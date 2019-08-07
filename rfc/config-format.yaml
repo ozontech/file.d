@@ -1,0 +1,67 @@
+settings:
+  log_level: debug
+  metrics_port: 4000
+
+pipeline:
+  docker:                             # pipeline for docker logs
+  - input: docker                     # get logs from docker containers
+  - filter: add_k8s_meta              # add kubernetes meta info
+  - filter: discard_unnecessary       # don't process some logs defined by OR regexp operation
+    on_regexp_or:                     # filter will be used when any of regexp matches
+      kubernetes_namespace_name: /kube-system|ozon-system|ingress-nginx/
+      kubernetes_container_name: /logstash|filebeat|cherkizon-event-manager|graylog|fluentd/
+  - filter: normalize                 # do some modifications
+  - filter: go_multiline              # join go panics
+  - filter: dotnet_multiline          # join dotnet panics
+  - filter: setup_kafka_topic         # set default kafka topic
+    pass_args:                        # pass some values to filter
+      topic: prod-k8s-filebeat-logs
+  - filter: setup_kafka_topic         # set kafka topic for travel namespace
+    on_equals_and:                    # filter will be used when all fields matches
+      kubernetes_namespace_name: travel
+    pass_args:                        # pass some values to filter
+      topic: prod-k8s-filebeat-travel-logs
+  - filter: setup_kafka_topic         # set kafka topic for lms service
+    on_equals_and:                    # filter will be used when all fields matches
+      kubernetes_label_app: lms-go-service-sorter-system-vanderlande-driver
+    pass_args:                        # pass some values to filter
+      topic: prod-k8s-filebeat-vanderlande-driver
+  - output: kafka                     # send logs to kafka
+
+  trickster_slow_log:                 # pipeline for trickster slow logs
+  - input: trickster_slow_log
+  - filter: add_host_meta
+  - output: kafka
+
+filter:
+  add_k8s_meta:           # define `add_k8s_meta` filter
+    ^type: k8s_meta       # `add_k8s_meta` filter is `k8s_meta` plugin
+
+  discard_unnecessary:    # define `discard_unnecessary` filter
+    ^type: discard        # `discard_unnecessary` filter is `discard` plugin
+
+  setup_kafka_topic:      # define `setup_kafka_topic` filter
+    ^type: modify         # setup_kafka_topic filter is modify plugin
+    ~kafka_topic: %args.topic%  # place passed argument into field `~topic`, all fields started with `~` are temporary and won't be in final json
+
+  normalize:              # define `normalize` filter
+    ^type: modify
+    some_field: %log.kubernetes.namespace%                      # copy field `kubernetes.namespace` into `some_field`
+    pipeline: docker                                            # add field with const value
+    complex: this is %log.kubernetes.namespace%                 # add field with template value
+    kubernetes_host: %log.host.name,drop%                       # rename field `host.name` to `kubernetes_host`
+    kubernetes_namespace_name: %log.kubernetes.namespace,drop%  # rename field `kubernetes.namespace` to `kubernetes_namespace_name`
+    ~deleted: %log.beat,drop% %log.offset,drop% %log.kubernetes.container,drop% %log.kubernetes.replicaset,drop%  # delete `beat`, `offset` and other fields
+
+input:
+  docker:                 # define `docker` filter
+    ^type: docker
+    path: "/var/lib/docker/containers"
+    offset_file: "/data/offsets.json"
+
+output:
+  kafka:                  # define `kafka` filter
+    ^type: kafka
+    brokers: sreinfrakafka1198z20.h.o3.ru:9092,sreinfrakafka1199z20.h.o3.ru:9092
+    batch_bytes: 10M
+    topic: %log.~kafka_topic%
