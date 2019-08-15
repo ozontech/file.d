@@ -1,0 +1,23 @@
+pipelines:
+  docker-logs1:
+    input: docker-logs1
+  docker-logs2:
+    input: docker-logs2
+
+processors:
+  processor1:
+    type: k8s_meta
+  processor2:
+    type: discard
+
+inputs:
+  docker-logs1:
+    type: docker
+  docker-logs2:
+    type: docker
+
+outputs:
+  kafka-logs1:
+    type: kafka
+  kafka-logs2:
+    type: kafka
