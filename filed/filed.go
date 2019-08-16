@@ -1,41 +1,54 @@
 package filed
 
 import (
-	"gitlab.ozon.ru/sre/filed/config"
-	"gitlab.ozon.ru/sre/filed/global"
 	"net/http"
+
+	"gitlab.ozon.ru/sre/filed/logger"
 )
 
 type Filed struct {
-	config         *config.Config
+	config         *Config
 	pluginRegistry *PluginRegistry
+	done           chan bool
 }
 
-type Plugin interface {
-	Start()
-}
-
-func New(config *config.Config, pluginRegistry *PluginRegistry) *Filed {
+func New(config *Config) *Filed {
 	return &Filed{
 		config:         config,
-		pluginRegistry: pluginRegistry,
+		pluginRegistry: DefaultPluginRegistry,
+		done:           make(chan bool),
 	}
 }
 
-func (f *Filed) Start() error {
-	global.Logger.Info("starting filed")
+func NewWithPluginRegistry(config *Config, pluginRegistry *PluginRegistry) *Filed {
+	return &Filed{
+		config:         config,
+		pluginRegistry: pluginRegistry,
+		done:           make(chan bool),
+	}
+}
+
+func (f *Filed) SetConfig(config *Config) {
+	f.config = config
+}
+
+func (f *Filed) Start()  {
+	logger.Info("starting filed")
 	go f.startLiveReadyHTTPEndpoint()
-	global.Logger.Info("filed started")
+	logger.Info("filed started")
 
-	done := make(chan bool)
+	<-f.done
+	return
+}
 
-	<-done
-	return nil
+func (f *Filed) Stop() {
+	// todo: stop logic here
+	f.done <- true
 }
 
 func (f *Filed) startLiveReadyHTTPEndpoint() {
 	addr := ":9000"
-	global.Logger.Infof("starting live/ready http endpoint at %q", addr)
+	logger.Infof("starting live/ready http endpoint at %q", addr)
 
 	mux := http.DefaultServeMux
 	liveReadyHandler := &liveReadyHandler{}
@@ -44,7 +57,7 @@ func (f *Filed) startLiveReadyHTTPEndpoint() {
 
 	err := http.ListenAndServe(addr, mux)
 	if err != nil {
-		global.Logger.Panicf("can't start live/ready http endpoint at %q: %s", addr, err.Error())
+		logger.Panicf("can't start live/ready http endpoint at %q: %s", addr, err.Error())
 	}
 }
 
@@ -52,5 +65,5 @@ type liveReadyHandler struct {
 }
 
 func (p *liveReadyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	global.Logger.Info("Live/ready OK")
+	logger.Info("Live/ready OK")
 }

@@ -1,18 +1,18 @@
-package global
+package filed
 
 import (
 	"fmt"
 )
 
 const (
-	ErrCodeConfigRead    = 100
-	ErrCodeConfigYAML    = 101
-	ErrCodeConfigConvert = 102
-	ErrCodeConfigProcess = 103
+	ErrCodeConfigReadFailed    = 100
+	ErrCodeConfigWrongYAML     = 101
+	ErrCodeConfigConvertFailed = 102
+	ErrCodeConfigProcessFailed = 103
 
-	ErrCodeHttpLiveReadyEndpoint = 200
+	ErrCodeHttpStartFailed = 200
 
-	ErrCodePluginRegistryAlreadyRegistered = 300
+	ErrCodePluginAlreadyRegistered = 300
 )
 
 type Err struct {
@@ -29,11 +29,11 @@ func (e *Err) Error() string {
 	return fmt.Sprintf("%s (code=%d) %s", e.Message, e.Code, suffix)
 }
 
-func New(code int, format string, a ...interface{}) error {
+func NewError(code int, format string, a ...interface{}) error {
 	return &Err{Message: fmt.Sprintf(format, a...), Code: code}
 }
 
-func Wrap(err error, code int, format string, a ...interface{}) error {
+func WrapError(err error, code int, format string, a ...interface{}) error {
 	if err == nil {
 		panic("Why wrap nil?")
 	}

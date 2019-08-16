@@ -1,22 +1,50 @@
 package main
 
 import (
-	"gitlab.ozon.ru/sre/filed/config"
+	"os"
+	"os/signal"
+	"syscall"
+
 	"gitlab.ozon.ru/sre/filed/filed"
-	"gitlab.ozon.ru/sre/filed/global"
+	"gitlab.ozon.ru/sre/filed/logger"
 )
 
+var fd *filed.Filed = nil
+
 func main() {
-	global.Logger.Info("hello")
+	logger.Info("hello")
+	listenSignals()
 
-	cfg, err := config.NewConfigFromFile("testdata/config/simple.yaml")
+	fd := filed.New(getConfig())
+	fd.Start()
+}
+func getConfig() (*filed.Config) {
+	cfg, err := filed.NewConfigFromFile("testdata/config/simple.yaml")
 	if err != nil {
-		global.Logger.Panic(err.Error())
+		logger.Fatalf("Can't load config: %s", err.Error())
 	}
+	return cfg
+}
 
-	fd := filed.New(cfg, filed.DefaultPluginRegistry)
-	err = fd.Start()
-	if err != nil {
-		global.Logger.Panic(err.Error())
-	}
+func listenSignals() {
+	signalChan := make(chan os.Signal)
+	signal.Notify(signalChan, syscall.SIGHUP, syscall.SIGTERM)
+	go func() {
+		s := <-signalChan
+		if s == syscall.SIGHUP {
+			reload()
+		} else {
+			stop()
+		}
+	}()
+}
+
+func stop() {
+	fd.Stop()
+}
+
+func reload() {
+	fd.Stop()
+	fd.SetConfig(getConfig())
+	fd.Start()
 }

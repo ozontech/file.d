@@ -1,64 +1,57 @@
 package pipeline
 
 import (
-	"github.com/valyala/fastjson"
-	"gitlab.ozon.ru/sre/filed/global"
-	"go.uber.org/atomic"
+	"math/rand"
 	"sync"
+	"time"
+
+	"github.com/valyala/fastjson"
+	"gitlab.ozon.ru/sre/filed/logger"
 )
 
-type event struct {
-	index   int
-	raw     []byte
-	json    *fastjson.Value
-	next    *event
-	parser  *fastjson.Parser
-	isReady bool
-}
+const InfoReportInterval = time.Second * 2
 
 type splitBuffer struct {
-	capacity int
+	controller *Controller
 
-	events      []*event
+	events      []*Event
 	eventsMu    sync.Mutex
 	eventsCount int
 
-	streams    map[string]*stream
+	done      *sync.WaitGroup
+	resetDone bool
+
+	pipelines  []*pipeline
+	streams    map[string]map[string]*stream
 	streamsMu  sync.Mutex
 	nextStream chan *stream
 
 	reserves chan bool
 
-	// Some debugging shit
-	isTest           bool
-	EventLogMu       sync.Mutex
-	EventLog         []string
-	eventsProcessed  atomic.Int64
 	CapacityHits     int
 	MaxCapacityUsage int
 }
 
-func newSplitBuffer(capacity int, isTest bool) *splitBuffer {
-	splitBuffer := &splitBuffer{
-		capacity: capacity,
+func newSplitBuffer(pipelines []*pipeline, controller *Controller) *splitBuffer {
+	capacity := controller.capacity
 
-		events:   make([]*event, capacity, capacity),
+	splitBuffer := &splitBuffer{
+		controller: controller,
+
+		events:   make([]*Event, capacity, capacity),
 		eventsMu: sync.Mutex{},
 
-		streams:    make(map[string]*stream),
+		pipelines:  pipelines,
+		streams:    make(map[string]map[string]*stream),
 		streamsMu:  sync.Mutex{},
 		nextStream: make(chan *stream, capacity),
 
 		reserves: make(chan bool, capacity),
-
-		isTest:     isTest,
-		EventLogMu: sync.Mutex{},
-		EventLog:   make([]string, 0, capacity),
 	}
 
 	for i := 0; i < capacity; i++ {
 		splitBuffer.reserves <- true
-		splitBuffer.events[i] = &event{
+		splitBuffer.events[i] = &Event{
 			parser: &fastjson.Parser{},
 		}
 	}
@@ -66,37 +59,13 @@ func newSplitBuffer(capacity int, isTest bool) *splitBuffer {
 	return splitBuffer
 }
 
-func (b *splitBuffer) EventsProcessed() int {
-	return int(b.eventsProcessed.Load())
-}
-
-var streams = []string{
-	"1",
-	"2",
-	"3",
-	"4",
-	"5",
-	"6",
-}
-
-// temporary stream selector
-var k = 0
-
-func (b *splitBuffer) reserve() *event {
+func (b *splitBuffer) Reserve() *Event {
 	<-b.reserves
+	index, event := b.reserve()
 
-	b.eventsMu.Lock()
-	index := b.eventsCount
-	event := b.events[index]
-	event.index = index
-	event.isReady = false
-	b.eventsCount++
-	b.eventsMu.Unlock()
-
-	if index == b.capacity-1 {
+	if index == b.controller.capacity-1 {
 		b.CapacityHits++
 	}
-
 	if index > b.MaxCapacityUsage {
 		b.MaxCapacityUsage = index + 1
 	}
@@ -104,44 +73,42 @@ func (b *splitBuffer) reserve() *event {
 	return event
 }
 
-func (b *splitBuffer) push(event *event) {
-	if b.isTest {
-		b.EventLogMu.Lock()
-		b.EventLog = append(b.EventLog, string(event.raw))
-		b.EventLogMu.Unlock()
-	}
-
-	event.isReady = true
-
-	b.streamsMu.Lock()
-	streamId := &streams[k%len(streams)]
-	k++
-	stream := b.getStream(streamId)
-	b.streamsMu.Unlock()
-
-	stream.push(event)
-	b.nextStream <- stream
-}
-
-func (b *splitBuffer) pop() *event {
-	stream := <-b.nextStream
-
-	event := stream.pop()
-
-	return event
-}
-
-func (b *splitBuffer) commit(event *event) {
-	b.eventsProcessed.Add(1)
+func (b *splitBuffer) reserve() (int, *Event) {
+	b.eventsMu.Lock()
+	defer b.eventsMu.Unlock()
 
 	if b.eventsCount == 0 {
-		global.Logger.Panic("extra event commit")
+		b.controller.splitBufferWorks()
 	}
 
-	// place event back to pool
+	index := b.eventsCount
+	event := b.events[index]
+	event.index = index
+	b.eventsCount++
+
+	return index, event
+}
+
+func (b *splitBuffer) Push(event *Event) {
+	stream := b.getStream(event)
+	stream.push(event)
+}
+
+func (b *splitBuffer) commit(event *Event) {
+	if b.eventsCount == 0 {
+		logger.Panic("extra event commit")
+	}
+
+	event.input.Commit(event)
+
 	b.eventsMu.Lock()
 	b.eventsCount--
 
+	if b.eventsCount == 0 {
+		b.controller.splitBufferDone()
+	}
+
+	// place event back to pool
 	current := event.index
 	last := b.eventsCount
 	tmp := b.events[current]
@@ -157,19 +124,36 @@ func (b *splitBuffer) commit(event *event) {
 	b.reserves <- true
 }
 
-func (b *splitBuffer) getStream(streamId *string) *stream {
-	if b.streams[*streamId] == nil {
-		b.addStream(*streamId)
+func (b *splitBuffer) getStream(event *Event) *stream {
+	b.streamsMu.Lock()
+	defer b.streamsMu.Unlock()
+
+	s := b.streams[event.Stream]
+	if s == nil {
+		b.streams[event.Stream] = make(map[string]*stream)
+		s = b.streams[event.Stream]
 	}
-	stream := b.streams[*streamId]
-	return stream
+
+	subStream := s[event.SubStream]
+	if subStream == nil {
+		subStream = b.addStream(event)
+
+	}
+	return subStream
 }
 
-func (b *splitBuffer) addStream(id string) {
+func (b *splitBuffer) addStream(event *Event) *stream {
 	stream := &stream{
-		mu: &sync.Mutex{},
-		id: id,
+		mu:        &sync.Mutex{},
+		stream:    event.Stream,
+		subStream: event.SubStream,
 	}
 
-	b.streams[id] = stream
+	b.streams[event.Stream][event.SubStream] = stream
+
+	// Assign random pipeline for stream
+	pipeline := b.pipelines[rand.Int()%len(b.pipelines)]
+	pipeline.addStream(stream)
+
+	return stream
 }

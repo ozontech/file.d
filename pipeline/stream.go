@@ -5,51 +5,58 @@ import (
 )
 
 type stream struct {
-	id    string
-	index int
-	mu    *sync.Mutex
+	pipeline  *pipeline
+	stream    string
+	subStream string
+	mu        *sync.Mutex
 
-	first *event
-	last  *event
+	first *Event
+	last  *Event
 
 	length int
 }
 
-func (s *stream) push(event *event) {
+func (s *stream) push(event *Event) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	s.length++
 	event.next = nil
 
-	if (s.last == nil) {
+	if s.last == nil {
 		s.last = event
 		s.first = event
+
+		s.pipeline.nextStream <- s
 		return
 	}
 
 	s.last.next = event
 	s.last = event
+
+	s.pipeline.nextStream <- s
 	return
 }
 
-func (s *stream) pop() (*event) {
+func (s *stream) tryPop() *Event {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	s.length--
-	if (s.first == nil) {
-		panic("stream is empty, why pop?")
+	if s.first == nil {
+		return nil
 	}
 
 	if s.first == s.last {
 		result := s.first
 		s.first = nil
 		s.last = nil
+
 		return result
 	}
 
 	result := s.first
 	s.first = s.first.next
+
 	return result
 }

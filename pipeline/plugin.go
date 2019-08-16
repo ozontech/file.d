@@ -1,9 +1,6 @@
-package filed
+package pipeline
 
-import (
-	"github.com/bitly/go-simplejson"
-	"gitlab.ozon.ru/sre/filed/pipeline"
-)
+import "sync"
 
 const (
 	PluginKindInput     = "input"
@@ -16,7 +13,15 @@ type Param struct {
 
 type Params map[string]Param
 
-type PluginFactory func(args *simplejson.Json, pipelineInputs []*pipeline.Parser) Plugin
+type Plugin interface {
+	Start()
+	Stop()
+}
+type InputPlugin interface {
+	Commit(*Event)
+}
+
+type PluginFactory func(config interface{}, parsers []*Parser, done *sync.WaitGroup) Plugin
 
 type PluginRegistryItem struct {
 	Name string
