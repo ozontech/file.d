@@ -5,11 +5,11 @@ import (
 	"unsafe"
 )
 
-func b2s(b []byte) string {
+func ByteToString(b []byte) string {
 	return *(*string)(unsafe.Pointer(&b))
 }
 
-func s2b(s string) []byte {
+func StringToByte(s string) []byte {
 	strh := (*reflect.StringHeader)(unsafe.Pointer(&s))
 	var sh reflect.SliceHeader
 	sh.Data = strh.Data

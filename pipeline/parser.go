@@ -10,7 +10,7 @@ func NewParser(splitBuffer *splitBuffer) *Parser {
 	}
 }
 
-func (i *Parser) Put(source InputPlugin, stream string, offset int64, bytes []byte) {
+func (i *Parser) Put(source InputPlugin, sourceId uint64, offset int64, bytes []byte) {
 	event := i.splitBuffer.Reserve()
 
 	jsonParser := event.parser
@@ -23,11 +23,11 @@ func (i *Parser) Put(source InputPlugin, stream string, offset int64, bytes []by
 	event.json = json
 	event.input = source
 	event.Offset = offset
-	event.Stream = stream
-	if json.Get("stream") != nil {
-		event.SubStream = json.Get("stream").String()
+	event.SourceId = sourceId
+	if json.Get("sourceId") != nil {
+		event.Stream = json.Get("sourceId").String()
 	} else {
-		event.SubStream = "default"
+		event.Stream = "default"
 	}
 
 	i.splitBuffer.Push(event)

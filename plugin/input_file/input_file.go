@@ -1,8 +1,6 @@
 package input_file
 
 import (
-	"sync"
-
 	"gitlab.ozon.ru/sre/filed/filed"
 	"gitlab.ozon.ru/sre/filed/logger"
 	"gitlab.ozon.ru/sre/filed/pipeline"
@@ -53,7 +51,7 @@ type InputFilePlugin struct {
 	watcher     *watcher
 }
 
-func newInputFilePlugin(config interface{}, parsers []*pipeline.Parser, done *sync.WaitGroup) pipeline.Plugin {
+func newInputFilePlugin(config interface{}, controller pipeline.ControllerForPlugin) pipeline.Plugin {
 	cfg := config.(*Config)
 
 	if cfg.PersistenceMode == "" {
@@ -89,11 +87,11 @@ func newInputFilePlugin(config interface{}, parsers []*pipeline.Parser, done *sy
 
 	cfg.offsetsTmpFilename = cfg.OffsetsFilename + ".atomic"
 
-	jobProvider := NewJobProvider(cfg, done)
+	jobProvider := NewJobProvider(cfg, controller.GetDone())
 	watcher := NewWatcher(cfg.WatchingDir, jobProvider)
 	plugin := &InputFilePlugin{
 		config:      cfg,
-		parsers:     parsers,
+		parsers:     controller.GetParsers(),
 		jobProvider: jobProvider,
 		watcher:     watcher,
 	}

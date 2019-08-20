@@ -5,10 +5,10 @@ import (
 )
 
 type stream struct {
-	pipeline  *pipeline
-	stream    string
-	subStream string
-	mu        *sync.Mutex
+	pipeline *pipeline
+	sourceId uint64
+	name     string
+	mu       *sync.Mutex
 
 	first *Event
 	last  *Event

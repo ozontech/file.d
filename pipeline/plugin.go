@@ -1,7 +1,5 @@
 package pipeline
 
-import "sync"
-
 const (
 	PluginKindInput     = "input"
 	PluginKindProcessor = "processor"
@@ -21,7 +19,7 @@ type InputPlugin interface {
 	Commit(*Event)
 }
 
-type PluginFactory func(config interface{}, parsers []*Parser, done *sync.WaitGroup) Plugin
+type PluginFactory func(config interface{}, controller ControllerForPlugin) Plugin
 
 type PluginRegistryItem struct {
 	Name string

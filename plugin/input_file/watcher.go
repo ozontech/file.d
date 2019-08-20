@@ -51,6 +51,9 @@ func (w *watcher) watchEvents() {
 
 		filename := event.Name
 
+		//if event.Op&fsnotify.Rename == fsnotify.Rename {
+		//	//logger.Infof("file renaming detected %s", filename)
+		//}
 		if event.Op&fsnotify.Create == fsnotify.Create {
 			w.filesCreated++
 

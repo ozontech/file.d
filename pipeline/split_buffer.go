@@ -22,7 +22,7 @@ type splitBuffer struct {
 	resetDone bool
 
 	pipelines  []*pipeline
-	streams    map[string]map[string]*stream
+	streams    map[uint64]map[string]*stream
 	streamsMu  sync.Mutex
 	nextStream chan *stream
 
@@ -42,7 +42,7 @@ func newSplitBuffer(pipelines []*pipeline, controller *Controller) *splitBuffer 
 		eventsMu: sync.Mutex{},
 
 		pipelines:  pipelines,
-		streams:    make(map[string]map[string]*stream),
+		streams:    make(map[uint64]map[string]*stream),
 		streamsMu:  sync.Mutex{},
 		nextStream: make(chan *stream, capacity),
 
@@ -128,13 +128,13 @@ func (b *splitBuffer) getStream(event *Event) *stream {
 	b.streamsMu.Lock()
 	defer b.streamsMu.Unlock()
 
-	s := b.streams[event.Stream]
+	s := b.streams[event.SourceId]
 	if s == nil {
-		b.streams[event.Stream] = make(map[string]*stream)
-		s = b.streams[event.Stream]
+		b.streams[event.SourceId] = make(map[string]*stream)
+		s = b.streams[event.SourceId]
 	}
 
-	subStream := s[event.SubStream]
+	subStream := s[event.Stream]
 	if subStream == nil {
 		subStream = b.addStream(event)
 
@@ -144,14 +144,14 @@ func (b *splitBuffer) getStream(event *Event) *stream {
 
 func (b *splitBuffer) addStream(event *Event) *stream {
 	stream := &stream{
-		mu:        &sync.Mutex{},
-		stream:    event.Stream,
-		subStream: event.SubStream,
+		mu:       &sync.Mutex{},
+		sourceId: event.SourceId,
+		name:     event.Stream,
 	}
 
-	b.streams[event.Stream][event.SubStream] = stream
+	b.streams[event.SourceId][event.Stream] = stream
 
-	// Assign random pipeline for stream
+	// Assign random pipeline for sourceId
 	pipeline := b.pipelines[rand.Int()%len(b.pipelines)]
 	pipeline.addStream(stream)
 

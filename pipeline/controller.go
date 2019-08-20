@@ -14,22 +14,28 @@ const defaultCapacity = 128
 type Controller struct {
 	capacity int
 
-	Parsers     []*Parser
-	Pipelines   []*pipeline
-	SplitBuffer *splitBuffer
+	parsers     []*Parser
+	pipelines   []*pipeline
+	splitBuffer *splitBuffer
 
-	InputPlugin Plugin
+	inputPlugin Plugin
 
-	Done       *sync.WaitGroup
-	shouldExit bool
+	done        *sync.WaitGroup
+	doneCounter int
+	shouldExit  bool
 
 	// some debugging shit
 	eventsProcessed *atomic.Int64
 
 	shouldWaitForJob bool
 	eventLogEnabled  bool
-	EventLog         []string
+	eventLog         []string
 	eventLogMu       sync.Mutex
+}
+
+type ControllerForPlugin interface {
+	GetParsers() []*Parser
+	GetDone() *sync.WaitGroup
 }
 
 func NewController(enableEventLog bool, shouldWaitForJob bool) *Controller {
@@ -41,11 +47,11 @@ func NewController(enableEventLog bool, shouldWaitForJob bool) *Controller {
 
 	controller := &Controller{
 		capacity:         defaultCapacity,
-		Done:             &sync.WaitGroup{},
+		done:             &sync.WaitGroup{},
 		eventsProcessed:  atomic.NewInt64(0),
 		shouldWaitForJob: shouldWaitForJob,
 		eventLogEnabled:  enableEventLog,
-		EventLog:         make([]string, 0, 128),
+		eventLog:         make([]string, 0, 128),
 		eventLogMu:       sync.Mutex{},
 	}
 
@@ -61,22 +67,22 @@ func NewController(enableEventLog bool, shouldWaitForJob bool) *Controller {
 		parsers[i] = NewParser(splitBuffer)
 	}
 
-	controller.Pipelines = pipelines
-	controller.Parsers = parsers
-	controller.SplitBuffer = splitBuffer
+	controller.pipelines = pipelines
+	controller.parsers = parsers
+	controller.splitBuffer = splitBuffer
 
 	return controller
 }
 
 func (c *Controller) Start() {
 	if c.shouldWaitForJob {
-		c.Done.Add(1)
+		c.done.Add(1)
 	}
 
-	c.InputPlugin.Start()
+	c.inputPlugin.Start()
 
-	for _, pipeline := range c.Pipelines {
-		pipeline.start(c.SplitBuffer)
+	for _, pipeline := range c.pipelines {
+		pipeline.start(c.splitBuffer)
 	}
 
 	go c.reportStats()
@@ -86,12 +92,11 @@ func (c *Controller) Start() {
 func (c *Controller) Stop() {
 	c.shouldExit = true
 
-
-	for _, pipeline := range c.Pipelines {
+	for _, pipeline := range c.pipelines {
 		pipeline.stop()
 	}
 
-	c.InputPlugin.Stop()
+	c.inputPlugin.Stop()
 }
 
 func (c *Controller) commit(event *Event) {
@@ -101,22 +106,23 @@ func (c *Controller) commit(event *Event) {
 		c.eventLogMu.Lock()
 		defer c.eventLogMu.Unlock()
 
-		c.EventLog = append(c.EventLog, string(event.raw))
+		c.eventLog = append(c.eventLog, string(event.raw))
 	}
 }
 
 func (c *Controller) SetInputPlugin(inputPlugin Plugin) {
-	c.InputPlugin = inputPlugin
+	c.inputPlugin = inputPlugin
 }
 
 func (c *Controller) splitBufferDone() {
-	c.Done.Done()
+	c.done.Done()
 }
 
 func (c *Controller) splitBufferWorks() {
-	c.Done.Add(1)
+	c.done.Add(1)
+	c.doneCounter++
 	if c.shouldWaitForJob {
-		c.Done.Done()
+		c.done.Done()
 		c.shouldWaitForJob = false
 	}
 }
@@ -141,4 +147,34 @@ func (c *Controller) reportStats() {
 
 		lastProcessed = delta
 	}
+}
+
+func (c *Controller) WaitUntilDone() {
+	for {
+		c.done.Wait()
+		c.doneCounter = 0
+		time.Sleep(time.Millisecond * 50)
+		if c.doneCounter == 0 {
+			break
+		}
+	}
+}
+
+func (c *Controller) GetEventLogLength() int {
+	return len(c.eventLog)
+}
+
+func (c *Controller) GetEventLogItem(index int) string {
+	if index >= len(c.eventLog) {
+		logger.Fatalf("Can't find log item with index %d", index)
+	}
+	return c.eventLog[index]
+}
+
+func (c *Controller) GetParsers() []*Parser {
+	return c.parsers
+}
+
+func (c *Controller) GetDone() *sync.WaitGroup {
+	return c.done
 }

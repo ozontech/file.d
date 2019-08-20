@@ -7,16 +7,17 @@ import (
 )
 
 func TestParseOffsets(t *testing.T) {
-	data := `- stream: firstStream
+	data := `- file: 1 /some/informational/name
   default: 100
   another: 200
-- stream: secondStream
+- file: 2 /another/informational/name
   stderr: 300
 `
-	offsets := parseOffsets(data)
+	offsets, inodeToFile := parseOffsets(data)
 
-	stream, has := offsets["firstStream"]
+	stream, has := offsets[1]
 	assert.True(t, has, "Stream not found")
+	assert.Equal(t, "/some/informational/name", inodeToFile[1], "Stream not found")
 
 	offset, has := stream["default"]
 	assert.True(t, has, "Sub stream not found")
@@ -26,7 +27,8 @@ func TestParseOffsets(t *testing.T) {
 	assert.True(t, has, "Sub stream not found")
 	assert.Equal(t, int64(200), offset, "Wrong offset")
 
-	stream, has = offsets["secondStream"]
+	stream, has = offsets[2]
+	assert.Equal(t, "/another/informational/name", inodeToFile[2], "Stream not found")
 	assert.True(t, has, "Stream not found")
 
 	offset, has = stream["stderr"]

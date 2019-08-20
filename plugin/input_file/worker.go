@@ -31,7 +31,7 @@ func (w *worker) process(parser *pipeline.Parser, jobProvider *jobProvider, read
 		file := job.file
 		offset, err := file.Seek(0, io.SeekCurrent)
 		if err != nil {
-			logger.Panicf("file % s seek error: %s", file.Name(), err.Error())
+			logger.Fatalf("file % s seek error: %s", file.Name(), err.Error())
 		}
 
 		isEOF := false
@@ -52,7 +52,7 @@ func (w *worker) process(parser *pipeline.Parser, jobProvider *jobProvider, read
 			}
 
 			if err != nil {
-				logger.Panicf("file %s read error, %s read=%d", file.Name(), read, err.Error())
+				logger.Fatalf("file %s read error, %s read=%d", file.Name(), read, err.Error())
 			}
 
 			processed = 0
@@ -63,9 +63,9 @@ func (w *worker) process(parser *pipeline.Parser, jobProvider *jobProvider, read
 
 				if len(accumBuffer) != 0 {
 					accumBuffer = append(accumBuffer, readBuffer[processed:i]...)
-					parser.Put(jobProvider, job.stream, offset+accumulated+i+1, accumBuffer)
+					parser.Put(jobProvider, job.sourceId, offset+accumulated+i+1, accumBuffer)
 				} else {
-					parser.Put(jobProvider, job.stream, offset+i+1, readBuffer[processed:i])
+					parser.Put(jobProvider, job.sourceId, offset+i+1, readBuffer[processed:i])
 				}
 				accumBuffer = accumBuffer[:0]
 
@@ -92,7 +92,23 @@ func (w *worker) process(parser *pipeline.Parser, jobProvider *jobProvider, read
 		if backwardOffset != 0 {
 			_, err := file.Seek(int64(backwardOffset), io.SeekCurrent)
 			if err != nil {
-				logger.Panicf("file % s seek error: %s", file.Name(), err.Error())
+				logger.Fatalf("file %s seek error: %s", file.Name(), err.Error())
+			}
+		}
+
+		// check if file was truncated
+		if isEOF {
+			stat, err := file.Stat()
+			if err != nil {
+				logger.Fatalf("file %s stat error: %s", file.Name(), err.Error())
+			}
+
+			//fmt.Printf("offset: %d, size=%d\n", offset+readTotal, stat.Size())
+			// file was truncated, seek to start
+			if offset+readTotal > stat.Size() {
+				logger.Infof("file %s was truncated", file.Name())
+				jobProvider.resetJob(job)
+				isEOF = false
 			}
 		}
 

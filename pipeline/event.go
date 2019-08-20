@@ -8,10 +8,10 @@ type Event struct {
 	parser *fastjson.Parser
 	json   *fastjson.Value
 
-	input     InputPlugin
-	Offset    int64
-	Stream    string
-	SubStream string
+	input    InputPlugin
+	Offset   int64
+	SourceId uint64
+	Stream   string
 
 	index int
 	seq   int
