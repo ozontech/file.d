@@ -28,6 +28,7 @@ type job struct {
 	isRunning bool
 
 	sourceId uint64
+	offsets  offsetsByStream
 
 	mu *sync.Mutex
 }
@@ -36,52 +37,38 @@ type jobProvider struct {
 	config *Config
 	done   *sync.WaitGroup
 
-	sourceIdToFile sourceIdToFile
-
 	jobs     map[uint64]*job
 	jobsDone *atomic.Int32
+	jobsMu   *sync.Mutex
+	jobsChan chan *job
+	jobsLog  []string
 
-	activeJobs chan *job
-	nextJob    chan *job
-
-	offsets    offsets
-	offsetsMu  *sync.Mutex
-	offsetsBuf []string // content buffer to avoid allocation every offsets dump
-
-	eventsCommitted int
-
-	jobMu *sync.Mutex
-	//commitMu *sync.Mutex
-
-	shouldStop bool
-
-	jobsAddedLog []string
+	offsetsBuf      []string // content buffer to avoid allocation every offsets dump
+	loadedOffsets   offsetsAll
+	fileByInode     fileByInode
+	shouldStop      bool
+	eventsCommitted *atomic.Int64
 }
 
-type offsets map[uint64]map[string]int64
-type sourceIdToFile map[uint64]string
+type offsetsByStream map[string]int64
+type offsetsAll map[uint64]map[string]int64
+type fileByInode map[uint64]string
 
 func NewJobProvider(config *Config, done *sync.WaitGroup) *jobProvider {
 	jp := &jobProvider{
 		config: config,
+		done:   done,
 
-		sourceIdToFile: make(sourceIdToFile),
 
 		jobs:     make(map[uint64]*job, config.ChanLength),
 		jobsDone: atomic.NewInt32(0),
-		done:     done,
+		jobsMu:   &sync.Mutex{},
+		jobsChan: make(chan *job, config.ChanLength),
+		jobsLog:  make([]string, 0, 16),
 
-		activeJobs: make(chan *job, config.ChanLength),
-		nextJob:    make(chan *job, config.ChanLength),
-
-		offsets:    make(offsets),
-		offsetsBuf: make([]string, 0, config.ChanLength),
-		offsetsMu:  &sync.Mutex{},
-
-		jobMu: &sync.Mutex{},
-		//commitMu: &sync.Mutex{},
-
-		jobsAddedLog: make([]string, 0, 16),
+		offsetsBuf:      make([]string, 0, 65536),
+		fileByInode:     make(fileByInode),
+		eventsCommitted: &atomic.Int64{},
 	}
 
 	if jp.config.persistenceMode == PersistenceModeAsync {
@@ -90,59 +77,49 @@ func NewJobProvider(config *Config, done *sync.WaitGroup) *jobProvider {
 		go jp.saveOffsetsCyclic(time.Second * 5)
 	}
 
-	go jp.reportStats()
-
 	return jp
 }
 
 func (jp *jobProvider) start() {
+	jp.shouldStop = false
 	jp.loadOffsets()
 	jp.loadJobs()
-	go jp.process()
+
+	go jp.reportStats()
 }
 
 func (jp *jobProvider) stop() {
 	jp.shouldStop = true
 	// unblock process function to allow goroutine to exit
-	jp.nextJob <- nil
+	jp.jobsChan <- nil
 }
 
-func (jp *jobProvider) process() {
-	logger.Infof("job provider started with %q persistence mode", jp.config.PersistenceMode)
-	for {
-		job := <-jp.activeJobs
-		if jp.shouldStop {
-			return
-		}
-
-		job.mu.Lock()
-		if job.isDone || job.isRunning {
-			logger.Panicf("why run? it's at end or already running")
-		}
-		job.isRunning = true
-		job.mu.Unlock()
-
-		jp.nextJob <- job
+func (jp *jobProvider) sendToWorkers(job *job) {
+	if job.isDone || job.isRunning {
+		logger.Panicf("why run? it's at end or already running")
 	}
+	job.isRunning = true
+
+	jp.jobsChan <- job
 }
 
 func (jp *jobProvider) Commit(event *pipeline.Event) {
-	jp.offsetsMu.Lock()
-	defer jp.offsetsMu.Unlock()
-
-	sourceId, has := jp.offsets[event.SourceId]
+	jp.jobsMu.Lock()
+	job, has := jp.jobs[event.SourceId]
+	jp.jobsMu.Unlock()
 	if !has {
-		logger.Panicf("no offsets for source %s", event.SourceId)
+		logger.Panicf("can't find job for event, source=%s", event.SourceId)
 	}
 
-	offset := sourceId[event.Stream]
-	if offset >= event.Offset {
-		logger.Panicf("commit offset(%d) for source %d:%s less than current(%d)", event.Offset, event.SourceId, event.Stream, offset)
+	job.mu.Lock()
+	offsets := job.offsets
+	if offsets[event.Stream] >= event.Offset {
+		logger.Panicf("commit offset(%d) for source %d:%s less than current(%d)", event.Offset, event.SourceId, event.Stream, offsets[event.Stream])
 	}
+	offsets[event.Stream] = event.Offset
+	job.mu.Unlock()
 
-	sourceId[event.Stream] = event.Offset
-
-	jp.eventsCommitted++
+	jp.eventsCommitted.Inc()
 
 	if jp.config.persistenceMode == PersistenceModeSync {
 		jp.saveOffsets()
@@ -168,10 +145,10 @@ func (jp *jobProvider) addJob(filename string, loadOffset bool) {
 	sysStat := stat.Sys().(*syscall.Stat_t)
 	inode := sysStat.Ino
 
-	jp.jobMu.Lock()
-	defer jp.jobMu.Unlock()
+	jp.jobsMu.Lock()
+	defer jp.jobsMu.Unlock()
 
-	jp.sourceIdToFile[inode] = filename
+	jp.fileByInode[inode] = filename
 
 	existingJob, has := jp.jobs[inode]
 	if has {
@@ -185,48 +162,44 @@ func (jp *jobProvider) addJob(filename string, loadOffset bool) {
 	}
 
 	jp.jobs[inode] = job
-	jp.jobsAddedLog = append(jp.jobsAddedLog, filename)
+	jp.jobsLog = append(jp.jobsLog, filename)
 
 	jp.jobsDone.Inc()
 	jp.resumeJob(job)
 }
 
-func (jp *jobProvider) instantiateJob(file *os.File, inode uint64, loadOffset bool) *job {
-	jp.offsetsMu.Lock()
-	defer jp.offsetsMu.Unlock()
-
-	offsets, has := jp.offsets[inode]
-	if !loadOffset && has {
-		logger.Panicf("can't instantiate job, offsets already created for job %d:%s", file.Name())
-	}
-
+func (jp *jobProvider) instantiateJob(file *os.File, inode uint64, loadOffsets bool) *job {
 	job := &job{
 		sourceId: inode,
 		file:     file,
 		isDone:   true,
 		mu:       &sync.Mutex{},
+		offsets:  make(offsetsByStream),
 	}
 
-	if loadOffset && has {
-		if len(offsets) == 0 {
+	if loadOffsets {
+		offsetsByStream, has := jp.loadedOffsets[inode]
+		if has && len(offsetsByStream) == 0 {
 			logger.Panicf("can't instantiate job, no streams in source %d:%q", inode, file.Name())
 		}
 
-		// as all streams are in one file, so we should find min offset
-		// to make sure all logs from all streams will be delivered at least once
-		minOffset := int64(math.MaxInt64)
-		for _, offset := range offsets {
-			if offset < minOffset {
-				minOffset = offset
+		if has {
+			job.offsets = offsetsByStream
+
+			// all streams are in one file, so we should seek file to
+			// min offset to make sure logs from all streams will be delivered at least once
+			minOffset := int64(math.MaxInt64)
+			for _, offset := range offsetsByStream {
+				if offset < minOffset {
+					minOffset = offset
+				}
+			}
+
+			offset, err := file.Seek(minOffset, io.SeekStart)
+			if err != nil || offset != minOffset {
+				logger.Panicf("can't make job, can't seek file %d:%s", inode, file.Name())
 			}
 		}
-
-		offset, err := file.Seek(minOffset, io.SeekStart)
-		if err != nil || offset != minOffset {
-			logger.Panicf("can't make job, can't seek file %d:%s", inode, file.Name())
-		}
-	} else {
-		jp.offsets[inode] = make(map[string]int64)
 	}
 
 	return job
@@ -234,44 +207,41 @@ func (jp *jobProvider) instantiateJob(file *os.File, inode uint64, loadOffset bo
 
 func (jp *jobProvider) resumeJob(job *job) {
 	job.mu.Lock()
+	defer job.mu.Unlock()
 	if !job.isDone {
-		job.mu.Unlock()
 		return
 	}
 
-	job.isDone = false
-
 	jp.done.Add(1)
-
+	job.isDone = false
 	v := jp.jobsDone.Dec()
 	if v < 0 {
 		logger.Panicf("done jobs counter less than zero")
 	}
-	job.mu.Unlock()
 
-	jp.activeJobs <- job
+	jp.sendToWorkers(job)
 }
 
 func (jp *jobProvider) releaseJob(job *job, isAtEnd bool) {
 	job.mu.Lock()
+	defer job.mu.Unlock()
+
 	if !job.isRunning || job.isDone {
 		logger.Panicf("job isn't running, why release?")
 	}
 
 	job.isRunning = false
 	job.isDone = isAtEnd
-	v := 0
 	if isAtEnd {
-		v = int(jp.jobsDone.Inc())
+		v := int(jp.jobsDone.Inc())
 		if v > len(jp.jobs) {
 			logger.Panicf("done jobs counter more than job count")
 		}
 		jp.done.Done()
 	}
-	job.mu.Unlock()
 
 	if !isAtEnd {
-		jp.activeJobs <- job
+		jp.sendToWorkers(job)
 	}
 }
 
@@ -281,28 +251,20 @@ func (jp *jobProvider) resetJob(job *job) {
 		logger.Fatalf("job reset error, file % s seek error: %s", job.file.Name(), err.Error())
 	}
 
-	jp.offsetsMu.Lock()
-	defer jp.offsetsMu.Unlock()
-
-	offsets, has := jp.offsets[job.sourceId]
-	if !has {
-		logger.Panicf("job reset error, no offsets for source %s found", job.sourceId)
-	}
-
-	for k := range offsets {
-		offsets[k] = 0
+	for k := range job.offsets {
+		job.offsets[k] = 0
 	}
 }
 
 func (jp *jobProvider) saveOffsetsCyclic(duration time.Duration) {
-	lastCommitted := 0
+	lastCommitted := int64(0)
 	for {
 		time.Sleep(duration)
 		if jp.shouldStop {
 			return
 		}
 		// by having separate var won't get race condition
-		eventsCommitted := jp.eventsCommitted
+		eventsCommitted := jp.eventsCommitted.Load()
 		if lastCommitted != eventsCommitted {
 			lastCommitted = eventsCommitted
 			jp.saveOffsets()
@@ -311,8 +273,8 @@ func (jp *jobProvider) saveOffsetsCyclic(duration time.Duration) {
 }
 
 func (jp *jobProvider) saveOffsets() {
-	jp.offsetsMu.Lock()
-	defer jp.offsetsMu.Unlock()
+	jp.jobsMu.Lock()
+	defer jp.jobsMu.Unlock()
 
 	tmpFilename := jp.config.offsetsTmpFilename
 	file, err := os.OpenFile(tmpFilename, os.O_RDWR|os.O_CREATE, 0664)
@@ -328,12 +290,14 @@ func (jp *jobProvider) saveOffsets() {
 	}()
 
 	jp.offsetsBuf = jp.offsetsBuf[:0]
-	for sourceId, streams := range jp.offsets {
-		if len(streams) == 0 {
+	for sourceId, job := range jp.jobs {
+		job.mu.Lock()
+		if len(job.offsets) == 0 {
+			job.mu.Unlock()
 			continue
 		}
 
-		file, has := jp.sourceIdToFile[sourceId]
+		file, has := jp.fileByInode[sourceId]
 		if !has {
 			logger.Panicf("no file name for source id %d", sourceId)
 		}
@@ -343,13 +307,14 @@ func (jp *jobProvider) saveOffsets() {
 		jp.offsetsBuf = append(jp.offsetsBuf, " ")
 		jp.offsetsBuf = append(jp.offsetsBuf, file)
 		jp.offsetsBuf = append(jp.offsetsBuf, "\n")
-		for stream, offset := range streams {
+		for stream, offset := range job.offsets {
 			jp.offsetsBuf = append(jp.offsetsBuf, "  ")
 			jp.offsetsBuf = append(jp.offsetsBuf, stream)
 			jp.offsetsBuf = append(jp.offsetsBuf, ": ")
 			jp.offsetsBuf = append(jp.offsetsBuf, strconv.FormatInt(offset, 10))
 			jp.offsetsBuf = append(jp.offsetsBuf, "\n")
 		}
+		job.mu.Unlock()
 	}
 
 	_, err = file.Seek(0, io.SeekStart)
@@ -380,9 +345,6 @@ func (jp *jobProvider) saveOffsets() {
 }
 
 func (jp *jobProvider) loadOffsets() {
-	jp.offsetsMu.Lock()
-	defer jp.offsetsMu.Unlock()
-
 	filename := jp.config.OffsetsFilename
 	info, err := os.Stat(filename)
 	if os.IsNotExist(err) {
@@ -398,7 +360,7 @@ func (jp *jobProvider) loadOffsets() {
 		logger.Panicf("Can't load offsets %s: ", err.Error())
 	}
 
-	jp.offsets, jp.sourceIdToFile = parseOffsets(string(content))
+	jp.loadedOffsets, jp.fileByInode = parseOffsets(string(content))
 }
 
 func (jp *jobProvider) loadJobs() {
@@ -428,14 +390,14 @@ func (jp *jobProvider) reportStats() {
 			return
 		}
 
-		added := len(jp.jobsAddedLog)
+		added := len(jp.jobsLog)
 
 		if added == 0 {
 			continue
 		}
 
 		if added <= 3 {
-			for _, job := range jp.jobsAddedLog {
+			for _, job := range jp.jobsLog {
 				logger.Infof("found new file for watching %s ", job)
 			}
 		}
@@ -443,13 +405,13 @@ func (jp *jobProvider) reportStats() {
 			logger.Infof("found %d new files for watching", added)
 		}
 
-		jp.jobsAddedLog = jp.jobsAddedLog[:0]
+		jp.jobsLog = jp.jobsLog[:0]
 	}
 }
 
-func parseOffsets(data string) (offsets, sourceIdToFile) {
-	offsets := make(offsets)
-	sourceIdToFile := make(sourceIdToFile)
+func parseOffsets(data string) (offsetsAll, fileByInode) {
+	offsets := make(offsetsAll)
+	sourceIdToFile := make(fileByInode)
 	inodeStr := "- file: "
 	inodeStrLen := len(inodeStr)
 	for len(data) != 0 {

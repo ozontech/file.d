@@ -9,10 +9,13 @@ import (
 	"go.uber.org/atomic"
 )
 
+const statsInfoReportInterval = time.Second * 5
 const defaultCapacity = 128
 
 type Controller struct {
-	capacity int
+	capacity   int
+	done       *sync.WaitGroup
+	doneHelper bool
 
 	parsers     []*Parser
 	pipelines   []*pipeline
@@ -20,17 +23,15 @@ type Controller struct {
 
 	inputPlugin Plugin
 
-	done        *sync.WaitGroup
-	doneCounter int
-	shouldExit  bool
-
-	// some debugging shit
-	eventsProcessed *atomic.Int64
+	shouldExit bool
 
 	shouldWaitForJob bool
 	eventLogEnabled  bool
 	eventLog         []string
 	eventLogMu       sync.Mutex
+
+	// some debugging shit
+	eventsProcessed *atomic.Int64
 }
 
 type ControllerForPlugin interface {
@@ -38,7 +39,7 @@ type ControllerForPlugin interface {
 	GetDone() *sync.WaitGroup
 }
 
-func NewController(enableEventLog bool, shouldWaitForJob bool) *Controller {
+func NewController(enableEventLog bool) *Controller {
 	procs := runtime.GOMAXPROCS(0)
 	parsersCount := procs * 4
 	pipelineCount := procs * 4
@@ -48,11 +49,11 @@ func NewController(enableEventLog bool, shouldWaitForJob bool) *Controller {
 	controller := &Controller{
 		capacity:         defaultCapacity,
 		done:             &sync.WaitGroup{},
-		eventsProcessed:  atomic.NewInt64(0),
-		shouldWaitForJob: shouldWaitForJob,
+		shouldWaitForJob: true,
 		eventLogEnabled:  enableEventLog,
 		eventLog:         make([]string, 0, 128),
 		eventLogMu:       sync.Mutex{},
+		eventsProcessed:  atomic.NewInt64(0),
 	}
 
 	pipelines := make([]*pipeline, pipelineCount)
@@ -75,9 +76,7 @@ func NewController(enableEventLog bool, shouldWaitForJob bool) *Controller {
 }
 
 func (c *Controller) Start() {
-	if c.shouldWaitForJob {
-		c.done.Add(1)
-	}
+	c.done.Add(1)
 
 	c.inputPlugin.Start()
 
@@ -101,6 +100,7 @@ func (c *Controller) Stop() {
 
 func (c *Controller) commit(event *Event) {
 	c.eventsProcessed.Inc()
+	c.doneHelper = true
 
 	if c.eventLogEnabled {
 		c.eventLogMu.Lock()
@@ -114,19 +114,6 @@ func (c *Controller) SetInputPlugin(inputPlugin Plugin) {
 	c.inputPlugin = inputPlugin
 }
 
-func (c *Controller) splitBufferDone() {
-	c.done.Done()
-}
-
-func (c *Controller) splitBufferWorks() {
-	c.done.Add(1)
-	c.doneCounter++
-	if c.shouldWaitForJob {
-		c.done.Done()
-		c.shouldWaitForJob = false
-	}
-}
-
 func (c *Controller) EventsProcessed() int {
 	return int(c.eventsProcessed.Load())
 }
@@ -134,29 +121,36 @@ func (c *Controller) EventsProcessed() int {
 func (c *Controller) reportStats() {
 	lastProcessed := c.eventsProcessed.Load()
 	for {
-		time.Sleep(InfoReportInterval)
+		time.Sleep(statsInfoReportInterval)
 		if c.shouldExit {
 			return
 		}
 
 		processed := c.eventsProcessed.Load()
 		delta := processed - lastProcessed
-		rate := float32(delta) / float32(InfoReportInterval) * float32(time.Second)
+		rate := float32(delta) / float32(statsInfoReportInterval) * float32(time.Second)
 
 		logger.Infof("stats info: processed=%d, rate=%.f/sec", delta, rate)
 
-		lastProcessed = delta
+		lastProcessed = processed
 	}
+}
+
+func (c *Controller) ResetDone() {
+	c.shouldWaitForJob = true
+	c.done.Add(1)
 }
 
 func (c *Controller) WaitUntilDone() {
 	for {
 		c.done.Wait()
-		c.doneCounter = 0
-		time.Sleep(time.Millisecond * 50)
-		if c.doneCounter == 0 {
+		// fs events may have delay, so wait for them
+		time.Sleep(time.Millisecond * 100)
+
+		if !c.doneHelper {
 			break
 		}
+		c.doneHelper = false
 	}
 }
 

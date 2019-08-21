@@ -46,8 +46,8 @@ func (p *pipeline) process() {
 
 		//pipeline logic will be here
 
-		p.controller.commit(event)
 		p.splitBuffer.commit(event)
+		p.controller.commit(event)
 	}
 }
 

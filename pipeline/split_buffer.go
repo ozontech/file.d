@@ -3,13 +3,10 @@ package pipeline
 import (
 	"math/rand"
 	"sync"
-	"time"
 
 	"github.com/valyala/fastjson"
 	"gitlab.ozon.ru/sre/filed/logger"
 )
-
-const InfoReportInterval = time.Second * 2
 
 type splitBuffer struct {
 	controller *Controller
@@ -18,12 +15,9 @@ type splitBuffer struct {
 	eventsMu    sync.Mutex
 	eventsCount int
 
-	done      *sync.WaitGroup
-	resetDone bool
-
 	pipelines  []*pipeline
-	streams    map[uint64]map[string]*stream
-	streamsMu  sync.Mutex
+	sources    map[uint64]map[string]*stream
+	sourcesMu  sync.Mutex
 	nextStream chan *stream
 
 	reserves chan bool
@@ -42,8 +36,8 @@ func newSplitBuffer(pipelines []*pipeline, controller *Controller) *splitBuffer 
 		eventsMu: sync.Mutex{},
 
 		pipelines:  pipelines,
-		streams:    make(map[uint64]map[string]*stream),
-		streamsMu:  sync.Mutex{},
+		sources:    make(map[uint64]map[string]*stream),
+		sourcesMu:  sync.Mutex{},
 		nextStream: make(chan *stream, capacity),
 
 		reserves: make(chan bool, capacity),
@@ -78,7 +72,11 @@ func (b *splitBuffer) reserve() (int, *Event) {
 	defer b.eventsMu.Unlock()
 
 	if b.eventsCount == 0 {
-		b.controller.splitBufferWorks()
+		b.controller.done.Add(1)
+		if b.controller.shouldWaitForJob {
+			b.controller.done.Done()
+			b.controller.shouldWaitForJob = false
+		}
 	}
 
 	index := b.eventsCount
@@ -105,7 +103,7 @@ func (b *splitBuffer) commit(event *Event) {
 	b.eventsCount--
 
 	if b.eventsCount == 0 {
-		b.controller.splitBufferDone()
+		b.controller.done.Done()
 	}
 
 	// place event back to pool
@@ -125,33 +123,30 @@ func (b *splitBuffer) commit(event *Event) {
 }
 
 func (b *splitBuffer) getStream(event *Event) *stream {
-	b.streamsMu.Lock()
-	defer b.streamsMu.Unlock()
+	b.sourcesMu.Lock()
+	defer b.sourcesMu.Unlock()
 
-	s := b.streams[event.SourceId]
-	if s == nil {
-		b.streams[event.SourceId] = make(map[string]*stream)
-		s = b.streams[event.SourceId]
+	if b.sources[event.SourceId] == nil {
+		b.sources[event.SourceId] = make(map[string]*stream)
 	}
 
-	subStream := s[event.Stream]
-	if subStream == nil {
-		subStream = b.addStream(event)
-
+	stream := b.sources[event.SourceId][event.Stream]
+	if stream == nil {
+		stream = b.instantiateStream(event)
+		b.sources[event.SourceId][event.Stream] = stream
 	}
-	return subStream
+
+	return stream
 }
 
-func (b *splitBuffer) addStream(event *Event) *stream {
+func (b *splitBuffer) instantiateStream(event *Event) *stream {
 	stream := &stream{
 		mu:       &sync.Mutex{},
 		sourceId: event.SourceId,
 		name:     event.Stream,
 	}
 
-	b.streams[event.SourceId][event.Stream] = stream
-
-	// Assign random pipeline for sourceId
+	// Assign random pipeline for stream to have uniform event distribution
 	pipeline := b.pipelines[rand.Int()%len(b.pipelines)]
 	pipeline.addStream(stream)
 

@@ -14,7 +14,6 @@ type Event struct {
 	Stream   string
 
 	index int
-	seq   int
 	next  *Event
 
 	// some debugging shit

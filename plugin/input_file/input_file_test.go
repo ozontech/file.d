@@ -41,8 +41,8 @@ func shutdown() {
 	}
 }
 
-func startController(persistenceMode string, enableEventLog bool, shouldWaitForJob bool, config *Config) (*pipeline.Controller, *InputFilePlugin) {
-	controller := pipeline.NewController(enableEventLog, shouldWaitForJob)
+func startController(persistenceMode string, enableEventLog bool, config *Config) (*pipeline.Controller, *InputFilePlugin) {
+	controller := pipeline.NewController(enableEventLog)
 
 	if config == nil {
 		config = &Config{WatchingDir: filesDir, OffsetsFilename: filepath.Join(offsetsDir, "filed.offsets"), PersistenceMode: persistenceMode}
@@ -79,6 +79,15 @@ func truncateFile(file string) {
 		panic(err.Error())
 	}
 }
+
+func rotateFile(file string) string {
+	newFile := file + ".new"
+	renameFile(file, newFile)
+	createFile(file)
+
+	return newFile
+}
+
 func createFile(file string) {
 	fd, err := os.Create(file)
 	if err != nil {
@@ -93,6 +102,15 @@ func createFile(file string) {
 func createTempFile() string {
 	u := uuid.NewV4().String()
 	file, err := os.Create(path.Join(filesDir, u))
+	if err != nil {
+		panic(err.Error())
+	}
+
+	return file.Name()
+}
+
+func createOffsetFile() string {
+	file, err := os.Create(path.Join(offsetsDir, "filed.offsets"))
 	if err != nil {
 		panic(err.Error())
 	}
@@ -220,7 +238,7 @@ func TestWatchCreateFile(t *testing.T) {
 	setup()
 	defer shutdown()
 
-	c, p := startController("async", true, true, nil)
+	c, p := startController("async", true, nil)
 	defer c.Stop()
 
 	file := createTempFile()
@@ -234,7 +252,7 @@ func TestReadLineSimple(t *testing.T) {
 	setup()
 	defer shutdown()
 
-	c, _ := startController("async", true, true, nil)
+	c, _ := startController("async", true, nil)
 	defer c.Stop()
 
 	file := createTempFile()
@@ -256,7 +274,7 @@ func TestOffsetsSimple(t *testing.T) {
 	setup()
 	defer shutdown()
 
-	c, p := startController("async", true, true, nil)
+	c, p := startController("async", true, nil)
 	defer c.Stop()
 
 	file := createTempFile()
@@ -274,16 +292,18 @@ func TestLoadOffsets(t *testing.T) {
 	setup()
 	defer shutdown()
 
-	file := createTempFile()
-	offsets := genOffsetsContent(file, 100)
+	data := `"some data"`
+	dataFile := createTempFile()
+	addData(dataFile, []byte(data), false, false)
 
-	addData(file, []byte(offsets), false, false)
+	offsetFile := createOffsetFile()
+	offsets := genOffsetsContent(dataFile, len(data))
+	addData(offsetFile, []byte(offsets), false, false)
 
-	config := &Config{OffsetsFilename: file, PersistenceMode: "async", WatchingDir: offsetsDir}
-	c, p := startController("async", true, false, config)
+	c, p := startController("async", true, nil)
 	defer c.Stop()
 
-	config.OffsetsFilename += ".new"
+	p.config.OffsetsFilename += ".new"
 	p.jobProvider.saveOffsets()
 	assert.Equal(t, offsets, getContent(p.config.OffsetsFilename), "Wrong offsets")
 }
@@ -292,7 +312,7 @@ func TestContinueReading(t *testing.T) {
 	setup()
 	defer shutdown()
 
-	c, p := startController("async", true, true, nil)
+	c, p := startController("async", true, nil)
 
 	file := createTempFile()
 	addData(file, []byte(`{"Data":"Line1"}`), true, false)
@@ -302,23 +322,21 @@ func TestContinueReading(t *testing.T) {
 	c.WaitUntilDone()
 	c.Stop()
 	p.jobProvider.saveOffsets()
-	assert.Equal(t, 3, c.GetEventLogLength(), "Wrong log count")
-	assert.Equal(t, genOffsetsContent(file, 51), getContent(p.config.OffsetsFilename), "Wrong offsets")
+	processed := c.EventsProcessed()
+
+	c.ResetDone()
 
 	addData(file, []byte(`{"Data":"Line4"}`), true, false)
 	addData(file, []byte(`{"Data":"Line5"}`), true, false)
 	addData(file, []byte(`{"Data":"Line6"}`), true, false)
 	addData(file, []byte(`{"Data":"Line7"}`), true, false)
 
-	c, p = startController("async", true, true, nil)
+	c, p = startController("async", true, nil)
 
 	c.WaitUntilDone()
 	c.Stop()
-	assert.Equal(t, 4, c.GetEventLogLength(), "Wrong log count")
-	assert.Equal(t, `{"Data":"Line4"}`, c.GetEventLogItem(0), "Wrong log")
-	assert.Equal(t, `{"Data":"Line5"}`, c.GetEventLogItem(1), "Wrong log")
-	assert.Equal(t, `{"Data":"Line6"}`, c.GetEventLogItem(2), "Wrong log")
-	assert.Equal(t, `{"Data":"Line7"}`, c.GetEventLogItem(3), "Wrong log")
+	assert.Equal(t, 7, processed+c.EventsProcessed(), "Wrong log count")
+	assert.Equal(t, `{"Data":"Line7"}`, c.GetEventLogItem(c.GetEventLogLength()-1), "Wrong log")
 	assert.Equal(t, genOffsetsContent(file, 119), getContent(p.config.OffsetsFilename), "Wrong offsets")
 }
 
@@ -326,7 +344,7 @@ func TestReadSeq(t *testing.T) {
 	setup()
 	defer shutdown()
 
-	c, p := startController("async", true, true, nil)
+	c, p := startController("async", true, nil)
 	defer c.Stop()
 
 	file := createTempFile()
@@ -349,7 +367,7 @@ func TestReadComplexSeqMulti(t *testing.T) {
 	setup()
 	defer shutdown()
 
-	c, p := startController("async", true, true, nil)
+	c, p := startController("async", true, nil)
 	defer c.Stop()
 
 	file := createTempFile()
@@ -369,7 +387,7 @@ func TestReadComplexSeqOne(t *testing.T) {
 	setup()
 	defer shutdown()
 
-	c, p := startController("async", true, true, nil)
+	c, p := startController("async", true, nil)
 	defer c.Stop()
 
 	file := createTempFile()
@@ -406,7 +424,7 @@ func TestReadComplexPar(t *testing.T) {
 		filesNames = append(filesNames, file)
 	}
 
-	c, p := startController("async", true, true, nil)
+	c, p := startController("async", true, nil)
 	defer c.Stop()
 
 	c.WaitUntilDone()
@@ -422,7 +440,7 @@ func TestReadHeavy(t *testing.T) {
 	setup()
 	defer shutdown()
 
-	c, p := startController("async", true, true, nil)
+	c, p := startController("async", true, nil)
 	defer c.Stop()
 
 	file := createTempFile()
@@ -458,7 +476,7 @@ func TestReadInsane(t *testing.T) {
 		filesNames = append(filesNames, file)
 	}
 
-	c, p := startController("async", true, true, nil)
+	c, p := startController("async", true, nil)
 	defer c.Stop()
 
 	c.WaitUntilDone()
@@ -471,14 +489,12 @@ func TestRenameRotationHandle(t *testing.T) {
 	setup()
 	defer shutdown()
 
-	c, p := startController("async", true, true, nil)
+	c, p := startController("async", true, nil)
 	defer c.Stop()
 
 	file := createTempFile()
 	addData(file, []byte(`{"Data":"Line1_1"}`), true, false)
 	addData(file, []byte(`{"Data":"Line2_1"}`), true, false)
-
-	//c.WaitUntilDone()
 
 	newFile := file + ".new"
 	renameFile(file, newFile)
@@ -495,6 +511,7 @@ func TestRenameRotationHandle(t *testing.T) {
 	addData(file, []byte(`{"Data":"Line3_2"}`), true, false)
 
 	c.WaitUntilDone()
+
 	p.jobProvider.saveOffsets()
 	offsets := fmt.Sprintf(`- file: %d %s
   default: 114
@@ -508,11 +525,88 @@ func TestRenameRotationHandle(t *testing.T) {
 	assertOffsetsEqual(t, offsets, getContent(p.config.OffsetsFilename))
 }
 
+func TestShutdownRotation(t *testing.T) {
+	setup()
+	defer shutdown()
+
+	c, p := startController("async", true, nil)
+
+	file := createTempFile()
+	addData(file, []byte(`{"Data":"Line1_1"}`), true, false)
+	addData(file, []byte(`{"Data":"Line2_1"}`), true, false)
+
+	c.WaitUntilDone()
+	c.Stop()
+	assert.Equal(t, 2, c.GetEventLogLength(), "Wrong log count")
+	assert.Equal(t, 2, c.EventsProcessed(), "Wrong processed events count")
+
+	newFile := rotateFile(file)
+
+	addData(newFile, []byte(`{"Data":"Line3_1"}`), true, false)
+	addData(newFile, []byte(`{"Data":"Line4_1"}`), true, false)
+	addData(newFile, []byte(`{"Data":"Line5_1"}`), true, false)
+	addData(newFile, []byte(`{"Data":"Line6_1"}`), true, false)
+
+	addData(file, []byte(`{"Data":"Line1_2"}`), true, false)
+	addData(file, []byte(`{"Data":"Line2_2"}`), true, false)
+	addData(file, []byte(`{"Data":"Line2_2"}`), true, false)
+	addData(file, []byte(`{"Data":"Line3_2"}`), true, false)
+
+	c, p = startController("async", true, nil)
+	defer c.Stop()
+	c.WaitUntilDone()
+	p.jobProvider.saveOffsets()
+	offsets := fmt.Sprintf(`- file: %d %s
+  default: 114
+- file: %d %s
+  default: 76
+`, getInode(newFile), newFile, getInode(file), file)
+
+	assert.Equal(t, 8, c.GetEventLogLength(), "Wrong log count")
+	assert.Equal(t, 8, c.EventsProcessed(), "Wrong processed events count")
+
+	assertOffsetsEqual(t, offsets, getContent(p.config.OffsetsFilename))
+}
+
+func TestTruncation(t *testing.T) {
+	setup()
+	defer shutdown()
+
+	c, p := startController("async", true, nil)
+	defer c.Stop()
+
+	data := []byte(`{"Data":"Line1"}`)
+	file := createTempFile()
+	addData(file, data, true, false)
+	addData(file, data, true, false)
+
+	c.WaitUntilDone()
+	assert.Equal(t, 2, c.GetEventLogLength(), "Wrong log count")
+	assert.Equal(t, 2, c.EventsProcessed(), "Wrong processed events count")
+
+	truncateFile(file)
+
+	c.ResetDone()
+
+	data = []byte(`{"Data":"Line2"}`)
+	addData(file, data, true, true)
+	addData(file, data, true, true)
+	addData(file, data, true, true)
+
+	c.WaitUntilDone()
+
+	assert.Equal(t, 5, c.GetEventLogLength(), "Wrong log count")
+	assert.Equal(t, 5, c.EventsProcessed(), "Wrong processed events count")
+
+	p.jobProvider.saveOffsets()
+	assertOffsetsEqual(t, genOffsetsContent(file, (len(data)+1)*3), getContent(p.config.OffsetsFilename))
+}
+
 func TestRenameRotationInsane(t *testing.T) {
 	setup()
 	defer shutdown()
 
-	c, p := startController("async", true, true, nil)
+	c, p := startController("async", true, nil)
 	defer c.Stop()
 
 	files := 64
@@ -528,13 +622,13 @@ func TestRenameRotationInsane(t *testing.T) {
 			renameFile(file, newFile)
 			createFile(file)
 
-			addData(newFile, []byte(`{"Data":"Line3_1"}`), true, false)
-			addData(newFile, []byte(`{"Data":"Line4_1"}`), true, false)
-			addData(newFile, []byte(`{"Data":"Line5_1"}`), true, false)
-			addData(newFile, []byte(`{"Data":"Line6_1"}`), true, false)
-
-			addData(file, []byte(`{"Data":"Line1_2"}`), true, false)
-			addData(file, []byte(`{"Data":"Line2_2"}`), true, false)
+			addData(file, []byte(`{"Data":"Line3_1"}`), true, false)
+			addData(file, []byte(`{"Data":"Line4_1"}`), true, false)
+			addData(file, []byte(`{"Data":"Line5_1"}`), true, false)
+			addData(file, []byte(`{"Data":"Line6_1"}`), true, false)
+			//
+			addData(newFile, []byte(`{"Data":"Line1_2"}`), true, false)
+			addData(newFile, []byte(`{"Data":"Line2_2"}`), true, false)
 		}(fileList[i], i)
 	}
 
@@ -549,7 +643,6 @@ func TestRenameRotationInsane(t *testing.T) {
 	assert.Equal(t, files*8, c.GetEventLogLength(), "Wrong log count")
 	assert.Equal(t, files*8, c.EventsProcessed(), "Wrong processed events count")
 
-	fmt.Println(getContent(p.config.OffsetsFilename))
 	assertOffsetsEqual(t, genOffsetsContentMultiple(fileList, 4*19), getContent(p.config.OffsetsFilename))
 }
 
@@ -585,7 +678,7 @@ func BenchmarkRawRead(b *testing.B) {
 	b.SetBytes(int64(bytes))
 	b.ReportAllocs()
 	for n := 0; n < b.N; n++ {
-		c, _ := startController("timer", false, true, nil)
+		c, _ := startController("timer", false, nil)
 
 		c.WaitUntilDone()
 		fmt.Printf("gen lines=%d, processed lines: %d\n", lines, c.EventsProcessed())
@@ -611,7 +704,7 @@ func BenchmarkHeavyJsonRead(b *testing.B) {
 	b.SetBytes(int64(lines * len(json)))
 	b.ReportAllocs()
 	for n := 0; n < b.N; n++ {
-		c, _ := startController("timer", false, true, nil)
+		c, _ := startController("timer", false, nil)
 
 		c.WaitUntilDone()
 		fmt.Printf("gen bytes=%d, gen lines=%d, processed lines: %d\n", lines*len(json), lines, c.EventsProcessed())
@@ -637,7 +730,7 @@ func BenchmarkLightJsonReadSeq(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
-		c, _ := startController("timer", false, true, nil)
+		c, _ := startController("timer", false, nil)
 
 		c.WaitUntilDone()
 		fmt.Printf("gen bytes=%d, gen lines=%d, processed lines: %d\n", lines*len(json), lines*2, c.EventsProcessed())
@@ -650,7 +743,7 @@ func BenchmarkLightJsonReadPar(b *testing.B) {
 	setup()
 	defer shutdown()
 
-	lines := 2000
+	lines := 10000
 	files := 64
 
 	json := getContent("../../testdata/json/light.json")
@@ -669,7 +762,7 @@ func BenchmarkLightJsonReadPar(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
-		c, _ := startController("timer", false, true, nil)
+		c, _ := startController("timer", false, nil)
 
 		c.WaitUntilDone()
 		fmt.Printf("gen bytes=%d, gen lines=%d, processed lines: %d\n",

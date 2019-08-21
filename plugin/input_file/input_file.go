@@ -121,7 +121,7 @@ func (p *InputFilePlugin) Stop() {
 
 	for range p.workers {
 		// unblock worker channels to allow goroutines to exit
-		p.jobProvider.nextJob <- nil
+		p.jobProvider.jobsChan <- nil
 	}
 
 	p.watcher.stop()

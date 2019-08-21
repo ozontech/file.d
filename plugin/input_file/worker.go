@@ -8,7 +8,7 @@ import (
 )
 
 type worker struct {
-	shouldExit bool
+	shouldStop bool
 }
 
 func (w *worker) start(parser *pipeline.Parser, jobProvider *jobProvider, readBufferSize int) {
@@ -16,15 +16,15 @@ func (w *worker) start(parser *pipeline.Parser, jobProvider *jobProvider, readBu
 }
 
 func (w *worker) stop() {
-	w.shouldExit = true
+	w.shouldStop = true
 }
 
 func (w *worker) process(parser *pipeline.Parser, jobProvider *jobProvider, readBufferSize int) {
 	accumBuffer := make([]byte, 0, readBufferSize)
 	readBuffer := make([]byte, readBufferSize)
 	for {
-		job := <-jobProvider.nextJob
-		if w.shouldExit {
+		job := <-jobProvider.jobsChan
+		if w.shouldStop {
 			return
 		}
 
@@ -103,7 +103,6 @@ func (w *worker) process(parser *pipeline.Parser, jobProvider *jobProvider, read
 				logger.Fatalf("file %s stat error: %s", file.Name(), err.Error())
 			}
 
-			//fmt.Printf("offset: %d, size=%d\n", offset+readTotal, stat.Size())
 			// file was truncated, seek to start
 			if offset+readTotal > stat.Size() {
 				logger.Infof("file %s was truncated", file.Name())
