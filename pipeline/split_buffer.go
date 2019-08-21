@@ -1,7 +1,6 @@
 package pipeline
 
 import (
-	"math/rand"
 	"sync"
 
 	"github.com/valyala/fastjson"
@@ -9,13 +8,12 @@ import (
 )
 
 type splitBuffer struct {
-	controller *Controller
+	controller *SplitController
 
 	events      []*Event
 	eventsMu    sync.Mutex
 	eventsCount int
 
-	pipelines  []*pipeline
 	sources    map[uint64]map[string]*stream
 	sourcesMu  sync.Mutex
 	nextStream chan *stream
@@ -26,7 +24,7 @@ type splitBuffer struct {
 	MaxCapacityUsage int
 }
 
-func newSplitBuffer(pipelines []*pipeline, controller *Controller) *splitBuffer {
+func newSplitBuffer(controller *SplitController) *splitBuffer {
 	capacity := controller.capacity
 
 	splitBuffer := &splitBuffer{
@@ -35,7 +33,6 @@ func newSplitBuffer(pipelines []*pipeline, controller *Controller) *splitBuffer 
 		events:   make([]*Event, capacity, capacity),
 		eventsMu: sync.Mutex{},
 
-		pipelines:  pipelines,
 		sources:    make(map[uint64]map[string]*stream),
 		sourcesMu:  sync.Mutex{},
 		nextStream: make(chan *stream, capacity),
@@ -146,9 +143,7 @@ func (b *splitBuffer) instantiateStream(event *Event) *stream {
 		name:     event.Stream,
 	}
 
-	// Assign random pipeline for stream to have uniform event distribution
-	pipeline := b.pipelines[rand.Int()%len(b.pipelines)]
-	pipeline.addStream(stream)
+	b.controller.attachStream(stream)
 
 	return stream
 }

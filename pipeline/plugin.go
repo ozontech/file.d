@@ -12,21 +12,28 @@ type Param struct {
 type Params map[string]Param
 
 type Plugin interface {
-	Start()
+	Start(config Config, controller Controller)
 	Stop()
 }
 type InputPlugin interface {
 	Commit(*Event)
 }
 
-type PluginFactory func(config interface{}, controller ControllerForPlugin) Plugin
+type PluginFactory func() (Plugin, Config)
 
 type PluginRegistryItem struct {
-	Name string
+	Id   string
 	Info *PluginInfo
 }
 
 type PluginInfo struct {
-	Params  *Params
+	Type    string
 	Factory PluginFactory
 }
+
+type PluginWithConfig struct {
+	Instance Plugin
+	Config   Config
+}
+
+type Config interface{}

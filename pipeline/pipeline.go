@@ -1,19 +1,15 @@
 package pipeline
 
-import (
-	"time"
-)
-
 type pipeline struct {
-	controller  *Controller
-	streams     []*stream
-	nextStream  chan *stream
-	splitBuffer *splitBuffer
-	ticker      *time.Ticker
-	shouldExit  bool
+	controller *SplitController
+
+	streams    []*stream
+	nextStream chan *stream
+
+	shouldExit bool
 }
 
-func NewPipeline(controller *Controller) *pipeline {
+func NewPipeline(controller *SplitController) *pipeline {
 	return &pipeline{
 		controller: controller,
 		streams:    make([]*stream, 0, 16),
@@ -26,8 +22,7 @@ func (p *pipeline) addStream(stream *stream) {
 	stream.pipeline = p
 }
 
-func (p *pipeline) start(splitBuffer *splitBuffer) {
-	p.splitBuffer = splitBuffer
+func (p *pipeline) start() {
 	go p.process()
 }
 
@@ -46,7 +41,6 @@ func (p *pipeline) process() {
 
 		//pipeline logic will be here
 
-		p.splitBuffer.commit(event)
 		p.controller.commit(event)
 	}
 }

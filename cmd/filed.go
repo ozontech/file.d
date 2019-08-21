@@ -7,44 +7,49 @@ import (
 
 	"gitlab.ozon.ru/sre/filed/filed"
 	"gitlab.ozon.ru/sre/filed/logger"
+
+	_ "gitlab.ozon.ru/sre/filed/inputplugin/file"
 )
 
 var fd *filed.Filed = nil
+var done = make(chan bool)
 
 func main() {
 	logger.Info("hello")
-	listenSignals()
 
-	fd := filed.New(getConfig())
-	fd.Start()
+	go listenSignals()
+	go start()
+
+	<-done
 }
-func getConfig() (*filed.Config) {
-	cfg, err := filed.NewConfigFromFile("testdata/config/simple.yaml")
-	if err != nil {
-		logger.Fatalf("Can't load config: %s", err.Error())
-	}
-	return cfg
+
+func start() () {
+	fd := filed.New(filed.NewConfigFromFile("testdata/config/simple.yaml"))
+	fd.Start()
 }
 
 func listenSignals() {
 	signalChan := make(chan os.Signal)
 	signal.Notify(signalChan, syscall.SIGHUP, syscall.SIGTERM)
-	go func() {
+
+	for {
 		s := <-signalChan
-		if s == syscall.SIGHUP {
+
+		switch s {
+		case syscall.SIGHUP:
 			reload()
-		} else {
+		case syscall.SIGTERM:
 			stop()
+			<-done
 		}
-	}()
+	}
+}
+
+func reload() {
+	stop()
+	start()
 }
 
 func stop() {
 	fd.Stop()
-}
-
-func reload() {
-	fd.Stop()
-	fd.SetConfig(getConfig())
-	fd.Start()
 }

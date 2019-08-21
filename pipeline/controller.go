@@ -1,6 +1,7 @@
 package pipeline
 
 import (
+	"math/rand"
 	"runtime"
 	"sync"
 	"time"
@@ -12,16 +13,21 @@ import (
 const statsInfoReportInterval = time.Second * 5
 const defaultCapacity = 128
 
-type Controller struct {
+type Controller interface {
+	GetHeads() []*Head
+	GetDone() *sync.WaitGroup
+}
+
+type SplitController struct {
 	capacity   int
 	done       *sync.WaitGroup
 	doneHelper bool
 
-	parsers     []*Parser
+	heads       []*Head
 	pipelines   []*pipeline
 	splitBuffer *splitBuffer
 
-	inputPlugin Plugin
+	inputPlugin *PluginWithConfig
 
 	shouldExit bool
 
@@ -34,19 +40,14 @@ type Controller struct {
 	eventsProcessed *atomic.Int64
 }
 
-type ControllerForPlugin interface {
-	GetParsers() []*Parser
-	GetDone() *sync.WaitGroup
-}
-
-func NewController(enableEventLog bool) *Controller {
+func NewController(enableEventLog bool) *SplitController {
 	procs := runtime.GOMAXPROCS(0)
-	parsersCount := procs * 4
 	pipelineCount := procs * 4
+	headsCount := procs * 4
 
 	logger.Infof("starting new pipeline controller with procs=%d capacity=%d", procs, defaultCapacity)
 
-	controller := &Controller{
+	controller := &SplitController{
 		capacity:         defaultCapacity,
 		done:             &sync.WaitGroup{},
 		shouldWaitForJob: true,
@@ -56,49 +57,51 @@ func NewController(enableEventLog bool) *Controller {
 		eventsProcessed:  atomic.NewInt64(0),
 	}
 
+	splitBuffer := newSplitBuffer(controller)
+
+	heads := make([]*Head, headsCount)
+	for i := 0; i < headsCount; i++ {
+		heads[i] = NewHead(splitBuffer)
+	}
+
 	pipelines := make([]*pipeline, pipelineCount)
 	for i := 0; i < pipelineCount; i++ {
 		pipelines[i] = NewPipeline(controller)
 	}
 
-	splitBuffer := newSplitBuffer(pipelines, controller)
-
-	parsers := make([]*Parser, parsersCount)
-	for i := 0; i < parsersCount; i++ {
-		parsers[i] = NewParser(splitBuffer)
-	}
-
-	controller.pipelines = pipelines
-	controller.parsers = parsers
 	controller.splitBuffer = splitBuffer
+	controller.heads = heads
+	controller.pipelines = pipelines
 
 	return controller
 }
 
-func (c *Controller) Start() {
+func (c *SplitController) Start() {
 	c.done.Add(1)
 
-	c.inputPlugin.Start()
+	c.inputPlugin.Instance.Start(c.inputPlugin.Config, c)
 
 	for _, pipeline := range c.pipelines {
-		pipeline.start(c.splitBuffer)
+		pipeline.start()
 	}
 
 	go c.reportStats()
 
 }
 
-func (c *Controller) Stop() {
+func (c *SplitController) Stop() {
 	c.shouldExit = true
 
 	for _, pipeline := range c.pipelines {
 		pipeline.stop()
 	}
 
-	c.inputPlugin.Stop()
+	c.inputPlugin.Instance.Stop()
 }
 
-func (c *Controller) commit(event *Event) {
+func (c *SplitController) commit(event *Event) {
+	c.splitBuffer.commit(event)
+
 	c.eventsProcessed.Inc()
 	c.doneHelper = true
 
@@ -110,15 +113,21 @@ func (c *Controller) commit(event *Event) {
 	}
 }
 
-func (c *Controller) SetInputPlugin(inputPlugin Plugin) {
-	c.inputPlugin = inputPlugin
+func (c *SplitController) SetInputPlugin(plugin *PluginWithConfig) {
+	c.inputPlugin = plugin
 }
 
-func (c *Controller) EventsProcessed() int {
+func (c *SplitController) EventsProcessed() int {
 	return int(c.eventsProcessed.Load())
 }
 
-func (c *Controller) reportStats() {
+func (c *SplitController) attachStream(stream *stream) {
+	// Assign random pipeline for stream to have uniform event distribution
+	pipeline := c.pipelines[rand.Int()%len(c.pipelines)]
+	pipeline.addStream(stream)
+}
+
+func (c *SplitController) reportStats() {
 	lastProcessed := c.eventsProcessed.Load()
 	for {
 		time.Sleep(statsInfoReportInterval)
@@ -130,18 +139,18 @@ func (c *Controller) reportStats() {
 		delta := processed - lastProcessed
 		rate := float32(delta) / float32(statsInfoReportInterval) * float32(time.Second)
 
-		logger.Infof("stats info: processed=%d, rate=%.f/sec", delta, rate)
+		logger.Infof("stats for last %d seconds: processed=%d, rate=%.f/sec", statsInfoReportInterval/time.Second, delta, rate)
 
 		lastProcessed = processed
 	}
 }
 
-func (c *Controller) ResetDone() {
+func (c *SplitController) ResetDone() {
 	c.shouldWaitForJob = true
 	c.done.Add(1)
 }
 
-func (c *Controller) WaitUntilDone() {
+func (c *SplitController) WaitUntilDone() {
 	for {
 		c.done.Wait()
 		// fs events may have delay, so wait for them
@@ -154,21 +163,21 @@ func (c *Controller) WaitUntilDone() {
 	}
 }
 
-func (c *Controller) GetEventLogLength() int {
+func (c *SplitController) GetEventLogLength() int {
 	return len(c.eventLog)
 }
 
-func (c *Controller) GetEventLogItem(index int) string {
+func (c *SplitController) GetEventLogItem(index int) string {
 	if index >= len(c.eventLog) {
 		logger.Fatalf("Can't find log item with index %d", index)
 	}
 	return c.eventLog[index]
 }
 
-func (c *Controller) GetParsers() []*Parser {
-	return c.parsers
+func (c *SplitController) GetHeads() []*Head {
+	return c.heads
 }
 
-func (c *Controller) GetDone() *sync.WaitGroup {
+func (c *SplitController) GetDone() *sync.WaitGroup {
 	return c.done
 }

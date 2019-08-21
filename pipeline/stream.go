@@ -42,10 +42,11 @@ func (s *stream) tryPop() *Event {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	s.length--
 	if s.first == nil {
 		return nil
 	}
+
+	s.length--
 
 	if s.first == s.last {
 		result := s.first
