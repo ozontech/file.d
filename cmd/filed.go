@@ -5,17 +5,30 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/alecthomas/kingpin"
 	"gitlab.ozon.ru/sre/filed/filed"
 	"gitlab.ozon.ru/sre/filed/logger"
+	"go.uber.org/automaxprocs/maxprocs"
 
-	_ "gitlab.ozon.ru/sre/filed/inputplugin/file"
+	_ "gitlab.ozon.ru/sre/filed/action/k8s"
+	_ "gitlab.ozon.ru/sre/filed/input/file"
 )
 
-var fd *filed.Filed = nil
-var done = make(chan bool)
+var (
+	fd      *filed.Filed
+	done    = make(chan bool)
+	version = "v0.0.1"
+
+	config = kingpin.Flag("config", "config file name").Required().ExistingFile()
+)
 
 func main() {
-	logger.Info("hello")
+	kingpin.Version(version)
+	kingpin.Parse()
+
+	logger.Info("hi!")
+
+	_, _ = maxprocs.Set(maxprocs.Logger(logger.Infof))
 
 	go listenSignals()
 	go start()
@@ -24,7 +37,7 @@ func main() {
 }
 
 func start() () {
-	fd := filed.New(filed.NewConfigFromFile("testdata/config/simple.yaml"))
+	fd := filed.New(filed.NewConfigFromFile(*config))
 	fd.Start()
 }
 
@@ -37,8 +50,10 @@ func listenSignals() {
 
 		switch s {
 		case syscall.SIGHUP:
+			logger.Infof("signal SIGHUP received")
 			reload()
 		case syscall.SIGTERM:
+			logger.Infof("signal SIGTERM received")
 			stop()
 			<-done
 		}

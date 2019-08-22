@@ -23,6 +23,7 @@ type Config struct {
 	PersistenceMode string `json:"persistence_mode"`
 	ReadBufferSize  int    `json:"read_buffer_size"`
 	ChanLength      int    `json:"chan_length"`
+	ResetOffsets    bool   `json:"reset_offsets"`
 
 	offsetsTmpFilename string
 	persistenceMode    byte
@@ -49,7 +50,7 @@ func factory() (pipeline.Plugin, pipeline.Config) {
 }
 
 func (p *FilePlugin) Start(config pipeline.Config, controller pipeline.Controller) {
-	logger.Info("starting input_file")
+	logger.Info("starting file input plugin")
 
 	p.config = config.(*Config)
 	if p.config == nil {

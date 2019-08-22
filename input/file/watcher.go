@@ -3,6 +3,7 @@ package file
 import (
 	"github.com/fsnotify/fsnotify"
 	"gitlab.ozon.ru/sre/filed/logger"
+	"go.uber.org/atomic"
 )
 
 type watcher struct {
@@ -10,7 +11,7 @@ type watcher struct {
 	path        string
 	fsWatcher   *fsnotify.Watcher
 
-	filesCreated int
+	filesCreated atomic.Int32
 }
 
 func NewWatcher(path string, jobProvider *jobProvider) *watcher {
@@ -55,7 +56,7 @@ func (w *watcher) watchEvents() {
 		//	//logger.Infof("file renaming detected %s", filename)
 		//}
 		if event.Op&fsnotify.Create == fsnotify.Create {
-			w.filesCreated++
+			w.filesCreated.Inc()
 
 			w.jobProvider.addJob(filename, false)
 		}
@@ -74,4 +75,8 @@ func (w *watcher) watchErrors() {
 
 		logger.Errorf("error while watching: %s", err.Error())
 	}
+}
+
+func (w *watcher) FilesCreated() int {
+	return int(w.filesCreated.Load())
 }

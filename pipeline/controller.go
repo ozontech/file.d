@@ -27,7 +27,8 @@ type SplitController struct {
 	pipelines   []*pipeline
 	splitBuffer *splitBuffer
 
-	inputPlugin *PluginWithConfig
+	inputPlugin   *PluginWithConfig
+	actionPlugins []*PluginWithConfig
 
 	shouldExit bool
 
@@ -48,8 +49,11 @@ func NewController(enableEventLog bool) *SplitController {
 	logger.Infof("starting new pipeline controller with procs=%d capacity=%d", procs, defaultCapacity)
 
 	controller := &SplitController{
-		capacity:         defaultCapacity,
-		done:             &sync.WaitGroup{},
+		capacity: defaultCapacity,
+		done:     &sync.WaitGroup{},
+
+		actionPlugins: make([]*PluginWithConfig, 0, 4),
+
 		shouldWaitForJob: true,
 		eventLogEnabled:  enableEventLog,
 		eventLog:         make([]string, 0, 128),
@@ -80,6 +84,10 @@ func (c *SplitController) Start() {
 	c.done.Add(1)
 
 	c.inputPlugin.Instance.Start(c.inputPlugin.Config, c)
+
+	for _, pluginInfo := range c.actionPlugins {
+		pluginInfo.Instance.Start(pluginInfo.Config, c)
+	}
 
 	for _, pipeline := range c.pipelines {
 		pipeline.start()
@@ -115,6 +123,10 @@ func (c *SplitController) commit(event *Event) {
 
 func (c *SplitController) SetInputPlugin(plugin *PluginWithConfig) {
 	c.inputPlugin = plugin
+}
+
+func (c *SplitController) AddActionPlugin(plugin *PluginWithConfig) {
+	c.actionPlugins = append(c.actionPlugins, plugin)
 }
 
 func (c *SplitController) EventsProcessed() int {

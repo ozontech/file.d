@@ -90,13 +90,12 @@ func (b *splitBuffer) Push(event *Event) {
 }
 
 func (b *splitBuffer) commit(event *Event) {
+	event.input.Commit(event)
+	b.eventsMu.Lock()
+
 	if b.eventsCount == 0 {
 		logger.Panic("extra event commit")
 	}
-
-	event.input.Commit(event)
-
-	b.eventsMu.Lock()
 	b.eventsCount--
 
 	if b.eventsCount == 0 {

@@ -5,7 +5,7 @@ settings:
 pipelines:
   docker-logs:                    # pipeline for docker logs
     input: docker                 # get logs from docker containers
-    processors:
+    actions:
     - add_k8s_meta                # add kubernetes meta info
     - discard_unnecessary_events: # don't process some logs defined by OR regexp operation
       match_fields:               # filter will be used when any of regexp matches
@@ -37,7 +37,7 @@ pipelines:
     - add_host_meta
     output: kafka
 
-processors:
+actions:
   add_k8s_meta:                   # define `add_k8s_meta` filter
     type: k8s_meta                # `add_k8s_meta` filter is a `k8s_meta` plugin
 

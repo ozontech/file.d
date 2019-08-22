@@ -105,12 +105,12 @@ func (w *worker) process(head *pipeline.Head, jobProvider *jobProvider, readBuff
 
 			// file was truncated, seek to start
 			if offset+readTotal > stat.Size() {
-				logger.Infof("file %s was truncated", file.Name())
+				logger.Infof("file %s was truncated, reading will start over", file.Name())
 				jobProvider.resetJob(job)
 				isEOF = false
 			}
 		}
 
-		jobProvider.releaseJob(job, isEOF)
+		jobProvider.releaseJob(job, isEOF, offset+accumulated+processed)
 	}
 }

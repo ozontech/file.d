@@ -25,8 +25,27 @@ func (r *PluginRegistry) GetInputByType(t string) *pipeline.PluginInfo {
 	return info.Info
 }
 
+func (r *PluginRegistry) GetActionByType(t string) *pipeline.PluginInfo {
+	id := r.MakeId(pipeline.PluginKindAction, t)
+
+	info := r.plugins[id]
+	if info == nil {
+		logger.Fatalf("can't find action plugin with type %q", t)
+		return nil
+	}
+
+	return info.Info
+}
+
 func (r *PluginRegistry) RegisterInput(info *pipeline.PluginInfo) {
 	err := r.register(pipeline.PluginKindInput, info)
+	if err != nil {
+		logger.Fatalf("can't register plugin %q: %s", info.Type, err.Error())
+	}
+}
+
+func (r *PluginRegistry) RegisterAction(info *pipeline.PluginInfo) {
+	err := r.register(pipeline.PluginKindAction, info)
 	if err != nil {
 		logger.Fatalf("can't register plugin %q: %s", info.Type, err.Error())
 	}

@@ -1,9 +1,9 @@
 package pipeline
 
 const (
-	PluginKindInput     = "input"
-	PluginKindProcessor = "processor"
-	PluginKindOutput    = "output"
+	PluginKindInput  = "input"
+	PluginKindAction = "action"
+	PluginKindOutput = "output"
 )
 
 type Param struct {

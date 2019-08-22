@@ -41,35 +41,65 @@ func (f *Filed) Start() {
 
 		controller := pipeline.NewController(false)
 
-		input := pipelineConfig.raw.Get("input")
-		if input.MustMap() == nil {
-			logger.Fatalf("no input for pipeline %q", pipelineName)
-		}
+		f.startInput(pipelineConfig, pipelineName, controller)
+		f.startActions(pipelineConfig, pipelineName, controller)
 
-		t := input.Get("type").MustString()
-		if t == "" {
-			logger.Fatalf("no input type provided for pipeline %q", pipelineName)
-		}
-
-		logger.Infof("creating input with type %q", t)
-
-		info := f.pluginRegistry.GetInputByType(t)
-		configJson, err := input.Encode()
-		if err != nil {
-			logger.Panicf("can't create config json for input %q in pipeline %q", t, pipelineName)
-		}
-
-		plugin, config := info.Factory()
-		err = json.Unmarshal(configJson, config)
-		if err != nil {
-			logger.Panicf("can't unmarshal config for input %q in pipeline %q", t, pipelineName)
-		}
-
-		controller.SetInputPlugin(&pipeline.PluginWithConfig{plugin, config})
 		controller.Start()
 	}
 
 	return
+}
+
+func (f *Filed) startInput(pipelineConfig *PipelineConfig, pipelineName string, controller *pipeline.SplitController) {
+	input := pipelineConfig.raw.Get("input")
+	if input.MustMap() == nil {
+		logger.Fatalf("no input for pipeline %q", pipelineName)
+	}
+	t := input.Get("type").MustString()
+	if t == "" {
+		logger.Fatalf("no input type provided for pipeline %q", pipelineName)
+	}
+	logger.Infof("creating input with type %q", t)
+	info := f.pluginRegistry.GetInputByType(t)
+	configJson, err := input.Encode()
+	if err != nil {
+		logger.Panicf("can't create config json for input %q in pipeline %q", t, pipelineName)
+	}
+	plugin, config := info.Factory()
+	err = json.Unmarshal(configJson, config)
+	if err != nil {
+		logger.Panicf("can't unmarshal config for input %q in pipeline %q", t, pipelineName)
+	}
+	controller.SetInputPlugin(&pipeline.PluginWithConfig{plugin, config})
+}
+
+func (f *Filed) startActions(pipelineConfig *PipelineConfig, pipelineName string, controller *pipeline.SplitController) {
+
+	actions := pipelineConfig.raw.Get("actions")
+	for index := range actions.MustArray() {
+		action := actions.GetIndex(index)
+		if action.MustMap() == nil {
+			logger.Fatalf("empty action #%d for pipeline %q", index, pipelineName)
+		}
+
+		t := action.Get("type").MustString()
+		if t == "" {
+			logger.Fatalf("action #%d doesn't provide type for pipeline %q", index, pipelineName)
+		}
+
+		logger.Infof("creating action with type %q", t)
+		info := f.pluginRegistry.GetActionByType(t)
+		configJson, err := action.Encode()
+		if err != nil {
+			logger.Panicf("can't create config json for action #%d in pipeline %q", index, t, pipelineName)
+		}
+		plugin, config := info.Factory()
+		err = json.Unmarshal(configJson, config)
+		if err != nil {
+			logger.Panicf("can't unmarshal config for action #%d in pipeline %q", index, t, pipelineName)
+		}
+		controller.AddActionPlugin(&pipeline.PluginWithConfig{plugin, config})
+	}
 }
 
 func (f *Filed) Stop() {

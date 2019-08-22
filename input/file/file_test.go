@@ -7,6 +7,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"sync"
 	"syscall"
 	"testing"
 
@@ -19,6 +20,8 @@ var (
 	filesDir   = ""
 	offsetsDir = ""
 )
+
+const offsetsFile = "filed_offsets.yaml"
 
 func setup() {
 	f, err := ioutil.TempDir("", "input_file")
@@ -45,7 +48,7 @@ func startController(persistenceMode string, enableEventLog bool, config *Config
 	controller := pipeline.NewController(enableEventLog)
 
 	if config == nil {
-		config = &Config{WatchingDir: filesDir, OffsetsFile: filepath.Join(offsetsDir, "filed_offsets.yaml"), PersistenceMode: persistenceMode}
+		config = &Config{WatchingDir: filesDir, OffsetsFile: filepath.Join(offsetsDir, offsetsFile), PersistenceMode: persistenceMode}
 	}
 	inputPlugin, _ := factory()
 
@@ -110,12 +113,19 @@ func createTempFile() string {
 }
 
 func createOffsetFile() string {
-	file, err := os.Create(path.Join(offsetsDir, "filed.offsets"))
+	file, err := os.Create(path.Join(offsetsDir, offsetsFile))
 	if err != nil {
 		panic(err.Error())
 	}
 
 	return file.Name()
+}
+
+func addDataFile(file *os.File, data []byte) {
+	if _, err := file.Write(data);
+		err != nil {
+		panic(err.Error())
+	}
 }
 
 func addData(file string, data []byte, isLine bool, sync bool) {
@@ -244,8 +254,7 @@ func TestWatchCreateFile(t *testing.T) {
 	file := createTempFile()
 	addData(file, []byte(`{"Test":"Test"}`), true, true)
 
-	assert.Equal(t, 1, p.watcher.filesCreated, "Watch failed")
-
+	assert.Equal(t, 1, p.watcher.FilesCreated(), "Watch failed")
 }
 
 func TestReadLineSimple(t *testing.T) {
@@ -292,7 +301,7 @@ func TestLoadOffsets(t *testing.T) {
 	setup()
 	defer shutdown()
 
-	data := `"some data"`
+	data := `{"some key":"some data"}`
 	dataFile := createTempFile()
 	addData(dataFile, []byte(data), false, false)
 
@@ -467,22 +476,39 @@ func TestReadInsane(t *testing.T) {
 
 	lines := 100
 	files := 32
-	filesNames := make([]string, 0, files)
-	for f := 0; f < files; f++ {
-		file := createTempFile()
-		for i := 0; i < lines; i++ {
-			addData(file, json, false, false)
-		}
-		filesNames = append(filesNames, file)
-	}
+	fs := make([]*os.File, 0, files)
+	fileNames := make([]string, 0, files)
 
 	c, p := startController("async", true, nil)
 	defer c.Stop()
 
+	for f := 0; f < files; f++ {
+		file := createTempFile()
+		f, err := os.OpenFile(file, os.O_APPEND|os.O_WRONLY, 0600)
+		if err != nil {
+			panic(err.Error())
+		}
+		//logger.Infof("added %s", file)
+		fs = append(fs, f)
+		fileNames = append(fileNames, file)
+	}
+
+	wg := &sync.WaitGroup{}
+	for i := range fs {
+		wg.Add(1)
+		go func(index int) {
+			for i := 0; i < lines; i++ {
+				addDataFile(fs[index], json)
+			}
+			wg.Done()
+		}(i)
+	}
+
+	wg.Wait()
 	c.WaitUntilDone()
 
 	p.jobProvider.saveOffsets()
-	assertOffsetsEqual(t, genOffsetsContentMultiple(filesNames, len(json)*lines), getContent(p.config.OffsetsFile))
+	assertOffsetsEqual(t, genOffsetsContentMultiple(fileNames, len(json)*lines), getContent(p.config.OffsetsFile))
 }
 
 func TestReadPlayground(t *testing.T) {

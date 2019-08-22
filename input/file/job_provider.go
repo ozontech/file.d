@@ -18,7 +18,8 @@ import (
 )
 
 const (
-	InfoReportInterval = time.Second * 1
+	infoReportInterval  = time.Second * 1
+	maintenanceInterval = time.Second * 5
 )
 
 type job struct {
@@ -27,8 +28,9 @@ type job struct {
 	isDone    bool
 	isRunning bool
 
-	sourceId uint64
-	offsets  offsetsByStream
+	sourceId   uint64
+	offsets    offsetsByStream
+	latestSize int64
 
 	mu *sync.Mutex
 }
@@ -42,6 +44,7 @@ type jobProvider struct {
 	jobsMu   *sync.Mutex
 	jobsChan chan *job
 	jobsLog  []string
+	jobsList []*job // temporary list of jobs
 
 	offsetsBuf      []string // content buffer to avoid allocation every offsets dump
 	loadedOffsets   offsetsAll
@@ -82,10 +85,13 @@ func NewJobProvider(config *Config, done *sync.WaitGroup) *jobProvider {
 
 func (jp *jobProvider) start() {
 	jp.shouldStop = false
-	jp.loadOffsets()
+	if !jp.config.ResetOffsets {
+		jp.loadOffsets()
+	}
 	jp.loadJobs()
 
 	go jp.reportStats()
+	go jp.maintenance()
 }
 
 func (jp *jobProvider) stop() {
@@ -99,7 +105,6 @@ func (jp *jobProvider) sendToWorkers(job *job) {
 		logger.Panicf("why run? it's at end or already running")
 	}
 	job.isRunning = true
-
 	jp.jobsChan <- job
 }
 
@@ -152,7 +157,10 @@ func (jp *jobProvider) addJob(filename string, loadOffset bool) {
 
 	existingJob, has := jp.jobs[inode]
 	if has {
-		jp.resumeJob(existingJob)
+		existingJob.mu.Lock()
+		defer existingJob.mu.Unlock()
+
+		jp.resumeJob(existingJob, stat.Size())
 		return
 	}
 
@@ -165,7 +173,10 @@ func (jp *jobProvider) addJob(filename string, loadOffset bool) {
 	jp.jobsLog = append(jp.jobsLog, filename)
 
 	jp.jobsDone.Inc()
-	jp.resumeJob(job)
+
+	job.mu.Lock()
+	defer job.mu.Unlock()
+	jp.resumeJob(job, stat.Size())
 }
 
 func (jp *jobProvider) instantiateJob(file *os.File, inode uint64, loadOffsets bool) *job {
@@ -205,9 +216,10 @@ func (jp *jobProvider) instantiateJob(file *os.File, inode uint64, loadOffsets b
 	return job
 }
 
-func (jp *jobProvider) resumeJob(job *job) {
-	job.mu.Lock()
-	defer job.mu.Unlock()
+// resumeJob job should be already locked
+func (jp *jobProvider) resumeJob(job *job, size int64) {
+	job.latestSize = size
+
 	if !job.isDone {
 		return
 	}
@@ -222,7 +234,7 @@ func (jp *jobProvider) resumeJob(job *job) {
 	jp.sendToWorkers(job)
 }
 
-func (jp *jobProvider) releaseJob(job *job, isAtEnd bool) {
+func (jp *jobProvider) releaseJob(job *job, wasEOF bool, offset int64) {
 	job.mu.Lock()
 	defer job.mu.Unlock()
 
@@ -231,16 +243,16 @@ func (jp *jobProvider) releaseJob(job *job, isAtEnd bool) {
 	}
 
 	job.isRunning = false
-	job.isDone = isAtEnd
-	if isAtEnd {
+	if wasEOF && offset >= job.latestSize {
+		job.isDone = true
+		job.latestSize = offset
+
 		v := int(jp.jobsDone.Inc())
 		if v > len(jp.jobs) {
 			logger.Panicf("done jobs counter more than job count")
 		}
 		jp.done.Done()
-	}
-
-	if !isAtEnd {
+	} else {
 		jp.sendToWorkers(job)
 	}
 }
@@ -385,7 +397,7 @@ func (jp *jobProvider) loadJobs() {
 
 func (jp *jobProvider) reportStats() {
 	for {
-		time.Sleep(InfoReportInterval)
+		time.Sleep(infoReportInterval)
 		if jp.shouldStop {
 			return
 		}
@@ -398,14 +410,106 @@ func (jp *jobProvider) reportStats() {
 
 		if added <= 3 {
 			for _, job := range jp.jobsLog {
-				logger.Infof("found new file for watching %s ", job)
+				logger.Infof("job added for new file %s ", job)
 			}
 		}
 		if added > 3 {
-			logger.Infof("found %d new files for watching", added)
+			logger.Infof("jobs added for new files count=%d", added)
 		}
 
 		jp.jobsLog = jp.jobsLog[:0]
+	}
+}
+
+func (jp *jobProvider) maintenance() {
+	for {
+		time.Sleep(maintenanceInterval)
+		if jp.shouldStop {
+			return
+		}
+
+		// snapshot current jobs to not lock jobs map for a long time
+		jp.jobsList = jp.jobsList[:0]
+		jp.jobsMu.Lock()
+		for _, job := range jp.jobs {
+			jp.jobsList = append(jp.jobsList, job)
+		}
+		jp.jobsMu.Unlock()
+
+		for _, job := range jp.jobsList {
+			job.mu.Lock()
+			if !job.isDone {
+				job.mu.Unlock()
+				continue
+			}
+
+			stat, err := job.file.Stat()
+			if err != nil {
+				logger.Warnf("can't stat file %s", job.file.Name())
+				job.mu.Unlock()
+				continue
+			}
+
+			if job.latestSize != stat.Size() && job.isDone {
+				jp.resumeJob(job, job.latestSize)
+				job.mu.Unlock()
+				continue
+			}
+
+			// try release file descriptor in the case file was deleted
+			// for that reason just close it and try to open
+			sysStat := stat.Sys().(*syscall.Stat_t)
+
+			filename := job.file.Name()
+			inode := sysStat.Ino
+
+			offset, err := job.file.Seek(0, io.SeekCurrent)
+			if err != nil {
+				logger.Warnf("can't seek file %s", filename)
+				job.mu.Unlock()
+				continue
+			}
+
+			if offset != job.latestSize {
+				logger.Warnf("something strange happened with offsets of file %s", filename)
+				jp.resumeJob(job, job.latestSize)
+				job.mu.Unlock()
+			}
+
+			err = job.file.Close()
+			if err != nil {
+				logger.Warnf("can't close file %s", filename)
+				job.mu.Unlock()
+				continue
+			}
+
+			file, err := os.Open(filename)
+			if err != nil {
+				jp.jobsMu.Lock()
+
+				delete(jp.jobs, inode)
+				// job isn't done we've delete it
+				v := jp.jobsDone.Dec()
+				if v < 0 {
+					logger.Panicf("done jobs counter less than zero")
+
+				}
+
+				jp.jobsMu.Unlock()
+
+				logger.Infof("job for file %s was released", filename)
+				job.mu.Unlock()
+				continue
+			}
+
+			_, err = file.Seek(offset, io.SeekStart)
+			if err != nil {
+				logger.Panicf("can't seek file %s after reopen", filename)
+			}
+
+			job.file = file
+			job.mu.Unlock()
+		}
 	}
 }
 

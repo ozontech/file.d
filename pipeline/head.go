@@ -23,7 +23,7 @@ func (i *Head) Push(source InputPlugin, sourceId uint64, from int64, delta int64
 	parser := event.parser
 	json, err := parser.ParseBytes(bytes)
 	if err != nil {
-		logger.Fatalf("wrong json %s at offset %d, prev line: %s", string(bytes), from, i.splitBuffer.events[i.splitBuffer.eventsCount-1].raw)
+		logger.Fatalf("wrong json %s at offset %d", string(bytes), from)
 		return
 	}
 
