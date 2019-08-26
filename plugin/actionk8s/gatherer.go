@@ -38,9 +38,9 @@ type containerName string
 type containerID string
 
 var (
-	meta          = make(metaData)
-	client        *kubernetes.Clientset
-	maintenanceMu sync.Mutex
+	meta   = make(metaData)
+	client *kubernetes.Clientset
+	metaMu sync.Mutex
 
 	expiredItems = make([]*metaItem, 0, 16)
 
@@ -56,17 +56,20 @@ var (
 	stopWg = &sync.WaitGroup{}
 
 	// some debugging shit
-	disableWatching     = false
-	checkerLogsCounter  = make(map[podName]int)
-	watchEventsCounter  atomic.Int64
+	disableWatching          = false
+	checkerLogs                  = make(map[podName]int)
+	metaAddedCounter    atomic.Int64
 	expiredItemsCounter atomic.Int64
 )
 
 func enableGatherer() {
 	logger.Info("enabling k8s meta gatherer")
 
+	createClient()
+
 	stopWg.Add(1)
 	go gather()
+
 	stopWg.Add(1)
 	go maintenance()
 }
@@ -101,7 +104,7 @@ func gather() {
 	}
 }
 
-func getWatcher() watch.Interface {
+func createClient() {
 	apiConfig, err := rest.InClusterConfig()
 	if err != nil {
 		kubeConfig := filepath.Join(os.Getenv("HOME"), ".kube", "config")
@@ -115,6 +118,9 @@ func getWatcher() watch.Interface {
 		logger.Fatalf("can't create k8s client: %s", err.Error())
 		panic("")
 	}
+}
+
+func getWatcher() watch.Interface {
 	watcher, err := client.CoreV1().Pods("").Watch(metav1.ListOptions{})
 	if err != nil {
 		logger.Fatalf("can't watch k8s pod events: %s", err.Error())
@@ -135,31 +141,50 @@ func maintenance() {
 			stopWg.Done()
 			return
 		default:
+			// retrieve all pods info first, then sleep
+			refresh()
 			time.Sleep(maintenanceInterval)
-
-			cleanUp()
 		}
 	}
 }
 
-func cleanUp() {
-	maintenanceMu.Lock()
-	defer maintenanceMu.Unlock()
+func refresh() {
+	podList, err := client.CoreV1().Pods("").List(metav1.ListOptions{})
+	if err != nil {
+		logger.Errorf("can't get pod list from k8s")
+		return
+	}
 
-	expiredItems = getExpiredItems(expiredItems[:0])
+	// update time for pods which is in the k8s pod list
+	for _, podMeta := range podList.Items {
+		putMeta(&podMeta)
+	}
+
+	expiredItems = getExpiredItems(expiredItems)
 	cleanUpItems(expiredItems)
 
 	notFull := 0
-	for _, c := range checkerLogsCounter {
+	for _, c := range checkerLogs {
 		if c != 20001 {
 			notFull++
 		}
 	}
-	logger.Infof("checker logs total=%d, not full=%d", len(checkerLogsCounter), notFull)
+
+	logger.Infof("k8s meta stat for last %d seconds: updated=%d, expired=%d", maintenanceInterval/time.Second, metaAddedCounter.Load(), expiredItemsCounter.Load())
+	logger.Infof("checker logs total=%d, not full=%d", len(checkerLogs), notFull)
+
+	metaAddedCounter.Swap(0)
+	expiredItemsCounter.Swap(0)
 }
 
 func getExpiredItems(out []*metaItem) []*metaItem {
+	out = out[:0]
 	now := time.Now()
+
+	metaMu.Lock()
+	defer metaMu.Unlock()
+
+	// find pods which isn't in k8s pod list for some time and add them to the expiration list
 	for ns, podNames := range meta {
 		for pod, containerIDs := range podNames {
 			for cid, podData := range containerIDs {
@@ -170,9 +195,13 @@ func getExpiredItems(out []*metaItem) []*metaItem {
 						containerID: cid,
 					})
 				}
+
+				// don't need to check all containers, just first
+				break
 			}
 		}
 	}
+
 	return out
 }
 
@@ -192,18 +221,18 @@ func cleanUpItems(items []*metaItem) {
 func getMeta(ns namespace, pod podName, cid containerID, container containerName) *corev1.Pod {
 	i := time.Nanosecond
 	for {
-		maintenanceMu.Lock()
-		if meta[ns][pod][cid] != nil {
-			metaInfo := meta[ns][pod][cid]
-			maintenanceMu.Unlock()
+		metaMu.Lock()
+		metaInfo := meta[ns][pod][cid]
+		metaMu.Unlock()
+
+		if metaInfo != nil {
 			return metaInfo
 		}
-		maintenanceMu.Unlock()
 
 		time.Sleep(metaRecheckInterval)
 		i += metaRecheckInterval
 		if i-metaWaitTimeout >= 0 {
-			logger.Errorf("meta retrieve timeout for ns=%s pod=%s container=%s", string(ns), string(pod), string(container))
+			logger.Errorf("meta retrieve timeout for ns=%s pod=%s container=%s cid=%s", string(ns), string(pod), string(container), string(cid))
 			return nil
 		}
 	}
@@ -217,8 +246,8 @@ func putMeta(podMeta *corev1.Pod) {
 	pod := podName(podMeta.Name)
 	ns := namespace(podMeta.Namespace)
 
-	maintenanceMu.Lock()
-	defer maintenanceMu.Unlock()
+	metaMu.Lock()
+	defer metaMu.Unlock()
 
 	if meta[ns] == nil {
 		meta[ns] = make(map[podName]map[containerID]*corev1.Pod)
@@ -228,28 +257,47 @@ func putMeta(podMeta *corev1.Pod) {
 		meta[ns][pod] = make(map[containerID]*corev1.Pod)
 	}
 
-	for _, containerStatus := range podMeta.Status.ContainerStatuses {
-		if len(containerStatus.ContainerID) == 0 {
-			continue
+	// normal containers
+	for _, status := range podMeta.Status.ContainerStatuses {
+		putContainerMeta(ns, pod, status.ContainerID, status.Name, podMeta)
+
+		if status.LastTerminationState.Terminated != nil {
+			putContainerMeta(ns, pod, status.LastTerminationState.Terminated.ContainerID, status.Name, podMeta)
 		}
-
-		if len(containerStatus.ContainerID) < 9 || containerStatus.ContainerID[:9] != "docker://" {
-			logger.Fatalf("wrong container id: %s", containerStatus.ContainerID)
-		}
-
-		containerID := containerID(containerStatus.ContainerID[9:])
-		if len(containerID) != 64 {
-			logger.Fatalf("wrong container id: %s", containerStatus.ContainerID)
-		}
-
-		// hack to avoid creation of special struct to store time
-		// store it in generation field of k8d pod
-		podMeta.Generation = time.Now().UnixNano()
-		meta[ns][pod][containerID] = podMeta
-
 	}
 
-	watchEventsCounter.Inc()
+	// init containers
+	for _, status := range podMeta.Status.InitContainerStatuses {
+		putContainerMeta(ns, pod, status.ContainerID, status.Name, podMeta)
+
+		if status.LastTerminationState.Terminated != nil {
+			putContainerMeta(ns, pod, status.LastTerminationState.Terminated.ContainerID, status.Name, podMeta)
+		}
+	}
+
+	metaAddedCounter.Inc()
+}
+
+func putContainerMeta(ns namespace, pod podName, fullContainerID string, containerName string, podMeta *corev1.Pod) {
+	if len(fullContainerID) == 0 {
+		return
+	}
+
+	if len(fullContainerID) < 9 || fullContainerID[:9] != "docker://" {
+		logger.Fatalf("wrong container id: %s", fullContainerID)
+	}
+
+	containerID := containerID(fullContainerID[9:])
+	if len(containerID) != 64 {
+		logger.Fatalf("wrong container id: %s", fullContainerID)
+	}
+
+	// hack to avoid creation of special struct to store time
+	// store it in generation field of k8d pod
+	podMeta.Generation = time.Now().UnixNano()
+	meta[ns][pod][containerID] = podMeta
+
+	//logger.Infof("k8s meta added ns=%s pod=%s container=%s cid=%s", ns, pod, containerName, containerID)
 }
 
 func parseDockerFilename(fullFilename string) (namespace, podName, containerName, containerID) {

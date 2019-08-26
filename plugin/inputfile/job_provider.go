@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	infoReportInterval  = time.Second * 1
+	infoReportInterval  = time.Second * 10
 	maintenanceInterval = time.Second * 5
 )
 
@@ -92,6 +92,7 @@ func NewJobProvider(config *Config, done *sync.WaitGroup) *jobProvider {
 }
 
 func (jp *jobProvider) start() {
+	logger.Infof("starting job provider persistence mode=%s", jp.config.PersistenceMode)
 	if !jp.config.ResetOffsets {
 		jp.loadOffsets()
 	}
@@ -440,12 +441,13 @@ func (jp *jobProvider) reportStats() {
 			return
 		default:
 
+			jp.jobsMu.Lock()
+
 			saveCount := jp.offsetsSaveCounter.Swap(0)
 			if saveCount != 0 {
-				logger.Infof("offsets saved %d times for last %d seconds", saveCount, infoReportInterval/time.Second)
+				logger.Infof("file plugin stats for last %d seconds: offsets saves=%d, jobs done=%d, jobs total=%d", infoReportInterval/time.Second, saveCount, jp.jobsDoneCounter.Load(), len(jp.jobs))
 			}
 
-			jp.jobsMu.Lock()
 			added := len(jp.jobsLog)
 			if added <= 3 {
 				for _, job := range jp.jobsLog {
@@ -562,7 +564,7 @@ func (jp *jobProvider) maintenance() {
 				job.mu.Unlock()
 			}
 
-			logger.Debugf("maintenance stats not done jobs=%d, resumed jobs=%d, reopened=%d", jobsNotDone, jobsResumed, jobsReopened)
+			logger.Debugf("maintenance stats: not done jobs=%d, resumed jobs=%d, reopened=%d", jobsNotDone, jobsResumed, jobsReopened)
 			time.Sleep(maintenanceInterval)
 		}
 	}

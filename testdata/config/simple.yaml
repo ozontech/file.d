@@ -3,7 +3,7 @@ pipelines:
     input:
       type: file
       persistence_mode: async
-      watching_dir: ./testdata/playground/logs
+      watching_dir: ./testdata/playground/k8s
       offsets_file: ./testdata/playground/offsets/docker_offsets.yaml
       reset_offsets: true
     actions:

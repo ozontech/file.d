@@ -3,13 +3,13 @@ test:
 	go test ./filed/ -v -count 1
 	go test ./plugin/... -v -count 1
 
-.PHONY: bench
-bench:
-	go test -bench LightJsonReadPar ./input/file -v -count 1 -run -benchmem -benchtime 1x
+.PHONY: bench-file
+bench-file:
+	go test -bench LightJsonReadPar ./plugin/inputfile -v -count 1 -run -benchmem -benchtime 1x
 
-.PHONY: profile
-profile:
-	go test -bench LightJsonReadPar ./input/file -v -count 1 -run -benchmem -benchtime 1x -cpuprofile cpu.pprof -memprofile mem.pprof
+.PHONY: profile-file
+profile-file:
+	go test -bench LightJsonReadPar ./plugin/inputfile -v -count 1 -run -benchmem -benchtime 1x -cpuprofile cpu.pprof -memprofile mem.pprof
 
 .PHONY: build
 build:

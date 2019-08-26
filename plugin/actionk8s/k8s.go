@@ -63,9 +63,9 @@ func (k *K8SPlugin) Do(event *pipeline.Event) {
 		event.JSON.Set("k8s_node", fastjson.MustParse(`"`+string(podMeta.Spec.NodeName)+`"`))
 	}
 
-	maintenanceMu.Lock()
-	defer maintenanceMu.Unlock()
+	metaMu.Lock()
+	defer metaMu.Unlock()
 	if strings.Contains(string(pod), "advanced-logs-checker") {
-		checkerLogsCounter[pod]++
+		checkerLogs[pod]++
 	}
 }

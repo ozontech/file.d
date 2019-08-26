@@ -6,10 +6,10 @@ type Track struct {
 	descriptions []*PluginDescription
 	actions      []ActionPlugin
 
+	shouldStop bool
+
 	streams    []*stream
 	nextStream chan *stream
-
-	stopCh chan bool
 }
 
 func NewTrack(pipeline *SplitPipeline) *Track {
@@ -17,7 +17,6 @@ func NewTrack(pipeline *SplitPipeline) *Track {
 		pipeline:   pipeline,
 		streams:    make([]*stream, 0, 16),
 		nextStream: make(chan *stream, pipeline.capacity),
-		stopCh:     make(chan bool),
 	}
 }
 
@@ -27,6 +26,7 @@ func (t *Track) addStream(stream *stream) {
 }
 
 func (t *Track) start() {
+	t.shouldStop = false
 	for _, pd := range t.descriptions {
 		pd.Plugin.(ActionPlugin).Start(pd.Config, t)
 	}
@@ -39,7 +39,9 @@ func (t *Track) stop() {
 		action.Stop()
 	}
 
-	t.stopCh <- true
+	t.shouldStop = true
+	//unblock goroutine
+	t.nextStream <- nil
 }
 
 func (t *Track) process() {
@@ -59,14 +61,13 @@ func (t *Track) process() {
 
 func (t *Track) getEvent() *Event {
 	for {
-		select {
-		case stream := <-t.nextStream:
-			event := stream.tryPop()
-			if event != nil {
-				return event
-			}
-		case <-t.stopCh:
+		stream := <-t.nextStream
+		if t.shouldStop {
 			return nil
+		}
+		event := stream.tryPop()
+		if event != nil {
+			return event
 		}
 	}
 }

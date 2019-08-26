@@ -10,7 +10,7 @@ import (
 )
 
 const statsInfoReportInterval = time.Second * 5
-const defaultCapacity = 128
+const defaultCapacity = 256
 
 type Pipeline interface {
 	GetHeads() []*Head
@@ -147,7 +147,7 @@ func (p *SplitPipeline) reportStats() {
 			delta := processed - lastProcessed
 			rate := float32(delta) / float32(statsInfoReportInterval) * float32(time.Second)
 
-			logger.Infof("stats for last %d seconds: processed=%d, rate=%.f/sec, queue=%d", statsInfoReportInterval/time.Second, delta, rate, p.splitBuffer.eventsCount)
+			logger.Infof("pipeline %q stats for last %d seconds: processed=%d, rate=%.f/sec, queue=%d", p.name, statsInfoReportInterval/time.Second, delta, rate, p.splitBuffer.eventsCount)
 
 			lastProcessed = processed
 			time.Sleep(statsInfoReportInterval)
@@ -167,13 +167,23 @@ func (p *SplitPipeline) HandleEventFlowStart() {
 	p.doneWg.Add(1)
 }
 
-func (p *SplitPipeline) HandleEventFlowFinish() {
+func (p *SplitPipeline) HandleEventFlowFinish(instant bool) {
+	if instant {
+		p.doneWg.Done()
+		return
+	}
+
 	// fs events may have delay, so wait for them
 	time.Sleep(time.Millisecond * 100)
 	p.doneWg.Done()
 }
 
-func (p *SplitPipeline) WaitUntilDone() {
+func (p *SplitPipeline) WaitUntilDone(instant bool) {
+	if instant {
+		p.doneWg.Wait()
+		return
+	}
+
 	for {
 		p.doneWg.Wait()
 		//fs events may have delay, so wait for them
@@ -192,7 +202,7 @@ func (p *SplitPipeline) GetEventLogLength() int {
 
 func (p *SplitPipeline) GetEventLogItem(index int) string {
 	if index >= len(p.eventLog) {
-		logger.Fatalf("Can't find log item with index %d", index)
+		logger.Fatalf("can't find log item with index %d", index)
 	}
 	return p.eventLog[index]
 }

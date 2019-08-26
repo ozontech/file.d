@@ -22,11 +22,13 @@ var (
 	config = kingpin.Flag("config", "config file name").Required().ExistingFile()
 )
 
+func init() {
+	logger.Info("hi!")
+}
+
 func main() {
 	kingpin.Version(version)
 	kingpin.Parse()
-
-	logger.Info("hi!")
 
 	_, _ = maxprocs.Set(maxprocs.Logger(logger.Infof))
 

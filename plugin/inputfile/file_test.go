@@ -258,7 +258,7 @@ func TestWatchCreateFile(t *testing.T) {
 
 	file := createTempFile()
 	addData(file, []byte(`{"Test":"Test"}`), true, true)
-	c.HandleEventFlowFinish()
+	c.HandleEventFlowFinish(false)
 
 	assert.Equal(t, 1, p.watcher.FilesCreated(), "Watch failed")
 }
@@ -274,9 +274,9 @@ func TestReadLineSimple(t *testing.T) {
 	addData(file, []byte(`{"Data":"Line1"}`), true, true)
 	addData(file, []byte(`{"Data":"Line2"}`), true, true)
 	addData(file, []byte(`{"Data":"Line3"}`), true, true)
-	c.HandleEventFlowFinish()
+	c.HandleEventFlowFinish(false)
 
-	c.WaitUntilDone()
+	c.WaitUntilDone(false)
 
 	assert.Equal(t, 3, c.GetEventLogLength(), "Wrong log count")
 	assert.Equal(t, 3, c.EventsProcessed(), "Wrong log count")
@@ -297,9 +297,9 @@ func TestOffsetsSimple(t *testing.T) {
 	addData(file, []byte(`{"Data":"Line1"}`), true, false)
 	addData(file, []byte(`{"Data":"Line2"}`), true, false)
 	addData(file, []byte(`{"Data":"Line3"}`), true, false)
-	c.HandleEventFlowFinish()
+	c.HandleEventFlowFinish(false)
 
-	c.WaitUntilDone()
+	c.WaitUntilDone(false)
 
 	p.jobProvider.saveOffsets()
 	assert.Equal(t, genOffsetsContent(file, 51), getContent(p.config.OffsetsFile), "Wrong offsets")
@@ -335,9 +335,9 @@ func TestContinueReading(t *testing.T) {
 	addData(file, []byte(`{"Data":"Line1"}`), true, false)
 	addData(file, []byte(`{"Data":"Line2"}`), true, false)
 	addData(file, []byte(`{"Data":"Line3"}`), true, false)
-	c.HandleEventFlowFinish()
+	c.HandleEventFlowFinish(false)
 
-	c.WaitUntilDone()
+	c.WaitUntilDone(false)
 	c.Stop()
 	p.jobProvider.saveOffsets()
 	processed := c.EventsProcessed()
@@ -349,8 +349,8 @@ func TestContinueReading(t *testing.T) {
 
 	c, p = startPipeline("async", true, nil)
 
-	c.HandleEventFlowFinish()
-	c.WaitUntilDone()
+	c.HandleEventFlowFinish(false)
+	c.WaitUntilDone(false)
 	c.Stop()
 
 	assert.Equal(t, 7, processed+c.EventsProcessed(), "Wrong log count")
@@ -370,9 +370,9 @@ func TestReadSeq(t *testing.T) {
 	addData(file, []byte(`{"Data":"Line1`), false, true)
 	addData(file, []byte(`Line2`), false, true)
 	addData(file, []byte(`Line3"}`), true, true)
-	c.HandleEventFlowFinish()
+	c.HandleEventFlowFinish(false)
 
-	c.WaitUntilDone()
+	c.WaitUntilDone(false)
 
 	assert.Equal(t, 1, c.GetEventLogLength(), "Wrong log count")
 	assert.Equal(t, 1, c.EventsProcessed(), "Wrong log count")
@@ -392,9 +392,9 @@ func TestReadComplexSeqMulti(t *testing.T) {
 
 	lines := 1000
 	addLines(file, lines, lines+lines)
-	c.HandleEventFlowFinish()
+	c.HandleEventFlowFinish(false)
 
-	c.WaitUntilDone()
+	c.WaitUntilDone(false)
 	assert.Equal(t, lines, c.GetEventLogLength(), "Wrong log count")
 	assert.Equal(t, lines, c.EventsProcessed(), "Wrong processed events count")
 
@@ -418,9 +418,9 @@ func TestReadComplexSeqOne(t *testing.T) {
 	}
 	addData(file, []byte{}, false, false)
 	addData(file, []byte(`"`), true, false)
-	c.HandleEventFlowFinish()
+	c.HandleEventFlowFinish(false)
 
-	c.WaitUntilDone()
+	c.WaitUntilDone(false)
 
 	assert.Equal(t, 1, c.GetEventLogLength(), "Wrong log count")
 	assert.Equal(t, lines+2, len(c.GetEventLogItem(0)), "Wrong log")
@@ -447,8 +447,8 @@ func TestReadComplexPar(t *testing.T) {
 	c, p := startPipeline("async", true, nil)
 	defer c.Stop()
 
-	c.HandleEventFlowFinish()
-	c.WaitUntilDone()
+	c.HandleEventFlowFinish(false)
+	c.WaitUntilDone(false)
 
 	assert.Equal(t, lines*files, c.GetEventLogLength(), "Wrong log count")
 	assert.Equal(t, lines*files, c.EventsProcessed(), "Wrong processed events count")
@@ -471,8 +471,8 @@ func TestReadHeavy(t *testing.T) {
 		addData(file, json, false, true)
 	}
 
-	c.HandleEventFlowFinish()
-	c.WaitUntilDone()
+	c.HandleEventFlowFinish(false)
+	c.WaitUntilDone(false)
 
 	assert.Equal(t, lines, c.GetEventLogLength())
 	assert.Equal(t, lines, c.EventsProcessed())
@@ -518,8 +518,8 @@ func TestReadInsane(t *testing.T) {
 	}
 
 	wg.Wait()
-	c.HandleEventFlowFinish()
-	c.WaitUntilDone()
+	c.HandleEventFlowFinish(false)
+	c.WaitUntilDone(false)
 
 	p.jobProvider.saveOffsets()
 	assertOffsetsEqual(t, genOffsetsContentMultiple(fileNames, len(json)*lines), getContent(p.config.OffsetsFile))
@@ -537,8 +537,8 @@ func TestReadPlayground(t *testing.T) {
 	c, _ := startPipeline("async", true, nil)
 	defer c.Stop()
 
-	c.HandleEventFlowFinish()
-	c.WaitUntilDone()
+	c.HandleEventFlowFinish(false)
+	c.WaitUntilDone(false)
 }
 
 func TestRenameRotationHandle(t *testing.T) {
@@ -565,9 +565,9 @@ func TestRenameRotationHandle(t *testing.T) {
 	addData(file, []byte(`{"Data":"Line2_2"}`), true, false)
 	addData(file, []byte(`{"Data":"Line2_2"}`), true, false)
 	addData(file, []byte(`{"Data":"Line3_2"}`), true, false)
-	c.HandleEventFlowFinish()
+	c.HandleEventFlowFinish(false)
 
-	c.WaitUntilDone()
+	c.WaitUntilDone(false)
 
 	p.jobProvider.saveOffsets()
 	offsets := fmt.Sprintf(`- file: %d %s
@@ -591,9 +591,9 @@ func TestShutdownRotation(t *testing.T) {
 	file := createTempFile()
 	addData(file, []byte(`{"Data":"Line1_1"}`), true, false)
 	addData(file, []byte(`{"Data":"Line2_1"}`), true, false)
-	c.HandleEventFlowFinish()
+	c.HandleEventFlowFinish(false)
 
-	c.WaitUntilDone()
+	c.WaitUntilDone(false)
 	c.Stop()
 	assert.Equal(t, 2, c.GetEventLogLength(), "Wrong log count")
 	assert.Equal(t, 2, c.EventsProcessed(), "Wrong processed events count")
@@ -612,8 +612,8 @@ func TestShutdownRotation(t *testing.T) {
 
 	c, p = startPipeline("async", true, nil)
 	defer c.Stop()
-	c.HandleEventFlowFinish()
-	c.WaitUntilDone()
+	c.HandleEventFlowFinish(false)
+	c.WaitUntilDone(false)
 	p.jobProvider.saveOffsets()
 
 	offsets := fmt.Sprintf(`- file: %d %s
@@ -639,9 +639,9 @@ func TestTruncation(t *testing.T) {
 	file := createTempFile()
 	addData(file, data, true, false)
 	addData(file, data, true, false)
-	c.HandleEventFlowFinish()
+	c.HandleEventFlowFinish(false)
 
-	c.WaitUntilDone()
+	c.WaitUntilDone(false)
 	assert.Equal(t, 2, c.GetEventLogLength(), "Wrong log count")
 	assert.Equal(t, 2, c.EventsProcessed(), "Wrong processed events count")
 
@@ -651,9 +651,9 @@ func TestTruncation(t *testing.T) {
 	addData(file, data, true, true)
 	addData(file, data, true, true)
 	addData(file, data, true, true)
-	c.HandleEventFlowFinish()
+	c.HandleEventFlowFinish(false)
 
-	c.WaitUntilDone()
+	c.WaitUntilDone(false)
 	assert.Equal(t, 5, c.GetEventLogLength(), "Wrong log count")
 	assert.Equal(t, 5, c.EventsProcessed(), "Wrong processed events count")
 
@@ -699,8 +699,8 @@ func TestRenameRotationInsane(t *testing.T) {
 	}
 
 	wg.Wait()
-	c.HandleEventFlowFinish()
-	c.WaitUntilDone()
+	c.HandleEventFlowFinish(false)
+	c.WaitUntilDone(false)
 
 	p.jobProvider.saveOffsets()
 
@@ -744,7 +744,8 @@ func BenchmarkRawRead(b *testing.B) {
 	for n := 0; n < b.N; n++ {
 		c, _ := startPipeline("timer", false, nil)
 
-		c.WaitUntilDone()
+		c.HandleEventFlowFinish(false)
+		c.WaitUntilDone(false)
 		fmt.Printf("gen lines=%d, processed lines: %d\n", lines, c.EventsProcessed())
 
 		c.Stop()
@@ -770,7 +771,8 @@ func BenchmarkHeavyJsonRead(b *testing.B) {
 	for n := 0; n < b.N; n++ {
 		c, _ := startPipeline("timer", false, nil)
 
-		c.WaitUntilDone()
+		c.HandleEventFlowFinish(true)
+		c.WaitUntilDone(true)
 		fmt.Printf("gen bytes=%d, gen lines=%d, processed lines: %d\n", lines*len(json), lines, c.EventsProcessed())
 
 		c.Stop()
@@ -796,7 +798,8 @@ func BenchmarkLightJsonReadSeq(b *testing.B) {
 	for n := 0; n < b.N; n++ {
 		c, _ := startPipeline("timer", false, nil)
 
-		c.WaitUntilDone()
+		c.HandleEventFlowFinish(true)
+		c.WaitUntilDone(true)
 		fmt.Printf("gen bytes=%d, gen lines=%d, processed lines: %d\n", lines*len(json), lines*2, c.EventsProcessed())
 
 		c.Stop()
@@ -807,7 +810,7 @@ func BenchmarkLightJsonReadPar(b *testing.B) {
 	setup()
 	defer shutdown()
 
-	lines := 10000
+	lines := 128 * 128
 	files := 64
 
 	json := getContent("../../testdata/json/light.json")
@@ -824,16 +827,20 @@ func BenchmarkLightJsonReadPar(b *testing.B) {
 
 	b.SetBytes(int64(files * lines * len(json)))
 	b.ReportAllocs()
+	b.StopTimer()
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
 		c, _ := startPipeline("timer", false, nil)
 
-		c.WaitUntilDone()
+		b.StartTimer()
+		c.HandleEventFlowFinish(true)
+		c.WaitUntilDone(true)
 		fmt.Printf("gen bytes=%d, gen lines=%d, processed lines: %d\n",
 			files*lines*len(json),
 			files*lines*2,
 			c.EventsProcessed(),
 		)
+		b.StopTimer()
 
 		c.Stop()
 	}

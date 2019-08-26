@@ -82,7 +82,7 @@ func TestEnrichment(t *testing.T) {
 	input.Push(0, filename, 0, 0, []byte(json))
 	input.Wait()
 
-	assert.Equal(t, 1, checkerLogsCounter["advanced-logs-checker-1566485760-trtrq"])
+	assert.Equal(t, 1, checkerLogs["advanced-logs-checker-1566485760-trtrq"])
 
 	assert.NotNil(t, event.JSON.Get("k8s_pod"), "can't find field")
 	assert.Equal(t, `"advanced-logs-checker-1566485760-trtrq"`, event.JSON.Get("k8s_pod").String())
