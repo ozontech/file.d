@@ -8,7 +8,7 @@ import (
 )
 
 type splitBuffer struct {
-	controller *SplitController
+	pipeline *SplitPipeline
 
 	events      []*Event
 	eventsMu    sync.Mutex
@@ -24,11 +24,11 @@ type splitBuffer struct {
 	MaxCapacityUsage int
 }
 
-func newSplitBuffer(controller *SplitController) *splitBuffer {
-	capacity := controller.capacity
+func newSplitBuffer(pipeline *SplitPipeline) *splitBuffer {
+	capacity := pipeline.capacity
 
 	splitBuffer := &splitBuffer{
-		controller: controller,
+		pipeline: pipeline,
 
 		events:   make([]*Event, capacity, capacity),
 		eventsMu: sync.Mutex{},
@@ -54,7 +54,7 @@ func (b *splitBuffer) Reserve() *Event {
 	<-b.reserves
 	index, event := b.reserve()
 
-	if index == b.controller.capacity-1 {
+	if index == b.pipeline.capacity-1 {
 		b.CapacityHits++
 	}
 	if index > b.MaxCapacityUsage {
@@ -69,11 +69,7 @@ func (b *splitBuffer) reserve() (int, *Event) {
 	defer b.eventsMu.Unlock()
 
 	if b.eventsCount == 0 {
-		b.controller.done.Add(1)
-		if b.controller.shouldWaitForJob {
-			b.controller.done.Done()
-			b.controller.shouldWaitForJob = false
-		}
+		b.pipeline.handleFirstEvent()
 	}
 
 	index := b.eventsCount
@@ -90,16 +86,15 @@ func (b *splitBuffer) Push(event *Event) {
 }
 
 func (b *splitBuffer) commit(event *Event) {
-	event.input.Commit(event)
+	event.acceptor.Accept(event)
 	b.eventsMu.Lock()
 
-	if b.eventsCount == 0 {
+	b.eventsCount--
+	if b.eventsCount == -1 {
 		logger.Panic("extra event commit")
 	}
-	b.eventsCount--
-
 	if b.eventsCount == 0 {
-		b.controller.done.Done()
+		b.pipeline.handleLastEvent()
 	}
 
 	// place event back to pool
@@ -142,7 +137,7 @@ func (b *splitBuffer) instantiateStream(event *Event) *stream {
 		name:     event.Stream,
 	}
 
-	b.controller.attachStream(stream)
+	b.pipeline.attachStream(stream)
 
 	return stream
 }

@@ -14,29 +14,31 @@ func NewHead(splitBuffer *splitBuffer) *Head {
 	}
 }
 
-func (i *Head) Push(source InputPlugin, sourceId uint64, from int64, delta int64, bytes []byte) {
+func (i *Head) Push(acceptor InputPluginAcceptor, sourceId uint64, additional string, from int64, delta int64, bytes []byte) {
 	if len(bytes) == 0 {
 		return
 	}
 
 	event := i.splitBuffer.Reserve()
-	parser := event.parser
-	json, err := parser.ParseBytes(bytes)
+	json, err := event.parser.ParseBytes(bytes)
 	if err != nil {
 		logger.Fatalf("wrong json %s at offset %d", string(bytes), from)
 		return
 	}
 
+	stream := "default"
+	if json.Get("stream") != nil {
+		stream = json.Get("stream").String()
+	}
+
 	event.raw = bytes
-	event.json = json
-	event.input = source
+	event.JSON = json
+	event.acceptor = acceptor
+
 	event.Offset = from + delta
 	event.SourceId = sourceId
-	if json.Get("stream") != nil {
-		event.Stream = json.Get("stream").String()
-	} else {
-		event.Stream = "default"
-	}
+	event.Stream = stream
+	event.Additional = additional
 
 	i.splitBuffer.Push(event)
 }

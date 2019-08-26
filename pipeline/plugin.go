@@ -6,20 +6,22 @@ const (
 	PluginKindOutput = "output"
 )
 
-type Param struct {
+type ActionPlugin interface {
+	Start(config AnyConfigPointer, track *Track)
+	Stop()
+	Do(*Event)
 }
 
-type Params map[string]Param
-
-type Plugin interface {
-	Start(config Config, controller Controller)
+type InputPlugin interface {
+	Start(config AnyConfigPointer, pipeline Pipeline)
 	Stop()
 }
-type InputPlugin interface {
-	Commit(*Event)
+
+type InputPluginAcceptor interface {
+	Accept(*Event)
 }
 
-type PluginFactory func() (Plugin, Config)
+type PluginFactory func() (AnyPluginPointer, AnyConfigPointer)
 
 type PluginRegistryItem struct {
 	Id   string
@@ -31,9 +33,11 @@ type PluginInfo struct {
 	Factory PluginFactory
 }
 
-type PluginWithConfig struct {
-	Instance Plugin
-	Config   Config
+type PluginDescription struct {
+	Plugin AnyPluginPointer
+	Config AnyConfigPointer
 }
 
-type Config interface{}
+type AnyPluginPointer interface{}
+
+type AnyConfigPointer interface{}

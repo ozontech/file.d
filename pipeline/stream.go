@@ -4,8 +4,9 @@ import (
 	"sync"
 )
 
+// stream is a filtered event list from one source by some condition(eg json field "stream" in docker logs)
 type stream struct {
-	pipeline *pipeline
+	track    *Track
 	sourceId uint64
 	name     string
 	mu       *sync.Mutex
@@ -27,14 +28,14 @@ func (s *stream) push(event *Event) {
 		s.last = event
 		s.first = event
 
-		s.pipeline.nextStream <- s
+		s.track.nextStream <- s
 		return
 	}
 
 	s.last.next = event
 	s.last = event
 
-	s.pipeline.nextStream <- s
+	s.track.nextStream <- s
 	return
 }
 

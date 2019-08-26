@@ -10,8 +10,8 @@ import (
 	"gitlab.ozon.ru/sre/filed/logger"
 	"go.uber.org/automaxprocs/maxprocs"
 
-	_ "gitlab.ozon.ru/sre/filed/action/k8s"
-	_ "gitlab.ozon.ru/sre/filed/input/file"
+	_ "gitlab.ozon.ru/sre/filed/plugin/actionk8s"
+	_ "gitlab.ozon.ru/sre/filed/plugin/inputfile"
 )
 
 var (

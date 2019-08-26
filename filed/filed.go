@@ -3,6 +3,7 @@ package filed
 import (
 	"encoding/json"
 	"net/http"
+	"runtime"
 
 	"gitlab.ozon.ru/sre/filed/logger"
 	"gitlab.ozon.ru/sre/filed/pipeline"
@@ -11,6 +12,7 @@ import (
 type Filed struct {
 	config         *Config
 	pluginRegistry *PluginRegistry
+	pipelines      []*pipeline.SplitPipeline
 }
 
 func New(config *Config) *Filed {
@@ -36,21 +38,26 @@ func (f *Filed) Start() {
 
 	go f.startLiveReadyHTTPEndpoint()
 
-	for pipelineName, pipelineConfig := range f.config.pipelines {
-		logger.Infof("starting pipeline %q", pipelineName)
+	f.pipelines = f.pipelines[:0]
+	for name, config := range f.config.pipelines {
+		procs := runtime.GOMAXPROCS(0)
+		tracksCount := procs * 4
+		headsCount := procs * 4
 
-		controller := pipeline.NewController(false)
+		logger.Infof("starting pipeline %q using %d processor cores", name, procs)
 
-		f.startInput(pipelineConfig, pipelineName, controller)
-		f.startActions(pipelineConfig, pipelineName, controller)
+		p := pipeline.New(name, tracksCount, headsCount)
 
-		controller.Start()
+		f.startInput(config, name, p)
+		f.startActions(config, name, p)
+
+		p.Start()
+
+		f.pipelines = append(f.pipelines, p)
 	}
-
-	return
 }
 
-func (f *Filed) startInput(pipelineConfig *PipelineConfig, pipelineName string, controller *pipeline.SplitController) {
+func (f *Filed) startInput(pipelineConfig *PipelineConfig, pipelineName string, p *pipeline.SplitPipeline) {
 	input := pipelineConfig.raw.Get("input")
 	if input.MustMap() == nil {
 		logger.Fatalf("no input for pipeline %q", pipelineName)
@@ -59,22 +66,24 @@ func (f *Filed) startInput(pipelineConfig *PipelineConfig, pipelineName string, 
 	if t == "" {
 		logger.Fatalf("no input type provided for pipeline %q", pipelineName)
 	}
+
 	logger.Infof("creating input with type %q", t)
 	info := f.pluginRegistry.GetInputByType(t)
 	configJson, err := input.Encode()
 	if err != nil {
 		logger.Panicf("can't create config json for input %q in pipeline %q", t, pipelineName)
 	}
+
 	plugin, config := info.Factory()
 	err = json.Unmarshal(configJson, config)
 	if err != nil {
 		logger.Panicf("can't unmarshal config for input %q in pipeline %q", t, pipelineName)
 	}
-	controller.SetInputPlugin(&pipeline.PluginWithConfig{plugin, config})
+
+	p.SetInputPlugin(&pipeline.PluginDescription{Plugin: plugin, Config: config})
 }
 
-func (f *Filed) startActions(pipelineConfig *PipelineConfig, pipelineName string, controller *pipeline.SplitController) {
-
+func (f *Filed) startActions(pipelineConfig *PipelineConfig, pipelineName string, p *pipeline.SplitPipeline) {
 	actions := pipelineConfig.raw.Get("actions")
 	for index := range actions.MustArray() {
 		action := actions.GetIndex(index)
@@ -93,17 +102,22 @@ func (f *Filed) startActions(pipelineConfig *PipelineConfig, pipelineName string
 		if err != nil {
 			logger.Panicf("can't create config json for action #%d in pipeline %q", index, t, pipelineName)
 		}
-		plugin, config := info.Factory()
-		err = json.Unmarshal(configJson, config)
-		if err != nil {
-			logger.Panicf("can't unmarshal config for action #%d in pipeline %q", index, t, pipelineName)
+
+		for _, track := range p.Tracks {
+			plugin, config := info.Factory()
+			err = json.Unmarshal(configJson, config)
+			if err != nil {
+				logger.Panicf("can't unmarshal config for action #%d in pipeline %q", index, t, pipelineName)
+			}
+			track.AddActionPlugin(&pipeline.PluginDescription{Plugin: plugin, Config: config})
 		}
-		controller.AddActionPlugin(&pipeline.PluginWithConfig{plugin, config})
 	}
 }
 
 func (f *Filed) Stop() {
-	// todo: stop logic here
+	for _, p := range f.pipelines {
+		p.Stop()
+	}
 }
 
 func (f *Filed) startLiveReadyHTTPEndpoint() {

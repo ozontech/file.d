@@ -9,8 +9,8 @@ import (
 )
 
 type Config struct {
-	processors map[string]*PluginConfig
-	pipelines  map[string]*PipelineConfig
+	actions   map[string]*PluginConfig
+	pipelines map[string]*PipelineConfig
 }
 
 type PluginConfig struct {
@@ -23,8 +23,8 @@ type PipelineConfig struct {
 
 func NewConfig() *Config {
 	return &Config{
-		processors: make(map[string]*PluginConfig, 20),
-		pipelines:  make(map[string]*PipelineConfig, 20),
+		actions:   make(map[string]*PluginConfig, 20),
+		pipelines: make(map[string]*PipelineConfig, 20),
 	}
 }
 
@@ -55,7 +55,7 @@ func parseConfig(json *simplejson.Json) (*Config) {
 	processors := processorsJson.MustMap()
 	for i := range processors {
 		raw := processorsJson.Get(i)
-		config.processors[i] = &PluginConfig{raw: raw}
+		config.actions[i] = &PluginConfig{raw: raw}
 	}
 
 	pipelinesJson := json.Get("pipelines")

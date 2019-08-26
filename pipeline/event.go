@@ -6,16 +6,18 @@ import (
 
 type Event struct {
 	parser *fastjson.Parser
-	json   *fastjson.Value
 
-	input    InputPlugin
-	Offset   int64
-	SourceId uint64
-	Stream   string
+	acceptor InputPluginAcceptor
 
 	index int
 	next  *Event
 
 	// some debugging shit
 	raw []byte
+
+	JSON   *fastjson.Value
+	Offset     int64
+	SourceId   uint64
+	Stream     string
+	Additional string
 }
