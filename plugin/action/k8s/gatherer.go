@@ -100,7 +100,7 @@ func gather() {
 			stopWg.Done()
 			return
 		case event := <-watcher.ResultChan():
-			logger.Infof("watch event received")
+			logger.Infof("watch event received %s", event.Object.GetObjectKind())
 
 			if event.Type == watch.Error {
 				logger.Warnf("watch error: %s", event.Object)
