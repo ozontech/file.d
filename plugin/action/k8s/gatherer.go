@@ -1,6 +1,7 @@
-package actionk8s
+package k8s
 
 import (
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -38,26 +39,29 @@ type containerName string
 type containerID string
 
 var (
-	meta   = make(metaData)
-	client *kubernetes.Clientset
-	metaMu sync.Mutex
+	meta         = make(metaData)
+	client       *kubernetes.Clientset
+	metaMu       sync.Mutex
+	podListOps   metav1.ListOptions       // to select only pods for node on which we are running
+	podBlackList = make(map[podName]bool) // to mark pods for which we are miss k8s meta and don't wanna wait for timeout for each event
 
-	expiredItems = make([]*metaItem, 0, 16)
+	expiredItems = make([]*metaItem, 0, 16) // temporary list of expired items
 
 	gathererStop    = make(chan bool, 1)
 	maintenanceStop = make(chan bool, 1)
 
-	maintenanceInterval = time.Second * 15
+	maintenanceInterval = time.Second * 30
 	metaExpireDuration  = time.Minute * 5
 
-	metaRecheckInterval = time.Millisecond * 250
-	metaWaitTimeout     = time.Second * 5
+	metaRecheckInterval = time.Millisecond * 50
+	metaWaitWarn        = time.Millisecond * 500
+	metaWaitTimeout     = time.Second * 30
 
 	stopWg = &sync.WaitGroup{}
 
 	// some debugging shit
-	disableWatching          = false
-	checkerLogs                  = make(map[podName]int)
+	disableMetaUpdates  = false
+	checkerLogs         = make(map[podName]int)
 	metaAddedCounter    atomic.Int64
 	expiredItemsCounter atomic.Int64
 )
@@ -65,7 +69,7 @@ var (
 func enableGatherer() {
 	logger.Info("enabling k8s meta gatherer")
 
-	createClient()
+	initGatherer()
 
 	stopWg.Add(1)
 	go gather()
@@ -82,13 +86,21 @@ func disableGatherer() {
 }
 
 func gather() {
+	if disableMetaUpdates {
+		<-gathererStop
+		stopWg.Done()
+		return
+	}
+
 	watcher := getWatcher()
 	for {
 		select {
 		case <-gathererStop:
+			watcher.Stop()
 			stopWg.Done()
 			return
 		case event := <-watcher.ResultChan():
+			logger.Infof("watch event received")
 
 			if event.Type == watch.Error {
 				logger.Warnf("watch error: %s", event.Object)
@@ -99,18 +111,18 @@ func gather() {
 				continue
 			}
 
-			putMeta(event.Object.(*corev1.Pod))
+			putMeta(event.Object.(*corev1.Pod), true)
 		}
 	}
 }
 
-func createClient() {
+func initGatherer() {
 	apiConfig, err := rest.InClusterConfig()
 	if err != nil {
 		kubeConfig := filepath.Join(os.Getenv("HOME"), ".kube", "config")
 		apiConfig, err = clientcmd.BuildConfigFromFlags("", kubeConfig)
 		if err != nil {
-			logger.Fatalf("can't get k8s config: %s", err.Error())
+			logger.Fatalf("can't get k8s client config: %s", err.Error())
 		}
 	}
 	client, err = kubernetes.NewForConfig(apiConfig)
@@ -118,18 +130,34 @@ func createClient() {
 		logger.Fatalf("can't create k8s client: %s", err.Error())
 		panic("")
 	}
+
+	podListOps.IncludeUninitialized = true
+
+	if !disableMetaUpdates {
+		podName, err := os.Hostname()
+		if err != nil {
+			logger.Fatalf("can't get host name for k8s plugin: %s", err.Error())
+			panic("")
+		}
+
+		pod, err := client.CoreV1().Pods(getNamespace()).Get(podName, metav1.GetOptions{})
+		if err != nil {
+			logger.Fatalf("can't detect node name for k8s plugin using pod %q: %s", podName, err.Error())
+			panic("")
+		}
+
+		podListOps.FieldSelector = "spec.nodeName=" + string(pod.Spec.NodeName)
+	}
 }
 
 func getWatcher() watch.Interface {
-	watcher, err := client.CoreV1().Pods("").Watch(metav1.ListOptions{})
+	watcher, err := client.CoreV1().Pods("").Watch(podListOps)
 	if err != nil {
 		logger.Fatalf("can't watch k8s pod events: %s", err.Error())
 		panic("")
 	}
 
-	if disableWatching {
-		watcher.Stop()
-	}
+	watcher.Stop()
 
 	return watcher
 }
@@ -149,15 +177,17 @@ func maintenance() {
 }
 
 func refresh() {
-	podList, err := client.CoreV1().Pods("").List(metav1.ListOptions{})
-	if err != nil {
-		logger.Errorf("can't get pod list from k8s")
-		return
-	}
+	if !disableMetaUpdates {
+		podList, err := client.CoreV1().Pods("").List(podListOps)
+		if err != nil {
+			logger.Errorf("can't get pod list from k8s")
+			return
+		}
 
-	// update time for pods which is in the k8s pod list
-	for _, podMeta := range podList.Items {
-		putMeta(&podMeta)
+		// update time for pods which is in the k8s pod list
+		for _, podMeta := range podList.Items {
+			putMeta(&podMeta, false)
+		}
 	}
 
 	expiredItems = getExpiredItems(expiredItems)
@@ -170,11 +200,24 @@ func refresh() {
 		}
 	}
 
-	logger.Infof("k8s meta stat for last %d seconds: updated=%d, expired=%d", maintenanceInterval/time.Second, metaAddedCounter.Load(), expiredItemsCounter.Load())
+	logger.Infof("k8s meta stat for last %d seconds: total=%d, updated=%d, expired=%d", maintenanceInterval/time.Second, getTotalItems(), metaAddedCounter.Load(), expiredItemsCounter.Load())
 	logger.Infof("checker logs total=%d, not full=%d", len(checkerLogs), notFull)
 
 	metaAddedCounter.Swap(0)
 	expiredItemsCounter.Swap(0)
+}
+
+func getTotalItems() int {
+	metaMu.Lock()
+	defer metaMu.Unlock()
+
+	totalItems := 0
+	for _, podNames := range meta {
+		for _, containerIDs := range podNames {
+			totalItems += len(containerIDs)
+		}
+	}
+	return totalItems
 }
 
 func getExpiredItems(out []*metaItem) []*metaItem {
@@ -195,9 +238,6 @@ func getExpiredItems(out []*metaItem) []*metaItem {
 						containerID: cid,
 					})
 				}
-
-				// don't need to check all containers, just first
-				break
 			}
 		}
 	}
@@ -206,6 +246,9 @@ func getExpiredItems(out []*metaItem) []*metaItem {
 }
 
 func cleanUpItems(items []*metaItem) {
+	metaMu.Lock()
+	defer metaMu.Unlock()
+
 	for _, i := range items {
 		expiredItemsCounter.Inc()
 		delete(meta[i.namespace][i.podName], i.containerID)
@@ -221,30 +264,50 @@ func cleanUpItems(items []*metaItem) {
 func getMeta(ns namespace, pod podName, cid containerID, container containerName) *corev1.Pod {
 	i := time.Nanosecond
 	for {
+		// todo how to do it without mutex? it shares single mutex for all pipelines and tracks
 		metaMu.Lock()
 		metaInfo := meta[ns][pod][cid]
+		isInBlackList := podBlackList[pod]
 		metaMu.Unlock()
 
+		// fast skip blacklisted pods
+		if isInBlackList {
+			return nil
+		}
+
 		if metaInfo != nil {
+			if i-metaWaitWarn >= 0 {
+				logger.Warnf("meta for pod %q retrieved with delay time=%dms ns=%s container=%s cid=%s", string(pod), i/time.Millisecond, string(ns), string(container), string(cid))
+			}
 			return metaInfo
 		}
 
 		time.Sleep(metaRecheckInterval)
 		i += metaRecheckInterval
+
 		if i-metaWaitTimeout >= 0 {
-			logger.Errorf("meta retrieve timeout for ns=%s pod=%s container=%s cid=%s", string(ns), string(pod), string(container), string(cid))
+			metaMu.Lock()
+			podBlackList[pod] = true
+			if len(podBlackList) > 32 {
+				logger.Panicf("too many blacklisted pods, sorry")
+			}
+			metaMu.Unlock()
+			logger.Errorf("pod %q have blacklisted, cause k8s meta retrieve timeout ns=%s container=%s cid=%s", string(pod), string(ns), string(container), string(cid))
 			return nil
 		}
 	}
 }
 
-func putMeta(podMeta *corev1.Pod) {
+func putMeta(podMeta *corev1.Pod, shouldLog bool) {
 	if len(podMeta.Status.ContainerStatuses) == 0 {
 		return
 	}
 
 	pod := podName(podMeta.Name)
 	ns := namespace(podMeta.Namespace)
+	if shouldLog {
+		logger.Infof("k8s meta added ns=%s pod=%s", ns, pod)
+	}
 
 	metaMu.Lock()
 	defer metaMu.Unlock()
@@ -259,26 +322,26 @@ func putMeta(podMeta *corev1.Pod) {
 
 	// normal containers
 	for _, status := range podMeta.Status.ContainerStatuses {
-		putContainerMeta(ns, pod, status.ContainerID, status.Name, podMeta)
+		putContainerMeta(ns, pod, status.ContainerID, podMeta)
 
 		if status.LastTerminationState.Terminated != nil {
-			putContainerMeta(ns, pod, status.LastTerminationState.Terminated.ContainerID, status.Name, podMeta)
+			putContainerMeta(ns, pod, status.LastTerminationState.Terminated.ContainerID, podMeta)
 		}
 	}
 
 	// init containers
 	for _, status := range podMeta.Status.InitContainerStatuses {
-		putContainerMeta(ns, pod, status.ContainerID, status.Name, podMeta)
+		putContainerMeta(ns, pod, status.ContainerID, podMeta)
 
 		if status.LastTerminationState.Terminated != nil {
-			putContainerMeta(ns, pod, status.LastTerminationState.Terminated.ContainerID, status.Name, podMeta)
+			putContainerMeta(ns, pod, status.LastTerminationState.Terminated.ContainerID, podMeta)
 		}
 	}
 
 	metaAddedCounter.Inc()
 }
 
-func putContainerMeta(ns namespace, pod podName, fullContainerID string, containerName string, podMeta *corev1.Pod) {
+func putContainerMeta(ns namespace, pod podName, fullContainerID string, podMeta *corev1.Pod) {
 	if len(fullContainerID) == 0 {
 		return
 	}
@@ -297,7 +360,6 @@ func putContainerMeta(ns namespace, pod podName, fullContainerID string, contain
 	podMeta.Generation = time.Now().UnixNano()
 	meta[ns][pod][containerID] = podMeta
 
-	//logger.Infof("k8s meta added ns=%s pod=%s container=%s cid=%s", ns, pod, containerName, containerID)
 }
 
 func parseDockerFilename(fullFilename string) (namespace, podName, containerName, containerID) {
@@ -342,4 +404,12 @@ func parseDockerFilename(fullFilename string) (namespace, podName, containerName
 	cid := filename[len(filename)-64:]
 
 	return namespace(ns), podName(pod), containerName(container), containerID(cid)
+}
+
+func getNamespace() string {
+	data, err := ioutil.ReadFile("/var/run/secrets/kubernetes.io/serviceaccount/namespace")
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(data))
 }

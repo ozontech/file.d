@@ -5,11 +5,11 @@ test:
 
 .PHONY: bench-file
 bench-file:
-	go test -bench LightJsonReadPar ./plugin/inputfile -v -count 1 -run -benchmem -benchtime 1x
+	go test -bench LightJsonReadPar ./plugin/input/file -v -count 1 -run -benchmem -benchtime 1x
 
 .PHONY: profile-file
 profile-file:
-	go test -bench LightJsonReadPar ./plugin/inputfile -v -count 1 -run -benchmem -benchtime 1x -cpuprofile cpu.pprof -memprofile mem.pprof
+	go test -bench LightJsonReadPar ./plugin/input/file -v -count 1 -run -benchmem -benchtime 1x -cpuprofile cpu.pprof -memprofile mem.pprof
 
 .PHONY: build
 build:

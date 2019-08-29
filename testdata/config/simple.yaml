@@ -7,14 +7,10 @@ pipelines:
       offsets_file: ./testdata/playground/offsets/docker_offsets.yaml
       reset_offsets: true
     actions:
-    - type: k8s
+    - type: discard
+      match_fields:
+        k8s_namespace: /kube-system|ozon-system|ingress-nginx/
+        k8s_container: /logstash|filebeat|cherkizon-event-manager|graylog|fluentd/
+      match_mode: or
     output:
-      type: kafka
-      batch_size: 1000
-      hosts: infrakafka2.h.o3.ru:9000,infrakafka3.h.o3.ru:9000
-
-actions:
-  processor1:
-    type: k8s_meta
-  processor2:
-    type: discard
+      type: devnull

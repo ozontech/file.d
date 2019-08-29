@@ -1,4 +1,4 @@
-package inputfile
+package file
 
 import (
 	"github.com/fsnotify/fsnotify"

@@ -1,4 +1,4 @@
-package inputfile
+package file
 
 import (
 	"fmt"
@@ -13,7 +13,9 @@ import (
 
 	"github.com/satori/go.uuid"
 	"github.com/stretchr/testify/assert"
+	"gitlab.ozon.ru/sre/filed/logger"
 	"gitlab.ozon.ru/sre/filed/pipeline"
+	"gitlab.ozon.ru/sre/filed/plugin/outputdevnull"
 )
 
 var (
@@ -44,7 +46,7 @@ func shutdown() {
 	}
 }
 
-func startPipeline(persistenceMode string, enableEventLog bool, config *Config) (*pipeline.SplitPipeline, *FilePlugin) {
+func startPipeline(persistenceMode string, enableEventLog bool, config *Config) (*pipeline.Pipeline, *FilePlugin) {
 	p := pipeline.New("file_pipeline", 16, 16)
 	if enableEventLog {
 		p.EnableEventLog()
@@ -56,8 +58,12 @@ func startPipeline(persistenceMode string, enableEventLog bool, config *Config) 
 	anyPlugin, _ := factory()
 	inputPlugin := anyPlugin.(*FilePlugin)
 	inputPlugin.disableFinalSave()
+	p.SetInputPlugin(&pipeline.InputPluginDescription{Plugin: inputPlugin, Config: config})
 
-	p.SetInputPlugin(&pipeline.PluginDescription{Plugin: anyPlugin, Config: config})
+	anyPlugin, _ = devnull.Factory()
+	outputPlugin := anyPlugin.(*devnull.DevNullPlugin)
+	p.SetOutputPlugin(&pipeline.OutputPluginDescription{Plugin: outputPlugin, Config: config})
+
 	p.Start()
 
 	return p, inputPlugin
@@ -487,7 +493,7 @@ func TestReadInsane(t *testing.T) {
 
 	json := getContentBytes("../../testdata/json/light.json")
 
-	lines := 100
+	lines := 256
 	files := 32
 	fs := make([]*os.File, 0, files)
 	fileNames := make([]string, 0, files)
@@ -518,6 +524,34 @@ func TestReadInsane(t *testing.T) {
 	}
 
 	wg.Wait()
+	c.HandleEventFlowFinish(false)
+	c.WaitUntilDone(false)
+
+	p.jobProvider.saveOffsets()
+	assertOffsetsEqual(t, genOffsetsContentMultiple(fileNames, len(json)*lines), getContent(p.config.OffsetsFile))
+}
+func TestReadPar(t *testing.T) {
+	setup()
+	defer shutdown()
+
+	json := getContentBytes("../../testdata/json/light.json")
+
+	lines := 128 * 128
+	files := 32
+	content := make([]byte, 0, len(json)*lines)
+	for i := 0; i < lines; i++ {
+		content = append(content, json...)
+	}
+
+	fileNames := make([]string, 0, files)
+	for f := 0; f < files; f++ {
+		file := createTempFile()
+		fileNames = append(fileNames, file)
+		addData(file, content, false, false)
+	}
+
+	c, p := startPipeline("async", true, nil)
+	defer c.Stop()
 	c.HandleEventFlowFinish(false)
 	c.WaitUntilDone(false)
 
@@ -825,21 +859,18 @@ func BenchmarkLightJsonReadPar(b *testing.B) {
 		addData(file, content, false, false)
 	}
 
-	b.SetBytes(int64(files * lines * len(json)))
+	bytes := int64(files * lines * len(json))
+	logger.Infof("")
+	logger.Infof("will read %dMb", bytes/1024/1024)
+	b.SetBytes(bytes)
 	b.ReportAllocs()
 	b.StopTimer()
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
 		c, _ := startPipeline("timer", false, nil)
-
 		b.StartTimer()
 		c.HandleEventFlowFinish(true)
 		c.WaitUntilDone(true)
-		fmt.Printf("gen bytes=%d, gen lines=%d, processed lines: %d\n",
-			files*lines*len(json),
-			files*lines*2,
-			c.EventsProcessed(),
-		)
 		b.StopTimer()
 
 		c.Stop()

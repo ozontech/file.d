@@ -1,12 +1,15 @@
-package inputfile
+package file
 
 import (
+	"sync"
+
 	"gitlab.ozon.ru/sre/filed/filed"
 	"gitlab.ozon.ru/sre/filed/logger"
 	"gitlab.ozon.ru/sre/filed/pipeline"
 )
 
 const (
+	defaultWorkers        = 16
 	defaultReadBufferSize = 256 * 1024
 	defaultChanLength     = 256
 
@@ -31,7 +34,6 @@ type Config struct {
 
 type FilePlugin struct {
 	config *Config
-	heads  []*pipeline.Head
 
 	workers     []*worker
 	jobProvider *jobProvider
@@ -47,11 +49,11 @@ func init() {
 	})
 }
 
-func factory() (pipeline.AnyPluginPointer, pipeline.AnyConfigPointer) {
+func factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 	return &FilePlugin{}, &Config{}
 }
 
-func (p *FilePlugin) Start(config pipeline.AnyConfigPointer, pipeline pipeline.Pipeline) {
+func (p *FilePlugin) Start(config pipeline.AnyConfig, head pipeline.Head, doneWg *sync.WaitGroup) {
 	logger.Info("starting file input plugin")
 
 	p.config = config.(*Config)
@@ -92,17 +94,26 @@ func (p *FilePlugin) Start(config pipeline.AnyConfigPointer, pipeline pipeline.P
 
 	p.config.offsetsTmpFilename = p.config.OffsetsFile + ".atomic"
 
-	p.heads = pipeline.GetHeads()
-	p.jobProvider = NewJobProvider(p.config, pipeline.GetDoneWg())
+	p.jobProvider = NewJobProvider(p.config, doneWg)
 	p.watcher = NewWatcher(p.config.WatchingDir, p.jobProvider)
 
 	p.watcher.start()
-	p.startWorkers()
+	p.startWorkers(head)
 	p.jobProvider.start()
 }
 
-func (p *FilePlugin) disableFinalSave() {
-	p.isFinalSaveDisabled = true
+func (p *FilePlugin) startWorkers(head pipeline.Head) {
+	p.workers = make([]*worker, defaultWorkers)
+	for i := range p.workers {
+		p.workers[i] = &worker{}
+		p.workers[i].start(head, p.jobProvider, p.config.ReadBufferSize)
+	}
+
+	logger.Infof("file read workers created, count=%d", len(p.workers))
+}
+
+func (p *FilePlugin) Commit(event *pipeline.Event) {
+	p.jobProvider.commit(event)
 }
 
 func (p *FilePlugin) Stop() {
@@ -111,8 +122,8 @@ func (p *FilePlugin) Stop() {
 	}
 
 	logger.Infof("stopping %d workers", len(p.workers))
-	for i := range p.workers {
-		p.workers[i].stop()
+	for range p.workers {
+		p.jobProvider.jobsChan <- nil
 	}
 
 	logger.Infof("stopping job provider")
@@ -127,11 +138,6 @@ func (p *FilePlugin) Stop() {
 	}
 }
 
-func (p *FilePlugin) startWorkers() {
-	p.workers = make([]*worker, len(p.heads))
-	for i := range p.workers {
-		p.workers[i] = &worker{stopCh: make(chan bool)}
-		p.workers[i].start(p.heads[i], p.jobProvider, p.config.ReadBufferSize)
-	}
-	logger.Infof("file read workers created, count=%d", len(p.workers))
+func (p *FilePlugin) disableFinalSave() {
+	p.isFinalSaveDisabled = true
 }

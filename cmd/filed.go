@@ -10,8 +10,11 @@ import (
 	"gitlab.ozon.ru/sre/filed/logger"
 	"go.uber.org/automaxprocs/maxprocs"
 
-	_ "gitlab.ozon.ru/sre/filed/plugin/actionk8s"
-	_ "gitlab.ozon.ru/sre/filed/plugin/inputfile"
+	_ "gitlab.ozon.ru/sre/filed/plugin/action/discard"
+	_ "gitlab.ozon.ru/sre/filed/plugin/action/k8s"
+	_ "gitlab.ozon.ru/sre/filed/plugin/input/fake"
+	_ "gitlab.ozon.ru/sre/filed/plugin/input/file"
+	_ "gitlab.ozon.ru/sre/filed/plugin/output/devnull"
 )
 
 var (
@@ -19,18 +22,17 @@ var (
 	done    = make(chan bool)
 	version = "v0.0.1"
 
-	config = kingpin.Flag("config", "config file name").Required().ExistingFile()
+	config = kingpin.Flag("config", `config file name`).Required().ExistingFile()
+	http   = kingpin.Flag("http", `http listen addr eg. ":9000", "off" to disable`).Default(":9000").String()
 )
-
-func init() {
-	logger.Info("hi!")
-}
 
 func main() {
 	kingpin.Version(version)
 	kingpin.Parse()
 
-	_, _ = maxprocs.Set(maxprocs.Logger(logger.Infof))
+	logger.Infof("hi!")
+
+	_, _ = maxprocs.Set(maxprocs.Logger(logger.Debugf))
 
 	go listenSignals()
 	go start()
@@ -39,7 +41,7 @@ func main() {
 }
 
 func start() () {
-	fd := filed.New(filed.NewConfigFromFile(*config))
+	fd := filed.New(filed.NewConfigFromFile(*config), *http)
 	fd.Start()
 }
 

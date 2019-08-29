@@ -1,27 +1,33 @@
 package pipeline
 
+import (
+	"regexp"
+	"sync"
+)
+
 const (
 	PluginKindInput  = "input"
 	PluginKindAction = "action"
 	PluginKindOutput = "output"
 )
 
+type InputPlugin interface {
+	Start(config AnyConfig, head Head, doneWg *sync.WaitGroup)
+	Stop()
+	Commit(*Event)
+}
+
 type ActionPlugin interface {
-	Start(config AnyConfigPointer, track *Track)
+	Start(config AnyConfig, controller ActionController)
 	Stop()
 	Do(*Event)
 }
 
-type InputPlugin interface {
-	Start(config AnyConfigPointer, pipeline Pipeline)
+type OutputPlugin interface {
+	Start(config AnyConfig, controller OutputController)
 	Stop()
+	Dump(*Event)
 }
-
-type InputPluginAcceptor interface {
-	Accept(*Event)
-}
-
-type PluginFactory func() (AnyPluginPointer, AnyConfigPointer)
 
 type PluginRegistryItem struct {
 	Id   string
@@ -33,11 +39,43 @@ type PluginInfo struct {
 	Factory PluginFactory
 }
 
-type PluginDescription struct {
-	Plugin AnyPluginPointer
-	Config AnyConfigPointer
+type InputPluginDescription struct {
+	Type   string
+	Plugin InputPlugin
+	Config AnyConfig
 }
 
-type AnyPluginPointer interface{}
+type ActionPluginDescription struct {
+	Type            string
+	Plugin          ActionPlugin
+	Config          AnyConfig
+	MatchConditions MatchConditions
+	MatchMode       MatchMode
+}
 
-type AnyConfigPointer interface{}
+type OutputPluginDescription struct {
+	Type   string
+	Plugin OutputPlugin
+	Config AnyConfig
+}
+
+type AnyPlugin interface{}
+
+type AnyConfig interface{}
+
+type PluginFactory func() (AnyPlugin, AnyConfig)
+
+type MatchConditions []MatchCondition
+
+type MatchCondition struct {
+	Field  string
+	Value  string
+	Regexp *regexp.Regexp
+}
+
+type MatchMode int
+
+const (
+	ModeAnd MatchMode = 0
+	ModeOr  MatchMode = 1
+)

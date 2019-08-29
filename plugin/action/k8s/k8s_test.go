@@ -1,4 +1,4 @@
-package actionk8s
+package k8s
 
 import (
 	"fmt"
@@ -8,7 +8,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"gitlab.ozon.ru/sre/filed/pipeline"
-	"gitlab.ozon.ru/sre/filed/plugin/inputfake"
+	"gitlab.ozon.ru/sre/filed/plugin/input/inputfake"
+	"gitlab.ozon.ru/sre/filed/plugin/outputdevnull"
 	corev1 "k8s.io/api/core/v1"
 )
 
@@ -16,7 +17,7 @@ func TestMain(m *testing.M) {
 	// we are going to do work fucking fast
 	maintenanceInterval = time.Millisecond * 100
 	metaExpireDuration = time.Millisecond * 500
-	disableWatching = true
+	disableMetaUpdates = true
 
 	code := m.Run()
 	os.Exit(code)
@@ -44,18 +45,25 @@ func getPodInfo(item *metaItem) *corev1.Pod {
 	return podInfo
 }
 
-func startPipeline() (*pipeline.SplitPipeline, *inputfake.FakePlugin, *K8SPlugin) {
+func startPipeline() (*pipeline.Pipeline, *fake.FakePlugin, *K8SPlugin) {
 	p := pipeline.New("k8s_pipeline", 16, 1)
 
-	config := &Config{}
-	inputPlugin, inputPluginConfig := inputfake.Factory()
+	anyPlugin, _ := fake.Factory()
+	inputPlugin := anyPlugin.(*fake.FakePlugin)
+	p.SetInputPlugin(&pipeline.InputPluginDescription{Plugin: inputPlugin, Config: fake.Config{}})
 
-	p.SetInputPlugin(&pipeline.PluginDescription{Plugin: inputPlugin, Config: inputPluginConfig})
-	plugin, _ := factory()
-	p.Tracks[0].AddActionPlugin(&pipeline.PluginDescription{Plugin: plugin, Config: config})
+	anyPlugin, _ = factory()
+	plugin := anyPlugin.(*K8SPlugin)
+	config := &Config{}
+	p.Tracks[0].AddActionPlugin(&pipeline.ActionPluginDescription{Plugin: plugin, Config: config})
+
+	anyPlugin, _ = devnull.Factory()
+	outputPlugin := anyPlugin.(*devnull.DevNullPlugin)
+	p.SetOutputPlugin(&pipeline.OutputPluginDescription{Plugin: outputPlugin, Config: config})
+
 	p.Start()
 
-	return p, inputPlugin.(*inputfake.FakePlugin), plugin.(*K8SPlugin)
+	return p, inputPlugin, plugin
 }
 
 func TestEnrichment(t *testing.T) {
@@ -70,7 +78,7 @@ func TestEnrichment(t *testing.T) {
 		containerID:   "4e0301b633eaa2bfdcafdeba59ba0c72a3815911a6a820bf273534b0f32d98e0",
 	}
 	podInfo := getPodInfo(item)
-	putMeta(podInfo)
+	putMeta(podInfo, false)
 
 	var event *pipeline.Event = nil
 	filename := getLogFilename("/docker-logs", item)
@@ -79,22 +87,22 @@ func TestEnrichment(t *testing.T) {
 		event = e
 	})
 
-	input.Push(0, filename, 0, 0, []byte(json))
+	input.Accept(0, filename, 0, 0, []byte(json))
 	input.Wait()
 
 	assert.Equal(t, 1, checkerLogs["advanced-logs-checker-1566485760-trtrq"])
 
-	assert.NotNil(t, event.JSON.Get("k8s_pod"), "can't find field")
-	assert.Equal(t, `"advanced-logs-checker-1566485760-trtrq"`, event.JSON.Get("k8s_pod").String())
+	assert.NotNil(t, event.Value.Get("k8s_pod"), "can't find field")
+	assert.Equal(t, `"advanced-logs-checker-1566485760-trtrq"`, event.Value.Get("k8s_pod").String())
 
-	assert.NotNil(t, event.JSON.Get("k8s_ns"), "can't find field")
-	assert.Equal(t, `"sre"`, event.JSON.Get("k8s_ns").String())
+	assert.NotNil(t, event.Value.Get("k8s_ns"), "can't find field")
+	assert.Equal(t, `"sre"`, event.Value.Get("k8s_ns").String())
 
-	assert.NotNil(t, event.JSON.Get("k8s_container"), "can't find field")
-	assert.Equal(t, `"duty-bot"`, event.JSON.Get("k8s_container").String())
+	assert.NotNil(t, event.Value.Get("k8s_container"), "can't find field")
+	assert.Equal(t, `"duty-bot"`, event.Value.Get("k8s_container").String())
 
-	assert.NotNil(t, event.JSON.Get("k8s_node"), "can't find field")
-	assert.Equal(t, `"node_1"`, event.JSON.Get("k8s_node").String())
+	assert.NotNil(t, event.Value.Get("k8s_node"), "can't find field")
+	assert.Equal(t, `"node_1"`, event.Value.Get("k8s_node").String())
 }
 
 func TestCleanUp(t *testing.T) {
@@ -107,21 +115,21 @@ func TestCleanUp(t *testing.T) {
 		podName:       "advanced-logs-checker-1566485760-1",
 		containerName: "duty-bot",
 		containerID:   "1111111111111111111111111111111111111111111111111111111111111111",
-	}))
+	}), false)
 	putMeta(getPodInfo(&metaItem{
 		nodeName:      "node_1",
 		namespace:     "sre",
 		podName:       "advanced-logs-checker-1566485760-2",
 		containerName: "duty-bot",
 		containerID:   "2222222222222222222222222222222222222222222222222222222222222222",
-	}))
+	}), false)
 	putMeta(getPodInfo(&metaItem{
 		nodeName:      "node_1",
 		namespace:     "infra",
 		podName:       "advanced-logs-checker-1566485760-3",
 		containerName: "duty-bot",
 		containerID:   "3333333333333333333333333333333333333333333333333333333333333333",
-	}))
+	}), false)
 
 	time.Sleep(metaExpireDuration + maintenanceInterval)
 
