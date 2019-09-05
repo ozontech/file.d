@@ -1,23 +1,28 @@
 package k8s
 
 import (
-	"strings"
-
-	"github.com/valyala/fastjson"
+	"github.com/alecthomas/units"
 	"gitlab.ozon.ru/sre/filed/filed"
+	"gitlab.ozon.ru/sre/filed/logger"
 	"gitlab.ozon.ru/sre/filed/pipeline"
 	"go.uber.org/atomic"
 )
 
-// K8SPlugin adds k8s meta info to docker logs
+// Plugin adds k8s meta info to docker logs and also joined split docker logs into one event
 // source docker log file name format should be: [pod-name]_[namespace]_[container-name]-[container id].log
 // example: /docker-logs/advanced-logs-checker-1566485760-trtrq_sre_duty-bot-4e0301b633eaa2bfdcafdeba59ba0c72a3815911a6a820bf273534b0f32d98e0.log
-type K8SPlugin struct {
+type Plugin struct {
 	config     *Config
 	controller pipeline.ActionController
+	fullLog    []byte
 }
 
+const (
+	defaultMaxLogSize = 1 * units.Mebibyte
+)
+
 type Config struct {
+	MaxLogSize int `json:"max_log_size"`
 }
 
 var (
@@ -32,47 +37,67 @@ func init() {
 }
 
 func factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
-	return &K8SPlugin{}, &Config{}
+	return &Plugin{}, &Config{}
 }
 
-func (p *K8SPlugin) Start(config pipeline.AnyConfig, controller pipeline.ActionController) {
+func (p *Plugin) Start(config pipeline.AnyConfig, controller pipeline.ActionController) {
 	p.controller = controller
+	p.config = config.(*Config)
+
+	if p.config.MaxLogSize == 0 {
+		p.config.MaxLogSize = int(defaultMaxLogSize)
+	}
+
 	startCounter := startCounter.Inc()
 	if startCounter == 1 {
 		enableGatherer()
 	}
 }
 
-func (p *K8SPlugin) Stop() {
+func (p *Plugin) Stop() {
 	startCounter := startCounter.Dec()
 	if startCounter == 0 {
 		disableGatherer()
 	}
 }
 
-func (p *K8SPlugin) Do(event *pipeline.Event) {
-	fullFilename := event.Additional
-	ns, pod, container, cid := parseDockerFilename(fullFilename)
+func (p *Plugin) Do(event *pipeline.Event) {
+	chunkedLog := event.JSON.GetStringBytes("log")
+	if chunkedLog == nil {
+		logger.Fatalf("wrong docker log format, it doesn't contain log field: %s", string(event.JSON.MarshalTo(nil)))
+		panic("")
+	}
 
-	podMeta := getMeta(ns, pod, cid, container)
+	isMaxReached := len(p.fullLog)+len(chunkedLog) > p.config.MaxLogSize
+	// docker splits long JSON logs by 16kb chunks, so let's join them
+	if chunkedLog[len(chunkedLog)-1] != '\n' && !isMaxReached {
+		p.fullLog = append(p.fullLog, chunkedLog...)
+		p.controller.Next()
+		return
+	}
 
-	// todo: optimize string concatenations
-	event.Value.Set("k8s_pod", fastjson.MustParse(`"`+string(pod)+`"`))
-	event.Value.Set("k8s_ns", fastjson.MustParse(`"`+string(ns)+`"`))
-	event.Value.Set("k8s_container", fastjson.MustParse(`"`+string(container)+`"`))
+	ns, pod, container, _, podMeta := getMeta(event.Additional)
+
+	if isMaxReached {
+		logger.Warnf("too long docker log found, it'll be split, ns=%s pod=%s container=%s consider increase max_log_size, current value=%d", ns, pod, container, p.config.MaxLogSize)
+	}
+
+	event.JSON.Set("k8s_pod", event.JSONPool.NewString(string(pod)))
+	event.JSON.Set("k8s_ns", event.JSONPool.NewString(string(ns)))
+	event.JSON.Set("k8s_container", event.JSONPool.NewString(string(container)))
 
 	if podMeta != nil {
-		event.Value.Set("k8s_node", fastjson.MustParse(`"`+string(podMeta.Spec.NodeName)+`"`))
+		event.JSON.Set("k8s_node", event.JSONPool.NewString(podMeta.Spec.NodeName))
 
 		for labelName, labelValue := range podMeta.Labels {
-			event.Value.Set("k8s_"+labelName, fastjson.MustParse(`"`+labelValue+`"`))
+			event.JSON.Set("k8s_label_"+labelName, event.JSONPool.NewString(labelValue))
 		}
 	}
 
-	metaMu.Lock()
-	defer metaMu.Unlock()
-	if strings.Contains(string(pod), "advanced-logs-checker") {
-		checkerLogs[pod]++
+	if len(p.fullLog) > 0 {
+		p.fullLog = append(p.fullLog, chunkedLog...)
+		event.JSON.Set("log", event.JSONPool.NewStringBytes(p.fullLog))
+		p.fullLog = p.fullLog[:0]
 	}
 
 	p.controller.Propagate()

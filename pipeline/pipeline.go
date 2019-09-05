@@ -13,13 +13,15 @@ const statsInfoReportInterval = time.Second * 5
 const defaultCapacity = 1024
 
 type Head interface {
-	Accept(sourceId SourceId, additional string, from int64, delta int64, bytes []byte)
+	In(sourceId SourceId, additional string, from int64, delta int64, bytes []byte)
+	DeprecateEvents(sourceId SourceId) // mark source events in the pipeline as deprecated, it means that these events shouldn't update offsets
 }
 
 type ActionController interface {
 	Propagate()          // passes event to the next action in pipeline
 	Next()               // requests next event from the same stream as current
-	Commit(event *Event) // tells that this event is processed
+	Commit(event *Event) // notifies input plugin that event is successfully processed
+	Drop(event *Event)   // skip processing of event
 }
 
 type OutputController interface {
@@ -34,14 +36,14 @@ type Pipeline struct {
 	capacity  int
 	eventPool *eventPool
 
-	inputDescr  *InputPluginDescription  // first input plugin reads something
-	input       InputPlugin              // then plugin push logs to the pipeline head and it decode log to event
-	Tracks      []*track                 // then events splits by streams
-	outputDescr *OutputPluginDescription // each stream is attached to the pipeline track(pipeline instance), track launches action plugins on event
-	output      OutputPlugin             // output plugin is the final point of pipeline it can't propagate event to next plugin it has only commit method
+	inputDescr  *InputPluginDescription
+	input       InputPlugin
+	Tracks      []*track
+	outputDescr *OutputPluginDescription
+	output      OutputPlugin
 
 	streams   map[SourceId]map[StreamName]*stream
-	streamsMu *sync.RWMutex
+	streamsMu *sync.Mutex
 
 	doneWg *sync.WaitGroup
 
@@ -52,11 +54,11 @@ type Pipeline struct {
 	stopCh chan bool
 
 	// some debugging shit
-	eventsProcessed *atomic.Int64
+	eventsProcessed atomic.Int64
 }
 
 func New(name string, headsCount int, tracksCount int) *Pipeline {
-	logger.Infof("starting new pipeline with heads=%d tracks=%d capacity=%d", headsCount, tracksCount, defaultCapacity)
+	logger.Infof("creating new pipeline with heads=%d tracks=%d capacity=%d", headsCount, tracksCount, defaultCapacity)
 
 	pipeline := &Pipeline{
 		name:     name,
@@ -65,15 +67,12 @@ func New(name string, headsCount int, tracksCount int) *Pipeline {
 		doneWg: &sync.WaitGroup{},
 
 		streams:   make(map[SourceId]map[StreamName]*stream),
-		streamsMu: &sync.RWMutex{},
-
+		streamsMu: &sync.Mutex{},
 
 		eventLog:   make([]string, 0, 128),
 		eventLogMu: &sync.Mutex{},
 
 		stopCh: make(chan bool, 1), //non-zero channel cause we don't wanna wait goroutine to stop
-
-		eventsProcessed: atomic.NewInt64(0),
 	}
 
 	tracks := make([]*track, tracksCount)
@@ -124,7 +123,19 @@ func (p *Pipeline) Stop() {
 	p.output.Stop()
 }
 
-func (p *Pipeline) Accept(sourceId SourceId, additional string, from int64, delta int64, bytes []byte) {
+func (p *Pipeline) DeprecateEvents(sourceId SourceId) {
+	count := 0
+	p.eventPool.visit(func(e *Event) {
+		if e.Source == sourceId {
+			e.markDeprecated()
+			count++
+		}
+	})
+
+	logger.Infof("events marked as deprecated count=%d source=%d", count, sourceId)
+}
+
+func (p *Pipeline) In(sourceId SourceId, additional string, from int64, delta int64, bytes []byte) {
 	if len(bytes) == 0 {
 		return
 	}
@@ -134,57 +145,61 @@ func (p *Pipeline) Accept(sourceId SourceId, additional string, from int64, delt
 		p.handleFirstEvent()
 	}
 
-	streamName := "default"
-
-	json, err := event.parser.ParseBytes(bytes)
+	json, err := event.ParseJSON(bytes)
 	if err != nil {
-		logger.Fatalf("wrong json %s at offset %d", string(bytes), from)
+		logger.Fatalf("wrong json %s at offset %d for source %d", string(bytes), from, sourceId)
 		return
 	}
 
-	if json.Get("stream") != nil {
-		streamName = json.Get("stream").String()
+	streamName := "default"
+	streamBytes := json.GetStringBytes("stream")
+	if streamBytes != nil {
+		streamName = string(streamBytes)
 	}
 
-	event.Value = json
+	o, _ := json.Object()
+	o.Set("details", event.JSONPool.NewString("filed"))
+
+	event.JSON = json
 	event.Offset = from + delta
-	event.SourceId = sourceId
+	event.Source = sourceId
 	event.Stream = StreamName(streamName)
 	event.Additional = additional
-
 	event.raw = bytes
 
 	p.pushToStream(event)
 }
 
 func (p *Pipeline) pushToStream(event *Event) {
-	p.streamsMu.RLock()
-	st, has := p.streams[event.SourceId][event.Stream]
-	p.streamsMu.RUnlock()
+	p.streamsMu.Lock()
+	st, has := p.streams[event.Source][event.Stream]
 
 	if !has {
-		p.streamsMu.Lock()
-		_, has := p.streams[event.SourceId]
+		_, has := p.streams[event.Source]
 		if !has {
-			p.streams[event.SourceId] = make(map[StreamName]*stream)
+			p.streams[event.Source] = make(map[StreamName]*stream)
 		}
-		st, has = p.streams[event.SourceId][event.Stream]
+		st, has = p.streams[event.Source][event.Stream]
 		if !has {
 			// assign random track for new stream
-			st = newStream(event.Stream, event.SourceId, p.Tracks[rand.Int()%len(p.Tracks)])
-			p.streams[event.SourceId][event.Stream] = st
+			st = newStream(event.Stream, event.Source, p.Tracks[rand.Int()%len(p.Tracks)])
+			p.streams[event.Source][event.Stream] = st
 		}
-		p.streamsMu.Unlock()
 	}
+
+	p.streamsMu.Unlock()
 
 	st.put(event)
 }
 
 func (p *Pipeline) Commit(event *Event) {
-	p.input.Commit(event)
-	eventIndex := p.eventPool.back(event)
+	p.commit(event, true)
+}
 
-	p.eventsProcessed.Inc()
+func (p *Pipeline) commit(event *Event, notifyInput bool) {
+	if notifyInput {
+		p.input.Commit(event)
+	}
 
 	if p.eventLogEnabled {
 		p.eventLogMu.Lock()
@@ -192,13 +207,15 @@ func (p *Pipeline) Commit(event *Event) {
 		p.eventLogMu.Unlock()
 	}
 
-	if eventIndex == 0 {
+	if p.eventPool.back(event) == 0 {
 		p.handleLastEvent()
 	}
+
+	p.eventsProcessed.Inc()
 }
 
 func (p *Pipeline) reportStats() {
-	lastProcessed := p.eventsProcessed.Load()
+	lastProcessed := int64(0)
 	time.Sleep(statsInfoReportInterval)
 	for {
 		select {
@@ -263,15 +280,14 @@ func (p *Pipeline) WaitUntilDone(instant bool) {
 	for {
 		p.doneWg.Wait()
 
-		events := p.eventsProcessed.Load()
+		processed := p.eventsProcessed.Load()
 		//fs events may have delay, so wait for them
 		time.Sleep(time.Millisecond * 100)
 		//
-		eventsNew := p.eventsProcessed.Load()
-		if events == eventsNew {
+		processed = p.eventsProcessed.Load() - processed
+		if processed == 0 {
 			break
 		}
-		eventsNew = events
 	}
 }
 

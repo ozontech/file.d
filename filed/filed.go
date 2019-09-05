@@ -22,9 +22,10 @@ type Filed struct {
 
 func New(config *Config, httpAddr string) *Filed {
 	return &Filed{
-		config:   config,
-		httpAddr: httpAddr,
-		plugins:  DefaultPluginRegistry,
+		config:    config,
+		httpAddr:  httpAddr,
+		plugins:   DefaultPluginRegistry,
+		pipelines: make([]*pipeline.Pipeline, 0, 0),
 	}
 }
 
@@ -53,13 +54,14 @@ func (f *Filed) Start() {
 		logger.Infof("starting pipeline %q using %d processor cores", name, procs)
 
 		p := pipeline.New(name, tracksCount, headsCount)
-		f.pipelines = append(f.pipelines, p)
 
 		f.setupInput(config, name, p)
 		f.setupActions(config, name, p)
 		f.setupOutput(config, name, p)
 
 		p.Start()
+
+		f.pipelines = append(f.pipelines, p)
 	}
 }
 
@@ -146,7 +148,7 @@ func (f *Filed) setupActions(pipelineConfig *PipelineConfig, pipelineName string
 			plugin, config := info.Factory()
 			err = json.Unmarshal(configJson, config)
 			if err != nil {
-				logger.Panicf("can't unmarshal config for action #%d in pipeline %q", index, t, pipelineName)
+				logger.Panicf("can't unmarshal config for action #%d in pipeline %q", index, pipelineName)
 			}
 
 			track.AddActionPlugin(&pipeline.ActionPluginDescription{
@@ -187,6 +189,7 @@ func (f *Filed) setupOutput(pipelineConfig *PipelineConfig, pipelineName string,
 }
 
 func (f *Filed) Stop() {
+	logger.Infof("stopping filed pipelines=%d", len(f.pipelines))
 	for _, p := range f.pipelines {
 		p.Stop()
 	}

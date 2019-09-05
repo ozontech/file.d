@@ -41,7 +41,7 @@ type containerID string
 var (
 	meta         = make(metaData)
 	client       *kubernetes.Clientset
-	metaMu       sync.Mutex
+	metaMu       = &sync.RWMutex{}
 	podListOps   metav1.ListOptions       // to select only pods for node on which we are running
 	podBlackList = make(map[podName]bool) // to mark pods for which we are miss k8s meta and don't wanna wait for timeout for each event
 
@@ -50,18 +50,17 @@ var (
 	gathererStop    = make(chan bool, 1)
 	maintenanceStop = make(chan bool, 1)
 
-	maintenanceInterval = time.Second * 30
-	metaExpireDuration  = time.Minute * 5
+	maintenanceInterval = 10 * time.Second
+	metaExpireDuration  = 5 * time.Minute
 
-	metaRecheckInterval = time.Millisecond * 50
-	metaWaitWarn        = time.Millisecond * 500
-	metaWaitTimeout     = time.Second * 30
+	metaRecheckInterval = 250 * time.Millisecond
+	metaWaitWarn        = 5 * time.Second
+	metaWaitTimeout     = 60 * time.Second
 
 	stopWg = &sync.WaitGroup{}
 
 	// some debugging shit
 	disableMetaUpdates  = false
-	checkerLogs         = make(map[podName]int)
 	metaAddedCounter    atomic.Int64
 	expiredItemsCounter atomic.Int64
 )
@@ -83,37 +82,6 @@ func disableGatherer() {
 	gathererStop <- true
 	maintenanceStop <- true
 	stopWg.Wait()
-}
-
-func gather() {
-	if disableMetaUpdates {
-		<-gathererStop
-		stopWg.Done()
-		return
-	}
-
-	watcher := getWatcher()
-	for {
-		select {
-		case <-gathererStop:
-			watcher.Stop()
-			stopWg.Done()
-			return
-		case event := <-watcher.ResultChan():
-			logger.Infof("watch event received %s", event.Object.GetObjectKind())
-
-			if event.Type == watch.Error {
-				logger.Warnf("watch error: %s", event.Object)
-				continue
-			}
-
-			if event.Object == nil {
-				continue
-			}
-
-			putMeta(event.Object.(*corev1.Pod), true)
-		}
-	}
 }
 
 func initGatherer() {
@@ -150,14 +118,75 @@ func initGatherer() {
 	}
 }
 
+func gather() {
+	if disableMetaUpdates {
+		<-gathererStop
+		stopWg.Done()
+		return
+	}
+
+	watcher := getWatcher()
+	for {
+		select {
+		case <-gathererStop:
+			watcher.Stop()
+			stopWg.Done()
+			return
+		case event, ok := <-watcher.ResultChan():
+			// watcher stopped by api server, recreate it
+			if !ok {
+				logger.Infof("k8s watcher will be recreated")
+				watcher.Stop()
+				watcher = getWatcher()
+			}
+
+			if event.Type == watch.Error {
+				logger.Errorf("k8s watch error: %s", event.Object)
+				continue
+			}
+
+			if event.Object == nil {
+				continue
+			}
+
+			putMeta(event.Object.(*corev1.Pod))
+		}
+	}
+}
+
+func refresh() {
+	if !disableMetaUpdates {
+		podList, err := client.CoreV1().Pods("").List(podListOps)
+		if err != nil {
+			logger.Errorf("can't get pod list from k8s")
+			return
+		}
+
+		// update time for pods which is in the k8s pod list
+		for _, podMeta := range podList.Items {
+			putMeta(&podMeta)
+		}
+	}
+
+	expiredItems = getExpiredItems(expiredItems)
+	cleanUpItems(expiredItems)
+
+	for _, i := range expiredItems {
+		logger.Debugf("k8s meta expired ns=%s pod=%s cid=%s", i.namespace, i.podName, i.containerID)
+	}
+
+	logger.Infof("k8s meta stat for last %d seconds: total=%d, updated=%d, expired=%d", maintenanceInterval/time.Second, getTotalItems(), metaAddedCounter.Load(), expiredItemsCounter.Load())
+
+	metaAddedCounter.Swap(0)
+	expiredItemsCounter.Swap(0)
+}
+
 func getWatcher() watch.Interface {
 	watcher, err := client.CoreV1().Pods("").Watch(podListOps)
 	if err != nil {
 		logger.Fatalf("can't watch k8s pod events: %s", err.Error())
 		panic("")
 	}
-
-	watcher.Stop()
 
 	return watcher
 }
@@ -176,40 +205,9 @@ func maintenance() {
 	}
 }
 
-func refresh() {
-	if !disableMetaUpdates {
-		podList, err := client.CoreV1().Pods("").List(podListOps)
-		if err != nil {
-			logger.Errorf("can't get pod list from k8s")
-			return
-		}
-
-		// update time for pods which is in the k8s pod list
-		for _, podMeta := range podList.Items {
-			putMeta(&podMeta, false)
-		}
-	}
-
-	expiredItems = getExpiredItems(expiredItems)
-	cleanUpItems(expiredItems)
-
-	notFull := 0
-	for _, c := range checkerLogs {
-		if c != 20001 {
-			notFull++
-		}
-	}
-
-	logger.Infof("k8s meta stat for last %d seconds: total=%d, updated=%d, expired=%d", maintenanceInterval/time.Second, getTotalItems(), metaAddedCounter.Load(), expiredItemsCounter.Load())
-	logger.Infof("checker logs total=%d, not full=%d", len(checkerLogs), notFull)
-
-	metaAddedCounter.Swap(0)
-	expiredItemsCounter.Swap(0)
-}
-
 func getTotalItems() int {
-	metaMu.Lock()
-	defer metaMu.Unlock()
+	metaMu.RLock()
+	defer metaMu.RUnlock()
 
 	totalItems := 0
 	for _, podNames := range meta {
@@ -224,14 +222,15 @@ func getExpiredItems(out []*metaItem) []*metaItem {
 	out = out[:0]
 	now := time.Now()
 
-	metaMu.Lock()
-	defer metaMu.Unlock()
+	metaMu.RLock()
+	defer metaMu.RUnlock()
 
 	// find pods which isn't in k8s pod list for some time and add them to the expiration list
 	for ns, podNames := range meta {
 		for pod, containerIDs := range podNames {
 			for cid, podData := range containerIDs {
-				if now.Sub(time.Unix(0, podData.Generation)) > metaExpireDuration {
+				podUpdateTime := time.Unix(0, podData.Generation)
+				if now.Sub(podUpdateTime) > metaExpireDuration {
 					out = append(out, &metaItem{
 						namespace:   ns,
 						podName:     pod,
@@ -261,25 +260,28 @@ func cleanUpItems(items []*metaItem) {
 	}
 }
 
-func getMeta(ns namespace, pod podName, cid containerID, container containerName) *corev1.Pod {
+func getMeta(fullFilename string) (ns namespace, pod podName, container containerName, cid containerID, podMeta *corev1.Pod) {
+	podMeta = nil
+	ns, pod, container, cid = parseDockerFilename(fullFilename)
+
 	i := time.Nanosecond
 	for {
-		// todo how to do it without mutex? it shares single mutex for all pipelines and tracks
-		metaMu.Lock()
-		metaInfo := meta[ns][pod][cid]
+		metaMu.RLock()
+		pm := meta[ns][pod][cid]
 		isInBlackList := podBlackList[pod]
-		metaMu.Unlock()
+		metaMu.RUnlock()
 
 		// fast skip blacklisted pods
 		if isInBlackList {
-			return nil
+			return
 		}
 
-		if metaInfo != nil {
+		if pm != nil {
 			if i-metaWaitWarn >= 0 {
 				logger.Warnf("meta for pod %q retrieved with delay time=%dms ns=%s container=%s cid=%s", string(pod), i/time.Millisecond, string(ns), string(container), string(cid))
 			}
-			return metaInfo
+			podMeta = pm
+			return
 		}
 
 		time.Sleep(metaRecheckInterval)
@@ -287,30 +289,32 @@ func getMeta(ns namespace, pod podName, cid containerID, container containerName
 
 		if i-metaWaitTimeout >= 0 {
 			metaMu.Lock()
-			podBlackList[pod] = true
 			if len(podBlackList) > 32 {
-				logger.Panicf("too many blacklisted pods, sorry")
+				podBlackList = make(map[podName]bool)
 			}
+			podBlackList[pod] = true
 			metaMu.Unlock()
 			logger.Errorf("pod %q have blacklisted, cause k8s meta retrieve timeout ns=%s container=%s cid=%s", string(pod), string(ns), string(container), string(cid))
-			return nil
+			return
 		}
 	}
 }
 
-func putMeta(podMeta *corev1.Pod, shouldLog bool) {
+func putMeta(podMeta *corev1.Pod) {
 	if len(podMeta.Status.ContainerStatuses) == 0 {
 		return
 	}
 
 	pod := podName(podMeta.Name)
 	ns := namespace(podMeta.Namespace)
-	if shouldLog {
-		logger.Infof("k8s meta added ns=%s pod=%s", ns, pod)
-	}
+	logger.Debugf("k8s meta updated ns=%s pod=%s", ns, pod)
 
 	metaMu.Lock()
 	defer metaMu.Unlock()
+
+	// hack to avoid creation of special struct to store time
+	// store it in generation field of k8d pod
+	podMeta.Generation = time.Now().UnixNano()
 
 	if meta[ns] == nil {
 		meta[ns] = make(map[podName]map[containerID]*corev1.Pod)
@@ -355,9 +359,6 @@ func putContainerMeta(ns namespace, pod podName, fullContainerID string, podMeta
 		logger.Fatalf("wrong container id: %s", fullContainerID)
 	}
 
-	// hack to avoid creation of special struct to store time
-	// store it in generation field of k8d pod
-	podMeta.Generation = time.Now().UnixNano()
 	meta[ns][pod][containerID] = podMeta
 
 }

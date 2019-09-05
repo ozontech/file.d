@@ -32,17 +32,17 @@ func NewConfigFromFile(path string) (*Config) {
 	logger.Infof("reading config %q", path)
 	yamlContents, err := ioutil.ReadFile(path)
 	if err != nil {
-		logger.Fatalf("can't read config file %q", path)
+		logger.Fatalf("can't read config file %q: %s", path, err)
 	}
 
-	jsonContents, err := yaml.YAMLToJSON([]byte(yamlContents))
+	jsonContents, err := yaml.YAMLToJSON(yamlContents)
 	if err != nil {
-		logger.Fatalf("can't parse config file yaml %q", path)
+		logger.Fatalf("can't parse config file yaml %q: %s", path, err.Error())
 	}
 
 	json, err := simplejson.NewJson(jsonContents)
 	if err != nil {
-		logger.Fatalf("can't convert config to json %q", path)
+		logger.Fatalf("can't convert config to json %q: %s", path, err.Error())
 	}
 
 	return parseConfig(json)

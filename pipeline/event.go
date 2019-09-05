@@ -3,31 +3,93 @@ package pipeline
 import (
 	"sync"
 
+	"github.com/alecthomas/units"
 	"github.com/valyala/fastjson"
 	"gitlab.ozon.ru/sre/filed/logger"
+	"go.uber.org/atomic"
 )
 
-type Event struct {
-	index int
-	next  *Event
+var logCleanUpSize = 4 * units.Kibibyte
 
-	Value      *fastjson.Value
+type Event struct {
+	poolIndex int
+	next      *Event
+
+	ID         int64
+	JSON       *fastjson.Value
+	JSONPool   *fastjson.Arena
 	Offset     int64
-	SourceId   SourceId
+	Source     SourceId
 	Stream     StreamName
 	Additional string
 
-	parser *fastjson.Parser
+	deprecated    atomic.Bool
+	shouldCleanUp bool
+
+	parsers      []*fastjson.Parser
+	parsersCount int
 
 	// some debugging shit
 	raw []byte
 }
 
-type eventPool struct {
-	capacity    int
-	eventsCount int
+func newEvent(poolIndex int) *Event {
+	return &Event{
+		parsers:   make([]*fastjson.Parser, 0, 0),
+		JSONPool:  &fastjson.Arena{},
+		poolIndex: poolIndex,
+	}
+}
 
-	pool []*Event
+func (e *Event) reset() {
+	// reallocate big objects
+	if e.shouldCleanUp {
+		e.shouldCleanUp = false
+		e.JSONPool = &fastjson.Arena{}
+		e.parsers = make([]*fastjson.Parser, 0, 0)
+	}
+
+	e.JSONPool.Reset()
+	e.parsersCount = 0
+	e.deprecated.Swap(false)
+}
+
+func (e *Event) IsActual() bool {
+	return e.deprecated.Load() == false
+}
+
+func (e *Event) markDeprecated() {
+	e.deprecated.Swap(true)
+}
+
+func (e *Event) ParseJSON(json []byte) (*fastjson.Value, error) {
+	if e.parsersCount+1 > len(e.parsers) {
+		e.parsers = append(e.parsers, &fastjson.Parser{})
+	}
+	parser := e.parsers[e.parsersCount]
+	e.parsersCount++
+
+	return parser.ParseBytes(json)
+}
+
+func (e *Event) Marshal(out []byte) ([]byte, int) {
+	l := len(out)
+	out = e.JSON.MarshalTo(out)
+
+	// event is going to be super big, lets GC it
+	e.shouldCleanUp = len(out)-l > int(logCleanUpSize)
+
+	return out, l
+}
+
+// channels are slower than this implementation by ~20%
+type eventPool struct {
+	currentID int64
+	capacity  int
+
+	eventsCount int
+	events      []*Event
+
 	mu   *sync.Mutex
 	cond *sync.Cond
 }
@@ -36,62 +98,71 @@ func newEventPool(capacity int) *eventPool {
 
 	eventPool := &eventPool{
 		capacity: capacity,
-		pool:     make([]*Event, capacity, capacity),
+		events:   make([]*Event, capacity, capacity),
 		mu:       &sync.Mutex{},
 	}
 
 	eventPool.cond = sync.NewCond(eventPool.mu)
 
 	for i := 0; i < capacity; i++ {
-		eventPool.pool[i] = &Event{
-			parser: &fastjson.Parser{},
-			index:  i,
-		}
+		eventPool.events[i] = newEvent(i)
 	}
 
 	return eventPool
 }
 
-func (b *eventPool) get() (*Event, int) {
-	b.mu.Lock()
+func (p *eventPool) visit(fn func(*Event)) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
 
-	for b.eventsCount >= b.capacity-1 {
-		b.cond.Wait()
+	for i := 0; i < p.eventsCount; i++ {
+		fn(p.events[i])
+	}
+}
+
+func (p *eventPool) get() (*Event, int) {
+	p.mu.Lock()
+
+	for p.eventsCount >= p.capacity {
+		p.cond.Wait()
 	}
 
-	index := b.eventsCount
-	event := b.pool[index]
-	b.eventsCount++
+	index := p.eventsCount
+	event := p.events[index]
+	event.ID = p.currentID
+	p.eventsCount++
+	p.currentID++
 
-	b.mu.Unlock()
+	p.mu.Unlock()
 
+	event.reset()
 	return event, index
 }
 
-func (b *eventPool) back(event *Event) int {
-	b.mu.Lock()
+func (p *eventPool) back(event *Event) int {
+	p.mu.Lock()
 
-	b.eventsCount--
+	p.eventsCount--
 
-	currentIndex := event.index
-	lastIndex := b.eventsCount
+	currentIndex := event.poolIndex
+	lastIndex := p.eventsCount
 
 	if lastIndex == -1 {
 		logger.Panic("extra event commit")
 	}
 
-	last := b.pool[lastIndex]
+	last := p.events[lastIndex]
 
-	// exchange event with last one to place in back to pool
-	b.pool[currentIndex] = last
-	b.pool[lastIndex] = event
+	// exchange event with last one to place back to pool
+	p.events[currentIndex] = last
+	p.events[lastIndex] = event
 
-	event.index = lastIndex
-	last.index = currentIndex
+	event.poolIndex = lastIndex
+	last.poolIndex = currentIndex
 
-	b.cond.Signal()
+	p.mu.Unlock()
 
-	b.mu.Unlock()
+	p.cond.Signal()
 
 	return lastIndex
 }

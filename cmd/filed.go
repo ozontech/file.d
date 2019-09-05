@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"os/signal"
+	"runtime"
 	"syscall"
 
 	"github.com/alecthomas/kingpin"
@@ -11,15 +12,19 @@ import (
 	"go.uber.org/automaxprocs/maxprocs"
 
 	_ "gitlab.ozon.ru/sre/filed/plugin/action/discard"
+	_ "gitlab.ozon.ru/sre/filed/plugin/action/json_decode"
 	_ "gitlab.ozon.ru/sre/filed/plugin/action/k8s"
+	_ "gitlab.ozon.ru/sre/filed/plugin/action/keep_fields"
+	_ "gitlab.ozon.ru/sre/filed/plugin/action/rename"
 	_ "gitlab.ozon.ru/sre/filed/plugin/input/fake"
 	_ "gitlab.ozon.ru/sre/filed/plugin/input/file"
 	_ "gitlab.ozon.ru/sre/filed/plugin/output/devnull"
+	_ "gitlab.ozon.ru/sre/filed/plugin/output/kafka"
 )
 
 var (
 	fd      *filed.Filed
-	done    = make(chan bool)
+	exit    = make(chan bool)
 	version = "v0.0.1"
 
 	config = kingpin.Flag("config", `config file name`).Required().ExistingFile()
@@ -27,6 +32,10 @@ var (
 )
 
 func main() {
+	runtime.SetMutexProfileFraction(10000)
+	runtime.SetBlockProfileRate(10000)
+	runtime.SetCPUProfileRate(10000)
+
 	kingpin.Version(version)
 	kingpin.Parse()
 
@@ -37,11 +46,12 @@ func main() {
 	go listenSignals()
 	go start()
 
-	<-done
+	<-exit
+	logger.Infof("see you soon...")
 }
 
 func start() () {
-	fd := filed.New(filed.NewConfigFromFile(*config), *http)
+	fd = filed.New(filed.NewConfigFromFile(*config), *http)
 	fd.Start()
 }
 
@@ -55,20 +65,12 @@ func listenSignals() {
 		switch s {
 		case syscall.SIGHUP:
 			logger.Infof("signal SIGHUP received")
-			reload()
+			fd.Stop()
+			start()
 		case syscall.SIGTERM:
 			logger.Infof("signal SIGTERM received")
-			stop()
-			<-done
+			fd.Stop()
+			exit <- true
 		}
 	}
-}
-
-func reload() {
-	stop()
-	start()
-}
-
-func stop() {
-	fd.Stop()
 }

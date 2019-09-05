@@ -6,24 +6,24 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"gitlab.ozon.ru/sre/filed/pipeline"
-	"gitlab.ozon.ru/sre/filed/plugin/input/inputfake"
-	"gitlab.ozon.ru/sre/filed/plugin/outputdevnull"
+	"gitlab.ozon.ru/sre/filed/plugin/input/fake"
+	"gitlab.ozon.ru/sre/filed/plugin/output/devnull"
 )
 
-func startPipeline(conds pipeline.MatchConditions, condMode pipeline.MatchMode) (*pipeline.Pipeline, *fake.FakePlugin, *devnull.DevNullPlugin) {
+func startPipeline(conds pipeline.MatchConditions, condMode pipeline.MatchMode) (*pipeline.Pipeline, *fake.Plugin, *devnull.Plugin) {
 	p := pipeline.New("k8s_pipeline", 16, 1)
 
 	anyPlugin, _ := fake.Factory()
-	inputPlugin := anyPlugin.(*fake.FakePlugin)
+	inputPlugin := anyPlugin.(*fake.Plugin)
 	p.SetInputPlugin(&pipeline.InputPluginDescription{Plugin: inputPlugin, Config: fake.Config{}})
 
 	anyPlugin, _ = factory()
-	plugin := anyPlugin.(*DiscardPlugin)
+	plugin := anyPlugin.(*Plugin)
 	config := &Config{}
 	p.Tracks[0].AddActionPlugin(&pipeline.ActionPluginDescription{Plugin: plugin, Config: config, MatchConditions: conds, MatchMode: condMode})
 
 	anyPlugin, _ = devnull.Factory()
-	outputPlugin := anyPlugin.(*devnull.DevNullPlugin)
+	outputPlugin := anyPlugin.(*devnull.Plugin)
 	p.SetOutputPlugin(&pipeline.OutputPluginDescription{Plugin: outputPlugin, Config: config})
 
 	p.Start()
@@ -52,16 +52,18 @@ func TestDiscardAnd(t *testing.T) {
 	})
 
 	dumpedEvents := make([]*pipeline.Event, 0, 0)
-	output.SetDumpFn(func(e *pipeline.Event) {
+	output.SetOutFn(func(e *pipeline.Event) {
 		dumpedEvents = append(dumpedEvents, e)
 	})
 
-	input.Accept(0, "test.log", 0, 0, []byte(`{"field1":"not_value1"}`))
-	input.Accept(0, "test.log", 0, 0, []byte(`{"field2":"not_value2"}`))
-	input.Accept(0, "test.log", 0, 0, []byte(`{"field1":"value1"}`))
-	input.Accept(0, "test.log", 0, 0, []byte(`{"field2":"value2"}`))
-	input.Accept(0, "test.log", 0, 0, []byte(`{"field1":"value1","field2":"value2"}`))
-	input.Accept(0, "test.log", 0, 0, []byte(`{"field3":"value3","field1":"value1","field2":"value2"}`))
+	input.In(0, "test.log", 0, 0, []byte(`{"field1":"not_value1"}`))
+	input.In(0, "test.log", 0, 0, []byte(`{"field2":"not_value2"}`))
+	input.In(0, "test.log", 0, 0, []byte(`{"field1":"value1"}`))
+	input.In(0, "test.log", 0, 0, []byte(`{"field2":"value2"}`))
+	input.In(0, "test.log", 0, 0, []byte(`{"field1":"value1","field2":"value2"}`))
+	input.In(0, "test.log", 0, 0, []byte(`{"field3":"value3","field1":"value1","field2":"value2"}`))
+	input.Commit(nil)
+	input.Commit(nil)
 	input.Wait()
 
 	assert.Equal(t, 6, len(acceptedEvents), "wrong accepted events count")
@@ -89,16 +91,20 @@ func TestDiscardOr(t *testing.T) {
 	})
 
 	dumpedEvents := make([]*pipeline.Event, 0, 0)
-	output.SetDumpFn(func(e *pipeline.Event) {
+	output.SetOutFn(func(e *pipeline.Event) {
 		dumpedEvents = append(dumpedEvents, e)
 	})
 
-	input.Accept(0, "test.log", 0, 0, []byte(`{"field1":"not_value1"}`))
-	input.Accept(0, "test.log", 0, 0, []byte(`{"field2":"not_value2"}`))
-	input.Accept(0, "test.log", 0, 0, []byte(`{"field1":"value1"}`))
-	input.Accept(0, "test.log", 0, 0, []byte(`{"field2":"value2"}`))
-	input.Accept(0, "test.log", 0, 0, []byte(`{"field1":"value1","field2":"value2"}`))
-	input.Accept(0, "test.log", 0, 0, []byte(`{"field3":"value3","field1":"value1","field2":"value2"}`))
+	input.In(0, "test.log", 0, 0, []byte(`{"field1":"not_value1"}`))
+	input.In(0, "test.log", 0, 0, []byte(`{"field2":"not_value2"}`))
+	input.In(0, "test.log", 0, 0, []byte(`{"field1":"value1"}`))
+	input.In(0, "test.log", 0, 0, []byte(`{"field2":"value2"}`))
+	input.In(0, "test.log", 0, 0, []byte(`{"field1":"value1","field2":"value2"}`))
+	input.In(0, "test.log", 0, 0, []byte(`{"field3":"value3","field1":"value1","field2":"value2"}`))
+	input.Commit(nil)
+	input.Commit(nil)
+	input.Commit(nil)
+	input.Commit(nil)
 	input.Wait()
 
 	assert.Equal(t, 6, len(acceptedEvents), "wrong accepted events count")
@@ -126,16 +132,19 @@ func TestDiscardRegex(t *testing.T) {
 	})
 
 	dumpedEvents := make([]*pipeline.Event, 0, 0)
-	output.SetDumpFn(func(e *pipeline.Event) {
+	output.SetOutFn(func(e *pipeline.Event) {
 		dumpedEvents = append(dumpedEvents, e)
 	})
 
-	input.Accept(0, "test.log", 0, 0, []byte(`{"field1":"0000 one 0000"}`))
-	input.Accept(0, "test.log", 0, 0, []byte(`{"field2":"0000 one 0000"}`))
-	input.Accept(0, "test.log", 0, 0, []byte(`{"field1":". two ."}`))
-	input.Accept(0, "test.log", 0, 0, []byte(`{"field1":"four"}`))
-	input.Accept(0, "test.log", 0, 0, []byte(`{"field2":"... four ....","field2":"value2"}`))
-	input.Accept(0, "test.log", 0, 0, []byte(`{"field3":"value3","field1":"value1","field2":"value2"}`))
+	input.In(0, "test.log", 0, 0, []byte(`{"field1":"0000 one 0000"}`))
+	input.In(0, "test.log", 0, 0, []byte(`{"field2":"0000 one 0000"}`))
+	input.In(0, "test.log", 0, 0, []byte(`{"field1":". two ."}`))
+	input.In(0, "test.log", 0, 0, []byte(`{"field1":"four"}`))
+	input.In(0, "test.log", 0, 0, []byte(`{"field2":"... four ....","field2":"value2"}`))
+	input.In(0, "test.log", 0, 0, []byte(`{"field3":"value3","field1":"value1","field2":"value2"}`))
+	input.Commit(nil)
+	input.Commit(nil)
+	input.Commit(nil)
 	input.Wait()
 
 	assert.Equal(t, 6, len(acceptedEvents), "wrong accepted events count")

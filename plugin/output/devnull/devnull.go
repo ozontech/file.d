@@ -8,9 +8,9 @@ import (
 type Config struct {
 }
 
-type DevNullPlugin struct {
+type Plugin struct {
 	controller pipeline.OutputController
-	dumpFn     func(event *pipeline.Event)
+	outFn      func(event *pipeline.Event)
 }
 
 func init() {
@@ -21,23 +21,23 @@ func init() {
 }
 
 func Factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
-	return &DevNullPlugin{}, &Config{}
+	return &Plugin{}, &Config{}
 }
 
-func (p *DevNullPlugin) Start(config pipeline.AnyConfig, controller pipeline.OutputController) {
+func (p *Plugin) Start(config pipeline.AnyConfig, controller pipeline.OutputController) {
 	p.controller = controller
 }
 
-func (p *DevNullPlugin) SetDumpFn(fn func(event *pipeline.Event)) {
-	p.dumpFn = fn
+func (p *Plugin) SetOutFn(fn func(event *pipeline.Event)) {
+	p.outFn = fn
 
 }
-func (p *DevNullPlugin) Stop() {
+func (p *Plugin) Stop() {
 }
 
-func (p *DevNullPlugin) Dump(event *pipeline.Event) {
-	if p.dumpFn != nil {
-		p.dumpFn(event)
+func (p *Plugin) Out(event *pipeline.Event) {
+	if p.outFn != nil {
+		p.outFn(event)
 	}
 
 	p.controller.Commit(event)

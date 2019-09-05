@@ -26,7 +26,7 @@ type ActionPlugin interface {
 type OutputPlugin interface {
 	Start(config AnyConfig, controller OutputController)
 	Stop()
-	Dump(*Event)
+	Out(*Event)
 }
 
 type PluginRegistryItem struct {

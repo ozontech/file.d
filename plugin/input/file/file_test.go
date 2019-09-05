@@ -15,7 +15,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"gitlab.ozon.ru/sre/filed/logger"
 	"gitlab.ozon.ru/sre/filed/pipeline"
-	"gitlab.ozon.ru/sre/filed/plugin/outputdevnull"
+	"gitlab.ozon.ru/sre/filed/plugin/output/devnull"
 )
 
 var (
@@ -46,7 +46,7 @@ func shutdown() {
 	}
 }
 
-func startPipeline(persistenceMode string, enableEventLog bool, config *Config) (*pipeline.Pipeline, *FilePlugin) {
+func startPipeline(persistenceMode string, enableEventLog bool, config *Config) (*pipeline.Pipeline, *Plugin) {
 	p := pipeline.New("file_pipeline", 16, 16)
 	if enableEventLog {
 		p.EnableEventLog()
@@ -56,12 +56,12 @@ func startPipeline(persistenceMode string, enableEventLog bool, config *Config) 
 		config = &Config{WatchingDir: filesDir, OffsetsFile: filepath.Join(offsetsDir, offsetsFile), PersistenceMode: persistenceMode}
 	}
 	anyPlugin, _ := factory()
-	inputPlugin := anyPlugin.(*FilePlugin)
+	inputPlugin := anyPlugin.(*Plugin)
 	inputPlugin.disableFinalSave()
 	p.SetInputPlugin(&pipeline.InputPluginDescription{Plugin: inputPlugin, Config: config})
 
 	anyPlugin, _ = devnull.Factory()
-	outputPlugin := anyPlugin.(*devnull.DevNullPlugin)
+	outputPlugin := anyPlugin.(*devnull.Plugin)
 	p.SetOutputPlugin(&pipeline.OutputPluginDescription{Plugin: outputPlugin, Config: config})
 
 	p.Start()
@@ -226,6 +226,18 @@ func genOffsetsContentMultiple(files []string, offset int) string {
 		result = append(result, fmt.Sprintf(`- file: %d %s
   default: %d
 `, getInode(file), file, offset)...)
+	}
+
+	return string(result)
+}
+
+func genOffsetsContentMultipleStreams(files []string, offsetStdErr int, offsetStdOut int) string {
+	result := make([]byte, 0, len(files)*100)
+	for _, file := range files {
+		result = append(result, fmt.Sprintf(`- file: %d %s
+  stderr: %d
+  stdout: %d
+`, getInode(file), file, offsetStdErr, offsetStdOut)...)
 	}
 
 	return string(result)
@@ -471,7 +483,7 @@ func TestReadHeavy(t *testing.T) {
 	defer c.Stop()
 
 	file := createTempFile()
-	json := getContentBytes("../../testdata/json/heavy.json")
+	json := getContentBytes("../../../testdata/json/heavy.json")
 	lines := 10
 	for i := 0; i < lines; i++ {
 		addData(file, json, false, true)
@@ -491,7 +503,7 @@ func TestReadInsane(t *testing.T) {
 	setup()
 	defer shutdown()
 
-	json := getContentBytes("../../testdata/json/light.json")
+	json := getContentBytes("../../../testdata/json/light.json")
 
 	lines := 256
 	files := 32
@@ -534,7 +546,7 @@ func TestReadPar(t *testing.T) {
 	setup()
 	defer shutdown()
 
-	json := getContentBytes("../../testdata/json/light.json")
+	json := getContentBytes("../../../testdata/json/light.json")
 
 	lines := 128 * 128
 	files := 32
@@ -559,11 +571,40 @@ func TestReadPar(t *testing.T) {
 	assertOffsetsEqual(t, genOffsetsContentMultiple(fileNames, len(json)*lines), getContent(p.config.OffsetsFile))
 }
 
+func TestReadParStreams(t *testing.T) {
+	setup()
+	defer shutdown()
+
+	json := getContentBytes("../../../testdata/json/streams.json")
+
+	lines := 128
+	files := 16
+	content := make([]byte, 0, len(json)*lines)
+	for i := 0; i < lines; i++ {
+		content = append(content, json...)
+	}
+
+	fileNames := make([]string, 0, files)
+	for f := 0; f < files; f++ {
+		file := createTempFile()
+		fileNames = append(fileNames, file)
+		addData(file, content, false, false)
+	}
+
+	c, p := startPipeline("async", true, nil)
+	defer c.Stop()
+	c.HandleEventFlowFinish(false)
+	c.WaitUntilDone(false)
+
+	p.jobProvider.saveOffsets()
+	assertOffsetsEqual(t, genOffsetsContentMultipleStreams(fileNames, len(json)*lines, len(json)*lines-len(json)/2), getContent(p.config.OffsetsFile))
+}
+
 func TestReadPlayground(t *testing.T) {
 	setup()
 	defer shutdown()
 
-	json := getContentBytes("../../testdata/playground/logs/shelf.json")
+	json := getContentBytes("../../../testdata/playground/logs/shelf.json")
 
 	file := createTempFile()
 	addData(file, json, false, false)
@@ -791,7 +832,7 @@ func BenchmarkHeavyJsonRead(b *testing.B) {
 	defer shutdown()
 
 	file := createTempFile()
-	json := getContent("../../testdata/json/heavy.json")
+	json := getContent("../../../testdata/json/heavy.json")
 	lines := 100
 	content := make([]byte, 0, len(json)*lines)
 	for i := 0; i < lines; i++ {
@@ -818,7 +859,7 @@ func BenchmarkLightJsonReadSeq(b *testing.B) {
 	defer shutdown()
 
 	file := createTempFile()
-	json := getContent("../../testdata/json/light.json")
+	json := getContent("../../../testdata/json/light.json")
 	lines := 30000
 	content := make([]byte, 0, len(json)*lines)
 	for i := 0; i < lines; i++ {
@@ -847,7 +888,7 @@ func BenchmarkLightJsonReadPar(b *testing.B) {
 	lines := 128 * 128
 	files := 64
 
-	json := getContent("../../testdata/json/light.json")
+	json := getContent("../../../testdata/json/light.json")
 
 	content := make([]byte, 0, len(json)*lines)
 	for i := 0; i < lines; i++ {

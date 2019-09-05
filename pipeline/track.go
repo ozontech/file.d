@@ -8,10 +8,9 @@ import (
 
 const (
 	trackStateUnknown        trackState = 0
-	trackStateReadSameStream trackState = 1
-	trackStateCommit         trackState = 2
-	trackStatePropagate      trackState = 3
-	trackStateReadNewStream  trackState = 4
+	trackStatePropagate      trackState = 1
+	trackStateReadSameStream trackState = 2
+	trackStateReadNewStream  trackState = 3
 )
 
 // track is worker goroutine which doing pipeline actions
@@ -27,14 +26,14 @@ type track struct {
 	state trackState
 }
 
+type trackState int
+
 func NewTrack(pipeline *Pipeline) *track {
 	return &track{
 		pipeline: pipeline,
 		streamCh: make(chan *stream, pipeline.capacity),
 	}
 }
-
-type trackState int
 
 func (t *track) process(output OutputPlugin) {
 	t.state = trackStateReadNewStream
@@ -54,6 +53,8 @@ func (t *track) process(output OutputPlugin) {
 				}
 			}
 		case trackStateReadSameStream:
+			// commit previous event
+			t.pipeline.commit(event, false)
 			event = stream.waitGet()
 			if t.shouldStop {
 				return
@@ -76,16 +77,13 @@ func (t *track) process(output OutputPlugin) {
 			}
 
 			if t.state == trackStateReadNewStream {
-				logger.Panicf("wrong state=%d after action in pipeline %s", t.state, t.pipeline.name)
-			}
-
-			if t.state == trackStateCommit {
-				t.state = trackStateReadNewStream
+				break
 			}
 		}
 
+		// if last action called Propagate then pass event to output
 		if t.state == trackStatePropagate {
-			output.Dump(event)
+			output.Out(event)
 			t.state = trackStateReadNewStream
 		}
 	}
@@ -105,7 +103,7 @@ func (t *track) match(index int, event *Event) bool {
 
 func (t *track) matchOr(conds MatchConditions, event *Event) bool {
 	for _, cond := range conds {
-		value := event.Value.Get(cond.Field).GetStringBytes()
+		value := event.JSON.Get(cond.Field).GetStringBytes()
 		if value == nil {
 			continue
 		}
@@ -127,7 +125,7 @@ func (t *track) matchOr(conds MatchConditions, event *Event) bool {
 
 func (t *track) matchAnd(conds MatchConditions, event *Event) bool {
 	for _, cond := range conds {
-		value := event.Value.Get(cond.Field).GetStringBytes()
+		value := event.JSON.Get(cond.Field).GetStringBytes()
 		if value == nil {
 			return false
 		}
@@ -149,11 +147,16 @@ func (t *track) matchAnd(conds MatchConditions, event *Event) bool {
 
 func (t *track) Next() {
 	t.state = trackStateReadSameStream
-
 }
+
 func (t *track) Commit(event *Event) {
-	t.state = trackStateCommit
-	t.pipeline.Commit(event)
+	t.state = trackStateReadNewStream
+	t.pipeline.commit(event, true)
+}
+
+func (t *track) Drop(event *Event) {
+	t.state = trackStateReadNewStream
+	t.pipeline.commit(event, false)
 }
 
 func (t *track) Propagate() {

@@ -29,6 +29,8 @@ func (w *worker) work(head pipeline.Head, jobProvider *jobProvider, readBufferSi
 			logger.Fatalf("file % s seek error: %s", file.Name(), err.Error())
 		}
 
+		logger.Debugf("worker started reading at %d job %d:%s", offset, job.inode, file.Name())
+
 		isEOF := false
 		wasPut := false
 
@@ -38,8 +40,10 @@ func (w *worker) work(head pipeline.Head, jobProvider *jobProvider, readBufferSi
 
 		accumBuffer = accumBuffer[:0]
 		for {
+			readBuffer = readBuffer[:readBufferSize]
 			r, err := file.Read(readBuffer)
 			read := int64(r)
+			readBuffer = readBuffer[:read]
 
 			if err == io.EOF || read == 0 {
 				isEOF = true
@@ -58,9 +62,9 @@ func (w *worker) work(head pipeline.Head, jobProvider *jobProvider, readBufferSi
 
 				if len(accumBuffer) != 0 {
 					accumBuffer = append(accumBuffer, readBuffer[processed:i]...)
-					head.Accept(pipeline.SourceId(job.inode), file.Name(), offset, accumulated+i+1, accumBuffer)
+					head.In(pipeline.SourceId(job.inode), file.Name(), offset, accumulated+i+1, accumBuffer)
 				} else {
-					head.Accept(pipeline.SourceId(job.inode), file.Name(), offset, i+1, readBuffer[processed:i])
+					head.In(pipeline.SourceId(job.inode), file.Name(), offset, i+1, readBuffer[processed:i])
 				}
 				accumBuffer = accumBuffer[:0]
 
@@ -100,9 +104,11 @@ func (w *worker) work(head pipeline.Head, jobProvider *jobProvider, readBufferSi
 
 			// file was truncated, seek to start
 			if offset+readTotal > stat.Size() {
-				logger.Infof("file %s was truncated, reading will start over", file.Name())
-				jobProvider.resetJob(job)
+				jobProvider.truncateJob(job, offset+readTotal, stat.Size())
 				isEOF = false
+				offset = 0
+				accumulated = 0
+				processed = 0
 			}
 		}
 

@@ -1,6 +1,7 @@
 .PHONY: test
 test:
 	go test ./filed/ -v -count 1
+	go test ./pipeline/ -v -count 1
 	go test ./plugin/... -v -count 1
 
 .PHONY: bench-file
@@ -9,7 +10,7 @@ bench-file:
 
 .PHONY: profile-file
 profile-file:
-	go test -bench LightJsonReadPar ./plugin/input/file -v -count 1 -run -benchmem -benchtime 1x -cpuprofile cpu.pprof -memprofile mem.pprof
+	go test -bench LightJsonReadPar ./plugin/input/file -v -count 1 -run -benchmem -benchtime 1x -cpuprofile cpu.pprof -memprofile mem.pprof -mutexprofile mutex.pprof
 
 .PHONY: build
 build:
