@@ -13,6 +13,8 @@ type stream struct {
 	mu       *sync.Mutex
 	cond     *sync.Cond
 
+	isInWait bool
+
 	first *Event
 	last  *Event
 }
@@ -30,8 +32,8 @@ func newStream(name StreamName, sourceId SourceId, track *track) *stream {
 }
 
 func (s *stream) put(event *Event) {
-	event.next = nil
 	s.mu.Lock()
+	wasInWait := s.isInWait
 	if s.last == nil {
 		s.last = event
 		s.first = event
@@ -43,16 +45,21 @@ func (s *stream) put(event *Event) {
 	}
 	s.mu.Unlock()
 
-	s.track.streamCh <- s
+	if !wasInWait {
+		s.track.streamCh <- s
+	}
 	return
 }
 
+//todo: waitGet leads to deadlock if pipeline capacity is around ~1024 events
 func (s *stream) waitGet() *Event {
 	s.mu.Lock()
+	s.isInWait = true
 	for s.first == nil {
 		s.cond.Wait()
 	}
 	event := s.get()
+	s.isInWait = false
 	s.mu.Unlock()
 
 	return event

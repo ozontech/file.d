@@ -20,8 +20,9 @@ type Event struct {
 	JSONPool   *fastjson.Arena
 	Offset     int64
 	Source     SourceId
+	SourceName string
 	Stream     StreamName
-	Additional string
+	SourceSize int
 
 	deprecated    atomic.Bool
 	shouldCleanUp bool
@@ -30,7 +31,8 @@ type Event struct {
 	parsersCount int
 
 	// some debugging shit
-	raw []byte
+	raw     []byte
+	maxSize int
 }
 
 func newEvent(poolIndex int) *Event {
@@ -49,6 +51,7 @@ func (e *Event) reset() {
 		e.parsers = make([]*fastjson.Parser, 0, 0)
 	}
 
+	e.next = nil
 	e.JSONPool.Reset()
 	e.parsersCount = 0
 	e.deprecated.Swap(false)
@@ -76,8 +79,13 @@ func (e *Event) Marshal(out []byte) ([]byte, int) {
 	l := len(out)
 	out = e.JSON.MarshalTo(out)
 
+	size := len(out) - l
 	// event is going to be super big, lets GC it
-	e.shouldCleanUp = len(out)-l > int(logCleanUpSize)
+	e.shouldCleanUp = size > int(logCleanUpSize)
+
+	if size > e.maxSize {
+		e.maxSize = size
+	}
 
 	return out, l
 }
@@ -92,6 +100,8 @@ type eventPool struct {
 
 	mu   *sync.Mutex
 	cond *sync.Cond
+
+	maxEventSize int
 }
 
 func newEventPool(capacity int) *eventPool {
@@ -136,6 +146,9 @@ func (p *eventPool) get() (*Event, int) {
 	p.mu.Unlock()
 
 	event.reset()
+	if event.maxSize > p.maxEventSize {
+		p.maxEventSize = event.maxSize
+	}
 	return event, index
 }
 

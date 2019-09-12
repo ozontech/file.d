@@ -1,7 +1,6 @@
 package kafka
 
 import (
-	"context"
 	"strings"
 	"sync"
 	"time"
@@ -13,9 +12,13 @@ import (
 	"github.com/Shopify/sarama"
 )
 
-const defaultWorkers = 16
-const defaultBatchSize = 512
-const defaultAvgLogSize = 4096
+const (
+	defaultWorkers    = 16
+	defaultBatchSize  = 1024
+	defaultAvgLogSize = 4096
+
+	defaultFlushTimeout = time.Second
+)
 
 var kafkaKey = []byte("message")
 
@@ -28,16 +31,17 @@ type Config struct {
 }
 
 type Plugin struct {
-	ctx        context.Context
 	config     *Config
 	controller pipeline.OutputController
 
-	producers []sarama.SyncProducer
-	batch     *batch
+	shouldStop bool
+	batch      *batch
 
 	// cycle of batches: freeBatches => fullBatches, fullBatches => freeBatches
 	freeBatches chan *batch
 	fullBatches chan *batch
+
+	producer sarama.SyncProducer
 
 	mu        *sync.Mutex
 	cond      *sync.Cond
@@ -57,7 +61,6 @@ func Factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 }
 
 func (p *Plugin) Start(config pipeline.AnyConfig, controller pipeline.OutputController) {
-	p.ctx = context.Background()
 	p.config = config.(*Config)
 	p.controller = controller
 
@@ -73,25 +76,46 @@ func (p *Plugin) Start(config pipeline.AnyConfig, controller pipeline.OutputCont
 		p.config.BatchSize = defaultBatchSize
 	}
 
-	p.producers = make([]sarama.SyncProducer, defaultWorkers)
 	p.mu = &sync.Mutex{}
 	p.cond = sync.NewCond(p.mu)
+	p.producer = p.newProducer()
 
 	p.freeBatches = make(chan *batch, p.config.Workers)
 	p.fullBatches = make(chan *batch, p.config.Workers)
 	for i := 0; i < p.config.Workers; i++ {
-		p.producers[i] = p.newProducer()
-		go p.work(p.producers[i])
+		go p.work()
 
-		p.freeBatches <- newBatch(defaultBatchSize)
+		p.freeBatches <- newBatch(defaultBatchSize, defaultFlushTimeout)
 	}
-	logger.Infof("new kafka producers created with brokers %q, count=%d", strings.Join(p.config.brokers, ","), p.config.Workers)
+
+	go p.heartbeat()
+}
+
+func (p *Plugin) heartbeat() {
+	for {
+		if p.shouldStop {
+			return
+		}
+
+		p.mu.Lock()
+		batch := p.getBatch()
+		p.trySendBatchAndUnlock(batch)
+
+		time.Sleep(time.Millisecond * 100)
+	}
 }
 
 func (p *Plugin) Out(event *pipeline.Event) {
 	p.mu.Lock()
+
 	batch := p.getBatch()
 	batch.append(event)
+
+	p.trySendBatchAndUnlock(batch)
+}
+
+// trySendBatch mu should be locked and it'll be unlocked after execution of this function
+func (p *Plugin) trySendBatchAndUnlock(batch *batch) {
 	if !batch.isReady() {
 		p.mu.Unlock()
 		return
@@ -100,13 +124,12 @@ func (p *Plugin) Out(event *pipeline.Event) {
 	batch.seq = p.outSeq
 	p.outSeq++
 	p.batch = nil
-
 	p.mu.Unlock()
 
 	p.fullBatches <- batch
 }
 
-func (p *Plugin) work(producer sarama.SyncProducer) {
+func (p *Plugin) work() {
 	events := make([]*pipeline.Event, 0, 0)
 	out := make([]byte, 0, 0)
 	for {
@@ -136,7 +159,7 @@ func (p *Plugin) work(producer sarama.SyncProducer) {
 			}
 		}
 
-		err := producer.SendMessages(batch.messages[:len(batch.events)])
+		err := p.producer.SendMessages(batch.messages[:len(batch.events)])
 		if err != nil {
 			errs := err.(sarama.ProducerErrors)
 
@@ -171,13 +194,15 @@ func (p *Plugin) work(producer sarama.SyncProducer) {
 			p.controller.Commit(e)
 		}
 
+		logger.Infof("kafka batch written count=%d", len(events))
+
 		p.cond.Broadcast()
 		p.mu.Unlock()
-
 	}
 }
 
 func (p *Plugin) Stop() {
+	p.shouldStop = true
 }
 
 func (p *Plugin) getBatch() *batch {
@@ -192,8 +217,7 @@ func (p *Plugin) newProducer() sarama.SyncProducer {
 	config := sarama.NewConfig()
 	config.Net.MaxOpenRequests = 1
 	config.Producer.Flush.Messages = defaultBatchSize
-	config.Producer.Flush.MaxMessages = defaultBatchSize
-	config.Producer.Flush.Frequency = time.Millisecond * 500
+	config.Producer.Flush.Frequency = time.Millisecond
 	config.Producer.Return.Errors = true
 	config.Producer.Return.Successes = true
 
@@ -202,5 +226,6 @@ func (p *Plugin) newProducer() sarama.SyncProducer {
 		logger.Fatalf("can't create kafka producer: %s", err.Error())
 	}
 
+	logger.Infof("kafka producer created with brokers %q", strings.Join(p.config.brokers, ","))
 	return producer
 }

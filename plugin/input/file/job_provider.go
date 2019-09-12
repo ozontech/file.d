@@ -19,32 +19,44 @@ import (
 
 const (
 	infoReportInterval  = time.Second * 10
-	maintenanceInterval = time.Second * 5
+	maintenanceInterval = time.Second * 10
+
+	maintenanceResultError    = 0
+	maintenanceResultNotDone  = 1
+	maintenanceResultResumed  = 2
+	maintenanceResultReleased = 3
+	maintenanceResultNoop     = 4
 )
 
 type job struct {
-	file *os.File
+	file     *os.File
+	inode    inode
+	filename string
+	symlink  string
 
-	isDone    bool
-	isRunning bool
+	size   int64
+	isDone bool
 
-	inode   inode
-	offsets offsetsStreams
-	size    int64
+	offsets streamsOffsets
 
 	mu *sync.Mutex
 }
 
 type jobProvider struct {
-	config *Config
-	head   pipeline.Head
+	config    *Config
+	head      pipeline.Head
+	isStarted bool
+
+	watcher *watcher
 
 	jobs                map[inode]*job
 	jobsMu              *sync.RWMutex
 	jobsChan            chan *job
 	jobsLog             []string
-	jobsMaintenanceList []*job // temporary list of jobs
 	jobsSaveOffsetsList []*job // temporary list of jobs
+
+	symlinks   map[inode]string
+	symlinksMu *sync.Mutex
 
 	jobsDoneCounter *atomic.Int32
 	doneWg          *sync.WaitGroup
@@ -52,8 +64,7 @@ type jobProvider struct {
 	offsetsSaveMu      *sync.Mutex
 	offsetsSaveCounter *atomic.Int64
 	offsetsSaveBuf     []string // content buffer to avoid allocation every offsets saving
-	loadedOffsets      offsetsInode
-	files              files
+	loadedOffsets      inodesOffsets
 
 	stopSaveOffsetsCh chan bool
 	stopReportCh      chan bool
@@ -64,10 +75,13 @@ type jobProvider struct {
 }
 
 type inode uint64
+type streamsOffsets map[pipeline.StreamName]int64
+type inodesOffsets map[inode]map[pipeline.StreamName]int64
 
-type offsetsStreams map[pipeline.StreamName]int64
-type offsetsInode map[inode]map[pipeline.StreamName]int64
-type files map[inode]string
+type symlinkInfo struct {
+	filename string
+	inode    inode
+}
 
 func NewJobProvider(config *Config, done *sync.WaitGroup, head pipeline.Head) *jobProvider {
 	jp := &jobProvider{
@@ -76,16 +90,18 @@ func NewJobProvider(config *Config, done *sync.WaitGroup, head pipeline.Head) *j
 
 		head: head,
 
-		jobs:            make(map[inode]*job, config.ChanLength),
+		jobs:            make(map[inode]*job, config.MaxFiles),
 		jobsDoneCounter: atomic.NewInt32(0),
 		jobsMu:          &sync.RWMutex{},
-		jobsChan:        make(chan *job, config.ChanLength),
+		jobsChan:        make(chan *job, config.MaxFiles),
 		jobsLog:         make([]string, 0, 16),
+
+		symlinks:   make(map[inode]string),
+		symlinksMu: &sync.Mutex{},
 
 		offsetsSaveMu:      &sync.Mutex{},
 		offsetsSaveCounter: &atomic.Int64{},
 		offsetsSaveBuf:     make([]string, 0, 65536),
-		files:              make(files),
 		eventsCommitted:    &atomic.Int64{},
 
 		stopSaveOffsetsCh: make(chan bool, 1), //non-zero channel cause we don't wanna wait goroutine to stop
@@ -101,13 +117,17 @@ func (jp *jobProvider) start() {
 	if jp.config.offsetsOp == offsetsOpContinue {
 		jp.loadOffsets()
 	}
-	jp.loadJobs()
+
+	jp.watcher = NewWatcher(jp.config.WatchingDir, jp.config.FilenamePattern, jp)
+	jp.watcher.start()
 
 	if jp.config.persistenceMode == persistenceModeAsync {
 		go jp.saveOffsetsCyclic(time.Millisecond * 100)
 	} else if jp.config.persistenceMode == persistenceModeTimer {
 		go jp.saveOffsetsCyclic(time.Second * 5)
 	}
+
+	jp.isStarted = true
 
 	go jp.reportStats()
 	go jp.maintenance()
@@ -119,14 +139,8 @@ func (jp *jobProvider) stop() {
 	if jp.config.persistenceMode == persistenceModeAsync || jp.config.persistenceMode == persistenceModeTimer {
 		jp.stopSaveOffsetsCh <- true
 	}
-}
 
-func (jp *jobProvider) sendToWorkers(job *job) {
-	if job.isDone || job.isRunning {
-		logger.Panicf("why run? it's at end or already running")
-	}
-	job.isRunning = true
-	jp.jobsChan <- job
+	jp.watcher.stop()
 }
 
 func (jp *jobProvider) commit(event *pipeline.Event) {
@@ -146,7 +160,7 @@ func (jp *jobProvider) commit(event *pipeline.Event) {
 
 	job.mu.Lock()
 	if job.offsets[event.Stream] >= event.Offset && isActual {
-		logger.Panicf("commit offset=%d for source=%d:%s should be more than current=%d for event id=", event.Offset, event.Source, event.Stream, job.offsets[event.Stream], event.ID)
+		logger.Panicf("commit offset=%d for source=%d:%s should be more than current=%d for event id=%d", event.Offset, event.Source, event.Stream, job.offsets[event.Stream], event.ID)
 	}
 	if isActual {
 		job.offsets[event.Stream] = event.Offset
@@ -160,140 +174,183 @@ func (jp *jobProvider) commit(event *pipeline.Event) {
 	}
 }
 
-func (jp *jobProvider) addJob(filename string, isStartup bool) {
+func (jp *jobProvider) actualizeSomething(filename string, stat os.FileInfo) {
 	if filename == jp.config.OffsetsFile || filename == jp.config.offsetsTmpFilename {
 		logger.Fatalf("sorry, you can't place offsets file %s inside watching dir %s", jp.config.OffsetsFile, jp.config.WatchingDir)
 	}
 
-	file, err := os.Open(filename)
-	// file may be renamed or deleted while we get to this line, so only warn about this
-	if err != nil {
-		logger.Warnf("file was already moved from creation place %s", filename)
+	if stat.Mode()&os.ModeSymlink != 0 {
+		jp.actualizeSymlink(filename, getInode(stat))
 		return
 	}
-	stat, err := file.Stat()
-	if err != nil {
-		logger.Errorf("can't instantiate job, can't stat file %s", filename)
-		return
-	}
-	sysStat := stat.Sys().(*syscall.Stat_t)
-	inode := inode(sysStat.Ino)
 
-	jp.files[inode] = filename
+	jp.actualizeFile(stat, filename, "")
+}
+
+func getInode(stat os.FileInfo) inode {
+	return inode(stat.Sys().(*syscall.Stat_t).Ino)
+}
+
+func (jp *jobProvider) actualizeFile(stat os.FileInfo, filename string, symlink string) {
+	inode := getInode(stat)
 
 	jp.jobsMu.RLock()
-	existingJob, has := jp.jobs[inode]
+	job, has := jp.jobs[inode]
 	jp.jobsMu.RUnlock()
 
 	if has {
-		existingJob.mu.Lock()
-		jp.resumeJob(existingJob, stat.Size())
-		existingJob.mu.Unlock()
-
+		jp.resumeJob(job, stat, filename)
 		return
 	}
 
-	job := jp.instantiateJob(file, inode, isStartup)
-	if job == nil {
+	file, err := os.Open(filename)
+	if err != nil {
+		logger.Warnf("file was already moved from creation place %s: %s", filename, err.Error())
 		return
+	}
+
+	jp.addJob(file, stat, inode, filename, symlink)
+}
+
+func (jp *jobProvider) actualizeSymlink(symlink string, inode inode) {
+	jp.symlinksMu.Lock()
+	jp.symlinks[inode] = symlink
+	jp.symlinksMu.Unlock()
+
+	filename, err := filepath.EvalSymlinks(symlink)
+	if err != nil {
+		logger.Warnf("symlink have been removed %s", symlink)
+
+		jp.symlinksMu.Lock()
+		delete(jp.symlinks, inode)
+		jp.symlinksMu.Unlock()
+		return
+	}
+
+	filename, err = filepath.Abs(filename)
+	if err != nil {
+		logger.Warnf("can't follow symlink to %s: %s", filename, err.Error())
+		return
+	}
+
+	stat, err := os.Stat(filename)
+	if err != nil {
+		logger.Warnf("can't follow symlink to %s: %s", filename, err.Error())
+		return
+	}
+
+	jp.actualizeFile(stat, filename, symlink)
+}
+
+func (jp *jobProvider) addJob(file *os.File, stat os.FileInfo, inode inode, filename string, symlink string) {
+	job := &job{
+		file:     file,
+		inode:    inode,
+		filename: filename,
+		symlink:  symlink,
+
+		size:   0,
+		isDone: true,
+
+		offsets: make(streamsOffsets),
+
+		mu: &sync.Mutex{},
+	}
+
+	// load saved offsets only on start phase
+	if !jp.isStarted {
+		jp.loadJobOffsets(job, inode)
 	}
 
 	jp.jobsMu.Lock()
 	jp.jobs[inode] = job
+	if len(jp.jobs) > jp.config.MaxFiles {
+		logger.Fatalf("max_files reached for input plugin, consider increase this parameter")
+	}
 	jp.jobsLog = append(jp.jobsLog, filename)
 	jp.jobsMu.Unlock()
 
 	jp.jobsDoneCounter.Inc()
 
-	job.mu.Lock()
-	logger.Debugf("job added for %d:%s", job.inode, job.file.Name())
-	jp.resumeJob(job, stat.Size())
-	job.mu.Unlock()
+	logger.Infof("job added for a file %d:%s", inode, filename)
 
+	jp.resumeJob(job, stat, filename)
 }
 
-func (jp *jobProvider) instantiateJob(file *os.File, inode inode, isStartup bool) *job {
-	job := &job{
-		inode:   inode,
-		file:    file,
-		isDone:  true,
-		mu:      &sync.Mutex{},
-		offsets: make(offsetsStreams),
-	}
-
-	if isStartup {
-		if jp.config.offsetsOp == offsetsOpTail {
-			_, err := file.Seek(0, io.SeekEnd)
-			if err != nil {
-				logger.Panicf("can't make job, can't seek file %d:%s", inode, file.Name())
-			}
-		}
-
-		offsets, has := jp.loadedOffsets[inode]
-		if has && len(offsets) == 0 {
-			logger.Panicf("can't instantiate job, no streams in source %d:%q", inode, file.Name())
-		}
-
-		if has {
-			job.offsets = offsets
-
-			// all streams are in one file, so we should seek file to
-			// min offset to make sure logs from all streams will be delivered at least once
-			minOffset := int64(math.MaxInt64)
-			for _, offset := range offsets {
-				if offset < minOffset {
-					minOffset = offset
-				}
-			}
-
-			offset, err := file.Seek(minOffset, io.SeekStart)
-			if err != nil || offset != minOffset {
-				logger.Panicf("can't make job, can't seek file %d:%s", inode, file.Name())
-			}
+func (jp *jobProvider) loadJobOffsets(job *job, inode inode) {
+	file := job.file
+	if jp.config.offsetsOp == offsetsOpTail {
+		_, err := file.Seek(0, io.SeekEnd)
+		if err != nil {
+			logger.Panicf("can't make job, can't seek file %d:%s: %s", inode, job.filename, err.Error())
 		}
 	}
 
-	return job
+	offsets, has := jp.loadedOffsets[inode]
+	if has && len(offsets) == 0 {
+		logger.Panicf("can't instantiate job, no streams in source %d:%q", inode, job.filename)
+	}
+
+	if has {
+		job.offsets = offsets
+
+		// all streams are in one file, so we should seek file to
+		// min offset to make sure logs from all streams will be delivered at least once
+		minOffset := int64(math.MaxInt64)
+		for _, offset := range offsets {
+			if offset < minOffset {
+				minOffset = offset
+			}
+		}
+
+		_, err := file.Seek(minOffset, io.SeekStart)
+		if err != nil {
+			logger.Panicf("can't make job, can't seek file %d:%s: %s", inode, job.filename, err.Error())
+		}
+	}
 }
 
+// releaseJob job should be already locked, and after this call it will be unlocked
 func (jp *jobProvider) releaseJob(job *job, wasEOF bool, offset int64) {
-	job.mu.Lock()
-	defer job.mu.Unlock()
-
-	if !job.isRunning || job.isDone {
+	if job.isDone {
 		logger.Panicf("job isn't running, why release?")
 	}
 
-	job.isRunning = false
 	if wasEOF {
 		jp.doneJob(job)
 	} else {
-		jp.sendToWorkers(job)
+		jp.jobsChan <- job
 	}
 }
 
-// resumeJob job should be already locked
-func (jp *jobProvider) resumeJob(job *job, size int64) {
-	logger.Debugf("job for %d:%s resumed", job.inode, job.file.Name())
+func (jp *jobProvider) resumeJob(job *job, stat os.FileInfo, filename string) {
+	logger.Debugf("job for %d:%s resumed", job.inode, job.filename)
 
-	job.size = size
-
+	job.mu.Lock()
 	if !job.isDone {
+		job.mu.Unlock()
 		return
 	}
 
-	jp.doneWg.Add(1)
+	job.size = stat.Size()
+	job.filename = filename
 	job.isDone = false
-	v := jp.jobsDoneCounter.Dec()
-	if v < 0 {
+	job.mu.Unlock()
+
+	if jp.jobsDoneCounter.Dec() < 0 {
 		logger.Panicf("done jobs counter less than zero")
 	}
 
-	jp.sendToWorkers(job)
+	jp.doneWg.Add(1)
+
+	jp.jobsChan <- job
 }
 
 // doneJob job should already be locked
 func (jp *jobProvider) doneJob(job *job) {
+	job.mu.Lock()
+	defer job.mu.Unlock()
+
 	job.isDone = true
 	v := int(jp.jobsDoneCounter.Inc())
 	if v > len(jp.jobs) {
@@ -302,16 +359,15 @@ func (jp *jobProvider) doneJob(job *job) {
 	jp.doneWg.Done()
 }
 
-// doneJob job should be already locked
 func (jp *jobProvider) truncateJob(job *job, offset int64, size int64) {
+	jp.head.DeprecateEvents(pipeline.SourceId(job.inode))
+
 	job.mu.Lock()
 	defer job.mu.Unlock()
 
-	jp.head.DeprecateEvents(pipeline.SourceId(job.inode))
-
 	_, err := job.file.Seek(0, io.SeekStart)
 	if err != nil {
-		logger.Fatalf("job reset error, file % s seek error: %s", job.file.Name(), err.Error())
+		logger.Fatalf("job reset error, file % s seek error: %s", job.filename, err.Error())
 	}
 
 	job.size = size
@@ -319,7 +375,7 @@ func (jp *jobProvider) truncateJob(job *job, offset int64, size int64) {
 		job.offsets[k] = 0
 	}
 
-	logger.Infof("job %d:%s was truncated, reading will start over, offset=%s, size=%d", job.inode, job.file.Name(), offset, size)
+	logger.Infof("job %d:%s was truncated, reading will start over, offset=%d, size=%d", job.inode, job.filename, offset, size)
 }
 
 func (jp *jobProvider) saveOffsetsCyclic(duration time.Duration) {
@@ -374,15 +430,10 @@ func (jp *jobProvider) saveOffsets() {
 			continue
 		}
 
-		file, has := jp.files[job.inode]
-		if !has {
-			logger.Panicf("no file name for source id %d", job.inode)
-		}
-
 		jp.offsetsSaveBuf = append(jp.offsetsSaveBuf, "- file: ")
 		jp.offsetsSaveBuf = append(jp.offsetsSaveBuf, strconv.FormatUint(uint64(job.inode), 10))
 		jp.offsetsSaveBuf = append(jp.offsetsSaveBuf, " ")
-		jp.offsetsSaveBuf = append(jp.offsetsSaveBuf, file)
+		jp.offsetsSaveBuf = append(jp.offsetsSaveBuf, job.filename)
 		jp.offsetsSaveBuf = append(jp.offsetsSaveBuf, "\n")
 		for stream, offset := range job.offsets {
 			jp.offsetsSaveBuf = append(jp.offsetsSaveBuf, "  ")
@@ -437,27 +488,7 @@ func (jp *jobProvider) loadOffsets() {
 		logger.Panicf("Can't load offsets %s: ", err.Error())
 	}
 
-	jp.loadedOffsets, jp.files = parseOffsets(string(content))
-}
-
-func (jp *jobProvider) loadJobs() {
-	files, err := filepath.Glob(filepath.Join(jp.config.WatchingDir, "*"))
-	if err != nil {
-		logger.Fatalf("can't get file list from watching dir %s:", err.Error())
-	}
-	for _, filename := range files {
-		stat, err := os.Stat(filename)
-		if err != nil {
-			logger.Warnf("can't open file %s", filename)
-			continue
-		}
-		if stat.IsDir() {
-			continue
-		}
-
-		jp.addJob(filename, true)
-	}
-	logger.Infof("jobs loaded, count=%d", len(files))
+	jp.loadedOffsets = parseOffsets(string(content))
 }
 
 func (jp *jobProvider) reportStats() {
@@ -498,108 +529,164 @@ func (jp *jobProvider) maintenance() {
 		case <-jp.stopMaintenanceCh:
 			return
 		default:
-			// snapshot current jobs to avoid jobs map locking for a long time
-			jp.jobsMaintenanceList = jp.jobsMaintenanceList[:0]
-			jp.jobsMu.RLock()
-			for _, job := range jp.jobs {
-				jp.jobsMaintenanceList = append(jp.jobsMaintenanceList, job)
-			}
-			jp.jobsMu.RUnlock()
+			jp.maintenanceJobs()
+			jp.maintenanceSymlinks()
 
-			logger.Debugf("running maintenance for %d jobs", len(jp.jobsMaintenanceList))
-			jobsNotDone := 0
-			jobsResumed := 0
-			jobsReopened := 0
-			for _, job := range jp.jobsMaintenanceList {
-				job.mu.Lock()
-				if !job.isDone {
-					jobsNotDone++
-					job.mu.Unlock()
-					continue
-				}
-
-				stat, err := job.file.Stat()
-				if err != nil {
-					logger.Warnf("can't stat file %s", job.file.Name())
-					job.mu.Unlock()
-					continue
-				}
-
-				if job.size != stat.Size() && job.isDone {
-					jobsResumed++
-					jp.resumeJob(job, job.size)
-					job.mu.Unlock()
-					continue
-				}
-
-				// try release file descriptor in the case file have been deleted
-				// for that reason just close it and try to open
-				sysStat := stat.Sys().(*syscall.Stat_t)
-
-				filename := job.file.Name()
-				inode := inode(sysStat.Ino)
-
-				offset, err := job.file.Seek(0, io.SeekCurrent)
-				if err != nil {
-					logger.Warnf("can't seek file %s", filename)
-					job.mu.Unlock()
-					continue
-				}
-
-				if offset != job.size {
-					logger.Errorf("something strange happened with offsets of file %s", filename)
-					jp.resumeJob(job, job.size)
-					job.mu.Unlock()
-					continue
-				}
-
-				err = job.file.Close()
-				if err != nil {
-					logger.Warnf("can't close file %s", filename)
-					job.mu.Unlock()
-					continue
-				}
-
-				file, err := os.Open(filename)
-				if err != nil {
-					job.mu.Unlock()
-
-					jp.jobsMu.Lock()
-					jp.head.DeprecateEvents(pipeline.SourceId(job.inode))
-
-					delete(jp.jobs, inode)
-					// job isn't done we've delete it
-					v := jp.jobsDoneCounter.Dec()
-					if v < 0 {
-						logger.Panicf("done jobs counter less than zero")
-
-					}
-
-					jp.jobsMu.Unlock()
-
-					logger.Infof("job for file %d:%s was released", job.inode, filename)
-					continue
-				}
-
-				jobsReopened++
-				_, err = file.Seek(offset, io.SeekStart)
-				if err != nil {
-					logger.Panicf("can't seek file %s after reopen", filename)
-				}
-
-				job.file = file
-				job.mu.Unlock()
-			}
-
-			logger.Infof("maintenance stats: not done jobs=%d, resumed jobs=%d, reopened=%d", jobsNotDone, jobsResumed, jobsReopened)
 			time.Sleep(maintenanceInterval)
 		}
 	}
 }
 
-func parseOffsets(data string) (offsetsInode, files) {
-	offsets := make(offsetsInode)
-	sourceIdToFile := make(files)
+func (jp *jobProvider) maintenanceSymlinks() {
+
+	jp.symlinksMu.Lock()
+	symlinks := make([]symlinkInfo, 0, len(jp.symlinks))
+	for inode, filename := range jp.symlinks {
+		symlinks = append(symlinks, symlinkInfo{
+			filename:
+			filename, inode: inode,
+		})
+	}
+	jp.symlinksMu.Unlock()
+
+	for _, info := range symlinks {
+		jp.actualizeSymlink(info.filename, info.inode)
+	}
+}
+
+func (jp *jobProvider) maintenanceJobs() {
+	// snapshot jobs to avoid jobs map locking for a long time
+	jp.jobsMu.RLock()
+	jobs := make([]*job, 0, len(jp.jobs))
+	for _, job := range jp.jobs {
+		jobs = append(jobs, job)
+	}
+	jp.jobsMu.RUnlock()
+
+	resumed := 0
+	reopened := 0
+	notDone := 0
+	released := 0
+	errors := 0
+	for _, job := range jobs {
+		result := jp.maintenanceJob(job)
+		switch result {
+		case maintenanceResultResumed:
+			resumed++
+		case maintenanceResultNoop:
+			reopened++
+		case maintenanceResultNotDone:
+			notDone++
+		case maintenanceResultReleased:
+			released++
+		case maintenanceResultError:
+			errors++
+		}
+	}
+
+	logger.Infof("file plugin maintenance stats: not done=%d, resumed=%d, reopened=%d, released=%d errors=%d", notDone, resumed, reopened, released, errors)
+}
+
+func (jp *jobProvider) maintenanceJob(job *job) int {
+	job.mu.Lock()
+	isDone := job.isDone
+	filename := job.filename
+	file := job.file
+	size := job.size
+	inode := job.inode
+	job.mu.Unlock()
+
+	if !isDone {
+		return maintenanceResultNotDone
+	}
+
+	stat, err := file.Stat()
+	if err != nil {
+		logger.Warnf("can't stat file %s", filename)
+
+		return maintenanceResultError
+	}
+
+	if size != stat.Size() {
+		jp.resumeJob(job, stat, filename)
+
+		return maintenanceResultResumed
+	}
+
+	// try release file descriptor in the case file have been deleted
+	// for that reason just close it and immediately try to open
+	offset, err := file.Seek(0, io.SeekCurrent)
+	if err != nil {
+		logger.Fatalf("can't seek file %s: %s", filename, err.Error())
+		panic("")
+	}
+
+	if offset != size {
+		logger.Panicf("something strange happened with offsets of file %s", filename)
+	}
+
+	err = file.Close()
+	if err != nil {
+		logger.Fatalf("can't close file %s: %s", filename, err.Error())
+		panic("")
+	}
+
+	//todo: here we may have symlink opened, so handle it
+	file, err = os.Open(filename)
+	if err != nil {
+		jp.deleteJob(job)
+		logger.Infof("job for file %d:%s was released", inode, filename)
+
+		return maintenanceResultReleased
+	}
+
+	stat, err = file.Stat()
+	if err != nil {
+		logger.Panicf("can't stat file %s: %s", filename, err.Error())
+	}
+
+	// it's not a file that was in the job, don't process it
+	newInode := getInode(stat)
+	if newInode != inode {
+		jp.deleteJob(job)
+
+		return maintenanceResultReleased
+	}
+
+	_, err = file.Seek(offset, io.SeekStart)
+	if err != nil {
+		logger.Fatalf("can't seek file %s after reopen: %s", filename, err.Error())
+		panic("")
+	}
+
+	job.mu.Lock()
+	job.file = file
+	job.mu.Unlock()
+
+	return maintenanceResultNoop
+}
+
+// deleteJob job should be already locked
+func (jp *jobProvider) deleteJob(job *job) {
+	job.mu.Lock()
+	if !job.isDone {
+		logger.Panicf("can't delete job, it isn't done: %d:%s", job.inode, job.filename)
+	}
+	jp.head.DeprecateEvents(pipeline.SourceId(job.inode))
+	job.mu.Unlock()
+
+	jp.jobsMu.Lock()
+	delete(jp.jobs, job.inode)
+	c := jp.jobsDoneCounter.Dec()
+	jp.jobsMu.Unlock()
+
+	if c < 0 {
+		logger.Panicf("done jobs counter less than zero")
+	}
+}
+
+func parseOffsets(data string) inodesOffsets {
+	offsets := make(inodesOffsets)
 	inodeStr := "- file: "
 	inodeStrLen := len(inodeStr)
 	source := data
@@ -621,7 +708,6 @@ func parseOffsets(data string) (offsetsInode, files) {
 			logger.Panicf("wrong offsets format, inode expected: %s", source)
 		}
 
-		filename := line[inodeStrLen+pos+1 : linePos]
 		sysInode, err := strconv.ParseUint(line[inodeStrLen:inodeStrLen+pos], 10, 64)
 		inode := inode(sysInode)
 		if err != nil {
@@ -633,7 +719,6 @@ func parseOffsets(data string) (offsetsInode, files) {
 			logger.Panicf("wrong offsets format, duplicate inode %d, %s", inode, source)
 		}
 		offsets[inode] = make(map[pipeline.StreamName]int64)
-		sourceIdToFile[inode] = filename
 
 		for len(data) != 0 && data[0] != '-' {
 			linePos = strings.IndexByte(data, '\n')
@@ -669,5 +754,5 @@ func parseOffsets(data string) (offsetsInode, files) {
 		}
 	}
 
-	return offsets, sourceIdToFile
+	return offsets
 }

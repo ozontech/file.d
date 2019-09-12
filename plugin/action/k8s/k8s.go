@@ -8,13 +8,15 @@ import (
 	"go.uber.org/atomic"
 )
 
-// Plugin adds k8s meta info to docker logs and also joined split docker logs into one event
+// Plugin adds k8s meta info to docker logs and also joins split docker logs into one event
 // source docker log file name format should be: [pod-name]_[namespace]_[container-name]-[container id].log
 // example: /docker-logs/advanced-logs-checker-1566485760-trtrq_sre_duty-bot-4e0301b633eaa2bfdcafdeba59ba0c72a3815911a6a820bf273534b0f32d98e0.log
+// todo: use informer instead of watch API?
 type Plugin struct {
 	config     *Config
 	controller pipeline.ActionController
 	fullLog    []byte
+	fullSize   int
 }
 
 const (
@@ -68,15 +70,16 @@ func (p *Plugin) Do(event *pipeline.Event) {
 		panic("")
 	}
 
-	isMaxReached := len(p.fullLog)+len(chunkedLog) > p.config.MaxLogSize
-	// docker splits long JSON logs by 16kb chunks, so let's join them
+	p.fullSize += event.SourceSize
+	isMaxReached := p.fullSize > p.config.MaxLogSize
+	//docker splits long JSON logs by 16kb chunks, so let's join them
 	if chunkedLog[len(chunkedLog)-1] != '\n' && !isMaxReached {
 		p.fullLog = append(p.fullLog, chunkedLog...)
 		p.controller.Next()
 		return
 	}
 
-	ns, pod, container, _, podMeta := getMeta(event.Additional)
+	ns, pod, container, _, success, podMeta := getMeta(event.SourceName)
 
 	if isMaxReached {
 		logger.Warnf("too long docker log found, it'll be split, ns=%s pod=%s container=%s consider increase max_log_size, current value=%d", ns, pod, container, p.config.MaxLogSize)
@@ -86,7 +89,7 @@ func (p *Plugin) Do(event *pipeline.Event) {
 	event.JSON.Set("k8s_ns", event.JSONPool.NewString(string(ns)))
 	event.JSON.Set("k8s_container", event.JSONPool.NewString(string(container)))
 
-	if podMeta != nil {
+	if success {
 		event.JSON.Set("k8s_node", event.JSONPool.NewString(podMeta.Spec.NodeName))
 
 		for labelName, labelValue := range podMeta.Labels {
@@ -99,6 +102,7 @@ func (p *Plugin) Do(event *pipeline.Event) {
 		event.JSON.Set("log", event.JSONPool.NewStringBytes(p.fullLog))
 		p.fullLog = p.fullLog[:0]
 	}
+	p.fullSize = 0
 
 	p.controller.Propagate()
 }

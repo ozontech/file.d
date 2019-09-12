@@ -13,16 +13,18 @@ type batch struct {
 	messages  []*sarama.ProducerMessage
 	seq       int64
 	size      int
+	timeout   time.Duration
 	startTime time.Time
 }
 
-func newBatch(size int) *batch {
+func newBatch(size int, timeout time.Duration) *batch {
 	if size <= 0 {
 		logger.Fatalf("why batch size is 0?")
 	}
 
 	return &batch{
 		size:     size,
+		timeout:  timeout,
 		events:   make([]*pipeline.Event, 0, size),
 		messages: make([]*sarama.ProducerMessage, size, size),
 	}
@@ -38,5 +40,5 @@ func (b *batch) append(e *pipeline.Event) {
 }
 
 func (b *batch) isReady() bool {
-	return len(b.events) == b.size || (len(b.events) > 0 && time.Now().Sub(b.startTime) > time.Second)
+	return len(b.events) == b.size || (len(b.events) > 0 && time.Now().Sub(b.startTime) > b.timeout)
 }

@@ -10,12 +10,15 @@ import (
 	"sync"
 	"syscall"
 	"testing"
+	"time"
 
+	"github.com/alecthomas/units"
 	"github.com/satori/go.uuid"
 	"github.com/stretchr/testify/assert"
 	"gitlab.ozon.ru/sre/filed/logger"
 	"gitlab.ozon.ru/sre/filed/pipeline"
 	"gitlab.ozon.ru/sre/filed/plugin/output/devnull"
+	"go.uber.org/atomic"
 )
 
 var (
@@ -140,7 +143,7 @@ func addDataFile(file *os.File, data []byte) {
 }
 
 func addData(file string, data []byte, isLine bool, sync bool) {
-	f, err := os.OpenFile(file, os.O_APPEND|os.O_WRONLY, 0600)
+	f, err := os.OpenFile(file, os.O_APPEND|os.O_WRONLY, 0660)
 	if err != nil {
 		panic(err.Error())
 	}
@@ -168,7 +171,7 @@ func addData(file string, data []byte, isLine bool, sync bool) {
 	}
 }
 func addLines(file string, from int, to int) {
-	f, err := os.OpenFile(file, os.O_APPEND|os.O_WRONLY, 0600)
+	f, err := os.OpenFile(file, os.O_APPEND|os.O_WRONLY, 0660)
 	if err != nil {
 		panic(err.Error())
 	}
@@ -217,7 +220,7 @@ func getContentBytes(file string) []byte {
 func genOffsetsContent(file string, offset int) string {
 	return fmt.Sprintf(`- file: %d %s
   default: %d
-`, getInode(file), file, offset)
+`, getInodeByFile(file), file, offset)
 }
 
 func genOffsetsContentMultiple(files []string, offset int) string {
@@ -225,7 +228,7 @@ func genOffsetsContentMultiple(files []string, offset int) string {
 	for _, file := range files {
 		result = append(result, fmt.Sprintf(`- file: %d %s
   default: %d
-`, getInode(file), file, offset)...)
+`, getInodeByFile(file), file, offset)...)
 	}
 
 	return string(result)
@@ -237,13 +240,13 @@ func genOffsetsContentMultipleStreams(files []string, offsetStdErr int, offsetSt
 		result = append(result, fmt.Sprintf(`- file: %d %s
   stderr: %d
   stdout: %d
-`, getInode(file), file, offsetStdErr, offsetStdOut)...)
+`, getInodeByFile(file), file, offsetStdErr, offsetStdOut)...)
 	}
 
 	return string(result)
 }
 
-func getInode(file string) uint64 {
+func getInodeByFile(file string) uint64 {
 	stat, err := os.Stat(file)
 	if err != nil {
 		panic(err)
@@ -254,8 +257,8 @@ func getInode(file string) uint64 {
 }
 
 func assertOffsetsEqual(t *testing.T, offsetsContentA string, offsetsContentB string) {
-	offsetsA, _ := parseOffsets(offsetsContentA)
-	offsetsB, _ := parseOffsets(offsetsContentB)
+	offsetsA := parseOffsets(offsetsContentA)
+	offsetsB := parseOffsets(offsetsContentB)
 	for sourceId, streams := range offsetsA {
 		_, has := offsetsB[sourceId]
 		assert.True(t, has, "Offsets aren't equal, sourceId %d", sourceId)
@@ -267,18 +270,58 @@ func assertOffsetsEqual(t *testing.T, offsetsContentA string, offsetsContentB st
 	}
 }
 
-func TestWatchCreateFile(t *testing.T) {
+func TestWatch(t *testing.T) {
 	setup()
 	defer shutdown()
 
-	c, p := startPipeline("async", true, nil)
+	c, _ := startPipeline("async", true, nil)
 	defer c.Stop()
 
 	file := createTempFile()
-	addData(file, []byte(`{"Test":"Test"}`), true, true)
+	content := []byte(`{"key":"value"}` + "\n")
+
+	time.Sleep(time.Millisecond * 500)
+	dir := filepath.Join(filepath.Dir(file), "dir1")
+	_ = os.Mkdir(dir, 0770)
+	time.Sleep(time.Millisecond * 500)
+
+	err := ioutil.WriteFile(filepath.Join(dir, "new_file"), content, 0660)
+	if err != nil {
+		panic(err.Error())
+	}
+	err = ioutil.WriteFile(filepath.Join(dir, "other_file"), content, 0660)
+	if err != nil {
+		panic(err.Error())
+	}
+	time.Sleep(time.Millisecond * 500)
+	err = os.RemoveAll(dir)
+	if err != nil {
+		panic(err.Error())
+	}
+
+	dir = filepath.Join(filepath.Dir(file), "dir2")
+	_ = os.Mkdir(dir, 0770)
+	time.Sleep(time.Millisecond * 500)
+
+	err = ioutil.WriteFile(filepath.Join(dir, "new_file"), content, 0660)
+	if err != nil {
+		panic(err.Error())
+	}
+	err = ioutil.WriteFile(filepath.Join(dir, "other_file"), content, 0660)
+	if err != nil {
+		panic(err.Error())
+	}
+	time.Sleep(time.Millisecond * 500)
+	err = os.RemoveAll(dir)
+	if err != nil {
+		panic(err.Error())
+	}
+
+	addData(file, content, true, true)
 	c.HandleEventFlowFinish(false)
 
-	assert.Equal(t, 1, p.watcher.FilesCreated(), "Watch failed")
+	assert.Equal(t, 5, c.GetEventLogLength(), "Wrong log count")
+	assert.Equal(t, 5, c.EventsProcessed(), "Wrong log count")
 }
 
 func TestReadLineSimple(t *testing.T) {
@@ -515,7 +558,7 @@ func TestReadInsane(t *testing.T) {
 
 	for f := 0; f < files; f++ {
 		file := createTempFile()
-		f, err := os.OpenFile(file, os.O_APPEND|os.O_WRONLY, 0600)
+		f, err := os.OpenFile(file, os.O_APPEND|os.O_WRONLY, 0660)
 		if err != nil {
 			panic(err.Error())
 		}
@@ -649,7 +692,7 @@ func TestRenameRotationHandle(t *testing.T) {
   default: 114
 - file: %d %s
   default: 76
-`, getInode(newFile), newFile, getInode(file), file)
+`, getInodeByFile(newFile), newFile, getInodeByFile(file), file)
 
 	assert.Equal(t, 10, c.GetEventLogLength(), "Wrong log count")
 	assert.Equal(t, 10, c.EventsProcessed(), "Wrong processed events count")
@@ -695,7 +738,7 @@ func TestShutdownRotation(t *testing.T) {
   default: 114
 - file: %d %s
   default: 76
-`, getInode(newFile), newFile, getInode(file), file)
+`, getInodeByFile(newFile), newFile, getInodeByFile(file), file)
 
 	assert.Equal(t, 8, c.GetEventLogLength(), "Wrong log count")
 	assert.Equal(t, 8, c.EventsProcessed(), "Wrong processed events count")
@@ -734,6 +777,81 @@ func TestTruncation(t *testing.T) {
 
 	p.jobProvider.saveOffsets()
 	assertOffsetsEqual(t, genOffsetsContent(file, (len(data)+1)*3), getContent(p.config.OffsetsFile))
+}
+
+func TestTruncationSeq(t *testing.T) {
+	setup()
+	defer shutdown()
+
+	c, _ := startPipeline("async", true, nil)
+	defer c.Stop()
+
+	data := getContentBytes("../../../testdata/json/streams.json")
+	data = append(data, data...)
+	data = append(data, data...)
+	data = append(data, data...)
+	data = append(data, data...)
+	data = append(data, data...)
+	data = append(data, data...)
+	data = append(data, data...)
+	truncationSize := int(32 * units.Mebibyte)
+	truncationCount := 4
+
+	wg := &sync.WaitGroup{}
+
+	for k := 0; k < 4; k++ {
+		wg.Add(1)
+		go func() {
+			lwg := &sync.WaitGroup{}
+			truncations := 0
+			size := atomic.Int32{}
+			name := createTempFile()
+			file, err := os.OpenFile(name, os.O_APPEND|os.O_WRONLY, 0664)
+			defer func() {
+				_ = file.Close()
+			}()
+			if err != nil {
+				panic(err.Error())
+			}
+			lwg.Add(2)
+			go func() {
+				for {
+					_, _ = file.Write(data)
+					size.Add(int32(len(data)))
+					if rand.Int()%300 == 0 {
+						time.Sleep(time.Millisecond * 200)
+					}
+					if truncations > truncationCount {
+						break
+					}
+				}
+				lwg.Done()
+			}()
+
+			go func() {
+				for {
+					time.Sleep(50 * time.Millisecond)
+					if size.Load() > int32(truncationSize) {
+						fmt.Println("truncate")
+						size.Swap(0)
+						_ = file.Truncate(0)
+						truncations++
+						if truncations > truncationCount {
+							break
+						}
+					}
+				}
+				lwg.Done()
+			}()
+
+			lwg.Wait()
+			wg.Done()
+		}()
+	}
+
+	wg.Wait()
+	c.HandleEventFlowFinish(false)
+	c.WaitUntilDone(false)
 }
 
 func TestRenameRotationInsane(t *testing.T) {

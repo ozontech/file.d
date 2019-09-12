@@ -22,14 +22,19 @@ func (w *worker) work(head pipeline.Head, jobProvider *jobProvider, readBufferSi
 		if job == nil {
 			return
 		}
-
+		job.mu.Lock()
 		file := job.file
+		sourceId := pipeline.SourceId(job.inode)
+		sourceName := job.filename
+		if job.symlink != "" {
+			sourceName = job.symlink
+		}
+		job.mu.Unlock()
+
 		offset, err := file.Seek(0, io.SeekCurrent)
 		if err != nil {
-			logger.Fatalf("file % s seek error: %s", file.Name(), err.Error())
+			logger.Fatalf("file %d:%s seek error: %s", sourceId, sourceName, err.Error())
 		}
-
-		logger.Debugf("worker started reading at %d job %d:%s", offset, job.inode, file.Name())
 
 		isEOF := false
 		wasPut := false
@@ -51,7 +56,7 @@ func (w *worker) work(head pipeline.Head, jobProvider *jobProvider, readBufferSi
 			}
 
 			if err != nil {
-				logger.Fatalf("file %s read error, %s read=%d", file.Name(), read, err.Error())
+				logger.Fatalf("file %d:%s read error, %s read=%d", sourceId, sourceName, read, err.Error())
 			}
 
 			processed = 0
@@ -62,9 +67,9 @@ func (w *worker) work(head pipeline.Head, jobProvider *jobProvider, readBufferSi
 
 				if len(accumBuffer) != 0 {
 					accumBuffer = append(accumBuffer, readBuffer[processed:i]...)
-					head.In(pipeline.SourceId(job.inode), file.Name(), offset, accumulated+i+1, accumBuffer)
+					head.In(sourceId, sourceName, offset, accumulated+i+1, accumBuffer)
 				} else {
-					head.In(pipeline.SourceId(job.inode), file.Name(), offset, i+1, readBuffer[processed:i])
+					head.In(sourceId, sourceName, offset, i+1, readBuffer[processed:i])
 				}
 				accumBuffer = accumBuffer[:0]
 
@@ -89,9 +94,9 @@ func (w *worker) work(head pipeline.Head, jobProvider *jobProvider, readBufferSi
 
 		backwardOffset := accumulated + processed - readTotal
 		if backwardOffset != 0 {
-			_, err := file.Seek(int64(backwardOffset), io.SeekCurrent)
+			_, err := file.Seek(backwardOffset, io.SeekCurrent)
 			if err != nil {
-				logger.Fatalf("file %s seek error: %s", file.Name(), err.Error())
+				logger.Fatalf("file %d:%s seek error: %s", sourceId, sourceName, err.Error())
 			}
 		}
 
@@ -99,7 +104,7 @@ func (w *worker) work(head pipeline.Head, jobProvider *jobProvider, readBufferSi
 		if isEOF {
 			stat, err := file.Stat()
 			if err != nil {
-				logger.Fatalf("file %s stat error: %s", file.Name(), err.Error())
+				logger.Fatalf("file %d:%s stat error: %s", sourceId, sourceName, err.Error())
 			}
 
 			// file was truncated, seek to start

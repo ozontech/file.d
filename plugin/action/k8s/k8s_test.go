@@ -177,7 +177,7 @@ func TestCleanUp(t *testing.T) {
 
 	time.Sleep(metaExpireDuration + maintenanceInterval)
 
-	assert.Equal(t, 0, len(meta))
+	assert.Equal(t, 0, len(metaData))
 }
 
 func TestParseDockerFilename(t *testing.T) {

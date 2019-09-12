@@ -59,10 +59,10 @@ func (p *Plugin) Do(event *pipeline.Event) {
 		return
 	}
 
+	event.JSON.Del(p.config.Field)
+
 	// place decoded object under root
 	o.Visit(func(key []byte, v *fastjson.Value) {
 		event.JSON.Set(pipeline.ByteToString(key), v)
 	})
-
-	event.JSON.Del(p.config.Field)
 }

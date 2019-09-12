@@ -23,7 +23,7 @@ var logger = zap.New(
 			EncodeCaller:   zapcore.ShortCallerEncoder,
 		}),
 		zapcore.AddSync(os.Stdout),
-		zap.NewAtomicLevelAt(zap.DebugLevel),
+		zap.NewAtomicLevelAt(zap.InfoLevel),
 	),
 ).Sugar()
 

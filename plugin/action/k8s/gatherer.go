@@ -30,7 +30,7 @@ type metaItem struct {
 	containerID   containerID
 }
 
-type metaData map[namespace]map[podName]map[containerID]*corev1.Pod
+type meta map[namespace]map[podName]map[containerID]*corev1.Pod
 
 type nodeName string
 type podName string
@@ -39,9 +39,9 @@ type containerName string
 type containerID string
 
 var (
-	meta         = make(metaData)
 	client       *kubernetes.Clientset
-	metaMu       = &sync.RWMutex{}
+	metaData     = make(meta)
+	metaDataMu   = &sync.Mutex{}
 	podListOps   metav1.ListOptions       // to select only pods for node on which we are running
 	podBlackList = make(map[podName]bool) // to mark pods for which we are miss k8s meta and don't wanna wait for timeout for each event
 
@@ -50,7 +50,7 @@ var (
 	gathererStop    = make(chan bool, 1)
 	maintenanceStop = make(chan bool, 1)
 
-	maintenanceInterval = 10 * time.Second
+	maintenanceInterval = 15 * time.Second
 	metaExpireDuration  = 5 * time.Minute
 
 	metaRecheckInterval = 250 * time.Millisecond
@@ -63,6 +63,7 @@ var (
 	disableMetaUpdates  = false
 	metaAddedCounter    atomic.Int64
 	expiredItemsCounter atomic.Int64
+
 )
 
 func enableGatherer() {
@@ -114,7 +115,7 @@ func initGatherer() {
 			panic("")
 		}
 
-		podListOps.FieldSelector = "spec.nodeName=" + string(pod.Spec.NodeName)
+		podListOps.FieldSelector = "spec.nodeName=" + pod.Spec.NodeName
 	}
 }
 
@@ -171,10 +172,6 @@ func refresh() {
 	expiredItems = getExpiredItems(expiredItems)
 	cleanUpItems(expiredItems)
 
-	for _, i := range expiredItems {
-		logger.Debugf("k8s meta expired ns=%s pod=%s cid=%s", i.namespace, i.podName, i.containerID)
-	}
-
 	logger.Infof("k8s meta stat for last %d seconds: total=%d, updated=%d, expired=%d", maintenanceInterval/time.Second, getTotalItems(), metaAddedCounter.Load(), expiredItemsCounter.Load())
 
 	metaAddedCounter.Swap(0)
@@ -206,11 +203,11 @@ func maintenance() {
 }
 
 func getTotalItems() int {
-	metaMu.RLock()
-	defer metaMu.RUnlock()
+	metaDataMu.Lock()
+	defer metaDataMu.Unlock()
 
 	totalItems := 0
-	for _, podNames := range meta {
+	for _, podNames := range metaData {
 		for _, containerIDs := range podNames {
 			totalItems += len(containerIDs)
 		}
@@ -222,11 +219,11 @@ func getExpiredItems(out []*metaItem) []*metaItem {
 	out = out[:0]
 	now := time.Now()
 
-	metaMu.RLock()
-	defer metaMu.RUnlock()
+	metaDataMu.Lock()
+	defer metaDataMu.Unlock()
 
 	// find pods which isn't in k8s pod list for some time and add them to the expiration list
-	for ns, podNames := range meta {
+	for ns, podNames := range metaData {
 		for pod, containerIDs := range podNames {
 			for cid, podData := range containerIDs {
 				podUpdateTime := time.Unix(0, podData.Generation)
@@ -245,41 +242,46 @@ func getExpiredItems(out []*metaItem) []*metaItem {
 }
 
 func cleanUpItems(items []*metaItem) {
-	metaMu.Lock()
-	defer metaMu.Unlock()
+	metaDataMu.Lock()
+	defer metaDataMu.Unlock()
 
 	for _, i := range items {
 		expiredItemsCounter.Inc()
-		delete(meta[i.namespace][i.podName], i.containerID)
-		if len(meta[i.namespace][i.podName]) == 0 {
-			delete(meta[i.namespace], i.podName)
+		delete(metaData[i.namespace][i.podName], i.containerID)
+
+		if len(metaData[i.namespace][i.podName]) == 0 {
+			delete(metaData[i.namespace], i.podName)
 		}
-		if len(meta[i.namespace]) == 0 {
-			delete(meta, i.namespace)
+
+		if len(metaData[i.namespace]) == 0 {
+			delete(metaData, i.namespace)
 		}
 	}
 }
 
-func getMeta(fullFilename string) (ns namespace, pod podName, container containerName, cid containerID, podMeta *corev1.Pod) {
+func getMeta(fullFilename string) (ns namespace, pod podName, container containerName, cid containerID, success bool, podMeta *corev1.Pod) {
 	podMeta = nil
+	success = false
 	ns, pod, container, cid = parseDockerFilename(fullFilename)
 
 	i := time.Nanosecond
 	for {
-		metaMu.RLock()
-		pm := meta[ns][pod][cid]
+		metaDataMu.Lock()
+		pm, has := metaData[ns][pod][cid]
 		isInBlackList := podBlackList[pod]
-		metaMu.RUnlock()
+		metaDataMu.Unlock()
 
 		// fast skip blacklisted pods
 		if isInBlackList {
 			return
 		}
 
-		if pm != nil {
+		if has {
 			if i-metaWaitWarn >= 0 {
-				logger.Warnf("meta for pod %q retrieved with delay time=%dms ns=%s container=%s cid=%s", string(pod), i/time.Millisecond, string(ns), string(container), string(cid))
+				logger.Warnf("meta retrieved with delay time=%dms pod=%s container=%s", i/time.Millisecond, string(pod), string(cid))
 			}
+
+			success = true
 			podMeta = pm
 			return
 		}
@@ -288,13 +290,14 @@ func getMeta(fullFilename string) (ns namespace, pod podName, container containe
 		i += metaRecheckInterval
 
 		if i-metaWaitTimeout >= 0 {
-			metaMu.Lock()
+			metaDataMu.Lock()
 			if len(podBlackList) > 32 {
 				podBlackList = make(map[podName]bool)
 			}
 			podBlackList[pod] = true
-			metaMu.Unlock()
+			metaDataMu.Unlock()
 			logger.Errorf("pod %q have blacklisted, cause k8s meta retrieve timeout ns=%s container=%s cid=%s", string(pod), string(ns), string(container), string(cid))
+
 			return
 		}
 	}
@@ -307,22 +310,17 @@ func putMeta(podMeta *corev1.Pod) {
 
 	pod := podName(podMeta.Name)
 	ns := namespace(podMeta.Namespace)
-	logger.Debugf("k8s meta updated ns=%s pod=%s", ns, pod)
-
-	metaMu.Lock()
-	defer metaMu.Unlock()
-
-	// hack to avoid creation of special struct to store time
-	// store it in generation field of k8d pod
+	// use generation field of k8d pod as hack to avoid creation of special struct to store time
 	podMeta.Generation = time.Now().UnixNano()
 
-	if meta[ns] == nil {
-		meta[ns] = make(map[podName]map[containerID]*corev1.Pod)
+	metaDataMu.Lock()
+	if metaData[ns] == nil {
+		metaData[ns] = make(map[podName]map[containerID]*corev1.Pod)
 	}
-
-	if meta[ns][pod] == nil {
-		meta[ns][pod] = make(map[containerID]*corev1.Pod)
+	if metaData[ns][pod] == nil {
+		metaData[ns][pod] = make(map[containerID]*corev1.Pod)
 	}
+	metaDataMu.Unlock()
 
 	// normal containers
 	for _, status := range podMeta.Status.ContainerStatuses {
@@ -359,8 +357,9 @@ func putContainerMeta(ns namespace, pod podName, fullContainerID string, podMeta
 		logger.Fatalf("wrong container id: %s", fullContainerID)
 	}
 
-	meta[ns][pod][containerID] = podMeta
-
+	metaDataMu.Lock()
+	metaData[ns][pod][containerID] = podMeta
+	metaDataMu.Unlock()
 }
 
 func parseDockerFilename(fullFilename string) (namespace, podName, containerName, containerID) {

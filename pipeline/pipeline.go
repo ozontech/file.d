@@ -13,7 +13,7 @@ const statsInfoReportInterval = time.Second * 5
 const defaultCapacity = 1024
 
 type Head interface {
-	In(sourceId SourceId, additional string, from int64, delta int64, bytes []byte)
+	In(sourceId SourceId, sourceName string, offset int64, size int64, bytes []byte)
 	DeprecateEvents(sourceId SourceId) // mark source events in the pipeline as deprecated, it means that these events shouldn't update offsets
 }
 
@@ -62,7 +62,7 @@ func New(name string, headsCount int, tracksCount int) *Pipeline {
 
 	pipeline := &Pipeline{
 		name:     name,
-		capacity: defaultCapacity,
+		capacity: int(defaultCapacity),
 
 		doneWg: &sync.WaitGroup{},
 
@@ -116,6 +116,15 @@ func (p *Pipeline) Stop() {
 		track.stop()
 	}
 
+	p.streamsMu.Lock()
+	for _, s := range p.streams {
+		for _, st := range s {
+			// unlock all waiting streams
+			st.put(nil)
+		}
+	}
+	p.streamsMu.Unlock()
+
 	logger.Infof("stopping %s input", p.name)
 	p.input.Stop()
 
@@ -135,7 +144,7 @@ func (p *Pipeline) DeprecateEvents(sourceId SourceId) {
 	logger.Infof("events marked as deprecated count=%d source=%d", count, sourceId)
 }
 
-func (p *Pipeline) In(sourceId SourceId, additional string, from int64, delta int64, bytes []byte) {
+func (p *Pipeline) In(sourceId SourceId, sourceName string, from int64, delta int64, bytes []byte) {
 	if len(bytes) == 0 {
 		return
 	}
@@ -147,7 +156,7 @@ func (p *Pipeline) In(sourceId SourceId, additional string, from int64, delta in
 
 	json, err := event.ParseJSON(bytes)
 	if err != nil {
-		logger.Fatalf("wrong json %s at offset %d for source %d", string(bytes), from, sourceId)
+		logger.Fatalf("wrong json offset=%d length=%d err=%s source=%d:%s json=%s", from, len(bytes), err.Error(), sourceId, sourceName, bytes)
 		return
 	}
 
@@ -164,7 +173,8 @@ func (p *Pipeline) In(sourceId SourceId, additional string, from int64, delta in
 	event.Offset = from + delta
 	event.Source = sourceId
 	event.Stream = StreamName(streamName)
-	event.Additional = additional
+	event.SourceName = sourceName
+	event.SourceSize = len(bytes)
 	event.raw = bytes
 
 	p.pushToStream(event)
@@ -186,7 +196,6 @@ func (p *Pipeline) pushToStream(event *Event) {
 			p.streams[event.Source][event.Stream] = st
 		}
 	}
-
 	p.streamsMu.Unlock()
 
 	st.put(event)
@@ -226,7 +235,7 @@ func (p *Pipeline) reportStats() {
 			delta := processed - lastProcessed
 			rate := float32(delta) / float32(statsInfoReportInterval) * float32(time.Second)
 
-			logger.Infof("pipeline %q stats for last %d seconds: processed=%d, rate=%.f/sec, queue=%d", p.name, statsInfoReportInterval/time.Second, delta, rate, p.eventPool.eventsCount)
+			logger.Infof("pipeline %q stats for last %d seconds: processed=%d, rate=%.f/sec, queue=%d, total processed=%d, max log size=%d", p.name, statsInfoReportInterval/time.Second, delta, rate, p.eventPool.eventsCount, processed, p.eventPool.maxEventSize)
 
 			lastProcessed = processed
 			time.Sleep(statsInfoReportInterval)

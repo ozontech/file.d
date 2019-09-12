@@ -11,7 +11,7 @@ import (
 const (
 	defaultWorkers        = 16
 	defaultReadBufferSize = 128 * 1024
-	defaultChanLength     = 256
+	defaultMaxFiles       = 16384
 
 	defaultPersistenceMode = "timer"
 	defaultOffsetsOp       = "continue"
@@ -30,10 +30,11 @@ type offsetsOp int
 
 type Config struct {
 	WatchingDir     string `json:"watching_dir"`
+	FilenamePattern string `json:"filename_pattern"`
 	OffsetsFile     string `json:"offsets_file"`
 	PersistenceMode string `json:"persistence_mode"`
 	ReadBufferSize  int    `json:"read_buffer_size"`
-	ChanLength      int    `json:"chan_length"`
+	MaxFiles        int    `json:"max_files"`
 	OffsetsOp       string `json:"offsets_op"` // continue|tail|reset
 
 	offsetsTmpFilename string
@@ -47,7 +48,6 @@ type Plugin struct {
 
 	workers     []*worker
 	jobProvider *jobProvider
-	watcher     *watcher
 
 	isFinalSaveDisabled bool
 }
@@ -105,6 +105,10 @@ func (p *Plugin) Start(config pipeline.AnyConfig, head pipeline.Head, doneWg *sy
 		logger.Fatalf("no watching_dir provided in config for the file plugin")
 	}
 
+	if p.config.FilenamePattern == "" {
+		p.config.FilenamePattern = "*"
+	}
+
 	if p.config.OffsetsFile == "" {
 		logger.Fatalf("no offsets_file provided in config for the file plugin")
 	}
@@ -113,17 +117,14 @@ func (p *Plugin) Start(config pipeline.AnyConfig, head pipeline.Head, doneWg *sy
 		p.config.ReadBufferSize = defaultReadBufferSize
 	}
 
-	if p.config.ChanLength == 0 {
-		p.config.ChanLength = defaultChanLength
+	if p.config.MaxFiles == 0 {
+		p.config.MaxFiles = defaultMaxFiles
 	}
 
 	p.config.offsetsTmpFilename = p.config.OffsetsFile + ".atomic"
 
 	p.head = head
 	p.jobProvider = NewJobProvider(p.config, doneWg, head)
-	p.watcher = NewWatcher(p.config.WatchingDir, p.jobProvider)
-
-	p.watcher.start()
 	p.startWorkers()
 	p.jobProvider.start()
 }
@@ -143,10 +144,6 @@ func (p *Plugin) Commit(event *pipeline.Event) {
 }
 
 func (p *Plugin) Stop() {
-	if p.watcher == nil {
-		return
-	}
-
 	logger.Infof("stopping %d workers", len(p.workers))
 	for range p.workers {
 		p.jobProvider.jobsChan <- nil
@@ -154,9 +151,6 @@ func (p *Plugin) Stop() {
 
 	logger.Infof("stopping job provider")
 	p.jobProvider.stop()
-
-	logger.Infof("stopping watcher")
-	p.watcher.stop()
 
 	if !p.isFinalSaveDisabled {
 		logger.Infof("saving last known offsets")

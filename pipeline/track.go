@@ -55,6 +55,7 @@ func (t *track) process(output OutputPlugin) {
 		case trackStateReadSameStream:
 			// commit previous event
 			t.pipeline.commit(event, false)
+			// todo: we may have deadlock here if sequence of events is longer than event pool capacity, event pool must handle overflow
 			event = stream.waitGet()
 			if t.shouldStop {
 				return

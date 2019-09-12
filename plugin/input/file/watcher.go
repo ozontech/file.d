@@ -1,82 +1,123 @@
 package file
 
 import (
+	"io/ioutil"
+	"os"
+	"path/filepath"
+
 	"github.com/fsnotify/fsnotify"
 	"gitlab.ozon.ru/sre/filed/logger"
-	"go.uber.org/atomic"
 )
 
 type watcher struct {
-	jobProvider *jobProvider
-	path        string
-	fsWatcher   *fsnotify.Watcher
-
-	filesCreated atomic.Int32
+	jobProvider     *jobProvider
+	path            string
+	filenamePattern string
+	fsWatcher       *fsnotify.Watcher
 }
 
-func NewWatcher(path string, jobProvider *jobProvider) *watcher {
-
-	return &watcher{path: path, jobProvider: jobProvider}
+func NewWatcher(path string, filenamePattern string, jobProvider *jobProvider) *watcher {
+	return &watcher{
+		path:            path,
+		filenamePattern: filenamePattern,
+		jobProvider:     jobProvider,
+	}
 }
 
 func (w *watcher) start() {
+	if _, err := filepath.Match(w.filenamePattern, "test"); err != nil {
+		logger.Fatalf("wrong file name pattern %q: %s", w.filenamePattern, err.Error())
+	}
+
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
-		logger.Fatalf("can't watching for files: %s", err.Error())
+		logger.Warnf("can't create fs watcher: %s", err.Error())
+		return
 	}
 	w.fsWatcher = watcher
 
-	go w.watchEvents()
-	go w.watchErrors()
+	go w.watch()
 
-	err = w.fsWatcher.Add(w.path)
-	if err != nil {
-		logger.Fatalf("can't watch path: %s", err.Error())
-	}
+	w.tryAddPath(w.path)
 }
 
 func (w *watcher) stop() {
+	logger.Infof("stopping watcher")
+
 	err := w.fsWatcher.Close()
 	if err != nil {
-		logger.Errorf("can't stop watching: %s", err.Error())
+		logger.Errorf("can't close watcher: %s", err.Error())
 	}
 }
 
-func (w *watcher) watchEvents() {
-	logger.Info("file watching started")
+func (w *watcher) tryAddPath(path string) {
+	err := w.fsWatcher.Add(path)
+	if err != nil {
+		return
+	}
+
+	files, err := ioutil.ReadDir(path)
+	if err != nil {
+		return
+	}
+
+	logger.Infof("starting path watch: %s ", path)
+
+	for _, file := range files {
+		if file.Name() == "." || file.Name() == ".." {
+			continue
+		}
+
+		filename := filepath.Join(path, file.Name())
+		event := fsnotify.Event{Name: filename, Op: fsnotify.Create}
+		w.notify(&event)
+	}
+}
+
+func (w *watcher) notify(event *fsnotify.Event) {
+	filename := event.Name
+	if filename == "." || filename == ".." {
+		return
+	}
+
+	filename, err := filepath.Abs(filename)
+	if err != nil {
+		logger.Fatalf("can't get abs file name: %s", err.Error())
+		return
+	}
+
+	match, _ := filepath.Match(w.filenamePattern, filepath.Base(filename))
+	if ! match {
+		return
+	}
+
+	stat, err := os.Lstat(filename)
+	if err != nil {
+		return
+	}
+
+	w.jobProvider.actualizeSomething(filename, stat)
+
+	if stat.IsDir() {
+		w.tryAddPath(filename)
+	}
+}
+
+func (w *watcher) watch() {
 	for {
-		event, ok := <-w.fsWatcher.Events
-		if !ok {
-			return
-		}
+		select {
+		case event, ok := <-w.fsWatcher.Events:
+			if !ok {
+				return
+			}
 
-		filename := event.Name
-
-		if event.Op&fsnotify.Create == fsnotify.Create {
-			logger.Debugf("create event received for %s", filename)
-			w.filesCreated.Inc()
-
-			w.jobProvider.addJob(filename, false)
-		}
-
-		if event.Op&fsnotify.Write == fsnotify.Write {
-			logger.Debugf("write event received for %s", filename)
-			w.jobProvider.addJob(filename, false)
+			w.notify(&event)
+		case err, ok := <-w.fsWatcher.Errors:
+			if !ok {
+				return
+			}
+			logger.Infof("watching path error(have it been deleted?): %s", err.Error())
 		}
 	}
-}
 
-func (w *watcher) watchErrors() {
-	for {
-		err, ok := <-w.fsWatcher.Errors
-		if !ok {
-			return
-		}
-
-		logger.Errorf("error while watching: %s", err.Error())
-	}
-}
-
-func (w *watcher) FilesCreated() int {
-	return int(w.filesCreated.Load())
 }
