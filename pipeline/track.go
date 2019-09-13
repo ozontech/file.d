@@ -84,6 +84,10 @@ func (t *track) process(output OutputPlugin) {
 
 		// if last action called Propagate then pass event to output
 		if t.state == trackStatePropagate {
+			if event.ID%10000 == 0 {
+				out, _ := event.Marshal(make([]byte, 0, 0))
+				logger.Infof("pipeline %q final event sample: %s", t.pipeline.name, string(out))
+			}
 			output.Out(event)
 			t.state = trackStateReadNewStream
 		}

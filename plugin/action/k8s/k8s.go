@@ -85,8 +85,8 @@ func (p *Plugin) Do(event *pipeline.Event) {
 		logger.Warnf("too long docker log found, it'll be split, ns=%s pod=%s container=%s consider increase max_log_size, current value=%d", ns, pod, container, p.config.MaxLogSize)
 	}
 
+	event.JSON.Set("k8s_namespace", event.JSONPool.NewString(string(ns)))
 	event.JSON.Set("k8s_pod", event.JSONPool.NewString(string(pod)))
-	event.JSON.Set("k8s_ns", event.JSONPool.NewString(string(ns)))
 	event.JSON.Set("k8s_container", event.JSONPool.NewString(string(container)))
 
 	if success {

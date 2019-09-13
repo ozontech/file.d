@@ -15,7 +15,7 @@ type Event struct {
 	poolIndex int
 	next      *Event
 
-	ID         int64
+	ID         uint64
 	JSON       *fastjson.Value
 	JSONPool   *fastjson.Arena
 	Offset     int64
@@ -92,7 +92,7 @@ func (e *Event) Marshal(out []byte) ([]byte, int) {
 
 // channels are slower than this implementation by ~20%
 type eventPool struct {
-	currentID int64
+	currentID uint64
 	capacity  int
 
 	eventsCount int

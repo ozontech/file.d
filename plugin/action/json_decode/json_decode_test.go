@@ -52,5 +52,5 @@ func TestDecode(t *testing.T) {
 	assert.Equal(t, 1, len(dumpedEvents), "wrong dumped events count")
 
 	result := dumpedEvents[0].JSON.MarshalTo(nil)
-	assert.Equal(t, `{"details":"filed","field2":"value2","field3":"value3"}`, string(result), "wrong dumped events count")
+	assert.Equal(t, `{"field2":"value2","field3":"value3"}`, string(result), "wrong dumped events count")
 }

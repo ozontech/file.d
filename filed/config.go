@@ -28,7 +28,7 @@ func NewConfig() *Config {
 	}
 }
 
-func NewConfigFromFile(path string) (*Config) {
+func NewConfigFromFile(path string) *Config {
 	logger.Infof("reading config %q", path)
 	yamlContents, err := ioutil.ReadFile(path)
 	if err != nil {
@@ -37,6 +37,7 @@ func NewConfigFromFile(path string) (*Config) {
 
 	jsonContents, err := yaml.YAMLToJSON(yamlContents)
 	if err != nil {
+		logger.Infof("%s", yamlContents)
 		logger.Fatalf("can't parse config file yaml %q: %s", path, err.Error())
 	}
 
@@ -48,7 +49,7 @@ func NewConfigFromFile(path string) (*Config) {
 	return parseConfig(json)
 }
 
-func parseConfig(json *simplejson.Json) (*Config) {
+func parseConfig(json *simplejson.Json) *Config {
 	config := NewConfig()
 
 	processorsJson := json.Get("processors")

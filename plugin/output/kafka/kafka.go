@@ -20,8 +20,6 @@ const (
 	defaultFlushTimeout = time.Second
 )
 
-var kafkaKey = []byte("message")
-
 type Config struct {
 	Brokers      string `json:"brokers"`
 	brokers      []string
@@ -147,7 +145,6 @@ func (p *Plugin) work() {
 
 			message := batch.messages[i]
 
-			message.Key = sarama.ByteEncoder(kafkaKey)
 			out, start := event.Marshal(out)
 			message.Value = sarama.ByteEncoder(out[start:])
 
@@ -216,6 +213,7 @@ func (p *Plugin) getBatch() *batch {
 func (p *Plugin) newProducer() sarama.SyncProducer {
 	config := sarama.NewConfig()
 	config.Net.MaxOpenRequests = 1
+	config.Producer.Partitioner = sarama.NewRoundRobinPartitioner
 	config.Producer.Flush.Messages = defaultBatchSize
 	config.Producer.Flush.Frequency = time.Millisecond
 	config.Producer.Return.Errors = true

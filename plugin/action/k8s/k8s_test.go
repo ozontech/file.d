@@ -92,8 +92,8 @@ func TestEnrichment(t *testing.T) {
 	assert.NotNil(t, event.JSON.Get("k8s_pod"), "can't find field")
 	assert.Equal(t, `"advanced-logs-checker-1566485760-trtrq"`, event.JSON.Get("k8s_pod").String())
 
-	assert.NotNil(t, event.JSON.Get("k8s_ns"), "can't find field")
-	assert.Equal(t, `"sre"`, event.JSON.Get("k8s_ns").String())
+	assert.NotNil(t, event.JSON.Get("k8s_namespace"), "can't find field")
+	assert.Equal(t, `"sre"`, event.JSON.Get("k8s_namespace").String())
 
 	assert.NotNil(t, event.JSON.Get("k8s_container"), "can't find field")
 	assert.Equal(t, `"duty-bot"`, event.JSON.Get("k8s_container").String())

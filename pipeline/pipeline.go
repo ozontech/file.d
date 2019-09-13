@@ -166,9 +166,6 @@ func (p *Pipeline) In(sourceId SourceId, sourceName string, from int64, delta in
 		streamName = string(streamBytes)
 	}
 
-	o, _ := json.Object()
-	o.Set("details", event.JSONPool.NewString("filed"))
-
 	event.JSON = json
 	event.Offset = from + delta
 	event.Source = sourceId

@@ -279,33 +279,40 @@ func (jp *jobProvider) addJob(file *os.File, stat os.FileInfo, inode inode, file
 
 func (jp *jobProvider) loadJobOffsets(job *job, inode inode) {
 	file := job.file
-	if jp.config.offsetsOp == offsetsOpTail {
+
+	switch jp.config.offsetsOp {
+	case offsetsOpTail:
 		_, err := file.Seek(0, io.SeekEnd)
 		if err != nil {
 			logger.Panicf("can't make job, can't seek file %d:%s: %s", inode, job.filename, err.Error())
 		}
-	}
-
-	offsets, has := jp.loadedOffsets[inode]
-	if has && len(offsets) == 0 {
-		logger.Panicf("can't instantiate job, no streams in source %d:%q", inode, job.filename)
-	}
-
-	if has {
-		job.offsets = offsets
-
-		// all streams are in one file, so we should seek file to
-		// min offset to make sure logs from all streams will be delivered at least once
-		minOffset := int64(math.MaxInt64)
-		for _, offset := range offsets {
-			if offset < minOffset {
-				minOffset = offset
-			}
-		}
-
-		_, err := file.Seek(minOffset, io.SeekStart)
+	case offsetsOpReset:
+		_, err := file.Seek(0, io.SeekStart)
 		if err != nil {
 			logger.Panicf("can't make job, can't seek file %d:%s: %s", inode, job.filename, err.Error())
+		}
+	case offsetsOpContinue:
+		offsets, has := jp.loadedOffsets[inode]
+		if has && len(offsets) == 0 {
+			logger.Panicf("can't instantiate job, no streams in source %d:%q", inode, job.filename)
+		}
+
+		if has {
+			job.offsets = offsets
+
+			// all streams are in one file, so we should seek file to
+			// min offset to make sure logs from all streams will be delivered at least once
+			minOffset := int64(math.MaxInt64)
+			for _, offset := range offsets {
+				if offset < minOffset {
+					minOffset = offset
+				}
+			}
+
+			_, err := file.Seek(minOffset, io.SeekStart)
+			if err != nil {
+				logger.Panicf("can't make job, can't seek file %d:%s: %s", inode, job.filename, err.Error())
+			}
 		}
 	}
 }
