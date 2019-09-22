@@ -14,23 +14,22 @@ import (
 
 const (
 	defaultWorkers    = 16
-	defaultBatchSize  = 1024
 	defaultAvgLogSize = 4096
 
-	defaultFlushTimeout = time.Second
+	defaultFlushTimeout = time.Millisecond * 200
 )
 
 type Config struct {
 	Brokers      string `json:"brokers"`
-	brokers      []string
+	brokers      []string //split brokers string by comma
 	DefaultTopic string `json:"default_topic"`
-	Workers      int    `json:"workers"`
+	WorkersCount int    `json:"workers_count"`
 	BatchSize    int    `json:"batch_size"`
 }
 
 type Plugin struct {
-	config     *Config
-	controller pipeline.OutputController
+	config *Config
+	tail   pipeline.Tail
 
 	shouldStop bool
 	batch      *batch
@@ -58,32 +57,34 @@ func Factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 	return &Plugin{}, &Config{}
 }
 
-func (p *Plugin) Start(config pipeline.AnyConfig, controller pipeline.OutputController) {
+func (p *Plugin) Start(config pipeline.AnyConfig, capacity int, tail pipeline.Tail) {
 	p.config = config.(*Config)
-	p.controller = controller
+	p.tail = tail
 
 	p.config.brokers = strings.Split(p.config.Brokers, ",")
 	if p.config.Brokers == "" || len(p.config.brokers) == 0 {
 		logger.Fatalf("brokers isn't provided for kafka output")
 	}
 
-	if p.config.Workers == 0 {
-		p.config.Workers = defaultWorkers
+	if p.config.WorkersCount == 0 {
+		p.config.WorkersCount = defaultWorkers
 	}
 	if p.config.BatchSize == 0 {
-		p.config.BatchSize = defaultBatchSize
+		p.config.BatchSize = capacity / 4
 	}
+
+	logger.Infof("starting kafka plugin batch size=%d", p.config.BatchSize)
 
 	p.mu = &sync.Mutex{}
 	p.cond = sync.NewCond(p.mu)
 	p.producer = p.newProducer()
 
-	p.freeBatches = make(chan *batch, p.config.Workers)
-	p.fullBatches = make(chan *batch, p.config.Workers)
-	for i := 0; i < p.config.Workers; i++ {
+	p.freeBatches = make(chan *batch, p.config.WorkersCount)
+	p.fullBatches = make(chan *batch, p.config.WorkersCount)
+	for i := 0; i < p.config.WorkersCount; i++ {
 		go p.work()
 
-		p.freeBatches <- newBatch(defaultBatchSize, defaultFlushTimeout)
+		p.freeBatches <- newBatch(p.config.BatchSize, defaultFlushTimeout)
 	}
 
 	go p.heartbeat()
@@ -163,7 +164,7 @@ func (p *Plugin) work() {
 			for _, e := range errs {
 				switch e.Err {
 				case sarama.ErrMessageSizeTooLarge:
-					logger.Errorf("too large message, so it have been dropped while sending to kafka")
+					logger.Fatalf("too large message, so it have been dropped while sending to kafka")
 				default:
 					logger.Fatalf("can't write batch to kafka: %s", err)
 				}
@@ -188,7 +189,7 @@ func (p *Plugin) work() {
 		p.commitSeq++
 
 		for _, e := range events {
-			p.controller.Commit(e)
+			p.tail.Commit(e)
 		}
 
 		logger.Infof("kafka batch written count=%d", len(events))
@@ -214,7 +215,7 @@ func (p *Plugin) newProducer() sarama.SyncProducer {
 	config := sarama.NewConfig()
 	config.Net.MaxOpenRequests = 1
 	config.Producer.Partitioner = sarama.NewRoundRobinPartitioner
-	config.Producer.Flush.Messages = defaultBatchSize
+	config.Producer.Flush.Messages = p.config.BatchSize
 	config.Producer.Flush.Frequency = time.Millisecond
 	config.Producer.Return.Errors = true
 	config.Producer.Return.Successes = true

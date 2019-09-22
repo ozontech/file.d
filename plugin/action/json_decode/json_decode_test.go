@@ -3,6 +3,7 @@ package json_decode
 import (
 	"testing"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
 	"gitlab.ozon.ru/sre/filed/pipeline"
 	"gitlab.ozon.ru/sre/filed/plugin/input/fake"
@@ -10,20 +11,20 @@ import (
 )
 
 func startPipeline() (*pipeline.Pipeline, *fake.Plugin, *devnull.Plugin) {
-	p := pipeline.New("json_pipeline", 16, 1)
+	p := pipeline.New("json_pipeline", 1, 0, prometheus.NewRegistry())
 
 	anyPlugin, _ := fake.Factory()
 	inputPlugin := anyPlugin.(*fake.Plugin)
-	p.SetInputPlugin(&pipeline.InputPluginDescription{Plugin: inputPlugin, Config: fake.Config{}})
+	p.SetInputPlugin(&pipeline.InputPluginData{Plugin: inputPlugin, PluginDesc: pipeline.PluginDesc{Config: fake.Config{}}})
 
 	anyPlugin, _ = factory()
 	plugin := anyPlugin.(*Plugin)
 	config := &Config{Field: "log"}
-	p.Tracks[0].AddActionPlugin(&pipeline.ActionPluginDescription{Plugin: plugin, Config: config})
+	p.Processors[0].AddActionPlugin(&pipeline.ActionPluginData{Plugin: plugin, PluginDesc: pipeline.PluginDesc{Config: config}})
 
 	anyPlugin, _ = devnull.Factory()
 	outputPlugin := anyPlugin.(*devnull.Plugin)
-	p.SetOutputPlugin(&pipeline.OutputPluginDescription{Plugin: outputPlugin, Config: config})
+	p.SetOutputPlugin(&pipeline.OutputPluginData{Plugin: outputPlugin, PluginDesc: pipeline.PluginDesc{Config: config}})
 
 	p.Start()
 

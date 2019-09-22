@@ -13,6 +13,7 @@ var logCleanUpSize = 4 * units.Kibibyte
 
 type Event struct {
 	poolIndex int
+	poolID    int
 	next      *Event
 
 	ID         uint64
@@ -21,8 +22,8 @@ type Event struct {
 	Offset     int64
 	Source     SourceId
 	SourceName string
-	Stream     StreamName
-	SourceSize int
+	StreamName StreamName
+	Size       int
 
 	deprecated    atomic.Bool
 	shouldCleanUp bool
@@ -31,14 +32,15 @@ type Event struct {
 	parsersCount int
 
 	// some debugging shit
-	raw     []byte
-	maxSize int
+	maxSize     int
+	processorID int
 }
 
-func newEvent(poolIndex int) *Event {
+func newEvent(poolID int, poolIndex int) *Event {
 	return &Event{
 		parsers:   make([]*fastjson.Parser, 0, 0),
 		JSONPool:  &fastjson.Arena{},
+		poolID:    poolID,
 		poolIndex: poolIndex,
 	}
 }
@@ -92,8 +94,9 @@ func (e *Event) Marshal(out []byte) ([]byte, int) {
 
 // channels are slower than this implementation by ~20%
 type eventPool struct {
-	currentID uint64
-	capacity  int
+	id       int
+	eventSeq uint64
+	capacity int
 
 	eventsCount int
 	events      []*Event
@@ -104,9 +107,9 @@ type eventPool struct {
 	maxEventSize int
 }
 
-func newEventPool(capacity int) *eventPool {
-
+func newEventPool(id int, capacity int) *eventPool {
 	eventPool := &eventPool{
+		id:       id,
 		capacity: capacity,
 		events:   make([]*Event, capacity, capacity),
 		mu:       &sync.Mutex{},
@@ -115,7 +118,7 @@ func newEventPool(capacity int) *eventPool {
 	eventPool.cond = sync.NewCond(eventPool.mu)
 
 	for i := 0; i < capacity; i++ {
-		eventPool.events[i] = newEvent(i)
+		eventPool.events[i] = newEvent(id, i)
 	}
 
 	return eventPool
@@ -130,7 +133,7 @@ func (p *eventPool) visit(fn func(*Event)) {
 	}
 }
 
-func (p *eventPool) get() (*Event, int) {
+func (p *eventPool) get() *Event {
 	p.mu.Lock()
 
 	for p.eventsCount >= p.capacity {
@@ -139,9 +142,10 @@ func (p *eventPool) get() (*Event, int) {
 
 	index := p.eventsCount
 	event := p.events[index]
-	event.ID = p.currentID
+	event.ID = p.eventSeq
+
 	p.eventsCount++
-	p.currentID++
+	p.eventSeq++
 
 	p.mu.Unlock()
 
@@ -149,20 +153,19 @@ func (p *eventPool) get() (*Event, int) {
 	if event.maxSize > p.maxEventSize {
 		p.maxEventSize = event.maxSize
 	}
-	return event, index
+	return event
 }
 
-func (p *eventPool) back(event *Event) int {
+func (p *eventPool) back(event *Event) {
 	p.mu.Lock()
 
 	p.eventsCount--
+	if p.eventsCount == -1 {
+		logger.Panicf("event pool is full, why back()? id=%d index=%d", event.ID, event.poolIndex)
+	}
 
 	currentIndex := event.poolIndex
 	lastIndex := p.eventsCount
-
-	if lastIndex == -1 {
-		logger.Panic("extra event commit")
-	}
 
 	last := p.events[lastIndex]
 
@@ -173,9 +176,6 @@ func (p *eventPool) back(event *Event) int {
 	event.poolIndex = lastIndex
 	last.poolIndex = currentIndex
 
-	p.mu.Unlock()
-
 	p.cond.Signal()
-
-	return lastIndex
+	p.mu.Unlock()
 }

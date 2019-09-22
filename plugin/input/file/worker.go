@@ -10,8 +10,8 @@ import (
 type worker struct {
 }
 
-func (w *worker) start(head pipeline.Head, jobProvider *jobProvider, readBufferSize int) {
-	go w.work(head, jobProvider, readBufferSize)
+func (w *worker) start(inputController pipeline.Head, jobProvider *jobProvider, readBufferSize int) {
+	go w.work(inputController, jobProvider, readBufferSize)
 }
 
 func (w *worker) work(head pipeline.Head, jobProvider *jobProvider, readBufferSize int) {
@@ -69,7 +69,7 @@ func (w *worker) work(head pipeline.Head, jobProvider *jobProvider, readBufferSi
 					accumBuffer = append(accumBuffer, readBuffer[processed:i]...)
 					head.In(sourceId, sourceName, offset, accumulated+i+1, accumBuffer)
 				} else {
-					head.In(sourceId, sourceName, offset, i+1, readBuffer[processed:i])
+					head.In(sourceId, sourceName, offset+processed, accumulated+i+1-processed, readBuffer[processed:i])
 				}
 				accumBuffer = accumBuffer[:0]
 

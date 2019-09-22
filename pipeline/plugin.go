@@ -3,13 +3,17 @@ package pipeline
 import (
 	"regexp"
 	"sync"
+
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 const (
-	PluginKindInput  = "input"
-	PluginKindAction = "action"
-	PluginKindOutput = "output"
+	PluginKindInput  PluginKind = "input"
+	PluginKindAction PluginKind = "action"
+	PluginKindOutput PluginKind = "output"
 )
+
+type PluginKind string
 
 type InputPlugin interface {
 	Start(config AnyConfig, head Head, doneWg *sync.WaitGroup)
@@ -18,13 +22,13 @@ type InputPlugin interface {
 }
 
 type ActionPlugin interface {
-	Start(config AnyConfig, controller ActionController)
+	Start(config AnyConfig)
 	Stop()
-	Do(*Event)
+	Do(*Event) ActionResult
 }
 
 type OutputPlugin interface {
-	Start(config AnyConfig, controller OutputController)
+	Start(config AnyConfig, capacity int, controller Tail)
 	Stop()
 	Out(*Event)
 }
@@ -39,24 +43,43 @@ type PluginInfo struct {
 	Factory PluginFactory
 }
 
-type InputPluginDescription struct {
-	Type   string
+type InputPluginData struct {
 	Plugin InputPlugin
-	Config AnyConfig
+
+	PluginDesc
+	PluginMetrics
 }
 
-type ActionPluginDescription struct {
-	Type            string
-	Plugin          ActionPlugin
-	Config          AnyConfig
+type ActionPluginData struct {
+	Plugin ActionPlugin
+
+	PluginDesc
+	PluginMetrics
+
 	MatchConditions MatchConditions
 	MatchMode       MatchMode
 }
 
-type OutputPluginDescription struct {
-	Type   string
+type OutputPluginData struct {
 	Plugin OutputPlugin
+
+	PluginDesc
+	PluginMetrics
+}
+
+type PluginDesc struct {
+	ID     string
+	T      string // plugin type
 	Config AnyConfig
+}
+
+type PluginMetrics struct {
+	MetricName  string
+	LabelNames  []string
+	labelValues []string
+
+	counter     *prometheus.CounterVec
+	counterPrev *prometheus.CounterVec
 }
 
 type AnyPlugin interface{}

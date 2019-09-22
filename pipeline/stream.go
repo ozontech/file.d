@@ -5,26 +5,25 @@ import (
 )
 
 // stream is a queue of events
-// all events in queue are from one source and also has same field(eg json field "stream" in docker logs)
+// all events in the queue are from one source and also has same field value (eg json field "stream" in docker logs)
 type stream struct {
-	name     StreamName
-	sourceId SourceId
-	track    *track
-	mu       *sync.Mutex
-	cond     *sync.Cond
-
-	isInWait bool
+	index     int
+	name      StreamName
+	sourceId  SourceId
+	processor *processor
+	mu        *sync.Mutex
+	cond      *sync.Cond
 
 	first *Event
 	last  *Event
 }
 
-func newStream(name StreamName, sourceId SourceId, track *track) *stream {
+func newStream(name StreamName, sourceId SourceId, processor *processor) *stream {
 	stream := stream{
-		name:     name,
-		sourceId: sourceId,
-		track:    track,
-		mu:       &sync.Mutex{},
+		name:      name,
+		sourceId:  sourceId,
+		processor: processor,
+		mu:        &sync.Mutex{},
 	}
 	stream.cond = sync.NewCond(stream.mu)
 
@@ -33,33 +32,26 @@ func newStream(name StreamName, sourceId SourceId, track *track) *stream {
 
 func (s *stream) put(event *Event) {
 	s.mu.Lock()
-	wasInWait := s.isInWait
-	if s.last == nil {
+	event.processorID = s.processor.id
+	if s.first == nil {
 		s.last = event
 		s.first = event
-
+		s.processor.addActiveStream(s)
 		s.cond.Signal()
 	} else {
 		s.last.next = event
 		s.last = event
 	}
-	s.mu.Unlock()
 
-	if !wasInWait {
-		s.track.streamCh <- s
-	}
-	return
+	s.mu.Unlock()
 }
 
-//todo: waitGet leads to deadlock if pipeline capacity is around ~1024 events
 func (s *stream) waitGet() *Event {
 	s.mu.Lock()
-	s.isInWait = true
 	for s.first == nil {
 		s.cond.Wait()
 	}
 	event := s.get()
-	s.isInWait = false
 	s.mu.Unlock()
 
 	return event
@@ -82,6 +74,7 @@ func (s *stream) get() *Event {
 		result := s.first
 		s.first = nil
 		s.last = nil
+		s.processor.removeActiveStream(s)
 
 		return result
 	}

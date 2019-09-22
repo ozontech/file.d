@@ -70,11 +70,11 @@ func (r *PluginRegistry) RegisterOutput(info *pipeline.PluginInfo) {
 	}
 }
 
-func (r *PluginRegistry) MakeId(pluginKind string, pluginType string) string {
-	return pluginKind + "_" + pluginType
+func (r *PluginRegistry) MakeId(pluginKind pipeline.PluginKind, pluginType string) string {
+	return string(pluginKind) + "_" + pluginType
 }
 
-func (r *PluginRegistry) register(pluginKind string, info *pipeline.PluginInfo) error {
+func (r *PluginRegistry) register(pluginKind pipeline.PluginKind, info *pipeline.PluginInfo) error {
 	id := r.MakeId(pluginKind, info.Type)
 	_, alreadyHave := r.plugins[id]
 	if alreadyHave {

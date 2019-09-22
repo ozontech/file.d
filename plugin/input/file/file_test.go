@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/alecthomas/units"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/satori/go.uuid"
 	"github.com/stretchr/testify/assert"
 	"gitlab.ozon.ru/sre/filed/logger"
@@ -50,7 +51,7 @@ func shutdown() {
 }
 
 func startPipeline(persistenceMode string, enableEventLog bool, config *Config) (*pipeline.Pipeline, *Plugin) {
-	p := pipeline.New("file_pipeline", 16, 16)
+	p := pipeline.New("file_pipeline", 16, 0, prometheus.NewRegistry())
 	if enableEventLog {
 		p.EnableEventLog()
 	}
@@ -61,11 +62,11 @@ func startPipeline(persistenceMode string, enableEventLog bool, config *Config) 
 	anyPlugin, _ := factory()
 	inputPlugin := anyPlugin.(*Plugin)
 	inputPlugin.disableFinalSave()
-	p.SetInputPlugin(&pipeline.InputPluginDescription{Plugin: inputPlugin, Config: config})
+	p.SetInputPlugin(&pipeline.InputPluginData{Plugin: inputPlugin, PluginDesc: pipeline.PluginDesc{Config: config}})
 
 	anyPlugin, _ = devnull.Factory()
 	outputPlugin := anyPlugin.(*devnull.Plugin)
-	p.SetOutputPlugin(&pipeline.OutputPluginDescription{Plugin: outputPlugin, Config: config})
+	p.SetOutputPlugin(&pipeline.OutputPluginData{Plugin: outputPlugin, PluginDesc: pipeline.PluginDesc{Config: config}})
 
 	p.Start()
 
@@ -321,7 +322,7 @@ func TestWatch(t *testing.T) {
 	c.HandleEventFlowFinish(false)
 
 	assert.Equal(t, 5, c.GetEventLogLength(), "Wrong log count")
-	assert.Equal(t, 5, c.EventsProcessed(), "Wrong log count")
+	assert.Equal(t, 5, c.GetEventsTotal(), "Wrong log count")
 }
 
 func TestReadLineSimple(t *testing.T) {
@@ -340,7 +341,7 @@ func TestReadLineSimple(t *testing.T) {
 	c.WaitUntilDone(false)
 
 	assert.Equal(t, 3, c.GetEventLogLength(), "Wrong log count")
-	assert.Equal(t, 3, c.EventsProcessed(), "Wrong log count")
+	assert.Equal(t, 3, c.GetEventsTotal(), "Wrong log count")
 	assert.Equal(t, `{"Data":"Line1"}`, c.GetEventLogItem(0), "Wrong log")
 	assert.Equal(t, `{"Data":"Line2"}`, c.GetEventLogItem(1), "Wrong log")
 	assert.Equal(t, `{"Data":"Line3"}`, c.GetEventLogItem(2), "Wrong log")
@@ -401,7 +402,7 @@ func TestContinueReading(t *testing.T) {
 	c.WaitUntilDone(false)
 	c.Stop()
 	p.jobProvider.saveOffsets()
-	processed := c.EventsProcessed()
+	processed := c.GetEventsTotal()
 
 	addData(file, []byte(`{"Data":"Line4"}`), true, false)
 	addData(file, []byte(`{"Data":"Line5"}`), true, false)
@@ -414,7 +415,7 @@ func TestContinueReading(t *testing.T) {
 	c.WaitUntilDone(false)
 	c.Stop()
 
-	assert.Equal(t, 7, processed+c.EventsProcessed(), "Wrong log count")
+	assert.Equal(t, 7, processed+c.GetEventsTotal(), "Wrong log count")
 	assert.Equal(t, `{"Data":"Line7"}`, c.GetEventLogItem(c.GetEventLogLength()-1), "Wrong log")
 	assert.Equal(t, genOffsetsContent(file, 119), getContent(p.config.OffsetsFile), "Wrong offsets")
 }
@@ -436,7 +437,7 @@ func TestReadSeq(t *testing.T) {
 	c.WaitUntilDone(false)
 
 	assert.Equal(t, 1, c.GetEventLogLength(), "Wrong log count")
-	assert.Equal(t, 1, c.EventsProcessed(), "Wrong log count")
+	assert.Equal(t, 1, c.GetEventsTotal(), "Wrong log count")
 	assert.Equal(t, `{"Data":"Line1Line2Line3"}`, c.GetEventLogItem(0), "Wrong log")
 	p.jobProvider.saveOffsets()
 	assert.Equal(t, genOffsetsContent(file, 27), getContent(p.config.OffsetsFile), "Wrong offsets")
@@ -457,7 +458,7 @@ func TestReadComplexSeqMulti(t *testing.T) {
 
 	c.WaitUntilDone(false)
 	assert.Equal(t, lines, c.GetEventLogLength(), "Wrong log count")
-	assert.Equal(t, lines, c.EventsProcessed(), "Wrong processed events count")
+	assert.Equal(t, lines, c.GetEventsTotal(), "Wrong processed events count")
 
 	p.jobProvider.saveOffsets()
 	assert.Equal(t, genOffsetsContent(file, lines*8), getContent(p.config.OffsetsFile), "Wrong offsets")
@@ -485,7 +486,7 @@ func TestReadComplexSeqOne(t *testing.T) {
 
 	assert.Equal(t, 1, c.GetEventLogLength(), "Wrong log count")
 	assert.Equal(t, lines+2, len(c.GetEventLogItem(0)), "Wrong log")
-	assert.Equal(t, 1, c.EventsProcessed(), "Wrong processed events count")
+	assert.Equal(t, 1, c.GetEventsTotal(), "Wrong processed events count")
 
 	p.jobProvider.saveOffsets()
 	assert.Equal(t, genOffsetsContent(file, lines+3), getContent(p.config.OffsetsFile), "Wrong offsets")
@@ -512,7 +513,7 @@ func TestReadComplexPar(t *testing.T) {
 	c.WaitUntilDone(false)
 
 	assert.Equal(t, lines*files, c.GetEventLogLength(), "Wrong log count")
-	assert.Equal(t, lines*files, c.EventsProcessed(), "Wrong processed events count")
+	assert.Equal(t, lines*files, c.GetEventsTotal(), "Wrong processed events count")
 
 	p.jobProvider.saveOffsets()
 	assertOffsetsEqual(t, genOffsetsContentMultiple(filesNames, lines*7), getContent(p.config.OffsetsFile))
@@ -536,7 +537,7 @@ func TestReadHeavy(t *testing.T) {
 	c.WaitUntilDone(false)
 
 	assert.Equal(t, lines, c.GetEventLogLength())
-	assert.Equal(t, lines, c.EventsProcessed())
+	assert.Equal(t, lines, c.GetEventsTotal())
 
 	p.jobProvider.saveOffsets()
 	assert.Equal(t, genOffsetsContent(file, len(json)*lines), getContent(p.config.OffsetsFile), "Wrong offsets")
@@ -695,7 +696,7 @@ func TestRenameRotationHandle(t *testing.T) {
 `, getInodeByFile(newFile), newFile, getInodeByFile(file), file)
 
 	assert.Equal(t, 10, c.GetEventLogLength(), "Wrong log count")
-	assert.Equal(t, 10, c.EventsProcessed(), "Wrong processed events count")
+	assert.Equal(t, 10, c.GetEventsTotal(), "Wrong processed events count")
 
 	assertOffsetsEqual(t, offsets, getContent(p.config.OffsetsFile))
 }
@@ -714,7 +715,7 @@ func TestShutdownRotation(t *testing.T) {
 	c.WaitUntilDone(false)
 	c.Stop()
 	assert.Equal(t, 2, c.GetEventLogLength(), "Wrong log count")
-	assert.Equal(t, 2, c.EventsProcessed(), "Wrong processed events count")
+	assert.Equal(t, 2, c.GetEventsTotal(), "Wrong processed events count")
 
 	newFile := rotateFile(file)
 
@@ -741,7 +742,7 @@ func TestShutdownRotation(t *testing.T) {
 `, getInodeByFile(newFile), newFile, getInodeByFile(file), file)
 
 	assert.Equal(t, 8, c.GetEventLogLength(), "Wrong log count")
-	assert.Equal(t, 8, c.EventsProcessed(), "Wrong processed events count")
+	assert.Equal(t, 8, c.GetEventsTotal(), "Wrong processed events count")
 
 	assertOffsetsEqual(t, offsets, getContent(p.config.OffsetsFile))
 }
@@ -761,7 +762,7 @@ func TestTruncation(t *testing.T) {
 
 	c.WaitUntilDone(false)
 	assert.Equal(t, 2, c.GetEventLogLength(), "Wrong log count")
-	assert.Equal(t, 2, c.EventsProcessed(), "Wrong processed events count")
+	assert.Equal(t, 2, c.GetEventsTotal(), "Wrong processed events count")
 
 	c.HandleEventFlowStart()
 	truncateFile(file)
@@ -773,7 +774,7 @@ func TestTruncation(t *testing.T) {
 
 	c.WaitUntilDone(false)
 	assert.Equal(t, 5, c.GetEventLogLength(), "Wrong log count")
-	assert.Equal(t, 5, c.EventsProcessed(), "Wrong processed events count")
+	assert.Equal(t, 5, c.GetEventsTotal(), "Wrong processed events count")
 
 	p.jobProvider.saveOffsets()
 	assertOffsetsEqual(t, genOffsetsContent(file, (len(data)+1)*3), getContent(p.config.OffsetsFile))
@@ -898,7 +899,7 @@ func TestRenameRotationInsane(t *testing.T) {
 	p.jobProvider.saveOffsets()
 
 	assert.Equal(t, files*8, c.GetEventLogLength(), "Wrong log count")
-	assert.Equal(t, files*8, c.EventsProcessed(), "Wrong processed events count")
+	assert.Equal(t, files*8, c.GetEventsTotal(), "Wrong processed events count")
 
 	assertOffsetsEqual(t, genOffsetsContentMultiple(fileList, 4*19), getContent(p.config.OffsetsFile))
 }
@@ -939,7 +940,7 @@ func BenchmarkRawRead(b *testing.B) {
 
 		c.HandleEventFlowFinish(false)
 		c.WaitUntilDone(false)
-		fmt.Printf("gen lines=%d, processed lines: %d\n", lines, c.EventsProcessed())
+		fmt.Printf("gen lines=%d, processed lines: %d\n", lines, c.GetEventsTotal())
 
 		c.Stop()
 	}
@@ -966,7 +967,7 @@ func BenchmarkHeavyJsonRead(b *testing.B) {
 
 		c.HandleEventFlowFinish(true)
 		c.WaitUntilDone(true)
-		fmt.Printf("gen bytes=%d, gen lines=%d, processed lines: %d\n", lines*len(json), lines, c.EventsProcessed())
+		fmt.Printf("gen bytes=%d, gen lines=%d, processed lines: %d\n", lines*len(json), lines, c.GetEventsTotal())
 
 		c.Stop()
 	}
@@ -993,7 +994,7 @@ func BenchmarkLightJsonReadSeq(b *testing.B) {
 
 		c.HandleEventFlowFinish(true)
 		c.WaitUntilDone(true)
-		fmt.Printf("gen bytes=%d, gen lines=%d, processed lines: %d\n", lines*len(json), lines*2, c.EventsProcessed())
+		fmt.Printf("gen bytes=%d, gen lines=%d, processed lines: %d\n", lines*len(json), lines*2, c.GetEventsTotal())
 
 		c.Stop()
 	}

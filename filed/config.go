@@ -9,22 +9,16 @@ import (
 )
 
 type Config struct {
-	actions   map[string]*PluginConfig
-	pipelines map[string]*PipelineConfig
-}
-
-type PluginConfig struct {
-	raw *simplejson.Json
+	Pipelines map[string]*PipelineConfig
 }
 
 type PipelineConfig struct {
-	raw *simplejson.Json
+	Raw *simplejson.Json
 }
 
 func NewConfig() *Config {
 	return &Config{
-		actions:   make(map[string]*PluginConfig, 20),
-		pipelines: make(map[string]*PipelineConfig, 20),
+		Pipelines: make(map[string]*PipelineConfig, 20),
 	}
 }
 
@@ -52,13 +46,6 @@ func NewConfigFromFile(path string) *Config {
 func parseConfig(json *simplejson.Json) *Config {
 	config := NewConfig()
 
-	processorsJson := json.Get("processors")
-	processors := processorsJson.MustMap()
-	for i := range processors {
-		raw := processorsJson.Get(i)
-		config.actions[i] = &PluginConfig{raw: raw}
-	}
-
 	pipelinesJson := json.Get("pipelines")
 	pipelines := pipelinesJson.MustMap()
 	if len(pipelines) == 0 {
@@ -66,10 +53,10 @@ func parseConfig(json *simplejson.Json) *Config {
 	}
 	for i := range pipelines {
 		raw := pipelinesJson.Get(i)
-		config.pipelines[i] = &PipelineConfig{raw: raw}
+		config.Pipelines[i] = &PipelineConfig{Raw: raw}
 	}
 
-	logger.Infof("config parsed, found %d pipelines", len(config.pipelines), )
+	logger.Infof("config parsed, found %d pipelines", len(config.Pipelines), )
 
 	return config
 }

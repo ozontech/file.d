@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
 	"gitlab.ozon.ru/sre/filed/pipeline"
 	"gitlab.ozon.ru/sre/filed/plugin/input/fake"
@@ -15,9 +16,9 @@ import (
 
 func TestMain(m *testing.M) {
 	// we are going to do work fucking fast
-	maintenanceInterval = time.Millisecond * 100
+	MaintenanceInterval = time.Millisecond * 100
 	metaExpireDuration = time.Millisecond * 500
-	disableMetaUpdates = true
+	DisableMetaUpdates = true
 
 	code := m.Run()
 	os.Exit(code)
@@ -46,20 +47,20 @@ func getPodInfo(item *metaItem) *corev1.Pod {
 }
 
 func startPipeline() (*pipeline.Pipeline, *fake.Plugin, *Plugin, *devnull.Plugin) {
-	p := pipeline.New("k8s_pipeline", 16, 1)
+	p := pipeline.New("k8s_pipeline", 1, 0, prometheus.NewRegistry())
 
 	anyPlugin, _ := fake.Factory()
 	inputPlugin := anyPlugin.(*fake.Plugin)
-	p.SetInputPlugin(&pipeline.InputPluginDescription{Plugin: inputPlugin, Config: fake.Config{}})
+	p.SetInputPlugin(&pipeline.InputPluginData{Plugin: inputPlugin, PluginDesc: pipeline.PluginDesc{Config: fake.Config{}}})
 
 	anyPlugin, _ = factory()
 	plugin := anyPlugin.(*Plugin)
 	config := &Config{}
-	p.Tracks[0].AddActionPlugin(&pipeline.ActionPluginDescription{Plugin: plugin, Config: config})
+	p.Processors[0].AddActionPlugin(&pipeline.ActionPluginData{Plugin: plugin, PluginDesc: pipeline.PluginDesc{Config: config}})
 
 	anyPlugin, _ = devnull.Factory()
 	outputPlugin := anyPlugin.(*devnull.Plugin)
-	p.SetOutputPlugin(&pipeline.OutputPluginDescription{Plugin: outputPlugin, Config: config})
+	p.SetOutputPlugin(&pipeline.OutputPluginData{Plugin: outputPlugin, PluginDesc: pipeline.PluginDesc{Config: config}})
 
 	p.Start()
 
@@ -131,22 +132,47 @@ func TestJoin(t *testing.T) {
 	input.In(0, filename, 50, 10, []byte(`{"ts":"time","stream":"stdout","log":"log 2\n"}`))
 	input.In(0, filename, 60, 10, []byte(`{"ts":"time","stream":"stderr","log":"joined\n"}`))
 	input.In(0, filename, 70, 10, []byte(`{"ts":"time","stream":"stdout","log":"one line log 3\n"}`))
+
+	// unlock input
+	input.Commit(nil)
+	input.Commit(nil)
+	input.Commit(nil)
+	input.Commit(nil)
+
 	p.HandleEventFlowFinish(true)
 	p.WaitUntilDone(true)
+	input.Wait()
 
 	assert.Equal(t, 4, len(events))
 
-	assert.Equal(t, "one line log 1\n", string(events[0].JSON.GetStringBytes("log")), "wrong event")
-	assert.Equal(t, int64(10), events[0].Offset, "wrong offset")
+	logs := []string{"one line log 1\n", "error joined\n", "this is joined log 2\n", "one line log 3\n"}
+	offsets := []int64{10, 70, 60, 80}
 
-	assert.Equal(t, "error joined\n", string(events[1].JSON.GetStringBytes("log")), "wrong event")
-	assert.Equal(t, int64(70), events[1].Offset, "wrong offset")
+	check := func(log string, offset int64) {
+		index := -1
+		for i, c := range logs {
+			if c == log {
+				index = i
+				break
+			}
 
-	assert.Equal(t, "this is joined log 2\n", string(events[2].JSON.GetStringBytes("log")), "wrong event")
-	assert.Equal(t, int64(60), events[2].Offset, "wrong offset")
+		}
+		assert.True(t, index != -1, "log not found")
 
-	assert.Equal(t, "one line log 3\n", string(events[3].JSON.GetStringBytes("log")), "wrong event")
-	assert.Equal(t, int64(80), events[3].Offset, "wrong offset")
+		assert.Equal(t, offsets[index], offset, "wrong offset")
+
+		logs[index] = logs[len(logs)-1]
+		offsets[index] = offsets[len(offsets)-1]
+
+		logs = logs[:len(logs)-1]
+		offsets = offsets[:len(offsets)-1]
+
+	}
+
+	check(string(events[0].JSON.GetStringBytes("log")), events[0].Offset)
+	check(string(events[1].JSON.GetStringBytes("log")), events[1].Offset)
+	check(string(events[2].JSON.GetStringBytes("log")), events[2].Offset)
+	check(string(events[3].JSON.GetStringBytes("log")), events[3].Offset)
 }
 
 func TestCleanUp(t *testing.T) {
@@ -175,7 +201,7 @@ func TestCleanUp(t *testing.T) {
 		containerID:   "3333333333333333333333333333333333333333333333333333333333333333",
 	}))
 
-	time.Sleep(metaExpireDuration + maintenanceInterval)
+	time.Sleep(metaExpireDuration + MaintenanceInterval)
 
 	assert.Equal(t, 0, len(metaData))
 }

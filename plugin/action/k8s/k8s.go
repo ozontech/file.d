@@ -13,10 +13,8 @@ import (
 // example: /docker-logs/advanced-logs-checker-1566485760-trtrq_sre_duty-bot-4e0301b633eaa2bfdcafdeba59ba0c72a3815911a6a820bf273534b0f32d98e0.log
 // todo: use informer instead of watch API?
 type Plugin struct {
-	config     *Config
-	controller pipeline.ActionController
-	fullLog    []byte
-	fullSize   int
+	config  *Config
+	fullLog []byte
 }
 
 const (
@@ -42,8 +40,7 @@ func factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 	return &Plugin{}, &Config{}
 }
 
-func (p *Plugin) Start(config pipeline.AnyConfig, controller pipeline.ActionController) {
-	p.controller = controller
+func (p *Plugin) Start(config pipeline.AnyConfig) {
 	p.config = config.(*Config)
 
 	if p.config.MaxLogSize == 0 {
@@ -63,20 +60,20 @@ func (p *Plugin) Stop() {
 	}
 }
 
-func (p *Plugin) Do(event *pipeline.Event) {
+func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	chunkedLog := event.JSON.GetStringBytes("log")
 	if chunkedLog == nil {
 		logger.Fatalf("wrong docker log format, it doesn't contain log field: %s", string(event.JSON.MarshalTo(nil)))
 		panic("")
 	}
 
-	p.fullSize += event.SourceSize
-	isMaxReached := p.fullSize > p.config.MaxLogSize
-	//docker splits long JSON logs by 16kb chunks, so let's join them
+	// docker splits long JSON logs by 16kb chunks, so let's join them
+	// look ahead 32kb to ensure we won't throw events longer than MaxLogSize
+	isMaxReached := len(p.fullLog)+event.Size+32*int(units.Kibibyte) > p.config.MaxLogSize
 	if chunkedLog[len(chunkedLog)-1] != '\n' && !isMaxReached {
 		p.fullLog = append(p.fullLog, chunkedLog...)
-		p.controller.Next()
-		return
+
+		return pipeline.ActionCollapse
 	}
 
 	ns, pod, container, _, success, podMeta := getMeta(event.SourceName)
@@ -90,8 +87,14 @@ func (p *Plugin) Do(event *pipeline.Event) {
 	event.JSON.Set("k8s_container", event.JSONPool.NewString(string(container)))
 
 	if success {
-		event.JSON.Set("k8s_node", event.JSONPool.NewString(podMeta.Spec.NodeName))
+		if ns != namespace(podMeta.Namespace) {
+			logger.Panicf("k8s plugin inconsistency: source=%s, file namespace=%s, meta namespace=%s, event=%s", event.SourceName, ns, podMeta.Namespace, event.JSON.String())
+		}
+		if pod != podName(podMeta.Name) {
+			logger.Panicf("k8s plugin inconsistency: source=%s, file pod=%s, meta pod=%s, x=%s, event=%s", event.SourceName, pod, podMeta.Name, event.JSON.String())
+		}
 
+		event.JSON.Set("k8s_node", event.JSONPool.NewString(podMeta.Spec.NodeName))
 		for labelName, labelValue := range podMeta.Labels {
 			event.JSON.Set("k8s_label_"+labelName, event.JSONPool.NewString(labelValue))
 		}
@@ -102,7 +105,6 @@ func (p *Plugin) Do(event *pipeline.Event) {
 		event.JSON.Set("log", event.JSONPool.NewStringBytes(p.fullLog))
 		p.fullLog = p.fullLog[:0]
 	}
-	p.fullSize = 0
 
-	p.controller.Propagate()
+	return pipeline.ActionPass
 }

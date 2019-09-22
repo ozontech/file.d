@@ -9,7 +9,6 @@ import (
 
 type Plugin struct {
 	config     *Config
-	controller pipeline.ActionController
 	fieldsBuf  [][]byte
 }
 
@@ -28,19 +27,17 @@ func factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 	return &Plugin{}, &Config{}
 }
 
-func (p *Plugin) Start(config pipeline.AnyConfig, controller pipeline.ActionController) {
+func (p *Plugin) Start(config pipeline.AnyConfig) {
 	p.config = config.(*Config)
 	if p.config == nil {
 		logger.Panicf("config is nil for the keep fields plugin")
 	}
-
-	p.controller = controller
 }
 
 func (p *Plugin) Stop() {
 }
 
-func (p *Plugin) Do(event *pipeline.Event) {
+func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	fields := p.config.Fields
 	p.fieldsBuf = p.fieldsBuf[:0]
 
@@ -67,5 +64,5 @@ func (p *Plugin) Do(event *pipeline.Event) {
 		event.JSON.Del(pipeline.ByteToString(field))
 	}
 
-	p.controller.Propagate()
+	return pipeline.ActionPass
 }

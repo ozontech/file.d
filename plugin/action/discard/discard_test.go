@@ -4,6 +4,7 @@ import (
 	"regexp"
 	"testing"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
 	"gitlab.ozon.ru/sre/filed/pipeline"
 	"gitlab.ozon.ru/sre/filed/plugin/input/fake"
@@ -11,20 +12,20 @@ import (
 )
 
 func startPipeline(conds pipeline.MatchConditions, condMode pipeline.MatchMode) (*pipeline.Pipeline, *fake.Plugin, *devnull.Plugin) {
-	p := pipeline.New("k8s_pipeline", 16, 1)
+	p := pipeline.New("k8s_pipeline", 1, 0, prometheus.NewRegistry())
 
 	anyPlugin, _ := fake.Factory()
 	inputPlugin := anyPlugin.(*fake.Plugin)
-	p.SetInputPlugin(&pipeline.InputPluginDescription{Plugin: inputPlugin, Config: fake.Config{}})
+	p.SetInputPlugin(&pipeline.InputPluginData{Plugin: inputPlugin, PluginDesc: pipeline.PluginDesc{Config: fake.Config{}}})
 
 	anyPlugin, _ = factory()
 	plugin := anyPlugin.(*Plugin)
 	config := &Config{}
-	p.Tracks[0].AddActionPlugin(&pipeline.ActionPluginDescription{Plugin: plugin, Config: config, MatchConditions: conds, MatchMode: condMode})
+	p.Processors[0].AddActionPlugin(&pipeline.ActionPluginData{Plugin: plugin, PluginDesc: pipeline.PluginDesc{Config: config}, MatchConditions: conds, MatchMode: condMode})
 
 	anyPlugin, _ = devnull.Factory()
 	outputPlugin := anyPlugin.(*devnull.Plugin)
-	p.SetOutputPlugin(&pipeline.OutputPluginDescription{Plugin: outputPlugin, Config: config})
+	p.SetOutputPlugin(&pipeline.OutputPluginData{Plugin: outputPlugin, PluginDesc: pipeline.PluginDesc{Config: config}})
 
 	p.Start()
 
@@ -62,8 +63,11 @@ func TestDiscardAnd(t *testing.T) {
 	input.In(0, "test.log", 0, 0, []byte(`{"field2":"value2"}`))
 	input.In(0, "test.log", 0, 0, []byte(`{"field1":"value1","field2":"value2"}`))
 	input.In(0, "test.log", 0, 0, []byte(`{"field3":"value3","field1":"value1","field2":"value2"}`))
+
+	// release input WG
 	input.Commit(nil)
 	input.Commit(nil)
+
 	input.Wait()
 
 	assert.Equal(t, 6, len(acceptedEvents), "wrong accepted events count")
@@ -101,10 +105,13 @@ func TestDiscardOr(t *testing.T) {
 	input.In(0, "test.log", 0, 0, []byte(`{"field2":"value2"}`))
 	input.In(0, "test.log", 0, 0, []byte(`{"field1":"value1","field2":"value2"}`))
 	input.In(0, "test.log", 0, 0, []byte(`{"field3":"value3","field1":"value1","field2":"value2"}`))
+
+	// release input WG
 	input.Commit(nil)
 	input.Commit(nil)
 	input.Commit(nil)
 	input.Commit(nil)
+
 	input.Wait()
 
 	assert.Equal(t, 6, len(acceptedEvents), "wrong accepted events count")
@@ -142,9 +149,12 @@ func TestDiscardRegex(t *testing.T) {
 	input.In(0, "test.log", 0, 0, []byte(`{"field1":"four"}`))
 	input.In(0, "test.log", 0, 0, []byte(`{"field2":"... four ....","field2":"value2"}`))
 	input.In(0, "test.log", 0, 0, []byte(`{"field3":"value3","field1":"value1","field2":"value2"}`))
+
+	// release input WG
 	input.Commit(nil)
 	input.Commit(nil)
 	input.Commit(nil)
+
 	input.Wait()
 
 	assert.Equal(t, 6, len(acceptedEvents), "wrong accepted events count")

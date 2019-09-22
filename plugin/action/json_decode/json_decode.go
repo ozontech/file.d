@@ -8,9 +8,8 @@ import (
 )
 
 type Plugin struct {
-	config     *Config
-	controller pipeline.ActionController
-	parsers    []*fastjson.Parser
+	config  *Config
+	parsers []*fastjson.Parser
 }
 
 type Config struct {
@@ -28,9 +27,8 @@ func factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 	return &Plugin{}, &Config{}
 }
 
-func (p *Plugin) Start(config pipeline.AnyConfig, controller pipeline.ActionController) {
+func (p *Plugin) Start(config pipeline.AnyConfig) {
 	p.config = config.(*Config)
-	p.controller = controller
 	p.parsers = make([]*fastjson.Parser, 0, 0)
 
 	if p.config.Field == "" {
@@ -41,22 +39,20 @@ func (p *Plugin) Start(config pipeline.AnyConfig, controller pipeline.ActionCont
 func (p *Plugin) Stop() {
 }
 
-func (p *Plugin) Do(event *pipeline.Event) {
-	defer p.controller.Propagate()
-
+func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	json := event.JSON.GetStringBytes(p.config.Field)
 	if json == nil {
-		return
+		return pipeline.ActionPass
 	}
 
 	parsed, err := event.ParseJSON(json)
 	if err != nil {
-		return
+		return pipeline.ActionPass
 	}
 
 	o, err := parsed.Object()
 	if err != nil {
-		return
+		return pipeline.ActionPass
 	}
 
 	event.JSON.Del(p.config.Field)
@@ -65,4 +61,6 @@ func (p *Plugin) Do(event *pipeline.Event) {
 	o.Visit(func(key []byte, v *fastjson.Value) {
 		event.JSON.Set(pipeline.ByteToString(key), v)
 	})
+
+	return pipeline.ActionPass
 }

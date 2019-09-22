@@ -25,7 +25,8 @@ func NewWatcher(path string, filenamePattern string, jobProvider *jobProvider) *
 }
 
 func (w *watcher) start() {
-	if _, err := filepath.Match(w.filenamePattern, "test"); err != nil {
+	logger.Infof("starting watcher path=%s, pattern=%s", w.path, w.filenamePattern)
+	if _, err := filepath.Match(w.filenamePattern, "_"); err != nil {
 		logger.Fatalf("wrong file name pattern %q: %s", w.filenamePattern, err.Error())
 	}
 
@@ -64,7 +65,7 @@ func (w *watcher) tryAddPath(path string) {
 	logger.Infof("starting path watch: %s ", path)
 
 	for _, file := range files {
-		if file.Name() == "." || file.Name() == ".." {
+		if file.Name() == "" || file.Name() == "." || file.Name() == ".." {
 			continue
 		}
 
@@ -76,7 +77,7 @@ func (w *watcher) tryAddPath(path string) {
 
 func (w *watcher) notify(event *fsnotify.Event) {
 	filename := event.Name
-	if filename == "." || filename == ".." {
+	if filename == "" || filename == "." || filename == ".." {
 		return
 	}
 
@@ -119,5 +120,4 @@ func (w *watcher) watch() {
 			logger.Infof("watching path error(have it been deleted?): %s", err.Error())
 		}
 	}
-
 }

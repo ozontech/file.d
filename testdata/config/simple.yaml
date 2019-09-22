@@ -1,16 +1,23 @@
 pipelines:
-  docker:
+  test:
     input:
       type: file
       persistence_mode: async
-      watching_dir: ./testdata/playground/k8s
-      offsets_file: ./testdata/playground/offsets/docker_offsets.yaml
-      reset_offsets: true
+      watching_dir: SOME_DIR
+      offsets_file: SOME_FILE
+      offsets_op: reset
     actions:
+    - type: k8s
     - type: discard
       match_fields:
-        k8s_namespace: /kube-system|ozon-system|ingress-nginx/
-        k8s_container: /logstash|filebeat|cherkizon-event-manager|graylog|fluentd/
+        should_drop: ok
       match_mode: or
+    - type: throttle
+      default_limit: 1000
+      throttle_field: throttle
+      interval: 5s
+      buckets: 60
+      metric_name: throttle
+      metric_labels: [service, k8s_pod, k8s_container]
     output:
       type: devnull

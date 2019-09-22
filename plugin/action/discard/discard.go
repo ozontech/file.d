@@ -6,8 +6,6 @@ import (
 )
 
 type Plugin struct {
-	config     *Config
-	controller pipeline.ActionController
 }
 
 type Config struct {
@@ -24,13 +22,12 @@ func factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 	return &Plugin{}, &Config{}
 }
 
-func (p *Plugin) Start(config pipeline.AnyConfig, controller pipeline.ActionController) {
-	p.controller = controller
+func (p *Plugin) Start(config pipeline.AnyConfig) {
 }
 
 func (p *Plugin) Stop() {
 }
 
-func (p *Plugin) Do(event *pipeline.Event) {
-	p.controller.Drop(event)
+func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
+	return pipeline.ActionDiscard
 }

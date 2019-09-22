@@ -16,6 +16,7 @@ import (
 	_ "gitlab.ozon.ru/sre/filed/plugin/action/k8s"
 	_ "gitlab.ozon.ru/sre/filed/plugin/action/keep_fields"
 	_ "gitlab.ozon.ru/sre/filed/plugin/action/rename"
+	_ "gitlab.ozon.ru/sre/filed/plugin/action/throttle"
 	_ "gitlab.ozon.ru/sre/filed/plugin/input/fake"
 	_ "gitlab.ozon.ru/sre/filed/plugin/input/file"
 	_ "gitlab.ozon.ru/sre/filed/plugin/output/devnull"

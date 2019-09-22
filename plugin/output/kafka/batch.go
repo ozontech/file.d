@@ -40,5 +40,8 @@ func (b *batch) append(e *pipeline.Event) {
 }
 
 func (b *batch) isReady() bool {
-	return len(b.events) == b.size || (len(b.events) > 0 && time.Now().Sub(b.startTime) > b.timeout)
+	l := len(b.events)
+	isFull := l == b.size
+	isTimeout := l > 0 && time.Now().Sub(b.startTime) > b.timeout
+	return isFull || isTimeout
 }

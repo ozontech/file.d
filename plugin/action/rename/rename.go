@@ -8,7 +8,6 @@ import (
 
 type Plugin struct {
 	config     *Config
-	controller pipeline.ActionController
 }
 
 type Config map[string]string
@@ -24,18 +23,17 @@ func factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 	return &Plugin{}, &Config{}
 }
 
-func (p *Plugin) Start(config pipeline.AnyConfig, controller pipeline.ActionController) {
+func (p *Plugin) Start(config pipeline.AnyConfig) {
 	p.config = config.(*Config)
 	if p.config == nil {
 		logger.Panicf("config is nil for the rename plugin")
 	}
-	p.controller = controller
 }
 
 func (p *Plugin) Stop() {
 }
 
-func (p *Plugin) Do(event *pipeline.Event) {
+func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	for from, to := range *p.config {
 		v := event.JSON.Get(from)
 		if v == nil {
@@ -46,5 +44,5 @@ func (p *Plugin) Do(event *pipeline.Event) {
 		event.JSON.Del(from)
 	}
 
-	p.controller.Propagate()
+	return pipeline.ActionPass
 }

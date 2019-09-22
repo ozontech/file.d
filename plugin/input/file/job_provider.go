@@ -21,11 +21,11 @@ const (
 	infoReportInterval  = time.Second * 10
 	maintenanceInterval = time.Second * 10
 
-	maintenanceResultError    = 0
-	maintenanceResultNotDone  = 1
-	maintenanceResultResumed  = 2
-	maintenanceResultReleased = 3
-	maintenanceResultNoop     = 4
+	maintenanceResultError   = 0
+	maintenanceResultNotDone = 1
+	maintenanceResultResumed = 2
+	maintenanceResultDeleted = 3
+	maintenanceResultNoop    = 4
 )
 
 type job struct {
@@ -150,7 +150,7 @@ func (jp *jobProvider) commit(event *pipeline.Event) {
 	job, has := jp.jobs[inode(event.Source)]
 	jp.jobsMu.RUnlock()
 	if !has && isActual {
-		logger.Panicf("can't find job for event, source=%d:%s", event.Source, event.Stream)
+		logger.Panicf("can't find job for event, source=%d:%s", event.Source, event.StreamName)
 	}
 
 	// file and job was deleted, so simply skip commit :)
@@ -159,11 +159,11 @@ func (jp *jobProvider) commit(event *pipeline.Event) {
 	}
 
 	job.mu.Lock()
-	if job.offsets[event.Stream] >= event.Offset && isActual {
-		logger.Panicf("commit offset=%d for source=%d:%s should be more than current=%d for event id=%d", event.Offset, event.Source, event.Stream, job.offsets[event.Stream], event.ID)
+	if job.offsets[event.StreamName] >= event.Offset && isActual {
+		logger.Panicf("commit offset=%d for source=%d:%s should be more than current=%d for event id=%d", event.Offset, event.Source, event.StreamName, job.offsets[event.StreamName], event.ID)
 	}
 	if isActual {
-		job.offsets[event.Stream] = event.Offset
+		job.offsets[event.StreamName] = event.Offset
 	}
 	job.mu.Unlock()
 
@@ -272,7 +272,7 @@ func (jp *jobProvider) addJob(file *os.File, stat os.FileInfo, inode inode, file
 
 	jp.jobsDoneCounter.Inc()
 
-	logger.Infof("job added for a file %d:%s", inode, filename)
+	logger.Debugf("job added for a file %d:%s, symlink=%s", inode, filename, symlink)
 
 	jp.resumeJob(job, stat, filename)
 }
@@ -367,7 +367,7 @@ func (jp *jobProvider) doneJob(job *job) {
 }
 
 func (jp *jobProvider) truncateJob(job *job, offset int64, size int64) {
-	jp.head.DeprecateEvents(pipeline.SourceId(job.inode))
+	jp.head.Deprecate(pipeline.SourceId(job.inode))
 
 	job.mu.Lock()
 	defer job.mu.Unlock()
@@ -508,19 +508,8 @@ func (jp *jobProvider) reportStats() {
 			jp.jobsMu.RLock()
 
 			saveCount := jp.offsetsSaveCounter.Swap(0)
-			//if saveCount != 0 {
 			logger.Infof("file plugin stats for last %d seconds: offsets saves=%d, jobs done=%d, jobs total=%d", infoReportInterval/time.Second, saveCount, jp.jobsDoneCounter.Load(), len(jp.jobs))
-			//}
 
-			added := len(jp.jobsLog)
-			if added <= 3 {
-				for _, job := range jp.jobsLog {
-					logger.Infof("job added for a new file %s", job)
-				}
-			}
-			if added > 3 {
-				logger.Infof("jobs added for %d new files", added)
-			}
 			jp.jobsLog = jp.jobsLog[:0]
 			jp.jobsMu.RUnlock()
 
@@ -573,7 +562,7 @@ func (jp *jobProvider) maintenanceJobs() {
 	resumed := 0
 	reopened := 0
 	notDone := 0
-	released := 0
+	deleted := 0
 	errors := 0
 	for _, job := range jobs {
 		result := jp.maintenanceJob(job)
@@ -584,14 +573,14 @@ func (jp *jobProvider) maintenanceJobs() {
 			reopened++
 		case maintenanceResultNotDone:
 			notDone++
-		case maintenanceResultReleased:
-			released++
+		case maintenanceResultDeleted:
+			deleted++
 		case maintenanceResultError:
 			errors++
 		}
 	}
 
-	logger.Infof("file plugin maintenance stats: not done=%d, resumed=%d, reopened=%d, released=%d errors=%d", notDone, resumed, reopened, released, errors)
+	logger.Infof("file plugin maintenance stats: not done=%d, resumed=%d, reopened=%d, deleted=%d, errors=%d", notDone, resumed, reopened, deleted, errors)
 }
 
 func (jp *jobProvider) maintenanceJob(job *job) int {
@@ -644,7 +633,7 @@ func (jp *jobProvider) maintenanceJob(job *job) int {
 		jp.deleteJob(job)
 		logger.Infof("job for file %d:%s was released", inode, filename)
 
-		return maintenanceResultReleased
+		return maintenanceResultDeleted
 	}
 
 	stat, err = file.Stat()
@@ -657,7 +646,7 @@ func (jp *jobProvider) maintenanceJob(job *job) int {
 	if newInode != inode {
 		jp.deleteJob(job)
 
-		return maintenanceResultReleased
+		return maintenanceResultDeleted
 	}
 
 	_, err = file.Seek(offset, io.SeekStart)
@@ -679,7 +668,7 @@ func (jp *jobProvider) deleteJob(job *job) {
 	if !job.isDone {
 		logger.Panicf("can't delete job, it isn't done: %d:%s", job.inode, job.filename)
 	}
-	jp.head.DeprecateEvents(pipeline.SourceId(job.inode))
+	jp.head.Deprecate(pipeline.SourceId(job.inode))
 	job.mu.Unlock()
 
 	jp.jobsMu.Lock()
@@ -687,6 +676,7 @@ func (jp *jobProvider) deleteJob(job *job) {
 	c := jp.jobsDoneCounter.Dec()
 	jp.jobsMu.Unlock()
 
+	logger.Infof("job %d:%s deleted", job.inode, job.filename)
 	if c < 0 {
 		logger.Panicf("done jobs counter less than zero")
 	}

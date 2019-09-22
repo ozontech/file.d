@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	defaultWorkers        = 16
+	defaultWorkersCount   = 16
 	defaultReadBufferSize = 128 * 1024
 	defaultMaxFiles       = 16384
 
@@ -36,6 +36,7 @@ type Config struct {
 	ReadBufferSize  int    `json:"read_buffer_size"`
 	MaxFiles        int    `json:"max_files"`
 	OffsetsOp       string `json:"offsets_op"` // continue|tail|reset
+	WorkersCount    int    `json:"workers_count"`
 
 	offsetsTmpFilename string
 	persistenceMode    persistenceMode
@@ -109,6 +110,10 @@ func (p *Plugin) Start(config pipeline.AnyConfig, head pipeline.Head, doneWg *sy
 		p.config.FilenamePattern = "*"
 	}
 
+	if p.config.WorkersCount == 0 {
+		p.config.WorkersCount = defaultWorkersCount
+	}
+
 	if p.config.OffsetsFile == "" {
 		logger.Fatalf("no offsets_file provided in config for the file plugin")
 	}
@@ -130,7 +135,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, head pipeline.Head, doneWg *sy
 }
 
 func (p *Plugin) startWorkers() {
-	p.workers = make([]*worker, defaultWorkers)
+	p.workers = make([]*worker, p.config.WorkersCount)
 	for i := range p.workers {
 		p.workers[i] = &worker{}
 		p.workers[i].start(p.head, p.jobProvider, p.config.ReadBufferSize)

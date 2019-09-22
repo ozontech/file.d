@@ -1,2 +1,6 @@
-- file: 19590662 testdata/playground/k8s/advanced-logs-checker-1566485760-trtrq_sre_duty-bot-4e0301b633eaa2bfdcafdeba59ba0c72a3815911a6a820bf273534b0f32d98e0.log
-  default: 5567991
+- file: 21839098 /Users/vvitkovskiy/go/src/gitlab.ozon.ru/sre/filed/testdata/playground/k8s/oms-go-service-ospi-broker-77d5f957f8-rfsz8_oms_oms-go-service-ospi-broker-3c06095e7435180bfd40e0a0da7b69958bf45623942176c954ed902add2fabf2.log
+  stdout: 9060721
+- file: 21839100 /Users/vvitkovskiy/go/src/gitlab.ozon.ru/sre/filed/testdata/playground/k8s/advanced-logs-checker-1568920320-cfkml_sre_duty-bot-67e67fcf71ecfc93dba6ab7e6166adc08705ef3786d73bced9b2905539041465.log
+  stdout: 2557644
+- file: 21839099 /Users/vvitkovskiy/go/src/gitlab.ozon.ru/sre/filed/testdata/playground/k8s/oms-go-service-ospi-broker-infra-postgresql-94574f95d-hp7fv_oms_postgresql-97b5f2a6ac141fad7a98601ddb55cf8297989f86c5293486e7b2538c986895c6.log
+  stderr: 2186102

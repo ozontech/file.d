@@ -6,8 +6,10 @@ import (
 	_ "net/http/pprof"
 	"regexp"
 	"runtime"
+	"strconv"
 	"strings"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"gitlab.ozon.ru/sre/filed/logger"
 	"gitlab.ozon.ru/sre/filed/pipeline"
@@ -17,7 +19,7 @@ type Filed struct {
 	config    *Config
 	httpAddr  string
 	plugins   *PluginRegistry
-	pipelines []*pipeline.Pipeline
+	Pipelines []*pipeline.Pipeline
 }
 
 func New(config *Config, httpAddr string) *Filed {
@@ -25,14 +27,7 @@ func New(config *Config, httpAddr string) *Filed {
 		config:    config,
 		httpAddr:  httpAddr,
 		plugins:   DefaultPluginRegistry,
-		pipelines: make([]*pipeline.Pipeline, 0, 0),
-	}
-}
-
-func NewWithPluginRegistry(config *Config, pluginRegistry *PluginRegistry) *Filed {
-	return &Filed{
-		config:  config,
-		plugins: pluginRegistry,
+		Pipelines: make([]*pipeline.Pipeline, 0, 0),
 	}
 }
 
@@ -45,15 +40,28 @@ func (f *Filed) Start() {
 
 	go f.startHttp()
 
-	f.pipelines = f.pipelines[:0]
-	for name, config := range f.config.pipelines {
+	f.Pipelines = f.Pipelines[:0]
+	for name, config := range f.config.Pipelines {
 		procs := runtime.GOMAXPROCS(0)
-		tracksCount := procs * 4
-		headsCount := procs * 4
+		processorsCount := procs * 4
+		sampleEvery := uint64(0)
+
+		settings := config.Raw.Get("settings")
+		if settings != nil {
+			val := settings.Get("processors_count").MustInt()
+			if val != 0 {
+				processorsCount = val
+			}
+
+			sampleEvery = settings.Get("sample_every").MustUint64()
+		}
 
 		logger.Infof("starting pipeline %q using %d processor cores", name, procs)
 
-		p := pipeline.New(name, tracksCount, headsCount)
+		registry := prometheus.NewRegistry()
+		prometheus.DefaultGatherer = registry
+		prometheus.DefaultRegisterer = registry
+		p := pipeline.New(name, processorsCount, sampleEvery, registry)
 
 		f.setupInput(config, name, p)
 		f.setupActions(config, name, p)
@@ -61,12 +69,12 @@ func (f *Filed) Start() {
 
 		p.Start()
 
-		f.pipelines = append(f.pipelines, p)
+		f.Pipelines = append(f.Pipelines, p)
 	}
 }
 
 func (f *Filed) setupInput(pipelineConfig *PipelineConfig, pipelineName string, p *pipeline.Pipeline) {
-	inputJSON := pipelineConfig.raw.Get("input")
+	inputJSON := pipelineConfig.Raw.Get("input")
 	if inputJSON.MustMap() == nil {
 		logger.Fatalf("no input for pipeline %q", pipelineName)
 	}
@@ -88,11 +96,11 @@ func (f *Filed) setupInput(pipelineConfig *PipelineConfig, pipelineName string, 
 		logger.Panicf("can't unmarshal config for input %q in pipeline %q", t, pipelineName)
 	}
 
-	p.SetInputPlugin(&pipeline.InputPluginDescription{Plugin: plugin.(pipeline.InputPlugin), Config: config, Type: t})
+	p.SetInputPlugin(&pipeline.InputPluginData{Plugin: plugin.(pipeline.InputPlugin), PluginDesc: pipeline.PluginDesc{Config: config, T: t}})
 }
 
 func (f *Filed) setupActions(pipelineConfig *PipelineConfig, pipelineName string, p *pipeline.Pipeline) {
-	actions := pipelineConfig.raw.Get("actions")
+	actions := pipelineConfig.Raw.Get("actions")
 	for index := range actions.MustArray() {
 		actionJSON := actions.GetIndex(index)
 		if actionJSON.MustMap() == nil {
@@ -144,26 +152,39 @@ func (f *Filed) setupActions(pipelineConfig *PipelineConfig, pipelineName string
 			conditions = append(conditions, condition)
 		}
 
-		for _, track := range p.Tracks {
+		metricName := actionJSON.Get("metric_name").MustString()
+		metricLabels := actionJSON.Get("metric_labels").MustStringArray()
+		if metricLabels == nil {
+			metricLabels = []string{}
+		}
+
+		for index, processor := range p.Processors {
 			plugin, config := info.Factory()
 			err = json.Unmarshal(configJson, config)
 			if err != nil {
-				logger.Panicf("can't unmarshal config for action #%d in pipeline %q", index, pipelineName)
+				logger.Panicf("can't unmarshal config for action #%d in pipeline %q: %s", index, pipelineName, err)
 			}
 
-			track.AddActionPlugin(&pipeline.ActionPluginDescription{
-				Plugin:          plugin.(pipeline.ActionPlugin),
-				Config:          config,
-				Type:            t,
+			processor.AddActionPlugin(&pipeline.ActionPluginData{
+				Plugin: plugin.(pipeline.ActionPlugin),
+				PluginDesc: pipeline.PluginDesc{
+					ID:     strconv.Itoa(index) + "_" + strconv.Itoa(index),
+					T:      t,
+					Config: config,
+				},
 				MatchConditions: conditions,
 				MatchMode:       matchMode,
+				PluginMetrics: pipeline.PluginMetrics{
+					MetricName: metricName,
+					LabelNames: metricLabels,
+				},
 			})
 		}
 	}
 }
 
 func (f *Filed) setupOutput(pipelineConfig *PipelineConfig, pipelineName string, p *pipeline.Pipeline) {
-	outputJSON := pipelineConfig.raw.Get("output")
+	outputJSON := pipelineConfig.Raw.Get("output")
 	if outputJSON.MustMap() == nil {
 		logger.Fatalf("no output for pipeline %q", pipelineName)
 	}
@@ -185,12 +206,12 @@ func (f *Filed) setupOutput(pipelineConfig *PipelineConfig, pipelineName string,
 		logger.Panicf("can't unmarshal config for output %q in pipeline %q", t, pipelineName)
 	}
 
-	p.SetOutputPlugin(&pipeline.OutputPluginDescription{Plugin: plugin.(pipeline.OutputPlugin), Config: config, Type: t})
+	p.SetOutputPlugin(&pipeline.OutputPluginData{Plugin: plugin.(pipeline.OutputPlugin), PluginDesc: pipeline.PluginDesc{Config: config, T: t}})
 }
 
 func (f *Filed) Stop() {
-	logger.Infof("stopping filed pipelines=%d", len(f.pipelines))
-	for _, p := range f.pipelines {
+	logger.Infof("stopping filed pipelines=%d", len(f.Pipelines))
+	for _, p := range f.Pipelines {
 		p.Stop()
 	}
 }
