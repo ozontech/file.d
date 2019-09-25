@@ -101,7 +101,9 @@ func (p *Plugin) Start(config pipeline.AnyConfig) {
 }
 
 func (p *Plugin) Stop() {
+}
 
+func (p *Plugin) Reset() {
 }
 
 func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
@@ -135,7 +137,7 @@ func (p *Plugin) isAllowed(event *pipeline.Event) bool {
 		p.limiterBuff.Write(throttleKey)
 		limiterKey := p.limiterBuff.String()
 
-		// check if limiter already have created
+		// check if limiter already have been created
 		limiter, ok := p.limiters[limiterKey]
 		if !ok {
 			limiter = NewLimiter(p.config.Interval.Duration, p.config.Buckets, rule.limit)

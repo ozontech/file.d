@@ -51,7 +51,7 @@ func shutdown() {
 }
 
 func startPipeline(persistenceMode string, enableEventLog bool, config *Config) (*pipeline.Pipeline, *Plugin) {
-	p := pipeline.New("file_pipeline", 16, 0, prometheus.NewRegistry())
+	p := pipeline.New("file_pipeline", 2048, 16, prometheus.NewRegistry())
 	if enableEventLog {
 		p.EnableEventLog()
 	}

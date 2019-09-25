@@ -14,7 +14,7 @@ import (
 )
 
 func startPipeline(interval time.Duration, buckets, limitA, limitB, defaultLimit int) (*pipeline.Pipeline, *fake.Plugin, *devnull.Plugin) {
-	p := pipeline.New("k8s_pipeline", 1, 0, prometheus.NewRegistry())
+	p := pipeline.New("k8s_pipeline", 2048, 1, prometheus.NewRegistry())
 
 	anyPlugin, _ := fake.Factory()
 	inputPlugin := anyPlugin.(*fake.Plugin)

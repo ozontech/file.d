@@ -11,7 +11,7 @@ import (
 )
 
 func startPipeline() (*pipeline.Pipeline, *fake.Plugin, *devnull.Plugin) {
-	p := pipeline.New("json_pipeline", 1, 0, prometheus.NewRegistry())
+	p := pipeline.New("json_pipeline", 2048, 1, prometheus.NewRegistry())
 
 	anyPlugin, _ := fake.Factory()
 	inputPlugin := anyPlugin.(*fake.Plugin)

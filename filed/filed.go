@@ -15,6 +15,10 @@ import (
 	"gitlab.ozon.ru/sre/filed/pipeline"
 )
 
+var (
+	defaultCapacity = 2048
+)
+
 type Filed struct {
 	config    *Config
 	httpAddr  string
@@ -44,7 +48,7 @@ func (f *Filed) Start() {
 	for name, config := range f.config.Pipelines {
 		procs := runtime.GOMAXPROCS(0)
 		processorsCount := procs * 4
-		sampleEvery := uint64(0)
+		capacity := defaultCapacity
 
 		settings := config.Raw.Get("settings")
 		if settings != nil {
@@ -53,7 +57,10 @@ func (f *Filed) Start() {
 				processorsCount = val
 			}
 
-			sampleEvery = settings.Get("sample_every").MustUint64()
+			val = settings.Get("capacity").MustInt()
+			if val != 0 {
+				capacity = val
+			}
 		}
 
 		logger.Infof("starting pipeline %q using %d processor cores", name, procs)
@@ -61,7 +68,7 @@ func (f *Filed) Start() {
 		registry := prometheus.NewRegistry()
 		prometheus.DefaultGatherer = registry
 		prometheus.DefaultRegisterer = registry
-		p := pipeline.New(name, processorsCount, sampleEvery, registry)
+		p := pipeline.New(name, capacity, processorsCount, registry)
 
 		f.setupInput(config, name, p)
 		f.setupActions(config, name, p)

@@ -2,21 +2,24 @@ package pipeline
 
 import (
 	"fmt"
-	"math/rand"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"gitlab.ozon.ru/sre/filed/logger"
+	"go.uber.org/atomic"
 )
 
 type processorState int
 
 const (
-	processorStatePass           processorState = 0
-	processorStateReadSameStream processorState = 1
-	processorStateReadNewStream  processorState = 2
+	processorStatePass  processorState = 0
+	stateReadSameStream processorState = 1
+	stateReadAnyStream  processorState = 2
 )
+
+var eventWaitTimeout = time.Second * 30
 
 type ActionResult int
 
@@ -46,95 +49,91 @@ type processor struct {
 	shouldStop bool
 	stopWg     *sync.WaitGroup
 
-	state  processorState
-	stream *stream
-
-	activeStreams     []*stream
-	activeStreamsMu   *sync.Mutex
-	activeStreamsCond *sync.Cond
+	state          processorState
+	stream         *stream
+	event          *Event
+	waitingEventID *atomic.Uint64
 }
 
 func NewProcessor(id int, pipeline *Pipeline) *processor {
 	processor := &processor{
-		id:       id,
-		pipeline: pipeline,
-		stopWg:   &sync.WaitGroup{},
-
-		activeStreams:   make([]*stream, 0, 0),
-		activeStreamsMu: &sync.Mutex{},
+		id:             id,
+		pipeline:       pipeline,
+		stopWg:         &sync.WaitGroup{},
+		waitingEventID: &atomic.Uint64{},
 	}
 
-	processor.activeStreamsCond = sync.NewCond(processor.activeStreamsMu)
 	return processor
 }
 
-func (p *processor) addActiveStream(stream *stream) {
-	p.activeStreamsMu.Lock()
-	p.activeStreams = append(p.activeStreams, stream)
-	stream.index = len(p.activeStreams) - 1
-	p.activeStreamsCond.Signal()
-	p.activeStreamsMu.Unlock()
-}
-
-func (p *processor) removeActiveStream(stream *stream) {
-	p.activeStreamsMu.Lock()
-	lastIndex := len(p.activeStreams) - 1
-	if lastIndex == -1 {
-		logger.Panicf("why remove?")
+func (p *processor) start(output OutputPlugin) {
+	for i, action := range p.actions {
+		action.Start(p.actionsData[i].Config)
 	}
-	p.activeStreams[stream.index] = p.activeStreams[lastIndex]
-	p.activeStreams[stream.index].index = stream.index
-	p.activeStreams = p.activeStreams[:lastIndex]
-	p.activeStreamsMu.Unlock()
+
+	go p.process(output)
+	go p.heartbeat()
 }
 
 func (p *processor) process(output OutputPlugin) {
-	p.state = processorStateReadNewStream
-	var event *Event
+	p.state = stateReadAnyStream
 	for {
 		switch p.state {
-		case processorStateReadNewStream:
-			p.activeStreamsMu.Lock()
-			for len(p.activeStreams) == 0 {
-				p.activeStreamsCond.Wait()
-			}
-			p.stream = p.activeStreams[rand.Int()%len(p.activeStreams)]
-			p.activeStreamsMu.Unlock()
+		case stateReadAnyStream:
+			for {
+				if p.stream == nil {
+					p.stream = p.pipeline.attachToStream(p)
+				}
 
-			event = p.pipeline.getStreamEvent(p.stream, false)
-		case processorStateReadSameStream:
-			event = p.pipeline.getStreamEvent(p.stream, true)
+				p.event = p.stream.instantGet()
+				if p.event != nil {
+					break
+				}
+
+				// if event is nil then stream is over, so let's attach to a new stream
+				p.stream = nil
+			}
+		case stateReadSameStream:
+			p.event = p.stream.waitGet(p.waitingEventID)
+			if p.event.poolIndex == -1 {
+				logger.Errorf("some events are lost, can't read next sequential event from stream %d(%s)", p.stream.sourceId, p.stream.name)
+				p.reset()
+				p.state = stateReadAnyStream
+				p.stream = nil
+				continue
+			}
 			if p.shouldStop {
 				return
 			}
 		default:
 			logger.Panicf("wrong state=%d before action in pipeline %s", p.state, p.pipeline.name)
 		}
-		p.state = processorStatePass
 
+		p.state = processorStatePass
 		for index, action := range p.actions {
 			p.state = processorStatePass
-			p.countEvent(index, event, eventStatusReceived)
+			p.countEvent(index, p.event, eventStatusReceived)
 
-			if !p.isMatch(index, event) {
-				p.countEvent(index, event, eventStatusNotMatched)
+			if !p.isMatch(index, p.event) {
+				p.countEvent(index, p.event, eventStatusNotMatched)
 				continue
 			}
 
-			switch action.Do(event) {
+			switch action.Do(p.event) {
 			case ActionPass:
-				p.countEvent(index, event, eventStatusPassed)
+				p.countEvent(index, p.event, eventStatusPassed)
 				p.state = processorStatePass
 			case ActionDiscard:
-				p.countEvent(index, event, eventStatusDiscarded)
+				p.countEvent(index, p.event, eventStatusDiscarded)
 				// can't notify input here, because previous events may delay and we'll receive offsets corruption
-				p.pipeline.commit(event, false)
-				p.state = processorStateReadNewStream
+				p.pipeline.commit(p.event, false)
+				p.state = stateReadAnyStream
 			case ActionCollapse:
-				p.countEvent(index, event, eventStatusCollapsed)
+				p.countEvent(index, p.event, eventStatusCollapsed)
+				p.waitingEventID.Swap(p.event.ID)
 				// can't notify input here, because previous events may delay and we'll receive offsets corruption
-				p.pipeline.commit(event, false)
-				p.state = processorStateReadSameStream
+				p.pipeline.commit(p.event, false)
+				p.state = stateReadSameStream
 			}
 
 			if p.state != processorStatePass {
@@ -144,8 +143,31 @@ func (p *processor) process(output OutputPlugin) {
 
 		// if last action returned eventStatusPassed then pass event to output
 		if p.state == processorStatePass {
-			p.pipeline.output.Out(event)
-			p.state = processorStateReadNewStream
+			p.event.stage = eventStageOutput
+			p.pipeline.output.Out(p.event)
+			p.state = stateReadAnyStream
+		}
+	}
+}
+
+func (p *processor) reset() {
+	for _, action := range p.actions {
+		action.Reset()
+	}
+}
+
+func (p *processor) heartbeat() {
+	for {
+		idA := p.waitingEventID.Load()
+		time.Sleep(eventWaitTimeout)
+		idB := p.waitingEventID.Load()
+
+		if idA == 0 || idB == 0 || idA != idB {
+			continue
+		}
+
+		if p.stream.tryUnblockWait(p.waitingEventID) {
+			logger.Errorf("event sequence timeout after event id=%d, consider increasing %q", idA, "processors_count")
 		}
 	}
 }
@@ -206,14 +228,6 @@ func (p *processor) isMatchAnd(conds MatchConditions, event *Event) bool {
 	return true
 }
 
-func (p *processor) start(output OutputPlugin) {
-	for i, action := range p.actions {
-		action.Start(p.actionsData[i].Config)
-	}
-
-	go p.process(output)
-}
-
 func (p *processor) stop() {
 	p.shouldStop = true
 
@@ -269,24 +283,18 @@ func (p *processor) countEvent(actionIndex int, event *Event, eventStatus eventS
 	data.counter.WithLabelValues(data.labelValues...).Inc()
 }
 
-func (p *processor) dumpState(waitingSourceId SourceId) {
+func (p *processor) dumpState() {
 	state := "unknown"
 	switch p.state {
-	case processorStateReadNewStream:
-		state = "READING NEW"
-	case processorStateReadSameStream:
-		state = fmt.Sprintf("READING SOURCE=%d(%s)", p.stream.sourceId, p.stream.name)
+	case stateReadAnyStream:
+		state = "READING ANY"
+	case stateReadSameStream:
+		state = fmt.Sprintf("READING STREAM=%d(%s)", p.stream.sourceId, p.stream.name)
 	case processorStatePass:
 		state = "WORKING"
 	}
 
-	activeStreams := ""
-	p.activeStreamsMu.Lock()
-	for _, stream := range p.activeStreams {
-		activeStreams = activeStreams + fmt.Sprintf("%d(%s)", stream.sourceId, stream.name)
-	}
-	p.activeStreamsMu.Unlock()
-	logger.Infof("processor id=%d, state=%s, active streams=%d: %s", p.id, state, len(p.activeStreams), activeStreams)
+	logger.Infof("processor id=%d, state=%s", p.id, state)
 }
 
 func (p *processor) AddActionPlugin(descr *ActionPluginData) {

@@ -25,6 +25,7 @@ type ActionPlugin interface {
 	Start(config AnyConfig)
 	Stop()
 	Do(*Event) ActionResult
+	Reset()
 }
 
 type OutputPlugin interface {

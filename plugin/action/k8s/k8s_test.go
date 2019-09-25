@@ -47,7 +47,7 @@ func getPodInfo(item *metaItem) *corev1.Pod {
 }
 
 func startPipeline() (*pipeline.Pipeline, *fake.Plugin, *Plugin, *devnull.Plugin) {
-	p := pipeline.New("k8s_pipeline", 1, 0, prometheus.NewRegistry())
+	p := pipeline.New("k8s_pipeline", 2048, 1, prometheus.NewRegistry())
 
 	anyPlugin, _ := fake.Factory()
 	inputPlugin := anyPlugin.(*fake.Plugin)

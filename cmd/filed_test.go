@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"io/ioutil"
 	"math/rand"
 	"os"
@@ -26,60 +27,60 @@ import (
 )
 
 var jsons = []string{
-	//`{"log":"one\n","stream":"stderr"}`,
-
-	//`{"log":"one","stream":"stdout"}`,
-	//`{"log":"one two","stream":"stdout"}`,
-	//`{"log":"log one two three","stream":"stdout"}`,
-	//`{"log":"dropped log one", "should_drop":"ok","stream":"stdout"}`,
-	//`{"log":"dropped log one two", "should_drop":"ok","stream":"stdout"}`,
-	//`{"log":"dropped log one three", "should_drop":"ok","stream":"stdout"}`,
-	//`{"log":"throttled log one", "throttle":"1","stream":"stdout"}`,
-	//`{"log":"throttled log one two", "throttle":"2","stream":"stdout"}`,
-	//`{"log":"throttled log one three", "throttle":"3","stream":"stdout"}`,
-
-	`{"log":"one\n","stream":"stdout"}`,
-	`{"log":"one two\n","stream":"stdout"}`,
-	`{"log":"log one two three\n","stream":"stdout"}`,
-	`{"log":"dropped log one\n", "should_drop":"ok","stream":"stdout"}`,
-	`{"log":"dropped log one two\n", "should_drop":"ok","stream":"stdout"}`,
-	`{"log":"dropped log one three\n", "should_drop":"ok","stream":"stdout"}`,
-	`{"log":"throttled log one\n", "throttle":"1","stream":"stdout"}`,
-	`{"log":"throttled log one two\n", "throttle":"2","stream":"stdout"}`,
-	`{"log":"throttled log one three\n", "throttle":"3","stream":"stdout"}`,
+	`{"log":"one\n","stream":"%s"}`,
+	`{"log":"one two\n","stream":"%s"}`,
+	`{"log":"log one two three\n","stream":"%s"}`,
+	`{"log":"dropped log one\n", "should_drop":"ok","stream":"%s"}`,
+	`{"log":"dropped log one two\n", "should_drop":"ok","stream":"%s"}`,
+	`{"log":"dropped log one three\n", "should_drop":"ok","stream":"%s"}`,
+	`{"log":"throttled log one\n", "throttle":"1","stream":"%s"}`,
+	`{"log":"throttled log one two\n", "throttle":"2","stream":"%s"}`,
+	`{"log":"throttled log one three\n", "throttle":"3","stream":"%s"}`,
 }
 
-var multilineJson = `{"log":"log","stream":"stdout"}`
+var multilineJson = `{"log":"log","stream":"%s"}`
 
 func gen(tempDir string, files int, wg *sync.WaitGroup) {
 	for i := 0; i < files; i++ {
-		u := strings.ReplaceAll(uuid.NewV4().String(), "-", "")
-		name := path.Join(tempDir, "pod_ns_container-"+u+u+".log")
+		u1 := strings.ReplaceAll(uuid.NewV4().String(), "-", "")
+		u2 := strings.ReplaceAll(uuid.NewV4().String(), "-", "")
+		name := path.Join(tempDir, "pod_ns_container-"+u1+u2+".log")
 		file, _ := os.Create(name)
 
-		intervals := []int{0, 5, 15}
-		interval := intervals[rand.Int()%len(intervals)]
-		lines := 1000 // + rand.Int()%10000
+		//intervals := []int{0, 5}
+		//interval := intervals[rand.Int()%len(intervals)]
+		stream := "stdout"
+		if rand.Int()%3 == 0 {
+			stream = "stderr"
+		}
+		lines := 100000
 		for l := 0; l < lines; l++ {
-			if rand.Int()%2 == 0 {
+			if rand.Int()%100 == 0 {
 				for k := 0; k < 3; k++ {
-					_, _ = file.WriteString(multilineJson)
+					_, _ = file.WriteString(fmt.Sprintf(multilineJson, stream))
 					_, _ = file.Write([]byte{'\n'})
 				}
 			}
-			_, _ = file.WriteString(jsons[rand.Int()%len(jsons)])
+			_, _ = file.WriteString(fmt.Sprintf(jsons[rand.Int()%len(jsons)], stream))
 			_, _ = file.Write([]byte{'\n'})
-			time.Sleep(time.Duration(interval) * time.Millisecond)
+			//time.Sleep(time.Duration(interval) * time.Millisecond)
 		}
 
+		time.Sleep(time.Second * 1)
 		_ = file.Close()
-		//_ = os.Remove(name)
+		err := os.Remove(name)
+		if err != nil {
+			panic(err.Error())
+		}
 	}
 
 	wg.Done()
 }
 
 func TestEndToEnd(t *testing.T) {
+	// we are very deterministic :)
+	rand.Seed(0)
+
 	k8s.DisableMetaUpdates = true
 	k8s.MetaWaitTimeout = time.Millisecond
 	k8s.MaintenanceInterval = time.Millisecond * 100
@@ -96,15 +97,16 @@ func TestEndToEnd(t *testing.T) {
 	fd.Start()
 
 	wg := &sync.WaitGroup{}
-	//jobs := 16
-	//files := 1
-	//for {
-	for i := 0; i < 15; i++ {
+	for {
+	jobs := 8
+	files := 1
+	for i := 0; i < jobs; i++ {
 		wg.Add(1)
-		go gen(filesDir, 5, wg)
+		go gen(filesDir, files, wg)
 	}
-	//time.Sleep(time.Second * 5)
-	//}
+
+	time.Sleep(time.Second * 5)
+	}
 
 	time.Sleep(time.Second * 1000)
 	wg.Wait()

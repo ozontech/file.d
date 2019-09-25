@@ -14,15 +14,16 @@ import (
 // todo: use informer instead of watch API?
 type Plugin struct {
 	config  *Config
-	fullLog []byte
+	logBuff []byte
+	logSize int
 }
 
 const (
-	defaultMaxLogSize = 1 * units.Mebibyte
+	defaultMaxEventSize = 1 * units.Megabyte
 )
 
 type Config struct {
-	MaxLogSize int `json:"max_log_size"`
+	MaxEventSize int `json:"max_event_size"`
 }
 
 var (
@@ -43,8 +44,8 @@ func factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 func (p *Plugin) Start(config pipeline.AnyConfig) {
 	p.config = config.(*Config)
 
-	if p.config.MaxLogSize == 0 {
-		p.config.MaxLogSize = int(defaultMaxLogSize)
+	if p.config.MaxEventSize == 0 {
+		p.config.MaxEventSize = int(defaultMaxEventSize)
 	}
 
 	startCounter := startCounter.Inc()
@@ -60,18 +61,25 @@ func (p *Plugin) Stop() {
 	}
 }
 
+func (p *Plugin) Reset() {
+	p.logBuff = p.logBuff[:0]
+}
+
 func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
-	chunkedLog := event.JSON.GetStringBytes("log")
-	if chunkedLog == nil {
-		logger.Fatalf("wrong docker log format, it doesn't contain log field: %s", string(event.JSON.MarshalTo(nil)))
+	logFragment := event.JSON.GetStringBytes("log")
+	if logFragment == nil {
+		logger.Fatalf("wrong docker log format, it doesn't contain log field: %s", event.JSON.String())
 		panic("")
 	}
 
 	// docker splits long JSON logs by 16kb chunks, so let's join them
-	// look ahead 32kb to ensure we won't throw events longer than MaxLogSize
-	isMaxReached := len(p.fullLog)+event.Size+32*int(units.Kibibyte) > p.config.MaxLogSize
-	if chunkedLog[len(chunkedLog)-1] != '\n' && !isMaxReached {
-		p.fullLog = append(p.fullLog, chunkedLog...)
+	// look ahead 32kb to ensure we won't throw events longer than MaxEventSize
+	p.logSize += event.Size
+	predictedLen := p.logSize + 32*1024
+	isMaxReached := predictedLen > p.config.MaxEventSize
+	if logFragment[len(logFragment)-1] != '\n' && !isMaxReached {
+		p.logBuff = append(p.logBuff, logFragment...)
+		// event size is longer than len(logFragment) because it's quoted
 
 		return pipeline.ActionCollapse
 	}
@@ -79,7 +87,7 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	ns, pod, container, _, success, podMeta := getMeta(event.SourceName)
 
 	if isMaxReached {
-		logger.Warnf("too long docker log found, it'll be split, ns=%s pod=%s container=%s consider increase max_log_size, current value=%d", ns, pod, container, p.config.MaxLogSize)
+		logger.Warnf("too long k8s event found, it'll be split, ns=%s pod=%s container=%s consider increase max_event_size, max_event_size=%d, predicted event size=%d", ns, pod, container, p.config.MaxEventSize, predictedLen)
 	}
 
 	event.JSON.Set("k8s_namespace", event.JSONPool.NewString(string(ns)))
@@ -100,11 +108,12 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 		}
 	}
 
-	if len(p.fullLog) > 0 {
-		p.fullLog = append(p.fullLog, chunkedLog...)
-		event.JSON.Set("log", event.JSONPool.NewStringBytes(p.fullLog))
-		p.fullLog = p.fullLog[:0]
+	if len(p.logBuff) > 0 {
+		p.logBuff = append(p.logBuff, logFragment...)
+		event.JSON.Set("log", event.JSONPool.NewStringBytes(p.logBuff))
+		p.logBuff = p.logBuff[:0]
 	}
+	p.logSize = 0
 
 	return pipeline.ActionPass
 }

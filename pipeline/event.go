@@ -13,8 +13,8 @@ var logCleanUpSize = 4 * units.Kibibyte
 
 type Event struct {
 	poolIndex int
-	poolID    int
 	next      *Event
+	stream    *stream
 
 	ID         uint64
 	JSON       *fastjson.Value
@@ -32,19 +32,47 @@ type Event struct {
 	parsersCount int
 
 	// some debugging shit
-	maxSize     int
-	processorID int
+	maxSize int
+	stage   eventStage
 }
 
-func newEvent(poolID int, poolIndex int) *Event {
+const (
+	eventStagePool      = 0
+	eventStageHead      = 1
+	eventStageStream    = 2
+	eventStageProcessor = 3
+	eventStageOutput    = 4
+	eventStageTail      = 5
+)
+
+type eventStage int
+
+func newEvent(poolIndex int) *Event {
 	return &Event{
 		parsers:   make([]*fastjson.Parser, 0, 0),
 		JSONPool:  &fastjson.Arena{},
-		poolID:    poolID,
 		poolIndex: poolIndex,
 	}
 }
 
+func (e *Event) stageStr() string {
+	switch e.stage {
+	case eventStagePool:
+		return "POOL"
+	case eventStageHead:
+		return "HEAD"
+	case eventStageStream:
+		return "STREAM"
+	case eventStageProcessor:
+		return "PROCESSOR"
+	case eventStageOutput:
+		return "OUTPUT"
+	case eventStageTail:
+		return "TAIL"
+	default:
+		return "UNKNOWN"
+	}
+}
 func (e *Event) reset() {
 	// reallocate big objects
 	if e.shouldCleanUp {
@@ -94,7 +122,6 @@ func (e *Event) Marshal(out []byte) ([]byte, int) {
 
 // channels are slower than this implementation by ~20%
 type eventPool struct {
-	id       int
 	eventSeq uint64
 	capacity int
 
@@ -107,9 +134,8 @@ type eventPool struct {
 	maxEventSize int
 }
 
-func newEventPool(id int, capacity int) *eventPool {
+func newEventPool(capacity int) *eventPool {
 	eventPool := &eventPool{
-		id:       id,
 		capacity: capacity,
 		events:   make([]*Event, capacity, capacity),
 		mu:       &sync.Mutex{},
@@ -118,7 +144,7 @@ func newEventPool(id int, capacity int) *eventPool {
 	eventPool.cond = sync.NewCond(eventPool.mu)
 
 	for i := 0; i < capacity; i++ {
-		eventPool.events[i] = newEvent(id, i)
+		eventPool.events[i] = newEvent(i)
 	}
 
 	return eventPool
@@ -159,6 +185,7 @@ func (p *eventPool) get() *Event {
 func (p *eventPool) back(event *Event) {
 	p.mu.Lock()
 
+	event.stage = eventStagePool
 	p.eventsCount--
 	if p.eventsCount == -1 {
 		logger.Panicf("event pool is full, why back()? id=%d index=%d", event.ID, event.poolIndex)

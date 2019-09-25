@@ -37,6 +37,9 @@ func (p *Plugin) Start(config pipeline.AnyConfig) {
 func (p *Plugin) Stop() {
 }
 
+func (p *Plugin) Reset() {
+}
+
 func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	fields := p.config.Fields
 	p.fieldsBuf = p.fieldsBuf[:0]

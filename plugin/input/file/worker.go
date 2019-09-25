@@ -22,8 +22,10 @@ func (w *worker) work(head pipeline.Head, jobProvider *jobProvider, readBufferSi
 		if job == nil {
 			return
 		}
+
 		job.mu.Lock()
 		file := job.file
+		isDone := job.isDone
 		sourceId := pipeline.SourceId(job.inode)
 		sourceName := job.filename
 		if job.symlink != "" {
@@ -31,9 +33,13 @@ func (w *worker) work(head pipeline.Head, jobProvider *jobProvider, readBufferSi
 		}
 		job.mu.Unlock()
 
+		if isDone {
+			logger.Panicf("job is done, why worker should work?")
+		}
+
 		offset, err := file.Seek(0, io.SeekCurrent)
 		if err != nil {
-			logger.Fatalf("file %d:%s seek error: %s", sourceId, sourceName, err.Error())
+			logger.Fatalf("can't get offset, file %d:%s seek error: %s", sourceId, sourceName, err.Error())
 		}
 
 		isEOF := false
@@ -96,7 +102,7 @@ func (w *worker) work(head pipeline.Head, jobProvider *jobProvider, readBufferSi
 		if backwardOffset != 0 {
 			_, err := file.Seek(backwardOffset, io.SeekCurrent)
 			if err != nil {
-				logger.Fatalf("file %d:%s seek error: %s", sourceId, sourceName, err.Error())
+				logger.Fatalf("can't set offset, file %d:%s seek error: %s", sourceId, sourceName, err.Error())
 			}
 		}
 
@@ -109,7 +115,7 @@ func (w *worker) work(head pipeline.Head, jobProvider *jobProvider, readBufferSi
 
 			// file was truncated, seek to start
 			if offset+readTotal > stat.Size() {
-				jobProvider.truncateJob(job, offset+readTotal, stat.Size())
+				jobProvider.truncateJob(job)
 				isEOF = false
 				offset = 0
 				accumulated = 0
@@ -117,6 +123,6 @@ func (w *worker) work(head pipeline.Head, jobProvider *jobProvider, readBufferSi
 			}
 		}
 
-		jobProvider.releaseJob(job, isEOF, offset+accumulated+processed)
+		jobProvider.releaseJob(job, isEOF)
 	}
 }

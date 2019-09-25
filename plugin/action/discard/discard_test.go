@@ -12,7 +12,7 @@ import (
 )
 
 func startPipeline(conds pipeline.MatchConditions, condMode pipeline.MatchMode) (*pipeline.Pipeline, *fake.Plugin, *devnull.Plugin) {
-	p := pipeline.New("k8s_pipeline", 1, 0, prometheus.NewRegistry())
+	p := pipeline.New("discard_pipeline", 2048, 1, prometheus.NewRegistry())
 
 	anyPlugin, _ := fake.Factory()
 	inputPlugin := anyPlugin.(*fake.Plugin)

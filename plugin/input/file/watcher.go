@@ -76,6 +76,10 @@ func (w *watcher) tryAddPath(path string) {
 }
 
 func (w *watcher) notify(event *fsnotify.Event) {
+	//if event.Op&fsnotify.Write != 0 {
+	//	return
+	//}
+
 	filename := event.Name
 	if filename == "" || filename == "." || filename == ".." {
 		return
