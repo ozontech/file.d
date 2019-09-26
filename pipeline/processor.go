@@ -66,9 +66,9 @@ func NewProcessor(id int, pipeline *Pipeline) *processor {
 	return processor
 }
 
-func (p *processor) start(output OutputPlugin) {
+func (p *processor) start(output OutputPlugin, params *ActionPluginParams) {
 	for i, action := range p.actions {
-		action.Start(p.actionsData[i].Config)
+		action.Start(p.actionsData[i].Config, params)
 	}
 
 	go p.process(output)

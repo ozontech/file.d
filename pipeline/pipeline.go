@@ -113,8 +113,12 @@ func (p *Pipeline) Start() {
 
 	p.output.Start(p.outputData.Config, p.capacity, p)
 
+	params := &ActionPluginParams{
+		PipelineName:     p.name,
+		PipelineCapacity: p.capacity,
+	}
 	for _, processor := range p.Processors {
-		processor.start(p.output)
+		processor.start(p.output, params)
 	}
 
 	p.input.Start(p.inputData.Config, p, p.doneWg)

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"sync"
 	"time"
 
 	"gitlab.ozon.ru/sre/filed/filed"
@@ -11,15 +12,20 @@ import (
 	"gitlab.ozon.ru/sre/filed/pipeline"
 )
 
-var defaultThrottleKey = []byte("default")
+var (
+	defaultThrottleKey = []byte("default")
 
-// Plugin throttle plugin drops events if event count per interval gets higher than threshold
-// PS: for now it works across only ONE source (eg. it doesn't sum logs from two different files)
+	// limiters should be shared across pipeline, so lets have a map by namespace and limiter name
+	limiters   = map[string]map[string]*limiter{} // todo: cleanup this map?
+	limitersMu = &sync.RWMutex{}
+)
+
+// Plugin throttle plugin drops events if event count per interval gets higher than a configured threshold
 type Plugin struct {
-	config *Config
+	config   *Config
+	pipeline string
 
 	limiterBuff *bytes.Buffer
-	limiters    map[string]*limiter
 	rules       []*rule
 }
 
@@ -36,6 +42,7 @@ type RuleConfig struct {
 	Limit      int64             `json:"limit"`
 	Conditions map[string]string `json:"conditions"`
 }
+
 type Duration struct {
 	time.Duration
 }
@@ -76,10 +83,14 @@ func factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 	return &Plugin{}, &Config{}
 }
 
-func (p *Plugin) Start(config pipeline.AnyConfig) {
+func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginParams) {
 	p.config = config.(*Config)
+	p.pipeline = params.PipelineName
 	p.limiterBuff = bytes.NewBufferString("")
-	p.limiters = make(map[string]*limiter)
+
+	limitersMu.Lock()
+	limiters[p.pipeline] = map[string]*limiter{}
+	limitersMu.Unlock()
 
 	if p.config.DefaultLimit == 0 {
 		p.config.DefaultLimit = 10000
@@ -138,10 +149,15 @@ func (p *Plugin) isAllowed(event *pipeline.Event) bool {
 		limiterKey := p.limiterBuff.String()
 
 		// check if limiter already have been created
-		limiter, ok := p.limiters[limiterKey]
-		if !ok {
+		limitersMu.RLock()
+		limiter, has := limiters[p.pipeline][limiterKey]
+		limitersMu.RUnlock()
+
+		if !has {
 			limiter = NewLimiter(p.config.Interval.Duration, p.config.Buckets, rule.limit)
-			p.limiters[limiterKey] = limiter
+			limitersMu.Lock()
+			limiters[p.pipeline][limiterKey] = limiter
+			limitersMu.Unlock()
 		}
 
 		return limiter.isAllowed(ts)

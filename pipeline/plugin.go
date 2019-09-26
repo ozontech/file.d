@@ -22,10 +22,15 @@ type InputPlugin interface {
 }
 
 type ActionPlugin interface {
-	Start(config AnyConfig)
+	Start(config AnyConfig, params *ActionPluginParams)
 	Stop()
 	Do(*Event) ActionResult
 	Reset()
+}
+
+type ActionPluginParams struct {
+	PipelineName     string
+	PipelineCapacity int
 }
 
 type OutputPlugin interface {

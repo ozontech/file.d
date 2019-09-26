@@ -27,7 +27,7 @@ func factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 	return &Plugin{}, &Config{}
 }
 
-func (p *Plugin) Start(config pipeline.AnyConfig) {
+func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginParams) {
 	p.config = config.(*Config)
 	p.parsers = make([]*fastjson.Parser, 0, 0)
 

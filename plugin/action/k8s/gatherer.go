@@ -12,9 +12,10 @@ import (
 	"go.uber.org/atomic"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/watch"
+	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/clientcmd"
 )
 
@@ -47,12 +48,12 @@ var (
 	client       *kubernetes.Clientset
 	metaData     = make(meta)
 	metaDataMu   = &sync.RWMutex{}
-	podListOps   metav1.ListOptions       // to select only pods for node on which we are running
 	podBlackList = make(map[podName]bool) // to mark pods for which we are miss k8s meta and don't wanna wait for timeout for each event
+	controller   cache.Controller
 
 	expiredItems = make([]*metaItem, 0, 16) // temporary list of expired items
 
-	gathererStop    = make(chan bool, 1)
+	informerStop    = make(chan struct{}, 1)
 	maintenanceStop = make(chan bool, 1)
 
 	MaintenanceInterval = 15 * time.Second
@@ -76,16 +77,19 @@ func enableGatherer() {
 	initGatherer()
 
 	stopWg.Add(1)
-	go gather()
-
-	stopWg.Add(1)
 	go maintenance()
+
+	if !DisableMetaUpdates {
+		go controller.Run(informerStop)
+	}
 }
 
 func disableGatherer() {
 	logger.Info("disabling k8s meta gatherer")
-	gathererStop <- true
 	maintenanceStop <- true
+	if !DisableMetaUpdates {
+		informerStop <- struct{}{}
+	}
 	stopWg.Wait()
 }
 
@@ -104,76 +108,41 @@ func initGatherer() {
 		panic("")
 	}
 
-	podListOps.IncludeUninitialized = true
-
 	if !DisableMetaUpdates {
-		podName, err := os.Hostname()
-		if err != nil {
-			logger.Fatalf("can't get host name for k8s plugin: %s", err.Error())
-			panic("")
-		}
-
-		pod, err := client.CoreV1().Pods(getNamespace()).Get(podName, metav1.GetOptions{})
-		if err != nil {
-			logger.Fatalf("can't detect node name for k8s plugin using pod %q: %s", podName, err.Error())
-			panic("")
-		}
-
-		podListOps.FieldSelector = "spec.nodeName=" + pod.Spec.NodeName
+		initInformer()
 	}
 }
 
-func gather() {
-	if DisableMetaUpdates {
-		<-gathererStop
-		stopWg.Done()
-		return
+func initInformer() {
+	podName, err := os.Hostname()
+	if err != nil {
+		logger.Fatalf("can't get host name for k8s plugin: %s", err.Error())
+		panic("")
 	}
-
-	watcher := getWatcher()
-	for {
-		select {
-		case <-gathererStop:
-			watcher.Stop()
-			stopWg.Done()
-			return
-		case event, ok := <-watcher.ResultChan():
-			// watcher stopped by api server, recreate it
-			if !ok {
-				logger.Infof("k8s watcher will be recreated")
-				watcher.Stop()
-				watcher = getWatcher()
-			}
-
-			if event.Type == watch.Error {
-				logger.Errorf("k8s watch error: %s", event.Object)
-				continue
-			}
-
-			if event.Object == nil {
-				continue
-			}
-
-			putMeta(event.Object.(*corev1.Pod))
-		}
+	pod, err := client.CoreV1().Pods(getNamespace()).Get(podName, metav1.GetOptions{})
+	if err != nil {
+		logger.Fatalf("can't detect node name for k8s plugin using pod %q: %s", podName, err.Error())
+		panic("")
 	}
+	selector, err := fields.ParseSelector("spec.nodeName=" + pod.Spec.NodeName)
+	if err != nil {
+		logger.Fatalf("can't create k8s field selector: %s", err.Error())
+	}
+	podListWatcher := cache.NewListWatchFromClient(client.CoreV1().RESTClient(), "pods", "", selector)
+	_, c := cache.NewIndexerInformer(podListWatcher, &corev1.Pod{}, 0, cache.ResourceEventHandlerFuncs{
+		AddFunc: func(obj interface{}) {
+			putMeta(obj.(*corev1.Pod))
+		},
+		UpdateFunc: func(old interface{}, obj interface{}) {
+			putMeta(obj.(*corev1.Pod))
+		},
+		DeleteFunc: func(obj interface{}) {
+		},
+	}, cache.Indexers{})
+	controller = c
 }
 
-func refresh() {
-	if !DisableMetaUpdates {
-		podList, err := client.CoreV1().Pods("").List(podListOps)
-		if err != nil {
-			logger.Errorf("can't get pod list from k8s")
-			return
-		}
-
-		// update time for pods which is in the k8s pod list
-		for i := range podList.Items {
-			// get pointer from actual list elements, not from loop var
-			putMeta(&podList.Items[i])
-		}
-	}
-
+func removeExpired() {
 	expiredItems = getExpiredItems(expiredItems)
 	cleanUpItems(expiredItems)
 
@@ -185,16 +154,6 @@ func refresh() {
 	expiredItemsCounter.Swap(0)
 }
 
-func getWatcher() watch.Interface {
-	watcher, err := client.CoreV1().Pods("").Watch(podListOps)
-	if err != nil {
-		logger.Fatalf("can't watch k8s pod events: %s", err.Error())
-		panic("")
-	}
-
-	return watcher
-}
-
 func maintenance() {
 	for {
 		select {
@@ -202,9 +161,8 @@ func maintenance() {
 			stopWg.Done()
 			return
 		default:
-			// retrieve all pods info first, then sleep
-			refresh()
 			time.Sleep(MaintenanceInterval)
+			removeExpired()
 		}
 	}
 }
@@ -277,11 +235,6 @@ func getMeta(fullFilename string) (ns namespace, pod podName, container containe
 		isInBlackList := podBlackList[pod]
 		metaDataMu.RUnlock()
 
-		// fast skip blacklisted pods
-		if isInBlackList {
-			return
-		}
-
 		if has {
 			if i-metaWaitWarn >= 0 {
 				logger.Warnf("meta retrieved with delay time=%dms pod=%s container=%s", i/time.Millisecond, string(pod), string(cid))
@@ -289,6 +242,11 @@ func getMeta(fullFilename string) (ns namespace, pod podName, container containe
 
 			success = true
 			podMeta = pm
+			return
+		}
+
+		// fast skip blacklisted pods
+		if isInBlackList {
 			return
 		}
 

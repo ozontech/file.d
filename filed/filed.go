@@ -16,7 +16,7 @@ import (
 )
 
 var (
-	defaultCapacity = 2048
+	defaultCapacity = 1024
 )
 
 type Filed struct {
@@ -47,7 +47,7 @@ func (f *Filed) Start() {
 	f.Pipelines = f.Pipelines[:0]
 	for name, config := range f.config.Pipelines {
 		procs := runtime.GOMAXPROCS(0)
-		processorsCount := procs * 4
+		processorsCount := procs * 16
 		capacity := defaultCapacity
 
 		settings := config.Raw.Get("settings")
