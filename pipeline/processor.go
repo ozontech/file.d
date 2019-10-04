@@ -6,7 +6,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/prometheus/client_golang/prometheus"
 	"gitlab.ozon.ru/sre/filed/logger"
 	"go.uber.org/atomic"
 )
@@ -53,6 +52,7 @@ type processor struct {
 	stream         *stream
 	event          *Event
 	waitingEventID *atomic.Uint64
+	metricsValues  []string
 }
 
 func NewProcessor(id int, pipeline *Pipeline) *processor {
@@ -61,6 +61,7 @@ func NewProcessor(id int, pipeline *Pipeline) *processor {
 		pipeline:       pipeline,
 		stopWg:         &sync.WaitGroup{},
 		waitingEventID: &atomic.Uint64{},
+		metricsValues:  make([]string, 0, 0),
 	}
 
 	return processor
@@ -106,31 +107,31 @@ func (p *processor) process(output OutputPlugin) {
 				return
 			}
 		default:
-			logger.Panicf("wrong state=%d before action in pipeline %s", p.state, p.pipeline.name)
+			logger.Panicf("wrong state=%d before action in pipeline %s", p.state, p.pipeline.Name)
 		}
 
 		p.state = processorStatePass
 		for index, action := range p.actions {
 			p.state = processorStatePass
-			p.countEvent(index, p.event, eventStatusReceived)
+			p.countEvent(index, eventStatusReceived)
 
 			if !p.isMatch(index, p.event) {
-				p.countEvent(index, p.event, eventStatusNotMatched)
+				p.countEvent(index, eventStatusNotMatched)
 				continue
 			}
 
 			switch action.Do(p.event) {
 			case ActionPass:
-				p.countEvent(index, p.event, eventStatusPassed)
+				p.countEvent(index, eventStatusPassed)
 				p.state = processorStatePass
 			case ActionDiscard:
-				p.countEvent(index, p.event, eventStatusDiscarded)
+				p.countEvent(index, eventStatusDiscarded)
 				// can't notify input here, because previous events may delay and we'll receive offsets corruption
 				p.pipeline.commit(p.event, false)
 				p.state = stateReadAnyStream
 			case ActionCollapse:
-				p.countEvent(index, p.event, eventStatusCollapsed)
-				p.waitingEventID.Swap(p.event.ID)
+				p.countEvent(index, eventStatusCollapsed)
+				p.waitingEventID.Swap(p.event.SeqID)
 				// can't notify input here, because previous events may delay and we'll receive offsets corruption
 				p.pipeline.commit(p.event, false)
 				p.state = stateReadSameStream
@@ -148,6 +149,10 @@ func (p *processor) process(output OutputPlugin) {
 			p.state = stateReadAnyStream
 		}
 	}
+}
+
+func (p *processor) countEvent(actionIndex int, status eventStatus) {
+	p.metricsValues = p.pipeline.countEvent(actionIndex, p.event, status, p.metricsValues)
 }
 
 func (p *processor) reset() {
@@ -186,16 +191,16 @@ func (p *processor) isMatch(index int, event *Event) bool {
 
 func (p *processor) isMatchOr(conds MatchConditions, event *Event) bool {
 	for _, cond := range conds {
-		value := event.JSON.Get(cond.Field).GetStringBytes()
-		if value == nil {
+		value := event.Root.Dig(cond.Field).AsString()
+		if value == "" {
 			continue
 		}
 
 		match := false
 		if cond.Regexp != nil {
-			match = cond.Regexp.Match(value)
+			match = cond.Regexp.MatchString(value)
 		} else {
-			match = strings.Trim(ByteToString(value), " ") == cond.Value
+			match = strings.Trim(value, " ") == cond.Value
 		}
 
 		if match {
@@ -208,16 +213,16 @@ func (p *processor) isMatchOr(conds MatchConditions, event *Event) bool {
 
 func (p *processor) isMatchAnd(conds MatchConditions, event *Event) bool {
 	for _, cond := range conds {
-		value := event.JSON.Get(cond.Field).GetStringBytes()
-		if value == nil {
+		value := event.Root.Dig(cond.Field).AsString()
+		if value == "" {
 			return false
 		}
 
 		match := false
 		if cond.Regexp != nil {
-			match = cond.Regexp.Match(value)
+			match = cond.Regexp.MatchString(value)
 		} else {
-			match = strings.Trim(ByteToString(value), " ") == cond.Value
+			match = strings.Trim(value, " ") == cond.Value
 		}
 
 		if !match {
@@ -234,53 +239,6 @@ func (p *processor) stop() {
 	for _, action := range p.actions {
 		action.Stop()
 	}
-}
-
-func (p *processor) nextMetricsGeneration(metricsGen string) {
-	for _, data := range p.actionsData {
-		if data.MetricName == "" {
-			continue
-		}
-
-		counter := prometheus.NewCounterVec(prometheus.CounterOpts{
-			Namespace:   "filed",
-			Subsystem:   "pipeline_" + p.pipeline.name,
-			Name:        data.MetricName + "_events_total",
-			Help:        fmt.Sprintf("how many events processed by pipeline %q and action %q", p.pipeline.name, data.T),
-			ConstLabels: map[string]string{"gen": data.ID + "_" + metricsGen},
-		}, append([]string{"status"}, data.LabelNames...))
-
-		prev := data.counterPrev
-		data.counterPrev = data.counter
-		data.counter = counter
-
-		p.pipeline.registry.MustRegister(counter)
-		if prev != nil {
-			p.pipeline.registry.Unregister(prev)
-		}
-	}
-}
-
-func (p *processor) countEvent(actionIndex int, event *Event, eventStatus eventStatus) {
-	data := p.actionsData[actionIndex]
-	if data.MetricName == "" {
-		return
-	}
-
-	data.labelValues = data.labelValues[:0]
-	data.labelValues = append(data.labelValues, string(eventStatus))
-
-	for _, field := range data.LabelNames {
-		value := event.JSON.GetStringBytes(field)
-		valueStr := defaultFieldValue
-		if value != nil {
-			valueStr = string(value)
-		}
-
-		data.labelValues = append(data.labelValues, valueStr)
-	}
-
-	data.counter.WithLabelValues(data.labelValues...).Inc()
 }
 
 func (p *processor) dumpState() {

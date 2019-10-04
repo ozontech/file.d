@@ -90,17 +90,10 @@ func TestEnrichment(t *testing.T) {
 	input.In(0, filename, 0, 0, []byte(`{"time":"time","log":"log\n"}`))
 	input.Wait()
 
-	assert.NotNil(t, event.JSON.Get("k8s_pod"), "can't find field")
-	assert.Equal(t, `"advanced-logs-checker-1566485760-trtrq"`, event.JSON.Get("k8s_pod").String())
-
-	assert.NotNil(t, event.JSON.Get("k8s_namespace"), "can't find field")
-	assert.Equal(t, `"sre"`, event.JSON.Get("k8s_namespace").String())
-
-	assert.NotNil(t, event.JSON.Get("k8s_container"), "can't find field")
-	assert.Equal(t, `"duty-bot"`, event.JSON.Get("k8s_container").String())
-
-	assert.NotNil(t, event.JSON.Get("k8s_node"), "can't find field")
-	assert.Equal(t, `"node_1"`, event.JSON.Get("k8s_node").String())
+	assert.Equal(t, "advanced-logs-checker-1566485760-trtrq", event.Root.Dig("k8s_pod").AsString(), "wrong event field")
+	assert.Equal(t, "sre", event.Root.Dig("k8s_namespace").AsString(), "wrong event field")
+	assert.Equal(t, "duty-bot", event.Root.Dig("k8s_container").AsString(), "wrong event field")
+	assert.Equal(t, "node_1", event.Root.Dig("k8s_node").AsString(), "wrong event field")
 }
 
 func TestJoin(t *testing.T) {
@@ -124,14 +117,14 @@ func TestJoin(t *testing.T) {
 	})
 
 	filename := getLogFilename("/docker-logs", item)
-	input.In(0, filename, 0, 10, []byte(`{"ts":"time","stream":"stdout","log":"one line log 1\n"}`))
-	input.In(0, filename, 10, 10, []byte(`{"ts":"time","stream":"stderr","log":"error "}`))
-	input.In(0, filename, 20, 10, []byte(`{"ts":"time","stream":"stdout","log":"this "}`))
-	input.In(0, filename, 30, 10, []byte(`{"ts":"time","stream":"stdout","log":"is "}`))
-	input.In(0, filename, 40, 10, []byte(`{"ts":"time","stream":"stdout","log":"joined "}`))
-	input.In(0, filename, 50, 10, []byte(`{"ts":"time","stream":"stdout","log":"log 2\n"}`))
-	input.In(0, filename, 60, 10, []byte(`{"ts":"time","stream":"stderr","log":"joined\n"}`))
-	input.In(0, filename, 70, 10, []byte(`{"ts":"time","stream":"stdout","log":"one line log 3\n"}`))
+	input.In(0, filename, 10, 10, []byte(`{"ts":"time","stream":"stdout","log":"one line log 1\n"}`))
+	input.In(0, filename, 20, 10, []byte(`{"ts":"time","stream":"stderr","log":"error "}`))
+	input.In(0, filename, 30, 10, []byte(`{"ts":"time","stream":"stdout","log":"this "}`))
+	input.In(0, filename, 40, 10, []byte(`{"ts":"time","stream":"stdout","log":"is "}`))
+	input.In(0, filename, 50, 10, []byte(`{"ts":"time","stream":"stdout","log":"joined "}`))
+	input.In(0, filename, 60, 10, []byte(`{"ts":"time","stream":"stdout","log":"log 2\n"}`))
+	input.In(0, filename, 70, 10, []byte(`{"ts":"time","stream":"stderr","log":"joined\n"}`))
+	input.In(0, filename, 80, 10, []byte(`{"ts":"time","stream":"stdout","log":"one line log 3\n"}`))
 
 	// unlock input
 	input.Commit(nil)
@@ -157,6 +150,7 @@ func TestJoin(t *testing.T) {
 			}
 
 		}
+		assert.Equal(t, len(logs), len(offsets), "lengths isn't equal")
 		assert.True(t, index != -1, "log not found")
 
 		assert.Equal(t, offsets[index], offset, "wrong offset")
@@ -169,10 +163,10 @@ func TestJoin(t *testing.T) {
 
 	}
 
-	check(string(events[0].JSON.GetStringBytes("log")), events[0].Offset)
-	check(string(events[1].JSON.GetStringBytes("log")), events[1].Offset)
-	check(string(events[2].JSON.GetStringBytes("log")), events[2].Offset)
-	check(string(events[3].JSON.GetStringBytes("log")), events[3].Offset)
+	check(events[0].Root.Dig("log").AsString(), events[0].Offset)
+	check(events[1].Root.Dig("log").AsString(), events[1].Offset)
+	check(events[2].Root.Dig("log").AsString(), events[2].Offset)
+	check(events[3].Root.Dig("log").AsString(), events[3].Offset)
 }
 
 func TestCleanUp(t *testing.T) {

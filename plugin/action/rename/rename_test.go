@@ -1,4 +1,4 @@
-package discard
+package rename
 
 import (
 	"testing"
@@ -46,10 +46,10 @@ func TestRename(t *testing.T) {
 	input.Wait()
 
 	assert.Equal(t, 3, len(dumpedEvents), "wrong accepted events count")
-	assert.Equal(t, "value_1", string(dumpedEvents[0].JSON.GetStringBytes("renamed_field_1")), "wrong field value")
-	assert.Equal(t, "value_2", string(dumpedEvents[1].JSON.GetStringBytes("renamed_field_2")), "wrong field value")
-	assert.Equal(t, "value_3", string(dumpedEvents[2].JSON.GetStringBytes("field_3")), "wrong field value")
-	assert.Nil(t, dumpedEvents[0].JSON.Get("field_1"), "field isn't nil")
-	assert.Nil(t, dumpedEvents[1].JSON.Get("field_2"), "field isn't nil")
-	assert.Nil(t, dumpedEvents[2].JSON.Get("renamed_field_3"), "field isn't nil")
+	assert.Equal(t, "value_1", dumpedEvents[0].Root.Dig("renamed_field_1").AsString(), "wrong field value")
+	assert.Equal(t, "value_2", dumpedEvents[1].Root.Dig("renamed_field_2").AsString(), "wrong field value")
+	assert.Equal(t, "value_3", dumpedEvents[2].Root.Dig("field_3").AsString(), "wrong field value")
+	assert.Nil(t, dumpedEvents[0].Root.Dig("field_1"), "field isn't nil")
+	assert.Nil(t, dumpedEvents[1].Root.Dig("field_2"), "field isn't nil")
+	assert.Nil(t, dumpedEvents[2].Root.Dig("renamed_field_3"), "field isn't nil")
 }

@@ -159,7 +159,7 @@ func (jp *jobProvider) commit(event *pipeline.Event) {
 
 	job.mu.Lock()
 	if job.offsets[event.StreamName] >= event.Offset && isActual {
-		logger.Panicf("commit offset=%d for source=%d:%s should be more than current=%d for event id=%d", event.Offset, event.Source, event.StreamName, job.offsets[event.StreamName], event.ID)
+		logger.Panicf("commit offset=%d for source=%d:%s should be more than current=%d for event id=%d", event.Offset, event.Source, event.StreamName, job.offsets[event.StreamName], event.SeqID)
 	}
 	if isActual {
 		job.offsets[event.StreamName] = event.Offset
@@ -369,7 +369,7 @@ func (jp *jobProvider) doneJob(job *job) {
 }
 
 func (jp *jobProvider) truncateJob(job *job) {
-	deprecated := jp.head.Deprecate(pipeline.SourceId(job.inode))
+	deprecated := jp.head.Reset(pipeline.SourceId(job.inode))
 
 	job.mu.Lock()
 	defer job.mu.Unlock()
@@ -619,6 +619,15 @@ func (jp *jobProvider) maintenanceJob(job *job) int {
 		job.mu.Unlock()
 		return maintenanceResultNotDone
 	}
+
+	// filename was changed
+	if filepath.Base(job.filename) != stat.Name() {
+		job.filename = filepath.Dir(job.filename) + stat.Name()
+		job.mu.Unlock()
+
+		return maintenanceResultNoop
+	}
+
 	filename = job.filename
 	file = job.file
 	inode = job.inode
@@ -673,7 +682,7 @@ func (jp *jobProvider) deleteJob(job *job) {
 	if !job.isDone {
 		logger.Panicf("can't delete job, it isn't done: %d:%s", job.inode, job.filename)
 	}
-	deprecated := jp.head.Deprecate(pipeline.SourceId(job.inode))
+	deprecated := jp.head.Reset(pipeline.SourceId(job.inode))
 
 	jp.jobsMu.Lock()
 	delete(jp.jobs, job.inode)

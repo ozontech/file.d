@@ -23,26 +23,28 @@ const (
 	formatInfo = "make sure log has name in format [pod-name]_[namespace]_[container-name]-[container id].log"
 )
 
-type metaItem struct {
-	nodeName      nodeName
-	namespace     namespace
-	podName       podName
-	containerName containerName
-	containerID   containerID
-}
+type (
+	nodeName      string
+	podName       string
+	namespace     string
+	containerName string
+	containerID   string
 
-type meta map[namespace]map[podName]map[containerID]*podMeta
+	podMeta struct {
+		*corev1.Pod
+		updateTime time.Time
+	}
 
-type podMeta struct {
-	*corev1.Pod
-	updateTime time.Time
-}
+	metaItem struct {
+		nodeName      nodeName
+		namespace     namespace
+		podName       podName
+		containerName containerName
+		containerID   containerID
+	}
 
-type nodeName string
-type podName string
-type namespace string
-type containerName string
-type containerID string
+	meta map[namespace]map[podName]map[containerID]*podMeta
+)
 
 var (
 	client       *kubernetes.Clientset
@@ -129,7 +131,7 @@ func initInformer() {
 		logger.Fatalf("can't create k8s field selector: %s", err.Error())
 	}
 	podListWatcher := cache.NewListWatchFromClient(client.CoreV1().RESTClient(), "pods", "", selector)
-	_, c := cache.NewIndexerInformer(podListWatcher, &corev1.Pod{}, 0, cache.ResourceEventHandlerFuncs{
+	_, c := cache.NewIndexerInformer(podListWatcher, &corev1.Pod{}, metaExpireDuration/4, cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
 			putMeta(obj.(*corev1.Pod))
 		},

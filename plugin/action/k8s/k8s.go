@@ -66,20 +66,25 @@ func (p *Plugin) Reset() {
 }
 
 func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
-	logFragment := event.JSON.GetStringBytes("log")
-	if logFragment == nil {
-		logger.Fatalf("wrong docker log format, it doesn't contain log field: %s", event.JSON.String())
+	// don't need to unescape/escape log fields cause concatenation of escaped strings is escaped string
+	logFragment := event.Root.Dig("log").AsEscapedString()
+	if logFragment == "" {
+		logger.Fatalf("wrong docker log format, it doesn't contain log field: %s", event.Root.EncodeToString())
 		panic("")
 	}
 
 	// docker splits long JSON logs by 16kb chunks, so let's join them
 	// look ahead 32kb to ensure we won't throw events longer than MaxEventSize
+	prevLogSize := p.logSize
 	p.logSize += event.Size
 	predictedLen := p.logSize + 32*1024
 	isMaxReached := predictedLen > p.config.MaxEventSize
-	if logFragment[len(logFragment)-1] != '\n' && !isMaxReached {
-		p.logBuff = append(p.logBuff, logFragment...)
-		// event size is longer than len(logFragment) because it's quoted
+	logFragmentLen := len(logFragment)
+	if logFragment[logFragmentLen-3:logFragmentLen-1] != `\n` && !isMaxReached {
+		if prevLogSize == 0 {
+			p.logBuff = append(p.logBuff, '"')
+		}
+		p.logBuff = append(p.logBuff, logFragment[1:logFragmentLen-1]...)
 
 		return pipeline.ActionCollapse
 	}
@@ -90,27 +95,28 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 		logger.Warnf("too long k8s event found, it'll be split, ns=%s pod=%s container=%s consider increase max_event_size, max_event_size=%d, predicted event size=%d", ns, pod, container, p.config.MaxEventSize, predictedLen)
 	}
 
-	event.JSON.Set("k8s_namespace", event.JSONPool.NewString(string(ns)))
-	event.JSON.Set("k8s_pod", event.JSONPool.NewString(string(pod)))
-	event.JSON.Set("k8s_container", event.JSONPool.NewString(string(container)))
+	event.Root.AddField("k8s_namespace").MutateToString(string(ns))
+	event.Root.AddField("k8s_pod").MutateToString(string(pod))
+	event.Root.AddField("k8s_container").MutateToString(string(container))
 
 	if success {
 		if ns != namespace(podMeta.Namespace) {
-			logger.Panicf("k8s plugin inconsistency: source=%s, file namespace=%s, meta namespace=%s, event=%s", event.SourceName, ns, podMeta.Namespace, event.JSON.String())
+			logger.Panicf("k8s plugin inconsistency: source=%s, file namespace=%s, meta namespace=%s, event=%s", event.SourceName, ns, podMeta.Namespace, event.Root.EncodeToString())
 		}
 		if pod != podName(podMeta.Name) {
-			logger.Panicf("k8s plugin inconsistency: source=%s, file pod=%s, meta pod=%s, x=%s, event=%s", event.SourceName, pod, podMeta.Name, event.JSON.String())
+			logger.Panicf("k8s plugin inconsistency: source=%s, file pod=%s, meta pod=%s, x=%s, event=%s", event.SourceName, pod, podMeta.Name, event.Root.EncodeToString())
 		}
 
-		event.JSON.Set("k8s_node", event.JSONPool.NewString(podMeta.Spec.NodeName))
+		event.Root.AddField("k8s_node").MutateToString(podMeta.Spec.NodeName)
 		for labelName, labelValue := range podMeta.Labels {
-			event.JSON.Set("k8s_label_"+labelName, event.JSONPool.NewString(labelValue))
+			event.Root.AddField("k8s_label_" + labelName).MutateToString(labelValue)
 		}
 	}
 
 	if len(p.logBuff) > 0 {
-		p.logBuff = append(p.logBuff, logFragment...)
-		event.JSON.Set("log", event.JSONPool.NewStringBytes(p.logBuff))
+		p.logBuff = append(p.logBuff, logFragment[1:logFragmentLen-1]...)
+		p.logBuff = append(p.logBuff, '"')
+		event.Root.AddField("log").MutateToEscapedString(string(p.logBuff))
 		p.logBuff = p.logBuff[:0]
 	}
 	p.logSize = 0

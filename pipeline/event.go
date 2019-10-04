@@ -4,32 +4,28 @@ import (
 	"sync"
 
 	"github.com/alecthomas/units"
-	"github.com/valyala/fastjson"
+	insaneJSON "github.com/vitkovskii/insane-json"
 	"gitlab.ozon.ru/sre/filed/logger"
 	"go.uber.org/atomic"
 )
 
-var logCleanUpSize = 4 * units.Kibibyte
+var eventGCSizeThreshold = 4 * units.Kibibyte
 
 type Event struct {
+	Root      *insaneJSON.Root
 	poolIndex int
 	next      *Event
 	stream    *stream
 
-	ID         uint64
-	JSON       *fastjson.Value
-	JSONPool   *fastjson.Arena
+	SeqID      uint64
 	Offset     int64
 	Source     SourceId
 	SourceName string
 	StreamName StreamName
 	Size       int
 
-	deprecated    atomic.Bool
-	shouldCleanUp bool
-
-	parsers      []*fastjson.Parser
-	parsersCount int
+	isDeprecated atomic.Bool
+	shouldGC     bool
 
 	// some debugging shit
 	maxSize int
@@ -49,9 +45,8 @@ type eventStage int
 
 func newEvent(poolIndex int) *Event {
 	return &Event{
-		parsers:   make([]*fastjson.Parser, 0, 0),
-		JSONPool:  &fastjson.Arena{},
 		poolIndex: poolIndex,
+		Root:      insaneJSON.Spawn(),
 	}
 }
 
@@ -74,44 +69,43 @@ func (e *Event) stageStr() string {
 	}
 }
 func (e *Event) reset() {
-	// reallocate big objects
-	if e.shouldCleanUp {
-		e.shouldCleanUp = false
-		e.JSONPool = &fastjson.Arena{}
-		e.parsers = make([]*fastjson.Parser, 0, 0)
+	if e.shouldGC {
+		e.Root.ReleaseMem()
+		e.shouldGC = false
 	}
 
+	e.stage = eventStageHead
 	e.next = nil
-	e.JSONPool.Reset()
-	e.parsersCount = 0
-	e.deprecated.Swap(false)
+	e.isDeprecated.Swap(false)
+}
+
+func (e *Event) deprecate() {
+	e.isDeprecated.Swap(true)
 }
 
 func (e *Event) IsActual() bool {
-	return e.deprecated.Load() == false
+	return e.isDeprecated.Load() == false
 }
 
-func (e *Event) markDeprecated() {
-	e.deprecated.Swap(true)
-}
-
-func (e *Event) ParseJSON(json []byte) (*fastjson.Value, error) {
-	if e.parsersCount+1 > len(e.parsers) {
-		e.parsers = append(e.parsers, &fastjson.Parser{})
+func (e *Event) parseJSON(json []byte) (*Event, error) {
+	err := e.Root.DecodeBytes(json)
+	if err != nil {
+		return e, err
 	}
-	parser := e.parsers[e.parsersCount]
-	e.parsersCount++
+	return e, nil
+}
 
-	return parser.ParseBytes(json)
+func (e *Event) SubparseJSON(json []byte) (*insaneJSON.Node, error) {
+	return e.Root.DecodeBytesAdditional(json)
 }
 
 func (e *Event) Marshal(out []byte) ([]byte, int) {
 	l := len(out)
-	out = e.JSON.MarshalTo(out)
+	out = e.Root.Encode(out)
 
 	size := len(out) - l
 	// event is going to be super big, lets GC it
-	e.shouldCleanUp = size > int(logCleanUpSize)
+	e.shouldGC = size > int(eventGCSizeThreshold)
 
 	if size > e.maxSize {
 		e.maxSize = size
@@ -137,14 +131,13 @@ type eventPool struct {
 func newEventPool(capacity int) *eventPool {
 	eventPool := &eventPool{
 		capacity: capacity,
-		events:   make([]*Event, capacity, capacity),
 		mu:       &sync.Mutex{},
 	}
 
 	eventPool.cond = sync.NewCond(eventPool.mu)
 
 	for i := 0; i < capacity; i++ {
-		eventPool.events[i] = newEvent(i)
+		eventPool.events = append(eventPool.events, newEvent(i))
 	}
 
 	return eventPool
@@ -159,7 +152,7 @@ func (p *eventPool) visit(fn func(*Event)) {
 	}
 }
 
-func (p *eventPool) get() *Event {
+func (p *eventPool) get(bytes []byte) (*Event, error) {
 	p.mu.Lock()
 
 	for p.eventsCount >= p.capacity {
@@ -168,18 +161,19 @@ func (p *eventPool) get() *Event {
 
 	index := p.eventsCount
 	event := p.events[index]
-	event.ID = p.eventSeq
+	event.SeqID = p.eventSeq
 
 	p.eventsCount++
 	p.eventSeq++
 
 	p.mu.Unlock()
 
-	event.reset()
 	if event.maxSize > p.maxEventSize {
 		p.maxEventSize = event.maxSize
 	}
-	return event
+
+	event.reset()
+	return event.parseJSON(bytes)
 }
 
 func (p *eventPool) back(event *Event) {
@@ -188,7 +182,7 @@ func (p *eventPool) back(event *Event) {
 	event.stage = eventStagePool
 	p.eventsCount--
 	if p.eventsCount == -1 {
-		logger.Panicf("event pool is full, why back()? id=%d index=%d", event.ID, event.poolIndex)
+		logger.Panicf("event pool is full, why back()? id=%d index=%d", event.SeqID, event.poolIndex)
 	}
 
 	currentIndex := event.poolIndex

@@ -20,6 +20,7 @@ type stream struct {
 
 	isDetaching  bool
 	isAttached   bool
+	maxID        uint64
 	getOffset    int64
 	commitOffset int64
 
@@ -52,13 +53,16 @@ func (s *stream) detach() {
 }
 
 func (s *stream) commit(event *Event) {
-	s.mu.Lock()
 	// we need to get max here because discarded events with
 	// bigger offsets can be committed faster than events with lower
 	// offsets which are going through output
-	if event.Offset > s.commitOffset {
-		s.commitOffset = event.Offset
+	if event.SeqID < s.maxID {
+		return
 	}
+	s.maxID = event.SeqID
+
+	s.mu.Lock()
+	s.commitOffset = event.Offset
 	if s.isDetaching {
 		s.tryDropProcessor()
 	}
@@ -192,10 +196,6 @@ func (s *stream) get() *Event {
 	}
 
 	result.stage = eventStageProcessor
-	// stream was reset somewhere
-	if result.Offset < s.getOffset {
-		s.commitOffset = 0
-	}
 	s.getOffset = result.Offset
 	return result
 }

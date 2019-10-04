@@ -1,4 +1,4 @@
-package json_decode
+package modify
 
 import (
 	"testing"
@@ -11,7 +11,7 @@ import (
 )
 
 func startPipeline() (*pipeline.Pipeline, *fake.Plugin, *devnull.Plugin) {
-	p := pipeline.New("json_pipeline", 2048, 1, prometheus.NewRegistry())
+	p := pipeline.New("modify_pipeline", 2048, 1, prometheus.NewRegistry())
 
 	anyPlugin, _ := fake.Factory()
 	inputPlugin := anyPlugin.(*fake.Plugin)
@@ -19,7 +19,7 @@ func startPipeline() (*pipeline.Pipeline, *fake.Plugin, *devnull.Plugin) {
 
 	anyPlugin, _ = factory()
 	plugin := anyPlugin.(*Plugin)
-	config := &Config{Field: "log"}
+	config := &Config{"new_field": "new_value", "field_pattern": "$existing_field"}
 	p.Processors[0].AddActionPlugin(&pipeline.ActionPluginData{Plugin: plugin, PluginDesc: pipeline.PluginDesc{Config: config}})
 
 	anyPlugin, _ = devnull.Factory()
@@ -31,26 +31,19 @@ func startPipeline() (*pipeline.Pipeline, *fake.Plugin, *devnull.Plugin) {
 	return p, inputPlugin, outputPlugin
 }
 
-func TestDecode(t *testing.T) {
+func TestModify(t *testing.T) {
 	p, input, output := startPipeline()
 	defer p.Stop()
-
-	acceptedEvents := make([]*pipeline.Event, 0, 0)
-	input.SetAcceptFn(func(e *pipeline.Event) {
-		acceptedEvents = append(acceptedEvents, e)
-	})
 
 	dumpedEvents := make([]*pipeline.Event, 0, 0)
 	output.SetOutFn(func(e *pipeline.Event) {
 		dumpedEvents = append(dumpedEvents, e)
 	})
 
-	input.In(0, "test.log", 0, 0, []byte(`{"log":"{\"field2\":\"value2\",\"field3\":\"value3\"}"}`))
-	p.HandleEventFlowFinish(false)
-	p.WaitUntilDone(false)
+	input.In(0, "test.log", 0, 0, []byte(`{"existing_field":"existing_value"}`))
+	input.Wait()
 
-	assert.Equal(t, 1, len(acceptedEvents), "wrong accepted events count")
-	assert.Equal(t, 1, len(dumpedEvents), "wrong dumped events count")
-
-	assert.Equal(t, `{"field2":"value2","field3":"value3"}`, dumpedEvents[0].Root.EncodeToString(), "wrong dumped events count")
+	assert.Equal(t, 1, len(dumpedEvents), "wrong accepted events count")
+	assert.Equal(t, "new_value", dumpedEvents[0].Root.Dig("new_field").AsString(), "wrong field value")
+	assert.Equal(t, "existing_value", dumpedEvents[0].Root.Dig("field_pattern").AsString(), "wrong field value")
 }

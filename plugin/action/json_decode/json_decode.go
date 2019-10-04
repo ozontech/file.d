@@ -1,15 +1,13 @@
 package json_decode
 
 import (
-	"github.com/valyala/fastjson"
 	"gitlab.ozon.ru/sre/filed/filed"
 	"gitlab.ozon.ru/sre/filed/logger"
 	"gitlab.ozon.ru/sre/filed/pipeline"
 )
 
 type Plugin struct {
-	config  *Config
-	parsers []*fastjson.Parser
+	config *Config
 }
 
 type Config struct {
@@ -29,7 +27,6 @@ func factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginParams) {
 	p.config = config.(*Config)
-	p.parsers = make([]*fastjson.Parser, 0, 0)
 
 	if p.config.Field == "" {
 		logger.Fatalf("no field provided for json decode plugin")
@@ -43,27 +40,24 @@ func (p *Plugin) Reset() {
 }
 
 func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
-	json := event.JSON.GetStringBytes(p.config.Field)
-	if json == nil {
+	jsonNode := event.Root.Dig(p.config.Field)
+	if jsonNode == nil {
 		return pipeline.ActionPass
 	}
 
-	parsed, err := event.ParseJSON(json)
+	node, err := event.SubparseJSON(jsonNode.AsBytes())
 	if err != nil {
 		return pipeline.ActionPass
 	}
 
-	o, err := parsed.Object()
-	if err != nil {
+	if !node.IsObject() {
 		return pipeline.ActionPass
 	}
 
-	event.JSON.Del(p.config.Field)
+	jsonNode.Suicide()
 
 	// place decoded object under root
-	o.Visit(func(key []byte, v *fastjson.Value) {
-		event.JSON.Set(pipeline.ByteToString(key), v)
-	})
+	event.Root.MergeWith(node)
 
 	return pipeline.ActionPass
 }

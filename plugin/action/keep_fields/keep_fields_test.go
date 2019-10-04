@@ -46,7 +46,7 @@ func TestKeepFields(t *testing.T) {
 	input.Wait()
 
 	assert.Equal(t, 3, len(dumpedEvents), "wrong accepted events count")
-	assert.Equal(t, `{"field_1":"value_1"}`, string(dumpedEvents[0].JSON.MarshalTo(nil)), "wrong event")
-	assert.Equal(t, `{"field_2":"value_2"}`, string(dumpedEvents[1].JSON.MarshalTo(nil)), "wrong event")
-	assert.Equal(t, `{}`, string(dumpedEvents[2].JSON.MarshalTo(nil)), "wrong event")
+	assert.Equal(t, `{"field_1":"value_1"}`, dumpedEvents[0].Root.EncodeToString(), "wrong event")
+	assert.Equal(t, `{"field_2":"value_2"}`, dumpedEvents[1].Root.EncodeToString(), "wrong event")
+	assert.Equal(t, `{}`, dumpedEvents[2].Root.EncodeToString(), "wrong event")
 }

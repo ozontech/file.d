@@ -3,8 +3,6 @@ package pipeline
 import (
 	"regexp"
 	"sync"
-
-	"github.com/prometheus/client_golang/prometheus"
 )
 
 const (
@@ -53,14 +51,12 @@ type InputPluginData struct {
 	Plugin InputPlugin
 
 	PluginDesc
-	PluginMetrics
 }
 
 type ActionPluginData struct {
 	Plugin ActionPlugin
 
 	PluginDesc
-	PluginMetrics
 
 	MatchConditions MatchConditions
 	MatchMode       MatchMode
@@ -70,22 +66,12 @@ type OutputPluginData struct {
 	Plugin OutputPlugin
 
 	PluginDesc
-	PluginMetrics
 }
 
 type PluginDesc struct {
 	ID     string
 	T      string // plugin type
 	Config AnyConfig
-}
-
-type PluginMetrics struct {
-	MetricName  string
-	LabelNames  []string
-	labelValues []string
-
-	counter     *prometheus.CounterVec
-	counterPrev *prometheus.CounterVec
 }
 
 type AnyPlugin interface{}
@@ -105,6 +91,7 @@ type MatchCondition struct {
 type MatchMode int
 
 const (
-	ModeAnd MatchMode = 0
-	ModeOr  MatchMode = 1
+	ModeAnd     MatchMode = 0
+	ModeOr      MatchMode = 1
+	ModeUnknown MatchMode = 2
 )

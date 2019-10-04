@@ -13,7 +13,7 @@ import (
 )
 
 var (
-	defaultThrottleKey = []byte("default")
+	defaultThrottleKey = "default"
 
 	// limiters should be shared across pipeline, so lets have a map by namespace and limiter name
 	limiters   = map[string]map[string]*limiter{} // todo: cleanup this map?
@@ -126,14 +126,14 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 }
 
 func (p *Plugin) isAllowed(event *pipeline.Event) bool {
-	tsValue := event.JSON.GetStringBytes(p.config.TimeField)
-	ts, err := time.Parse(time.RFC3339Nano, pipeline.ByteToString(tsValue))
+	tsValue := event.Root.Dig(p.config.TimeField).AsString()
+	ts, err := time.Parse(time.RFC3339Nano, tsValue)
 	if err != nil || ts.IsZero() {
 		ts = time.Now()
 	}
 
-	throttleKey := event.JSON.GetStringBytes(p.config.ThrottleField)
-	if throttleKey == nil {
+	throttleKey := event.Root.Dig(p.config.ThrottleField).AsString()
+	if throttleKey == "" {
 		throttleKey = defaultThrottleKey
 	}
 
@@ -145,7 +145,7 @@ func (p *Plugin) isAllowed(event *pipeline.Event) bool {
 		p.limiterBuff.Reset()
 		p.limiterBuff.WriteByte(byte('a' + index))
 		p.limiterBuff.WriteByte(':')
-		p.limiterBuff.Write(throttleKey)
+		p.limiterBuff.WriteString(throttleKey)
 		limiterKey := p.limiterBuff.String()
 
 		// check if limiter already have been created

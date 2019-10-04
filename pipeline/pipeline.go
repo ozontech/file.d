@@ -1,6 +1,8 @@
 package pipeline
 
 import (
+	"encoding/json"
+	"fmt"
 	"strconv"
 	"sync"
 	"time"
@@ -17,8 +19,8 @@ const (
 )
 
 type Head interface {
-	In(sourceId SourceId, sourceName string, offset int64, size int64, bytes []byte)
-	Deprecate(sourceId SourceId) int // mark source events in the pipeline as deprecated, it means that these events shouldn't update offsets
+	In(sourceId SourceId, sourceName string, offset int64, bytes []byte)
+	Reset(sourceId SourceId) int // mark source events in the pipeline as isDeprecated, it means that these events shouldn't update offsets
 }
 
 type Tail interface {
@@ -29,7 +31,7 @@ type SourceId uint64
 type StreamName string
 
 type Pipeline struct {
-	name      string
+	Name      string
 	capacity  int
 	eventPool *eventPool
 
@@ -50,25 +52,36 @@ type Pipeline struct {
 
 	stopCh chan bool
 
-	// metrics
-	registry       *prometheus.Registry
-	metricsGen     int // generation is used to drop unused metrics from counters
-	metricsGenTime time.Time
-
 	readyStreams     []*stream
 	readyStreamsMu   *sync.Mutex
 	readyStreamsCond *sync.Cond
 
+	// metrics
+	registry       *prometheus.Registry
+	metricsGen     int // generation is used to drop unused metrics from counters
+	metricsGenTime time.Time
+	actionMetrics  []*actionMetrics
+
 	// some debugging shit
-	eventSample    string
+	eventSample    []byte
 	totalCommitted atomic.Int64
 	totalIn        atomic.Int64
+}
+
+type actionMetrics struct {
+	name   string
+	labels []string
+
+	counter     *prometheus.CounterVec
+	counterPrev *prometheus.CounterVec
+
+	mu *sync.RWMutex
 }
 
 func New(name string, capacity int, processorsCount int, registry *prometheus.Registry) *Pipeline {
 	logger.Infof("creating new pipeline with processors=%d capacity=%d", processorsCount, capacity)
 	pipeline := &Pipeline{
-		name:     name,
+		Name:     name,
 		capacity: capacity,
 
 		streams:   make(map[SourceId]map[StreamName]*stream),
@@ -81,7 +94,8 @@ func New(name string, capacity int, processorsCount int, registry *prometheus.Re
 
 		stopCh: make(chan bool, 1), //non-zero channel cause we don't wanna wait goroutine to stop
 
-		registry: registry,
+		registry:      registry,
+		actionMetrics: make([]*actionMetrics, 0, 0),
 
 		readyStreams:   make([]*stream, 0, 0),
 		readyStreamsMu: &sync.Mutex{},
@@ -101,20 +115,23 @@ func New(name string, capacity int, processorsCount int, registry *prometheus.Re
 }
 
 func (p *Pipeline) Start() {
-	p.nextMetricsGeneration()
-	p.HandleEventFlowStart()
-
 	if p.input == nil {
-		logger.Panicf("input isn't set for pipeline %q", p.name)
+		logger.Panicf("input isn't set for pipeline %q", p.Name)
 	}
 	if p.output == nil {
-		logger.Panicf("output isn't set for pipeline %q", p.name)
+		logger.Panicf("output isn't set for pipeline %q", p.Name)
 	}
+	if len(p.actionMetrics) == 0 {
+		logger.Panicf("actions isn't set for pipeline %q", p.Name)
+	}
+
+	p.nextMetricsGen()
+	p.HandleEventFlowStart()
 
 	p.output.Start(p.outputData.Config, p.capacity, p)
 
 	params := &ActionPluginParams{
-		PipelineName:     p.name,
+		PipelineName:     p.Name,
 		PipelineCapacity: p.capacity,
 	}
 	for _, processor := range p.Processors {
@@ -127,18 +144,18 @@ func (p *Pipeline) Start() {
 }
 
 func (p *Pipeline) Stop() {
-	logger.Infof("stopping pipeline %q, total: in=%d, processed=%d", p.name, p.totalIn.Load(), p.totalCommitted.Load())
+	logger.Infof("stopping pipeline %q, total: in=%d, processed=%d", p.Name, p.totalIn.Load(), p.totalCommitted.Load())
 	p.stopCh <- true
 
-	logger.Infof("stopping pipeline %q processors count=%d", p.name, len(p.Processors))
+	logger.Infof("stopping pipeline %q processors count=%d", p.Name, len(p.Processors))
 	for _, processor := range p.Processors {
 		processor.stop()
 	}
 
-	logger.Infof("stopping %q input", p.name)
+	logger.Infof("stopping %q input", p.Name)
 	p.input.Stop()
 
-	logger.Infof("stopping %q output", p.name)
+	logger.Infof("stopping %q output", p.Name)
 	p.output.Stop()
 }
 
@@ -152,48 +169,47 @@ func (p *Pipeline) SetOutputPlugin(descr *OutputPluginData) {
 	p.output = descr.Plugin
 }
 
-func (p *Pipeline) Deprecate(sourceId SourceId) int {
+func (p *Pipeline) Reset(sourceId SourceId) int {
 	count := 0
 	p.eventPool.visit(func(e *Event) {
-		if e.Source == sourceId {
-			e.markDeprecated()
-			count++
+		if e.Source != sourceId {
+			return
 		}
+
+		e.deprecate()
+		count++
 	})
 
 	return count
 }
 
-func (p *Pipeline) In(sourceId SourceId, sourceName string, offset int64, size int64, bytes []byte) {
+func (p *Pipeline) In(sourceId SourceId, sourceName string, offset int64, bytes []byte) {
 	if len(bytes) == 0 {
 		return
 	}
 
 	p.totalIn.Inc()
 
-	event := p.eventPool.get()
-	event.stage = eventStageHead
-
-	json, err := event.ParseJSON(bytes)
+	size := len(bytes)
+	event, err := p.eventPool.get(bytes)
 	if err != nil {
-		logger.Fatalf("wrong json offset=%d length=%d err=%s source=%d:%s json=%s", offset, len(bytes), err.Error(), sourceId, sourceName, bytes)
+		logger.Fatalf("wrong json offset=%d length=%d err=%s source=%d:%s json=%s", offset, size, err.Error(), sourceId, sourceName, bytes)
 		return
 	}
 
-	stream := "default"
-	streamBytes := json.GetStringBytes("stream")
-	if streamBytes != nil {
-		stream = string(streamBytes)
+	stream := StreamName("default")
+	streamNode := event.Root.Dig("stream")
+	if streamNode != nil {
+		stream = StreamName(streamNode.AsBytes()) // as bytes because we need a copy
 	}
 
-	event.JSON = json
-	event.Offset = offset + size
+	event.Offset = offset
 	event.Source = sourceId
-	event.StreamName = StreamName(stream)
+	event.StreamName = stream
 	event.SourceName = sourceName
 	event.Size = len(bytes)
 
-	p.getStream(sourceId, sourceName, StreamName(stream)).put(event)
+	p.getStream(sourceId, sourceName, stream).put(event)
 }
 
 func (p *Pipeline) getStream(sourceId SourceId, sourceName string, streamName StreamName) *stream {
@@ -269,15 +285,15 @@ func (p *Pipeline) Commit(event *Event) {
 func (p *Pipeline) commit(event *Event, notifyInput bool) {
 	event.stage = eventStageTail
 	if notifyInput {
-		if p.eventSample == "" {
-			p.eventSample = event.JSON.String()
+		if len(p.eventSample) == 0 {
+			p.eventSample = event.Root.Encode(p.eventSample)
 		}
 		p.input.Commit(event)
 	}
 
 	if p.eventLogEnabled {
 		p.eventLogMu.Lock()
-		p.eventLog = append(p.eventLog, event.JSON.String())
+		p.eventLog = append(p.eventLog, event.Root.EncodeToString())
 		p.eventLogMu.Unlock()
 	}
 
@@ -286,15 +302,97 @@ func (p *Pipeline) commit(event *Event, notifyInput bool) {
 	p.totalCommitted.Inc()
 }
 
-func (p *Pipeline) nextMetricsGeneration() {
+func (p *Pipeline) AddAction(info *PluginInfo, configJSON []byte, matchMode MatchMode, conditions MatchConditions, metricName string, metricLabels []string) {
+	p.actionMetrics = append(p.actionMetrics, &actionMetrics{
+		name:        metricName,
+		labels:      metricLabels,
+		counter:     nil,
+		counterPrev: nil,
+		mu:          &sync.RWMutex{},
+	})
+
+	for index, processor := range p.Processors {
+		plugin, config := info.Factory()
+		err := json.Unmarshal(configJSON, config)
+		if err != nil {
+			logger.Panicf("can't unmarshal config for action #%d in pipeline %q: %s", index, p.Name, err.Error())
+		}
+
+		processor.AddActionPlugin(&ActionPluginData{
+			Plugin: plugin.(ActionPlugin),
+			PluginDesc: PluginDesc{
+				ID:     strconv.Itoa(index) + "_" + strconv.Itoa(index),
+				T:      info.Type,
+				Config: config,
+			},
+			MatchConditions: conditions,
+			MatchMode:       matchMode,
+		})
+	}
+}
+
+func (p *Pipeline) nextMetricsGen() {
 	metricsGen := strconv.Itoa(p.metricsGen)
 
-	for _, processor := range p.Processors {
-		processor.nextMetricsGeneration(metricsGen)
+	for index, metrics := range p.actionMetrics {
+		if metrics.name == "" {
+			continue
+		}
+
+		counter := prometheus.NewCounterVec(prometheus.CounterOpts{
+			Namespace:   "filed",
+			Subsystem:   "pipeline_" + p.Name,
+			Name:        metrics.name + "_events_total",
+			Help:        fmt.Sprintf("how many events processed by pipeline %q and #%d action", p.Name, index),
+			ConstLabels: map[string]string{"gen": metricsGen},
+		}, append([]string{"status"}, metrics.labels...))
+
+		prev := metrics.counterPrev
+
+		metrics.mu.Lock()
+		metrics.counterPrev = metrics.counter
+		metrics.counter = counter
+		metrics.mu.Unlock()
+
+		p.registry.MustRegister(counter)
+		if prev != nil {
+			p.registry.Unregister(prev)
+		}
 	}
 
 	p.metricsGen++
 	p.metricsGenTime = time.Now()
+}
+
+func (p *Pipeline) countEvent(actionIndex int, event *Event, eventStatus eventStatus, valuesBuf []string) []string {
+	if len(p.actionMetrics) == 0 {
+		return valuesBuf
+	}
+
+	metrics := p.actionMetrics[actionIndex]
+	if metrics.name == "" {
+		return valuesBuf
+	}
+
+	valuesBuf = valuesBuf[:0]
+	valuesBuf = append(valuesBuf, string(eventStatus))
+
+	for _, field := range metrics.labels {
+		node := event.Root.Dig(field)
+
+		value := defaultFieldValue
+		if node != nil {
+			value = node.AsString()
+		}
+
+		valuesBuf = append(valuesBuf, value)
+	}
+
+	metrics.mu.RLock()
+	metrics.counter.WithLabelValues(valuesBuf...).Inc()
+	metrics.mu.RUnlock()
+
+	return valuesBuf
 }
 
 func (p *Pipeline) maintenance() {
@@ -305,8 +403,8 @@ func (p *Pipeline) maintenance() {
 		case <-p.stopCh:
 			return
 		default:
-			logger.Infof("pipeline %q final event sample: %s", p.name, p.eventSample)
-			p.eventSample = ""
+			logger.Infof("pipeline %q final event sample: %s", p.Name, p.eventSample)
+			p.eventSample = p.eventSample[:0]
 
 			if p.eventPool.eventsCount == p.capacity {
 				p.streamsMu.Lock()
@@ -329,7 +427,7 @@ func (p *Pipeline) maintenance() {
 
 				logger.Infof("========default events dump========")
 				p.eventPool.visit(func(event *Event) {
-					logger.Infof("event: index=%d, id=%d, stream=%d(%s), stage=%s", event.poolIndex, event.ID, event.Source, event.StreamName, event.stageStr())
+					logger.Infof("event: index=%d, id=%d, stream=%d(%s), stage=%s", event.poolIndex, event.SeqID, event.Source, event.StreamName, event.stageStr())
 				})
 			}
 
@@ -337,10 +435,10 @@ func (p *Pipeline) maintenance() {
 			delta := processed - lastProcessed
 			lastProcessed = processed
 			rate := delta * int64(time.Second) / int64(maintenanceInterval)
-			logger.Infof("pipeline %q stats for last %d seconds: processed=%d, rate=%d/sec, queue=%d/%d, total processed=%d, max log size=%d", p.name, maintenanceInterval/time.Second, delta, rate, p.eventPool.eventsCount, p.capacity, processed, p.eventPool.maxEventSize)
+			logger.Infof("pipeline %q stats for last %d seconds: processed=%d, rate=%d/sec, queue=%d/%d, total processed=%d, max log size=%d", p.Name, maintenanceInterval/time.Second, delta, rate, p.eventPool.eventsCount, p.capacity, processed, p.eventPool.maxEventSize)
 
 			if time.Now().Sub(p.metricsGenTime) > metricsGenInterval {
-				p.nextMetricsGeneration()
+				p.nextMetricsGen()
 			}
 
 			time.Sleep(maintenanceInterval)

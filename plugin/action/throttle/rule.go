@@ -39,12 +39,7 @@ func NewRule(conditions map[string]string, limit int64) *rule {
 // isMatch checks if event has the same field values as given in conditions.
 func (r *rule) isMatch(event *pipeline.Event) bool {
 	for i, fields := range r.fields {
-		v := event.JSON.GetStringBytes(fields)
-		if v == nil {
-			return false
-		}
-
-		if pipeline.ByteToString(v) != r.values[i] {
+		if event.Root.Dig(fields).AsString() != r.values[i] {
 			return false
 		}
 	}

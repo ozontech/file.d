@@ -1,4 +1,4 @@
-package rename
+package modify
 
 import (
 	"gitlab.ozon.ru/sre/filed/filed"
@@ -14,7 +14,7 @@ type Config map[string]string
 
 func init() {
 	filed.DefaultPluginRegistry.RegisterAction(&pipeline.PluginInfo{
-		Type:    "rename",
+		Type:    "modify",
 		Factory: factory,
 	})
 }
@@ -37,13 +37,19 @@ func (p *Plugin) Reset() {
 }
 
 func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
-	for from, to := range *p.config {
-		field := event.Root.AsField(from)
-		if field == nil {
+	for field, value := range *p.config {
+		if value == "" {
 			continue
 		}
 
-		field.MutateToField(to)
+		if value[0] == '$' {
+			value = event.Root.Dig(value[1:]).AsString()
+			if value == "" {
+				continue
+			}
+		}
+
+		event.Root.AddField(field).MutateToString(value)
 	}
 
 	return pipeline.ActionPass

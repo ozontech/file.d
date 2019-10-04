@@ -1,15 +1,14 @@
 package keep_fields
 
 import (
-	"github.com/valyala/fastjson"
 	"gitlab.ozon.ru/sre/filed/filed"
 	"gitlab.ozon.ru/sre/filed/logger"
 	"gitlab.ozon.ru/sre/filed/pipeline"
 )
 
 type Plugin struct {
-	config     *Config
-	fieldsBuf  [][]byte
+	config    *Config
+	fieldsBuf []string
 }
 
 type Config struct {
@@ -41,30 +40,28 @@ func (p *Plugin) Reset() {
 }
 
 func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
-	fields := p.config.Fields
 	p.fieldsBuf = p.fieldsBuf[:0]
 
-	o, err := event.JSON.Object()
-	if err != nil {
-		logger.Panicf("why event isn't object?")
-		panic("")
+	if !event.Root.IsObject() {
+		return pipeline.ActionPass
 	}
 
-	o.Visit(func(key []byte, v *fastjson.Value) {
+	for _, node := range event.Root.AsFields() {
+		eventField := node.AsString()
 		isInList := false
-		for _, field := range fields {
-			if field == pipeline.ByteToString(key) {
+		for _, pluginField := range p.config.Fields {
+			if pluginField == eventField {
 				isInList = true
 				break
 			}
 		}
 		if !isInList {
-			p.fieldsBuf = append(p.fieldsBuf, key)
+			p.fieldsBuf = append(p.fieldsBuf, eventField)
 		}
-	})
+	}
 
 	for _, field := range p.fieldsBuf {
-		event.JSON.Del(pipeline.ByteToString(field))
+		event.Root.Dig(field).Suicide()
 	}
 
 	return pipeline.ActionPass
