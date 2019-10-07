@@ -47,6 +47,9 @@ func (f *Filed) Start() {
 
 func (f *Filed) createRegistry() {
 	f.registry = prometheus.NewRegistry()
+	f.registry.MustRegister(prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}))
+	f.registry.MustRegister(prometheus.NewGoCollector())
+
 	prometheus.DefaultGatherer = f.registry
 	prometheus.DefaultRegisterer = f.registry
 }

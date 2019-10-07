@@ -154,7 +154,7 @@ func (p *Plugin) work() {
 
 			topic := p.config.DefaultTopic
 			if p.config.ShouldUseTopicField {
-				fieldValue := event.Root.Dig(p.config.TopicField).AsString()
+				fieldValue := event.Fields.Dig(p.config.TopicField).AsString()
 				if fieldValue != "" {
 					topic = fieldValue
 				}

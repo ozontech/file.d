@@ -191,7 +191,7 @@ func (p *processor) isMatch(index int, event *Event) bool {
 
 func (p *processor) isMatchOr(conds MatchConditions, event *Event) bool {
 	for _, cond := range conds {
-		value := event.Root.Dig(cond.Field).AsString()
+		value := event.Fields.Dig(cond.Field).AsString()
 		if value == "" {
 			continue
 		}
@@ -213,7 +213,7 @@ func (p *processor) isMatchOr(conds MatchConditions, event *Event) bool {
 
 func (p *processor) isMatchAnd(conds MatchConditions, event *Event) bool {
 	for _, cond := range conds {
-		value := event.Root.Dig(cond.Field).AsString()
+		value := event.Fields.Dig(cond.Field).AsString()
 		if value == "" {
 			return false
 		}

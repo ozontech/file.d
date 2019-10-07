@@ -43,13 +43,13 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 		}
 
 		if value[0] == '$' {
-			value = event.Root.Dig(value[1:]).AsString()
+			value = event.Fields.Dig(value[1:]).AsString()
 			if value == "" {
 				continue
 			}
 		}
 
-		event.Root.AddField(field).MutateToString(value)
+		event.Fields.AddField(field).MutateToString(value)
 	}
 
 	return pipeline.ActionPass

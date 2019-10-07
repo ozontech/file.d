@@ -90,10 +90,10 @@ func TestEnrichment(t *testing.T) {
 	input.In(0, filename, 0, 0, []byte(`{"time":"time","log":"log\n"}`))
 	input.Wait()
 
-	assert.Equal(t, "advanced-logs-checker-1566485760-trtrq", event.Root.Dig("k8s_pod").AsString(), "wrong event field")
-	assert.Equal(t, "sre", event.Root.Dig("k8s_namespace").AsString(), "wrong event field")
-	assert.Equal(t, "duty-bot", event.Root.Dig("k8s_container").AsString(), "wrong event field")
-	assert.Equal(t, "node_1", event.Root.Dig("k8s_node").AsString(), "wrong event field")
+	assert.Equal(t, "advanced-logs-checker-1566485760-trtrq", event.Fields.Dig("k8s_pod").AsString(), "wrong event field")
+	assert.Equal(t, "sre", event.Fields.Dig("k8s_namespace").AsString(), "wrong event field")
+	assert.Equal(t, "duty-bot", event.Fields.Dig("k8s_container").AsString(), "wrong event field")
+	assert.Equal(t, "node_1", event.Fields.Dig("k8s_node").AsString(), "wrong event field")
 }
 
 func TestJoin(t *testing.T) {
@@ -163,10 +163,10 @@ func TestJoin(t *testing.T) {
 
 	}
 
-	check(events[0].Root.Dig("log").AsString(), events[0].Offset)
-	check(events[1].Root.Dig("log").AsString(), events[1].Offset)
-	check(events[2].Root.Dig("log").AsString(), events[2].Offset)
-	check(events[3].Root.Dig("log").AsString(), events[3].Offset)
+	check(events[0].Fields.Dig("log").AsString(), events[0].Offset)
+	check(events[1].Fields.Dig("log").AsString(), events[1].Offset)
+	check(events[2].Fields.Dig("log").AsString(), events[2].Offset)
+	check(events[3].Fields.Dig("log").AsString(), events[3].Offset)
 }
 
 func TestCleanUp(t *testing.T) {

@@ -42,11 +42,11 @@ func (p *Plugin) Reset() {
 func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	p.fieldsBuf = p.fieldsBuf[:0]
 
-	if !event.Root.IsObject() {
+	if !event.Fields.IsObject() {
 		return pipeline.ActionPass
 	}
 
-	for _, node := range event.Root.AsFields() {
+	for _, node := range event.Fields.AsFields() {
 		eventField := node.AsString()
 		isInList := false
 		for _, pluginField := range p.config.Fields {
@@ -61,7 +61,7 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	}
 
 	for _, field := range p.fieldsBuf {
-		event.Root.Dig(field).Suicide()
+		event.Fields.Dig(field).Suicide()
 	}
 
 	return pipeline.ActionPass

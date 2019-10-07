@@ -3,7 +3,6 @@ package main
 import (
 	"os"
 	"os/signal"
-	"runtime"
 	"syscall"
 
 	"github.com/alecthomas/kingpin"
@@ -34,10 +33,6 @@ var (
 )
 
 func main() {
-	runtime.SetMutexProfileFraction(10000)
-	runtime.SetBlockProfileRate(10000)
-	runtime.SetCPUProfileRate(10000)
-
 	kingpin.Version(version)
 	kingpin.Parse()
 

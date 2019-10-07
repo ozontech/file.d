@@ -12,7 +12,7 @@ import (
 var eventGCSizeThreshold = 4 * units.Kibibyte
 
 type Event struct {
-	Root      *insaneJSON.Root
+	Fields    *insaneJSON.Root
 	poolIndex int
 	next      *Event
 	stream    *stream
@@ -46,7 +46,7 @@ type eventStage int
 func newEvent(poolIndex int) *Event {
 	return &Event{
 		poolIndex: poolIndex,
-		Root:      insaneJSON.Spawn(),
+		Fields:    insaneJSON.Spawn(),
 	}
 }
 
@@ -70,7 +70,7 @@ func (e *Event) stageStr() string {
 }
 func (e *Event) reset() {
 	if e.shouldGC {
-		e.Root.ReleaseMem()
+		e.Fields.ReleaseMem()
 		e.shouldGC = false
 	}
 
@@ -88,7 +88,7 @@ func (e *Event) IsActual() bool {
 }
 
 func (e *Event) parseJSON(json []byte) (*Event, error) {
-	err := e.Root.DecodeBytes(json)
+	err := e.Fields.DecodeBytes(json)
 	if err != nil {
 		return e, err
 	}
@@ -96,12 +96,12 @@ func (e *Event) parseJSON(json []byte) (*Event, error) {
 }
 
 func (e *Event) SubparseJSON(json []byte) (*insaneJSON.Node, error) {
-	return e.Root.DecodeBytesAdditional(json)
+	return e.Fields.DecodeBytesAdditional(json)
 }
 
 func (e *Event) Marshal(out []byte) ([]byte, int) {
 	l := len(out)
-	out = e.Root.Encode(out)
+	out = e.Fields.Encode(out)
 
 	size := len(out) - l
 	// event is going to be super big, lets GC it

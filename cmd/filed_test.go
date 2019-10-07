@@ -27,18 +27,18 @@ import (
 )
 
 var jsons = []string{
-	`{"log":"one\n","stream":"%s"}`,
-	`{"log":"one two\n","stream":"%s"}`,
-	`{"log":"log one two three\n","stream":"%s"}`,
-	`{"log":"dropped log one\n", "should_drop":"ok","stream":"%s"}`,
-	`{"log":"dropped log one two\n", "should_drop":"ok","stream":"%s"}`,
-	`{"log":"dropped log one three\n", "should_drop":"ok","stream":"%s"}`,
-	`{"log":"throttled log one\n", "throttle":"1","stream":"%s"}`,
-	`{"log":"throttled log one two\n", "throttle":"2","stream":"%s"}`,
-	`{"log":"throttled log one three\n", "throttle":"3","stream":"%s"}`,
+	`{"log":"one\n","stream":"%s","service":"1"}`,
+	`{"log":"one two\n","stream":"%s","service":"1"}`,
+	`{"log":"log one two three\n","stream":"%s","service":"1"}`,
+	`{"log":"dropped log one\n", "should_drop":"ok","stream":"%s","service":"1"}`,
+	`{"log":"dropped log one two\n", "should_drop":"ok","stream":"%s","service":"1"}`,
+	`{"log":"dropped log one three\n", "should_drop":"ok","stream":"%s","service":"1"}`,
+	`{"log":"throttled log one\n", "throttle":"1","stream":"%s","service":"1"}`,
+	`{"log":"throttled log one two\n", "throttle":"2","stream":"%s","service":"1"}`,
+	`{"log":"throttled log one three\n", "throttle":"3","stream":"%s","service":"1"}`,
 }
 
-var multilineJson = `{"log":"log","stream":"%s"}`
+var multilineJson = `{"log":"log","stream":"%s","service":"1"}`
 
 func gen(tempDir string, files int, wg *sync.WaitGroup) {
 	for i := 0; i < files; i++ {

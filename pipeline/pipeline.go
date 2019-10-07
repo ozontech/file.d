@@ -121,9 +121,6 @@ func (p *Pipeline) Start() {
 	if p.output == nil {
 		logger.Panicf("output isn't set for pipeline %q", p.Name)
 	}
-	if len(p.actionMetrics) == 0 {
-		logger.Panicf("actions isn't set for pipeline %q", p.Name)
-	}
 
 	p.nextMetricsGen()
 	p.HandleEventFlowStart()
@@ -198,7 +195,7 @@ func (p *Pipeline) In(sourceId SourceId, sourceName string, offset int64, bytes 
 	}
 
 	stream := StreamName("default")
-	streamNode := event.Root.Dig("stream")
+	streamNode := event.Fields.Dig("stream")
 	if streamNode != nil {
 		stream = StreamName(streamNode.AsBytes()) // as bytes because we need a copy
 	}
@@ -286,14 +283,14 @@ func (p *Pipeline) commit(event *Event, notifyInput bool) {
 	event.stage = eventStageTail
 	if notifyInput {
 		if len(p.eventSample) == 0 {
-			p.eventSample = event.Root.Encode(p.eventSample)
+			p.eventSample = event.Fields.Encode(p.eventSample)
 		}
 		p.input.Commit(event)
 	}
 
 	if p.eventLogEnabled {
 		p.eventLogMu.Lock()
-		p.eventLog = append(p.eventLog, event.Root.EncodeToString())
+		p.eventLog = append(p.eventLog, event.Fields.EncodeToString())
 		p.eventLogMu.Unlock()
 	}
 
@@ -378,7 +375,7 @@ func (p *Pipeline) countEvent(actionIndex int, event *Event, eventStatus eventSt
 	valuesBuf = append(valuesBuf, string(eventStatus))
 
 	for _, field := range metrics.labels {
-		node := event.Root.Dig(field)
+		node := event.Fields.Dig(field)
 
 		value := defaultFieldValue
 		if node != nil {

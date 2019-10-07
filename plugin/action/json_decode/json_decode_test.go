@@ -52,5 +52,5 @@ func TestDecode(t *testing.T) {
 	assert.Equal(t, 1, len(acceptedEvents), "wrong accepted events count")
 	assert.Equal(t, 1, len(dumpedEvents), "wrong dumped events count")
 
-	assert.Equal(t, `{"field2":"value2","field3":"value3"}`, dumpedEvents[0].Root.EncodeToString(), "wrong dumped events count")
+	assert.Equal(t, `{"field2":"value2","field3":"value3"}`, dumpedEvents[0].Fields.EncodeToString(), "wrong dumped events count")
 }

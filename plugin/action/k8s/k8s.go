@@ -67,9 +67,9 @@ func (p *Plugin) Reset() {
 
 func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	// don't need to unescape/escape log fields cause concatenation of escaped strings is escaped string
-	logFragment := event.Root.Dig("log").AsEscapedString()
+	logFragment := event.Fields.Dig("log").AsEscapedString()
 	if logFragment == "" {
-		logger.Fatalf("wrong docker log format, it doesn't contain log field: %s", event.Root.EncodeToString())
+		logger.Fatalf("wrong docker log format, it doesn't contain log field: %s", event.Fields.EncodeToString())
 		panic("")
 	}
 
@@ -95,28 +95,28 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 		logger.Warnf("too long k8s event found, it'll be split, ns=%s pod=%s container=%s consider increase max_event_size, max_event_size=%d, predicted event size=%d", ns, pod, container, p.config.MaxEventSize, predictedLen)
 	}
 
-	event.Root.AddField("k8s_namespace").MutateToString(string(ns))
-	event.Root.AddField("k8s_pod").MutateToString(string(pod))
-	event.Root.AddField("k8s_container").MutateToString(string(container))
+	event.Fields.AddField("k8s_namespace").MutateToString(string(ns))
+	event.Fields.AddField("k8s_pod").MutateToString(string(pod))
+	event.Fields.AddField("k8s_container").MutateToString(string(container))
 
 	if success {
 		if ns != namespace(podMeta.Namespace) {
-			logger.Panicf("k8s plugin inconsistency: source=%s, file namespace=%s, meta namespace=%s, event=%s", event.SourceName, ns, podMeta.Namespace, event.Root.EncodeToString())
+			logger.Panicf("k8s plugin inconsistency: source=%s, file namespace=%s, meta namespace=%s, event=%s", event.SourceName, ns, podMeta.Namespace, event.Fields.EncodeToString())
 		}
 		if pod != podName(podMeta.Name) {
-			logger.Panicf("k8s plugin inconsistency: source=%s, file pod=%s, meta pod=%s, x=%s, event=%s", event.SourceName, pod, podMeta.Name, event.Root.EncodeToString())
+			logger.Panicf("k8s plugin inconsistency: source=%s, file pod=%s, meta pod=%s, x=%s, event=%s", event.SourceName, pod, podMeta.Name, event.Fields.EncodeToString())
 		}
 
-		event.Root.AddField("k8s_node").MutateToString(podMeta.Spec.NodeName)
+		event.Fields.AddField("k8s_node").MutateToString(podMeta.Spec.NodeName)
 		for labelName, labelValue := range podMeta.Labels {
-			event.Root.AddField("k8s_label_" + labelName).MutateToString(labelValue)
+			event.Fields.AddField("k8s_label_" + labelName).MutateToString(labelValue)
 		}
 	}
 
 	if len(p.logBuff) > 0 {
 		p.logBuff = append(p.logBuff, logFragment[1:logFragmentLen-1]...)
 		p.logBuff = append(p.logBuff, '"')
-		event.Root.AddField("log").MutateToEscapedString(string(p.logBuff))
+		event.Fields.AddField("log").MutateToEscapedString(string(p.logBuff))
 		p.logBuff = p.logBuff[:0]
 	}
 	p.logSize = 0

@@ -44,6 +44,6 @@ func TestModify(t *testing.T) {
 	input.Wait()
 
 	assert.Equal(t, 1, len(dumpedEvents), "wrong accepted events count")
-	assert.Equal(t, "new_value", dumpedEvents[0].Root.Dig("new_field").AsString(), "wrong field value")
-	assert.Equal(t, "existing_value", dumpedEvents[0].Root.Dig("field_pattern").AsString(), "wrong field value")
+	assert.Equal(t, "new_value", dumpedEvents[0].Fields.Dig("new_field").AsString(), "wrong field value")
+	assert.Equal(t, "existing_value", dumpedEvents[0].Fields.Dig("field_pattern").AsString(), "wrong field value")
 }

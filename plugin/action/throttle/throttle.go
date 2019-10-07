@@ -126,13 +126,13 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 }
 
 func (p *Plugin) isAllowed(event *pipeline.Event) bool {
-	tsValue := event.Root.Dig(p.config.TimeField).AsString()
+	tsValue := event.Fields.Dig(p.config.TimeField).AsString()
 	ts, err := time.Parse(time.RFC3339Nano, tsValue)
 	if err != nil || ts.IsZero() {
 		ts = time.Now()
 	}
 
-	throttleKey := event.Root.Dig(p.config.ThrottleField).AsString()
+	throttleKey := event.Fields.Dig(p.config.ThrottleField).AsString()
 	if throttleKey == "" {
 		throttleKey = defaultThrottleKey
 	}

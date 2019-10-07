@@ -38,7 +38,7 @@ func (p *Plugin) Reset() {
 
 func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	for from, to := range *p.config {
-		field := event.Root.AsField(from)
+		field := event.Fields.AsField(from)
 		if field == nil {
 			continue
 		}
