@@ -26,15 +26,24 @@ type ActionPlugin interface {
 	Reset()
 }
 
-type ActionPluginParams struct {
-	PipelineName     string
-	PipelineCapacity int
-}
-
 type OutputPlugin interface {
-	Start(config AnyConfig, capacity int, controller Tail)
+	Start(config AnyConfig, params *OutputPluginParams)
 	Stop()
 	Out(*Event)
+}
+
+type PluginDefaultParams struct {
+	PipelineName     string
+	PipelineSettings *Settings
+}
+
+type ActionPluginParams struct {
+	*PluginDefaultParams
+}
+
+type OutputPluginParams struct {
+	*PluginDefaultParams
+	Tail Tail
 }
 
 type PluginRegistryItem struct {

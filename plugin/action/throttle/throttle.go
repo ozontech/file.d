@@ -2,8 +2,6 @@ package throttle
 
 import (
 	"bytes"
-	"encoding/json"
-	"errors"
 	"sync"
 	"time"
 
@@ -30,46 +28,17 @@ type Plugin struct {
 }
 
 type Config struct {
-	ThrottleField string       `json:"throttle_field"`
-	TimeField     string       `json:"time_field"`
-	DefaultLimit  int64        `json:"default_limit"`
-	Interval      Duration     `json:"interval"`
-	Buckets       int          `json:"buckets"`
-	Rules         []RuleConfig `json:"rules"`
+	ThrottleField string            `json:"throttle_field"`
+	TimeField     string            `json:"time_field"`
+	DefaultLimit  int64             `json:"default_limit"`
+	Interval      pipeline.Duration `json:"interval"`
+	Buckets       int               `json:"buckets"`
+	Rules         []RuleConfig      `json:"rules"`
 }
 
 type RuleConfig struct {
 	Limit      int64             `json:"limit"`
 	Conditions map[string]string `json:"conditions"`
-}
-
-type Duration struct {
-	time.Duration
-}
-
-func (d Duration) MarshalJSON() ([]byte, error) {
-	return json.Marshal(d.String())
-}
-
-func (d *Duration) UnmarshalJSON(b []byte) error {
-	var v interface{}
-	if err := json.Unmarshal(b, &v); err != nil {
-		return err
-	}
-	switch value := v.(type) {
-	case float64:
-		d.Duration = time.Duration(value)
-		return nil
-	case string:
-		var err error
-		d.Duration, err = time.ParseDuration(value)
-		if err != nil {
-			return err
-		}
-		return nil
-	default:
-		return errors.New("invalid duration")
-	}
 }
 
 func init() {
@@ -126,13 +95,13 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 }
 
 func (p *Plugin) isAllowed(event *pipeline.Event) bool {
-	tsValue := event.Fields.Dig(p.config.TimeField).AsString()
+	tsValue := event.Root.Dig(p.config.TimeField).AsString()
 	ts, err := time.Parse(time.RFC3339Nano, tsValue)
 	if err != nil || ts.IsZero() {
 		ts = time.Now()
 	}
 
-	throttleKey := event.Fields.Dig(p.config.ThrottleField).AsString()
+	throttleKey := event.Root.Dig(p.config.ThrottleField).AsString()
 	if throttleKey == "" {
 		throttleKey = defaultThrottleKey
 	}

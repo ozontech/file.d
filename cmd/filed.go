@@ -19,7 +19,9 @@ import (
 	_ "gitlab.ozon.ru/sre/filed/plugin/action/throttle"
 	_ "gitlab.ozon.ru/sre/filed/plugin/input/fake"
 	_ "gitlab.ozon.ru/sre/filed/plugin/input/file"
+	_ "gitlab.ozon.ru/sre/filed/plugin/input/kafka"
 	_ "gitlab.ozon.ru/sre/filed/plugin/output/devnull"
+	_ "gitlab.ozon.ru/sre/filed/plugin/output/gelf"
 	_ "gitlab.ozon.ru/sre/filed/plugin/output/kafka"
 )
 
@@ -61,11 +63,11 @@ func listenSignals() {
 
 		switch s {
 		case syscall.SIGHUP:
-			logger.Infof("signal SIGHUP received")
+			logger.Infof("SIGHUP received")
 			fd.Stop()
 			start()
 		case syscall.SIGTERM:
-			logger.Infof("signal SIGTERM received")
+			logger.Infof("SIGTERM received")
 			fd.Stop()
 			exit <- true
 		}

@@ -3,7 +3,6 @@ package json_decode
 import (
 	"testing"
 
-	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
 	"gitlab.ozon.ru/sre/filed/pipeline"
 	"gitlab.ozon.ru/sre/filed/plugin/input/fake"
@@ -11,7 +10,7 @@ import (
 )
 
 func startPipeline() (*pipeline.Pipeline, *fake.Plugin, *devnull.Plugin) {
-	p := pipeline.New("json_pipeline", 2048, 1, prometheus.NewRegistry())
+	p := pipeline.NewTestPipeLine(false)
 
 	anyPlugin, _ := fake.Factory()
 	inputPlugin := anyPlugin.(*fake.Plugin)
@@ -52,5 +51,5 @@ func TestDecode(t *testing.T) {
 	assert.Equal(t, 1, len(acceptedEvents), "wrong accepted events count")
 	assert.Equal(t, 1, len(dumpedEvents), "wrong dumped events count")
 
-	assert.Equal(t, `{"field2":"value2","field3":"value3"}`, dumpedEvents[0].Fields.EncodeToString(), "wrong dumped events count")
+	assert.Equal(t, `{"field2":"value2","field3":"value3"}`, dumpedEvents[0].Root.EncodeToString(), "wrong dumped events count")
 }

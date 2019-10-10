@@ -3,7 +3,6 @@ package keep_fields
 import (
 	"testing"
 
-	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
 	"gitlab.ozon.ru/sre/filed/pipeline"
 	"gitlab.ozon.ru/sre/filed/plugin/input/fake"
@@ -11,7 +10,7 @@ import (
 )
 
 func startPipeline() (*pipeline.Pipeline, *fake.Plugin, *devnull.Plugin) {
-	p := pipeline.New("rename_pipeline", 2048, 1, prometheus.NewRegistry())
+	p := pipeline.NewTestPipeLine(false)
 
 	anyPlugin, _ := fake.Factory()
 	inputPlugin := anyPlugin.(*fake.Plugin)
@@ -46,7 +45,7 @@ func TestKeepFields(t *testing.T) {
 	input.Wait()
 
 	assert.Equal(t, 3, len(dumpedEvents), "wrong accepted events count")
-	assert.Equal(t, `{"field_1":"value_1"}`, dumpedEvents[0].Fields.EncodeToString(), "wrong event")
-	assert.Equal(t, `{"field_2":"value_2"}`, dumpedEvents[1].Fields.EncodeToString(), "wrong event")
-	assert.Equal(t, `{}`, dumpedEvents[2].Fields.EncodeToString(), "wrong event")
+	assert.Equal(t, `{"field_1":"value_1"}`, dumpedEvents[0].Root.EncodeToString(), "wrong event")
+	assert.Equal(t, `{"field_2":"value_2"}`, dumpedEvents[1].Root.EncodeToString(), "wrong event")
+	assert.Equal(t, `{}`, dumpedEvents[2].Root.EncodeToString(), "wrong event")
 }

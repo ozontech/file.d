@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/alecthomas/units"
-	"github.com/prometheus/client_golang/prometheus"
 	"github.com/satori/go.uuid"
 	"github.com/stretchr/testify/assert"
 	"gitlab.ozon.ru/sre/filed/logger"
@@ -51,7 +50,7 @@ func shutdown() {
 }
 
 func startPipeline(persistenceMode string, enableEventLog bool, config *Config) (*pipeline.Pipeline, *Plugin) {
-	p := pipeline.New("file_pipeline", 2048, 16, prometheus.NewRegistry())
+	p := pipeline.NewTestPipeLine(true)
 	if enableEventLog {
 		p.EnableEventLog()
 	}
@@ -220,7 +219,7 @@ func getContentBytes(file string) []byte {
 
 func genOffsetsContent(file string, offset int) string {
 	return fmt.Sprintf(`- file: %d %s
-  default: %d
+  not_set: %d
 `, getInodeByFile(file), file, offset)
 }
 
@@ -228,7 +227,7 @@ func genOffsetsContentMultiple(files []string, offset int) string {
 	result := make([]byte, 0, len(files)*100)
 	for _, file := range files {
 		result = append(result, fmt.Sprintf(`- file: %d %s
-  default: %d
+  not_set: %d
 `, getInodeByFile(file), file, offset)...)
 	}
 
@@ -690,9 +689,9 @@ func TestRenameRotationHandle(t *testing.T) {
 
 	p.jobProvider.saveOffsets()
 	offsets := fmt.Sprintf(`- file: %d %s
-  default: 114
+  not_set: 114
 - file: %d %s
-  default: 76
+  not_set: 76
 `, getInodeByFile(newFile), newFile, getInodeByFile(file), file)
 
 	assert.Equal(t, 10, c.GetEventLogLength(), "Wrong log count")
@@ -736,9 +735,9 @@ func TestShutdownRotation(t *testing.T) {
 	p.jobProvider.saveOffsets()
 
 	offsets := fmt.Sprintf(`- file: %d %s
-  default: 114
+  not_set: 114
 - file: %d %s
-  default: 76
+  not_set: 76
 `, getInodeByFile(newFile), newFile, getInodeByFile(file), file)
 
 	assert.Equal(t, 8, c.GetEventLogLength(), "Wrong log count")

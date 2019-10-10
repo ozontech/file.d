@@ -3,6 +3,8 @@ package pipeline
 import (
 	"encoding/json"
 	"fmt"
+	"hash/crc32"
+	"math/rand"
 	"strconv"
 	"sync"
 	"time"
@@ -32,7 +34,7 @@ type StreamName string
 
 type Pipeline struct {
 	Name      string
-	capacity  int
+	settings  *Settings
 	eventPool *eventPool
 
 	input      InputPlugin
@@ -41,8 +43,9 @@ type Pipeline struct {
 	output     OutputPlugin
 	outputData *OutputPluginData
 
-	streams   map[SourceId]map[StreamName]*stream
-	streamsMu *sync.RWMutex
+	streamNames []string
+	streams     map[SourceId]map[StreamName]*stream
+	streamsMu   *sync.RWMutex
 
 	doneWg *sync.WaitGroup
 
@@ -68,6 +71,13 @@ type Pipeline struct {
 	totalIn        atomic.Int64
 }
 
+type Settings struct {
+	Capacity        int
+	AvgLogSize      int
+	ProcessorsCount int
+	StreamField     string
+}
+
 type actionMetrics struct {
 	name   string
 	labels []string
@@ -78,11 +88,11 @@ type actionMetrics struct {
 	mu *sync.RWMutex
 }
 
-func New(name string, capacity int, processorsCount int, registry *prometheus.Registry) *Pipeline {
-	logger.Infof("creating new pipeline with processors=%d capacity=%d", processorsCount, capacity)
+func New(name string, settings *Settings, registry *prometheus.Registry) *Pipeline {
+	logger.Infof("creating pipeline %q: processors=%d, capacity=%d, stream field=%s", name, settings.ProcessorsCount, settings.Capacity, settings.StreamField)
 	pipeline := &Pipeline{
 		Name:     name,
-		capacity: capacity,
+		settings: settings,
 
 		streams:   make(map[SourceId]map[StreamName]*stream),
 		streamsMu: &sync.RWMutex{},
@@ -103,13 +113,13 @@ func New(name string, capacity int, processorsCount int, registry *prometheus.Re
 
 	pipeline.readyStreamsCond = sync.NewCond(pipeline.readyStreamsMu)
 
-	processors := make([]*processor, processorsCount)
-	for i := 0; i < processorsCount; i++ {
-		processors[i] = NewProcessor(i, pipeline)
+	processors := make([]*processor, 0, 0)
+	for i := 0; i < settings.ProcessorsCount; i++ {
+		processors = append(processors, NewProcessor(i, pipeline))
 	}
 	pipeline.Processors = processors
 
-	pipeline.eventPool = newEventPool(pipeline.capacity)
+	pipeline.eventPool = newEventPool(pipeline.settings.Capacity)
 
 	return pipeline
 }
@@ -125,14 +135,28 @@ func (p *Pipeline) Start() {
 	p.nextMetricsGen()
 	p.HandleEventFlowStart()
 
-	p.output.Start(p.outputData.Config, p.capacity, p)
-
-	params := &ActionPluginParams{
+	defaultParams := &PluginDefaultParams{
 		PipelineName:     p.Name,
-		PipelineCapacity: p.capacity,
+		PipelineSettings: p.settings,
 	}
+	outputParams := &OutputPluginParams{
+		PluginDefaultParams: defaultParams,
+		Tail:                p,
+	}
+	actionParams := &ActionPluginParams{
+		PluginDefaultParams: defaultParams,
+	}
+
+	p.output.Start(p.outputData.Config, outputParams)
+
+	rnd := []byte{}
 	for _, processor := range p.Processors {
-		processor.start(p.output, params)
+		processor.start(p.output, actionParams)
+		if p.settings.StreamField == "off" {
+			rnd = append(rnd, byte('a'+rand.Int()%('z'-'a')))
+			crc := crc32.ChecksumIEEE(rnd)
+			p.streamNames = append(p.streamNames, strconv.FormatUint(uint64(crc), 8))
+		}
 	}
 
 	p.input.Start(p.inputData.Config, p, p.doneWg)
@@ -144,7 +168,6 @@ func (p *Pipeline) Stop() {
 	logger.Infof("stopping pipeline %q, total: in=%d, processed=%d", p.Name, p.totalIn.Load(), p.totalCommitted.Load())
 	p.stopCh <- true
 
-	logger.Infof("stopping pipeline %q processors count=%d", p.Name, len(p.Processors))
 	for _, processor := range p.Processors {
 		processor.stop()
 	}
@@ -185,19 +208,25 @@ func (p *Pipeline) In(sourceId SourceId, sourceName string, offset int64, bytes 
 		return
 	}
 
-	p.totalIn.Inc()
+	x := p.totalIn.Inc()
 
 	size := len(bytes)
 	event, err := p.eventPool.get(bytes)
 	if err != nil {
-		logger.Fatalf("wrong json offset=%d length=%d err=%s source=%d:%s json=%s", offset, size, err.Error(), sourceId, sourceName, bytes)
+		logger.Fatalf("wrong json offset=%d, length=%d, err=%s, source=%d:%s, json=%s", offset, size, err.Error(), sourceId, sourceName, bytes)
 		return
 	}
 
-	stream := StreamName("default")
-	streamNode := event.Fields.Dig("stream")
-	if streamNode != nil {
-		stream = StreamName(streamNode.AsBytes()) // as bytes because we need a copy
+	stream := StreamName("not_set")
+	if p.settings.StreamField == "off" {
+		index := int(x) % len(p.streamNames)
+		stream = StreamName(p.streamNames[index])
+		sourceId = SourceId(index)
+	} else {
+		streamNode := event.Root.Dig("stream")
+		if streamNode != nil {
+			stream = StreamName(streamNode.AsBytes()) // as bytes because we need a copy
+		}
 	}
 
 	event.Offset = offset
@@ -283,14 +312,14 @@ func (p *Pipeline) commit(event *Event, notifyInput bool) {
 	event.stage = eventStageTail
 	if notifyInput {
 		if len(p.eventSample) == 0 {
-			p.eventSample = event.Fields.Encode(p.eventSample)
+			p.eventSample = event.Root.Encode(p.eventSample)
 		}
 		p.input.Commit(event)
 	}
 
 	if p.eventLogEnabled {
 		p.eventLogMu.Lock()
-		p.eventLog = append(p.eventLog, event.Fields.EncodeToString())
+		p.eventLog = append(p.eventLog, event.Root.EncodeToString())
 		p.eventLogMu.Unlock()
 	}
 
@@ -375,7 +404,7 @@ func (p *Pipeline) countEvent(actionIndex int, event *Event, eventStatus eventSt
 	valuesBuf = append(valuesBuf, string(eventStatus))
 
 	for _, field := range metrics.labels {
-		node := event.Fields.Dig(field)
+		node := event.Root.Dig(field)
 
 		value := defaultFieldValue
 		if node != nil {
@@ -403,7 +432,7 @@ func (p *Pipeline) maintenance() {
 			logger.Infof("pipeline %q final event sample: %s", p.Name, p.eventSample)
 			p.eventSample = p.eventSample[:0]
 
-			if p.eventPool.eventsCount == p.capacity {
+			if p.eventPool.eventsCount == p.settings.Capacity {
 				p.streamsMu.Lock()
 				logger.Infof("========streams======== ready=%d", len(p.readyStreams))
 				for _, s := range p.streams {
@@ -432,7 +461,7 @@ func (p *Pipeline) maintenance() {
 			delta := processed - lastProcessed
 			lastProcessed = processed
 			rate := delta * int64(time.Second) / int64(maintenanceInterval)
-			logger.Infof("pipeline %q stats for last %d seconds: processed=%d, rate=%d/sec, queue=%d/%d, total processed=%d, max log size=%d", p.Name, maintenanceInterval/time.Second, delta, rate, p.eventPool.eventsCount, p.capacity, processed, p.eventPool.maxEventSize)
+			logger.Infof("pipeline %q stats for last %d seconds: processed=%d, rate=%d/sec, queue=%d/%d, total processed=%d, max log size=%d", p.Name, maintenanceInterval/time.Second, delta, rate, p.eventPool.eventsCount, p.settings.Capacity, processed, p.eventPool.maxEventSize)
 
 			if time.Now().Sub(p.metricsGenTime) > metricsGenInterval {
 				p.nextMetricsGen()

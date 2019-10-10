@@ -3,7 +3,6 @@ package rename
 import (
 	"testing"
 
-	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
 	"gitlab.ozon.ru/sre/filed/pipeline"
 	"gitlab.ozon.ru/sre/filed/plugin/input/fake"
@@ -11,7 +10,7 @@ import (
 )
 
 func startPipeline() (*pipeline.Pipeline, *fake.Plugin, *devnull.Plugin) {
-	p := pipeline.New("rename_pipeline", 2048, 1, prometheus.NewRegistry())
+	p := pipeline.NewTestPipeLine(false)
 
 	anyPlugin, _ := fake.Factory()
 	inputPlugin := anyPlugin.(*fake.Plugin)
@@ -46,10 +45,10 @@ func TestRename(t *testing.T) {
 	input.Wait()
 
 	assert.Equal(t, 3, len(dumpedEvents), "wrong accepted events count")
-	assert.Equal(t, "value_1", dumpedEvents[0].Fields.Dig("renamed_field_1").AsString(), "wrong field value")
-	assert.Equal(t, "value_2", dumpedEvents[1].Fields.Dig("renamed_field_2").AsString(), "wrong field value")
-	assert.Equal(t, "value_3", dumpedEvents[2].Fields.Dig("field_3").AsString(), "wrong field value")
-	assert.Nil(t, dumpedEvents[0].Fields.Dig("field_1"), "field isn't nil")
-	assert.Nil(t, dumpedEvents[1].Fields.Dig("field_2"), "field isn't nil")
-	assert.Nil(t, dumpedEvents[2].Fields.Dig("renamed_field_3"), "field isn't nil")
+	assert.Equal(t, "value_1", dumpedEvents[0].Root.Dig("renamed_field_1").AsString(), "wrong field value")
+	assert.Equal(t, "value_2", dumpedEvents[1].Root.Dig("renamed_field_2").AsString(), "wrong field value")
+	assert.Equal(t, "value_3", dumpedEvents[2].Root.Dig("field_3").AsString(), "wrong field value")
+	assert.Nil(t, dumpedEvents[0].Root.Dig("field_1"), "field isn't nil")
+	assert.Nil(t, dumpedEvents[1].Root.Dig("field_2"), "field isn't nil")
+	assert.Nil(t, dumpedEvents[2].Root.Dig("renamed_field_3"), "field isn't nil")
 }
