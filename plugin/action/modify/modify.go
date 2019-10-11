@@ -49,7 +49,7 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 			}
 		}
 
-		event.Root.AddField(field).MutateToString(value)
+		event.Root.AddFieldNoAlloc(event.Root, field).MutateToString(value)
 	}
 
 	return pipeline.ActionPass

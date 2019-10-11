@@ -146,10 +146,10 @@ func (jp *jobProvider) commit(event *pipeline.Event) {
 	isActual := event.IsActual()
 
 	jp.jobsMu.RLock()
-	job, has := jp.jobs[inode(event.Source)]
+	job, has := jp.jobs[inode(event.SourceID)]
 	jp.jobsMu.RUnlock()
 	if !has && isActual {
-		logger.Panicf("can't find job for event, source=%d:%s", event.Source, event.StreamName)
+		logger.Panicf("can't find job for event, source=%d:%s", event.SourceID, event.StreamName)
 	}
 
 	// file and job was deleted, so simply skip commit :)
@@ -159,7 +159,7 @@ func (jp *jobProvider) commit(event *pipeline.Event) {
 
 	job.mu.Lock()
 	if job.offsets[event.StreamName] >= event.Offset && isActual {
-		logger.Panicf("commit offset=%d for source=%d:%s should be more than current=%d for event id=%d", event.Offset, event.Source, event.StreamName, job.offsets[event.StreamName], event.SeqID)
+		logger.Panicf("commit offset=%d for source=%d:%s should be more than current=%d for event id=%d", event.Offset, event.SourceID, event.StreamName, job.offsets[event.StreamName], event.SeqID)
 	}
 	if isActual {
 		job.offsets[event.StreamName] = event.Offset
@@ -369,7 +369,7 @@ func (jp *jobProvider) doneJob(job *job) {
 }
 
 func (jp *jobProvider) truncateJob(job *job) {
-	deprecated := jp.head.Reset(pipeline.SourceId(job.inode))
+	deprecated := jp.head.Reset(pipeline.SourceID(job.inode))
 
 	job.mu.Lock()
 	defer job.mu.Unlock()
@@ -682,7 +682,7 @@ func (jp *jobProvider) deleteJob(job *job) {
 	if !job.isDone {
 		logger.Panicf("can't delete job, it isn't done: %d:%s", job.inode, job.filename)
 	}
-	deprecated := jp.head.Reset(pipeline.SourceId(job.inode))
+	deprecated := jp.head.Reset(pipeline.SourceID(job.inode))
 
 	jp.jobsMu.Lock()
 	delete(jp.jobs, job.inode)

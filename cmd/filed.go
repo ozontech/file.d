@@ -6,6 +6,7 @@ import (
 	"syscall"
 
 	"github.com/alecthomas/kingpin"
+	insaneJSON "github.com/vitkovskii/insane-json"
 	"gitlab.ozon.ru/sre/filed/filed"
 	"gitlab.ozon.ru/sre/filed/logger"
 	"go.uber.org/automaxprocs/maxprocs"
@@ -39,6 +40,9 @@ func main() {
 	kingpin.Parse()
 
 	logger.Infof("hi!")
+
+	insaneJSON.DisableBeautifulErrors = true
+	insaneJSON.StartNodePoolSize = 1024
 
 	_, _ = maxprocs.Set(maxprocs.Logger(logger.Debugf))
 

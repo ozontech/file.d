@@ -88,7 +88,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.batcher = pipeline.NewBatcher(
 		params.PipelineName,
 		"kafka",
-		p.batchOut,
+		p.out,
 		nil,
 		p.tail,
 		p.config.WorkersCount,
@@ -103,18 +103,18 @@ func (p *Plugin) Out(event *pipeline.Event) {
 	p.batcher.Add(event)
 }
 
-func (p *Plugin) batchOut(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
+func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 	if *workerData == nil {
 		*workerData = &data{
 			messages: make([]*sarama.ProducerMessage, p.config.BatchSize, p.config.BatchSize),
-			outBuf:   make([]byte, 0, 0),
+			outBuf:   make([]byte, 0, p.config.BatchSize*p.avgLogSize),
 		}
 	}
 
 	// handle to much memory consumption
 	data := (*workerData).(*data)
 	if cap(data.outBuf) > p.config.BatchSize*p.avgLogSize {
-		data.outBuf = make([]byte, 0, 0)
+		data.outBuf = make([]byte, 0, p.config.BatchSize*p.avgLogSize)
 	}
 
 	outBuf := data.outBuf[:0]

@@ -21,15 +21,15 @@ const (
 )
 
 type Head interface {
-	In(sourceId SourceId, sourceName string, offset int64, bytes []byte)
-	Reset(sourceId SourceId) int // mark source events in the pipeline as isDeprecated, it means that these events shouldn't update offsets
+	In(sourceId SourceID, sourceName string, offset int64, bytes []byte)
+	Reset(sourceId SourceID) int // mark source events in the pipeline as isDeprecated, it means that these events shouldn't update offsets
 }
 
 type Tail interface {
 	Commit(event *Event) // notify input plugin that event is successfully processed and save offsets
 }
 
-type SourceId uint64
+type SourceID uint64
 type StreamName string
 
 type Pipeline struct {
@@ -44,7 +44,7 @@ type Pipeline struct {
 	outputData *OutputPluginData
 
 	streamNames []string
-	streams     map[SourceId]map[StreamName]*stream
+	streams     map[SourceID]map[StreamName]*stream
 	streamsMu   *sync.RWMutex
 
 	doneWg *sync.WaitGroup
@@ -72,10 +72,11 @@ type Pipeline struct {
 }
 
 type Settings struct {
-	Capacity        int
-	AvgLogSize      int
-	ProcessorsCount int
-	StreamField     string
+	Capacity             int
+	AvgLogSize           int
+	ProcessorsCount      int
+	StreamField          string
+	isStreamFieldEnabled bool
 }
 
 type actionMetrics struct {
@@ -94,7 +95,7 @@ func New(name string, settings *Settings, registry *prometheus.Registry) *Pipeli
 		Name:     name,
 		settings: settings,
 
-		streams:   make(map[SourceId]map[StreamName]*stream),
+		streams:   make(map[SourceID]map[StreamName]*stream),
 		streamsMu: &sync.RWMutex{},
 
 		doneWg: &sync.WaitGroup{},
@@ -110,6 +111,8 @@ func New(name string, settings *Settings, registry *prometheus.Registry) *Pipeli
 		readyStreams:   make([]*stream, 0, 0),
 		readyStreamsMu: &sync.Mutex{},
 	}
+
+	settings.isStreamFieldEnabled = settings.StreamField != "off"
 
 	pipeline.readyStreamsCond = sync.NewCond(pipeline.readyStreamsMu)
 
@@ -152,7 +155,7 @@ func (p *Pipeline) Start() {
 	rnd := []byte{}
 	for _, processor := range p.Processors {
 		processor.start(p.output, actionParams)
-		if p.settings.StreamField == "off" {
+		if !p.settings.isStreamFieldEnabled {
 			rnd = append(rnd, byte('a'+rand.Int()%('z'-'a')))
 			crc := crc32.ChecksumIEEE(rnd)
 			p.streamNames = append(p.streamNames, strconv.FormatUint(uint64(crc), 8))
@@ -189,10 +192,10 @@ func (p *Pipeline) SetOutputPlugin(descr *OutputPluginData) {
 	p.output = descr.Plugin
 }
 
-func (p *Pipeline) Reset(sourceId SourceId) int {
+func (p *Pipeline) Reset(sourceId SourceID) int {
 	count := 0
 	p.eventPool.visit(func(e *Event) {
-		if e.Source != sourceId {
+		if e.SourceID != sourceId {
 			return
 		}
 
@@ -203,7 +206,7 @@ func (p *Pipeline) Reset(sourceId SourceId) int {
 	return count
 }
 
-func (p *Pipeline) In(sourceId SourceId, sourceName string, offset int64, bytes []byte) {
+func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes []byte) {
 	if len(bytes) == 0 {
 		return
 	}
@@ -213,16 +216,12 @@ func (p *Pipeline) In(sourceId SourceId, sourceName string, offset int64, bytes 
 	size := len(bytes)
 	event, err := p.eventPool.get(bytes)
 	if err != nil {
-		logger.Fatalf("wrong json offset=%d, length=%d, err=%s, source=%d:%s, json=%s", offset, size, err.Error(), sourceId, sourceName, bytes)
+		logger.Fatalf("wrong json offset=%d, length=%d, err=%s, source=%d:%s, json=%s", offset, size, err.Error(), sourceID, sourceName, bytes)
 		return
 	}
 
 	stream := StreamName("not_set")
-	if p.settings.StreamField == "off" {
-		index := int(x) % len(p.streamNames)
-		stream = StreamName(p.streamNames[index])
-		sourceId = SourceId(index)
-	} else {
+	if p.settings.isStreamFieldEnabled {
 		streamNode := event.Root.Dig("stream")
 		if streamNode != nil {
 			stream = StreamName(streamNode.AsBytes()) // as bytes because we need a copy
@@ -230,15 +229,21 @@ func (p *Pipeline) In(sourceId SourceId, sourceName string, offset int64, bytes 
 	}
 
 	event.Offset = offset
-	event.Source = sourceId
+	event.SourceID = sourceID
 	event.StreamName = stream
 	event.SourceName = sourceName
 	event.Size = len(bytes)
 
-	p.getStream(sourceId, sourceName, stream).put(event)
+	if !p.settings.isStreamFieldEnabled {
+		index := int(x) % len(p.streamNames)
+		stream = StreamName(p.streamNames[index])
+		sourceID = SourceID(index)
+	}
+
+	p.getStream(sourceID, sourceName, stream).put(event)
 }
 
-func (p *Pipeline) getStream(sourceId SourceId, sourceName string, streamName StreamName) *stream {
+func (p *Pipeline) getStream(sourceId SourceID, sourceName string, streamName StreamName) *stream {
 	// fast path, stream have been already created
 	p.streamsMu.RLock()
 	st, has := p.streams[sourceId][streamName]
@@ -453,7 +458,7 @@ func (p *Pipeline) maintenance() {
 
 				logger.Infof("========default events dump========")
 				p.eventPool.visit(func(event *Event) {
-					logger.Infof("event: index=%d, id=%d, stream=%d(%s), stage=%s", event.poolIndex, event.SeqID, event.Source, event.StreamName, event.stageStr())
+					logger.Infof("event: index=%d, id=%d, stream=%d(%s), stage=%s", event.poolIndex, event.SeqID, event.SourceID, event.StreamName, event.stageStr())
 				})
 			}
 

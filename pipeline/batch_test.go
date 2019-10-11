@@ -40,7 +40,7 @@ func TestBatcher(t *testing.T) {
 		wg.Done()
 	}}
 
-	batcher := NewBatcher("test", "devnull", batcherOut, batcherTail, 2, batchSize, time.Second)
+	batcher := NewBatcher("test", "devnull", batcherOut, nil, batcherTail, 2, batchSize, time.Second, 0)
 
 	batcher.Start()
 	for i := 0; i < eventCount; i++ {

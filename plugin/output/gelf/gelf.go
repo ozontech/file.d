@@ -28,7 +28,7 @@ const (
 	defaultConnectionTimeout    = time.Second * 5
 	defaultHostField            = "host"
 	defaultShortMessageField    = "message"
-	defaultTimestampField       = "ts"
+	defaultTimestampField       = "time"
 	defaultTimestampFieldFormat = "RFC3339Nano"
 	defaultLevelField           = "level"
 )
@@ -37,7 +37,7 @@ type Config struct {
 	Host              string            `json:"host"`
 	Port              uint              `json:"port"`
 	FlushTimeout      pipeline.Duration `json:"flush_timeout"`
-	ReconnectTimeout  pipeline.Duration `json:"reconnect_timeout"`
+	ReconnectInterval pipeline.Duration `json:"reconnect_interval"`
 	ConnectionTimeout pipeline.Duration `json:"connection_timeout"`
 	WorkersCount      int               `json:"workers_count"`
 	BatchSize         int               `json:"batch_size"`
@@ -155,7 +155,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		p.config.WorkersCount,
 		p.config.BatchSize,
 		p.config.FlushTimeout.Duration,
-		p.config.ReconnectTimeout.Duration,
+		p.config.ReconnectInterval.Duration,
 	)
 	p.batcher.Start()
 }
@@ -170,7 +170,7 @@ func (p *Plugin) Out(event *pipeline.Event) {
 func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 	if *workerData == nil {
 		*workerData = &data{
-			outBuf:    make([]byte, 0, 0),
+			outBuf:    make([]byte, 0, p.config.BatchSize*p.avgLogSize),
 			encodeBuf: make([]byte, 0, 0),
 		}
 	}
@@ -178,15 +178,14 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 	// handle to much memory consumption
 	data := (*workerData).(*data)
 	if cap(data.outBuf) > p.config.BatchSize*p.avgLogSize {
-		data.outBuf = make([]byte, 0, 0)
-		data.encodeBuf = make([]byte, 0, 0)
+		data.outBuf = make([]byte, 0, p.config.BatchSize*p.avgLogSize)
 	}
 
 	outBuf := data.outBuf[:0]
 	encodeBuf := data.encodeBuf[:0]
 	for _, event := range batch.Events {
 		encodeBuf = p.formatEvent(encodeBuf, event)
-		outBuf, _ = event.Encode(data.outBuf)
+		outBuf, _ = event.Encode(outBuf)
 		outBuf = append(outBuf, byte(0))
 	}
 	data.outBuf = outBuf
@@ -236,7 +235,7 @@ func (p *Plugin) formatEvent(encodeBuf []byte, event *pipeline.Event) []byte {
 
 	encodeBuf = p.makeExtraFields(encodeBuf, root)
 
-	root.AddField("version").MutateToString("1.1")
+	root.AddFieldNoAlloc(root, "version").MutateToString("1.1")
 
 	p.makeBaseField(root, "host", p.config.hostField, "unknown")
 	p.makeBaseField(root, "short_message", p.config.shortMessageField, "")
@@ -257,7 +256,7 @@ func (p *Plugin) makeBaseField(root *insaneJSON.Root, baseFieldName string, root
 	if field != nil {
 		field.MutateToField(baseFieldName)
 	} else {
-		root.AddField(baseFieldName).MutateToString(defaultValue)
+		root.AddFieldNoAlloc(root, baseFieldName).MutateToString(defaultValue)
 	}
 }
 
@@ -267,15 +266,32 @@ func (p *Plugin) makeTimestampField(root *insaneJSON.Root, timestampField string
 		return
 	}
 
-	timeStr := node.AsString()
-
-	t, err := time.Parse(timestampFieldFormat, timeStr)
-	if err != nil {
-		return
+	now := float64(time.Now().UnixNano()) / float64(time.Second)
+	ts := now
+	if node.IsNumber() {
+		ts = node.AsFloat()
+		// is it in millis?
+		if ts > 1000000000000 {
+			ts = ts / 1000
+		}
+		// is it still in millis?
+		if ts > 1000000000000 {
+			ts = ts / 1000
+		}
+	} else if node.IsString() {
+		t, err := time.Parse(timestampFieldFormat, node.AsString())
+		if err == nil {
+			ts = float64(t.UnixNano()) / float64(time.Second)
+		}
 	}
 
-	timestamp := float64(t.UnixNano()) / float64(time.Second)
-	root.AddField("timestamp").MutateToFloat(timestamp)
+	// are we in the past?
+	if ts < 100000000 {
+		logger.Warnf("found too old event for gelf output, falling back to current time: %s", root.EncodeToString())
+		ts = now
+	}
+
+	root.AddFieldNoAlloc(root, "timestamp").MutateToFloat(ts)
 	node.Suicide()
 }
 
@@ -301,7 +317,7 @@ func (p *Plugin) makeLevelField(root *insaneJSON.Root, levelField string) {
 		return
 	}
 
-	root.AddField("level").MutateToInt(level)
+	root.AddFieldNoAlloc(root, "level").MutateToInt(level)
 	node.Suicide()
 }
 

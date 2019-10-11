@@ -12,12 +12,12 @@ import (
 )
 
 type Config struct {
-	Brokers string `json:"brokers"`
+	Brokers string   `json:"brokers"`
 	brokers []string //split brokers string by comma
 
-	Topics        string `json:"topics"`
+	Topics        string   `json:"topics"`
 	topics        []string //split topics string by comma
-	ConsumerGroup string `json:"consumer_group"`
+	ConsumerGroup string   `json:"consumer_group"`
 	consumerGroup string
 }
 
@@ -28,6 +28,7 @@ type Plugin struct {
 	cancel        context.CancelFunc
 	context       context.Context
 	head          pipeline.Head
+	idByTopic     map[string]int
 }
 
 func init() {
@@ -53,6 +54,11 @@ func (p *Plugin) Start(config pipeline.AnyConfig, head pipeline.Head, doneWg *sy
 	p.config.topics = strings.Split(p.config.Topics, ",")
 	if p.config.Topics == "" || len(p.config.topics) == 0 {
 		logger.Fatalf(`"topics" isn't set for kafka input`)
+	}
+
+	p.idByTopic = make(map[string]int)
+	for i, topic := range p.config.topics {
+		p.idByTopic[topic] = i
 	}
 
 	if p.config.ConsumerGroup != "" {
@@ -87,7 +93,8 @@ func (p *Plugin) Commit(event *pipeline.Event) {
 		logger.Errorf("no kafka consumer session for event commit")
 		return
 	}
-	p.session.MarkOffset(event.SourceName, int32(event.Source), event.Offset+1, "")
+	index, partition := extractMessageParams(event.SourceID)
+	p.session.MarkOffset(p.config.topics[index], partition, event.Offset+1, "")
 }
 
 func (p *Plugin) newConsumerGroup() sarama.ConsumerGroup {
@@ -116,8 +123,20 @@ func (p *Plugin) Cleanup(sarama.ConsumerGroupSession) error {
 
 func (p *Plugin) ConsumeClaim(session sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
 	for message := range claim.Messages() {
-		p.head.In(pipeline.SourceId(message.Partition), message.Topic, message.Offset, message.Value)
+		sourceID := makeSourceID(p.idByTopic[message.Topic], message.Partition)
+		p.head.In(sourceID, "", message.Offset, message.Value)
 	}
 
 	return nil
+}
+
+func makeSourceID(index int, partition int32) pipeline.SourceID {
+	return pipeline.SourceID(index<<16 + int(partition))
+}
+
+func extractMessageParams(sourceID pipeline.SourceID) (index int, partition int32) {
+	index = int(sourceID >> 16)
+	partition = int32(sourceID & 0xFFFF)
+
+	return
 }

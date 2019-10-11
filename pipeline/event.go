@@ -19,7 +19,7 @@ type Event struct {
 
 	SeqID      uint64
 	Offset     int64
-	Source     SourceId
+	SourceID   SourceID
 	SourceName string
 	StreamName StreamName
 	Size       int
