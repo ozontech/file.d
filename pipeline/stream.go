@@ -12,7 +12,7 @@ import (
 type stream struct {
 	readyIndex int
 	name       StreamName
-	sourceId   SourceId
+	sourceId   SourceID
 	pipeline   *Pipeline
 
 	mu   *sync.Mutex
@@ -28,7 +28,7 @@ type stream struct {
 	last  *Event
 }
 
-func newStream(name StreamName, sourceId SourceId, pipeline *Pipeline) *stream {
+func newStream(name StreamName, sourceId SourceID, pipeline *Pipeline) *stream {
 	stream := stream{
 		readyIndex: -1,
 		name:       name,

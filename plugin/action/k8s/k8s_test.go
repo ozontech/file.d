@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
 	"gitlab.ozon.ru/sre/filed/pipeline"
 	"gitlab.ozon.ru/sre/filed/plugin/input/fake"
@@ -47,7 +46,7 @@ func getPodInfo(item *metaItem) *corev1.Pod {
 }
 
 func startPipeline() (*pipeline.Pipeline, *fake.Plugin, *Plugin, *devnull.Plugin) {
-	p := pipeline.New("k8s_pipeline", 2048, 1, prometheus.NewRegistry())
+	p := pipeline.NewTestPipeLine(false)
 
 	anyPlugin, _ := fake.Factory()
 	inputPlugin := anyPlugin.(*fake.Plugin)
@@ -90,10 +89,10 @@ func TestEnrichment(t *testing.T) {
 	input.In(0, filename, 0, 0, []byte(`{"time":"time","log":"log\n"}`))
 	input.Wait()
 
-	assert.Equal(t, "advanced-logs-checker-1566485760-trtrq", event.Fields.Dig("k8s_pod").AsString(), "wrong event field")
-	assert.Equal(t, "sre", event.Fields.Dig("k8s_namespace").AsString(), "wrong event field")
-	assert.Equal(t, "duty-bot", event.Fields.Dig("k8s_container").AsString(), "wrong event field")
-	assert.Equal(t, "node_1", event.Fields.Dig("k8s_node").AsString(), "wrong event field")
+	assert.Equal(t, "advanced-logs-checker-1566485760-trtrq", event.Root.Dig("k8s_pod").AsString(), "wrong event field")
+	assert.Equal(t, "sre", event.Root.Dig("k8s_namespace").AsString(), "wrong event field")
+	assert.Equal(t, "duty-bot", event.Root.Dig("k8s_container").AsString(), "wrong event field")
+	assert.Equal(t, "node_1", event.Root.Dig("k8s_node").AsString(), "wrong event field")
 }
 
 func TestJoin(t *testing.T) {
@@ -138,7 +137,7 @@ func TestJoin(t *testing.T) {
 
 	assert.Equal(t, 4, len(events))
 
-	logs := []string{"one line log 1\n", "error joined\n", "this is joined log 2\n", "one line log 3\n"}
+	logs := []string{"\"one line log 1\\n\"", "\"error joined\\n\"", "\"this is joined log 2\\n\"", "\"one line log 3\\n\""}
 	offsets := []int64{10, 70, 60, 80}
 
 	check := func(log string, offset int64) {
@@ -151,7 +150,7 @@ func TestJoin(t *testing.T) {
 
 		}
 		assert.Equal(t, len(logs), len(offsets), "lengths isn't equal")
-		assert.True(t, index != -1, "log not found")
+		assert.True(t, index != -1, "log %s not found", log)
 
 		assert.Equal(t, offsets[index], offset, "wrong offset")
 
@@ -163,10 +162,10 @@ func TestJoin(t *testing.T) {
 
 	}
 
-	check(events[0].Fields.Dig("log").AsString(), events[0].Offset)
-	check(events[1].Fields.Dig("log").AsString(), events[1].Offset)
-	check(events[2].Fields.Dig("log").AsString(), events[2].Offset)
-	check(events[3].Fields.Dig("log").AsString(), events[3].Offset)
+	check(events[0].Root.Dig("log").AsEscapedString(), events[0].Offset)
+	check(events[1].Root.Dig("log").AsEscapedString(), events[1].Offset)
+	check(events[2].Root.Dig("log").AsEscapedString(), events[2].Offset)
+	check(events[3].Root.Dig("log").AsEscapedString(), events[3].Offset)
 }
 
 func TestCleanUp(t *testing.T) {

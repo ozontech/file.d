@@ -12,14 +12,14 @@ import (
 var eventGCSizeThreshold = 4 * units.Kibibyte
 
 type Event struct {
-	Fields    *insaneJSON.Root
+	Root      *insaneJSON.Root
 	poolIndex int
 	next      *Event
 	stream    *stream
 
 	SeqID      uint64
 	Offset     int64
-	Source     SourceId
+	SourceID   SourceID
 	SourceName string
 	StreamName StreamName
 	Size       int
@@ -46,7 +46,7 @@ type eventStage int
 func newEvent(poolIndex int) *Event {
 	return &Event{
 		poolIndex: poolIndex,
-		Fields:    insaneJSON.Spawn(),
+		Root:      insaneJSON.Spawn(),
 	}
 }
 
@@ -70,7 +70,7 @@ func (e *Event) stageStr() string {
 }
 func (e *Event) reset() {
 	if e.shouldGC {
-		e.Fields.ReleaseMem()
+		e.Root.ReleaseMem()
 		e.shouldGC = false
 	}
 
@@ -88,7 +88,7 @@ func (e *Event) IsActual() bool {
 }
 
 func (e *Event) parseJSON(json []byte) (*Event, error) {
-	err := e.Fields.DecodeBytes(json)
+	err := e.Root.DecodeBytes(json)
 	if err != nil {
 		return e, err
 	}
@@ -96,14 +96,14 @@ func (e *Event) parseJSON(json []byte) (*Event, error) {
 }
 
 func (e *Event) SubparseJSON(json []byte) (*insaneJSON.Node, error) {
-	return e.Fields.DecodeBytesAdditional(json)
+	return e.Root.DecodeBytesAdditional(json)
 }
 
-func (e *Event) Marshal(out []byte) ([]byte, int) {
-	l := len(out)
-	out = e.Fields.Encode(out)
+func (e *Event) Encode(outBuf []byte) ([]byte, int) {
+	l := len(outBuf)
+	outBuf = e.Root.Encode(outBuf)
 
-	size := len(out) - l
+	size := len(outBuf) - l
 	// event is going to be super big, lets GC it
 	e.shouldGC = size > int(eventGCSizeThreshold)
 
@@ -111,7 +111,7 @@ func (e *Event) Marshal(out []byte) ([]byte, int) {
 		e.maxSize = size
 	}
 
-	return out, l
+	return outBuf, l
 }
 
 // channels are slower than this implementation by ~20%
@@ -152,7 +152,7 @@ func (p *eventPool) visit(fn func(*Event)) {
 	}
 }
 
-func (p *eventPool) get(bytes []byte) (*Event, error) {
+func (p *eventPool) get(json []byte) (*Event, error) {
 	p.mu.Lock()
 
 	for p.eventsCount >= p.capacity {
@@ -173,7 +173,7 @@ func (p *eventPool) get(bytes []byte) (*Event, error) {
 	}
 
 	event.reset()
-	return event.parseJSON(bytes)
+	return event.parseJSON(json)
 }
 
 func (p *eventPool) back(event *Event) {

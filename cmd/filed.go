@@ -6,6 +6,7 @@ import (
 	"syscall"
 
 	"github.com/alecthomas/kingpin"
+	insaneJSON "github.com/vitkovskii/insane-json"
 	"gitlab.ozon.ru/sre/filed/filed"
 	"gitlab.ozon.ru/sre/filed/logger"
 	"go.uber.org/automaxprocs/maxprocs"
@@ -19,7 +20,9 @@ import (
 	_ "gitlab.ozon.ru/sre/filed/plugin/action/throttle"
 	_ "gitlab.ozon.ru/sre/filed/plugin/input/fake"
 	_ "gitlab.ozon.ru/sre/filed/plugin/input/file"
+	_ "gitlab.ozon.ru/sre/filed/plugin/input/kafka"
 	_ "gitlab.ozon.ru/sre/filed/plugin/output/devnull"
+	_ "gitlab.ozon.ru/sre/filed/plugin/output/gelf"
 	_ "gitlab.ozon.ru/sre/filed/plugin/output/kafka"
 )
 
@@ -37,6 +40,9 @@ func main() {
 	kingpin.Parse()
 
 	logger.Infof("hi!")
+
+	insaneJSON.DisableBeautifulErrors = true
+	insaneJSON.StartNodePoolSize = 1024
 
 	_, _ = maxprocs.Set(maxprocs.Logger(logger.Debugf))
 
@@ -61,11 +67,11 @@ func listenSignals() {
 
 		switch s {
 		case syscall.SIGHUP:
-			logger.Infof("signal SIGHUP received")
+			logger.Infof("SIGHUP received")
 			fd.Stop()
 			start()
 		case syscall.SIGTERM:
-			logger.Infof("signal SIGTERM received")
+			logger.Infof("SIGTERM received")
 			fd.Stop()
 			exit <- true
 		}

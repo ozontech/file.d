@@ -3,7 +3,6 @@ package modify
 import (
 	"testing"
 
-	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
 	"gitlab.ozon.ru/sre/filed/pipeline"
 	"gitlab.ozon.ru/sre/filed/plugin/input/fake"
@@ -11,7 +10,7 @@ import (
 )
 
 func startPipeline() (*pipeline.Pipeline, *fake.Plugin, *devnull.Plugin) {
-	p := pipeline.New("modify_pipeline", 2048, 1, prometheus.NewRegistry())
+	p := pipeline.NewTestPipeLine(false)
 
 	anyPlugin, _ := fake.Factory()
 	inputPlugin := anyPlugin.(*fake.Plugin)
@@ -44,6 +43,6 @@ func TestModify(t *testing.T) {
 	input.Wait()
 
 	assert.Equal(t, 1, len(dumpedEvents), "wrong accepted events count")
-	assert.Equal(t, "new_value", dumpedEvents[0].Fields.Dig("new_field").AsString(), "wrong field value")
-	assert.Equal(t, "existing_value", dumpedEvents[0].Fields.Dig("field_pattern").AsString(), "wrong field value")
+	assert.Equal(t, "new_value", dumpedEvents[0].Root.Dig("new_field").AsString(), "wrong field value")
+	assert.Equal(t, "existing_value", dumpedEvents[0].Root.Dig("field_pattern").AsString(), "wrong field value")
 }

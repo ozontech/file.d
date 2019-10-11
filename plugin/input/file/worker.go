@@ -26,7 +26,7 @@ func (w *worker) work(head pipeline.Head, jobProvider *jobProvider, readBufferSi
 		job.mu.Lock()
 		file := job.file
 		isDone := job.isDone
-		sourceId := pipeline.SourceId(job.inode)
+		sourceId := pipeline.SourceID(job.inode)
 		sourceName := job.filename
 		if job.symlink != "" {
 			sourceName = job.symlink

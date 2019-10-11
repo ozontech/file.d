@@ -107,7 +107,7 @@ func (p *processor) process(output OutputPlugin) {
 				return
 			}
 		default:
-			logger.Panicf("wrong state=%d before action in pipeline %s", p.state, p.pipeline.Name)
+			logger.Panicf("wrong state=%d before action pipeline=%s", p.state, p.pipeline.Name)
 		}
 
 		p.state = processorStatePass
@@ -191,7 +191,7 @@ func (p *processor) isMatch(index int, event *Event) bool {
 
 func (p *processor) isMatchOr(conds MatchConditions, event *Event) bool {
 	for _, cond := range conds {
-		value := event.Fields.Dig(cond.Field).AsString()
+		value := event.Root.Dig(cond.Field).AsString()
 		if value == "" {
 			continue
 		}
@@ -213,7 +213,7 @@ func (p *processor) isMatchOr(conds MatchConditions, event *Event) bool {
 
 func (p *processor) isMatchAnd(conds MatchConditions, event *Event) bool {
 	for _, cond := range conds {
-		value := event.Fields.Dig(cond.Field).AsString()
+		value := event.Root.Dig(cond.Field).AsString()
 		if value == "" {
 			return false
 		}

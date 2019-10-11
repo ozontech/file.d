@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
 	"gitlab.ozon.ru/sre/filed/pipeline"
 	"gitlab.ozon.ru/sre/filed/plugin/input/fake"
@@ -14,7 +13,7 @@ import (
 )
 
 func startPipeline(interval time.Duration, buckets, limitA, limitB, defaultLimit int) (*pipeline.Pipeline, *fake.Plugin, *devnull.Plugin) {
-	p := pipeline.New("k8s_pipeline", 2048, 1, prometheus.NewRegistry())
+	p := pipeline.NewTestPipeLine(false)
 
 	anyPlugin, _ := fake.Factory()
 	inputPlugin := anyPlugin.(*fake.Plugin)
@@ -28,7 +27,7 @@ func startPipeline(interval time.Duration, buckets, limitA, limitB, defaultLimit
 			{Limit: int64(limitB), Conditions: map[string]string{"k8s_ns": "ns_2"}},
 		},
 		Buckets:       buckets,
-		Interval:      Duration{Duration: interval},
+		Interval:      pipeline.Duration{Duration: interval},
 		ThrottleField: "k8s_pod",
 		TimeField:     "time",
 		DefaultLimit:  int64(defaultLimit),

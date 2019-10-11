@@ -40,7 +40,7 @@ func (p *Plugin) Reset() {
 }
 
 func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
-	jsonNode := event.Fields.Dig(p.config.Field)
+	jsonNode := event.Root.Dig(p.config.Field)
 	if jsonNode == nil {
 		return pipeline.ActionPass
 	}
@@ -57,7 +57,7 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	jsonNode.Suicide()
 
 	// place decoded object under root
-	event.Fields.MergeWith(node)
+	event.Root.MergeWith(node)
 
 	return pipeline.ActionPass
 }

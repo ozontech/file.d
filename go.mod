@@ -22,7 +22,7 @@ require (
 	github.com/satori/go.uuid v1.2.0
 	github.com/spf13/pflag v1.0.3 // indirect
 	github.com/stretchr/testify v1.3.0
-	github.com/vitkovskii/insane-json v0.0.6
+	github.com/vitkovskii/insane-json v0.0.14
 	go.uber.org/atomic v1.4.0
 	go.uber.org/automaxprocs v1.2.0
 	go.uber.org/multierr v1.1.0 // indirect

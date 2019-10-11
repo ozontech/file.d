@@ -24,8 +24,8 @@ func Factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 	return &Plugin{}, &Config{}
 }
 
-func (p *Plugin) Start(config pipeline.AnyConfig, capacity int, tail pipeline.Tail) {
-	p.tail = tail
+func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginParams) {
+	p.tail = params.Tail
 }
 
 func (p *Plugin) SetOutFn(fn func(event *pipeline.Event)) {

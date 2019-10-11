@@ -13,7 +13,8 @@ import (
 )
 
 const (
-	defaultCapacity = 1024
+	defaultCapacity   = 1024
+	defaultAvgLogSize = 4096
 )
 
 type Filed struct {
@@ -57,18 +58,17 @@ func (f *Filed) createRegistry() {
 func (f *Filed) startPipelines() {
 	f.Pipelines = f.Pipelines[:0]
 	for name, config := range f.config.Pipelines {
-		f.addPipeline(config, name)
+		f.addPipeline(name, config)
 	}
 	for _, p := range f.Pipelines {
 		p.Start()
 	}
 }
 
-func (f *Filed) addPipeline(config *PipelineConfig, name string) {
-	processorsCount, capacity := extractPipelineParams(config.Raw.Get("settings"))
-	logger.Infof("creating pipeline %q with %d processors", name, processorsCount)
+func (f *Filed) addPipeline(name string, config *PipelineConfig) {
+	settings := extractPipelineParams(config.Raw.Get("settings"))
 
-	p := pipeline.New(name, capacity, processorsCount, f.registry)
+	p := pipeline.New(name, settings, f.registry)
 	f.setupInput(p, config)
 	f.setupActions(p, config)
 	f.setupOutput(p, config)

@@ -13,10 +13,12 @@ import (
 	"gitlab.ozon.ru/sre/filed/pipeline"
 )
 
-func extractPipelineParams(settings *simplejson.Json) (processorsCount int, capacity int) {
+func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 	procs := runtime.GOMAXPROCS(0)
-	processorsCount = procs * 8
-	capacity = defaultCapacity
+	processorsCount := procs * 8
+	capacity := defaultCapacity
+	avgLogSize := defaultAvgLogSize
+	streamField := "stream"
 	if settings != nil {
 		val := settings.Get("processors_count").MustInt()
 		if val != 0 {
@@ -27,9 +29,24 @@ func extractPipelineParams(settings *simplejson.Json) (processorsCount int, capa
 		if val != 0 {
 			capacity = val
 		}
+
+		val = settings.Get("avg_log_size").MustInt()
+		if val != 0 {
+			avgLogSize = val
+		}
+
+		str := settings.Get("stream_field").MustString()
+		if str != "" {
+			streamField = str
+		}
 	}
 
-	return processorsCount, capacity
+	return &pipeline.Settings{
+		Capacity:        capacity,
+		AvgLogSize:      avgLogSize,
+		ProcessorsCount: processorsCount,
+		StreamField:     streamField,
+	}
 }
 
 func extractMatchMode(actionJSON *simplejson.Json) (pipeline.MatchMode, error) {
@@ -81,6 +98,7 @@ func extractMetrics(actionJSON *simplejson.Json) (string, []string) {
 }
 
 func makeActionJSON(actionJSON *simplejson.Json) []byte {
+	actionJSON.Del("type")
 	actionJSON.Del("match_fields")
 	actionJSON.Del("match_mode")
 	actionJSON.Del("metric_name")
