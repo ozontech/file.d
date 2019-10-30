@@ -18,7 +18,7 @@ func startPipeline() (*pipeline.Pipeline, *fake.Plugin, *devnull.Plugin) {
 
 	anyPlugin, _ = factory()
 	plugin := anyPlugin.(*Plugin)
-	config := &Config{Field: "log"}
+	config := &Config{Field: "log", Prefix:"prefix."}
 	p.Processors[0].AddActionPlugin(&pipeline.ActionPluginData{Plugin: plugin, PluginDesc: pipeline.PluginDesc{Config: config}})
 
 	anyPlugin, _ = devnull.Factory()
@@ -51,5 +51,5 @@ func TestDecode(t *testing.T) {
 	assert.Equal(t, 1, len(acceptedEvents), "wrong accepted events count")
 	assert.Equal(t, 1, len(dumpedEvents), "wrong dumped events count")
 
-	assert.Equal(t, `{"field2":"value2","field3":"value3"}`, dumpedEvents[0].Root.EncodeToString(), "wrong dumped events count")
+	assert.Equal(t, `{"prefix.field2":"value2","prefix.field3":"value3"}`, dumpedEvents[0].Root.EncodeToString(), "wrong dumped events count")
 }

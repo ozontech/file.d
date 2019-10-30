@@ -127,7 +127,7 @@ func (s *stream) waitGet(waitingEventId *atomic.Uint64) *Event {
 	waitingEventId.Swap(0)
 	event := s.get()
 	// it was timeout, not real event
-	if event.poolIndex == -1 {
+	if event.index == -1 {
 		s.detach()
 	}
 
@@ -173,7 +173,7 @@ func (s *stream) tryUnblockWait(waitingEventId *atomic.Uint64) bool {
 		logger.Panicf("why offsets are different? get offset=%d, commit offset=%d", s.getOffset, s.commitOffset)
 	}
 
-	event := &Event{poolIndex: -1, Offset: s.commitOffset}
+	event := &Event{index: -1, Offset: s.commitOffset}
 	s.last = event
 	s.first = event
 	s.cond.Signal()

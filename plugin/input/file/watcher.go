@@ -97,7 +97,7 @@ func (w *watcher) notify(event *fsnotify.Event) {
 		return
 	}
 
-	w.jobProvider.actualizeSomething(filename, stat)
+	w.jobProvider.actualize(filename, stat)
 
 	if stat.IsDir() {
 		w.tryAddPath(filename)

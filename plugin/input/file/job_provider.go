@@ -34,7 +34,8 @@ type job struct {
 	filename string
 	symlink  string
 
-	isDone bool
+	isDone   bool
+	skipLine bool
 
 	offsets streamsOffsets
 
@@ -75,7 +76,11 @@ type jobProvider struct {
 
 type inode uint64
 type streamsOffsets map[pipeline.StreamName]int64
-type inodesOffsets map[inode]map[pipeline.StreamName]int64
+type inodeOffsets struct {
+	streams  streamsOffsets
+	filename string
+}
+type inodesOffsets map[inode]*inodeOffsets
 
 type symlinkInfo struct {
 	filename string
@@ -173,7 +178,7 @@ func (jp *jobProvider) commit(event *pipeline.Event) {
 	}
 }
 
-func (jp *jobProvider) actualizeSomething(filename string, stat os.FileInfo) {
+func (jp *jobProvider) actualize(filename string, stat os.FileInfo) {
 	if filename == jp.config.OffsetsFile || filename == jp.config.offsetsTmpFilename {
 		logger.Fatalf("sorry, you can't place offsets file %s inside watching dir %s", jp.config.OffsetsFile, jp.config.WatchingDir)
 	}
@@ -184,10 +189,6 @@ func (jp *jobProvider) actualizeSomething(filename string, stat os.FileInfo) {
 	}
 
 	jp.actualizeFile(stat, filename, "")
-}
-
-func getInode(stat os.FileInfo) inode {
-	return inode(stat.Sys().(*syscall.Stat_t).Ino)
 }
 
 func (jp *jobProvider) actualizeFile(stat os.FileInfo, filename string, symlink string) {
@@ -248,7 +249,8 @@ func (jp *jobProvider) addJob(file *os.File, stat os.FileInfo, inode inode, file
 		filename: filename,
 		symlink:  symlink,
 
-		isDone: true,
+		isDone:   true,
+		skipLine: false,
 
 		offsets: make(streamsOffsets),
 
@@ -256,8 +258,10 @@ func (jp *jobProvider) addJob(file *os.File, stat os.FileInfo, inode inode, file
 	}
 
 	// load saved offsets only on start phase
-	if !jp.isStarted {
-		jp.loadJobOffsets(job, inode)
+	if jp.isStarted {
+		jp.initJobOffset(offsetsOpReset, job, inode)
+	} else {
+		jp.initJobOffset(jp.config.offsetsOp, job, inode)
 	}
 
 	jp.jobsMu.Lock()
@@ -279,43 +283,53 @@ func (jp *jobProvider) addJob(file *os.File, stat os.FileInfo, inode inode, file
 	jp.tryResumeJob(job, filename)
 }
 
-func (jp *jobProvider) loadJobOffsets(job *job, inode inode) {
-	file := job.file
-
-	switch jp.config.offsetsOp {
+func (jp *jobProvider) initJobOffset(operation offsetsOp, job *job, inode inode) {
+	switch operation {
 	case offsetsOpTail:
-		_, err := file.Seek(0, io.SeekEnd)
+		offset, err := job.file.Seek(0, io.SeekEnd)
 		if err != nil {
 			logger.Panicf("can't make job, can't seek file %d:%s: %s", inode, job.filename, err.Error())
 		}
+
+		if offset == 0 {
+			return
+		}
+
+		// current offset may be in the middle of an event, so worker skips data to the next line
+		// by applying this offset it'll guarantee that full log won't be skipped
+		magicOffset := int64(-1)
+		_, err = job.file.Seek(magicOffset, io.SeekEnd)
+		if err != nil {
+			logger.Panicf("can't make job, can't seek file %d:%s: %s", inode, job.filename, err.Error())
+		}
+		job.skipLine = true
+
 	case offsetsOpReset:
-		_, err := file.Seek(0, io.SeekStart)
+		_, err := job.file.Seek(0, io.SeekStart)
 		if err != nil {
 			logger.Panicf("can't make job, can't seek file %d:%s: %s", inode, job.filename, err.Error())
 		}
 	case offsetsOpContinue:
 		offsets, has := jp.loadedOffsets[inode]
-		if has && len(offsets) == 0 {
+		if has && len(offsets.streams) == 0 {
 			logger.Panicf("can't instantiate job, no streams in source %d:%q", inode, job.filename)
 		}
 
-		if has {
-			job.offsets = offsets
+		if !has || offsets.filename != job.filename {
+			return
+		}
 
-			// all streams are in one file, so we should seek file to
-			// min offset to make sure logs from all streams will be delivered at least once
-			minOffset := int64(math.MaxInt64)
-			for _, offset := range offsets {
-				if offset < minOffset {
-					minOffset = offset
-				}
-			}
-
-			_, err := file.Seek(minOffset, io.SeekStart)
+		job.offsets = offsets.streams
+		// seek to any offset since whey all equal at start time
+		for _, offset := range offsets.streams {
+			_, err := job.file.Seek(offset, io.SeekStart)
 			if err != nil {
 				logger.Panicf("can't make job, can't seek file %d:%s: %s", inode, job.filename, err.Error())
 			}
+			return
 		}
+	default:
+		logger.Panicf("unknown offsets op: %d", jp.config.offsetsOp)
 	}
 }
 
@@ -488,15 +502,33 @@ func (jp *jobProvider) loadOffsets() {
 	}
 
 	if info.IsDir() {
-		logger.Fatalf("Can't load offsets, offsets file %s is dir")
+		logger.Fatalf("can't load offsets, offsets file %s is dir")
 	}
 
 	content, err := ioutil.ReadFile(filename)
 	if err != nil {
-		logger.Panicf("Can't load offsets %s: ", err.Error())
+		logger.Panicf("can't load offsets %s: ", err.Error())
 	}
 
 	jp.loadedOffsets = parseOffsets(string(content))
+	jp.collapseOffsets()
+}
+
+// collapseOffsets all streams are in one file, so we should seek file to
+// min offset to make sure logs from all streams will be delivered at least once
+func (jp *jobProvider) collapseOffsets() {
+	for _, inode := range jp.loadedOffsets {
+		minOffset := int64(math.MaxInt64)
+		for _, offset := range inode.streams {
+			if offset < minOffset {
+				minOffset = offset
+			}
+		}
+
+		for key := range inode.streams {
+			inode.streams[key] = minOffset
+		}
+	}
 }
 
 func (jp *jobProvider) reportStats() {
@@ -728,7 +760,10 @@ func parseOffsets(data string) inodesOffsets {
 		if has {
 			logger.Panicf("wrong offsets format, duplicate inode %d, %s", inode, source)
 		}
-		offsets[inode] = make(map[pipeline.StreamName]int64)
+		offsets[inode] = &inodeOffsets{
+			streams:  make(streamsOffsets),
+			filename: fullFile[pos+1:],
+		}
 
 		for len(data) != 0 && data[0] != '-' {
 			linePos = strings.IndexByte(data, '\n')
@@ -749,7 +784,7 @@ func parseOffsets(data string) inodesOffsets {
 			if len(stream) == 0 {
 				logger.Panicf("wrong offsets format, empty stream in inode %d, %s", inode, source)
 			}
-			_, has = offsets[inode][stream]
+			_, has = offsets[inode].streams[stream]
 			if has {
 				logger.Panicf("wrong offsets format, duplicate stream %q in inode %d, %s", stream, inode, source)
 			}
@@ -760,9 +795,13 @@ func parseOffsets(data string) inodesOffsets {
 				logger.Panicf("wrong offsets format, can't parse offset: %q, %q", offsetStr, err.Error())
 			}
 
-			offsets[inode][stream] = offset
+			offsets[inode].streams[stream] = offset
 		}
 	}
 
 	return offsets
+}
+
+func getInode(stat os.FileInfo) inode {
+	return inode(stat.Sys().(*syscall.Stat_t).Ino)
 }

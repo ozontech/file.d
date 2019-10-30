@@ -9,13 +9,11 @@ import (
 	"go.uber.org/atomic"
 )
 
-var eventGCSizeThreshold = 4 * units.Kibibyte
+var eventSizeGCThreshold = 4 * units.Kibibyte
 
 type Event struct {
-	Root      *insaneJSON.Root
-	poolIndex int
-	next      *Event
-	stream    *stream
+	Root *insaneJSON.Root
+	Buf  []byte
 
 	SeqID      uint64
 	Offset     int64
@@ -24,6 +22,9 @@ type Event struct {
 	StreamName StreamName
 	Size       int
 
+	index        int
+	next         *Event
+	stream       *stream
 	isDeprecated atomic.Bool
 	shouldGC     bool
 
@@ -45,8 +46,9 @@ type eventStage int
 
 func newEvent(poolIndex int) *Event {
 	return &Event{
-		poolIndex: poolIndex,
-		Root:      insaneJSON.Spawn(),
+		index: poolIndex,
+		Root:  insaneJSON.Spawn(),
+		Buf:   make([]byte, 0, 1024),
 	}
 }
 
@@ -68,12 +70,15 @@ func (e *Event) stageStr() string {
 		return "UNKNOWN"
 	}
 }
+
 func (e *Event) reset() {
 	if e.shouldGC {
 		e.Root.ReleaseMem()
+		e.Buf = make([]byte, 0, 1024)
 		e.shouldGC = false
 	}
 
+	e.Buf = e.Buf[:0]
 	e.stage = eventStageHead
 	e.next = nil
 	e.isDeprecated.Swap(false)
@@ -105,7 +110,7 @@ func (e *Event) Encode(outBuf []byte) ([]byte, int) {
 
 	size := len(outBuf) - l
 	// event is going to be super big, lets GC it
-	e.shouldGC = size > int(eventGCSizeThreshold)
+	e.shouldGC = size > int(eventSizeGCThreshold)
 
 	if size > e.maxSize {
 		e.maxSize = size
@@ -182,10 +187,10 @@ func (p *eventPool) back(event *Event) {
 	event.stage = eventStagePool
 	p.eventsCount--
 	if p.eventsCount == -1 {
-		logger.Panicf("event pool is full, why back()? id=%d index=%d", event.SeqID, event.poolIndex)
+		logger.Panicf("event pool is full, why back()? id=%d index=%d", event.SeqID, event.index)
 	}
 
-	currentIndex := event.poolIndex
+	currentIndex := event.index
 	lastIndex := p.eventsCount
 
 	last := p.events[lastIndex]
@@ -194,8 +199,8 @@ func (p *eventPool) back(event *Event) {
 	p.events[currentIndex] = last
 	p.events[lastIndex] = event
 
-	event.poolIndex = lastIndex
-	last.poolIndex = currentIndex
+	event.index = lastIndex
+	last.index = currentIndex
 
 	p.cond.Signal()
 	p.mu.Unlock()
