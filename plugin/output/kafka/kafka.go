@@ -120,11 +120,6 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 	outBuf := data.outBuf[:0]
 	start := 0
 	for i, event := range batch.Events {
-		value := event.Root.Dig("EventId")
-		if value != nil {
-			logger.Infof("EVENT ID %s", event.Root.EncodeToString())
-		}
-
 		outBuf, start = event.Encode(outBuf)
 
 		topic := p.config.DefaultTopic
