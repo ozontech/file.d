@@ -96,7 +96,7 @@ func (p *processor) process(output OutputPlugin) {
 			}
 		case stateReadSameStream:
 			p.event = p.stream.waitGet(p.waitingEventID)
-			if p.event.poolIndex == -1 {
+			if p.event.index == -1 {
 				logger.Errorf("some events are lost, can't read next sequential event from stream %d(%s)", p.stream.sourceId, p.stream.name)
 				p.reset()
 				p.state = stateReadAnyStream

@@ -230,8 +230,8 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 
 	event.Offset = offset
 	event.SourceID = sourceID
-	event.StreamName = stream
 	event.SourceName = sourceName
+	event.StreamName = stream
 	event.Size = len(bytes)
 
 	if !p.settings.isStreamFieldEnabled {
@@ -458,7 +458,7 @@ func (p *Pipeline) maintenance() {
 
 				logger.Infof("========default events dump========")
 				p.eventPool.visit(func(event *Event) {
-					logger.Infof("event: index=%d, id=%d, stream=%d(%s), stage=%s", event.poolIndex, event.SeqID, event.SourceID, event.StreamName, event.stageStr())
+					logger.Infof("event: index=%d, id=%d, stream=%d(%s), stage=%s", event.index, event.SeqID, event.SourceID, event.StreamName, event.stageStr())
 				})
 			}
 

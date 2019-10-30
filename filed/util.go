@@ -74,7 +74,7 @@ func extractConditions(condJSON *simplejson.Json) (pipeline.MatchConditions, err
 			Field: strings.Trim(field, " "),
 		}
 		if value[0] == '/' && value[len(value)-1] == '/' {
-			r, err := regexp.Compile(value[1 : len(value)-2])
+			r, err := regexp.Compile(value[1 : len(value)-1])
 			if err != nil {
 				return nil, errors.Wrapf(err, "can't compile regexp %s", value)
 			}

@@ -28,6 +28,7 @@ func (w *worker) work(head pipeline.Head, jobProvider *jobProvider, readBufferSi
 		isDone := job.isDone
 		sourceId := pipeline.SourceID(job.inode)
 		sourceName := job.filename
+		skipLine := job.skipLine
 		if job.symlink != "" {
 			sourceName = job.symlink
 		}
@@ -71,11 +72,18 @@ func (w *worker) work(head pipeline.Head, jobProvider *jobProvider, readBufferSi
 					continue
 				}
 
-				if len(accumBuffer) != 0 {
-					accumBuffer = append(accumBuffer, readBuffer[processed:i]...)
-					head.In(sourceId, sourceName, offset+accumulated+i+1, accumBuffer)
+				// skip first event because it may lost first part
+				if skipLine {
+					job.mu.Lock()
+					job.skipLine = false
+					job.mu.Unlock()
 				} else {
-					head.In(sourceId, sourceName, offset+i+1, readBuffer[processed:i])
+					if len(accumBuffer) != 0 {
+						accumBuffer = append(accumBuffer, readBuffer[processed:i]...)
+						head.In(sourceId, sourceName, offset+accumulated+i+1, accumBuffer)
+					} else {
+						head.In(sourceId, sourceName, offset+i+1, readBuffer[processed:i])
+					}
 				}
 				accumBuffer = accumBuffer[:0]
 

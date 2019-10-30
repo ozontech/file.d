@@ -75,9 +75,9 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	}
 
 	// docker splits long JSON logs by 16kb chunks, so let's join them
-	// look ahead 32kb to ensure we won't throw events longer than MaxEventSize
+	// look ahead 64kb to ensure we won't throw events longer than MaxEventSize
 	p.logSize += event.Size
-	predictedLen := p.logSize + 32*1024
+	predictedLen := p.logSize + 64*1024
 	isMaxReached := predictedLen > p.config.MaxEventSize
 	logFragmentLen := len(logFragment)
 	if logFragment[logFragmentLen-3:logFragmentLen-1] != `\n` && !isMaxReached {
@@ -105,16 +105,21 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 
 		event.Root.AddFieldNoAlloc(event.Root, "k8s_node").MutateToString(podMeta.Spec.NodeName)
 		for labelName, labelValue := range podMeta.Labels {
-			//todo: fix copy of strings?
-			event.Root.AddFieldNoAlloc(event.Root, "k8s_label_"+labelName).MutateToString(labelValue)
+			l := len(event.Buf)
+			event.Buf = append(event.Buf, "k8s_label_"...)
+			event.Buf = append(event.Buf, labelName...)
+			event.Root.AddFieldNoAlloc(event.Root, pipeline.ByteToString(event.Buf[l:])).MutateToString(labelValue)
 		}
 	}
 
 	if len(p.logBuff) > 1 {
 		p.logBuff = append(p.logBuff, logFragment[1:logFragmentLen-1]...)
 		p.logBuff = append(p.logBuff, '"')
-		//todo: fix copy of strings?
-		event.Root.AddFieldNoAlloc(event.Root, "log").MutateToEscapedString(string(p.logBuff))
+
+		l := len(event.Buf)
+		event.Buf = append(event.Buf, p.logBuff...)
+		event.Root.AddFieldNoAlloc(event.Root, "log").MutateToEscapedString(pipeline.ByteToString(event.Buf[l:]))
+
 		p.logBuff = p.logBuff[:1]
 	}
 	p.logSize = 0

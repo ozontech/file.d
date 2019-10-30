@@ -10,7 +10,8 @@ import (
 	"gitlab.ozon.ru/sre/filed/pipeline"
 )
 
-/* GELF messages are separated by null byte sequence. Each GELF message is a JSON with the following fields:
+/*
+GELF messages are separated by null byte sequence. Each GELF message is a JSON with the following fields:
 1.  string version SHOULD be "1.1"
 2.  string host
 3.  string short_message
@@ -20,6 +21,9 @@ import (
 7.  string _extra_field_1
 8.  string _extra_field_2
 10. string _extra_field_3
+
+Every field with an underscore prefix (_) will be treated as an extra field.
+Allowed characters in field names are any word character (letter, number, underscore), dashes and dots.
 */
 
 const (
@@ -28,6 +32,7 @@ const (
 	defaultConnectionTimeout    = time.Second * 5
 	defaultHostField            = "host"
 	defaultShortMessageField    = "message"
+	defaultShortMessageValue    = "not set"
 	defaultTimestampField       = "time"
 	defaultTimestampFieldFormat = "RFC3339Nano"
 	defaultLevelField           = "level"
@@ -42,20 +47,22 @@ type Config struct {
 	WorkersCount      int               `json:"workers_count"`
 	BatchSize         int               `json:"batch_size"`
 
-	HostField            string `json:"host_field"`
-	ShortMessageField    string `json:"short_message_field"`
-	FullMessageField     string `json:"full_message_field"`
-	TimestampField       string `json:"timestamp_field"`
-	TimestampFieldFormat string `json:"timestamp_field_format"`
-	LevelField           string `json:"level_field"`
+	HostField                string `json:"host_field"`
+	ShortMessageField        string `json:"short_message_field"`
+	DefaultShortMessageValue string `json:"default_short_message_value"`
+	FullMessageField         string `json:"full_message_field"`
+	TimestampField           string `json:"timestamp_field"`
+	TimestampFieldFormat     string `json:"timestamp_field_format"`
+	LevelField               string `json:"level_field"`
 
 	// fields converted to extra fields GELF format
-	hostField            string
-	shortMessageField    string
-	fullMessageField     string
-	timestampField       string
-	timestampFieldFormat string
-	levelField           string
+	hostField                string
+	shortMessageField        string
+	defaultShortMessageValue string
+	fullMessageField         string
+	timestampField           string
+	timestampFieldFormat     string
+	levelField               string
 }
 
 type Plugin struct {
@@ -120,6 +127,10 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		p.config.ShortMessageField = defaultShortMessageField
 	}
 	p.config.shortMessageField = pipeline.ByteToString(p.formatExtraField(nil, p.config.ShortMessageField))
+
+	if p.config.DefaultShortMessageValue == "" {
+		p.config.defaultShortMessageValue = defaultShortMessageValue
+	}
 
 	p.config.fullMessageField = pipeline.ByteToString(p.formatExtraField(nil, p.config.FullMessageField))
 
@@ -238,8 +249,8 @@ func (p *Plugin) formatEvent(encodeBuf []byte, event *pipeline.Event) []byte {
 	root.AddFieldNoAlloc(root, "version").MutateToString("1.1")
 
 	p.makeBaseField(root, "host", p.config.hostField, "unknown")
-	p.makeBaseField(root, "short_message", p.config.shortMessageField, "")
-	p.makeBaseField(root, "full_message", p.config.fullMessageField, "not set")
+	p.makeBaseField(root, "short_message", p.config.shortMessageField, p.config.defaultShortMessageValue)
+	p.makeBaseField(root, "full_message", p.config.fullMessageField, "")
 
 	p.makeTimestampField(root, p.config.timestampField, p.config.timestampFieldFormat)
 	p.makeLevelField(root, p.config.levelField)
@@ -255,7 +266,19 @@ func (p *Plugin) makeBaseField(root *insaneJSON.Root, baseFieldName string, root
 	field := root.DigField(rootFieldName)
 	if field != nil {
 		field.MutateToField(baseFieldName)
-	} else {
+		value := field.AsFieldValue()
+
+		if !value.IsString() {
+			value.MutateToString(value.AsString())
+		}
+
+		if p.isBlank(value.AsString()) {
+			value.MutateToString(defaultValue)
+		}
+		return
+	}
+
+	if defaultValue != "" {
 		root.AddFieldNoAlloc(root, baseFieldName).MutateToString(defaultValue)
 	}
 }
@@ -285,7 +308,7 @@ func (p *Plugin) makeTimestampField(root *insaneJSON.Root, timestampField string
 		}
 	}
 
-	// are we in the past?
+	// are event in the past?
 	if ts < 100000000 {
 		logger.Warnf("found too old event for gelf output, falling back to current time: %s", root.EncodeToString())
 		ts = now
@@ -342,27 +365,31 @@ func (p *Plugin) makeExtraFields(encodeBuf []byte, root *insaneJSON.Root) []byte
 	return encodeBuf
 }
 
-/*
-From GELF doc:
-Every field with an underscore prefix (_) will be treated as an extra field.
-Allowed characters in field names are any word character (letter, number, underscore), dashes and dots.
-*/
+func (p *Plugin) isBlank(s string) bool {
+	for _, c := range s {
+		isBlankChar := c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\u000B' || c == '\f' || c == '\u001C' || c == '\u001D' || c == '\u001E' || c == '\u001F'
+		if !isBlankChar {
+			return false
+		}
+	}
+
+	return true
+}
+
 func (p *Plugin) formatExtraField(encodeBuf []byte, name string) []byte {
 	if len(name) == 0 {
 		return encodeBuf
 	}
 
 	encodeBuf = append(encodeBuf, '_')
-	l := len(name)
-	for i := 0; i < l; i++ {
-		c := name[i]
+	for _, c := range name {
 		isLetter := (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
 		isNumber := c >= '0' && c <= '9'
 		isAllowedChar := c == '_' || c == '-' || c == '.'
 		if !isLetter && !isNumber && !isAllowedChar {
 			c = '-'
 		}
-		encodeBuf = append(encodeBuf, c)
+		encodeBuf = append(encodeBuf, byte(c))
 	}
 
 	return encodeBuf

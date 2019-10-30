@@ -11,7 +11,8 @@ type Plugin struct {
 }
 
 type Config struct {
-	Field string `json:"field"`
+	Field  string `json:"field"`
+	Prefix string `json:"prefix"`
 }
 
 func init() {
@@ -55,6 +56,16 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	}
 
 	jsonNode.Suicide()
+
+	if p.config.Prefix != "" {
+		fields := node.AsFields()
+		for _, field := range fields {
+			l := len(event.Buf)
+			event.Buf = append(event.Buf, p.config.Prefix...)
+			event.Buf = append(event.Buf, field.AsString()...)
+			field.MutateToField(pipeline.ByteToString(event.Buf[l:]))
+		}
+	}
 
 	// place decoded object under root
 	event.Root.MergeWith(node)

@@ -120,6 +120,11 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 	outBuf := data.outBuf[:0]
 	start := 0
 	for i, event := range batch.Events {
+		value := event.Root.Dig("EventId")
+		if value != nil {
+			logger.Infof("EVENT ID %s", event.Root.EncodeToString())
+		}
+
 		outBuf, start = event.Encode(outBuf)
 
 		topic := p.config.DefaultTopic
@@ -143,14 +148,9 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 	if err != nil {
 		errs := err.(sarama.ProducerErrors)
 		for _, e := range errs {
-			switch e.Err {
-			case sarama.ErrMessageSizeTooLarge:
-				logger.Errorf("too large message, so it have been dropped while sending to kafka")
-			default:
-				logger.Errorf("can't write batch to kafka: %s", e.Err.Error())
-			}
+			logger.Errorf("can't write batch to kafka: %s", e.Err.Error())
 		}
-		logger.Fatalf("kafka batch failed to deliver: ", err.Error())
+		logger.Fatalf("kafka batch failed to deliver: %s", err.Error())
 	}
 
 }
