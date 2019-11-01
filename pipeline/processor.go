@@ -79,7 +79,6 @@ func (p *processor) start(output OutputPlugin, params *ActionPluginParams) {
 	}
 
 	go p.process(output)
-	//go p.heartbeat()
 }
 
 func (p *processor) readAnyStream(st *stream) (*Event, *stream) {
@@ -147,7 +146,7 @@ func (p *processor) processEvent(event *Event, st *stream) bool {
 				isPassed = false
 			}
 
-			if isPassed {
+			if !isPassed {
 				break
 			}
 		}

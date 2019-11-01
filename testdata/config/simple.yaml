@@ -1,7 +1,7 @@
 pipelines:
   test:
     settings:
-      processors_count: 1
+      processors_count: 128
     input:
       type: file
       persistence_mode: async
@@ -10,16 +10,16 @@ pipelines:
       offsets_op: reset
     actions:
     - type: k8s
-#    - type: discard
-#      match_fields:
-#        should_drop: ok
-#      match_mode: or
-#    - type: throttle
-#      default_limit: 1000
-#      throttle_field: throttle
-#      interval: 5s
-#      buckets: 60
-#      metric_name: throttle
-#      metric_labels: [service, k8s_pod, k8s_container]
+    - type: discard
+      match_fields:
+        should_drop: ok
+      match_mode: or
+    - type: throttle
+      default_limit: 1000
+      throttle_field: throttle
+      interval: 5s
+      buckets: 60
+      metric_name: throttle
+      metric_labels: [service, k8s_pod, k8s_container]
     output:
       type: devnull

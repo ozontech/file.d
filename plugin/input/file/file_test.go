@@ -463,6 +463,35 @@ func TestReadSeq(t *testing.T) {
 	assert.Equal(t, genOffsetsContent(file, 27), getContent(p.config.OffsetsFile), "wrong offsets")
 }
 
+func TestReadLong(t *testing.T) {
+	setup()
+	defer shutdown()
+
+	c, p := startPipeline("async", true, nil)
+	defer c.Stop()
+
+	file := createTempFile()
+
+	s := ""
+	overhead := 100
+	for i := 0; i < defaultReadBufferSize+overhead; i++ {
+		s = s + "a"
+	}
+	data := fmt.Sprintf(`{"Data":"%s"}`+"\n"+`{"Data":"xxx"}`, s)
+
+	addData(file, []byte(data), true, false)
+	addData(file, []byte(data), true, false)
+	addData(file, []byte(data), true, false)
+	c.HandleEventFlowFinish(false)
+
+	c.WaitUntilDone(false)
+
+	assert.Equal(t, 6, c.GetEventLogLength(), "wrong log count")
+	assert.Equal(t, 6, c.GetEventsTotal(), "wrong log count")
+	p.jobProvider.saveOffsets()
+	assert.Equal(t, genOffsetsContent(file, (defaultReadBufferSize+overhead+27)*3), getContent(p.config.OffsetsFile), "wrong offsets")
+}
+
 func TestReadComplexSeqMulti(t *testing.T) {
 	setup()
 	defer shutdown()
@@ -583,7 +612,6 @@ func TestReadInsane(t *testing.T) {
 		if err != nil {
 			panic(err.Error())
 		}
-		//logger.Infof("added %s", file)
 		fs = append(fs, f)
 		fileNames = append(fileNames, file)
 	}
@@ -606,6 +634,57 @@ func TestReadInsane(t *testing.T) {
 	p.jobProvider.saveOffsets()
 	assertOffsetsEqual(t, genOffsetsContentMultiple(fileNames, len(json)*lines), getContent(p.config.OffsetsFile))
 }
+
+func TestReadInsaneLong(t *testing.T) {
+	setup()
+	defer shutdown()
+
+	s := ""
+	overhead := 100
+	for i := 0; i < defaultReadBufferSize+overhead; i++ {
+		s = s + "a"
+	}
+	json1 := []byte(fmt.Sprintf(`{"Data":"%s"}`+"\n"+`{"Data":"xxx"}`+"\n", s))
+	json2 := []byte(fmt.Sprintf(`{"Data":"xxx"}`+"\n"))
+
+	lines := 128
+	files := 8
+	fs := make([]*os.File, 0, files)
+	fileNames := make([]string, 0, files)
+
+	c, p := startPipeline("async", true, nil)
+	defer c.Stop()
+
+	for f := 0; f < files; f++ {
+		file := createTempFile()
+		f, err := os.OpenFile(file, os.O_APPEND|os.O_WRONLY, 0660)
+		if err != nil {
+			panic(err.Error())
+		}
+		fs = append(fs, f)
+		fileNames = append(fileNames, file)
+	}
+
+	wg := &sync.WaitGroup{}
+	wg.Add(len(fs))
+	for i := range fs {
+		go func(index int) {
+			for i := 0; i < lines; i++ {
+				addDataFile(fs[index], json1)
+				addDataFile(fs[index], json2)
+			}
+			wg.Done()
+		}(i)
+	}
+
+	wg.Wait()
+	c.HandleEventFlowFinish(false)
+	c.WaitUntilDone(false)
+
+	p.jobProvider.saveOffsets()
+	assertOffsetsEqual(t, genOffsetsContentMultiple(fileNames, (len(json1)+len(json2))*lines), getContent(p.config.OffsetsFile))
+}
+
 func TestReadPar(t *testing.T) {
 	setup()
 	defer shutdown()

@@ -38,7 +38,7 @@ func (w *worker) work(index int, controller pipeline.InputPluginController, jobP
 			logger.Panicf("job is done, why worker should work?")
 		}
 
-		offset, err := file.Seek(0, io.SeekCurrent)
+		lastOffset, err := file.Seek(0, io.SeekCurrent)
 		if err != nil {
 			logger.Fatalf("can't get offset, file %d:%s seek error: %s", sourceId, sourceName, err.Error())
 		}
@@ -78,11 +78,12 @@ func (w *worker) work(index int, controller pipeline.InputPluginController, jobP
 					job.skipLine = false
 					job.mu.Unlock()
 				} else {
+					offset := lastOffset + accumulated + i + 1
 					if len(accumBuffer) != 0 {
 						accumBuffer = append(accumBuffer, readBuffer[processed:i]...)
-						controller.In(sourceId, sourceName, offset+accumulated+i+1, accumBuffer)
+						controller.In(sourceId, sourceName, offset, accumBuffer)
 					} else {
-						controller.In(sourceId, sourceName, offset+i+1, readBuffer[processed:i])
+						controller.In(sourceId, sourceName, offset, readBuffer[processed:i])
 					}
 				}
 				accumBuffer = accumBuffer[:0]
@@ -122,10 +123,10 @@ func (w *worker) work(index int, controller pipeline.InputPluginController, jobP
 			}
 
 			// file was truncated, seek to start
-			if offset+readTotal > stat.Size() {
+			if lastOffset+readTotal > stat.Size() {
 				jobProvider.truncateJob(job)
 				isEOF = false
-				offset = 0
+				lastOffset = 0
 				accumulated = 0
 				processed = 0
 			}

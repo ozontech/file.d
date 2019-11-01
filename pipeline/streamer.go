@@ -90,6 +90,7 @@ func (s *streamer) makeBlocked(stream *stream) {
 }
 
 func (s *streamer) resetBlocked(stream *stream) {
+	s.blockedMu.Lock()
 	if stream.blockIndex == -1 {
 		logger.Panicf("why remove? stream isn't blocked")
 	}
@@ -104,6 +105,7 @@ func (s *streamer) resetBlocked(stream *stream) {
 	s.blocked = s.blocked[:lastIndex]
 
 	stream.blockIndex = -1
+	s.blockedMu.Unlock()
 }
 
 func (s *streamer) makeReady(stream *stream) {

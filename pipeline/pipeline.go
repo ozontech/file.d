@@ -241,6 +241,7 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 		sourceID = SourceID(index)
 	}
 
+	//logger.Infof("commit: %d %s", event.Offset, event.Root.EncodeToString())
 	p.streamer.putEvent(event)
 }
 

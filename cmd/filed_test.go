@@ -98,8 +98,8 @@ func TestEndToEnd(t *testing.T) {
 
 	wg := &sync.WaitGroup{}
 	for {
-	jobs := 8
-	files := 1
+	jobs := 16
+	files := 2
 	for i := 0; i < jobs; i++ {
 		wg.Add(1)
 		go gen(filesDir, files, wg)
