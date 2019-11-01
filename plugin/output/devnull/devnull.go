@@ -9,8 +9,8 @@ type Config struct {
 }
 
 type Plugin struct {
-	tail  pipeline.Tail
-	outFn func(event *pipeline.Event)
+	controller pipeline.OutputPluginController
+	outFn      func(event *pipeline.Event)
 }
 
 func init() {
@@ -25,7 +25,7 @@ func Factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 }
 
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginParams) {
-	p.tail = params.Tail
+	p.controller = params.Controller
 }
 
 func (p *Plugin) SetOutFn(fn func(event *pipeline.Event)) {
@@ -40,5 +40,5 @@ func (p *Plugin) Out(event *pipeline.Event) {
 		p.outFn(event)
 	}
 
-	p.tail.Commit(event)
+	p.controller.Commit(event)
 }

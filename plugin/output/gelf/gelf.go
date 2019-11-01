@@ -68,7 +68,7 @@ type Config struct {
 type Plugin struct {
 	config     *Config
 	batcher    *pipeline.Batcher
-	tail       pipeline.Tail
+	controller pipeline.OutputPluginController
 	avgLogSize int
 }
 
@@ -90,7 +90,7 @@ func Factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 }
 
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginParams) {
-	p.tail = params.Tail
+	p.controller = params.Controller
 	p.avgLogSize = params.PipelineSettings.AvgLogSize
 	p.config = config.(*Config)
 
@@ -162,7 +162,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		"gelf",
 		p.out,
 		p.maintenance,
-		p.tail,
+		p.controller,
 		p.config.WorkersCount,
 		p.config.BatchSize,
 		p.config.FlushTimeout.Duration,

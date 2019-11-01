@@ -12,6 +12,7 @@ import (
 	"go.uber.org/automaxprocs/maxprocs"
 
 	_ "gitlab.ozon.ru/sre/filed/plugin/action/discard"
+	_ "gitlab.ozon.ru/sre/filed/plugin/action/flatten"
 	_ "gitlab.ozon.ru/sre/filed/plugin/action/json_decode"
 	_ "gitlab.ozon.ru/sre/filed/plugin/action/k8s"
 	_ "gitlab.ozon.ru/sre/filed/plugin/action/keep_fields"

@@ -1,8 +1,6 @@
 package file
 
 import (
-	"sync"
-
 	"gitlab.ozon.ru/sre/filed/filed"
 	"gitlab.ozon.ru/sre/filed/logger"
 	"gitlab.ozon.ru/sre/filed/pipeline"
@@ -45,7 +43,7 @@ type Config struct {
 
 type Plugin struct {
 	config *Config
-	head   pipeline.Head
+	params *pipeline.InputPluginParams
 
 	workers     []*worker
 	jobProvider *jobProvider
@@ -64,9 +62,10 @@ func factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 	return &Plugin{}, &Config{}
 }
 
-func (p *Plugin) Start(config pipeline.AnyConfig, head pipeline.Head, doneWg *sync.WaitGroup) {
+func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginParams) {
 	logger.Info("starting file input plugin")
 
+	p.params = params
 	p.config = config.(*Config)
 	if p.config == nil {
 		logger.Panicf("config is nil for the file plugin")
@@ -128,8 +127,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, head pipeline.Head, doneWg *sy
 
 	p.config.offsetsTmpFilename = p.config.OffsetsFile + ".atomic"
 
-	p.head = head
-	p.jobProvider = NewJobProvider(p.config, doneWg, head)
+	p.jobProvider = NewJobProvider(p.config, p.params.DoneWg, p.params.Controller)
 	p.startWorkers()
 	p.jobProvider.start()
 }
@@ -138,7 +136,7 @@ func (p *Plugin) startWorkers() {
 	p.workers = make([]*worker, p.config.WorkersCount)
 	for i := range p.workers {
 		p.workers[i] = &worker{}
-		p.workers[i].start(p.head, p.jobProvider, p.config.ReadBufferSize)
+		p.workers[i].start(i, p.params.Controller, p.jobProvider, p.config.ReadBufferSize)
 	}
 
 	logger.Infof("file read workers created, count=%d", len(p.workers))

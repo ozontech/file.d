@@ -35,7 +35,7 @@ type data struct {
 
 type Plugin struct {
 	config     *Config
-	tail       pipeline.Tail
+	controller pipeline.OutputPluginController
 	avgLogSize int
 
 	producer sarama.SyncProducer
@@ -55,7 +55,7 @@ func Factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginParams) {
 	p.config = config.(*Config)
-	p.tail = params.Tail
+	p.controller = params.Controller
 
 	p.config.brokers = strings.Split(p.config.Brokers, ",")
 	if p.config.Brokers == "" || len(p.config.brokers) == 0 {
@@ -90,7 +90,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		"kafka",
 		p.out,
 		nil,
-		p.tail,
+		p.controller,
 		p.config.WorkersCount,
 		p.config.BatchSize,
 		p.config.FlushTimeout.Duration,

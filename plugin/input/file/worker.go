@@ -10,11 +10,11 @@ import (
 type worker struct {
 }
 
-func (w *worker) start(inputController pipeline.Head, jobProvider *jobProvider, readBufferSize int) {
-	go w.work(inputController, jobProvider, readBufferSize)
+func (w *worker) start(index int, inputController pipeline.InputPluginController, jobProvider *jobProvider, readBufferSize int) {
+	go w.work(index, inputController, jobProvider, readBufferSize)
 }
 
-func (w *worker) work(head pipeline.Head, jobProvider *jobProvider, readBufferSize int) {
+func (w *worker) work(index int, controller pipeline.InputPluginController, jobProvider *jobProvider, readBufferSize int) {
 	accumBuffer := make([]byte, 0, readBufferSize)
 	readBuffer := make([]byte, readBufferSize)
 	for {
@@ -80,9 +80,9 @@ func (w *worker) work(head pipeline.Head, jobProvider *jobProvider, readBufferSi
 				} else {
 					if len(accumBuffer) != 0 {
 						accumBuffer = append(accumBuffer, readBuffer[processed:i]...)
-						head.In(sourceId, sourceName, offset+accumulated+i+1, accumBuffer)
+						controller.In(sourceId, sourceName, offset+accumulated+i+1, accumBuffer)
 					} else {
-						head.In(sourceId, sourceName, offset+i+1, readBuffer[processed:i])
+						controller.In(sourceId, sourceName, offset+i+1, readBuffer[processed:i])
 					}
 				}
 				accumBuffer = accumBuffer[:0]

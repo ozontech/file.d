@@ -11,9 +11,9 @@ type Config struct {
 }
 
 type Plugin struct {
-	head     pipeline.Head
-	acceptFn func(event *pipeline.Event)
-	done     sync.WaitGroup
+	controller pipeline.InputPluginController
+	acceptFn   func(event *pipeline.Event)
+	done       sync.WaitGroup
 }
 
 func init() {
@@ -27,8 +27,8 @@ func Factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 	return &Plugin{}, &Config{}
 }
 
-func (p *Plugin) Start(config pipeline.AnyConfig, head pipeline.Head, doneWg *sync.WaitGroup) {
-	p.head = head
+func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginParams) {
+	p.controller = params.Controller
 }
 
 func (p *Plugin) Stop() {
@@ -52,5 +52,5 @@ func (p *Plugin) SetAcceptFn(fn func(event *pipeline.Event)) {
 
 func (p *Plugin) In(sourceId pipeline.SourceID, sourceName string, offset int64, size int64, bytes []byte) {
 	p.done.Add(1)
-	p.head.In(sourceId, sourceName, offset, bytes)
+	p.controller.In(sourceId, sourceName, offset, bytes)
 }

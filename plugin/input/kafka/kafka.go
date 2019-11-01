@@ -3,7 +3,6 @@ package kafka
 import (
 	"context"
 	"strings"
-	"sync"
 
 	"github.com/Shopify/sarama"
 	"gitlab.ozon.ru/sre/filed/filed"
@@ -27,7 +26,7 @@ type Plugin struct {
 	consumerGroup sarama.ConsumerGroup
 	cancel        context.CancelFunc
 	context       context.Context
-	head          pipeline.Head
+	controller    pipeline.InputPluginController
 	idByTopic     map[string]int
 }
 
@@ -42,8 +41,8 @@ func Factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 	return &Plugin{}, &Config{}
 }
 
-func (p *Plugin) Start(config pipeline.AnyConfig, head pipeline.Head, doneWg *sync.WaitGroup) {
-	p.head = head
+func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginParams) {
+	p.controller = params.Controller
 	p.config = config.(*Config)
 
 	p.config.brokers = strings.Split(p.config.Brokers, ",")
@@ -124,7 +123,7 @@ func (p *Plugin) Cleanup(sarama.ConsumerGroupSession) error {
 func (p *Plugin) ConsumeClaim(session sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
 	for message := range claim.Messages() {
 		sourceID := makeSourceID(p.idByTopic[message.Topic], message.Partition)
-		p.head.In(sourceID, "", message.Offset, message.Value)
+		p.controller.In(sourceID, "", message.Offset, message.Value)
 	}
 
 	return nil

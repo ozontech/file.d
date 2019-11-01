@@ -116,7 +116,7 @@ func TestFormatEvent(t *testing.T) {
 					AvgLogSize:      128,
 				},
 			},
-			Tail: nil,
+			Controller: nil,
 		}
 		plugin.Start(config, params)
 		plugin.formatEvent([]byte{}, event)

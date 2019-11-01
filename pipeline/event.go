@@ -35,11 +35,11 @@ type Event struct {
 
 const (
 	eventStagePool      = 0
-	eventStageHead      = 1
+	eventStageInput     = 1
 	eventStageStream    = 2
 	eventStageProcessor = 3
 	eventStageOutput    = 4
-	eventStageTail      = 5
+	eventStageBack      = 5
 )
 
 type eventStage int
@@ -56,16 +56,16 @@ func (e *Event) stageStr() string {
 	switch e.stage {
 	case eventStagePool:
 		return "POOL"
-	case eventStageHead:
-		return "HEAD"
+	case eventStageInput:
+		return "INPUT"
 	case eventStageStream:
 		return "STREAM"
 	case eventStageProcessor:
 		return "PROCESSOR"
 	case eventStageOutput:
 		return "OUTPUT"
-	case eventStageTail:
-		return "TAIL"
+	case eventStageBack:
+		return "BACK"
 	default:
 		return "UNKNOWN"
 	}
@@ -79,7 +79,7 @@ func (e *Event) reset() {
 	}
 
 	e.Buf = e.Buf[:0]
-	e.stage = eventStageHead
+	e.stage = eventStageInput
 	e.next = nil
 	e.isDeprecated.Swap(false)
 }

@@ -11,7 +11,9 @@ import (
 )
 
 var (
-	defaultThrottleKey = "default"
+	defaultThrottleKey        = "default"
+	defaultTimeField          = "time"
+	defaultDefaultLimit int64 = 10000
 
 	// limiters should be shared across pipeline, so lets have a map by namespace and limiter name
 	limiters   = map[string]map[string]*limiter{} // todo: cleanup this map?
@@ -62,7 +64,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 	limitersMu.Unlock()
 
 	if p.config.DefaultLimit == 0 {
-		p.config.DefaultLimit = 10000
+		p.config.DefaultLimit = defaultDefaultLimit
 	}
 
 	if p.config.ThrottleField == "" {
@@ -70,7 +72,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 	}
 
 	if p.config.TimeField == "" {
-		p.config.TimeField = "ts"
+		p.config.TimeField = defaultTimeField
 	}
 
 	for _, r := range p.config.Rules {

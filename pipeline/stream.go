@@ -2,18 +2,24 @@ package pipeline
 
 import (
 	"sync"
+	"time"
 
 	"gitlab.ozon.ru/sre/filed/logger"
-	"go.uber.org/atomic"
 )
+
+var eventWaitTimeout = time.Second * 30
 
 // stream is a queue of events
 // all events in the queue are from one source and also has same field value (eg json field "stream" in docker logs)
 type stream struct {
 	readyIndex int
+	blockIndex int
+
 	name       StreamName
 	sourceId   SourceID
-	pipeline   *Pipeline
+	sourceName string
+	streamer   *streamer
+	blockTime  time.Time
 
 	mu   *sync.Mutex
 	cond *sync.Cond
@@ -28,12 +34,13 @@ type stream struct {
 	last  *Event
 }
 
-func newStream(name StreamName, sourceId SourceID, pipeline *Pipeline) *stream {
+func newStream(name StreamName, sourceId SourceID, sourceName string, streamer *streamer) *stream {
 	stream := stream{
 		readyIndex: -1,
 		name:       name,
 		sourceId:   sourceId,
-		pipeline:   pipeline,
+		sourceName: sourceName,
+		streamer:   streamer,
 		mu:         &sync.Mutex{},
 	}
 	stream.cond = sync.NewCond(stream.mu)
@@ -78,11 +85,11 @@ func (s *stream) tryDropProcessor() {
 	s.isDetaching = false
 
 	if s.first != nil {
-		s.pipeline.addReadyStream(s)
+		s.streamer.makeReady(s)
 	}
 }
 
-func (s *stream) attach(processor *processor) {
+func (s *stream) attach() {
 	s.mu.Lock()
 	if s.isAttached {
 		logger.Panicf("why attach? processor is already attached")
@@ -106,7 +113,7 @@ func (s *stream) put(event *Event) {
 		s.last = event
 		s.first = event
 		if !s.isAttached {
-			s.pipeline.addReadyStream(s)
+			s.streamer.makeReady(s)
 		}
 		s.cond.Signal()
 	} else {
@@ -116,15 +123,17 @@ func (s *stream) put(event *Event) {
 	s.mu.Unlock()
 }
 
-func (s *stream) waitGet(waitingEventId *atomic.Uint64) *Event {
+func (s *stream) blockGet() *Event {
 	s.mu.Lock()
 	if !s.isAttached {
 		logger.Panicf("why wait get? stream isn't attached")
 	}
 	for s.first == nil {
+		s.blockTime = time.Now()
+		s.streamer.makeBlocked(s)
 		s.cond.Wait()
+		s.streamer.resetBlocked(s)
 	}
-	waitingEventId.Swap(0)
 	event := s.get()
 	// it was timeout, not real event
 	if event.index == -1 {
@@ -153,14 +162,13 @@ func (s *stream) instantGet() *Event {
 	return event
 }
 
-func (s *stream) tryUnblockWait(waitingEventId *atomic.Uint64) bool {
+func (s *stream) tryUnblock() bool {
 	if s == nil {
 		return false
 	}
 
 	s.mu.Lock()
-	id := waitingEventId.Load()
-	if id == 0 {
+	if time.Now().Sub(s.blockTime) < eventWaitTimeout {
 		s.mu.Unlock()
 		return false
 	}

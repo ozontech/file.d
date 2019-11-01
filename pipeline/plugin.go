@@ -14,7 +14,7 @@ const (
 type PluginKind string
 
 type InputPlugin interface {
-	Start(config AnyConfig, head Head, doneWg *sync.WaitGroup)
+	Start(config AnyConfig, params *InputPluginParams)
 	Stop()
 	Commit(*Event)
 }
@@ -39,11 +39,18 @@ type PluginDefaultParams struct {
 
 type ActionPluginParams struct {
 	*PluginDefaultParams
+	Controller ActionPluginController
 }
 
 type OutputPluginParams struct {
 	*PluginDefaultParams
-	Tail Tail
+	Controller OutputPluginController
+}
+
+type InputPluginParams struct {
+	*PluginDefaultParams
+	DoneWg     *sync.WaitGroup
+	Controller InputPluginController
 }
 
 type PluginRegistryItem struct {

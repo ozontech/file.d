@@ -43,9 +43,9 @@ type job struct {
 }
 
 type jobProvider struct {
-	config    *Config
-	head      pipeline.Head
-	isStarted bool
+	config     *Config
+	controller pipeline.InputPluginController
+	isStarted  bool
 
 	watcher *watcher
 
@@ -87,12 +87,12 @@ type symlinkInfo struct {
 	inode    inode
 }
 
-func NewJobProvider(config *Config, done *sync.WaitGroup, head pipeline.Head) *jobProvider {
+func NewJobProvider(config *Config, done *sync.WaitGroup, controller pipeline.InputPluginController) *jobProvider {
 	jp := &jobProvider{
 		config: config,
 		doneWg: done,
 
-		head: head,
+		controller: controller,
 
 		jobs:            make(map[inode]*job, config.MaxFiles),
 		jobsDoneCounter: atomic.NewInt32(0),
@@ -383,7 +383,7 @@ func (jp *jobProvider) doneJob(job *job) {
 }
 
 func (jp *jobProvider) truncateJob(job *job) {
-	deprecated := jp.head.Reset(pipeline.SourceID(job.inode))
+	deprecated := jp.controller.Reset(pipeline.SourceID(job.inode))
 
 	job.mu.Lock()
 	defer job.mu.Unlock()
@@ -714,7 +714,7 @@ func (jp *jobProvider) deleteJob(job *job) {
 	if !job.isDone {
 		logger.Panicf("can't delete job, it isn't done: %d:%s", job.inode, job.filename)
 	}
-	deprecated := jp.head.Reset(pipeline.SourceID(job.inode))
+	deprecated := jp.controller.Reset(pipeline.SourceID(job.inode))
 
 	jp.jobsMu.Lock()
 	delete(jp.jobs, job.inode)

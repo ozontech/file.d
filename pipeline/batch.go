@@ -48,7 +48,7 @@ type Batcher struct {
 	outputType          string
 	outFn               BatcherOutFn
 	maintenanceFn       BatcherMaintenanceFn
-	tail                Tail
+	controller          OutputPluginController
 	workerCount         int
 	batchSize           int
 	flushTimeout        time.Duration
@@ -75,7 +75,7 @@ func NewBatcher(
 	outputType string,
 	outFn BatcherOutFn,
 	maintenanceFn BatcherMaintenanceFn,
-	tail Tail,
+	controller OutputPluginController,
 	workers int,
 	batchSize int,
 	flushTimeout time.Duration,
@@ -86,7 +86,7 @@ func NewBatcher(
 		outputType:          outputType,
 		outFn:               outFn,
 		maintenanceFn:       maintenanceFn,
-		tail:                tail,
+		controller:          controller,
 		workerCount:         workers,
 		batchSize:           batchSize,
 		flushTimeout:        flushTimeout,
@@ -147,7 +147,7 @@ func (b *Batcher) commitBatch(events []*Event, batch *Batch) []*Event {
 	b.commitSeq++
 
 	for _, e := range events {
-		b.tail.Commit(e)
+		b.controller.Commit(e)
 	}
 
 	logger.Infof("output has written a batch type=%s, pipeline=%s, events=%d", b.outputType, b.pipelineName, len(events))

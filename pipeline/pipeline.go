@@ -20,12 +20,16 @@ const (
 	metricsGenInterval  = time.Minute * 10
 )
 
-type Head interface {
+type InputPluginController interface {
 	In(sourceId SourceID, sourceName string, offset int64, bytes []byte)
 	Reset(sourceId SourceID) int // mark source events in the pipeline as isDeprecated, it means that these events shouldn't update offsets
 }
 
-type Tail interface {
+type ActionPluginController interface {
+	Commit(event *Event)    // commit offset of held event and skip further processing
+	Propagate(event *Event) // throw held event back to pipeline
+}
+type OutputPluginController interface {
 	Commit(event *Event) // notify input plugin that event is successfully processed and save offsets
 }
 
@@ -44,8 +48,7 @@ type Pipeline struct {
 	outputData *OutputPluginData
 
 	streamNames []string
-	streams     map[SourceID]map[StreamName]*stream
-	streamsMu   *sync.RWMutex
+	streamer    *streamer
 
 	doneWg *sync.WaitGroup
 
@@ -54,10 +57,6 @@ type Pipeline struct {
 	eventLogMu      *sync.Mutex
 
 	stopCh chan bool
-
-	readyStreams     []*stream
-	readyStreamsMu   *sync.Mutex
-	readyStreamsCond *sync.Cond
 
 	// metrics
 	registry       *prometheus.Registry
@@ -95,8 +94,7 @@ func New(name string, settings *Settings, registry *prometheus.Registry) *Pipeli
 		Name:     name,
 		settings: settings,
 
-		streams:   make(map[SourceID]map[StreamName]*stream),
-		streamsMu: &sync.RWMutex{},
+		streamer: newStreamer(),
 
 		doneWg: &sync.WaitGroup{},
 
@@ -107,18 +105,13 @@ func New(name string, settings *Settings, registry *prometheus.Registry) *Pipeli
 
 		registry:      registry,
 		actionMetrics: make([]*actionMetrics, 0, 0),
-
-		readyStreams:   make([]*stream, 0, 0),
-		readyStreamsMu: &sync.Mutex{},
 	}
 
 	settings.isStreamFieldEnabled = settings.StreamField != "off"
 
-	pipeline.readyStreamsCond = sync.NewCond(pipeline.readyStreamsMu)
-
 	processors := make([]*processor, 0, 0)
 	for i := 0; i < settings.ProcessorsCount; i++ {
-		processors = append(processors, NewProcessor(i, pipeline))
+		processors = append(processors, NewProcessor(i, pipeline, pipeline.streamer))
 	}
 	pipeline.Processors = processors
 
@@ -142,17 +135,23 @@ func (p *Pipeline) Start() {
 		PipelineName:     p.Name,
 		PipelineSettings: p.settings,
 	}
-	outputParams := &OutputPluginParams{
+	inputParams := &InputPluginParams{
 		PluginDefaultParams: defaultParams,
-		Tail:                p,
+		Controller:          p,
+		DoneWg:              p.doneWg,
 	}
 	actionParams := &ActionPluginParams{
 		PluginDefaultParams: defaultParams,
+		Controller:          p,
+	}
+	outputParams := &OutputPluginParams{
+		PluginDefaultParams: defaultParams,
+		Controller:          p,
 	}
 
 	p.output.Start(p.outputData.Config, outputParams)
 
-	rnd := []byte{}
+	rnd := make([]byte, 0, 0)
 	for _, processor := range p.Processors {
 		processor.start(p.output, actionParams)
 		if !p.settings.isStreamFieldEnabled {
@@ -162,7 +161,9 @@ func (p *Pipeline) Start() {
 		}
 	}
 
-	p.input.Start(p.inputData.Config, p, p.doneWg)
+	p.input.Start(p.inputData.Config, inputParams)
+
+	p.streamer.start()
 
 	go p.maintenance()
 }
@@ -240,81 +241,19 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 		sourceID = SourceID(index)
 	}
 
-	p.getStream(sourceID, sourceName, stream).put(event)
-}
-
-func (p *Pipeline) getStream(sourceId SourceID, sourceName string, streamName StreamName) *stream {
-	// fast path, stream have been already created
-	p.streamsMu.RLock()
-	st, has := p.streams[sourceId][streamName]
-	p.streamsMu.RUnlock()
-	if has {
-		return st
-	}
-
-	// slow path, create new stream
-	p.streamsMu.Lock()
-	defer p.streamsMu.Unlock()
-	st, has = p.streams[sourceId][streamName]
-	if has {
-		return st
-	}
-
-	_, has = p.streams[sourceId]
-	if !has {
-		p.streams[sourceId] = make(map[StreamName]*stream)
-	}
-
-	st = newStream(streamName, sourceId, p)
-	p.streams[sourceId][streamName] = st
-
-	return st
-}
-
-func (p *Pipeline) attachToStream(processor *processor) *stream {
-	p.readyStreamsMu.Lock()
-	for len(p.readyStreams) == 0 {
-		p.readyStreamsCond.Wait()
-	}
-	stream := p.readyStreams[0]
-	stream.attach(processor)
-	p.removeReadyStream(stream)
-	p.readyStreamsMu.Unlock()
-
-	return stream
-}
-
-func (p *Pipeline) addReadyStream(stream *stream) {
-	p.readyStreamsMu.Lock()
-	stream.readyIndex = len(p.readyStreams)
-	p.readyStreams = append(p.readyStreams, stream)
-	p.readyStreamsCond.Signal()
-	p.readyStreamsMu.Unlock()
-}
-
-func (p *Pipeline) removeReadyStream(stream *stream) {
-	if stream.readyIndex == -1 {
-		logger.Panicf("why remove? stream isn't ready")
-	}
-
-	lastIndex := len(p.readyStreams) - 1
-	if lastIndex == -1 {
-		logger.Panicf("why remove? stream isn't in ready list")
-	}
-	index := stream.readyIndex
-	p.readyStreams[index] = p.readyStreams[lastIndex]
-	p.readyStreams[index].readyIndex = index
-	p.readyStreams = p.readyStreams[:lastIndex]
-
-	stream.readyIndex = -1
+	p.streamer.putEvent(event)
 }
 
 func (p *Pipeline) Commit(event *Event) {
 	p.commit(event, true)
 }
 
+func (p *Pipeline) Propagate(event *Event) {
+	p.commit(event, true)
+}
+
 func (p *Pipeline) commit(event *Event, notifyInput bool) {
-	event.stage = eventStageTail
+	event.stage = eventStageBack
 	if notifyInput {
 		if len(p.eventSample) == 0 {
 			p.eventSample = event.Root.Encode(p.eventSample)
@@ -395,7 +334,7 @@ func (p *Pipeline) nextMetricsGen() {
 	p.metricsGenTime = time.Now()
 }
 
-func (p *Pipeline) countEvent(actionIndex int, event *Event, eventStatus eventStatus, valuesBuf []string) []string {
+func (p *Pipeline) countEvent(event *Event, actionIndex int, eventStatus eventStatus, valuesBuf []string) []string {
 	if len(p.actionMetrics) == 0 {
 		return valuesBuf
 	}
@@ -437,30 +376,30 @@ func (p *Pipeline) maintenance() {
 			logger.Infof("pipeline %q final event sample: %s", p.Name, p.eventSample)
 			p.eventSample = p.eventSample[:0]
 
-			if p.eventPool.eventsCount == p.settings.Capacity {
-				p.streamsMu.Lock()
-				logger.Infof("========streams======== ready=%d", len(p.readyStreams))
-				for _, s := range p.streams {
-					for _, stream := range s {
-						if stream.isDetaching {
-							logger.Infof("stream %d(%s) state=DETACHING, get offset=%d, commit offset=%d", stream.sourceId, stream.name, stream.getOffset, stream.commitOffset)
-						}
-						if stream.isAttached {
-							logger.Infof("stream %d(%s) state=ATTACHED", stream.sourceId, stream.name)
-						}
-					}
-				}
-				p.streamsMu.Unlock()
-				logger.Infof("========processor state dump========")
-				for _, t := range p.Processors {
-					t.dumpState()
-				}
-
-				logger.Infof("========default events dump========")
-				p.eventPool.visit(func(event *Event) {
-					logger.Infof("event: index=%d, id=%d, stream=%d(%s), stage=%s", event.index, event.SeqID, event.SourceID, event.StreamName, event.stageStr())
-				})
-			}
+			//if p.eventPool.eventsCount == p.settings.Capacity {
+			//	p.streamsMu.Lock()
+			//	logger.Infof("========streams======== ready=%d", len(p.readyStreams))
+			//	for _, s := range p.streams {
+			//		for _, stream := range s {
+			//			if stream.isDetaching {
+			//				logger.Infof("stream %d(%s) state=DETACHING, get offset=%d, commit offset=%d", stream.sourceId, stream.name, stream.getOffset, stream.commitOffset)
+			//			}
+			//			if stream.isAttached {
+			//				logger.Infof("stream %d(%s) state=ATTACHED", stream.sourceId, stream.name)
+			//			}
+			//		}
+			//	}
+			//	p.streamsMu.Unlock()
+			//	logger.Infof("========processor state dump========")
+			//	for _, t := range p.Processors {
+			//		t.dumpState()
+			//	}
+			//
+			//	logger.Infof("========default events dump========")
+			//	p.eventPool.visit(func(event *Event) {
+			//		logger.Infof("event: index=%d, id=%d, stream=%d(%s), stage=%s", event.index, event.SeqID, event.SourceID, event.StreamName, event.stageStr())
+			//	})
+			//}
 
 			processed := p.totalCommitted.Load()
 			delta := processed - lastProcessed
