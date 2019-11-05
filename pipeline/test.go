@@ -1,6 +1,10 @@
 package pipeline
 
-import "github.com/prometheus/client_golang/prometheus"
+import (
+	"net/http"
+
+	"github.com/prometheus/client_golang/prometheus"
+)
 
 func NewTestPipeLine(multiProcessors bool) *Pipeline {
 	processorsCount := 1
@@ -15,5 +19,6 @@ func NewTestPipeLine(multiProcessors bool) *Pipeline {
 		AvgLogSize:      2048,
 	}
 
-	return New("test", settings, prometheus.NewRegistry())
+	http.DefaultServeMux = &http.ServeMux{}
+	return New("test", settings, prometheus.NewRegistry(), http.DefaultServeMux)
 }

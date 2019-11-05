@@ -2,7 +2,6 @@ package filed
 
 import (
 	"fmt"
-	"net/http"
 	"regexp"
 	"runtime"
 	"strings"
@@ -108,13 +107,6 @@ func makeActionJSON(actionJSON *simplejson.Json) []byte {
 		logger.Panicf("can't create action json")
 	}
 	return configJson
-}
-
-type liveReadyHandler struct {
-}
-
-func (p *liveReadyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	logger.Infof("live/ready OK")
 }
 
 func CompileRegex(s string) (*regexp.Regexp, error) {

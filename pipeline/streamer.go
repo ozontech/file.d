@@ -1,6 +1,7 @@
 package pipeline
 
 import (
+	"fmt"
 	"sync"
 	"time"
 
@@ -134,14 +135,64 @@ func (s *streamer) resetReady(stream *stream) {
 }
 
 func (s *streamer) heartbeat() {
+	streams := make([]*stream, 0, 0)
 	for {
 		time.Sleep(time.Millisecond * 200)
+		streams = streams[:0]
+
 		s.blockedMu.Lock()
-		for _, stream := range s.blocked {
+		streams = append(streams, s.blocked...)
+		s.blockedMu.Unlock()
+
+		for _, stream := range streams {
 			if stream.tryUnblock() {
 				logger.Errorf(`event sequence timeout consider increasing "processors_count" parameter`)
 			}
 		}
-		s.blockedMu.Unlock()
 	}
+}
+
+func (s *streamer) dump() (result string) {
+	s.mu.Lock()
+
+	result += logger.Cond(len(s.streams) == 0, logger.Header("no streams"), func() (result string) {
+		result = logger.Header("streams")
+		for _, s := range s.streams {
+			for _, stream := range s {
+				state := "| UNATTACHED |"
+				if stream.isAttached {
+					state = "|  ATTACHED  |"
+				}
+				if stream.isDetaching {
+					state = "| DETACHING  |"
+				}
+
+				result += fmt.Sprintf("%d(%s) state=%s, get offset=%d, commit offset=%d\n", stream.sourceId, stream.name, state, stream.getOffset, stream.commitOffset)
+			}
+		}
+
+		return result
+	})
+
+	result += logger.Cond(len(s.ready) == 0, logger.Header("no ready streams"), func() (result string) {
+		result = logger.Header("ready streams")
+		for _, s := range s.ready {
+			result += fmt.Sprintf("%d(%s)\n", s.sourceId, s.name)
+		}
+
+		return result
+	})
+
+	result += logger.Cond(len(s.blocked) == 0, logger.Header("no blocked streams"), func() (result string) {
+		result = logger.Header("blocked streams")
+		for _, s := range s.blocked {
+			result += fmt.Sprintf("%d(%s)\n", s.sourceId, s.name)
+		}
+
+		return result
+	})
+
+	s.mu.Unlock()
+
+	return result
 }

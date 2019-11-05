@@ -241,20 +241,6 @@ func (p *processor) stop() {
 	}
 }
 
-//func (p *processor) dumpState() {
-//	state := "unknown"
-//	switch p.state {
-//	case stateReadAnyStream:
-//		state = "READING ANY"
-//	case stateReadSameStream:
-//		state = fmt.Sprintf("READING STREAM=%d(%s)", p.stream.sourceId, p.stream.name)
-//	case statePass:
-//		state = "WORKING"
-//	}
-//
-//	logger.Infof("processor id=%d, state=%s", p.id, state)
-//}
-
 func (p *processor) AddActionPlugin(descr *ActionPluginData) {
 	p.actionsData = append(p.actionsData, descr)
 	p.actions = append(p.actions, descr.Plugin)

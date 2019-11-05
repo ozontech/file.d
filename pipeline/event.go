@@ -1,6 +1,7 @@
 package pipeline
 
 import (
+	"fmt"
 	"sync"
 
 	"github.com/alecthomas/units"
@@ -204,4 +205,17 @@ func (p *eventPool) back(event *Event) {
 
 	p.cond.Signal()
 	p.mu.Unlock()
+}
+
+func (p *eventPool) dump() (result string) {
+	result = logger.Cond(len(p.events) == 0, logger.Header("no events"), func() (result string) {
+		result = logger.Header("events")
+		p.visit(func(event *Event) {
+			result += fmt.Sprintf("index=%d, id=%d, stream=%d(%s), stage=%s\n", event.index, event.SeqID, event.SourceID, event.StreamName, event.stageStr())
+		})
+
+		return result
+	})
+
+	return result
 }

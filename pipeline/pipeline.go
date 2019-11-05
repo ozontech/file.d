@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"hash/crc32"
 	"math/rand"
+	"net/http"
 	"strconv"
 	"sync"
 	"time"
@@ -88,7 +89,7 @@ type actionMetrics struct {
 	mu *sync.RWMutex
 }
 
-func New(name string, settings *Settings, registry *prometheus.Registry) *Pipeline {
+func New(name string, settings *Settings, registry *prometheus.Registry, mux *http.ServeMux) *Pipeline {
 	logger.Infof("creating pipeline %q: processors=%d, capacity=%d, stream field=%s", name, settings.ProcessorsCount, settings.Capacity, settings.StreamField)
 	pipeline := &Pipeline{
 		Name:     name,
@@ -116,6 +117,8 @@ func New(name string, settings *Settings, registry *prometheus.Registry) *Pipeli
 	pipeline.Processors = processors
 
 	pipeline.eventPool = newEventPool(pipeline.settings.Capacity)
+
+	mux.HandleFunc("/pipelines/"+name, pipeline.servePipeline)
 
 	return pipeline
 }
@@ -377,31 +380,6 @@ func (p *Pipeline) maintenance() {
 			logger.Infof("pipeline %q final event sample: %s", p.Name, p.eventSample)
 			p.eventSample = p.eventSample[:0]
 
-			//if p.eventPool.eventsCount == p.settings.Capacity {
-			//	p.streamsMu.Lock()
-			//	logger.Infof("========streams======== ready=%d", len(p.readyStreams))
-			//	for _, s := range p.streams {
-			//		for _, stream := range s {
-			//			if stream.isDetaching {
-			//				logger.Infof("stream %d(%s) state=DETACHING, get offset=%d, commit offset=%d", stream.sourceId, stream.name, stream.getOffset, stream.commitOffset)
-			//			}
-			//			if stream.isAttached {
-			//				logger.Infof("stream %d(%s) state=ATTACHED", stream.sourceId, stream.name)
-			//			}
-			//		}
-			//	}
-			//	p.streamsMu.Unlock()
-			//	logger.Infof("========processor state dump========")
-			//	for _, t := range p.Processors {
-			//		t.dumpState()
-			//	}
-			//
-			//	logger.Infof("========default events dump========")
-			//	p.eventPool.visit(func(event *Event) {
-			//		logger.Infof("event: index=%d, id=%d, stream=%d(%s), stage=%s", event.index, event.SeqID, event.SourceID, event.StreamName, event.stageStr())
-			//	})
-			//}
-
 			processed := p.totalCommitted.Load()
 			delta := processed - lastProcessed
 			lastProcessed = processed
@@ -469,4 +447,13 @@ func (p *Pipeline) GetEventLogItem(index int) string {
 		logger.Fatalf("can't find log item with index %d", index)
 	}
 	return p.eventLog[index]
+}
+
+func (p *Pipeline) servePipeline(w http.ResponseWriter, r *http.Request) {
+	_, _ = w.Write([]byte("<html><body><pre><p>"))
+	_, _ = w.Write([]byte(logger.Header("pipeline " + p.Name)))
+	_, _ = w.Write([]byte(p.streamer.dump()))
+	_, _ = w.Write([]byte(p.eventPool.dump()))
+
+	_, _ = w.Write([]byte("</p></pre></body></html>"))
 }

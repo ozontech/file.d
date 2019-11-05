@@ -66,9 +66,10 @@ func (f *Filed) startPipelines() {
 }
 
 func (f *Filed) addPipeline(name string, config *PipelineConfig) {
+	mux := http.DefaultServeMux
 	settings := extractPipelineParams(config.Raw.Get("settings"))
 
-	p := pipeline.New(name, settings, f.registry)
+	p := pipeline.New(name, settings, f.registry, mux)
 	f.setupInput(p, config)
 	f.setupActions(p, config)
 	f.setupOutput(p, config)
@@ -180,13 +181,20 @@ func (f *Filed) startHTTP() {
 func (f *Filed) listenHTTP() {
 	mux := http.DefaultServeMux
 
-	var liveReadyHandler = &liveReadyHandler{}
-	mux.Handle("/live", liveReadyHandler)
-	mux.Handle("/ready", liveReadyHandler)
+	mux.HandleFunc("/live", f.serveLiveReady)
+	mux.HandleFunc("/ready", f.serveLiveReady)
 	mux.Handle("/metrics", promhttp.Handler())
 
 	err := http.ListenAndServe(f.httpAddr, mux)
 	if err != nil {
 		logger.Fatalf("can't start http with %q address: %s", f.httpAddr, err.Error())
 	}
+}
+
+func (f *Filed) serveLiveReady(w http.ResponseWriter, r *http.Request) {
+	logger.Infof("live/ready OK")
+}
+
+func (f *Filed) servePipelines(w http.ResponseWriter, r *http.Request) {
+	logger.Infof("pipelines OK")
 }

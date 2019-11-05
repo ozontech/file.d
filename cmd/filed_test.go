@@ -49,14 +49,14 @@ func gen(tempDir string, files int, wg *sync.WaitGroup) {
 
 		//intervals := []int{0, 5}
 		//interval := intervals[rand.Int()%len(intervals)]
-		stream := "stdout"
-		if rand.Int()%3 == 0 {
-			stream = "stderr"
-		}
 		lines := 100000
 		for l := 0; l < lines; l++ {
+			stream := "stdout"
+			if rand.Int()%3 == 0 {
+				stream = "stderr"
+			}
 			if rand.Int()%100 == 0 {
-				for k := 0; k < 3; k++ {
+				for k := 0; k < 8; k++ {
 					_, _ = file.WriteString(fmt.Sprintf(multilineJson, stream))
 					_, _ = file.Write([]byte{'\n'})
 				}
@@ -98,14 +98,13 @@ func TestEndToEnd(t *testing.T) {
 
 	wg := &sync.WaitGroup{}
 	for {
-	jobs := 16
-	files := 2
-	for i := 0; i < jobs; i++ {
-		wg.Add(1)
-		go gen(filesDir, files, wg)
-	}
+		jobs := 64
+		for i := 0; i < jobs; i++ {
+			wg.Add(1)
+			go gen(filesDir, 1, wg)
+		}
 
-	time.Sleep(time.Second * 5)
+		time.Sleep(time.Second * 10)
 	}
 
 	time.Sleep(time.Second * 1000)
