@@ -12,9 +12,9 @@ type streamer struct {
 	streams map[SourceID]map[StreamName]*stream
 	mu      *sync.RWMutex
 
-	ready     []*stream
-	readyMu   *sync.Mutex
-	readyCond *sync.Cond
+	charged     []*stream
+	chargedMu   *sync.Mutex
+	chargedCond *sync.Cond
 
 	blocked   []*stream
 	blockedMu *sync.Mutex
@@ -24,12 +24,12 @@ func newStreamer() *streamer {
 	streamer := &streamer{
 		streams: make(map[SourceID]map[StreamName]*stream),
 		mu:      &sync.RWMutex{},
-		ready:   make([]*stream, 0, 0),
+		charged: make([]*stream, 0, 0),
 
-		readyMu:   &sync.Mutex{},
+		chargedMu: &sync.Mutex{},
 		blockedMu: &sync.Mutex{},
 	}
-	streamer.readyCond = sync.NewCond(streamer.readyMu)
+	streamer.chargedCond = sync.NewCond(streamer.chargedMu)
 
 	return streamer
 }
@@ -70,15 +70,15 @@ func (s *streamer) getStream(streamName StreamName, sourceId SourceID, sourceNam
 	return st
 }
 
-func (s *streamer) reserve() *stream {
-	s.readyMu.Lock()
-	for len(s.ready) == 0 {
-		s.readyCond.Wait()
+func (s *streamer) reserveStream() *stream {
+	s.chargedMu.Lock()
+	for len(s.charged) == 0 {
+		s.chargedCond.Wait()
 	}
-	stream := s.ready[0]
+	stream := s.charged[0]
 	stream.attach()
-	s.resetReady(stream)
-	s.readyMu.Unlock()
+	s.resetCharged(stream)
+	s.chargedMu.Unlock()
 
 	return stream
 }
@@ -109,29 +109,29 @@ func (s *streamer) resetBlocked(stream *stream) {
 	s.blockedMu.Unlock()
 }
 
-func (s *streamer) makeReady(stream *stream) {
-	s.readyMu.Lock()
-	stream.readyIndex = len(s.ready)
-	s.ready = append(s.ready, stream)
-	s.readyCond.Signal()
-	s.readyMu.Unlock()
+func (s *streamer) makeCharged(stream *stream) {
+	s.chargedMu.Lock()
+	stream.chargeIndex = len(s.charged)
+	s.charged = append(s.charged, stream)
+	s.chargedCond.Signal()
+	s.chargedMu.Unlock()
 }
 
-func (s *streamer) resetReady(stream *stream) {
-	if stream.readyIndex == -1 {
+func (s *streamer) resetCharged(stream *stream) {
+	if stream.chargeIndex == -1 {
 		logger.Panicf("why remove? stream isn't ready")
 	}
 
-	lastIndex := len(s.ready) - 1
+	lastIndex := len(s.charged) - 1
 	if lastIndex == -1 {
 		logger.Panicf("why remove? stream isn't in ready list")
 	}
-	index := stream.readyIndex
-	s.ready[index] = s.ready[lastIndex]
-	s.ready[index].readyIndex = index
-	s.ready = s.ready[:lastIndex]
+	index := stream.chargeIndex
+	s.charged[index] = s.charged[lastIndex]
+	s.charged[index].chargeIndex = index
+	s.charged = s.charged[:lastIndex]
 
-	stream.readyIndex = -1
+	stream.chargeIndex = -1
 }
 
 func (s *streamer) heartbeat() {
@@ -152,11 +152,11 @@ func (s *streamer) heartbeat() {
 	}
 }
 
-func (s *streamer) dump() (result string) {
+func (s *streamer) dump() string {
 	s.mu.Lock()
 
-	result += logger.Cond(len(s.streams) == 0, logger.Header("no streams"), func() (result string) {
-		result = logger.Header("streams")
+	out := logger.Cond(len(s.streams) == 0, logger.Header("no streams"), func() string {
+		o := logger.Header("streams")
 		for _, s := range s.streams {
 			for _, stream := range s {
 				state := "| UNATTACHED |"
@@ -167,32 +167,32 @@ func (s *streamer) dump() (result string) {
 					state = "| DETACHING  |"
 				}
 
-				result += fmt.Sprintf("%d(%s) state=%s, get offset=%d, commit offset=%d\n", stream.sourceId, stream.name, state, stream.getOffset, stream.commitOffset)
+				o += fmt.Sprintf("%d(%s) state=%s, get offset=%d, commit offset=%d\n", stream.sourceId, stream.name, state, stream.getOffset, stream.commitOffset)
 			}
 		}
 
-		return result
+		return o
 	})
 
-	result += logger.Cond(len(s.ready) == 0, logger.Header("no ready streams"), func() (result string) {
-		result = logger.Header("ready streams")
-		for _, s := range s.ready {
-			result += fmt.Sprintf("%d(%s)\n", s.sourceId, s.name)
+	out += logger.Cond(len(s.charged) == 0, logger.Header("no ready streams"), func() string {
+		o := logger.Header("ready streams")
+		for _, s := range s.charged {
+			o += fmt.Sprintf("%d(%s)\n", s.sourceId, s.name)
 		}
 
-		return result
+		return o
 	})
 
-	result += logger.Cond(len(s.blocked) == 0, logger.Header("no blocked streams"), func() (result string) {
-		result = logger.Header("blocked streams")
+	out += logger.Cond(len(s.blocked) == 0, logger.Header("no blocked streams"), func() string {
+		o := logger.Header("blocked streams")
 		for _, s := range s.blocked {
-			result += fmt.Sprintf("%d(%s)\n", s.sourceId, s.name)
+			o += fmt.Sprintf("%d(%s)\n", s.sourceId, s.name)
 		}
 
-		return result
+		return o
 	})
 
 	s.mu.Unlock()
 
-	return result
+	return out
 }

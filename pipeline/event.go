@@ -24,6 +24,7 @@ type Event struct {
 	Size       int
 
 	index        int
+	action       int
 	next         *Event
 	stream       *stream
 	isDeprecated atomic.Bool
@@ -82,6 +83,8 @@ func (e *Event) reset() {
 	e.Buf = e.Buf[:0]
 	e.stage = eventStageInput
 	e.next = nil
+	e.action = 0
+	e.stream = nil
 	e.isDeprecated.Swap(false)
 }
 
@@ -118,6 +121,10 @@ func (e *Event) Encode(outBuf []byte) ([]byte, int) {
 	}
 
 	return outBuf, l
+}
+
+func (e *Event) String() string {
+	return fmt.Sprintf("event: id=%d, source=%d/%s, stream=%s, stage=%s, json=%s", e.index, e.SourceID, e.SourceName, e.StreamName, e.stageStr(), e.Root.EncodeToString())
 }
 
 // channels are slower than this implementation by ~20%
@@ -207,15 +214,15 @@ func (p *eventPool) back(event *Event) {
 	p.mu.Unlock()
 }
 
-func (p *eventPool) dump() (result string) {
-	result = logger.Cond(len(p.events) == 0, logger.Header("no events"), func() (result string) {
-		result = logger.Header("events")
+func (p *eventPool) dump() string {
+	out := logger.Cond(len(p.events) == 0, logger.Header("no events"), func() string {
+		o := logger.Header("events")
 		p.visit(func(event *Event) {
-			result += fmt.Sprintf("index=%d, id=%d, stream=%d(%s), stage=%s\n", event.index, event.SeqID, event.SourceID, event.StreamName, event.stageStr())
+			o += event.String() + "\n"
 		})
 
-		return result
+		return o
 	})
 
-	return result
+	return out
 }

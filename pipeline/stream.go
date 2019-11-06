@@ -10,10 +10,12 @@ import (
 var eventWaitTimeout = time.Second * 30
 
 // stream is a queue of events
-// all events in the queue are from one source and also has same field value (eg json field "stream" in docker logs)
+// events fall into stream based on rules defined by input plugin
+// streams are used to allow event joins and other operations which needs sequential event input
+// e.g. events from same file will be in same stream for "file" input plugin
 type stream struct {
-	readyIndex int
-	blockIndex int
+	chargeIndex int
+	blockIndex  int
 
 	name       StreamName
 	sourceId   SourceID
@@ -36,12 +38,12 @@ type stream struct {
 
 func newStream(name StreamName, sourceId SourceID, sourceName string, streamer *streamer) *stream {
 	stream := stream{
-		readyIndex: -1,
-		name:       name,
-		sourceId:   sourceId,
-		sourceName: sourceName,
-		streamer:   streamer,
-		mu:         &sync.Mutex{},
+		chargeIndex: -1,
+		name:        name,
+		sourceId:    sourceId,
+		sourceName:  sourceName,
+		streamer:    streamer,
+		mu:          &sync.Mutex{},
 	}
 	stream.cond = sync.NewCond(stream.mu)
 
@@ -60,9 +62,8 @@ func (s *stream) detach() {
 }
 
 func (s *stream) commit(event *Event) {
-	// we need to get max here because discarded events with
-	// bigger offsets can be committed faster than events with lower
-	// offsets which are going through output
+	// get max is needed here because discarded events with bigger offsets may be
+	// committed faster than events with lower offsets which are goes through output
 	if event.SeqID < s.maxID {
 		return
 	}
@@ -85,7 +86,7 @@ func (s *stream) tryDropProcessor() {
 	s.isDetaching = false
 
 	if s.first != nil {
-		s.streamer.makeReady(s)
+		s.streamer.makeCharged(s)
 	}
 }
 
@@ -113,7 +114,7 @@ func (s *stream) put(event *Event) {
 		s.last = event
 		s.first = event
 		if !s.isAttached {
-			s.streamer.makeReady(s)
+			s.streamer.makeCharged(s)
 		}
 		s.cond.Signal()
 	} else {

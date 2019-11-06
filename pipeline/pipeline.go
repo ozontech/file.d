@@ -143,10 +143,6 @@ func (p *Pipeline) Start() {
 		Controller:          p,
 		DoneWg:              p.doneWg,
 	}
-	actionParams := &ActionPluginParams{
-		PluginDefaultParams: defaultParams,
-		Controller:          p,
-	}
 	outputParams := &OutputPluginParams{
 		PluginDefaultParams: defaultParams,
 		Controller:          p,
@@ -156,6 +152,10 @@ func (p *Pipeline) Start() {
 
 	rnd := make([]byte, 0, 0)
 	for _, processor := range p.Processors {
+		actionParams := &ActionPluginParams{
+			PluginDefaultParams: defaultParams,
+			Controller:          processor,
+		}
 		processor.start(p.output, actionParams)
 		if !p.settings.isStreamFieldEnabled {
 			rnd = append(rnd, byte('a'+rand.Int()%('z'-'a')))
@@ -244,15 +244,10 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 		sourceID = SourceID(index)
 	}
 
-	//logger.Infof("commit: %d %s", event.Offset, event.Root.EncodeToString())
 	p.streamer.putEvent(event)
 }
 
 func (p *Pipeline) Commit(event *Event) {
-	p.commit(event, true)
-}
-
-func (p *Pipeline) Propagate(event *Event) {
 	p.commit(event, true)
 }
 

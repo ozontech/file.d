@@ -74,6 +74,8 @@ func (p *Plugin) flush() {
 
 	p.firstEvent.Root.Dig(p.config.Field).MutateToString(string(p.buff))
 	p.controller.Propagate(p.firstEvent)
+	p.firstEvent = nil
+	p.isNext = false
 }
 
 func (p *Plugin) handleFirstEvent(event *pipeline.Event, value string) {
@@ -99,11 +101,13 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	valStr := value.AsString()
 	isFirst := p.firstRe.MatchString(valStr)
 	if isFirst {
+		//logger.Infof("first! %s", event.Root.EncodeToString())
 		p.handleFirstEvent(event, valStr)
 		return pipeline.ActionHold
 	}
 
 	if p.isNext {
+		//logger.Infof("bext! %s", event.Root.EncodeToString())
 		isNext := p.nextRe.MatchString(valStr)
 		if isNext {
 			p.buff = append(p.buff, valStr...)

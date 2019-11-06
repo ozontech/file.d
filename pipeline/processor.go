@@ -10,12 +10,6 @@ import (
 
 type processorState int
 
-const (
-	statePass           processorState = 0
-	stateReadSameStream processorState = 1
-	stateReadAnyStream  processorState = 2
-)
-
 type ActionResult int
 
 const (
@@ -25,8 +19,8 @@ const (
 	ActionCollapse ActionResult = 2
 	// skip further processing of event and request next event from any stream and source
 	ActionDiscard ActionResult = 1
-	// hold event in a plugin  and request next event from the same stream and source as current.
-	// held event should be manually committed or returned into pipeline.
+	// hold event in a plugin and request next event from the same stream and source as current.
+	// same as ActionCollapse but held event should be manually committed or returned into pipeline.
 	// check out Commit()/Propagate() functions in InputPluginController.
 	ActionHold ActionResult = 3
 )
@@ -81,92 +75,105 @@ func (p *processor) start(output OutputPlugin, params *ActionPluginParams) {
 	go p.process(output)
 }
 
-func (p *processor) readAnyStream(st *stream) (*Event, *stream) {
-	for {
-		if st == nil {
-			st = p.streamer.reserve()
-		}
-
-		event := st.instantGet()
-		if event != nil {
-			return event, st
-		}
-
-		// if event is nil then stream is over, so let's attach to a new stream
-		st = nil
-	}
-}
-
 func (p *processor) process(output OutputPlugin) {
-	var event *Event
-	var st *stream
 	for {
 		if p.shouldStop {
 			return
 		}
 
-		event, st = p.readAnyStream(st)
-		if !p.processEvent(event, st) {
-			st = nil
-		}
+		st := p.streamer.reserveStream()
+		p.dischargeStream(st)
 	}
 }
 
-func (p *processor) processEvent(event *Event, st *stream) bool {
+func (p *processor) dischargeStream(st *stream) {
 	for {
-		if p.shouldStop {
-			return true
+		event := st.instantGet()
+		// if event is nil then stream is over, so let's attach to a new stream
+		if event == nil {
+			return
 		}
 
-		isPassed := true
-		for index, action := range p.actions {
-			isPassed = true
-			p.countEvent(event, index, eventStatusReceived)
+		p.processSequence(event)
+	}
+}
 
-			if !p.isMatch(index, event) {
-				p.countEvent(event, index, eventStatusNotMatched)
+func (p *processor) processSequence(event *Event) {
+	isSuccess := false
+	isPassed := false
+	isSuccess, isPassed, event = p.processEvent(event)
+
+	if isPassed {
+		event.stage = eventStageOutput
+		p.pipeline.output.Out(event)
+		return
+	}
+
+	if !isSuccess {
+		return
+	}
+}
+
+func (p *processor) processEvent(event *Event) (isSuccess bool, isPassed bool, e *Event) {
+	for {
+		stream := event.stream
+		offset := event.Offset
+
+		isPassed, readSeq := p.doActions(event)
+
+		if isPassed {
+			return true, true, event
+		}
+
+		if readSeq {
+			event = stream.blockGet()
+			if event.index != -1 {
 				continue
 			}
 
-			switch action.Do(event) {
-			case ActionPass:
-				p.countEvent(event, index, eventStatusPassed)
-			case ActionDiscard:
-				p.countEvent(event, index, eventStatusDiscarded)
-				// can't notify input here, because previous events may delay and we'll get offset sequence corruption
-				p.pipeline.commit(event, false)
-				return true
-			case ActionCollapse:
-				p.countEvent(event, index, eventStatusCollapse)
-				// can't notify input here, because previous events may delay and we'll get offset sequence corruption
-				p.pipeline.commit(event, false)
-				isPassed = false
-			case ActionHold:
-				p.countEvent(event, index, eventStatusHold)
-				isPassed = false
-			}
-
-			if !isPassed {
-				break
-			}
-		}
-
-		// if actions are passed then send event to output
-		if isPassed {
-			event.stage = eventStageOutput
-			p.pipeline.output.Out(event)
-			return true
-		}
-
-		offset := event.Offset
-		event = st.blockGet()
-		if event.index == -1 {
-			logger.Errorf("can't read next sequential event from stream %s:%d(%s), offset=%d", st.sourceName, st.sourceId, st.name, offset)
+			logger.Errorf("can't read next sequential event from stream %s:%d(%s), offset=%d", stream.sourceName, stream.sourceId, stream.name, offset)
 			p.reset()
-			return false
+			return false, false, nil
 		}
+
+		return true, false, nil
 	}
 }
+
+func (p *processor) doActions(event *Event) (isPassed bool, readSeq bool) {
+	l := len(p.actions)
+	for index := event.action; index < l; index++ {
+		action := p.actions[index]
+		event.action = index
+		p.countEvent(event, index, eventStatusReceived)
+
+		if !p.isMatch(index, event) {
+			p.countEvent(event, index, eventStatusNotMatched)
+			continue
+		}
+
+		switch action.Do(event) {
+		case ActionPass:
+			p.countEvent(event, index, eventStatusPassed)
+		case ActionDiscard:
+			p.countEvent(event, index, eventStatusDiscarded)
+			// can't notify input here, because previous events may delay and we'll get offset sequence corruption
+			p.pipeline.commit(event, false)
+			return false, false
+		case ActionCollapse:
+			p.countEvent(event, index, eventStatusCollapse)
+			// can't notify input here, because previous events may delay and we'll get offset sequence corruption
+			p.pipeline.commit(event, false)
+			return false, true
+		case ActionHold:
+			p.countEvent(event, index, eventStatusHold)
+			return false, true
+		}
+	}
+
+	return true, false
+}
+
 func (p *processor) countEvent(event *Event, actionIndex int, status eventStatus) {
 	p.metricsValues = p.pipeline.countEvent(event, actionIndex, status, p.metricsValues)
 }
@@ -244,4 +251,13 @@ func (p *processor) stop() {
 func (p *processor) AddActionPlugin(descr *ActionPluginData) {
 	p.actionsData = append(p.actionsData, descr)
 	p.actions = append(p.actions, descr.Plugin)
+}
+
+func (p *processor) Commit(event *Event) {
+	p.pipeline.commit(event, false)
+}
+
+func (p *processor) Propagate(event *Event) {
+	event.action++
+	p.processSequence(event)
 }
