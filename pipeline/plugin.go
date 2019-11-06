@@ -23,7 +23,6 @@ type ActionPlugin interface {
 	Start(config AnyConfig, params *ActionPluginParams)
 	Stop()
 	Do(*Event) ActionResult
-	Reset()
 }
 
 type OutputPlugin interface {
@@ -54,7 +53,7 @@ type InputPluginParams struct {
 }
 
 type PluginRegistryItem struct {
-	Id   string
+	ID   string
 	Info *PluginInfo
 }
 

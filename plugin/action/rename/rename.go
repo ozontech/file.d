@@ -42,9 +42,6 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 func (p *Plugin) Stop() {
 }
 
-func (p *Plugin) Reset() {
-}
-
 func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	for index, path := range p.paths {
 		node := event.Root.Dig(path...)

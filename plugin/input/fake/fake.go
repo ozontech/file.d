@@ -50,7 +50,7 @@ func (p *Plugin) SetAcceptFn(fn func(event *pipeline.Event)) {
 	p.acceptFn = fn
 }
 
-func (p *Plugin) In(sourceId pipeline.SourceID, sourceName string, offset int64, size int64, bytes []byte) {
+func (p *Plugin) In(sourceID pipeline.SourceID, sourceName string, offset int64, size int64, bytes []byte) {
 	p.done.Add(1)
-	p.controller.In(sourceId, sourceName, offset, bytes)
+	p.controller.In(sourceID, sourceName, offset, bytes)
 }

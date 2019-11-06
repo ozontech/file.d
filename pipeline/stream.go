@@ -18,7 +18,7 @@ type stream struct {
 	blockIndex  int
 
 	name       StreamName
-	sourceId   SourceID
+	sourceID   SourceID
 	sourceName string
 	streamer   *streamer
 	blockTime  time.Time
@@ -36,11 +36,11 @@ type stream struct {
 	last  *Event
 }
 
-func newStream(name StreamName, sourceId SourceID, sourceName string, streamer *streamer) *stream {
+func newStream(name StreamName, sourceID SourceID, sourceName string, streamer *streamer) *stream {
 	stream := stream{
 		chargeIndex: -1,
 		name:        name,
-		sourceId:    sourceId,
+		sourceID:    sourceID,
 		sourceName:  sourceName,
 		streamer:    streamer,
 		mu:          &sync.Mutex{},
@@ -62,7 +62,7 @@ func (s *stream) detach() {
 }
 
 func (s *stream) commit(event *Event) {
-	// get max is needed here because discarded events with bigger offsets may be
+	// maxID is needed here because discarded events with bigger offsets may be
 	// committed faster than events with lower offsets which are goes through output
 	if event.SeqID < s.maxID {
 		return
@@ -136,11 +136,6 @@ func (s *stream) blockGet() *Event {
 		s.streamer.resetBlocked(s)
 	}
 	event := s.get()
-	// it was timeout, not real event
-	if event.index == -1 {
-		s.detach()
-	}
-
 	s.mu.Unlock()
 
 	return event
@@ -182,9 +177,10 @@ func (s *stream) tryUnblock() bool {
 		logger.Panicf("why offsets are different? get offset=%d, commit offset=%d", s.getOffset, s.commitOffset)
 	}
 
-	event := &Event{index: -1, Offset: s.commitOffset}
-	s.last = event
-	s.first = event
+	timeoutEvent := newTimoutEvent(s)
+	s.last = timeoutEvent
+	s.first = timeoutEvent
+
 	s.cond.Signal()
 	s.mu.Unlock()
 

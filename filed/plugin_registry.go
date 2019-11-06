@@ -14,7 +14,7 @@ type PluginRegistry struct {
 }
 
 func (r *PluginRegistry) GetInputByType(t string) *pipeline.PluginInfo {
-	id := r.MakeId(pipeline.PluginKindInput, t)
+	id := r.MakeID(pipeline.PluginKindInput, t)
 
 	info := r.plugins[id]
 	if info == nil {
@@ -26,7 +26,7 @@ func (r *PluginRegistry) GetInputByType(t string) *pipeline.PluginInfo {
 }
 
 func (r *PluginRegistry) GetActionByType(t string) *pipeline.PluginInfo {
-	id := r.MakeId(pipeline.PluginKindAction, t)
+	id := r.MakeID(pipeline.PluginKindAction, t)
 
 	info := r.plugins[id]
 	if info == nil {
@@ -38,7 +38,7 @@ func (r *PluginRegistry) GetActionByType(t string) *pipeline.PluginInfo {
 }
 
 func (r *PluginRegistry) GetOutputByType(t string) *pipeline.PluginInfo {
-	id := r.MakeId(pipeline.PluginKindOutput, t)
+	id := r.MakeID(pipeline.PluginKindOutput, t)
 
 	info := r.plugins[id]
 	if info == nil {
@@ -70,19 +70,19 @@ func (r *PluginRegistry) RegisterOutput(info *pipeline.PluginInfo) {
 	}
 }
 
-func (r *PluginRegistry) MakeId(pluginKind pipeline.PluginKind, pluginType string) string {
+func (r *PluginRegistry) MakeID(pluginKind pipeline.PluginKind, pluginType string) string {
 	return string(pluginKind) + "_" + pluginType
 }
 
 func (r *PluginRegistry) register(pluginKind pipeline.PluginKind, info *pipeline.PluginInfo) error {
-	id := r.MakeId(pluginKind, info.Type)
+	id := r.MakeID(pluginKind, info.Type)
 	_, alreadyHave := r.plugins[id]
 	if alreadyHave {
 		logger.Fatalf("plugin %s/%s is already registered", pluginKind, info.Type)
 	}
 
 	r.plugins[id] = &pipeline.PluginRegistryItem{
-		Id:   id,
+		ID:   id,
 		Info: info,
 	}
 	logger.Infof("plugin %s/%s registered", pluginKind, info.Type)

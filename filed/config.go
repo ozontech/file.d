@@ -31,7 +31,7 @@ func NewConfigFromFile(path string) *Config {
 
 	jsonContents, err := yaml.YAMLToJSON(yamlContents)
 	if err != nil {
-		logger.Infof("%s", yamlContents)
+		logger.Infof("config content:\n%s", logger.Numerate(string(yamlContents)))
 		logger.Fatalf("can't parse config file yaml %q: %s", path, err.Error())
 	}
 

@@ -42,6 +42,7 @@ func Factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 }
 
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginParams) {
+	logger.Info("starting kafka input plugin")
 	p.controller = params.Controller
 	p.config = config.(*Config)
 
@@ -72,6 +73,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 }
 
 func (p *Plugin) consume() {
+	logger.Info("kafka input reading from topics: %s", strings.Join(p.config.topics, ","))
 	for {
 		err := p.consumerGroup.Consume(p.context, p.config.topics, p)
 		if err != nil {

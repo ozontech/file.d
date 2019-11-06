@@ -26,7 +26,7 @@ func (w *worker) work(index int, controller pipeline.InputPluginController, jobP
 		job.mu.Lock()
 		file := job.file
 		isDone := job.isDone
-		sourceId := pipeline.SourceID(job.inode)
+		sourceID := pipeline.SourceID(job.inode)
 		sourceName := job.filename
 		skipLine := job.skipLine
 		if job.symlink != "" {
@@ -40,7 +40,7 @@ func (w *worker) work(index int, controller pipeline.InputPluginController, jobP
 
 		lastOffset, err := file.Seek(0, io.SeekCurrent)
 		if err != nil {
-			logger.Fatalf("can't get offset, file %d:%s seek error: %s", sourceId, sourceName, err.Error())
+			logger.Fatalf("can't get offset, file %d:%s seek error: %s", sourceID, sourceName, err.Error())
 		}
 
 		isEOF := false
@@ -63,7 +63,7 @@ func (w *worker) work(index int, controller pipeline.InputPluginController, jobP
 			}
 
 			if err != nil {
-				logger.Fatalf("file %d:%s read error, %s read=%d", sourceId, sourceName, read, err.Error())
+				logger.Fatalf("file %d:%s read error, %s read=%d", sourceID, sourceName, read, err.Error())
 			}
 
 			processed = 0
@@ -81,9 +81,9 @@ func (w *worker) work(index int, controller pipeline.InputPluginController, jobP
 					offset := lastOffset + accumulated + i + 1
 					if len(accumBuffer) != 0 {
 						accumBuffer = append(accumBuffer, readBuffer[processed:i]...)
-						controller.In(sourceId, sourceName, offset, accumBuffer)
+						controller.In(sourceID, sourceName, offset, accumBuffer)
 					} else {
-						controller.In(sourceId, sourceName, offset, readBuffer[processed:i])
+						controller.In(sourceID, sourceName, offset, readBuffer[processed:i])
 					}
 				}
 				accumBuffer = accumBuffer[:0]
@@ -111,7 +111,7 @@ func (w *worker) work(index int, controller pipeline.InputPluginController, jobP
 		if backwardOffset != 0 {
 			_, err := file.Seek(backwardOffset, io.SeekCurrent)
 			if err != nil {
-				logger.Fatalf("can't set offset, file %d:%s seek error: %s", sourceId, sourceName, err.Error())
+				logger.Fatalf("can't set offset, file %d:%s seek error: %s", sourceID, sourceName, err.Error())
 			}
 		}
 
@@ -119,7 +119,7 @@ func (w *worker) work(index int, controller pipeline.InputPluginController, jobP
 		if isEOF {
 			stat, err := file.Stat()
 			if err != nil {
-				logger.Fatalf("file %d:%s stat error: %s", sourceId, sourceName, err.Error())
+				logger.Fatalf("file %d:%s stat error: %s", sourceID, sourceName, err.Error())
 			}
 
 			// file was truncated, seek to start

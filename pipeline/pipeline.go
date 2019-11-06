@@ -22,8 +22,8 @@ const (
 )
 
 type InputPluginController interface {
-	In(sourceId SourceID, sourceName string, offset int64, bytes []byte)
-	Reset(sourceId SourceID) int // mark source events in the pipeline as isDeprecated, it means that these events shouldn't update offsets
+	In(sourceID SourceID, sourceName string, offset int64, bytes []byte)
+	DeprecateSource(sourceID SourceID) int // mark events in the pipeline as deprecated, it means that these events shouldn't update offsets on commit
 }
 
 type ActionPluginController interface {
@@ -196,14 +196,14 @@ func (p *Pipeline) SetOutputPlugin(descr *OutputPluginData) {
 	p.output = descr.Plugin
 }
 
-func (p *Pipeline) Reset(sourceId SourceID) int {
+func (p *Pipeline) DeprecateSource(sourceID SourceID) int {
 	count := 0
 	p.eventPool.visit(func(e *Event) {
-		if e.SourceID != sourceId {
+		if e.SourceID != sourceID {
 			return
 		}
 
-		e.deprecate()
+		e.ToDeprecatedKind()
 		count++
 	})
 
@@ -252,6 +252,10 @@ func (p *Pipeline) Commit(event *Event) {
 }
 
 func (p *Pipeline) commit(event *Event, notifyInput bool) {
+	if event.IsTimeoutKind() {
+		return
+	}
+
 	event.stage = eventStageBack
 	if notifyInput {
 		if len(p.eventSample) == 0 {

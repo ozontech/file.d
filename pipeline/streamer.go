@@ -42,10 +42,10 @@ func (s *streamer) putEvent(event *Event) {
 	s.getStream(event.StreamName, event.SourceID, event.SourceName).put(event)
 }
 
-func (s *streamer) getStream(streamName StreamName, sourceId SourceID, sourceName string) *stream {
+func (s *streamer) getStream(streamName StreamName, sourceID SourceID, sourceName string) *stream {
 	// fast path, stream have been already created
 	s.mu.RLock()
-	st, has := s.streams[sourceId][streamName]
+	st, has := s.streams[sourceID][streamName]
 	s.mu.RUnlock()
 	if has {
 		return st
@@ -54,18 +54,18 @@ func (s *streamer) getStream(streamName StreamName, sourceId SourceID, sourceNam
 	// slow path, create new stream
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	st, has = s.streams[sourceId][streamName]
+	st, has = s.streams[sourceID][streamName]
 	if has {
 		return st
 	}
 
-	_, has = s.streams[sourceId]
+	_, has = s.streams[sourceID]
 	if !has {
-		s.streams[sourceId] = make(map[StreamName]*stream)
+		s.streams[sourceID] = make(map[StreamName]*stream)
 	}
 
-	st = newStream(streamName, sourceId, sourceName, s)
-	s.streams[sourceId][streamName] = st
+	st = newStream(streamName, sourceID, sourceName, s)
+	s.streams[sourceID][streamName] = st
 
 	return st
 }
@@ -145,9 +145,7 @@ func (s *streamer) heartbeat() {
 		s.blockedMu.Unlock()
 
 		for _, stream := range streams {
-			if stream.tryUnblock() {
-				logger.Errorf(`event sequence timeout consider increasing "processors_count" parameter`)
-			}
+			stream.tryUnblock()
 		}
 	}
 }
@@ -167,7 +165,7 @@ func (s *streamer) dump() string {
 					state = "| DETACHING  |"
 				}
 
-				o += fmt.Sprintf("%d(%s) state=%s, get offset=%d, commit offset=%d\n", stream.sourceId, stream.name, state, stream.getOffset, stream.commitOffset)
+				o += fmt.Sprintf("%d(%s) state=%s, get offset=%d, commit offset=%d\n", stream.sourceID, stream.name, state, stream.getOffset, stream.commitOffset)
 			}
 		}
 
@@ -177,7 +175,7 @@ func (s *streamer) dump() string {
 	out += logger.Cond(len(s.charged) == 0, logger.Header("no ready streams"), func() string {
 		o := logger.Header("ready streams")
 		for _, s := range s.charged {
-			o += fmt.Sprintf("%d(%s)\n", s.sourceId, s.name)
+			o += fmt.Sprintf("%d(%s)\n", s.sourceID, s.name)
 		}
 
 		return o
@@ -186,7 +184,7 @@ func (s *streamer) dump() string {
 	out += logger.Cond(len(s.blocked) == 0, logger.Header("no blocked streams"), func() string {
 		o := logger.Header("blocked streams")
 		for _, s := range s.blocked {
-			o += fmt.Sprintf("%d(%s)\n", s.sourceId, s.name)
+			o += fmt.Sprintf("%d(%s)\n", s.sourceID, s.name)
 		}
 
 		return o

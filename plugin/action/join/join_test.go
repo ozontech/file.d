@@ -181,19 +181,19 @@ func TestJoin(t *testing.T) {
 	}
 
 	panics := 12
-	iterations := 100
+	iterations := 10
 
-	p, input, output := startPipeline("/^(panic:)|(http: panic serving)/", `/(^$)|(goroutine [0-9]+ \[)|(\([0-9]+x[0-9,a-f]+)|(\.go:[0-9]+ \+[0-9]x)|(\/.*\.go:[0-9]+)|(\(...\))|(main\.main\(\))|(created by .*\/.*\.)|(^\[signal)|(panic.+[0-9]x[0-9,a-f]+)/`)
+	p, input, output := startPipeline(`/^(panic:)|(http: panic serving)/`, `/(^$)|(goroutine [0-9]+ \[)|(\([0-9]+x[0-9,a-f]+)|(\.go:[0-9]+ \+[0-9]x)|(\/.*\.go:[0-9]+)|(\(...\))|(main\.main\(\))|(created by .*\/.*\.)|(^\[signal)|(panic.+[0-9]x[0-9,a-f]+)/`)
 	defer p.Stop()
 
-	acceptedEvents := make([]*pipeline.Event, 0, 0)
+	acceptedEvents := make([]string, 0, 0)
 	input.SetAcceptFn(func(e *pipeline.Event) {
-		acceptedEvents = append(acceptedEvents, e)
+		acceptedEvents = append(acceptedEvents, e.Root.EncodeToString())
 	})
 
-	dumpedEvents := make([]*pipeline.Event, 0, 0)
+	dumpedEvents := make([]string, 0, 0)
 	output.SetOutFn(func(e *pipeline.Event) {
-		dumpedEvents = append(dumpedEvents, e)
+		dumpedEvents = append(dumpedEvents, e.Root.EncodeToString())
 	})
 
 	for i := 0; i < iterations; i++ {

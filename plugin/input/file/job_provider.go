@@ -148,7 +148,7 @@ func (jp *jobProvider) stop() {
 }
 
 func (jp *jobProvider) commit(event *pipeline.Event) {
-	isActual := event.IsActual()
+	isActual := !event.IsDeprecatedKind()
 
 	jp.jobsMu.RLock()
 	job, has := jp.jobs[inode(event.SourceID)]
@@ -383,7 +383,7 @@ func (jp *jobProvider) doneJob(job *job) {
 }
 
 func (jp *jobProvider) truncateJob(job *job) {
-	deprecated := jp.controller.Reset(pipeline.SourceID(job.inode))
+	deprecated := jp.controller.DeprecateSource(pipeline.SourceID(job.inode))
 
 	job.mu.Lock()
 	defer job.mu.Unlock()
@@ -714,7 +714,7 @@ func (jp *jobProvider) deleteJob(job *job) {
 	if !job.isDone {
 		logger.Panicf("can't delete job, it isn't done: %d:%s", job.inode, job.filename)
 	}
-	deprecated := jp.controller.Reset(pipeline.SourceID(job.inode))
+	deprecated := jp.controller.DeprecateSource(pipeline.SourceID(job.inode))
 
 	jp.jobsMu.Lock()
 	delete(jp.jobs, job.inode)

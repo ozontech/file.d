@@ -62,11 +62,14 @@ func (p *Plugin) Stop() {
 	}
 }
 
-func (p *Plugin) Reset() {
-	p.logBuff = p.logBuff[:1]
-}
-
 func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
+	// todo: do same logic as in join plugin here, to send not full logs
+	if event.IsTimeoutKind() {
+		logger.Errorf("can't read next sequential event, timeout=%s", event)
+		p.logBuff = p.logBuff[:1]
+		return pipeline.ActionDiscard
+	}
+
 	// don't need to unescape/escape log fields cause concatenation of escaped strings is escaped string
 	logFragment := event.Root.Dig("log").AsEscapedString()
 	if logFragment == "" {

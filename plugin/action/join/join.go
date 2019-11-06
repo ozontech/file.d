@@ -27,7 +27,7 @@ type Config struct {
 
 func init() {
 	filed.DefaultPluginRegistry.RegisterAction(&pipeline.PluginInfo{
-		Type:    "flatten",
+		Type:    "join",
 		Factory: factory,
 	})
 }
@@ -39,12 +39,19 @@ func factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginParams) {
 	p.controller = params.Controller
 	p.config = config.(*Config)
+	p.isNext = false
+	p.buff = make([]byte, 0, params.PipelineSettings.AvgLogSize)
 
 	if p.config.Field == "" {
 		logger.Fatalf("no field provided for join plugin")
 	}
 
-	p.isNext = false
+	if p.config.First == "" {
+		logger.Fatalf("no %q parameter provided for join plugin", "first_re")
+	}
+	if p.config.Next == "" {
+		logger.Fatalf("no %q parameter provided for join plugin", "next_re")
+	}
 
 	r, err := filed.CompileRegex(p.config.First)
 	if err != nil {
@@ -57,14 +64,9 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 		logger.Fatalf("can't compile next line regexp: %s", err.Error())
 	}
 	p.nextRe = r
-	p.buff = make([]byte, 0, params.PipelineSettings.AvgLogSize)
 }
 
 func (p *Plugin) Stop() {
-}
-
-func (p *Plugin) Reset() {
-	p.buff = p.buff[:0]
 }
 
 func (p *Plugin) flush() {
@@ -89,6 +91,11 @@ func (p *Plugin) handleFirstEvent(event *pipeline.Event, value string) {
 }
 
 func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
+	if event.IsTimeoutKind() {
+		p.flush()
+		return pipeline.ActionDiscard
+	}
+
 	value := event.Root.Dig(p.config.Field)
 
 	if !value.IsString() {
@@ -101,13 +108,11 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	valStr := value.AsString()
 	isFirst := p.firstRe.MatchString(valStr)
 	if isFirst {
-		//logger.Infof("first! %s", event.Root.EncodeToString())
 		p.handleFirstEvent(event, valStr)
 		return pipeline.ActionHold
 	}
 
 	if p.isNext {
-		//logger.Infof("bext! %s", event.Root.EncodeToString())
 		isNext := p.nextRe.MatchString(valStr)
 		if isNext {
 			p.buff = append(p.buff, valStr...)

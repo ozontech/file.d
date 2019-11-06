@@ -259,11 +259,11 @@ func getInodeByFile(file string) uint64 {
 func assertOffsetsEqual(t *testing.T, offsetsContentA string, offsetsContentB string) {
 	offsetsA := parseOffsets(offsetsContentA)
 	offsetsB := parseOffsets(offsetsContentB)
-	for sourceId, inode := range offsetsA {
-		_, has := offsetsB[sourceId]
-		assert.True(t, has, "offsets aren't equal, source id=%d", sourceId)
+	for sourceID, inode := range offsetsA {
+		_, has := offsetsB[sourceID]
+		assert.True(t, has, "offsets aren't equal, source id=%d", sourceID)
 		for stream, offset := range inode.streams {
-			offsetB, has := offsetsB[sourceId].streams[stream]
+			offsetB, has := offsetsB[sourceID].streams[stream]
 			assert.True(t, has, "offsets aren't equal, no stream %q", stream)
 			assert.Equal(t, offset, offsetB, "offsets aren't equal")
 		}

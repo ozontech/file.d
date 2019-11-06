@@ -1,7 +1,6 @@
 package throttle
 
 import (
-	"bytes"
 	"sync"
 	"time"
 
@@ -25,7 +24,7 @@ type Plugin struct {
 	config   *Config
 	pipeline string
 
-	limiterBuff *bytes.Buffer
+	limiterBuff []byte
 	rules       []*rule
 }
 
@@ -57,7 +56,7 @@ func factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginParams) {
 	p.config = config.(*Config)
 	p.pipeline = params.PipelineName
-	p.limiterBuff = bytes.NewBufferString("")
+	p.limiterBuff = make([]byte, 0, 0)
 
 	limitersMu.Lock()
 	limiters[p.pipeline] = map[string]*limiter{}
@@ -85,9 +84,6 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 func (p *Plugin) Stop() {
 }
 
-func (p *Plugin) Reset() {
-}
-
 func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	if p.isAllowed(event) {
 		return pipeline.ActionPass
@@ -113,11 +109,10 @@ func (p *Plugin) isAllowed(event *pipeline.Event) bool {
 			continue
 		}
 
-		p.limiterBuff.Reset()
-		p.limiterBuff.WriteByte(byte('a' + index))
-		p.limiterBuff.WriteByte(':')
-		p.limiterBuff.WriteString(throttleKey)
-		limiterKey := p.limiterBuff.String()
+		p.limiterBuff = append(p.limiterBuff[:0], byte('a'+index))
+		p.limiterBuff = append(p.limiterBuff, ':')
+		p.limiterBuff = append(p.limiterBuff, throttleKey...)
+		limiterKey := string(p.limiterBuff)
 
 		// check if limiter already have been created
 		limitersMu.RLock()

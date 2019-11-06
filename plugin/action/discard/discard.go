@@ -29,9 +29,6 @@ func (p *Plugin) Stop() {
 
 }
 
-func (p *Plugin) Reset() {
-}
-
 func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	return pipeline.ActionDiscard
 }

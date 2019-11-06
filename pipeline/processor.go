@@ -4,7 +4,6 @@ import (
 	"strings"
 	"sync"
 
-	"gitlab.ozon.ru/sre/filed/logger"
 	"go.uber.org/atomic"
 )
 
@@ -16,12 +15,14 @@ const (
 	// pass event to the next action in a pipeline
 	ActionPass ActionResult = 0
 	// skip further processing of event and request next event from the same stream and source as current
+	// plugin may receive event with eventKindTimeout kind if it takes to long to read next event from same stream
 	ActionCollapse ActionResult = 2
 	// skip further processing of event and request next event from any stream and source
 	ActionDiscard ActionResult = 1
 	// hold event in a plugin and request next event from the same stream and source as current.
 	// same as ActionCollapse but held event should be manually committed or returned into pipeline.
 	// check out Commit()/Propagate() functions in InputPluginController.
+	// plugin may receive event with eventKindTimeout kind if it takes to long to read next event from same stream
 	ActionHold ActionResult = 3
 )
 
@@ -94,11 +95,13 @@ func (p *processor) dischargeStream(st *stream) {
 			return
 		}
 
-		p.processSequence(event)
+		if !p.processSequence(event) {
+			return
+		}
 	}
 }
 
-func (p *processor) processSequence(event *Event) {
+func (p *processor) processSequence(event *Event) bool {
 	isSuccess := false
 	isPassed := false
 	isSuccess, isPassed, event = p.processEvent(event)
@@ -106,34 +109,29 @@ func (p *processor) processSequence(event *Event) {
 	if isPassed {
 		event.stage = eventStageOutput
 		p.pipeline.output.Out(event)
-		return
 	}
 
-	if !isSuccess {
-		return
-	}
+	return isSuccess
 }
 
 func (p *processor) processEvent(event *Event) (isSuccess bool, isPassed bool, e *Event) {
 	for {
 		stream := event.stream
-		offset := event.Offset
 
-		isPassed, readSeq := p.doActions(event)
+		isPassed, readNext := p.doActions(event)
 
 		if isPassed {
 			return true, true, event
 		}
 
-		if readSeq {
+		if readNext {
+			action := event.action
 			event = stream.blockGet()
-			if event.index != -1 {
-				continue
+			if event.IsTimeoutKind() {
+				// pass timeout directly to plugin which requested the sequential event
+				event.action = action
 			}
-
-			logger.Errorf("can't read next sequential event from stream %s:%d(%s), offset=%d", stream.sourceName, stream.sourceId, stream.name, offset)
-			p.reset()
-			return false, false, nil
+			continue
 		}
 
 		return true, false, nil
@@ -178,13 +176,11 @@ func (p *processor) countEvent(event *Event, actionIndex int, status eventStatus
 	p.metricsValues = p.pipeline.countEvent(event, actionIndex, status, p.metricsValues)
 }
 
-func (p *processor) reset() {
-	for _, action := range p.actions {
-		action.Reset()
-	}
-}
-
 func (p *processor) isMatch(index int, event *Event) bool {
+	if event.IsTimeoutKind() {
+		return true
+	}
+
 	descr := p.actionsData[index]
 	conds := descr.MatchConditions
 	mode := descr.MatchMode

@@ -110,8 +110,8 @@ func makeActionJSON(actionJSON *simplejson.Json) []byte {
 }
 
 func CompileRegex(s string) (*regexp.Regexp, error) {
-	if s[0] != '/' || s[len(s)-1] != '/' {
-		return nil, fmt.Errorf("regexp %s should be surounded by '/'", s)
+	if len(s) == 0 || s[0] != '/' || s[len(s)-1] != '/' {
+		return nil, fmt.Errorf(`regexp "%s" should be surounded by "/"`, s)
 	}
 
 	return regexp.Compile(s[1 : len(s)-1])

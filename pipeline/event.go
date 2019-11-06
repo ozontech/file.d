@@ -13,6 +13,8 @@ import (
 var eventSizeGCThreshold = 4 * units.Kibibyte
 
 type Event struct {
+	kind atomic.Int32
+
 	Root *insaneJSON.Root
 	Buf  []byte
 
@@ -23,12 +25,11 @@ type Event struct {
 	StreamName StreamName
 	Size       int
 
-	index        int
-	action       int
-	next         *Event
-	stream       *stream
-	isDeprecated atomic.Bool
-	shouldGC     bool
+	index    int
+	action   int
+	next     *Event
+	stream   *stream
+	shouldGC bool
 
 	// some debugging shit
 	maxSize int
@@ -42,9 +43,14 @@ const (
 	eventStageProcessor = 3
 	eventStageOutput    = 4
 	eventStageBack      = 5
+
+	eventKindRegular    eventKind = 0
+	eventKindDeprecated eventKind = 1
+	eventKindTimeout    eventKind = 2
 )
 
 type eventStage int
+type eventKind int32
 
 func newEvent(poolIndex int) *Event {
 	return &Event{
@@ -54,23 +60,21 @@ func newEvent(poolIndex int) *Event {
 	}
 }
 
-func (e *Event) stageStr() string {
-	switch e.stage {
-	case eventStagePool:
-		return "POOL"
-	case eventStageInput:
-		return "INPUT"
-	case eventStageStream:
-		return "STREAM"
-	case eventStageProcessor:
-		return "PROCESSOR"
-	case eventStageOutput:
-		return "OUTPUT"
-	case eventStageBack:
-		return "BACK"
-	default:
-		return "UNKNOWN"
+func newTimoutEvent(stream *stream) *Event {
+	//todo: use pooling here?
+	event := &Event{
+		index:      -1,
+		Root:       insaneJSON.Spawn(),
+		stream:     stream,
+		Offset:     stream.commitOffset,
+		SourceID:   stream.sourceID,
+		SourceName: stream.sourceName,
+		StreamName: stream.name,
 	}
+
+	event.ToTimeoutKind()
+
+	return event
 }
 
 func (e *Event) reset() {
@@ -85,15 +89,23 @@ func (e *Event) reset() {
 	e.next = nil
 	e.action = 0
 	e.stream = nil
-	e.isDeprecated.Swap(false)
+	e.kind.Swap(int32(eventKindRegular))
 }
 
-func (e *Event) deprecate() {
-	e.isDeprecated.Swap(true)
+func (e *Event) ToDeprecatedKind() {
+	e.kind.Swap(int32(eventKindDeprecated))
 }
 
-func (e *Event) IsActual() bool {
-	return e.isDeprecated.Load() == false
+func (e *Event) IsDeprecatedKind() bool {
+	return e.kind.Load() == int32(eventKindDeprecated)
+}
+
+func (e *Event) ToTimeoutKind() {
+	e.kind.Swap(int32(eventKindTimeout))
+}
+
+func (e *Event) IsTimeoutKind() bool {
+	return e.kind.Load() == int32(eventKindTimeout)
 }
 
 func (e *Event) parseJSON(json []byte) (*Event, error) {
@@ -123,8 +135,40 @@ func (e *Event) Encode(outBuf []byte) ([]byte, int) {
 	return outBuf, l
 }
 
+func (e *Event) stageStr() string {
+	switch e.stage {
+	case eventStagePool:
+		return "POOL"
+	case eventStageInput:
+		return "INPUT"
+	case eventStageStream:
+		return "STREAM"
+	case eventStageProcessor:
+		return "PROCESSOR"
+	case eventStageOutput:
+		return "OUTPUT"
+	case eventStageBack:
+		return "BACK"
+	default:
+		return "UNKNOWN"
+	}
+}
+
+func (e *Event) kindStr() string {
+	switch eventKind(e.kind.Load()) {
+	case eventKindRegular:
+		return "REGULAR"
+	case eventKindDeprecated:
+		return "DEPRECATED"
+	case eventKindTimeout:
+		return "TIMEOUT"
+	default:
+		return "UNKNOWN"
+	}
+}
+
 func (e *Event) String() string {
-	return fmt.Sprintf("event: id=%d, source=%d/%s, stream=%s, stage=%s, json=%s", e.index, e.SourceID, e.SourceName, e.StreamName, e.stageStr(), e.Root.EncodeToString())
+	return fmt.Sprintf("event: id=%d kind=%s, source=%d/%s, stream=%s, stage=%s, json=%s", e.index, e.kindStr(), e.SourceID, e.SourceName, e.StreamName, e.stageStr(), e.Root.EncodeToString())
 }
 
 // channels are slower than this implementation by ~20%
