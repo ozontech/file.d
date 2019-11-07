@@ -70,7 +70,7 @@ func (s *streamer) getStream(streamName StreamName, sourceID SourceID, sourceNam
 	return st
 }
 
-func (s *streamer) reserveStream() *stream {
+func (s *streamer) joinStream() *stream {
 	s.chargedMu.Lock()
 	for len(s.charged) == 0 {
 		s.chargedCond.Wait()

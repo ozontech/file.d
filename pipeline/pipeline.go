@@ -211,13 +211,13 @@ func (p *Pipeline) DeprecateSource(sourceID SourceID) int {
 }
 
 func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes []byte) {
-	if len(bytes) == 0 {
+	size := len(bytes)
+	if size == 0 {
 		return
 	}
 
 	x := p.totalIn.Inc()
 
-	size := len(bytes)
 	event, err := p.eventPool.get(bytes)
 	if err != nil {
 		logger.Fatalf("wrong json offset=%d, length=%d, err=%s, source=%d:%s, json=%s", offset, size, err.Error(), sourceID, sourceName, bytes)

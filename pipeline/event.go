@@ -4,13 +4,12 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/alecthomas/units"
 	insaneJSON "github.com/vitkovskii/insane-json"
 	"gitlab.ozon.ru/sre/filed/logger"
 	"go.uber.org/atomic"
 )
 
-var eventSizeGCThreshold = 4 * units.Kibibyte
+var eventSizeGCThreshold = 4 * 1024
 
 type Event struct {
 	kind atomic.Int32
@@ -23,17 +22,15 @@ type Event struct {
 	SourceID   SourceID
 	SourceName string
 	StreamName StreamName
-	Size       int
+	Size       int // last known event size, it may not be actual
 
-	index    int
-	action   int
-	next     *Event
-	stream   *stream
-	shouldGC bool
+	index  int
+	action int
+	next   *Event
+	stream *stream
 
 	// some debugging shit
-	maxSize int
-	stage   eventStage
+	stage eventStage
 }
 
 const (
@@ -78,10 +75,9 @@ func newTimoutEvent(stream *stream) *Event {
 }
 
 func (e *Event) reset() {
-	if e.shouldGC {
+	if e.Size > eventSizeGCThreshold {
 		e.Root.ReleaseMem()
 		e.Buf = make([]byte, 0, 1024)
-		e.shouldGC = false
 	}
 
 	e.Buf = e.Buf[:0]
@@ -123,14 +119,7 @@ func (e *Event) SubparseJSON(json []byte) (*insaneJSON.Node, error) {
 func (e *Event) Encode(outBuf []byte) ([]byte, int) {
 	l := len(outBuf)
 	outBuf = e.Root.Encode(outBuf)
-
-	size := len(outBuf) - l
-	// event is going to be super big, lets GC it
-	e.shouldGC = size > int(eventSizeGCThreshold)
-
-	if size > e.maxSize {
-		e.maxSize = size
-	}
+	e.Size = len(outBuf) - l
 
 	return outBuf, l
 }
@@ -225,16 +214,15 @@ func (p *eventPool) get(json []byte) (*Event, error) {
 
 	p.mu.Unlock()
 
-	if event.maxSize > p.maxEventSize {
-		p.maxEventSize = event.maxSize
-	}
-
 	event.reset()
 	return event.parseJSON(json)
 }
 
 func (p *eventPool) back(event *Event) {
 	p.mu.Lock()
+	if event.Size > p.maxEventSize {
+		p.maxEventSize = event.Size
+	}
 
 	event.stage = eventStagePool
 	p.eventsCount--

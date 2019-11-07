@@ -13,6 +13,7 @@ var eventWaitTimeout = time.Second * 30
 // events fall into stream based on rules defined by input plugin
 // streams are used to allow event joins and other operations which needs sequential event input
 // e.g. events from same file will be in same stream for "file" input plugin
+// todo: remove dependency on streamer
 type stream struct {
 	chargeIndex int
 	blockIndex  int
@@ -50,7 +51,7 @@ func newStream(name StreamName, sourceID SourceID, sourceName string, streamer *
 	return &stream
 }
 
-func (s *stream) detach() {
+func (s *stream) leave() {
 	if s.isDetaching {
 		logger.Panicf("why detach? stream is already detaching")
 	}
@@ -147,7 +148,7 @@ func (s *stream) instantGet() *Event {
 		logger.Panicf("why instant get? stream isn't attached")
 	}
 	if s.first == nil {
-		s.detach()
+		s.leave()
 		s.mu.Unlock()
 
 		return nil

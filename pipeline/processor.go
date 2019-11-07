@@ -82,7 +82,7 @@ func (p *processor) process(output OutputPlugin) {
 			return
 		}
 
-		st := p.streamer.reserveStream()
+		st := p.streamer.joinStream()
 		p.dischargeStream(st)
 	}
 }
