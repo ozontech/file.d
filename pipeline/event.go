@@ -63,7 +63,7 @@ func newTimoutEvent(stream *stream) *Event {
 		index:      -1,
 		Root:       insaneJSON.Spawn(),
 		stream:     stream,
-		Offset:     stream.commitOffset,
+		SeqID:      stream.commitID,
 		SourceID:   stream.sourceID,
 		SourceName: stream.sourceName,
 		StreamName: stream.name,
@@ -157,7 +157,7 @@ func (e *Event) kindStr() string {
 }
 
 func (e *Event) String() string {
-	return fmt.Sprintf("event: id=%d kind=%s, source=%d/%s, stream=%s, stage=%s, json=%s", e.index, e.kindStr(), e.SourceID, e.SourceName, e.StreamName, e.stageStr(), e.Root.EncodeToString())
+	return fmt.Sprintf("id=%d, index=%d kind=%s, action=%d, source=%d/%s, stream=%s, stage=%s, json=%s", e.SeqID, e.index, e.kindStr(), e.action, e.SourceID, e.SourceName, e.StreamName, e.stageStr(), e.Root.EncodeToString())
 }
 
 // channels are slower than this implementation by ~20%
@@ -220,6 +220,8 @@ func (p *eventPool) get(json []byte) (*Event, error) {
 
 func (p *eventPool) back(event *Event) {
 	p.mu.Lock()
+	event.stage = eventStageBack
+
 	if event.Size > p.maxEventSize {
 		p.maxEventSize = event.Size
 	}

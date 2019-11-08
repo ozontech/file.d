@@ -4,10 +4,9 @@ import (
 	"strings"
 	"sync"
 
+	"gitlab.ozon.ru/sre/filed/logger"
 	"go.uber.org/atomic"
 )
-
-type processorState int
 
 type ActionResult int
 
@@ -43,8 +42,10 @@ type processor struct {
 	pipeline *Pipeline
 	streamer *streamer
 
-	actions     []ActionPlugin
-	actionsData []*ActionPluginData
+	actions        []ActionPlugin
+	actionsData    []*ActionPluginData
+	actionsBlocked []bool
+	totalBlocked   int
 
 	shouldStop bool
 	stopWg     *sync.WaitGroup
@@ -94,7 +95,6 @@ func (p *processor) dischargeStream(st *stream) {
 		if event == nil {
 			return
 		}
-
 		if !p.processSequence(event) {
 			return
 		}
@@ -118,13 +118,11 @@ func (p *processor) processEvent(event *Event) (isSuccess bool, isPassed bool, e
 	for {
 		stream := event.stream
 
-		isPassed, readNext := p.doActions(event)
-
-		if isPassed {
+		if p.doActions(event) {
 			return true, true, event
 		}
 
-		if readNext {
+		if p.totalBlocked != 0 {
 			action := event.action
 			event = stream.blockGet()
 			if event.IsTimeoutKind() {
@@ -138,7 +136,7 @@ func (p *processor) processEvent(event *Event) (isSuccess bool, isPassed bool, e
 	}
 }
 
-func (p *processor) doActions(event *Event) (isPassed bool, readSeq bool) {
+func (p *processor) doActions(event *Event) (isPassed bool) {
 	l := len(p.actions)
 	for index := event.action; index < l; index++ {
 		action := p.actions[index]
@@ -153,23 +151,53 @@ func (p *processor) doActions(event *Event) (isPassed bool, readSeq bool) {
 		switch action.Do(event) {
 		case ActionPass:
 			p.countEvent(event, index, eventStatusPassed)
+			p.tryUnblockAction(index)
 		case ActionDiscard:
 			p.countEvent(event, index, eventStatusDiscarded)
+			p.tryUnblockAction(index)
 			// can't notify input here, because previous events may delay and we'll get offset sequence corruption
-			p.pipeline.commit(event, false)
-			return false, false
+			p.pipeline.finalize(event, false, true)
+			return false
 		case ActionCollapse:
 			p.countEvent(event, index, eventStatusCollapse)
+			p.tryBlockAction(index)
 			// can't notify input here, because previous events may delay and we'll get offset sequence corruption
-			p.pipeline.commit(event, false)
-			return false, true
+			p.pipeline.finalize(event, false, true)
+			return false
 		case ActionHold:
 			p.countEvent(event, index, eventStatusHold)
-			return false, true
+			p.tryBlockAction(index)
+
+			p.pipeline.finalize(event, false, false)
+			return false
 		}
 	}
 
-	return true, false
+	return true
+}
+
+func (p *processor) tryBlockAction(index int) {
+	if p.actionsBlocked[index] {
+		return
+	}
+	p.actionsBlocked[index] = true
+	p.totalBlocked++
+
+	if p.totalBlocked > len(p.actions) {
+		logger.Panicf("blocked actions too big")
+	}
+}
+
+func (p *processor) tryUnblockAction(index int) {
+	if !p.actionsBlocked[index] {
+		return
+	}
+	p.actionsBlocked[index] = false
+	p.totalBlocked--
+
+	if p.totalBlocked < 0 {
+		logger.Panicf("blocked action count less than zero")
+	}
 }
 
 func (p *processor) countEvent(event *Event, actionIndex int, status eventStatus) {
@@ -178,6 +206,10 @@ func (p *processor) countEvent(event *Event, actionIndex int, status eventStatus
 
 func (p *processor) isMatch(index int, event *Event) bool {
 	if event.IsTimeoutKind() {
+		return true
+	}
+
+	if p.actionsBlocked[index] {
 		return true
 	}
 
@@ -245,12 +277,13 @@ func (p *processor) stop() {
 }
 
 func (p *processor) AddActionPlugin(descr *ActionPluginData) {
-	p.actionsData = append(p.actionsData, descr)
 	p.actions = append(p.actions, descr.Plugin)
+	p.actionsData = append(p.actionsData, descr)
+	p.actionsBlocked = append(p.actionsBlocked, false)
 }
 
 func (p *processor) Commit(event *Event) {
-	p.pipeline.commit(event, false)
+	p.pipeline.finalize(event, false, true)
 }
 
 func (p *processor) Propagate(event *Event) {

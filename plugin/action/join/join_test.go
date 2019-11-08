@@ -9,6 +9,7 @@ import (
 	"gitlab.ozon.ru/sre/filed/pipeline"
 	"gitlab.ozon.ru/sre/filed/plugin/input/fake"
 	"gitlab.ozon.ru/sre/filed/plugin/output/devnull"
+	"go.uber.org/atomic"
 )
 
 const content = `# ===next===
@@ -149,7 +150,7 @@ Isn't panic
 `
 
 func startPipeline(first, next string) (*pipeline.Pipeline, *fake.Plugin, *devnull.Plugin) {
-	p := pipeline.NewTestPipeLine(false)
+	p := pipeline.NewTestPipeLine(true)
 
 	anyPlugin, _ := fake.Factory()
 	inputPlugin := anyPlugin.(*fake.Plugin)
@@ -158,7 +159,9 @@ func startPipeline(first, next string) (*pipeline.Pipeline, *fake.Plugin, *devnu
 	anyPlugin, _ = factory()
 	plugin := anyPlugin.(*Plugin)
 	config := &Config{Field: "log", First: first, Next: next}
-	p.Processors[0].AddActionPlugin(&pipeline.ActionPluginData{Plugin: plugin, PluginDesc: pipeline.PluginDesc{Config: config}})
+	for _, p := range p.Processors {
+		p.AddActionPlugin(&pipeline.ActionPluginData{Plugin: plugin, PluginDesc: pipeline.PluginDesc{Config: config}})
+	}
 
 	anyPlugin, _ = devnull.Factory()
 	outputPlugin := anyPlugin.(*devnull.Plugin)
@@ -181,30 +184,36 @@ func TestJoin(t *testing.T) {
 	}
 
 	panics := 12
-	iterations := 10
+	iterations := 100
 
 	p, input, output := startPipeline(`/^(panic:)|(http: panic serving)/`, `/(^$)|(goroutine [0-9]+ \[)|(\([0-9]+x[0-9,a-f]+)|(\.go:[0-9]+ \+[0-9]x)|(\/.*\.go:[0-9]+)|(\(...\))|(main\.main\(\))|(created by .*\/.*\.)|(^\[signal)|(panic.+[0-9]x[0-9,a-f]+)/`)
 	defer p.Stop()
 
-	acceptedEvents := make([]string, 0, 0)
+	acceptedEvents := atomic.Int32{}
 	input.SetAcceptFn(func(e *pipeline.Event) {
-		acceptedEvents = append(acceptedEvents, e.Root.EncodeToString())
+		acceptedEvents.Inc()
 	})
 
-	dumpedEvents := make([]string, 0, 0)
+	dumpedEvents := atomic.Int32{}
+	lastID := atomic.Uint64{}
 	output.SetOutFn(func(e *pipeline.Event) {
-		dumpedEvents = append(dumpedEvents, e.Root.EncodeToString())
+		dumpedEvents.Inc()
+		//logger.Infof("out %s", e)
+		id := lastID.Swap(e.SeqID)
+		if id != 0 && id >= e.SeqID {
+			panic("wrong id")
+		}
 	})
 
 	for i := 0; i < iterations; i++ {
-		for _, line := range lines {
-			input.In(0, "test.log", 0, 0, []byte(line))
+		for m, line := range lines {
+			input.In(0, "test.log", int64(i*10000+m), int64(len(line)), []byte(line))
 		}
 	}
 
 	p.HandleEventFlowFinish(false)
 	p.WaitUntilDone(false)
 
-	assert.Equal(t, panics*iterations, len(acceptedEvents), "wrong accepted events count")
-	assert.Equal(t, panics*iterations, len(dumpedEvents), "wrong dumped events count")
+	assert.Equal(t, int32(panics*iterations), acceptedEvents.Load(), "wrong accepted events count")
+	assert.Equal(t, int32(panics*iterations), dumpedEvents.Load(), "wrong dumped events count")
 }

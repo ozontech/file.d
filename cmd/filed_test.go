@@ -38,20 +38,54 @@ var jsons = []string{
 	`{"log":"throttled log one three\n", "throttle":"3","stream":"%s","service":"1"}`,
 }
 
+var panicContent = `panic: assignment to entry in nil map
+
+goroutine 1 [running]:
+example.com/tariffication/tarifficatorGoApi/services/cache.(*Cache).getGeoRules(0xc420438780, 0xef36b8, 0xc42bb7e600, 0xc42bb77ce0, 0x0, 0x0)
+	/builds/tariffication/tarifficatorGoApi/services/cache/index.go:69 +0x538
+example.com/tariffication/tarifficatorGoApi/services/cache.(*Cache).createAddressIndex(0xc420438780, 0x0, 0x0)
+	/builds/tariffication/tarifficatorGoApi/services/cache/index.go:166 +0x5e
+example.com/tariffication/tarifficatorGoApi/services/cache.(*Cache).createIndexes(0xc420438780, 0x0, 0xc44ec607d0)
+	/builds/tariffication/tarifficatorGoApi/services/cache/index.go:211 +0x8a
+example.com/tariffication/tarifficatorGoApi/services/cache.(*Cache).updateDbCache(0xc420438780, 0xc420438780, 0xc4200845c0)
+	/builds/tariffication/tarifficatorGoApi/services/cache/cache.go:84 +0x182
+example.com/tariffication/tarifficatorGoApi/services/cache.NewCache(0xc4200985f0, 0xc4203fdad0, 0xc420084440, 0x0, 0x0, 0x0)
+	/builds/tariffication/tarifficatorGoApi/services/cache/cache.go:66 +0xa7
+main.initialize(0xec3270, 0x1d, 0xee7133, 0x9e, 0xec53d7, 0x1f, 0xc40000000a, 0x14, 0xc420086e00)
+	/builds/tariffication/tarifficatorGoApi/cmd/tarifficator/main.go:41 +0x389
+main.main()
+	/builds/tariffication/tarifficatorGoApi/cmd/tarifficator/main.go:65 +0x2ae
+`
+
 var multilineJson = `{"log":"log","stream":"%s","service":"1"}`
 
 func gen(tempDir string, files int, wg *sync.WaitGroup) {
+	format := `{"log":"%s\n","stream":"stderr"}`
+	panicLines := make([]string, 0, 0)
+	for _, line := range strings.Split(panicContent, "\n") {
+		if line == "" {
+			continue
+		}
+		panicLines = append(panicLines, fmt.Sprintf(format, line))
+	}
+
 	for i := 0; i < files; i++ {
 		u1 := strings.ReplaceAll(uuid.NewV4().String(), "-", "")
 		u2 := strings.ReplaceAll(uuid.NewV4().String(), "-", "")
 		name := path.Join(tempDir, "pod_ns_container-"+u1+u2+".log")
 		file, _ := os.Create(name)
 
-		//intervals := []int{0, 5}
-		//interval := intervals[rand.Int()%len(intervals)]
 		lines := 100000
 		for l := 0; l < lines; l++ {
-			stream := "stdout"
+			//if rand.Int()%2 == 0 {
+				for _, line := range panicLines {
+					_, _ = file.WriteString(line)
+					_, _ = file.Write([]byte{'\n'})
+				}
+				continue
+			//}
+
+			stream := "stderr"
 			if rand.Int()%3 == 0 {
 				stream = "stderr"
 			}
@@ -63,7 +97,6 @@ func gen(tempDir string, files int, wg *sync.WaitGroup) {
 			}
 			_, _ = file.WriteString(fmt.Sprintf(jsons[rand.Int()%len(jsons)], stream))
 			_, _ = file.Write([]byte{'\n'})
-			//time.Sleep(time.Duration(interval) * time.Millisecond)
 		}
 
 		time.Sleep(time.Second * 1)
@@ -98,7 +131,7 @@ func TestEndToEnd(t *testing.T) {
 
 	wg := &sync.WaitGroup{}
 	for {
-		jobs := 64
+		jobs := 8
 		for i := 0; i < jobs; i++ {
 			wg.Add(1)
 			go gen(filesDir, 1, wg)

@@ -164,7 +164,7 @@ func (jp *jobProvider) commit(event *pipeline.Event) {
 
 	job.mu.Lock()
 	if job.offsets[event.StreamName] >= event.Offset && isActual {
-		logger.Panicf("commit offset=%d for source=%d:%s should be more than current=%d for event id=%d", event.Offset, event.SourceID, event.StreamName, job.offsets[event.StreamName], event.SeqID)
+		logger.Panicf("offset corruption: committing=%d, current=%d, event id=%d, source=%d:%s", event.Offset, job.offsets[event.StreamName], event.SeqID, event.SourceID, event.SourceName)
 	}
 	if isActual {
 		job.offsets[event.StreamName] = event.Offset

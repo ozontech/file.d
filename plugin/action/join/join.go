@@ -11,12 +11,13 @@ import (
 type Plugin struct {
 	controller pipeline.ActionPluginController
 	config     *Config
-	firstRe    *regexp.Regexp
-	nextRe     *regexp.Regexp
-	isNext     bool
 
-	firstEvent *pipeline.Event
-	buff       []byte
+	firstRe *regexp.Regexp
+	nextRe  *regexp.Regexp
+
+	isJoining bool
+	first     *pipeline.Event
+	buff      []byte
 }
 
 type Config struct {
@@ -39,7 +40,7 @@ func factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginParams) {
 	p.controller = params.Controller
 	p.config = config.(*Config)
-	p.isNext = false
+	p.isJoining = false
 	p.buff = make([]byte, 0, params.PipelineSettings.AvgLogSize)
 
 	if p.config.Field == "" {
@@ -70,57 +71,57 @@ func (p *Plugin) Stop() {
 }
 
 func (p *Plugin) flush() {
-	if p.firstEvent == nil {
+	event := p.first
+	p.first = nil
+	p.isJoining = false
+
+	if event == nil {
 		logger.Panicf("first event is nil, why?")
+		return
 	}
 
-	p.firstEvent.Root.Dig(p.config.Field).MutateToString(string(p.buff))
-	p.controller.Propagate(p.firstEvent)
-	p.firstEvent = nil
-	p.isNext = false
-}
-
-func (p *Plugin) handleFirstEvent(event *pipeline.Event, value string) {
-	if p.isNext {
-		p.flush()
-	}
-
-	p.firstEvent = event
-	p.isNext = true
-	p.buff = append(p.buff[:0], value...)
+	event.Root.Dig(p.config.Field).MutateToString(string(p.buff))
+	p.controller.Propagate(event)
 }
 
 func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	if event.IsTimeoutKind() {
+		if !p.isJoining {
+			logger.Panicf("timeout without joining, why?")
+		}
 		p.flush()
 		return pipeline.ActionDiscard
 	}
 
-	value := event.Root.Dig(p.config.Field)
+	node := event.Root.Dig(p.config.Field)
+	value := node.AsString()
 
-	if !value.IsString() {
-		if p.isNext {
-			p.flush()
-		}
-		return pipeline.ActionPass
+	firstOK := false
+	if node.IsString() {
+		firstOK = p.firstRe.MatchString(value)
 	}
 
-	valStr := value.AsString()
-	isFirst := p.firstRe.MatchString(valStr)
-	if isFirst {
-		p.handleFirstEvent(event, valStr)
+	if firstOK {
+		if p.isJoining {
+			p.flush()
+		}
+
+		p.first = event
+		p.isJoining = true
+		p.buff = append(p.buff[:0], value...)
 		return pipeline.ActionHold
 	}
 
-	if p.isNext {
-		isNext := p.nextRe.MatchString(valStr)
-		if isNext {
-			p.buff = append(p.buff, valStr...)
+	if p.isJoining {
+		nextOK := p.nextRe.MatchString(value)
+		if nextOK {
+			p.buff = append(p.buff, value...)
 			return pipeline.ActionCollapse
 		}
-
-		p.flush()
 	}
 
+	if p.isJoining {
+		p.flush()
+	}
 	return pipeline.ActionPass
 }

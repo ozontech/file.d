@@ -248,31 +248,35 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 }
 
 func (p *Pipeline) Commit(event *Event) {
-	p.commit(event, true)
+	p.finalize(event, true, true)
 }
 
-func (p *Pipeline) commit(event *Event, notifyInput bool) {
+func (p *Pipeline) finalize(event *Event, notifyInput bool, backEvent bool) {
 	if event.IsTimeoutKind() {
 		return
 	}
 
-	event.stage = eventStageBack
 	if notifyInput {
-		if len(p.eventSample) == 0 {
-			p.eventSample = event.Root.Encode(p.eventSample)
-		}
 		p.input.Commit(event)
 	}
 
-	if p.eventLogEnabled {
-		p.eventLogMu.Lock()
-		p.eventLog = append(p.eventLog, event.Root.EncodeToString())
-		p.eventLogMu.Unlock()
-	}
-
+	// todo: it's shitty event.stream (EVENT) !!
 	event.stream.commit(event)
-	p.eventPool.back(event)
-	p.totalCommitted.Inc()
+	if backEvent {
+		if len(p.eventSample) == 0 && notifyInput {
+			p.eventSample = event.Root.Encode(p.eventSample)
+		}
+
+		if p.eventLogEnabled {
+			p.eventLogMu.Lock()
+			p.eventLog = append(p.eventLog, event.Root.EncodeToString())
+			p.eventLogMu.Unlock()
+		}
+
+		p.totalCommitted.Inc()
+
+		p.eventPool.back(event)
+	}
 }
 
 func (p *Pipeline) AddAction(info *PluginInfo, configJSON []byte, matchMode MatchMode, conditions MatchConditions, metricName string, metricLabels []string) {

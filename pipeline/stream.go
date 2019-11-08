@@ -27,11 +27,10 @@ type stream struct {
 	mu   *sync.Mutex
 	cond *sync.Cond
 
-	isDetaching  bool
-	isAttached   bool
-	maxID        uint64
-	getOffset    int64
-	commitOffset int64
+	isDetaching bool
+	isAttached  bool
+	commitID    uint64
+	awayID      uint64
 
 	first *Event
 	last  *Event
@@ -63,15 +62,15 @@ func (s *stream) leave() {
 }
 
 func (s *stream) commit(event *Event) {
+	s.mu.Lock()
 	// maxID is needed here because discarded events with bigger offsets may be
 	// committed faster than events with lower offsets which are goes through output
-	if event.SeqID < s.maxID {
+	if event.SeqID < s.commitID {
+		s.mu.Unlock()
 		return
 	}
-	s.maxID = event.SeqID
+	s.commitID = event.SeqID
 
-	s.mu.Lock()
-	s.commitOffset = event.Offset
 	if s.isDetaching {
 		s.tryDropProcessor()
 	}
@@ -79,7 +78,7 @@ func (s *stream) commit(event *Event) {
 }
 
 func (s *stream) tryDropProcessor() {
-	if s.getOffset != s.commitOffset {
+	if s.awayID != s.commitID {
 		return
 	}
 
@@ -171,11 +170,11 @@ func (s *stream) tryUnblock() bool {
 	}
 
 	if s.first != nil {
-		logger.Panicf("why stream isn't empty? get offset=%d, commit offset=%d", s.getOffset, s.commitOffset)
+		logger.Panicf("why stream isn't empty? away event id=%d, commit event id=%d", s.awayID, s.commitID)
 	}
 
-	if s.getOffset != s.commitOffset {
-		logger.Panicf("why offsets are different? get offset=%d, commit offset=%d", s.getOffset, s.commitOffset)
+	if s.awayID != s.commitID {
+		logger.Panicf("why events are different? away event id=%d, commit event id=%d", s.awayID, s.commitID)
 	}
 
 	timeoutEvent := newTimoutEvent(s)
@@ -193,7 +192,7 @@ func (s *stream) get() *Event {
 		logger.Panicf("why get while detaching?")
 	}
 
-	result := s.first
+	event := s.first
 	if s.first == s.last {
 		s.first = nil
 		s.last = nil
@@ -201,7 +200,8 @@ func (s *stream) get() *Event {
 		s.first = s.first.next
 	}
 
-	result.stage = eventStageProcessor
-	s.getOffset = result.Offset
-	return result
+	event.stage = eventStageProcessor
+	s.awayID = event.SeqID
+
+	return event
 }

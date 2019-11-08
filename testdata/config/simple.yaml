@@ -1,7 +1,7 @@
 pipelines:
   test:
     settings:
-      processors_count: 16
+      processors_count: 1
     input:
       type: file
       persistence_mode: async
@@ -14,12 +14,18 @@ pipelines:
       match_fields:
         should_drop: ok
       match_mode: or
-    - type: throttle
-      default_limit: 1000
-      throttle_field: throttle
-      interval: 5s
-      buckets: 60
-      metric_name: throttle
-      metric_labels: [service, k8s_pod, k8s_container]
+    - type: join
+      field: log
+      first_re: '/^(panic:)|(http: panic serving)/'
+      next_re: '/(^$)|(goroutine [0-9]+ \[)|(\([0-9]+x[0-9,a-f]+)|(\.go:[0-9]+ \+[0-9]x)|(\/.*\.go:[0-9]+)|(\(...\))|(main\.main\(\))|(created by .*\/.*\.)|(^\[signal)|(panic.+[0-9]x[0-9,a-f]+)|(panic:)/'
+      match_fields:
+        stream: stderr
+    #    - type: throttle
+    #      default_limit: 1000
+    #      throttle_field: throttle
+    #      interval: 5s
+    #      buckets: 60
+    #      metric_name: throttle
+    #      metric_labels: [service, k8s_pod, k8s_container]
     output:
       type: devnull
