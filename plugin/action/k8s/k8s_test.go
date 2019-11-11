@@ -34,7 +34,7 @@ func getLogFilename(prefix string, item *metaItem) string {
 	)
 }
 
-func getPodInfo(item *metaItem) *corev1.Pod {
+func getPodInfo(item *metaItem, isWhite bool) *corev1.Pod {
 	podInfo := &corev1.Pod{}
 	podInfo.Namespace = string(item.namespace)
 	podInfo.Name = string(item.podName)
@@ -42,6 +42,11 @@ func getPodInfo(item *metaItem) *corev1.Pod {
 	podInfo.Status.ContainerStatuses[0].Name = string(item.containerName)
 	podInfo.Status.ContainerStatuses[0].ContainerID = "docker://" + string(item.containerID)
 	podInfo.Spec.NodeName = string(item.nodeName)
+	if isWhite {
+		podInfo.Labels = map[string]string{"white_label": "white_value"}
+	} else {
+		podInfo.Labels = map[string]string{"black_label": "some_value"}
+	}
 	return podInfo
 }
 
@@ -54,7 +59,10 @@ func startPipeline() (*pipeline.Pipeline, *fake.Plugin, *Plugin, *devnull.Plugin
 
 	anyPlugin, _ = factory()
 	plugin := anyPlugin.(*Plugin)
-	config := &Config{}
+	config := &Config{
+		LabelsWhitelist: "white_label",
+		labelsWhitelist: nil,
+	}
 	p.Processors[0].AddActionPlugin(&pipeline.ActionPluginData{Plugin: plugin, PluginDesc: pipeline.PluginDesc{Config: config}})
 
 	anyPlugin, _ = devnull.Factory()
@@ -77,7 +85,7 @@ func TestEnrichment(t *testing.T) {
 		containerName: "duty-bot",
 		containerID:   "4e0301b633eaa2bfdcafdeba59ba0c72a3815911a6a820bf273534b0f32d98e0",
 	}
-	podInfo := getPodInfo(item)
+	podInfo := getPodInfo(item, true)
 	putMeta(podInfo)
 
 	var event *pipeline.Event = nil
@@ -95,6 +103,43 @@ func TestEnrichment(t *testing.T) {
 	assert.Equal(t, "node_1", event.Root.Dig("k8s_node").AsString(), "wrong event field")
 }
 
+func TestWhitelist(t *testing.T) {
+	p, input, _, output := startPipeline()
+	defer p.Stop()
+
+	item := &metaItem{
+		nodeName:      "node_1",
+		namespace:     "sre",
+		podName:       "advanced-logs-checker-1111111111-trtrq",
+		containerName: "duty-bot",
+		containerID:   "4e0301b633eaa2bfdcafdeba59ba0c72a3815911a6a820bf273534b0f32d98e0",
+	}
+	putMeta(getPodInfo(item, true))
+	filename1 := getLogFilename("/docker-logs", item)
+
+	item = &metaItem{
+		nodeName:      "node_1",
+		namespace:     "sre",
+		podName:       "advanced-logs-checker-2222222222-trtrq",
+		containerName: "duty-bot",
+		containerID:   "4e0301b633eaa2bfdcafdeba59ba0c72a3815911a6a820bf273534b0f32d98e0",
+	}
+	putMeta(getPodInfo(item, false))
+	filename2 := getLogFilename("/docker-logs", item)
+
+	events := make([]*pipeline.Event, 0, 0)
+	output.SetOutFn(func(e *pipeline.Event) {
+		events = append(events, e)
+	})
+
+	input.In(0, filename1, 0, 0, []byte(`{"time":"time","log":"log\n"}`))
+	input.In(0, filename2, 0, 0, []byte(`{"time":"time","log":"log\n"}`))
+	input.Wait()
+
+	assert.Equal(t, "white_value", events[0].Root.Dig("k8s_label_white_label").AsString(), "wrong event count")
+	assert.Nil(t, events[1].Root.Dig("k8s_label_black_label"), "wrong event count")
+}
+
 func TestJoin(t *testing.T) {
 	p, input, _, output := startPipeline()
 	defer p.Stop()
@@ -106,7 +151,7 @@ func TestJoin(t *testing.T) {
 		containerName: "duty-bot",
 		containerID:   "4e0301b633eaa2bfdcafdeba59ba0c72a3815911a6a820bf273534b0f32d98e0",
 	}
-	podInfo := getPodInfo(item)
+	podInfo := getPodInfo(item, true)
 	putMeta(podInfo)
 
 	events := make([]*pipeline.Event, 0, 0)
@@ -178,21 +223,21 @@ func TestCleanUp(t *testing.T) {
 		podName:       "advanced-logs-checker-1566485760-1",
 		containerName: "duty-bot",
 		containerID:   "1111111111111111111111111111111111111111111111111111111111111111",
-	}))
+	}, true))
 	putMeta(getPodInfo(&metaItem{
 		nodeName:      "node_1",
 		namespace:     "sre",
 		podName:       "advanced-logs-checker-1566485760-2",
 		containerName: "duty-bot",
 		containerID:   "2222222222222222222222222222222222222222222222222222222222222222",
-	}))
+	}, true))
 	putMeta(getPodInfo(&metaItem{
 		nodeName:      "node_1",
 		namespace:     "infra",
 		podName:       "advanced-logs-checker-1566485760-3",
 		containerName: "duty-bot",
 		containerID:   "3333333333333333333333333333333333333333333333333333333333333333",
-	}))
+	}, true))
 
 	time.Sleep(metaExpireDuration + MaintenanceInterval)
 

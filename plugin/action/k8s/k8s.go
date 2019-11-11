@@ -1,6 +1,8 @@
 package k8s
 
 import (
+	"strings"
+
 	"github.com/alecthomas/units"
 	"gitlab.ozon.ru/sre/filed/filed"
 	"gitlab.ozon.ru/sre/filed/logger"
@@ -22,7 +24,9 @@ const (
 )
 
 type Config struct {
-	MaxEventSize int `json:"max_event_size"`
+	MaxEventSize    int    `json:"max_event_size"`
+	LabelsWhitelist string `json:"labels_whitelist"`
+	labelsWhitelist map[string]bool
 }
 
 var (
@@ -45,6 +49,15 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 
 	if p.config.MaxEventSize == 0 {
 		p.config.MaxEventSize = int(defaultMaxEventSize)
+	}
+
+	p.config.labelsWhitelist = make(map[string]bool)
+	if p.config.LabelsWhitelist != "" {
+		parts := strings.Split(p.config.LabelsWhitelist, ",")
+		for _, part := range parts {
+			cleanPart := strings.TrimSpace(part)
+			p.config.labelsWhitelist[cleanPart] = true
+		}
 	}
 
 	startCounter := startCounter.Inc()
@@ -108,6 +121,14 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 
 		event.Root.AddFieldNoAlloc(event.Root, "k8s_node").MutateToString(podMeta.Spec.NodeName)
 		for labelName, labelValue := range podMeta.Labels {
+			if len(p.config.labelsWhitelist) != 0 {
+				_, has := p.config.labelsWhitelist[labelName]
+
+				if !has {
+					continue
+				}
+			}
+
 			l := len(event.Buf)
 			event.Buf = append(event.Buf, "k8s_label_"...)
 			event.Buf = append(event.Buf, labelName...)
