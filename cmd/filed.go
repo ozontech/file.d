@@ -3,12 +3,14 @@ package main
 import (
 	"os"
 	"os/signal"
+	"runtime/debug"
 	"syscall"
 
 	"github.com/alecthomas/kingpin"
 	insaneJSON "github.com/vitkovskii/insane-json"
 	"gitlab.ozon.ru/sre/filed/filed"
 	"gitlab.ozon.ru/sre/filed/logger"
+	"gitlab.ozon.ru/sre/filed/pipeline"
 	"go.uber.org/automaxprocs/maxprocs"
 
 	_ "gitlab.ozon.ru/sre/filed/plugin/action/discard"
@@ -35,6 +37,8 @@ var (
 
 	config = kingpin.Flag("config", `config file name`).Required().ExistingFile()
 	http   = kingpin.Flag("http", `http listen addr eg. ":9000", "off" to disable`).Default(":9000").String()
+
+	gcPercent = 20
 )
 
 func main() {
@@ -43,8 +47,9 @@ func main() {
 
 	logger.Infof("hi!")
 
+	debug.SetGCPercent(gcPercent)
 	insaneJSON.DisableBeautifulErrors = true
-	insaneJSON.StartNodePoolSize = 1024
+	insaneJSON.StartNodePoolSize = pipeline.DefaultNodePoolSize
 
 	_, _ = maxprocs.Set(maxprocs.Logger(logger.Debugf))
 

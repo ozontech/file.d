@@ -61,6 +61,7 @@ type Batcher struct {
 	freeBatches chan *Batch
 	fullBatches chan *Batch
 	mu          *sync.Mutex
+	seqMu       *sync.Mutex
 	cond        *sync.Cond
 
 	outSeq    int64
@@ -96,7 +97,8 @@ func NewBatcher(
 
 func (b *Batcher) Start() {
 	b.mu = &sync.Mutex{}
-	b.cond = sync.NewCond(b.mu)
+	b.seqMu = &sync.Mutex{}
+	b.cond = sync.NewCond(b.seqMu)
 
 	go b.heartbeat()
 
@@ -140,7 +142,7 @@ func (b *Batcher) commitBatch(events []*Event, batch *Batch) []*Event {
 	}
 
 	// lets restore the sequence of batches to make sure input will commit offsets incrementally
-	b.mu.Lock()
+	b.seqMu.Lock()
 	for b.commitSeq != batchSeq {
 		b.cond.Wait()
 	}
@@ -150,10 +152,10 @@ func (b *Batcher) commitBatch(events []*Event, batch *Batch) []*Event {
 		b.controller.Commit(e)
 	}
 
-	logger.Infof("output has written a batch type=%s, pipeline=%s, events=%d", b.outputType, b.pipelineName, len(events))
-
 	b.cond.Broadcast()
-	b.mu.Unlock()
+	b.seqMu.Unlock()
+
+	logger.Infof("output has written a batch type=%s, pipeline=%s, events=%d", b.outputType, b.pipelineName, len(events))
 
 	return events
 }

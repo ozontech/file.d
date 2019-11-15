@@ -111,8 +111,8 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 		}
 	}
 
-	// handle to much memory consumption
 	data := (*workerData).(*data)
+	//handle to much memory consumption
 	if cap(data.outBuf) > p.config.BatchSize*p.avgLogSize {
 		data.outBuf = make([]byte, 0, p.config.BatchSize*p.avgLogSize)
 	}

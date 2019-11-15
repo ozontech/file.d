@@ -4,17 +4,13 @@ import (
 	"encoding/json"
 	"net/http"
 	_ "net/http/pprof"
+	"runtime/debug"
 
 	"github.com/bitly/go-simplejson"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"gitlab.ozon.ru/sre/filed/logger"
 	"gitlab.ozon.ru/sre/filed/pipeline"
-)
-
-const (
-	defaultCapacity   = 1024
-	defaultAvgLogSize = 4096
 )
 
 type Filed struct {
@@ -183,12 +179,18 @@ func (f *Filed) listenHTTP() {
 
 	mux.HandleFunc("/live", f.serveLiveReady)
 	mux.HandleFunc("/ready", f.serveLiveReady)
+	mux.HandleFunc("/freeosmem", f.serveFreeOsMem)
 	mux.Handle("/metrics", promhttp.Handler())
 
 	err := http.ListenAndServe(f.httpAddr, mux)
 	if err != nil {
 		logger.Fatalf("can't start http with %q address: %s", f.httpAddr, err.Error())
 	}
+}
+
+func (f *Filed) serveFreeOsMem(w http.ResponseWriter, r *http.Request) {
+	debug.FreeOSMemory()
+	logger.Infof("Free OS memory OK")
 }
 
 func (f *Filed) serveLiveReady(w http.ResponseWriter, r *http.Request) {

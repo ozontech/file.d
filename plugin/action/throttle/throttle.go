@@ -112,6 +112,7 @@ func (p *Plugin) isAllowed(event *pipeline.Event) bool {
 		p.limiterBuff = append(p.limiterBuff[:0], byte('a'+index))
 		p.limiterBuff = append(p.limiterBuff, ':')
 		p.limiterBuff = append(p.limiterBuff, throttleKey...)
+		// todo: alloc string only when adding to map
 		limiterKey := string(p.limiterBuff)
 
 		// check if limiter already have been created

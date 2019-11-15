@@ -16,9 +16,13 @@ import (
 )
 
 const (
-	defaultFieldValue   = "not_set"
-	maintenanceInterval = time.Second * 5
-	metricsGenInterval  = time.Minute * 10
+	DefaultFieldValue   = "not_set"
+	DefaultCapacity     = 1024
+	DefaultAvgLogSize   = 64 * 1024
+	DefaultNodePoolSize = 1024
+
+	MaintenanceInterval = time.Second * 5
+	MetricsGenInterval  = time.Minute * 10
 )
 
 type InputPluginController interface {
@@ -357,7 +361,7 @@ func (p *Pipeline) countEvent(event *Event, actionIndex int, eventStatus eventSt
 	for _, field := range metrics.labels {
 		node := event.Root.Dig(field)
 
-		value := defaultFieldValue
+		value := DefaultFieldValue
 		if node != nil {
 			value = node.AsString()
 		}
@@ -374,7 +378,7 @@ func (p *Pipeline) countEvent(event *Event, actionIndex int, eventStatus eventSt
 
 func (p *Pipeline) maintenance() {
 	lastProcessed := int64(0)
-	time.Sleep(maintenanceInterval)
+	time.Sleep(MaintenanceInterval)
 	for {
 		select {
 		case <-p.stopCh:
@@ -386,14 +390,14 @@ func (p *Pipeline) maintenance() {
 			processed := p.totalCommitted.Load()
 			delta := processed - lastProcessed
 			lastProcessed = processed
-			rate := delta * int64(time.Second) / int64(maintenanceInterval)
-			logger.Infof("pipeline %q stats for last %d seconds: processed=%d, rate=%d/sec, queue=%d/%d, total processed=%d, max log size=%d", p.Name, maintenanceInterval/time.Second, delta, rate, p.eventPool.eventsCount, p.settings.Capacity, processed, p.eventPool.maxEventSize)
+			rate := delta * int64(time.Second) / int64(MaintenanceInterval)
+			logger.Infof("pipeline %q stats for last %d seconds: processed=%d, rate=%d/sec, queue=%d/%d, total processed=%d, max log size=%d", p.Name, MaintenanceInterval/time.Second, delta, rate, p.eventPool.eventsCount, p.settings.Capacity, processed, p.eventPool.maxEventSize)
 
-			if time.Now().Sub(p.metricsGenTime) > metricsGenInterval {
+			if time.Now().Sub(p.metricsGenTime) > MetricsGenInterval {
 				p.nextMetricsGen()
 			}
 
-			time.Sleep(maintenanceInterval)
+			time.Sleep(MaintenanceInterval)
 		}
 	}
 }

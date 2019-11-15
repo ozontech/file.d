@@ -3,7 +3,6 @@ package k8s
 import (
 	"strings"
 
-	"github.com/alecthomas/units"
 	"gitlab.ozon.ru/sre/filed/filed"
 	"gitlab.ozon.ru/sre/filed/logger"
 	"gitlab.ozon.ru/sre/filed/pipeline"
@@ -20,7 +19,8 @@ type Plugin struct {
 }
 
 const (
-	defaultMaxEventSize = 1 * units.Megabyte
+	defaultMaxEventSize = 1000000
+	predictionLookahead = 128 * 1024
 )
 
 type Config struct {
@@ -90,10 +90,11 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 		panic("")
 	}
 
-	// docker splits long JSON logs by 16kb chunks, so let's join them
-	// look ahead 64kb to ensure we won't throw events longer than MaxEventSize
+	// docker splits long logs by 16kb chunks, so let's join them
+	// look ahead to ensure we won't throw events longer than MaxEventSize
+	// lookahead value is much more than 16Kb because json may be escaped
 	p.logSize += event.Size
-	predictedLen := p.logSize + 64*1024
+	predictedLen := p.logSize + predictionLookahead
 	isMaxReached := predictedLen > p.config.MaxEventSize
 	logFragmentLen := len(logFragment)
 	if logFragment[logFragmentLen-3:logFragmentLen-1] != `\n` && !isMaxReached {

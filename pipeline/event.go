@@ -76,8 +76,15 @@ func newTimoutEvent(stream *stream) *Event {
 
 func (e *Event) reset() {
 	if e.Size > eventSizeGCThreshold {
-		e.Root.ReleaseMem()
+		e.Root.ReleaseBufMem()
+	}
+
+	if cap(e.Buf) > 4096 {
 		e.Buf = make([]byte, 0, 1024)
+	}
+
+	if e.Root.PoolSize() > DefaultNodePoolSize*4 {
+		e.Root.ReleasePoolMem()
 	}
 
 	e.Buf = e.Buf[:0]

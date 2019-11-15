@@ -369,17 +369,19 @@ func (jp *jobProvider) tryResumeJob(job *job, filename string) bool {
 	return true
 }
 
-// doneJob job should already be locked
+// doneJob
 func (jp *jobProvider) doneJob(job *job) {
 	job.mu.Lock()
-	defer job.mu.Unlock()
-
 	job.isDone = true
+	jp.jobsMu.Lock()
 	v := int(jp.jobsDoneCounter.Inc())
 	if v > len(jp.jobs) {
 		logger.Panicf("done jobs counter more than job count")
 	}
+	jp.jobsMu.Unlock()
+
 	jp.doneWg.Done()
+	job.mu.Unlock()
 }
 
 func (jp *jobProvider) truncateJob(job *job) {
@@ -709,7 +711,7 @@ func (jp *jobProvider) maintenanceJob(job *job) int {
 	return maintenanceResultNoop
 }
 
-// deleteJob job should already be locked
+// deleteJob job should be already locked
 func (jp *jobProvider) deleteJob(job *job) {
 	if !job.isDone {
 		logger.Panicf("can't delete job, it isn't done: %d:%s", job.inode, job.filename)

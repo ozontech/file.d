@@ -2,6 +2,7 @@ package gelf
 
 import (
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/vitkovskii/insane-json"
@@ -128,9 +129,10 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	}
 	p.config.shortMessageField = pipeline.ByteToString(p.formatExtraField(nil, p.config.ShortMessageField))
 
-	if p.config.DefaultShortMessageValue == "" {
-		p.config.defaultShortMessageValue = defaultShortMessageValue
+	if strings.TrimSpace(p.config.DefaultShortMessageValue) == "" {
+		p.config.DefaultShortMessageValue = defaultShortMessageValue
 	}
+	p.config.defaultShortMessageValue = strings.TrimSpace(p.config.DefaultShortMessageValue)
 
 	p.config.fullMessageField = pipeline.ByteToString(p.formatExtraField(nil, p.config.FullMessageField))
 
@@ -186,8 +188,8 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 		}
 	}
 
-	// handle to much memory consumption
 	data := (*workerData).(*data)
+	// handle to much memory consumption
 	if cap(data.outBuf) > p.config.BatchSize*p.avgLogSize {
 		data.outBuf = make([]byte, 0, p.config.BatchSize*p.avgLogSize)
 	}
@@ -258,28 +260,29 @@ func (p *Plugin) formatEvent(encodeBuf []byte, event *pipeline.Event) []byte {
 	return encodeBuf
 }
 
-func (p *Plugin) makeBaseField(root *insaneJSON.Root, baseFieldName string, rootFieldName string, defaultValue string) {
-	if rootFieldName == "" {
+func (p *Plugin) makeBaseField(root *insaneJSON.Root, gelfFieldName string, configFieldName string, defaultValue string) {
+	if configFieldName == "" {
 		return
 	}
 
-	field := root.DigField(rootFieldName)
-	if field != nil {
-		field.MutateToField(baseFieldName)
-		value := field.AsFieldValue()
-
-		if !value.IsString() {
-			value.MutateToString(value.AsString())
+	field := root.DigField(configFieldName)
+	if field == nil {
+		if defaultValue == "" {
+			return
 		}
-
-		if p.isBlank(value.AsString()) {
-			value.MutateToString(defaultValue)
-		}
-		return
+		root.AddFieldNoAlloc(root, configFieldName).MutateToString(defaultValue)
+		field = root.DigField(configFieldName)
 	}
 
-	if defaultValue != "" {
-		root.AddFieldNoAlloc(root, baseFieldName).MutateToString(defaultValue)
+	field.MutateToField(gelfFieldName)
+	value := field.AsFieldValue()
+
+	if !value.IsString() {
+		value.MutateToString(value.AsString())
+	}
+
+	if p.isBlank(value.AsString()) {
+		value.MutateToString(defaultValue)
 	}
 }
 
