@@ -20,14 +20,17 @@ import (
 	_ "gitlab.ozon.ru/sre/filed/plugin/action/k8s"
 	_ "gitlab.ozon.ru/sre/filed/plugin/action/keep_fields"
 	_ "gitlab.ozon.ru/sre/filed/plugin/action/modify"
+	_ "gitlab.ozon.ru/sre/filed/plugin/action/parse_es"
 	_ "gitlab.ozon.ru/sre/filed/plugin/action/rename"
 	_ "gitlab.ozon.ru/sre/filed/plugin/action/throttle"
 	_ "gitlab.ozon.ru/sre/filed/plugin/input/fake"
 	_ "gitlab.ozon.ru/sre/filed/plugin/input/file"
+	_ "gitlab.ozon.ru/sre/filed/plugin/input/http"
 	_ "gitlab.ozon.ru/sre/filed/plugin/input/kafka"
 	_ "gitlab.ozon.ru/sre/filed/plugin/output/devnull"
 	_ "gitlab.ozon.ru/sre/filed/plugin/output/gelf"
 	_ "gitlab.ozon.ru/sre/filed/plugin/output/kafka"
+	_ "gitlab.ozon.ru/sre/filed/plugin/output/stdout"
 )
 
 var (

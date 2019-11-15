@@ -54,11 +54,11 @@ type Plugin struct {
 func init() {
 	filed.DefaultPluginRegistry.RegisterInput(&pipeline.PluginInfo{
 		Type:    "file",
-		Factory: factory,
+		Factory: Factory,
 	})
 }
 
-func factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
+func Factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 	return &Plugin{}, &Config{}
 }
 

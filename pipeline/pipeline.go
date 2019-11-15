@@ -264,7 +264,7 @@ func (p *Pipeline) finalize(event *Event, notifyInput bool, backEvent bool) {
 		p.input.Commit(event)
 	}
 
-	// todo: it's shitty event.stream (EVENT) !!
+	// todo: it's shitty event.stream.commit(event) !!
 	event.stream.commit(event)
 	if backEvent {
 		if len(p.eventSample) == 0 && notifyInput {

@@ -19,6 +19,7 @@ type Filed struct {
 	registry  *prometheus.Registry
 	plugins   *PluginRegistry
 	Pipelines []*pipeline.Pipeline
+	server    *http.Server
 }
 
 func New(config *Config, httpAddr string) *Filed {
@@ -161,6 +162,7 @@ func (f *Filed) setupOutput(p *pipeline.Pipeline, pipelineConfig *PipelineConfig
 
 func (f *Filed) Stop() {
 	logger.Infof("stopping filed pipelines=%d", len(f.Pipelines))
+	_ = f.server.Shutdown(nil)
 	for _, p := range f.Pipelines {
 		p.Stop()
 	}
@@ -171,10 +173,6 @@ func (f *Filed) startHTTP() {
 		return
 	}
 
-	go f.listenHTTP()
-}
-
-func (f *Filed) listenHTTP() {
 	mux := http.DefaultServeMux
 
 	mux.HandleFunc("/live", f.serveLiveReady)
@@ -182,9 +180,14 @@ func (f *Filed) listenHTTP() {
 	mux.HandleFunc("/freeosmem", f.serveFreeOsMem)
 	mux.Handle("/metrics", promhttp.Handler())
 
-	err := http.ListenAndServe(f.httpAddr, mux)
+	f.server = &http.Server{Addr: f.httpAddr, Handler: mux}
+	go f.listenHTTP()
+}
+
+func (f *Filed) listenHTTP() {
+	err := f.server.ListenAndServe()
 	if err != nil {
-		logger.Fatalf("can't start http with %q address: %s", f.httpAddr, err.Error())
+		logger.Fatalf("http listening error address=%q: %s", f.httpAddr, err.Error())
 	}
 }
 

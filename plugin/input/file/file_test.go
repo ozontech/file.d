@@ -58,7 +58,7 @@ func startPipeline(persistenceMode string, enableEventLog bool, config *Config) 
 	if config == nil {
 		config = &Config{WatchingDir: filesDir, OffsetsFile: filepath.Join(offsetsDir, offsetsFile), PersistenceMode: persistenceMode}
 	}
-	anyPlugin, _ := factory()
+	anyPlugin, _ := Factory()
 	inputPlugin := anyPlugin.(*Plugin)
 	inputPlugin.disableFinalSave()
 	p.SetInputPlugin(&pipeline.InputPluginData{Plugin: inputPlugin, PluginDesc: pipeline.PluginDesc{Config: config}})

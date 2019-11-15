@@ -112,8 +112,7 @@ func (p *Plugin) isAllowed(event *pipeline.Event) bool {
 		p.limiterBuff = append(p.limiterBuff[:0], byte('a'+index))
 		p.limiterBuff = append(p.limiterBuff, ':')
 		p.limiterBuff = append(p.limiterBuff, throttleKey...)
-		// todo: alloc string only when adding to map
-		limiterKey := string(p.limiterBuff)
+		limiterKey := pipeline.ByteToString(p.limiterBuff)
 
 		// check if limiter already have been created
 		limitersMu.RLock()
@@ -122,6 +121,8 @@ func (p *Plugin) isAllowed(event *pipeline.Event) bool {
 
 		if !has {
 			limiter = NewLimiter(p.config.Interval.Duration, p.config.Buckets, rule.limit)
+			// alloc new string before adding new key to map
+			limiterKey = string(p.limiterBuff)
 			limitersMu.Lock()
 			limiters[p.pipeline][limiterKey] = limiter
 			limitersMu.Unlock()

@@ -113,3 +113,7 @@ func ParseLevel(level string) int {
 		return -1
 	}
 }
+
+func TrimSpaceFunc(r rune) bool {
+	return byte(r) == ' '
+}

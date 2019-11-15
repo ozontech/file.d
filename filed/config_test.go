@@ -11,7 +11,7 @@ func NewTestConfig(name string) (*Config) {
 }
 
 func TestSimple(t *testing.T) {
-	c := NewTestConfig("simple.yaml")
+	c := NewTestConfig("e2e.yaml")
 
 	assert.NotNil(t, c, "config loading should't return nil")
 

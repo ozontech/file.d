@@ -235,8 +235,7 @@ func (p *processor) isMatchOr(conds MatchConditions, event *Event) bool {
 		if cond.Regexp != nil {
 			match = cond.Regexp.MatchString(value)
 		} else {
-			// todo: compare slices instead of alloc new trimmed string
-			match = strings.Trim(value, " ") == cond.Value
+			match = strings.TrimFunc(value, TrimSpaceFunc) == cond.Value
 		}
 
 		if match {

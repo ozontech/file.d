@@ -121,7 +121,7 @@ func TestEndToEnd(t *testing.T) {
 	filesDir, _ := ioutil.TempDir("", "filed")
 	offsetsDir, _ := ioutil.TempDir("", "filed")
 
-	config := filed.NewConfigFromFile("./../testdata/config/simple.yaml")
+	config := filed.NewConfigFromFile("./../testdata/config/e2e.yaml")
 	input := config.Pipelines["test"].Raw.Get("input")
 	input.Set("watching_dir", filesDir)
 	input.Set("offsets_file", filepath.Join(offsetsDir, "offsets.yaml"))
