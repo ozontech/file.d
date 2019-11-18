@@ -74,9 +74,7 @@ func (w *worker) work(index int, controller pipeline.InputPluginController, jobP
 
 				// skip first event because it may lost first part
 				if skipLine {
-					job.mu.Lock()
 					job.skipLine = false
-					job.mu.Unlock()
 				} else {
 					offset := lastOffset + accumulated + i + 1
 					if len(accumBuffer) != 0 {

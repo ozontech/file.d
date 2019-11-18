@@ -1,0 +1,11 @@
+pipelines:
+  test:
+    settings:
+      processors_count: 1
+    input:
+      type: http
+      address: :9001
+    actions:
+    - type: parse_es
+    output:
+      type: stdout

@@ -195,7 +195,7 @@ func TestJoin(t *testing.T) {
 
 		}
 		assert.Equal(t, len(logs), len(offsets), "lengths isn't equal")
-		assert.True(t, index != -1, "log %s not found", log)
+		assert.True(t, index != -1, "log %s isn't found", log)
 
 		assert.Equal(t, offsets[index], offset, "wrong offset")
 

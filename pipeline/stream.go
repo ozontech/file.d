@@ -169,8 +169,10 @@ func (s *stream) tryUnblock() bool {
 		return false
 	}
 
+	// is it lock after put signal?
 	if s.first != nil {
-		logger.Panicf("why stream isn't empty? away event id=%d, commit event id=%d", s.awayID, s.commitID)
+		s.mu.Unlock()
+		return false
 	}
 
 	if s.awayID != s.commitID {
