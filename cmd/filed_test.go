@@ -77,13 +77,10 @@ func gen(tempDir string, files int, wg *sync.WaitGroup) {
 
 		lines := 100000
 		for l := 0; l < lines; l++ {
-			//if rand.Int()%2 == 0 {
-				for _, line := range panicLines {
-					_, _ = file.WriteString(line)
-					_, _ = file.Write([]byte{'\n'})
-				}
-				continue
-			//}
+			for _, line := range panicLines {
+				_, _ = file.WriteString(line)
+				_, _ = file.Write([]byte{'\n'})
+			}
 
 			stream := "stderr"
 			if rand.Int()%3 == 0 {
@@ -139,11 +136,4 @@ func TestEndToEnd(t *testing.T) {
 
 		time.Sleep(time.Second * 10)
 	}
-
-	time.Sleep(time.Second * 1000)
-	wg.Wait()
-	fd.Stop()
-
-	_ = os.RemoveAll(filesDir)
-	_ = os.RemoveAll(offsetsDir)
 }

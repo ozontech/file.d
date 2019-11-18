@@ -368,7 +368,6 @@ func (jp *jobProvider) doneJob(job *job) {
 		logger.Panicf("job is already done")
 	}
 	job.isDone = true
-	job.mu.Unlock()
 
 	jp.jobsMu.Lock()
 	v := int(jp.jobsDoneCounter.Inc())
@@ -376,6 +375,9 @@ func (jp *jobProvider) doneJob(job *job) {
 		logger.Panicf("done jobs counter is more than job count")
 	}
 	jp.jobsMu.Unlock()
+
+	job.mu.Unlock()
+
 
 	jp.doneWg.Done()
 }

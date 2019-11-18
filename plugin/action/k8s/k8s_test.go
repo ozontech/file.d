@@ -79,7 +79,6 @@ func TestEnrichment(t *testing.T) {
 	defer p.Stop()
 
 	item := &metaItem{
-		nodeName:      "node_1",
 		namespace:     "sre",
 		podName:       "advanced-logs-checker-1566485760-trtrq",
 		containerName: "duty-bot",
@@ -87,6 +86,7 @@ func TestEnrichment(t *testing.T) {
 	}
 	podInfo := getPodInfo(item, true)
 	putMeta(podInfo)
+	node = "node_1"
 
 	var event *pipeline.Event = nil
 	filename := getLogFilename("/docker-logs", item)

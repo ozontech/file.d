@@ -71,6 +71,8 @@ var (
 	DisableMetaUpdates  = false
 	metaAddedCounter    atomic.Int64
 	expiredItemsCounter atomic.Int64
+
+	node string
 )
 
 func enableGatherer() {
@@ -111,11 +113,12 @@ func initGatherer() {
 	}
 
 	if !DisableMetaUpdates {
+		detectNode()
 		initInformer()
 	}
 }
 
-func initInformer() {
+func detectNode() {
 	podName, err := os.Hostname()
 	if err != nil {
 		logger.Fatalf("can't get host name for k8s plugin: %s", err.Error())
@@ -126,7 +129,11 @@ func initInformer() {
 		logger.Fatalf("can't detect node name for k8s plugin using pod %q: %s", podName, err.Error())
 		panic("")
 	}
-	selector, err := fields.ParseSelector("spec.nodeName=" + pod.Spec.NodeName)
+	node = pod.Spec.NodeName
+}
+
+func initInformer() {
+	selector, err := fields.ParseSelector("spec.nodeName=" + node)
 	if err != nil {
 		logger.Fatalf("can't create k8s field selector: %s", err.Error())
 	}

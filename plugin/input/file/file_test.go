@@ -743,22 +743,6 @@ func TestReadParStreams(t *testing.T) {
 	assertOffsetsEqual(t, genOffsetsContentMultipleStreams(fileNames, len(json)*lines, len(json)*lines-len(json)/2), getContent(p.config.OffsetsFile))
 }
 
-func TestReadPlayground(t *testing.T) {
-	setup()
-	defer shutdown()
-
-	json := getContentBytes("../../../testdata/playground/logs/shelf.json")
-
-	file := createTempFile()
-	addData(file, json, false, false)
-
-	c, _ := startPipeline("async", true, nil)
-	defer c.Stop()
-
-	c.HandleEventFlowFinish(false)
-	c.WaitUntilDone(false)
-}
-
 func TestRenameRotationHandle(t *testing.T) {
 	setup()
 	defer shutdown()

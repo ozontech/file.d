@@ -26,6 +26,7 @@ const (
 type Config struct {
 	MaxEventSize    int    `json:"max_event_size"`
 	LabelsWhitelist string `json:"labels_whitelist"`
+	OnlyNode        bool   `json:"only_node"`
 	labelsWhitelist map[string]bool
 }
 
@@ -83,6 +84,10 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 		return pipeline.ActionDiscard
 	}
 
+	event.Root.AddFieldNoAlloc(event.Root, "k8s_node").MutateToString(node)
+	if p.config.OnlyNode {
+		return pipeline.ActionPass
+	}
 	// don't need to unescape/escape log fields cause concatenation of escaped strings is escaped string
 	logFragment := event.Root.Dig("log").AsEscapedString()
 	if logFragment == "" {
@@ -120,7 +125,6 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 			logger.Panicf("k8s plugin inconsistency: source=%s, file pod=%s, meta pod=%s, x=%s, event=%s", event.SourceName, pod, podMeta.Name, event.Root.EncodeToString())
 		}
 
-		event.Root.AddFieldNoAlloc(event.Root, "k8s_node").MutateToString(podMeta.Spec.NodeName)
 		for labelName, labelValue := range podMeta.Labels {
 			if len(p.config.labelsWhitelist) != 0 {
 				_, has := p.config.labelsWhitelist[labelName]
