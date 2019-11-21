@@ -21,8 +21,8 @@ type Plugin struct {
 	eventBuffs *sync.Pool
 	controller pipeline.InputPluginController
 	server     *http.Server
-	sourceID   []int
-	sourceSeq  int
+	sourceIDs  []pipeline.SourceID
+	sourceSeq  pipeline.SourceID
 	mu         *sync.Mutex
 }
 
@@ -139,7 +139,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 
 	p.mu = &sync.Mutex{}
 	p.controller = params.Controller
-	p.sourceID = make([]int, 0, 0)
+	p.sourceIDs = make([]pipeline.SourceID, 0, 0)
 
 	if p.config.Address != "off" {
 		mux := http.NewServeMux()
@@ -187,23 +187,24 @@ func (p *Plugin) serveInfo(w http.ResponseWriter, r *http.Request) {
 	logger.Errorf("unknown request uri=%s, method=%s", r.RequestURI, r.Method)
 }
 
-func (p *Plugin) getSourceID() int {
+func (p *Plugin) getSourceID() pipeline.SourceID {
 	p.mu.Lock()
-	if len(p.sourceID) == 0 {
-		p.sourceID = append(p.sourceID, p.sourceSeq)
+	if len(p.sourceIDs) == 0 {
+		p.sourceIDs = append(p.sourceIDs, p.sourceSeq)
 		p.sourceSeq++
 	}
 
-	l := len(p.sourceID)
-	x := p.sourceID[l-1]
-	p.sourceID = p.sourceID[:l-1]
+	l := len(p.sourceIDs)
+	x := p.sourceIDs[l-1]
+	p.sourceIDs = p.sourceIDs[:l-2]
 	p.mu.Unlock()
+
 	return x
 }
 
-func (p *Plugin) putSourceID(x int) {
+func (p *Plugin) putSourceID(x pipeline.SourceID) {
 	p.mu.Lock()
-	p.sourceID = append(p.sourceID, x)
+	p.sourceIDs = append(p.sourceIDs, x)
 	p.mu.Unlock()
 }
 
@@ -219,6 +220,7 @@ func (p *Plugin) serveBulk(w http.ResponseWriter, r *http.Request) {
 		if n == 0 && err == io.EOF {
 			break
 		}
+
 		if err != nil && err != io.EOF {
 			logger.Errorf("http input read error: %s", err.Error())
 			break
@@ -236,7 +238,7 @@ func (p *Plugin) serveBulk(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (p *Plugin) processChunk(sourceId int, readBuff []byte, eventBuff []byte) []byte {
+func (p *Plugin) processChunk(sourceID pipeline.SourceID, readBuff []byte, eventBuff []byte) []byte {
 	pos := 0
 	nlPos := 0
 	for pos < len(readBuff) {
@@ -247,12 +249,10 @@ func (p *Plugin) processChunk(sourceId int, readBuff []byte, eventBuff []byte) [
 
 		if len(eventBuff) != 0 {
 			eventBuff = append(eventBuff, readBuff[nlPos:pos]...)
-			//logger.Infof("IN %d, %d, %s", sourceId, pos, string(eventBuff[:60]))
-			p.controller.In(pipeline.SourceID(sourceId), "http", 0, eventBuff)
+			p.controller.In(sourceID, "http", int64(pos), eventBuff)
 			eventBuff = eventBuff[:0]
 		} else {
-			p.controller.In(pipeline.SourceID(sourceId), "http", 0, readBuff[nlPos:pos])
-			//logger.Infof("IN %d, %d, %s", sourceId, pos, string(readBuff[nlPos:nlPos+30]))
+			p.controller.In(sourceID, "http", int64(pos), readBuff[nlPos:pos])
 		}
 
 		pos++
