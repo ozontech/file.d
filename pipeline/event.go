@@ -58,14 +58,13 @@ func newEvent(poolIndex int) *Event {
 }
 
 func newTimoutEvent(stream *stream) *Event {
-	//todo: use pooling here?
 	event := &Event{
 		index:      -1,
 		Root:       insaneJSON.Spawn(),
 		stream:     stream,
-		SeqID:      stream.commitID,
+		SeqID:      stream.commitSeq,
 		SourceID:   stream.sourceID,
-		SourceName: stream.sourceName,
+		SourceName: "timeout",
 		StreamName: stream.name,
 	}
 
@@ -164,12 +163,11 @@ func (e *Event) kindStr() string {
 }
 
 func (e *Event) String() string {
-	return fmt.Sprintf("id=%d, index=%d kind=%s, action=%d, source=%d/%s, stream=%s, stage=%s, json=%s", e.SeqID, e.index, e.kindStr(), e.action, e.SourceID, e.SourceName, e.StreamName, e.stageStr(), e.Root.EncodeToString())
+	return fmt.Sprintf("index=%d kind=%s, action=%d, source=%d/%s, stream=%s, stage=%s, json=%s", e.index, e.kindStr(), e.action, e.SourceID, e.SourceName, e.StreamName, e.stageStr(), e.Root.EncodeToString())
 }
 
 // channels are slower than this implementation by ~20%
 type eventPool struct {
-	eventSeq uint64
 	capacity int
 
 	eventsCount int
@@ -214,10 +212,8 @@ func (p *eventPool) get(json []byte) (*Event, error) {
 
 	index := p.eventsCount
 	event := p.events[index]
-	event.SeqID = p.eventSeq
 
 	p.eventsCount++
-	p.eventSeq++
 
 	p.mu.Unlock()
 

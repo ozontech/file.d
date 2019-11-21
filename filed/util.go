@@ -15,9 +15,11 @@ import (
 func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 	procs := runtime.GOMAXPROCS(0)
 	processorsCount := procs * 8
+
 	capacity := pipeline.DefaultCapacity
 	avgLogSize := pipeline.DefaultAvgLogSize
-	streamField := "stream"
+	streamField := pipeline.DefaultStreamField
+
 	if settings != nil {
 		val := settings.Get("processors_count").MustInt()
 		if val != 0 {

@@ -17,6 +17,10 @@ var eventWaitTimeout = time.Second * 30
 type stream struct {
 	chargeIndex int
 	blockIndex  int
+	len         int
+	currentSeq  uint64
+	commitSeq   uint64
+	awaySeq     uint64
 
 	name       StreamName
 	sourceID   SourceID
@@ -29,19 +33,16 @@ type stream struct {
 
 	isDetaching bool
 	isAttached  bool
-	commitID    uint64
-	awayID      uint64
 
 	first *Event
 	last  *Event
 }
 
-func newStream(name StreamName, sourceID SourceID, sourceName string, streamer *streamer) *stream {
+func newStream(name StreamName, sourceID SourceID, streamer *streamer) *stream {
 	stream := stream{
 		chargeIndex: -1,
 		name:        name,
 		sourceID:    sourceID,
-		sourceName:  sourceName,
 		streamer:    streamer,
 		mu:          &sync.Mutex{},
 	}
@@ -58,27 +59,27 @@ func (s *stream) leave() {
 		logger.Panicf("why detach? stream isn't attached")
 	}
 	s.isDetaching = true
-	s.tryDropProcessor()
+	s.tryDetach()
 }
 
 func (s *stream) commit(event *Event) {
 	s.mu.Lock()
 	// maxID is needed here because discarded events with bigger offsets may be
 	// committed faster than events with lower offsets which are goes through output
-	if event.SeqID < s.commitID {
+	if event.SeqID < s.commitSeq {
 		s.mu.Unlock()
 		return
 	}
-	s.commitID = event.SeqID
+	s.commitSeq = event.SeqID
 
 	if s.isDetaching {
-		s.tryDropProcessor()
+		s.tryDetach()
 	}
 	s.mu.Unlock()
 }
 
-func (s *stream) tryDropProcessor() {
-	if s.awayID != s.commitID {
+func (s *stream) tryDetach() {
+	if s.awaySeq != s.commitSeq {
 		return
 	}
 
@@ -101,15 +102,18 @@ func (s *stream) attach() {
 	if s.first == nil {
 		logger.Panicf("why attach? stream is empty")
 	}
+
 	s.isAttached = true
-	s.isDetaching = false
 	s.mu.Unlock()
 }
 
 func (s *stream) put(event *Event) {
 	s.mu.Lock()
+	s.len++
+	s.currentSeq++
 	event.stream = s
 	event.stage = eventStageStream
+	event.SeqID = s.currentSeq
 	if s.first == nil {
 		s.last = event
 		s.first = event
@@ -175,8 +179,8 @@ func (s *stream) tryUnblock() bool {
 		return false
 	}
 
-	if s.awayID != s.commitID {
-		logger.Panicf("why events are different? away event id=%d, commit event id=%d", s.awayID, s.commitID)
+	if s.awaySeq != s.commitSeq {
+		logger.Panicf("why events are different? away event id=%d, commit event id=%d", s.awaySeq, s.commitSeq)
 	}
 
 	timeoutEvent := newTimoutEvent(s)
@@ -203,7 +207,10 @@ func (s *stream) get() *Event {
 	}
 
 	event.stage = eventStageProcessor
-	s.awayID = event.SeqID
+	s.awaySeq = event.SeqID
+	if event != nil {
+		s.len--
+	}
 
 	return event
 }

@@ -38,11 +38,11 @@ func (s *streamer) start() {
 	go s.heartbeat()
 }
 
-func (s *streamer) putEvent(event *Event) {
-	s.getStream(event.StreamName, event.SourceID, event.SourceName).put(event)
+func (s *streamer) putEvent(sourceID SourceID, streamName StreamName, event *Event) {
+	s.getStream(sourceID, streamName).put(event)
 }
 
-func (s *streamer) getStream(streamName StreamName, sourceID SourceID, sourceName string) *stream {
+func (s *streamer) getStream(sourceID SourceID, streamName StreamName) *stream {
 	// fast path, stream have been already created
 	s.mu.RLock()
 	st, has := s.streams[sourceID][streamName]
@@ -64,7 +64,7 @@ func (s *streamer) getStream(streamName StreamName, sourceID SourceID, sourceNam
 		s.streams[sourceID] = make(map[StreamName]*stream)
 	}
 
-	st = newStream(streamName, sourceID, sourceName, s)
+	st = newStream(streamName, sourceID, s)
 	s.streams[sourceID][streamName] = st
 
 	return st
@@ -165,15 +165,15 @@ func (s *streamer) dump() string {
 					state = "| DETACHING  |"
 				}
 
-				o += fmt.Sprintf("%d(%s) state=%s, away event id=%d, commit event id=%d\n", stream.sourceID, stream.name, state, stream.awayID, stream.commitID)
+				o += fmt.Sprintf("%d(%s) state=%s, away event id=%d, commit event id=%d, len=%d\n", stream.sourceID, stream.name, state, stream.awaySeq, stream.commitSeq, stream.len)
 			}
 		}
 
 		return o
 	})
 
-	out += logger.Cond(len(s.charged) == 0, logger.Header("no ready streams"), func() string {
-		o := logger.Header("ready streams")
+	out += logger.Cond(len(s.charged) == 0, logger.Header("charged streams empty"), func() string {
+		o := logger.Header("charged streams")
 		for _, s := range s.charged {
 			o += fmt.Sprintf("%d(%s)\n", s.sourceID, s.name)
 		}
@@ -181,7 +181,7 @@ func (s *streamer) dump() string {
 		return o
 	})
 
-	out += logger.Cond(len(s.blocked) == 0, logger.Header("no blocked streams"), func() string {
+	out += logger.Cond(len(s.blocked) == 0, logger.Header("blocked streams empty"), func() string {
 		o := logger.Header("blocked streams")
 		for _, s := range s.blocked {
 			o += fmt.Sprintf("%d(%s)\n", s.sourceID, s.name)

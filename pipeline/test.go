@@ -13,7 +13,6 @@ func NewTestPipeLine(multiProcessors bool) *Pipeline {
 	}
 
 	settings := &Settings{
-		StreamField:     "stream",
 		ProcessorsCount: processorsCount,
 		Capacity:        1024,
 		AvgLogSize:      2048,

@@ -3,8 +3,6 @@ package pipeline
 import (
 	"encoding/json"
 	"fmt"
-	"hash/crc32"
-	"math/rand"
 	"net/http"
 	"strconv"
 	"sync"
@@ -17,12 +15,15 @@ import (
 
 const (
 	DefaultFieldValue   = "not_set"
+	DefaultStreamField  = "stream"
 	DefaultCapacity     = 1024
 	DefaultAvgLogSize   = 64 * 1024
 	DefaultNodePoolSize = 1024
 
 	MaintenanceInterval = time.Second * 5
 	MetricsGenInterval  = time.Minute * 10
+
+	defaultStreamName = StreamName("not_set")
 )
 
 type InputPluginController interface {
@@ -47,6 +48,9 @@ type Pipeline struct {
 	settings   *Settings
 	eventPool  *eventPool
 	useStreams bool
+	streamer   *streamer
+	doneWg     *sync.WaitGroup
+	stopCh     chan bool
 
 	input      InputPlugin
 	inputData  *InputPluginData
@@ -54,16 +58,9 @@ type Pipeline struct {
 	output     OutputPlugin
 	outputData *OutputPluginData
 
-	streamNames []string
-	streamer    *streamer
-
-	doneWg *sync.WaitGroup
-
 	eventLogEnabled bool
 	eventLog        []string
 	eventLogMu      *sync.Mutex
-
-	stopCh chan bool
 
 	// metrics
 	registry       *prometheus.Registry
@@ -72,9 +69,8 @@ type Pipeline struct {
 	actionMetrics  []*actionMetrics
 
 	// some debugging shit
-	eventSample    []byte
-	totalCommitted atomic.Int64
-	totalIn        atomic.Int64
+	eventSample []byte
+	committed   atomic.Int64
 }
 
 type Settings struct {
@@ -154,17 +150,12 @@ func (p *Pipeline) Start() {
 
 	p.output.Start(p.outputData.Config, outputParams)
 
-	rnd := make([]byte, 0, 0)
 	for _, processor := range p.Processors {
 		actionParams := &ActionPluginParams{
 			PluginDefaultParams: defaultParams,
 			Controller:          processor,
 		}
 		processor.start(p.output, actionParams)
-
-		rnd = append(rnd, byte('a'+rand.Int()%('z'-'a')))
-		crc := crc32.ChecksumIEEE(rnd)
-		p.streamNames = append(p.streamNames, strconv.FormatUint(uint64(crc), 8))
 	}
 
 	p.input.Start(p.inputData.Config, inputParams)
@@ -175,7 +166,7 @@ func (p *Pipeline) Start() {
 }
 
 func (p *Pipeline) Stop() {
-	logger.Infof("stopping pipeline %q, total: in=%d, processed=%d", p.Name, p.totalIn.Load(), p.totalCommitted.Load())
+	logger.Infof("stopping pipeline %q, total: processed=%d", p.Name, p.committed.Load())
 	p.stopCh <- true
 
 	for _, processor := range p.Processors {
@@ -219,35 +210,34 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 		return
 	}
 
-	x := p.totalIn.Inc()
-
 	event, err := p.eventPool.get(bytes)
 	if err != nil {
 		logger.Fatalf("wrong json offset=%d, length=%d, err=%s, source=%d:%s, json=%s", offset, size, err.Error(), sourceID, sourceName, bytes)
 		return
 	}
 
-	stream := StreamName("not_set")
-	if p.useStreams {
-		streamNode := event.Root.Dig("stream")
-		if streamNode != nil {
-			stream = StreamName(streamNode.AsBytes()) // as bytes because we need a copy
-		}
-	}
-
 	event.Offset = offset
 	event.SourceID = sourceID
 	event.SourceName = sourceName
-	event.StreamName = stream
+	event.StreamName = defaultStreamName
 	event.Size = len(bytes)
 
+	p.streamEvent(event)
+}
+
+func (p *Pipeline) streamEvent(event *Event) {
+	// spread events across all processors
 	if !p.useStreams {
-		index := int(x) % len(p.streamNames)
-		stream = StreamName(p.streamNames[index])
-		sourceID = SourceID(index)
+		sourceID := SourceID(event.SeqID % uint64(p.settings.ProcessorsCount))
+		p.streamer.putEvent(sourceID, defaultStreamName, event)
+		return
 	}
 
-	p.streamer.putEvent(event)
+	node := event.Root.Dig(p.settings.StreamField)
+	if node != nil {
+		event.StreamName = StreamName(node.AsBytes()) // as bytes because we need a copy
+	}
+	p.streamer.putEvent(event.SourceID, event.StreamName, event)
 }
 
 func (p *Pipeline) DisableStreams() {
@@ -280,7 +270,7 @@ func (p *Pipeline) finalize(event *Event, notifyInput bool, backEvent bool) {
 			p.eventLogMu.Unlock()
 		}
 
-		p.totalCommitted.Inc()
+		p.committed.Inc()
 
 		p.eventPool.back(event)
 	}
@@ -390,7 +380,7 @@ func (p *Pipeline) maintenance() {
 			logger.Infof("pipeline %q final event sample: %s", p.Name, p.eventSample)
 			p.eventSample = p.eventSample[:0]
 
-			processed := p.totalCommitted.Load()
+			processed := p.committed.Load()
 			delta := processed - lastProcessed
 			lastProcessed = processed
 			rate := delta * int64(time.Second) / int64(MaintenanceInterval)
@@ -429,11 +419,11 @@ func (p *Pipeline) WaitUntilDone(instant bool) {
 	for {
 		p.doneWg.Wait()
 
-		processed := p.totalCommitted.Load()
+		processed := p.committed.Load()
 		//fs events may have delay, so wait for them
 		time.Sleep(time.Millisecond * 100)
 		//
-		processed = p.totalCommitted.Load() - processed
+		processed = p.committed.Load() - processed
 		if processed == 0 {
 			break
 		}
@@ -441,7 +431,7 @@ func (p *Pipeline) WaitUntilDone(instant bool) {
 }
 
 func (p *Pipeline) GetEventsTotal() int {
-	return int(p.totalCommitted.Load())
+	return int(p.committed.Load())
 }
 
 func (p *Pipeline) EnableEventLog() {
