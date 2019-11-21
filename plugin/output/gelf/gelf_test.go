@@ -19,8 +19,7 @@ func TestFormatEvent(t *testing.T) {
 		{
 			configJSON: `
 				{
-					"host":"host",
-					"port":1000,
+					"address":"host:1000",
 					"host_field":"my_host_field",
 					"short_message_field":"my_short_message_field",
 					"full_message_field":"my_full_message_field",
@@ -57,8 +56,7 @@ func TestFormatEvent(t *testing.T) {
 		{
 			configJSON: `
 				{
-					"host":"host",
-					"port":1000,
+					"address":"host:1000",
 					"host_field":"my_host_field",
 					"short_message_field":"my_short_message_field",
 					"full_message_field":"my_full_message_field",

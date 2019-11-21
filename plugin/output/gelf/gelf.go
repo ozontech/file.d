@@ -28,7 +28,6 @@ Allowed characters in field names are any word character (letter, number, unders
 */
 
 const (
-	defaultPort                 = 12201
 	defaultFlushTimeout         = time.Millisecond * 200
 	defaultConnectionTimeout    = time.Second * 5
 	defaultHostField            = "host"
@@ -40,8 +39,7 @@ const (
 )
 
 type Config struct {
-	Host              string            `json:"host"`
-	Port              uint              `json:"port"`
+	Address           string            `json:"address"`
 	FlushTimeout      pipeline.Duration `json:"flush_timeout"`
 	ReconnectInterval pipeline.Duration `json:"reconnect_interval"`
 	ConnectionTimeout pipeline.Duration `json:"connection_timeout"`
@@ -95,12 +93,8 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.avgLogSize = params.PipelineSettings.AvgLogSize
 	p.config = config.(*Config)
 
-	if p.config.Host == "" {
+	if p.config.Address == "" {
 		logger.Errorf(`no "address" provided for gelf output`)
-	}
-
-	if p.config.Port == 0 {
-		p.config.Port = defaultPort
 	}
 
 	if p.config.WorkersCount == 0 {
@@ -113,10 +107,6 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 
 	if p.config.ConnectionTimeout.Duration == 0 {
 		p.config.ConnectionTimeout.Duration = defaultConnectionTimeout
-	}
-
-	if p.config.Port == 0 {
-		logger.Errorf(`no "port" provided for gelf output`)
 	}
 
 	if p.config.HostField == "" {
@@ -206,11 +196,11 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 
 	for {
 		if data.gelf == nil {
-			logger.Infof("connecting to gelf endpoint host=%s, port=%d", p.config.Host, p.config.Port)
+			logger.Infof("connecting to gelf address=%s", p.config.Address)
 
-			gelf, err := newClient(p.config.Host, p.config.Port, false, transportTCP, p.config.ConnectionTimeout.Duration, nil)
+			gelf, err := newClient(transportTCP, p.config.Address, p.config.ConnectionTimeout.Duration, false, nil)
 			if err != nil {
-				logger.Errorf("can't connect to gelf endpoint host=%s, port=%d, will retry: %s", p.config.Host, p.config.Port, err.Error())
+				logger.Errorf("can't connect to gelf endpoint address=%s: %s", p.config.Address, err.Error())
 				time.Sleep(time.Second)
 				continue
 			}
@@ -221,7 +211,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 		_, err := data.gelf.send(outBuf)
 
 		if err != nil {
-			logger.Errorf("can't send data to gelf endpoint host=%s, port=%d, will retry: %s", p.config.Host, p.config.Port, err.Error())
+			logger.Errorf("can't send data to gelf address=%s", p.config.Address, err.Error())
 			_ = data.gelf.close()
 			data.gelf = nil
 			time.Sleep(time.Second)

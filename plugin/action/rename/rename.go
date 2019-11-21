@@ -9,8 +9,9 @@ import (
 )
 
 type Plugin struct {
-	paths [][]string
-	names []string
+	paths          [][]string
+	names          []string
+	preserveFields bool
 }
 
 type Config map[string]string
@@ -31,9 +32,10 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 		logger.Panicf("config is nil for the rename plugin")
 	}
 
-	cfg := config.(*Config)
+	cfg := *config.(*Config)
+	p.preserveFields = cfg["@mode"] == "preserve"
 
-	for path, name := range *cfg {
+	for path, name := range cfg {
 		p.paths = append(p.paths, strings.Split(path, "."))
 		p.names = append(p.names, name)
 	}
@@ -44,6 +46,12 @@ func (p *Plugin) Stop() {
 
 func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	for index, path := range p.paths {
+		if p.preserveFields {
+			if event.Root.Dig(p.names[index]) != nil {
+				continue
+			}
+		}
+
 		node := event.Root.Dig(path...)
 		if node == nil {
 			continue

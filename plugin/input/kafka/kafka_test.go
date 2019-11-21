@@ -6,13 +6,13 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestExtractParams(t *testing.T) {
+func TestAssembleSourceID(t *testing.T) {
 	index := 123456789
 	partition := int32(123)
 
-	x := makeSourceID(index, partition)
+	x := assembleSourceID(index, partition)
 
-	newIndex, newPartition := extractMessageParams(x)
+	newIndex, newPartition := disassembleSourceID(x)
 
 	assert.Equal(t, index, newIndex, "values aren't equal")
 	assert.Equal(t, partition, newPartition, "values aren't equal")

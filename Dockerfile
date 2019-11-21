@@ -1,4 +1,4 @@
-FROM golang:1.12
+FROM ubuntu:19.04
 
 WORKDIR /filed
 

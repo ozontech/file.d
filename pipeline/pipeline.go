@@ -28,6 +28,7 @@ const (
 type InputPluginController interface {
 	In(sourceID SourceID, sourceName string, offset int64, bytes []byte)
 	DeprecateSource(sourceID SourceID) int // mark events in the pipeline as deprecated, it means that these events shouldn't update offsets on commit
+	DisableStreams()                       // don't use stream field and spread all events across all processors
 }
 
 type ActionPluginController interface {
@@ -42,9 +43,10 @@ type SourceID uint64
 type StreamName string
 
 type Pipeline struct {
-	Name      string
-	settings  *Settings
-	eventPool *eventPool
+	Name       string
+	settings   *Settings
+	eventPool  *eventPool
+	useStreams bool
 
 	input      InputPlugin
 	inputData  *InputPluginData
@@ -76,11 +78,10 @@ type Pipeline struct {
 }
 
 type Settings struct {
-	Capacity             int
-	AvgLogSize           int
-	ProcessorsCount      int
-	StreamField          string
-	isStreamFieldEnabled bool
+	Capacity        int
+	AvgLogSize      int
+	ProcessorsCount int
+	StreamField     string
 }
 
 type actionMetrics struct {
@@ -96,8 +97,9 @@ type actionMetrics struct {
 func New(name string, settings *Settings, registry *prometheus.Registry, mux *http.ServeMux) *Pipeline {
 	logger.Infof("creating pipeline %q: processors=%d, capacity=%d, stream field=%s", name, settings.ProcessorsCount, settings.Capacity, settings.StreamField)
 	pipeline := &Pipeline{
-		Name:     name,
-		settings: settings,
+		Name:       name,
+		settings:   settings,
+		useStreams: true,
 
 		streamer: newStreamer(),
 
@@ -111,8 +113,6 @@ func New(name string, settings *Settings, registry *prometheus.Registry, mux *ht
 		registry:      registry,
 		actionMetrics: make([]*actionMetrics, 0, 0),
 	}
-
-	settings.isStreamFieldEnabled = settings.StreamField != "off"
 
 	processors := make([]*processor, 0, 0)
 	for i := 0; i < settings.ProcessorsCount; i++ {
@@ -161,11 +161,10 @@ func (p *Pipeline) Start() {
 			Controller:          processor,
 		}
 		processor.start(p.output, actionParams)
-		if !p.settings.isStreamFieldEnabled {
-			rnd = append(rnd, byte('a'+rand.Int()%('z'-'a')))
-			crc := crc32.ChecksumIEEE(rnd)
-			p.streamNames = append(p.streamNames, strconv.FormatUint(uint64(crc), 8))
-		}
+
+		rnd = append(rnd, byte('a'+rand.Int()%('z'-'a')))
+		crc := crc32.ChecksumIEEE(rnd)
+		p.streamNames = append(p.streamNames, strconv.FormatUint(uint64(crc), 8))
 	}
 
 	p.input.Start(p.inputData.Config, inputParams)
@@ -229,7 +228,7 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 	}
 
 	stream := StreamName("not_set")
-	if p.settings.isStreamFieldEnabled {
+	if p.useStreams {
 		streamNode := event.Root.Dig("stream")
 		if streamNode != nil {
 			stream = StreamName(streamNode.AsBytes()) // as bytes because we need a copy
@@ -242,13 +241,17 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 	event.StreamName = stream
 	event.Size = len(bytes)
 
-	if !p.settings.isStreamFieldEnabled {
+	if !p.useStreams {
 		index := int(x) % len(p.streamNames)
 		stream = StreamName(p.streamNames[index])
 		sourceID = SourceID(index)
 	}
 
 	p.streamer.putEvent(event)
+}
+
+func (p *Pipeline) DisableStreams() {
+	p.useStreams = false
 }
 
 func (p *Pipeline) Commit(event *Event) {

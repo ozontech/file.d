@@ -44,7 +44,7 @@ func TestProcessChunksMany(t *testing.T) {
 {"a":"3"}
 `)
 	eventBuff := make([]byte, 0, 0)
-	eventBuff = p.processChunk(chunk, eventBuff)
+	eventBuff = p.processChunk(0, chunk, eventBuff)
 
 	c.HandleEventFlowFinish(false)
 	c.WaitUntilDone(false)
@@ -69,7 +69,7 @@ func TestProcessChunksEventBuff(t *testing.T) {
 {"a":"2"}
 {"a":"3"}`)
 	eventBuff := make([]byte, 0, 0)
-	eventBuff = p.processChunk(chunk, eventBuff)
+	eventBuff = p.processChunk(0, chunk, eventBuff)
 
 	c.HandleEventFlowFinish(false)
 	c.WaitUntilDone(false)
@@ -94,7 +94,7 @@ func TestProcessChunksContinue(t *testing.T) {
 {"a":"3"}
 `)
 	eventBuff := []byte(`{"a":`)
-	eventBuff = p.processChunk(chunk, eventBuff)
+	eventBuff = p.processChunk(0, chunk, eventBuff)
 
 	c.HandleEventFlowFinish(false)
 	c.WaitUntilDone(false)
@@ -117,10 +117,10 @@ func TestProcessChunksContinueMany(t *testing.T) {
 
 	eventBuff := []byte(``)
 
-	eventBuff = p.processChunk([]byte(`{`), eventBuff)
-	eventBuff = p.processChunk([]byte(`"a"`), eventBuff)
-	eventBuff = p.processChunk([]byte(`:`), eventBuff)
-	eventBuff = p.processChunk([]byte(`"1"}`+"\n"), eventBuff)
+	eventBuff = p.processChunk(0, []byte(`{`), eventBuff)
+	eventBuff = p.processChunk(0, []byte(`"a"`), eventBuff)
+	eventBuff = p.processChunk(0, []byte(`:`), eventBuff)
+	eventBuff = p.processChunk(0, []byte(`"1"}`+"\n"), eventBuff)
 
 	c.HandleEventFlowFinish(false)
 	c.WaitUntilDone(false)

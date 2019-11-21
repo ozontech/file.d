@@ -21,6 +21,7 @@ import (
 	_ "gitlab.ozon.ru/sre/filed/plugin/action/keep_fields"
 	_ "gitlab.ozon.ru/sre/filed/plugin/action/modify"
 	_ "gitlab.ozon.ru/sre/filed/plugin/action/parse_es"
+	_ "gitlab.ozon.ru/sre/filed/plugin/action/remove_fields"
 	_ "gitlab.ozon.ru/sre/filed/plugin/action/rename"
 	_ "gitlab.ozon.ru/sre/filed/plugin/action/throttle"
 	_ "gitlab.ozon.ru/sre/filed/plugin/input/fake"

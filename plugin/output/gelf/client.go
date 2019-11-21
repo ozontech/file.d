@@ -2,36 +2,34 @@ package gelf
 
 import (
 	"crypto/tls"
-	"fmt"
 	"net"
 	"time"
 )
 
-type transport string
+type network string
 
 const (
-	transportTCP transport = "tcp"
-	transportUDP transport = "udp"
+	transportTCP network = "tcp"
+	transportUDP network = "udp"
 )
 
 type client struct {
-	transport transport
+	network   network
 	useTLS    bool
 	stdClient net.Conn
 	tlsClient *tls.Conn
 }
 
-func newClient(address string, port uint, useTLS bool, transport transport, timeout time.Duration, config *tls.Config) (*client, error) {
-	endpoint := fmt.Sprintf("%s:%d", address, port)
+func newClient(network network, address string, timeout time.Duration, useTLS bool, tlsConfig *tls.Config) (*client, error) {
 	if useTLS {
-		c, err := tls.DialWithDialer(&net.Dialer{Timeout: timeout}, string(transport), endpoint, config)
+		c, err := tls.DialWithDialer(&net.Dialer{Timeout: timeout}, string(network), address, tlsConfig)
 		if err != nil {
 			return nil, err
 		}
 
 		return &client{tlsClient: c}, nil
 	} else {
-		c, err := net.Dial("tcp", endpoint)
+		c, err := net.DialTimeout(string(network), address, timeout)
 		if err != nil {
 			return nil, err
 		}

@@ -69,6 +69,8 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 
 	p.context, p.cancel = context.WithCancel(context.Background())
 	p.consumerGroup = p.newConsumerGroup()
+	p.controller.DisableStreams()
+
 	go p.consume()
 }
 
@@ -94,7 +96,7 @@ func (p *Plugin) Commit(event *pipeline.Event) {
 		logger.Errorf("no kafka consumer session for event commit")
 		return
 	}
-	index, partition := extractMessageParams(event.SourceID)
+	index, partition := disassembleSourceID(event.SourceID)
 	p.session.MarkOffset(p.config.topics[index], partition, event.Offset+1, "")
 }
 
@@ -124,18 +126,18 @@ func (p *Plugin) Cleanup(sarama.ConsumerGroupSession) error {
 
 func (p *Plugin) ConsumeClaim(session sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
 	for message := range claim.Messages() {
-		sourceID := makeSourceID(p.idByTopic[message.Topic], message.Partition)
-		p.controller.In(sourceID, "", message.Offset, message.Value)
+		sourceID := assembleSourceID(p.idByTopic[message.Topic], message.Partition)
+		p.controller.In(sourceID, "kafka", message.Offset, message.Value)
 	}
 
 	return nil
 }
 
-func makeSourceID(index int, partition int32) pipeline.SourceID {
+func assembleSourceID(index int, partition int32) pipeline.SourceID {
 	return pipeline.SourceID(index<<16 + int(partition))
 }
 
-func extractMessageParams(sourceID pipeline.SourceID) (index int, partition int32) {
+func disassembleSourceID(sourceID pipeline.SourceID) (index int, partition int32) {
 	index = int(sourceID >> 16)
 	partition = int32(sourceID & 0xFFFF)
 
