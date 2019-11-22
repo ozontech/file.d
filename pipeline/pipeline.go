@@ -3,6 +3,7 @@ package pipeline
 import (
 	"encoding/json"
 	"fmt"
+	"math/rand"
 	"net/http"
 	"strconv"
 	"sync"
@@ -69,8 +70,11 @@ type Pipeline struct {
 	actionMetrics  []*actionMetrics
 
 	// some debugging shit
-	eventSample []byte
-	committed   atomic.Int64
+	inSample       []byte
+	outSample      []byte
+	totalCommitted atomic.Int64
+	totalSize      atomic.Int64
+	maxSize        int
 }
 
 type Settings struct {
@@ -166,7 +170,7 @@ func (p *Pipeline) Start() {
 }
 
 func (p *Pipeline) Stop() {
-	logger.Infof("stopping pipeline %q, total: processed=%d", p.Name, p.committed.Load())
+	logger.Infof("stopping pipeline %q", p.Name)
 	p.stopCh <- true
 
 	for _, processor := range p.Processors {
@@ -197,7 +201,7 @@ func (p *Pipeline) DeprecateSource(sourceID SourceID) int {
 			return
 		}
 
-		e.ToDeprecatedKind()
+		e.SetIgnoreKind()
 		count++
 	})
 
@@ -221,6 +225,10 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 	event.SourceName = sourceName
 	event.StreamName = defaultStreamName
 	event.Size = len(bytes)
+
+	if len(p.inSample) == 0 && rand.Int()&1 == 1 {
+		p.inSample = event.Root.Encode(p.inSample)
+	}
 
 	p.streamEvent(event)
 }
@@ -255,25 +263,33 @@ func (p *Pipeline) finalize(event *Event, notifyInput bool, backEvent bool) {
 
 	if notifyInput {
 		p.input.Commit(event)
+
+		p.totalCommitted.Inc()
+		p.totalSize.Add(int64(event.Size))
+
+		if len(p.outSample) == 0 && rand.Int()&1 == 1 {
+			p.outSample = event.Root.Encode(p.outSample)
+		}
+
+		if event.Size > p.maxSize {
+			p.maxSize = event.Size
+		}
 	}
 
-	// todo: it's shitty event.stream.commit(event) !!
+	// todo: avoid shitty event.stream.commit(event)
 	event.stream.commit(event)
-	if backEvent {
-		if len(p.eventSample) == 0 && notifyInput {
-			p.eventSample = event.Root.Encode(p.eventSample)
-		}
 
-		if p.eventLogEnabled {
-			p.eventLogMu.Lock()
-			p.eventLog = append(p.eventLog, event.Root.EncodeToString())
-			p.eventLogMu.Unlock()
-		}
-
-		p.committed.Inc()
-
-		p.eventPool.back(event)
+	if !backEvent {
+		return
 	}
+
+	if p.eventLogEnabled {
+		p.eventLogMu.Lock()
+		p.eventLog = append(p.eventLog, event.Root.EncodeToString())
+		p.eventLogMu.Unlock()
+	}
+
+	p.eventPool.back(event)
 }
 
 func (p *Pipeline) AddAction(info *PluginInfo, configJSON []byte, matchMode MatchMode, conditions MatchConditions, metricName string, metricLabels []string) {
@@ -370,21 +386,37 @@ func (p *Pipeline) countEvent(event *Event, actionIndex int, eventStatus eventSt
 }
 
 func (p *Pipeline) maintenance() {
-	lastProcessed := int64(0)
+	lastCommitted := int64(0)
+	lastSize := int64(0)
 	time.Sleep(MaintenanceInterval)
 	for {
 		select {
 		case <-p.stopCh:
 			return
 		default:
-			logger.Infof("pipeline %q final event sample: %s", p.Name, p.eventSample)
-			p.eventSample = p.eventSample[:0]
+			totalCommitted := p.totalCommitted.Load()
+			deltaCommitted := int(totalCommitted - lastCommitted)
 
-			processed := p.committed.Load()
-			delta := processed - lastProcessed
-			lastProcessed = processed
-			rate := delta * int64(time.Second) / int64(MaintenanceInterval)
-			logger.Infof("pipeline %q stats for last %d seconds: processed=%d, rate=%d/sec, queue=%d/%d, total processed=%d, max log size=%d", p.Name, MaintenanceInterval/time.Second, delta, rate, p.eventPool.eventsCount, p.settings.Capacity, processed, p.eventPool.maxEventSize)
+			totalSize := p.totalSize.Load()
+			deltaSize := int(totalSize - lastSize)
+
+			rate := int(float64(deltaCommitted) * float64(time.Second) / float64(MaintenanceInterval))
+			rateMb := float64(deltaSize) * float64(time.Second) / float64(MaintenanceInterval) / 1024 / 1024
+
+			if totalCommitted == 0 {
+				totalCommitted = 1
+			}
+
+			logger.Infof("%q pipeline stats interval=%ds, queue=%d/%d, out=%d|%.1fMb, rate=%d/s|%.1fMb/s, total=%d|%.1fMb, avg size=%d, max size=%d", p.Name, MaintenanceInterval/time.Second, p.eventPool.eventsCount, p.settings.Capacity, deltaCommitted, float64(deltaSize)/1024.0/1024.0, rate, rateMb, totalCommitted, float64(totalSize)/1024.0/1024.0, totalSize/totalCommitted, p.maxSize)
+
+			lastCommitted = totalCommitted
+			lastSize = totalSize
+
+			logger.Infof("%q pipeline input event sample: %s", p.Name, p.inSample)
+			p.inSample = p.inSample[:0]
+
+			logger.Infof("%q pipeline output event sample: %s", p.Name, p.outSample)
+			p.outSample = p.outSample[:0]
 
 			if time.Now().Sub(p.metricsGenTime) > MetricsGenInterval {
 				p.nextMetricsGen()
@@ -419,11 +451,11 @@ func (p *Pipeline) WaitUntilDone(instant bool) {
 	for {
 		p.doneWg.Wait()
 
-		processed := p.committed.Load()
+		processed := p.totalCommitted.Load()
 		//fs events may have delay, so wait for them
 		time.Sleep(time.Millisecond * 100)
-		//
-		processed = p.committed.Load() - processed
+
+		processed = p.totalCommitted.Load() - processed
 		if processed == 0 {
 			break
 		}
@@ -431,7 +463,7 @@ func (p *Pipeline) WaitUntilDone(instant bool) {
 }
 
 func (p *Pipeline) GetEventsTotal() int {
-	return int(p.committed.Load())
+	return int(p.totalCommitted.Load())
 }
 
 func (p *Pipeline) EnableEventLog() {

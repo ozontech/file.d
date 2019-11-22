@@ -34,6 +34,11 @@ func (p *Plugin) Stop() {
 }
 
 func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
+	if event.IsTimeoutKind() {
+		logger.Errorf("timeout while parsing elasticsearch event stream")
+		return pipeline.ActionDiscard
+	}
+
 	root := event.Root
 
 	if p.passNext && p.discardNext {
@@ -47,26 +52,26 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 
 	if p.discardNext {
 		p.discardNext = false
-		return pipeline.ActionDiscard
+		return pipeline.ActionCollapse
 	}
 
 	if root.Dig("delete") != nil {
-		return pipeline.ActionDiscard
+		return pipeline.ActionCollapse
 	}
 
 	if root.Dig("update") != nil {
 		p.discardNext = true
-		return pipeline.ActionDiscard
+		return pipeline.ActionCollapse
 	}
 
 	if root.Dig("index") != nil {
 		p.passNext = true
-		return pipeline.ActionDiscard
+		return pipeline.ActionCollapse
 	}
 
 	if root.Dig("create") != nil {
 		p.passNext = true
-		return pipeline.ActionDiscard
+		return pipeline.ActionCollapse
 	}
 
 	logger.Fatalf("wrong ES input format, expected action, got: %s", root.EncodeToString())

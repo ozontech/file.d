@@ -379,8 +379,8 @@ func TestOffsetsStart(t *testing.T) {
 
 	addData(file, []byte(`"Line1"}`), true, false)
 	addData(file, []byte(`{"Data":"Line2"}`), true, false)
-	c.HandleEventFlowFinish(false)
 
+	c.HandleEventFlowFinish(false)
 	c.WaitUntilDone(false)
 
 	p.jobProvider.saveOffsets()

@@ -16,6 +16,7 @@ func NewTestPipeLine(multiProcessors bool) *Pipeline {
 		ProcessorsCount: processorsCount,
 		Capacity:        1024,
 		AvgLogSize:      2048,
+		StreamField:     "stream",
 	}
 
 	http.DefaultServeMux = &http.ServeMux{}

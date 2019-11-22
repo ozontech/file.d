@@ -120,16 +120,14 @@ func (w *worker) work(index int, controller pipeline.InputPluginController, jobP
 				logger.Fatalf("file %d:%s stat error: %s", sourceID, sourceName, err.Error())
 			}
 
-			// file was truncated, seek to start
+			// file was truncated
 			if lastOffset+readTotal > stat.Size() {
 				jobProvider.truncateJob(job)
-				isEOF = false
-				lastOffset = 0
-				accumulated = 0
-				processed = 0
 			}
-		}
 
-		jobProvider.releaseJob(job, isEOF)
+			jobProvider.doneJob(job)
+		} else {
+			jobProvider.continueJob(job)
+		}
 	}
 }

@@ -75,7 +75,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 }
 
 func (p *Plugin) consume() {
-	logger.Info("kafka input reading from topics: %s", strings.Join(p.config.topics, ","))
+	logger.Infof("kafka input reading from topics: %s", strings.Join(p.config.topics, ","))
 	for {
 		err := p.consumerGroup.Consume(p.context, p.config.topics, p)
 		if err != nil {

@@ -155,8 +155,6 @@ func (b *Batcher) commitBatch(events []*Event, batch *Batch) []*Event {
 	b.cond.Broadcast()
 	b.seqMu.Unlock()
 
-	logger.Infof("output has written a batch type=%s, pipeline=%s, events=%d", b.outputType, b.pipelineName, len(events))
-
 	return events
 }
 

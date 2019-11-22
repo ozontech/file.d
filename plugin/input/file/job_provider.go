@@ -148,24 +148,24 @@ func (jp *jobProvider) stop() {
 }
 
 func (jp *jobProvider) commit(event *pipeline.Event) {
-	isActual := !event.IsDeprecatedKind()
 
 	jp.jobsMu.RLock()
 	job, has := jp.jobs[inode(event.SourceID)]
 	jp.jobsMu.RUnlock()
 
-	if isActual {
+	job.mu.Lock()
+	if event.IsRegularKind() {
 		if !has {
 			logger.Panicf("can't find job for event, source=%d:%s", event.SourceID, event.StreamName)
 		}
 
-		job.mu.Lock()
 		if job.offsets[event.StreamName] >= event.Offset {
 			logger.Panicf("offset corruption: committing=%d, current=%d, event id=%d, source=%d:%s", event.Offset, job.offsets[event.StreamName], event.SeqID, event.SourceID, event.SourceName)
 		}
+
 		job.offsets[event.StreamName] = event.Offset
-		job.mu.Unlock()
 	}
+	job.mu.Unlock()
 
 	jp.eventsCommitted.Inc()
 
@@ -330,14 +330,6 @@ func (jp *jobProvider) initJobOffset(operation offsetsOp, job *job, inode inode)
 	}
 }
 
-func (jp *jobProvider) releaseJob(job *job, wasEOF bool) {
-	if wasEOF {
-		jp.doneJob(job)
-	} else {
-		jp.jobsChan <- job
-	}
-}
-
 //tryResumeJob job should be already locked and it'll be unlocked
 func (jp *jobProvider) tryResumeJobAndUnlock(job *job, filename string) bool {
 	logger.Debugf("job for %d:%s resumed", job.inode, job.filename)
@@ -361,7 +353,10 @@ func (jp *jobProvider) tryResumeJobAndUnlock(job *job, filename string) bool {
 	return true
 }
 
-// doneJob
+func (jp *jobProvider) continueJob(job *job) {
+	jp.jobsChan <- job
+}
+
 func (jp *jobProvider) doneJob(job *job) {
 	job.mu.Lock()
 	if job.isDone {
@@ -378,26 +373,25 @@ func (jp *jobProvider) doneJob(job *job) {
 
 	job.mu.Unlock()
 
-
 	jp.doneWg.Done()
 }
 
 func (jp *jobProvider) truncateJob(job *job) {
-	deprecated := jp.controller.DeprecateSource(pipeline.SourceID(job.inode))
-
 	job.mu.Lock()
 	defer job.mu.Unlock()
 
+	deprecated := jp.controller.DeprecateSource(pipeline.SourceID(job.inode))
+
 	_, err := job.file.Seek(0, io.SeekStart)
 	if err != nil {
-		logger.Fatalf("job reset error, file % s seek error: %s", job.filename, err.Error())
+		logger.Fatalf("job reset error, file %s seek error: %s", job.filename, err.Error())
 	}
 
-	for k := range job.offsets {
-		job.offsets[k] = 0
+	for stream := range job.offsets {
+		job.offsets[stream] = 0
 	}
 
-	logger.Infof("job %d:%s was truncated, reading will start over, events deprecated=%d", job.inode, job.filename, deprecated)
+	logger.Infof("job %d:%s was truncated, reading will start over, deprecated=%d", job.inode, job.filename, deprecated)
 }
 
 func (jp *jobProvider) saveOffsetsCyclic(duration time.Duration) {

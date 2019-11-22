@@ -115,6 +115,8 @@ var result = []byte(`{
    "items": []
 }`)
 
+var empty = []byte(`{}`)
+
 func init() {
 	filed.DefaultPluginRegistry.RegisterInput(&pipeline.PluginInfo{
 		Type:    "http",
@@ -146,6 +148,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 		mux.HandleFunc("/", p.serveInfo)
 		mux.HandleFunc("/_xpack", p.serveXPack)
 		mux.HandleFunc("/_bulk", p.serveBulk)
+		mux.HandleFunc("/_template/", p.serveTemplate)
 		p.server = &http.Server{Addr: p.config.Address, Handler: mux}
 
 		go p.listenHTTP()
@@ -174,6 +177,13 @@ func (p *Plugin) serveXPack(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (p *Plugin) serveTemplate(w http.ResponseWriter, r *http.Request) {
+	_, err := w.Write(empty)
+	if err != nil {
+		logger.Errorf("can't write response: %s", err.Error())
+	}
+}
+
 func (p *Plugin) serveInfo(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodGet && r.RequestURI == "/" {
 
@@ -191,12 +201,13 @@ func (p *Plugin) getSourceID() pipeline.SourceID {
 	p.mu.Lock()
 	if len(p.sourceIDs) == 0 {
 		p.sourceIDs = append(p.sourceIDs, p.sourceSeq)
+		logger.Infof("HHHHH %d", p.sourceSeq)
 		p.sourceSeq++
 	}
 
 	l := len(p.sourceIDs)
 	x := p.sourceIDs[l-1]
-	p.sourceIDs = p.sourceIDs[:l-2]
+	p.sourceIDs = p.sourceIDs[:l-1]
 	p.mu.Unlock()
 
 	return x

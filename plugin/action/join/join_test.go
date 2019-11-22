@@ -198,7 +198,6 @@ func TestJoin(t *testing.T) {
 	lastID := atomic.Uint64{}
 	output.SetOutFn(func(e *pipeline.Event) {
 		dumpedEvents.Inc()
-		//logger.Infof("out %s", e)
 		id := lastID.Swap(e.SeqID)
 		if id != 0 && id >= e.SeqID {
 			panic("wrong id")

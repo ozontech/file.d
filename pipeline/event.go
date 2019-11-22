@@ -39,15 +39,13 @@ const (
 	eventStageStream    = 2
 	eventStageProcessor = 3
 	eventStageOutput    = 4
-	eventStageBack      = 5
 
-	eventKindRegular    eventKind = 0
-	eventKindDeprecated eventKind = 1
-	eventKindTimeout    eventKind = 2
+	eventKindRegular int32 = 0
+	eventKindIgnore  int32 = 1
+	eventKindTimeout int32 = 2
 )
 
 type eventStage int
-type eventKind int32
 
 func newEvent(poolIndex int) *Event {
 	return &Event{
@@ -68,7 +66,7 @@ func newTimoutEvent(stream *stream) *Event {
 		StreamName: stream.name,
 	}
 
-	event.ToTimeoutKind()
+	event.SetTimeoutKind()
 
 	return event
 }
@@ -91,23 +89,27 @@ func (e *Event) reset() {
 	e.next = nil
 	e.action = 0
 	e.stream = nil
-	e.kind.Swap(int32(eventKindRegular))
+	e.kind.Swap(eventKindRegular)
 }
 
-func (e *Event) ToDeprecatedKind() {
-	e.kind.Swap(int32(eventKindDeprecated))
+func (e *Event) IsRegularKind() bool {
+	return e.kind.Load() == eventKindRegular
 }
 
-func (e *Event) IsDeprecatedKind() bool {
-	return e.kind.Load() == int32(eventKindDeprecated)
+func (e *Event) SetIgnoreKind() {
+	e.kind.Swap(eventKindIgnore)
 }
 
-func (e *Event) ToTimeoutKind() {
-	e.kind.Swap(int32(eventKindTimeout))
+func (e *Event) IsIgnoreKind() bool {
+	return e.kind.Load() == eventKindIgnore
+}
+
+func (e *Event) SetTimeoutKind() {
+	e.kind.Swap(eventKindTimeout)
 }
 
 func (e *Event) IsTimeoutKind() bool {
-	return e.kind.Load() == int32(eventKindTimeout)
+	return e.kind.Load() == eventKindTimeout
 }
 
 func (e *Event) parseJSON(json []byte) (*Event, error) {
@@ -142,18 +144,16 @@ func (e *Event) stageStr() string {
 		return "PROCESSOR"
 	case eventStageOutput:
 		return "OUTPUT"
-	case eventStageBack:
-		return "BACK"
 	default:
 		return "UNKNOWN"
 	}
 }
 
 func (e *Event) kindStr() string {
-	switch eventKind(e.kind.Load()) {
+	switch e.kind.Load() {
 	case eventKindRegular:
 		return "REGULAR"
-	case eventKindDeprecated:
+	case eventKindIgnore:
 		return "DEPRECATED"
 	case eventKindTimeout:
 		return "TIMEOUT"
@@ -175,8 +175,6 @@ type eventPool struct {
 
 	mu   *sync.Mutex
 	cond *sync.Cond
-
-	maxEventSize int
 }
 
 func newEventPool(capacity int) *eventPool {
@@ -223,13 +221,6 @@ func (p *eventPool) get(json []byte) (*Event, error) {
 
 func (p *eventPool) back(event *Event) {
 	p.mu.Lock()
-	event.stage = eventStageBack
-
-	if event.Size > p.maxEventSize {
-		p.maxEventSize = event.Size
-	}
-
-	event.stage = eventStagePool
 	p.eventsCount--
 	if p.eventsCount == -1 {
 		logger.Panicf("event pool is full, why back()? id=%d index=%d", event.SeqID, event.index)
@@ -247,6 +238,7 @@ func (p *eventPool) back(event *Event) {
 	event.index = lastIndex
 	last.index = currentIndex
 
+	event.stage = eventStagePool
 	p.cond.Signal()
 	p.mu.Unlock()
 }

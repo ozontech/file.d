@@ -49,7 +49,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 	p.config = config.(*Config)
 
 	if p.config.MaxEventSize == 0 {
-		p.config.MaxEventSize = int(defaultMaxEventSize)
+		p.config.MaxEventSize = defaultMaxEventSize
 	}
 
 	p.config.labelsWhitelist = make(map[string]bool)
@@ -79,7 +79,7 @@ func (p *Plugin) Stop() {
 func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	// todo: do same logic as in join plugin here, to send not full logs
 	if event.IsTimeoutKind() {
-		logger.Errorf("can't read next sequential event, timeout=%s", event)
+		logger.Errorf("can't read next sequential event for k8s pod stream")
 		p.logBuff = p.logBuff[:1]
 		return pipeline.ActionDiscard
 	}

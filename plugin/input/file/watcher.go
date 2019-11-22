@@ -97,6 +97,7 @@ func (w *watcher) notify(event *fsnotify.Event) {
 		return
 	}
 
+
 	w.jobProvider.actualize(filename, stat)
 
 	if stat.IsDir() {

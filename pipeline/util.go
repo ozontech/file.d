@@ -110,7 +110,7 @@ func ParseLevel(level string) int {
 	case "DEBUG":
 		return 7
 	default:
-		return -1
+		return 6
 	}
 }
 
