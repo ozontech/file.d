@@ -35,8 +35,8 @@ type data struct {
 
 type Plugin struct {
 	config     *Config
-	controller pipeline.OutputPluginController
 	avgLogSize int
+	controller pipeline.OutputPluginController
 
 	producer sarama.SyncProducer
 	batcher  *pipeline.Batcher
@@ -55,6 +55,7 @@ func Factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginParams) {
 	p.config = config.(*Config)
+	p.avgLogSize = params.PipelineSettings.AvgLogSize
 	p.controller = params.Controller
 
 	p.config.brokers = strings.Split(p.config.Brokers, ",")
@@ -63,7 +64,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	}
 
 	if p.config.WorkersCount == 0 {
-		p.config.WorkersCount = runtime.GOMAXPROCS(0) * 8
+		p.config.WorkersCount = runtime.GOMAXPROCS(0) * 4
 	}
 
 	if p.config.BatchSize == 0 {

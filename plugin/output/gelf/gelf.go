@@ -66,9 +66,9 @@ type Config struct {
 
 type Plugin struct {
 	config     *Config
+	avgLogSize int
 	batcher    *pipeline.Batcher
 	controller pipeline.OutputPluginController
-	avgLogSize int
 }
 
 type data struct {
@@ -98,7 +98,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	}
 
 	if p.config.WorkersCount == 0 {
-		p.config.WorkersCount = runtime.GOMAXPROCS(0) * 8
+		p.config.WorkersCount = runtime.GOMAXPROCS(0) * 4
 	}
 
 	if p.config.FlushTimeout.Duration == 0 {

@@ -18,7 +18,7 @@ const (
 	DefaultFieldValue   = "not_set"
 	DefaultStreamField  = "stream"
 	DefaultCapacity     = 1024
-	DefaultAvgLogSize   = 64 * 1024
+	DefaultAvgLogSize   = 32 * 1024
 	DefaultNodePoolSize = 1024
 
 	MaintenanceInterval = time.Second * 5
