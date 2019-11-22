@@ -23,8 +23,10 @@ const (
 	offsetsOpTail     offsetsOp = 2
 )
 
-type persistenceMode int
-type offsetsOp int
+type (
+	persistenceMode int
+	offsetsOp       int
+)
 
 type Config struct {
 	WatchingDir     string `json:"watching_dir"`

@@ -1,6 +1,7 @@
 package file
 
 import (
+	"fmt"
 	"io"
 	"io/ioutil"
 	"math"
@@ -155,15 +156,23 @@ func (jp *jobProvider) commit(event *pipeline.Event) {
 
 	job.mu.Lock()
 	if event.IsRegularKind() {
+		streamName := pipeline.StreamName(event.StreamNameBytes())
+
 		if !has {
-			logger.Panicf("can't find job for event, source=%d:%s", event.SourceID, event.StreamName)
+			logger.Panicf("can't find job for event, source=%d:%s", event.SourceID, streamName)
 		}
 
-		if job.offsets[event.StreamName] >= event.Offset {
-			logger.Panicf("offset corruption: committing=%d, current=%d, event id=%d, source=%d:%s", event.Offset, job.offsets[event.StreamName], event.SeqID, event.SourceID, event.SourceName)
+		value, has := job.offsets[streamName]
+		if value >= event.Offset {
+			logger.Panicf("offset corruption: committing=%d, current=%d, event id=%d, source=%d:%s", event.Offset, value, event.SeqID, event.SourceID, event.SourceName)
 		}
 
-		job.offsets[event.StreamName] = event.Offset
+		// streamName isn't actually a string, but unsafe []byte, so copy it when adding to map
+		if has {
+			job.offsets[streamName] = event.Offset
+		} else {
+			job.offsets[pipeline.StreamName(event.StreamNameBytes())] = event.Offset
+		}
 	}
 	job.mu.Unlock()
 
@@ -447,7 +456,7 @@ func (jp *jobProvider) saveOffsets() {
 		}
 
 		jp.offsetsSaveBuf = append(jp.offsetsSaveBuf, "- file: ")
-		jp.offsetsSaveBuf = append(jp.offsetsSaveBuf, strconv.FormatUint(uint64(job.inode), 10))
+		jp.offsetsSaveBuf = append(jp.offsetsSaveBuf, fmt.Sprintf("%d", uint64(job.inode)))
 		jp.offsetsSaveBuf = append(jp.offsetsSaveBuf, " ")
 		jp.offsetsSaveBuf = append(jp.offsetsSaveBuf, job.filename)
 		jp.offsetsSaveBuf = append(jp.offsetsSaveBuf, "\n")
@@ -455,7 +464,7 @@ func (jp *jobProvider) saveOffsets() {
 			jp.offsetsSaveBuf = append(jp.offsetsSaveBuf, "  ")
 			jp.offsetsSaveBuf = append(jp.offsetsSaveBuf, string(stream))
 			jp.offsetsSaveBuf = append(jp.offsetsSaveBuf, ": ")
-			jp.offsetsSaveBuf = append(jp.offsetsSaveBuf, strconv.FormatInt(offset, 10))
+			jp.offsetsSaveBuf = append(jp.offsetsSaveBuf, fmt.Sprintf("%d", uint64(offset)))
 			jp.offsetsSaveBuf = append(jp.offsetsSaveBuf, "\n")
 		}
 		job.mu.Unlock()

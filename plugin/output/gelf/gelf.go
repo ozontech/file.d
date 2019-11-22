@@ -112,24 +112,24 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	if p.config.HostField == "" {
 		p.config.HostField = defaultHostField
 	}
-	p.config.hostField = pipeline.ByteToString(p.formatExtraField(nil, p.config.HostField))
+	p.config.hostField = pipeline.ByteToStringUnsafe(p.formatExtraField(nil, p.config.HostField))
 
 	if p.config.ShortMessageField == "" {
 		p.config.ShortMessageField = defaultShortMessageField
 	}
-	p.config.shortMessageField = pipeline.ByteToString(p.formatExtraField(nil, p.config.ShortMessageField))
+	p.config.shortMessageField = pipeline.ByteToStringUnsafe(p.formatExtraField(nil, p.config.ShortMessageField))
 
 	if strings.TrimSpace(p.config.DefaultShortMessageValue) == "" {
 		p.config.DefaultShortMessageValue = defaultShortMessageValue
 	}
 	p.config.defaultShortMessageValue = strings.TrimSpace(p.config.DefaultShortMessageValue)
 
-	p.config.fullMessageField = pipeline.ByteToString(p.formatExtraField(nil, p.config.FullMessageField))
+	p.config.fullMessageField = pipeline.ByteToStringUnsafe(p.formatExtraField(nil, p.config.FullMessageField))
 
 	if p.config.TimestampField == "" {
 		p.config.TimestampField = defaultTimestampField
 	}
-	p.config.timestampField = pipeline.ByteToString(p.formatExtraField(nil, p.config.TimestampField))
+	p.config.timestampField = pipeline.ByteToStringUnsafe(p.formatExtraField(nil, p.config.TimestampField))
 
 	if p.config.TimestampFieldFormat == "" {
 		p.config.TimestampFieldFormat = defaultTimestampFieldFormat
@@ -143,7 +143,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	if p.config.LevelField == "" {
 		p.config.LevelField = defaultLevelField
 	}
-	p.config.levelField = pipeline.ByteToString(p.formatExtraField(nil, p.config.LevelField))
+	p.config.levelField = pipeline.ByteToStringUnsafe(p.formatExtraField(nil, p.config.LevelField))
 
 	if p.config.BatchSize == 0 {
 		p.config.BatchSize = params.PipelineSettings.Capacity / 4
@@ -344,14 +344,14 @@ func (p *Plugin) makeExtraFields(encodeBuf []byte, root *insaneJSON.Root) []byte
 		// rename to gelf extra field format
 		l := len(encodeBuf)
 		encodeBuf = p.formatExtraField(encodeBuf, field.AsString())
-		field.MutateToField(pipeline.ByteToString(encodeBuf[l:]))
+		field.MutateToField(pipeline.ByteToStringUnsafe(encodeBuf[l:]))
 
 		// make sure extra fields are strings and numbers
 		value := field.AsFieldValue()
 		if !value.IsString() && !value.IsNumber() {
 			l := len(encodeBuf)
 			encodeBuf = value.Encode(encodeBuf)
-			value.MutateToString(pipeline.ByteToString(encodeBuf[l:]))
+			value.MutateToString(pipeline.ByteToStringUnsafe(encodeBuf[l:]))
 		}
 	}
 

@@ -64,8 +64,10 @@ func (s *streamer) getStream(sourceID SourceID, streamName StreamName) *stream {
 		s.streams[sourceID] = make(map[StreamName]*stream)
 	}
 
-	st = newStream(streamName, sourceID, s)
-	s.streams[sourceID][streamName] = st
+	// copy streamName because it may be unsafe []byte instead regular string
+	streamNameCopy := StreamName([]byte(streamName))
+	st = newStream(streamNameCopy, sourceID, s)
+	s.streams[sourceID][streamNameCopy] = st
 
 	return st
 }

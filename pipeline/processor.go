@@ -257,7 +257,7 @@ func (p *processor) isMatchAnd(conds MatchConditions, event *Event) bool {
 		if cond.Regexp != nil {
 			match = cond.Regexp.MatchString(value)
 		} else {
-			match = strings.Trim(value, " ") == cond.Value
+			match = strings.TrimFunc(value, TrimSpaceFunc) == cond.Value
 		}
 
 		if !match {

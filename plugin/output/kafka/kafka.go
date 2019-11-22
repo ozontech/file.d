@@ -30,7 +30,7 @@ type Config struct {
 
 type data struct {
 	messages []*sarama.ProducerMessage
-	outBuf   []byte
+	outBuf   sarama.ByteEncoder
 }
 
 type Plugin struct {
@@ -114,7 +114,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 	data := (*workerData).(*data)
 	//handle to much memory consumption
 	if cap(data.outBuf) > p.config.BatchSize*p.avgLogSize {
-		data.outBuf = make([]byte, 0, p.config.BatchSize*p.avgLogSize)
+		data.outBuf = make(sarama.ByteEncoder, 0, p.config.BatchSize*p.avgLogSize)
 	}
 
 	outBuf := data.outBuf[:0]
@@ -133,7 +133,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 		if data.messages[i] == nil {
 			data.messages[i] = &sarama.ProducerMessage{}
 		}
-		data.messages[i].Value = sarama.ByteEncoder(outBuf[start:])
+		data.messages[i].Value = outBuf[start:]
 		data.messages[i].Topic = topic
 	}
 

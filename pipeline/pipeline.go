@@ -223,7 +223,7 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 	event.Offset = offset
 	event.SourceID = sourceID
 	event.SourceName = sourceName
-	event.StreamName = defaultStreamName
+	event.streamName = defaultStreamName
 	event.Size = len(bytes)
 
 	if len(p.inSample) == 0 && rand.Int()&1 == 1 {
@@ -243,9 +243,9 @@ func (p *Pipeline) streamEvent(event *Event) {
 
 	node := event.Root.Dig(p.settings.StreamField)
 	if node != nil {
-		event.StreamName = StreamName(node.AsBytes()) // as bytes because we need a copy
+		event.streamName = StreamName(node.AsString())
 	}
-	p.streamer.putEvent(event.SourceID, event.StreamName, event)
+	p.streamer.putEvent(event.SourceID, event.streamName, event)
 }
 
 func (p *Pipeline) DisableStreams() {

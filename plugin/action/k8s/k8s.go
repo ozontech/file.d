@@ -137,7 +137,7 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 			l := len(event.Buf)
 			event.Buf = append(event.Buf, "k8s_label_"...)
 			event.Buf = append(event.Buf, labelName...)
-			event.Root.AddFieldNoAlloc(event.Root, pipeline.ByteToString(event.Buf[l:])).MutateToString(labelValue)
+			event.Root.AddFieldNoAlloc(event.Root, pipeline.ByteToStringUnsafe(event.Buf[l:])).MutateToString(labelValue)
 		}
 	}
 
@@ -147,7 +147,7 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 
 		l := len(event.Buf)
 		event.Buf = append(event.Buf, p.logBuff...)
-		event.Root.AddFieldNoAlloc(event.Root, "log").MutateToEscapedString(pipeline.ByteToString(event.Buf[l:]))
+		event.Root.AddFieldNoAlloc(event.Root, "log").MutateToEscapedString(pipeline.ByteToStringUnsafe(event.Buf[l:]))
 
 		p.logBuff = p.logBuff[:1]
 	}

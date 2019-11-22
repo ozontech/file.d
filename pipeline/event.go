@@ -21,7 +21,7 @@ type Event struct {
 	Offset     int64
 	SourceID   SourceID
 	SourceName string
-	StreamName StreamName
+	streamName StreamName
 	Size       int // last known event size, it may not be actual
 
 	index  int
@@ -63,7 +63,7 @@ func newTimoutEvent(stream *stream) *Event {
 		SeqID:      stream.commitSeq,
 		SourceID:   stream.sourceID,
 		SourceName: "timeout",
-		StreamName: stream.name,
+		streamName: stream.name,
 	}
 
 	event.SetTimeoutKind()
@@ -90,6 +90,10 @@ func (e *Event) reset() {
 	e.action = 0
 	e.stream = nil
 	e.kind.Swap(eventKindRegular)
+}
+
+func (e *Event) StreamNameBytes() []byte {
+	return StringToByteUnsafe(string(e.streamName))
 }
 
 func (e *Event) IsRegularKind() bool {
@@ -163,7 +167,7 @@ func (e *Event) kindStr() string {
 }
 
 func (e *Event) String() string {
-	return fmt.Sprintf("index=%d kind=%s, action=%d, source=%d/%s, stream=%s, stage=%s, json=%s", e.index, e.kindStr(), e.action, e.SourceID, e.SourceName, e.StreamName, e.stageStr(), e.Root.EncodeToString())
+	return fmt.Sprintf("index=%d kind=%s, action=%d, source=%d/%s, stream=%s, stage=%s, json=%s", e.index, e.kindStr(), e.action, e.SourceID, e.SourceName, e.streamName, e.stageStr(), e.Root.EncodeToString())
 }
 
 // channels are slower than this implementation by ~20%
