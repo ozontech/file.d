@@ -72,15 +72,23 @@ func (s *streamer) getStream(sourceID SourceID, streamName StreamName) *stream {
 	return st
 }
 
+func (s *streamer) makeCharged(stream *stream) {
+	s.chargedMu.Lock()
+	s.charged = append(s.charged, stream)
+	s.chargedCond.Signal()
+	s.chargedMu.Unlock()
+}
+
 func (s *streamer) joinStream() *stream {
 	s.chargedMu.Lock()
 	for len(s.charged) == 0 {
 		s.chargedCond.Wait()
 	}
-	stream := s.charged[0]
-	stream.attach()
-	s.resetCharged(stream)
+	l := len(s.charged)
+	stream := s.charged[l-1]
+	s.charged = s.charged[:l-1]
 	s.chargedMu.Unlock()
+	stream.attach()
 
 	return stream
 }
@@ -109,31 +117,6 @@ func (s *streamer) resetBlocked(stream *stream) {
 
 	stream.blockIndex = -1
 	s.blockedMu.Unlock()
-}
-
-func (s *streamer) makeCharged(stream *stream) {
-	s.chargedMu.Lock()
-	stream.chargeIndex = len(s.charged)
-	s.charged = append(s.charged, stream)
-	s.chargedCond.Signal()
-	s.chargedMu.Unlock()
-}
-
-func (s *streamer) resetCharged(stream *stream) {
-	if stream.chargeIndex == -1 {
-		logger.Panicf("why remove? stream isn't ready")
-	}
-
-	lastIndex := len(s.charged) - 1
-	if lastIndex == -1 {
-		logger.Panicf("why remove? stream isn't in ready list")
-	}
-	index := stream.chargeIndex
-	s.charged[index] = s.charged[lastIndex]
-	s.charged[index].chargeIndex = index
-	s.charged = s.charged[:lastIndex]
-
-	stream.chargeIndex = -1
 }
 
 func (s *streamer) heartbeat() {

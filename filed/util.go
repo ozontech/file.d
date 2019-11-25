@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/bitly/go-simplejson"
 	"github.com/pkg/errors"
@@ -17,8 +18,10 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 	processorsCount := procs * 8
 
 	capacity := pipeline.DefaultCapacity
+	antispamThreshold := 0
 	avgLogSize := pipeline.DefaultAvgLogSize
 	streamField := pipeline.DefaultStreamField
+	maintenanceInterval := pipeline.DefaultMaintenanceInterval
 
 	if settings != nil {
 		val := settings.Get("processors_count").MustInt()
@@ -40,13 +43,27 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 		if str != "" {
 			streamField = str
 		}
+
+		str = settings.Get("maintenance_interval").MustString()
+		if str != "" {
+			i, err := time.ParseDuration(str)
+			if err != nil {
+				logger.Fatalf("can't parse pipeline maintenance interval: %s", err.Error())
+			}
+			maintenanceInterval = i
+		}
+
+		antispamThreshold = settings.Get("antispam_threshold").MustInt()
+		antispamThreshold *= int(maintenanceInterval / time.Second)
 	}
 
 	return &pipeline.Settings{
-		Capacity:        capacity,
-		AvgLogSize:      avgLogSize,
-		ProcessorsCount: processorsCount,
-		StreamField:     streamField,
+		Capacity:            capacity,
+		AvgLogSize:          avgLogSize,
+		AntispamThreshold:   antispamThreshold,
+		MaintenanceInterval: maintenanceInterval,
+		ProcessorsCount:     processorsCount,
+		StreamField:         streamField,
 	}
 }
 

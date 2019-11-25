@@ -41,7 +41,6 @@ type stream struct {
 func newStream(name StreamName, sourceID SourceID, streamer *streamer) *stream {
 	stream := stream{
 		name:        name,
-		chargeIndex: -1,
 		sourceID:    sourceID,
 		streamer:    streamer,
 		mu:          &sync.Mutex{},

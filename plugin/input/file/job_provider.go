@@ -149,11 +149,6 @@ func (jp *jobProvider) stop() {
 }
 
 func (jp *jobProvider) commit(event *pipeline.Event) {
-	// commit offsets only for regular events
-	if !event.IsRegularKind() {
-		return
-	}
-
 	streamName := pipeline.StreamName(pipeline.ByteToStringUnsafe(event.StreamNameBytes()))
 
 	jp.jobsMu.RLock()
@@ -161,10 +156,15 @@ func (jp *jobProvider) commit(event *pipeline.Event) {
 	jp.jobsMu.RUnlock()
 
 	if !has {
-		logger.Panicf("can't find job for event, source=%d:%s", event.SourceID, streamName)
+		return
 	}
 
 	job.mu.Lock()
+	// commit offsets only for regular events
+	if !event.IsRegularKind() {
+		job.mu.Unlock()
+		return
+	}
 
 	value, has := job.offsets[streamName]
 	if value >= event.Offset {

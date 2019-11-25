@@ -5,7 +5,6 @@ import (
 	"sync"
 
 	"gitlab.ozon.ru/sre/filed/logger"
-	"go.uber.org/atomic"
 )
 
 type ActionResult int
@@ -42,17 +41,16 @@ type processor struct {
 	pipeline *Pipeline
 	streamer *streamer
 
-	actions        []ActionPlugin
-	actionsData    []*ActionPluginData
-	actionsBlocked []bool
-	totalBlocked   int
+	actions          []ActionPlugin
+	actionsData      []*ActionPluginData
+	busyActions      []bool
+	busyActionsTotal int
 
 	shouldStop bool
 	stopWg     *sync.WaitGroup
 
-	heartbeatCh    chan *stream
-	waitingEventID *atomic.Uint64
-	metricsValues  []string
+	heartbeatCh   chan *stream
+	metricsValues []string
 }
 
 func NewProcessor(id int, pipeline *Pipeline, streamer *streamer) *processor {
@@ -61,9 +59,8 @@ func NewProcessor(id int, pipeline *Pipeline, streamer *streamer) *processor {
 		pipeline: pipeline,
 		streamer: streamer,
 
-		stopWg:         &sync.WaitGroup{},
-		waitingEventID: &atomic.Uint64{},
-		metricsValues:  make([]string, 0, 0),
+		stopWg:        &sync.WaitGroup{},
+		metricsValues: make([]string, 0, 0),
 	}
 
 	return processor
@@ -122,17 +119,18 @@ func (p *processor) processEvent(event *Event) (isSuccess bool, isPassed bool, e
 			return true, true, event
 		}
 
-		if p.totalBlocked != 0 {
-			action := event.action
-			event = stream.blockGet()
-			if event.IsTimeoutKind() {
-				// pass timeout directly to plugin which requested the sequential event
-				event.action = action
-			}
-			continue
+		// no busy actions, so return
+		if p.busyActionsTotal == 0 {
+			return true, false, nil
 		}
 
-		return true, false, nil
+		// there is busy action, waiting for next sequential event
+		action := event.action
+		event = stream.blockGet()
+		if event.IsTimeoutKind() {
+			// pass timeout directly to plugin which requested next sequential event
+			event.action = action
+		}
 	}
 }
 
@@ -151,22 +149,22 @@ func (p *processor) doActions(event *Event) (isPassed bool) {
 		switch action.Do(event) {
 		case ActionPass:
 			p.countEvent(event, index, eventStatusPassed)
-			p.tryUnblockAction(index)
+			p.tryResetBusy(index)
 		case ActionDiscard:
 			p.countEvent(event, index, eventStatusDiscarded)
-			p.tryUnblockAction(index)
+			p.tryResetBusy(index)
 			// can't notify input here, because previous events may delay and we'll get offset sequence corruption
 			p.pipeline.finalize(event, false, true)
 			return false
 		case ActionCollapse:
 			p.countEvent(event, index, eventStatusCollapse)
-			p.tryBlockAction(index)
+			p.tryMarkBusy(index)
 			// can't notify input here, because previous events may delay and we'll get offset sequence corruption
 			p.pipeline.finalize(event, false, true)
 			return false
 		case ActionHold:
 			p.countEvent(event, index, eventStatusHold)
-			p.tryBlockAction(index)
+			p.tryMarkBusy(index)
 
 			p.pipeline.finalize(event, false, false)
 			return false
@@ -176,26 +174,26 @@ func (p *processor) doActions(event *Event) (isPassed bool) {
 	return true
 }
 
-func (p *processor) tryBlockAction(index int) {
-	if p.actionsBlocked[index] {
+func (p *processor) tryMarkBusy(index int) {
+	if p.busyActions[index] {
 		return
 	}
-	p.actionsBlocked[index] = true
-	p.totalBlocked++
+	p.busyActions[index] = true
+	p.busyActionsTotal++
 
-	if p.totalBlocked > len(p.actions) {
+	if p.busyActionsTotal > len(p.actions) {
 		logger.Panicf("blocked actions too big")
 	}
 }
 
-func (p *processor) tryUnblockAction(index int) {
-	if !p.actionsBlocked[index] {
+func (p *processor) tryResetBusy(index int) {
+	if !p.busyActions[index] {
 		return
 	}
-	p.actionsBlocked[index] = false
-	p.totalBlocked--
+	p.busyActions[index] = false
+	p.busyActionsTotal--
 
-	if p.totalBlocked < 0 {
+	if p.busyActionsTotal < 0 {
 		logger.Panicf("blocked action count less than zero")
 	}
 }
@@ -209,7 +207,7 @@ func (p *processor) isMatch(index int, event *Event) bool {
 		return true
 	}
 
-	if p.actionsBlocked[index] {
+	if p.busyActions[index] {
 		return true
 	}
 
@@ -279,7 +277,7 @@ func (p *processor) stop() {
 func (p *processor) AddActionPlugin(descr *ActionPluginData) {
 	p.actions = append(p.actions, descr.Plugin)
 	p.actionsData = append(p.actionsData, descr)
-	p.actionsBlocked = append(p.actionsBlocked, false)
+	p.busyActions = append(p.busyActions, false)
 }
 
 func (p *processor) Commit(event *Event) {

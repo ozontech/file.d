@@ -116,12 +116,8 @@ func (e *Event) IsTimeoutKind() bool {
 	return e.kind.Load() == eventKindTimeout
 }
 
-func (e *Event) parseJSON(json []byte) (*Event, error) {
-	err := e.Root.DecodeBytes(json)
-	if err != nil {
-		return e, err
-	}
-	return e, nil
+func (e *Event) parseJSON(json []byte) error {
+	return e.Root.DecodeBytes(json)
 }
 
 func (e *Event) SubparseJSON(json []byte) (*insaneJSON.Node, error) {
@@ -205,7 +201,7 @@ func (p *eventPool) visit(fn func(*Event)) {
 	}
 }
 
-func (p *eventPool) get(json []byte) (*Event, error) {
+func (p *eventPool) get() (*Event) {
 	p.mu.Lock()
 
 	for p.eventsCount >= p.capacity {
@@ -220,7 +216,7 @@ func (p *eventPool) get(json []byte) (*Event, error) {
 	p.mu.Unlock()
 
 	event.reset()
-	return event.parseJSON(json)
+	return event
 }
 
 func (p *eventPool) back(event *Event) {
