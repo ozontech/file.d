@@ -72,7 +72,7 @@ type jobProvider struct {
 	stopMaintenanceCh chan bool
 
 	// some debugging shit
-	eventsCommitted *atomic.Int64
+	offsetsCommitted *atomic.Int64
 }
 
 type inode uint64
@@ -107,7 +107,7 @@ func NewJobProvider(config *Config, done *sync.WaitGroup, controller pipeline.In
 		offsetsSaveMu:      &sync.Mutex{},
 		offsetsSaveCounter: &atomic.Int64{},
 		offsetsSaveBuf:     make([]string, 0, 65536),
-		eventsCommitted:    &atomic.Int64{},
+		offsetsCommitted:   &atomic.Int64{},
 
 		stopSaveOffsetsCh: make(chan bool, 1), //non-zero channel cause we don't wanna wait goroutine to stop
 		stopReportCh:      make(chan bool, 1), //non-zero channel cause we don't wanna wait goroutine to stop
@@ -149,35 +149,39 @@ func (jp *jobProvider) stop() {
 }
 
 func (jp *jobProvider) commit(event *pipeline.Event) {
+	// commit offsets only for regular events
+	if !event.IsRegularKind() {
+		return
+	}
+
+	streamName := pipeline.StreamName(pipeline.ByteToStringUnsafe(event.StreamNameBytes()))
 
 	jp.jobsMu.RLock()
 	job, has := jp.jobs[inode(event.SourceID)]
 	jp.jobsMu.RUnlock()
 
-	job.mu.Lock()
-	if event.IsRegularKind() {
-		streamName := pipeline.StreamName(event.StreamNameBytes())
-
-		if !has {
-			logger.Panicf("can't find job for event, source=%d:%s", event.SourceID, streamName)
-		}
-
-		value, has := job.offsets[streamName]
-		if value >= event.Offset {
-			logger.Panicf("offset corruption: committing=%d, current=%d, event id=%d, source=%d:%s", event.Offset, value, event.SeqID, event.SourceID, event.SourceName)
-		}
-
-		// streamName isn't actually a string, but unsafe []byte, so copy it when adding to map
-		if has {
-			job.offsets[streamName] = event.Offset
-		} else {
-			job.offsets[pipeline.StreamName(event.StreamNameBytes())] = event.Offset
-		}
+	if !has {
+		logger.Panicf("can't find job for event, source=%d:%s", event.SourceID, streamName)
 	}
+
+	job.mu.Lock()
+
+	value, has := job.offsets[streamName]
+	if value >= event.Offset {
+		logger.Panicf("offset corruption: committing=%d, current=%d, event id=%d, source=%d:%s", event.Offset, value, event.SeqID, event.SourceID, event.SourceName)
+	}
+
+	// streamName isn't actually a string, but unsafe []byte, so copy it when adding to map
+	if has {
+		job.offsets[streamName] = event.Offset
+	} else {
+		streamNameCopy := pipeline.StreamName(event.StreamNameBytes())
+		job.offsets[streamNameCopy] = event.Offset
+	}
+
 	job.mu.Unlock()
 
-	jp.eventsCommitted.Inc()
-
+	jp.offsetsCommitted.Inc()
 	if jp.config.persistenceMode == persistenceModeSync {
 		jp.saveOffsets()
 	}
@@ -410,9 +414,9 @@ func (jp *jobProvider) saveOffsetsCyclic(duration time.Duration) {
 		case <-jp.stopSaveOffsetsCh:
 			return
 		default:
-			eventsAccepted := jp.eventsCommitted.Load()
-			if lastCommitted != eventsAccepted {
-				lastCommitted = eventsAccepted
+			offsetsCommitted := jp.offsetsCommitted.Load()
+			if lastCommitted != offsetsCommitted {
+				lastCommitted = offsetsCommitted
 				jp.saveOffsets()
 			}
 			time.Sleep(duration)
