@@ -21,7 +21,7 @@ type Config struct {
 	WorkersCount        int               `json:"workers_count"`
 	BatchSize           int               `json:"batch_size"`
 	DefaultTopic        string            `json:"default_topic"`
-	ShouldUseTopicField bool              `json:"should_use_topic_filed"`
+	ShouldUseTopicField bool              `json:"should_use_topic_field"`
 	TopicField          string            `json:"topic_field"`
 	FlushTimeout        pipeline.Duration `json:"flush_timeout"`
 

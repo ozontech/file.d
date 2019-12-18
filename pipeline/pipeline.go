@@ -444,11 +444,12 @@ func (p *Pipeline) maintenance() {
 		rate := int(float64(deltaCommitted) * float64(time.Second) / float64(interval))
 		rateMb := float64(deltaSize) * float64(time.Second) / float64(interval) / 1024 / 1024
 
-		if totalCommitted == 0 {
-			totalCommitted = 1
-		}
+			tc := totalCommitted
+			if totalCommitted == 0 {
+				tc = 1
+			}
 
-		logger.Infof("%q pipeline stats interval=%ds, queue=%d/%d, out=%d|%.1fMb, rate=%d/s|%.1fMb/s, total=%d|%.1fMb, avg size=%d, max size=%d", p.Name, interval/time.Second, p.eventPool.eventsCount, p.settings.Capacity, deltaCommitted, float64(deltaSize)/1024.0/1024.0, rate, rateMb, totalCommitted, float64(totalSize)/1024.0/1024.0, totalSize/totalCommitted, p.maxSize)
+			logger.Infof("%q pipeline stats interval=%ds, queue=%d/%d, out=%d|%.1fMb, rate=%d/s|%.1fMb/s, total=%d|%.1fMb, avg size=%d, max size=%d", p.Name, interval/time.Second, p.eventPool.eventsCount, p.settings.Capacity, deltaCommitted, float64(deltaSize)/1024.0/1024.0, rate, rateMb, totalCommitted, float64(totalSize)/1024.0/1024.0, totalSize/tc, p.maxSize)
 
 		lastCommitted = totalCommitted
 		lastSize = totalSize
@@ -524,4 +525,8 @@ func (p *Pipeline) servePipeline(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write([]byte(p.eventPool.dump()))
 
 	_, _ = w.Write([]byte("</p></pre></body></html>"))
+}
+
+func NewEmptyOutputPluginParams() *OutputPluginParams {
+	return &OutputPluginParams{PluginDefaultParams: &PluginDefaultParams{PipelineName: "test", PipelineSettings: &Settings{}}, Controller: nil}
 }

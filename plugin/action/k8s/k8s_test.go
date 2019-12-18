@@ -3,6 +3,7 @@ package k8s
 import (
 	"fmt"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -76,7 +77,8 @@ func startPipeline() (*pipeline.Pipeline, *fake.Plugin, *Plugin, *devnull.Plugin
 
 func TestEnrichment(t *testing.T) {
 	p, input, _, _ := startPipeline()
-	defer p.Stop()
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
 
 	item := &metaItem{
 		namespace:     "sre",
@@ -90,12 +92,15 @@ func TestEnrichment(t *testing.T) {
 
 	var event *pipeline.Event = nil
 	filename := getLogFilename("/docker-logs", item)
-	input.SetAcceptFn(func(e *pipeline.Event) {
+	input.SetCommitFn(func(e *pipeline.Event) {
 		event = e
+		wg.Done()
 	})
 
 	input.In(0, filename, 0, 0, []byte(`{"time":"time","log":"log\n"}`))
-	input.Wait()
+
+	wg.Wait()
+	p.Stop()
 
 	assert.Equal(t, "advanced-logs-checker-1566485760-trtrq", event.Root.Dig("k8s_pod").AsString(), "wrong event field")
 	assert.Equal(t, "sre", event.Root.Dig("k8s_namespace").AsString(), "wrong event field")
@@ -105,7 +110,8 @@ func TestEnrichment(t *testing.T) {
 
 func TestWhitelist(t *testing.T) {
 	p, input, _, output := startPipeline()
-	defer p.Stop()
+	wg := &sync.WaitGroup{}
+	wg.Add(2)
 
 	item := &metaItem{
 		nodeName:      "node_1",
@@ -127,21 +133,26 @@ func TestWhitelist(t *testing.T) {
 	putMeta(getPodInfo(item, false))
 	filename2 := getLogFilename("/docker-logs", item)
 
-	events := make([]*pipeline.Event, 0, 0)
+	outEvents := make([]*pipeline.Event, 0, 0)
 	output.SetOutFn(func(e *pipeline.Event) {
-		events = append(events, e)
+		outEvents = append(outEvents, e)
+		wg.Done()
 	})
 
 	input.In(0, filename1, 0, 0, []byte(`{"time":"time","log":"log\n"}`))
 	input.In(0, filename2, 0, 0, []byte(`{"time":"time","log":"log\n"}`))
-	input.Wait()
 
-	assert.Equal(t, "white_value", events[0].Root.Dig("k8s_label_white_label").AsString(), "wrong event count")
-	assert.Nil(t, events[1].Root.Dig("k8s_label_black_label"), "wrong event count")
+	wg.Wait()
+	p.Stop()
+
+	assert.Equal(t, "white_value", outEvents[0].Root.Dig("k8s_label_white_label").AsString(), "wrong out events count")
+	assert.Nil(t, outEvents[1].Root.Dig("k8s_label_black_label"), "wrong event content")
 }
 
 func TestJoin(t *testing.T) {
 	p, input, _, output := startPipeline()
+	wg := &sync.WaitGroup{}
+	wg.Add(4)
 
 	item := &metaItem{
 		nodeName:      "node_1",
@@ -153,10 +164,11 @@ func TestJoin(t *testing.T) {
 	podInfo := getPodInfo(item, true)
 	putMeta(podInfo)
 
-	events := make([]*pipeline.Event, 0, 0)
+	outEvents := make([]*pipeline.Event, 0, 0)
 	output.SetOutFn(func(e *pipeline.Event) {
 		event := *e
-		events = append(events, &event)
+		outEvents = append(outEvents, &event)
+		wg.Done()
 	})
 
 	filename := getLogFilename("/docker-logs", item)
@@ -169,9 +181,10 @@ func TestJoin(t *testing.T) {
 	input.In(0, filename, 70, 10, []byte(`{"ts":"time","stream":"stderr","log":"joined\n"}`))
 	input.In(0, filename, 80, 10, []byte(`{"ts":"time","stream":"stdout","log":"one line log 3\n"}`))
 
+	wg.Wait()
 	p.Stop()
 
-	assert.Equal(t, 4, len(events))
+	assert.Equal(t, 4, len(outEvents))
 
 	logs := []string{"\"one line log 1\\n\"", "\"error joined\\n\"", "\"this is joined log 2\\n\"", "\"one line log 3\\n\""}
 	offsets := []int64{10, 70, 60, 80}
@@ -198,10 +211,10 @@ func TestJoin(t *testing.T) {
 
 	}
 
-	check(events[0].Root.Dig("log").AsEscapedString(), events[0].Offset)
-	check(events[1].Root.Dig("log").AsEscapedString(), events[1].Offset)
-	check(events[2].Root.Dig("log").AsEscapedString(), events[2].Offset)
-	check(events[3].Root.Dig("log").AsEscapedString(), events[3].Offset)
+	check(outEvents[0].Root.Dig("log").AsEscapedString(), outEvents[0].Offset)
+	check(outEvents[1].Root.Dig("log").AsEscapedString(), outEvents[1].Offset)
+	check(outEvents[2].Root.Dig("log").AsEscapedString(), outEvents[2].Offset)
+	check(outEvents[3].Root.Dig("log").AsEscapedString(), outEvents[3].Offset)
 }
 
 func TestCleanUp(t *testing.T) {

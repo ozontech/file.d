@@ -29,6 +29,7 @@ import (
 	_ "gitlab.ozon.ru/sre/filed/plugin/input/http"
 	_ "gitlab.ozon.ru/sre/filed/plugin/input/kafka"
 	_ "gitlab.ozon.ru/sre/filed/plugin/output/devnull"
+	_ "gitlab.ozon.ru/sre/filed/plugin/output/elasticsearch"
 	_ "gitlab.ozon.ru/sre/filed/plugin/output/gelf"
 	_ "gitlab.ozon.ru/sre/filed/plugin/output/kafka"
 	_ "gitlab.ozon.ru/sre/filed/plugin/output/stdout"

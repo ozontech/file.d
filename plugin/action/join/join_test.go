@@ -190,17 +190,18 @@ func TestJoin(t *testing.T) {
 	p, input, output := startPipeline(`/^(panic:)|(http: panic serving)/`, `/(^$)|(goroutine [0-9]+ \[)|(\([0-9]+x[0-9,a-f]+)|(\.go:[0-9]+ \+[0-9]x)|(\/.*\.go:[0-9]+)|(\(...\))|(main\.main\(\))|(created by .*\/.*\.)|(^\[signal)|(panic.+[0-9]x[0-9,a-f]+)/`)
 
 	wg := &sync.WaitGroup{}
+	wg.Add(panics * iterations)
 
-	acceptedEvents := atomic.Int32{}
-	input.SetAcceptFn(func(e *pipeline.Event) {
-		wg.Done()
-		acceptedEvents.Inc()
+	inEvents := atomic.Int32{}
+	input.SetInFn(func() {
+		//wg.Done()
+		inEvents.Inc()
 	})
 
-	dumpedEvents := atomic.Int32{}
+	outEvents := atomic.Int32{}
 	lastID := atomic.Uint64{}
 	output.SetOutFn(func(e *pipeline.Event) {
-		dumpedEvents.Inc()
+		outEvents.Inc()
 		wg.Done()
 		id := lastID.Swap(e.SeqID)
 		if id != 0 && id >= e.SeqID {
@@ -210,13 +211,12 @@ func TestJoin(t *testing.T) {
 
 	for i := 0; i < iterations; i++ {
 		for m, line := range lines {
-			wg.Add(2)
 			input.In(0, "test.log", int64(i*10000+m), int64(len(line)), []byte(line))
 		}
 	}
 
+	wg.Wait()
 	p.Stop()
 
-	assert.Equal(t, int32(panics*iterations), acceptedEvents.Load(), "wrong accepted events count")
-	assert.Equal(t, int32(panics*iterations), dumpedEvents.Load(), "wrong dumped events count")
+	assert.Equal(t, int32(panics*iterations), outEvents.Load(), "wrong out events count")
 }
