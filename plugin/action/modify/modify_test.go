@@ -1,6 +1,7 @@
 package modify
 
 import (
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -32,17 +33,21 @@ func startPipeline() (*pipeline.Pipeline, *fake.Plugin, *devnull.Plugin) {
 
 func TestModify(t *testing.T) {
 	p, input, output := startPipeline()
-	defer p.Stop()
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
 
-	dumpedEvents := make([]*pipeline.Event, 0, 0)
+	outEvents := make([]*pipeline.Event, 0, 0)
 	output.SetOutFn(func(e *pipeline.Event) {
-		dumpedEvents = append(dumpedEvents, e)
+		outEvents = append(outEvents, e)
+		wg.Done()
 	})
 
 	input.In(0, "test.log", 0, 0, []byte(`{"existing_field":"existing_value"}`))
-	input.Wait()
 
-	assert.Equal(t, 1, len(dumpedEvents), "wrong accepted events count")
-	assert.Equal(t, "new_value", dumpedEvents[0].Root.Dig("new_field").AsString(), "wrong field value")
-	assert.Equal(t, "existing_value", dumpedEvents[0].Root.Dig("field_pattern").AsString(), "wrong field value")
+	wg.Wait()
+	p.Stop()
+
+	assert.Equal(t, 1, len(outEvents), "wrong out events count")
+	assert.Equal(t, "new_value", outEvents[0].Root.Dig("new_field").AsString(), "wrong field value")
+	assert.Equal(t, "existing_value", outEvents[0].Root.Dig("field_pattern").AsString(), "wrong field value")
 }

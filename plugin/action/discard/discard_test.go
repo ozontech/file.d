@@ -2,6 +2,7 @@ package discard
 
 import (
 	"regexp"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -44,16 +45,19 @@ func TestDiscardAnd(t *testing.T) {
 	}
 
 	p, input, output := startPipeline(conds, pipeline.ModeAnd)
-	defer p.Stop()
+	wg := &sync.WaitGroup{}
+	wg.Add(10)
 
-	acceptedEvents := make([]*pipeline.Event, 0, 0)
-	input.SetAcceptFn(func(e *pipeline.Event) {
-		acceptedEvents = append(acceptedEvents, e)
+	inEvents := 0
+	input.SetInFn(func() {
+		wg.Done()
+		inEvents++
 	})
 
-	dumpedEvents := make([]*pipeline.Event, 0, 0)
+	outEvents := make([]*pipeline.Event, 0, 0)
 	output.SetOutFn(func(e *pipeline.Event) {
-		dumpedEvents = append(dumpedEvents, e)
+		wg.Done()
+		outEvents = append(outEvents, e)
 	})
 
 	input.In(0, "test.log", 0, 0, []byte(`{"field1":"not_value1"}`))
@@ -63,14 +67,12 @@ func TestDiscardAnd(t *testing.T) {
 	input.In(0, "test.log", 0, 0, []byte(`{"field1":"value1","field2":"value2"}`))
 	input.In(0, "test.log", 0, 0, []byte(`{"field3":"value3","field1":"value1","field2":"value2"}`))
 
-	// release input WG
-	input.Commit(nil)
-	input.Commit(nil)
+	wg.Wait()
+	p.Stop()
 
-	input.Wait()
-
-	assert.Equal(t, 6, len(acceptedEvents), "wrong accepted events count")
-	assert.Equal(t, 4, len(dumpedEvents), "wrong dumped events count")
+	assert.Equal(t, 6, inEvents, "wrong in events count")
+	assert.Equal(t, 4, len(outEvents), "wrong out events count")
+	assert.Equal(t, `{"field1":"not_value1"}`, outEvents[0].Root.EncodeToString(), "wrong event json")
 }
 
 func TestDiscardOr(t *testing.T) {
@@ -86,16 +88,19 @@ func TestDiscardOr(t *testing.T) {
 	}
 
 	p, input, output := startPipeline(conds, pipeline.ModeOr)
-	defer p.Stop()
+	wg := &sync.WaitGroup{}
+	wg.Add(8)
 
-	acceptedEvents := make([]*pipeline.Event, 0, 0)
-	input.SetAcceptFn(func(e *pipeline.Event) {
-		acceptedEvents = append(acceptedEvents, e)
+	inEvents := 0
+	input.SetInFn(func() {
+		wg.Done()
+		inEvents++
 	})
 
-	dumpedEvents := make([]*pipeline.Event, 0, 0)
+	outEvents := make([]*pipeline.Event, 0, 0)
 	output.SetOutFn(func(e *pipeline.Event) {
-		dumpedEvents = append(dumpedEvents, e)
+		wg.Done()
+		outEvents = append(outEvents, e)
 	})
 
 	input.In(0, "test.log", 0, 0, []byte(`{"field1":"not_value1"}`))
@@ -105,16 +110,12 @@ func TestDiscardOr(t *testing.T) {
 	input.In(0, "test.log", 0, 0, []byte(`{"field1":"value1","field2":"value2"}`))
 	input.In(0, "test.log", 0, 0, []byte(`{"field3":"value3","field1":"value1","field2":"value2"}`))
 
-	// release input WG
-	input.Commit(nil)
-	input.Commit(nil)
-	input.Commit(nil)
-	input.Commit(nil)
+	wg.Wait()
+	p.Stop()
 
-	input.Wait()
-
-	assert.Equal(t, 6, len(acceptedEvents), "wrong accepted events count")
-	assert.Equal(t, 2, len(dumpedEvents), "wrong dumped events count")
+	assert.Equal(t, 6, inEvents, "wrong in events count")
+	assert.Equal(t, 2, len(outEvents), "wrong out events count")
+	assert.Equal(t, `{"field1":"not_value1"}`, outEvents[0].Root.EncodeToString(), "wrong event json")
 }
 
 func TestDiscardRegex(t *testing.T) {
@@ -130,16 +131,19 @@ func TestDiscardRegex(t *testing.T) {
 	}
 
 	p, input, output := startPipeline(conds, pipeline.ModeOr)
-	defer p.Stop()
+	wg := &sync.WaitGroup{}
+	wg.Add(9)
 
-	acceptedEvents := make([]*pipeline.Event, 0, 0)
-	input.SetAcceptFn(func(e *pipeline.Event) {
-		acceptedEvents = append(acceptedEvents, e)
+	inEvents := 0
+	input.SetInFn(func() {
+		wg.Done()
+		inEvents++
 	})
 
-	dumpedEvents := make([]*pipeline.Event, 0, 0)
+	outEvents := make([]*pipeline.Event, 0, 0)
 	output.SetOutFn(func(e *pipeline.Event) {
-		dumpedEvents = append(dumpedEvents, e)
+		wg.Done()
+		outEvents = append(outEvents, e)
 	})
 
 	input.In(0, "test.log", 0, 0, []byte(`{"field1":"0000 one 0000"}`))
@@ -149,13 +153,9 @@ func TestDiscardRegex(t *testing.T) {
 	input.In(0, "test.log", 0, 0, []byte(`{"field2":"... four ....","field2":"value2"}`))
 	input.In(0, "test.log", 0, 0, []byte(`{"field3":"value3","field1":"value1","field2":"value2"}`))
 
-	// release input WG
-	input.Commit(nil)
-	input.Commit(nil)
-	input.Commit(nil)
+	wg.Wait()
+	p.Stop()
 
-	input.Wait()
-
-	assert.Equal(t, 6, len(acceptedEvents), "wrong accepted events count")
-	assert.Equal(t, 3, len(dumpedEvents), "wrong dumped events count")
+	assert.Equal(t, 6, inEvents, "wrong in events count")
+	assert.Equal(t, 3, len(outEvents), "wrong out events count")
 }

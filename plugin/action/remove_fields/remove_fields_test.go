@@ -1,6 +1,7 @@
 package remove_fields
 
 import (
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -32,20 +33,24 @@ func startPipeline() (*pipeline.Pipeline, *fake.Plugin, *devnull.Plugin) {
 
 func TestRemoveFields(t *testing.T) {
 	p, input, output := startPipeline()
-	defer p.Stop()
+	wg := &sync.WaitGroup{}
+	wg.Add(3)
 
-	dumpedEvents := make([]*pipeline.Event, 0, 0)
+	outEvents := make([]*pipeline.Event, 0, 0)
 	output.SetOutFn(func(e *pipeline.Event) {
-		dumpedEvents = append(dumpedEvents, e)
+		outEvents = append(outEvents, e)
+		wg.Done()
 	})
 
 	input.In(0, "test.log", 0, 0, []byte(`{"field_1":"value_1","a":"b"}`))
 	input.In(0, "test.log", 0, 0, []byte(`{"field_2":"value_2","b":"c"}`))
 	input.In(0, "test.log", 0, 0, []byte(`{"field_3":"value_3","a":"b"}`))
-	input.Wait()
 
-	assert.Equal(t, 3, len(dumpedEvents), "wrong accepted events count")
-	assert.Equal(t, `{"a":"b"}`, dumpedEvents[0].Root.EncodeToString(), "wrong event")
-	assert.Equal(t, `{"b":"c"}`, dumpedEvents[1].Root.EncodeToString(), "wrong event")
-	assert.Equal(t, `{"field_3":"value_3","a":"b"}`, dumpedEvents[2].Root.EncodeToString(), "wrong event")
+	wg.Wait()
+	p.Stop()
+
+	assert.Equal(t, 3, len(outEvents), "wrong out events count")
+	assert.Equal(t, `{"a":"b"}`, outEvents[0].Root.EncodeToString(), "wrong event")
+	assert.Equal(t, `{"b":"c"}`, outEvents[1].Root.EncodeToString(), "wrong event")
+	assert.Equal(t, `{"field_3":"value_3","a":"b"}`, outEvents[2].Root.EncodeToString(), "wrong event")
 }

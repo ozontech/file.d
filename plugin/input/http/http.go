@@ -201,7 +201,6 @@ func (p *Plugin) getSourceID() pipeline.SourceID {
 	p.mu.Lock()
 	if len(p.sourceIDs) == 0 {
 		p.sourceIDs = append(p.sourceIDs, p.sourceSeq)
-		logger.Infof("HHHHH %d", p.sourceSeq)
 		p.sourceSeq++
 	}
 

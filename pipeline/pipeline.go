@@ -52,8 +52,7 @@ type Pipeline struct {
 	eventPool  *eventPool
 	useStreams bool
 	streamer   *streamer
-	doneWg     *sync.WaitGroup
-	stopCh     chan bool
+	shouldStop bool
 	countersMu *sync.RWMutex
 	counters   map[SourceID]*atomic.Int32
 
@@ -105,8 +104,6 @@ func New(name string, settings *Settings, registry *prometheus.Registry, mux *ht
 		Name:       name,
 		settings:   settings,
 		useStreams: true,
-		stopCh:     make(chan bool, 1), //non-zero channel cause we don't wanna wait goroutine to stop
-		doneWg:     &sync.WaitGroup{},
 		counters:   make(map[SourceID]*atomic.Int32),
 		countersMu: &sync.RWMutex{},
 
@@ -144,7 +141,6 @@ func (p *Pipeline) Start() {
 	}
 
 	p.nextMetricsGen()
-	p.HandleEventFlowStart()
 
 	defaultParams := &PluginDefaultParams{
 		PipelineName:     p.Name,
@@ -153,7 +149,6 @@ func (p *Pipeline) Start() {
 	inputParams := &InputPluginParams{
 		PluginDefaultParams: defaultParams,
 		Controller:          p,
-		DoneWg:              p.doneWg,
 	}
 	outputParams := &OutputPluginParams{
 		PluginDefaultParams: defaultParams,
@@ -179,17 +174,21 @@ func (p *Pipeline) Start() {
 
 func (p *Pipeline) Stop() {
 	logger.Infof("stopping pipeline %q", p.Name)
-	p.stopCh <- true
 
+	logger.Infof("stopping processors count=%d", len(p.Processors))
 	for _, processor := range p.Processors {
 		processor.stop()
 	}
+
+	p.streamer.stop()
 
 	logger.Infof("stopping %q input", p.Name)
 	p.input.Stop()
 
 	logger.Infof("stopping %q output", p.Name)
 	p.output.Stop()
+
+	p.shouldStop = true
 }
 
 func (p *Pipeline) SetInputPlugin(descr *InputPluginData) {
@@ -429,21 +428,21 @@ func (p *Pipeline) maintenance() {
 	interval := p.settings.MaintenanceInterval
 	for {
 		time.Sleep(interval)
-		select {
-		case <-p.stopCh:
+		if p.shouldStop {
 			return
-		default:
-			p.maintenanceCounters()
-			p.maintenanceMetrics()
+		}
 
-			totalCommitted := p.totalCommitted.Load()
-			deltaCommitted := int(totalCommitted - lastCommitted)
+		p.maintenanceCounters()
+		p.maintenanceMetrics()
 
-			totalSize := p.totalSize.Load()
-			deltaSize := int(totalSize - lastSize)
+		totalCommitted := p.totalCommitted.Load()
+		deltaCommitted := int(totalCommitted - lastCommitted)
 
-			rate := int(float64(deltaCommitted) * float64(time.Second) / float64(interval))
-			rateMb := float64(deltaSize) * float64(time.Second) / float64(interval) / 1024 / 1024
+		totalSize := p.totalSize.Load()
+		deltaSize := int(totalSize - lastSize)
+
+		rate := int(float64(deltaCommitted) * float64(time.Second) / float64(interval))
+		rateMb := float64(deltaSize) * float64(time.Second) / float64(interval) / 1024 / 1024
 
 			tc := totalCommitted
 			if totalCommitted == 0 {
@@ -452,18 +451,17 @@ func (p *Pipeline) maintenance() {
 
 			logger.Infof("%q pipeline stats interval=%ds, queue=%d/%d, out=%d|%.1fMb, rate=%d/s|%.1fMb/s, total=%d|%.1fMb, avg size=%d, max size=%d", p.Name, interval/time.Second, p.eventPool.eventsCount, p.settings.Capacity, deltaCommitted, float64(deltaSize)/1024.0/1024.0, rate, rateMb, totalCommitted, float64(totalSize)/1024.0/1024.0, totalSize/tc, p.maxSize)
 
-			lastCommitted = totalCommitted
-			lastSize = totalSize
+		lastCommitted = totalCommitted
+		lastSize = totalSize
 
-			if len(p.inSample) > 0 {
-				logger.Infof("%q pipeline input event sample: %s", p.Name, p.inSample)
-				p.inSample = p.inSample[:0]
-			}
+		if len(p.inSample) > 0 {
+			logger.Infof("%q pipeline input event sample: %s", p.Name, p.inSample)
+			p.inSample = p.inSample[:0]
+		}
 
-			if len(p.outSample) > 0 {
-				logger.Infof("%q pipeline output event sample: %s", p.Name, p.outSample)
-				p.outSample = p.outSample[:0]
-			}
+		if len(p.outSample) > 0 {
+			logger.Infof("%q pipeline output event sample: %s", p.Name, p.outSample)
+			p.outSample = p.outSample[:0]
 		}
 	}
 }
@@ -505,51 +503,12 @@ func (p *Pipeline) maintenanceCounters() {
 	p.countersMu.Unlock()
 }
 
-func (p *Pipeline) HandleEventFlowStart() {
-	p.doneWg.Add(1)
-}
-
-func (p *Pipeline) HandleEventFlowFinish(instant bool) {
-	if instant {
-		p.doneWg.Done()
-		return
-	}
-
-	// fs events may have delay, so wait for them
-	time.Sleep(time.Millisecond * 100)
-	p.doneWg.Done()
-}
-
-func (p *Pipeline) WaitUntilDone(instant bool) {
-	if instant {
-		p.doneWg.Wait()
-		return
-	}
-
-	for {
-		p.doneWg.Wait()
-
-		processed := p.totalCommitted.Load()
-		//fs events may have delay, so wait for them
-		time.Sleep(time.Millisecond * 100)
-
-		processed = p.totalCommitted.Load() - processed
-		if processed == 0 {
-			break
-		}
-	}
-}
-
 func (p *Pipeline) GetEventsTotal() int {
 	return int(p.totalCommitted.Load())
 }
 
 func (p *Pipeline) EnableEventLog() {
 	p.eventLogEnabled = true
-}
-
-func (p *Pipeline) GetEventLogLength() int {
-	return len(p.eventLog)
 }
 
 func (p *Pipeline) GetEventLogItem(index int) string {

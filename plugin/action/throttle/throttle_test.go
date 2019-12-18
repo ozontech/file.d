@@ -3,6 +3,7 @@ package throttle
 import (
 	"fmt"
 	"math/rand"
+	"sync"
 	"testing"
 	"time"
 
@@ -53,12 +54,18 @@ func TestThrottle(t *testing.T) {
 	iterations := 5
 	workTime := interval * time.Duration(iterations)
 
-	p, input, output := startPipeline(interval, buckets, limitA, limitB, defaultLimit)
-	defer p.Stop()
+	totalBuckets := iterations + 1
+	defaultLimitDelta := totalBuckets * defaultLimit
+	eventsTotal := totalBuckets*(limitA+limitB) + defaultLimitDelta
 
-	events := make([]*pipeline.Event, 0, 0)
+	p, input, output := startPipeline(interval, buckets, limitA, limitB, defaultLimit)
+	wg := &sync.WaitGroup{}
+	wg.Add(eventsTotal)
+
+	outEvents := make([]*pipeline.Event, 0, 0)
 	output.SetOutFn(func(e *pipeline.Event) {
-		events = append(events, e)
+		outEvents = append(outEvents, e)
+		wg.Done()
 	})
 
 	formats := []string{
@@ -84,10 +91,8 @@ func TestThrottle(t *testing.T) {
 		}
 	}
 
-	p.HandleEventFlowFinish(false)
-	p.WaitUntilDone(false)
+	p.Stop()
+	wg.Wait()
 
-	totalBuckets := iterations + 1
-	defaultLimitDelta := totalBuckets * defaultLimit
-	assert.Equal(t, totalBuckets*(limitA+limitB)+defaultLimitDelta, len(events), "wrong accepted events count")
+	assert.Equal(t, eventsTotal, len(outEvents), "wrong in events count")
 }

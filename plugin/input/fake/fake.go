@@ -1,8 +1,6 @@
 package fake
 
 import (
-	"sync"
-
 	"gitlab.ozon.ru/sre/filed/filed"
 	"gitlab.ozon.ru/sre/filed/pipeline"
 )
@@ -12,8 +10,8 @@ type Config struct {
 
 type Plugin struct {
 	controller pipeline.InputPluginController
-	acceptFn   func(event *pipeline.Event)
-	done       sync.WaitGroup
+	commitFn   func(event *pipeline.Event)
+	inFn       func()
 }
 
 func init() {
@@ -35,22 +33,22 @@ func (p *Plugin) Stop() {
 }
 
 func (p *Plugin) Commit(event *pipeline.Event) {
-	if p.acceptFn != nil {
-		p.acceptFn(event)
+	if p.commitFn != nil {
+		p.commitFn(event)
 	}
-
-	p.done.Done()
 }
 
-func (p *Plugin) Wait() {
-	p.done.Wait()
+func (p *Plugin) SetCommitFn(fn func(event *pipeline.Event)) {
+	p.commitFn = fn
 }
 
-func (p *Plugin) SetAcceptFn(fn func(event *pipeline.Event)) {
-	p.acceptFn = fn
+func (p *Plugin) SetInFn(fn func()) {
+	p.inFn = fn
 }
 
 func (p *Plugin) In(sourceID pipeline.SourceID, sourceName string, offset int64, size int64, bytes []byte) {
-	p.done.Add(1)
+	if p.inFn != nil {
+		p.inFn()
+	}
 	p.controller.In(sourceID, sourceName, offset, bytes)
 }

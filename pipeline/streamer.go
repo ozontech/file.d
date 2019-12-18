@@ -12,6 +12,8 @@ type streamer struct {
 	streams map[SourceID]map[StreamName]*stream
 	mu      *sync.RWMutex
 
+	shouldStop bool
+
 	charged     []*stream
 	chargedMu   *sync.Mutex
 	chargedCond *sync.Cond
@@ -36,6 +38,18 @@ func newStreamer() *streamer {
 
 func (s *streamer) start() {
 	go s.heartbeat()
+}
+
+func (s *streamer) stop() {
+	s.shouldStop = true
+
+	s.mu.Lock()
+	for _, source := range s.streams {
+		for _, stream := range source {
+			stream.put(unlockEvent(stream))
+		}
+	}
+	s.mu.Unlock()
 }
 
 func (s *streamer) putEvent(sourceID SourceID, streamName StreamName, event *Event) {
@@ -79,10 +93,15 @@ func (s *streamer) makeCharged(stream *stream) {
 	s.chargedMu.Unlock()
 }
 
+// nil means that streamer is stopping
 func (s *streamer) joinStream() *stream {
 	s.chargedMu.Lock()
 	for len(s.charged) == 0 {
 		s.chargedCond.Wait()
+		if s.shouldStop {
+			s.chargedMu.Unlock()
+			return nil
+		}
 	}
 	l := len(s.charged)
 	stream := s.charged[l-1]
@@ -123,6 +142,10 @@ func (s *streamer) heartbeat() {
 	streams := make([]*stream, 0, 0)
 	for {
 		time.Sleep(time.Millisecond * 200)
+		if s.shouldStop {
+			return
+		}
+
 		streams = streams[:0]
 
 		s.blockedMu.Lock()
@@ -178,4 +201,8 @@ func (s *streamer) dump() string {
 	s.mu.Unlock()
 
 	return out
+}
+
+func (s *streamer) unblockProcessor() {
+	s.chargedCond.Signal()
 }

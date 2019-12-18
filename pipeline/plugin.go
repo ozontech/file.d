@@ -2,7 +2,6 @@ package pipeline
 
 import (
 	"regexp"
-	"sync"
 )
 
 const (
@@ -48,7 +47,6 @@ type OutputPluginParams struct {
 
 type InputPluginParams struct {
 	*PluginDefaultParams
-	DoneWg     *sync.WaitGroup
 	Controller InputPluginController
 }
 

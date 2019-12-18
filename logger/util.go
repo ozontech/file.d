@@ -4,19 +4,16 @@ import (
 	"fmt"
 	"math"
 	"strings"
-	"unicode"
 )
 
 type condFn func() (result string)
 
 func Header(name string) string {
+	upper := strings.ToUpper(name)
+
 	base := []byte("=================================")
-
 	offset := len(base)/2 - len(name)/2
-
-	for i, c := range name {
-		base[offset+i] = byte(unicode.ToUpper(c))
-	}
+	copy(base[offset:], upper)
 
 	return string(base) + "\n"
 }

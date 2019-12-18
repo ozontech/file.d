@@ -1,22 +1,24 @@
 package file
 
 import (
+	"time"
+
 	"gitlab.ozon.ru/sre/filed/filed"
 	"gitlab.ozon.ru/sre/filed/logger"
 	"gitlab.ozon.ru/sre/filed/pipeline"
 )
 
 const (
-	defaultWorkersCount   = 16
-	defaultReadBufferSize = 128 * 1024
-	defaultMaxFiles       = 16384
+	defaultWorkersCount    = 16
+	defaultReadBufferSize  = 128 * 1024
+	defaultMaxFiles        = 16384
+	defaultPersistInterval = time.Second
 
 	defaultPersistenceMode = "timer"
 	defaultOffsetsOp       = "continue"
 
 	persistenceModeSync  persistenceMode = 0
 	persistenceModeAsync persistenceMode = 1
-	persistenceModeTimer persistenceMode = 2
 
 	offsetsOpContinue offsetsOp = 0
 	offsetsOpReset    offsetsOp = 1
@@ -29,14 +31,15 @@ type (
 )
 
 type Config struct {
-	WatchingDir     string `json:"watching_dir"`
-	FilenamePattern string `json:"filename_pattern"`
-	OffsetsFile     string `json:"offsets_file"`
-	PersistenceMode string `json:"persistence_mode"`
-	ReadBufferSize  int    `json:"read_buffer_size"`
-	MaxFiles        int    `json:"max_files"`
-	OffsetsOp       string `json:"offsets_op"` // continue|tail|reset
-	WorkersCount    int    `json:"workers_count"`
+	WatchingDir     string        `json:"watching_dir"`
+	FilenamePattern string        `json:"filename_pattern"`
+	OffsetsFile     string        `json:"offsets_file"`
+	PersistenceMode string        `json:"persistence_mode"`
+	PersistInterval time.Duration `json:"persist_interval"`
+	ReadBufferSize  int           `json:"read_buffer_size"`
+	MaxFiles        int           `json:"max_files"`
+	OffsetsOp       string        `json:"offsets_op"` // continue|tail|reset
+	WorkersCount    int           `json:"workers_count"`
 
 	offsetsTmpFilename string
 	persistenceMode    persistenceMode
@@ -49,8 +52,6 @@ type Plugin struct {
 
 	workers     []*worker
 	jobProvider *jobProvider
-
-	isFinalSaveDisabled bool
 }
 
 func init() {
@@ -93,16 +94,17 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	}
 
 	switch p.config.PersistenceMode {
-	case "timer":
-		p.config.persistenceMode = persistenceModeTimer
 	case "async":
 		p.config.persistenceMode = persistenceModeAsync
 	case "sync":
 		p.config.persistenceMode = persistenceModeSync
 	default:
-		logger.Fatalf("wrong persistence mode %q provided, should be one of timer|async|sync", p.config.PersistenceMode)
+		logger.Fatalf("wrong persistence mode %q provided, should be one of async|sync", p.config.PersistenceMode)
 	}
 
+	if p.config.PersistInterval == 0 {
+		p.config.PersistInterval = defaultPersistInterval
+	}
 	if p.config.WatchingDir == "" {
 		logger.Fatalf("no watching_dir provided in config for the file plugin")
 	}
@@ -129,7 +131,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 
 	p.config.offsetsTmpFilename = p.config.OffsetsFile + ".atomic"
 
-	p.jobProvider = NewJobProvider(p.config, p.params.DoneWg, p.params.Controller)
+	p.jobProvider = NewJobProvider(p.config, p.params.Controller)
 	p.startWorkers()
 	p.jobProvider.start()
 }
@@ -156,13 +158,4 @@ func (p *Plugin) Stop() {
 
 	logger.Infof("stopping job provider")
 	p.jobProvider.stop()
-
-	if !p.isFinalSaveDisabled {
-		logger.Infof("saving last known offsets")
-		p.jobProvider.saveOffsets()
-	}
-}
-
-func (p *Plugin) disableFinalSave() {
-	p.isFinalSaveDisabled = true
 }
