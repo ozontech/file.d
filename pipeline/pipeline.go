@@ -20,6 +20,8 @@ const (
 	DefaultAvgLogSize          = 32 * 1024
 	DefaultNodePoolSize        = 1024
 	DefaultMaintenanceInterval = time.Second * 5
+	DefaultFlushTimeout        = time.Millisecond * 200
+	DefaultConnectionTimeout   = time.Second * 5
 	defaultFieldValue          = "not_set"
 	defaultStreamName          = StreamName("not_set")
 
