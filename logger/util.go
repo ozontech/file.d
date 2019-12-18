@@ -3,7 +3,6 @@ package logger
 import (
 	"fmt"
 	"math"
-	"strconv"
 	"strings"
 	"unicode"
 )
@@ -29,15 +28,15 @@ func Cond(is bool, positive string, negative condFn) string {
 		return negative()
 	}
 }
+
 func Numerate(content string) string {
 	lines := strings.Split(strings.TrimSpace(content), "\n")
 
 	x := len(lines)
 	digits := int(math.Log10(float64(x)))
 
-	format := "%" + strconv.Itoa(digits) + "d: %s"
 	for i := range lines {
-		lines[i] = fmt.Sprintf(format, i+1, lines[i])
+		lines[i] = fmt.Sprintf("%*d: %s", digits, i+1, lines[i])
 	}
 
 	return strings.Join(lines, "\n")
