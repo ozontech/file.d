@@ -13,7 +13,8 @@ func TestParseOffsets(t *testing.T) {
 - file: 2 /another/informational/name
   stderr: 300
 `
-	offsets := parseOffsets(data)
+	offsetDB := newOffsetDB("", "")
+	offsets := offsetDB.parse(data)
 
 	inode, has := offsets[1]
 	assert.True(t, has, "Stream not found")

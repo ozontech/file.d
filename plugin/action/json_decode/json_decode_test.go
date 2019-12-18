@@ -45,11 +45,10 @@ func TestDecode(t *testing.T) {
 	})
 
 	input.In(0, "test.log", 0, 0, []byte(`{"log":"{\"field2\":\"value2\",\"field3\":\"value3\"}"}`))
-	p.HandleEventFlowFinish(false)
-	p.WaitUntilDone(false)
+
+	p.Stop()
 
 	assert.Equal(t, 1, len(acceptedEvents), "wrong accepted events count")
 	assert.Equal(t, 1, len(dumpedEvents), "wrong dumped events count")
-
 	assert.Equal(t, `{"prefix.field2":"value2","prefix.field3":"value3"}`, dumpedEvents[0].Root.EncodeToString(), "wrong dumped events count")
 }

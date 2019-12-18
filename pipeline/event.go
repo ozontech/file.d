@@ -43,6 +43,7 @@ const (
 	eventKindRegular int32 = 0
 	eventKindIgnore  int32 = 1
 	eventKindTimeout int32 = 2
+	eventKindUnlock  int32 = 3
 )
 
 type eventStage int
@@ -67,6 +68,22 @@ func newTimoutEvent(stream *stream) *Event {
 	}
 
 	event.SetTimeoutKind()
+
+	return event
+}
+
+func unlockEvent(stream *stream) *Event {
+	event := &Event{
+		index:      -1,
+		Root:       nil,
+		stream:     stream,
+		SeqID:      stream.commitSeq,
+		SourceID:   stream.sourceID,
+		SourceName: "unlock",
+		streamName: stream.name,
+	}
+
+	event.SetUnlockKind()
 
 	return event
 }
@@ -104,8 +121,16 @@ func (e *Event) SetIgnoreKind() {
 	e.kind.Swap(eventKindIgnore)
 }
 
+func (e *Event) IsUnlockKind() bool {
+	return e.kind.Load() == eventKindUnlock
+}
+
+func (e *Event) SetUnlockKind() {
+	e.kind.Swap(eventKindUnlock)
+}
+
 func (e *Event) IsIgnoreKind() bool {
-	return e.kind.Load() == eventKindIgnore
+	return e.kind.Load() == eventKindUnlock
 }
 
 func (e *Event) SetTimeoutKind() {
@@ -201,7 +226,7 @@ func (p *eventPool) visit(fn func(*Event)) {
 	}
 }
 
-func (p *eventPool) get() (*Event) {
+func (p *eventPool) get() *Event {
 	p.mu.Lock()
 
 	for p.eventsCount >= p.capacity {

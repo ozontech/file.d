@@ -3,6 +3,7 @@ package join
 import (
 	"fmt"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -187,10 +188,12 @@ func TestJoin(t *testing.T) {
 	iterations := 100
 
 	p, input, output := startPipeline(`/^(panic:)|(http: panic serving)/`, `/(^$)|(goroutine [0-9]+ \[)|(\([0-9]+x[0-9,a-f]+)|(\.go:[0-9]+ \+[0-9]x)|(\/.*\.go:[0-9]+)|(\(...\))|(main\.main\(\))|(created by .*\/.*\.)|(^\[signal)|(panic.+[0-9]x[0-9,a-f]+)/`)
-	defer p.Stop()
+
+	wg := &sync.WaitGroup{}
 
 	acceptedEvents := atomic.Int32{}
 	input.SetAcceptFn(func(e *pipeline.Event) {
+		wg.Done()
 		acceptedEvents.Inc()
 	})
 
@@ -198,6 +201,7 @@ func TestJoin(t *testing.T) {
 	lastID := atomic.Uint64{}
 	output.SetOutFn(func(e *pipeline.Event) {
 		dumpedEvents.Inc()
+		wg.Done()
 		id := lastID.Swap(e.SeqID)
 		if id != 0 && id >= e.SeqID {
 			panic("wrong id")
@@ -206,12 +210,12 @@ func TestJoin(t *testing.T) {
 
 	for i := 0; i < iterations; i++ {
 		for m, line := range lines {
+			wg.Add(2)
 			input.In(0, "test.log", int64(i*10000+m), int64(len(line)), []byte(line))
 		}
 	}
 
-	p.HandleEventFlowFinish(false)
-	p.WaitUntilDone(false)
+	p.Stop()
 
 	assert.Equal(t, int32(panics*iterations), acceptedEvents.Load(), "wrong accepted events count")
 	assert.Equal(t, int32(panics*iterations), dumpedEvents.Load(), "wrong dumped events count")

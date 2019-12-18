@@ -10,24 +10,26 @@ import (
 )
 
 type watcher struct {
-	jobProvider     *jobProvider
-	path            string
-	filenamePattern string
-	fsWatcher       *fsnotify.Watcher
+	path      string // dir in which watch for files
+	pattern   string // files which match this pattern will be watched
+	notifyFn  notify // function to receive notifications
+	fsWatcher *fsnotify.Watcher
 }
 
-func NewWatcher(path string, filenamePattern string, jobProvider *jobProvider) *watcher {
+type notify func(filename string, stat os.FileInfo)
+
+func NewWatcher(path string, pattern string, notifyFn notify) *watcher {
 	return &watcher{
-		path:            path,
-		filenamePattern: filenamePattern,
-		jobProvider:     jobProvider,
+		path:     path,
+		pattern:  pattern,
+		notifyFn: notifyFn,
 	}
 }
 
 func (w *watcher) start() {
-	logger.Infof("starting watcher path=%s, pattern=%s", w.path, w.filenamePattern)
-	if _, err := filepath.Match(w.filenamePattern, "_"); err != nil {
-		logger.Fatalf("wrong file name pattern %q: %s", w.filenamePattern, err.Error())
+	logger.Infof("starting watcher path=%s, pattern=%s", w.path, w.pattern)
+	if _, err := filepath.Match(w.pattern, "_"); err != nil {
+		logger.Fatalf("wrong file name pattern %q: %s", w.pattern, err.Error())
 	}
 
 	watcher, err := fsnotify.NewWatcher()
@@ -87,7 +89,7 @@ func (w *watcher) notify(event *fsnotify.Event) {
 		return
 	}
 
-	match, _ := filepath.Match(w.filenamePattern, filepath.Base(filename))
+	match, _ := filepath.Match(w.pattern, filepath.Base(filename))
 	if ! match {
 		return
 	}
@@ -97,8 +99,7 @@ func (w *watcher) notify(event *fsnotify.Event) {
 		return
 	}
 
-
-	w.jobProvider.actualize(filename, stat)
+	w.notifyFn(filename, stat)
 
 	if stat.IsDir() {
 		w.tryAddPath(filename)

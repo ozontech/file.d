@@ -28,7 +28,14 @@ var (
 
 const offsetsFile = "filed_offsets.yaml"
 
-func setup() {
+func TestMain(m *testing.M) {
+	setupDirs()
+	exitVal := m.Run()
+	cleanUp()
+	os.Exit(exitVal)
+}
+
+func setupDirs() {
 	f, err := ioutil.TempDir("", "input_file")
 	if err != nil {
 		panic(err.Error())
@@ -42,25 +49,40 @@ func setup() {
 	offsetsDir = f
 }
 
-func shutdown() {
+func cleanUp() {
 	err := os.RemoveAll(filesDir)
 	if err != nil {
 		panic(err.Error())
 	}
 }
 
-func startPipeline(persistenceMode string, enableEventLog bool, config *Config) (*pipeline.Pipeline, *Plugin) {
+func stdConfig() *Config {
+	return &Config{WatchingDir: filesDir, OffsetsFile: filepath.Join(offsetsDir, offsetsFile), PersistenceMode: "async"}
+}
+
+func startStdCleanPipeline() (*pipeline.Pipeline, *Plugin, *devnull.Plugin) {
+	cleanUp()
+	setupDirs()
+
+	return startStdPipeline()
+}
+
+func startStdPipeline() (*pipeline.Pipeline, *Plugin, *devnull.Plugin) {
+	return startPipeline(stdConfig(), true)
+}
+
+func startBenchPipeline() (*pipeline.Pipeline, *Plugin, *devnull.Plugin) {
+	return startPipeline(stdConfig(), false)
+}
+
+func startPipeline(config *Config, enableEventLog bool) (*pipeline.Pipeline, *Plugin, *devnull.Plugin) {
 	p := pipeline.NewTestPipeLine(true)
 	if enableEventLog {
 		p.EnableEventLog()
 	}
 
-	if config == nil {
-		config = &Config{WatchingDir: filesDir, OffsetsFile: filepath.Join(offsetsDir, offsetsFile), PersistenceMode: persistenceMode}
-	}
 	anyPlugin, _ := Factory()
 	inputPlugin := anyPlugin.(*Plugin)
-	inputPlugin.disableFinalSave()
 	p.SetInputPlugin(&pipeline.InputPluginData{Plugin: inputPlugin, PluginDesc: pipeline.PluginDesc{Config: config}})
 
 	anyPlugin, _ = devnull.Factory()
@@ -69,11 +91,18 @@ func startPipeline(persistenceMode string, enableEventLog bool, config *Config) 
 
 	p.Start()
 
-	return p, inputPlugin
+	return p, inputPlugin, outputPlugin
 }
 
 func renameFile(oldFile string, newFile string) {
 	err := os.Rename(oldFile, newFile)
+	if err != nil {
+		panic(err.Error())
+	}
+}
+
+func closeFile(f *os.File) {
+	err := f.Close()
 	if err != nil {
 		panic(err.Error())
 	}
@@ -84,12 +113,7 @@ func truncateFile(file string) {
 	if err != nil {
 		panic(err.Error())
 	}
-	defer func() {
-		err := f.Close()
-		if err != nil {
-			panic(err.Error())
-		}
-	}()
+	defer closeFile(f)
 
 	err = f.Truncate(0)
 	if err != nil {
@@ -97,13 +121,33 @@ func truncateFile(file string) {
 	}
 }
 
-func rotateFile(file string) string {
-	newFile := file + ".new"
-	renameFile(file, newFile)
-	createFile(file)
+//func waitForFile(file string) {
+//	size := int64(0)
+//	t := time.Now()
+//	for {
+//		stat, err := os.Stat(file)
+//		if err != nil {
+//			panic(err.Error())
+//		}
+//
+//		if stat.Size() != size {
+//			t = time.Now()
+//			size = stat.Size()
+//		}
+//
+//		if time.Now().Sub(t) > time.Millisecond*100 {
+//			return
+//		}
+//	}
+//}
 
-	return newFile
-}
+//func rotateFile(file string) string {
+//	newFile := file + ".new"
+//	renameFile(file, newFile)
+//	createFile(file)
+//
+//	return newFile
+//}
 
 func createFile(file string) {
 	fd, err := os.Create(file)
@@ -147,12 +191,7 @@ func addData(file string, data []byte, isLine bool, sync bool) {
 	if err != nil {
 		panic(err.Error())
 	}
-	defer func() {
-		err := f.Close()
-		if err != nil {
-			panic(err.Error())
-		}
-	}()
+	defer closeFile(f)
 
 	if _, err = f.Write(data); err != nil {
 		panic(err.Error())
@@ -170,18 +209,14 @@ func addData(file string, data []byte, isLine bool, sync bool) {
 		}
 	}
 }
+
 func addLines(file string, from int, to int) {
 	f, err := os.OpenFile(file, os.O_APPEND|os.O_WRONLY, 0660)
 	if err != nil {
 		panic(err.Error())
 	}
 
-	defer func() {
-		err := f.Close()
-		if err != nil {
-			panic(err.Error())
-		}
-	}()
+	defer closeFile(f)
 
 	for i := from; i < to; i++ {
 
@@ -257,8 +292,9 @@ func getInodeByFile(file string) uint64 {
 }
 
 func assertOffsetsEqual(t *testing.T, offsetsContentA string, offsetsContentB string) {
-	offsetsA := parseOffsets(offsetsContentA)
-	offsetsB := parseOffsets(offsetsContentB)
+	offsetDB := newOffsetDB("", "")
+	offsetsA := offsetDB.parse(offsetsContentA)
+	offsetsB := offsetDB.parse(offsetsContentB)
 	for sourceID, inode := range offsetsA {
 		_, has := offsetsB[sourceID]
 		assert.True(t, has, "offsets aren't equal, source id=%d", sourceID)
@@ -271,11 +307,7 @@ func assertOffsetsEqual(t *testing.T, offsetsContentA string, offsetsContentB st
 }
 
 func TestWatch(t *testing.T) {
-	setup()
-	defer shutdown()
-
-	c, _ := startPipeline("async", true, nil)
-	defer c.Stop()
+	c, _, _ := startStdCleanPipeline()
 
 	file := createTempFile()
 	content := []byte(`{"key":"value"}` + "\n")
@@ -318,157 +350,131 @@ func TestWatch(t *testing.T) {
 	}
 
 	addData(file, content, true, true)
-	c.HandleEventFlowFinish(false)
 
-	assert.Equal(t, 5, c.GetEventLogLength(), "wrong log count")
-	assert.Equal(t, 5, c.GetEventsTotal(), "wrong log count")
+	c.Stop()
+
+	assert.Equal(t, 5, c.GetEventsTotal(), "wrong event count")
 }
 
 func TestReadLineSimple(t *testing.T) {
-	setup()
-	defer shutdown()
-
-	c, _ := startPipeline("async", true, nil)
-	defer c.Stop()
+	pipe, _, output := startStdCleanPipeline()
 
 	file := createTempFile()
 	addData(file, []byte(`{"Data":"Line1"}`), true, true)
 	addData(file, []byte(`{"Data":"Line2"}`), true, true)
 	addData(file, []byte(`{"Data":"Line3"}`), true, true)
-	c.HandleEventFlowFinish(false)
 
-	c.WaitUntilDone(false)
+	output.WaitFor(3)
+	pipe.Stop()
 
-	assert.Equal(t, 3, c.GetEventLogLength(), "wrong log count")
-	assert.Equal(t, 3, c.GetEventsTotal(), "wrong log count")
-	assert.Equal(t, `{"Data":"Line1"}`, c.GetEventLogItem(0), "Wrong log")
-	assert.Equal(t, `{"Data":"Line2"}`, c.GetEventLogItem(1), "Wrong log")
-	assert.Equal(t, `{"Data":"Line3"}`, c.GetEventLogItem(2), "Wrong log")
-
+	assert.Equal(t, 3, pipe.GetEventsTotal(), "wrong event count")
+	assert.Equal(t, `{"Data":"Line1"}`, pipe.GetEventLogItem(0), "wrong event content")
+	assert.Equal(t, `{"Data":"Line2"}`, pipe.GetEventLogItem(1), "wrong event content")
+	assert.Equal(t, `{"Data":"Line3"}`, pipe.GetEventLogItem(2), "wrong event content")
 }
 
-func TestOffsetsSimple(t *testing.T) {
-	setup()
-	defer shutdown()
-
-	c, p := startPipeline("async", true, nil)
-	defer c.Stop()
+func TestOffsetsSaveSimple(t *testing.T) {
+	pipe, input, output := startStdCleanPipeline()
 
 	file := createTempFile()
 	addData(file, []byte(`{"Data":"Line1"}`), true, false)
 	addData(file, []byte(`{"Data":"Line2"}`), true, false)
 	addData(file, []byte(`{"Data":"Line3"}`), true, false)
-	c.HandleEventFlowFinish(false)
 
-	c.WaitUntilDone(false)
+	output.WaitFor(3)
+	pipe.Stop()
 
-	p.jobProvider.saveOffsets()
-	assert.Equal(t, genOffsetsContent(file, 51), getContent(p.config.OffsetsFile), "wrong offsets")
+	assert.Equal(t, genOffsetsContent(file, 51), getContent(input.config.OffsetsFile), "wrong offsets")
 }
 
-func TestOffsetsStart(t *testing.T) {
-	setup()
-	defer shutdown()
-
+func TestOffsetsSaveAfterStartInTheMiddleOfFile(t *testing.T) {
 	file := createTempFile()
 	addData(file, []byte(`{"Data":`), false, false)
 
 	config := &Config{WatchingDir: filesDir, OffsetsFile: filepath.Join(offsetsDir, offsetsFile), PersistenceMode: "sync", OffsetsOp: "tail"}
-	c, p := startPipeline("async", true, config)
-	defer c.Stop()
+	pipe, input, output := startPipeline(config, true)
 
 	addData(file, []byte(`"Line1"}`), true, false)
 	addData(file, []byte(`{"Data":"Line2"}`), true, false)
 
-	c.HandleEventFlowFinish(false)
-	c.WaitUntilDone(false)
+	output.WaitFor(1)
+	pipe.Stop()
 
-	p.jobProvider.saveOffsets()
-	assert.Equal(t, genOffsetsContent(file, 34), getContent(p.config.OffsetsFile), "wrong offsets")
+	assert.Equal(t, genOffsetsContent(file, 34), getContent(input.config.OffsetsFile), "wrong offsets")
 }
 
-func TestLoadOffsets(t *testing.T) {
-	setup()
-	defer shutdown()
+func TestOffsetsLoad(t *testing.T) {
+	cleanUp()
+	setupDirs()
 
-	data := `{"some key":"some data"}`
+	data1 := `{"some key1":"some data"}`
+	data2 := `{"some key2":"some data"}`
 	dataFile := createTempFile()
-	addData(dataFile, []byte(data), false, false)
+	addData(dataFile, []byte(data1), true, false)
+	addData(dataFile, []byte(data2), true, false)
 
 	offsetFile := createOffsetFile()
-	offsets := genOffsetsContent(dataFile, len(data))
+	offsets := genOffsetsContent(dataFile, len(data1))
 	addData(offsetFile, []byte(offsets), false, false)
 
-	c, p := startPipeline("async", true, nil)
-	defer c.Stop()
+	pipe, input, output := startStdPipeline()
 
-	p.config.OffsetsFile += ".new"
-	p.jobProvider.saveOffsets()
-	assert.Equal(t, offsets, getContent(p.config.OffsetsFile), "wrong offsets")
+	output.WaitFor(1)
+
+	// force save into another file
+	input.jobProvider.offsetDB.offsetsFile += ".new"
+	pipe.Stop()
+
+	assert.Equal(t, 1, pipe.GetEventsTotal(), "wrong event count")
+	assert.Equal(t, data2, pipe.GetEventLogItem(0), "wrong event content")
 }
 
 func TestContinueReading(t *testing.T) {
-	setup()
-	defer shutdown()
-
-	c, p := startPipeline("async", true, nil)
+	pipe, input, output := startStdCleanPipeline()
 
 	file := createTempFile()
 	addData(file, []byte(`{"Data":"Line1"}`), true, false)
 	addData(file, []byte(`{"Data":"Line2"}`), true, false)
 	addData(file, []byte(`{"Data":"Line3"}`), true, false)
-	c.HandleEventFlowFinish(false)
 
-	c.WaitUntilDone(false)
-	c.Stop()
-	p.jobProvider.saveOffsets()
-	processed := c.GetEventsTotal()
+	pipe.Stop()
+
+	processed := pipe.GetEventsTotal()
 
 	addData(file, []byte(`{"Data":"Line4"}`), true, false)
 	addData(file, []byte(`{"Data":"Line5"}`), true, false)
 	addData(file, []byte(`{"Data":"Line6"}`), true, false)
 	addData(file, []byte(`{"Data":"Line7"}`), true, false)
 
-	c, p = startPipeline("async", true, nil)
+	pipe, input, output = startStdPipeline()
 
-	c.HandleEventFlowFinish(false)
-	c.WaitUntilDone(false)
-	c.Stop()
+	output.WaitFor(7 - processed)
+	pipe.Stop()
 
-	assert.Equal(t, 7, processed+c.GetEventsTotal(), "wrong log count")
-	assert.Equal(t, `{"Data":"Line7"}`, c.GetEventLogItem(c.GetEventLogLength()-1), "Wrong log")
-	assert.Equal(t, genOffsetsContent(file, 119), getContent(p.config.OffsetsFile), "wrong offsets")
+	assert.Equal(t, 7, processed+pipe.GetEventsTotal(), "wrong event count")
+	assert.Equal(t, `{"Data":"Line7"}`, pipe.GetEventLogItem(pipe.GetEventsTotal()-1), "wrong event")
+	assert.Equal(t, genOffsetsContent(file, 119), getContent(input.config.OffsetsFile), "wrong offsets")
 }
 
 func TestReadSeq(t *testing.T) {
-	setup()
-	defer shutdown()
-
-	c, p := startPipeline("async", true, nil)
-	defer c.Stop()
+	c, p, output := startStdCleanPipeline()
 
 	file := createTempFile()
 
 	addData(file, []byte(`{"Data":"Line1`), false, true)
 	addData(file, []byte(`Line2`), false, true)
 	addData(file, []byte(`Line3"}`), true, true)
-	c.HandleEventFlowFinish(false)
 
-	c.WaitUntilDone(false)
+	output.WaitFor(1)
+	c.Stop()
 
-	assert.Equal(t, 1, c.GetEventLogLength(), "wrong log count")
-	assert.Equal(t, 1, c.GetEventsTotal(), "wrong log count")
-	assert.Equal(t, `{"Data":"Line1Line2Line3"}`, c.GetEventLogItem(0), "Wrong log")
-	p.jobProvider.saveOffsets()
+	assert.Equal(t, 1, c.GetEventsTotal(), "wrong event count")
+	assert.Equal(t, `{"Data":"Line1Line2Line3"}`, c.GetEventLogItem(0), "wrong event content")
 	assert.Equal(t, genOffsetsContent(file, 27), getContent(p.config.OffsetsFile), "wrong offsets")
 }
 
 func TestReadLong(t *testing.T) {
-	setup()
-	defer shutdown()
-
-	c, p := startPipeline("async", true, nil)
-	defer c.Stop()
+	pipe, input, output := startStdCleanPipeline()
 
 	file := createTempFile()
 
@@ -482,98 +488,74 @@ func TestReadLong(t *testing.T) {
 	addData(file, []byte(data), true, false)
 	addData(file, []byte(data), true, false)
 	addData(file, []byte(data), true, false)
-	c.HandleEventFlowFinish(false)
 
-	c.WaitUntilDone(false)
+	output.WaitFor(6)
+	pipe.Stop()
 
-	assert.Equal(t, 6, c.GetEventLogLength(), "wrong log count")
-	assert.Equal(t, 6, c.GetEventsTotal(), "wrong log count")
-	p.jobProvider.saveOffsets()
-	assert.Equal(t, genOffsetsContent(file, (defaultReadBufferSize+overhead+27)*3), getContent(p.config.OffsetsFile), "wrong offsets")
+	assert.Equal(t, 6, pipe.GetEventsTotal(), "wrong event count")
+	assert.Equal(t, genOffsetsContent(file, (defaultReadBufferSize+overhead+27)*3), getContent(input.config.OffsetsFile), "wrong offsets")
 }
 
 func TestReadComplexSeqMulti(t *testing.T) {
-	setup()
-	defer shutdown()
-
-	c, p := startPipeline("async", true, nil)
-	defer c.Stop()
+	c, p, _ := startStdCleanPipeline()
 
 	file := createTempFile()
 
 	lines := 1000
 	addLines(file, lines, lines+lines)
-	c.HandleEventFlowFinish(false)
 
-	c.WaitUntilDone(false)
-	assert.Equal(t, lines, c.GetEventLogLength(), "wrong log count")
-	assert.Equal(t, lines, c.GetEventsTotal(), "Wrong processed events count")
+	c.Stop()
 
-	p.jobProvider.saveOffsets()
+	assert.Equal(t, lines, c.GetEventsTotal(), "wrong events count")
 	assert.Equal(t, genOffsetsContent(file, lines*8), getContent(p.config.OffsetsFile), "wrong offsets")
 }
 
-func TestReadComplexSeqOne(t *testing.T) {
-	setup()
-	defer shutdown()
-
-	c, p := startPipeline("async", true, nil)
-	defer c.Stop()
+func TestReadOneLineSequential(t *testing.T) {
+	plugin, input, output := startStdCleanPipeline()
 
 	file := createTempFile()
 
 	addData(file, []byte(`"`), false, false)
-	lines := 100
-	for i := 0; i < lines; i++ {
+	charsCount := 100
+	for i := 0; i < charsCount; i++ {
 		addData(file, []byte{'a'}, false, false)
 	}
 	addData(file, []byte{}, false, false)
 	addData(file, []byte(`"`), true, false)
-	c.HandleEventFlowFinish(false)
 
-	c.WaitUntilDone(false)
+	output.WaitFor(1)
+	plugin.Stop()
 
-	assert.Equal(t, 1, c.GetEventLogLength(), "wrong log count")
-	assert.Equal(t, lines+2, len(c.GetEventLogItem(0)), "Wrong log")
-	assert.Equal(t, 1, c.GetEventsTotal(), "Wrong processed events count")
-
-	p.jobProvider.saveOffsets()
-	assert.Equal(t, genOffsetsContent(file, lines+3), getContent(p.config.OffsetsFile), "wrong offsets")
+	assert.Equal(t, 1, plugin.GetEventsTotal(), "wrong events count")
+	assert.Equal(t, charsCount+2, len(plugin.GetEventLogItem(0)), "wrong event")
+	assert.Equal(t, genOffsetsContent(file, charsCount+3), getContent(input.config.OffsetsFile), "wrong offsets")
 }
 
-func TestReadComplexPar(t *testing.T) {
-	setup()
-	defer shutdown()
+func TestReadManyLinesInParallel(t *testing.T) {
+	cleanUp()
+	setupDirs()
 
-	lines := 100
-	files := 60
-	filesNames := make([]string, 0, files)
-	for i := 0; i < files; i++ {
+	linesCount := 100
+	filesCount := 60
+	filesNames := make([]string, 0, filesCount)
+	for i := 0; i < filesCount; i++ {
 		file := createTempFile()
-		addLines(file, lines, lines+lines)
+		addLines(file, linesCount, linesCount+linesCount)
 
 		filesNames = append(filesNames, file)
 	}
 
-	c, p := startPipeline("async", true, nil)
-	defer c.Stop()
+	pipe, input, output := startStdPipeline()
 
-	c.HandleEventFlowFinish(false)
-	c.WaitUntilDone(false)
+	output.WaitFor(linesCount * filesCount)
+	pipe.Stop()
 
-	assert.Equal(t, lines*files, c.GetEventLogLength(), "wrong log count")
-	assert.Equal(t, lines*files, c.GetEventsTotal(), "Wrong processed events count")
-
-	p.jobProvider.saveOffsets()
-	assertOffsetsEqual(t, genOffsetsContentMultiple(filesNames, lines*7), getContent(p.config.OffsetsFile))
+	assert.Equal(t, linesCount*filesCount, pipe.GetEventsTotal(), "wrong events count")
+	assertOffsetsEqual(t, genOffsetsContentMultiple(filesNames, linesCount*7), getContent(input.config.OffsetsFile))
 }
 
-func TestReadHeavy(t *testing.T) {
-	setup()
-	defer shutdown()
-
-	c, p := startPipeline("async", true, nil)
-	defer c.Stop()
+func TestReadHeavyJSON(t *testing.T) {
+	pipe, input, output := startStdCleanPipeline()
 
 	file := createTempFile()
 	json := getContentBytes("../../../testdata/json/heavy.json")
@@ -582,62 +564,48 @@ func TestReadHeavy(t *testing.T) {
 		addData(file, json, false, true)
 	}
 
-	c.HandleEventFlowFinish(false)
-	c.WaitUntilDone(false)
-
-	assert.Equal(t, lines, c.GetEventLogLength())
-	assert.Equal(t, lines, c.GetEventsTotal())
-
-	p.jobProvider.saveOffsets()
-	assert.Equal(t, genOffsetsContent(file, len(json)*lines), getContent(p.config.OffsetsFile), "wrong offsets")
+	output.WaitFor(lines)
+	pipe.Stop()
+	assert.Equal(t, lines, pipe.GetEventsTotal())
+	assert.Equal(t, genOffsetsContent(file, len(json)*lines), getContent(input.config.OffsetsFile), "wrong offsets")
 }
 
-func TestReadInsane(t *testing.T) {
-	setup()
-	defer shutdown()
+func TestReadManyFilesInParallel(t *testing.T) {
+	pipe, input, output := startStdCleanPipeline()
 
+	linesCount := 2
+	blocksCount := 256
+	filesCount := 32
+	files := make([]*os.File, 0, filesCount)
+	fileNames := make([]string, 0, filesCount)
 	json := getContentBytes("../../../testdata/json/light.json")
 
-	lines := 256
-	files := 32
-	fs := make([]*os.File, 0, files)
-	fileNames := make([]string, 0, files)
-
-	c, p := startPipeline("async", true, nil)
-	defer c.Stop()
-
-	for f := 0; f < files; f++ {
+	for f := 0; f < filesCount; f++ {
 		file := createTempFile()
 		f, err := os.OpenFile(file, os.O_APPEND|os.O_WRONLY, 0660)
 		if err != nil {
 			panic(err.Error())
 		}
-		fs = append(fs, f)
+		files = append(files, f)
 		fileNames = append(fileNames, file)
 	}
 
-	wg := &sync.WaitGroup{}
-	wg.Add(len(fs))
-	for i := range fs {
+	for i := range files {
 		go func(index int) {
-			for i := 0; i < lines; i++ {
-				addDataFile(fs[index], json)
+			for i := 0; i < blocksCount; i++ {
+				addDataFile(files[index], json)
 			}
-			wg.Done()
 		}(i)
 	}
 
-	wg.Wait()
-	c.HandleEventFlowFinish(false)
-	c.WaitUntilDone(false)
+	output.WaitFor(linesCount * filesCount * blocksCount)
+	pipe.Stop()
 
-	p.jobProvider.saveOffsets()
-	assertOffsetsEqual(t, genOffsetsContentMultiple(fileNames, len(json)*lines), getContent(p.config.OffsetsFile))
+	assertOffsetsEqual(t, genOffsetsContentMultiple(fileNames, len(json)*blocksCount), getContent(input.config.OffsetsFile))
 }
 
 func TestReadInsaneLong(t *testing.T) {
-	setup()
-	defer shutdown()
+	pipe, input, output := startStdCleanPipeline()
 
 	s := ""
 	overhead := 100
@@ -645,110 +613,97 @@ func TestReadInsaneLong(t *testing.T) {
 		s = s + "a"
 	}
 	json1 := []byte(fmt.Sprintf(`{"Data":"%s"}`+"\n"+`{"Data":"xxx"}`+"\n", s))
-	json2 := []byte(fmt.Sprintf(`{"Data":"xxx"}`+"\n"))
+	json2 := []byte(fmt.Sprintf(`{"Data":"xxx"}` + "\n"))
 
-	lines := 128
-	files := 8
-	fs := make([]*os.File, 0, files)
-	fileNames := make([]string, 0, files)
+	linesCount := 3
+	blocksCount := 128
+	filesCount := 8
+	files := make([]*os.File, 0, filesCount)
+	fileNames := make([]string, 0, filesCount)
 
-	c, p := startPipeline("async", true, nil)
-	defer c.Stop()
-
-	for f := 0; f < files; f++ {
+	for f := 0; f < filesCount; f++ {
 		file := createTempFile()
 		f, err := os.OpenFile(file, os.O_APPEND|os.O_WRONLY, 0660)
 		if err != nil {
 			panic(err.Error())
 		}
-		fs = append(fs, f)
+		files = append(files, f)
 		fileNames = append(fileNames, file)
 	}
 
-	wg := &sync.WaitGroup{}
-	wg.Add(len(fs))
-	for i := range fs {
+	for i := range files {
 		go func(index int) {
-			for i := 0; i < lines; i++ {
-				addDataFile(fs[index], json1)
-				addDataFile(fs[index], json2)
+			for i := 0; i < blocksCount; i++ {
+				addDataFile(files[index], json1)
+				addDataFile(files[index], json2)
 			}
-			wg.Done()
 		}(i)
 	}
 
-	wg.Wait()
-	c.HandleEventFlowFinish(false)
-	c.WaitUntilDone(false)
+	output.WaitFor(linesCount * blocksCount * filesCount)
+	pipe.Stop()
 
-	p.jobProvider.saveOffsets()
-	assertOffsetsEqual(t, genOffsetsContentMultiple(fileNames, (len(json1)+len(json2))*lines), getContent(p.config.OffsetsFile))
+	assertOffsetsEqual(t, genOffsetsContentMultiple(fileNames, (len(json1)+len(json2))*blocksCount), getContent(input.config.OffsetsFile))
 }
 
-func TestReadPar(t *testing.T) {
-	setup()
-	defer shutdown()
+func TestReadManyPreparedFilesInParallel(t *testing.T) {
+	cleanUp()
+	setupDirs()
+
+	linesCount := 2
+	blocksCount := 128 * 128
+	filesCount := 32
 
 	json := getContentBytes("../../../testdata/json/light.json")
-
-	lines := 128 * 128
-	files := 32
-	content := make([]byte, 0, len(json)*lines)
-	for i := 0; i < lines; i++ {
+	content := make([]byte, 0, len(json)*blocksCount)
+	for i := 0; i < blocksCount; i++ {
 		content = append(content, json...)
 	}
 
-	fileNames := make([]string, 0, files)
-	for f := 0; f < files; f++ {
+	fileNames := make([]string, 0, filesCount)
+	for f := 0; f < filesCount; f++ {
 		file := createTempFile()
 		fileNames = append(fileNames, file)
 		addData(file, content, false, false)
 	}
 
-	c, p := startPipeline("async", true, nil)
-	defer c.Stop()
-	c.HandleEventFlowFinish(false)
-	c.WaitUntilDone(false)
+	pipe, input, output := startStdPipeline()
+	output.WaitFor(linesCount * blocksCount * filesCount)
+	pipe.Stop()
 
-	p.jobProvider.saveOffsets()
-	assertOffsetsEqual(t, genOffsetsContentMultiple(fileNames, len(json)*lines), getContent(p.config.OffsetsFile))
+	assertOffsetsEqual(t, genOffsetsContentMultiple(fileNames, len(json)*blocksCount), getContent(input.config.OffsetsFile))
 }
 
-func TestReadParStreams(t *testing.T) {
-	setup()
-	defer shutdown()
+func TestReadManyPreparedFilesInParallelWithStreams(t *testing.T) {
+	cleanUp()
+	setupDirs()
+
+	linesCount := 2
+	blocksCount := 128
+	filesCount := 16
 
 	json := getContentBytes("../../../testdata/json/streams.json")
-
-	lines := 128
-	files := 16
-	content := make([]byte, 0, len(json)*lines)
-	for i := 0; i < lines; i++ {
+	content := make([]byte, 0, len(json)*blocksCount)
+	for i := 0; i < blocksCount; i++ {
 		content = append(content, json...)
 	}
 
-	fileNames := make([]string, 0, files)
-	for f := 0; f < files; f++ {
+	fileNames := make([]string, 0, filesCount)
+	for f := 0; f < filesCount; f++ {
 		file := createTempFile()
 		fileNames = append(fileNames, file)
 		addData(file, content, false, false)
 	}
 
-	c, p := startPipeline("async", true, nil)
-	defer c.Stop()
-	c.HandleEventFlowFinish(false)
-	c.WaitUntilDone(false)
+	pipe, input, output := startStdPipeline()
+	output.WaitFor(linesCount * blocksCount * filesCount)
+	pipe.Stop()
 
-	p.jobProvider.saveOffsets()
-	assertOffsetsEqual(t, genOffsetsContentMultipleStreams(fileNames, len(json)*lines, len(json)*lines-len(json)/2), getContent(p.config.OffsetsFile))
+	assertOffsetsEqual(t, genOffsetsContentMultipleStreams(fileNames, len(json)*blocksCount, len(json)*blocksCount-len(json)/2), getContent(input.config.OffsetsFile))
 }
 
-func TestRenameRotationHandle(t *testing.T) {
-	setup()
-	defer shutdown()
-
-	c, p := startPipeline("async", true, nil)
-	defer c.Stop()
+func TestRenameRotation(t *testing.T) {
+	pipe, input, output := startStdCleanPipeline()
 
 	file := createTempFile()
 	addData(file, []byte(`{"Data":"Line1_1"}`), true, false)
@@ -767,29 +722,22 @@ func TestRenameRotationHandle(t *testing.T) {
 	addData(file, []byte(`{"Data":"Line2_2"}`), true, false)
 	addData(file, []byte(`{"Data":"Line2_2"}`), true, false)
 	addData(file, []byte(`{"Data":"Line3_2"}`), true, false)
-	c.HandleEventFlowFinish(false)
 
-	c.WaitUntilDone(false)
+	output.WaitFor(10)
+	pipe.Stop()
 
-	p.jobProvider.saveOffsets()
 	offsets := fmt.Sprintf(`- file: %d %s
   not_set: 114
 - file: %d %s
   not_set: 76
 `, getInodeByFile(newFile), newFile, getInodeByFile(file), file)
-
-	assert.Equal(t, 10, c.GetEventLogLength(), "wrong log count")
-	assert.Equal(t, 10, c.GetEventsTotal(), "Wrong processed events count")
-
-	assertOffsetsEqual(t, offsets, getContent(p.config.OffsetsFile))
+	assert.Equal(t, 10, pipe.GetEventsTotal(), "wrong events count")
+	assertOffsetsEqual(t, offsets, getContent(input.config.OffsetsFile))
 }
 
 // todo: this test should work but we should have some "fingerprint" of a file to do it
 //func TestShutdownRotation(t *testing.T) {
-//	setup()
-//	defer shutdown()
-//
-//	c, p := startPipeline("async", true, nil)
+//	c, p := startPipeline(stdConfig(),true)
 //
 //	file := createTempFile()
 //	addData(file, []byte(`{"Data":"Line1_1"}`), true, false)
@@ -798,8 +746,8 @@ func TestRenameRotationHandle(t *testing.T) {
 //
 //	c.WaitUntilDone(false)
 //	c.Stop()
-//	assert.Equal(t, 2, c.GetEventLogLength(), "wrong log count")
-//	assert.Equal(t, 2, c.GetEventsTotal(), "Wrong processed events count")
+//	assert.Equal(t, 2, c.GetEventLogLength(), "wrong event count")
+//	assert.Equal(t, 2, c.GetEventsTotal(), "wrong events count")
 //
 //	newFile := rotateFile(file)
 //
@@ -817,59 +765,46 @@ func TestRenameRotationHandle(t *testing.T) {
 //	defer c.Stop()
 //	c.HandleEventFlowFinish(false)
 //	c.WaitUntilDone(false)
-//	p.jobProvider.saveOffsets()
-//
+//	//
 //	offsets := fmt.Sprintf(`- file: %d %s
 //  not_set: 114
 //- file: %d %s
 //  not_set: 76
 //`, getInodeByFile(newFile), newFile, getInodeByFile(file), file)
 //
-//	assert.Equal(t, 8, c.GetEventLogLength(), "wrong log count")
-//	assert.Equal(t, 8, c.GetEventsTotal(), "Wrong processed events count")
+//	assert.Equal(t, 8, c.GetEventLogLength(), "wrong event count")
+//	assert.Equal(t, 8, c.GetEventsTotal(), "wrong events count")
 //
 //	assertOffsetsEqual(t, offsets, getContent(p.config.OffsetsFile))
 //}
 
 func TestTruncation(t *testing.T) {
-	setup()
-	defer shutdown()
-
-	c, p := startPipeline("async", true, nil)
-	defer c.Stop()
+	pipe, input, output := startStdCleanPipeline()
 
 	data := []byte(`{"Data":"Line1"}`)
 	file := createTempFile()
 	addData(file, data, true, false)
 	addData(file, data, true, false)
-	c.HandleEventFlowFinish(false)
 
-	c.WaitUntilDone(false)
-	assert.Equal(t, 2, c.GetEventLogLength(), "wrong log count")
-	assert.Equal(t, 2, c.GetEventsTotal(), "Wrong processed events count")
+	output.WaitFor(2)
+	assert.Equal(t, 2, pipe.GetEventsTotal(), "wrong events count")
+	output.ResetWaitFor()
 
-	c.HandleEventFlowStart()
 	truncateFile(file)
 	data = []byte(`{"Data":"Line2"}`)
 	addData(file, data, true, true)
 	addData(file, data, true, true)
 	addData(file, data, true, true)
-	c.HandleEventFlowFinish(false)
 
-	c.WaitUntilDone(false)
-	assert.Equal(t, 5, c.GetEventLogLength(), "wrong log count")
-	assert.Equal(t, 5, c.GetEventsTotal(), "Wrong processed events count")
+	output.WaitFor(3)
+	pipe.Stop()
 
-	p.jobProvider.saveOffsets()
-	assertOffsetsEqual(t, genOffsetsContent(file, (len(data)+1)*3), getContent(p.config.OffsetsFile))
+	assert.Equal(t, 5, pipe.GetEventsTotal(), "wrong events count")
+	assertOffsetsEqual(t, genOffsetsContent(file, (len(data)+1)*3), getContent(input.config.OffsetsFile))
 }
 
 func TestTruncationSeq(t *testing.T) {
-	setup()
-	defer shutdown()
-
-	c, _ := startPipeline("async", true, nil)
-	defer c.Stop()
+	c, _, _ := startStdCleanPipeline()
 
 	data := getContentBytes("../../../testdata/json/streams.json")
 	data = append(data, data...)
@@ -892,12 +827,10 @@ func TestTruncationSeq(t *testing.T) {
 			size := atomic.Int32{}
 			name := createTempFile()
 			file, err := os.OpenFile(name, os.O_APPEND|os.O_WRONLY, 0664)
-			defer func() {
-				_ = file.Close()
-			}()
 			if err != nil {
 				panic(err.Error())
 			}
+			defer closeFile(file)
 			lwg.Add(2)
 			go func() {
 				for {
@@ -935,25 +868,20 @@ func TestTruncationSeq(t *testing.T) {
 	}
 
 	wg.Wait()
-	c.HandleEventFlowFinish(false)
-	c.WaitUntilDone(false)
+	c.Stop()
 }
 
 // todo: remove sleep after file creation and fix test
 func TestRenameRotationInsane(t *testing.T) {
-	setup()
-	defer shutdown()
+	c, p, _ := startStdCleanPipeline()
 
-	c, p := startPipeline("async", true, nil)
-	defer c.Stop()
-
-	files := 16
-	fileList := make([]string, 0, files)
+	filesCount := 16
+	files := make([]string, 0, filesCount)
 
 	wg := sync.WaitGroup{}
-	wg.Add(files)
-	for i := 0; i < files; i++ {
-		fileList = append(fileList, createTempFile())
+	wg.Add(filesCount)
+	for i := 0; i < filesCount; i++ {
+		files = append(files, createTempFile())
 		time.Sleep(time.Millisecond * 100)
 		go func(file string, index int, wg *sync.WaitGroup) {
 			addData(file, []byte(`{"Data":"Line1_1"}`), true, false)
@@ -971,29 +899,22 @@ func TestRenameRotationInsane(t *testing.T) {
 			addData(newFile, []byte(`{"Data":"Line1_2"}`), true, false)
 			addData(newFile, []byte(`{"Data":"Line2_2"}`), true, false)
 			wg.Done()
-		}(fileList[i], i, &wg)
+		}(files[i], i, &wg)
 	}
 
-	for i := 0; i < files; i++ {
-		fileList = append(fileList, fileList[i]+".new")
+	for i := 0; i < filesCount; i++ {
+		files = append(files, files[i]+".new")
 	}
 
 	wg.Wait()
 	p.jobProvider.maintenanceJobs()
-	c.HandleEventFlowFinish(false)
-	c.WaitUntilDone(false)
+	c.Stop()
 
-	p.jobProvider.saveOffsets()
-
-	assert.Equal(t, files*8, c.GetEventsTotal(), "Wrong processed events count")
-
-	assertOffsetsEqual(t, genOffsetsContentMultiple(fileList, 4*19), getContent(p.config.OffsetsFile))
+	assert.Equal(t, filesCount*8, c.GetEventsTotal(), "wrong events count")
+	assertOffsetsEqual(t, genOffsetsContentMultiple(files, 4*19), getContent(p.config.OffsetsFile))
 }
 
 func BenchmarkRawRead(b *testing.B) {
-	setup()
-	defer shutdown()
-
 	bytes := 100 * 1024 * 1024
 	file := createTempFile()
 	data := make([]byte, 0, bytes)
@@ -1022,10 +943,8 @@ func BenchmarkRawRead(b *testing.B) {
 	b.SetBytes(int64(bytes))
 	b.ReportAllocs()
 	for n := 0; n < b.N; n++ {
-		c, _ := startPipeline("timer", false, nil)
+		c, _, _ := startBenchPipeline()
 
-		c.HandleEventFlowFinish(false)
-		c.WaitUntilDone(false)
 		fmt.Printf("gen lines=%d, processed lines: %d\n", lines, c.GetEventsTotal())
 
 		c.Stop()
@@ -1033,9 +952,6 @@ func BenchmarkRawRead(b *testing.B) {
 }
 
 func BenchmarkHeavyJsonRead(b *testing.B) {
-	setup()
-	defer shutdown()
-
 	file := createTempFile()
 	json := getContent("../../../testdata/json/heavy.json")
 	lines := 100
@@ -1049,10 +965,8 @@ func BenchmarkHeavyJsonRead(b *testing.B) {
 	b.SetBytes(int64(lines * len(json)))
 	b.ReportAllocs()
 	for n := 0; n < b.N; n++ {
-		c, _ := startPipeline("timer", false, nil)
+		c, _, _ := startBenchPipeline()
 
-		c.HandleEventFlowFinish(true)
-		c.WaitUntilDone(true)
 		fmt.Printf("gen bytes=%d, gen lines=%d, processed lines: %d\n", lines*len(json), lines, c.GetEventsTotal())
 
 		c.Stop()
@@ -1060,9 +974,6 @@ func BenchmarkHeavyJsonRead(b *testing.B) {
 }
 
 func BenchmarkLightJsonReadSeq(b *testing.B) {
-	setup()
-	defer shutdown()
-
 	file := createTempFile()
 	json := getContent("../../../testdata/json/light.json")
 	lines := 30000
@@ -1076,10 +987,8 @@ func BenchmarkLightJsonReadSeq(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
-		c, _ := startPipeline("timer", false, nil)
+		c, _, _ := startBenchPipeline()
 
-		c.HandleEventFlowFinish(true)
-		c.WaitUntilDone(true)
 		fmt.Printf("gen bytes=%d, gen lines=%d, processed lines: %d\n", lines*len(json), lines*2, c.GetEventsTotal())
 
 		c.Stop()
@@ -1087,9 +996,6 @@ func BenchmarkLightJsonReadSeq(b *testing.B) {
 }
 
 func BenchmarkLightJsonReadPar(b *testing.B) {
-	setup()
-	defer shutdown()
-
 	lines := 128 * 128
 	files := 64
 
@@ -1113,12 +1019,9 @@ func BenchmarkLightJsonReadPar(b *testing.B) {
 	b.StopTimer()
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
-		c, _ := startPipeline("timer", false, nil)
+		c, _, _ := startBenchPipeline()
 		b.StartTimer()
-		c.HandleEventFlowFinish(true)
-		c.WaitUntilDone(true)
 		b.StopTimer()
-
 		c.Stop()
 	}
 }

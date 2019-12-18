@@ -2,6 +2,7 @@ package discard
 
 import (
 	"regexp"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -44,15 +45,17 @@ func TestDiscardAnd(t *testing.T) {
 	}
 
 	p, input, output := startPipeline(conds, pipeline.ModeAnd)
-	defer p.Stop()
+	wg := &sync.WaitGroup{}
 
 	acceptedEvents := make([]*pipeline.Event, 0, 0)
 	input.SetAcceptFn(func(e *pipeline.Event) {
+		wg.Done()
 		acceptedEvents = append(acceptedEvents, e)
 	})
 
 	dumpedEvents := make([]*pipeline.Event, 0, 0)
 	output.SetOutFn(func(e *pipeline.Event) {
+		wg.Done()
 		dumpedEvents = append(dumpedEvents, e)
 	})
 
@@ -63,11 +66,9 @@ func TestDiscardAnd(t *testing.T) {
 	input.In(0, "test.log", 0, 0, []byte(`{"field1":"value1","field2":"value2"}`))
 	input.In(0, "test.log", 0, 0, []byte(`{"field3":"value3","field1":"value1","field2":"value2"}`))
 
-	// release input WG
-	input.Commit(nil)
-	input.Commit(nil)
-
-	input.Wait()
+	wg.Add(10)
+	wg.Wait()
+	p.Stop()
 
 	assert.Equal(t, 6, len(acceptedEvents), "wrong accepted events count")
 	assert.Equal(t, 4, len(dumpedEvents), "wrong dumped events count")

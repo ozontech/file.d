@@ -2,7 +2,6 @@ package pipeline
 
 import (
 	"strings"
-	"sync"
 
 	"gitlab.ozon.ru/sre/filed/logger"
 )
@@ -46,9 +45,6 @@ type processor struct {
 	busyActions      []bool
 	busyActionsTotal int
 
-	shouldStop bool
-	stopWg     *sync.WaitGroup
-
 	heartbeatCh   chan *stream
 	metricsValues []string
 }
@@ -59,7 +55,6 @@ func NewProcessor(id int, pipeline *Pipeline, streamer *streamer) *processor {
 		pipeline: pipeline,
 		streamer: streamer,
 
-		stopWg:        &sync.WaitGroup{},
 		metricsValues: make([]string, 0, 0),
 	}
 
@@ -76,11 +71,10 @@ func (p *processor) start(output OutputPlugin, params *ActionPluginParams) {
 
 func (p *processor) process(output OutputPlugin) {
 	for {
-		if p.shouldStop {
+		st := p.streamer.joinStream()
+		if st == nil {
 			return
 		}
-
-		st := p.streamer.joinStream()
 		p.dischargeStream(st)
 	}
 }
@@ -104,6 +98,10 @@ func (p *processor) processSequence(event *Event) bool {
 	isSuccess, isPassed, event = p.processEvent(event)
 
 	if isPassed {
+		if event.IsUnlockKind() {
+			return false
+		}
+
 		event.stage = eventStageOutput
 		p.pipeline.output.Out(event)
 	}
@@ -113,6 +111,9 @@ func (p *processor) processSequence(event *Event) bool {
 
 func (p *processor) processEvent(event *Event) (isSuccess bool, isPassed bool, e *Event) {
 	for {
+		if event.IsUnlockKind() {
+			return true, true, event
+		}
 		stream := event.stream
 
 		if p.doActions(event) {
@@ -267,7 +268,7 @@ func (p *processor) isMatchAnd(conds MatchConditions, event *Event) bool {
 }
 
 func (p *processor) stop() {
-	p.shouldStop = true
+	p.streamer.unblockProcessor()
 
 	for _, action := range p.actions {
 		action.Stop()

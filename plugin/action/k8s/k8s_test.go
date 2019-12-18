@@ -142,7 +142,6 @@ func TestWhitelist(t *testing.T) {
 
 func TestJoin(t *testing.T) {
 	p, input, _, output := startPipeline()
-	defer p.Stop()
 
 	item := &metaItem{
 		nodeName:      "node_1",
@@ -170,15 +169,7 @@ func TestJoin(t *testing.T) {
 	input.In(0, filename, 70, 10, []byte(`{"ts":"time","stream":"stderr","log":"joined\n"}`))
 	input.In(0, filename, 80, 10, []byte(`{"ts":"time","stream":"stdout","log":"one line log 3\n"}`))
 
-	// unlock input
-	input.Commit(nil)
-	input.Commit(nil)
-	input.Commit(nil)
-	input.Commit(nil)
-
-	p.HandleEventFlowFinish(true)
-	p.WaitUntilDone(true)
-	input.Wait()
+	p.Stop()
 
 	assert.Equal(t, 4, len(events))
 

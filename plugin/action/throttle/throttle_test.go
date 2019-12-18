@@ -54,7 +54,6 @@ func TestThrottle(t *testing.T) {
 	workTime := interval * time.Duration(iterations)
 
 	p, input, output := startPipeline(interval, buckets, limitA, limitB, defaultLimit)
-	defer p.Stop()
 
 	events := make([]*pipeline.Event, 0, 0)
 	output.SetOutFn(func(e *pipeline.Event) {
@@ -84,8 +83,7 @@ func TestThrottle(t *testing.T) {
 		}
 	}
 
-	p.HandleEventFlowFinish(false)
-	p.WaitUntilDone(false)
+	p.Stop()
 
 	totalBuckets := iterations + 1
 	defaultLimitDelta := totalBuckets * defaultLimit

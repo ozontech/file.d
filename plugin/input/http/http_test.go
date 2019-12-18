@@ -32,7 +32,6 @@ func startPipeline(persistenceMode string, enableEventLog bool, config *Config) 
 
 func TestProcessChunksMany(t *testing.T) {
 	c, p, o := startPipeline("async", true, nil)
-	defer c.Stop()
 
 	events := make([]string, 0, 0)
 	o.SetOutFn(func(event *pipeline.Event) {
@@ -46,8 +45,7 @@ func TestProcessChunksMany(t *testing.T) {
 	eventBuff := make([]byte, 0, 0)
 	eventBuff = p.processChunk(0, chunk, eventBuff)
 
-	c.HandleEventFlowFinish(false)
-	c.WaitUntilDone(false)
+	c.Stop()
 
 	assert.Equal(t, 3, len(events), "wrong events count")
 	assert.Equal(t, `{"a":"1"}`, events[0], "wrong event")
@@ -58,7 +56,6 @@ func TestProcessChunksMany(t *testing.T) {
 
 func TestProcessChunksEventBuff(t *testing.T) {
 	c, p, o := startPipeline("async", true, nil)
-	defer c.Stop()
 
 	events := make([]string, 0, 0)
 	o.SetOutFn(func(event *pipeline.Event) {
@@ -71,9 +68,7 @@ func TestProcessChunksEventBuff(t *testing.T) {
 	eventBuff := make([]byte, 0, 0)
 	eventBuff = p.processChunk(0, chunk, eventBuff)
 
-	c.HandleEventFlowFinish(false)
-	c.WaitUntilDone(false)
-
+	c.Stop()
 	assert.Equal(t, 2, len(events), "wrong events count")
 	assert.Equal(t, `{"a":"1"}`, events[0], "wrong event")
 	assert.Equal(t, `{"a":"2"}`, events[1], "wrong event")
@@ -82,7 +77,6 @@ func TestProcessChunksEventBuff(t *testing.T) {
 
 func TestProcessChunksContinue(t *testing.T) {
 	c, p, o := startPipeline("async", true, nil)
-	defer c.Stop()
 
 	events := make([]string, 0, 0)
 	o.SetOutFn(func(event *pipeline.Event) {
@@ -96,8 +90,7 @@ func TestProcessChunksContinue(t *testing.T) {
 	eventBuff := []byte(`{"a":`)
 	eventBuff = p.processChunk(0, chunk, eventBuff)
 
-	c.HandleEventFlowFinish(false)
-	c.WaitUntilDone(false)
+	c.Stop()
 
 	assert.Equal(t, 3, len(events), "wrong events count")
 	assert.Equal(t, `{"a":"1"}`, events[0], "wrong event")
@@ -108,7 +101,6 @@ func TestProcessChunksContinue(t *testing.T) {
 
 func TestProcessChunksContinueMany(t *testing.T) {
 	c, p, o := startPipeline("async", true, nil)
-	defer c.Stop()
 
 	events := make([]string, 0, 0)
 	o.SetOutFn(func(event *pipeline.Event) {
@@ -122,8 +114,7 @@ func TestProcessChunksContinueMany(t *testing.T) {
 	eventBuff = p.processChunk(0, []byte(`:`), eventBuff)
 	eventBuff = p.processChunk(0, []byte(`"1"}`+"\n"), eventBuff)
 
-	c.HandleEventFlowFinish(false)
-	c.WaitUntilDone(false)
+	c.Stop()
 
 	assert.Equal(t, 1, len(events), "wrong events count")
 	assert.Equal(t, `{"a":"1"}`, events[0], "wrong event")
