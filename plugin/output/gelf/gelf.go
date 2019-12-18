@@ -28,8 +28,6 @@ Allowed characters in field names are any word character (letter, number, unders
 */
 
 const (
-	defaultFlushTimeout         = time.Millisecond * 200
-	defaultConnectionTimeout    = time.Second * 5
 	defaultHostField            = "host"
 	defaultShortMessageField    = "message"
 	defaultShortMessageValue    = "not set"
@@ -102,11 +100,11 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	}
 
 	if p.config.FlushTimeout.Duration == 0 {
-		p.config.FlushTimeout.Duration = defaultFlushTimeout
+		p.config.FlushTimeout.Duration = pipeline.DefaultFlushTimeout
 	}
 
 	if p.config.ConnectionTimeout.Duration == 0 {
-		p.config.ConnectionTimeout.Duration = defaultConnectionTimeout
+		p.config.ConnectionTimeout.Duration = pipeline.DefaultConnectionTimeout
 	}
 
 	if p.config.HostField == "" {
