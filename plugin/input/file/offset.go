@@ -1,8 +1,6 @@
 package file
 
 import (
-	"fmt"
-	"io"
 	"io/ioutil"
 	"math"
 	"os"
@@ -16,43 +14,45 @@ import (
 )
 
 type offsetDB struct {
-	offsetsFile string
-	tmpFile     string
-	mu          *sync.Mutex
-	saves       *atomic.Int64
-	buf         []string // content buffer to avoid allocation every offsets saving
-	jobs        []*job   // temporary list of jobs
+	curOffsetsFile string
+	tmpOffsetsFile string
+	savesTotal     *atomic.Int64
+	jobsSnapshot   []*job
+	buf            []byte
+	mu             *sync.Mutex
 }
 
 type inodeOffsets struct {
-	streams  streamsOffsets
-	filename string
+	filename    string
+	fingerprint fingerprint
+	streams     streamsOffsets
 }
-type streamsOffsets map[pipeline.StreamName]int64
-type inodesOffsets map[inode]*inodeOffsets
 
-func newOffsetDB(offsetsFile string, tmpFile string) *offsetDB {
+type streamsOffsets map[pipeline.StreamName]int64
+type offsets map[inode]*inodeOffsets
+
+func newOffsetDB(curOffsetsFile string, tmpOffsetsFile string) *offsetDB {
 	return &offsetDB{
-		offsetsFile: offsetsFile,
-		tmpFile:     tmpFile,
-		mu:          &sync.Mutex{},
-		saves:       &atomic.Int64{},
-		buf:         make([]string, 0, 65536),
-		jobs:        make([]*job, 0, 0),
+		curOffsetsFile: curOffsetsFile,
+		tmpOffsetsFile: tmpOffsetsFile,
+		mu:             &sync.Mutex{},
+		savesTotal:     &atomic.Int64{},
+		buf:            make([]byte, 0, 65536),
+		jobsSnapshot:   make([]*job, 0, 0),
 	}
 }
 
-func (o *offsetDB) load() inodesOffsets {
-	info, err := os.Stat(o.offsetsFile)
+func (o *offsetDB) load() offsets {
+	info, err := os.Stat(o.curOffsetsFile)
 	if os.IsNotExist(err) {
-		return make(inodesOffsets)
+		return make(offsets)
 	}
 
 	if info.IsDir() {
 		logger.Fatalf("can't load offsets, offsets file %s is dir")
 	}
 
-	content, err := ioutil.ReadFile(o.offsetsFile)
+	content, err := ioutil.ReadFile(o.curOffsetsFile)
 	if err != nil {
 		logger.Panicf("can't load offsets %s: ", err.Error())
 	}
@@ -60,9 +60,9 @@ func (o *offsetDB) load() inodesOffsets {
 	return o.collapse(o.parse(string(content)))
 }
 
-// collapseOffsets all streams are in one file, so we should seek file to
+// collapse all streams are in one file, so we should seek file to
 // min offset to make sure logs from all streams will be delivered at least once
-func (o *offsetDB) collapse(inodeOffsets inodesOffsets) inodesOffsets {
+func (o *offsetDB) collapse(inodeOffsets offsets) offsets {
 	for _, inode := range inodeOffsets {
 		minOffset := int64(math.MaxInt64)
 		for _, offset := range inode.streams {
@@ -79,153 +79,178 @@ func (o *offsetDB) collapse(inodeOffsets inodesOffsets) inodesOffsets {
 	return inodeOffsets
 }
 
-func (o *offsetDB) parse(content string) inodesOffsets {
-	offsets := make(inodesOffsets)
-	inodeStr := "- file: "
-	inodeStrLen := len(inodeStr)
-	source := content
+func (o *offsetDB) parse(content string) offsets {
+	offsets := make(offsets)
 	for len(content) != 0 {
-		linePos := strings.IndexByte(content, '\n')
-		line := content[0:linePos]
-		if linePos < 0 {
-			logger.Panicf("wrong offsets format, no new line: %q", source)
-		}
-		content = content[linePos+1:]
-
-		if linePos < inodeStrLen+1 || line[0:inodeStrLen] != inodeStr {
-			logger.Panicf("wrong offsets format, file expected: %s", source)
-		}
-
-		fullFile := line[inodeStrLen:linePos]
-		pos := strings.IndexByte(fullFile, ' ')
-		if pos < 0 {
-			logger.Panicf("wrong offsets format, inode expected: %s", source)
-		}
-
-		sysInode, err := strconv.ParseUint(line[inodeStrLen:inodeStrLen+pos], 10, 64)
-		inode := inode(sysInode)
-		if err != nil {
-			logger.Panicf("wrong offsets format, can't get inode: %s", err.Error())
-		}
-
-		_, has := offsets[inode]
-		if has {
-			logger.Panicf("wrong offsets format, duplicate inode %d, %s", inode, source)
-		}
-		offsets[inode] = &inodeOffsets{
-			streams:  make(streamsOffsets),
-			filename: fullFile[pos+1:],
-		}
-
-		for len(content) != 0 && content[0] != '-' {
-			linePos = strings.IndexByte(content, '\n')
-			if linePos < 0 {
-				logger.Panicf("wrong offsets format, no new line %s", source)
-			}
-			line = content[0:linePos]
-			if linePos < 3 || line[0:2] != "  " {
-				logger.Panicf("wrong offsets format, no leading whitespaces %q", line)
-			}
-			content = content[linePos+1:]
-
-			pos = strings.IndexByte(line, ':')
-			if pos < 0 {
-				logger.Panicf("wrong offsets format, no separator %q", line)
-			}
-			stream := pipeline.StreamName(line[2:pos])
-			if len(stream) == 0 {
-				logger.Panicf("wrong offsets format, empty stream in inode %d, %s", inode, source)
-			}
-			_, has = offsets[inode].streams[stream]
-			if has {
-				logger.Panicf("wrong offsets format, duplicate stream %q in inode %d, %s", stream, inode, source)
-			}
-
-			offsetStr := line[pos+2:]
-			offset, err := strconv.ParseInt(offsetStr, 10, 64)
-			if err != nil {
-				logger.Panicf("wrong offsets format, can't parse offset: %q, %q", offsetStr, err.Error())
-			}
-
-			offsets[inode].streams[stream] = offset
-		}
+		content = o.parseOne(content, offsets)
 	}
 
 	return offsets
 }
 
-func (o *offsetDB) save(jobs map[inode]*job, mu *sync.RWMutex) {
-	o.saves.Inc()
+func (o *offsetDB) parseOne(content string, offsets offsets) string {
+	filename := ""
+	inodeStr := ""
+	fingerprintStr := ""
+	filename, content = o.parseLine(content, "- file: ")
+	inodeStr, content = o.parseLine(content, "  inode: ")
+	fingerprintStr, content = o.parseLine(content, "  fingerprint: ")
+
+	sysInode, err := strconv.ParseUint(inodeStr, 10, 64)
+	if err != nil {
+		logger.Panicf("wrong offsets format, can't parse inode: %s", err.Error())
+	}
+	inode := inode(sysInode)
+
+	fp, err := strconv.ParseUint(fingerprintStr, 10, 64)
+	if err != nil {
+		logger.Panicf("wrong offsets format, can't parse fingerprint: %s", err.Error())
+	}
+
+	_, has := offsets[inode]
+	if has {
+		logger.Panicf("wrong offsets format, duplicate inode %d", inode)
+	}
+
+	offsets[inode] = &inodeOffsets{
+		streams:     make(streamsOffsets),
+		filename:    filename,
+		fingerprint: fingerprint(fp),
+	}
+
+	return o.parseStreams(content, offsets[inode].streams)
+}
+
+func (o *offsetDB) parseStreams(content string, streams streamsOffsets) string {
+	_, content = o.parseLine(content, "  streams:")
+	for len(content) != 0 && content[0] != '-' {
+		linePos := strings.IndexByte(content, '\n')
+		if linePos < 0 {
+			logger.Panicf("wrong offsets format, no new line %s", content)
+		}
+		line := content[0:linePos]
+		if linePos < 5 || line[0:4] != "    " {
+			logger.Panicf("wrong offsets format, no leading whitespaces %q", line)
+		}
+		content = content[linePos+1:]
+
+		pos := strings.IndexByte(line, ':')
+		if pos < 0 {
+			logger.Panicf("wrong offsets format, no separator %q", line)
+		}
+		stream := pipeline.StreamName(line[4:pos])
+		if len(stream) == 0 {
+			logger.Panicf("wrong offsets format, empty stream %d, %s", content)
+		}
+
+		_, has := streams[stream]
+		if has {
+			logger.Panicf("wrong offsets format, duplicate stream %q", stream)
+		}
+
+		offsetStr := line[pos+2:]
+		offset, err := strconv.ParseInt(offsetStr, 10, 64)
+		if err != nil {
+			logger.Panicf("wrong offsets format, can't parse offset: %q, %q", offsetStr, err.Error())
+		}
+
+		streams[stream] = offset
+	}
+
+	return content
+}
+
+func (o *offsetDB) parseLine(content string, start string) (string, string) {
+	l := len(start)
+
+	linePos := strings.IndexByte(content, '\n')
+	line := content[0:linePos]
+	if linePos < 0 {
+		logger.Panicf("wrong offsets format, no nl: %q", content)
+	}
+	content = content[linePos+1:]
+	if linePos < l || line[0:l] != start {
+		logger.Panicf("wrong offsets file format expected=%q, got=%q", start, line[0:l])
+	}
+
+	return line[l:], content
+}
+
+func (o *offsetDB) save(jobs map[fingerprint]*job, mu *sync.RWMutex) {
+	o.savesTotal.Inc()
 
 	o.mu.Lock()
 	defer o.mu.Unlock()
 
 	// snapshot jobs to avoid long locks
-	o.jobs = o.jobs[:0]
-	mu.RLock()
-	for _, job := range jobs {
-		o.jobs = append(o.jobs, job)
-	}
-	mu.RUnlock()
+	snapshot := o.snapshotJobs(mu, jobs)
 
-	file, err := os.OpenFile(o.tmpFile, os.O_RDWR|os.O_CREATE, 0664)
+	file, err := os.OpenFile(o.tmpOffsetsFile, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0664)
 	if err != nil {
-		logger.Errorf("can't open temp offsets file %s, %s", o.tmpFile, err.Error())
+		logger.Errorf("can't open temp offsets file %s, %s", o.tmpOffsetsFile, err.Error())
 		return
 	}
 	defer func() {
 		err := file.Close()
 		if err != nil {
-			logger.Errorf("can't close offsets file: %s, %s", o.tmpFile, err.Error())
+			logger.Errorf("can't close offsets file: %s, %s", o.tmpOffsetsFile, err.Error())
 		}
 	}()
 
 	o.buf = o.buf[:0]
-	for _, job := range o.jobs {
+	for _, job := range snapshot {
 		job.mu.Lock()
 		if len(job.offsets) == 0 {
 			job.mu.Unlock()
 			continue
 		}
 
-		o.buf = append(o.buf, "- file: ")
-		o.buf = append(o.buf, fmt.Sprintf("%d", uint64(job.inode)))
-		o.buf = append(o.buf, " ")
-		o.buf = append(o.buf, job.filename)
-		o.buf = append(o.buf, "\n")
+		o.buf = append(o.buf, "- file: "...)
+		o.buf = append(o.buf, job.filename...)
+		o.buf = append(o.buf, '\n')
+
+		o.buf = append(o.buf, "  inode: "...)
+		o.buf = strconv.AppendUint(o.buf, uint64(job.inode), 10)
+		o.buf = append(o.buf, '\n')
+
+		o.buf = append(o.buf, "  fingerprint: "...)
+		o.buf = strconv.AppendUint(o.buf, uint64(job.fingerprint), 10)
+		o.buf = append(o.buf, '\n')
+
+		o.buf = append(o.buf, "  streams:\n"...)
 		for stream, offset := range job.offsets {
-			o.buf = append(o.buf, "  ")
-			o.buf = append(o.buf, string(stream))
-			o.buf = append(o.buf, ": ")
-			o.buf = append(o.buf, fmt.Sprintf("%d", uint64(offset)))
-			o.buf = append(o.buf, "\n")
+			o.buf = append(o.buf, "    "...)
+			o.buf = append(o.buf, string(stream)...)
+			o.buf = append(o.buf, ": "...)
+			o.buf = strconv.AppendUint(o.buf, uint64(offset), 10)
+			o.buf = append(o.buf, '\n')
 		}
 		job.mu.Unlock()
 	}
 
-	_, err = file.Seek(0, io.SeekStart)
+	_, err = file.Write(o.buf)
 	if err != nil {
-		logger.Errorf("can't seek offsets file %s, %s", o.tmpFile, err.Error())
-	}
-	err = file.Truncate(0)
-	if err != nil {
-		logger.Errorf("can't truncate offsets file %s, %s", o.tmpFile, err.Error())
-	}
-
-	for _, s := range o.buf {
-		_, err = file.WriteString(s)
-		if err != nil {
-			logger.Errorf("can't write offsets file %s, %s", o.tmpFile, err.Error())
-		}
+		logger.Errorf("can't write offsets file %s, %s", o.tmpOffsetsFile, err.Error())
 	}
 
 	err = file.Sync()
 	if err != nil {
-		logger.Errorf("can't sync offsets file %s, %s", o.tmpFile, err.Error())
+		logger.Errorf("can't sync offsets file %s, %s", o.tmpOffsetsFile, err.Error())
 	}
 
-	err = os.Rename(o.tmpFile, o.offsetsFile)
+	err = os.Rename(o.tmpOffsetsFile, o.curOffsetsFile)
 	if err != nil {
-		logger.Errorf("failed renaming temporary offsets file to actual: %s", err.Error())
+		logger.Errorf("failed renaming temporary offsets file to current: %s", err.Error())
 	}
+}
+
+func (o *offsetDB) snapshotJobs(mu *sync.RWMutex, jobs map[fingerprint]*job) []*job {
+	o.jobsSnapshot = o.jobsSnapshot[:0]
+	mu.RLock()
+	for _, job := range jobs {
+		o.jobsSnapshot = append(o.jobsSnapshot, job)
+	}
+	mu.RUnlock()
+
+	return o.jobsSnapshot
 }

@@ -6,7 +6,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func NewTestConfig(name string) (*Config) {
+func NewTestConfig(name string) *Config {
 	return NewConfigFromFile("../testdata/config/" + name)
 }
 

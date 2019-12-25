@@ -8,8 +8,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"gitlab.ozon.ru/sre/filed/pipeline"
-	"gitlab.ozon.ru/sre/filed/plugin/input/fake"
-	"gitlab.ozon.ru/sre/filed/plugin/output/devnull"
+	"gitlab.ozon.ru/sre/filed/test"
 	"go.uber.org/atomic"
 )
 
@@ -150,29 +149,6 @@ created by example.com/sre/filed/pipeline.(*processor).start
 Isn't panic
 `
 
-func startPipeline(first, next string) (*pipeline.Pipeline, *fake.Plugin, *devnull.Plugin) {
-	p := pipeline.NewTestPipeLine(true)
-
-	anyPlugin, _ := fake.Factory()
-	inputPlugin := anyPlugin.(*fake.Plugin)
-	p.SetInputPlugin(&pipeline.InputPluginData{Plugin: inputPlugin, PluginDesc: pipeline.PluginDesc{Config: fake.Config{}}})
-
-	anyPlugin, _ = factory()
-	plugin := anyPlugin.(*Plugin)
-	config := &Config{Field: "log", First: first, Next: next}
-	for _, p := range p.Processors {
-		p.AddActionPlugin(&pipeline.ActionPluginData{Plugin: plugin, PluginDesc: pipeline.PluginDesc{Config: config}})
-	}
-
-	anyPlugin, _ = devnull.Factory()
-	outputPlugin := anyPlugin.(*devnull.Plugin)
-	p.SetOutputPlugin(&pipeline.OutputPluginData{Plugin: outputPlugin, PluginDesc: pipeline.PluginDesc{Config: config}})
-
-	p.Start()
-
-	return p, inputPlugin, outputPlugin
-}
-
 func TestJoin(t *testing.T) {
 	format := `{"log":"%s\n"}`
 	content := strings.ReplaceAll(content, "# ===next===\n", "")
@@ -187,14 +163,18 @@ func TestJoin(t *testing.T) {
 	panics := 12
 	iterations := 100
 
-	p, input, output := startPipeline(`/^(panic:)|(http: panic serving)/`, `/(^$)|(goroutine [0-9]+ \[)|(\([0-9]+x[0-9,a-f]+)|(\.go:[0-9]+ \+[0-9]x)|(\/.*\.go:[0-9]+)|(\(...\))|(main\.main\(\))|(created by .*\/.*\.)|(^\[signal)|(panic.+[0-9]x[0-9,a-f]+)/`)
+	config := &Config{
+		Field: "log",
+		First: `/^(panic:)|(http: panic serving)/`,
+		Next:  `/(^$)|(goroutine [0-9]+ \[)|(\([0-9]+x[0-9,a-f]+)|(\.go:[0-9]+ \+[0-9]x)|(\/.*\.go:[0-9]+)|(\(...\))|(main\.main\(\))|(created by .*\/.*\.)|(^\[signal)|(panic.+[0-9]x[0-9,a-f]+)/`,
+	}
+	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, config, pipeline.MatchModeAnd, nil))
 
 	wg := &sync.WaitGroup{}
 	wg.Add(panics * iterations)
 
 	inEvents := atomic.Int32{}
 	input.SetInFn(func() {
-		//wg.Done()
 		inEvents.Inc()
 	})
 

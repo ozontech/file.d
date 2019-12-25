@@ -1,10 +1,9 @@
 package pipeline
 
 import (
-	"encoding/json"
-	"fmt"
 	"math/rand"
 	"net/http"
+	"runtime"
 	"strconv"
 	"sync"
 	"time"
@@ -29,6 +28,8 @@ const (
 	metricsGenInterval = time.Minute * 10
 )
 
+type finalizeFn = func(event *Event, notifyInput bool, backEvent bool)
+
 type InputPluginController interface {
 	In(sourceID SourceID, sourceName string, offset int64, bytes []byte)
 	DeprecateSource(sourceID SourceID) int // mark events in the pipeline as deprecated, it means that these events shouldn't update offsets on commit
@@ -47,26 +48,31 @@ type SourceID uint64
 type StreamName string
 
 type Pipeline struct {
-	Name       string
-	settings   *Settings
-	eventPool  *eventPool
+	Name     string
+	settings *Settings
+
+	eventPool *eventPool
+	streamer  *streamer
+
 	useStreams bool
-	streamer   *streamer
+	singleProc bool
 	shouldStop bool
+
 	countersMu *sync.RWMutex
 	counters   map[SourceID]*atomic.Int32
 
-	input      InputPlugin
-	inputData  *InputPluginData
-	Processors []*processor
-	output     OutputPlugin
-	outputData *OutputPluginData
+	input     InputPlugin
+	inputInfo *InputPluginInfo
 
-	// metrics
-	registry       *prometheus.Registry
-	metricsGen     int // generation is used to drop unused metrics from counters
-	metricsGenTime time.Time
-	actionMetrics  []*actionMetrics
+	actionInfos []*ActionPluginStaticInfo
+	Procs       []*processor
+	procCount   *atomic.Int32
+	activeProcs *atomic.Int32
+
+	output     OutputPlugin
+	outputInfo *OutputPluginInfo
+
+	metricsHolder *metricsHolder
 
 	// some debugging shit
 	eventLogEnabled bool
@@ -84,7 +90,6 @@ type Settings struct {
 	MaintenanceInterval time.Duration
 	AntispamThreshold   int
 	AvgLogSize          int
-	ProcessorsCount     int
 	StreamField         string
 }
 
@@ -99,33 +104,27 @@ type actionMetrics struct {
 }
 
 func New(name string, settings *Settings, registry *prometheus.Registry, mux *http.ServeMux) *Pipeline {
-	logger.Infof("creating pipeline %q: processors=%d, capacity=%d, stream field=%s", name, settings.ProcessorsCount, settings.Capacity, settings.StreamField)
+	logger.Infof("creating pipeline %q: capacity=%d, stream field=%s", name, settings.Capacity, settings.StreamField)
 	pipeline := &Pipeline{
 		Name:       name,
 		settings:   settings,
 		useStreams: true,
+
+		metricsHolder: newMetricsHolder(name, registry),
+
+		streamer:  newStreamer(),
+		eventPool: newEventPool(settings.Capacity),
+
 		counters:   make(map[SourceID]*atomic.Int32),
 		countersMu: &sync.RWMutex{},
-
-		streamer:      newStreamer(),
-		registry:      registry,
-		actionMetrics: make([]*actionMetrics, 0, 0),
 
 		eventLog:   make([]string, 0, 128),
 		eventLogMu: &sync.Mutex{},
 	}
 
 	if settings.AntispamThreshold != 0 {
-		logger.Infof("antispam: enabled threshold=%d/s", settings.AntispamThreshold/int(settings.MaintenanceInterval/time.Second))
+		logger.Infof("antispam enabled threshold=%d/s", settings.AntispamThreshold/int(settings.MaintenanceInterval/time.Second))
 	}
-
-	processors := make([]*processor, 0, 0)
-	for i := 0; i < settings.ProcessorsCount; i++ {
-		processors = append(processors, NewProcessor(i, pipeline, pipeline.streamer))
-	}
-	pipeline.Processors = processors
-
-	pipeline.eventPool = newEventPool(pipeline.settings.Capacity)
 
 	mux.HandleFunc("/pipelines/"+name, pipeline.servePipeline)
 
@@ -140,7 +139,8 @@ func (p *Pipeline) Start() {
 		logger.Panicf("output isn't set for pipeline %q", p.Name)
 	}
 
-	p.nextMetricsGen()
+	p.makeProcessors()
+	p.metricsHolder.start()
 
 	defaultParams := &PluginDefaultParams{
 		PipelineName:     p.Name,
@@ -155,28 +155,57 @@ func (p *Pipeline) Start() {
 		Controller:          p,
 	}
 
-	p.output.Start(p.outputData.Config, outputParams)
+	p.output.Start(p.outputInfo.Config, outputParams)
 
-	for _, processor := range p.Processors {
+	for _, processor := range p.Procs {
 		actionParams := &ActionPluginParams{
 			PluginDefaultParams: defaultParams,
 			Controller:          processor,
 		}
-		processor.start(p.output, actionParams)
+		processor.start(actionParams)
 	}
 
-	p.input.Start(p.inputData.Config, inputParams)
+	p.input.Start(p.inputInfo.Config, inputParams)
 
 	p.streamer.start()
 
 	go p.maintenance()
 }
 
+func (p *Pipeline) makeProcessors() {
+	// default proc count is CPU cores * 2
+	procCount := runtime.GOMAXPROCS(0) * 2
+	if p.singleProc {
+		procCount = 1
+	}
+
+	p.procCount = atomic.NewInt32(int32(procCount))
+	p.activeProcs = atomic.NewInt32(0)
+
+	p.Procs = make([]*processor, 0, procCount)
+	for i := 0; i < procCount; i++ {
+		proc := NewProcessor(i, p.metricsHolder, p.activeProcs, p.output, p.streamer, p.finalize)
+
+		for j, info := range p.actionInfos {
+			plugin, _ := info.Factory()
+			proc.AddActionPlugin(&ActionPluginInfo{
+				ActionPluginStaticInfo: info,
+				PluginRuntimeInfo: &PluginRuntimeInfo{
+					Plugin: plugin,
+					ID:     strconv.Itoa(i) + "_" + strconv.Itoa(j),
+				},
+			})
+		}
+
+		p.Procs = append(p.Procs, proc)
+	}
+}
+
 func (p *Pipeline) Stop() {
 	logger.Infof("stopping pipeline %q", p.Name)
 
-	logger.Infof("stopping processors count=%d", len(p.Processors))
-	for _, processor := range p.Processors {
+	logger.Infof("stopping processors count=%d", len(p.Procs))
+	for _, processor := range p.Procs {
 		processor.stop()
 	}
 
@@ -191,14 +220,22 @@ func (p *Pipeline) Stop() {
 	p.shouldStop = true
 }
 
-func (p *Pipeline) SetInputPlugin(descr *InputPluginData) {
-	p.inputData = descr
-	p.input = descr.Plugin
+func (p *Pipeline) SetInput(info *InputPluginInfo) {
+	p.inputInfo = info
+	p.input = info.Plugin.(InputPlugin)
 }
 
-func (p *Pipeline) SetOutputPlugin(descr *OutputPluginData) {
-	p.outputData = descr
-	p.output = descr.Plugin
+func (p *Pipeline) GetInput() InputPlugin {
+	return p.input
+}
+
+func (p *Pipeline) SetOutput(info *OutputPluginInfo) {
+	p.outputInfo = info
+	p.output = info.Plugin.(OutputPlugin)
+}
+
+func (p *Pipeline) GetOutput() OutputPlugin {
+	return p.output
 }
 
 func (p *Pipeline) DeprecateSource(sourceID SourceID) int {
@@ -274,7 +311,7 @@ func (p *Pipeline) isBanned(id SourceID, name string, isNew bool) bool {
 func (p *Pipeline) streamEvent(event *Event) {
 	// spread events across all processors
 	if !p.useStreams {
-		sourceID := SourceID(event.SeqID % uint64(p.settings.ProcessorsCount))
+		sourceID := SourceID(event.SeqID % uint64(p.procCount.Load()))
 		p.streamer.putEvent(sourceID, defaultStreamName, event)
 		return
 	}
@@ -284,10 +321,6 @@ func (p *Pipeline) streamEvent(event *Event) {
 		event.streamName = StreamName(node.AsString())
 	}
 	p.streamer.putEvent(event.SourceID, event.streamName, event)
-}
-
-func (p *Pipeline) DisableStreams() {
-	p.useStreams = false
 }
 
 func (p *Pipeline) Commit(event *Event) {
@@ -330,96 +363,9 @@ func (p *Pipeline) finalize(event *Event, notifyInput bool, backEvent bool) {
 	p.eventPool.back(event)
 }
 
-func (p *Pipeline) AddAction(info *PluginInfo, configJSON []byte, matchMode MatchMode, conditions MatchConditions, metricName string, metricLabels []string) {
-	p.actionMetrics = append(p.actionMetrics, &actionMetrics{
-		name:        metricName,
-		labels:      metricLabels,
-		counter:     nil,
-		counterPrev: nil,
-		mu:          &sync.RWMutex{},
-	})
-
-	for index, processor := range p.Processors {
-		plugin, config := info.Factory()
-		err := json.Unmarshal(configJSON, config)
-		if err != nil {
-			logger.Panicf("can't unmarshal config for action #%d in pipeline %q: %s", index, p.Name, err.Error())
-		}
-
-		processor.AddActionPlugin(&ActionPluginData{
-			Plugin: plugin.(ActionPlugin),
-			PluginDesc: PluginDesc{
-				ID:     strconv.Itoa(index) + "_" + strconv.Itoa(index),
-				T:      info.Type,
-				Config: config,
-			},
-			MatchConditions: conditions,
-			MatchMode:       matchMode,
-		})
-	}
-}
-
-func (p *Pipeline) nextMetricsGen() {
-	metricsGen := strconv.Itoa(p.metricsGen)
-
-	for index, metrics := range p.actionMetrics {
-		if metrics.name == "" {
-			continue
-		}
-
-		counter := prometheus.NewCounterVec(prometheus.CounterOpts{
-			Namespace:   "filed",
-			Subsystem:   "pipeline_" + p.Name,
-			Name:        metrics.name + "_events_total",
-			Help:        fmt.Sprintf("how many events processed by pipeline %q and #%d action", p.Name, index),
-			ConstLabels: map[string]string{"gen": metricsGen},
-		}, append([]string{"status"}, metrics.labels...))
-
-		prev := metrics.counterPrev
-
-		metrics.mu.Lock()
-		metrics.counterPrev = metrics.counter
-		metrics.counter = counter
-		metrics.mu.Unlock()
-
-		p.registry.MustRegister(counter)
-		if prev != nil {
-			p.registry.Unregister(prev)
-		}
-	}
-
-	p.metricsGen++
-	p.metricsGenTime = time.Now()
-}
-
-func (p *Pipeline) countEvent(event *Event, actionIndex int, eventStatus eventStatus, valuesBuf []string) []string {
-	if len(p.actionMetrics) == 0 {
-		return valuesBuf
-	}
-
-	metrics := p.actionMetrics[actionIndex]
-	if metrics.name == "" {
-		return valuesBuf
-	}
-
-	valuesBuf = valuesBuf[:0]
-	valuesBuf = append(valuesBuf, string(eventStatus))
-
-	for _, field := range metrics.labels {
-		node := event.Root.Dig(field)
-
-		if node == nil {
-			valuesBuf = append(valuesBuf, defaultFieldValue)
-		} else {
-			valuesBuf = append(valuesBuf, node.AsString())
-		}
-	}
-
-	metrics.mu.RLock()
-	metrics.counter.WithLabelValues(valuesBuf...).Inc()
-	metrics.mu.RUnlock()
-
-	return valuesBuf
+func (p *Pipeline) AddAction(info *ActionPluginStaticInfo) {
+	p.actionInfos = append(p.actionInfos, info)
+	p.metricsHolder.AddAction(info.MetricName, info.MetricLabels)
 }
 
 func (p *Pipeline) maintenance() {
@@ -433,7 +379,7 @@ func (p *Pipeline) maintenance() {
 		}
 
 		p.maintenanceCounters()
-		p.maintenanceMetrics()
+		p.metricsHolder.maintenance()
 
 		totalCommitted := p.totalCommitted.Load()
 		deltaCommitted := int(totalCommitted - lastCommitted)
@@ -444,12 +390,12 @@ func (p *Pipeline) maintenance() {
 		rate := int(float64(deltaCommitted) * float64(time.Second) / float64(interval))
 		rateMb := float64(deltaSize) * float64(time.Second) / float64(interval) / 1024 / 1024
 
-			tc := totalCommitted
-			if totalCommitted == 0 {
-				tc = 1
-			}
+		tc := totalCommitted
+		if totalCommitted == 0 {
+			tc = 1
+		}
 
-			logger.Infof("%q pipeline stats interval=%ds, queue=%d/%d, out=%d|%.1fMb, rate=%d/s|%.1fMb/s, total=%d|%.1fMb, avg size=%d, max size=%d", p.Name, interval/time.Second, p.eventPool.eventsCount, p.settings.Capacity, deltaCommitted, float64(deltaSize)/1024.0/1024.0, rate, rateMb, totalCommitted, float64(totalSize)/1024.0/1024.0, totalSize/tc, p.maxSize)
+		logger.Infof("%q pipeline stats interval=%ds, procs=%d, queue=%d/%d, out=%d|%.1fMb, rate=%d/s|%.1fMb/s, total=%d|%.1fMb, avg size=%d, max size=%d", p.Name, interval/time.Second, p.procCount.Load(), p.eventPool.eventsCount, p.settings.Capacity, deltaCommitted, float64(deltaSize)/1024.0/1024.0, rate, rateMb, totalCommitted, float64(totalSize)/1024.0/1024.0, totalSize/tc, p.maxSize)
 
 		lastCommitted = totalCommitted
 		lastSize = totalSize
@@ -464,14 +410,6 @@ func (p *Pipeline) maintenance() {
 			p.outSample = p.outSample[:0]
 		}
 	}
-}
-
-func (p *Pipeline) maintenanceMetrics() {
-	if time.Now().Sub(p.metricsGenTime) < metricsGenInterval {
-		return
-	}
-
-	p.nextMetricsGen()
 }
 
 func (p *Pipeline) maintenanceCounters() {
@@ -501,6 +439,14 @@ func (p *Pipeline) maintenanceCounters() {
 		counter.Swap(int32(x))
 	}
 	p.countersMu.Unlock()
+}
+
+func (p *Pipeline) DisableStreams() {
+	p.useStreams = false
+}
+
+func (p *Pipeline) DisableParallelism() {
+	p.singleProc = true
 }
 
 func (p *Pipeline) GetEventsTotal() int {

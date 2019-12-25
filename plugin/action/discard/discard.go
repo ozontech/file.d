@@ -12,7 +12,7 @@ type Config struct {
 }
 
 func init() {
-	filed.DefaultPluginRegistry.RegisterAction(&pipeline.PluginInfo{
+	filed.DefaultPluginRegistry.RegisterAction(&pipeline.PluginStaticInfo{
 		Type:    "discard",
 		Factory: factory,
 	})

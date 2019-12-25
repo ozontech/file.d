@@ -7,6 +7,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strings"
 	"sync"
 	"syscall"
 	"testing"
@@ -18,6 +19,7 @@ import (
 	"gitlab.ozon.ru/sre/filed/logger"
 	"gitlab.ozon.ru/sre/filed/pipeline"
 	"gitlab.ozon.ru/sre/filed/plugin/output/devnull"
+	"gitlab.ozon.ru/sre/filed/test"
 	"go.uber.org/atomic"
 )
 
@@ -27,6 +29,8 @@ var (
 )
 
 const offsetsFile = "filed_offsets.yaml"
+const newLine = 1
+const perm = 0770
 
 func TestMain(m *testing.M) {
 	setupDirs()
@@ -54,45 +58,61 @@ func cleanUp() {
 	if err != nil {
 		panic(err.Error())
 	}
+
+	err = os.Mkdir(filesDir, perm)
+	if err != nil {
+		panic(err.Error())
+	}
 }
 
-func stdConfig() *Config {
-	return &Config{WatchingDir: filesDir, OffsetsFile: filepath.Join(offsetsDir, offsetsFile), PersistenceMode: "async"}
-}
-
-func startStdCleanPipeline() (*pipeline.Pipeline, *Plugin, *devnull.Plugin) {
-	cleanUp()
-	setupDirs()
-
-	return startStdPipeline()
-}
-
-func startStdPipeline() (*pipeline.Pipeline, *Plugin, *devnull.Plugin) {
-	return startPipeline(stdConfig(), true)
-}
-
-func startBenchPipeline() (*pipeline.Pipeline, *Plugin, *devnull.Plugin) {
-	return startPipeline(stdConfig(), false)
-}
-
-func startPipeline(config *Config, enableEventLog bool) (*pipeline.Pipeline, *Plugin, *devnull.Plugin) {
-	p := pipeline.NewTestPipeLine(true)
-	if enableEventLog {
-		p.EnableEventLog()
+func pluginConfig(opts ...string) *Config {
+	op := ""
+	if test.Opts(opts).Has("tail") {
+		op = "tail"
 	}
 
-	anyPlugin, _ := Factory()
-	inputPlugin := anyPlugin.(*Plugin)
-	p.SetInputPlugin(&pipeline.InputPluginData{Plugin: inputPlugin, PluginDesc: pipeline.PluginDesc{Config: config}})
-
-	anyPlugin, _ = devnull.Factory()
-	outputPlugin := anyPlugin.(*devnull.Plugin)
-	p.SetOutputPlugin(&pipeline.OutputPluginData{Plugin: outputPlugin, PluginDesc: pipeline.PluginDesc{Config: config}})
-
-	p.Start()
-
-	return p, inputPlugin, outputPlugin
+	return &Config{
+		WatchingDir:     filesDir,
+		OffsetsFile:     filepath.Join(offsetsDir, offsetsFile),
+		PersistenceMode: "async",
+		OffsetsOp:       op,
+	}
 }
+
+//
+//func startStdCleanPipeline() (*pipeline.Pipeline, *Plugin, *devnull.Plugin) {
+//	cleanUp()
+//	setupDirs()
+//
+//	return startStdPipeline()
+//}
+//
+//func startStdPipeline() (*pipeline.Pipeline, *Plugin, *devnull.Plugin) {
+//	return startPipeline(pluginConfig(""), true)
+//}
+//
+//func startBenchPipeline() (*pipeline.Pipeline, *Plugin, *devnull.Plugin) {
+//	return startPipeline(pluginConfig(""), false)
+//}
+//
+//func startPipeline(config *Config, enableEventLog bool) (*pipeline.Pipeline, *Plugin, *devnull.Plugin) {
+//	p := test.NewPipeline(true)
+//	if enableEventLog {
+//		p.EnableEventLog()
+//	}
+//
+//	anyPlugin, _ := Factory()
+//	inputPlugin := anyPlugin.(*Plugin)
+//	p.SetInput(&pipeline.InputPluginInfo{Plugin: inputPlugin, PluginDesc: pipeline.PluginDesc{Config: config}})
+//
+//	anyPlugin, _ = devnull.Factory()
+//	outputPlugin := anyPlugin.(*devnull.Plugin)
+//	p.SetOutput(&pipeline.OutputPluginInfo{Plugin: outputPlugin, PluginDesc: pipeline.PluginDesc{Config: config}})
+//
+//	p.Start()
+//
+//	return p, inputPlugin, outputPlugin
+//}
 
 func renameFile(oldFile string, newFile string) {
 	err := os.Rename(oldFile, newFile)
@@ -109,7 +129,7 @@ func closeFile(f *os.File) {
 }
 
 func truncateFile(file string) {
-	f, err := os.OpenFile(file, os.O_WRONLY, 0664)
+	f, err := os.OpenFile(file, os.O_WRONLY, perm)
 	if err != nil {
 		panic(err.Error())
 	}
@@ -141,13 +161,37 @@ func truncateFile(file string) {
 //	}
 //}
 
-//func rotateFile(file string) string {
-//	newFile := file + ".new"
-//	renameFile(file, newFile)
-//	createFile(file)
-//
-//	return newFile
-//}
+func rotateFile(file string) string {
+	newFile := file + ".new"
+	renameFile(file, newFile)
+	createFile(file)
+
+	return newFile
+}
+
+// any string in opts may contain: tail, dirty
+func run(testCase *test.Case, eventCount int, opts ...string) {
+	if test.Opts(opts).Has("dirty") {
+		cleanUp()
+	}
+
+	test.RunCase(testCase, getInputInfo(opts...), eventCount, opts...)
+}
+
+func getInputInfo(opts ...string) *pipeline.InputPluginInfo {
+	input, _ := Factory()
+	return &pipeline.InputPluginInfo{
+		PluginStaticInfo: &pipeline.PluginStaticInfo{
+			Type:    "",
+			Factory: nil,
+			Config:  pluginConfig(opts...),
+		},
+		PluginRuntimeInfo: &pipeline.PluginRuntimeInfo{
+			Plugin: input,
+			ID:     "",
+		},
+	}
+}
 
 func createFile(file string) {
 	fd, err := os.Create(file)
@@ -186,8 +230,8 @@ func addDataFile(file *os.File, data []byte) {
 	}
 }
 
-func addData(file string, data []byte, isLine bool, sync bool) {
-	f, err := os.OpenFile(file, os.O_APPEND|os.O_WRONLY, 0660)
+func addBytes(file string, data []byte, isLine bool, sync bool) {
+	f, err := os.OpenFile(file, os.O_APPEND|os.O_WRONLY, perm)
 	if err != nil {
 		panic(err.Error())
 	}
@@ -196,6 +240,7 @@ func addData(file string, data []byte, isLine bool, sync bool) {
 	if _, err = f.Write(data); err != nil {
 		panic(err.Error())
 	}
+
 	if isLine {
 		if _, err = f.Write([]byte{'\n'}); err != nil {
 			panic(err.Error())
@@ -210,28 +255,61 @@ func addData(file string, data []byte, isLine bool, sync bool) {
 	}
 }
 
-func addLines(file string, from int, to int) {
-	f, err := os.OpenFile(file, os.O_APPEND|os.O_WRONLY, 0660)
+func addString(file string, str string, isLine bool, sync bool) {
+	f, err := os.OpenFile(file, os.O_APPEND|os.O_WRONLY, perm)
+	if err != nil {
+		panic(err.Error())
+	}
+	defer closeFile(f)
+
+	if _, err = f.WriteString(str); err != nil {
+		panic(err.Error())
+	}
+
+	if isLine {
+		if _, err = f.Write([]byte{'\n'}); err != nil {
+			panic(err.Error())
+		}
+	}
+
+	if sync {
+		err = f.Sync()
+		if err != nil {
+			panic(err.Error())
+		}
+	}
+}
+
+func addLines(file string, from int, to int) int {
+	f, err := os.OpenFile(file, os.O_APPEND|os.O_WRONLY, perm)
 	if err != nil {
 		panic(err.Error())
 	}
 
 	defer closeFile(f)
 
+	size := 0
 	for i := from; i < to; i++ {
 
-		if _, err = f.WriteString(fmt.Sprintf(`"_`)); err != nil {
+		str := fmt.Sprintf(`"_`)
+		if _, err = f.WriteString(str); err != nil {
 			panic(err.Error())
 		}
-		if _, err = f.WriteString(fmt.Sprintf(`%d"`+"\n", i)); err != nil {
+		size += len(str)
+
+		str = fmt.Sprintf(`%d"`+"\n", i)
+		if _, err = f.WriteString(str); err != nil {
 			panic(err.Error())
 		}
+		size += len(str)
 	}
 
 	err = f.Sync()
 	if err != nil {
 		panic(err.Error())
 	}
+
+	return size
 }
 
 func getContent(file string) string {
@@ -253,17 +331,23 @@ func getContentBytes(file string) []byte {
 }
 
 func genOffsetsContent(file string, offset int) string {
-	return fmt.Sprintf(`- file: %d %s
-  not_set: %d
-`, getInodeByFile(file), file, offset)
+	return fmt.Sprintf(`- file: %s
+  inode: %d
+  fingerprint: %d
+  streams:
+    not_set: %d
+`, file, getInodeByFile(file), getFingerprint(file), offset)
 }
 
 func genOffsetsContentMultiple(files []string, offset int) string {
 	result := make([]byte, 0, len(files)*100)
 	for _, file := range files {
-		result = append(result, fmt.Sprintf(`- file: %d %s
-  not_set: %d
-`, getInodeByFile(file), file, offset)...)
+		result = append(result, fmt.Sprintf(`- file: %s
+  inode: %d
+  fingerprint: %d
+  streams:
+    not_set: %d
+`, file, getInodeByFile(file), getFingerprint(file), offset)...)
 	}
 
 	return string(result)
@@ -272,13 +356,21 @@ func genOffsetsContentMultiple(files []string, offset int) string {
 func genOffsetsContentMultipleStreams(files []string, offsetStdErr int, offsetStdOut int) string {
 	result := make([]byte, 0, len(files)*100)
 	for _, file := range files {
-		result = append(result, fmt.Sprintf(`- file: %d %s
-  stderr: %d
-  stdout: %d
-`, getInodeByFile(file), file, offsetStdErr, offsetStdOut)...)
+		result = append(result, fmt.Sprintf(`- file: %s
+  inode: %d
+  fingerprint: %d
+  streams:
+    stderr: %d
+    stdout: %d
+`, file, getInodeByFile(file), getFingerprint(file), offsetStdErr, offsetStdOut)...)
 	}
 
 	return string(result)
+}
+
+func getFingerprint(file string) fingerprint {
+	info, _ := os.Stat(file)
+	return fingerprintFile(info, "")
 }
 
 func getInodeByFile(file string) uint64 {
@@ -291,7 +383,7 @@ func getInodeByFile(file string) uint64 {
 	return inode
 }
 
-func assertOffsetsEqual(t *testing.T, offsetsContentA string, offsetsContentB string) {
+func assertOffsetsAreEqual(t *testing.T, offsetsContentA string, offsetsContentB string) {
 	offsetDB := newOffsetDB("", "")
 	offsetsA := offsetDB.parse(offsetsContentA)
 	offsetsB := offsetDB.parse(offsetsContentB)
@@ -306,505 +398,620 @@ func assertOffsetsEqual(t *testing.T, offsetsContentA string, offsetsContentB st
 	}
 }
 
+func getConfigByPipeline(p *pipeline.Pipeline) *Config {
+	return p.GetInput().(*Plugin).config
+}
+
+// TestWatch tests if watcher notifies about new dirs and files
 func TestWatch(t *testing.T) {
-	c, _, _ := startStdCleanPipeline()
+	iterations := 4
+	eventsPerIteration := 2
+	finalEvent := 1
+	eventCount := iterations*eventsPerIteration + finalEvent
+	content := "666\n"
+	file := ""
 
-	file := createTempFile()
-	content := []byte(`{"key":"value"}` + "\n")
+	run(&test.Case{
+		Prepare: func() {
+			file = createTempFile()
+		},
+		Act: func(p *pipeline.Pipeline) {
+			for x := 0; x < iterations; x++ {
+				dir := fmt.Sprintf("dir_%d", x)
+				go func(dir string) {
+					dir = filepath.Join(filepath.Dir(file), dir)
+					_ = os.Mkdir(dir, 0770)
 
-	time.Sleep(time.Millisecond * 500)
-	dir := filepath.Join(filepath.Dir(file), "dir1")
-	_ = os.Mkdir(dir, 0770)
-	time.Sleep(time.Millisecond * 500)
+					err := ioutil.WriteFile(filepath.Join(dir, "new_file"), []byte(content), perm)
+					if err != nil {
+						panic(err.Error())
+					}
+					err = ioutil.WriteFile(filepath.Join(dir, "other_file"), []byte(content), perm)
+					if err != nil {
+						panic(err.Error())
+					}
+				}(dir)
+			}
 
-	err := ioutil.WriteFile(filepath.Join(dir, "new_file"), content, 0660)
-	if err != nil {
-		panic(err.Error())
-	}
-	err = ioutil.WriteFile(filepath.Join(dir, "other_file"), content, 0660)
-	if err != nil {
-		panic(err.Error())
-	}
-	time.Sleep(time.Millisecond * 500)
-	err = os.RemoveAll(dir)
-	if err != nil {
-		panic(err.Error())
-	}
-
-	dir = filepath.Join(filepath.Dir(file), "dir2")
-	_ = os.Mkdir(dir, 0770)
-	time.Sleep(time.Millisecond * 500)
-
-	err = ioutil.WriteFile(filepath.Join(dir, "new_file"), content, 0660)
-	if err != nil {
-		panic(err.Error())
-	}
-	err = ioutil.WriteFile(filepath.Join(dir, "other_file"), content, 0660)
-	if err != nil {
-		panic(err.Error())
-	}
-	time.Sleep(time.Millisecond * 500)
-	err = os.RemoveAll(dir)
-	if err != nil {
-		panic(err.Error())
-	}
-
-	addData(file, content, true, true)
-
-	c.Stop()
-
-	assert.Equal(t, 5, c.GetEventsTotal(), "wrong event count")
+			addString(file, content, true, true)
+		},
+		Assert: func(p *pipeline.Pipeline) {
+			assert.Equal(t, eventCount, p.GetEventsTotal(), "wrong event count")
+		},
+	}, eventCount)
 }
 
-func TestReadLineSimple(t *testing.T) {
-	pipe, _, output := startStdCleanPipeline()
+// TestReadSimple tests if file reading works right in the simple case
+func TestReadSimple(t *testing.T) {
+	eventCount := 5
+	events := make([]string, 0, 0)
 
-	file := createTempFile()
-	addData(file, []byte(`{"Data":"Line1"}`), true, true)
-	addData(file, []byte(`{"Data":"Line2"}`), true, true)
-	addData(file, []byte(`{"Data":"Line3"}`), true, true)
-
-	output.WaitFor(3)
-	pipe.Stop()
-
-	assert.Equal(t, 3, pipe.GetEventsTotal(), "wrong event count")
-	assert.Equal(t, `{"Data":"Line1"}`, pipe.GetEventLogItem(0), "wrong event content")
-	assert.Equal(t, `{"Data":"Line2"}`, pipe.GetEventLogItem(1), "wrong event content")
-	assert.Equal(t, `{"Data":"Line3"}`, pipe.GetEventLogItem(2), "wrong event content")
+	run(&test.Case{
+		Prepare: func() {
+			for i := 0; i < eventCount; i++ {
+				events = append(events, fmt.Sprintf(`{"field":"value_%d"}`, i))
+			}
+		},
+		Act: func(p *pipeline.Pipeline) {
+			file := createTempFile()
+			for _, s := range events {
+				addString(file, s, true, true)
+			}
+		},
+		Assert: func(p *pipeline.Pipeline) {
+			assert.Equal(t, eventCount, p.GetEventsTotal(), "wrong event count")
+			for i, s := range events {
+				assert.Equal(t, s, p.GetEventLogItem(i), "wrong event")
+			}
+		},
+	}, eventCount)
 }
 
+// TestReadContinue tests if file reading works right after restart of the pipeline
+func TestReadContinue(t *testing.T) {
+	blockSize := 2000
+	stopAfter := 100
+	processed := 0
+	inputEvents := make([]string, 0, 0)
+	outputEvents := make([]string, 0, 0)
+	file := ""
+	size := 0
+
+	run(&test.Case{
+		Prepare: func() {
+		},
+		Act: func(p *pipeline.Pipeline) {
+			file = createTempFile()
+			for x := 0; x < blockSize; x++ {
+				line := fmt.Sprintf(`{"data_1":"line_%d"}`, x)
+				size += len(line) + newLine
+				inputEvents = append(inputEvents, line)
+				addString(file, line, true, false)
+			}
+		},
+		Assert: func(p *pipeline.Pipeline) {
+			processed = p.GetEventsTotal()
+			for i := 0; i < processed; i++ {
+				outputEvents = append(outputEvents, p.GetEventLogItem(i))
+			}
+		},
+	}, stopAfter)
+
+	run(&test.Case{
+		Prepare: func() {
+		},
+		Act: func(p *pipeline.Pipeline) {
+			for x := 0; x < blockSize; x++ {
+				line := fmt.Sprintf(`{"data_2":"line_%d"}`, x)
+				size += len(line) + newLine
+				inputEvents = append(inputEvents, line)
+				addString(file, line, true, false)
+			}
+
+		},
+		Assert: func(p *pipeline.Pipeline) {
+			for i := 0; i < p.GetEventsTotal(); i++ {
+				outputEvents = append(outputEvents, p.GetEventLogItem(i))
+			}
+
+			for i := range inputEvents {
+				assert.Equal(t, inputEvents[i], outputEvents[i], "wrong event")
+			}
+
+			assertOffsetsAreEqual(t, genOffsetsContent(file, size), getContent(getConfigByPipeline(p).OffsetsFile))
+		},
+	}, blockSize+blockSize-processed, "dirty")
+}
+
+// TestOffsetsSaveSimple tests if offsets saving works right in the simple case
 func TestOffsetsSaveSimple(t *testing.T) {
-	pipe, input, output := startStdCleanPipeline()
+	eventCount := 5
+	events := make([]string, 0, 0)
+	file := ""
+	size := 0
 
-	file := createTempFile()
-	addData(file, []byte(`{"Data":"Line1"}`), true, false)
-	addData(file, []byte(`{"Data":"Line2"}`), true, false)
-	addData(file, []byte(`{"Data":"Line3"}`), true, false)
-
-	output.WaitFor(3)
-	pipe.Stop()
-
-	assert.Equal(t, genOffsetsContent(file, 51), getContent(input.config.OffsetsFile), "wrong offsets")
+	run(&test.Case{
+		Prepare: func() {
+			s := "1"
+			for i := 0; i < eventCount; i++ {
+				s += "1"
+				event := fmt.Sprintf(`{"field":"value_%s"}`, s)
+				events = append(events, event)
+				size += len(event) + newLine
+			}
+		},
+		Act: func(p *pipeline.Pipeline) {
+			file = createTempFile()
+			for _, s := range events {
+				addString(file, s, true, true)
+			}
+		},
+		Assert: func(p *pipeline.Pipeline) {
+			assertOffsetsAreEqual(t, genOffsetsContent(file, size), getContent(getConfigByPipeline(p).OffsetsFile))
+		},
+	}, eventCount)
 }
 
-func TestOffsetsSaveAfterStartInTheMiddleOfFile(t *testing.T) {
-	file := createTempFile()
-	addData(file, []byte(`{"Data":`), false, false)
+// TestOffsetsSaveContinue tests if plugin skips partial data in the case pipeline starts in the middle of the line
+func TestOffsetsSaveContinue(t *testing.T) {
+	leftPart := `["left_part",`
+	rightPart := `"right_part"]`
+	secondLine := `"line_2"`
+	size := len(leftPart) + len(rightPart) + newLine + len(secondLine) + newLine
+	file := ""
 
-	config := &Config{WatchingDir: filesDir, OffsetsFile: filepath.Join(offsetsDir, offsetsFile), PersistenceMode: "sync", OffsetsOp: "tail"}
-	pipe, input, output := startPipeline(config, true)
-
-	addData(file, []byte(`"Line1"}`), true, false)
-	addData(file, []byte(`{"Data":"Line2"}`), true, false)
-
-	output.WaitFor(1)
-	pipe.Stop()
-
-	assert.Equal(t, genOffsetsContent(file, 34), getContent(input.config.OffsetsFile), "wrong offsets")
+	run(&test.Case{
+		Prepare: func() {
+			file = createTempFile()
+			addString(file, leftPart, false, false)
+		},
+		Act: func(p *pipeline.Pipeline) {
+			addString(file, rightPart, true, false)
+			addString(file, secondLine, true, false)
+		},
+		Assert: func(p *pipeline.Pipeline) {
+			assertOffsetsAreEqual(t, genOffsetsContent(file, size), getContent(getConfigByPipeline(p).OffsetsFile))
+		},
+	}, 1, "tail")
 }
 
+// TestOffsetsLoad tests if plugin skips lines which is located before loaded offsets
 func TestOffsetsLoad(t *testing.T) {
-	cleanUp()
-	setupDirs()
+	line1 := `{"some key1":"some data"}`
+	line2 := `{"some key2":"some data"}`
 
-	data1 := `{"some key1":"some data"}`
-	data2 := `{"some key2":"some data"}`
-	dataFile := createTempFile()
-	addData(dataFile, []byte(data1), true, false)
-	addData(dataFile, []byte(data2), true, false)
+	run(&test.Case{
+		Prepare: func() {
+			file := createTempFile()
+			addString(file, line1, true, false)
+			addString(file, line2, true, false)
 
-	offsetFile := createOffsetFile()
-	offsets := genOffsetsContent(dataFile, len(data1))
-	addData(offsetFile, []byte(offsets), false, false)
-
-	pipe, input, output := startStdPipeline()
-
-	output.WaitFor(1)
-
-	// force save into another file
-	input.jobProvider.offsetDB.offsetsFile += ".new"
-	pipe.Stop()
-
-	assert.Equal(t, 1, pipe.GetEventsTotal(), "wrong event count")
-	assert.Equal(t, data2, pipe.GetEventLogItem(0), "wrong event content")
+			offsetFile := createOffsetFile()
+			offsets := genOffsetsContent(file, len(line1))
+			addBytes(offsetFile, []byte(offsets), false, false)
+		},
+		Act: func(p *pipeline.Pipeline) {},
+		Assert: func(p *pipeline.Pipeline) {
+			assert.Equal(t, 1, p.GetEventsTotal(), "wrong event count")
+			assert.Equal(t, line2, p.GetEventLogItem(0), "wrong event")
+		},
+	}, 1)
 }
 
-func TestContinueReading(t *testing.T) {
-	pipe, input, output := startStdCleanPipeline()
+// TestReadLineSequential tests if plugin read works right in the case of sequential data appending to the single line
+func TestReadLineSequential(t *testing.T) {
+	file := ""
+	parts := []string{`["some",`, `"sequential",`, `"data"]`}
+	size := len(strings.Join(parts, "")) + newLine
 
-	file := createTempFile()
-	addData(file, []byte(`{"Data":"Line1"}`), true, false)
-	addData(file, []byte(`{"Data":"Line2"}`), true, false)
-	addData(file, []byte(`{"Data":"Line3"}`), true, false)
-
-	pipe.Stop()
-
-	processed := pipe.GetEventsTotal()
-
-	addData(file, []byte(`{"Data":"Line4"}`), true, false)
-	addData(file, []byte(`{"Data":"Line5"}`), true, false)
-	addData(file, []byte(`{"Data":"Line6"}`), true, false)
-	addData(file, []byte(`{"Data":"Line7"}`), true, false)
-
-	pipe, input, output = startStdPipeline()
-
-	output.WaitFor(7 - processed)
-	pipe.Stop()
-
-	assert.Equal(t, 7, processed+pipe.GetEventsTotal(), "wrong event count")
-	assert.Equal(t, `{"Data":"Line7"}`, pipe.GetEventLogItem(pipe.GetEventsTotal()-1), "wrong event")
-	assert.Equal(t, genOffsetsContent(file, 119), getContent(input.config.OffsetsFile), "wrong offsets")
+	run(&test.Case{
+		Prepare: func() {
+			file = createTempFile()
+			for _, s := range parts {
+				addString(file, s, false, true)
+			}
+			addString(file, "", true, true)
+		},
+		Act: func(p *pipeline.Pipeline) {},
+		Assert: func(p *pipeline.Pipeline) {
+			assert.Equal(t, 1, p.GetEventsTotal(), "wrong event count")
+			assert.Equal(t, strings.Join(parts, ""), p.GetEventLogItem(0), "wrong event content")
+			assertOffsetsAreEqual(t, genOffsetsContent(file, size), getContent(getConfigByPipeline(p).OffsetsFile))
+		},
+	}, 1)
 }
 
-func TestReadSeq(t *testing.T) {
-	c, p, output := startStdCleanPipeline()
+// TestReadBufferOverflow tests if plugin read works right in the case line is bigger than read buffer
+func TestReadBufferOverflow(t *testing.T) {
+	file := ""
+	overhead := 128
+	iterations := 5
+	linesPerIterations := 2
 
-	file := createTempFile()
-
-	addData(file, []byte(`{"Data":"Line1`), false, true)
-	addData(file, []byte(`Line2`), false, true)
-	addData(file, []byte(`Line3"}`), true, true)
-
-	output.WaitFor(1)
-	c.Stop()
-
-	assert.Equal(t, 1, c.GetEventsTotal(), "wrong event count")
-	assert.Equal(t, `{"Data":"Line1Line2Line3"}`, c.GetEventLogItem(0), "wrong event content")
-	assert.Equal(t, genOffsetsContent(file, 27), getContent(p.config.OffsetsFile), "wrong offsets")
-}
-
-func TestReadLong(t *testing.T) {
-	pipe, input, output := startStdCleanPipeline()
-
-	file := createTempFile()
-
-	s := ""
-	overhead := 100
+	firstLine := `"`
 	for i := 0; i < defaultReadBufferSize+overhead; i++ {
-		s = s + "a"
+		firstLine = firstLine + "a"
 	}
-	data := fmt.Sprintf(`{"Data":"%s"}`+"\n"+`{"Data":"xxx"}`, s)
+	firstLine = firstLine + `"`
 
-	addData(file, []byte(data), true, false)
-	addData(file, []byte(data), true, false)
-	addData(file, []byte(data), true, false)
+	secondLine := "666"
 
-	output.WaitFor(6)
-	pipe.Stop()
+	size := (len(firstLine) + newLine + len(secondLine) + newLine) * iterations
+	eventCount := iterations * linesPerIterations
 
-	assert.Equal(t, 6, pipe.GetEventsTotal(), "wrong event count")
-	assert.Equal(t, genOffsetsContent(file, (defaultReadBufferSize+overhead+27)*3), getContent(input.config.OffsetsFile), "wrong offsets")
+	run(&test.Case{
+		Prepare: func() {
+			file = createTempFile()
+			for i := 0; i < iterations; i++ {
+				addString(file, firstLine+"\n"+secondLine+"\n", false, false)
+			}
+		},
+		Act: func(p *pipeline.Pipeline) {},
+		Assert: func(p *pipeline.Pipeline) {
+			assert.Equal(t, eventCount, p.GetEventsTotal(), "wrong event count")
+			assertOffsetsAreEqual(t, genOffsetsContent(file, size), getContent(getConfigByPipeline(p).OffsetsFile))
+		},
+	}, eventCount)
 }
 
-func TestReadComplexSeqMulti(t *testing.T) {
-	c, p, _ := startStdCleanPipeline()
+// TestReadManyCharsRace tests if plugin doesn't have race conditions in the case of sequential processing of chars of single line
+func TestReadManyCharsRace(t *testing.T) {
+	file := ""
+	charCount := 1024
+	strQuotes := 2
+	size := charCount + strQuotes + newLine
+	run(&test.Case{
+		Prepare: func() {
+			file = createTempFile()
 
-	file := createTempFile()
-
-	lines := 1000
-	addLines(file, lines, lines+lines)
-
-	c.Stop()
-
-	assert.Equal(t, lines, c.GetEventsTotal(), "wrong events count")
-	assert.Equal(t, genOffsetsContent(file, lines*8), getContent(p.config.OffsetsFile), "wrong offsets")
+			addString(file, `"`, false, false)
+			for i := 0; i < charCount; i++ {
+				addString(file, "a", false, false)
+			}
+			addString(file, `"`, true, false)
+		},
+		Act: func(p *pipeline.Pipeline) {},
+		Assert: func(p *pipeline.Pipeline) {
+			assert.Equal(t, 1, p.GetEventsTotal(), "wrong event count")
+			assertOffsetsAreEqual(t, genOffsetsContent(file, size), getContent(getConfigByPipeline(p).OffsetsFile))
+		},
+	}, 1)
 }
 
-func TestReadOneLineSequential(t *testing.T) {
-	plugin, input, output := startStdCleanPipeline()
+// TestReadManyLinesRace tests if plugin doesn't have race conditions in the case of sequential processing of lines
+func TestReadManyLinesRace(t *testing.T) {
+	eventCount := 1024
+	size := 0
+	file := ""
+	run(&test.Case{
+		Prepare: func() {
+			file = createTempFile()
 
-	file := createTempFile()
-
-	addData(file, []byte(`"`), false, false)
-	charsCount := 100
-	for i := 0; i < charsCount; i++ {
-		addData(file, []byte{'a'}, false, false)
-	}
-	addData(file, []byte{}, false, false)
-	addData(file, []byte(`"`), true, false)
-
-	output.WaitFor(1)
-	plugin.Stop()
-
-	assert.Equal(t, 1, plugin.GetEventsTotal(), "wrong events count")
-	assert.Equal(t, charsCount+2, len(plugin.GetEventLogItem(0)), "wrong event")
-	assert.Equal(t, genOffsetsContent(file, charsCount+3), getContent(input.config.OffsetsFile), "wrong offsets")
+			size = addLines(file, eventCount, eventCount*2)
+		},
+		Act: func(p *pipeline.Pipeline) {},
+		Assert: func(p *pipeline.Pipeline) {
+			assert.Equal(t, eventCount, p.GetEventsTotal(), "wrong event count")
+			assertOffsetsAreEqual(t, genOffsetsContent(file, size), getContent(getConfigByPipeline(p).OffsetsFile))
+		},
+	}, eventCount)
 }
 
-func TestReadManyLinesInParallel(t *testing.T) {
-	cleanUp()
-	setupDirs()
+// TestReadManyFilesRace tests if plugin doesn't have race conditions in the case of sequential processing of files
+func TestReadManyFilesRace(t *testing.T) {
+	fileCount := 64
+	eventCountPerFile := 128
+	eventCount := fileCount * eventCountPerFile
+	oneFileSize := 0
+	files := make([]string, 0, fileCount)
+	run(&test.Case{
+		Prepare: func() {
+			for i := 0; i < fileCount; i++ {
+				file := createTempFile()
+				oneFileSize = addLines(file, eventCountPerFile, eventCountPerFile*2)
 
-	linesCount := 100
-	filesCount := 60
-	filesNames := make([]string, 0, filesCount)
-	for i := 0; i < filesCount; i++ {
-		file := createTempFile()
-		addLines(file, linesCount, linesCount+linesCount)
-
-		filesNames = append(filesNames, file)
-	}
-
-	pipe, input, output := startStdPipeline()
-
-	output.WaitFor(linesCount * filesCount)
-	pipe.Stop()
-
-	assert.Equal(t, linesCount*filesCount, pipe.GetEventsTotal(), "wrong events count")
-	assertOffsetsEqual(t, genOffsetsContentMultiple(filesNames, linesCount*7), getContent(input.config.OffsetsFile))
+				files = append(files, file)
+			}
+		},
+		Act: func(p *pipeline.Pipeline) {},
+		Assert: func(p *pipeline.Pipeline) {
+			assert.Equal(t, eventCount, p.GetEventsTotal(), "wrong events count")
+			assertOffsetsAreEqual(t, genOffsetsContentMultiple(files, oneFileSize), getContent(getConfigByPipeline(p).OffsetsFile))
+		},
+	}, eventCount)
 }
 
-func TestReadHeavyJSON(t *testing.T) {
-	pipe, input, output := startStdCleanPipeline()
-
-	file := createTempFile()
+// TestReadLongJSON tests if plugin read works right if it's super long json
+func TestReadLongJSON(t *testing.T) {
+	eventCount := 10
+	file := ""
 	json := getContentBytes("../../../testdata/json/heavy.json")
-	lines := 10
-	for i := 0; i < lines; i++ {
-		addData(file, json, false, true)
-	}
-
-	output.WaitFor(lines)
-	pipe.Stop()
-	assert.Equal(t, lines, pipe.GetEventsTotal())
-	assert.Equal(t, genOffsetsContent(file, len(json)*lines), getContent(input.config.OffsetsFile), "wrong offsets")
+	run(&test.Case{
+		Prepare: func() {
+		},
+		Act: func(p *pipeline.Pipeline) {
+			file = createTempFile()
+			for i := 0; i < eventCount; i++ {
+				addBytes(file, json, false, true)
+			}
+		},
+		Assert: func(p *pipeline.Pipeline) {
+			assert.Equal(t, eventCount, p.GetEventsTotal())
+			assertOffsetsAreEqual(t, genOffsetsContent(file, len(json)*eventCount), getContent(getConfigByPipeline(p).OffsetsFile))
+		},
+	}, eventCount)
 }
 
-func TestReadManyFilesInParallel(t *testing.T) {
-	pipe, input, output := startStdCleanPipeline()
-
-	linesCount := 2
-	blocksCount := 256
-	filesCount := 32
-	files := make([]*os.File, 0, filesCount)
-	fileNames := make([]string, 0, filesCount)
+// TestReadManyFilesParallelRace tests if plugin doesn't have race conditions in the case of parallel processing of files
+func TestReadManyFilesParallelRace(t *testing.T) {
+	lineCount := 2
+	blockCount := 256
+	fileCount := 32
+	eventCount := lineCount * fileCount * blockCount
+	fds := make([]*os.File, 0, fileCount)
+	files := make([]string, 0, fileCount)
 	json := getContentBytes("../../../testdata/json/light.json")
 
-	for f := 0; f < filesCount; f++ {
-		file := createTempFile()
-		f, err := os.OpenFile(file, os.O_APPEND|os.O_WRONLY, 0660)
-		if err != nil {
-			panic(err.Error())
-		}
-		files = append(files, f)
-		fileNames = append(fileNames, file)
-	}
-
-	for i := range files {
-		go func(index int) {
-			for i := 0; i < blocksCount; i++ {
-				addDataFile(files[index], json)
+	run(&test.Case{
+		Prepare: func() {
+			for f := 0; f < fileCount; f++ {
+				file := createTempFile()
+				f, err := os.OpenFile(file, os.O_APPEND|os.O_WRONLY, perm)
+				if err != nil {
+					panic(err.Error())
+				}
+				fds = append(fds, f)
+				files = append(files, file)
 			}
-		}(i)
-	}
-
-	output.WaitFor(linesCount * filesCount * blocksCount)
-	pipe.Stop()
-
-	assertOffsetsEqual(t, genOffsetsContentMultiple(fileNames, len(json)*blocksCount), getContent(input.config.OffsetsFile))
+		},
+		Act: func(p *pipeline.Pipeline) {
+			for i := range fds {
+				go func(index int) {
+					for i := 0; i < blockCount; i++ {
+						addDataFile(fds[index], json)
+					}
+				}(i)
+			}
+		},
+		Assert: func(p *pipeline.Pipeline) {
+			assert.Equal(t, eventCount, p.GetEventsTotal())
+			assertOffsetsAreEqual(t, genOffsetsContentMultiple(files, len(json)*blockCount), getContent(getConfigByPipeline(p).OffsetsFile))
+		},
+	}, eventCount)
 }
 
-func TestReadInsaneLong(t *testing.T) {
-	pipe, input, output := startStdCleanPipeline()
-
-	s := ""
+// TestReadManyCharsParallelRace tests if plugin doesn't have race conditions in the case of parallel processing of chars
+func TestReadManyCharsParallelRace(t *testing.T) {
 	overhead := 100
+	s := ""
 	for i := 0; i < defaultReadBufferSize+overhead; i++ {
 		s = s + "a"
 	}
-	json1 := []byte(fmt.Sprintf(`{"Data":"%s"}`+"\n"+`{"Data":"xxx"}`+"\n", s))
-	json2 := []byte(fmt.Sprintf(`{"Data":"xxx"}` + "\n"))
+	json1 := []byte(fmt.Sprintf(`{"data":"%s"}`+"\n"+`{"data":"666"}`+"\n", s))
+	json2 := []byte(fmt.Sprintf(`{"data":"666"}` + "\n"))
+	lineCount := 3
+	blockCount := 128
+	fileCount := 8
+	fds := make([]*os.File, 0, fileCount)
+	files := make([]string, 0, fileCount)
 
-	linesCount := 3
-	blocksCount := 128
-	filesCount := 8
-	files := make([]*os.File, 0, filesCount)
-	fileNames := make([]string, 0, filesCount)
+	eventCount := lineCount * blockCount * fileCount
+	run(&test.Case{
+		Prepare: func() {
 
-	for f := 0; f < filesCount; f++ {
-		file := createTempFile()
-		f, err := os.OpenFile(file, os.O_APPEND|os.O_WRONLY, 0660)
-		if err != nil {
-			panic(err.Error())
-		}
-		files = append(files, f)
-		fileNames = append(fileNames, file)
-	}
-
-	for i := range files {
-		go func(index int) {
-			for i := 0; i < blocksCount; i++ {
-				addDataFile(files[index], json1)
-				addDataFile(files[index], json2)
+			for f := 0; f < fileCount; f++ {
+				file := createTempFile()
+				f, err := os.OpenFile(file, os.O_APPEND|os.O_WRONLY, perm)
+				if err != nil {
+					panic(err.Error())
+				}
+				fds = append(fds, f)
+				files = append(files, file)
 			}
-		}(i)
-	}
-
-	output.WaitFor(linesCount * blocksCount * filesCount)
-	pipe.Stop()
-
-	assertOffsetsEqual(t, genOffsetsContentMultiple(fileNames, (len(json1)+len(json2))*blocksCount), getContent(input.config.OffsetsFile))
+		},
+		Act: func(p *pipeline.Pipeline) {
+			for i := range fds {
+				go func(index int) {
+					for i := 0; i < blockCount; i++ {
+						addDataFile(fds[index], json1)
+						addDataFile(fds[index], json2)
+					}
+				}(i)
+			}
+		},
+		Assert: func(p *pipeline.Pipeline) {
+			assert.Equal(t, eventCount, p.GetEventsTotal())
+			assertOffsetsAreEqual(t, genOffsetsContentMultiple(files, (len(json1)+len(json2))*blockCount), getContent(getConfigByPipeline(p).OffsetsFile))
+		},
+	}, eventCount)
 }
 
-func TestReadManyPreparedFilesInParallel(t *testing.T) {
-	cleanUp()
-	setupDirs()
-
-	linesCount := 2
-	blocksCount := 128 * 128
-	filesCount := 32
+// TestReadManyPreparedFilesRace tests if plugin doesn't have race conditions in the case of parallel processing of prepared files
+func TestReadManyPreparedFilesRace(t *testing.T) {
+	lineCount := 2
+	blockCount := 128 * 128
+	fileCount := 32
+	files := make([]string, 0, fileCount)
+	eventCount := lineCount * blockCount * fileCount
 
 	json := getContentBytes("../../../testdata/json/light.json")
-	content := make([]byte, 0, len(json)*blocksCount)
-	for i := 0; i < blocksCount; i++ {
-		content = append(content, json...)
-	}
+	run(&test.Case{
+		Prepare: func() {
+			content := make([]byte, 0, len(json)*blockCount)
+			for i := 0; i < blockCount; i++ {
+				content = append(content, json...)
+			}
 
-	fileNames := make([]string, 0, filesCount)
-	for f := 0; f < filesCount; f++ {
-		file := createTempFile()
-		fileNames = append(fileNames, file)
-		addData(file, content, false, false)
-	}
-
-	pipe, input, output := startStdPipeline()
-	output.WaitFor(linesCount * blocksCount * filesCount)
-	pipe.Stop()
-
-	assertOffsetsEqual(t, genOffsetsContentMultiple(fileNames, len(json)*blocksCount), getContent(input.config.OffsetsFile))
+			for f := 0; f < fileCount; f++ {
+				file := createTempFile()
+				files = append(files, file)
+				addBytes(file, content, false, false)
+			}
+		},
+		Act: func(p *pipeline.Pipeline) {
+		},
+		Assert: func(p *pipeline.Pipeline) {
+			assert.Equal(t, eventCount, p.GetEventsTotal())
+			assertOffsetsAreEqual(t, genOffsetsContentMultiple(files, len(json)*blockCount), getContent(getConfigByPipeline(p).OffsetsFile))
+		},
+	}, eventCount)
 }
 
-func TestReadManyPreparedFilesInParallelWithStreams(t *testing.T) {
-	cleanUp()
-	setupDirs()
-
+// TestReadStreamRace tests if plugin doesn't have race conditions in the case of parallel processing of prepared files with streams
+func TestReadStreamRace(t *testing.T) {
 	linesCount := 2
 	blocksCount := 128
 	filesCount := 16
-
-	json := getContentBytes("../../../testdata/json/streams.json")
-	content := make([]byte, 0, len(json)*blocksCount)
-	for i := 0; i < blocksCount; i++ {
-		content = append(content, json...)
-	}
-
 	fileNames := make([]string, 0, filesCount)
-	for f := 0; f < filesCount; f++ {
-		file := createTempFile()
-		fileNames = append(fileNames, file)
-		addData(file, content, false, false)
-	}
+	eventCount := linesCount * blocksCount * filesCount
+	json := getContentBytes("../../../testdata/json/streams.json")
 
-	pipe, input, output := startStdPipeline()
-	output.WaitFor(linesCount * blocksCount * filesCount)
-	pipe.Stop()
+	run(&test.Case{
+		Prepare: func() {
+			content := make([]byte, 0, len(json)*blocksCount)
+			for i := 0; i < blocksCount; i++ {
+				content = append(content, json...)
+			}
 
-	assertOffsetsEqual(t, genOffsetsContentMultipleStreams(fileNames, len(json)*blocksCount, len(json)*blocksCount-len(json)/2), getContent(input.config.OffsetsFile))
+			for f := 0; f < filesCount; f++ {
+				file := createTempFile()
+				fileNames = append(fileNames, file)
+				addBytes(file, content, false, false)
+			}
+		},
+		Act: func(p *pipeline.Pipeline) {
+		},
+		Assert: func(p *pipeline.Pipeline) {
+			assert.Equal(t, eventCount, p.GetEventsTotal())
+			assertOffsetsAreEqual(t, genOffsetsContentMultipleStreams(fileNames, len(json)*blocksCount, len(json)*blocksCount-len(json)/2), getContent(getConfigByPipeline(p).OffsetsFile))
+		},
+	}, eventCount)
 }
 
-func TestRenameRotation(t *testing.T) {
-	pipe, input, output := startStdCleanPipeline()
+func TestRotationRenameSimple(t *testing.T) {
+	file := ""
+	newFile := ""
+	run(&test.Case{
+		Prepare: func() {},
+		Act: func(p *pipeline.Pipeline) {
+			file = createTempFile()
+			addBytes(file, []byte(`{"Data":"Line1_1"}`), true, false)
+			addBytes(file, []byte(`{"Data":"Line2_1"}`), true, false)
 
-	file := createTempFile()
-	addData(file, []byte(`{"Data":"Line1_1"}`), true, false)
-	addData(file, []byte(`{"Data":"Line2_1"}`), true, false)
+			newFile = file + ".new"
+			renameFile(file, newFile)
+			createFile(file)
 
-	newFile := file + ".new"
-	renameFile(file, newFile)
-	createFile(file)
+			addBytes(newFile, []byte(`{"Data":"Line3_1"}`), true, false)
+			addBytes(newFile, []byte(`{"Data":"Line4_1"}`), true, false)
+			addBytes(newFile, []byte(`{"Data":"Line5_1"}`), true, false)
+			addBytes(newFile, []byte(`{"Data":"Line6_1"}`), true, false)
 
-	addData(newFile, []byte(`{"Data":"Line3_1"}`), true, false)
-	addData(newFile, []byte(`{"Data":"Line4_1"}`), true, false)
-	addData(newFile, []byte(`{"Data":"Line5_1"}`), true, false)
-	addData(newFile, []byte(`{"Data":"Line6_1"}`), true, false)
-
-	addData(file, []byte(`{"Data":"Line1_2"}`), true, false)
-	addData(file, []byte(`{"Data":"Line2_2"}`), true, false)
-	addData(file, []byte(`{"Data":"Line2_2"}`), true, false)
-	addData(file, []byte(`{"Data":"Line3_2"}`), true, false)
-
-	output.WaitFor(10)
-	pipe.Stop()
-
-	offsets := fmt.Sprintf(`- file: %d %s
-  not_set: 114
-- file: %d %s
-  not_set: 76
-`, getInodeByFile(newFile), newFile, getInodeByFile(file), file)
-	assert.Equal(t, 10, pipe.GetEventsTotal(), "wrong events count")
-	assertOffsetsEqual(t, offsets, getContent(input.config.OffsetsFile))
+			addBytes(file, []byte(`{"Data":"Line1_2"}`), true, false)
+			addBytes(file, []byte(`{"Data":"Line2_2"}`), true, false)
+			addBytes(file, []byte(`{"Data":"Line2_2"}`), true, false)
+			addBytes(file, []byte(`{"Data":"Line3_2"}`), true, false)
+		},
+		Assert: func(p *pipeline.Pipeline) {
+			offsets := fmt.Sprintf(`- file: %s
+  inode: %d
+  fingerprint: %d
+  streams:
+    not_set: 114
+- file: %s
+  inode: %d
+  fingerprint: %d
+  streams:
+    not_set: 76
+`, newFile, getInodeByFile(newFile), getFingerprint(newFile), file, getInodeByFile(file), getFingerprint(file))
+			assert.Equal(t, 10, p.GetEventsTotal(), "wrong events count")
+			assertOffsetsAreEqual(t, offsets, getContent(getConfigByPipeline(p).OffsetsFile))
+		},
+	}, 10)
 }
 
-// todo: this test should work but we should have some "fingerprint" of a file to do it
-//func TestShutdownRotation(t *testing.T) {
-//	c, p := startPipeline(stdConfig(),true)
-//
-//	file := createTempFile()
-//	addData(file, []byte(`{"Data":"Line1_1"}`), true, false)
-//	addData(file, []byte(`{"Data":"Line2_1"}`), true, false)
-//	c.HandleEventFlowFinish(false)
-//
-//	c.WaitUntilDone(false)
-//	c.Stop()
-//	assert.Equal(t, 2, c.GetEventLogLength(), "wrong event count")
-//	assert.Equal(t, 2, c.GetEventsTotal(), "wrong events count")
-//
-//	newFile := rotateFile(file)
-//
-//	addData(newFile, []byte(`{"Data":"Line3_1"}`), true, false)
-//	addData(newFile, []byte(`{"Data":"Line4_1"}`), true, false)
-//	addData(newFile, []byte(`{"Data":"Line5_1"}`), true, false)
-//	addData(newFile, []byte(`{"Data":"Line6_1"}`), true, false)
-//
-//	addData(file, []byte(`{"Data":"Line1_2"}`), true, false)
-//	addData(file, []byte(`{"Data":"Line2_2"}`), true, false)
-//	addData(file, []byte(`{"Data":"Line2_2"}`), true, false)
-//	addData(file, []byte(`{"Data":"Line3_2"}`), true, false)
-//
-//	c, p = startPipeline("async", true, nil)
-//	defer c.Stop()
-//	c.HandleEventFlowFinish(false)
-//	c.WaitUntilDone(false)
-//	//
-//	offsets := fmt.Sprintf(`- file: %d %s
-//  not_set: 114
-//- file: %d %s
-//  not_set: 76
-//`, getInodeByFile(newFile), newFile, getInodeByFile(file), file)
-//
-//	assert.Equal(t, 8, c.GetEventLogLength(), "wrong event count")
-//	assert.Equal(t, 8, c.GetEventsTotal(), "wrong events count")
-//
-//	assertOffsetsEqual(t, offsets, getContent(p.config.OffsetsFile))
-//}
+func TestRotationRenameWhileNotWorking(t *testing.T) {
+	file := ""
+	run(&test.Case{
+		Prepare: func() {
+		},
+		Act: func(p *pipeline.Pipeline) {
+			file = createTempFile()
+			addString(file, `"file_1_line_1"`, true, false)
+			addString(file, `"file_1_line_2"`, true, false)
+		},
+		Assert: func(p *pipeline.Pipeline) {
+			assert.Equal(t, 2, p.GetEventsTotal(), "wrong events count")
+		},
+	}, 2)
+
+	newFile := rotateFile(file)
+
+	run(&test.Case{
+		Prepare: func() {
+			addString(newFile, `"file_1_line_3"`, true, false)
+			addString(newFile, `"file_1_line_4"`, true, false)
+			addString(newFile, `"file_1_line_5"`, true, false)
+			addString(newFile, `"file_1_line_6"`, true, false)
+
+			addString(file, `"file_2_line_1"`, true, false)
+			addString(file, `"file_2_line_2"`, true, false)
+			addString(file, `"file_2_line_3"`, true, false)
+			addString(file, `"file_2_line_4"`, true, false)
+		},
+		Act: func(p *pipeline.Pipeline) {},
+		Assert: func(p *pipeline.Pipeline) {
+			assert.Equal(t, 10, p.GetEventsTotal(), "wrong events count")
+
+			contentFormat := `- file: %s
+  inode: %d
+  fingerprint: %d
+  streams:
+    not_set: 96
+- file: %s
+  inode: %d
+  fingerprint: %d
+  streams:
+    not_set: 64
+`
+			offsets := fmt.Sprintf(contentFormat, newFile, getInodeByFile(newFile), getFingerprint(newFile), file, getInodeByFile(file), getFingerprint(file))
+			assertOffsetsAreEqual(t, offsets, getContent(getConfigByPipeline(p).OffsetsFile))
+		},
+	}, 8, "dirty")
+}
 
 func TestTruncation(t *testing.T) {
-	pipe, input, output := startStdCleanPipeline()
+	file := ""
+	x := atomic.NewInt32(2)
+	run(&test.Case{
+		Prepare: func() {},
+		Act: func(p *pipeline.Pipeline) {
+			file = createTempFile()
+			addString(file, `"line_1"`, true, false)
+			addString(file, `"line_2"`, true, false)
 
-	data := []byte(`{"Data":"Line1"}`)
-	file := createTempFile()
-	addData(file, data, true, false)
-	addData(file, data, true, false)
+			test.WaitForEvents(x)
 
-	output.WaitFor(2)
-	assert.Equal(t, 2, pipe.GetEventsTotal(), "wrong events count")
-	output.ResetWaitFor()
+			truncateFile(file)
+			addString(file, `"line_3"`, true, true)
+			addString(file, `"line_4"`, true, true)
+			addString(file, `"line_5"`, true, true)
 
-	truncateFile(file)
-	data = []byte(`{"Data":"Line2"}`)
-	addData(file, data, true, true)
-	addData(file, data, true, true)
-	addData(file, data, true, true)
-
-	output.WaitFor(3)
-	pipe.Stop()
-
-	assert.Equal(t, 5, pipe.GetEventsTotal(), "wrong events count")
-	assertOffsetsEqual(t, genOffsetsContent(file, (len(data)+1)*3), getContent(input.config.OffsetsFile))
+		},
+		Assert: func(p *pipeline.Pipeline) {
+			assert.Equal(t, 5, p.GetEventsTotal(), "wrong events count")
+			assertOffsetsAreEqual(t, genOffsetsContent(file, (len(`"line_1"`)+newLine)*3), getContent(getConfigByPipeline(p).OffsetsFile))
+		},
+		Out: func(event *pipeline.Event) {
+			x.Dec()
+		},
+	}, 5)
 }
 
 func TestTruncationSeq(t *testing.T) {
-	c, _, _ := startStdCleanPipeline()
+	p := test.NewPipeline(nil)
+	p.SetInput(getInputInfo())
+	p.Start()
 
 	data := getContentBytes("../../../testdata/json/streams.json")
 	data = append(data, data...)
@@ -826,7 +1033,7 @@ func TestTruncationSeq(t *testing.T) {
 			truncations := 0
 			size := atomic.Int32{}
 			name := createTempFile()
-			file, err := os.OpenFile(name, os.O_APPEND|os.O_WRONLY, 0664)
+			file, err := os.OpenFile(name, os.O_APPEND|os.O_WRONLY, perm)
 			if err != nil {
 				panic(err.Error())
 			}
@@ -868,38 +1075,43 @@ func TestTruncationSeq(t *testing.T) {
 	}
 
 	wg.Wait()
-	c.Stop()
+	p.Stop()
 }
 
-// todo: remove sleep after file creation and fix test
 func TestRenameRotationInsane(t *testing.T) {
-	c, p, _ := startStdCleanPipeline()
+	p := test.NewPipeline(nil)
+	p.SetInput(getInputInfo())
+	input := p.GetInput().(*Plugin)
+	output := p.GetOutput().(*devnull.Plugin)
+	p.Start()
 
 	filesCount := 16
+	wg := sync.WaitGroup{}
+	wg.Add(filesCount * 8)
+	output.SetOutFn(func(event *pipeline.Event) {
+		wg.Done()
+	})
+
 	files := make([]string, 0, filesCount)
 
-	wg := sync.WaitGroup{}
-	wg.Add(filesCount)
 	for i := 0; i < filesCount; i++ {
 		files = append(files, createTempFile())
-		time.Sleep(time.Millisecond * 100)
-		go func(file string, index int, wg *sync.WaitGroup) {
-			addData(file, []byte(`{"Data":"Line1_1"}`), true, false)
-			addData(file, []byte(`{"Data":"Line2_1"}`), true, false)
+		go func(file string, index int) {
+			addBytes(file, []byte(`{"Data":"Line1_1"}`), true, false)
+			addBytes(file, []byte(`{"Data":"Line2_1"}`), true, false)
 
 			newFile := file + ".new"
 			renameFile(file, newFile)
 			createFile(file)
 
-			addData(file, []byte(`{"Data":"Line3_1"}`), true, false)
-			addData(file, []byte(`{"Data":"Line4_1"}`), true, false)
-			addData(file, []byte(`{"Data":"Line5_1"}`), true, false)
-			addData(file, []byte(`{"Data":"Line6_1"}`), true, false)
+			addBytes(file, []byte(`{"Data":"Line3_1"}`), true, false)
+			addBytes(file, []byte(`{"Data":"Line4_1"}`), true, false)
+			addBytes(file, []byte(`{"Data":"Line5_1"}`), true, false)
+			addBytes(file, []byte(`{"Data":"Line6_1"}`), true, false)
 
-			addData(newFile, []byte(`{"Data":"Line1_2"}`), true, false)
-			addData(newFile, []byte(`{"Data":"Line2_2"}`), true, false)
-			wg.Done()
-		}(files[i], i, &wg)
+			addBytes(newFile, []byte(`{"Data":"Line1_2"}`), true, false)
+			addBytes(newFile, []byte(`{"Data":"Line2_2"}`), true, false)
+		}(files[i], i)
 	}
 
 	for i := 0; i < filesCount; i++ {
@@ -907,92 +1119,10 @@ func TestRenameRotationInsane(t *testing.T) {
 	}
 
 	wg.Wait()
-	p.jobProvider.maintenanceJobs()
-	c.Stop()
+	p.Stop()
 
-	assert.Equal(t, filesCount*8, c.GetEventsTotal(), "wrong events count")
-	assertOffsetsEqual(t, genOffsetsContentMultiple(files, 4*19), getContent(p.config.OffsetsFile))
-}
-
-func BenchmarkRawRead(b *testing.B) {
-	bytes := 100 * 1024 * 1024
-	file := createTempFile()
-	data := make([]byte, 0, bytes)
-	lengthOffset := 300
-	lengthRange := 300
-	line := make([]byte, 0, lengthOffset+lengthRange+1)
-	i := 0
-	lines := 0
-	for i < bytes {
-		l := lengthOffset + rand.Int()%lengthRange
-		if i+l > bytes {
-			l -= i + l - bytes + 1
-		}
-		c := line[0:l]
-		for j := 0; j < l; j++ {
-			c[j] = 'a'
-		}
-		c[l-1] = '\n'
-		lines++
-		i += l + 1
-		data = append(data, c...)
-	}
-	addData(file, data, false, true)
-
-	b.ResetTimer()
-	b.SetBytes(int64(bytes))
-	b.ReportAllocs()
-	for n := 0; n < b.N; n++ {
-		c, _, _ := startBenchPipeline()
-
-		fmt.Printf("gen lines=%d, processed lines: %d\n", lines, c.GetEventsTotal())
-
-		c.Stop()
-	}
-}
-
-func BenchmarkHeavyJsonRead(b *testing.B) {
-	file := createTempFile()
-	json := getContent("../../../testdata/json/heavy.json")
-	lines := 100
-	content := make([]byte, 0, len(json)*lines)
-	for i := 0; i < lines; i++ {
-		content = append(content, json...)
-	}
-	addData(file, content, false, false)
-
-	b.ResetTimer()
-	b.SetBytes(int64(lines * len(json)))
-	b.ReportAllocs()
-	for n := 0; n < b.N; n++ {
-		c, _, _ := startBenchPipeline()
-
-		fmt.Printf("gen bytes=%d, gen lines=%d, processed lines: %d\n", lines*len(json), lines, c.GetEventsTotal())
-
-		c.Stop()
-	}
-}
-
-func BenchmarkLightJsonReadSeq(b *testing.B) {
-	file := createTempFile()
-	json := getContent("../../../testdata/json/light.json")
-	lines := 30000
-	content := make([]byte, 0, len(json)*lines)
-	for i := 0; i < lines; i++ {
-		content = append(content, json...)
-	}
-	addData(file, content, false, false)
-
-	b.SetBytes(int64(lines * len(json)))
-	b.ReportAllocs()
-	b.ResetTimer()
-	for n := 0; n < b.N; n++ {
-		c, _, _ := startBenchPipeline()
-
-		fmt.Printf("gen bytes=%d, gen lines=%d, processed lines: %d\n", lines*len(json), lines*2, c.GetEventsTotal())
-
-		c.Stop()
-	}
+	assert.Equal(t, filesCount*8, p.GetEventsTotal(), "wrong events count")
+	assertOffsetsAreEqual(t, genOffsetsContentMultiple(files, 4*19), getContent(input.config.OffsetsFile))
 }
 
 func BenchmarkLightJsonReadPar(b *testing.B) {
@@ -1008,20 +1138,32 @@ func BenchmarkLightJsonReadPar(b *testing.B) {
 
 	for f := 0; f < files; f++ {
 		file := createTempFile()
-		addData(file, content, false, false)
+		addBytes(file, content, false, false)
 	}
 
 	bytes := int64(files * lines * len(json))
-	logger.Infof("")
 	logger.Infof("will read %dMb", bytes/1024/1024)
 	b.SetBytes(bytes)
 	b.ReportAllocs()
 	b.StopTimer()
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
-		c, _, _ := startBenchPipeline()
+		p, _, output := test.NewPipelineMock(nil, "passive")
+		p.SetInput(getInputInfo())
+
+		wg := &sync.WaitGroup{}
+		wg.Add(lines * files * 2)
+
+		output.SetOutFn(func(event *pipeline.Event) {
+			wg.Done()
+		})
+
+		p.Start()
+
 		b.StartTimer()
+		wg.Wait()
 		b.StopTimer()
-		c.Stop()
+
+		p.Stop()
 	}
 }

@@ -108,7 +108,6 @@ func TestFormatEvent(t *testing.T) {
 			PluginDefaultParams: &pipeline.PluginDefaultParams{
 				PipelineName: "name",
 				PipelineSettings: &pipeline.Settings{
-					ProcessorsCount: 8,
 					Capacity:        128,
 					AvgLogSize:      128,
 				},

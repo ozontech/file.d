@@ -9,8 +9,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"gitlab.ozon.ru/sre/filed/pipeline"
-	"gitlab.ozon.ru/sre/filed/plugin/input/fake"
-	"gitlab.ozon.ru/sre/filed/plugin/output/devnull"
+	"gitlab.ozon.ru/sre/filed/test"
 	corev1 "k8s.io/api/core/v1"
 )
 
@@ -51,32 +50,12 @@ func getPodInfo(item *metaItem, isWhite bool) *corev1.Pod {
 	return podInfo
 }
 
-func startPipeline() (*pipeline.Pipeline, *fake.Plugin, *Plugin, *devnull.Plugin) {
-	p := pipeline.NewTestPipeLine(false)
-
-	anyPlugin, _ := fake.Factory()
-	inputPlugin := anyPlugin.(*fake.Plugin)
-	p.SetInputPlugin(&pipeline.InputPluginData{Plugin: inputPlugin, PluginDesc: pipeline.PluginDesc{Config: fake.Config{}}})
-
-	anyPlugin, _ = factory()
-	plugin := anyPlugin.(*Plugin)
-	config := &Config{
-		LabelsWhitelist: "white_label",
-		labelsWhitelist: nil,
-	}
-	p.Processors[0].AddActionPlugin(&pipeline.ActionPluginData{Plugin: plugin, PluginDesc: pipeline.PluginDesc{Config: config}})
-
-	anyPlugin, _ = devnull.Factory()
-	outputPlugin := anyPlugin.(*devnull.Plugin)
-	p.SetOutputPlugin(&pipeline.OutputPluginData{Plugin: outputPlugin, PluginDesc: pipeline.PluginDesc{Config: config}})
-
-	p.Start()
-
-	return p, inputPlugin, plugin, outputPlugin
+func config() *Config {
+	return &Config{LabelsWhitelist: "white_label"}
 }
 
 func TestEnrichment(t *testing.T) {
-	p, input, _, _ := startPipeline()
+	p, input, _ := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, config(), pipeline.MatchModeAnd, nil))
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
 
@@ -109,7 +88,7 @@ func TestEnrichment(t *testing.T) {
 }
 
 func TestWhitelist(t *testing.T) {
-	p, input, _, output := startPipeline()
+	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, config(), pipeline.MatchModeAnd, nil))
 	wg := &sync.WaitGroup{}
 	wg.Add(2)
 
@@ -150,7 +129,7 @@ func TestWhitelist(t *testing.T) {
 }
 
 func TestJoin(t *testing.T) {
-	p, input, _, output := startPipeline()
+	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, config(), pipeline.MatchModeAnd, nil))
 	wg := &sync.WaitGroup{}
 	wg.Add(4)
 
@@ -218,8 +197,7 @@ func TestJoin(t *testing.T) {
 }
 
 func TestCleanUp(t *testing.T) {
-	p, _, _, _ := startPipeline()
-	defer p.Stop()
+	p, _, _ := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, config(), pipeline.MatchModeAnd, nil))
 
 	putMeta(getPodInfo(&metaItem{
 		nodeName:      "node_1",
@@ -245,6 +223,7 @@ func TestCleanUp(t *testing.T) {
 
 	time.Sleep(metaExpireDuration + MaintenanceInterval)
 
+	p.Stop()
 	assert.Equal(t, 0, len(metaData))
 }
 

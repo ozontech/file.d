@@ -26,9 +26,9 @@ func (w *worker) work(index int, controller pipeline.InputPluginController, jobP
 		job.mu.Lock()
 		file := job.file
 		isDone := job.isDone
-		sourceID := pipeline.SourceID(job.inode)
+		sourceID := pipeline.SourceID(job.fingerprint)
 		sourceName := job.filename
-		skipLine := job.skipLine
+		skipLine := job.shouldSkip
 		if job.symlink != "" {
 			sourceName = job.symlink
 		}
@@ -74,7 +74,7 @@ func (w *worker) work(index int, controller pipeline.InputPluginController, jobP
 
 				// skip first event because it may lost first part
 				if skipLine {
-					job.skipLine = false
+					job.shouldSkip = false
 					skipLine = false
 				} else {
 					offset := lastOffset + accumulated + i + 1

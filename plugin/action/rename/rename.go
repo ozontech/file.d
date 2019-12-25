@@ -17,7 +17,7 @@ type Plugin struct {
 type Config map[string]string
 
 func init() {
-	filed.DefaultPluginRegistry.RegisterAction(&pipeline.PluginInfo{
+	filed.DefaultPluginRegistry.RegisterAction(&pipeline.PluginStaticInfo{
 		Type:    "rename",
 		Factory: factory,
 	})

@@ -7,30 +7,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"gitlab.ozon.ru/sre/filed/pipeline"
-	"gitlab.ozon.ru/sre/filed/plugin/input/fake"
-	"gitlab.ozon.ru/sre/filed/plugin/output/devnull"
+	"gitlab.ozon.ru/sre/filed/test"
 )
-
-func startPipeline(conds pipeline.MatchConditions, condMode pipeline.MatchMode) (*pipeline.Pipeline, *fake.Plugin, *devnull.Plugin) {
-	p := pipeline.NewTestPipeLine(false)
-
-	anyPlugin, _ := fake.Factory()
-	inputPlugin := anyPlugin.(*fake.Plugin)
-	p.SetInputPlugin(&pipeline.InputPluginData{Plugin: inputPlugin, PluginDesc: pipeline.PluginDesc{Config: fake.Config{}}})
-
-	anyPlugin, _ = factory()
-	plugin := anyPlugin.(*Plugin)
-	config := &Config{}
-	p.Processors[0].AddActionPlugin(&pipeline.ActionPluginData{Plugin: plugin, PluginDesc: pipeline.PluginDesc{Config: config}, MatchConditions: conds, MatchMode: condMode})
-
-	anyPlugin, _ = devnull.Factory()
-	outputPlugin := anyPlugin.(*devnull.Plugin)
-	p.SetOutputPlugin(&pipeline.OutputPluginData{Plugin: outputPlugin, PluginDesc: pipeline.PluginDesc{Config: config}})
-
-	p.Start()
-
-	return p, inputPlugin, outputPlugin
-}
 
 func TestDiscardAnd(t *testing.T) {
 	conds := pipeline.MatchConditions{
@@ -44,7 +22,8 @@ func TestDiscardAnd(t *testing.T) {
 		},
 	}
 
-	p, input, output := startPipeline(conds, pipeline.ModeAnd)
+	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, nil, pipeline.MatchModeAnd, conds))
+
 	wg := &sync.WaitGroup{}
 	wg.Add(10)
 
@@ -60,12 +39,12 @@ func TestDiscardAnd(t *testing.T) {
 		outEvents = append(outEvents, e)
 	})
 
-	input.In(0, "test.log", 0, 0, []byte(`{"field1":"not_value1"}`))
-	input.In(0, "test.log", 0, 0, []byte(`{"field2":"not_value2"}`))
-	input.In(0, "test.log", 0, 0, []byte(`{"field1":"value1"}`))
-	input.In(0, "test.log", 0, 0, []byte(`{"field2":"value2"}`))
-	input.In(0, "test.log", 0, 0, []byte(`{"field1":"value1","field2":"value2"}`))
-	input.In(0, "test.log", 0, 0, []byte(`{"field3":"value3","field1":"value1","field2":"value2"}`))
+	input.In(0, "test", 0, 0, []byte(`{"field1":"not_value1"}`))
+	input.In(0, "test", 0, 0, []byte(`{"field2":"not_value2"}`))
+	input.In(0, "test", 0, 0, []byte(`{"field1":"value1"}`))
+	input.In(0, "test", 0, 0, []byte(`{"field2":"value2"}`))
+	input.In(0, "test", 0, 0, []byte(`{"field1":"value1","field2":"value2"}`))
+	input.In(0, "test", 0, 0, []byte(`{"field3":"value3","field1":"value1","field2":"value2"}`))
 
 	wg.Wait()
 	p.Stop()
@@ -87,7 +66,8 @@ func TestDiscardOr(t *testing.T) {
 		},
 	}
 
-	p, input, output := startPipeline(conds, pipeline.ModeOr)
+	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, nil, pipeline.MatchModeOr, conds))
+
 	wg := &sync.WaitGroup{}
 	wg.Add(8)
 
@@ -130,7 +110,8 @@ func TestDiscardRegex(t *testing.T) {
 		},
 	}
 
-	p, input, output := startPipeline(conds, pipeline.ModeOr)
+	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, nil, pipeline.MatchModeOr, conds))
+
 	wg := &sync.WaitGroup{}
 	wg.Add(9)
 

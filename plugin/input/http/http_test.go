@@ -7,10 +7,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"gitlab.ozon.ru/sre/filed/pipeline"
 	"gitlab.ozon.ru/sre/filed/plugin/output/devnull"
+	"gitlab.ozon.ru/sre/filed/test"
 )
 
 func startPipeline(persistenceMode string, enableEventLog bool, config *Config) (*pipeline.Pipeline, *Plugin, *devnull.Plugin) {
-	p := pipeline.NewTestPipeLine(true)
+	p := test.NewPipeline(true)
 	if enableEventLog {
 		p.EnableEventLog()
 	}
@@ -20,11 +21,11 @@ func startPipeline(persistenceMode string, enableEventLog bool, config *Config) 
 	}
 	anyPlugin, _ := Factory()
 	inputPlugin := anyPlugin.(*Plugin)
-	p.SetInputPlugin(&pipeline.InputPluginData{Plugin: inputPlugin, PluginDesc: pipeline.PluginDesc{Config: config}})
+	p.SetInput(&pipeline.InputPluginInfo{Plugin: inputPlugin, PluginDesc: pipeline.PluginDesc{Config: config}})
 
 	anyPlugin, _ = devnull.Factory()
 	outputPlugin := anyPlugin.(*devnull.Plugin)
-	p.SetOutputPlugin(&pipeline.OutputPluginData{Plugin: outputPlugin, PluginDesc: pipeline.PluginDesc{Config: config}})
+	p.SetOutput(&pipeline.OutputPluginInfo{Plugin: outputPlugin, PluginDesc: pipeline.PluginDesc{Config: config}})
 
 	p.Start()
 

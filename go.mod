@@ -4,9 +4,9 @@ require (
 	github.com/DataDog/zstd v1.4.0 // indirect
 	github.com/Shopify/sarama v1.23.1
 	github.com/alecthomas/kingpin v2.2.6+incompatible
-	github.com/alecthomas/template v0.0.0-20190718012654-fb15b899a751 // indirect
 	github.com/alecthomas/units v0.0.0-20190717042225-c3de453c63f4
 	github.com/bitly/go-simplejson v0.5.0
+	github.com/bmizerany/assert v0.0.0-20160611221934-b7ed37b82869 // indirect
 	github.com/fsnotify/fsnotify v1.4.7
 	github.com/ghodss/yaml v1.0.0
 	github.com/gogo/protobuf v1.2.1 // indirect
@@ -17,7 +17,7 @@ require (
 	github.com/kr/pretty v0.1.0 // indirect
 	github.com/pierrec/lz4 v2.0.5+incompatible // indirect
 	github.com/pkg/errors v0.8.1
-	github.com/prometheus/client_golang v1.1.0
+	github.com/prometheus/client_golang v1.3.0
 	github.com/satori/go.uuid v1.2.0
 	github.com/spf13/pflag v1.0.3 // indirect
 	github.com/stretchr/testify v1.3.0
@@ -29,7 +29,6 @@ require (
 	golang.org/x/crypto v0.0.0-20190506204251-e1dfcc566284 // indirect
 	golang.org/x/net v0.0.0-20190813141303-74dc4d7220e7 // indirect
 	golang.org/x/oauth2 v0.0.0-20190604053449-0f29369cfe45 // indirect
-	golang.org/x/sys v0.0.0-20190804053845-51ab0e2deafa // indirect
 	golang.org/x/time v0.0.0-20190308202827-9d24e82272b4 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/jcmturner/goidentity.v3 v3.0.0 // indirect

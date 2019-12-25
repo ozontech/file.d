@@ -9,40 +9,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"gitlab.ozon.ru/sre/filed/pipeline"
-	"gitlab.ozon.ru/sre/filed/plugin/input/fake"
-	"gitlab.ozon.ru/sre/filed/plugin/output/devnull"
+	"gitlab.ozon.ru/sre/filed/test"
 )
-
-func startPipeline(interval time.Duration, buckets, limitA, limitB, defaultLimit int) (*pipeline.Pipeline, *fake.Plugin, *devnull.Plugin) {
-	p := pipeline.NewTestPipeLine(false)
-
-	anyPlugin, _ := fake.Factory()
-	inputPlugin := anyPlugin.(*fake.Plugin)
-	p.SetInputPlugin(&pipeline.InputPluginData{Plugin: inputPlugin, PluginDesc: pipeline.PluginDesc{Config: fake.Config{}}})
-
-	anyPlugin, _ = factory()
-	plugin := anyPlugin.(*Plugin)
-	config := &Config{
-		Rules: []RuleConfig{
-			{Limit: int64(limitA), Conditions: map[string]string{"k8s_ns": "ns_1"}},
-			{Limit: int64(limitB), Conditions: map[string]string{"k8s_ns": "ns_2"}},
-		},
-		Buckets:       buckets,
-		Interval:      pipeline.Duration{Duration: interval},
-		ThrottleField: "k8s_pod",
-		TimeField:     "time",
-		DefaultLimit:  int64(defaultLimit),
-	}
-	p.Processors[0].AddActionPlugin(&pipeline.ActionPluginData{Plugin: plugin, PluginDesc: pipeline.PluginDesc{Config: config}})
-
-	anyPlugin, _ = devnull.Factory()
-	outputPlugin := anyPlugin.(*devnull.Plugin)
-	p.SetOutputPlugin(&pipeline.OutputPluginData{Plugin: outputPlugin, PluginDesc: pipeline.PluginDesc{Config: config}})
-
-	p.Start()
-
-	return p, inputPlugin, outputPlugin
-}
 
 func TestThrottle(t *testing.T) {
 	interval := time.Millisecond * 100
@@ -58,7 +26,19 @@ func TestThrottle(t *testing.T) {
 	defaultLimitDelta := totalBuckets * defaultLimit
 	eventsTotal := totalBuckets*(limitA+limitB) + defaultLimitDelta
 
-	p, input, output := startPipeline(interval, buckets, limitA, limitB, defaultLimit)
+	config := &Config{
+		Rules: []RuleConfig{
+			{Limit: int64(limitA), Conditions: map[string]string{"k8s_ns": "ns_1"}},
+			{Limit: int64(limitB), Conditions: map[string]string{"k8s_ns": "ns_2"}},
+		},
+		Buckets:       buckets,
+		Interval:      pipeline.Duration{Duration: interval},
+		ThrottleField: "k8s_pod",
+		TimeField:     "time",
+		DefaultLimit:  int64(defaultLimit),
+	}
+
+	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, config, pipeline.MatchModeAnd, nil))
 	wg := &sync.WaitGroup{}
 	wg.Add(eventsTotal)
 

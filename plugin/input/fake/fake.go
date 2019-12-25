@@ -15,7 +15,7 @@ type Plugin struct {
 }
 
 func init() {
-	filed.DefaultPluginRegistry.RegisterInput(&pipeline.PluginInfo{
+	filed.DefaultPluginRegistry.RegisterInput(&pipeline.PluginStaticInfo{
 		Type:    "fake",
 		Factory: Factory,
 	})
