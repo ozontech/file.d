@@ -2,6 +2,7 @@ package filed
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	_ "net/http/pprof"
 	"runtime/debug"
@@ -67,37 +68,33 @@ func (f *Filed) addPipeline(name string, config *PipelineConfig) {
 	settings := extractPipelineParams(config.Raw.Get("settings"))
 
 	p := pipeline.New(name, settings, f.registry, mux)
-	f.setupInput(p, config)
+	err := f.setupInput(p, config)
+	if err != nil {
+		logger.Fatalf("can't create pipeline %q: %s", name, err.Error())
+	}
+
 	f.setupActions(p, config)
-	f.setupOutput(p, config)
+
+	err = f.setupOutput(p, config)
+	if err != nil {
+		logger.Fatalf("can't create pipeline %q: %s", name, err.Error())
+	}
 
 	f.Pipelines = append(f.Pipelines, p)
 }
 
-func (f *Filed) setupInput(p *pipeline.Pipeline, pipelineConfig *PipelineConfig) {
-	inputJSON := pipelineConfig.Raw.Get("input")
-	if inputJSON.MustMap() == nil {
-		logger.Fatalf("no input for pipeline %q", p.Name)
-	}
-	t := inputJSON.Get("type").MustString()
-	if t == "" {
-		logger.Fatalf("no input type provided for pipeline %q", p.Name)
-	}
-
-	logger.Infof("creating input with type %q", t)
-	info := f.plugins.GetInputByType(t)
-	configJson, err := inputJSON.Encode()
+func (f *Filed) setupInput(p *pipeline.Pipeline, pipelineConfig *PipelineConfig) error {
+	info, err := f.getStaticInfo(pipelineConfig, pipeline.PluginKindInput)
 	if err != nil {
-		logger.Panicf("can't create config json for input %q in pipeline %q", t, p.Name)
+		return err
 	}
 
-	plugin, config := info.Factory()
-	err = json.Unmarshal(configJson, config)
-	if err != nil {
-		logger.Panicf("can't unmarshal config for input %q in pipeline %q", t, p.Name)
-	}
+	p.SetInput(&pipeline.InputPluginInfo{
+		PluginStaticInfo:  info,
+		PluginRuntimeInfo: f.instantiatePlugin(info),
+	})
 
-	p.SetInputPlugin(&pipeline.InputPluginData{Plugin: plugin.(pipeline.InputPlugin), PluginDesc: pipeline.PluginDesc{Config: config, T: t}})
+	return nil
 }
 
 func (f *Filed) setupActions(p *pipeline.Pipeline, pipelineConfig *PipelineConfig) {
@@ -131,33 +128,73 @@ func (f *Filed) setupAction(p *pipeline.Pipeline, index int, t string, actionJSO
 	metricName, metricLabels := extractMetrics(actionJSON)
 	configJSON := makeActionJSON(actionJSON)
 
-	p.AddAction(info, configJSON, matchMode, conditions, metricName, metricLabels)
+	_, config := info.Factory()
+	err = json.Unmarshal(configJSON, config)
+	if err != nil {
+		logger.Fatalf("can't unmarshal config for %s action in pipeline %q: %s", info.Type, p.Name, err.Error())
+	}
+
+	infoCopy := *info
+	infoCopy.Config = config
+
+	p.AddAction(&pipeline.ActionPluginStaticInfo{
+		PluginStaticInfo: &infoCopy,
+		MatchConditions:  conditions,
+		MatchMode:        matchMode,
+		MetricName:       metricName,
+		MetricLabels:     metricLabels,
+	})
 }
 
-func (f *Filed) setupOutput(p *pipeline.Pipeline, pipelineConfig *PipelineConfig) {
-	outputJSON := pipelineConfig.Raw.Get("output")
-	if outputJSON.MustMap() == nil {
-		logger.Fatalf("no output for pipeline %q", p.Name)
-	}
-	t := outputJSON.Get("type").MustString()
-	if t == "" {
-		logger.Fatalf("no output type provided for pipeline %q", p.Name)
-	}
-
-	logger.Infof("creating output with type %q", t)
-	info := f.plugins.GetOutputByType(t)
-	configJson, err := outputJSON.Encode()
+func (f *Filed) setupOutput(p *pipeline.Pipeline, pipelineConfig *PipelineConfig) error {
+	info, err := f.getStaticInfo(pipelineConfig, pipeline.PluginKindOutput)
 	if err != nil {
-		logger.Panicf("can't create config json for output %q in pipeline %q", t, p.Name)
+		return err
 	}
 
-	plugin, config := info.Factory()
+	p.SetOutput(&pipeline.OutputPluginInfo{
+		PluginStaticInfo:  info,
+		PluginRuntimeInfo: f.instantiatePlugin(info),
+	})
+
+	return nil
+}
+
+func (f *Filed) instantiatePlugin(info *pipeline.PluginStaticInfo) *pipeline.PluginRuntimeInfo {
+	plugin, _ := info.Factory()
+	return &pipeline.PluginRuntimeInfo{
+		Plugin: plugin,
+		ID:     "",
+	}
+}
+
+func (f *Filed) getStaticInfo(pipelineConfig *PipelineConfig, pluginKind pipeline.PluginKind) (*pipeline.PluginStaticInfo, error) {
+	inputJSON := pipelineConfig.Raw.Get(string(pluginKind))
+	if inputJSON.MustMap() == nil {
+		return nil, fmt.Errorf("no %s plugin provided", pluginKind)
+	}
+	t := inputJSON.Get("type").MustString()
+	if t == "" {
+		return nil, fmt.Errorf("%s doesn't have type", pluginKind)
+	}
+
+	logger.Infof("creating %s with type %q", pluginKind, t)
+	info := f.plugins.Get(pluginKind, t)
+	configJson, err := inputJSON.Encode()
+	if err != nil {
+		logger.Panicf("can't create config json for %s", t)
+	}
+
+	_, config := info.Factory()
 	err = json.Unmarshal(configJson, config)
 	if err != nil {
-		logger.Panicf("can't unmarshal config for output %q in pipeline %q", t, p.Name)
+		return nil, fmt.Errorf("can't unmarshal config for %s", pluginKind)
 	}
 
-	p.SetOutputPlugin(&pipeline.OutputPluginData{Plugin: plugin.(pipeline.OutputPlugin), PluginDesc: pipeline.PluginDesc{Config: config, T: t}})
+	infoCopy := *info
+	infoCopy.Config = config
+
+	return &infoCopy, nil
 }
 
 func (f *Filed) Stop() {

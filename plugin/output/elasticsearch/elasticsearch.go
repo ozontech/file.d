@@ -45,7 +45,7 @@ type data struct {
 }
 
 func init() {
-	filed.DefaultPluginRegistry.RegisterOutput(&pipeline.PluginInfo{
+	filed.DefaultPluginRegistry.RegisterOutput(&pipeline.PluginStaticInfo{
 		Type:    "elasticsearch",
 		Factory: Factory,
 	})

@@ -1,3 +1,5 @@
+VERSION ?= v0.1.0
+
 .PHONY: test
 test:
 	go test ./filed/ -v -count 1
@@ -18,10 +20,6 @@ build:
 
 .PHONY: push-image
 push-image: build
-	@if [[ "${VERSION}" == "" ]]; then \
-		echo "Usage push-image VERSION=vX.X.X"; exit 1; \
-	fi
-
 	docker build -t gitlab-registry.ozon.ru/sre/filed:${VERSION} .
 	docker push gitlab-registry.ozon.ru/sre/filed:${VERSION}
 

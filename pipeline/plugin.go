@@ -50,41 +50,39 @@ type InputPluginParams struct {
 	Controller InputPluginController
 }
 
-type PluginRegistryItem struct {
-	ID   string
-	Info *PluginInfo
-}
-
-type PluginInfo struct {
+type PluginStaticInfo struct {
 	Type    string
 	Factory PluginFactory
+	Config  AnyConfig
 }
 
-type InputPluginData struct {
-	Plugin InputPlugin
-
-	PluginDesc
+type PluginRuntimeInfo struct {
+	Plugin AnyPlugin
+	ID     string
 }
 
-type ActionPluginData struct {
-	Plugin ActionPlugin
+type InputPluginInfo struct {
+	*PluginStaticInfo
+	*PluginRuntimeInfo
+}
 
-	PluginDesc
+type ActionPluginStaticInfo struct {
+	*PluginStaticInfo
 
+	MetricName string
+	MetricLabels []string
 	MatchConditions MatchConditions
 	MatchMode       MatchMode
 }
 
-type OutputPluginData struct {
-	Plugin OutputPlugin
-
-	PluginDesc
+type ActionPluginInfo struct {
+	*ActionPluginStaticInfo
+	*PluginRuntimeInfo
 }
 
-type PluginDesc struct {
-	ID     string
-	T      string // plugin type
-	Config AnyConfig
+type OutputPluginInfo struct {
+	*PluginStaticInfo
+	*PluginRuntimeInfo
 }
 
 type AnyPlugin interface{}
@@ -104,7 +102,7 @@ type MatchCondition struct {
 type MatchMode int
 
 const (
-	ModeAnd     MatchMode = 0
-	ModeOr      MatchMode = 1
-	ModeUnknown MatchMode = 2
+	MatchModeAnd     MatchMode = 0
+	MatchModeOr      MatchMode = 1
+	MatchModeUnknown MatchMode = 2
 )

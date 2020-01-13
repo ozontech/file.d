@@ -54,7 +54,7 @@ func main() {
 
 	debug.SetGCPercent(gcPercent)
 	insaneJSON.DisableBeautifulErrors = true
-	insaneJSON.StartNodePoolSize = pipeline.DefaultNodePoolSize
+	insaneJSON.StartNodePoolSize = pipeline.DefaultJSONNodePoolSize
 
 	_, _ = maxprocs.Set(maxprocs.Logger(logger.Debugf))
 

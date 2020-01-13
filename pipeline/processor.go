@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"gitlab.ozon.ru/sre/filed/logger"
+	"go.uber.org/atomic"
 )
 
 type ActionResult int
@@ -12,14 +13,14 @@ const (
 	// pass event to the next action in a pipeline
 	ActionPass ActionResult = 0
 	// skip further processing of event and request next event from the same stream and source as current
-	// plugin may receive event with eventKindTimeout kind if it takes to long to read next event from same stream
+	// plugin may receive event with eventKindTimeout if it takes to long to read next event from same stream
 	ActionCollapse ActionResult = 2
 	// skip further processing of event and request next event from any stream and source
 	ActionDiscard ActionResult = 1
 	// hold event in a plugin and request next event from the same stream and source as current.
 	// same as ActionCollapse but held event should be manually committed or returned into pipeline.
 	// check out Commit()/Propagate() functions in InputPluginController.
-	// plugin may receive event with eventKindTimeout kind if it takes to long to read next event from same stream
+	// plugin may receive event with eventKindTimeout if it takes to long to read next event from same stream
 	ActionHold ActionResult = 3
 )
 
@@ -34,14 +35,18 @@ const (
 	eventStatusHold       eventStatus = "held"
 )
 
-// processor is worker goroutine which doing pipeline actions
+// processor is a goroutine which doing pipeline actions
 type processor struct {
-	id       int
-	pipeline *Pipeline
-	streamer *streamer
+	id            int
+	streamer      *streamer
+	metricsHolder *metricsHolder
+	output        OutputPlugin
+	finalize      finalizeFn
+
+	activeCounter *atomic.Int32
 
 	actions          []ActionPlugin
-	actionsData      []*ActionPluginData
+	actionInfos      []*ActionPluginStaticInfo
 	busyActions      []bool
 	busyActionsTotal int
 
@@ -49,33 +54,47 @@ type processor struct {
 	metricsValues []string
 }
 
-func NewProcessor(id int, pipeline *Pipeline, streamer *streamer) *processor {
+var id = 0
+
+func NewProcessor(metricsHolder *metricsHolder, activeCounter *atomic.Int32, output OutputPlugin, streamer *streamer, finalizeFn finalizeFn) *processor {
 	processor := &processor{
-		id:       id,
-		pipeline: pipeline,
-		streamer: streamer,
+		id:            id,
+		streamer:      streamer,
+		metricsHolder: metricsHolder,
+		output:        output,
+		finalize:      finalizeFn,
+
+		activeCounter: activeCounter,
 
 		metricsValues: make([]string, 0, 0),
 	}
 
+	id++
+
 	return processor
 }
 
-func (p *processor) start(output OutputPlugin, params *ActionPluginParams) {
+func (p *processor) start(params *PluginDefaultParams) {
 	for i, action := range p.actions {
-		action.Start(p.actionsData[i].Config, params)
+		action.Start(p.actionInfos[i].PluginStaticInfo.Config, &ActionPluginParams{
+			PluginDefaultParams: params,
+			Controller:          p,
+		})
 	}
 
-	go p.process(output)
+	go p.process()
 }
 
-func (p *processor) process(output OutputPlugin) {
+func (p *processor) process() {
 	for {
 		st := p.streamer.joinStream()
 		if st == nil {
 			return
 		}
+
+		p.activeCounter.Inc()
 		p.dischargeStream(st)
+		p.activeCounter.Dec()
 	}
 }
 
@@ -103,7 +122,7 @@ func (p *processor) processSequence(event *Event) bool {
 		}
 
 		event.stage = eventStageOutput
-		p.pipeline.output.Out(event)
+		p.output.Out(event)
 	}
 
 	return isSuccess
@@ -155,19 +174,19 @@ func (p *processor) doActions(event *Event) (isPassed bool) {
 			p.countEvent(event, index, eventStatusDiscarded)
 			p.tryResetBusy(index)
 			// can't notify input here, because previous events may delay and we'll get offset sequence corruption
-			p.pipeline.finalize(event, false, true)
+			p.finalize(event, false, true)
 			return false
 		case ActionCollapse:
 			p.countEvent(event, index, eventStatusCollapse)
 			p.tryMarkBusy(index)
 			// can't notify input here, because previous events may delay and we'll get offset sequence corruption
-			p.pipeline.finalize(event, false, true)
+			p.finalize(event, false, true)
 			return false
 		case ActionHold:
 			p.countEvent(event, index, eventStatusHold)
 			p.tryMarkBusy(index)
 
-			p.pipeline.finalize(event, false, false)
+			p.finalize(event, false, false)
 			return false
 		}
 	}
@@ -200,7 +219,7 @@ func (p *processor) tryResetBusy(index int) {
 }
 
 func (p *processor) countEvent(event *Event, actionIndex int, status eventStatus) {
-	p.metricsValues = p.pipeline.countEvent(event, actionIndex, status, p.metricsValues)
+	p.metricsValues = p.metricsHolder.count(event, actionIndex, status, p.metricsValues)
 }
 
 func (p *processor) isMatch(index int, event *Event) bool {
@@ -212,11 +231,11 @@ func (p *processor) isMatch(index int, event *Event) bool {
 		return true
 	}
 
-	descr := p.actionsData[index]
-	conds := descr.MatchConditions
-	mode := descr.MatchMode
+	info := p.actionInfos[index]
+	conds := info.MatchConditions
+	mode := info.MatchMode
 
-	if mode == ModeOr {
+	if mode == MatchModeOr {
 		return p.isMatchOr(conds, event)
 	} else {
 		return p.isMatchAnd(conds, event)
@@ -275,14 +294,14 @@ func (p *processor) stop() {
 	}
 }
 
-func (p *processor) AddActionPlugin(descr *ActionPluginData) {
-	p.actions = append(p.actions, descr.Plugin)
-	p.actionsData = append(p.actionsData, descr)
+func (p *processor) AddActionPlugin(info *ActionPluginInfo) {
+	p.actions = append(p.actions, info.Plugin.(ActionPlugin))
+	p.actionInfos = append(p.actionInfos, info.ActionPluginStaticInfo)
 	p.busyActions = append(p.busyActions, false)
 }
 
 func (p *processor) Commit(event *Event) {
-	p.pipeline.finalize(event, false, true)
+	p.finalize(event, false, true)
 }
 
 func (p *processor) Propagate(event *Event) {

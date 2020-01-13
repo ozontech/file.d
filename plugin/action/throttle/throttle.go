@@ -43,7 +43,7 @@ type RuleConfig struct {
 }
 
 func init() {
-	filed.DefaultPluginRegistry.RegisterAction(&pipeline.PluginInfo{
+	filed.DefaultPluginRegistry.RegisterAction(&pipeline.PluginStaticInfo{
 		Type:    "throttle",
 		Factory: factory,
 	})

@@ -35,7 +35,7 @@ var (
 )
 
 func init() {
-	filed.DefaultPluginRegistry.RegisterAction(&pipeline.PluginInfo{
+	filed.DefaultPluginRegistry.RegisterAction(&pipeline.PluginStaticInfo{
 		Type:    "k8s",
 		Factory: factory,
 	})

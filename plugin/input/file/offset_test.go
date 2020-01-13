@@ -7,11 +7,17 @@ import (
 )
 
 func TestParseOffsets(t *testing.T) {
-	data := `- file: 1 /some/informational/name
-  default: 100
-  another: 200
-- file: 2 /another/informational/name
-  stderr: 300
+	data := `- file: /some/informational/name
+  inode: 1
+  fingerprint: 1234
+  streams:
+    default: 100
+    another: 200
+- file: /another/informational/name
+  inode: 2
+  fingerprint: 4321
+  streams:
+    stderr: 300
 `
 	offsetDB := newOffsetDB("", "")
 	offsets := offsetDB.parse(data)
@@ -20,6 +26,7 @@ func TestParseOffsets(t *testing.T) {
 	assert.True(t, has, "Stream not found")
 
 	assert.Equal(t, "/some/informational/name", inode.filename)
+	assert.Equal(t, fingerprint(1234), inode.fingerprint)
 
 	offset, has := inode.streams["default"]
 	assert.True(t, has, "Sub stream not found")
@@ -33,6 +40,7 @@ func TestParseOffsets(t *testing.T) {
 	assert.True(t, has, "Stream not found")
 
 	assert.Equal(t, "/another/informational/name", inode.filename)
+	assert.Equal(t, fingerprint(4321), inode.fingerprint)
 
 	offset, has = inode.streams["stderr"]
 	assert.True(t, has, "Sub stream not found")

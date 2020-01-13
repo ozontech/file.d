@@ -6,13 +6,14 @@ import (
 )
 
 type job struct {
-	file     *os.File
-	inode    inode
-	filename string
-	symlink  string
+	file        *os.File
+	inode       inode
+	fingerprint fingerprint
+	filename    string
+	symlink     string
 
-	isDone   bool
-	skipLine bool
+	isDone     bool
+	shouldSkip bool
 
 	offsets streamsOffsets
 

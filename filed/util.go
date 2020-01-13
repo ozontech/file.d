@@ -3,7 +3,6 @@ package filed
 import (
 	"fmt"
 	"regexp"
-	"runtime"
 	"strings"
 	"time"
 
@@ -14,9 +13,6 @@ import (
 )
 
 func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
-	procs := runtime.GOMAXPROCS(0)
-	processorsCount := procs * 8
-
 	capacity := pipeline.DefaultCapacity
 	antispamThreshold := 0
 	avgLogSize := pipeline.DefaultAvgLogSize
@@ -24,12 +20,7 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 	maintenanceInterval := pipeline.DefaultMaintenanceInterval
 
 	if settings != nil {
-		val := settings.Get("processors_count").MustInt()
-		if val != 0 {
-			processorsCount = val
-		}
-
-		val = settings.Get("capacity").MustInt()
+		val := settings.Get("capacity").MustInt()
 		if val != 0 {
 			capacity = val
 		}
@@ -62,7 +53,6 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 		AvgLogSize:          avgLogSize,
 		AntispamThreshold:   antispamThreshold,
 		MaintenanceInterval: maintenanceInterval,
-		ProcessorsCount:     processorsCount,
 		StreamField:         streamField,
 	}
 }
@@ -70,12 +60,12 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 func extractMatchMode(actionJSON *simplejson.Json) (pipeline.MatchMode, error) {
 	mm := actionJSON.Get("match_mode").MustString()
 	if mm != "or" && mm != "and" && mm != "" {
-		return pipeline.ModeUnknown, fmt.Errorf("unknown match mode %q must be or/and", mm)
+		return pipeline.MatchModeUnknown, fmt.Errorf("unknown match mode %q must be or/and", mm)
 
 	}
-	matchMode := pipeline.ModeAnd
+	matchMode := pipeline.MatchModeAnd
 	if mm == "or" {
-		matchMode = pipeline.ModeOr
+		matchMode = pipeline.MatchModeOr
 	}
 	return matchMode, nil
 }

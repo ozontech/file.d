@@ -16,7 +16,7 @@ type Plugin struct {
 }
 
 func init() {
-	filed.DefaultPluginRegistry.RegisterAction(&pipeline.PluginInfo{
+	filed.DefaultPluginRegistry.RegisterAction(&pipeline.PluginStaticInfo{
 		Type:    "parse_es",
 		Factory: factory,
 	})
