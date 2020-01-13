@@ -97,7 +97,7 @@ func (e *Event) reset() {
 		e.Buf = make([]byte, 0, 1024)
 	}
 
-	if e.Root.PoolSize() > DefaultNodePoolSize*4 {
+	if e.Root.PoolSize() > DefaultJSONNodePoolSize*4 {
 		e.Root.ReleasePoolMem()
 	}
 

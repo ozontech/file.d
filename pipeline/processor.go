@@ -54,7 +54,9 @@ type processor struct {
 	metricsValues []string
 }
 
-func NewProcessor(id int, metricsHolder *metricsHolder, activeCounter *atomic.Int32, output OutputPlugin, streamer *streamer, finalizeFn finalizeFn) *processor {
+var id = 0
+
+func NewProcessor(metricsHolder *metricsHolder, activeCounter *atomic.Int32, output OutputPlugin, streamer *streamer, finalizeFn finalizeFn) *processor {
 	processor := &processor{
 		id:            id,
 		streamer:      streamer,
@@ -67,12 +69,17 @@ func NewProcessor(id int, metricsHolder *metricsHolder, activeCounter *atomic.In
 		metricsValues: make([]string, 0, 0),
 	}
 
+	id++
+
 	return processor
 }
 
-func (p *processor) start(params *ActionPluginParams) {
+func (p *processor) start(params *PluginDefaultParams) {
 	for i, action := range p.actions {
-		action.Start(p.actionInfos[i].PluginStaticInfo.Config, params)
+		action.Start(p.actionInfos[i].PluginStaticInfo.Config, &ActionPluginParams{
+			PluginDefaultParams: params,
+			Controller:          p,
+		})
 	}
 
 	go p.process()
@@ -212,7 +219,7 @@ func (p *processor) tryResetBusy(index int) {
 }
 
 func (p *processor) countEvent(event *Event, actionIndex int, status eventStatus) {
-	p.metricsValues = p.metricsHolder.countEvent(event, actionIndex, status, p.metricsValues)
+	p.metricsValues = p.metricsHolder.count(event, actionIndex, status, p.metricsValues)
 }
 
 func (p *processor) isMatch(index int, event *Event) bool {

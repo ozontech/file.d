@@ -14,11 +14,11 @@ type PluginRegistry struct {
 }
 
 func (r *PluginRegistry) Get(kind pipeline.PluginKind, t string) *pipeline.PluginStaticInfo {
-	id := r.MakeID(pipeline.PluginKindInput, t)
+	id := r.MakeID(kind, t)
 
 	info := r.plugins[id]
 	if info == nil {
-		logger.Fatalf("can't find input plugin with type %q", t)
+		logger.Fatalf("can't find plugin kind=%s type=%s", kind, t)
 		return nil
 	}
 

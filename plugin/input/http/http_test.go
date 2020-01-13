@@ -6,34 +6,30 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"gitlab.ozon.ru/sre/filed/pipeline"
-	"gitlab.ozon.ru/sre/filed/plugin/output/devnull"
 	"gitlab.ozon.ru/sre/filed/test"
 )
 
-func startPipeline(persistenceMode string, enableEventLog bool, config *Config) (*pipeline.Pipeline, *Plugin, *devnull.Plugin) {
-	p := test.NewPipeline(true)
-	if enableEventLog {
-		p.EnableEventLog()
+func getInputInfo() *pipeline.InputPluginInfo {
+	input, _ := Factory()
+	return &pipeline.InputPluginInfo{
+		PluginStaticInfo: &pipeline.PluginStaticInfo{
+			Type:    "",
+			Factory: nil,
+			Config:  &Config{Address: "off"},
+		},
+		PluginRuntimeInfo: &pipeline.PluginRuntimeInfo{
+			Plugin: input,
+			ID:     "",
+		},
 	}
-
-	if config == nil {
-		config = &Config{Address: "off"}
-	}
-	anyPlugin, _ := Factory()
-	inputPlugin := anyPlugin.(*Plugin)
-	p.SetInput(&pipeline.InputPluginInfo{Plugin: inputPlugin, PluginDesc: pipeline.PluginDesc{Config: config}})
-
-	anyPlugin, _ = devnull.Factory()
-	outputPlugin := anyPlugin.(*devnull.Plugin)
-	p.SetOutput(&pipeline.OutputPluginInfo{Plugin: outputPlugin, PluginDesc: pipeline.PluginDesc{Config: config}})
-
-	p.Start()
-
-	return p, inputPlugin, outputPlugin
 }
 
 func TestProcessChunksMany(t *testing.T) {
-	pipe, input, output := startPipeline("async", true, nil)
+	p, _, output := test.NewPipelineMock(nil, "passive")
+	p.SetInput(getInputInfo())
+	input := p.GetInput().(*Plugin)
+	p.Start()
+
 	wg := &sync.WaitGroup{}
 	wg.Add(3)
 
@@ -51,7 +47,7 @@ func TestProcessChunksMany(t *testing.T) {
 	eventBuff = input.processChunk(0, chunk, eventBuff)
 
 	wg.Wait()
-	pipe.Stop()
+	p.Stop()
 
 	assert.Equal(t, 3, len(outEvents), "wrong events count")
 	assert.Equal(t, `{"a":"1"}`, outEvents[0], "wrong event")
@@ -61,7 +57,11 @@ func TestProcessChunksMany(t *testing.T) {
 }
 
 func TestProcessChunksEventBuff(t *testing.T) {
-	pipe, input, output := startPipeline("async", true, nil)
+	p, _, output := test.NewPipelineMock(nil, "passive")
+	p.SetInput(getInputInfo())
+	input := p.GetInput().(*Plugin)
+	p.Start()
+
 	wg := &sync.WaitGroup{}
 	wg.Add(2)
 
@@ -78,7 +78,7 @@ func TestProcessChunksEventBuff(t *testing.T) {
 	eventBuff = input.processChunk(0, chunk, eventBuff)
 
 	wg.Wait()
-	pipe.Stop()
+	p.Stop()
 
 	assert.Equal(t, 2, len(outEvents), "wrong out events count")
 	assert.Equal(t, `{"a":"1"}`, outEvents[0], "wrong event")
@@ -87,7 +87,11 @@ func TestProcessChunksEventBuff(t *testing.T) {
 }
 
 func TestProcessChunksContinue(t *testing.T) {
-	pipe, input, output := startPipeline("async", true, nil)
+	p, _, output := test.NewPipelineMock(nil, "passive")
+	p.SetInput(getInputInfo())
+	input := p.GetInput().(*Plugin)
+	p.Start()
+
 	wg := &sync.WaitGroup{}
 	wg.Add(3)
 
@@ -104,7 +108,7 @@ func TestProcessChunksContinue(t *testing.T) {
 	eventBuff := []byte(`{"a":`)
 	eventBuff = input.processChunk(0, chunk, eventBuff)
 
-	pipe.Stop()
+	p.Stop()
 	wg.Wait()
 
 	assert.Equal(t, 3, len(outEvents), "wrong out events count")
@@ -115,7 +119,11 @@ func TestProcessChunksContinue(t *testing.T) {
 }
 
 func TestProcessChunksContinueMany(t *testing.T) {
-	pipe, input, output := startPipeline("async", true, nil)
+	p, _, output := test.NewPipelineMock(nil, "passive")
+	p.SetInput(getInputInfo())
+	input := p.GetInput().(*Plugin)
+	p.Start()
+
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
 
@@ -133,7 +141,7 @@ func TestProcessChunksContinueMany(t *testing.T) {
 	eventBuff = input.processChunk(0, []byte(`"1"}`+"\n"), eventBuff)
 
 	wg.Wait()
-	pipe.Stop()
+	p.Stop()
 
 	assert.Equal(t, 1, len(outEvents), "wrong events count")
 	assert.Equal(t, `{"a":"1"}`, outEvents[0], "wrong event")

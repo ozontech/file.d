@@ -169,3 +169,7 @@ func NewActionPluginStaticInfo(factory pipeline.PluginFactory, config pipeline.A
 		},
 	}
 }
+
+func NewEmptyOutputPluginParams() *pipeline.OutputPluginParams {
+	return &pipeline.OutputPluginParams{PluginDefaultParams: &pipeline.PluginDefaultParams{PipelineName: "test", PipelineSettings: &pipeline.Settings{}}, Controller: nil}
+}

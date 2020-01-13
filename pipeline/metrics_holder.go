@@ -10,29 +10,51 @@ import (
 )
 
 type metricsHolder struct {
-	pipelineName   string
-	metricsGen     int // generation is used to drop unused metrics from counters
-	metricsGenTime time.Time
-	actionMetrics  []*actionMetrics
-	registry       *prometheus.Registry
+	pipelineName       string
+	metricsGen         int // generation is used to drop unused metrics from counters
+	metricsGenTime     time.Time
+	metricsGenInterval time.Duration
+	metrics            []*metrics
+	registry           *prometheus.Registry
 }
 
-func newMetricsHolder(pipelineName string, registry *prometheus.Registry) *metricsHolder {
+type metrics struct {
+	name   string
+	labels []string
+
+	root *mNode
+
+	current  *prometheus.CounterVec
+	previous *prometheus.CounterVec
+}
+
+type mNode struct {
+	childs map[string]*mNode
+	mu     *sync.RWMutex
+	self   string
+}
+
+func newMetricsHolder(pipelineName string, registry *prometheus.Registry, metricsGenInterval time.Duration) *metricsHolder {
 	return &metricsHolder{
-		pipelineName:  pipelineName,
-		registry:      registry,
-		actionMetrics: make([]*actionMetrics, 0, 0),
+		pipelineName: pipelineName,
+		registry:     registry,
+
+		metrics:            make([]*metrics, 0, 0),
+		metricsGenInterval: metricsGenInterval,
 	}
 
 }
 
 func (m *metricsHolder) AddAction(metricName string, metricLabels []string) {
-	m.actionMetrics = append(m.actionMetrics, &actionMetrics{
-		name:        metricName,
-		labels:      metricLabels,
-		counter:     nil,
-		counterPrev: nil,
-		mu:          &sync.RWMutex{},
+	m.metrics = append(m.metrics, &metrics{
+		name:   metricName,
+		labels: metricLabels,
+		root: &mNode{
+			childs: make(map[string]*mNode),
+			mu:     &sync.RWMutex{},
+		},
+		current:  nil,
+		previous: nil,
 	})
 }
 
@@ -40,11 +62,10 @@ func (m *metricsHolder) start() {
 	m.nextMetricsGen()
 }
 
-
 func (m *metricsHolder) nextMetricsGen() {
 	metricsGen := strconv.Itoa(m.metricsGen)
 
-	for index, metrics := range m.actionMetrics {
+	for index, metrics := range m.metrics {
 		if metrics.name == "" {
 			continue
 		}
@@ -57,16 +78,14 @@ func (m *metricsHolder) nextMetricsGen() {
 			ConstLabels: map[string]string{"gen": metricsGen},
 		}
 		counter := prometheus.NewCounterVec(opts, append([]string{"status"}, metrics.labels...))
-		prev := metrics.counterPrev
+		obsolete := metrics.previous
 
-		metrics.mu.Lock()
-		metrics.counterPrev = metrics.counter
-		metrics.counter = counter
-		metrics.mu.Unlock()
+		metrics.previous = metrics.current
+		metrics.current = counter
 
 		m.registry.MustRegister(counter)
-		if prev != nil {
-			m.registry.Unregister(prev)
+		if obsolete != nil {
+			m.registry.Unregister(obsolete)
 		}
 	}
 
@@ -74,12 +93,12 @@ func (m *metricsHolder) nextMetricsGen() {
 	m.metricsGenTime = time.Now()
 }
 
-func (m *metricsHolder) countEvent(event *Event, actionIndex int, eventStatus eventStatus, valuesBuf []string) []string {
-	if len(m.actionMetrics) == 0 {
+func (m *metricsHolder) count(event *Event, actionIndex int, eventStatus eventStatus, valuesBuf []string) []string {
+	if len(m.metrics) == 0 {
 		return valuesBuf
 	}
 
-	metrics := m.actionMetrics[actionIndex]
+	metrics := m.metrics[actionIndex]
 	if metrics.name == "" {
 		return valuesBuf
 	}
@@ -87,19 +106,42 @@ func (m *metricsHolder) countEvent(event *Event, actionIndex int, eventStatus ev
 	valuesBuf = valuesBuf[:0]
 	valuesBuf = append(valuesBuf, string(eventStatus))
 
+	mn := metrics.root
 	for _, field := range metrics.labels {
-		node := event.Root.Dig(field)
+		val := DefaultFieldValue
 
-		if node == nil {
-			valuesBuf = append(valuesBuf, defaultFieldValue)
-		} else {
-			valuesBuf = append(valuesBuf, node.AsString())
+		node := event.Root.Dig(field)
+		if node != nil {
+			val = node.AsString()
 		}
+
+		mn.mu.RLock()
+		nextMN, has := mn.childs[val]
+		mn.mu.RUnlock()
+
+		if !has {
+			mn.mu.Lock()
+			nextMN, has = mn.childs[val];
+			if !has {
+				key := DefaultFieldValue
+				if node != nil {
+					key = string(node.AsBytes()) // make string from []byte to make map string keys works good
+				}
+
+				nextMN = &mNode{
+					childs: make(map[string]*mNode),
+					self:   key,
+				}
+				mn.childs[key] = nextMN
+			}
+			mn.mu.Unlock()
+		}
+
+		valuesBuf = append(valuesBuf, nextMN.self)
+		mn = nextMN
 	}
 
-	metrics.mu.RLock()
-	metrics.counter.WithLabelValues(valuesBuf...).Inc()
-	metrics.mu.RUnlock()
+	metrics.current.WithLabelValues(valuesBuf...).Inc()
 
 	return valuesBuf
 }

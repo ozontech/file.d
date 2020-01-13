@@ -271,17 +271,13 @@ func (jp *jobProvider) addJob(file *os.File, stat os.FileInfo, filename string, 
 }
 
 func fingerprintFile(s os.FileInfo, symlink string) fingerprint {
-	x := s.Sys().(*syscall.Stat_t).Birthtimespec.Sec * 8922886018542929
-	x ^= math.MaxInt64
-	x += s.Sys().(*syscall.Stat_t).Birthtimespec.Nsec * 8460724049
-	x ^= math.MaxInt64
-	x += int64(s.Sys().(*syscall.Stat_t).Ino) * 67214201
+	x := int64(s.Sys().(*syscall.Stat_t).Ino) * 8922886018542929
 	x ^= math.MaxInt64
 
 	for _, c := range symlink {
 		x <<= 2
 		x -= 1
-		x += int64(c) * 67214201
+		x += int64(c) * 8460724049
 		x ^= math.MaxInt64
 	}
 

@@ -133,10 +133,12 @@ func (f *Filed) setupAction(p *pipeline.Pipeline, index int, t string, actionJSO
 	if err != nil {
 		logger.Fatalf("can't unmarshal config for %s action in pipeline %q: %s", info.Type, p.Name, err.Error())
 	}
-	info.Config = config
+
+	infoCopy := *info
+	infoCopy.Config = config
 
 	p.AddAction(&pipeline.ActionPluginStaticInfo{
-		PluginStaticInfo: info,
+		PluginStaticInfo: &infoCopy,
 		MatchConditions:  conditions,
 		MatchMode:        matchMode,
 		MetricName:       metricName,
@@ -188,9 +190,11 @@ func (f *Filed) getStaticInfo(pipelineConfig *PipelineConfig, pluginKind pipelin
 	if err != nil {
 		return nil, fmt.Errorf("can't unmarshal config for %s", pluginKind)
 	}
-	info.Config = config
 
-	return info, nil
+	infoCopy := *info
+	infoCopy.Config = config
+
+	return &infoCopy, nil
 }
 
 func (f *Filed) Stop() {

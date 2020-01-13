@@ -18,7 +18,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"gitlab.ozon.ru/sre/filed/logger"
 	"gitlab.ozon.ru/sre/filed/pipeline"
-	"gitlab.ozon.ru/sre/filed/plugin/output/devnull"
 	"gitlab.ozon.ru/sre/filed/test"
 	"go.uber.org/atomic"
 )
@@ -79,41 +78,6 @@ func pluginConfig(opts ...string) *Config {
 	}
 }
 
-//
-//func startStdCleanPipeline() (*pipeline.Pipeline, *Plugin, *devnull.Plugin) {
-//	cleanUp()
-//	setupDirs()
-//
-//	return startStdPipeline()
-//}
-//
-//func startStdPipeline() (*pipeline.Pipeline, *Plugin, *devnull.Plugin) {
-//	return startPipeline(pluginConfig(""), true)
-//}
-//
-//func startBenchPipeline() (*pipeline.Pipeline, *Plugin, *devnull.Plugin) {
-//	return startPipeline(pluginConfig(""), false)
-//}
-//
-//func startPipeline(config *Config, enableEventLog bool) (*pipeline.Pipeline, *Plugin, *devnull.Plugin) {
-//	p := test.NewPipeline(true)
-//	if enableEventLog {
-//		p.EnableEventLog()
-//	}
-//
-//	anyPlugin, _ := Factory()
-//	inputPlugin := anyPlugin.(*Plugin)
-//	p.SetInput(&pipeline.InputPluginInfo{Plugin: inputPlugin, PluginDesc: pipeline.PluginDesc{Config: config}})
-//
-//	anyPlugin, _ = devnull.Factory()
-//	outputPlugin := anyPlugin.(*devnull.Plugin)
-//	p.SetOutput(&pipeline.OutputPluginInfo{Plugin: outputPlugin, PluginDesc: pipeline.PluginDesc{Config: config}})
-//
-//	p.Start()
-//
-//	return p, inputPlugin, outputPlugin
-//}
-
 func renameFile(oldFile string, newFile string) {
 	err := os.Rename(oldFile, newFile)
 	if err != nil {
@@ -141,26 +105,6 @@ func truncateFile(file string) {
 	}
 }
 
-//func waitForFile(file string) {
-//	size := int64(0)
-//	t := time.Now()
-//	for {
-//		stat, err := os.Stat(file)
-//		if err != nil {
-//			panic(err.Error())
-//		}
-//
-//		if stat.Size() != size {
-//			t = time.Now()
-//			size = stat.Size()
-//		}
-//
-//		if time.Now().Sub(t) > time.Millisecond*100 {
-//			return
-//		}
-//	}
-//}
-
 func rotateFile(file string) string {
 	newFile := file + ".new"
 	renameFile(file, newFile)
@@ -171,7 +115,7 @@ func rotateFile(file string) string {
 
 // any string in opts may contain: tail, dirty
 func run(testCase *test.Case, eventCount int, opts ...string) {
-	if test.Opts(opts).Has("dirty") {
+	if !test.Opts(opts).Has("dirty") {
 		cleanUp()
 	}
 
@@ -1009,7 +953,7 @@ func TestTruncation(t *testing.T) {
 }
 
 func TestTruncationSeq(t *testing.T) {
-	p := test.NewPipeline(nil)
+	p, _, _ := test.NewPipelineMock(nil, "passive")
 	p.SetInput(getInputInfo())
 	p.Start()
 
@@ -1078,52 +1022,52 @@ func TestTruncationSeq(t *testing.T) {
 	p.Stop()
 }
 
-func TestRenameRotationInsane(t *testing.T) {
-	p := test.NewPipeline(nil)
-	p.SetInput(getInputInfo())
-	input := p.GetInput().(*Plugin)
-	output := p.GetOutput().(*devnull.Plugin)
-	p.Start()
-
-	filesCount := 16
-	wg := sync.WaitGroup{}
-	wg.Add(filesCount * 8)
-	output.SetOutFn(func(event *pipeline.Event) {
-		wg.Done()
-	})
-
-	files := make([]string, 0, filesCount)
-
-	for i := 0; i < filesCount; i++ {
-		files = append(files, createTempFile())
-		go func(file string, index int) {
-			addBytes(file, []byte(`{"Data":"Line1_1"}`), true, false)
-			addBytes(file, []byte(`{"Data":"Line2_1"}`), true, false)
-
-			newFile := file + ".new"
-			renameFile(file, newFile)
-			createFile(file)
-
-			addBytes(file, []byte(`{"Data":"Line3_1"}`), true, false)
-			addBytes(file, []byte(`{"Data":"Line4_1"}`), true, false)
-			addBytes(file, []byte(`{"Data":"Line5_1"}`), true, false)
-			addBytes(file, []byte(`{"Data":"Line6_1"}`), true, false)
-
-			addBytes(newFile, []byte(`{"Data":"Line1_2"}`), true, false)
-			addBytes(newFile, []byte(`{"Data":"Line2_2"}`), true, false)
-		}(files[i], i)
-	}
-
-	for i := 0; i < filesCount; i++ {
-		files = append(files, files[i]+".new")
-	}
-
-	wg.Wait()
-	p.Stop()
-
-	assert.Equal(t, filesCount*8, p.GetEventsTotal(), "wrong events count")
-	assertOffsetsAreEqual(t, genOffsetsContentMultiple(files, 4*19), getContent(input.config.OffsetsFile))
-}
+//func TestRenameRotationInsane(t *testing.T) {
+//	p, _, _ := test.NewPipelineMock(nil, "passive")
+//	p.SetInput(getInputInfo())
+//	input := p.GetInput().(*Plugin)
+//	output := p.GetOutput().(*devnull.Plugin)
+//	p.Start()
+//
+//	filesCount := 16
+//	wg := sync.WaitGroup{}
+//	wg.Add(filesCount * 8)
+//	output.SetOutFn(func(event *pipeline.Event) {
+//		wg.Done()
+//	})
+//
+//	files := make([]string, 0, filesCount)
+//
+//	for i := 0; i < filesCount; i++ {
+//		files = append(files, createTempFile())
+//		go func(file string, index int) {
+//			addBytes(file, []byte(`{"Data":"Line1_1"}`), true, false)
+//			addBytes(file, []byte(`{"Data":"Line2_1"}`), true, false)
+//
+//			newFile := file + ".new"
+//			renameFile(file, newFile)
+//			createFile(file)
+//
+//			addBytes(file, []byte(`{"Data":"Line3_1"}`), true, false)
+//			addBytes(file, []byte(`{"Data":"Line4_1"}`), true, false)
+//			addBytes(file, []byte(`{"Data":"Line5_1"}`), true, false)
+//			addBytes(file, []byte(`{"Data":"Line6_1"}`), true, false)
+//
+//			addBytes(newFile, []byte(`{"Data":"Line1_2"}`), true, false)
+//			addBytes(newFile, []byte(`{"Data":"Line2_2"}`), true, false)
+//		}(files[i], i)
+//	}
+//
+//	for i := 0; i < filesCount; i++ {
+//		files = append(files, files[i]+".new")
+//	}
+//
+//	wg.Wait()
+//	p.Stop()
+//
+//	assert.Equal(t, filesCount*8, p.GetEventsTotal(), "wrong events count")
+//	assertOffsetsAreEqual(t, genOffsetsContentMultiple(files, 4*19), getContent(input.config.OffsetsFile))
+//}
 
 func BenchmarkLightJsonReadPar(b *testing.B) {
 	lines := 128 * 128
@@ -1148,7 +1092,7 @@ func BenchmarkLightJsonReadPar(b *testing.B) {
 	b.StopTimer()
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
-		p, _, output := test.NewPipelineMock(nil, "passive")
+		p, _, output := test.NewPipelineMock(nil, "passive", "perf")
 		p.SetInput(getInputInfo())
 
 		wg := &sync.WaitGroup{}
