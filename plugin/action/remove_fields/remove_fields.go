@@ -1,9 +1,9 @@
 package remove_fields
 
 import (
-	"gitlab.ozon.ru/sre/filed/filed"
-	"gitlab.ozon.ru/sre/filed/logger"
-	"gitlab.ozon.ru/sre/filed/pipeline"
+	"gitlab.ozon.ru/sre/file-d/fd"
+	"gitlab.ozon.ru/sre/file-d/logger"
+	"gitlab.ozon.ru/sre/file-d/pipeline"
 )
 
 type Plugin struct {
@@ -16,7 +16,7 @@ type Config struct {
 }
 
 func init() {
-	filed.DefaultPluginRegistry.RegisterAction(&pipeline.PluginStaticInfo{
+	fd.DefaultPluginRegistry.RegisterAction(&pipeline.PluginStaticInfo{
 		Type:    "remove_fields",
 		Factory: factory,
 	})

@@ -2,7 +2,7 @@ VERSION ?= v0.1.0
 
 .PHONY: test
 test:
-	go test ./filed/ -v -count 1
+	go test ./fd/ -v -count 1
 	go test ./pipeline/ -v -count 1
 	go test ./plugin/... -v -count 1
 
@@ -16,10 +16,10 @@ profile-file:
 
 .PHONY: build
 build:
-	GOOS=linux GOARCH=amd64 go build -o file-d ./cmd/filed.go
+	GOOS=linux GOARCH=amd64 go build -o file-d ./cmd/file_d.go
 
 .PHONY: push-image
 push-image: build
-	docker build -t gitlab-registry.ozon.ru/sre/filed:${VERSION} .
-	docker push gitlab-registry.ozon.ru/sre/filed:${VERSION}
+	docker build -t gitlab-registry.ozon.ru/sre/file-d:${VERSION} .
+	docker push gitlab-registry.ozon.ru/sre/file-d:${VERSION}
 

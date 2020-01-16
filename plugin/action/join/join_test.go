@@ -7,8 +7,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"gitlab.ozon.ru/sre/filed/pipeline"
-	"gitlab.ozon.ru/sre/filed/test"
+	"gitlab.ozon.ru/sre/file-d/pipeline"
+	"gitlab.ozon.ru/sre/file-d/test"
 	"go.uber.org/atomic"
 )
 

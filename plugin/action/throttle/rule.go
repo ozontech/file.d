@@ -3,7 +3,7 @@ package throttle
 import (
 	"sort"
 
-	"gitlab.ozon.ru/sre/filed/pipeline"
+	"gitlab.ozon.ru/sre/file-d/pipeline"
 )
 
 type rule struct {

@@ -16,9 +16,9 @@ import (
 	"github.com/alecthomas/units"
 	"github.com/satori/go.uuid"
 	"github.com/stretchr/testify/assert"
-	"gitlab.ozon.ru/sre/filed/logger"
-	"gitlab.ozon.ru/sre/filed/pipeline"
-	"gitlab.ozon.ru/sre/filed/test"
+	"gitlab.ozon.ru/sre/file-d/logger"
+	"gitlab.ozon.ru/sre/file-d/pipeline"
+	"gitlab.ozon.ru/sre/file-d/test"
 	"go.uber.org/atomic"
 )
 

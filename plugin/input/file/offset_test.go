@@ -22,27 +22,27 @@ func TestParseOffsets(t *testing.T) {
 	offsetDB := newOffsetDB("", "")
 	offsets := offsetDB.parse(data)
 
-	inode, has := offsets[1]
-	assert.True(t, has, "Stream not found")
+	item, has := offsets[fingerprint(1234)]
+	assert.True(t, has, "item isn't found")
 
-	assert.Equal(t, "/some/informational/name", inode.filename)
-	assert.Equal(t, fingerprint(1234), inode.fingerprint)
+	assert.Equal(t, "/some/informational/name", item.filename)
+	assert.Equal(t, fingerprint(1234), item.fingerprint)
 
-	offset, has := inode.streams["default"]
-	assert.True(t, has, "Sub stream not found")
-	assert.Equal(t, int64(100), offset, "Wrong offset")
+	offset, has := item.streams["default"]
+	assert.True(t, has, "stream isn't found")
+	assert.Equal(t, int64(100), offset, "wrong offset")
 
-	offset, has = inode.streams["another"]
-	assert.True(t, has, "Sub stream not found")
-	assert.Equal(t, int64(200), offset, "Wrong offset")
+	offset, has = item.streams["another"]
+	assert.True(t, has, "stream isn't found")
+	assert.Equal(t, int64(200), offset, "wrong offset")
 
-	inode, has = offsets[2]
-	assert.True(t, has, "Stream not found")
+	item, has = offsets[fingerprint(4321)]
+	assert.True(t, has, "item isn't found")
 
-	assert.Equal(t, "/another/informational/name", inode.filename)
-	assert.Equal(t, fingerprint(4321), inode.fingerprint)
+	assert.Equal(t, "/another/informational/name", item.filename)
+	assert.Equal(t, fingerprint(4321), item.fingerprint)
 
-	offset, has = inode.streams["stderr"]
-	assert.True(t, has, "Sub stream not found")
-	assert.Equal(t, int64(300), offset, "Wrong offset")
+	offset, has = item.streams["stderr"]
+	assert.True(t, has, "stream isn't found")
+	assert.Equal(t, int64(300), offset, "wrong offset")
 }

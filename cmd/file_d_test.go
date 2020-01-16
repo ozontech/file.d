@@ -12,17 +12,17 @@ import (
 	"time"
 
 	uuid "github.com/satori/go.uuid"
-	"gitlab.ozon.ru/sre/filed/filed"
-	_ "gitlab.ozon.ru/sre/filed/plugin/action/discard"
-	_ "gitlab.ozon.ru/sre/filed/plugin/action/json_decode"
-	"gitlab.ozon.ru/sre/filed/plugin/action/k8s"
-	_ "gitlab.ozon.ru/sre/filed/plugin/action/keep_fields"
-	_ "gitlab.ozon.ru/sre/filed/plugin/action/rename"
-	_ "gitlab.ozon.ru/sre/filed/plugin/action/throttle"
-	_ "gitlab.ozon.ru/sre/filed/plugin/input/fake"
-	_ "gitlab.ozon.ru/sre/filed/plugin/input/file"
-	_ "gitlab.ozon.ru/sre/filed/plugin/output/devnull"
-	_ "gitlab.ozon.ru/sre/filed/plugin/output/kafka"
+	"gitlab.ozon.ru/sre/file-d/fd"
+	_ "gitlab.ozon.ru/sre/file-d/plugin/action/discard"
+	_ "gitlab.ozon.ru/sre/file-d/plugin/action/json_decode"
+	"gitlab.ozon.ru/sre/file-d/plugin/action/k8s"
+	_ "gitlab.ozon.ru/sre/file-d/plugin/action/keep_fields"
+	_ "gitlab.ozon.ru/sre/file-d/plugin/action/rename"
+	_ "gitlab.ozon.ru/sre/file-d/plugin/action/throttle"
+	_ "gitlab.ozon.ru/sre/file-d/plugin/input/fake"
+	_ "gitlab.ozon.ru/sre/file-d/plugin/input/file"
+	_ "gitlab.ozon.ru/sre/file-d/plugin/output/devnull"
+	_ "gitlab.ozon.ru/sre/file-d/plugin/output/kafka"
 )
 
 var (
@@ -79,12 +79,12 @@ func TestEndToEnd(t *testing.T) {
 	filesDir, _ := ioutil.TempDir("", "file-d")
 	offsetsDir, _ := ioutil.TempDir("", "file-d")
 
-	config := filed.NewConfigFromFile(configFilename)
+	config := fd.NewConfigFromFile(configFilename)
 	input := config.Pipelines["test"].Raw.Get("input")
 	input.Set("watching_dir", filesDir)
 	input.Set("offsets_file", filepath.Join(offsetsDir, "offsets.yaml"))
 
-	fd := filed.New(config, ":9000")
+	fd := fd.New(config, ":9000")
 	fd.Start()
 
 	tm := time.Now()

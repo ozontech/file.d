@@ -3,9 +3,9 @@ package k8s
 import (
 	"strings"
 
-	"gitlab.ozon.ru/sre/filed/filed"
-	"gitlab.ozon.ru/sre/filed/logger"
-	"gitlab.ozon.ru/sre/filed/pipeline"
+	"gitlab.ozon.ru/sre/file-d/fd"
+	"gitlab.ozon.ru/sre/file-d/logger"
+	"gitlab.ozon.ru/sre/file-d/pipeline"
 	"go.uber.org/atomic"
 )
 
@@ -35,7 +35,7 @@ var (
 )
 
 func init() {
-	filed.DefaultPluginRegistry.RegisterAction(&pipeline.PluginStaticInfo{
+	fd.DefaultPluginRegistry.RegisterAction(&pipeline.PluginStaticInfo{
 		Type:    "k8s",
 		Factory: factory,
 	})
@@ -45,24 +45,25 @@ func factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 	return &Plugin{}, &Config{}
 }
 
-func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginParams) {
+func (p *Plugin) Start(config pipeline.AnyConfig, _ *pipeline.ActionPluginParams) {
 	p.config = config.(*Config)
-
-	if p.config.MaxEventSize == 0 {
-		p.config.MaxEventSize = defaultMaxEventSize
-	}
-
-	p.config.labelsWhitelist = make(map[string]bool)
-	if p.config.LabelsWhitelist != "" {
-		parts := strings.Split(p.config.LabelsWhitelist, ",")
-		for _, part := range parts {
-			cleanPart := strings.TrimSpace(part)
-			p.config.labelsWhitelist[cleanPart] = true
-		}
-	}
 
 	startCounter := startCounter.Inc()
 	if startCounter == 1 {
+		if p.config.MaxEventSize == 0 {
+			p.config.MaxEventSize = defaultMaxEventSize
+		}
+
+		p.config.labelsWhitelist = make(map[string]bool)
+
+		if p.config.LabelsWhitelist != "" {
+			parts := strings.Split(p.config.LabelsWhitelist, ",")
+			for _, part := range parts {
+				cleanPart := strings.TrimSpace(part)
+				p.config.labelsWhitelist[cleanPart] = true
+			}
+		}
+
 		enableGatherer()
 	}
 

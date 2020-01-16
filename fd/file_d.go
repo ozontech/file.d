@@ -1,4 +1,4 @@
-package filed
+package fd
 
 import (
 	"encoding/json"
@@ -10,11 +10,11 @@ import (
 	"github.com/bitly/go-simplejson"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"gitlab.ozon.ru/sre/filed/logger"
-	"gitlab.ozon.ru/sre/filed/pipeline"
+	"gitlab.ozon.ru/sre/file-d/logger"
+	"gitlab.ozon.ru/sre/file-d/pipeline"
 )
 
-type Filed struct {
+type FileD struct {
 	config    *Config
 	httpAddr  string
 	registry  *prometheus.Registry
@@ -23,8 +23,8 @@ type Filed struct {
 	server    *http.Server
 }
 
-func New(config *Config, httpAddr string) *Filed {
-	return &Filed{
+func New(config *Config, httpAddr string) *FileD {
+	return &FileD{
 		config:    config,
 		httpAddr:  httpAddr,
 		plugins:   DefaultPluginRegistry,
@@ -32,11 +32,11 @@ func New(config *Config, httpAddr string) *Filed {
 	}
 }
 
-func (f *Filed) SetConfig(config *Config) {
+func (f *FileD) SetConfig(config *Config) {
 	f.config = config
 }
 
-func (f *Filed) Start() {
+func (f *FileD) Start() {
 	logger.Infof("starting filed")
 
 	f.createRegistry()
@@ -44,7 +44,7 @@ func (f *Filed) Start() {
 	f.startPipelines()
 }
 
-func (f *Filed) createRegistry() {
+func (f *FileD) createRegistry() {
 	f.registry = prometheus.NewRegistry()
 	f.registry.MustRegister(prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}))
 	f.registry.MustRegister(prometheus.NewGoCollector())
@@ -53,7 +53,7 @@ func (f *Filed) createRegistry() {
 	prometheus.DefaultRegisterer = f.registry
 }
 
-func (f *Filed) startPipelines() {
+func (f *FileD) startPipelines() {
 	f.Pipelines = f.Pipelines[:0]
 	for name, config := range f.config.Pipelines {
 		f.addPipeline(name, config)
@@ -63,7 +63,7 @@ func (f *Filed) startPipelines() {
 	}
 }
 
-func (f *Filed) addPipeline(name string, config *PipelineConfig) {
+func (f *FileD) addPipeline(name string, config *PipelineConfig) {
 	mux := http.DefaultServeMux
 	settings := extractPipelineParams(config.Raw.Get("settings"))
 
@@ -83,7 +83,7 @@ func (f *Filed) addPipeline(name string, config *PipelineConfig) {
 	f.Pipelines = append(f.Pipelines, p)
 }
 
-func (f *Filed) setupInput(p *pipeline.Pipeline, pipelineConfig *PipelineConfig) error {
+func (f *FileD) setupInput(p *pipeline.Pipeline, pipelineConfig *PipelineConfig) error {
 	info, err := f.getStaticInfo(pipelineConfig, pipeline.PluginKindInput)
 	if err != nil {
 		return err
@@ -97,7 +97,7 @@ func (f *Filed) setupInput(p *pipeline.Pipeline, pipelineConfig *PipelineConfig)
 	return nil
 }
 
-func (f *Filed) setupActions(p *pipeline.Pipeline, pipelineConfig *PipelineConfig) {
+func (f *FileD) setupActions(p *pipeline.Pipeline, pipelineConfig *PipelineConfig) {
 	actions := pipelineConfig.Raw.Get("actions")
 	for index := range actions.MustArray() {
 		actionJSON := actions.GetIndex(index)
@@ -113,7 +113,7 @@ func (f *Filed) setupActions(p *pipeline.Pipeline, pipelineConfig *PipelineConfi
 	}
 }
 
-func (f *Filed) setupAction(p *pipeline.Pipeline, index int, t string, actionJSON *simplejson.Json) {
+func (f *FileD) setupAction(p *pipeline.Pipeline, index int, t string, actionJSON *simplejson.Json) {
 	logger.Infof("creating action with type %q for pipeline %q", t, p.Name)
 	info := f.plugins.GetActionByType(t)
 
@@ -146,7 +146,7 @@ func (f *Filed) setupAction(p *pipeline.Pipeline, index int, t string, actionJSO
 	})
 }
 
-func (f *Filed) setupOutput(p *pipeline.Pipeline, pipelineConfig *PipelineConfig) error {
+func (f *FileD) setupOutput(p *pipeline.Pipeline, pipelineConfig *PipelineConfig) error {
 	info, err := f.getStaticInfo(pipelineConfig, pipeline.PluginKindOutput)
 	if err != nil {
 		return err
@@ -160,7 +160,7 @@ func (f *Filed) setupOutput(p *pipeline.Pipeline, pipelineConfig *PipelineConfig
 	return nil
 }
 
-func (f *Filed) instantiatePlugin(info *pipeline.PluginStaticInfo) *pipeline.PluginRuntimeInfo {
+func (f *FileD) instantiatePlugin(info *pipeline.PluginStaticInfo) *pipeline.PluginRuntimeInfo {
 	plugin, _ := info.Factory()
 	return &pipeline.PluginRuntimeInfo{
 		Plugin: plugin,
@@ -168,7 +168,7 @@ func (f *Filed) instantiatePlugin(info *pipeline.PluginStaticInfo) *pipeline.Plu
 	}
 }
 
-func (f *Filed) getStaticInfo(pipelineConfig *PipelineConfig, pluginKind pipeline.PluginKind) (*pipeline.PluginStaticInfo, error) {
+func (f *FileD) getStaticInfo(pipelineConfig *PipelineConfig, pluginKind pipeline.PluginKind) (*pipeline.PluginStaticInfo, error) {
 	inputJSON := pipelineConfig.Raw.Get(string(pluginKind))
 	if inputJSON.MustMap() == nil {
 		return nil, fmt.Errorf("no %s plugin provided", pluginKind)
@@ -197,7 +197,7 @@ func (f *Filed) getStaticInfo(pipelineConfig *PipelineConfig, pluginKind pipelin
 	return &infoCopy, nil
 }
 
-func (f *Filed) Stop() {
+func (f *FileD) Stop() {
 	logger.Infof("stopping filed pipelines=%d", len(f.Pipelines))
 	_ = f.server.Shutdown(nil)
 	for _, p := range f.Pipelines {
@@ -205,7 +205,7 @@ func (f *Filed) Stop() {
 	}
 }
 
-func (f *Filed) startHTTP() {
+func (f *FileD) startHTTP() {
 	if f.httpAddr == "off" {
 		return
 	}
@@ -221,22 +221,22 @@ func (f *Filed) startHTTP() {
 	go f.listenHTTP()
 }
 
-func (f *Filed) listenHTTP() {
+func (f *FileD) listenHTTP() {
 	err := f.server.ListenAndServe()
 	if err != nil {
 		logger.Fatalf("http listening error address=%q: %s", f.httpAddr, err.Error())
 	}
 }
 
-func (f *Filed) serveFreeOsMem(w http.ResponseWriter, r *http.Request) {
+func (f *FileD) serveFreeOsMem(_ http.ResponseWriter, _ *http.Request) {
 	debug.FreeOSMemory()
 	logger.Infof("Free OS memory OK")
 }
 
-func (f *Filed) serveLiveReady(w http.ResponseWriter, r *http.Request) {
+func (f *FileD) serveLiveReady(_ http.ResponseWriter, _ *http.Request) {
 	logger.Infof("live/ready OK")
 }
 
-func (f *Filed) servePipelines(w http.ResponseWriter, r *http.Request) {
+func (f *FileD) servePipelines(_ http.ResponseWriter, _ *http.Request) {
 	logger.Infof("pipelines OK")
 }

@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/fsnotify/fsnotify"
-	"gitlab.ozon.ru/sre/filed/logger"
+	"gitlab.ozon.ru/sre/file-d/logger"
 )
 
 type watcher struct {

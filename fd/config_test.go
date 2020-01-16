@@ -1,4 +1,4 @@
-package filed
+package fd
 
 import (
 	"testing"
