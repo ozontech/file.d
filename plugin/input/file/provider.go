@@ -9,8 +9,8 @@ import (
 	"syscall"
 	"time"
 
-	"gitlab.ozon.ru/sre/filed/logger"
-	"gitlab.ozon.ru/sre/filed/pipeline"
+	"gitlab.ozon.ru/sre/file-d/logger"
+	"gitlab.ozon.ru/sre/file-d/pipeline"
 	"go.uber.org/atomic"
 )
 
@@ -43,7 +43,7 @@ type jobProvider struct {
 
 	jobsDone *atomic.Int32
 
-	loadedOffsets offsets
+	loadedOffsets fpOffsets
 
 	stopSaveOffsetsCh chan bool
 	stopReportCh      chan bool
@@ -51,6 +51,21 @@ type jobProvider struct {
 
 	// some debugging shit
 	offsetsCommitted *atomic.Int64
+}
+
+type job struct {
+	file        *os.File
+	inode       inode
+	fingerprint fingerprint // some value to distinguish jobs with same inode
+	filename    string
+	symlink     string
+
+	isDone     bool
+	shouldSkip bool
+
+	offsets streamsOffsets
+
+	mu *sync.Mutex
 }
 
 type inode uint64
@@ -246,9 +261,9 @@ func (jp *jobProvider) addJob(file *os.File, stat os.FileInfo, filename string, 
 
 	// load saved offsets only on start phase
 	if jp.isStarted {
-		jp.initJobOffset(offsetsOpReset, job, inode)
+		jp.initJobOffset(offsetsOpReset, job)
 	} else {
-		jp.initJobOffset(jp.config.offsetsOp, job, inode)
+		jp.initJobOffset(jp.config.offsetsOp, job)
 	}
 
 	jp.jobsMu.Lock()
@@ -271,25 +286,25 @@ func (jp *jobProvider) addJob(file *os.File, stat os.FileInfo, filename string, 
 }
 
 func fingerprintFile(s os.FileInfo, symlink string) fingerprint {
-	x := int64(s.Sys().(*syscall.Stat_t).Ino) * 8922886018542929
-	x ^= math.MaxInt64
+	inode := int64(s.Sys().(*syscall.Stat_t).Ino)
 
+	symHash := inode * 8922886018542929
 	for _, c := range symlink {
-		x <<= 2
-		x -= 1
-		x += int64(c) * 8460724049
-		x ^= math.MaxInt64
+		symHash <<= 2
+		symHash -= 1
+		symHash += int64(c) * 8460724049
 	}
 
-	return fingerprint(x)
+	// since the inode number is more likely only 32 bit, use upper bits to store hash symlink
+	return fingerprint(inode + symHash&math.MaxUint32)
 }
 
-func (jp *jobProvider) initJobOffset(operation offsetsOp, job *job, inode inode) {
+func (jp *jobProvider) initJobOffset(operation offsetsOp, job *job) {
 	switch operation {
 	case offsetsOpTail:
 		offset, err := job.file.Seek(0, io.SeekEnd)
 		if err != nil {
-			logger.Panicf("can't make job, can't seek file %d:%s: %s", inode, job.filename, err.Error())
+			logger.Panicf("can't make job, can't seek file %d:%s: %s", job.fingerprint, job.filename, err.Error())
 		}
 
 		if offset == 0 {
@@ -301,27 +316,26 @@ func (jp *jobProvider) initJobOffset(operation offsetsOp, job *job, inode inode)
 		magicOffset := int64(-1)
 		_, err = job.file.Seek(magicOffset, io.SeekEnd)
 		if err != nil {
-			logger.Panicf("can't make job, can't seek file %d:%s: %s", inode, job.filename, err.Error())
+			logger.Panicf("can't make job, can't seek file %d:%s: %s", job.fingerprint, job.filename, err.Error())
 		}
 		job.shouldSkip = true
 
 	case offsetsOpReset:
 		_, err := job.file.Seek(0, io.SeekStart)
 		if err != nil {
-			logger.Panicf("can't make job, can't seek file %d:%s: %s", inode, job.filename, err.Error())
+			logger.Panicf("can't make job, can't seek file %d:%s: %s", job.fingerprint, job.filename, err.Error())
 		}
 	case offsetsOpContinue:
-		offsets, has := jp.loadedOffsets[inode]
+		offsets, has := jp.loadedOffsets[job.fingerprint]
 		if has && len(offsets.streams) == 0 {
-			logger.Panicf("can't instantiate job, no streams in source %d:%q", inode, job.filename)
+			logger.Panicf("can't instantiate job, no streams in source %d:%q", job.fingerprint, job.filename)
 		}
 		if !has {
-			return
-		}
+			_, err := job.file.Seek(0, io.SeekStart)
+			if err != nil {
+				logger.Panicf("can't make job, can't seek file %d:%s: %s", job.fingerprint, job.filename, err.Error())
+			}
 
-		isFingerprintMatch := offsets.fingerprint == 0 || (offsets.fingerprint == job.fingerprint)
-		isFilenameMatch := offsets.filename == job.filename
-		if !isFilenameMatch || !isFingerprintMatch {
 			return
 		}
 
@@ -330,7 +344,7 @@ func (jp *jobProvider) initJobOffset(operation offsetsOp, job *job, inode inode)
 		for _, offset := range offsets.streams {
 			_, err := job.file.Seek(offset, io.SeekStart)
 			if err != nil {
-				logger.Panicf("can't make job, can't seek file %d:%s: %s", inode, job.filename, err.Error())
+				logger.Panicf("can't make job, can't seek file %d:%s: %s", job.fingerprint, job.filename, err.Error())
 			}
 			return
 		}

@@ -3,8 +3,8 @@ package devnull
 import (
 	"sync"
 
-	"gitlab.ozon.ru/sre/filed/filed"
-	"gitlab.ozon.ru/sre/filed/pipeline"
+	"gitlab.ozon.ru/sre/file-d/fd"
+	"gitlab.ozon.ru/sre/file-d/pipeline"
 	"go.uber.org/atomic"
 )
 
@@ -20,7 +20,7 @@ type Plugin struct {
 }
 
 func init() {
-	filed.DefaultPluginRegistry.RegisterOutput(&pipeline.PluginStaticInfo{
+	fd.DefaultPluginRegistry.RegisterOutput(&pipeline.PluginStaticInfo{
 		Type:    "devnull",
 		Factory: Factory,
 	})

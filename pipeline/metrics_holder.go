@@ -131,6 +131,7 @@ func (m *metricsHolder) count(event *Event, actionIndex int, eventStatus eventSt
 				nextMN = &mNode{
 					childs: make(map[string]*mNode),
 					self:   key,
+					mu:     &sync.RWMutex{},
 				}
 				mn.childs[key] = nextMN
 			}

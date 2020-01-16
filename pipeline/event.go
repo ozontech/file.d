@@ -5,7 +5,7 @@ import (
 	"sync"
 
 	insaneJSON "github.com/vitkovskii/insane-json"
-	"gitlab.ozon.ru/sre/filed/logger"
+	"gitlab.ozon.ru/sre/file-d/logger"
 	"go.uber.org/atomic"
 )
 

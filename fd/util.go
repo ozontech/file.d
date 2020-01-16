@@ -1,4 +1,4 @@
-package filed
+package fd
 
 import (
 	"fmt"
@@ -8,8 +8,8 @@ import (
 
 	"github.com/bitly/go-simplejson"
 	"github.com/pkg/errors"
-	"gitlab.ozon.ru/sre/filed/logger"
-	"gitlab.ozon.ru/sre/filed/pipeline"
+	"gitlab.ozon.ru/sre/file-d/logger"
+	"gitlab.ozon.ru/sre/file-d/pipeline"
 )
 
 func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {

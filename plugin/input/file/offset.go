@@ -8,8 +8,8 @@ import (
 	"strings"
 	"sync"
 
-	"gitlab.ozon.ru/sre/filed/logger"
-	"gitlab.ozon.ru/sre/filed/pipeline"
+	"gitlab.ozon.ru/sre/file-d/logger"
+	"gitlab.ozon.ru/sre/file-d/pipeline"
 	"go.uber.org/atomic"
 )
 
@@ -29,7 +29,7 @@ type inodeOffsets struct {
 }
 
 type streamsOffsets map[pipeline.StreamName]int64
-type offsets map[inode]*inodeOffsets
+type fpOffsets map[fingerprint]*inodeOffsets
 
 func newOffsetDB(curOffsetsFile string, tmpOffsetsFile string) *offsetDB {
 	return &offsetDB{
@@ -42,14 +42,14 @@ func newOffsetDB(curOffsetsFile string, tmpOffsetsFile string) *offsetDB {
 	}
 }
 
-func (o *offsetDB) load() offsets {
+func (o *offsetDB) load() fpOffsets {
 	info, err := os.Stat(o.curOffsetsFile)
 	if os.IsNotExist(err) {
-		return make(offsets)
+		return make(fpOffsets)
 	}
 
 	if info.IsDir() {
-		logger.Fatalf("can't load offsets, offsets file %s is dir")
+		logger.Fatalf("can't load offsets, file %s is dir")
 	}
 
 	content, err := ioutil.ReadFile(o.curOffsetsFile)
@@ -62,7 +62,7 @@ func (o *offsetDB) load() offsets {
 
 // collapse all streams are in one file, so we should seek file to
 // min offset to make sure logs from all streams will be delivered at least once
-func (o *offsetDB) collapse(inodeOffsets offsets) offsets {
+func (o *offsetDB) collapse(inodeOffsets fpOffsets) fpOffsets {
 	for _, inode := range inodeOffsets {
 		minOffset := int64(math.MaxInt64)
 		for _, offset := range inode.streams {
@@ -79,8 +79,8 @@ func (o *offsetDB) collapse(inodeOffsets offsets) offsets {
 	return inodeOffsets
 }
 
-func (o *offsetDB) parse(content string) offsets {
-	offsets := make(offsets)
+func (o *offsetDB) parse(content string) fpOffsets {
+	offsets := make(fpOffsets)
 	for len(content) != 0 {
 		content = o.parseOne(content, offsets)
 	}
@@ -88,7 +88,7 @@ func (o *offsetDB) parse(content string) offsets {
 	return offsets
 }
 
-func (o *offsetDB) parseOne(content string, offsets offsets) string {
+func (o *offsetDB) parseOne(content string, offsets fpOffsets) string {
 	filename := ""
 	inodeStr := ""
 	fingerprintStr := ""
@@ -102,23 +102,26 @@ func (o *offsetDB) parseOne(content string, offsets offsets) string {
 	}
 	inode := inode(sysInode)
 
-	fp, err := strconv.ParseUint(fingerprintStr, 10, 64)
+	fpVal, err := strconv.ParseUint(fingerprintStr, 10, 64)
 	if err != nil {
 		logger.Panicf("wrong offsets format, can't parse fingerprint: %s", err.Error())
 	}
+	fp := fingerprint(fpVal)
 
-	_, has := offsets[inode]
+	_, has := offsets[fp]
 	if has {
 		logger.Panicf("wrong offsets format, duplicate inode %d", inode)
 	}
 
-	offsets[inode] = &inodeOffsets{
-		streams:     make(streamsOffsets),
+	logger.Infof("unknown fingerprint: %d", fp)
+
+	offsets[fp] = &inodeOffsets{
+		streams:     make(map[pipeline.StreamName]int64),
 		filename:    filename,
-		fingerprint: fingerprint(fp),
+		fingerprint: fp,
 	}
 
-	return o.parseStreams(content, offsets[inode].streams)
+	return o.parseStreams(content, offsets[fp].streams)
 }
 
 func (o *offsetDB) parseStreams(content string, streams streamsOffsets) string {

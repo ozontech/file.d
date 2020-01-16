@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	"gitlab.ozon.ru/sre/filed/pipeline"
-	"gitlab.ozon.ru/sre/filed/test"
+	"gitlab.ozon.ru/sre/file-d/pipeline"
+	"gitlab.ozon.ru/sre/file-d/test"
 	corev1 "k8s.io/api/core/v1"
 )
 

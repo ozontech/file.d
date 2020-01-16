@@ -5,9 +5,9 @@ import (
 	"strings"
 
 	"github.com/Shopify/sarama"
-	"gitlab.ozon.ru/sre/filed/filed"
-	"gitlab.ozon.ru/sre/filed/logger"
-	"gitlab.ozon.ru/sre/filed/pipeline"
+	"gitlab.ozon.ru/sre/file-d/fd"
+	"gitlab.ozon.ru/sre/file-d/logger"
+	"gitlab.ozon.ru/sre/file-d/pipeline"
 )
 
 type Config struct {
@@ -31,7 +31,7 @@ type Plugin struct {
 }
 
 func init() {
-	filed.DefaultPluginRegistry.RegisterInput(&pipeline.PluginStaticInfo{
+	fd.DefaultPluginRegistry.RegisterInput(&pipeline.PluginStaticInfo{
 		Type:    "kafka",
 		Factory: Factory,
 	})

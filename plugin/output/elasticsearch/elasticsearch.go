@@ -11,10 +11,10 @@ import (
 	"time"
 
 	insaneJSON "github.com/vitkovskii/insane-json"
-	"gitlab.ozon.ru/sre/filed/logger"
+	"gitlab.ozon.ru/sre/file-d/logger"
 
-	"gitlab.ozon.ru/sre/filed/filed"
-	"gitlab.ozon.ru/sre/filed/pipeline"
+	"gitlab.ozon.ru/sre/file-d/fd"
+	"gitlab.ozon.ru/sre/file-d/pipeline"
 )
 
 type Config struct {
@@ -45,7 +45,7 @@ type data struct {
 }
 
 func init() {
-	filed.DefaultPluginRegistry.RegisterOutput(&pipeline.PluginStaticInfo{
+	fd.DefaultPluginRegistry.RegisterOutput(&pipeline.PluginStaticInfo{
 		Type:    "elasticsearch",
 		Factory: Factory,
 	})

@@ -6,8 +6,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	insaneJSON "github.com/vitkovskii/insane-json"
-	"gitlab.ozon.ru/sre/filed/pipeline"
-	"gitlab.ozon.ru/sre/filed/test"
+	"gitlab.ozon.ru/sre/file-d/pipeline"
+	"gitlab.ozon.ru/sre/file-d/test"
 )
 
 func TestAppendEvent(t *testing.T) {

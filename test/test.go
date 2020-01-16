@@ -6,9 +6,9 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
-	"gitlab.ozon.ru/sre/filed/pipeline"
-	"gitlab.ozon.ru/sre/filed/plugin/input/fake"
-	"gitlab.ozon.ru/sre/filed/plugin/output/devnull"
+	"gitlab.ozon.ru/sre/file-d/pipeline"
+	"gitlab.ozon.ru/sre/file-d/plugin/input/fake"
+	"gitlab.ozon.ru/sre/file-d/plugin/output/devnull"
 	"go.uber.org/atomic"
 )
 

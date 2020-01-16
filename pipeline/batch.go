@@ -4,7 +4,7 @@ import (
 	"sync"
 	"time"
 
-	"gitlab.ozon.ru/sre/filed/logger"
+	"gitlab.ozon.ru/sre/file-d/logger"
 )
 
 type Batch struct {

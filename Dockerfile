@@ -1,6 +1,6 @@
 FROM ubuntu:19.04
 
-WORKDIR /filed
+WORKDIR /file-d
 
 COPY ./file-d .
 

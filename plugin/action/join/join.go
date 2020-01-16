@@ -3,9 +3,9 @@ package join
 import (
 	"regexp"
 
-	"gitlab.ozon.ru/sre/filed/filed"
-	"gitlab.ozon.ru/sre/filed/logger"
-	"gitlab.ozon.ru/sre/filed/pipeline"
+	"gitlab.ozon.ru/sre/file-d/fd"
+	"gitlab.ozon.ru/sre/file-d/logger"
+	"gitlab.ozon.ru/sre/file-d/pipeline"
 )
 
 type Plugin struct {
@@ -27,7 +27,7 @@ type Config struct {
 }
 
 func init() {
-	filed.DefaultPluginRegistry.RegisterAction(&pipeline.PluginStaticInfo{
+	fd.DefaultPluginRegistry.RegisterAction(&pipeline.PluginStaticInfo{
 		Type:    "join",
 		Factory: factory,
 	})
@@ -54,13 +54,13 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 		logger.Fatalf("no %q parameter provided for join plugin", "next_re")
 	}
 
-	r, err := filed.CompileRegex(p.config.First)
+	r, err := fd.CompileRegex(p.config.First)
 	if err != nil {
 		logger.Fatalf("can't compile first line regexp: %s", err.Error())
 	}
 	p.firstRe = r
 
-	r, err = filed.CompileRegex(p.config.Next)
+	r, err = fd.CompileRegex(p.config.Next)
 	if err != nil {
 		logger.Fatalf("can't compile next line regexp: %s", err.Error())
 	}

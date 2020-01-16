@@ -3,8 +3,8 @@ package stdout
 import (
 	"fmt"
 
-	"gitlab.ozon.ru/sre/filed/filed"
-	"gitlab.ozon.ru/sre/filed/pipeline"
+	"gitlab.ozon.ru/sre/file-d/fd"
+	"gitlab.ozon.ru/sre/file-d/pipeline"
 )
 
 type Config struct {
@@ -16,7 +16,7 @@ type Plugin struct {
 }
 
 func init() {
-	filed.DefaultPluginRegistry.RegisterOutput(&pipeline.PluginStaticInfo{
+	fd.DefaultPluginRegistry.RegisterOutput(&pipeline.PluginStaticInfo{
 		Type:    "stdout",
 		Factory: Factory,
 	})

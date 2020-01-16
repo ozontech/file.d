@@ -1,11 +1,11 @@
-package filed
+package fd
 
 import (
 	"io/ioutil"
 
 	"github.com/bitly/go-simplejson"
 	"github.com/ghodss/yaml"
-	"gitlab.ozon.ru/sre/filed/logger"
+	"gitlab.ozon.ru/sre/file-d/logger"
 )
 
 type Config struct {

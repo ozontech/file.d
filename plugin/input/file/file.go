@@ -3,9 +3,9 @@ package file
 import (
 	"time"
 
-	"gitlab.ozon.ru/sre/filed/filed"
-	"gitlab.ozon.ru/sre/filed/logger"
-	"gitlab.ozon.ru/sre/filed/pipeline"
+	"gitlab.ozon.ru/sre/file-d/fd"
+	"gitlab.ozon.ru/sre/file-d/logger"
+	"gitlab.ozon.ru/sre/file-d/pipeline"
 )
 
 const (
@@ -55,7 +55,7 @@ type Plugin struct {
 }
 
 func init() {
-	filed.DefaultPluginRegistry.RegisterInput(&pipeline.PluginStaticInfo{
+	fd.DefaultPluginRegistry.RegisterInput(&pipeline.PluginStaticInfo{
 		Type:    "file",
 		Factory: Factory,
 	})
