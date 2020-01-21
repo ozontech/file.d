@@ -192,6 +192,8 @@ func (e *Event) String() string {
 }
 
 // channels are slower than this implementation by ~20%
+// todo: may we use here some lock-free structures?
+
 type eventPool struct {
 	capacity int
 
