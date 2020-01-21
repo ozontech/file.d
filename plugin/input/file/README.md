@@ -19,38 +19,50 @@ pipelines:
 
 ## Config params
 ### watching_dir 
- `string` `required` <br> <br> Directory to watch for files.
+ `string` `required` <br> <br> Directory to watch for new files.
 ### offsets_file 
- `string` `required` <br> <br> File name into which offsets will be saving. It's simply yaml file. You can read and manually modify it. Offsets are loaded only on initialization.
+ `string` `required`
+
+File name to store offsets of processing files. Offsets are loaded only on initialization.
+> It's simply a `yaml` file. You can manually modify it manually.
 ### filename_pattern 
- `string` `default="*"` <br> <br> Files which doesn't match this pattern will be ignored. Check out https://golang.org/pkg/path/filepath/#Glob for details.
+ `string` `default="*"`
+
+Files which doesn't match this pattern will be ignored.
+> Check out https://golang.org/pkg/path/filepath/#Glob for details.
 ### persistence_mode 
  `string="sync|async"` `default="async"`
 
-Defines how to save offsets file:
-* `sync` – saves offsets file with event commitment. It's very slow, but excludes possibility of events duplication in extreme situations like power loss.
-* `async` – saves offsets file by timer using `persist_interval`. Saving is skipped if offsets haven't been changed. Suitable in most cases, guarantees at least once delivery and makes almost no overhead.
+Defines how to save the offsets file:
+* `sync` – saves offsets as part of event commitment. It's very slow, but excludes possibility of events duplication in extreme situations like power loss.
+* `async` – periodically saves offsets using `persist_interval`. Saving is skipped if offsets haven't been changed. Suitable in most cases, guarantees at least once delivery and makes almost no overhead.
 
-Save means doing three stages:
+Saving is done in three steps:
 * Write temporary file with all offsets
 * Call `fsync()` on it
-* Rename temporary file to original
+* Rename temporary file to the original one
 ### persist_interval 
- `time` `default=time.Second` <br> <br> Offsets save interval. Used only if `persistence_mode` is `async`.
+ `time` `default=time.Second` <br> <br> Offsets save interval. Only used if `persistence_mode` is `async`.
 ### read_buffer_size 
- `number` `default=131072` <br> <br> Size of buffer to use for file reading. Each worker use own buffer, so memory consumption will be `read_buffer_size*workers_count`.
+ `number` `default=131072`
+
+Size of buffer to use for file reading.
+> Each worker use own buffer so final memory consumption will be `read_buffer_size*workers_count`.
 ### max_files 
- `number` `default=16384` <br> <br> Max amount of opened files. If the limit is exceeded `file-d` will exit with fatal. Also check your file descriptors limit: `ulimit -n`.
+ `number` `default=16384`
+
+Max amount of opened files. If the limit is exceeded `file-d` will exit with fatal.
+> Also check your system file descriptors limit: `ulimit -n`.
 ### offsets_op 
  `string="continue|reset|tail"` default=`"continue"`
 
 Offset operation which will be preformed when adding file as a job:
-* `continue` – set offset as saved in offsets file.
-* `reset` – set offset to the beginning of the file.
-* `tail` – set offset to the end of the file.
-> It is only used on initial scan of `watching_dir`. Files which will be catched up later during work always use `reset` operation.
+* `continue` – use offset file
+* `reset` – reset offset to the beginning of the file
+* `tail` – set offset to the end of the file
+> It is only used on initial scan of `watching_dir`. Files which will be caught up later during work, will always use `reset` operation.
 ### workers_count 
- `number` default=`16`
+ `number` `default=16`
 
 How much workers will be instantiated. Each worker:
 * Read files (I/O bound)
