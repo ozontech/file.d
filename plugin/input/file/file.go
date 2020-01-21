@@ -15,15 +15,16 @@ From time to time it instantly releases and reopens descriptors of completely pr
 Such behaviour allows files to be deleted by third party software even though `file-d` is still working(in this case reopen will fail).
 Watcher trying to use file system events to watch for files.
 But events isn't work with symlinks, so watcher also manually rescans directory by some interval.
-Config example:
-```
+
+**Config example:**
+```yaml
 pipelines:
   docker:
-	  type: file
-	  persistence_mode: async
-	  watching_dir: /var/lib/docker/containers
-	  filename_pattern: "*-json.log"
-	  offsets_file: /data/offsets.yaml
+    type: file
+    persistence_mode: async
+    watching_dir: /var/lib/docker/containers
+    filename_pattern: "*-json.log"
+    offsets_file: /data/offsets.yaml
 ```
 !} */
 type Plugin struct {
@@ -53,33 +54,61 @@ const (
 
 type Config struct {
 	// {! params @config /json:\"(.+)\"`/
-	WatchingDir     string `json:"watching_dir"`     // *! `string` `required` <br> <br> Directory to watch for files.
-	OffsetsFile     string `json:"offsets_file"`     // *! `string` `required` <br> <br> File name into which offsets will be saving. It's simply yaml file. You can read and manually modify it. Offsets are loaded only on initialization.
-	FilenamePattern string `json:"filename_pattern"` // *! `string` `default=[! @defaults.defaultFilenamePattern !]` <br> <br> Files which doesn't match this pattern will be ignored. Check out https://golang.org/pkg/path/filepath/#Glob for details.
+	WatchingDir string `json:"watching_dir"` // *! `string` `required` <br> <br> Directory to watch for new files.
+
+	/*
+		>! `string` `required` <br> <br>
+		>!
+		>! File name into which offsets will be saving.
+		>! > It's simply a `yaml` file. You can read and manually modify it. Offsets are loaded only on initialization.
+	*/
+	OffsetsFile string `json:"offsets_file"` // *!
+
+	/*
+		>! `string` `default=[! @defaults.defaultFilenamePattern !]`
+		>!
+		>! Files which doesn't match this pattern will be ignored.
+		>! > Check out https://golang.org/pkg/path/filepath/#Glob for details.
+	*/
+	FilenamePattern string `json:"filename_pattern"` // *!  <br> <br>
+
 	/*
 		>! `string="[! @persistenceMode.variants !]"` `default=[! @defaults.defaultPersistenceMode !]`
 		>!
 		>! Defines how to save offsets file:
 		>! [! @persistenceMode.legend !]
 		>!
-		>! Save means doing three stages:
+		>! Saving is done in three steps:
 		>! * Write temporary file with all offsets
 		>! * Call `fsync()` on it
 		>! * Rename temporary file to original
-		>!
 	*/
 	PersistenceMode string `json:"persistence_mode"` // *!
 
-	PersistInterval time.Duration `json:"persist_interval"` // *! `default=[! @defaults.defaultPersistInterval !]` <br> <br> Offsets save interval. Used only if `persistence_mode` is `async`.
-	ReadBufferSize  int           `json:"read_buffer_size"` // *! `default=[! @defaults.defaultReadBufferSize !]` <br> <br> Size of buffer to use for file reading. Each worker use own buffer, so memory consumption will be `read_buffer_size*workers_count`.
-	MaxFiles        int           `json:"max_files"`        // *! `default=[! @defaults.defaultMaxFiles !]` <br> <br> Max amount of opened files. If the limit is exceeded `file-d` will exit with fatal. Also check your file descriptors limit: `ulimit -n`.
+	PersistInterval time.Duration `json:"persist_interval"` // *! `time` `default=[! @defaults.defaultPersistInterval !]` <br> <br> Offsets save interval. Only used if `persistence_mode` is `async`.
+
+	/*
+		>! `number` `default=[! @defaults.defaultReadBufferSize !]`
+		>!
+		>! Size of buffer to use for file reading.
+		>! > Each worker use own buffer so final memory consumption will be `read_buffer_size*workers_count`.
+	*/
+	ReadBufferSize int `json:"read_buffer_size"` // *!
+
+	/*
+		>! `number` `default=[! @defaults.defaultMaxFiles !]`
+		>!
+		>! Max amount of opened files. If the limit is exceeded `file-d` will exit with fatal.
+		>! > Also check your system file descriptors limit: `ulimit -n`.
+	*/
+	MaxFiles int `json:"max_files"` // *!
 
 	/*
 		>! `string="[! @offsetsOp.variants !]"` default=`[! @defaults.defaultOffsetsOp !]`
 		>!
 		>! Offset operation which will be preformed when adding file as a job:
 		>! [! @offsetsOp.legend !]
-		>! > It is only used on initial scan of `watching_dir`. Files which will be catched up later during work always use `reset` operation.
+		>! > It is only used on initial scan of `watching_dir`. Files which will be caught up later during work always use `reset` operation.
 	*/
 	OffsetsOp string `json:"offsets_op"` // *!
 
