@@ -15,15 +15,16 @@ From time to time it instantly releases and reopens descriptors of completely pr
 Such behaviour allows files to be deleted by third party software even though `file-d` is still working(in this case reopen will fail).
 Watcher trying to use file system events to watch for files.
 But events isn't work with symlinks, so watcher also manually rescans directory by some interval.
-Config example:
-```
+
+**Config example:**
+```yaml
 pipelines:
   docker:
-	  type: file
-	  persistence_mode: async
-	  watching_dir: /var/lib/docker/containers
-	  filename_pattern: "*-json.log"
-	  offsets_file: /data/offsets.yaml
+    type: file
+    persistence_mode: async
+    watching_dir: /var/lib/docker/containers
+    filename_pattern: "*-json.log"
+    offsets_file: /data/offsets.yaml
 ```
 !} */
 type Plugin struct {
@@ -70,9 +71,9 @@ type Config struct {
 	*/
 	PersistenceMode string `json:"persistence_mode"` // *!
 
-	PersistInterval time.Duration `json:"persist_interval"` // *! `default=[! @defaults.defaultPersistInterval !]` <br> <br> Offsets save interval. Used only if `persistence_mode` is `async`.
-	ReadBufferSize  int           `json:"read_buffer_size"` // *! `default=[! @defaults.defaultReadBufferSize !]` <br> <br> Size of buffer to use for file reading. Each worker use own buffer, so memory consumption will be `read_buffer_size*workers_count`.
-	MaxFiles        int           `json:"max_files"`        // *! `default=[! @defaults.defaultMaxFiles !]` <br> <br> Max amount of opened files. If the limit is exceeded `file-d` will exit with fatal. Also check your file descriptors limit: `ulimit -n`.
+	PersistInterval time.Duration `json:"persist_interval"` // *! `time` `default=[! @defaults.defaultPersistInterval !]` <br> <br> Offsets save interval. Used only if `persistence_mode` is `async`.
+	ReadBufferSize  int           `json:"read_buffer_size"` // *! `number` `default=[! @defaults.defaultReadBufferSize !]` <br> <br> Size of buffer to use for file reading. Each worker use own buffer, so memory consumption will be `read_buffer_size*workers_count`.
+	MaxFiles        int           `json:"max_files"`        // *! `number` `default=[! @defaults.defaultMaxFiles !]` <br> <br> Max amount of opened files. If the limit is exceeded `file-d` will exit with fatal. Also check your file descriptors limit: `ulimit -n`.
 
 	/*
 		>! `string="[! @offsetsOp.variants !]"` default=`[! @defaults.defaultOffsetsOp !]`

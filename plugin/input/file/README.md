@@ -5,15 +5,16 @@ From time to time it instantly releases and reopens descriptors of completely pr
 Such behaviour allows files to be deleted by third party software even though `file-d` is still working(in this case reopen will fail).
 Watcher trying to use file system events to watch for files.
 But events isn't work with symlinks, so watcher also manually rescans directory by some interval.
-Config example:
-```
+
+**Config example:**
+```yaml
 pipelines:
   docker:
-	  type: file
-	  persistence_mode: async
-	  watching_dir: /var/lib/docker/containers
-	  filename_pattern: "*-json.log"
-	  offsets_file: /data/offsets.yaml
+    type: file
+    persistence_mode: async
+    watching_dir: /var/lib/docker/containers
+    filename_pattern: "*-json.log"
+    offsets_file: /data/offsets.yaml
 ```
 
 ## Config params
@@ -35,11 +36,11 @@ Save means doing three stages:
 * Call `fsync()` on it
 * Rename temporary file to original
 ### persist_interval 
- `default=time.Second` <br> <br> Offsets save interval. Used only if `persistence_mode` is `async`.
+ `time` `default=time.Second` <br> <br> Offsets save interval. Used only if `persistence_mode` is `async`.
 ### read_buffer_size 
- `default=131072` <br> <br> Size of buffer to use for file reading. Each worker use own buffer, so memory consumption will be `read_buffer_size*workers_count`.
+ `number` `default=131072` <br> <br> Size of buffer to use for file reading. Each worker use own buffer, so memory consumption will be `read_buffer_size*workers_count`.
 ### max_files 
- `default=16384` <br> <br> Max amount of opened files. If the limit is exceeded `file-d` will exit with fatal. Also check your file descriptors limit: `ulimit -n`.
+ `number` `default=16384` <br> <br> Max amount of opened files. If the limit is exceeded `file-d` will exit with fatal. Also check your file descriptors limit: `ulimit -n`.
 ### offsets_op 
  `string="continue|reset|tail"` default=`"continue"`
 
