@@ -15,15 +15,16 @@ From time to time it instantly releases and reopens descriptors of completely pr
 Such behaviour allows files to be deleted by third party software even though `file-d` is still working(in this case reopen will fail).
 Watcher trying to use file system events to watch for files.
 But events isn't work with symlinks, so watcher also manually rescans directory by some interval.
-Config example:
-```
+
+**Config example:**
+```yaml
 pipelines:
   docker:
-	  type: file
-	  persistence_mode: async
-	  watching_dir: /var/lib/docker/containers
-	  filename_pattern: "*-json.log"
-	  offsets_file: /data/offsets.yaml
+    type: file
+    persistence_mode: async
+    watching_dir: /var/lib/docker/containers
+    filename_pattern: "*-json.log"
+    offsets_file: /data/offsets.yaml
 ```
 !} */
 type Plugin struct {
