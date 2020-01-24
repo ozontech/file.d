@@ -1,17 +1,16 @@
 package k8s
 
 import (
-	"strings"
-
 	"gitlab.ozon.ru/sre/file-d/fd"
 	"gitlab.ozon.ru/sre/file-d/logger"
 	"gitlab.ozon.ru/sre/file-d/pipeline"
 	"go.uber.org/atomic"
 )
 
-// Plugin adds k8s meta info to docker logs and also joins split docker logs into one event
-// source docker log file name format should be: [pod-name]_[namespace]_[container-name]-[container id].log
-// example: /docker-logs/advanced-logs-checker-1566485760-trtrq_sre_duty-bot-4e0301b633eaa2bfdcafdeba59ba0c72a3815911a6a820bf273534b0f32d98e0.log
+/*{ introduction
+Plugin adds k8s meta info to docker logs and also joins split docker logs into one event.
+Source docker log file name should be in format: `[pod-name]_[namespace]_[container-name]-[container-id].log` e.g. `/docker-logs/advanced-logs-checker-1566485760-trtrq_sre_duty-bot-4e0301b633eaa2bfdcafdeba59ba0c72a3815911a6a820bf273534b0f32d98e0.log`
+}*/
 type Plugin struct {
 	config  *Config
 	logBuff []byte
@@ -19,15 +18,30 @@ type Plugin struct {
 }
 
 const (
-	defaultMaxEventSize = 1000000
 	predictionLookahead = 128 * 1024
 )
 
 type Config struct {
-	MaxEventSize    int    `json:"max_event_size"`
-	LabelsWhitelist string `json:"labels_whitelist"`
-	OnlyNode        bool   `json:"only_node"`
-	labelsWhitelist map[string]bool
+	//! config /json:\"([a-z_]+)\"/ #2 /default:\"([^"]+)\"/ /(required):\"true\"/  /options:\"([^"]+)\"/
+	//^ _ _ code /`default=%s`/ code /`options=%s`/
+
+	//>  @3 @4 @5 @6
+	//>
+	//> Docker splits long logs by 16kb chunks. Plugin joins them back, but if event will be longer than this value in bytes it will be split after all.
+	//> > Because of optimization it's not strict rule. Events may be split even if they won't gonna exceed the limit.
+	MaxEventSize int `json:"max_event_size" default:"1000000"` //*
+
+	//>  @3 @4 @5 @6
+	//>
+	//> By default plugin adds all pod labels to the event. List here only those are needed.
+	//> e.g. `app,release`
+	LabelsWhitelist  string `json:"labels_whitelist" parse:"list-map" flags:"empty-ok"` //*
+	LabelsWhitelist_ map[string]bool
+
+	//>  @3 @4 @5 @6
+	//>
+	//> Skip retrieving k8s meta information using k8s API and add only `k8s_node` field.
+	OnlyNode bool `json:"only_node" default:"false"` //*
 }
 
 var (
@@ -50,20 +64,6 @@ func (p *Plugin) Start(config pipeline.AnyConfig, _ *pipeline.ActionPluginParams
 
 	startCounter := startCounter.Inc()
 	if startCounter == 1 {
-		if p.config.MaxEventSize == 0 {
-			p.config.MaxEventSize = defaultMaxEventSize
-		}
-
-		p.config.labelsWhitelist = make(map[string]bool)
-
-		if p.config.LabelsWhitelist != "" {
-			parts := strings.Split(p.config.LabelsWhitelist, ",")
-			for _, part := range parts {
-				cleanPart := strings.TrimSpace(part)
-				p.config.labelsWhitelist[cleanPart] = true
-			}
-		}
-
 		enableGatherer()
 	}
 
@@ -78,7 +78,7 @@ func (p *Plugin) Stop() {
 }
 
 func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
-	// todo: do same logic as in join plugin here, to send not full logs
+	// todo: do same logic as in join plugin here to send not full logs
 	if event.IsTimeoutKind() {
 		logger.Errorf("can't read next sequential event for k8s pod stream")
 		p.logBuff = p.logBuff[:1]
@@ -127,8 +127,8 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 		}
 
 		for labelName, labelValue := range podMeta.Labels {
-			if len(p.config.labelsWhitelist) != 0 {
-				_, has := p.config.labelsWhitelist[labelName]
+			if len(p.config.LabelsWhitelist_) != 0 {
+				_, has := p.config.LabelsWhitelist_[labelName]
 
 				if !has {
 					continue

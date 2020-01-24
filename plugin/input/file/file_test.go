@@ -16,6 +16,7 @@ import (
 	"github.com/alecthomas/units"
 	"github.com/satori/go.uuid"
 	"github.com/stretchr/testify/assert"
+	"gitlab.ozon.ru/sre/file-d/fd"
 	"gitlab.ozon.ru/sre/file-d/logger"
 	"gitlab.ozon.ru/sre/file-d/pipeline"
 	"gitlab.ozon.ru/sre/file-d/test"
@@ -27,7 +28,7 @@ var (
 	offsetsDir = ""
 )
 
-const offsetsFile = "filed_offsets.yaml"
+const offsetsFile = "offsets.yaml"
 const newLine = 1
 const perm = 0770
 
@@ -70,12 +71,16 @@ func pluginConfig(opts ...string) *Config {
 		op = "tail"
 	}
 
-	return &Config{
+	config := &Config{
 		WatchingDir:     filesDir,
 		OffsetsFile:     filepath.Join(offsetsDir, offsetsFile),
 		PersistenceMode: "async",
 		OffsetsOp:       op,
 	}
+
+	_ = fd.Parse(config)
+
+	return config
 }
 
 func renameFile(oldFile string, newFile string) {
@@ -572,8 +577,10 @@ func TestReadBufferOverflow(t *testing.T) {
 	iterations := 5
 	linesPerIterations := 2
 
+	config := &Config{}
+	_ = fd.Parse(config)
 	firstLine := `"`
-	for i := 0; i < defaultReadBufferSize+overhead; i++ {
+	for i := 0; i < config.ReadBufferSize+overhead; i++ {
 		firstLine = firstLine + "a"
 	}
 	firstLine = firstLine + `"`
@@ -726,9 +733,12 @@ func TestReadManyFilesParallelRace(t *testing.T) {
 
 // TestReadManyCharsParallelRace tests if plugin doesn't have race conditions in the case of parallel processing of chars
 func TestReadManyCharsParallelRace(t *testing.T) {
+	config := &Config{}
+	_ = fd.Parse(config)
+
 	overhead := 100
 	s := ""
-	for i := 0; i < defaultReadBufferSize+overhead; i++ {
+	for i := 0; i < config.ReadBufferSize+overhead; i++ {
 		s = s + "a"
 	}
 	json1 := []byte(fmt.Sprintf(`{"data":"%s"}`+"\n"+`{"data":"666"}`+"\n", s))
@@ -1084,6 +1094,7 @@ func BenchmarkLightJsonReadPar(b *testing.B) {
 		file := createTempFile()
 		addBytes(file, content, false, false)
 	}
+	logger.Infof("%s", filesDir)
 
 	bytes := int64(files * lines * len(json))
 	logger.Infof("will read %dMb", bytes/1024/1024)

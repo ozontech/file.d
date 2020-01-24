@@ -1,4 +1,4 @@
-# File input plugin
+# Kubernetes plugin
 @introduction
 
 ## Config params

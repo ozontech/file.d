@@ -15,9 +15,6 @@ import (
 )
 
 const (
-	infoReportInterval  = time.Second * 10
-	maintenanceInterval = time.Second * 10
-
 	maintenanceResultError   = 0
 	maintenanceResultNotDone = 1
 	maintenanceResultResumed = 2
@@ -80,7 +77,7 @@ func NewJobProvider(config *Config, controller pipeline.InputPluginController) *
 	jp := &jobProvider{
 		config:     config,
 		controller: controller,
-		offsetDB:   newOffsetDB(config.OffsetsFile, config.offsetsTmpFilename),
+		offsetDB:   newOffsetDB(config.OffsetsFile, config.OffsetsFileTmp),
 
 		jobs:     make(map[fingerprint]*job, config.MaxFiles),
 		jobsDone: atomic.NewInt32(0),
@@ -105,14 +102,14 @@ func NewJobProvider(config *Config, controller pipeline.InputPluginController) *
 
 func (jp *jobProvider) start() {
 	logger.Infof("starting job provider persistence mode=%s", jp.config.PersistenceMode)
-	if jp.config.offsetsOp == offsetsOpContinue {
+	if jp.config.OffsetsOp_ == offsetsOpContinue {
 		jp.loadedOffsets = jp.offsetDB.load()
 	}
 
 	jp.watcher.start()
 
-	if jp.config.persistenceMode == persistenceModeAsync {
-		go jp.saveOffsetsCyclic(jp.config.PersistInterval)
+	if jp.config.PersistenceMode_ == persistenceModeAsync {
+		go jp.saveOffsetsCyclic(jp.config.AsyncInterval_)
 	}
 
 	jp.isStarted = true
@@ -124,7 +121,7 @@ func (jp *jobProvider) start() {
 func (jp *jobProvider) stop() {
 	jp.stopReportCh <- true
 	jp.stopMaintenanceCh <- true
-	if jp.config.persistenceMode == persistenceModeAsync {
+	if jp.config.PersistenceMode_ == persistenceModeAsync {
 		jp.stopSaveOffsetsCh <- true
 	}
 
@@ -168,13 +165,13 @@ func (jp *jobProvider) commit(event *pipeline.Event) {
 	job.mu.Unlock()
 
 	jp.offsetsCommitted.Inc()
-	if jp.config.persistenceMode == persistenceModeSync {
+	if jp.config.PersistenceMode_ == persistenceModeSync {
 		jp.offsetDB.save(jp.jobs, jp.jobsMu)
 	}
 }
 
 func (jp *jobProvider) processNotification(filename string, stat os.FileInfo) {
-	if filename == jp.config.OffsetsFile || filename == jp.config.offsetsTmpFilename {
+	if filename == jp.config.OffsetsFile || filename == jp.config.OffsetsFileTmp {
 		logger.Fatalf("sorry, you can't place offsets file %s inside watching dir %s", jp.config.OffsetsFile, jp.config.WatchingDir)
 	}
 
@@ -263,7 +260,7 @@ func (jp *jobProvider) addJob(file *os.File, stat os.FileInfo, filename string, 
 	if jp.isStarted {
 		jp.initJobOffset(offsetsOpReset, job)
 	} else {
-		jp.initJobOffset(jp.config.offsetsOp, job)
+		jp.initJobOffset(jp.config.OffsetsOp_, job)
 	}
 
 	jp.jobsMu.Lock()
@@ -349,7 +346,7 @@ func (jp *jobProvider) initJobOffset(operation offsetsOp, job *job) {
 			return
 		}
 	default:
-		logger.Panicf("unknown offsets op: %d", jp.config.offsetsOp)
+		logger.Panicf("unknown offsets op: %d", jp.config.OffsetsOp_)
 	}
 }
 
@@ -431,7 +428,7 @@ func (jp *jobProvider) saveOffsetsCyclic(duration time.Duration) {
 }
 
 func (jp *jobProvider) reportStats() {
-	time.Sleep(infoReportInterval)
+	time.Sleep(jp.config.ReportInterval_)
 	lastSaves := jp.offsetDB.savesTotal.Load()
 	for {
 		select {
@@ -444,17 +441,25 @@ func (jp *jobProvider) reportStats() {
 
 			savesTotal := jp.offsetDB.savesTotal.Load() - lastSaves
 			lastSaves = savesTotal
-			logger.Infof("file plugin stats for last %d seconds: offsets saves=%d, jobs done=%d, jobs total=%d", infoReportInterval/time.Second, savesTotal, jp.jobsDone.Load(), l)
+			logger.Infof("file plugin stats for last %d seconds: offsets saves=%d, jobs done=%d, jobs total=%d", jp.config.ReportInterval_/time.Second, savesTotal, jp.jobsDone.Load(), l)
 
 			jp.jobsLog = jp.jobsLog[:0]
 
-			time.Sleep(infoReportInterval)
+			time.Sleep(jp.config.ReportInterval_)
 		}
 	}
 }
 
+/*{ maintenance
+For now maintenance consists of two stages:
+* Symlinks
+* Jobs
+
+Symlinks maintenance detects if underlying file of symlink is changed.
+Job maintenance `fstat` tracked files to detect if new portion of data have been written to the file. If job is in `done` state when it releases and reopens file descriptor to allow third party software delete the file.
+}*/
 func (jp *jobProvider) maintenance() {
-	time.Sleep(maintenanceInterval)
+	time.Sleep(jp.config.MaintenanceInterval_)
 	for {
 		select {
 		case <-jp.stopMaintenanceCh:
@@ -463,7 +468,7 @@ func (jp *jobProvider) maintenance() {
 			jp.maintenanceJobs()
 			jp.maintenanceSymlinks()
 
-			time.Sleep(maintenanceInterval)
+			time.Sleep(jp.config.MaintenanceInterval_)
 		}
 	}
 }

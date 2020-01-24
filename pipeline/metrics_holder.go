@@ -71,7 +71,7 @@ func (m *metricsHolder) nextMetricsGen() {
 		}
 
 		opts := prometheus.CounterOpts{
-			Namespace:   "filed",
+			Namespace:   "file_d",
 			Subsystem:   "pipeline_" + m.pipelineName,
 			Name:        metrics.name + "_events_total",
 			Help:        fmt.Sprintf("how many events processed by pipeline %q and #%d action", m.pipelineName, index),

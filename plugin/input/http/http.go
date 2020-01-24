@@ -10,9 +10,16 @@ import (
 	"gitlab.ozon.ru/sre/file-d/pipeline"
 )
 
-type Config struct {
-	Address string `json:"address"`
-}
+/*{ introduction
+Plugin listens to HTTP requests. Request body should contain events delimited by a new line.
+Also it emulates some protocols to allow receive events from wide range of software which use HTTP to transmit data.
+E.g. `file-d` may pretends to be Elasticsearch allows clients to send events using Elasticsearch protocol.
+So you can use Elasticsearch filebeat output plugin to send data to `file-d`.
+
+> Currently event commitment mechanism isn't implemented.
+> Plugin answers with HTTP code `OK 200` right after it have read all the request body.
+> It doesn't wait until events will be committed.
+}*/
 
 type Plugin struct {
 	config     *Config
@@ -26,96 +33,18 @@ type Plugin struct {
 	mu         *sync.Mutex
 }
 
-var info = []byte(`{
-  "name" : "filed_elasticsearch_input",
-  "cluster_name" : "filed",
-  "cluster_uuid" : "Rz-wj_pkT8a0Y1KXTLmN9g",
-  "version" : {
-    "number" : "6.7.1",
-    "build_flavor" : "default",
-    "build_type" : "deb",
-    "build_hash" : "2f32220",
-    "build_date" : "2019-04-02T15:59:27.961366Z",
-    "build_snapshot" : false,
-    "lucene_version" : "7.7.0",
-    "minimum_wire_compatibility_version" : "5.6.0",
-    "minimum_index_compatibility_version" : "5.0.0"
-  },
-  "tagline" : "You know, for file.d"
-}`)
-
-var xpack = []byte(`{
-  "build": {
-    "date": "2019-04-02T15:59:27.961366Z",
-    "hash": "2f32220"
-  },
-  "features": {
-    "graph": {
-      "available": false,
-      "description": "Graph Data Exploration for the Elastic Stack",
-      "enabled": true
-    },
-    "ilm": {
-      "available": true,
-      "description": "Index lifecycle management for the Elastic Stack",
-      "enabled": true
-    },
-    "logstash": {
-      "available": false,
-      "description": "Logstash management component for X-Pack",
-      "enabled": true
-    },
-    "ml": {
-      "available": false,
-      "description": "Machine Learning for the Elastic Stack",
-      "enabled": false,
-      "native_code_info": {
-        "build_hash": "N/A",
-        "version": "N/A"
-      }
-    },
-    "monitoring": {
-      "available": true,
-      "description": "Monitoring for the Elastic Stack",
-      "enabled": true
-    },
-    "rollup": {
-      "available": true,
-      "description": "Time series pre-aggregation and rollup",
-      "enabled": true
-    },
-    "security": {
-      "available": false,
-      "description": "Security for the Elastic Stack",
-      "enabled": false
-    },
-    "sql": {
-      "available": true,
-      "description": "SQL access to Elasticsearch",
-      "enabled": true
-    },
-    "watcher": {
-      "available": false,
-      "description": "Alerting, Notification and Automation for the Elastic Stack",
-      "enabled": true
-    }
-  },
-  "license": {
-    "mode": "basic",
-    "status": "active",
-    "type": "basic",
-    "uid": "e76d6ce9-f78c-44ff-8fd5-b5877357d649"
-  },
-  "tagline": "You know, for nothing"
-}`)
-
-var result = []byte(`{
-   "took": 30,
-   "errors": false,
-   "items": []
-}`)
-
-var empty = []byte(`{}`)
+//! config /json:\"([a-z_]+)\"/ #2 /default:\"([^"]+)\"/ /(required):\"true\"/  /options:\"([^"]+)\"/
+//^ _ _ code /`default=%s`/ code /`options=%s`/
+type Config struct {
+	//> @3 @4 @5 @6
+	//>
+	//> Address to listen to. Omit ip/host to listen all network interfaces: `:88`
+	Address string `json:"address" default:":9200"` //*
+	//> @3 @4 @5 @6
+	//>
+	//> Which protocol to emulate.
+	EmulateMode string `json:"emulate_mode" default:"no" options:"no|elasticsearch"` //*
+}
 
 func init() {
 	fd.DefaultPluginRegistry.RegisterInput(&pipeline.PluginStaticInfo{
@@ -143,16 +72,16 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	p.controller = params.Controller
 	p.sourceIDs = make([]pipeline.SourceID, 0, 0)
 
-	if p.config.Address != "off" {
-		mux := http.NewServeMux()
-		mux.HandleFunc("/", p.serveInfo)
-		mux.HandleFunc("/_xpack", p.serveXPack)
-		mux.HandleFunc("/_bulk", p.serveBulk)
-		mux.HandleFunc("/_template/", p.serveTemplate)
-		p.server = &http.Server{Addr: p.config.Address, Handler: mux}
-
-		go p.listenHTTP()
+	mux := http.NewServeMux()
+	switch p.config.EmulateMode {
+	case "elasticsearch":
+		p.elasticsearch(mux)
+	case "no":
+		mux.HandleFunc("/", p.serve)
 	}
+	p.server = &http.Server{Addr: p.config.Address, Handler: mux}
+
+	go p.listenHTTP()
 }
 
 func (p *Plugin) listenHTTP() {
@@ -168,33 +97,6 @@ func (p *Plugin) newReadBuff() interface{} {
 
 func (p *Plugin) newEventBuffs() interface{} {
 	return make([]byte, 0, p.params.PipelineSettings.AvgLogSize)
-}
-
-func (p *Plugin) serveXPack(w http.ResponseWriter, r *http.Request) {
-	_, err := w.Write(xpack)
-	if err != nil {
-		logger.Errorf("can't write response: %s", err.Error())
-	}
-}
-
-func (p *Plugin) serveTemplate(w http.ResponseWriter, r *http.Request) {
-	_, err := w.Write(empty)
-	if err != nil {
-		logger.Errorf("can't write response: %s", err.Error())
-	}
-}
-
-func (p *Plugin) serveInfo(w http.ResponseWriter, r *http.Request) {
-	if r.Method == http.MethodGet && r.RequestURI == "/" {
-
-		_, err := w.Write(info)
-		if err != nil {
-			logger.Errorf("can't write response: %s", err.Error())
-		}
-		return
-	}
-
-	logger.Errorf("unknown request uri=%s, method=%s", r.RequestURI, r.Method)
 }
 
 func (p *Plugin) getSourceID() pipeline.SourceID {
@@ -218,7 +120,7 @@ func (p *Plugin) putSourceID(x pipeline.SourceID) {
 	p.mu.Unlock()
 }
 
-func (p *Plugin) serveBulk(w http.ResponseWriter, r *http.Request) {
+func (p *Plugin) serve(w http.ResponseWriter, r *http.Request) {
 	readBuff := p.readBuffs.Get().([]byte)
 	eventBuff := p.eventBuffs.Get().([]byte)[:0]
 
@@ -277,5 +179,6 @@ func (p *Plugin) processChunk(sourceID pipeline.SourceID, readBuff []byte, event
 func (p *Plugin) Stop() {
 }
 
-func (p *Plugin) Commit(event *pipeline.Event) {
+func (p *Plugin) Commit(_ *pipeline.Event) {
+	//todo: don't reply with OK till all events in request will be committed
 }

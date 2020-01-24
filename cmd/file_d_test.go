@@ -59,8 +59,9 @@ main.main()
 `
 )
 
-// TestEndToEnd creates near-realistic workload and pipeline and it shouldn't crash/panic or hang for some time
-// it's something like fuzz testing
+// TestEndToEnd creates near-realistic workload and setups a complex pipeline.
+// It's something like fuzz testing. file-d shouldn't crash/panic or hang for infinite time.
+// Keep this test running while you are sleeping is a very good idea :)
 func TestEndToEnd(t *testing.T) {
 	configFilename := "./../testdata/config/e2e.yaml"
 	testTime := time.Minute

@@ -76,7 +76,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	}
 
 	if p.config.ShouldUseTopicField && p.config.TopicField == "" {
-		logger.Fatalf(`"topic_field" isn't set for kafka output while "should_use_topic_filed=true"`)
+		logger.Fatalf(`"topic_field" isn't set for kafka output while "should_use_topic_field=true"`)
 	}
 
 	if p.config.FlushTimeout.Duration == 0 {

@@ -1,4 +1,4 @@
-# File input plugin
+# HTTP input plugin
 @introduction
 
 ## Config params

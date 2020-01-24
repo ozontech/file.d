@@ -113,8 +113,6 @@ func (o *offsetDB) parseOne(content string, offsets fpOffsets) string {
 		logger.Panicf("wrong offsets format, duplicate inode %d", inode)
 	}
 
-	logger.Infof("unknown fingerprint: %d", fp)
-
 	offsets[fp] = &inodeOffsets{
 		streams:     make(map[pipeline.StreamName]int64),
 		filename:    filename,

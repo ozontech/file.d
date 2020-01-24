@@ -37,7 +37,7 @@ func (f *FileD) SetConfig(config *Config) {
 }
 
 func (f *FileD) Start() {
-	logger.Infof("starting filed")
+	logger.Infof("starting file-d")
 
 	f.createRegistry()
 	f.startHTTP()
@@ -134,6 +134,11 @@ func (f *FileD) setupAction(p *pipeline.Pipeline, index int, t string, actionJSO
 		logger.Fatalf("can't unmarshal config for %s action in pipeline %q: %s", info.Type, p.Name, err.Error())
 	}
 
+	err = Parse(config)
+	if err != nil {
+		logger.Fatalf("wrong config for %q action in pipeline %q: %s", info.Type, p.Name, err.Error())
+	}
+
 	infoCopy := *info
 	infoCopy.Config = config
 
@@ -169,18 +174,18 @@ func (f *FileD) instantiatePlugin(info *pipeline.PluginStaticInfo) *pipeline.Plu
 }
 
 func (f *FileD) getStaticInfo(pipelineConfig *PipelineConfig, pluginKind pipeline.PluginKind) (*pipeline.PluginStaticInfo, error) {
-	inputJSON := pipelineConfig.Raw.Get(string(pluginKind))
-	if inputJSON.MustMap() == nil {
+	configJSON := pipelineConfig.Raw.Get(string(pluginKind))
+	if configJSON.MustMap() == nil {
 		return nil, fmt.Errorf("no %s plugin provided", pluginKind)
 	}
-	t := inputJSON.Get("type").MustString()
+	t := configJSON.Get("type").MustString()
 	if t == "" {
 		return nil, fmt.Errorf("%s doesn't have type", pluginKind)
 	}
 
 	logger.Infof("creating %s with type %q", pluginKind, t)
 	info := f.plugins.Get(pluginKind, t)
-	configJson, err := inputJSON.Encode()
+	configJson, err := configJSON.Encode()
 	if err != nil {
 		logger.Panicf("can't create config json for %s", t)
 	}
@@ -191,6 +196,11 @@ func (f *FileD) getStaticInfo(pipelineConfig *PipelineConfig, pluginKind pipelin
 		return nil, fmt.Errorf("can't unmarshal config for %s", pluginKind)
 	}
 
+	err = Parse(config)
+	if err != nil {
+		logger.Fatalf("wrong config for %q plugin %q: %s", pluginKind, t, err.Error())
+	}
+
 	infoCopy := *info
 	infoCopy.Config = config
 
@@ -198,7 +208,7 @@ func (f *FileD) getStaticInfo(pipelineConfig *PipelineConfig, pluginKind pipelin
 }
 
 func (f *FileD) Stop() {
-	logger.Infof("stopping filed pipelines=%d", len(f.Pipelines))
+	logger.Infof("stopping pipelines=%d", len(f.Pipelines))
 	_ = f.server.Shutdown(nil)
 	for _, p := range f.Pipelines {
 		p.Stop()
@@ -230,7 +240,7 @@ func (f *FileD) listenHTTP() {
 
 func (f *FileD) serveFreeOsMem(_ http.ResponseWriter, _ *http.Request) {
 	debug.FreeOSMemory()
-	logger.Infof("Free OS memory OK")
+	logger.Infof("free OS memory OK")
 }
 
 func (f *FileD) serveLiveReady(_ http.ResponseWriter, _ *http.Request) {

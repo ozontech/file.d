@@ -8,25 +8,25 @@ import (
 	"gitlab.ozon.ru/sre/file-d/pipeline"
 )
 
-/* {! comment @description
+/*{ introduction
 Plugin is watching for files in the provided directory and reads them line by line.
 Each line should contain only one event. It also correctly handles rotations (rename/truncate) and symlinks.
 From time to time it instantly releases and reopens descriptors of completely processed files.
-Such behaviour allows files to be deleted by third party software even though `file-d` is still working(in this case reopen will fail).
-Watcher trying to use file system events to watch for files.
-But events isn't work with symlinks, so watcher also manually rescans directory by some interval.
+Such behaviour allows files to be deleted by third party software even though `file-d` is still working (in this case reopen will fail).
+Watcher is trying to use file system events detect file creation and updates.
+But update events don't work with symlinks, so watcher also manually `fstat` all tracking files to detect changes.
 
-**Config example:**
+**Config example for reading docker container log files:**
 ```yaml
 pipelines:
-  docker:
+  example_docker_pipeline:
     type: file
-    persistence_mode: async
     watching_dir: /var/lib/docker/containers
-    filename_pattern: "*-json.log"
     offsets_file: /data/offsets.yaml
+    filename_pattern: "*-json.log"
+    persistence_mode: async
 ```
-!} */
+}*/
 type Plugin struct {
 	config *Config
 	params *pipeline.InputPluginParams
@@ -35,109 +35,95 @@ type Plugin struct {
 	jobProvider *jobProvider
 }
 
-// {! options #2 #6
 type persistenceMode int
 
 const (
-	persistenceModeSync  persistenceMode = 0 // sync *! saves offsets as part of event commitment. It's very slow, but excludes possibility of events duplication in extreme situations like power loss.
-	persistenceModeAsync persistenceMode = 1 // async *! periodically saves offsets using `persist_interval`. Saving is skipped if offsets haven't been changed. Suitable in most cases, guarantees at least once delivery and makes almost no overhead.
-) // !}
+	//! persistenceMode #1 /`([a-z]+)`/
+	persistenceModeAsync persistenceMode = iota //* `async` – periodically saves offsets using `async_interval`. Saving is skipped if offsets haven't been changed. Suitable in most cases, guarantees at least once delivery and makes almost no overhead.
+	persistenceModeSync                         //* `sync` – saves offsets as part of event commitment. It's very slow, but excludes possibility of events duplication in extreme situations like power loss.
+)
 
-// {! options #2 #6
 type offsetsOp int
 
 const (
-	offsetsOpContinue offsetsOp = 0 // continue *! use offset file
-	offsetsOpReset    offsetsOp = 1 // reset *! reset offset to the beginning of the file
-	offsetsOpTail     offsetsOp = 2 // tail *! set offset to the end of the file
-) // !}
+	//! offsetsOp #1 /`(.+)`/
+	offsetsOpContinue offsetsOp = iota //* `continue` – use offset file
+	offsetsOpTail                      //* `tail` – set offset to the end of the file
+	offsetsOpReset                     //* `reset` – reset offset to the beginning of the file
+)
 
 type Config struct {
-	// {! params @config /json:\"(.+)\"`/
-	WatchingDir string `json:"watching_dir"` // *! `string` `required` <br> <br> Directory to watch for new files.
+	//! config /json:\"([a-z_]+)\"/ #2 /default:\"([^"]+)\"/ /(required):\"true\"/  /options:\"([^"]+)\"/
+	//^ _ _ code /`default=%s`/ code /`options=%s`/
 
-	/*
-		>! `string` `required`
-		>!
-		>! File name to store offsets of processing files. Offsets are loaded only on initialization.
-		>! > It's simply a `yaml` file. You can manually modify it manually.
-	*/
-	OffsetsFile string `json:"offsets_file"` // *!
+	WatchingDir string `json:"watching_dir" required:"true"` //* @3 @4 @5 @6 <br> <br> Directory to watch for new files.
 
-	/*
-		>! `string` `default=[! @defaults.defaultFilenamePattern !]`
-		>!
-		>! Files which doesn't match this pattern will be ignored.
-		>! > Check out https://golang.org/pkg/path/filepath/#Glob for details.
-	*/
-	FilenamePattern string `json:"filename_pattern"` // *!  <br> <br>
+	//> @3 @4 @5 @6
+	//>
+	//> File name to store offsets of processing files. Offsets are loaded only on initialization.
+	//> > It's simply a `yaml` file. You can modify it manually.
+	OffsetsFile    string `json:"offsets_file" required:"true"` //*
+	OffsetsFileTmp string
 
-	/*
-		>! `string="[! @persistenceMode.variants !]"` `default=[! @defaults.defaultPersistenceMode !]`
-		>!
-		>! Defines how to save the offsets file:
-		>! [! @persistenceMode.legend !]
-		>!
-		>! Saving is done in three steps:
-		>! * Write temporary file with all offsets
-		>! * Call `fsync()` on it
-		>! * Rename temporary file to the original one
-	*/
-	PersistenceMode string `json:"persistence_mode"` // *!
+	//> @3 @4 @5 @6
+	//>
+	//> Files which doesn't match this pattern will be ignored.
+	//> > Check out https://golang.org/pkg/path/filepath/#Glob for details.
+	FilenamePattern string `json:"filename_pattern" default:"*"` //*
 
-	PersistInterval time.Duration `json:"persist_interval"` // *! `time` `default=[! @defaults.defaultPersistInterval !]` <br> <br> Offsets save interval. Only used if `persistence_mode` is `async`.
+	//> @3 @4 @5 @6
+	//> 
+	//>  Defines how to save the offsets file:
+	//>  @persistenceMode|comment-list
+	//>
+	//>  Saving is done in three steps:
+	//>  * Write temporary file with all offsets
+	//>  * Call `fsync()` on it
+	//>  * Rename temporary file to the original one
+	PersistenceMode  string `json:"persistence_mode" default:"async" options:"async|sync"` //*
+	PersistenceMode_ persistenceMode
 
-	/*
-		>! `number` `default=[! @defaults.defaultReadBufferSize !]`
-		>!
-		>! Size of buffer to use for file reading.
-		>! > Each worker use own buffer so final memory consumption will be `read_buffer_size*workers_count`.
-	*/
-	ReadBufferSize int `json:"read_buffer_size"` // *!
+	AsyncInterval  fd.Duration `json:"async_interval" default:"1s" parse:"duration"` // *! @3 @4 @5 @6 <br> <br> Offsets save interval. Only used if `persistence_mode` is `async`.
+	AsyncInterval_ time.Duration
 
-	/*
-		>! `number` `default=[! @defaults.defaultMaxFiles !]`
-		>!
-		>! Max amount of opened files. If the limit is exceeded `file-d` will exit with fatal.
-		>! > Also check your system file descriptors limit: `ulimit -n`.
-	*/
-	MaxFiles int `json:"max_files"` // *!
+	//> @3 @4 @5 @6
+	//>
+	//>  Size of buffer to use for file reading.
+	//>  > Each worker use own buffer, so final memory consumption will be `read_buffer_size*workers_count`.
+	ReadBufferSize int `json:"read_buffer_size" default:"131072"` //*
 
-	/*
-		>! `string="[! @offsetsOp.variants !]"` default=`[! @defaults.defaultOffsetsOp !]`
-		>!
-		>! Offset operation which will be preformed when adding file as a job:
-		>! [! @offsetsOp.legend !]
-		>! > It is only used on initial scan of `watching_dir`. Files which will be caught up later during work, will always use `reset` operation.
-	*/
-	OffsetsOp string `json:"offsets_op"` // *!
+	//>  @3 @4 @5 @6
+	//>
+	//>  Max amount of opened files. If the limit is exceeded `file-d` will exit with fatal.
+	//>  > Also check your system file descriptors limit: `ulimit -n`.
+	MaxFiles int `json:"max_files" default:"16384"` //*
 
-	/*
-		>! `number` `default=[! @defaults.defaultWorkersCount !]`
-		>!
-		>! How much workers will be instantiated. Each worker:
-		>! * Read files (I/O bound)
-		>! * Decode events (CPU bound)
-		>! > It's recommended to set it to 4x-8x of CPU cores.
-	*/
-	WorkersCount int `json:"workers_count"` // *!
-	// !}
+	//>  @3 @4 @5 @6
+	//>
+	//>  Offset operation which will be preformed when adding file as a job:
+	//>  @offsetsOp|comment-list
+	//>  > It is only used on initial scan of `watching_dir`. Files which will be caught up later during work, will always use `reset` operation.
+	OffsetsOp  string `json:"offsets_op" default:"continue" options:"continue|tail|reset"` //*
+	OffsetsOp_ offsetsOp
 
-	offsetsTmpFilename string
-	persistenceMode    persistenceMode
-	offsetsOp          offsetsOp
+	//>  @3 @4 @5 @6
+	//>
+	//>  How much workers will be instantiated. Each worker:
+	//>  * Read files (I/O bound)
+	//>  * Decode events (CPU bound)
+	//>  > It's recommended to set it to 4x-8x of CPU cores.
+	WorkersCount int `json:"workers_count" default:"16"` //*
+
+	ReportInterval  fd.Duration `json:"report_interval" default:"10s" parse:"duration"` //* @3 @4 @5 @6 <br> <br> How often to report statistical information to stdout
+	ReportInterval_ time.Duration
+
+	//> @3 @4 @5 @6
+	//>
+	//> How often to perform maintenance.
+	//> @maintenance
+	MaintenanceInterval  fd.Duration `json:"maintenance_interval" default:"10s" parse:"duration"` //*
+	MaintenanceInterval_ time.Duration
 }
-
-// {! values @defaults #1 #3
-const (
-	defaultWorkersCount    = 16          // *!
-	defaultReadBufferSize  = 131072      // *!
-	defaultMaxFiles        = 16384       // *!
-	defaultPersistInterval = time.Second // *!
-	defaultPersistenceMode = "async"     // *!
-	defaultOffsetsOp       = "continue"  // *!
-	defaultFilenamePattern = "*"         // *!
-) // !}
 
 func init() {
 	fd.DefaultPluginRegistry.RegisterInput(&pipeline.PluginStaticInfo{
@@ -155,66 +141,8 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 
 	p.params = params
 	p.config = config.(*Config)
-	if p.config == nil {
-		logger.Panicf("config is nil for the file plugin")
-	}
 
-	if p.config.OffsetsOp == "" {
-		p.config.OffsetsOp = defaultOffsetsOp
-	}
-
-	switch p.config.OffsetsOp {
-	case "continue":
-		p.config.offsetsOp = offsetsOpContinue
-	case "reset":
-		p.config.offsetsOp = offsetsOpReset
-	case "tail":
-		p.config.offsetsOp = offsetsOpTail
-	default:
-		logger.Fatalf("wrong offsets operation %q provided, should be one of continue|reset|tail", p.config.OffsetsOp)
-	}
-
-	if p.config.PersistenceMode == "" {
-		p.config.PersistenceMode = defaultPersistenceMode
-	}
-
-	switch p.config.PersistenceMode {
-	case "async":
-		p.config.persistenceMode = persistenceModeAsync
-	case "sync":
-		p.config.persistenceMode = persistenceModeSync
-	default:
-		logger.Fatalf("wrong persistence mode %q provided, should be one of async|sync", p.config.PersistenceMode)
-	}
-
-	if p.config.PersistInterval == 0 {
-		p.config.PersistInterval = defaultPersistInterval
-	}
-	if p.config.WatchingDir == "" {
-		logger.Fatalf("no watching_dir provided in config for the file plugin")
-	}
-
-	if p.config.FilenamePattern == "" {
-		p.config.FilenamePattern = defaultFilenamePattern
-	}
-
-	if p.config.WorkersCount == 0 {
-		p.config.WorkersCount = defaultWorkersCount
-	}
-
-	if p.config.OffsetsFile == "" {
-		logger.Fatalf("no offsets_file provided in config for the file plugin")
-	}
-
-	if p.config.ReadBufferSize == 0 {
-		p.config.ReadBufferSize = defaultReadBufferSize
-	}
-
-	if p.config.MaxFiles == 0 {
-		p.config.MaxFiles = defaultMaxFiles
-	}
-
-	p.config.offsetsTmpFilename = p.config.OffsetsFile + ".atomic"
+	p.config.OffsetsFileTmp = p.config.OffsetsFile + ".atomic"
 
 	p.jobProvider = NewJobProvider(p.config, p.params.Controller)
 	p.startWorkers()

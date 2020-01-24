@@ -5,13 +5,18 @@ import (
 	"gitlab.ozon.ru/sre/file-d/pipeline"
 )
 
-type Config struct {
-}
+/*{ introduction
+Plugin provides methods to use in test scenarios:
 
+@fns|signature-list
+}*/
 type Plugin struct {
 	controller pipeline.InputPluginController
 	commitFn   func(event *pipeline.Event)
 	inFn       func()
+}
+
+type Config struct {
 }
 
 func init() {
@@ -25,7 +30,7 @@ func Factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 	return &Plugin{}, &Config{}
 }
 
-func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginParams) {
+func (p *Plugin) Start(_ pipeline.AnyConfig, params *pipeline.InputPluginParams) {
 	p.controller = params.Controller
 }
 
@@ -38,17 +43,23 @@ func (p *Plugin) Commit(event *pipeline.Event) {
 	}
 }
 
-func (p *Plugin) SetCommitFn(fn func(event *pipeline.Event)) {
-	p.commitFn = fn
-}
+//! fns #4 /Plugin\)\s(.+)\s{/
+//^ _ _ code
 
-func (p *Plugin) SetInFn(fn func()) {
-	p.inFn = fn
-}
-
-func (p *Plugin) In(sourceID pipeline.SourceID, sourceName string, offset int64, size int64, bytes []byte) {
+//> Sends test event into pipeline.
+func (p *Plugin) In(sourceID pipeline.SourceID, sourceName string, offset int64, size int64, bytes []byte) { //*
 	if p.inFn != nil {
 		p.inFn()
 	}
 	p.controller.In(sourceID, sourceName, offset, bytes)
+}
+
+//> Sets up a hook to make sure test event have been successfully committed.
+func (p *Plugin) SetCommitFn(fn func(event *pipeline.Event)) { //*
+	p.commitFn = fn
+}
+
+//> Sets up a hook to make sure test event have been passed to plugin.
+func (p *Plugin) SetInFn(fn func()) { //*
+	p.inFn = fn
 }
