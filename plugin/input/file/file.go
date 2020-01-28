@@ -153,7 +153,7 @@ func (p *Plugin) startWorkers() {
 	p.workers = make([]*worker, p.config.WorkersCount)
 	for i := range p.workers {
 		p.workers[i] = &worker{}
-		p.workers[i].start(i, p.params.Controller, p.jobProvider, p.config.ReadBufferSize)
+		p.workers[i].start(p.params.Controller, p.jobProvider, p.config.ReadBufferSize)
 	}
 
 	logger.Infof("file read workers created, count=%d", len(p.workers))

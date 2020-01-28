@@ -40,10 +40,10 @@ type stream struct {
 
 func newStream(name StreamName, sourceID SourceID, streamer *streamer) *stream {
 	stream := stream{
-		name:        name,
-		sourceID:    sourceID,
-		streamer:    streamer,
-		mu:          &sync.Mutex{},
+		name:     name,
+		sourceID: sourceID,
+		streamer: streamer,
+		mu:       &sync.Mutex{},
 	}
 	stream.cond = sync.NewCond(stream.mu)
 
@@ -106,13 +106,14 @@ func (s *stream) attach() {
 	s.mu.Unlock()
 }
 
-func (s *stream) put(event *Event) {
+func (s *stream) put(event *Event) uint64 {
 	s.mu.Lock()
 	s.len++
 	s.currentSeq++
+	seqID := s.currentSeq
 	event.stream = s
 	event.stage = eventStageStream
-	event.SeqID = s.currentSeq
+	event.SeqID = seqID
 	if s.first == nil {
 		s.last = event
 		s.first = event
@@ -125,6 +126,8 @@ func (s *stream) put(event *Event) {
 		s.last = event
 	}
 	s.mu.Unlock()
+
+	return seqID
 }
 
 func (s *stream) blockGet() *Event {

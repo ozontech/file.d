@@ -31,8 +31,7 @@ const (
 type finalizeFn = func(event *Event, notifyInput bool, backEvent bool)
 
 type InputPluginController interface {
-	In(sourceID SourceID, sourceName string, offset int64, data []byte)
-	DeprecateSource(sourceID SourceID) int // mark events in the pipeline as deprecated, it means that these events shouldn't update offsets on commit
+	In(sourceID SourceID, sourceName string, offset int64, data []byte) uint64
 	DisableStreams()                       // don't use stream field and spread all events across all processors
 }
 
@@ -153,7 +152,7 @@ func (p *Pipeline) Start() {
 }
 
 func (p *Pipeline) Stop() {
-	logger.Infof("stopping pipeline %q", p.Name)
+	logger.Infof("stopping pipeline %q, total committed=%d", p.Name, p.totalCommitted.Load())
 
 	logger.Infof("stopping processors count=%d", len(p.Procs))
 	for _, processor := range p.Procs {
@@ -189,35 +188,21 @@ func (p *Pipeline) GetOutput() OutputPlugin {
 	return p.output
 }
 
-func (p *Pipeline) DeprecateSource(sourceID SourceID) int {
-	count := 0
-	p.eventPool.visit(func(e *Event) {
-		if e.SourceID != sourceID {
-			return
-		}
-
-		e.SetIgnoreKind()
-		count++
-	})
-
-	return count
-}
-
-func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes []byte) {
+func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes []byte) uint64 {
 	length := len(bytes)
 
 	// don't process shit
 	isEmpty := length == 0
 	isSpam := p.antispamer.check(sourceID, sourceName, (offset-int64(length)) <= 1)
 	if isEmpty || isSpam {
-		return
+		return 0
 	}
 
 	event := p.eventPool.get()
 	err := event.parseJSON(bytes)
 	if err != nil {
 		logger.Fatalf("wrong json offset=%d, length=%d, err=%s, source=%d:%s, json=%s", offset, length, err.Error(), sourceID, sourceName, bytes)
-		return
+		return 0
 	}
 
 	event.Offset = offset
@@ -230,22 +215,23 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 		p.inSample = event.Root.Encode(p.inSample)
 	}
 
-	p.streamEvent(event)
+	return p.streamEvent(event)
 }
 
-func (p *Pipeline) streamEvent(event *Event) {
+func (p *Pipeline) streamEvent(event *Event) uint64 {
 	// spread events across all processors
 	if !p.useStreams {
 		sourceID := SourceID(event.SeqID % uint64(p.procCount.Load()))
-		p.streamer.putEvent(sourceID, DefaultStreamName, event)
-		return
+
+		return p.streamer.putEvent(sourceID, DefaultStreamName, event)
 	}
 
 	node := event.Root.Dig(p.settings.StreamField)
 	if node != nil {
 		event.streamName = StreamName(node.AsString())
 	}
-	p.streamer.putEvent(event.SourceID, event.streamName, event)
+
+	return p.streamer.putEvent(event.SourceID, event.streamName, event)
 }
 
 func (p *Pipeline) Commit(event *Event) {
@@ -299,6 +285,7 @@ func (p *Pipeline) initProcs() {
 	if p.singleProc {
 		procCount = 1
 	}
+	logger.Infof("starting pipeline %q: procs=%d", p.Name, procCount)
 
 	p.procCount = atomic.NewInt32(int32(procCount))
 	p.activeProcs = atomic.NewInt32(0)
@@ -391,7 +378,7 @@ func (p *Pipeline) maintenance() {
 			tc = 1
 		}
 
-		logger.Infof("%q pipeline stats interval=%ds, active procs=%d/%d, queue=%d/%d, out=%d|%.1fMb, rate=%d/s|%.1fMb/s, total=%d|%.1fMb, avg size=%d, max size=%d", p.Name, interval/time.Second, p.activeProcs.Load(), p.procCount.Load(), p.eventPool.eventsCount, p.settings.Capacity, deltaCommitted, float64(deltaSize)/1024.0/1024.0, rate, rateMb, totalCommitted, float64(totalSize)/1024.0/1024.0, totalSize/tc, p.maxSize)
+		logger.Infof("%q pipeline stats interval=%ds, active procs=%d, queue=%d/%d, out=%d|%.1fMb, rate=%d/s|%.1fMb/s, total=%d|%.1fMb, avg size=%d, max size=%d", p.Name, interval/time.Second, p.activeProcs.Load(), p.procCount.Load(), p.settings.Capacity, deltaCommitted, float64(deltaSize)/1024.0/1024.0, rate, rateMb, totalCommitted, float64(totalSize)/1024.0/1024.0, totalSize/tc, p.maxSize)
 
 		lastCommitted = totalCommitted
 		lastSize = totalSize

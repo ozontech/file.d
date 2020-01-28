@@ -11,7 +11,7 @@ File-d is a daemon which allows you to build data pipelines: read, process and o
 * Don't loose any data due to commitment mechanism
 
 ## Performance
-`file-d` achieve `700Mb/s` throughput on regular MacBook Pro 2017 with two physical cores in `file > json decode > devnull` case. 
+`file-d` achieve `900Mb/s` throughput on regular MacBook Pro 2017 with two physical cores in `file > json decode > devnull` case. 
 
 
 ### CPU

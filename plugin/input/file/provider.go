@@ -30,7 +30,7 @@ type jobProvider struct {
 
 	isStarted bool
 
-	jobs     map[fingerprint]*job
+	jobs     map[pipeline.SourceID]*job
 	jobsMu   *sync.RWMutex
 	jobsChan chan *job
 	jobsLog  []string
@@ -51,11 +51,14 @@ type jobProvider struct {
 }
 
 type job struct {
-	file        *os.File
-	inode       inode
-	fingerprint fingerprint // some value to distinguish jobs with same inode
-	filename    string
-	symlink     string
+	file     *os.File
+	inode    inode
+	sourceID pipeline.SourceID // some value to distinguish jobs with same inode
+	filename string
+	symlink  string
+
+	ignoreEventsLE uint64 // events with seq id less or equal than this should be ignored in terms offset commitment
+	lastEventSeq   uint64
 
 	isDone     bool
 	shouldSkip bool
@@ -66,7 +69,6 @@ type job struct {
 }
 
 type inode uint64
-type fingerprint uint64
 
 type symlinkInfo struct {
 	filename string
@@ -79,7 +81,7 @@ func NewJobProvider(config *Config, controller pipeline.InputPluginController) *
 		controller: controller,
 		offsetDB:   newOffsetDB(config.OffsetsFile, config.OffsetsFileTmp),
 
-		jobs:     make(map[fingerprint]*job, config.MaxFiles),
+		jobs:     make(map[pipeline.SourceID]*job, config.MaxFiles),
 		jobsDone: atomic.NewInt32(0),
 		jobsMu:   &sync.RWMutex{},
 		jobsChan: make(chan *job, config.MaxFiles),
@@ -135,16 +137,17 @@ func (jp *jobProvider) commit(event *pipeline.Event) {
 	streamName := pipeline.StreamName(pipeline.ByteToStringUnsafe(event.StreamNameBytes()))
 
 	jp.jobsMu.RLock()
-	job, has := jp.jobs[fingerprint(event.SourceID)]
+	job, has := jp.jobs[event.SourceID]
 	jp.jobsMu.RUnlock()
 
 	if !has {
 		return
 	}
 
+
 	job.mu.Lock()
-	// commit offsets only for regular events
-	if !event.IsRegularKind() {
+	// commit offsets only not ignored AND regular events
+	if !event.IsRegularKind() || event.SeqID <= job.ignoreEventsLE {
 		job.mu.Unlock()
 		return
 	}
@@ -152,6 +155,10 @@ func (jp *jobProvider) commit(event *pipeline.Event) {
 	value, has := job.offsets[streamName]
 	if value >= event.Offset {
 		logger.Panicf("offset corruption: committing=%d, current=%d, event id=%d, source=%d:%s", event.Offset, value, event.SeqID, event.SourceID, event.SourceName)
+	}
+
+	if value == 0 && event.Offset >= 16*1024*1024 {
+		logger.Errorf("it maybe an offset corruption: committing=%d, current=%d, event id=%d, source=%d:%s", event.Offset, value, event.SeqID, event.SourceID, event.SourceName)
 	}
 
 	// streamName isn't actually a string, but unsafe []byte, so copy it when adding to map
@@ -218,9 +225,9 @@ func (jp *jobProvider) refreshSymlink(symlink string, inode inode) {
 }
 
 func (jp *jobProvider) refreshFile(stat os.FileInfo, filename string, symlink string) {
-	fingerprint := fingerprintFile(stat, symlink)
+	sourceID := sourceIDByStat(stat, symlink)
 	jp.jobsMu.RLock()
-	job, has := jp.jobs[fingerprint]
+	job, has := jp.jobs[sourceID]
 	jp.jobsMu.RUnlock()
 
 	if has {
@@ -239,14 +246,14 @@ func (jp *jobProvider) refreshFile(stat os.FileInfo, filename string, symlink st
 }
 
 func (jp *jobProvider) addJob(file *os.File, stat os.FileInfo, filename string, symlink string) {
-	fingerprint := fingerprintFile(stat, symlink)
+	sourceID := sourceIDByStat(stat, symlink)
 	inode := getInode(stat)
 	job := &job{
-		file:        file,
-		inode:       inode,
-		filename:    filename,
-		symlink:     symlink,
-		fingerprint: fingerprint,
+		file:     file,
+		inode:    inode,
+		filename: filename,
+		symlink:  symlink,
+		sourceID: sourceID,
 
 		isDone:     true,
 		shouldSkip: false,
@@ -264,7 +271,7 @@ func (jp *jobProvider) addJob(file *os.File, stat os.FileInfo, filename string, 
 	}
 
 	jp.jobsMu.Lock()
-	jp.jobs[fingerprint] = job
+	jp.jobs[sourceID] = job
 	if len(jp.jobs) > jp.config.MaxFiles {
 		logger.Fatalf("max_files reached for input plugin, consider increase this parameter")
 	}
@@ -273,16 +280,16 @@ func (jp *jobProvider) addJob(file *os.File, stat os.FileInfo, filename string, 
 	jp.jobsMu.Unlock()
 
 	if symlink != "" {
-		logger.Infof("job added for a file %d:%s, symlink=%s", inode, filename, symlink)
+		logger.Infof("job added for a file %d:%s, symlink=%s", sourceID, filename, symlink)
 	} else {
-		logger.Infof("job added for a file %d:%s", inode, filename)
+		logger.Infof("job added for a file %d:%s", sourceID, filename)
 	}
 
 	job.mu.Lock()
 	jp.tryResumeJobAndUnlock(job, filename)
 }
 
-func fingerprintFile(s os.FileInfo, symlink string) fingerprint {
+func sourceIDByStat(s os.FileInfo, symlink string) pipeline.SourceID {
 	inode := int64(s.Sys().(*syscall.Stat_t).Ino)
 
 	symHash := inode * 8922886018542929
@@ -293,7 +300,7 @@ func fingerprintFile(s os.FileInfo, symlink string) fingerprint {
 	}
 
 	// since the inode number is more likely only 32 bit, use upper bits to store hash symlink
-	return fingerprint(inode + symHash&math.MaxUint32)
+	return pipeline.SourceID(inode + symHash&math.MaxUint32)
 }
 
 func (jp *jobProvider) initJobOffset(operation offsetsOp, job *job) {
@@ -301,7 +308,7 @@ func (jp *jobProvider) initJobOffset(operation offsetsOp, job *job) {
 	case offsetsOpTail:
 		offset, err := job.file.Seek(0, io.SeekEnd)
 		if err != nil {
-			logger.Panicf("can't make job, can't seek file %d:%s: %s", job.fingerprint, job.filename, err.Error())
+			logger.Panicf("can't make job, can't seek file %d:%s: %s", job.sourceID, job.filename, err.Error())
 		}
 
 		if offset == 0 {
@@ -313,24 +320,24 @@ func (jp *jobProvider) initJobOffset(operation offsetsOp, job *job) {
 		magicOffset := int64(-1)
 		_, err = job.file.Seek(magicOffset, io.SeekEnd)
 		if err != nil {
-			logger.Panicf("can't make job, can't seek file %d:%s: %s", job.fingerprint, job.filename, err.Error())
+			logger.Panicf("can't make job, can't seek file %d:%s: %s", job.sourceID, job.filename, err.Error())
 		}
 		job.shouldSkip = true
 
 	case offsetsOpReset:
 		_, err := job.file.Seek(0, io.SeekStart)
 		if err != nil {
-			logger.Panicf("can't make job, can't seek file %d:%s: %s", job.fingerprint, job.filename, err.Error())
+			logger.Panicf("can't make job, can't seek file %d:%s: %s", job.sourceID, job.filename, err.Error())
 		}
 	case offsetsOpContinue:
-		offsets, has := jp.loadedOffsets[job.fingerprint]
+		offsets, has := jp.loadedOffsets[job.sourceID]
 		if has && len(offsets.streams) == 0 {
-			logger.Panicf("can't instantiate job, no streams in source %d:%q", job.fingerprint, job.filename)
+			logger.Panicf("can't instantiate job, no streams in source %d:%q", job.sourceID, job.filename)
 		}
 		if !has {
 			_, err := job.file.Seek(0, io.SeekStart)
 			if err != nil {
-				logger.Panicf("can't make job, can't seek file %d:%s: %s", job.fingerprint, job.filename, err.Error())
+				logger.Panicf("can't make job, can't seek file %d:%s: %s", job.sourceID, job.filename, err.Error())
 			}
 
 			return
@@ -341,7 +348,7 @@ func (jp *jobProvider) initJobOffset(operation offsetsOp, job *job) {
 		for _, offset := range offsets.streams {
 			_, err := job.file.Seek(offset, io.SeekStart)
 			if err != nil {
-				logger.Panicf("can't make job, can't seek file %d:%s: %s", job.fingerprint, job.filename, err.Error())
+				logger.Panicf("can't make job, can't seek file %d:%s: %s", job.sourceID, job.filename, err.Error())
 			}
 			return
 		}
@@ -352,7 +359,7 @@ func (jp *jobProvider) initJobOffset(operation offsetsOp, job *job) {
 
 //tryResumeJob job should be already locked and it'll be unlocked
 func (jp *jobProvider) tryResumeJobAndUnlock(job *job, filename string) bool {
-	logger.Debugf("job for %d:%s resumed", job.fingerprint, job.filename)
+	logger.Debugf("job for %d:%s resumed", job.sourceID, job.filename)
 
 	if !job.isDone {
 		job.mu.Unlock()
@@ -396,7 +403,7 @@ func (jp *jobProvider) truncateJob(job *job) {
 	job.mu.Lock()
 	defer job.mu.Unlock()
 
-	deprecated := jp.controller.DeprecateSource(pipeline.SourceID(job.fingerprint))
+	job.ignoreEventsLE = job.lastEventSeq
 
 	_, err := job.file.Seek(0, io.SeekStart)
 	if err != nil {
@@ -407,7 +414,7 @@ func (jp *jobProvider) truncateJob(job *job) {
 		job.offsets[stream] = 0
 	}
 
-	logger.Infof("job %d:%s was truncated, reading will start over, deprecated=%d", job.fingerprint, job.filename, deprecated)
+	logger.Infof("job %d:%s was truncated, reading will start over, events with id less than %d will be ignored", job.sourceID, job.filename, job.ignoreEventsLE)
 }
 
 func (jp *jobProvider) saveOffsetsCyclic(duration time.Duration) {
@@ -612,20 +619,18 @@ func (jp *jobProvider) maintenanceJob(job *job) int {
 // deleteJob job should be already locked and it'll be unlocked
 func (jp *jobProvider) deleteJobAndUnlock(job *job) {
 	if !job.isDone {
-		logger.Panicf("can't delete job, it isn't done: %d:%s", job.fingerprint, job.filename)
+		logger.Panicf("can't delete job, it isn't done: %d:%s", job.sourceID, job.filename)
 	}
-	fingerprint := job.fingerprint
+	sourceID := job.sourceID
 	filename := job.filename
 	job.mu.Unlock()
 
-	deprecated := jp.controller.DeprecateSource(pipeline.SourceID(fingerprint))
-
 	jp.jobsMu.Lock()
-	delete(jp.jobs, fingerprint)
+	delete(jp.jobs, sourceID)
 	c := jp.jobsDone.Dec()
 	jp.jobsMu.Unlock()
 
-	logger.Infof("job %d:%s deleted, events deprecated=%d", job.fingerprint, filename, deprecated)
+	logger.Infof("job %d:%s deleted", job.sourceID, filename)
 	if c < 0 {
 		logger.Panicf("done jobs counter less than zero")
 	}

@@ -16,7 +16,7 @@ profile-file:
 
 .PHONY: build
 build:
-	GOOS=linux GOARCH=amd64 go build -o file-d ./cmd/file_d.go
+	GOOS=linux GOARCH=amd64 go build -v -o file-d ./cmd/file_d.go
 
 .PHONY: push-image
 push-image: build

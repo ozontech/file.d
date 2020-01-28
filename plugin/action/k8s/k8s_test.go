@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"gitlab.ozon.ru/sre/file-d/fd"
+	"gitlab.ozon.ru/sre/file-d/logger"
 	"gitlab.ozon.ru/sre/file-d/pipeline"
 	"gitlab.ozon.ru/sre/file-d/test"
 	corev1 "k8s.io/api/core/v1"
@@ -51,7 +53,12 @@ func getPodInfo(item *metaItem, isWhite bool) *corev1.Pod {
 }
 
 func config() *Config {
-	return &Config{LabelsWhitelist: "white_label"}
+	config := &Config{LabelsWhitelist: "white_label"}
+	err := fd.Parse(config)
+	if err != nil {
+		logger.Panic(err.Error())
+	}
+	return config
 }
 
 func TestEnrichment(t *testing.T) {

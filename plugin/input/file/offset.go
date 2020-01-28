@@ -23,13 +23,13 @@ type offsetDB struct {
 }
 
 type inodeOffsets struct {
-	filename    string
-	fingerprint fingerprint
-	streams     streamsOffsets
+	filename string
+	sourceID pipeline.SourceID
+	streams  streamsOffsets
 }
 
 type streamsOffsets map[pipeline.StreamName]int64
-type fpOffsets map[fingerprint]*inodeOffsets
+type fpOffsets map[pipeline.SourceID]*inodeOffsets
 
 func newOffsetDB(curOffsetsFile string, tmpOffsetsFile string) *offsetDB {
 	return &offsetDB{
@@ -91,10 +91,10 @@ func (o *offsetDB) parse(content string) fpOffsets {
 func (o *offsetDB) parseOne(content string, offsets fpOffsets) string {
 	filename := ""
 	inodeStr := ""
-	fingerprintStr := ""
+	sourceIDStr := ""
 	filename, content = o.parseLine(content, "- file: ")
 	inodeStr, content = o.parseLine(content, "  inode: ")
-	fingerprintStr, content = o.parseLine(content, "  fingerprint: ")
+	sourceIDStr, content = o.parseLine(content, "  source_id: ")
 
 	sysInode, err := strconv.ParseUint(inodeStr, 10, 64)
 	if err != nil {
@@ -102,11 +102,11 @@ func (o *offsetDB) parseOne(content string, offsets fpOffsets) string {
 	}
 	inode := inode(sysInode)
 
-	fpVal, err := strconv.ParseUint(fingerprintStr, 10, 64)
+	fpVal, err := strconv.ParseUint(sourceIDStr, 10, 64)
 	if err != nil {
-		logger.Panicf("wrong offsets format, can't parse fingerprint: %s", err.Error())
+		logger.Panicf("wrong offsets format, can't parse source id: %s", err.Error())
 	}
-	fp := fingerprint(fpVal)
+	fp := pipeline.SourceID(fpVal)
 
 	_, has := offsets[fp]
 	if has {
@@ -114,9 +114,9 @@ func (o *offsetDB) parseOne(content string, offsets fpOffsets) string {
 	}
 
 	offsets[fp] = &inodeOffsets{
-		streams:     make(map[pipeline.StreamName]int64),
-		filename:    filename,
-		fingerprint: fp,
+		streams:  make(map[pipeline.StreamName]int64),
+		filename: filename,
+		sourceID: fp,
 	}
 
 	return o.parseStreams(content, offsets[fp].streams)
@@ -177,7 +177,7 @@ func (o *offsetDB) parseLine(content string, start string) (string, string) {
 	return line[l:], content
 }
 
-func (o *offsetDB) save(jobs map[fingerprint]*job, mu *sync.RWMutex) {
+func (o *offsetDB) save(jobs map[pipeline.SourceID]*job, mu *sync.RWMutex) {
 	o.savesTotal.Inc()
 
 	o.mu.Lock()
@@ -214,8 +214,8 @@ func (o *offsetDB) save(jobs map[fingerprint]*job, mu *sync.RWMutex) {
 		o.buf = strconv.AppendUint(o.buf, uint64(job.inode), 10)
 		o.buf = append(o.buf, '\n')
 
-		o.buf = append(o.buf, "  fingerprint: "...)
-		o.buf = strconv.AppendUint(o.buf, uint64(job.fingerprint), 10)
+		o.buf = append(o.buf, "  source_id: "...)
+		o.buf = strconv.AppendUint(o.buf, uint64(job.sourceID), 10)
 		o.buf = append(o.buf, '\n')
 
 		o.buf = append(o.buf, "  streams:\n"...)
@@ -245,7 +245,7 @@ func (o *offsetDB) save(jobs map[fingerprint]*job, mu *sync.RWMutex) {
 	}
 }
 
-func (o *offsetDB) snapshotJobs(mu *sync.RWMutex, jobs map[fingerprint]*job) []*job {
+func (o *offsetDB) snapshotJobs(mu *sync.RWMutex, jobs map[pipeline.SourceID]*job) []*job {
 	o.jobsSnapshot = o.jobsSnapshot[:0]
 	mu.RLock()
 	for _, job := range jobs {

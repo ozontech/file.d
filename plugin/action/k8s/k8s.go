@@ -33,9 +33,9 @@ type Config struct {
 
 	//>  @3 @4 @5 @6
 	//>
-	//> By default plugin adds all pod labels to the event. List here only those are needed.
+	//> By default plugin adds all pod labels to the event. List here only those which are needed.
 	//> e.g. `app,release`
-	LabelsWhitelist  string `json:"labels_whitelist" parse:"list-map" flags:"empty-ok"` //*
+	LabelsWhitelist  string `json:"labels_whitelist" parse:"list-map"` //*
 	LabelsWhitelist_ map[string]bool
 
 	//>  @3 @4 @5 @6

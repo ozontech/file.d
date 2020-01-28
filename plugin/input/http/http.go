@@ -81,7 +81,9 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	}
 	p.server = &http.Server{Addr: p.config.Address, Handler: mux}
 
-	go p.listenHTTP()
+	if p.config.Address != "off" {
+		go p.listenHTTP()
+	}
 }
 
 func (p *Plugin) listenHTTP() {

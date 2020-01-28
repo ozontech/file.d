@@ -96,6 +96,10 @@ func NewPipeline(actions []*pipeline.ActionPluginStaticInfo, pipelineOpts ...str
 	mock := Opts(pipelineOpts).Has("mock")
 	passive := Opts(pipelineOpts).Has("passive")
 
+	if perf {
+		parallel = true
+	}
+
 	settings := &pipeline.Settings{
 		Capacity:            1024,
 		MaintenanceInterval: time.Second * 100000,

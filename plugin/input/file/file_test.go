@@ -282,10 +282,10 @@ func getContentBytes(file string) []byte {
 func genOffsetsContent(file string, offset int) string {
 	return fmt.Sprintf(`- file: %s
   inode: %d
-  fingerprint: %d
+  source_id: %d
   streams:
     not_set: %d
-`, file, getInodeByFile(file), getFingerprint(file), offset)
+`, file, getInodeByFile(file), getSourceID(file), offset)
 }
 
 func genOffsetsContentMultiple(files []string, offset int) string {
@@ -293,10 +293,10 @@ func genOffsetsContentMultiple(files []string, offset int) string {
 	for _, file := range files {
 		result = append(result, fmt.Sprintf(`- file: %s
   inode: %d
-  fingerprint: %d
+  source_id: %d
   streams:
     not_set: %d
-`, file, getInodeByFile(file), getFingerprint(file), offset)...)
+`, file, getInodeByFile(file), getSourceID(file), offset)...)
 	}
 
 	return string(result)
@@ -307,19 +307,19 @@ func genOffsetsContentMultipleStreams(files []string, offsetStdErr int, offsetSt
 	for _, file := range files {
 		result = append(result, fmt.Sprintf(`- file: %s
   inode: %d
-  fingerprint: %d
+  source_id: %d
   streams:
     stderr: %d
     stdout: %d
-`, file, getInodeByFile(file), getFingerprint(file), offsetStdErr, offsetStdOut)...)
+`, file, getInodeByFile(file), getSourceID(file), offsetStdErr, offsetStdOut)...)
 	}
 
 	return string(result)
 }
 
-func getFingerprint(file string) fingerprint {
+func getSourceID(file string) pipeline.SourceID {
 	info, _ := os.Stat(file)
-	return fingerprintFile(info, "")
+	return sourceIDByStat(info, "")
 }
 
 func getInodeByFile(file string) uint64 {
@@ -869,15 +869,15 @@ func TestRotationRenameSimple(t *testing.T) {
 		Assert: func(p *pipeline.Pipeline) {
 			offsets := fmt.Sprintf(`- file: %s
   inode: %d
-  fingerprint: %d
+  source_id: %d
   streams:
     not_set: 114
 - file: %s
   inode: %d
-  fingerprint: %d
+  source_id: %d
   streams:
     not_set: 76
-`, newFile, getInodeByFile(newFile), getFingerprint(newFile), file, getInodeByFile(file), getFingerprint(file))
+`, newFile, getInodeByFile(newFile), getSourceID(newFile), file, getInodeByFile(file), getSourceID(file))
 			assert.Equal(t, 10, p.GetEventsTotal(), "wrong events count")
 			assertOffsetsAreEqual(t, offsets, getContent(getConfigByPipeline(p).OffsetsFile))
 		},
@@ -886,6 +886,7 @@ func TestRotationRenameSimple(t *testing.T) {
 
 func TestRotationRenameWhileNotWorking(t *testing.T) {
 	file := ""
+	before := 0
 	run(&test.Case{
 		Prepare: func() {
 		},
@@ -895,6 +896,7 @@ func TestRotationRenameWhileNotWorking(t *testing.T) {
 			addString(file, `"file_1_line_2"`, true, false)
 		},
 		Assert: func(p *pipeline.Pipeline) {
+			before = p.GetEventsTotal()
 			assert.Equal(t, 2, p.GetEventsTotal(), "wrong events count")
 		},
 	}, 2)
@@ -915,20 +917,20 @@ func TestRotationRenameWhileNotWorking(t *testing.T) {
 		},
 		Act: func(p *pipeline.Pipeline) {},
 		Assert: func(p *pipeline.Pipeline) {
-			assert.Equal(t, 10, p.GetEventsTotal(), "wrong events count")
+			assert.Equal(t, 10, before+p.GetEventsTotal(), "wrong events count")
 
 			contentFormat := `- file: %s
   inode: %d
-  fingerprint: %d
+  source_id: %d
   streams:
     not_set: 96
 - file: %s
   inode: %d
-  fingerprint: %d
+  source_id: %d
   streams:
     not_set: 64
 `
-			offsets := fmt.Sprintf(contentFormat, newFile, getInodeByFile(newFile), getFingerprint(newFile), file, getInodeByFile(file), getFingerprint(file))
+			offsets := fmt.Sprintf(contentFormat, newFile, getInodeByFile(newFile), getSourceID(newFile), file, getInodeByFile(file), getSourceID(file))
 			assertOffsetsAreEqual(t, offsets, getContent(getConfigByPipeline(p).OffsetsFile))
 		},
 	}, 8, "dirty")

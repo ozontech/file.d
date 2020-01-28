@@ -20,7 +20,7 @@ func TestSimple(t *testing.T) {
 }
 
 type strRequired struct {
-	T string
+	T string `required:"true"`
 }
 
 type strDefault struct {
@@ -43,7 +43,7 @@ func TestParseRequiredOk(t *testing.T) {
 	assert.NoError(t, err, "shouldn't be an error")
 }
 
-func TestParseRequiredFail(t *testing.T) {
+func TestParseRequiredErr(t *testing.T) {
 	s := &strRequired{}
 	err := Parse(s)
 
@@ -73,7 +73,7 @@ func TestParseOptionsOk(t *testing.T) {
 	assert.NoError(t, err, "shouldn't be an error")
 }
 
-func TestParseOptionsFail(t *testing.T) {
+func TestParseOptionsErr(t *testing.T) {
 	s := &strOptions{T: "sequential"}
 	err := Parse(s)
 

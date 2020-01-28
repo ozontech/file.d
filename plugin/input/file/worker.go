@@ -1,6 +1,7 @@
 package file
 
 import (
+	"bytes"
 	"io"
 
 	"gitlab.ozon.ru/sre/file-d/logger"
@@ -10,13 +11,14 @@ import (
 type worker struct {
 }
 
-func (w *worker) start(index int, inputController pipeline.InputPluginController, jobProvider *jobProvider, readBufferSize int) {
-	go w.work(index, inputController, jobProvider, readBufferSize)
+func (w *worker) start(inputController pipeline.InputPluginController, jobProvider *jobProvider, readBufferSize int) {
+	go w.work(inputController, jobProvider, readBufferSize)
 }
 
-func (w *worker) work(index int, controller pipeline.InputPluginController, jobProvider *jobProvider, readBufferSize int) {
+func (w *worker) work(controller pipeline.InputPluginController, jobProvider *jobProvider, readBufferSize int) {
 	accumBuffer := make([]byte, 0, readBufferSize)
 	readBuffer := make([]byte, readBufferSize)
+	var seqID uint64 = 0
 	for {
 		job := <-jobProvider.jobsChan
 		if job == nil {
@@ -26,7 +28,7 @@ func (w *worker) work(index int, controller pipeline.InputPluginController, jobP
 		job.mu.Lock()
 		file := job.file
 		isDone := job.isDone
-		sourceID := pipeline.SourceID(job.fingerprint)
+		sourceID := job.sourceID
 		sourceName := job.filename
 		skipLine := job.shouldSkip
 		if job.symlink != "" {
@@ -67,27 +69,34 @@ func (w *worker) work(index int, controller pipeline.InputPluginController, jobP
 			}
 
 			processed = 0
-			for i := int64(0); i < read; i++ {
-				if readBuffer[i] != '\n' {
-					continue
+			for {
+				if processed >= int64(len(readBuffer)) {
+					break
 				}
 
-				// skip first event because it may lost first part
+				pos := int64(bytes.IndexByte(readBuffer[processed:], '\n'))
+				if pos == -1 {
+					break
+				}
+				pos += processed
+
+				// skip first event because file may be opened while event isn't completely written
 				if skipLine {
 					job.shouldSkip = false
 					skipLine = false
 				} else {
-					offset := lastOffset + accumulated + i + 1
+					offset := lastOffset + accumulated + pos + 1
 					if len(accumBuffer) != 0 {
-						accumBuffer = append(accumBuffer, readBuffer[processed:i]...)
-						controller.In(sourceID, sourceName, offset, accumBuffer)
+						accumBuffer = append(accumBuffer, readBuffer[processed:pos]...)
+						seqID = controller.In(sourceID, sourceName, offset, accumBuffer)
 					} else {
-						controller.In(sourceID, sourceName, offset, readBuffer[processed:i])
+						seqID = controller.In(sourceID, sourceName, offset, readBuffer[processed:pos])
 					}
+					job.lastEventSeq = seqID
 				}
 				accumBuffer = accumBuffer[:0]
 
-				processed = i + 1
+				processed = pos + 1
 			}
 
 			readTotal += read

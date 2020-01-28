@@ -24,7 +24,6 @@ type Event struct {
 	streamName StreamName
 	Size       int // last known event size, it may not be actual
 
-	index  int
 	action int
 	next   *Event
 	stream *stream
@@ -48,17 +47,15 @@ const (
 
 type eventStage int
 
-func newEvent(poolIndex int) *Event {
+func newEvent() *Event {
 	return &Event{
-		index: poolIndex,
-		Root:  insaneJSON.Spawn(),
-		Buf:   make([]byte, 0, 1024),
+		Root: insaneJSON.Spawn(),
+		Buf:  make([]byte, 0, 1024),
 	}
 }
 
 func newTimoutEvent(stream *stream) *Event {
 	event := &Event{
-		index:      -1,
 		Root:       insaneJSON.Spawn(),
 		stream:     stream,
 		SeqID:      stream.commitSeq,
@@ -74,7 +71,6 @@ func newTimoutEvent(stream *stream) *Event {
 
 func unlockEvent(stream *stream) *Event {
 	event := &Event{
-		index:      -1,
 		Root:       nil,
 		stream:     stream,
 		SeqID:      stream.commitSeq,
@@ -188,7 +184,7 @@ func (e *Event) kindStr() string {
 }
 
 func (e *Event) String() string {
-	return fmt.Sprintf("index=%d kind=%s, action=%d, source=%d/%s, stream=%s, stage=%s, json=%s", e.index, e.kindStr(), e.action, e.SourceID, e.SourceName, e.streamName, e.stageStr(), e.Root.EncodeToString())
+	return fmt.Sprintf("kind=%s, action=%d, source=%d/%s, stream=%s, stage=%s, json=%s", e.kindStr(), e.action, e.SourceID, e.SourceName, e.streamName, e.stageStr(), e.Root.EncodeToString())
 }
 
 // channels are slower than this implementation by ~20%
@@ -206,14 +202,15 @@ type eventPool struct {
 
 func newEventPool(capacity int) *eventPool {
 	eventPool := &eventPool{
-		capacity: capacity,
-		mu:       &sync.Mutex{},
+		capacity:    capacity,
+		eventsCount: capacity,
+		mu:          &sync.Mutex{},
 	}
 
 	eventPool.cond = sync.NewCond(eventPool.mu)
 
 	for i := 0; i < capacity; i++ {
-		eventPool.events = append(eventPool.events, newEvent(i))
+		eventPool.events = append(eventPool.events, newEvent())
 	}
 
 	return eventPool
@@ -231,14 +228,11 @@ func (p *eventPool) visit(fn func(*Event)) {
 func (p *eventPool) get() *Event {
 	p.mu.Lock()
 
-	for p.eventsCount >= p.capacity {
+	for p.eventsCount == 0 {
 		p.cond.Wait()
 	}
-
-	index := p.eventsCount
-	event := p.events[index]
-
-	p.eventsCount++
+	p.eventsCount--
+	event := p.events[p.eventsCount]
 
 	p.mu.Unlock()
 
@@ -248,24 +242,9 @@ func (p *eventPool) get() *Event {
 
 func (p *eventPool) back(event *Event) {
 	p.mu.Lock()
-	p.eventsCount--
-	if p.eventsCount == -1 {
-		logger.Panicf("event pool is full, why back()? id=%d index=%d", event.SeqID, event.index)
-	}
-
-	currentIndex := event.index
-	lastIndex := p.eventsCount
-
-	last := p.events[lastIndex]
-
-	// exchange event with last one to place back to pool
-	p.events[currentIndex] = last
-	p.events[lastIndex] = event
-
-	event.index = lastIndex
-	last.index = currentIndex
-
 	event.stage = eventStagePool
+	p.events[p.eventsCount] = event
+	p.eventsCount++
 	p.cond.Signal()
 	p.mu.Unlock()
 }
