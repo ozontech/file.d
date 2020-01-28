@@ -1,4 +1,4 @@
-# Fake input plugin
+# dev/null output
 @introduction
 
 > No config params

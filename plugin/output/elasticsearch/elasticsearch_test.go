@@ -34,6 +34,6 @@ func TestConfig(t *testing.T) {
 		BatchSize: 1,
 	}, test.NewEmptyOutputPluginParams())
 
-	assert.Equal(t, "http://endpoint_1:9000/_bulk?_source=false", p.config.endpoints[0], "wrong endpoint")
-	assert.Equal(t, "http://endpoint_2:9000/_bulk?_source=false", p.config.endpoints[1], "wrong endpoint")
+	assert.Equal(t, "http://endpoint_1:9000/_bulk?_source=false", p.config.Endpoints_[0], "wrong endpoint")
+	assert.Equal(t, "http://endpoint_2:9000/_bulk?_source=false", p.config.Endpoints_[1], "wrong endpoint")
 }

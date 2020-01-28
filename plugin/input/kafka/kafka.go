@@ -10,15 +10,10 @@ import (
 	"gitlab.ozon.ru/sre/file-d/pipeline"
 )
 
-type Config struct {
-	Brokers string   `json:"brokers"`
-	brokers []string //split brokers string by comma
-
-	Topics        string   `json:"topics"`
-	topics        []string //split topics string by comma
-	ConsumerGroup string   `json:"consumer_group"`
-	consumerGroup string
-}
+/*{ introduction
+Plugin reads events from listed kafka topics. It uses `sarama` lib.
+It supports commitment mechanism, so it guaranties at least once delivery.
+}*/
 
 type Plugin struct {
 	config        *Config
@@ -28,6 +23,27 @@ type Plugin struct {
 	context       context.Context
 	controller    pipeline.InputPluginController
 	idByTopic     map[string]int
+}
+
+//! config /json:\"([a-z_]+)\"/ #2 /default:\"([^"]+)\"/ /(required):\"true\"/  /options:\"([^"]+)\"/
+//^ _ _ code /`default=%s`/ code /`options=%s`/
+type Config struct {
+	//> @3 @4 @5 @6
+	//>
+	//> Comma separated list of kafka brokers to read from.
+	Brokers  string `json:"brokers" required:"true" parse:"list"`  //*
+	Brokers_ []string
+
+	//> @3 @4 @5 @6
+	//>
+	//> Comma separated list of kafka topics to read from.
+	Topics        string `json:"topics" required:"true" parse:"list"` //*
+	Topics_       []string
+
+	//> @3 @4 @5 @6
+	//>
+	//> Name of consumer group to use.
+	ConsumerGroup string `json:"consumer_group" default:"file-d"` //*
 }
 
 func init() {
@@ -46,25 +62,9 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	p.controller = params.Controller
 	p.config = config.(*Config)
 
-	p.config.brokers = strings.Split(p.config.Brokers, ",")
-	if p.config.Brokers == "" || len(p.config.brokers) == 0 {
-		logger.Fatalf("brokers isn't provided for kafka input")
-	}
-
-	p.config.topics = strings.Split(p.config.Topics, ",")
-	if p.config.Topics == "" || len(p.config.topics) == 0 {
-		logger.Fatalf(`"topics" isn't set for kafka input`)
-	}
-
 	p.idByTopic = make(map[string]int)
-	for i, topic := range p.config.topics {
+	for i, topic := range p.config.Topics_ {
 		p.idByTopic[topic] = i
-	}
-
-	if p.config.ConsumerGroup != "" {
-		p.config.consumerGroup = p.config.ConsumerGroup
-	} else {
-		p.config.consumerGroup = "file.d"
 	}
 
 	p.context, p.cancel = context.WithCancel(context.Background())
@@ -75,9 +75,9 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 }
 
 func (p *Plugin) consume() {
-	logger.Infof("kafka input reading from topics: %s", strings.Join(p.config.topics, ","))
+	logger.Infof("kafka input reading from topics: %s", strings.Join(p.config.Topics_, ","))
 	for {
-		err := p.consumerGroup.Consume(p.context, p.config.topics, p)
+		err := p.consumerGroup.Consume(p.context, p.config.Topics_, p)
 		if err != nil {
 			logger.Errorf("can't consume from kafka: %s", err.Error())
 		}
@@ -97,7 +97,7 @@ func (p *Plugin) Commit(event *pipeline.Event) {
 		return
 	}
 	index, partition := disassembleSourceID(event.SourceID)
-	p.session.MarkOffset(p.config.topics[index], partition, event.Offset+1, "")
+	p.session.MarkOffset(p.config.Topics_[index], partition, event.Offset+1, "")
 }
 
 func (p *Plugin) newConsumerGroup() sarama.ConsumerGroup {
@@ -105,7 +105,7 @@ func (p *Plugin) newConsumerGroup() sarama.ConsumerGroup {
 	config.Consumer.Group.Rebalance.Strategy = sarama.BalanceStrategyRoundRobin
 	config.Version = sarama.V0_10_2_0
 
-	consumerGroup, err := sarama.NewConsumerGroup(p.config.brokers, p.config.consumerGroup, config)
+	consumerGroup, err := sarama.NewConsumerGroup(p.config.Brokers_, p.config.ConsumerGroup, config)
 	if err != nil {
 		logger.Fatalf("can't create kafka consumer: %s", err.Error())
 	}
@@ -114,7 +114,7 @@ func (p *Plugin) newConsumerGroup() sarama.ConsumerGroup {
 }
 
 func (p *Plugin) Setup(session sarama.ConsumerGroupSession) error {
-	logger.Infof("kafka consumer created with brokers %q", strings.Join(p.config.brokers, ","))
+	logger.Infof("kafka consumer created with brokers %q", strings.Join(p.config.Brokers_, ","))
 	p.session = session
 	return nil
 }
@@ -124,7 +124,7 @@ func (p *Plugin) Cleanup(sarama.ConsumerGroupSession) error {
 	return nil
 }
 
-func (p *Plugin) ConsumeClaim(session sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
+func (p *Plugin) ConsumeClaim(_ sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
 	for message := range claim.Messages() {
 		sourceID := assembleSourceID(p.idByTopic[message.Topic], message.Partition)
 		p.controller.In(sourceID, "kafka", message.Offset, message.Value)

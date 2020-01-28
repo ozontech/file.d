@@ -10,26 +10,33 @@ import (
 )
 
 type watcher struct {
-	path      string // dir in which watch for files
-	pattern   string // files which match this pattern will be watched
-	notifyFn  notify // function to receive notifications
-	fsWatcher *fsnotify.Watcher
+	path            string // dir in which watch for files
+	filenamePattern string // files which match this pattern will be watched
+	dirPattern      string // dirs which match this pattern will be watched
+	notifyFn        notify // function to receive notifications
+	fsWatcher       *fsnotify.Watcher
 }
 
 type notify func(filename string, stat os.FileInfo)
 
-func NewWatcher(path string, pattern string, notifyFn notify) *watcher {
+func NewWatcher(path string, filenamePattern string, dirPattern string, notifyFn notify) *watcher {
 	return &watcher{
-		path:     path,
-		pattern:  pattern,
-		notifyFn: notifyFn,
+		path:            path,
+		filenamePattern: filenamePattern,
+		dirPattern:      dirPattern,
+		notifyFn:        notifyFn,
 	}
 }
 
 func (w *watcher) start() {
-	logger.Infof("starting watcher path=%s, pattern=%s", w.path, w.pattern)
-	if _, err := filepath.Match(w.pattern, "_"); err != nil {
-		logger.Fatalf("wrong file name pattern %q: %s", w.pattern, err.Error())
+	logger.Infof("starting watcher path=%s, pattern=%s", w.path, w.filenamePattern)
+
+	if _, err := filepath.Match(w.filenamePattern, "_"); err != nil {
+		logger.Fatalf("wrong file name pattern %q: %s", w.filenamePattern, err.Error())
+	}
+
+	if _, err := filepath.Match(w.dirPattern, "_"); err != nil {
+		logger.Fatalf("wrong dir name pattern %q: %s", w.dirPattern, err.Error())
 	}
 
 	watcher, err := fsnotify.NewWatcher()
@@ -89,19 +96,18 @@ func (w *watcher) notify(event *fsnotify.Event) {
 		return
 	}
 
-	match, _ := filepath.Match(w.pattern, filepath.Base(filename))
-	if ! match {
-		return
-	}
-
 	stat, err := os.Lstat(filename)
 	if err != nil {
 		return
 	}
 
-	w.notifyFn(filename, stat)
+	match, _ := filepath.Match(w.filenamePattern, filepath.Base(filename))
+	if match {
+		w.notifyFn(filename, stat)
+	}
 
-	if stat.IsDir() {
+	match, _ = filepath.Match(w.dirPattern, filepath.Base(filename))
+	if stat.IsDir() && match {
 		w.tryAddPath(filename)
 	}
 }

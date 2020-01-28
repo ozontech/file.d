@@ -97,7 +97,7 @@ func NewJobProvider(config *Config, controller pipeline.InputPluginController) *
 		stopMaintenanceCh: make(chan bool, 1), //non-zero channel cause we don't wanna wait goroutine to stop
 	}
 
-	jp.watcher = NewWatcher(config.WatchingDir, config.FilenamePattern, jp.processNotification)
+	jp.watcher = NewWatcher(config.WatchingDir, config.FilenamePattern, config.DirPattern, jp.processNotification)
 
 	return jp
 }
@@ -143,7 +143,6 @@ func (jp *jobProvider) commit(event *pipeline.Event) {
 	if !has {
 		return
 	}
-
 
 	job.mu.Lock()
 	// commit offsets only not ignored AND regular events

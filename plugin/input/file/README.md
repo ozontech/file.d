@@ -4,7 +4,16 @@ Each line should contain only one event. It also correctly handles rotations (re
 From time to time it instantly releases and reopens descriptors of completely processed files.
 Such behaviour allows files to be deleted by third party software even though `file-d` is still working (in this case reopen will fail).
 Watcher is trying to use file system events detect file creation and updates.
-But update events don't work with symlinks, so watcher also manually `fstat` all tracking files to detect changes.
+But update events don't work with symlinks, so watcher also periodically manually `fstat` all tracking files to detect changes.
+
+
+## Guarantees
+It supports commitment mechanism. But at least once delivery guarantees only if files aren't being truncated.
+However, `file-d` correctly handles file truncation there is a little chance of data loss.
+It isn't `file-d` issue. Data may have been written just before file truncation. In that case you may late to some read event.
+If you care about delivery you also should know that `logrotate` manual clearly states that copy/truncate may cause data loss even on a rotating stage.
+So use copy/truncate or similar actions only with if your data isn't important/sensitive.
+
 
 **Config example for reading docker container log files:**
 ```yaml
@@ -18,11 +27,13 @@ pipelines:
 ```
 
 ## Config params
-### watching_dir
-
- `string`  `required`  <br> <br> Directory to watch for new files.
 ### offsets_file
 
+`string`  `required` 
+Source directory to watch for files to process. All subdirectories also will be watched. E.g. if files have
+`/var/my-logs/$YEAR/$MONTH/$DAY/$HOST/$FACILITY-$PROGRAM.log` structure, `watching_dir` should be `/var/my-logs`.
+Also `filename_pattern`/`dir_pattern` is useful to filter needless files/subdirectories. In the case of using two or more
+absolutely different directories it's recommended to setup separate pipelines.
 `string`  `required` 
 
 File name to store offsets of processing files. Offsets are loaded only on initialization.
@@ -33,6 +44,13 @@ File name to store offsets of processing files. Offsets are loaded only on initi
 `string` `default=*`  
 
 Files which doesn't match this pattern will be ignored.
+> Check out https://golang.org/pkg/path/filepath/#Glob for details.
+
+### dir_pattern
+
+`string` `default=*`  
+
+Dirs which doesn't match this pattern will be ignored.
 > Check out https://golang.org/pkg/path/filepath/#Glob for details.
 
 ### persistence_mode

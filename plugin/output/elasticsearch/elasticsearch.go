@@ -17,18 +17,12 @@ import (
 	"gitlab.ozon.ru/sre/file-d/pipeline"
 )
 
-type Config struct {
-	endpoints          []string
-	Endpoints          string            `json:"endpoints"`
-	IndexFormat        string            `json:"index_format"` // "index-for-service-%-and-time-%"
-	IndexValues        []string          `json:"index_values"` // ["service", "@time"]
-	TimeFormat         string            `json:"time_format"`
-	FlushTimeout       pipeline.Duration `json:"flush_timeout"`
-	ConnectionTimeout  pipeline.Duration `json:"connection_timeout"`
-	WorkersCount       int               `json:"workers_count"`
-	BatchSize          int               `json:"batch_size"`
-	IndexErrorWarnOnly bool              `json:"index_error_warn_only"`
-}
+/*{ introduction
+Plugin writes events into Elasticsearch. It uses `_bulk` API to send events in batches.
+If a network error occurs batch will be infinitely tries to be delivered to random endpoint.
+
+@fns|signature-list
+}*/
 
 type Plugin struct {
 	client     *http.Client
@@ -38,6 +32,59 @@ type Plugin struct {
 	batcher    *pipeline.Batcher
 	controller pipeline.OutputPluginController
 	mu         *sync.Mutex
+}
+
+//! config /json:\"([a-z_]+)\"/ #2 /default:\"([^"]+)\"/ /(required):\"true\"/  /options:\"([^"]+)\"/
+//^ _ _ code /`default=%s`/ code /`options=%s`/
+type Config struct {
+	//> @3 @4 @5 @6
+	//>
+	//> Defines pattern of elasticsearch index name. Use `%` character as a placeholder. Use `index_values` to define values for replacement.
+	//> E.g. if `index_format="my-index-%-%"` and `index_values="service,@time"` and event is `{"service"="my-service"}`
+	//> then index for that event will be `my-index-my-service-2020-01-05`. First `%` replaced with `service` field of event and the second
+	//> replaced with current time(see `time_format` option)
+	IndexFormat string `json:"index_format" required:"true"` //*
+
+	//> @3 @4 @5 @6
+	//>
+	//> Comma separated list of elasticsearch endpoints in format `SCHEMA://HOST:PORT`
+	Endpoints  string `json:"endpoints" parse:"list" required:"true"` //*
+	Endpoints_ []string
+
+	//> @3 @4 @5 @6
+	//>
+	//> Comma-separated list of event fields which will be used for replacement `index_format`.
+	//> There is a special field `@time` which equals to current time. Use `time_format` to define time format.
+	//> E.g. `service,@time`
+	IndexValues  string `json:"index_values" default:"@time"` //*
+	IndexValues_ []string
+
+	//> @3 @4 @5 @6
+	//>
+	//> Time format pattern to use as value for `@time` placeholder.
+	//> > Check out https://golang.org/pkg/time/#Parse for details.
+	TimeFormat string `json:"time_format" default:"2006-01-02"` //*
+
+	//> @3 @4 @5 @6
+	//>
+	//> After this timeout batch will be sent even if batch isn't completed.
+	FlushTimeout pipeline.Duration `json:"flush_timeout" default:"200ms"` //*
+
+	//> @3 @4 @5 @6
+	//>
+	//> How much time to wait for connection.
+	ConnectionTimeout pipeline.Duration `json:"connection_timeout" default:"5s"` //*
+
+	//> @3 @4 @5 @6
+	//>
+	//> How much workers will be instantiated to send batches.
+	WorkersCount int `json:"workers_count" default:"gomaxprocs*4"` //*
+
+	//> @3 @4 @5 @6
+	//>
+	//> Maximum quantity of events to send in one batch.
+	BatchSize          int  `json:"batch_size"`            //*
+	IndexErrorWarnOnly bool `json:"index_error_warn_only"` //*
 }
 
 type data struct {
@@ -65,12 +112,12 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		logger.Fatalf("endpoints aren't set for elasticsearch output")
 	}
 
-	p.config.endpoints = strings.Split(p.config.Endpoints, ",")
-	for i, endpoint := range p.config.endpoints {
+	p.config.Endpoints_ = strings.Split(p.config.Endpoints, ",")
+	for i, endpoint := range p.config.Endpoints_ {
 		if endpoint[len(endpoint)-1] == '/' {
 			endpoint = endpoint[:len(endpoint)-1]
 		}
-		p.config.endpoints[i] = endpoint + "/_bulk?_source=false"
+		p.config.Endpoints_[i] = endpoint + "/_bulk?_source=false"
 	}
 
 	if p.config.WorkersCount == 0 {
@@ -139,7 +186,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 	}
 
 	for {
-		endpoint := p.config.endpoints[rand.Int()%len(p.config.endpoints)]
+		endpoint := p.config.Endpoints_[rand.Int()%len(p.config.Endpoints_)]
 		resp, err := p.client.Post(endpoint, "application/x-ndjson", bytes.NewBuffer(data.outBuf))
 		if err != nil {
 			logger.Errorf("can't send batch to %s, will try other endpoint: %s", endpoint, err.Error())
@@ -200,7 +247,7 @@ func (p *Plugin) appendIndexName(outBuf []byte, event *pipeline.Event) []byte {
 		if replacements >= len(p.config.IndexValues) {
 			logger.Fatalf("wrong index format / values")
 		}
-		value := p.config.IndexValues[replacements]
+		value := p.config.IndexValues_[replacements]
 		replacements++
 
 		if value == "@time" {

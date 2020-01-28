@@ -14,7 +14,7 @@ Docker splits long logs by 16kb chunks. Plugin joins them back, but if event wil
 
 `string`   
 
-By default plugin adds all pod labels to the event. List here only those are needed.
+By default plugin adds all pod labels to the event. List here only those which are needed.
 e.g. `app,release`
 
 ### only_node

@@ -17,7 +17,6 @@ File-d is a daemon which allows you to build data pipelines: read, process and o
 ### CPU
 
 ### Memory consumption
-roughly speaking
 
 ## Installation
 

@@ -14,7 +14,16 @@ Each line should contain only one event. It also correctly handles rotations (re
 From time to time it instantly releases and reopens descriptors of completely processed files.
 Such behaviour allows files to be deleted by third party software even though `file-d` is still working (in this case reopen will fail).
 Watcher is trying to use file system events detect file creation and updates.
-But update events don't work with symlinks, so watcher also manually `fstat` all tracking files to detect changes.
+But update events don't work with symlinks, so watcher also periodically manually `fstat` all tracking files to detect changes.
+
+
+## Guarantees
+It supports commitment mechanism. But at least once delivery guarantees only if files aren't being truncated.
+However, `file-d` correctly handles file truncation there is a little chance of data loss.
+It isn't an `file-d` issue. Data may have been written just before file truncation. In this case, you may late to read some events.
+If you care about delivery, you should also know that `logrotate` manual clearly states that copy/truncate may cause data loss even on a rotating stage.
+So use copy/truncate or similar actions only if your data isn't very important.
+
 
 **Config example for reading docker container log files:**
 ```yaml
@@ -27,6 +36,7 @@ pipelines:
     persistence_mode: async
 ```
 }*/
+
 type Plugin struct {
 	config *Config
 	params *pipeline.InputPluginParams
@@ -56,7 +66,12 @@ type Config struct {
 	//! config /json:\"([a-z_]+)\"/ #2 /default:\"([^"]+)\"/ /(required):\"true\"/  /options:\"([^"]+)\"/
 	//^ _ _ code /`default=%s`/ code /`options=%s`/
 
-	WatchingDir string `json:"watching_dir" required:"true"` //* @3 @4 @5 @6 <br> <br> Directory to watch for new files.
+	//> @3 @4 @5 @6
+	//> Source directory to watch for files to process. All subdirectories also will be watched. E.g. if files have
+	//> `/var/my-logs/$YEAR/$MONTH/$DAY/$HOST/$FACILITY-$PROGRAM.log` structure, `watching_dir` should be `/var/my-logs`.
+	//> Also `filename_pattern`/`dir_pattern` is useful to filter needless files/subdirectories. In the case of using two or more
+	//> absolutely different directories it's recommended to setup separate pipelines.
+	WatchingDir string `json:"watching_dir" required:"true"`
 
 	//> @3 @4 @5 @6
 	//>
@@ -70,6 +85,12 @@ type Config struct {
 	//> Files which doesn't match this pattern will be ignored.
 	//> > Check out https://golang.org/pkg/path/filepath/#Glob for details.
 	FilenamePattern string `json:"filename_pattern" default:"*"` //*
+
+	//> @3 @4 @5 @6
+	//>
+	//> Dirs which doesn't match this pattern will be ignored.
+	//> > Check out https://golang.org/pkg/path/filepath/#Glob for details.
+	DirPattern string `json:"dir_pattern" default:"*"` //*
 
 	//> @3 @4 @5 @6
 	//> 
