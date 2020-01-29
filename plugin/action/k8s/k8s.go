@@ -126,6 +126,7 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 			logger.Panicf("k8s plugin inconsistency: source=%s, file pod=%s, meta pod=%s, x=%s, event=%s", event.SourceName, pod, podMeta.Name, event.Root.EncodeToString())
 		}
 
+
 		for labelName, labelValue := range podMeta.Labels {
 			if len(p.config.LabelsWhitelist_) != 0 {
 				_, has := p.config.LabelsWhitelist_[labelName]

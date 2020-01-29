@@ -78,7 +78,7 @@ func pluginConfig(opts ...string) *Config {
 		OffsetsOp:       op,
 	}
 
-	_ = fd.Parse(config)
+	_ = fd.Parse(config, nil)
 
 	return config
 }
@@ -578,7 +578,7 @@ func TestReadBufferOverflow(t *testing.T) {
 	linesPerIterations := 2
 
 	config := &Config{}
-	_ = fd.Parse(config)
+	_ = fd.Parse(config, nil)
 	firstLine := `"`
 	for i := 0; i < config.ReadBufferSize+overhead; i++ {
 		firstLine = firstLine + "a"
@@ -734,7 +734,7 @@ func TestReadManyFilesParallelRace(t *testing.T) {
 // TestReadManyCharsParallelRace tests if plugin doesn't have race conditions in the case of parallel processing of chars
 func TestReadManyCharsParallelRace(t *testing.T) {
 	config := &Config{}
-	_ = fd.Parse(config)
+	_ = fd.Parse(config, nil)
 
 	overhead := 100
 	s := ""

@@ -53,7 +53,7 @@ type Config struct {
 	//> Comma-separated list of event fields which will be used for replacement `index_format`.
 	//> There is a special field `@@time` which equals to current time. Use `time_format` to define time format.
 	//> E.g. `service,@@time`
-	IndexValues  string `json:"index_values" default:"@time"` //*
+	IndexValues  string `json:"index_values" default:"@time" parse:"list"` //*
 	IndexValues_ []string
 
 	//> @3 @4 @5 @6
@@ -224,8 +224,8 @@ func (p *Plugin) appendIndexName(outBuf []byte, event *pipeline.Event) []byte {
 			continue
 		}
 
-		if replacements >= len(p.config.IndexValues) {
-			logger.Fatalf("wrong index format / values")
+		if replacements >= len(p.config.IndexValues_) {
+			logger.Fatalf("count of placeholders and values isn't match, check index_format/index_values config params")
 		}
 		value := p.config.IndexValues_[replacements]
 		replacements++

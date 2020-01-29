@@ -158,6 +158,20 @@ func Parse(ptr interface{}, values map[string]int) error {
 				}
 				field := v.FieldByName(t.Field(i).Name + "_")
 				field.Set(reflect.ValueOf(listMap))
+			case "list":
+				if vField.Kind() != reflect.String {
+					return fmt.Errorf("list deals only with strings, but field %s has %s type", tField.Name, tField.Type.Name())
+				}
+
+				list := make([]string, 0)
+
+				parts := strings.Split(vField.String(), ",")
+				for _, part := range parts {
+					cleanPart := strings.TrimSpace(part)
+					list = append(list, cleanPart)
+				}
+				field := v.FieldByName(t.Field(i).Name + "_")
+				field.Set(reflect.ValueOf(list))
 			case "expression":
 				if vField.Kind() != reflect.String {
 					return fmt.Errorf("expression deals only with strings, but field %s has %s type", tField.Name, tField.Type.Name())
@@ -212,7 +226,7 @@ func Parse(ptr interface{}, values map[string]int) error {
 
 				field.SetInt(int64(result))
 			default:
-				return fmt.Errorf("unsupported parse %s for field %s", tag, t.Field(i).Type.Name())
+				return fmt.Errorf("unsupported parse type %q for field %s", tag, t.Field(i).Name)
 			}
 		}
 

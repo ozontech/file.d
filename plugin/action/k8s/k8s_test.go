@@ -54,7 +54,7 @@ func getPodInfo(item *metaItem, isWhite bool) *corev1.Pod {
 
 func config() *Config {
 	config := &Config{LabelsWhitelist: "white_label"}
-	err := fd.Parse(config)
+	err := fd.Parse(config, nil)
 	if err != nil {
 		logger.Panic(err.Error())
 	}
@@ -131,8 +131,8 @@ func TestWhitelist(t *testing.T) {
 	wg.Wait()
 	p.Stop()
 
-	assert.Equal(t, "white_value", outEvents[0].Root.Dig("k8s_label_white_label").AsString(), "wrong out events count")
-	assert.Nil(t, outEvents[1].Root.Dig("k8s_label_black_label"), "wrong event content")
+	assert.Equal(t, "white_value", outEvents[0].Root.Dig("k8s_label_white_label").AsString(), "no label in event")
+	assert.Nil(t, outEvents[1].Root.Dig("k8s_label_black_label"), "extra label in event")
 }
 
 func TestJoin(t *testing.T) {

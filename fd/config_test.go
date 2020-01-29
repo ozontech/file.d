@@ -99,3 +99,11 @@ func TestParseExpressionAdd(t *testing.T) {
 	assert.Nil(t, err, "shouldn't be an error")
 	assert.Equal(t, 13, s.T_, "wrong value")
 }
+
+func TestParseExpressionConst(t *testing.T) {
+	s := &strExpression{T: "10"}
+	err := Parse(s, map[string]int{"val": 12})
+
+	assert.Nil(t, err, "shouldn't be an error")
+	assert.Equal(t, 10, s.T_, "wrong value")
+}
