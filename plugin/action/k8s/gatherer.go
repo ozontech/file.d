@@ -20,7 +20,7 @@ import (
 )
 
 const (
-	formatInfo = "make sure log has name in format [pod-name]_[namespace]_[container-name]-[container id].log"
+	formatInfo = "make sure source file has name format: [pod-name]_[namespace]_[container-name]-[container id].log"
 )
 
 type (

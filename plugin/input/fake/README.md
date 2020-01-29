@@ -8,4 +8,7 @@ Plugin provides methods to use in test scenarios:
 ``SetInFn(fn func())``<br>Sets up a hook to make sure test event have been passed to plugin.
 
 
-> No config params required
+> No config params
+
+
+ Generated using *insane-doc*

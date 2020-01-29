@@ -10,9 +10,9 @@ But update events don't work with symlinks, so watcher also periodically manuall
 ## Guarantees
 It supports commitment mechanism. But at least once delivery guarantees only if files aren't being truncated.
 However, `file-d` correctly handles file truncation there is a little chance of data loss.
-It isn't `file-d` issue. Data may have been written just before file truncation. In that case you may late to some read event.
-If you care about delivery you also should know that `logrotate` manual clearly states that copy/truncate may cause data loss even on a rotating stage.
-So use copy/truncate or similar actions only with if your data isn't important/sensitive.
+It isn't an `file-d` issue. Data may have been written just before file truncation. In this case, you may late to read some events.
+If you care about delivery, you should also know that `logrotate` manual clearly states that copy/truncate may cause data loss even on a rotating stage.
+So use copy/truncate or similar actions only if your data isn't very important.
 
 
 **Config example for reading docker container log files:**
@@ -114,3 +114,6 @@ For now maintenance consists of two stages:
 Symlinks maintenance detects if underlying file of symlink is changed.
 Job maintenance `fstat` tracked files to detect if new portion of data have been written to the file. If job is in `done` state when it releases and reopens file descriptor to allow third party software delete the file.
 
+
+
+ Generated using *insane-doc*

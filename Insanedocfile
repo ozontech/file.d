@@ -1,10 +1,2 @@
-- template: plugin/input/fake/README.idoc.md
-  files: [plugin/input/fake/*.go]
-- template: plugin/input/file/README.idoc.md
-  files: [plugin/input/file/*.go]
-- template: plugin/input/http/README.idoc.md
-  files: [plugin/input/http/*.go]
-- template: plugin/input/kafka/README.idoc.md
-  files: [plugin/input/kafka/*.go]
-- template: plugin/action/k8s/README.idoc.md
-  files: [plugin/action/k8s/*.go]
+- template: plugin/*/*/README.idoc.md
+  files: ["*.go"]

@@ -1,7 +1,6 @@
 package gelf
 
 import (
-	"runtime"
 	"strings"
 	"time"
 
@@ -10,6 +9,11 @@ import (
 	"gitlab.ozon.ru/sre/file-d/logger"
 	"gitlab.ozon.ru/sre/file-d/pipeline"
 )
+
+/*{ introduction
+Plugin sends event batches to the GELF endpoint. Transport level protocol TCP or UDP is configurable.
+> It doesn't support UDP chunking. So don't use UDP if event size may be grater than 8192.
+}*/
 
 /*
 GELF messages are separated by null byte sequence. Each GELF message is a JSON with the following fields:
@@ -24,7 +28,7 @@ GELF messages are separated by null byte sequence. Each GELF message is a JSON w
 10. string _extra_field_3
 
 Every field with an underscore prefix (_) will be treated as an extra field.
-Allowed characters in field names are any word character (letter, number, underscore), dashes and dots.
+Allowed characters in a field names are any word character (letter, number, underscore), dashes and dots.
 */
 
 const (
@@ -36,13 +40,47 @@ const (
 	defaultLevelField           = "level"
 )
 
+type Plugin struct {
+	config     *Config
+	avgLogSize int
+	batcher    *pipeline.Batcher
+	controller pipeline.OutputPluginController
+}
+
+//! config /json:\"([a-z_]+)\"/ #2 /default:\"([^"]+)\"/ /(required):\"true\"/  /options:\"([^"]+)\"/
+//^ _ _ code /`default=%s`/ code /`options=%s`/
 type Config struct {
-	Address           string            `json:"address"`
-	FlushTimeout      pipeline.Duration `json:"flush_timeout"`
-	ReconnectInterval pipeline.Duration `json:"reconnect_interval"`
-	ConnectionTimeout pipeline.Duration `json:"connection_timeout"`
-	WorkersCount      int               `json:"workers_count"`
-	BatchSize         int               `json:"batch_size"`
+	//> @3 @4 @5 @6
+	//>
+	//> Address of gelf endpoint. Format: `HOST:PORT`. E.g. `localhost:12201`
+	Endpoint string `json:"endpoint" required:"true"` //*
+
+	//> @3 @4 @5 @6
+	//>
+	//> Plugin reconnects to endpoint periodically using this interval. Useful if endpoint is a load balancer.
+	ReconnectInterval pipeline.Duration `json:"reconnect_interval" default:"1m" parse:"duration"` //*
+
+	//> @3 @4 @5 @6
+	//>
+	//> After this timeout batch will be sent even if batch isn't completed.
+	FlushTimeout pipeline.Duration `json:"flush_timeout"` //*
+
+	//> @3 @4 @5 @6
+	//>
+	//> How much time to wait for connection.
+	ConnectionTimeout pipeline.Duration `json:"connection_timeout"` //*
+
+	//> @3 @4 @5 @6
+	//>
+	//> How much workers will be instantiated to send batches.
+	WorkersCount  fd.Expression `json:"workers_count" default:"gomaxprocs*4" parse:"expression"` //*
+	WorkersCount_ int
+
+	//> @3 @4 @5 @6
+	//>
+	//> Maximum quantity of events to pack into one batch.
+	BatchSize  fd.Expression `json:"batch_size" default:"capacity/4"  parse:"expression"` //*
+	BatchSize_ int
 
 	HostField                string `json:"host_field"`
 	ShortMessageField        string `json:"short_message_field"`
@@ -60,13 +98,6 @@ type Config struct {
 	timestampField           string
 	timestampFieldFormat     string
 	levelField               string
-}
-
-type Plugin struct {
-	config     *Config
-	avgLogSize int
-	batcher    *pipeline.Batcher
-	controller pipeline.OutputPluginController
 }
 
 type data struct {
@@ -90,22 +121,6 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.controller = params.Controller
 	p.avgLogSize = params.PipelineSettings.AvgLogSize
 	p.config = config.(*Config)
-
-	if p.config.Address == "" {
-		logger.Errorf(`no "address" provided for gelf output`)
-	}
-
-	if p.config.WorkersCount == 0 {
-		p.config.WorkersCount = runtime.GOMAXPROCS(0) * 4
-	}
-
-	if p.config.FlushTimeout.Duration == 0 {
-		p.config.FlushTimeout.Duration = pipeline.DefaultFlushTimeout
-	}
-
-	if p.config.ConnectionTimeout.Duration == 0 {
-		p.config.ConnectionTimeout.Duration = pipeline.DefaultConnectionTimeout
-	}
 
 	if p.config.HostField == "" {
 		p.config.HostField = defaultHostField
@@ -143,18 +158,14 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	}
 	p.config.levelField = pipeline.ByteToStringUnsafe(p.formatExtraField(nil, p.config.LevelField))
 
-	if p.config.BatchSize == 0 {
-		p.config.BatchSize = params.PipelineSettings.Capacity / 4
-	}
-
 	p.batcher = pipeline.NewBatcher(
 		params.PipelineName,
 		"gelf",
 		p.out,
 		p.maintenance,
 		p.controller,
-		p.config.WorkersCount,
-		p.config.BatchSize,
+		p.config.WorkersCount_,
+		p.config.BatchSize_,
 		p.config.FlushTimeout.Duration,
 		p.config.ReconnectInterval.Duration,
 	)
@@ -171,15 +182,15 @@ func (p *Plugin) Out(event *pipeline.Event) {
 func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 	if *workerData == nil {
 		*workerData = &data{
-			outBuf:    make([]byte, 0, p.config.BatchSize*p.avgLogSize),
+			outBuf:    make([]byte, 0, p.config.BatchSize_*p.avgLogSize),
 			encodeBuf: make([]byte, 0, 0),
 		}
 	}
 
 	data := (*workerData).(*data)
 	// handle to much memory consumption
-	if cap(data.outBuf) > p.config.BatchSize*p.avgLogSize {
-		data.outBuf = make([]byte, 0, p.config.BatchSize*p.avgLogSize)
+	if cap(data.outBuf) > p.config.BatchSize_*p.avgLogSize {
+		data.outBuf = make([]byte, 0, p.config.BatchSize_*p.avgLogSize)
 	}
 
 	outBuf := data.outBuf[:0]
@@ -194,11 +205,11 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 
 	for {
 		if data.gelf == nil {
-			logger.Infof("connecting to gelf address=%s", p.config.Address)
+			logger.Infof("connecting to gelf address=%s", p.config.Endpoint)
 
-			gelf, err := newClient(transportTCP, p.config.Address, p.config.ConnectionTimeout.Duration, false, nil)
+			gelf, err := newClient(transportTCP, p.config.Endpoint, p.config.ConnectionTimeout.Duration, false, nil)
 			if err != nil {
-				logger.Errorf("can't connect to gelf endpoint address=%s: %s", p.config.Address, err.Error())
+				logger.Errorf("can't connect to gelf endpoint address=%s: %s", p.config.Endpoint, err.Error())
 				time.Sleep(time.Second)
 				continue
 			}
@@ -209,7 +220,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 		_, err := data.gelf.send(outBuf)
 
 		if err != nil {
-			logger.Errorf("can't send data to gelf address=%s", p.config.Address, err.Error())
+			logger.Errorf("can't send data to gelf address=%s", p.config.Endpoint, err.Error())
 			_ = data.gelf.close()
 			data.gelf = nil
 			time.Sleep(time.Second)

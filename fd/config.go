@@ -20,6 +20,7 @@ type Config struct {
 
 type Duration string
 type ListMap string
+type Expression string
 
 type PipelineConfig struct {
 	Raw *simplejson.Json
@@ -70,41 +71,16 @@ func parseConfig(json *simplejson.Json) *Config {
 	return config
 }
 
-func ParseOptions(title string, options string, value string) int {
-	parts := strings.Split(options, "|")
-	for i, variant := range parts {
-		if value == variant {
-			return i
-		}
-	}
-
-	logger.Fatalf("wrong %s %q provided, should be one of %s", title, options)
-	return -1
-}
-
-func ParseDuration(value string) time.Duration {
-	result, err := time.ParseDuration(string(value))
-	if err != nil {
-		return -1
-	}
-
-	return result
-}
-
-var (
-	errPointerRequired = fmt.Errorf("pointer to struct is required")
-)
-
-func Parse(ptr interface{}) error {
+func Parse(ptr interface{}, values map[string]int) error {
 	if reflect.TypeOf(ptr).Kind() != reflect.Ptr {
-		return errPointerRequired
+		return fmt.Errorf("pointer to struct is required")
 	}
 
 	v := reflect.ValueOf(ptr).Elem()
 	t := v.Type()
 
 	if t.Kind() != reflect.Struct {
-		return errPointerRequired
+		return fmt.Errorf("pointer to struct is required")
 	}
 
 	for i := 0; i < t.NumField(); i++ {
@@ -182,7 +158,59 @@ func Parse(ptr interface{}) error {
 				}
 				field := v.FieldByName(t.Field(i).Name + "_")
 				field.Set(reflect.ValueOf(listMap))
+			case "expression":
+				if vField.Kind() != reflect.String {
+					return fmt.Errorf("expression deals only with strings, but field %s has %s type", tField.Name, tField.Type.Name())
+				}
+				field := v.FieldByName(t.Field(i).Name + "_")
 
+				pos := strings.IndexAny(vField.String(), "*/+-")
+				if pos == -1 {
+					i, err := strconv.Atoi(vField.String())
+					if err != nil {
+						return fmt.Errorf("can't convert %s to int", vField.String())
+					}
+					field.SetInt(int64(i))
+					return nil
+				}
+
+				op1 := strings.TrimSpace(vField.String()[:pos])
+				op := vField.String()[pos]
+				op2 := strings.TrimSpace(vField.String()[pos+1:])
+
+				op1_, err := strconv.Atoi(op1)
+				if err != nil {
+					has := false
+					op1_, has = values[op1]
+					if ! has {
+						return fmt.Errorf("can't find value for %q in expression", op1)
+					}
+				}
+
+				op2_, err := strconv.Atoi(op2)
+				if err != nil {
+					has := false
+					op2_, has = values[op2]
+					if ! has {
+						return fmt.Errorf("can't find value for %q in expression", op2)
+					}
+				}
+
+				result := 0
+				switch op {
+				case '+':
+					result = op1_ + op2_
+				case '-':
+					result = op1_ - op2_
+				case '*':
+					result = op1_ * op2_
+				case '/':
+					result = op1_ / op2_
+				default:
+					return fmt.Errorf("unknown operation %q", op)
+				}
+
+				field.SetInt(int64(result))
 			default:
 				return fmt.Errorf("unsupported parse %s for field %s", tag, t.Field(i).Type.Name())
 			}

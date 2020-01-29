@@ -36,23 +36,28 @@ type strOptions struct {
 	T string `default:"async" options:"async|sync"`
 }
 
+type strExpression struct {
+	T  string `parse:"expression"`
+	T_ int
+}
+
 func TestParseRequiredOk(t *testing.T) {
 	s := &strRequired{T: "some_value"}
-	err := Parse(s)
+	err := Parse(s, nil)
 
 	assert.NoError(t, err, "shouldn't be an error")
 }
 
 func TestParseRequiredErr(t *testing.T) {
 	s := &strRequired{}
-	err := Parse(s)
+	err := Parse(s, nil)
 
 	assert.NotNil(t, err, "should be an error")
 }
 
 func TestParseDefault(t *testing.T) {
 	s := &strDefault{}
-	err := Parse(s)
+	err := Parse(s, nil)
 
 	assert.NoError(t, err, "shouldn't be an error")
 	assert.Equal(t, "sync", s.T, "wrong value")
@@ -60,7 +65,7 @@ func TestParseDefault(t *testing.T) {
 
 func TestParseDuration(t *testing.T) {
 	s := &strDuration{}
-	err := Parse(s)
+	err := Parse(s, nil)
 
 	assert.NoError(t, err, "shouldn't be an error")
 	assert.Equal(t, time.Second*5, s.T_, "wrong value")
@@ -68,14 +73,29 @@ func TestParseDuration(t *testing.T) {
 
 func TestParseOptionsOk(t *testing.T) {
 	s := &strOptions{T: "async"}
-	err := Parse(s)
+	err := Parse(s, nil)
 
 	assert.NoError(t, err, "shouldn't be an error")
 }
 
 func TestParseOptionsErr(t *testing.T) {
 	s := &strOptions{T: "sequential"}
-	err := Parse(s)
+	err := Parse(s, nil)
 
 	assert.NotNil(t, err, "should be an error")
+}
+func TestParseExpressionMul(t *testing.T) {
+	s := &strExpression{T: "val*2"}
+	err := Parse(s, map[string]int{"val": 3})
+
+	assert.Nil(t, err, "shouldn't be an error")
+	assert.Equal(t, 6, s.T_, "wrong value")
+}
+
+func TestParseExpressionAdd(t *testing.T) {
+	s := &strExpression{T: "10+val"}
+	err := Parse(s, map[string]int{"val": 3})
+
+	assert.Nil(t, err, "shouldn't be an error")
+	assert.Equal(t, 13, s.T_, "wrong value")
 }

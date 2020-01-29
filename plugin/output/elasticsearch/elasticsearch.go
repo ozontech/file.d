@@ -5,7 +5,6 @@ import (
 	"io/ioutil"
 	"math/rand"
 	"net/http"
-	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -20,8 +19,6 @@ import (
 /*{ introduction
 Plugin writes events into Elasticsearch. It uses `_bulk` API to send events in batches.
 If a network error occurs batch will be infinitely tries to be delivered to random endpoint.
-
-@fns|signature-list
 }*/
 
 type Plugin struct {
@@ -39,29 +36,29 @@ type Plugin struct {
 type Config struct {
 	//> @3 @4 @5 @6
 	//>
-	//> Defines pattern of elasticsearch index name. Use `%` character as a placeholder. Use `index_values` to define values for replacement.
-	//> E.g. if `index_format="my-index-%-%"` and `index_values="service,@time"` and event is `{"service"="my-service"}`
-	//> then index for that event will be `my-index-my-service-2020-01-05`. First `%` replaced with `service` field of event and the second
-	//> replaced with current time(see `time_format` option)
-	IndexFormat string `json:"index_format" required:"true"` //*
-
-	//> @3 @4 @5 @6
-	//>
 	//> Comma separated list of elasticsearch endpoints in format `SCHEMA://HOST:PORT`
 	Endpoints  string `json:"endpoints" parse:"list" required:"true"` //*
 	Endpoints_ []string
 
 	//> @3 @4 @5 @6
 	//>
+	//> Defines pattern of elasticsearch index name. Use `%` character as a placeholder. Use `index_values` to define values for replacement.
+	//> E.g. if `index_format="my-index-%-%"` and `index_values="service,@@time"` and event is `{"service"="my-service"}`
+	//> then index for that event will be `my-index-my-service-2020-01-05`. First `%` replaced with `service` field of the event and the second
+	//> replaced with current time(see `time_format` option)
+	IndexFormat string `json:"index_format" required:"true"` //*
+
+	//> @3 @4 @5 @6
+	//>
 	//> Comma-separated list of event fields which will be used for replacement `index_format`.
-	//> There is a special field `@time` which equals to current time. Use `time_format` to define time format.
-	//> E.g. `service,@time`
+	//> There is a special field `@@time` which equals to current time. Use `time_format` to define time format.
+	//> E.g. `service,@@time`
 	IndexValues  string `json:"index_values" default:"@time"` //*
 	IndexValues_ []string
 
 	//> @3 @4 @5 @6
 	//>
-	//> Time format pattern to use as value for `@time` placeholder.
+	//> Time format pattern to use as value for the `@@time` placeholder.
 	//> > Check out https://golang.org/pkg/time/#Parse for details.
 	TimeFormat string `json:"time_format" default:"2006-01-02"` //*
 
@@ -78,13 +75,20 @@ type Config struct {
 	//> @3 @4 @5 @6
 	//>
 	//> How much workers will be instantiated to send batches.
-	WorkersCount int `json:"workers_count" default:"gomaxprocs*4"` //*
+	WorkersCount  fd.Expression `json:"workers_count" default:"gomaxprocs*4" parse:"expression"` //*
+	WorkersCount_ int
 
 	//> @3 @4 @5 @6
 	//>
-	//> Maximum quantity of events to send in one batch.
-	BatchSize          int  `json:"batch_size"`            //*
-	IndexErrorWarnOnly bool `json:"index_error_warn_only"` //*
+	//> Maximum quantity of events to pack into one batch.
+	BatchSize  fd.Expression `json:"batch_size" default:"capacity/4"  parse:"expression"` //*
+	BatchSize_ int
+
+	//> @3 @4 @5 @6
+	//>
+	//> If set to `false`, indexing error won't lead to an fatal and exit
+	// todo: my it be useful for all plugins? strict mode?
+	StrictMode bool `json:"strict_mode" default:"true"` //*
 }
 
 type data struct {
@@ -108,10 +112,6 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.config = config.(*Config)
 	p.mu = &sync.Mutex{}
 
-	if p.config.Endpoints == "" {
-		logger.Fatalf("endpoints aren't set for elasticsearch output")
-	}
-
 	p.config.Endpoints_ = strings.Split(p.config.Endpoints, ",")
 	for i, endpoint := range p.config.Endpoints_ {
 		if endpoint[len(endpoint)-1] == '/' {
@@ -120,28 +120,8 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		p.config.Endpoints_[i] = endpoint + "/_bulk?_source=false"
 	}
 
-	if p.config.WorkersCount == 0 {
-		p.config.WorkersCount = runtime.GOMAXPROCS(0) * 4
-	}
-
-	if p.config.FlushTimeout.Duration == 0 {
-		p.config.FlushTimeout.Duration = pipeline.DefaultFlushTimeout
-	}
-
-	if p.config.ConnectionTimeout.Duration == 0 {
-		p.config.ConnectionTimeout.Duration = pipeline.DefaultConnectionTimeout
-	}
-
-	if p.config.TimeFormat == "" {
-		p.config.TimeFormat = "2006-01-02"
-	}
-
 	p.client = &http.Client{
 		Timeout: p.config.ConnectionTimeout.Duration,
-	}
-
-	if p.config.BatchSize == 0 {
-		p.config.BatchSize = params.PipelineSettings.Capacity / 4
 	}
 
 	p.maintenance(nil)
@@ -152,8 +132,8 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		p.out,
 		p.maintenance,
 		p.controller,
-		p.config.WorkersCount,
-		p.config.BatchSize,
+		p.config.WorkersCount_,
+		p.config.BatchSize_,
 		p.config.FlushTimeout.Duration,
 		time.Minute,
 	)
@@ -170,14 +150,14 @@ func (p *Plugin) Out(event *pipeline.Event) {
 func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 	if *workerData == nil {
 		*workerData = &data{
-			outBuf: make([]byte, 0, p.config.BatchSize*p.avgLogSize),
+			outBuf: make([]byte, 0, p.config.BatchSize_*p.avgLogSize),
 		}
 	}
 
 	data := (*workerData).(*data)
 	// handle to much memory consumption
-	if cap(data.outBuf) > p.config.BatchSize*p.avgLogSize {
-		data.outBuf = make([]byte, 0, p.config.BatchSize*p.avgLogSize)
+	if cap(data.outBuf) > p.config.BatchSize_*p.avgLogSize {
+		data.outBuf = make([]byte, 0, p.config.BatchSize_*p.avgLogSize)
 	}
 
 	data.outBuf = data.outBuf[:0]
@@ -213,7 +193,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 				}
 			}
 
-			if !p.config.IndexErrorWarnOnly {
+			if !p.config.StrictMode {
 				logger.Fatalf("batch send error")
 			}
 		}
@@ -264,7 +244,7 @@ func (p *Plugin) appendIndexName(outBuf []byte, event *pipeline.Event) []byte {
 	return outBuf
 }
 
-func (p *Plugin) maintenance(workerData *pipeline.WorkerData) {
+func (p *Plugin) maintenance(_ *pipeline.WorkerData) {
 	p.mu.Lock()
 	p.time = time.Now().Format(p.config.TimeFormat)
 	p.mu.Unlock()

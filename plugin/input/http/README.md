@@ -21,3 +21,6 @@ Address to listen to. Omit ip/host to listen all network interfaces: `:88`
 
 Which protocol to emulate.
 
+
+
+ Generated using *insane-doc*
