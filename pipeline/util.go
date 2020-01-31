@@ -21,44 +21,39 @@ func StringToByteUnsafe(s string) []byte {
 	return *(*[]byte)(unsafe.Pointer(&sh))
 }
 
-type Duration struct {
-	time.Duration
-}
-
-
-const formats = "ANSIC|UnixDate|RubyDate|RFC822|RFC822Z|RFC850|RFC1123|RFC1123Z|RFC3339|RFC3339Nano|Kitchen|Stamp|StampMilli|StampMicro|StampNano"
+const formats = "ansic|unixdate|rubydate|rfc822|rfc822z|rfc850|rfc1123|rfc1123z|rfc3339|rfc3339nano|kitchen|stamp|stampmilli|stampmicro|stampnano"
 
 func ParseFormatName(formatName string) (string, error) {
-	switch formatName {
-	case "ANSIC":
+	switch strings.ToLower(strings.TrimSpace(formatName)) {
+	case "ansic":
 		return time.ANSIC, nil
-	case "UnixDate":
+	case "unixdate":
 		return time.UnixDate, nil
-	case "RubyDate":
+	case "rubydate":
 		return time.RubyDate, nil
-	case "RFC822":
+	case "rfc822":
 		return time.RFC822, nil
-	case "RFC822Z":
+	case "rfc822z":
 		return time.RFC822Z, nil
-	case "RFC850":
+	case "rfc850":
 		return time.RFC850, nil
-	case "RFC1123":
+	case "rfc1123":
 		return time.RFC1123, nil
-	case "RFC1123Z":
+	case "rfc1123z":
 		return time.RFC1123Z, nil
-	case "RFC3339":
+	case "rfc3339":
 		return time.RFC3339, nil
-	case "RFC3339Nano":
+	case "rfc3339nano":
 		return time.RFC3339Nano, nil
-	case "Kitchen":
+	case "kitchen":
 		return time.Kitchen, nil
-	case "Stamp":
+	case "stamp":
 		return time.Stamp, nil
-	case "StampMilli":
+	case "stampmilli":
 		return time.StampMilli, nil
-	case "StampMicro":
+	case "stampmicro":
 		return time.StampMicro, nil
-	case "StampNano":
+	case "stampnano":
 		return time.StampNano, nil
 	default:
 		return "", fmt.Errorf("unknown format name %q, should be one of %s", formatName, formats)
@@ -66,22 +61,22 @@ func ParseFormatName(formatName string) (string, error) {
 }
 
 func ParseLevel(level string) int {
-	switch strings.ToUpper(level) {
-	case "EMERGENCY":
+	switch strings.ToLower(strings.TrimSpace(level)) {
+	case "0", "emergency":
 		return 0
-	case "ALERT":
+	case "1", "alert":
 		return 1
-	case "CRITICAL", "CRIT":
+	case "2", "critical", "crit":
 		return 2
-	case "ERROR", "ERR":
+	case "3", "error", "err":
 		return 3
-	case "WARNING", "WARN":
+	case "4", "warning", "warn":
 		return 4
-	case "NOTICE":
+	case "5", "notice":
 		return 5
-	case "INFORMATIONAL", "INFO":
+	case "6", "informational", "info":
 		return 6
-	case "DEBUG":
+	case "7", "debug":
 		return 7
 	default:
 		return 6

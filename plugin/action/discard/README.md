@@ -1,11 +1,4 @@
-package discard
-
-import (
-	"gitlab.ozon.ru/sre/file-d/fd"
-	"gitlab.ozon.ru/sre/file-d/pipeline"
-)
-
-/*{ introduction
+# Discard action plugin
 Plugin simply drops event. Used in a combination with `match_fields` parameters to filter out events.
 
 *Example discarding informational and debug logs:*
@@ -47,3 +40,9 @@ func (p *Plugin) Stop() {
 func (p *Plugin) Do(_ *pipeline.Event) pipeline.ActionResult {
 	return pipeline.ActionDiscard
 }
+
+
+> No config params
+
+##
+ *Generated using **insane-doc***

@@ -2,17 +2,42 @@ package flatten
 
 import (
 	"gitlab.ozon.ru/sre/file-d/fd"
-	"gitlab.ozon.ru/sre/file-d/logger"
 	"gitlab.ozon.ru/sre/file-d/pipeline"
 )
 
+/*{ introduction
+Plugin extracts object keys and adds them into root with some prefix.
+
+Example:
+```
+pipelines:
+  example_pipeline:
+    ...
+    actions:
+    - type: flatten
+      field: animal
+      prefix: pet_
+    ...
+```
+
+Will transform `{"animal":{"type":"cat","paws":4}}` into `{"pet_type":"b","pet_paws":"4"}`.
+}*/
 type Plugin struct {
 	config *Config
 }
 
+//! config /json:\"([a-z_]+)\"/ #2 /default:\"([^"]+)\"/ /(required):\"true\"/  /options:\"([^"]+)\"/
+//^ _ _ code /`default=%s`/ code /`options=%s`/
 type Config struct {
-	Field  string `json:"field"`
-	Prefix string `json:"prefix"`
+	//> @3 @4 @5 @6
+	//>
+	//> To be filled
+	Field string `json:"field" required:"true"` //*
+
+	//> @3 @4 @5 @6
+	//>
+	//> To be filled
+	Prefix string `json:"prefix" default:""` //*
 }
 
 func init() {
@@ -28,10 +53,6 @@ func factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 
 func (p *Plugin) Start(config pipeline.AnyConfig, _ *pipeline.ActionPluginParams) {
 	p.config = config.(*Config)
-
-	if p.config.Field == "" {
-		logger.Fatalf("no field provided for flatten plugin")
-	}
 }
 
 func (p *Plugin) Stop() {

@@ -21,10 +21,9 @@ const (
 	predictionLookahead = 128 * 1024
 )
 
+//! config /json:\"([a-z_]+)\"/ #2 /default:\"([^"]+)\"/ /(required):\"true\"/  /options:\"([^"]+)\"/
+//^ _ _ code /`default=%s`/ code /`options=%s`/
 type Config struct {
-	//! config /json:\"([a-z_]+)\"/ #2 /default:\"([^"]+)\"/ /(required):\"true\"/  /options:\"([^"]+)\"/
-	//^ _ _ code /`default=%s`/ code /`options=%s`/
-
 	//>  @3 @4 @5 @6
 	//>
 	//> Docker splits long logs by 16kb chunks. Plugin joins them back, but if event will be longer than this value in bytes it will be split after all.

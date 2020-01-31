@@ -72,15 +72,11 @@ func parseConfig(json *simplejson.Json) *Config {
 }
 
 func Parse(ptr interface{}, values map[string]int) error {
-	if reflect.TypeOf(ptr).Kind() != reflect.Ptr {
-		return fmt.Errorf("pointer to struct is required")
-	}
-
 	v := reflect.ValueOf(ptr).Elem()
 	t := v.Type()
 
 	if t.Kind() != reflect.Struct {
-		return fmt.Errorf("pointer to struct is required")
+		return nil
 	}
 
 	for i := 0; i < t.NumField(); i++ {
@@ -122,7 +118,7 @@ func Parse(ptr interface{}, values map[string]int) error {
 			}
 
 			if !found {
-				return fmt.Errorf("field %s should be one of %s, got=%s", t.Field(i).Type.Name(), tag, vField.String())
+				return fmt.Errorf("field %s should be one of %s, got=%s", t.Field(i).Name, tag, vField.String())
 			}
 		}
 

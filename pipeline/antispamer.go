@@ -16,7 +16,7 @@ type antispamer struct {
 
 func newAntispamer(threshold int, unbanIterations int) *antispamer {
 	if threshold != 0 {
-		logger.Infof("antispam enabled threshold=%d", threshold)
+		logger.Infof("antispam enabled, threshold=%d", threshold)
 	}
 
 	return &antispamer{

@@ -6,13 +6,16 @@ import (
 	"gitlab.ozon.ru/sre/file-d/pipeline"
 )
 
-type Config struct {
-}
-
+/*{ introduction
+Plugin ...
+}*/
 type Plugin struct {
 	config      *Config
 	passNext    bool
 	discardNext bool
+}
+
+type Config struct {
 }
 
 func init() {

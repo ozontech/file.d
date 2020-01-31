@@ -7,7 +7,7 @@ It supports commitment mechanism, so it guaranties at least once delivery.
 
 `string`  `required` 
 
-Comma separated list of kafka brokers to read from.
+Comma-separated list of kafka brokers to read from.
 
 ### topics
 
@@ -22,5 +22,5 @@ Comma separated list of kafka topics to read from.
 Name of consumer group to use.
 
 
-
- Generated using *insane-doc*
+##
+ *Generated using **insane-doc***

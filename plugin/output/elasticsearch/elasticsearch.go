@@ -46,7 +46,7 @@ type Config struct {
 	//> E.g. if `index_format="my-index-%-%"` and `index_values="service,@@time"` and event is `{"service"="my-service"}`
 	//> then index for that event will be `my-index-my-service-2020-01-05`. First `%` replaced with `service` field of the event and the second
 	//> replaced with current time(see `time_format` option)
-	IndexFormat string `json:"index_format" required:"true"` //*
+	IndexFormat string `json:"index_format" default:"file-d-%"` //*
 
 	//> @3 @4 @5 @6
 	//>
@@ -64,13 +64,9 @@ type Config struct {
 
 	//> @3 @4 @5 @6
 	//>
-	//> After this timeout batch will be sent even if batch isn't completed.
-	FlushTimeout pipeline.Duration `json:"flush_timeout" default:"200ms"` //*
-
-	//> @3 @4 @5 @6
-	//>
 	//> How much time to wait for connection.
-	ConnectionTimeout pipeline.Duration `json:"connection_timeout" default:"5s"` //*
+	ConnectionTimeout  fd.Duration `json:"connection_timeout" default:"5s"` //*
+	ConnectionTimeout_ time.Duration
 
 	//> @3 @4 @5 @6
 	//>
@@ -86,8 +82,14 @@ type Config struct {
 
 	//> @3 @4 @5 @6
 	//>
-	//> If set to `false`, indexing error won't lead to an fatal and exit
-	// todo: my it be useful for all plugins? strict mode?
+	//> After this timeout batch will be sent even if batch isn't full.
+	BatchFlushTimeout  fd.Duration `json:"batch_flush_timeout" default:"200ms"` //*
+	BatchFlushTimeout_ time.Duration
+
+	//> @3 @4 @5 @6
+	//>
+	//> If set to `false`, indexing error won't lead to an fatal and exit.
+	//> todo: my it be useful for all plugins?
 	StrictMode bool `json:"strict_mode" default:"true"` //*
 }
 
@@ -121,7 +123,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	}
 
 	p.client = &http.Client{
-		Timeout: p.config.ConnectionTimeout.Duration,
+		Timeout: p.config.ConnectionTimeout_,
 	}
 
 	p.maintenance(nil)
@@ -134,7 +136,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		p.controller,
 		p.config.WorkersCount_,
 		p.config.BatchSize_,
-		p.config.FlushTimeout.Duration,
+		p.config.BatchFlushTimeout_,
 		time.Minute,
 	)
 	p.batcher.Start()
@@ -193,7 +195,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 				}
 			}
 
-			if !p.config.StrictMode {
+			if p.config.StrictMode {
 				logger.Fatalf("batch send error")
 			}
 		}

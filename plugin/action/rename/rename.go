@@ -8,12 +8,18 @@ import (
 	"gitlab.ozon.ru/sre/file-d/pipeline"
 )
 
+/*{ introduction
+Plugin ...
+}*/
 type Plugin struct {
 	paths          [][]string
 	names          []string
 	preserveFields bool
 }
 
+/*{ config
+Plugin ...
+}*/
 type Config map[string]string
 
 func init() {

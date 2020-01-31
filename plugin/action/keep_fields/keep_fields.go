@@ -6,13 +6,21 @@ import (
 	"gitlab.ozon.ru/sre/file-d/pipeline"
 )
 
+/*{ introduction
+Plugin ...
+}*/
 type Plugin struct {
 	config    *Config
 	fieldsBuf []string
 }
 
+//! config /json:\"([a-z_]+)\"/ #2 /default:\"([^"]+)\"/ /(required):\"true\"/  /options:\"([^"]+)\"/
+//^ _ _ code /`default=%s`/ code /`options=%s`/
 type Config struct {
-	Fields []string `json:"fields"`
+	//> @3 @4 @5 @6
+	//>
+	//> To be filled
+	Fields []string `json:"fields"` //*
 }
 
 func init() {

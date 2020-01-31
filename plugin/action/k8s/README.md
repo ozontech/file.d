@@ -24,5 +24,5 @@ e.g. `app,release`
 Skip retrieving k8s meta information using k8s API and add only `k8s_node` field.
 
 
-
- Generated using *insane-doc*
+##
+ *Generated using **insane-doc***

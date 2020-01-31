@@ -7,12 +7,15 @@ import (
 	"gitlab.ozon.ru/sre/file-d/pipeline"
 )
 
-type Config struct {
-}
-
+/*{ introduction
+Plugin simply writes events to stdout(also known as console).
+}*/
 type Plugin struct {
 	controller pipeline.OutputPluginController
 	outFn      func(event *pipeline.Event)
+}
+
+type Config struct {
 }
 
 func init() {
@@ -26,7 +29,7 @@ func Factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 	return &Plugin{}, &Config{}
 }
 
-func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginParams) {
+func (p *Plugin) Start(_ pipeline.AnyConfig, params *pipeline.OutputPluginParams) {
 	p.controller = params.Controller
 }
 

@@ -13,32 +13,21 @@ import (
 /*{ introduction
 Plugin sends event batches to the GELF endpoint. Transport level protocol TCP or UDP is configurable.
 > It doesn't support UDP chunking. So don't use UDP if event size may be grater than 8192.
-}*/
 
-/*
-GELF messages are separated by null byte sequence. Each GELF message is a JSON with the following fields:
-1.  string version SHOULD be "1.1"
-2.  string host
-3.  string short_message
-4.  string full_message
-5.  number timestamp
-6.  number level
-7.  string _extra_field_1
-8.  string _extra_field_2
-10. string _extra_field_3
+GELF messages are separated by null byte. Each message is a JSON with the following fields:
+* `version`, string, should be `1.1`
+* `host`, string
+* `short_message`, string
+* `full_message`, string
+* `timestamp`, number
+* `level`, number
+* `_extra_field_1`, string
+* `_extra_field_2`, string
+* `_extra_field_3`, string
 
 Every field with an underscore prefix (_) will be treated as an extra field.
-Allowed characters in a field names are any word character (letter, number, underscore), dashes and dots.
-*/
-
-const (
-	defaultHostField            = "host"
-	defaultShortMessageField    = "message"
-	defaultShortMessageValue    = "not set"
-	defaultTimestampField       = "time"
-	defaultTimestampFieldFormat = "RFC3339Nano"
-	defaultLevelField           = "level"
-)
+Allowed characters in a field names are any word character(letter, number, underscore), dashes and dots.
+}*/
 
 type Plugin struct {
 	config     *Config
@@ -52,23 +41,64 @@ type Plugin struct {
 type Config struct {
 	//> @3 @4 @5 @6
 	//>
-	//> Address of gelf endpoint. Format: `HOST:PORT`. E.g. `localhost:12201`
+	//> Address of gelf endpoint. Format: `HOST:PORT`. E.g. `localhost:12201`.
 	Endpoint string `json:"endpoint" required:"true"` //*
 
 	//> @3 @4 @5 @6
 	//>
 	//> Plugin reconnects to endpoint periodically using this interval. Useful if endpoint is a load balancer.
-	ReconnectInterval pipeline.Duration `json:"reconnect_interval" default:"1m" parse:"duration"` //*
-
-	//> @3 @4 @5 @6
-	//>
-	//> After this timeout batch will be sent even if batch isn't completed.
-	FlushTimeout pipeline.Duration `json:"flush_timeout"` //*
+	ReconnectInterval  fd.Duration `json:"reconnect_interval" default:"1m" parse:"duration"` //*
+	ReconnectInterval_ time.Duration
 
 	//> @3 @4 @5 @6
 	//>
 	//> How much time to wait for connection.
-	ConnectionTimeout pipeline.Duration `json:"connection_timeout"` //*
+	ConnectionTimeout  fd.Duration `json:"connection_timeout" default:"5s"` //*
+	ConnectionTimeout_ time.Duration
+
+	//> @3 @4 @5 @6
+	//>
+	//> Which field of event should be used as `host` GELF field.
+	HostField string `json:"host_field" default:"host"` //*
+
+	//> @3 @4 @5 @6
+	//>
+	//>  Which field of event should be used as `short_message` GELF field.
+	ShortMessageField string `json:"short_message_field" default:"message"` //*
+
+	//> @3 @4 @5 @6
+	//>
+	//>  Default value for `short_message` GELF field if nothing is found in the event.
+	DefaultShortMessageValue string `json:"default_short_message_value" default:"not set"` //*
+
+	//> @3 @4 @5 @6
+	//>
+	//> Which field of event should be used as `full_message` GELF field.
+	FullMessageField string `json:"full_message_field" default:""` //*
+
+	//> @3 @4 @5 @6
+	//>
+	//> Which field of event should be used as `timestamp` GELF field.
+	TimestampField string `json:"timestamp_field" default:"time"` //*
+
+	//> @3 @4 @5 @6
+	//>
+	//> In which format timestamp field should be parsed.
+	TimestampFieldFormat string `json:"timestamp_field_format" default:"rfc3339nano" options:"ansic|unixdate|rubydate|rfc822|rfc822z|rfc850|rfc1123|rfc1123z|rfc3339|rfc3339nano|kitchen|stamp|stampmilli|stampmicro|stampnano"` //*
+
+	//> @3 @4 @5 @6
+	//>
+	//> Which field of event should be used as `level` GELF field. Level field should contain level number or string according to RFC 5424:
+	//> * `7`/`debug`
+	//> * `6`/`info`
+	//> * `5`/`notice`
+	//> * `4`/`warning`
+	//> * `3`/`error`
+	//> * `2`/`critical`
+	//> * `1`/`alert`
+	//> * `0`/`emergency`
+	//> Otherwise `6` will be used.
+	LevelField string `json:"level_field" default:"level"` //*
 
 	//> @3 @4 @5 @6
 	//>
@@ -79,16 +109,14 @@ type Config struct {
 	//> @3 @4 @5 @6
 	//>
 	//> Maximum quantity of events to pack into one batch.
-	BatchSize  fd.Expression `json:"batch_size" default:"capacity/4"  parse:"expression"` //*
+	BatchSize  fd.Expression `json:"batch_size" default:"capacity/4" parse:"expression"` //*
 	BatchSize_ int
 
-	HostField                string `json:"host_field"`
-	ShortMessageField        string `json:"short_message_field"`
-	DefaultShortMessageValue string `json:"default_short_message_value"`
-	FullMessageField         string `json:"full_message_field"`
-	TimestampField           string `json:"timestamp_field"`
-	TimestampFieldFormat     string `json:"timestamp_field_format"`
-	LevelField               string `json:"level_field"`
+	//> @3 @4 @5 @6
+	//>
+	//> After this timeout batch will be sent even if batch isn't completed.
+	BatchFlushTimeout  fd.Duration `json:"batch_flush_timeout" default:"200ms"` //*
+	BatchFlushTimeout_ time.Duration
 
 	// fields converted to extra fields GELF format
 	hostField                string
@@ -122,40 +150,16 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.avgLogSize = params.PipelineSettings.AvgLogSize
 	p.config = config.(*Config)
 
-	if p.config.HostField == "" {
-		p.config.HostField = defaultHostField
-	}
 	p.config.hostField = pipeline.ByteToStringUnsafe(p.formatExtraField(nil, p.config.HostField))
-
-	if p.config.ShortMessageField == "" {
-		p.config.ShortMessageField = defaultShortMessageField
-	}
 	p.config.shortMessageField = pipeline.ByteToStringUnsafe(p.formatExtraField(nil, p.config.ShortMessageField))
-
-	if strings.TrimSpace(p.config.DefaultShortMessageValue) == "" {
-		p.config.DefaultShortMessageValue = defaultShortMessageValue
-	}
 	p.config.defaultShortMessageValue = strings.TrimSpace(p.config.DefaultShortMessageValue)
-
 	p.config.fullMessageField = pipeline.ByteToStringUnsafe(p.formatExtraField(nil, p.config.FullMessageField))
-
-	if p.config.TimestampField == "" {
-		p.config.TimestampField = defaultTimestampField
-	}
 	p.config.timestampField = pipeline.ByteToStringUnsafe(p.formatExtraField(nil, p.config.TimestampField))
-
-	if p.config.TimestampFieldFormat == "" {
-		p.config.TimestampFieldFormat = defaultTimestampFieldFormat
-	}
 	format, err := pipeline.ParseFormatName(p.config.TimestampFieldFormat)
 	if err != nil {
 		logger.Errorf("can't convert format for gelf output: %s", err.Error())
 	}
 	p.config.timestampFieldFormat = format
-
-	if p.config.LevelField == "" {
-		p.config.LevelField = defaultLevelField
-	}
 	p.config.levelField = pipeline.ByteToStringUnsafe(p.formatExtraField(nil, p.config.LevelField))
 
 	p.batcher = pipeline.NewBatcher(
@@ -166,8 +170,8 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		p.controller,
 		p.config.WorkersCount_,
 		p.config.BatchSize_,
-		p.config.FlushTimeout.Duration,
-		p.config.ReconnectInterval.Duration,
+		p.config.BatchFlushTimeout_,
+		p.config.ReconnectInterval_,
 	)
 	p.batcher.Start()
 }
@@ -207,7 +211,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 		if data.gelf == nil {
 			logger.Infof("connecting to gelf address=%s", p.config.Endpoint)
 
-			gelf, err := newClient(transportTCP, p.config.Endpoint, p.config.ConnectionTimeout.Duration, false, nil)
+			gelf, err := newClient(transportTCP, p.config.Endpoint, p.config.ConnectionTimeout_, false, nil)
 			if err != nil {
 				logger.Errorf("can't connect to gelf endpoint address=%s: %s", p.config.Endpoint, err.Error())
 				time.Sleep(time.Second)

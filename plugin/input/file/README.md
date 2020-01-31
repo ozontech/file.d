@@ -92,12 +92,15 @@ Offset operation which will be preformed when adding file as a job:
 
 ### workers_count
 
-`int` `default=16`  
+`fd.Expression` `default=gomaxprocs*4`  
 
 How much workers will be instantiated. Each worker:
 * Read files (I/O bound)
 * Decode events (CPU bound)
 > It's recommended to set it to 4x-8x of CPU cores.
+
+### workers_count
+
 
 ### report_interval
 
@@ -115,5 +118,5 @@ Symlinks maintenance detects if underlying file of symlink is changed.
 Job maintenance `fstat` tracked files to detect if new portion of data have been written to the file. If job is in `done` state when it releases and reopens file descriptor to allow third party software delete the file.
 
 
-
- Generated using *insane-doc*
+##
+ *Generated using **insane-doc***

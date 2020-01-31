@@ -19,20 +19,21 @@ const (
 	DefaultAvgLogSize          = 16 * 1024
 	DefaultJSONNodePoolSize    = 1024
 	DefaultMaintenanceInterval = time.Second * 5
-	DefaultFlushTimeout        = time.Millisecond * 200
-	DefaultConnectionTimeout   = time.Second * 5
 	DefaultFieldValue          = "not_set"
 	DefaultStreamName          = StreamName("not_set")
 
 	antispamUnbanIterations = 4
 	metricsGenInterval      = time.Hour
+
+	decoderJSON = 0
+	decoderRAW  = 1
 )
 
 type finalizeFn = func(event *Event, notifyInput bool, backEvent bool)
 
 type InputPluginController interface {
 	In(sourceID SourceID, sourceName string, offset int64, data []byte) uint64
-	DisableStreams()                       // don't use stream field and spread all events across all processors
+	DisableStreams() // don't use stream field and spread all events across all processors
 }
 
 type ActionPluginController interface {
@@ -50,6 +51,8 @@ type StreamName string
 type Pipeline struct {
 	Name     string
 	settings *Settings
+
+	decoder int
 
 	eventPool *eventPool
 	streamer  *streamer
@@ -85,6 +88,7 @@ type Pipeline struct {
 }
 
 type Settings struct {
+	Decoder             string
 	Capacity            int
 	MaintenanceInterval time.Duration
 	AntispamThreshold   int
@@ -111,6 +115,15 @@ func New(name string, settings *Settings, registry *prometheus.Registry, mux *ht
 
 		eventLog:   make([]string, 0, 128),
 		eventLogMu: &sync.Mutex{},
+	}
+
+	switch settings.Decoder {
+	case "json":
+		pipeline.decoder = decoderJSON
+	case "raw":
+		pipeline.decoder = decoderRAW
+	default:
+		logger.Fatalf("unknown decoder %q for pipeline %q", settings.Decoder, name)
 	}
 
 	mux.HandleFunc("/pipelines/"+name, pipeline.servePipeline)
@@ -199,10 +212,19 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 	}
 
 	event := p.eventPool.get()
-	err := event.parseJSON(bytes)
-	if err != nil {
-		logger.Fatalf("wrong json offset=%d, length=%d, err=%s, source=%d:%s, json=%s", offset, length, err.Error(), sourceID, sourceName, bytes)
-		return 0
+
+	switch p.decoder {
+	case decoderJSON:
+		err := event.parseJSON(bytes)
+		if err != nil {
+			logger.Fatalf("wrong json offset=%d, length=%d, err=%s, source=%d:%s, json=%s", offset, length, err.Error(), sourceID, sourceName, bytes)
+			return 0
+		}
+	case decoderRAW:
+		_ = event.Root.DecodeString("{}")
+		event.Root.AddFieldNoAlloc(event.Root, "message").MutateToBytesCopy(event.Root, bytes)
+	default:
+		logger.Panicf("unknown decoder %d for pipeline %q", p.decoder, p.Name)
 	}
 
 	event.Offset = offset
@@ -378,7 +400,7 @@ func (p *Pipeline) maintenance() {
 			tc = 1
 		}
 
-		logger.Infof("%q pipeline stats interval=%ds, active procs=%d, queue=%d/%d, out=%d|%.1fMb, rate=%d/s|%.1fMb/s, total=%d|%.1fMb, avg size=%d, max size=%d", p.Name, interval/time.Second, p.activeProcs.Load(), p.procCount.Load(), p.settings.Capacity, deltaCommitted, float64(deltaSize)/1024.0/1024.0, rate, rateMb, totalCommitted, float64(totalSize)/1024.0/1024.0, totalSize/tc, p.maxSize)
+		logger.Infof("%q pipeline stats interval=%ds, active procs=%d/%d, queue=%d/%d, out=%d|%.1fMb, rate=%d/s|%.1fMb/s, total=%d|%.1fMb, avg size=%d, max size=%d", p.Name, interval/time.Second, p.activeProcs.Load(), p.procCount.Load(), p.eventPool.eventsCount, p.settings.Capacity, deltaCommitted, float64(deltaSize)/1024.0/1024.0, rate, rateMb, totalCommitted, float64(totalSize)/1024.0/1024.0, totalSize/tc, p.maxSize)
 
 		lastCommitted = totalCommitted
 		lastSize = totalSize
@@ -418,7 +440,7 @@ func (p *Pipeline) GetEventLogItem(index int) string {
 	return p.eventLog[index]
 }
 
-func (p *Pipeline) servePipeline(w http.ResponseWriter, r *http.Request) {
+func (p *Pipeline) servePipeline(w http.ResponseWriter, _ *http.Request) {
 	_, _ = w.Write([]byte("<html><body><pre><p>"))
 	_, _ = w.Write([]byte(logger.Header("pipeline " + p.Name)))
 	_, _ = w.Write([]byte(p.streamer.dump()))

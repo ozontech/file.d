@@ -1,7 +1,6 @@
 package kafka
 
 import (
-	"runtime"
 	"strings"
 	"time"
 
@@ -12,22 +11,9 @@ import (
 	"github.com/Shopify/sarama"
 )
 
-const (
-	defaultFlushTimeout = time.Millisecond * 200
-)
-
-type Config struct {
-	Brokers             string            `json:"brokers"`
-	WorkersCount        int               `json:"workers_count"`
-	BatchSize           int               `json:"batch_size"`
-	DefaultTopic        string            `json:"default_topic"`
-	ShouldUseTopicField bool              `json:"should_use_topic_field"`
-	TopicField          string            `json:"topic_field"`
-	FlushTimeout        pipeline.Duration `json:"flush_timeout"`
-
-	brokers []string //split brokers string by comma
-}
-
+/*{ introduction
+Plugin sends event batches to the kafka brokers. It uses `sarama` lib.
+}*/
 type data struct {
 	messages []*sarama.ProducerMessage
 	outBuf   sarama.ByteEncoder
@@ -40,6 +26,49 @@ type Plugin struct {
 
 	producer sarama.SyncProducer
 	batcher  *pipeline.Batcher
+}
+
+//! config /json:\"([a-z_]+)\"/ #2 /default:\"([^"]+)\"/ /(required):\"true\"/  /options:\"([^"]+)\"/
+//^ _ _ code /`default=%s`/ code /`options=%s`/
+type Config struct {
+	//> @3 @4 @5 @6
+	//>
+	//> Comma-separated list of kafka brokers to write to.
+	Brokers  string `json:"brokers" required:"true"` //*
+	Brokers_ []string
+
+	//> @3 @4 @5 @6
+	//>
+	//> Default topic name if nothing will be found in the event field or `should_use_topic_field` isn't set.
+	DefaultTopic string `json:"default_topic" required:"true"` //*
+
+	//> @3 @4 @5 @6
+	//>
+	//> If set plugin will use topic name from the event field.
+	UseTopicField bool `json:"use_topic_field" default:"false"` //*
+
+	//> @3 @4 @5 @6
+	//>
+	//> Which event field to use as topic name, if `should_use_topic_field` is set.
+	TopicField string `json:"topic_field" default:"topic"` //*
+
+	//> @3 @4 @5 @6
+	//>
+	//> How much workers will be instantiated to send batches.
+	WorkersCount  fd.Expression `json:"workers_count" default:"gomaxprocs*4" parse:"expression"` //*
+	WorkersCount_ int
+
+	//> @3 @4 @5 @6
+	//>
+	//> Maximum quantity of events to pack into one batch.
+	BatchSize  fd.Expression `json:"batch_size" default:"capacity/4" parse:"expression"` //*
+	BatchSize_ int
+
+	//> @3 @4 @5 @6
+	//>
+	//> After this timeout batch will be sent even if batch isn't full.
+	BatchFlushTimeout  fd.Duration `json:"batch_flush_timeout" parse:"duration"` //*
+	BatchFlushTimeout_ time.Duration
 }
 
 func init() {
@@ -58,31 +87,6 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.avgLogSize = params.PipelineSettings.AvgLogSize
 	p.controller = params.Controller
 
-	p.config.brokers = strings.Split(p.config.Brokers, ",")
-	if p.config.Brokers == "" || len(p.config.brokers) == 0 {
-		logger.Fatalf("brokers isn't provided for kafka output")
-	}
-
-	if p.config.WorkersCount == 0 {
-		p.config.WorkersCount = runtime.GOMAXPROCS(0) * 4
-	}
-
-	if p.config.BatchSize == 0 {
-		p.config.BatchSize = params.PipelineSettings.Capacity / 4
-	}
-
-	if p.config.DefaultTopic == "" {
-		logger.Fatalf(`"default_topic" isn't set for kafka output`)
-	}
-
-	if p.config.ShouldUseTopicField && p.config.TopicField == "" {
-		logger.Fatalf(`"topic_field" isn't set for kafka output while "should_use_topic_field=true"`)
-	}
-
-	if p.config.FlushTimeout.Duration == 0 {
-		p.config.FlushTimeout.Duration = defaultFlushTimeout
-	}
-
 	logger.Infof("starting kafka plugin batch size=%d", p.config.BatchSize)
 
 	p.producer = p.newProducer()
@@ -92,9 +96,9 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		p.out,
 		nil,
 		p.controller,
-		p.config.WorkersCount,
-		p.config.BatchSize,
-		p.config.FlushTimeout.Duration,
+		p.config.WorkersCount_,
+		p.config.BatchSize_,
+		p.config.BatchFlushTimeout_,
 		0,
 	)
 	p.batcher.Start()
@@ -107,15 +111,15 @@ func (p *Plugin) Out(event *pipeline.Event) {
 func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 	if *workerData == nil {
 		*workerData = &data{
-			messages: make([]*sarama.ProducerMessage, p.config.BatchSize, p.config.BatchSize),
-			outBuf:   make([]byte, 0, p.config.BatchSize*p.avgLogSize),
+			messages: make([]*sarama.ProducerMessage, p.config.BatchSize_, p.config.BatchSize_),
+			outBuf:   make([]byte, 0, p.config.BatchSize_*p.avgLogSize),
 		}
 	}
 
 	data := (*workerData).(*data)
 	//handle to much memory consumption
-	if cap(data.outBuf) > p.config.BatchSize*p.avgLogSize {
-		data.outBuf = make(sarama.ByteEncoder, 0, p.config.BatchSize*p.avgLogSize)
+	if cap(data.outBuf) > p.config.BatchSize_*p.avgLogSize {
+		data.outBuf = make(sarama.ByteEncoder, 0, p.config.BatchSize_*p.avgLogSize)
 	}
 
 	outBuf := data.outBuf[:0]
@@ -158,17 +162,17 @@ func (p *Plugin) Stop() {
 func (p *Plugin) newProducer() sarama.SyncProducer {
 	config := sarama.NewConfig()
 	config.Producer.Partitioner = sarama.NewRoundRobinPartitioner
-	config.Producer.Flush.Messages = p.config.BatchSize
+	config.Producer.Flush.Messages = p.config.BatchSize_
 	// kafka plugin itself cares for flush frequency, but we are using batcher so disable it
 	config.Producer.Flush.Frequency = time.Millisecond
 	config.Producer.Return.Errors = true
 	config.Producer.Return.Successes = true
 
-	producer, err := sarama.NewSyncProducer(p.config.brokers, config)
+	producer, err := sarama.NewSyncProducer(p.config.Brokers_, config)
 	if err != nil {
 		logger.Fatalf("can't create kafka producer: %s", err.Error())
 	}
 
-	logger.Infof("kafka producer created with brokers %q", strings.Join(p.config.brokers, ","))
+	logger.Infof("kafka producer created with brokers %q", strings.Join(p.config.Brokers_, ","))
 	return producer
 }

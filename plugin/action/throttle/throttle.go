@@ -19,7 +19,9 @@ var (
 	limitersMu = &sync.RWMutex{}
 )
 
-// Plugin throttle plugin drops events if event count per interval gets higher than a configured threshold
+/*{ introduction
+Plugin throttle plugin drops events if event count per interval gets higher than a configured threshold.
+}*/
 type Plugin struct {
 	config   *Config
 	pipeline string
@@ -28,13 +30,39 @@ type Plugin struct {
 	rules       []*rule
 }
 
+//! config /json:\"([a-z_]+)\"/ #2 /default:\"([^"]+)\"/ /(required):\"true\"/  /options:\"([^"]+)\"/
+//^ _ _ code /`default=%s`/ code /`options=%s`/
 type Config struct {
-	ThrottleField string            `json:"throttle_field"`
-	TimeField     string            `json:"time_field"`
-	DefaultLimit  int64             `json:"default_limit"`
-	Interval      pipeline.Duration `json:"interval"`
-	Buckets       int               `json:"buckets"`
-	Rules         []RuleConfig      `json:"rules"`
+	//> @3 @4 @5 @6
+	//>
+	//> To be filled
+	ThrottleField string `json:"throttle_field"` //*
+
+	//> @3 @4 @5 @6
+	//>
+	//> To be filled
+	TimeField string `json:"time_field"` //*
+
+	//> @3 @4 @5 @6
+	//>
+	//> To be filled
+	DefaultLimit int64 `json:"default_limit"` //*
+
+	//> @3 @4 @5 @6
+	//>
+	//> To be filled
+	Interval  fd.Duration `json:"interval" parse:"duration"` //*
+	Interval_ time.Duration
+
+	//> @3 @4 @5 @6
+	//>
+	//> To be filled
+	Buckets int `json:"buckets"` //*
+
+	//> @3 @4 @5 @6
+	//>
+	//> To be filled
+	Rules []RuleConfig `json:"rules"` //*
 }
 
 type RuleConfig struct {
@@ -120,7 +148,7 @@ func (p *Plugin) isAllowed(event *pipeline.Event) bool {
 		limitersMu.RUnlock()
 
 		if !has {
-			limiter = NewLimiter(p.config.Interval.Duration, p.config.Buckets, rule.limit)
+			limiter = NewLimiter(p.config.Interval_, p.config.Buckets, rule.limit)
 			// alloc new string before adding new key to map
 			limiterKey = string(p.limiterBuff)
 			limitersMu.Lock()

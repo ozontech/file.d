@@ -30,7 +30,7 @@ type Plugin struct {
 type Config struct {
 	//> @3 @4 @5 @6
 	//>
-	//> Comma separated list of kafka brokers to read from.
+	//> Comma-separated list of kafka brokers to read from.
 	Brokers  string `json:"brokers" required:"true" parse:"list"`  //*
 	Brokers_ []string
 

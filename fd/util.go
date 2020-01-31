@@ -18,6 +18,7 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 	avgLogSize := pipeline.DefaultAvgLogSize
 	streamField := pipeline.DefaultStreamField
 	maintenanceInterval := pipeline.DefaultMaintenanceInterval
+	decoder := "json"
 
 	if settings != nil {
 		val := settings.Get("capacity").MustInt()
@@ -30,7 +31,12 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 			avgLogSize = val
 		}
 
-		str := settings.Get("stream_field").MustString()
+		str := settings.Get("decoder").MustString()
+		if str != "" {
+			decoder = str
+		}
+
+		str = settings.Get("stream_field").MustString()
 		if str != "" {
 			streamField = str
 		}
@@ -49,6 +55,7 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 	}
 
 	return &pipeline.Settings{
+		Decoder:             decoder,
 		Capacity:            capacity,
 		AvgLogSize:          avgLogSize,
 		AntispamThreshold:   antispamThreshold,

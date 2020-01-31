@@ -1082,8 +1082,8 @@ func TestTruncationSeq(t *testing.T) {
 //}
 
 func BenchmarkLightJsonReadPar(b *testing.B) {
-	lines := 128 * 128
-	files := 64
+	lines := 128 * 64
+	files := 128
 
 	json := getContent("../../../testdata/json/light.json")
 

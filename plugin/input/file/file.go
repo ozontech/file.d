@@ -133,7 +133,8 @@ type Config struct {
 	//>  * Read files (I/O bound)
 	//>  * Decode events (CPU bound)
 	//>  > It's recommended to set it to 4x-8x of CPU cores.
-	WorkersCount int `json:"workers_count" default:"16"` //*
+	WorkersCount  fd.Expression `json:"workers_count" default:"gomaxprocs*4"` //*
+	WorkersCount_ int           `json:"workers_count" default:"16"`           //*
 
 	ReportInterval  fd.Duration `json:"report_interval" default:"10s" parse:"duration"` //* @3 @4 @5 @6 <br> <br> How often to report statistical information to stdout
 	ReportInterval_ time.Duration
@@ -171,7 +172,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 }
 
 func (p *Plugin) startWorkers() {
-	p.workers = make([]*worker, p.config.WorkersCount)
+	p.workers = make([]*worker, p.config.WorkersCount_)
 	for i := range p.workers {
 		p.workers[i] = &worker{}
 		p.workers[i].start(p.params.Controller, p.jobProvider, p.config.ReadBufferSize)

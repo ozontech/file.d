@@ -6,5 +6,5 @@ Plugin provides methods to use in test scenarios:
 
 > No config params
 
-
- Generated using *insane-doc*
+##
+ *Generated using **insane-doc***

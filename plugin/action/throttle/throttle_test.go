@@ -8,19 +8,19 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"gitlab.ozon.ru/sre/file-d/fd"
+	"gitlab.ozon.ru/sre/file-d/logger"
 	"gitlab.ozon.ru/sre/file-d/pipeline"
 	"gitlab.ozon.ru/sre/file-d/test"
 )
 
 func TestThrottle(t *testing.T) {
-	interval := time.Millisecond * 100
 	buckets := 2
 	limitA := 2
 	limitB := 3
 	defaultLimit := 20
 
 	iterations := 5
-	workTime := interval * time.Duration(iterations)
 
 	totalBuckets := iterations + 1
 	defaultLimitDelta := totalBuckets * defaultLimit
@@ -32,11 +32,17 @@ func TestThrottle(t *testing.T) {
 			{Limit: int64(limitB), Conditions: map[string]string{"k8s_ns": "ns_2"}},
 		},
 		Buckets:       buckets,
-		Interval:      pipeline.Duration{Duration: interval},
+		Interval:      "100ms",
 		ThrottleField: "k8s_pod",
 		TimeField:     "time",
 		DefaultLimit:  int64(defaultLimit),
 	}
+	err := fd.Parse(config, nil)
+	if err != nil {
+		logger.Panic(err.Error())
+	}
+
+	workTime := config.Interval_ * time.Duration(iterations)
 
 	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, config, pipeline.MatchModeAnd, nil))
 	wg := &sync.WaitGroup{}

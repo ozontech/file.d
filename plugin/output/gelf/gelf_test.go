@@ -7,6 +7,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	insaneJSON "github.com/vitkovskii/insane-json"
+	"gitlab.ozon.ru/sre/file-d/fd"
+	"gitlab.ozon.ru/sre/file-d/logger"
 	"gitlab.ozon.ru/sre/file-d/pipeline"
 )
 
@@ -19,12 +21,12 @@ func TestFormatEvent(t *testing.T) {
 		{
 			configJSON: `
 				{
-					"address":"host:1000",
+					"endpoint":"host:1000",
 					"host_field":"my_host_field",
 					"short_message_field":"my_short_message_field",
 					"full_message_field":"my_full_message_field",
 					"timestamp_field":"my_timestamp_field",
-					"timestamp_field_format":"RFC3339Nano",
+					"timestamp_field_format":"rfc3339nano",
 					"level_field":"my_level_field"
 				}`,
 			eventJSON: `
@@ -56,12 +58,12 @@ func TestFormatEvent(t *testing.T) {
 		{
 			configJSON: `
 				{
-					"address":"host:1000",
+					"endpoint":"host:1000",
 					"host_field":"my_host_field",
 					"short_message_field":"my_short_message_field",
 					"full_message_field":"my_full_message_field",
 					"timestamp_field":"my_timestamp_field",
-					"timestamp_field_format":"RFC3339Nano",
+					"timestamp_field_format":"rfc3339nano",
 					"level_field":"my_level_field"
 				}`,
 			eventJSON: `
@@ -101,15 +103,20 @@ func TestFormatEvent(t *testing.T) {
 		config := &Config{}
 		err = json.Unmarshal([]byte(test.configJSON), config)
 		if err != nil {
-			panic(err.Error())
+			logger.Panicf(err.Error())
+		}
+
+		err = fd.Parse(config, map[string]int{"gomaxprocs": 1, "capacity": 64})
+		if err != nil {
+			logger.Panicf(err.Error())
 		}
 
 		params := &pipeline.OutputPluginParams{
 			PluginDefaultParams: &pipeline.PluginDefaultParams{
 				PipelineName: "name",
 				PipelineSettings: &pipeline.Settings{
-					Capacity:        128,
-					AvgLogSize:      128,
+					Capacity:   128,
+					AvgLogSize: 128,
 				},
 			},
 			Controller: nil,

@@ -199,7 +199,7 @@ func (f *FileD) getStaticInfo(pipelineConfig *PipelineConfig, pluginKind pipelin
 	_, config := info.Factory()
 	err = json.Unmarshal(configJson, config)
 	if err != nil {
-		return nil, fmt.Errorf("can't unmarshal config for %s", pluginKind)
+		return nil, fmt.Errorf("can't unmarshal config for %s: %s", pluginKind, err.Error())
 	}
 
 	err = Parse(config, values)

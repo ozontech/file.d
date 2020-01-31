@@ -106,6 +106,7 @@ func NewPipeline(actions []*pipeline.ActionPluginStaticInfo, pipelineOpts ...str
 		AntispamThreshold:   0,
 		AvgLogSize:          2048,
 		StreamField:         "stream",
+		Decoder:             "json",
 	}
 
 	http.DefaultServeMux = &http.ServeMux{}
