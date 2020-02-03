@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/vitkovskii/insane-json"
+	"gitlab.ozon.ru/sre/file-d/config"
 	"gitlab.ozon.ru/sre/file-d/fd"
 	"gitlab.ozon.ru/sre/file-d/logger"
 	"gitlab.ozon.ru/sre/file-d/pipeline"
@@ -47,13 +48,13 @@ type Config struct {
 	//> @3 @4 @5 @6
 	//>
 	//> Plugin reconnects to endpoint periodically using this interval. Useful if endpoint is a load balancer.
-	ReconnectInterval  fd.Duration `json:"reconnect_interval" default:"1m" parse:"duration"` //*
+	ReconnectInterval  cfg.Duration `json:"reconnect_interval" default:"1m" parse:"duration"` //*
 	ReconnectInterval_ time.Duration
 
 	//> @3 @4 @5 @6
 	//>
 	//> How much time to wait for connection.
-	ConnectionTimeout  fd.Duration `json:"connection_timeout" default:"5s"` //*
+	ConnectionTimeout  cfg.Duration `json:"connection_timeout" default:"5s"` //*
 	ConnectionTimeout_ time.Duration
 
 	//> @3 @4 @5 @6
@@ -103,19 +104,19 @@ type Config struct {
 	//> @3 @4 @5 @6
 	//>
 	//> How much workers will be instantiated to send batches.
-	WorkersCount  fd.Expression `json:"workers_count" default:"gomaxprocs*4" parse:"expression"` //*
+	WorkersCount  cfg.Expression `json:"workers_count" default:"gomaxprocs*4" parse:"expression"` //*
 	WorkersCount_ int
 
 	//> @3 @4 @5 @6
 	//>
 	//> Maximum quantity of events to pack into one batch.
-	BatchSize  fd.Expression `json:"batch_size" default:"capacity/4" parse:"expression"` //*
+	BatchSize  cfg.Expression `json:"batch_size" default:"capacity/4" parse:"expression"` //*
 	BatchSize_ int
 
 	//> @3 @4 @5 @6
 	//>
 	//> After this timeout batch will be sent even if batch isn't completed.
-	BatchFlushTimeout  fd.Duration `json:"batch_flush_timeout" default:"200ms"` //*
+	BatchFlushTimeout  cfg.Duration `json:"batch_flush_timeout" default:"200ms"` //*
 	BatchFlushTimeout_ time.Duration
 
 	// fields converted to extra fields GELF format

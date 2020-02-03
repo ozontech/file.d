@@ -4,6 +4,7 @@ import (
 	"sync"
 	"time"
 
+	"gitlab.ozon.ru/sre/file-d/config"
 	"gitlab.ozon.ru/sre/file-d/fd"
 	"gitlab.ozon.ru/sre/file-d/logger"
 	"gitlab.ozon.ru/sre/file-d/pipeline"
@@ -51,7 +52,7 @@ type Config struct {
 	//> @3 @4 @5 @6
 	//>
 	//> To be filled
-	Interval  fd.Duration `json:"interval" parse:"duration"` //*
+	Interval  cfg.Duration `json:"interval" parse:"duration"` //*
 	Interval_ time.Duration
 
 	//> @3 @4 @5 @6

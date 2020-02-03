@@ -7,7 +7,8 @@ import (
 )
 
 /*{ introduction
-Plugin ...
+Plugin parses HTTP input using Elasticsearch /_bulk API format: https://www.elastic.co/guide/en/elasticsearch/reference/current/docs-bulk.html
+It converts sources defining by create/index actions to the events. Update/delete actions are ignored.
 }*/
 type Plugin struct {
 	config      *Config
@@ -29,7 +30,7 @@ func factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 	return &Plugin{}, &Config{}
 }
 
-func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginParams) {
+func (p *Plugin) Start(_ pipeline.AnyConfig, _ *pipeline.ActionPluginParams) {
 
 }
 

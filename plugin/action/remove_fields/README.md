@@ -1,12 +1,12 @@
 # Remove fields action plugin
-Plugin ...
+Plugin removes list of the fields of the event and keeps others.
 
 ## Config params
 ### fields
 
 `[]string`   
 
-To be filled
+List of the fields to remove.
 
 
 ##

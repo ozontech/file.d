@@ -12,6 +12,7 @@ pipelines:
         level: /info|debug/
     ...
 ```
+
 } */
 type Plugin struct {
 }

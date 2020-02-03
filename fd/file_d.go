@@ -11,12 +11,13 @@ import (
 	"github.com/bitly/go-simplejson"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"gitlab.ozon.ru/sre/file-d/cfg"
 	"gitlab.ozon.ru/sre/file-d/logger"
 	"gitlab.ozon.ru/sre/file-d/pipeline"
 )
 
 type FileD struct {
-	config    *Config
+	config    *cfg.Config
 	httpAddr  string
 	registry  *prometheus.Registry
 	plugins   *PluginRegistry
@@ -24,7 +25,7 @@ type FileD struct {
 	server    *http.Server
 }
 
-func New(config *Config, httpAddr string) *FileD {
+func New(config *cfg.Config, httpAddr string) *FileD {
 	return &FileD{
 		config:    config,
 		httpAddr:  httpAddr,
@@ -33,7 +34,7 @@ func New(config *Config, httpAddr string) *FileD {
 	}
 }
 
-func (f *FileD) SetConfig(config *Config) {
+func (f *FileD) SetConfig(config *cfg.Config) {
 	f.config = config
 }
 
@@ -64,7 +65,7 @@ func (f *FileD) startPipelines() {
 	}
 }
 
-func (f *FileD) addPipeline(name string, config *PipelineConfig) {
+func (f *FileD) addPipeline(name string, config *cfg.PipelineConfig) {
 	mux := http.DefaultServeMux
 	settings := extractPipelineParams(config.Raw.Get("settings"))
 
@@ -89,7 +90,7 @@ func (f *FileD) addPipeline(name string, config *PipelineConfig) {
 	f.Pipelines = append(f.Pipelines, p)
 }
 
-func (f *FileD) setupInput(p *pipeline.Pipeline, pipelineConfig *PipelineConfig, values map[string]int) error {
+func (f *FileD) setupInput(p *pipeline.Pipeline, pipelineConfig *cfg.PipelineConfig, values map[string]int) error {
 	info, err := f.getStaticInfo(pipelineConfig, pipeline.PluginKindInput, values)
 	if err != nil {
 		return err
@@ -103,7 +104,7 @@ func (f *FileD) setupInput(p *pipeline.Pipeline, pipelineConfig *PipelineConfig,
 	return nil
 }
 
-func (f *FileD) setupActions(p *pipeline.Pipeline, pipelineConfig *PipelineConfig, values map[string]int) {
+func (f *FileD) setupActions(p *pipeline.Pipeline, pipelineConfig *cfg.PipelineConfig, values map[string]int) {
 	actions := pipelineConfig.Raw.Get("actions")
 	for index := range actions.MustArray() {
 		actionJSON := actions.GetIndex(index)
@@ -140,7 +141,7 @@ func (f *FileD) setupAction(p *pipeline.Pipeline, index int, t string, actionJSO
 		logger.Fatalf("can't unmarshal config for %s action in pipeline %q: %s", info.Type, p.Name, err.Error())
 	}
 
-	err = Parse(config, values)
+	err = cfg.Parse(config, values)
 	if err != nil {
 		logger.Fatalf("wrong config for %q action in pipeline %q: %s", info.Type, p.Name, err.Error())
 	}
@@ -157,7 +158,7 @@ func (f *FileD) setupAction(p *pipeline.Pipeline, index int, t string, actionJSO
 	})
 }
 
-func (f *FileD) setupOutput(p *pipeline.Pipeline, pipelineConfig *PipelineConfig, values map[string]int) error {
+func (f *FileD) setupOutput(p *pipeline.Pipeline, pipelineConfig *cfg.PipelineConfig, values map[string]int) error {
 	info, err := f.getStaticInfo(pipelineConfig, pipeline.PluginKindOutput, values)
 	if err != nil {
 		return err
@@ -179,7 +180,7 @@ func (f *FileD) instantiatePlugin(info *pipeline.PluginStaticInfo) *pipeline.Plu
 	}
 }
 
-func (f *FileD) getStaticInfo(pipelineConfig *PipelineConfig, pluginKind pipeline.PluginKind, values map[string]int) (*pipeline.PluginStaticInfo, error) {
+func (f *FileD) getStaticInfo(pipelineConfig *cfg.PipelineConfig, pluginKind pipeline.PluginKind, values map[string]int) (*pipeline.PluginStaticInfo, error) {
 	configJSON := pipelineConfig.Raw.Get(string(pluginKind))
 	if configJSON.MustMap() == nil {
 		return nil, fmt.Errorf("no %s plugin provided", pluginKind)
@@ -202,7 +203,7 @@ func (f *FileD) getStaticInfo(pipelineConfig *PipelineConfig, pluginKind pipelin
 		return nil, fmt.Errorf("can't unmarshal config for %s: %s", pluginKind, err.Error())
 	}
 
-	err = Parse(config, values)
+	err = cfg.Parse(config, values)
 	if err != nil {
 		logger.Fatalf("wrong config for %q plugin %q: %s", pluginKind, t, err.Error())
 	}

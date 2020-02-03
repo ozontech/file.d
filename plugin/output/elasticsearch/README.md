@@ -35,25 +35,25 @@ Time format pattern to use as value for the `@time` placeholder.
 
 ### connection_timeout
 
-`fd.Duration` `default=5s`  
+`cfg.Duration` `default=5s`  
 
 How much time to wait for connection.
 
 ### workers_count
 
-`fd.Expression` `default=gomaxprocs*4`  
+`cfg.Expression` `default=gomaxprocs*4`  
 
 How much workers will be instantiated to send batches.
 
 ### batch_size
 
-`fd.Expression` `default=capacity/4`  
+`cfg.Expression` `default=capacity/4`  
 
 Maximum quantity of events to pack into one batch.
 
 ### batch_flush_timeout
 
-`fd.Duration` `default=200ms`  
+`cfg.Duration` `default=200ms`  
 
 After this timeout batch will be sent even if batch isn't full.
 

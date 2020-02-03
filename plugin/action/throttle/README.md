@@ -22,7 +22,7 @@ To be filled
 
 ### interval
 
-`fd.Duration`   
+`cfg.Duration`   
 
 To be filled
 

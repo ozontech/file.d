@@ -1,15 +1,34 @@
 package rename
 
 import (
-	"strings"
-
+	"gitlab.ozon.ru/sre/file-d/cfg"
 	"gitlab.ozon.ru/sre/file-d/fd"
-	"gitlab.ozon.ru/sre/file-d/logger"
 	"gitlab.ozon.ru/sre/file-d/pipeline"
 )
 
 /*{ introduction
-Plugin ...
+Plugin renames fields of the event. There can be provided unlimited config parameters. Each parameter handled as `cfg.FieldSelector`:`string`.
+When `override` is set to `false` no renaming will be done in the case of field name collision.
+
+Example:
+pipelines:
+  example_pipeline:
+    ...
+    actions:
+    - type: rename
+      override: false
+      my_object.field.subfield: new_sub_field
+    ...
+
+Result event could looks like:
+```
+{
+  "my_object": {
+    "field": {
+      "new_sub_field":"value"
+    }
+  },
+```
 }*/
 type Plugin struct {
 	paths          [][]string
@@ -17,9 +36,6 @@ type Plugin struct {
 	preserveFields bool
 }
 
-/*{ config
-Plugin ...
-}*/
 type Config map[string]string
 
 func init() {
@@ -33,16 +49,15 @@ func factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 	return &Plugin{}, &Config{}
 }
 
-func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginParams) {
-	if config == nil {
-		logger.Panicf("config is nil for the rename plugin")
-	}
+func (p *Plugin) Start(config pipeline.AnyConfig, _ *pipeline.ActionPluginParams) {
+	c := *config.(*Config)
+	p.preserveFields = c["override"] == "false"
 
-	cfg := *config.(*Config)
-	p.preserveFields = cfg["@mode"] == "preserve"
+	c = cfg.UnescapeMap(c)
 
-	for path, name := range cfg {
-		p.paths = append(p.paths, strings.Split(path, "."))
+	for path, name := range c {
+		selector := cfg.ParseFieldSelector(path)
+		p.paths = append(p.paths, selector)
 		p.names = append(p.names, name)
 	}
 }

@@ -27,13 +27,17 @@ pipelines:
 ```
 
 ## Config params
-### offsets_file
+### watching_dir
 
 `string`  `required` 
+
 Source directory to watch for files to process. All subdirectories also will be watched. E.g. if files have
 `/var/my-logs/$YEAR/$MONTH/$DAY/$HOST/$FACILITY-$PROGRAM.log` structure, `watching_dir` should be `/var/my-logs`.
 Also `filename_pattern`/`dir_pattern` is useful to filter needless files/subdirectories. In the case of using two or more
 absolutely different directories it's recommended to setup separate pipelines.
+
+### offsets_file
+
 `string`  `required` 
 
 File name to store offsets of processing files. Offsets are loaded only on initialization.
@@ -92,22 +96,19 @@ Offset operation which will be preformed when adding file as a job:
 
 ### workers_count
 
-`fd.Expression` `default=gomaxprocs*4`  
+`cfg.Expression` `default=gomaxprocs*4`  
 
 How much workers will be instantiated. Each worker:
 * Read files (I/O bound)
 * Decode events (CPU bound)
 > It's recommended to set it to 4x-8x of CPU cores.
 
-### workers_count
-
-
 ### report_interval
 
- `fd.Duration` `default=10s`   <br> <br> How often to report statistical information to stdout
+ `cfg.Duration` `default=10s`   <br> <br> How often to report statistical information to stdout
 ### maintenance_interval
 
-`fd.Duration` `default=10s`  
+`cfg.Duration` `default=10s`  
 
 How often to perform maintenance.
 For now maintenance consists of two stages:

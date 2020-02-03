@@ -16,7 +16,7 @@ import (
 	"github.com/alecthomas/units"
 	"github.com/satori/go.uuid"
 	"github.com/stretchr/testify/assert"
-	"gitlab.ozon.ru/sre/file-d/fd"
+	config2 "gitlab.ozon.ru/sre/file-d/config"
 	"gitlab.ozon.ru/sre/file-d/logger"
 	"gitlab.ozon.ru/sre/file-d/pipeline"
 	"gitlab.ozon.ru/sre/file-d/test"
@@ -78,7 +78,7 @@ func pluginConfig(opts ...string) *Config {
 		OffsetsOp:       op,
 	}
 
-	_ = fd.Parse(config, nil)
+	_ = config2.Parse(config, nil)
 
 	return config
 }
@@ -578,7 +578,7 @@ func TestReadBufferOverflow(t *testing.T) {
 	linesPerIterations := 2
 
 	config := &Config{}
-	_ = fd.Parse(config, nil)
+	_ = config2.Parse(config, nil)
 	firstLine := `"`
 	for i := 0; i < config.ReadBufferSize+overhead; i++ {
 		firstLine = firstLine + "a"
@@ -734,7 +734,7 @@ func TestReadManyFilesParallelRace(t *testing.T) {
 // TestReadManyCharsParallelRace tests if plugin doesn't have race conditions in the case of parallel processing of chars
 func TestReadManyCharsParallelRace(t *testing.T) {
 	config := &Config{}
-	_ = fd.Parse(config, nil)
+	_ = config2.Parse(config, nil)
 
 	overhead := 100
 	s := ""

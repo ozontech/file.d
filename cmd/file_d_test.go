@@ -12,6 +12,7 @@ import (
 	"time"
 
 	uuid "github.com/satori/go.uuid"
+	config2 "gitlab.ozon.ru/sre/file-d/config"
 	"gitlab.ozon.ru/sre/file-d/fd"
 	_ "gitlab.ozon.ru/sre/file-d/plugin/action/discard"
 	_ "gitlab.ozon.ru/sre/file-d/plugin/action/json_decode"
@@ -80,7 +81,7 @@ func TestEndToEnd(t *testing.T) {
 	filesDir, _ := ioutil.TempDir("", "file-d")
 	offsetsDir, _ := ioutil.TempDir("", "file-d")
 
-	config := fd.NewConfigFromFile(configFilename)
+	config := config2.NewConfigFromFile(configFilename)
 	input := config.Pipelines["test"].Raw.Get("input")
 	input.Set("watching_dir", filesDir)
 	input.Set("offsets_file", filepath.Join(offsetsDir, "offsets.yaml"))

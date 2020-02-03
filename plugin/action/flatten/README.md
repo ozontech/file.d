@@ -1,7 +1,7 @@
 # Flatten action plugin
-Plugin extracts object keys and adds them into root with some prefix.
+Plugin extracts object keys and adds them into the root with some prefix. If provided field isn't object, event will be skipped.
 
-**Example:**
+Example:
 ```
 pipelines:
   example_pipeline:
@@ -18,15 +18,15 @@ Will transform `{"animal":{"type":"cat","paws":4}}` into `{"pet_type":"b","pet_p
 ## Config params
 ### field
 
-`string`   
+`cfg.FieldSelector`  `required` 
 
-To be filled
+Defines field that should be flattened.
 
 ### prefix
 
 `string`   
 
-To be filled
+Which prefix to use for extracted fields.
 
 
 ##

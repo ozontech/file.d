@@ -25,13 +25,13 @@ Address of gelf endpoint. Format: `HOST:PORT`. E.g. `localhost:12201`.
 
 ### reconnect_interval
 
-`fd.Duration` `default=1m`  
+`cfg.Duration` `default=1m`  
 
 Plugin reconnects to endpoint periodically using this interval. Useful if endpoint is a load balancer.
 
 ### connection_timeout
 
-`fd.Duration` `default=5s`  
+`cfg.Duration` `default=5s`  
 
 How much time to wait for connection.
 
@@ -88,19 +88,19 @@ Otherwise `6` will be used.
 
 ### workers_count
 
-`fd.Expression` `default=gomaxprocs*4`  
+`cfg.Expression` `default=gomaxprocs*4`  
 
 How much workers will be instantiated to send batches.
 
 ### batch_size
 
-`fd.Expression` `default=capacity/4`  
+`cfg.Expression` `default=capacity/4`  
 
 Maximum quantity of events to pack into one batch.
 
 ### batch_flush_timeout
 
-`fd.Duration` `default=200ms`  
+`cfg.Duration` `default=200ms`  
 
 After this timeout batch will be sent even if batch isn't completed.
 

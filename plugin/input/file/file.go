@@ -3,6 +3,7 @@ package file
 import (
 	"time"
 
+	"gitlab.ozon.ru/sre/file-d/config"
 	"gitlab.ozon.ru/sre/file-d/fd"
 	"gitlab.ozon.ru/sre/file-d/logger"
 	"gitlab.ozon.ru/sre/file-d/pipeline"
@@ -67,11 +68,12 @@ type Config struct {
 	//^ _ _ code /`default=%s`/ code /`options=%s`/
 
 	//> @3 @4 @5 @6
+	//>
 	//> Source directory to watch for files to process. All subdirectories also will be watched. E.g. if files have
 	//> `/var/my-logs/$YEAR/$MONTH/$DAY/$HOST/$FACILITY-$PROGRAM.log` structure, `watching_dir` should be `/var/my-logs`.
 	//> Also `filename_pattern`/`dir_pattern` is useful to filter needless files/subdirectories. In the case of using two or more
 	//> absolutely different directories it's recommended to setup separate pipelines.
-	WatchingDir string `json:"watching_dir" required:"true"`
+	WatchingDir string `json:"watching_dir" required:"true"` //*
 
 	//> @3 @4 @5 @6
 	//>
@@ -104,7 +106,7 @@ type Config struct {
 	PersistenceMode  string `json:"persistence_mode" default:"async" options:"async|sync"` //*
 	PersistenceMode_ persistenceMode
 
-	AsyncInterval  fd.Duration `json:"async_interval" default:"1s" parse:"duration"` // *! @3 @4 @5 @6 <br> <br> Offsets save interval. Only used if `persistence_mode` is `async`.
+	AsyncInterval  cfg.Duration `json:"async_interval" default:"1s" parse:"duration"` // *! @3 @4 @5 @6 <br> <br> Offsets save interval. Only used if `persistence_mode` is `async`.
 	AsyncInterval_ time.Duration
 
 	//> @3 @4 @5 @6
@@ -133,17 +135,17 @@ type Config struct {
 	//>  * Read files (I/O bound)
 	//>  * Decode events (CPU bound)
 	//>  > It's recommended to set it to 4x-8x of CPU cores.
-	WorkersCount  fd.Expression `json:"workers_count" default:"gomaxprocs*4"` //*
-	WorkersCount_ int           `json:"workers_count" default:"16"`           //*
+	WorkersCount  cfg.Expression `json:"workers_count" default:"gomaxprocs*4"` //*
+	WorkersCount_ int            `json:"workers_count" default:"16"`
 
-	ReportInterval  fd.Duration `json:"report_interval" default:"10s" parse:"duration"` //* @3 @4 @5 @6 <br> <br> How often to report statistical information to stdout
+	ReportInterval  cfg.Duration `json:"report_interval" default:"10s" parse:"duration"` //* @3 @4 @5 @6 <br> <br> How often to report statistical information to stdout
 	ReportInterval_ time.Duration
 
 	//> @3 @4 @5 @6
 	//>
 	//> How often to perform maintenance.
 	//> @maintenance
-	MaintenanceInterval  fd.Duration `json:"maintenance_interval" default:"10s" parse:"duration"` //*
+	MaintenanceInterval  cfg.Duration `json:"maintenance_interval" default:"10s" parse:"duration"` //*
 	MaintenanceInterval_ time.Duration
 }
 

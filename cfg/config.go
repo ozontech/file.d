@@ -1,4 +1,4 @@
-package fd
+package cfg
 
 import (
 	"fmt"
@@ -21,6 +21,8 @@ type Config struct {
 type Duration string
 type ListMap string
 type Expression string
+type FieldSelector string
+type Regexp string
 
 type PipelineConfig struct {
 	Raw *simplejson.Json
@@ -124,27 +126,25 @@ func Parse(ptr interface{}, values map[string]int) error {
 
 		tag = tField.Tag.Get("parse")
 		if tag != "" {
-			switch tag {
-			case "duration":
-				if vField.Kind() != reflect.String {
-					return fmt.Errorf("duration deals only with strings, but field %s has %s type", tField.Name, tField.Type.Name())
-				}
+			if vField.Kind() != reflect.String {
+				return fmt.Errorf("field %s should be a string, but it's %s", tField.Name, tField.Type.Name())
+			}
 
+			finalField := v.FieldByName(t.Field(i).Name + "_")
+
+			switch tag {
+			case "selector":
+				fields := ParseFieldSelector(vField.String())
+				finalField.Set(reflect.ValueOf(fields))
+
+			case "duration":
 				result, err := time.ParseDuration(vField.String())
 				if err != nil {
 					return fmt.Errorf("field %s has wrong duration format: %s", t.Field(i).Name, err.Error())
 				}
-				field := v.FieldByName(t.Field(i).Name + "_")
-				field.SetInt(int64(result))
 
-				if field.String() == "" {
-					return fmt.Errorf("field %s is required to be set to string", t.Field(i).Name)
-				}
+				finalField.SetInt(int64(result))
 			case "list-map":
-				if vField.Kind() != reflect.String {
-					return fmt.Errorf("list-map deals only with strings, but field %s has %s type", tField.Name, tField.Type.Name())
-				}
-
 				listMap := make(map[string]bool)
 
 				parts := strings.Split(vField.String(), ",")
@@ -152,13 +152,9 @@ func Parse(ptr interface{}, values map[string]int) error {
 					cleanPart := strings.TrimSpace(part)
 					listMap[cleanPart] = true
 				}
-				field := v.FieldByName(t.Field(i).Name + "_")
-				field.Set(reflect.ValueOf(listMap))
-			case "list":
-				if vField.Kind() != reflect.String {
-					return fmt.Errorf("list deals only with strings, but field %s has %s type", tField.Name, tField.Type.Name())
-				}
 
+				finalField.Set(reflect.ValueOf(listMap))
+			case "list":
 				list := make([]string, 0)
 
 				parts := strings.Split(vField.String(), ",")
@@ -166,21 +162,16 @@ func Parse(ptr interface{}, values map[string]int) error {
 					cleanPart := strings.TrimSpace(part)
 					list = append(list, cleanPart)
 				}
-				field := v.FieldByName(t.Field(i).Name + "_")
-				field.Set(reflect.ValueOf(list))
-			case "expression":
-				if vField.Kind() != reflect.String {
-					return fmt.Errorf("expression deals only with strings, but field %s has %s type", tField.Name, tField.Type.Name())
-				}
-				field := v.FieldByName(t.Field(i).Name + "_")
 
+				finalField.Set(reflect.ValueOf(list))
+			case "expression":
 				pos := strings.IndexAny(vField.String(), "*/+-")
 				if pos == -1 {
 					i, err := strconv.Atoi(vField.String())
 					if err != nil {
 						return fmt.Errorf("can't convert %s to int", vField.String())
 					}
-					field.SetInt(int64(i))
+					finalField.SetInt(int64(i))
 					return nil
 				}
 
@@ -220,7 +211,7 @@ func Parse(ptr interface{}, values map[string]int) error {
 					return fmt.Errorf("unknown operation %q", op)
 				}
 
-				field.SetInt(int64(result))
+				finalField.SetInt(int64(result))
 			default:
 				return fmt.Errorf("unsupported parse type %q for field %s", tag, t.Field(i).Name)
 			}
@@ -241,4 +232,51 @@ func Parse(ptr interface{}, values map[string]int) error {
 	}
 
 	return nil
+}
+
+func UnescapeMap(fields map[string]string) map[string]string {
+	result := make(map[string]string)
+
+	for key, val := range fields {
+		if len(key) == 0 {
+			continue
+		}
+
+		if key[0] == '_' {
+			key = key[1:]
+		}
+
+		result[key] = val
+	}
+
+	return result
+}
+
+func ParseFieldSelector(selector string) []string {
+	result := make([]string, 0)
+	tail := ""
+	for {
+		pos := strings.IndexByte(selector, '.')
+		if pos == -1 {
+			break
+		}
+
+		if len(selector) > pos+1 {
+			if selector[pos+1] == '.' {
+				tail = selector[:pos+1]
+				selector = selector[pos+2:]
+				continue
+			}
+		}
+
+		result = append(result, tail+selector[:pos])
+		selector = selector[pos+1:]
+		tail = ""
+	}
+
+	if len(selector)+len(tail) != 0 {
+		result = append(result, tail+selector)
+	}
+
+	return result
 }

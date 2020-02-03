@@ -3,6 +3,7 @@ package join
 import (
 	"regexp"
 
+	"gitlab.ozon.ru/sre/file-d/cfg"
 	"gitlab.ozon.ru/sre/file-d/fd"
 	"gitlab.ozon.ru/sre/file-d/logger"
 	"gitlab.ozon.ru/sre/file-d/pipeline"
@@ -10,48 +11,53 @@ import (
 
 /*{ introduction
 Plugin also known as "multiline" makes one big event from event sequence.
-Useful for assembly back "exceptions" or "panics" together then they written line by line.
+Useful for assembling back together "exceptions" or "panics" if they was written line by line.
 
-### Understanding `first_re`/`next_re`
+> ⚠ Parsing all event flow could be very CPU intensive because plugin uses regular expressions.
+> Consider `match_fields` parameter to apply it only for particular events. Check out example for details.
+
+### Understanding start/continue regexps
 
 No joining:
 ```
 event 1
-event 2 – matches first_re
+event 2 – matches start regexp
 event 3
-event 4 – matches next_re
+event 4 – matches continue regexp
 event 5
 ```
 
 Events `event 2` and `event 3` will be joined:
 ```
 event 1
-event 2 – matches first_re
-event 3 – matches next_re
+event 2 – matches start regexp
+event 3 – matches continue regexp
 event 4
 ```
 
 Events from `event 2` to `event N` will be joined:
 ```
 event 1
-event 2 matches first_re
-event 3 matches next_re
-event ... matches next_re
-event N matches next_re
+event 2 matches start regexp
+event 3 matches continue regexp
+event ... matches continue regexp
+event N matches continue regexp
 event N+1
 ```
 <br/>
 
-Example joining Golang panics:
+Example of joining Golang panics:
 ```
 pipelines:
   example_pipeline:
     ...
     actions:
     - type: join
-	  field: log
-	  first_re: '/^(panic:)|(http: panic serving)/'
-	  next_re: '/(^\s*$)|(goroutine [0-9]+ \[)|(\([0-9]+x[0-9,a-f]+)|(\.go:[0-9]+ \+[0-9]x)|(\/.*\.go:[0-9]+)|(\(...\))|(main\.main\(\))|(created by .*\/.*\.)|(^\[signal)|(panic.+[0-9]x[0-9,a-f]+)|(panic:)/'
+      field: log
+      start: '/^(panic:)|(http: panic serving)/'
+      continue: '/(^\s*$)|(goroutine [0-9]+ \[)|(\([0-9]+x[0-9,a-f]+)|(\.go:[0-9]+ \+[0-9]x)|(\/.*\.go:[0-9]+)|(\(...\))|(main\.main\(\))|(created by .*\/.*\.)|(^\[signal)|(panic.+[0-9]x[0-9,a-f]+)|(panic:)/'
+      match_fields:
+        stream: stderr // apply only for events which was written to stderr to save CPU time
     ...
 ```
 }*/
@@ -60,11 +66,8 @@ type Plugin struct {
 	controller pipeline.ActionPluginController
 	config     *Config
 
-	firstRe *regexp.Regexp
-	nextRe  *regexp.Regexp
-
 	isJoining bool
-	first     *pipeline.Event
+	initial   *pipeline.Event
 	buff      []byte
 }
 
@@ -73,18 +76,21 @@ type Plugin struct {
 type Config struct {
 	//> @3 @4 @5 @6
 	//>
-	//> Field of events which will be analyzed for joining with each other.
-	Field string `json:"field"` //*
+	//> Field of event which will be analyzed for joining with each other.
+	Field  cfg.FieldSelector `json:"field" required:"true" parse:"selector"` //*
+	Field_ []string
 
 	//> @3 @4 @5 @6
 	//>
 	//> Regexp which will start join sequence.
-	First string `json:"first_re"` //*
+	Start  cfg.Regexp `json:"start" required:"true" parse:"regexp"` //*
+	Start_ regexp.Regexp
 
 	//> @3 @4 @5 @6
 	//>
 	//> Regexp which will continue join sequence.
-	Next string `json:"next_re"` //*
+	Continue  cfg.Regexp `json:"continue" required:"true" parse:"regexp"` //*
+	Continue_ regexp.Regexp
 }
 
 func init() {
@@ -103,37 +109,14 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 	p.config = config.(*Config)
 	p.isJoining = false
 	p.buff = make([]byte, 0, params.PipelineSettings.AvgLogSize)
-
-	if p.config.Field == "" {
-		logger.Fatalf("no field provided for join plugin")
-	}
-
-	if p.config.First == "" {
-		logger.Fatalf("no %q parameter provided for join plugin", "first_re")
-	}
-	if p.config.Next == "" {
-		logger.Fatalf("no %q parameter provided for join plugin", "next_re")
-	}
-
-	r, err := fd.CompileRegex(p.config.First)
-	if err != nil {
-		logger.Fatalf("can't compile first line regexp: %s", err.Error())
-	}
-	p.firstRe = r
-
-	r, err = fd.CompileRegex(p.config.Next)
-	if err != nil {
-		logger.Fatalf("can't compile next line regexp: %s", err.Error())
-	}
-	p.nextRe = r
 }
 
 func (p *Plugin) Stop() {
 }
 
 func (p *Plugin) flush() {
-	event := p.first
-	p.first = nil
+	event := p.initial
+	p.initial = nil
 	p.isJoining = false
 
 	if event == nil {
@@ -141,7 +124,7 @@ func (p *Plugin) flush() {
 		return
 	}
 
-	event.Root.Dig(p.config.Field).MutateToString(string(p.buff))
+	event.Root.Dig(p.config.Field_...).MutateToString(string(p.buff))
 	p.controller.Propagate(event)
 }
 
@@ -154,7 +137,7 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 		return pipeline.ActionDiscard
 	}
 
-	node := event.Root.Dig(p.config.Field)
+	node := event.Root.Dig(p.config.Field_...)
 	value := node.AsString()
 
 	firstOK := false
@@ -167,7 +150,7 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 			p.flush()
 		}
 
-		p.first = event
+		p.initial = event
 		p.isJoining = true
 		p.buff = append(p.buff[:0], value...)
 		return pipeline.ActionHold

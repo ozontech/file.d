@@ -1,12 +1,12 @@
 # Keep fields action plugin
-Plugin ...
+Plugin keeps list of the fields of the event and removes others.
 
 ## Config params
 ### fields
 
 `[]string`   
 
-To be filled
+List of the fields to keep.
 
 
 ##

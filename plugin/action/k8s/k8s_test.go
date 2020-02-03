@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	"gitlab.ozon.ru/sre/file-d/fd"
+	config2 "gitlab.ozon.ru/sre/file-d/config"
 	"gitlab.ozon.ru/sre/file-d/logger"
 	"gitlab.ozon.ru/sre/file-d/pipeline"
 	"gitlab.ozon.ru/sre/file-d/test"
@@ -54,7 +54,7 @@ func getPodInfo(item *metaItem, isWhite bool) *corev1.Pod {
 
 func config() *Config {
 	config := &Config{LabelsWhitelist: "white_label"}
-	err := fd.Parse(config, nil)
+	err := config2.Parse(config, nil)
 	if err != nil {
 		logger.Panic(err.Error())
 	}

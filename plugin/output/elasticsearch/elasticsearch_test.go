@@ -6,7 +6,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	insaneJSON "github.com/vitkovskii/insane-json"
-	"gitlab.ozon.ru/sre/file-d/fd"
+	config2 "gitlab.ozon.ru/sre/file-d/config"
 	"gitlab.ozon.ru/sre/file-d/logger"
 	"gitlab.ozon.ru/sre/file-d/pipeline"
 	"gitlab.ozon.ru/sre/file-d/test"
@@ -21,7 +21,7 @@ func TestAppendEvent(t *testing.T) {
 		BatchSize:   "1",
 	}
 
-	err := fd.Parse(config, map[string]int{"gomaxprocs": 1})
+	err := config2.Parse(config, map[string]int{"gomaxprocs": 1})
 	if err != nil {
 		logger.Panic(err.Error())
 	}
@@ -44,7 +44,7 @@ func TestConfig(t *testing.T) {
 		BatchSize: "1",
 	}
 
-	err := fd.Parse(config, map[string]int{"gomaxprocs": 1})
+	err := config2.Parse(config, map[string]int{"gomaxprocs": 1})
 	if err != nil {
 		logger.Panic(err.Error())
 	}

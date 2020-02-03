@@ -1,4 +1,4 @@
-package fd
+package cfg
 
 import (
 	"testing"
@@ -106,4 +106,30 @@ func TestParseExpressionConst(t *testing.T) {
 
 	assert.Nil(t, err, "shouldn't be an error")
 	assert.Equal(t, 10, s.T_, "wrong value")
+}
+
+func TestParseFieldSelectorSimple(t *testing.T) {
+	path := ParseFieldSelector("a.b.c")
+
+	assert.Equal(t, 3, len(path), "wrong length")
+	assert.Equal(t, "a", path[0], "wrong field")
+	assert.Equal(t, "b", path[1], "wrong field")
+	assert.Equal(t, "c", path[2], "wrong field")
+}
+
+func TestParseFieldSelectorEscape(t *testing.T) {
+	path := ParseFieldSelector("a.b..c")
+
+	assert.Equal(t, 2, len(path), "wrong length")
+	assert.Equal(t, "a", path[0], "wrong field")
+	assert.Equal(t, "b.c", path[1], "wrong field")
+}
+
+func TestParseFieldSelectorEnding(t *testing.T) {
+	path := ParseFieldSelector("a.b.c..")
+
+	assert.Equal(t, 3, len(path), "wrong length")
+	assert.Equal(t, "a", path[0], "wrong field")
+	assert.Equal(t, "b", path[1], "wrong field")
+	assert.Equal(t, "c.", path[2], "wrong field")
 }

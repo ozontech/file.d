@@ -28,19 +28,19 @@ Which event field to use as topic name, if `should_use_topic_field` is set.
 
 ### workers_count
 
-`fd.Expression` `default=gomaxprocs*4`  
+`cfg.Expression` `default=gomaxprocs*4`  
 
 How much workers will be instantiated to send batches.
 
 ### batch_size
 
-`fd.Expression` `default=capacity/4`  
+`cfg.Expression` `default=capacity/4`  
 
 Maximum quantity of events to pack into one batch.
 
 ### batch_flush_timeout
 
-`fd.Duration`   
+`cfg.Duration`   
 
 After this timeout batch will be sent even if batch isn't full.
 

@@ -1,13 +1,15 @@
 package json_decode
 
 import (
+	"gitlab.ozon.ru/sre/file-d/cfg"
 	"gitlab.ozon.ru/sre/file-d/fd"
 	"gitlab.ozon.ru/sre/file-d/logger"
 	"gitlab.ozon.ru/sre/file-d/pipeline"
 )
 
 /*{ introduction
-Plugin ...
+Plugin decodes JSON string from event field and merges result with event root.
+If decoded JSON isn't an object, event will be skipped.
 }*/
 type Plugin struct {
 	config *Config
@@ -18,13 +20,14 @@ type Plugin struct {
 type Config struct {
 	//> @3 @4 @5 @6
 	//>
-	//> To be filled
-	Field string `json:"field"` //*
+	//> Field of event to use as JSON strings?
+	Field  cfg.FieldSelector `json:"field"` //*
+	Field_ []string
 
 	//> @3 @4 @5 @6
 	//>
-	//> To be filled
-	Prefix string `json:"prefix"` //*
+	//> Prefix to add to keys of decoded object.
+	Prefix string `json:"prefix" default:""` //*
 }
 
 func init() {
@@ -38,7 +41,7 @@ func factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 	return &Plugin{}, &Config{}
 }
 
-func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginParams) {
+func (p *Plugin) Start(config pipeline.AnyConfig, _ *pipeline.ActionPluginParams) {
 	p.config = config.(*Config)
 
 	if p.config.Field == "" {
@@ -50,7 +53,7 @@ func (p *Plugin) Stop() {
 }
 
 func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
-	jsonNode := event.Root.Dig(p.config.Field)
+	jsonNode := event.Root.Dig(p.config.Field_...)
 	if jsonNode == nil {
 		return pipeline.ActionPass
 	}

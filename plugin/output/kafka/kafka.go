@@ -4,6 +4,7 @@ import (
 	"strings"
 	"time"
 
+	"gitlab.ozon.ru/sre/file-d/config"
 	"gitlab.ozon.ru/sre/file-d/fd"
 	"gitlab.ozon.ru/sre/file-d/logger"
 	"gitlab.ozon.ru/sre/file-d/pipeline"
@@ -55,19 +56,19 @@ type Config struct {
 	//> @3 @4 @5 @6
 	//>
 	//> How much workers will be instantiated to send batches.
-	WorkersCount  fd.Expression `json:"workers_count" default:"gomaxprocs*4" parse:"expression"` //*
+	WorkersCount  cfg.Expression `json:"workers_count" default:"gomaxprocs*4" parse:"expression"` //*
 	WorkersCount_ int
 
 	//> @3 @4 @5 @6
 	//>
 	//> Maximum quantity of events to pack into one batch.
-	BatchSize  fd.Expression `json:"batch_size" default:"capacity/4" parse:"expression"` //*
+	BatchSize  cfg.Expression `json:"batch_size" default:"capacity/4" parse:"expression"` //*
 	BatchSize_ int
 
 	//> @3 @4 @5 @6
 	//>
 	//> After this timeout batch will be sent even if batch isn't full.
-	BatchFlushTimeout  fd.Duration `json:"batch_flush_timeout" parse:"duration"` //*
+	BatchFlushTimeout  cfg.Duration `json:"batch_flush_timeout" parse:"duration"` //*
 	BatchFlushTimeout_ time.Duration
 }
 
