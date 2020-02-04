@@ -47,7 +47,7 @@ func (p *Plugin) Commit(event *pipeline.Event) {
 //^ _ _ code
 
 //> Sends test event into pipeline.
-func (p *Plugin) In(sourceID pipeline.SourceID, sourceName string, offset int64, size int64, bytes []byte) { //*
+func (p *Plugin) In(sourceID pipeline.SourceID, sourceName string, offset int64, _ int64, bytes []byte) { //*
 	if p.inFn != nil {
 		p.inFn()
 	}

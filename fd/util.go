@@ -2,12 +2,12 @@ package fd
 
 import (
 	"fmt"
-	"regexp"
 	"strings"
 	"time"
 
 	"github.com/bitly/go-simplejson"
 	"github.com/pkg/errors"
+	"gitlab.ozon.ru/sre/file-d/cfg"
 	"gitlab.ozon.ru/sre/file-d/logger"
 	"gitlab.ozon.ru/sre/file-d/pipeline"
 )
@@ -89,7 +89,7 @@ func extractConditions(condJSON *simplejson.Json) (pipeline.MatchConditions, err
 			Field: strings.Trim(field, " "),
 		}
 		if value[0] == '/' {
-			r, err := CompileRegex(value)
+			r, err := cfg.CompileRegex(value)
 			if err != nil {
 				return nil, errors.Wrapf(err, "can't compile regexp %s: %s", value, err)
 			}
@@ -123,12 +123,4 @@ func makeActionJSON(actionJSON *simplejson.Json) []byte {
 		logger.Panicf("can't create action json")
 	}
 	return configJson
-}
-
-func CompileRegex(s string) (*regexp.Regexp, error) {
-	if len(s) == 0 || s[0] != '/' || s[len(s)-1] != '/' {
-		return nil, fmt.Errorf(`regexp "%s" should be surounded by "/"`, s)
-	}
-
-	return regexp.Compile(s[1 : len(s)-1])
 }

@@ -105,14 +105,14 @@ func (p *Plugin) elasticsearch(mux *http.ServeMux) {
 	mux.HandleFunc("/_template/", p.serveElasticsearchTemplate)
 }
 
-func (p *Plugin) serveElasticsearchXPack(w http.ResponseWriter, r *http.Request) {
+func (p *Plugin) serveElasticsearchXPack(w http.ResponseWriter, _ *http.Request) {
 	_, err := w.Write(xpack)
 	if err != nil {
 		logger.Errorf("can't write response: %s", err.Error())
 	}
 }
 
-func (p *Plugin) serveElasticsearchTemplate(w http.ResponseWriter, r *http.Request) {
+func (p *Plugin) serveElasticsearchTemplate(w http.ResponseWriter, _ *http.Request) {
 	_, err := w.Write(empty)
 	if err != nil {
 		logger.Errorf("can't write response: %s", err.Error())

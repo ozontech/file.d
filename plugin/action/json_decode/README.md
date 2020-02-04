@@ -5,9 +5,9 @@ If decoded JSON isn't an object, event will be skipped.
 ## Config params
 ### field
 
-`cfg.FieldSelector`   
+`cfg.FieldSelector`  `required` 
 
-Field of event to use as JSON strings?
+Field of event to decode. Should be string.
 
 ### prefix
 

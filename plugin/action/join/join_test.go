@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"gitlab.ozon.ru/sre/file-d/cfg"
+	"gitlab.ozon.ru/sre/file-d/logger"
 	"gitlab.ozon.ru/sre/file-d/pipeline"
 	"gitlab.ozon.ru/sre/file-d/test"
 	"go.uber.org/atomic"
@@ -168,6 +170,12 @@ func TestJoin(t *testing.T) {
 		Start:    `/^(panic:)|(http: panic serving)/`,
 		Continue: `/(^$)|(goroutine [0-9]+ \[)|(\([0-9]+x[0-9,a-f]+)|(\.go:[0-9]+ \+[0-9]x)|(\/.*\.go:[0-9]+)|(\(...\))|(main\.main\(\))|(created by .*\/.*\.)|(^\[signal)|(panic.+[0-9]x[0-9,a-f]+)/`,
 	}
+
+	err := cfg.Parse(config, nil)
+	if err != nil {
+		logger.Panic(err.Error())
+	}
+
 	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, config, pipeline.MatchModeAnd, nil))
 
 	wg := &sync.WaitGroup{}

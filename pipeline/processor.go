@@ -5,6 +5,7 @@ import (
 
 	"gitlab.ozon.ru/sre/file-d/logger"
 	"go.uber.org/atomic"
+	"go.uber.org/zap"
 )
 
 type ActionResult int
@@ -74,11 +75,13 @@ func NewProcessor(metricsHolder *metricsHolder, activeCounter *atomic.Int32, out
 	return processor
 }
 
-func (p *processor) start(params *PluginDefaultParams) {
+func (p *processor) start(params *PluginDefaultParams, logger *zap.SugaredLogger) {
 	for i, action := range p.actions {
-		action.Start(p.actionInfos[i].PluginStaticInfo.Config, &ActionPluginParams{
+		actionInfo := p.actionInfos[i]
+		action.Start(actionInfo.PluginStaticInfo.Config, &ActionPluginParams{
 			PluginDefaultParams: params,
 			Controller:          p,
+			Logger:              logger.Named("action").Named(actionInfo.Type),
 		})
 	}
 

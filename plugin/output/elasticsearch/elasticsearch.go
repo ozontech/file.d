@@ -10,8 +10,8 @@ import (
 	"time"
 
 	insaneJSON "github.com/vitkovskii/insane-json"
-	"gitlab.ozon.ru/sre/file-d/config"
-	"gitlab.ozon.ru/sre/file-d/logger"
+	"gitlab.ozon.ru/sre/file-d/cfg"
+	"go.uber.org/zap"
 
 	"gitlab.ozon.ru/sre/file-d/fd"
 	"gitlab.ozon.ru/sre/file-d/pipeline"
@@ -23,6 +23,7 @@ If a network error occurs batch will be infinitely tries to be delivered to rand
 }*/
 
 type Plugin struct {
+	logger     *zap.SugaredLogger
 	client     *http.Client
 	config     *Config
 	avgLogSize int
@@ -111,6 +112,7 @@ func Factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginParams) {
 	p.controller = params.Controller
+	p.logger = params.Logger
 	p.avgLogSize = params.PipelineSettings.AvgLogSize
 	p.config = config.(*Config)
 	p.mu = &sync.Mutex{}
@@ -172,19 +174,19 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 		endpoint := p.config.Endpoints_[rand.Int()%len(p.config.Endpoints_)]
 		resp, err := p.client.Post(endpoint, "application/x-ndjson", bytes.NewBuffer(data.outBuf))
 		if err != nil {
-			logger.Errorf("can't send batch to %s, will try other endpoint: %s", endpoint, err.Error())
+			p.logger.Errorf("can't send batch to %s, will try other endpoint: %s", endpoint, err.Error())
 			continue
 		}
 
 		respContent, err := ioutil.ReadAll(resp.Body)
 		if err != nil {
-			logger.Errorf("can't read batch response from %s, will try other endpoint: %s", endpoint, err.Error())
+			p.logger.Errorf("can't read batch response from %s, will try other endpoint: %s", endpoint, err.Error())
 			continue
 		}
 
 		root, err := insaneJSON.DecodeBytes(respContent)
 		if err != nil {
-			logger.Errorf("wrong response from %s, will try other endpoint: %s", endpoint, err.Error())
+			p.logger.Errorf("wrong response from %s, will try other endpoint: %s", endpoint, err.Error())
 			continue
 		}
 
@@ -192,12 +194,12 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 			for _, node := range root.Dig("items").AsArray() {
 				errNode := node.Dig("index", "error")
 				if errNode != nil {
-					logger.Warnf("indexing error: %s", errNode.Dig("reason").AsString())
+					p.logger.Warnf("indexing error: %s", errNode.Dig("reason").AsString())
 				}
 			}
 
 			if p.config.StrictMode {
-				logger.Fatalf("batch send error")
+				p.logger.Fatalf("batch send error")
 			}
 		}
 
@@ -228,7 +230,7 @@ func (p *Plugin) appendIndexName(outBuf []byte, event *pipeline.Event) []byte {
 		}
 
 		if replacements >= len(p.config.IndexValues_) {
-			logger.Fatalf("count of placeholders and values isn't match, check index_format/index_values config params")
+			p.logger.Fatalf("count of placeholders and values isn't match, check index_format/index_values config params")
 		}
 		value := p.config.IndexValues_[replacements]
 		replacements++

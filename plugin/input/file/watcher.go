@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/fsnotify/fsnotify"
-	"gitlab.ozon.ru/sre/file-d/logger"
+	"go.uber.org/zap"
 )
 
 type watcher struct {
@@ -15,33 +15,35 @@ type watcher struct {
 	dirPattern      string // dirs which match this pattern will be watched
 	notifyFn        notify // function to receive notifications
 	fsWatcher       *fsnotify.Watcher
+	logger          *zap.SugaredLogger
 }
 
 type notify func(filename string, stat os.FileInfo)
 
-func NewWatcher(path string, filenamePattern string, dirPattern string, notifyFn notify) *watcher {
+func NewWatcher(path string, filenamePattern string, dirPattern string, notifyFn notify, logger *zap.SugaredLogger) *watcher {
 	return &watcher{
 		path:            path,
 		filenamePattern: filenamePattern,
 		dirPattern:      dirPattern,
 		notifyFn:        notifyFn,
+		logger:          logger,
 	}
 }
 
 func (w *watcher) start() {
-	logger.Infof("starting watcher path=%s, pattern=%s", w.path, w.filenamePattern)
+	w.logger.Infof("starting watcher path=%s, pattern=%s", w.path, w.filenamePattern)
 
 	if _, err := filepath.Match(w.filenamePattern, "_"); err != nil {
-		logger.Fatalf("wrong file name pattern %q: %s", w.filenamePattern, err.Error())
+		w.logger.Fatalf("wrong file name pattern %q: %s", w.filenamePattern, err.Error())
 	}
 
 	if _, err := filepath.Match(w.dirPattern, "_"); err != nil {
-		logger.Fatalf("wrong dir name pattern %q: %s", w.dirPattern, err.Error())
+		w.logger.Fatalf("wrong dir name pattern %q: %s", w.dirPattern, err.Error())
 	}
 
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
-		logger.Warnf("can't create fs watcher: %s", err.Error())
+		w.logger.Warnf("can't create fs watcher: %s", err.Error())
 		return
 	}
 	w.fsWatcher = watcher
@@ -52,11 +54,11 @@ func (w *watcher) start() {
 }
 
 func (w *watcher) stop() {
-	logger.Infof("stopping watcher")
+	w.logger.Infof("stopping watcher")
 
 	err := w.fsWatcher.Close()
 	if err != nil {
-		logger.Errorf("can't close watcher: %s", err.Error())
+		w.logger.Errorf("can't close watcher: %s", err.Error())
 	}
 }
 
@@ -71,7 +73,7 @@ func (w *watcher) tryAddPath(path string) {
 		return
 	}
 
-	logger.Infof("starting path watch: %s ", path)
+	w.logger.Infof("starting path watch: %s ", path)
 
 	for _, file := range files {
 		if file.Name() == "" || file.Name() == "." || file.Name() == ".." {
@@ -92,7 +94,7 @@ func (w *watcher) notify(event *fsnotify.Event) {
 
 	filename, err := filepath.Abs(filename)
 	if err != nil {
-		logger.Fatalf("can't get abs file name: %s", err.Error())
+		w.logger.Fatalf("can't get abs file name: %s", err.Error())
 		return
 	}
 
@@ -125,7 +127,7 @@ func (w *watcher) watch() {
 			if !ok {
 				return
 			}
-			logger.Infof("watching path error(have it been deleted?): %s", err.Error())
+			w.logger.Infof("watching path error(have it been deleted?): %s", err.Error())
 		}
 	}
 }

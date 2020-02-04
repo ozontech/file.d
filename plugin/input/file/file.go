@@ -3,10 +3,10 @@ package file
 import (
 	"time"
 
-	"gitlab.ozon.ru/sre/file-d/config"
+	"gitlab.ozon.ru/sre/file-d/cfg"
 	"gitlab.ozon.ru/sre/file-d/fd"
-	"gitlab.ozon.ru/sre/file-d/logger"
 	"gitlab.ozon.ru/sre/file-d/pipeline"
+	"go.uber.org/zap"
 )
 
 /*{ introduction
@@ -40,6 +40,7 @@ pipelines:
 
 type Plugin struct {
 	config *Config
+	logger *zap.SugaredLogger
 	params *pipeline.InputPluginParams
 
 	workers     []*worker
@@ -161,14 +162,13 @@ func Factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 }
 
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginParams) {
-	logger.Info("starting file input plugin")
-
+	p.logger = params.Logger
 	p.params = params
 	p.config = config.(*Config)
 
 	p.config.OffsetsFileTmp = p.config.OffsetsFile + ".atomic"
 
-	p.jobProvider = NewJobProvider(p.config, p.params.Controller)
+	p.jobProvider = NewJobProvider(p.config, p.params.Controller, p.logger)
 	p.startWorkers()
 	p.jobProvider.start()
 }
@@ -177,10 +177,10 @@ func (p *Plugin) startWorkers() {
 	p.workers = make([]*worker, p.config.WorkersCount_)
 	for i := range p.workers {
 		p.workers[i] = &worker{}
-		p.workers[i].start(p.params.Controller, p.jobProvider, p.config.ReadBufferSize)
+		p.workers[i].start(p.params.Controller, p.jobProvider, p.config.ReadBufferSize, p.logger)
 	}
 
-	logger.Infof("file read workers created, count=%d", len(p.workers))
+	p.logger.Infof("workers created, count=%d", len(p.workers))
 }
 
 func (p *Plugin) Commit(event *pipeline.Event) {
@@ -188,11 +188,11 @@ func (p *Plugin) Commit(event *pipeline.Event) {
 }
 
 func (p *Plugin) Stop() {
-	logger.Infof("stopping %d workers", len(p.workers))
+	p.logger.Infof("stopping %d workers", len(p.workers))
 	for range p.workers {
 		p.jobProvider.jobsChan <- nil
 	}
 
-	logger.Infof("stopping job provider")
+	p.logger.Infof("stopping job provider")
 	p.jobProvider.stop()
 }

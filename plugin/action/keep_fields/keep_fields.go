@@ -2,7 +2,6 @@ package keep_fields
 
 import (
 	"gitlab.ozon.ru/sre/file-d/fd"
-	"gitlab.ozon.ru/sre/file-d/logger"
 	"gitlab.ozon.ru/sre/file-d/pipeline"
 )
 
@@ -34,11 +33,8 @@ func factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 	return &Plugin{}, &Config{}
 }
 
-func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginParams) {
+func (p *Plugin) Start(config pipeline.AnyConfig, _ *pipeline.ActionPluginParams) {
 	p.config = config.(*Config)
-	if p.config == nil {
-		logger.Panicf("config is nil for the keep fields plugin")
-	}
 }
 
 func (p *Plugin) Stop() {

@@ -9,9 +9,9 @@ import (
 	"syscall"
 	"time"
 
-	"gitlab.ozon.ru/sre/file-d/logger"
 	"gitlab.ozon.ru/sre/file-d/pipeline"
 	"go.uber.org/atomic"
+	"go.uber.org/zap"
 )
 
 const (
@@ -48,6 +48,7 @@ type jobProvider struct {
 
 	// some debugging shit
 	offsetsCommitted *atomic.Int64
+	logger           *zap.SugaredLogger
 }
 
 type job struct {
@@ -75,7 +76,7 @@ type symlinkInfo struct {
 	inode    inode
 }
 
-func NewJobProvider(config *Config, controller pipeline.InputPluginController) *jobProvider {
+func NewJobProvider(config *Config, controller pipeline.InputPluginController, logger *zap.SugaredLogger) *jobProvider {
 	jp := &jobProvider{
 		config:     config,
 		controller: controller,
@@ -95,15 +96,17 @@ func NewJobProvider(config *Config, controller pipeline.InputPluginController) *
 		stopSaveOffsetsCh: make(chan bool, 1), //non-zero channel cause we don't wanna wait goroutine to stop
 		stopReportCh:      make(chan bool, 1), //non-zero channel cause we don't wanna wait goroutine to stop
 		stopMaintenanceCh: make(chan bool, 1), //non-zero channel cause we don't wanna wait goroutine to stop
+
+		logger: logger,
 	}
 
-	jp.watcher = NewWatcher(config.WatchingDir, config.FilenamePattern, config.DirPattern, jp.processNotification)
+	jp.watcher = NewWatcher(config.WatchingDir, config.FilenamePattern, config.DirPattern, jp.processNotification, logger)
 
 	return jp
 }
 
 func (jp *jobProvider) start() {
-	logger.Infof("starting job provider persistence mode=%s", jp.config.PersistenceMode)
+	jp.logger.Infof("starting job provider persistence mode=%s", jp.config.PersistenceMode)
 	if jp.config.OffsetsOp_ == offsetsOpContinue {
 		jp.loadedOffsets = jp.offsetDB.load()
 	}
@@ -129,7 +132,7 @@ func (jp *jobProvider) stop() {
 
 	jp.watcher.stop()
 
-	logger.Infof("saving last known offsets...")
+	jp.logger.Infof("saving last known offsets...")
 	jp.offsetDB.save(jp.jobs, jp.jobsMu)
 }
 
@@ -153,11 +156,11 @@ func (jp *jobProvider) commit(event *pipeline.Event) {
 
 	value, has := job.offsets[streamName]
 	if value >= event.Offset {
-		logger.Panicf("offset corruption: committing=%d, current=%d, event id=%d, source=%d:%s", event.Offset, value, event.SeqID, event.SourceID, event.SourceName)
+		jp.logger.Panicf("offset corruption: committing=%d, current=%d, event id=%d, source=%d:%s", event.Offset, value, event.SeqID, event.SourceID, event.SourceName)
 	}
 
 	if value == 0 && event.Offset >= 16*1024*1024 {
-		logger.Errorf("it maybe an offset corruption: committing=%d, current=%d, event id=%d, source=%d:%s", event.Offset, value, event.SeqID, event.SourceID, event.SourceName)
+		jp.logger.Errorf("it maybe an offset corruption: committing=%d, current=%d, event id=%d, source=%d:%s", event.Offset, value, event.SeqID, event.SourceID, event.SourceName)
 	}
 
 	// streamName isn't actually a string, but unsafe []byte, so copy it when adding to map
@@ -178,7 +181,7 @@ func (jp *jobProvider) commit(event *pipeline.Event) {
 
 func (jp *jobProvider) processNotification(filename string, stat os.FileInfo) {
 	if filename == jp.config.OffsetsFile || filename == jp.config.OffsetsFileTmp {
-		logger.Fatalf("sorry, you can't place offsets file %s inside watching dir %s", jp.config.OffsetsFile, jp.config.WatchingDir)
+		jp.logger.Fatalf("sorry, you can't place offsets file %s inside watching dir %s", jp.config.OffsetsFile, jp.config.WatchingDir)
 	}
 
 	if stat.Mode()&os.ModeSymlink != 0 {
@@ -200,7 +203,7 @@ func (jp *jobProvider) addSymlink(inode inode, filename string) {
 func (jp *jobProvider) refreshSymlink(symlink string, inode inode) {
 	filename, err := filepath.EvalSymlinks(symlink)
 	if err != nil {
-		logger.Warnf("symlink have been removed %s", symlink)
+		jp.logger.Warnf("symlink have been removed %s", symlink)
 
 		jp.symlinksMu.Lock()
 		delete(jp.symlinks, inode)
@@ -210,13 +213,13 @@ func (jp *jobProvider) refreshSymlink(symlink string, inode inode) {
 
 	filename, err = filepath.Abs(filename)
 	if err != nil {
-		logger.Warnf("can't follow symlink to %s: %s", filename, err.Error())
+		jp.logger.Warnf("can't follow symlink to %s: %s", filename, err.Error())
 		return
 	}
 
 	stat, err := os.Stat(filename)
 	if err != nil {
-		logger.Warnf("can't follow symlink to %s: %s", filename, err.Error())
+		jp.logger.Warnf("can't follow symlink to %s: %s", filename, err.Error())
 		return
 	}
 
@@ -237,7 +240,7 @@ func (jp *jobProvider) refreshFile(stat os.FileInfo, filename string, symlink st
 
 	file, err := os.Open(filename)
 	if err != nil {
-		logger.Warnf("file was already moved from creation place %s: %s", filename, err.Error())
+		jp.logger.Warnf("file was already moved from creation place %s: %s", filename, err.Error())
 		return
 	}
 
@@ -272,16 +275,16 @@ func (jp *jobProvider) addJob(file *os.File, stat os.FileInfo, filename string, 
 	jp.jobsMu.Lock()
 	jp.jobs[sourceID] = job
 	if len(jp.jobs) > jp.config.MaxFiles {
-		logger.Fatalf("max_files reached for input plugin, consider increase this parameter")
+		jp.logger.Fatalf("max_files reached for input plugin, consider increase this parameter")
 	}
 	jp.jobsLog = append(jp.jobsLog, filename)
 	jp.jobsDone.Inc()
 	jp.jobsMu.Unlock()
 
 	if symlink != "" {
-		logger.Infof("job added for a file %d:%s, symlink=%s", sourceID, filename, symlink)
+		jp.logger.Infof("job added for a file %d:%s, symlink=%s", sourceID, filename, symlink)
 	} else {
-		logger.Infof("job added for a file %d:%s", sourceID, filename)
+		jp.logger.Infof("job added for a file %d:%s", sourceID, filename)
 	}
 
 	job.mu.Lock()
@@ -307,7 +310,7 @@ func (jp *jobProvider) initJobOffset(operation offsetsOp, job *job) {
 	case offsetsOpTail:
 		offset, err := job.file.Seek(0, io.SeekEnd)
 		if err != nil {
-			logger.Panicf("can't make job, can't seek file %d:%s: %s", job.sourceID, job.filename, err.Error())
+			jp.logger.Panicf("can't make job, can't seek file %d:%s: %s", job.sourceID, job.filename, err.Error())
 		}
 
 		if offset == 0 {
@@ -319,24 +322,24 @@ func (jp *jobProvider) initJobOffset(operation offsetsOp, job *job) {
 		magicOffset := int64(-1)
 		_, err = job.file.Seek(magicOffset, io.SeekEnd)
 		if err != nil {
-			logger.Panicf("can't make job, can't seek file %d:%s: %s", job.sourceID, job.filename, err.Error())
+			jp.logger.Panicf("can't make job, can't seek file %d:%s: %s", job.sourceID, job.filename, err.Error())
 		}
 		job.shouldSkip = true
 
 	case offsetsOpReset:
 		_, err := job.file.Seek(0, io.SeekStart)
 		if err != nil {
-			logger.Panicf("can't make job, can't seek file %d:%s: %s", job.sourceID, job.filename, err.Error())
+			jp.logger.Panicf("can't make job, can't seek file %d:%s: %s", job.sourceID, job.filename, err.Error())
 		}
 	case offsetsOpContinue:
 		offsets, has := jp.loadedOffsets[job.sourceID]
 		if has && len(offsets.streams) == 0 {
-			logger.Panicf("can't instantiate job, no streams in source %d:%q", job.sourceID, job.filename)
+			jp.logger.Panicf("can't instantiate job, no streams in source %d:%q", job.sourceID, job.filename)
 		}
 		if !has {
 			_, err := job.file.Seek(0, io.SeekStart)
 			if err != nil {
-				logger.Panicf("can't make job, can't seek file %d:%s: %s", job.sourceID, job.filename, err.Error())
+				jp.logger.Panicf("can't make job, can't seek file %d:%s: %s", job.sourceID, job.filename, err.Error())
 			}
 
 			return
@@ -347,18 +350,18 @@ func (jp *jobProvider) initJobOffset(operation offsetsOp, job *job) {
 		for _, offset := range offsets.streams {
 			_, err := job.file.Seek(offset, io.SeekStart)
 			if err != nil {
-				logger.Panicf("can't make job, can't seek file %d:%s: %s", job.sourceID, job.filename, err.Error())
+				jp.logger.Panicf("can't make job, can't seek file %d:%s: %s", job.sourceID, job.filename, err.Error())
 			}
 			return
 		}
 	default:
-		logger.Panicf("unknown offsets op: %d", jp.config.OffsetsOp_)
+		jp.logger.Panicf("unknown offsets op: %d", jp.config.OffsetsOp_)
 	}
 }
 
 //tryResumeJob job should be already locked and it'll be unlocked
 func (jp *jobProvider) tryResumeJobAndUnlock(job *job, filename string) bool {
-	logger.Debugf("job for %d:%s resumed", job.sourceID, job.filename)
+	jp.logger.Debugf("job for %d:%s resumed", job.sourceID, job.filename)
 
 	if !job.isDone {
 		job.mu.Unlock()
@@ -369,7 +372,7 @@ func (jp *jobProvider) tryResumeJobAndUnlock(job *job, filename string) bool {
 	job.isDone = false
 
 	if jp.jobsDone.Dec() < 0 {
-		logger.Panicf("done jobs counter is less than zero")
+		jp.logger.Panicf("done jobs counter is less than zero")
 	}
 
 	job.mu.Unlock()
@@ -384,14 +387,14 @@ func (jp *jobProvider) continueJob(job *job) {
 func (jp *jobProvider) doneJob(job *job) {
 	job.mu.Lock()
 	if job.isDone {
-		logger.Panicf("job is already done")
+		jp.logger.Panicf("job is already done")
 	}
 	job.isDone = true
 
 	jp.jobsMu.Lock()
 	v := int(jp.jobsDone.Inc())
 	if v > len(jp.jobs) {
-		logger.Panicf("done jobs counter is more than job count")
+		jp.logger.Panicf("done jobs counter is more than job count")
 	}
 	jp.jobsMu.Unlock()
 
@@ -406,14 +409,14 @@ func (jp *jobProvider) truncateJob(job *job) {
 
 	_, err := job.file.Seek(0, io.SeekStart)
 	if err != nil {
-		logger.Fatalf("job reset error, file %s seek error: %s", job.filename, err.Error())
+		jp.logger.Fatalf("job reset error, file %s seek error: %s", job.filename, err.Error())
 	}
 
 	for stream := range job.offsets {
 		job.offsets[stream] = 0
 	}
 
-	logger.Infof("job %d:%s was truncated, reading will start over, events with id less than %d will be ignored", job.sourceID, job.filename, job.ignoreEventsLE)
+	jp.logger.Infof("job %d:%s was truncated, reading will start over, events with id less than %d will be ignored", job.sourceID, job.filename, job.ignoreEventsLE)
 }
 
 func (jp *jobProvider) saveOffsetsCyclic(duration time.Duration) {
@@ -447,7 +450,7 @@ func (jp *jobProvider) reportStats() {
 
 			savesTotal := jp.offsetDB.savesTotal.Load() - lastSaves
 			lastSaves = savesTotal
-			logger.Infof("file plugin stats for last %d seconds: offsets saves=%d, jobs done=%d, jobs total=%d", jp.config.ReportInterval_/time.Second, savesTotal, jp.jobsDone.Load(), l)
+			jp.logger.Infof("file plugin stats for last %d seconds: offsets saves=%d, jobs done=%d, jobs total=%d", jp.config.ReportInterval_/time.Second, savesTotal, jp.jobsDone.Load(), l)
 
 			jp.jobsLog = jp.jobsLog[:0]
 
@@ -525,7 +528,7 @@ func (jp *jobProvider) maintenanceJobs() {
 		}
 	}
 
-	logger.Infof("file plugin maintenance stats: not done=%d, resumed=%d, reopened=%d, deleted=%d, errors=%d", notDone, resumed, reopened, deleted, errors)
+	jp.logger.Infof("file plugin maintenance stats: not done=%d, resumed=%d, reopened=%d, deleted=%d, errors=%d", notDone, resumed, reopened, deleted, errors)
 }
 
 func (jp *jobProvider) maintenanceJob(job *job) int {
@@ -543,14 +546,14 @@ func (jp *jobProvider) maintenanceJob(job *job) int {
 	stat, err := file.Stat()
 	if err != nil {
 		job.mu.Unlock()
-		logger.Warnf("can't stat file %s", filename)
+		jp.logger.Warnf("can't stat file %s", filename)
 
 		return maintenanceResultError
 	}
 
 	offset, err := file.Seek(0, io.SeekCurrent)
 	if err != nil {
-		logger.Fatalf("can't seek file %s: %s", filename, err.Error())
+		jp.logger.Fatalf("can't seek file %s: %s", filename, err.Error())
 		panic("")
 	}
 
@@ -577,7 +580,7 @@ func (jp *jobProvider) maintenanceJob(job *job) int {
 
 	err = file.Close()
 	if err != nil {
-		logger.Fatalf("can't close a file %s: %s", filename, err.Error())
+		jp.logger.Fatalf("can't close a file %s: %s", filename, err.Error())
 		panic("")
 	}
 
@@ -585,14 +588,14 @@ func (jp *jobProvider) maintenanceJob(job *job) int {
 	file, err = os.Open(filename)
 	if err != nil {
 		jp.deleteJobAndUnlock(job)
-		logger.Infof("job for a file %d:%s have been released", inode, filename)
+		jp.logger.Infof("job for a file %d:%s have been released", inode, filename)
 
 		return maintenanceResultDeleted
 	}
 
 	stat, err = file.Stat()
 	if err != nil {
-		logger.Panicf("can't stat a file %s: %s", filename, err.Error())
+		jp.logger.Panicf("can't stat a file %s: %s", filename, err.Error())
 	}
 
 	// it isn't a file that was in the job, don't process it
@@ -605,7 +608,7 @@ func (jp *jobProvider) maintenanceJob(job *job) int {
 
 	_, err = file.Seek(offset, io.SeekStart)
 	if err != nil {
-		logger.Fatalf("can't seek a file %s after reopen: %s", filename, err.Error())
+		jp.logger.Fatalf("can't seek a file %s after reopen: %s", filename, err.Error())
 		panic("")
 	}
 
@@ -618,7 +621,7 @@ func (jp *jobProvider) maintenanceJob(job *job) int {
 // deleteJob job should be already locked and it'll be unlocked
 func (jp *jobProvider) deleteJobAndUnlock(job *job) {
 	if !job.isDone {
-		logger.Panicf("can't delete job, it isn't done: %d:%s", job.sourceID, job.filename)
+		jp.logger.Panicf("can't delete job, it isn't done: %d:%s", job.sourceID, job.filename)
 	}
 	sourceID := job.sourceID
 	filename := job.filename
@@ -629,9 +632,9 @@ func (jp *jobProvider) deleteJobAndUnlock(job *job) {
 	c := jp.jobsDone.Dec()
 	jp.jobsMu.Unlock()
 
-	logger.Infof("job %d:%s deleted", job.sourceID, filename)
+	jp.logger.Infof("job %d:%s deleted", job.sourceID, filename)
 	if c < 0 {
-		logger.Panicf("done jobs counter less than zero")
+		jp.logger.Panicf("done jobs counter less than zero")
 	}
 }
 

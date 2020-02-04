@@ -3,3 +3,6 @@
 
 ## Config params
 @config|description
+
+### Understanding start/continue regexps
+@understanding

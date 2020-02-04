@@ -3,7 +3,6 @@ package json_decode
 import (
 	"gitlab.ozon.ru/sre/file-d/cfg"
 	"gitlab.ozon.ru/sre/file-d/fd"
-	"gitlab.ozon.ru/sre/file-d/logger"
 	"gitlab.ozon.ru/sre/file-d/pipeline"
 )
 
@@ -20,8 +19,8 @@ type Plugin struct {
 type Config struct {
 	//> @3 @4 @5 @6
 	//>
-	//> Field of event to use as JSON strings?
-	Field  cfg.FieldSelector `json:"field"` //*
+	//> Field of event to decode. Should be string.
+	Field  cfg.FieldSelector `json:"field" parse:"selector" required:"true"` //*
 	Field_ []string
 
 	//> @3 @4 @5 @6
@@ -43,10 +42,6 @@ func factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 
 func (p *Plugin) Start(config pipeline.AnyConfig, _ *pipeline.ActionPluginParams) {
 	p.config = config.(*Config)
-
-	if p.config.Field == "" {
-		logger.Fatalf("no field provided for json decode plugin")
-	}
 }
 
 func (p *Plugin) Stop() {

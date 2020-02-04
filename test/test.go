@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"gitlab.ozon.ru/sre/file-d/cfg"
+	"gitlab.ozon.ru/sre/file-d/logger"
 	"gitlab.ozon.ru/sre/file-d/pipeline"
 	"gitlab.ozon.ru/sre/file-d/plugin/input/fake"
 	"gitlab.ozon.ru/sre/file-d/plugin/output/devnull"
@@ -110,7 +112,7 @@ func NewPipeline(actions []*pipeline.ActionPluginStaticInfo, pipelineOpts ...str
 	}
 
 	http.DefaultServeMux = &http.ServeMux{}
-	p := pipeline.New("test", settings, prometheus.NewRegistry(), http.DefaultServeMux)
+	p := pipeline.New("test_pipeline", settings, prometheus.NewRegistry(), http.DefaultServeMux)
 	if !parallel {
 		p.DisableParallelism()
 	}
@@ -123,7 +125,9 @@ func NewPipeline(actions []*pipeline.ActionPluginStaticInfo, pipelineOpts ...str
 		anyPlugin, _ := fake.Factory()
 		inputPlugin := anyPlugin.(*fake.Plugin)
 		p.SetInput(&pipeline.InputPluginInfo{
-			PluginStaticInfo: &pipeline.PluginStaticInfo{},
+			PluginStaticInfo: &pipeline.PluginStaticInfo{
+				Type: "fake",
+			},
 			PluginRuntimeInfo: &pipeline.PluginRuntimeInfo{
 				Plugin: inputPlugin,
 			},
@@ -132,7 +136,9 @@ func NewPipeline(actions []*pipeline.ActionPluginStaticInfo, pipelineOpts ...str
 		anyPlugin, _ = devnull.Factory()
 		outputPlugin := anyPlugin.(*devnull.Plugin)
 		p.SetOutput(&pipeline.OutputPluginInfo{
-			PluginStaticInfo: &pipeline.PluginStaticInfo{},
+			PluginStaticInfo: &pipeline.PluginStaticInfo{
+				Type: "devnull",
+			},
 			PluginRuntimeInfo: &pipeline.PluginRuntimeInfo{
 				Plugin: outputPlugin,
 			},
@@ -159,7 +165,7 @@ func NewPipelineMock(actions []*pipeline.ActionPluginStaticInfo, pipelineOpts ..
 
 func NewPluginStaticInfo(factory pipeline.PluginFactory, config pipeline.AnyConfig) *pipeline.PluginStaticInfo {
 	return &pipeline.PluginStaticInfo{
-		Type:    "",
+		Type:    "test_plugin",
 		Factory: factory,
 		Config:  config,
 	}
@@ -176,5 +182,14 @@ func NewActionPluginStaticInfo(factory pipeline.PluginFactory, config pipeline.A
 }
 
 func NewEmptyOutputPluginParams() *pipeline.OutputPluginParams {
-	return &pipeline.OutputPluginParams{PluginDefaultParams: &pipeline.PluginDefaultParams{PipelineName: "test", PipelineSettings: &pipeline.Settings{}}, Controller: nil}
+	return &pipeline.OutputPluginParams{PluginDefaultParams: &pipeline.PluginDefaultParams{PipelineName: "test_pipeline", PipelineSettings: &pipeline.Settings{}}, Controller: nil}
+}
+
+func NewConfig(config interface{}, params map[string]int) interface{} {
+	err := cfg.Parse(config, params)
+	if err != nil {
+		logger.Panicf("wrong config: %s", err.Error())
+	}
+
+	return config
 }

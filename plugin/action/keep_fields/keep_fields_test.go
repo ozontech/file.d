@@ -10,7 +10,7 @@ import (
 )
 
 func TestKeepFields(t *testing.T) {
-	config := &Config{Fields: []string{"field_1", "field_2"}}
+	config := test.NewConfig(&Config{Fields: []string{"field_1", "field_2"}}, nil)
 	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, config, pipeline.MatchModeAnd, nil))
 	wg := &sync.WaitGroup{}
 	wg.Add(3)

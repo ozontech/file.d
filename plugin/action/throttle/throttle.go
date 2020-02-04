@@ -4,16 +4,13 @@ import (
 	"sync"
 	"time"
 
-	"gitlab.ozon.ru/sre/file-d/config"
+	"gitlab.ozon.ru/sre/file-d/cfg"
 	"gitlab.ozon.ru/sre/file-d/fd"
-	"gitlab.ozon.ru/sre/file-d/logger"
 	"gitlab.ozon.ru/sre/file-d/pipeline"
 )
 
 var (
-	defaultThrottleKey        = "default"
-	defaultTimeField          = "time"
-	defaultDefaultLimit int64 = 10000
+	defaultThrottleKey = "default"
 
 	// limiters should be shared across pipeline, so lets have a map by namespace and limiter name
 	limiters   = map[string]map[string]*limiter{} // todo: cleanup this map?
@@ -21,7 +18,7 @@ var (
 )
 
 /*{ introduction
-Plugin throttle plugin drops events if event count per interval gets higher than a configured threshold.
+Plugin drops events if event flow gets higher than a configured threshold.
 }*/
 type Plugin struct {
 	config   *Config
@@ -36,34 +33,49 @@ type Plugin struct {
 type Config struct {
 	//> @3 @4 @5 @6
 	//>
-	//> To be filled
-	ThrottleField string `json:"throttle_field"` //*
+	//> Event field which will be used as a key for throttling.
+	//> It means that throttling will work separately for events with different keys.
+	//> If not set, it's assumed that all events have the same key.
+	ThrottleField  cfg.FieldSelector `json:"throttle_field" default:""` //*
+	ThrottleField_ []string
 
 	//> @3 @4 @5 @6
 	//>
-	//> To be filled
-	TimeField string `json:"time_field"` //*
+	//> Event field which defines the time when event was fired.
+	//> It used to detect event throughput in particular time range.
+	//> If not set current time will be taken.
+	TimeField  cfg.FieldSelector `json:"time_field" default:"time"` //*
+	TimeField_ []string
 
 	//> @3 @4 @5 @6
 	//>
-	//> To be filled
-	DefaultLimit int64 `json:"default_limit"` //*
+	//> Defines how to parse time field format.
+	TimeFieldFormat string `json:"time_field_format" default:"rfc3339nano" options:"ansic|unixdate|rubydate|rfc822|rfc822z|rfc850|rfc1123|rfc1123z|rfc3339|rfc3339nano|kitchen|stamp|stampmilli|stampmicro|stampnano"` //*
 
 	//> @3 @4 @5 @6
 	//>
-	//> To be filled
-	Interval  cfg.Duration `json:"interval" parse:"duration"` //*
+	//> Default limit of events that plugin allows per `interval`
+	DefaultLimit int64 `json:"default_limit" default:"5000"` //*
+
+	//> @3 @4 @5 @6
+	//>
+	//> Time interval to check event throughput.
+	Interval  cfg.Duration `json:"interval" parse:"duration" default:"1m"` //*
 	Interval_ time.Duration
 
 	//> @3 @4 @5 @6
 	//>
-	//> To be filled
-	Buckets int `json:"buckets"` //*
+	//> How much time buckets to hold in the memory. E.g. if `buckets_count` is `60` and `interval` is `5m`,
+	//> then `5 hours` will be covered. Events with time later than `now() - 5h` will be dropped even if threshold isn't exceeded.
+	Buckets int `json:"buckets_count" default:"60"` //*
 
 	//> @3 @4 @5 @6
 	//>
-	//> To be filled
-	Rules []RuleConfig `json:"rules"` //*
+	//> Rules can override `default_limit` for different group of event. It's a list of objects.
+	//> Each object have `limit` and `conditions` field.
+	//> * `limit` – value which will override `default_limit`, if `conditions` are met.
+	//> * `conditions` – a map of `event field name => event field value`. Conditions are checked using `AND` operator.
+	Rules []RuleConfig `json:"rules" default:""` //*
 }
 
 type RuleConfig struct {
@@ -91,18 +103,6 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 	limiters[p.pipeline] = map[string]*limiter{}
 	limitersMu.Unlock()
 
-	if p.config.DefaultLimit == 0 {
-		p.config.DefaultLimit = defaultDefaultLimit
-	}
-
-	if p.config.ThrottleField == "" {
-		logger.Fatalf("throttle_field isn't set for throttle plugin")
-	}
-
-	if p.config.TimeField == "" {
-		p.config.TimeField = defaultTimeField
-	}
-
 	for _, r := range p.config.Rules {
 		p.rules = append(p.rules, NewRule(r.Conditions, r.Limit))
 	}
@@ -122,15 +122,18 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 }
 
 func (p *Plugin) isAllowed(event *pipeline.Event) bool {
-	tsValue := event.Root.Dig(p.config.TimeField).AsString()
-	ts, err := time.Parse(time.RFC3339Nano, tsValue)
+	tsValue := event.Root.Dig(p.config.TimeField_...).AsString()
+	ts, err := time.Parse(p.config.TimeFieldFormat, tsValue)
 	if err != nil || ts.IsZero() {
 		ts = time.Now()
 	}
 
-	throttleKey := event.Root.Dig(p.config.ThrottleField).AsString()
-	if throttleKey == "" {
-		throttleKey = defaultThrottleKey
+	throttleKey := defaultThrottleKey
+	if len(p.config.ThrottleField_) > 0 {
+		val := event.Root.Dig(p.config.ThrottleField_...).AsString()
+		if val != "" {
+			throttleKey = val
+		}
 	}
 
 	for index, rule := range p.rules {

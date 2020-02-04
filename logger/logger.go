@@ -7,7 +7,7 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
-var logger = zap.New(
+var Instance = zap.New(
 	zapcore.NewCore(
 		zapcore.NewConsoleEncoder(zapcore.EncoderConfig{
 			//TimeKey:        "ts",
@@ -25,55 +25,55 @@ var logger = zap.New(
 		zapcore.AddSync(os.Stdout),
 		zap.NewAtomicLevelAt(zap.InfoLevel),
 	),
-).Sugar()
+).Sugar().Named("fd")
 
 func Debug(args ...interface{}) {
-	logger.Debug(args...)
+	Instance.Debug(args...)
 }
 
 func Info(args ...interface{}) {
-	logger.Info(args...)
+	Instance.Info(args...)
 }
 
 func Warn(args ...interface{}) {
-	logger.Warn(args...)
+	Instance.Warn(args...)
 }
 
 func Error(args ...interface{}) {
-	logger.Error(args...)
+	Instance.Error(args...)
 
 }
 
 func Panic(args ...interface{}) {
-	logger.Panic(args...)
+	Instance.Panic(args...)
 
 }
 
 func Fatal(args ...interface{}) {
-	logger.Fatal(args...)
+	Instance.Fatal(args...)
 
 }
 
 func Debugf(template string, args ...interface{}) {
-	logger.Debugf(template, args...)
+	Instance.Debugf(template, args...)
 }
 
 func Infof(template string, args ...interface{}) {
-	logger.Infof(template, args...)
+	Instance.Infof(template, args...)
 }
 
 func Warnf(template string, args ...interface{}) {
-	logger.Warnf(template, args...)
+	Instance.Warnf(template, args...)
 }
 
 func Errorf(template string, args ...interface{}) {
-	logger.Errorf(template, args...)
+	Instance.Errorf(template, args...)
 }
 
 func Panicf(template string, args ...interface{}) {
-	logger.Panicf(template, args...)
+	Instance.Panicf(template, args...)
 }
 
 func Fatalf(template string, args ...interface{}) {
-	logger.Fatalf(template, args...)
+	Instance.Fatalf(template, args...)
 }

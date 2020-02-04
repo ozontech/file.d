@@ -2,6 +2,8 @@ package pipeline
 
 import (
 	"regexp"
+
+	"go.uber.org/zap"
 )
 
 const (
@@ -38,16 +40,19 @@ type PluginDefaultParams struct {
 type ActionPluginParams struct {
 	*PluginDefaultParams
 	Controller ActionPluginController
+	Logger     *zap.SugaredLogger
 }
 
 type OutputPluginParams struct {
 	*PluginDefaultParams
 	Controller OutputPluginController
+	Logger     *zap.SugaredLogger
 }
 
 type InputPluginParams struct {
 	*PluginDefaultParams
 	Controller InputPluginController
+	Logger     *zap.SugaredLogger
 }
 
 type PluginStaticInfo struct {
@@ -69,8 +74,8 @@ type InputPluginInfo struct {
 type ActionPluginStaticInfo struct {
 	*PluginStaticInfo
 
-	MetricName string
-	MetricLabels []string
+	MetricName      string
+	MetricLabels    []string
 	MatchConditions MatchConditions
 	MatchMode       MatchMode
 }

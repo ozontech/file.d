@@ -34,7 +34,7 @@ func factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 	return &Plugin{}, &Config{}
 }
 
-func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginParams) {
+func (p *Plugin) Start(config pipeline.AnyConfig, _ *pipeline.ActionPluginParams) {
 	p.config = config.(*Config)
 	if p.config == nil {
 		logger.Panicf("config is nil for the remove fields plugin")

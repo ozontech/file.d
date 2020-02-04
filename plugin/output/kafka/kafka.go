@@ -4,10 +4,10 @@ import (
 	"strings"
 	"time"
 
-	"gitlab.ozon.ru/sre/file-d/config"
+	"gitlab.ozon.ru/sre/file-d/cfg"
 	"gitlab.ozon.ru/sre/file-d/fd"
-	"gitlab.ozon.ru/sre/file-d/logger"
 	"gitlab.ozon.ru/sre/file-d/pipeline"
+	"go.uber.org/zap"
 
 	"github.com/Shopify/sarama"
 )
@@ -21,6 +21,7 @@ type data struct {
 }
 
 type Plugin struct {
+	logger     *zap.SugaredLogger
 	config     *Config
 	avgLogSize int
 	controller pipeline.OutputPluginController
@@ -85,10 +86,9 @@ func Factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginParams) {
 	p.config = config.(*Config)
+	p.logger = params.Logger
 	p.avgLogSize = params.PipelineSettings.AvgLogSize
 	p.controller = params.Controller
-
-	logger.Infof("starting kafka plugin batch size=%d", p.config.BatchSize)
 
 	p.producer = p.newProducer()
 	p.batcher = pipeline.NewBatcher(
@@ -129,7 +129,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 		outBuf, start = event.Encode(outBuf)
 
 		topic := p.config.DefaultTopic
-		if p.config.ShouldUseTopicField {
+		if p.config.UseTopicField {
 			fieldValue := event.Root.Dig(p.config.TopicField).AsString()
 			if fieldValue != "" {
 				topic = fieldValue
@@ -149,9 +149,9 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 	if err != nil {
 		errs := err.(sarama.ProducerErrors)
 		for _, e := range errs {
-			logger.Errorf("can't write batch to kafka: %s", e.Err.Error())
+			p.logger.Errorf("can't write batch: %s", e.Err.Error())
 		}
-		logger.Fatalf("kafka batch failed to deliver: %s", err.Error())
+		p.logger.Fatalf("batch failed to deliver: %s", err.Error())
 	}
 
 }
@@ -171,9 +171,9 @@ func (p *Plugin) newProducer() sarama.SyncProducer {
 
 	producer, err := sarama.NewSyncProducer(p.config.Brokers_, config)
 	if err != nil {
-		logger.Fatalf("can't create kafka producer: %s", err.Error())
+		p.logger.Fatalf("can't create producer: %s", err.Error())
 	}
 
-	logger.Infof("kafka producer created with brokers %q", strings.Join(p.config.Brokers_, ","))
+	p.logger.Infof("producer created with brokers %q", strings.Join(p.config.Brokers_, ","))
 	return producer
 }

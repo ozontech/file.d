@@ -2,8 +2,8 @@ package parse_es
 
 import (
 	"gitlab.ozon.ru/sre/file-d/fd"
-	"gitlab.ozon.ru/sre/file-d/logger"
 	"gitlab.ozon.ru/sre/file-d/pipeline"
+	"go.uber.org/zap"
 )
 
 /*{ introduction
@@ -11,6 +11,7 @@ Plugin parses HTTP input using Elasticsearch /_bulk API format: https://www.elas
 It converts sources defining by create/index actions to the events. Update/delete actions are ignored.
 }*/
 type Plugin struct {
+	logger      *zap.SugaredLogger
 	config      *Config
 	passNext    bool
 	discardNext bool
@@ -30,8 +31,8 @@ func factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 	return &Plugin{}, &Config{}
 }
 
-func (p *Plugin) Start(_ pipeline.AnyConfig, _ *pipeline.ActionPluginParams) {
-
+func (p *Plugin) Start(_ pipeline.AnyConfig, params *pipeline.ActionPluginParams) {
+	p.logger = params.Logger
 }
 
 func (p *Plugin) Stop() {
@@ -39,14 +40,14 @@ func (p *Plugin) Stop() {
 
 func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	if event.IsTimeoutKind() {
-		logger.Errorf("timeout while parsing elasticsearch event stream")
+		p.logger.Errorf("timeout while parsing elasticsearch event stream")
 		return pipeline.ActionDiscard
 	}
 
 	root := event.Root
 
 	if p.passNext && p.discardNext {
-		logger.Panicf("wrong state")
+		p.logger.Panicf("wrong state")
 	}
 
 	if p.passNext {
@@ -78,7 +79,7 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 		return pipeline.ActionCollapse
 	}
 
-	logger.Fatalf("wrong ES input format, expected action, got: %s", root.EncodeToString())
+	p.logger.Fatalf("wrong ES input format, expected action, got: %s", root.EncodeToString())
 
 	return pipeline.ActionDiscard
 }

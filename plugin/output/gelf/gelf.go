@@ -5,10 +5,10 @@ import (
 	"time"
 
 	"github.com/vitkovskii/insane-json"
-	"gitlab.ozon.ru/sre/file-d/config"
+	"gitlab.ozon.ru/sre/file-d/cfg"
 	"gitlab.ozon.ru/sre/file-d/fd"
-	"gitlab.ozon.ru/sre/file-d/logger"
 	"gitlab.ozon.ru/sre/file-d/pipeline"
+	"go.uber.org/zap"
 )
 
 /*{ introduction
@@ -32,6 +32,7 @@ Allowed characters in a field names are any word character(letter, number, under
 
 type Plugin struct {
 	config     *Config
+	logger     *zap.SugaredLogger
 	avgLogSize int
 	batcher    *pipeline.Batcher
 	controller pipeline.OutputPluginController
@@ -148,6 +149,7 @@ func Factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginParams) {
 	p.controller = params.Controller
+	p.logger = params.Logger
 	p.avgLogSize = params.PipelineSettings.AvgLogSize
 	p.config = config.(*Config)
 
@@ -158,7 +160,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.config.timestampField = pipeline.ByteToStringUnsafe(p.formatExtraField(nil, p.config.TimestampField))
 	format, err := pipeline.ParseFormatName(p.config.TimestampFieldFormat)
 	if err != nil {
-		logger.Errorf("can't convert format for gelf output: %s", err.Error())
+		p.logger.Errorf("can't parse time format: %s", err.Error())
 	}
 	p.config.timestampFieldFormat = format
 	p.config.levelField = pipeline.ByteToStringUnsafe(p.formatExtraField(nil, p.config.LevelField))
@@ -210,11 +212,11 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 
 	for {
 		if data.gelf == nil {
-			logger.Infof("connecting to gelf address=%s", p.config.Endpoint)
+			p.logger.Infof("connecting to gelf address=%s", p.config.Endpoint)
 
 			gelf, err := newClient(transportTCP, p.config.Endpoint, p.config.ConnectionTimeout_, false, nil)
 			if err != nil {
-				logger.Errorf("can't connect to gelf endpoint address=%s: %s", p.config.Endpoint, err.Error())
+				p.logger.Errorf("can't connect to gelf endpoint address=%s: %s", p.config.Endpoint, err.Error())
 				time.Sleep(time.Second)
 				continue
 			}
@@ -225,7 +227,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 		_, err := data.gelf.send(outBuf)
 
 		if err != nil {
-			logger.Errorf("can't send data to gelf address=%s", p.config.Endpoint, err.Error())
+			p.logger.Errorf("can't send data to gelf address=%s", p.config.Endpoint, err.Error())
 			_ = data.gelf.close()
 			data.gelf = nil
 			time.Sleep(time.Second)
@@ -241,7 +243,7 @@ func (p *Plugin) maintenance(workerData *pipeline.WorkerData) {
 		return
 	}
 
-	logger.Infof("reconnecting worker to gelf...")
+	p.logger.Infof("reconnecting worker...")
 	data := (*workerData).(*data)
 	_ = data.gelf.close()
 	data.gelf = nil
@@ -317,7 +319,7 @@ func (p *Plugin) makeTimestampField(root *insaneJSON.Root, timestampField string
 
 	// are event in the past?
 	if ts < 100000000 {
-		logger.Warnf("found too old event for gelf output, falling back to current time: %s", root.EncodeToString())
+		p.logger.Warnf("found too old event, falling back to current time: %s", root.EncodeToString())
 		ts = now
 	}
 

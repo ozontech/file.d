@@ -5,8 +5,8 @@ import (
 
 	"gitlab.ozon.ru/sre/file-d/cfg"
 	"gitlab.ozon.ru/sre/file-d/fd"
-	"gitlab.ozon.ru/sre/file-d/logger"
 	"gitlab.ozon.ru/sre/file-d/pipeline"
+	"go.uber.org/zap"
 )
 
 /*{ introduction
@@ -14,10 +14,25 @@ Plugin also known as "multiline" makes one big event from event sequence.
 Useful for assembling back together "exceptions" or "panics" if they was written line by line.
 
 > ⚠ Parsing all event flow could be very CPU intensive because plugin uses regular expressions.
-> Consider `match_fields` parameter to apply it only for particular events. Check out example for details.
+> Consider `match_fields` parameter to process only particular events. Check out example for details.
 
-### Understanding start/continue regexps
+Example of joining Golang panics:
+```
+pipelines:
+  example_pipeline:
+    ...
+    actions:
+    - type: join
+      field: log
+      start: '/^(panic:)|(http: panic serving)/'
+      continue: '/(^\s*$)|(goroutine [0-9]+ \[)|(\([0-9]+x[0-9,a-f]+)|(\.go:[0-9]+ \+[0-9]x)|(\/.*\.go:[0-9]+)|(\(...\))|(main\.main\(\))|(created by .*\/.*\.)|(^\[signal)|(panic.+[0-9]x[0-9,a-f]+)|(panic:)/'
+      match_fields:
+        stream: stderr // apply only for events which was written to stderr to save CPU time
+    ...
+```
+}*/
 
+/*{ understanding
 No joining:
 ```
 event 1
@@ -44,22 +59,6 @@ event ... matches continue regexp
 event N matches continue regexp
 event N+1
 ```
-<br/>
-
-Example of joining Golang panics:
-```
-pipelines:
-  example_pipeline:
-    ...
-    actions:
-    - type: join
-      field: log
-      start: '/^(panic:)|(http: panic serving)/'
-      continue: '/(^\s*$)|(goroutine [0-9]+ \[)|(\([0-9]+x[0-9,a-f]+)|(\.go:[0-9]+ \+[0-9]x)|(\/.*\.go:[0-9]+)|(\(...\))|(main\.main\(\))|(created by .*\/.*\.)|(^\[signal)|(panic.+[0-9]x[0-9,a-f]+)|(panic:)/'
-      match_fields:
-        stream: stderr // apply only for events which was written to stderr to save CPU time
-    ...
-```
 }*/
 
 type Plugin struct {
@@ -69,6 +68,8 @@ type Plugin struct {
 	isJoining bool
 	initial   *pipeline.Event
 	buff      []byte
+
+	logger *zap.SugaredLogger
 }
 
 //! config /json:\"([a-z_]+)\"/ #2 /default:\"([^"]+)\"/ /(required):\"true\"/  /options:\"([^"]+)\"/
@@ -84,13 +85,13 @@ type Config struct {
 	//>
 	//> Regexp which will start join sequence.
 	Start  cfg.Regexp `json:"start" required:"true" parse:"regexp"` //*
-	Start_ regexp.Regexp
+	Start_ *regexp.Regexp
 
 	//> @3 @4 @5 @6
 	//>
 	//> Regexp which will continue join sequence.
 	Continue  cfg.Regexp `json:"continue" required:"true" parse:"regexp"` //*
-	Continue_ regexp.Regexp
+	Continue_ *regexp.Regexp
 }
 
 func init() {
@@ -109,6 +110,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 	p.config = config.(*Config)
 	p.isJoining = false
 	p.buff = make([]byte, 0, params.PipelineSettings.AvgLogSize)
+	p.logger = params.Logger
 }
 
 func (p *Plugin) Stop() {
@@ -120,7 +122,7 @@ func (p *Plugin) flush() {
 	p.isJoining = false
 
 	if event == nil {
-		logger.Panicf("first event is nil, why?")
+		p.logger.Panicf("first event is nil, why?")
 		return
 	}
 
@@ -131,7 +133,7 @@ func (p *Plugin) flush() {
 func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	if event.IsTimeoutKind() {
 		if !p.isJoining {
-			logger.Panicf("timeout without joining, why?")
+			p.logger.Panicf("timeout without joining, why?")
 		}
 		p.flush()
 		return pipeline.ActionDiscard
@@ -142,7 +144,7 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 
 	firstOK := false
 	if node.IsString() {
-		firstOK = p.firstRe.MatchString(value)
+		firstOK = p.config.Start_.MatchString(value)
 	}
 
 	if firstOK {
@@ -157,7 +159,7 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	}
 
 	if p.isJoining {
-		nextOK := p.nextRe.MatchString(value)
+		nextOK := p.config.Continue_.MatchString(value)
 		if nextOK {
 			p.buff = append(p.buff, value...)
 			return pipeline.ActionCollapse

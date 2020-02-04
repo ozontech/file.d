@@ -26,32 +26,38 @@ func ParseSubstitution(substitution string) ([]SubstitutionOp, error) {
 			break
 		}
 
-		if len(substitution) > pos+1 {
-			switch substitution[pos+1] {
-			case '$':
-				tail = substitution[:pos+1]
-				substitution = substitution[pos+2:]
-			case '{':
-				result = append(result, SubstitutionOp{
-					Kind: SubstitutionOpKindRaw,
-					Data: []string{tail + substitution[:pos]},
-				})
-				tail = ""
+		if len(substitution) < pos+1 {
+			substitution = substitution[pos+1:]
+			continue
+		}
 
-				end := strings.IndexByte(substitution, '}')
-				if end == -1 {
-					return nil, fmt.Errorf("can't find substitution end '}': %s", substitution)
-				}
+		switch substitution[pos+1] {
+		case '$':
+			tail = substitution[:pos+1]
+			substitution = substitution[pos+2:]
+		case '{':
+			result = append(result, SubstitutionOp{
+				Kind: SubstitutionOpKindRaw,
+				Data: []string{tail + substitution[:pos]},
+			})
+			tail = ""
 
-				selector := substitution[pos+2 : end]
-				path := ParseFieldSelector(selector)
-				result = append(result, SubstitutionOp{
-					Kind: SubstitutionOpKindField,
-					Data: path,
-				})
-
-				substitution = substitution[end+1:]
+			end := strings.IndexByte(substitution, '}')
+			if end == -1 {
+				return nil, fmt.Errorf("can't find substitution end '}': %s", substitution)
 			}
+
+			selector := substitution[pos+2 : end]
+			path := ParseFieldSelector(selector)
+			result = append(result, SubstitutionOp{
+				Kind: SubstitutionOpKindField,
+				Data: path,
+			})
+
+			substitution = substitution[end+1:]
+		default:
+			tail = substitution[:pos+1]
+			substitution = substitution[pos+1:]
 		}
 	}
 

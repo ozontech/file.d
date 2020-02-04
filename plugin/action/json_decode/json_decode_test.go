@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"gitlab.ozon.ru/sre/file-d/cfg"
+	"gitlab.ozon.ru/sre/file-d/logger"
 	"gitlab.ozon.ru/sre/file-d/pipeline"
 	"gitlab.ozon.ru/sre/file-d/test"
 )
@@ -14,6 +16,11 @@ func TestDecode(t *testing.T) {
 	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, config, pipeline.MatchModeAnd, nil))
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
+
+	err := cfg.Parse(config, nil)
+	if err != nil {
+		logger.Panicf("wrong config")
+	}
 
 	inEvents := 0
 	input.SetInFn(func() {

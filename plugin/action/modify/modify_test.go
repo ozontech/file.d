@@ -10,7 +10,7 @@ import (
 )
 
 func TestModify(t *testing.T) {
-	config := &Config{"new_field": "new_value", "field_pattern": "$existing_field"}
+	config := test.NewConfig(&Config{"new_field": "new_value", "substitution_field": "${existing_field}"}, nil)
 	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, config, pipeline.MatchModeAnd, nil))
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
@@ -28,5 +28,5 @@ func TestModify(t *testing.T) {
 
 	assert.Equal(t, 1, len(outEvents), "wrong out events count")
 	assert.Equal(t, "new_value", outEvents[0].Root.Dig("new_field").AsString(), "wrong field value")
-	assert.Equal(t, "existing_value", outEvents[0].Root.Dig("field_pattern").AsString(), "wrong field value")
+	assert.Equal(t, "existing_value", outEvents[0].Root.Dig("substitution_field").AsString(), "wrong field value")
 }

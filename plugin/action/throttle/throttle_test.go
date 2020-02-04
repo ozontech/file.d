@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	config2 "gitlab.ozon.ru/sre/file-d/config"
+	"gitlab.ozon.ru/sre/file-d/cfg"
 	"gitlab.ozon.ru/sre/file-d/logger"
 	"gitlab.ozon.ru/sre/file-d/pipeline"
 	"gitlab.ozon.ru/sre/file-d/test"
@@ -37,7 +37,7 @@ func TestThrottle(t *testing.T) {
 		TimeField:     "time",
 		DefaultLimit:  int64(defaultLimit),
 	}
-	err := config2.Parse(config, nil)
+	err := cfg.Parse(config, nil)
 	if err != nil {
 		logger.Panic(err.Error())
 	}

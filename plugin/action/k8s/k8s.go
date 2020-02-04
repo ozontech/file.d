@@ -2,9 +2,9 @@ package k8s
 
 import (
 	"gitlab.ozon.ru/sre/file-d/fd"
-	"gitlab.ozon.ru/sre/file-d/logger"
 	"gitlab.ozon.ru/sre/file-d/pipeline"
 	"go.uber.org/atomic"
+	"go.uber.org/zap"
 )
 
 /*{ introduction
@@ -13,6 +13,7 @@ Source docker log file name should be in format: `[pod-name]_[namespace]_[contai
 }*/
 type Plugin struct {
 	config  *Config
+	logger  *zap.SugaredLogger
 	logBuff []byte
 	logSize int
 }
@@ -58,12 +59,13 @@ func factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 	return &Plugin{}, &Config{}
 }
 
-func (p *Plugin) Start(config pipeline.AnyConfig, _ *pipeline.ActionPluginParams) {
+func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginParams) {
 	p.config = config.(*Config)
+	p.logger = params.Logger
 
 	startCounter := startCounter.Inc()
 	if startCounter == 1 {
-		enableGatherer()
+		enableGatherer(p.logger)
 	}
 
 	p.logBuff = append(p.logBuff, '"')
@@ -79,7 +81,7 @@ func (p *Plugin) Stop() {
 func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	// todo: do same logic as in join plugin here to send not full logs
 	if event.IsTimeoutKind() {
-		logger.Errorf("can't read next sequential event for k8s pod stream")
+		p.logger.Errorf("can't read next sequential event for k8s pod stream")
 		p.logBuff = p.logBuff[:1]
 		return pipeline.ActionDiscard
 	}
@@ -91,7 +93,7 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	// don't need to unescape/escape log fields cause concatenation of escaped strings is escaped string
 	logFragment := event.Root.Dig("log").AsEscapedString()
 	if logFragment == "" {
-		logger.Fatalf("wrong docker log format, it doesn't contain log field: %s", event.Root.EncodeToString())
+		p.logger.Fatalf("wrong docker log format, it doesn't contain log field: %s", event.Root.EncodeToString())
 		panic("")
 	}
 
@@ -110,7 +112,7 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	ns, pod, container, _, success, podMeta := getMeta(event.SourceName)
 
 	if isMaxReached {
-		logger.Warnf("too long k8s event found, it'll be split, ns=%s pod=%s container=%s consider increase max_event_size, max_event_size=%d, predicted event size=%d", ns, pod, container, p.config.MaxEventSize, predictedLen)
+		p.logger.Warnf("too long k8s event found, it'll be split, ns=%s pod=%s container=%s consider increase max_event_size, max_event_size=%d, predicted event size=%d", ns, pod, container, p.config.MaxEventSize, predictedLen)
 	}
 
 	event.Root.AddFieldNoAlloc(event.Root, "k8s_namespace").MutateToString(string(ns))
@@ -119,12 +121,11 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 
 	if success {
 		if ns != namespace(podMeta.Namespace) {
-			logger.Panicf("k8s plugin inconsistency: source=%s, file namespace=%s, meta namespace=%s, event=%s", event.SourceName, ns, podMeta.Namespace, event.Root.EncodeToString())
+			p.logger.Panicf("k8s plugin inconsistency: source=%s, file namespace=%s, meta namespace=%s, event=%s", event.SourceName, ns, podMeta.Namespace, event.Root.EncodeToString())
 		}
 		if pod != podName(podMeta.Name) {
-			logger.Panicf("k8s plugin inconsistency: source=%s, file pod=%s, meta pod=%s, x=%s, event=%s", event.SourceName, pod, podMeta.Name, event.Root.EncodeToString())
+			p.logger.Panicf("k8s plugin inconsistency: source=%s, file pod=%s, meta pod=%s, x=%s, event=%s", event.SourceName, pod, podMeta.Name, event.Root.EncodeToString())
 		}
-
 
 		for labelName, labelValue := range podMeta.Labels {
 			if len(p.config.LabelsWhitelist_) != 0 {

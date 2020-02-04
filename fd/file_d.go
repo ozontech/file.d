@@ -74,6 +74,8 @@ func (f *FileD) addPipeline(name string, config *cfg.PipelineConfig) {
 		"gomaxprocs": runtime.GOMAXPROCS(0),
 	}
 
+	logger.Infof("creating pipeline %q: capacity=%d, stream field=%s", name, settings.Capacity, settings.StreamField)
+
 	p := pipeline.New(name, settings, f.registry, mux)
 	err := f.setupInput(p, config, values)
 	if err != nil {
@@ -114,7 +116,7 @@ func (f *FileD) setupActions(p *pipeline.Pipeline, pipelineConfig *cfg.PipelineC
 
 		t := actionJSON.Get("type").MustString()
 		if t == "" {
-			logger.Fatalf("action #%d doesn't provide type for pipeline %q", index, p.Name)
+			logger.Fatalf("action #%d doesn't provide type %q", index, p.Name)
 		}
 		f.setupAction(p, index, t, actionJSON, values)
 	}
@@ -148,6 +150,7 @@ func (f *FileD) setupAction(p *pipeline.Pipeline, index int, t string, actionJSO
 
 	infoCopy := *info
 	infoCopy.Config = config
+	infoCopy.Type = t
 
 	p.AddAction(&pipeline.ActionPluginStaticInfo{
 		PluginStaticInfo: &infoCopy,

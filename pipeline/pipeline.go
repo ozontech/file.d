@@ -11,6 +11,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"gitlab.ozon.ru/sre/file-d/logger"
 	"go.uber.org/atomic"
+	"go.uber.org/zap"
 )
 
 const (
@@ -77,6 +78,7 @@ type Pipeline struct {
 	metricsHolder *metricsHolder
 
 	// some debugging shit
+	logger          *zap.SugaredLogger
 	eventLogEnabled bool
 	eventLog        []string
 	eventLogMu      *sync.Mutex
@@ -97,10 +99,9 @@ type Settings struct {
 }
 
 func New(name string, settings *Settings, registry *prometheus.Registry, mux *http.ServeMux) *Pipeline {
-	logger.Infof("creating pipeline %q: capacity=%d, stream field=%s", name, settings.Capacity, settings.StreamField)
-
 	pipeline := &Pipeline{
 		Name:       name,
+		logger:     logger.Instance.Named(name),
 		settings:   settings,
 		useStreams: true,
 		actionParams: &PluginDefaultParams{
@@ -123,7 +124,7 @@ func New(name string, settings *Settings, registry *prometheus.Registry, mux *ht
 	case "raw":
 		pipeline.decoder = decoderRAW
 	default:
-		logger.Fatalf("unknown decoder %q for pipeline %q", settings.Decoder, name)
+		pipeline.logger.Fatalf("unknown decoder %q for pipeline %q", settings.Decoder, name)
 	}
 
 	mux.HandleFunc("/pipelines/"+name, pipeline.servePipeline)
@@ -133,10 +134,10 @@ func New(name string, settings *Settings, registry *prometheus.Registry, mux *ht
 
 func (p *Pipeline) Start() {
 	if p.input == nil {
-		logger.Panicf("input isn't set for pipeline %q", p.Name)
+		p.logger.Panicf("input isn't set for pipeline %q", p.Name)
 	}
 	if p.output == nil {
-		logger.Panicf("output isn't set for pipeline %q", p.Name)
+		p.logger.Panicf("output isn't set for pipeline %q", p.Name)
 	}
 
 	p.initProcs()
@@ -145,16 +146,21 @@ func (p *Pipeline) Start() {
 	outputParams := &OutputPluginParams{
 		PluginDefaultParams: p.actionParams,
 		Controller:          p,
+		Logger:              p.logger.Named("output " + p.outputInfo.Type),
 	}
+	p.logger.Infof("starting output plugin %q", p.outputInfo.Type)
 	p.output.Start(p.outputInfo.Config, outputParams)
 
+	p.logger.Infof("stating processors, count=%d", len(p.Procs))
 	for _, processor := range p.Procs {
-		processor.start(p.actionParams)
+		processor.start(p.actionParams, p.logger)
 	}
 
+	p.logger.Infof("starting input plugin %q", p.inputInfo.Type)
 	inputParams := &InputPluginParams{
 		PluginDefaultParams: p.actionParams,
 		Controller:          p,
+		Logger:              p.logger.Named("input " + p.inputInfo.Type),
 	}
 	p.input.Start(p.inputInfo.Config, inputParams)
 
@@ -165,19 +171,19 @@ func (p *Pipeline) Start() {
 }
 
 func (p *Pipeline) Stop() {
-	logger.Infof("stopping pipeline %q, total committed=%d", p.Name, p.totalCommitted.Load())
+	p.logger.Infof("stopping pipeline %q, total committed=%d", p.Name, p.totalCommitted.Load())
 
-	logger.Infof("stopping processors count=%d", len(p.Procs))
+	p.logger.Infof("stopping processors count=%d", len(p.Procs))
 	for _, processor := range p.Procs {
 		processor.stop()
 	}
 
 	p.streamer.stop()
 
-	logger.Infof("stopping %q input", p.Name)
+	p.logger.Infof("stopping %q input", p.Name)
 	p.input.Stop()
 
-	logger.Infof("stopping %q output", p.Name)
+	p.logger.Infof("stopping %q output", p.Name)
 	p.output.Stop()
 
 	p.shouldStop = true
@@ -217,14 +223,14 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 	case decoderJSON:
 		err := event.parseJSON(bytes)
 		if err != nil {
-			logger.Fatalf("wrong json offset=%d, length=%d, err=%s, source=%d:%s, json=%s", offset, length, err.Error(), sourceID, sourceName, bytes)
+			p.logger.Fatalf("wrong json offset=%d, length=%d, err=%s, source=%d:%s, json=%s", offset, length, err.Error(), sourceID, sourceName, bytes)
 			return 0
 		}
 	case decoderRAW:
 		_ = event.Root.DecodeString("{}")
 		event.Root.AddFieldNoAlloc(event.Root, "message").MutateToBytesCopy(event.Root, bytes)
 	default:
-		logger.Panicf("unknown decoder %d for pipeline %q", p.decoder, p.Name)
+		p.logger.Panicf("unknown decoder %d for pipeline %q", p.decoder, p.Name)
 	}
 
 	event.Offset = offset
@@ -307,7 +313,7 @@ func (p *Pipeline) initProcs() {
 	if p.singleProc {
 		procCount = 1
 	}
-	logger.Infof("starting pipeline %q: procs=%d", p.Name, procCount)
+	p.logger.Infof("starting pipeline %q: procs=%d", p.Name, procCount)
 
 	p.procCount = atomic.NewInt32(int32(procCount))
 	p.activeProcs = atomic.NewInt32(0)
@@ -359,15 +365,15 @@ func (p *Pipeline) expandProcs() {
 
 	from := p.procCount.Load()
 	to := from * 2
-	logger.Infof("processors count expanded from %d to %d", from, to)
+	p.logger.Infof("processors count expanded from %d to %d", from, to)
 	if to > 10000 {
-		logger.Warnf("too many processors: %d", to)
+		p.logger.Warnf("too many processors: %d", to)
 	}
 
 	for x := 0; x < int(to-from); x++ {
 		proc := p.newProc()
 		p.Procs = append(p.Procs, )
-		proc.start(p.actionParams)
+		proc.start(p.actionParams, p.logger)
 	}
 
 	p.procCount.Swap(to)
@@ -400,18 +406,18 @@ func (p *Pipeline) maintenance() {
 			tc = 1
 		}
 
-		logger.Infof("%q pipeline stats interval=%ds, active procs=%d/%d, queue=%d/%d, out=%d|%.1fMb, rate=%d/s|%.1fMb/s, total=%d|%.1fMb, avg size=%d, max size=%d", p.Name, interval/time.Second, p.activeProcs.Load(), p.procCount.Load(), p.eventPool.eventsCount, p.settings.Capacity, deltaCommitted, float64(deltaSize)/1024.0/1024.0, rate, rateMb, totalCommitted, float64(totalSize)/1024.0/1024.0, totalSize/tc, p.maxSize)
+		p.logger.Infof("%q pipeline stats interval=%ds, active procs=%d/%d, queue=%d/%d, out=%d|%.1fMb, rate=%d/s|%.1fMb/s, total=%d|%.1fMb, avg size=%d, max size=%d", p.Name, interval/time.Second, p.activeProcs.Load(), p.procCount.Load(), p.eventPool.eventsCount, p.settings.Capacity, deltaCommitted, float64(deltaSize)/1024.0/1024.0, rate, rateMb, totalCommitted, float64(totalSize)/1024.0/1024.0, totalSize/tc, p.maxSize)
 
 		lastCommitted = totalCommitted
 		lastSize = totalSize
 
 		if len(p.inSample) > 0 {
-			logger.Infof("%q pipeline input event sample: %s", p.Name, p.inSample)
+			p.logger.Infof("%q pipeline input event sample: %s", p.Name, p.inSample)
 			p.inSample = p.inSample[:0]
 		}
 
 		if len(p.outSample) > 0 {
-			logger.Infof("%q pipeline output event sample: %s", p.Name, p.outSample)
+			p.logger.Infof("%q pipeline output event sample: %s", p.Name, p.outSample)
 			p.outSample = p.outSample[:0]
 		}
 	}
@@ -435,7 +441,7 @@ func (p *Pipeline) EnableEventLog() {
 
 func (p *Pipeline) GetEventLogItem(index int) string {
 	if index >= len(p.eventLog) {
-		logger.Fatalf("can't find log item with index %d", index)
+		p.logger.Fatalf("can't find log item with index %d", index)
 	}
 	return p.eventLog[index]
 }

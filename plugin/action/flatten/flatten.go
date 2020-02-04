@@ -33,7 +33,7 @@ type Config struct {
 	//> @3 @4 @5 @6
 	//>
 	//> Defines field that should be flattened.
-	Field  cfg.FieldSelector `json:"field" required:"true"` //*
+	Field  cfg.FieldSelector `json:"field" required:"true" parse:"selector"` //*
 	Field_ []string
 
 	//> @3 @4 @5 @6

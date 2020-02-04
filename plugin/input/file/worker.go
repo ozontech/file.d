@@ -4,18 +4,18 @@ import (
 	"bytes"
 	"io"
 
-	"gitlab.ozon.ru/sre/file-d/logger"
 	"gitlab.ozon.ru/sre/file-d/pipeline"
+	"go.uber.org/zap"
 )
 
 type worker struct {
 }
 
-func (w *worker) start(inputController pipeline.InputPluginController, jobProvider *jobProvider, readBufferSize int) {
-	go w.work(inputController, jobProvider, readBufferSize)
+func (w *worker) start(inputController pipeline.InputPluginController, jobProvider *jobProvider, readBufferSize int, logger *zap.SugaredLogger) {
+	go w.work(inputController, jobProvider, readBufferSize, logger)
 }
 
-func (w *worker) work(controller pipeline.InputPluginController, jobProvider *jobProvider, readBufferSize int) {
+func (w *worker) work(controller pipeline.InputPluginController, jobProvider *jobProvider, readBufferSize int, logger *zap.SugaredLogger) {
 	accumBuffer := make([]byte, 0, readBufferSize)
 	readBuffer := make([]byte, readBufferSize)
 	var seqID uint64 = 0

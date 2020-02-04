@@ -7,7 +7,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	insaneJSON "github.com/vitkovskii/insane-json"
-	config2 "gitlab.ozon.ru/sre/file-d/config"
+	"gitlab.ozon.ru/sre/file-d/cfg"
 	"gitlab.ozon.ru/sre/file-d/logger"
 	"gitlab.ozon.ru/sre/file-d/pipeline"
 )
@@ -106,7 +106,7 @@ func TestFormatEvent(t *testing.T) {
 			logger.Panicf(err.Error())
 		}
 
-		err = config2.Parse(config, map[string]int{"gomaxprocs": 1, "capacity": 64})
+		err = cfg.Parse(config, map[string]int{"gomaxprocs": 1, "capacity": 64})
 		if err != nil {
 			logger.Panicf(err.Error())
 		}

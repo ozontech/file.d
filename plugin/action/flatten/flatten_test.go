@@ -5,12 +5,19 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"gitlab.ozon.ru/sre/file-d/cfg"
+	"gitlab.ozon.ru/sre/file-d/logger"
 	"gitlab.ozon.ru/sre/file-d/pipeline"
 	"gitlab.ozon.ru/sre/file-d/test"
 )
 
 func TestFlatten(t *testing.T) {
 	config := &Config{Field: "complex", Prefix: "flat_"}
+	err := cfg.Parse(config, nil)
+	if err != nil {
+		logger.Panicf("wrong config")
+	}
+
 	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, config, pipeline.MatchModeAnd, nil))
 
 	wg := &sync.WaitGroup{}

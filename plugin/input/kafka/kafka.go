@@ -6,8 +6,8 @@ import (
 
 	"github.com/Shopify/sarama"
 	"gitlab.ozon.ru/sre/file-d/fd"
-	"gitlab.ozon.ru/sre/file-d/logger"
 	"gitlab.ozon.ru/sre/file-d/pipeline"
+	"go.uber.org/zap"
 )
 
 /*{ introduction
@@ -17,6 +17,7 @@ It supports commitment mechanism, so it guaranties at least once delivery.
 
 type Plugin struct {
 	config        *Config
+	logger        *zap.SugaredLogger
 	session       sarama.ConsumerGroupSession
 	consumerGroup sarama.ConsumerGroup
 	cancel        context.CancelFunc
@@ -31,14 +32,14 @@ type Config struct {
 	//> @3 @4 @5 @6
 	//>
 	//> Comma-separated list of kafka brokers to read from.
-	Brokers  string `json:"brokers" required:"true" parse:"list"`  //*
+	Brokers  string `json:"brokers" required:"true" parse:"list"` //*
 	Brokers_ []string
 
 	//> @3 @4 @5 @6
 	//>
 	//> Comma separated list of kafka topics to read from.
-	Topics        string `json:"topics" required:"true" parse:"list"` //*
-	Topics_       []string
+	Topics  string `json:"topics" required:"true" parse:"list"` //*
+	Topics_ []string
 
 	//> @3 @4 @5 @6
 	//>
@@ -58,8 +59,8 @@ func Factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 }
 
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginParams) {
-	logger.Info("starting kafka input plugin")
 	p.controller = params.Controller
+	p.logger = params.Logger
 	p.config = config.(*Config)
 
 	p.idByTopic = make(map[string]int)
@@ -75,11 +76,11 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 }
 
 func (p *Plugin) consume() {
-	logger.Infof("kafka input reading from topics: %s", strings.Join(p.config.Topics_, ","))
+	p.logger.Infof("kafka input reading from topics: %s", strings.Join(p.config.Topics_, ","))
 	for {
 		err := p.consumerGroup.Consume(p.context, p.config.Topics_, p)
 		if err != nil {
-			logger.Errorf("can't consume from kafka: %s", err.Error())
+			p.logger.Errorf("can't consume from kafka: %s", err.Error())
 		}
 
 		if p.context.Err() != nil {
@@ -93,7 +94,7 @@ func (p *Plugin) Stop() {
 
 func (p *Plugin) Commit(event *pipeline.Event) {
 	if p.session == nil {
-		logger.Errorf("no kafka consumer session for event commit")
+		p.logger.Errorf("no kafka consumer session for event commit")
 		return
 	}
 	index, partition := disassembleSourceID(event.SourceID)
@@ -107,14 +108,14 @@ func (p *Plugin) newConsumerGroup() sarama.ConsumerGroup {
 
 	consumerGroup, err := sarama.NewConsumerGroup(p.config.Brokers_, p.config.ConsumerGroup, config)
 	if err != nil {
-		logger.Fatalf("can't create kafka consumer: %s", err.Error())
+		p.logger.Fatalf("can't create kafka consumer: %s", err.Error())
 	}
 
 	return consumerGroup
 }
 
 func (p *Plugin) Setup(session sarama.ConsumerGroupSession) error {
-	logger.Infof("kafka consumer created with brokers %q", strings.Join(p.config.Brokers_, ","))
+	p.logger.Infof("kafka consumer created with brokers %q", strings.Join(p.config.Brokers_, ","))
 	p.session = session
 	return nil
 }

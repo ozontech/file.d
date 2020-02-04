@@ -3,37 +3,7 @@ Plugin also known as "multiline" makes one big event from event sequence.
 Useful for assembling back together "exceptions" or "panics" if they was written line by line.
 
 > ⚠ Parsing all event flow could be very CPU intensive because plugin uses regular expressions.
-> Consider `match_fields` parameter to apply it only for particular events. Check out example for details.
-
-### Understanding start/continue regexps
-
-No joining:
-```
-event 1
-event 2 – matches start regexp
-event 3
-event 4 – matches continue regexp
-event 5
-```
-
-Events `event 2` and `event 3` will be joined:
-```
-event 1
-event 2 – matches start regexp
-event 3 – matches continue regexp
-event 4
-```
-
-Events from `event 2` to `event N` will be joined:
-```
-event 1
-event 2 matches start regexp
-event 3 matches continue regexp
-event ... matches continue regexp
-event N matches continue regexp
-event N+1
-```
-<br/>
+> Consider `match_fields` parameter to process only particular events. Check out example for details.
 
 Example of joining Golang panics:
 ```
@@ -70,5 +40,32 @@ Regexp which will start join sequence.
 Regexp which will continue join sequence.
 
 
+### Understanding start/continue regexps
+No joining:
+```
+event 1
+event 2 – matches start regexp
+event 3
+event 4 – matches continue regexp
+event 5
+```
+
+Events `event 2` and `event 3` will be joined:
+```
+event 1
+event 2 – matches start regexp
+event 3 – matches continue regexp
+event 4
+```
+
+Events from `event 2` to `event N` will be joined:
+```
+event 1
+event 2 matches start regexp
+event 3 matches continue regexp
+event ... matches continue regexp
+event N matches continue regexp
+event N+1
+```
 ##
  *Generated using **insane-doc***

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"reflect"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -73,6 +74,7 @@ func parseConfig(json *simplejson.Json) *Config {
 	return config
 }
 
+// Parse holy shit! who write this function?
 func Parse(ptr interface{}, values map[string]int) error {
 	v := reflect.ValueOf(ptr).Elem()
 	t := v.Type()
@@ -133,6 +135,12 @@ func Parse(ptr interface{}, values map[string]int) error {
 			finalField := v.FieldByName(t.Field(i).Name + "_")
 
 			switch tag {
+			case "regexp":
+				re, err := CompileRegex(vField.String())
+				if err != nil {
+					return fmt.Errorf("can't compile regexp for field %s: %s", t.Field(i).Name, err.Error())
+				}
+				finalField.Set(reflect.ValueOf(re))
 			case "selector":
 				fields := ParseFieldSelector(vField.String())
 				finalField.Set(reflect.ValueOf(fields))
@@ -279,4 +287,12 @@ func ParseFieldSelector(selector string) []string {
 	}
 
 	return result
+}
+
+func CompileRegex(s string) (*regexp.Regexp, error) {
+	if len(s) == 0 || s[0] != '/' || s[len(s)-1] != '/' {
+		return nil, fmt.Errorf(`regexp "%s" should be surounded by "/"`, s)
+	}
+
+	return regexp.Compile(s[1 : len(s)-1])
 }

@@ -3,8 +3,8 @@ package modify
 import (
 	"gitlab.ozon.ru/sre/file-d/cfg"
 	"gitlab.ozon.ru/sre/file-d/fd"
-	"gitlab.ozon.ru/sre/file-d/logger"
 	"gitlab.ozon.ru/sre/file-d/pipeline"
+	"go.uber.org/zap"
 )
 
 /*{ introduction
@@ -37,6 +37,7 @@ Result event could looks like:
 }*/
 type Plugin struct {
 	config *Config
+	logger *zap.SugaredLogger
 	ops    map[string][]cfg.SubstitutionOp
 	buf    []byte
 }
@@ -54,13 +55,15 @@ func factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 	return &Plugin{}, &Config{}
 }
 
-func (p *Plugin) Start(config pipeline.AnyConfig, _ *pipeline.ActionPluginParams) {
+func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginParams) {
 	p.config = config.(*Config)
+	p.ops = make(map[string][]cfg.SubstitutionOp)
+	p.logger = params.Logger
 
 	for key, value := range *p.config {
 		ops, err := cfg.ParseSubstitution(value)
 		if err != nil {
-			logger.Fatalf("can't parse config for modify plugin: %s", err.Error())
+			p.logger.Fatalf("can't parse substitution: %s", err.Error())
 		}
 
 		if len(ops) == 0 {
@@ -83,7 +86,8 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 				p.buf = append(p.buf, op.Data[0]...)
 			case cfg.SubstitutionOpKindField:
 				p.buf = append(p.buf, event.Root.Dig(op.Data...).AsBytes()...)
-
+			default:
+				p.logger.Panicf("unknown substitution kind %d", op.Kind)
 			}
 		}
 

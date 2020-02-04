@@ -8,8 +8,8 @@ import (
 	"sync"
 	"time"
 
-	"gitlab.ozon.ru/sre/file-d/logger"
 	"go.uber.org/atomic"
+	"go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
@@ -73,9 +73,12 @@ var (
 	expiredItemsCounter atomic.Int64
 
 	node string
+
+	logger *zap.SugaredLogger
 )
 
-func enableGatherer() {
+func enableGatherer(l *zap.SugaredLogger) {
+	logger = l
 	logger.Info("enabling k8s meta gatherer")
 
 	initGatherer()
