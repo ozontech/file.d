@@ -144,7 +144,6 @@ func Parse(ptr interface{}, values map[string]int) error {
 			case "selector":
 				fields := ParseFieldSelector(vField.String())
 				finalField.Set(reflect.ValueOf(fields))
-
 			case "duration":
 				result, err := time.ParseDuration(vField.String())
 				if err != nil {
@@ -225,24 +224,15 @@ func Parse(ptr interface{}, values map[string]int) error {
 			}
 		}
 
-		if required {
-			switch vField.Kind() {
-			case reflect.String:
-				if vField.String() == "" {
-					return fmt.Errorf("field %s should be set as not empty string", t.Field(i).Name)
-				}
-			case reflect.Int:
-				if vField.Int() == 0 {
-					return fmt.Errorf("field %s should be set as not zero int", t.Field(i).Name)
-				}
-			}
+		if required && vField.IsZero() {
+			return fmt.Errorf("field %s should set as non-zero value", t.Field(i).Name)
 		}
 	}
 
 	return nil
 }
 
-func UnescapeMap(fields map[string]string) map[string]string {
+func UnescapeMap(fields map[string]interface{}) map[string]string {
 	result := make(map[string]string)
 
 	for key, val := range fields {
@@ -254,7 +244,7 @@ func UnescapeMap(fields map[string]string) map[string]string {
 			key = key[1:]
 		}
 
-		result[key] = val
+		result[key] = val.(string)
 	}
 
 	return result
@@ -289,7 +279,20 @@ func ParseFieldSelector(selector string) []string {
 	return result
 }
 
+func ListToMap(a []string) map[string]bool {
+	result := make(map[string]bool)
+	for _, key := range a {
+		result[key] = true
+	}
+
+	return result
+}
+
 func CompileRegex(s string) (*regexp.Regexp, error) {
+	if s == "" {
+		return nil, fmt.Errorf(`regexp is empty`)
+	}
+
 	if len(s) == 0 || s[0] != '/' || s[len(s)-1] != '/' {
 		return nil, fmt.Errorf(`regexp "%s" should be surounded by "/"`, s)
 	}

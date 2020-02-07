@@ -8,7 +8,7 @@ import (
 
 	"github.com/alecthomas/kingpin"
 	insaneJSON "github.com/vitkovskii/insane-json"
-	config2 "gitlab.ozon.ru/sre/file-d/config"
+	"gitlab.ozon.ru/sre/file-d/cfg"
 	"gitlab.ozon.ru/sre/file-d/fd"
 	"gitlab.ozon.ru/sre/file-d/logger"
 	"gitlab.ozon.ru/sre/file-d/pipeline"
@@ -67,7 +67,7 @@ func main() {
 }
 
 func start() () {
-	fileD = fd.New(config2.NewConfigFromFile(*config), *http)
+	fileD = fd.New(cfg.NewConfigFromFile(*config), *http)
 	fileD.Start()
 }
 

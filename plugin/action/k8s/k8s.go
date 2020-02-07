@@ -1,6 +1,7 @@
 package k8s
 
 import (
+	"gitlab.ozon.ru/sre/file-d/cfg"
 	"gitlab.ozon.ru/sre/file-d/fd"
 	"gitlab.ozon.ru/sre/file-d/pipeline"
 	"go.uber.org/atomic"
@@ -33,9 +34,8 @@ type Config struct {
 
 	//>  @3 @4 @5 @6
 	//>
-	//> By default plugin adds all pod labels to the event. List here only those which are needed.
-	//> e.g. `app,release`
-	LabelsWhitelist  string `json:"labels_whitelist" parse:"list-map"` //*
+	//> If set defines which pod labels to add to the event, others will be ignored.
+	LabelsWhitelist  []string `json:"labels_whitelist"` //*
 	LabelsWhitelist_ map[string]bool
 
 	//>  @3 @4 @5 @6
@@ -64,6 +64,8 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 	p.logger = params.Logger
 
 	startCounter := startCounter.Inc()
+	p.config.LabelsWhitelist_ = cfg.ListToMap(p.config.LabelsWhitelist)
+
 	if startCounter == 1 {
 		enableGatherer(p.logger)
 	}

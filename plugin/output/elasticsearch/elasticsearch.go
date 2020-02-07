@@ -5,7 +5,6 @@ import (
 	"io/ioutil"
 	"math/rand"
 	"net/http"
-	"strings"
 	"sync"
 	"time"
 
@@ -38,9 +37,8 @@ type Plugin struct {
 type Config struct {
 	//> @3 @4 @5 @6
 	//>
-	//> Comma separated list of elasticsearch endpoints in format `SCHEMA://HOST:PORT`
-	Endpoints  string `json:"endpoints" parse:"list" required:"true"` //*
-	Endpoints_ []string
+	//> List of elasticsearch endpoints in format `SCHEMA://HOST:PORT`
+	Endpoints []string `json:"endpoints"  required:"true"` //*
 
 	//> @3 @4 @5 @6
 	//>
@@ -54,9 +52,8 @@ type Config struct {
 	//>
 	//> Comma-separated list of event fields which will be used for replacement `index_format`.
 	//> There is a special field `@@time` which equals to current time. Use `time_format` to define time format.
-	//> E.g. `service,@@time`
-	IndexValues  string `json:"index_values" default:"@time" parse:"list"` //*
-	IndexValues_ []string
+	//> E.g. `[service, @@time]`
+	IndexValues []string `json:"index_values" default:"[@time]"` //*
 
 	//> @3 @4 @5 @6
 	//>
@@ -117,12 +114,15 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.config = config.(*Config)
 	p.mu = &sync.Mutex{}
 
-	p.config.Endpoints_ = strings.Split(p.config.Endpoints, ",")
-	for i, endpoint := range p.config.Endpoints_ {
+	if len(p.config.IndexValues) == 0 {
+		p.config.IndexValues = append(p.config.IndexValues, "@time")
+	}
+
+	for i, endpoint := range p.config.Endpoints {
 		if endpoint[len(endpoint)-1] == '/' {
 			endpoint = endpoint[:len(endpoint)-1]
 		}
-		p.config.Endpoints_[i] = endpoint + "/_bulk?_source=false"
+		p.config.Endpoints[i] = endpoint + "/_bulk?_source=false"
 	}
 
 	p.client = &http.Client{
@@ -171,7 +171,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 	}
 
 	for {
-		endpoint := p.config.Endpoints_[rand.Int()%len(p.config.Endpoints_)]
+		endpoint := p.config.Endpoints[rand.Int()%len(p.config.Endpoints)]
 		resp, err := p.client.Post(endpoint, "application/x-ndjson", bytes.NewBuffer(data.outBuf))
 		if err != nil {
 			p.logger.Errorf("can't send batch to %s, will try other endpoint: %s", endpoint, err.Error())
@@ -229,10 +229,10 @@ func (p *Plugin) appendIndexName(outBuf []byte, event *pipeline.Event) []byte {
 			continue
 		}
 
-		if replacements >= len(p.config.IndexValues_) {
+		if replacements >= len(p.config.IndexValues) {
 			p.logger.Fatalf("count of placeholders and values isn't match, check index_format/index_values config params")
 		}
-		value := p.config.IndexValues_[replacements]
+		value := p.config.IndexValues[replacements]
 		replacements++
 
 		if value == "@time" {

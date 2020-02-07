@@ -74,7 +74,7 @@ func (f *FileD) addPipeline(name string, config *cfg.PipelineConfig) {
 		"gomaxprocs": runtime.GOMAXPROCS(0),
 	}
 
-	logger.Infof("creating pipeline %q: capacity=%d, stream field=%s", name, settings.Capacity, settings.StreamField)
+	logger.Infof("creating pipeline %q: capacity=%d, stream field=%s, decoder=%s", name, settings.Capacity, settings.StreamField, settings.Decoder)
 
 	p := pipeline.New(name, settings, f.registry, mux)
 	err := f.setupInput(p, config, values)

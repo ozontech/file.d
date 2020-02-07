@@ -36,7 +36,7 @@ type Plugin struct {
 	preserveFields bool
 }
 
-type Config map[string]string
+type Config map[string]interface{}
 
 func init() {
 	fd.DefaultPluginRegistry.RegisterAction(&pipeline.PluginStaticInfo{
@@ -51,11 +51,12 @@ func factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 
 func (p *Plugin) Start(config pipeline.AnyConfig, _ *pipeline.ActionPluginParams) {
 	c := *config.(*Config)
-	p.preserveFields = c["override"] == "false"
+	p.preserveFields = c["override"] == nil || !c["override"].(bool)
 
-	c = cfg.UnescapeMap(c)
+	delete(c, "override")
+	m := cfg.UnescapeMap(c)
 
-	for path, name := range c {
+	for path, name := range m {
 		selector := cfg.ParseFieldSelector(path)
 		p.paths = append(p.paths, selector)
 		p.names = append(p.names, name)

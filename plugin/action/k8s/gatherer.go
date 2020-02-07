@@ -81,22 +81,21 @@ func enableGatherer(l *zap.SugaredLogger) {
 	logger = l
 	logger.Info("enabling k8s meta gatherer")
 
-	initGatherer()
-
-	stopWg.Add(1)
-	go maintenance()
-
 	if !DisableMetaUpdates {
+		initGatherer()
+
 		go controller.Run(informerStop)
 	}
+
+	go maintenance()
 }
 
 func disableGatherer() {
 	logger.Info("disabling k8s meta gatherer")
-	maintenanceStop <- true
 	if !DisableMetaUpdates {
 		informerStop <- struct{}{}
 	}
+	maintenanceStop <- true
 	stopWg.Wait()
 }
 
@@ -109,19 +108,18 @@ func initGatherer() {
 			logger.Fatalf("can't get k8s client config: %s", err.Error())
 		}
 	}
+
 	client, err = kubernetes.NewForConfig(apiConfig)
 	if err != nil {
 		logger.Fatalf("can't create k8s client: %s", err.Error())
 		panic("")
 	}
 
-	if !DisableMetaUpdates {
-		detectNode()
-		initInformer()
-	}
+	initNodeInfo()
+	initInformer()
 }
 
-func detectNode() {
+func initNodeInfo() {
 	podName, err := os.Hostname()
 	if err != nil {
 		logger.Fatalf("can't get host name for k8s plugin: %s", err.Error())
@@ -167,6 +165,7 @@ func removeExpired() {
 }
 
 func maintenance() {
+	stopWg.Add(1)
 	for {
 		select {
 		case <-maintenanceStop:

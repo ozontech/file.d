@@ -1,10 +1,14 @@
-VERSION ?= v0.1.1
+VERSION ?= v0.1.2
 
 .PHONY: test
 test:
 	go test ./fd/ -v -count 1
 	go test ./pipeline/ -v -count 1
 	go test ./plugin/... -v -count 1
+
+.PHONY: test-e2e
+test-e2e:
+	go test ./cmd/ -v -count 1
 
 .PHONY: bench-file
 bench-file:

@@ -21,10 +21,10 @@ func TestRename(t *testing.T) {
 		wg.Done()
 	})
 
-	input.In(0, "test.log", 0, 0, []byte(`{"field_1":"value_1"}`))
-	input.In(0, "test.log", 0, 0, []byte(`{"field_2":"value_2"}`))
-	input.In(0, "test.log", 0, 0, []byte(`{"field_3":"value_3"}`))
-	input.In(0, "test.log", 0, 0, []byte(`{"field_4":{"field_5":"value_5"}}`))
+	input.In(0, "test.log", 0, []byte(`{"field_1":"value_1"}`))
+	input.In(0, "test.log", 0, []byte(`{"field_2":"value_2"}`))
+	input.In(0, "test.log", 0, []byte(`{"field_3":"value_3"}`))
+	input.In(0, "test.log", 0, []byte(`{"field_4":{"field_5":"value_5"}}`))
 
 	wg.Wait()
 	p.Stop()

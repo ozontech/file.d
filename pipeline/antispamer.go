@@ -2,6 +2,7 @@ package pipeline
 
 import (
 	"sync"
+	"time"
 
 	"gitlab.ozon.ru/sre/file-d/logger"
 	"go.uber.org/atomic"
@@ -14,9 +15,9 @@ type antispamer struct {
 	counters        map[SourceID]*atomic.Int32
 }
 
-func newAntispamer(threshold int, unbanIterations int) *antispamer {
+func newAntispamer(threshold int, unbanIterations int, maintenanceInterval time.Duration) *antispamer {
 	if threshold != 0 {
-		logger.Infof("antispam enabled, threshold=%d", threshold)
+		logger.Infof("antispam enabled, threshold=%d/%d sec", threshold, maintenanceInterval / time.Second)
 	}
 
 	return &antispamer{
@@ -27,7 +28,7 @@ func newAntispamer(threshold int, unbanIterations int) *antispamer {
 	}
 }
 
-func (p *antispamer) check(id SourceID, name string, isNew bool) bool {
+func (p *antispamer) isSpam(id SourceID, name string, isNewSource bool) bool {
 	if p.threshold == 0 {
 		return false
 	}
@@ -43,8 +44,9 @@ func (p *antispamer) check(id SourceID, name string, isNew bool) bool {
 		p.mu.Unlock()
 	}
 
-	if isNew {
+	if isNewSource {
 		value.Swap(0)
+		return false
 	}
 
 	x := value.Inc()

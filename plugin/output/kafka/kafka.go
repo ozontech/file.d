@@ -35,9 +35,8 @@ type Plugin struct {
 type Config struct {
 	//> @3 @4 @5 @6
 	//>
-	//> Comma-separated list of kafka brokers to write to.
-	Brokers  string `json:"brokers" required:"true"` //*
-	Brokers_ []string
+	//> List of kafka brokers to write to.
+	Brokers []string `json:"brokers" required:"true"` //*
 
 	//> @3 @4 @5 @6
 	//>
@@ -69,7 +68,7 @@ type Config struct {
 	//> @3 @4 @5 @6
 	//>
 	//> After this timeout batch will be sent even if batch isn't full.
-	BatchFlushTimeout  cfg.Duration `json:"batch_flush_timeout" parse:"duration"` //*
+	BatchFlushTimeout  cfg.Duration `json:"batch_flush_timeout" default:"200ms" parse:"duration"` //*
 	BatchFlushTimeout_ time.Duration
 }
 
@@ -89,6 +88,8 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.logger = params.Logger
 	p.avgLogSize = params.PipelineSettings.AvgLogSize
 	p.controller = params.Controller
+
+	p.logger.Infof("workers count=%d, batch size=%d", p.config.WorkersCount_, p.config.BatchSize_)
 
 	p.producer = p.newProducer()
 	p.batcher = pipeline.NewBatcher(
@@ -169,11 +170,11 @@ func (p *Plugin) newProducer() sarama.SyncProducer {
 	config.Producer.Return.Errors = true
 	config.Producer.Return.Successes = true
 
-	producer, err := sarama.NewSyncProducer(p.config.Brokers_, config)
+	producer, err := sarama.NewSyncProducer(p.config.Brokers, config)
 	if err != nil {
 		p.logger.Fatalf("can't create producer: %s", err.Error())
 	}
 
-	p.logger.Infof("producer created with brokers %q", strings.Join(p.config.Brokers_, ","))
+	p.logger.Infof("producer created with brokers %q", strings.Join(p.config.Brokers, ","))
 	return producer
 }

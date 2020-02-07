@@ -12,7 +12,7 @@ import (
 	"time"
 
 	uuid "github.com/satori/go.uuid"
-	config2 "gitlab.ozon.ru/sre/file-d/config"
+	"gitlab.ozon.ru/sre/file-d/cfg"
 	"gitlab.ozon.ru/sre/file-d/fd"
 	_ "gitlab.ozon.ru/sre/file-d/plugin/action/discard"
 	_ "gitlab.ozon.ru/sre/file-d/plugin/action/json_decode"
@@ -60,12 +60,13 @@ main.main()
 `
 )
 
+const testTime = 10 * time.Minute
+
 // TestEndToEnd creates near-realistic workload and setups a complex pipeline.
 // It's something like fuzz testing. file-d shouldn't crash/panic or hang for infinite time.
-// Keep this test running while you are sleeping is a very good idea :)
+// E.g. keep this test running while you are sleeping :)
 func TestEndToEnd(t *testing.T) {
 	configFilename := "./../testdata/config/e2e.yaml"
-	testTime := time.Minute
 	iterationInterval := time.Second * 10
 	writerCount := 8
 	fileCount := 8
@@ -81,13 +82,13 @@ func TestEndToEnd(t *testing.T) {
 	filesDir, _ := ioutil.TempDir("", "file-d")
 	offsetsDir, _ := ioutil.TempDir("", "file-d")
 
-	config := config2.NewConfigFromFile(configFilename)
+	config := cfg.NewConfigFromFile(configFilename)
 	input := config.Pipelines["test"].Raw.Get("input")
 	input.Set("watching_dir", filesDir)
 	input.Set("offsets_file", filepath.Join(offsetsDir, "offsets.yaml"))
 
-	fd := fd.New(config, ":9000")
-	fd.Start()
+	fileD := fd.New(config, ":9000")
+	fileD.Start()
 
 	tm := time.Now()
 	for {

@@ -193,8 +193,8 @@ func (e *Event) String() string {
 type eventPool struct {
 	capacity int
 
-	eventsCount int
-	events      []*Event
+	freeEventsCount int
+	events          []*Event
 
 	mu   *sync.Mutex
 	cond *sync.Cond
@@ -202,9 +202,9 @@ type eventPool struct {
 
 func newEventPool(capacity int) *eventPool {
 	eventPool := &eventPool{
-		capacity:    capacity,
-		eventsCount: capacity,
-		mu:          &sync.Mutex{},
+		capacity:        capacity,
+		freeEventsCount: capacity,
+		mu:              &sync.Mutex{},
 	}
 
 	eventPool.cond = sync.NewCond(eventPool.mu)
@@ -216,23 +216,14 @@ func newEventPool(capacity int) *eventPool {
 	return eventPool
 }
 
-func (p *eventPool) visit(fn func(*Event)) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
-	for i := 0; i < p.eventsCount; i++ {
-		fn(p.events[i])
-	}
-}
-
 func (p *eventPool) get() *Event {
 	p.mu.Lock()
 
-	for p.eventsCount == 0 {
+	for p.freeEventsCount == 0 {
 		p.cond.Wait()
 	}
-	p.eventsCount--
-	event := p.events[p.eventsCount]
+	p.freeEventsCount--
+	event := p.events[p.freeEventsCount]
 
 	p.mu.Unlock()
 
@@ -243,8 +234,8 @@ func (p *eventPool) get() *Event {
 func (p *eventPool) back(event *Event) {
 	p.mu.Lock()
 	event.stage = eventStagePool
-	p.events[p.eventsCount] = event
-	p.eventsCount++
+	p.events[p.freeEventsCount] = event
+	p.freeEventsCount++
 	p.cond.Signal()
 	p.mu.Unlock()
 }
@@ -252,9 +243,10 @@ func (p *eventPool) back(event *Event) {
 func (p *eventPool) dump() string {
 	out := logger.Cond(len(p.events) == 0, logger.Header("no events"), func() string {
 		o := logger.Header("events")
-		p.visit(func(event *Event) {
+		for i := 0; i < p.freeEventsCount; i++ {
+			event := p.events[i]
 			o += event.String() + "\n"
-		})
+		}
 
 		return o
 	})

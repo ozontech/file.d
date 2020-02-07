@@ -8,7 +8,7 @@ import (
 /*{ introduction
 Plugin simply drops event. Used in a combination with `match_fields` parameters to filter out events.
 
-*Example discarding informational and debug logs:*
+Example discarding informational and debug logs:
 ```
 pipelines:
   example_pipeline:
@@ -20,7 +20,7 @@ pipelines:
     ...
 ```
 
-} */
+}*/
 type Plugin struct {
 }
 

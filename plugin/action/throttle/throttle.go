@@ -36,7 +36,7 @@ type Config struct {
 	//> Event field which will be used as a key for throttling.
 	//> It means that throttling will work separately for events with different keys.
 	//> If not set, it's assumed that all events have the same key.
-	ThrottleField  cfg.FieldSelector `json:"throttle_field" default:""` //*
+	ThrottleField  cfg.FieldSelector `json:"throttle_field" default:"" parse:"selector"` //*
 	ThrottleField_ []string
 
 	//> @3 @4 @5 @6
@@ -59,15 +59,15 @@ type Config struct {
 
 	//> @3 @4 @5 @6
 	//>
-	//> Time interval to check event throughput.
-	Interval  cfg.Duration `json:"interval" parse:"duration" default:"1m"` //*
-	Interval_ time.Duration
+	//> How much time buckets to hold in the memory. E.g. if `buckets_count` is `60` and `interval` is `5m`,
+	//> then `5 hours` will be covered. Events with time later than `now() - 5h` will be dropped even if threshold isn't exceeded.
+	BucketsCount int `json:"buckets_count" default:"60"` //*
 
 	//> @3 @4 @5 @6
 	//>
-	//> How much time buckets to hold in the memory. E.g. if `buckets_count` is `60` and `interval` is `5m`,
-	//> then `5 hours` will be covered. Events with time later than `now() - 5h` will be dropped even if threshold isn't exceeded.
-	Buckets int `json:"buckets_count" default:"60"` //*
+	//> Time interval to check event throughput.
+	BucketInterval  cfg.Duration `json:"bucket_interval" parse:"duration" default:"1m"` //*
+	BucketInterval_ time.Duration
 
 	//> @3 @4 @5 @6
 	//>
@@ -152,7 +152,7 @@ func (p *Plugin) isAllowed(event *pipeline.Event) bool {
 		limitersMu.RUnlock()
 
 		if !has {
-			limiter = NewLimiter(p.config.Interval_, p.config.Buckets, rule.limit)
+			limiter = NewLimiter(p.config.BucketInterval_, p.config.BucketsCount, rule.limit)
 			// alloc new string before adding new key to map
 			limiterKey = string(p.limiterBuff)
 			limitersMu.Lock()

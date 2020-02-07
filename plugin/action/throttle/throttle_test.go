@@ -31,18 +31,18 @@ func TestThrottle(t *testing.T) {
 			{Limit: int64(limitA), Conditions: map[string]string{"k8s_ns": "ns_1"}},
 			{Limit: int64(limitB), Conditions: map[string]string{"k8s_ns": "ns_2"}},
 		},
-		Buckets:       buckets,
-		Interval:      "100ms",
-		ThrottleField: "k8s_pod",
-		TimeField:     "time",
-		DefaultLimit:  int64(defaultLimit),
+		BucketsCount:   buckets,
+		BucketInterval: "100ms",
+		ThrottleField:  "k8s_pod",
+		TimeField:      "time",
+		DefaultLimit:   int64(defaultLimit),
 	}
 	err := cfg.Parse(config, nil)
 	if err != nil {
 		logger.Panic(err.Error())
 	}
 
-	workTime := config.Interval_ * time.Duration(iterations)
+	workTime := config.BucketInterval_ * time.Duration(iterations)
 
 	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, config, pipeline.MatchModeAnd, nil))
 	wg := &sync.WaitGroup{}
@@ -71,7 +71,7 @@ func TestThrottle(t *testing.T) {
 		index := rand.Int() % len(formats)
 		json := fmt.Sprintf(formats[index], time.Now().Format(time.RFC3339Nano))
 
-		input.In(10, sourceNames[rand.Int()%len(sourceNames)], 0, 0, []byte(json))
+		input.In(10, sourceNames[rand.Int()%len(sourceNames)], 0, []byte(json))
 		if time.Now().Sub(startTime) > workTime {
 			break
 		}

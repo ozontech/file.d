@@ -47,11 +47,11 @@ func (p *Plugin) Commit(event *pipeline.Event) {
 //^ _ _ code
 
 //> Sends test event into pipeline.
-func (p *Plugin) In(sourceID pipeline.SourceID, sourceName string, offset int64, _ int64, bytes []byte) { //*
+func (p *Plugin) In(sourceID pipeline.SourceID, sourceName string, offset int64, bytes []byte) { //*
 	if p.inFn != nil {
 		p.inFn()
 	}
-	p.controller.In(sourceID, sourceName, offset, bytes)
+	p.controller.In(sourceID, sourceName, offset, bytes, false)
 }
 
 //> Sets up a hook to make sure test event have been successfully committed.

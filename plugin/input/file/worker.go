@@ -28,6 +28,7 @@ func (w *worker) work(controller pipeline.InputPluginController, jobProvider *jo
 		job.mu.Lock()
 		file := job.file
 		isDone := job.isDone
+		isVirgin := job.isVirgin
 		sourceID := job.sourceID
 		sourceName := job.filename
 		skipLine := job.shouldSkip
@@ -88,9 +89,9 @@ func (w *worker) work(controller pipeline.InputPluginController, jobProvider *jo
 					offset := lastOffset + accumulated + pos + 1
 					if len(accumBuffer) != 0 {
 						accumBuffer = append(accumBuffer, readBuffer[processed:pos]...)
-						seqID = controller.In(sourceID, sourceName, offset, accumBuffer)
+						seqID = controller.In(sourceID, sourceName, offset, accumBuffer, isVirgin)
 					} else {
-						seqID = controller.In(sourceID, sourceName, offset, readBuffer[processed:pos])
+						seqID = controller.In(sourceID, sourceName, offset, readBuffer[processed:pos], isVirgin)
 					}
 					job.lastEventSeq = seqID
 				}

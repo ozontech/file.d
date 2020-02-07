@@ -20,9 +20,9 @@ func TestRemoveFields(t *testing.T) {
 		wg.Done()
 	})
 
-	input.In(0, "test.log", 0, 0, []byte(`{"field_1":"value_1","a":"b"}`))
-	input.In(0, "test.log", 0, 0, []byte(`{"field_2":"value_2","b":"c"}`))
-	input.In(0, "test.log", 0, 0, []byte(`{"field_3":"value_3","a":"b"}`))
+	input.In(0, "test.log", 0, []byte(`{"field_1":"value_1","a":"b"}`))
+	input.In(0, "test.log", 0, []byte(`{"field_2":"value_2","b":"c"}`))
+	input.In(0, "test.log", 0, []byte(`{"field_3":"value_3","a":"b"}`))
 
 	wg.Wait()
 	p.Stop()

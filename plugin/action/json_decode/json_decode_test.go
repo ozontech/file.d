@@ -33,7 +33,7 @@ func TestDecode(t *testing.T) {
 		wg.Done()
 	})
 
-	input.In(0, "test.log", 0, 0, []byte(`{"log":"{\"field2\":\"value2\",\"field3\":\"value3\"}"}`))
+	input.In(0, "test.log", 0, []byte(`{"log":"{\"field2\":\"value2\",\"field3\":\"value3\"}"}`))
 
 	wg.Wait()
 	p.Stop()

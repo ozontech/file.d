@@ -52,7 +52,7 @@ func getPodInfo(item *metaItem, isWhite bool) *corev1.Pod {
 }
 
 func config() *Config {
-	config := &Config{LabelsWhitelist: "white_label"}
+	config := &Config{LabelsWhitelist: []string{"white_label"}}
 	err := cfg.Parse(config, nil)
 	if err != nil {
 		logger.Panic(err.Error())
@@ -82,7 +82,7 @@ func TestEnrichment(t *testing.T) {
 		wg.Done()
 	})
 
-	input.In(0, filename, 0, 0, []byte(`{"time":"time","log":"log\n"}`))
+	input.In(0, filename, 0, []byte(`{"time":"time","log":"log\n"}`))
 
 	wg.Wait()
 	p.Stop()
@@ -124,8 +124,8 @@ func TestWhitelist(t *testing.T) {
 		wg.Done()
 	})
 
-	input.In(0, filename1, 0, 0, []byte(`{"time":"time","log":"log\n"}`))
-	input.In(0, filename2, 0, 0, []byte(`{"time":"time","log":"log\n"}`))
+	input.In(0, filename1, 0, []byte(`{"time":"time","log":"log\n"}`))
+	input.In(0, filename2, 0, []byte(`{"time":"time","log":"log\n"}`))
 
 	wg.Wait()
 	p.Stop()
@@ -157,14 +157,14 @@ func TestJoin(t *testing.T) {
 	})
 
 	filename := getLogFilename("/docker-logs", item)
-	input.In(0, filename, 10, 10, []byte(`{"ts":"time","stream":"stdout","log":"one line log 1\n"}`))
-	input.In(0, filename, 20, 10, []byte(`{"ts":"time","stream":"stderr","log":"error "}`))
-	input.In(0, filename, 30, 10, []byte(`{"ts":"time","stream":"stdout","log":"this "}`))
-	input.In(0, filename, 40, 10, []byte(`{"ts":"time","stream":"stdout","log":"is "}`))
-	input.In(0, filename, 50, 10, []byte(`{"ts":"time","stream":"stdout","log":"joined "}`))
-	input.In(0, filename, 60, 10, []byte(`{"ts":"time","stream":"stdout","log":"log 2\n"}`))
-	input.In(0, filename, 70, 10, []byte(`{"ts":"time","stream":"stderr","log":"joined\n"}`))
-	input.In(0, filename, 80, 10, []byte(`{"ts":"time","stream":"stdout","log":"one line log 3\n"}`))
+	input.In(0, filename, 10, []byte(`{"ts":"time","stream":"stdout","log":"one line log 1\n"}`))
+	input.In(0, filename, 20, []byte(`{"ts":"time","stream":"stderr","log":"error "}`))
+	input.In(0, filename, 30, []byte(`{"ts":"time","stream":"stdout","log":"this "}`))
+	input.In(0, filename, 40, []byte(`{"ts":"time","stream":"stdout","log":"is "}`))
+	input.In(0, filename, 50, []byte(`{"ts":"time","stream":"stdout","log":"joined "}`))
+	input.In(0, filename, 60, []byte(`{"ts":"time","stream":"stdout","log":"log 2\n"}`))
+	input.In(0, filename, 70, []byte(`{"ts":"time","stream":"stderr","log":"joined\n"}`))
+	input.In(0, filename, 80, []byte(`{"ts":"time","stream":"stdout","log":"one line log 3\n"}`))
 
 	wg.Wait()
 	p.Stop()

@@ -61,6 +61,7 @@ type job struct {
 	ignoreEventsLE uint64 // events with seq id less or equal than this should be ignored in terms offset commitment
 	lastEventSeq   uint64
 
+	isVirgin   bool // it should be set to false if job hits isDone=true at the first time
 	isDone     bool
 	shouldSkip bool
 
@@ -257,6 +258,7 @@ func (jp *jobProvider) addJob(file *os.File, stat os.FileInfo, filename string, 
 		symlink:  symlink,
 		sourceID: sourceID,
 
+		isVirgin:   true,
 		isDone:     true,
 		shouldSkip: false,
 
@@ -390,6 +392,7 @@ func (jp *jobProvider) doneJob(job *job) {
 		jp.logger.Panicf("job is already done")
 	}
 	job.isDone = true
+	job.isVirgin = false
 
 	jp.jobsMu.Lock()
 	v := int(jp.jobsDone.Inc())

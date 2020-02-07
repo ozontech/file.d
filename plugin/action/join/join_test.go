@@ -199,7 +199,7 @@ func TestJoin(t *testing.T) {
 
 	for i := 0; i < iterations; i++ {
 		for m, line := range lines {
-			input.In(0, "test.log", int64(i*10000+m), int64(len(line)), []byte(line))
+			input.In(0, "test.log", int64(i*10000+m), []byte(line))
 		}
 	}
 

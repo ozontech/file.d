@@ -33,7 +33,7 @@ const (
 type finalizeFn = func(event *Event, notifyInput bool, backEvent bool)
 
 type InputPluginController interface {
-	In(sourceID SourceID, sourceName string, offset int64, data []byte) uint64
+	In(sourceID SourceID, sourceName string, offset int64, data []byte, isNewSource bool) uint64
 	DisableStreams() // don't use stream field and spread all events across all processors
 }
 
@@ -112,7 +112,7 @@ func New(name string, settings *Settings, registry *prometheus.Registry, mux *ht
 		metricsHolder: newMetricsHolder(name, registry, metricsGenInterval),
 		streamer:      newStreamer(),
 		eventPool:     newEventPool(settings.Capacity),
-		antispamer:    newAntispamer(settings.AntispamThreshold, antispamUnbanIterations),
+		antispamer:    newAntispamer(settings.AntispamThreshold, antispamUnbanIterations, settings.MaintenanceInterval),
 
 		eventLog:   make([]string, 0, 128),
 		eventLogMu: &sync.Mutex{},
@@ -207,12 +207,12 @@ func (p *Pipeline) GetOutput() OutputPlugin {
 	return p.output
 }
 
-func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes []byte) uint64 {
+func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes []byte, isNewSource bool) uint64 {
 	length := len(bytes)
 
 	// don't process shit
 	isEmpty := length == 0
-	isSpam := p.antispamer.check(sourceID, sourceName, (offset-int64(length)) <= 1)
+	isSpam := p.antispamer.isSpam(sourceID, sourceName, isNewSource)
 	if isEmpty || isSpam {
 		return 0
 	}
@@ -406,7 +406,7 @@ func (p *Pipeline) maintenance() {
 			tc = 1
 		}
 
-		p.logger.Infof("%q pipeline stats interval=%ds, active procs=%d/%d, queue=%d/%d, out=%d|%.1fMb, rate=%d/s|%.1fMb/s, total=%d|%.1fMb, avg size=%d, max size=%d", p.Name, interval/time.Second, p.activeProcs.Load(), p.procCount.Load(), p.eventPool.eventsCount, p.settings.Capacity, deltaCommitted, float64(deltaSize)/1024.0/1024.0, rate, rateMb, totalCommitted, float64(totalSize)/1024.0/1024.0, totalSize/tc, p.maxSize)
+		p.logger.Infof("%q pipeline stats interval=%ds, active procs=%d/%d, queue=%d/%d, out=%d|%.1fMb, rate=%d/s|%.1fMb/s, total=%d|%.1fMb, avg size=%d, max size=%d", p.Name, interval/time.Second, p.activeProcs.Load(), p.procCount.Load(), p.settings.Capacity-p.eventPool.freeEventsCount, p.settings.Capacity, deltaCommitted, float64(deltaSize)/1024.0/1024.0, rate, rateMb, totalCommitted, float64(totalSize)/1024.0/1024.0, totalSize/tc, p.maxSize)
 
 		lastCommitted = totalCommitted
 		lastSize = totalSize
