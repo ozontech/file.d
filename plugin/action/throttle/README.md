@@ -30,18 +30,18 @@ Defines how to parse time field format.
 
 Default limit of events that plugin allows per `interval`
 
-### interval
-
-`cfg.Duration` `default=1m`  
-
-Time interval to check event throughput.
-
 ### buckets_count
 
 `int` `default=60`  
 
 How much time buckets to hold in the memory. E.g. if `buckets_count` is `60` and `interval` is `5m`,
 then `5 hours` will be covered. Events with time later than `now() - 5h` will be dropped even if threshold isn't exceeded.
+
+### bucket_interval
+
+`cfg.Duration` `default=1m`  
+
+Time interval to check event throughput.
 
 ### rules
 
@@ -53,5 +53,5 @@ Each object have `limit` and `conditions` field.
 * `conditions` – a map of `event field name => event field value`. Conditions are checked using `AND` operator.
 
 
-##
- *Generated using **insane-doc***
+
+*Generated using __insane-doc__*

@@ -22,5 +22,5 @@ Result event could looks like:
   },
 ```
 
-##
- *Generated using **insane-doc***
+
+*Generated using __insane-doc__*

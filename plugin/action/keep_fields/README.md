@@ -9,5 +9,5 @@ Plugin keeps list of the fields of the event and removes others.
 List of the fields to keep.
 
 
-##
- *Generated using **insane-doc***
+
+*Generated using __insane-doc__*

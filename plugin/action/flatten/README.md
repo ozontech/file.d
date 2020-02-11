@@ -29,5 +29,5 @@ Defines field that should be flattened.
 Which prefix to use for extracted fields.
 
 
-##
- *Generated using **insane-doc***
+
+*Generated using __insane-doc__*

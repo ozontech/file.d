@@ -4,9 +4,9 @@ Plugin sends event batches to the kafka brokers. It uses `sarama` lib.
 ## Config params
 ### brokers
 
-`string`  `required` 
+`[]string`  `required` 
 
-Comma-separated list of kafka brokers to write to.
+List of kafka brokers to write to.
 
 ### default_topic
 
@@ -40,10 +40,10 @@ Maximum quantity of events to pack into one batch.
 
 ### batch_flush_timeout
 
-`cfg.Duration`   
+`cfg.Duration` `default=200ms`  
 
 After this timeout batch will be sent even if batch isn't full.
 
 
-##
- *Generated using **insane-doc***
+
+*Generated using __insane-doc__*

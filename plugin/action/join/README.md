@@ -67,5 +67,5 @@ event ... matches continue regexp
 event N matches continue regexp
 event N+1
 ```
-##
- *Generated using **insane-doc***
+
+*Generated using __insane-doc__*

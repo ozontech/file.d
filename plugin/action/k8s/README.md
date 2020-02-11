@@ -12,10 +12,9 @@ Docker splits long logs by 16kb chunks. Plugin joins them back, but if event wil
 
 ### labels_whitelist
 
-`string`   
+`[]string`   
 
-By default plugin adds all pod labels to the event. List here only those which are needed.
-e.g. `app,release`
+If set defines which pod labels to add to the event, others will be ignored.
 
 ### only_node
 
@@ -24,5 +23,5 @@ e.g. `app,release`
 Skip retrieving k8s meta information using k8s API and add only `k8s_node` field.
 
 
-##
- *Generated using **insane-doc***
+
+*Generated using __insane-doc__*

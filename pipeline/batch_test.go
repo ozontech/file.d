@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"gitlab.ozon.ru/sre/file-d/logger"
 	"go.uber.org/atomic"
 )
 
@@ -18,8 +19,9 @@ func (b *batcherTail) Commit(event *Event) {
 }
 
 func TestBatcher(t *testing.T) {
-	eventCount := 10
-	batchSize := 5
+	eventCount := 10000000
+	batchSize := 100
+	processors := 16
 
 	wg := sync.WaitGroup{}
 	wg.Add(eventCount)
@@ -33,18 +35,40 @@ func TestBatcher(t *testing.T) {
 		counter.Inc()
 	}
 
+	seqIDs := make(map[SourceID]uint64)
 	commitsCount := atomic.Int32{}
 	batcherTail := &batcherTail{commit: func(event *Event) {
-		val := commitsCount.Inc() - 1
-		assert.Equal(t, val, int32(event.SeqID), "wrong event SeqID")
+		if _, has := seqIDs[event.SourceID]; !has {
+			seqIDs[event.SourceID] = event.SeqID
+		}
+		if event.SeqID < seqIDs[event.SourceID] {
+			logger.Panicf("wrong batch sequence:source=%d seq=%d, prev seq=%d", event.SourceID, event.SeqID, seqIDs[event.SourceID])
+		}
+		seqIDs[event.SourceID] = event.SeqID
+
+		commitsCount.Inc()
 		wg.Done()
 	}}
 
-	batcher := NewBatcher("test", "devnull", batcherOut, nil, batcherTail, 2, batchSize, time.Second, 0)
+	batcher := NewBatcher("test", "devnull", batcherOut, nil, batcherTail, 8, batchSize, time.Second, 0)
 
 	batcher.Start()
-	for i := 0; i < eventCount; i++ {
-		batcher.Add(&Event{SeqID: uint64(i)})
+
+	eventsCh := make(chan *Event, 1024)
+	go func() {
+		for i := 0; i < eventCount; i++ {
+			eventsCh <- &Event{SeqID: uint64(i)}
+		}
+		close(eventsCh)
+	}()
+
+	for p := 0; p < processors; p++ {
+		go func(x int) {
+			for event := range eventsCh {
+				event.SourceID = SourceID(x)
+				batcher.Add(event)
+			}
+		}(p)
 	}
 
 	wg.Wait()

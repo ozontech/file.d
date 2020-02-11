@@ -16,5 +16,5 @@ Field of event to decode. Should be string.
 Prefix to add to keys of decoded object.
 
 
-##
- *Generated using **insane-doc***
+
+*Generated using __insane-doc__*

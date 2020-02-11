@@ -1,4 +1,8 @@
 - template: plugin/*/*/README.idoc.md
   files: ["*.go"]
+- template: plugin/*/README.idoc.md
+  files: []
+- template: plugin/README.idoc.md
+  files: []
 - template: README.idoc.md
   files: []

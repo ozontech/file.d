@@ -1,7 +1,9 @@
-# file-d
+# File-d
+
+## What is it
 File-d is a daemon which allows you to build data pipelines: read, process and output events. 
 
-## One more data forwarder?
+## Motivation
 Well, we already have a number of similar tools: `vector`, `filebeat`, `logstash`, `fluend-d`, `fluent-bit`, etc.
 
 Performance tests states that best ones achieve around `100MB/sec` throughput. 
@@ -25,7 +27,7 @@ On MacBook Pro 2017 with two physical cores `file-d` can achieve throughput:
 ### Benchmarks
 To be filled
 
-### CPU/RAM/Throughput optimization tips
+### Optimization tips
 * Limit regular expressions usage if you care about CPU load.
 * File input plugin must have at least X files to process data efficiently. Where X is number of CPU cores.
 * Plugin parameters such as `worker_count`, `batch_size` may have huge impact on throughput. Tune them for your system and needs.
@@ -42,30 +44,11 @@ To be filled
 ## Guarantees
 
 ## Plugins
-**Input:**
-* [fake](plugin/input/fake/README.md)
-* [file](plugin/input/file/README.md)
-* [http](plugin/input/http/README.md)
-* [kafka](plugin/input/kafka/README.md)
 
-**Action:**
-* [discard](plugin/action/discard/README.md)
-* [flatten](plugin/action/flatten/README.md)
-* [join](plugin/action/join/README.md)
-* [json_decode](plugin/action/json_decode/README.md)
-* [k8s](plugin/action/k8s/README.md)
-* [keep_fields](plugin/action/keep_fields/README.md)
-* [modify](plugin/action/modify/README.md)
-* [parse_es](plugin/action/parse_es/README.md)
-* [remove_fields](plugin/action/remove_fields/README.md)
-* [rename](plugin/action/rename/README.md)
-* [throttle](plugin/action/throttle/README.md)
+**Input**: [fake](plugin/input/fake/README.md), [file](plugin/input/file/README.md), [http](plugin/input/http/README.md), [kafka](plugin/input/kafka/README.md)
 
-**Output:**
-* [devnull](plugin/output/devnull/README.md)
-* [elasticsearch](plugin/output/elasticsearch/README.md)
-* [gelf](plugin/output/gelf/README.md)
-* [kafka](plugin/output/kafka/README.md)
-* [stdout](plugin/output/stdout/README.md)
-##
- *Generated using **insane-doc***
+**Action**: [discard](plugin/action/discard/README.md), [flatten](plugin/action/flatten/README.md), [join](plugin/action/join/README.md), [json_decode](plugin/action/json_decode/README.md), [k8s](plugin/action/k8s/README.md), [keep_fields](plugin/action/keep_fields/README.md), [modify](plugin/action/modify/README.md), [parse_es](plugin/action/parse_es/README.md), [remove_fields](plugin/action/remove_fields/README.md), [rename](plugin/action/rename/README.md), [throttle](plugin/action/throttle/README.md)
+
+**Output**: [devnull](plugin/output/devnull/README.md), [elasticsearch](plugin/output/elasticsearch/README.md), [gelf](plugin/output/gelf/README.md), [kafka](plugin/output/kafka/README.md), [stdout](plugin/output/stdout/README.md)
+
+*Generated using __insane-doc__*

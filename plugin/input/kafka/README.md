@@ -5,15 +5,15 @@ It supports commitment mechanism, so it guaranties at least once delivery.
 ## Config params
 ### brokers
 
-`string`  `required` 
+`[]string`  `required` 
 
-Comma-separated list of kafka brokers to read from.
+List of kafka brokers to read from.
 
 ### topics
 
-`string`  `required` 
+`[]string`  `required` 
 
-Comma separated list of kafka topics to read from.
+List of kafka topics to read from.
 
 ### consumer_group
 
@@ -22,5 +22,5 @@ Comma separated list of kafka topics to read from.
 Name of consumer group to use.
 
 
-##
- *Generated using **insane-doc***
+
+*Generated using __insane-doc__*

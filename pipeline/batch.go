@@ -100,14 +100,14 @@ func (b *Batcher) Start() {
 	b.seqMu = &sync.Mutex{}
 	b.cond = sync.NewCond(b.seqMu)
 
-	go b.heartbeat()
-
 	b.freeBatches = make(chan *Batch, b.workerCount)
 	b.fullBatches = make(chan *Batch, b.workerCount)
 	for i := 0; i < b.workerCount; i++ {
 		b.freeBatches <- newBatch(b.batchSize, b.flushTimeout)
 		go b.work()
 	}
+
+	go b.heartbeat()
 }
 
 type WorkerData interface{}
@@ -137,10 +137,6 @@ func (b *Batcher) commitBatch(events []*Event, batch *Batch) []*Event {
 
 	batchSeq := batch.seq
 
-	if !b.shouldStop {
-		b.freeBatches <- batch
-	}
-
 	// lets restore the sequence of batches to make sure input will commit offsets incrementally
 	b.seqMu.Lock()
 	for b.commitSeq != batchSeq {
@@ -154,6 +150,8 @@ func (b *Batcher) commitBatch(events []*Event, batch *Batch) []*Event {
 
 	b.cond.Broadcast()
 	b.seqMu.Unlock()
+
+	b.freeBatches <- batch
 
 	return events
 }

@@ -1,7 +1,9 @@
-# file-d
+# File-d
+
+## What is it
 File-d is a daemon which allows you to build data pipelines: read, process and output events. 
 
-## One more data forwarder?
+## Motivation
 Well, we already have a number of similar tools: `vector`, `filebeat`, `logstash`, `fluend-d`, `fluent-bit`, etc.
 
 Performance tests states that best ones achieve around `100MB/sec` throughput. 
@@ -25,7 +27,7 @@ On MacBook Pro 2017 with two physical cores `file-d` can achieve throughput:
 ### Benchmarks
 To be filled
 
-### CPU/RAM/Throughput optimization tips
+### Optimization tips
 * Limit regular expressions usage if you care about CPU load.
 * File input plugin must have at least X files to process data efficiently. Where X is number of CPU cores.
 * Plugin parameters such as `worker_count`, `batch_size` may have huge impact on throughput. Tune them for your system and needs.
@@ -42,11 +44,9 @@ To be filled
 ## Guarantees
 
 ## Plugins
-**Input:**
-@global-contents-table-plugin-input|contents-table
 
-**Action:**
-@global-contents-table-plugin-action|contents-table
+**Input**: @global-contents-table-plugin-input|links
 
-**Output:**
-@global-contents-table-plugin-output|contents-table
+**Action**: @global-contents-table-plugin-action|links
+
+**Output**: @global-contents-table-plugin-output|links

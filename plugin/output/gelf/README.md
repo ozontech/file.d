@@ -105,5 +105,5 @@ Maximum quantity of events to pack into one batch.
 After this timeout batch will be sent even if batch isn't completed.
 
 
-##
- *Generated using **insane-doc***
+
+*Generated using __insane-doc__*

@@ -5,9 +5,9 @@ If a network error occurs batch will be infinitely tries to be delivered to rand
 ## Config params
 ### endpoints
 
-`string`  `required` 
+`[]string`  `required` 
 
-Comma separated list of elasticsearch endpoints in format `SCHEMA://HOST:PORT`
+List of elasticsearch endpoints in format `SCHEMA://HOST:PORT`
 
 ### index_format
 
@@ -20,11 +20,11 @@ replaced with current time(see `time_format` option)
 
 ### index_values
 
-`string` `default=@time`  
+`[]string` `default=[@time]`  
 
 Comma-separated list of event fields which will be used for replacement `index_format`.
 There is a special field `@time` which equals to current time. Use `time_format` to define time format.
-E.g. `service,@time`
+E.g. `[service, @time]`
 
 ### time_format
 
@@ -65,5 +65,5 @@ If set to `false`, indexing error won't lead to an fatal and exit.
 todo: my it be useful for all plugins?
 
 
-##
- *Generated using **insane-doc***
+
+*Generated using __insane-doc__*
