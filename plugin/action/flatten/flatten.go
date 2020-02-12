@@ -27,8 +27,8 @@ type Plugin struct {
 	config *Config
 }
 
-//! config /json:\"([a-z_]+)\"/ #2 /default:\"([^"]+)\"/ /(required):\"true\"/  /options:\"([^"]+)\"/
-//^ _ _ code /`default=%s`/ code /`options=%s`/
+//! config-params
+//^ config-params
 type Config struct {
 	//> @3 @4 @5 @6
 	//>

@@ -2,7 +2,7 @@
 @introduction
 
 ## Config params
-@config|description
+@config-params|description
 
 ### Understanding start/continue regexps
 @understanding

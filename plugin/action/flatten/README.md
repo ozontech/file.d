@@ -16,18 +16,15 @@ pipelines:
 Will transform `{"animal":{"type":"cat","paws":4}}` into `{"pet_type":"b","pet_paws":"4"}`.
 
 ## Config params
-### field
-
-`cfg.FieldSelector`  `required` 
+- **`field`** *`cfg.FieldSelector`*   *`required`*  
 
 Defines field that should be flattened.
+<br><br>
 
-### prefix
-
-`string`   
+- **`prefix`** *`string`*    
 
 Which prefix to use for extracted fields.
+<br><br>
 
 
-
-*Generated using __insane-doc__*
+<br>*Generated using [__insane-doc__](https://github.com/vitkovskii/insane-doc)*

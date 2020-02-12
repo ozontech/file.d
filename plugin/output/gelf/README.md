@@ -17,63 +17,52 @@ Every field with an underscore prefix (_) will be treated as an extra field.
 Allowed characters in a field names are any word character(letter, number, underscore), dashes and dots.
 
 ## Config params
-### endpoint
-
-`string`  `required` 
+- **`endpoint`** *`string`*   *`required`*  
 
 Address of gelf endpoint. Format: `HOST:PORT`. E.g. `localhost:12201`.
+<br><br>
 
-### reconnect_interval
-
-`cfg.Duration` `default=1m`  
+- **`reconnect_interval`** *`cfg.Duration`*  *`default=1m`*   
 
 Plugin reconnects to endpoint periodically using this interval. Useful if endpoint is a load balancer.
+<br><br>
 
-### connection_timeout
-
-`cfg.Duration` `default=5s`  
+- **`connection_timeout`** *`cfg.Duration`*  *`default=5s`*   
 
 How much time to wait for connection.
+<br><br>
 
-### host_field
-
-`string` `default=host`  
+- **`host_field`** *`string`*  *`default=host`*   
 
 Which field of event should be used as `host` GELF field.
+<br><br>
 
-### short_message_field
-
-`string` `default=message`  
+- **`short_message_field`** *`string`*  *`default=message`*   
 
 Which field of event should be used as `short_message` GELF field.
+<br><br>
 
-### default_short_message_value
-
-`string` `default=not set`  
+- **`default_short_message_value`** *`string`*  *`default=not set`*   
 
 Default value for `short_message` GELF field if nothing is found in the event.
+<br><br>
 
-### full_message_field
-
-`string`   
+- **`full_message_field`** *`string`*    
 
 Which field of event should be used as `full_message` GELF field.
+<br><br>
 
-### timestamp_field
-
-`string` `default=time`  
+- **`timestamp_field`** *`string`*  *`default=time`*   
 
 Which field of event should be used as `timestamp` GELF field.
+<br><br>
 
-### timestamp_field_format
-
-`string` `default=rfc3339nano`  `options=ansic|unixdate|rubydate|rfc822|rfc822z|rfc850|rfc1123|rfc1123z|rfc3339|rfc3339nano|kitchen|stamp|stampmilli|stampmicro|stampnano`
+- **`timestamp_field_format`** *`string`*  *`default=rfc3339nano`*   *`options=ansic|unixdate|rubydate|rfc822|rfc822z|rfc850|rfc1123|rfc1123z|rfc3339|rfc3339nano|kitchen|stamp|stampmilli|stampmicro|stampnano`* 
 
 In which format timestamp field should be parsed.
+<br><br>
 
-### level_field
-
-`string` `default=level`  
+- **`level_field`** *`string`*  *`default=level`*   
 
 Which field of event should be used as `level` GELF field. Level field should contain level number or string according to RFC 5424:
 * `7`/`debug`
@@ -85,25 +74,22 @@ Which field of event should be used as `level` GELF field. Level field should co
 * `1`/`alert`
 * `0`/`emergency`
 Otherwise `6` will be used.
+<br><br>
 
-### workers_count
-
-`cfg.Expression` `default=gomaxprocs*4`  
+- **`workers_count`** *`cfg.Expression`*  *`default=gomaxprocs*4`*   
 
 How much workers will be instantiated to send batches.
+<br><br>
 
-### batch_size
-
-`cfg.Expression` `default=capacity/4`  
+- **`batch_size`** *`cfg.Expression`*  *`default=capacity/4`*   
 
 Maximum quantity of events to pack into one batch.
+<br><br>
 
-### batch_flush_timeout
-
-`cfg.Duration` `default=200ms`  
+- **`batch_flush_timeout`** *`cfg.Duration`*  *`default=200ms`*   
 
 After this timeout batch will be sent even if batch isn't completed.
+<br><br>
 
 
-
-*Generated using __insane-doc__*
+<br>*Generated using [__insane-doc__](https://github.com/vitkovskii/insane-doc)*

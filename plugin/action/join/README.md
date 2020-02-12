@@ -21,23 +21,20 @@ pipelines:
 ```
 
 ## Config params
-### field
-
-`cfg.FieldSelector`  `required` 
+- **`field`** *`cfg.FieldSelector`*   *`required`*  
 
 Field of event which will be analyzed for joining with each other.
+<br><br>
 
-### start
-
-`cfg.Regexp`  `required` 
+- **`start`** *`cfg.Regexp`*   *`required`*  
 
 Regexp which will start join sequence.
+<br><br>
 
-### continue
-
-`cfg.Regexp`  `required` 
+- **`continue`** *`cfg.Regexp`*   *`required`*  
 
 Regexp which will continue join sequence.
+<br><br>
 
 
 ### Understanding start/continue regexps
@@ -67,5 +64,4 @@ event ... matches continue regexp
 event N matches continue regexp
 event N+1
 ```
-
-*Generated using __insane-doc__*
+<br>*Generated using [__insane-doc__](https://github.com/vitkovskii/insane-doc)*

@@ -1,9 +1,7 @@
-- How to use
-  - [Overview](/)
-  - [Quick start](/GetStarted)
-  - [Examples](/ex/)
+- [**Overview**](/README.md)
 
-- Plugins
- - [Input](/plugin/input/)
- - [Action](/plugin/action/)
- - [Output](/plugin/output/)
+- [**Documentation**](/docs/DOCUMENTATION.md)
+
+- [**Plugins**](/plugin/)
+
+- [**Other**](/docs/OTHER.md)

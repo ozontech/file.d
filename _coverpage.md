@@ -1,4 +1,4 @@
-# File-d <small>v0.0.1</small>
+# File-d <small>v0.1.0</small>
 
 > Blazing fast tool to make data pipelines 
 

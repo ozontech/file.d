@@ -2,4 +2,4 @@
 @introduction
 
 ## Config params
-@config|description
+@config-params|description

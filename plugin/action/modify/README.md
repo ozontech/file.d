@@ -26,5 +26,4 @@ Result event could looks like:
   }
 ```
 
-
-*Generated using __insane-doc__*
+<br>*Generated using [__insane-doc__](https://github.com/vitkovskii/insane-doc)*

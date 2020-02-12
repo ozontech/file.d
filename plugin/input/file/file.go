@@ -18,23 +18,23 @@ Watcher is trying to use file system events detect file creation and updates.
 But update events don't work with symlinks, so watcher also periodically manually `fstat` all tracking files to detect changes.
 
 
-## Guarantees
-It supports commitment mechanism. But at least once delivery guarantees only if files aren't being truncated.
-However, `file-d` correctly handles file truncation there is a little chance of data loss.
-It isn't an `file-d` issue. Data may have been written just before file truncation. In this case, you may late to read some events.
-If you care about delivery, you should also know that `logrotate` manual clearly states that copy/truncate may cause data loss even on a rotating stage.
-So use copy/truncate or similar actions only if your data isn't very important.
+> ⚠ It supports commitment mechanism. But at least once delivery guarantees only if files aren't being truncated.
+> However, `file-d` correctly handles file truncation, there is a little chance of data loss.
+> It isn't an `file-d` issue. Data may have been written just before file truncation. In this case, you may late to read some events.
+> If you care about delivery, you should also know that `logrotate` manual clearly states that copy/truncate may cause data loss even on a rotating stage.
+> So use copy/truncate or similar actions only if your data isn't very important.
 
 
-**Config example for reading docker container log files:**
+Config example for reading docker container log files:
 ```yaml
 pipelines:
   example_docker_pipeline:
-    type: file
-    watching_dir: /var/lib/docker/containers
-    offsets_file: /data/offsets.yaml
-    filename_pattern: "*-json.log"
-    persistence_mode: async
+	input: 
+		type: file
+		watching_dir: /var/lib/docker/containers
+		offsets_file: /data/offsets.yaml
+		filename_pattern: "*-json.log"
+		persistence_mode: async
 ```
 }*/
 
@@ -50,7 +50,7 @@ type Plugin struct {
 type persistenceMode int
 
 const (
-	//! persistenceMode #1 /`([a-z]+)`/
+	//! "persistenceMode" #1 /`([a-z]+)`/
 	persistenceModeAsync persistenceMode = iota //* `async` – periodically saves offsets using `async_interval`. Saving is skipped if offsets haven't been changed. Suitable in most cases, guarantees at least once delivery and makes almost no overhead.
 	persistenceModeSync                         //* `sync` – saves offsets as part of event commitment. It's very slow, but excludes possibility of events duplication in extreme situations like power loss.
 )
@@ -58,15 +58,15 @@ const (
 type offsetsOp int
 
 const (
-	//! offsetsOp #1 /`(.+)`/
+	//! "offsetsOp" #1 /`(.+)`/
 	offsetsOpContinue offsetsOp = iota //* `continue` – use offset file
 	offsetsOpTail                      //* `tail` – set offset to the end of the file
 	offsetsOpReset                     //* `reset` – reset offset to the beginning of the file
 )
 
 type Config struct {
-	//! config /json:\"([a-z_]+)\"/ #2 /default:\"([^"]+)\"/ /(required):\"true\"/  /options:\"([^"]+)\"/
-	//^ _ _ code /`default=%s`/ code /`options=%s`/
+	//! config-params
+	//^ config-params
 
 	//> @3 @4 @5 @6
 	//>

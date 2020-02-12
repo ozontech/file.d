@@ -3,7 +3,7 @@
 ## fake
 Plugin provides methods to use in test scenarios:
 
-@fns|signature-list
+
 
 [More details...](plugin/input/fake/README.md)
 ## file
@@ -15,15 +15,14 @@ Watcher is trying to use file system events detect file creation and updates.
 But update events don't work with symlinks, so watcher also periodically manually `fstat` all tracking files to detect changes.
 
 
-## Guarantees
-It supports commitment mechanism. But at least once delivery guarantees only if files aren't being truncated.
-However, `file-d` correctly handles file truncation there is a little chance of data loss.
-It isn't an `file-d` issue. Data may have been written just before file truncation. In this case, you may late to read some events.
-If you care about delivery, you should also know that `logrotate` manual clearly states that copy/truncate may cause data loss even on a rotating stage.
-So use copy/truncate or similar actions only if your data isn't very important.
+> ⚠ It supports commitment mechanism. But at least once delivery guarantees only if files aren't being truncated.
+> However, `file-d` correctly handles file truncation there is a little chance of data loss.
+> It isn't an `file-d` issue. Data may have been written just before file truncation. In this case, you may late to read some events.
+> If you care about delivery, you should also know that `logrotate` manual clearly states that copy/truncate may cause data loss even on a rotating stage.
+> So use copy/truncate or similar actions only if your data isn't very important.
 
 
-**Config example for reading docker container log files:**
+Config example for reading docker container log files:
 ```yaml
 pipelines:
   example_docker_pipeline:
@@ -51,5 +50,4 @@ Plugin reads events from listed kafka topics. It uses `sarama` lib.
 It supports commitment mechanism, so it guaranties at least once delivery.
 
 [More details...](plugin/input/kafka/README.md)
-
-*Generated using __insane-doc__*
+<br>*Generated using [__insane-doc__](https://github.com/vitkovskii/insane-doc)*

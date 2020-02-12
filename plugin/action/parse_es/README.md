@@ -3,5 +3,4 @@ Plugin parses HTTP input using Elasticsearch /_bulk API format: https://www.elas
 It converts sources defining by create/index actions to the events. Update/delete actions are ignored.
 
 > No config params
-
-*Generated using __insane-doc__*
+<br>*Generated using [__insane-doc__](https://github.com/vitkovskii/insane-doc)*

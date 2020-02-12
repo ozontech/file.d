@@ -9,18 +9,13 @@ So you can use Elasticsearch filebeat output plugin to send data to `file-d`.
 > It doesn't wait until events will be committed.
 
 ## Config params
-### address
-
-`string` `default=:9200`  
-
+- **`address`** *`string`* *`default=:9200`* 
 Address to listen to. Omit ip/host to listen all network interfaces: `:88`
+<br><br>
 
-### emulate_mode
-
-`string` `default=no`  `options=no|elasticsearch`
-
+- **`emulate_mode`** *`string`* *`default=no`* *`options=no|elasticsearch`* 
 Which protocol to emulate.
+<br><br>
 
 
-
-*Generated using __insane-doc__*
+<br>*Generated using [__insane-doc__](https://github.com/vitkovskii/insane-doc)*

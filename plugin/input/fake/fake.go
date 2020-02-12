@@ -8,7 +8,7 @@ import (
 /*{ introduction
 Plugin provides methods to use in test scenarios:
 
-@fns|signature-list
+@fn-list|signature-list
 }*/
 type Plugin struct {
 	controller pipeline.InputPluginController
@@ -43,8 +43,8 @@ func (p *Plugin) Commit(event *pipeline.Event) {
 	}
 }
 
-//! fns #4 /Plugin\)\s(.+)\s{/
-//^ _ _ code
+//! fn-list
+//^ fn-list
 
 //> Sends test event into pipeline.
 func (p *Plugin) In(sourceID pipeline.SourceID, sourceName string, offset int64, bytes []byte) { //*

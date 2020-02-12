@@ -7,15 +7,14 @@ Watcher is trying to use file system events detect file creation and updates.
 But update events don't work with symlinks, so watcher also periodically manually `fstat` all tracking files to detect changes.
 
 
-## Guarantees
-It supports commitment mechanism. But at least once delivery guarantees only if files aren't being truncated.
-However, `file-d` correctly handles file truncation there is a little chance of data loss.
-It isn't an `file-d` issue. Data may have been written just before file truncation. In this case, you may late to read some events.
-If you care about delivery, you should also know that `logrotate` manual clearly states that copy/truncate may cause data loss even on a rotating stage.
-So use copy/truncate or similar actions only if your data isn't very important.
+> ⚠ It supports commitment mechanism. But at least once delivery guarantees only if files aren't being truncated.
+> However, `file-d` correctly handles file truncation there is a little chance of data loss.
+> It isn't an `file-d` issue. Data may have been written just before file truncation. In this case, you may late to read some events.
+> If you care about delivery, you should also know that `logrotate` manual clearly states that copy/truncate may cause data loss even on a rotating stage.
+> So use copy/truncate or similar actions only if your data isn't very important.
 
 
-**Config example for reading docker container log files:**
+Config example for reading docker container log files:
 ```yaml
 pipelines:
   example_docker_pipeline:
@@ -27,39 +26,33 @@ pipelines:
 ```
 
 ## Config params
-### watching_dir
-
-`string`  `required` 
+- **`watching_dir`** *`string`*   *`required`*  
 
 Source directory to watch for files to process. All subdirectories also will be watched. E.g. if files have
 `/var/my-logs/$YEAR/$MONTH/$DAY/$HOST/$FACILITY-$PROGRAM.log` structure, `watching_dir` should be `/var/my-logs`.
 Also `filename_pattern`/`dir_pattern` is useful to filter needless files/subdirectories. In the case of using two or more
 absolutely different directories it's recommended to setup separate pipelines.
+<br><br>
 
-### offsets_file
-
-`string`  `required` 
+- **`offsets_file`** *`string`*   *`required`*  
 
 File name to store offsets of processing files. Offsets are loaded only on initialization.
 > It's simply a `yaml` file. You can modify it manually.
+<br><br>
 
-### filename_pattern
-
-`string` `default=*`  
+- **`filename_pattern`** *`string`*  *`default=*`*   
 
 Files which doesn't match this pattern will be ignored.
 > Check out https://golang.org/pkg/path/filepath/#Glob for details.
+<br><br>
 
-### dir_pattern
-
-`string` `default=*`  
+- **`dir_pattern`** *`string`*  *`default=*`*   
 
 Dirs which doesn't match this pattern will be ignored.
 > Check out https://golang.org/pkg/path/filepath/#Glob for details.
+<br><br>
 
-### persistence_mode
-
-`string` `default=async`  `options=async|sync`
+- **`persistence_mode`** *`string`*  *`default=async`*   *`options=async|sync`* 
 
 Defines how to save the offsets file:
 *  `async` – periodically saves offsets using `async_interval`. Saving is skipped if offsets haven't been changed. Suitable in most cases, guarantees at least once delivery and makes almost no overhead.
@@ -69,46 +62,40 @@ Saving is done in three steps:
 * Write temporary file with all offsets
 * Call `fsync()` on it
 * Rename temporary file to the original one
+<br><br>
 
-### read_buffer_size
-
-`int` `default=131072`  
+- **`read_buffer_size`** *`int`*  *`default=131072`*   
 
 Size of buffer to use for file reading.
 > Each worker use own buffer, so final memory consumption will be `read_buffer_size*workers_count`.
+<br><br>
 
-### max_files
-
-`int` `default=16384`  
+- **`max_files`** *`int`*  *`default=16384`*   
 
 Max amount of opened files. If the limit is exceeded `file-d` will exit with fatal.
 > Also check your system file descriptors limit: `ulimit -n`.
+<br><br>
 
-### offsets_op
-
-`string` `default=continue`  `options=continue|tail|reset`
+- **`offsets_op`** *`string`*  *`default=continue`*   *`options=continue|tail|reset`* 
 
 Offset operation which will be preformed when adding file as a job:
 *  `continue` – use offset file
 *  `tail` – set offset to the end of the file
 *  `reset` – reset offset to the beginning of the file
 > It is only used on initial scan of `watching_dir`. Files which will be caught up later during work, will always use `reset` operation.
+<br><br>
 
-### workers_count
-
-`cfg.Expression` `default=gomaxprocs*4`  
+- **`workers_count`** *`cfg.Expression`*  *`default=gomaxprocs*4`*   
 
 How much workers will be instantiated. Each worker:
 * Read files (I/O bound)
 * Decode events (CPU bound)
 > It's recommended to set it to 4x-8x of CPU cores.
+<br><br>
 
-### report_interval
+- **`report_interval`**  *`cfg.Duration`*  *`default=10s`*    <br> <br> How often to report statistical information to stdout<br><br>
 
- `cfg.Duration` `default=10s`   <br> <br> How often to report statistical information to stdout
-### maintenance_interval
-
-`cfg.Duration` `default=10s`  
+- **`maintenance_interval`** *`cfg.Duration`*  *`default=10s`*   
 
 How often to perform maintenance.
 For now maintenance consists of two stages:
@@ -117,7 +104,7 @@ For now maintenance consists of two stages:
 
 Symlinks maintenance detects if underlying file of symlink is changed.
 Job maintenance `fstat` tracked files to detect if new portion of data have been written to the file. If job is in `done` state when it releases and reopens file descriptor to allow third party software delete the file.
+<br><br>
 
 
-
-*Generated using __insane-doc__*
+<br>*Generated using [__insane-doc__](https://github.com/vitkovskii/insane-doc)*

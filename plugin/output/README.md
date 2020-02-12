@@ -3,7 +3,7 @@
 ## devnull
 Plugin provides methods to use in test scenarios:
 
-@fns|signature-list
+
 
 [More details...](plugin/output/devnull/README.md)
 ## elasticsearch
@@ -38,5 +38,4 @@ Plugin sends event batches to the kafka brokers. It uses `sarama` lib.
 Plugin simply writes events to stdout(also known as console).
 
 [More details...](plugin/output/stdout/README.md)
-
-*Generated using __insane-doc__*
+<br>*Generated using [__insane-doc__](https://github.com/vitkovskii/insane-doc)*

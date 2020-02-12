@@ -2,48 +2,40 @@
 Plugin sends event batches to the kafka brokers. It uses `sarama` lib.
 
 ## Config params
-### brokers
-
-`[]string`  `required` 
+- **`brokers`** *`[]string`* *`required`* 
 
 List of kafka brokers to write to.
+<br><br>
 
-### default_topic
-
-`string`  `required` 
+- **`default_topic`** *`string`* *`required`* 
 
 Default topic name if nothing will be found in the event field or `should_use_topic_field` isn't set.
+<br><br>
 
-### use_topic_field
-
-`bool` `default=false`  
+- **`use_topic_field`** *`bool`* *`default=false`* 
 
 If set plugin will use topic name from the event field.
+<br><br>
 
-### topic_field
+- **`topic_field`** *`string`* *`default=topic`* 
 
-`string` `default=topic`  
+Which event field to use as topic name. Works only if `should_use_topic_field` is set.
+<br><br>
 
-Which event field to use as topic name, if `should_use_topic_field` is set.
-
-### workers_count
-
-`cfg.Expression` `default=gomaxprocs*4`  
+- **`workers_count`** *`cfg.Expression`* *`default=gomaxprocs*4`* 
 
 How much workers will be instantiated to send batches.
+<br><br>
 
-### batch_size
-
-`cfg.Expression` `default=capacity/4`  
+- **`batch_size`** *`cfg.Expression`* *`default=capacity/4`* 
 
 Maximum quantity of events to pack into one batch.
+<br><br>
 
-### batch_flush_timeout
-
-`cfg.Duration` `default=200ms`  
+- **`batch_flush_timeout`** *`cfg.Duration`* *`default=200ms`* 
 
 After this timeout batch will be sent even if batch isn't full.
+<br><br>
 
 
-
-*Generated using __insane-doc__*
+<br>*Generated using [__insane-doc__](https://github.com/vitkovskii/insane-doc)*

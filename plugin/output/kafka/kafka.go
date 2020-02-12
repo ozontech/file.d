@@ -30,43 +30,43 @@ type Plugin struct {
 	batcher  *pipeline.Batcher
 }
 
-//! config /json:\"([a-z_]+)\"/ #2 /default:\"([^"]+)\"/ /(required):\"true\"/  /options:\"([^"]+)\"/
-//^ _ _ code /`default=%s`/ code /`options=%s`/
+//! config-params
+//^ config-params
 type Config struct {
-	//> @3 @4 @5 @6
-	//>
+	//> @3@4@5@6 
+	//> 
 	//> List of kafka brokers to write to.
 	Brokers []string `json:"brokers" required:"true"` //*
 
-	//> @3 @4 @5 @6
-	//>
+	//> @3@4@5@6
+	//> 
 	//> Default topic name if nothing will be found in the event field or `should_use_topic_field` isn't set.
 	DefaultTopic string `json:"default_topic" required:"true"` //*
 
-	//> @3 @4 @5 @6
-	//>
+	//> @3@4@5@6 
+	//> 
 	//> If set plugin will use topic name from the event field.
 	UseTopicField bool `json:"use_topic_field" default:"false"` //*
 
-	//> @3 @4 @5 @6
-	//>
-	//> Which event field to use as topic name, if `should_use_topic_field` is set.
+	//> @3@4@5@6
+	//> 
+	//> Which event field to use as topic name. Works only if `should_use_topic_field` is set.
 	TopicField string `json:"topic_field" default:"topic"` //*
 
-	//> @3 @4 @5 @6
-	//>
+	//> @3@4@5@6
+	//> 
 	//> How much workers will be instantiated to send batches.
 	WorkersCount  cfg.Expression `json:"workers_count" default:"gomaxprocs*4" parse:"expression"` //*
 	WorkersCount_ int
 
-	//> @3 @4 @5 @6
-	//>
+	//> @3@4@5@6
+	//> 
 	//> Maximum quantity of events to pack into one batch.
 	BatchSize  cfg.Expression `json:"batch_size" default:"capacity/4" parse:"expression"` //*
 	BatchSize_ int
 
-	//> @3 @4 @5 @6
-	//>
+	//> @3@4@5@6
+	//> 
 	//> After this timeout batch will be sent even if batch isn't full.
 	BatchFlushTimeout  cfg.Duration `json:"batch_flush_timeout" default:"200ms" parse:"duration"` //*
 	BatchFlushTimeout_ time.Duration

@@ -33,15 +33,13 @@ type Plugin struct {
 	mu         *sync.Mutex
 }
 
-//! config /json:\"([a-z_]+)\"/ #2 /default:\"([^"]+)\"/ /(required):\"true\"/  /options:\"([^"]+)\"/
-//^ _ _ code /`default=%s`/ code /`options=%s`/
+//! config-params
+//^ config-params
 type Config struct {
-	//> @3 @4 @5 @6
-	//>
+	//> @3@4@5@6   
 	//> Address to listen to. Omit ip/host to listen all network interfaces: `:88`
 	Address string `json:"address" default:":9200"` //*
-	//> @3 @4 @5 @6
-	//>
+	//> @3@4@5@6   
 	//> Which protocol to emulate.
 	EmulateMode string `json:"emulate_mode" default:"no" options:"no|elasticsearch"` //*
 }

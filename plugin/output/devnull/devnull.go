@@ -9,7 +9,7 @@ import (
 /*{ introduction
 Plugin provides methods to use in test scenarios:
 
-@fns|signature-list
+@fn-list|signature-list
 }*/
 
 type Plugin struct {
@@ -37,8 +37,8 @@ func (p *Plugin) Start(_ pipeline.AnyConfig, params *pipeline.OutputPluginParams
 	p.total = &atomic.Int64{}
 }
 
-//! fns #4 /Plugin\)\s(.+)\s{/
-//^ _ _ code
+//! fn-list
+//^ fn-list
 
 //> Sets up a hook to make sure test event have been successfully passed to output.
 func (p *Plugin) SetOutFn(fn func(event *pipeline.Event)) { //*
