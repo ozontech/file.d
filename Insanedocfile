@@ -1,6 +1,6 @@
 extractors:
   config-params: '"config-params" /json:\"([a-z_]+)\"/ #2 /default:\"([^"]+)\"/ /(required):\"true\"/  /options:\"([^"]+)\"/'
-  fn-list: '"fn-list" '#4 /Plugin\)\s(.+)\s{/'
+  fn-list: '"fn-list" #4 /Plugin\)\s(.+)\s{/'
 decorators:
   config-params: '_ _ /*`%s`* / /*`default=%s`* / /*`%s`* / /*`options=%s`* /'
   fn-list: '_ _ /`%s`/'
@@ -12,4 +12,7 @@ templates:
   - template: plugin/README.idoc.md
     files: []
   - template: README.idoc.md
+    files: []
+  - template: _sidebar.idoc.md
+    disable_footer: true
     files: []

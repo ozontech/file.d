@@ -1,22 +1,25 @@
-# Kafka input plugin
-Plugin reads events from listed kafka topics. It uses `sarama` lib.
-It supports commitment mechanism, so it guaranties at least once delivery.
+# Kafka plugin
+Reads events from multiple kafka topics using `sarama` library.
+> It guaranties at least once delivery due to commitment mechanism.
 
-## Config params
-- **`brokers`** *`[]string`*   *`required`*  
+### Config params
+**`brokers`** *`[]string`* *`required`* 
 
 List of kafka brokers to read from.
-<br><br>
 
-- **`topics`** *`[]string`*   *`required`*  
+<br>
+
+**`topics`** *`[]string`* *`required`* 
 
 List of kafka topics to read from.
-<br><br>
 
-- **`consumer_group`** *`string`*  *`default=file-d`*   
+<br>
+
+**`consumer_group`** *`string`* *`default=file-d`* 
 
 Name of consumer group to use.
-<br><br>
+
+<br>
 
 
 <br>*Generated using [__insane-doc__](https://github.com/vitkovskii/insane-doc)*

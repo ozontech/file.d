@@ -1,5 +1,5 @@
-# JSON decode action plugin
+# JSON decode plugin
 @introduction
 
-## Config params
+### Config params
 @config-params|description

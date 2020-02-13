@@ -1,8 +1,8 @@
-# Flatten action plugin
-Plugin extracts object keys and adds them into the root with some prefix. If provided field isn't object, event will be skipped.
+# Flatten plugin
+Extracts object keys and adds them into the root with some prefix. If provided field isn't object, event will be skipped.
 
-Example:
-```
+**Example:**
+```yaml
 pipelines:
   example_pipeline:
     ...
@@ -12,19 +12,20 @@ pipelines:
       prefix: pet_
     ...
 ```
+Transforms `{"animal":{"type":"cat","paws":4}}` into `{"pet_type":"b","pet_paws":"4"}`.
 
-Will transform `{"animal":{"type":"cat","paws":4}}` into `{"pet_type":"b","pet_paws":"4"}`.
-
-## Config params
-- **`field`** *`cfg.FieldSelector`*   *`required`*  
+### Config params
+**`field`** *`cfg.FieldSelector`* *`required`* 
 
 Defines field that should be flattened.
-<br><br>
 
-- **`prefix`** *`string`*    
+<br>
+
+**`prefix`** *`string`* 
 
 Which prefix to use for extracted fields.
-<br><br>
+
+<br>
 
 
 <br>*Generated using [__insane-doc__](https://github.com/vitkovskii/insane-doc)*

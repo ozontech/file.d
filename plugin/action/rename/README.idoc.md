@@ -1,2 +1,2 @@
-# Rename action plugin
+# Rename plugin
 @introduction

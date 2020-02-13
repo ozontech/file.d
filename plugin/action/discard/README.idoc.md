@@ -1,4 +1,4 @@
-# Discard action plugin
+# Discard plugin
 @introduction
 
 > No config params

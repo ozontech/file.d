@@ -1,2 +1,2 @@
-# Modify action plugin
+# Modify plugin
 @introduction

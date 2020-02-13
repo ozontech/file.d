@@ -1,11 +1,11 @@
-# Join action plugin
+# Join plugin
 Plugin also known as "multiline" makes one big event from event sequence.
 Useful for assembling back together "exceptions" or "panics" if they was written line by line.
 
 > ⚠ Parsing all event flow could be very CPU intensive because plugin uses regular expressions.
 > Consider `match_fields` parameter to process only particular events. Check out example for details.
 
-Example of joining Golang panics:
+**Example of joining Go panics**:
 ```
 pipelines:
   example_pipeline:
@@ -20,25 +20,28 @@ pipelines:
     ...
 ```
 
-## Config params
-- **`field`** *`cfg.FieldSelector`*   *`required`*  
+### Config params
+**`field`** *`cfg.FieldSelector`* *`required`* 
 
 Field of event which will be analyzed for joining with each other.
-<br><br>
 
-- **`start`** *`cfg.Regexp`*   *`required`*  
+<br>
+
+**`start`** *`cfg.Regexp`* *`required`* 
 
 Regexp which will start join sequence.
-<br><br>
 
-- **`continue`** *`cfg.Regexp`*   *`required`*  
+<br>
+
+**`continue`** *`cfg.Regexp`* *`required`* 
 
 Regexp which will continue join sequence.
-<br><br>
+
+<br>
 
 
 ### Understanding start/continue regexps
-No joining:
+**No joining:**
 ```
 event 1
 event 2 – matches start regexp
@@ -47,7 +50,7 @@ event 4 – matches continue regexp
 event 5
 ```
 
-Events `event 2` and `event 3` will be joined:
+**Events `event 2` and `event 3` will be joined:**
 ```
 event 1
 event 2 – matches start regexp
@@ -55,7 +58,7 @@ event 3 – matches continue regexp
 event 4
 ```
 
-Events from `event 2` to `event N` will be joined:
+**Events from `event 2` to `event N` will be joined:**
 ```
 event 1
 event 2 matches start regexp

@@ -1,5 +1,5 @@
-# Keep fields action plugin
+# Keep fields plugin
 @introduction
 
-## Config params
+### Config params
 @config-params|description

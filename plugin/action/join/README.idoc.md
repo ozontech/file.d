@@ -1,7 +1,7 @@
-# Join action plugin
+# Join plugin
 @introduction
 
-## Config params
+### Config params
 @config-params|description
 
 ### Understanding start/continue regexps

@@ -1,49 +1,56 @@
-# Throttle action plugin
-Plugin drops events if event flow gets higher than a configured threshold.
+# Throttle plugin
+Discards events if pipeline throughput gets higher than a configured threshold.
 
-## Config params
-- **`throttle_field`** *`cfg.FieldSelector`*    
+### Config params
+**`throttle_field`** *`cfg.FieldSelector`* 
 
 Event field which will be used as a key for throttling.
 It means that throttling will work separately for events with different keys.
 If not set, it's assumed that all events have the same key.
-<br><br>
 
-- **`time_field`** *`cfg.FieldSelector`*  *`default=time`*   
+<br>
+
+**`time_field`** *`cfg.FieldSelector`* *`default=time`* 
 
 Event field which defines the time when event was fired.
 It used to detect event throughput in particular time range.
 If not set current time will be taken.
-<br><br>
 
-- **`time_field_format`** *`string`*  *`default=rfc3339nano`*   *`options=ansic|unixdate|rubydate|rfc822|rfc822z|rfc850|rfc1123|rfc1123z|rfc3339|rfc3339nano|kitchen|stamp|stampmilli|stampmicro|stampnano`* 
+<br>
+
+**`time_field_format`** *`string`* *`default=rfc3339nano`* *`options=ansic|unixdate|rubydate|rfc822|rfc822z|rfc850|rfc1123|rfc1123z|rfc3339|rfc3339nano|kitchen|stamp|stampmilli|stampmicro|stampnano`* 
 
 Defines how to parse time field format.
-<br><br>
 
-- **`default_limit`** *`int64`*  *`default=5000`*   
+<br>
+
+**`default_limit`** *`int64`* *`default=5000`* 
 
 Default limit of events that plugin allows per `interval`
-<br><br>
 
-- **`buckets_count`** *`int`*  *`default=60`*   
+<br>
+
+**`buckets_count`** *`int`* *`default=60`* 
 
 How much time buckets to hold in the memory. E.g. if `buckets_count` is `60` and `interval` is `5m`,
 then `5 hours` will be covered. Events with time later than `now() - 5h` will be dropped even if threshold isn't exceeded.
-<br><br>
 
-- **`bucket_interval`** *`cfg.Duration`*  *`default=1m`*   
+<br>
+
+**`bucket_interval`** *`cfg.Duration`* *`default=1m`* 
 
 Time interval to check event throughput.
-<br><br>
 
-- **`rules`** *`[]RuleConfig`*    
+<br>
+
+**`rules`** *`[]RuleConfig`* 
 
 Rules can override `default_limit` for different group of event. It's a list of objects.
 Each object have `limit` and `conditions` field.
 * `limit` – value which will override `default_limit`, if `conditions` are met.
 * `conditions` – a map of `event field name => event field value`. Conditions are checked using `AND` operator.
-<br><br>
+
+<br>
 
 
 <br>*Generated using [__insane-doc__](https://github.com/vitkovskii/insane-doc)*

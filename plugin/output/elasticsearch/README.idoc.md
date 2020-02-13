@@ -1,5 +1,5 @@
 # Elasticsearch output
 @introduction
 
-## Config params
+### Config params
 @config-params|description

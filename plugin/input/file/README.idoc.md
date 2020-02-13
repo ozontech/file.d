@@ -1,5 +1,5 @@
-# File input plugin
+# File plugin
 @introduction
 
-## Config params
+### Config params
 @config-params|description

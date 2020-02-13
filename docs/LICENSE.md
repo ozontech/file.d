@@ -1,10 +1,5 @@
-# Other
-
-## Contributing
-File.d is an open source project. Contributing are very welcome! For now contribution is free of rules. 
-
-## License
-File.d is licensed under a BSD-like licence:
+# License
+`file.d` is licensed under a BSD-like licence:
 ```
 Copyright (c) 2020 The File.d Authors. All rights reserved.
 

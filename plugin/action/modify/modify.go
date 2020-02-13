@@ -8,7 +8,7 @@ import (
 )
 
 /*{ introduction
-Plugin modifies content for a field. Works only with strings.
+Modifies content for a field. Works only with strings.
 There can be provided unlimited config parameters. Each parameter handled as `cfg.FieldSelector`:`cfg.Substitution`.
 
 Example:

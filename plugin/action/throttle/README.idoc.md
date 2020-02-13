@@ -1,5 +1,5 @@
-# Throttle action plugin
+# Throttle plugin
 @introduction
 
-## Config params
+### Config params
 @config-params|description

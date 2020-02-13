@@ -18,7 +18,7 @@ var (
 )
 
 /*{ introduction
-Plugin drops events if event flow gets higher than a configured threshold.
+Discards events if pipeline throughput gets higher than a configured threshold.
 }*/
 type Plugin struct {
 	config   *Config
@@ -31,7 +31,7 @@ type Plugin struct {
 //! config-params
 //^ config-params
 type Config struct {
-	//> @3 @4 @5 @6
+	//> @3@4@5@6
 	//>
 	//> Event field which will be used as a key for throttling.
 	//> It means that throttling will work separately for events with different keys.
@@ -39,7 +39,7 @@ type Config struct {
 	ThrottleField  cfg.FieldSelector `json:"throttle_field" default:"" parse:"selector"` //*
 	ThrottleField_ []string
 
-	//> @3 @4 @5 @6
+	//> @3@4@5@6
 	//>
 	//> Event field which defines the time when event was fired.
 	//> It used to detect event throughput in particular time range.
@@ -47,29 +47,29 @@ type Config struct {
 	TimeField  cfg.FieldSelector `json:"time_field" default:"time"` //*
 	TimeField_ []string
 
-	//> @3 @4 @5 @6
+	//> @3@4@5@6
 	//>
 	//> Defines how to parse time field format.
 	TimeFieldFormat string `json:"time_field_format" default:"rfc3339nano" options:"ansic|unixdate|rubydate|rfc822|rfc822z|rfc850|rfc1123|rfc1123z|rfc3339|rfc3339nano|kitchen|stamp|stampmilli|stampmicro|stampnano"` //*
 
-	//> @3 @4 @5 @6
+	//> @3@4@5@6
 	//>
 	//> Default limit of events that plugin allows per `interval`
 	DefaultLimit int64 `json:"default_limit" default:"5000"` //*
 
-	//> @3 @4 @5 @6
+	//> @3@4@5@6
 	//>
 	//> How much time buckets to hold in the memory. E.g. if `buckets_count` is `60` and `interval` is `5m`,
 	//> then `5 hours` will be covered. Events with time later than `now() - 5h` will be dropped even if threshold isn't exceeded.
 	BucketsCount int `json:"buckets_count" default:"60"` //*
 
-	//> @3 @4 @5 @6
+	//> @3@4@5@6
 	//>
 	//> Time interval to check event throughput.
 	BucketInterval  cfg.Duration `json:"bucket_interval" parse:"duration" default:"1m"` //*
 	BucketInterval_ time.Duration
 
-	//> @3 @4 @5 @6
+	//> @3@4@5@6
 	//>
 	//> Rules can override `default_limit` for different group of event. It's a list of objects.
 	//> Each object have `limit` and `conditions` field.

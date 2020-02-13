@@ -11,8 +11,8 @@ import (
 )
 
 /*{ introduction
-Plugin reads events from listed kafka topics. It uses `sarama` lib.
-It supports commitment mechanism, so it guaranties at least once delivery.
+Reads events from multiple kafka topics using `sarama` library.
+> It guaranties at least once delivery due to commitment mechanism.
 }*/
 
 type Plugin struct {
@@ -29,17 +29,17 @@ type Plugin struct {
 //! config-params
 //^ config-params
 type Config struct {
-	//> @3 @4 @5 @6
+	//> @3@4@5@6
 	//>
 	//> List of kafka brokers to read from.
 	Brokers []string `json:"brokers" required:"true"` //*
 
-	//> @3 @4 @5 @6
+	//> @3@4@5@6
 	//>
 	//> List of kafka topics to read from.
 	Topics []string `json:"topics" required:"true"` //*
 
-	//> @3 @4 @5 @6
+	//> @3@4@5@6
 	//>
 	//> Name of consumer group to use.
 	ConsumerGroup string `json:"consumer_group" default:"file-d"` //*

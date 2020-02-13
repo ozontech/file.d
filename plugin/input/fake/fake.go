@@ -6,9 +6,7 @@ import (
 )
 
 /*{ introduction
-Plugin provides methods to use in test scenarios:
-
-@fn-list|signature-list
+Provides API to test pipelines and other plugins.
 }*/
 type Plugin struct {
 	controller pipeline.InputPluginController

@@ -17,7 +17,7 @@ import (
 )
 
 /*{ introduction
-Plugin writes events into Elasticsearch. It uses `_bulk` API to send events in batches.
+Sends events into Elasticsearch. It uses `_bulk` API to send events in batches.
 If a network error occurs batch will be infinitely tries to be delivered to random endpoint.
 }*/
 
@@ -35,12 +35,12 @@ type Plugin struct {
 //! config-params
 //^ config-params
 type Config struct {
-	//> @3 @4 @5 @6
+	//> @3@4@5@6
 	//>
 	//> List of elasticsearch endpoints in format `SCHEMA://HOST:PORT`
 	Endpoints []string `json:"endpoints"  required:"true"` //*
 
-	//> @3 @4 @5 @6
+	//> @3@4@5@6
 	//>
 	//> Defines pattern of elasticsearch index name. Use `%` character as a placeholder. Use `index_values` to define values for replacement.
 	//> E.g. if `index_format="my-index-%-%"` and `index_values="service,@@time"` and event is `{"service"="my-service"}`
@@ -48,44 +48,44 @@ type Config struct {
 	//> replaced with current time(see `time_format` option)
 	IndexFormat string `json:"index_format" default:"file-d-%"` //*
 
-	//> @3 @4 @5 @6
+	//> @3@4@5@6
 	//>
 	//> Comma-separated list of event fields which will be used for replacement `index_format`.
 	//> There is a special field `@@time` which equals to current time. Use `time_format` to define time format.
 	//> E.g. `[service, @@time]`
 	IndexValues []string `json:"index_values" default:"[@time]"` //*
 
-	//> @3 @4 @5 @6
+	//> @3@4@5@6
 	//>
 	//> Time format pattern to use as value for the `@@time` placeholder.
 	//> > Check out https://golang.org/pkg/time/#Parse for details.
 	TimeFormat string `json:"time_format" default:"2006-01-02"` //*
 
-	//> @3 @4 @5 @6
+	//> @3@4@5@6
 	//>
 	//> How much time to wait for connection.
 	ConnectionTimeout  cfg.Duration `json:"connection_timeout" default:"5s"` //*
 	ConnectionTimeout_ time.Duration
 
-	//> @3 @4 @5 @6
+	//> @3@4@5@6
 	//>
 	//> How much workers will be instantiated to send batches.
 	WorkersCount  cfg.Expression `json:"workers_count" default:"gomaxprocs*4" parse:"expression"` //*
 	WorkersCount_ int
 
-	//> @3 @4 @5 @6
+	//> @3@4@5@6
 	//>
 	//> Maximum quantity of events to pack into one batch.
 	BatchSize  cfg.Expression `json:"batch_size" default:"capacity/4"  parse:"expression"` //*
 	BatchSize_ int
 
-	//> @3 @4 @5 @6
+	//> @3@4@5@6
 	//>
 	//> After this timeout batch will be sent even if batch isn't full.
 	BatchFlushTimeout  cfg.Duration `json:"batch_flush_timeout" default:"200ms"` //*
 	BatchFlushTimeout_ time.Duration
 
-	//> @3 @4 @5 @6
+	//> @3@4@5@6
 	//>
 	//> If set to `false`, indexing error won't lead to an fatal and exit.
 	//> todo: my it be useful for all plugins?

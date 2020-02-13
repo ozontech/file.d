@@ -1,4 +1,4 @@
-# Parse elasticsearch plugin
+# Parse Elasticsearch plugin
 @introduction
 
 > No config params

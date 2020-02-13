@@ -1,5 +1,5 @@
-# Remove fields action plugin
+# Remove fields plugin
 @introduction
 
-## Config params
+### Config params
 @config-params|description

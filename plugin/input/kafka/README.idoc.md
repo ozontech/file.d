@@ -1,5 +1,5 @@
-# Kafka input plugin
+# Kafka plugin
 @introduction
 
-## Config params
+### Config params
 @config-params|description

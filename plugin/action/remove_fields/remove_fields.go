@@ -7,7 +7,7 @@ import (
 )
 
 /*{ introduction
-Plugin removes list of the fields of the event and keeps others.
+Removes list of the event fields and keeps others.
 }*/
 type Plugin struct {
 	config    *Config
@@ -17,7 +17,7 @@ type Plugin struct {
 //! config-params
 //^ config-params
 type Config struct {
-	//> @3 @4 @5 @6
+	//> @3@4@5@6
 	//>
 	//> List of the fields to remove.
 	Fields []string `json:"fields"` //*

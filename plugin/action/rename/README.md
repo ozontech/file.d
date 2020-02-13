@@ -1,8 +1,9 @@
-# Rename action plugin
-Plugin renames fields of the event. There can be provided unlimited config parameters. Each parameter handled as `cfg.FieldSelector`:`string`.
+# Rename plugin
+Renames fields of the event. There can be provided unlimited config parameters. Each parameter handled as `cfg.FieldSelector`:`string`.
 When `override` is set to `false` no renaming will be done in the case of field name collision.
 
-Example:
+**Example:**
+```yaml
 pipelines:
   example_pipeline:
     ...
@@ -11,9 +12,10 @@ pipelines:
       override: false
       my_object.field.subfield: new_sub_field
     ...
-
-Result event could looks like:
 ```
+
+**Result event could looks like:**
+```yaml
 {
   "my_object": {
     "field": {

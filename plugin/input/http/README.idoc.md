@@ -1,5 +1,5 @@
-# HTTP input plugin
+# HTTP plugin
 @introduction
 
-## Config params
+### Config params
 @config-params|description

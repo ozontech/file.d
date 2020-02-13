@@ -1,5 +1,5 @@
-# Modify action plugin
-Plugin modifies content for a field. Works only with strings.
+# Modify plugin
+Modifies content for a field. Works only with strings.
 There can be provided unlimited config parameters. Each parameter handled as `cfg.FieldSelector`:`cfg.Substitution`.
 
 Example:

@@ -1,7 +1,7 @@
-# Discard action plugin
-Plugin simply drops event. Used in a combination with `match_fields` parameters to filter out events.
+# Discard plugin
+Simply drops event. Used in a combination with `match_fields`/`match_mode` parameters to filter out events.
 
-Example discarding informational and debug logs:
+**Example discarding informational and debug logs:**
 ```
 pipelines:
   example_pipeline:
@@ -12,7 +12,6 @@ pipelines:
         level: /info|debug/
     ...
 ```
-
 
 > No config params
 

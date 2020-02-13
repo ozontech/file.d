@@ -1,9 +1,8 @@
-# File-d <small>v0.1.0</small>
+# `file.d`
 
-> Blazing fast tool to make data pipelines 
+> A blazing fast tool for building data pipelines: read, process and output logs/events. 
 
 [GitHub](https://github.com/docsifyjs/docsify/)
-[Get Started](#quick-start)
+[Get started](/README.md)
 
 
-![color](#f0f0f0)

@@ -10,13 +10,14 @@ import (
 )
 
 /*{ introduction
-Plugin also known as "multiline" makes one big event from event sequence.
-Useful for assembling back together "exceptions" or "panics" if they was written line by line.
+Makes one big event from event sequence.
+Useful for assembling back together "exceptions" or "panics" if they was written line by line. 
+Also known as "multiline".
 
 > ⚠ Parsing all event flow could be very CPU intensive because plugin uses regular expressions.
 > Consider `match_fields` parameter to process only particular events. Check out example for details.
 
-Example of joining Golang panics:
+**Example of joining Go panics**:
 ```
 pipelines:
   example_pipeline:
@@ -33,7 +34,7 @@ pipelines:
 }*/
 
 /*{ understanding
-No joining:
+**No joining:**
 ```
 event 1
 event 2 – matches start regexp
@@ -42,7 +43,7 @@ event 4 – matches continue regexp
 event 5
 ```
 
-Events `event 2` and `event 3` will be joined:
+**Events `event 2` and `event 3` will be joined:**
 ```
 event 1
 event 2 – matches start regexp
@@ -50,7 +51,7 @@ event 3 – matches continue regexp
 event 4
 ```
 
-Events from `event 2` to `event N` will be joined:
+**Events from `event 2` to `event N` will be joined:**
 ```
 event 1
 event 2 matches start regexp
@@ -75,19 +76,19 @@ type Plugin struct {
 //! config-params
 //^ config-params
 type Config struct {
-	//> @3 @4 @5 @6
+	//> @3@4@5@6
 	//>
 	//> Field of event which will be analyzed for joining with each other.
 	Field  cfg.FieldSelector `json:"field" required:"true" parse:"selector"` //*
 	Field_ []string
 
-	//> @3 @4 @5 @6
+	//> @3@4@5@6
 	//>
 	//> Regexp which will start join sequence.
 	Start  cfg.Regexp `json:"start" required:"true" parse:"regexp"` //*
 	Start_ *regexp.Regexp
 
-	//> @3 @4 @5 @6
+	//> @3@4@5@6
 	//>
 	//> Regexp which will continue join sequence.
 	Continue  cfg.Regexp `json:"continue" required:"true" parse:"regexp"` //*

@@ -11,12 +11,13 @@ import (
 )
 
 /*{ introduction
-Plugin listens to HTTP requests. Request body should contain events delimited by a new line.
-Also it emulates some protocols to allow receive events from wide range of software which use HTTP to transmit data.
-E.g. `file-d` may pretends to be Elasticsearch allows clients to send events using Elasticsearch protocol.
-So you can use Elasticsearch filebeat output plugin to send data to `file-d`.
+Reads events from HTTP requests with body delimited by a new line.
 
-> Currently event commitment mechanism isn't implemented for that plugin.
+Also it emulates some protocols to allow receive events from wide range of software which use HTTP to transmit data.
+E.g. `file.d` may pretends to be Elasticsearch allows clients to send events using Elasticsearch protocol.
+So you can use Elasticsearch filebeat output plugin to send data to `file.d`.
+
+> ⚠ Currently event commitment mechanism isn't implemented for this plugin.
 > Plugin answers with HTTP code `OK 200` right after it have read all the request body.
 > It doesn't wait until events will be committed.
 }*/
@@ -37,9 +38,11 @@ type Plugin struct {
 //^ config-params
 type Config struct {
 	//> @3@4@5@6   
-	//> Address to listen to. Omit ip/host to listen all network interfaces: `:88`
+	//> 
+	//> Address to listen to. Omit ip/host to listen for all network interfaces. E.g. `:88`
 	Address string `json:"address" default:":9200"` //*
-	//> @3@4@5@6   
+	//> @3@4@5@6
+	//>
 	//> Which protocol to emulate.
 	EmulateMode string `json:"emulate_mode" default:"no" options:"no|elasticsearch"` //*
 }

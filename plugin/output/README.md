@@ -1,9 +1,7 @@
 # Output plugins
 
 ## devnull
-Plugin provides methods to use in test scenarios:
-
-
+Provides API to test pipelines and other plugins.
 
 [More details...](plugin/output/devnull/README.md)
 ## elasticsearch
@@ -16,22 +14,22 @@ Plugin sends event batches to the GELF endpoint. Transport level protocol TCP or
 > It doesn't support UDP chunking. So don't use UDP if event size may be grater than 8192.
 
 GELF messages are separated by null byte. Each message is a JSON with the following fields:
-* `version`, string, should be `1.1`
-* `host`, string
-* `short_message`, string
-* `full_message`, string
-* `timestamp`, number
-* `level`, number
-* `_extra_field_1`, string
-* `_extra_field_2`, string
-* `_extra_field_3`, string
+* `version` *`string=1.1`*
+* `host` *`string`*
+* `short_message` *`string`*
+* `full_message` *`string`*
+* `timestamp` *`number`*
+* `level` *`number`*
+* `_extra_field_1` *`string`*
+* `_extra_field_2` *`string`*
+* `_extra_field_3` *`string`*
 
-Every field with an underscore prefix (_) will be treated as an extra field.
-Allowed characters in a field names are any word character(letter, number, underscore), dashes and dots.
+Every field with an underscore prefix `_` will be treated as an extra field.
+Allowed characters in a field names are letters, numbers, underscores, dashes and dots.
 
 [More details...](plugin/output/gelf/README.md)
 ## kafka
-Plugin sends event batches to the kafka brokers. It uses `sarama` lib.
+Sends event batches to kafka brokers using `sarama` lib.
 
 [More details...](plugin/output/kafka/README.md)
 ## stdout

@@ -13,7 +13,7 @@ import (
 )
 
 /*{ introduction
-Plugin sends event batches to the kafka brokers. It uses `sarama` lib.
+Sends event batches to kafka brokers using `sarama` lib.
 }*/
 type data struct {
 	messages []*sarama.ProducerMessage
