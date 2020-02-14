@@ -1,13 +1,13 @@
 # Overview
 `file.d` is a blazing fast tool for building data pipelines: read, process and output events. Primarily developed to read from files, but also supports numerous input/action/output plugins. 
 
-> ⚠ However we use it in production `it's still less than v1.0.0`. Please, test your pipelines carefully on dev/stage environments.  
+> ⚠ Though we use it in a production `it's still less than v1.0.0`. Please, test your pipelines carefully on dev/stage environments.  
 
 ## Motivation
 Well, we already have a number of similar tools: vector, filebeat, logstash, fluend-d, fluent-bit, etc.
 
-Performance tests states that best ones achieve around **100MB/sec** throughput. 
-Guys, its 2020 now. HDDs and NICs can handle throughput of a **few GB/sec** and CPUs processes **dozens of GB/sec**. Are you sure 100MB/sec is what we deserve? Are you sure 100MB/sec is fast?
+Performance tests states that best ones achieve around 100MB/sec throughput. 
+Guys, its 2020 now. HDDs and NICs can handle throughput of a **few GB/sec** and CPUs processes **dozens of GB/sec**. Are you sure **100MB/sec** is what we deserve? Are you sure it is fast?
 
 ## Main features
 * More than 10x faster compared to the similar tools
