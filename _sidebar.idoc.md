@@ -1,6 +1,6 @@
 - **Getting started**
   - [Overview](/README.md)
-  - [Quick start](/docs/quick%20start.md)
+  - [Quick start](/docs/quick-start.md)
   - [Installation](/docs/installation.md)
   - [Examples](/docs/examples.md)
   - [Configuring](/docs/configuring.md)

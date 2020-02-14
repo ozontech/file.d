@@ -15,9 +15,9 @@ import (
 func TestAppendEvent(t *testing.T) {
 	p := &Plugin{}
 	config := &Config{
-		Endpoints:   "test",
+		Endpoints:   []string{"test"},
 		IndexFormat: "test-%-index-%-%",
-		IndexValues: "@time,field_a,field_b",
+		IndexValues: []string{"@time", "field_a", "field_b"},
 		BatchSize:   "1",
 	}
 
@@ -40,8 +40,8 @@ func TestConfig(t *testing.T) {
 	p := &Plugin{}
 	config := &Config{
 		IndexFormat: "test-%",
-		Endpoints: "http://endpoint_1:9000,http://endpoint_2:9000/",
-		BatchSize: "1",
+		Endpoints:   []string{"http://endpoint_1:9000", "http://endpoint_2:9000/"},
+		BatchSize:   "1",
 	}
 
 	err := cfg.Parse(config, map[string]int{"gomaxprocs": 1})
@@ -51,6 +51,6 @@ func TestConfig(t *testing.T) {
 
 	p.Start(config, test.NewEmptyOutputPluginParams())
 
-	assert.Equal(t, "http://endpoint_1:9000/_bulk?_source=false", p.config.Endpoints_[0], "wrong endpoint")
-	assert.Equal(t, "http://endpoint_2:9000/_bulk?_source=false", p.config.Endpoints_[1], "wrong endpoint")
+	assert.Equal(t, "http://endpoint_1:9000/_bulk?_source=false", p.config.Endpoints[0], "wrong endpoint")
+	assert.Equal(t, "http://endpoint_2:9000/_bulk?_source=false", p.config.Endpoints[1], "wrong endpoint")
 }

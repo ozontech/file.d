@@ -136,13 +136,13 @@ type Config struct {
 	//> * Read files (I/O bound)
 	//> * Decode events (CPU bound)
 	//> > It's recommended to set it to 4x-8x of CPU cores.
-	WorkersCount  cfg.Expression `json:"workers_count" default:"gomaxprocs*4"` //*
-	WorkersCount_ int            
+	WorkersCount  cfg.Expression `json:"workers_count" default:"gomaxprocs*4" parse:"expression"` //*
+	WorkersCount_ int
 
 	//> @3@4@5@6
 	//>
 	//> How often report statistical information to stdout.
-	ReportInterval  cfg.Duration `json:"report_interval" default:"10s" parse:"duration"`//*
+	ReportInterval  cfg.Duration `json:"report_interval" default:"10s" parse:"duration"` //*
 	ReportInterval_ time.Duration
 
 	//> @3@4@5@6

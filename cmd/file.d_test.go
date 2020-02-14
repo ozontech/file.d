@@ -63,7 +63,7 @@ main.main()
 const testTime = 10 * time.Minute
 
 // TestEndToEnd creates near-realistic workload and setups a complex pipeline.
-// It's something like fuzz testing. file-d shouldn't crash/panic or hang for infinite time.
+// It's something like fuzz testing. file.d shouldn't crash/panic or hang for infinite time.
 // E.g. keep this test running while you are sleeping :)
 func TestEndToEnd(t *testing.T) {
 	configFilename := "./../testdata/config/e2e.yaml"
@@ -79,8 +79,8 @@ func TestEndToEnd(t *testing.T) {
 	k8s.MetaWaitTimeout = time.Millisecond
 	k8s.MaintenanceInterval = time.Millisecond * 100
 
-	filesDir, _ := ioutil.TempDir("", "file-d")
-	offsetsDir, _ := ioutil.TempDir("", "file-d")
+	filesDir, _ := ioutil.TempDir("", "file.d")
+	offsetsDir, _ := ioutil.TempDir("", "file.d")
 
 	config := cfg.NewConfigFromFile(configFilename)
 	input := config.Pipelines["test"].Raw.Get("input")

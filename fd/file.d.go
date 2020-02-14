@@ -39,7 +39,7 @@ func (f *FileD) SetConfig(config *cfg.Config) {
 }
 
 func (f *FileD) Start() {
-	logger.Infof("starting file-d")
+	logger.Infof("starting file.d")
 
 	f.createRegistry()
 	f.startHTTP()

@@ -78,7 +78,7 @@ func pluginConfig(opts ...string) *Config {
 		OffsetsOp:       op,
 	}
 
-	_ = cfg.Parse(config, nil)
+	_ = cfg.Parse(config, map[string]int{"gomaxprocs": 1})
 
 	return config
 }
