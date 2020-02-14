@@ -5,8 +5,8 @@ import (
 	"strings"
 
 	"github.com/Shopify/sarama"
-	"gitlab.ozon.ru/sre/file-d/fd"
-	"gitlab.ozon.ru/sre/file-d/pipeline"
+	"github.com/ozonru/file.d/fd"
+	"github.com/ozonru/file.d/pipeline"
 	"go.uber.org/zap"
 )
 

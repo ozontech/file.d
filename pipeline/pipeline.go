@@ -8,8 +8,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ozonru/file.d/logger"
 	"github.com/prometheus/client_golang/prometheus"
-	"gitlab.ozon.ru/sre/file-d/logger"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
 )

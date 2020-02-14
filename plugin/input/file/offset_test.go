@@ -3,8 +3,8 @@ package file
 import (
 	"testing"
 
+	"github.com/ozonru/file.d/pipeline"
 	"github.com/stretchr/testify/assert"
-	"gitlab.ozon.ru/sre/file-d/pipeline"
 )
 
 func TestParseOffsets(t *testing.T) {

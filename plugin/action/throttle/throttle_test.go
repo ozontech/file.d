@@ -7,11 +7,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ozonru/file.d/cfg"
+	"github.com/ozonru/file.d/logger"
+	"github.com/ozonru/file.d/pipeline"
+	"github.com/ozonru/file.d/test"
 	"github.com/stretchr/testify/assert"
-	"gitlab.ozon.ru/sre/file-d/cfg"
-	"gitlab.ozon.ru/sre/file-d/logger"
-	"gitlab.ozon.ru/sre/file-d/pipeline"
-	"gitlab.ozon.ru/sre/file-d/test"
 )
 
 func TestThrottle(t *testing.T) {

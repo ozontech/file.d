@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ozonru/file.d/logger"
 	"github.com/stretchr/testify/assert"
-	"gitlab.ozon.ru/sre/file-d/logger"
 	"go.uber.org/atomic"
 )
 

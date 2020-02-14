@@ -9,11 +9,11 @@ import (
 	"runtime/debug"
 
 	"github.com/bitly/go-simplejson"
+	"github.com/ozonru/file.d/cfg"
+	"github.com/ozonru/file.d/logger"
+	"github.com/ozonru/file.d/pipeline"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"gitlab.ozon.ru/sre/file-d/cfg"
-	"gitlab.ozon.ru/sre/file-d/logger"
-	"gitlab.ozon.ru/sre/file-d/pipeline"
 )
 
 type FileD struct {

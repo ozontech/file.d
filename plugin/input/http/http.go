@@ -5,9 +5,9 @@ import (
 	"net/http"
 	"sync"
 
-	"gitlab.ozon.ru/sre/file-d/fd"
-	"gitlab.ozon.ru/sre/file-d/logger"
-	"gitlab.ozon.ru/sre/file-d/pipeline"
+	"github.com/ozonru/file.d/fd"
+	"github.com/ozonru/file.d/logger"
+	"github.com/ozonru/file.d/pipeline"
 )
 
 /*{ introduction

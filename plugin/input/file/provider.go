@@ -9,7 +9,7 @@ import (
 	"syscall"
 	"time"
 
-	"gitlab.ozon.ru/sre/file-d/pipeline"
+	"github.com/ozonru/file.d/pipeline"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
 )

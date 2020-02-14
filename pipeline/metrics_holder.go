@@ -121,7 +121,7 @@ func (m *metricsHolder) count(event *Event, actionIndex int, eventStatus eventSt
 
 		if !has {
 			mn.mu.Lock()
-			nextMN, has = mn.childs[val];
+			nextMN, has = mn.childs[val]
 			if !has {
 				key := DefaultFieldValue
 				if node != nil {

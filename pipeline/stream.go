@@ -4,7 +4,7 @@ import (
 	"sync"
 	"time"
 
-	"gitlab.ozon.ru/sre/file-d/logger"
+	"github.com/ozonru/file.d/logger"
 )
 
 var eventWaitTimeout = time.Second * 30

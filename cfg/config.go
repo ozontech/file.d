@@ -11,8 +11,8 @@ import (
 
 	"github.com/bitly/go-simplejson"
 	"github.com/ghodss/yaml"
+	"github.com/ozonru/file.d/logger"
 	"github.com/pkg/errors"
-	"gitlab.ozon.ru/sre/file-d/logger"
 )
 
 type Config struct {

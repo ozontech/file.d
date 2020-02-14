@@ -8,12 +8,12 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ozonru/file.d/cfg"
 	insaneJSON "github.com/vitkovskii/insane-json"
-	"gitlab.ozon.ru/sre/file-d/cfg"
 	"go.uber.org/zap"
 
-	"gitlab.ozon.ru/sre/file-d/fd"
-	"gitlab.ozon.ru/sre/file-d/pipeline"
+	"github.com/ozonru/file.d/fd"
+	"github.com/ozonru/file.d/pipeline"
 )
 
 /*{ introduction

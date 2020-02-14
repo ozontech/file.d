@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/ozonru/file.d/logger"
 	insaneJSON "github.com/vitkovskii/insane-json"
-	"gitlab.ozon.ru/sre/file-d/logger"
 	"go.uber.org/atomic"
 )
 

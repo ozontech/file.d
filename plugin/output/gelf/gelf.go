@@ -4,10 +4,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ozonru/file.d/cfg"
+	"github.com/ozonru/file.d/fd"
+	"github.com/ozonru/file.d/pipeline"
 	"github.com/vitkovskii/insane-json"
-	"gitlab.ozon.ru/sre/file-d/cfg"
-	"gitlab.ozon.ru/sre/file-d/fd"
-	"gitlab.ozon.ru/sre/file-d/pipeline"
 	"go.uber.org/zap"
 )
 

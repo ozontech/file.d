@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"io"
 
-	"gitlab.ozon.ru/sre/file-d/pipeline"
+	"github.com/ozonru/file.d/pipeline"
 	"go.uber.org/zap"
 )
 

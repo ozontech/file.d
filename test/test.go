@@ -5,12 +5,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ozonru/file.d/cfg"
+	"github.com/ozonru/file.d/logger"
+	"github.com/ozonru/file.d/pipeline"
+	"github.com/ozonru/file.d/plugin/input/fake"
+	"github.com/ozonru/file.d/plugin/output/devnull"
 	"github.com/prometheus/client_golang/prometheus"
-	"gitlab.ozon.ru/sre/file-d/cfg"
-	"gitlab.ozon.ru/sre/file-d/logger"
-	"gitlab.ozon.ru/sre/file-d/pipeline"
-	"gitlab.ozon.ru/sre/file-d/plugin/input/fake"
-	"gitlab.ozon.ru/sre/file-d/plugin/output/devnull"
 	"go.uber.org/atomic"
 )
 

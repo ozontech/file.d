@@ -1,4 +1,4 @@
-module gitlab.ozon.ru/sre/file-d
+module github.com/ozonru/file.d
 
 require (
 	github.com/DataDog/zstd v1.4.0 // indirect

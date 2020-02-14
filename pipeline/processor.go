@@ -3,7 +3,7 @@ package pipeline
 import (
 	"strings"
 
-	"gitlab.ozon.ru/sre/file-d/logger"
+	"github.com/ozonru/file.d/logger"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
 )

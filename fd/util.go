@@ -6,10 +6,10 @@ import (
 	"time"
 
 	"github.com/bitly/go-simplejson"
+	"github.com/ozonru/file.d/cfg"
+	"github.com/ozonru/file.d/logger"
+	"github.com/ozonru/file.d/pipeline"
 	"github.com/pkg/errors"
-	"gitlab.ozon.ru/sre/file-d/cfg"
-	"gitlab.ozon.ru/sre/file-d/logger"
-	"gitlab.ozon.ru/sre/file-d/pipeline"
 )
 
 func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
