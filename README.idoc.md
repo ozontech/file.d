@@ -40,3 +40,4 @@ Throughput on production server to be filled.
 * [Configuring](/docs/configuring.md)
 * [Architecture](/docs/architecture.md)
 * [Contributing](/docs/contributing.md)
+* [License](/docs/license.md)
