@@ -40,5 +40,6 @@ Throughput on production server to be filled.
 * [Configuring](/docs/configuring.md)
 * [Architecture](/docs/architecture.md)
 * [Contributing](/docs/contributing.md)
+* [License](/docs/license.md)
 
 <br>*Generated using [__insane-doc__](https://github.com/vitkovskii/insane-doc)*
