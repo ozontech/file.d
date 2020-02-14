@@ -1,5 +1,5 @@
 # Elasticsearch output
-Plugin sends event batches to the GELF endpoint. Transport level protocol TCP or UDP is configurable.
+Sends event batches to the GELF endpoint. Transport level protocol TCP or UDP is configurable.
 > It doesn't support UDP chunking. So don't use UDP if event size may be grater than 8192.
 
 GELF messages are separated by null byte. Each message is a JSON with the following fields:

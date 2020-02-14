@@ -5,12 +5,12 @@ Provides API to test pipelines and other plugins.
 
 [More details...](plugin/output/devnull/README.md)
 ## elasticsearch
-Plugin writes events into Elasticsearch. It uses `_bulk` API to send events in batches.
+Sends events into Elasticsearch. It uses `_bulk` API to send events in batches.
 If a network error occurs batch will be infinitely tries to be delivered to random endpoint.
 
 [More details...](plugin/output/elasticsearch/README.md)
 ## gelf
-Plugin sends event batches to the GELF endpoint. Transport level protocol TCP or UDP is configurable.
+Sends event batches to the GELF endpoint. Transport level protocol TCP or UDP is configurable.
 > It doesn't support UDP chunking. So don't use UDP if event size may be grater than 8192.
 
 GELF messages are separated by null byte. Each message is a JSON with the following fields:
@@ -33,7 +33,7 @@ Sends event batches to kafka brokers using `sarama` lib.
 
 [More details...](plugin/output/kafka/README.md)
 ## stdout
-Plugin simply writes events to stdout(also known as console).
+Simply writes events to stdout(also known as console).
 
 [More details...](plugin/output/stdout/README.md)
 <br>*Generated using [__insane-doc__](https://github.com/vitkovskii/insane-doc)*

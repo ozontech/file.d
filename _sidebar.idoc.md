@@ -1,15 +1,15 @@
 - **Getting started**
   - [Overview](/README.md)
-  - [Quick start](/docs/QUICKSTART.md)
-  - [Installation](/docs/INSTALLATION.md)
-  - [Examples](/docs/EXAMPLES.md)
-  - [Configuring](/docs/CONFIGURING.md)
+  - [Quick start](/docs/quick%20start.md)
+  - [Installation](/docs/installation.md)
+  - [Examples](/docs/examples.md)
+  - [Configuring](/docs/configuring.md)
 
 - **Documentation**
-  - [Architecture](/docs/ARCHITECTURE.md)
-  - [Benchmarks](/docs/BENCHMARKS.md)
-  - [Guarantees](/docs/GUARANTEES.md)
-  - [Optimization tips](/docs/OPTIMIZATIONTIPS.md)
+  - [Architecture](/docs/architecture.md)
+  - [Benchmarks](/docs/benchmarks.md)
+  - [Guarantees](/docs/guarantees.md)
+  - [Optimization tips](/docs/optimization-tips.md)
 
 - **Plugins**
   - Input
@@ -20,5 +20,5 @@
 @global-contents-table-plugin-output|links-list
 
 - **Other**
-  - [Contribution](/docs/CONTRIBUTION.md)
-  - [License](/docs/LICENSE.md)
+  - [Contributing](/docs/contributing.md)
+  - [License](/docs/license.md)

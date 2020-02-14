@@ -6,8 +6,8 @@
 ## Motivation
 Well, we already have a number of similar tools: vector, filebeat, logstash, fluend-d, fluent-bit, etc.
 
-Performance tests states that best ones achieve around 100MB/sec throughput. 
-Guys, its 2020 now. HDDs and NICs can handle throughput of a few GB/sec and CPUs processes dozens of GB/sec. Are you sure 100MB/sec is what we deserve? Are you sure 100MB/sec is fast?
+Performance tests states that best ones achieve around **100MB/sec** throughput. 
+Guys, its 2020 now. HDDs and NICs can handle throughput of a **few GB/sec** and CPUs processes **dozens of GB/sec**. Are you sure 100MB/sec is what we deserve? Are you sure 100MB/sec is fast?
 
 ## Main features
 * More than 10x faster compared to the similar tools
@@ -33,10 +33,12 @@ Throughput on production server to be filled.
 
 **Output**: [devnull](plugin/output/devnull/README.md), [elasticsearch](plugin/output/elasticsearch/README.md), [gelf](plugin/output/gelf/README.md), [kafka](plugin/output/kafka/README.md), [stdout](plugin/output/stdout/README.md)
 
-## What else
-* [Getting started](/docs/QUICKSTART.md)
-* [Documentation](/docs/BENCHMARKS.md)
-* [Contributing](/docs/LICENSE.md)
-* [License](/docs/LICENSE.md?id=license)
+## What's next
+* [Quick start](/docs/quick-start.md)
+* [Installation](/docs/installation.md)
+* [Examples](/docs/examples.md)
+* [Configuring](/docs/configuring.md)
+* [Architecture](/docs/architecture.md)
+* [Contributing](/docs/contributing.md)
 
 <br>*Generated using [__insane-doc__](https://github.com/vitkovskii/insane-doc)*

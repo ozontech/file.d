@@ -34,8 +34,9 @@ Transforms `{"animal":{"type":"cat","paws":4}}` into `{"pet_type":"b","pet_paws"
 
 [More details...](plugin/action/flatten/README.md)
 ## join
-Plugin also known as "multiline" makes one big event from event sequence.
-Useful for assembling back together "exceptions" or "panics" if they was written line by line.
+Makes one big event from event sequence.
+Useful for assembling back together "exceptions" or "panics" if they was written line by line. 
+Also known as "multiline".
 
 > ⚠ Parsing all event flow could be very CPU intensive because plugin uses regular expressions.
 > Consider `match_fields` parameter to process only particular events. Check out example for details.
@@ -57,12 +58,12 @@ pipelines:
 
 [More details...](plugin/action/join/README.md)
 ## json_decode
-Plugin decodes JSON string from event field and merges result with event root.
+Decodes JSON string from event field and merges result with event root.
 If decoded JSON isn't an object, event will be skipped.
 
 [More details...](plugin/action/json_decode/README.md)
 ## k8s
-Adds k8s meta info to docker logs and also joins split docker logs into one event.
+Adds kubernetes meta information into events collected from docker log files. Also joins split docker logs into one event.
 
 Source docker log file name should be in format:<br> `[pod-name]_[namespace]_[container-name]-[container-id].log` 
 
@@ -78,7 +79,7 @@ Information which plugin adds:
 
 [More details...](plugin/action/k8s/README.md)
 ## keep_fields
-Keeps list of the fields of the event and removes others.
+Keeps list of the event fields and removes others.
 
 [More details...](plugin/action/keep_fields/README.md)
 ## modify
@@ -116,7 +117,7 @@ Parses HTTP input using Elasticsearch `/_bulk` API format. It converts sources d
 
 [More details...](plugin/action/parse_es/README.md)
 ## remove_fields
-Removes list of the fields of the event and keeps others.
+Removes list of the event fields and keeps others.
 
 [More details...](plugin/action/remove_fields/README.md)
 ## rename

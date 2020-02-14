@@ -1,6 +1,7 @@
 # Join plugin
-Plugin also known as "multiline" makes one big event from event sequence.
-Useful for assembling back together "exceptions" or "panics" if they was written line by line.
+Makes one big event from event sequence.
+Useful for assembling back together "exceptions" or "panics" if they was written line by line. 
+Also known as "multiline".
 
 > ⚠ Parsing all event flow could be very CPU intensive because plugin uses regular expressions.
 > Consider `match_fields` parameter to process only particular events. Check out example for details.

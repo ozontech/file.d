@@ -1,5 +1,5 @@
 # Elasticsearch output
-Plugin writes events into Elasticsearch. It uses `_bulk` API to send events in batches.
+Sends events into Elasticsearch. It uses `_bulk` API to send events in batches.
 If a network error occurs batch will be infinitely tries to be delivered to random endpoint.
 
 ### Config params

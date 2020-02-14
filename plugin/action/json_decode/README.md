@@ -1,5 +1,5 @@
 # JSON decode plugin
-Plugin decodes JSON string from event field and merges result with event root.
+Decodes JSON string from event field and merges result with event root.
 If decoded JSON isn't an object, event will be skipped.
 
 ### Config params

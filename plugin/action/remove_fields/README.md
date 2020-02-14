@@ -1,5 +1,5 @@
 # Remove fields plugin
-Removes list of the fields of the event and keeps others.
+Removes list of the event fields and keeps others.
 
 ### Config params
 **`fields`** *`[]string`* 

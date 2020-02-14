@@ -1,5 +1,5 @@
 # Kubernetes plugin
-Adds k8s meta info to docker logs and also joins split docker logs into one event.
+Adds kubernetes meta information into events collected from docker log files. Also joins split docker logs into one event.
 
 Source docker log file name should be in format:<br> `[pod-name]_[namespace]_[container-name]-[container-id].log` 
 
