@@ -1,5 +1,5 @@
 # Overview
-`file.d` is a daemon which allows you to build data pipelines: read, process and output events. Primarily developed to read from files, but also supports numerous input plugins. 
+`file.d` is a blazing fast tool for building data pipelines: read, process and output events. Primarily developed to read from files, but also supports numerous input/action/output plugins. 
 
 > ⚠ However we use it in production `it's still less than v1.0.0`. Please, test your pipelines carefully on dev/stage environments.  
 
