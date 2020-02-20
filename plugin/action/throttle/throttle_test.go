@@ -34,7 +34,7 @@ func TestThrottle(t *testing.T) {
 		BucketsCount:   buckets,
 		BucketInterval: "100ms",
 		ThrottleField:  "k8s_pod",
-		TimeField:      "time",
+		TimeField:      "",
 		DefaultLimit:   int64(defaultLimit),
 	}
 	err := cfg.Parse(config, nil)

@@ -6,6 +6,7 @@ import (
 
 	"github.com/ozonru/file.d/cfg"
 	"github.com/ozonru/file.d/fd"
+	"github.com/ozonru/file.d/logger"
 	"github.com/ozonru/file.d/pipeline"
 )
 
@@ -122,10 +123,15 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 }
 
 func (p *Plugin) isAllowed(event *pipeline.Event) bool {
-	tsValue := event.Root.Dig(p.config.TimeField_...).AsString()
-	ts, err := time.Parse(p.config.TimeFieldFormat, tsValue)
-	if err != nil || ts.IsZero() {
-		ts = time.Now()
+	ts := time.Now()
+	if len(p.config.TimeField_) != 0 {
+		tsValue := event.Root.Dig(p.config.TimeField_...).AsString()
+		t, err := time.Parse(p.config.TimeFieldFormat, tsValue)
+		if err != nil || ts.IsZero() {
+			logger.Warnf("can't parse field %q using format %s: %s", p.config.TimeField, p.config.TimeFieldFormat, tsValue)
+		} else {
+			ts = t
+		}
 	}
 
 	throttleKey := defaultThrottleKey
