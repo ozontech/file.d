@@ -10,12 +10,12 @@ import (
 )
 
 /*{ introduction
-Makes one big event from event sequence.
-Useful for assembling back together "exceptions" or "panics" if they was written line by line. 
+It makes one big event from the sequence of the events.
+It is useful for assembling back together "exceptions" or "panics" if they were written line by line. 
 Also known as "multiline".
 
-> ⚠ Parsing all event flow could be very CPU intensive because plugin uses regular expressions.
-> Consider `match_fields` parameter to process only particular events. Check out example for details.
+> ⚠ Parsing the whole event flow could be very CPU intensive because the plugin uses regular expressions.
+> Consider `match_fields` parameter to process only particular events. Check out an example for details.
 
 **Example of joining Go panics**:
 ```
@@ -78,19 +78,19 @@ type Plugin struct {
 type Config struct {
 	//> @3@4@5@6
 	//>
-	//> Field of event which will be analyzed for joining with each other.
+	//> The event field which will be checked for joining with each other.
 	Field  cfg.FieldSelector `json:"field" required:"true" parse:"selector"` //*
 	Field_ []string
 
 	//> @3@4@5@6
 	//>
-	//> Regexp which will start join sequence.
+	//> A regexp which will start the join sequence.
 	Start  cfg.Regexp `json:"start" required:"true" parse:"regexp"` //*
 	Start_ *regexp.Regexp
 
 	//> @3@4@5@6
 	//>
-	//> Regexp which will continue join sequence.
+	//> A regexp which will continue the join sequence.
 	Continue  cfg.Regexp `json:"continue" required:"true" parse:"regexp"` //*
 	Continue_ *regexp.Regexp
 }

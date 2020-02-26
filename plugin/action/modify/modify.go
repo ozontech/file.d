@@ -8,10 +8,10 @@ import (
 )
 
 /*{ introduction
-Modifies content for a field. Works only with strings.
-There can be provided unlimited config parameters. Each parameter handled as `cfg.FieldSelector`:`cfg.Substitution`.
+It modifies the content for a field. It works only with strings.
+You can provide an unlimited number of config parameters. Each parameter handled as `cfg.FieldSelector`:`cfg.Substitution`.
 
-Example:
+**Example:**
 ```yaml
 pipelines:
   example_pipeline:
@@ -22,7 +22,7 @@ pipelines:
     ...
 ```
 
-Result event could looks like:
+The resulting event could look like:
 ```
 {
   "my_object": {

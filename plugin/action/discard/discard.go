@@ -6,9 +6,9 @@ import (
 )
 
 /*{ introduction
-Simply drops event. Used in a combination with `match_fields`/`match_mode` parameters to filter out events.
+It drops an event. It is used in a combination with `match_fields`/`match_mode` parameters to filter out the events.
 
-**Example discarding informational and debug logs:**
+**An example for discarding informational and debug logs:**
 ```
 pipelines:
   example_pipeline:

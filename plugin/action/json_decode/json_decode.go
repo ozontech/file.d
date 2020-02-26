@@ -7,8 +7,8 @@ import (
 )
 
 /*{ introduction
-Decodes JSON string from event field and merges result with event root.
-If decoded JSON isn't an object, event will be skipped.
+It decodes a JSON string from the event field and merges the result with the event root.
+If the decoded JSON isn't an object, the event will be skipped.
 }*/
 type Plugin struct {
 	config *Config
@@ -19,13 +19,13 @@ type Plugin struct {
 type Config struct {
 	//> @3@4@5@6
 	//>
-	//> Field of event to decode. Should be string.
+	//> Event field to decode. Must be a string.
 	Field  cfg.FieldSelector `json:"field" parse:"selector" required:"true"` //*
 	Field_ []string
 
 	//> @3@4@5@6
 	//>
-	//> Prefix to add to keys of decoded object.
+	//> A prefix to add to decoded object keys.
 	Prefix string `json:"prefix" default:""` //*
 }
 

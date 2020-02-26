@@ -12,8 +12,8 @@ import (
 )
 
 /*{ introduction
-Sends event batches to the GELF endpoint. Transport level protocol TCP or UDP is configurable.
-> It doesn't support UDP chunking. So don't use UDP if event size may be grater than 8192.
+It sends event batches to the GELF endpoint. Transport level protocol TCP or UDP is configurable.
+> It doesn't support UDP chunking. So don't use UDP if event size may be greater than 8192.
 
 GELF messages are separated by null byte. Each message is a JSON with the following fields:
 * `version` *`string=1.1`*
@@ -27,7 +27,7 @@ GELF messages are separated by null byte. Each message is a JSON with the follow
 * `_extra_field_3` *`string`*
 
 Every field with an underscore prefix `_` will be treated as an extra field.
-Allowed characters in a field names are letters, numbers, underscores, dashes and dots.
+Allowed characters in field names are letters, numbers, underscores, dashes, and dots.
 }*/
 
 type Plugin struct {
@@ -43,44 +43,44 @@ type Plugin struct {
 type Config struct {
 	//> @3@4@5@6
 	//>
-	//> Address of gelf endpoint. Format: `HOST:PORT`. E.g. `localhost:12201`.
+	//> An address of gelf endpoint. Format: `HOST:PORT`. E.g. `localhost:12201`.
 	Endpoint string `json:"endpoint" required:"true"` //*
 
 	//> @3@4@5@6
 	//>
-	//> Plugin reconnects to endpoint periodically using this interval. Useful if endpoint is a load balancer.
+	//> The plugin reconnects to endpoint periodically using this interval. It is useful if an endpoint is a load balancer.
 	ReconnectInterval  cfg.Duration `json:"reconnect_interval" default:"1m" parse:"duration"` //*
 	ReconnectInterval_ time.Duration
 
 	//> @3@4@5@6
 	//>
-	//> How much time to wait for connection.
+	//> How much time to wait for the connection?
 	ConnectionTimeout  cfg.Duration `json:"connection_timeout" default:"5s"` //*
 	ConnectionTimeout_ time.Duration
 
 	//> @3@4@5@6
 	//>
-	//> Which field of event should be used as `host` GELF field.
+	//> Which field of the event should be used as `host` GELF field.
 	HostField string `json:"host_field" default:"host"` //*
 
 	//> @3@4@5@6
 	//>
-	//>  Which field of event should be used as `short_message` GELF field.
+	//>  Which field of the event should be used as `short_message` GELF field.
 	ShortMessageField string `json:"short_message_field" default:"message"` //*
 
 	//> @3@4@5@6
 	//>
-	//>  Default value for `short_message` GELF field if nothing is found in the event.
+	//>  The default value for `short_message` GELF field if nothing is found in the event.
 	DefaultShortMessageValue string `json:"default_short_message_value" default:"not set"` //*
 
 	//> @3@4@5@6
 	//>
-	//> Which field of event should be used as `full_message` GELF field.
+	//> Which field of the event should be used as `full_message` GELF field.
 	FullMessageField string `json:"full_message_field" default:""` //*
 
 	//> @3@4@5@6
 	//>
-	//> Which field of event should be used as `timestamp` GELF field.
+	//> Which field of the event should be used as `timestamp` GELF field.
 	TimestampField string `json:"timestamp_field" default:"time"` //*
 
 	//> @3@4@5@6
@@ -90,7 +90,7 @@ type Config struct {
 
 	//> @3@4@5@6
 	//>
-	//> Which field of event should be used as `level` GELF field. Level field should contain level number or string according to RFC 5424:
+	//> Which field of the event should be used as a `level` GELF field. Level field should contain level number or string according to RFC 5424:
 	//> * `7` or `debug`
 	//> * `6` or `info`
 	//> * `5` or `notice`
@@ -105,19 +105,19 @@ type Config struct {
 
 	//> @3@4@5@6
 	//>
-	//> How much workers will be instantiated to send batches.
+	//> How many workers will be instantiated to send batches.
 	WorkersCount  cfg.Expression `json:"workers_count" default:"gomaxprocs*4" parse:"expression"` //*
 	WorkersCount_ int
 
 	//> @3@4@5@6
 	//>
-	//> Maximum quantity of events to pack into one batch.
+	//> A maximum quantity of events to pack into one batch.
 	BatchSize  cfg.Expression `json:"batch_size" default:"capacity/4" parse:"expression"` //*
 	BatchSize_ int
 
 	//> @3@4@5@6
 	//>
-	//> After this timeout batch will be sent even if batch isn't completed.
+	//> After this timeout the batch will be sent even if batch isn't completed.
 	BatchFlushTimeout  cfg.Duration `json:"batch_flush_timeout" default:"200ms"` //*
 	BatchFlushTimeout_ time.Duration
 

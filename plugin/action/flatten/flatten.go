@@ -7,7 +7,7 @@ import (
 )
 
 /*{ introduction
-Extracts object keys and adds them into the root with some prefix. If provided field isn't object, event will be skipped.
+It extracts the object keys and adds them into the root with some prefix. If the provided field isn't an object, an event will be skipped.
 
 **Example:**
 ```yaml
@@ -20,7 +20,7 @@ pipelines:
       prefix: pet_
     ...
 ```
-Transforms `{"animal":{"type":"cat","paws":4}}` into `{"pet_type":"b","pet_paws":"4"}`.
+It transforms `{"animal":{"type":"cat","paws":4}}` into `{"pet_type":"b","pet_paws":"4"}`.
 }*/
 type Plugin struct {
 	config *Config
@@ -31,7 +31,7 @@ type Plugin struct {
 type Config struct {
 	//> @3@4@5@6
 	//>
-	//> Defines field that should be flattened.
+	//> Defines the field that should be flattened.
 	Field  cfg.FieldSelector `json:"field" required:"true" parse:"selector"` //*
 	Field_ []string
 

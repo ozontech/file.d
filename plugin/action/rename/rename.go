@@ -7,8 +7,8 @@ import (
 )
 
 /*{ introduction
-Renames fields of the event. There can be provided unlimited config parameters. Each parameter handled as `cfg.FieldSelector`:`string`.
-When `override` is set to `false` no renaming will be done in the case of field name collision.
+It renames the fields of the event. You can provide an unlimited number of config parameters. Each parameter handled as `cfg.FieldSelector`:`string`.
+When `override` is set to `false`, the field won't be renamed in the case of field name collision.
 
 **Example:**
 ```yaml
@@ -22,7 +22,7 @@ pipelines:
     ...
 ```
 
-**Result event could looks like:**
+The resulting event could look like:
 ```yaml
 {
   "my_object": {

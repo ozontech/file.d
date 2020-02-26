@@ -6,7 +6,7 @@ import (
 )
 
 /*{ introduction
-Provides API to test pipelines and other plugins.
+It provides an API to test pipelines and other plugins.
 }*/
 type Plugin struct {
 	controller pipeline.InputPluginController
@@ -44,7 +44,7 @@ func (p *Plugin) Commit(event *pipeline.Event) {
 //! fn-list
 //^ fn-list
 
-//> Sends test event into pipeline.
+//> It sends a test event into the pipeline.
 func (p *Plugin) In(sourceID pipeline.SourceID, sourceName string, offset int64, bytes []byte) { //*
 	if p.inFn != nil {
 		p.inFn()
@@ -52,12 +52,12 @@ func (p *Plugin) In(sourceID pipeline.SourceID, sourceName string, offset int64,
 	p.controller.In(sourceID, sourceName, offset, bytes, false)
 }
 
-//> Sets up a hook to make sure test event have been successfully committed.
+//> It sets up a hook to make sure the test event has been successfully committed.
 func (p *Plugin) SetCommitFn(fn func(event *pipeline.Event)) { //*
 	p.commitFn = fn
 }
 
-//> Sets up a hook to make sure test event have been passed to plugin.
+//> It sets up a hook to make sure the test event has been passed to the plugin.
 func (p *Plugin) SetInFn(fn func()) { //*
 	p.inFn = fn
 }

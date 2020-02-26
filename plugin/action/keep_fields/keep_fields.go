@@ -6,7 +6,7 @@ import (
 )
 
 /*{ introduction
-Keeps list of the event fields and removes others.
+It keeps the list of the event fields and removes others.
 }*/
 type Plugin struct {
 	config    *Config
@@ -18,7 +18,7 @@ type Plugin struct {
 type Config struct {
 	//> @3@4@5@6
 	//>
-	//> List of the fields to keep.
+	//> The list of the fields to keep.
 	Fields []string `json:"fields"` //*
 }
 

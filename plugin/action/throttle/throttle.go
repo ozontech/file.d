@@ -13,13 +13,13 @@ import (
 var (
 	defaultThrottleKey = "default"
 
-	// limiters should be shared across pipeline, so lets have a map by namespace and limiter name
+	// limiters should be shared across pipeline, so let's have a map by namespace and limiter name
 	limiters   = map[string]map[string]*limiter{} // todo: cleanup this map?
 	limitersMu = &sync.RWMutex{}
 )
 
 /*{ introduction
-Discards events if pipeline throughput gets higher than a configured threshold.
+It discards the events if pipeline throughput gets higher than a configured threshold.
 }*/
 type Plugin struct {
 	config   *Config
@@ -34,7 +34,7 @@ type Plugin struct {
 type Config struct {
 	//> @3@4@5@6
 	//>
-	//> Event field which will be used as a key for throttling.
+	//> The event field which will be used as a key for throttling.
 	//> It means that throttling will work separately for events with different keys.
 	//> If not set, it's assumed that all events have the same key.
 	ThrottleField  cfg.FieldSelector `json:"throttle_field" default:"" parse:"selector"` //*
@@ -42,20 +42,20 @@ type Config struct {
 
 	//> @3@4@5@6
 	//>
-	//> Event field which defines the time when event was fired.
-	//> It used to detect event throughput in particular time range.
-	//> If not set current time will be taken.
+	//> The event field which defines the time when event was fired.
+	//> It is used to detect the event throughput in a particular time range.
+	//> If not set, the current time will be taken.
 	TimeField  cfg.FieldSelector `json:"time_field" default:"time"` //*
 	TimeField_ []string
 
 	//> @3@4@5@6
 	//>
-	//> Defines how to parse time field format.
+	//> It defines how to parse the time field format.
 	TimeFieldFormat string `json:"time_field_format" default:"rfc3339nano" options:"ansic|unixdate|rubydate|rfc822|rfc822z|rfc850|rfc1123|rfc1123z|rfc3339|rfc3339nano|kitchen|stamp|stampmilli|stampmicro|stampnano"` //*
 
 	//> @3@4@5@6
 	//>
-	//> Default limit of events that plugin allows per `interval`
+	//> The default events limit that plugin allows per `interval`
 	DefaultLimit int64 `json:"default_limit" default:"5000"` //*
 
 	//> @3@4@5@6
@@ -72,10 +72,10 @@ type Config struct {
 
 	//> @3@4@5@6
 	//>
-	//> Rules can override `default_limit` for different group of event. It's a list of objects.
-	//> Each object have `limit` and `conditions` field.
-	//> * `limit` – value which will override `default_limit`, if `conditions` are met.
-	//> * `conditions` – a map of `event field name => event field value`. Conditions are checked using `AND` operator.
+	//> Rules to override the `default_limit` for different group of event. It's a list of objects.
+	//> Each object has the `limit` and `conditions` fields.
+	//> * `limit` – the value which will override the `default_limit`, if `conditions` are met.
+	//> * `conditions` – the map of `event field name => event field value`. The conditions are checked using `AND` operator.
 	Rules []RuleConfig `json:"rules" default:""` //*
 }
 

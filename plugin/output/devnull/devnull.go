@@ -7,7 +7,7 @@ import (
 )
 
 /*{ introduction
-Provides API to test pipelines and other plugins.
+It provides an API to test pipelines and other plugins.
 }*/
 
 type Plugin struct {
@@ -38,7 +38,7 @@ func (p *Plugin) Start(_ pipeline.AnyConfig, params *pipeline.OutputPluginParams
 //! fn-list
 //^ fn-list
 
-//> Sets up a hook to make sure test event have been successfully passed to output.
+//> It sets up a hook to make sure the test event passes successfully to output.
 func (p *Plugin) SetOutFn(fn func(event *pipeline.Event)) { //*
 	p.outFn = fn
 

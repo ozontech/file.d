@@ -9,49 +9,49 @@ import (
 )
 
 /*{ introduction
-Adds kubernetes meta information into events collected from docker log files. Also joins split docker logs into one event.
+It adds the Kubernetes meta-information into the events collected from docker log files. Also, it joins split docker logs into a single event.
 
-Source docker log file name should be in format:<br> `[pod-name]_[namespace]_[container-name]-[container-id].log` 
+Source docker log file name should be written in the following format:<br> `[pod-name]_[namespace]_[container-name]-[container-id].log` 
 
 E.g. `my_pod-1566485760-trtrq_my-namespace_my-container-4e0301b633eaa2bfdcafdeba59ba0c72a3815911a6a820bf273534b0f32d98e0.log`
 
-Information which plugin adds: 
-* `k8s_node` – node name where pod is running
-* `k8s_pod` – pod name
-* `k8s_namespace` – pod namespace name
-* `k8s_container` – pod container name
-* `k8s_label_*` – pod labels
+An information which plugin adds: 
+* `k8s_node` – node name where pod is running;
+* `k8s_pod` – pod name;
+* `k8s_namespace` – pod namespace name;
+* `k8s_container` – pod container name;
+* `k8s_label_*` – pod labels.
 
 }*/
 type Plugin struct {
-	config  *Config
-	logger  *zap.SugaredLogger
-	logBuff []byte
-	logSize int
+    config  *Config
+    logger  *zap.SugaredLogger
+    logBuff []byte
+    logSize int
 }
 
 const (
-	predictionLookahead = 128 * 1024
+    predictionLookahead = 128 * 1024
 )
 
 //! config-params
 //^ config-params
 type Config struct {
-	//> @3@4@5@6
-	//>
-	//> Docker splits long logs by 16kb chunks. Plugin joins them back, but if event will be longer than this value in bytes it will be split after all.
-	//> > Because of optimization it's not strict rule. Events may be split even if they won't gonna exceed the limit.
-	MaxEventSize int `json:"max_event_size" default:"1000000"` //*
+    //> @3@4@5@6
+    //>
+    //> Docker splits long logs by 16kb chunks. The plugin joins them back, but if an event is longer than this value in bytes, it will be split after all.
+    //> > Due to the optimization process it's not a strict rule. Events may be split even if they won't exceed the limit.
+    MaxEventSize int `json:"max_event_size" default:"1000000"` //*
 
-	//> @3@4@5@6
-	//>
-	//> If set defines which pod labels to add to the event, others will be ignored.
-	LabelsWhitelist  []string `json:"labels_whitelist"` //*
-	LabelsWhitelist_ map[string]bool
+    //> @3@4@5@6
+    //>
+    //> If set, it defines which pod labels to add to the event, others will be ignored.
+    LabelsWhitelist  []string `json:"labels_whitelist"` //*
+    LabelsWhitelist_ map[string]bool
 
-	//> @3@4@5@6
-	//>
-	//> Skip retrieving k8s meta information using kubernetes API and add only `k8s_node` field.
+    //> @3@4@5@6
+    //>
+    //> Skips retrieving k8s meta information using Kubernetes API and adds only `k8s_node` field.
 	OnlyNode bool `json:"only_node" default:"false"` //*
 }
 

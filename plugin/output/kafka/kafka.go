@@ -13,7 +13,7 @@ import (
 )
 
 /*{ introduction
-Sends event batches to kafka brokers using `sarama` lib.
+It sends the event batches to kafka brokers using `sarama` lib.
 }*/
 type data struct {
 	messages []*sarama.ProducerMessage
@@ -40,34 +40,34 @@ type Config struct {
 
 	//> @3@4@5@6
 	//> 
-	//> Default topic name if nothing will be found in the event field or `should_use_topic_field` isn't set.
+	//> The default topic name if nothing will be found in the event field or `should_use_topic_field` isn't set.
 	DefaultTopic string `json:"default_topic" required:"true"` //*
 
 	//> @3@4@5@6 
 	//> 
-	//> If set plugin will use topic name from the event field.
+	//> If set, the plugin will use topic name from the event field.
 	UseTopicField bool `json:"use_topic_field" default:"false"` //*
 
 	//> @3@4@5@6
 	//> 
-	//> Which event field to use as topic name. Works only if `should_use_topic_field` is set.
+	//> Which event field to use as topic name. It works only if `should_use_topic_field` is set.
 	TopicField string `json:"topic_field" default:"topic"` //*
 
 	//> @3@4@5@6
 	//> 
-	//> How much workers will be instantiated to send batches.
+	//> How many workers will be instantiated to send batches.
 	WorkersCount  cfg.Expression `json:"workers_count" default:"gomaxprocs*4" parse:"expression"` //*
 	WorkersCount_ int
 
 	//> @3@4@5@6
 	//> 
-	//> Maximum quantity of events to pack into one batch.
+	//> A maximum quantity of the events to pack into one batch.
 	BatchSize  cfg.Expression `json:"batch_size" default:"capacity/4" parse:"expression"` //*
 	BatchSize_ int
 
 	//> @3@4@5@6
 	//> 
-	//> After this timeout batch will be sent even if batch isn't full.
+	//> After this timeout the batch will be sent even if batch isn't full.
 	BatchFlushTimeout  cfg.Duration `json:"batch_flush_timeout" default:"200ms" parse:"duration"` //*
 	BatchFlushTimeout_ time.Duration
 }

@@ -17,8 +17,8 @@ import (
 )
 
 /*{ introduction
-Sends events into Elasticsearch. It uses `_bulk` API to send events in batches.
-If a network error occurs batch will be infinitely tries to be delivered to random endpoint.
+It sends events into Elasticsearch. It uses `_bulk` API to send events in batches.
+If a network error occurs, the batch will infinitely try to be delivered to the random endpoint.
 }*/
 
 type Plugin struct {
@@ -37,12 +37,12 @@ type Plugin struct {
 type Config struct {
 	//> @3@4@5@6
 	//>
-	//> List of elasticsearch endpoints in format `SCHEMA://HOST:PORT`
+	//> List of elasticsearch endpoints in the following format: `SCHEMA://HOST:PORT`
 	Endpoints []string `json:"endpoints"  required:"true"` //*
 
 	//> @3@4@5@6
 	//>
-	//> Defines pattern of elasticsearch index name. Use `%` character as a placeholder. Use `index_values` to define values for replacement.
+	//> It defines the pattern of elasticsearch index name. Use `%` character as a placeholder. Use `index_values` to define values for the replacement.
 	//> E.g. if `index_format="my-index-%-%"` and `index_values="service,@@time"` and event is `{"service"="my-service"}`
 	//> then index for that event will be `my-index-my-service-2020-01-05`. First `%` replaced with `service` field of the event and the second
 	//> replaced with current time(see `time_format` option)
@@ -50,32 +50,32 @@ type Config struct {
 
 	//> @3@4@5@6
 	//>
-	//> Comma-separated list of event fields which will be used for replacement `index_format`.
-	//> There is a special field `@@time` which equals to current time. Use `time_format` to define time format.
+	//> A comma-separated list of event fields which will be used for replacement `index_format`.
+	//> There is a special field `@@time` which equals the current time. Use the `time_format` to define a time format.
 	//> E.g. `[service, @@time]`
 	IndexValues []string `json:"index_values" default:"[@time]"` //*
 
 	//> @3@4@5@6
 	//>
-	//> Time format pattern to use as value for the `@@time` placeholder.
-	//> > Check out https://golang.org/pkg/time/#Parse for details.
+	//> The time format pattern to use as value for the `@@time` placeholder.
+	//> > Check out [func Parse](https://golang.org/pkg/time/#Parse) for details.
 	TimeFormat string `json:"time_format" default:"2006-01-02"` //*
 
 	//> @3@4@5@6
 	//>
-	//> How much time to wait for connection.
+	//> How much time to wait for the connection.
 	ConnectionTimeout  cfg.Duration `json:"connection_timeout" default:"5s"` //*
 	ConnectionTimeout_ time.Duration
 
 	//> @3@4@5@6
 	//>
-	//> How much workers will be instantiated to send batches.
+	//> How many workers will be instantiated to send batches?
 	WorkersCount  cfg.Expression `json:"workers_count" default:"gomaxprocs*4" parse:"expression"` //*
 	WorkersCount_ int
 
 	//> @3@4@5@6
 	//>
-	//> Maximum quantity of events to pack into one batch.
+	//> A maximum quantity of events to pack into one batch.
 	BatchSize  cfg.Expression `json:"batch_size" default:"capacity/4"  parse:"expression"` //*
 	BatchSize_ int
 
@@ -87,7 +87,7 @@ type Config struct {
 
 	//> @3@4@5@6
 	//>
-	//> If set to `false`, indexing error won't lead to an fatal and exit.
+	//> If set to `false`, indexing error won't lead to a fatal and exit.
 	//> todo: my it be useful for all plugins?
 	StrictMode bool `json:"strict_mode" default:"true"` //*
 }

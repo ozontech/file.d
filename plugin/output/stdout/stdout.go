@@ -8,7 +8,7 @@ import (
 )
 
 /*{ introduction
-Simply writes events to stdout(also known as console).
+It writes events to stdout(also known as console).
 }*/
 type Plugin struct {
 	controller pipeline.OutputPluginController
