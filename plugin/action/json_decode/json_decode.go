@@ -19,7 +19,7 @@ type Plugin struct {
 type Config struct {
 	//> @3@4@5@6
 	//>
-	//> Event field to decode. Must be a string.
+	//> The event field to decode. Must be a string.
 	Field  cfg.FieldSelector `json:"field" parse:"selector" required:"true"` //*
 	Field_ []string
 

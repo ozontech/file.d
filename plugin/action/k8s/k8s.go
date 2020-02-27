@@ -11,7 +11,7 @@ import (
 /*{ introduction
 It adds the Kubernetes meta-information into the events collected from docker log files. Also, it joins split docker logs into a single event.
 
-Source docker log file name should be written in the following format:<br> `[pod-name]_[namespace]_[container-name]-[container-id].log` 
+Source docker log file should be named in the following format:<br> `[pod-name]_[namespace]_[container-name]-[container-id].log` 
 
 E.g. `my_pod-1566485760-trtrq_my-namespace_my-container-4e0301b633eaa2bfdcafdeba59ba0c72a3815911a6a820bf273534b0f32d98e0.log`
 

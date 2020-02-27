@@ -134,7 +134,8 @@ type Config struct {
 
 	//> @3@4@5@6
 	//>
-	//> How many workers will be instantiated? Each worker:
+	//> It defines how many workers will be instantiated. 
+	//> Each worker:
 	//> * Reads files (I/O bound)
 	//> * Decodes events (CPU bound)
 	//> > We recommend to set it to 4x-8x of CPU cores.
@@ -143,13 +144,13 @@ type Config struct {
 
 	//> @3@4@5@6
 	//>
-	//> How often to report statistical information to stdout?
+	//> It defines how often to report statistical information to stdout?
 	ReportInterval  cfg.Duration `json:"report_interval" default:"10s" parse:"duration"` //*
 	ReportInterval_ time.Duration
 
 	//> @3@4@5@6
 	//>
-	//> How often to perform maintenance?
+	//> It defines how often to perform maintenance?
 	//> @maintenance
 	MaintenanceInterval  cfg.Duration `json:"maintenance_interval" default:"10s" parse:"duration"` //*
 	MaintenanceInterval_ time.Duration

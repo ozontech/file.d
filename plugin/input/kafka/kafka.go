@@ -12,7 +12,7 @@ import (
 
 /*{ introduction
 It reads events from multiple Kafka topics using `sarama` library.
-> It guarantees at least once delivery due to commitment mechanism.
+> It guarantees at "at least once delivery" due to the commitment mechanism.
 }*/
 
 type Plugin struct {
@@ -31,17 +31,17 @@ type Plugin struct {
 type Config struct {
 	//> @3@4@5@6
 	//>
-	//> List of kafka brokers to read from.
+	//> The name of kafka brokers to read from.
 	Brokers []string `json:"brokers" required:"true"` //*
 
 	//> @3@4@5@6
 	//>
-	//> List of kafka topics to read from.
+	//> The list of kafka topics to read from.
 	Topics []string `json:"topics" required:"true"` //*
 
 	//> @3@4@5@6
 	//>
-	//> Name of consumer group to use.
+	//> The name of consumer group to use.
 	ConsumerGroup string `json:"consumer_group" default:"file-d"` //*
 }
 

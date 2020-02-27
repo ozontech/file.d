@@ -37,7 +37,7 @@ type Plugin struct {
 type Config struct {
 	//> @3@4@5@6
 	//>
-	//> List of elasticsearch endpoints in the following format: `SCHEMA://HOST:PORT`
+	//> The list of elasticsearch endpoints in the following format: `SCHEMA://HOST:PORT`
 	Endpoints []string `json:"endpoints"  required:"true"` //*
 
 	//> @3@4@5@6
@@ -58,18 +58,18 @@ type Config struct {
 	//> @3@4@5@6
 	//>
 	//> The time format pattern to use as value for the `@@time` placeholder.
-	//> > Check out [func Parse](https://golang.org/pkg/time/#Parse) for details.
+	//> > Check out [func Parse doc](https://golang.org/pkg/time/#Parse) for details.
 	TimeFormat string `json:"time_format" default:"2006-01-02"` //*
 
 	//> @3@4@5@6
 	//>
-	//> How much time to wait for the connection.
+	//> It defines how much time to wait for the connection.
 	ConnectionTimeout  cfg.Duration `json:"connection_timeout" default:"5s"` //*
 	ConnectionTimeout_ time.Duration
 
 	//> @3@4@5@6
 	//>
-	//> How many workers will be instantiated to send batches?
+	//> It defines how many workers will be instantiated to send batches.
 	WorkersCount  cfg.Expression `json:"workers_count" default:"gomaxprocs*4" parse:"expression"` //*
 	WorkersCount_ int
 
