@@ -136,7 +136,7 @@ type Config struct {
 	//> * Read files (I/O bound)
 	//> * Decode events (CPU bound)
 	//> > It's recommended to set it to 4x-8x of CPU cores.
-	WorkersCount  cfg.Expression `json:"workers_count" default:"gomaxprocs*4" parse:"expression"` //*
+	WorkersCount  cfg.Expression `json:"workers_count" default:"gomaxprocs*8" parse:"expression"` //*
 	WorkersCount_ int
 
 	//> @3@4@5@6

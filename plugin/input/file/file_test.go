@@ -7,6 +7,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"syscall"
@@ -78,7 +79,7 @@ func pluginConfig(opts ...string) *Config {
 		OffsetsOp:       op,
 	}
 
-	_ = cfg.Parse(config, map[string]int{"gomaxprocs": 1})
+	_ = cfg.Parse(config, map[string]int{"gomaxprocs": runtime.GOMAXPROCS(0)})
 
 	return config
 }
@@ -1083,7 +1084,7 @@ func TestTruncationSeq(t *testing.T) {
 
 func BenchmarkLightJsonReadPar(b *testing.B) {
 	lines := 128 * 64
-	files := 512
+	files := 256
 
 	json := getContent("../../../testdata/json/light.json")
 
