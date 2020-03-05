@@ -57,7 +57,7 @@ func (s *streamer) putEvent(sourceID SourceID, streamName StreamName, event *Eve
 }
 
 func (s *streamer) getStream(sourceID SourceID, streamName StreamName) *stream {
-	// fast path, stream have been already created
+	// fast path, stream has been already created
 	s.mu.RLock()
 	st, has := s.streams[sourceID][streamName]
 	s.mu.RUnlock()
@@ -78,7 +78,7 @@ func (s *streamer) getStream(sourceID SourceID, streamName StreamName) *stream {
 		s.streams[sourceID] = make(map[StreamName]*stream)
 	}
 
-	// copy streamName because it may be unsafe []byte instead regular string
+	// copy streamName because it's unsafe []byte instead of regular string
 	streamNameCopy := StreamName([]byte(streamName))
 	st = newStream(streamNameCopy, sourceID, s)
 	s.streams[sourceID][streamNameCopy] = st
