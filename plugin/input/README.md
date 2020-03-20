@@ -49,7 +49,7 @@ So you can use Elasticsearch filebeat output plugin to send data to `file.d`.
 [More details...](plugin/input/http/README.md)
 ## kafka
 It reads events from multiple Kafka topics using `sarama` library.
-> It guarantees at "at least once delivery" due to the commitment mechanism.
+> It guarantees at "at-least-once delivery" due to the commitment mechanism.
 
 [More details...](plugin/input/kafka/README.md)
 <br>*Generated using [__insane-doc__](https://github.com/vitkovskii/insane-doc)*
