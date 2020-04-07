@@ -12,8 +12,8 @@ import (
 
 /*{ introduction
 It reads events from multiple Kafka topics using `sarama` library.
-> It guarantees at "at least once delivery" due to the commitment mechanism.
-}*/
+> It guarantees at "at-least-once delivery" due to the commitment mechanism.
+}*/ 
 
 type Plugin struct {
 	config        *Config

@@ -1,6 +1,6 @@
 # Kafka plugin
 It reads events from multiple Kafka topics using `sarama` library.
-> It guarantees at "at least once delivery" due to the commitment mechanism.
+> It guarantees at "at-least-once delivery" due to the commitment mechanism.
 
 ### Config params
 **`brokers`** *`[]string`* *`required`* 
