@@ -19,6 +19,8 @@
     - [kafka](plugin/input/kafka/README.md)
 
   - Action
+    - [convert_date](plugin/action/convert_date/README.md)
+    - [debug](plugin/action/debug/README.md)
     - [discard](plugin/action/discard/README.md)
     - [flatten](plugin/action/flatten/README.md)
     - [join](plugin/action/join/README.md)

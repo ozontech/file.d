@@ -1,5 +1,14 @@
 # Action plugins
 
+## convert_date
+It decodes a JSON string from the event field and merges the result with the event root.
+If the decoded JSON isn't an object, the event will be skipped.
+
+[More details...](plugin/action/convert_date/README.md)
+## debug
+It logs event to stdout. Useful for debugging.
+
+[More details...](plugin/action/debug/README.md)
 ## discard
 It drops an event. It is used in a combination with `match_fields`/`match_mode` parameters to filter out the events.
 
