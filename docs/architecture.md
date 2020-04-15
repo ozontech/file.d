@@ -1,53 +1,15 @@
 # Architecture 
 
-So it's actually something like this:
-```
-             +-+-+-+-+-+ +-+                      +-+-+-+-+-+ +-+                 +-+-+-+-+-+ +-+               +-+-+-+-+-+ +-+                 +-+-+-+-+-+ +-+
-             |S|T|A|G|E| |1|                      |S|T|A|G|E| |2|                 |S|T|A|G|E| |3|               |S|T|A|G|E| |4|                 |S|T|A|G|E| |5|
-             +-+-+-+-+-+ +-+                      +-+-+-+-+-+ +-+                 +-+-+-+-+-+ +-+               +-+-+-+-+-+ +-+                 +-+-+-+-+-+ +-+
-                                          │                             │                               │                             │
-                                          │                             │                               │                             │
-                                          │               ┌─────────────┼───────────────────────────────┼─────────────────────────────┼──────┐
-                                                          ├──────────────────────────────────────────────────────────────────────────────────┤
-                                                          │                                                   ┌─────────────────┐            │
-                                          │               │             │       ┌────────────────┐      │     │   processor 1   │     │      │
-                                          │               │             │       │     stream     │      │     │                 │     │      │
-                                          │               │           event B1  │      ----      │  event B1  │    action 1 │   │     │      │
-                                                          │         ┌─event B2─▶│  sourceID=100  │──event B2─▶│    action 2 │   │──┐         │
-                                                          │         │           │  name=stderr   │            │       ...   │   │  │         │
-                                          │               │         │   │       └────────────────┘      │     │    action K ▼   │  │  │      │
-                                          │               │         │   │                               │     │                 │  │  │      │
-                                          │               │         │   │       ┌────────────────┐      │     └─────────────────┘  │  │      │
-                                                          │         │           │     stream     │                             event B1*     │
-                                                          │         │           │      ----      │            ┌─────────────────┐  │         │
-                                          │            event A*     │   │       │  sourceID=100  │      │     │   processor 2   │  │  │   event A*
-                                          │            eve│t B1*    │   │       │  name=stdout   │      │     │                 │  │  │   eve│t B1*
-┌────────────┐                            │               │         │   │       └────────────────┘      │     │    action 1 │   │  │  │      │
-│  external  │                                            ▼         │                               ┌────────▶│    action 2 │   │──┤         │
-│   system   │           ┌────────────┐           ┌──────────────┐  │           ┌────────────────┐  │         │       ...   │   │  │   ┌───────────┐        ┌──────────┐
-│    ----    │           │            │   │       │   pipeline   │  │   │       │     stream     │  │   │     │    action K ▼   │  │  ││           │        │          │
-│  source 1  │  []byte   │   input    │  []byte   │  controller  │  │   │       │      ----      │  │   │     │                 │  │  ││  output   │        │ external │
-│  source 2  │─sourceID─▶│   plugin   │─sourceID─▶│     ----     │──┴──────────▶│  sourceID=256  │──┘   │     └─────────────────┘  └──▶│  plugin   │───────▶│  system  │
-│    ...     │           │            │           │[]byte > event│              │  name=stdout   │                   ┌─────┐           │           │[]byte  │          │
-│  source S  │           └────────────┘           └──────────────┘              └────────────────┘                   │ ... │           └───────────┘        └──────────┘
-│            │                            │          ▲       ┃          │             ┌─────┐           │            └─────┘          │
-└────────────┘                            │          ┃       ┃          │             │ ... │           │     ┌─────────────────┐     │
-                                          │          ┃       ┃          │             └─────┘           │     │   processor P   │     │
-                                                   fresh   stale                ┌────────────────┐            │                 │
-                                                   event   event                │     stream     │            │    action 1 │   │
-                                          │          ┃       ┃          │       │      ----      │      │     │    action 2 │   │     │
-                                          │          ┃       ▼          │       │  sourceID=XXX  │      │     │       ...   │   │     │
-                                          │       ┏━━━━━━━━━━━━━━┓      │       │    name=YYY    │      │     │    action K ▼   │     │
-                                                  ┃  event pool  ┃              └────────────────┘            │                 │
-                                                  ┃     ----     ┃                                            └─────────────────┘
-                                          │       ┃   event 1    ┃      │                               │              │              │
-                                          │       ┃   event 2    ┃◀─────┼───────────────────────────event B2*──────────┘              │
-                                          │       ┃     ...      ┃      │                               │                             │
-                                                  ┃   event N    ┃
-                                                  ┗━━━━━━━━━━━━━━┛
-                                          │                             │                               │                             │
-                                          │                             │                               │                             │
-                                          │                             │                               │                             │
-```
+Here is a bit simplified architecture of the **file.d** solution. 
 
-TBF: explain this crazy picture.
+![file.d](../static/file.d_arch.png)
+
+What's going on here:
+
+- **Input plugin** pulls data from external systems and pushes next to the pipeline controller. Full list of input plugins available is [here](../plugin/input).
+- The **pipeline controller** is in charge of converting data to event and subsequent routing.
+- The **event pool** provides fast event instancing. 
+- Events are processed by one or more **action plugins**; they act on the events which meet particular criteria.
+- Finally, the event goes to the **output plugins** and is dispatched to the external system.  
+
+You can extend `file.d` by adding your own input, action, and output plugins. 
