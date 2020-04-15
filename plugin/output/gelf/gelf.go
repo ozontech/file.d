@@ -161,7 +161,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.config.timestampField = pipeline.ByteToStringUnsafe(p.formatExtraField(nil, p.config.TimestampField))
 	format, err := pipeline.ParseFormatName(p.config.TimestampFieldFormat)
 	if err != nil {
-		p.logger.Errorf("can't parse time format: %s", err.Error())
+		params.Logger.Errorf("unknown time format: %s", err.Error())
 	}
 	p.config.timestampFieldFormat = format
 	p.config.levelField = pipeline.ByteToStringUnsafe(p.formatExtraField(nil, p.config.LevelField))

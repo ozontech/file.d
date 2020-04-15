@@ -154,7 +154,6 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 		}
 		p.logger.Fatalf("batch failed to deliver: %s", err.Error())
 	}
-
 }
 
 func (p *Plugin) Stop() {

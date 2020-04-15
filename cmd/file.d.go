@@ -14,6 +14,8 @@ import (
 	insaneJSON "github.com/vitkovskii/insane-json"
 	"go.uber.org/automaxprocs/maxprocs"
 
+	_ "github.com/ozonru/file.d/plugin/action/convert_date"
+	_ "github.com/ozonru/file.d/plugin/action/debug"
 	_ "github.com/ozonru/file.d/plugin/action/discard"
 	_ "github.com/ozonru/file.d/plugin/action/flatten"
 	_ "github.com/ozonru/file.d/plugin/action/join"
