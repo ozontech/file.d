@@ -1,7 +1,6 @@
 package convert_date
 
 import (
-	"strconv"
 	"time"
 
 	"github.com/ozonru/file.d/cfg"
@@ -87,7 +86,7 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 		t, err := time.Parse(format, date)
 		if err == nil {
 			if p.config.TargetFormat_ == "timestamp" {
-				dateNode.MutateToString(strconv.Itoa(int(t.Unix())))
+				dateNode.MutateToInt(int(t.Unix()))
 			} else {
 				dateNode.MutateToString(t.Format(p.config.TargetFormat_))
 			}

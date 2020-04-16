@@ -41,5 +41,5 @@ func TestConvert(t *testing.T) {
 
 	assert.Equal(t, 1, inEvents, "wrong in events count")
 	assert.Equal(t, 1, len(outEvents), "wrong out events count")
-	assert.Equal(t, `{"time":"998578502"}`, outEvents[0].Root.EncodeToString(), "wrong out event")
+	assert.Equal(t, `{"time":998578502}`, outEvents[0].Root.EncodeToString(), "wrong out event")
 }
