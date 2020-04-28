@@ -9,8 +9,7 @@ import (
 )
 
 /*{ introduction
-It decodes a JSON string from the event field and merges the result with the event root.
-If the decoded JSON isn't an object, the event will be skipped.
+It converts field date/time data to different format.
 }*/
 type Plugin struct {
 	config *Config
@@ -36,6 +35,11 @@ type Config struct {
 	//> Date format to convert to.
 	TargetFormat  string `json:"target_format" default:"timestamp"` //*
 	TargetFormat_ string
+
+	//> @3@4@5@6
+	//>
+	//> Remove field if conversion fails.
+	RemoveOnFail bool `json:"remove_on_fail" default:"false"` //*
 }
 
 func init() {
@@ -49,7 +53,7 @@ func factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 	return &Plugin{}, &Config{}
 }
 
-func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginParams) {
+func (p *Plugin) Start(config pipeline.AnyConfig, _ *pipeline.ActionPluginParams) {
 	p.config = config.(*Config)
 
 	for _, formatName := range p.config.SourceFormats {
@@ -77,20 +81,25 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 		return pipeline.ActionPass
 	}
 	isValidType := dateNode.IsString() || dateNode.IsNumber()
-	if !isValidType {
-		return pipeline.ActionPass
-	}
+	if isValidType {
+		date := dateNode.AsString()
+		for _, format := range p.config.SourceFormats_ {
+			t, err := time.Parse(format, date)
+			if err == nil {
+				if p.config.TargetFormat_ == "timestamp" {
+					dateNode.MutateToInt(int(t.Unix()))
+				} else {
+					dateNode.MutateToString(t.Format(p.config.TargetFormat_))
+				}
 
-	date := dateNode.AsString()
-	for _, format := range p.config.SourceFormats_ {
-		t, err := time.Parse(format, date)
-		if err == nil {
-			if p.config.TargetFormat_ == "timestamp" {
-				dateNode.MutateToInt(int(t.Unix()))
-			} else {
-				dateNode.MutateToString(t.Format(p.config.TargetFormat_))
+				return pipeline.ActionPass // successful conversion
 			}
 		}
+	}
+
+	// failed conversion
+	if p.config.RemoveOnFail {
+		dateNode.Suicide()
 	}
 
 	return pipeline.ActionPass

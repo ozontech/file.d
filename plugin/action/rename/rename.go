@@ -9,6 +9,7 @@ import (
 /*{ introduction
 It renames the fields of the event. You can provide an unlimited number of config parameters. Each parameter handled as `cfg.FieldSelector`:`string`.
 When `override` is set to `false`, the field won't be renamed in the case of field name collision.
+Sequence of rename operations isn't guaranteed. Use different actions for prioritization.
 
 **Example:**
 ```yaml
@@ -52,11 +53,16 @@ func factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 }
 
 func (p *Plugin) Start(config pipeline.AnyConfig, _ *pipeline.ActionPluginParams) {
-	c := *config.(*Config)
-	p.preserveFields = c["override"] == nil || !c["override"].(bool)
+	sharedConfig := *config.(*Config)
+	localConfig := make(map[string]interface{}) // clone shared config to be able to modify it
+	for k, v := range sharedConfig {
+		localConfig[k] = v
+	}
 
-	delete(c, "override")
-	m := cfg.UnescapeMap(c)
+	p.preserveFields = localConfig["override"] == nil || !localConfig["override"].(bool)
+
+	delete(localConfig, "override")
+	m := cfg.UnescapeMap(localConfig)
 
 	for path, name := range m {
 		selector := cfg.ParseFieldSelector(path)
