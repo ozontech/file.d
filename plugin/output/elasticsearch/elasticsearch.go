@@ -84,12 +84,6 @@ type Config struct {
 	//> After this timeout batch will be sent even if batch isn't full.
 	BatchFlushTimeout  cfg.Duration `json:"batch_flush_timeout" default:"200ms"` //*
 	BatchFlushTimeout_ time.Duration
-
-	//> @3@4@5@6
-	//>
-	//> If set to `false`, indexing error won't lead to a fatal and exit.
-	//> todo: my it be useful for all plugins?
-	StrictMode bool `json:"strict_mode" default:"true"` //*
 }
 
 type data struct {
@@ -194,13 +188,11 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 			for _, node := range root.Dig("items").AsArray() {
 				errNode := node.Dig("index", "error")
 				if errNode != nil {
-					p.logger.Warnf("indexing error: %s", errNode.Dig("reason").AsString())
+					p.logger.Errorf("indexing error: %s", errNode.EncodeToString())
 				}
 			}
 
-			if p.config.StrictMode {
-				p.logger.Fatalf("batch send error")
-			}
+			p.controller.Error("some events from batch isn't written")
 		}
 
 		insaneJSON.Release(root)

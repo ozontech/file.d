@@ -152,7 +152,8 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 		for _, e := range errs {
 			p.logger.Errorf("can't write batch: %s", e.Err.Error())
 		}
-		p.logger.Fatalf("batch failed to deliver: %s", err.Error())
+
+		p.controller.Error("some events from batch isn't written")
 	}
 }
 

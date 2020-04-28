@@ -19,6 +19,7 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 	streamField := pipeline.DefaultStreamField
 	maintenanceInterval := pipeline.DefaultMaintenanceInterval
 	decoder := "json"
+	isStrict := false
 
 	if settings != nil {
 		val := settings.Get("capacity").MustInt()
@@ -52,6 +53,8 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 
 		antispamThreshold = settings.Get("antispam_threshold").MustInt()
 		antispamThreshold *= int(maintenanceInterval / time.Second)
+
+		isStrict = settings.Get("is_strict").MustBool()
 	}
 
 	return &pipeline.Settings{
@@ -61,6 +64,7 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 		AntispamThreshold:   antispamThreshold,
 		MaintenanceInterval: maintenanceInterval,
 		StreamField:         streamField,
+		IsStrict:            isStrict,
 	}
 }
 

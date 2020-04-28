@@ -44,6 +44,7 @@ type ActionPluginController interface {
 
 type OutputPluginController interface {
 	Commit(event *Event) // notify input plugin that event is successfully processed and save offsets
+	Error(err string)
 }
 
 type SourceID uint64
@@ -96,6 +97,7 @@ type Settings struct {
 	AntispamThreshold   int
 	AvgLogSize          int
 	StreamField         string
+	IsStrict            bool
 }
 
 func New(name string, settings *Settings, registry *prometheus.Registry, mux *http.ServeMux) *Pipeline {
@@ -238,7 +240,7 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 	event.SourceName = sourceName
 	event.streamName = DefaultStreamName
 	event.Size = len(bytes)
-	
+
 	if len(p.inSample) == 0 && rand.Int()&1 == 1 {
 		p.inSample = event.Root.Encode(p.inSample)
 	}
@@ -264,6 +266,14 @@ func (p *Pipeline) streamEvent(event *Event) uint64 {
 
 func (p *Pipeline) Commit(event *Event) {
 	p.finalize(event, true, true)
+}
+
+func (p *Pipeline) Error(err string) {
+	if p.settings.IsStrict {
+		logger.Fatal(err)
+	} else {
+		logger.Error(err)
+	}
 }
 
 func (p *Pipeline) finalize(event *Event, notifyInput bool, backEvent bool) {

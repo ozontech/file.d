@@ -18,6 +18,10 @@ func (b *batcherTail) Commit(event *Event) {
 	b.commit(event)
 }
 
+func (b *batcherTail) Error(err string) {
+	logger.Panic(err)
+}
+
 func TestBatcher(t *testing.T) {
 	eventCount := 10000000
 	batchSize := 100
