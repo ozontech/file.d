@@ -1,5 +1,9 @@
 # Input plugins
 
+## dmesg
+It reads kernel events from /dev/kmsg
+
+[More details...](plugin/input/dmesg/README.md)
 ## fake
 It provides an API to test pipelines and other plugins.
 

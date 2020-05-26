@@ -13,6 +13,7 @@
 
 - **Plugins**
   - Input
+    - [dmesg](plugin/input/dmesg/README.md)
     - [fake](plugin/input/fake/README.md)
     - [file](plugin/input/file/README.md)
     - [http](plugin/input/http/README.md)

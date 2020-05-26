@@ -1,8 +1,7 @@
 # Action plugins
 
 ## convert_date
-It decodes a JSON string from the event field and merges the result with the event root.
-If the decoded JSON isn't an object, the event will be skipped.
+It converts field date/time data to different format.
 
 [More details...](plugin/action/convert_date/README.md)
 ## debug
@@ -132,6 +131,7 @@ It removes the list of the event fields and keeps others.
 ## rename
 It renames the fields of the event. You can provide an unlimited number of config parameters. Each parameter handled as `cfg.FieldSelector`:`string`.
 When `override` is set to `false`, the field won't be renamed in the case of field name collision.
+Sequence of rename operations isn't guaranteed. Use different actions for prioritization.
 
 **Example:**
 ```yaml

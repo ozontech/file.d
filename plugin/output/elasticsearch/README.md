@@ -57,12 +57,5 @@ After this timeout batch will be sent even if batch isn't full.
 
 <br>
 
-**`strict_mode`** *`bool`* *`default=true`* 
-
-If set to `false`, indexing error won't lead to a fatal and exit.
-todo: my it be useful for all plugins?
-
-<br>
-
 
 <br>*Generated using [__insane-doc__](https://github.com/vitkovskii/insane-doc)*

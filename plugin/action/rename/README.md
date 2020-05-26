@@ -1,6 +1,7 @@
 # Rename plugin
 It renames the fields of the event. You can provide an unlimited number of config parameters. Each parameter handled as `cfg.FieldSelector`:`string`.
 When `override` is set to `false`, the field won't be renamed in the case of field name collision.
+Sequence of rename operations isn't guaranteed. Use different actions for prioritization.
 
 **Example:**
 ```yaml

@@ -60,7 +60,7 @@ func (o *offsetDB) load() fpOffsets {
 	return o.collapse(o.parse(string(content)))
 }
 
-// collapse all streams are in one file, so we should seek file to
+// collapse all streams in one file, so we should seek file to
 // min offset to make sure logs from all streams will be delivered at-least-once
 func (o *offsetDB) collapse(inodeOffsets fpOffsets) fpOffsets {
 	for _, inode := range inodeOffsets {

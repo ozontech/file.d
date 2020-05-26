@@ -27,6 +27,7 @@ import (
 	_ "github.com/ozonru/file.d/plugin/action/remove_fields"
 	_ "github.com/ozonru/file.d/plugin/action/rename"
 	_ "github.com/ozonru/file.d/plugin/action/throttle"
+	_ "github.com/ozonru/file.d/plugin/input/dmesg"
 	_ "github.com/ozonru/file.d/plugin/input/fake"
 	_ "github.com/ozonru/file.d/plugin/input/file"
 	_ "github.com/ozonru/file.d/plugin/input/http"

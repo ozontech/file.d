@@ -1,6 +1,5 @@
 # Date convert plugin
-It decodes a JSON string from the event field and merges the result with the event root.
-If the decoded JSON isn't an object, the event will be skipped.
+It converts field date/time data to different format.
 
 ### Config params
 **`field`** *`cfg.FieldSelector`* *`default=time`* 
@@ -18,6 +17,12 @@ List of date formats to parse a field. Available list items should be one of `an
 **`target_format`** *`string`* *`default=timestamp`* 
 
 Date format to convert to.
+
+<br>
+
+**`remove_on_fail`** *`bool`* *`default=false`* 
+
+Remove field if conversion fails.
 
 <br>
 
