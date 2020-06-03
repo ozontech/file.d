@@ -2,7 +2,6 @@ package fd
 
 import (
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/bitly/go-simplejson"
@@ -84,15 +83,13 @@ func extractMatchMode(actionJSON *simplejson.Json) (pipeline.MatchMode, error) {
 func extractConditions(condJSON *simplejson.Json) (pipeline.MatchConditions, error) {
 	conditions := make(pipeline.MatchConditions, 0, 0)
 	for field := range condJSON.MustMap() {
-		value := strings.Trim(condJSON.Get(field).MustString(), " ")
-		if value == "" {
-			return nil, fmt.Errorf("no value for field matching condition %q", field)
-		}
+		value := condJSON.Get(field).MustString()
 
 		condition := pipeline.MatchCondition{
-			Field: strings.Trim(field, " "),
+			Field: field,
 		}
-		if value[0] == '/' {
+
+		if len(value) > 0 && value[0] == '/' {
 			r, err := cfg.CompileRegex(value)
 			if err != nil {
 				return nil, errors.Wrapf(err, "can't compile regexp %s: %s", value, err)

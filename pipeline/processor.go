@@ -1,8 +1,6 @@
 package pipeline
 
 import (
-	"strings"
-
 	"github.com/ozonru/file.d/logger"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
@@ -247,16 +245,16 @@ func (p *processor) isMatch(index int, event *Event) bool {
 
 func (p *processor) isMatchOr(conds MatchConditions, event *Event) bool {
 	for _, cond := range conds {
-		value := event.Root.Dig(cond.Field).AsString()
-		if value == "" {
+		node := event.Root.Dig(cond.Field)
+		if node == nil {
 			continue
 		}
-
+		value := node.AsString()
 		match := false
 		if cond.Regexp != nil {
 			match = cond.Regexp.MatchString(value)
 		} else {
-			match = strings.TrimFunc(value, TrimSpaceFunc) == cond.Value
+			match = value == cond.Value
 		}
 
 		if match {
@@ -269,16 +267,17 @@ func (p *processor) isMatchOr(conds MatchConditions, event *Event) bool {
 
 func (p *processor) isMatchAnd(conds MatchConditions, event *Event) bool {
 	for _, cond := range conds {
-		value := event.Root.Dig(cond.Field).AsString()
-		if value == "" {
+		node := event.Root.Dig(cond.Field)
+		if node == nil {
 			return false
 		}
+		value := node.AsString()
 
 		match := false
 		if cond.Regexp != nil {
 			match = cond.Regexp.MatchString(value)
 		} else {
-			match = strings.TrimFunc(value, TrimSpaceFunc) == cond.Value
+			match = value == cond.Value
 		}
 
 		if !match {
