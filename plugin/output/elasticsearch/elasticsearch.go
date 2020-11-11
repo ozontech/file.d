@@ -173,8 +173,14 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 		}
 
 		respContent, err := ioutil.ReadAll(resp.Body)
+		_ = resp.Body.Close()
 		if err != nil {
-			p.logger.Errorf("can't read batch response from %s, will try other endpoint: %s", endpoint, err.Error())
+			p.logger.Errorf("can't read response from %s, will try other endpoint: %s", endpoint, err.Error())
+			continue
+		}
+
+		if resp.StatusCode < http.StatusOK || resp.StatusCode > http.StatusAccepted {
+			p.logger.Errorf("response status from %s isn't OK, will try other endpoint: status=%d, body=%s", endpoint, resp.StatusCode, respContent)
 			continue
 		}
 

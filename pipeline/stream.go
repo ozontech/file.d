@@ -208,9 +208,9 @@ func (s *stream) get() *Event {
 		s.first = s.first.next
 	}
 
-	event.stage = eventStageProcessor
 	s.awaySeq = event.SeqID
 	if event != nil {
+		event.stage = eventStageProcessor
 		s.len--
 	}
 

@@ -8,7 +8,7 @@ require (
 	github.com/bitly/go-simplejson v0.5.0
 	github.com/bmizerany/assert v0.0.0-20160611221934-b7ed37b82869 // indirect
 	github.com/euank/go-kmsg-parser v2.0.0+incompatible
-	github.com/fsnotify/fsnotify v1.4.7
+	github.com/fsnotify/fsnotify v1.4.9
 	github.com/ghodss/yaml v1.0.0
 	github.com/gogo/protobuf v1.2.1 // indirect
 	github.com/golang/groupcache v0.0.0-20191002201903-404acd9df4cc // indirect
@@ -40,4 +40,4 @@ require (
 	k8s.io/utils v0.0.0-20190829053155-3a4a5477acf8 // indirect
 )
 
-go 1.13
+go 1.15

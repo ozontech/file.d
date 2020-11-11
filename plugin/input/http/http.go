@@ -143,6 +143,8 @@ func (p *Plugin) serve(w http.ResponseWriter, r *http.Request) {
 
 		eventBuff = p.processChunk(sourceID, readBuff[:n], eventBuff)
 	}
+	
+	_ = r.Body.Close()
 
 	p.readBuffs.Put(readBuff)
 	p.eventBuffs.Put(eventBuff)
