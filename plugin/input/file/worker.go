@@ -88,10 +88,10 @@ func (w *worker) work(controller pipeline.InputPluginController, jobProvider *jo
 				} else {
 					offset := lastOffset + accumulated + pos + 1
 					if len(accumBuffer) != 0 {
-						accumBuffer = append(accumBuffer, readBuffer[processed:pos]...)
+						accumBuffer = append(accumBuffer, readBuffer[processed:pos+1]...)
 						seqID = controller.In(sourceID, sourceName, offset, accumBuffer, isVirgin)
 					} else {
-						seqID = controller.In(sourceID, sourceName, offset, readBuffer[processed:pos], isVirgin)
+						seqID = controller.In(sourceID, sourceName, offset, readBuffer[processed:pos+1], isVirgin)
 					}
 					job.lastEventSeq = seqID
 				}

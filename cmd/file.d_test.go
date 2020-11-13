@@ -15,12 +15,12 @@ import (
 	"github.com/ozonru/file.d/fd"
 	_ "github.com/ozonru/file.d/plugin/action/discard"
 	_ "github.com/ozonru/file.d/plugin/action/json_decode"
-	"github.com/ozonru/file.d/plugin/action/k8s"
 	_ "github.com/ozonru/file.d/plugin/action/keep_fields"
 	_ "github.com/ozonru/file.d/plugin/action/rename"
 	_ "github.com/ozonru/file.d/plugin/action/throttle"
 	_ "github.com/ozonru/file.d/plugin/input/fake"
 	_ "github.com/ozonru/file.d/plugin/input/file"
+	k8s2 "github.com/ozonru/file.d/plugin/input/k8s"
 	_ "github.com/ozonru/file.d/plugin/output/devnull"
 	_ "github.com/ozonru/file.d/plugin/output/kafka"
 	uuid "github.com/satori/go.uuid"
@@ -75,9 +75,9 @@ func TestEndToEnd(t *testing.T) {
 	rand.Seed(0)
 
 	// disable k8s environment
-	k8s.DisableMetaUpdates = true
-	k8s.MetaWaitTimeout = time.Millisecond
-	k8s.MaintenanceInterval = time.Millisecond * 100
+	k8s2.DisableMetaUpdates = true
+	k8s2.MetaWaitTimeout = time.Millisecond
+	k8s2.MaintenanceInterval = time.Millisecond * 100
 
 	filesDir, _ := ioutil.TempDir("", "file.d")
 	offsetsDir, _ := ioutil.TempDir("", "file.d")

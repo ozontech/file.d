@@ -1,7 +1,7 @@
 # Examples
 
 ## Kubernetes to kafka
-The following config reads logs on k8s node with docker containers, processes them and sends into kafka.
+The following config reads logs on k8s node, processes them and sends into kafka.
 It assumes that k8s logs located in `/var/log/containers/` directory.
 ```yaml
 pipelines:
@@ -46,7 +46,7 @@ pipelines:
 
 ## Kafka to graylog
 The following config reads logs from kafka, processes them and sends into gelf endpoint(graylog).
-It assumes that logs are in docker format.
+It assumes that logs are in docker json format.
 ```yaml
 pipelines:
   kafka_gelf_example:
@@ -56,7 +56,7 @@ pipelines:
       topics: [k8s-logs]
 
     actions:
-    - type: json_decode                             # unpack docker "log" field 
+    - type: json_decode                             # unpack "log" field 
       field: log
       metric_name: input
       metric_labels: [k8s_label_app]                # expose input metrics to prometheus

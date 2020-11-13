@@ -71,15 +71,17 @@ var (
 	DisableMetaUpdates  = false
 	metaAddedCounter    atomic.Int64
 	expiredItemsCounter atomic.Int64
+	
+	criType = "docker"
 
-	node string
+	selfNodeName string
 
-	logger *zap.SugaredLogger
+	localLogger *zap.SugaredLogger
 )
 
 func enableGatherer(l *zap.SugaredLogger) {
-	logger = l
-	logger.Info("enabling k8s meta gatherer")
+	localLogger = l
+	localLogger.Info("enabling k8s meta gatherer")
 
 	if !DisableMetaUpdates {
 		initGatherer()
@@ -91,7 +93,7 @@ func enableGatherer(l *zap.SugaredLogger) {
 }
 
 func disableGatherer() {
-	logger.Info("disabling k8s meta gatherer")
+	localLogger.Info("disabling k8s meta gatherer")
 	if !DisableMetaUpdates {
 		informerStop <- struct{}{}
 	}
@@ -105,38 +107,39 @@ func initGatherer() {
 		kubeConfig := filepath.Join(os.Getenv("HOME"), ".kube", "config")
 		apiConfig, err = clientcmd.BuildConfigFromFlags("", kubeConfig)
 		if err != nil {
-			logger.Fatalf("can't get k8s client config: %s", err.Error())
+			localLogger.Fatalf("can't get k8s client config: %s", err.Error())
 		}
 	}
 
 	client, err = kubernetes.NewForConfig(apiConfig)
 	if err != nil {
-		logger.Fatalf("can't create k8s client: %s", err.Error())
+		localLogger.Fatalf("can't create k8s client: %s", err.Error())
 		panic("")
 	}
 
 	initNodeInfo()
 	initInformer()
+	initRuntime()
 }
 
 func initNodeInfo() {
 	podName, err := os.Hostname()
 	if err != nil {
-		logger.Fatalf("can't get host name for k8s plugin: %s", err.Error())
+		localLogger.Fatalf("can't get host name for k8s plugin: %s", err.Error())
 		panic("")
 	}
 	pod, err := client.CoreV1().Pods(getNamespace()).Get(podName, metav1.GetOptions{})
 	if err != nil {
-		logger.Fatalf("can't detect node name for k8s plugin using pod %q: %s", podName, err.Error())
+		localLogger.Fatalf("can't detect node name for k8s plugin using pod %q: %s", podName, err.Error())
 		panic("")
 	}
-	node = pod.Spec.NodeName
+	selfNodeName = pod.Spec.NodeName
 }
 
 func initInformer() {
-	selector, err := fields.ParseSelector("spec.nodeName=" + node)
+	selector, err := fields.ParseSelector("spec.nodeName=" + selfNodeName)
 	if err != nil {
-		logger.Fatalf("can't create k8s field selector: %s", err.Error())
+		localLogger.Fatalf("can't create k8s field selector: %s", err.Error())
 	}
 	podListWatcher := cache.NewListWatchFromClient(client.CoreV1().RESTClient(), "pods", "", selector)
 	_, c := cache.NewIndexerInformer(podListWatcher, &corev1.Pod{}, metaExpireDuration/4, cache.ResourceEventHandlerFuncs{
@@ -152,12 +155,28 @@ func initInformer() {
 	controller = c
 }
 
+func initRuntime() {
+	node, err := client.CoreV1().Nodes().Get(selfNodeName, metav1.GetOptions{})
+	if err != nil || node == nil {
+		localLogger.Fatalf("can't detect CRI runtime for node %s, api call is unsuccessful: %s", node, err.Error())
+		panic("_")
+	}
+	runtimeVer := node.Status.NodeInfo.ContainerRuntimeVersion
+	pos := strings.IndexByte(runtimeVer, ':')
+	if pos < 0 {
+		localLogger.Fatalf("can't detect CRI runtime for node %s, wrong runtime version: %s", node, runtimeVer)
+	}
+	
+	criType = runtimeVer[:pos]
+}
+
+
 func removeExpired() {
 	expiredItems = getExpiredItems(expiredItems)
 	cleanUpItems(expiredItems)
 
 	if MaintenanceInterval > time.Second {
-		logger.Infof("k8s meta stat for last %d seconds: total=%d, updated=%d, expired=%d", MaintenanceInterval/time.Second, getTotalItems(), metaAddedCounter.Load(), expiredItemsCounter.Load())
+		localLogger.Infof("k8s meta stat for last %d seconds: total=%d, updated=%d, expired=%d", MaintenanceInterval/time.Second, getTotalItems(), metaAddedCounter.Load(), expiredItemsCounter.Load())
 	}
 
 	metaAddedCounter.Swap(0)
@@ -237,7 +256,7 @@ func cleanUpItems(items []*metaItem) {
 func getMeta(fullFilename string) (ns namespace, pod podName, container containerName, cid containerID, success bool, podMeta *podMeta) {
 	podMeta = nil
 	success = false
-	ns, pod, container, cid = parseDockerFilename(fullFilename)
+	ns, pod, container, cid = parseLogFilename(fullFilename)
 
 	i := time.Nanosecond
 	for {
@@ -248,7 +267,7 @@ func getMeta(fullFilename string) (ns namespace, pod podName, container containe
 
 		if has {
 			if i-metaWaitWarn >= 0 {
-				logger.Warnf("meta retrieved with delay time=%dms pod=%s container=%s", i/time.Millisecond, string(pod), string(cid))
+				localLogger.Warnf("meta retrieved with delay time=%dms pod=%s container=%s", i/time.Millisecond, string(pod), string(cid))
 			}
 
 			success = true
@@ -271,7 +290,7 @@ func getMeta(fullFilename string) (ns namespace, pod podName, container containe
 			}
 			podBlackList[pod] = true
 			metaDataMu.Unlock()
-			logger.Errorf("pod %q have blacklisted, cause k8s meta retrieve timeout ns=%s container=%s cid=%s", string(pod), string(ns), string(container), string(cid))
+			localLogger.Errorf("pod %q have blacklisted, cause k8s meta retrieve timeout ns=%s container=%s cid=%s", string(pod), string(ns), string(container), string(cid))
 
 			return
 		}
@@ -319,18 +338,29 @@ func putMeta(podData *corev1.Pod) {
 	metaAddedCounter.Inc()
 }
 
+// putContainerMeta fullContainerID must be in format XXX://ID, eg docker://4e0301b633eaa2bfdcafdeba59ba0c72a3815911a6a820bf273534b0f32d98e0
 func putContainerMeta(ns namespace, pod podName, fullContainerID string, podInfo *corev1.Pod) {
-	if len(fullContainerID) == 0 {
+	l := len(fullContainerID)
+	if l == 0 {
 		return
 	}
 
-	if len(fullContainerID) < 9 || fullContainerID[:9] != "docker://" {
-		logger.Fatalf("wrong container id: %s", fullContainerID)
+	pos := strings.IndexByte(fullContainerID, ':')
+	if pos <= 0 {
+		localLogger.Fatalf("container id should have format XXXX://ID: %s", fullContainerID)
 	}
-
-	containerID := containerID(fullContainerID[9:])
+	
+	if pos + 3 >= l {
+		localLogger.Fatalf("container id should have format XXXX://ID: %s", fullContainerID)
+	}
+	
+	if fullContainerID[pos:pos+3] != "://" {
+		localLogger.Fatalf("container id should have format XXXX://ID: %s", fullContainerID)
+	}
+	
+	containerID := containerID(fullContainerID[pos+3:])
 	if len(containerID) != 64 {
-		logger.Fatalf("wrong container id: %s", fullContainerID)
+		localLogger.Fatalf("wrong container id: %s", fullContainerID)
 	}
 
 	meta := &podMeta{
@@ -343,26 +373,26 @@ func putContainerMeta(ns namespace, pod podName, fullContainerID string, podInfo
 	metaDataMu.Unlock()
 }
 
-func parseDockerFilename(fullFilename string) (namespace, podName, containerName, containerID) {
+func parseLogFilename(fullFilename string) (namespace, podName, containerName, containerID) {
 	if fullFilename[len(fullFilename)-4:] != ".log" {
-		logger.Infof(formatInfo)
-		logger.Fatalf("wrong docker log file name, no .log at ending %s", fullFilename)
+		localLogger.Infof(formatInfo)
+		localLogger.Fatalf("wrong log file name, no .log at ending %s", fullFilename)
 	}
 	lastSlash := strings.LastIndexByte(fullFilename, '/')
 	if lastSlash < 0 {
-		logger.Infof(formatInfo)
-		logger.Fatalf("wrong docker log file name %s, no slashes", fullFilename)
+		localLogger.Infof(formatInfo)
+		localLogger.Fatalf("wrong log file name %s, no slashes", fullFilename)
 	}
 	filename := fullFilename[lastSlash+1 : len(fullFilename)-4]
 	if filename == "" {
-		logger.Infof(formatInfo)
-		logger.Fatalf("wrong docker log file name, empty", filename)
+		localLogger.Infof(formatInfo)
+		localLogger.Fatalf("wrong log file name, empty", filename)
 	}
 
 	underscore := strings.IndexByte(filename, '_')
 	if underscore < 0 {
-		logger.Infof(formatInfo)
-		logger.Fatalf("wrong docker log file name, no underscore for pod: %s", filename)
+		localLogger.Infof(formatInfo)
+		localLogger.Fatalf("wrong log file name, no underscore for pod: %s", filename)
 	}
 
 	pod := filename[:underscore]
@@ -370,15 +400,15 @@ func parseDockerFilename(fullFilename string) (namespace, podName, containerName
 
 	underscore = strings.IndexByte(filename, '_')
 	if underscore < 0 {
-		logger.Infof(formatInfo)
-		logger.Fatalf("wrong docker log file name, no underscore for ns: %s", filename)
+		localLogger.Infof(formatInfo)
+		localLogger.Fatalf("wrong log file name, no underscore for ns: %s", filename)
 	}
 	ns := filename[:underscore]
 	filename = filename[underscore+1:]
 
 	if len(filename) < 65 {
-		logger.Infof(formatInfo)
-		logger.Fatalf("wrong docker log file name, not enough chars: %s", filename)
+		localLogger.Infof(formatInfo)
+		localLogger.Fatalf("wrong log file name, not enough chars: %s", filename)
 	}
 
 	container := filename[:len(filename)-65]

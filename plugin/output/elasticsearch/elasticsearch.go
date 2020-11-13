@@ -187,6 +187,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 		root, err := insaneJSON.DecodeBytes(respContent)
 		if err != nil {
 			p.logger.Errorf("wrong response from %s, will try other endpoint: %s", endpoint, err.Error())
+			insaneJSON.Release(root)
 			continue
 		}
 

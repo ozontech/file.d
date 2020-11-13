@@ -17,7 +17,7 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 	avgLogSize := pipeline.DefaultAvgLogSize
 	streamField := pipeline.DefaultStreamField
 	maintenanceInterval := pipeline.DefaultMaintenanceInterval
-	decoder := "json"
+	decoder := "auto"
 	isStrict := false
 
 	if settings != nil {
