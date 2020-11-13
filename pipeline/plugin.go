@@ -56,9 +56,10 @@ type InputPluginParams struct {
 }
 
 type PluginStaticInfo struct {
-	Type    string
-	Factory PluginFactory
-	Config  AnyConfig
+	Type              string
+	Factory           PluginFactory
+	Config            AnyConfig
+	AdditionalActions []string // used only for input plugins, defines actions that should be run right after input plugin with input config 
 }
 
 type PluginRuntimeInfo struct {

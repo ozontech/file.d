@@ -93,15 +93,28 @@ func (f *FileD) addPipeline(name string, config *cfg.PipelineConfig) {
 }
 
 func (f *FileD) setupInput(p *pipeline.Pipeline, pipelineConfig *cfg.PipelineConfig, values map[string]int) error {
-	info, err := f.getStaticInfo(pipelineConfig, pipeline.PluginKindInput, values)
+	inputInfo, err := f.getStaticInfo(pipelineConfig, pipeline.PluginKindInput, values)
 	if err != nil {
 		return err
 	}
 
 	p.SetInput(&pipeline.InputPluginInfo{
-		PluginStaticInfo:  info,
-		PluginRuntimeInfo: f.instantiatePlugin(info),
+		PluginStaticInfo:  inputInfo,
+		PluginRuntimeInfo: f.instantiatePlugin(inputInfo),
 	})
+
+	for _, actionType := range inputInfo.AdditionalActions {
+		actionInfo := f.plugins.GetActionByType(actionType)
+
+		infoCopy := *actionInfo
+		infoCopy.Config = inputInfo.Config
+		infoCopy.Type = actionType
+
+		p.AddAction(&pipeline.ActionPluginStaticInfo{
+			PluginStaticInfo: &infoCopy,
+			MatchConditions:  pipeline.MatchConditions{},
+		})
+	}
 
 	return nil
 }

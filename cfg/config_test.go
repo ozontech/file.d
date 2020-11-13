@@ -41,6 +41,15 @@ type strExpression struct {
 	T_ int
 }
 
+type hierarchyChild struct {
+	T string `required:"true"`
+}
+
+type hierarchy struct {
+	T     string         `default:"sync"`
+	Child hierarchyChild `child:"true"`
+}
+
 func TestParseRequiredOk(t *testing.T) {
 	s := &strRequired{T: "some_value"}
 	err := Parse(s, nil)
@@ -132,4 +141,13 @@ func TestParseFieldSelectorEnding(t *testing.T) {
 	assert.Equal(t, "a", path[0], "wrong field")
 	assert.Equal(t, "b", path[1], "wrong field")
 	assert.Equal(t, "c.", path[2], "wrong field")
+}
+
+func TestHierarchy(t *testing.T) {
+	s := &hierarchy{T: "10"}
+	err := Parse(s, map[string]int{})
+
+	assert.Nil(t, err, "shouldn't be an error")
+	assert.Equal(t, "10", s.T, "wrong value")
+	assert.Equal(t, "10", s.Child.T, "wrong value")
 }

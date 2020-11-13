@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ozonru/file.d/decoder"
 	"github.com/ozonru/file.d/logger"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/atomic"
@@ -25,16 +26,14 @@ const (
 
 	antispamUnbanIterations = 4
 	metricsGenInterval      = time.Hour
-
-	decoderJSON = 0
-	decoderRAW  = 1
 )
 
 type finalizeFn = func(event *Event, notifyInput bool, backEvent bool)
 
 type InputPluginController interface {
 	In(sourceID SourceID, sourceName string, offset int64, data []byte, isNewSource bool) uint64
-	DisableStreams() // don't use stream field and spread all events across all processors
+	DisableStreams()                      // don't use stream field and spread all events across all processors
+	SuggestDecoder(t decoder.DecoderType) // set decoder if pipeline uses "auto" value for decoder
 }
 
 type ActionPluginController interface {
@@ -54,7 +53,8 @@ type Pipeline struct {
 	Name     string
 	settings *Settings
 
-	decoder int
+	decoder          decoder.DecoderType // decoder set in the config
+	suggestedDecoder decoder.DecoderType // decoder suggested by input plugin, it is used when config decoder is set to "auto"
 
 	eventPool *eventPool
 	streamer  *streamer
@@ -122,9 +122,13 @@ func New(name string, settings *Settings, registry *prometheus.Registry, mux *ht
 
 	switch settings.Decoder {
 	case "json":
-		pipeline.decoder = decoderJSON
+		pipeline.decoder = decoder.JSON
 	case "raw":
-		pipeline.decoder = decoderRAW
+		pipeline.decoder = decoder.RAW
+	case "cri":
+		pipeline.decoder = decoder.CRI
+	case "auto":
+		pipeline.decoder = decoder.AUTO
 	default:
 		pipeline.logger.Fatalf("unknown decoder %q for pipeline %q", settings.Decoder, name)
 	}
@@ -213,7 +217,7 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 	length := len(bytes)
 
 	// don't process shit
-	isEmpty := length == 0
+	isEmpty := length == 0 || (bytes[0] == '\n' && length == 1)
 	isSpam := p.antispamer.isSpam(sourceID, sourceName, isNewSource)
 	if isEmpty || isSpam {
 		return 0
@@ -221,16 +225,33 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 
 	event := p.eventPool.get()
 
-	switch p.decoder {
-	case decoderJSON:
+	dec := decoder.NO
+	if p.decoder == decoder.AUTO {
+		dec = p.suggestedDecoder
+	} else {
+		dec = p.decoder
+	}
+	if dec == decoder.NO {
+		dec = decoder.JSON
+	}
+
+	switch dec {
+	case decoder.JSON:
 		err := event.parseJSON(bytes)
 		if err != nil {
-			p.logger.Fatalf("wrong json offset=%d, length=%d, err=%s, source=%d:%s, json=%s", offset, length, err.Error(), sourceID, sourceName, bytes)
+			p.logger.Fatalf("wrong json format offset=%d, length=%d, err=%s, source=%d:%s, json=%s", offset, length, err.Error(), sourceID, sourceName, bytes)
 			return 0
 		}
-	case decoderRAW:
+	case decoder.RAW:
 		_ = event.Root.DecodeString("{}")
-		event.Root.AddFieldNoAlloc(event.Root, "message").MutateToBytesCopy(event.Root, bytes)
+		event.Root.AddFieldNoAlloc(event.Root, "message").MutateToBytesCopy(event.Root, bytes[:len(bytes)-1])
+	case decoder.CRI:
+		_ = event.Root.DecodeString("{}")
+		err := decoder.DecodeCRI(event.Root, bytes)
+		if err != nil {
+			p.logger.Fatalf("wrong cri format offset=%d, length=%d, err=%s, source=%d:%s, cri=%s", offset, length, err.Error(), sourceID, sourceName, bytes)
+			return 0
+		}
 	default:
 		p.logger.Panicf("unknown decoder %d for pipeline %q", p.decoder, p.Name)
 	}
@@ -435,6 +456,10 @@ func (p *Pipeline) maintenance() {
 
 func (p *Pipeline) DisableStreams() {
 	p.useStreams = false
+}
+
+func (p *Pipeline) SuggestDecoder(t decoder.DecoderType) {
+	p.suggestedDecoder = t
 }
 
 func (p *Pipeline) DisableParallelism() {

@@ -1,4 +1,4 @@
-VERSION ?= v0.1.4
+VERSION ?= v0.1.7
 
 .PHONY: test
 test:
@@ -13,6 +13,10 @@ test-e2e:
 .PHONY: bench-file
 bench-file:
 	go test -bench LightJsonReadPar ./plugin/input/file -v -count 1 -run -benchmem -benchtime 1x
+
+.PHONY: gen-doc
+gen-doc:
+	insane-doc
 
 .PHONY: profile-file
 profile-file:

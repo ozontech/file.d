@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/ozonru/file.d/cfg"
+	"github.com/ozonru/file.d/logger"
 	"github.com/ozonru/file.d/pipeline"
 	"github.com/ozonru/file.d/test"
 	"github.com/stretchr/testify/assert"
@@ -41,7 +42,7 @@ func getPodInfo(item *metaItem, isWhite bool) *corev1.Pod {
 	podInfo.Name = string(item.podName)
 	podInfo.Status.ContainerStatuses = make([]corev1.ContainerStatus, 1)
 	podInfo.Status.ContainerStatuses[0].Name = string(item.containerName)
-	podInfo.Status.ContainerStatuses[0].ContainerID = "docker://" + string(item.containerID)
+	podInfo.Status.ContainerStatuses[0].ContainerID = "containerd://" + string(item.containerID)
 	podInfo.Spec.NodeName = string(item.nodeName)
 	if isWhite {
 		podInfo.Labels = map[string]string{"white_label": "white_value"}
@@ -55,13 +56,13 @@ func config() *Config {
 	config := &Config{LabelsWhitelist: []string{"white_label"}}
 	err := cfg.Parse(config, nil)
 	if err != nil {
-		logger.Panic(err.Error())
+		localLogger.Panic(err.Error())
 	}
 	return config
 }
 
 func TestEnrichment(t *testing.T) {
-	p, input, _ := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, config(), pipeline.MatchModeAnd, nil))
+	p, input, _ := test.NewPipelineMock(test.NewActionPluginStaticInfo(MultilineActionFactory, config(), pipeline.MatchModeAnd, nil))
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
 
@@ -73,10 +74,10 @@ func TestEnrichment(t *testing.T) {
 	}
 	podInfo := getPodInfo(item, true)
 	putMeta(podInfo)
-	node = "node_1"
+	selfNodeName = "node_1"
 
 	var event *pipeline.Event = nil
-	filename := getLogFilename("/docker-logs", item)
+	filename := getLogFilename("/k8s-logs", item)
 	input.SetCommitFn(func(e *pipeline.Event) {
 		event = e
 		wg.Done()
@@ -94,7 +95,7 @@ func TestEnrichment(t *testing.T) {
 }
 
 func TestWhitelist(t *testing.T) {
-	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, config(), pipeline.MatchModeAnd, nil))
+	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(MultilineActionFactory, config(), pipeline.MatchModeAnd, nil))
 	wg := &sync.WaitGroup{}
 	wg.Add(2)
 
@@ -106,7 +107,7 @@ func TestWhitelist(t *testing.T) {
 		containerID:   "4e0301b633eaa2bfdcafdeba59ba0c72a3815911a6a820bf273534b0f32d98e0",
 	}
 	putMeta(getPodInfo(item, true))
-	filename1 := getLogFilename("/docker-logs", item)
+	filename1 := getLogFilename("/k8s-logs", item)
 
 	item = &metaItem{
 		nodeName:      "node_1",
@@ -116,7 +117,7 @@ func TestWhitelist(t *testing.T) {
 		containerID:   "4e0301b633eaa2bfdcafdeba59ba0c72a3815911a6a820bf273534b0f32d98e0",
 	}
 	putMeta(getPodInfo(item, false))
-	filename2 := getLogFilename("/docker-logs", item)
+	filename2 := getLogFilename("/k8s-logs", item)
 
 	outEvents := make([]*pipeline.Event, 0, 0)
 	output.SetOutFn(func(e *pipeline.Event) {
@@ -135,7 +136,7 @@ func TestWhitelist(t *testing.T) {
 }
 
 func TestJoin(t *testing.T) {
-	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, config(), pipeline.MatchModeAnd, nil))
+	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(MultilineActionFactory, config(), pipeline.MatchModeAnd, nil))
 	wg := &sync.WaitGroup{}
 	wg.Add(4)
 
@@ -156,7 +157,7 @@ func TestJoin(t *testing.T) {
 		wg.Done()
 	})
 
-	filename := getLogFilename("/docker-logs", item)
+	filename := getLogFilename("/k8s-logs", item)
 	input.In(0, filename, 10, []byte(`{"ts":"time","stream":"stdout","log":"one line log 1\n"}`))
 	input.In(0, filename, 20, []byte(`{"ts":"time","stream":"stderr","log":"error "}`))
 	input.In(0, filename, 30, []byte(`{"ts":"time","stream":"stdout","log":"this "}`))
@@ -203,8 +204,11 @@ func TestJoin(t *testing.T) {
 }
 
 func TestCleanUp(t *testing.T) {
-	p, _, _ := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, config(), pipeline.MatchModeAnd, nil))
+	p, _, _ := test.NewPipelineMock(test.NewActionPluginStaticInfo(MultilineActionFactory, config(), pipeline.MatchModeAnd, nil))
 
+	enableGatherer(logger.Instance)
+	defer disableGatherer()
+	
 	putMeta(getPodInfo(&metaItem{
 		nodeName:      "node_1",
 		namespace:     "sre",
@@ -228,13 +232,13 @@ func TestCleanUp(t *testing.T) {
 	}, true))
 
 	time.Sleep(metaExpireDuration + MaintenanceInterval)
-
+	
 	p.Stop()
 	assert.Equal(t, 0, len(metaData))
 }
 
-func TestParseDockerFilename(t *testing.T) {
-	ns, pod, container, cid := parseDockerFilename("/docker-logs/advanced-logs-checker-1566485760-trtrq_sre_duty-bot-4e0301b633eaa2bfdcafdeba59ba0c72a3815911a6a820bf273534b0f32d98e0.log")
+func TestParseLogFilename(t *testing.T) {
+	ns, pod, container, cid := parseLogFilename("/k8s-logs/advanced-logs-checker-1566485760-trtrq_sre_duty-bot-4e0301b633eaa2bfdcafdeba59ba0c72a3815911a6a820bf273534b0f32d98e0.log")
 
 	assert.Equal(t, namespace("sre"), ns)
 	assert.Equal(t, podName("advanced-logs-checker-1566485760-trtrq"), pod)
