@@ -31,8 +31,8 @@ push-linux-amd64:
 	GOOS=linux GOARCH=amd64 go build -v -o file.d ./cmd/file.d.go
 	docker build -t ozonru/file.d:${VERSION}-linux-amd64 .
 	docker push ozonru/file.d:${VERSION}-linux-amd64
-	docker build -t ozonru/latest-linux-amd64 .
-	docker push ozonru/latest-linux-amd64
+	docker build -t ozonru/file.d:latest-linux-amd64 .
+	docker push ozonru/file.d:latest-linux-amd64
 
 .PHONY: push-images
 push-images: prepare push-linux-amd64
