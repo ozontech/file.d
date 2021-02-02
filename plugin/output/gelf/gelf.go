@@ -318,9 +318,8 @@ func (p *Plugin) makeTimestampField(root *insaneJSON.Root, timestampField string
 		}
 	}
 
-	// are event in the past?
-	if ts < 100000000 {
-		p.logger.Warnf("found too old event, falling back to current time: %s", root.EncodeToString())
+	// is event in the past? earlier than "Sunday, September 9, 2001 1:46:40 AM"
+	if ts < 1000000000 {
 		ts = now
 	}
 
