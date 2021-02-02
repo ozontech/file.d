@@ -1,4 +1,8 @@
-VERSION ?= v0.1.7
+VERSION ?= 0.1.8
+
+.PHONY: prepare
+prepare:
+	docker login
 
 .PHONY: test
 test:
@@ -25,8 +29,10 @@ profile-file:
 .PHONY: push-linux-amd64
 push-linux-amd64:
 	GOOS=linux GOARCH=amd64 go build -v -o file.d ./cmd/file.d.go
-	docker build -t docker.pkg.github.com/ozonru/file.d/file.d-linux-amd64:${VERSION} .
-	docker push docker.pkg.github.com/ozonru/file.d/file.d-linux-amd64:${VERSION}
+	docker build -t ozonru/file.d:${VERSION}-linux-amd64 .
+	docker push ozonru/file.d:${VERSION}-linux-amd64
+	docker build -t ozonru/latest-linux-amd64 .
+	docker push ozonru/latest-linux-amd64
 
 .PHONY: push-images
-push-images: push-linux-amd64
+push-images: prepare push-linux-amd64
