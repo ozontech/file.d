@@ -2,6 +2,7 @@ package pipeline
 
 import (
 	"fmt"
+	"runtime"
 	"sync"
 
 	"github.com/ozonru/file.d/logger"
@@ -188,13 +189,15 @@ func (e *Event) String() string {
 }
 
 // channels are slower than this implementation by ~20%
-// todo: may we use here some lock-free structures?
-
 type eventPool struct {
 	capacity int
 
 	freeEventsCount int
+	getCounter      atomic.Int64
+	backCounter     atomic.Int64
 	events          []*Event
+	free1           []atomic.Bool
+	free2           []atomic.Bool
 
 	mu   *sync.Mutex
 	cond *sync.Cond
@@ -205,11 +208,14 @@ func newEventPool(capacity int) *eventPool {
 		capacity:        capacity,
 		freeEventsCount: capacity,
 		mu:              &sync.Mutex{},
+		backCounter:     *atomic.NewInt64(int64(capacity)),
 	}
 
 	eventPool.cond = sync.NewCond(eventPool.mu)
 
 	for i := 0; i < capacity; i++ {
+		eventPool.free1 = append(eventPool.free1, *atomic.NewBool(true))
+		eventPool.free2 = append(eventPool.free2, *atomic.NewBool(true))
 		eventPool.events = append(eventPool.events, newEvent())
 	}
 
@@ -217,29 +223,35 @@ func newEventPool(capacity int) *eventPool {
 }
 
 func (p *eventPool) get() *Event {
-	p.mu.Lock()
-
-	for p.freeEventsCount == 0 {
-		p.cond.Wait()
+	x := (p.getCounter.Inc() - 1) % int64(p.capacity)
+	for {
+		if x < p.backCounter.Load() {
+			if p.free1[x].CAS(true, false) {
+				break
+			}
+		}
+		runtime.Gosched()
 	}
-	p.freeEventsCount--
-	event := p.events[p.freeEventsCount]
-
-	p.mu.Unlock()
+	event := p.events[x]
+	p.events[x] = nil
+	p.free2[x].Store(false)
 
 	event.reset()
 	return event
 }
 
 func (p *eventPool) back(event *Event) {
-	p.mu.Lock()
-	
 	event.stage = eventStagePool
-	p.events[p.freeEventsCount] = event
-	p.freeEventsCount++
-	p.cond.Signal()
-	
-	p.mu.Unlock()
+	x := (p.backCounter.Inc() - 1) % int64(p.capacity)
+	for {
+		if p.free2[x].CAS(false, true) {
+			break
+		}
+		runtime.Gosched()
+	}
+
+	p.events[x] = event
+	p.free1[x].Store(true)
 }
 
 func (p *eventPool) dump() string {

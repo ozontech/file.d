@@ -262,7 +262,7 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 	event.streamName = DefaultStreamName
 	event.Size = len(bytes)
 
-	if len(p.inSample) == 0 && rand.Int()&1 == 1 {
+	if len(p.inSample) == 0 {
 		p.inSample = event.Root.Encode(p.inSample)
 	}
 
