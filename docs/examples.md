@@ -6,23 +6,17 @@ It assumes that k8s logs located in `/var/log/containers/` directory.
 ```yaml
 pipelines:
   k8s_kafka_example:
-    settings:
-      antispam_threshold: 4000                  # ban files which spam logs
     input:
-      type: file
+      type: k8s
       persistence_mode: async
       watching_dir: /var/log/containers/
       filename_pattern: "*"
       offsets_file: /data/k8s-offsets.yaml
+      labels_whitelist: [app, jobid]            # add only these labels
     actions:
-    - type: k8s                                 # add k8s meta information to event
-      labels_whitelist: [app, jobid]            # add only this labels
-      max_event_size: 131072
-      metric_name: in                           # expose input metrics to prometheus
-      metric_labels: [k8s_label_app, k8s_pod, k8s_container]
     - type: discard                             # discard some events 
       match_fields:
-        k8s_namespace: /kube-system|ingress/
+        k8s_namespace: /kube-system|ingress/    # regex
         k8s_container: /file-d/
       match_mode: or
     - type: join                                # join goland panics from stderr

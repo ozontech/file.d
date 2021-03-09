@@ -13,7 +13,7 @@
 `curl 'https://raw.githubusercontent.com/ozonru/file.d/master/testdata/json/welcome.json' > /tmp/welcome.json`
 
 3. Run `file.d`:<br>
-`docker run -v /tmp:/tmp docker pull ozonru/file.d:latest-linux-amd64 /file.d/file.d --config /tmp/welcome.yaml`
+`docker run -v /tmp:/tmp ozonru/file.d:latest-linux-amd64 /file.d/file.d --config /tmp/welcome.yaml`
 
 4. `file.d` will use data file as an input and your terminal as an output. So you'll see a welcome message.
 

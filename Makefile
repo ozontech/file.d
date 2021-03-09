@@ -26,13 +26,20 @@ gen-doc:
 profile-file:
 	go test -bench LightJsonReadPar ./plugin/input/file -v -count 1 -run -benchmem -benchtime 1x -cpuprofile cpu.pprof -memprofile mem.pprof -mutexprofile mutex.pprof
 
-.PHONY: push-linux-amd64
-push-linux-amd64:
+.PHONY: push-version-linux-amd64
+push-version-linux-amd64:
 	GOOS=linux GOARCH=amd64 go build -v -o file.d ./cmd/file.d.go
 	docker build -t ozonru/file.d:${VERSION}-linux-amd64 .
 	docker push ozonru/file.d:${VERSION}-linux-amd64
+
+.PHONY: push-latest-linux-amd64
+push-latest-linux-amd64:
+	GOOS=linux GOARCH=amd64 go build -v -o file.d ./cmd/file.d.go
 	docker build -t ozonru/file.d:latest-linux-amd64 .
 	docker push ozonru/file.d:latest-linux-amd64
 
-.PHONY: push-images
-push-images: prepare push-linux-amd64
+.PHONY: push-images-version
+push-images-version: prepare push-linux-amd64
+
+.PHONY: push-images-latest
+push-images-latest: prepare push-latest-linux-amd64
