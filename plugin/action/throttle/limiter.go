@@ -3,10 +3,12 @@ package throttle
 import (
 	"sync"
 	"time"
+
+	"github.com/ozonru/file.d/pipeline"
 )
 
 type limiter struct {
-	limit       int64 // maximum number of events per bucket
+	limit       complexLimit // maximum number of events per bucket
 	bucketCount int
 	buckets     []int64
 	interval    time.Duration // bucket interval
@@ -14,7 +16,7 @@ type limiter struct {
 	mu          sync.Mutex
 }
 
-func NewLimiter(interval time.Duration, bucketCount int, limit int64) *limiter {
+func NewLimiter(interval time.Duration, bucketCount int, limit complexLimit) *limiter {
 	return &limiter{
 		interval:    interval,
 		bucketCount: bucketCount,
@@ -25,7 +27,7 @@ func NewLimiter(interval time.Duration, bucketCount int, limit int64) *limiter {
 }
 
 // isAllowed returns TRUE if event is allowed to be processed.
-func (l *limiter) isAllowed(ts time.Time) bool {
+func (l *limiter) isAllowed(event *pipeline.Event, ts time.Time) bool {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
@@ -55,9 +57,16 @@ func (l *limiter) isAllowed(ts time.Time) bool {
 	}
 
 	index := id - l.minID
-	l.buckets[index]++
+	switch l.limit.kind {
+	default:
+		fallthrough
+	case "count":
+		l.buckets[index]++
+	case "size":
+		l.buckets[index] += int64(event.Size)
+	}
 
-	return l.buckets[index] <= l.limit
+	return l.buckets[index] <= l.limit.value
 }
 
 // bucketIDToTime converts bucketID to time. This time is start of the bucket.

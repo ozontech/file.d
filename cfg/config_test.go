@@ -50,6 +50,15 @@ type hierarchy struct {
 	Child hierarchyChild `child:"true"`
 }
 
+type sliceChild struct {
+	Value string `default:"child"`
+}
+
+type sliceStruct struct {
+	Value  string       `default:"parent"`
+	Childs []sliceChild `default:"" slice:"true"`
+}
+
 func TestParseRequiredOk(t *testing.T) {
 	s := &strRequired{T: "some_value"}
 	err := Parse(s, nil)
@@ -150,4 +159,24 @@ func TestHierarchy(t *testing.T) {
 	assert.Nil(t, err, "shouldn't be an error")
 	assert.Equal(t, "10", s.T, "wrong value")
 	assert.Equal(t, "10", s.Child.T, "wrong value")
+}
+
+func TestSlice(t *testing.T) {
+	s := &sliceStruct{Value: "parent_value", Childs: []sliceChild{{"child_1"}, {}}}
+	err := Parse(s, map[string]int{})
+
+	assert.Nil(t, err, "shouldn't be an error")
+	assert.Equal(t, "parent_value", s.Value, "wrong value")
+	assert.Equal(t, "child_1", s.Childs[0].Value, "wrong value")
+	assert.Equal(t, "child", s.Childs[1].Value, "wrong value") // default value
+}
+
+func TestDefaultSlice(t *testing.T) {
+	s := &sliceStruct{Value: "parent_value"}
+	err := Parse(s, map[string]int{})
+
+	assert.Nil(t, err, "shouldn't be an error")
+	assert.Equal(t, "parent_value", s.Value, "wrong value")
+	assert.NotEqual(t, nil, s.Childs, "wrong value")
+	assert.Equal(t, 0, len(s.Childs), "wrong value")
 }

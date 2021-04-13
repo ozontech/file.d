@@ -69,7 +69,7 @@ func parseConfig(json *simplejson.Json) *Config {
 		config.Pipelines[i] = &PipelineConfig{Raw: raw}
 	}
 
-	logger.Infof("config parsed, found %d pipelines", len(config.Pipelines), )
+	logger.Infof("config parsed, found %d pipelines", len(config.Pipelines))
 
 	return config
 }
@@ -83,17 +83,24 @@ func Parse(ptr interface{}, values map[string]int) error {
 		return nil
 	}
 
-	var vChild reflect.Value 
+	childs := make([]reflect.Value, 0)
 	for i := 0; i < t.NumField(); i++ {
 		vField := v.Field(i)
 		tField := t.Field(i)
 
-		shouldFill := tField.Tag.Get("child")
-		if shouldFill == "true" {
-			vChild = vField
+		childTag := tField.Tag.Get("child")
+		if childTag == "true" {
+			childs = append(childs, vField)
 			continue
 		}
 
+		sliceTag := tField.Tag.Get("slice")
+		if sliceTag == "true" {
+			if err := ParseSlice(vField, values); err != nil {
+				return err
+			}
+			continue
+		}
 
 		err := ParseField(v, vField, tField, values)
 		if err != nil {
@@ -101,22 +108,52 @@ func Parse(ptr interface{}, values map[string]int) error {
 		}
 	}
 
-	if vChild.CanAddr() {
-		for i := 0; i < vChild.NumField(); i++ {
-			name := vChild.Type().Field(i).Name
-			val := v.FieldByName(name)
+	for _, child := range childs {
+		if err := ParseChild(v, child, values); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// it isn't just a recursion
+// it also captures values with the same name from parent
+// i.e. take this config:
+// {
+// 	"T": 10,
+// 	"Child": { // has `child:true` in a tag
+// 		"T": null
+// 	}
+// }
+// this function will set `config.Child.T = config.T`
+// see file.d/cfg/config_test.go:TestHierarchy for an example
+func ParseChild(parent reflect.Value, v reflect.Value, values map[string]int) error {
+	if v.CanAddr() {
+		for i := 0; i < v.NumField(); i++ {
+			name := v.Type().Field(i).Name
+			val := parent.FieldByName(name)
 			if val.CanAddr() {
-				vChild.Field(i).Set(val)
+				v.Field(i).Set(val)
 			}
 		}
-		
-		err := Parse(vChild.Addr().Interface(), values)
+
+		err := Parse(v.Addr().Interface(), values)
 		if err != nil {
 			return err
 		}
-		return nil
 	}
+	return nil
+}
 
+// recursively parses elements of an slice
+// calls Parse, not ParseChild (!)
+func ParseSlice(v reflect.Value, values map[string]int) error {
+	for i := 0; i < v.Len(); i++ {
+		if err := Parse(v.Index(i).Addr().Interface(), values); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -224,7 +261,7 @@ func ParseField(v reflect.Value, vField reflect.Value, tField reflect.StructFiel
 			if err != nil {
 				has := false
 				op1_, has = values[op1]
-				if ! has {
+				if !has {
 					return fmt.Errorf("can't find value for %q in expression", op1)
 				}
 			}
@@ -233,7 +270,7 @@ func ParseField(v reflect.Value, vField reflect.Value, tField reflect.StructFiel
 			if err != nil {
 				has := false
 				op2_, has = values[op2]
-				if ! has {
+				if !has {
 					return fmt.Errorf("can't find value for %q in expression", op2)
 				}
 			}
@@ -261,7 +298,7 @@ func ParseField(v reflect.Value, vField reflect.Value, tField reflect.StructFiel
 	if required && vField.IsZero() {
 		return fmt.Errorf("field %s should set as non-zero value", tField.Name)
 	}
-	
+
 	return nil
 }
 
