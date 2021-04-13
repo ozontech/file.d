@@ -61,7 +61,7 @@ type Config struct {
 	//> @3@4@5@6
 	//>
 	//> What we're limiting: number of messages, or total size of the messages
-	LimitType string `json:"limit_type" default:"count" options:"count|size"` //*
+	LimitKind string `json:"limit_kind" default:"count" options:"count|size"` //*
 
 	//> @3@4@5@6
 	//>
@@ -80,14 +80,14 @@ type Config struct {
 	//> Rules to override the `default_limit` for different group of event. It's a list of objects.
 	//> Each object has the `limit` and `conditions` fields.
 	//> * `limit` – the value which will override the `default_limit`, if `conditions` are met.
-	//> * `limit_type` – the type of a limit: `count` - number of messages, `size` - total size from all messages
+	//> * `limit_kind` – the type of a limit: `count` - number of messages, `size` - total size from all messages
 	//> * `conditions` – the map of `event field name => event field value`. The conditions are checked using `AND` operator.
 	Rules []RuleConfig `json:"rules" default:"" slice:"true"` //*
 }
 
 type RuleConfig struct {
 	Limit      int64             `json:"limit"`
-	LimitType  string            `json:"limit_type" default:"count" options:"count|size"`
+	LimitKind  string            `json:"limit_kind" default:"count" options:"count|size"`
 	Conditions map[string]string `json:"conditions"`
 }
 
@@ -112,10 +112,10 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 	limitersMu.Unlock()
 
 	for _, r := range p.config.Rules {
-		p.rules = append(p.rules, NewRule(r.Conditions, complexLimit{r.Limit, r.LimitType}))
+		p.rules = append(p.rules, NewRule(r.Conditions, complexLimit{r.Limit, r.LimitKind}))
 	}
 
-	p.rules = append(p.rules, NewRule(map[string]string{}, complexLimit{p.config.DefaultLimit, p.config.LimitType}))
+	p.rules = append(p.rules, NewRule(map[string]string{}, complexLimit{p.config.DefaultLimit, p.config.LimitKind}))
 }
 
 func (p *Plugin) Stop() {

@@ -4,11 +4,12 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ozonru/file.d/logger"
 	"github.com/ozonru/file.d/pipeline"
 )
 
 type limiter struct {
-	limit       complexLimit // maximum number of events per bucket
+	limit       complexLimit // threshold and type of an limiter
 	bucketCount int
 	buckets     []int64
 	interval    time.Duration // bucket interval
@@ -59,6 +60,8 @@ func (l *limiter) isAllowed(event *pipeline.Event, ts time.Time) bool {
 	index := id - l.minID
 	switch l.limit.kind {
 	default:
+		logger.Fatalf("Unknown type of the limiter: \"%s\"", l.limit.kind)
+	case "":
 		fallthrough
 	case "count":
 		l.buckets[index]++

@@ -21,10 +21,10 @@ type testConfig struct {
 	workTime    time.Duration
 }
 
-func (tconf *testConfig) runPipeline() {
-	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, tconf.config, pipeline.MatchModeAnd, nil))
+func (c *testConfig) runPipeline() {
+	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, c.config, pipeline.MatchModeAnd, nil))
 	wg := &sync.WaitGroup{}
-	wg.Add(tconf.eventsTotal)
+	wg.Add(c.eventsTotal)
 
 	outEvents := make([]*pipeline.Event, 0)
 	output.SetOutFn(func(e *pipeline.Event) {
@@ -50,7 +50,7 @@ func (tconf *testConfig) runPipeline() {
 		json := fmt.Sprintf(formats[index], time.Now().Format(time.RFC3339Nano))
 
 		input.In(10, sourceNames[rand.Int()%len(sourceNames)], 0, []byte(json))
-		if time.Since(startTime) > tconf.workTime {
+		if time.Since(startTime) > c.workTime {
 			break
 		}
 	}
@@ -58,7 +58,7 @@ func (tconf *testConfig) runPipeline() {
 	p.Stop()
 	wg.Wait()
 
-	assert.Equal(tconf.t, tconf.eventsTotal, len(outEvents), "wrong in events count")
+	assert.Equal(c.t, c.eventsTotal, len(outEvents), "wrong in events count")
 }
 
 func TestThrottle(t *testing.T) {
@@ -110,15 +110,15 @@ func TestSizeThrottle(t *testing.T) {
 
 	config := &Config{
 		Rules: []RuleConfig{
-			{Limit: int64(limitA), LimitType: "size", Conditions: map[string]string{"k8s_ns": "ns_1"}},
-			{Limit: int64(limitB), LimitType: "size", Conditions: map[string]string{"k8s_ns": "ns_2"}},
+			{Limit: int64(limitA), LimitKind: "size", Conditions: map[string]string{"k8s_ns": "ns_1"}},
+			{Limit: int64(limitB), LimitKind: "size", Conditions: map[string]string{"k8s_ns": "ns_2"}},
 		},
 		BucketsCount:   buckets,
 		BucketInterval: "100ms",
 		ThrottleField:  "k8s_pod",
 		TimeField:      "",
 		DefaultLimit:   int64(defaultLimit),
-		LimitType:      "size",
+		LimitKind:      "size",
 	}
 	err := cfg.Parse(config, nil)
 	if err != nil {
@@ -147,7 +147,7 @@ func TestMixedThrottle(t *testing.T) {
 	config := &Config{
 		Rules: []RuleConfig{
 			{Limit: int64(limitA), Conditions: map[string]string{"k8s_ns": "ns_1"}},
-			{Limit: int64(limitB), LimitType: "size", Conditions: map[string]string{"k8s_ns": "ns_2"}},
+			{Limit: int64(limitB), LimitKind: "size", Conditions: map[string]string{"k8s_ns": "ns_2"}},
 		},
 		BucketsCount:   buckets,
 		BucketInterval: "100ms",
