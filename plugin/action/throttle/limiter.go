@@ -60,7 +60,7 @@ func (l *limiter) isAllowed(event *pipeline.Event, ts time.Time) bool {
 	index := id - l.minID
 	switch l.limit.kind {
 	default:
-		logger.Fatalf("Unknown type of the limiter: \"%s\"", l.limit.kind)
+		logger.Fatalf("unknown type of the limiter: %q", l.limit.kind)
 	case "":
 		fallthrough
 	case "count":
