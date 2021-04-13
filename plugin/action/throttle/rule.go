@@ -6,14 +6,19 @@ import (
 	"github.com/ozonru/file.d/pipeline"
 )
 
+type complexLimit struct {
+	value int64
+	kind  string
+}
+
 type rule struct {
 	fields []string // sorted list of used keys is used for combining limiter key.
 	values []string // values to check against. order is the same as for keys.
-	limit  int64
+	limit  complexLimit
 }
 
 // NewRule returns new Limit instance.
-func NewRule(conditions map[string]string, limit int64) *rule {
+func NewRule(conditions map[string]string, limit complexLimit) *rule {
 	var (
 		keys   = make([]string, 0, len(conditions))
 		values = make([]string, len(conditions))
