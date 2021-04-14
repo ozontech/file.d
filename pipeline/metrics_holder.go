@@ -18,14 +18,19 @@ type metricsHolder struct {
 	registry           *prometheus.Registry
 }
 
+type counter struct {
+	count *prometheus.CounterVec
+	size  *prometheus.CounterVec
+}
+
 type metrics struct {
 	name   string
 	labels []string
 
 	root *mNode
 
-	current  *prometheus.CounterVec
-	previous *prometheus.CounterVec
+	current  counter
+	previous counter
 }
 
 type mNode struct {
@@ -39,7 +44,7 @@ func newMetricsHolder(pipelineName string, registry *prometheus.Registry, metric
 		pipelineName: pipelineName,
 		registry:     registry,
 
-		metrics:            make([]*metrics, 0, 0),
+		metrics:            make([]*metrics, 0),
 		metricsGenInterval: metricsGenInterval,
 	}
 
@@ -53,8 +58,8 @@ func (m *metricsHolder) AddAction(metricName string, metricLabels []string) {
 			childs: make(map[string]*mNode),
 			mu:     &sync.RWMutex{},
 		},
-		current:  nil,
-		previous: nil,
+		current:  counter{nil, nil},
+		previous: counter{nil, nil},
 	})
 }
 
@@ -62,30 +67,50 @@ func (m *metricsHolder) start() {
 	m.nextMetricsGen()
 }
 
+func (c *counter) register(registry *prometheus.Registry) {
+	registry.MustRegister(c.count)
+	registry.MustRegister(c.size)
+}
+
+func (c *counter) unregister(registry *prometheus.Registry) {
+	registry.Unregister(c.count)
+	registry.Unregister(c.size)
+}
+
 func (m *metricsHolder) nextMetricsGen() {
 	metricsGen := strconv.Itoa(m.metricsGen)
-
 	for index, metrics := range m.metrics {
 		if metrics.name == "" {
 			continue
 		}
 
+		cnt := counter{}
 		opts := prometheus.CounterOpts{
 			Namespace:   "file_d",
 			Subsystem:   "pipeline_" + m.pipelineName,
-			Name:        metrics.name + "_events_total",
+			Name:        metrics.name + "_events_count_total",
 			Help:        fmt.Sprintf("how many events processed by pipeline %q and #%d action", m.pipelineName, index),
 			ConstLabels: map[string]string{"gen": metricsGen},
 		}
-		counter := prometheus.NewCounterVec(opts, append([]string{"status"}, metrics.labels...))
+		cnt.count = prometheus.NewCounterVec(opts, append([]string{"status"}, metrics.labels...))
+
+		opts = prometheus.CounterOpts{
+			Namespace:   "file_d",
+			Subsystem:   "pipeline_" + m.pipelineName,
+			Name:        metrics.name + "_events_size_total",
+			Help:        fmt.Sprintf("total size of events processed by pipeline %q and #%d action", m.pipelineName, index),
+			ConstLabels: map[string]string{"gen": metricsGen},
+		}
+		cnt.size = prometheus.NewCounterVec(opts, append([]string{"status"}, metrics.labels...))
+
 		obsolete := metrics.previous
 
 		metrics.previous = metrics.current
-		metrics.current = counter
+		metrics.current = cnt
 
-		m.registry.MustRegister(counter)
-		if obsolete != nil {
-			m.registry.Unregister(obsolete)
+		metrics.current.register(m.registry)
+		if obsolete.count != nil {
+			obsolete.unregister(m.registry)
 		}
 	}
 
@@ -142,13 +167,14 @@ func (m *metricsHolder) count(event *Event, actionIndex int, eventStatus eventSt
 		mn = nextMN
 	}
 
-	metrics.current.WithLabelValues(valuesBuf...).Inc()
+	metrics.current.count.WithLabelValues(valuesBuf...).Inc()
+	metrics.current.size.WithLabelValues(valuesBuf...).Add(float64(event.Size))
 
 	return valuesBuf
 }
 
 func (m *metricsHolder) maintenance() {
-	if time.Now().Sub(m.metricsGenTime) < metricsGenInterval {
+	if time.Since(m.metricsGenTime) < metricsGenInterval {
 		return
 	}
 
