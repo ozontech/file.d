@@ -18,7 +18,10 @@ type metricsHolder struct {
 	registry           *prometheus.Registry
 }
 
-type counter [2]*prometheus.CounterVec
+type counter struct {
+	count *prometheus.CounterVec
+	size  *prometheus.CounterVec
+}
 
 type metrics struct {
 	name   string
@@ -65,15 +68,13 @@ func (m *metricsHolder) start() {
 }
 
 func (c *counter) register(registry *prometheus.Registry) {
-	for _, cnt := range c {
-		registry.MustRegister(cnt)
-	}
+	registry.MustRegister(c.count)
+	registry.MustRegister(c.size)
 }
 
 func (c *counter) unregister(registry *prometheus.Registry) {
-	for _, cnt := range c {
-		registry.Unregister(cnt)
-	}
+	registry.Unregister(c.count)
+	registry.Unregister(c.size)
 }
 
 func (m *metricsHolder) nextMetricsGen() {
@@ -91,12 +92,16 @@ func (m *metricsHolder) nextMetricsGen() {
 			Help:        fmt.Sprintf("how many events processed by pipeline %q and #%d action", m.pipelineName, index),
 			ConstLabels: map[string]string{"gen": metricsGen},
 		}
-		cnt[0] = prometheus.NewCounterVec(opts, append([]string{"status"}, metrics.labels...))
+		cnt.count = prometheus.NewCounterVec(opts, append([]string{"status"}, metrics.labels...))
 
-		opts.Name = metrics.name + "_events_size_total"
-		opts.Help = fmt.Sprintf("total size of events processed by pipeline %q and #%d action", m.pipelineName, index)
-
-		cnt[1] = prometheus.NewCounterVec(opts, append([]string{"status"}, metrics.labels...))
+		opts = prometheus.CounterOpts{
+			Namespace:   "file_d",
+			Subsystem:   "pipeline_" + m.pipelineName,
+			Name:        metrics.name + "_events_size_total",
+			Help:        fmt.Sprintf("total size of events processed by pipeline %q and #%d action", m.pipelineName, index),
+			ConstLabels: map[string]string{"gen": metricsGen},
+		}
+		cnt.size = prometheus.NewCounterVec(opts, append([]string{"status"}, metrics.labels...))
 
 		obsolete := metrics.previous
 
@@ -104,7 +109,7 @@ func (m *metricsHolder) nextMetricsGen() {
 		metrics.current = cnt
 
 		metrics.current.register(m.registry)
-		if obsolete[0] != nil {
+		if obsolete.count != nil {
 			obsolete.unregister(m.registry)
 		}
 	}
@@ -162,8 +167,8 @@ func (m *metricsHolder) count(event *Event, actionIndex int, eventStatus eventSt
 		mn = nextMN
 	}
 
-	metrics.current[0].WithLabelValues(valuesBuf...).Inc()
-	metrics.current[1].WithLabelValues(valuesBuf...).Add(float64(event.Size))
+	metrics.current.count.WithLabelValues(valuesBuf...).Inc()
+	metrics.current.size.WithLabelValues(valuesBuf...).Add(float64(event.Size))
 
 	return valuesBuf
 }
