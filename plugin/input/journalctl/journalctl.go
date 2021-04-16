@@ -63,6 +63,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 		output:   p,
 		cursor:   p.offset.cursor,
 		maxLines: p.config.MaxLines,
+		logger:   p.params.Logger,
 	}
 	p.reader = newJournalReader(readConfig)
 	p.reader.args = append(p.reader.args, p.config.JournalArgs...)

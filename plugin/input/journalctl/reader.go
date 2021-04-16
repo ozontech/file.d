@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"io"
 	"os/exec"
+	"strings"
 
 	"go.uber.org/zap"
 )
@@ -68,6 +69,7 @@ func newJournalReader(config *journalReaderConfig) *journalReader {
 }
 
 func (r *journalReader) start() error {
+	r.config.logger.Infof("Running \"journalctl %s\"", strings.Join(r.args, " "))
 	r.cmd = exec.Command("journalctl", r.args...)
 	out, err := r.cmd.StdoutPipe()
 	if err != nil {
