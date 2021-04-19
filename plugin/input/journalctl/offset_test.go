@@ -16,7 +16,7 @@ func compare(t *testing.T, exp *offsetInfo, act *offsetInfo) {
 
 func TestSaveLoad(t *testing.T) {
 	offset := newOffsetInfo("")
-	for i := 0; i < 5; i++ {
+	for i := 1; i < 6; i++ {
 		offset.set(fmt.Sprintf("cursor_%d", i))
 	}
 	offset.current = offset.offset + 1
@@ -36,16 +36,24 @@ func TestSaveLoad(t *testing.T) {
 
 func TestSaveLoadFile(t *testing.T) {
 	offset := newOffsetInfo(getTmpPath(t, "offset.yaml"))
-	for i := 0; i < 5; i++ {
+	for i := 1; i < 6; i++ {
 		offset.set(fmt.Sprintf("cursor_%d", i))
 	}
 	offset.current = offset.offset + 1
 
-	err := offset.saveFile()
+	err := offset.openFile()
+	assert.NoError(t, err)
+	err = offset.save(offset.file)
+	assert.NoError(t, err)
+	err = offset.closeFile()
 	assert.NoError(t, err)
 
 	loaded := newOffsetInfo(offset.path)
-	err = loaded.loadFile()
+	err = loaded.openFile()
+	assert.NoError(t, err)
+	err = loaded.load(loaded.file)
+	assert.NoError(t, err)
+	err = loaded.closeFile()
 	assert.NoError(t, err)
 
 	compare(t, offset, loaded)
@@ -53,16 +61,40 @@ func TestSaveLoadFile(t *testing.T) {
 
 func TestAppendFile(t *testing.T) {
 	offset := newOffsetInfo(getTmpPath(t, "offset.yaml"))
-	for i := 0; i < 5; i++ {
+	for i := 1; i < 6; i++ {
 		offset.set(fmt.Sprintf("cursor_%d", i))
 		offset.current = offset.offset + 1
-		err := offset.saveFile()
+		err := offset.openFile()
+		assert.NoError(t, err)
+		err = offset.clearFile()
+		assert.NoError(t, err)
+		err = offset.save(offset.file)
+		assert.NoError(t, err)
+		err = offset.closeFile()
 		assert.NoError(t, err)
 
 		loaded := newOffsetInfo(offset.path)
-		err = loaded.loadFile()
+		err = loaded.openFile()
+		assert.NoError(t, err)
+		err = loaded.load(loaded.file)
+		assert.NoError(t, err)
+		err = loaded.closeFile()
 		assert.NoError(t, err)
 
 		compare(t, offset, loaded)
 	}
+}
+
+// check, that no errors will happen
+func TestEmptyFile(t *testing.T) {
+	offset := newOffsetInfo(getTmpPath(t, "offset.yaml"))
+
+	err := offset.openFile()
+	assert.NoError(t, err)
+	err = offset.load(offset.file)
+	assert.NoError(t, err)
+	err = offset.closeFile()
+	assert.NoError(t, err)
+
+	compare(t, newOffsetInfo(""), offset)
 }

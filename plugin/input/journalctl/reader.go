@@ -57,8 +57,6 @@ func newJournalReader(config *journalReaderConfig) *journalReader {
 	res := &journalReader{config: config}
 	res.args = []string{
 		"-o", "json",
-		"-f",
-		"-a",
 	}
 	if config.cursor != "" {
 		res.args = append(res.args, "-c", config.cursor)
@@ -69,7 +67,7 @@ func newJournalReader(config *journalReaderConfig) *journalReader {
 }
 
 func (r *journalReader) start() error {
-	r.config.logger.Infof("Running \"journalctl %s\"", strings.Join(r.args, " "))
+	r.config.logger.Infof("running \"journalctl %s\"", strings.Join(r.args, " "))
 	r.cmd = exec.Command("journalctl", r.args...)
 	out, err := r.cmd.StdoutPipe()
 	if err != nil {
