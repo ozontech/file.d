@@ -22,65 +22,50 @@ func TestSaveLoad(t *testing.T) {
 	offset.current = offset.offset + 1
 
 	buffer := &bytes.Buffer{}
-	err := offset.save(buffer)
+	err := offset.Write(buffer)
 	assert.NoError(t, err)
 
 	fmt.Println(buffer.String())
 
 	loaded := newOffsetInfo("")
-	err = loaded.load(buffer)
+	err = loaded.Read(buffer)
 	assert.NoError(t, err)
 
 	compare(t, offset, loaded)
 }
 
 func TestSaveLoadFile(t *testing.T) {
-	offset := newOffsetInfo(getTmpPath(t, "offset.yaml"))
+	path := getTmpPath(t, "offset.yaml")
+	offset := newOffsetInfo(path)
 	for i := 1; i < 6; i++ {
 		offset.set(fmt.Sprintf("cursor_%d", i))
 	}
 	offset.current = offset.offset + 1
 
-	err := offset.openFile()
-	assert.NoError(t, err)
-	err = offset.save(offset.file)
-	assert.NoError(t, err)
-	err = offset.closeFile()
+	err := offset.save()
 	assert.NoError(t, err)
 
-	loaded := newOffsetInfo(offset.path)
-	err = loaded.openFile()
-	assert.NoError(t, err)
-	err = loaded.load(loaded.file)
-	assert.NoError(t, err)
-	err = loaded.closeFile()
+	loaded := newOffsetInfo(path)
+	err = loaded.load()
 	assert.NoError(t, err)
 
 	compare(t, offset, loaded)
 }
 
 func TestAppendFile(t *testing.T) {
-	offset := newOffsetInfo(getTmpPath(t, "offset.yaml"))
+	path := getTmpPath(t, "offset.yaml")
+	offset := newOffsetInfo(path)
 	for i := 1; i < 6; i++ {
 		offset.set(fmt.Sprintf("cursor_%d", i))
 		offset.current = offset.offset + 1
-		err := offset.openFile()
-		assert.NoError(t, err)
-		err = offset.clearFile()
-		assert.NoError(t, err)
-		err = offset.save(offset.file)
-		assert.NoError(t, err)
-		err = offset.closeFile()
-		assert.NoError(t, err)
 
-		loaded := newOffsetInfo(offset.path)
-		err = loaded.openFile()
+		err := offset.save()
 		assert.NoError(t, err)
-		err = loaded.load(loaded.file)
+	
+		loaded := newOffsetInfo(path)
+		err = loaded.load()
 		assert.NoError(t, err)
-		err = loaded.closeFile()
-		assert.NoError(t, err)
-
+	
 		compare(t, offset, loaded)
 	}
 }
@@ -89,11 +74,7 @@ func TestAppendFile(t *testing.T) {
 func TestEmptyFile(t *testing.T) {
 	offset := newOffsetInfo(getTmpPath(t, "offset.yaml"))
 
-	err := offset.openFile()
-	assert.NoError(t, err)
-	err = offset.load(offset.file)
-	assert.NoError(t, err)
-	err = offset.closeFile()
+	err := offset.load()
 	assert.NoError(t, err)
 
 	compare(t, newOffsetInfo(""), offset)

@@ -30,10 +30,10 @@ type Config struct {
 	//> Plugin forces "-o json" and "-c *cursor*" or "-n all", otherwise
 	//> you can use almost any additional args
 	//> https://man7.org/linux/man-pages/man1/journalctl.1.html
-	JournalArgs []string `json:"journal_args" default:"['-f', '-a']"` //*
+	JournalArgs []string `json:"journal_args" default:"-f -a"` //*
 
 	// for testing mostly
-	MaxLines int `json:"max_lines" default:"0"`
+	MaxLines int `json:"max_lines"`
 }
 
 func (p *Plugin) Write(bytes []byte) (int, error) {
@@ -58,10 +58,9 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	p.config = config.(*Config)
 
 	p.offset = newOffsetInfo(p.config.OffsetsFile)
-	if err := p.offset.openFile(); err != nil {
+	if err := p.offset.load(); err != nil {
 		p.params.Logger.Fatal(err)
 	}
-	p.offset.load(p.offset.file)
 
 	readConfig := &journalReaderConfig{
 		output:   p,
@@ -79,15 +78,10 @@ func (p *Plugin) Stop() {
 	if err != nil {
 		p.params.Logger.Error(err)
 	}
-	p.offset.clearFile()
-	p.offset.save(p.offset.file)
-
-	p.offset.closeFile()
+	p.offset.save()
 }
 
 func (p *Plugin) Commit(event *pipeline.Event) {
 	p.offset.set(event.Root.Dig("__CURSOR").AsString())
-
-	p.offset.clearFile()
-	p.offset.save(p.offset.file)
+	p.offset.save()
 }

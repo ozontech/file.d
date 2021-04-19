@@ -4,10 +4,11 @@ package dmesg
 
 import (
 	"encoding/json"
-	"io/ioutil"
+	"io"
 	"time"
 
 	"github.com/euank/go-kmsg-parser/kmsgparser"
+	"github.com/ozonru/file.d/common"
 	"github.com/ozonru/file.d/fd"
 	"github.com/ozonru/file.d/pipeline"
 	insaneJSON "github.com/vitkovskii/insane-json"
@@ -33,7 +34,7 @@ type Config struct {
 	//> @3@4@5@6
 	//>
 	//> The filename to store offsets of processed messages.
-	//> > It's a `json` file. You can modify it manually. 
+	//> > It's a `json` file. You can modify it manually.
 	OffsetsFile string `json:"offsets_file" required:"true"` //*
 }
 
@@ -42,36 +43,49 @@ type state struct {
 }
 
 type stateManager struct {
-	path string
+	file *common.File
+
+	current *state
 }
 
 func newStateManager(path string) *stateManager {
-	return &stateManager{path: path}
+	return &stateManager{file: common.NewFile(path)}
 }
 
-func (sm *stateManager) writeState(s *state) error {
-	b, err := json.Marshal(s)
+func (sm *stateManager) Read(r io.Reader) error {
+	b, err := io.ReadAll(r)
+
 	if err != nil {
 		return err
 	}
 
-	err = ioutil.WriteFile(sm.path, b, 0644)
-	return err
+	if err := json.Unmarshal(b, sm.current); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (sm *stateManager) Write(w io.Writer) error {
+	b, err := json.Marshal(sm.current)
+	if err != nil {
+		return err
+	}
+	if _, err := w.Write(b); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (sm *stateManager) readState() *state {
-	b, err := ioutil.ReadFile(sm.path)
-	s := &state{}
+	sm.current = &state{}
+	sm.file.Load()
+	return sm.current
+}
 
-	if err != nil {
-		return s
-	}
-
-	if err := json.Unmarshal(b, s); err != nil {
-		return s
-	}
-
-	return s
+func (sm *stateManager) writeState(s *state) error {
+	sm.current = s
+	return sm.file.Save()
 }
 
 func init() {

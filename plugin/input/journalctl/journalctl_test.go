@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ozonru/file.d/cfg"
 	"github.com/ozonru/file.d/pipeline"
 	"github.com/ozonru/file.d/plugin/output/devnull"
 	"github.com/ozonru/file.d/test"
@@ -47,7 +48,12 @@ func setOutput(p *pipeline.Pipeline, out func(event *pipeline.Event)) {
 
 func TestPipeline(t *testing.T) {
 	p := test.NewPipeline(nil, "passive")
-	setInput(p, &Config{OffsetsFile: getTmpPath(t, "offset.yaml"), MaxLines: 10}, t)
+	config := &Config{OffsetsFile: getTmpPath(t, "offset.yaml"), MaxLines: 10}
+	err := cfg.Parse(config, nil)
+	assert.NoError(t, err)
+	assert.Equal(t, []string{"-f", "-a"}, config.JournalArgs)
+
+	setInput(p, config, t)
 
 	total := 0
 	setOutput(p, func(event *pipeline.Event) {
@@ -59,16 +65,21 @@ func TestPipeline(t *testing.T) {
 	time.Sleep(time.Millisecond * 300)
 	p.Stop()
 
-	assert.Equal(t, total, 10)
+	assert.Equal(t, 10, total)
 }
 func TestOffsets(t *testing.T) {
 	offsetPath := getTmpPath(t, "offset.yaml")
+	
+	config := &Config{OffsetsFile: offsetPath, MaxLines: 5}
+	err := cfg.Parse(config, nil)
+	assert.NoError(t, err)
 
 	cursors := map[string]int{}
 
 	for i := 0; i < 2; i++ {
 		p := test.NewPipeline(nil, "passive")
-		setInput(p, &Config{OffsetsFile: offsetPath, MaxLines: 5}, t)
+		
+		setInput(p, config, t)
 		setOutput(p, func(event *pipeline.Event) {
 			cursors[event.Root.Dig("__CURSOR").AsString()]++
 		})
