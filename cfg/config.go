@@ -174,6 +174,12 @@ func ParseField(v reflect.Value, vField reflect.Value, tField reflect.StructFiel
 				return errors.Wrapf(err, "default value for field %s should be int, got=%s", tField.Name, tag)
 			}
 			vField.SetInt(int64(val))
+		case reflect.Slice:
+			val := strings.Fields(tag)
+			vField.Set(reflect.MakeSlice(vField.Type(), len(val), len(val)))
+			for i, v := range val {
+				vField.Index(i).SetString(v)
+			}
 		}
 	}
 
