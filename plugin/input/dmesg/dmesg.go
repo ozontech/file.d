@@ -3,13 +3,11 @@
 package dmesg
 
 import (
-	"encoding/json"
-	"io"
 	"time"
 
 	"github.com/euank/go-kmsg-parser/kmsgparser"
-	"github.com/ozonru/file.d/common"
 	"github.com/ozonru/file.d/fd"
+	"github.com/ozonru/file.d/offset"
 	"github.com/ozonru/file.d/pipeline"
 	insaneJSON "github.com/vitkovskii/insane-json"
 	"go.uber.org/zap"
@@ -22,7 +20,6 @@ It reads kernel events from /dev/kmsg
 type Plugin struct {
 	config       *Config
 	state        *state
-	stateManager *stateManager
 	controller   pipeline.InputPluginController
 	parser       kmsgparser.Parser
 	logger       *zap.SugaredLogger
@@ -42,52 +39,6 @@ type state struct {
 	TS int64 `json:"ts"`
 }
 
-type stateManager struct {
-	file *common.File
-
-	current *state
-}
-
-func newStateManager(path string) *stateManager {
-	return &stateManager{file: common.NewFile(path)}
-}
-
-func (sm *stateManager) Read(r io.Reader) error {
-	b, err := io.ReadAll(r)
-
-	if err != nil {
-		return err
-	}
-
-	if err := json.Unmarshal(b, sm.current); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (sm *stateManager) Write(w io.Writer) error {
-	b, err := json.Marshal(sm.current)
-	if err != nil {
-		return err
-	}
-	if _, err := w.Write(b); err != nil {
-		return err
-	}
-	return nil
-}
-
-func (sm *stateManager) readState() *state {
-	sm.current = &state{}
-	sm.file.Load()
-	return sm.current
-}
-
-func (sm *stateManager) writeState(s *state) error {
-	sm.current = s
-	return sm.file.Save()
-}
-
 func init() {
 	fd.DefaultPluginRegistry.RegisterInput(&pipeline.PluginStaticInfo{
 		Type:    "dmesg",
@@ -104,8 +55,10 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	p.config = config.(*Config)
 	p.controller = params.Controller
 
-	p.stateManager = newStateManager(p.config.OffsetsFile)
-	p.state = p.stateManager.readState()
+	p.state = &state{}
+	if err := offset.LoadYAML(p.config.OffsetsFile, p.state); err != nil {
+		p.logger.Error("can't load offset file: %s", err.Error())
+	}
 
 	parser, err := kmsgparser.NewParser()
 	if err != nil {
@@ -153,7 +106,8 @@ func (p *Plugin) Stop() {
 
 func (p *Plugin) Commit(event *pipeline.Event) {
 	p.state.TS = event.Offset
-	if err := p.stateManager.writeState(p.state); err != nil {
-		p.logger.Fatalf("can't write state: %s", err.Error())
+	
+	if err := offset.SaveYAML(p.config.OffsetsFile, p.state); err != nil {
+		p.logger.Error("can't save offset file: %s", err.Error())
 	}
 }

@@ -2,6 +2,7 @@ package journalctl
 
 import (
 	"github.com/ozonru/file.d/fd"
+	"github.com/ozonru/file.d/offset"
 	"github.com/ozonru/file.d/pipeline"
 )
 
@@ -9,10 +10,10 @@ import (
 Input plugin, that reads journalctl logs
 }*/
 type Plugin struct {
-	params *pipeline.InputPluginParams
-	config *Config
-	reader *journalReader
-	offset *offsetInfo
+	params  *pipeline.InputPluginParams
+	config  *Config
+	reader  *journalReader
+	offInfo *offsetInfo
 }
 
 type Config struct {
@@ -36,9 +37,21 @@ type Config struct {
 	MaxLines int `json:"max_lines"`
 }
 
+type offsetInfo struct {
+	Offset  int64  `json:"offset"`
+	Cursor  string `json:"cursor"`
+	
+	current int64
+}
+
+func (o *offsetInfo) set(cursor string) {
+	o.Cursor = cursor
+	o.Offset++
+}
+
 func (p *Plugin) Write(bytes []byte) (int, error) {
-	p.params.Controller.In(0, "journalctl", p.offset.current, bytes, false)
-	p.offset.current++
+	p.params.Controller.In(0, "journalctl", p.offInfo.current, bytes, false)
+	p.offInfo.current++
 	return len(bytes), nil
 }
 
@@ -57,14 +70,14 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	p.params = params
 	p.config = config.(*Config)
 
-	p.offset = newOffsetInfo(p.config.OffsetsFile)
-	if err := p.offset.load(); err != nil {
-		p.params.Logger.Fatal(err)
+	p.offInfo = &offsetInfo{}
+	if err := offset.LoadYAML(p.config.OffsetsFile, p.offInfo); err != nil {
+		p.params.Logger.Error("can't load offset file: %s", err.Error())
 	}
 
 	readConfig := &journalReaderConfig{
 		output:   p,
-		cursor:   p.offset.cursor,
+		cursor:   p.offInfo.Cursor,
 		maxLines: p.config.MaxLines,
 		logger:   p.params.Logger,
 	}
@@ -76,12 +89,18 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 func (p *Plugin) Stop() {
 	err := p.reader.stop()
 	if err != nil {
-		p.params.Logger.Error(err)
+		p.params.Logger.Error("can't stop journalctl cmd: %s", err.Error())
 	}
-	p.offset.save()
+
+	if err := offset.SaveYAML(p.config.OffsetsFile, p.offInfo); err != nil {
+		p.params.Logger.Error("can't save offset file: %s", err.Error())
+	}
 }
 
 func (p *Plugin) Commit(event *pipeline.Event) {
-	p.offset.set(event.Root.Dig("__CURSOR").AsString())
-	p.offset.save()
+	p.offInfo.set(event.Root.Dig("__CURSOR").AsString())
+
+	if err := offset.SaveYAML(p.config.OffsetsFile, p.offInfo); err != nil {
+		p.params.Logger.Error("can't save offset file: %s", err.Error())
+	}
 }
