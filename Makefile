@@ -43,7 +43,10 @@ push-latest-linux-amd64:
 	docker push ozonru/file.d:latest-linux-amd64
 
 .PHONY: push-images-version
-push-images-version: prepare push-linux-amd64
+push-images-version: prepare push-version-linux-amd64
 
 .PHONY: push-images-latest
 push-images-latest: prepare push-latest-linux-amd64
+
+.PHONY: push-images-all
+push-images-all: push-images-version push-images-latest
