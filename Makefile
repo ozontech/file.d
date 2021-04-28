@@ -4,6 +4,10 @@ VERSION ?= 0.1.8
 prepare:
 	docker login
 
+.PHONY: deps
+deps:
+	go get -v github.com/vitkovskii/insane-doc@v0.0.1
+
 .PHONY: test
 test:
 	go test ./fd/ -v -count 1

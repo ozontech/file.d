@@ -7,7 +7,7 @@ import (
 )
 
 /*{ introduction
-Input plugin, that reads journalctl logs
+Reads `journalctl` output.
 }*/
 type Plugin struct {
 	params  *pipeline.InputPluginParams
@@ -27,10 +27,10 @@ type Config struct {
 
 	//> @3@4@5@6
 	//>
-	//> Additional args for journalctl
+	//> Additional args for `journalctl`.
 	//> Plugin forces "-o json" and "-c *cursor*" or "-n all", otherwise
-	//> you can use almost any additional args
-	//> https://man7.org/linux/man-pages/man1/journalctl.1.html
+	//> you can use any additional args.
+	//>> Have a look at https://man7.org/linux/man-pages/man1/journalctl.1.html
 	JournalArgs []string `json:"journal_args" default:"-f -a"` //*
 
 	// for testing mostly

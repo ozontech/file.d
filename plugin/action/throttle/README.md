@@ -30,6 +30,12 @@ The default events limit that plugin allows per `interval`
 
 <br>
 
+**`limit_kind`** *`string`* *`default=count`* *`options=count|size`* 
+
+What we're limiting: number of messages, or total size of the messages
+
+<br>
+
 **`buckets_count`** *`int`* *`default=60`* 
 
 How much time buckets to hold in the memory. E.g. if `buckets_count` is `60` and `interval` is `5m`,
@@ -48,6 +54,7 @@ Time interval to check event throughput.
 Rules to override the `default_limit` for different group of event. It's a list of objects.
 Each object has the `limit` and `conditions` fields.
 * `limit` – the value which will override the `default_limit`, if `conditions` are met.
+* `limit_kind` – the type of a limit: `count` - number of messages, `size` - total size from all messages
 * `conditions` – the map of `event field name => event field value`. The conditions are checked using `AND` operator.
 
 <br>

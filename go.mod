@@ -4,7 +4,7 @@ require (
 	github.com/DataDog/zstd v1.4.0 // indirect
 	github.com/Shopify/sarama v1.23.1
 	github.com/alecthomas/kingpin v2.2.6+incompatible
-	github.com/alecthomas/units v0.0.0-20190717042225-c3de453c63f4
+	github.com/alecthomas/units v0.0.0-20190924025748-f65c72e2690d
 	github.com/bitly/go-simplejson v0.5.0
 	github.com/bmizerany/assert v0.0.0-20160611221934-b7ed37b82869 // indirect
 	github.com/euank/go-kmsg-parser v2.0.0+incompatible
@@ -21,13 +21,12 @@ require (
 	github.com/prometheus/client_golang v1.3.0
 	github.com/satori/go.uuid v1.2.0
 	github.com/spf13/pflag v1.0.3 // indirect
-	github.com/stretchr/testify v1.3.0
+	github.com/stretchr/testify v1.4.0
+	github.com/vitkovskii/insane-doc v0.0.1 // indirect
 	github.com/vitkovskii/insane-json v0.1.0
-	go.uber.org/atomic v1.4.0
+	go.uber.org/atomic v1.5.0
 	go.uber.org/automaxprocs v1.2.0
-	go.uber.org/multierr v1.1.0 // indirect
-	go.uber.org/zap v1.9.1
-	golang.org/x/crypto v0.0.0-20190506204251-e1dfcc566284 // indirect
+	go.uber.org/zap v1.13.0
 	golang.org/x/net v0.0.0-20190813141303-74dc4d7220e7 // indirect
 	golang.org/x/oauth2 v0.0.0-20190604053449-0f29369cfe45 // indirect
 	golang.org/x/time v0.0.0-20190308202827-9d24e82272b4 // indirect

@@ -4,11 +4,11 @@
 ## dmesg
 It reads kernel events from /dev/kmsg
 
-[More details...](/plugin/input/dmesg/README.md)
+[More details...](plugin/input/dmesg/README.md)
 ## fake
 It provides an API to test pipelines and other plugins.
 
-[More details...](/plugin/input/fake/README.md)
+[More details...](plugin/input/fake/README.md)
 ## file
 It watches for files in the provided directory and reads them line by line.
 
@@ -39,7 +39,7 @@ pipelines:
         persistence_mode: async
 ```
 
-[More details...](/plugin/input/file/README.md)
+[More details...](plugin/input/file/README.md)
 ## http
 Reads events from HTTP requests with the body delimited by a new line.
 
@@ -51,7 +51,11 @@ So you can use Elasticsearch filebeat output plugin to send data to `file.d`.
 > Plugin answers with HTTP code `OK 200` right after it has read all the request body.
 > It doesn't wait until events are committed.
 
-[More details...](/plugin/input/http/README.md)
+[More details...](plugin/input/http/README.md)
+## journalctl
+Reads `journalctl` output.
+
+[More details...](plugin/input/journalctl/README.md)
 ## k8s
 It reads Kubernetes logs and also adds pod meta-information. Also, it joins split logs into a single event.
 
@@ -78,22 +82,22 @@ pipelines:
         read_buffer_size: 2048
 ```
 
-[More details...](/plugin/input/k8s/README.md)
+[More details...](plugin/input/k8s/README.md)
 ## kafka
 It reads events from multiple Kafka topics using `sarama` library.
 > It guarantees at "at-least-once delivery" due to the commitment mechanism.
 
-[More details...](/plugin/input/kafka/README.md)
+[More details...](plugin/input/kafka/README.md)
 
 # Actions
 ## convert_date
 It converts field date/time data to different format.
 
-[More details...](/plugin/action/convert_date/README.md)
+[More details...](plugin/action/convert_date/README.md)
 ## debug
 It logs event to stdout. Useful for debugging.
 
-[More details...](/plugin/action/debug/README.md)
+[More details...](plugin/action/debug/README.md)
 ## discard
 It drops an event. It is used in a combination with `match_fields`/`match_mode` parameters to filter out the events.
 
@@ -109,7 +113,7 @@ pipelines:
     ...
 ```
 
-[More details...](/plugin/action/discard/README.md)
+[More details...](plugin/action/discard/README.md)
 ## flatten
 It extracts the object keys and adds them into the root with some prefix. If the provided field isn't an object, an event will be skipped.
 
@@ -126,7 +130,7 @@ pipelines:
 ```
 It transforms `{"animal":{"type":"cat","paws":4}}` into `{"pet_type":"b","pet_paws":"4"}`.
 
-[More details...](/plugin/action/flatten/README.md)
+[More details...](plugin/action/flatten/README.md)
 ## join
 It makes one big event from the sequence of the events.
 It is useful for assembling back together "exceptions" or "panics" if they were written line by line. 
@@ -150,16 +154,16 @@ pipelines:
     ...
 ```
 
-[More details...](/plugin/action/join/README.md)
+[More details...](plugin/action/join/README.md)
 ## json_decode
 It decodes a JSON string from the event field and merges the result with the event root.
 If the decoded JSON isn't an object, the event will be skipped.
 
-[More details...](/plugin/action/json_decode/README.md)
+[More details...](plugin/action/json_decode/README.md)
 ## keep_fields
 It keeps the list of the event fields and removes others.
 
-[More details...](/plugin/action/keep_fields/README.md)
+[More details...](plugin/action/keep_fields/README.md)
 ## modify
 It modifies the content for a field. It works only with strings.
 You can provide an unlimited number of config parameters. Each parameter handled as `cfg.FieldSelector`:`cfg.Substitution`.
@@ -188,16 +192,16 @@ The resulting event could look like:
   }
 ```
 
-[More details...](/plugin/action/modify/README.md)
+[More details...](plugin/action/modify/README.md)
 ## parse_es
 It parses HTTP input using Elasticsearch `/_bulk` API format. It converts sources defining create/index actions to the events. Update/delete actions are ignored.
 > Check out the details in [Elastic Bulk API](https://www.elastic.co/guide/en/elasticsearch/reference/current/docs-bulk.html).
 
-[More details...](/plugin/action/parse_es/README.md)
+[More details...](plugin/action/parse_es/README.md)
 ## remove_fields
 It removes the list of the event fields and keeps others.
 
-[More details...](/plugin/action/remove_fields/README.md)
+[More details...](plugin/action/remove_fields/README.md)
 ## rename
 It renames the fields of the event. You can provide an unlimited number of config parameters. Each parameter handled as `cfg.FieldSelector`:`string`.
 When `override` is set to `false`, the field won't be renamed in the case of field name collision.
@@ -225,22 +229,22 @@ The resulting event could look like:
   },
 ```
 
-[More details...](/plugin/action/rename/README.md)
+[More details...](plugin/action/rename/README.md)
 ## throttle
 It discards the events if pipeline throughput gets higher than a configured threshold.
 
-[More details...](/plugin/action/throttle/README.md)
+[More details...](plugin/action/throttle/README.md)
 
 # Outputs
 ## devnull
 It provides an API to test pipelines and other plugins.
 
-[More details...](/plugin/output/devnull/README.md)
+[More details...](plugin/output/devnull/README.md)
 ## elasticsearch
 It sends events into Elasticsearch. It uses `_bulk` API to send events in batches.
 If a network error occurs, the batch will infinitely try to be delivered to the random endpoint.
 
-[More details...](/plugin/output/elasticsearch/README.md)
+[More details...](plugin/output/elasticsearch/README.md)
 ## gelf
 It sends event batches to the GELF endpoint. Transport level protocol TCP or UDP is configurable.
 > It doesn't support UDP chunking. So don't use UDP if event size may be greater than 8192.
@@ -259,15 +263,15 @@ GELF messages are separated by null byte. Each message is a JSON with the follow
 Every field with an underscore prefix `_` will be treated as an extra field.
 Allowed characters in field names are letters, numbers, underscores, dashes, and dots.
 
-[More details...](/plugin/output/gelf/README.md)
+[More details...](plugin/output/gelf/README.md)
 ## kafka
 It sends the event batches to kafka brokers using `sarama` lib.
 
-[More details...](/plugin/output/kafka/README.md)
+[More details...](plugin/output/kafka/README.md)
 ## stdout
 It writes events to stdout(also known as console).
 
-[More details...](/plugin/output/stdout/README.md)
+[More details...](plugin/output/stdout/README.md)
 
 
 <br>*Generated using [__insane-doc__](https://github.com/vitkovskii/insane-doc)*

@@ -3,11 +3,11 @@
 ## dmesg
 It reads kernel events from /dev/kmsg
 
-[More details...](/plugin/input/dmesg/README.md)
+[More details...](plugin/input/dmesg/README.md)
 ## fake
 It provides an API to test pipelines and other plugins.
 
-[More details...](/plugin/input/fake/README.md)
+[More details...](plugin/input/fake/README.md)
 ## file
 It watches for files in the provided directory and reads them line by line.
 
@@ -38,7 +38,7 @@ pipelines:
         persistence_mode: async
 ```
 
-[More details...](/plugin/input/file/README.md)
+[More details...](plugin/input/file/README.md)
 ## http
 Reads events from HTTP requests with the body delimited by a new line.
 
@@ -50,7 +50,11 @@ So you can use Elasticsearch filebeat output plugin to send data to `file.d`.
 > Plugin answers with HTTP code `OK 200` right after it has read all the request body.
 > It doesn't wait until events are committed.
 
-[More details...](/plugin/input/http/README.md)
+[More details...](plugin/input/http/README.md)
+## journalctl
+Reads `journalctl` output.
+
+[More details...](plugin/input/journalctl/README.md)
 ## k8s
 It reads Kubernetes logs and also adds pod meta-information. Also, it joins split logs into a single event.
 
@@ -77,10 +81,10 @@ pipelines:
         read_buffer_size: 2048
 ```
 
-[More details...](/plugin/input/k8s/README.md)
+[More details...](plugin/input/k8s/README.md)
 ## kafka
 It reads events from multiple Kafka topics using `sarama` library.
 > It guarantees at "at-least-once delivery" due to the commitment mechanism.
 
-[More details...](/plugin/input/kafka/README.md)
+[More details...](plugin/input/kafka/README.md)
 <br>*Generated using [__insane-doc__](https://github.com/vitkovskii/insane-doc)*
