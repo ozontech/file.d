@@ -1,3 +1,5 @@
+// +build linux
+
 package journalctl
 
 import (
@@ -38,9 +40,9 @@ type Config struct {
 }
 
 type offsetInfo struct {
-	Offset  int64  `json:"offset"`
-	Cursor  string `json:"cursor"`
-	
+	Offset int64  `json:"offset"`
+	Cursor string `json:"cursor"`
+
 	current int64
 }
 

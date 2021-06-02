@@ -21,6 +21,12 @@ type testConfig struct {
 	workTime    time.Duration
 }
 
+var formats = []string{
+	`{"time":"%s","k8s_ns":"ns_1","k8s_pod":"pod_1"}`,
+	`{"time":"%s","k8s_ns":"ns_2","k8s_pod":"pod_2"}`,
+	`{"time":"%s","k8s_ns":"not_matched","k8s_pod":"pod_3"}`,
+}
+
 func (c *testConfig) runPipeline() {
 	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, c.config, pipeline.MatchModeAnd, nil))
 	wg := &sync.WaitGroup{}
@@ -31,12 +37,6 @@ func (c *testConfig) runPipeline() {
 		outEvents = append(outEvents, e)
 		wg.Done()
 	})
-
-	formats := []string{
-		`{"time":"%s","k8s_ns":"ns_1","k8s_pod":"pod_1"}`,
-		`{"time":"%s","k8s_ns":"ns_2","k8s_pod":"pod_2"}`,
-		`{"time":"%s","k8s_ns":"not_matched","k8s_pod":"pod_3"}`,
-	}
 
 	sourceNames := []string{
 		`source_1`,
@@ -96,17 +96,17 @@ func TestThrottle(t *testing.T) {
 }
 
 func TestSizeThrottle(t *testing.T) {
-	buckets := 2
-	avgMessageSize := 90
-	limitA := avgMessageSize * 2
-	limitB := avgMessageSize * 3
-	defaultLimit := avgMessageSize * 20
+	buckets := 4
+	sizeFraction := 100
+	limitA := sizeFraction * 2
+	limitB := sizeFraction * 3
+	defaultLimit := sizeFraction * 20
 
+	dateLen := len("2006-01-02T15:04:05.999999999Z")
 	iterations := 5
 
 	totalBuckets := iterations + 1
-	defaultLimitDelta := totalBuckets * defaultLimit
-	eventsTotal := (totalBuckets*(limitA+limitB) + defaultLimitDelta) / avgMessageSize
+	eventsTotal := totalBuckets * (limitA/(len(formats[0])+dateLen) + limitB/(len(formats[1])+dateLen) + defaultLimit/(len(formats[2])+dateLen))
 
 	config := &Config{
 		Rules: []RuleConfig{

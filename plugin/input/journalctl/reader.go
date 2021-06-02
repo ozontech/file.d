@@ -2,6 +2,7 @@ package journalctl
 
 import (
 	"bufio"
+	"github.com/ozonru/file.d/logger"
 	"io"
 	"os/exec"
 	"strings"
@@ -29,7 +30,10 @@ func readLines(r io.Reader, config *journalReaderConfig) {
 	// cursor will point to the last message, that we sent
 	// so we'll skip it, because we already sent it
 	if config.cursor != "" {
-		reader.ReadLine()
+		_, _, err := reader.ReadLine()
+		if err != nil {
+			logger.Fatalf(err.Error())
+		}
 	}
 
 	for {
@@ -69,6 +73,10 @@ func newJournalReader(config *journalReaderConfig) *journalReader {
 func (r *journalReader) start() error {
 	r.config.logger.Infof("running \"journalctl %s\"", strings.Join(r.args, " "))
 	r.cmd = exec.Command("journalctl", r.args...)
+	if r.cmd.Process == nil {
+		logger.Fatalf("can't run journalctl")
+	}
+
 	out, err := r.cmd.StdoutPipe()
 	if err != nil {
 		return err

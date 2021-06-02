@@ -53,7 +53,7 @@ type Config struct {
 	//> A comma-separated list of event fields which will be used for replacement `index_format`.
 	//> There is a special field `@@time` which equals the current time. Use the `time_format` to define a time format.
 	//> E.g. `[service, @@time]`
-	IndexValues []string `json:"index_values" default:"[@time]"` //*
+	IndexValues []string `json:"index_values" default:"[@time]" slice:"true"` //*
 
 	//> @3@4@5@6
 	//>

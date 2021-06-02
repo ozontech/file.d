@@ -34,7 +34,7 @@ func TestConvert(t *testing.T) {
 		wg.Done()
 	})
 
-	input.In(0, "test.log", 0, []byte(`{"time":"Thu Aug 23 14:55:02 2001"}`))
+	input.In(0, "test.log", 0, []byte(`{"time":998578502}`))
 
 	wg.Wait()
 	p.Stop()

@@ -22,7 +22,8 @@ func (p *MultilineAction) Start(config pipeline.AnyConfig, params *pipeline.Acti
 	p.logger = params.Logger
 	p.params = params
 	p.config = config.(*Config)
-	p.config.LabelsWhitelist_ = cfg.ListToMap(p.config.LabelsWhitelist)
+	p.config.AllowedPodLabels_ = cfg.ListToMap(p.config.AllowedPodLabels)
+	p.config.AllowedNodeLabels_ = cfg.ListToMap(p.config.AllowedNodeLabels)
 
 	p.logBuff = append(p.logBuff, '"')
 }
@@ -80,8 +81,8 @@ func (p *MultilineAction) Do(event *pipeline.Event) pipeline.ActionResult {
 		}
 
 		for labelName, labelValue := range podMeta.Labels {
-			if len(p.config.LabelsWhitelist_) != 0 {
-				_, has := p.config.LabelsWhitelist_[labelName]
+			if len(p.config.AllowedPodLabels_) != 0 {
+				_, has := p.config.AllowedPodLabels_[labelName]
 
 				if !has {
 					continue
@@ -90,6 +91,21 @@ func (p *MultilineAction) Do(event *pipeline.Event) pipeline.ActionResult {
 
 			l := len(event.Buf)
 			event.Buf = append(event.Buf, "k8s_label_"...)
+			event.Buf = append(event.Buf, labelName...)
+			event.Root.AddFieldNoAlloc(event.Root, pipeline.ByteToStringUnsafe(event.Buf[l:])).MutateToString(labelValue)
+		}
+
+		for labelName, labelValue := range nodeLabels {
+			if len(p.config.AllowedNodeLabels_) != 0 {
+				_, has := p.config.AllowedNodeLabels_[labelName]
+
+				if !has {
+					continue
+				}
+			}
+
+			l := len(event.Buf)
+			event.Buf = append(event.Buf, "node_label_"...)
 			event.Buf = append(event.Buf, labelName...)
 			event.Root.AddFieldNoAlloc(event.Root, pipeline.ByteToStringUnsafe(event.Buf[l:])).MutateToString(labelValue)
 		}

@@ -146,7 +146,7 @@ func ParseChild(parent reflect.Value, v reflect.Value, values map[string]int) er
 	return nil
 }
 
-// recursively parses elements of an slice
+// ParseSlice recursively parses elements of an slice
 // calls Parse, not ParseChild (!)
 func ParseSlice(v reflect.Value, values map[string]int) error {
 	for i := 0; i < v.Len(); i++ {

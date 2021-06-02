@@ -18,6 +18,7 @@ E.g. `my_pod-1566485760-trtrq_my-namespace_my-container-4e0301b633eaa2bfdcafdeba
 
 An information which plugin adds:
 * `k8s_node` – node name where pod is running;
+* `k8s_node_label_*` – node labels;
 * `k8s_pod` – pod name;
 * `k8s_namespace` – pod namespace name;
 * `k8s_container` – pod container name;
@@ -59,8 +60,14 @@ type Config struct {
 	//> @3@4@5@6
 	//>
 	//> If set, it defines which pod labels to add to the event, others will be ignored.
-	LabelsWhitelist  []string `json:"labels_whitelist"` //*
-	LabelsWhitelist_ map[string]bool
+	AllowedPodLabels  []string `json:"allowed_pod_labels"` //*
+	AllowedPodLabels_ map[string]bool
+
+	//> @3@4@5@6
+	//>
+	//> If set, it defines which node labels to add to the event, others will be ignored.
+	AllowedNodeLabels  []string `json:"allowed_node_labels"` //*
+	AllowedNodeLabels_ map[string]bool
 
 	//> @3@4@5@6
 	//>

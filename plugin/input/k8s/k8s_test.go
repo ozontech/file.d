@@ -45,16 +45,17 @@ func getPodInfo(item *metaItem, isWhite bool) *corev1.Pod {
 	podInfo.Status.ContainerStatuses[0].ContainerID = "containerd://" + string(item.containerID)
 	podInfo.Spec.NodeName = string(item.nodeName)
 	if isWhite {
-		podInfo.Labels = map[string]string{"white_label": "white_value"}
+		podInfo.Labels = map[string]string{"allowed_label": "allowed_value"}
 	} else {
-		podInfo.Labels = map[string]string{"black_label": "some_value"}
+		podInfo.Labels = map[string]string{"denied_label": "some_value"}
 	}
 	return podInfo
 }
 
 func config() *Config {
-	config := &Config{LabelsWhitelist: []string{"white_label"}}
-	err := cfg.Parse(config, nil)
+	config := &Config{AllowedPodLabels: []string{"allowed_label"}, OffsetsFile: "offsets.yaml"}
+	err := cfg.Parse(config, map[string]int{"gomaxprocs": 1})
+	logger.Infof("", err)
 	if err != nil {
 		localLogger.Panic(err.Error())
 	}
@@ -131,8 +132,8 @@ func TestWhitelist(t *testing.T) {
 	wg.Wait()
 	p.Stop()
 
-	assert.Equal(t, "white_value", outEvents[0].Root.Dig("k8s_label_white_label").AsString(), "no label in event")
-	assert.Nil(t, outEvents[1].Root.Dig("k8s_label_black_label"), "extra label in event")
+	assert.Equal(t, "allowed_value", outEvents[0].Root.Dig("k8s_label_allowed_label").AsString(), "no label in event")
+	assert.Nil(t, outEvents[1].Root.Dig("k8s_label_denied_label"), "extra label in event")
 }
 
 func TestJoin(t *testing.T) {
@@ -208,7 +209,7 @@ func TestCleanUp(t *testing.T) {
 
 	enableGatherer(logger.Instance)
 	defer disableGatherer()
-	
+
 	putMeta(getPodInfo(&metaItem{
 		nodeName:      "node_1",
 		namespace:     "sre",
@@ -232,7 +233,7 @@ func TestCleanUp(t *testing.T) {
 	}, true))
 
 	time.Sleep(metaExpireDuration + MaintenanceInterval)
-	
+
 	p.Stop()
 	assert.Equal(t, 0, len(metaData))
 }

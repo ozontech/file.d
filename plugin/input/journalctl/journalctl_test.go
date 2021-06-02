@@ -1,3 +1,5 @@
+// +build linux
+
 package journalctl
 
 import (

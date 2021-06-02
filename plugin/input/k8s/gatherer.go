@@ -71,8 +71,9 @@ var (
 	DisableMetaUpdates  = false
 	metaAddedCounter    atomic.Int64
 	expiredItemsCounter atomic.Int64
-	
-	criType = "docker"
+
+	criType    = "docker"
+	nodeLabels = make(map[string]string)
 
 	selfNodeName string
 
@@ -166,10 +167,10 @@ func initRuntime() {
 	if pos < 0 {
 		localLogger.Fatalf("can't detect CRI runtime for node %s, wrong runtime version: %s", node, runtimeVer)
 	}
-	
+
+	nodeLabels = node.Labels
 	criType = runtimeVer[:pos]
 }
-
 
 func removeExpired() {
 	expiredItems = getExpiredItems(expiredItems)
@@ -349,15 +350,15 @@ func putContainerMeta(ns namespace, pod podName, fullContainerID string, podInfo
 	if pos <= 0 {
 		localLogger.Fatalf("container id should have format XXXX://ID: %s", fullContainerID)
 	}
-	
-	if pos + 3 >= l {
+
+	if pos+3 >= l {
 		localLogger.Fatalf("container id should have format XXXX://ID: %s", fullContainerID)
 	}
-	
+
 	if fullContainerID[pos:pos+3] != "://" {
 		localLogger.Fatalf("container id should have format XXXX://ID: %s", fullContainerID)
 	}
-	
+
 	containerID := containerID(fullContainerID[pos+3:])
 	if len(containerID) != 64 {
 		localLogger.Fatalf("wrong container id: %s", fullContainerID)
