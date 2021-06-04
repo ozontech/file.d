@@ -22,6 +22,7 @@ func (p *MultilineAction) Start(config pipeline.AnyConfig, params *pipeline.Acti
 	p.logger = params.Logger
 	p.params = params
 	p.config = config.(*Config)
+
 	p.config.AllowedPodLabels_ = cfg.ListToMap(p.config.AllowedPodLabels)
 	p.config.AllowedNodeLabels_ = cfg.ListToMap(p.config.AllowedNodeLabels)
 
@@ -90,7 +91,7 @@ func (p *MultilineAction) Do(event *pipeline.Event) pipeline.ActionResult {
 			}
 
 			l := len(event.Buf)
-			event.Buf = append(event.Buf, "k8s_label_"...)
+			event.Buf = append(event.Buf, "k8s_pod_label_"...)
 			event.Buf = append(event.Buf, labelName...)
 			event.Root.AddFieldNoAlloc(event.Root, pipeline.ByteToStringUnsafe(event.Buf[l:])).MutateToString(labelValue)
 		}
@@ -105,7 +106,7 @@ func (p *MultilineAction) Do(event *pipeline.Event) pipeline.ActionResult {
 			}
 
 			l := len(event.Buf)
-			event.Buf = append(event.Buf, "node_label_"...)
+			event.Buf = append(event.Buf, "k8s_node_label_"...)
 			event.Buf = append(event.Buf, labelName...)
 			event.Root.AddFieldNoAlloc(event.Root, pipeline.ByteToStringUnsafe(event.Buf[l:])).MutateToString(labelValue)
 		}

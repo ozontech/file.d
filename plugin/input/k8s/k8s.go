@@ -60,13 +60,13 @@ type Config struct {
 	//> @3@4@5@6
 	//>
 	//> If set, it defines which pod labels to add to the event, others will be ignored.
-	AllowedPodLabels  []string `json:"allowed_pod_labels"` //*
+	AllowedPodLabels  []string `json:"allowed_pod_labels" slice:"true"` //*
 	AllowedPodLabels_ map[string]bool
 
 	//> @3@4@5@6
 	//>
 	//> If set, it defines which node labels to add to the event, others will be ignored.
-	AllowedNodeLabels  []string `json:"allowed_node_labels"` //*
+	AllowedNodeLabels  []string `json:"allowed_node_labels" slice:"true"` //*
 	AllowedNodeLabels_ map[string]bool
 
 	//> @3@4@5@6

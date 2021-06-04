@@ -334,6 +334,11 @@ func ParseFieldSelector(selector string) []string {
 		if pos == -1 {
 			break
 		}
+		if pos > 0 && selector[pos-1] == '\\' {
+			tail = tail + selector[:pos-1] + "."
+			selector = selector[pos+1:]
+			continue
+		}
 
 		if len(selector) > pos+1 {
 			if selector[pos+1] == '.' {

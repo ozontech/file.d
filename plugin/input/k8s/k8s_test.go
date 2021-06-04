@@ -63,6 +63,7 @@ func config() *Config {
 }
 
 func TestEnrichment(t *testing.T) {
+	nodeLabels = map[string]string{"zone":"z34"}
 	p, input, _ := test.NewPipelineMock(test.NewActionPluginStaticInfo(MultilineActionFactory, config(), pipeline.MatchModeAnd, nil))
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
@@ -93,6 +94,7 @@ func TestEnrichment(t *testing.T) {
 	assert.Equal(t, "sre", event.Root.Dig("k8s_namespace").AsString(), "wrong event field")
 	assert.Equal(t, "duty-bot", event.Root.Dig("k8s_container").AsString(), "wrong event field")
 	assert.Equal(t, "node_1", event.Root.Dig("k8s_node").AsString(), "wrong event field")
+	assert.Equal(t, "z34", event.Root.Dig("k8s_node_label_zone").AsString(), "wrong event field")
 }
 
 func TestWhitelist(t *testing.T) {
