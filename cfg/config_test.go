@@ -59,6 +59,11 @@ type sliceStruct struct {
 	Childs []sliceChild `default:"" slice:"true"`
 }
 
+type strBase8 struct {
+	T  string `default:"0666" parse:"base8"`
+	T_ int64
+}
+
 func TestParseRequiredOk(t *testing.T) {
 	s := &strRequired{T: "some_value"}
 	err := Parse(s, nil)
@@ -179,4 +184,19 @@ func TestDefaultSlice(t *testing.T) {
 	assert.Equal(t, "parent_value", s.Value, "wrong value")
 	assert.NotEqual(t, nil, s.Childs, "wrong value")
 	assert.Equal(t, 0, len(s.Childs), "wrong value")
+}
+
+
+func TestBase8Default(t *testing.T) {
+	s := &strBase8{}
+	err := Parse(s,nil)
+	assert.Nil(t, err, "shouldn't be an error")
+	assert.Equal(t, int64(438), s.T_)
+}
+
+func TestBase8(t *testing.T) {
+	s := &strBase8{T: "0777"}
+	err := Parse(s,nil)
+	assert.Nil(t, err, "shouldn't be an error")
+	assert.Equal(t, int64(511), s.T_)
 }

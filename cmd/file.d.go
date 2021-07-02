@@ -38,6 +38,7 @@ import (
 	_ "github.com/ozonru/file.d/plugin/output/gelf"
 	_ "github.com/ozonru/file.d/plugin/output/kafka"
 	_ "github.com/ozonru/file.d/plugin/output/stdout"
+	_ "github.com/ozonru/file.d/plugin/output/file"
 )
 
 var (
