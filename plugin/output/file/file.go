@@ -117,21 +117,14 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		}
 	}
 	p.idx = p.getStartIdx()
-	// seal up old file if have it
-
 	p.createNew()
 	p.setNextSealUpTime()
-	if time.Now().After(p.nextSealUpTime) {
-		fmt.Println("go to seal up by time")
-		p.sealUp()
-	}
-
 	//additional checks
 	if p.file == nil {
 		p.logger.Panic("file struct is nil!")
 	}
 	if p.nextSealUpTime.IsZero() {
-		p.logger.Panic("next sealup time is nil!")
+		p.logger.Panic("next seal up time is nil!")
 	}
 
 	go p.fileSealUpTicker()
