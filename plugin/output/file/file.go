@@ -118,19 +118,20 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	}
 	p.idx = p.getStartIdx()
 	// seal up old file if have it
-	if p.shouldSealUp() {
-		fmt.Println("is old")
+
+	p.createNew()
+	p.setNextSealUpTime()
+	if time.Now().After(p.nextSealUpTime) {
+		fmt.Println("go to seal up by time")
 		p.sealUp()
-	} else {
-		p.createNew()
 	}
 
-
+	//additional checks
 	if p.file == nil {
 		p.logger.Panic("file struct is nil!")
 	}
 	if p.nextSealUpTime.IsZero() {
-		p.nextSealUpTime = time.Now().Add(p.config.RetentionInterval_)
+		p.logger.Panic("next sealup time is nil!")
 	}
 
 	go p.fileSealUpTicker()
@@ -185,18 +186,14 @@ func (p *Plugin) fileSealUpTicker() {
 	}
 }
 
-func (p *Plugin) shouldSealUp() bool {
+func (p *Plugin) setNextSealUpTime() {
 	info, err := os.Stat(p.config.TargetFile)
 	if err != nil {
-		return false
+		p.logger.Panicf("could not get stat for file: %s, error: %s", p.config.TargetFile, err.Error())
 	}
 	stat_t := info.Sys().(*syscall.Stat_t)
 	creationTime := time.Unix(stat_t.Birthtimespec.Sec, stat_t.Birthtimespec.Nsec)
-	fmt.Println("creation time-> ", creationTime)
-	currentSealUpTime := creationTime.Add(p.config.RetentionInterval_)
-	p.nextSealUpTime = currentSealUpTime
-	isOld := time.Now().After(currentSealUpTime)
-	return info.Size() > 0 && isOld
+	p.nextSealUpTime = creationTime.Add(p.config.RetentionInterval_)
 }
 
 func (p *Plugin) write(data []byte) {
@@ -217,26 +214,21 @@ func (p *Plugin) createNew() {
 
 //sealUp manege current log file. Renames it, close it and create new log file.
 func (p *Plugin) sealUp() {
-	if p.file != nil {
-		info, err := p.file.Stat()
-		if err != nil {
-			p.logger.Panicf("could not get info about file: %s, error: %s", p.file.Name(), err.Error())
-		}
-		if info.Size() == 0 {
-			return
-		}
+	info, err := p.file.Stat()
+	if err != nil {
+		p.logger.Panicf("could not get info about file: %s, error: %s", p.file.Name(), err.Error())
 	}
-
+	if info.Size() == 0 {
+		return
+	}
 	p.rename()
 	oldFile := p.file
 	p.mu.Lock()
 	p.createNew()
 	p.nextSealUpTime = time.Now().Add(p.config.RetentionInterval_)
 	p.mu.Unlock()
-	if oldFile != nil {
-		if err := oldFile.Close(); err != nil {
-			p.logger.Panicf("could not close file: %s, error: %s", oldFile.Name(), err.Error())
-		}
+	if err := oldFile.Close(); err != nil {
+		p.logger.Panicf("could not close file: %s, error: %s", oldFile.Name(), err.Error())
 	}
 }
 
