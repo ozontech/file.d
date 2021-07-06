@@ -205,7 +205,7 @@ func (p *Plugin) createNew() {
 	p.file = file
 }
 
-//sealUp manege current log file. Renames it, close it and create new log file.
+//sealUp manages current file: renames, closes, and creates new.
 func (p *Plugin) sealUp() {
 	info, err := p.file.Stat()
 	if err != nil {
