@@ -83,11 +83,11 @@ func TestShouldSealUpWithContent(t *testing.T) {
 			cfg := Config{
 				TargetFile:         targetFile,
 				RetentionInterval_: tc.retention,
-				TargetDir:          targetDir,
 			}
 
 			p := Plugin{
-				config: &cfg,
+				config:    &cfg,
+				targetDir: targetDir,
 			}
 
 			result := p.shouldSealUp()
@@ -103,11 +103,11 @@ func TestShouldSealUpWithContent(t *testing.T) {
 			cfg := Config{
 				TargetFile:         targetFile,
 				RetentionInterval_: tc.retention,
-				TargetDir:          targetDir,
 			}
 
 			p := Plugin{
-				config: &cfg,
+				config:    &cfg,
+				targetDir: targetDir,
 			}
 
 			result := p.shouldSealUp()
@@ -147,11 +147,11 @@ func TestShouldSealUpNoContent(t *testing.T) {
 			cfg := Config{
 				TargetFile:         targetFile,
 				RetentionInterval_: tc.retention,
-				TargetDir:          targetDir,
 			}
 
 			p := Plugin{
-				config: &cfg,
+				config:    &cfg,
+				targetDir: targetDir,
 			}
 
 			result := p.shouldSealUp()
@@ -166,11 +166,11 @@ func TestShouldSealUpNoContent(t *testing.T) {
 			cfg := Config{
 				TargetFile:         targetFile,
 				RetentionInterval_: tc.retention,
-				TargetDir:          targetDir,
 			}
 
 			p := Plugin{
-				config: &cfg,
+				config:    &cfg,
+				targetDir: targetDir,
 			}
 
 			result := p.shouldSealUp()
@@ -197,26 +197,24 @@ func TestGetStartIdx(t *testing.T) {
 	cfg := Config{
 		TargetFile: targetFile,
 		Layout:     "01",
-
-		TargetDir:     "",
-		FileExtension: "",
-		FileName:      "",
 	}
 
 	dir, file := filepath.Split(cfg.TargetFile)
+	extension := filepath.Ext(file)
 
-	cfg.TargetDir = dir
-	cfg.FileExtension = filepath.Ext(file)
-	cfg.FileName = file[0 : len(file)-len(cfg.FileExtension)]
-
-	p := Plugin{config: &cfg}
+	p := Plugin{
+		config:        &cfg,
+		targetDir:     dir,
+		fileExtension: extension,
+		fileName:      file[0 : len(file)-len(extension)],
+	}
 
 	for _, tc := range testsCases {
 
 		//create files
 		files := make([]*os.File, len(tc.filesName))
-		createDir(t, p.config.TargetDir)
-		defer clearDir(t, p.config.TargetDir)
+		createDir(t, p.targetDir)
+		defer clearDir(t, p.targetDir)
 
 		for _, f := range tc.filesName {
 			files = append(files, createFile(t, f, nil))
@@ -229,7 +227,7 @@ func TestGetStartIdx(t *testing.T) {
 		for _, f := range files {
 			f.Close()
 		}
-		clearDir(t, p.config.TargetDir)
+		clearDir(t, p.targetDir)
 
 	}
 }
@@ -240,29 +238,27 @@ func TestSealUpHasContent(t *testing.T) {
 		RetentionInterval_: time.Second,
 		Layout:             "01",
 		FileMode_:          0666,
-
-		TargetDir:     "",
-		FileExtension: "",
-		FileName:      "",
 	}
 
 	dir, file := filepath.Split(cfg.TargetFile)
 
-	cfg.TargetDir = dir
-	cfg.FileExtension = filepath.Ext(file)
-	cfg.FileName = file[0 : len(file)-len(cfg.FileExtension)]
+	//cfg.TargetDir = dir
+	extension := filepath.Ext(file)
 
-	createDir(t, cfg.TargetDir)
+	createDir(t, dir)
 
-	defer clearDir(t, cfg.TargetDir)
+	defer clearDir(t, dir)
 
 	d := []byte("some data")
 	f := createFile(t, cfg.TargetFile, &d)
 	defer f.Close()
 	p := Plugin{
-		config: &cfg,
-		mu:     &sync.RWMutex{},
-		file:   f,
+		config:        &cfg,
+		mu:            &sync.RWMutex{},
+		file:          f,
+		targetDir:     dir,
+		fileExtension: extension,
+		fileName:      file[0 : len(file)-len(extension)],
 	}
 
 	infoInitial, _ := f.Stat()
@@ -272,7 +268,7 @@ func TestSealUpHasContent(t *testing.T) {
 	p.sealUp()
 
 	//check work result
-	pattern := fmt.Sprintf("%s/%s*%s", cfg.TargetDir, cfg.FileName, cfg.FileExtension)
+	pattern := fmt.Sprintf("%s/%s*%s", p.targetDir, p.fileName, p.fileExtension)
 	matches := getMatches(t, pattern)
 	assert.Equal(t, 2, len(matches))
 
@@ -297,28 +293,24 @@ func TestSealUpNoContent(t *testing.T) {
 		RetentionInterval_: time.Second,
 		Layout:             "01",
 		FileMode_:          0666,
-
-		TargetDir:     "",
-		FileExtension: "",
-		FileName:      "",
 	}
 
 	dir, file := filepath.Split(cfg.TargetFile)
+	extension := filepath.Ext(file)
 
-	cfg.TargetDir = dir
-	cfg.FileExtension = filepath.Ext(file)
-	cfg.FileName = file[0 : len(file)-len(cfg.FileExtension)]
+	createDir(t, dir)
 
-	createDir(t, cfg.TargetDir)
-
-	defer clearDir(t, cfg.TargetDir)
+	defer clearDir(t, dir)
 
 	f := createFile(t, cfg.TargetFile, nil)
 	defer f.Close()
 	p := Plugin{
-		config: &cfg,
-		mu:     &sync.RWMutex{},
-		file:   f,
+		config:        &cfg,
+		mu:            &sync.RWMutex{},
+		file:          f,
+		targetDir:     dir,
+		fileExtension: extension,
+		fileName:      file[0 : len(file)-len(extension)],
 	}
 
 	infoInitial, _ := f.Stat()
@@ -328,7 +320,7 @@ func TestSealUpNoContent(t *testing.T) {
 	p.sealUp()
 
 	//check work result
-	pattern := fmt.Sprintf("%s/%s*%s", cfg.TargetDir, cfg.FileName, cfg.FileExtension)
+	pattern := fmt.Sprintf("%s/%s*%s", p.targetDir, p.fileName, p.fileExtension)
 	assert.Equal(t, 1, len(getMatches(t, pattern)))
 
 	//check new file was created and it is empty
@@ -362,20 +354,20 @@ func TestStart(t *testing.T) {
 	p.Start(&cfg, &pluginParams)
 
 	defer p.Stop()
-	defer clearDir(t, p.config.TargetDir)
+	defer clearDir(t, p.targetDir)
 
 	//check no saves without events
 
-	pattern := fmt.Sprintf("%s/%s*%s", cfg.TargetDir, cfg.FileName, cfg.FileExtension)
+	pattern := fmt.Sprintf("%s/%s*%s", p.targetDir, p.fileName, p.fileExtension)
 
 	assert.Equal(t, 1, len(getMatches(t, pattern)))
-	assert.NotEqual(t, "", cfg.TargetDir)
-	assert.NotEqual(t, "", cfg.FileExtension)
-	assert.NotEqual(t, "", cfg.FileName)
+	assert.NotEqual(t, "", p.targetDir)
+	assert.NotEqual(t, "", p.fileExtension)
+	assert.NotEqual(t, "", p.fileName)
 
-	assert.Equal(t, "filetests/", cfg.TargetDir)
-	assert.Equal(t, ".log", cfg.FileExtension)
-	assert.Equal(t, "log", cfg.FileName)
+	assert.Equal(t, "filetests/", p.targetDir)
+	assert.Equal(t, ".log", p.fileExtension)
+	assert.Equal(t, "log", p.fileName)
 
 	assert.False(t, p.nextSealUpTime.IsZero())
 

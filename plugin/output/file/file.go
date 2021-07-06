@@ -29,6 +29,10 @@ type Plugin struct {
 	idx            int
 	nextSealUpTime time.Time
 
+	targetDir     string
+	fileExtension string
+	fileName      string
+
 	mu *sync.RWMutex
 }
 
@@ -67,10 +71,6 @@ type Config struct {
 	//> File mode for log files
 	FileMode  cfg.Base8 `json:"file_mode" default:"0666" parse:"base8"` //*
 	FileMode_ int64
-
-	TargetDir     string
-	FileExtension string
-	FileName      string
 }
 
 func init() {
@@ -90,9 +90,9 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.config = config.(*Config)
 	dir, file := filepath.Split(p.config.TargetFile)
 
-	p.config.TargetDir = dir
-	p.config.FileExtension = filepath.Ext(file)
-	p.config.FileName = file[0 : len(file)-len(p.config.FileExtension)]
+	p.targetDir = dir
+	p.fileExtension = filepath.Ext(file)
+	p.fileName = file[0 : len(file)-len(p.fileExtension)]
 
 	p.batcher = pipeline.NewBatcher(
 		params.PipelineName,
@@ -111,18 +111,20 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.ctx = ctx
 	p.cancelFunc = cancel
 	//create target dir
-	if _, err := os.Stat(p.config.TargetDir); os.IsNotExist(err) {
-		if err := os.MkdirAll(p.config.TargetDir, os.ModePerm); err != nil {
-			p.logger.Fatalf("could not create target dir: %s, error: %s", p.config.TargetDir, err.Error())
+	if _, err := os.Stat(p.targetDir); os.IsNotExist(err) {
+		if err := os.MkdirAll(p.targetDir, os.ModePerm); err != nil {
+			p.logger.Fatalf("could not create target dir: %s, error: %s", p.targetDir, err.Error())
 		}
 	}
 	p.idx = p.getStartIdx()
 	// seal up old file if have it
 	if p.shouldSealUp() {
+		fmt.Println("is old")
 		p.sealUp()
 	} else {
-		p.file = p.createNew()
+		p.createNew()
 	}
+
 
 	if p.file == nil {
 		p.logger.Panic("file struct is nil!")
@@ -190,6 +192,7 @@ func (p *Plugin) shouldSealUp() bool {
 	}
 	stat_t := info.Sys().(*syscall.Stat_t)
 	creationTime := time.Unix(stat_t.Birthtimespec.Sec, stat_t.Birthtimespec.Nsec)
+	fmt.Println("creation time-> ", creationTime)
 	currentSealUpTime := creationTime.Add(p.config.RetentionInterval_)
 	p.nextSealUpTime = currentSealUpTime
 	isOld := time.Now().After(currentSealUpTime)
@@ -204,17 +207,16 @@ func (p *Plugin) write(data []byte) {
 	}
 }
 
-func (p *Plugin) createNew() *os.File {
+func (p *Plugin) createNew() {
 	file, err := os.OpenFile(p.config.TargetFile, os.O_CREATE|os.O_APPEND|os.O_RDWR, os.FileMode(p.config.FileMode_))
 	if err != nil {
 		p.logger.Panicf("could not open or create file: %s, error: %s", p.config.TargetFile, err.Error())
 	}
-	return file
+	p.file = file
 }
 
 //sealUp manege current log file. Renames it, close it and create new log file.
 func (p *Plugin) sealUp() {
-	// if size file is zero, we do not seal up the file
 	if p.file != nil {
 		info, err := p.file.Stat()
 		if err != nil {
@@ -224,10 +226,11 @@ func (p *Plugin) sealUp() {
 			return
 		}
 	}
+
 	p.rename()
 	oldFile := p.file
 	p.mu.Lock()
-	p.file = p.createNew()
+	p.createNew()
 	p.nextSealUpTime = time.Now().Add(p.config.RetentionInterval_)
 	p.mu.Unlock()
 	if oldFile != nil {
@@ -235,11 +238,10 @@ func (p *Plugin) sealUp() {
 			p.logger.Panicf("could not close file: %s, error: %s", oldFile.Name(), err.Error())
 		}
 	}
-
 }
 
 func (p *Plugin) rename() {
-	fullFileName := filepath.Join(p.config.TargetDir, fmt.Sprintf("%s%s%d%s%s%s", p.config.FileName, fileNameSeparator, p.idx, fileNameSeparator, time.Now().Format(p.config.Layout), p.config.FileExtension))
+	fullFileName := filepath.Join(p.targetDir, fmt.Sprintf("%s%s%d%s%s%s", p.fileName, fileNameSeparator, p.idx, fileNameSeparator, time.Now().Format(p.config.Layout), p.fileExtension))
 	if err := os.Rename(p.config.TargetFile, fullFileName); err != nil {
 		p.logger.Panicf("could not rename file, error: %s", err.Error())
 	}
@@ -247,7 +249,7 @@ func (p *Plugin) rename() {
 }
 
 func (p *Plugin) getStartIdx() int {
-	pattern := fmt.Sprintf("%s/%s%s*%s*%s", p.config.TargetDir, p.config.FileName, fileNameSeparator, fileNameSeparator, p.config.FileExtension)
+	pattern := fmt.Sprintf("%s/%s%s*%s*%s", p.targetDir, p.fileName, fileNameSeparator, fileNameSeparator, p.fileExtension)
 	matches, err := filepath.Glob(pattern)
 	if err != nil {
 		p.logger.Panic(err.Error())
@@ -255,7 +257,7 @@ func (p *Plugin) getStartIdx() int {
 	idx := -1
 	for _, v := range matches {
 		file := filepath.Base(v)
-		i := file[len(p.config.FileName)+len(fileNameSeparator) : len(file)-len(p.config.FileExtension)-len(p.config.Layout)-len(fileNameSeparator)]
+		i := file[len(p.fileName)+len(fileNameSeparator) : len(file)-len(p.fileExtension)-len(p.config.Layout)-len(fileNameSeparator)]
 		maxIdx, err := strconv.Atoi(i)
 		if err != nil {
 			p.logger.Panicf("wrong number for file: %s,  error: %s", file, err.Error())
