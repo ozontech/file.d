@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ozonru/file.d/pipeline"
+	"github.com/ozonru/file.d/cfg"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -16,206 +16,53 @@ const (
 	targetFile = "filetests/log.log"
 )
 
-func createFile(t *testing.T, fileName string, data *[]byte) *os.File {
-	t.Helper()
-
-	file, err := os.OpenFile(fileName, os.O_CREATE|os.O_APPEND|os.O_RDWR, os.FileMode(0666))
-	if err != nil {
-		t.Fatalf("could not open or create file, error: %s", err.Error())
-	}
-	if data != nil {
-		if _, err := file.Write(*data); err != nil {
-			t.Fatalf("could not write cintent into the file, err: %s", err.Error())
-		}
-	}
-	return file
-}
-
-func createDir(t *testing.T, dir string) {
-	t.Helper()
-	if err := os.MkdirAll(dir, os.ModePerm); err != nil {
-		t.Fatalf("could not create target dir: %s, error: %s", dir, err.Error())
-	}
-}
-
-func clearDir(t *testing.T, dir string) {
-	t.Helper()
-	if err := os.RemoveAll(dir); err != nil {
-		t.Fatalf("coudl not delete dirs and files adter tests, error: %s", err.Error())
-	}
-
-}
-
-func getMatches(t *testing.T, pattern string) []string {
-	t.Helper()
-	matches, err := filepath.Glob(pattern)
-	assert.NoError(t, err)
-	return matches
-}
-
-func TestShouldSealUpWithContent(t *testing.T) {
-	testsCasesFalse := []struct {
-		retention time.Duration
-	}{
-		{time.Minute},
-		{10 * time.Minute},
-		{1 * time.Hour},
-		{1 * time.Hour},
-	}
-
-	testsCasesTrue := []struct {
-		retention time.Duration
-	}{
-		{time.Microsecond},
-		{5 * time.Microsecond},
-		{10 * time.Microsecond},
-		{1 * time.Second},
-	}
-	targetDir, _ := filepath.Split(targetFile)
-	createDir(t, targetDir)
-	defer clearDir(t, targetDir)
-	d := []byte("some data")
-	file := createFile(t, targetFile, &d)
-	defer file.Close()
-	t.Run("do not need seal up, new file", func(t *testing.T) {
-		for _, tc := range testsCasesFalse {
-
-			cfg := Config{
-				TargetFile:         targetFile,
-				RetentionInterval_: tc.retention,
-			}
-
-			p := Plugin{
-				config:    &cfg,
-				targetDir: targetDir,
-			}
-
-			result := p.shouldSealUp()
-			assert.False(t, result)
-
-		}
-	})
-
-	t.Run("need seal up", func(t *testing.T) {
-		time.Sleep(2 * time.Second)
-		for _, tc := range testsCasesTrue {
-
-			cfg := Config{
-				TargetFile:         targetFile,
-				RetentionInterval_: tc.retention,
-			}
-
-			p := Plugin{
-				config:    &cfg,
-				targetDir: targetDir,
-			}
-
-			result := p.shouldSealUp()
-			assert.True(t, result)
-
-		}
-	})
-
-}
-
-func TestShouldSealUpNoContent(t *testing.T) {
-	testsCasesTimeFalse := []struct {
-		retention time.Duration
-	}{
-		{time.Minute},
-		{10 * time.Minute},
-		{1 * time.Hour},
-		{1 * time.Hour},
-	}
-
-	testsCasesTimeTrue := []struct {
-		retention time.Duration
-	}{
-		{time.Microsecond},
-		{5 * time.Microsecond},
-		{10 * time.Microsecond},
-		{1 * time.Second},
-	}
-	targetDir, _ := filepath.Split(targetFile)
-	createDir(t, targetDir)
-	defer clearDir(t, targetDir)
-	file := createFile(t, targetFile, nil)
-	defer file.Close()
-	t.Run("do not need seal up, new file, empty file", func(t *testing.T) {
-		for _, tc := range testsCasesTimeFalse {
-
-			cfg := Config{
-				TargetFile:         targetFile,
-				RetentionInterval_: tc.retention,
-			}
-
-			p := Plugin{
-				config:    &cfg,
-				targetDir: targetDir,
-			}
-
-			result := p.shouldSealUp()
-			assert.False(t, result)
-
-		}
-	})
-	t.Run("need seal up", func(t *testing.T) {
-		time.Sleep(2 * time.Second)
-		for _, tc := range testsCasesTimeTrue {
-
-			cfg := Config{
-				TargetFile:         targetFile,
-				RetentionInterval_: tc.retention,
-			}
-
-			p := Plugin{
-				config:    &cfg,
-				targetDir: targetDir,
-			}
-
-			result := p.shouldSealUp()
-			assert.False(t, result)
-
-		}
-	})
-
-}
+var (
+	dir, file = filepath.Split(targetFile)
+	extension = filepath.Ext(file)
+)
 
 func TestGetStartIdx(t *testing.T) {
 	testsCases := []struct {
+		targetFile  string
+		layout      string
 		filesName   []string
 		expectedIdx int
 	}{
-		{[]string{}, 0},
-		{[]string{"filetests/log_0_06.log", "filetests/log_1_06.log", "filetests/log_2_06.log"}, 3},
-		{[]string{"filetests/log_0_06.log", "filetests/log_1_06.log", "filetests/log_2_06.log", "filetests/log_3_07.log"}, 4},
-		{[]string{"filetests/log_-2_06.log", "filetests/log_-3_06.log", "filetests/log_-1_06.log"}, 0},
-		{[]string{"filetests/log_0_06.log", "filetests/log_1_06.log", "filetests/log_2_06"}, 2},
-		{[]string{"filetests/log_-2_06.log", "filetests/log_-3_06.log", "filetests/log_-4_06.log"}, 0},
-		{[]string{"filetests/another_0_06.log", "filetests/another_1_06.log", "filetests/another_2_06.log"}, 0},
-	}
-	cfg := Config{
-		TargetFile: targetFile,
-		Layout:     "01",
-	}
+		{targetFile, "01", []string{}, 0},
+		{targetFile, "01", []string{"filetests/log_0_06.log", "filetests/log_1_06.log", "filetests/log_2_06.log"}, 3},
+		{targetFile, "01", []string{"filetests/log_0_06.log", "filetests/log_1_06.log", "filetests/log_2_06.log", "filetests/log_3_07.log"}, 4},
+		{targetFile, "01", []string{"filetests/log_-2_06.log", "filetests/log_-3_06.log", "filetests/log_-1_06.log"}, 0},
+		{targetFile, "01", []string{"filetests/log_0_06.log", "filetests/log_1_06.log", "filetests/log_2_06"}, 2},
+		{targetFile, "01", []string{"filetests/log_-2_06.log", "filetests/log_-3_06.log", "filetests/log_-4_06.log"}, 0},
+		{targetFile, "01", []string{"filetests/another_0_06.log", "filetests/another_1_06.log", "filetests/another_2_06.log"}, 0},
 
-	dir, file := filepath.Split(cfg.TargetFile)
-	extension := filepath.Ext(file)
-
-	p := Plugin{
-		config:        &cfg,
-		targetDir:     dir,
-		fileExtension: extension,
-		fileName:      file[0 : len(file)-len(extension)],
+		{"filetests/some-file", "01-02", []string{"filetests/some-file_0_06-02.log"}, 0},
+		{"filetests/some-file", "01-02", []string{"filetests/some-file_0_06-02"}, 1},
+		{"tmp/f.log", "", []string{"tmp/f_0_.log", "tmp/f_8_.log"}, 9},
+		{"tmp/f.log.log", "", []string{"tmp/f.log_0_.log"}, 1},
+		{"tmp/f_0_3.log", "01", []string{"tmp/f_0_3_0_05.log"}, 1},
+		{"tmp/f_0_3.log", "01", []string{"tmp/f_3_0_05.log"}, 0},
 	}
 
 	for _, tc := range testsCases {
+		cfg := Config{
+			TargetFile: tc.targetFile,
+			Layout:     tc.layout,
+		}
+
+		dir, file := filepath.Split(cfg.TargetFile)
+		extension := filepath.Ext(file)
+		clearDir(t, dir)
+		p := Plugin{
+			config:        &cfg,
+			targetDir:     dir,
+			fileExtension: extension,
+			fileName:      file[0 : len(file)-len(extension)],
+		}
 
 		//create files
 		files := make([]*os.File, len(tc.filesName))
 		createDir(t, p.targetDir)
-		defer clearDir(t, p.targetDir)
-
 		for _, f := range tc.filesName {
 			files = append(files, createFile(t, f, nil))
 		}
@@ -228,14 +75,14 @@ func TestGetStartIdx(t *testing.T) {
 			f.Close()
 		}
 		clearDir(t, p.targetDir)
-
 	}
 }
 
 func TestSealUpHasContent(t *testing.T) {
+	fileSealUpInterval = 200 * time.Millisecond
 	cfg := Config{
 		TargetFile:         targetFile,
-		RetentionInterval_: time.Second,
+		RetentionInterval_: 200 * time.Millisecond,
 		Layout:             "01",
 		FileMode_:          0666,
 	}
@@ -244,9 +91,8 @@ func TestSealUpHasContent(t *testing.T) {
 
 	//cfg.TargetDir = dir
 	extension := filepath.Ext(file)
-
+	clearDir(t, dir)
 	createDir(t, dir)
-
 	defer clearDir(t, dir)
 
 	d := []byte("some data")
@@ -288,9 +134,10 @@ func TestSealUpHasContent(t *testing.T) {
 }
 
 func TestSealUpNoContent(t *testing.T) {
+	fileSealUpInterval = 200 * time.Millisecond
 	cfg := Config{
 		TargetFile:         targetFile,
-		RetentionInterval_: time.Second,
+		RetentionInterval_: 200 * time.Millisecond,
 		Layout:             "01",
 		FileMode_:          0666,
 	}
@@ -298,8 +145,8 @@ func TestSealUpNoContent(t *testing.T) {
 	dir, file := filepath.Split(cfg.TargetFile)
 	extension := filepath.Ext(file)
 
+	clearDir(t, dir)
 	createDir(t, dir)
-
 	defer clearDir(t, dir)
 
 	f := createFile(t, cfg.TargetFile, nil)
@@ -329,46 +176,114 @@ func TestSealUpNoContent(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+type msg []byte
+
 func TestStart(t *testing.T) {
-	clearDir(t, "filetests")
-	cfg := Config{
-		TargetFile:         targetFile,
-		RetentionInterval_: 2 * time.Second,
-		Layout:             "01",
-		BatchSize_:         4,
-		BatchFlushTimeout_: time.Second,
-		FileMode_:          0666,
-	}
-	pluginParams := pipeline.OutputPluginParams{
-		PluginDefaultParams: &pipeline.PluginDefaultParams{
-			PipelineName: "name",
-			PipelineSettings: &pipeline.Settings{
-				Capacity:   128,
-				AvgLogSize: 128,
-			},
+	tests := struct {
+		firstPack  []msg
+		secondPack []msg
+		thirdPack  []msg
+	}{
+		firstPack: []msg{
+			msg(`{"level":"error","ts":"2019-08-21T11:43:25.865Z","message":"get_items_error_1","trace_id":"3ea4a6589d06bb3f","span_id":"deddd718684b10a","get_items_error":"product: error while consuming CoverImage: context canceled","get_items_error_option":"CoverImage","get_items_error_cause":"context canceled","get_items_error_cause_type":"context_cancelled"}`),
+			msg(`{"level":"error","ts":"2019-08-21T11:43:25.865Z","message":"get_items_error_1","trace_id":"3ea4a6589d06bb3f","span_id":"deddd718684b10a","get_items_error":"product: error while consuming CoverImage: context canceled","get_items_error_option":"CoverImage","get_items_error_cause":"context canceled","get_items_error_cause_type":"context_cancelled"}`),
+			msg(`{"level":"error","ts":"2019-08-21T11:43:25.865Z","message":"get_items_error_1","trace_id":"3ea4a6589d06bb3f","span_id":"deddd718684b10a","get_items_error":"product: error while consuming CoverImage: context canceled","get_items_error_option":"CoverImage","get_items_error_cause":"context canceled","get_items_error_cause_type":"context_cancelled"}`),
 		},
-		Controller: nil,
+		secondPack: []msg{
+			msg(`{"level":"error","ts":"2019-08-21T11:43:25.865Z","message":"get_items_error_12","trace_id":"3ea4a6589d06bb3f","span_id":"deddd718684b10a","get_items_error":"product: error while consuming CoverImage: context canceled","get_items_error_option":"CoverImage","get_items_error_cause":"context canceled","get_items_error_cause_type":"context_cancelled"}`),
+			msg(`{"level":"error","ts":"2019-08-21T11:43:25.865Z","message":"get_items_error_12","trace_id":"3ea4a6589d06bb3f","span_id":"deddd718684b10a","get_items_error":"product: error while consuming CoverImage: context canceled","get_items_error_option":"CoverImage","get_items_error_cause":"context canceled","get_items_error_cause_type":"context_cancelled"}`),
+			msg(`{"level":"error","ts":"2019-08-21T11:43:25.865Z","message":"get_items_error_12","trace_id":"3ea4a6589d06bb3f","span_id":"deddd718684b10a","get_items_error":"product: error while consuming CoverImage: context canceled","get_items_error_option":"CoverImage","get_items_error_cause":"context canceled","get_items_error_cause_type":"context_cancelled"}`),
+		},
+		thirdPack: []msg{
+			msg(`{"level":"error","ts":"2019-08-21T11:43:25.865Z","message":"get_items_error_123","trace_id":"3ea4a6589d06bb3f","span_id":"deddd718684b10a","get_items_error":"product: error while consuming CoverImage: context canceled","get_items_error_option":"CoverImage","get_items_error_cause":"context canceled","get_items_error_cause_type":"context_cancelled"}`),
+			msg(`{"level":"error","ts":"2019-08-21T11:43:25.865Z","message":"get_items_error_123","trace_id":"3ea4a6589d06bb3f","span_id":"deddd718684b10a","get_items_error":"product: error while consuming CoverImage: context canceled","get_items_error_option":"CoverImage","get_items_error_cause":"context canceled","get_items_error_cause_type":"context_cancelled"}`),
+			msg(`{"level":"error","ts":"2019-08-21T11:43:25.865Z","message":"get_items_error_123","trace_id":"3ea4a6589d06bb3f","span_id":"deddd718684b10a","get_items_error":"product: error while consuming CoverImage: context canceled","get_items_error_option":"CoverImage","get_items_error_cause":"context canceled","get_items_error_cause_type":"context_cancelled"}`),
+		},
 	}
-	p := Plugin{}
+	clearDir(t, dir)
+	defer clearDir(t, dir)
+	config := &Config{
+		TargetFile:        targetFile,
+		RetentionInterval: "300ms",
+		Layout:            "01",
+		BatchFlushTimeout: "100ms",
 
-	p.Start(&cfg, &pluginParams)
+		FileMode_: 0666,
+	}
+	fileSealUpInterval = 200 * time.Millisecond
 
-	defer p.Stop()
-	defer clearDir(t, p.targetDir)
+	pattern := fmt.Sprintf("%s/*%s", dir, extension)
 
-	//check no saves without events
+	writeFileSleep := 100*time.Millisecond + 100*time.Millisecond
+	sealUpFileSleep := 2*fileSealUpInterval + 500*time.Millisecond
 
-	pattern := fmt.Sprintf("%s/%s*%s", p.targetDir, p.fileName, p.fileExtension)
+	err := cfg.Parse(config, map[string]int{"gomaxprocs": 1, "capacity": 64})
+	assert.NoError(t, err)
+	totalSent := int64(0)
 
-	assert.Equal(t, 1, len(getMatches(t, pattern)))
-	assert.NotEqual(t, "", p.targetDir)
-	assert.NotEqual(t, "", p.fileExtension)
-	assert.NotEqual(t, "", p.fileName)
+	p := newPipeline(t, config)
+	assert.NotNil(t, p, "could not create new pipline")
+	p.Start()
+	time.Sleep(300 * time.Microsecond)
 
-	assert.Equal(t, "filetests/", p.targetDir)
-	assert.Equal(t, ".log", p.fileExtension)
-	assert.Equal(t, "log", p.fileName)
+	//check log file created and empty
+	checkZero(t, config.TargetFile, "log file is not created or is not empty")
 
-	assert.False(t, p.nextSealUpTime.IsZero())
+	//send events
+	packSize := sendPack(t, p, tests.firstPack)
+	totalSent += packSize
+	time.Sleep(writeFileSleep)
 
+	// check that plugin wrote into the file
+	assert.Equal(t, packSize, checkNotZero(t, config.TargetFile, "check log file has data"), "plugin did not write into the file")
+
+	time.Sleep(sealUpFileSleep)
+	//check sealing up
+	//check log file is empty
+	checkZero(t, config.TargetFile, "log fil is not empty after sealing up")
+
+	//check that sealed up file is created and not empty
+	matches := getMatches(t, pattern)
+
+	assert.GreaterOrEqual(t, len(matches), 2, "there is no new file after sealing up")
+	checkDirFiles(t, matches, totalSent, "written data and saved data are not equal")
+
+	//send next pack. And stop pipeline before next seal up time
+	totalSent += sendPack(t, p, tests.secondPack)
+	time.Sleep(writeFileSleep)
+	// check that plugin wrote into the file
+	p.Stop()
+	// check that plugin  did not seal up
+	checkNotZero(t, config.TargetFile, "plugin sealed up")
+
+	matches = getMatches(t, pattern)
+	checkDirFiles(t, matches, totalSent, "after sealing up interruption written data and saved data are not equal")
+
+	time.Sleep(sealUpFileSleep)
+	// Start new pipeline like pod restart
+	//start pipeline again
+	p2 := newPipeline(t, config)
+	p2.Start()
+	//waite ticker 1st tick
+	time.Sleep(fileSealUpInterval + 50*time.Millisecond)
+	// check old file log file is sealed up
+	matches = getMatches(t, pattern)
+	assert.GreaterOrEqual(t, len(matches), 3, "old log file is not sealed up")
+	checkZero(t, targetFile, "log file is not empty after sealing up")
+
+	//send third pack
+	totalSent += sendPack(t, p2, tests.thirdPack)
+	time.Sleep(writeFileSleep)
+	checkNotZero(t, config.TargetFile, "third pack is not written")
+	matches = getMatches(t, pattern)
+	checkDirFiles(t, matches, totalSent, "")
+
+	// check seal up for third
+	time.Sleep(sealUpFileSleep)
+	checkZero(t, config.TargetFile, "log file with third pack is not sealed up")
+	matches = getMatches(t, pattern)
+	assert.GreaterOrEqual(t, len(matches), 4, "there is no new files after sealing up third pack")
+
+	checkDirFiles(t, matches, totalSent, "lost data for third pack")
+	p2.Stop()
 }

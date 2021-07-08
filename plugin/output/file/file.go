@@ -41,7 +41,10 @@ type data struct {
 }
 
 const (
-	fileNameSeparator  = "_"
+	fileNameSeparator = "_"
+)
+
+var (
 	fileSealUpInterval = time.Second
 )
 
@@ -65,7 +68,7 @@ type Config struct {
 	BatchSize_ int
 
 	//> After this timeout batch will be sent even if batch isn't completed.
-	BatchFlushTimeout  cfg.Duration `json:"batch_flush_timeout" default:"1s"` //*
+	BatchFlushTimeout  cfg.Duration `json:"batch_flush_timeout" default:"1s" parse:"duration"` //*
 	BatchFlushTimeout_ time.Duration
 
 	//> File mode for log files
@@ -106,7 +109,6 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		0,
 	)
 	p.mu = &sync.RWMutex{}
-
 	ctx, cancel := context.WithCancel(context.Background())
 	p.ctx = ctx
 	p.cancelFunc = cancel
@@ -245,7 +247,7 @@ func (p *Plugin) getStartIdx() int {
 		i := file[len(p.fileName)+len(fileNameSeparator) : len(file)-len(p.fileExtension)-len(p.config.Layout)-len(fileNameSeparator)]
 		maxIdx, err := strconv.Atoi(i)
 		if err != nil {
-			p.logger.Panicf("wrong number for file: %s,  error: %s", file, err.Error())
+			break
 		}
 		if maxIdx > idx {
 			idx = maxIdx
