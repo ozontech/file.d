@@ -1,5 +1,9 @@
 # Action plugins
 
+## add_host
+It adds field containing hostname to an event.
+
+[More details...](plugin/action/add_host/README.md)
 ## convert_date
 It converts field date/time data to different format.
 
