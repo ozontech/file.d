@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/ozonru/file.d/cfg"
+	"github.com/ozonru/file.d/test"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -55,7 +56,7 @@ func TestGetStartIdx(t *testing.T) {
 
 		dir, file := filepath.Split(cfg.TargetFile)
 		extension := filepath.Ext(file)
-		clearDir(t, dir)
+		test.ClearDir(t, dir)
 		p := Plugin{
 			config:        &cfg,
 			targetDir:     dir,
@@ -77,12 +78,12 @@ func TestGetStartIdx(t *testing.T) {
 		for _, f := range files {
 			f.Close()
 		}
-		clearDir(t, p.targetDir)
+		test.ClearDir(t, p.targetDir)
 	}
 }
 
 func TestSealUpHasContent(t *testing.T) {
-	fileSealUpInterval = 200 * time.Millisecond
+	FileSealUpInterval = 200 * time.Millisecond
 	cfg := Config{
 		TargetFile:         targetFile,
 		RetentionInterval_: 200 * time.Millisecond,
@@ -93,9 +94,9 @@ func TestSealUpHasContent(t *testing.T) {
 	dir, file := filepath.Split(cfg.TargetFile)
 
 	extension := filepath.Ext(file)
-	clearDir(t, dir)
+	test.ClearDir(t, dir)
 	createDir(t, dir)
-	defer clearDir(t, dir)
+	defer test.ClearDir(t, dir)
 
 	d := []byte("some data")
 	testFileName := fmt.Sprintf(targetFileThreshold, time.Now().Unix(), fileNameSeparator)
@@ -118,7 +119,7 @@ func TestSealUpHasContent(t *testing.T) {
 
 	//check work result
 	pattern := fmt.Sprintf("%s/*%s", p.targetDir, p.fileExtension)
-	matches := getMatches(t, pattern)
+	matches := test.GetMatches(t, pattern)
 	assert.Equal(t, 2, len(matches))
 
 	//check new file was created and it is empty
@@ -137,7 +138,7 @@ func TestSealUpHasContent(t *testing.T) {
 }
 
 func TestSealUpNoContent(t *testing.T) {
-	fileSealUpInterval = 200 * time.Millisecond
+	FileSealUpInterval = 200 * time.Millisecond
 	cfg := Config{
 		TargetFile:         targetFile,
 		RetentionInterval_: 200 * time.Millisecond,
@@ -148,9 +149,9 @@ func TestSealUpNoContent(t *testing.T) {
 	dir, file := filepath.Split(cfg.TargetFile)
 	extension := filepath.Ext(file)
 
-	clearDir(t, dir)
+	test.ClearDir(t, dir)
 	createDir(t, dir)
-	defer clearDir(t, dir)
+	defer test.ClearDir(t, dir)
 	testFileName := fmt.Sprintf(targetFileThreshold, time.Now().Unix(), fileNameSeparator)
 	f := createFile(t, testFileName, nil)
 	defer f.Close()
@@ -172,7 +173,7 @@ func TestSealUpNoContent(t *testing.T) {
 
 	//check work result
 	pattern := fmt.Sprintf("%s/*%s", p.targetDir, p.fileExtension)
-	assert.Equal(t, 1, len(getMatches(t, pattern)))
+	assert.Equal(t, 1, len(test.GetMatches(t, pattern)))
 
 	//check new file was created and it is empty
 	info, err := p.file.Stat()
@@ -180,32 +181,30 @@ func TestSealUpNoContent(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-type msg []byte
-
 func TestStart(t *testing.T) {
 	tests := struct {
-		firstPack  []msg
-		secondPack []msg
-		thirdPack  []msg
+		firstPack  []test.Msg
+		secondPack []test.Msg
+		thirdPack  []test.Msg
 	}{
-		firstPack: []msg{
-			msg(`{"level":"error","ts":"2019-08-21T11:43:25.865Z","message":"get_items_error_1","trace_id":"3ea4a6589d06bb3f","span_id":"deddd718684b10a","get_items_error":"product: error while consuming CoverImage: context canceled","get_items_error_option":"CoverImage","get_items_error_cause":"context canceled","get_items_error_cause_type":"context_cancelled"}`),
-			msg(`{"level":"error","ts":"2019-08-21T11:43:25.865Z","message":"get_items_error_1","trace_id":"3ea4a6589d06bb3f","span_id":"deddd718684b10a","get_items_error":"product: error while consuming CoverImage: context canceled","get_items_error_option":"CoverImage","get_items_error_cause":"context canceled","get_items_error_cause_type":"context_cancelled"}`),
-			msg(`{"level":"error","ts":"2019-08-21T11:43:25.865Z","message":"get_items_error_1","trace_id":"3ea4a6589d06bb3f","span_id":"deddd718684b10a","get_items_error":"product: error while consuming CoverImage: context canceled","get_items_error_option":"CoverImage","get_items_error_cause":"context canceled","get_items_error_cause_type":"context_cancelled"}`),
+		firstPack: []test.Msg{
+			test.Msg(`{"level":"error","ts":"2019-08-21T11:43:25.865Z","message":"get_items_error_1","trace_id":"3ea4a6589d06bb3f","span_id":"deddd718684b10a","get_items_error":"product: error while consuming CoverImage: context canceled","get_items_error_option":"CoverImage","get_items_error_cause":"context canceled","get_items_error_cause_type":"context_cancelled"}`),
+			test.Msg(`{"level":"error","ts":"2019-08-21T11:43:25.865Z","message":"get_items_error_1","trace_id":"3ea4a6589d06bb3f","span_id":"deddd718684b10a","get_items_error":"product: error while consuming CoverImage: context canceled","get_items_error_option":"CoverImage","get_items_error_cause":"context canceled","get_items_error_cause_type":"context_cancelled"}`),
+			test.Msg(`{"level":"error","ts":"2019-08-21T11:43:25.865Z","message":"get_items_error_1","trace_id":"3ea4a6589d06bb3f","span_id":"deddd718684b10a","get_items_error":"product: error while consuming CoverImage: context canceled","get_items_error_option":"CoverImage","get_items_error_cause":"context canceled","get_items_error_cause_type":"context_cancelled"}`),
 		},
-		secondPack: []msg{
-			msg(`{"level":"error","ts":"2019-08-21T11:43:25.865Z","message":"get_items_error_12","trace_id":"3ea4a6589d06bb3f","span_id":"deddd718684b10a","get_items_error":"product: error while consuming CoverImage: context canceled","get_items_error_option":"CoverImage","get_items_error_cause":"context canceled","get_items_error_cause_type":"context_cancelled"}`),
-			msg(`{"level":"error","ts":"2019-08-21T11:43:25.865Z","message":"get_items_error_12","trace_id":"3ea4a6589d06bb3f","span_id":"deddd718684b10a","get_items_error":"product: error while consuming CoverImage: context canceled","get_items_error_option":"CoverImage","get_items_error_cause":"context canceled","get_items_error_cause_type":"context_cancelled"}`),
-			msg(`{"level":"error","ts":"2019-08-21T11:43:25.865Z","message":"get_items_error_12","trace_id":"3ea4a6589d06bb3f","span_id":"deddd718684b10a","get_items_error":"product: error while consuming CoverImage: context canceled","get_items_error_option":"CoverImage","get_items_error_cause":"context canceled","get_items_error_cause_type":"context_cancelled"}`),
+		secondPack: []test.Msg{
+			test.Msg(`{"level":"error","ts":"2019-08-21T11:43:25.865Z","message":"get_items_error_12","trace_id":"3ea4a6589d06bb3f","span_id":"deddd718684b10a","get_items_error":"product: error while consuming CoverImage: context canceled","get_items_error_option":"CoverImage","get_items_error_cause":"context canceled","get_items_error_cause_type":"context_cancelled"}`),
+			test.Msg(`{"level":"error","ts":"2019-08-21T11:43:25.865Z","message":"get_items_error_12","trace_id":"3ea4a6589d06bb3f","span_id":"deddd718684b10a","get_items_error":"product: error while consuming CoverImage: context canceled","get_items_error_option":"CoverImage","get_items_error_cause":"context canceled","get_items_error_cause_type":"context_cancelled"}`),
+			test.Msg(`{"level":"error","ts":"2019-08-21T11:43:25.865Z","message":"get_items_error_12","trace_id":"3ea4a6589d06bb3f","span_id":"deddd718684b10a","get_items_error":"product: error while consuming CoverImage: context canceled","get_items_error_option":"CoverImage","get_items_error_cause":"context canceled","get_items_error_cause_type":"context_cancelled"}`),
 		},
-		thirdPack: []msg{
-			msg(`{"level":"error","ts":"2019-08-21T11:43:25.865Z","message":"get_items_error_123","trace_id":"3ea4a6589d06bb3f","span_id":"deddd718684b10a","get_items_error":"product: error while consuming CoverImage: context canceled","get_items_error_option":"CoverImage","get_items_error_cause":"context canceled","get_items_error_cause_type":"context_cancelled"}`),
-			msg(`{"level":"error","ts":"2019-08-21T11:43:25.865Z","message":"get_items_error_123","trace_id":"3ea4a6589d06bb3f","span_id":"deddd718684b10a","get_items_error":"product: error while consuming CoverImage: context canceled","get_items_error_option":"CoverImage","get_items_error_cause":"context canceled","get_items_error_cause_type":"context_cancelled"}`),
-			msg(`{"level":"error","ts":"2019-08-21T11:43:25.865Z","message":"get_items_error_123","trace_id":"3ea4a6589d06bb3f","span_id":"deddd718684b10a","get_items_error":"product: error while consuming CoverImage: context canceled","get_items_error_option":"CoverImage","get_items_error_cause":"context canceled","get_items_error_cause_type":"context_cancelled"}`),
+		thirdPack: []test.Msg{
+			test.Msg(`{"level":"error","ts":"2019-08-21T11:43:25.865Z","message":"get_items_error_123","trace_id":"3ea4a6589d06bb3f","span_id":"deddd718684b10a","get_items_error":"product: error while consuming CoverImage: context canceled","get_items_error_option":"CoverImage","get_items_error_cause":"context canceled","get_items_error_cause_type":"context_cancelled"}`),
+			test.Msg(`{"level":"error","ts":"2019-08-21T11:43:25.865Z","message":"get_items_error_123","trace_id":"3ea4a6589d06bb3f","span_id":"deddd718684b10a","get_items_error":"product: error while consuming CoverImage: context canceled","get_items_error_option":"CoverImage","get_items_error_cause":"context canceled","get_items_error_cause_type":"context_cancelled"}`),
+			test.Msg(`{"level":"error","ts":"2019-08-21T11:43:25.865Z","message":"get_items_error_123","trace_id":"3ea4a6589d06bb3f","span_id":"deddd718684b10a","get_items_error":"product: error while consuming CoverImage: context canceled","get_items_error_option":"CoverImage","get_items_error_cause":"context canceled","get_items_error_cause_type":"context_cancelled"}`),
 		},
 	}
-	clearDir(t, dir)
-	defer clearDir(t, dir)
+	test.ClearDir(t, dir)
+	defer test.ClearDir(t, dir)
 	config := &Config{
 		TargetFile:        targetFile,
 		RetentionInterval: "300ms",
@@ -214,10 +213,10 @@ func TestStart(t *testing.T) {
 
 		FileMode_: 0666,
 	}
-	fileSealUpInterval = 200 * time.Millisecond
+	FileSealUpInterval = 200 * time.Millisecond
 
 	writeFileSleep := 100*time.Millisecond + 100*time.Millisecond
-	sealUpFileSleep := 2*fileSealUpInterval + 500*time.Millisecond
+	sealUpFileSleep := 2*FileSealUpInterval + 500*time.Millisecond
 	generalPattern := fmt.Sprintf("%s/*%s", dir, extension)
 	logFilePattern := fmt.Sprintf("%s/*%s", path.Dir(targetFile), path.Base(targetFile))
 	currentLogFileSubstr := fmt.Sprintf("_%s", path.Base(targetFile))
@@ -232,29 +231,29 @@ func TestStart(t *testing.T) {
 	time.Sleep(300 * time.Microsecond)
 
 	//check log file created and empty
-	matches := getMatches(t, logFilePattern)
+	matches := test.GetMatches(t, logFilePattern)
 	assert.Equal(t, 1, len(matches))
 
 	tsFileName := matches[0]
-	checkZero(t, tsFileName, "log file is not created or is not empty")
+	test.CheckZero(t, tsFileName, "log file is not created or is not empty")
 
 	//send events
-	packSize := sendPack(t, p, tests.firstPack)
+	packSize := test.SendPack(t, p, tests.firstPack)
 	totalSent += packSize
 	time.Sleep(writeFileSleep)
 
 	// check that plugin wrote into the file
-	assert.Equal(t, packSize, checkNotZero(t, tsFileName, "check log file has data"), "plugin did not write into the file")
+	assert.Equal(t, packSize, test.CheckNotZero(t, tsFileName, "check log file has data"), "plugin did not write into the file")
 	time.Sleep(sealUpFileSleep)
 	//check sealing up
 	//check log file is empty
-	matches = getMatches(t, logFilePattern)
+	matches = test.GetMatches(t, logFilePattern)
 	assert.Equal(t, 1, len(matches))
 	tsFileName = matches[0]
-	checkZero(t, tsFileName, "log fil is not empty after sealing up")
+	test.CheckZero(t, tsFileName, "log fil is not empty after sealing up")
 
 	//check that sealed up file is created and not empty
-	matches = getMatches(t, generalPattern)
+	matches = test.GetMatches(t, generalPattern)
 	assert.GreaterOrEqual(t, len(matches), 2, "there is no new file after sealing up")
 	checkDirFiles(t, matches, totalSent, "written data and saved data are not equal")
 
@@ -266,16 +265,16 @@ func TestStart(t *testing.T) {
 	}
 
 	//send next pack. And stop pipeline before next seal up time
-	totalSent += sendPack(t, p, tests.secondPack)
+	totalSent += test.SendPack(t, p, tests.secondPack)
 	time.Sleep(writeFileSleep)
 	// check that plugin wrote into the file
 	p.Stop()
 	// check that plugin  did not seal up
-	matches = getMatches(t, generalPattern)
+	matches = test.GetMatches(t, generalPattern)
 	checkDirFiles(t, matches, totalSent, "after sealing up interruption written data and saved data are not equal")
 	for _, m := range matches {
 		if strings.Contains(m, currentLogFileSubstr) {
-			checkNotZero(t, m, "plugin sealed up")
+			test.CheckNotZero(t, m, "plugin sealed up")
 			break
 		}
 	}
@@ -286,38 +285,38 @@ func TestStart(t *testing.T) {
 	p2 := newPipeline(t, config)
 	p2.Start()
 	//waite ticker 1st tick
-	time.Sleep(fileSealUpInterval + 50*time.Millisecond)
+	time.Sleep(FileSealUpInterval + 50*time.Millisecond)
 	// check old file log file is sealed up
-	matches = getMatches(t, generalPattern)
+	matches = test.GetMatches(t, generalPattern)
 	assert.GreaterOrEqual(t, len(matches), 3, "old log file is not sealed up")
 
 	for _, m := range matches {
 		if strings.Contains(m, currentLogFileSubstr) {
-			checkZero(t, m, "log file is not empty after sealing up")
+			test.CheckZero(t, m, "log file is not empty after sealing up")
 			break
 		}
 	}
 
 	//send third pack
-	totalSent += sendPack(t, p2, tests.thirdPack)
+	totalSent += test.SendPack(t, p2, tests.thirdPack)
 	time.Sleep(writeFileSleep)
 
-	matches = getMatches(t, generalPattern)
+	matches = test.GetMatches(t, generalPattern)
 	checkDirFiles(t, matches, totalSent, "")
 	for _, m := range matches {
 		if strings.Contains(m, currentLogFileSubstr) {
-			checkNotZero(t, m, "third pack is not written")
+			test.CheckNotZero(t, m, "third pack is not written")
 		}
 	}
 
 	// check seal up for third
 	time.Sleep(sealUpFileSleep)
-	matches = getMatches(t, generalPattern)
+	matches = test.GetMatches(t, generalPattern)
 	assert.GreaterOrEqual(t, len(matches), 4, "there is no new files after sealing up third pack")
 	checkDirFiles(t, matches, totalSent, "lost data for third pack")
 	for _, m := range matches {
-		if strings.Contains(m, currentLogFileSubstr){
-			checkZero(t, m, "log file with third pack is not sealed up")
+		if strings.Contains(m, currentLogFileSubstr) {
+			test.CheckZero(t, m, "log file with third pack is not sealed up")
 			break
 		}
 	}

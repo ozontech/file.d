@@ -34,6 +34,8 @@ type Plugin struct {
 	fileName      string
 	tsFileName    string
 
+	SealupCallback func(string) ()
+
 	mu *sync.RWMutex
 }
 
@@ -46,7 +48,7 @@ const (
 )
 
 var (
-	fileSealUpInterval = time.Second
+	FileSealUpInterval = time.Second
 )
 
 type Config struct {
@@ -93,12 +95,10 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.logger = params.Logger
 	p.config = config.(*Config)
 	dir, file := filepath.Split(p.config.TargetFile)
-
 	p.targetDir = dir
 	p.fileExtension = filepath.Ext(file)
 	p.fileName = file[0 : len(file)-len(p.fileExtension)]
 	p.tsFileName = "%s" + "-" + p.fileName
-
 	p.batcher = pipeline.NewBatcher(
 		params.PipelineName,
 		"file",
@@ -169,7 +169,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 }
 
 func (p *Plugin) fileSealUpTicker() {
-	ticker := time.NewTicker(fileSealUpInterval)
+	ticker := time.NewTicker(FileSealUpInterval)
 	defer ticker.Stop()
 	for {
 		select {
@@ -226,7 +226,8 @@ func (p *Plugin) sealUp() {
 	if info.Size() == 0 {
 		return
 	}
-	p.rename()
+	newFileName := filepath.Join(p.targetDir, fmt.Sprintf("%s%s%d%s%s%s", p.fileName, fileNameSeparator, p.idx, fileNameSeparator, time.Now().Format(p.config.Layout), p.fileExtension))
+	p.rename(newFileName)
 	oldFile := p.file
 	p.mu.Lock()
 	p.createNew()
@@ -235,12 +236,16 @@ func (p *Plugin) sealUp() {
 	if err := oldFile.Close(); err != nil {
 		p.logger.Panicf("could not close file: %s, error: %s", oldFile.Name(), err.Error())
 	}
+
+	if p.SealupCallback != nil {
+		go p.SealupCallback(newFileName)
+	}
 }
 
-func (p *Plugin) rename() {
-	fullFileName := filepath.Join(p.targetDir, fmt.Sprintf("%s%s%d%s%s%s", p.fileName, fileNameSeparator, p.idx, fileNameSeparator, time.Now().Format(p.config.Layout), p.fileExtension))
+
+func (p *Plugin) rename(newFileName string) {
 	f := fmt.Sprintf("%s%s", p.targetDir, p.tsFileName)
-	if err := os.Rename(f, fullFileName); err != nil {
+	if err := os.Rename(f, newFileName); err != nil {
 		p.logger.Panicf("could not rename file, error: %s", err.Error())
 	}
 	p.idx++
