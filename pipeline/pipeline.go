@@ -127,6 +127,8 @@ func New(name string, settings *Settings, registry *prometheus.Registry, mux *ht
 		pipeline.decoder = decoder.RAW
 	case "cri":
 		pipeline.decoder = decoder.CRI
+	case "postgres":
+		pipeline.decoder = decoder.POSTGRES
 	case "auto":
 		pipeline.decoder = decoder.AUTO
 	default:
@@ -250,6 +252,13 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 		err := decoder.DecodeCRI(event.Root, bytes)
 		if err != nil {
 			p.logger.Fatalf("wrong cri format offset=%d, length=%d, err=%s, source=%d:%s, cri=%s", offset, length, err.Error(), sourceID, sourceName, bytes)
+			return 0
+		}
+	case decoder.POSTGRES:
+		_ = event.Root.DecodeString("{}")
+		err := decoder.DecodePostgres(event.Root, bytes)
+		if err != nil {
+			p.logger.Fatalf("wrong postgres format offset=%d, length=%d, err=%s, source=%d:%s, cri=%s", offset, length, err.Error(), sourceID, sourceName, bytes)
 			return 0
 		}
 	default:
