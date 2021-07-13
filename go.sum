@@ -179,6 +179,8 @@ github.com/stretchr/testify v1.2.2/go.mod h1:a8OnRcib4nhh0OaRAV+Yts87kKdq0PP7pXf
 github.com/stretchr/testify v1.3.0/go.mod h1:M5WIy9Dh21IEIfnGCwXGc5bZfKNJtfHm1UVUgZn+9EI=
 github.com/stretchr/testify v1.4.0 h1:2E4SXV/wtOkTonXsotYi4li6zVWxYlZuYNCXe9XRJyk=
 github.com/stretchr/testify v1.4.0/go.mod h1:j7eGeouHqKxXV5pUuKE4zz7dFj8WfuZ+81PSLYec5m4=
+github.com/vitkovskii/insane-doc v0.0.1 h1:VAo+bhfzbEtJows9f+XcNB/1B1jNA4DCgvuC9ATNmOE=
+github.com/vitkovskii/insane-doc v0.0.1/go.mod h1:ebjM3CQC8/330kQYh640VK2sS68k/T1q7TFFgj6jiyY=
 github.com/vitkovskii/insane-json v0.1.0 h1:EY22tUdAaMpXDxaw4P1Ojs9jEtsJjvLFgWisX8q13m0=
 github.com/vitkovskii/insane-json v0.1.0/go.mod h1:xQyYcnFJ8ElboaEZG805SrQ7I4QupForGkm0/TnRaZ8=
 github.com/xdg/scram v0.0.0-20180814205039-7eeb5667e42c h1:u40Z8hqBAAQyv+vATcGgV0YCnDjqSL7/q/JyPhhJSPk=

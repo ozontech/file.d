@@ -65,6 +65,7 @@ E.g. `my_pod-1566485760-trtrq_my-namespace_my-container-4e0301b633eaa2bfdcafdeba
 
 An information which plugin adds:
 * `k8s_node` – node name where pod is running;
+* `k8s_node_label_*` – node labels;
 * `k8s_pod` – pod name;
 * `k8s_namespace` – pod namespace name;
 * `k8s_container` – pod container name;
@@ -90,6 +91,10 @@ It reads events from multiple Kafka topics using `sarama` library.
 [More details...](plugin/input/kafka/README.md)
 
 # Actions
+## add_host
+It adds field containing hostname to an event.
+
+[More details...](plugin/action/add_host/README.md)
 ## convert_date
 It converts field date/time data to different format.
 

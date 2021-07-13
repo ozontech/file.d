@@ -7,6 +7,7 @@ E.g. `my_pod-1566485760-trtrq_my-namespace_my-container-4e0301b633eaa2bfdcafdeba
 
 An information which plugin adds:
 * `k8s_node` – node name where pod is running;
+* `k8s_node_label_*` – node labels;
 * `k8s_pod` – pod name;
 * `k8s_namespace` – pod namespace name;
 * `k8s_container` – pod container name;
@@ -32,9 +33,15 @@ Docker splits long logs by 16kb chunks. The plugin joins them back, but if an ev
 
 <br>
 
-**`labels_whitelist`** *`[]string`* 
+**`allowed_pod_labels`** *`[]string`* 
 
 If set, it defines which pod labels to add to the event, others will be ignored.
+
+<br>
+
+**`allowed_node_labels`** *`[]string`* 
+
+If set, it defines which node labels to add to the event, others will be ignored.
 
 <br>
 

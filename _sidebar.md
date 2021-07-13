@@ -22,6 +22,7 @@
     - [kafka](plugin/input/kafka/README.md)
 
   - Action
+    - [add_host](plugin/action/add_host/README.md)
     - [convert_date](plugin/action/convert_date/README.md)
     - [debug](plugin/action/debug/README.md)
     - [discard](plugin/action/discard/README.md)
