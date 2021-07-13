@@ -6,6 +6,7 @@ const (
 	JSON
 	RAW
 	CRI
+	POSTGRES
 )
 
 type DecoderType int
