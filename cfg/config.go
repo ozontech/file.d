@@ -24,6 +24,7 @@ type ListMap string
 type Expression string
 type FieldSelector string
 type Regexp string
+type Base8 string
 
 type PipelineConfig struct {
 	Raw *simplejson.Json
@@ -296,6 +297,14 @@ func ParseField(v reflect.Value, vField reflect.Value, tField reflect.StructFiel
 			}
 
 			finalField.SetInt(int64(result))
+
+		case "base8":
+			value, err := strconv.ParseInt(vField.String(), 8, 64)
+			if err != nil {
+				return fmt.Errorf("could not parse field %s, err: %s", tField.Name, err.Error())
+			}
+			finalField.SetInt(int64(value))
+
 		default:
 			return fmt.Errorf("unsupported parse type %q for field %s", tag, tField.Name)
 		}
