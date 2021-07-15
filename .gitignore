@@ -2,3 +2,4 @@ file.d
 *.pprof
 *.test
 ozon*
+dist/
