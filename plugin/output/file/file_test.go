@@ -312,10 +312,14 @@ func TestStart(t *testing.T) {
 
 	// check seal up for third
 	time.Sleep(sealUpFileSleep)
-	//TODO:add it again after test
-	//checkZero(t, config.TargetFile, "log file with third pack is not sealed up")
 	matches = getMatches(t, generalPattern)
 	assert.GreaterOrEqual(t, len(matches), 4, "there is no new files after sealing up third pack")
 	checkDirFiles(t, matches, totalSent, "lost data for third pack")
+	for _, m := range matches {
+		if strings.Contains(m, currentLogFileSubstr){
+			checkZero(t, m, "log file with third pack is not sealed up")
+			break
+		}
+	}
 	p2.Stop()
 }
