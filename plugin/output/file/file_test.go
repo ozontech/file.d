@@ -3,7 +3,9 @@ package file
 import (
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -13,7 +15,8 @@ import (
 )
 
 const (
-	targetFile = "filetests/log.log"
+	targetFile          = "filetests/log.log"
+	targetFileThreshold = "filetests/%d%slog.log"
 )
 
 var (
@@ -89,15 +92,17 @@ func TestSealUpHasContent(t *testing.T) {
 
 	dir, file := filepath.Split(cfg.TargetFile)
 
-	//cfg.TargetDir = dir
 	extension := filepath.Ext(file)
 	clearDir(t, dir)
 	createDir(t, dir)
 	defer clearDir(t, dir)
 
 	d := []byte("some data")
-	f := createFile(t, cfg.TargetFile, &d)
+	testFileName := fmt.Sprintf(targetFileThreshold, time.Now().Unix(), fileNameSeparator)
+	f := createFile(t, testFileName, &d)
 	defer f.Close()
+	infoInitial, _ := f.Stat()
+	assert.NotZero(t, infoInitial.Size())
 	p := Plugin{
 		config:        &cfg,
 		mu:            &sync.RWMutex{},
@@ -105,16 +110,14 @@ func TestSealUpHasContent(t *testing.T) {
 		targetDir:     dir,
 		fileExtension: extension,
 		fileName:      file[0 : len(file)-len(extension)],
+		tsFileName:    path.Base(testFileName),
 	}
-
-	infoInitial, _ := f.Stat()
-	assert.NotZero(t, infoInitial.Size())
 
 	//call func
 	p.sealUp()
 
 	//check work result
-	pattern := fmt.Sprintf("%s/%s*%s", p.targetDir, p.fileName, p.fileExtension)
+	pattern := fmt.Sprintf("%s/*%s", p.targetDir, p.fileExtension)
 	matches := getMatches(t, pattern)
 	assert.Equal(t, 2, len(matches))
 
@@ -125,7 +128,7 @@ func TestSealUpHasContent(t *testing.T) {
 
 	//check old file was renamed. And renamed file is not empty and contains data
 	for _, v := range matches {
-		if v != cfg.TargetFile {
+		if v != fmt.Sprintf("%s%s", dir, p.tsFileName) {
 			info, err := os.Stat(v)
 			assert.NoError(t, err)
 			assert.EqualValues(t, len(d), info.Size())
@@ -148,8 +151,8 @@ func TestSealUpNoContent(t *testing.T) {
 	clearDir(t, dir)
 	createDir(t, dir)
 	defer clearDir(t, dir)
-
-	f := createFile(t, cfg.TargetFile, nil)
+	testFileName := fmt.Sprintf(targetFileThreshold, time.Now().Unix(), fileNameSeparator)
+	f := createFile(t, testFileName, nil)
 	defer f.Close()
 	p := Plugin{
 		config:        &cfg,
@@ -158,6 +161,7 @@ func TestSealUpNoContent(t *testing.T) {
 		targetDir:     dir,
 		fileExtension: extension,
 		fileName:      file[0 : len(file)-len(extension)],
+		tsFileName:    path.Base(testFileName),
 	}
 
 	infoInitial, _ := f.Stat()
@@ -167,7 +171,7 @@ func TestSealUpNoContent(t *testing.T) {
 	p.sealUp()
 
 	//check work result
-	pattern := fmt.Sprintf("%s/%s*%s", p.targetDir, p.fileName, p.fileExtension)
+	pattern := fmt.Sprintf("%s/*%s", p.targetDir, p.fileExtension)
 	assert.Equal(t, 1, len(getMatches(t, pattern)))
 
 	//check new file was created and it is empty
@@ -212,22 +216,27 @@ func TestStart(t *testing.T) {
 	}
 	fileSealUpInterval = 200 * time.Millisecond
 
-	pattern := fmt.Sprintf("%s/*%s", dir, extension)
-
 	writeFileSleep := 100*time.Millisecond + 100*time.Millisecond
 	sealUpFileSleep := 2*fileSealUpInterval + 500*time.Millisecond
+	generalPattern := fmt.Sprintf("%s/*%s", dir, extension)
+	logFilePattern := fmt.Sprintf("%s/*%s", path.Dir(targetFile), path.Base(targetFile))
+	currentLogFileSubstr := fmt.Sprintf("_%s", path.Base(targetFile))
 
 	err := cfg.Parse(config, map[string]int{"gomaxprocs": 1, "capacity": 64})
 	assert.NoError(t, err)
 	totalSent := int64(0)
-
 	p := newPipeline(t, config)
-	assert.NotNil(t, p, "could not create new pipline")
+	assert.NotNil(t, p, "could not create new pipeline")
+
 	p.Start()
 	time.Sleep(300 * time.Microsecond)
 
 	//check log file created and empty
-	checkZero(t, config.TargetFile, "log file is not created or is not empty")
+	matches := getMatches(t, logFilePattern)
+	assert.Equal(t, 1, len(matches))
+
+	tsFileName := matches[0]
+	checkZero(t, tsFileName, "log file is not created or is not empty")
 
 	//send events
 	packSize := sendPack(t, p, tests.firstPack)
@@ -235,18 +244,26 @@ func TestStart(t *testing.T) {
 	time.Sleep(writeFileSleep)
 
 	// check that plugin wrote into the file
-	assert.Equal(t, packSize, checkNotZero(t, config.TargetFile, "check log file has data"), "plugin did not write into the file")
-
+	assert.Equal(t, packSize, checkNotZero(t, tsFileName, "check log file has data"), "plugin did not write into the file")
 	time.Sleep(sealUpFileSleep)
 	//check sealing up
 	//check log file is empty
-	checkZero(t, config.TargetFile, "log fil is not empty after sealing up")
+	matches = getMatches(t, logFilePattern)
+	assert.Equal(t, 1, len(matches))
+	tsFileName = matches[0]
+	checkZero(t, tsFileName, "log fil is not empty after sealing up")
 
 	//check that sealed up file is created and not empty
-	matches := getMatches(t, pattern)
-
+	matches = getMatches(t, generalPattern)
 	assert.GreaterOrEqual(t, len(matches), 2, "there is no new file after sealing up")
 	checkDirFiles(t, matches, totalSent, "written data and saved data are not equal")
+
+	for _, m := range matches {
+		if strings.Contains(m, currentLogFileSubstr) {
+			tsFileName = m
+			break
+		}
+	}
 
 	//send next pack. And stop pipeline before next seal up time
 	totalSent += sendPack(t, p, tests.secondPack)
@@ -254,10 +271,14 @@ func TestStart(t *testing.T) {
 	// check that plugin wrote into the file
 	p.Stop()
 	// check that plugin  did not seal up
-	checkNotZero(t, config.TargetFile, "plugin sealed up")
-
-	matches = getMatches(t, pattern)
+	matches = getMatches(t, generalPattern)
 	checkDirFiles(t, matches, totalSent, "after sealing up interruption written data and saved data are not equal")
+	for _, m := range matches {
+		if strings.Contains(m, currentLogFileSubstr) {
+			checkNotZero(t, m, "plugin sealed up")
+			break
+		}
+	}
 
 	time.Sleep(sealUpFileSleep)
 	// Start new pipeline like pod restart
@@ -267,23 +288,34 @@ func TestStart(t *testing.T) {
 	//waite ticker 1st tick
 	time.Sleep(fileSealUpInterval + 50*time.Millisecond)
 	// check old file log file is sealed up
-	matches = getMatches(t, pattern)
+	matches = getMatches(t, generalPattern)
 	assert.GreaterOrEqual(t, len(matches), 3, "old log file is not sealed up")
-	checkZero(t, targetFile, "log file is not empty after sealing up")
+
+	for _, m := range matches {
+		if strings.Contains(m, currentLogFileSubstr) {
+			checkZero(t, m, "log file is not empty after sealing up")
+			break
+		}
+	}
 
 	//send third pack
 	totalSent += sendPack(t, p2, tests.thirdPack)
 	time.Sleep(writeFileSleep)
-	checkNotZero(t, config.TargetFile, "third pack is not written")
-	matches = getMatches(t, pattern)
+
+	matches = getMatches(t, generalPattern)
 	checkDirFiles(t, matches, totalSent, "")
+	for _, m := range matches {
+		if strings.Contains(m, currentLogFileSubstr) {
+			checkNotZero(t, m, "third pack is not written")
+		}
+	}
 
 	// check seal up for third
 	time.Sleep(sealUpFileSleep)
-	checkZero(t, config.TargetFile, "log file with third pack is not sealed up")
-	matches = getMatches(t, pattern)
+	//TODO:add it again after test
+	//checkZero(t, config.TargetFile, "log file with third pack is not sealed up")
+	matches = getMatches(t, generalPattern)
 	assert.GreaterOrEqual(t, len(matches), 4, "there is no new files after sealing up third pack")
-
 	checkDirFiles(t, matches, totalSent, "lost data for third pack")
 	p2.Stop()
 }

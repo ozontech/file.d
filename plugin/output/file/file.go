@@ -1,5 +1,3 @@
-// +build darwin
-
 package file
 
 import (
@@ -186,12 +184,12 @@ func (p *Plugin) fileSealUpTicker() {
 }
 
 func (p *Plugin) setNextSealUpTime() {
-	ts := p.tsFileName[0:len(p.tsFileName) - len(fileNameSeparator) - len(p.fileName) - len(p.fileExtension)]
-	t, err := strconv.ParseInt(ts,10, 64 )
+	ts := p.tsFileName[0 : len(p.tsFileName)-len(fileNameSeparator)-len(p.fileName)-len(p.fileExtension)]
+	t, err := strconv.ParseInt(ts, 10, 64)
 	if err != nil {
 		p.logger.Panicf("coult nod convert timestamp to int for file: %s, error: %s", p.tsFileName, err.Error())
 	}
-	creationTime := time.Unix(t,0)
+	creationTime := time.Unix(t, 0)
 	p.nextSealUpTime = creationTime.Add(p.config.RetentionInterval_)
 }
 
@@ -205,19 +203,13 @@ func (p *Plugin) write(data []byte) {
 
 func (p *Plugin) createNew() {
 	p.tsFileName = fmt.Sprintf("%d%s%s%s", time.Now().Unix(), fileNameSeparator, p.fileName, p.fileExtension)
-	f := fmt.Sprintf("%s%s", p.targetDir,p.tsFileName)
+	f := fmt.Sprintf("%s%s", p.targetDir, p.tsFileName)
 	pattern := fmt.Sprintf("%s*%s%s%s", p.targetDir, fileNameSeparator, p.fileName, p.fileExtension)
-	fmt.Println("pattern ", pattern)
 	matches, err := filepath.Glob(pattern)
-	fmt.Println("matches: ", matches)
 	if len(matches) == 1 {
 		p.tsFileName = path.Base(matches[0])
-		f = fmt.Sprintf("%s%s", p.targetDir,p.tsFileName)
+		f = fmt.Sprintf("%s%s", p.targetDir, p.tsFileName)
 	}
-	fmt.Println("log file: ", p.tsFileName)
-	fmt.Println("log file full: ", f)
-
-
 	file, err := os.OpenFile(f, os.O_CREATE|os.O_APPEND|os.O_RDWR, os.FileMode(p.config.FileMode_))
 	if err != nil {
 		p.logger.Panicf("could not open or create file: %s, error: %s", f, err.Error())
@@ -237,7 +229,6 @@ func (p *Plugin) sealUp() {
 	p.rename()
 	oldFile := p.file
 	p.mu.Lock()
-	fmt.Println("call create from sealup")
 	p.createNew()
 	p.nextSealUpTime = time.Now().Add(p.config.RetentionInterval_)
 	p.mu.Unlock()
