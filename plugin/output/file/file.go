@@ -1,14 +1,12 @@
-// +build darwin
-
 package file
 
 import (
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"strconv"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/ozonru/file.d/cfg"
@@ -34,6 +32,7 @@ type Plugin struct {
 	targetDir     string
 	fileExtension string
 	fileName      string
+	tsFileName    string
 
 	mu *sync.RWMutex
 }
@@ -98,6 +97,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.targetDir = dir
 	p.fileExtension = filepath.Ext(file)
 	p.fileName = file[0 : len(file)-len(p.fileExtension)]
+	p.tsFileName = "%s" + "-" + p.fileName
 
 	p.batcher = pipeline.NewBatcher(
 		params.PipelineName,
@@ -184,12 +184,12 @@ func (p *Plugin) fileSealUpTicker() {
 }
 
 func (p *Plugin) setNextSealUpTime() {
-	info, err := os.Stat(p.config.TargetFile)
+	ts := p.tsFileName[0 : len(p.tsFileName)-len(fileNameSeparator)-len(p.fileName)-len(p.fileExtension)]
+	t, err := strconv.ParseInt(ts, 10, 64)
 	if err != nil {
-		p.logger.Panicf("could not get stat for file: %s, error: %s", p.config.TargetFile, err.Error())
+		p.logger.Panicf("coult nod convert timestamp to int for file: %s, error: %s", p.tsFileName, err.Error())
 	}
-	stat_t := info.Sys().(*syscall.Stat_t)
-	creationTime := time.Unix(stat_t.Birthtimespec.Sec, stat_t.Birthtimespec.Nsec)
+	creationTime := time.Unix(t, 0)
 	p.nextSealUpTime = creationTime.Add(p.config.RetentionInterval_)
 }
 
@@ -202,9 +202,17 @@ func (p *Plugin) write(data []byte) {
 }
 
 func (p *Plugin) createNew() {
-	file, err := os.OpenFile(p.config.TargetFile, os.O_CREATE|os.O_APPEND|os.O_RDWR, os.FileMode(p.config.FileMode_))
+	p.tsFileName = fmt.Sprintf("%d%s%s%s", time.Now().Unix(), fileNameSeparator, p.fileName, p.fileExtension)
+	f := fmt.Sprintf("%s%s", p.targetDir, p.tsFileName)
+	pattern := fmt.Sprintf("%s*%s%s%s", p.targetDir, fileNameSeparator, p.fileName, p.fileExtension)
+	matches, err := filepath.Glob(pattern)
+	if len(matches) == 1 {
+		p.tsFileName = path.Base(matches[0])
+		f = fmt.Sprintf("%s%s", p.targetDir, p.tsFileName)
+	}
+	file, err := os.OpenFile(f, os.O_CREATE|os.O_APPEND|os.O_RDWR, os.FileMode(p.config.FileMode_))
 	if err != nil {
-		p.logger.Panicf("could not open or create file: %s, error: %s", p.config.TargetFile, err.Error())
+		p.logger.Panicf("could not open or create file: %s, error: %s", f, err.Error())
 	}
 	p.file = file
 }
@@ -231,7 +239,8 @@ func (p *Plugin) sealUp() {
 
 func (p *Plugin) rename() {
 	fullFileName := filepath.Join(p.targetDir, fmt.Sprintf("%s%s%d%s%s%s", p.fileName, fileNameSeparator, p.idx, fileNameSeparator, time.Now().Format(p.config.Layout), p.fileExtension))
-	if err := os.Rename(p.config.TargetFile, fullFileName); err != nil {
+	f := fmt.Sprintf("%s%s", p.targetDir, p.tsFileName)
+	if err := os.Rename(f, fullFileName); err != nil {
 		p.logger.Panicf("could not rename file, error: %s", err.Error())
 	}
 	p.idx++
