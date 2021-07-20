@@ -2,10 +2,11 @@ package journalctl
 
 import (
 	"bufio"
-	"github.com/ozonru/file.d/logger"
 	"io"
 	"os/exec"
 	"strings"
+
+	"github.com/ozonru/file.d/logger"
 
 	"go.uber.org/zap"
 )
@@ -71,11 +72,8 @@ func newJournalReader(config *journalReaderConfig) *journalReader {
 }
 
 func (r *journalReader) start() error {
-	r.config.logger.Infof("running \"journalctl %s\"", strings.Join(r.args, " "))
+	r.config.logger.Infof(`running "journalctl %s"`, strings.Join(r.args, " "))
 	r.cmd = exec.Command("journalctl", r.args...)
-	if r.cmd.Process == nil {
-		logger.Fatalf("can't run journalctl")
-	}
 
 	out, err := r.cmd.StdoutPipe()
 	if err != nil {

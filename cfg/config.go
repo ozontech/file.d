@@ -176,10 +176,12 @@ func ParseField(v reflect.Value, vField reflect.Value, tField reflect.StructFiel
 			}
 			vField.SetInt(int64(val))
 		case reflect.Slice:
-			val := strings.Fields(tag)
-			vField.Set(reflect.MakeSlice(vField.Type(), len(val), len(val)))
-			for i, v := range val {
-				vField.Index(i).SetString(v)
+			if vField.Len() == 0 {
+				val := strings.Fields(tag)
+				vField.Set(reflect.MakeSlice(vField.Type(), len(val), len(val)))
+				for i, v := range val {
+					vField.Index(i).SetString(v)
+				}
 			}
 		}
 	}
