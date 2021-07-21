@@ -176,7 +176,7 @@ func TestJoin(t *testing.T) {
 		logger.Panic(err.Error())
 	}
 
-	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, config, pipeline.MatchModeAnd, nil))
+	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, config, pipeline.MatchModeAnd, nil, false))
 
 	wg := &sync.WaitGroup{}
 	wg.Add(panics * iterations)

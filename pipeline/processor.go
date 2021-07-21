@@ -1,8 +1,6 @@
 package pipeline
 
 import (
-	"fmt"
-
 	"github.com/ozonru/file.d/logger"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
@@ -157,10 +155,8 @@ func (p *processor) processEvent(event *Event) (isSuccess bool, isPassed bool, e
 	}
 }
 
-func (p *processor) needToSkip(idx int, event *Event) bool {
-	isMatch := p.isMatch(idx, event)
-	s := (!isMatch && !p.actionInfos[idx].InvertMatchMode) || (isMatch && p.actionInfos[idx].InvertMatchMode)
-	fmt.Println("need to skip: ", s)
+
+func (p *processor) shouldSkip(idx int,  isMatch bool) bool {
 	return (!isMatch && !p.actionInfos[idx].InvertMatchMode) || (isMatch && p.actionInfos[idx].InvertMatchMode)
 }
 
@@ -170,10 +166,7 @@ func (p *processor) doActions(event *Event) (isPassed bool) {
 		action := p.actions[index]
 		event.action = index
 		p.countEvent(event, index, eventStatusReceived)
-		if p.needToSkip(index, event) {
-			fmt.Println("")
-			fmt.Println("in skipping")
-			fmt.Println("")
+		if p.shouldSkip(index, p.isMatch(index, event)) {
 			p.countEvent(event, index, eventStatusNotMatched)
 			continue
 		}

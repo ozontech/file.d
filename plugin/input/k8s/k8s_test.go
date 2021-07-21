@@ -64,7 +64,7 @@ func config() *Config {
 
 func TestEnrichment(t *testing.T) {
 	nodeLabels = map[string]string{"zone":"z34"}
-	p, input, _ := test.NewPipelineMock(test.NewActionPluginStaticInfo(MultilineActionFactory, config(), pipeline.MatchModeAnd, nil))
+	p, input, _ := test.NewPipelineMock(test.NewActionPluginStaticInfo(MultilineActionFactory, config(), pipeline.MatchModeAnd, nil, false))
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
 
@@ -98,7 +98,7 @@ func TestEnrichment(t *testing.T) {
 }
 
 func TestWhitelist(t *testing.T) {
-	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(MultilineActionFactory, config(), pipeline.MatchModeAnd, nil))
+	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(MultilineActionFactory, config(), pipeline.MatchModeAnd, nil, false))
 	wg := &sync.WaitGroup{}
 	wg.Add(2)
 
@@ -139,7 +139,7 @@ func TestWhitelist(t *testing.T) {
 }
 
 func TestJoin(t *testing.T) {
-	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(MultilineActionFactory, config(), pipeline.MatchModeAnd, nil))
+	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(MultilineActionFactory, config(), pipeline.MatchModeAnd, nil, false))
 	wg := &sync.WaitGroup{}
 	wg.Add(4)
 
@@ -207,7 +207,7 @@ func TestJoin(t *testing.T) {
 }
 
 func TestCleanUp(t *testing.T) {
-	p, _, _ := test.NewPipelineMock(test.NewActionPluginStaticInfo(MultilineActionFactory, config(), pipeline.MatchModeAnd, nil))
+	p, _, _ := test.NewPipelineMock(test.NewActionPluginStaticInfo(MultilineActionFactory, config(), pipeline.MatchModeAnd, nil, false))
 
 	enableGatherer(logger.Instance)
 	defer disableGatherer()

@@ -28,7 +28,7 @@ var formats = []string{
 }
 
 func (c *testConfig) runPipeline() {
-	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, c.config, pipeline.MatchModeAnd, nil))
+	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, c.config, pipeline.MatchModeAnd, nil, false))
 	wg := &sync.WaitGroup{}
 	wg.Add(c.eventsTotal)
 

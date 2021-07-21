@@ -17,7 +17,7 @@ func TestDecode(t *testing.T) {
 		Prefix: "prefix.",
 		Re2:    "(?P<date>[\\d]{4}-[\\d]{2}-[\\d]{2} [\\d]{2}:[\\d]{2}:[\\d]{2} GMT) \\[(?P<pid>[\\d]+)\\] => \\[(?P<pid_message_number>[\\d-]+)\\] client=(?P<client>[^,]*),db=(?P<db>[^,]*),user=(?P<user>[^,]*) (LOG|HINT):  (?P<message>.+)",
 	}
-	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, config, pipeline.MatchModeAnd, nil))
+	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, config, pipeline.MatchModeAnd, nil, false))
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
 
