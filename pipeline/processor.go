@@ -162,7 +162,12 @@ func (p *processor) doActions(event *Event) (isPassed bool) {
 		event.action = index
 		p.countEvent(event, index, eventStatusReceived)
 
-		if !p.isMatch(index, event) {
+		isMatch := p.isMatch(index, event)
+		if p.actionInfos[index].MatchInvert {
+			isMatch = !isMatch
+		}
+
+		if !isMatch {
 			p.countEvent(event, index, eventStatusNotMatched)
 			continue
 		}

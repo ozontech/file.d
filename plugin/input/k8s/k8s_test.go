@@ -64,7 +64,7 @@ func config() *Config {
 
 func TestEnrichment(t *testing.T) {
 	nodeLabels = map[string]string{"zone":"z34"}
-	p, input, _ := test.NewPipelineMock(test.NewActionPluginStaticInfo(MultilineActionFactory, config(), pipeline.MatchModeAnd, nil))
+	p, input, _ := test.NewPipelineMock(test.NewActionPluginStaticInfo(MultilineActionFactory, config(), pipeline.MatchModeAnd, nil, false))
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
 
@@ -97,8 +97,8 @@ func TestEnrichment(t *testing.T) {
 	assert.Equal(t, "z34", event.Root.Dig("k8s_node_label_zone").AsString(), "wrong event field")
 }
 
-func TestWhitelist(t *testing.T) {
-	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(MultilineActionFactory, config(), pipeline.MatchModeAnd, nil))
+func TestAllowedLabels(t *testing.T) {
+	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(MultilineActionFactory, config(), pipeline.MatchModeAnd, nil, false))
 	wg := &sync.WaitGroup{}
 	wg.Add(2)
 
@@ -134,12 +134,12 @@ func TestWhitelist(t *testing.T) {
 	wg.Wait()
 	p.Stop()
 
-	assert.Equal(t, "allowed_value", outEvents[0].Root.Dig("k8s_label_allowed_label").AsString(), "no label in event")
+	assert.Equal(t, "allowed_value", outEvents[0].Root.Dig("k8s_pod_label_allowed_label").AsString(), "no label in event")
 	assert.Nil(t, outEvents[1].Root.Dig("k8s_label_denied_label"), "extra label in event")
 }
 
 func TestJoin(t *testing.T) {
-	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(MultilineActionFactory, config(), pipeline.MatchModeAnd, nil))
+	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(MultilineActionFactory, config(), pipeline.MatchModeAnd, nil, false))
 	wg := &sync.WaitGroup{}
 	wg.Add(4)
 
@@ -207,7 +207,7 @@ func TestJoin(t *testing.T) {
 }
 
 func TestCleanUp(t *testing.T) {
-	p, _, _ := test.NewPipelineMock(test.NewActionPluginStaticInfo(MultilineActionFactory, config(), pipeline.MatchModeAnd, nil))
+	p, _, _ := test.NewPipelineMock(test.NewActionPluginStaticInfo(MultilineActionFactory, config(), pipeline.MatchModeAnd, nil, false))
 
 	enableGatherer(logger.Instance)
 	defer disableGatherer()

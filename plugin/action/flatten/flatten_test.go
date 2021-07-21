@@ -18,7 +18,7 @@ func TestFlatten(t *testing.T) {
 		logger.Panicf("wrong config")
 	}
 
-	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, config, pipeline.MatchModeAnd, nil))
+	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, config, pipeline.MatchModeAnd, nil, false))
 
 	wg := &sync.WaitGroup{}
 	acceptedEvents := make([]*pipeline.Event, 0, 0)

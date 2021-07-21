@@ -10,7 +10,7 @@ import (
 )
 
 func TestRemoveFields(t *testing.T) {
-	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, &Config{Fields: []string{"field_1", "field_2"}}, pipeline.MatchModeAnd, nil))
+	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, &Config{Fields: []string{"field_1", "field_2"}}, pipeline.MatchModeAnd, nil, false))
 	wg := &sync.WaitGroup{}
 	wg.Add(3)
 

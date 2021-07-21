@@ -143,6 +143,10 @@ func (f *FileD) setupAction(p *pipeline.Pipeline, index int, t string, actionJSO
 	if err != nil {
 		logger.Fatalf("can't extract match mode for action %d/%s in pipeline %q: %s", index, t, p.Name, err.Error())
 	}
+	matchInvert, err := extractMatchInvert(actionJSON)
+	if err != nil {
+		logger.Fatalf("can't extract invert match mode for action %d/%s in pipeline %q: %s", index, t, p.Name, err.Error())
+	}
 	conditions, err := extractConditions(actionJSON.Get("match_fields"))
 	if err != nil {
 		logger.Fatalf("can't extract conditions for action %d/%s in pipeline %q: %s", index, t, p.Name, err.Error())
@@ -171,6 +175,7 @@ func (f *FileD) setupAction(p *pipeline.Pipeline, index int, t string, actionJSO
 		MatchMode:        matchMode,
 		MetricName:       metricName,
 		MetricLabels:     metricLabels,
+		MatchInvert:      matchInvert,
 	})
 }
 

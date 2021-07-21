@@ -18,7 +18,7 @@ func TestRename(t *testing.T) {
 		"k8s_node_label_topology\\.kubernetes\\.io/zone": "renamed_field.escaped",
 		"override":              false,
 	}
-	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, config, pipeline.MatchModeAnd, nil))
+	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, config, pipeline.MatchModeAnd, nil, false))
 	wg := &sync.WaitGroup{}
 	wg.Add(5)
 
