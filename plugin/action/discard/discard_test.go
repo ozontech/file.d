@@ -141,7 +141,7 @@ func TestDiscardRegex(t *testing.T) {
 	assert.Equal(t, 3, len(outEvents), "wrong out events count")
 }
 
-func TestDiscardInvertMode(t *testing.T) {
+func TestDiscardMatchInvert(t *testing.T) {
 	//only this value should appear
 	conds := pipeline.MatchConditions{
 		pipeline.MatchCondition{

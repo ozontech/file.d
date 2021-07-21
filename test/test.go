@@ -171,13 +171,13 @@ func NewPluginStaticInfo(factory pipeline.PluginFactory, config pipeline.AnyConf
 	}
 }
 
-func NewActionPluginStaticInfo(factory pipeline.PluginFactory, config pipeline.AnyConfig, mode pipeline.MatchMode, conds pipeline.MatchConditions, invertMatchMode bool) []*pipeline.ActionPluginStaticInfo {
+func NewActionPluginStaticInfo(factory pipeline.PluginFactory, config pipeline.AnyConfig, mode pipeline.MatchMode, conds pipeline.MatchConditions, matchInvert bool) []*pipeline.ActionPluginStaticInfo {
 	return []*pipeline.ActionPluginStaticInfo{
 		{
 			PluginStaticInfo: NewPluginStaticInfo(factory, config),
 			MatchConditions:  conds,
 			MatchMode:        mode,
-			InvertMatchMode: invertMatchMode,
+			MatchInvert:      matchInvert,
 		},
 	}
 }

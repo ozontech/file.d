@@ -155,18 +155,19 @@ func (p *processor) processEvent(event *Event) (isSuccess bool, isPassed bool, e
 	}
 }
 
-
-func (p *processor) shouldSkip(idx int,  isMatch bool) bool {
-	return (!isMatch && !p.actionInfos[idx].InvertMatchMode) || (isMatch && p.actionInfos[idx].InvertMatchMode)
-}
-
 func (p *processor) doActions(event *Event) (isPassed bool) {
 	l := len(p.actions)
 	for index := event.action; index < l; index++ {
 		action := p.actions[index]
 		event.action = index
 		p.countEvent(event, index, eventStatusReceived)
-		if p.shouldSkip(index, p.isMatch(index, event)) {
+
+		isMatch := p.isMatch(index, event)
+		if p.actionInfos[index].MatchInvert {
+			isMatch = !isMatch
+		}
+
+		if !isMatch {
 			p.countEvent(event, index, eventStatusNotMatched)
 			continue
 		}

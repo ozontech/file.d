@@ -79,7 +79,7 @@ type ActionPluginStaticInfo struct {
 	MetricLabels    []string
 	MatchConditions MatchConditions
 	MatchMode       MatchMode
-	InvertMatchMode bool
+	MatchInvert     bool
 }
 
 type ActionPluginInfo struct {

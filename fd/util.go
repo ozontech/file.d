@@ -80,8 +80,8 @@ func extractMatchMode(actionJSON *simplejson.Json) (pipeline.MatchMode, error) {
 	return matchMode, nil
 }
 
-func extractInvertMatchMode (actionJSON *simplejson.Json) (bool, error){
-	invertMatchMode := actionJSON.Get("invert_match_mode").MustBool()
+func extractMatchInvert (actionJSON *simplejson.Json) (bool, error){
+	invertMatchMode := actionJSON.Get("match_invert").MustBool()
 	return invertMatchMode, nil
 }
 
@@ -124,7 +124,7 @@ func makeActionJSON(actionJSON *simplejson.Json) []byte {
 	actionJSON.Del("match_mode")
 	actionJSON.Del("metric_name")
 	actionJSON.Del("metric_labels")
-	actionJSON.Del("invert_match_mode")
+	actionJSON.Del("match_invert")
 	configJson, err := actionJSON.Encode()
 	if err != nil {
 		logger.Panicf("can't create action json")
