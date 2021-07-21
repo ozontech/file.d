@@ -4,11 +4,13 @@ require (
 	github.com/Shopify/sarama v1.29.1
 	github.com/alecthomas/kingpin v2.2.6+incompatible
 	github.com/alecthomas/units v0.0.0-20190924025748-f65c72e2690d
+	github.com/alicebob/miniredis/v2 v2.15.1
 	github.com/bitly/go-simplejson v0.5.0
 	github.com/bmizerany/assert v0.0.0-20160611221934-b7ed37b82869 // indirect
 	github.com/euank/go-kmsg-parser v2.0.0+incompatible
 	github.com/fsnotify/fsnotify v1.4.9
 	github.com/ghodss/yaml v1.0.0
+	github.com/go-redis/redis v6.15.9+incompatible
 	github.com/gogo/protobuf v1.2.1 // indirect
 	github.com/golang/groupcache v0.0.0-20191002201903-404acd9df4cc // indirect
 	github.com/googleapis/gnostic v0.3.1 // indirect
