@@ -2,6 +2,8 @@ package join
 
 import (
 	"regexp"
+	"sync/atomic"
+	"time"
 
 	"github.com/ozonru/file.d/cfg"
 	"github.com/ozonru/file.d/fd"
@@ -11,7 +13,7 @@ import (
 
 /*{ introduction
 It makes one big event from the sequence of the events.
-It is useful for assembling back together "exceptions" or "panics" if they were written line by line. 
+It is useful for assembling back together "exceptions" or "panics" if they were written line by line.
 Also known as "multiline".
 
 > ⚠ Parsing the whole event flow could be very CPU intensive because the plugin uses regular expressions.
@@ -66,9 +68,11 @@ type Plugin struct {
 	controller pipeline.ActionPluginController
 	config     *Config
 
-	isJoining bool
-	initial   *pipeline.Event
-	buff      []byte
+	atomicLock int32
+	ticker     *time.Ticker
+	isJoining  bool
+	initial    *pipeline.Event
+	buff       []byte
 
 	logger *zap.SugaredLogger
 }
@@ -112,9 +116,35 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 	p.isJoining = false
 	p.buff = make([]byte, 0, params.PipelineSettings.AvgLogSize)
 	p.logger = params.Logger
+	p.ticker = time.NewTicker(time.Second)
+
+	go func() {
+		for range p.ticker.C {
+			p.spinLock()
+
+			if p.initial != nil {
+				p.flush()
+			}
+
+			p.spinUnlock()
+		}
+	}()
+}
+
+func (p *Plugin) spinUnlock() {
+	atomic.StoreInt32(&p.atomicLock, 0)
+}
+
+func (p *Plugin) spinLock() {
+	for {
+		if atomic.CompareAndSwapInt32(&p.atomicLock, 0, 1) {
+			break
+		}
+	}
 }
 
 func (p *Plugin) Stop() {
+	p.ticker.Stop()
 }
 
 func (p *Plugin) flush() {
@@ -132,6 +162,11 @@ func (p *Plugin) flush() {
 }
 
 func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
+	p.spinLock()
+	defer p.spinUnlock()
+
+	p.ticker.Reset(time.Second)
+
 	if event.IsTimeoutKind() {
 		if !p.isJoining {
 			p.logger.Panicf("timeout without joining, why?")
