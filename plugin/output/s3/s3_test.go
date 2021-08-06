@@ -62,7 +62,7 @@ func (m mockClient) FPutObject(bucketName, objectName, filePath string, opts min
 	return 1, nil
 }
 
-func Test_Start(t *testing.T) {
+func TestStart(t *testing.T) {
 	tests := struct {
 		firstPack  []test.Msg
 		secondPack []test.Msg
@@ -207,7 +207,7 @@ func newPipeline(t *testing.T, configOutput *Config) *pipeline.Pipeline {
 	return p
 }
 
-func Test_StartPanic(t *testing.T) {
+func TestStartPanic(t *testing.T) {
 	test.ClearDir(t, dir)
 	fileConfig := file.Config{
 
@@ -279,7 +279,7 @@ func (m mockClientWIthSomeFails) FPutObject(bucketName, objectName, filePath str
 	}
 }
 
-func Test_StartWithSendProblems(t *testing.T) {
+func TestStartWithSendProblems(t *testing.T) {
 	tests := struct {
 		firstPack  []test.Msg
 		secondPack []test.Msg

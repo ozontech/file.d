@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func Test_GetName(t *testing.T) {
+func TestGetName(t *testing.T) {
 	c := newZipCompressor(logger.Instance)
 	//filename:zipName
 	testsCases := map[string]string{
@@ -38,10 +38,10 @@ func (w simpleWriter) Write(p []byte) (n int, err error) {
 }
 
 var (
-	logStr = "I am a log line in file\n"
+	logStr = "I am a log line in a file\n"
 )
 
-func Test_Compress(t *testing.T) {
+func TestCompress(t *testing.T) {
 	dir := "tests"
 	test.ClearDir(t, dir)
 	defer test.ClearDir(t, dir)

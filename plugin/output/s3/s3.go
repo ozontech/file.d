@@ -96,13 +96,13 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.logger = params.Logger
 	p.config = config.(*Config)
 
-	//set up compression
+	// set up compression
 	p.config.CompressionType = strings.ToLower(p.config.CompressionType)
-	getNewCompressor, ok := compressors[p.config.CompressionType]
+	newCompressor, ok := compressors[p.config.CompressionType]
 	if !ok {
-		p.logger.Panicf("compression type: %s is not supported", p.config.CompressionType)
+		p.logger.Fatalf("compression type: %s is not supported", p.config.CompressionType)
 	}
-	p.compressor = getNewCompressor(p.logger)
+	p.compressor = newCompressor(p.logger)
 
 	dir, f := filepath.Split(p.config.FileConfig.TargetFile)
 
@@ -118,7 +118,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		go p.compressWork()
 	}
 
-	//Initialize minio client object.
+	// initialize minio client object.
 	minioClient, err := minio.New(p.config.Endpoint, p.config.AccessKey, p.config.SecretKey, p.config.Secure)
 	p.client = minioClient
 	if err != nil || minioClient == nil {
@@ -135,7 +135,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		p.logger.Panicf("could not check bucket: %s, error: %s", p.config.Bucket, err.Error())
 	}
 	if !exist {
-		p.logger.Panicf("bucket: %s, does not exist", p.config.Bucket)
+		p.logger.Fatalf("bucket: %s, does not exist", p.config.Bucket)
 	}
 	p.logger.Info("client is ready")
 	p.logger.Infof("bucket: %s exists", p.config.Bucket)
@@ -143,10 +143,10 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	anyPlugin, _ := file.Factory()
 	p.outPlugin = anyPlugin.(*file.Plugin)
 
-	p.outPlugin.SealupCallback = p.addFileJob
+	p.outPlugin.SealUpCallback = p.addFileJob
 
 	p.outPlugin.Start(&p.config.FileConfig, params)
-	p.uploadExistedFiles()
+	p.uploadExistingFiles()
 }
 
 func (p *Plugin) Stop() {
@@ -157,25 +157,26 @@ func (p *Plugin) Out(event *pipeline.Event) {
 	p.outPlugin.Out(event)
 }
 
-// uploadFiles gets files from dirs, sorts it, compresses it if it's need, and then upload to s3
-func (p *Plugin) uploadExistedFiles() {
-	//compress all files that we have in the dir
-	p.compressFilesInDir()
+// uploadExistingFiles gets files from dirs, sorts it, compresses it if it's need, and then upload to s3
+func (p *Plugin) uploadExistingFiles() {
 	// get all compressed files
 	pattern := fmt.Sprintf("%s*%s", p.targetDir, p.compressor.getExtension())
 	compressedFiles, err := filepath.Glob(pattern)
 	if err != nil {
 		p.logger.Panicf("could not read dir: %s", p.targetDir)
 	}
-	//sort compressed files by creation time
+	// sort compressed files by creation time
 	sort.Slice(compressedFiles, p.getSortFunc(compressedFiles))
-	//upload archive
+	// upload archive
 	for _, z := range compressedFiles {
 		p.uploadCh <- z
 	}
+
+	// compress all files that we have in the dir
+	p.compressFilesInDir()
 }
 
-//compressFilesInDir compresses all files in dir
+// compressFilesInDir compresses all files in dir
 func (p *Plugin) compressFilesInDir() {
 	pattern := fmt.Sprintf("%s/%s%s*%s*%s", p.targetDir, p.fileName, fileNameSeparator, fileNameSeparator, p.fileExtension)
 	files, err := filepath.Glob(pattern)
@@ -183,18 +184,14 @@ func (p *Plugin) compressFilesInDir() {
 	if err != nil {
 		p.logger.Panicf("could not read dir: %s", p.targetDir)
 	}
-	//sort files by creation time
+	// sort files by creation time
 	sort.Slice(files, p.getSortFunc(files))
 	for _, f := range files {
 		p.compressCh <- f
-		//delete old file
-		if err := os.Remove(f); err != nil {
-			p.logger.Panicf("could not delete file: %s, error: %s", f, err.Error())
-		}
 	}
 }
 
-//getSortFunc return func that sorts files by mod time
+// getSortFunc return func that sorts files by mod time
 func (p *Plugin) getSortFunc(files []string) func(i, j int) bool {
 	return func(i, j int) bool {
 		InfoI, err := os.Stat(files[i])
@@ -214,35 +211,35 @@ func (p *Plugin) addFileJob(fileName string) {
 	p.compressCh <- fileName
 }
 
-//uploadWork uploads compressed files from channel to s3 and then delete compressed file
+// uploadWork uploads compressed files from channel to s3 and then delete compressed file
 // in case error worker will attempt sending with an exponential time interval
 func (p *Plugin) uploadWork() {
 	for compressed := range p.uploadCh {
 		sleepTime := attemptInterval
 		for {
-			err := p.uploadCompressedFile(compressed)
+			err := p.uploadToS3(compressed)
 			if err == nil {
 				p.logger.Infof("successfully uploaded object: %s", compressed)
-				//delete archive after uploading
+				// delete archive after uploading
 				err = os.Remove(compressed)
 				if err != nil {
 					p.logger.Panicf("could not delete file: %s, err: %s", compressed, err.Error())
 				}
 				break
 			}
-			p.logger.Errorf("could not upload object: %s, error: %s", compressed, err.Error())
 			sleepTime += sleepTime
+			p.logger.Errorf("could not upload object: %s, next attempt in %s, error: %s", compressed, sleepTime.String(), err.Error())
 			time.Sleep(sleepTime)
 		}
 	}
 }
 
-//compressWork compress file from channel and then delete source file
+// compressWork compress file from channel and then delete source file
 func (p *Plugin) compressWork() {
 	for f := range p.compressCh {
 		compressedName := p.compressor.getName(f)
 		p.compressor.compress(compressedName, f)
-		//delete old file
+		// delete old file
 		if err := os.Remove(f); err != nil {
 			p.logger.Panicf("could not delete file: %s, error: %s", f, err.Error())
 		}
@@ -250,8 +247,8 @@ func (p *Plugin) compressWork() {
 	}
 }
 
-//uploadCompressedFile uploads compressed file to s3
-func (p *Plugin) uploadCompressedFile(name string) error {
+// uploadToS3 uploads compressed file to s3
+func (p *Plugin) uploadToS3(name string) error {
 	_, err := p.client.FPutObject(p.config.Bucket, p.generateObjectName(name), name, p.compressor.getObjectOptions())
 	if err != nil {
 		return fmt.Errorf("could not upload file: %s into bucket: %s, error: %s", name, p.config.Bucket, err.Error())
@@ -259,7 +256,7 @@ func (p *Plugin) uploadCompressedFile(name string) error {
 	return nil
 }
 
-//generateObjectName generates object name by compressed file name
+// generateObjectName generates object name by compressed file name
 func (p *Plugin) generateObjectName(name string) string {
 	n := strconv.FormatInt(r.Int63n(math.MaxInt64), 16)
 	n = n[len(n)-8:]

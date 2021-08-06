@@ -34,7 +34,7 @@ type Plugin struct {
 	fileName      string
 	tsFileName    string
 
-	SealupCallback func(string) ()
+	SealUpCallback func(string) ()
 
 	mu *sync.RWMutex
 }
@@ -226,6 +226,8 @@ func (p *Plugin) sealUp() {
 	if info.Size() == 0 {
 		return
 	}
+
+	// newFileName will be like: ".var/log/log_1_01-02-2009_15:04.log
 	newFileName := filepath.Join(p.targetDir, fmt.Sprintf("%s%s%d%s%s%s", p.fileName, fileNameSeparator, p.idx, fileNameSeparator, time.Now().Format(p.config.Layout), p.fileExtension))
 	p.rename(newFileName)
 	oldFile := p.file
@@ -237,8 +239,8 @@ func (p *Plugin) sealUp() {
 		p.logger.Panicf("could not close file: %s, error: %s", oldFile.Name(), err.Error())
 	}
 
-	if p.SealupCallback != nil {
-		go p.SealupCallback(newFileName)
+	if p.SealUpCallback != nil {
+		go p.SealUpCallback(newFileName)
 	}
 }
 
