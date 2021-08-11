@@ -3,3 +3,4 @@ file.d
 *.test
 ozon*
 dist/
+tests-offsets

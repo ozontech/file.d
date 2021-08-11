@@ -30,9 +30,9 @@ type jobProvider struct {
 
 	isStarted bool
 
-	jobs     map[pipeline.SourceID]*job
+	jobs     map[pipeline.SourceID]*Job
 	jobsMu   *sync.RWMutex
-	jobsChan chan *job
+	jobsChan chan *Job
 	jobsLog  []string
 
 	symlinks   map[inode]string
@@ -51,7 +51,7 @@ type jobProvider struct {
 	logger           *zap.SugaredLogger
 }
 
-type job struct {
+type Job struct {
 	file     *os.File
 	inode    inode
 	sourceID pipeline.SourceID // some value to distinguish jobs with same inode
@@ -83,10 +83,10 @@ func NewJobProvider(config *Config, controller pipeline.InputPluginController, l
 		controller: controller,
 		offsetDB:   newOffsetDB(config.OffsetsFile, config.OffsetsFileTmp),
 
-		jobs:     make(map[pipeline.SourceID]*job, config.MaxFiles),
+		jobs:     make(map[pipeline.SourceID]*Job, config.MaxFiles),
 		jobsDone: atomic.NewInt32(0),
 		jobsMu:   &sync.RWMutex{},
-		jobsChan: make(chan *job, config.MaxFiles),
+		jobsChan: make(chan *Job, config.MaxFiles),
 		jobsLog:  make([]string, 0, 16),
 
 		symlinks:   make(map[inode]string),
@@ -251,7 +251,7 @@ func (jp *jobProvider) refreshFile(stat os.FileInfo, filename string, symlink st
 func (jp *jobProvider) addJob(file *os.File, stat os.FileInfo, filename string, symlink string) {
 	sourceID := sourceIDByStat(stat, symlink)
 	inode := getInode(stat)
-	job := &job{
+	job := &Job{
 		file:     file,
 		inode:    inode,
 		filename: filename,
@@ -307,7 +307,7 @@ func sourceIDByStat(s os.FileInfo, symlink string) pipeline.SourceID {
 	return pipeline.SourceID(inode + symHash&math.MaxUint32)
 }
 
-func (jp *jobProvider) initJobOffset(operation offsetsOp, job *job) {
+func (jp *jobProvider) initJobOffset(operation offsetsOp, job *Job) {
 	switch operation {
 	case offsetsOpTail:
 		offset, err := job.file.Seek(0, io.SeekEnd)
@@ -362,7 +362,7 @@ func (jp *jobProvider) initJobOffset(operation offsetsOp, job *job) {
 }
 
 //tryResumeJob job should be already locked and it'll be unlocked
-func (jp *jobProvider) tryResumeJobAndUnlock(job *job, filename string) bool {
+func (jp *jobProvider) tryResumeJobAndUnlock(job *Job, filename string) bool {
 	jp.logger.Debugf("job for %d:%s resumed", job.sourceID, job.filename)
 
 	if !job.isDone {
@@ -382,11 +382,11 @@ func (jp *jobProvider) tryResumeJobAndUnlock(job *job, filename string) bool {
 	return true
 }
 
-func (jp *jobProvider) continueJob(job *job) {
+func (jp *jobProvider) continueJob(job *Job) {
 	jp.jobsChan <- job
 }
 
-func (jp *jobProvider) doneJob(job *job) {
+func (jp *jobProvider) doneJob(job *Job) {
 	job.mu.Lock()
 	if job.isDone {
 		jp.logger.Panicf("job is already done")
@@ -404,7 +404,7 @@ func (jp *jobProvider) doneJob(job *job) {
 	job.mu.Unlock()
 }
 
-func (jp *jobProvider) truncateJob(job *job) {
+func (jp *jobProvider) truncateJob(job *Job) {
 	job.mu.Lock()
 	defer job.mu.Unlock()
 
@@ -504,7 +504,7 @@ func (jp *jobProvider) maintenanceSymlinks() {
 func (jp *jobProvider) maintenanceJobs() {
 	// snapshot jobs to avoid long lock
 	jp.jobsMu.RLock()
-	jobs := make([]*job, 0, len(jp.jobs))
+	jobs := make([]*Job, 0, len(jp.jobs))
 	for _, job := range jp.jobs {
 		jobs = append(jobs, job)
 	}
@@ -534,7 +534,7 @@ func (jp *jobProvider) maintenanceJobs() {
 	jp.logger.Infof("file plugin maintenance stats: not done=%d, resumed=%d, reopened=%d, deleted=%d, errors=%d", notDone, resumed, reopened, deleted, errors)
 }
 
-func (jp *jobProvider) maintenanceJob(job *job) int {
+func (jp *jobProvider) maintenanceJob(job *Job) int {
 	job.mu.Lock()
 	isDone := job.isDone
 	filename := job.filename
@@ -622,7 +622,7 @@ func (jp *jobProvider) maintenanceJob(job *job) int {
 }
 
 // deleteJob job should be already locked and it'll be unlocked
-func (jp *jobProvider) deleteJobAndUnlock(job *job) {
+func (jp *jobProvider) deleteJobAndUnlock(job *Job) {
 	if !job.isDone {
 		jp.logger.Panicf("can't delete job, it isn't done: %d:%s", job.sourceID, job.filename)
 	}

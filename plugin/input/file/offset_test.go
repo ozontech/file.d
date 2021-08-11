@@ -1,6 +1,7 @@
 package file
 
 import (
+	"sync"
 	"testing"
 
 	"github.com/ozonru/file.d/pipeline"
@@ -46,4 +47,62 @@ func TestParseOffsets(t *testing.T) {
 	offset, has = item.streams["stderr"]
 	assert.True(t, has, "stream isn't found")
 	assert.Equal(t, int64(300), offset, "wrong offset")
+}
+
+func TestParallel(t *testing.T) {
+	data := `- file: /some/informational/name
+  inode: 1
+  source_id: 1234
+  streams:
+    default: 100
+    another: 200
+- file: /another/informational/name
+  inode: 2
+  source_id: 4321
+  streams:
+    stderr: 300
+`
+	jobs := make(map[pipeline.SourceID]*Job)
+	offsets := streamsOffsets{"stdout": 111, "stderr": 222}
+	jobs[0] = &Job{
+		file:           nil,
+		inode:          2343,
+		sourceID:       0,
+		filename:       "/file1",
+		symlink:        "/file1_sym",
+		ignoreEventsLE: 0,
+		lastEventSeq:   0,
+		isVirgin:       false,
+		isDone:         false,
+		shouldSkip:     false,
+		offsets:        offsets,
+		mu:             &sync.Mutex{},
+	}
+	jobs[1] = &Job{
+		file:           nil,
+		inode:          233,
+		sourceID:       0,
+		filename:       "/file2",
+		symlink:        "/file2_sym",
+		ignoreEventsLE: 0,
+		lastEventSeq:   0,
+		isVirgin:       false,
+		isDone:         false,
+		shouldSkip:     false,
+		offsets:        offsets,
+		mu:             &sync.Mutex{},
+	}
+	rwmu := &sync.RWMutex{}
+	count := 100
+	wg := sync.WaitGroup{}
+	wg.Add(100)
+	for i := 0; i < count; i++ {
+		go func() {
+			offsetDB := newOffsetDB("tests-offsets", "tests-offsets.tmp")
+			offsetDB.parse(data)
+			offsetDB.save(jobs, rwmu)
+			wg.Done()
+		}()
+	}
+	wg.Wait()
 }

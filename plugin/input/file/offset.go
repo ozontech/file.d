@@ -3,6 +3,7 @@ package file
 import (
 	"io/ioutil"
 	"math"
+	"math/rand"
 	"os"
 	"strconv"
 	"strings"
@@ -17,7 +18,7 @@ type offsetDB struct {
 	curOffsetsFile string
 	tmpOffsetsFile string
 	savesTotal     *atomic.Int64
-	jobsSnapshot   []*job
+	jobsSnapshot   []*Job
 	buf            []byte
 	mu             *sync.Mutex
 }
@@ -38,11 +39,13 @@ func newOffsetDB(curOffsetsFile string, tmpOffsetsFile string) *offsetDB {
 		mu:             &sync.Mutex{},
 		savesTotal:     &atomic.Int64{},
 		buf:            make([]byte, 0, 65536),
-		jobsSnapshot:   make([]*job, 0, 0),
+		jobsSnapshot:   make([]*Job, 0, 0),
 	}
 }
 
 func (o *offsetDB) load() fpOffsets {
+	logger.Infof("loading offsets: %s", o.curOffsetsFile)
+
 	info, err := os.Stat(o.curOffsetsFile)
 	if os.IsNotExist(err) {
 		return make(fpOffsets)
@@ -165,10 +168,11 @@ func (o *offsetDB) parseLine(content string, start string) (string, string) {
 	l := len(start)
 
 	linePos := strings.IndexByte(content, '\n')
-	line := content[0:linePos]
 	if linePos < 0 {
 		logger.Panicf("wrong offsets format, no nl: %q", content)
 	}
+	line := content[0:linePos]
+
 	content = content[linePos+1:]
 	if linePos < l || line[0:l] != start {
 		logger.Panicf("wrong offsets file format expected=%q, got=%q", start, line[0:l])
@@ -177,7 +181,7 @@ func (o *offsetDB) parseLine(content string, start string) (string, string) {
 	return line[l:], content
 }
 
-func (o *offsetDB) save(jobs map[pipeline.SourceID]*job, mu *sync.RWMutex) {
+func (o *offsetDB) save(jobs map[pipeline.SourceID]*Job, mu *sync.RWMutex) {
 	o.savesTotal.Inc()
 
 	o.mu.Lock()
@@ -186,7 +190,11 @@ func (o *offsetDB) save(jobs map[pipeline.SourceID]*job, mu *sync.RWMutex) {
 	// snapshot jobs to avoid long locks
 	snapshot := o.snapshotJobs(mu, jobs)
 
-	file, err := os.OpenFile(o.tmpOffsetsFile, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0664)
+	tmpWithRandom := append(make([]byte, 0), o.tmpOffsetsFile...)
+	tmpWithRandom = append(tmpWithRandom, '.')
+	tmpWithRandom = strconv.AppendUint(tmpWithRandom, rand.Uint64(), 8)
+
+	file, err := os.OpenFile(string(tmpWithRandom), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0664)
 	if err != nil {
 		logger.Errorf("can't open temp offsets file %s, %s", o.tmpOffsetsFile, err.Error())
 		return
@@ -239,13 +247,13 @@ func (o *offsetDB) save(jobs map[pipeline.SourceID]*job, mu *sync.RWMutex) {
 		logger.Errorf("can't sync offsets file %s, %s", o.tmpOffsetsFile, err.Error())
 	}
 
-	err = os.Rename(o.tmpOffsetsFile, o.curOffsetsFile)
+	err = os.Rename(string(tmpWithRandom), o.curOffsetsFile)
 	if err != nil {
 		logger.Errorf("failed renaming temporary offsets file to current: %s", err.Error())
 	}
 }
 
-func (o *offsetDB) snapshotJobs(mu *sync.RWMutex, jobs map[pipeline.SourceID]*job) []*job {
+func (o *offsetDB) snapshotJobs(mu *sync.RWMutex, jobs map[pipeline.SourceID]*Job) []*Job {
 	o.jobsSnapshot = o.jobsSnapshot[:0]
 	mu.RLock()
 	for _, job := range jobs {
