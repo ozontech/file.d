@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"sort"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/minio/minio-go"
@@ -63,20 +62,20 @@ type Plugin struct {
 }
 
 type Config struct {
-	//Under the hood this plugin uses /plugin/output/file/ to collect logs
+	// Under the hood this plugin uses /plugin/output/file/ to collect logs
 	FileConfig file.Config `json:"file_config" child:"true"`
 
-	//Compression type
-	CompressionType string `json:"compression_type" default:"zip"`
+	// Compression type
+	CompressionType string `json:"compression_type" default:"zip" options:"zip"`
 
-	//s3 section
+	// s3 section
 	Endpoint  string `json:"endpoint" required:"true"`
 	AccessKey string `json:"access_key" required:"true"`
 	SecretKey string `json:"secret_key" required:"true"`
 	Bucket    string `json:"bucket" required:"true"`
 	Secure    bool   `json:"secure" default:"false"`
 
-	//for mock client injection
+	// for mock client injection
 	client *objectStoreClient
 }
 
@@ -97,7 +96,6 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.config = config.(*Config)
 
 	// set up compression
-	p.config.CompressionType = strings.ToLower(p.config.CompressionType)
 	newCompressor, ok := compressors[p.config.CompressionType]
 	if !ok {
 		p.logger.Fatalf("compression type: %s is not supported", p.config.CompressionType)

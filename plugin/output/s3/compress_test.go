@@ -14,7 +14,6 @@ import (
 
 func TestGetName(t *testing.T) {
 	c := newZipCompressor(logger.Instance)
-	//filename:zipName
 	testsCases := map[string]string{
 		"some":                "some.zip",
 		"awesome.log":         "awesome.log.zip",
@@ -56,7 +55,7 @@ func TestCompress(t *testing.T) {
 		"tests/some.log",
 	}
 
-	//create files and write data
+	// create files and write data
 	for _, v := range testsCases {
 		file, err := os.OpenFile(v, os.O_CREATE|os.O_APPEND|os.O_RDWR, os.FileMode(0666))
 		assert.NoError(t, err)
@@ -66,7 +65,7 @@ func TestCompress(t *testing.T) {
 		assert.NoError(t, err)
 	}
 
-	//then compress them
+	// then compress them
 	for _, v := range testsCases {
 		c.compress(c.getName(v), v)
 	}

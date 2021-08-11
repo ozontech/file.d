@@ -64,7 +64,7 @@ func TestGetStartIdx(t *testing.T) {
 			fileName:      file[0 : len(file)-len(extension)],
 		}
 
-		//create files
+		// create files
 		files := make([]*os.File, len(tc.filesName))
 		createDir(t, p.targetDir)
 		for _, f := range tc.filesName {
@@ -114,20 +114,20 @@ func TestSealUpHasContent(t *testing.T) {
 		tsFileName:    path.Base(testFileName),
 	}
 
-	//call func
+	// call func
 	p.sealUp()
 
-	//check work result
+	// check work result
 	pattern := fmt.Sprintf("%s/*%s", p.targetDir, p.fileExtension)
 	matches := test.GetMatches(t, pattern)
 	assert.Equal(t, 2, len(matches))
 
-	//check new file was created and it is empty
+	// check new file was created and it is empty
 	info, err := p.file.Stat()
 	assert.EqualValues(t, 0, info.Size())
 	assert.NoError(t, err)
 
-	//check old file was renamed. And renamed file is not empty and contains data
+	// check old file was renamed. And renamed file is not empty and contains data
 	for _, v := range matches {
 		if v != fmt.Sprintf("%s%s", dir, p.tsFileName) {
 			info, err := os.Stat(v)
@@ -168,14 +168,14 @@ func TestSealUpNoContent(t *testing.T) {
 	infoInitial, _ := f.Stat()
 	assert.Zero(t, infoInitial.Size())
 
-	//call func
+	// call func
 	p.sealUp()
 
-	//check work result
+	// check work result
 	pattern := fmt.Sprintf("%s/*%s", p.targetDir, p.fileExtension)
 	assert.Equal(t, 1, len(test.GetMatches(t, pattern)))
 
-	//check new file was created and it is empty
+	// check new file was created and it is empty
 	info, err := p.file.Stat()
 	assert.Zero(t, info.Size())
 	assert.NoError(t, err)
@@ -230,14 +230,14 @@ func TestStart(t *testing.T) {
 	p.Start()
 	time.Sleep(300 * time.Microsecond)
 
-	//check log file created and empty
+	// check log file created and empty
 	matches := test.GetMatches(t, logFilePattern)
 	assert.Equal(t, 1, len(matches))
 
 	tsFileName := matches[0]
 	test.CheckZero(t, tsFileName, "log file is not created or is not empty")
 
-	//send events
+	// send events
 	packSize := test.SendPack(t, p, tests.firstPack)
 	totalSent += packSize
 	time.Sleep(writeFileSleep)
@@ -245,8 +245,8 @@ func TestStart(t *testing.T) {
 	// check that plugin wrote into the file
 	assert.Equal(t, packSize, test.CheckNotZero(t, tsFileName, "check log file has data"), "plugin did not write into the file")
 	time.Sleep(sealUpFileSleep)
-	//check sealing up
-	//check log file is empty
+	// check sealing up
+	// check log file is empty
 	matches = test.GetMatches(t, logFilePattern)
 	assert.Equal(t, 1, len(matches))
 	tsFileName = matches[0]
@@ -264,7 +264,7 @@ func TestStart(t *testing.T) {
 		}
 	}
 
-	//send next pack. And stop pipeline before next seal up time
+	// send next pack. And stop pipeline before next seal up time
 	totalSent += test.SendPack(t, p, tests.secondPack)
 	time.Sleep(writeFileSleep)
 	// check that plugin wrote into the file
@@ -281,10 +281,10 @@ func TestStart(t *testing.T) {
 
 	time.Sleep(sealUpFileSleep)
 	// Start new pipeline like pod restart
-	//start pipeline again
+	// start pipeline again
 	p2 := newPipeline(t, config)
 	p2.Start()
-	//waite ticker 1st tick
+	// waite ticker 1st tick
 	time.Sleep(FileSealUpInterval + 50*time.Millisecond)
 	// check old file log file is sealed up
 	matches = test.GetMatches(t, generalPattern)
@@ -297,7 +297,7 @@ func TestStart(t *testing.T) {
 		}
 	}
 
-	//send third pack
+	// send third pack
 	totalSent += test.SendPack(t, p2, tests.thirdPack)
 	time.Sleep(writeFileSleep)
 

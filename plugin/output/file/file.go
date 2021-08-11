@@ -123,7 +123,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.idx = p.getStartIdx()
 	p.createNew()
 	p.setNextSealUpTime()
-	//additional checks
+	// additional checks
 	if p.file == nil {
 		p.logger.Panic("file struct is nil!")
 	}
@@ -217,7 +217,7 @@ func (p *Plugin) createNew() {
 	p.file = file
 }
 
-//sealUp manages current file: renames, closes, and creates new.
+// sealUp manages current file: renames, closes, and creates new.
 func (p *Plugin) sealUp() {
 	info, err := p.file.Stat()
 	if err != nil {

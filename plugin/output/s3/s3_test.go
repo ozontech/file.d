@@ -86,7 +86,7 @@ func TestStart(t *testing.T) {
 	}
 
 	file.FileSealUpInterval = 200 * time.Millisecond
-	//pattern for parent log file
+	// pattern for parent log file
 	pattern := fmt.Sprintf("%s/*.log", dir)
 
 	writeFileSleep := 100*time.Millisecond + 100*time.Millisecond
@@ -126,12 +126,12 @@ func TestStart(t *testing.T) {
 	time.Sleep(sealUpFileSleep)
 	size1 := test.CheckNotZero(t, fileName, "s3 data is missed after first pack")
 
-	//check deletion upload log files
+	// check deletion upload log files
 	match := test.GetMatches(t, pattern)
 	assert.Equal(t, 1, len(match))
 	test.CheckZero(t, match[0], "log file is not nil")
 
-	//initial sending the second pack
+	// initial sending the second pack
 	// no special situations
 	test.SendPack(t, p, tests.secondPack)
 	time.Sleep(writeFileSleep)
@@ -144,18 +144,18 @@ func TestStart(t *testing.T) {
 	size2 := test.CheckNotZero(t, fileName, "s3 data missed after second pack")
 	assert.True(t, size2 > size1)
 
-	//failed during writing
+	// failed during writing
 	test.SendPack(t, p, tests.thirdPack)
 	time.Sleep(writeFileSleep - writeFileSleep/2)
 	p.Stop()
 
-	//check log file not empty
+	// check log file not empty
 	match = test.GetMatches(t, pattern)
 	assert.Equal(t, 1, len(match))
 	test.CheckNotZero(t, match[0], "log file data missed")
 	time.Sleep(sealUpFileSleep)
 
-	//restart like after crash
+	// restart like after crash
 	p.Start()
 
 	time.Sleep(sealUpFileSleep / 2)
@@ -303,7 +303,7 @@ func TestStartWithSendProblems(t *testing.T) {
 	}
 
 	file.FileSealUpInterval = 200 * time.Millisecond
-	//pattern for parent log file
+	// pattern for parent log file
 	pattern := fmt.Sprintf("%s/*.log", dir)
 	zipPattern := fmt.Sprintf("%s/*.zip", dir)
 
@@ -355,7 +355,7 @@ func TestStartWithSendProblems(t *testing.T) {
 	assert.Equal(t, 1, len(matches))
 	test.CheckZero(t, matches[0], "log file is not empty")
 
-	//initial sending the second pack
+	// initial sending the second pack
 	// no special situations
 	test.SendPack(t, p, tests.secondPack)
 	time.Sleep(writeFileSleep)
@@ -365,7 +365,7 @@ func TestStartWithSendProblems(t *testing.T) {
 	assert.Equal(t, 1, len(matches))
 	test.CheckZero(t, matches[0], "log file is not empty")
 
-	//check not empty zips
+	// check not empty zips
 	matches = test.GetMatches(t, zipPattern)
 	assert.GreaterOrEqual(t, len(matches), 2)
 	for _, m := range matches {
@@ -374,7 +374,7 @@ func TestStartWithSendProblems(t *testing.T) {
 
 	noSentToS3(t)
 
-	//	allow sending to s3
+	// allow sending to s3
 	s3Client := s3MockClient.(mockClientWIthSomeFails)
 	s3Client.Cancel()
 
@@ -386,7 +386,7 @@ func TestStartWithSendProblems(t *testing.T) {
 	sleep := sealUpFileSleep
 	for {
 		time.Sleep(sleep)
-		//wait deletion
+		// wait deletion
 		matches = test.GetMatches(t, zipPattern)
 		if len(matches) == 0 {
 			logger.Infof("spent %f second of %f second of fake loading", sleep.Seconds(), maxTimeWait.Seconds())
@@ -401,16 +401,16 @@ func TestStartWithSendProblems(t *testing.T) {
 		sleep += sleep
 	}
 
-	//	1)chek zip  in dir
+	// chek zip  in dir
 	matches = test.GetMatches(t, zipPattern)
 	assert.Equal(t, 0, len(matches))
 
-	//	2) check log file
+	// check log file
 	matches = test.GetMatches(t, pattern)
 	assert.Equal(t, 1, len(matches))
 	test.CheckZero(t, matches[0], "log file is not empty after restart sending")
 
-	//	3) проверить моковский файл, что он не пустой и там больше трех записей
+	// check mock file is not empty and contains more than 3 raws
 	test.CheckNotZero(t, fileName, "s3 file is empty")
 	file, err := os.Open(fileName)
 	assert.NoError(t, err)
@@ -428,7 +428,7 @@ func TestStartWithSendProblems(t *testing.T) {
 
 func noSentToS3(t *testing.T) {
 	t.Helper()
-	//check no sent
+	// check no sent
 	_, err := os.Stat(fileName)
 	assert.Error(t, err)
 	assert.True(t, os.IsNotExist(err))
