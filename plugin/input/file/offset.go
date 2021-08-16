@@ -194,7 +194,7 @@ func (o *offsetDB) save(jobs map[pipeline.SourceID]*Job, mu *sync.RWMutex) {
 	tmpWithRandom = append(tmpWithRandom, '.')
 	tmpWithRandom = strconv.AppendUint(tmpWithRandom, rand.Uint64(), 8)
 
-	file, err := os.OpenFile(string(tmpWithRandom), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0664)
+	file, err := os.OpenFile(string(tmpWithRandom), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0600)
 	if err != nil {
 		logger.Errorf("can't open temp offsets file %s, %s", o.tmpOffsetsFile, err.Error())
 		return

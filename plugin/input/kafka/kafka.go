@@ -68,6 +68,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 
 	p.context, p.cancel = context.WithCancel(context.Background())
 	p.consumerGroup = p.newConsumerGroup()
+	p.controller.UseSpread()
 	p.controller.DisableStreams()
 
 	go p.consume()

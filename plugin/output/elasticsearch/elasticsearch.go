@@ -64,7 +64,7 @@ type Config struct {
 	//> @3@4@5@6
 	//>
 	//> It defines how much time to wait for the connection.
-	ConnectionTimeout  cfg.Duration `json:"connection_timeout" default:"5s"` //*
+	ConnectionTimeout  cfg.Duration `json:"connection_timeout" default:"5s" parse:"duration"`  //*
 	ConnectionTimeout_ time.Duration
 
 	//> @3@4@5@6
@@ -82,7 +82,7 @@ type Config struct {
 	//> @3@4@5@6
 	//>
 	//> After this timeout batch will be sent even if batch isn't full.
-	BatchFlushTimeout  cfg.Duration `json:"batch_flush_timeout" default:"200ms"` //*
+	BatchFlushTimeout  cfg.Duration `json:"batch_flush_timeout" default:"200ms" parse:"duration"`  //*
 	BatchFlushTimeout_ time.Duration
 }
 
@@ -125,6 +125,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 
 	p.maintenance(nil)
 
+	p.logger.Infof("starting batcher: timeout=%d", p.config.BatchFlushTimeout_)
 	p.batcher = pipeline.NewBatcher(
 		params.PipelineName,
 		"elasticsearch",
@@ -169,6 +170,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 		resp, err := p.client.Post(endpoint, "application/x-ndjson", bytes.NewBuffer(data.outBuf))
 		if err != nil {
 			p.logger.Errorf("can't send batch to %s, will try other endpoint: %s", endpoint, err.Error())
+			time.Sleep(time.Second)
 			continue
 		}
 

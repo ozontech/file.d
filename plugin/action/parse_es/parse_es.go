@@ -15,6 +15,7 @@ type Plugin struct {
 	config      *Config
 	passNext    bool
 	discardNext bool
+	isStrict    bool
 }
 
 type Config struct {
@@ -33,6 +34,7 @@ func factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 
 func (p *Plugin) Start(_ pipeline.AnyConfig, params *pipeline.ActionPluginParams) {
 	p.logger = params.Logger
+	p.isStrict = params.PipelineSettings.IsStrict
 }
 
 func (p *Plugin) Stop() {

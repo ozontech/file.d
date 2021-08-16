@@ -55,7 +55,7 @@ type Config struct {
 	//> @3@4@5@6
 	//>
 	//> How much time to wait for the connection?
-	ConnectionTimeout  cfg.Duration `json:"connection_timeout" default:"5s"` //*
+	ConnectionTimeout  cfg.Duration `json:"connection_timeout" default:"5s" parse:"duration"` //*
 	ConnectionTimeout_ time.Duration
 
 	//> @3@4@5@6
@@ -118,7 +118,7 @@ type Config struct {
 	//> @3@4@5@6
 	//>
 	//> After this timeout the batch will be sent even if batch isn't completed.
-	BatchFlushTimeout  cfg.Duration `json:"batch_flush_timeout" default:"200ms"` //*
+	BatchFlushTimeout  cfg.Duration `json:"batch_flush_timeout" default:"200ms" parse:"duration"` //*
 	BatchFlushTimeout_ time.Duration
 
 	// fields converted to extra fields GELF format

@@ -32,7 +32,8 @@ type finalizeFn = func(event *Event, notifyInput bool, backEvent bool)
 
 type InputPluginController interface {
 	In(sourceID SourceID, sourceName string, offset int64, data []byte, isNewSource bool) uint64
-	DisableStreams()                      // don't use stream field and spread all events across all processors
+	UseSpread()                           // don't use stream field and spread all events across all processors
+	DisableStreams()                      // don't use stream field
 	SuggestDecoder(t decoder.DecoderType) // set decoder if pipeline uses "auto" value for decoder
 }
 
@@ -59,9 +60,10 @@ type Pipeline struct {
 	eventPool *eventPool
 	streamer  *streamer
 
-	useStreams bool
-	singleProc bool
-	shouldStop bool
+	useSpread      bool
+	disableStreams bool
+	singleProc     bool
+	shouldStop     bool
 
 	input      InputPlugin
 	inputInfo  *InputPluginInfo
@@ -102,10 +104,11 @@ type Settings struct {
 
 func New(name string, settings *Settings, registry *prometheus.Registry, mux *http.ServeMux) *Pipeline {
 	pipeline := &Pipeline{
-		Name:       name,
-		logger:     logger.Instance.Named(name),
-		settings:   settings,
-		useStreams: true,
+		Name:           name,
+		logger:         logger.Instance.Named(name),
+		settings:       settings,
+		useSpread:      false,
+		disableStreams: false,
 		actionParams: &PluginDefaultParams{
 			PipelineName:     name,
 			PipelineSettings: settings,
@@ -241,7 +244,11 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 	case decoder.JSON:
 		err := event.parseJSON(bytes)
 		if err != nil {
-			p.logger.Fatalf("wrong json format offset=%d, length=%d, err=%s, source=%d:%s, json=%s", offset, length, err.Error(), sourceID, sourceName, bytes)
+			if p.settings.IsStrict {
+				p.logger.Fatalf("wrong json format offset=%d, length=%d, err=%s, source=%d:%s, json=%s", offset, length, err.Error(), sourceID, sourceName, bytes)
+			} else {
+				p.logger.Errorf("wrong json format offset=%d, length=%d, err=%s, source=%d:%s, json=%s", offset, length, err.Error(), sourceID, sourceName, bytes)
+			}
 			return 0
 		}
 	case decoder.RAW:
@@ -280,15 +287,15 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 
 func (p *Pipeline) streamEvent(event *Event) uint64 {
 	// spread events across all processors
-	if !p.useStreams {
-		sourceID := SourceID(event.SeqID % uint64(p.procCount.Load()))
-
-		return p.streamer.putEvent(sourceID, DefaultStreamName, event)
+	if p.useSpread {
+		event.SourceID = SourceID(event.SeqID % uint64(p.procCount.Load()))
 	}
 
-	node := event.Root.Dig(p.settings.StreamField)
-	if node != nil {
-		event.streamName = StreamName(node.AsString())
+	if !p.disableStreams {
+		node := event.Root.Dig(p.settings.StreamField)
+		if node != nil {
+			event.streamName = StreamName(node.AsString())
+		}
 	}
 
 	return p.streamer.putEvent(event.SourceID, event.streamName, event)
@@ -463,8 +470,12 @@ func (p *Pipeline) maintenance() {
 	}
 }
 
+func (p *Pipeline) UseSpread() {
+	p.useSpread = true
+}
+
 func (p *Pipeline) DisableStreams() {
-	p.useStreams = false
+	p.disableStreams = true
 }
 
 func (p *Pipeline) SuggestDecoder(t decoder.DecoderType) {
