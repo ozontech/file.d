@@ -66,6 +66,10 @@ const testTime = 10 * time.Minute
 // It's something like fuzz testing. file.d shouldn't crash/panic or hang for infinite time.
 // E.g. keep this test running while you are sleeping :)
 func TestEndToEnd(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping testing in short mode")
+	}
+
 	configFilename := "./../testdata/config/e2e.yaml"
 	iterationInterval := time.Second * 10
 	writerCount := 8

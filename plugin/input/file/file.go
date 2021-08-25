@@ -1,6 +1,8 @@
 package file
 
 import (
+	"net/http"
+	"sync"
 	"time"
 
 	"github.com/ozonru/file.d/cfg"
@@ -81,7 +83,7 @@ type Config struct {
 	//> @3@4@5@6
 	//>
 	//> The filename to store offsets of processed files. Offsets are loaded only on initialization.
-	//> > It's a `yaml` file. You can modify it manually. 
+	//> > It's a `yaml` file. You can modify it manually.
 	OffsetsFile    string `json:"offsets_file" required:"true"` //*
 	OffsetsFileTmp string
 
@@ -134,7 +136,7 @@ type Config struct {
 
 	//> @3@4@5@6
 	//>
-	//> It defines how many workers will be instantiated. 
+	//> It defines how many workers will be instantiated.
 	//> Each worker:
 	//> * Reads files (I/O bound)
 	//> * Decodes events (CPU bound)
@@ -156,10 +158,18 @@ type Config struct {
 	MaintenanceInterval_ time.Duration
 }
 
+var resetter Resetter = Resetter{
+	plug:     nil,
+	offsetMu: sync.Mutex{},
+}
+
 func init() {
 	fd.DefaultPluginRegistry.RegisterInput(&pipeline.PluginStaticInfo{
 		Type:    "file",
 		Factory: Factory,
+		Endpoints: map[string]func(http.ResponseWriter, *http.Request){
+			"reset": resetter.reset,
+		},
 	})
 }
 
@@ -175,6 +185,9 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	p.config.OffsetsFileTmp = p.config.OffsetsFile + ".atomic"
 
 	p.jobProvider = NewJobProvider(p.config, p.params.Controller, p.logger)
+
+	resetter.setPlug(p)
+
 	p.startWorkers()
 	p.jobProvider.start()
 }

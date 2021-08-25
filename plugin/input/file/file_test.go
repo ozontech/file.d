@@ -19,8 +19,9 @@ import (
 	"github.com/ozonru/file.d/logger"
 	"github.com/ozonru/file.d/pipeline"
 	"github.com/ozonru/file.d/test"
-	"github.com/satori/go.uuid"
+	uuid "github.com/satori/go.uuid"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/atomic"
 )
 
@@ -29,9 +30,11 @@ var (
 	offsetsDir = ""
 )
 
-const offsetsFile = "offsets.yaml"
-const newLine = 1
-const perm = 0770
+const (
+	offsetsFile = "offsets.yaml"
+	newLine     = 1
+	perm        = 0o770
+)
 
 func TestMain(m *testing.M) {
 	setupDirs()
@@ -174,8 +177,7 @@ func createOffsetFile() string {
 }
 
 func addDataFile(file *os.File, data []byte) {
-	if _, err := file.Write(data);
-		err != nil {
+	if _, err := file.Write(data); err != nil {
 		panic(err.Error())
 	}
 }
@@ -335,8 +337,10 @@ func getInodeByFile(file string) uint64 {
 
 func assertOffsetsAreEqual(t *testing.T, offsetsContentA string, offsetsContentB string) {
 	offsetDB := newOffsetDB("", "")
-	offsetsA := offsetDB.parse(offsetsContentA)
-	offsetsB := offsetDB.parse(offsetsContentB)
+	offsetsA, err := offsetDB.parse(offsetsContentA)
+	require.NoError(t, err)
+	offsetsB, err := offsetDB.parse(offsetsContentB)
+	require.NoError(t, err)
 	for sourceID, inode := range offsetsA {
 		_, has := offsetsB[sourceID]
 		assert.True(t, has, "offsets aren't equal, source id=%d", sourceID)
@@ -370,7 +374,7 @@ func TestWatch(t *testing.T) {
 				dir := fmt.Sprintf("dir_%d", x)
 				go func(dir string) {
 					dir = filepath.Join(filepath.Dir(file), dir)
-					_ = os.Mkdir(dir, 0770)
+					_ = os.Mkdir(dir, 0o770)
 
 					err := ioutil.WriteFile(filepath.Join(dir, "new_file"), []byte(content), perm)
 					if err != nil {
@@ -457,7 +461,6 @@ func TestReadContinue(t *testing.T) {
 				inputEvents = append(inputEvents, line)
 				addString(file, line, true, false)
 			}
-
 		},
 		Assert: func(p *pipeline.Pipeline) {
 			for i := 0; i < p.GetEventsTotal(); i++ {
@@ -753,7 +756,6 @@ func TestReadManyCharsParallelRace(t *testing.T) {
 	eventCount := lineCount * blockCount * fileCount
 	run(&test.Case{
 		Prepare: func() {
-
 			for f := 0; f < fileCount; f++ {
 				file := createTempFile()
 				f, err := os.OpenFile(file, os.O_APPEND|os.O_WRONLY, perm)
@@ -938,6 +940,10 @@ func TestRotationRenameWhileNotWorking(t *testing.T) {
 }
 
 func TestTruncation(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping testing in short mode")
+	}
+
 	file := ""
 	x := atomic.NewInt32(2)
 	run(&test.Case{
@@ -953,7 +959,6 @@ func TestTruncation(t *testing.T) {
 			addString(file, `"line_3"`, true, true)
 			addString(file, `"line_4"`, true, true)
 			addString(file, `"line_5"`, true, true)
-
 		},
 		Assert: func(p *pipeline.Pipeline) {
 			assert.Equal(t, 5, p.GetEventsTotal(), "wrong events count")
@@ -966,6 +971,10 @@ func TestTruncation(t *testing.T) {
 }
 
 func TestTruncationSeq(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping testing in short mode")
+	}
+
 	p, _, _ := test.NewPipelineMock(nil, "passive")
 	p.SetInput(getInputInfo())
 	p.Start()

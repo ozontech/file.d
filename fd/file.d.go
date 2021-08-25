@@ -76,7 +76,7 @@ func (f *FileD) addPipeline(name string, config *cfg.PipelineConfig) {
 
 	logger.Infof("creating pipeline %q: capacity=%d, stream field=%s, decoder=%s", name, settings.Capacity, settings.StreamField, settings.Decoder)
 
-	p := pipeline.New(name, settings, f.registry, mux)
+	p := pipeline.New(name, settings, f.registry)
 	err := f.setupInput(p, config, values)
 	if err != nil {
 		logger.Fatalf("can't create pipeline %q: %s", name, err.Error())
@@ -89,6 +89,7 @@ func (f *FileD) addPipeline(name string, config *cfg.PipelineConfig) {
 		logger.Fatalf("can't create pipeline %q: %s", name, err.Error())
 	}
 
+	p.SetupHTTPHandlers(mux)
 	f.Pipelines = append(f.Pipelines, p)
 }
 

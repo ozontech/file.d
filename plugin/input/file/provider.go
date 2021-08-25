@@ -94,9 +94,9 @@ func NewJobProvider(config *Config, controller pipeline.InputPluginController, l
 
 		offsetsCommitted: &atomic.Int64{},
 
-		stopSaveOffsetsCh: make(chan bool, 1), //non-zero channel cause we don't wanna wait goroutine to stop
-		stopReportCh:      make(chan bool, 1), //non-zero channel cause we don't wanna wait goroutine to stop
-		stopMaintenanceCh: make(chan bool, 1), //non-zero channel cause we don't wanna wait goroutine to stop
+		stopSaveOffsetsCh: make(chan bool, 1), // non-zero channel cause we don't wanna wait goroutine to stop
+		stopReportCh:      make(chan bool, 1), // non-zero channel cause we don't wanna wait goroutine to stop
+		stopMaintenanceCh: make(chan bool, 1), // non-zero channel cause we don't wanna wait goroutine to stop
 
 		logger: logger,
 	}
@@ -109,7 +109,15 @@ func NewJobProvider(config *Config, controller pipeline.InputPluginController, l
 func (jp *jobProvider) start() {
 	jp.logger.Infof("starting job provider persistence mode=%s", jp.config.PersistenceMode)
 	if jp.config.OffsetsOp_ == offsetsOpContinue {
-		jp.loadedOffsets = jp.offsetDB.load()
+		for {
+			offsets, err := jp.offsetDB.load()
+			if err == nil {
+				jp.loadedOffsets = offsets
+
+				break
+			}
+			jp.controller.WaitOrPanic(err.Error())
+		}
 	}
 
 	jp.watcher.start()
@@ -361,7 +369,7 @@ func (jp *jobProvider) initJobOffset(operation offsetsOp, job *Job) {
 	}
 }
 
-//tryResumeJob job should be already locked and it'll be unlocked
+// tryResumeJob job should be already locked and it'll be unlocked.
 func (jp *jobProvider) tryResumeJobAndUnlock(job *Job, filename string) bool {
 	jp.logger.Debugf("job for %d:%s resumed", job.sourceID, job.filename)
 
@@ -587,7 +595,7 @@ func (jp *jobProvider) maintenanceJob(job *Job) int {
 		panic("")
 	}
 
-	//todo: here we may have symlink opened, so handle it
+	// todo: here we may have symlink opened, so handle it
 	file, err = os.Open(filename)
 	if err != nil {
 		jp.deleteJobAndUnlock(job)
