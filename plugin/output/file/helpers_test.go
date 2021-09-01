@@ -3,7 +3,6 @@ package file
 import (
 	"net/http"
 	"os"
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -34,20 +33,6 @@ func createDir(t *testing.T, dir string) {
 	}
 }
 
-func clearDir(t *testing.T, dir string) {
-	t.Helper()
-	if err := os.RemoveAll(dir); err != nil {
-		t.Fatalf("coudl not delete dirs and files adter tests, error: %s", err.Error())
-	}
-}
-
-func getMatches(t *testing.T, pattern string) []string {
-	t.Helper()
-	matches, err := filepath.Glob(pattern)
-	assert.NoError(t, err)
-	return matches
-}
-
 func checkDirFiles(t *testing.T, matches []string, totalSent int64, msg string) {
 	t.Helper()
 	totalSize := int64(0)
@@ -60,17 +45,6 @@ func checkDirFiles(t *testing.T, matches []string, totalSent int64, msg string) 
 		totalSize += info.Size()
 	}
 	assert.Equal(t, totalSent, totalSize, msg)
-}
-
-func sendPack(t *testing.T, p *pipeline.Pipeline, msgs []msg) int64 {
-	t.Helper()
-	var sent int64 = 0
-	for _, m := range msgs {
-		p.In(0, "test", 0, m, false)
-		//count \n
-		sent += int64(len(m)) + 1
-	}
-	return sent
 }
 
 func newPipeline(t *testing.T, configOutput *Config) *pipeline.Pipeline {
@@ -114,22 +88,4 @@ func newPipeline(t *testing.T, configOutput *Config) *pipeline.Pipeline {
 	},
 	)
 	return p
-}
-
-func checkZero(t *testing.T, target string, msg string) int64 {
-	t.Helper()
-	info, err := os.Stat(target)
-	assert.NoErrorf(t, err, "there is no target: %s", target, msg)
-	assert.NotNil(t, info, msg)
-	assert.Zero(t, info.Size(), msg)
-	return info.Size()
-}
-
-func checkNotZero(t *testing.T, target string, msg string) int64 {
-	t.Helper()
-	info, err := os.Stat(target)
-	assert.NoError(t, err, msg)
-	assert.NotNil(t, info, msg)
-	assert.NotZero(t, info.Size(), msg)
-	return info.Size()
 }
