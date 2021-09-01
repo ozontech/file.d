@@ -94,11 +94,16 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.controller = params.Controller
 	p.logger = params.Logger
 	p.config = config.(*Config)
+	
 	dir, file := filepath.Split(p.config.TargetFile)
+	if p.file == nil {
+		p.logger.Panic("file struct is nil!")
+	}
 	p.targetDir = dir
 	p.fileExtension = filepath.Ext(file)
 	p.fileName = file[0 : len(file)-len(p.fileExtension)]
 	p.tsFileName = "%s" + "-" + p.fileName
+	
 	p.batcher = pipeline.NewBatcher(
 		params.PipelineName,
 		"file",
@@ -110,23 +115,20 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		p.config.BatchFlushTimeout_,
 		0,
 	)
+	
 	p.mu = &sync.RWMutex{}
 	ctx, cancel := context.WithCancel(context.Background())
 	p.ctx = ctx
 	p.cancelFunc = cancel
-	//create target dir
-	if _, err := os.Stat(p.targetDir); os.IsNotExist(err) {
-		if err := os.MkdirAll(p.targetDir, os.ModePerm); err != nil {
-			p.logger.Fatalf("could not create target dir: %s, error: %s", p.targetDir, err.Error())
-		}
+	
+	if err := os.MkdirAll(p.targetDir, os.ModePerm); err != nil {
+		p.logger.Fatalf("could not create target dir: %s, error: %s", p.targetDir, err.Error())
 	}
+	
 	p.idx = p.getStartIdx()
 	p.createNew()
 	p.setNextSealUpTime()
-	// additional checks
-	if p.file == nil {
-		p.logger.Panic("file struct is nil!")
-	}
+
 	if p.nextSealUpTime.IsZero() {
 		p.logger.Panic("next seal up time is nil!")
 	}
@@ -169,15 +171,13 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 }
 
 func (p *Plugin) fileSealUpTicker() {
-	ticker := time.NewTicker(FileSealUpInterval)
-	defer ticker.Stop()
 	for {
+		timer := time.NewTimer(time.Until(p.nextSealUpTime))
 		select {
-		case t := <-ticker.C:
-			if t.After(p.nextSealUpTime) {
-				p.sealUp()
-			}
+		case <-timer.C:
+			p.sealUp()
 		case <-p.ctx.Done():
+			timer.Stop()
 			return
 		}
 	}

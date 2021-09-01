@@ -118,10 +118,10 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 
 	// initialize minio client object.
 	minioClient, err := minio.New(p.config.Endpoint, p.config.AccessKey, p.config.SecretKey, p.config.Secure)
-	p.client = minioClient
 	if err != nil || minioClient == nil {
 		p.logger.Panicf("could not create minio client, error: %s", err.Error())
 	}
+	p.client = minioClient
 
 	if p.config.client != nil {
 		p.logger.Info("set mock client")
