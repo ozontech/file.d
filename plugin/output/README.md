@@ -32,6 +32,10 @@ Allowed characters in field names are letters, numbers, underscores, dashes, and
 It sends the event batches to kafka brokers using `sarama` lib.
 
 [More details...](plugin/output/kafka/README.md)
+## splunk
+It sends events to splunk.
+
+[More details...](plugin/output/splunk/README.md)
 ## stdout
 It writes events to stdout(also known as console).
 

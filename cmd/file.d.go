@@ -37,11 +37,12 @@ import (
 	_ "github.com/ozonru/file.d/plugin/input/kafka"
 	_ "github.com/ozonru/file.d/plugin/output/devnull"
 	_ "github.com/ozonru/file.d/plugin/output/elasticsearch"
+	_ "github.com/ozonru/file.d/plugin/output/file"
 	_ "github.com/ozonru/file.d/plugin/output/gelf"
 	_ "github.com/ozonru/file.d/plugin/output/kafka"
-	_ "github.com/ozonru/file.d/plugin/output/stdout"
-	_ "github.com/ozonru/file.d/plugin/output/file"
 	_ "github.com/ozonru/file.d/plugin/output/s3"
+	_ "github.com/ozonru/file.d/plugin/output/splunk"
+	_ "github.com/ozonru/file.d/plugin/output/stdout"
 )
 
 var (
