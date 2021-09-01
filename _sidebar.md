@@ -32,6 +32,7 @@
     - [keep_fields](plugin/action/keep_fields/README.md)
     - [modify](plugin/action/modify/README.md)
     - [parse_es](plugin/action/parse_es/README.md)
+    - [parse_re2](plugin/action/parse_re2/README.md)
     - [remove_fields](plugin/action/remove_fields/README.md)
     - [rename](plugin/action/rename/README.md)
     - [throttle](plugin/action/throttle/README.md)
@@ -41,6 +42,7 @@
     - [elasticsearch](plugin/output/elasticsearch/README.md)
     - [gelf](plugin/output/gelf/README.md)
     - [kafka](plugin/output/kafka/README.md)
+    - [splunk](plugin/output/splunk/README.md)
     - [stdout](plugin/output/stdout/README.md)
 
 

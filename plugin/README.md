@@ -203,6 +203,10 @@ It parses HTTP input using Elasticsearch `/_bulk` API format. It converts source
 > Check out the details in [Elastic Bulk API](https://www.elastic.co/guide/en/elasticsearch/reference/current/docs-bulk.html).
 
 [More details...](plugin/action/parse_es/README.md)
+## parse_re2
+It parses string from the event field using re2 expression with named subgroups and merges the result with the event root.
+
+[More details...](plugin/action/parse_re2/README.md)
 ## remove_fields
 It removes the list of the event fields and keeps others.
 
@@ -273,6 +277,10 @@ Allowed characters in field names are letters, numbers, underscores, dashes, and
 It sends the event batches to kafka brokers using `sarama` lib.
 
 [More details...](plugin/output/kafka/README.md)
+## splunk
+It sends events to splunk.
+
+[More details...](plugin/output/splunk/README.md)
 ## stdout
 It writes events to stdout(also known as console).
 
