@@ -22,11 +22,12 @@ It sends events to splunk.
 }*/
 
 type Plugin struct {
-	config     *Config
-	logger     *zap.SugaredLogger
-	avgLogSize int
-	batcher    *pipeline.Batcher
-	controller pipeline.OutputPluginController
+	config         *Config
+	logger         *zap.SugaredLogger
+	avgLogSize     int
+	batcher        *pipeline.Batcher
+	controller     pipeline.OutputPluginController
+	requestTimeout time.Duration
 }
 
 //! config-params
@@ -47,6 +48,12 @@ type Config struct {
 	//> How many workers will be instantiated to send batches.
 	WorkersCount  cfg.Expression `json:"workers_count" default:"gomaxprocs*4" parse:"expression"` //*
 	WorkersCount_ int
+
+	//> @3@4@5@6
+	//>
+	//> Client timeout when sends requests to HTTP Event Collector.
+	RequestTimeout  cfg.Duration `json:"request_timeout" default:"1s" parse:"duration"` //*
+	RequestTimeout_ time.Duration
 
 	//> @3@4@5@6
 	//>
@@ -125,7 +132,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 	data.outBuf = outBuf
 
 	for {
-		err := p.send(outBuf)
+		err := p.send(outBuf, p.config.RequestTimeout_)
 		if err != nil {
 			p.logger.Errorf("can't send data to splunk address=%s: %s", p.config.Endpoint, err.Error())
 			time.Sleep(time.Second)
@@ -139,8 +146,9 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 
 func (p *Plugin) maintenance(workerData *pipeline.WorkerData) {}
 
-func (p *Plugin) send(data []byte) error {
+func (p *Plugin) send(data []byte, timeout time.Duration) error {
 	c := http.Client{
+		Timeout: timeout,
 		Transport: &http.Transport{
 			TLSClientConfig: &tls.Config{
 				InsecureSkipVerify: true,
