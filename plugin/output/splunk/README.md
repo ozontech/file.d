@@ -8,7 +8,7 @@ A full URI address of splunk HEC endpoint. Format: `http://127.0.0.1:8088/servic
 
 <br>
 
-**`token`** *`string`* 
+**`token`** *`string`* *`required`* 
 
 Token for an authentication for a HEC endpoint.
 
@@ -17,6 +17,12 @@ Token for an authentication for a HEC endpoint.
 **`workers_count`** *`cfg.Expression`* *`default=gomaxprocs*4`* 
 
 How many workers will be instantiated to send batches.
+
+<br>
+
+**`request_timeout`** *`cfg.Duration`* *`default=1s`* 
+
+Client timeout when sends requests to HTTP Event Collector.
 
 <br>
 
