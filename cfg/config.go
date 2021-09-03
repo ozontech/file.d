@@ -3,6 +3,7 @@ package cfg
 import (
 	"fmt"
 	"io/ioutil"
+	"os"
 	"reflect"
 	"regexp"
 	"strconv"
@@ -16,22 +17,36 @@ import (
 )
 
 type Config struct {
+	Vault     VaultConfig
 	Pipelines map[string]*PipelineConfig
 }
 
-type Duration string
-type ListMap string
-type Expression string
-type FieldSelector string
-type Regexp string
-type Base8 string
+type (
+	Duration      string
+	ListMap       string
+	Expression    string
+	FieldSelector string
+	Regexp        string
+	Base8         string
+)
 
 type PipelineConfig struct {
 	Raw *simplejson.Json
 }
 
+type VaultConfig struct {
+	Token     string
+	Address   string
+	ShouldUse bool
+}
+
 func NewConfig() *Config {
 	return &Config{
+		Vault: VaultConfig{
+			Token:     "",
+			Address:   "",
+			ShouldUse: false,
+		},
 		Pipelines: make(map[string]*PipelineConfig, 20),
 	}
 }
@@ -54,11 +69,65 @@ func NewConfigFromFile(path string) *Config {
 		logger.Fatalf("can't convert config to json %q: %s", path, err.Error())
 	}
 
-	return parseConfig(json)
+	err = applyEnvs(json)
+	if err != nil {
+		logger.Fatalf("can't get config values from environments: %s", err.Error())
+	}
+
+	config := parseConfig(json)
+	if !config.Vault.ShouldUse {
+		return config
+	}
+
+	vault, err := newVault(config.Vault.Address, config.Vault.Token)
+	if err != nil {
+		logger.Fatalf("can't create vault client: %s", err.Error())
+	}
+
+	for _, p := range config.Pipelines {
+		applyVault(vault, p.Raw)
+	}
+
+	logger.Infof("config parsed, found %d pipelines", len(config.Pipelines))
+
+	return config
+}
+
+func applyEnvs(json *simplejson.Json) error {
+	for _, env := range os.Environ() {
+		kv := strings.SplitN(env, "=", 2)
+		if len(kv) != 2 {
+			return errors.Errorf("can't parse env %s", env)
+		}
+
+		k, v := kv[0], kv[1]
+		if strings.HasPrefix(k, "FILED_") {
+			lower := strings.ToLower(k)
+			path := strings.Split(lower, "_")[1:]
+			json.SetPath(path, v)
+		}
+	}
+
+	return nil
 }
 
 func parseConfig(json *simplejson.Json) *Config {
 	config := NewConfig()
+	vault := json.Get("vault")
+	var err error
+
+	addr := vault.Get("address")
+	config.Vault.Address, err = addr.String()
+	if err != nil {
+		logger.Warnf("can't parse vault address: %s", err.Error())
+	}
+
+	token := vault.Get("token")
+	config.Vault.Token, err = token.String()
+	if err != nil {
+		logger.Warnf("can't parse vault token: %s", err.Error())
+	}
+	config.Vault.ShouldUse = config.Vault.Address != "" && config.Vault.Token != ""
 
 	pipelinesJson := json.Get("pipelines")
 	pipelines := pipelinesJson.MustMap()
@@ -70,9 +139,55 @@ func parseConfig(json *simplejson.Json) *Config {
 		config.Pipelines[i] = &PipelineConfig{Raw: raw}
 	}
 
-	logger.Infof("config parsed, found %d pipelines", len(config.Pipelines))
-
 	return config
+}
+
+func applyVault(vault secreter, json *simplejson.Json) {
+	if a, err := json.Array(); err == nil {
+		for i := range a {
+			field := json.GetIndex(i)
+			if value, ok := tryGetSecret(vault, field); ok {
+				a[i] = value
+
+				continue
+			}
+			applyVault(vault, field)
+		}
+	}
+
+	if m, err := json.Map(); err == nil {
+		for k := range m {
+			field := json.Get(k)
+			if value, ok := tryGetSecret(vault, field); ok {
+				json.Set(k, value)
+
+				continue
+			}
+			applyVault(vault, field)
+		}
+	}
+}
+
+func tryGetSecret(vault secreter, field *simplejson.Json) (string, bool) {
+	s, err := field.String()
+	if err != nil {
+		return "", false
+	}
+	if !strings.HasPrefix(s, "vault(") || !strings.HasSuffix(s, ")") {
+		return "", false
+	}
+
+	args := strings.TrimPrefix(s, "vault(")
+	args = strings.TrimSuffix(args, ")")
+	noSpaces := strings.ReplaceAll(args, " ", "")
+	pathAndKey := strings.Split(noSpaces, ",")
+
+	secret, err := vault.GetSecret(pathAndKey[0], pathAndKey[1])
+	if err != nil {
+		logger.Fatalf("can't GetSecret: %s", err.Error())
+	}
+
+	return secret, true
 }
 
 // Parse holy shit! who write this function?
