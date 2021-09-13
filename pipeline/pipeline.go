@@ -623,9 +623,13 @@ func (p *Pipeline) serveActionInfo(info ActionPluginStaticInfo) func(http.Respon
 			eventStatusDiscarded,
 			eventStatusPassed,
 		} {
+			c := actionMetric.current.totalCounter[string(status)]
+			if c == nil {
+				c = atomic.NewUint64(0)
+			}
 			events = append(events, Event{
 				Status: string(status),
-				Count:  int(actionMetric.current.totalCounter.Load()),
+				Count:  int(c.Load()),
 			})
 		}
 

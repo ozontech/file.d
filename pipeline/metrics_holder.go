@@ -20,8 +20,9 @@ type metricsHolder struct {
 }
 
 type counter struct {
-	count        *prometheus.CounterVec
-	totalCounter *atomic.Uint64
+	count *prometheus.CounterVec
+	// totalCounter is a map of eventStatus to counter for `/info` endpoint.
+	totalCounter map[string]*atomic.Uint64
 	size         *prometheus.CounterVec
 }
 
@@ -59,8 +60,8 @@ func (m *metricsHolder) AddAction(metricName string, metricLabels []string) {
 			childs: make(map[string]*mNode),
 			mu:     &sync.RWMutex{},
 		},
-		current:  counter{nil, atomic.NewUint64(0), nil},
-		previous: counter{nil, atomic.NewUint64(0), nil},
+		current:  counter{nil, make(map[string]*atomic.Uint64), nil},
+		previous: counter{nil, make(map[string]*atomic.Uint64), nil},
 	})
 }
 
@@ -85,7 +86,7 @@ func (m *metricsHolder) nextMetricsGen() {
 			continue
 		}
 
-		cnt := counter{nil, atomic.NewUint64(0), nil}
+		cnt := counter{nil, make(map[string]*atomic.Uint64), nil}
 		opts := prometheus.CounterOpts{
 			Namespace:   "file_d",
 			Subsystem:   "pipeline_" + m.pipelineName,
@@ -169,7 +170,10 @@ func (m *metricsHolder) count(event *Event, actionIndex int, eventStatus eventSt
 	}
 
 	metrics.current.count.WithLabelValues(valuesBuf...).Inc()
-	metrics.current.totalCounter.Inc()
+	if metrics.current.totalCounter[string(eventStatus)] == nil {
+		metrics.current.totalCounter[string(eventStatus)] = atomic.NewUint64(0)
+	}
+	metrics.current.totalCounter[string(eventStatus)].Inc()
 	metrics.current.size.WithLabelValues(valuesBuf...).Add(float64(event.Size))
 
 	return valuesBuf
