@@ -21,9 +21,9 @@ func (r *Resetter) setPlug(plug *Plugin) {
 	r.plug = plug
 }
 
-// reset truncates jobs if the plugin has started or delete the whole offset file
+// Reset truncates jobs if the plugin has started or delete the whole offset file
 // or just one entry if inode or source_id was setted in a request.
-func (r *Resetter) reset(_ http.ResponseWriter, request *http.Request) {
+func (r *Resetter) Reset(_ http.ResponseWriter, request *http.Request) {
 	type Req struct {
 		INode    uint64 `json:"inode,omitempty"`
 		SourceID uint64 `json:"source_id,omitempty"`

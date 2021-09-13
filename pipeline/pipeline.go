@@ -14,7 +14,6 @@ import (
 	"github.com/ozonru/file.d/decoder"
 	"github.com/ozonru/file.d/logger"
 	"github.com/prometheus/client_golang/prometheus"
-	dto "github.com/prometheus/client_model/go"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
 )
@@ -554,9 +553,10 @@ func (p *Pipeline) WaitOrPanic(errMsg string) {
 		time.Sleep(10 * time.Millisecond)
 		if !p.waitForPanic.Load() {
 			p.logger.Error("panic recovered! Trying to continue execution...")
+
 			return
 		}
-		if time.Now().Sub(t) > time.Minute {
+		if time.Since(t) > time.Minute {
 			p.logger.Panic(errMsg)
 		}
 	}
@@ -623,13 +623,9 @@ func (p *Pipeline) serveActionInfo(info ActionPluginStaticInfo) func(http.Respon
 			eventStatusDiscarded,
 			eventStatusPassed,
 		} {
-			var metric dto.Metric
-			_ = actionMetric.current.count.WithLabelValues(string(status)).Write(&metric)
-			count := metric.GetCounter().GetValue()
-
 			events = append(events, Event{
 				Status: string(status),
-				Count:  int(count),
+				Count:  int(actionMetric.current.totalCounter.Load()),
 			})
 		}
 

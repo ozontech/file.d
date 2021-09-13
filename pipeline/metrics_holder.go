@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"go.uber.org/atomic"
 )
 
 type metricsHolder struct {
@@ -19,8 +20,9 @@ type metricsHolder struct {
 }
 
 type counter struct {
-	count *prometheus.CounterVec
-	size  *prometheus.CounterVec
+	count        *prometheus.CounterVec
+	totalCounter *atomic.Uint64
+	size         *prometheus.CounterVec
 }
 
 type metrics struct {
@@ -47,7 +49,6 @@ func newMetricsHolder(pipelineName string, registry *prometheus.Registry, metric
 		metrics:            make([]*metrics, 0),
 		metricsGenInterval: metricsGenInterval,
 	}
-
 }
 
 func (m *metricsHolder) AddAction(metricName string, metricLabels []string) {
@@ -58,8 +59,8 @@ func (m *metricsHolder) AddAction(metricName string, metricLabels []string) {
 			childs: make(map[string]*mNode),
 			mu:     &sync.RWMutex{},
 		},
-		current:  counter{nil, nil},
-		previous: counter{nil, nil},
+		current:  counter{nil, atomic.NewUint64(0), nil},
+		previous: counter{nil, atomic.NewUint64(0), nil},
 	})
 }
 
@@ -84,7 +85,7 @@ func (m *metricsHolder) nextMetricsGen() {
 			continue
 		}
 
-		cnt := counter{}
+		cnt := counter{nil, atomic.NewUint64(0), nil}
 		opts := prometheus.CounterOpts{
 			Namespace:   "file_d",
 			Subsystem:   "pipeline_" + m.pipelineName,
@@ -168,6 +169,7 @@ func (m *metricsHolder) count(event *Event, actionIndex int, eventStatus eventSt
 	}
 
 	metrics.current.count.WithLabelValues(valuesBuf...).Inc()
+	metrics.current.totalCounter.Inc()
 	metrics.current.size.WithLabelValues(valuesBuf...).Add(float64(event.Size))
 
 	return valuesBuf
