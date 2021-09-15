@@ -101,7 +101,7 @@ func init() {
 		Factory:           Factory,
 		AdditionalActions: []string{"k8s-multiline"},
 		Endpoints: map[string]func(http.ResponseWriter, *http.Request){
-			"reset": file.ResetterInstance.Reset,
+			"reset": file.ResetterRegistryInstance.Reset,
 		},
 	})
 	fd.DefaultPluginRegistry.RegisterAction(&pipeline.PluginStaticInfo{

@@ -4,26 +4,52 @@ import (
 	"encoding/json"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 
 	"github.com/ozonru/file.d/logger"
 	"gopkg.in/yaml.v3"
 )
 
-// Resetter is a global struct for /reset endpoint of the plugin.
-// It truncates jobs and tries to fix the offset file if the plugin can't load it.
-type Resetter struct {
-	plug     *Plugin
-	offsetMu sync.Mutex
+// ResetterRegistryInstance is an instance of the registry.
+var ResetterRegistryInstance = &ResetterRegistry{
+	pipelineToResetter: make(map[string]*resetter),
 }
 
-func (r *Resetter) setPlug(plug *Plugin) {
-	r.plug = plug
+// ResetterRegistry is a registry that holds map of pipeline names to file plugins and functions to reset their offsets.
+type ResetterRegistry struct {
+	pipelineToResetter map[string]*resetter
+}
+
+// AddResetter adds plugin to the ResetterRegistry.
+func (rr *ResetterRegistry) AddResetter(pipelineName string, plug *Plugin) {
+	rr.pipelineToResetter[pipelineName] = &resetter{
+		plug:     plug,
+		offsetMu: sync.Mutex{},
+	}
 }
 
 // Reset truncates jobs if the plugin has started or delete the whole offset file
 // or just one entry if inode or source_id was setted in a request.
-func (r *Resetter) Reset(_ http.ResponseWriter, request *http.Request) {
+func (rr *ResetterRegistry) Reset(_ http.ResponseWriter, request *http.Request) {
+	pipe := strings.Split(request.URL.Path, "/")[2]
+
+	resetter, ok := rr.pipelineToResetter[pipe]
+	if !ok {
+		logger.Panicf("pipeline '%s' is not registered", pipe)
+	}
+
+	resetter.reset(request)
+}
+
+// resetter is a global struct for /reset endpoint of the plugin.
+// It truncates jobs and tries to fix the offset file if the plugin can't load it.
+type resetter struct {
+	plug     *Plugin
+	offsetMu sync.Mutex
+}
+
+func (r *resetter) reset(request *http.Request) {
 	type Req struct {
 		INode    uint64 `json:"inode,omitempty"`
 		SourceID uint64 `json:"source_id,omitempty"`
@@ -67,7 +93,7 @@ func (r *Resetter) Reset(_ http.ResponseWriter, request *http.Request) {
 	r.plug.params.Controller.RecoverFromPanic()
 }
 
-func (r *Resetter) truncateJobs(truncateAll bool, inode, sourceID uint64) {
+func (r *resetter) truncateJobs(truncateAll bool, inode, sourceID uint64) {
 	jp := r.plug.jobProvider
 
 	jp.jobsMu.Lock()

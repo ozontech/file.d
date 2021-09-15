@@ -2,7 +2,6 @@ package file
 
 import (
 	"net/http"
-	"sync"
 	"time"
 
 	"github.com/ozonru/file.d/cfg"
@@ -158,20 +157,12 @@ type Config struct {
 	MaintenanceInterval_ time.Duration
 }
 
-// ResetterInstance is an instance of Resetter.
-// Now endpoints are registered before plugin creation, it is a singleton.
-// And now only 1 file plugin can be registered. TODO: fix it
-var ResetterInstance Resetter = Resetter{
-	plug:     nil,
-	offsetMu: sync.Mutex{},
-}
-
 func init() {
 	fd.DefaultPluginRegistry.RegisterInput(&pipeline.PluginStaticInfo{
 		Type:    "file",
 		Factory: Factory,
 		Endpoints: map[string]func(http.ResponseWriter, *http.Request){
-			"reset": ResetterInstance.Reset,
+			"reset": ResetterRegistryInstance.Reset,
 		},
 	})
 }
@@ -189,7 +180,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 
 	p.jobProvider = NewJobProvider(p.config, p.params.Controller, p.logger)
 
-	ResetterInstance.setPlug(p)
+	ResetterRegistryInstance.AddResetter(params.PipelineName, p)
 
 	p.startWorkers()
 	p.jobProvider.start()
