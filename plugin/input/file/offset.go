@@ -28,7 +28,7 @@ type offsetDB struct {
 type inodeOffsets struct {
 	filename string
 	sourceID pipeline.SourceID
-	streams  streamsOffsets
+	streams  map[pipeline.StreamName]int64
 }
 
 type (
@@ -256,11 +256,11 @@ func (o *offsetDB) save(jobs map[pipeline.SourceID]*Job, mu *sync.RWMutex) {
 		o.buf = append(o.buf, '\n')
 
 		o.buf = append(o.buf, "  streams:\n"...)
-		for stream, offset := range job.offsets {
+		for _, strOff := range job.offsets {
 			o.buf = append(o.buf, "    "...)
-			o.buf = append(o.buf, string(stream)...)
+			o.buf = append(o.buf, string(strOff.stream)...)
 			o.buf = append(o.buf, ": "...)
-			o.buf = strconv.AppendUint(o.buf, uint64(offset), 10)
+			o.buf = strconv.AppendUint(o.buf, uint64(strOff.offset), 10)
 			o.buf = append(o.buf, '\n')
 		}
 		job.mu.Unlock()

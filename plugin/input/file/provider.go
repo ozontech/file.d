@@ -65,7 +65,10 @@ type Job struct {
 	isDone     bool
 	shouldSkip bool
 
-	offsets streamsOffsets
+	// offsets is a sliceMap of streamName to offset.
+	// Unlike map[string]int, sliceMap can work with mutable strings when using unsafe conversion from []byte.
+	// Also it is likely not slower than map implementation for 1-2 streams case.
+	offsets sliceMap
 
 	mu *sync.Mutex
 }
@@ -119,7 +122,6 @@ func (jp *jobProvider) start() {
 			jp.controller.WaitOrPanic(err.Error())
 		}
 	}
-
 	jp.watcher.start()
 
 	if jp.config.PersistenceMode_ == persistenceModeAsync {
@@ -163,7 +165,7 @@ func (jp *jobProvider) commit(event *pipeline.Event) {
 		return
 	}
 
-	value, has := job.offsets[streamName]
+	value, has := job.offsets.get(streamName)
 	if value >= event.Offset {
 		jp.logger.Panicf("offset corruption: committing=%d, current=%d, event id=%d, source=%d:%s", event.Offset, value, event.SeqID, event.SourceID, event.SourceName)
 	}
@@ -172,12 +174,12 @@ func (jp *jobProvider) commit(event *pipeline.Event) {
 		jp.logger.Errorf("it maybe an offset corruption: committing=%d, current=%d, event id=%d, source=%d:%s", event.Offset, value, event.SeqID, event.SourceID, event.SourceName)
 	}
 
-	// streamName isn't actually a string, but unsafe []byte, so copy it when adding to map
+	// streamName isn't actually a string, but unsafe []byte, so copy it when adding to the sliceMap
 	if has {
-		job.offsets[streamName] = event.Offset
+		job.offsets.set(streamName, event.Offset)
 	} else {
 		streamNameCopy := pipeline.StreamName(event.StreamNameBytes())
-		job.offsets[streamNameCopy] = event.Offset
+		job.offsets.set(streamNameCopy, event.Offset)
 	}
 
 	job.mu.Unlock()
@@ -270,7 +272,7 @@ func (jp *jobProvider) addJob(file *os.File, stat os.FileInfo, filename string, 
 		isDone:     true,
 		shouldSkip: false,
 
-		offsets: make(streamsOffsets),
+		offsets: nil,
 
 		mu: &sync.Mutex{},
 	}
@@ -355,7 +357,7 @@ func (jp *jobProvider) initJobOffset(operation offsetsOp, job *Job) {
 			return
 		}
 
-		job.offsets = offsets.streams
+		job.offsets = sliceFromMap(offsets.streams)
 		// seek to any offset since whey all equal at start time
 		for _, offset := range offsets.streams {
 			_, err := job.file.Seek(offset, io.SeekStart)
@@ -423,8 +425,8 @@ func (jp *jobProvider) truncateJob(job *Job) {
 		jp.logger.Fatalf("job reset error, file %s seek error: %s", job.filename, err.Error())
 	}
 
-	for stream := range job.offsets {
-		job.offsets[stream] = 0
+	for _, strOff := range job.offsets {
+		job.offsets.set(strOff.stream, 0)
 	}
 
 	jp.logger.Infof("job %d:%s was truncated, reading will start over, events with id less than %d will be ignored", job.sourceID, job.filename, job.ignoreEventsLE)

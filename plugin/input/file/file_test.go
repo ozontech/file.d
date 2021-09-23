@@ -44,13 +44,13 @@ func TestMain(m *testing.M) {
 }
 
 func setupDirs() {
-	f, err := ioutil.TempDir("", "input_file")
+	f, err := os.MkdirTemp("", "input_file")
 	if err != nil {
 		panic(err.Error())
 	}
 	filesDir = f
 
-	f, err = ioutil.TempDir("", "input_file_offsets")
+	f, err = os.MkdirTemp("", "input_file_offsets")
 	if err != nil {
 		panic(err.Error())
 	}
@@ -1095,27 +1095,36 @@ func BenchmarkLightJsonReadPar(b *testing.B) {
 	lines := 128 * 64
 	files := 256
 
-	json := getContent("../../../testdata/json/light.json")
+	if fs, err := os.ReadDir(filesDir); err != nil || len(fs) == 0 {
+		json := getContent("../../../testdata/json/light.json")
 
-	content := make([]byte, 0, len(json)*lines)
-	for i := 0; i < lines; i++ {
-		content = append(content, json...)
+		content := make([]byte, 0, len(json)*lines)
+		for i := 0; i < lines; i++ {
+			content = append(content, json...)
+		}
+
+		for f := 0; f < files; f++ {
+			file := createTempFile()
+			addBytes(file, content, false, false)
+		}
+		logger.Infof("%s", filesDir)
+
+		bytes := int64(files * lines * len(json))
+		logger.Infof("will read %dMb", bytes/1024/1024)
+		b.SetBytes(bytes)
 	}
 
-	for f := 0; f < files; f++ {
-		file := createTempFile()
-		addBytes(file, content, false, false)
-	}
-	logger.Infof("%s", filesDir)
-
-	bytes := int64(files * lines * len(json))
-	logger.Infof("will read %dMb", bytes/1024/1024)
-	b.SetBytes(bytes)
 	b.ReportAllocs()
 	b.StopTimer()
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
 		p, _, output := test.NewPipelineMock(nil, "passive", "perf")
+
+		f, err := os.MkdirTemp("", "off")
+		if err != nil {
+			panic(err.Error())
+		}
+		offsetsDir = f
 		p.SetInput(getInputInfo())
 
 		wg := &sync.WaitGroup{}
