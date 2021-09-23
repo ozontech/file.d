@@ -112,15 +112,7 @@ func NewJobProvider(config *Config, controller pipeline.InputPluginController, l
 func (jp *jobProvider) start() {
 	jp.logger.Infof("starting job provider persistence mode=%s", jp.config.PersistenceMode)
 	if jp.config.OffsetsOp_ == offsetsOpContinue {
-		for {
-			offsets, err := jp.offsetDB.load()
-			if err == nil {
-				jp.loadedOffsets = offsets
-
-				break
-			}
-			jp.controller.WaitOrPanic(err.Error())
-		}
+		jp.loadOffsets()
 	}
 	jp.watcher.start()
 
@@ -132,6 +124,36 @@ func (jp *jobProvider) start() {
 
 	go jp.reportStats()
 	go jp.maintenance()
+}
+
+func (jp *jobProvider) loadOffsets() {
+	load := func() error {
+		offsets, err := jp.offsetDB.load()
+		if err != nil {
+			return err
+		}
+
+		jp.loadedOffsets = offsets
+		return nil
+	}
+
+	defer func() {
+		if err, ok := recover().(error); ok {
+			jp.controller.WaitOrPanic(err.Error())
+			// last try.
+			if errLoad := load(); errLoad != nil {
+				panic(errLoad)
+			}
+		}
+	}()
+
+	for {
+		err := load()
+		if err == nil {
+			return
+		}
+		jp.controller.WaitOrPanic(err.Error())
+	}
 }
 
 func (jp *jobProvider) stop() {
