@@ -173,6 +173,13 @@ func tryGetSecret(vault secreter, field *simplejson.Json) (string, bool) {
 	if err != nil {
 		return "", false
 	}
+
+	// escape symbols.
+	if strings.HasPrefix(s, `\vault(`) {
+		s = strings.ReplaceAll(s, `\vault(`, "vault(")
+		return s, true
+	}
+
 	if !strings.HasPrefix(s, "vault(") || !strings.HasSuffix(s, ")") {
 		return "", false
 	}

@@ -204,7 +204,7 @@ func TestBase8(t *testing.T) {
 	assert.Equal(t, int64(511), s.T_)
 }
 
-func Test_applyEnvs(t *testing.T) {
+func TestApplyEnvs(t *testing.T) {
 	tests := []struct {
 		name     string
 		json     string
@@ -251,34 +251,72 @@ func Test_applyEnvs(t *testing.T) {
 	}
 }
 
-type vaultMock struct{}
-
-func (v *vaultMock) GetSecret(path, key string) (string, error) {
-	if path == "test/test" && key == "value" {
-		return "result", nil
-	}
-	return "", assert.AnError
+type vaultMock struct {
+	t                                   *testing.T
+	secretPath, secretKey, secretResult string
+	secretErr                           error
 }
 
-func Test_applyVault(t *testing.T) {
+func newVaultMock(t *testing.T, path, key, result string, err error) *vaultMock {
+	return &vaultMock{
+		t:            t,
+		secretPath:   path,
+		secretKey:    key,
+		secretResult: result,
+		secretErr:    err,
+	}
+}
+
+func (v *vaultMock) GetSecret(path, key string) (string, error) {
+	assert.Equal(v.t, v.secretPath, path)
+	assert.Equal(v.t, v.secretKey, key)
+	return v.secretResult, v.secretErr
+}
+
+func TestApplyVault(t *testing.T) {
 	tests := []struct {
 		name     string
 		json     string
 		wantJSON string
 		wantErr  string
+
+		secretKey, secretPath, secretResult string
+		secretErr                           error
 	}{
 		{
-			name:     "should_ok",
-			json:     `{"welcome": {"input": {"type": "vault(test/test, value)"}}}`,
-			wantJSON: `{"welcome": {"input": {"type": "result"}}}`,
+			name:         "should_ok",
+			json:         `{"welcome": {"input": {"type": "vault(test/test, value)"}}}`,
+			secretPath:   "test/test",
+			secretKey:    "value",
+			secretResult: "result",
+			wantJSON:     `{"welcome": {"input": {"type": "result"}}}`,
+		},
+		{
+			name:         "should_ok_when_value_in_array",
+			json:         `{"welcome": {"input": {"type": ["vault(test/test, value)"]}}}`,
+			secretPath:   "test/test",
+			secretKey:    "value",
+			secretResult: "result",
+			wantJSON:     `{"welcome": {"input": {"type": ["result"]}}}`,
+		},
+		{
+			name:     "should_ok_when_vault_field_escaped",
+			json:     `{"welcome": {"input": {"type": "\\vault(test/test, value)"}}}`,
+			wantJSON: `{"welcome": {"input": {"type": "vault(test/test, value)"}}}`,
+		},
+		{
+			name:     "should_ok_when_vault_syntax_invalid_no_bracket",
+			json:     `{"welcome": {"input": {"type": "vault(test/test, value"}}}`,
+			wantJSON: `{"welcome": {"input": {"type": "vault(test/test, value"}}}`,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			json, err := simplejson.NewJson([]byte(tt.json))
 			require.NoError(t, err)
+			vault := newVaultMock(t, tt.secretPath, tt.secretKey, tt.secretResult, tt.secretErr)
 
-			applyVault(&vaultMock{}, json)
+			applyVault(vault, json)
 
 			if tt.wantErr == "" {
 				require.NoError(t, err)
