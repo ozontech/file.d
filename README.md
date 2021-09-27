@@ -18,6 +18,7 @@ Guys, it's 2020 now. HDDs and NICs can handle the throughput of a **few GB/sec**
 * Container / cloud / kubernetes native
 * Simply configurable with YAML
 * Prometheus-friendly: transform your events into metrics on any pipeline stage
+* Vault-friendly: store sensitive info and get it for any pipeline parameter
 * Well-tested and used in production to collect logs from Kubernetes cluster with 3000+ total CPU cores
 
 ## Performance
