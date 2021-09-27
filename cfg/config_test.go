@@ -1,10 +1,13 @@
 package cfg
 
 import (
+	"os"
 	"testing"
 	"time"
 
+	"github.com/bitly/go-simplejson"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func NewTestConfig(name string) *Config {
@@ -107,6 +110,7 @@ func TestParseOptionsErr(t *testing.T) {
 
 	assert.NotNil(t, err, "should be an error")
 }
+
 func TestParseExpressionMul(t *testing.T) {
 	s := &strExpression{T: "val*2"}
 	err := Parse(s, map[string]int{"val": 3})
@@ -186,17 +190,143 @@ func TestDefaultSlice(t *testing.T) {
 	assert.Equal(t, 0, len(s.Childs), "wrong value")
 }
 
-
 func TestBase8Default(t *testing.T) {
 	s := &strBase8{}
-	err := Parse(s,nil)
+	err := Parse(s, nil)
 	assert.Nil(t, err, "shouldn't be an error")
 	assert.Equal(t, int64(438), s.T_)
 }
 
 func TestBase8(t *testing.T) {
 	s := &strBase8{T: "0777"}
-	err := Parse(s,nil)
+	err := Parse(s, nil)
 	assert.Nil(t, err, "shouldn't be an error")
 	assert.Equal(t, int64(511), s.T_)
+}
+
+func TestApplyEnvs(t *testing.T) {
+	tests := []struct {
+		name     string
+		json     string
+		environs [][]string
+		wantJSON string
+		wantErr  string
+	}{
+		{
+			name: "should_ok_when_rewrite",
+			json: `{"vault":{"address": "super_host"}}`,
+			environs: [][]string{
+				{"FILED_VAULT_ADDRESS", "http://127.0.0.1"},
+				{"FILED_VAULT_TOKEN", "example_token"},
+			},
+			wantJSON: `{"vault": {"address": "http://127.0.0.1", "token": "example_token"}}`,
+		},
+	}
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			json, err := simplejson.NewJson([]byte(tt.json))
+			require.NoError(t, err)
+			for _, env := range tt.environs {
+				errS := os.Setenv(env[0], env[1])
+				require.NoError(t, errS)
+				defer func(key string) {
+					errU := os.Unsetenv(key)
+					require.NoError(t, errU)
+				}(env[0])
+			}
+
+			err = applyEnvs(json)
+
+			if tt.wantErr == "" {
+				require.NoError(t, err)
+				got, errEnc := json.Encode()
+				require.NoError(t, errEnc)
+				require.JSONEq(t, tt.wantJSON, string(got))
+			} else {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), tt.wantErr)
+			}
+		})
+	}
+}
+
+type vaultMock struct {
+	t                                   *testing.T
+	secretPath, secretKey, secretResult string
+	secretErr                           error
+}
+
+func newVaultMock(t *testing.T, path, key, result string, err error) *vaultMock {
+	return &vaultMock{
+		t:            t,
+		secretPath:   path,
+		secretKey:    key,
+		secretResult: result,
+		secretErr:    err,
+	}
+}
+
+func (v *vaultMock) GetSecret(path, key string) (string, error) {
+	assert.Equal(v.t, v.secretPath, path)
+	assert.Equal(v.t, v.secretKey, key)
+	return v.secretResult, v.secretErr
+}
+
+func TestApplyVault(t *testing.T) {
+	tests := []struct {
+		name     string
+		json     string
+		wantJSON string
+		wantErr  string
+
+		secretKey, secretPath, secretResult string
+		secretErr                           error
+	}{
+		{
+			name:         "should_ok",
+			json:         `{"welcome": {"input": {"type": "vault(test/test, value)"}}}`,
+			secretPath:   "test/test",
+			secretKey:    "value",
+			secretResult: "result",
+			wantJSON:     `{"welcome": {"input": {"type": "result"}}}`,
+		},
+		{
+			name:         "should_ok_when_value_in_array",
+			json:         `{"welcome": {"input": {"type": ["vault(test/test, value)"]}}}`,
+			secretPath:   "test/test",
+			secretKey:    "value",
+			secretResult: "result",
+			wantJSON:     `{"welcome": {"input": {"type": ["result"]}}}`,
+		},
+		{
+			name:     "should_ok_when_vault_field_escaped",
+			json:     `{"welcome": {"input": {"type": "\\vault(test/test, value)"}}}`,
+			wantJSON: `{"welcome": {"input": {"type": "vault(test/test, value)"}}}`,
+		},
+		{
+			name:     "should_ok_when_vault_syntax_invalid_no_bracket",
+			json:     `{"welcome": {"input": {"type": "vault(test/test, value"}}}`,
+			wantJSON: `{"welcome": {"input": {"type": "vault(test/test, value"}}}`,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			json, err := simplejson.NewJson([]byte(tt.json))
+			require.NoError(t, err)
+			vault := newVaultMock(t, tt.secretPath, tt.secretKey, tt.secretResult, tt.secretErr)
+
+			applyVault(vault, json)
+
+			if tt.wantErr == "" {
+				require.NoError(t, err)
+				got, errEnc := json.Encode()
+				require.NoError(t, errEnc)
+				require.JSONEq(t, tt.wantJSON, string(got))
+			} else {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), tt.wantErr)
+			}
+		})
+	}
 }

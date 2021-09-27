@@ -34,7 +34,7 @@ type Plugin struct {
 	fileName      string
 	tsFileName    string
 
-	SealUpCallback func(string) ()
+	SealUpCallback func(string)
 
 	mu *sync.RWMutex
 }
@@ -47,9 +47,7 @@ const (
 	fileNameSeparator = "_"
 )
 
-var (
-	FileSealUpInterval = time.Second
-)
+var FileSealUpInterval = time.Second
 
 type Config struct {
 	//> File name for log file.
@@ -94,16 +92,13 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.controller = params.Controller
 	p.logger = params.Logger
 	p.config = config.(*Config)
-	
+
 	dir, file := filepath.Split(p.config.TargetFile)
-	if p.file == nil {
-		p.logger.Panic("file struct is nil!")
-	}
 	p.targetDir = dir
 	p.fileExtension = filepath.Ext(file)
 	p.fileName = file[0 : len(file)-len(p.fileExtension)]
 	p.tsFileName = "%s" + "-" + p.fileName
-	
+
 	p.batcher = pipeline.NewBatcher(
 		params.PipelineName,
 		"file",
@@ -115,20 +110,23 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		p.config.BatchFlushTimeout_,
 		0,
 	)
-	
+
 	p.mu = &sync.RWMutex{}
 	ctx, cancel := context.WithCancel(context.Background())
 	p.ctx = ctx
 	p.cancelFunc = cancel
-	
+
 	if err := os.MkdirAll(p.targetDir, os.ModePerm); err != nil {
 		p.logger.Fatalf("could not create target dir: %s, error: %s", p.targetDir, err.Error())
 	}
-	
+
 	p.idx = p.getStartIdx()
 	p.createNew()
 	p.setNextSealUpTime()
 
+	if p.file == nil {
+		p.logger.Panic("file struct is nil!")
+	}
 	if p.nextSealUpTime.IsZero() {
 		p.logger.Panic("next seal up time is nil!")
 	}
@@ -243,7 +241,6 @@ func (p *Plugin) sealUp() {
 		go p.SealUpCallback(newFileName)
 	}
 }
-
 
 func (p *Plugin) rename(newFileName string) {
 	f := fmt.Sprintf("%s%s", p.targetDir, p.tsFileName)
