@@ -189,11 +189,13 @@ func tryGetSecret(vault secreter, field *simplejson.Json) (string, bool) {
 	noSpaces := strings.ReplaceAll(args, " ", "")
 	pathAndKey := strings.Split(noSpaces, ",")
 
+	logger.Infof("get secrets for %q and %q", pathAndKey[0], pathAndKey[1])
 	secret, err := vault.GetSecret(pathAndKey[0], pathAndKey[1])
 	if err != nil {
 		logger.Fatalf("can't GetSecret: %s", err.Error())
 	}
 
+	logger.Infof("success getting secret %q and %q", pathAndKey[0], pathAndKey[1])
 	return secret, true
 }
 
