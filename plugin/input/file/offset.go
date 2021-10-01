@@ -1,6 +1,7 @@
 package file
 
 import (
+	"fmt"
 	"io/ioutil"
 	"math"
 	"math/rand"
@@ -11,7 +12,6 @@ import (
 
 	"github.com/ozonru/file.d/logger"
 	"github.com/ozonru/file.d/pipeline"
-	"github.com/pkg/errors"
 	"go.uber.org/atomic"
 )
 
@@ -67,7 +67,7 @@ func (o *offsetDB) load() (fpOffsets, error) {
 
 	offsets, err := o.parse(string(content))
 	if err != nil {
-		return make(fpOffsets), errors.Wrap(err, "can't load offsets file")
+		return make(fpOffsets), fmt.Errorf("can't load offsets file: %w", err)
 	}
 
 	return o.collapse(offsets), nil
@@ -97,7 +97,7 @@ func (o *offsetDB) parse(content string) (fpOffsets, error) {
 	for len(content) != 0 {
 		one, err := o.parseOne(content, offsets)
 		if err != nil {
-			return make(fpOffsets), errors.Wrap(err, "can't parseOne")
+			return make(fpOffsets), fmt.Errorf("can't parseOne: %w", err)
 		}
 		content = one
 	}
@@ -113,32 +113,32 @@ func (o *offsetDB) parseOne(content string, offsets fpOffsets) (string, error) {
 
 	filename, content, err = o.parseLine(content, "- file: ")
 	if err != nil {
-		return "", errors.Wrap(err, "can't parse file")
+		return "", fmt.Errorf("can't parse file: %w", err)
 	}
 	inodeStr, content, err = o.parseLine(content, "  inode: ")
 	if err != nil {
-		return "", errors.Wrap(err, "can't parse inode")
+		return "", fmt.Errorf("can't parse inode: %w", err)
 	}
 	sourceIDStr, content, err = o.parseLine(content, "  source_id: ")
 	if err != nil {
-		return "", errors.Wrap(err, "can't parse source_id")
+		return "", fmt.Errorf("can't parse source_id: %w", err)
 	}
 
 	sysInode, err := strconv.ParseUint(inodeStr, 10, 64)
 	if err != nil {
-		return "", errors.Wrap(err, "wrong offsets format, can't parse inode: %s")
+		return "", fmt.Errorf("wrong offsets format, can't parse inode: %s: %w", inodeStr, err)
 	}
 	inode := inode(sysInode)
 
 	fpVal, err := strconv.ParseUint(sourceIDStr, 10, 64)
 	if err != nil {
-		return "", errors.Wrap(err, "wrong offsets format, can't parse source id: %s")
+		return "", fmt.Errorf("wrong offsets format, can't parse source id: %s: %w", sourceIDStr, err)
 	}
 	fp := pipeline.SourceID(fpVal)
 
 	_, has := offsets[fp]
 	if has {
-		return "", errors.Errorf("wrong offsets format, duplicate inode %d", inode)
+		return "", fmt.Errorf("wrong offsets format, duplicate inode %d", inode)
 	}
 
 	offsets[fp] = &inodeOffsets{
@@ -153,38 +153,38 @@ func (o *offsetDB) parseOne(content string, offsets fpOffsets) (string, error) {
 func (o *offsetDB) parseStreams(content string, streams streamsOffsets) (string, error) {
 	_, content, err := o.parseLine(content, "  streams:")
 	if err != nil {
-		return "", errors.Wrapf(err, "can''t parse line")
+		return "", fmt.Errorf("can''t parse line: %w", err)
 	}
 
 	for len(content) != 0 && content[0] != '-' {
 		linePos := strings.IndexByte(content, '\n')
 		if linePos < 0 {
-			return "", errors.Errorf("wrong offsets format, no new line %s", content)
+			return "", fmt.Errorf("wrong offsets format, no new line %s", content)
 		}
 		line := content[0:linePos]
 		if linePos < 5 || line[0:4] != "    " {
-			return "", errors.Errorf("wrong offsets format, no leading whitespaces %q", line)
+			return "", fmt.Errorf("wrong offsets format, no leading whitespaces %q", line)
 		}
 		content = content[linePos+1:]
 
 		pos := strings.IndexByte(line, ':')
 		if pos < 0 {
-			return "", errors.Errorf("wrong offsets format, no separator %q", line)
+			return "", fmt.Errorf("wrong offsets format, no separator %q", line)
 		}
 		stream := pipeline.StreamName(line[4:pos])
 		if len(stream) == 0 {
-			return "", errors.Errorf("wrong offsets format, empty stream, %s", content)
+			return "", fmt.Errorf("wrong offsets format, empty stream, %s", content)
 		}
 
 		_, has := streams[stream]
 		if has {
-			return "", errors.Errorf("wrong offsets format, duplicate stream %q", stream)
+			return "", fmt.Errorf("wrong offsets format, duplicate stream %q", stream)
 		}
 
 		offsetStr := line[pos+2:]
 		offset, err := strconv.ParseInt(offsetStr, 10, 64)
 		if err != nil {
-			return "", errors.Wrapf(err, "wrong offsets format, can't parse offset: %q, %q", offsetStr, err.Error())
+			return "", fmt.Errorf("wrong offsets format, can't parse offset: %q: %w", offsetStr, err)
 		}
 
 		streams[stream] = offset
@@ -198,13 +198,13 @@ func (o *offsetDB) parseLine(content string, start string) (string, string, erro
 
 	linePos := strings.IndexByte(content, '\n')
 	if linePos < 0 {
-		return "", "", errors.Errorf("wrong offsets format, no nl: %q", content)
+		return "", "", fmt.Errorf("wrong offsets format, no nl: %q", content)
 	}
 	line := content[0:linePos]
 
 	content = content[linePos+1:]
 	if linePos < l || line[0:l] != start {
-		return "", "", errors.Errorf("wrong offsets file format expected=%q, got=%q", start, line[0:l])
+		return "", "", fmt.Errorf("wrong offsets file format expected=%q, got=%q", start, line[0:l])
 	}
 
 	return line[l:], content, nil

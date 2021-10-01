@@ -13,7 +13,6 @@ import (
 	"github.com/bitly/go-simplejson"
 	"github.com/ghodss/yaml"
 	"github.com/ozonru/file.d/logger"
-	"github.com/pkg/errors"
 )
 
 type Config struct {
@@ -97,7 +96,7 @@ func applyEnvs(json *simplejson.Json) error {
 	for _, env := range os.Environ() {
 		kv := strings.SplitN(env, "=", 2)
 		if len(kv) != 2 {
-			return errors.Errorf("can't parse env %s", env)
+			return fmt.Errorf("can't parse env %s", env)
 		}
 
 		k, v := kv[0], kv[1]
@@ -296,7 +295,7 @@ func ParseField(v reflect.Value, vField reflect.Value, tField reflect.StructFiel
 		case reflect.Int:
 			val, err := strconv.Atoi(tag)
 			if err != nil {
-				return errors.Wrapf(err, "default value for field %s should be int, got=%s", tField.Name, tag)
+				return fmt.Errorf("default value for field %s should be int, got=%s: %w", tField.Name, tag, err)
 			}
 			vField.SetInt(int64(val))
 		case reflect.Slice:

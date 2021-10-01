@@ -15,7 +15,6 @@ require (
 	github.com/hashicorp/vault/api v1.1.1
 	github.com/imdario/mergo v0.3.7 // indirect
 	github.com/minio/minio-go v6.0.14+incompatible
-	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.4.0
 	github.com/satori/go.uuid v1.2.0
 	github.com/smartystreets/goconvey v1.6.4 // indirect

@@ -64,7 +64,7 @@ func NewProcessor(
 	output OutputPlugin,
 	streamer *streamer,
 	finalizeFn finalizeFn,
-	waitForPanic func(string),
+	waitOrPanic func(string),
 	recoverPanic func(),
 ) *processor {
 	processor := &processor{
@@ -76,7 +76,7 @@ func NewProcessor(
 
 		activeCounter:    activeCounter,
 		actionWatcher:    newActionWatcher(id),
-		waitOrPanic:      waitForPanic,
+		waitOrPanic:      waitOrPanic,
 		recoverFromPanic: recoverPanic,
 
 		metricsValues: make([]string, 0, 0),

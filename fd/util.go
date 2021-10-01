@@ -8,7 +8,6 @@ import (
 	"github.com/ozonru/file.d/cfg"
 	"github.com/ozonru/file.d/logger"
 	"github.com/ozonru/file.d/pipeline"
-	"github.com/pkg/errors"
 )
 
 func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
@@ -19,6 +18,7 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 	maintenanceInterval := pipeline.DefaultMaintenanceInterval
 	decoder := "auto"
 	isStrict := false
+	waitForPanicTimeout := pipeline.DefaultWaitForPanicTimeout
 
 	if settings != nil {
 		val := settings.Get("capacity").MustInt()
@@ -50,6 +50,15 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 			maintenanceInterval = i
 		}
 
+		str = settings.Get("wait_for_panic_timeout").MustString()
+		if str != "" {
+			i, err := time.ParseDuration(str)
+			if err != nil {
+				logger.Fatalf("can't parse pipeline wait_for_panic_timeout: %s", err.Error())
+			}
+			waitForPanicTimeout = i
+		}
+
 		antispamThreshold = settings.Get("antispam_threshold").MustInt()
 		antispamThreshold *= int(maintenanceInterval / time.Second)
 
@@ -64,6 +73,7 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 		MaintenanceInterval: maintenanceInterval,
 		StreamField:         streamField,
 		IsStrict:            isStrict,
+		WaitForPanicTimeout: waitForPanicTimeout,
 	}
 }
 
@@ -71,7 +81,6 @@ func extractMatchMode(actionJSON *simplejson.Json) (pipeline.MatchMode, error) {
 	mm := actionJSON.Get("match_mode").MustString()
 	if mm != "or" && mm != "and" && mm != "" {
 		return pipeline.MatchModeUnknown, fmt.Errorf("unknown match mode %q must be or/and", mm)
-
 	}
 	matchMode := pipeline.MatchModeAnd
 	if mm == "or" {
@@ -80,7 +89,7 @@ func extractMatchMode(actionJSON *simplejson.Json) (pipeline.MatchMode, error) {
 	return matchMode, nil
 }
 
-func extractMatchInvert (actionJSON *simplejson.Json) (bool, error){
+func extractMatchInvert(actionJSON *simplejson.Json) (bool, error) {
 	invertMatchMode := actionJSON.Get("match_invert").MustBool()
 	return invertMatchMode, nil
 }
@@ -97,7 +106,7 @@ func extractConditions(condJSON *simplejson.Json) (pipeline.MatchConditions, err
 		if len(value) > 0 && value[0] == '/' {
 			r, err := cfg.CompileRegex(value)
 			if err != nil {
-				return nil, errors.Wrapf(err, "can't compile regexp %s: %s", value, err)
+				return nil, fmt.Errorf("can't compile regexp %s: %w", value, err)
 			}
 			condition.Regexp = r
 		} else {

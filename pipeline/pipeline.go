@@ -26,6 +26,7 @@ const (
 	DefaultMaintenanceInterval = time.Second * 5
 	DefaultFieldValue          = "not_set"
 	DefaultStreamName          = StreamName("not_set")
+	DefaultWaitForPanicTimeout = time.Minute
 
 	antispamUnbanIterations = 4
 	metricsGenInterval      = time.Hour
@@ -114,6 +115,8 @@ type Settings struct {
 	AvgLogSize          int
 	StreamField         string
 	IsStrict            bool
+	// WaitForPanicTimeout is a panic timeout for WaitOrPanic.
+	WaitForPanicTimeout time.Duration
 }
 
 // New creates new pipeline. Consider using `SetupHTTPHandlers` next.
@@ -556,7 +559,7 @@ func (p *Pipeline) WaitOrPanic(errMsg string) {
 
 			return
 		}
-		if time.Since(t) > time.Minute {
+		if time.Since(t) > p.settings.WaitForPanicTimeout {
 			p.logger.Panic(errMsg)
 		}
 	}

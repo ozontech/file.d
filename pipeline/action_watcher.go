@@ -43,10 +43,14 @@ func newActionWatcher(procID int) *actionWatcher {
 	}
 }
 
-// watch add a sample and wait until the processor fill it.
-func (aw *actionWatcher) watch(actionIndex int, timeout time.Duration) (*sample, error) {
-	s := aw.addSample(actionIndex)
-	defer aw.deleteSample(actionIndex, s)
+// watch adds a sample and waits until the processor fill it.
+// Every processor has its actionWatcher. When the watcher adds the sample,
+// the process tries to fill it (via setEventBefore and setEventAfter methods),
+// and then send `true` to `readyCh`. The watcher then returns the sample
+// and deletes it from waiting samples.
+func (aw *actionWatcher) watch(actionIdx int, timeout time.Duration) (*sample, error) {
+	s := aw.addSample(actionIdx)
+	defer aw.deleteSample(actionIdx, s)
 
 	select {
 	case <-s.ready():
@@ -56,7 +60,7 @@ func (aw *actionWatcher) watch(actionIndex int, timeout time.Duration) (*sample,
 	}
 }
 
-func (aw *actionWatcher) addSample(actionIndex int) *sample {
+func (aw *actionWatcher) addSample(actionIdx int) *sample {
 	s := &sample{
 		procID:      aw.procID,
 		readyCh:     make(chan bool, 1),
@@ -65,18 +69,18 @@ func (aw *actionWatcher) addSample(actionIndex int) *sample {
 		eventStatus: eventStatus(""),
 	}
 	aw.samplesMu.Lock()
-	aw.samples[actionIndex] = append(aw.samples[actionIndex], s)
+	aw.samples[actionIdx] = append(aw.samples[actionIdx], s)
 	aw.samplesLen.Inc()
 	aw.samplesMu.Unlock()
 
 	return s
 }
 
-func (aw *actionWatcher) deleteSample(actionIndex int, sample *sample) {
+func (aw *actionWatcher) deleteSample(actionIdx int, sample *sample) {
 	aw.samplesMu.Lock()
 	defer aw.samplesMu.Unlock()
 
-	samples := aw.samples[actionIndex]
+	samples := aw.samples[actionIdx]
 
 	deleteInd := 0
 	for i, s := range samples {
@@ -89,7 +93,7 @@ func (aw *actionWatcher) deleteSample(actionIndex int, sample *sample) {
 
 	samples[deleteInd] = samples[len(samples)-1]
 	samples[len(samples)-1] = nil
-	aw.samples[actionIndex] = samples[:len(samples)-1]
+	aw.samples[actionIdx] = samples[:len(samples)-1]
 	aw.samplesLen.Dec()
 }
 
@@ -102,11 +106,11 @@ func (aw *actionWatcher) setEventBefore(index int, event *Event) {
 	aw.samplesMu.Lock()
 	defer aw.samplesMu.Unlock()
 
-	for _, as := range aw.samples[index] {
-		if as == nil || len(as.eventBefore) > 0 {
+	for _, s := range aw.samples[index] {
+		if s == nil || len(s.eventBefore) > 0 {
 			continue
 		}
-		as.eventBefore = event.Root.EncodeToByte()
+		s.eventBefore = event.Root.EncodeToByte()
 	}
 }
 
