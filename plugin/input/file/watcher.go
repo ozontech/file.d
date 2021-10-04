@@ -5,22 +5,22 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/fsnotify/fsnotify"
+	"github.com/rjeczalik/notify"
 	"go.uber.org/zap"
 )
 
 type watcher struct {
-	path            string // dir in which watch for files
-	filenamePattern string // files which match this pattern will be watched
-	dirPattern      string // dirs which match this pattern will be watched
-	notifyFn        notify // function to receive notifications
-	fsWatcher       *fsnotify.Watcher
+	path            string   // dir in which watch for files
+	filenamePattern string   // files which match this pattern will be watched
+	dirPattern      string   // dirs which match this pattern will be watched
+	notifyFn        notifyFn // function to receive notifications
+	watcherCh       chan notify.EventInfo
 	logger          *zap.SugaredLogger
 }
 
-type notify func(filename string, stat os.FileInfo)
+type notifyFn func(filename string, stat os.FileInfo)
 
-func NewWatcher(path string, filenamePattern string, dirPattern string, notifyFn notify, logger *zap.SugaredLogger) *watcher {
+func NewWatcher(path string, filenamePattern string, dirPattern string, notifyFn notifyFn, logger *zap.SugaredLogger) *watcher {
 	return &watcher{
 		path:            path,
 		filenamePattern: filenamePattern,
@@ -41,12 +41,14 @@ func (w *watcher) start() {
 		w.logger.Fatalf("wrong dir name pattern %q: %s", w.dirPattern, err.Error())
 	}
 
-	watcher, err := fsnotify.NewWatcher()
+	eventsCh := make(chan notify.EventInfo, 1)
+	w.watcherCh = eventsCh
+
+	err := notify.Watch(w.path, eventsCh, notify.Create)
 	if err != nil {
 		w.logger.Warnf("can't create fs watcher: %s", err.Error())
 		return
 	}
-	w.fsWatcher = watcher
 
 	go w.watch()
 
@@ -56,18 +58,11 @@ func (w *watcher) start() {
 func (w *watcher) stop() {
 	w.logger.Infof("stopping watcher")
 
-	err := w.fsWatcher.Close()
-	if err != nil {
-		w.logger.Errorf("can't close watcher: %s", err.Error())
-	}
+	notify.Stop(w.watcherCh)
+	close(w.watcherCh)
 }
 
 func (w *watcher) tryAddPath(path string) {
-	err := w.fsWatcher.Add(path)
-	if err != nil {
-		return
-	}
-
 	files, err := ioutil.ReadDir(path)
 	if err != nil {
 		return
@@ -80,14 +75,12 @@ func (w *watcher) tryAddPath(path string) {
 			continue
 		}
 
-		filename := filepath.Join(path, file.Name())
-		event := fsnotify.Event{Name: filename, Op: fsnotify.Create}
-		w.notify(&event)
+		w.notify(filepath.Join(path, file.Name()))
 	}
 }
 
-func (w *watcher) notify(event *fsnotify.Event) {
-	filename := event.Name
+func (w *watcher) notify(path string) {
+	filename := path
 	if filename == "" || filename == "." || filename == ".." {
 		return
 	}
@@ -116,18 +109,10 @@ func (w *watcher) notify(event *fsnotify.Event) {
 
 func (w *watcher) watch() {
 	for {
-		select {
-		case event, ok := <-w.fsWatcher.Events:
-			if !ok {
-				return
-			}
-
-			w.notify(&event)
-		case err, ok := <-w.fsWatcher.Errors:
-			if !ok {
-				return
-			}
-			w.logger.Infof("watching path error(have it been deleted?): %s", err.Error())
+		event, ok := <-w.watcherCh
+		if !ok {
+			return
 		}
+		w.notify(event.Path())
 	}
 }
