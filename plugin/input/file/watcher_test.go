@@ -1,0 +1,73 @@
+package file
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"testing"
+	"time"
+
+	"github.com/ozonru/file.d/logger"
+	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
+)
+
+func TestWatcher(t *testing.T) {
+	tests := []struct {
+		name            string
+		filenamePattern string
+		dirPattern      string
+	}{
+		{
+			name:            "should_ok_and_count_only_creation",
+			filenamePattern: "watch*.log",
+		},
+	}
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			path, err := os.MkdirTemp("/tmp", "watcher_test")
+			require.NoError(t, err)
+			shouldCreate := 0
+			notifyFn := func(p string, _ os.FileInfo) {
+				logger.Error("here" + p)
+				shouldCreate++
+			}
+			w := NewWatcher(path, tt.filenamePattern, tt.dirPattern, notifyFn, zap.L().Sugar())
+			w.start()
+			defer w.stop()
+
+			// creates, write, remove files and ensure events are only passed for creation events.
+
+			f1Name := filepath.Join(path, "watch1.log")
+
+			f1, err := os.Create(f1Name)
+			require.NoError(t, err)
+			err = f1.Close()
+			require.NoError(t, err)
+
+			f2, err := os.Create(filepath.Join(path, "watch2.log"))
+			require.NoError(t, err)
+			err = f2.Close()
+			require.NoError(t, err)
+
+			time.Sleep(10 * time.Millisecond)
+
+			f1, err = os.OpenFile(f1Name, os.O_WRONLY, 0o600)
+			require.NoError(t, err)
+			_, err = fmt.Fprint(f1, "test")
+			require.NoError(t, err)
+			err = f1.Close()
+			require.NoError(t, err)
+
+			time.Sleep(10 * time.Millisecond)
+
+			err = os.Remove(f1Name)
+			require.NoError(t, err)
+
+			time.Sleep(10 * time.Millisecond)
+
+			require.Equal(t, 2, shouldCreate)
+		})
+	}
+}
