@@ -20,6 +20,8 @@ type watcher struct {
 
 type notifyFn func(filename string, stat os.FileInfo)
 
+// NewWatcher creates a watcher that see file creations in the path
+// and if they match filePattern and dirPattern, pass them to notifyFn.
 func NewWatcher(path string, filenamePattern string, dirPattern string, notifyFn notifyFn, logger *zap.SugaredLogger) *watcher {
 	return &watcher{
 		path:            path,
