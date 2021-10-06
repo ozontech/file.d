@@ -1,5 +1,7 @@
 module github.com/ozonru/file.d
 
+go 1.17
+
 require (
 	github.com/Shopify/sarama v1.29.1
 	github.com/alecthomas/kingpin v2.2.6+incompatible
@@ -7,7 +9,6 @@ require (
 	github.com/bitly/go-simplejson v0.5.0
 	github.com/bmizerany/assert v0.0.0-20160611221934-b7ed37b82869 // indirect
 	github.com/euank/go-kmsg-parser v2.0.0+incompatible
-	github.com/fsnotify/fsnotify v1.4.9
 	github.com/ghodss/yaml v1.0.0
 	github.com/go-ini/ini v1.62.0 // indirect
 	github.com/golang/groupcache v0.0.0-20191002201903-404acd9df4cc // indirect
@@ -16,6 +17,7 @@ require (
 	github.com/imdario/mergo v0.3.7 // indirect
 	github.com/minio/minio-go v6.0.14+incompatible
 	github.com/prometheus/client_golang v1.4.0
+	github.com/rjeczalik/notify v0.9.2
 	github.com/satori/go.uuid v1.2.0
 	github.com/smartystreets/goconvey v1.6.4 // indirect
 	github.com/stretchr/testify v1.7.0
@@ -95,5 +97,3 @@ require (
 	honnef.co/go/tools v0.0.1-2019.2.3 // indirect
 	sigs.k8s.io/yaml v1.1.0 // indirect
 )
-
-go 1.17
