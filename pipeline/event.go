@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"runtime"
 	"sync"
+	"time"
 
 	"github.com/ozonru/file.d/logger"
 	insaneJSON "github.com/vitkovskii/insane-json"
@@ -224,13 +225,20 @@ func newEventPool(capacity int) *eventPool {
 
 func (p *eventPool) get() *Event {
 	x := (p.getCounter.Inc() - 1) % int64(p.capacity)
+	var i int
 	for {
 		if x < p.backCounter.Load() {
 			if p.free1[x].CAS(true, false) {
 				break
 			}
 		}
-		runtime.Gosched()
+		if i%3 == 0 {
+			time.Sleep(30 * time.Millisecond)
+			i = 0
+		} else {
+			runtime.Gosched()
+			i++
+		}
 	}
 	event := p.events[x]
 	p.events[x] = nil
@@ -243,11 +251,18 @@ func (p *eventPool) get() *Event {
 func (p *eventPool) back(event *Event) {
 	event.stage = eventStagePool
 	x := (p.backCounter.Inc() - 1) % int64(p.capacity)
+	var i int
 	for {
 		if p.free2[x].CAS(false, true) {
 			break
 		}
-		runtime.Gosched()
+		if i%3 == 0 {
+			time.Sleep(30 * time.Millisecond)
+			i = 0
+		} else {
+			runtime.Gosched()
+			i++
+		}
 	}
 
 	p.events[x] = event
