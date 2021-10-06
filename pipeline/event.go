@@ -223,6 +223,8 @@ func newEventPool(capacity int) *eventPool {
 	return eventPool
 }
 
+const shouldSleep = 3
+
 func (p *eventPool) get() *Event {
 	x := (p.getCounter.Inc() - 1) % int64(p.capacity)
 	var i int
@@ -232,7 +234,7 @@ func (p *eventPool) get() *Event {
 				break
 			}
 		}
-		if i%3 == 0 {
+		if i%shouldSleep == shouldSleep-1 {
 			time.Sleep(30 * time.Millisecond)
 			i = 0
 		} else {
@@ -256,7 +258,7 @@ func (p *eventPool) back(event *Event) {
 		if p.free2[x].CAS(false, true) {
 			break
 		}
-		if i%3 == 0 {
+		if i%shouldSleep == shouldSleep-1 {
 			time.Sleep(30 * time.Millisecond)
 			i = 0
 		} else {
