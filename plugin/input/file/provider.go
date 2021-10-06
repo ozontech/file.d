@@ -9,6 +9,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/ozonru/file.d/logger"
+	"github.com/ozonru/file.d/longpanic"
 	"github.com/ozonru/file.d/pipeline"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
@@ -112,48 +114,25 @@ func NewJobProvider(config *Config, controller pipeline.InputPluginController, l
 func (jp *jobProvider) start() {
 	jp.logger.Infof("starting job provider persistence mode=%s", jp.config.PersistenceMode)
 	if jp.config.OffsetsOp_ == offsetsOpContinue {
-		jp.loadOffsets()
+		longpanic.WithRecover(func() {
+			offsets, err := jp.offsetDB.load()
+			if err != nil {
+				logger.Panicf("can't load offsets: %s", err.Error())
+			}
+			jp.loadedOffsets = offsets
+		})
 	}
+
 	jp.watcher.start()
 
 	if jp.config.PersistenceMode_ == persistenceModeAsync {
-		go jp.saveOffsetsCyclic(jp.config.AsyncInterval_)
+		longpanic.Go(func() { jp.saveOffsetsCyclic(jp.config.AsyncInterval_) })
 	}
 
 	jp.isStarted = true
 
-	go jp.reportStats()
-	go jp.maintenance()
-}
-
-func (jp *jobProvider) loadOffsets() {
-	load := func() error {
-		offsets, err := jp.offsetDB.load()
-		if err != nil {
-			return err
-		}
-
-		jp.loadedOffsets = offsets
-		return nil
-	}
-
-	defer func() {
-		if err, ok := recover().(error); ok {
-			jp.controller.WaitOrPanic(err.Error())
-			// last try.
-			if errLoad := load(); errLoad != nil {
-				panic(errLoad)
-			}
-		}
-	}()
-
-	for {
-		err := load()
-		if err == nil {
-			return
-		}
-		jp.controller.WaitOrPanic(err.Error())
-	}
+	longpanic.Go(jp.reportStats)
+	longpanic.Go(jp.maintenance)
 }
 
 func (jp *jobProvider) stop() {

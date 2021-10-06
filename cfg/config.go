@@ -16,8 +16,9 @@ import (
 )
 
 type Config struct {
-	Vault     VaultConfig
-	Pipelines map[string]*PipelineConfig
+	Vault        VaultConfig
+	PanicTimeout time.Duration
+	Pipelines    map[string]*PipelineConfig
 }
 
 type (
@@ -137,6 +138,20 @@ func parseConfig(json *simplejson.Json) *Config {
 		raw := pipelinesJson.Get(i)
 		config.Pipelines[i] = &PipelineConfig{Raw: raw}
 	}
+
+	panicTimeoutStr, err := json.Get("panic_timeout").String()
+	if err != nil {
+		logger.Warnf("can't get panic_timeout: %s", err.Error())
+	}
+	if panicTimeoutStr == "" {
+		panicTimeoutStr = "1m"
+	}
+
+	panicTimeout, err := time.ParseDuration(panicTimeoutStr)
+	if err != nil {
+		logger.Panicf("can't parse panic_timeout: %s", err.Error())
+	}
+	config.PanicTimeout = panicTimeout
 
 	return config
 }

@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/ozonru/file.d/logger"
+	"github.com/ozonru/file.d/longpanic"
 	"gopkg.in/yaml.v3"
 )
 
@@ -90,7 +91,13 @@ func (r *resetter) reset(request *http.Request) {
 		deleteOneOffsetByField(jp.offsetDB, "source_id", req.SourceID)
 	}
 
-	r.plug.params.Controller.RecoverFromPanic()
+	offsets, err := jp.offsetDB.load()
+	if err != nil {
+		logger.Panicf("can't load offsets: %s", err.Error())
+	}
+	jp.loadedOffsets = offsets
+
+	longpanic.RecoverFromPanic()
 }
 
 func (r *resetter) truncateJobs(truncateAll bool, inode, sourceID uint64) {

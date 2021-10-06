@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/ozonru/file.d/logger"
+	"github.com/ozonru/file.d/longpanic"
 )
 
 type streamer struct {
@@ -37,7 +38,7 @@ func newStreamer() *streamer {
 }
 
 func (s *streamer) start() {
-	go s.heartbeat()
+	longpanic.Go(s.heartbeat)
 }
 
 func (s *streamer) stop() {

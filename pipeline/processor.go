@@ -2,6 +2,7 @@ package pipeline
 
 import (
 	"github.com/ozonru/file.d/logger"
+	"github.com/ozonru/file.d/longpanic"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
 )
@@ -64,8 +65,6 @@ func NewProcessor(
 	output OutputPlugin,
 	streamer *streamer,
 	finalizeFn finalizeFn,
-	waitOrPanic func(string),
-	recoverPanic func(),
 ) *processor {
 	processor := &processor{
 		id:            id,
@@ -74,10 +73,8 @@ func NewProcessor(
 		output:        output,
 		finalize:      finalizeFn,
 
-		activeCounter:    activeCounter,
-		actionWatcher:    newActionWatcher(id),
-		waitOrPanic:      waitOrPanic,
-		recoverFromPanic: recoverPanic,
+		activeCounter: activeCounter,
+		actionWatcher: newActionWatcher(id),
 
 		metricsValues: make([]string, 0, 0),
 	}
@@ -97,7 +94,7 @@ func (p *processor) start(params *PluginDefaultParams, logger *zap.SugaredLogger
 		})
 	}
 
-	go p.process()
+	longpanic.Go(p.process)
 }
 
 func (p *processor) process() {
@@ -334,10 +331,6 @@ func (p *processor) Commit(event *Event) {
 func (p *processor) Propagate(event *Event) {
 	event.action++
 	p.processSequence(event)
-}
-
-func (p *processor) WaitOrPanic(msgStr string) {
-	p.waitOrPanic(msgStr)
 }
 
 func (p *processor) RecoverFromPanic() {

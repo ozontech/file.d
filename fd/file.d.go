@@ -11,6 +11,7 @@ import (
 	"github.com/bitly/go-simplejson"
 	"github.com/ozonru/file.d/cfg"
 	"github.com/ozonru/file.d/logger"
+	"github.com/ozonru/file.d/longpanic"
 	"github.com/ozonru/file.d/pipeline"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -257,7 +258,7 @@ func (f *FileD) startHTTP() {
 	mux.Handle("/metrics", promhttp.Handler())
 
 	f.server = &http.Server{Addr: f.httpAddr, Handler: mux}
-	go f.listenHTTP()
+	longpanic.Go(f.listenHTTP)
 }
 
 func (f *FileD) listenHTTP() {

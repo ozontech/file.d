@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/ozonru/file.d/logger"
+	"github.com/ozonru/file.d/longpanic"
 
 	"go.uber.org/zap"
 )
@@ -84,7 +85,7 @@ func (r *journalReader) start() error {
 		return err
 	}
 
-	go readLines(out, r.config)
+	longpanic.Go(func() { readLines(out, r.config) })
 
 	return nil
 }

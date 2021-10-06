@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/fsnotify/fsnotify"
+	"github.com/ozonru/file.d/longpanic"
 	"go.uber.org/zap"
 )
 
@@ -48,7 +49,7 @@ func (w *watcher) start() {
 	}
 	w.fsWatcher = watcher
 
-	go w.watch()
+	longpanic.Go(w.watch)
 
 	w.tryAddPath(w.path)
 }

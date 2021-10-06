@@ -13,6 +13,7 @@ import (
 
 	"github.com/ozonru/file.d/decoder"
 	"github.com/ozonru/file.d/logger"
+	"github.com/ozonru/file.d/longpanic"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
@@ -39,22 +40,16 @@ type InputPluginController interface {
 	UseSpread()                           // don't use stream field and spread all events across all processors
 	DisableStreams()                      // don't use stream field
 	SuggestDecoder(t decoder.DecoderType) // set decoder if pipeline uses "auto" value for decoder
-	WaitOrPanic(msg string)
-	RecoverFromPanic()
 }
 
 type ActionPluginController interface {
 	Commit(event *Event)    // commit offset of held event and skip further processing
 	Propagate(event *Event) // throw held event back to pipeline
-	WaitOrPanic(msg string)
-	RecoverFromPanic()
 }
 
 type OutputPluginController interface {
 	Commit(event *Event) // notify input plugin that event is successfully processed and save offsets
 	Error(err string)
-	WaitOrPanic(msg string)
-	RecoverFromPanic()
 }
 
 type (
@@ -91,9 +86,6 @@ type Pipeline struct {
 	outputInfo *OutputPluginInfo
 
 	metricsHolder *metricsHolder
-	// waitForPanic is an atomic that WaitOrPanic sets in case of recoverable error in a plugin.
-	// It's not a channel because it should reset not 1 but all goroutines at the same time.
-	waitForPanic *atomic.Bool
 
 	// some debugging shit
 	logger          *zap.SugaredLogger
@@ -115,8 +107,6 @@ type Settings struct {
 	AvgLogSize          int
 	StreamField         string
 	IsStrict            bool
-	// WaitForPanicTimeout is a panic timeout for WaitOrPanic.
-	WaitForPanicTimeout time.Duration
 }
 
 // New creates new pipeline. Consider using `SetupHTTPHandlers` next.
@@ -133,7 +123,6 @@ func New(name string, settings *Settings, registry *prometheus.Registry) *Pipeli
 		},
 
 		metricsHolder: newMetricsHolder(name, registry, metricsGenInterval),
-		waitForPanic:  atomic.NewBool(false),
 		streamer:      newStreamer(),
 		eventPool:     newEventPool(settings.Capacity),
 		antispamer:    newAntispamer(settings.AntispamThreshold, antispamUnbanIterations, settings.MaintenanceInterval),
@@ -227,8 +216,8 @@ func (p *Pipeline) Start() {
 
 	p.streamer.start()
 
-	go p.maintenance()
-	go p.growProcs()
+	longpanic.Go(p.maintenance)
+	longpanic.Go(p.growProcs)
 }
 
 func (p *Pipeline) Stop() {
@@ -428,8 +417,6 @@ func (p *Pipeline) newProc() *processor {
 		p.output,
 		p.streamer,
 		p.finalize,
-		p.WaitOrPanic,
-		p.RecoverFromPanic,
 	)
 	for j, info := range p.actionInfos {
 		plugin, _ := info.Factory()
@@ -538,31 +525,6 @@ func (p *Pipeline) DisableStreams() {
 
 func (p *Pipeline) SuggestDecoder(t decoder.DecoderType) {
 	p.suggestedDecoder = t
-}
-
-// RecoverFromPanic is a signal to not wait for the panic and tries to continue the execution.
-func (p *Pipeline) RecoverFromPanic() {
-	p.waitForPanic.Store(false)
-}
-
-// WaitOrPanic waits 1 minute for somebody to reset the error plugin and then panics.
-func (p *Pipeline) WaitOrPanic(errMsg string) {
-	p.logger.Error(errMsg)
-	p.logger.Error("wait for somebody to restart plugins via endpoint")
-
-	p.waitForPanic.Store(true)
-	t := time.Now()
-	for {
-		time.Sleep(10 * time.Millisecond)
-		if !p.waitForPanic.Load() {
-			p.logger.Error("panic recovered! Trying to continue execution...")
-
-			return
-		}
-		if time.Since(t) > p.settings.WaitForPanicTimeout {
-			p.logger.Panic(errMsg)
-		}
-	}
 }
 
 func (p *Pipeline) DisableParallelism() {
