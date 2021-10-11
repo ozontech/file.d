@@ -200,19 +200,19 @@ type eventPool struct {
 	free1           []atomic.Bool
 	free2           []atomic.Bool
 
-	mu   *sync.Mutex
-	cond *sync.Cond
+	getMu   *sync.Mutex
+	getCond *sync.Cond
 }
 
 func newEventPool(capacity int) *eventPool {
 	eventPool := &eventPool{
 		capacity:        capacity,
 		freeEventsCount: capacity,
-		mu:              &sync.Mutex{},
+		getMu:           &sync.Mutex{},
 		backCounter:     *atomic.NewInt64(int64(capacity)),
 	}
 
-	eventPool.cond = sync.NewCond(eventPool.mu)
+	eventPool.getCond = sync.NewCond(eventPool.getMu)
 
 	for i := 0; i < capacity; i++ {
 		eventPool.free1 = append(eventPool.free1, *atomic.NewBool(true))
@@ -235,7 +235,9 @@ func (p *eventPool) get() *Event {
 			}
 		}
 		if i%shouldSleep == shouldSleep-1 {
-			time.Sleep(30 * time.Millisecond)
+			p.getMu.Lock()
+			p.getCond.Wait()
+			p.getMu.Unlock()
 			i = 0
 		} else {
 			runtime.Gosched()
@@ -259,7 +261,7 @@ func (p *eventPool) back(event *Event) {
 			break
 		}
 		if i%shouldSleep == shouldSleep-1 {
-			time.Sleep(30 * time.Millisecond)
+			time.Sleep(5 * time.Millisecond)
 			i = 0
 		} else {
 			runtime.Gosched()
@@ -269,6 +271,7 @@ func (p *eventPool) back(event *Event) {
 
 	p.events[x] = event
 	p.free1[x].Store(true)
+	p.getCond.Broadcast()
 }
 
 func (p *eventPool) dump() string {
