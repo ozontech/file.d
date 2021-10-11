@@ -9,15 +9,23 @@ import (
 )
 
 type worker struct {
+	maxLogSize int
 }
 
-func (w *worker) start(inputController pipeline.InputPluginController, jobProvider *jobProvider, readBufferSize int, logger *zap.SugaredLogger) {
+type inputer interface {
+	In(sourceID pipeline.SourceID, sourceName string, offset int64, data []byte, isNewSource bool) uint64
+}
+
+func (w *worker) start(inputController inputer, jobProvider *jobProvider, readBufferSize int, logger *zap.SugaredLogger) {
 	go w.work(inputController, jobProvider, readBufferSize, logger)
 }
 
-func (w *worker) work(controller pipeline.InputPluginController, jobProvider *jobProvider, readBufferSize int, logger *zap.SugaredLogger) {
+func (w *worker) work(controller inputer, jobProvider *jobProvider, readBufferSize int, logger *zap.SugaredLogger) {
 	accumBuffer := make([]byte, 0, readBufferSize)
 	readBuffer := make([]byte, readBufferSize)
+	var inBuffer []byte
+	shouldCheckMax := w.maxLogSize != 0
+
 	var seqID uint64 = 0
 	for {
 		job := <-jobProvider.jobsChan
@@ -89,10 +97,14 @@ func (w *worker) work(controller pipeline.InputPluginController, jobProvider *jo
 					offset := lastOffset + accumulated + pos + 1
 					if len(accumBuffer) != 0 {
 						accumBuffer = append(accumBuffer, readBuffer[processed:pos+1]...)
-						seqID = controller.In(sourceID, sourceName, offset, accumBuffer, isVirgin)
+						inBuffer = accumBuffer
 					} else {
-						seqID = controller.In(sourceID, sourceName, offset, readBuffer[processed:pos+1], isVirgin)
+						inBuffer = readBuffer[processed : pos+1]
 					}
+					if shouldCheckMax && len(inBuffer) > w.maxLogSize {
+						break
+					}
+					seqID = controller.In(sourceID, sourceName, offset, inBuffer, isVirgin)
 					job.lastEventSeq = seqID
 				}
 				accumBuffer = accumBuffer[:0]
@@ -108,6 +120,9 @@ func (w *worker) work(controller pipeline.InputPluginController, jobProvider *jo
 			} else {
 				accumBuffer = append(accumBuffer, readBuffer[:read]...)
 				accumulated += read
+				if shouldCheckMax && len(accumBuffer) > w.maxLogSize {
+					break
+				}
 			}
 		}
 

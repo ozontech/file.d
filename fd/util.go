@@ -15,6 +15,7 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 	capacity := pipeline.DefaultCapacity
 	antispamThreshold := 0
 	avgLogSize := pipeline.DefaultAvgLogSize
+	maxLogSize := pipeline.DefaultMaxLogSize
 	streamField := pipeline.DefaultStreamField
 	maintenanceInterval := pipeline.DefaultMaintenanceInterval
 	decoder := "auto"
@@ -29,6 +30,11 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 		val = settings.Get("avg_log_size").MustInt()
 		if val != 0 {
 			avgLogSize = val
+		}
+
+		val = settings.Get("max_log_size").MustInt()
+		if val != 0 {
+			maxLogSize = val
 		}
 
 		str := settings.Get("decoder").MustString()
@@ -60,6 +66,7 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 		Decoder:             decoder,
 		Capacity:            capacity,
 		AvgLogSize:          avgLogSize,
+		MaxLogSize:          maxLogSize,
 		AntispamThreshold:   antispamThreshold,
 		MaintenanceInterval: maintenanceInterval,
 		StreamField:         streamField,
@@ -71,7 +78,6 @@ func extractMatchMode(actionJSON *simplejson.Json) (pipeline.MatchMode, error) {
 	mm := actionJSON.Get("match_mode").MustString()
 	if mm != "or" && mm != "and" && mm != "" {
 		return pipeline.MatchModeUnknown, fmt.Errorf("unknown match mode %q must be or/and", mm)
-
 	}
 	matchMode := pipeline.MatchModeAnd
 	if mm == "or" {
@@ -80,7 +86,7 @@ func extractMatchMode(actionJSON *simplejson.Json) (pipeline.MatchMode, error) {
 	return matchMode, nil
 }
 
-func extractMatchInvert (actionJSON *simplejson.Json) (bool, error){
+func extractMatchInvert(actionJSON *simplejson.Json) (bool, error) {
 	invertMatchMode := actionJSON.Get("match_invert").MustBool()
 	return invertMatchMode, nil
 }

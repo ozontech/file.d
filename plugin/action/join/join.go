@@ -11,7 +11,7 @@ import (
 
 /*{ introduction
 It makes one big event from the sequence of the events.
-It is useful for assembling back together "exceptions" or "panics" if they were written line by line. 
+It is useful for assembling back together "exceptions" or "panics" if they were written line by line.
 Also known as "multiline".
 
 > ⚠ Parsing the whole event flow could be very CPU intensive because the plugin uses regular expressions.
@@ -66,9 +66,10 @@ type Plugin struct {
 	controller pipeline.ActionPluginController
 	config     *Config
 
-	isJoining bool
-	initial   *pipeline.Event
-	buff      []byte
+	isJoining  bool
+	initial    *pipeline.Event
+	buff       []byte
+	maxLogSize int
 
 	logger *zap.SugaredLogger
 }
@@ -111,6 +112,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 	p.config = config.(*Config)
 	p.isJoining = false
 	p.buff = make([]byte, 0, params.PipelineSettings.AvgLogSize)
+	p.maxLogSize = params.PipelineSettings.MaxLogSize
 	p.logger = params.Logger
 }
 
@@ -163,6 +165,10 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 		nextOK := p.config.Continue_.MatchString(value)
 		if nextOK {
 			p.buff = append(p.buff, value...)
+			if p.maxLogSize != 0 && len(p.buff) > p.maxLogSize {
+				p.flush()
+				return pipeline.ActionDiscard
+			}
 			return pipeline.ActionCollapse
 		}
 	}

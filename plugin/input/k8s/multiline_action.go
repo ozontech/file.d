@@ -7,11 +7,12 @@ import (
 )
 
 type MultilineAction struct {
-	config  *Config
-	logger  *zap.SugaredLogger
-	params  *pipeline.ActionPluginParams
-	logBuff []byte
-	logSize int
+	config     *Config
+	logger     *zap.SugaredLogger
+	params     *pipeline.ActionPluginParams
+	maxLogSize int
+	logBuff    []byte
+	logSize    int
 }
 
 const (
@@ -21,6 +22,7 @@ const (
 func (p *MultilineAction) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginParams) {
 	p.logger = params.Logger
 	p.params = params
+	p.maxLogSize = params.PipelineSettings.MaxLogSize
 	p.config = config.(*Config)
 
 	p.config.AllowedPodLabels_ = cfg.ListToMap(p.config.AllowedPodLabels)
@@ -39,6 +41,11 @@ func (p *MultilineAction) Do(event *pipeline.Event) pipeline.ActionResult {
 		p.logBuff = p.logBuff[:1]
 		return pipeline.ActionDiscard
 	}
+	if p.maxLogSize != 0 && p.logSize > p.maxLogSize {
+		p.logger.Errorf("logs will be discarded due to maxLogSize")
+		p.logBuff = p.logBuff[:1]
+		return pipeline.ActionDiscard
+	}
 
 	event.Root.AddFieldNoAlloc(event.Root, "k8s_node").MutateToString(selfNodeName)
 	if p.config.OnlyNode {
@@ -52,21 +59,21 @@ func (p *MultilineAction) Do(event *pipeline.Event) pipeline.ActionResult {
 	}
 
 	// docker splits long logs by 16kb chunks, so let's join them
-	// look ahead to ensure we won't throw events longer than MaxEventSize
+	// look ahead to ensure we won't throw events longer than SplitEventSize
 	// lookahead value is much more than 16Kb because json may be escaped
 	p.logSize += event.Size
 	predictedLen := p.logSize + predictionLookahead
-	isMaxReached := predictedLen > p.config.MaxEventSize
+	shouldSplit := predictedLen > p.config.SplitEventSize
 	logFragmentLen := len(logFragment)
-	if logFragment[logFragmentLen-3:logFragmentLen-1] != `\n` && !isMaxReached {
+	if logFragment[logFragmentLen-3:logFragmentLen-1] != `\n` && !shouldSplit {
 		p.logBuff = append(p.logBuff, logFragment[1:logFragmentLen-1]...)
 		return pipeline.ActionCollapse
 	}
 
 	ns, pod, container, _, success, podMeta := getMeta(event.SourceName)
 
-	if isMaxReached {
-		p.logger.Warnf("too long k8s event found, it'll be split, ns=%s pod=%s container=%s consider increase max_event_size, max_event_size=%d, predicted event size=%d", ns, pod, container, p.config.MaxEventSize, predictedLen)
+	if shouldSplit {
+		p.logger.Warnf("too long k8s event found, it'll be split, ns=%s pod=%s container=%s consider increase split_event_size, split_event_size=%d, predicted event size=%d", ns, pod, container, p.config.SplitEventSize, predictedLen)
 	}
 
 	event.Root.AddFieldNoAlloc(event.Root, "k8s_namespace").MutateToString(string(ns))

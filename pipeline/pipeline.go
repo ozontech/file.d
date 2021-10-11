@@ -19,6 +19,7 @@ const (
 	DefaultStreamField         = "stream"
 	DefaultCapacity            = 1024
 	DefaultAvgLogSize          = 16 * 1024
+	DefaultMaxLogSize          = 0
 	DefaultJSONNodePoolSize    = 1024
 	DefaultMaintenanceInterval = time.Second * 5
 	DefaultFieldValue          = "not_set"
@@ -47,8 +48,10 @@ type OutputPluginController interface {
 	Error(err string)
 }
 
-type SourceID uint64
-type StreamName string
+type (
+	SourceID   uint64
+	StreamName string
+)
 
 type Pipeline struct {
 	Name     string
@@ -98,6 +101,7 @@ type Settings struct {
 	MaintenanceInterval time.Duration
 	AntispamThreshold   int
 	AvgLogSize          int
+	MaxLogSize          int
 	StreamField         string
 	IsStrict            bool
 }
@@ -224,7 +228,8 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 	// don't process shit
 	isEmpty := length == 0 || (bytes[0] == '\n' && length == 1)
 	isSpam := p.antispamer.isSpam(sourceID, sourceName, isNewSource)
-	if isEmpty || isSpam {
+	isLong := p.settings.MaxLogSize != 0 && length > p.settings.MaxLogSize
+	if isEmpty || isSpam || isLong {
 		return 0
 	}
 

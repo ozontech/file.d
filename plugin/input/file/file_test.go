@@ -19,7 +19,7 @@ import (
 	"github.com/ozonru/file.d/logger"
 	"github.com/ozonru/file.d/pipeline"
 	"github.com/ozonru/file.d/test"
-	"github.com/satori/go.uuid"
+	uuid "github.com/satori/go.uuid"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/atomic"
 )
@@ -29,9 +29,11 @@ var (
 	offsetsDir = ""
 )
 
-const offsetsFile = "offsets.yaml"
-const newLine = 1
-const perm = 0770
+const (
+	offsetsFile = "offsets.yaml"
+	newLine     = 1
+	perm        = 0o770
+)
 
 func TestMain(m *testing.M) {
 	setupDirs()
@@ -174,8 +176,7 @@ func createOffsetFile() string {
 }
 
 func addDataFile(file *os.File, data []byte) {
-	if _, err := file.Write(data);
-		err != nil {
+	if _, err := file.Write(data); err != nil {
 		panic(err.Error())
 	}
 }
@@ -354,6 +355,9 @@ func getConfigByPipeline(p *pipeline.Pipeline) *Config {
 
 // TestWatch tests if watcher notifies about new dirs and files
 func TestWatch(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skip test in short mode")
+	}
 	iterations := 4
 	eventsPerIteration := 2
 	finalEvent := 1
@@ -370,7 +374,7 @@ func TestWatch(t *testing.T) {
 				dir := fmt.Sprintf("dir_%d", x)
 				go func(dir string) {
 					dir = filepath.Join(filepath.Dir(file), dir)
-					_ = os.Mkdir(dir, 0770)
+					_ = os.Mkdir(dir, 0o770)
 
 					err := ioutil.WriteFile(filepath.Join(dir, "new_file"), []byte(content), perm)
 					if err != nil {
@@ -457,7 +461,6 @@ func TestReadContinue(t *testing.T) {
 				inputEvents = append(inputEvents, line)
 				addString(file, line, true, false)
 			}
-
 		},
 		Assert: func(p *pipeline.Pipeline) {
 			for i := 0; i < p.GetEventsTotal(); i++ {
@@ -696,6 +699,9 @@ func TestReadLongJSON(t *testing.T) {
 
 // TestReadManyFilesParallelRace tests if plugin doesn't have race conditions in the case of parallel processing of files
 func TestReadManyFilesParallelRace(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skip test in short mode")
+	}
 	lineCount := 2
 	blockCount := 256
 	fileCount := 32
@@ -734,6 +740,9 @@ func TestReadManyFilesParallelRace(t *testing.T) {
 
 // TestReadManyCharsParallelRace tests if plugin doesn't have race conditions in the case of parallel processing of chars
 func TestReadManyCharsParallelRace(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skip test in short mode")
+	}
 	config := &Config{}
 	_ = cfg.Parse(config, nil)
 
@@ -753,7 +762,6 @@ func TestReadManyCharsParallelRace(t *testing.T) {
 	eventCount := lineCount * blockCount * fileCount
 	run(&test.Case{
 		Prepare: func() {
-
 			for f := 0; f < fileCount; f++ {
 				file := createTempFile()
 				f, err := os.OpenFile(file, os.O_APPEND|os.O_WRONLY, perm)
@@ -844,6 +852,9 @@ func TestReadStreamRace(t *testing.T) {
 }
 
 func TestRotationRenameSimple(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skip test in short mode")
+	}
 	file := ""
 	newFile := ""
 	run(&test.Case{
@@ -938,6 +949,9 @@ func TestRotationRenameWhileNotWorking(t *testing.T) {
 }
 
 func TestTruncation(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skip test in short mode")
+	}
 	file := ""
 	x := atomic.NewInt32(2)
 	run(&test.Case{
@@ -953,7 +967,6 @@ func TestTruncation(t *testing.T) {
 			addString(file, `"line_3"`, true, true)
 			addString(file, `"line_4"`, true, true)
 			addString(file, `"line_5"`, true, true)
-
 		},
 		Assert: func(p *pipeline.Pipeline) {
 			assert.Equal(t, 5, p.GetEventsTotal(), "wrong events count")

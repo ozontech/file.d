@@ -81,7 +81,7 @@ type Config struct {
 	//> @3@4@5@6
 	//>
 	//> The filename to store offsets of processed files. Offsets are loaded only on initialization.
-	//> > It's a `yaml` file. You can modify it manually. 
+	//> > It's a `yaml` file. You can modify it manually.
 	OffsetsFile    string `json:"offsets_file" required:"true"` //*
 	OffsetsFileTmp string
 
@@ -134,7 +134,7 @@ type Config struct {
 
 	//> @3@4@5@6
 	//>
-	//> It defines how many workers will be instantiated. 
+	//> It defines how many workers will be instantiated.
 	//> Each worker:
 	//> * Reads files (I/O bound)
 	//> * Decodes events (CPU bound)
@@ -182,7 +182,9 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 func (p *Plugin) startWorkers() {
 	p.workers = make([]*worker, p.config.WorkersCount_)
 	for i := range p.workers {
-		p.workers[i] = &worker{}
+		p.workers[i] = &worker{
+			maxLogSize: p.params.PipelineSettings.MaxLogSize,
+		}
 		p.workers[i].start(p.params.Controller, p.jobProvider, p.config.ReadBufferSize, p.logger)
 	}
 
