@@ -266,13 +266,22 @@ func (p *eventPool) back(event *Event) {
 	x := (p.backCounter.Inc() - 1) % int64(p.capacity)
 	var tries int
 	for {
+		// fast path
+		if p.free2[x].CAS(false, true) {
+			break
+		}
+		if p.free2[x].CAS(false, true) {
+			break
+		}
 		if p.free2[x].CAS(false, true) {
 			break
 		}
 		tries++
 		if tries%maxTries != 0 {
+			// slow path
 			runtime.Gosched()
 		} else {
+			// slowest path, sleep instead of cond.Wait because of potential deadlock.
 			time.Sleep(5 * time.Millisecond)
 			tries = 0
 		}
