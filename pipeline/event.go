@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"runtime"
 	"sync"
+	"time"
 
 	"github.com/ozonru/file.d/logger"
 	insaneJSON "github.com/vitkovskii/insane-json"
@@ -199,19 +200,19 @@ type eventPool struct {
 	free1           []atomic.Bool
 	free2           []atomic.Bool
 
-	mu   *sync.Mutex
-	cond *sync.Cond
+	getMu   *sync.Mutex
+	getCond *sync.Cond
 }
 
 func newEventPool(capacity int) *eventPool {
 	eventPool := &eventPool{
 		capacity:        capacity,
 		freeEventsCount: capacity,
-		mu:              &sync.Mutex{},
+		getMu:           &sync.Mutex{},
 		backCounter:     *atomic.NewInt64(int64(capacity)),
 	}
 
-	eventPool.cond = sync.NewCond(eventPool.mu)
+	eventPool.getCond = sync.NewCond(eventPool.getMu)
 
 	for i := 0; i < capacity; i++ {
 		eventPool.free1 = append(eventPool.free1, *atomic.NewBool(true))
@@ -222,15 +223,35 @@ func newEventPool(capacity int) *eventPool {
 	return eventPool
 }
 
+const maxTries = 3
+
 func (p *eventPool) get() *Event {
 	x := (p.getCounter.Inc() - 1) % int64(p.capacity)
+	var tries int
 	for {
 		if x < p.backCounter.Load() {
+			// fast path
+			if p.free1[x].CAS(true, false) {
+				break
+			}
+			if p.free1[x].CAS(true, false) {
+				break
+			}
 			if p.free1[x].CAS(true, false) {
 				break
 			}
 		}
-		runtime.Gosched()
+		tries++
+		if tries%maxTries != 0 {
+			// slow path
+			runtime.Gosched()
+		} else {
+			// slowest path
+			p.getMu.Lock()
+			p.getCond.Wait()
+			p.getMu.Unlock()
+			tries = 0
+		}
 	}
 	event := p.events[x]
 	p.events[x] = nil
@@ -243,15 +264,32 @@ func (p *eventPool) get() *Event {
 func (p *eventPool) back(event *Event) {
 	event.stage = eventStagePool
 	x := (p.backCounter.Inc() - 1) % int64(p.capacity)
+	var tries int
 	for {
+		// fast path
 		if p.free2[x].CAS(false, true) {
 			break
 		}
-		runtime.Gosched()
+		if p.free2[x].CAS(false, true) {
+			break
+		}
+		if p.free2[x].CAS(false, true) {
+			break
+		}
+		tries++
+		if tries%maxTries != 0 {
+			// slow path
+			runtime.Gosched()
+		} else {
+			// slowest path, sleep instead of cond.Wait because of potential deadlock.
+			time.Sleep(5 * time.Millisecond)
+			tries = 0
+		}
 	}
 
 	p.events[x] = event
 	p.free1[x].Store(true)
+	p.getCond.Broadcast()
 }
 
 func (p *eventPool) dump() string {
