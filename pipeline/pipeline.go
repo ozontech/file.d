@@ -22,6 +22,7 @@ const (
 	DefaultMaxLogSize          = 0
 	DefaultJSONNodePoolSize    = 1024
 	DefaultMaintenanceInterval = time.Second * 5
+	DefaultEventTimeout        = time.Second * 30
 	DefaultFieldValue          = "not_set"
 	DefaultStreamName          = StreamName("not_set")
 
@@ -99,6 +100,7 @@ type Settings struct {
 	Decoder             string
 	Capacity            int
 	MaintenanceInterval time.Duration
+	EventTimeout        time.Duration
 	AntispamThreshold   int
 	AvgLogSize          int
 	MaxLogSize          int
@@ -119,7 +121,7 @@ func New(name string, settings *Settings, registry *prometheus.Registry, mux *ht
 		},
 
 		metricsHolder: newMetricsHolder(name, registry, metricsGenInterval),
-		streamer:      newStreamer(),
+		streamer:      newStreamer(settings.EventTimeout),
 		eventPool:     newEventPool(settings.Capacity),
 		antispamer:    newAntispamer(settings.AntispamThreshold, antispamUnbanIterations, settings.MaintenanceInterval),
 

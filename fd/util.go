@@ -20,6 +20,7 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 	maintenanceInterval := pipeline.DefaultMaintenanceInterval
 	decoder := "auto"
 	isStrict := false
+	eventTimeout := pipeline.DefaultEventTimeout
 
 	if settings != nil {
 		val := settings.Get("capacity").MustInt()
@@ -56,6 +57,15 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 			maintenanceInterval = i
 		}
 
+		str = settings.Get("event_timeout").MustString()
+		if str != "" {
+			i, err := time.ParseDuration(str)
+			if err != nil {
+				logger.Fatalf("can't parse pipeline event timeout: %s", err.Error())
+			}
+			eventTimeout = i
+		}
+
 		antispamThreshold = settings.Get("antispam_threshold").MustInt()
 		antispamThreshold *= int(maintenanceInterval / time.Second)
 
@@ -69,6 +79,7 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 		MaxLogSize:          maxLogSize,
 		AntispamThreshold:   antispamThreshold,
 		MaintenanceInterval: maintenanceInterval,
+		EventTimeout:        eventTimeout,
 		StreamField:         streamField,
 		IsStrict:            isStrict,
 	}

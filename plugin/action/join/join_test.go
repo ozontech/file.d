@@ -14,7 +14,7 @@ import (
 	"go.uber.org/atomic"
 )
 
-const content = `# ===next===
+const contentPanics = `# ===next===
 panic: assignment to entry in nil map
 
 goroutine 1 [running]:
@@ -151,60 +151,134 @@ created by example.com/sre/filed/pipeline.(*processor).start
 Isn't panic
 `
 
+const contentPostgres = `# ===next===
+2021-10-12 08:25:44 GMT [23379] => [520-1] client=[local],db=exampledb,user=none LOG:  duration: 0.287 ms  bind <unnamed>: select distinct connamespace as schema_id
+	from pg_catalog.pg_constraint F,
+	    pg_catalog.pg_class O
+	where F.contype = 'f'
+	 and F.confrelid = O.oid
+	 and O.relnamespace in ($1)
+
+# ===next===
+2021-10-12 08:25:44 GMT [23379] => [521-1] client=[local],db=exampledb,user=none DETAIL:  parameters: $1 = '2200'
+
+# ===next===
+2021-10-12 08:25:44 GMT [23379] => [522-1] client=[local],db=exampledb,user=none LOG:  duration: 0.043 ms  execute <unnamed>: select distinct connamespace as schema_id
+	from pg_catalog.pg_constraint F,
+	    pg_catalog.pg_class O
+	where F.contype = 'f'
+	 and F.confrelid = O.oid
+	 and O.relnamespace in ($1)
+
+# ===next===
+2021-10-12 08:25:44 GMT [23379] => [523-1] client=[local],db=exampledb,user=none DETAIL:  parameters: $1 = '2200'
+
+# ===next===
+2021-10-12 08:25:44 GMT [23379] => [524-1] client=[local],db=exampledb,user=none LOG:  duration: 0.056 ms  parse <unnamed>: SHOW TRANSACTION ISOLATION LEVEL
+
+# ===next===
+2021-10-12 08:25:44 GMT [23379] => [525-1] client=[local],db=exampledb,user=none LOG:  duration: 0.009 ms  bind <unnamed>: SHOW TRANSACTION ISOLATION LEVEL
+
+# ===next===
+2021-10-12 08:25:44 GMT [23379] => [526-1] client=[local],db=exampledb,user=none LOG:  duration: 0.018 ms  execute <unnamed>: SHOW TRANSACTION ISOLATION LEVEL
+`
+
 func TestJoin(t *testing.T) {
-	format := `{"log":"%s\n"}`
-	content := strings.ReplaceAll(content, "# ===next===\n", "")
-	lines := make([]string, 0, 0)
-	for _, line := range strings.Split(content, "\n") {
-		if line == "" {
-			continue
-		}
-		lines = append(lines, fmt.Sprintf(format, line))
+	cases := []struct {
+		name        string
+		startPat    string
+		continuePat string
+		content     string
+		expEvents   int
+		iterations  int
+	}{
+		{
+			name:        "should_ok_for_panics",
+			startPat:    `/^(panic:)|(http: panic serving)/`,
+			continuePat: `/(^$)|(goroutine [0-9]+ \[)|(\([0-9]+x[0-9,a-f]+)|(\.go:[0-9]+ \+[0-9]x)|(\/.*\.go:[0-9]+)|(\(...\))|(main\.main\(\))|(created by .*\/.*\.)|(^\[signal)|(panic.+[0-9]x[0-9,a-f]+)/`,
+			content:     contentPanics,
+			iterations:  100,
+			expEvents:   12 * 100,
+		},
+		{
+			name:        "should_ok_for_postgres_logs",
+			startPat:    `/^\d\d\d\d-\d\d-\d\d \d\d:\d\d:\d\d.*?\[\d+\] => .+?client=.+?,db=.+?,user=.+:.*/`,
+			continuePat: `/.+/`,
+			content:     contentPostgres,
+			iterations:  100,
+			expEvents:   7 * 100,
+		},
 	}
 
-	panics := 12
-	iterations := 100
+	for _, tt := range cases {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			format := `{"log":"%s\n"}`
+			content := strings.ReplaceAll(tt.content, "# ===next===\n", "")
+			lines := make([]string, 0, 0)
+			for _, line := range strings.Split(content, "\n") {
+				if line == "" {
+					continue
+				}
+				lines = append(lines, fmt.Sprintf(format, line))
+			}
 
-	config := &Config{
-		Field:    "log",
-		Start:    `/^(panic:)|(http: panic serving)/`,
-		Continue: `/(^$)|(goroutine [0-9]+ \[)|(\([0-9]+x[0-9,a-f]+)|(\.go:[0-9]+ \+[0-9]x)|(\/.*\.go:[0-9]+)|(\(...\))|(main\.main\(\))|(created by .*\/.*\.)|(^\[signal)|(panic.+[0-9]x[0-9,a-f]+)/`,
+			config := &Config{
+				Field:    "log",
+				Start:    cfg.Regexp(tt.startPat),
+				Continue: cfg.Regexp(tt.continuePat),
+			}
+
+			err := cfg.Parse(config, nil)
+			if err != nil {
+				logger.Panic(err.Error())
+			}
+
+			p, input, output := test.NewPipelineMock(
+				test.NewActionPluginStaticInfo(
+					factory,
+					config,
+					pipeline.MatchModeAnd,
+					nil,
+					false,
+				),
+				"short_event_timeout",
+			)
+
+			wg := &sync.WaitGroup{}
+			wg.Add(tt.expEvents)
+
+			inEvents := atomic.Int32{}
+			var a, b int
+			input.SetInFn(func() {
+				a++
+				logger.Errorf("a=%#v", a)
+				inEvents.Inc()
+			})
+
+			outEvents := atomic.Int32{}
+			lastID := atomic.Uint64{}
+			output.SetOutFn(func(e *pipeline.Event) {
+				b++
+				logger.Error("b=%#v", b)
+				outEvents.Inc()
+				wg.Done()
+				id := lastID.Swap(e.SeqID)
+				if id != 0 && id >= e.SeqID {
+					panic("wrong id")
+				}
+			})
+
+			for i := 0; i < tt.iterations; i++ {
+				for m, line := range lines {
+					input.In(0, "test.log", int64(i*10000+m), []byte(line))
+				}
+			}
+
+			wg.Wait()
+			p.Stop()
+
+			assert.Equal(t, int32(tt.expEvents), outEvents.Load(), "wrong out events count")
+		})
 	}
-
-	err := cfg.Parse(config, nil)
-	if err != nil {
-		logger.Panic(err.Error())
-	}
-
-	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, config, pipeline.MatchModeAnd, nil, false))
-
-	wg := &sync.WaitGroup{}
-	wg.Add(panics * iterations)
-
-	inEvents := atomic.Int32{}
-	input.SetInFn(func() {
-		inEvents.Inc()
-	})
-
-	outEvents := atomic.Int32{}
-	lastID := atomic.Uint64{}
-	output.SetOutFn(func(e *pipeline.Event) {
-		outEvents.Inc()
-		wg.Done()
-		id := lastID.Swap(e.SeqID)
-		if id != 0 && id >= e.SeqID {
-			panic("wrong id")
-		}
-	})
-
-	for i := 0; i < iterations; i++ {
-		for m, line := range lines {
-			input.In(0, "test.log", int64(i*10000+m), []byte(line))
-		}
-	}
-
-	wg.Wait()
-	p.Stop()
-
-	assert.Equal(t, int32(panics*iterations), outEvents.Load(), "wrong out events count")
 }
