@@ -223,25 +223,34 @@ func newEventPool(capacity int) *eventPool {
 	return eventPool
 }
 
-const shouldSleep = 3
+const maxTries = 3
 
 func (p *eventPool) get() *Event {
 	x := (p.getCounter.Inc() - 1) % int64(p.capacity)
-	var i int
+	var tries int
 	for {
 		if x < p.backCounter.Load() {
+			// fast path
+			if p.free1[x].CAS(true, false) {
+				break
+			}
+			if p.free1[x].CAS(true, false) {
+				break
+			}
 			if p.free1[x].CAS(true, false) {
 				break
 			}
 		}
-		if i%shouldSleep == shouldSleep-1 {
+		tries++
+		if tries%maxTries != 0 {
+			// slow path
+			runtime.Gosched()
+		} else {
+			// slowest path
 			p.getMu.Lock()
 			p.getCond.Wait()
 			p.getMu.Unlock()
-			i = 0
-		} else {
-			runtime.Gosched()
-			i++
+			tries = 0
 		}
 	}
 	event := p.events[x]
@@ -255,17 +264,17 @@ func (p *eventPool) get() *Event {
 func (p *eventPool) back(event *Event) {
 	event.stage = eventStagePool
 	x := (p.backCounter.Inc() - 1) % int64(p.capacity)
-	var i int
+	var tries int
 	for {
 		if p.free2[x].CAS(false, true) {
 			break
 		}
-		if i%shouldSleep == shouldSleep-1 {
-			time.Sleep(5 * time.Millisecond)
-			i = 0
-		} else {
+		tries++
+		if tries%maxTries != 0 {
 			runtime.Gosched()
-			i++
+		} else {
+			time.Sleep(5 * time.Millisecond)
+			tries = 0
 		}
 	}
 

@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func BenchmarkEventPoolEven(b *testing.B) {
+func BenchmarkEventPoolOneGoroutine(b *testing.B) {
 	const capacity = 32
 
 	p := newEventPool(capacity)
@@ -16,7 +16,27 @@ func BenchmarkEventPoolEven(b *testing.B) {
 	}
 }
 
-func BenchmarkEventPoolManyGetters(b *testing.B) {
+func BenchmarkEventPoolManyGoroutines(b *testing.B) {
+	const capacity = 32
+
+	p := newEventPool(capacity)
+
+	for i := 0; i < b.N; i++ {
+		wg := &sync.WaitGroup{}
+		for j := 0; j < runtime.GOMAXPROCS(0); j++ {
+			wg.Add(1)
+			go func() {
+				for k := 0; k < 1000; k++ {
+					p.back(p.get())
+				}
+				wg.Done()
+			}()
+		}
+		wg.Wait()
+	}
+}
+
+func BenchmarkEventPoolSlowestPath(b *testing.B) {
 	const capacity = 32
 
 	p := newEventPool(capacity)
