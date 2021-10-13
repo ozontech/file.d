@@ -21,6 +21,7 @@ import (
 	"github.com/ozonru/file.d/test"
 	uuid "github.com/satori/go.uuid"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/atomic"
 )
 
@@ -43,13 +44,13 @@ func TestMain(m *testing.M) {
 }
 
 func setupDirs() {
-	f, err := ioutil.TempDir("", "input_file")
+	f, err := os.MkdirTemp("", "input_file")
 	if err != nil {
 		panic(err.Error())
 	}
 	filesDir = f
 
-	f, err = ioutil.TempDir("", "input_file_offsets")
+	f, err = os.MkdirTemp("", "input_file_offsets")
 	if err != nil {
 		panic(err.Error())
 	}
@@ -336,8 +337,10 @@ func getInodeByFile(file string) uint64 {
 
 func assertOffsetsAreEqual(t *testing.T, offsetsContentA string, offsetsContentB string) {
 	offsetDB := newOffsetDB("", "")
-	offsetsA := offsetDB.parse(offsetsContentA)
-	offsetsB := offsetDB.parse(offsetsContentB)
+	offsetsA, err := offsetDB.parse(offsetsContentA)
+	require.NoError(t, err)
+	offsetsB, err := offsetDB.parse(offsetsContentB)
+	require.NoError(t, err)
 	for sourceID, inode := range offsetsA {
 		_, has := offsetsB[sourceID]
 		assert.True(t, has, "offsets aren't equal, source id=%d", sourceID)
@@ -937,6 +940,10 @@ func TestRotationRenameWhileNotWorking(t *testing.T) {
 }
 
 func TestTruncation(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping testing in short mode")
+	}
+
 	file := ""
 	x := atomic.NewInt32(2)
 	run(&test.Case{
@@ -964,6 +971,10 @@ func TestTruncation(t *testing.T) {
 }
 
 func TestTruncationSeq(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping testing in short mode")
+	}
+
 	p, _, _ := test.NewPipelineMock(nil, "passive")
 	p.SetInput(getInputInfo())
 	p.Start()

@@ -88,7 +88,7 @@ func TestSealUpHasContent(t *testing.T) {
 		TargetFile:         targetFile,
 		RetentionInterval_: 200 * time.Millisecond,
 		Layout:             "01",
-		FileMode_:          0666,
+		FileMode_:          0o666,
 	}
 
 	dir, file := filepath.Split(cfg.TargetFile)
@@ -143,7 +143,7 @@ func TestSealUpNoContent(t *testing.T) {
 		TargetFile:         targetFile,
 		RetentionInterval_: 200 * time.Millisecond,
 		Layout:             "01",
-		FileMode_:          0666,
+		FileMode_:          0o666,
 	}
 
 	dir, file := filepath.Split(cfg.TargetFile)
@@ -182,6 +182,10 @@ func TestSealUpNoContent(t *testing.T) {
 }
 
 func TestStart(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping testing in short mode")
+	}
+
 	tests := struct {
 		firstPack  []test.Msg
 		secondPack []test.Msg
@@ -211,7 +215,7 @@ func TestStart(t *testing.T) {
 		Layout:            "01",
 		BatchFlushTimeout: "100ms",
 
-		FileMode_: 0666,
+		FileMode_: 0o666,
 	}
 	FileSealUpInterval = 200 * time.Millisecond
 
@@ -252,7 +256,7 @@ func TestStart(t *testing.T) {
 	tsFileName = matches[0]
 	test.CheckZero(t, tsFileName, "log fil is not empty after sealing up")
 
-	//check that sealed up file is created and not empty
+	// check that sealed up file is created and not empty
 	matches = test.GetMatches(t, generalPattern)
 	assert.GreaterOrEqual(t, len(matches), 2, "there is no new file after sealing up")
 	checkDirFiles(t, matches, totalSent, "written data and saved data are not equal")

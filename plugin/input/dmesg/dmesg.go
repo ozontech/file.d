@@ -1,3 +1,4 @@
+//go:build linux
 // +build linux
 
 package dmesg
@@ -7,6 +8,7 @@ import (
 
 	"github.com/euank/go-kmsg-parser/kmsgparser"
 	"github.com/ozonru/file.d/fd"
+	"github.com/ozonru/file.d/longpanic"
 	"github.com/ozonru/file.d/offset"
 	"github.com/ozonru/file.d/pipeline"
 	insaneJSON "github.com/vitkovskii/insane-json"
@@ -18,11 +20,11 @@ It reads kernel events from /dev/kmsg
 }*/
 
 type Plugin struct {
-	config       *Config
-	state        *state
-	controller   pipeline.InputPluginController
-	parser       kmsgparser.Parser
-	logger       *zap.SugaredLogger
+	config     *Config
+	state      *state
+	controller pipeline.InputPluginController
+	parser     kmsgparser.Parser
+	logger     *zap.SugaredLogger
 }
 
 //! config-params
@@ -67,7 +69,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 
 	p.parser = parser
 
-	go p.read()
+	longpanic.Go(p.read)
 }
 
 func (p *Plugin) read() {
@@ -106,7 +108,7 @@ func (p *Plugin) Stop() {
 
 func (p *Plugin) Commit(event *pipeline.Event) {
 	p.state.TS = event.Offset
-	
+
 	if err := offset.SaveYAML(p.config.OffsetsFile, p.state); err != nil {
 		p.logger.Error("can't save offset file: %s", err.Error())
 	}

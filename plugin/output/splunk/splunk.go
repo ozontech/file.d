@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
+	"fmt"
 	"io"
 	"net/http"
 	"time"
@@ -12,7 +13,6 @@ import (
 	"github.com/ozonru/file.d/cfg"
 	"github.com/ozonru/file.d/fd"
 	"github.com/ozonru/file.d/pipeline"
-	"github.com/pkg/errors"
 	insaneJSON "github.com/vitkovskii/insane-json"
 	"go.uber.org/zap"
 )
@@ -159,29 +159,29 @@ func (p *Plugin) send(data []byte, timeout time.Duration) error {
 	r := bytes.NewReader(data)
 	req, err := http.NewRequestWithContext(context.Background(), "POST", p.config.Endpoint, r)
 	if err != nil {
-		return errors.Wrap(err, "can't create request")
+		return fmt.Errorf("can't create request: %w", err)
 	}
 
 	req.Header.Set("Authorization", "Splunk "+p.config.Token)
 	resp, err := c.Do(req)
 	if err != nil {
-		return errors.Wrap(err, "can't send request")
+		return fmt.Errorf("can't send request: %w", err)
 	}
 	defer resp.Body.Close()
 
 	b, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return errors.Wrap(err, "can't read response")
+		return fmt.Errorf("can't read response: %w", err)
 	}
 
 	root, err := insaneJSON.DecodeBytes(b)
 	if err != nil {
-		return errors.Wrap(err, "can't decode response")
+		return fmt.Errorf("can't decode response: %w", err)
 	}
 
 	code := root.Dig("code").AsInt()
 	if code > 0 {
-		return errors.Errorf("error while sending to splunk: %s", string(b))
+		return fmt.Errorf("error while sending to splunk: %s", string(b))
 	}
 
 	return nil

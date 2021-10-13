@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ozonru/file.d/longpanic"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"
@@ -87,10 +88,10 @@ func enableGatherer(l *zap.SugaredLogger) {
 	if !DisableMetaUpdates {
 		initGatherer()
 
-		go controller.Run(informerStop)
+		longpanic.Go(func() { controller.Run(informerStop) })
 	}
 
-	go maintenance()
+	longpanic.Go(maintenance)
 }
 
 func disableGatherer() {
@@ -304,7 +305,7 @@ func putMeta(podData *corev1.Pod) {
 	}
 
 	podCopy := podData
-	//podCopy := podData.DeepCopy()
+	// podCopy := podData.DeepCopy()
 
 	pod := podName(podCopy.Name)
 	ns := namespace(podCopy.Namespace)

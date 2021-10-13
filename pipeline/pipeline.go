@@ -1,6 +1,9 @@
 package pipeline
 
 import (
+	"encoding/json"
+	"fmt"
+	"io"
 	"math/rand"
 	"net/http"
 	"runtime"
@@ -10,6 +13,7 @@ import (
 
 	"github.com/ozonru/file.d/decoder"
 	"github.com/ozonru/file.d/logger"
+	"github.com/ozonru/file.d/longpanic"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
@@ -23,6 +27,7 @@ const (
 	DefaultMaintenanceInterval = time.Second * 5
 	DefaultFieldValue          = "not_set"
 	DefaultStreamName          = StreamName("not_set")
+	DefaultWaitForPanicTimeout = time.Minute
 
 	antispamUnbanIterations = 4
 	metricsGenInterval      = time.Hour
@@ -47,8 +52,10 @@ type OutputPluginController interface {
 	Error(err string)
 }
 
-type SourceID uint64
-type StreamName string
+type (
+	SourceID   uint64
+	StreamName string
+)
 
 type Pipeline struct {
 	Name     string
@@ -102,7 +109,8 @@ type Settings struct {
 	IsStrict            bool
 }
 
-func New(name string, settings *Settings, registry *prometheus.Registry, mux *http.ServeMux) *Pipeline {
+// New creates new pipeline. Consider using `SetupHTTPHandlers` next.
+func New(name string, settings *Settings, registry *prometheus.Registry) *Pipeline {
 	pipeline := &Pipeline{
 		Name:           name,
 		logger:         logger.Instance.Named(name),
@@ -138,9 +146,40 @@ func New(name string, settings *Settings, registry *prometheus.Registry, mux *ht
 		pipeline.logger.Fatalf("unknown decoder %q for pipeline %q", settings.Decoder, name)
 	}
 
-	mux.HandleFunc("/pipelines/"+name, pipeline.servePipeline)
-
 	return pipeline
+}
+
+// SetupHTTPHandlers creates handlers for plugin endpoints and pipeline info.
+// Plugin endpoints can be accessed via
+// URL `/pipelines/<pipeline_name>/<plugin_index_in_config>/<plugin_endpoint>`.
+// Input plugin has the index of zero, output plugin has the last index.
+// Actions also have the standard endpoints `/info` and `/sample`.
+func (p *Pipeline) SetupHTTPHandlers(mux *http.ServeMux) {
+	if p.input == nil {
+		p.logger.Panicf("input isn't set for pipeline %q", p.Name)
+	}
+	if p.output == nil {
+		p.logger.Panicf("output isn't set for pipeline %q", p.Name)
+	}
+
+	prefix := "/pipelines/" + p.Name
+	mux.HandleFunc(prefix, p.servePipeline)
+
+	for hName, handler := range p.inputInfo.PluginStaticInfo.Endpoints {
+		mux.HandleFunc(fmt.Sprintf("%s/0/%s", prefix, hName), handler)
+	}
+
+	for i, info := range p.actionInfos {
+		mux.HandleFunc(fmt.Sprintf("%s/%d/info", prefix, i+1), p.serveActionInfo(*info))
+		mux.HandleFunc(fmt.Sprintf("%s/%d/sample", prefix, i+1), p.serveActionSample(i))
+		for hName, handler := range info.PluginStaticInfo.Endpoints {
+			mux.HandleFunc(fmt.Sprintf("%s/%d/%s", prefix, i+1, hName), handler)
+		}
+	}
+
+	for hName, handler := range p.outputInfo.PluginStaticInfo.Endpoints {
+		mux.HandleFunc(fmt.Sprintf("%s/%d/%s", prefix, len(p.actionInfos)+1, hName), handler)
+	}
 }
 
 func (p *Pipeline) Start() {
@@ -177,8 +216,8 @@ func (p *Pipeline) Start() {
 
 	p.streamer.start()
 
-	go p.maintenance()
-	go p.growProcs()
+	longpanic.Go(p.maintenance)
+	longpanic.Go(p.growProcs)
 }
 
 func (p *Pipeline) Stop() {
@@ -372,7 +411,13 @@ func (p *Pipeline) initProcs() {
 }
 
 func (p *Pipeline) newProc() *processor {
-	proc := NewProcessor(p.metricsHolder, p.activeProcs, p.output, p.streamer, p.finalize)
+	proc := NewProcessor(
+		p.metricsHolder,
+		p.activeProcs,
+		p.output,
+		p.streamer,
+		p.finalize,
+	)
 	for j, info := range p.actionInfos {
 		plugin, _ := info.Factory()
 		proc.AddActionPlugin(&ActionPluginInfo{
@@ -508,4 +553,98 @@ func (p *Pipeline) servePipeline(w http.ResponseWriter, _ *http.Request) {
 	_, _ = w.Write([]byte(p.eventPool.dump()))
 
 	_, _ = w.Write([]byte("</p></pre></body></html>"))
+}
+
+// serveActionInfo creates a handlerFunc for the given action.
+// it returns metric values for the given action.
+func (p *Pipeline) serveActionInfo(info ActionPluginStaticInfo) func(http.ResponseWriter, *http.Request) {
+	return func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Add("Content-Type", "application/json")
+
+		type Event struct {
+			Status string `json:"status"`
+			Count  int    `json:"count"`
+		}
+
+		if info.MetricName == "" {
+			writeErr(w, "If you want to see a statistic about events, consider adding `metric_name` to the action's configuration.")
+			w.WriteHeader(http.StatusBadRequest)
+
+			return
+		}
+
+		var actionMetric *metrics
+		for _, m := range p.metricsHolder.metrics {
+			if m.name == info.MetricName {
+				actionMetric = m
+
+				break
+			}
+		}
+
+		events := []Event{}
+		for _, status := range []eventStatus{
+			eventStatusReceived,
+			eventStatusDiscarded,
+			eventStatusPassed,
+		} {
+			c := actionMetric.current.totalCounter[string(status)]
+			if c == nil {
+				c = atomic.NewUint64(0)
+			}
+			events = append(events, Event{
+				Status: string(status),
+				Count:  int(c.Load()),
+			})
+		}
+
+		resp, _ := json.Marshal(events)
+		_, _ = w.Write(resp)
+	}
+}
+
+// serveActionSample creates a handlerFunc for the given action.
+// The func watch every processor, store their events before and after processing,
+// and returns the first result from the fastest processor.
+func (p *Pipeline) serveActionSample(actionIndex int) func(http.ResponseWriter, *http.Request) {
+	return func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Add("Content-Type", "application/json")
+
+		if p.activeProcs.Load() <= 0 || p.procCount.Load() <= 0 {
+			writeErr(w, "There are no active processors")
+			w.WriteHeader(http.StatusBadRequest)
+
+			return
+		}
+
+		timeout := 5 * time.Second
+
+		samples := make(chan sample, len(p.Procs))
+		for _, proc := range p.Procs {
+			go func(proc *processor) {
+				if sample, err := proc.actionWatcher.watch(actionIndex, timeout); err == nil {
+					samples <- *sample
+				}
+			}(proc)
+		}
+
+		select {
+		case firstSample := <-samples:
+			_, _ = w.Write(firstSample.Marshal())
+		case <-time.After(timeout):
+			writeErr(w, "Timeout while try to display an event before and after the action processing.")
+			w.WriteHeader(http.StatusInternalServerError)
+		}
+	}
+}
+
+func writeErr(w io.Writer, err string) {
+	type ErrResp struct {
+		Error string `json:"error"`
+	}
+
+	respErr, _ := json.Marshal(ErrResp{
+		Error: err,
+	})
+	_, _ = w.Write(respErr)
 }

@@ -7,6 +7,7 @@ import (
 
 	"github.com/ozonru/file.d/fd"
 	"github.com/ozonru/file.d/logger"
+	"github.com/ozonru/file.d/longpanic"
 	"github.com/ozonru/file.d/pipeline"
 )
 
@@ -37,8 +38,8 @@ type Plugin struct {
 //! config-params
 //^ config-params
 type Config struct {
-	//> @3@4@5@6   
-	//> 
+	//> @3@4@5@6
+	//>
 	//> An address to listen to. Omit ip/host to listen all network interfaces. E.g. `:88`
 	Address string `json:"address" default:":9200"` //*
 	//> @3@4@5@6
@@ -84,7 +85,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	p.server = &http.Server{Addr: p.config.Address, Handler: mux}
 
 	if p.config.Address != "off" {
-		go p.listenHTTP()
+		longpanic.Go(p.listenHTTP)
 	}
 }
 
@@ -144,7 +145,7 @@ func (p *Plugin) serve(w http.ResponseWriter, r *http.Request) {
 
 		eventBuff = p.processChunk(sourceID, readBuff[:n], eventBuff)
 	}
-	
+
 	_ = r.Body.Close()
 
 	p.readBuffs.Put(readBuff)
@@ -186,5 +187,5 @@ func (p *Plugin) Stop() {
 }
 
 func (p *Plugin) Commit(_ *pipeline.Event) {
-	//todo: don't reply with OK till all events in request will be committed
+	// todo: don't reply with OK till all events in request will be committed
 }

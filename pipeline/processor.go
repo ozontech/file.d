@@ -2,6 +2,7 @@ package pipeline
 
 import (
 	"github.com/ozonru/file.d/logger"
+	"github.com/ozonru/file.d/longpanic"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
 )
@@ -48,6 +49,9 @@ type processor struct {
 	actionInfos      []*ActionPluginStaticInfo
 	busyActions      []bool
 	busyActionsTotal int
+	actionWatcher    *actionWatcher
+	waitOrPanic      func(msgStr string)
+	recoverFromPanic func()
 
 	heartbeatCh   chan *stream
 	metricsValues []string
@@ -55,7 +59,13 @@ type processor struct {
 
 var id = 0
 
-func NewProcessor(metricsHolder *metricsHolder, activeCounter *atomic.Int32, output OutputPlugin, streamer *streamer, finalizeFn finalizeFn) *processor {
+func NewProcessor(
+	metricsHolder *metricsHolder,
+	activeCounter *atomic.Int32,
+	output OutputPlugin,
+	streamer *streamer,
+	finalizeFn finalizeFn,
+) *processor {
 	processor := &processor{
 		id:            id,
 		streamer:      streamer,
@@ -64,6 +74,7 @@ func NewProcessor(metricsHolder *metricsHolder, activeCounter *atomic.Int32, out
 		finalize:      finalizeFn,
 
 		activeCounter: activeCounter,
+		actionWatcher: newActionWatcher(id),
 
 		metricsValues: make([]string, 0, 0),
 	}
@@ -83,7 +94,7 @@ func (p *processor) start(params *PluginDefaultParams, logger *zap.SugaredLogger
 		})
 	}
 
-	go p.process()
+	longpanic.Go(p.process)
 }
 
 func (p *processor) process() {
@@ -172,27 +183,33 @@ func (p *processor) doActions(event *Event) (isPassed bool) {
 			continue
 		}
 
+		p.actionWatcher.setEventBefore(index, event)
+
 		switch action.Do(event) {
 		case ActionPass:
 			p.countEvent(event, index, eventStatusPassed)
 			p.tryResetBusy(index)
+			p.actionWatcher.setEventAfter(index, event, eventStatusPassed)
 		case ActionDiscard:
 			p.countEvent(event, index, eventStatusDiscarded)
 			p.tryResetBusy(index)
 			// can't notify input here, because previous events may delay and we'll get offset sequence corruption
 			p.finalize(event, false, true)
+			p.actionWatcher.setEventAfter(index, event, eventStatusDiscarded)
 			return false
 		case ActionCollapse:
 			p.countEvent(event, index, eventStatusCollapse)
 			p.tryMarkBusy(index)
 			// can't notify input here, because previous events may delay and we'll get offset sequence corruption
 			p.finalize(event, false, true)
+			p.actionWatcher.setEventAfter(index, event, eventStatusCollapse)
 			return false
 		case ActionHold:
 			p.countEvent(event, index, eventStatusHold)
 			p.tryMarkBusy(index)
 
 			p.finalize(event, false, false)
+			p.actionWatcher.setEventAfter(index, event, eventStatusHold)
 			return false
 		}
 	}
@@ -314,4 +331,8 @@ func (p *processor) Commit(event *Event) {
 func (p *processor) Propagate(event *Event) {
 	event.action++
 	p.processSequence(event)
+}
+
+func (p *processor) RecoverFromPanic() {
+	p.recoverFromPanic()
 }

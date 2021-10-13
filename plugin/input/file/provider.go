@@ -9,6 +9,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/ozonru/file.d/logger"
+	"github.com/ozonru/file.d/longpanic"
 	"github.com/ozonru/file.d/pipeline"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
@@ -65,7 +67,10 @@ type Job struct {
 	isDone     bool
 	shouldSkip bool
 
-	offsets streamsOffsets
+	// offsets is a sliceMap of streamName to offset.
+	// Unlike map[string]int, sliceMap can work with mutable strings when using unsafe conversion from []byte.
+	// Also it is likely not slower than map implementation for 1-2 streams case.
+	offsets sliceMap
 
 	mu *sync.Mutex
 }
@@ -94,9 +99,9 @@ func NewJobProvider(config *Config, controller pipeline.InputPluginController, l
 
 		offsetsCommitted: &atomic.Int64{},
 
-		stopSaveOffsetsCh: make(chan bool, 1), //non-zero channel cause we don't wanna wait goroutine to stop
-		stopReportCh:      make(chan bool, 1), //non-zero channel cause we don't wanna wait goroutine to stop
-		stopMaintenanceCh: make(chan bool, 1), //non-zero channel cause we don't wanna wait goroutine to stop
+		stopSaveOffsetsCh: make(chan bool, 1), // non-zero channel cause we don't wanna wait goroutine to stop
+		stopReportCh:      make(chan bool, 1), // non-zero channel cause we don't wanna wait goroutine to stop
+		stopMaintenanceCh: make(chan bool, 1), // non-zero channel cause we don't wanna wait goroutine to stop
 
 		logger: logger,
 	}
@@ -109,19 +114,25 @@ func NewJobProvider(config *Config, controller pipeline.InputPluginController, l
 func (jp *jobProvider) start() {
 	jp.logger.Infof("starting job provider persistence mode=%s", jp.config.PersistenceMode)
 	if jp.config.OffsetsOp_ == offsetsOpContinue {
-		jp.loadedOffsets = jp.offsetDB.load()
+		longpanic.WithRecover(func() {
+			offsets, err := jp.offsetDB.load()
+			if err != nil {
+				logger.Panicf("can't load offsets: %s", err.Error())
+			}
+			jp.loadedOffsets = offsets
+		})
 	}
 
 	jp.watcher.start()
 
 	if jp.config.PersistenceMode_ == persistenceModeAsync {
-		go jp.saveOffsetsCyclic(jp.config.AsyncInterval_)
+		longpanic.Go(func() { jp.saveOffsetsCyclic(jp.config.AsyncInterval_) })
 	}
 
 	jp.isStarted = true
 
-	go jp.reportStats()
-	go jp.maintenance()
+	longpanic.Go(jp.reportStats)
+	longpanic.Go(jp.maintenance)
 }
 
 func (jp *jobProvider) stop() {
@@ -155,7 +166,7 @@ func (jp *jobProvider) commit(event *pipeline.Event) {
 		return
 	}
 
-	value, has := job.offsets[streamName]
+	value, has := job.offsets.get(streamName)
 	if value >= event.Offset {
 		jp.logger.Panicf("offset corruption: committing=%d, current=%d, event id=%d, source=%d:%s", event.Offset, value, event.SeqID, event.SourceID, event.SourceName)
 	}
@@ -164,12 +175,12 @@ func (jp *jobProvider) commit(event *pipeline.Event) {
 		jp.logger.Errorf("it maybe an offset corruption: committing=%d, current=%d, event id=%d, source=%d:%s", event.Offset, value, event.SeqID, event.SourceID, event.SourceName)
 	}
 
-	// streamName isn't actually a string, but unsafe []byte, so copy it when adding to map
+	// streamName isn't actually a string, but unsafe []byte, so copy it when adding to the sliceMap
 	if has {
-		job.offsets[streamName] = event.Offset
+		job.offsets.set(streamName, event.Offset)
 	} else {
 		streamNameCopy := pipeline.StreamName(event.StreamNameBytes())
-		job.offsets[streamNameCopy] = event.Offset
+		job.offsets.set(streamNameCopy, event.Offset)
 	}
 
 	job.mu.Unlock()
@@ -262,7 +273,7 @@ func (jp *jobProvider) addJob(file *os.File, stat os.FileInfo, filename string, 
 		isDone:     true,
 		shouldSkip: false,
 
-		offsets: make(streamsOffsets),
+		offsets: nil,
 
 		mu: &sync.Mutex{},
 	}
@@ -347,7 +358,7 @@ func (jp *jobProvider) initJobOffset(operation offsetsOp, job *Job) {
 			return
 		}
 
-		job.offsets = offsets.streams
+		job.offsets = sliceFromMap(offsets.streams)
 		// seek to any offset since whey all equal at start time
 		for _, offset := range offsets.streams {
 			_, err := job.file.Seek(offset, io.SeekStart)
@@ -361,7 +372,7 @@ func (jp *jobProvider) initJobOffset(operation offsetsOp, job *Job) {
 	}
 }
 
-//tryResumeJob job should be already locked and it'll be unlocked
+// tryResumeJob job should be already locked and it'll be unlocked.
 func (jp *jobProvider) tryResumeJobAndUnlock(job *Job, filename string) bool {
 	jp.logger.Debugf("job for %d:%s resumed", job.sourceID, job.filename)
 
@@ -415,8 +426,8 @@ func (jp *jobProvider) truncateJob(job *Job) {
 		jp.logger.Fatalf("job reset error, file %s seek error: %s", job.filename, err.Error())
 	}
 
-	for stream := range job.offsets {
-		job.offsets[stream] = 0
+	for _, strOff := range job.offsets {
+		job.offsets.set(strOff.stream, 0)
 	}
 
 	jp.logger.Infof("job %d:%s was truncated, reading will start over, events with id less than %d will be ignored", job.sourceID, job.filename, job.ignoreEventsLE)
@@ -587,7 +598,7 @@ func (jp *jobProvider) maintenanceJob(job *Job) int {
 		panic("")
 	}
 
-	//todo: here we may have symlink opened, so handle it
+	// todo: here we may have symlink opened, so handle it
 	file, err = os.Open(filename)
 	if err != nil {
 		jp.deleteJobAndUnlock(job)

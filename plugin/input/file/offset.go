@@ -1,6 +1,7 @@
 package file
 
 import (
+	"fmt"
 	"io/ioutil"
 	"math"
 	"math/rand"
@@ -21,16 +22,19 @@ type offsetDB struct {
 	jobsSnapshot   []*Job
 	buf            []byte
 	mu             *sync.Mutex
+	reloadCh       chan bool
 }
 
 type inodeOffsets struct {
 	filename string
 	sourceID pipeline.SourceID
-	streams  streamsOffsets
+	streams  map[pipeline.StreamName]int64
 }
 
-type streamsOffsets map[pipeline.StreamName]int64
-type fpOffsets map[pipeline.SourceID]*inodeOffsets
+type (
+	streamsOffsets map[pipeline.StreamName]int64
+	fpOffsets      map[pipeline.SourceID]*inodeOffsets
+)
 
 func newOffsetDB(curOffsetsFile string, tmpOffsetsFile string) *offsetDB {
 	return &offsetDB{
@@ -40,15 +44,16 @@ func newOffsetDB(curOffsetsFile string, tmpOffsetsFile string) *offsetDB {
 		savesTotal:     &atomic.Int64{},
 		buf:            make([]byte, 0, 65536),
 		jobsSnapshot:   make([]*Job, 0, 0),
+		reloadCh:       make(chan bool),
 	}
 }
 
-func (o *offsetDB) load() fpOffsets {
+func (o *offsetDB) load() (fpOffsets, error) {
 	logger.Infof("loading offsets: %s", o.curOffsetsFile)
 
 	info, err := os.Stat(o.curOffsetsFile)
 	if os.IsNotExist(err) {
-		return make(fpOffsets)
+		return make(fpOffsets), nil
 	}
 
 	if info.IsDir() {
@@ -57,10 +62,15 @@ func (o *offsetDB) load() fpOffsets {
 
 	content, err := ioutil.ReadFile(o.curOffsetsFile)
 	if err != nil {
-		logger.Panicf("can't load offsets %s: ", err.Error())
+		logger.Panicf("can't read offset file: %s", err.Error())
 	}
 
-	return o.collapse(o.parse(string(content)))
+	offsets, err := o.parse(string(content))
+	if err != nil {
+		return make(fpOffsets), fmt.Errorf("can't load offsets file: %w", err)
+	}
+
+	return o.collapse(offsets), nil
 }
 
 // collapse all streams in one file, so we should seek file to
@@ -82,38 +92,53 @@ func (o *offsetDB) collapse(inodeOffsets fpOffsets) fpOffsets {
 	return inodeOffsets
 }
 
-func (o *offsetDB) parse(content string) fpOffsets {
+func (o *offsetDB) parse(content string) (fpOffsets, error) {
 	offsets := make(fpOffsets)
 	for len(content) != 0 {
-		content = o.parseOne(content, offsets)
+		one, err := o.parseOne(content, offsets)
+		if err != nil {
+			return make(fpOffsets), fmt.Errorf("can't parseOne: %w", err)
+		}
+		content = one
 	}
 
-	return offsets
+	return offsets, nil
 }
 
-func (o *offsetDB) parseOne(content string, offsets fpOffsets) string {
+func (o *offsetDB) parseOne(content string, offsets fpOffsets) (string, error) {
 	filename := ""
 	inodeStr := ""
 	sourceIDStr := ""
-	filename, content = o.parseLine(content, "- file: ")
-	inodeStr, content = o.parseLine(content, "  inode: ")
-	sourceIDStr, content = o.parseLine(content, "  source_id: ")
+	var err error
+
+	filename, content, err = o.parseLine(content, "- file: ")
+	if err != nil {
+		return "", fmt.Errorf("can't parse file: %w", err)
+	}
+	inodeStr, content, err = o.parseLine(content, "  inode: ")
+	if err != nil {
+		return "", fmt.Errorf("can't parse inode: %w", err)
+	}
+	sourceIDStr, content, err = o.parseLine(content, "  source_id: ")
+	if err != nil {
+		return "", fmt.Errorf("can't parse source_id: %w", err)
+	}
 
 	sysInode, err := strconv.ParseUint(inodeStr, 10, 64)
 	if err != nil {
-		logger.Panicf("wrong offsets format, can't parse inode: %s", err.Error())
+		return "", fmt.Errorf("wrong offsets format, can't parse inode: %s: %w", inodeStr, err)
 	}
 	inode := inode(sysInode)
 
 	fpVal, err := strconv.ParseUint(sourceIDStr, 10, 64)
 	if err != nil {
-		logger.Panicf("wrong offsets format, can't parse source id: %s", err.Error())
+		return "", fmt.Errorf("wrong offsets format, can't parse source id: %s: %w", sourceIDStr, err)
 	}
 	fp := pipeline.SourceID(fpVal)
 
 	_, has := offsets[fp]
 	if has {
-		logger.Panicf("wrong offsets format, duplicate inode %d", inode)
+		return "", fmt.Errorf("wrong offsets format, duplicate inode %d", inode)
 	}
 
 	offsets[fp] = &inodeOffsets{
@@ -125,60 +150,64 @@ func (o *offsetDB) parseOne(content string, offsets fpOffsets) string {
 	return o.parseStreams(content, offsets[fp].streams)
 }
 
-func (o *offsetDB) parseStreams(content string, streams streamsOffsets) string {
-	_, content = o.parseLine(content, "  streams:")
+func (o *offsetDB) parseStreams(content string, streams streamsOffsets) (string, error) {
+	_, content, err := o.parseLine(content, "  streams:")
+	if err != nil {
+		return "", fmt.Errorf("can''t parse line: %w", err)
+	}
+
 	for len(content) != 0 && content[0] != '-' {
 		linePos := strings.IndexByte(content, '\n')
 		if linePos < 0 {
-			logger.Panicf("wrong offsets format, no new line %s", content)
+			return "", fmt.Errorf("wrong offsets format, no new line %s", content)
 		}
 		line := content[0:linePos]
 		if linePos < 5 || line[0:4] != "    " {
-			logger.Panicf("wrong offsets format, no leading whitespaces %q", line)
+			return "", fmt.Errorf("wrong offsets format, no leading whitespaces %q", line)
 		}
 		content = content[linePos+1:]
 
 		pos := strings.IndexByte(line, ':')
 		if pos < 0 {
-			logger.Panicf("wrong offsets format, no separator %q", line)
+			return "", fmt.Errorf("wrong offsets format, no separator %q", line)
 		}
 		stream := pipeline.StreamName(line[4:pos])
 		if len(stream) == 0 {
-			logger.Panicf("wrong offsets format, empty stream %d, %s", content)
+			return "", fmt.Errorf("wrong offsets format, empty stream, %s", content)
 		}
 
 		_, has := streams[stream]
 		if has {
-			logger.Panicf("wrong offsets format, duplicate stream %q", stream)
+			return "", fmt.Errorf("wrong offsets format, duplicate stream %q", stream)
 		}
 
 		offsetStr := line[pos+2:]
 		offset, err := strconv.ParseInt(offsetStr, 10, 64)
 		if err != nil {
-			logger.Panicf("wrong offsets format, can't parse offset: %q, %q", offsetStr, err.Error())
+			return "", fmt.Errorf("wrong offsets format, can't parse offset: %q: %w", offsetStr, err)
 		}
 
 		streams[stream] = offset
 	}
 
-	return content
+	return content, nil
 }
 
-func (o *offsetDB) parseLine(content string, start string) (string, string) {
+func (o *offsetDB) parseLine(content string, start string) (string, string, error) {
 	l := len(start)
 
 	linePos := strings.IndexByte(content, '\n')
 	if linePos < 0 {
-		logger.Panicf("wrong offsets format, no nl: %q", content)
+		return "", "", fmt.Errorf("wrong offsets format, no nl: %q", content)
 	}
 	line := content[0:linePos]
 
 	content = content[linePos+1:]
 	if linePos < l || line[0:l] != start {
-		logger.Panicf("wrong offsets file format expected=%q, got=%q", start, line[0:l])
+		return "", "", fmt.Errorf("wrong offsets file format expected=%q, got=%q", start, line[0:l])
 	}
 
-	return line[l:], content
+	return line[l:], content, nil
 }
 
 func (o *offsetDB) save(jobs map[pipeline.SourceID]*Job, mu *sync.RWMutex) {
@@ -194,7 +223,7 @@ func (o *offsetDB) save(jobs map[pipeline.SourceID]*Job, mu *sync.RWMutex) {
 	tmpWithRandom = append(tmpWithRandom, '.')
 	tmpWithRandom = strconv.AppendUint(tmpWithRandom, rand.Uint64(), 8)
 
-	file, err := os.OpenFile(string(tmpWithRandom), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0600)
+	file, err := os.OpenFile(string(tmpWithRandom), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0o600)
 	if err != nil {
 		logger.Errorf("can't open temp offsets file %s, %s", o.tmpOffsetsFile, err.Error())
 		return
@@ -227,11 +256,11 @@ func (o *offsetDB) save(jobs map[pipeline.SourceID]*Job, mu *sync.RWMutex) {
 		o.buf = append(o.buf, '\n')
 
 		o.buf = append(o.buf, "  streams:\n"...)
-		for stream, offset := range job.offsets {
+		for _, strOff := range job.offsets {
 			o.buf = append(o.buf, "    "...)
-			o.buf = append(o.buf, string(stream)...)
+			o.buf = append(o.buf, string(strOff.stream)...)
 			o.buf = append(o.buf, ": "...)
-			o.buf = strconv.AppendUint(o.buf, uint64(offset), 10)
+			o.buf = strconv.AppendUint(o.buf, uint64(strOff.offset), 10)
 			o.buf = append(o.buf, '\n')
 		}
 		job.mu.Unlock()

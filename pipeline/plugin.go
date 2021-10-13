@@ -1,6 +1,7 @@
 package pipeline
 
 import (
+	"net/http"
 	"regexp"
 
 	"go.uber.org/zap"
@@ -56,10 +57,14 @@ type InputPluginParams struct {
 }
 
 type PluginStaticInfo struct {
-	Type              string
-	Factory           PluginFactory
-	Config            AnyConfig
-	AdditionalActions []string // used only for input plugins, defines actions that should be run right after input plugin with input config 
+	Type    string
+	Factory PluginFactory
+	Config  AnyConfig
+
+	// Endpoints is the map of endpoint name to handlerFunc.
+	// Every plugin can provide their own API through Endpoints.
+	Endpoints         map[string]func(http.ResponseWriter, *http.Request)
+	AdditionalActions []string // used only for input plugins, defines actions that should be run right after input plugin with input config
 }
 
 type PluginRuntimeInfo struct {

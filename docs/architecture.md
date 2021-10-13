@@ -6,10 +6,31 @@ Here is a bit simplified architecture of the **file.d** solution.
 
 What's going on here:
 
-- **Input plugin** pulls data from external systems and pushes next to the pipeline controller. Full list of input plugins available is [here](../plugin/input).
-- The **pipeline controller** is in charge of converting data to event and subsequent routing.
+- **Input plugin** pulls data from external systems and pushes it next to the pipeline controller. Full list of input plugins available is [here](../plugin/input).
+- The **pipeline controller** creates **streams** of the data and is in charge of converting data to event and subsequent routing.
 - The **event pool** provides fast event instancing. 
-- Events are processed by one or more **action plugins**; they act on the events which meet particular criteria.
+- Events are processed by one or more **processors**. Every processor holds all **action plugins** from the configuration.
+- Every moment the processor gets a stream of data, process 1 or more events and returns the stream to a **streamer** that is a pool of streams.
+- Action plugins act on the events which meet particular criteria.
 - Finally, the event goes to the **output plugins** and is dispatched to the external system.  
 
 You can extend `file.d` by adding your own input, action, and output plugins. 
+
+## Plugin endpoints
+Every plugin can expose their own API via `PluginStaticInfo.Endpoints`.  
+Plugin endpoints can be accessed via URL  
+`/pipelines/<pipeline_name>/<plugin_index_in_config>/<plugin_endpoint>`.  
+Input plugin has the index of zero, output plugin has the last index.  
+
+#### `/info` and `/sample`
+Actions also have the standard endpoints `/info` and `/sample`.  
+If the action has `metric_name`, it will be collected and can be viewed via the `/info` endpoint.  
+The `/sample` handler stores and shows an event before and after processing, so you can debug the action better.  
+
+#### `longpanic` and `/reset`
+Every goroutine can (and should) use `longpanic.Go` and `longpanic.WithRecover` functions.  
+`longpanic.Go` is a goroutine wrapper that panics only after a timeout that you can set in pipeline settings.  
+`longpanic.WithRecover` is essentially the same but it runs a function synchronously.  
+It helps to debug the app, because you can see the state of failed file.d via API.  
+Also you can restart the failed plugin via API, i.e. with the `/reset` endpoint of `file` input plugin.  
+In case of nobody call API, it will panic with the given error message.  

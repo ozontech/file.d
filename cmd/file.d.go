@@ -10,6 +10,7 @@ import (
 	"github.com/ozonru/file.d/cfg"
 	"github.com/ozonru/file.d/fd"
 	"github.com/ozonru/file.d/logger"
+	"github.com/ozonru/file.d/longpanic"
 	"github.com/ozonru/file.d/pipeline"
 	insaneJSON "github.com/vitkovskii/insane-json"
 	"go.uber.org/automaxprocs/maxprocs"
@@ -69,14 +70,17 @@ func main() {
 	_, _ = maxprocs.Set(maxprocs.Logger(logger.Debugf))
 
 	go listenSignals()
-	go start()
+	longpanic.Go(start)
 
 	<-exit
 	logger.Infof("see you soon...")
 }
 
 func start() {
-	fileD = fd.New(cfg.NewConfigFromFile(*config), *http)
+	cfg := cfg.NewConfigFromFile(*config)
+	longpanic.SetTimeout(cfg.PanicTimeout)
+
+	fileD = fd.New(cfg, *http)
 	fileD.Start()
 }
 

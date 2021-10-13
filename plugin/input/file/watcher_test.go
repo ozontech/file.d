@@ -35,7 +35,7 @@ func TestWatcher(t *testing.T) {
 			w.start()
 			defer w.stop()
 
-			// creates, write, remove files and ensure events are only passed for creation events.
+			// create, write, remove files and ensure events are only passed for creation events.
 
 			f1Name := filepath.Join(path, "watch1.log")
 

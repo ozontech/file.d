@@ -8,7 +8,6 @@ import (
 	"github.com/ozonru/file.d/cfg"
 	"github.com/ozonru/file.d/logger"
 	"github.com/ozonru/file.d/pipeline"
-	"github.com/pkg/errors"
 )
 
 func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
@@ -71,7 +70,6 @@ func extractMatchMode(actionJSON *simplejson.Json) (pipeline.MatchMode, error) {
 	mm := actionJSON.Get("match_mode").MustString()
 	if mm != "or" && mm != "and" && mm != "" {
 		return pipeline.MatchModeUnknown, fmt.Errorf("unknown match mode %q must be or/and", mm)
-
 	}
 	matchMode := pipeline.MatchModeAnd
 	if mm == "or" {
@@ -80,7 +78,7 @@ func extractMatchMode(actionJSON *simplejson.Json) (pipeline.MatchMode, error) {
 	return matchMode, nil
 }
 
-func extractMatchInvert (actionJSON *simplejson.Json) (bool, error){
+func extractMatchInvert(actionJSON *simplejson.Json) (bool, error) {
 	invertMatchMode := actionJSON.Get("match_invert").MustBool()
 	return invertMatchMode, nil
 }
@@ -97,7 +95,7 @@ func extractConditions(condJSON *simplejson.Json) (pipeline.MatchConditions, err
 		if len(value) > 0 && value[0] == '/' {
 			r, err := cfg.CompileRegex(value)
 			if err != nil {
-				return nil, errors.Wrapf(err, "can't compile regexp %s: %s", value, err)
+				return nil, fmt.Errorf("can't compile regexp %s: %w", value, err)
 			}
 			condition.Regexp = r
 		} else {

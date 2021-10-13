@@ -4,15 +4,15 @@ import (
 	"bytes"
 	"io"
 
+	"github.com/ozonru/file.d/longpanic"
 	"github.com/ozonru/file.d/pipeline"
 	"go.uber.org/zap"
 )
 
-type worker struct {
-}
+type worker struct{}
 
 func (w *worker) start(inputController pipeline.InputPluginController, jobProvider *jobProvider, readBufferSize int, logger *zap.SugaredLogger) {
-	go w.work(inputController, jobProvider, readBufferSize, logger)
+	longpanic.Go(func() { w.work(inputController, jobProvider, readBufferSize, logger) })
 }
 
 func (w *worker) work(controller pipeline.InputPluginController, jobProvider *jobProvider, readBufferSize int, logger *zap.SugaredLogger) {

@@ -6,6 +6,7 @@ import (
 
 	"github.com/Shopify/sarama"
 	"github.com/ozonru/file.d/fd"
+	"github.com/ozonru/file.d/longpanic"
 	"github.com/ozonru/file.d/pipeline"
 	"go.uber.org/zap"
 )
@@ -13,7 +14,7 @@ import (
 /*{ introduction
 It reads events from multiple Kafka topics using `sarama` library.
 > It guarantees at "at-least-once delivery" due to the commitment mechanism.
-}*/ 
+}*/
 
 type Plugin struct {
 	config        *Config
@@ -71,7 +72,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	p.controller.UseSpread()
 	p.controller.DisableStreams()
 
-	go p.consume()
+	longpanic.Go(p.consume)
 }
 
 func (p *Plugin) consume() {
@@ -87,6 +88,7 @@ func (p *Plugin) consume() {
 		}
 	}
 }
+
 func (p *Plugin) Stop() {
 	p.cancel()
 }
