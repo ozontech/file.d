@@ -11,6 +11,7 @@ import (
 	"github.com/bitly/go-simplejson"
 	"github.com/ozonru/file.d/cfg"
 	"github.com/ozonru/file.d/logger"
+	"github.com/ozonru/file.d/longpanic"
 	"github.com/ozonru/file.d/pipeline"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -76,7 +77,7 @@ func (f *FileD) addPipeline(name string, config *cfg.PipelineConfig) {
 
 	logger.Infof("creating pipeline %q: capacity=%d, stream field=%s, decoder=%s", name, settings.Capacity, settings.StreamField, settings.Decoder)
 
-	p := pipeline.New(name, settings, f.registry, mux)
+	p := pipeline.New(name, settings, f.registry)
 	err := f.setupInput(p, config, values)
 	if err != nil {
 		logger.Fatalf("can't create pipeline %q: %s", name, err.Error())
@@ -89,6 +90,7 @@ func (f *FileD) addPipeline(name string, config *cfg.PipelineConfig) {
 		logger.Fatalf("can't create pipeline %q: %s", name, err.Error())
 	}
 
+	p.SetupHTTPHandlers(mux)
 	f.Pipelines = append(f.Pipelines, p)
 }
 
@@ -256,7 +258,7 @@ func (f *FileD) startHTTP() {
 	mux.Handle("/metrics", promhttp.Handler())
 
 	f.server = &http.Server{Addr: f.httpAddr, Handler: mux}
-	go f.listenHTTP()
+	longpanic.Go(f.listenHTTP)
 }
 
 func (f *FileD) listenHTTP() {

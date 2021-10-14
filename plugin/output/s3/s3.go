@@ -13,6 +13,7 @@ import (
 
 	"github.com/minio/minio-go"
 	"github.com/ozonru/file.d/fd"
+	"github.com/ozonru/file.d/longpanic"
 	"github.com/ozonru/file.d/pipeline"
 	"github.com/ozonru/file.d/plugin/output/file"
 	"go.uber.org/zap"
@@ -112,8 +113,8 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.compressCh = make(chan string, p.config.FileConfig.WorkersCount_)
 
 	for i := 0; i < p.config.FileConfig.WorkersCount_; i++ {
-		go p.uploadWork()
-		go p.compressWork()
+		longpanic.Go(p.uploadWork)
+		longpanic.Go(p.compressWork)
 	}
 
 	// initialize minio client object.
@@ -178,7 +179,6 @@ func (p *Plugin) uploadExistingFiles() {
 func (p *Plugin) compressFilesInDir() {
 	pattern := fmt.Sprintf("%s/%s%s*%s*%s", p.targetDir, p.fileName, fileNameSeparator, fileNameSeparator, p.fileExtension)
 	files, err := filepath.Glob(pattern)
-
 	if err != nil {
 		p.logger.Panicf("could not read dir: %s", p.targetDir)
 	}
@@ -199,7 +199,6 @@ func (p *Plugin) getSortFunc(files []string) func(i, j int) bool {
 		InfoJ, err := os.Stat(files[j])
 		if err != nil {
 			p.logger.Panicf("could not get info about file: %s, error: %s", files[j], err.Error())
-
 		}
 		return InfoI.ModTime().Before(InfoJ.ModTime())
 	}

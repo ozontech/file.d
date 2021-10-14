@@ -1,6 +1,7 @@
 package file
 
 import (
+	"net/http"
 	"time"
 
 	"github.com/ozonru/file.d/cfg"
@@ -160,6 +161,9 @@ func init() {
 	fd.DefaultPluginRegistry.RegisterInput(&pipeline.PluginStaticInfo{
 		Type:    "file",
 		Factory: Factory,
+		Endpoints: map[string]func(http.ResponseWriter, *http.Request){
+			"reset": ResetterRegistryInstance.Reset,
+		},
 	})
 }
 
@@ -175,6 +179,9 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	p.config.OffsetsFileTmp = p.config.OffsetsFile + ".atomic"
 
 	p.jobProvider = NewJobProvider(p.config, p.params.Controller, p.logger)
+
+	ResetterRegistryInstance.AddResetter(params.PipelineName, p)
+
 	p.startWorkers()
 	p.jobProvider.start()
 }

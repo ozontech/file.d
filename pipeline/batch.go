@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/ozonru/file.d/logger"
+	"github.com/ozonru/file.d/longpanic"
 )
 
 type Batch struct {
@@ -68,8 +69,10 @@ type Batcher struct {
 	commitSeq int64
 }
 
-type BatcherOutFn func(*WorkerData, *Batch)
-type BatcherMaintenanceFn func(*WorkerData)
+type (
+	BatcherOutFn         func(*WorkerData, *Batch)
+	BatcherMaintenanceFn func(*WorkerData)
+)
 
 func NewBatcher(
 	pipelineName string,
@@ -104,10 +107,10 @@ func (b *Batcher) Start() {
 	b.fullBatches = make(chan *Batch, b.workerCount)
 	for i := 0; i < b.workerCount; i++ {
 		b.freeBatches <- newBatch(b.batchSize, b.flushTimeout)
-		go b.work()
+		longpanic.Go(b.work)
 	}
 
-	go b.heartbeat()
+	longpanic.Go(b.heartbeat)
 }
 
 type WorkerData interface{}

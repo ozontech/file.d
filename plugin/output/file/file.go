@@ -11,6 +11,7 @@ import (
 
 	"github.com/ozonru/file.d/cfg"
 	"github.com/ozonru/file.d/fd"
+	"github.com/ozonru/file.d/longpanic"
 	"github.com/ozonru/file.d/pipeline"
 
 	"go.uber.org/zap"
@@ -131,7 +132,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		p.logger.Panic("next seal up time is nil!")
 	}
 
-	go p.fileSealUpTicker()
+	longpanic.Go(p.fileSealUpTicker)
 	p.batcher.Start()
 }
 
@@ -238,7 +239,7 @@ func (p *Plugin) sealUp() {
 	}
 
 	if p.SealUpCallback != nil {
-		go p.SealUpCallback(newFileName)
+		longpanic.Go(func() { p.SealUpCallback(newFileName) })
 	}
 }
 

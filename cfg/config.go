@@ -13,12 +13,12 @@ import (
 	"github.com/bitly/go-simplejson"
 	"github.com/ghodss/yaml"
 	"github.com/ozonru/file.d/logger"
-	"github.com/pkg/errors"
 )
 
 type Config struct {
-	Vault     VaultConfig
-	Pipelines map[string]*PipelineConfig
+	Vault        VaultConfig
+	PanicTimeout time.Duration
+	Pipelines    map[string]*PipelineConfig
 }
 
 type (
@@ -97,7 +97,7 @@ func applyEnvs(json *simplejson.Json) error {
 	for _, env := range os.Environ() {
 		kv := strings.SplitN(env, "=", 2)
 		if len(kv) != 2 {
-			return errors.Errorf("can't parse env %s", env)
+			return fmt.Errorf("can't parse env %s", env)
 		}
 
 		k, v := kv[0], kv[1]
@@ -138,6 +138,20 @@ func parseConfig(json *simplejson.Json) *Config {
 		raw := pipelinesJson.Get(i)
 		config.Pipelines[i] = &PipelineConfig{Raw: raw}
 	}
+
+	panicTimeoutStr, err := json.Get("panic_timeout").String()
+	if err != nil {
+		logger.Warnf("can't get panic_timeout: %s", err.Error())
+	}
+	if panicTimeoutStr == "" {
+		panicTimeoutStr = "1m"
+	}
+
+	panicTimeout, err := time.ParseDuration(panicTimeoutStr)
+	if err != nil {
+		logger.Panicf("can't parse panic_timeout: %s", err.Error())
+	}
+	config.PanicTimeout = panicTimeout
 
 	return config
 }
@@ -189,11 +203,13 @@ func tryGetSecret(vault secreter, field *simplejson.Json) (string, bool) {
 	noSpaces := strings.ReplaceAll(args, " ", "")
 	pathAndKey := strings.Split(noSpaces, ",")
 
+	logger.Infof("get secrets for %q and %q", pathAndKey[0], pathAndKey[1])
 	secret, err := vault.GetSecret(pathAndKey[0], pathAndKey[1])
 	if err != nil {
 		logger.Fatalf("can't GetSecret: %s", err.Error())
 	}
 
+	logger.Infof("success getting secret %q and %q", pathAndKey[0], pathAndKey[1])
 	return secret, true
 }
 
@@ -294,7 +310,7 @@ func ParseField(v reflect.Value, vField reflect.Value, tField reflect.StructFiel
 		case reflect.Int:
 			val, err := strconv.Atoi(tag)
 			if err != nil {
-				return errors.Wrapf(err, "default value for field %s should be int, got=%s", tField.Name, tag)
+				return fmt.Errorf("default value for field %s should be int, got=%s: %w", tField.Name, tag, err)
 			}
 			vField.SetInt(int64(val))
 		case reflect.Slice:

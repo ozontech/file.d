@@ -12,6 +12,7 @@ import (
 	"github.com/ozonru/file.d/plugin/output/devnull"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/atomic"
+	"go.uber.org/zap"
 )
 
 type Opts []string
@@ -118,7 +119,7 @@ func NewPipeline(actions []*pipeline.ActionPluginStaticInfo, pipelineOpts ...str
 	}
 
 	http.DefaultServeMux = &http.ServeMux{}
-	p := pipeline.New("test_pipeline", settings, prometheus.NewRegistry(), http.DefaultServeMux)
+	p := pipeline.New("test_pipeline", settings, prometheus.NewRegistry())
 	if !parallel {
 		p.DisableParallelism()
 	}
@@ -189,7 +190,14 @@ func NewActionPluginStaticInfo(factory pipeline.PluginFactory, config pipeline.A
 }
 
 func NewEmptyOutputPluginParams() *pipeline.OutputPluginParams {
-	return &pipeline.OutputPluginParams{PluginDefaultParams: &pipeline.PluginDefaultParams{PipelineName: "test_pipeline", PipelineSettings: &pipeline.Settings{}}, Controller: nil}
+	return &pipeline.OutputPluginParams{
+		PluginDefaultParams: &pipeline.PluginDefaultParams{
+			PipelineName:     "test_pipeline",
+			PipelineSettings: &pipeline.Settings{},
+		},
+		Controller: nil,
+		Logger:     zap.L().Sugar(),
+	}
 }
 
 func NewConfig(config interface{}, params map[string]int) interface{} {

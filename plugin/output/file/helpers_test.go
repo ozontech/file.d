@@ -14,7 +14,7 @@ import (
 
 func createFile(t *testing.T, fileName string, data *[]byte) *os.File {
 	t.Helper()
-	file, err := os.OpenFile(fileName, os.O_CREATE|os.O_APPEND|os.O_RDWR, os.FileMode(0666))
+	file, err := os.OpenFile(fileName, os.O_CREATE|os.O_APPEND|os.O_RDWR, os.FileMode(0o666))
 	if err != nil {
 		t.Fatalf("could not open or create file, error: %s", err.Error())
 	}
@@ -59,7 +59,7 @@ func newPipeline(t *testing.T, configOutput *Config) *pipeline.Pipeline {
 	}
 
 	http.DefaultServeMux = &http.ServeMux{}
-	p := pipeline.New("test_pipeline", settings, prometheus.NewRegistry(), http.DefaultServeMux)
+	p := pipeline.New("test_pipeline", settings, prometheus.NewRegistry())
 	p.DisableParallelism()
 	p.EnableEventLog()
 
@@ -74,7 +74,7 @@ func newPipeline(t *testing.T, configOutput *Config) *pipeline.Pipeline {
 		},
 	})
 
-	//output plugin
+	// output plugin
 	anyPlugin, _ = Factory()
 	outputPlugin := anyPlugin.(*Plugin)
 	p.SetOutput(&pipeline.OutputPluginInfo{

@@ -1,6 +1,8 @@
 package k8s
 
 import (
+	"net/http"
+
 	"github.com/ozonru/file.d/decoder"
 	"github.com/ozonru/file.d/fd"
 	"github.com/ozonru/file.d/pipeline"
@@ -98,6 +100,10 @@ func init() {
 		Type:              "k8s",
 		Factory:           Factory,
 		AdditionalActions: []string{"k8s-multiline"},
+
+		Endpoints: map[string]func(http.ResponseWriter, *http.Request){
+			"reset": file.ResetterRegistryInstance.Reset,
+		},
 	})
 	fd.DefaultPluginRegistry.RegisterAction(&pipeline.PluginStaticInfo{
 		Type:    "k8s-multiline",

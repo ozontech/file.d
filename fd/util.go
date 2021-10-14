@@ -8,7 +8,6 @@ import (
 	"github.com/ozonru/file.d/cfg"
 	"github.com/ozonru/file.d/logger"
 	"github.com/ozonru/file.d/pipeline"
-	"github.com/pkg/errors"
 )
 
 func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
@@ -114,7 +113,7 @@ func extractConditions(condJSON *simplejson.Json) (pipeline.MatchConditions, err
 		if len(value) > 0 && value[0] == '/' {
 			r, err := cfg.CompileRegex(value)
 			if err != nil {
-				return nil, errors.Wrapf(err, "can't compile regexp %s: %s", value, err)
+				return nil, fmt.Errorf("can't compile regexp %s: %w", value, err)
 			}
 			condition.Regexp = r
 		} else {

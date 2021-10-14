@@ -1,8 +1,9 @@
 package cfg
 
 import (
+	"fmt"
+
 	"github.com/hashicorp/vault/api"
-	"github.com/pkg/errors"
 )
 
 type secreter interface {
@@ -18,7 +19,7 @@ func newVault(addr, token string) (*vault, error) {
 	conf.Address = addr
 	c, err := api.NewClient(conf)
 	if err != nil {
-		return nil, errors.Wrap(err, "can't create client")
+		return nil, fmt.Errorf("can't create client: %w", err)
 	}
 
 	c.SetToken(token)
@@ -30,12 +31,12 @@ func (v *vault) GetSecret(path, key string) (string, error) {
 	c := v.c
 	secret, err := c.Logical().Read(path)
 	if err != nil {
-		return "", errors.Wrap(err, "can't get secret")
+		return "", fmt.Errorf("can't get secret: %w", err)
 	}
 
 	str, ok := secret.Data[key].(string)
 	if !ok {
-		return "", errors.Wrap(err, "can't get 'value' of the secret")
+		return "", fmt.Errorf("can't get 'key' of the secret: %q", key)
 	}
 
 	return str, nil
