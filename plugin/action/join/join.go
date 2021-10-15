@@ -164,10 +164,9 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	if p.isJoining {
 		nextOK := p.config.Continue_.MatchString(value)
 		if nextOK {
-			p.buff = append(p.buff, value...)
-			if p.maxLogSize != 0 && len(p.buff) > p.maxLogSize {
-				p.flush()
-				return pipeline.ActionDiscard
+			// append buff until it exceeds max_log_size.
+			if p.maxLogSize == 0 || len(p.buff) < p.maxLogSize {
+				p.buff = append(p.buff, value...)
 			}
 			return pipeline.ActionCollapse
 		}
