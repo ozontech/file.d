@@ -43,10 +43,10 @@ func DecodeCRI(event *insaneJSON.Root, data []byte) error {
 	data = data[pos+1:]
 
 	isPartial := tags[0] == 'P'
-	
+
 	// log
 	log := data
-	
+
 	// remove \n from log for partial logs
 	if isPartial {
 		log = log[:len(log)-1]

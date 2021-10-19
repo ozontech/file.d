@@ -12,7 +12,7 @@ import (
 
 type testOffset struct {
 	Name  string `json:"name"`
-	Value int `json:"value"`
+	Value int    `json:"value"`
 }
 
 func (o *testOffset) set(name string, value int) {
@@ -63,14 +63,14 @@ func TestAppendFile(t *testing.T) {
 	for i := 1; i < 5; i++ {
 		offset := testOffset{}
 		offset.set(fmt.Sprintf("iter_%d", i), i)
-	
+
 		err := SaveYAML(path, &offset)
 		assert.NoError(t, err)
-	
+
 		loaded := testOffset{}
 		err = LoadYAML(path, &loaded)
 		assert.NoError(t, err)
-	
+
 		assert.Equal(t, offset, loaded)
 	}
 }

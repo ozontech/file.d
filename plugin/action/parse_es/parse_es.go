@@ -18,8 +18,7 @@ type Plugin struct {
 	isStrict    bool
 }
 
-type Config struct {
-}
+type Config struct{}
 
 func init() {
 	fd.DefaultPluginRegistry.RegisterAction(&pipeline.PluginStaticInfo{

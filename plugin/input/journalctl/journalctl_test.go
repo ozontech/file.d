@@ -1,3 +1,4 @@
+//go:build linux
 // +build linux
 
 package journalctl
@@ -69,9 +70,10 @@ func TestPipeline(t *testing.T) {
 
 	assert.Equal(t, 10, total)
 }
+
 func TestOffsets(t *testing.T) {
 	offsetPath := getTmpPath(t, "offset.yaml")
-	
+
 	config := &Config{OffsetsFile: offsetPath, MaxLines: 5}
 	err := cfg.Parse(config, nil)
 	assert.NoError(t, err)
@@ -80,7 +82,7 @@ func TestOffsets(t *testing.T) {
 
 	for i := 0; i < 2; i++ {
 		p := test.NewPipeline(nil, "passive")
-		
+
 		setInput(p, config, t)
 		setOutput(p, func(event *pipeline.Event) {
 			cursors[event.Root.Dig("__CURSOR").AsString()]++

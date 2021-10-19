@@ -11,13 +11,12 @@ It provides an API to test pipelines and other plugins.
 }*/
 
 type Plugin struct {
-	controller    pipeline.OutputPluginController
-	outFn         func(event *pipeline.Event)
-	total         *atomic.Int64
+	controller pipeline.OutputPluginController
+	outFn      func(event *pipeline.Event)
+	total      *atomic.Int64
 }
 
-type Config struct {
-}
+type Config struct{}
 
 func init() {
 	fd.DefaultPluginRegistry.RegisterOutput(&pipeline.PluginStaticInfo{
@@ -41,7 +40,6 @@ func (p *Plugin) Start(_ pipeline.AnyConfig, params *pipeline.OutputPluginParams
 //> It sets up a hook to make sure the test event passes successfully to output.
 func (p *Plugin) SetOutFn(fn func(event *pipeline.Event)) { //*
 	p.outFn = fn
-
 }
 
 func (p *Plugin) Stop() {
