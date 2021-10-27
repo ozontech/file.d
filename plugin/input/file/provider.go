@@ -261,6 +261,16 @@ func (jp *jobProvider) refreshFile(stat os.FileInfo, filename string, symlink st
 
 func (jp *jobProvider) addJob(file *os.File, stat os.FileInfo, filename string, symlink string) {
 	sourceID := sourceIDByStat(stat, symlink)
+
+	jp.jobsMu.Lock()
+	defer jp.jobsMu.Unlock()
+	// check again in case when the file was created, removed (or renamed) and created again.
+	_, has := jp.jobs[sourceID]
+	if has {
+		jp.logger.Warnf("job for a file %q was already created", filename)
+		return
+	}
+
 	inode := getInode(stat)
 	job := &Job{
 		file:     file,
@@ -284,15 +294,12 @@ func (jp *jobProvider) addJob(file *os.File, stat os.FileInfo, filename string, 
 	} else {
 		jp.initJobOffset(jp.config.OffsetsOp_, job)
 	}
-
-	jp.jobsMu.Lock()
 	jp.jobs[sourceID] = job
 	if len(jp.jobs) > jp.config.MaxFiles {
 		jp.logger.Fatalf("max_files reached for input plugin, consider increase this parameter")
 	}
 	jp.jobsLog = append(jp.jobsLog, filename)
 	jp.jobsDone.Inc()
-	jp.jobsMu.Unlock()
 
 	if symlink != "" {
 		jp.logger.Infof("job added for a file %d:%s, symlink=%s", sourceID, filename, symlink)

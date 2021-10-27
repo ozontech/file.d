@@ -185,6 +185,7 @@ func (p *processor) doActions(event *Event) (isPassed bool) {
 
 		p.actionWatcher.setEventBefore(index, event)
 
+		logger.Errorf("before action Do=%#v")
 		switch action.Do(event) {
 		case ActionPass:
 			p.countEvent(event, index, eventStatusPassed)

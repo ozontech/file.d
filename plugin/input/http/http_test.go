@@ -3,7 +3,9 @@ package http
 import (
 	"sync"
 	"testing"
+	"time"
 
+	"github.com/ozonru/file.d/logger"
 	"github.com/ozonru/file.d/pipeline"
 	"github.com/ozonru/file.d/test"
 	"github.com/stretchr/testify/assert"
@@ -98,6 +100,7 @@ func TestProcessChunksContinue(t *testing.T) {
 	outEvents := make([]string, 0, 0)
 	output.SetOutFn(func(event *pipeline.Event) {
 		outEvents = append(outEvents, event.Root.EncodeToString())
+		logger.Errorf("event=%v", event.String())
 		wg.Done()
 	})
 
@@ -107,6 +110,9 @@ func TestProcessChunksContinue(t *testing.T) {
 `)
 	eventBuff := []byte(`{"a":`)
 	eventBuff = input.processChunk(0, chunk, eventBuff)
+
+	// wait for processors to start.
+	time.Sleep(30 * time.Millisecond)
 
 	p.Stop()
 	wg.Wait()

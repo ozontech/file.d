@@ -43,6 +43,7 @@ func (s *streamer) start() {
 
 func (s *streamer) stop() {
 	s.shouldStop = true
+	logger.Errorf("after stop")
 
 	s.mu.Lock()
 	for _, source := range s.streams {

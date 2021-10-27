@@ -146,7 +146,7 @@ type Config struct {
 	//> @3@4@5@6
 	//>
 	//> It defines how often to report statistical information to stdout
-	ReportInterval  cfg.Duration `json:"report_interval" default:"10s" parse:"duration"` //*
+	ReportInterval  cfg.Duration `json:"report_interval" default:"5s" parse:"duration"` //*
 	ReportInterval_ time.Duration
 
 	//> @3@4@5@6

@@ -124,6 +124,7 @@ func (w *worker) work(controller pipeline.InputPluginController, jobProvider *jo
 			}
 		}
 
+		logger.Errorf("readBuffer=%#v", string(readBuffer))
 		// check if file was truncated
 		if isEOF {
 			stat, err := file.Stat()
@@ -132,6 +133,7 @@ func (w *worker) work(controller pipeline.InputPluginController, jobProvider *jo
 			}
 
 			// file was truncated
+			logger.Errorf("truncated start=%#v", lastOffset, readTotal, stat.Size())
 			if lastOffset+readTotal > stat.Size() {
 				jobProvider.truncateJob(job)
 			}

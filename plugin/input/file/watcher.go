@@ -44,10 +44,11 @@ func (w *watcher) start() {
 		w.logger.Fatalf("wrong dir name pattern %q: %s", w.dirPattern, err.Error())
 	}
 
-	eventsCh := make(chan notify.EventInfo, 1)
+	eventsCh := make(chan notify.EventInfo, 128)
 	w.watcherCh = eventsCh
 
-	err := notify.Watch(w.path, eventsCh, notify.Create)
+	// watch recursivly
+	err := notify.Watch(filepath.Join(w.path, "..."), eventsCh, notify.Create)
 	if err != nil {
 		w.logger.Warnf("can't create fs watcher: %s", err.Error())
 		return
@@ -116,6 +117,6 @@ func (w *watcher) watch() {
 		if !ok {
 			return
 		}
-		w.notify(event.Path())
+		longpanic.Go(func() { w.notify(event.Path()) })
 	}
 }

@@ -63,6 +63,10 @@ func (m mockClient) FPutObject(bucketName, objectName, filePath string, opts min
 }
 
 func TestStart(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skip test in short mode")
+	}
+
 	tests := struct {
 		firstPack  []test.Msg
 		secondPack []test.Msg
@@ -176,7 +180,7 @@ func newPipeline(t *testing.T, configOutput *Config) *pipeline.Pipeline {
 	}
 
 	http.DefaultServeMux = &http.ServeMux{}
-	p := pipeline.New("test_pipeline", settings, prometheus.NewRegistry(), http.DefaultServeMux)
+	p := pipeline.New("test_pipeline", settings, prometheus.NewRegistry())
 	p.DisableParallelism()
 	p.EnableEventLog()
 
