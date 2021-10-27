@@ -21,13 +21,10 @@ import (
 	"golang.org/x/net/context"
 )
 
-const (
-	targetFile = "filetests/log.log"
-)
+const targetFile = "filetests/log.log"
 
 var (
-	dir, _ = filepath.Split(targetFile)
-
+	dir, _   = filepath.Split(targetFile)
 	fileName = ""
 )
 
@@ -42,7 +39,7 @@ func (m mockClient) BucketExists(bucketName string) (bool, error) {
 }
 
 func (m mockClient) FPutObject(bucketName, objectName, filePath string, opts minio.PutObjectOptions) (n int64, err error) {
-	fmt.Println("put object")
+	logger.Infof("put object: %s, %s, %s", bucketName, objectName, filePath)
 	targetDir := fmt.Sprintf("./%s", bucketName)
 	if _, err := os.Stat(targetDir); os.IsNotExist(err) {
 		if err := os.MkdirAll(targetDir, os.ModePerm); err != nil {
@@ -54,6 +51,7 @@ func (m mockClient) FPutObject(bucketName, objectName, filePath string, opts min
 	if err != nil {
 		logger.Panicf("could not open or create file: %s, error: %s", fileName, err.Error())
 	}
+	defer file.Close()
 
 	if _, err := file.WriteString(fmt.Sprintf("%s | from '%s' to b: `%s` as obj: `%s`\n", time.Now().String(), filePath, bucketName, objectName)); err != nil {
 		return 0, fmt.Errorf(err.Error())
@@ -85,12 +83,10 @@ func TestStart(t *testing.T) {
 		},
 	}
 
-	file.FileSealUpInterval = 200 * time.Millisecond
 	// pattern for parent log file
 	pattern := fmt.Sprintf("%s/*.log", dir)
 
-	writeFileSleep := 100*time.Millisecond + 100*time.Millisecond
-	sealUpFileSleep := 2*file.FileSealUpInterval + 500*time.Millisecond
+	sealUpFileSleep := 400 * time.Millisecond
 	test.ClearDir(t, dir)
 	s3MockClient := newMockClient()
 	fileConfig := file.Config{
@@ -111,18 +107,18 @@ func TestStart(t *testing.T) {
 	}
 	test.ClearDir(t, dir)
 	defer test.ClearDir(t, dir)
-	test.ClearDir(t, fmt.Sprintf("%s/", config.Bucket))
+	test.ClearDir(t, config.Bucket)
 	defer test.ClearDir(t, config.Bucket)
+
 	err := cfg.Parse(config, map[string]int{"gomaxprocs": 1, "capacity": 64})
 	assert.NoError(t, err)
-	p := newPipeline(t, config)
 
+	p := newPipeline(t, config)
 	assert.NotNil(t, p, "could not create new pipeline")
 	p.Start()
 	time.Sleep(300 * time.Microsecond)
 
 	test.SendPack(t, p, tests.firstPack)
-	time.Sleep(writeFileSleep)
 	time.Sleep(sealUpFileSleep)
 	size1 := test.CheckNotZero(t, fileName, "s3 data is missed after first pack")
 
@@ -134,7 +130,6 @@ func TestStart(t *testing.T) {
 	// initial sending the second pack
 	// no special situations
 	test.SendPack(t, p, tests.secondPack)
-	time.Sleep(writeFileSleep)
 	time.Sleep(sealUpFileSleep)
 
 	match = test.GetMatches(t, pattern)
@@ -146,7 +141,7 @@ func TestStart(t *testing.T) {
 
 	// failed during writing
 	test.SendPack(t, p, tests.thirdPack)
-	time.Sleep(writeFileSleep - writeFileSleep/2)
+	time.Sleep(sealUpFileSleep / 4)
 	p.Stop()
 
 	// check log file not empty
@@ -176,7 +171,7 @@ func newPipeline(t *testing.T, configOutput *Config) *pipeline.Pipeline {
 	}
 
 	http.DefaultServeMux = &http.ServeMux{}
-	p := pipeline.New("test_pipeline", settings, prometheus.NewRegistry(), http.DefaultServeMux)
+	p := pipeline.New("test_pipeline", settings, prometheus.NewRegistry())
 	p.DisableParallelism()
 	p.EnableEventLog()
 
@@ -300,13 +295,12 @@ func TestStartWithSendProblems(t *testing.T) {
 		},
 	}
 
-	file.FileSealUpInterval = 200 * time.Millisecond
 	// pattern for parent log file
 	pattern := fmt.Sprintf("%s/*.log", dir)
 	zipPattern := fmt.Sprintf("%s/*.zip", dir)
 
 	writeFileSleep := 100*time.Millisecond + 100*time.Millisecond
-	sealUpFileSleep := 2*file.FileSealUpInterval + 500*time.Millisecond
+	sealUpFileSleep := 2*200*time.Millisecond + 500*time.Millisecond
 	test.ClearDir(t, dir)
 	s3MockClient := newMockClientWIthSomeFails()
 

@@ -76,10 +76,11 @@ func pluginConfig(opts ...string) *Config {
 	}
 
 	config := &Config{
-		WatchingDir:     filesDir,
-		OffsetsFile:     filepath.Join(offsetsDir, offsetsFile),
-		PersistenceMode: "async",
-		OffsetsOp:       op,
+		WatchingDir:         filesDir,
+		OffsetsFile:         filepath.Join(offsetsDir, offsetsFile),
+		PersistenceMode:     "async",
+		OffsetsOp:           op,
+		MaintenanceInterval: "100ms",
 	}
 
 	_ = cfg.Parse(config, map[string]int{"gomaxprocs": runtime.GOMAXPROCS(0)})
@@ -368,6 +369,7 @@ func TestWatch(t *testing.T) {
 	run(&test.Case{
 		Prepare: func() {
 			file = createTempFile()
+			addString(file, content, true, true)
 		},
 		Act: func(p *pipeline.Pipeline) {
 			for x := 0; x < iterations; x++ {
@@ -376,18 +378,16 @@ func TestWatch(t *testing.T) {
 					dir = filepath.Join(filepath.Dir(file), dir)
 					_ = os.Mkdir(dir, 0o770)
 
-					err := ioutil.WriteFile(filepath.Join(dir, "new_file"), []byte(content), perm)
+					err := os.WriteFile(filepath.Join(dir, "new_file"), []byte(content), perm)
 					if err != nil {
 						panic(err.Error())
 					}
-					err = ioutil.WriteFile(filepath.Join(dir, "other_file"), []byte(content), perm)
+					err = os.WriteFile(filepath.Join(dir, "other_file"), []byte(content), perm)
 					if err != nil {
 						panic(err.Error())
 					}
 				}(dir)
 			}
-
-			addString(file, content, true, true)
 		},
 		Assert: func(p *pipeline.Pipeline) {
 			assert.Equal(t, eventCount, p.GetEventsTotal(), "wrong event count")
@@ -468,7 +468,7 @@ func TestReadContinue(t *testing.T) {
 			}
 
 			for i := range inputEvents {
-				assert.Equal(t, inputEvents[i], outputEvents[i], "wrong event")
+				require.Equal(t, inputEvents[i], outputEvents[i], "wrong event")
 			}
 
 			assertOffsetsAreEqual(t, genOffsetsContent(file, size), getContent(getConfigByPipeline(p).OffsetsFile))
@@ -940,10 +940,6 @@ func TestRotationRenameWhileNotWorking(t *testing.T) {
 }
 
 func TestTruncation(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping testing in short mode")
-	}
-
 	file := ""
 	x := atomic.NewInt32(2)
 	run(&test.Case{
@@ -952,29 +948,26 @@ func TestTruncation(t *testing.T) {
 			file = createTempFile()
 			addString(file, `"line_1"`, true, false)
 			addString(file, `"line_2"`, true, false)
+			addString(file, `"line_3"`, true, true)
 
 			test.WaitForEvents(x)
-
 			truncateFile(file)
-			addString(file, `"line_3"`, true, true)
+
 			addString(file, `"line_4"`, true, true)
 			addString(file, `"line_5"`, true, true)
 		},
 		Assert: func(p *pipeline.Pipeline) {
 			assert.Equal(t, 5, p.GetEventsTotal(), "wrong events count")
-			assertOffsetsAreEqual(t, genOffsetsContent(file, (len(`"line_1"`)+newLine)*3), getContent(getConfigByPipeline(p).OffsetsFile))
+			assertOffsetsAreEqual(t, genOffsetsContent(file, (len(`"line_1"`)+newLine)*2), getContent(getConfigByPipeline(p).OffsetsFile))
 		},
 		Out: func(event *pipeline.Event) {
+			logger.Errorf("event=%v", event)
 			x.Dec()
 		},
 	}, 5)
 }
 
 func TestTruncationSeq(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping testing in short mode")
-	}
-
 	p, _, _ := test.NewPipelineMock(nil, "passive")
 	p.SetInput(getInputInfo())
 	p.Start()

@@ -44,11 +44,7 @@ type data struct {
 	outBuf []byte
 }
 
-const (
-	fileNameSeparator = "_"
-)
-
-var FileSealUpInterval = time.Second
+const fileNameSeparator = "_"
 
 type Config struct {
 	//> File name for log file.

@@ -12,6 +12,7 @@ import (
 	"github.com/ozonru/file.d/logger"
 	"github.com/ozonru/file.d/longpanic"
 	"github.com/ozonru/file.d/pipeline"
+	"github.com/rjeczalik/notify"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
 )
@@ -106,7 +107,14 @@ func NewJobProvider(config *Config, controller pipeline.InputPluginController, l
 		logger: logger,
 	}
 
-	jp.watcher = NewWatcher(config.WatchingDir, config.FilenamePattern, config.DirPattern, jp.processNotification, logger)
+	jp.watcher = NewWatcher(
+		config.WatchingDir,
+		config.FilenamePattern,
+		config.DirPattern,
+		jp.processNotification,
+		config.ShouldWatchModifications,
+		logger,
+	)
 
 	return jp
 }
@@ -191,19 +199,21 @@ func (jp *jobProvider) commit(event *pipeline.Event) {
 	}
 }
 
-func (jp *jobProvider) processNotification(filename string, stat os.FileInfo) {
+func (jp *jobProvider) processNotification(e notify.Event, filename string, stat os.FileInfo) {
 	if filename == jp.config.OffsetsFile || filename == jp.config.OffsetsFileTmp {
 		return
 	}
 
+	isWrite := e == notify.Write
+
 	if stat.Mode()&os.ModeSymlink != 0 {
 		inode := getInode(stat)
 		jp.addSymlink(inode, filename)
-		jp.refreshSymlink(filename, inode)
+		jp.refreshSymlink(filename, inode, isWrite)
 		return
 	}
 
-	jp.refreshFile(stat, filename, "")
+	jp.refreshFile(stat, filename, "", isWrite)
 }
 
 func (jp *jobProvider) addSymlink(inode inode, filename string) {
@@ -212,7 +222,7 @@ func (jp *jobProvider) addSymlink(inode inode, filename string) {
 	jp.symlinksMu.Unlock()
 }
 
-func (jp *jobProvider) refreshSymlink(symlink string, inode inode) {
+func (jp *jobProvider) refreshSymlink(symlink string, inode inode, isWrite bool) {
 	filename, err := filepath.EvalSymlinks(symlink)
 	if err != nil {
 		jp.logger.Warnf("symlink have been removed %s", symlink)
@@ -235,16 +245,19 @@ func (jp *jobProvider) refreshSymlink(symlink string, inode inode) {
 		return
 	}
 
-	jp.refreshFile(stat, filename, symlink)
+	jp.refreshFile(stat, filename, symlink, isWrite)
 }
 
-func (jp *jobProvider) refreshFile(stat os.FileInfo, filename string, symlink string) {
+func (jp *jobProvider) refreshFile(stat os.FileInfo, filename string, symlink string, isWrite bool) {
 	sourceID := sourceIDByStat(stat, symlink)
 	jp.jobsMu.RLock()
 	job, has := jp.jobs[sourceID]
 	jp.jobsMu.RUnlock()
 
 	if has {
+		if isWrite {
+			jp.checkFileWasTruncated(job, stat.Size())
+		}
 		job.mu.Lock()
 		jp.tryResumeJobAndUnlock(job, filename)
 		return
@@ -259,8 +272,29 @@ func (jp *jobProvider) refreshFile(stat os.FileInfo, filename string, symlink st
 	jp.addJob(file, stat, filename, symlink)
 }
 
+func (jp *jobProvider) checkFileWasTruncated(job *Job, size int64) {
+	lastOffset, err := job.file.Seek(0, io.SeekCurrent)
+	if err != nil {
+		jp.logger.Fatalf("check file was truncated error, file %s seek error: %s", job.filename, err.Error())
+	}
+
+	if lastOffset > size {
+		jp.truncateJob(job)
+	}
+}
+
 func (jp *jobProvider) addJob(file *os.File, stat os.FileInfo, filename string, symlink string) {
 	sourceID := sourceIDByStat(stat, symlink)
+
+	jp.jobsMu.Lock()
+	defer jp.jobsMu.Unlock()
+	// check again in case when the file was created, removed (or renamed) and created again.
+	_, has := jp.jobs[sourceID]
+	if has {
+		jp.logger.Warnf("job for a file %q was already created", filename)
+		return
+	}
+
 	inode := getInode(stat)
 	job := &Job{
 		file:     file,
@@ -284,15 +318,12 @@ func (jp *jobProvider) addJob(file *os.File, stat os.FileInfo, filename string, 
 	} else {
 		jp.initJobOffset(jp.config.OffsetsOp_, job)
 	}
-
-	jp.jobsMu.Lock()
 	jp.jobs[sourceID] = job
 	if len(jp.jobs) > jp.config.MaxFiles {
 		jp.logger.Fatalf("max_files reached for input plugin, consider increase this parameter")
 	}
 	jp.jobsLog = append(jp.jobsLog, filename)
 	jp.jobsDone.Inc()
-	jp.jobsMu.Unlock()
 
 	if symlink != "" {
 		jp.logger.Infof("job added for a file %d:%s, symlink=%s", sourceID, filename, symlink)
@@ -508,7 +539,7 @@ func (jp *jobProvider) maintenanceSymlinks() {
 	jp.symlinksMu.Unlock()
 
 	for _, info := range symlinks {
-		jp.refreshSymlink(info.filename, info.inode)
+		jp.refreshSymlink(info.filename, info.inode, false)
 	}
 }
 

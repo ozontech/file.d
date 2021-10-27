@@ -3,7 +3,6 @@ package throttle
 import (
 	"fmt"
 	"math/rand"
-	"sync"
 	"testing"
 	"time"
 
@@ -12,6 +11,8 @@ import (
 	"github.com/ozonru/file.d/pipeline"
 	"github.com/ozonru/file.d/test"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"go.uber.org/atomic"
 )
 
 type testConfig struct {
@@ -27,15 +28,14 @@ var formats = []string{
 	`{"time":"%s","k8s_ns":"not_matched","k8s_pod":"pod_3"}`,
 }
 
-func (c *testConfig) runPipeline() {
+func (c *testConfig) runPipeline(t *testing.T) {
 	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, c.config, pipeline.MatchModeAnd, nil, false))
-	wg := &sync.WaitGroup{}
-	wg.Add(c.eventsTotal)
+	wgWithDeadline := atomic.NewInt32(int32(c.eventsTotal))
 
 	outEvents := make([]*pipeline.Event, 0)
 	output.SetOutFn(func(e *pipeline.Event) {
 		outEvents = append(outEvents, e)
-		wg.Done()
+		wgWithDeadline.Dec()
 	})
 
 	sourceNames := []string{
@@ -47,8 +47,7 @@ func (c *testConfig) runPipeline() {
 	startTime := time.Now()
 	for {
 		index := rand.Int() % len(formats)
-		json := fmt.Sprintf(formats[index], time.Now().Format(time.RFC3339Nano))
-
+		json := fmt.Sprintf(formats[index], time.Now().UTC().Format(time.RFC3339Nano))
 		input.In(10, sourceNames[rand.Int()%len(sourceNames)], 0, []byte(json))
 		if time.Since(startTime) > c.workTime {
 			break
@@ -56,7 +55,16 @@ func (c *testConfig) runPipeline() {
 	}
 
 	p.Stop()
-	wg.Wait()
+	tnow := time.Now()
+	for {
+		if time.Since(tnow) > 10*time.Second {
+			require.FailNow(t, "too long act")
+		}
+		if wgWithDeadline.Load() <= 0 {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 
 	assert.Equal(c.t, c.eventsTotal, len(outEvents), "wrong in events count")
 }
@@ -92,7 +100,7 @@ func TestThrottle(t *testing.T) {
 	workTime := config.BucketInterval_ * time.Duration(iterations)
 
 	tconf := testConfig{t, config, eventsTotal, workTime}
-	tconf.runPipeline()
+	tconf.runPipeline(t)
 }
 
 func TestSizeThrottle(t *testing.T) {
@@ -106,7 +114,8 @@ func TestSizeThrottle(t *testing.T) {
 	iterations := 5
 
 	totalBuckets := iterations + 1
-	eventsTotal := totalBuckets * (limitA/(len(formats[0])+dateLen) + limitB/(len(formats[1])+dateLen) + defaultLimit/(len(formats[2])+dateLen))
+	test := limitA/(len(formats[0])+dateLen-2) + limitB/(len(formats[1])+dateLen-2) + defaultLimit/(len(formats[2])+dateLen-2)
+	eventsTotal := totalBuckets * test
 
 	config := &Config{
 		Rules: []RuleConfig{
@@ -128,7 +137,7 @@ func TestSizeThrottle(t *testing.T) {
 	workTime := config.BucketInterval_ * time.Duration(iterations)
 
 	tconf := testConfig{t, config, eventsTotal, workTime}
-	tconf.runPipeline()
+	tconf.runPipeline(t)
 }
 
 func TestMixedThrottle(t *testing.T) {
@@ -142,7 +151,7 @@ func TestMixedThrottle(t *testing.T) {
 
 	totalBuckets := iterations + 1
 	defaultLimitDelta := totalBuckets * defaultLimit
-	eventsTotal := totalBuckets*(limitA+limitB/avgMessageSize) + defaultLimitDelta
+	eventsTotal := totalBuckets*(limitA+(limitB/avgMessageSize)) + defaultLimitDelta
 
 	config := &Config{
 		Rules: []RuleConfig{
@@ -163,5 +172,5 @@ func TestMixedThrottle(t *testing.T) {
 	workTime := config.BucketInterval_ * time.Duration(iterations)
 
 	tconf := testConfig{t, config, eventsTotal, workTime}
-	tconf.runPipeline()
+	tconf.runPipeline(t)
 }

@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// The file contains helpers function for testing file base output plugins
+// The file_base contains helpers function for testing file base output plugins
 // output/file and output/s3
 
 type Msg []byte
