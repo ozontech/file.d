@@ -87,6 +87,10 @@ func (m *metricsHolder) nextMetricsGen() {
 		}
 
 		cnt := counter{nil, make(map[string]*atomic.Uint64), nil}
+		for _, st := range allEventStatuses() {
+			cnt.totalCounter[string(st)] = atomic.NewUint64(0)
+		}
+
 		opts := prometheus.CounterOpts{
 			Namespace:   "file_d",
 			Subsystem:   "pipeline_" + m.pipelineName,
@@ -169,11 +173,8 @@ func (m *metricsHolder) count(event *Event, actionIndex int, eventStatus eventSt
 		mn = nextMN
 	}
 
-	metrics.current.count.WithLabelValues(valuesBuf...).Inc()
-	if metrics.current.totalCounter[string(eventStatus)] == nil {
-		metrics.current.totalCounter[string(eventStatus)] = atomic.NewUint64(0)
-	}
 	metrics.current.totalCounter[string(eventStatus)].Inc()
+	metrics.current.count.WithLabelValues(valuesBuf...).Inc()
 	metrics.current.size.WithLabelValues(valuesBuf...).Add(float64(event.Size))
 
 	return valuesBuf

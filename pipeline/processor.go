@@ -35,6 +35,17 @@ const (
 	eventStatusHold       eventStatus = "held"
 )
 
+func allEventStatuses() []eventStatus {
+	return []eventStatus{
+		eventStatusReceived,
+		eventStatusNotMatched,
+		eventStatusPassed,
+		eventStatusDiscarded,
+		eventStatusCollapse,
+		eventStatusHold,
+	}
+}
+
 // processor is a goroutine which doing pipeline actions
 type processor struct {
 	id            int
