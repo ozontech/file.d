@@ -138,7 +138,7 @@ func TestAllowedLabels(t *testing.T) {
 	assert.Nil(t, outEvents[1].Root.Dig("k8s_label_denied_label"), "extra label in event")
 }
 
-func TestJoin(t *testing.T) {
+func TestJoinK8S(t *testing.T) {
 	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(MultilineActionFactory, config(), pipeline.MatchModeAnd, nil, false))
 	wg := &sync.WaitGroup{}
 	wg.Add(4)

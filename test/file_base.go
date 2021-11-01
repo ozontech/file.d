@@ -28,7 +28,7 @@ func SendPack(t *testing.T, p *pipeline.Pipeline, msgs []Msg) int64 {
 func ClearDir(t *testing.T, dir string) {
 	t.Helper()
 	if err := os.RemoveAll(dir); err != nil {
-		t.Fatalf("coudl not delete dirs and files adter tests, error: %s", err.Error())
+		t.Fatalf("could not delete dirs and files after tests, error: %s", err.Error())
 	}
 }
 

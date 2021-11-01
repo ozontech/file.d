@@ -11,6 +11,7 @@ import (
 
 	"github.com/ozonru/file.d/cfg"
 	"github.com/ozonru/file.d/fd"
+	"github.com/ozonru/file.d/logger"
 	"github.com/ozonru/file.d/longpanic"
 	"github.com/ozonru/file.d/pipeline"
 
@@ -120,6 +121,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.idx = p.getStartIdx()
 	p.createNew()
 	p.setNextSealUpTime()
+	logger.Errorf("time setted")
 
 	if p.file == nil {
 		p.logger.Panic("file struct is nil!")
@@ -198,6 +200,7 @@ func (p *Plugin) write(data []byte) {
 
 func (p *Plugin) createNew() {
 	p.tsFileName = fmt.Sprintf("%d%s%s%s", time.Now().Unix(), fileNameSeparator, p.fileName, p.fileExtension)
+	logger.Errorf("tsFileName in createNew=%s", p.tsFileName)
 	f := fmt.Sprintf("%s%s", p.targetDir, p.tsFileName)
 	pattern := fmt.Sprintf("%s*%s%s%s", p.targetDir, fileNameSeparator, p.fileName, p.fileExtension)
 	matches, err := filepath.Glob(pattern)
@@ -234,6 +237,7 @@ func (p *Plugin) sealUp() {
 		p.logger.Panicf("could not close file: %s, error: %s", oldFile.Name(), err.Error())
 	}
 
+	logger.Errorf("sealing in %d, newFile: %s", time.Now().Unix(), newFileName)
 	if p.SealUpCallback != nil {
 		longpanic.Go(func() { p.SealUpCallback(newFileName) })
 	}

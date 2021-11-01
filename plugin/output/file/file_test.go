@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/ozonru/file.d/cfg"
+	"github.com/ozonru/file.d/logger"
 	"github.com/ozonru/file.d/test"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -226,19 +227,21 @@ func TestStart(t *testing.T) {
 	assert.NotNil(t, p, "could not create new pipeline")
 
 	p.Start()
-	time.Sleep(300 * time.Microsecond)
 
 	// check log file created and empty
 	matches := test.GetMatches(t, logFilePattern)
-	assert.Equal(t, 1, len(matches))
+	require.Equal(t, 1, len(matches))
 
 	tsFileName := matches[0]
 	test.CheckZero(t, tsFileName, "log file is not created or is not empty")
+	logger.Errorf("tsFileName=%s", tsFileName)
 
 	// send events
+	logger.Errorf("send pack, t=%s", time.Now().Unix())
 	packSize := test.SendPack(t, p, tests.firstPack)
 	totalSent += packSize
 	time.Sleep(100 * time.Millisecond)
+	logger.Errorf("after sleep")
 
 	// check that plugin wrote into the file
 	require.Equal(t, packSize, test.CheckNotZero(t, tsFileName, "check log file has data"), "plugin did not write into the file")
