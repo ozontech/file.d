@@ -182,6 +182,9 @@ func TestSealUpNoContent(t *testing.T) {
 }
 
 func TestStart(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skip long tests in short mode")
+	}
 	tests := struct {
 		firstPack  []test.Msg
 		secondPack []test.Msg
@@ -207,7 +210,7 @@ func TestStart(t *testing.T) {
 	defer test.ClearDir(t, dir)
 	config := &Config{
 		TargetFile:        targetFile,
-		RetentionInterval: "300ms",
+		RetentionInterval: "2s",
 		Layout:            "01",
 		BatchFlushTimeout: "100ms",
 
@@ -215,7 +218,7 @@ func TestStart(t *testing.T) {
 	}
 
 	writeFileSleep := 2 * 100 * time.Millisecond
-	sealUpFileSleep := 2*200*time.Millisecond + 500*time.Millisecond
+	sealUpFileSleep := 2 * time.Second
 	generalPattern := fmt.Sprintf("%s/*%s", dir, extension)
 	logFilePattern := fmt.Sprintf("%s/*%s", path.Dir(targetFile), path.Base(targetFile))
 	currentLogFileSubstr := fmt.Sprintf("_%s", path.Base(targetFile))
@@ -240,7 +243,7 @@ func TestStart(t *testing.T) {
 	logger.Errorf("send pack, t=%s", time.Now().Unix())
 	packSize := test.SendPack(t, p, tests.firstPack)
 	totalSent += packSize
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(200 * time.Millisecond)
 	logger.Errorf("after sleep")
 
 	// check that plugin wrote into the file

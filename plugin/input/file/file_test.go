@@ -785,6 +785,9 @@ func TestReadManyCharsParallelRace(t *testing.T) {
 
 // TestReadManyPreparedFilesRace tests if plugin doesn't have race conditions in the case of parallel processing of prepared files
 func TestReadManyPreparedFilesRace(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skip long tests in short mode")
+	}
 	lineCount := 2
 	blockCount := 128 * 128
 	fileCount := 32
@@ -968,6 +971,9 @@ func TestTruncation(t *testing.T) {
 }
 
 func TestTruncationSeq(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skip long tests in short mode")
+	}
 	p, _, _ := test.NewPipelineMock(nil, "passive")
 	p.SetInput(getInputInfo())
 	p.Start()

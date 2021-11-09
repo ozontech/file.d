@@ -61,6 +61,9 @@ func (m mockClient) FPutObject(bucketName, objectName, filePath string, opts min
 }
 
 func TestStart(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skip long tests in short mode")
+	}
 	tests := struct {
 		firstPack  []test.Msg
 		secondPack []test.Msg
@@ -273,6 +276,9 @@ func (m mockClientWIthSomeFails) FPutObject(bucketName, objectName, filePath str
 }
 
 func TestStartWithSendProblems(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skip long tests in short mode")
+	}
 	tests := struct {
 		firstPack  []test.Msg
 		secondPack []test.Msg
