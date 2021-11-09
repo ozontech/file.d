@@ -521,6 +521,7 @@ func TestOffsetsSaveContinue(t *testing.T) {
 		Act: func(p *pipeline.Pipeline) {
 			addString(file, rightPart, true, false)
 			addString(file, secondLine, true, false)
+			time.Sleep(100 * time.Millisecond)
 		},
 		Assert: func(p *pipeline.Pipeline) {
 			assertOffsetsAreEqual(t, genOffsetsContent(file, size), getContent(getConfigByPipeline(p).OffsetsFile))
