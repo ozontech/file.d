@@ -173,6 +173,18 @@ func TestRemask(t *testing.T) {
 			comment:  "only value replaced",
 		},
 		{
+			name:     "simple substitution",
+			input:    `{"field1":"-ab-axxb-17-ab-axxb-ab"}`,
+			expected: `{"field1":"-TEST-TEST-digitdigit-TEST-TEST-TEST"}`,
+			comment:  "only value replaced",
+		},
+		{
+			name:     "simple substitution",
+			input:    `{"field1":"-axxxxxxxxb-axb-17-ab-axxxxxxxb-ab"}`,
+			expected: `{"field1":"-TEST-TEST-digitdigit-TEST-TEST-TEST"}`,
+			comment:  "only value replaced",
+		},
+		{
 			name:     "card number substitution",
 			input:    `{"field1":"4445-2222-3333-4444"}`,
 			expected: `{"field1":"****-****-****-****"}`,
@@ -217,6 +229,10 @@ func TestRemask(t *testing.T) {
 			{
 				Re:           `^[А-Я][а-я]{1,64}(\-[А-Я][а-я]{1,64})?\s+[А-Я][а-я]{1,64}(\.)?\s+[А-Я][а-я]{1,64}`,
 				Substitution: "<Фамилия Имя Отчество>",
+			},
+			{
+				Re:           `\d`,
+				Substitution: "digit",
 			},
 		},
 	}
@@ -267,8 +283,8 @@ func createBenchInput() (string, Config) {
 	}
 	matchable := `{"field1":"Иванов Иван Иванович c картой 4445-2222-3333-4444 встал не с той ноги"}`
 	unmatchable := `{"field1":"Просто строка которая не заменяется"}`
-	matchableCoeff := 0.01 // percentage of matchable input
-	n := 10
+	matchableCoeff := 0.1 // percentage of matchable input
+	n := 500
 	c := (int)((float64)(n) * matchableCoeff)
 	builder := strings.Builder{}
 	for i := 0; i < n; i++ {

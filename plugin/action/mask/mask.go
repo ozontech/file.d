@@ -91,14 +91,15 @@ func (p *Plugin) Stop() {
 
 func (p *Plugin) maskByIndex(value string) (*string, bool) {
 	isMasked := false
-	offset := 0
 	l := len(value)
+	offset := 0
 	for i, mask := range p.config.Masks {
+		offset = 0
 		matches := p.re[i].FindAllStringIndex(value, -1)
 		for _, match := range matches {
 			value = value[:match[0]+offset] + mask.Substitution + value[match[1]+offset:]
 			isMasked = true
-			offset = len(value) - l
+			offset += len(value) - l
 			l = len(value)
 			p.logger.Infof("mask by index %s", mask.Substitution)
 		}
