@@ -63,7 +63,7 @@ func config() *Config {
 }
 
 func TestEnrichment(t *testing.T) {
-	nodeLabels = map[string]string{"zone":"z34"}
+	nodeLabels = map[string]string{"zone": "z34"}
 	p, input, _ := test.NewPipelineMock(test.NewActionPluginStaticInfo(MultilineActionFactory, config(), pipeline.MatchModeAnd, nil, false))
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
@@ -185,7 +185,6 @@ func TestJoin(t *testing.T) {
 				index = i
 				break
 			}
-
 		}
 		assert.Equal(t, len(logs), len(offsets), "lengths isn't equal")
 		assert.True(t, index != -1, "log %s isn't found", log)
@@ -197,7 +196,6 @@ func TestJoin(t *testing.T) {
 
 		logs = logs[:len(logs)-1]
 		offsets = offsets[:len(offsets)-1]
-
 	}
 
 	check(outEvents[0].Root.Dig("log").AsEscapedString(), outEvents[0].Offset)

@@ -1,4 +1,5 @@
 VERSION ?= 0.1.15
+UPSTREAM_BRANCH ?= origin/master
 
 .PHONY: prepare
 prepare:
@@ -50,3 +51,8 @@ push-images-latest: prepare push-latest-linux-amd64
 
 .PHONY: push-images-all
 push-images-all: push-images-version push-images-latest
+
+.PHONY: lint
+lint:
+	# installation: https://golangci-lint.run/usage/install/#local-installation
+	golangci-lint run --new-from-rev=${UPSTREAM_BRANCH}

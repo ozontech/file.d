@@ -31,12 +31,12 @@ var (
 	fileName = ""
 )
 
-type mockClient struct {
-}
+type mockClient struct{}
 
 func newMockClient() objectStoreClient {
 	return mockClient{}
 }
+
 func (m mockClient) BucketExists(bucketName string) (bool, error) {
 	return true, nil
 }
@@ -50,7 +50,7 @@ func (m mockClient) FPutObject(bucketName, objectName, filePath string, opts min
 		}
 	}
 	fileName = fmt.Sprintf("%s/%s", bucketName, "mockLog.txt")
-	file, err := os.OpenFile(fileName, os.O_CREATE|os.O_APPEND|os.O_RDWR, os.FileMode(0777))
+	file, err := os.OpenFile(fileName, os.O_CREATE|os.O_APPEND|os.O_RDWR, os.FileMode(0o777))
 	if err != nil {
 		logger.Panicf("could not open or create file: %s, error: %s", fileName, err.Error())
 	}
@@ -191,7 +191,7 @@ func newPipeline(t *testing.T, configOutput *Config) *pipeline.Pipeline {
 		},
 	})
 
-	//output plugin
+	// output plugin
 	anyPlugin, _ = Factory()
 	outputPlugin := anyPlugin.(*Plugin)
 	p.SetOutput(&pipeline.OutputPluginInfo{
@@ -209,9 +209,7 @@ func newPipeline(t *testing.T, configOutput *Config) *pipeline.Pipeline {
 
 func TestStartPanic(t *testing.T) {
 	test.ClearDir(t, dir)
-	fileConfig := file.Config{
-
-	}
+	fileConfig := file.Config{}
 	config := &Config{
 		FileConfig:      fileConfig,
 		CompressionType: "zip",
@@ -265,7 +263,7 @@ func (m mockClientWIthSomeFails) FPutObject(bucketName, objectName, filePath str
 			}
 		}
 		fileName = fmt.Sprintf("%s/%s", bucketName, "mockLog.txt")
-		file, err := os.OpenFile(fileName, os.O_CREATE|os.O_APPEND|os.O_RDWR, os.FileMode(0777))
+		file, err := os.OpenFile(fileName, os.O_CREATE|os.O_APPEND|os.O_RDWR, os.FileMode(0o777))
 		if err != nil {
 			logger.Panicf("could not open or create file: %s, error: %s", fileName, err.Error())
 		}
@@ -423,7 +421,6 @@ func TestStartWithSendProblems(t *testing.T) {
 		lineCounter++
 	}
 	assert.GreaterOrEqual(t, lineCounter, 3)
-
 }
 
 func noSentToS3(t *testing.T) {

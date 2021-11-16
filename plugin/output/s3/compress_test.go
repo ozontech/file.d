@@ -26,8 +26,7 @@ func TestGetName(t *testing.T) {
 	}
 }
 
-type simpleWriter struct {
-}
+type simpleWriter struct{}
 
 func (w simpleWriter) Write(p []byte) (n int, err error) {
 	if string(p) == logStr {
@@ -36,9 +35,7 @@ func (w simpleWriter) Write(p []byte) (n int, err error) {
 	return -1, nil
 }
 
-var (
-	logStr = "I am a log line in a file\n"
-)
+var logStr = "I am a log line in a file\n"
 
 func TestCompress(t *testing.T) {
 	dir := "tests"
@@ -57,7 +54,7 @@ func TestCompress(t *testing.T) {
 
 	// create files and write data
 	for _, v := range testsCases {
-		file, err := os.OpenFile(v, os.O_CREATE|os.O_APPEND|os.O_RDWR, os.FileMode(0666))
+		file, err := os.OpenFile(v, os.O_CREATE|os.O_APPEND|os.O_RDWR, os.FileMode(0o666))
 		assert.NoError(t, err)
 		_, err = file.WriteString(logStr)
 		assert.NoError(t, err)

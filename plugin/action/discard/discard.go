@@ -20,11 +20,9 @@ pipelines:
     ...
 ```
 }*/
-type Plugin struct {
-}
+type Plugin struct{}
 
-type Config struct {
-}
+type Config struct{}
 
 func init() {
 	fd.DefaultPluginRegistry.RegisterAction(&pipeline.PluginStaticInfo{
@@ -41,7 +39,6 @@ func (p *Plugin) Start(_ pipeline.AnyConfig, _ *pipeline.ActionPluginParams) {
 }
 
 func (p *Plugin) Stop() {
-
 }
 
 func (p *Plugin) Do(_ *pipeline.Event) pipeline.ActionResult {

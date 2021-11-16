@@ -30,7 +30,7 @@ func TestAppendEvent(t *testing.T) {
 
 	p.time = "6666-66-66"
 	root, _ := insaneJSON.DecodeBytes([]byte(`{"field_a":"AAAA","field_b":"BBBB"}`))
-	result := p.appendEvent(nil, &pipeline.Event{Root: root,})
+	result := p.appendEvent(nil, &pipeline.Event{Root: root})
 
 	expected := fmt.Sprintf("%s\n%s\n", `{"index":{"_index":"test-6666-66-66-index-AAAA-BBBB"}}`, `{"field_a":"AAAA","field_b":"BBBB"}`)
 	assert.Equal(t, expected, string(result), "wrong request content")
