@@ -151,7 +151,7 @@ created by example.com/sre/filed/pipeline.(*processor).start
 Isn't panic
 `
 
-func TestJoinJoin(t *testing.T) {
+func TestSimpleJoin(t *testing.T) {
 	format := `{"log":"%s\n"}`
 	content := strings.ReplaceAll(content, "# ===next===\n", "")
 	lines := make([]string, 0, 0)
