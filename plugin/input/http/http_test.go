@@ -3,7 +3,6 @@ package http
 import (
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/ozonru/file.d/pipeline"
 	"github.com/ozonru/file.d/test"
@@ -109,11 +108,8 @@ func TestProcessChunksContinue(t *testing.T) {
 	eventBuff := []byte(`{"a":`)
 	eventBuff = input.processChunk(0, chunk, eventBuff)
 
-	// wait for processors to start.
-	time.Sleep(30 * time.Millisecond)
-
-	p.Stop()
 	wg.Wait()
+	p.Stop()
 
 	assert.Equal(t, 3, len(outEvents), "wrong out events count")
 	assert.Equal(t, `{"a":"1"}`, outEvents[0], "wrong event")

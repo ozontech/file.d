@@ -114,8 +114,8 @@ func TestSizeThrottle(t *testing.T) {
 	iterations := 5
 
 	totalBuckets := iterations + 1
-	test := limitA/(len(formats[0])+dateLen-2) + limitB/(len(formats[1])+dateLen-2) + defaultLimit/(len(formats[2])+dateLen-2)
-	eventsTotal := totalBuckets * test
+	eventsPerBucket := limitA/(len(formats[0])+dateLen-2) + limitB/(len(formats[1])+dateLen-2) + defaultLimit/(len(formats[2])+dateLen-2)
+	eventsTotal := totalBuckets * eventsPerBucket
 
 	config := &Config{
 		Rules: []RuleConfig{

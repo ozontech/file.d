@@ -25,8 +25,8 @@ But update events don't work with symlinks, so watcher also periodically manuall
 > It isn't a `file.d` issue. The data may have been written just before the file truncation. In this case, you may miss to read some events.
 > If you care about the delivery, you should also know that the `logrotate` manual clearly states that copy/truncate may cause data loss even on a rotating stage.
 > So use copy/truncate or similar actions only if your data isn't critical.
-> In order to reduce potential harm of truncation, you can turn on notifications of file modifications.
-> By default the plugin is notified only on file creations. Note that following for modifications is more CPU intensive.
+> In order to reduce potential harm of truncation, you can turn on notifications of file changes.
+> By default the plugin is notified only on file creations. Note that following for changes is more CPU intensive.
 
 
 **Reading docker container log files:**

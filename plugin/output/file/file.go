@@ -121,7 +121,6 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.idx = p.getStartIdx()
 	p.createNew()
 	p.setNextSealUpTime()
-	logger.Errorf("time setted")
 
 	if p.file == nil {
 		p.logger.Panic("file struct is nil!")

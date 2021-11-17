@@ -112,7 +112,7 @@ func NewJobProvider(config *Config, controller pipeline.InputPluginController, l
 		config.FilenamePattern,
 		config.DirPattern,
 		jp.processNotification,
-		config.ShouldWatchModifications,
+		config.ShouldWatchChanges,
 		logger,
 	)
 
