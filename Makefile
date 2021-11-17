@@ -25,6 +25,7 @@ bench-file:
 
 .PHONY: gen-doc
 gen-doc:
+	go install github.com/vitkovskii/insane-doc@latest
 	insane-doc
 
 .PHONY: profile-file

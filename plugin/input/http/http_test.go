@@ -108,8 +108,8 @@ func TestProcessChunksContinue(t *testing.T) {
 	eventBuff := []byte(`{"a":`)
 	eventBuff = input.processChunk(0, chunk, eventBuff)
 
-	p.Stop()
 	wg.Wait()
+	p.Stop()
 
 	assert.Equal(t, 3, len(outEvents), "wrong out events count")
 	assert.Equal(t, `{"a":"1"}`, outEvents[0], "wrong event")

@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// The file contains helpers function for testing file base output plugins
+// The file_base contains helpers function for testing file base output plugins
 // output/file and output/s3
 
 type Msg []byte
@@ -28,7 +28,7 @@ func SendPack(t *testing.T, p *pipeline.Pipeline, msgs []Msg) int64 {
 func ClearDir(t *testing.T, dir string) {
 	t.Helper()
 	if err := os.RemoveAll(dir); err != nil {
-		t.Fatalf("coudl not delete dirs and files adter tests, error: %s", err.Error())
+		t.Fatalf("could not delete dirs and files after tests, error: %s", err.Error())
 	}
 }
 

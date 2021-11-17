@@ -37,4 +37,4 @@ jobs:
       with:
         only-new-issues: true
         # golangci-lint command line arguments
-        # args: # optional, default is 
+        args: --timeout=5m0s
