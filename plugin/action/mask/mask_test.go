@@ -13,64 +13,152 @@ import (
 	"go.uber.org/zap"
 )
 
-func MustString(s *string, _ bool) string {
-	return *s
+var (
+	kDefaultIDRegExp     = `[А-Я][а-я]{1,64}(\-[А-Я][а-я]{1,64})?\s+[А-Я][а-я]{1,64}(\.)?\s+[А-Я][а-я]{1,64}`
+	kDefaultCardRegExp   = `\b(\d{1,4})\D?(\d{1,4})\D?(\d{1,4})\D?(\d{1,4})\b`
+	kDefaultSubstitution = byte('*')
+)
+
+func MustString(s []byte, _ bool) string {
+	return string(s)
+
 }
 
+//nolint:funlen
 func TestMaskFunctions(t *testing.T) {
 	logger.Instance = zap.NewNop().Sugar()
 	suits := []struct {
-		name         string
-		comment      string
-		input        string
-		inputRe      string
-		substitution string
-		expected     string
+		name     string
+		comment  string
+		input    []byte
+		masks    []Mask
+		expected string
 	}{
 		{
-			name:         "simple test",
-			comment:      "all digits should be replaced",
-			input:        "01.01.2021",
-			inputRe:      `\d`,
-			substitution: `*`,
-			expected:     "**.**.****",
+			name:     "simple test",
+			comment:  "all digits should be replaced",
+			input:    []byte("12.34.5678"),
+			masks:    []Mask{{`\d`, kDefaultSubstitution, []int{}}},
+			expected: "**.**.****",
 		},
 		{
-			name:         "re not matches input string",
-			comment:      "no one symbol should be replaced",
-			input:        "ab.cd.efgh",
-			inputRe:      `\d`,
-			substitution: `*`,
-			expected:     "ab.cd.efgh",
+			name:     "simple test with empty groups",
+			comment:  "all digits should be replaced. empty groups equal group with group '0'",
+			input:    []byte("12.34.5678"),
+			masks:    []Mask{{`\d`, kDefaultSubstitution, []int{0}}},
+			expected: "**.**.****",
 		},
 		{
-			name:         "card number",
-			comment:      "hide card number",
-			input:        "1234-2345-4567-3322",
-			inputRe:      `\b\d{1,4}\D?\d{1,4}\D?\d{1,4}\D?\d{1,4}\b`,
-			substitution: "****-****-****-****",
-			expected:     "****-****-****-****",
+			name:     "re not matches input string",
+			comment:  "no one symbol should be replaced",
+			input:    []byte("ab.cd.efgh"),
+			masks:    []Mask{{`\d`, kDefaultSubstitution, []int{0}}},
+			expected: "ab.cd.efgh",
 		},
 		{
-			name:         "ID",
-			comment:      "hide ID",
-			input:        "Иванов Иван Иванович",
-			inputRe:      `^[А-Я][а-я]{1,64}(\-[А-Я][а-я]{1,64})?\s+[А-Я][а-я]{1,64}(\.)?\s+[А-Я][а-я]{1,64}`,
-			substitution: "<Фамилия Имя Отчество>",
-			expected:     "<Фамилия Имя Отчество>",
+			name:     "simple substitution",
+			comment:  "value replaced only in first group",
+			input:    []byte(`{"field1":"-ab-axxb-"}`),
+			masks:    []Mask{{`a(x*)b`, kDefaultSubstitution, []int{1}}},
+			expected: `{"field1":"-ab-a**b-"}`,
+		},
+		{
+			name:     "simple substitution",
+			comment:  "all value replaced",
+			input:    []byte(`{"field1":"-ab-axxb-"}`),
+			masks:    []Mask{{`a(x*)b`, kDefaultSubstitution, []int{0}}},
+			expected: `{"field1":"-**-****-"}`,
+		},
+		{
+			name:    "many substitutions",
+			comment: "value replaced in first and in all groups",
+			input:   []byte(`{"field":"-ab-axxb-17-ab-axxb-ab"}`),
+			masks: []Mask{{`a(x*)b`, kDefaultSubstitution, []int{0}},
+				{`\d`, kDefaultSubstitution, []int{0}}},
+			expected: `{"field":"-**-****-**-**-****-**"}`,
+		},
+		{
+			name:     "many different length substitutions ",
+			comment:  "value replaced",
+			input:    []byte(`{"field":"-axxxxxxxxb-axb-17-ab-axxxxxxxb-ab"}`),
+			masks:    []Mask{{`a(x*)b`, kDefaultSubstitution, []int{1}}, {`\d`, kDefaultSubstitution, []int{0}}},
+			expected: `{"field":"-a********b-a*b-**-ab-a*******b-ab"}`,
+		},
+		{
+			name:     "card number",
+			comment:  "hide card number",
+			input:    []byte("1234-2345-4567-3322"),
+			masks:    []Mask{{kDefaultCardRegExp, kDefaultSubstitution, []int{1, 2, 3, 4}}},
+			expected: "****-****-****-****",
+		},
+		{
+			name:     "card number",
+			comment:  "hide card number",
+			input:    []byte("1234-2345-4567-3322"),
+			masks:    []Mask{{kDefaultCardRegExp, kDefaultSubstitution, []int{1, 2, 3}}},
+			expected: "****-****-****-3322",
+		},
+		{
+			name:    "ID",
+			comment: "hide ID",
+			input:   []byte("abbc Иванов Иван Иванович dss"),
+			masks: []Mask{
+				{
+					kDefaultIDRegExp,
+					kDefaultSubstitution,
+					[]int{0},
+				},
+			},
+			expected: "abbc ******************** dss",
+		},
+		{
+			name:    "ID",
+			comment: "hide ID",
+			input:   []byte("Иванов Иван Иванович"),
+			masks: []Mask{
+				{
+					kDefaultIDRegExp,
+					kDefaultSubstitution,
+					[]int{0},
+				},
+			},
+			expected: "********************",
+		},
+		{
+			name:     "ID with text",
+			input:    []byte("Иванов Иван Иванович встал не с той ноги"),
+			expected: "******************** встал не с той ноги",
+			masks: []Mask{
+				{
+					kDefaultIDRegExp,
+					kDefaultSubstitution,
+					[]int{0},
+				},
+			},
+			comment: "Only ID replaced",
+		},
+		{
+			name:     "ID with text",
+			input:    []byte("сегодня Иванов Иван Иванович встал не с той ноги"),
+			expected: "сегодня ******************** встал не с той ноги",
+			masks: []Mask{
+				{
+					kDefaultIDRegExp,
+					kDefaultSubstitution,
+					[]int{0},
+				},
+			},
+			comment: "Only ID replaced",
 		},
 	}
 
 	for _, s := range suits {
 		t.Run(s.name, func(t *testing.T) {
-			config := Config{[]Mask{{s.inputRe, s.substitution}}}
+			config := Config{s.masks}
 			sut := Plugin{config: &config}
-			params := pipeline.ActionPluginParams{}
-			params.Logger = logger.Instance
+			params := createActionPluginParams()
 			sut.Start(&config, &params)
-			assert.Equal(t, s.expected, MustString(sut.maskAll(s.input)), s.comment)
-			assert.Equal(t, s.expected, MustString(sut.maskIfMatched(s.input)), s.comment)
-			assert.Equal(t, s.expected, MustString(sut.maskByIndex(s.input)), s.comment)
+			assert.Equal(t, s.expected, MustString(sut.mask(s.input)), s.comment)
 		})
 	}
 }
@@ -93,7 +181,7 @@ func TestApllyForStrings(t *testing.T) {
 			name:     "json without strings",
 			comment:  "empty slice as result",
 			input:    `{"name1":1}`,
-			expected: []string{},
+			expected: []string{"1"},
 		},
 		{
 			name:    "big json with ints and nulls",
@@ -106,7 +194,7 @@ func TestApllyForStrings(t *testing.T) {
         "width": 500,
         "height": 500
     },
-    "image": { 
+    "image": {
         "src": "Images/Sun.png",
         "name": "sun1",
         "hOffset": 250,
@@ -128,32 +216,35 @@ func TestApllyForStrings(t *testing.T) {
 			expected: []string{"on",
 				"Sample Konfabulator Widget",
 				"main_window",
+				"500",
+				"500",
 				"Images/Sun.png",
 				"sun1",
+				"250",
+				"250",
 				"center",
 				"Click Here",
+				"36",
+				"null",
 				"bold",
 				"text1",
+				"250",
+				"100",
 				"center",
 				"sun1.opacity = (sun1.opacity / 100) * 90;"},
 		},
 	}
 
-	var slice []string
-
-	appender := func(in string) (*string, bool) {
-		slice = append(slice, in)
-		return &in, true
-	}
+	// var slice []string
 
 	for _, s := range suits {
 		t.Run(s.name, func(t *testing.T) {
 			root, err := insaneJSON.DecodeString(s.input)
 			assert.NoError(t, err, "error on parsing test json")
-			node := root.Node
-			applyForStrings(node, appender)
-			assert.Equal(t, s.expected, slice, s.comment)
-			slice = slice[:0]
+			nodes := getValueNodeList(root.Node)
+			for i, _ := range nodes {
+				assert.Equal(t, s.expected[i], nodes[i].AsString(), s.comment)
+			}
 		})
 	}
 }
@@ -167,24 +258,6 @@ func TestRemask(t *testing.T) {
 		comment  string
 	}{
 		{
-			name:     "simple substitution",
-			input:    `{"field1":"-ab-axxb-"}`,
-			expected: `{"field1":"-TEST-TEST-"}`,
-			comment:  "only value replaced",
-		},
-		{
-			name:     "simple substitution",
-			input:    `{"field1":"-ab-axxb-17-ab-axxb-ab"}`,
-			expected: `{"field1":"-TEST-TEST-digitdigit-TEST-TEST-TEST"}`,
-			comment:  "only value replaced",
-		},
-		{
-			name:     "simple substitution",
-			input:    `{"field1":"-axxxxxxxxb-axb-17-ab-axxxxxxxb-ab"}`,
-			expected: `{"field1":"-TEST-TEST-digitdigit-TEST-TEST-TEST"}`,
-			comment:  "only value replaced",
-		},
-		{
 			name:     "card number substitution",
 			input:    `{"field1":"4445-2222-3333-4444"}`,
 			expected: `{"field1":"****-****-****-****"}`,
@@ -193,49 +266,36 @@ func TestRemask(t *testing.T) {
 		{
 			name:     "ID",
 			input:    `{"field1":"Иванов Иван Иванович"}`,
-			expected: `{"field1":"<Фамилия Имя Отчество>"}`,
+			expected: `{"field1":"********************"}`,
 			comment:  "ID replaced",
 		},
 		{
 			name:     "ID with text",
 			input:    `{"field1":"Иванов Иван Иванович встал не с той ноги"}`,
-			expected: `{"field1":"<Фамилия Имя Отчество> встал не с той ноги"}`,
+			expected: `{"field1":"******************** встал не с той ноги"}`,
 			comment:  "Only ID replaced",
 		},
 		{
 			name:     "ID&text&card",
 			input:    `{"field1":"Иванов Иван Иванович c картой 4445-2222-3333-4444 встал не с той ноги"}`,
-			expected: `{"field1":"<Фамилия Имя Отчество> c картой ****-****-****-**** встал не с той ноги"}`,
+			expected: `{"field1":"******************** c картой ****-****-****-**** встал не с той ноги"}`,
 			comment:  "only ID & card replaced",
 		},
 		{
 			name:     "ID&text&card",
 			input:    `{"field1":"Иванов Иван Иванович c картами 4445-2222-3333-4444 и 4445-2222-3333-4444"}`,
-			expected: `{"field1":"<Фамилия Имя Отчество> c картами ****-****-****-**** и ****-****-****-****"}`,
+			expected: `{"field1":"******************** c картами ****-****-****-**** и ****-****-****-****"}`,
 			comment:  "ID replaced, and card replaced twice",
+		},
+		{
+			name:     "ID&text[cyr/en]&card",
+			input:    `{"field1":"yesterday Иванов Иван Иванович pay by card номер 4445-2222-3333-4444"}`,
+			expected: `{"field1":"yesterday ******************** pay by card номер ****-****-****-****"}`,
+			comment:  "ID replaced, and card replaced",
 		},
 	}
 
-	config := Config{
-		Masks: []Mask{
-			{
-				Re:           `a(x*)b`,
-				Substitution: "TEST",
-			},
-			{
-				Re:           `\b\d{1,4}\D?\d{1,4}\D?\d{1,4}\D?\d{1,4}\b`,
-				Substitution: "****-****-****-****",
-			},
-			{
-				Re:           `^[А-Я][а-я]{1,64}(\-[А-Я][а-я]{1,64})?\s+[А-Я][а-я]{1,64}(\.)?\s+[А-Я][а-я]{1,64}`,
-				Substitution: "<Фамилия Имя Отчество>",
-			},
-			{
-				Re:           `\d`,
-				Substitution: "digit",
-			},
-		},
-	}
+	config := createConfig()
 
 	for _, s := range suits {
 		t.Run(s.name, func(t *testing.T) {
@@ -264,69 +324,77 @@ func TestRemask(t *testing.T) {
 	}
 }
 
-func createBenchInput() (string, Config) {
+func createConfig() Config {
 	config := Config{
 		Masks: []Mask{
 			{
 				Re:           `a(x*)b`,
-				Substitution: "TEST",
+				Substitution: kDefaultSubstitution,
+				Groups:       []int{0},
 			},
 			{
-				Re:           `\b\d{1,4}\D?\d{1,4}\D?\d{1,4}\D?\d{1,4}\b`,
-				Substitution: "****-****-****-****",
+				Re:           kDefaultCardRegExp,
+				Substitution: kDefaultSubstitution,
+				Groups:       []int{1, 2, 3, 4},
 			},
 			{
-				Re:           `^[А-Я][а-я]{1,64}(\-[А-Я][а-я]{1,64})?\s+[А-Я][а-я]{1,64}(\.)?\s+[А-Я][а-я]{1,64}`,
-				Substitution: "<Фамилия Имя Отчество>",
+				Re:           kDefaultIDRegExp,
+				Substitution: kDefaultSubstitution,
+				Groups:       []int{0},
 			},
 		},
 	}
+	return config
+}
+
+func createBenchInputString() []byte {
 	matchable := `{"field1":"Иванов Иван Иванович c картой 4445-2222-3333-4444 встал не с той ноги"}`
 	unmatchable := `{"field1":"Просто строка которая не заменяется"}`
 	matchableCoeff := 0.1 // percentage of matchable input
-	n := 500
-	c := (int)((float64)(n) * matchableCoeff)
+	totalCount := 50
+	matchableCount := (int)((float64)(totalCount) * matchableCoeff)
 	builder := strings.Builder{}
-	for i := 0; i < n; i++ {
-		if i <= c {
+	for i := 0; i < totalCount; i++ {
+		if i <= matchableCount {
 			builder.WriteString(matchable)
 		} else {
 			builder.WriteString(unmatchable)
 		}
 	}
-	return builder.String(), config
+	return []byte(builder.String())
 }
 
-func BenchmarkMaskAll(b *testing.B) {
+func createPipelineSettings() *pipeline.Settings {
+	var s pipeline.Settings
+	s.AvgLogSize = 2048
+	return &s
+}
+
+func createPluginDefaultParams() *pipeline.PluginDefaultParams {
+	var p pipeline.PluginDefaultParams
+	p.PipelineSettings = createPipelineSettings()
+	return &p
+}
+
+func createActionPluginParams() pipeline.ActionPluginParams {
 	logger.Instance = zap.NewNop().Sugar()
-	input, config := createBenchInput()
-	p := Plugin{&config, nil, nil}
 	params := pipeline.ActionPluginParams{}
+	params.PluginDefaultParams = createPluginDefaultParams()
 	params.Logger = logger.Instance
-	p.Start(&config, &params)
-	for i := 0; i < b.N; i++ {
-		p.maskAll(input)
-	}
+	return params
 }
 
-func BenchmarkMaskIfMatched(b *testing.B) {
-	input, config := createBenchInput()
-	p := Plugin{&config, nil, logger.Instance}
-	params := pipeline.ActionPluginParams{}
-	params.Logger = logger.Instance
-	p.Start(&config, &params)
-	for i := 0; i < b.N; i++ {
-		p.maskIfMatched(input)
-	}
+func createPlugin(config *Config) Plugin {
+	p := Plugin{config, nil, nil, []byte{}}
+	return p
 }
-
-func BenchmarkMaskByIndex(b *testing.B) {
-	input, config := createBenchInput()
-	p := Plugin{&config, nil, logger.Instance}
-	params := pipeline.ActionPluginParams{}
-	params.Logger = logger.Instance
+func BenchmarkMask(b *testing.B) {
+	config := createConfig()
+	params := createActionPluginParams()
+	input := createBenchInputString()
+	p := createPlugin(&config)
 	p.Start(&config, &params)
 	for i := 0; i < b.N; i++ {
-		p.maskByIndex(input)
+		p.mask(input)
 	}
 }

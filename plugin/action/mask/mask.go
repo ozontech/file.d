@@ -2,6 +2,7 @@ package mask
 
 import (
 	"regexp"
+	"unicode/utf8"
 
 	"github.com/ozonru/file.d/fd"
 	"github.com/ozonru/file.d/pipeline"
@@ -38,6 +39,7 @@ type Plugin struct {
 	config *Config
 	re     []*regexp.Regexp
 	logger *zap.SugaredLogger
+	buff   []byte
 }
 
 //! config-params
@@ -60,7 +62,9 @@ type Mask struct {
 	//> @3@4@5@6
 	//>
 	//>	Substitution mask
-	Substitution string `json:"substitution" default:"" required:"true"`
+	Substitution byte `json:"substitution" default:"*"`
+
+	Groups []int `json:"groups"`
 }
 
 func init() {
@@ -79,6 +83,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 		p.logger = params.Logger
 	}
 	p.config = config.(*Config)
+	p.buff = make([]byte, 0, params.PipelineSettings.AvgLogSize)
 	p.re = make([]*regexp.Regexp, len(p.config.Masks))
 	for i, mask := range p.config.Masks {
 		p.logger.Infof("compiling regexp %s/ - %s", mask.Re, mask.Substitution)
@@ -86,73 +91,132 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 	}
 }
 
-func (p *Plugin) Stop() {
+func (p Plugin) Stop() {
 }
 
-func (p *Plugin) maskByIndex(value string) (*string, bool) {
-	isMasked := false
-	l := len(value)
-	offset := 0
-	for i, mask := range p.config.Masks {
-		offset = 0
-		matches := p.re[i].FindAllStringIndex(value, -1)
-		for _, match := range matches {
-			value = value[:match[0]+offset] + mask.Substitution + value[match[1]+offset:]
-			isMasked = true
-			offset += len(value) - l
-			l = len(value)
-			p.logger.Infof("mask by index %s", mask.Substitution)
+type section struct {
+	begin, end int
+}
+
+func find(slice []int, val int) bool {
+	for _, item := range slice {
+		if item == val {
+			return true
 		}
 	}
-	return &value, isMasked
+	return false
 }
 
-func (p *Plugin) maskIfMatched(value string) (*string, bool) {
-	isMasked := false
-	for i, mask := range p.config.Masks {
-		if p.re[i].MatchString(value) {
-			isMasked = true
-			value = p.re[i].ReplaceAllString(value, mask.Substitution)
-			p.logger.Infof("mask %s", mask.Substitution)
+func transformMatchesToSections(input [][]int, hideGroups []int) []section {
+	if len(hideGroups) == 0 {
+		hideGroups = append(hideGroups, 0)
+	}
+	result := make([]section, 0, len(input))
+	for _, matches := range input {
+		for _, group := range hideGroups {
+			if group*2+1 >= len(matches) {
+				continue
+			}
+			result = append(result, section{matches[group*2], matches[group*2+1]})
 		}
 	}
-	return &value, isMasked
+	return result
 }
 
-func (p *Plugin) maskAll(value string) (*string, bool) {
-	for i := range p.config.Masks {
-		value = p.re[i].ReplaceAllString(value, p.config.Masks[i].Substitution)
+func (p *Plugin) appendMaskToBuffer(s section, source []byte, ch byte) (offset int) {
+	runeCounter := utf8.RuneCount(source[s.begin:s.end])
+	for j := 0; j < runeCounter; j++ {
+		if s.begin+j >= len(p.buff) {
+			p.buff = append(p.buff, ch)
+		} else {
+			p.buff[s.begin+j] = ch
+		}
 	}
-	return &value, true
+	offset = len(source[s.begin:s.end]) - runeCounter
+	return
 }
 
-func applyForStrings(node *insaneJSON.Node, applyFn func(string) (*string, bool)) {
+func (p *Plugin) maskSection(s section, source []byte, ch byte) int {
+	if len(p.buff) < s.begin {
+		p.buff = append(p.buff, source[len(p.buff):s.begin]...)
+	}
+
+	return p.appendMaskToBuffer(s, source, ch)
+}
+
+func (p *Plugin) mask(value []byte) ([]byte, bool) {
+	isMasked := false
+
+	for i, mask := range p.config.Masks {
+		matches := p.re[i].FindAllSubmatchIndex(value, -1)
+		if len(matches) == 0 {
+			continue
+		}
+		p.buff = p.buff[:0]
+
+		hideSections := transformMatchesToSections(matches, mask.Groups)
+
+		offset := 0
+		for _, section := range hideSections {
+			offset += p.maskSection(section, value, mask.Substitution)
+			isMasked = true
+		}
+
+		if len(p.buff)+offset < len(value) {
+			p.buff = append(p.buff, value[len(p.buff)+offset:]...)
+		}
+
+		// if offset != 0 {
+		value = p.buff[:]
+
+		// }
+	}
+
+	if len(p.buff) == 0 {
+		return value, false
+	}
+
+	return p.buff, isMasked
+}
+
+func collectValueNodes(currentNode *insaneJSON.Node, valueNodes *[]*insaneJSON.Node) {
 	switch {
-	case node.IsField():
-		applyForStrings(node.AsFieldValue(), applyFn)
-	case node.IsArray():
-		for _, n := range node.AsArray() {
-			applyForStrings(n, applyFn)
+	case currentNode.IsField():
+		collectValueNodes(currentNode.AsFieldValue(), valueNodes)
+	case currentNode.IsArray():
+		for _, n := range currentNode.AsArray() {
+			collectValueNodes(n, valueNodes)
 		}
-	case node.IsObject():
-		for _, n := range node.AsFields() {
-			applyForStrings(n, applyFn)
+	case currentNode.IsObject():
+		for _, n := range currentNode.AsFields() {
+			collectValueNodes(n, valueNodes)
 		}
 	default:
-		if node.IsString() {
-			str, isMasked := applyFn(node.AsString())
-			if isMasked {
-				node.MutateToString(*str)
-			}
-		}
+		*valueNodes = append(*valueNodes, currentNode)
 	}
 }
 
-func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
+func getValueNodeList(rootNode *insaneJSON.Node) []*insaneJSON.Node {
+	var nodes []*insaneJSON.Node
+	collectValueNodes(rootNode, &nodes)
+	return nodes
+}
+
+func (p Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	node := event.Root.Node
 	if node == nil {
 		return pipeline.ActionPass
 	}
-	applyForStrings(node, p.maskByIndex)
+
+	nodes := getValueNodeList(node)
+
+	for _, v := range nodes {
+		data := v.AsBytes()
+		res, isMasked := p.mask(data)
+		if isMasked {
+			v.MutateToBytes(res)
+		}
+	}
+
 	return pipeline.ActionPass
 }
