@@ -14,6 +14,8 @@ But update events don't work with symlinks, so watcher also periodically manuall
 > It isn't a `file.d` issue. The data may have been written just before the file truncation. In this case, you may miss to read some events.
 > If you care about the delivery, you should also know that the `logrotate` manual clearly states that copy/truncate may cause data loss even on a rotating stage.
 > So use copy/truncate or similar actions only if your data isn't critical.
+> In order to reduce potential harm of truncation, you can turn on notifications of file changes.
+> By default the plugin is notified only on file creations. Note that following for changes is more CPU intensive.
 
 
 **Reading docker container log files:**
@@ -106,7 +108,7 @@ Each worker:
 
 <br>
 
-**`report_interval`** *`cfg.Duration`* *`default=10s`* 
+**`report_interval`** *`cfg.Duration`* *`default=5s`* 
 
 It defines how often to report statistical information to stdout
 
@@ -121,6 +123,12 @@ For now maintenance consists of two stages:
 
 Symlinks maintenance detects if underlying file of symlink is changed.
 Job maintenance `fstat` tracked files to detect if new portion of data have been written to the file. If job is in `done` state when it releases and reopens file descriptor to allow third party software delete the file.
+
+<br>
+
+**`should_watch_file_changes`** *`bool`* *`default=false`* 
+
+It turns on watching for file modifications. Turning it on cause more CPU work, but it is more probable to catch file truncation
 
 <br>
 

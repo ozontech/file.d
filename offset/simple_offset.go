@@ -7,7 +7,7 @@ import (
 )
 
 type yamlValue struct {
-	value  interface{}
+	value interface{}
 }
 
 func (o *yamlValue) Load(r io.Reader) error {

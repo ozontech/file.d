@@ -10,7 +10,7 @@ import (
 var Instance = zap.New(
 	zapcore.NewCore(
 		zapcore.NewConsoleEncoder(zapcore.EncoderConfig{
-			//TimeKey:        "ts",
+			// TimeKey:        "ts",
 			LevelKey:       "level",
 			NameKey:        "logger",
 			CallerKey:      "caller",
@@ -41,17 +41,14 @@ func Warn(args ...interface{}) {
 
 func Error(args ...interface{}) {
 	Instance.Error(args...)
-
 }
 
 func Panic(args ...interface{}) {
 	Instance.Panic(args...)
-
 }
 
 func Fatal(args ...interface{}) {
 	Instance.Fatal(args...)
-
 }
 
 func Debugf(template string, args ...interface{}) {

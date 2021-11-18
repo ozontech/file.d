@@ -142,7 +142,7 @@ func TestDiscardRegex(t *testing.T) {
 }
 
 func TestDiscardMatchInvert(t *testing.T) {
-	//only this value should appear
+	// only this value should appear
 	conds := pipeline.MatchConditions{
 		pipeline.MatchCondition{
 			Field: "field2",

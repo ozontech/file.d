@@ -20,7 +20,7 @@ pipelines:
     input:
       type: k8s
       offsets_file: /data/offsets.yaml
-      file_config:                        // customize file plugin 
+      file_config:                        // customize file plugin
         persistence_mode: sync
         read_buffer_size: 2048
 ```

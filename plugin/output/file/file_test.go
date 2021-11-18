@@ -11,8 +11,10 @@ import (
 	"time"
 
 	"github.com/ozonru/file.d/cfg"
+	"github.com/ozonru/file.d/logger"
 	"github.com/ozonru/file.d/test"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 const (
@@ -83,7 +85,6 @@ func TestGetStartIdx(t *testing.T) {
 }
 
 func TestSealUpHasContent(t *testing.T) {
-	FileSealUpInterval = 200 * time.Millisecond
 	cfg := Config{
 		TargetFile:         targetFile,
 		RetentionInterval_: 200 * time.Millisecond,
@@ -138,7 +139,6 @@ func TestSealUpHasContent(t *testing.T) {
 }
 
 func TestSealUpNoContent(t *testing.T) {
-	FileSealUpInterval = 200 * time.Millisecond
 	cfg := Config{
 		TargetFile:         targetFile,
 		RetentionInterval_: 200 * time.Millisecond,
@@ -183,9 +183,8 @@ func TestSealUpNoContent(t *testing.T) {
 
 func TestStart(t *testing.T) {
 	if testing.Short() {
-		t.Skip("skipping testing in short mode")
+		t.Skip("skip long tests in short mode")
 	}
-
 	tests := struct {
 		firstPack  []test.Msg
 		secondPack []test.Msg
@@ -211,16 +210,15 @@ func TestStart(t *testing.T) {
 	defer test.ClearDir(t, dir)
 	config := &Config{
 		TargetFile:        targetFile,
-		RetentionInterval: "300ms",
+		RetentionInterval: "2s",
 		Layout:            "01",
 		BatchFlushTimeout: "100ms",
 
 		FileMode_: 0o666,
 	}
-	FileSealUpInterval = 200 * time.Millisecond
 
-	writeFileSleep := 100*time.Millisecond + 100*time.Millisecond
-	sealUpFileSleep := 2*FileSealUpInterval + 500*time.Millisecond
+	writeFileSleep := 2 * 100 * time.Millisecond
+	sealUpFileSleep := 2 * time.Second
 	generalPattern := fmt.Sprintf("%s/*%s", dir, extension)
 	logFilePattern := fmt.Sprintf("%s/*%s", path.Dir(targetFile), path.Base(targetFile))
 	currentLogFileSubstr := fmt.Sprintf("_%s", path.Base(targetFile))
@@ -232,22 +230,24 @@ func TestStart(t *testing.T) {
 	assert.NotNil(t, p, "could not create new pipeline")
 
 	p.Start()
-	time.Sleep(300 * time.Microsecond)
 
 	// check log file created and empty
 	matches := test.GetMatches(t, logFilePattern)
-	assert.Equal(t, 1, len(matches))
+	require.Equal(t, 1, len(matches))
 
 	tsFileName := matches[0]
 	test.CheckZero(t, tsFileName, "log file is not created or is not empty")
+	logger.Errorf("tsFileName=%s", tsFileName)
 
 	// send events
+	logger.Errorf("send pack, t=%s", time.Now().Unix())
 	packSize := test.SendPack(t, p, tests.firstPack)
 	totalSent += packSize
-	time.Sleep(writeFileSleep)
+	time.Sleep(200 * time.Millisecond)
+	logger.Errorf("after sleep")
 
 	// check that plugin wrote into the file
-	assert.Equal(t, packSize, test.CheckNotZero(t, tsFileName, "check log file has data"), "plugin did not write into the file")
+	require.Equal(t, packSize, test.CheckNotZero(t, tsFileName, "check log file has data"), "plugin did not write into the file")
 	time.Sleep(sealUpFileSleep)
 	// check sealing up
 	// check log file is empty
@@ -289,7 +289,7 @@ func TestStart(t *testing.T) {
 	p2 := newPipeline(t, config)
 	p2.Start()
 	// waite ticker 1st tick
-	time.Sleep(FileSealUpInterval + 50*time.Millisecond)
+	time.Sleep(250 * time.Millisecond)
 	// check old file log file is sealed up
 	matches = test.GetMatches(t, generalPattern)
 	assert.GreaterOrEqual(t, len(matches), 3, "old log file is not sealed up")
