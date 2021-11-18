@@ -97,7 +97,6 @@ var result = []byte(`{
 
 var empty = []byte(`{}`)
 
-
 func (p *Plugin) elasticsearch(mux *http.ServeMux) {
 	mux.HandleFunc("/", p.serveElasticsearchInfo)
 	mux.HandleFunc("/_xpack", p.serveElasticsearchXPack)

@@ -11,25 +11,34 @@ import (
 )
 
 type watcher struct {
-	path            string   // dir in which watch for files
-	filenamePattern string   // files which match this pattern will be watched
-	dirPattern      string   // dirs which match this pattern will be watched
-	notifyFn        notifyFn // function to receive notifications
-	watcherCh       chan notify.EventInfo
-	logger          *zap.SugaredLogger
+	path              string   // dir in which watch for files
+	filenamePattern   string   // files which match this pattern will be watched
+	dirPattern        string   // dirs which match this pattern will be watched
+	notifyFn          notifyFn // function to receive notifications
+	watcherCh         chan notify.EventInfo
+	shouldWatchWrites bool
+	logger            *zap.SugaredLogger
 }
 
-type notifyFn func(filename string, stat os.FileInfo)
+type notifyFn func(e notify.Event, filename string, stat os.FileInfo)
 
 // NewWatcher creates a watcher that see file creations in the path
 // and if they match filePattern and dirPattern, pass them to notifyFn.
-func NewWatcher(path string, filenamePattern string, dirPattern string, notifyFn notifyFn, logger *zap.SugaredLogger) *watcher {
+func NewWatcher(
+	path string,
+	filenamePattern string,
+	dirPattern string,
+	notifyFn notifyFn,
+	shouldWatchWrites bool,
+	logger *zap.SugaredLogger,
+) *watcher {
 	return &watcher{
-		path:            path,
-		filenamePattern: filenamePattern,
-		dirPattern:      dirPattern,
-		notifyFn:        notifyFn,
-		logger:          logger,
+		path:              path,
+		filenamePattern:   filenamePattern,
+		dirPattern:        dirPattern,
+		notifyFn:          notifyFn,
+		shouldWatchWrites: shouldWatchWrites,
+		logger:            logger,
 	}
 }
 
@@ -44,10 +53,16 @@ func (w *watcher) start() {
 		w.logger.Fatalf("wrong dir name pattern %q: %s", w.dirPattern, err.Error())
 	}
 
-	eventsCh := make(chan notify.EventInfo, 1)
+	eventsCh := make(chan notify.EventInfo, 128)
 	w.watcherCh = eventsCh
 
-	err := notify.Watch(w.path, eventsCh, notify.Create)
+	events := []notify.Event{notify.Create}
+	if w.shouldWatchWrites {
+		events = append(events, notify.Write)
+	}
+
+	// watch recursivly
+	err := notify.Watch(filepath.Join(w.path, "..."), eventsCh, events...)
 	if err != nil {
 		w.logger.Warnf("can't create fs watcher: %s", err.Error())
 		return
@@ -78,11 +93,11 @@ func (w *watcher) tryAddPath(path string) {
 			continue
 		}
 
-		w.notify(filepath.Join(path, file.Name()))
+		w.notify(notify.Create, filepath.Join(path, file.Name()))
 	}
 }
 
-func (w *watcher) notify(path string) {
+func (w *watcher) notify(e notify.Event, path string) {
 	filename := path
 	if filename == "" || filename == "." || filename == ".." {
 		return
@@ -101,7 +116,7 @@ func (w *watcher) notify(path string) {
 
 	match, _ := filepath.Match(w.filenamePattern, filepath.Base(filename))
 	if match {
-		w.notifyFn(filename, stat)
+		w.notifyFn(e, filename, stat)
 	}
 
 	match, _ = filepath.Match(w.dirPattern, filepath.Base(filename))
@@ -116,6 +131,6 @@ func (w *watcher) watch() {
 		if !ok {
 			return
 		}
-		w.notify(event.Path())
+		w.notify(event.Event(), event.Path())
 	}
 }

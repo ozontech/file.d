@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rjeczalik/notify"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 )
@@ -28,10 +29,10 @@ func TestWatcher(t *testing.T) {
 			path, err := os.MkdirTemp("/tmp", "watcher_test")
 			require.NoError(t, err)
 			shouldCreate := 0
-			notifyFn := func(_ string, _ os.FileInfo) {
+			notifyFn := func(_ notify.Event, _ string, _ os.FileInfo) {
 				shouldCreate++
 			}
-			w := NewWatcher(path, tt.filenamePattern, tt.dirPattern, notifyFn, zap.L().Sugar())
+			w := NewWatcher(path, tt.filenamePattern, tt.dirPattern, notifyFn, false, zap.L().Sugar())
 			w.start()
 			defer w.stop()
 
