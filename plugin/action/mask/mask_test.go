@@ -19,9 +19,8 @@ var (
 	kDefaultSubstitution = byte('*')
 )
 
-func MustString(s []byte, _ bool) string {
-	return string(s)
-
+func MustString(p *Plugin) string {
+	return string(p.buff)
 }
 
 //nolint:funlen
@@ -53,7 +52,7 @@ func TestMaskFunctions(t *testing.T) {
 			comment:  "no one symbol should be replaced",
 			input:    []byte("ab.cd.efgh"),
 			masks:    []Mask{{`\d`, kDefaultSubstitution, []int{0}}},
-			expected: "ab.cd.efgh",
+			expected: "",
 		},
 		{
 			name:     "simple substitution",
@@ -158,7 +157,8 @@ func TestMaskFunctions(t *testing.T) {
 			sut := Plugin{config: &config}
 			params := createActionPluginParams()
 			sut.Start(&config, &params)
-			assert.Equal(t, s.expected, MustString(sut.mask(s.input)), s.comment)
+			sut.mask(s.input)
+			assert.Equal(t, s.expected, MustString(&sut), s.comment)
 		})
 	}
 }

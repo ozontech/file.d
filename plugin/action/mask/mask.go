@@ -98,15 +98,6 @@ type section struct {
 	begin, end int
 }
 
-// func find(slice []int, val int) bool {
-// 	for _, item := range slice {
-// 		if item == val {
-// 			return true
-// 		}
-// 	}
-// 	return false
-// }
-
 func transformMatchesToSections(input [][]int, hideGroups []int) []section {
 	if len(hideGroups) == 0 {
 		hideGroups = append(hideGroups, 0)
@@ -144,9 +135,7 @@ func (p *Plugin) maskSection(s section, source []byte, ch byte) int {
 	return p.appendMaskToBuffer(s, source, ch)
 }
 
-func (p *Plugin) mask(value []byte) ([]byte, bool) {
-	isMasked := false
-
+func (p *Plugin) mask(value []byte) bool {
 	for i, mask := range p.config.Masks {
 		matches := p.re[i].FindAllSubmatchIndex(value, -1)
 		if len(matches) == 0 {
@@ -159,24 +148,16 @@ func (p *Plugin) mask(value []byte) ([]byte, bool) {
 		offset := 0
 		for _, section := range hideSections {
 			offset += p.maskSection(section, value, mask.Substitution)
-			isMasked = true
 		}
 
 		if len(p.buff)+offset < len(value) {
 			p.buff = append(p.buff, value[len(p.buff)+offset:]...)
 		}
 
-		// if offset != 0 {
 		value = p.buff[:]
-
-		// }
 	}
 
-	if len(p.buff) == 0 {
-		return value, false
-	}
-
-	return p.buff, isMasked
+	return len(p.buff) != 0
 }
 
 func collectValueNodes(currentNode *insaneJSON.Node, valueNodes *[]*insaneJSON.Node) {
@@ -212,9 +193,9 @@ func (p Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 
 	for _, v := range nodes {
 		data := v.AsBytes()
-		res, isMasked := p.mask(data)
+		isMasked := p.mask(data)
 		if isMasked {
-			v.MutateToBytes(res)
+			v.MutateToBytes(p.buff)
 		}
 	}
 
