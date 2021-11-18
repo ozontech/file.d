@@ -98,14 +98,14 @@ type section struct {
 	begin, end int
 }
 
-func find(slice []int, val int) bool {
-	for _, item := range slice {
-		if item == val {
-			return true
-		}
-	}
-	return false
-}
+// func find(slice []int, val int) bool {
+// 	for _, item := range slice {
+// 		if item == val {
+// 			return true
+// 		}
+// 	}
+// 	return false
+// }
 
 func transformMatchesToSections(input [][]int, hideGroups []int) []section {
 	if len(hideGroups) == 0 {

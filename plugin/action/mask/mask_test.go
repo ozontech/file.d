@@ -242,7 +242,7 @@ func TestApllyForStrings(t *testing.T) {
 			root, err := insaneJSON.DecodeString(s.input)
 			assert.NoError(t, err, "error on parsing test json")
 			nodes := getValueNodeList(root.Node)
-			for i, _ := range nodes {
+			for i := range nodes {
 				assert.Equal(t, s.expected[i], nodes[i].AsString(), s.comment)
 			}
 		})
