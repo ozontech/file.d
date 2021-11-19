@@ -13,14 +13,14 @@ import (
 	"go.uber.org/zap"
 )
 
-var (
+const (
 	kDefaultIDRegExp     = `[А-Я][а-я]{1,64}(\-[А-Я][а-я]{1,64})?\s+[А-Я][а-я]{1,64}(\.)?\s+[А-Я][а-я]{1,64}`
 	kDefaultCardRegExp   = `\b(\d{1,4})\D?(\d{1,4})\D?(\d{1,4})\D?(\d{1,4})\b`
 	kDefaultSubstitution = byte('*')
 )
 
 func MustString(p *Plugin) string {
-	return string(p.buff)
+	return string(*p.buff)
 }
 
 //nolint:funlen
@@ -52,7 +52,7 @@ func TestMaskFunctions(t *testing.T) {
 			comment:  "no one symbol should be replaced",
 			input:    []byte("ab.cd.efgh"),
 			masks:    []Mask{{`\d`, kDefaultSubstitution, []int{0}}},
-			expected: "",
+			expected: "ab.cd.efgh",
 		},
 		{
 			name:     "simple substitution",
@@ -157,7 +157,7 @@ func TestMaskFunctions(t *testing.T) {
 			sut := Plugin{config: &config}
 			params := createActionPluginParams()
 			sut.Start(&config, &params)
-			sut.mask(s.input)
+			sut.mask(&s.input)
 			assert.Equal(t, s.expected, MustString(&sut), s.comment)
 		})
 	}
@@ -234,8 +234,6 @@ func TestApllyForStrings(t *testing.T) {
 				"sun1.opacity = (sun1.opacity / 100) * 90;"},
 		},
 	}
-
-	// var slice []string
 
 	for _, s := range suits {
 		t.Run(s.name, func(t *testing.T) {
@@ -385,7 +383,7 @@ func createActionPluginParams() pipeline.ActionPluginParams {
 }
 
 func createPlugin(config *Config) Plugin {
-	p := Plugin{config, nil, nil, []byte{}}
+	p := Plugin{config, nil, nil, &[]byte{}}
 	return p
 }
 func BenchmarkMask(b *testing.B) {
@@ -395,6 +393,6 @@ func BenchmarkMask(b *testing.B) {
 	p := createPlugin(&config)
 	p.Start(&config, &params)
 	for i := 0; i < b.N; i++ {
-		p.mask(input)
+		p.mask(&input)
 	}
 }

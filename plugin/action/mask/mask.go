@@ -39,7 +39,7 @@ type Plugin struct {
 	config *Config
 	re     []*regexp.Regexp
 	logger *zap.SugaredLogger
-	buff   []byte
+	buff   *[]byte
 }
 
 //! config-params
@@ -83,7 +83,8 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 		p.logger = params.Logger
 	}
 	p.config = config.(*Config)
-	p.buff = make([]byte, 0, params.PipelineSettings.AvgLogSize)
+	buff := make([]byte, 0, params.PipelineSettings.AvgLogSize)
+	p.buff = &buff
 	p.re = make([]*regexp.Regexp, len(p.config.Masks))
 	for i, mask := range p.config.Masks {
 		p.logger.Infof("compiling regexp %s/ - %s", mask.Re, mask.Substitution)
@@ -114,34 +115,34 @@ func transformMatchesToSections(input [][]int, hideGroups []int) []section {
 	return result
 }
 
-func (p *Plugin) appendMaskToBuffer(s section, source []byte, ch byte) (offset int) {
-	runeCounter := utf8.RuneCount(source[s.begin:s.end])
+func (p *Plugin) appendMaskToBuffer(s section, source *[]byte, ch byte) (offset int) {
+	runeCounter := utf8.RuneCount((*source)[s.begin:s.end])
 	for j := 0; j < runeCounter; j++ {
-		if s.begin+j >= len(p.buff) {
-			p.buff = append(p.buff, ch)
+		if s.begin+j >= len(*p.buff) {
+			*p.buff = append(*p.buff, ch)
 		} else {
-			p.buff[s.begin+j] = ch
+			(*p.buff)[s.begin+j] = ch
 		}
 	}
-	offset = len(source[s.begin:s.end]) - runeCounter
+	offset = len((*source)[s.begin:s.end]) - runeCounter
 	return
 }
 
-func (p *Plugin) maskSection(s section, source []byte, ch byte) int {
-	if len(p.buff) < s.begin {
-		p.buff = append(p.buff, source[len(p.buff):s.begin]...)
+func (p *Plugin) maskSection(s section, source *[]byte, ch byte) int {
+	if len(*p.buff) < s.begin {
+		*p.buff = append(*p.buff, (*source)[len(*p.buff):s.begin]...)
 	}
 
 	return p.appendMaskToBuffer(s, source, ch)
 }
 
-func (p *Plugin) mask(value []byte) bool {
+func (p *Plugin) mask(value *[]byte) bool {
 	for i, mask := range p.config.Masks {
-		matches := p.re[i].FindAllSubmatchIndex(value, -1)
+		matches := p.re[i].FindAllSubmatchIndex(*value, -1)
 		if len(matches) == 0 {
 			continue
 		}
-		p.buff = p.buff[:0]
+		*p.buff = (*p.buff)[:0]
 
 		hideSections := transformMatchesToSections(matches, mask.Groups)
 
@@ -150,14 +151,14 @@ func (p *Plugin) mask(value []byte) bool {
 			offset += p.maskSection(section, value, mask.Substitution)
 		}
 
-		if len(p.buff)+offset < len(value) {
-			p.buff = append(p.buff, value[len(p.buff)+offset:]...)
+		if len(*p.buff)+offset < len(*value) {
+			*p.buff = append(*p.buff, (*value)[len(*p.buff)+offset:]...)
 		}
 
-		value = p.buff[:]
+		value, p.buff = p.buff, value
 	}
-
-	return len(p.buff) != 0
+	p.buff = value
+	return len(*p.buff) != 0
 }
 
 func collectValueNodes(currentNode *insaneJSON.Node, valueNodes *[]*insaneJSON.Node) {
@@ -193,9 +194,9 @@ func (p Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 
 	for _, v := range nodes {
 		data := v.AsBytes()
-		isMasked := p.mask(data)
+		isMasked := p.mask(&data)
 		if isMasked {
-			v.MutateToBytes(p.buff)
+			v.MutateToBytes(*p.buff)
 		}
 	}
 
