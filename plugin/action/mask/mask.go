@@ -7,7 +7,6 @@ import (
 	"github.com/ozonru/file.d/fd"
 	"github.com/ozonru/file.d/pipeline"
 	insaneJSON "github.com/vitkovskii/insane-json"
-	"go.uber.org/zap"
 )
 
 /*{ introduction
@@ -35,11 +34,14 @@ There are three variants of math&replace methods:
 
 }*/
 
+const (
+	substitution = byte('*')
+)
+
 type Plugin struct {
-	config *Config
-	re     []*regexp.Regexp
-	logger *zap.SugaredLogger
-	buff   *[]byte
+	config     *Config
+	buf        []byte
+	valueNodes []*insaneJSON.Node
 }
 
 //! config-params
@@ -57,14 +59,15 @@ type Mask struct {
 	//> @3@4@5@6
 	//>
 	//> Regular expression used for masking
-	Re string `json:"re2" default:"" required:"true"`
+	ReStr string `json:"re2" default:"" required:"true"`
 
 	//> @3@4@5@6
 	//>
-	//>	Substitution mask
-	Substitution byte `json:"substitution" default:"*"`
-
+	//>
+	// Substitution byte `json:"substitution" default:"*"`
 	Groups []int `json:"groups"`
+
+	re *regexp.Regexp
 }
 
 func init() {
@@ -79,124 +82,102 @@ func factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 }
 
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginParams) {
-	if params != nil && params.Logger != nil {
-		p.logger = params.Logger
-	}
 	p.config = config.(*Config)
-	buff := make([]byte, 0, params.PipelineSettings.AvgLogSize)
-	p.buff = &buff
-	p.re = make([]*regexp.Regexp, len(p.config.Masks))
-	for i, mask := range p.config.Masks {
-		p.logger.Infof("compiling regexp %s/ - %s", mask.Re, mask.Substitution)
-		p.re[i] = regexp.MustCompile(mask.Re)
+	p.buf = make([]byte, 0, params.PipelineSettings.AvgLogSize)
+	p.valueNodes = make([]*insaneJSON.Node, 0)
+	for i := range p.config.Masks {
+		p.config.Masks[i].re = regexp.MustCompile(p.config.Masks[i].ReStr)
 	}
 }
 
 func (p Plugin) Stop() {
 }
 
-type section struct {
-	begin, end int
+func appendMask(src, dst []byte, begin, end int) (int, []byte) {
+	runeCounter := utf8.RuneCount(src[begin:end])
+	for j := 0; j < runeCounter; j++ {
+		dst = append(dst, substitution)
+	}
+	offset := len(src[begin:end]) - runeCounter
+	return offset, dst
 }
 
-func transformMatchesToSections(input [][]int, hideGroups []int) []section {
-	if len(hideGroups) == 0 {
-		hideGroups = append(hideGroups, 0)
+func maskSection(src, dst []byte, begin, end int) (int, []byte) {
+	dst = append(dst, src[0:begin]...)
+
+	offset, dst := appendMask(src, dst, begin, end)
+
+	if len(dst)+offset < len(src) {
+		dst = append(dst, src[end:]...)
 	}
-	result := make([]section, 0, len(input))
-	for _, matches := range input {
-		for _, group := range hideGroups {
-			if group*2+1 >= len(matches) {
+
+	return offset, dst
+}
+
+func maskValue(value, buf []byte, re *regexp.Regexp, grp []int) []byte {
+	buf = buf[:0]
+	indexes := re.FindAllSubmatchIndex(value, -1)
+	if len(indexes) == 0 {
+		return buf
+	}
+
+	offset := 0
+	for _, index := range indexes {
+		for _, group := range grp {
+			if group*2+1 >= len(index) {
 				continue
 			}
-			result = append(result, section{matches[group*2], matches[group*2+1]})
+			offset, value = maskSection(
+				value,
+				buf,
+				index[group*2]-offset,
+				index[group*2+1]-offset,
+			)
 		}
 	}
-	return result
+
+	return value
 }
 
-func (p *Plugin) appendMaskToBuffer(s section, source *[]byte, ch byte) (offset int) {
-	runeCounter := utf8.RuneCount((*source)[s.begin:s.end])
-	for j := 0; j < runeCounter; j++ {
-		if s.begin+j >= len(*p.buff) {
-			*p.buff = append(*p.buff, ch)
-		} else {
-			(*p.buff)[s.begin+j] = ch
-		}
-	}
-	offset = len((*source)[s.begin:s.end]) - runeCounter
-	return
-}
-
-func (p *Plugin) maskSection(s section, source *[]byte, ch byte) int {
-	if len(*p.buff) < s.begin {
-		*p.buff = append(*p.buff, (*source)[len(*p.buff):s.begin]...)
-	}
-
-	return p.appendMaskToBuffer(s, source, ch)
-}
-
-func (p *Plugin) mask(value *[]byte) bool {
-	for i, mask := range p.config.Masks {
-		matches := p.re[i].FindAllSubmatchIndex(*value, -1)
-		if len(matches) == 0 {
-			continue
-		}
-		*p.buff = (*p.buff)[:0]
-
-		hideSections := transformMatchesToSections(matches, mask.Groups)
-
-		offset := 0
-		for _, section := range hideSections {
-			offset += p.maskSection(section, value, mask.Substitution)
-		}
-
-		if len(*p.buff)+offset < len(*value) {
-			*p.buff = append(*p.buff, (*value)[len(*p.buff)+offset:]...)
-		}
-
-		value, p.buff = p.buff, value
-	}
-	p.buff = value
-	return len(*p.buff) != 0
-}
-
-func collectValueNodes(currentNode *insaneJSON.Node, valueNodes *[]*insaneJSON.Node) {
+func getValueNodeList(currentNode *insaneJSON.Node, valueNodes []*insaneJSON.Node) []*insaneJSON.Node {
 	switch {
 	case currentNode.IsField():
-		collectValueNodes(currentNode.AsFieldValue(), valueNodes)
+		valueNodes = getValueNodeList(currentNode.AsFieldValue(), valueNodes)
 	case currentNode.IsArray():
 		for _, n := range currentNode.AsArray() {
-			collectValueNodes(n, valueNodes)
+			valueNodes = getValueNodeList(n, valueNodes)
 		}
 	case currentNode.IsObject():
 		for _, n := range currentNode.AsFields() {
-			collectValueNodes(n, valueNodes)
+			valueNodes = getValueNodeList(n, valueNodes)
 		}
 	default:
-		*valueNodes = append(*valueNodes, currentNode)
+		valueNodes = append(valueNodes, currentNode)
 	}
+	return valueNodes
 }
 
-func getValueNodeList(rootNode *insaneJSON.Node) []*insaneJSON.Node {
-	var nodes []*insaneJSON.Node
-	collectValueNodes(rootNode, &nodes)
-	return nodes
-}
-
-func (p Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
-	node := event.Root.Node
-	if node == nil {
+func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
+	root := event.Root.Node
+	if root == nil {
 		return pipeline.ActionPass
 	}
 
-	nodes := getValueNodeList(node)
+	p.valueNodes = p.valueNodes[:0]
+	p.valueNodes = getValueNodeList(root, p.valueNodes)
 
-	for _, v := range nodes {
-		data := v.AsBytes()
-		isMasked := p.mask(&data)
+	for _, v := range p.valueNodes {
+		value := v.AsBytes()
+		isMasked := false
+		for _, mask := range p.config.Masks {
+			res := maskValue(value, p.buf, mask.re, mask.Groups)
+			if len(res) > 0 {
+				isMasked = true
+				value = res
+			}
+		}
 		if isMasked {
-			v.MutateToBytes(*p.buff)
+			v.MutateToBytes(value)
 		}
 	}
 
