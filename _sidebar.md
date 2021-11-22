@@ -30,6 +30,7 @@
     - [join](plugin/action/join/README.md)
     - [json_decode](plugin/action/json_decode/README.md)
     - [keep_fields](plugin/action/keep_fields/README.md)
+    - [mask](plugin/action/mask/README.md)
     - [modify](plugin/action/modify/README.md)
     - [parse_es](plugin/action/parse_es/README.md)
     - [parse_re2](plugin/action/parse_re2/README.md)

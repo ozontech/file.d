@@ -1,1 +1,81 @@
-package mask
+# Action plugins
+
+## add_host
+It adds field containing hostname to an event.
+
+[More details...](plugin/action/add_host/README.md)
+## convert_date
+It converts field date/time data to different format.
+
+[More details...](plugin/action/convert_date/README.md)
+## debug
+It logs event to stdout. Useful for debugging.
+
+[More details...](plugin/action/debug/README.md)
+## discard
+It drops an event. It is used in a combination with `match_fields`/`match_mode` parameters to filter out the events.
+
+**An example for discarding informational and debug logs:**
+```yaml
+pipelines:
+  example_pipeline:
+    ...
+    actions:
+    - type: discard
+      match_fields:
+        level: /info|debug/
+    ...
+```
+
+[More details...](plugin/action/discard/README.md)
+## flatten
+It extracts the object keys and adds them into the root with some prefix. If the provided field isn't an object, an event will be skipped.
+
+**Example:**
+```yaml
+pipelines:
+  example_pipeline:
+    ...
+    actions:
+    - type: flatten
+      field: animal
+      prefix: pet_
+    ...
+```
+It transforms `{"animal":{"type":"cat","paws":4}}` into `{"pet_type":"b","pet_paws":"4"}`.
+
+[More details...](plugin/action/flatten/README.md)
+## join
+It makes one big event from the sequence of the events.
+It is useful for assembling back together "exceptions" or "panics" if they were written line by line.
+Also known as "multiline".
+
+> ⚠ Parsing the whole event flow could be very CPU intensive because the plugin uses regular expressions.
+> Consider `match_fields` parameter to process only particular events. Check out an example for details.
+
+**Example of joining Go panics**:
+```yaml
+pipelines:
+  example_pipeline:
+    ...
+    actions:
+    - type: join
+      field: log
+      start: '/^(panic:)|(http: panic serving)/'
+      continue: '/(^\s*$)|(goroutine [0-9]+ \[)|(\([0-9]+x[0-9,a-f]+)|(\.go:[0-9]+ \+[0-9]x)|(\/.*\.go:[0-9]+)|(\(...\))|(main\.main\(\))|(created by .*\/.*\.)|(^\[signal)|(panic.+[0-9]x[0-9,a-f]+)|(panic:)/'
+      match_fields:
+        stream: stderr // apply only for events which was written to stderr to save CPU time
+    ...
+```
+
+[More details...](plugin/action/join/README.md)
+## json_decode
+It decodes a JSON string from the event field and merges the result with the event root.
+If the decoded JSON isn't an object, the event will be skipped.
+
+[More details...](plugin/action/json_decode/README.md)
+## keep_fields
+It keeps the list of the event fields and removes others.
+
+[More details...](plugin/action/keep_fields/README.md)
+<br>*Generated using [__insane-doc__](https://github.com/vitkovskii/insane-doc)*

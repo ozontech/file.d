@@ -171,6 +171,26 @@ If the decoded JSON isn't an object, the event will be skipped.
 It keeps the list of the event fields and removes others.
 
 [More details...](plugin/action/keep_fields/README.md)
+## mask
+Mask plugin matches event with regular expression and substitutions successfully matched symbols via asterix symbol.
+You could set regular expressions and submatch groups.
+
+**Example:**
+```yaml
+pipelines:
+  example_pipeline:
+    ...
+    actions:
+    - type: mask
+      masks:
+        - mask:
+			re: "\b(\d{1,4})\D?(\d{1,4})\D?(\d{1,4})\D?(\d{1,4})\b"
+			groups: [1,2,3]
+    ...
+```
+
+
+[More details...](plugin/action/mask/README.md)
 ## modify
 It modifies the content for a field. It works only with strings.
 You can provide an unlimited number of config parameters. Each parameter handled as `cfg.FieldSelector`:`cfg.Substitution`.

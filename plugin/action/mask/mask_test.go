@@ -10,6 +10,7 @@ import (
 	"github.com/ozonru/file.d/test"
 	"github.com/stretchr/testify/assert"
 	insaneJSON "github.com/vitkovskii/insane-json"
+	"go.uber.org/zap"
 )
 
 const (
@@ -19,7 +20,6 @@ const (
 
 //nolint:funlen
 func TestMaskFunctions(t *testing.T) {
-	// logger.Instance = zap.NewNop().Sugar()
 	suits := []struct {
 		name     string
 		comment  string
@@ -31,56 +31,84 @@ func TestMaskFunctions(t *testing.T) {
 			name:     "simple test",
 			comment:  "all digits should be replaced",
 			input:    []byte("12.34.5678"),
-			masks:    Mask{ReStr: `\d`, Groups: []int{0}},
+			masks:    Mask{Re: `\d`, Groups: []int{0}},
 			expected: []byte("**.**.****"),
 		},
 		{
 			name:     "re not matches input string",
 			comment:  "no one symbol should be replaced",
 			input:    []byte("ab.cd.efgh"),
-			masks:    Mask{ReStr: `\d`, Groups: []int{0}},
+			masks:    Mask{Re: `\d`, Groups: []int{0}},
 			expected: []byte(""),
 		},
 		{
 			name:     "simple substitution",
 			comment:  "value replaced only in first group",
 			input:    []byte(`{"field1":"-ab-axxb-"}`),
-			masks:    Mask{ReStr: `a(x*)b`, Groups: []int{1}},
+			masks:    Mask{Re: `a(x*)b`, Groups: []int{1}},
 			expected: []byte(`{"field1":"-ab-a**b-"}`),
 		},
 		{
 			name:     "simple substitution",
 			comment:  "all value replaced",
 			input:    []byte(`{"field1":"-ab-axxb-"}`),
-			masks:    Mask{ReStr: `a(x*)b`, Groups: []int{0}},
+			masks:    Mask{Re: `a(x*)b`, Groups: []int{0}},
 			expected: []byte(`{"field1":"-**-****-"}`),
 		},
 		{
 			name:     "card number",
 			comment:  "hide card number",
 			input:    []byte("1234-2345-4567-3322"),
-			masks:    Mask{ReStr: kDefaultCardRegExp, Groups: []int{1, 2, 3, 4}},
+			masks:    Mask{Re: kDefaultCardRegExp, Groups: []int{1, 2, 3, 4}},
 			expected: []byte("****-****-****-****"),
 		},
 		{
 			name:     "card number",
 			comment:  "hide card number",
 			input:    []byte("1234-2345-4567-3322"),
-			masks:    Mask{ReStr: kDefaultCardRegExp, Groups: []int{1, 2, 3}},
+			masks:    Mask{Re: kDefaultCardRegExp, Groups: []int{1, 2, 3}},
 			expected: []byte("****-****-****-3322"),
 		},
 		{
 			name:     "ID",
 			comment:  "hide ID",
 			input:    []byte("abbc Иванов Иван Иванович dss"),
-			masks:    Mask{ReStr: kDefaultIDRegExp, Groups: []int{0}},
+			masks:    Mask{Re: kDefaultIDRegExp, Groups: []int{0}},
 			expected: []byte("abbc ******************** dss"),
 		},
 		{
 			name:     "2 ID with text",
 			input:    []byte("Иванов Иван Иванович и Петров Петр Петрович встали не с той ноги"),
 			expected: []byte("******************** и ******************** встали не с той ноги"),
-			masks:    Mask{ReStr: kDefaultIDRegExp, Groups: []int{0}},
+			masks:    Mask{Re: kDefaultIDRegExp, Groups: []int{0}},
+			comment:  "Only ID replaced",
+		},
+		{
+			name:     "Test not exists groups numbers",
+			input:    []byte("Иванов Иван Иванович встал не с той ноги"),
+			expected: []byte("Иванов Иван Иванович встал не с той ноги"),
+			masks:    Mask{Re: kDefaultIDRegExp, Groups: []int{33}},
+			comment:  "Only ID replaced",
+		},
+		{
+			name:     "Test not exists groups numbers",
+			input:    []byte("12.23.3456"),
+			expected: []byte("12.23.3456"),
+			masks:    Mask{Re: `\d`, Groups: []int{1}},
+			comment:  "Nothing masked",
+		},
+		{
+			name:     "Test groups numbers",
+			input:    []byte("1234-2345-4567-3322"),
+			expected: []byte("1234-****-4567-3322"),
+			masks:    Mask{Re: kDefaultCardRegExp, Groups: []int{2}},
+			comment:  "Only ID replaced",
+		},
+		{
+			name:     "Test groups with negative numbers",
+			input:    []byte("Иванов Иван Иванович встал не с той ноги"),
+			expected: []byte("Иванов Иван Иванович встал не с той ноги"),
+			masks:    Mask{Re: kDefaultIDRegExp, Groups: []int{-5}},
 			comment:  "Only ID replaced",
 		},
 	}
@@ -88,7 +116,7 @@ func TestMaskFunctions(t *testing.T) {
 	for _, s := range suits {
 		t.Run(s.name, func(t *testing.T) {
 			buf := make([]byte, 0, 2048)
-			buf = maskValue(s.input, buf, regexp.MustCompile(s.masks.ReStr), s.masks.Groups)
+			buf = maskValue(s.input, buf, regexp.MustCompile(s.masks.Re), s.masks.Groups, zap.NewNop().Sugar())
 			assert.Equal(t, string(s.expected), string(buf), s.comment)
 		})
 	}
@@ -220,8 +248,8 @@ func TestPlugin(t *testing.T) {
 		},
 		{
 			name:     "ID&text[cyr/en]&card",
-			input:    []string{`{"field1":"yesterday Иванов Иван Иванович pay by card номер 4445-2222-3333-4444"}`},
-			expected: []string{`{"field1":"yesterday ******************** pay by card номер ****-****-****-****"}`},
+			input:    []string{`{"field1":"yesterday Иванов Иван Иванович paid by card номер 4445-2222-3333-4444"}`},
+			expected: []string{`{"field1":"yesterday ******************** paid by card номер ****-****-****-****"}`},
 			comment:  "ID replaced, and card replaced",
 		},
 		{
@@ -276,15 +304,15 @@ func createConfig() Config {
 	config := Config{
 		Masks: []Mask{
 			{
-				ReStr:  `a(x*)b`,
+				Re:     `a(x*)b`,
 				Groups: []int{0},
 			},
 			{
-				ReStr:  kDefaultCardRegExp,
+				Re:     kDefaultCardRegExp,
 				Groups: []int{1, 2, 3, 4},
 			},
 			{
-				ReStr:  kDefaultIDRegExp,
+				Re:     kDefaultIDRegExp,
 				Groups: []int{0},
 			},
 		},
@@ -315,6 +343,6 @@ func BenchmarkMask(b *testing.B) {
 	grp := []int{0, 1, 2, 3}
 	buf := make([]byte, 0, 2048)
 	for i := 0; i < b.N; i++ {
-		buf = maskValue(input, buf, re, grp)
+		buf = maskValue(input, buf, re, grp, zap.NewNop().Sugar())
 	}
 }

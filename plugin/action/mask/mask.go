@@ -7,12 +7,12 @@ import (
 	"github.com/ozonru/file.d/fd"
 	"github.com/ozonru/file.d/pipeline"
 	insaneJSON "github.com/vitkovskii/insane-json"
+	"go.uber.org/zap"
 )
 
 /*{ introduction
-Remask plugin matches event with regular expression, and substitution successfully matched symbols via template.
-You can set many expressions.
-
+Mask plugin matches event with regular expression and substitutions successfully matched symbols via asterix symbol.
+You could set regular expressions and submatch groups.
 
 **Example:**
 ```yaml
@@ -23,25 +23,20 @@ pipelines:
     - type: mask
       masks:
         - mask:
-			re2: "\b\d{1,4}\D?\d{1,4}\D?\d{1,4}\D?\d{1,4}\b"
-          	mask: "****-****-****-****"
+			re: "\b(\d{1,4})\D?(\d{1,4})\D?(\d{1,4})\D?(\d{1,4})\b"
+			groups: [1,2,3]
     ...
 ```
-There are three variants of math&replace methods:
-* Call regex.Replace for every string in event (maskAll)
-* First call regex.Match, if matching successful then call regex.Replace (maskIfMatched)
-* First call regex.FindMatchingIndex, then replace finded symbol by index(maskByIndex)
 
 }*/
 
-const (
-	substitution = byte('*')
-)
+const substitution = byte('*')
 
 type Plugin struct {
 	config     *Config
 	buf        []byte
 	valueNodes []*insaneJSON.Node
+	logger     *zap.SugaredLogger
 }
 
 //! config-params
@@ -49,25 +44,21 @@ type Plugin struct {
 type Config struct {
 	//> @3@4@5@6
 	//>
-	//> List of Masks
+	//> List of masks
 	Masks []Mask `json:"masks"` //*
 }
 
-//! config-params
-//^ config-params
 type Mask struct {
 	//> @3@4@5@6
 	//>
-	//> Regular expression used for masking
-	ReStr string `json:"re2" default:"" required:"true"`
+	//> Regular expression for masking
+	Re  string `json:"re" default:"" required:"true"` //*
+	Re_ *regexp.Regexp
 
 	//> @3@4@5@6
 	//>
-	//>
-	// Substitution byte `json:"substitution" default:"*"`
-	Groups []int `json:"groups"`
-
-	re *regexp.Regexp
+	// Numbers of masking groups in expression, zero for mask all expression
+	Groups []int `json:"groups" required:"true"` //*
 }
 
 func init() {
@@ -85,8 +76,10 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 	p.config = config.(*Config)
 	p.buf = make([]byte, 0, params.PipelineSettings.AvgLogSize)
 	p.valueNodes = make([]*insaneJSON.Node, 0)
+	p.logger = params.Logger
 	for i := range p.config.Masks {
-		p.config.Masks[i].re = regexp.MustCompile(p.config.Masks[i].ReStr)
+		p.logger.Infof("compiling re: %s, groups: %v", p.config.Masks[i].Re, p.config.Masks[i].Groups)
+		p.config.Masks[i].Re_ = regexp.MustCompile(p.config.Masks[i].Re)
 	}
 }
 
@@ -114,7 +107,7 @@ func maskSection(src, dst []byte, begin, end int) (int, []byte) {
 	return offset, dst
 }
 
-func maskValue(value, buf []byte, re *regexp.Regexp, grp []int) []byte {
+func maskValue(value, buf []byte, re *regexp.Regexp, groups []int, l *zap.SugaredLogger) []byte {
 	buf = buf[:0]
 	indexes := re.FindAllSubmatchIndex(value, -1)
 	if len(indexes) == 0 {
@@ -123,15 +116,17 @@ func maskValue(value, buf []byte, re *regexp.Regexp, grp []int) []byte {
 
 	offset := 0
 	for _, index := range indexes {
-		for _, group := range grp {
-			if group*2+1 >= len(index) {
+		for _, grp := range groups {
+			maxIndexValue := grp*2 + 1
+			if maxIndexValue < 0 || maxIndexValue >= len(index) || index[maxIndexValue] == -1 {
+				l.Warnf("For re %s group %v doesn't exists", grp, re.String())
 				continue
 			}
 			offset, value = maskSection(
 				value,
 				buf,
-				index[group*2]-offset,
-				index[group*2+1]-offset,
+				index[grp*2]-offset,
+				index[grp*2+1]-offset,
 			)
 		}
 	}
@@ -159,9 +154,6 @@ func getValueNodeList(currentNode *insaneJSON.Node, valueNodes []*insaneJSON.Nod
 
 func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	root := event.Root.Node
-	if root == nil {
-		return pipeline.ActionPass
-	}
 
 	p.valueNodes = p.valueNodes[:0]
 	p.valueNodes = getValueNodeList(root, p.valueNodes)
@@ -170,8 +162,9 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 		value := v.AsBytes()
 		isMasked := false
 		for _, mask := range p.config.Masks {
-			res := maskValue(value, p.buf, mask.re, mask.Groups)
+			res := maskValue(value, p.buf, mask.Re_, mask.Groups, p.logger)
 			if len(res) > 0 {
+				p.logger.Infof("value masked by re %s, groups %v", mask.Re, mask.Groups)
 				isMasked = true
 				value = res
 			}
