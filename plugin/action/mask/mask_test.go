@@ -25,7 +25,7 @@ func TestMaskFunctions(t *testing.T) {
 		comment  string
 		input    []byte
 		masks    Mask
-		expected []byte
+		expected []byte ``
 	}{
 		{
 			name:     "simple test",
@@ -39,7 +39,7 @@ func TestMaskFunctions(t *testing.T) {
 			comment:  "no one symbol should be replaced",
 			input:    []byte("ab.cd.efgh"),
 			masks:    Mask{Re: `\d`, Groups: []int{0}},
-			expected: []byte(""),
+			expected: []byte("ab.cd.efgh"),
 		},
 		{
 			name:     "simple substitution",
@@ -256,13 +256,27 @@ func TestPlugin(t *testing.T) {
 			name: "ID&text&card",
 			input: []string{
 				`{"field1":"Иванов Иван Иванович c картой 4445-2222-3333-4444 встал не с той ноги"}`,
-				`{"field1":"Просто событие"}`,
-				`{"field1":"Петров Петр Петрович"}`,
+				`{"field2":"Просто событие"}`,
+				`{"field3":"Петров Петр Петрович"}`,
 			},
 			expected: []string{
 				`{"field1":"******************** c картой ****-****-****-**** встал не с той ноги"}`,
-				`{"field1":"Просто событие"}`,
-				`{"field1":"********************"}`,
+				`{"field2":"Просто событие"}`,
+				`{"field3":"********************"}`,
+			},
+			comment: "only ID & card replaced",
+		},
+		{
+			name: "ID&text&card",
+			input: []string{
+				`{"field1":"Иванов Иван Иванович with card 4445-2222-3333-4444 gets up with the wrong side"}`,
+				`{"field2":"Simple event"}`,
+				`{"field3":"Петров Петр Петрович"}`,
+			},
+			expected: []string{
+				`{"field1":"******************** with card ****-****-****-**** gets up with the wrong side"}`,
+				`{"field2":"Simple event"}`,
+				`{"field3":"********************"}`,
 			},
 			comment: "only ID & card replaced",
 		},
@@ -299,6 +313,18 @@ func TestPlugin(t *testing.T) {
 		})
 	}
 }
+
+// func TestJson(t *testing.T) {
+// 	data := `{"field_1":"hello"}`
+// 	root, err := insaneJSON.DecodeString(data)
+// 	assert.Equal(t, err, nil)
+// 	newData := make([]byte, 0, 2048)
+// 	newData = append(newData, []byte("До скорых встреч")...)
+// 	value := root.Node.AsFields()[0].AsFieldValue()
+// 	value.MutateToBytes(newData)
+// 	assert.Equal(t, value.AsBytes(), []byte("До скорых встреч"))
+
+// }
 
 func createConfig() Config {
 	config := Config{

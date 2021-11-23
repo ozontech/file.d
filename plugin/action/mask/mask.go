@@ -34,7 +34,8 @@ const substitution = byte('*')
 
 type Plugin struct {
 	config     *Config
-	buf        []byte
+	sourceBuf  []byte
+	maskBuf    []byte
 	valueNodes []*insaneJSON.Node
 	logger     *zap.SugaredLogger
 }
@@ -74,11 +75,12 @@ func factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginParams) {
 	p.config = config.(*Config)
-	p.buf = make([]byte, 0, params.PipelineSettings.AvgLogSize)
+	p.maskBuf = make([]byte, 0, params.PipelineSettings.AvgLogSize)
+	p.sourceBuf = make([]byte, 0, params.PipelineSettings.AvgLogSize)
 	p.valueNodes = make([]*insaneJSON.Node, 0)
 	p.logger = params.Logger
 	for i := range p.config.Masks {
-		p.logger.Infof("compiling re: %s, groups: %v", p.config.Masks[i].Re, p.config.Masks[i].Groups)
+		p.logger.Infof("compiling, re=%s, groups=%v", p.config.Masks[i].Re, p.config.Masks[i].Groups)
 		p.config.Masks[i].Re_ = regexp.MustCompile(p.config.Masks[i].Re)
 	}
 }
@@ -86,45 +88,45 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 func (p Plugin) Stop() {
 }
 
-func appendMask(src, dst []byte, begin, end int) (int, []byte) {
+func appendMask(dst, src []byte, begin, end int) ([]byte, int) {
 	runeCounter := utf8.RuneCount(src[begin:end])
 	for j := 0; j < runeCounter; j++ {
 		dst = append(dst, substitution)
 	}
 	offset := len(src[begin:end]) - runeCounter
-	return offset, dst
+	return dst, offset
 }
 
-func maskSection(src, dst []byte, begin, end int) (int, []byte) {
-	dst = append(dst, src[0:begin]...)
+func maskSection(dst, src []byte, begin, end int) ([]byte, int) {
+	dst = append(dst, src[:begin]...)
 
-	offset, dst := appendMask(src, dst, begin, end)
+	dst, offset := appendMask(dst, src, begin, end)
 
 	if len(dst)+offset < len(src) {
 		dst = append(dst, src[end:]...)
 	}
 
-	return offset, dst
+	return dst, offset
 }
 
 func maskValue(value, buf []byte, re *regexp.Regexp, groups []int, l *zap.SugaredLogger) []byte {
-	buf = buf[:0]
 	indexes := re.FindAllSubmatchIndex(value, -1)
 	if len(indexes) == 0 {
-		return buf
+		return value
 	}
+
+	buf = buf[:0]
 
 	offset := 0
 	for _, index := range indexes {
 		for _, grp := range groups {
 			maxIndexValue := grp*2 + 1
 			if maxIndexValue < 0 || maxIndexValue >= len(index) || index[maxIndexValue] == -1 {
-				l.Warnf("For re %s group %v doesn't exists", grp, re.String())
 				continue
 			}
-			offset, value = maskSection(
-				value,
+			value, offset = maskSection(
 				buf,
+				value,
 				index[grp*2]-offset,
 				index[grp*2+1]-offset,
 			)
@@ -160,18 +162,13 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 
 	for _, v := range p.valueNodes {
 		value := v.AsBytes()
-		isMasked := false
+		p.sourceBuf = append(p.sourceBuf[:0], value...)
+		p.maskBuf = append(p.maskBuf[:0], p.sourceBuf...)
 		for _, mask := range p.config.Masks {
-			res := maskValue(value, p.buf, mask.Re_, mask.Groups, p.logger)
-			if len(res) > 0 {
-				p.logger.Infof("value masked by re %s, groups %v", mask.Re, mask.Groups)
-				isMasked = true
-				value = res
-			}
+			p.maskBuf = maskValue(p.sourceBuf, p.maskBuf, mask.Re_, mask.Groups, p.logger)
+			p.sourceBuf = p.maskBuf
 		}
-		if isMasked {
-			v.MutateToBytes(value)
-		}
+		v.MutateToString(string(p.maskBuf))
 	}
 
 	return pipeline.ActionPass
