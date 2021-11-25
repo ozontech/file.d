@@ -111,21 +111,21 @@ func TestGroupNumbers(t *testing.T) {
 			comment:  "mask successfully compiled",
 		},
 		{
-			name:     "test groups contains `zero`",
+			name:     "groups contains `zero`",
 			input:    Mask{Re: kDefaultCardRegExp, Groups: []int{0, 1, 2}},
 			expect:   Mask{Re: kDefaultCardRegExp, Groups: []int{0}},
 			isPanics: false,
 			comment:  "deleted all groups except zero",
 		},
 		{
-			name:     "test groups is empty",
+			name:     "groups is empty",
 			input:    Mask{Re: kDefaultCardRegExp, Groups: []int{}},
 			expect:   Mask{Re: kDefaultCardRegExp, Groups: []int{0}},
 			isPanics: false,
 			comment:  "zero group added",
 		},
 		{
-			name:        "test negative group number",
+			name:        "negative group number",
 			input:       Mask{Re: kDefaultCardRegExp, Groups: []int{-1}},
 			expect:      Mask{Re: kDefaultCardRegExp, Groups: []int{}},
 			isPanics:    true,
@@ -133,7 +133,7 @@ func TestGroupNumbers(t *testing.T) {
 			comment:     "zero group added",
 		},
 		{
-			name:        "test big value of group number",
+			name:        "big value of group number",
 			input:       Mask{Re: kDefaultCardRegExp, Groups: []int{11}},
 			expect:      Mask{Re: kDefaultCardRegExp, Groups: []int{}},
 			isPanics:    true,
@@ -141,7 +141,7 @@ func TestGroupNumbers(t *testing.T) {
 			comment:     "panics on checking group number",
 		},
 		{
-			name:     "test zero in group numbers",
+			name:     "zero in group numbers",
 			input:    Mask{Re: kDefaultCardRegExp, Groups: []int{0}},
 			expect:   Mask{Re: kDefaultCardRegExp, Groups: []int{0}},
 			isPanics: false,
