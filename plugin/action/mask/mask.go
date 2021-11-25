@@ -22,9 +22,9 @@ pipelines:
     actions:
     - type: mask
       masks:
-        - mask:
-			re: "\b(\d{1,4})\D?(\d{1,4})\D?(\d{1,4})\D?(\d{1,4})\b"
-			groups: [1,2,3]
+      - mask:
+        re: "\b(\d{1,4})\D?(\d{1,4})\D?(\d{1,4})\D?(\d{1,4})\b"
+        groups: [1,2,3]
     ...
 ```
 

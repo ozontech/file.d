@@ -57,37 +57,37 @@ func TestMaskFunctions(t *testing.T) {
 		},
 		{
 			name:     "card number",
-			input:    []byte("1234-2345-4567-3322"),
+			input:    []byte("5408-7430-0756-2004"),
 			masks:    Mask{Re: kDefaultCardRegExp, Groups: []int{1, 2, 3, 4}},
 			expected: []byte("****-****-****-****"),
 			comment:  "card number masked",
 		},
 		{
 			name:     "groups of card number regex",
-			input:    []byte("1234-2345-4567-3322"),
+			input:    []byte("5568-2587-2420-0263"),
 			masks:    Mask{Re: kDefaultCardRegExp, Groups: []int{1, 2, 3}},
-			expected: []byte("****-****-****-3322"),
+			expected: []byte("****-****-****-0263"),
 			comment:  "first, second, third sections of card number masked",
 		},
 		{
 			name:     "ID",
-			input:    []byte("abbc Иванов Иван Иванович dss"),
+			input:    []byte("user details: Иванов Иван Иванович"),
 			masks:    Mask{Re: kDefaultIDRegExp, Groups: []int{0}},
-			expected: []byte("abbc ******************** dss"),
+			expected: []byte("user details: ********************"),
 			comment:  "ID masked ",
 		},
 		{
-			name:     "2 ID with text",
-			input:    []byte("Иванов Иван Иванович и Петров Петр Петрович встали не с той ноги"),
-			expected: []byte("******************** и ******************** встали не с той ноги"),
-			masks:    Mask{Re: kDefaultIDRegExp, Groups: []int{0}},
+			name:     "2 card numbers and text",
+			input:    []byte("issued card number 3528-3889-3793-9946 and card number 4035-3005-3980-4083"),
+			expected: []byte("issued card number ****-****-****-**** and card number ****-****-****-****"),
+			masks:    Mask{Re: kDefaultCardRegExp, Groups: []int{1, 2, 3, 4}},
 			comment:  "2 ID masked",
 		},
 		{
 			name:     "not exists groups numbers",
-			input:    []byte("Иванов Иван Иванович встал не с той ноги"),
-			expected: []byte("Иванов Иван Иванович встал не с той ноги"),
-			masks:    Mask{Re: kDefaultIDRegExp, Groups: []int{33}},
+			input:    []byte("12.23.3456"),
+			expected: []byte("12.23.3456"),
+			masks:    Mask{Re: `\d`, Groups: []int{33}},
 			comment:  "Nothing masked",
 		},
 		{
@@ -99,15 +99,15 @@ func TestMaskFunctions(t *testing.T) {
 		},
 		{
 			name:     "exists groups numbers",
-			input:    []byte("1234-2345-4567-3322"),
-			expected: []byte("1234-****-4567-3322"),
+			input:    []byte("2202-5246-9099-4638"),
+			expected: []byte("2202-****-9099-4638"),
 			masks:    Mask{Re: kDefaultCardRegExp, Groups: []int{2}},
 			comment:  "Only second part of card number masked",
 		},
 		{
 			name:     "negative number of group",
-			input:    []byte("Иванов Иван Иванович встал не с той ноги"),
-			expected: []byte("Иванов Иван Иванович встал не с той ноги"),
+			input:    []byte("Иванов Иван Иванович logged in"),
+			expected: []byte("Иванов Иван Иванович logged in"),
 			masks:    Mask{Re: kDefaultIDRegExp, Groups: []int{-5}},
 			comment:  "Nothing masked",
 		},
@@ -145,32 +145,32 @@ func TestGetValueNodeList(t *testing.T) {
 		{
 			name: "big json with ints and nulls",
 			input: `{"widget": {
-				"debug": "on",
-				"window": {
-					"title": "Sample Konfabulator Widget",
-					"name": "main_window",
-					"width": 500,
-					"height": 500
-				},
-				"image": {
-					"src": "Images/Sun.png",
-					"name": "sun1",
-					"hOffset": 250,
-					"vOffset": 250,
-					"alignment": "center"
-				},
-				"text": {
-					"data": "Click Here",
-					"size": 36,
-					"param": null,
-					"style": "bold",
-					"name": "text1",
-					"hOffset": 250,
-					"vOffset": 100,
-					"alignment": "center",
-					"onMouseUp": "sun1.opacity = (sun1.opacity / 100) * 90;"
-				}
-				}} `,
+                "debug": "on",
+                "window": {
+                    "title": "Sample Konfabulator Widget",
+                    "name": "main_window",
+                    "width": 500,
+                    "height": 500
+                },
+                "image": {
+                    "src": "Images/Sun.png",
+                    "name": "sun1",
+                    "hOffset": 250,
+                    "vOffset": 250,
+                    "alignment": "center"
+                },
+                "text": {
+                    "data": "Click Here",
+                    "size": 36,
+                    "param": null,
+                    "style": "bold",
+                    "name": "text1",
+                    "hOffset": 250,
+                    "vOffset": 100,
+                    "alignment": "center",
+                    "onMouseUp": "sun1.opacity = (sun1.opacity / 100) * 90;"
+                }
+                }} `,
 			expected: []string{"on",
 				"Sample Konfabulator Widget",
 				"main_window",
@@ -218,7 +218,7 @@ func TestPlugin(t *testing.T) {
 	}{
 		{
 			name:     "card number substitution",
-			input:    []string{`{"field1":"4445-2222-3333-4444"}`},
+			input:    []string{`{"field1":"5679-0643-9766-5536"}`},
 			expected: []string{`{"field1":"****-****-****-****"}`},
 			comment:  "card number masked",
 		},
@@ -229,42 +229,36 @@ func TestPlugin(t *testing.T) {
 			comment:  "ID masked",
 		},
 		{
-			name:     "ID with text",
-			input:    []string{`{"field1":"Иванов Иван Иванович встал не с той ноги"}`},
-			expected: []string{`{"field1":"******************** встал не с той ноги"}`},
-			comment:  "only ID masked",
+			name:     "card number with text",
+			input:    []string{`{"field1":"authorization of card number 5679-0643-9766-5536 failed"}`},
+			expected: []string{`{"field1":"authorization of card number ****-****-****-**** failed"}`},
+			comment:  "only card number masked",
 		},
 		{
 			name:     "ID&text&card",
-			input:    []string{`{"field1":"Иванов Иван Иванович c картой 4445-2222-3333-4444 встал не с той ноги"}`},
-			expected: []string{`{"field1":"******************** c картой ****-****-****-**** встал не с той ноги"}`},
+			input:    []string{`{"field1":"Иванов Иван Иванович paid by card number 5679-0643-9766-5536"}`},
+			expected: []string{`{"field1":"******************** paid by card number ****-****-****-****"}`},
 			comment:  "only ID & card number masked",
 		},
 		{
-			name:     "ID&text&card",
-			input:    []string{`{"field1":"Иванов Иван Иванович c картами 4445-2222-3333-4444 и 4445-2222-3333-4444"}`},
-			expected: []string{`{"field1":"******************** c картами ****-****-****-**** и ****-****-****-****"}`},
+			name:     "ID&text&2cards",
+			input:    []string{`{"field1":"Иванов Иван Иванович have cards number 5679-0643-9766-5536, 3528-3889-3793-9946"}`},
+			expected: []string{`{"field1":"******************** have cards number ****-****-****-****, ****-****-****-****"}`},
 			comment:  "ID masked, two card numbers also masked",
-		},
-		{
-			name:     "ID&text[cyr/en]&card",
-			input:    []string{`{"field1":"yesterday Иванов Иван Иванович paid by card номер 4445-2222-3333-4444"}`},
-			expected: []string{`{"field1":"yesterday ******************** paid by card номер ****-****-****-****"}`},
-			comment:  "ID masked, and card number masked",
 		},
 		{
 			name: "ID&text&card",
 			input: []string{
-				`{"field1":"Иванов Иван Иванович with card 4445-2222-3333-4444 gets up with the wrong side"}`,
+				`{"field1":"authorization of card number 5679-0643-9766-5536 failed"}`,
 				`{"field2":"Simple event"}`,
 				`{"field3":"Просто событие"}`,
-				`{"field4":"Петров Петр Петрович"}`,
+				`{"field4":"Иванов Иван Иванович have cards number ****-****-****-****, ****-****-****-****"}`,
 			},
 			expected: []string{
-				`{"field1":"******************** with card ****-****-****-**** gets up with the wrong side"}`,
+				`{"field1":"authorization of card number ****-****-****-**** failed"}`,
 				`{"field2":"Simple event"}`,
 				`{"field3":"Просто событие"}`,
-				`{"field4":"********************"}`,
+				`{"field4":"******************** have cards number ****-****-****-****, ****-****-****-****"}`,
 			},
 			comment: "only ID & card number masked",
 		},
