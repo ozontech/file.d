@@ -1,3 +1,5 @@
-# Action plugins
+# Keep fields plugin
+@introduction
 
-@global-contents-table-plugin-action|contents-table
+### Config params
+@config-params|description
