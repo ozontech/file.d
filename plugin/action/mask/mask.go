@@ -107,23 +107,25 @@ func isGroupsUnique(groups []int) bool {
 
 func verifyGroupNumbers(groups []int, totalGroups int, logger *zap.SugaredLogger) []int {
 	if len(groups) == 0 {
-		groups = append(groups, 0)
+		logger.Panicf("groups is empty")
 	}
 
 	if !isGroupsUnique(groups) {
 		logger.Panicf("groups numbers must be unique, groups numbers=%v", groups)
 	}
 
-	out := make([]int, 0, len(groups))
+	if len(groups) > totalGroups {
+		logger.Panicf("there are many groups, groups=%d, totalGroups=%d", len(groups), totalGroups)
+	}
+
 	for _, g := range groups {
 		if g > totalGroups || g < 0 {
 			logger.Panicf("wrong group number, number=%d", g)
 		} else if g == 0 {
 			return []int{0}
 		}
-		out = append(out, g)
 	}
-	return out
+	return groups
 }
 
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginParams) {
