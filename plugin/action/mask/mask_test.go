@@ -83,34 +83,6 @@ func TestMaskFunctions(t *testing.T) {
 			masks:    Mask{Re: kDefaultCardRegExp, Groups: []int{1, 2, 3, 4}},
 			comment:  "2 ID masked",
 		},
-		{
-			name:     "not exists groups numbers",
-			input:    []byte("12.23.3456"),
-			expected: []byte("12.23.3456"),
-			masks:    Mask{Re: `\d`, Groups: []int{33}},
-			comment:  "Nothing masked",
-		},
-		{
-			name:     "not exists groups numbers",
-			input:    []byte("12.23.3456"),
-			expected: []byte("12.23.3456"),
-			masks:    Mask{Re: `\d`, Groups: []int{1}},
-			comment:  "Nothing masked",
-		},
-		{
-			name:     "exists groups numbers",
-			input:    []byte("2202-5246-9099-4638"),
-			expected: []byte("2202-****-9099-4638"),
-			masks:    Mask{Re: kDefaultCardRegExp, Groups: []int{2}},
-			comment:  "Only second part of card number masked",
-		},
-		{
-			name:     "negative number of group",
-			input:    []byte("Иванов Иван Иванович logged in"),
-			expected: []byte("Иванов Иван Иванович logged in"),
-			masks:    Mask{Re: kDefaultIDRegExp, Groups: []int{-5}},
-			comment:  "Nothing masked",
-		},
 	}
 
 	for _, s := range suits {
@@ -118,6 +90,123 @@ func TestMaskFunctions(t *testing.T) {
 			buf := make([]byte, 0, 2048)
 			buf = maskValue(s.input, buf, regexp.MustCompile(s.masks.Re), s.masks.Groups, zap.NewNop().Sugar())
 			assert.Equal(t, string(s.expected), string(buf), s.comment)
+		})
+	}
+}
+
+func TestGroupNumbers(t *testing.T) {
+	suits := []struct {
+		name        string
+		input       Mask
+		expect      Mask
+		isPanics    bool
+		panicsValue string
+		comment     string
+	}{
+		{
+			name:     "simple test",
+			input:    Mask{Re: kDefaultCardRegExp, Groups: []int{1, 2, 3}},
+			expect:   Mask{Re: kDefaultCardRegExp, Groups: []int{1, 2, 3}},
+			isPanics: false,
+			comment:  "mask successfully compiled",
+		},
+		{
+			name:     "test groups contains `zero`",
+			input:    Mask{Re: kDefaultCardRegExp, Groups: []int{0, 1, 2}},
+			expect:   Mask{Re: kDefaultCardRegExp, Groups: []int{0}},
+			isPanics: false,
+			comment:  "deleted all groups except zero",
+		},
+		{
+			name:     "test groups is empty",
+			input:    Mask{Re: kDefaultCardRegExp, Groups: []int{}},
+			expect:   Mask{Re: kDefaultCardRegExp, Groups: []int{0}},
+			isPanics: false,
+			comment:  "zero group added",
+		},
+		{
+			name:        "test negative group number",
+			input:       Mask{Re: kDefaultCardRegExp, Groups: []int{-1}},
+			expect:      Mask{Re: kDefaultCardRegExp, Groups: []int{}},
+			isPanics:    true,
+			panicsValue: "wrong group number, number=-1",
+			comment:     "zero group added",
+		},
+		{
+			name:        "test big value of group number",
+			input:       Mask{Re: kDefaultCardRegExp, Groups: []int{11}},
+			expect:      Mask{Re: kDefaultCardRegExp, Groups: []int{}},
+			isPanics:    true,
+			panicsValue: "wrong group number, number=11",
+			comment:     "panics on checking group number",
+		},
+		{
+			name:     "test zero in group numbers",
+			input:    Mask{Re: kDefaultCardRegExp, Groups: []int{0}},
+			expect:   Mask{Re: kDefaultCardRegExp, Groups: []int{0}},
+			isPanics: false,
+			comment:  "compiling success",
+		},
+		{
+			name:        "error in expression",
+			input:       Mask{Re: "(err", Groups: []int{1}},
+			expect:      Mask{Re: kDefaultCardRegExp, Groups: []int{}},
+			isPanics:    true,
+			panicsValue: "error on compiling regexp, regexp=(err",
+			comment:     "panics on compiling regexp",
+		},
+		{
+			name:     "big value of group number with zero",
+			input:    Mask{Re: kDefaultCardRegExp, Groups: []int{0, 1, 2, 3, 4, 5}},
+			expect:   Mask{Re: kDefaultCardRegExp, Groups: []int{0}},
+			isPanics: false,
+			comment:  "all values deleted, except zero value",
+		},
+		{
+			name:        "many value of group number",
+			input:       Mask{Re: kDefaultCardRegExp, Groups: []int{1, 2, 3, 4, 5}},
+			isPanics:    true,
+			panicsValue: "wrong group number, number=5",
+			comment:     "group 5 not exists in regex",
+		},
+		{
+			name:        "wrong value of group number",
+			input:       Mask{Re: kDefaultCardRegExp, Groups: []int{6}},
+			isPanics:    true,
+			panicsValue: "wrong group number, number=6",
+			comment:     "group 6 not exists in regex",
+		},
+		{
+			name:        "wrong negative value of group number",
+			input:       Mask{Re: kDefaultCardRegExp, Groups: []int{-6}},
+			isPanics:    true,
+			panicsValue: "wrong group number, number=-6",
+			comment:     "group -6 not exists in regex",
+		},
+		{
+			name:        "groups numbers not unique",
+			input:       Mask{Re: kDefaultCardRegExp, Groups: []int{1, 1, 1}},
+			isPanics:    true,
+			panicsValue: "groups numbers must be unique, groups numbers=[1 1 1]",
+			comment:     "not unique value",
+		},
+	}
+
+	for _, s := range suits {
+		t.Run(s.name, func(t *testing.T) {
+			if s.isPanics {
+				assert.PanicsWithValue(t,
+					s.panicsValue,
+					func() {
+						compileMask(s.input, zap.NewNop().Sugar())
+					},
+					s.comment)
+			} else {
+				res := compileMask(s.input, zap.NewNop().Sugar())
+				assert.NotNil(t, res.Re_, s.comment)
+				assert.Equal(t, res.Re, s.expect.Re, s.comment)
+				assert.Equal(t, res.Groups, s.expect.Groups, s.comment)
+			}
 		})
 	}
 }
@@ -247,7 +336,7 @@ func TestPlugin(t *testing.T) {
 			comment:  "ID masked, two card numbers also masked",
 		},
 		{
-			name: "ID&text&card",
+			name: "ID&text&card pipeline",
 			input: []string{
 				`{"field1":"authorization of card number 5679-0643-9766-5536 failed"}`,
 				`{"field2":"Simple event"}`,

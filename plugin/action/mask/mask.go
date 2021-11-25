@@ -73,16 +73,66 @@ func factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 	return &Plugin{}, &Config{}
 }
 
+func compileMasks(masks []Mask, logger *zap.SugaredLogger) []Mask {
+	out := make([]Mask, 0, len(masks))
+	for _, m := range masks {
+		out = append(out, compileMask(m, logger))
+	}
+	return out
+}
+
+func compileMask(m Mask, logger *zap.SugaredLogger) Mask {
+	logger.Infof("compiling, re=%s, groups=%v", m.Re, m.Groups)
+	re, err := regexp.Compile(m.Re)
+	if err != nil {
+		logger.Panicf("error on compiling regexp, regexp=%s", m.Re)
+	}
+
+	groups := verifyGroupNumbers(m.Groups, re.NumSubexp(), logger)
+	return Mask{Re: m.Re, Re_: re, Groups: groups}
+
+}
+
+func isGroupsUnique(groups []int) bool {
+	uniqueGrp := make(map[int]struct{}, len(groups))
+	var exists struct{}
+	for _, g := range groups {
+		if _, isContains := uniqueGrp[g]; isContains {
+			return false
+		}
+		uniqueGrp[g] = exists
+	}
+	return true
+}
+
+func verifyGroupNumbers(groups []int, totalGroups int, logger *zap.SugaredLogger) []int {
+	if len(groups) == 0 {
+		groups = append(groups, 0)
+	}
+
+	if !isGroupsUnique(groups) {
+		logger.Panicf("groups numbers must be unique, groups numbers=%v", groups)
+	}
+
+	out := make([]int, 0, len(groups))
+	for _, g := range groups {
+		if g > totalGroups || g < 0 {
+			logger.Panicf("wrong group number, number=%d", g)
+		} else if g == 0 {
+			return []int{0}
+		}
+		out = append(out, g)
+	}
+	return out
+}
+
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginParams) {
 	p.config = config.(*Config)
 	p.maskBuf = make([]byte, 0, params.PipelineSettings.AvgLogSize)
 	p.sourceBuf = make([]byte, 0, params.PipelineSettings.AvgLogSize)
 	p.valueNodes = make([]*insaneJSON.Node, 0)
 	p.logger = params.Logger
-	for i := range p.config.Masks {
-		p.logger.Infof("compiling, re=%s, groups=%v", p.config.Masks[i].Re, p.config.Masks[i].Groups)
-		p.config.Masks[i].Re_ = regexp.MustCompile(p.config.Masks[i].Re)
-	}
+	p.config.Masks = compileMasks(p.config.Masks, p.logger)
 }
 
 func (p Plugin) Stop() {
@@ -120,10 +170,6 @@ func maskValue(value, buf []byte, re *regexp.Regexp, groups []int, l *zap.Sugare
 	offset := 0
 	for _, index := range indexes {
 		for _, grp := range groups {
-			maxIndexValue := grp*2 + 1
-			if maxIndexValue < 0 || maxIndexValue >= len(index) || index[maxIndexValue] == -1 {
-				continue
-			}
 			value, offset = maskSection(
 				buf,
 				value,
