@@ -90,7 +90,6 @@ func compileMask(m Mask, logger *zap.SugaredLogger) Mask {
 
 	groups := verifyGroupNumbers(m.Groups, re.NumSubexp(), logger)
 	return Mask{Re: m.Re, Re_: re, Groups: groups}
-
 }
 
 func isGroupsUnique(groups []int) bool {
