@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	insaneJSON "github.com/vitkovskii/insane-json"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
 const (
@@ -96,116 +97,119 @@ func TestMaskFunctions(t *testing.T) {
 
 func TestGroupNumbers(t *testing.T) {
 	suits := []struct {
-		name        string
-		input       Mask
-		expect      Mask
-		isPanics    bool
-		panicsValue string
-		comment     string
+		name     string
+		input    Mask
+		expect   Mask
+		isFatal  bool
+		fatalMsg string
+		comment  string
 	}{
 		{
-			name:     "simple test",
-			input:    Mask{Re: kDefaultCardRegExp, Groups: []int{1, 2, 3}},
-			expect:   Mask{Re: kDefaultCardRegExp, Groups: []int{1, 2, 3}},
-			isPanics: false,
-			comment:  "mask successfully compiled",
+			name:    "simple test",
+			input:   Mask{Re: kDefaultCardRegExp, Groups: []int{1, 2, 3}},
+			expect:  Mask{Re: kDefaultCardRegExp, Groups: []int{1, 2, 3}},
+			isFatal: false,
+			comment: "mask successfully compiled",
 		},
 		{
-			name:     "groups contains `zero`",
-			input:    Mask{Re: kDefaultCardRegExp, Groups: []int{0, 1, 2, 3}},
-			expect:   Mask{Re: kDefaultCardRegExp, Groups: []int{0}},
-			isPanics: false,
-			comment:  "deleted all groups except zero",
+			name:    "groups contains `zero`",
+			input:   Mask{Re: kDefaultCardRegExp, Groups: []int{0, 1, 2, 3}},
+			expect:  Mask{Re: kDefaultCardRegExp, Groups: []int{0}},
+			isFatal: false,
+			comment: "deleted all groups except zero",
 		},
 		{
-			name:        "groups is empty",
-			input:       Mask{Re: kDefaultCardRegExp, Groups: []int{}},
-			isPanics:    true,
-			panicsValue: "groups is empty",
-			comment:     "panics on empty groups",
+			name:     "groups is empty",
+			input:    Mask{Re: kDefaultCardRegExp, Groups: []int{}},
+			isFatal:  true,
+			fatalMsg: "groups is empty",
+			comment:  "fatal on empty groups",
 		},
 		{
-			name:        "negative group number",
-			input:       Mask{Re: kDefaultCardRegExp, Groups: []int{-1}},
-			expect:      Mask{Re: kDefaultCardRegExp, Groups: []int{}},
-			isPanics:    true,
-			panicsValue: "wrong group number, number=-1",
-			comment:     "zero group added",
+			name:     "negative group number",
+			input:    Mask{Re: kDefaultCardRegExp, Groups: []int{-1}},
+			expect:   Mask{Re: kDefaultCardRegExp, Groups: []int{}},
+			isFatal:  true,
+			fatalMsg: "wrong group number, number=-1",
+			comment:  "fatal on negative group number",
 		},
 		{
-			name:        "big value of group number",
-			input:       Mask{Re: kDefaultCardRegExp, Groups: []int{11}},
-			expect:      Mask{Re: kDefaultCardRegExp, Groups: []int{}},
-			isPanics:    true,
-			panicsValue: "wrong group number, number=11",
-			comment:     "panics on checking group number",
+			name:     "big value of group number",
+			input:    Mask{Re: kDefaultCardRegExp, Groups: []int{11}},
+			expect:   Mask{Re: kDefaultCardRegExp, Groups: []int{}},
+			isFatal:  true,
+			fatalMsg: "wrong group number, number=11",
+			comment:  "fatal on checking group number",
 		},
 		{
-			name:     "zero in group numbers",
-			input:    Mask{Re: kDefaultCardRegExp, Groups: []int{0}},
-			expect:   Mask{Re: kDefaultCardRegExp, Groups: []int{0}},
-			isPanics: false,
-			comment:  "compiling success",
+			name:    "zero in group numbers",
+			input:   Mask{Re: kDefaultCardRegExp, Groups: []int{0}},
+			expect:  Mask{Re: kDefaultCardRegExp, Groups: []int{0}},
+			isFatal: false,
+			comment: "compiling success",
 		},
 		{
-			name:        "error in expression",
-			input:       Mask{Re: "(err", Groups: []int{1}},
-			expect:      Mask{Re: kDefaultCardRegExp, Groups: []int{}},
-			isPanics:    true,
-			panicsValue: "error on compiling regexp, regexp=(err",
-			comment:     "panics on compiling regexp",
+			name:     "error in expression",
+			input:    Mask{Re: "(err", Groups: []int{1}},
+			expect:   Mask{Re: kDefaultCardRegExp, Groups: []int{}},
+			isFatal:  true,
+			fatalMsg: "error on compiling regexp, regexp=(err",
+			comment:  "fatal on compiling regexp",
 		},
 		{
-			name:        "big value of group number with zero first",
-			input:       Mask{Re: kDefaultCardRegExp, Groups: []int{0, 1, 2, 3, 4, 5}},
-			isPanics:    true,
-			panicsValue: "there are many groups, groups=6, totalGroups=4",
-			comment:     "panics",
+			name:     "big value of group number with zero first",
+			input:    Mask{Re: kDefaultCardRegExp, Groups: []int{0, 1, 2, 3, 4, 5}},
+			isFatal:  true,
+			fatalMsg: "there are many groups, groups=6, totalGroups=4",
+			comment:  "fatal error",
 		},
 		{
-			name:        "big value of group number with zero last",
-			input:       Mask{Re: kDefaultCardRegExp, Groups: []int{1, 2, 3, 4, 5, 0}},
-			isPanics:    true,
-			panicsValue: "there are many groups, groups=6, totalGroups=4",
-			comment:     "all values deleted, except zero value",
+			name:     "big value of group number with zero last",
+			input:    Mask{Re: kDefaultCardRegExp, Groups: []int{1, 2, 3, 4, 5, 0}},
+			isFatal:  true,
+			fatalMsg: "there are many groups, groups=6, totalGroups=4",
+			comment:  "fatal error",
 		},
 		{
-			name:        "many value of group number",
-			input:       Mask{Re: kDefaultCardRegExp, Groups: []int{1, 2, 3, 4, 5}},
-			isPanics:    true,
-			panicsValue: "there are many groups, groups=5, totalGroups=4",
-			comment:     "group 5 not exists in regex",
+			name:     "many value of group number",
+			input:    Mask{Re: kDefaultCardRegExp, Groups: []int{1, 2, 3, 4, 5}},
+			isFatal:  true,
+			fatalMsg: "there are many groups, groups=5, totalGroups=4",
+			comment:  "group 5 not exists in regex",
 		},
 		{
-			name:        "wrong value of group number",
-			input:       Mask{Re: kDefaultCardRegExp, Groups: []int{6}},
-			isPanics:    true,
-			panicsValue: "wrong group number, number=6",
-			comment:     "group 6 not exists in regex",
+			name:     "wrong value of group number",
+			input:    Mask{Re: kDefaultCardRegExp, Groups: []int{6}},
+			isFatal:  true,
+			fatalMsg: "wrong group number, number=6",
+			comment:  "group 6 not exists in regex",
 		},
 		{
-			name:        "wrong negative value of group number",
-			input:       Mask{Re: kDefaultCardRegExp, Groups: []int{-6}},
-			isPanics:    true,
-			panicsValue: "wrong group number, number=-6",
-			comment:     "group -6 not exists in regex",
+			name:     "wrong negative value of group number",
+			input:    Mask{Re: kDefaultCardRegExp, Groups: []int{-6}},
+			isFatal:  true,
+			fatalMsg: "wrong group number, number=-6",
+			comment:  "group -6 not exists in regex",
 		},
 		{
-			name:        "groups numbers not unique",
-			input:       Mask{Re: kDefaultCardRegExp, Groups: []int{1, 1, 1}},
-			isPanics:    true,
-			panicsValue: "groups numbers must be unique, groups numbers=[1 1 1]",
-			comment:     "not unique value",
+			name:     "groups numbers not unique",
+			input:    Mask{Re: kDefaultCardRegExp, Groups: []int{1, 1, 1}},
+			isFatal:  true,
+			fatalMsg: "groups numbers must be unique, groups numbers=[1 1 1]",
+			comment:  "not unique value",
 		},
 	}
 
 	for _, s := range suits {
 		t.Run(s.name, func(t *testing.T) {
-			if s.isPanics {
+			if s.isFatal {
 				assert.PanicsWithValue(t,
-					s.panicsValue,
+					s.fatalMsg,
 					func() {
-						compileMask(s.input, zap.NewNop().Sugar())
+						compileMask(
+							s.input,
+							zap.NewNop().WithOptions(zap.OnFatal(zapcore.WriteThenPanic)).Sugar(),
+						)
 					},
 					s.comment)
 			} else {

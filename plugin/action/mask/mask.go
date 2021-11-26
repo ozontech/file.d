@@ -85,7 +85,7 @@ func compileMask(m Mask, logger *zap.SugaredLogger) Mask {
 	logger.Infof("compiling, re=%s, groups=%v", m.Re, m.Groups)
 	re, err := regexp.Compile(m.Re)
 	if err != nil {
-		logger.Panicf("error on compiling regexp, regexp=%s", m.Re)
+		logger.Fatalf("error on compiling regexp, regexp=%s", m.Re)
 	}
 
 	groups := verifyGroupNumbers(m.Groups, re.NumSubexp(), logger)
@@ -106,20 +106,20 @@ func isGroupsUnique(groups []int) bool {
 
 func verifyGroupNumbers(groups []int, totalGroups int, logger *zap.SugaredLogger) []int {
 	if len(groups) == 0 {
-		logger.Panicf("groups is empty")
+		logger.Fatal("groups is empty")
 	}
 
 	if !isGroupsUnique(groups) {
-		logger.Panicf("groups numbers must be unique, groups numbers=%v", groups)
+		logger.Fatalf("groups numbers must be unique, groups numbers=%v", groups)
 	}
 
 	if len(groups) > totalGroups {
-		logger.Panicf("there are many groups, groups=%d, totalGroups=%d", len(groups), totalGroups)
+		logger.Fatalf("there are many groups, groups=%d, totalGroups=%d", len(groups), totalGroups)
 	}
 
 	for _, g := range groups {
 		if g > totalGroups || g < 0 {
-			logger.Panicf("wrong group number, number=%d", g)
+			logger.Fatalf("wrong group number, number=%d", g)
 		} else if g == 0 {
 			return []int{0}
 		}
