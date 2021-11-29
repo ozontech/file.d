@@ -11,12 +11,12 @@ import (
 
 func TestRename(t *testing.T) {
 	config := &Config{
-		"field_1":               "renamed_field_1",
-		"field_2":               "renamed_field_2",
-		"field_4.field_5":       "renamed_field_5",
-		"field_5":               "renamed_field_2",
+		"field_1":         "renamed_field_1",
+		"field_2":         "renamed_field_2",
+		"field_4.field_5": "renamed_field_5",
+		"field_5":         "renamed_field_2",
 		"k8s_node_label_topology\\.kubernetes\\.io/zone": "renamed_field.escaped",
-		"override":              false,
+		"override": false,
 	}
 	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, config, pipeline.MatchModeAnd, nil, false))
 	wg := &sync.WaitGroup{}

@@ -33,7 +33,7 @@ func TestFlatten(t *testing.T) {
 		dumpedEvents = append(dumpedEvents, e)
 	})
 
-	input.In(0, "test.log", 0,  []byte(`{"complex":{"a":"b","c":"d"}}`))
+	input.In(0, "test.log", 0, []byte(`{"complex":{"a":"b","c":"d"}}`))
 
 	wg.Add(2)
 	wg.Wait()

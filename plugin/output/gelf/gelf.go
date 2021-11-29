@@ -7,7 +7,7 @@ import (
 	"github.com/ozonru/file.d/cfg"
 	"github.com/ozonru/file.d/fd"
 	"github.com/ozonru/file.d/pipeline"
-	"github.com/vitkovskii/insane-json"
+	insaneJSON "github.com/vitkovskii/insane-json"
 	"go.uber.org/zap"
 )
 
@@ -226,7 +226,6 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 		}
 
 		_, err := data.gelf.send(outBuf)
-
 		if err != nil {
 			p.logger.Errorf("can't send data to gelf address=%s", p.config.Endpoint, err.Error())
 			_ = data.gelf.close()

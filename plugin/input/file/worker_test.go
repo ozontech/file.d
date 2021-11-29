@@ -78,7 +78,7 @@ func TestWorkerWork(t *testing.T) {
 				isVirgin:       false,
 				isDone:         false,
 				shouldSkip:     false,
-				offsets:        map[pipeline.StreamName]int64{},
+				offsets:        sliceMap{},
 				mu:             &sync.Mutex{},
 			}
 			jp := jobProvider{

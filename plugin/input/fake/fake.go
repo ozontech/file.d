@@ -14,8 +14,7 @@ type Plugin struct {
 	inFn       func()
 }
 
-type Config struct {
-}
+type Config struct{}
 
 func init() {
 	fd.DefaultPluginRegistry.RegisterInput(&pipeline.PluginStaticInfo{

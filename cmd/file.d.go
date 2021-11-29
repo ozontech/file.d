@@ -23,6 +23,7 @@ import (
 	_ "github.com/ozonru/file.d/plugin/action/join"
 	_ "github.com/ozonru/file.d/plugin/action/json_decode"
 	_ "github.com/ozonru/file.d/plugin/action/keep_fields"
+	_ "github.com/ozonru/file.d/plugin/action/mask"
 	_ "github.com/ozonru/file.d/plugin/action/modify"
 	_ "github.com/ozonru/file.d/plugin/action/parse_es"
 	_ "github.com/ozonru/file.d/plugin/action/parse_re2"

@@ -15,8 +15,7 @@ type Plugin struct {
 	outFn      func(event *pipeline.Event)
 }
 
-type Config struct {
-}
+type Config struct{}
 
 func init() {
 	fd.DefaultPluginRegistry.RegisterOutput(&pipeline.PluginStaticInfo{

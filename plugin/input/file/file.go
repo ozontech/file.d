@@ -26,6 +26,8 @@ But update events don't work with symlinks, so watcher also periodically manuall
 > It isn't a `file.d` issue. The data may have been written just before the file truncation. In this case, you may miss to read some events.
 > If you care about the delivery, you should also know that the `logrotate` manual clearly states that copy/truncate may cause data loss even on a rotating stage.
 > So use copy/truncate or similar actions only if your data isn't critical.
+> In order to reduce potential harm of truncation, you can turn on notifications of file changes.
+> By default the plugin is notified only on file creations. Note that following for changes is more CPU intensive.
 
 
 **Reading docker container log files:**
@@ -146,7 +148,7 @@ type Config struct {
 	//> @3@4@5@6
 	//>
 	//> It defines how often to report statistical information to stdout
-	ReportInterval  cfg.Duration `json:"report_interval" default:"10s" parse:"duration"` //*
+	ReportInterval  cfg.Duration `json:"report_interval" default:"5s" parse:"duration"` //*
 	ReportInterval_ time.Duration
 
 	//> @3@4@5@6
@@ -155,6 +157,11 @@ type Config struct {
 	//> @maintenance
 	MaintenanceInterval  cfg.Duration `json:"maintenance_interval" default:"10s" parse:"duration"` //*
 	MaintenanceInterval_ time.Duration
+
+	//> @3@4@5@6
+	//>
+	//> It turns on watching for file modifications. Turning it on cause more CPU work, but it is more probable to catch file truncation
+	ShouldWatchChanges bool `json:"should_watch_file_changes" default:"false"` //*
 }
 
 func init() {

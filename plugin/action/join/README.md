@@ -1,6 +1,6 @@
 # Join plugin
 It makes one big event from the sequence of the events.
-It is useful for assembling back together "exceptions" or "panics" if they were written line by line. 
+It is useful for assembling back together "exceptions" or "panics" if they were written line by line.
 Also known as "multiline".
 
 > ⚠ Parsing the whole event flow could be very CPU intensive because the plugin uses regular expressions.

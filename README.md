@@ -1,6 +1,11 @@
 ![file.d](/static/file.d.png)
 
 # Overview
+[![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://GitHub.com/ozonru/file.d/graphs/commit-activity)
+[![CI](https://github.com/Snyssfx/file.d/actions/workflows/go.yml/badge.svg)](https://github.com/Snyssfx/file.d/actions/workflows/go.yml)
+[![GitHub go.mod Go version of a Go module](https://img.shields.io/github/go-mod/go-version/ozonru/file.d)](https://github.com/ozonru/file.d)
+[![GoReportCard example](https://goreportcard.com/badge/github.com/ozonru/file.d)](https://goreportcard.com/report/github.com/ozonru/file.d)
+
 `file.d` is a blazing fast tool for building data pipelines: read, process, and output events. Primarily developed to read from files, but also supports numerous input/action/output plugins. 
 
 > ⚠ Although we use it in production, `it still isn't v1.0.0`. Please, test your pipelines carefully on dev/stage environments.  
@@ -32,7 +37,7 @@ TBD: throughput on production servers.
 
 **Input**: [dmesg](plugin/input/dmesg/README.md), [fake](plugin/input/fake/README.md), [file](plugin/input/file/README.md), [http](plugin/input/http/README.md), [journalctl](plugin/input/journalctl/README.md), [k8s](plugin/input/k8s/README.md), [kafka](plugin/input/kafka/README.md)
 
-**Action**: [add_host](plugin/action/add_host/README.md), [convert_date](plugin/action/convert_date/README.md), [debug](plugin/action/debug/README.md), [discard](plugin/action/discard/README.md), [flatten](plugin/action/flatten/README.md), [join](plugin/action/join/README.md), [json_decode](plugin/action/json_decode/README.md), [keep_fields](plugin/action/keep_fields/README.md), [modify](plugin/action/modify/README.md), [parse_es](plugin/action/parse_es/README.md), [parse_re2](plugin/action/parse_re2/README.md), [remove_fields](plugin/action/remove_fields/README.md), [rename](plugin/action/rename/README.md), [throttle](plugin/action/throttle/README.md)
+**Action**: [add_host](plugin/action/add_host/README.md), [convert_date](plugin/action/convert_date/README.md), [debug](plugin/action/debug/README.md), [discard](plugin/action/discard/README.md), [flatten](plugin/action/flatten/README.md), [join](plugin/action/join/README.md), [json_decode](plugin/action/json_decode/README.md), [keep_fields](plugin/action/keep_fields/README.md), [mask](plugin/action/mask/README.md), [modify](plugin/action/modify/README.md), [parse_es](plugin/action/parse_es/README.md), [parse_re2](plugin/action/parse_re2/README.md), [remove_fields](plugin/action/remove_fields/README.md), [rename](plugin/action/rename/README.md), [throttle](plugin/action/throttle/README.md)
 
 **Output**: [devnull](plugin/output/devnull/README.md), [elasticsearch](plugin/output/elasticsearch/README.md), [gelf](plugin/output/gelf/README.md), [kafka](plugin/output/kafka/README.md), [splunk](plugin/output/splunk/README.md), [stdout](plugin/output/stdout/README.md)
 

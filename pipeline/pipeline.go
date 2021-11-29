@@ -273,7 +273,6 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 	}
 
 	event := p.eventPool.get()
-
 	dec := decoder.NO
 	if p.decoder == decoder.AUTO {
 		dec = p.suggestedDecoder
@@ -334,7 +333,6 @@ func (p *Pipeline) streamEvent(event *Event) uint64 {
 	if p.useSpread {
 		event.SourceID = SourceID(event.SeqID % uint64(p.procCount.Load()))
 	}
-
 	if !p.disableStreams {
 		node := event.Root.Dig(p.settings.StreamField)
 		if node != nil {
