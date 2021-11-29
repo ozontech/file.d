@@ -66,10 +66,10 @@ type Plugin struct {
 	controller pipeline.ActionPluginController
 	config     *Config
 
-	isJoining  bool
-	initial    *pipeline.Event
-	buff       []byte
-	maxLogSize int
+	isJoining    bool
+	initial      *pipeline.Event
+	buff         []byte
+	maxEventSize int
 
 	logger *zap.SugaredLogger
 }
@@ -94,6 +94,11 @@ type Config struct {
 	//> A regexp which will continue the join sequence.
 	Continue  cfg.Regexp `json:"continue" required:"true" parse:"regexp"` //*
 	Continue_ *regexp.Regexp
+
+	//> @3@4@5@6
+	//>
+	//> Max size of the resulted event. If it is set and the event exceeds the limit, the event will be truncated.
+	MaxEventSize int `json:"max_event_size" default:"0"` //*
 }
 
 func init() {
@@ -111,8 +116,8 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 	p.controller = params.Controller
 	p.config = config.(*Config)
 	p.isJoining = false
-	p.buff = make([]byte, 0, params.PipelineSettings.AvgLogSize)
-	p.maxLogSize = params.PipelineSettings.MaxLogSize
+	p.buff = make([]byte, 0, params.PipelineSettings.AvgEventSize)
+	p.maxEventSize = p.config.MaxEventSize
 	p.logger = params.Logger
 }
 
@@ -164,8 +169,7 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	if p.isJoining {
 		nextOK := p.config.Continue_.MatchString(value)
 		if nextOK {
-			// append buff until it exceeds max_log_size.
-			if p.maxLogSize == 0 || len(p.buff) < p.maxLogSize {
+			if p.maxEventSize == 0 || len(p.buff) < p.maxEventSize {
 				p.buff = append(p.buff, value...)
 			}
 			return pipeline.ActionCollapse

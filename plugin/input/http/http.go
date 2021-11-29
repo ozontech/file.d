@@ -101,7 +101,7 @@ func (p *Plugin) newReadBuff() interface{} {
 }
 
 func (p *Plugin) newEventBuffs() interface{} {
-	return make([]byte, 0, p.params.PipelineSettings.AvgLogSize)
+	return make([]byte, 0, p.params.PipelineSettings.AvgEventSize)
 }
 
 func (p *Plugin) getSourceID() pipeline.SourceID {

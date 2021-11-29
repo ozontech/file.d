@@ -7,12 +7,12 @@ import (
 )
 
 type MultilineAction struct {
-	config     *Config
-	logger     *zap.SugaredLogger
-	params     *pipeline.ActionPluginParams
-	maxLogSize int
-	logBuff    []byte
-	logSize    int
+	config       *Config
+	logger       *zap.SugaredLogger
+	params       *pipeline.ActionPluginParams
+	maxEventSize int
+	logBuff      []byte
+	logSize      int
 }
 
 const (
@@ -22,7 +22,7 @@ const (
 func (p *MultilineAction) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginParams) {
 	p.logger = params.Logger
 	p.params = params
-	p.maxLogSize = params.PipelineSettings.MaxLogSize
+	p.maxEventSize = params.PipelineSettings.MaxEventSize
 	p.config = config.(*Config)
 
 	p.config.AllowedPodLabels_ = cfg.ListToMap(p.config.AllowedPodLabels)
@@ -41,8 +41,8 @@ func (p *MultilineAction) Do(event *pipeline.Event) pipeline.ActionResult {
 		p.logBuff = p.logBuff[:1]
 		return pipeline.ActionDiscard
 	}
-	if p.maxLogSize != 0 && p.logSize > p.maxLogSize {
-		p.logger.Errorf("logs will be discarded due to maxLogSize")
+	if p.maxEventSize != 0 && p.logSize > p.maxEventSize {
+		p.logger.Errorf("logs will be discarded due to maxEventSize")
 		p.logBuff = p.logBuff[:1]
 		return pipeline.ActionDiscard
 	}

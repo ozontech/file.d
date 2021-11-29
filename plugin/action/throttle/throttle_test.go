@@ -47,7 +47,8 @@ func (c *testConfig) runPipeline(t *testing.T) {
 	startTime := time.Now()
 	for {
 		index := rand.Int() % len(formats)
-		json := fmt.Sprintf(formats[index], time.Now().UTC().Format(time.RFC3339Nano))
+		// Format like RFC3339Nano, but nanoseconds are zero-padded, thus all times have equal length.
+		json := fmt.Sprintf(formats[index], time.Now().UTC().Format("2006-01-02T15:04:05.000000000Z07:00"))
 		input.In(10, sourceNames[rand.Int()%len(sourceNames)], 0, []byte(json))
 		if time.Since(startTime) > c.workTime {
 			break

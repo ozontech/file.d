@@ -183,7 +183,7 @@ const contentPostgres = `# ===next===
 2021-10-12 08:25:44 GMT [23379] => [526-1] client=[local],db=exampledb,user=none LOG:  duration: 0.018 ms  execute <unnamed>: SHOW TRANSACTION ISOLATION LEVEL
 `
 
-func TestJoin(t *testing.T) {
+func TestSimpleJoin(t *testing.T) {
 	cases := []struct {
 		name        string
 		startPat    string
@@ -215,7 +215,7 @@ func TestJoin(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			format := `{"log":"%s\n"}`
 			content := strings.ReplaceAll(tt.content, "# ===next===\n", "")
-			lines := make([]string, 0, 0)
+			lines := make([]string, 0)
 			for _, line := range strings.Split(content, "\n") {
 				if line == "" {
 					continue

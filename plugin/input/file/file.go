@@ -197,7 +197,7 @@ func (p *Plugin) startWorkers() {
 	p.workers = make([]*worker, p.config.WorkersCount_)
 	for i := range p.workers {
 		p.workers[i] = &worker{
-			maxLogSize: p.params.PipelineSettings.MaxLogSize,
+			maxEventSize: p.params.PipelineSettings.MaxEventSize,
 		}
 		p.workers[i].start(p.params.Controller, p.jobProvider, p.config.ReadBufferSize, p.logger)
 	}

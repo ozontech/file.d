@@ -113,7 +113,7 @@ func NewPipeline(actions []*pipeline.ActionPluginStaticInfo, pipelineOpts ...str
 		MaintenanceInterval: time.Second * 100000,
 		EventTimeout:        eventTimeout,
 		AntispamThreshold:   0,
-		AvgLogSize:          2048,
+		AvgEventSize:        2048,
 		StreamField:         "stream",
 		Decoder:             "json",
 	}

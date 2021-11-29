@@ -22,14 +22,14 @@ If a network error occurs, the batch will infinitely try to be delivered to the 
 }*/
 
 type Plugin struct {
-	logger     *zap.SugaredLogger
-	client     *http.Client
-	config     *Config
-	avgLogSize int
-	time       string
-	batcher    *pipeline.Batcher
-	controller pipeline.OutputPluginController
-	mu         *sync.Mutex
+	logger       *zap.SugaredLogger
+	client       *http.Client
+	config       *Config
+	avgEventSize int
+	time         string
+	batcher      *pipeline.Batcher
+	controller   pipeline.OutputPluginController
+	mu           *sync.Mutex
 }
 
 //! config-params
@@ -104,7 +104,7 @@ func Factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginParams) {
 	p.controller = params.Controller
 	p.logger = params.Logger
-	p.avgLogSize = params.PipelineSettings.AvgLogSize
+	p.avgEventSize = params.PipelineSettings.AvgEventSize
 	p.config = config.(*Config)
 	p.mu = &sync.Mutex{}
 
@@ -150,14 +150,14 @@ func (p *Plugin) Out(event *pipeline.Event) {
 func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 	if *workerData == nil {
 		*workerData = &data{
-			outBuf: make([]byte, 0, p.config.BatchSize_*p.avgLogSize),
+			outBuf: make([]byte, 0, p.config.BatchSize_*p.avgEventSize),
 		}
 	}
 
 	data := (*workerData).(*data)
 	// handle to much memory consumption
-	if cap(data.outBuf) > p.config.BatchSize_*p.avgLogSize {
-		data.outBuf = make([]byte, 0, p.config.BatchSize_*p.avgLogSize)
+	if cap(data.outBuf) > p.config.BatchSize_*p.avgEventSize {
+		data.outBuf = make([]byte, 0, p.config.BatchSize_*p.avgEventSize)
 	}
 
 	data.outBuf = data.outBuf[:0]

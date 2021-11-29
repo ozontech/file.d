@@ -129,8 +129,8 @@ func verifyGroupNumbers(groups []int, totalGroups int, logger *zap.SugaredLogger
 
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginParams) {
 	p.config = config.(*Config)
-	p.maskBuf = make([]byte, 0, params.PipelineSettings.AvgLogSize)
-	p.sourceBuf = make([]byte, 0, params.PipelineSettings.AvgLogSize)
+	p.maskBuf = make([]byte, 0, params.PipelineSettings.AvgEventSize)
+	p.sourceBuf = make([]byte, 0, params.PipelineSettings.AvgEventSize)
 	p.valueNodes = make([]*insaneJSON.Node, 0)
 	p.logger = params.Logger
 	p.config.Masks = compileMasks(p.config.Masks, p.logger)

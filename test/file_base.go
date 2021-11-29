@@ -53,6 +53,8 @@ func CheckNotZero(t *testing.T, target string, msg string) int64 {
 	info, err := os.Stat(target)
 	assert.NoError(t, err, msg)
 	assert.NotNil(t, info, msg)
-	assert.NotZero(t, info.Size(), msg)
+	if info.Size() == 0 {
+		assert.NotZero(t, info.Size(), msg)
+	}
 	return info.Size()
 }

@@ -25,34 +25,30 @@ func (i *inputerMock) In(sourceID pipeline.SourceID, sourceName string, offset i
 }
 
 func TestWorkerWork(t *testing.T) {
-	type args struct {
-		file           string
-		readBufferSize int
-	}
 	tests := []struct {
 		name           string
-		maxLogSize     int
+		maxEventSize   int
 		inFile         string
 		readBufferSize int
 		expData        string
 	}{
 		{
 			name:           "should_ok_when_read_1_line",
-			maxLogSize:     1024,
+			maxEventSize:   1024,
 			inFile:         "abc\n",
 			readBufferSize: 1024,
 			expData:        "abc\n",
 		},
 		{
 			name:           "should_ok_and_empty_when_read_not_ready_line",
-			maxLogSize:     1024,
+			maxEventSize:   1024,
 			inFile:         "abc",
 			readBufferSize: 1024,
 			expData:        "",
 		},
 		{
 			name:           "should_ok_and_not_read_long_line",
-			maxLogSize:     2,
+			maxEventSize:   2,
 			inFile:         "abc\n",
 			readBufferSize: 1024,
 			expData:        "",
@@ -60,7 +56,7 @@ func TestWorkerWork(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			w := &worker{maxLogSize: tt.maxLogSize}
+			w := &worker{maxEventSize: tt.maxEventSize}
 			inputer := inputerMock{}
 			f, err := os.CreateTemp("/tmp", "worker_test")
 			require.NoError(t, err)

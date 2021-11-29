@@ -168,7 +168,7 @@ func (s *stream) tryUnblock() bool {
 	}
 
 	s.mu.Lock()
-	if time.Now().Sub(s.blockTime) < s.streamer.eventTimeout {
+	if time.Since(s.blockTime) < s.streamer.eventTimeout {
 		s.mu.Unlock()
 		return false
 	}

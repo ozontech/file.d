@@ -13,8 +13,8 @@ import (
 func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 	capacity := pipeline.DefaultCapacity
 	antispamThreshold := 0
-	avgLogSize := pipeline.DefaultAvgLogSize
-	maxLogSize := pipeline.DefaultMaxLogSize
+	avgInputEventSize := pipeline.DefaultAvgInputEventSize
+	maxInputEventSize := pipeline.DefaultMaxInputEventSize
 	streamField := pipeline.DefaultStreamField
 	maintenanceInterval := pipeline.DefaultMaintenanceInterval
 	decoder := "auto"
@@ -29,12 +29,12 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 
 		val = settings.Get("avg_log_size").MustInt()
 		if val != 0 {
-			avgLogSize = val
+			avgInputEventSize = val
 		}
 
 		val = settings.Get("max_log_size").MustInt()
 		if val != 0 {
-			maxLogSize = val
+			maxInputEventSize = val
 		}
 
 		str := settings.Get("decoder").MustString()
@@ -74,8 +74,8 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 	return &pipeline.Settings{
 		Decoder:             decoder,
 		Capacity:            capacity,
-		AvgLogSize:          avgLogSize,
-		MaxLogSize:          maxLogSize,
+		AvgEventSize:        avgInputEventSize,
+		MaxEventSize:        maxInputEventSize,
 		AntispamThreshold:   antispamThreshold,
 		MaintenanceInterval: maintenanceInterval,
 		EventTimeout:        eventTimeout,

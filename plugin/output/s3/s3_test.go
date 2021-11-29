@@ -89,7 +89,6 @@ func TestStart(t *testing.T) {
 	// pattern for parent log file
 	pattern := fmt.Sprintf("%s/*.log", dir)
 
-	sealUpFileSleep := 400 * time.Millisecond
 	test.ClearDir(t, dir)
 	s3MockClient := newMockClient()
 	fileConfig := file.Config{
@@ -122,7 +121,7 @@ func TestStart(t *testing.T) {
 	time.Sleep(300 * time.Microsecond)
 
 	test.SendPack(t, p, tests.firstPack)
-	time.Sleep(sealUpFileSleep)
+	time.Sleep(time.Second)
 	size1 := test.CheckNotZero(t, fileName, "s3 data is missed after first pack")
 
 	// check deletion upload log files
@@ -133,7 +132,7 @@ func TestStart(t *testing.T) {
 	// initial sending the second pack
 	// no special situations
 	test.SendPack(t, p, tests.secondPack)
-	time.Sleep(sealUpFileSleep)
+	time.Sleep(time.Second)
 
 	match = test.GetMatches(t, pattern)
 	assert.Equal(t, 1, len(match))
@@ -144,19 +143,19 @@ func TestStart(t *testing.T) {
 
 	// failed during writing
 	test.SendPack(t, p, tests.thirdPack)
-	time.Sleep(sealUpFileSleep / 4)
+	time.Sleep(200 * time.Millisecond)
 	p.Stop()
 
 	// check log file not empty
 	match = test.GetMatches(t, pattern)
 	assert.Equal(t, 1, len(match))
 	test.CheckNotZero(t, match[0], "log file data missed")
-	time.Sleep(sealUpFileSleep)
+	// time.Sleep(sealUpFileSleep)
 
 	// restart like after crash
 	p.Start()
 
-	time.Sleep(sealUpFileSleep / 2)
+	time.Sleep(time.Second)
 
 	size3 := test.CheckNotZero(t, fileName, "s3 data missed after third pack")
 	assert.True(t, size3 > size2)
@@ -168,7 +167,7 @@ func newPipeline(t *testing.T, configOutput *Config) *pipeline.Pipeline {
 		Capacity:            4096,
 		MaintenanceInterval: time.Second * 100000,
 		AntispamThreshold:   0,
-		AvgLogSize:          2048,
+		AvgEventSize:        2048,
 		StreamField:         "stream",
 		Decoder:             "json",
 	}

@@ -10,7 +10,7 @@ import (
 )
 
 type worker struct {
-	maxLogSize int
+	maxEventSize int
 }
 
 type inputer interface {
@@ -25,7 +25,7 @@ func (w *worker) work(controller inputer, jobProvider *jobProvider, readBufferSi
 	accumBuffer := make([]byte, 0, readBufferSize)
 	readBuffer := make([]byte, readBufferSize)
 	var inBuffer []byte
-	shouldCheckMax := w.maxLogSize != 0
+	shouldCheckMax := w.maxEventSize != 0
 
 	var seqID uint64 = 0
 	for {
@@ -102,7 +102,7 @@ func (w *worker) work(controller inputer, jobProvider *jobProvider, readBufferSi
 					} else {
 						inBuffer = readBuffer[processed : pos+1]
 					}
-					if shouldCheckMax && len(inBuffer) > w.maxLogSize {
+					if shouldCheckMax && len(inBuffer) > w.maxEventSize {
 						break
 					}
 					seqID = controller.In(sourceID, sourceName, offset, inBuffer, isVirgin)
@@ -121,7 +121,7 @@ func (w *worker) work(controller inputer, jobProvider *jobProvider, readBufferSi
 			} else {
 				accumBuffer = append(accumBuffer, readBuffer[:read]...)
 				accumulated += read
-				if shouldCheckMax && len(accumBuffer) > w.maxLogSize {
+				if shouldCheckMax && len(accumBuffer) > w.maxEventSize {
 					break
 				}
 			}
