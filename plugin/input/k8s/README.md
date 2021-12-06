@@ -26,7 +26,7 @@ pipelines:
 ```
 
 ### Config params
-**`max_event_size`** *`int`* *`default=1000000`* 
+**`split_event_size`** *`int`* *`default=1000000`* 
 
 Docker splits long logs by 16kb chunks. The plugin joins them back, but if an event is longer than this value in bytes, it will be split after all.
 > Due to the optimization process it's not a strict rule. Events may be split even if they won't exceed the limit.

@@ -21,10 +21,10 @@ type data struct {
 }
 
 type Plugin struct {
-	logger     *zap.SugaredLogger
-	config     *Config
-	avgLogSize int
-	controller pipeline.OutputPluginController
+	logger       *zap.SugaredLogger
+	config       *Config
+	avgEventSize int
+	controller   pipeline.OutputPluginController
 
 	producer sarama.SyncProducer
 	batcher  *pipeline.Batcher
@@ -86,7 +86,7 @@ func Factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginParams) {
 	p.config = config.(*Config)
 	p.logger = params.Logger
-	p.avgLogSize = params.PipelineSettings.AvgLogSize
+	p.avgEventSize = params.PipelineSettings.AvgEventSize
 	p.controller = params.Controller
 
 	p.logger.Infof("workers count=%d, batch size=%d", p.config.WorkersCount_, p.config.BatchSize_)
@@ -114,14 +114,14 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 	if *workerData == nil {
 		*workerData = &data{
 			messages: make([]*sarama.ProducerMessage, p.config.BatchSize_, p.config.BatchSize_),
-			outBuf:   make([]byte, 0, p.config.BatchSize_*p.avgLogSize),
+			outBuf:   make([]byte, 0, p.config.BatchSize_*p.avgEventSize),
 		}
 	}
 
 	data := (*workerData).(*data)
 	// handle to much memory consumption
-	if cap(data.outBuf) > p.config.BatchSize_*p.avgLogSize {
-		data.outBuf = make(sarama.ByteEncoder, 0, p.config.BatchSize_*p.avgLogSize)
+	if cap(data.outBuf) > p.config.BatchSize_*p.avgEventSize {
+		data.outBuf = make(sarama.ByteEncoder, 0, p.config.BatchSize_*p.avgEventSize)
 	}
 
 	outBuf := data.outBuf[:0]

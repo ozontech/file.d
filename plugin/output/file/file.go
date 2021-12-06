@@ -23,7 +23,7 @@ type Plugin struct {
 	controller     pipeline.OutputPluginController
 	logger         *zap.SugaredLogger
 	config         *Config
-	avgLogSize     int
+	avgEventSize   int
 	batcher        *pipeline.Batcher
 	file           *os.File
 	ctx            context.Context
@@ -145,14 +145,14 @@ func (p *Plugin) Out(event *pipeline.Event) {
 func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 	if *workerData == nil {
 		*workerData = &data{
-			outBuf: make([]byte, 0, p.config.BatchSize_*p.avgLogSize),
+			outBuf: make([]byte, 0, p.config.BatchSize_*p.avgEventSize),
 		}
 	}
 	data := (*workerData).(*data)
 
 	// handle to much memory consumption
-	if cap(data.outBuf) > p.config.BatchSize_*p.avgLogSize {
-		data.outBuf = make([]byte, 0, p.config.BatchSize_*p.avgLogSize)
+	if cap(data.outBuf) > p.config.BatchSize_*p.avgEventSize {
+		data.outBuf = make([]byte, 0, p.config.BatchSize_*p.avgEventSize)
 	}
 
 	outBuf := data.outBuf[:0]

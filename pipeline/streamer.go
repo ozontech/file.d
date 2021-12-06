@@ -21,9 +21,11 @@ type streamer struct {
 
 	blocked   []*stream
 	blockedMu *sync.Mutex
+
+	eventTimeout time.Duration
 }
 
-func newStreamer() *streamer {
+func newStreamer(eventTimeout time.Duration) *streamer {
 	streamer := &streamer{
 		streams: make(map[SourceID]map[StreamName]*stream),
 		mu:      &sync.RWMutex{},
@@ -31,6 +33,8 @@ func newStreamer() *streamer {
 
 		chargedMu: &sync.Mutex{},
 		blockedMu: &sync.Mutex{},
+
+		eventTimeout: eventTimeout,
 	}
 	streamer.chargedCond = sync.NewCond(streamer.chargedMu)
 

@@ -359,6 +359,9 @@ func getConfigByPipeline(p *pipeline.Pipeline) *Config {
 
 // TestWatch tests if watcher notifies about new dirs and files
 func TestWatch(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skip test in short mode")
+	}
 	iterations := 4
 	eventsPerIteration := 2
 	finalEvent := 1
@@ -700,6 +703,9 @@ func TestReadLongJSON(t *testing.T) {
 
 // TestReadManyFilesParallelRace tests if plugin doesn't have race conditions in the case of parallel processing of files
 func TestReadManyFilesParallelRace(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skip test in short mode")
+	}
 	lineCount := 2
 	blockCount := 256
 	fileCount := 32
@@ -738,6 +744,9 @@ func TestReadManyFilesParallelRace(t *testing.T) {
 
 // TestReadManyCharsParallelRace tests if plugin doesn't have race conditions in the case of parallel processing of chars
 func TestReadManyCharsParallelRace(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skip test in short mode")
+	}
 	config := &Config{}
 	_ = cfg.Parse(config, nil)
 
@@ -850,6 +859,9 @@ func TestReadStreamRace(t *testing.T) {
 }
 
 func TestRotationRenameSimple(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skip test in short mode")
+	}
 	file := ""
 	newFile := ""
 	run(&test.Case{

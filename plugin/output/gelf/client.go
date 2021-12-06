@@ -8,10 +8,7 @@ import (
 
 type network string
 
-const (
-	transportTCP network = "tcp"
-	transportUDP network = "udp"
-)
+const transportTCP network = "tcp"
 
 type client struct {
 	network   network

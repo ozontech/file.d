@@ -13,11 +13,13 @@ import (
 func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 	capacity := pipeline.DefaultCapacity
 	antispamThreshold := 0
-	avgLogSize := pipeline.DefaultAvgLogSize
+	avgInputEventSize := pipeline.DefaultAvgInputEventSize
+	maxInputEventSize := pipeline.DefaultMaxInputEventSize
 	streamField := pipeline.DefaultStreamField
 	maintenanceInterval := pipeline.DefaultMaintenanceInterval
 	decoder := "auto"
 	isStrict := false
+	eventTimeout := pipeline.DefaultEventTimeout
 
 	if settings != nil {
 		val := settings.Get("capacity").MustInt()
@@ -27,7 +29,12 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 
 		val = settings.Get("avg_log_size").MustInt()
 		if val != 0 {
-			avgLogSize = val
+			avgInputEventSize = val
+		}
+
+		val = settings.Get("max_log_size").MustInt()
+		if val != 0 {
+			maxInputEventSize = val
 		}
 
 		str := settings.Get("decoder").MustString()
@@ -49,6 +56,15 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 			maintenanceInterval = i
 		}
 
+		str = settings.Get("event_timeout").MustString()
+		if str != "" {
+			i, err := time.ParseDuration(str)
+			if err != nil {
+				logger.Fatalf("can't parse pipeline event timeout: %s", err.Error())
+			}
+			eventTimeout = i
+		}
+
 		antispamThreshold = settings.Get("antispam_threshold").MustInt()
 		antispamThreshold *= int(maintenanceInterval / time.Second)
 
@@ -58,9 +74,11 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 	return &pipeline.Settings{
 		Decoder:             decoder,
 		Capacity:            capacity,
-		AvgLogSize:          avgLogSize,
+		AvgEventSize:        avgInputEventSize,
+		MaxEventSize:        maxInputEventSize,
 		AntispamThreshold:   antispamThreshold,
 		MaintenanceInterval: maintenanceInterval,
+		EventTimeout:        eventTimeout,
 		StreamField:         streamField,
 		IsStrict:            isStrict,
 	}

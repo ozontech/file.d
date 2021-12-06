@@ -115,8 +115,8 @@ func TestFormatEvent(t *testing.T) {
 			PluginDefaultParams: &pipeline.PluginDefaultParams{
 				PipelineName: "name",
 				PipelineSettings: &pipeline.Settings{
-					Capacity:   128,
-					AvgLogSize: 128,
+					Capacity:     128,
+					AvgEventSize: 128,
 				},
 			},
 			Controller: nil,

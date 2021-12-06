@@ -53,7 +53,7 @@ func newPipeline(t *testing.T, configOutput *Config) *pipeline.Pipeline {
 		Capacity:            4096,
 		MaintenanceInterval: time.Second * 100000,
 		AntispamThreshold:   0,
-		AvgLogSize:          2048,
+		AvgEventSize:        2048,
 		StreamField:         "stream",
 		Decoder:             "json",
 	}

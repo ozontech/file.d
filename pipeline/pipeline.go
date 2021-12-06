@@ -22,9 +22,11 @@ import (
 const (
 	DefaultStreamField         = "stream"
 	DefaultCapacity            = 1024
-	DefaultAvgLogSize          = 16 * 1024
+	DefaultAvgInputEventSize   = 16 * 1024
+	DefaultMaxInputEventSize   = 0
 	DefaultJSONNodePoolSize    = 1024
 	DefaultMaintenanceInterval = time.Second * 5
+	DefaultEventTimeout        = time.Second * 30
 	DefaultFieldValue          = "not_set"
 	DefaultStreamName          = StreamName("not_set")
 	DefaultWaitForPanicTimeout = time.Minute
@@ -103,8 +105,10 @@ type Settings struct {
 	Decoder             string
 	Capacity            int
 	MaintenanceInterval time.Duration
+	EventTimeout        time.Duration
 	AntispamThreshold   int
-	AvgLogSize          int
+	AvgEventSize        int
+	MaxEventSize        int
 	StreamField         string
 	IsStrict            bool
 }
@@ -123,7 +127,7 @@ func New(name string, settings *Settings, registry *prometheus.Registry) *Pipeli
 		},
 
 		metricsHolder: newMetricsHolder(name, registry, metricsGenInterval),
-		streamer:      newStreamer(),
+		streamer:      newStreamer(settings.EventTimeout),
 		eventPool:     newEventPool(settings.Capacity),
 		antispamer:    newAntispamer(settings.AntispamThreshold, antispamUnbanIterations, settings.MaintenanceInterval),
 
@@ -263,7 +267,8 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 	// don't process shit
 	isEmpty := length == 0 || (bytes[0] == '\n' && length == 1)
 	isSpam := p.antispamer.isSpam(sourceID, sourceName, isNewSource)
-	if isEmpty || isSpam {
+	isLong := p.settings.MaxEventSize != 0 && length > p.settings.MaxEventSize
+	if isEmpty || isSpam || isLong {
 		return 0
 	}
 

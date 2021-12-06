@@ -31,11 +31,11 @@ Allowed characters in field names are letters, numbers, underscores, dashes, and
 }*/
 
 type Plugin struct {
-	config     *Config
-	logger     *zap.SugaredLogger
-	avgLogSize int
-	batcher    *pipeline.Batcher
-	controller pipeline.OutputPluginController
+	config       *Config
+	logger       *zap.SugaredLogger
+	avgEventSize int
+	batcher      *pipeline.Batcher
+	controller   pipeline.OutputPluginController
 }
 
 //! config-params
@@ -151,7 +151,7 @@ func Factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginParams) {
 	p.controller = params.Controller
 	p.logger = params.Logger
-	p.avgLogSize = params.PipelineSettings.AvgLogSize
+	p.avgEventSize = params.PipelineSettings.AvgEventSize
 	p.config = config.(*Config)
 
 	p.config.hostField = pipeline.ByteToStringUnsafe(p.formatExtraField(nil, p.config.HostField))
@@ -190,15 +190,15 @@ func (p *Plugin) Out(event *pipeline.Event) {
 func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 	if *workerData == nil {
 		*workerData = &data{
-			outBuf:    make([]byte, 0, p.config.BatchSize_*p.avgLogSize),
+			outBuf:    make([]byte, 0, p.config.BatchSize_*p.avgEventSize),
 			encodeBuf: make([]byte, 0, 0),
 		}
 	}
 
 	data := (*workerData).(*data)
 	// handle to much memory consumption
-	if cap(data.outBuf) > p.config.BatchSize_*p.avgLogSize {
-		data.outBuf = make([]byte, 0, p.config.BatchSize_*p.avgLogSize)
+	if cap(data.outBuf) > p.config.BatchSize_*p.avgEventSize {
+		data.outBuf = make([]byte, 0, p.config.BatchSize_*p.avgEventSize)
 	}
 
 	outBuf := data.outBuf[:0]

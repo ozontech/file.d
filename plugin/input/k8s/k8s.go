@@ -57,7 +57,7 @@ type Config struct {
 	//>
 	//> Docker splits long logs by 16kb chunks. The plugin joins them back, but if an event is longer than this value in bytes, it will be split after all.
 	//> > Due to the optimization process it's not a strict rule. Events may be split even if they won't exceed the limit.
-	MaxEventSize int `json:"max_event_size" default:"1000000"` //*
+	SplitEventSize int `json:"split_event_size" default:"1000000"` //*
 
 	//> @3@4@5@6
 	//>

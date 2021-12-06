@@ -7,8 +7,6 @@ import (
 	"github.com/ozonru/file.d/logger"
 )
 
-var eventWaitTimeout = time.Second * 30
-
 // stream is a queue of events
 // events fall into stream based on rules defined by input plugin
 // streams are used to allow event joins and other operations which needs sequential event input
@@ -170,7 +168,7 @@ func (s *stream) tryUnblock() bool {
 	}
 
 	s.mu.Lock()
-	if time.Now().Sub(s.blockTime) < eventWaitTimeout {
+	if time.Since(s.blockTime) < s.streamer.eventTimeout {
 		s.mu.Unlock()
 		return false
 	}

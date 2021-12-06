@@ -99,6 +99,11 @@ func NewPipeline(actions []*pipeline.ActionPluginStaticInfo, pipelineOpts ...str
 	mock := Opts(pipelineOpts).Has("mock")
 	passive := Opts(pipelineOpts).Has("passive")
 
+	eventTimeout := pipeline.DefaultEventTimeout
+	if Opts(pipelineOpts).Has("short_event_timeout") {
+		eventTimeout = 10 * time.Millisecond
+	}
+
 	if perf {
 		parallel = true
 	}
@@ -106,8 +111,9 @@ func NewPipeline(actions []*pipeline.ActionPluginStaticInfo, pipelineOpts ...str
 	settings := &pipeline.Settings{
 		Capacity:            4096,
 		MaintenanceInterval: time.Second * 100000,
+		EventTimeout:        eventTimeout,
 		AntispamThreshold:   0,
-		AvgLogSize:          2048,
+		AvgEventSize:        2048,
 		StreamField:         "stream",
 		Decoder:             "json",
 	}
