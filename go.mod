@@ -17,7 +17,7 @@ require (
 	github.com/imdario/mergo v0.3.7 // indirect
 	github.com/minio/minio-go v6.0.14+incompatible
 	github.com/prometheus/client_golang v1.4.0
-	github.com/rjeczalik/notify v0.9.2
+	github.com/rjeczalik/notify v0.9.3-0.20210809113154-3472d85e95cd
 	github.com/satori/go.uuid v1.2.0
 	github.com/smartystreets/goconvey v1.6.4 // indirect
 	github.com/stretchr/testify v1.7.0
