@@ -21,6 +21,8 @@ import (
 It sends events to splunk.
 }*/
 
+const outPluginType = "splunk"
+
 type Plugin struct {
 	config         *Config
 	logger         *zap.SugaredLogger
@@ -74,7 +76,7 @@ type data struct {
 
 func init() {
 	fd.DefaultPluginRegistry.RegisterOutput(&pipeline.PluginStaticInfo{
-		Type:    "splunk",
+		Type:    outPluginType,
 		Factory: Factory,
 	})
 }
@@ -91,7 +93,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 
 	p.batcher = pipeline.NewBatcher(
 		params.PipelineName,
-		"splunk",
+		outPluginType,
 		p.out,
 		p.maintenance,
 		p.controller,
@@ -104,6 +106,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 }
 
 func (p *Plugin) Stop() {
+	p.batcher.Stop()
 }
 
 func (p *Plugin) Out(event *pipeline.Event) {
@@ -118,7 +121,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 	}
 
 	data := (*workerData).(*data)
-	// handle to much memory consumption
+	// handle too much memory consumption
 	if cap(data.outBuf) > p.config.BatchSize_*p.avgEventSize {
 		data.outBuf = make([]byte, 0, p.config.BatchSize_*p.avgEventSize)
 	}
@@ -128,6 +131,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 		root := insaneJSON.Spawn()
 		root.AddField("event").MutateToNode(event.Root.Node)
 		outBuf = root.Encode(outBuf)
+		go insaneJSON.Release(root)
 	}
 	data.outBuf = outBuf
 
