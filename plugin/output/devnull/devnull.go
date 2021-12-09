@@ -10,6 +10,8 @@ import (
 It provides an API to test pipelines and other plugins.
 }*/
 
+const outPluginType = "devnull"
+
 type Plugin struct {
 	controller pipeline.OutputPluginController
 	outFn      func(event *pipeline.Event)
@@ -20,7 +22,7 @@ type Config struct{}
 
 func init() {
 	fd.DefaultPluginRegistry.RegisterOutput(&pipeline.PluginStaticInfo{
-		Type:    "devnull",
+		Type:    outPluginType,
 		Factory: Factory,
 	})
 }

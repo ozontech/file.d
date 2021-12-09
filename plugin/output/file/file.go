@@ -45,7 +45,11 @@ type data struct {
 	outBuf []byte
 }
 
-const fileNameSeparator = "_"
+const (
+	outPluginType ="file"
+
+	fileNameSeparator = "_"
+)
 
 type Config struct {
 	//> File name for log file.
@@ -77,7 +81,7 @@ type Config struct {
 
 func init() {
 	fd.DefaultPluginRegistry.RegisterOutput(&pipeline.PluginStaticInfo{
-		Type:    "file",
+		Type:    outPluginType,
 		Factory: Factory,
 	})
 }
@@ -99,7 +103,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 
 	p.batcher = pipeline.NewBatcher(
 		params.PipelineName,
-		"file",
+		outPluginType,
 		p.out,
 		nil,
 		p.controller,

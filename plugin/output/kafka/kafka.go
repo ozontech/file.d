@@ -15,6 +15,9 @@ import (
 /*{ introduction
 It sends the event batches to kafka brokers using `sarama` lib.
 }*/
+
+const outPluginType = "kafka"
+
 type data struct {
 	messages []*sarama.ProducerMessage
 	outBuf   sarama.ByteEncoder
@@ -74,7 +77,7 @@ type Config struct {
 
 func init() {
 	fd.DefaultPluginRegistry.RegisterOutput(&pipeline.PluginStaticInfo{
-		Type:    "kafka",
+		Type:    outPluginType,
 		Factory: Factory,
 	})
 }
@@ -94,7 +97,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.producer = p.newProducer()
 	p.batcher = pipeline.NewBatcher(
 		params.PipelineName,
-		"kafka",
+		outPluginType,
 		p.out,
 		nil,
 		p.controller,

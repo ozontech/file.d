@@ -10,6 +10,9 @@ import (
 /*{ introduction
 It writes events to stdout(also known as console).
 }*/
+
+const outPluginType = "stdout"
+
 type Plugin struct {
 	controller pipeline.OutputPluginController
 	outFn      func(event *pipeline.Event)
@@ -19,7 +22,7 @@ type Config struct{}
 
 func init() {
 	fd.DefaultPluginRegistry.RegisterOutput(&pipeline.PluginStaticInfo{
-		Type:    "stdout",
+		Type:    outPluginType,
 		Factory: Factory,
 	})
 }

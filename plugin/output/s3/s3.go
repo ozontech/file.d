@@ -20,6 +20,7 @@ import (
 )
 
 const (
+	outPluginType      = "s3"
 	fileNameSeparator  = "_"
 	attemptIntervalMin = 1 * time.Second
 )
@@ -82,7 +83,7 @@ type Config struct {
 
 func init() {
 	fd.DefaultPluginRegistry.RegisterOutput(&pipeline.PluginStaticInfo{
-		Type:    "s3",
+		Type:    outPluginType,
 		Factory: Factory,
 	})
 }
