@@ -74,6 +74,8 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 
 func (p *Plugin) read() {
 	root := insaneJSON.Spawn()
+	defer insaneJSON.Release(root)
+
 	out := make([]byte, 0)
 	for m := range p.parser.Parse() {
 		ts := m.Timestamp.UnixNano()
