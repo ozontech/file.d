@@ -278,7 +278,7 @@ func (p *processor) isMatch(index int, event *Event) bool {
 
 func (p *processor) isMatchOr(conds MatchConditions, event *Event) bool {
 	for _, cond := range conds {
-		node := event.Root.Dig(cond.Field)
+		node := event.Root.Dig(cond.Field...)
 		if node == nil {
 			continue
 		}
@@ -300,7 +300,7 @@ func (p *processor) isMatchOr(conds MatchConditions, event *Event) bool {
 
 func (p *processor) isMatchAnd(conds MatchConditions, event *Event) bool {
 	for _, cond := range conds {
-		node := event.Root.Dig(cond.Field)
+		node := event.Root.Dig(cond.Field...)
 		if node == nil {
 			return false
 		}

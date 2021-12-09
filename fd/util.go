@@ -2,6 +2,7 @@ package fd
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/bitly/go-simplejson"
@@ -107,7 +108,7 @@ func extractConditions(condJSON *simplejson.Json) (pipeline.MatchConditions, err
 		value := condJSON.Get(field).MustString()
 
 		condition := pipeline.MatchCondition{
-			Field: field,
+			Field: strings.Split(field, "."),
 		}
 
 		if len(value) > 0 && value[0] == '/' {
