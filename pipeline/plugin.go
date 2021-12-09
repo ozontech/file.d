@@ -106,7 +106,8 @@ type PluginFactory func() (AnyPlugin, AnyConfig)
 type MatchConditions []MatchCondition
 
 type MatchCondition struct {
-	Field  string
+	// Slice for nested fields. Separator is a dot symbol.
+	Field  []string
 	Value  string
 	Regexp *regexp.Regexp
 }
