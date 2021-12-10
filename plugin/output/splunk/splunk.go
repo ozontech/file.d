@@ -126,13 +126,14 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 		data.outBuf = make([]byte, 0, p.config.BatchSize_*p.avgEventSize)
 	}
 
+	root := insaneJSON.Spawn()
 	outBuf := data.outBuf[:0]
 	for _, event := range batch.Events {
-		root := insaneJSON.Spawn()
 		root.AddField("event").MutateToNode(event.Root.Node)
 		outBuf = root.Encode(outBuf)
-		go insaneJSON.Release(root)
+		_ = root.DecodeString("{}")
 	}
+	insaneJSON.Release(root)
 	data.outBuf = outBuf
 
 	for {
