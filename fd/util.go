@@ -107,7 +107,7 @@ func extractConditions(condJSON *simplejson.Json) (pipeline.MatchConditions, err
 		value := condJSON.Get(field).MustString()
 
 		condition := pipeline.MatchCondition{
-			Field: field,
+			Field: cfg.ParseFieldSelector(field),
 		}
 
 		if len(value) > 0 && value[0] == '/' {

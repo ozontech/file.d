@@ -13,11 +13,11 @@ import (
 func TestDiscardAnd(t *testing.T) {
 	conds := pipeline.MatchConditions{
 		pipeline.MatchCondition{
-			Field: "field1",
+			Field: []string{"field1"},
 			Value: "value1",
 		},
 		pipeline.MatchCondition{
-			Field: "field2",
+			Field: []string{"field2"},
 			Value: "value2",
 		},
 	}
@@ -57,11 +57,11 @@ func TestDiscardAnd(t *testing.T) {
 func TestDiscardOr(t *testing.T) {
 	conds := pipeline.MatchConditions{
 		pipeline.MatchCondition{
-			Field: "field1",
+			Field: []string{"field1"},
 			Value: "value1",
 		},
 		pipeline.MatchCondition{
-			Field: "field2",
+			Field: []string{"field2"},
 			Value: "value2",
 		},
 	}
@@ -101,11 +101,11 @@ func TestDiscardOr(t *testing.T) {
 func TestDiscardRegex(t *testing.T) {
 	conds := pipeline.MatchConditions{
 		pipeline.MatchCondition{
-			Field:  "field1",
+			Field:  []string{"field1"},
 			Regexp: regexp.MustCompile("(one|two|three)"),
 		},
 		pipeline.MatchCondition{
-			Field:  "field2",
+			Field:  []string{"field2", "field3"},
 			Regexp: regexp.MustCompile("four"),
 		},
 	}
@@ -113,7 +113,7 @@ func TestDiscardRegex(t *testing.T) {
 	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, nil, pipeline.MatchModeOr, conds, false))
 
 	wg := &sync.WaitGroup{}
-	wg.Add(9)
+	wg.Add(11)
 
 	inEvents := 0
 	input.SetInFn(func() {
@@ -128,7 +128,8 @@ func TestDiscardRegex(t *testing.T) {
 	})
 
 	input.In(0, "test.log", 0, []byte(`{"field1":"0000 one 0000"}`))
-	input.In(0, "test.log", 0, []byte(`{"field2":"0000 one 0000"}`))
+	input.In(0, "test.log", 0, []byte(`{"field2":{"field3": "0000 one 0000"}}`))
+	input.In(0, "test.log", 0, []byte(`{"field2":{"field3": "0000 four 0000"}}`))
 	input.In(0, "test.log", 0, []byte(`{"field1":". two ."}`))
 	input.In(0, "test.log", 0, []byte(`{"field1":"four"}`))
 	input.In(0, "test.log", 0, []byte(`{"field2":"... four ....","field2":"value2"}`))
@@ -137,15 +138,15 @@ func TestDiscardRegex(t *testing.T) {
 	wg.Wait()
 	p.Stop()
 
-	assert.Equal(t, 6, inEvents, "wrong in events count")
-	assert.Equal(t, 3, len(outEvents), "wrong out events count")
+	assert.Equal(t, 7, inEvents, "wrong in events count")
+	assert.Equal(t, 4, len(outEvents), "wrong out events count")
 }
 
 func TestDiscardMatchInvert(t *testing.T) {
 	// only this value should appear
 	conds := pipeline.MatchConditions{
 		pipeline.MatchCondition{
-			Field: "field2",
+			Field: []string{"field2"},
 			Value: "value2",
 		},
 	}
