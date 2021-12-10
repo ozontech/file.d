@@ -30,6 +30,8 @@ Every field with an underscore prefix `_` will be treated as an extra field.
 Allowed characters in field names are letters, numbers, underscores, dashes, and dots.
 }*/
 
+const outPluginType = "gelf"
+
 type Plugin struct {
 	config       *Config
 	logger       *zap.SugaredLogger
@@ -139,7 +141,7 @@ type data struct {
 
 func init() {
 	fd.DefaultPluginRegistry.RegisterOutput(&pipeline.PluginStaticInfo{
-		Type:    "gelf",
+		Type:    outPluginType,
 		Factory: Factory,
 	})
 }
@@ -168,7 +170,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 
 	p.batcher = pipeline.NewBatcher(
 		params.PipelineName,
-		"gelf",
+		outPluginType,
 		p.out,
 		p.maintenance,
 		p.controller,
@@ -181,6 +183,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 }
 
 func (p *Plugin) Stop() {
+	p.batcher.Stop()
 }
 
 func (p *Plugin) Out(event *pipeline.Event) {

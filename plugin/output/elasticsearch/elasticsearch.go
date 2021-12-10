@@ -21,6 +21,8 @@ It sends events into Elasticsearch. It uses `_bulk` API to send events in batche
 If a network error occurs, the batch will infinitely try to be delivered to the random endpoint.
 }*/
 
+const outPluginType = "elasticsearch"
+
 type Plugin struct {
 	logger       *zap.SugaredLogger
 	client       *http.Client
@@ -92,7 +94,7 @@ type data struct {
 
 func init() {
 	fd.DefaultPluginRegistry.RegisterOutput(&pipeline.PluginStaticInfo{
-		Type:    "elasticsearch",
+		Type:    outPluginType,
 		Factory: Factory,
 	})
 }
@@ -128,7 +130,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.logger.Infof("starting batcher: timeout=%d", p.config.BatchFlushTimeout_)
 	p.batcher = pipeline.NewBatcher(
 		params.PipelineName,
-		"elasticsearch",
+		outPluginType,
 		p.out,
 		p.maintenance,
 		p.controller,
@@ -141,6 +143,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 }
 
 func (p *Plugin) Stop() {
+	p.batcher.Stop()
 }
 
 func (p *Plugin) Out(event *pipeline.Event) {
@@ -155,7 +158,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 	}
 
 	data := (*workerData).(*data)
-	// handle to much memory consumption
+	// handle too much memory consumption
 	if cap(data.outBuf) > p.config.BatchSize_*p.avgEventSize {
 		data.outBuf = make([]byte, 0, p.config.BatchSize_*p.avgEventSize)
 	}
