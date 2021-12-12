@@ -29,7 +29,7 @@ func newStreamer(eventTimeout time.Duration) *streamer {
 	streamer := &streamer{
 		streams: make(map[SourceID]map[StreamName]*stream),
 		mu:      &sync.RWMutex{},
-		charged: make([]*stream, 0, 0),
+		charged: make([]*stream, 0),
 
 		chargedMu: &sync.Mutex{},
 		blockedMu: &sync.Mutex{},
@@ -144,7 +144,7 @@ func (s *streamer) resetBlocked(stream *stream) {
 }
 
 func (s *streamer) heartbeat() {
-	streams := make([]*stream, 0, 0)
+	streams := make([]*stream, 0)
 	for {
 		time.Sleep(time.Millisecond * 200)
 		if s.shouldStop {

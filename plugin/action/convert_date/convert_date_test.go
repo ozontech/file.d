@@ -28,7 +28,7 @@ func TestConvert(t *testing.T) {
 		inEvents++
 	})
 
-	outEvents := make([]*pipeline.Event, 0, 0)
+	outEvents := make([]*pipeline.Event, 0)
 	output.SetOutFn(func(e *pipeline.Event) {
 		outEvents = append(outEvents, e)
 		wg.Done()
@@ -61,7 +61,7 @@ func TestConvertFail(t *testing.T) {
 		inEvents++
 	})
 
-	outEvents := make([]*pipeline.Event, 0, 0)
+	outEvents := make([]*pipeline.Event, 0)
 	output.SetOutFn(func(e *pipeline.Event) {
 		outEvents = append(outEvents, e)
 		wg.Done()

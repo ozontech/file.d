@@ -9,6 +9,12 @@ prepare:
 deps:
 	go get -v github.com/vitkovskii/insane-doc@v0.0.1
 
+.PHONY: cover
+cover:
+	go test -coverprofile=coverage.out ./...
+	go tool cover -html=coverage.out
+	rm coverage.out
+
 .PHONY: test
 test:
 	go test ./fd/ -v -count 1

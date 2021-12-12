@@ -27,7 +27,6 @@ func (w *worker) work(controller inputer, jobProvider *jobProvider, readBufferSi
 	var inBuffer []byte
 	shouldCheckMax := w.maxEventSize != 0
 
-	var seqID uint64 = 0
 	for {
 		job := <-jobProvider.jobsChan
 		if job == nil {
@@ -105,8 +104,7 @@ func (w *worker) work(controller inputer, jobProvider *jobProvider, readBufferSi
 					if shouldCheckMax && len(inBuffer) > w.maxEventSize {
 						break
 					}
-					seqID = controller.In(sourceID, sourceName, offset, inBuffer, isVirgin)
-					job.lastEventSeq = seqID
+					job.lastEventSeq = controller.In(sourceID, sourceName, offset, inBuffer, isVirgin)
 				}
 				accumBuffer = accumBuffer[:0]
 

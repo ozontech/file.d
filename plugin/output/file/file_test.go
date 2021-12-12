@@ -261,13 +261,6 @@ func TestStart(t *testing.T) {
 	assert.GreaterOrEqual(t, len(matches), 2, "there is no new file after sealing up")
 	checkDirFiles(t, matches, totalSent, "written data and saved data are not equal")
 
-	for _, m := range matches {
-		if strings.Contains(m, currentLogFileSubstr) {
-			tsFileName = m
-			break
-		}
-	}
-
 	// send next pack. And stop pipeline before next seal up time
 	totalSent += test.SendPack(t, p, tests.secondPack)
 	time.Sleep(writeFileSleep)

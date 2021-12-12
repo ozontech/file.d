@@ -46,7 +46,7 @@ type data struct {
 }
 
 const (
-	outPluginType ="file"
+	outPluginType = "file"
 
 	fileNameSeparator = "_"
 )
@@ -207,6 +207,9 @@ func (p *Plugin) createNew() {
 	f := fmt.Sprintf("%s%s", p.targetDir, p.tsFileName)
 	pattern := fmt.Sprintf("%s*%s%s%s", p.targetDir, fileNameSeparator, p.fileName, p.fileExtension)
 	matches, err := filepath.Glob(pattern)
+	if err != nil {
+		p.logger.Fatalf("can't glob: pattern=%s, err=%ss", pattern, err.Error())
+	}
 	if len(matches) == 1 {
 		p.tsFileName = path.Base(matches[0])
 		f = fmt.Sprintf("%s%s", p.targetDir, p.tsFileName)

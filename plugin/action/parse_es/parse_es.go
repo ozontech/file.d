@@ -80,7 +80,8 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 		return pipeline.ActionCollapse
 	}
 
-	p.logger.Fatalf("wrong ES input format, expected action, got: %s", root.EncodeToString())
+	// If request invalid skip bad event.
+	p.logger.Error("wrong ES input format, expected action, got: %s", root.EncodeToString())
 
 	return pipeline.ActionDiscard
 }

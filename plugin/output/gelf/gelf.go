@@ -194,7 +194,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 	if *workerData == nil {
 		*workerData = &data{
 			outBuf:    make([]byte, 0, p.config.BatchSize_*p.avgEventSize),
-			encodeBuf: make([]byte, 0, 0),
+			encodeBuf: make([]byte, 0),
 		}
 	}
 
