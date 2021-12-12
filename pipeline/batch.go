@@ -40,7 +40,7 @@ func (b *Batch) append(e *Event) {
 func (b *Batch) isReady() bool {
 	l := len(b.Events)
 	isFull := l == b.size
-	isTimeout := l > 0 && time.Now().Sub(b.startTime) > b.timeout
+	isTimeout := l > 0 && time.Since(b.startTime) > b.timeout
 	return isFull || isTimeout
 }
 
@@ -117,13 +117,13 @@ type WorkerData interface{}
 
 func (b *Batcher) work() {
 	t := time.Now()
-	events := make([]*Event, 0, 0)
+	events := make([]*Event, 0)
 	data := WorkerData(nil)
 	for batch := range b.fullBatches {
 		b.outFn(&data, batch)
 		events = b.commitBatch(events, batch)
 
-		shouldRunMaintenance := b.maintenanceFn != nil && b.maintenanceInterval != 0 && time.Now().Sub(t) > b.maintenanceInterval
+		shouldRunMaintenance := b.maintenanceFn != nil && b.maintenanceInterval != 0 && time.Since(t) > b.maintenanceInterval
 		if shouldRunMaintenance {
 			t = time.Now()
 			b.maintenanceFn(&data)

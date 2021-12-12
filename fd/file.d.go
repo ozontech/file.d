@@ -1,6 +1,7 @@
 package fd
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -31,7 +32,7 @@ func New(config *cfg.Config, httpAddr string) *FileD {
 		config:    config,
 		httpAddr:  httpAddr,
 		plugins:   DefaultPluginRegistry,
-		Pipelines: make([]*pipeline.Pipeline, 0, 0),
+		Pipelines: make([]*pipeline.Pipeline, 0),
 	}
 }
 
@@ -239,7 +240,7 @@ func (f *FileD) getStaticInfo(pipelineConfig *cfg.PipelineConfig, pluginKind pip
 
 func (f *FileD) Stop() {
 	logger.Infof("stopping pipelines=%d", len(f.Pipelines))
-	_ = f.server.Shutdown(nil)
+	_ = f.server.Shutdown(context.TODO())
 	for _, p := range f.Pipelines {
 		p.Stop()
 	}

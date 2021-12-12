@@ -102,7 +102,7 @@ func TestParallel(t *testing.T) {
 	for i := 0; i < count; i++ {
 		go func() {
 			offsetDB := newOffsetDB("tests-offsets", "tests-offsets.tmp")
-			offsetDB.parse(data)
+			_, _ = offsetDB.parse(data)
 			offsetDB.save(jobs, rwmu)
 			wg.Done()
 		}()
