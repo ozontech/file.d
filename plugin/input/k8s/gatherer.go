@@ -57,7 +57,8 @@ var (
 	expiredItems = make([]*metaItem, 0, 16) // temporary list of expired items
 
 	informerStop    = make(chan struct{}, 1)
-	maintenanceStop = make(chan bool, 1)
+	maintenanceStop = make(chan struct{}, 1)
+	stopped         = make(chan struct{}, 1)
 
 	MaintenanceInterval = 15 * time.Second
 	metaExpireDuration  = 5 * time.Minute
@@ -99,7 +100,8 @@ func disableGatherer() {
 	if !DisableMetaUpdates {
 		informerStop <- struct{}{}
 	}
-	maintenanceStop <- true
+	maintenanceStop <- struct{}{}
+	<-stopped
 	stopWg.Wait()
 }
 
@@ -190,6 +192,7 @@ func maintenance() {
 	for {
 		select {
 		case <-maintenanceStop:
+			stopped <- struct{}{}
 			stopWg.Done()
 			return
 		default:

@@ -82,7 +82,7 @@ func TestWorkerWork(t *testing.T) {
 				controller: nil,
 				watcher:    &watcher{},
 				offsetDB:   &offsetDB{},
-				isStarted:  false,
+				isStarted:  atomic.Bool{},
 				jobs: map[pipeline.SourceID]*Job{
 					1: job,
 				},

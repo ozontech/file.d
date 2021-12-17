@@ -22,7 +22,6 @@ type Plugin struct {
 	session       sarama.ConsumerGroupSession
 	consumerGroup sarama.ConsumerGroup
 	cancel        context.CancelFunc
-	context       context.Context
 	controller    pipeline.InputPluginController
 	idByTopic     map[string]int
 }
@@ -67,23 +66,26 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 		p.idByTopic[topic] = i
 	}
 
-	p.context, p.cancel = context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(context.Background())
+	p.cancel = cancel
 	p.consumerGroup = p.newConsumerGroup()
 	p.controller.UseSpread()
 	p.controller.DisableStreams()
 
-	longpanic.Go(p.consume)
+	longpanic.Go(func() {
+		p.consume(ctx)
+	})
 }
 
-func (p *Plugin) consume() {
+func (p *Plugin) consume(ctx context.Context) {
 	p.logger.Infof("kafka input reading from topics: %s", strings.Join(p.config.Topics, ","))
 	for {
-		err := p.consumerGroup.Consume(p.context, p.config.Topics, p)
+		err := p.consumerGroup.Consume(ctx, p.config.Topics, p)
 		if err != nil {
 			p.logger.Errorf("can't consume from kafka: %s", err.Error())
 		}
 
-		if p.context.Err() != nil {
+		if ctx.Err() != nil {
 			return
 		}
 	}

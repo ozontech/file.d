@@ -106,6 +106,9 @@ func (p *Plugin) read() {
 }
 
 func (p *Plugin) Stop() {
+	if err := p.parser.Close(); err != nil {
+		p.logger.Error("can't close parser: %s", err.Error())
+	}
 }
 
 func (p *Plugin) Commit(event *pipeline.Event) {

@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/minio/minio-go"
@@ -52,6 +53,7 @@ type Plugin struct {
 	config     *Config
 	client     objectStoreClient
 	outPlugin  *file.Plugin
+	randLock   sync.Mutex
 
 	targetDir     string
 	fileExtension string
@@ -146,6 +148,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.outPlugin.SealUpCallback = p.addFileJob
 
 	p.outPlugin.Start(&p.config.FileConfig, params)
+	// This function runs once - to send to s3 all file what wasn't send before crash.
 	p.uploadExistingFiles()
 }
 
@@ -256,9 +259,18 @@ func (p *Plugin) uploadToS3(name string) error {
 
 // generateObjectName generates object name by compressed file name
 func (p *Plugin) generateObjectName(name string) string {
-	n := strconv.FormatInt(r.Int63n(math.MaxInt64), 16)
+	n := strconv.FormatInt(p.randInt63(), 16)
 	n = n[len(n)-8:]
 	objectName := path.Base(name)
 	objectName = objectName[0 : len(objectName)-len(p.compressor.getExtension())]
 	return fmt.Sprintf("%s.%s%s", objectName, n, p.compressor.getExtension())
+}
+
+func (p *Plugin) randInt63() int64 {
+	// rand.NewSource is thread-unsafe, need lock to avoid data race.
+	p.randLock.Lock()
+	result := r.Int63n(math.MaxInt64)
+	p.randLock.Unlock()
+
+	return result
 }

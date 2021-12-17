@@ -61,7 +61,7 @@ func (w *watcher) start() {
 		events = append(events, notify.Write)
 	}
 
-	// watch recursivly
+	// watch recursively.
 	err := notify.Watch(filepath.Join(w.path, "..."), eventsCh, events...)
 	if err != nil {
 		w.logger.Warnf("can't create fs watcher: %s", err.Error())

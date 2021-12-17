@@ -2,6 +2,7 @@ package pipeline
 
 import (
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/ozonru/file.d/logger"
@@ -63,11 +64,12 @@ func (s *stream) commit(event *Event) {
 	s.mu.Lock()
 	// maxID is needed here because discarded events with bigger offsets may be
 	// committed faster than events with lower offsets which are goes through output
-	if event.SeqID < s.commitSeq {
+	if event.SeqID < atomic.LoadUint64(&s.commitSeq) {
 		s.mu.Unlock()
 		return
 	}
-	s.commitSeq = event.SeqID
+	atomic.StoreUint64(&s.commitSeq, event.SeqID)
+	//s.commitSeq = event.SeqID
 
 	if s.isDetaching {
 		s.tryDetach()
@@ -76,7 +78,7 @@ func (s *stream) commit(event *Event) {
 }
 
 func (s *stream) tryDetach() {
-	if s.awaySeq != s.commitSeq {
+	if s.awaySeq != atomic.LoadUint64(&s.commitSeq) {
 		return
 	}
 
@@ -179,7 +181,7 @@ func (s *stream) tryUnblock() bool {
 		return false
 	}
 
-	if s.awaySeq != s.commitSeq {
+	if s.awaySeq != atomic.LoadUint64(&s.commitSeq) {
 		logger.Panicf("why events are different? away event id=%d, commit event id=%d", s.awaySeq, s.commitSeq)
 	}
 

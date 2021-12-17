@@ -20,7 +20,7 @@ const (
 	// ActionHold hold event in a plugin and request next event from the same stream and source as current.
 	// same as ActionCollapse but held event should be manually committed or returned into pipeline.
 	// check out Commit()/Propagate() functions in InputPluginController.
-	// plugin may receive event with eventKindTimeout if it takes to long to read next event from same stream
+	// plugin may receive event with eventKindTimeout if it takes to long to read next event from same stream.
 	ActionHold ActionResult = 3
 )
 
@@ -124,7 +124,7 @@ func (p *processor) process() {
 func (p *processor) dischargeStream(st *stream) {
 	for {
 		event := st.instantGet()
-		// if event is nil then stream is over, so let's attach to a new stream
+		// if event is nil then stream is over, so let's attach to a new stream.
 		if event == nil {
 			return
 		}
@@ -162,16 +162,16 @@ func (p *processor) processEvent(event *Event) (isSuccess bool, isPassed bool, e
 			return true, true, event
 		}
 
-		// no busy actions, so return
+		// no busy actions, so return.
 		if p.busyActionsTotal == 0 {
 			return true, false, nil
 		}
 
-		// there is busy action, waiting for next sequential event
+		// there is busy action, waiting for next sequential event.
 		action := event.action
 		event = stream.blockGet()
 		if event.IsTimeoutKind() {
-			// pass timeout directly to plugin which requested next sequential event
+			// pass timeout directly to plugin which requested next sequential event.
 			event.action = action
 		}
 	}
@@ -179,9 +179,9 @@ func (p *processor) processEvent(event *Event) (isSuccess bool, isPassed bool, e
 
 func (p *processor) doActions(event *Event) (isPassed bool) {
 	l := len(p.actions)
-	for index := event.action; index < l; index++ {
+	for index := int(event.action.Load()); index < l; index++ {
 		action := p.actions[index]
-		event.action = index
+		event.action.Store(int64(index))
 		p.countEvent(event, index, eventStatusReceived)
 
 		isMatch := p.isMatch(index, event)
@@ -204,14 +204,14 @@ func (p *processor) doActions(event *Event) (isPassed bool) {
 		case ActionDiscard:
 			p.countEvent(event, index, eventStatusDiscarded)
 			p.tryResetBusy(index)
-			// can't notify input here, because previous events may delay and we'll get offset sequence corruption
+			// can't notify input here, because previous events may delay, and we'll get offset sequence corruption.
 			p.finalize(event, false, true)
 			p.actionWatcher.setEventAfter(index, event, eventStatusDiscarded)
 			return false
 		case ActionCollapse:
 			p.countEvent(event, index, eventStatusCollapse)
 			p.tryMarkBusy(index)
-			// can't notify input here, because previous events may delay and we'll get offset sequence corruption
+			// can't notify input here, because previous events may delay, and we'll get offset sequence corruption.
 			p.finalize(event, false, true)
 			p.actionWatcher.setEventAfter(index, event, eventStatusCollapse)
 			return false
@@ -340,7 +340,7 @@ func (p *processor) Commit(event *Event) {
 }
 
 func (p *processor) Propagate(event *Event) {
-	event.action++
+	event.action.Inc()
 	p.processSequence(event)
 }
 

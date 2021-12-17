@@ -51,7 +51,7 @@ func newPipeline(t *testing.T, configOutput *Config) *pipeline.Pipeline {
 	t.Helper()
 	settings := &pipeline.Settings{
 		Capacity:            4096,
-		MaintenanceInterval: time.Second * 100000,
+		MaintenanceInterval: time.Second * 10,
 		AntispamThreshold:   0,
 		AvgEventSize:        2048,
 		StreamField:         "stream",

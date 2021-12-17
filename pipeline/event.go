@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"runtime"
 	"sync"
+	sync_atomic "sync/atomic"
 	"time"
 
 	"github.com/ozonru/file.d/logger"
@@ -26,7 +27,7 @@ type Event struct {
 	streamName StreamName
 	Size       int // last known event size, it may not be actual
 
-	action int
+	action atomic.Int64
 	next   *Event
 	stream *stream
 
@@ -75,7 +76,7 @@ func unlockEvent(stream *stream) *Event {
 	event := &Event{
 		Root:       nil,
 		stream:     stream,
-		SeqID:      stream.commitSeq,
+		SeqID:      sync_atomic.LoadUint64(&stream.commitSeq),
 		SourceID:   stream.sourceID,
 		SourceName: "unlock",
 		streamName: stream.name,
@@ -102,7 +103,7 @@ func (e *Event) reset() {
 	e.Buf = e.Buf[:0]
 	e.stage = eventStageInput
 	e.next = nil
-	e.action = 0
+	e.action = atomic.Int64{}
 	e.stream = nil
 	e.kind.Swap(eventKindRegular)
 }
@@ -186,7 +187,7 @@ func (e *Event) kindStr() string {
 }
 
 func (e *Event) String() string {
-	return fmt.Sprintf("kind=%s, action=%d, source=%d/%s, stream=%s, stage=%s, json=%s", e.kindStr(), e.action, e.SourceID, e.SourceName, e.streamName, e.stageStr(), e.Root.EncodeToString())
+	return fmt.Sprintf("kind=%s, action=%d, source=%d/%s, stream=%s, stage=%s, json=%s", e.kindStr(), e.action.Load(), e.SourceID, e.SourceName, e.streamName, e.stageStr(), e.Root.EncodeToString())
 }
 
 // channels are slower than this implementation by ~20%

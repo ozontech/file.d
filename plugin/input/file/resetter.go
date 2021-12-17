@@ -73,7 +73,7 @@ func (r *resetter) reset(request *http.Request) {
 
 	truncateAll := req.INode == 0 && req.SourceID == 0
 
-	if jp.isStarted {
+	if jp.isStarted.Load() {
 		r.truncateJobs(truncateAll, req.INode, req.SourceID)
 
 		return

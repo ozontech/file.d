@@ -110,7 +110,7 @@ func NewPipeline(actions []*pipeline.ActionPluginStaticInfo, pipelineOpts ...str
 
 	settings := &pipeline.Settings{
 		Capacity:            4096,
-		MaintenanceInterval: time.Second * 100000,
+		MaintenanceInterval: time.Second * 10,
 		EventTimeout:        eventTimeout,
 		AntispamThreshold:   0,
 		AvgEventSize:        2048,

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"os"
 	"os/signal"
 	"runtime/debug"
@@ -86,22 +87,39 @@ func start() {
 }
 
 func listenSignals() {
-	signalChan := make(chan os.Signal)
+	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, syscall.SIGHUP, syscall.SIGTERM)
 
 	for {
+		ctx, cancel := context.WithCancel(context.Background())
 		s := <-signalChan
 
 		switch s {
 		case syscall.SIGHUP:
 			logger.Infof("SIGHUP received")
-			fileD.Stop()
+
+			go func() {
+				cancel()
+			}()
+			err := fileD.Stop(ctx)
+			if err != nil {
+				logger.Fatalf("can't stop file.d with SIGHUP: %s", err.Error())
+			}
+
 			start()
 		case syscall.SIGINT:
 			fallthrough
 		case syscall.SIGTERM:
-			logger.Infof("SIGTERM received")
-			fileD.Stop()
+			logger.Infof("SIGTERM or SIGINT received")
+
+			go func() {
+				cancel()
+			}()
+			err := fileD.Stop(ctx)
+			if err != nil {
+				logger.Fatalf("can't stop file.d with SIGTERM or SIGINT: %s", err.Error())
+			}
+
 			exit <- true
 		}
 	}
