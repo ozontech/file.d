@@ -86,7 +86,7 @@ func start() {
 }
 
 func listenSignals() {
-	signalChan := make(chan os.Signal)
+	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, syscall.SIGHUP, syscall.SIGTERM)
 
 	for {

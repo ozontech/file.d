@@ -447,7 +447,7 @@ func (p *Pipeline) growProcs() {
 			t = time.Now()
 		}
 
-		if time.Now().Sub(t) > interval {
+		if time.Since(t) > interval {
 			p.expandProcs()
 		}
 	}

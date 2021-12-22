@@ -2,6 +2,7 @@ package s3
 
 import (
 	"archive/zip"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -79,6 +80,9 @@ func TestCompress(t *testing.T) {
 		assert.NoError(t, err)
 		sw := simpleWriter{}
 		written, err := io.CopyN(sw, closer, int64(len(logStr)))
+		assert.Error(t, err)
+		assert.EqualError(t, errors.New("short write"), err.Error())
+
 		assert.Equal(t, int64(0), written)
 		err = closer.Close()
 		assert.NoError(t, err)

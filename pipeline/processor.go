@@ -87,7 +87,7 @@ func NewProcessor(
 		activeCounter: activeCounter,
 		actionWatcher: newActionWatcher(id),
 
-		metricsValues: make([]string, 0, 0),
+		metricsValues: make([]string, 0),
 	}
 
 	id++

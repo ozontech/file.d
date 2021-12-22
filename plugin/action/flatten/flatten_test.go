@@ -21,13 +21,13 @@ func TestFlatten(t *testing.T) {
 	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, config, pipeline.MatchModeAnd, nil, false))
 
 	wg := &sync.WaitGroup{}
-	acceptedEvents := make([]*pipeline.Event, 0, 0)
+	acceptedEvents := make([]*pipeline.Event, 0)
 	input.SetCommitFn(func(e *pipeline.Event) {
 		wg.Done()
 		acceptedEvents = append(acceptedEvents, e)
 	})
 
-	dumpedEvents := make([]*pipeline.Event, 0, 0)
+	dumpedEvents := make([]*pipeline.Event, 0)
 	output.SetOutFn(func(e *pipeline.Event) {
 		wg.Done()
 		dumpedEvents = append(dumpedEvents, e)
