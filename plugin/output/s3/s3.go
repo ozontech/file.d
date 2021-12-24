@@ -23,6 +23,8 @@ const (
 	outPluginType      = "s3"
 	fileNameSeparator  = "_"
 	attemptIntervalMin = 1 * time.Second
+
+	bucketField = "bucket"
 )
 
 var (
@@ -51,7 +53,7 @@ type Plugin struct {
 	logger     *zap.SugaredLogger
 	config     *Config
 	client     objectStoreClient
-	outPlugin  *file.Plugin
+	outPlugins map[string]*file.Plugin
 
 	targetDir     string
 	fileExtension string
@@ -74,11 +76,25 @@ type Config struct {
 	Endpoint  string `json:"endpoint" required:"true"`
 	AccessKey string `json:"access_key" required:"true"`
 	SecretKey string `json:"secret_key" required:"true"`
-	Bucket    string `json:"bucket" required:"true"`
-	Secure    bool   `json:"secure" default:"false"`
+	// Required s3 default bucket.
+	Bucket string `json:"bucket" required:"true"`
+	// MultiBuckets is additional buckets, which can also receive event.
+	// Event must contain `bucket_name` which value is valid s3 bucket name.
+	// Events without `bucket_name` sends to	 Bucket.
+	MultiBuckets []singleBucket `json:"multi_buckets" required:"false"`
+	Secure       bool           `json:"secure" default:"false"`
 
 	// for mock client injection
 	client *objectStoreClient
+}
+
+type singleBucket struct {
+	// s3 section
+	Endpoint  string `json:"endpoint" required:"true"`
+	AccessKey string `json:"access_key" required:"true"`
+	SecretKey string `json:"secret_key" required:"true"`
+	// Required s3 default bucket.
+	Bucket string `json:"bucket" required:"true"`
 }
 
 func init() {
@@ -130,44 +146,80 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		p.client = *p.config.client
 	}
 
-	exist, err := p.client.BucketExists(p.config.Bucket)
-	if err != nil {
+	outPlugins := make(map[string]*file.Plugin, len(p.config.MultiBuckets)+1)
+	// Checks required bucket and exit if it's invalid.
+	var err1 error
+	exist, err1 := true, nil
+	//exist, err := p.client.BucketExists(p.config.Bucket)
+	if err1 != nil {
 		p.logger.Panicf("could not check bucket: %s, error: %s", p.config.Bucket, err.Error())
 	}
 	if !exist {
 		p.logger.Fatalf("bucket: %s, does not exist", p.config.Bucket)
 	}
+	anyPlugin, _ := file.Factory()
+	outPlugin := anyPlugin.(*file.Plugin)
+	outPlugin.SealUpCallback = p.addFileJob
+	outPlugins[p.config.Bucket] = outPlugin
+
+	// If multi_buckets described on file.d config, check each of them as well.
+	for _, singleB := range p.config.MultiBuckets {
+		//exist, err := p.client.BucketExists(singleB.Bucket)
+		var err error
+		exist, err := true, nil
+		if err != nil {
+			p.logger.Panicf("could not check bucket: %s, error: %s", singleB.Bucket, err.Error())
+		}
+		if !exist {
+			p.logger.Fatalf("bucket from multi_backets: %s, does not exist", singleB.Bucket)
+		}
+		anyPlugin, _ := file.Factory()
+		outPlugin := anyPlugin.(*file.Plugin)
+		outPlugin.SealUpCallback = p.addFileJob
+		outPlugins[singleB.Bucket] = outPlugin
+	}
+
 	p.logger.Info("client is ready")
 	p.logger.Infof("bucket: %s exists", p.config.Bucket)
 
-	anyPlugin, _ := file.Factory()
-	p.outPlugin = anyPlugin.(*file.Plugin)
-
-	p.outPlugin.SealUpCallback = p.addFileJob
-
-	p.outPlugin.Start(&p.config.FileConfig, params)
+	p.outPlugins = outPlugins
+	for _, pl := range p.outPlugins {
+		pl.Start(&p.config.FileConfig, params)
+	}
 	p.uploadExistingFiles()
 }
 
 func (p *Plugin) Stop() {
-	p.outPlugin.Stop()
+	for _, plugin := range p.outPlugins {
+		plugin.Stop()
+	}
 }
 
 func (p *Plugin) Out(event *pipeline.Event) {
-	p.outPlugin.Out(event)
+	p.outPlugins[p.getS3BucketFromEvent(event)].Out(event)
 }
 
-// uploadExistingFiles gets files from dirs, sorts it, compresses it if it's need, and then upload to s3
+// getS3BucketFromEvent tries finds bucket in multi_buckets. Otherwise, events goes to main bucket.
+func (p *Plugin) getS3BucketFromEvent(event *pipeline.Event) string {
+	bucket := event.Root.Dig(bucketField).AsString()
+	_, ok := p.outPlugins[bucket]
+	if !ok {
+		return p.config.Bucket
+	}
+	return bucket
+}
+
+// uploadExistingFiles gets files from dirs, sorts it, compresses it if it's need, and then upload to s3.
 func (p *Plugin) uploadExistingFiles() {
-	// get all compressed files
+	// get all compressed files.
 	pattern := fmt.Sprintf("%s*%s", p.targetDir, p.compressor.getExtension())
 	compressedFiles, err := filepath.Glob(pattern)
 	if err != nil {
 		p.logger.Panicf("could not read dir: %s", p.targetDir)
 	}
-	// sort compressed files by creation time
+	// sort compressed files by creation time.
 	sort.Slice(compressedFiles, p.getSortFunc(compressedFiles))
-	// upload archive
+	// upload archive.
 	for _, z := range compressedFiles {
 		p.uploadCh <- z
 	}
