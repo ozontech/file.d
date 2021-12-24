@@ -148,10 +148,8 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 
 	outPlugins := make(map[string]*file.Plugin, len(p.config.MultiBuckets)+1)
 	// Checks required bucket and exit if it's invalid.
-	var err1 error
-	exist, err1 := true, nil
-	//exist, err := p.client.BucketExists(p.config.Bucket)
-	if err1 != nil {
+	exist, err := p.client.BucketExists(p.config.Bucket)
+	if err != nil {
 		p.logger.Panicf("could not check bucket: %s, error: %s", p.config.Bucket, err.Error())
 	}
 	if !exist {
@@ -164,9 +162,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 
 	// If multi_buckets described on file.d config, check each of them as well.
 	for _, singleB := range p.config.MultiBuckets {
-		//exist, err := p.client.BucketExists(singleB.Bucket)
-		var err error
-		exist, err := true, nil
+		exist, err := p.client.BucketExists(singleB.Bucket)
 		if err != nil {
 			p.logger.Panicf("could not check bucket: %s, error: %s", singleB.Bucket, err.Error())
 		}

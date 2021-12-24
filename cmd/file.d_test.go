@@ -107,7 +107,7 @@ func TestEndToEnd(t *testing.T) {
 
 func runWriter(tempDir string, files int) {
 	format := `{"log":"%s\n","stream":"stderr"}`
-	panicLines := make([]string, 0, 0)
+	panicLines := make([]string, 0)
 	for _, line := range strings.Split(panicContent, "\n") {
 		if line == "" {
 			continue

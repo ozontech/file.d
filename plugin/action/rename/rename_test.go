@@ -22,7 +22,7 @@ func TestRename(t *testing.T) {
 	wg := &sync.WaitGroup{}
 	wg.Add(5)
 
-	outEvents := make([]*pipeline.Event, 0, 0)
+	outEvents := make([]*pipeline.Event, 0)
 	output.SetOutFn(func(e *pipeline.Event) {
 		outEvents = append(outEvents, e)
 		wg.Done()

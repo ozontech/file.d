@@ -34,6 +34,8 @@ const (
 	offsetsFile = "offsets.yaml"
 	newLine     = 1
 	perm        = 0o770
+
+	strPrefix = `"_`
 )
 
 func TestMain(m *testing.M) {
@@ -244,13 +246,12 @@ func addLines(file string, from int, to int) int {
 	size := 0
 	for i := from; i < to; i++ {
 
-		str := fmt.Sprintf(`"_`)
-		if _, err = f.WriteString(str); err != nil {
+		if _, err = f.WriteString(strPrefix); err != nil {
 			panic(err.Error())
 		}
-		size += len(str)
+		size += len(strPrefix)
 
-		str = fmt.Sprintf(`%d"`+"\n", i)
+		str := fmt.Sprintf(`%d"`+"\n", i)
 		if _, err = f.WriteString(str); err != nil {
 			panic(err.Error())
 		}
@@ -401,7 +402,7 @@ func TestWatch(t *testing.T) {
 // TestReadSimple tests if file reading works right in the simple case
 func TestReadSimple(t *testing.T) {
 	eventCount := 5
-	events := make([]string, 0, 0)
+	events := make([]string, 0)
 
 	run(&test.Case{
 		Prepare: func() {
@@ -429,8 +430,8 @@ func TestReadContinue(t *testing.T) {
 	blockSize := 2000
 	stopAfter := 100
 	processed := 0
-	inputEvents := make([]string, 0, 0)
-	outputEvents := make([]string, 0, 0)
+	inputEvents := make([]string, 0)
+	outputEvents := make([]string, 0)
 	file := ""
 	size := 0
 
@@ -482,7 +483,7 @@ func TestReadContinue(t *testing.T) {
 // TestOffsetsSaveSimple tests if offsets saving works right in the simple case
 func TestOffsetsSaveSimple(t *testing.T) {
 	eventCount := 5
-	events := make([]string, 0, 0)
+	events := make([]string, 0)
 	file := ""
 	size := 0
 

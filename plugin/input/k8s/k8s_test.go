@@ -122,7 +122,7 @@ func TestAllowedLabels(t *testing.T) {
 	putMeta(getPodInfo(item, false))
 	filename2 := getLogFilename("/k8s-logs", item)
 
-	outEvents := make([]*pipeline.Event, 0, 0)
+	outEvents := make([]*pipeline.Event, 0)
 	output.SetOutFn(func(e *pipeline.Event) {
 		outEvents = append(outEvents, e)
 		wg.Done()
@@ -153,7 +153,7 @@ func TestK8SJoin(t *testing.T) {
 	podInfo := getPodInfo(item, true)
 	putMeta(podInfo)
 
-	outEvents := make([]*pipeline.Event, 0, 0)
+	outEvents := make([]*pipeline.Event, 0)
 	output.SetOutFn(func(e *pipeline.Event) {
 		event := *e
 		outEvents = append(outEvents, &event)

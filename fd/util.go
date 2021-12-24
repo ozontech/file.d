@@ -102,7 +102,7 @@ func extractMatchInvert(actionJSON *simplejson.Json) (bool, error) {
 }
 
 func extractConditions(condJSON *simplejson.Json) (pipeline.MatchConditions, error) {
-	conditions := make(pipeline.MatchConditions, 0, 0)
+	conditions := make(pipeline.MatchConditions, 0)
 	for field := range condJSON.MustMap() {
 		value := condJSON.Get(field).MustString()
 

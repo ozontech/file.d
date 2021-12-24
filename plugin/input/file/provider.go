@@ -581,7 +581,6 @@ func (jp *jobProvider) maintenanceJob(job *Job) int {
 	isDone := job.isDone
 	filename := job.filename
 	file := job.file
-	inode := job.inode
 
 	if !isDone {
 		job.mu.Unlock()
@@ -618,7 +617,7 @@ func (jp *jobProvider) maintenanceJob(job *Job) int {
 
 	filename = job.filename
 	file = job.file
-	inode = job.inode
+	inode := job.inode
 
 	// try release file descriptor in the case file have been deleted
 	// for that reason just close it and immediately try to open

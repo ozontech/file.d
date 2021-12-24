@@ -71,7 +71,7 @@ func startCasePipeline(act func(pipeline *pipeline.Pipeline), out func(event *pi
 		if x.Load() <= 0 {
 			break
 		}
-		if time.Now().Sub(t) > time.Second*10 {
+		if time.Since(t) > time.Second*10 {
 			panic("too long act")
 		}
 	}
@@ -87,7 +87,7 @@ func WaitForEvents(x *atomic.Int32) {
 		if x.Load() <= 0 {
 			break
 		}
-		if time.Now().Sub(t) > time.Second*10 {
+		if time.Since(t) > time.Second*10 {
 			panic("too long wait")
 		}
 	}
