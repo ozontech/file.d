@@ -21,6 +21,54 @@ So you can use Elasticsearch filebeat output plugin to send data to `file.d`.
 > ⚠ Currently event commitment mechanism isn't implemented for this plugin.
 > Plugin answers with HTTP code `OK 200` right after it has read all the request body.
 > It doesn't wait until events are committed.
+
+**Example:**
+Emulating elastic through http:
+```yaml
+pipelines:
+  example_k8s_pipeline:
+    settings:
+      capacity: 1024
+    input:
+      # define input type.
+      type: http
+      # pretend elastic search, emulate it's protocol.
+      emulate_mode: "elasticsearch"
+      # define http port.
+      address: ":9200"
+    actions:
+      # parse elastic search query.
+      - type: parse_es
+      # decode elastic search json.
+      - type: json_decode
+        # field is required.
+        field: message
+    output:
+      # Let's write to kafka example.
+      type: kafka
+        brokers: [kafka-local:9092, kafka-local:9091]
+        default_topic: yourtopic-k8s-data
+        use_topic_field: true
+        topic_field: pipeline_kafka_topic
+
+      # Or we can write to file:
+      # type: file
+      # target_file: "./output.txt"
+```
+
+Setup:
+```
+# run server.
+# config.yaml should contains yaml config above.
+go run cmd/file.d.go --config=config.yaml
+
+# now do requests.
+curl "localhost:9200/_bulk" -H 'Content-Type: application/json' -d \
+'{"index":{"_index":"index-main","_type":"span"}}
+{"message": "hello", "kind": "normal"}
+
+##
+
 }*/
 
 type Plugin struct {

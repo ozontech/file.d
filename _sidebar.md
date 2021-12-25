@@ -43,6 +43,7 @@
     - [elasticsearch](plugin/output/elasticsearch/README.md)
     - [gelf](plugin/output/gelf/README.md)
     - [kafka](plugin/output/kafka/README.md)
+    - [s3](plugin/output/s3/usecase/README.md)
     - [splunk](plugin/output/splunk/README.md)
     - [stdout](plugin/output/stdout/README.md)
 

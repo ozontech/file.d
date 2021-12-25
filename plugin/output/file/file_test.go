@@ -66,7 +66,7 @@ func TestGetStartIdx(t *testing.T) {
 			fileName:      file[0 : len(file)-len(extension)],
 		}
 
-		// create files
+		// create files.
 		files := make([]*os.File, len(tc.filesName))
 		createDir(t, p.targetDir)
 		for _, f := range tc.filesName {
@@ -76,7 +76,7 @@ func TestGetStartIdx(t *testing.T) {
 		idx := p.getStartIdx()
 		assert.EqualValues(t, tc.expectedIdx, idx)
 
-		//	close files
+		//	close files.
 		for _, f := range files {
 			f.Close()
 		}
@@ -309,7 +309,7 @@ func TestStart(t *testing.T) {
 	// check seal up for third
 	time.Sleep(sealUpFileSleep)
 	matches = test.GetMatches(t, generalPattern)
-	assert.GreaterOrEqual(t, len(matches), 4, "there is no new files after sealing up third pack")
+	assert.GreaterOrEqual(t, len(matches), 4, "there is no new plugins after sealing up third pack")
 	checkDirFiles(t, matches, totalSent, "lost data for third pack")
 	for _, m := range matches {
 		if strings.Contains(m, currentLogFileSubstr) {
