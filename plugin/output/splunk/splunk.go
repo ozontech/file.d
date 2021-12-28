@@ -30,6 +30,7 @@ type Plugin struct {
 	batcher        *pipeline.Batcher
 	controller     pipeline.OutputPluginController
 	requestTimeout time.Duration
+	client 			http.Client
 }
 
 //! config-params
@@ -68,6 +69,8 @@ type Config struct {
 	//> After this timeout the batch will be sent even if batch isn't completed.
 	BatchFlushTimeout  cfg.Duration `json:"batch_flush_timeout" default:"200ms" parse:"duration"` //*
 	BatchFlushTimeout_ time.Duration
+
+	EventKey string
 }
 
 type data struct {
@@ -90,6 +93,14 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.logger = params.Logger
 	p.avgEventSize = params.PipelineSettings.AvgEventSize
 	p.config = config.(*Config)
+	p.client = http.Client{
+		Timeout: p.config.RequestTimeout_,
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: true,
+			},
+		},
+	}
 
 	p.batcher = pipeline.NewBatcher(
 		params.PipelineName,
@@ -129,7 +140,17 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 	root := insaneJSON.Spawn()
 	outBuf := data.outBuf[:0]
 	for _, event := range batch.Events {
-		root.AddField("event").MutateToNode(event.Root.Node)
+		for _, field := range event.Root.AsFields() {
+			key := field.AsString()
+			val := field.AsFieldValue()
+			if key == p.config.EventKey {
+				node := root.AddField("event").MutateToObject()
+				node.AddField(key).MutateToNode(val)
+				continue
+			}
+			root.AddField(key).MutateToNode(val)
+		}
+
 		outBuf = root.Encode(outBuf)
 		_ = root.DecodeString("{}")
 	}
@@ -137,30 +158,19 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 	data.outBuf = outBuf
 
 	for {
-		err := p.send(outBuf, p.config.RequestTimeout_)
+		err := p.send(outBuf)
 		if err != nil {
 			p.logger.Errorf("can't send data to splunk address=%s: %s", p.config.Endpoint, err.Error())
 			time.Sleep(time.Second)
-
 			continue
 		}
-
 		break
 	}
 }
 
 func (p *Plugin) maintenance(workerData *pipeline.WorkerData) {}
 
-func (p *Plugin) send(data []byte, timeout time.Duration) error {
-	c := http.Client{
-		Timeout: timeout,
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{
-				InsecureSkipVerify: true,
-			},
-		},
-	}
-
+func (p *Plugin) send(data []byte) error {
 	r := bytes.NewReader(data)
 	req, err := http.NewRequestWithContext(context.Background(), "POST", p.config.Endpoint, r)
 	if err != nil {
@@ -168,7 +178,7 @@ func (p *Plugin) send(data []byte, timeout time.Duration) error {
 	}
 
 	req.Header.Set("Authorization", "Splunk "+p.config.Token)
-	resp, err := c.Do(req)
+	resp, err := p.client.Do(req)
 	if err != nil {
 		return fmt.Errorf("can't send request: %w", err)
 	}
