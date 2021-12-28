@@ -12,7 +12,7 @@ import (
 
 func TestEventKey(t *testing.T) {
 	testsCases := map[string]string{
-		`{"msg":"AAAA","some_field":"BBBB"}`: `{"event":{"msg":"AAAA"},"some_field":"BBBB"}`,
+		`{"msg":"AAAA","some_field":"BBBB"}`:         `{"event":{"msg":"AAAA"},"some_field":"BBBB"}`,
 		`{"msg":"AAAA","some_field":{"boo": "bar"}}`: `{"event":{"msg":"AAAA"},"some_field":{"boo":"bar"}}`,
 	}
 
@@ -46,7 +46,7 @@ func testOne(in string, t *testing.T) string {
 
 	logger := zap.NewExample().Sugar()
 	plugin := Plugin{
-		config: &Config {
+		config: &Config{
 			EventKey: "msg",
 			Endpoint: testServer.URL,
 		},
@@ -63,4 +63,4 @@ func testOne(in string, t *testing.T) string {
 	plugin.out(&data, &batch)
 
 	return string(response)
-}	
+}

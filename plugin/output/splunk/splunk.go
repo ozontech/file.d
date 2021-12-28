@@ -30,7 +30,7 @@ type Plugin struct {
 	batcher        *pipeline.Batcher
 	controller     pipeline.OutputPluginController
 	requestTimeout time.Duration
-	client 			http.Client
+	client         http.Client
 }
 
 //! config-params
