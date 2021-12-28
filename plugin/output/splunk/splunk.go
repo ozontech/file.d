@@ -70,7 +70,10 @@ type Config struct {
 	BatchFlushTimeout  cfg.Duration `json:"batch_flush_timeout" default:"200ms" parse:"duration"` //*
 	BatchFlushTimeout_ time.Duration
 
-	EventKey string
+	//> @3@4@5@6
+	//>
+	//> This key will be extracted as "event" value
+	EventKey string `json:"event_key"` //*
 }
 
 type data struct {
