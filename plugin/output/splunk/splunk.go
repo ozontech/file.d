@@ -180,6 +180,7 @@ func (p *Plugin) send(data []byte, timeout time.Duration) error {
 	}
 
 	root, err := insaneJSON.DecodeBytes(b)
+	defer insaneJSON.Release(root)
 	if err != nil {
 		return fmt.Errorf("can't decode response: %w", err)
 	}
