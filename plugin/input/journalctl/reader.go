@@ -60,6 +60,7 @@ func readLines(r io.Reader, config *journalReaderConfig) {
 }
 
 func newJournalReader(config *journalReaderConfig) *journalReader {
+
 	res := &journalReader{config: config}
 	res.args = []string{
 		"-o", "json",
