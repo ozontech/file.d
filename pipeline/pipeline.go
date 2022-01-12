@@ -263,7 +263,6 @@ func (p *Pipeline) GetOutput() OutputPlugin {
 
 func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes []byte, isNewSource bool) uint64 {
 	length := len(bytes)
-	logger.Infof("in %s", bytes)
 
 	// don't process shit
 	isEmpty := length == 0 || (bytes[0] == '\n' && length == 1)
