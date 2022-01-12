@@ -5,7 +5,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/ozonru/file.d/pipeline"
+	"github.com/ozontech/file.d/pipeline"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

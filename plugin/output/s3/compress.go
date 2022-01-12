@@ -1,4 +1,4 @@
-package usecase
+package s3
 
 import (
 	"archive/zip"

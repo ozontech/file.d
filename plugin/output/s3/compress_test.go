@@ -1,4 +1,4 @@
-package usecase
+package s3
 
 import (
 	"archive/zip"
@@ -8,8 +8,8 @@ import (
 	"os"
 	"testing"
 
-	"github.com/ozonru/file.d/logger"
-	"github.com/ozonru/file.d/test"
+	"github.com/ozontech/file.d/logger"
+	"github.com/ozontech/file.d/test"
 	"github.com/stretchr/testify/assert"
 )
 

@@ -1,4 +1,4 @@
-package usecase
+package s3
 
 import (
 	"bufio"
@@ -9,18 +9,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ozonru/file.d/plugin/output/s3"
-
 	"github.com/golang/mock/gomock"
-	mock_s3 "github.com/ozonru/file.d/plugin/output/s3/mock"
-
 	"github.com/minio/minio-go"
-	"github.com/ozonru/file.d/cfg"
-	"github.com/ozonru/file.d/logger"
-	"github.com/ozonru/file.d/pipeline"
-	"github.com/ozonru/file.d/plugin/input/fake"
-	"github.com/ozonru/file.d/plugin/output/file"
-	"github.com/ozonru/file.d/test"
+	"github.com/ozontech/file.d/cfg"
+	"github.com/ozontech/file.d/logger"
+	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/plugin/input/fake"
+	"github.com/ozontech/file.d/plugin/output/file"
+	mock_s3 "github.com/ozontech/file.d/plugin/output/s3/mock"
+	"github.com/ozontech/file.d/test"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/net/context"
@@ -76,7 +73,7 @@ type putWithErr struct {
 func (put *putWithErr) fPutObjectErr(bucketName, objectName, filePath string, opts minio.PutObjectOptions) (n int64, err error) {
 	select {
 	case <-put.ctx.Done():
-		fmt.Println("put object")
+		logger.Info("put object")
 
 		targetDir := fmt.Sprintf("./%s", bucketName)
 		if _, err := os.Stat(targetDir); os.IsNotExist(err) {
@@ -85,12 +82,12 @@ func (put *putWithErr) fPutObjectErr(bucketName, objectName, filePath string, op
 			}
 		}
 		fileName = fmt.Sprintf("%s/%s", bucketName, "mockLog.txt")
-		file, err := os.OpenFile(fileName, os.O_CREATE|os.O_APPEND|os.O_RDWR, os.FileMode(0o777))
+		f, err := os.OpenFile(fileName, os.O_CREATE|os.O_APPEND|os.O_RDWR, os.FileMode(0o777))
 		if err != nil {
 			logger.Panicf("could not open or create file: %s, error: %s", fileName, err.Error())
 		}
 
-		if _, err := file.WriteString(fmt.Sprintf("%s | from '%s' to b: `%s` as obj: `%s`\n", time.Now().String(), filePath, bucketName, objectName)); err != nil {
+		if _, err := f.WriteString(fmt.Sprintf("%s | from '%s' to b: `%s` as obj: `%s`\n", time.Now().String(), filePath, bucketName, objectName)); err != nil {
 			return 0, fmt.Errorf(err.Error())
 		}
 		return 1, nil
@@ -134,9 +131,9 @@ func TestStart(t *testing.T) {
 
 	ctl := gomock.NewController(t)
 	defer ctl.Finish()
-	s3GomockClient := mock_s3.NewMockObjectStoreClient(ctl)
-	s3GomockClient.EXPECT().BucketExists(bucketName).Return(true, nil).AnyTimes()
-	s3GomockClient.EXPECT().FPutObject(bucketName, gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(fPutObjectOk).AnyTimes()
+	s3MockClient := mock_s3.NewMockObjectStoreClient(ctl)
+	s3MockClient.EXPECT().BucketExists(bucketName).Return(true, nil).AnyTimes()
+	s3MockClient.EXPECT().FPutObject(bucketName, gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(fPutObjectOk).AnyTimes()
 
 	fileConfig := file.Config{
 		TargetFile:        targetFile,
@@ -161,9 +158,9 @@ func TestStart(t *testing.T) {
 	err := cfg.Parse(config, map[string]int{"gomaxprocs": 1, "capacity": 64})
 	assert.NoError(t, err)
 
-	p := newPipeline(t, config, func(cfg *Config) (s3.ObjectStoreClient, map[string]s3.ObjectStoreClient, error) {
-		return s3GomockClient, map[string]s3.ObjectStoreClient{
-			bucketName: s3GomockClient,
+	p := newPipeline(t, config, func(cfg *Config) (ObjectStoreClient, map[string]ObjectStoreClient, error) {
+		return s3MockClient, map[string]ObjectStoreClient{
+			bucketName: s3MockClient,
 		}, nil
 	})
 	assert.NotNil(t, p, "could not create new pipeline")
@@ -218,7 +215,7 @@ func TestStartWithMultiBuckets(t *testing.T) {
 	// will be created.
 	dynamicBucket := "FAKE_BUCKET"
 
-	buckets := []string{"main", "multi_bucket1", "multi_bucket2", dynamicBucket}
+	buckets := []string{"main", "multi_bucket1", "multi_bucket2"}
 	tests := struct {
 		firstPack  []test.Msg
 		secondPack []test.Msg
@@ -286,10 +283,18 @@ func TestStartWithMultiBuckets(t *testing.T) {
 	defer ctl.Finish()
 
 	s3MockClient := mock_s3.NewMockObjectStoreClient(ctl)
-	for _, bucketName := range append(append(buckets, dynamicBucket)) {
+	//dynamicBucket
+	for _, bucketName := range buckets {
 		s3MockClient.EXPECT().BucketExists(bucketName).Return(true, nil).AnyTimes()
 		s3MockClient.EXPECT().FPutObject(bucketName, gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(fPutObjectOk).AnyTimes()
 	}
+	// At first dynamic bucket doesn't exist
+	s3MockClient.EXPECT().BucketExists(dynamicBucket).Return(false, nil).Times(1)
+	// Successful creation on bucket.
+	s3MockClient.EXPECT().MakeBucket(dynamicBucket, "").Return(nil).Times(1)
+	// Now s3 answers that bucket exists.
+	s3MockClient.EXPECT().BucketExists(dynamicBucket).Return(true, nil).AnyTimes()
+	s3MockClient.EXPECT().FPutObject(dynamicBucket, gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(fPutObjectOk).AnyTimes()
 
 	fileConfig := file.Config{
 		TargetFile:        targetFile,
@@ -298,14 +303,14 @@ func TestStartWithMultiBuckets(t *testing.T) {
 		BatchFlushTimeout: "100ms",
 	}
 	config := &Config{
-		FileConfig:         fileConfig,
-		CompressionType:    "zip",
-		Endpoint:           buckets[0],
-		AccessKey:          buckets[0],
-		SecretKey:          buckets[0],
-		DefaultBucket:      buckets[0],
-		Secure:             false,
-		BucketFieldInEvent: "bucket_name",
+		FileConfig:       fileConfig,
+		CompressionType:  "zip",
+		Endpoint:         buckets[0],
+		AccessKey:        buckets[0],
+		SecretKey:        buckets[0],
+		DefaultBucket:    buckets[0],
+		Secure:           false,
+		BucketEventField: "bucket_name",
 		MultiBuckets: []singleBucketConfig{
 			{
 				Endpoint:       buckets[1],
@@ -339,8 +344,8 @@ func TestStartWithMultiBuckets(t *testing.T) {
 	err := cfg.Parse(config, map[string]int{"gomaxprocs": 1, "capacity": 64})
 	assert.NoError(t, err)
 
-	p := newPipeline(t, config, func(cfg *Config) (s3.ObjectStoreClient, map[string]s3.ObjectStoreClient, error) {
-		return s3MockClient, map[string]s3.ObjectStoreClient{
+	p := newPipeline(t, config, func(cfg *Config) (ObjectStoreClient, map[string]ObjectStoreClient, error) {
+		return s3MockClient, map[string]ObjectStoreClient{
 			buckets[0]:    s3MockClient,
 			buckets[1]:    s3MockClient,
 			buckets[2]:    s3MockClient,
@@ -460,7 +465,7 @@ func TestStartPanic(t *testing.T) {
 
 	err := cfg.Parse(config, map[string]int{"gomaxprocs": 1, "capacity": 64})
 	assert.NoError(t, err)
-	p := newPipeline(t, config, func(cfg *Config) (s3.ObjectStoreClient, map[string]s3.ObjectStoreClient, error) {
+	p := newPipeline(t, config, func(cfg *Config) (ObjectStoreClient, map[string]ObjectStoreClient, error) {
 		return nil, nil, nil
 	})
 
@@ -507,12 +512,12 @@ func TestStartWithSendProblems(t *testing.T) {
 	ctl := gomock.NewController(t)
 	defer ctl.Finish()
 
-	s3GoMockClient := mock_s3.NewMockObjectStoreClient(ctl)
-	s3GoMockClient.EXPECT().BucketExists(bucketName).Return(true, nil).AnyTimes()
+	s3MockClient := mock_s3.NewMockObjectStoreClient(ctl)
+	s3MockClient.EXPECT().BucketExists(bucketName).Return(true, nil).AnyTimes()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	withErr := putWithErr{ctx: ctx, cancel: cancel}
-	s3GoMockClient.EXPECT().FPutObject(bucketName, gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(withErr.fPutObjectErr).AnyTimes()
+	s3MockClient.EXPECT().FPutObject(bucketName, gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(withErr.fPutObjectErr).AnyTimes()
 
 	fileConfig := file.Config{
 		TargetFile:        targetFile,
@@ -535,9 +540,9 @@ func TestStartWithSendProblems(t *testing.T) {
 	defer test.ClearDir(t, config.DefaultBucket)
 	err := cfg.Parse(config, map[string]int{"gomaxprocs": 1, "capacity": 64})
 	assert.NoError(t, err)
-	p := newPipeline(t, config, func(cfg *Config) (s3.ObjectStoreClient, map[string]s3.ObjectStoreClient, error) {
-		return s3GoMockClient, map[string]s3.ObjectStoreClient{
-			bucketName: s3GoMockClient,
+	p := newPipeline(t, config, func(cfg *Config) (ObjectStoreClient, map[string]ObjectStoreClient, error) {
+		return s3MockClient, map[string]ObjectStoreClient{
+			bucketName: s3MockClient,
 		}, nil
 	})
 

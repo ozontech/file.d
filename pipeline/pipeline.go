@@ -11,9 +11,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ozonru/file.d/decoder"
-	"github.com/ozonru/file.d/logger"
-	"github.com/ozonru/file.d/longpanic"
+	"github.com/ozontech/file.d/decoder"
+	"github.com/ozontech/file.d/logger"
+	"github.com/ozontech/file.d/longpanic"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"

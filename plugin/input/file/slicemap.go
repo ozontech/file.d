@@ -1,7 +1,7 @@
 package file
 
 import (
-	"github.com/ozonru/file.d/pipeline"
+	"github.com/ozontech/file.d/pipeline"
 )
 
 // sliceMap is a map of streamName to offset.

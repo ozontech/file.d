@@ -3,7 +3,7 @@ package throttle
 import (
 	"sort"
 
-	"github.com/ozonru/file.d/pipeline"
+	"github.com/ozontech/file.d/pipeline"
 )
 
 type complexLimit struct {

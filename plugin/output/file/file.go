@@ -9,17 +9,17 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ozonru/file.d/cfg"
-	"github.com/ozonru/file.d/fd"
-	"github.com/ozonru/file.d/logger"
-	"github.com/ozonru/file.d/longpanic"
-	"github.com/ozonru/file.d/pipeline"
+	"github.com/ozontech/file.d/cfg"
+	"github.com/ozontech/file.d/fd"
+	"github.com/ozontech/file.d/logger"
+	"github.com/ozontech/file.d/longpanic"
+	"github.com/ozontech/file.d/pipeline"
 
 	"go.uber.org/zap"
 	"golang.org/x/net/context"
 )
 
-type PluginInterface interface {
+type Plugable interface {
 	Start(config pipeline.AnyConfig, params *pipeline.OutputPluginParams)
 	Out(event *pipeline.Event)
 	Stop()
@@ -59,7 +59,7 @@ const (
 
 type Config struct {
 	//> File name for log file.
-	// 	defaultTargetFileName = TargetFile default value
+	//> defaultTargetFileName = TargetFile default value
 	TargetFile string `json:"target_file" default:"/var/log/file-d.log"` //*
 
 	//> Interval of creation new file

@@ -1,4 +1,4 @@
-package usecase
+package s3
 
 import (
 	"errors"
@@ -7,11 +7,8 @@ import (
 	"path/filepath"
 
 	"github.com/minio/minio-go"
-
-	"github.com/ozonru/file.d/plugin/output/s3"
-
-	"github.com/ozonru/file.d/pipeline"
-	"github.com/ozonru/file.d/plugin/output/file"
+	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/plugin/output/file"
 )
 
 var (
@@ -19,10 +16,10 @@ var (
 	ErrCreateOutputPluginNoSuchBucket    = errors.New("bucket doesn't exist")
 )
 
-type objStoreFactory func(cfg *Config) (s3.ObjectStoreClient, map[string]s3.ObjectStoreClient, error)
+type objStoreFactory func(cfg *Config) (ObjectStoreClient, map[string]ObjectStoreClient, error)
 
-func (p *Plugin) minioClientsFactory(cfg *Config) (s3.ObjectStoreClient, map[string]s3.ObjectStoreClient, error) {
-	minioClients := make(map[string]s3.ObjectStoreClient)
+func (p *Plugin) minioClientsFactory(cfg *Config) (ObjectStoreClient, map[string]ObjectStoreClient, error) {
+	minioClients := make(map[string]ObjectStoreClient)
 	// initialize minio clients object for main bucket.
 	defaultClient, err := minio.New(cfg.Endpoint, cfg.AccessKey, cfg.SecretKey, cfg.Secure)
 	if err != nil {
@@ -41,7 +38,7 @@ func (p *Plugin) minioClientsFactory(cfg *Config) (s3.ObjectStoreClient, map[str
 	return defaultClient, minioClients, nil
 }
 
-func (p *Plugin) getDirs(outPlugCount int) map[string]string {
+func (p *Plugin) getStaticDirs(outPlugCount int) (map[string]string, error) {
 	// dir for all bucket files.
 	dir, _ := filepath.Split(p.config.FileConfig.TargetFile)
 
@@ -49,9 +46,13 @@ func (p *Plugin) getDirs(outPlugCount int) map[string]string {
 	targetDirs[p.config.DefaultBucket] = dir
 	// multi_buckets from config are sub dirs on in Config.FileConfig.TargetFile dir.
 	for _, singleBucket := range p.config.MultiBuckets {
+		// todo bucket names can't intersect, add ability to have equal bucket names in different s3 servers.
+		if _, ok := targetDirs[singleBucket.Bucket]; ok {
+			return nil, fmt.Errorf("bucket name %s has duplicated", singleBucket.Bucket)
+		}
 		targetDirs[singleBucket.Bucket] = filepath.Join(dir, StaticBucketDir, singleBucket.Bucket) + dirSep
 	}
-	return targetDirs
+	return targetDirs, nil
 }
 
 func (p *Plugin) getFileNames(outPlugCount int) map[string]string {
@@ -73,18 +74,23 @@ func (p *Plugin) createPlugsFromDynamicBucketArtifacts(targetDirs map[string]str
 	dynamicDirsPath := filepath.Join(targetDirs[p.config.DefaultBucket], DynamicBucketDir)
 	dynamicDir, err := ioutil.ReadDir(dynamicDirsPath)
 	if err != nil {
-		p.logger.Infof("%s doesn't exist, willn't restore dynamic s3 buckets", err.Error())
+		p.logger.Infof("%s doesn't exist, won't restore dynamic s3 buckets", err.Error())
 		return
 	}
 	for _, f := range dynamicDir {
+		// dir name == bucket. Were interested only in dirs.
 		if !f.IsDir() {
 			continue
 		}
+
+		// If bucket was dynamic and now declared as static, we just ignore it.
+		if p.config.IsMultiBucketExists(f.Name()) {
+			continue
+		}
+
 		created := p.tryRunNewPlugin(f.Name())
 		if created {
-			p.logger.Infof("dynamic bucket '%s' retrieved from artifacts", f.Name())
-		} else {
-			p.logger.Infof("can't retrieve dynamic bucket from artifacts: %s", err.Error())
+			p.logger.Infof("dynamic bucket %s retrieved from artifacts", f.Name())
 		}
 	}
 }
@@ -106,7 +112,7 @@ func (p *Plugin) createOutPlugin(bucketName string) (*file.Plugin, error) {
 }
 
 func (p *Plugin) startPlugins(Params *pipeline.OutputPluginParams, outPlugCount int, targetDirs, fileNames map[string]string) error {
-	outPlugins := make(map[string]file.PluginInterface, outPlugCount)
+	outPlugins := make(map[string]file.Plugable, outPlugCount)
 	outPlugin, err := p.createOutPlugin(p.config.DefaultBucket)
 	if err != nil {
 		return err
@@ -114,7 +120,6 @@ func (p *Plugin) startPlugins(Params *pipeline.OutputPluginParams, outPlugCount 
 	outPlugins[p.config.DefaultBucket] = outPlugin
 	p.logger.Infof("bucket %s exists", p.config.DefaultBucket)
 
-	p.createPlugsFromDynamicBucketArtifacts(targetDirs)
 	// If multi_buckets described on file.d config, check each of them as well.
 	for _, singleBucket := range p.config.MultiBuckets {
 		outPlugin, err := p.createOutPlugin(singleBucket.Bucket)
@@ -125,8 +130,9 @@ func (p *Plugin) startPlugins(Params *pipeline.OutputPluginParams, outPlugCount 
 		p.logger.Infof("bucket %s exists", singleBucket.Bucket)
 	}
 
-	p.logger.Info("outPlugins are ready")
+	p.logger.Info("outPlugins ready")
 	p.outPlugins = file.NewFilePlugins(outPlugins)
+	p.createPlugsFromDynamicBucketArtifacts(targetDirs)
 
 	starterMap := make(pipeline.PluginsStarterMap, outPlugCount)
 	for bucketName := range outPlugins {

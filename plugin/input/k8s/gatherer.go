@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ozonru/file.d/longpanic"
+	"github.com/ozontech/file.d/longpanic"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"

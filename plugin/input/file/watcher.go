@@ -5,7 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/ozonru/file.d/longpanic"
+	"github.com/ozontech/file.d/longpanic"
 	"github.com/rjeczalik/notify"
 	"go.uber.org/zap"
 )

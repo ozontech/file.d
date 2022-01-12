@@ -1,4 +1,4 @@
-VERSION ?= 0.1.15
+VERSION ?= 0.2.2
 UPSTREAM_BRANCH ?= origin/master
 
 .PHONY: prepare
@@ -20,6 +20,12 @@ test:
 	go test ./fd/ -v -count 1
 	go test ./pipeline/ -v -count 1
 	go test ./plugin/... -v -count 1
+
+.PHONY: test-short
+test-short:
+	go test ./fd/ -v -count 1 -short
+	go test ./pipeline/ -v -count 1 -short
+	go test ./plugin/... -v -count 1 -short
 
 .PHONY: test-e2e
 test-e2e:
@@ -66,4 +72,5 @@ lint:
 
 .PHONY: mock
 mock:
-	go generate mock_gen.go
+	go install github.com/golang/mock/mockgen
+	mockgen -source=plugin/output/s3/s3.go -destination=plugin/output/s3/mock/s3.go

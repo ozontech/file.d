@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ozonru/file.d/cfg"
-	"github.com/ozonru/file.d/logger"
-	"github.com/ozonru/file.d/test"
+	"github.com/ozontech/file.d/cfg"
+	"github.com/ozontech/file.d/logger"
+	"github.com/ozontech/file.d/test"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -72,11 +72,11 @@ func TestGetStartIdx(t *testing.T) {
 		for _, f := range tc.filesName {
 			files = append(files, createFile(t, f, nil))
 		}
-		//	make check
+		// make check
 		idx := p.getStartIdx()
 		assert.EqualValues(t, tc.expectedIdx, idx)
 
-		//	close files.
+		// close files.
 		for _, f := range files {
 			f.Close()
 		}

@@ -6,7 +6,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestPlugins_Exists(t *testing.T) {
+func TestPluginsExists(t *testing.T) {
 	cases := []struct {
 		name        string
 		prepareFunc func() *Plugins
@@ -24,7 +24,7 @@ func TestPlugins_Exists(t *testing.T) {
 		{
 			name: "not_exists",
 			prepareFunc: func() *Plugins {
-				return NewFilePlugins(map[string]PluginInterface{
+				return NewFilePlugins(map[string]Plugable{
 					"EXISTS": nil,
 				})
 			},
@@ -42,7 +42,7 @@ func TestPlugins_Exists(t *testing.T) {
 	}
 }
 
-func TestPlugins_IsStatic(t *testing.T) {
+func TestPluginsIsStatic(t *testing.T) {
 	cases := []struct {
 		name        string
 		prepareFunc func() *Plugins
@@ -60,7 +60,7 @@ func TestPlugins_IsStatic(t *testing.T) {
 		{
 			name: "static",
 			prepareFunc: func() *Plugins {
-				return NewFilePlugins(map[string]PluginInterface{
+				return NewFilePlugins(map[string]Plugable{
 					"plugname": nil,
 				})
 			},
@@ -78,7 +78,7 @@ func TestPlugins_IsStatic(t *testing.T) {
 	}
 }
 
-func TestPlugins_IsDynamic(t *testing.T) {
+func TestPluginsIsDynamic(t *testing.T) {
 	cases := []struct {
 		name        string
 		prepareFunc func() *Plugins
@@ -115,10 +115,10 @@ func TestPlugins_IsDynamic(t *testing.T) {
 	}
 }
 
-func TestPlugins_ExistsIsStaticIsDynamic(t *testing.T) {
+func TestPluginsExistsIsStaticIsDynamic(t *testing.T) {
 	staticPlug := "abc"
 	dynamicPlug := "def"
-	plugins := NewFilePlugins(map[string]PluginInterface{
+	plugins := NewFilePlugins(map[string]Plugable{
 		staticPlug: nil,
 	})
 	plugins.Add(dynamicPlug, nil)

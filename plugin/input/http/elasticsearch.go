@@ -3,7 +3,7 @@ package http
 import (
 	"net/http"
 
-	"github.com/ozonru/file.d/logger"
+	"github.com/ozontech/file.d/logger"
 )
 
 var info = []byte(`{

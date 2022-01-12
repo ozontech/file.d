@@ -126,8 +126,8 @@ const (
 	MatchModeUnknown MatchMode = 2
 )
 
-// PluginSelector only valid value now is ByNameSelector
-// and only value is string type. If required in future it can be expanded with custom type.
+// PluginSelector the only valid value for now is ByNameSelector
+// and only value is string type. It can be expanded with a custom type in the future.
 type PluginSelector struct {
 	CondType  ConditionType
 	CondValue string
@@ -136,7 +136,7 @@ type PluginSelector struct {
 type ConditionType int
 
 const (
-	// UnknownSelector value is default, therefore it's safer to user it as default unknown value.
+	// UnknownSelector value is default, therefore it's safer to use it as default unknown value.
 	UnknownSelector ConditionType = iota
 	ByNameSelector
 )

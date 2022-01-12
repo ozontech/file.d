@@ -3,10 +3,10 @@ package k8s
 import (
 	"net/http"
 
-	"github.com/ozonru/file.d/decoder"
-	"github.com/ozonru/file.d/fd"
-	"github.com/ozonru/file.d/pipeline"
-	"github.com/ozonru/file.d/plugin/input/file"
+	"github.com/ozontech/file.d/decoder"
+	"github.com/ozontech/file.d/fd"
+	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/plugin/input/file"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
 )

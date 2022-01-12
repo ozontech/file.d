@@ -1,8 +1,9 @@
-package usecase
+package s3
 
 import (
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"math"
 	"math/rand"
 	"os"
@@ -10,26 +11,28 @@ import (
 	"path/filepath"
 	"sort"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
-	"github.com/ozonru/file.d/plugin/output/s3"
-
 	"github.com/minio/minio-go"
-
-	"github.com/ozonru/file.d/fd"
-	"github.com/ozonru/file.d/longpanic"
-	"github.com/ozonru/file.d/pipeline"
-	"github.com/ozonru/file.d/plugin/output/file"
+	"github.com/ozontech/file.d/fd"
+	"github.com/ozontech/file.d/longpanic"
+	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/plugin/output/file"
 	"go.uber.org/zap"
 )
 
 /*{ introduction
 Sends events to s3 output of one or multiple buckets.
 `bucket` is default bucket for events. Addition buckets can be described in `multi_buckets` section, example down here.
-Field "bucket_field_in_event" is filed name, that will be searched in event.
+Field "bucket_field_event" is filed name, that will be searched in event.
 If appears we try to send event to this bucket instead of described here.
+
+> ⚠ Currently bucket names for bucket and multi_buckets can't intersect.
+
+> ⚠ If dynamic bucket moved to config it can leave some not send data behind.
+> To send this data to s3 move bucket dir from /var/log/dynamic_buckets/bucketName to /var/log/static_buckets/bucketName (/var/log is default path)
+> and restart file.d
 
 **Example**
 Standard example:
@@ -55,7 +58,7 @@ pipelines:
       access_key: "access_key1"
       secret_key: "secret_key2"
       bucket: "bucket-logs"
-      bucket_field_in_event: "bucket_name"
+      bucket_field_event: "bucket_name"
 ```
 
 Example with fan-out buckets:
@@ -81,9 +84,9 @@ pipelines:
       access_key: "access_key1"
       secret_key: "secret_key2"
       bucket: "bucket-logs"
-      # bucket_field_in_event - event with such field will be sent to bucket with its value
+      # bucket_field_event - event with such field will be sent to bucket with its value
       # if such exists: {"bucket_name": "secret", "message": 123} to bucket "secret".
-      bucket_field_in_event: "bucket_name"
+      bucket_field_event: "bucket_name"
       # multi_buckets is optional, contains array of buckets.
       multi_buckets:
         - endpoint: "otherS3.fake_host.org:80"
@@ -115,6 +118,12 @@ var (
 	r = rand.New(rand.NewSource(time.Now().UnixNano()))
 )
 
+type ObjectStoreClient interface {
+	MakeBucket(bucketName string, location string) (err error)
+	BucketExists(bucketName string) (bool, error)
+	FPutObject(bucketName, objectName, filePath string, opts minio.PutObjectOptions) (n int64, err error)
+}
+
 type compressor interface {
 	compress(archiveName, fileName string)
 	getObjectOptions() minio.PutObjectOptions
@@ -130,9 +139,9 @@ type Plugin struct {
 	fileExtension string
 
 	// defaultClient separated from others to avoid locks with dynamic buckets.
-	defaultClient s3.ObjectStoreClient
-	clients       map[string]s3.ObjectStoreClient
-	clientsFabric s3.ObjStoreFabricInterface
+	defaultClient ObjectStoreClient
+	clients       map[string]ObjectStoreClient
+	limiter       *ObjectStoreClientLimiter
 
 	outPlugins            *file.Plugins
 	dynamicPlugCreationMu sync.Mutex
@@ -147,6 +156,17 @@ type fileDTO struct {
 	fileName   string
 	bucketName string
 }
+
+type singleBucketConfig struct {
+	// s3 section
+	Endpoint       string      `json:"endpoint" required:"true"`
+	AccessKey      string      `json:"access_key" required:"true"`
+	SecretKey      string      `json:"secret_key" required:"true"`
+	Bucket         string      `json:"bucket" required:"true"`
+	Secure         bool        `json:"secure" default:"false"`
+	FilePluginInfo file.Config `json:"file_plugin" required:"true"`
+}
+type MultiBuckets []singleBucketConfig
 
 //! config-params
 //^ config-params
@@ -177,24 +197,32 @@ type Config struct {
 	//> MultiBuckets is additional buckets, which can also receive event.
 	//> Event must contain `bucket_name` field which value is s3 bucket name.
 	//> Events without `bucket_name` sends to DefaultBucket.
-	MultiBuckets []singleBucketConfig `json:"multi_buckets" required:"false"` //*
+	MultiBuckets `json:"multi_buckets" required:"false"`
 	//> @3@4@5@6
 	//> s3 connection secure option.
 	Secure bool `json:"secure" default:"false"` //*
 	//> @3@4@5@6
-	//> BucketFieldInEvent field change destination bucket of event to fields value.
-	// Fallback to DefaultBucket if BucketFieldInEvent bucket doesn't exist.
-	BucketFieldInEvent string `json:"bucket_field_in_event" default:"bucket_name"` //*
+	//> BucketEventField field change destination bucket of event to fields value.
+	//> Fallback to DefaultBucket if BucketEventField bucket doesn't exist.
+	BucketEventField string `json:"bucket_field_event" default:""` //*
+	//> @3@4@5@6
+	//> DynamicBucketsLimit regulates how many buckets can be created dynamically.
+	//> Prevents problems when some random strings in BucketEventField where
+	DynamicBucketsLimit int `json:"dynamic_buckets_limit" default:"32"`
 }
 
-type singleBucketConfig struct {
-	// s3 section
-	Endpoint       string      `json:"endpoint" required:"true"`
-	AccessKey      string      `json:"access_key" required:"true"`
-	SecretKey      string      `json:"secret_key" required:"true"`
-	Bucket         string      `json:"bucket" required:"true"`
-	Secure         bool        `json:"secure" default:"false"`
-	FilePluginInfo file.Config `json:"file_plugin" required:"true"`
+func (c *Config) IsMultiBucketExists(bucketName string) bool {
+	if c.MultiBuckets == nil {
+		return false
+	}
+
+	for _, bucket := range c.MultiBuckets {
+		if bucketName == bucket.Bucket {
+			return true
+		}
+	}
+
+	return false
 }
 
 func init() {
@@ -220,6 +248,7 @@ func (p *Plugin) StartWithMinio(config pipeline.AnyConfig, params *pipeline.Outp
 
 	// outPlugCount is defaultBucket + multi_buckets count, use to set maps size.
 	outPlugCount := len(p.config.MultiBuckets) + 1
+	p.limiter = NewObjectStoreClientLimiter(p.config.DynamicBucketsLimit + outPlugCount)
 
 	// set up compression.
 	newCompressor, ok := compressors[p.config.CompressionType]
@@ -229,7 +258,21 @@ func (p *Plugin) StartWithMinio(config pipeline.AnyConfig, params *pipeline.Outp
 	p.compressor = newCompressor(p.logger)
 
 	// dir for all bucket files.
-	targetDirs := p.getDirs(outPlugCount)
+	targetDirs, err := p.getStaticDirs(outPlugCount)
+	if err != nil {
+		p.logger.Fatal(err)
+	}
+
+	// initialize minio clients.
+	defaultClient, clients, err := factory(p.config)
+	if err != nil {
+		p.logger.Panicf("could not create minio client, error: %s", err.Error())
+	}
+	p.defaultClient = defaultClient
+	p.clients = clients
+
+	// dynamicDirs needs defaultClient set.
+	dynamicDirs := p.getDynamicDirsArtifacts(targetDirs)
 	// file for each bucket.
 	fileNames := p.getFileNames(outPlugCount)
 
@@ -240,14 +283,6 @@ func (p *Plugin) StartWithMinio(config pipeline.AnyConfig, params *pipeline.Outp
 		longpanic.Go(p.uploadWork)
 		longpanic.Go(p.compressWork)
 	}
-
-	// initialize minio clients.
-	defaultClient, clients, err := factory(p.config)
-	if err != nil {
-		p.logger.Panicf("could not create minio client, error: %s", err.Error())
-	}
-	p.defaultClient = defaultClient
-	p.clients = clients
 	err = p.startPlugins(params, outPlugCount, targetDirs, fileNames)
 	if errors.Is(err, ErrCreateOutputPluginCantCheckBucket) {
 		p.logger.Panic(err.Error())
@@ -256,7 +291,7 @@ func (p *Plugin) StartWithMinio(config pipeline.AnyConfig, params *pipeline.Outp
 		p.logger.Fatal(err.Error())
 	}
 
-	p.uploadExistingFiles(targetDirs, fileNames)
+	p.uploadExistingFiles(targetDirs, dynamicDirs, fileNames)
 }
 
 func (p *Plugin) Stop() {
@@ -266,14 +301,14 @@ func (p *Plugin) Stop() {
 func (p *Plugin) Out(event *pipeline.Event) {
 	p.outPlugins.Out(event, pipeline.PluginSelector{
 		CondType:  pipeline.ByNameSelector,
-		CondValue: p.decideReceiverBucket(event),
+		CondValue: p.getBucketName(event),
 	})
 }
 
-// decideReceiverBucket decide which s3 bucket shall receive event.
-func (p *Plugin) decideReceiverBucket(event *pipeline.Event) string {
-	bucketName := event.Root.Dig(p.config.BucketFieldInEvent).AsString()
-	// no BucketFieldInEvent in message, it's DefaultBucket, showtime.
+// getBucketName decides which s3 bucket shall receive event.
+func (p *Plugin) getBucketName(event *pipeline.Event) string {
+	bucketName := event.Root.Dig(p.config.BucketEventField).AsString()
+	// no BucketEventField in message, it's DefaultBucket, showtime.
 
 	if len(bucketName) == 0 {
 		return p.config.DefaultBucket
@@ -293,6 +328,37 @@ func (p *Plugin) decideReceiverBucket(event *pipeline.Event) string {
 	return p.config.DefaultBucket
 }
 
+func (p *Plugin) getDynamicDirsArtifacts(targetDirs map[string]string) map[string]string {
+	dynamicDirs := make(map[string]string)
+
+	dynamicDirsPath := filepath.Join(targetDirs[p.config.DefaultBucket], DynamicBucketDir)
+	dynamicDir, err := ioutil.ReadDir(dynamicDirsPath)
+	// If no such dir, no dynamic dirs existed.
+	if err != nil {
+		return nil
+	}
+
+	for _, dynDir := range dynamicDir {
+		// our target only dirs.
+		if !dynDir.IsDir() {
+			continue
+		}
+		_, ok := targetDirs[dynDir.Name()]
+		// ignore if we have such static dir.
+		if ok {
+			continue
+		}
+		_, err := p.defaultClient.BucketExists(dynDir.Name())
+		if err != nil {
+			continue
+		}
+
+		dynamicDirs[dynDir.Name()] = path.Join(dynamicDirsPath, dynDir.Name()) + dirSep
+	}
+
+	return dynamicDirs
+}
+
 // creates new dynamic plugin if such s3 bucket exists.
 func (p *Plugin) tryRunNewPlugin(bucketName string) (isCreated bool) {
 	// To avoid concurrent creation of bucketName plugin.
@@ -301,6 +367,15 @@ func (p *Plugin) tryRunNewPlugin(bucketName string) (isCreated bool) {
 	// Probably other worker created plugin concurrently, need check dynamic bucket one more time.
 	if p.outPlugins.IsDynamic(bucketName) {
 		return true
+	}
+	// If limit of dynamic buckets reached fallback to DefaultBucket.
+	if !p.limiter.CanCreate() {
+		p.logger.Warn(
+			"Limit of %d dynamic buckets reached, can't create new. Fallback to %s.",
+			p.config.DynamicBucketsLimit,
+			p.config.DefaultBucket,
+		)
+		return false
 	}
 
 	defaultBucketClient := p.defaultClient
@@ -311,8 +386,11 @@ func (p *Plugin) tryRunNewPlugin(bucketName string) (isCreated bool) {
 		return false
 	}
 	if !exists {
-		p.logger.Infof("Bucket %s doesn't exist in s3, message sent to DefaultBucket", bucketName)
-		return false
+		err := defaultBucketClient.MakeBucket(bucketName, "")
+		if err != nil {
+			p.logger.Errorf("can't create s3 bucket %s, error: %v, fallback to %s", bucketName, err, p.config.DefaultBucket)
+			return false
+		}
 	}
 
 	dir, _ := filepath.Split(p.config.FileConfig.TargetFile)
@@ -327,13 +405,21 @@ func (p *Plugin) tryRunNewPlugin(bucketName string) (isCreated bool) {
 	outPlugin.Start(&localBucketConfig, p.params)
 
 	p.outPlugins.Add(bucketName, outPlugin)
+	p.limiter.Increment()
 
 	return true
 }
 
 // uploadExistingFiles gets files from dirs, sorts it, compresses it if it's need, and then upload to s3.
-func (p *Plugin) uploadExistingFiles(targetDirs, fileNames map[string]string) {
-	for bucketName, dir := range targetDirs {
+func (p *Plugin) uploadExistingFiles(targetDirs, dynamicDirs, fileNames map[string]string) {
+	allDirs := make(map[string]string)
+	for k, v := range dynamicDirs {
+		allDirs[k] = v
+	}
+	for k, v := range targetDirs {
+		allDirs[k] = v
+	}
+	for bucketName, dir := range allDirs {
 		// get all compressed files.
 		pattern := fmt.Sprintf("%s*%s", dir, p.compressor.getExtension())
 		compressedFiles, err := filepath.Glob(pattern)
@@ -344,25 +430,13 @@ func (p *Plugin) uploadExistingFiles(targetDirs, fileNames map[string]string) {
 		sort.Slice(compressedFiles, p.getSortFunc(compressedFiles))
 		// upload archive.
 		for _, z := range compressedFiles {
-			splitPath := strings.Split(z, "/")
-			// multi_buckets are subdirectories of main bucket directory.
-			// If it's default: /var/log/file-d.log, then bucket "s3SpecialLogs" will have route:
-			// /var/log/static_buckets/s3SpecialLogs/12345_SpecialLogs.zip
-			// probableBucket will be found as in multi_buckets.
-			if len(splitPath) >= 2 {
-				probableBucket := fileNames[splitPath[len(splitPath)-2]]
-				_, ok := fileNames[probableBucket]
-				if ok {
-					p.uploadCh <- fileDTO{fileName: z, bucketName: probableBucket}
-				}
-			}
-
-			// If probableBucket wasn't wound in p.fileNamesAndType, it's archive of main bucket
-			p.uploadCh <- fileDTO{fileName: z, bucketName: p.config.DefaultBucket}
+			p.logger.Infof("uploaded file: %s, bucket: %s", z, bucketName)
+			p.uploadCh <- fileDTO{fileName: z, bucketName: bucketName}
 		}
 		// compress all files that we have in the dir
 		p.compressFilesInDir(bucketName, targetDirs, fileNames)
 	}
+	p.logger.Info("exited files uploaded")
 }
 
 // compressFilesInDir compresses all files in dir
@@ -423,20 +497,27 @@ func (p *Plugin) uploadWork() {
 
 // compressWork compress file from channel and then delete source file
 func (p *Plugin) compressWork() {
-	for DTO := range p.compressCh {
-		compressedName := p.compressor.getName(DTO.fileName)
-		p.compressor.compress(compressedName, DTO.fileName)
+	for dto := range p.compressCh {
+		compressedName := p.compressor.getName(dto.fileName)
+		p.compressor.compress(compressedName, dto.fileName)
 		// delete old file
-		if err := os.Remove(DTO.fileName); err != nil {
-			p.logger.Panicf("could not delete file: %s, error: %s", DTO, err.Error())
+		if err := os.Remove(dto.fileName); err != nil {
+			p.logger.Panicf("could not delete file: %s, error: %s", dto, err.Error())
 		}
-		DTO.fileName = compressedName
-		p.uploadCh <- fileDTO{fileName: DTO.fileName, bucketName: DTO.bucketName}
+		dto.fileName = compressedName
+		p.uploadCh <- fileDTO{fileName: dto.fileName, bucketName: dto.bucketName}
 	}
 }
 
 func (p *Plugin) uploadToS3(compressedDTO fileDTO) error {
-	_, err := p.clients[compressedDTO.bucketName].FPutObject(
+	var cl ObjectStoreClient
+	if ok := p.outPlugins.IsStatic(compressedDTO.bucketName); ok {
+		cl = p.clients[compressedDTO.bucketName]
+	} else {
+		cl = p.defaultClient
+	}
+
+	_, err := cl.FPutObject(
 		compressedDTO.bucketName, p.generateObjectName(compressedDTO.fileName),
 		compressedDTO.fileName,
 		p.compressor.getObjectOptions(),

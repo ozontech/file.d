@@ -9,9 +9,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/ozonru/file.d/logger"
-	"github.com/ozonru/file.d/longpanic"
-	"github.com/ozonru/file.d/pipeline"
+	"github.com/ozontech/file.d/logger"
+	"github.com/ozontech/file.d/longpanic"
+	"github.com/ozontech/file.d/pipeline"
 	"github.com/rjeczalik/notify"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"

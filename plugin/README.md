@@ -350,8 +350,14 @@ It sends the event batches to kafka brokers using `sarama` lib.
 ## s3
 Sends events to s3 output of one or multiple buckets.
 `bucket` is default bucket for events. Addition buckets can be described in `multi_buckets` section, example down here.
-Field "bucket_field_in_event" is filed name, that will be searched in event.
+Field "bucket_field_event" is filed name, that will be searched in event.
 If appears we try to send event to this bucket instead of described here.
+
+> ⚠ Currently bucket names for bucket and multi_buckets can't intersect.
+
+> ⚠ If dynamic bucket moved to config it can leave some not send data behind.
+> To send this data to s3 move bucket dir from /var/log/dynamic_buckets/bucketName to /var/log/static_buckets/bucketName (/var/log is default path)
+> and restart file.d
 
 **Example**
 Standard example:
@@ -377,7 +383,7 @@ pipelines:
       access_key: "access_key1"
       secret_key: "secret_key2"
       bucket: "bucket-logs"
-      bucket_field_in_event: "bucket_name"
+      bucket_field_event: "bucket_name"
 ```
 
 Example with fan-out buckets:
@@ -403,9 +409,9 @@ pipelines:
       access_key: "access_key1"
       secret_key: "secret_key2"
       bucket: "bucket-logs"
-      # bucket_field_in_event - event with such field will be sent to bucket with its value
+      # bucket_field_event - event with such field will be sent to bucket with its value
       # if such exists: {"bucket_name": "secret", "message": 123} to bucket "secret".
-      bucket_field_in_event: "bucket_name"
+      bucket_field_event: "bucket_name"
       # multi_buckets is optional, contains array of buckets.
       multi_buckets:
         - endpoint: "otherS3.fake_host.org:80"
