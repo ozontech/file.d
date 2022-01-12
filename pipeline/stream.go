@@ -4,7 +4,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ozonru/file.d/logger"
+	"github.com/ozontech/file.d/logger"
 )
 
 // stream is a queue of events

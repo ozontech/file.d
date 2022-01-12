@@ -11,9 +11,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ozonru/file.d/decoder"
-	"github.com/ozonru/file.d/logger"
-	"github.com/ozonru/file.d/longpanic"
+	"github.com/ozontech/file.d/decoder"
+	"github.com/ozontech/file.d/logger"
+	"github.com/ozontech/file.d/longpanic"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
@@ -263,6 +263,7 @@ func (p *Pipeline) GetOutput() OutputPlugin {
 
 func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes []byte, isNewSource bool) uint64 {
 	length := len(bytes)
+	logger.Infof("in %s", bytes)
 
 	// don't process shit
 	isEmpty := length == 0 || (bytes[0] == '\n' && length == 1)

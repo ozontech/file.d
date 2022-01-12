@@ -6,8 +6,8 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/ozonru/file.d/logger"
-	"github.com/ozonru/file.d/longpanic"
+	"github.com/ozontech/file.d/logger"
+	"github.com/ozontech/file.d/longpanic"
 
 	"go.uber.org/zap"
 )

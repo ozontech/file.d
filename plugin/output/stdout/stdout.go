@@ -3,8 +3,8 @@ package stdout
 import (
 	"fmt"
 
-	"github.com/ozonru/file.d/fd"
-	"github.com/ozonru/file.d/pipeline"
+	"github.com/ozontech/file.d/fd"
+	"github.com/ozontech/file.d/pipeline"
 )
 
 /*{ introduction

@@ -1,4 +1,4 @@
-module github.com/ozonru/file.d
+module github.com/ozontech/file.d
 
 go 1.17
 

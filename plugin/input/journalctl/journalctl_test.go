@@ -8,10 +8,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ozonru/file.d/cfg"
-	"github.com/ozonru/file.d/pipeline"
-	"github.com/ozonru/file.d/plugin/output/devnull"
-	"github.com/ozonru/file.d/test"
+	"github.com/ozontech/file.d/cfg"
+	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/plugin/output/devnull"
+	"github.com/ozontech/file.d/test"
 	"github.com/stretchr/testify/assert"
 )
 

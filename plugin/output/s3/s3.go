@@ -12,10 +12,10 @@ import (
 	"time"
 
 	"github.com/minio/minio-go"
-	"github.com/ozonru/file.d/fd"
-	"github.com/ozonru/file.d/longpanic"
-	"github.com/ozonru/file.d/pipeline"
-	"github.com/ozonru/file.d/plugin/output/file"
+	"github.com/ozontech/file.d/fd"
+	"github.com/ozontech/file.d/longpanic"
+	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/plugin/output/file"
 	"go.uber.org/zap"
 )
 

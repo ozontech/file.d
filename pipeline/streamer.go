@@ -5,8 +5,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ozonru/file.d/logger"
-	"github.com/ozonru/file.d/longpanic"
+	"github.com/ozontech/file.d/logger"
+	"github.com/ozontech/file.d/longpanic"
 )
 
 type streamer struct {

@@ -7,10 +7,10 @@ import (
 	"time"
 
 	"github.com/euank/go-kmsg-parser/kmsgparser"
-	"github.com/ozonru/file.d/fd"
-	"github.com/ozonru/file.d/longpanic"
-	"github.com/ozonru/file.d/offset"
-	"github.com/ozonru/file.d/pipeline"
+	"github.com/ozontech/file.d/fd"
+	"github.com/ozontech/file.d/longpanic"
+	"github.com/ozontech/file.d/offset"
+	"github.com/ozontech/file.d/pipeline"
 	insaneJSON "github.com/vitkovskii/insane-json"
 	"go.uber.org/zap"
 )

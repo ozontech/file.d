@@ -4,8 +4,8 @@ import (
 	"regexp"
 	"unicode/utf8"
 
-	"github.com/ozonru/file.d/fd"
-	"github.com/ozonru/file.d/pipeline"
+	"github.com/ozontech/file.d/fd"
+	"github.com/ozontech/file.d/pipeline"
 	insaneJSON "github.com/vitkovskii/insane-json"
 	"go.uber.org/zap"
 )

@@ -5,10 +5,10 @@ import (
 	"net/http"
 	"sync"
 
-	"github.com/ozonru/file.d/fd"
-	"github.com/ozonru/file.d/logger"
-	"github.com/ozonru/file.d/longpanic"
-	"github.com/ozonru/file.d/pipeline"
+	"github.com/ozontech/file.d/fd"
+	"github.com/ozontech/file.d/logger"
+	"github.com/ozontech/file.d/longpanic"
+	"github.com/ozontech/file.d/pipeline"
 )
 
 /*{ introduction

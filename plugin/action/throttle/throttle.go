@@ -4,10 +4,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ozonru/file.d/cfg"
-	"github.com/ozonru/file.d/fd"
-	"github.com/ozonru/file.d/logger"
-	"github.com/ozonru/file.d/pipeline"
+	"github.com/ozontech/file.d/cfg"
+	"github.com/ozontech/file.d/fd"
+	"github.com/ozontech/file.d/logger"
+	"github.com/ozontech/file.d/pipeline"
 )
 
 var (

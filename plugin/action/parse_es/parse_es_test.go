@@ -7,7 +7,7 @@ import (
 	insaneJSON "github.com/vitkovskii/insane-json"
 	"go.uber.org/zap"
 
-	"github.com/ozonru/file.d/pipeline"
+	"github.com/ozontech/file.d/pipeline"
 )
 
 func TestDoTimeout(t *testing.T) {
