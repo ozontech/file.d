@@ -19,6 +19,12 @@ import (
 	"golang.org/x/net/context"
 )
 
+type Plugable interface {
+	Start(config pipeline.AnyConfig, params *pipeline.OutputPluginParams)
+	Out(event *pipeline.Event)
+	Stop()
+}
+
 type Plugin struct {
 	controller     pipeline.OutputPluginController
 	logger         *zap.SugaredLogger
@@ -53,6 +59,7 @@ const (
 
 type Config struct {
 	//> File name for log file.
+	//> defaultTargetFileName = TargetFile default value
 	TargetFile string `json:"target_file" default:"/var/log/file-d.log"` //*
 
 	//> Interval of creation new file
@@ -203,7 +210,7 @@ func (p *Plugin) write(data []byte) {
 
 func (p *Plugin) createNew() {
 	p.tsFileName = fmt.Sprintf("%d%s%s%s", time.Now().Unix(), fileNameSeparator, p.fileName, p.fileExtension)
-	logger.Errorf("tsFileName in createNew=%s", p.tsFileName)
+	logger.Infof("tsFileName in createNew=%s", p.tsFileName)
 	f := fmt.Sprintf("%s%s", p.targetDir, p.tsFileName)
 	pattern := fmt.Sprintf("%s*%s%s%s", p.targetDir, fileNameSeparator, p.fileName, p.fileExtension)
 	matches, err := filepath.Glob(pattern)
@@ -242,7 +249,6 @@ func (p *Plugin) sealUp() {
 	if err := oldFile.Close(); err != nil {
 		p.logger.Panicf("could not close file: %s, error: %s", oldFile.Name(), err.Error())
 	}
-
 	logger.Errorf("sealing in %d, newFile: %s", time.Now().Unix(), newFileName)
 	if p.SealUpCallback != nil {
 		longpanic.Go(func() { p.SealUpCallback(newFileName) })

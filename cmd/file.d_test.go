@@ -4,6 +4,8 @@ package main
 
 import (
 	"fmt"
+	"github.com/ozontech/file.d/pipeline"
+	"github.com/stretchr/testify/require"
 	"io/ioutil"
 	"math/rand"
 	"os"
@@ -148,5 +150,63 @@ func runWriter(tempDir string, files int) {
 		if err != nil {
 			panic(err.Error())
 		}
+	}
+}
+
+/*
+Plugins registered automatically after importing by init() function:
+	_ "github.com/ozontech/file.d/plugin/output/devnull"
+	_ "github.com/ozontech/file.d/plugin/output/elasticsearch"
+Moving plugin in sub dir in plugin dir will quit registration quietly.
+To prevent this let's check that DefaultPluginRegistry contains all plugins.
+Plugins "dmesg", "journalctl" linux based, they contain tag: //go:build linux.
+We don't check them.
+*/
+func TestThatPluginsAreImported(t *testing.T) {
+	action := []string{
+		"add_host",
+		"debug",
+		"discard",
+		"flatten",
+		"json_decode",
+		"keep_fields",
+		"mask",
+		"modify",
+		"parse_es",
+		"parse_re2",
+		"remove_fields",
+		"rename",
+		"throttle",
+	}
+	for _, pluginName := range action {
+		pluginInfo := fd.DefaultPluginRegistry.Get(pipeline.PluginKindAction, pluginName)
+		require.NotNil(t, pluginInfo)
+	}
+
+	input := []string{
+		"fake",
+		"file",
+		"http",
+		"k8s",
+		"kafka",
+	}
+	for _, pluginName := range input {
+		pluginInfo := fd.DefaultPluginRegistry.Get(pipeline.PluginKindInput, pluginName)
+		require.NotNil(t, pluginInfo)
+	}
+
+	output := []string{
+		"devnull",
+		"elasticsearch",
+		"file",
+		"gelf",
+		"kafka",
+		"s3",
+		"splunk",
+		"stdout",
+	}
+	for _, pluginName := range output {
+		pluginInfo := fd.DefaultPluginRegistry.Get(pipeline.PluginKindOutput, pluginName)
+		require.NotNil(t, pluginInfo)
 	}
 }

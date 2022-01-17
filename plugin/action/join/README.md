@@ -40,6 +40,12 @@ A regexp which will continue the join sequence.
 
 <br>
 
+**`max_event_size`** *`int`* *`default=0`* 
+
+Max size of the resulted event. If it is set and the event exceeds the limit, the event will be truncated.
+
+<br>
+
 
 ### Understanding start/continue regexps
 **No joining:**

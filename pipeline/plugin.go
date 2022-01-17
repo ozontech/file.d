@@ -33,6 +33,12 @@ type OutputPlugin interface {
 	Out(*Event)
 }
 
+type PluginsStarterData struct {
+	Config AnyConfig
+	Params *OutputPluginParams
+}
+type PluginsStarterMap map[string]PluginsStarterData
+
 type PluginDefaultParams struct {
 	PipelineName     string
 	PipelineSettings *Settings
@@ -118,4 +124,19 @@ const (
 	MatchModeAnd     MatchMode = 0
 	MatchModeOr      MatchMode = 1
 	MatchModeUnknown MatchMode = 2
+)
+
+// PluginSelector the only valid value for now is ByNameSelector
+// and only value is string type. It can be expanded with a custom type in the future.
+type PluginSelector struct {
+	CondType  ConditionType
+	CondValue string
+}
+
+type ConditionType int
+
+const (
+	// UnknownSelector value is default, therefore it's safer to use it as default unknown value.
+	UnknownSelector ConditionType = iota
+	ByNameSelector
 )
