@@ -21,6 +21,7 @@ func (w *worker) start(inputController inputer, jobProvider *jobProvider, readBu
 	longpanic.Go(func() { w.work(inputController, jobProvider, readBufferSize, logger) })
 }
 
+// todo find job here.
 func (w *worker) work(controller inputer, jobProvider *jobProvider, readBufferSize int, logger *zap.SugaredLogger) {
 	accumBuffer := make([]byte, 0, readBufferSize)
 	readBuffer := make([]byte, readBufferSize)
@@ -67,14 +68,13 @@ func (w *worker) work(controller inputer, jobProvider *jobProvider, readBufferSi
 			r, err := file.Read(readBuffer)
 			read := int64(r)
 			readBuffer = readBuffer[:read]
-
 			if err == io.EOF || read == 0 {
 				isEOF = true
 				break
 			}
 
 			if err != nil {
-				logger.Fatalf("file %d:%s read error, %s read=%d", sourceID, sourceName, read, err.Error())
+				logger.Fatalf("file %d:%s read error, %s read=%d", sourceID, sourceName, err.Error(), read)
 			}
 
 			processed = 0
@@ -89,7 +89,7 @@ func (w *worker) work(controller inputer, jobProvider *jobProvider, readBufferSi
 				}
 				pos += processed
 
-				// skip first event because file may be opened while event isn't completely written
+				// skip first event because file may be opened while event isn't completely written.
 				if skipLine {
 					job.shouldSkip = false
 					skipLine = false
@@ -125,7 +125,7 @@ func (w *worker) work(controller inputer, jobProvider *jobProvider, readBufferSi
 			}
 		}
 
-		// don't consider accumulated buffer cause we haven't put any events
+		// don't consider accumulated buffer because we haven't put any events.
 		if !wasPut {
 			accumulated = 0
 		}
@@ -138,14 +138,16 @@ func (w *worker) work(controller inputer, jobProvider *jobProvider, readBufferSi
 			}
 		}
 
-		// check if file was truncated
+		// check if file was truncated.
 		if isEOF {
 			stat, err := file.Stat()
 			if err != nil {
 				logger.Fatalf("file %d:%s stat error: %s", sourceID, sourceName, err.Error())
 			}
 
-			// file was truncated
+			// files truncated from time to time, after logs from file was processed.
+			// Position > stat.Size() means that data was truncated and
+			// caret pointer must be moved to start of file.
 			if lastOffset+readTotal > stat.Size() {
 				jobProvider.truncateJob(job)
 			}
