@@ -11,7 +11,6 @@ type network string
 const transportTCP network = "tcp"
 
 type client struct {
-	network   network
 	useTLS    bool
 	stdClient net.Conn
 	tlsClient *tls.Conn

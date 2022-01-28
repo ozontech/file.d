@@ -56,11 +56,10 @@ func (w *watcher) start() {
 	eventsCh := make(chan notify.EventInfo, 128)
 	w.watcherCh = eventsCh
 
-	events := []notify.Event{notify.Create, notify.Rename}
+	events := []notify.Event{notify.Create, notify.Rename, notify.Remove}
 	if w.shouldWatchWrites {
 		events = append(events, notify.Write)
 	}
-
 	// watch recursively.
 	err := notify.Watch(filepath.Join(w.path, "..."), eventsCh, events...)
 	if err != nil {

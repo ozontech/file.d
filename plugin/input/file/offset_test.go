@@ -1,6 +1,7 @@
 package file
 
 import (
+	"go.uber.org/atomic"
 	"os"
 	"sync"
 	"testing"
@@ -77,7 +78,7 @@ func TestParallel(t *testing.T) {
 		lastEventSeq:   0,
 		isVirgin:       false,
 		isDone:         false,
-		shouldSkip:     false,
+		shouldSkip:     *atomic.NewBool(false),
 		offsets:        offsets,
 		mu:             &sync.Mutex{},
 	}
@@ -91,7 +92,7 @@ func TestParallel(t *testing.T) {
 		lastEventSeq:   0,
 		isVirgin:       false,
 		isDone:         false,
-		shouldSkip:     false,
+		shouldSkip:     *atomic.NewBool(false),
 		offsets:        offsets,
 		mu:             &sync.Mutex{},
 	}

@@ -22,8 +22,7 @@ func (b *batcherTail) Error(err string) {
 	logger.Panic(err)
 }
 
-func (b *batcherTail) WaitOrPanic(string) {}
-func (b *batcherTail) RecoverFromPanic()  {}
+func (b *batcherTail) RecoverFromPanic() {}
 
 func TestBatcher(t *testing.T) {
 	eventCount := 10000000

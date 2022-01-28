@@ -9,11 +9,7 @@ import (
 /*{ introduction
 It logs event to stdout. Useful for debugging.
 }*/
-type Plugin struct {
-	paths          [][]string
-	names          []string
-	preserveFields bool
-}
+type Plugin struct{}
 
 type Config map[string]interface{}
 
