@@ -74,7 +74,13 @@ func (w *worker) work(controller inputer, jobProvider *jobProvider, readBufferSi
 			}
 
 			if err != nil {
-				logger.Fatalf("file %d:%s read error, %s read=%d", sourceID, sourceName, read, err.Error())
+				logger.Fatalf(
+					"file %d:%s read error, %s read=%d",
+					sourceID,
+					sourceName,
+					read,
+					err.Error(),
+				)
 			}
 
 			processed = 0
@@ -96,7 +102,10 @@ func (w *worker) work(controller inputer, jobProvider *jobProvider, readBufferSi
 				} else {
 					offset := lastOffset + accumulated + pos + 1
 					if len(accumBuffer) != 0 {
-						accumBuffer = append(accumBuffer, readBuffer[processed:pos+1]...)
+						accumBuffer = append(
+							accumBuffer,
+							readBuffer[processed:pos+1]...,
+						)
 						inBuffer = accumBuffer
 					} else {
 						inBuffer = readBuffer[processed : pos+1]
