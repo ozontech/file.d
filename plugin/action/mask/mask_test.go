@@ -22,75 +22,85 @@ const (
 //nolint:funlen
 func TestMaskFunctions(t *testing.T) {
 	suits := []struct {
-		name     string
-		input    []byte
-		masks    Mask
-		expected []byte
-		comment  string
+		name         string
+		input        []byte
+		masks        Mask
+		expected     []byte
+		comment      string
+		mustBeMusked bool
 	}{
 		{
-			name:     "simple test",
-			input:    []byte("12.34.5678"),
-			masks:    Mask{Re: `\d`, Groups: []int{0}},
-			expected: []byte("**.**.****"),
-			comment:  "all digits should be masked",
+			name:         "simple test",
+			input:        []byte("12.34.5678"),
+			masks:        Mask{Re: `\d`, Groups: []int{0}},
+			expected:     []byte("**.**.****"),
+			comment:      "all digits should be masked",
+			mustBeMusked: true,
 		},
 		{
-			name:     "re not matches input string",
-			input:    []byte("ab.cd.efgh"),
-			masks:    Mask{Re: `\d`, Groups: []int{0}},
-			expected: []byte("ab.cd.efgh"),
-			comment:  "no one symbol should be masked",
+			name:         "re not matches input string",
+			input:        []byte("ab.cd.efgh"),
+			masks:        Mask{Re: `\d`, Groups: []int{0}},
+			expected:     []byte("ab.cd.efgh"),
+			comment:      "no one symbol should be masked",
+			mustBeMusked: false,
 		},
 		{
-			name:     "simple substitution",
-			input:    []byte(`{"field1":"-ab-axxb-"}`),
-			masks:    Mask{Re: `a(x*)b`, Groups: []int{1}},
-			expected: []byte(`{"field1":"-ab-a**b-"}`),
-			comment:  "value masked only in first group",
+			name:         "simple substitution",
+			input:        []byte(`{"field1":"-ab-axxb-"}`),
+			masks:        Mask{Re: `a(x*)b`, Groups: []int{1}},
+			expected:     []byte(`{"field1":"-ab-a**b-"}`),
+			comment:      "value masked only in first group",
+			mustBeMusked: true,
 		},
 		{
-			name:     "simple substitution",
-			input:    []byte(`{"field1":"-ab-axxb-"}`),
-			masks:    Mask{Re: `a(x*)b`, Groups: []int{0}},
-			expected: []byte(`{"field1":"-**-****-"}`),
-			comment:  "all value masked",
+			name:         "simple substitution",
+			input:        []byte(`{"field1":"-ab-axxb-"}`),
+			masks:        Mask{Re: `a(x*)b`, Groups: []int{0}},
+			expected:     []byte(`{"field1":"-**-****-"}`),
+			comment:      "all value masked",
+			mustBeMusked: true,
 		},
 		{
-			name:     "card number",
-			input:    []byte("5408-7430-0756-2004"),
-			masks:    Mask{Re: kDefaultCardRegExp, Groups: []int{1, 2, 3, 4}},
-			expected: []byte("****-****-****-****"),
-			comment:  "card number masked",
+			name:         "card number",
+			input:        []byte("5408-7430-0756-2004"),
+			masks:        Mask{Re: kDefaultCardRegExp, Groups: []int{1, 2, 3, 4}},
+			expected:     []byte("****-****-****-****"),
+			comment:      "card number masked",
+			mustBeMusked: true,
 		},
 		{
-			name:     "groups of card number regex",
-			input:    []byte("5568-2587-2420-0263"),
-			masks:    Mask{Re: kDefaultCardRegExp, Groups: []int{1, 2, 3}},
-			expected: []byte("****-****-****-0263"),
-			comment:  "first, second, third sections of card number masked",
+			name:         "groups of card number regex",
+			input:        []byte("5568-2587-2420-0263"),
+			masks:        Mask{Re: kDefaultCardRegExp, Groups: []int{1, 2, 3}},
+			expected:     []byte("****-****-****-0263"),
+			comment:      "first, second, third sections of card number masked",
+			mustBeMusked: true,
 		},
 		{
-			name:     "ID",
-			input:    []byte("user details: Иванов Иван Иванович"),
-			masks:    Mask{Re: kDefaultIDRegExp, Groups: []int{0}},
-			expected: []byte("user details: ********************"),
-			comment:  "ID masked ",
+			name:         "ID",
+			input:        []byte("user details: Иванов Иван Иванович"),
+			masks:        Mask{Re: kDefaultIDRegExp, Groups: []int{0}},
+			expected:     []byte("user details: ********************"),
+			comment:      "ID masked ",
+			mustBeMusked: true,
 		},
 		{
-			name:     "2 card numbers and text",
-			input:    []byte("issued card number 3528-3889-3793-9946 and card number 4035-3005-3980-4083"),
-			expected: []byte("issued card number ****-****-****-**** and card number ****-****-****-****"),
-			masks:    Mask{Re: kDefaultCardRegExp, Groups: []int{1, 2, 3, 4}},
-			comment:  "2 ID masked",
+			name:         "2 card numbers and text",
+			input:        []byte("issued card number 3528-3889-3793-9946 and card number 4035-3005-3980-4083"),
+			expected:     []byte("issued card number ****-****-****-**** and card number ****-****-****-****"),
+			masks:        Mask{Re: kDefaultCardRegExp, Groups: []int{1, 2, 3, 4}},
+			comment:      "2 ID masked",
+			mustBeMusked: true,
 		},
 	}
 
-	for _, s := range suits {
-		t.Run(s.name, func(t *testing.T) {
+	for _, tCase := range suits {
+		t.Run(tCase.name, func(t *testing.T) {
 			buf := make([]byte, 0, 2048)
-			buf = maskValue(s.input, buf, regexp.MustCompile(s.masks.Re), s.masks.Groups, zap.NewNop().Sugar())
-			assert.Equal(t, string(s.expected), string(buf), s.comment)
+			buf, masked := maskValue(tCase.input, buf, regexp.MustCompile(tCase.masks.Re), tCase.masks.Groups)
+			assert.Equal(t, string(tCase.expected), string(buf), tCase.comment)
+			assert.Equal(t, tCase.mustBeMusked, masked)
 		})
 	}
 }
@@ -439,6 +449,6 @@ func BenchmarkMaskValue(b *testing.B) {
 	grp := []int{0, 1, 2, 3}
 	buf := make([]byte, 0, 2048)
 	for i := 0; i < b.N; i++ {
-		buf = maskValue(input, buf, re, grp, zap.NewNop().Sugar())
+		buf, _ = maskValue(input, buf, re, grp)
 	}
 }

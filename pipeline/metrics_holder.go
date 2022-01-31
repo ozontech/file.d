@@ -10,9 +10,15 @@ import (
 	"go.uber.org/atomic"
 )
 
+const PromNamespace = "file_d"
+
+// metricHolder has nextMetricsGen method that creates new prometheus.CounterOpts,
+// differs form previous only by prometheus.CounterOpts.ConstLabels: {"gen": incValue}.
+// This decision help throw away from memory old metric\s, that wasn't written for a while.
+// TODO create better mechanism that'll delete only old metric\s, that aren't in use for N minutes.
 type metricsHolder struct {
 	pipelineName       string
-	metricsGen         int // generation is used to drop unused metrics from counters
+	metricsGen         int // generation is used to drop unused metrics from counters.
 	metricsGenTime     time.Time
 	metricsGenInterval time.Duration
 	metrics            []*metrics
@@ -90,9 +96,8 @@ func (m *metricsHolder) nextMetricsGen() {
 		for _, st := range allEventStatuses() {
 			cnt.totalCounter[string(st)] = atomic.NewUint64(0)
 		}
-
 		opts := prometheus.CounterOpts{
-			Namespace:   "file_d",
+			Namespace:   PromNamespace,
 			Subsystem:   "pipeline_" + m.pipelineName,
 			Name:        metrics.name + "_events_count_total",
 			Help:        fmt.Sprintf("how many events processed by pipeline %q and #%d action", m.pipelineName, index),
@@ -101,7 +106,7 @@ func (m *metricsHolder) nextMetricsGen() {
 		cnt.count = prometheus.NewCounterVec(opts, append([]string{"status"}, metrics.labels...))
 
 		opts = prometheus.CounterOpts{
-			Namespace:   "file_d",
+			Namespace:   PromNamespace,
 			Subsystem:   "pipeline_" + m.pipelineName,
 			Name:        metrics.name + "_events_size_total",
 			Help:        fmt.Sprintf("total size of events processed by pipeline %q and #%d action", m.pipelineName, index),

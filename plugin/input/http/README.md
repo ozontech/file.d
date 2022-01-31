@@ -9,20 +9,7 @@ So you can use Elasticsearch filebeat output plugin to send data to `file.d`.
 > Plugin answers with HTTP code `OK 200` right after it has read all the request body.
 > It doesn't wait until events are committed.
 
-### Config params
-**`address`** *`string`* *`default=:9200`* 
-
-An address to listen to. Omit ip/host to listen all network interfaces. E.g. `:88`
-
-<br>
-
-**`emulate_mode`** *`string`* *`default=no`* *`options=no|elasticsearch`* 
-
-Which protocol to emulate.
-
-<br>
-
-**Example:**  
+**Example:**
 Emulating elastic through http:
 ```yaml
 pipelines:
@@ -50,25 +37,39 @@ pipelines:
         default_topic: yourtopic-k8s-data
         use_topic_field: true
         topic_field: pipeline_kafka_topic
-      
-      # Or we can write to file: 
+
+      # Or we can write to file:
       # type: file
       # target_file: "./output.txt"
 ```
 
 Setup:
 ```
-# run server. 
-# config.yaml should contains yaml config above. 
+# run server.
+# config.yaml should contains yaml config above.
 go run cmd/file.d.go --config=config.yaml
 
 # now do requests.
 curl "localhost:9200/_bulk" -H 'Content-Type: application/json' -d \
 '{"index":{"_index":"index-main","_type":"span"}}
 {"message": "hello", "kind": "normal"}
+'
 
 ##
- 
-```
+
+
+### Config params
+**`address`** *`string`* *`default=:9200`* 
+
+An address to listen to. Omit ip/host to listen all network interfaces. E.g. `:88`
+
+<br>
+
+**`emulate_mode`** *`string`* *`default=no`* *`options=no|elasticsearch`* 
+
+Which protocol to emulate.
+
+<br>
+
 
 <br>*Generated using [__insane-doc__](https://github.com/vitkovskii/insane-doc)*

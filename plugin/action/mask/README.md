@@ -9,6 +9,7 @@ pipelines:
     ...
     actions:
     - type: mask
+      metric_subsystem_name: "some_name"
       masks:
       - mask:
         re: "\b(\d{1,4})\D?(\d{1,4})\D?(\d{1,4})\D?(\d{1,4})\b"
@@ -18,9 +19,15 @@ pipelines:
 
 
 ### Config params
+**`metric_subsystem_name`** *`*string`* 
+
+If set counterMetric with this name would be sent on metric_subsystem_name.mask_plugin
+
+<br>
+
 **`masks`** *`[]Mask`* 
 
-List of masks
+List of masks.
 
 <br>
 
@@ -32,6 +39,7 @@ Regular expression for masking
 
 **`groups`** *`[]int`* *`required`* 
 
+Numbers of masking groups in expression, zero for mask all expression
 
 <br>
 
