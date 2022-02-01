@@ -38,6 +38,8 @@ const (
 	metricName = "mask_plugin"
 )
 
+var MaskPromCounter = prometheus.NewCounter(prometheus.CounterOpts{})
+
 type Plugin struct {
 	config          *Config
 	sourceBuf       []byte
@@ -45,7 +47,6 @@ type Plugin struct {
 	logMaskAppeared bool
 	valueNodes      []*insaneJSON.Node
 	logger          *zap.SugaredLogger
-	counterMetric   prometheus.Counter
 }
 
 //! config-params
@@ -157,14 +158,16 @@ func (p *Plugin) Stop() {
 }
 
 func (p *Plugin) registerPluginMetrics(namespace, subsystem, metricName string) {
-	p.counterMetric = prometheus.NewCounter(prometheus.CounterOpts{
+	// can't declare counter as property on p.counter, because multiple cores
+	// will create multiple metrics and all but last one will be unregistered.
+	MaskPromCounter = prometheus.NewCounter(prometheus.CounterOpts{
 		Namespace: namespace,
 		Subsystem: subsystem,
 		Name:      metricName,
 		Help:      "",
 	})
-	prometheus.DefaultRegisterer.Unregister(p.counterMetric)
-	prometheus.DefaultRegisterer.MustRegister(p.counterMetric)
+	prometheus.DefaultRegisterer.Unregister(MaskPromCounter)
+	prometheus.DefaultRegisterer.MustRegister(MaskPromCounter)
 }
 
 func appendMask(dst, src []byte, begin, end int) ([]byte, int) {
@@ -253,7 +256,7 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 		v.MutateToString(string(p.maskBuf))
 	}
 	if p.logMaskAppeared && maskApplied {
-		p.counterMetric.Inc()
+		MaskPromCounter.Inc()
 		p.logger.Infof("mask appeared to event, output string: %s", event.Root.EncodeToString())
 	}
 

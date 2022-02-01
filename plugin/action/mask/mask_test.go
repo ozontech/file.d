@@ -15,8 +15,9 @@ import (
 )
 
 const (
-	kDefaultIDRegExp   = `[А-Я][а-я]{1,64}(\-[А-Я][а-я]{1,64})?\s+[А-Я][а-я]{1,64}(\.)?\s+[А-Я][а-я]{1,64}`
-	kDefaultCardRegExp = `\b(\d{1,4})\D?(\d{1,4})\D?(\d{1,4})\D?(\d{1,4})\b`
+	kDefaultIDRegExp                         = `[А-Я][а-я]{1,64}(\-[А-Я][а-я]{1,64})?\s+[А-Я][а-я]{1,64}(\.)?\s+[А-Я][а-я]{1,64}`
+	kDefaultCardRegExp                       = `\b(\d{1,4})\D?(\d{1,4})\D?(\d{1,4})\D?(\d{1,4})\b`
+	kCardWithStarOrSpaceOrNoDelimitersRegExp = `\b(\d{4})\s?\-?(\d{4})\s?\-?(\d{4})\s?\-?(\d{4})\b`
 )
 
 //nolint:funlen
@@ -27,7 +28,7 @@ func TestMaskFunctions(t *testing.T) {
 		masks        Mask
 		expected     []byte
 		comment      string
-		mustBeMusked bool
+		mustBeMasked bool
 	}{
 		{
 			name:         "simple test",
@@ -35,7 +36,7 @@ func TestMaskFunctions(t *testing.T) {
 			masks:        Mask{Re: `\d`, Groups: []int{0}},
 			expected:     []byte("**.**.****"),
 			comment:      "all digits should be masked",
-			mustBeMusked: true,
+			mustBeMasked: true,
 		},
 		{
 			name:         "re not matches input string",
@@ -43,7 +44,7 @@ func TestMaskFunctions(t *testing.T) {
 			masks:        Mask{Re: `\d`, Groups: []int{0}},
 			expected:     []byte("ab.cd.efgh"),
 			comment:      "no one symbol should be masked",
-			mustBeMusked: false,
+			mustBeMasked: false,
 		},
 		{
 			name:         "simple substitution",
@@ -51,7 +52,7 @@ func TestMaskFunctions(t *testing.T) {
 			masks:        Mask{Re: `a(x*)b`, Groups: []int{1}},
 			expected:     []byte(`{"field1":"-ab-a**b-"}`),
 			comment:      "value masked only in first group",
-			mustBeMusked: true,
+			mustBeMasked: true,
 		},
 		{
 			name:         "simple substitution",
@@ -59,7 +60,7 @@ func TestMaskFunctions(t *testing.T) {
 			masks:        Mask{Re: `a(x*)b`, Groups: []int{0}},
 			expected:     []byte(`{"field1":"-**-****-"}`),
 			comment:      "all value masked",
-			mustBeMusked: true,
+			mustBeMasked: true,
 		},
 		{
 			name:         "card number",
@@ -67,7 +68,7 @@ func TestMaskFunctions(t *testing.T) {
 			masks:        Mask{Re: kDefaultCardRegExp, Groups: []int{1, 2, 3, 4}},
 			expected:     []byte("****-****-****-****"),
 			comment:      "card number masked",
-			mustBeMusked: true,
+			mustBeMasked: true,
 		},
 		{
 			name:         "groups of card number regex",
@@ -75,7 +76,7 @@ func TestMaskFunctions(t *testing.T) {
 			masks:        Mask{Re: kDefaultCardRegExp, Groups: []int{1, 2, 3}},
 			expected:     []byte("****-****-****-0263"),
 			comment:      "first, second, third sections of card number masked",
-			mustBeMusked: true,
+			mustBeMasked: true,
 		},
 		{
 			name:         "ID",
@@ -83,7 +84,7 @@ func TestMaskFunctions(t *testing.T) {
 			masks:        Mask{Re: kDefaultIDRegExp, Groups: []int{0}},
 			expected:     []byte("user details: ********************"),
 			comment:      "ID masked ",
-			mustBeMusked: true,
+			mustBeMasked: true,
 		},
 		{
 			name:         "2 card numbers and text",
@@ -91,7 +92,31 @@ func TestMaskFunctions(t *testing.T) {
 			expected:     []byte("issued card number ****-****-****-**** and card number ****-****-****-****"),
 			masks:        Mask{Re: kDefaultCardRegExp, Groups: []int{1, 2, 3, 4}},
 			comment:      "2 ID masked",
-			mustBeMusked: true,
+			mustBeMasked: true,
+		},
+		{
+			name:         "card number with delimiter -",
+			input:        []byte("card number 3528-3889-3793-9946"),
+			expected:     []byte("card number ****-****-****-9946"),
+			comment:      "card must be partly musked",
+			masks:        Mask{Re: kCardWithStarOrSpaceOrNoDelimitersRegExp, Groups: []int{1, 2, 3}},
+			mustBeMasked: true,
+		},
+		{
+			name:         "card number with delimiter ' '",
+			input:        []byte("card number 3528 3889 3793 9946"),
+			expected:     []byte("card number **** **** **** 9946"),
+			comment:      "card must be partly musked",
+			masks:        Mask{Re: kCardWithStarOrSpaceOrNoDelimitersRegExp, Groups: []int{1, 2, 3}},
+			mustBeMasked: true,
+		},
+		{
+			name:         "card number with no delimiter",
+			input:        []byte("card number 3528388937939946"),
+			expected:     []byte("card number ************9946"),
+			comment:      "card must be partly musked",
+			masks:        Mask{Re: kCardWithStarOrSpaceOrNoDelimitersRegExp, Groups: []int{1, 2, 3}},
+			mustBeMasked: true,
 		},
 	}
 
@@ -100,7 +125,7 @@ func TestMaskFunctions(t *testing.T) {
 			buf := make([]byte, 0, 2048)
 			buf, masked := maskValue(tCase.input, buf, regexp.MustCompile(tCase.masks.Re), tCase.masks.Groups)
 			assert.Equal(t, string(tCase.expected), string(buf), tCase.comment)
-			assert.Equal(t, tCase.mustBeMusked, masked)
+			assert.Equal(t, tCase.mustBeMasked, masked)
 		})
 	}
 }

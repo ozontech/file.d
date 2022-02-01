@@ -1,38 +1,4 @@
-# Output plugins
-
-## devnull
-It provides an API to test pipelines and other plugins.
-
-[More details...](plugin/output/devnull/README.md)
-## elasticsearch
-It sends events into Elasticsearch. It uses `_bulk` API to send events in batches.
-If a network error occurs, the batch will infinitely try to be delivered to the random endpoint.
-
-[More details...](plugin/output/elasticsearch/README.md)
-## gelf
-It sends event batches to the GELF endpoint. Transport level protocol TCP or UDP is configurable.
-> It doesn't support UDP chunking. So don't use UDP if event size may be greater than 8192.
-
-GELF messages are separated by null byte. Each message is a JSON with the following fields:
-* `version` *`string=1.1`*
-* `host` *`string`*
-* `short_message` *`string`*
-* `full_message` *`string`*
-* `timestamp` *`number`*
-* `level` *`number`*
-* `_extra_field_1` *`string`*
-* `_extra_field_2` *`string`*
-* `_extra_field_3` *`string`*
-
-Every field with an underscore prefix `_` will be treated as an extra field.
-Allowed characters in field names are letters, numbers, underscores, dashes, and dots.
-
-[More details...](plugin/output/gelf/README.md)
-## kafka
-It sends the event batches to kafka brokers using `sarama` lib.
-
-[More details...](plugin/output/kafka/README.md)
-## s3
+# s3 output
 Sends events to s3 output of one or multiple buckets.
 `bucket` is default bucket for events. Addition buckets can be described in `multi_buckets` section, example down here.
 Field "bucket_field_event" is filed name, that will be searched in event.
@@ -109,13 +75,50 @@ pipelines:
           bucket: "bucket-logs-3"
 ```
 
-[More details...](plugin/output/s3/README.md)
-## splunk
-It sends events to splunk.
+### Config params
+**`file_config`** *`file.Config`* 
+Under the hood this plugin uses /plugin/output/file/ to collect logs
 
-[More details...](plugin/output/splunk/README.md)
-## stdout
-It writes events to stdout(also known as console).
+<br>
 
-[More details...](plugin/output/stdout/README.md)
+**`compression_type`** *`string`* *`default=zip`* *`options=zip`* 
+Compression type
+
+<br>
+
+**`endpoint`** *`string`* *`required`* 
+Endpoint address of default bucket.
+
+<br>
+
+**`access_key`** *`string`* *`required`* 
+s3 access key.
+
+<br>
+
+**`secret_key`** *`string`* *`required`* 
+s3 secret key.
+
+<br>
+
+**`bucket`** *`string`* *`required`* 
+s3 default bucket.
+
+<br>
+
+**`secure`** *`bool`* *`default=false`* 
+MultiBuckets is additional buckets, which can also receive event.
+Event must contain `bucket_name` field which value is s3 bucket name.
+Events without `bucket_name` sends to DefaultBucket.
+*`bool`* *`default=false`* 
+s3 connection secure option.
+
+<br>
+
+**`bucket_field_event`** *`string`* 
+BucketEventField field change destination bucket of event to fields value.
+Fallback to DefaultBucket if BucketEventField bucket doesn't exist.
+
+<br>
+
 <br>*Generated using [__insane-doc__](https://github.com/vitkovskii/insane-doc)*

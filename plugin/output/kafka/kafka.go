@@ -172,7 +172,7 @@ func (p *Plugin) newProducer() sarama.SyncProducer {
 	config := sarama.NewConfig()
 	config.Producer.Partitioner = sarama.NewRoundRobinPartitioner
 	config.Producer.Flush.Messages = p.config.BatchSize_
-	// kafka plugin itself cares for flush frequency, but we are using batcher so disable it
+	// kafka plugin itself cares for flush frequency, but we are using batcher so disable it.
 	config.Producer.Flush.Frequency = time.Millisecond
 	config.Producer.Return.Errors = true
 	config.Producer.Return.Successes = true
