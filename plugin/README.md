@@ -97,6 +97,7 @@ go run cmd/file.d.go --config=config.yaml
 curl "localhost:9200/_bulk" -H 'Content-Type: application/json' -d \
 '{"index":{"_index":"index-main","_type":"span"}}
 {"message": "hello", "kind": "normal"}
+'
 
 ##
 
@@ -230,6 +231,7 @@ pipelines:
     ...
     actions:
     - type: mask
+      metric_subsystem_name: "some_name"
       masks:
       - mask:
         re: "\b(\d{1,4})\D?(\d{1,4})\D?(\d{1,4})\D?(\d{1,4})\b"

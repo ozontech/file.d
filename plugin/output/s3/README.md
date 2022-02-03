@@ -117,6 +117,7 @@ s3 connection secure option.
 
 **`bucket_field_event`** *`string`* 
 BucketEventField field change destination bucket of event to fields value.
+Fallback to DefaultBucket if BucketEventField bucket doesn't exist.
 
 <br>
 

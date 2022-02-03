@@ -89,6 +89,7 @@ pipelines:
     ...
     actions:
     - type: mask
+      metric_subsystem_name: "some_name"
       masks:
       - mask:
         re: "\b(\d{1,4})\D?(\d{1,4})\D?(\d{1,4})\D?(\d{1,4})\b"

@@ -53,6 +53,7 @@ go run cmd/file.d.go --config=config.yaml
 curl "localhost:9200/_bulk" -H 'Content-Type: application/json' -d \
 '{"index":{"_index":"index-main","_type":"span"}}
 {"message": "hello", "kind": "normal"}
+'
 
 ##
 
