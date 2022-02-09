@@ -646,7 +646,9 @@ func (jp *jobProvider) maintenanceJob(job *Job) int {
 	newInode := getInode(stat)
 	if newInode != inode {
 		jp.deleteJobAndUnlock(job)
-
+		if err = file.Close(); err != nil {
+			jp.logger.Errorf("can't close file %s %v in case of different inodes", filename, err)
+		}
 		return maintenanceResultDeleted
 	}
 
