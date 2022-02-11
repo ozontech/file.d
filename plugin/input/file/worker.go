@@ -125,12 +125,11 @@ func (w *worker) work(controller inputer, jobProvider *jobProvider, readBufferSi
 			wasPut = processed != 0
 			if wasPut {
 				break
-			} else {
-				accumBuffer = append(accumBuffer, readBuffer[:read]...)
-				accumulated += read
-				if shouldCheckMax && len(accumBuffer) > w.maxEventSize {
-					break
-				}
+			}
+			accumBuffer = append(accumBuffer, readBuffer[:read]...)
+			accumulated += read
+			if shouldCheckMax && len(accumBuffer) > w.maxEventSize {
+				break
 			}
 		}
 

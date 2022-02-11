@@ -63,7 +63,6 @@ type processor struct {
 	actionWatcher    *actionWatcher
 	recoverFromPanic func()
 
-	heartbeatCh   chan *stream
 	metricsValues []string
 }
 

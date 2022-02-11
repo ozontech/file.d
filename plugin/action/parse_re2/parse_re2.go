@@ -77,7 +77,7 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	fields := p.re.SubexpNames()
 	var bl int
 	for i := 1; i < len(fields); i++ {
-		if len(fields[i]) == 0 {
+		if fields[i] == "" {
 			continue
 		}
 

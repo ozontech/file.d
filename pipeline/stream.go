@@ -13,7 +13,6 @@ import (
 // e.g. events from same file will be in same stream for "file" input plugin
 // todo: remove dependency on streamer
 type stream struct {
-	chargeIndex int
 	blockIndex  int
 	len         int
 	currentSeq  uint64
@@ -22,7 +21,6 @@ type stream struct {
 
 	name       StreamName
 	sourceID   SourceID
-	sourceName string
 	streamer   *streamer
 	blockTime  time.Time
 
@@ -206,8 +204,8 @@ func (s *stream) get() *Event {
 		s.first = s.first.next
 	}
 
-	s.awaySeq = event.SeqID
 	if event != nil {
+		s.awaySeq = event.SeqID
 		event.stage = eventStageProcessor
 		s.len--
 	}

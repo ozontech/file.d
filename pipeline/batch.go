@@ -133,10 +133,8 @@ func (b *Batcher) work() {
 
 func (b *Batcher) commitBatch(events []*Event, batch *Batch) []*Event {
 	// we need to release batch first and then commit events
-	// so lets exchange local slice with batch slice to avoid data copying
-	tmp := events
-	events = batch.Events
-	batch.Events = tmp
+	// so lets swap local slice with batch slice to avoid data copying
+	events, batch.Events = batch.Events, events
 
 	batchSeq := batch.seq
 

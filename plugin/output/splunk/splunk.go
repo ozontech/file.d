@@ -29,7 +29,6 @@ type Plugin struct {
 	avgEventSize   int
 	batcher        *pipeline.Batcher
 	controller     pipeline.OutputPluginController
-	requestTimeout time.Duration
 }
 
 //! config-params
@@ -156,6 +155,7 @@ func (p *Plugin) send(data []byte, timeout time.Duration) error {
 		Timeout: timeout,
 		Transport: &http.Transport{
 			TLSClientConfig: &tls.Config{
+				// TODO: make this configuration option and false by default
 				InsecureSkipVerify: true,
 			},
 		},

@@ -310,7 +310,7 @@ func (p *Plugin) getBucketName(event *pipeline.Event) string {
 	bucketName := event.Root.Dig(p.config.BucketEventField).AsString()
 	// no BucketEventField in message, it's DefaultBucket, showtime.
 
-	if len(bucketName) == 0 {
+	if bucketName == "" {
 		return p.config.DefaultBucket
 	}
 	// Bucket exists.

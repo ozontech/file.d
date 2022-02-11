@@ -85,7 +85,9 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	}
 	p.reader = newJournalReader(readConfig)
 	p.reader.args = append(p.reader.args, p.config.JournalArgs...)
-	p.reader.start()
+	if err := p.reader.start(); err != nil {
+		p.params.Logger.Error("failure during start: %s", err.Error())
+	}
 }
 
 func (p *Plugin) Stop() {
