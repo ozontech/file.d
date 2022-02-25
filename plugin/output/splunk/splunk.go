@@ -105,7 +105,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		0,
 	)
 
-	p.batcher.Start(context.Background())
+	p.batcher.Start(context.TODO())
 }
 
 func (p *Plugin) Stop() {

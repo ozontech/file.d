@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"runtime"
 	"sync"
-	sync_atomic "sync/atomic"
 	"time"
 
 	"github.com/ozonru/file.d/logger"
@@ -61,7 +60,7 @@ func newTimoutEvent(stream *stream) *Event {
 	event := &Event{
 		Root:       insaneJSON.Spawn(),
 		stream:     stream,
-		SeqID:      stream.commitSeq,
+		SeqID:      stream.commitSeq.Load(),
 		SourceID:   stream.sourceID,
 		SourceName: "timeout",
 		streamName: stream.name,
@@ -76,7 +75,7 @@ func unlockEvent(stream *stream) *Event {
 	event := &Event{
 		Root:       nil,
 		stream:     stream,
-		SeqID:      sync_atomic.LoadUint64(&stream.commitSeq),
+		SeqID:      stream.commitSeq.Load(),
 		SourceID:   stream.sourceID,
 		SourceName: "unlock",
 		streamName: stream.name,

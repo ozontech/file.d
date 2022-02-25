@@ -2,10 +2,10 @@ package pipeline
 
 import (
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/ozonru/file.d/logger"
+	"go.uber.org/atomic"
 )
 
 // stream is a queue of events
@@ -18,7 +18,7 @@ type stream struct {
 	blockIndex  int
 	len         int
 	currentSeq  uint64
-	commitSeq   uint64
+	commitSeq   atomic.Uint64
 	awaySeq     uint64
 
 	name       StreamName
@@ -64,11 +64,11 @@ func (s *stream) commit(event *Event) {
 	s.mu.Lock()
 	// maxID is needed here because discarded events with bigger offsets may be
 	// committed faster than events with lower offsets which are goes through output
-	if event.SeqID < atomic.LoadUint64(&s.commitSeq) {
+	if event.SeqID < s.commitSeq.Load() {
 		s.mu.Unlock()
 		return
 	}
-	atomic.StoreUint64(&s.commitSeq, event.SeqID)
+	s.commitSeq.Store(event.SeqID)
 	//s.commitSeq = event.SeqID
 
 	if s.isDetaching {
@@ -78,7 +78,7 @@ func (s *stream) commit(event *Event) {
 }
 
 func (s *stream) tryDetach() {
-	if s.awaySeq != atomic.LoadUint64(&s.commitSeq) {
+	if s.awaySeq != s.commitSeq.Load() {
 		return
 	}
 
@@ -181,7 +181,7 @@ func (s *stream) tryUnblock() bool {
 		return false
 	}
 
-	if s.awaySeq != atomic.LoadUint64(&s.commitSeq) {
+	if s.awaySeq != s.commitSeq.Load() {
 		logger.Panicf("why events are different? away event id=%d, commit event id=%d", s.awaySeq, s.commitSeq)
 	}
 

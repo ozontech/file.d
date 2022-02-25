@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"math/rand"
 	"net/http"
 	"runtime"
 	"strconv"
@@ -98,11 +97,18 @@ type Pipeline struct {
 	eventLogEnabled bool
 	eventLog        []string
 	eventLogMu      *sync.Mutex
+
 	// Move maintenance under config.
-	inSample       []byte
-	inSampleMu     sync.Mutex
-	outSample      []byte
-	outSampleMu    sync.Mutex
+	inSample   []byte
+	inSampleMu sync.Mutex
+	// Avoiding mutex blocking on concurrent access to len(inSample).
+	inSampleLen atomic.Int64
+
+	outSample   []byte
+	outSampleMu sync.Mutex
+	// Avoiding mutex blocking on concurrent access to len(outSample).
+	outSampleLen atomic.Int64
+
 	totalCommitted atomic.Int64
 	totalSize      atomic.Int64
 	maxSize        atomic.Int64
@@ -345,11 +351,14 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 	event.streamName = DefaultStreamName
 	event.Size = len(bytes)
 
-	p.inSampleMu.Lock()
-	if len(p.inSample) == 0 {
-		p.inSample = event.Root.Encode(p.inSample)
+	if p.inSampleLen.Load() == 0 {
+		func() {
+			p.inSampleMu.Lock()
+			p.inSampleMu.Unlock()
+
+			p.inSample = event.Root.Encode(p.inSample)
+		}()
 	}
-	p.inSampleMu.Unlock()
 
 	return p.streamEvent(event)
 }
@@ -392,12 +401,14 @@ func (p *Pipeline) finalize(event *Event, notifyInput bool, backEvent bool) {
 		p.totalCommitted.Inc()
 		p.totalSize.Add(int64(event.Size))
 
-		// rand.Int()&1 == 1 - randomize with 50% possibility.
-		p.outSampleMu.Lock()
-		if len(p.outSample) == 0 && rand.Int()&1 == 1 {
-			p.outSample = event.Root.Encode(p.outSample)
+		if p.outSampleLen.Load() == 0 {
+			func() {
+				p.outSampleMu.Lock()
+				defer p.outSampleMu.Unlock()
+
+				p.outSample = event.Root.Encode(p.outSample)
+			}()
 		}
-		p.outSampleMu.Unlock()
 
 		eventSize := int64(event.Size)
 		if eventSize > p.maxSize.Load() {
@@ -534,6 +545,7 @@ func (p *Pipeline) maintenance() {
 		// avoid division by zero.
 		tc := totalCommitted
 		if totalCommitted == 0 {
+			tc = 1
 		}
 
 		p.logger.Infof("%q pipeline stats interval=%ds, active procs=%d/%d, queue=%d/%d, out=%d|%.1fMb, rate=%d/s|%.1fMb/s, total=%d|%.1fMb, avg size=%d, max size=%d", p.Name, interval/time.Second, p.activeProcs.Load(), p.procCount.Load(), p.settings.Capacity-p.eventPool.freeEventsCount, p.settings.Capacity, deltaCommitted, float64(deltaSize)/1024.0/1024.0, rate, rateMb, totalCommitted, float64(totalSize)/1024.0/1024.0, totalSize/tc, p.maxSize.Load())
@@ -541,19 +553,25 @@ func (p *Pipeline) maintenance() {
 		lastCommitted = totalCommitted
 		lastSize = totalSize
 
-		p.inSampleMu.Lock()
-		if len(p.inSample) > 0 {
-			p.logger.Infof("%q pipeline input event sample: %s", p.Name, p.inSample)
-			p.inSample = p.inSample[:0]
-		}
-		p.inSampleMu.Unlock()
+		if p.inSampleLen.Load() > 0 {
+			func() {
+				p.inSampleMu.Lock()
+				defer p.inSampleMu.Unlock()
 
-		p.outSampleMu.Lock()
-		if len(p.outSample) > 0 {
-			p.logger.Infof("%q pipeline output event sample: %s", p.Name, p.outSample)
-			p.outSample = p.outSample[:0]
+				p.logger.Infof("%q pipeline input event sample: %s", p.Name, p.inSample)
+				p.inSample = p.inSample[:0]
+			}()
 		}
-		p.outSampleMu.Unlock()
+
+		if p.outSampleLen.Load() > 0 {
+			func() {
+				p.outSampleMu.Lock()
+				defer p.outSampleMu.Unlock()
+
+				p.logger.Infof("%q pipeline output event sample: %s", p.Name, p.outSample)
+				p.outSample = p.outSample[:0]
+			}()
+		}
 	}
 }
 
