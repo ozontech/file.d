@@ -15,6 +15,12 @@ import (
 	"go.uber.org/zap"
 )
 
+const (
+	subsystemName = "input_dmesg"
+
+	offsetErrors = "offset_errors"
+)
+
 /*{ introduction
 It reads kernel events from /dev/kmsg
 }*/
@@ -56,9 +62,11 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	p.logger = params.Logger
 	p.config = config.(*Config)
 	p.controller = params.Controller
+	p.registerPluginMetrics()
 
 	p.state = &state{}
 	if err := offset.LoadYAML(p.config.OffsetsFile, p.state); err != nil {
+		p.GetCounter(subsystemName, offsetErrors).Inc()
 		p.logger.Error("can't load offset file: %s", err.Error())
 	}
 
@@ -70,6 +78,14 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	p.parser = parser
 
 	longpanic.Go(p.read)
+}
+
+func (p *Plugin) registerPluginMetrics() {
+	stats.RegisterCounter(&stats.MetricDesc{
+		Name:      offsetErrors,
+		Subsystem: subsystemName,
+		Help:      "Number of errors occurred when saving/loading offset",
+	})
 }
 
 func (p *Plugin) read() {
@@ -112,6 +128,7 @@ func (p *Plugin) Commit(event *pipeline.Event) {
 	p.state.TS = event.Offset
 
 	if err := offset.SaveYAML(p.config.OffsetsFile, p.state); err != nil {
+		stats.GetCounter(subsystemName, offsetErrors).Inc()
 		p.logger.Error("can't save offset file: %s", err.Error())
 	}
 }

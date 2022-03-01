@@ -7,6 +7,7 @@ import (
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/stats"
 	"go.uber.org/zap"
 
 	"github.com/Shopify/sarama"
@@ -16,7 +17,12 @@ import (
 It sends the event batches to kafka brokers using `sarama` lib.
 }*/
 
-const outPluginType = "kafka"
+const (
+	outPluginType = "kafka"
+	subsystemName = "output_kafka"
+
+	sendErrorCounter = "send_errors"
+)
 
 type data struct {
 	messages []*sarama.ProducerMessage
@@ -94,6 +100,8 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 
 	p.logger.Infof("workers count=%d, batch size=%d", p.config.WorkersCount_, p.config.BatchSize_)
 
+	p.registerPluginMetrics()
+
 	p.producer = p.newProducer()
 	p.batcher = pipeline.NewBatcher(
 		params.PipelineName,
@@ -111,6 +119,14 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 
 func (p *Plugin) Out(event *pipeline.Event) {
 	p.batcher.Add(event)
+}
+
+func (p *Plugin) registerPluginMetrics() {
+	stats.RegisterCounter(&stats.MetricDesc{
+		Name:      sendErrorCounter,
+		Subsystem: subsystemName,
+		Help:      "Total Kafka send errors",
+	})
 }
 
 func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
@@ -159,8 +175,9 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 		for _, e := range errs {
 			p.logger.Errorf("can't write batch: %s", e.Err.Error())
 		}
+		stats.GetCounter(subsystemName, sendErrorCounter).Add(float64(len(errs)))
 
-		p.controller.Error("some events from batch isn't written")
+		p.controller.Error("some events from batch were not written")
 	}
 }
 
