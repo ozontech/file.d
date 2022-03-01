@@ -26,8 +26,9 @@ type stats struct {
 var statsGlobal *stats
 
 func InitStats() {
-	statsGlobal = &stats{}
-	statsGlobal.allMetrics = make(map[key]AnyMetric)
+	statsGlobal = &stats{
+		allMetrics: make(map[key]AnyMetric),
+	}
 }
 
 func RegisterCounter(metricDesc *MetricDesc) {
