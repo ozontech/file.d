@@ -17,6 +17,7 @@ import (
 	"github.com/ozontech/file.d/plugin/input/fake"
 	"github.com/ozontech/file.d/plugin/output/file"
 	mock_s3 "github.com/ozontech/file.d/plugin/output/s3/mock"
+	"github.com/ozontech/file.d/stats"
 	"github.com/ozontech/file.d/test"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
@@ -418,6 +419,8 @@ func newPipeline(t *testing.T, configOutput *Config, objStoreF objStoreFactory) 
 	p := pipeline.New("test_pipeline", settings, prometheus.NewRegistry())
 	p.DisableParallelism()
 	p.EnableEventLog()
+
+	stats.InitStats()
 
 	anyPlugin, _ := fake.Factory()
 	inputPlugin := anyPlugin.(*fake.Plugin)

@@ -242,7 +242,6 @@ func Factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 }
 
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginParams) {
-	p.registerPluginMetrics()
 	p.StartWithMinio(config, params, p.minioClientsFactory)
 }
 
@@ -255,6 +254,8 @@ func (p *Plugin) registerPluginMetrics() {
 }
 
 func (p *Plugin) StartWithMinio(config pipeline.AnyConfig, params *pipeline.OutputPluginParams, factory objStoreFactory) {
+	p.registerPluginMetrics()
+
 	p.controller = params.Controller
 	p.logger = params.Logger
 	p.config = config.(*Config)
