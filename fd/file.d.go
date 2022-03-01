@@ -277,7 +277,3 @@ func (f *FileD) serveFreeOsMem(_ http.ResponseWriter, _ *http.Request) {
 func (f *FileD) serveLiveReady(_ http.ResponseWriter, _ *http.Request) {
 	logger.Infof("live/ready OK")
 }
-
-func (f *FileD) servePipelines(_ http.ResponseWriter, _ *http.Request) {
-	logger.Infof("pipelines OK")
-}

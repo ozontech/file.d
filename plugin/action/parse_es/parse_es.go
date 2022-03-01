@@ -12,7 +12,6 @@ It parses HTTP input using Elasticsearch `/_bulk` API format. It converts source
 }*/
 type Plugin struct {
 	logger      *zap.SugaredLogger
-	config      *Config
 	passNext    bool
 	discardNext bool
 	isStrict    bool

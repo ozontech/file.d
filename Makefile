@@ -11,9 +11,15 @@ deps:
 
 .PHONY: cover
 cover:
-	go test -coverprofile=coverage.out ./...
+	go test -short -coverprofile=coverage.out ./...
 	go tool cover -html=coverage.out
 	rm coverage.out
+
+.PHONY: test-short
+test-short:
+	go test ./fd/ -v -count 1 -short
+	go test ./pipeline/ -v -count 1 -short
+	go test ./plugin/... -v -count 1 -short
 
 .PHONY: test
 test:

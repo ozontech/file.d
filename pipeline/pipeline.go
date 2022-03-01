@@ -264,7 +264,7 @@ func (p *Pipeline) GetOutput() OutputPlugin {
 func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes []byte, isNewSource bool) uint64 {
 	length := len(bytes)
 
-	// don't process shit
+	// don't process shit.
 	isEmpty := length == 0 || (bytes[0] == '\n' && length == 1)
 	isSpam := p.antispamer.isSpam(sourceID, sourceName, isNewSource)
 	isLong := p.settings.MaxEventSize != 0 && length > p.settings.MaxEventSize
@@ -273,7 +273,7 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 	}
 
 	event := p.eventPool.get()
-	dec := decoder.NO
+	var dec decoder.DecoderType
 	if p.decoder == decoder.AUTO {
 		dec = p.suggestedDecoder
 	} else {

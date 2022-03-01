@@ -60,7 +60,7 @@ func TestWorkerWork(t *testing.T) {
 			inputer := inputerMock{}
 			f, err := os.CreateTemp("/tmp", "worker_test")
 			require.NoError(t, err)
-			fmt.Fprint(f, tt.inFile)
+			_, _ = fmt.Fprint(f, tt.inFile)
 			_, err = f.Seek(0, io.SeekStart)
 			require.NoError(t, err)
 			job := &Job{
@@ -73,7 +73,7 @@ func TestWorkerWork(t *testing.T) {
 				lastEventSeq:   0,
 				isVirgin:       false,
 				isDone:         false,
-				shouldSkip:     false,
+				shouldSkip:     *atomic.NewBool(false),
 				offsets:        sliceMap{},
 				mu:             &sync.Mutex{},
 			}
