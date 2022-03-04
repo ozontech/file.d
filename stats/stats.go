@@ -18,10 +18,8 @@ type key struct {
 	name      string
 }
 
-type AnyMetric prom.Collector
-
 type stats struct {
-	allMetrics map[key]AnyMetric
+	allMetrics map[key]prom.Counter //
 }
 
 const (
@@ -33,7 +31,11 @@ var statsGlobal *stats
 
 func InitStats() {
 	statsGlobal = &stats{
-		allMetrics: make(map[key]AnyMetric),
+		allMetrics: make(map[key]prom.Counter),
+		// This map will store prom.Counter instead of prom.Collector for now
+		// because typecasts are slow.
+		// A viable option would be to use a map of maps if we ever need
+		// to be able to store several metric types.
 	}
 
 	statsGlobal.registerUnknown()
@@ -57,17 +59,17 @@ func GetCounter(subsystem, metricName string) prom.Counter {
 	}
 
 	if val, ok := statsGlobal.allMetrics[getKey(subsystem, metricName)]; ok {
-		return val.(prom.Counter)
+		return val
 	}
 
-	return statsGlobal.allMetrics[getKey(subsystemName, unknownCounter)].(prom.Counter)
+	return statsGlobal.allMetrics[getKey(subsystemName, unknownCounter)]
 }
 
 func getKey(subsystem, metricName string) key {
 	return key{pipeline.PromNamespace, subsystem, metricName}
 }
 
-func registerMetric(k key, metric prom.Collector) {
+func registerMetric(k key, metric prom.Counter) { // todo: support prom.Collector
 	if statsGlobal == nil {
 		logger.Panicf("stats package uninitialized")
 	}
