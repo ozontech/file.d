@@ -2,9 +2,8 @@
 Description=File.d
 
 [Service]
-ExecStart=/usr/bin/file.d $ARGS
-Restart=always
-EnvironmentFile=/etc/default/file.d
+ExecStart=/usr/bin/file.d --config /etc/file.d/config.yaml
+Restart=on-failure
 MemoryAccounting=true
 MemoryHigh=1536M
 MemoryMax=2G

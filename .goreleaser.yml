@@ -44,8 +44,6 @@ nfpms:
       - src: ./releaser/config.yaml
         dst: /etc/file.d/config.yaml
         type: config
-      - src: ./releaser/file.d.default
-        dst: /etc/default/file.d
       - src: ./releaser/file.d.service
         dst: /etc/systemd/system/file.d.service
     scripts: 
