@@ -6,11 +6,18 @@ env:
   - CGO_ENABLED=0
 checksum:
   name_template: '{{ .ProjectName }}_checksums.txt'
-changelog:
-  skip: true
+# changelog:
+#   skip: true
 release:
   draft: true
   prerelease: auto
+
+archives: 
+  - replacements:
+      darwin: Darwin
+      linux: Linux
+      amd64: x86_64
+
 builds:
   - main: ./cmd
     goos:
@@ -18,6 +25,30 @@ builds:
       - darwin
     goarch:
       - amd64
+      - arm64
     mod_timestamp: '{{ .CommitTimestamp }}'
     flags:
       - -trimpath
+nfpms:
+  - 
+    maintainer: Maintainer
+    formats:
+      - deb
+    description: |- 
+      file.d is a tool for building data pipelines: 
+      read, process and output events.
+    homepage: https://ozontech.github.io/file.d/
+    vendor: Ozon Tech
+    bindir: /usr/bin
+    contents: 
+      - src: ./releaser/config.yaml
+        dst: /etc/file.d/config.yaml
+        type: config
+      - src: ./releaser/file.d.default
+        dst: /etc/default/file.d
+      - src: ./releaser/file.d.service
+        dst: /etc/systemd/system/file.d.service
+    scripts: 
+      postinstall: "./releaser/scripts/postinstall.sh"
+      preremove:  "./releaser/scripts/preremove.sh"
+      postremove:  "./releaser/scripts/postremove.sh"

@@ -1,0 +1,13 @@
+[Unit]
+Description=File.d
+
+[Service]
+ExecStart=/usr/bin/file.d $ARGS
+Restart=always
+EnvironmentFile=/etc/default/file.d
+MemoryAccounting=true
+MemoryHigh=1536M
+MemoryMax=2G
+
+[Install]
+WantedBy=multi-user.target
