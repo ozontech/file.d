@@ -31,7 +31,7 @@ builds:
       - -trimpath
 nfpms:
   - 
-    maintainer: Maintainer
+    maintainer: Vitkovskiy Vladimir <vvitkovskiy@ozon.ru>
     formats:
       - deb
     description: |- 
