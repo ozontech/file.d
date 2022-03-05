@@ -15,10 +15,7 @@ func (o *yamlValue) Load(r io.Reader) error {
 	if err != nil {
 		return err
 	}
-	if err := yaml.Unmarshal(b, o.value); err != nil {
-		return err
-	}
-	return nil
+	return yaml.Unmarshal(b, o.value)
 }
 
 func (o *yamlValue) Save(w io.Writer) error {

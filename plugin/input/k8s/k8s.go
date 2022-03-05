@@ -43,8 +43,6 @@ type Plugin struct {
 	config  *Config
 	logger  *zap.SugaredLogger
 	params  *pipeline.InputPluginParams
-	logBuff []byte
-	logSize int
 
 	fp *file.Plugin
 }

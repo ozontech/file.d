@@ -111,14 +111,8 @@ func Factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginParams) {
 	p.config = config.(*Config)
 	p.params = params
-	p.readBuffs = &sync.Pool{
-		New: p.newReadBuff,
-	}
-
-	p.eventBuffs = &sync.Pool{
-		New: p.newEventBuffs,
-	}
-
+	p.readBuffs = &sync.Pool{}
+	p.eventBuffs = &sync.Pool{}
 	p.mu = &sync.Mutex{}
 	p.controller = params.Controller
 	p.controller.DisableStreams()
@@ -145,11 +139,17 @@ func (p *Plugin) listenHTTP() {
 	}
 }
 
-func (p *Plugin) newReadBuff() interface{} {
+func (p *Plugin) newReadBuff() []byte {
+	if buff := p.readBuffs.Get(); buff != nil {
+		return *buff.(*[]byte)
+	}
 	return make([]byte, 16*1024)
 }
 
-func (p *Plugin) newEventBuffs() interface{} {
+func (p *Plugin) newEventBuffs() []byte {
+	if buff := p.eventBuffs.Get(); buff != nil {
+		return (*buff.(*[]byte))[:0]
+	}
 	return make([]byte, 0, p.params.PipelineSettings.AvgEventSize)
 }
 
@@ -175,8 +175,8 @@ func (p *Plugin) putSourceID(x pipeline.SourceID) {
 }
 
 func (p *Plugin) serve(w http.ResponseWriter, r *http.Request) {
-	readBuff := p.readBuffs.Get().([]byte)
-	eventBuff := p.eventBuffs.Get().([]byte)[:0]
+	readBuff := p.newReadBuff()
+	eventBuff := p.newEventBuffs()
 
 	sourceID := p.getSourceID()
 	defer p.putSourceID(sourceID)
@@ -197,8 +197,9 @@ func (p *Plugin) serve(w http.ResponseWriter, r *http.Request) {
 
 	_ = r.Body.Close()
 
-	p.readBuffs.Put(readBuff)
-	p.eventBuffs.Put(eventBuff)
+	// https://staticcheck.io/docs/checks/#SA6002
+	p.readBuffs.Put(&readBuff)
+	p.eventBuffs.Put(&eventBuff)
 
 	_, err := w.Write(result)
 	if err != nil {

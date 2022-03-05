@@ -388,7 +388,7 @@ func (p *Plugin) isBlank(s string) bool {
 }
 
 func (p *Plugin) formatExtraField(encodeBuf []byte, name string) []byte {
-	if len(name) == 0 {
+	if name == "" {
 		return encodeBuf
 	}
 
