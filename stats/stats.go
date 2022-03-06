@@ -19,7 +19,7 @@ type key struct {
 }
 
 type stats struct {
-	allMetrics map[key]prom.Counter //
+	allMetrics map[key]prom.Counter
 }
 
 const (
@@ -62,7 +62,7 @@ func GetCounter(subsystem, metricName string) prom.Counter {
 		return val
 	}
 
-	return statsGlobal.allMetrics[getKey(subsystemName, unknownCounter)]
+	return statsGlobal.allMetrics[key{pipeline.PromNamespace, subsystem, metricName}]
 }
 
 func getKey(subsystem, metricName string) key {

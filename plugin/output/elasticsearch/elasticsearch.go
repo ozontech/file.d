@@ -225,7 +225,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 		}
 
 		if root.Dig("errors").AsBool() {
-			errors := 0.0
+			errors := 0
 			for _, node := range root.Dig("items").AsArray() {
 				errNode := node.Dig("index", "error")
 				if errNode != nil {
@@ -235,7 +235,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 			}
 
 			if errors != 0 {
-				stats.GetCounter(subsystemName, indexingErrors).Add(errors)
+				stats.GetCounter(subsystemName, indexingErrors).Add(float64(errors))
 			}
 
 			p.controller.Error("some events from batch isn't written")
