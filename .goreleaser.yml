@@ -6,8 +6,6 @@ env:
   - CGO_ENABLED=0
 checksum:
   name_template: '{{ .ProjectName }}_checksums.txt'
-# changelog:
-#   skip: true
 release:
   draft: true
   prerelease: auto
@@ -46,7 +44,3 @@ nfpms:
         type: config
       - src: ./releaser/file.d.service
         dst: /etc/systemd/system/file.d.service
-    scripts: 
-      postinstall: "./releaser/scripts/postinstall.sh"
-      preremove:  "./releaser/scripts/preremove.sh"
-      postremove:  "./releaser/scripts/postremove.sh"
