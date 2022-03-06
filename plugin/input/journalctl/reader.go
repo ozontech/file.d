@@ -14,11 +14,6 @@ import (
 )
 
 //nolint:unused
-const (
-	subsystemName = "input_journalctl"
-	readerErrors  = "reader_errors"
-)
-
 type journalReaderConfig struct {
 	output   io.Writer
 	cursor   string

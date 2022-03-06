@@ -11,6 +11,7 @@ import (
 	"github.com/ozontech/file.d/longpanic"
 	"github.com/ozontech/file.d/offset"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/stats"
 	insaneJSON "github.com/vitkovskii/insane-json"
 	"go.uber.org/zap"
 )
@@ -66,7 +67,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 
 	p.state = &state{}
 	if err := offset.LoadYAML(p.config.OffsetsFile, p.state); err != nil {
-		p.GetCounter(subsystemName, offsetErrors).Inc()
+		stats.GetCounter(subsystemName, offsetErrors).Inc()
 		p.logger.Error("can't load offset file: %s", err.Error())
 	}
 
