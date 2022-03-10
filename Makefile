@@ -21,6 +21,10 @@ test:
 	go test ./pipeline/ -v -count 1
 	go test ./plugin/... -v -count 1
 
+.PHONY: test-docker
+test-docker:
+	docker run --rm -it -v ${PWD}:/app -w /app golang:1.17 bash -c 'make test'
+
 .PHONY: test-e2e
 test-e2e:
 	go test ./cmd/ -v -count 1
