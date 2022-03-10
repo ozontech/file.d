@@ -4,6 +4,8 @@ package main
 
 import (
 	"fmt"
+	"github.com/ozontech/file.d/pipeline"
+	"github.com/stretchr/testify/require"
 	"io/ioutil"
 	"math/rand"
 	"os"
@@ -13,18 +15,18 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ozonru/file.d/cfg"
-	"github.com/ozonru/file.d/fd"
-	_ "github.com/ozonru/file.d/plugin/action/discard"
-	_ "github.com/ozonru/file.d/plugin/action/json_decode"
-	_ "github.com/ozonru/file.d/plugin/action/keep_fields"
-	_ "github.com/ozonru/file.d/plugin/action/rename"
-	_ "github.com/ozonru/file.d/plugin/action/throttle"
-	_ "github.com/ozonru/file.d/plugin/input/fake"
-	_ "github.com/ozonru/file.d/plugin/input/file"
-	k8s2 "github.com/ozonru/file.d/plugin/input/k8s"
-	_ "github.com/ozonru/file.d/plugin/output/devnull"
-	_ "github.com/ozonru/file.d/plugin/output/kafka"
+	"github.com/ozontech/file.d/cfg"
+	"github.com/ozontech/file.d/fd"
+	_ "github.com/ozontech/file.d/plugin/action/discard"
+	_ "github.com/ozontech/file.d/plugin/action/json_decode"
+	_ "github.com/ozontech/file.d/plugin/action/keep_fields"
+	_ "github.com/ozontech/file.d/plugin/action/rename"
+	_ "github.com/ozontech/file.d/plugin/action/throttle"
+	_ "github.com/ozontech/file.d/plugin/input/fake"
+	_ "github.com/ozontech/file.d/plugin/input/file"
+	k8s2 "github.com/ozontech/file.d/plugin/input/k8s"
+	_ "github.com/ozontech/file.d/plugin/output/devnull"
+	_ "github.com/ozontech/file.d/plugin/output/kafka"
 	uuid "github.com/satori/go.uuid"
 )
 
@@ -107,7 +109,7 @@ func TestEndToEnd(t *testing.T) {
 
 func runWriter(tempDir string, files int) {
 	format := `{"log":"%s\n","stream":"stderr"}`
-	panicLines := make([]string, 0, 0)
+	panicLines := make([]string, 0)
 	for _, line := range strings.Split(panicContent, "\n") {
 		if line == "" {
 			continue
@@ -148,5 +150,63 @@ func runWriter(tempDir string, files int) {
 		if err != nil {
 			panic(err.Error())
 		}
+	}
+}
+
+/*
+Plugins registered automatically after importing by init() function:
+	_ "github.com/ozontech/file.d/plugin/output/devnull"
+	_ "github.com/ozontech/file.d/plugin/output/elasticsearch"
+Moving plugin in sub dir in plugin dir will quit registration quietly.
+To prevent this let's check that DefaultPluginRegistry contains all plugins.
+Plugins "dmesg", "journalctl" linux based, they contain tag: //go:build linux.
+We don't check them.
+*/
+func TestThatPluginsAreImported(t *testing.T) {
+	action := []string{
+		"add_host",
+		"debug",
+		"discard",
+		"flatten",
+		"json_decode",
+		"keep_fields",
+		"mask",
+		"modify",
+		"parse_es",
+		"parse_re2",
+		"remove_fields",
+		"rename",
+		"throttle",
+	}
+	for _, pluginName := range action {
+		pluginInfo := fd.DefaultPluginRegistry.Get(pipeline.PluginKindAction, pluginName)
+		require.NotNil(t, pluginInfo)
+	}
+
+	input := []string{
+		"fake",
+		"file",
+		"http",
+		"k8s",
+		"kafka",
+	}
+	for _, pluginName := range input {
+		pluginInfo := fd.DefaultPluginRegistry.Get(pipeline.PluginKindInput, pluginName)
+		require.NotNil(t, pluginInfo)
+	}
+
+	output := []string{
+		"devnull",
+		"elasticsearch",
+		"file",
+		"gelf",
+		"kafka",
+		"s3",
+		"splunk",
+		"stdout",
+	}
+	for _, pluginName := range output {
+		pluginInfo := fd.DefaultPluginRegistry.Get(pipeline.PluginKindOutput, pluginName)
+		require.NotNil(t, pluginInfo)
 	}
 }

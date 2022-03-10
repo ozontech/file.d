@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ozonru/file.d/logger"
+	"github.com/ozontech/file.d/logger"
 	insaneJSON "github.com/vitkovskii/insane-json"
 	"go.uber.org/atomic"
 )

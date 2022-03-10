@@ -7,8 +7,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/ozonru/file.d/logger"
-	"github.com/ozonru/file.d/longpanic"
+	"github.com/ozontech/file.d/logger"
+	"github.com/ozontech/file.d/longpanic"
 	"gopkg.in/yaml.v3"
 )
 

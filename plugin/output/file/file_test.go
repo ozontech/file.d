@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ozonru/file.d/cfg"
-	"github.com/ozonru/file.d/logger"
-	"github.com/ozonru/file.d/test"
+	"github.com/ozontech/file.d/cfg"
+	"github.com/ozontech/file.d/logger"
+	"github.com/ozontech/file.d/test"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -66,17 +66,17 @@ func TestGetStartIdx(t *testing.T) {
 			fileName:      file[0 : len(file)-len(extension)],
 		}
 
-		// create files
+		// create files.
 		files := make([]*os.File, len(tc.filesName))
 		createDir(t, p.targetDir)
 		for _, f := range tc.filesName {
 			files = append(files, createFile(t, f, nil))
 		}
-		//	make check
+		// make check
 		idx := p.getStartIdx()
 		assert.EqualValues(t, tc.expectedIdx, idx)
 
-		//	close files
+		// close files.
 		for _, f := range files {
 			f.Close()
 		}
@@ -261,13 +261,6 @@ func TestStart(t *testing.T) {
 	assert.GreaterOrEqual(t, len(matches), 2, "there is no new file after sealing up")
 	checkDirFiles(t, matches, totalSent, "written data and saved data are not equal")
 
-	for _, m := range matches {
-		if strings.Contains(m, currentLogFileSubstr) {
-			tsFileName = m
-			break
-		}
-	}
-
 	// send next pack. And stop pipeline before next seal up time
 	totalSent += test.SendPack(t, p, tests.secondPack)
 	time.Sleep(writeFileSleep)
@@ -316,7 +309,7 @@ func TestStart(t *testing.T) {
 	// check seal up for third
 	time.Sleep(sealUpFileSleep)
 	matches = test.GetMatches(t, generalPattern)
-	assert.GreaterOrEqual(t, len(matches), 4, "there is no new files after sealing up third pack")
+	assert.GreaterOrEqual(t, len(matches), 4, "there is no new plugins after sealing up third pack")
 	checkDirFiles(t, matches, totalSent, "lost data for third pack")
 	for _, m := range matches {
 		if strings.Contains(m, currentLogFileSubstr) {

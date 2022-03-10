@@ -4,10 +4,10 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/ozonru/file.d/cfg"
-	"github.com/ozonru/file.d/logger"
-	"github.com/ozonru/file.d/pipeline"
-	"github.com/ozonru/file.d/test"
+	"github.com/ozontech/file.d/cfg"
+	"github.com/ozontech/file.d/logger"
+	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/test"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -21,13 +21,13 @@ func TestFlatten(t *testing.T) {
 	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, config, pipeline.MatchModeAnd, nil, false))
 
 	wg := &sync.WaitGroup{}
-	acceptedEvents := make([]*pipeline.Event, 0, 0)
+	acceptedEvents := make([]*pipeline.Event, 0)
 	input.SetCommitFn(func(e *pipeline.Event) {
 		wg.Done()
 		acceptedEvents = append(acceptedEvents, e)
 	})
 
-	dumpedEvents := make([]*pipeline.Event, 0, 0)
+	dumpedEvents := make([]*pipeline.Event, 0)
 	output.SetOutFn(func(e *pipeline.Event) {
 		wg.Done()
 		dumpedEvents = append(dumpedEvents, e)

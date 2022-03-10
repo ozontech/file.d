@@ -6,10 +6,10 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/ozonru/file.d/cfg"
-	"github.com/ozonru/file.d/logger"
-	"github.com/ozonru/file.d/pipeline"
-	"github.com/ozonru/file.d/test"
+	"github.com/ozontech/file.d/cfg"
+	"github.com/ozontech/file.d/logger"
+	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/test"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/atomic"
 )
@@ -252,7 +252,6 @@ func TestSimpleJoin(t *testing.T) {
 			var a, b int
 			input.SetInFn(func() {
 				a++
-				logger.Errorf("a=%#v", a)
 				inEvents.Inc()
 			})
 
@@ -260,7 +259,6 @@ func TestSimpleJoin(t *testing.T) {
 			lastID := atomic.Uint64{}
 			output.SetOutFn(func(e *pipeline.Event) {
 				b++
-				logger.Error("b=%#v", b)
 				outEvents.Inc()
 				wg.Done()
 				id := lastID.Swap(e.SeqID)

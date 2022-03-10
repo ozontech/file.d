@@ -4,8 +4,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/ozonru/file.d/pipeline"
-	"github.com/ozonru/file.d/test"
+	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/test"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -22,7 +22,7 @@ func TestRename(t *testing.T) {
 	wg := &sync.WaitGroup{}
 	wg.Add(5)
 
-	outEvents := make([]*pipeline.Event, 0, 0)
+	outEvents := make([]*pipeline.Event, 0)
 	output.SetOutFn(func(e *pipeline.Event) {
 		outEvents = append(outEvents, e)
 		wg.Done()

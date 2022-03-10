@@ -10,8 +10,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/ozonru/file.d/logger"
-	"github.com/ozonru/file.d/pipeline"
+	"github.com/ozontech/file.d/logger"
+	"github.com/ozontech/file.d/pipeline"
 	"go.uber.org/atomic"
 )
 
@@ -43,7 +43,7 @@ func newOffsetDB(curOffsetsFile string, tmpOffsetsFile string) *offsetDB {
 		mu:             &sync.Mutex{},
 		savesTotal:     &atomic.Int64{},
 		buf:            make([]byte, 0, 65536),
-		jobsSnapshot:   make([]*Job, 0, 0),
+		jobsSnapshot:   make([]*Job, 0),
 		reloadCh:       make(chan bool),
 	}
 }

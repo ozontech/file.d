@@ -1,4 +1,4 @@
-VERSION ?= 0.1.15
+VERSION ?= 0.2.2
 UPSTREAM_BRANCH ?= origin/master
 
 .PHONY: prepare
@@ -9,11 +9,29 @@ prepare:
 deps:
 	go get -v github.com/vitkovskii/insane-doc@v0.0.1
 
+.PHONY: cover
+cover:
+	go test -short -coverprofile=coverage.out ./...
+	go tool cover -html=coverage.out
+	rm coverage.out
+
+.PHONY: test-short
+test-short:
+	go test ./fd/ -v -count 1 -short
+	go test ./pipeline/ -v -count 1 -short
+	go test ./plugin/... -v -count 1 -short
+
 .PHONY: test
 test:
 	go test ./fd/ -v -count 1
 	go test ./pipeline/ -v -count 1
 	go test ./plugin/... -v -count 1
+
+.PHONY: test-short
+test-short:
+	go test ./fd/ -v -count 1 -short
+	go test ./pipeline/ -v -count 1 -short
+	go test ./plugin/... -v -count 1 -short
 
 .PHONY: test-e2e
 test-e2e:
@@ -57,3 +75,8 @@ push-images-all: push-images-version push-images-latest
 lint:
 	# installation: https://golangci-lint.run/usage/install/#local-installation
 	golangci-lint run --new-from-rev=${UPSTREAM_BRANCH}
+
+.PHONY: mock
+mock:
+	go install github.com/golang/mock/mockgen
+	mockgen -source=plugin/output/s3/s3.go -destination=plugin/output/s3/mock/s3.go

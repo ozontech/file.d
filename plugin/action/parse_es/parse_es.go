@@ -1,8 +1,8 @@
 package parse_es
 
 import (
-	"github.com/ozonru/file.d/fd"
-	"github.com/ozonru/file.d/pipeline"
+	"github.com/ozontech/file.d/fd"
+	"github.com/ozontech/file.d/pipeline"
 	"go.uber.org/zap"
 )
 
@@ -12,7 +12,6 @@ It parses HTTP input using Elasticsearch `/_bulk` API format. It converts source
 }*/
 type Plugin struct {
 	logger      *zap.SugaredLogger
-	config      *Config
 	passNext    bool
 	discardNext bool
 	isStrict    bool
@@ -80,7 +79,8 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 		return pipeline.ActionCollapse
 	}
 
-	p.logger.Fatalf("wrong ES input format, expected action, got: %s", root.EncodeToString())
+	// If request invalid skip bad event.
+	p.logger.Error("wrong ES input format, expected action, got: %s", root.EncodeToString())
 
 	return pipeline.ActionDiscard
 }

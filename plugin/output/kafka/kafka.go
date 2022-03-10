@@ -5,9 +5,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ozonru/file.d/cfg"
-	"github.com/ozonru/file.d/fd"
-	"github.com/ozonru/file.d/pipeline"
+	"github.com/ozontech/file.d/cfg"
+	"github.com/ozontech/file.d/fd"
+	"github.com/ozontech/file.d/pipeline"
 	"go.uber.org/zap"
 
 	"github.com/Shopify/sarama"
@@ -118,7 +118,7 @@ func (p *Plugin) Out(event *pipeline.Event) {
 func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 	if *workerData == nil {
 		*workerData = &data{
-			messages: make([]*sarama.ProducerMessage, p.config.BatchSize_, p.config.BatchSize_),
+			messages: make([]*sarama.ProducerMessage, p.config.BatchSize_),
 			outBuf:   make([]byte, 0, p.config.BatchSize_*p.avgEventSize),
 		}
 	}
@@ -177,7 +177,7 @@ func (p *Plugin) newProducer() sarama.SyncProducer {
 	config := sarama.NewConfig()
 	config.Producer.Partitioner = sarama.NewRoundRobinPartitioner
 	config.Producer.Flush.Messages = p.config.BatchSize_
-	// kafka plugin itself cares for flush frequency, but we are using batcher so disable it
+	// kafka plugin itself cares for flush frequency, but we are using batcher so disable it.
 	config.Producer.Flush.Frequency = time.Millisecond
 	config.Producer.Return.Errors = true
 	config.Producer.Return.Successes = true

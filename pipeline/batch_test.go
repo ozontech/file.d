@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ozonru/file.d/logger"
+	"github.com/ozontech/file.d/logger"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/atomic"
 )
@@ -23,8 +23,7 @@ func (b *batcherTail) Error(err string) {
 	logger.Panic(err)
 }
 
-func (b *batcherTail) WaitOrPanic(string) {}
-func (b *batcherTail) RecoverFromPanic()  {}
+func (b *batcherTail) RecoverFromPanic() {}
 
 func TestBatcher(t *testing.T) {
 	eventCount := 10000000

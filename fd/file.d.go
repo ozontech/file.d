@@ -10,10 +10,10 @@ import (
 	"runtime/debug"
 
 	"github.com/bitly/go-simplejson"
-	"github.com/ozonru/file.d/cfg"
-	"github.com/ozonru/file.d/logger"
-	"github.com/ozonru/file.d/longpanic"
-	"github.com/ozonru/file.d/pipeline"
+	"github.com/ozontech/file.d/cfg"
+	"github.com/ozontech/file.d/logger"
+	"github.com/ozontech/file.d/longpanic"
+	"github.com/ozontech/file.d/pipeline"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
@@ -32,7 +32,7 @@ func New(config *cfg.Config, httpAddr string) *FileD {
 		config:    config,
 		httpAddr:  httpAddr,
 		plugins:   DefaultPluginRegistry,
-		Pipelines: make([]*pipeline.Pipeline, 0, 0),
+		Pipelines: make([]*pipeline.Pipeline, 0),
 	}
 }
 
@@ -241,6 +241,7 @@ func (f *FileD) getStaticInfo(pipelineConfig *cfg.PipelineConfig, pluginKind pip
 func (f *FileD) Stop(ctx context.Context) error {
 	logger.Infof("stopping pipelines=%d", len(f.Pipelines))
 	err := f.server.Shutdown(ctx)
+	_ = f.server.Shutdown(context.TODO())
 	for _, p := range f.Pipelines {
 		p.Stop()
 	}
@@ -278,8 +279,4 @@ func (f *FileD) serveFreeOsMem(_ http.ResponseWriter, _ *http.Request) {
 
 func (f *FileD) serveLiveReady(_ http.ResponseWriter, _ *http.Request) {
 	logger.Infof("live/ready OK")
-}
-
-func (f *FileD) servePipelines(_ http.ResponseWriter, _ *http.Request) {
-	logger.Infof("pipelines OK")
 }

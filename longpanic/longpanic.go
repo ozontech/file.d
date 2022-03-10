@@ -5,7 +5,7 @@ package longpanic
 import (
 	"time"
 
-	"github.com/ozonru/file.d/logger"
+	"github.com/ozontech/file.d/logger"
 	"go.uber.org/atomic"
 )
 

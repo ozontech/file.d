@@ -10,9 +10,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ozonru/file.d/decoder"
-	"github.com/ozonru/file.d/logger"
-	"github.com/ozonru/file.d/longpanic"
+	"github.com/ozontech/file.d/decoder"
+	"github.com/ozontech/file.d/logger"
+	"github.com/ozontech/file.d/longpanic"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
@@ -294,7 +294,7 @@ func (p *Pipeline) GetOutput() OutputPlugin {
 func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes []byte, isNewSource bool) uint64 {
 	length := len(bytes)
 
-	// don't process shit
+	// don't process shit.
 	isEmpty := length == 0 || (bytes[0] == '\n' && length == 1)
 	isSpam := p.antispamer.isSpam(sourceID, sourceName, isNewSource)
 	isLong := p.settings.MaxEventSize != 0 && length > p.settings.MaxEventSize
@@ -303,7 +303,7 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 	}
 
 	event := p.eventPool.get()
-	dec := decoder.NO
+	var dec decoder.DecoderType
 	if p.decoder == decoder.AUTO {
 		dec = p.suggestedDecoder
 	} else {
@@ -490,7 +490,7 @@ func (p *Pipeline) growProcs() {
 		if p.procCount.Load() != p.activeProcs.Load() {
 			t = time.Now()
 		}
-		if time.Now().Sub(t) > interval {
+		if time.Since(t) > interval {
 			p.expandProcs()
 		}
 	}

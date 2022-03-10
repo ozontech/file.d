@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ozonru/file.d/pipeline"
-	"github.com/ozonru/file.d/plugin/input/fake"
+	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/plugin/input/fake"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
 )

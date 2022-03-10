@@ -5,8 +5,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ozonru/file.d/logger"
-	"github.com/ozonru/file.d/longpanic"
+	"github.com/ozontech/file.d/logger"
+	"github.com/ozontech/file.d/longpanic"
 	"go.uber.org/atomic"
 )
 
@@ -42,7 +42,7 @@ func (b *Batch) append(e *Event) {
 func (b *Batch) isReady() bool {
 	l := len(b.Events)
 	isFull := l == b.size
-	isTimeout := l > 0 && time.Now().Sub(b.startTime) > b.timeout
+	isTimeout := l > 0 && time.Since(b.startTime) > b.timeout
 	return isFull || isTimeout
 }
 
@@ -125,13 +125,13 @@ type WorkerData interface{}
 
 func (b *Batcher) work(ctx context.Context) {
 	t := time.Now()
-	events := make([]*Event, 0, 0)
+	events := make([]*Event, 0)
 	data := WorkerData(nil)
 	for batch := range b.fullBatches {
 		b.outFn(&data, batch)
 		events = b.commitBatch(ctx, events, batch)
 
-		shouldRunMaintenance := b.maintenanceFn != nil && b.maintenanceInterval != 0 && time.Now().Sub(t) > b.maintenanceInterval
+		shouldRunMaintenance := b.maintenanceFn != nil && b.maintenanceInterval != 0 && time.Since(t) > b.maintenanceInterval
 		if shouldRunMaintenance {
 			t = time.Now()
 			b.maintenanceFn(&data)

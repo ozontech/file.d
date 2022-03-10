@@ -7,10 +7,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ozonru/file.d/cfg"
-	"github.com/ozonru/file.d/logger"
-	"github.com/ozonru/file.d/pipeline"
-	"github.com/ozonru/file.d/test"
+	"github.com/ozontech/file.d/cfg"
+	"github.com/ozontech/file.d/logger"
+	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/test"
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 )
@@ -122,7 +122,7 @@ func TestAllowedLabels(t *testing.T) {
 	putMeta(getPodInfo(item, false))
 	filename2 := getLogFilename("/k8s-logs", item)
 
-	outEvents := make([]*pipeline.Event, 0, 0)
+	outEvents := make([]*pipeline.Event, 0)
 	output.SetOutFn(func(e *pipeline.Event) {
 		outEvents = append(outEvents, e)
 		wg.Done()
@@ -153,7 +153,7 @@ func TestK8SJoin(t *testing.T) {
 	podInfo := getPodInfo(item, true)
 	putMeta(podInfo)
 
-	outEvents := make([]*pipeline.Event, 0, 0)
+	outEvents := make([]*pipeline.Event, 0)
 	output.SetOutFn(func(e *pipeline.Event) {
 		event := *e
 		outEvents = append(outEvents, &event)

@@ -9,15 +9,20 @@ import (
 	"testing"
 	"time"
 
+<<<<<<< HEAD
 	"go.uber.org/atomic"
 
+=======
+	"github.com/golang/mock/gomock"
+>>>>>>> master
 	"github.com/minio/minio-go"
-	"github.com/ozonru/file.d/cfg"
-	"github.com/ozonru/file.d/logger"
-	"github.com/ozonru/file.d/pipeline"
-	"github.com/ozonru/file.d/plugin/input/fake"
-	"github.com/ozonru/file.d/plugin/output/file"
-	"github.com/ozonru/file.d/test"
+	"github.com/ozontech/file.d/cfg"
+	"github.com/ozontech/file.d/logger"
+	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/plugin/input/fake"
+	"github.com/ozontech/file.d/plugin/output/file"
+	mock_s3 "github.com/ozontech/file.d/plugin/output/s3/mock"
+	"github.com/ozontech/file.d/test"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/net/context"
@@ -30,17 +35,20 @@ var (
 	fileName atomic.String
 )
 
-type mockClient struct{}
-
-func newMockClient() objectStoreClient {
-	return mockClient{}
+func testFactory(objStoreF objStoreFactory) (pipeline.AnyPlugin, pipeline.AnyConfig) {
+	return &testS3Plugin{objStoreF: objStoreF}, &Config{}
 }
 
-func (m mockClient) BucketExists(bucketName string) (bool, error) {
-	return true, nil
+type testS3Plugin struct {
+	Plugin
+	objStoreF objStoreFactory
 }
 
-func (m mockClient) FPutObject(bucketName, objectName, filePath string, opts minio.PutObjectOptions) (n int64, err error) {
+func (p *testS3Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginParams) {
+	p.StartWithMinio(config, params, p.objStoreF)
+}
+
+func fPutObjectOk(bucketName, objectName, filePath string, opts minio.PutObjectOptions) (n int64, err error) {
 	logger.Infof("put object: %s, %s, %s", bucketName, objectName, filePath)
 	targetDir := fmt.Sprintf("./%s", bucketName)
 	if _, err := os.Stat(targetDir); os.IsNotExist(err) {
@@ -48,8 +56,13 @@ func (m mockClient) FPutObject(bucketName, objectName, filePath string, opts min
 			logger.Fatalf("could not create target dir: %s, error: %s", targetDir, err.Error())
 		}
 	}
+<<<<<<< HEAD
 	fileName.Store(fmt.Sprintf("%s/%s", bucketName, "mockLog.txt"))
 	f, err := os.OpenFile(fileName.Load(), os.O_CREATE|os.O_APPEND|os.O_RDWR, os.FileMode(0o777))
+=======
+	fileName = fmt.Sprintf("%s/%s", bucketName, "mockLog.txt")
+	f, err := os.OpenFile(fileName, os.O_CREATE|os.O_APPEND|os.O_RDWR, os.FileMode(0o777))
+>>>>>>> master
 	if err != nil {
 		logger.Panicf("could not open or create f: %s, error: %s", fileName.Load(), err.Error())
 	}
@@ -62,10 +75,43 @@ func (m mockClient) FPutObject(bucketName, objectName, filePath string, opts min
 	return 1, nil
 }
 
+type putWithErr struct {
+	ctx    context.Context
+	cancel context.CancelFunc
+}
+
+func (put *putWithErr) fPutObjectErr(bucketName, objectName, filePath string, opts minio.PutObjectOptions) (n int64, err error) {
+	select {
+	case <-put.ctx.Done():
+		logger.Info("put object")
+
+		targetDir := fmt.Sprintf("./%s", bucketName)
+		if _, err := os.Stat(targetDir); os.IsNotExist(err) {
+			if err := os.MkdirAll(targetDir, os.ModePerm); err != nil {
+				logger.Fatalf("could not create target dir: %s, error: %s", targetDir, err.Error())
+			}
+		}
+		fileName = fmt.Sprintf("%s/%s", bucketName, "mockLog.txt")
+		f, err := os.OpenFile(fileName, os.O_CREATE|os.O_APPEND|os.O_RDWR, os.FileMode(0o777))
+		if err != nil {
+			logger.Panicf("could not open or create file: %s, error: %s", fileName, err.Error())
+		}
+
+		if _, err := f.WriteString(fmt.Sprintf("%s | from '%s' to b: `%s` as obj: `%s`\n", time.Now().String(), filePath, bucketName, objectName)); err != nil {
+			return 0, fmt.Errorf(err.Error())
+		}
+		return 1, nil
+	default:
+		return 0, fmt.Errorf("fake could not sent")
+	}
+}
+
 func TestStart(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skip long tests in short mode")
 	}
+
+	bucketName := "some"
 	tests := struct {
 		firstPack  []test.Msg
 		secondPack []test.Msg
@@ -92,7 +138,13 @@ func TestStart(t *testing.T) {
 	pattern := fmt.Sprintf("%s/*.log", dir)
 
 	test.ClearDir(t, dir)
-	s3MockClient := newMockClient()
+
+	ctl := gomock.NewController(t)
+	defer ctl.Finish()
+	s3MockClient := mock_s3.NewMockObjectStoreClient(ctl)
+	s3MockClient.EXPECT().BucketExists(bucketName).Return(true, nil).AnyTimes()
+	s3MockClient.EXPECT().FPutObject(bucketName, gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(fPutObjectOk).AnyTimes()
+
 	fileConfig := file.Config{
 		TargetFile:        targetFile,
 		RetentionInterval: "300ms",
@@ -102,22 +154,25 @@ func TestStart(t *testing.T) {
 	config := &Config{
 		FileConfig:      fileConfig,
 		CompressionType: "zip",
-		Endpoint:        "some",
-		AccessKey:       "some",
-		SecretKey:       "some",
-		Bucket:          "some",
+		Endpoint:        bucketName,
+		AccessKey:       bucketName,
+		SecretKey:       bucketName,
+		DefaultBucket:   bucketName,
 		Secure:          false,
-		client:          &s3MockClient,
 	}
 	test.ClearDir(t, dir)
 	defer test.ClearDir(t, dir)
-	test.ClearDir(t, config.Bucket)
-	defer test.ClearDir(t, config.Bucket)
+	test.ClearDir(t, config.DefaultBucket)
+	defer test.ClearDir(t, config.DefaultBucket)
 
 	err := cfg.Parse(config, map[string]int{"gomaxprocs": 1, "capacity": 64})
 	assert.NoError(t, err)
 
-	p := newPipeline(t, config)
+	p := newPipeline(t, config, func(cfg *Config) (ObjectStoreClient, map[string]ObjectStoreClient, error) {
+		return s3MockClient, map[string]ObjectStoreClient{
+			bucketName: s3MockClient,
+		}, nil
+	})
 	assert.NotNil(t, p, "could not create new pipeline")
 	p.Start()
 	time.Sleep(300 * time.Microsecond)
@@ -163,7 +218,202 @@ func TestStart(t *testing.T) {
 	assert.True(t, size3 > size2)
 }
 
-func newPipeline(t *testing.T, configOutput *Config) *pipeline.Pipeline {
+func TestStartWithMultiBuckets(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skip long tests in short mode")
+	}
+	// will be created.
+	dynamicBucket := "FAKE_BUCKET"
+
+	buckets := []string{"main", "multi_bucket1", "multi_bucket2"}
+	tests := struct {
+		firstPack  []test.Msg
+		secondPack []test.Msg
+		thirdPack  []test.Msg
+	}{
+		firstPack: []test.Msg{
+			// msg to main bucket.
+			test.Msg(`{"level":"error","ts":"2019-08-21T11:43:25.865Z","message":"get_items_error_1","trace_id":"3ea4a6589d06bb3f","span_id":"deddd718684b10a","get_items_error":"product: error while consuming CoverImage: context canceled","get_items_error_option":"CoverImage","get_items_error_cause":"context canceled","get_items_error_cause_type":"context_cancelled"}`),
+			// msg to first of multi_buckets.
+			test.Msg(fmt.Sprintf(`{"bucket_name": "%s", "level":"error","ts":"2019-08-21T11:43:25.865Z","message":"get_items_error_1","trace_id":"3ea4a6589d06bb3f","span_id":"deddd718684b10a","get_items_error":"product: error while consuming CoverImage: context canceled","get_items_error_option":"CoverImage","get_items_error_cause":"context canceled","get_items_error_cause_type":"context_cancelled"}`, buckets[1])),
+			// msg to second of multi_buckets.
+			test.Msg(fmt.Sprintf(`{"bucket_name": "%s", "level":"error","ts":"2019-08-21T11:43:25.865Z","message":"get_items_error_1","trace_id":"3ea4a6589d06bb3f","span_id":"deddd718684b10a","get_items_error":"product: error while consuming CoverImage: context canceled","get_items_error_option":"CoverImage","get_items_error_cause":"context canceled","get_items_error_cause_type":"context_cancelled"}`, buckets[2])),
+			// msg to not exist multi_bucket, will send to main bucket.
+			test.Msg(fmt.Sprintf(`{"bucket_name": "%s", "level":"error","ts":"2019-08-21T11:43:25.865Z","message":"get_items_error_1","trace_id":"3ea4a6589d06bb3f","span_id":"deddd718684b10a","get_items_error":"product: error while consuming CoverImage: context canceled","get_items_error_option":"CoverImage","get_items_error_cause":"context canceled","get_items_error_cause_type":"context_cancelled"}`, dynamicBucket)),
+			// msg to defaultBucket.
+			test.Msg(`{"level":"error","ts":"2019-08-21T11:43:25.865Z","message":"get_items_error_1","trace_id":"3ea4a6589d06bb3f","span_id":"deddd718684b10a","get_items_error":"product: error while consuming CoverImage: context canceled","get_items_error_option":"CoverImage","get_items_error_cause":"context canceled","get_items_error_cause_type":"context_cancelled"}`),
+			// msg to first of multi_buckets.
+			test.Msg(fmt.Sprintf(`{"bucket_name": "%s", "level":"error","ts":"2019-08-21T11:43:25.865Z","message":"get_items_error_1","trace_id":"3ea4a6589d06bb3f","span_id":"deddd718684b10a","get_items_error":"product: error while consuming CoverImage: context canceled","get_items_error_option":"CoverImage","get_items_error_cause":"context canceled","get_items_error_cause_type":"context_cancelled"}`, buckets[1])),
+			// msg to second of multi_buckets.
+			test.Msg(fmt.Sprintf(`{"bucket_name": "%s", "level":"error","ts":"2019-08-21T11:43:25.865Z","message":"get_items_error_1","trace_id":"3ea4a6589d06bb3f","span_id":"deddd718684b10a","get_items_error":"product: error while consuming CoverImage: context canceled","get_items_error_option":"CoverImage","get_items_error_cause":"context canceled","get_items_error_cause_type":"context_cancelled"}`, buckets[2])),
+		},
+		secondPack: []test.Msg{
+			// msg to main bucket.
+			test.Msg(`{"level":"error","ts":"2019-08-21T11:43:25.865Z","message":"get_items_error_1","trace_id":"3ea4a6589d06bb3f","span_id":"deddd718684b10a","get_items_error":"product: error while consuming CoverImage: context canceled","get_items_error_option":"CoverImage","get_items_error_cause":"context canceled","get_items_error_cause_type":"context_cancelled"}`),
+			// msg to first of multi_buckets.
+			test.Msg(fmt.Sprintf(`{"bucket_name": "%s", "level":"error","ts":"2019-08-21T11:43:25.865Z","message":"get_items_error_1","trace_id":"3ea4a6589d06bb3f","span_id":"deddd718684b10a","get_items_error":"product: error while consuming CoverImage: context canceled","get_items_error_option":"CoverImage","get_items_error_cause":"context canceled","get_items_error_cause_type":"context_cancelled"}`, buckets[1])),
+			// msg to second of multi_buckets.
+			test.Msg(fmt.Sprintf(`{"bucket_name": "%s", "level":"error","ts":"2019-08-21T11:43:25.865Z","message":"get_items_error_1","trace_id":"3ea4a6589d06bb3f","span_id":"deddd718684b10a","get_items_error":"product: error while consuming CoverImage: context canceled","get_items_error_option":"CoverImage","get_items_error_cause":"context canceled","get_items_error_cause_type":"context_cancelled"}`, buckets[2])),
+			// msg to not exist multi_bucket, will send to main bucket.
+			test.Msg(fmt.Sprintf(`{"bucket_name": "%s", "level":"error","ts":"2019-08-21T11:43:25.865Z","message":"get_items_error_1","trace_id":"3ea4a6589d06bb3f","span_id":"deddd718684b10a","get_items_error":"product: error while consuming CoverImage: context canceled","get_items_error_option":"CoverImage","get_items_error_cause":"context canceled","get_items_error_cause_type":"context_cancelled"}`, dynamicBucket)),
+			// msg to defaultBucket.
+			test.Msg(`{"level":"error","ts":"2019-08-21T11:43:25.865Z","message":"get_items_error_1","trace_id":"3ea4a6589d06bb3f","span_id":"deddd718684b10a","get_items_error":"product: error while consuming CoverImage: context canceled","get_items_error_option":"CoverImage","get_items_error_cause":"context canceled","get_items_error_cause_type":"context_cancelled"}`),
+			// msg to first of multi_buckets.
+			test.Msg(fmt.Sprintf(`{"bucket_name": "%s", "level":"error","ts":"2019-08-21T11:43:25.865Z","message":"get_items_error_1","trace_id":"3ea4a6589d06bb3f","span_id":"deddd718684b10a","get_items_error":"product: error while consuming CoverImage: context canceled","get_items_error_option":"CoverImage","get_items_error_cause":"context canceled","get_items_error_cause_type":"context_cancelled"}`, buckets[1])),
+			// msg to second of multi_buckets.
+			test.Msg(fmt.Sprintf(`{"bucket_name": "%s", "level":"error","ts":"2019-08-21T11:43:25.865Z","message":"get_items_error_1","trace_id":"3ea4a6589d06bb3f","span_id":"deddd718684b10a","get_items_error":"product: error while consuming CoverImage: context canceled","get_items_error_option":"CoverImage","get_items_error_cause":"context canceled","get_items_error_cause_type":"context_cancelled"}`, buckets[2])),
+		},
+		thirdPack: []test.Msg{
+			// msg to main bucket.
+			test.Msg(`{"level":"error","ts":"2019-08-21T11:43:25.865Z","message":"get_items_error_1","trace_id":"3ea4a6589d06bb3f","span_id":"deddd718684b10a","get_items_error":"product: error while consuming CoverImage: context canceled","get_items_error_option":"CoverImage","get_items_error_cause":"context canceled","get_items_error_cause_type":"context_cancelled"}`),
+			// msg to first of multi_buckets.
+			test.Msg(fmt.Sprintf(`{"bucket_name": "%s", "level":"error","ts":"2019-08-21T11:43:25.865Z","message":"get_items_error_1","trace_id":"3ea4a6589d06bb3f","span_id":"deddd718684b10a","get_items_error":"product: error while consuming CoverImage: context canceled","get_items_error_option":"CoverImage","get_items_error_cause":"context canceled","get_items_error_cause_type":"context_cancelled"}`, buckets[1])),
+			// msg to second of multi_buckets.
+			test.Msg(fmt.Sprintf(`{"bucket_name": "%s", "level":"error","ts":"2019-08-21T11:43:25.865Z","message":"get_items_error_1","trace_id":"3ea4a6589d06bb3f","span_id":"deddd718684b10a","get_items_error":"product: error while consuming CoverImage: context canceled","get_items_error_option":"CoverImage","get_items_error_cause":"context canceled","get_items_error_cause_type":"context_cancelled"}`, buckets[2])),
+			// msg to not exist multi_bucket, will send to main bucket.
+			test.Msg(fmt.Sprintf(`{"bucket_name": "%s", "level":"error","ts":"2019-08-21T11:43:25.865Z","message":"get_items_error_1","trace_id":"3ea4a6589d06bb3f","span_id":"deddd718684b10a","get_items_error":"product: error while consuming CoverImage: context canceled","get_items_error_option":"CoverImage","get_items_error_cause":"context canceled","get_items_error_cause_type":"context_cancelled"}`, dynamicBucket)),
+			// msg to defaultBucket.
+			test.Msg(`{"level":"error","ts":"2019-08-21T11:43:25.865Z","message":"get_items_error_1","trace_id":"3ea4a6589d06bb3f","span_id":"deddd718684b10a","get_items_error":"product: error while consuming CoverImage: context canceled","get_items_error_option":"CoverImage","get_items_error_cause":"context canceled","get_items_error_cause_type":"context_cancelled"}`),
+			// msg to first of multi_buckets.
+			test.Msg(fmt.Sprintf(`{"bucket_name": "%s", "level":"error","ts":"2019-08-21T11:43:25.865Z","message":"get_items_error_1","trace_id":"3ea4a6589d06bb3f","span_id":"deddd718684b10a","get_items_error":"product: error while consuming CoverImage: context canceled","get_items_error_option":"CoverImage","get_items_error_cause":"context canceled","get_items_error_cause_type":"context_cancelled"}`, buckets[1])),
+			// msg to second of multi_buckets.
+			test.Msg(fmt.Sprintf(`{"bucket_name": "%s", "level":"error","ts":"2019-08-21T11:43:25.865Z","message":"get_items_error_1","trace_id":"3ea4a6589d06bb3f","span_id":"deddd718684b10a","get_items_error":"product: error while consuming CoverImage: context canceled","get_items_error_option":"CoverImage","get_items_error_cause":"context canceled","get_items_error_cause_type":"context_cancelled"}`, buckets[2])),
+		},
+	}
+
+	// patternMain for parent log file
+	patternMain := fmt.Sprintf("%s/*.log", dir)
+	patternForMultiBucket1 := fmt.Sprintf("%s%s/%s/*.log", dir, StaticBucketDir, buckets[1])
+	patternForMultiBucket2 := fmt.Sprintf("%s%s/%s/*.log", dir, StaticBucketDir, buckets[2])
+	patterns := []string{}
+	patterns = append(append(append(patterns, patternMain), patternForMultiBucket1), patternForMultiBucket2)
+
+	test.ClearDir(t, dir)
+	ctl := gomock.NewController(t)
+	defer ctl.Finish()
+
+	s3MockClient := mock_s3.NewMockObjectStoreClient(ctl)
+	//dynamicBucket
+	for _, bucketName := range buckets {
+		s3MockClient.EXPECT().BucketExists(bucketName).Return(true, nil).AnyTimes()
+		s3MockClient.EXPECT().FPutObject(bucketName, gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(fPutObjectOk).AnyTimes()
+	}
+	// At first dynamic bucket doesn't exist
+	s3MockClient.EXPECT().BucketExists(dynamicBucket).Return(false, nil).Times(1)
+	// Successful creation on bucket.
+	s3MockClient.EXPECT().MakeBucket(dynamicBucket, "").Return(nil).Times(1)
+	// Now s3 answers that bucket exists.
+	s3MockClient.EXPECT().BucketExists(dynamicBucket).Return(true, nil).AnyTimes()
+	s3MockClient.EXPECT().FPutObject(dynamicBucket, gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(fPutObjectOk).AnyTimes()
+
+	fileConfig := file.Config{
+		TargetFile:        targetFile,
+		RetentionInterval: "300ms",
+		Layout:            "01",
+		BatchFlushTimeout: "100ms",
+	}
+	config := &Config{
+		FileConfig:       fileConfig,
+		CompressionType:  "zip",
+		Endpoint:         buckets[0],
+		AccessKey:        buckets[0],
+		SecretKey:        buckets[0],
+		DefaultBucket:    buckets[0],
+		Secure:           false,
+		BucketEventField: "bucket_name",
+		MultiBuckets: []singleBucketConfig{
+			{
+				Endpoint:       buckets[1],
+				AccessKey:      buckets[1],
+				SecretKey:      buckets[1],
+				Bucket:         buckets[1],
+				Secure:         false,
+				FilePluginInfo: file.Config{},
+			},
+			{
+				Endpoint:       buckets[2],
+				AccessKey:      buckets[2],
+				SecretKey:      buckets[2],
+				Bucket:         buckets[2],
+				Secure:         false,
+				FilePluginInfo: file.Config{},
+			},
+		},
+	}
+	test.ClearDir(t, dir)
+	defer test.ClearDir(t, dir)
+	test.ClearDir(t, buckets[0])
+	defer test.ClearDir(t, buckets[0])
+	test.ClearDir(t, buckets[1])
+	defer test.ClearDir(t, buckets[1])
+	test.ClearDir(t, buckets[2])
+	defer test.ClearDir(t, buckets[2])
+	test.ClearDir(t, dynamicBucket)
+	defer test.ClearDir(t, dynamicBucket)
+
+	err := cfg.Parse(config, map[string]int{"gomaxprocs": 1, "capacity": 64})
+	assert.NoError(t, err)
+
+	p := newPipeline(t, config, func(cfg *Config) (ObjectStoreClient, map[string]ObjectStoreClient, error) {
+		return s3MockClient, map[string]ObjectStoreClient{
+			buckets[0]:    s3MockClient,
+			buckets[1]:    s3MockClient,
+			buckets[2]:    s3MockClient,
+			dynamicBucket: s3MockClient,
+		}, nil
+	})
+	assert.NotNil(t, p, "could not create new pipeline")
+	p.Start()
+	time.Sleep(300 * time.Microsecond)
+
+	test.SendPack(t, p, tests.firstPack)
+	time.Sleep(time.Second)
+	size1 := test.CheckNotZero(t, fileName, "s3 data is missed after first pack")
+
+	// check deletion upload log files
+	for _, pattern := range patterns {
+		match := test.GetMatches(t, pattern)
+		assert.Equal(t, 1, len(match), "no matches for: ", pattern)
+		test.CheckZero(t, match[0], "log file is not nil")
+	}
+
+	// initial sending the second pack
+	// no special situations
+	test.SendPack(t, p, tests.secondPack)
+	time.Sleep(time.Second)
+
+	for _, pattern := range patterns {
+		match := test.GetMatches(t, pattern)
+		assert.Equal(t, 1, len(match))
+		test.CheckZero(t, match[0], "log file is not empty")
+	}
+
+	size2 := test.CheckNotZero(t, fileName, "s3 data missed after second pack")
+	assert.True(t, size2 > size1)
+
+	// failed during writing
+	test.SendPack(t, p, tests.thirdPack)
+	time.Sleep(200 * time.Millisecond)
+	p.Stop()
+
+	// check log file not empty
+	for _, pattern := range patterns {
+		match := test.GetMatches(t, pattern)
+		assert.Equal(t, 1, len(match))
+		test.CheckNotZero(t, match[0], fmt.Sprintf("log file data missed for: %s", pattern))
+	}
+	// time.Sleep(sealUpFileSleep)
+
+	// restart like after crash
+	p.Start()
+
+	time.Sleep(time.Second)
+
+	size3 := test.CheckNotZero(t, fileName, "s3 data missed after third pack")
+	assert.True(t, size3 > size2)
+}
+
+func newPipeline(t *testing.T, configOutput *Config, objStoreF objStoreFactory) *pipeline.Pipeline {
 	t.Helper()
 	settings := &pipeline.Settings{
 		Capacity:            4096,
@@ -192,8 +442,8 @@ func newPipeline(t *testing.T, configOutput *Config) *pipeline.Pipeline {
 	})
 
 	// output plugin
-	anyPlugin, _ = Factory()
-	outputPlugin := anyPlugin.(*Plugin)
+	anyPlugin, _ = testFactory(objStoreF)
+	outputPlugin := anyPlugin.(*testS3Plugin)
 	p.SetOutput(&pipeline.OutputPluginInfo{
 		PluginStaticInfo: &pipeline.PluginStaticInfo{
 			Type:   "s3",
@@ -216,24 +466,26 @@ func TestStartPanic(t *testing.T) {
 		Endpoint:        "some",
 		AccessKey:       "some",
 		SecretKey:       "some",
-		Bucket:          "some",
+		DefaultBucket:   "some",
 		Secure:          false,
-		client:          nil,
 	}
 	test.ClearDir(t, dir)
 	defer test.ClearDir(t, dir)
-	test.ClearDir(t, config.Bucket)
-	defer test.ClearDir(t, config.Bucket)
+	test.ClearDir(t, config.DefaultBucket)
+	defer test.ClearDir(t, config.DefaultBucket)
 
 	err := cfg.Parse(config, map[string]int{"gomaxprocs": 1, "capacity": 64})
 	assert.NoError(t, err)
-	p := newPipeline(t, config)
+	p := newPipeline(t, config, func(cfg *Config) (ObjectStoreClient, map[string]ObjectStoreClient, error) {
+		return nil, nil, nil
+	})
 
 	assert.NotNil(t, p, "could not create new pipeline")
 
 	assert.Panics(t, p.Start)
 }
 
+<<<<<<< HEAD
 type mockClientWIthSomeFails struct {
 	ctx    context.Context
 	Cancel context.CancelFunc
@@ -277,10 +529,14 @@ func (m mockClientWIthSomeFails) FPutObject(bucketName, objectName, filePath str
 	}
 }
 
+=======
+>>>>>>> master
 func TestStartWithSendProblems(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skip long tests in short mode")
 	}
+
+	bucketName := "some"
 	tests := struct {
 		firstPack  []test.Msg
 		secondPack []test.Msg
@@ -310,7 +566,15 @@ func TestStartWithSendProblems(t *testing.T) {
 	writeFileSleep := 100*time.Millisecond + 100*time.Millisecond
 	sealUpFileSleep := 2*200*time.Millisecond + 500*time.Millisecond
 	test.ClearDir(t, dir)
-	s3MockClient := newMockClientWIthSomeFails()
+	ctl := gomock.NewController(t)
+	defer ctl.Finish()
+
+	s3MockClient := mock_s3.NewMockObjectStoreClient(ctl)
+	s3MockClient.EXPECT().BucketExists(bucketName).Return(true, nil).AnyTimes()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	withErr := putWithErr{ctx: ctx, cancel: cancel}
+	s3MockClient.EXPECT().FPutObject(bucketName, gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(withErr.fPutObjectErr).AnyTimes()
 
 	fileConfig := file.Config{
 		TargetFile:        targetFile,
@@ -321,20 +585,23 @@ func TestStartWithSendProblems(t *testing.T) {
 	config := &Config{
 		FileConfig:      fileConfig,
 		CompressionType: "zip",
-		Endpoint:        "some",
-		AccessKey:       "some",
-		SecretKey:       "some",
-		Bucket:          "some",
+		Endpoint:        bucketName,
+		AccessKey:       bucketName,
+		SecretKey:       bucketName,
+		DefaultBucket:   bucketName,
 		Secure:          false,
-		client:          &s3MockClient,
 	}
 	test.ClearDir(t, dir)
 	defer test.ClearDir(t, dir)
-	test.ClearDir(t, fmt.Sprintf("%s/", config.Bucket))
-	defer test.ClearDir(t, config.Bucket)
+	test.ClearDir(t, fmt.Sprintf("%s/", config.DefaultBucket))
+	defer test.ClearDir(t, config.DefaultBucket)
 	err := cfg.Parse(config, map[string]int{"gomaxprocs": 1, "capacity": 64})
 	assert.NoError(t, err)
-	p := newPipeline(t, config)
+	p := newPipeline(t, config, func(cfg *Config) (ObjectStoreClient, map[string]ObjectStoreClient, error) {
+		return s3MockClient, map[string]ObjectStoreClient{
+			bucketName: s3MockClient,
+		}, nil
+	})
 
 	assert.NotNil(t, p, "could not create new pipeline")
 
@@ -374,9 +641,7 @@ func TestStartWithSendProblems(t *testing.T) {
 
 	noSentToS3(t)
 
-	// allow sending to s3
-	s3Client := s3MockClient.(mockClientWIthSomeFails)
-	s3Client.Cancel()
+	cancel()
 
 	test.SendPack(t, p, tests.thirdPack)
 	time.Sleep(writeFileSleep)
@@ -411,8 +676,13 @@ func TestStartWithSendProblems(t *testing.T) {
 	test.CheckZero(t, matches[0], "log file is not empty after restart sending")
 
 	// check mock file is not empty and contains more than 3 raws
+<<<<<<< HEAD
 	test.CheckNotZero(t, fileName.Load(), "s3 file is empty")
 	f, err := os.Open(fileName.Load())
+=======
+	test.CheckNotZero(t, fileName, "s3 file is empty")
+	f, err := os.Open(fileName)
+>>>>>>> master
 	assert.NoError(t, err)
 	defer f.Close()
 

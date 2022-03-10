@@ -4,8 +4,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/ozonru/file.d/pipeline"
-	"github.com/ozonru/file.d/test"
+	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/test"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -33,7 +33,7 @@ func TestProcessChunksMany(t *testing.T) {
 	wg := &sync.WaitGroup{}
 	wg.Add(3)
 
-	outEvents := make([]string, 0, 0)
+	outEvents := make([]string, 0)
 	output.SetOutFn(func(event *pipeline.Event) {
 		outEvents = append(outEvents, event.Root.EncodeToString())
 		wg.Done()
@@ -43,7 +43,7 @@ func TestProcessChunksMany(t *testing.T) {
 {"a":"2"}
 {"a":"3"}
 `)
-	eventBuff := make([]byte, 0, 0)
+	eventBuff := make([]byte, 0)
 	eventBuff = input.processChunk(0, chunk, eventBuff)
 
 	wg.Wait()
@@ -65,7 +65,7 @@ func TestProcessChunksEventBuff(t *testing.T) {
 	wg := &sync.WaitGroup{}
 	wg.Add(2)
 
-	outEvents := make([]string, 0, 0)
+	outEvents := make([]string, 0)
 	output.SetOutFn(func(event *pipeline.Event) {
 		outEvents = append(outEvents, event.Root.EncodeToString())
 		wg.Done()
@@ -74,7 +74,7 @@ func TestProcessChunksEventBuff(t *testing.T) {
 	chunk := []byte(`{"a":"1"}
 {"a":"2"}
 {"a":"3"}`)
-	eventBuff := make([]byte, 0, 0)
+	eventBuff := make([]byte, 0)
 	eventBuff = input.processChunk(0, chunk, eventBuff)
 
 	wg.Wait()
@@ -95,7 +95,7 @@ func TestProcessChunksContinue(t *testing.T) {
 	wg := &sync.WaitGroup{}
 	wg.Add(3)
 
-	outEvents := make([]string, 0, 0)
+	outEvents := make([]string, 0)
 	output.SetOutFn(func(event *pipeline.Event) {
 		outEvents = append(outEvents, event.Root.EncodeToString())
 		wg.Done()
@@ -127,7 +127,7 @@ func TestProcessChunksContinueMany(t *testing.T) {
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
 
-	outEvents := make([]string, 0, 0)
+	outEvents := make([]string, 0)
 	output.SetOutFn(func(event *pipeline.Event) {
 		outEvents = append(outEvents, event.Root.EncodeToString())
 		wg.Done()

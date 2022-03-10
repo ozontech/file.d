@@ -5,8 +5,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ozonru/file.d/logger"
-	"github.com/ozonru/file.d/longpanic"
+	"github.com/ozontech/file.d/logger"
+	"github.com/ozontech/file.d/longpanic"
 	"go.uber.org/atomic"
 )
 
@@ -30,7 +30,7 @@ func newStreamer(eventTimeout time.Duration) *streamer {
 	streamer := &streamer{
 		streams: make(map[SourceID]map[StreamName]*stream),
 		mu:      &sync.RWMutex{},
-		charged: make([]*stream, 0, 0),
+		charged: make([]*stream, 0),
 
 		chargedMu: &sync.Mutex{},
 		blockedMu: &sync.Mutex{},
@@ -145,7 +145,7 @@ func (s *streamer) resetBlocked(stream *stream) {
 }
 
 func (s *streamer) heartbeat() {
-	streams := make([]*stream, 0, 0)
+	streams := make([]*stream, 0)
 	for {
 		time.Sleep(time.Millisecond * 200)
 		if s.shouldStop.Load() {

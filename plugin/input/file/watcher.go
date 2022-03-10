@@ -5,7 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/ozonru/file.d/longpanic"
+	"github.com/ozontech/file.d/longpanic"
 	"github.com/rjeczalik/notify"
 	"go.uber.org/zap"
 )
@@ -56,7 +56,7 @@ func (w *watcher) start() {
 	eventsCh := make(chan notify.EventInfo, 128)
 	w.watcherCh = eventsCh
 
-	events := []notify.Event{notify.Create}
+	events := []notify.Event{notify.Create, notify.Rename, notify.Remove}
 	if w.shouldWatchWrites {
 		events = append(events, notify.Write)
 	}

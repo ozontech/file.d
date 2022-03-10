@@ -5,11 +5,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ozonru/file.d/cfg"
-	"github.com/ozonru/file.d/logger"
-	"github.com/ozonru/file.d/pipeline"
-	"github.com/ozonru/file.d/plugin/input/fake"
-	"github.com/ozonru/file.d/plugin/output/devnull"
+	"github.com/ozontech/file.d/cfg"
+	"github.com/ozontech/file.d/logger"
+	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/plugin/input/fake"
+	"github.com/ozontech/file.d/plugin/output/devnull"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
@@ -71,7 +71,7 @@ func startCasePipeline(act func(pipeline *pipeline.Pipeline), out func(event *pi
 		if x.Load() <= 0 {
 			break
 		}
-		if time.Now().Sub(t) > time.Second*10 {
+		if time.Since(t) > time.Second*10 {
 			panic("too long act")
 		}
 	}
@@ -87,7 +87,7 @@ func WaitForEvents(x *atomic.Int32) {
 		if x.Load() <= 0 {
 			break
 		}
-		if time.Now().Sub(t) > time.Second*10 {
+		if time.Since(t) > time.Second*10 {
 			panic("too long wait")
 		}
 	}
