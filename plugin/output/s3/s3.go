@@ -19,6 +19,7 @@ import (
 	"github.com/ozontech/file.d/longpanic"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/plugin/output/file"
+	"github.com/ozontech/file.d/stats"
 	"go.uber.org/zap"
 )
 
@@ -102,11 +103,15 @@ pipelines:
 
 const (
 	outPluginType      = "s3"
+	subsystemName      = "output_s3"
 	fileNameSeparator  = "_"
 	attemptIntervalMin = 1 * time.Second
 	dirSep             = "/"
 	StaticBucketDir    = "static_buckets"
 	DynamicBucketDir   = "dynamic_buckets"
+
+	// errors
+	sendErrorCounter = "send_error"
 )
 
 var (
@@ -240,7 +245,17 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.StartWithMinio(config, params, p.minioClientsFactory)
 }
 
+func (p *Plugin) registerPluginMetrics() {
+	stats.RegisterCounter(&stats.MetricDesc{
+		Name:      sendErrorCounter,
+		Subsystem: subsystemName,
+		Help:      "Total s3 send errors",
+	})
+}
+
 func (p *Plugin) StartWithMinio(config pipeline.AnyConfig, params *pipeline.OutputPluginParams, factory objStoreFactory) {
+	p.registerPluginMetrics()
+
 	p.controller = params.Controller
 	p.logger = params.Logger
 	p.config = config.(*Config)
@@ -523,6 +538,7 @@ func (p *Plugin) uploadToS3(compressedDTO fileDTO) error {
 		p.compressor.getObjectOptions(),
 	)
 	if err != nil {
+		stats.GetCounter(subsystemName, sendErrorCounter).Inc()
 		return fmt.Errorf("could not upload file: %s into bucket: %s, error: %s", compressedDTO.fileName, compressedDTO.bucketName, err.Error())
 	}
 	return nil

@@ -72,12 +72,6 @@ func (l *limiter) isAllowed(event *pipeline.Event, ts time.Time) bool {
 	return l.buckets[index] <= l.limit.value
 }
 
-// bucketIDToTime converts bucketID to time. This time is start of the bucket.
-func (l *limiter) bucketIDToTime(id int) time.Time {
-	nano := int64(id) * l.interval.Nanoseconds()
-	return time.Unix(nano/100000000, nano%100000000)
-}
-
 // timeToBucketID converts time to bucketID.
 func (l *limiter) timeToBucketID(t time.Time) int {
 	return int(t.UnixNano() / l.interval.Nanoseconds())

@@ -30,10 +30,7 @@ func (o *Offset) Load() error {
 	}
 	defer file.Close()
 
-	if err := o.Callback.Load(file); err != nil {
-		return err
-	}
-	return nil
+	return o.Callback.Load(file)
 }
 
 func (o *Offset) getTmpPath() string {
@@ -46,20 +43,12 @@ func (o *Offset) saveToTmp() error {
 		return err
 	}
 	defer file.Close()
-	if err := o.Callback.Save(file); err != nil {
-		return err
-	}
-
-	return nil
+	return o.Callback.Save(file)
 }
 
 func (o *Offset) Save() error {
 	if err := o.saveToTmp(); err != nil {
 		return err
 	}
-	if err := os.Rename(o.getTmpPath(), o.path); err != nil {
-		return err
-	}
-
-	return nil
+	return os.Rename(o.getTmpPath(), o.path)
 }

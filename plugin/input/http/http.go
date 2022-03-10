@@ -9,6 +9,7 @@ import (
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/longpanic"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/stats"
 )
 
 /*{ introduction
@@ -72,6 +73,11 @@ curl "localhost:9200/_bulk" -H 'Content-Type: application/json' -d \
 
 }*/
 
+const (
+	subsystemName    = "input_http"
+	httpErrorCounter = "http_errors"
+)
+
 type Plugin struct {
 	config     *Config
 	params     *pipeline.InputPluginParams
@@ -111,18 +117,14 @@ func Factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginParams) {
 	p.config = config.(*Config)
 	p.params = params
-	p.readBuffs = &sync.Pool{
-		New: p.newReadBuff,
-	}
-
-	p.eventBuffs = &sync.Pool{
-		New: p.newEventBuffs,
-	}
-
+	p.readBuffs = &sync.Pool{}
+	p.eventBuffs = &sync.Pool{}
 	p.mu = &sync.Mutex{}
 	p.controller = params.Controller
 	p.controller.DisableStreams()
 	p.sourceIDs = make([]pipeline.SourceID, 0)
+
+	p.registerPluginMetrics()
 
 	mux := http.NewServeMux()
 	switch p.config.EmulateMode {
@@ -138,6 +140,14 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	}
 }
 
+func (p *Plugin) registerPluginMetrics() {
+	stats.RegisterCounter(&stats.MetricDesc{
+		Subsystem: subsystemName,
+		Name:      httpErrorCounter,
+		Help:      "Total http errors",
+	})
+}
+
 func (p *Plugin) listenHTTP() {
 	err := p.server.ListenAndServe()
 	if err != nil {
@@ -145,11 +155,17 @@ func (p *Plugin) listenHTTP() {
 	}
 }
 
-func (p *Plugin) newReadBuff() interface{} {
+func (p *Plugin) newReadBuff() []byte {
+	if buff := p.readBuffs.Get(); buff != nil {
+		return *buff.(*[]byte)
+	}
 	return make([]byte, 16*1024)
 }
 
-func (p *Plugin) newEventBuffs() interface{} {
+func (p *Plugin) newEventBuffs() []byte {
+	if buff := p.eventBuffs.Get(); buff != nil {
+		return (*buff.(*[]byte))[:0]
+	}
 	return make([]byte, 0, p.params.PipelineSettings.AvgEventSize)
 }
 
@@ -175,8 +191,8 @@ func (p *Plugin) putSourceID(x pipeline.SourceID) {
 }
 
 func (p *Plugin) serve(w http.ResponseWriter, r *http.Request) {
-	readBuff := p.readBuffs.Get().([]byte)
-	eventBuff := p.eventBuffs.Get().([]byte)[:0]
+	readBuff := p.newReadBuff()
+	eventBuff := p.newEventBuffs()
 
 	sourceID := p.getSourceID()
 	defer p.putSourceID(sourceID)
@@ -188,6 +204,7 @@ func (p *Plugin) serve(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if err != nil && err != io.EOF {
+			stats.GetCounter(subsystemName, httpErrorCounter).Inc()
 			logger.Errorf("http input read error: %s", err.Error())
 			break
 		}
@@ -197,11 +214,13 @@ func (p *Plugin) serve(w http.ResponseWriter, r *http.Request) {
 
 	_ = r.Body.Close()
 
-	p.readBuffs.Put(readBuff)
-	p.eventBuffs.Put(eventBuff)
+	// https://staticcheck.io/docs/checks/#SA6002
+	p.readBuffs.Put(&readBuff)
+	p.eventBuffs.Put(&eventBuff)
 
 	_, err := w.Write(result)
 	if err != nil {
+		stats.GetCounter(subsystemName, httpErrorCounter).Inc()
 		logger.Errorf("can't write response: %s", err.Error())
 	}
 }

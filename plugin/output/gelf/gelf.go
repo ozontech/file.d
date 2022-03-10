@@ -8,6 +8,7 @@ import (
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/stats"
 	insaneJSON "github.com/vitkovskii/insane-json"
 	"go.uber.org/zap"
 )
@@ -31,7 +32,13 @@ Every field with an underscore prefix `_` will be treated as an extra field.
 Allowed characters in field names are letters, numbers, underscores, dashes, and dots.
 }*/
 
-const outPluginType = "gelf"
+const (
+	outPluginType = "gelf"
+	subsystemName = "output_gelf"
+
+	// errors
+	sendErrorCounter = "send_error"
+)
 
 type Plugin struct {
 	config       *Config
@@ -169,6 +176,8 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.config.timestampFieldFormat = format
 	p.config.levelField = pipeline.ByteToStringUnsafe(p.formatExtraField(nil, p.config.LevelField))
 
+	p.registerPluginMetrics()
+
 	p.batcher = pipeline.NewBatcher(
 		params.PipelineName,
 		outPluginType,
@@ -190,6 +199,14 @@ func (p *Plugin) Stop() {
 
 func (p *Plugin) Out(event *pipeline.Event) {
 	p.batcher.Add(event)
+}
+
+func (p *Plugin) registerPluginMetrics() {
+	stats.RegisterCounter(&stats.MetricDesc{
+		Name:      sendErrorCounter,
+		Subsystem: subsystemName,
+		Help:      "Total GELF send errors",
+	})
 }
 
 func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
@@ -222,6 +239,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 
 			gelf, err := newClient(transportTCP, p.config.Endpoint, p.config.ConnectionTimeout_, false, nil)
 			if err != nil {
+				stats.GetCounter(subsystemName, sendErrorCounter).Inc()
 				p.logger.Errorf("can't connect to gelf endpoint address=%s: %s", p.config.Endpoint, err.Error())
 				time.Sleep(time.Second)
 				continue
@@ -231,6 +249,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 
 		_, err := data.gelf.send(outBuf)
 		if err != nil {
+			stats.GetCounter(subsystemName, sendErrorCounter).Inc()
 			p.logger.Errorf("can't send data to gelf address=%s, err: %s", p.config.Endpoint, err.Error())
 			_ = data.gelf.close()
 			data.gelf = nil
@@ -389,7 +408,7 @@ func (p *Plugin) isBlank(s string) bool {
 }
 
 func (p *Plugin) formatExtraField(encodeBuf []byte, name string) []byte {
-	if len(name) == 0 {
+	if name == "" {
 		return encodeBuf
 	}
 

@@ -15,7 +15,6 @@ const outPluginType = "stdout"
 
 type Plugin struct {
 	controller pipeline.OutputPluginController
-	outFn      func(event *pipeline.Event)
 }
 
 type Config struct{}
@@ -35,8 +34,7 @@ func (p *Plugin) Start(_ pipeline.AnyConfig, params *pipeline.OutputPluginParams
 	p.controller = params.Controller
 }
 
-func (p *Plugin) Stop() {
-}
+func (_ *Plugin) Stop() {}
 
 func (p *Plugin) Out(event *pipeline.Event) {
 	fmt.Println(event.Root.EncodeToString())
