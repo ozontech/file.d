@@ -9,12 +9,9 @@ import (
 	"testing"
 	"time"
 
-<<<<<<< HEAD
 	"go.uber.org/atomic"
 
-=======
 	"github.com/golang/mock/gomock"
->>>>>>> master
 	"github.com/minio/minio-go"
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/logger"
@@ -57,13 +54,9 @@ func fPutObjectOk(bucketName, objectName, filePath string, opts minio.PutObjectO
 			logger.Fatalf("could not create target dir: %s, error: %s", targetDir, err.Error())
 		}
 	}
-<<<<<<< HEAD
 	fileName.Store(fmt.Sprintf("%s/%s", bucketName, "mockLog.txt"))
 	f, err := os.OpenFile(fileName.Load(), os.O_CREATE|os.O_APPEND|os.O_RDWR, os.FileMode(0o777))
-=======
-	fileName = fmt.Sprintf("%s/%s", bucketName, "mockLog.txt")
-	f, err := os.OpenFile(fileName, os.O_CREATE|os.O_APPEND|os.O_RDWR, os.FileMode(0o777))
->>>>>>> master
+
 	if err != nil {
 		logger.Panicf("could not open or create f: %s, error: %s", fileName.Load(), err.Error())
 	}
@@ -92,8 +85,9 @@ func (put *putWithErr) fPutObjectErr(bucketName, objectName, filePath string, op
 				logger.Fatalf("could not create target dir: %s, error: %s", targetDir, err.Error())
 			}
 		}
-		fileName = fmt.Sprintf("%s/%s", bucketName, "mockLog.txt")
-		f, err := os.OpenFile(fileName, os.O_CREATE|os.O_APPEND|os.O_RDWR, os.FileMode(0o777))
+
+		fileName.Store(fmt.Sprintf("%s/%s", bucketName, "mockLog.txt"))
+		f, err := os.OpenFile(fileName.Load(), os.O_CREATE|os.O_APPEND|os.O_RDWR, os.FileMode(0o777))
 		if err != nil {
 			logger.Panicf("could not open or create file: %s, error: %s", fileName, err.Error())
 		}
@@ -369,7 +363,7 @@ func TestStartWithMultiBuckets(t *testing.T) {
 
 	test.SendPack(t, p, tests.firstPack)
 	time.Sleep(time.Second)
-	size1 := test.CheckNotZero(t, fileName, "s3 data is missed after first pack")
+	size1 := test.CheckNotZero(t, fileName.Load(), "s3 data is missed after first pack")
 
 	// check deletion upload log files
 	for _, pattern := range patterns {
@@ -389,7 +383,7 @@ func TestStartWithMultiBuckets(t *testing.T) {
 		test.CheckZero(t, match[0], "log file is not empty")
 	}
 
-	size2 := test.CheckNotZero(t, fileName, "s3 data missed after second pack")
+	size2 := test.CheckNotZero(t, fileName.Load(), "s3 data missed after second pack")
 	assert.True(t, size2 > size1)
 
 	// failed during writing
@@ -410,7 +404,7 @@ func TestStartWithMultiBuckets(t *testing.T) {
 
 	time.Sleep(time.Second)
 
-	size3 := test.CheckNotZero(t, fileName, "s3 data missed after third pack")
+	size3 := test.CheckNotZero(t, fileName.Load(), "s3 data missed after third pack")
 	assert.True(t, size3 > size2)
 }
 
@@ -488,52 +482,6 @@ func TestStartPanic(t *testing.T) {
 	assert.Panics(t, p.Start)
 }
 
-<<<<<<< HEAD
-type mockClientWIthSomeFails struct {
-	ctx    context.Context
-	Cancel context.CancelFunc
-}
-
-func newMockClientWIthSomeFails() objectStoreClient {
-	m := mockClientWIthSomeFails{}
-	ctx, cancel := context.WithCancel(context.Background())
-	m.ctx = ctx
-	m.Cancel = cancel
-	return m
-}
-
-func (m mockClientWIthSomeFails) BucketExists(bucketName string) (bool, error) {
-	return true, nil
-}
-
-func (m mockClientWIthSomeFails) FPutObject(bucketName, objectName, filePath string, opts minio.PutObjectOptions) (n int64, err error) {
-	select {
-	case <-m.ctx.Done():
-		fmt.Println("put object")
-
-		targetDir := fmt.Sprintf("./%s", bucketName)
-		if _, err := os.Stat(targetDir); os.IsNotExist(err) {
-			if err := os.MkdirAll(targetDir, os.ModePerm); err != nil {
-				logger.Fatalf("could not create target dir: %s, error: %s", targetDir, err.Error())
-			}
-		}
-		fileName.Store(fmt.Sprintf("%s/%s", bucketName, "mockLog.txt"))
-		file, err := os.OpenFile(fileName.Load(), os.O_CREATE|os.O_APPEND|os.O_RDWR, os.FileMode(0o777))
-		if err != nil {
-			logger.Panicf("could not open or create file: %s, error: %s", fileName.Load(), err.Error())
-		}
-
-		if _, err := file.WriteString(fmt.Sprintf("%s | from '%s' to b: `%s` as obj: `%s`\n", time.Now().String(), filePath, bucketName, objectName)); err != nil {
-			return 0, fmt.Errorf(err.Error())
-		}
-		return 1, nil
-	default:
-		return 0, fmt.Errorf("fake could not sent")
-	}
-}
-
-=======
->>>>>>> master
 func TestStartWithSendProblems(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skip long tests in short mode")
@@ -679,13 +627,9 @@ func TestStartWithSendProblems(t *testing.T) {
 	test.CheckZero(t, matches[0], "log file is not empty after restart sending")
 
 	// check mock file is not empty and contains more than 3 raws
-<<<<<<< HEAD
 	test.CheckNotZero(t, fileName.Load(), "s3 file is empty")
 	f, err := os.Open(fileName.Load())
-=======
-	test.CheckNotZero(t, fileName, "s3 file is empty")
-	f, err := os.Open(fileName)
->>>>>>> master
+
 	assert.NoError(t, err)
 	defer f.Close()
 

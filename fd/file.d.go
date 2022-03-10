@@ -247,7 +247,6 @@ func (f *FileD) getStaticInfo(pipelineConfig *cfg.PipelineConfig, pluginKind pip
 func (f *FileD) Stop(ctx context.Context) error {
 	logger.Infof("stopping pipelines=%d", len(f.Pipelines))
 	err := f.server.Shutdown(ctx)
-	_ = f.server.Shutdown(context.TODO())
 	for _, p := range f.Pipelines {
 		p.Stop()
 	}

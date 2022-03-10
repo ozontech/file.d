@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math/rand"
 	"net/http"
 	"runtime"
 	"strconv"
@@ -71,20 +72,16 @@ type Pipeline struct {
 	useSpread      bool
 	disableStreams bool
 	singleProc     bool
-	shouldStop     atomic.Bool
-
-	canStart chan struct{}
-	stopCh   chan struct{}
+	shouldStop     bool
 
 	input      InputPlugin
 	inputInfo  *InputPluginInfo
 	antispamer *antispamer
 
-	actionInfos []*ActionPluginStaticInfo
-	Procs       []*processor
-	procCount   *atomic.Int32
-	activeProcs *atomic.Int32
-
+	actionInfos  []*ActionPluginStaticInfo
+	Procs        []*processor
+	procCount    *atomic.Int32
+	activeProcs  *atomic.Int32
 	actionParams *PluginDefaultParams
 
 	output     OutputPlugin
@@ -92,26 +89,16 @@ type Pipeline struct {
 
 	metricsHolder *metricsHolder
 
-	// some debugging shit.
+	// some debugging shit
 	logger          *zap.SugaredLogger
 	eventLogEnabled bool
 	eventLog        []string
 	eventLogMu      *sync.Mutex
-
-	// Move maintenance under config.
-	inSample   []byte
-	inSampleMu sync.Mutex
-	// Avoiding mutex blocking on concurrent access to len(inSample).
-	inSampleLen atomic.Int64
-
-	outSample   []byte
-	outSampleMu sync.Mutex
-	// Avoiding mutex blocking on concurrent access to len(outSample).
-	outSampleLen atomic.Int64
-
-	totalCommitted atomic.Int64
-	totalSize      atomic.Int64
-	maxSize        atomic.Int64
+	inSample        []byte
+	outSample       []byte
+	totalCommitted  atomic.Int64
+	totalSize       atomic.Int64
+	maxSize         int
 }
 
 type Settings struct {
@@ -146,10 +133,7 @@ func New(name string, settings *Settings, registry *prometheus.Registry) *Pipeli
 
 		eventLog:   make([]string, 0, 128),
 		eventLogMu: &sync.Mutex{},
-		canStart:   make(chan struct{}, 1),
-		stopCh:     make(chan struct{}, 2),
 	}
-	pipeline.canStart <- struct{}{}
 
 	switch settings.Decoder {
 	case "json":
@@ -210,11 +194,6 @@ func (p *Pipeline) Start() {
 		p.logger.Panicf("output isn't set for pipeline %q", p.Name)
 	}
 
-	// If pipeline is stopping right now, wait to avoid races.
-	<-p.canStart
-	// If we finished job of pipeline before, shouldStop must be reset.
-	p.shouldStop.Store(false)
-
 	p.initProcs()
 	p.metricsHolder.start()
 
@@ -237,7 +216,6 @@ func (p *Pipeline) Start() {
 		Controller:          p,
 		Logger:              p.logger.Named("input " + p.inputInfo.Type),
 	}
-
 	p.input.Start(p.inputInfo.Config, inputParams)
 
 	p.streamer.start()
@@ -262,15 +240,7 @@ func (p *Pipeline) Stop() {
 	p.logger.Infof("stopping %q output", p.Name)
 	p.output.Stop()
 
-	// shouldStop guaranties, that we will stop eventually.
-
-	p.shouldStop.Store(true)
-
-	// Wait 2 time - from growProcs and maintenance finished.
-	<-p.stopCh
-	<-p.stopCh
-	// Pipeline ready to .Start() again.
-	p.canStart <- struct{}{}
+	p.shouldStop = true
 }
 
 func (p *Pipeline) SetInput(info *InputPluginInfo) {
@@ -351,13 +321,8 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 	event.streamName = DefaultStreamName
 	event.Size = len(bytes)
 
-	if p.inSampleLen.Load() == 0 {
-		func() {
-			p.inSampleMu.Lock()
-			p.inSampleMu.Unlock()
-
-			p.inSample = event.Root.Encode(p.inSample)
-		}()
+	if len(p.inSample) == 0 {
+		p.inSample = event.Root.Encode(p.inSample)
 	}
 
 	return p.streamEvent(event)
@@ -401,18 +366,12 @@ func (p *Pipeline) finalize(event *Event, notifyInput bool, backEvent bool) {
 		p.totalCommitted.Inc()
 		p.totalSize.Add(int64(event.Size))
 
-		if p.outSampleLen.Load() == 0 {
-			func() {
-				p.outSampleMu.Lock()
-				defer p.outSampleMu.Unlock()
-
-				p.outSample = event.Root.Encode(p.outSample)
-			}()
+		if len(p.outSample) == 0 && rand.Int()&1 == 1 {
+			p.outSample = event.Root.Encode(p.outSample)
 		}
 
-		eventSize := int64(event.Size)
-		if eventSize > p.maxSize.Load() {
-			p.maxSize.Store(eventSize)
+		if event.Size > p.maxSize {
+			p.maxSize = event.Size
 		}
 	}
 
@@ -481,15 +440,13 @@ func (p *Pipeline) growProcs() {
 	t := time.Now()
 	for {
 		time.Sleep(interval)
-		if p.shouldStop.Load() {
-			// tells that procs renewal actually stop.
-			//	p.procsStopped <- struct{}{}
-			p.stopCh <- struct{}{}
+		if p.shouldStop {
 			return
 		}
 		if p.procCount.Load() != p.activeProcs.Load() {
 			t = time.Now()
 		}
+
 		if time.Since(t) > interval {
 			p.expandProcs()
 		}
@@ -523,10 +480,7 @@ func (p *Pipeline) maintenance() {
 	interval := p.settings.MaintenanceInterval
 	for {
 		time.Sleep(interval)
-		if p.shouldStop.Load() {
-			// tells that procs renewal actually stop.
-			//p.maintenanceStopped <- struct{}{}
-			p.stopCh <- struct{}{}
+		if p.shouldStop {
 			return
 		}
 
@@ -542,35 +496,24 @@ func (p *Pipeline) maintenance() {
 		rate := int(float64(deltaCommitted) * float64(time.Second) / float64(interval))
 		rateMb := float64(deltaSize) * float64(time.Second) / float64(interval) / 1024 / 1024
 
-		// avoid division by zero.
 		tc := totalCommitted
 		if totalCommitted == 0 {
 			tc = 1
 		}
 
-		p.logger.Infof("%q pipeline stats interval=%ds, active procs=%d/%d, queue=%d/%d, out=%d|%.1fMb, rate=%d/s|%.1fMb/s, total=%d|%.1fMb, avg size=%d, max size=%d", p.Name, interval/time.Second, p.activeProcs.Load(), p.procCount.Load(), p.settings.Capacity-p.eventPool.freeEventsCount, p.settings.Capacity, deltaCommitted, float64(deltaSize)/1024.0/1024.0, rate, rateMb, totalCommitted, float64(totalSize)/1024.0/1024.0, totalSize/tc, p.maxSize.Load())
+		p.logger.Infof("%q pipeline stats interval=%ds, active procs=%d/%d, queue=%d/%d, out=%d|%.1fMb, rate=%d/s|%.1fMb/s, total=%d|%.1fMb, avg size=%d, max size=%d", p.Name, interval/time.Second, p.activeProcs.Load(), p.procCount.Load(), p.settings.Capacity-p.eventPool.freeEventsCount, p.settings.Capacity, deltaCommitted, float64(deltaSize)/1024.0/1024.0, rate, rateMb, totalCommitted, float64(totalSize)/1024.0/1024.0, totalSize/tc, p.maxSize)
 
 		lastCommitted = totalCommitted
 		lastSize = totalSize
 
-		if p.inSampleLen.Load() > 0 {
-			func() {
-				p.inSampleMu.Lock()
-				defer p.inSampleMu.Unlock()
-
-				p.logger.Infof("%q pipeline input event sample: %s", p.Name, p.inSample)
-				p.inSample = p.inSample[:0]
-			}()
+		if len(p.inSample) > 0 {
+			p.logger.Infof("%q pipeline input event sample: %s", p.Name, p.inSample)
+			p.inSample = p.inSample[:0]
 		}
 
-		if p.outSampleLen.Load() > 0 {
-			func() {
-				p.outSampleMu.Lock()
-				defer p.outSampleMu.Unlock()
-
-				p.logger.Infof("%q pipeline output event sample: %s", p.Name, p.outSample)
-				p.outSample = p.outSample[:0]
-			}()
+		if len(p.outSample) > 0 {
+			p.logger.Infof("%q pipeline output event sample: %s", p.Name, p.outSample)
+			p.outSample = p.outSample[:0]
 		}
 	}
 }
@@ -600,8 +543,6 @@ func (p *Pipeline) EnableEventLog() {
 }
 
 func (p *Pipeline) GetEventLogItem(index int) string {
-	p.eventLogMu.Lock()
-	defer p.eventLogMu.Unlock()
 	if index >= len(p.eventLog) {
 		p.logger.Fatalf("can't find log item with index %d", index)
 	}
