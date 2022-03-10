@@ -23,8 +23,10 @@ type stats struct {
 }
 
 const (
-	subsystemName  = "stats"
-	unknownCounter = "unknown_counter"
+	subsystemName = "stats"
+
+	unknownCounter   = "unknown_counter"
+	duplicateCounter = "duplicate_counter"
 )
 
 var statsGlobal *stats
@@ -38,7 +40,7 @@ func InitStats() {
 		// to be able to store several metric types.
 	}
 
-	statsGlobal.registerUnknown()
+	statsGlobal.registerOwnMetrics()
 }
 
 func RegisterCounter(metricDesc *MetricDesc) {
@@ -54,9 +56,7 @@ func RegisterCounter(metricDesc *MetricDesc) {
 }
 
 func GetCounter(subsystem, metricName string) prom.Counter {
-	if statsGlobal == nil {
-		logger.Panicf("stats package uninitialized")
-	}
+	checkStatsInitialized()
 
 	if val, ok := statsGlobal.allMetrics[getKey(subsystem, metricName)]; ok {
 		return val
@@ -65,13 +65,12 @@ func GetCounter(subsystem, metricName string) prom.Counter {
 	return statsGlobal.allMetrics[key{pipeline.PromNamespace, subsystem, metricName}]
 }
 
-func getKey(subsystem, metricName string) key {
-	return key{pipeline.PromNamespace, subsystem, metricName}
-}
-
 func registerMetric(k key, metric prom.Counter) { // todo: support prom.Collector
-	if statsGlobal == nil {
-		logger.Panicf("stats package uninitialized")
+	checkStatsInitialized()
+
+	if _, ok := statsGlobal.allMetrics[k]; ok {
+		logger.Errorf("rewriting existent metric")
+		GetCounter(subsystemName, duplicateCounter).Inc()
 	}
 
 	statsGlobal.allMetrics[k] = metric
@@ -79,10 +78,25 @@ func registerMetric(k key, metric prom.Counter) { // todo: support prom.Collecto
 	prom.DefaultRegisterer.MustRegister(metric)
 }
 
-func (s *stats) registerUnknown() {
+func (s *stats) registerOwnMetrics() {
 	RegisterCounter(&MetricDesc{
 		Subsystem: subsystemName,
 		Name:      unknownCounter,
 		Help:      "Counter for non-existent metrics",
 	})
+	RegisterCounter(&MetricDesc{
+		Subsystem: subsystemName,
+		Name:      duplicateCounter,
+		Help:      "Counter for duplicate metrics",
+	})
+}
+
+func getKey(subsystem, metricName string) key {
+	return key{pipeline.PromNamespace, subsystem, metricName}
+}
+
+func checkStatsInitialized() {
+	if statsGlobal == nil {
+		logger.Panicf("stats package uninitialized")
+	}
 }
