@@ -6,7 +6,7 @@ import (
 
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/pipeline"
-	"github.com/prometheus/client_golang/prometheus"
+	"github.com/ozontech/file.d/stats"
 	insaneJSON "github.com/vitkovskii/insane-json"
 	"go.uber.org/zap"
 )
@@ -33,20 +33,17 @@ pipelines:
 }*/
 
 const (
-	substitution = byte('*')
-
-	metricName = "mask_plugin"
+	substitution   = byte('*')
+	timesActivated = "times_activated"
 )
-
-var MaskPromCounter = prometheus.NewCounter(prometheus.CounterOpts{})
 
 type Plugin struct {
 	config          *Config
 	sourceBuf       []byte
 	maskBuf         []byte
-	logMaskAppeared bool
 	valueNodes      []*insaneJSON.Node
 	logger          *zap.SugaredLogger
+	logMaskAppeared bool
 }
 
 //! config-params
@@ -150,24 +147,19 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 	p.config.Masks = compileMasks(p.config.Masks, p.logger)
 	if p.config.MetricSubsystemName != nil {
 		p.logMaskAppeared = true
-		p.registerPluginMetrics(pipeline.PromNamespace, *p.config.MetricSubsystemName, metricName)
+		p.registerPluginMetrics()
 	}
 }
 
-func (p *Plugin) Stop() {
+func (p *Plugin) registerPluginMetrics() {
+	stats.RegisterCounter(&stats.MetricDesc{
+		Name:      timesActivated,
+		Subsystem: *p.config.MetricSubsystemName,
+		Help:      "Number of times mask plugin found the provided pattern",
+	})
 }
 
-func (p *Plugin) registerPluginMetrics(namespace, subsystem, metricName string) {
-	// can't declare counter as property on p.counter, because multiple cores
-	// will create multiple metrics and all but last one will be unregistered.
-	MaskPromCounter = prometheus.NewCounter(prometheus.CounterOpts{
-		Namespace: namespace,
-		Subsystem: subsystem,
-		Name:      metricName,
-		Help:      "",
-	})
-	prometheus.DefaultRegisterer.Unregister(MaskPromCounter)
-	prometheus.DefaultRegisterer.MustRegister(MaskPromCounter)
+func (p *Plugin) Stop() {
 }
 
 func appendMask(dst, src []byte, begin, end int) ([]byte, int) {
@@ -255,8 +247,9 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 		}
 		v.MutateToString(string(p.maskBuf))
 	}
+
 	if p.logMaskAppeared && maskApplied {
-		MaskPromCounter.Inc()
+		stats.GetCounter(*p.config.MetricSubsystemName, timesActivated).Inc()
 		p.logger.Infof("mask appeared to event, output string: %s", event.Root.EncodeToString())
 	}
 

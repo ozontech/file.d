@@ -13,6 +13,7 @@ import (
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/stats"
 	insaneJSON "github.com/vitkovskii/insane-json"
 	"go.uber.org/zap"
 )
@@ -21,7 +22,12 @@ import (
 It sends events to splunk.
 }*/
 
-const outPluginType = "splunk"
+const (
+	outPluginType = "splunk"
+	subsystemName = "output_splunk"
+
+	sendErrorCounter = "send_error"
+)
 
 type Plugin struct {
 	config         *Config
@@ -90,6 +96,8 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.avgEventSize = params.PipelineSettings.AvgEventSize
 	p.config = config.(*Config)
 
+	p.registerPluginMetrics()
+
 	p.batcher = pipeline.NewBatcher(
 		params.PipelineName,
 		outPluginType,
@@ -102,6 +110,14 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		0,
 	)
 	p.batcher.Start()
+}
+
+func (p *Plugin) registerPluginMetrics() {
+	stats.RegisterCounter(&stats.MetricDesc{
+		Name:      sendErrorCounter,
+		Subsystem: subsystemName,
+		Help:      "Total splunk send errors",
+	})
 }
 
 func (p *Plugin) Stop() {
@@ -138,6 +154,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 	for {
 		err := p.send(outBuf, p.config.RequestTimeout_)
 		if err != nil {
+			stats.GetCounter(subsystemName, sendErrorCounter).Inc()
 			p.logger.Errorf("can't send data to splunk address=%s: %s", p.config.Endpoint, err.Error())
 			time.Sleep(time.Second)
 

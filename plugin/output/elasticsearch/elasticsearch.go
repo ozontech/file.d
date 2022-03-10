@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/ozontech/file.d/cfg"
+	"github.com/ozontech/file.d/stats"
 	insaneJSON "github.com/vitkovskii/insane-json"
 	"go.uber.org/zap"
 
@@ -21,7 +22,14 @@ It sends events into Elasticsearch. It uses `_bulk` API to send events in batche
 If a network error occurs, the batch will infinitely try to be delivered to the random endpoint.
 }*/
 
-const outPluginType = "elasticsearch"
+const (
+	outPluginType = "elasticsearch"
+	subsystemName = "output_elasticsearch"
+
+	// errors
+	sendErrorCounter = "send_error"
+	indexingErrors   = "index_error"
+)
 
 type Plugin struct {
 	logger       *zap.SugaredLogger
@@ -127,6 +135,8 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 
 	p.maintenance(nil)
 
+	p.registerPluginMetrics()
+
 	p.logger.Infof("starting batcher: timeout=%d", p.config.BatchFlushTimeout_)
 	p.batcher = pipeline.NewBatcher(
 		params.PipelineName,
@@ -148,6 +158,20 @@ func (p *Plugin) Stop() {
 
 func (p *Plugin) Out(event *pipeline.Event) {
 	p.batcher.Add(event)
+}
+
+func (p *Plugin) registerPluginMetrics() {
+	stats.RegisterCounter(&stats.MetricDesc{
+		Name:      sendErrorCounter,
+		Subsystem: subsystemName,
+		Help:      "Total elasticsearch send errors",
+	})
+
+	stats.RegisterCounter(&stats.MetricDesc{
+		Name:      indexingErrors,
+		Subsystem: subsystemName,
+		Help:      "Number of elasticsearch indexing errors",
+	})
 }
 
 func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
@@ -172,6 +196,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 		endpoint := p.config.Endpoints[rand.Int()%len(p.config.Endpoints)]
 		resp, err := p.client.Post(endpoint, "application/x-ndjson", bytes.NewBuffer(data.outBuf))
 		if err != nil {
+			stats.GetCounter(subsystemName, sendErrorCounter).Inc()
 			p.logger.Errorf("can't send batch to %s, will try other endpoint: %s", endpoint, err.Error())
 			time.Sleep(time.Second)
 			continue
@@ -180,28 +205,37 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 		respContent, err := ioutil.ReadAll(resp.Body)
 		_ = resp.Body.Close()
 		if err != nil {
+			stats.GetCounter(subsystemName, sendErrorCounter).Inc()
 			p.logger.Errorf("can't read response from %s, will try other endpoint: %s", endpoint, err.Error())
 			continue
 		}
 
 		if resp.StatusCode < http.StatusOK || resp.StatusCode > http.StatusAccepted {
+			stats.GetCounter(subsystemName, sendErrorCounter).Inc()
 			p.logger.Errorf("response status from %s isn't OK, will try other endpoint: status=%d, body=%s", endpoint, resp.StatusCode, respContent)
 			continue
 		}
 
 		root, err := insaneJSON.DecodeBytes(respContent)
 		if err != nil {
+			stats.GetCounter(subsystemName, sendErrorCounter).Inc()
 			p.logger.Errorf("wrong response from %s, will try other endpoint: %s", endpoint, err.Error())
 			insaneJSON.Release(root)
 			continue
 		}
 
 		if root.Dig("errors").AsBool() {
+			errors := 0
 			for _, node := range root.Dig("items").AsArray() {
 				errNode := node.Dig("index", "error")
 				if errNode != nil {
+					errors += 1
 					p.logger.Errorf("indexing error: %s", errNode.EncodeToString())
 				}
+			}
+
+			if errors != 0 {
+				stats.GetCounter(subsystemName, indexingErrors).Add(float64(errors))
 			}
 
 			p.controller.Error("some events from batch isn't written")

@@ -9,6 +9,7 @@ import (
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/longpanic"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/stats"
 )
 
 /*{ introduction
@@ -72,6 +73,11 @@ curl "localhost:9200/_bulk" -H 'Content-Type: application/json' -d \
 
 }*/
 
+const (
+	subsystemName    = "input_http"
+	httpErrorCounter = "http_errors"
+)
+
 type Plugin struct {
 	config     *Config
 	params     *pipeline.InputPluginParams
@@ -118,6 +124,8 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	p.controller.DisableStreams()
 	p.sourceIDs = make([]pipeline.SourceID, 0)
 
+	p.registerPluginMetrics()
+
 	mux := http.NewServeMux()
 	switch p.config.EmulateMode {
 	case "elasticsearch":
@@ -130,6 +138,14 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	if p.config.Address != "off" {
 		longpanic.Go(p.listenHTTP)
 	}
+}
+
+func (p *Plugin) registerPluginMetrics() {
+	stats.RegisterCounter(&stats.MetricDesc{
+		Subsystem: subsystemName,
+		Name:      httpErrorCounter,
+		Help:      "Total http errors",
+	})
 }
 
 func (p *Plugin) listenHTTP() {
@@ -188,6 +204,7 @@ func (p *Plugin) serve(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if err != nil && err != io.EOF {
+			stats.GetCounter(subsystemName, httpErrorCounter).Inc()
 			logger.Errorf("http input read error: %s", err.Error())
 			break
 		}
@@ -203,6 +220,7 @@ func (p *Plugin) serve(w http.ResponseWriter, r *http.Request) {
 
 	_, err := w.Write(result)
 	if err != nil {
+		stats.GetCounter(subsystemName, httpErrorCounter).Inc()
 		logger.Errorf("can't write response: %s", err.Error())
 	}
 }

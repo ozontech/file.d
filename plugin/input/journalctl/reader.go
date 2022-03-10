@@ -8,6 +8,7 @@ import (
 
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/longpanic"
+	"github.com/ozontech/file.d/stats"
 
 	"go.uber.org/zap"
 )
@@ -47,11 +48,13 @@ func readLines(r io.Reader, config *journalReaderConfig) {
 			break
 		}
 		if err != nil {
+			stats.GetCounter(subsystemName, readerErrors).Inc()
 			config.logger.Error(err)
 			continue
 		}
 		_, err = config.output.Write(bytes)
 		if err != nil {
+			stats.GetCounter(subsystemName, readerErrors).Inc()
 			config.logger.Error(err)
 		}
 
