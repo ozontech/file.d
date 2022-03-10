@@ -32,6 +32,11 @@ const (
 var statsGlobal *stats
 
 func InitStats() {
+	if statsGlobal != nil {
+		logger.Error("attempt to initialize stats more than once")
+		return
+	}
+
 	statsGlobal = &stats{
 		allMetrics: make(map[key]prom.Counter),
 		// This map will store prom.Counter instead of prom.Collector for now
