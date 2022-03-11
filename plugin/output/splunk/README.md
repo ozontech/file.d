@@ -38,5 +38,11 @@ After this timeout the batch will be sent even if batch isn't completed.
 
 <br>
 
+**`event_key`** *`string`* 
+
+This key will be extracted as "event" value
+
+<br>
+
 
 <br>*Generated using [__insane-doc__](https://github.com/vitkovskii/insane-doc)*

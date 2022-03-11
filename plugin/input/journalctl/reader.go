@@ -1,3 +1,5 @@
+//go:build linux
+
 package journalctl
 
 import (
@@ -13,7 +15,6 @@ import (
 	"go.uber.org/zap"
 )
 
-//nolint:unused
 type journalReaderConfig struct {
 	output   io.Writer
 	cursor   string
@@ -21,14 +22,12 @@ type journalReaderConfig struct {
 	maxLines int
 }
 
-//nolint:unused
 type journalReader struct {
 	config *journalReaderConfig
 	cmd    *exec.Cmd
 	args   []string
 }
 
-//nolint:unused
 func readLines(r io.Reader, config *journalReaderConfig) {
 	reader := bufio.NewReaderSize(r, 1024*1024*10) // max message size
 	totalLines := 0
@@ -65,7 +64,6 @@ func readLines(r io.Reader, config *journalReaderConfig) {
 	}
 }
 
-//nolint:deadcode,unused
 func newJournalReader(config *journalReaderConfig) *journalReader {
 	res := &journalReader{config: config}
 	res.args = []string{
@@ -79,7 +77,6 @@ func newJournalReader(config *journalReaderConfig) *journalReader {
 	return res
 }
 
-//nolint:unused
 func (r *journalReader) start() error {
 	r.config.logger.Infof(`running "journalctl %s"`, strings.Join(r.args, " "))
 	r.cmd = exec.Command("journalctl", r.args...)
@@ -98,7 +95,6 @@ func (r *journalReader) start() error {
 	return nil
 }
 
-//nolint:unused
 func (r *journalReader) stop() error {
 	return r.cmd.Process.Kill()
 }

@@ -6,7 +6,7 @@ prepare:
 	docker login
 
 .PHONY: build
-build: 
+build:
 	echo "Building..."
 	GOOS=linux GOARCH=amd64 go build -v -o file.d ./cmd/file.d.go
 
@@ -32,11 +32,19 @@ test:
 	go test ./pipeline/ -v -count 1
 	go test ./plugin/... -v -count 1
 
+.PHONY: test-docker
+test-docker:
+	docker run --rm -it -v ${PWD}:/app -w /app golang:1.17 bash -c 'make test'
+
 .PHONY: test-short
 test-short:
 	go test ./fd/ -v -count 1 -short
 	go test ./pipeline/ -v -count 1 -short
 	go test ./plugin/... -v -count 1 -short
+
+.PHONY: test-short-docker
+test-short-docker:
+	docker run --rm -it -v ${PWD}:/app -w /app golang:1.17 bash -c 'make test-short'
 
 .PHONY: test-e2e
 test-e2e:
