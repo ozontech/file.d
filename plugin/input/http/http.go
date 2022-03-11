@@ -5,10 +5,11 @@ import (
 	"net/http"
 	"sync"
 
-	"github.com/ozonru/file.d/fd"
-	"github.com/ozonru/file.d/logger"
-	"github.com/ozonru/file.d/longpanic"
-	"github.com/ozonru/file.d/pipeline"
+	"github.com/ozontech/file.d/fd"
+	"github.com/ozontech/file.d/logger"
+	"github.com/ozontech/file.d/longpanic"
+	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/stats"
 )
 
 /*{ introduction
@@ -21,7 +22,61 @@ So you can use Elasticsearch filebeat output plugin to send data to `file.d`.
 > ⚠ Currently event commitment mechanism isn't implemented for this plugin.
 > Plugin answers with HTTP code `OK 200` right after it has read all the request body.
 > It doesn't wait until events are committed.
+
+**Example:**
+Emulating elastic through http:
+```yaml
+pipelines:
+  example_k8s_pipeline:
+    settings:
+      capacity: 1024
+    input:
+      # define input type.
+      type: http
+      # pretend elastic search, emulate it's protocol.
+      emulate_mode: "elasticsearch"
+      # define http port.
+      address: ":9200"
+    actions:
+      # parse elastic search query.
+      - type: parse_es
+      # decode elastic search json.
+      - type: json_decode
+        # field is required.
+        field: message
+    output:
+      # Let's write to kafka example.
+      type: kafka
+        brokers: [kafka-local:9092, kafka-local:9091]
+        default_topic: yourtopic-k8s-data
+        use_topic_field: true
+        topic_field: pipeline_kafka_topic
+
+      # Or we can write to file:
+      # type: file
+      # target_file: "./output.txt"
+```
+
+Setup:
+```
+# run server.
+# config.yaml should contains yaml config above.
+go run cmd/file.d.go --config=config.yaml
+
+# now do requests.
+curl "localhost:9200/_bulk" -H 'Content-Type: application/json' -d \
+'{"index":{"_index":"index-main","_type":"span"}}
+{"message": "hello", "kind": "normal"}
+'
+
+##
+
 }*/
+
+const (
+	subsystemName    = "input_http"
+	httpErrorCounter = "http_errors"
+)
 
 type Plugin struct {
 	config     *Config
@@ -62,18 +117,14 @@ func Factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginParams) {
 	p.config = config.(*Config)
 	p.params = params
-	p.readBuffs = &sync.Pool{
-		New: p.newReadBuff,
-	}
-
-	p.eventBuffs = &sync.Pool{
-		New: p.newEventBuffs,
-	}
-
+	p.readBuffs = &sync.Pool{}
+	p.eventBuffs = &sync.Pool{}
 	p.mu = &sync.Mutex{}
 	p.controller = params.Controller
 	p.controller.DisableStreams()
 	p.sourceIDs = make([]pipeline.SourceID, 0)
+
+	p.registerPluginMetrics()
 
 	mux := http.NewServeMux()
 	switch p.config.EmulateMode {
@@ -89,6 +140,14 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	}
 }
 
+func (p *Plugin) registerPluginMetrics() {
+	stats.RegisterCounter(&stats.MetricDesc{
+		Subsystem: subsystemName,
+		Name:      httpErrorCounter,
+		Help:      "Total http errors",
+	})
+}
+
 func (p *Plugin) listenHTTP() {
 	err := p.server.ListenAndServe()
 	if err != nil {
@@ -96,11 +155,17 @@ func (p *Plugin) listenHTTP() {
 	}
 }
 
-func (p *Plugin) newReadBuff() interface{} {
+func (p *Plugin) newReadBuff() []byte {
+	if buff := p.readBuffs.Get(); buff != nil {
+		return *buff.(*[]byte)
+	}
 	return make([]byte, 16*1024)
 }
 
-func (p *Plugin) newEventBuffs() interface{} {
+func (p *Plugin) newEventBuffs() []byte {
+	if buff := p.eventBuffs.Get(); buff != nil {
+		return (*buff.(*[]byte))[:0]
+	}
 	return make([]byte, 0, p.params.PipelineSettings.AvgEventSize)
 }
 
@@ -126,8 +191,8 @@ func (p *Plugin) putSourceID(x pipeline.SourceID) {
 }
 
 func (p *Plugin) serve(w http.ResponseWriter, r *http.Request) {
-	readBuff := p.readBuffs.Get().([]byte)
-	eventBuff := p.eventBuffs.Get().([]byte)[:0]
+	readBuff := p.newReadBuff()
+	eventBuff := p.newEventBuffs()
 
 	sourceID := p.getSourceID()
 	defer p.putSourceID(sourceID)
@@ -139,6 +204,7 @@ func (p *Plugin) serve(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if err != nil && err != io.EOF {
+			stats.GetCounter(subsystemName, httpErrorCounter).Inc()
 			logger.Errorf("http input read error: %s", err.Error())
 			break
 		}
@@ -148,11 +214,13 @@ func (p *Plugin) serve(w http.ResponseWriter, r *http.Request) {
 
 	_ = r.Body.Close()
 
-	p.readBuffs.Put(readBuff)
-	p.eventBuffs.Put(eventBuff)
+	// https://staticcheck.io/docs/checks/#SA6002
+	p.readBuffs.Put(&readBuff)
+	p.eventBuffs.Put(&eventBuff)
 
 	_, err := w.Write(result)
 	if err != nil {
+		stats.GetCounter(subsystemName, httpErrorCounter).Inc()
 		logger.Errorf("can't write response: %s", err.Error())
 	}
 }

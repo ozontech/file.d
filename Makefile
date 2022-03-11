@@ -1,9 +1,14 @@
-VERSION ?= 0.1.15
+VERSION ?= 0.2.2
 UPSTREAM_BRANCH ?= origin/master
 
 .PHONY: prepare
 prepare:
 	docker login
+
+.PHONY: build
+build:
+	echo "Building..."
+	GOOS=linux GOARCH=amd64 go build -v -o file.d ./cmd/file.d.go
 
 .PHONY: deps
 deps:
@@ -11,9 +16,15 @@ deps:
 
 .PHONY: cover
 cover:
-	go test -coverprofile=coverage.out ./...
+	go test -short -coverprofile=coverage.out ./...
 	go tool cover -html=coverage.out
 	rm coverage.out
+
+.PHONY: test-short
+test-short:
+	go test ./fd/ -v -count 1 -short
+	go test ./pipeline/ -v -count 1 -short
+	go test ./plugin/... -v -count 1 -short
 
 .PHONY: test
 test:
@@ -24,6 +35,16 @@ test:
 .PHONY: test-docker
 test-docker:
 	docker run --rm -it -v ${PWD}:/app -w /app golang:1.17 bash -c 'make test'
+
+.PHONY: test-short
+test-short:
+	go test ./fd/ -v -count 1 -short
+	go test ./pipeline/ -v -count 1 -short
+	go test ./plugin/... -v -count 1 -short
+
+.PHONY: test-short-docker
+test-short-docker:
+	docker run --rm -it -v ${PWD}:/app -w /app golang:1.17 bash -c 'make test-short'
 
 .PHONY: test-e2e
 test-e2e:
@@ -43,14 +64,12 @@ profile-file:
 	go test -bench LightJsonReadPar ./plugin/input/file -v -count 1 -run -benchmem -benchtime 1x -cpuprofile cpu.pprof -memprofile mem.pprof -mutexprofile mutex.pprof
 
 .PHONY: push-version-linux-amd64
-push-version-linux-amd64:
-	GOOS=linux GOARCH=amd64 go build -v -o file.d ./cmd/file.d.go
+push-version-linux-amd64: build
 	docker build -t ozonru/file.d:${VERSION}-linux-amd64 .
 	docker push ozonru/file.d:${VERSION}-linux-amd64
 
 .PHONY: push-latest-linux-amd64
-push-latest-linux-amd64:
-	GOOS=linux GOARCH=amd64 go build -v -o file.d ./cmd/file.d.go
+push-latest-linux-amd64: build
 	docker build -t ozonru/file.d:latest-linux-amd64 .
 	docker push ozonru/file.d:latest-linux-amd64
 
@@ -67,3 +86,8 @@ push-images-all: push-images-version push-images-latest
 lint:
 	# installation: https://golangci-lint.run/usage/install/#local-installation
 	golangci-lint run --new-from-rev=${UPSTREAM_BRANCH}
+
+.PHONY: mock
+mock:
+	go install github.com/golang/mock/mockgen
+	mockgen -source=plugin/output/s3/s3.go -destination=plugin/output/s3/mock/s3.go

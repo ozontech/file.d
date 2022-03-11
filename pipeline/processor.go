@@ -1,8 +1,8 @@
 package pipeline
 
 import (
-	"github.com/ozonru/file.d/logger"
-	"github.com/ozonru/file.d/longpanic"
+	"github.com/ozontech/file.d/logger"
+	"github.com/ozontech/file.d/longpanic"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
 )
@@ -61,10 +61,8 @@ type processor struct {
 	busyActions      []bool
 	busyActionsTotal int
 	actionWatcher    *actionWatcher
-	waitOrPanic      func(msgStr string)
 	recoverFromPanic func()
 
-	heartbeatCh   chan *stream
 	metricsValues []string
 }
 

@@ -1,11 +1,12 @@
 package file
 
 import (
+	"go.uber.org/atomic"
 	"os"
 	"sync"
 	"testing"
 
-	"github.com/ozonru/file.d/pipeline"
+	"github.com/ozontech/file.d/pipeline"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -77,7 +78,7 @@ func TestParallel(t *testing.T) {
 		lastEventSeq:   0,
 		isVirgin:       false,
 		isDone:         false,
-		shouldSkip:     false,
+		shouldSkip:     *atomic.NewBool(false),
 		offsets:        offsets,
 		mu:             &sync.Mutex{},
 	}
@@ -91,7 +92,7 @@ func TestParallel(t *testing.T) {
 		lastEventSeq:   0,
 		isVirgin:       false,
 		isDone:         false,
-		shouldSkip:     false,
+		shouldSkip:     *atomic.NewBool(false),
 		offsets:        offsets,
 		mu:             &sync.Mutex{},
 	}

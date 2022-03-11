@@ -1,0 +1,11 @@
+pipelines:
+  welcome:
+    input:
+      type: file
+      persistence_mode: async
+      watching_dir: /tmp/
+      filename_pattern: welcome.json
+      offsets_file: /tmp/offsets.yaml
+      offsets_op: reset
+    output:
+      type: stdout

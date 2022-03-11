@@ -4,15 +4,17 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/ozonru/file.d/cfg"
-	"github.com/ozonru/file.d/logger"
-	"github.com/ozonru/file.d/pipeline"
-	"github.com/ozonru/file.d/test"
+	"github.com/ozontech/file.d/cfg"
+	"github.com/ozontech/file.d/logger"
+	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/stats"
+	"github.com/ozontech/file.d/test"
 	"github.com/stretchr/testify/assert"
 	insaneJSON "github.com/vitkovskii/insane-json"
 )
 
 func TestAppendEvent(t *testing.T) {
+	stats.InitStats()
 	p := &Plugin{}
 	config := &Config{
 		Endpoints:   []string{"test"},
@@ -30,6 +32,8 @@ func TestAppendEvent(t *testing.T) {
 
 	p.time = "6666-66-66"
 	root, _ := insaneJSON.DecodeBytes([]byte(`{"field_a":"AAAA","field_b":"BBBB"}`))
+	defer insaneJSON.Release(root)
+
 	result := p.appendEvent(nil, &pipeline.Event{Root: root})
 
 	expected := fmt.Sprintf("%s\n%s\n", `{"index":{"_index":"test-6666-66-66-index-AAAA-BBBB"}}`, `{"field_a":"AAAA","field_b":"BBBB"}`)

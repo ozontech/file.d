@@ -1,8 +1,8 @@
 package fd
 
 import (
-	"github.com/ozonru/file.d/logger"
-	"github.com/ozonru/file.d/pipeline"
+	"github.com/ozontech/file.d/logger"
+	"github.com/ozontech/file.d/pipeline"
 )
 
 var DefaultPluginRegistry = &PluginRegistry{

@@ -8,18 +8,39 @@ import (
 	"unsafe"
 )
 
+// ByteToStringUnsafe converts byte slice to string without memory copy
+// This creates mutable string, thus unsafe method, should be used with caution (never modify provided byte slice)
 func ByteToStringUnsafe(b []byte) string {
 	return *(*string)(unsafe.Pointer(&b))
 }
 
+// StringToByteUnsafe converts string to byte slice without memory copy
+// This creates mutable string, thus unsafe method, should be used with caution (never modify resulting byte slice)
 func StringToByteUnsafe(s string) []byte {
-	strh := (*reflect.StringHeader)(unsafe.Pointer(&s))
-	var sh reflect.SliceHeader
-	sh.Data = strh.Data
-	sh.Len = strh.Len
-	sh.Cap = strh.Len
-	return *(*[]byte)(unsafe.Pointer(&sh))
+	var buf = *(*[]byte)(unsafe.Pointer(&s))
+	(*reflect.SliceHeader)(unsafe.Pointer(&buf)).Cap = len(s)
+	return buf
 }
+
+/* There are actually a lot of interesting ways to do this. Saving them here, for the purpose of possible debugging.
+
+func StringToByteUnsafe(s string) []byte {
+	const max = 0x7fff0000
+	if len(s) > max {
+		panic("string too long")
+	}
+	return (*[max]byte)(unsafe.Pointer((*reflect.StringHeader)(unsafe.Pointer(&s)).Data))[:len(s):len(s)]
+}
+
+func StringToByteUnsafe(s string) (b []byte) {
+	bh := (*reflect.SliceHeader)(unsafe.Pointer(&b))
+	sh := (*reflect.StringHeader)(unsafe.Pointer(&s))
+	bh.Data = sh.Data
+	bh.Cap = sh.Len
+	bh.Len = sh.Len
+	return b
+}
+*/
 
 const formats = "ansic|unixdate|rubydate|rfc822|rfc822z|rfc850|rfc1123|rfc1123z|rfc3339|rfc3339nano|kitchen|stamp|stampmilli|stampmicro|stampnano"
 

@@ -1,14 +1,15 @@
 package splunk
 
 import (
-	"github.com/ozonru/file.d/pipeline"
-	"github.com/stretchr/testify/assert"
-	insaneJSON "github.com/vitkovskii/insane-json"
-	"go.uber.org/zap"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/ozontech/file.d/pipeline"
+	"github.com/stretchr/testify/assert"
+	insaneJSON "github.com/vitkovskii/insane-json"
+	"go.uber.org/zap"
 )
 
 func TestEventKey(t *testing.T) {

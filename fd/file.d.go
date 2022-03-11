@@ -10,10 +10,11 @@ import (
 	"runtime/debug"
 
 	"github.com/bitly/go-simplejson"
-	"github.com/ozonru/file.d/cfg"
-	"github.com/ozonru/file.d/logger"
-	"github.com/ozonru/file.d/longpanic"
-	"github.com/ozonru/file.d/pipeline"
+	"github.com/ozontech/file.d/cfg"
+	"github.com/ozontech/file.d/logger"
+	"github.com/ozontech/file.d/longpanic"
+	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/stats"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
@@ -44,8 +45,13 @@ func (f *FileD) Start() {
 	logger.Infof("starting file.d")
 
 	f.createRegistry()
+	f.initMetrics()
 	f.startHTTP()
 	f.startPipelines()
+}
+
+func (f *FileD) initMetrics() {
+	stats.InitStats()
 }
 
 func (f *FileD) createRegistry() {
@@ -276,8 +282,4 @@ func (f *FileD) serveFreeOsMem(_ http.ResponseWriter, _ *http.Request) {
 
 func (f *FileD) serveLiveReady(_ http.ResponseWriter, _ *http.Request) {
 	logger.Infof("live/ready OK")
-}
-
-func (f *FileD) servePipelines(_ http.ResponseWriter, _ *http.Request) {
-	logger.Infof("pipelines OK")
 }

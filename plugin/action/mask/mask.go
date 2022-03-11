@@ -4,8 +4,9 @@ import (
 	"regexp"
 	"unicode/utf8"
 
-	"github.com/ozonru/file.d/fd"
-	"github.com/ozonru/file.d/pipeline"
+	"github.com/ozontech/file.d/fd"
+	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/stats"
 	insaneJSON "github.com/vitkovskii/insane-json"
 	"go.uber.org/zap"
 )
@@ -21,6 +22,7 @@ pipelines:
     ...
     actions:
     - type: mask
+      metric_subsystem_name: "some_name"
       masks:
       - mask:
         re: "\b(\d{1,4})\D?(\d{1,4})\D?(\d{1,4})\D?(\d{1,4})\b"
@@ -30,14 +32,18 @@ pipelines:
 
 }*/
 
-const substitution = byte('*')
+const (
+	substitution   = byte('*')
+	timesActivated = "times_activated"
+)
 
 type Plugin struct {
-	config     *Config
-	sourceBuf  []byte
-	maskBuf    []byte
-	valueNodes []*insaneJSON.Node
-	logger     *zap.SugaredLogger
+	config          *Config
+	sourceBuf       []byte
+	maskBuf         []byte
+	valueNodes      []*insaneJSON.Node
+	logger          *zap.SugaredLogger
+	logMaskAppeared bool
 }
 
 //! config-params
@@ -45,7 +51,12 @@ type Plugin struct {
 type Config struct {
 	//> @3@4@5@6
 	//>
-	//> List of masks
+	//> If set counterMetric with this name would be sent on metric_subsystem_name.mask_plugin
+	MetricSubsystemName *string `json:"metric_subsystem_name" required:"false"` //*
+
+	//> @3@4@5@6
+	//>
+	//> List of masks.
 	Masks []Mask `json:"masks"` //*
 }
 
@@ -58,7 +69,7 @@ type Mask struct {
 
 	//> @3@4@5@6
 	//>
-	// Numbers of masking groups in expression, zero for mask all expression
+	//> Numbers of masking groups in expression, zero for mask all expression
 	Groups []int `json:"groups" required:"true"` //*
 }
 
@@ -134,9 +145,21 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 	p.valueNodes = make([]*insaneJSON.Node, 0)
 	p.logger = params.Logger
 	p.config.Masks = compileMasks(p.config.Masks, p.logger)
+	if p.config.MetricSubsystemName != nil {
+		p.logMaskAppeared = true
+		p.registerPluginMetrics()
+	}
 }
 
-func (p Plugin) Stop() {
+func (p *Plugin) registerPluginMetrics() {
+	stats.RegisterCounter(&stats.MetricDesc{
+		Name:      timesActivated,
+		Subsystem: *p.config.MetricSubsystemName,
+		Help:      "Number of times mask plugin found the provided pattern",
+	})
+}
+
+func (p *Plugin) Stop() {
 }
 
 func appendMask(dst, src []byte, begin, end int) ([]byte, int) {
@@ -160,10 +183,11 @@ func maskSection(dst, src []byte, begin, end int) ([]byte, int) {
 	return dst, offset
 }
 
-func maskValue(value, buf []byte, re *regexp.Regexp, groups []int, l *zap.SugaredLogger) []byte {
+// mask value returns masked value and bool answer was buf masked at all.
+func maskValue(value, buf []byte, re *regexp.Regexp, groups []int) ([]byte, bool) {
 	indexes := re.FindAllSubmatchIndex(value, -1)
 	if len(indexes) == 0 {
-		return value
+		return value, false
 	}
 
 	buf = buf[:0]
@@ -180,7 +204,7 @@ func maskValue(value, buf []byte, re *regexp.Regexp, groups []int, l *zap.Sugare
 		}
 	}
 
-	return value
+	return value, true
 }
 
 func getValueNodeList(currentNode *insaneJSON.Node, valueNodes []*insaneJSON.Node) []*insaneJSON.Node {
@@ -204,18 +228,29 @@ func getValueNodeList(currentNode *insaneJSON.Node, valueNodes []*insaneJSON.Nod
 func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	root := event.Root.Node
 
+	// apply vars need to check if mask was applied to event data and send metric.
+	maskApplied := false
+	locApplied := false
+
 	p.valueNodes = p.valueNodes[:0]
 	p.valueNodes = getValueNodeList(root, p.valueNodes)
-
 	for _, v := range p.valueNodes {
 		value := v.AsBytes()
 		p.sourceBuf = append(p.sourceBuf[:0], value...)
 		p.maskBuf = append(p.maskBuf[:0], p.sourceBuf...)
 		for _, mask := range p.config.Masks {
-			p.maskBuf = maskValue(p.sourceBuf, p.maskBuf, mask.Re_, mask.Groups, p.logger)
+			p.maskBuf, locApplied = maskValue(p.sourceBuf, p.maskBuf, mask.Re_, mask.Groups)
 			p.sourceBuf = p.maskBuf
+			if locApplied {
+				maskApplied = true
+			}
 		}
 		v.MutateToString(string(p.maskBuf))
+	}
+
+	if p.logMaskAppeared && maskApplied {
+		stats.GetCounter(*p.config.MetricSubsystemName, timesActivated).Inc()
+		p.logger.Infof("mask appeared to event, output string: %s", event.Root.EncodeToString())
 	}
 
 	return pipeline.ActionPass

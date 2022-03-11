@@ -4,8 +4,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ozonru/file.d/logger"
-	"github.com/ozonru/file.d/pipeline"
+	"github.com/ozontech/file.d/logger"
+	"github.com/ozontech/file.d/pipeline"
 )
 
 type limiter struct {
@@ -70,12 +70,6 @@ func (l *limiter) isAllowed(event *pipeline.Event, ts time.Time) bool {
 	}
 
 	return l.buckets[index] <= l.limit.value
-}
-
-// bucketIDToTime converts bucketID to time. This time is start of the bucket.
-func (l *limiter) bucketIDToTime(id int) time.Time {
-	nano := int64(id) * l.interval.Nanoseconds()
-	return time.Unix(nano/100000000, nano%100000000)
 }
 
 // timeToBucketID converts time to bucketID.

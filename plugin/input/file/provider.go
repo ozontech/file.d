@@ -9,9 +9,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/ozonru/file.d/logger"
-	"github.com/ozonru/file.d/longpanic"
-	"github.com/ozonru/file.d/pipeline"
+	"github.com/ozontech/file.d/logger"
+	"github.com/ozontech/file.d/longpanic"
+	"github.com/ozontech/file.d/pipeline"
 	"github.com/rjeczalik/notify"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
@@ -66,7 +66,7 @@ type Job struct {
 
 	isVirgin   bool // it should be set to false if job hits isDone=true at the first time
 	isDone     bool
-	shouldSkip bool
+	shouldSkip atomic.Bool
 
 	// offsets is a sliceMap of streamName to offset.
 	// Unlike map[string]int, sliceMap can work with mutable strings when using unsafe conversion from []byte.
@@ -305,7 +305,7 @@ func (jp *jobProvider) addJob(file *os.File, stat os.FileInfo, filename string, 
 
 		isVirgin:   true,
 		isDone:     true,
-		shouldSkip: false,
+		shouldSkip: *atomic.NewBool(false),
 
 		offsets: nil,
 
@@ -368,7 +368,7 @@ func (jp *jobProvider) initJobOffset(operation offsetsOp, job *Job) {
 		if err != nil {
 			jp.logger.Panicf("can't make job, can't seek file %d:%s: %s", job.sourceID, job.filename, err.Error())
 		}
-		job.shouldSkip = true
+		job.shouldSkip.Store(true)
 
 	case offsetsOpReset:
 		_, err := job.file.Seek(0, io.SeekStart)
@@ -646,7 +646,9 @@ func (jp *jobProvider) maintenanceJob(job *Job) int {
 	newInode := getInode(stat)
 	if newInode != inode {
 		jp.deleteJobAndUnlock(job)
-
+		if err = file.Close(); err != nil {
+			jp.logger.Errorf("can't close file %s %v in case of different inodes", filename, err)
+		}
 		return maintenanceResultDeleted
 	}
 

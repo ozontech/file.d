@@ -1,19 +1,15 @@
 package debug
 
 import (
-	"github.com/ozonru/file.d/fd"
-	"github.com/ozonru/file.d/logger"
-	"github.com/ozonru/file.d/pipeline"
+	"github.com/ozontech/file.d/fd"
+	"github.com/ozontech/file.d/logger"
+	"github.com/ozontech/file.d/pipeline"
 )
 
 /*{ introduction
 It logs event to stdout. Useful for debugging.
 }*/
-type Plugin struct {
-	paths          [][]string
-	names          []string
-	preserveFields bool
-}
+type Plugin struct{}
 
 type Config map[string]interface{}
 

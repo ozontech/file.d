@@ -10,8 +10,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/ozonru/file.d/logger"
-	"github.com/ozonru/file.d/pipeline"
+	"github.com/ozontech/file.d/logger"
+	"github.com/ozontech/file.d/pipeline"
 	"go.uber.org/atomic"
 )
 
@@ -94,7 +94,7 @@ func (o *offsetDB) collapse(inodeOffsets fpOffsets) fpOffsets {
 
 func (o *offsetDB) parse(content string) (fpOffsets, error) {
 	offsets := make(fpOffsets)
-	for len(content) != 0 {
+	for content != "" {
 		one, err := o.parseOne(content, offsets)
 		if err != nil {
 			return make(fpOffsets), fmt.Errorf("can't parseOne: %w", err)
@@ -156,7 +156,7 @@ func (o *offsetDB) parseStreams(content string, streams streamsOffsets) (string,
 		return "", fmt.Errorf("can''t parse line: %w", err)
 	}
 
-	for len(content) != 0 && content[0] != '-' {
+	for content != "" && content[0] != '-' {
 		linePos := strings.IndexByte(content, '\n')
 		if linePos < 0 {
 			return "", fmt.Errorf("wrong offsets format, no new line %s", content)

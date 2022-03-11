@@ -5,14 +5,17 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ozonru/file.d/cfg"
-	"github.com/ozonru/file.d/logger"
-	"github.com/ozonru/file.d/pipeline"
+	"github.com/ozontech/file.d/cfg"
+	"github.com/ozontech/file.d/logger"
+	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/stats"
 	"github.com/stretchr/testify/assert"
 	insaneJSON "github.com/vitkovskii/insane-json"
 )
 
 func TestFormatEvent(t *testing.T) {
+	stats.InitStats()
+
 	tests := []struct {
 		configJSON    string
 		eventJSON     string

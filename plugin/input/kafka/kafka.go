@@ -5,9 +5,10 @@ import (
 	"strings"
 
 	"github.com/Shopify/sarama"
-	"github.com/ozonru/file.d/fd"
-	"github.com/ozonru/file.d/longpanic"
-	"github.com/ozonru/file.d/pipeline"
+	"github.com/ozontech/file.d/fd"
+	"github.com/ozontech/file.d/longpanic"
+	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/stats"
 	"go.uber.org/zap"
 )
 
@@ -15,6 +16,13 @@ import (
 It reads events from multiple Kafka topics using `sarama` library.
 > It guarantees at "at-least-once delivery" due to the commitment mechanism.
 }*/
+
+const (
+	subsystemName = "input_kafka"
+
+	commitErrors  = "commit_errors"
+	consumeErrors = "consume_errors"
+)
 
 type Plugin struct {
 	config        *Config
@@ -62,6 +70,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	p.logger = params.Logger
 	p.config = config.(*Config)
 
+	p.registerPluginMetrics()
 	p.idByTopic = make(map[string]int)
 	for i, topic := range p.config.Topics {
 		p.idByTopic[topic] = i
@@ -75,11 +84,26 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	longpanic.Go(p.consume)
 }
 
+func (p *Plugin) registerPluginMetrics() {
+	stats.RegisterCounter(&stats.MetricDesc{
+		Subsystem: subsystemName,
+		Name:      commitErrors,
+		Help:      "Number of kafka commit errors",
+	})
+
+	stats.RegisterCounter(&stats.MetricDesc{
+		Subsystem: subsystemName,
+		Name:      consumeErrors,
+		Help:      "Number of kafka consume errors",
+	})
+}
+
 func (p *Plugin) consume() {
 	p.logger.Infof("kafka input reading from topics: %s", strings.Join(p.config.Topics, ","))
 	for {
 		err := p.consumerGroup.Consume(p.context, p.config.Topics, p)
 		if err != nil {
+			stats.GetCounter(subsystemName, consumeErrors).Inc()
 			p.logger.Errorf("can't consume from kafka: %s", err.Error())
 		}
 
@@ -95,6 +119,7 @@ func (p *Plugin) Stop() {
 
 func (p *Plugin) Commit(event *pipeline.Event) {
 	if p.session == nil {
+		stats.GetCounter(subsystemName, commitErrors).Inc()
 		p.logger.Errorf("no kafka consumer session for event commit")
 		return
 	}

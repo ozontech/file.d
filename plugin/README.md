@@ -53,6 +53,55 @@ So you can use Elasticsearch filebeat output plugin to send data to `file.d`.
 > Plugin answers with HTTP code `OK 200` right after it has read all the request body.
 > It doesn't wait until events are committed.
 
+**Example:**
+Emulating elastic through http:
+```yaml
+pipelines:
+  example_k8s_pipeline:
+    settings:
+      capacity: 1024
+    input:
+      # define input type.
+      type: http
+      # pretend elastic search, emulate it's protocol.
+      emulate_mode: "elasticsearch"
+      # define http port.
+      address: ":9200"
+    actions:
+      # parse elastic search query.
+      - type: parse_es
+      # decode elastic search json.
+      - type: json_decode
+        # field is required.
+        field: message
+    output:
+      # Let's write to kafka example.
+      type: kafka
+        brokers: [kafka-local:9092, kafka-local:9091]
+        default_topic: yourtopic-k8s-data
+        use_topic_field: true
+        topic_field: pipeline_kafka_topic
+
+      # Or we can write to file:
+      # type: file
+      # target_file: "./output.txt"
+```
+
+Setup:
+```
+# run server.
+# config.yaml should contains yaml config above.
+go run cmd/file.d.go --config=config.yaml
+
+# now do requests.
+curl "localhost:9200/_bulk" -H 'Content-Type: application/json' -d \
+'{"index":{"_index":"index-main","_type":"span"}}
+{"message": "hello", "kind": "normal"}
+'
+
+##
+
+
 [More details...](plugin/input/http/README.md)
 ## journalctl
 Reads `journalctl` output.
@@ -182,6 +231,7 @@ pipelines:
     ...
     actions:
     - type: mask
+      metric_subsystem_name: "some_name"
       masks:
       - mask:
         re: "\b(\d{1,4})\D?(\d{1,4})\D?(\d{1,4})\D?(\d{1,4})\b"
@@ -299,6 +349,84 @@ Allowed characters in field names are letters, numbers, underscores, dashes, and
 It sends the event batches to kafka brokers using `sarama` lib.
 
 [More details...](plugin/output/kafka/README.md)
+## s3
+Sends events to s3 output of one or multiple buckets.
+`bucket` is default bucket for events. Addition buckets can be described in `multi_buckets` section, example down here.
+Field "bucket_field_event" is filed name, that will be searched in event.
+If appears we try to send event to this bucket instead of described here.
+
+> ⚠ Currently bucket names for bucket and multi_buckets can't intersect.
+
+> ⚠ If dynamic bucket moved to config it can leave some not send data behind.
+> To send this data to s3 move bucket dir from /var/log/dynamic_buckets/bucketName to /var/log/static_buckets/bucketName (/var/log is default path)
+> and restart file.d
+
+**Example**
+Standard example:
+```yaml
+pipelines:
+  mkk:
+    settings:
+      capacity: 128
+    # input plugin is not important in this case, let's emulate http input.
+    input:
+      type: http
+      emulate_mode: "no"
+      address: ":9200"
+      actions:
+        - type: json_decode
+          field: message
+    output:
+      type: s3
+      file_plugin:
+        retention_interval: 10s
+      # endpoint, access_key, secret_key, bucket are required.
+      endpoint: "s3.fake_host.org:80"
+      access_key: "access_key1"
+      secret_key: "secret_key2"
+      bucket: "bucket-logs"
+      bucket_field_event: "bucket_name"
+```
+
+Example with fan-out buckets:
+```yaml
+pipelines:
+  mkk:
+    settings:
+      capacity: 128
+    # input plugin is not important in this case, let's emulate http input.
+    input:
+      type: http
+      emulate_mode: "no"
+      address: ":9200"
+      actions:
+        - type: json_decode
+          field: message
+    output:
+      type: s3
+      file_plugin:
+        retention_interval: 10s
+      # endpoint, access_key, secret_key, bucket are required.
+      endpoint: "s3.fake_host.org:80"
+      access_key: "access_key1"
+      secret_key: "secret_key2"
+      bucket: "bucket-logs"
+      # bucket_field_event - event with such field will be sent to bucket with its value
+      # if such exists: {"bucket_name": "secret", "message": 123} to bucket "secret".
+      bucket_field_event: "bucket_name"
+      # multi_buckets is optional, contains array of buckets.
+      multi_buckets:
+        - endpoint: "otherS3.fake_host.org:80"
+          access_key: "access_key2"
+          secret_key: "secret_key2"
+          bucket: "bucket-logs-2"
+        - endpoint: "yet_anotherS3.fake_host.ru:80"
+          access_key: "access_key3"
+          secret_key: "secret_key3"
+          bucket: "bucket-logs-3"
+```
+
+[More details...](plugin/output/s3/README.md)
 ## splunk
 It sends events to splunk.
 
