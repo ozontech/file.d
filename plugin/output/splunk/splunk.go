@@ -30,13 +30,12 @@ const (
 )
 
 type Plugin struct {
-	config         *Config
-	logger         *zap.SugaredLogger
-	avgEventSize   int
-	batcher        *pipeline.Batcher
-	controller     pipeline.OutputPluginController
-	requestTimeout time.Duration
-	client         http.Client
+	config       *Config
+	logger       *zap.SugaredLogger
+	avgEventSize int
+	batcher      *pipeline.Batcher
+	controller   pipeline.OutputPluginController
+	client       http.Client
 }
 
 //! config-params

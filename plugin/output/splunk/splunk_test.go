@@ -45,7 +45,7 @@ func TestEventKey(t *testing.T) {
 					t.Fatal(err)
 				}
 				res.WriteHeader(http.StatusOK)
-				res.Write([]byte(`{"code":0}`))
+				_, _ = res.Write([]byte(`{"code":0}`))
 			}))
 			defer testServer.Close()
 
