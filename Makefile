@@ -32,12 +32,6 @@ test:
 	go test ./pipeline/ -v -count 1
 	go test ./plugin/... -v -count 1
 
-.PHONY: test-short
-test-short:
-	go test ./fd/ -v -count 1 -short
-	go test ./pipeline/ -v -count 1 -short
-	go test ./plugin/... -v -count 1 -short
-
 .PHONY: test-e2e
 test-e2e:
 	go test ./cmd/ -v -count 1
