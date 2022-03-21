@@ -4,6 +4,7 @@ package journalctl
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 	"time"
@@ -14,6 +15,12 @@ import (
 	"github.com/ozontech/file.d/test"
 	"github.com/stretchr/testify/assert"
 )
+
+func skipIfJournalctlMissing(t *testing.T) {
+	if _, err := exec.LookPath("journalctl"); err != nil {
+		t.Skip(err)
+	}
+}
 
 func getTmpPath(t *testing.T, file string) string {
 	res, err := os.MkdirTemp("", "file.d")
@@ -49,6 +56,7 @@ func setOutput(p *pipeline.Pipeline, out func(event *pipeline.Event)) {
 }
 
 func TestPipeline(t *testing.T) {
+	skipIfJournalctlMissing(t)
 	p := test.NewPipeline(nil, "passive")
 	config := &Config{OffsetsFile: getTmpPath(t, "offset.yaml"), MaxLines: 10}
 	err := cfg.Parse(config, nil)
@@ -71,6 +79,7 @@ func TestPipeline(t *testing.T) {
 }
 
 func TestOffsets(t *testing.T) {
+	skipIfJournalctlMissing(t)
 	offsetPath := getTmpPath(t, "offset.yaml")
 
 	config := &Config{OffsetsFile: offsetPath, MaxLines: 5}
