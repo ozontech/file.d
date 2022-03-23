@@ -38,7 +38,6 @@ require (
 )
 
 require (
-	github.com/golang/mock v1.6.0
 	github.com/alecthomas/template v0.0.0-20190718012654-fb15b899a751 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cenkalti/backoff/v3 v3.0.0 // indirect
@@ -48,6 +47,7 @@ require (
 	github.com/eapache/go-xerial-snappy v0.0.0-20180814174437-776d5712da21 // indirect
 	github.com/eapache/queue v1.1.0 // indirect
 	github.com/gogo/protobuf v1.3.1 // indirect
+	github.com/golang/mock v1.6.0
 	github.com/golang/protobuf v1.4.2 // indirect
 	github.com/golang/snappy v0.0.3 // indirect
 	github.com/google/gofuzz v1.0.0 // indirect
@@ -95,4 +95,14 @@ require (
 	gopkg.in/square/go-jose.v2 v2.5.1 // indirect
 	gopkg.in/yaml.v2 v2.2.8 // indirect
 	sigs.k8s.io/yaml v1.1.0 // indirect
+)
+
+require (
+	github.com/Masterminds/squirrel v1.5.2 // indirect
+	github.com/jackc/pgx v3.6.2+incompatible // indirect
+	github.com/jmoiron/sqlx v1.3.4 // indirect
+	github.com/lann/builder v0.0.0-20180802200727-47ae307949d0 // indirect
+	github.com/lann/ps v0.0.0-20150810152359-62de8c46ede0 // indirect
+	github.com/lib/pq v1.10.4 // indirect
+	github.com/pkg/errors v0.9.1 // indirect
 )

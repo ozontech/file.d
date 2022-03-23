@@ -202,7 +202,7 @@ type Config struct {
 	//> MultiBuckets is additional buckets, which can also receive event.
 	//> Event must contain `bucket_name` field which value is s3 bucket name.
 	//> Events without `bucket_name` sends to DefaultBucket.
-	MultiBuckets `json:"multi_buckets" required:"false"`
+	MultiBuckets `json:"multi_buckets" required:"false"` //*
 	//> @3@4@5@6
 	//> s3 connection secure option.
 	Secure bool `json:"secure" default:"false"` //*
@@ -213,7 +213,7 @@ type Config struct {
 	//> @3@4@5@6
 	//> DynamicBucketsLimit regulates how many buckets can be created dynamically.
 	//> Prevents problems when some random strings in BucketEventField where
-	DynamicBucketsLimit int `json:"dynamic_buckets_limit" default:"32"`
+	DynamicBucketsLimit int `json:"dynamic_buckets_limit" default:"32"` //*
 }
 
 func (c *Config) IsMultiBucketExists(bucketName string) bool {
