@@ -1,27 +1,44 @@
 package postgres
 
 import (
+	"errors"
 	"fmt"
+	"strings"
 
 	sq "github.com/Masterminds/squirrel"
 )
 
-type pgQueryBuilder interface {
+var ErrNoColumns = errors.New("no pg columns in config")
+var ErrEmptyTableName = errors.New("table name can't be empty string")
+
+type PgQueryBuilder interface {
 	GetPgFields() []column
-	GetQueryBuilder() sq.InsertBuilder
+	GetInsertBuilder() sq.InsertBuilder
 	GetPostfix() string
 	GetUniqueFields() []string
 }
 
-type queryBuilder struct {
+const (
+	doNothingPostfix = "ON CONFLICT (%s) DO NOTHING"
+	doUpdatePostfix  = "ON CONFLICT(%s) DO UPDATE SET %s"
+)
+
+type pgQueryBuilder struct {
 	columns      []column
 	queryBuilder sq.InsertBuilder
 	postfix      string
 	uniqueFields []string
 }
 
-func newQueryBuilder(cfgColumns []ConfigColumn, table string) (pgQueryBuilder, error) {
-	qb := &queryBuilder{}
+func NewQueryBuilder(cfgColumns []ConfigColumn, table string) (PgQueryBuilder, error) {
+	qb := &pgQueryBuilder{}
+
+	if len(cfgColumns) == 0 {
+		return nil, ErrNoColumns
+	}
+	if table == "" {
+		return nil, ErrEmptyTableName
+	}
 
 	pgFields, uniqueFields, err := qb.initPgFields(cfgColumns)
 	qb.columns = pgFields
@@ -37,25 +54,25 @@ func newQueryBuilder(cfgColumns []ConfigColumn, table string) (pgQueryBuilder, e
 }
 
 // Returns actucal pg columns.
-func (qb *queryBuilder) GetPgFields() []column {
+func (qb *pgQueryBuilder) GetPgFields() []column {
 	return qb.columns
 }
 
 // Returns base builder with with table name and column names.
-func (qb *queryBuilder) GetQueryBuilder() sq.InsertBuilder {
+func (qb *pgQueryBuilder) GetInsertBuilder() sq.InsertBuilder {
 	return qb.queryBuilder
 }
 
 // Returns postfix: "ON CONFLICT" clause.
-func (qb *queryBuilder) GetPostfix() string {
+func (qb *pgQueryBuilder) GetPostfix() string {
 	return qb.postfix
 }
 
-func (qb *queryBuilder) GetUniqueFields() []string {
+func (qb *pgQueryBuilder) GetUniqueFields() []string {
 	return qb.uniqueFields
 }
 
-func (qb *queryBuilder) initPgFields(cfgColumns []ConfigColumn) ([]column, []string, error) {
+func (qb *pgQueryBuilder) initPgFields(cfgColumns []ConfigColumn) ([]column, []string, error) {
 	pgColumns := make([]column, 0, len(cfgColumns))
 	uniqueFields := []string{}
 	for _, col := range cfgColumns {
@@ -65,8 +82,6 @@ func (qb *queryBuilder) initPgFields(cfgColumns []ConfigColumn) ([]column, []str
 			colType = pgInt
 		case colTypeString:
 			colType = pgString
-		case colTypeBool:
-			colType = pgBool
 		case colTypeTimestamp:
 			colType = pgTimestamp
 		default:
@@ -86,7 +101,7 @@ func (qb *queryBuilder) initPgFields(cfgColumns []ConfigColumn) ([]column, []str
 	return pgColumns, uniqueFields, nil
 }
 
-func (qb *queryBuilder) createQuery(pgFields []column, table string) (sq.InsertBuilder, string) {
+func (qb *pgQueryBuilder) createQuery(pgFields []column, table string) (sq.InsertBuilder, string) {
 	postfix := ""
 	uniqueFields := []string{}
 	updateableFields := []string{}
@@ -99,21 +114,26 @@ func (qb *queryBuilder) createQuery(pgFields []column, table string) (sq.InsertB
 			updateableFields = append(updateableFields, field.Name)
 		}
 	}
-	if len(uniqueFields) > 0 {
-		postfix = "ON CONFLICT("
-		for i, field := range uniqueFields {
-			postfix += field
-			if i < len(uniqueFields)-1 {
-				postfix += ","
-			}
+	if len(uniqueFields) > 0 && len(updateableFields) > 0 {
+		// ON CONFLICT (col1unique, 6tgyu, col3unique) DO UPDATE SET col1updateable=EXCLUDED.col1updateable
+		uniquePostfix := make([]string, 0, len(uniqueFields))
+		updatePostfix := make([]string, 0, len(updateableFields))
+
+		uniquePostfix = append(uniquePostfix, uniqueFields...)
+		uniquePostfixString := strings.Join(uniquePostfix, ",")
+
+		for _, field := range updateableFields {
+			updatePostfix = append(updatePostfix, field+"=EXCLUDED."+field)
 		}
-		postfix += ") DO UPDATE SET "
-		for i, field := range updateableFields {
-			postfix += field + "=EXCLUDED." + field
-			if i < len(updateableFields)-1 {
-				postfix += ","
-			}
-		}
+		updatePostfixString := strings.Join(updatePostfix, ",")
+
+		postfix = fmt.Sprintf(doUpdatePostfix, uniquePostfixString, updatePostfixString)
+	} else if len(uniqueFields) > 0 {
+		// ON CONFLICT (col1, col2, col3) DO NOTHING
+		uniquePostfix := make([]string, 0, len(uniqueFields))
+		uniquePostfix = append(uniquePostfix, uniqueFields...)
+		uniquePostfixString := strings.Join(uniquePostfix, ",")
+		postfix = fmt.Sprintf(doNothingPostfix, uniquePostfixString)
 	}
 
 	return sq.Insert(table).Columns(fieldsName...), postfix

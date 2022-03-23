@@ -7,12 +7,41 @@ import (
 	"github.com/jackc/pgx"
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
+	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/stats"
 	"go.uber.org/zap"
 	"golang.org/x/net/context"
 )
 
-const retryCount = 3
+type PgxIface interface {
+	Exec(sql string, arguments ...interface{}) (commandTag pgx.CommandTag, err error)
+	Close() error
+}
+
+const (
+	outPluginType = "postgres"
+	subsystemName = "output_postgres"
+
+	retryCount = 3
+
+	// metrics
+	discardedEventCounter = "event_discarded"
+)
+
+const (
+	// minimum required types for now.
+	unknownType pgType = iota
+	pgString
+	pgInt
+	pgTimestamp
+)
+
+const (
+	colTypeInt       = "int"
+	colTypeString    = "string"
+	colTypeTimestamp = "timestamp"
+)
 
 type Plugin struct {
 	controller pipeline.OutputPluginController
@@ -22,8 +51,8 @@ type Plugin struct {
 	ctx        context.Context
 	cancelFunc context.CancelFunc
 
-	queryBuilder pgQueryBuilder
-	db           *pgx.Conn
+	queryBuilder PgQueryBuilder
+	db           PgxIface
 }
 
 type column struct {
@@ -33,26 +62,6 @@ type column struct {
 }
 
 type pgType int
-
-const (
-	// minimum required types for now.
-	unknownType pgType = iota
-	pgString
-	pgInt
-	pgBool
-	pgTimestamp
-)
-
-const (
-	outPluginType = "postgres"
-)
-
-const (
-	colTypeInt       = "int"
-	colTypeString    = "string"
-	colTypeBool      = "bool"
-	colTypeTimestamp = "timestamp"
-)
 
 type ConfigColumn struct {
 	Name       string `json:"name" required:"true"`
@@ -117,6 +126,14 @@ func Factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 	return &Plugin{}, &Config{}
 }
 
+func (p *Plugin) registerPluginMetrics() {
+	stats.RegisterCounter(&stats.MetricDesc{
+		Name:      discardedEventCounter,
+		Subsystem: subsystemName,
+		Help:      "Total pgsql discarded messages",
+	})
+}
+
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginParams) {
 	p.controller = params.Controller
 	p.logger = params.Logger
@@ -124,8 +141,9 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	if len(p.config.Columns) == 0 {
 		p.logger.Fatal("Can't start plugin, no fields in config")
 	}
+	p.registerPluginMetrics()
 
-	queryBuilder, err := newQueryBuilder(p.config.Columns, p.config.Table)
+	queryBuilder, err := NewQueryBuilder(p.config.Columns, p.config.Table)
 	if err != nil {
 		p.logger.Fatal(err)
 	}
@@ -176,50 +194,54 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 	uniqueEventsMap := make(map[uint64]struct{}, len(batch.Events))
 	uniqueEvents := make([]*pipeline.Event, 0, len(batch.Events))
 	for _, event := range batch.Events {
+		// s3url, domain
+
+		// go throught unique cols: service + host
+		// secondary batch: 1, 3, 2.
+
 		_, ok := uniqueEventsMap[event.SeqID]
 		if ok {
+			logger.Infof("event duplicate: %v", event)
 			continue
 		}
 		uniqueEventsMap[event.SeqID] = struct{}{}
 		uniqueEvents = append(uniqueEvents, event)
 	}
 
-	builder := p.queryBuilder.GetQueryBuilder()
+	builder := p.queryBuilder.GetInsertBuilder()
 	for _, event := range uniqueEvents {
 		lVals := make([]interface{}, 0, len(p.queryBuilder.GetPgFields()))
+	LOOP_THROUGH_EVENT:
 		for _, field := range p.queryBuilder.GetPgFields() {
 			fNode, err := event.Root.DigStrict(field.Name)
 			if err != nil {
-				// In strict mode file.d must fail, otherwise truncate bad event.
+				// In strict mode file.d fails, otherwise truncate bad event.
 				if p.config.Strict {
 					p.logger.Fatalf("Required field '%s' doesn't appear in event: %v", field.Name, string(event.Buf))
 				}
-				continue
+				// todo log err.
+				stats.GetCounter(subsystemName, discardedEventCounter).Inc()
+				// stop loop for event
+				break LOOP_THROUGH_EVENT
 			}
 			switch field.ColType {
 			case pgString:
-				// TODO возможно не падать fatal, а пропускать сообщение в не strict mode?
+				// todo strict mode skip event.
 				lVal, err := fNode.AsString()
 				if err != nil {
-					p.logger.Fatalf("can't get %s as string, err: %w", field.Name, err)
+					p.logger.Fatalf("can't get %s as string, err: %w", field.Name, err.Error())
 				}
 				lVals = append(lVals, lVal)
 			case pgInt:
 				lVal, err := fNode.AsInt()
 				if err != nil {
-					p.logger.Fatalf("can't get %s as int, err: %w", field.Name, err)
-				}
-				lVals = append(lVals, lVal)
-			case pgBool:
-				lVal, err := fNode.AsBool()
-				if err != nil {
-					p.logger.Fatalf("can't get %s as bool, err: %w", field.Name, err)
+					p.logger.Fatalf("can't get %s as int, err: %w", field.Name, err.Error())
 				}
 				lVals = append(lVals, lVal)
 			case pgTimestamp:
 				tint, err := fNode.AsInt()
 				if err != nil {
-					p.logger.Fatalf("can't get %s as int, err: %s", field.Name, err)
+					p.logger.Fatalf("can't get %s as int, err: %s", field.Name, err.Error())
 				}
 				lVal := time.Unix(int64(tint), 0).Format(time.RFC3339)
 				lVals = append(lVals, lVal)
@@ -229,7 +251,10 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 				p.logger.Fatal("undefined col type: %d, col name: %s", field.ColType, field.Name)
 			}
 		}
-		builder = builder.Values(lVals...)
+		// If LOOP_THROUGH_EVENT was breaked values mustn't be added.
+		if len(lVals) == len(p.queryBuilder.GetPgFields()) {
+			builder = builder.Values(lVals...)
+		}
 	}
 
 	builder = builder.Suffix(p.queryBuilder.GetPostfix()).PlaceholderFormat(sq.Dollar)
@@ -250,6 +275,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 		break
 	}
 	if err != nil {
+		p.db.Close()
 		p.logger.Fatalf("Invalid SQL. query: %s, args: %v, err: %v", query, args, err)
 	}
 }
