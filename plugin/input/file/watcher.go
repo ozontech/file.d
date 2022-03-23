@@ -60,6 +60,7 @@ func (w *watcher) start() {
 	if w.shouldWatchWrites {
 		events = append(events, notify.Write)
 	}
+
 	// watch recursively.
 	err := notify.Watch(filepath.Join(w.path, "..."), eventsCh, events...)
 	if err != nil {

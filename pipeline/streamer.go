@@ -7,13 +7,14 @@ import (
 
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/longpanic"
+	"go.uber.org/atomic"
 )
 
 type streamer struct {
 	streams map[SourceID]map[StreamName]*stream
 	mu      *sync.RWMutex
 
-	shouldStop bool
+	shouldStop atomic.Bool
 
 	charged     []*stream
 	chargedMu   *sync.Mutex
@@ -46,7 +47,7 @@ func (s *streamer) start() {
 }
 
 func (s *streamer) stop() {
-	s.shouldStop = true
+	s.shouldStop.Store(true)
 
 	s.mu.Lock()
 	for _, source := range s.streams {
@@ -103,7 +104,7 @@ func (s *streamer) joinStream() *stream {
 	s.chargedMu.Lock()
 	for len(s.charged) == 0 {
 		s.chargedCond.Wait()
-		if s.shouldStop {
+		if s.shouldStop.Load() {
 			s.chargedMu.Unlock()
 			return nil
 		}
@@ -147,7 +148,7 @@ func (s *streamer) heartbeat() {
 	streams := make([]*stream, 0)
 	for {
 		time.Sleep(time.Millisecond * 200)
-		if s.shouldStop {
+		if s.shouldStop.Load() {
 			return
 		}
 

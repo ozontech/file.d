@@ -244,12 +244,14 @@ func (f *FileD) getStaticInfo(pipelineConfig *cfg.PipelineConfig, pluginKind pip
 	return &infoCopy, nil
 }
 
-func (f *FileD) Stop() {
+func (f *FileD) Stop(ctx context.Context) error {
 	logger.Infof("stopping pipelines=%d", len(f.Pipelines))
-	_ = f.server.Shutdown(context.TODO())
+	err := f.server.Shutdown(ctx)
 	for _, p := range f.Pipelines {
 		p.Stop()
 	}
+
+	return err
 }
 
 func (f *FileD) startHTTP() {

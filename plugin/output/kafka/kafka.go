@@ -1,6 +1,7 @@
 package kafka
 
 import (
+	"context"
 	"strings"
 	"time"
 
@@ -114,7 +115,8 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		p.config.BatchFlushTimeout_,
 		0,
 	)
-	p.batcher.Start()
+
+	p.batcher.Start(context.TODO())
 }
 
 func (p *Plugin) Out(event *pipeline.Event) {
@@ -183,6 +185,9 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 
 func (p *Plugin) Stop() {
 	p.batcher.Stop()
+	if err := p.producer.Close(); err != nil {
+		p.logger.Error("can't stop kafka producer: %s", err)
+	}
 }
 
 func (p *Plugin) newProducer() sarama.SyncProducer {

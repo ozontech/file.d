@@ -1,6 +1,7 @@
 package gelf
 
 import (
+	"context"
 	"strings"
 	"time"
 
@@ -188,7 +189,8 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		p.config.BatchFlushTimeout_,
 		p.config.ReconnectInterval_,
 	)
-	p.batcher.Start()
+
+	p.batcher.Start(context.TODO())
 }
 
 func (p *Plugin) Stop() {
@@ -243,13 +245,12 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 				continue
 			}
 			data.gelf = gelf
-
 		}
 
 		_, err := data.gelf.send(outBuf)
 		if err != nil {
 			stats.GetCounter(subsystemName, sendErrorCounter).Inc()
-			p.logger.Errorf("can't send data to gelf address=%s", p.config.Endpoint, err.Error())
+			p.logger.Errorf("can't send data to gelf address=%s, err: %s", p.config.Endpoint, err.Error())
 			_ = data.gelf.close()
 			data.gelf = nil
 			time.Sleep(time.Second)
