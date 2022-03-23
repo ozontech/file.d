@@ -159,7 +159,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.ctx = ctx
 	p.cancelFunc = cancel
 
-	p.batcher.Start()
+	p.batcher.Start(ctx)
 }
 
 func (p *Plugin) Stop() {
