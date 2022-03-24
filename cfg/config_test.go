@@ -22,6 +22,10 @@ func TestSimple(t *testing.T) {
 	assert.Equal(t, 1, len(c.Pipelines), "pipelines count isn't match")
 }
 
+type intDefault struct {
+	T int `default:"5"`
+}
+
 type strRequired struct {
 	T string `required:"true"`
 }
@@ -328,5 +332,21 @@ func TestApplyVault(t *testing.T) {
 				require.Contains(t, err.Error(), tt.wantErr)
 			}
 		})
+	}
+}
+
+func TestParseDefaultInt(t *testing.T) {
+	testCases := []struct {
+		s        *intDefault
+		expected int
+	}{
+		{s: &intDefault{}, expected: 5},
+		{s: &intDefault{T: 17}, expected: 17},
+	}
+	for i, tc := range testCases {
+		err := Parse(tc.s, nil)
+
+		assert.NoError(t, err, "shouldn't be an error tc: %d", i)
+		assert.Equal(t, tc.expected, tc.s.T, "wrong value tc: %d", i)
 	}
 }
