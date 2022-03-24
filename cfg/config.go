@@ -302,17 +302,20 @@ func ParseField(v reflect.Value, vField reflect.Value, tField reflect.StructFiel
 
 	tag = tField.Tag.Get("default")
 	if tag != "" {
+		// need to check current value of field and then set default in case of empty value
 		switch vField.Kind() {
 		case reflect.String:
 			if vField.String() == "" {
 				vField.SetString(tag)
 			}
 		case reflect.Int:
-			val, err := strconv.Atoi(tag)
-			if err != nil {
-				return fmt.Errorf("default value for field %s should be int, got=%s: %w", tField.Name, tag, err)
+			if vField.Int() == 0 { // like in vField.IsZero
+				val, err := strconv.Atoi(tag)
+				if err != nil {
+					return fmt.Errorf("default value for field %s should be int, got=%s: %w", tField.Name, tag, err)
+				}
+				vField.SetInt(int64(val))
 			}
-			vField.SetInt(int64(val))
 		case reflect.Slice:
 			if vField.Len() == 0 {
 				val := strings.Fields(tag)
