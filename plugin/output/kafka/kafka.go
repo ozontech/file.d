@@ -154,7 +154,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 		if p.config.UseTopicField {
 			fieldValue := event.Root.Dig(p.config.TopicField).AsString()
 			if fieldValue != "" {
-				topic = fieldValue
+				topic = pipeline.CloneString(fieldValue)
 			}
 		}
 
@@ -162,11 +162,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 			data.messages[i] = &sarama.ProducerMessage{}
 		}
 		data.messages[i].Value = outBuf[start:]
-
-		// copy topic from json, to temporary out buffer to avoid event reusing issues
-		start = len(outBuf)
-		outBuf = append(outBuf, topic...)
-		data.messages[i].Topic = pipeline.ByteToStringUnsafe(outBuf[start:])
+		data.messages[i].Topic = topic
 	}
 
 	data.outBuf = outBuf
