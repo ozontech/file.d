@@ -1,40 +1,81 @@
 # splunk HTTP Event Collector output
-It sends events to splunk.
+It sends the event batches to postgres db using pgx.
 
 ### Config params
-**`endpoint`** *`string`* *`required`* 
+**`strict`** *`bool`* *`default=false`* 
 
-A full URI address of splunk HEC endpoint. Format: `http://127.0.0.1:8088/services/collector`.
+In strict mode file.d will crash on events without required columns.
 
 <br>
 
-**`token`** *`string`* *`required`* 
+**`host`** *`string`* *`required`* 
 
-Token for an authentication for a HEC endpoint.
+Db host.
+
+<br>
+
+**`port`** *`uint16`* *`required`* 
+
+Db port.
+
+<br>
+
+**`dbname`** *`string`* *`required`* 
+
+Dbname in pg.
+
+<br>
+
+**`user`** *`string`* *`required`* 
+
+Pg user name.
+
+<br>
+
+**`password`** *`string`* *`required`* 
+
+Pg user pwd.
+
+<br>
+
+**`table`** *`string`* *`required`* 
+
+Pg target table.
+
+<br>
+
+**`columns`** *`[]ConfigColumn`* *`required`* 
+
+Array of DB columns. Each column have:
+name, type (int, string, bool, timestamp - which int that will be converted to timestamptz of rfc3339)
+and nullable options.
+
+<br>
+
+**`retention_interval`** *`cfg.Duration`* *`default=1h`* 
+
+Interval of creation new file
 
 <br>
 
 **`workers_count`** *`cfg.Expression`* *`default=gomaxprocs*4`* 
 
-How many workers will be instantiated to send batches.
-
-<br>
-
-**`request_timeout`** *`cfg.Duration`* *`default=1s`* 
-
-Client timeout when sends requests to HTTP Event Collector.
+How much workers will be instantiated to send batches.
 
 <br>
 
 **`batch_size`** *`cfg.Expression`* *`default=capacity/4`* 
 
-A maximum quantity of events to pack into one batch.
+Maximum quantity of events to pack into one batch.
 
+<br>
+
+**`batch_size`** 
 <br>
 
 **`batch_flush_timeout`** *`cfg.Duration`* *`default=200ms`* 
 
-After this timeout the batch will be sent even if batch isn't completed.
+After this timeout batch will be sent even if batch isn't completed.
 
 <br>
 

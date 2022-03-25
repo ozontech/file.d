@@ -297,6 +297,11 @@ func TestGetUniqueFields(t *testing.T) {
 			Unique:     true,
 		},
 		{
+			Name:       "uni_timestamp_col",
+			ColumnType: "timestamp",
+			Unique:     true,
+		},
+		{
 			Name:       "int_col",
 			ColumnType: "int",
 			Unique:     false,
@@ -304,7 +309,11 @@ func TestGetUniqueFields(t *testing.T) {
 	}
 	table := "some_table"
 
-	expectedUniqueFields := []string{"uni_str_col", "uni_int_col"}
+	expectedUniqueFields := map[string]pgType{
+		"uni_str_col":       pgString,
+		"uni_int_col":       pgInt,
+		"uni_timestamp_col": pgTimestamp,
+	}
 
 	queryBuilder, err := NewQueryBuilder(columns, table)
 	require.NoError(t, err)

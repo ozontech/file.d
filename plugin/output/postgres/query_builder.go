@@ -13,9 +13,9 @@ var ErrEmptyTableName = errors.New("table name can't be empty string")
 
 type PgQueryBuilder interface {
 	GetPgFields() []column
+	GetUniqueFields() map[string]pgType
 	GetInsertBuilder() sq.InsertBuilder
 	GetPostfix() string
-	GetUniqueFields() []string
 }
 
 const (
@@ -24,10 +24,10 @@ const (
 )
 
 type pgQueryBuilder struct {
-	columns      []column
+	fields       []column
+	uniqueFields map[string]pgType
 	queryBuilder sq.InsertBuilder
 	postfix      string
-	uniqueFields []string
 }
 
 func NewQueryBuilder(cfgColumns []ConfigColumn, table string) (PgQueryBuilder, error) {
@@ -40,12 +40,12 @@ func NewQueryBuilder(cfgColumns []ConfigColumn, table string) (PgQueryBuilder, e
 		return nil, ErrEmptyTableName
 	}
 
-	pgFields, uniqueFields, err := qb.initPgFields(cfgColumns)
-	qb.columns = pgFields
+	pgFields, uniqueColumns, err := qb.initPgFields(cfgColumns)
+	qb.fields = pgFields
 	if err != nil {
 		return nil, err
 	}
-	qb.uniqueFields = uniqueFields
+	qb.uniqueFields = uniqueColumns
 	query, postfix := qb.createQuery(pgFields, table)
 	qb.queryBuilder = query
 	qb.postfix = postfix
@@ -55,7 +55,7 @@ func NewQueryBuilder(cfgColumns []ConfigColumn, table string) (PgQueryBuilder, e
 
 // Returns actucal pg columns.
 func (qb *pgQueryBuilder) GetPgFields() []column {
-	return qb.columns
+	return qb.fields
 }
 
 // Returns base builder with with table name and column names.
@@ -68,13 +68,13 @@ func (qb *pgQueryBuilder) GetPostfix() string {
 	return qb.postfix
 }
 
-func (qb *pgQueryBuilder) GetUniqueFields() []string {
+func (qb *pgQueryBuilder) GetUniqueFields() map[string]pgType {
 	return qb.uniqueFields
 }
 
-func (qb *pgQueryBuilder) initPgFields(cfgColumns []ConfigColumn) ([]column, []string, error) {
-	pgColumns := make([]column, 0, len(cfgColumns))
-	uniqueFields := []string{}
+func (qb *pgQueryBuilder) initPgFields(cfgColumns []ConfigColumn) ([]column, map[string]pgType, error) {
+	pgFields := make([]column, 0, len(cfgColumns))
+	uniqueFields := make(map[string]pgType)
 	for _, col := range cfgColumns {
 		var colType pgType
 		switch col.ColumnType {
@@ -88,17 +88,17 @@ func (qb *pgQueryBuilder) initPgFields(cfgColumns []ConfigColumn) ([]column, []s
 			return nil, nil, fmt.Errorf("invalid pg type: %v", col.ColumnType)
 		}
 
-		pgColumns = append(pgColumns, column{
+		pgFields = append(pgFields, column{
 			Name:    col.Name,
 			ColType: colType,
 			Unique:  col.Unique,
 		})
 		if col.Unique {
-			uniqueFields = append(uniqueFields, col.Name)
+			uniqueFields[col.Name] = colType
 		}
 	}
 
-	return pgColumns, uniqueFields, nil
+	return pgFields, uniqueFields, nil
 }
 
 func (qb *pgQueryBuilder) createQuery(pgFields []column, table string) (sq.InsertBuilder, string) {
