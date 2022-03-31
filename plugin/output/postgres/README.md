@@ -1,4 +1,4 @@
-# splunk HTTP Event Collector output
+# postgres output
 It sends the event batches to postgres db using pgx.
 
 ### Config params
@@ -10,7 +10,7 @@ In strict mode file.d will crash on events without required columns.
 
 **`host`** *`string`* *`required`* 
 
-Db host.
+DB host.
 
 <br>
 
@@ -34,7 +34,7 @@ Pg user name.
 
 **`password`** *`string`* *`required`* 
 
-Pg user pwd.
+Pg user pass.
 
 <br>
 
@@ -47,14 +47,26 @@ Pg target table.
 **`columns`** *`[]ConfigColumn`* *`required`* 
 
 Array of DB columns. Each column have:
-name, type (int, string, bool, timestamp - which int that will be converted to timestamptz of rfc3339)
+name, type (int, string, timestamp - which int that will be converted to timestamptz of rfc3339)
 and nullable options.
 
 <br>
 
-**`retention_interval`** *`cfg.Duration`* *`default=1h`* 
+**`retry`** *`int`* *`default=3`* 
 
-Interval of creation new file
+Retries of insertion.
+
+<br>
+
+**`retention`** *`int`* *`default=50`* 
+
+Retention milliseconds for retry to DB.
+
+<br>
+
+**`db_request_timeout`** *`int`* 
+
+Timeout for DB requests in milliseconds.
 
 <br>
 

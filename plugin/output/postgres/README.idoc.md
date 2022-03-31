@@ -1,4 +1,4 @@
-# splunk HTTP Event Collector output
+# postgres output
 @introduction
 
 ### Config params

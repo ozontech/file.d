@@ -5,6 +5,7 @@
 package mock_postgres
 
 import (
+	context "context"
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
@@ -46,79 +47,22 @@ func (mr *MockPgxIfaceMockRecorder) Close() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*MockPgxIface)(nil).Close))
 }
 
-// Exec mocks base method.
-func (m *MockPgxIface) Exec(sql string, arguments ...interface{}) (pgx.CommandTag, error) {
+// ExecEx mocks base method.
+func (m *MockPgxIface) ExecEx(ctx context.Context, sql string, options *pgx.QueryExOptions, arguments ...interface{}) (pgx.CommandTag, error) {
 	m.ctrl.T.Helper()
-	varargs := []interface{}{sql}
+	varargs := []interface{}{ctx, sql, options}
 	for _, a := range arguments {
 		varargs = append(varargs, a)
 	}
-	ret := m.ctrl.Call(m, "Exec", varargs...)
+	ret := m.ctrl.Call(m, "ExecEx", varargs...)
 	ret0, _ := ret[0].(pgx.CommandTag)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// Exec indicates an expected call of Exec.
-func (mr *MockPgxIfaceMockRecorder) Exec(sql interface{}, arguments ...interface{}) *gomock.Call {
+// ExecEx indicates an expected call of ExecEx.
+func (mr *MockPgxIfaceMockRecorder) ExecEx(ctx, sql, options interface{}, arguments ...interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]interface{}{sql}, arguments...)
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Exec", reflect.TypeOf((*MockPgxIface)(nil).Exec), varargs...)
-}
-
-// MockPgxIfaceOld is a mock of PgxIfaceOld interface.
-type MockPgxIfaceOld struct {
-	ctrl     *gomock.Controller
-	recorder *MockPgxIfaceOldMockRecorder
-}
-
-// MockPgxIfaceOldMockRecorder is the mock recorder for MockPgxIfaceOld.
-type MockPgxIfaceOldMockRecorder struct {
-	mock *MockPgxIfaceOld
-}
-
-// NewMockPgxIfaceOld creates a new mock instance.
-func NewMockPgxIfaceOld(ctrl *gomock.Controller) *MockPgxIfaceOld {
-	mock := &MockPgxIfaceOld{ctrl: ctrl}
-	mock.recorder = &MockPgxIfaceOldMockRecorder{mock}
-	return mock
-}
-
-// EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockPgxIfaceOld) EXPECT() *MockPgxIfaceOldMockRecorder {
-	return m.recorder
-}
-
-// Close mocks base method.
-func (m *MockPgxIfaceOld) Close() error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Close")
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// Close indicates an expected call of Close.
-func (mr *MockPgxIfaceOldMockRecorder) Close() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*MockPgxIfaceOld)(nil).Close))
-}
-
-// Exec mocks base method.
-func (m *MockPgxIfaceOld) Exec(sql string, arguments ...interface{}) (pgx.CommandTag, error) {
-	m.ctrl.T.Helper()
-	varargs := []interface{}{sql}
-	for _, a := range arguments {
-		varargs = append(varargs, a)
-	}
-	ret := m.ctrl.Call(m, "Exec", varargs...)
-	ret0, _ := ret[0].(pgx.CommandTag)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// Exec indicates an expected call of Exec.
-func (mr *MockPgxIfaceOldMockRecorder) Exec(sql interface{}, arguments ...interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	varargs := append([]interface{}{sql}, arguments...)
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Exec", reflect.TypeOf((*MockPgxIfaceOld)(nil).Exec), varargs...)
+	varargs := append([]interface{}{ctx, sql, options}, arguments...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExecEx", reflect.TypeOf((*MockPgxIface)(nil).ExecEx), varargs...)
 }

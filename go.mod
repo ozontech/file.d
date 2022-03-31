@@ -35,9 +35,6 @@ require (
 	k8s.io/client-go v11.0.0+incompatible
 	k8s.io/klog v0.3.3 // indirect
 	k8s.io/utils v0.0.0-20190829053155-3a4a5477acf8 // indirect
-)
-
-require (
 	github.com/alecthomas/template v0.0.0-20190718012654-fb15b899a751 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cenkalti/backoff/v3 v3.0.0 // indirect
@@ -95,9 +92,6 @@ require (
 	gopkg.in/square/go-jose.v2 v2.5.1 // indirect
 	gopkg.in/yaml.v2 v2.2.8 // indirect
 	sigs.k8s.io/yaml v1.1.0 // indirect
-)
-
-require (
 	github.com/Masterminds/squirrel v1.5.2 // indirect
 	github.com/jackc/pgx v3.6.2+incompatible // indirect
 	github.com/jmoiron/sqlx v1.3.4 // indirect

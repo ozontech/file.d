@@ -1,6 +1,8 @@
 package postgres
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"time"
@@ -13,15 +15,19 @@ import (
 	"github.com/ozontech/file.d/stats"
 	insaneJSON "github.com/vitkovskii/insane-json"
 	"go.uber.org/zap"
-	"golang.org/x/net/context"
 )
 
 /*{ introduction
 It sends the event batches to postgres db using pgx.
 }*/
 
+var (
+	ErrEventDoesntHaveField   = errors.New("event doesn't have field")
+	ErrEventFieldHasWrongType = errors.New("event field has wrong type")
+)
+
 type PgxIface interface {
-	Exec(sql string, arguments ...interface{}) (commandTag pgx.CommandTag, err error)
+	ExecEx(ctx context.Context, sql string, options *pgx.QueryExOptions, arguments ...interface{}) (commandTag pgx.CommandTag, err error)
 	Close()
 }
 
@@ -33,6 +39,8 @@ const (
 	discardedEventCounter  = "event_discarded"
 	duplicatedEventCounter = "event_duplicated"
 )
+
+type pgType int
 
 const (
 	// minimum required types for now.
@@ -47,14 +55,6 @@ const (
 	colTypeString    = "string"
 	colTypeTimestamp = "timestamp"
 )
-
-type column struct {
-	Name    string
-	ColType pgType
-	Unique  bool
-}
-
-type pgType int
 
 type Plugin struct {
 	controller pipeline.OutputPluginController
@@ -85,7 +85,7 @@ type Config struct {
 
 	//> @3@4@5@6
 	//>
-	//> Db host.
+	//> DB host.
 	Host string `json:"host" required:"true"` //*
 
 	//> @3@4@5@6
@@ -96,7 +96,7 @@ type Config struct {
 	//> @3@4@5@6
 	//>
 	//> Dbname in pg.
-	DBname string `json:"dbname" required:"true"` //*
+	DBName string `json:"dbname" required:"true"` //*
 
 	//> @3@4@5@6
 	//>
@@ -105,8 +105,8 @@ type Config struct {
 
 	//> @3@4@5@6
 	//>
-	//> Pg user pwd.
-	Pwd string `json:"password" required:"true"` //*
+	//> Pg user pass.
+	Pass string `json:"password" required:"true"` //*
 
 	//> @3@4@5@6
 	//>
@@ -115,21 +115,27 @@ type Config struct {
 
 	//> @3@4@5@6
 	//>
-	//> Retries of insertion.
-	Retry int `json:"retry" default:"3"` //*
-
-	//> @3@4@5@6
-	//>
 	//> Array of DB columns. Each column have:
-	//> name, type (int, string, bool, timestamp - which int that will be converted to timestamptz of rfc3339)
+	//> name, type (int, string, timestamp - which int that will be converted to timestamptz of rfc3339)
 	//> and nullable options.
 	Columns []ConfigColumn `json:"columns" required:"true" slice:"true"` //*
 
 	//> @3@4@5@6
 	//>
-	//> Interval of creation new file
-	RetentionInterval  cfg.Duration `json:"retention_interval" default:"1h" parse:"duration"` //*
-	RetentionInterval_ time.Duration
+	//> Retries of insertion.
+	Retry int `json:"retry" default:"3"` //*
+
+	//> @3@4@5@6
+	//>
+	//> Retention milliseconds for retry to DB.
+	Retention  cfg.Duration `json:"retention" default:"50ms" parse:"duration"` //*
+	Retention_ time.Duration
+
+	//> @3@4@5@6
+	//>
+	//> Timeout for DB requests in milliseconds.
+	DBRequestTimeout  cfg.Duration `json:"db_request_timeout" default:"3000ms" parse:"duration"` //*
+	DBRequestTimeout_ time.Duration
 
 	//> @3@4@5@6
 	//>
@@ -184,7 +190,13 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	}
 
 	if p.config.Retry < 1 {
-		p.logger.Fatal("Retry count can't be <1")
+		p.logger.Fatal("'retry' can't be <1")
+	}
+	if p.config.Retention_ < 1 {
+		p.logger.Fatal("'renetion' can't be <1")
+	}
+	if p.config.DBRequestTimeout_ < 1 {
+		p.logger.Fatal("'db_request_timeout' can't be <1")
 	}
 
 	p.registerPluginMetrics()
@@ -198,10 +210,10 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		ConnConfig: pgx.ConnConfig{
 			Host:     p.config.Host,
 			Port:     p.config.Port,
-			Database: p.config.DBname,
-			Password: p.config.Pwd,
+			Database: p.config.DBName,
+			Password: p.config.Pass,
 			User:     p.config.Username,
-			// to work with
+			// to work with pgbouncer.
 			PreferSimpleProtocol: true,
 		},
 	})
@@ -232,101 +244,118 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 func (p *Plugin) Stop() {
 	p.cancelFunc()
 	p.batcher.Stop()
+	p.pool.Close()
 }
 
 func (p *Plugin) Out(event *pipeline.Event) {
 	p.batcher.Add(event)
 }
 
-func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
+func (p *Plugin) out(_ *pipeline.WorkerData, batch *pipeline.Batch) {
+	// _ *pipeline.WorkerData - doesn't required in this plugin, we can't parse
+	// events for uniques through bytes.
 	builder := p.queryBuilder.GetInsertBuilder()
 	pgFields := p.queryBuilder.GetPgFields()
-	uniqueFields := p.queryBuilder.GetUniqueFields()
+	uniqFields := p.queryBuilder.GetUniqueFields()
 
 	// Deduplicate events, pg can't do upsert with duplication.
 	uniqueEventsMap := make(map[string]struct{}, len(batch.Events))
-	var haveValidEvents bool
 
 	for _, event := range batch.Events {
-		lVals := make([]interface{}, 0, len(pgFields))
-		uniqueID := ""
-
-	LOOP_THROUGH_EVENT:
-		for _, field := range pgFields {
-			fNode, err := event.Root.DigStrict(field.Name)
-			if err != nil {
-				// In strict mode file.d fails, otherwise truncate bad event.
-				if p.config.Strict {
-					p.logger.Fatalf("Required field '%s' doesn't appear in event: %s", field.Name, string(event.Buf))
-				}
-
-				p.logger.Error("Required field '%s' doesn't appear in event: %s", field.Name, string(event.Buf))
+		fieldValues, uniqueID, err := p.processEvent(event, pgFields, uniqFields)
+		if err != nil {
+			if errors.Is(err, ErrEventDoesntHaveField) {
 				stats.GetCounter(subsystemName, discardedEventCounter).Inc()
-				// stop loop for event
-				break LOOP_THROUGH_EVENT
-			}
-
-			lVal, err := p.addFieldToValues(field, fNode)
-			if err != nil {
 				if p.config.Strict {
 					p.logger.Fatal(err)
 				}
 				p.logger.Error(err)
+			} else if errors.Is(err, ErrEventFieldHasWrongType) {
 				stats.GetCounter(subsystemName, discardedEventCounter).Inc()
-				break LOOP_THROUGH_EVENT
-			}
-
-			lVals = append(lVals, lVal)
-
-			if _, ok := uniqueFields[field.Name]; ok {
-				if field.ColType == pgInt || field.ColType == pgTimestamp {
-					uniqueID += strconv.Itoa(lVal.(int))
-				} else {
-					uniqueID += lVal.(string)
+				if p.config.Strict {
+					p.logger.Fatal(err)
 				}
+				p.logger.Error(err)
+			} else if err != nil { // protection from foolproof.
+				p.logger.Fatalf("undefined error: %w", err)
 			}
+
+			continue
 		}
 
-		// If LOOP_THROUGH_EVENT was breaked values mustn't be added.
-		if len(lVals) == len(pgFields) {
-			if _, ok := uniqueEventsMap[uniqueID]; ok {
-				stats.GetCounter(subsystemName, duplicatedEventCounter).Inc()
-				p.logger.Infof("event duplicated. Fields: %v, values: %v", pgFields, lVals)
-			} else {
-				uniqueEventsMap[uniqueID] = struct{}{}
-				haveValidEvents = true
-				builder = builder.Values(lVals...)
-			}
+		// passes here only if event valid.
+		if _, ok := uniqueEventsMap[uniqueID]; ok {
+			stats.GetCounter(subsystemName, duplicatedEventCounter).Inc()
+			p.logger.Infof("event duplicated. Fields: %v, values: %v", pgFields, fieldValues)
+		} else {
+			uniqueEventsMap[uniqueID] = struct{}{}
+			builder = builder.Values(fieldValues...)
 		}
 	}
 
 	builder = builder.Suffix(p.queryBuilder.GetPostfix()).PlaceholderFormat(sq.Dollar)
 
-	// no valid events passed in non-strict mode.
-	if !haveValidEvents {
-		return
-	}
-	query, args, err := builder.ToSql()
-	if err != nil {
-		p.logger.Fatalf("Invalid SQL. query: %s, args: %v, err: %v", query, args, err)
+	// no valid events passed.
+	if len(uniqueEventsMap) == 0 {
 		return
 	}
 
+	query, args, err := builder.ToSql()
+	if err != nil {
+		p.logger.Fatalf("Invalid SQL. query: %s, args: %v, err: %v", query, args, err)
+	}
+
+	var ctx context.Context
+	var cancel context.CancelFunc
 	// Insert into pg with retry.
 	for i := p.config.Retry; i > 0; i-- {
+		ctx, cancel = context.WithTimeout(p.ctx, p.config.DBRequestTimeout_)
+
 		p.logger.Info(query, args)
-		_, err = p.pool.Exec(query, args...)
+		_, err = p.pool.ExecEx(ctx, query, &pgx.QueryExOptions{SimpleProtocol: true}, args...)
 		if err != nil {
-			time.Sleep(time.Millisecond * 50)
+			cancel()
+			time.Sleep(time.Millisecond * p.config.Retention_)
 			continue
 		}
 
 		break
 	}
+	cancel()
+
 	if err != nil {
 		p.pool.Close()
 		p.logger.Fatalf("Failed insert into %s. query: %s, args: %v, err: %v", p.config.Table, query, args, err)
 	}
+}
+
+func (p *Plugin) processEvent(event *pipeline.Event, pgFields []column, uniqueFields map[string]pgType) (fieldValues []interface{}, uniqueID string, err error) {
+	fieldValues = make([]interface{}, 0, len(pgFields))
+	uniqueID = ""
+
+	for _, field := range pgFields {
+		fieldNode, err := event.Root.DigStrict(field.Name)
+		if err != nil {
+			return nil, "", fmt.Errorf("%w. required field %s, event: %s", ErrEventDoesntHaveField, field.Name, string(event.Buf))
+		}
+
+		lVal, err := p.addFieldToValues(field, fieldNode)
+		if err != nil {
+			return nil, "", err
+		}
+
+		fieldValues = append(fieldValues, lVal)
+
+		if _, ok := uniqueFields[field.Name]; ok {
+			if field.ColType == pgInt || field.ColType == pgTimestamp {
+				uniqueID += strconv.Itoa(lVal.(int))
+			} else {
+				uniqueID += lVal.(string)
+			}
+		}
+	}
+
+	return fieldValues, uniqueID, nil
 }
 
 func (p *Plugin) addFieldToValues(field column, sNode *insaneJSON.StrictNode) (interface{}, error) {
@@ -334,24 +363,24 @@ func (p *Plugin) addFieldToValues(field column, sNode *insaneJSON.StrictNode) (i
 	case pgString:
 		lVal, err := sNode.AsString()
 		if err != nil {
-			return nil, fmt.Errorf("can't get %s as string, err: %s", field.Name, err.Error())
+			return nil, fmt.Errorf("%w, can't get %s as string, err: %s", ErrEventFieldHasWrongType, field.Name, err.Error())
 		}
 		return lVal, nil
 	case pgInt:
 		lVal, err := sNode.AsInt()
 		if err != nil {
-			return nil, fmt.Errorf("can't get %s as int, err: %s", field.Name, err.Error())
+			return nil, fmt.Errorf("%w, can't get %s as int, err: %s", ErrEventFieldHasWrongType, field.Name, err.Error())
 		}
 		return lVal, nil
 	case pgTimestamp:
 		tint, err := sNode.AsInt()
 		if err != nil {
-			return nil, fmt.Errorf("can't get %s as timestamp, err: %s", field.Name, err.Error())
+			return nil, fmt.Errorf("%w, can't get %s as timestamp, err: %s", ErrEventFieldHasWrongType, field.Name, err.Error())
 		}
 		return time.Unix(int64(tint), 0).Format(time.RFC3339), nil
 	case unknownType:
 		fallthrough
 	default:
-		return nil, fmt.Errorf("undefined col type: %d, col name: %s", field.ColType, field.Name)
+		return nil, fmt.Errorf("%w, undefined col type: %d, col name: %s", ErrEventFieldHasWrongType, field.ColType, field.Name)
 	}
 }
