@@ -42,8 +42,8 @@ bench-file:
 
 .PHONY: gen-doc
 gen-doc:
-	go install github.com/vitkovskii/insane-doc@latest
-	insane-doc
+	@go install github.com/vitkovskii/insane-doc@latest
+	@~/go/bin/insane-doc
 
 .PHONY: profile-file
 profile-file:
@@ -75,5 +75,7 @@ lint:
 
 .PHONY: mock
 mock:
-	go install github.com/golang/mock/mockgen
-	mockgen -source=plugin/output/s3/s3.go -destination=plugin/output/s3/mock/s3.go
+	@go get github.com/golang/mock/gomock
+	@go install github.com/golang/mock/mockgen
+	@~/go/bin/mockgen -source=plugin/output/s3/s3.go -destination=plugin/output/s3/mock/s3.go
+	@~/go/bin/mockgen -source=plugin/output/postgres/postgres.go -destination=plugin/output/postgres/mock/postgres.go
