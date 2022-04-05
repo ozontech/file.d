@@ -30,12 +30,12 @@ const (
 )
 
 type Plugin struct {
-	config         *Config
-	client         http.Client
-	logger         *zap.SugaredLogger
-	avgEventSize   int
-	batcher        *pipeline.Batcher
-	controller     pipeline.OutputPluginController
+	config       *Config
+	client       http.Client
+	logger       *zap.SugaredLogger
+	avgEventSize int
+	batcher      *pipeline.Batcher
+	controller   pipeline.OutputPluginController
 }
 
 //! config-params
@@ -60,7 +60,7 @@ type Config struct {
 	//> @3@4@5@6
 	//>
 	//> Client timeout when sends requests to HTTP Event Collector.
-	RequestTimeout  cfg.Duration `json:"request_timeout" default:"1s" parse:"duration"` //*
+	RequestTimeout  cfg.Duration `json:"request_timeout" default:"5s" parse:"duration"` //*
 	RequestTimeout_ time.Duration
 
 	//> @3@4@5@6
