@@ -8,7 +8,8 @@ import (
 	"time"
 
 	sq "github.com/Masterminds/squirrel"
-	"github.com/jackc/pgx"
+	"github.com/jackc/pgconn"
+	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/pipeline"
@@ -27,7 +28,7 @@ var (
 )
 
 type PgxIface interface {
-	ExecEx(ctx context.Context, sql string, options *pgx.QueryExOptions, arguments ...interface{}) (commandTag pgx.CommandTag, err error)
+	Exec(ctx context.Context, sql string, arguments ...interface{}) (pgconn.CommandTag, error)
 	Close()
 }
 
@@ -139,6 +140,12 @@ type Config struct {
 
 	//> @3@4@5@6
 	//>
+	//> Timeout for DB health check.
+	DBHealthCheckPeriod  cfg.Duration `json:"db_health_check_period" default:"60s" parse:"duration"` //*
+	DBHealthCheckPeriod_ time.Duration
+
+	//> @3@4@5@6
+	//>
 	//> How much workers will be instantiated to send batches.
 	WorkersCount  cfg.Expression `json:"workers_count" default:"gomaxprocs*4" parse:"expression"` //*
 	WorkersCount_ int
@@ -185,6 +192,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.controller = params.Controller
 	p.logger = params.Logger
 	p.config = config.(*Config)
+	p.ctx = context.Background()
 	if len(p.config.Columns) == 0 {
 		p.logger.Fatal("Can't start plugin, no fields in config")
 	}
@@ -198,6 +206,9 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	if p.config.DBRequestTimeout_ < 1 {
 		p.logger.Fatal("'db_request_timeout' can't be <1")
 	}
+	if p.config.DBHealthCheckPeriod_ < 1 {
+		p.logger.Fatal("'db_health_check_period' can't be <1")
+	}
 
 	p.registerPluginMetrics()
 	queryBuilder, err := NewQueryBuilder(p.config.Columns, p.config.Table)
@@ -206,17 +217,22 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	}
 	p.queryBuilder = queryBuilder
 
-	pool, err := pgx.NewConnPool(pgx.ConnPoolConfig{
-		ConnConfig: pgx.ConnConfig{
-			Host:     p.config.Host,
-			Port:     p.config.Port,
-			Database: p.config.DBName,
-			Password: p.config.Pass,
-			User:     p.config.Username,
-			// to work with pgbouncer.
-			PreferSimpleProtocol: true,
-		},
-	})
+	cfgString := fmt.Sprintf("user=%s password=%s host=%s port=%d dbname=%s pool_max_conns=1",
+		p.config.Username,
+		p.config.Pass,
+		p.config.Host,
+		p.config.Port,
+		p.config.DBName)
+
+	cfg, err := pgxpool.ParseConfig(cfgString)
+	if err != nil {
+		p.logger.Fatalf("can't create pgsql config: %v", err)
+	}
+	cfg.LazyConnect = false
+
+	cfg.HealthCheckPeriod = p.config.DBHealthCheckPeriod_
+
+	pool, err := pgxpool.ConnectConfig(p.ctx, cfg)
 	if err != nil {
 		p.logger.Fatalf("can't create pgsql pool: %v", err)
 	}
@@ -307,25 +323,29 @@ func (p *Plugin) out(_ *pipeline.WorkerData, batch *pipeline.Batch) {
 
 	var ctx context.Context
 	var cancel context.CancelFunc
+	var outErr error
 	// Insert into pg with retry.
 	for i := p.config.Retry; i > 0; i-- {
 		ctx, cancel = context.WithTimeout(p.ctx, p.config.DBRequestTimeout_)
 
 		p.logger.Info(query, args)
-		_, err = p.pool.ExecEx(ctx, query, &pgx.QueryExOptions{SimpleProtocol: true}, args...)
+		pgCommResult, err := p.pool.Exec(ctx, query, args...)
 		if err != nil {
+			outErr = err
+			p.logger.Infof("pgCommResult: %v, err: %s", pgCommResult, err.Error())
 			cancel()
-			time.Sleep(time.Millisecond * p.config.Retention_)
+			time.Sleep(p.config.Retention_)
 			continue
+		} else {
+			outErr = nil
+			break
 		}
-
-		break
 	}
 	cancel()
 
-	if err != nil {
+	if outErr != nil {
 		p.pool.Close()
-		p.logger.Fatalf("Failed insert into %s. query: %s, args: %v, err: %v", p.config.Table, query, args, err)
+		p.logger.Fatalf("Failed insert into %s. query: %s, args: %v, err: %v", p.config.Table, query, args, outErr)
 	}
 }
 
@@ -336,7 +356,7 @@ func (p *Plugin) processEvent(event *pipeline.Event, pgFields []column, uniqueFi
 	for _, field := range pgFields {
 		fieldNode, err := event.Root.DigStrict(field.Name)
 		if err != nil {
-			return nil, "", fmt.Errorf("%w. required field %s, event: %s", ErrEventDoesntHaveField, field.Name, string(event.Buf))
+			return nil, "", fmt.Errorf("%w. required field %s", ErrEventDoesntHaveField, field.Name)
 		}
 
 		lVal, err := p.addFieldToValues(field, fieldNode)
