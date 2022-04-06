@@ -292,6 +292,9 @@ func (jp *jobProvider) addJob(file *os.File, stat os.FileInfo, filename string, 
 	_, has := jp.jobs[sourceID]
 	if has {
 		jp.logger.Warnf("job for a file %q was already created", filename)
+		if err := file.Close(); err != nil {
+			jp.logger.Errorf("can't close file %s %v in case of already created file", filename, err)
+		}
 		return
 	}
 
@@ -602,6 +605,16 @@ func (jp *jobProvider) maintenanceJob(job *Job) int {
 	}
 
 	if stat.Size() != offset {
+		// need to check is fd already deleted
+		// in case when the file has already been deleted, but we have not reached the end of the file
+		if !isExistsByNlink(stat) {
+			if err = file.Close(); err != nil {
+				jp.logger.Errorf("can't close file %s %v in case of deleted fd", filename, err)
+			}
+			jp.deleteJobAndUnlock(job)
+			jp.logger.Infof("job for a file %s have been deleted because of invalid fd", filename)
+			return maintenanceResultDeleted
+		}
 		jp.tryResumeJobAndUnlock(job, filename)
 
 		return maintenanceResultResumed
@@ -686,4 +699,9 @@ func (jp *jobProvider) deleteJobAndUnlock(job *Job) {
 
 func getInode(stat os.FileInfo) inode {
 	return inode(stat.Sys().(*syscall.Stat_t).Ino)
+}
+
+// isExistsByNlink check file's existence by number of hard links (Nlink)
+func isExistsByNlink(stat os.FileInfo) bool {
+	return stat.Sys().(*syscall.Stat_t).Nlink != 0
 }
