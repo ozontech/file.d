@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/golang/mock/gomock"
-	"github.com/jackc/pgx"
+	"github.com/jackc/pgconn"
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/pipeline"
 	mock_pg "github.com/ozontech/file.d/plugin/output/postgres/mock"
@@ -73,11 +73,11 @@ func TestPrivateOut(t *testing.T) {
 	ctx := context.Background()
 	var ctxMock = reflect.TypeOf((*context.Context)(nil)).Elem()
 
-	mockpool.EXPECT().ExecEx(
+	mockpool.EXPECT().Exec(
 		gomock.AssignableToTypeOf(ctxMock),
 		"INSERT INTO table1 (str_uni_1,int_uni_1,int_1,timestamp_1) VALUES ($1,$2,$3,$4) ON CONFLICT(str_uni_1,int_uni_1) DO UPDATE SET int_1=EXCLUDED.int_1,timestamp_1=EXCLUDED.timestamp_1",
-		&pgx.QueryExOptions{SimpleProtocol: true}, []interface{}{strUniValue, intUniValue, intValue, time.Unix(int64(timestampValue), 0).Format(time.RFC3339)},
-	).Return(pgx.CommandTag("some_tag"), nil).Times(1)
+		[]interface{}{strUniValue, intUniValue, intValue, time.Unix(int64(timestampValue), 0).Format(time.RFC3339)},
+	).Return(pgconn.CommandTag("some_tag"), nil).Times(1)
 
 	builder, err := NewQueryBuilder(columns, table)
 	require.NoError(t, err)
@@ -145,16 +145,16 @@ func TestPrivateOutWithRetry(t *testing.T) {
 	ctx := context.Background()
 	var ctxMock = reflect.TypeOf((*context.Context)(nil)).Elem()
 
-	mockpool.EXPECT().ExecEx(
+	mockpool.EXPECT().Exec(
 		gomock.AssignableToTypeOf(ctxMock),
 		"INSERT INTO table1 (str_uni_1,int_1,timestamp_1) VALUES ($1,$2,$3) ON CONFLICT(str_uni_1) DO UPDATE SET int_1=EXCLUDED.int_1,timestamp_1=EXCLUDED.timestamp_1",
-		&pgx.QueryExOptions{SimpleProtocol: true}, []interface{}{strUniValue, intValue, time.Unix(int64(timestampValue), 0).Format(time.RFC3339)},
-	).Return(pgx.CommandTag("some_tag"), errors.New("someError")).Times(2)
-	mockpool.EXPECT().ExecEx(
+		[]interface{}{strUniValue, intValue, time.Unix(int64(timestampValue), 0).Format(time.RFC3339)},
+	).Return(pgconn.CommandTag("some_tag"), errors.New("someError")).Times(2)
+	mockpool.EXPECT().Exec(
 		gomock.AssignableToTypeOf(ctxMock),
 		"INSERT INTO table1 (str_uni_1,int_1,timestamp_1) VALUES ($1,$2,$3) ON CONFLICT(str_uni_1) DO UPDATE SET int_1=EXCLUDED.int_1,timestamp_1=EXCLUDED.timestamp_1",
-		&pgx.QueryExOptions{SimpleProtocol: true}, []interface{}{strUniValue, intValue, time.Unix(int64(timestampValue), 0).Format(time.RFC3339)},
-	).Return(pgx.CommandTag("some_tag"), nil).Times(1)
+		[]interface{}{strUniValue, intValue, time.Unix(int64(timestampValue), 0).Format(time.RFC3339)},
+	).Return(pgconn.CommandTag("some_tag"), nil).Times(1)
 
 	builder, err := NewQueryBuilder(columns, table)
 	require.NoError(t, err)
@@ -287,11 +287,11 @@ func TestPrivateOutDeduplicatedEvents(t *testing.T) {
 	ctx := context.Background()
 	var ctxMock = reflect.TypeOf((*context.Context)(nil)).Elem()
 
-	mockpool.EXPECT().ExecEx(
+	mockpool.EXPECT().Exec(
 		gomock.AssignableToTypeOf(ctxMock),
 		"INSERT INTO table1 (str_uni_1,int_uni_1,int_1,timestamp_1) VALUES ($1,$2,$3,$4) ON CONFLICT(str_uni_1,int_uni_1) DO UPDATE SET int_1=EXCLUDED.int_1,timestamp_1=EXCLUDED.timestamp_1",
-		&pgx.QueryExOptions{SimpleProtocol: true}, []interface{}{strUniValue, intUniValue, intValue, time.Unix(int64(timestampValue), 0).Format(time.RFC3339)},
-	).Return(pgx.CommandTag("some_tag"), nil).Times(1)
+		[]interface{}{strUniValue, intUniValue, intValue, time.Unix(int64(timestampValue), 0).Format(time.RFC3339)},
+	).Return(pgconn.CommandTag("some_tag"), nil).Times(1)
 
 	builder, err := NewQueryBuilder(columns, table)
 	require.NoError(t, err)
@@ -461,12 +461,12 @@ func TestPrivateOutFewUniqueEventsYetWithDeduplicationEventsAnpooladEvents(t *te
 	ctx := context.Background()
 	var ctxMock = reflect.TypeOf((*context.Context)(nil)).Elem()
 
-	mockpool.EXPECT().ExecEx(
+	mockpool.EXPECT().Exec(
 		gomock.AssignableToTypeOf(ctxMock),
 		"INSERT INTO table1 (str_uni_1,int_uni_1,int_1,timestamp_1) VALUES ($1,$2,$3,$4),($5,$6,$7,$8) ON CONFLICT(str_uni_1,int_uni_1) DO UPDATE SET int_1=EXCLUDED.int_1,timestamp_1=EXCLUDED.timestamp_1",
-		&pgx.QueryExOptions{SimpleProtocol: true}, []interface{}{strUniValue, intUniValue, intValue, time.Unix(int64(timestampValue), 0).Format(time.RFC3339),
+		[]interface{}{strUniValue, intUniValue, intValue, time.Unix(int64(timestampValue), 0).Format(time.RFC3339),
 			secStrUniValue, secIntUniValue, secIntValue, time.Unix(int64(secTimestampValue), 0).Format(time.RFC3339)},
-	).Return(pgx.CommandTag("some_tag"), nil).Times(1)
+	).Return(pgconn.CommandTag("some_tag"), nil).Times(1)
 
 	builder, err := NewQueryBuilder(columns, table)
 	require.NoError(t, err)

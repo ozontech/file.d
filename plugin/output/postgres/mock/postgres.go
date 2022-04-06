@@ -9,7 +9,7 @@ import (
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
-	pgx "github.com/jackc/pgx"
+	pgconn "github.com/jackc/pgconn"
 )
 
 // MockPgxIface is a mock of PgxIface interface.
@@ -47,22 +47,22 @@ func (mr *MockPgxIfaceMockRecorder) Close() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*MockPgxIface)(nil).Close))
 }
 
-// ExecEx mocks base method.
-func (m *MockPgxIface) ExecEx(ctx context.Context, sql string, options *pgx.QueryExOptions, arguments ...interface{}) (pgx.CommandTag, error) {
+// Exec mocks base method.
+func (m *MockPgxIface) Exec(ctx context.Context, sql string, arguments ...interface{}) (pgconn.CommandTag, error) {
 	m.ctrl.T.Helper()
-	varargs := []interface{}{ctx, sql, options}
+	varargs := []interface{}{ctx, sql}
 	for _, a := range arguments {
 		varargs = append(varargs, a)
 	}
-	ret := m.ctrl.Call(m, "ExecEx", varargs...)
-	ret0, _ := ret[0].(pgx.CommandTag)
+	ret := m.ctrl.Call(m, "Exec", varargs...)
+	ret0, _ := ret[0].(pgconn.CommandTag)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// ExecEx indicates an expected call of ExecEx.
-func (mr *MockPgxIfaceMockRecorder) ExecEx(ctx, sql, options interface{}, arguments ...interface{}) *gomock.Call {
+// Exec indicates an expected call of Exec.
+func (mr *MockPgxIfaceMockRecorder) Exec(ctx, sql interface{}, arguments ...interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]interface{}{ctx, sql, options}, arguments...)
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExecEx", reflect.TypeOf((*MockPgxIface)(nil).ExecEx), varargs...)
+	varargs := append([]interface{}{ctx, sql}, arguments...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Exec", reflect.TypeOf((*MockPgxIface)(nil).Exec), varargs...)
 }
