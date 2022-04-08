@@ -11,8 +11,10 @@ import (
 var Instance *zap.SugaredLogger
 var Level zap.AtomicLevel
 
+const defaultLevel = zap.InfoLevel
+
 func init() {
-	level := zap.InfoLevel
+	var level zapcore.Level
 	switch strings.ToLower(os.Getenv("LOG_LEVEL")) {
 	case "debug":
 		level = zap.DebugLevel
@@ -24,6 +26,8 @@ func init() {
 		level = zap.ErrorLevel
 	case "fatal":
 		level = zap.FatalLevel
+	default:
+		level = defaultLevel
 	}
 
 	Level = zap.NewAtomicLevelAt(level)

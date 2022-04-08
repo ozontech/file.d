@@ -146,6 +146,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 
 	root := insaneJSON.Spawn()
 	outBuf := data.outBuf[:0]
+
 	for _, event := range batch.Events {
 		root.AddField("event").MutateToNode(event.Root.Node)
 		outBuf = root.Encode(outBuf)
@@ -154,11 +155,13 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 	insaneJSON.Release(root)
 	data.outBuf = outBuf
 
+	p.logger.Debugf("Trying to send: %s", outBuf)
+
 	for {
 		err := p.send(outBuf)
 		if err != nil {
 			stats.GetCounter(subsystemName, sendErrorCounter).Inc()
-			p.logger.Errorf("can't send data to splunk address=%s: %s", p.config.Endpoint, err.Error())
+			p.logger.Errorf("Can't send data to splunk address=%s: %s", p.config.Endpoint, err.Error())
 			time.Sleep(time.Second)
 
 			continue
@@ -166,6 +169,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 
 		break
 	}
+	p.logger.Debugf("Successfully sent: %s", outBuf)
 }
 
 func (p *Plugin) maintenance(workerData *pipeline.WorkerData) {}
