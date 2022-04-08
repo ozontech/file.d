@@ -146,6 +146,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 
 	root := insaneJSON.Spawn()
 	outBuf := data.outBuf[:0]
+
 	for _, event := range batch.Events {
 		root.AddField("event").MutateToNode(event.Root.Node)
 		outBuf = root.Encode(outBuf)
@@ -155,6 +156,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 	data.outBuf = outBuf
 
 	for {
+		p.logger.Debugf("Trying to send: %s", string(outBuf))
 		err := p.send(outBuf)
 		if err != nil {
 			stats.GetCounter(subsystemName, sendErrorCounter).Inc()
@@ -166,6 +168,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 
 		break
 	}
+	p.logger.Debugf("Successfully sent: %s", string(outBuf))
 }
 
 func (p *Plugin) maintenance(workerData *pipeline.WorkerData) {}
