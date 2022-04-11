@@ -1,4 +1,5 @@
-VERSION ?= 0.2.2
+VERSION ?= v0.5.2
+
 UPSTREAM_BRANCH ?= origin/master
 
 .PHONY: prepare
@@ -7,8 +8,13 @@ prepare:
 
 .PHONY: build
 build: 
-	echo "Building..."
-	GOOS=linux GOARCH=amd64 go build -v -o file.d ./cmd/file.d.go
+	echo "Building for amd64..."
+	GOOS=linux GOARCH=amd64 go build -ldflags "-X main.version=${VERSION}" -v -o file.d ./cmd/file.d.go
+
+.PHONY: build-for-current-system
+build-for-current-system:
+	echo "Building for current architecture..."
+	go build -ldflags "-X main.version=${VERSION}" -v -o file.d ./cmd/file.d.go
 
 .PHONY: deps
 deps:
