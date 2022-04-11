@@ -30,12 +30,12 @@ const (
 )
 
 type Plugin struct {
-	config         *Config
-	client         http.Client
-	logger         *zap.SugaredLogger
-	avgEventSize   int
-	batcher        *pipeline.Batcher
-	controller     pipeline.OutputPluginController
+	config       *Config
+	client       http.Client
+	logger       *zap.SugaredLogger
+	avgEventSize int
+	batcher      *pipeline.Batcher
+	controller   pipeline.OutputPluginController
 }
 
 //! config-params
@@ -197,6 +197,10 @@ func (p *Plugin) send(data []byte) error {
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode != 200 {
+		return fmt.Errorf("can't send request: %s", resp.Status)
+	}
+
 	b, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return fmt.Errorf("can't read response: %w", err)
@@ -208,8 +212,12 @@ func (p *Plugin) send(data []byte) error {
 		return fmt.Errorf("can't decode response: %w", err)
 	}
 
-	code := root.Dig("code").AsInt()
-	if code > 0 {
+	code := root.Dig("code")
+	if code == nil {
+		return fmt.Errorf("invalid response format, expecting json with 'code' field, got: %s", string(b))
+	}
+
+	if code.AsInt() > 0 {
 		return fmt.Errorf("error while sending to splunk: %s", string(b))
 	}
 
