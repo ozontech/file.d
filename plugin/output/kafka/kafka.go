@@ -1,6 +1,7 @@
 package kafka
 
 import (
+	"context"
 	"strings"
 	"time"
 
@@ -114,7 +115,8 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		p.config.BatchFlushTimeout_,
 		0,
 	)
-	p.batcher.Start()
+
+	p.batcher.Start(context.TODO())
 }
 
 func (p *Plugin) Out(event *pipeline.Event) {
@@ -152,7 +154,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 		if p.config.UseTopicField {
 			fieldValue := event.Root.Dig(p.config.TopicField).AsString()
 			if fieldValue != "" {
-				topic = fieldValue
+				topic = pipeline.CloneString(fieldValue)
 			}
 		}
 
@@ -160,11 +162,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 			data.messages[i] = &sarama.ProducerMessage{}
 		}
 		data.messages[i].Value = outBuf[start:]
-
-		// copy topic from json, to temporary out buffer to avoid event reusing issues
-		start = len(outBuf)
-		outBuf = append(outBuf, topic...)
-		data.messages[i].Topic = pipeline.ByteToStringUnsafe(outBuf[start:])
+		data.messages[i].Topic = topic
 	}
 
 	data.outBuf = outBuf
@@ -183,6 +181,9 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 
 func (p *Plugin) Stop() {
 	p.batcher.Stop()
+	if err := p.producer.Close(); err != nil {
+		p.logger.Error("can't stop kafka producer: %s", err)
+	}
 }
 
 func (p *Plugin) newProducer() sarama.SyncProducer {

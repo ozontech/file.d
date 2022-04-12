@@ -32,8 +32,7 @@ type Plugin struct {
 	avgEventSize   int
 	batcher        *pipeline.Batcher
 	file           *os.File
-	ctx            context.Context
-	cancelFunc     context.CancelFunc
+	cancel         context.CancelFunc
 	idx            int
 	nextSealUpTime time.Time
 
@@ -122,8 +121,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 
 	p.mu = &sync.RWMutex{}
 	ctx, cancel := context.WithCancel(context.Background())
-	p.ctx = ctx
-	p.cancelFunc = cancel
+	p.cancel = cancel
 
 	if err := os.MkdirAll(p.targetDir, os.ModePerm); err != nil {
 		p.logger.Fatalf("could not create target dir: %s, error: %s", p.targetDir, err.Error())
@@ -140,13 +138,16 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		p.logger.Panic("next seal up time is nil!")
 	}
 
-	longpanic.Go(p.fileSealUpTicker)
-	p.batcher.Start()
+	longpanic.Go(func() {
+		p.fileSealUpTicker(ctx)
+	})
+	p.batcher.Start(ctx)
 }
 
 func (p *Plugin) Stop() {
-	p.cancelFunc()
+	// we MUST NOT close file, through p.file.Close(), fileSealUpTicker already do this duty.
 	p.batcher.Stop()
+	p.cancel()
 }
 
 func (p *Plugin) Out(event *pipeline.Event) {
@@ -177,13 +178,13 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 	p.write(outBuf)
 }
 
-func (p *Plugin) fileSealUpTicker() {
+func (p *Plugin) fileSealUpTicker(ctx context.Context) {
 	for {
 		timer := time.NewTimer(time.Until(p.nextSealUpTime))
 		select {
 		case <-timer.C:
 			p.sealUp()
-		case <-p.ctx.Done():
+		case <-ctx.Done():
 			timer.Stop()
 			return
 		}
