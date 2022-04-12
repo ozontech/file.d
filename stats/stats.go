@@ -3,6 +3,7 @@ package stats
 import (
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/version"
 	prom "github.com/prometheus/client_golang/prometheus"
 )
 
@@ -50,10 +51,11 @@ func InitStats() {
 
 func RegisterCounter(metricDesc *MetricDesc) {
 	maskPromCounter := prom.NewCounter(prom.CounterOpts{
-		Namespace: pipeline.PromNamespace,
-		Subsystem: metricDesc.Subsystem,
-		Name:      metricDesc.Name,
-		Help:      metricDesc.Help,
+		Namespace:   pipeline.PromNamespace,
+		Subsystem:   metricDesc.Subsystem,
+		Name:        metricDesc.Name,
+		Help:        metricDesc.Help,
+		ConstLabels: map[string]string{"version": version.AppVersion},
 	})
 
 	keyInternal := key{pipeline.PromNamespace, metricDesc.Subsystem, metricDesc.Name}

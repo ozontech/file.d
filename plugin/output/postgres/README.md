@@ -58,15 +58,21 @@ Retries of insertion.
 
 <br>
 
-**`retention`** *`int`* *`default=50`* 
+**`retention`** *`cfg.Duration`* *`default=50ms`* 
 
 Retention milliseconds for retry to DB.
 
 <br>
 
-**`db_request_timeout`** *`int`* 
+**`db_request_timeout`** *`cfg.Duration`* *`default=3000ms`* 
 
 Timeout for DB requests in milliseconds.
+
+<br>
+
+**`db_health_check_period`** *`cfg.Duration`* *`default=60s`* 
+
+Timeout for DB health check.
 
 <br>
 

@@ -48,6 +48,7 @@ import (
 	_ "github.com/ozontech/file.d/plugin/output/s3"
 	_ "github.com/ozontech/file.d/plugin/output/splunk"
 	_ "github.com/ozontech/file.d/plugin/output/stdout"
+	appVer "github.com/ozontech/file.d/version"
 )
 
 var (
@@ -64,6 +65,7 @@ var (
 func main() {
 	kingpin.Version(version)
 	kingpin.Parse()
+	appVer.AppVersion = version
 
 	logger.Infof("hi!")
 

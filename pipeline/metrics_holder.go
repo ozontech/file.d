@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	appVer "github.com/ozontech/file.d/version"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/atomic"
 )
@@ -101,16 +102,15 @@ func (m *metricsHolder) nextMetricsGen() {
 			Subsystem:   "pipeline_" + m.pipelineName,
 			Name:        metrics.name + "_events_count_total",
 			Help:        fmt.Sprintf("how many events processed by pipeline %q and #%d action", m.pipelineName, index),
-			ConstLabels: map[string]string{"gen": metricsGen},
+			ConstLabels: map[string]string{"gen": metricsGen, "version": appVer.AppVersion},
 		}
 		cnt.count = prometheus.NewCounterVec(opts, append([]string{"status"}, metrics.labels...))
-
 		opts = prometheus.CounterOpts{
 			Namespace:   PromNamespace,
 			Subsystem:   "pipeline_" + m.pipelineName,
 			Name:        metrics.name + "_events_size_total",
 			Help:        fmt.Sprintf("total size of events processed by pipeline %q and #%d action", m.pipelineName, index),
-			ConstLabels: map[string]string{"gen": metricsGen},
+			ConstLabels: map[string]string{"gen": metricsGen, "version": appVer.AppVersion},
 		}
 		cnt.size = prometheus.NewCounterVec(opts, append([]string{"status"}, metrics.labels...))
 
