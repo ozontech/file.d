@@ -23,6 +23,8 @@ Make sure to use the bug report template available when creating a new issue.
 Please provide as many details and as much context as possible. Use the feature request template available when reporting a new issue.
 
 ## Pull requests
+Every pull request description should include the number of the issue it's resolving. Usually this looks like "Closes #<>" text in the PR description.
+
 Pull requests with new features, bug fixes and improvements are very helpful and should remain focused on one main thing and avoid containing unrelated commits.
 Please stick to the coding conventions used throughout the project (indentation, accurate comments, etc.).
 
