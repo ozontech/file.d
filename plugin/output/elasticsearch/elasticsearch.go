@@ -2,6 +2,7 @@ package elasticsearch
 
 import (
 	"bytes"
+	"context"
 	"io/ioutil"
 	"math/rand"
 	"net/http"
@@ -34,6 +35,7 @@ const (
 type Plugin struct {
 	logger       *zap.SugaredLogger
 	client       *http.Client
+	cancel       context.CancelFunc
 	config       *Config
 	avgEventSize int
 	time         string
@@ -149,11 +151,16 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		p.config.BatchFlushTimeout_,
 		time.Minute,
 	)
-	p.batcher.Start()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	p.cancel = cancel
+
+	p.batcher.Start(ctx)
 }
 
 func (p *Plugin) Stop() {
 	p.batcher.Stop()
+	p.cancel()
 }
 
 func (p *Plugin) Out(event *pipeline.Event) {

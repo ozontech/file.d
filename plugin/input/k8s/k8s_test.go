@@ -208,7 +208,6 @@ func TestCleanUp(t *testing.T) {
 	p, _, _ := test.NewPipelineMock(test.NewActionPluginStaticInfo(MultilineActionFactory, config(), pipeline.MatchModeAnd, nil, false))
 
 	enableGatherer(logger.Instance)
-	defer disableGatherer()
 
 	putMeta(getPodInfo(&metaItem{
 		nodeName:      "node_1",
@@ -234,6 +233,7 @@ func TestCleanUp(t *testing.T) {
 
 	time.Sleep(metaExpireDuration + MaintenanceInterval)
 
+	disableGatherer()
 	p.Stop()
 	assert.Equal(t, 0, len(metaData))
 }

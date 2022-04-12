@@ -32,12 +32,6 @@ test:
 	go test ./pipeline/ -v -count 1
 	go test ./plugin/... -v -count 1
 
-.PHONY: test-short
-test-short:
-	go test ./fd/ -v -count 1 -short
-	go test ./pipeline/ -v -count 1 -short
-	go test ./plugin/... -v -count 1 -short
-
 .PHONY: test-e2e
 test-e2e:
 	go test ./cmd/ -v -count 1
@@ -48,8 +42,8 @@ bench-file:
 
 .PHONY: gen-doc
 gen-doc:
-	go install github.com/vitkovskii/insane-doc@latest
-	insane-doc
+	@go install github.com/vitkovskii/insane-doc@latest
+	@~/go/bin/insane-doc
 
 .PHONY: profile-file
 profile-file:
@@ -81,5 +75,7 @@ lint:
 
 .PHONY: mock
 mock:
-	go install github.com/golang/mock/mockgen
-	mockgen -source=plugin/output/s3/s3.go -destination=plugin/output/s3/mock/s3.go
+	@go get github.com/golang/mock/gomock
+	@go install github.com/golang/mock/mockgen
+	@~/go/bin/mockgen -source=plugin/output/s3/s3.go -destination=plugin/output/s3/mock/s3.go
+	@~/go/bin/mockgen -source=plugin/output/postgres/postgres.go -destination=plugin/output/postgres/mock/postgres.go

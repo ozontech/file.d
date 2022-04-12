@@ -60,6 +60,7 @@ func RegisterCounter(metricDesc *MetricDesc) {
 	registerMetric(keyInternal, maskPromCounter)
 }
 
+// Returns counter of given metric, than can be inc or dec.
 func GetCounter(subsystem, metricName string) prom.Counter {
 	checkStatsInitialized()
 

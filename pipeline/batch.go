@@ -1,11 +1,13 @@
 package pipeline
 
 import (
+	"context"
 	"sync"
 	"time"
 
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/longpanic"
+	"go.uber.org/atomic"
 )
 
 type Batch struct {
@@ -54,11 +56,14 @@ type Batcher struct {
 	batchSize           int
 	flushTimeout        time.Duration
 	maintenanceInterval time.Duration
+	// todo graceful shutdown with context.
+	cancel context.CancelFunc
 
-	shouldStop bool
+	shouldStop atomic.Bool
 	batch      *Batch
 
 	// cycle of batches: freeBatches => fullBatches, fullBatches => freeBatches
+	// TODO get rid of freeBatches, fullBatches system, which prevents from graceful degradation.
 	freeBatches chan *Batch
 	fullBatches chan *Batch
 	mu          *sync.Mutex
@@ -98,16 +103,19 @@ func NewBatcher(
 	}
 }
 
-func (b *Batcher) Start() {
+func (b *Batcher) Start(ctx context.Context) {
 	b.mu = &sync.Mutex{}
 	b.seqMu = &sync.Mutex{}
 	b.cond = sync.NewCond(b.seqMu)
+	ctx, b.cancel = context.WithCancel(ctx)
 
 	b.freeBatches = make(chan *Batch, b.workerCount)
 	b.fullBatches = make(chan *Batch, b.workerCount)
 	for i := 0; i < b.workerCount; i++ {
 		b.freeBatches <- newBatch(b.batchSize, b.flushTimeout)
-		longpanic.Go(b.work)
+		longpanic.Go(func() {
+			b.work(ctx)
+		})
 	}
 
 	longpanic.Go(b.heartbeat)
@@ -115,13 +123,13 @@ func (b *Batcher) Start() {
 
 type WorkerData interface{}
 
-func (b *Batcher) work() {
+func (b *Batcher) work(ctx context.Context) {
 	t := time.Now()
 	events := make([]*Event, 0)
 	data := WorkerData(nil)
 	for batch := range b.fullBatches {
 		b.outFn(&data, batch)
-		events = b.commitBatch(events, batch)
+		events = b.commitBatch(ctx, events, batch)
 
 		shouldRunMaintenance := b.maintenanceFn != nil && b.maintenanceInterval != 0 && time.Since(t) > b.maintenanceInterval
 		if shouldRunMaintenance {
@@ -131,7 +139,7 @@ func (b *Batcher) work() {
 	}
 }
 
-func (b *Batcher) commitBatch(events []*Event, batch *Batch) []*Event {
+func (b *Batcher) commitBatch(ctx context.Context, events []*Event, batch *Batch) []*Event {
 	// we need to release batch first and then commit events
 	// so lets swap local slice with batch slice to avoid data copying
 	events, batch.Events = batch.Events, events
@@ -159,7 +167,7 @@ func (b *Batcher) commitBatch(events []*Event, batch *Batch) []*Event {
 
 func (b *Batcher) heartbeat() {
 	for {
-		if b.shouldStop {
+		if b.shouldStop.Load() {
 			return
 		}
 
@@ -204,7 +212,9 @@ func (b *Batcher) getBatch() *Batch {
 }
 
 func (b *Batcher) Stop() {
-	b.shouldStop = true
+	b.shouldStop.Store(true)
+
+	// todo add scenario without races.
 	close(b.freeBatches)
 	close(b.fullBatches)
 }

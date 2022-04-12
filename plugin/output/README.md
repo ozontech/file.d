@@ -32,6 +32,10 @@ Allowed characters in field names are letters, numbers, underscores, dashes, and
 It sends the event batches to kafka brokers using `sarama` lib.
 
 [More details...](plugin/output/kafka/README.md)
+## postgres
+It sends the event batches to postgres db using pgx.
+
+[More details...](plugin/output/postgres/README.md)
 ## s3
 Sends events to s3 output of one or multiple buckets.
 `bucket` is default bucket for events. Addition buckets can be described in `multi_buckets` section, example down here.

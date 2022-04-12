@@ -31,7 +31,7 @@ type jobProvider struct {
 	watcher    *watcher
 	offsetDB   *offsetDB
 
-	isStarted bool
+	isStarted atomic.Bool
 
 	jobs     map[pipeline.SourceID]*Job
 	jobsMu   *sync.RWMutex
@@ -137,7 +137,7 @@ func (jp *jobProvider) start() {
 		longpanic.Go(func() { jp.saveOffsetsCyclic(jp.config.AsyncInterval_) })
 	}
 
-	jp.isStarted = true
+	jp.isStarted.Store(true)
 
 	longpanic.Go(jp.reportStats)
 	longpanic.Go(jp.maintenance)
@@ -313,7 +313,7 @@ func (jp *jobProvider) addJob(file *os.File, stat os.FileInfo, filename string, 
 	}
 
 	// load saved offsets only on start phase
-	if jp.isStarted {
+	if jp.isStarted.Load() {
 		jp.initJobOffset(offsetsOpReset, job)
 	} else {
 		jp.initJobOffset(jp.config.OffsetsOp_, job)

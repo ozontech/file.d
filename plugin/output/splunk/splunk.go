@@ -30,11 +30,12 @@ const (
 )
 
 type Plugin struct {
-	config         *Config
-	logger         *zap.SugaredLogger
-	avgEventSize   int
-	batcher        *pipeline.Batcher
-	controller     pipeline.OutputPluginController
+	config       *Config
+	client       http.Client
+	logger       *zap.SugaredLogger
+	avgEventSize int
+	batcher      *pipeline.Batcher
+	controller   pipeline.OutputPluginController
 }
 
 //! config-params
@@ -95,6 +96,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.logger = params.Logger
 	p.avgEventSize = params.PipelineSettings.AvgEventSize
 	p.config = config.(*Config)
+	p.client = p.newClient(p.config.RequestTimeout_)
 
 	p.registerPluginMetrics()
 
@@ -109,7 +111,8 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		p.config.BatchFlushTimeout_,
 		0,
 	)
-	p.batcher.Start()
+
+	p.batcher.Start(context.TODO())
 }
 
 func (p *Plugin) registerPluginMetrics() {
@@ -152,7 +155,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 	data.outBuf = outBuf
 
 	for {
-		err := p.send(outBuf, p.config.RequestTimeout_)
+		err := p.send(outBuf)
 		if err != nil {
 			stats.GetCounter(subsystemName, sendErrorCounter).Inc()
 			p.logger.Errorf("can't send data to splunk address=%s: %s", p.config.Endpoint, err.Error())
@@ -167,8 +170,8 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 
 func (p *Plugin) maintenance(workerData *pipeline.WorkerData) {}
 
-func (p *Plugin) send(data []byte, timeout time.Duration) error {
-	c := http.Client{
+func (p *Plugin) newClient(timeout time.Duration) http.Client {
+	return http.Client{
 		Timeout: timeout,
 		Transport: &http.Transport{
 			TLSClientConfig: &tls.Config{
@@ -177,19 +180,26 @@ func (p *Plugin) send(data []byte, timeout time.Duration) error {
 			},
 		},
 	}
+}
 
+func (p *Plugin) send(data []byte) error {
 	r := bytes.NewReader(data)
+	// todo pass context from parent.
 	req, err := http.NewRequestWithContext(context.Background(), "POST", p.config.Endpoint, r)
 	if err != nil {
 		return fmt.Errorf("can't create request: %w", err)
 	}
 
 	req.Header.Set("Authorization", "Splunk "+p.config.Token)
-	resp, err := c.Do(req)
+	resp, err := p.client.Do(req)
 	if err != nil {
 		return fmt.Errorf("can't send request: %w", err)
 	}
 	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		return fmt.Errorf("can't send request: %s", resp.Status)
+	}
 
 	b, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -202,8 +212,12 @@ func (p *Plugin) send(data []byte, timeout time.Duration) error {
 		return fmt.Errorf("can't decode response: %w", err)
 	}
 
-	code := root.Dig("code").AsInt()
-	if code > 0 {
+	code := root.Dig("code")
+	if code == nil {
+		return fmt.Errorf("invalid response format, expecting json with 'code' field, got: %s", string(b))
+	}
+
+	if code.AsInt() > 0 {
 		return fmt.Errorf("error while sending to splunk: %s", string(b))
 	}
 

@@ -106,11 +106,14 @@ s3 default bucket.
 
 <br>
 
-**`secure`** *`bool`* *`default=false`* 
+**`multi_buckets`** *``json:"multi_buckets"`* 
 MultiBuckets is additional buckets, which can also receive event.
 Event must contain `bucket_name` field which value is s3 bucket name.
 Events without `bucket_name` sends to DefaultBucket.
-*`bool`* *`default=false`* 
+
+<br>
+
+**`secure`** *`bool`* *`default=false`* 
 s3 connection secure option.
 
 <br>
@@ -118,6 +121,12 @@ s3 connection secure option.
 **`bucket_field_event`** *`string`* 
 BucketEventField field change destination bucket of event to fields value.
 Fallback to DefaultBucket if BucketEventField bucket doesn't exist.
+
+<br>
+
+**`dynamic_buckets_limit`** *`int`* *`default=32`* 
+DynamicBucketsLimit regulates how many buckets can be created dynamically.
+Prevents problems when some random strings in BucketEventField where
 
 <br>
 

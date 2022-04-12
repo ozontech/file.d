@@ -1,6 +1,7 @@
 package pipeline
 
 import (
+	"context"
 	"sync"
 	"testing"
 	"time"
@@ -58,7 +59,8 @@ func TestBatcher(t *testing.T) {
 
 	batcher := NewBatcher("test", "devnull", batcherOut, nil, batcherTail, 8, batchSize, time.Second, 0)
 
-	batcher.Start()
+	ctx := context.TODO()
+	batcher.Start(ctx)
 
 	eventsCh := make(chan *Event, 1024)
 	go func() {
