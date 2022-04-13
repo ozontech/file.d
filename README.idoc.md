@@ -10,6 +10,10 @@
 
 > ⚠ Although we use it in production, `it still isn't v1.0.0`. Please, test your pipelines carefully on dev/stage environments.  
 
+## Contributing
+`file.d` is an open-source project and contributions are very welcome!
+Please make sure to read our [contributing guide](/CONTRIBUTING.md) before creating an issue and opening a PR!
+
 ## Motivation
 Well, we already have several similar tools: vector, filebeat, logstash, fluend-d, fluent-bit, etc.
 
@@ -41,11 +45,13 @@ TBD: throughput on production servers.
 
 **Output**: @global-contents-table-plugin-output|links
 
+
 ## What's next
 * [Quick start](/docs/quick-start.md)
 * [Installation](/docs/installation.md)
 * [Examples](/docs/examples.md)
 * [Configuring](/docs/configuring.md)
 * [Architecture](/docs/architecture.md)
-* [Contributing](/docs/contributing.md)
+* [Testing](/docs/testing.md)
+* [Contributing](/CONTRIBUTING.md)
 * [License](/docs/license.md)
