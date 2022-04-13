@@ -41,11 +41,16 @@ TBD: throughput on production servers.
 
 **Output**: @global-contents-table-plugin-output|links
 
+## Contributing
+`file.d` is an open-source project and contributions are very welcome!
+Please make sure to read our [contributing guide](/CONTRIBUTING.md) before creating an issue and opening a PR!
+
 ## What's next
 * [Quick start](/docs/quick-start.md)
 * [Installation](/docs/installation.md)
 * [Examples](/docs/examples.md)
 * [Configuring](/docs/configuring.md)
 * [Architecture](/docs/architecture.md)
-* [Contributing](/docs/contributing.md)
+* [Testing](/docs/testing.md)
+* [Contributing](/CONTRIBUTING.md)
 * [License](/docs/license.md)
