@@ -2,10 +2,19 @@ package stats
 
 import (
 	"github.com/ozontech/file.d/logger"
-	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/version"
+
 	prom "github.com/prometheus/client_golang/prometheus"
 )
+
+const PromNamespace = "file_d"
+
+const (
+	counterMetricType = 1
+	gaugeMetricType   = 2
+)
+
+type metricType = int
 
 type MetricDesc struct {
 	Subsystem string
@@ -20,13 +29,15 @@ type key struct {
 }
 
 type stats struct {
-	allMetrics map[key]prom.Counter
+	counters map[key]prom.Counter
+	gauges   map[key]prom.Gauge
 }
 
 const (
 	subsystemName = "stats"
 
 	unknownCounter   = "unknown_counter"
+	unknownGauge     = "unknown_gauge"
 	duplicateCounter = "duplicate_counter"
 )
 
@@ -39,49 +50,79 @@ func InitStats() {
 	}
 
 	statsGlobal = &stats{
-		allMetrics: make(map[key]prom.Counter),
-		// This map will store prom.Counter instead of prom.Collector for now
-		// because typecasts are slow.
-		// A viable option would be to use a map of maps if we ever need
-		// to be able to store several metric types.
+		counters: make(map[key]prom.Counter),
+		gauges:   make(map[key]prom.Gauge),
 	}
 
 	statsGlobal.registerOwnMetrics()
 }
 
-func RegisterCounter(metricDesc *MetricDesc) {
-	maskPromCounter := prom.NewCounter(prom.CounterOpts{
-		Namespace:   pipeline.PromNamespace,
+func RegisterGauge(metricDesc *MetricDesc) {
+	maskPromGauge := prom.NewGauge(prom.GaugeOpts{
+		Namespace:   PromNamespace,
 		Subsystem:   metricDesc.Subsystem,
 		Name:        metricDesc.Name,
 		Help:        metricDesc.Help,
 		ConstLabels: map[string]string{"version": version.AppVersion},
 	})
 
-	keyInternal := key{pipeline.PromNamespace, metricDesc.Subsystem, metricDesc.Name}
-	registerMetric(keyInternal, maskPromCounter)
+	keyInternal := key{PromNamespace, metricDesc.Subsystem, metricDesc.Name}
+	registerMetric(gaugeMetricType, keyInternal, maskPromGauge)
 }
 
-// Returns counter of given metric, than can be inc or dec.
+func RegisterCounter(metricDesc *MetricDesc) {
+	maskPromCounter := prom.NewCounter(prom.CounterOpts{
+		Namespace:   PromNamespace,
+		Subsystem:   metricDesc.Subsystem,
+		Name:        metricDesc.Name,
+		Help:        metricDesc.Help,
+		ConstLabels: map[string]string{"version": version.AppVersion},
+	})
+
+	keyInternal := key{PromNamespace, metricDesc.Subsystem, metricDesc.Name}
+	registerMetric(counterMetricType, keyInternal, maskPromCounter)
+}
+
+// Returns counter for a given metric.
 func GetCounter(subsystem, metricName string) prom.Counter {
 	checkStatsInitialized()
 
-	if val, ok := statsGlobal.allMetrics[getKey(subsystem, metricName)]; ok {
+	if val, ok := statsGlobal.counters[getKey(subsystem, metricName)]; ok {
 		return val
 	}
 
-	return statsGlobal.allMetrics[key{pipeline.PromNamespace, subsystem, metricName}]
+	return statsGlobal.counters[key{PromNamespace, subsystem, unknownCounter}]
 }
 
-func registerMetric(k key, metric prom.Counter) { // todo: support prom.Collector
+// Returns gauge for a given metric.
+func GetGauge(subsystem, metricName string) prom.Gauge {
 	checkStatsInitialized()
 
-	if _, ok := statsGlobal.allMetrics[k]; ok {
+	if val, ok := statsGlobal.gauges[getKey(subsystem, metricName)]; ok {
+		return val
+	}
+
+	return statsGlobal.gauges[key{PromNamespace, subsystem, unknownGauge}]
+}
+
+func registerMetric(mType metricType, k key, metric prom.Collector) {
+	checkStatsInitialized()
+
+	_, hasCounter := statsGlobal.counters[k]
+	_, hasGauge := statsGlobal.gauges[k]
+
+	if hasCounter || hasGauge {
 		logger.Errorf("rewriting existent metric")
 		GetCounter(subsystemName, duplicateCounter).Inc()
 	}
 
-	statsGlobal.allMetrics[k] = metric
+	switch mType {
+	case counterMetricType:
+		statsGlobal.counters[k] = metric.(prom.Counter)
+	case gaugeMetricType:
+		statsGlobal.gauges[k] = metric.(prom.Gauge)
+	}
+
 	prom.DefaultRegisterer.Unregister(metric)
 	prom.DefaultRegisterer.MustRegister(metric)
 }
@@ -92,6 +133,11 @@ func (s *stats) registerOwnMetrics() {
 		Name:      unknownCounter,
 		Help:      "Counter for non-existent metrics",
 	})
+	RegisterGauge(&MetricDesc{
+		Subsystem: subsystemName,
+		Name:      unknownGauge,
+		Help:      "Gauge for non-existent metrics",
+	})
 	RegisterCounter(&MetricDesc{
 		Subsystem: subsystemName,
 		Name:      duplicateCounter,
@@ -100,7 +146,7 @@ func (s *stats) registerOwnMetrics() {
 }
 
 func getKey(subsystem, metricName string) key {
-	return key{pipeline.PromNamespace, subsystem, metricName}
+	return key{PromNamespace, subsystem, metricName}
 }
 
 func checkStatsInitialized() {

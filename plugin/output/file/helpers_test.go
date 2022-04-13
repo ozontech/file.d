@@ -8,6 +8,7 @@ import (
 
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/plugin/input/fake"
+	"github.com/ozontech/file.d/stats"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
 )
@@ -48,6 +49,7 @@ func checkDirFiles(t *testing.T, matches []string, totalSent int64, msg string) 
 }
 
 func newPipeline(t *testing.T, configOutput *Config) *pipeline.Pipeline {
+	stats.InitStats()
 	t.Helper()
 	settings := &pipeline.Settings{
 		Capacity:            4096,

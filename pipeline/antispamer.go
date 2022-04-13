@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/ozontech/file.d/logger"
+	"github.com/ozontech/file.d/stats"
 	"go.uber.org/atomic"
 )
 
@@ -15,10 +16,23 @@ type antispamer struct {
 	counters        map[SourceID]*atomic.Int32
 }
 
+const (
+	metricName    = "enabled"
+	subsystemName = "antispam"
+)
+
 func newAntispamer(threshold int, unbanIterations int, maintenanceInterval time.Duration) *antispamer {
 	if threshold != 0 {
 		logger.Infof("antispam enabled, threshold=%d/%d sec", threshold, maintenanceInterval/time.Second)
 	}
+
+	stats.RegisterGauge(&stats.MetricDesc{
+		Name:      metricName,
+		Subsystem: subsystemName,
+		Help:      "Gauge indicates whether the antispam is enabled",
+	})
+	// not enabled by default
+	stats.GetGauge(subsystemName, metricName).Set(0)
 
 	return &antispamer{
 		threshold:       threshold,
@@ -39,8 +53,12 @@ func (p *antispamer) isSpam(id SourceID, name string, isNewSource bool) bool {
 
 	if !has {
 		p.mu.Lock()
-		value = &atomic.Int32{}
-		p.counters[id] = value
+		if newValue, has := p.counters[id]; has {
+			value = newValue
+		} else {
+			value = &atomic.Int32{}
+			p.counters[id] = value
+		}
 		p.mu.Unlock()
 	}
 
@@ -52,6 +70,7 @@ func (p *antispamer) isSpam(id SourceID, name string, isNewSource bool) bool {
 	x := value.Inc()
 	if x == int32(p.threshold) {
 		value.Swap(int32(p.unbanIterations * p.threshold))
+		stats.GetGauge(subsystemName, metricName).Set(1)
 		logger.Warnf("antispam: source has been banned id=%d, name=%s", id, name)
 	}
 
@@ -60,6 +79,8 @@ func (p *antispamer) isSpam(id SourceID, name string, isNewSource bool) bool {
 
 func (p *antispamer) maintenance() {
 	p.mu.Lock()
+
+	allUnbanned := true
 	for source, counter := range p.counters {
 		x := int(counter.Load())
 
@@ -78,11 +99,22 @@ func (p *antispamer) maintenance() {
 			logger.Infof("antispam: source has been unbanned id=%d", source)
 		}
 
+		if x >= p.threshold {
+			allUnbanned = false
+		}
+
 		if x > p.unbanIterations*p.threshold {
 			x = p.unbanIterations * p.threshold
 		}
 
 		counter.Swap(int32(x))
 	}
+
+	if allUnbanned {
+		stats.GetGauge(subsystemName, metricName).Set(0)
+	} else {
+		logger.Info("antispam: there are banned sources")
+	}
+
 	p.mu.Unlock()
 }

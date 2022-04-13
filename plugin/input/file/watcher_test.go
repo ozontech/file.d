@@ -2,11 +2,12 @@ package file
 
 import (
 	"fmt"
-	"go.uber.org/atomic"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
+
+	"go.uber.org/atomic"
 
 	"github.com/rjeczalik/notify"
 	"github.com/stretchr/testify/require"
