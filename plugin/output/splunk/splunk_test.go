@@ -1,11 +1,14 @@
 package splunk
 
 import (
+	"context"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
+	"github.com/cenkalti/backoff/v4"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/stretchr/testify/assert"
 	insaneJSON "github.com/vitkovskii/insane-json"
@@ -44,11 +47,19 @@ func TestSplunk(t *testing.T) {
 			}))
 			defer testServer.Close()
 
+			ctx := context.TODO()
+			stdBackoff := backoff.NewExponentialBackOff()
+			stdBackoff.Multiplier = 1.2
+			stdBackoff.RandomizationFactor = 0.25
+			stdBackoff.InitialInterval = time.Second
+			stdBackoff.MaxInterval = stdBackoff.InitialInterval * 2
+
 			plugin := Plugin{
 				config: &Config{
 					Endpoint: testServer.URL,
 				},
-				logger: zap.NewExample().Sugar(),
+				logger:  zap.NewExample().Sugar(),
+				backoff: backoff.WithContext(stdBackoff, ctx),
 			}
 
 			batch := pipeline.Batch{

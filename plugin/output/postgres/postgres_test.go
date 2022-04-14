@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cenkalti/backoff/v4"
 	"github.com/golang/mock/gomock"
 	"github.com/jackc/pgconn"
 	"github.com/ozontech/file.d/logger"
@@ -60,9 +61,10 @@ func TestPrivateOut(t *testing.T) {
 
 	table := "table1"
 
+	retryCnt := 0
 	config := Config{
 		Columns: columns,
-		Retry:   3,
+		Retry:   retryCnt,
 	}
 
 	ctl := gomock.NewController(t)
@@ -82,12 +84,20 @@ func TestPrivateOut(t *testing.T) {
 	builder, err := NewQueryBuilder(columns, table)
 	require.NoError(t, err)
 
+	retryBackoff := backoff.WithMaxRetries(
+		backoff.WithContext(
+			backoff.NewExponentialBackOff(),
+			ctx),
+		uint64(retryCnt),
+	)
+
 	p := &Plugin{
 		config:       &config,
 		queryBuilder: builder,
 		pool:         pool,
 		logger:       testLogger,
 		ctx:          ctx,
+		backoff:      retryBackoff,
 	}
 
 	p.registerPluginMetrics()
@@ -132,9 +142,10 @@ func TestPrivateOutWithRetry(t *testing.T) {
 
 	table := "table1"
 
+	retryCnt := 3
 	config := Config{
 		Columns: columns,
-		Retry:   3,
+		Retry:   retryCnt,
 	}
 
 	ctl := gomock.NewController(t)
@@ -159,12 +170,20 @@ func TestPrivateOutWithRetry(t *testing.T) {
 	builder, err := NewQueryBuilder(columns, table)
 	require.NoError(t, err)
 
+	retryBackoff := backoff.WithMaxRetries(
+		backoff.WithContext(
+			backoff.NewExponentialBackOff(),
+			ctx),
+		3,
+	)
+
 	p := &Plugin{
 		config:       &config,
 		queryBuilder: builder,
 		pool:         pool,
 		logger:       testLogger,
 		ctx:          ctx,
+		backoff:      retryBackoff,
 	}
 
 	p.registerPluginMetrics()
@@ -208,18 +227,26 @@ func TestPrivateOutNoGoodEvents(t *testing.T) {
 
 	table := "table1"
 
+	retryCnt := 0
 	config := Config{
 		Columns: columns,
-		Retry:   3,
+		Retry:   retryCnt,
 	}
 
 	builder, err := NewQueryBuilder(columns, table)
 	require.NoError(t, err)
 
+	retryBackoff := backoff.WithMaxRetries(
+		backoff.WithContext(
+			backoff.NewExponentialBackOff(),
+			context.Background()),
+		uint64(retryCnt),
+	)
 	p := &Plugin{
 		config:       &config,
 		queryBuilder: builder,
 		logger:       testLogger,
+		backoff:      retryBackoff,
 	}
 
 	p.registerPluginMetrics()
@@ -274,9 +301,10 @@ func TestPrivateOutDeduplicatedEvents(t *testing.T) {
 
 	table := "table1"
 
+	retryCnt := 1
 	config := Config{
 		Columns: columns,
-		Retry:   3,
+		Retry:   retryCnt,
 	}
 
 	ctl := gomock.NewController(t)
@@ -296,12 +324,19 @@ func TestPrivateOutDeduplicatedEvents(t *testing.T) {
 	builder, err := NewQueryBuilder(columns, table)
 	require.NoError(t, err)
 
+	retryBackoff := backoff.WithMaxRetries(
+		backoff.WithContext(
+			backoff.NewExponentialBackOff(),
+			ctx),
+		3,
+	)
 	p := &Plugin{
 		config:       &config,
 		queryBuilder: builder,
 		pool:         pool,
 		logger:       testLogger,
 		ctx:          ctx,
+		backoff:      retryBackoff,
 	}
 
 	p.registerPluginMetrics()
@@ -448,9 +483,10 @@ func TestPrivateOutFewUniqueEventsYetWithDeduplicationEventsAnpooladEvents(t *te
 
 	table := "table1"
 
+	retryCnt := 999
 	config := Config{
 		Columns: columns,
-		Retry:   3,
+		Retry:   retryCnt,
 	}
 
 	ctl := gomock.NewController(t)
@@ -471,12 +507,19 @@ func TestPrivateOutFewUniqueEventsYetWithDeduplicationEventsAnpooladEvents(t *te
 	builder, err := NewQueryBuilder(columns, table)
 	require.NoError(t, err)
 
+	retryBackoff := backoff.WithMaxRetries(
+		backoff.WithContext(
+			backoff.NewExponentialBackOff(),
+			ctx),
+		3,
+	)
 	p := &Plugin{
 		config:       &config,
 		queryBuilder: builder,
 		pool:         pool,
 		logger:       testLogger,
 		ctx:          ctx,
+		backoff:      retryBackoff,
 	}
 
 	p.registerPluginMetrics()

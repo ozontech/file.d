@@ -8,6 +8,7 @@ import (
 	"time"
 
 	sq "github.com/Masterminds/squirrel"
+	"github.com/cenkalti/backoff/v4"
 	"github.com/jackc/pgconn"
 	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/ozontech/file.d/cfg"
@@ -65,6 +66,7 @@ type Plugin struct {
 	ctx        context.Context
 	cancelFunc context.CancelFunc
 
+	backoff      backoff.BackOff
 	queryBuilder PgQueryBuilder
 	pool         PgxIface
 }
@@ -238,6 +240,17 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	}
 	p.pool = pool
 
+	stdBackoff := backoff.NewExponentialBackOff()
+	stdBackoff.Multiplier = 1.2
+	stdBackoff.RandomizationFactor = 0.25
+	stdBackoff.InitialInterval = p.config.Retention_
+	stdBackoff.MaxInterval = p.config.Retention_ * 2
+
+	ctxBackoff := backoff.WithContext(stdBackoff, p.ctx)
+	expBackoff := backoff.WithMaxRetries(ctxBackoff, uint64(p.config.Retry))
+
+	p.backoff = expBackoff
+
 	p.batcher = pipeline.NewBatcher(
 		params.PipelineName,
 		outPluginType,
@@ -321,31 +334,23 @@ func (p *Plugin) out(_ *pipeline.WorkerData, batch *pipeline.Batch) {
 		p.logger.Fatalf("Invalid SQL. query: %s, args: %v, err: %v", query, args, err)
 	}
 
-	var ctx context.Context
-	var cancel context.CancelFunc
-	var outErr error
 	// Insert into pg with retry.
-	for i := p.config.Retry; i > 0; i-- {
-		ctx, cancel = context.WithTimeout(p.ctx, p.config.DBRequestTimeout_)
+	err = backoff.Retry(func() error {
+		ctx, cancel := context.WithTimeout(p.ctx, p.config.DBRequestTimeout_)
+		defer cancel()
 
 		p.logger.Info(query, args)
 		pgCommResult, err := p.pool.Exec(ctx, query, args...)
 		if err != nil {
-			outErr = err
 			p.logger.Infof("pgCommResult: %v, err: %s", pgCommResult, err.Error())
-			cancel()
-			time.Sleep(p.config.Retention_)
-			continue
-		} else {
-			outErr = nil
-			break
-		}
-	}
-	cancel()
 
-	if outErr != nil {
+			return err
+		}
+		return nil
+	}, p.backoff)
+	if err != nil {
 		p.pool.Close()
-		p.logger.Fatalf("Failed insert into %s. query: %s, args: %v, err: %v", p.config.Table, query, args, outErr)
+		p.logger.Fatalf("Failed insert into %s. query: %s, args: %v, err: %v", p.config.Table, query, args, err)
 	}
 }
 

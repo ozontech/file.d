@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/cenkalti/backoff/v4"
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/pipeline"
@@ -36,6 +37,7 @@ type Plugin struct {
 	avgEventSize int
 	batcher      *pipeline.Batcher
 	controller   pipeline.OutputPluginController
+	backoff      backoff.BackOff
 }
 
 //! config-params
@@ -98,6 +100,14 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.config = config.(*Config)
 	p.client = p.newClient(p.config.RequestTimeout_)
 
+	ctx := context.TODO()
+	stdBackoff := backoff.NewExponentialBackOff()
+	stdBackoff.Multiplier = 1.2
+	stdBackoff.RandomizationFactor = 0.25
+	stdBackoff.InitialInterval = time.Second
+	stdBackoff.MaxInterval = stdBackoff.InitialInterval * 2
+	p.backoff = backoff.WithContext(stdBackoff, ctx)
+
 	p.registerPluginMetrics()
 
 	p.batcher = pipeline.NewBatcher(
@@ -112,7 +122,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		0,
 	)
 
-	p.batcher.Start(context.TODO())
+	p.batcher.Start(ctx)
 }
 
 func (p *Plugin) registerPluginMetrics() {
@@ -154,18 +164,16 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 	insaneJSON.Release(root)
 	data.outBuf = outBuf
 
-	for {
-		err := p.send(outBuf)
-		if err != nil {
+	_ = backoff.Retry(func() error {
+		sendErr := p.send(outBuf)
+		if sendErr != nil {
 			stats.GetCounter(subsystemName, sendErrorCounter).Inc()
-			p.logger.Errorf("can't send data to splunk address=%s: %s", p.config.Endpoint, err.Error())
-			time.Sleep(time.Second)
+			p.logger.Errorf("can't send data to splunk address=%s: %s", p.config.Endpoint, sendErr.Error())
 
-			continue
+			return sendErr
 		}
-
-		break
-	}
+		return nil
+	}, p.backoff)
 }
 
 func (p *Plugin) maintenance(workerData *pipeline.WorkerData) {}
