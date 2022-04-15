@@ -83,7 +83,7 @@ func RegisterCounter(metricDesc *MetricDesc) {
 	registerMetric(counterMetricType, keyInternal, maskPromCounter)
 }
 
-// Returns counter for a given metric.
+// GetCounter returns counter for a given metric.
 func GetCounter(subsystem, metricName string) prom.Counter {
 	checkStatsInitialized()
 
@@ -91,10 +91,10 @@ func GetCounter(subsystem, metricName string) prom.Counter {
 		return val
 	}
 
-	return statsGlobal.counters[key{PromNamespace, subsystem, unknownCounter}]
+	return statsGlobal.counters[getKey(subsystem, unknownCounter)]
 }
 
-// Returns gauge for a given metric.
+// GetGauge returns gauge for a given metric.
 func GetGauge(subsystem, metricName string) prom.Gauge {
 	checkStatsInitialized()
 
@@ -102,7 +102,7 @@ func GetGauge(subsystem, metricName string) prom.Gauge {
 		return val
 	}
 
-	return statsGlobal.gauges[key{PromNamespace, subsystem, unknownGauge}]
+	return statsGlobal.gauges[getKey(subsystem, unknownGauge)]
 }
 
 func registerMetric(mType metricType, k key, metric prom.Collector) {
@@ -146,7 +146,11 @@ func (s *stats) registerOwnMetrics() {
 }
 
 func getKey(subsystem, metricName string) key {
-	return key{PromNamespace, subsystem, metricName}
+	return key{
+		namespace: PromNamespace,
+		subsystem: subsystem,
+		name:      metricName,
+	}
 }
 
 func checkStatsInitialized() {
