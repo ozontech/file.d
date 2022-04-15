@@ -36,9 +36,9 @@ type stats struct {
 const (
 	subsystemName = "stats"
 
-	unknownCounter   = "unknown_counter"
-	unknownGauge     = "unknown_gauge"
-	duplicateCounter = "duplicate_counter"
+	unregisteredCounter = "unknown_counter"
+	unregisteredGauge   = "unknown_gauge"
+	duplicateCounter    = "duplicate_counter"
 )
 
 var statsGlobal *stats
@@ -91,7 +91,13 @@ func GetCounter(subsystem, metricName string) prom.Counter {
 		return val
 	}
 
-	return statsGlobal.counters[getKey(subsystem, unknownCounter)]
+	logger.Errorf("attempt to increment an unregistered metric, name=%s. incrementing the unknown_counter")
+	// in case somebody is trying to increment a non-registered metric,
+	// an "unregistered" counter will be incremented.
+	// this way file.d won't fail if the plugin developer
+	// forgot to register a metric before using it.
+	// same thing happens with gauges
+	return statsGlobal.counters[getKey(subsystem, unregisteredCounter)]
 }
 
 // GetGauge returns gauge for a given metric.
@@ -102,7 +108,8 @@ func GetGauge(subsystem, metricName string) prom.Gauge {
 		return val
 	}
 
-	return statsGlobal.gauges[getKey(subsystem, unknownGauge)]
+	logger.Errorf("attempt to increment an unregistered metric, name=%s. incrementing the unknown_gauge")
+	return statsGlobal.gauges[getKey(subsystem, unregisteredGauge)]
 }
 
 func registerMetric(mType metricType, k key, metric prom.Collector) {
@@ -130,13 +137,13 @@ func registerMetric(mType metricType, k key, metric prom.Collector) {
 func (s *stats) registerOwnMetrics() {
 	RegisterCounter(&MetricDesc{
 		Subsystem: subsystemName,
-		Name:      unknownCounter,
-		Help:      "Counter for non-existent metrics",
+		Name:      unregisteredCounter,
+		Help:      "Counter for unregistered metrics",
 	})
 	RegisterGauge(&MetricDesc{
 		Subsystem: subsystemName,
-		Name:      unknownGauge,
-		Help:      "Gauge for non-existent metrics",
+		Name:      unregisteredGauge,
+		Help:      "Gauge for unregistered metrics",
 	})
 	RegisterCounter(&MetricDesc{
 		Subsystem: subsystemName,
