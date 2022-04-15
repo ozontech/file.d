@@ -174,6 +174,7 @@ func (p *Plugin) newClient(timeout time.Duration) http.Client {
 	return http.Client{
 		Timeout: timeout,
 		Transport: &http.Transport{
+			DisableKeepAlives: true,
 			TLSClientConfig: &tls.Config{
 				// TODO: make this configuration option and false by default
 				InsecureSkipVerify: true,
@@ -190,6 +191,8 @@ func (p *Plugin) send(data []byte) error {
 		return fmt.Errorf("can't create request: %w", err)
 	}
 
+	req.Close = true
+	
 	req.Header.Set("Authorization", "Splunk "+p.config.Token)
 	resp, err := p.client.Do(req)
 	if err != nil {
