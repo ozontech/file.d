@@ -18,7 +18,7 @@ type antispamer struct {
 
 const (
 	subsystemName    = "antispam"
-	antispamEnabled  = "enabled"
+	antispamActive   = "active"
 	antispamBanCount = "ban_count"
 )
 
@@ -28,12 +28,12 @@ func newAntispamer(threshold int, unbanIterations int, maintenanceInterval time.
 	}
 
 	stats.RegisterGauge(&stats.MetricDesc{
-		Name:      antispamEnabled,
+		Name:      antispamActive,
 		Subsystem: subsystemName,
 		Help:      "Gauge indicates whether the antispam is enabled",
 	})
 	// not enabled by default
-	stats.GetGauge(subsystemName, antispamEnabled).Set(0)
+	stats.GetGauge(subsystemName, antispamActive).Set(0)
 
 	stats.RegisterCounter(&stats.MetricDesc{
 		Name:      antispamBanCount,
@@ -77,7 +77,7 @@ func (p *antispamer) isSpam(id SourceID, name string, isNewSource bool) bool {
 	x := value.Inc()
 	if x == int32(p.threshold) {
 		value.Swap(int32(p.unbanIterations * p.threshold))
-		stats.GetGauge(subsystemName, antispamEnabled).Set(1)
+		stats.GetGauge(subsystemName, antispamActive).Set(1)
 		stats.GetCounter(subsystemName, antispamBanCount).Inc()
 		logger.Warnf("antispam: source has been banned id=%d, name=%s", id, name)
 	}
@@ -119,7 +119,7 @@ func (p *antispamer) maintenance() {
 	}
 
 	if allUnbanned {
-		stats.GetGauge(subsystemName, antispamEnabled).Set(0)
+		stats.GetGauge(subsystemName, antispamActive).Set(0)
 	} else {
 		logger.Info("antispam: there are banned sources")
 	}
