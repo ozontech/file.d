@@ -409,6 +409,7 @@ func TestStartWithMultiBuckets(t *testing.T) {
 }
 
 func newPipeline(t *testing.T, configOutput *Config, objStoreF objStoreFactory) *pipeline.Pipeline {
+	stats.InitStats()
 	t.Helper()
 	settings := &pipeline.Settings{
 		Capacity:            4096,

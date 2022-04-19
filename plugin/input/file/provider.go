@@ -292,6 +292,9 @@ func (jp *jobProvider) addJob(file *os.File, stat os.FileInfo, filename string, 
 	_, has := jp.jobs[sourceID]
 	if has {
 		jp.logger.Warnf("job for a file %q was already created", filename)
+		if err := file.Close(); err != nil {
+			jp.logger.Errorf("can't close file %s %v in case of already created file", filename, err)
+		}
 		return
 	}
 
