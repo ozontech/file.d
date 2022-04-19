@@ -91,13 +91,13 @@ func GetCounter(subsystem, metricName string) prom.Counter {
 		return val
 	}
 
-	logger.Errorf("attempt to increment an unregistered metric, name=%s. incrementing the unknown_counter")
+	logger.Errorf("attempt to access an unregistered metric, name=%s. returning the unknown_counter",  metricName)
 	// in case somebody is trying to increment a non-registered metric,
 	// an "unregistered" counter will be incremented.
 	// this way file.d won't fail if the plugin developer
 	// forgot to register a metric before using it.
 	// same thing happens with gauges
-	return statsGlobal.counters[getKey(subsystem, unregisteredCounter)]
+	return statsGlobal.counters[getKey(subsystemName, unregisteredCounter)]
 }
 
 // GetGauge returns gauge for a given metric.
@@ -108,8 +108,8 @@ func GetGauge(subsystem, metricName string) prom.Gauge {
 		return val
 	}
 
-	logger.Errorf("attempt to increment an unregistered metric, name=%s. incrementing the unknown_gauge")
-	return statsGlobal.gauges[getKey(subsystem, unregisteredGauge)]
+	logger.Errorf("attempt to access an unregistered metric, name=%s. returning the unknown_gauge", metricName)
+	return statsGlobal.gauges[getKey(subsystemName, unregisteredGauge)]
 }
 
 func registerMetric(mType metricType, k key, metric prom.Collector) {
