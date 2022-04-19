@@ -49,7 +49,7 @@ type jobProvider struct {
 	stopReportCh      chan bool
 	stopMaintenanceCh chan bool
 
-	// some debugging shit
+	// some debugging stuff
 	offsetsCommitted *atomic.Int64
 	logger           *zap.SugaredLogger
 }
