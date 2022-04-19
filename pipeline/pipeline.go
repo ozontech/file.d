@@ -309,7 +309,7 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 	if isEmpty || isSpam || isLong {
 		return 0
 	}
-	p.logger.Infof("source_id=%d, sourceName=%s, bytes=%d", sourceID, sourceName, length)
+
 	p.inputEvents.Inc()
 	p.inputSize.Add(int64(length))
 
