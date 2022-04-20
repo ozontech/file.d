@@ -103,10 +103,10 @@ type Pipeline struct {
 	eventLogMu      *sync.Mutex
 	inSample        []byte
 	outSample       []byte
-	outputEvents    atomic.Int64
-	outputSize      atomic.Int64
 	inputEvents     atomic.Int64
 	inputSize       atomic.Int64
+	outputEvents    atomic.Int64
+	outputSize      atomic.Int64
 	maxSize         int
 }
 
@@ -514,28 +514,6 @@ func (p *Pipeline) expandProcs() {
 	p.procCount.Swap(to)
 }
 
-// DeltaWrapper acts as a wrapper around int64
-// and returns the difference between
-// the new and the old value when a new value is set.
-// This is useful for metrics (see the maintenance function).
-type DeltaWrapper struct {
-	val int64
-}
-
-func newDeltaWrapper() *DeltaWrapper {
-	return &DeltaWrapper{0}
-}
-
-func (c *DeltaWrapper) setAndGetDiff(newVal int64) int64 {
-	diff := newVal - c.val
-	c.val = newVal
-	return diff
-}
-
-func (c *DeltaWrapper) get() int64 {
-	return c.val
-}
-
 func (p *Pipeline) maintenance() {
 	inputEvents := newDeltaWrapper()
 	inputSize := newDeltaWrapper()
@@ -553,29 +531,25 @@ func (p *Pipeline) maintenance() {
 		p.metricsHolder.maintenance()
 
 		// set new values and get the diffs
-		deltaInputEvents := inputEvents.setAndGetDiff(p.inputEvents.Load())
-		deltaInputSize := inputSize.setAndGetDiff(p.inputSize.Load())
-		deltaOutputEvents := outputEvents.setAndGetDiff(p.outputEvents.Load())
-		deltaOutputSize := outputSize.setAndGetDiff(p.outputSize.Load())
+		deltaInputEvents := inputEvents.updateValue(p.inputEvents.Load())
+		deltaInputSize := inputSize.updateValue(p.inputSize.Load())
+		deltaOutputEvents := outputEvents.updateValue(p.outputEvents.Load())
+		deltaOutputSize := outputSize.updateValue(p.outputSize.Load())
 
-		// increment the metrics
-		getCounter := func(metric string) prometheus.Counter {
-			return stats.GetCounter(p.subsystemName(), metric)
-		}
-		getCounter(inputEventsCountMetric).Add(float64(deltaInputEvents))
-		getCounter(inputEventsSizeMetric).Add(float64(deltaInputSize))
-		getCounter(outputEventsCountMetric).Add(float64(deltaOutputEvents))
-		getCounter(outputEventsSizeMetric).Add(float64(deltaOutputSize))
+		stats.GetCounter(p.subsystemName(), inputEventsCountMetric).Add(deltaInputEvents)
+		stats.GetCounter(p.subsystemName(), inputEventsSizeMetric).Add(deltaInputSize)
+		stats.GetCounter(p.subsystemName(), outputEventsCountMetric).Add(deltaOutputEvents)
+		stats.GetCounter(p.subsystemName(), outputEventsSizeMetric).Add(deltaOutputSize)
 
-		rate := int(float64(deltaInputEvents) * float64(time.Second) / float64(interval))
-		rateMb := float64(deltaInputSize) * float64(time.Second) / float64(interval) / 1024 / 1024
+		rate := int(deltaInputEvents * float64(time.Second) / float64(interval))
+		rateMb := deltaInputSize * float64(time.Second) / float64(interval) / 1024 / 1024
 		tc := int64(math.Max(float64(inputEvents.get()), 1))
 
 		p.logger.Infof(`%q pipeline stats interval=%ds, active procs=%d/%d, queue=%d/%d, out=%d|%.1fMb,`+
 			`rate=%d/s|%.1fMb/s, total=%d|%.1fMb, avg size=%d, max size=%d`,
 			p.Name, interval/time.Second, p.activeProcs.Load(), p.procCount.Load(),
 			p.settings.Capacity-p.eventPool.freeEventsCount, p.settings.Capacity,
-			deltaInputEvents, float64(deltaInputSize)/1024.0/1024.0, rate, rateMb,
+			int64(deltaInputEvents), float64(deltaInputSize)/1024.0/1024.0, rate, rateMb,
 			inputEvents, float64(inputSize.get())/1024.0/1024.0, inputSize.get()/tc, p.maxSize)
 
 		if len(p.inSample) > 0 {
