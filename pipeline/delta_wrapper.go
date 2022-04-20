@@ -15,10 +15,10 @@ func newDeltaWrapper() *DeltaWrapper {
 // updateValue sets a new value for the wrapper
 // and **returns** the difference between
 // the current value and the new one.
-func (dw *DeltaWrapper) updateValue(newVal int64) (diff float64) {
-	diff = float64(newVal - dw.val)
+func (dw *DeltaWrapper) updateValue(newVal int64) float64 {
+	diff := float64(newVal - dw.val)
 	dw.val = newVal
-	return
+	return diff
 }
 
 // get returns the current value
