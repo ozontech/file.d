@@ -91,7 +91,7 @@ func GetCounter(subsystem, metricName string) prom.Counter {
 		return val
 	}
 
-	logger.Errorf("attempt to access an unregistered metric, name=%s. returning the unknown_counter",  metricName)
+	logger.Errorf("attempt to access an unregistered metric, name=%s. returning the unknown_counter", metricName)
 	// in case somebody is trying to increment a non-registered metric,
 	// an "unregistered" counter will be incremented.
 	// this way file.d won't fail if the plugin developer
