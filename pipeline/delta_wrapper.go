@@ -25,9 +25,11 @@ func newDeltaWrapper() *DeltaWrapper {
 // but doesn't fail, uses the abs(diff).
 func (dw *DeltaWrapper) updateValue(newVal int64) float64 {
 	diff := float64(newVal - dw.val)
+	// log if diff<0, but don't fail
 	if diff < 0 {
 		logger.Error("delta wrapper diff less than 0!")
 	}
+	// make sure diff is > 0
 	diff = math.Abs(diff)
 	dw.val = newVal
 	return diff
