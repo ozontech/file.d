@@ -2,30 +2,54 @@ package logger
 
 import (
 	"os"
+	"strings"
 
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
 
-var Instance = zap.New(
-	zapcore.NewCore(
-		zapcore.NewConsoleEncoder(zapcore.EncoderConfig{
-			// TimeKey:        "ts",
-			LevelKey:       "level",
-			NameKey:        "logger",
-			CallerKey:      "caller",
-			MessageKey:     "message",
-			StacktraceKey:  "stacktrace",
-			LineEnding:     zapcore.DefaultLineEnding,
-			EncodeLevel:    zapcore.LowercaseLevelEncoder,
-			EncodeTime:     zapcore.ISO8601TimeEncoder,
-			EncodeDuration: zapcore.SecondsDurationEncoder,
-			EncodeCaller:   zapcore.ShortCallerEncoder,
-		}),
-		zapcore.AddSync(os.Stdout),
-		zap.NewAtomicLevelAt(zap.InfoLevel),
-	),
-).Sugar().Named("fd")
+var Instance *zap.SugaredLogger
+var Level zap.AtomicLevel
+
+func init() {
+	level := zap.InfoLevel
+	switch strings.ToLower(os.Getenv("LOG_LEVEL")) {
+	case "debug":
+		level = zap.DebugLevel
+	case "info":
+		level = zap.InfoLevel
+	case "warn":
+		level = zap.WarnLevel
+	case "error":
+		level = zap.ErrorLevel
+	case "fatal":
+		level = zap.FatalLevel
+	}
+
+	Level = zap.NewAtomicLevelAt(level)
+
+	Instance = zap.New(
+		zapcore.NewCore(
+			zapcore.NewConsoleEncoder(zapcore.EncoderConfig{
+				// TimeKey:        "ts",
+				LevelKey:       "level",
+				NameKey:        "Instance",
+				CallerKey:      "caller",
+				MessageKey:     "message",
+				StacktraceKey:  "stacktrace",
+				LineEnding:     zapcore.DefaultLineEnding,
+				EncodeLevel:    zapcore.LowercaseLevelEncoder,
+				EncodeTime:     zapcore.ISO8601TimeEncoder,
+				EncodeDuration: zapcore.SecondsDurationEncoder,
+				EncodeCaller:   zapcore.ShortCallerEncoder,
+			}),
+			zapcore.AddSync(os.Stdout),
+			Level,
+		),
+	).Sugar().Named("fd")
+
+	Instance.Infof("Logger initialized with level: %s", level)
+}
 
 func Debug(args ...interface{}) {
 	Instance.Debug(args...)

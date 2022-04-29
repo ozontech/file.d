@@ -265,6 +265,7 @@ func (f *FileD) startHTTP() {
 	mux.HandleFunc("/ready", f.serveLiveReady)
 	mux.HandleFunc("/freeosmem", f.serveFreeOsMem)
 	mux.Handle("/metrics", promhttp.Handler())
+	mux.Handle("/log/level", logger.Level)
 
 	f.server = &http.Server{Addr: f.httpAddr, Handler: mux}
 	longpanic.Go(f.listenHTTP)
