@@ -12,6 +12,7 @@ import (
 
 	"github.com/cenkalti/backoff/v4"
 	"github.com/ozontech/file.d/cfg"
+	"github.com/ozontech/file.d/consts"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/stats"
@@ -102,8 +103,8 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 
 	ctx := context.TODO()
 	stdBackoff := backoff.NewExponentialBackOff()
-	stdBackoff.Multiplier = 1.2
-	stdBackoff.RandomizationFactor = 0.25
+	stdBackoff.Multiplier = consts.ExpBackoffDefaultMultiplier
+	stdBackoff.RandomizationFactor = consts.ExpBackoffDefaultRndFactor
 	stdBackoff.InitialInterval = time.Second
 	stdBackoff.MaxInterval = stdBackoff.InitialInterval * 2
 	p.backoff = backoff.WithContext(stdBackoff, ctx)
