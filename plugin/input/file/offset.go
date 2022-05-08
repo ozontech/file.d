@@ -128,7 +128,7 @@ func (o *offsetDB) parseOne(content string, offsets fpOffsets) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("wrong offsets format, can't parse inode: %s: %w", inodeStr, err)
 	}
-	inode := inode(sysInode)
+	inode := inodeID(sysInode)
 
 	fpVal, err := strconv.ParseUint(sourceIDStr, 10, 64)
 	if err != nil {

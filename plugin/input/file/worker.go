@@ -24,9 +24,9 @@ func (w *worker) start(inputController inputer, jobProvider *jobProvider, readBu
 }
 
 func (w *worker) work(controller inputer, jobProvider *jobProvider, readBufferSize int, logger *zap.SugaredLogger) {
-	var inBuffer []byte
-	accumBuffer := make([]byte, 0, readBufferSize)
-	readBuffer := make([]byte, readBufferSize)
+	var eventBuf []byte
+	accumBuf := make([]byte, 0, readBufferSize)
+	readBuf := make([]byte, readBufferSize)
 	shouldCheckMax := w.maxEventSize != 0
 
 	for {
@@ -41,6 +41,7 @@ func (w *worker) work(controller inputer, jobProvider *jobProvider, readBufferSi
 		sourceID := job.sourceID
 		sourceName := job.filename
 		skipLine := job.shouldSkip.Load()
+		lastOffset := job.curOffset
 		if job.symlink != "" {
 			sourceName = job.symlink
 		}
@@ -50,103 +51,79 @@ func (w *worker) work(controller inputer, jobProvider *jobProvider, readBufferSi
 			logger.Panicf("job is done, why worker should work?")
 		}
 
-		lastOffset, err := file.Seek(0, io.SeekCurrent)
-		if err != nil {
-			logger.Fatalf("can't get offset, file %d:%s seek error: %s", sourceID, sourceName, err.Error())
-		}
-
-		// have end of file reached.
-		isEOF := false
-
-		// have any event put.
-		wasPut := false
-
+		isEOFReached := false
 		readTotal := int64(0)
-		accumulated := int64(0)
 		processed := int64(0)
 
-		accumBuffer = accumBuffer[:0]
+		accumBuf = append(accumBuf[:0], job.tail...)
 		for {
 			// on each iteration cap is readBufferSize, so cut all extra bytes.
-			readBuffer = readBuffer[:readBufferSize]
-			r, err := file.Read(readBuffer)
-			read := int64(r)
-			readBuffer = readBuffer[:read]
+			n, err := file.Read(readBuf)
 			// if we read to end of file time to check truncation etc and process next job.
-			if err == io.EOF || read == 0 {
-				isEOF = true
+			if err == io.EOF || n == 0 {
+				isEOFReached = true
 				break
 			}
 			if err != nil {
-				logger.Fatalf("file %d:%s read error, %s read=%d", sourceID, sourceName, err.Error(), read)
+				logger.Fatalf("file %d:%s read error, %s read=%d", sourceID, sourceName, err.Error(), n)
 			}
 
-			processed = 0
-			for {
-				if processed >= int64(len(readBuffer)) {
-					break
-				}
+			read := int64(n)
+			job.curOffset += read
+			buf := readBuf[:read]
 
+			processed = 0
+			accumulated := int64(0)
+			for len(buf) != 0 {
 				// \n is line separator, -1 means that file doesn't have new valid logs.
-				pos := int64(bytes.IndexByte(readBuffer[processed:], '\n'))
+				pos := int64(bytes.IndexByte(buf, '\n'))
 				if pos == -1 {
 					break
 				}
+				line := buf[:pos+1]
+				buf = buf[pos+1:]
 
-				// to keep our total progress over file reading.
-				pos += processed
+				processed += pos + 1
 
 				// skip first event because file may be opened while event isn't completely written.
 				if skipLine {
 					job.shouldSkip.Store(false)
 					skipLine = false
 				} else {
-					// get current offset for reading.
-					offset := lastOffset + accumulated + pos + 1
 					// put into inBuffer read data from readBuffer and accumBuffer (of not empty).
-					if len(accumBuffer) != 0 {
-						accumBuffer = append(accumBuffer, readBuffer[processed:pos+1]...)
-						inBuffer = accumBuffer
+					if len(accumBuf) != 0 {
+						accumBuf = append(accumBuf, line...)
+						eventBuf = accumBuf
 					} else {
-						inBuffer = readBuffer[processed : pos+1]
+						eventBuf = line
 					}
-					if shouldCheckMax && len(inBuffer) > w.maxEventSize {
+					if shouldCheckMax && len(eventBuf) > w.maxEventSize {
 						break
 					}
-					job.lastEventSeq = controller.In(sourceID, sourceName, offset, inBuffer, isVirgin)
+					job.lastEventSeq = controller.In(sourceID, sourceName, lastOffset+processed+accumulated, eventBuf, isVirgin)
 				}
-				accumBuffer = accumBuffer[:0]
-
-				processed = pos + 1
+				accumBuf = accumBuf[:0]
 			}
 
 			readTotal += read
 
-			wasPut = processed != 0
-			if wasPut {
-				break
-			}
-			accumBuffer = append(accumBuffer, readBuffer[:read]...)
+			accumBuf = append(accumBuf, buf...)
 			accumulated += read
-			if shouldCheckMax && len(accumBuffer) > w.maxEventSize {
+			if shouldCheckMax && len(accumBuf) > w.maxEventSize {
+				break
+			}
+
+			// if any event have been sent to pipeline then get a new job
+			if processed != 0 {
 				break
 			}
 		}
 
-		// don't consider accumulated buffer because we haven't put any events.
-		if !wasPut {
-			accumulated = 0
-		}
+		// tail of read is in accumBuf, save it
+		job.tail = append(job.tail[:0], accumBuf...)
 
-		backwardOffset := accumulated + processed - readTotal
-		if backwardOffset != 0 {
-			_, err := file.Seek(backwardOffset, io.SeekCurrent)
-			if err != nil {
-				logger.Fatalf("can't set offset, file %d:%s seek error: %s", sourceID, sourceName, err.Error())
-			}
-		}
 		// check if file was truncated.
-		if isEOF {
+		if isEOFReached {
 			err := w.processEOF(file, job, jobProvider, lastOffset+readTotal)
 			if err != nil {
 				logger.Fatalf("file %d:%s stat error: %s", sourceID, sourceName, err.Error())

@@ -24,7 +24,7 @@ import (
 const (
 	DefaultStreamField         = "stream"
 	DefaultCapacity            = 1024
-	DefaultAvgInputEventSize   = 16 * 1024
+	DefaultAvgInputEventSize   = 4 * 1024
 	DefaultMaxInputEventSize   = 0
 	DefaultJSONNodePoolSize    = 1024
 	DefaultMaintenanceInterval = time.Second * 5
