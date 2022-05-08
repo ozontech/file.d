@@ -79,13 +79,13 @@ type Job struct {
 }
 
 func (j *Job) seek(offset int64, whence int, hint string) int64 {
-	no, err := j.file.Seek(offset, whence)
+	n, err := j.file.Seek(offset, whence)
 	if err != nil {
 		logger.Infof("file seek error hint=%s, name=%s, err=%s", hint, j.filename, err.Error())
 	}
-	j.curOffset = no
+	j.curOffset = n
 
-	return no
+	return n
 }
 
 type inodeID uint64
@@ -323,6 +323,9 @@ func (jp *jobProvider) addJob(file *os.File, stat os.FileInfo, filename string, 
 
 		mu: &sync.Mutex{},
 	}
+
+	// set curOffset
+	job.seek(0, io.SeekCurrent, "add job")
 
 	// load saved offsets only on start phase
 	if jp.isStarted.Load() {

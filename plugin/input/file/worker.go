@@ -69,15 +69,15 @@ func (w *worker) work(controller inputer, jobProvider *jobProvider, readBufferSi
 			}
 
 			read := int64(n)
-			job.curOffset += read
+			readTotal += read
 			buf := readBuf[:read]
 
-			processed = 0
-			accumulated := int64(0)
+			haveEventSent := false
 			for len(buf) != 0 {
 				// \n is line separator, -1 means that file doesn't have new valid logs.
 				pos := int64(bytes.IndexByte(buf, '\n'))
 				if pos == -1 {
+					processed += int64(len(buf))
 					break
 				}
 				line := buf[:pos+1]
@@ -100,27 +100,27 @@ func (w *worker) work(controller inputer, jobProvider *jobProvider, readBufferSi
 					if shouldCheckMax && len(eventBuf) > w.maxEventSize {
 						break
 					}
-					job.lastEventSeq = controller.In(sourceID, sourceName, lastOffset+processed+accumulated, eventBuf, isVirgin)
+					job.lastEventSeq = controller.In(sourceID, sourceName, lastOffset+processed, eventBuf, isVirgin)
+					haveEventSent = true
 				}
 				accumBuf = accumBuf[:0]
 			}
 
-			readTotal += read
 
 			accumBuf = append(accumBuf, buf...)
-			accumulated += read
 			if shouldCheckMax && len(accumBuf) > w.maxEventSize {
 				break
 			}
 
 			// if any event have been sent to pipeline then get a new job
-			if processed != 0 {
+			if haveEventSent {
 				break
 			}
 		}
 
 		// tail of read is in accumBuf, save it
 		job.tail = append(job.tail[:0], accumBuf...)
+		job.curOffset += readTotal
 
 		// check if file was truncated.
 		if isEOFReached {

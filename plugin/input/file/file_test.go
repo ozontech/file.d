@@ -76,6 +76,9 @@ func pluginConfig(opts ...string) *Config {
 	if test.Opts(opts).Has("tail") {
 		op = "tail"
 	}
+	if test.Opts(opts).Has("reset") {
+		op = "reset"
+	}
 
 	config := &Config{
 		WatchingDir:         filesDir,
@@ -337,19 +340,19 @@ func getInodeByFile(file string) uint64 {
 	return inode
 }
 
-func assertOffsetsAreEqual(t *testing.T, offsetsContentA string, offsetsContentB string) {
+func assertOffsetsAreEqual(t *testing.T, expectedContent string, actualContent string) {
 	offsetDB := newOffsetDB("", "")
-	offsetsA, err := offsetDB.parse(offsetsContentA)
+	offExpected, err := offsetDB.parse(expectedContent)
 	require.NoError(t, err)
-	offsetsB, err := offsetDB.parse(offsetsContentB)
+	offActual, err := offsetDB.parse(actualContent)
 	require.NoError(t, err)
-	for sourceID, inode := range offsetsA {
-		_, has := offsetsB[sourceID]
+	for sourceID, inodeExp := range offExpected {
+		_, has := offActual[sourceID]
 		assert.True(t, has, "offsets aren't equal, source id=%d", sourceID)
-		for stream, offset := range inode.streams {
-			offsetB, has := offsetsB[sourceID].streams[stream]
+		for stream, expected := range inodeExp.streams {
+			actual, has := offActual[sourceID].streams[stream]
 			assert.True(t, has, "offsets aren't equal, no stream %q", stream)
-			assert.Equal(t, offset, offsetB, "offsets aren't equal")
+			assert.Equal(t, expected, actual, "offsets aren't equal")
 		}
 	}
 }
@@ -686,6 +689,7 @@ func TestReadLongJSON(t *testing.T) {
 	eventCount := 10
 	file := ""
 	json := getContentBytes("../../../testdata/json/heavy.json")
+	logger.Infof("len=%d", len(json))
 	run(&test.Case{
 		Prepare: func() {
 		},
@@ -699,7 +703,7 @@ func TestReadLongJSON(t *testing.T) {
 			assert.Equal(t, eventCount, p.GetEventsTotal())
 			assertOffsetsAreEqual(t, genOffsetsContent(file, len(json)*eventCount), getContent(getConfigByPipeline(p).OffsetsFile))
 		},
-	}, eventCount)
+	}, eventCount, "reset")
 }
 
 // TestReadManyFilesParallelRace tests if plugin doesn't have race conditions in the case of parallel processing of files
