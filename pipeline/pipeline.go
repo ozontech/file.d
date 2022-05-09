@@ -40,6 +40,7 @@ const (
 	inputEventsSizeMetric   = "input_events_size"
 	outputEventsCountMetric = "output_events_count"
 	outputEventsSizeMetric  = "output_events_size"
+	readOpsEventsSizeMetric = "read_ops_count"
 )
 
 type finalizeFn = func(event *Event, notifyInput bool, backEvent bool)
@@ -49,6 +50,7 @@ type InputPluginController interface {
 	UseSpread()                           // don't use stream field and spread all events across all processors
 	DisableStreams()                      // don't use stream field
 	SuggestDecoder(t decoder.DecoderType) // set decoder if pipeline uses "auto" value for decoder
+	IncReadOps()                          // inc read ops for stats
 }
 
 type ActionPluginController interface {
@@ -107,6 +109,7 @@ type Pipeline struct {
 	inputSize       atomic.Int64
 	outputEvents    atomic.Int64
 	outputSize      atomic.Int64
+	readOps         atomic.Int64
 	maxSize         int
 }
 
@@ -162,6 +165,10 @@ func New(name string, settings *Settings, registry *prometheus.Registry) *Pipeli
 	}
 
 	return pipeline
+}
+
+func (p *Pipeline) IncReadOps() {
+	p.readOps.Inc()
 }
 
 func (p *Pipeline) subsystemName() string {
@@ -519,6 +526,7 @@ type deltas struct {
 	deltaInputSize    float64
 	deltaOutputEvents float64
 	deltaOutputSize   float64
+	deltaReads        float64
 }
 
 func (p *Pipeline) logChanges(myDeltas *deltas) {
@@ -528,33 +536,37 @@ func (p *Pipeline) logChanges(myDeltas *deltas) {
 	interval := p.settings.MaintenanceInterval
 	rate := int(myDeltas.deltaInputEvents * float64(time.Second) / float64(interval))
 	rateMb := myDeltas.deltaInputSize * float64(time.Second) / float64(interval) / 1024 / 1024
+	readOps := int(myDeltas.deltaReads * float64(time.Second) / float64(interval))
 	tc := int64(math.Max(float64(inputSize), 1))
 
 	p.logger.Infof(`%q pipeline stats interval=%ds, active procs=%d/%d, queue=%d/%d, out=%d|%.1fMb,`+
-		`rate=%d/s|%.1fMb/s, total=%d|%.1fMb, avg size=%d, max size=%d`,
+		`rate=%d/s|%.1fMb/s, read ops=%d/s, total=%d|%.1fMb, avg size=%d, max size=%d`,
 		p.Name, interval/time.Second, p.activeProcs.Load(), p.procCount.Load(),
 		p.settings.Capacity-p.eventPool.freeEventsCount, p.settings.Capacity,
-		int64(myDeltas.deltaInputEvents), float64(myDeltas.deltaInputSize)/1024.0/1024.0, rate, rateMb,
+		int64(myDeltas.deltaInputEvents), float64(myDeltas.deltaInputSize)/1024.0/1024.0, rate, rateMb, readOps,
 		inputEvents, float64(inputSize)/1024.0/1024.0, inputSize/tc, p.maxSize)
 }
 
-func (p *Pipeline) incMetrics(inputEvents, inputSize, outputEvents, outputSize *DeltaWrapper) *deltas {
+func (p *Pipeline) incMetrics(inputEvents, inputSize, outputEvents, outputSize, reads *DeltaWrapper) *deltas {
 	deltaInputEvents := inputEvents.updateValue(p.inputEvents.Load())
 	deltaInputSize := inputSize.updateValue(p.inputSize.Load())
 	deltaOutputEvents := outputEvents.updateValue(p.outputEvents.Load())
 	deltaOutputSize := outputSize.updateValue(p.outputSize.Load())
+	deltaReads := reads.updateValue(p.readOps.Load())
 
 	myDeltas := &deltas{
 		deltaInputEvents,
 		deltaInputSize,
 		deltaOutputEvents,
 		deltaOutputSize,
+		deltaReads,
 	}
 
 	stats.GetCounter(p.subsystemName(), inputEventsCountMetric).Add(myDeltas.deltaInputEvents)
 	stats.GetCounter(p.subsystemName(), inputEventsSizeMetric).Add(myDeltas.deltaInputSize)
 	stats.GetCounter(p.subsystemName(), outputEventsCountMetric).Add(myDeltas.deltaOutputEvents)
 	stats.GetCounter(p.subsystemName(), outputEventsSizeMetric).Add(myDeltas.deltaOutputSize)
+	stats.GetCounter(p.subsystemName(), readOpsEventsSizeMetric).Add(myDeltas.deltaReads)
 
 	return myDeltas
 }
@@ -564,6 +576,7 @@ func (p *Pipeline) maintenance() {
 	inputSize := newDeltaWrapper()
 	outputEvents := newDeltaWrapper()
 	outputSize := newDeltaWrapper()
+	readOps := newDeltaWrapper()
 
 	for {
 		time.Sleep(p.settings.MaintenanceInterval)
@@ -574,7 +587,7 @@ func (p *Pipeline) maintenance() {
 		p.antispamer.maintenance()
 		p.metricsHolder.maintenance()
 
-		myDeltas := p.incMetrics(inputEvents, inputSize, outputEvents, outputSize)
+		myDeltas := p.incMetrics(inputEvents, inputSize, outputEvents, outputSize, readOps)
 		p.logChanges(myDeltas)
 
 		if len(p.inSample) > 0 {

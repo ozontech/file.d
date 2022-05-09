@@ -18,6 +18,10 @@ type inputerMock struct {
 	gotData []byte
 }
 
+func (i *inputerMock) IncReadOps()  {
+
+}
+
 func (i *inputerMock) In(sourceID pipeline.SourceID, sourceName string, offset int64, data []byte, isNewSource bool) uint64 {
 	i.gotData = make([]byte, len(data))
 	copy(i.gotData, data)

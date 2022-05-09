@@ -17,6 +17,7 @@ type worker struct {
 type inputer interface {
 	// In processes event and returns it seq number.
 	In(sourceID pipeline.SourceID, sourceName string, offset int64, data []byte, isNewSource bool) uint64
+	IncReadOps()
 }
 
 func (w *worker) start(inputController inputer, jobProvider *jobProvider, readBufferSize int, logger *zap.SugaredLogger) {
@@ -24,7 +25,6 @@ func (w *worker) start(inputController inputer, jobProvider *jobProvider, readBu
 }
 
 func (w *worker) work(controller inputer, jobProvider *jobProvider, readBufferSize int, logger *zap.SugaredLogger) {
-	var eventBuf []byte
 	accumBuf := make([]byte, 0, readBufferSize)
 	readBuf := make([]byte, readBufferSize)
 	shouldCheckMax := w.maxEventSize != 0
@@ -53,13 +53,13 @@ func (w *worker) work(controller inputer, jobProvider *jobProvider, readBufferSi
 
 		isEOFReached := false
 		readTotal := int64(0)
-		processed := int64(0)
+		scanned := int64(0)
 
 		accumBuf = append(accumBuf[:0], job.tail...)
 		for {
-			// on each iteration cap is readBufferSize, so cut all extra bytes.
 			n, err := file.Read(readBuf)
-			// if we read to end of file time to check truncation etc and process next job.
+			controller.IncReadOps()
+			// if we read to end of file it's time to check truncation etc and process next job.
 			if err == io.EOF || n == 0 {
 				isEOFReached = true
 				break
@@ -72,48 +72,39 @@ func (w *worker) work(controller inputer, jobProvider *jobProvider, readBufferSi
 			readTotal += read
 			buf := readBuf[:read]
 
-			haveEventSent := false
 			for len(buf) != 0 {
-				// \n is line separator, -1 means that file doesn't have new valid logs.
+				// \n is a line separator, -1 means that the file doesn't have new valid logs.
 				pos := int64(bytes.IndexByte(buf, '\n'))
 				if pos == -1 {
-					processed += int64(len(buf))
+					scanned += int64(len(buf))
 					break
 				}
 				line := buf[:pos+1]
 				buf = buf[pos+1:]
 
-				processed += pos + 1
+				scanned += pos + 1
 
 				// skip first event because file may be opened while event isn't completely written.
 				if skipLine {
 					job.shouldSkip.Store(false)
 					skipLine = false
 				} else {
-					// put into inBuffer read data from readBuffer and accumBuffer (of not empty).
+					inBuf := line
+					// if some data have been accumulated then append the line to it
 					if len(accumBuf) != 0 {
 						accumBuf = append(accumBuf, line...)
-						eventBuf = accumBuf
-					} else {
-						eventBuf = line
+						inBuf = accumBuf
 					}
-					if shouldCheckMax && len(eventBuf) > w.maxEventSize {
+					if shouldCheckMax && len(inBuf) > w.maxEventSize {
 						break
 					}
-					job.lastEventSeq = controller.In(sourceID, sourceName, lastOffset+processed, eventBuf, isVirgin)
-					haveEventSent = true
+					job.lastEventSeq = controller.In(sourceID, sourceName, lastOffset+scanned, inBuf, isVirgin)
 				}
 				accumBuf = accumBuf[:0]
 			}
 
-
 			accumBuf = append(accumBuf, buf...)
 			if shouldCheckMax && len(accumBuf) > w.maxEventSize {
-				break
-			}
-
-			// if any event have been sent to pipeline then get a new job
-			if haveEventSent {
 				break
 			}
 		}
