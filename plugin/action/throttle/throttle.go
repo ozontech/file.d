@@ -1,9 +1,11 @@
 package throttle
 
 import (
+	"fmt"
 	"sync"
 	"time"
 
+	"github.com/go-redis/redis"
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/logger"
@@ -14,8 +16,22 @@ var (
 	defaultThrottleKey = "default"
 
 	// limiters should be shared across pipeline, so let's have a map by namespace and limiter name
-	limiters   = map[string]map[string]*limiter{} // todo: cleanup this map?
+	limiters   = map[string]map[string]limiter{} // todo: cleanup this map?
 	limitersMu = &sync.RWMutex{}
+)
+
+// Interface with only necessary functions of the original redis.Client
+type redisClient interface {
+	Watch(func(tx *redis.Tx) error, ...string) error
+	Expire(key string, expiration time.Duration) *redis.BoolCmd
+	SetNX(key string, value interface{}, expiration time.Duration) *redis.BoolCmd
+	Get(key string) *redis.StringCmd
+	Ping() *redis.StatusCmd
+}
+
+const (
+	redisLimiterType    = "redis"
+	inMemoryLimiterType = "memory"
 )
 
 /*{ introduction
@@ -24,6 +40,8 @@ It discards the events if pipeline throughput gets higher than a configured thre
 type Plugin struct {
 	config   *Config
 	pipeline string
+
+	redisClient redisClient
 
 	limiterBuff []byte
 	rules       []*rule
@@ -62,6 +80,22 @@ type Config struct {
 	//>
 	//> What we're limiting: number of messages, or total size of the messages
 	LimitKind string `json:"limit_kind" default:"count" options:"count|size"` //*
+
+	//> @3@4@5@6
+	//>
+	//> Where do we store the limit: locally in memory or in remote redis
+	LimiterKind string `json:"limiter_kind" default:"memory" options:"memory|redis"`
+
+	//> @3@4@5@6
+	//>
+	//> Host:port of redis server
+	RedisHost string `json:"redis_host"`
+
+	//> @3@4@5@6
+	//>
+	//> How ofter try to sync global threshold and limit values
+	RedisRefreshInterval  cfg.Duration `json:"redis_refresh_interval" parse:"duration" default:"5s"`
+	RedisRefreshInterval_ time.Duration
 
 	//> @3@4@5@6
 	//>
@@ -108,14 +142,45 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 	p.limiterBuff = make([]byte, 0)
 
 	limitersMu.Lock()
-	limiters[p.pipeline] = map[string]*limiter{}
+	limiters[p.pipeline] = map[string]limiter{}
 	limitersMu.Unlock()
+
+	if p.config.LimiterKind == redisLimiterType {
+		p.redisClient = redis.NewClient(&redis.Options{
+			Network: "tcp",
+			Addr:    p.config.RedisHost,
+		})
+
+		pingResp := p.redisClient.Ping()
+		if pingResp.Err() != nil {
+			logger.Fatalf("Can't ping redis: %s", pingResp.Err())
+		}
+	}
 
 	for _, r := range p.config.Rules {
 		p.rules = append(p.rules, NewRule(r.Conditions, complexLimit{r.Limit, r.LimitKind}))
 	}
 
 	p.rules = append(p.rules, NewRule(map[string]string{}, complexLimit{p.config.DefaultLimit, p.config.LimitKind}))
+}
+
+func (p *Plugin) getNewLimiter(throttleField, limiterKey string, rule *rule) limiter {
+	switch p.config.LimiterKind {
+	case redisLimiterType:
+		return NewRedisLimiter(
+			p.redisClient,
+			throttleField,
+			limiterKey,
+			p.config.RedisRefreshInterval_,
+			p.config.BucketInterval_,
+			p.config.BucketsCount,
+			rule.limit,
+		)
+	case inMemoryLimiterType:
+		fallthrough
+	default:
+		return NewInMemoryLimiter(p.config.BucketInterval_, p.config.BucketsCount, rule.limit)
+	}
 }
 
 func (p *Plugin) Stop() {
@@ -170,7 +235,12 @@ func (p *Plugin) isAllowed(event *pipeline.Event) bool {
 			limiter, has = limiters[p.pipeline][limiterKey]
 			// we could already write it between `limitersMu.RUnlock()` and `limitersMu.Lock()`, so we need to check again
 			if !has {
-				limiter = NewLimiter(p.config.BucketInterval_, p.config.BucketsCount, rule.limit)
+				fmt.Println(pipeline.ByteToStringUnsafe(p.limiterBuff[2:]))
+				limiter = p.getNewLimiter(
+					string(p.config.ThrottleField),
+					pipeline.ByteToStringUnsafe(p.limiterBuff[2:]),
+					rule,
+				)
 				// alloc new string before adding new key to map
 				limiterKey = string(p.limiterBuff)
 				limiters[p.pipeline][limiterKey] = limiter
