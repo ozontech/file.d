@@ -153,10 +153,22 @@ func (p *Plugin) Cleanup(sarama.ConsumerGroupSession) error {
 	return nil
 }
 
+// It's impossible to get pipeline.pool from here, only creation of raw event possible.
+func (p *Plugin) makeSkippedEvent(sourceID pipeline.SourceID, offset int64) *pipeline.Event {
+	return &pipeline.Event{
+		SourceID: pipeline.SourceID(sourceID),
+		Offset:   offset,
+	}
+}
+
 func (p *Plugin) ConsumeClaim(_ sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
 	for message := range claim.Messages() {
 		sourceID := assembleSourceID(p.idByTopic[message.Topic], message.Partition)
-		p.controller.In(sourceID, "kafka", message.Offset, message.Value, true)
+		seqID := p.controller.In(sourceID, "kafka", message.Offset, message.Value, true)
+		// data was invalid but In(...) didn't throw fatal, just skip bad message and move offset in kafka.
+		if seqID == 0 {
+			p.Commit(p.makeSkippedEvent(sourceID, message.Offset))
+		}
 	}
 
 	return nil
