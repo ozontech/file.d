@@ -55,3 +55,5 @@ TBD: throughput on production servers.
 * [Testing](/docs/testing.md)
 * [Contributing](/CONTRIBUTING.md)
 * [License](/docs/license.md)
+
+Join our community in Telegram: https://t.me/file_d_community
