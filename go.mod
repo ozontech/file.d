@@ -8,7 +8,6 @@ require (
 	github.com/alecthomas/kingpin v2.2.6+incompatible
 	github.com/alecthomas/units v0.0.0-20190924025748-f65c72e2690d
 	github.com/bitly/go-simplejson v0.5.0
-	github.com/cenkalti/backoff/v4 v4.1.2
 	github.com/euank/go-kmsg-parser v2.0.0+incompatible
 	github.com/ghodss/yaml v1.0.0
 	github.com/golang/mock v1.6.0
@@ -43,7 +42,7 @@ require (
 	github.com/eapache/go-xerial-snappy v0.0.0-20180814174437-776d5712da21 // indirect
 	github.com/eapache/queue v1.1.0 // indirect
 	github.com/go-ini/ini v1.62.0 // indirect
-	github.com/gogo/protobuf v1.3.1 // indirect
+	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/groupcache v0.0.0-20191002201903-404acd9df4cc // indirect
 	github.com/golang/protobuf v1.4.2 // indirect
 	github.com/golang/snappy v0.0.3 // indirect
