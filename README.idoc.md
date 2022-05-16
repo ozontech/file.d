@@ -2,7 +2,7 @@
 
 # Overview
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://GitHub.com/ozontech/file.d/graphs/commit-activity)
-[![CI](https://github.com/Snyssfx/file.d/actions/workflows/go.yml/badge.svg)](https://github.com/Snyssfx/file.d/actions/workflows/go.yml)
+[![CI](https://github.com/ozontech/file.d/actions/workflows/go.yml/badge.svg)](https://github.com/ozontech/file.d/actions/workflows/go.yml)
 [![GitHub go.mod Go version of a Go module](https://img.shields.io/github/go-mod/go-version/ozontech/file.d)](https://github.com/ozontech/file.d)
 [![GoReportCard example](https://goreportcard.com/badge/github.com/ozontech/file.d)](https://goreportcard.com/report/github.com/ozontech/file.d)
 
