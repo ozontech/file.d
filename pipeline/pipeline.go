@@ -33,7 +33,7 @@ const (
 	DefaultStreamName          = StreamName("not_set")
 	DefaultWaitForPanicTimeout = time.Minute
 
-	SkippedSeqID = uint64(0)
+	EventSeqIDError = uint64(0)
 
 	antispamUnbanIterations = 4
 	metricsGenInterval      = time.Hour
@@ -308,14 +308,6 @@ func (p *Pipeline) GetOutput() OutputPlugin {
 	return p.output
 }
 
-func (p *Pipeline) CommitSkippedEvent(event *Event, sourceID SourceID, offset int64) {
-	event.SourceID = sourceID
-	event.Offset = offset
-	// event.SeqID == 0 by default assign here just for clarity.
-	event.SeqID = SkippedSeqID
-	p.Commit(event)
-}
-
 // In decodes message and passes it to event stream.
 func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes []byte, isNewSource bool) (seqID uint64) {
 	length := len(bytes)
@@ -324,22 +316,14 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 	isEmpty := length == 0 || (bytes[0] == '\n' && length == 1)
 	isSpam := p.antispamer.isSpam(sourceID, sourceName, isNewSource)
 	isLong := p.settings.MaxEventSize != 0 && length > p.settings.MaxEventSize
-
-	event := p.eventPool.get()
-	defer func() {
-		// return event into pool and commit it if message was empty || blocked by antispam || too long || wrong format.
-		if seqID == SkippedSeqID {
-			p.CommitSkippedEvent(event, sourceID, offset)
-		}
-	}()
-
 	if isEmpty || isSpam || isLong {
-		return SkippedSeqID
+		return EventSeqIDError
 	}
 
 	p.inputEvents.Inc()
 	p.inputSize.Add(int64(length))
 
+	event := p.eventPool.get()
 	var dec decoder.DecoderType
 	if p.decoder == decoder.AUTO {
 		dec = p.suggestedDecoder
@@ -359,7 +343,9 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 			} else {
 				p.logger.Errorf("wrong json format offset=%d, length=%d, err=%s, source=%d:%s, json=%s", offset, length, err.Error(), sourceID, sourceName, bytes)
 			}
-			return SkippedSeqID
+			// Can't process event, return to pool.
+			p.eventPool.back(event)
+			return EventSeqIDError
 		}
 	case decoder.RAW:
 		_ = event.Root.DecodeString("{}")
@@ -370,7 +356,7 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 		if err != nil {
 			p.logger.Fatalf("wrong cri format offset=%d, length=%d, err=%s, source=%d:%s, cri=%s", offset, length, err.Error(), sourceID, sourceName, bytes)
 			// Dead route, never passed here.
-			return SkippedSeqID
+			return EventSeqIDError
 		}
 	case decoder.POSTGRES:
 		_ = event.Root.DecodeString("{}")
@@ -378,7 +364,7 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 		if err != nil {
 			p.logger.Fatalf("wrong postgres format offset=%d, length=%d, err=%s, source=%d:%s, cri=%s", offset, length, err.Error(), sourceID, sourceName, bytes)
 			// Dead route, never passed here.
-			return SkippedSeqID
+			return EventSeqIDError
 		}
 	default:
 		p.logger.Panicf("unknown decoder %d for pipeline %q", p.decoder, p.Name)
@@ -443,11 +429,8 @@ func (p *Pipeline) finalize(event *Event, notifyInput bool, backEvent bool) {
 		}
 	}
 
-	// Only for good events that passed to streamer and have stream.
-	if event.stream != nil {
-		// todo: avoid event.stream.commit(event)
-		event.stream.commit(event)
-	}
+	// todo: avoid event.stream.commit(event)
+	event.stream.commit(event)
 
 	if !backEvent {
 		return

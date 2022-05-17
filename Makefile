@@ -1,4 +1,4 @@
-VERSION ?= v0.5.4
+VERSION ?= v0.5.5
 UPSTREAM_BRANCH ?= origin/master
 
 .PHONY: prepare
