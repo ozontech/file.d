@@ -14,16 +14,16 @@ import (
 // e.g. events from same file will be in same stream for "file" input plugin
 // todo: remove dependency on streamer
 type stream struct {
-	blockIndex  int
-	len         int
-	currentSeq  uint64
-	commitSeq   atomic.Uint64
-	awaySeq     uint64
+	blockIndex int
+	len        int
+	currentSeq uint64
+	commitSeq  atomic.Uint64
+	awaySeq    uint64
 
-	name       StreamName
-	sourceID   SourceID
-	streamer   *streamer
-	blockTime  time.Time
+	name      StreamName
+	sourceID  SourceID
+	streamer  *streamer
+	blockTime time.Time
 
 	mu   *sync.Mutex
 	cond *sync.Cond

@@ -1,0 +1,29 @@
+error	fd	MESSAGE TO COMMIT: kind=REGULAR, action=0, source=1827253770/, stream=, stage=INPUT, json={}
+error	fd	MESSAGE TO COMMIT: kind=REGULAR, action=0, source=1827253770//var/folders/90/b19bybwn7_54983krrg5rxbc0000gq/T/input_file2132873122/f478b67c-3079-48b0-aaa3-3a30a6831a4c, stream=not_set, stage=OUTPUT, json=666
+error	fd	MESSAGE TO COMMIT: kind=REGULAR, action=0, source=65865902//private/var/folders/90/b19bybwn7_54983krrg5rxbc0000gq/T/input_file2132873122/dir_3/new_file, stream=not_set, stage=OUTPUT, json=666
+error	fd	MESSAGE TO COMMIT: kind=REGULAR, action=0, source=3371636890//private/var/folders/90/b19bybwn7_54983krrg5rxbc0000gq/T/input_file2132873122/dir_3/other_file, stream=not_set, stage=OUTPUT, json=666
+error	fd	MESSAGE TO COMMIT: kind=REGULAR, action=0, source=1115650868//private/var/folders/90/b19bybwn7_54983krrg5rxbc0000gq/T/input_file2132873122/dir_1/other_file, stream=not_set, stage=OUTPUT, json=666
+error	fd	MESSAGE TO COMMIT: kind=REGULAR, action=0, source=838057462//private/var/folders/90/b19bybwn7_54983krrg5rxbc0000gq/T/input_file2132873122/dir_0/new_file, stream=not_set, stage=OUTPUT, json=666
+error	fd	MESSAGE TO COMMIT: kind=REGULAR, action=0, source=343459308//private/var/folders/90/b19bybwn7_54983krrg5rxbc0000gq/T/input_file2132873122/dir_2/new_file, stream=not_set, stage=OUTPUT, json=666
+error	fd	MESSAGE TO COMMIT: kind=REGULAR, action=0, source=1610249022//private/var/folders/90/b19bybwn7_54983krrg5rxbc0000gq/T/input_file2132873122/dir_1/new_file, stream=not_set, stage=OUTPUT, json=666
+error	fd	MESSAGE TO COMMIT: kind=REGULAR, action=0, source=4143828450//private/var/folders/90/b19bybwn7_54983krrg5rxbc0000gq/T/input_file2132873122/dir_2/other_file, stream=not_set, stage=OUTPUT, json=666
+error	fd	MESSAGE TO COMMIT: kind=REGULAR, action=0, source=2877038736//private/var/folders/90/b19bybwn7_54983krrg5rxbc0000gq/T/input_file2132873122/dir_0/other_file, stream=not_set, stage=OUTPUT, json=666
+
+
+
+
+
+
+
+
+
+
+error	fd	MESSAGE TO COMMIT: kind=REGULAR, action=0, source=309475852//var/folders/90/b19bybwn7_54983krrg5rxbc0000gq/T/input_file3598489199/ce422a7e-c890-4c64-ab49-36e88fed1202, stream=not_set, stage=OUTPUT, json=666
+error	fd	MESSAGE TO COMMIT: kind=REGULAR, action=0, source=2626050532//private/var/folders/90/b19bybwn7_54983krrg5rxbc0000gq/T/input_file3598489199/dir_0/other_file, stream=not_set, stage=OUTPUT, json=666
+error	fd	MESSAGE TO COMMIT: kind=REGULAR, action=0, source=3615246840//private/var/folders/90/b19bybwn7_54983krrg5rxbc0000gq/T/input_file3598489199/dir_1/new_file, stream=not_set, stage=OUTPUT, json=666
+error	fd	MESSAGE TO COMMIT: kind=REGULAR, action=0, source=4109844994//private/var/folders/90/b19bybwn7_54983krrg5rxbc0000gq/T/input_file3598489199/dir_3/new_file, stream=not_set, stage=OUTPUT, json=666
+error	fd	MESSAGE TO COMMIT: kind=REGULAR, action=0, source=3120648686//private/var/folders/90/b19bybwn7_54983krrg5rxbc0000gq/T/input_file3598489199/dir_3/other_file, stream=not_set, stage=OUTPUT, json=666
+error	fd	MESSAGE TO COMMIT: kind=REGULAR, action=0, source=92471104//private/var/folders/90/b19bybwn7_54983krrg5rxbc0000gq/T/input_file3598489199/dir_1/other_file, stream=not_set, stage=OUTPUT, json=666
+error	fd	MESSAGE TO COMMIT: kind=REGULAR, action=0, source=587069258//private/var/folders/90/b19bybwn7_54983krrg5rxbc0000gq/T/input_file3598489199/dir_2/new_file, stream=not_set, stage=OUTPUT, json=666
+error	fd	MESSAGE TO COMMIT: kind=REGULAR, action=0, source=1359260818//private/var/folders/90/b19bybwn7_54983krrg5rxbc0000gq/T/input_file3598489199/dir_2/other_file, stream=not_set, stage=OUTPUT, json=666
+error	fd	MESSAGE TO COMMIT: kind=REGULAR, action=0, source=1853858972//private/var/folders/90/b19bybwn7_54983krrg5rxbc0000gq/T/input_file3598489199/dir_0/new_file, stream=not_set, stage=OUTPUT, json=666

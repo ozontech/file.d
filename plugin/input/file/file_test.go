@@ -368,8 +368,8 @@ func TestWatch(t *testing.T) {
 	}
 	iterations := 4
 	eventsPerIteration := 2
-	finalEvent := 1
-	eventCount := iterations*eventsPerIteration + finalEvent
+	prepareEvent := 2
+	eventCount := prepareEvent + iterations*eventsPerIteration
 	content := "666\n"
 	file := ""
 

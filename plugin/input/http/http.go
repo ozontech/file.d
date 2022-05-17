@@ -236,10 +236,10 @@ func (p *Plugin) processChunk(sourceID pipeline.SourceID, readBuff []byte, event
 
 		if len(eventBuff) != 0 {
 			eventBuff = append(eventBuff, readBuff[nlPos:pos]...)
-			p.controller.In(sourceID, "http", int64(pos), eventBuff, true)
+			_ = p.controller.In(sourceID, "http", int64(pos), eventBuff, true)
 			eventBuff = eventBuff[:0]
 		} else {
-			p.controller.In(sourceID, "http", int64(pos), readBuff[nlPos:pos], true)
+			_ = p.controller.In(sourceID, "http", int64(pos), readBuff[nlPos:pos], true)
 		}
 
 		pos++

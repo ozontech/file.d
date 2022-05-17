@@ -33,6 +33,8 @@ const (
 	DefaultStreamName          = StreamName("not_set")
 	DefaultWaitForPanicTimeout = time.Minute
 
+	SkippedSeqID = uint64(0)
+
 	antispamUnbanIterations = 4
 	metricsGenInterval      = time.Hour
 
@@ -306,21 +308,38 @@ func (p *Pipeline) GetOutput() OutputPlugin {
 	return p.output
 }
 
-func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes []byte, isNewSource bool) uint64 {
+func (p *Pipeline) CommitSkippedEvent(event *Event, sourceID SourceID, offset int64) {
+	event.SourceID = sourceID
+	event.Offset = offset
+	// event.SeqID == 0 by default assign here just for clarity.
+	event.SeqID = SkippedSeqID
+	p.Commit(event)
+}
+
+// In decodes message and passes it to event stream.
+func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes []byte, isNewSource bool) (seqID uint64) {
 	length := len(bytes)
 
-	// don't process shit.
+	// don't process mud.
 	isEmpty := length == 0 || (bytes[0] == '\n' && length == 1)
 	isSpam := p.antispamer.isSpam(sourceID, sourceName, isNewSource)
 	isLong := p.settings.MaxEventSize != 0 && length > p.settings.MaxEventSize
+
+	event := p.eventPool.get()
+	defer func() {
+		// return event into pool and commit it if message was empty || blocked by antispam || too long || wrong format.
+		if seqID == SkippedSeqID {
+			p.CommitSkippedEvent(event, sourceID, offset)
+		}
+	}()
+
 	if isEmpty || isSpam || isLong {
-		return 0
+		return SkippedSeqID
 	}
 
 	p.inputEvents.Inc()
 	p.inputSize.Add(int64(length))
 
-	event := p.eventPool.get()
 	var dec decoder.DecoderType
 	if p.decoder == decoder.AUTO {
 		dec = p.suggestedDecoder
@@ -340,7 +359,7 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 			} else {
 				p.logger.Errorf("wrong json format offset=%d, length=%d, err=%s, source=%d:%s, json=%s", offset, length, err.Error(), sourceID, sourceName, bytes)
 			}
-			return 0
+			return SkippedSeqID
 		}
 	case decoder.RAW:
 		_ = event.Root.DecodeString("{}")
@@ -350,14 +369,16 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 		err := decoder.DecodeCRI(event.Root, bytes)
 		if err != nil {
 			p.logger.Fatalf("wrong cri format offset=%d, length=%d, err=%s, source=%d:%s, cri=%s", offset, length, err.Error(), sourceID, sourceName, bytes)
-			return 0
+			// Dead route, never passed here.
+			return SkippedSeqID
 		}
 	case decoder.POSTGRES:
 		_ = event.Root.DecodeString("{}")
 		err := decoder.DecodePostgres(event.Root, bytes)
 		if err != nil {
 			p.logger.Fatalf("wrong postgres format offset=%d, length=%d, err=%s, source=%d:%s, cri=%s", offset, length, err.Error(), sourceID, sourceName, bytes)
-			return 0
+			// Dead route, never passed here.
+			return SkippedSeqID
 		}
 	default:
 		p.logger.Panicf("unknown decoder %d for pipeline %q", p.decoder, p.Name)
@@ -422,8 +443,11 @@ func (p *Pipeline) finalize(event *Event, notifyInput bool, backEvent bool) {
 		}
 	}
 
-	// todo: avoid event.stream.commit(event)
-	event.stream.commit(event)
+	// Only for good events that passed to streamer and have stream.
+	if event.stream != nil {
+		// todo: avoid event.stream.commit(event)
+		event.stream.commit(event)
+	}
 
 	if !backEvent {
 		return
@@ -540,11 +564,12 @@ func (p *Pipeline) logChanges(myDeltas *deltas) {
 	tc := int64(math.Max(float64(inputSize), 1))
 
 	p.logger.Infof(`%q pipeline stats interval=%ds, active procs=%d/%d, queue=%d/%d, out=%d|%.1fMb,`+
-		`rate=%d/s|%.1fMb/s, read ops=%d/s, total=%d|%.1fMb, avg size=%d, max size=%d`,
+		`rate=%d/s|%.1fMb/s, read ops=%d/s, total=%d|%.1fMb, avg size=%d, max size=%d, pool fullness=%d/%d`,
 		p.Name, interval/time.Second, p.activeProcs.Load(), p.procCount.Load(),
 		p.settings.Capacity-p.eventPool.freeEventsCount, p.settings.Capacity,
 		int64(myDeltas.deltaInputEvents), float64(myDeltas.deltaInputSize)/1024.0/1024.0, rate, rateMb, readOps,
-		inputEvents, float64(inputSize)/1024.0/1024.0, inputSize/tc, p.maxSize)
+		inputEvents, float64(inputSize)/1024.0/1024.0, inputSize/tc, p.maxSize,
+		p.eventPool.capacity-p.eventPool.freeEventsCount, p.eventPool.capacity)
 }
 
 func (p *Pipeline) incMetrics(inputEvents, inputSize, outputEvents, outputSize, reads *DeltaWrapper) *deltas {
