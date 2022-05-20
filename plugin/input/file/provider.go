@@ -376,7 +376,7 @@ func (jp *jobProvider) initJobOffset(operation offsetsOp, job *Job) {
 		// current offset may be in the middle of an event, so worker skips data to the next line
 		// by applying this offset it'll guarantee that full log won't be skipped
 		magicOffset := int64(-1)
-		offset = job.seek(magicOffset, io.SeekEnd, "job initialization")
+		_ = job.seek(magicOffset, io.SeekEnd, "job initialization")
 		job.shouldSkip.Store(true)
 
 	case offsetsOpReset:
