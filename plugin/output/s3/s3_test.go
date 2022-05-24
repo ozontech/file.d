@@ -43,7 +43,11 @@ type testS3Plugin struct {
 }
 
 func (p *testS3Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginParams) {
-	p.StartWithMinio(config, params, p.objStoreF)
+	fabric, err := NewCommitterFabric(config.(*Config), params)
+	if err != nil {
+		p.logger.Fatal(err)
+	}
+	p.StartInner(config, params, p.objStoreF, fabric)
 }
 
 func fPutObjectOk(bucketName, objectName, filePath string, opts minio.PutObjectOptions) (n int64, err error) {

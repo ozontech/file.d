@@ -11,10 +11,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strconv"
-	"sync"
 	"time"
 
-	"github.com/minio/minio-go"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/longpanic"
 	"github.com/ozontech/file.d/pipeline"
@@ -112,6 +110,9 @@ const (
 
 	// errors
 	sendErrorCounter = "send_error"
+
+	// commiter type
+	kafkaType = "kafka"
 )
 
 var (
@@ -123,99 +124,7 @@ var (
 	r = rand.New(rand.NewSource(time.Now().UnixNano()))
 )
 
-type ObjectStoreClient interface {
-	MakeBucket(bucketName string, location string) (err error)
-	BucketExists(bucketName string) (bool, error)
-	FPutObject(bucketName, objectName, filePath string, opts minio.PutObjectOptions) (n int64, err error)
-}
-
-type compressor interface {
-	compress(archiveName, fileName string)
-	getObjectOptions() minio.PutObjectOptions
-	getExtension() string
-	getName(fileName string) string
-}
-
-type Plugin struct {
-	controller    pipeline.OutputPluginController
-	logger        *zap.SugaredLogger
-	config        *Config
-	params        *pipeline.OutputPluginParams
-	fileExtension string
-
-	// defaultClient separated from others to avoid locks with dynamic buckets.
-	defaultClient ObjectStoreClient
-	clients       map[string]ObjectStoreClient
-	limiter       *ObjectStoreClientLimiter
-
-	outPlugins            *file.Plugins
-	dynamicPlugCreationMu sync.Mutex
-
-	compressCh chan fileDTO
-	uploadCh   chan fileDTO
-
-	compressor compressor
-}
-
-type fileDTO struct {
-	fileName   string
-	bucketName string
-}
-
-type singleBucketConfig struct {
-	// s3 section
-	Endpoint       string      `json:"endpoint" required:"true"`
-	AccessKey      string      `json:"access_key" required:"true"`
-	SecretKey      string      `json:"secret_key" required:"true"`
-	Bucket         string      `json:"bucket" required:"true"`
-	Secure         bool        `json:"secure" default:"false"`
-	FilePluginInfo file.Config `json:"file_plugin" required:"true"`
-}
-type MultiBuckets []singleBucketConfig
-
-//! config-params
-//^ config-params
-type Config struct {
-	//> @3@4@5@6
-	//> Under the hood this plugin uses /plugin/output/file/ to collect logs
-	FileConfig file.Config `json:"file_config" child:"true"` //*
-
-	//> @3@4@5@6
-	//> Compression type
-	CompressionType string `json:"compression_type" default:"zip" options:"zip"` //*
-
-	// s3 section
-
-	//> @3@4@5@6
-	//> Endpoint address of default bucket.
-	Endpoint string `json:"endpoint" required:"true"` //*
-	//> @3@4@5@6
-	//> s3 access key.
-	AccessKey string `json:"access_key" required:"true"` //*
-	//> @3@4@5@6
-	//> s3 secret key.
-	SecretKey string `json:"secret_key" required:"true"` //*
-	//> @3@4@5@6
-	//>  s3 default bucket.
-	DefaultBucket string `json:"bucket" required:"true"` //*
-	//> @3@4@5@6
-	//> MultiBuckets is additional buckets, which can also receive event.
-	//> Event must contain `bucket_name` field which value is s3 bucket name.
-	//> Events without `bucket_name` sends to DefaultBucket.
-	MultiBuckets `json:"multi_buckets" required:"false"` //*
-	//> @3@4@5@6
-	//> s3 connection secure option.
-	Secure bool `json:"secure" default:"false"` //*
-	//> @3@4@5@6
-	//> BucketEventField field change destination bucket of event to fields value.
-	//> Fallback to DefaultBucket if BucketEventField bucket doesn't exist.
-	BucketEventField string `json:"bucket_field_event" default:""` //*
-	//> @3@4@5@6
-	//> DynamicBucketsLimit regulates how many buckets can be created dynamically.
-	//> Prevents problems when some random strings in BucketEventField where
-	DynamicBucketsLimit int `json:"dynamic_buckets_limit" default:"32"` //*
-}
-
+// IsMultiBucketExists check existense on bucket.
 func (c *Config) IsMultiBucketExists(bucketName string) bool {
 	if c.MultiBuckets == nil {
 		return false
@@ -241,8 +150,14 @@ func Factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 	return &Plugin{}, &Config{}
 }
 
+// Start initializes and runs plugin. This function calls by pipeline and have hardcoded dependencies.
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginParams) {
-	p.StartWithMinio(config, params, p.minioClientsFactory)
+	committerFabric, err := NewCommitterFabric(config.(*Config), params)
+	if err != nil {
+		params.Logger.Fatal(err)
+	}
+
+	p.StartInner(config, params, p.minioClientsFactory, committerFabric)
 }
 
 func (p *Plugin) registerPluginMetrics() {
@@ -253,7 +168,8 @@ func (p *Plugin) registerPluginMetrics() {
 	})
 }
 
-func (p *Plugin) StartWithMinio(config pipeline.AnyConfig, params *pipeline.OutputPluginParams, factory objStoreFactory) {
+// StartInner initializes and runs plugin. Unlike `Start` arguments passed by aggregation which allows mocks testing.
+func (p *Plugin) StartInner(config pipeline.AnyConfig, params *pipeline.OutputPluginParams, objectStoreFactory objStoreFactory, commFabric CommitterFabric) {
 	p.registerPluginMetrics()
 
 	p.controller = params.Controller
@@ -279,7 +195,7 @@ func (p *Plugin) StartWithMinio(config pipeline.AnyConfig, params *pipeline.Outp
 	}
 
 	// initialize minio clients.
-	defaultClient, clients, err := factory(p.config)
+	defaultClient, clients, err := objectStoreFactory(p.config)
 	if err != nil {
 		p.logger.Panicf("could not create minio client, error: %s", err.Error())
 	}
@@ -304,6 +220,14 @@ func (p *Plugin) StartWithMinio(config pipeline.AnyConfig, params *pipeline.Outp
 	}
 	if errors.Is(err, ErrCreateOutputPluginNoSuchBucket) {
 		p.logger.Fatal(err.Error())
+	}
+
+	// Init and start commiter.
+	if commFabric != nil && !commFabric.IsNil(commFabric) {
+		p.commitMode = true
+		starter := commFabric.CommitterFunc()
+		p.commiterPlugin = starter()
+		p.inputController = p.controller.(pipeline.InputPluginController)
 	}
 
 	p.uploadExistingFiles(targetDirs, dynamicDirs, fileNames)
@@ -503,6 +427,12 @@ func (p *Plugin) uploadWork() {
 				}
 				break
 			}
+
+			p.inputController.In(pipeline.SourceID(time.Now().Unix()), "s3-output", 0, []byte("{empty:\"yes\"}"), p.isNew.Load())
+			if !p.isNew.Load() {
+				p.isNew.Store(true)
+			}
+
 			sleepTime += sleepTime
 			p.logger.Errorf("could not upload object: %s, next attempt in %s, error: %s", compressed, sleepTime.String(), err.Error())
 			time.Sleep(sleepTime)

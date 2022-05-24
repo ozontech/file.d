@@ -62,7 +62,8 @@ type Config struct {
 	TargetFile string `json:"target_file" default:"/var/log/file-d.log"` //*
 
 	//> Interval of creation new file
-	RetentionInterval  cfg.Duration `json:"retention_interval" default:"1h" parse:"duration"` //*
+	//RetentionInterval  cfg.Duration `json:"retention_interval" default:"1h" parse:"duration"` //*
+	RetentionInterval  cfg.Duration `json:"retention_interval" default:"20s" parse:"duration"` //*
 	RetentionInterval_ time.Duration
 
 	//> Layout is added to targetFile after sealing up. Determines result file name

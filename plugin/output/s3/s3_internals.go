@@ -69,7 +69,7 @@ func (p *Plugin) getFileNames(outPlugCount int) map[string]string {
 	return fileNames
 }
 
-// Try to create buckets from dirs lying in dynamic_dirs route
+// Try to create buckets from dirs lying in dynamic_dirs route.
 func (p *Plugin) createPlugsFromDynamicBucketArtifacts(targetDirs map[string]string) {
 	dynamicDirsPath := filepath.Join(targetDirs[p.config.DefaultBucket], DynamicBucketDir)
 	dynamicDir, err := ioutil.ReadDir(dynamicDirsPath)

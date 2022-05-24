@@ -73,6 +73,7 @@ func (p *Plugins) Add(plugName string, plug Plugable) {
 }
 
 // Exists asks if such file.Plugin exists in Plugins.
+// Concurrent safe.
 func (p *Plugins) Exists(plugName string) (exists bool) {
 	return p.IsStatic(plugName) || p.IsDynamic(plugName)
 }
