@@ -187,6 +187,9 @@ func (e *Event) kindStr() string {
 }
 
 func (e *Event) String() string {
+	if e == nil {
+		return "nil"
+	}
 	return fmt.Sprintf("kind=%s, action=%d, source=%d/%s, stream=%s, stage=%s, json=%s", e.kindStr(), e.action.Load(), e.SourceID, e.SourceName, e.streamName, e.stageStr(), e.Root.EncodeToString())
 }
 
@@ -298,9 +301,6 @@ func (p *eventPool) dump() string {
 		o := logger.Header("events")
 		for i := 0; i < p.freeEventsCount; i++ {
 			event := p.events[i]
-			if event == nil {
-				continue
-			}
 			o += event.String() + "\n"
 		}
 
