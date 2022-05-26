@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestEvent_String(t *testing.T) {
+func TestEventPoolDump(t *testing.T) {
 	eventPool := newEventPool(2)
 	e := eventPool.get()
 	defer eventPool.back(e)
