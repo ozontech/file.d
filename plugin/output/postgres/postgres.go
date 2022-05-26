@@ -329,9 +329,6 @@ func (p *Plugin) out(_ *pipeline.WorkerData, batch *pipeline.Batch) {
 			break
 		}
 	}
-	if cancel != nil {
-		cancel()
-	}
 
 	if outErr != nil {
 		p.pool.Close()
