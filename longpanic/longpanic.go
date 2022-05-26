@@ -5,8 +5,15 @@ package longpanic
 import (
 	"time"
 
-	"github.com/ozontech/file.d/logger"
 	"go.uber.org/atomic"
+
+	"github.com/ozontech/file.d/logger"
+	"github.com/ozontech/file.d/stats"
+)
+
+const (
+	subsystemName = "long_panic"
+	panics        = "panics"
 )
 
 // instance is a singleton with timeout that every `go func` call should use.
@@ -46,6 +53,11 @@ type LongPanic struct {
 
 // NewLongPanic creates LongPanic.
 func NewLongPanic(timeout time.Duration) *LongPanic {
+	stats.RegisterCounter(&stats.MetricDesc{
+		Subsystem: subsystemName,
+		Name:      panics,
+		Help:      "Count of panics in the LongPanic",
+	})
 	return &LongPanic{
 		shouldPanic: atomic.NewBool(false),
 		timeout:     timeout,
@@ -75,6 +87,8 @@ func (l *LongPanic) WithRecover(fn func()) {
 // recover waits for somebody to reset the error plugin or panics after a timeout.
 func (l *LongPanic) recoverUntilTimeout() {
 	if err, ok := recover().(error); ok {
+		stats.GetCounter(subsystemName, panics).Inc()
+
 		logger.Error(err.Error())
 		logger.Error("wait for somebody to restart plugins via endpoint")
 
