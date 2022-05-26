@@ -6,9 +6,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ozontech/file.d/logger"
 	insaneJSON "github.com/vitkovskii/insane-json"
 	"go.uber.org/atomic"
+
+	"github.com/ozontech/file.d/logger"
 )
 
 var eventSizeGCThreshold = 4 * 1024
@@ -297,6 +298,9 @@ func (p *eventPool) dump() string {
 		o := logger.Header("events")
 		for i := 0; i < p.freeEventsCount; i++ {
 			event := p.events[i]
+			if event == nil {
+				continue
+			}
 			o += event.String() + "\n"
 		}
 
