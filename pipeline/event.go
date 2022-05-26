@@ -41,10 +41,11 @@ const (
 	eventStageProcessor = 3
 	eventStageOutput    = 4
 
-	eventKindRegular int32 = 0
-	eventKindIgnore  int32 = 1
-	eventKindTimeout int32 = 2
-	eventKindUnlock  int32 = 3
+	eventKindRegular      int32 = 0
+	eventKindIgnore       int32 = 1
+	eventKindTimeout      int32 = 2
+	eventKindUnlock       int32 = 3
+	eventKindCustomCommit int32 = 4
 )
 
 type eventStage int
@@ -139,6 +140,14 @@ func (e *Event) IsTimeoutKind() bool {
 	return e.kind.Load() == eventKindTimeout
 }
 
+func (e *Event) SetCustomCommitKind() {
+	e.kind.Swap(eventKindCustomCommit)
+}
+
+func (e *Event) IsCustomCommitKind() bool {
+	return e.kind.Load() == eventKindCustomCommit
+}
+
 func (e *Event) parseJSON(json []byte) error {
 	return e.Root.DecodeBytes(json)
 }
@@ -180,6 +189,8 @@ func (e *Event) kindStr() string {
 		return "DEPRECATED"
 	case eventKindTimeout:
 		return "TIMEOUT"
+	case eventKindCustomCommit:
+		return "CUSTOM_COMMIT"
 	default:
 		return "UNKNOWN"
 	}

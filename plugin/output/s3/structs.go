@@ -7,7 +7,6 @@ import (
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/plugin/output/file"
 	"github.com/ozontech/file.d/plugin/output/kafka"
-	"go.uber.org/atomic"
 	"go.uber.org/zap"
 )
 
@@ -27,6 +26,8 @@ type compressor interface {
 type fileDTO struct {
 	fileName   string
 	bucketName string
+	firstTimestamp,
+	lastTimestamp uint64
 }
 
 type singleBucketConfig struct {
@@ -42,8 +43,32 @@ type singleBucketConfig struct {
 type MultiBuckets []singleBucketConfig
 
 type commitConfig struct {
-	CommitterType string        `json:"type" default:"unknown"`
-	KafkaCfg      *kafka.Config `json:"kafka_config"`
+	//> @3@4@5@6
+	//> Type of commiter. Now only Kafka type enabled.
+	CommitterType string `json:"type" default:""` //*
+
+	//> @3@4@5@6
+	//> Name of min timestamp in commiter message.
+	FirstTimestampFieldForTrack string `json:"first_timestamp_field_for_track"` //*
+
+	//> @3@4@5@6
+	//> Name of max timestamp in commiter message.
+	LastTimestampFieldForTrack string `json:"last_timestamp_field_for_track"` //*
+
+	//> @3@4@5@6
+	//> Name of bucket name in commiter message.
+	BucketNameFieldForTrack string `json:"bucket_name_field_for_track"` //*
+
+	//> @3@4@5@6
+	//> Name of s3url in commiter message.
+	S3UrlNameFieldForTrack string `json:"s3_url_name_field_for_track"` //*
+
+	//> @3@4@5@6
+	//> Constant part of commit, must be valid json fields.
+	//> Useful to add some contant data to commiter message: `"service": "serviceName", "release": "v1.0.1"`
+	ConstantCommitMessagePart string `json:"contant_message_part"` //*
+	//> @3@4@5@6
+	KafkaCfg kafka.Config `json:"kafka_config" child:"true"` //*
 }
 
 type Plugin struct {
@@ -66,9 +91,8 @@ type Plugin struct {
 	compressor compressor
 
 	commitMode      bool
-	commiterPlugin  pipeline.OutputPlugin
+	commiterWrapper *CommiterWrapper
 	inputController pipeline.InputPluginController
-	isNew           atomic.Bool
 }
 
 //! config-params
@@ -114,8 +138,7 @@ type Config struct {
 	DynamicBucketsLimit int `json:"dynamic_buckets_limit" default:"32"` //*
 
 	// 2 phase commit section
-
 	//> @3@4@5@6
 	//> Describes config of commit.
-	CommitCfg *commitConfig `json:"commit_config"` //*
+	CommitCfg *commitConfig `json:"commit_config" child:"true"` //*
 }

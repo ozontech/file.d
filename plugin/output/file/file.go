@@ -14,6 +14,7 @@ import (
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/longpanic"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/plugin/output/file/timestamp"
 
 	"go.uber.org/zap"
 	"golang.org/x/net/context"
@@ -41,9 +42,11 @@ type Plugin struct {
 	fileName      string
 	tsFileName    string
 
-	SealUpCallback func(string)
+	SealUpCallback func(string, uint64, uint64)
 
 	mu *sync.RWMutex
+
+	pairs *timestamp.Pair
 }
 
 type data struct {
@@ -62,8 +65,7 @@ type Config struct {
 	TargetFile string `json:"target_file" default:"/var/log/file-d.log"` //*
 
 	//> Interval of creation new file
-	//RetentionInterval  cfg.Duration `json:"retention_interval" default:"1h" parse:"duration"` //*
-	RetentionInterval  cfg.Duration `json:"retention_interval" default:"20s" parse:"duration"` //*
+	RetentionInterval  cfg.Duration `json:"retention_interval" default:"1h" parse:"duration"` //*
 	RetentionInterval_ time.Duration
 
 	//> Layout is added to targetFile after sealing up. Determines result file name
@@ -84,6 +86,12 @@ type Config struct {
 	//> File mode for log files
 	FileMode  cfg.Base8 `json:"file_mode" default:"0666" parse:"base8"` //*
 	FileMode_ int64
+
+	//> Track timestamps of oldest and newest event in file. Have sense only with SealUpCallback func.
+	TrackTimestamps bool `json:"track_timestamps"` //*
+
+	//> Fields name that will containt timestamp in event.
+	TimestampField string `json:"timestamp_field" default:"timestamp"` //*
 }
 
 func init() {
@@ -107,6 +115,10 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.fileExtension = filepath.Ext(file)
 	p.fileName = file[0 : len(file)-len(p.fileExtension)]
 	p.tsFileName = "%s" + "-" + p.fileName
+
+	if p.config.TrackTimestamps {
+		p.pairs = timestamp.New(0, 0)
+	}
 
 	p.batcher = pipeline.NewBatcher(
 		params.PipelineName,
@@ -173,6 +185,12 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 	for _, event := range batch.Events {
 		outBuf, _ = event.Encode(outBuf)
 		outBuf = append(outBuf, byte('\n'))
+
+		// writes first or last timestamps if found.
+		if p.config.TrackTimestamps {
+			ts := event.Root.Dig(p.config.TimestampField).AsUint64()
+			p.pairs.UpdatePair(ts)
+		}
 	}
 	data.outBuf = outBuf
 
@@ -253,7 +271,11 @@ func (p *Plugin) sealUp() {
 	}
 	logger.Errorf("sealing in %d, newFile: %s", time.Now().Unix(), newFileName)
 	if p.SealUpCallback != nil {
-		longpanic.Go(func() { p.SealUpCallback(newFileName) })
+		var f, l uint64
+		if p.config.TrackTimestamps {
+			f, l = p.pairs.Reset()
+		}
+		longpanic.Go(func() { p.SealUpCallback(newFileName, f, l) })
 	}
 }
 

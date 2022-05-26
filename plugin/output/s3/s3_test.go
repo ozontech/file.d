@@ -45,7 +45,7 @@ type testS3Plugin struct {
 func (p *testS3Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginParams) {
 	fabric, err := NewCommitterFabric(config.(*Config), params)
 	if err != nil {
-		p.logger.Fatal(err)
+		params.Logger.Fatal(err)
 	}
 	p.StartInner(config, params, p.objStoreF, fabric)
 }

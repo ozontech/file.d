@@ -174,17 +174,14 @@ func (b *Batcher) heartbeat() {
 		b.mu.Lock()
 		batch := b.getBatch()
 		b.trySendBatchAndUnlock(batch)
-
 		time.Sleep(time.Millisecond * 100)
 	}
 }
 
 func (b *Batcher) Add(event *Event) {
 	b.mu.Lock()
-
 	batch := b.getBatch()
 	batch.append(event)
-
 	b.trySendBatchAndUnlock(batch)
 }
 

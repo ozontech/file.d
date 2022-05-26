@@ -411,7 +411,8 @@ func (p *Pipeline) Error(err string) {
 }
 
 func (p *Pipeline) finalize(event *Event, notifyInput bool, backEvent bool) {
-	if event.IsTimeoutKind() {
+	// CustomCommitKind exists out of pull and must be immideamtely returned.
+	if event.IsTimeoutKind() || event.IsCustomCommitKind() {
 		return
 	}
 

@@ -266,18 +266,24 @@ func Parse(ptr interface{}, values map[string]int) error {
 // 	}
 // }
 // this function will set `config.Child.T = config.T`
-// see file.d/cfg/config_test.go:TestHierarchy for an example
+// see file.d/cfg/config_test.go:TestHierarchy for an example.
 func ParseChild(parent reflect.Value, v reflect.Value, values map[string]int) error {
 	if v.CanAddr() {
-		for i := 0; i < v.NumField(); i++ {
-			name := v.Type().Field(i).Name
+		// Check for cfg pointers.
+		vIndirect := reflect.Indirect(v)
+		// Config is null.
+		if !vIndirect.IsValid() {
+			return nil
+		}
+		for i := 0; i < vIndirect.NumField(); i++ {
+			name := vIndirect.Type().Field(i).Name
 			val := parent.FieldByName(name)
 			if val.CanAddr() {
-				v.Field(i).Set(val)
+				vIndirect.Field(i).Set(val)
 			}
 		}
 
-		err := Parse(v.Addr().Interface(), values)
+		err := Parse(vIndirect.Addr().Interface(), values)
 		if err != nil {
 			return err
 		}

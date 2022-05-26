@@ -130,4 +130,9 @@ Prevents problems when some random strings in BucketEventField where
 
 <br>
 
+**`commit_config`** *`*commitConfig`* 
+Describes config of commit.
+
+<br>
+
 <br>*Generated using [__insane-doc__](https://github.com/vitkovskii/insane-doc)*

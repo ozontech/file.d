@@ -110,9 +110,6 @@ const (
 
 	// errors
 	sendErrorCounter = "send_error"
-
-	// commiter type
-	kafkaType = "kafka"
 )
 
 var (
@@ -202,13 +199,21 @@ func (p *Plugin) StartInner(config pipeline.AnyConfig, params *pipeline.OutputPl
 	p.defaultClient = defaultClient
 	p.clients = clients
 
-	// dynamicDirs needs defaultClient set.
+	// dynamicDirs needs defaultClient set
 	dynamicDirs := p.getDynamicDirsArtifacts(targetDirs)
-	// file for each bucket.
+	// file for each bucket
 	fileNames := p.getFileNames(outPlugCount)
 
 	p.uploadCh = make(chan fileDTO, p.config.FileConfig.WorkersCount_*4)
 	p.compressCh = make(chan fileDTO, p.config.FileConfig.WorkersCount_)
+
+	// init and start commiter
+	if commFabric != nil {
+		p.commitMode = true
+		starter := commFabric.CommitterFunc()
+		p.commiterWrapper = starter()
+		p.inputController = p.controller.(pipeline.InputPluginController)
+	}
 
 	for i := 0; i < p.config.FileConfig.WorkersCount_; i++ {
 		longpanic.Go(p.uploadWork)
@@ -220,14 +225,6 @@ func (p *Plugin) StartInner(config pipeline.AnyConfig, params *pipeline.OutputPl
 	}
 	if errors.Is(err, ErrCreateOutputPluginNoSuchBucket) {
 		p.logger.Fatal(err.Error())
-	}
-
-	// Init and start commiter.
-	if commFabric != nil && !commFabric.IsNil(commFabric) {
-		p.commitMode = true
-		starter := commFabric.CommitterFunc()
-		p.commiterPlugin = starter()
-		p.inputController = p.controller.(pipeline.InputPluginController)
 	}
 
 	p.uploadExistingFiles(targetDirs, dynamicDirs, fileNames)
@@ -300,14 +297,14 @@ func (p *Plugin) getDynamicDirsArtifacts(targetDirs map[string]string) map[strin
 
 // creates new dynamic plugin if such s3 bucket exists.
 func (p *Plugin) tryRunNewPlugin(bucketName string) (isCreated bool) {
-	// To avoid concurrent creation of bucketName plugin.
+	// to avoid concurrent creation of bucketName plugin
 	p.dynamicPlugCreationMu.Lock()
 	defer p.dynamicPlugCreationMu.Unlock()
-	// Probably other worker created plugin concurrently, need check dynamic bucket one more time.
+	// probably other worker created plugin concurrently, need check dynamic bucket one more time
 	if p.outPlugins.IsDynamic(bucketName) {
 		return true
 	}
-	// If limit of dynamic buckets reached fallback to DefaultBucket.
+	// if limit of dynamic buckets reached fallback to DefaultBucket
 	if !p.limiter.CanCreate() {
 		p.logger.Warn(
 			"Limit of %d dynamic buckets reached, can't create new. Fallback to %s.",
@@ -359,15 +356,15 @@ func (p *Plugin) uploadExistingFiles(targetDirs, dynamicDirs, fileNames map[stri
 		allDirs[k] = v
 	}
 	for bucketName, dir := range allDirs {
-		// get all compressed files.
+		// get all compressed files
 		pattern := fmt.Sprintf("%s*%s", dir, p.compressor.getExtension())
 		compressedFiles, err := filepath.Glob(pattern)
 		if err != nil {
 			p.logger.Panicf("could not read dir: %s", dir)
 		}
-		// sort compressed files by creation time.
+		// sort compressed files by creation time
 		sort.Slice(compressedFiles, p.getSortFunc(compressedFiles))
-		// upload archive.
+		// upload archive
 		for _, z := range compressedFiles {
 			p.logger.Infof("uploaded file: %s, bucket: %s", z, bucketName)
 			p.uploadCh <- fileDTO{fileName: z, bucketName: bucketName}
@@ -385,7 +382,7 @@ func (p *Plugin) compressFilesInDir(bucketName string, targetDirs, fileNames map
 	if err != nil {
 		p.logger.Panicf("could not read dir: %s", targetDirs[bucketName])
 	}
-	// sort files by creation time.
+	// sort files by creation time
 	sort.Slice(files, p.getSortFunc(files))
 	for _, f := range files {
 		p.compressCh <- fileDTO{fileName: f, bucketName: bucketName}
@@ -407,9 +404,9 @@ func (p *Plugin) getSortFunc(files []string) func(i, j int) bool {
 	}
 }
 
-func (p *Plugin) addFileJobWithBucket(bucketName string) func(filename string) {
-	return func(filename string) {
-		p.compressCh <- fileDTO{fileName: filename, bucketName: bucketName}
+func (p *Plugin) addFileJobWithBucket(bucketName string) func(filename string, firstTimestamp, lastTimestamp uint64) {
+	return func(filename string, firstTimestamp, lastTimestamp uint64) {
+		p.compressCh <- fileDTO{fileName: filename, bucketName: bucketName, firstTimestamp: firstTimestamp, lastTimestamp: lastTimestamp}
 	}
 }
 
@@ -419,18 +416,38 @@ func (p *Plugin) uploadWork() {
 		for {
 			err := p.uploadToS3(compressed)
 			if err == nil {
-				p.logger.Infof("successfully uploaded object: %s", compressed)
+				p.logger.Infof("successfully uploaded object: %v", compressed)
+
+				// send message to commiter
+				if p.config.CommitCfg != nil {
+					commiterData := make(map[string]interface{})
+					if p.config.CommitCfg.FirstTimestampFieldForTrack != "" {
+						commiterData[p.config.CommitCfg.FirstTimestampFieldForTrack] = compressed.firstTimestamp
+					}
+					if p.config.CommitCfg.LastTimestampFieldForTrack != "" {
+						commiterData[p.config.CommitCfg.LastTimestampFieldForTrack] = compressed.lastTimestamp
+					}
+					if p.config.CommitCfg.BucketNameFieldForTrack != "" {
+						commiterData[p.config.CommitCfg.BucketNameFieldForTrack] = compressed.bucketName
+					}
+					if p.config.CommitCfg.S3UrlNameFieldForTrack != "" {
+						commiterData[p.config.CommitCfg.S3UrlNameFieldForTrack] = compressed.fileName
+					}
+					err := p.commiterWrapper.CommitUpload(commiterData, p.config.CommitCfg.ConstantCommitMessagePart)
+					if err != nil {
+						p.logger.Fatalf("can't commit message of uploading: %s", err.Error())
+					}
+
+					p.logger.Infof("successfully commited to %s", p.config.CommitCfg.CommitterType)
+				}
+
 				// delete archive after uploading
 				err = os.Remove(compressed.fileName)
 				if err != nil {
 					p.logger.Panicf("could not delete file: %s, err: %s", compressed, err.Error())
 				}
-				break
-			}
 
-			p.inputController.In(pipeline.SourceID(time.Now().Unix()), "s3-output", 0, []byte("{empty:\"yes\"}"), p.isNew.Load())
-			if !p.isNew.Load() {
-				p.isNew.Store(true)
+				break
 			}
 
 			sleepTime += sleepTime
@@ -450,7 +467,7 @@ func (p *Plugin) compressWork() {
 			p.logger.Panicf("could not delete file: %s, error: %s", dto, err.Error())
 		}
 		dto.fileName = compressedName
-		p.uploadCh <- fileDTO{fileName: dto.fileName, bucketName: dto.bucketName}
+		p.uploadCh <- fileDTO{fileName: dto.fileName, bucketName: dto.bucketName, firstTimestamp: dto.firstTimestamp, lastTimestamp: dto.lastTimestamp}
 	}
 }
 
