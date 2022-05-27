@@ -56,12 +56,12 @@ profile-file:
 
 .PHONY: push-version-linux-amd64
 push-version-linux-amd64: build
-	docker build -t ozonru/file.d:${VERSION}-linux-amd64 .
+	docker build -t ozonru/file.d:${VERSION}-linux-amd64 -f Dockerfile.ozon .
 	docker push ozonru/file.d:${VERSION}-linux-amd64
 
 .PHONY: push-latest-linux-amd64
 push-latest-linux-amd64: build
-	docker build -t ozonru/file.d:latest-linux-amd64 .
+	docker build -t ozonru/file.d:latest-linux-amd64 -f Dockerfile.ozon .
 	docker push ozonru/file.d:latest-linux-amd64
 
 .PHONY: push-images-version
