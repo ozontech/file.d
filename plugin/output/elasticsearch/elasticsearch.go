@@ -6,16 +6,18 @@ import (
 	"io/ioutil"
 	"math/rand"
 	"net/http"
+	"os"
 	"sync"
 	"time"
 
-	"github.com/ozontech/file.d/cfg"
-	"github.com/ozontech/file.d/stats"
+	"github.com/elastic/go-elasticsearch/v8"
 	insaneJSON "github.com/vitkovskii/insane-json"
 	"go.uber.org/zap"
 
+	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/stats"
 )
 
 /*{ introduction
@@ -30,11 +32,13 @@ const (
 	// errors
 	sendErrorCounter = "send_error"
 	indexingErrors   = "index_error"
+
+	NDJSONContentType = "application/x-ndjson"
 )
 
 type Plugin struct {
 	logger       *zap.SugaredLogger
-	client       *http.Client
+	elastic      *elasticsearch.Client
 	cancel       context.CancelFunc
 	config       *Config
 	avgEventSize int
@@ -51,6 +55,31 @@ type Config struct {
 	//>
 	//> The list of elasticsearch endpoints in the following format: `SCHEMA://HOST:PORT`
 	Endpoints []string `json:"endpoints"  required:"true"` //*
+
+	//> @3@4@5@6
+	//>
+	//> Elastic username for Basic authentication (username and password).
+	Username string `json:"username"` //*
+
+	//> @3@4@5@6
+	//>
+	//> Elastic password for Basic authentication (username and password).
+	Password string `json:"password"` //*
+
+	//> @3@4@5@6
+	//>
+	//> Elastic secret token for API key authentication.
+	APIKey string `json:"api_key"` //*
+
+	//> @3@4@5@6
+	//>
+	//> Custom certificate authority used to sign the certificates of cluster nodes.
+	CACert string `json:"ca_cert"` //*
+
+	//> @3@4@5@6
+	//>
+	//> Custom certificate authority used to sign the certificates of cluster nodes.
+	CertificateFingerprint string `json:"certificate_fingerprint"` //*
 
 	//> @3@4@5@6
 	//>
@@ -131,8 +160,27 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		p.config.Endpoints[i] = endpoint + "/_bulk?_source=false"
 	}
 
-	p.client = &http.Client{
-		Timeout: p.config.ConnectionTimeout_,
+	var (
+		err    error
+		caCert []byte
+	)
+	if p.config.CACert != "" {
+		caCert, err = os.ReadFile(p.config.CACert)
+		if err != nil {
+			p.logger.Fatalf("can't read CACert file: %s", err.Error())
+		}
+	}
+
+	p.elastic, err = elasticsearch.NewClient(elasticsearch.Config{
+		Addresses:              p.config.Endpoints,
+		Username:               p.config.Username,
+		Password:               p.config.Password,
+		APIKey:                 p.config.APIKey,
+		CertificateFingerprint: p.config.CertificateFingerprint,
+		CACert:                 caCert,
+	})
+	if err != nil {
+		p.logger.Fatalf("can't create elasticsearch client: %s", err.Error())
 	}
 
 	p.maintenance(nil)
@@ -201,7 +249,16 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 
 	for {
 		endpoint := p.config.Endpoints[rand.Int()%len(p.config.Endpoints)]
-		resp, err := p.client.Post(endpoint, "application/x-ndjson", bytes.NewBuffer(data.outBuf))
+		ctx, cancel := context.WithTimeout(context.Background(), p.config.ConnectionTimeout_)
+
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewBuffer(data.outBuf))
+		if err != nil {
+			p.logger.Panicf("can't create elasticsearch request: %s", err.Error())
+		}
+		req.Header.Set("Content-Type", NDJSONContentType)
+
+		resp, err := p.elastic.Transport.Perform(req)
+		cancel()
 		if err != nil {
 			stats.GetCounter(subsystemName, sendErrorCounter).Inc()
 			p.logger.Errorf("can't send batch to %s, will try other endpoint: %s", endpoint, err.Error())
