@@ -12,13 +12,14 @@ import (
 	"sync"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
+	"go.uber.org/atomic"
+	"go.uber.org/zap"
+
 	"github.com/ozontech/file.d/decoder"
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/longpanic"
 	"github.com/ozontech/file.d/stats"
-	"github.com/prometheus/client_golang/prometheus"
-	"go.uber.org/atomic"
-	"go.uber.org/zap"
 )
 
 const (
@@ -197,6 +198,11 @@ func (p *Pipeline) registerMetrics() {
 		Subsystem: p.subsystemName(),
 		Name:      outputEventsSizeMetric,
 		Help:      "Size of events on pipeline output",
+	})
+	stats.RegisterCounter(&stats.MetricDesc{
+		Subsystem: p.subsystemName(),
+		Name:      readOpsEventsSizeMetric,
+		Help:      "Read OPS count",
 	})
 }
 
