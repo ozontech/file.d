@@ -154,6 +154,13 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		p.config.IndexValues = append(p.config.IndexValues, "@time")
 	}
 
+	for i, endpoint := range p.config.Endpoints {
+		if endpoint[len(endpoint)-1] == '/' {
+			endpoint = endpoint[:len(endpoint)-1]
+		}
+		p.config.Endpoints[i] = endpoint + "/_bulk?_source=false"
+	}
+
 	p.client = &fasthttp.Client{}
 	var (
 		err    error
@@ -165,7 +172,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 			p.logger.Fatalf("can't read CACert file: %s", err.Error())
 		}
 
-		certPool := &x509.CertPool{}
+		certPool := x509.NewCertPool()
 		certPool.AppendCertsFromPEM(caCert)
 		p.client.TLSConfig = &tls.Config{
 			RootCAs: certPool,
@@ -255,6 +262,7 @@ func (p *Plugin) send(body []byte) error {
 	endpoint := p.config.Endpoints[rand.Int()%len(p.config.Endpoints)]
 	req.SetRequestURI(endpoint)
 	req.SetBodyRaw(body)
+	req.Header.SetMethod(fasthttp.MethodPost)
 	req.Header.SetContentType(NDJSONContentType)
 	p.setAuthHeader(req)
 
@@ -271,7 +279,7 @@ func (p *Plugin) send(body []byte) error {
 
 	root, err := insaneJSON.DecodeBytes(respContent)
 	if err != nil {
-		return fmt.Errorf("wrong response from %s, will try other endpoint: %s", endpoint, err.Error())
+		return fmt.Errorf("wrong response from %s: %s", endpoint, err.Error())
 	}
 	defer insaneJSON.Release(root)
 
