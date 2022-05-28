@@ -1,16 +1,17 @@
 package elasticsearch
 
 import (
-	"bytes"
 	"context"
-	"io/ioutil"
+	"crypto/tls"
+	"crypto/x509"
+	"fmt"
 	"math/rand"
 	"net/http"
 	"os"
 	"sync"
 	"time"
 
-	"github.com/elastic/go-elasticsearch/v8"
+	"github.com/valyala/fasthttp"
 	insaneJSON "github.com/vitkovskii/insane-json"
 	"go.uber.org/zap"
 
@@ -38,7 +39,7 @@ const (
 
 type Plugin struct {
 	logger       *zap.SugaredLogger
-	elastic      *elasticsearch.Client
+	client       *fasthttp.Client
 	cancel       context.CancelFunc
 	config       *Config
 	avgEventSize int
@@ -153,13 +154,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		p.config.IndexValues = append(p.config.IndexValues, "@time")
 	}
 
-	for i, endpoint := range p.config.Endpoints {
-		if endpoint[len(endpoint)-1] == '/' {
-			endpoint = endpoint[:len(endpoint)-1]
-		}
-		p.config.Endpoints[i] = endpoint + "/_bulk?_source=false"
-	}
-
+	p.client = &fasthttp.Client{}
 	var (
 		err    error
 		caCert []byte
@@ -169,18 +164,12 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		if err != nil {
 			p.logger.Fatalf("can't read CACert file: %s", err.Error())
 		}
-	}
 
-	p.elastic, err = elasticsearch.NewClient(elasticsearch.Config{
-		Addresses:              p.config.Endpoints,
-		Username:               p.config.Username,
-		Password:               p.config.Password,
-		APIKey:                 p.config.APIKey,
-		CertificateFingerprint: p.config.CertificateFingerprint,
-		CACert:                 caCert,
-	})
-	if err != nil {
-		p.logger.Fatalf("can't create elasticsearch client: %s", err.Error())
+		certPool := &x509.CertPool{}
+		certPool.AppendCertsFromPEM(caCert)
+		p.client.TLSConfig = &tls.Config{
+			RootCAs: certPool,
+		}
 	}
 
 	p.maintenance(nil)
@@ -248,66 +237,62 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 	}
 
 	for {
-		endpoint := p.config.Endpoints[rand.Int()%len(p.config.Endpoints)]
-		ctx, cancel := context.WithTimeout(context.Background(), p.config.ConnectionTimeout_)
-
-		req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewBuffer(data.outBuf))
-		if err != nil {
-			p.logger.Panicf("can't create elasticsearch request: %s", err.Error())
-		}
-		req.Header.Set("Content-Type", NDJSONContentType)
-
-		resp, err := p.elastic.Transport.Perform(req)
-		cancel()
-		if err != nil {
+		if err := p.send(data.outBuf); err != nil {
 			stats.GetCounter(subsystemName, sendErrorCounter).Inc()
-			p.logger.Errorf("can't send batch to %s, will try other endpoint: %s", endpoint, err.Error())
-			time.Sleep(time.Second)
-			continue
+			p.logger.Errorf("can't send to the elastic, will try other endpoint: %s", err.Error())
+		} else {
+			break
 		}
-
-		respContent, err := ioutil.ReadAll(resp.Body)
-		_ = resp.Body.Close()
-		if err != nil {
-			stats.GetCounter(subsystemName, sendErrorCounter).Inc()
-			p.logger.Errorf("can't read response from %s, will try other endpoint: %s", endpoint, err.Error())
-			continue
-		}
-
-		if resp.StatusCode < http.StatusOK || resp.StatusCode > http.StatusAccepted {
-			stats.GetCounter(subsystemName, sendErrorCounter).Inc()
-			p.logger.Errorf("response status from %s isn't OK, will try other endpoint: status=%d, body=%s", endpoint, resp.StatusCode, respContent)
-			continue
-		}
-
-		root, err := insaneJSON.DecodeBytes(respContent)
-		if err != nil {
-			stats.GetCounter(subsystemName, sendErrorCounter).Inc()
-			p.logger.Errorf("wrong response from %s, will try other endpoint: %s", endpoint, err.Error())
-			insaneJSON.Release(root)
-			continue
-		}
-
-		if root.Dig("errors").AsBool() {
-			errors := 0
-			for _, node := range root.Dig("items").AsArray() {
-				errNode := node.Dig("index", "error")
-				if errNode != nil {
-					errors += 1
-					p.logger.Errorf("indexing error: %s", errNode.EncodeToString())
-				}
-			}
-
-			if errors != 0 {
-				stats.GetCounter(subsystemName, indexingErrors).Add(float64(errors))
-			}
-
-			p.controller.Error("some events from batch isn't written")
-		}
-
-		insaneJSON.Release(root)
-		break
 	}
+}
+
+func (p *Plugin) send(body []byte) error {
+	req := fasthttp.AcquireRequest()
+	defer fasthttp.ReleaseRequest(req)
+	resp := fasthttp.AcquireResponse()
+	defer fasthttp.ReleaseResponse(resp)
+
+	endpoint := p.config.Endpoints[rand.Int()%len(p.config.Endpoints)]
+	req.SetRequestURI(endpoint)
+	req.SetBodyRaw(body)
+	req.Header.SetContentType(NDJSONContentType)
+	p.setAuthHeader(req)
+
+	if err := p.client.DoTimeout(req, resp, p.config.ConnectionTimeout_); err != nil {
+		time.Sleep(time.Second)
+		return fmt.Errorf("can't send batch to %s: %s", endpoint, err.Error())
+	}
+
+	respContent := resp.Body()
+
+	if statusCode := resp.Header.StatusCode(); statusCode < http.StatusOK || statusCode > http.StatusAccepted {
+		return fmt.Errorf("response status from %s isn't OK: status=%d, body=%s", endpoint, statusCode, string(respContent))
+	}
+
+	root, err := insaneJSON.DecodeBytes(respContent)
+	if err != nil {
+		return fmt.Errorf("wrong response from %s, will try other endpoint: %s", endpoint, err.Error())
+	}
+	defer insaneJSON.Release(root)
+
+	if root.Dig("errors").AsBool() {
+		errors := 0
+		for _, node := range root.Dig("items").AsArray() {
+			errNode := node.Dig("index", "error")
+			if errNode != nil {
+				errors += 1
+				p.logger.Errorf("indexing error: %s", errNode.EncodeToString())
+			}
+		}
+
+		if errors != 0 {
+			stats.GetCounter(subsystemName, indexingErrors).Add(float64(errors))
+		}
+
+		p.controller.Error("some events from batch isn't written")
+	}
+
+	return nil
 }
 
 func (p *Plugin) appendEvent(outBuf []byte, event *pipeline.Event) []byte {
@@ -355,4 +340,14 @@ func (p *Plugin) maintenance(_ *pipeline.WorkerData) {
 	p.mu.Lock()
 	p.time = time.Now().Format(p.config.TimeFormat)
 	p.mu.Unlock()
+}
+
+func (p *Plugin) setAuthHeader(req *fasthttp.Request) *fasthttp.Request {
+	if p.config.APIKey != "" {
+		req.Header.Set(fasthttp.HeaderAuthorization, "Bearer "+p.config.APIKey)
+	} else if p.config.Username != "" && p.config.Password != "" {
+		req.Header.Set(fasthttp.HeaderAuthorization, "Basic "+p.config.Username+":"+p.config.Password)
+	}
+
+	return req
 }
