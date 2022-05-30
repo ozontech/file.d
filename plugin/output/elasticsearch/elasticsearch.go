@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/base64"
 	"fmt"
 	"math/rand"
 	"net/http"
@@ -42,6 +43,7 @@ type Plugin struct {
 	client       *fasthttp.Client
 	cancel       context.CancelFunc
 	config       *Config
+	authHeader   []byte
 	avgEventSize int
 	time         string
 	batcher      *pipeline.Batcher
@@ -178,6 +180,8 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 			RootCAs: certPool,
 		}
 	}
+
+	p.authHeader = p.getAuthHeader()
 
 	p.maintenance(nil)
 
@@ -350,12 +354,21 @@ func (p *Plugin) maintenance(_ *pipeline.WorkerData) {
 	p.mu.Unlock()
 }
 
-func (p *Plugin) setAuthHeader(req *fasthttp.Request) *fasthttp.Request {
+func (p *Plugin) getAuthHeader() []byte {
 	if p.config.APIKey != "" {
-		req.Header.Set(fasthttp.HeaderAuthorization, "Bearer "+p.config.APIKey)
+		return []byte("Bearer " + p.config.APIKey)
 	} else if p.config.Username != "" && p.config.Password != "" {
-		req.Header.Set(fasthttp.HeaderAuthorization, "Basic "+p.config.Username+":"+p.config.Password)
+		credentials := []byte(p.config.Username + ":" + p.config.Password)
+		buf := make([]byte, base64.StdEncoding.EncodedLen(len(credentials)))
+		base64.StdEncoding.Encode(buf, credentials)
+		return append([]byte("Basic "), buf...)
 	}
+	return nil
+}
 
-	return req
+func (p *Plugin) setAuthHeader(req *fasthttp.Request) {
+	strAuthorization := []byte(fasthttp.HeaderAuthorization)
+	if p.authHeader != nil {
+		req.Header.SetBytesKV(strAuthorization, p.authHeader)
+	}
 }
