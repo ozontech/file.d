@@ -157,6 +157,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 
 	root := insaneJSON.Spawn()
 	outBuf := data.outBuf[:0]
+
 	for _, event := range batch.Events {
 		root.AddField("event").MutateToNode(event.Root.Node)
 		outBuf = root.Encode(outBuf)
@@ -165,6 +166,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 	insaneJSON.Release(root)
 	data.outBuf = outBuf
 
+	p.logger.Debugf("Trying to send: %s", outBuf)
 	_ = backoff.Retry(func() error {
 		sendErr := p.send(outBuf)
 		if sendErr != nil {
@@ -175,6 +177,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 		}
 		return nil
 	}, p.backoff)
+	p.logger.Debugf("Successfully sent: %s", outBuf)
 }
 
 func (p *Plugin) maintenance(workerData *pipeline.WorkerData) {}

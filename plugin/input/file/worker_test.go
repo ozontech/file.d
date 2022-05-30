@@ -18,6 +18,10 @@ type inputerMock struct {
 	gotData []byte
 }
 
+func (i *inputerMock) IncReadOps()  {
+
+}
+
 func (i *inputerMock) In(sourceID pipeline.SourceID, sourceName string, offset int64, data []byte, isNewSource bool) uint64 {
 	i.gotData = make([]byte, len(data))
 	copy(i.gotData, data)
@@ -89,7 +93,7 @@ func TestWorkerWork(t *testing.T) {
 				jobsMu:            &sync.RWMutex{},
 				jobsChan:          make(chan *Job, 2),
 				jobsLog:           []string{},
-				symlinks:          map[inode]string{},
+				symlinks:          map[inodeID]string{},
 				symlinksMu:        &sync.Mutex{},
 				jobsDone:          &atomic.Int32{},
 				loadedOffsets:     map[pipeline.SourceID]*inodeOffsets{},

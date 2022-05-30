@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"math/rand"
 	"net/http"
 	"runtime"
@@ -14,6 +15,7 @@ import (
 	"github.com/ozontech/file.d/decoder"
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/longpanic"
+	"github.com/ozontech/file.d/stats"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
@@ -22,7 +24,7 @@ import (
 const (
 	DefaultStreamField         = "stream"
 	DefaultCapacity            = 1024
-	DefaultAvgInputEventSize   = 16 * 1024
+	DefaultAvgInputEventSize   = 4 * 1024
 	DefaultMaxInputEventSize   = 0
 	DefaultJSONNodePoolSize    = 1024
 	DefaultMaintenanceInterval = time.Second * 5
@@ -31,8 +33,16 @@ const (
 	DefaultStreamName          = StreamName("not_set")
 	DefaultWaitForPanicTimeout = time.Minute
 
+	EventSeqIDError = uint64(0)
+
 	antispamUnbanIterations = 4
 	metricsGenInterval      = time.Hour
+
+	inputEventsCountMetric  = "input_events_count"
+	inputEventsSizeMetric   = "input_events_size"
+	outputEventsCountMetric = "output_events_count"
+	outputEventsSizeMetric  = "output_events_size"
+	readOpsEventsSizeMetric = "read_ops_count"
 )
 
 type finalizeFn = func(event *Event, notifyInput bool, backEvent bool)
@@ -42,6 +52,7 @@ type InputPluginController interface {
 	UseSpread()                           // don't use stream field and spread all events across all processors
 	DisableStreams()                      // don't use stream field
 	SuggestDecoder(t decoder.DecoderType) // set decoder if pipeline uses "auto" value for decoder
+	IncReadOps()                          // inc read ops for stats
 }
 
 type ActionPluginController interface {
@@ -89,15 +100,18 @@ type Pipeline struct {
 
 	metricsHolder *metricsHolder
 
-	// some debugging shit
+	// some debugging stuff
 	logger          *zap.SugaredLogger
 	eventLogEnabled bool
 	eventLog        []string
 	eventLogMu      *sync.Mutex
 	inSample        []byte
 	outSample       []byte
-	totalCommitted  atomic.Int64
-	totalSize       atomic.Int64
+	inputEvents     atomic.Int64
+	inputSize       atomic.Int64
+	outputEvents    atomic.Int64
+	outputSize      atomic.Int64
+	readOps         atomic.Int64
 	maxSize         int
 }
 
@@ -135,6 +149,8 @@ func New(name string, settings *Settings, registry *prometheus.Registry) *Pipeli
 		eventLogMu: &sync.Mutex{},
 	}
 
+	pipeline.registerMetrics()
+
 	switch settings.Decoder {
 	case "json":
 		pipeline.decoder = decoder.JSON
@@ -151,6 +167,37 @@ func New(name string, settings *Settings, registry *prometheus.Registry) *Pipeli
 	}
 
 	return pipeline
+}
+
+func (p *Pipeline) IncReadOps() {
+	p.readOps.Inc()
+}
+
+func (p *Pipeline) subsystemName() string {
+	return "pipeline_" + p.Name
+}
+
+func (p *Pipeline) registerMetrics() {
+	stats.RegisterCounter(&stats.MetricDesc{
+		Subsystem: p.subsystemName(),
+		Name:      inputEventsCountMetric,
+		Help:      "Count of events on pipeline input",
+	})
+	stats.RegisterCounter(&stats.MetricDesc{
+		Subsystem: p.subsystemName(),
+		Name:      inputEventsSizeMetric,
+		Help:      "Size of events on pipeline input",
+	})
+	stats.RegisterCounter(&stats.MetricDesc{
+		Subsystem: p.subsystemName(),
+		Name:      outputEventsCountMetric,
+		Help:      "Count of events on pipeline output",
+	})
+	stats.RegisterCounter(&stats.MetricDesc{
+		Subsystem: p.subsystemName(),
+		Name:      outputEventsSizeMetric,
+		Help:      "Size of events on pipeline output",
+	})
 }
 
 // SetupHTTPHandlers creates handlers for plugin endpoints and pipeline info.
@@ -225,7 +272,7 @@ func (p *Pipeline) Start() {
 }
 
 func (p *Pipeline) Stop() {
-	p.logger.Infof("stopping pipeline %q, total committed=%d", p.Name, p.totalCommitted.Load())
+	p.logger.Infof("stopping pipeline %q, total committed=%d", p.Name, p.outputEvents.Load())
 
 	p.logger.Infof("stopping processors count=%d", len(p.Procs))
 	for _, processor := range p.Procs {
@@ -261,16 +308,20 @@ func (p *Pipeline) GetOutput() OutputPlugin {
 	return p.output
 }
 
-func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes []byte, isNewSource bool) uint64 {
+// In decodes message and passes it to event stream.
+func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes []byte, isNewSource bool) (seqID uint64) {
 	length := len(bytes)
 
-	// don't process shit.
+	// don't process mud.
 	isEmpty := length == 0 || (bytes[0] == '\n' && length == 1)
 	isSpam := p.antispamer.isSpam(sourceID, sourceName, isNewSource)
 	isLong := p.settings.MaxEventSize != 0 && length > p.settings.MaxEventSize
 	if isEmpty || isSpam || isLong {
-		return 0
+		return EventSeqIDError
 	}
+
+	p.inputEvents.Inc()
+	p.inputSize.Add(int64(length))
 
 	event := p.eventPool.get()
 	var dec decoder.DecoderType
@@ -292,7 +343,9 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 			} else {
 				p.logger.Errorf("wrong json format offset=%d, length=%d, err=%s, source=%d:%s, json=%s", offset, length, err.Error(), sourceID, sourceName, bytes)
 			}
-			return 0
+			// Can't process event, return to pool.
+			p.eventPool.back(event)
+			return EventSeqIDError
 		}
 	case decoder.RAW:
 		_ = event.Root.DecodeString("{}")
@@ -302,14 +355,16 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 		err := decoder.DecodeCRI(event.Root, bytes)
 		if err != nil {
 			p.logger.Fatalf("wrong cri format offset=%d, length=%d, err=%s, source=%d:%s, cri=%s", offset, length, err.Error(), sourceID, sourceName, bytes)
-			return 0
+			// Dead route, never passed here.
+			return EventSeqIDError
 		}
 	case decoder.POSTGRES:
 		_ = event.Root.DecodeString("{}")
 		err := decoder.DecodePostgres(event.Root, bytes)
 		if err != nil {
 			p.logger.Fatalf("wrong postgres format offset=%d, length=%d, err=%s, source=%d:%s, cri=%s", offset, length, err.Error(), sourceID, sourceName, bytes)
-			return 0
+			// Dead route, never passed here.
+			return EventSeqIDError
 		}
 	default:
 		p.logger.Panicf("unknown decoder %d for pipeline %q", p.decoder, p.Name)
@@ -362,9 +417,8 @@ func (p *Pipeline) finalize(event *Event, notifyInput bool, backEvent bool) {
 
 	if notifyInput {
 		p.input.Commit(event)
-
-		p.totalCommitted.Inc()
-		p.totalSize.Add(int64(event.Size))
+		p.outputEvents.Inc()
+		p.outputSize.Add(int64(event.Size))
 
 		if len(p.outSample) == 0 && rand.Int()&1 == 1 {
 			p.outSample = event.Root.Encode(p.outSample)
@@ -375,7 +429,7 @@ func (p *Pipeline) finalize(event *Event, notifyInput bool, backEvent bool) {
 		}
 	}
 
-	// todo: avoid shitty event.stream.commit(event)
+	// todo: avoid event.stream.commit(event)
 	event.stream.commit(event)
 
 	if !backEvent {
@@ -474,12 +528,66 @@ func (p *Pipeline) expandProcs() {
 	p.procCount.Swap(to)
 }
 
-func (p *Pipeline) maintenance() {
-	lastCommitted := int64(0)
-	lastSize := int64(0)
+type deltas struct {
+	deltaInputEvents  float64
+	deltaInputSize    float64
+	deltaOutputEvents float64
+	deltaOutputSize   float64
+	deltaReads        float64
+}
+
+func (p *Pipeline) logChanges(myDeltas *deltas) {
+	inputSize := p.inputSize.Load()
+	inputEvents := p.inputEvents.Load()
+
 	interval := p.settings.MaintenanceInterval
+	rate := int(myDeltas.deltaInputEvents * float64(time.Second) / float64(interval))
+	rateMb := myDeltas.deltaInputSize * float64(time.Second) / float64(interval) / 1024 / 1024
+	readOps := int(myDeltas.deltaReads * float64(time.Second) / float64(interval))
+	tc := int64(math.Max(float64(inputSize), 1))
+
+	p.logger.Infof(`%q pipeline stats interval=%ds, active procs=%d/%d, queue=%d/%d, out=%d|%.1fMb,`+
+		`rate=%d/s|%.1fMb/s, read ops=%d/s, total=%d|%.1fMb, avg size=%d, max size=%d, pool fullness=%d/%d`,
+		p.Name, interval/time.Second, p.activeProcs.Load(), p.procCount.Load(),
+		p.settings.Capacity-p.eventPool.freeEventsCount, p.settings.Capacity,
+		int64(myDeltas.deltaInputEvents), float64(myDeltas.deltaInputSize)/1024.0/1024.0, rate, rateMb, readOps,
+		inputEvents, float64(inputSize)/1024.0/1024.0, inputSize/tc, p.maxSize,
+		p.eventPool.capacity-p.eventPool.freeEventsCount, p.eventPool.capacity)
+}
+
+func (p *Pipeline) incMetrics(inputEvents, inputSize, outputEvents, outputSize, reads *DeltaWrapper) *deltas {
+	deltaInputEvents := inputEvents.updateValue(p.inputEvents.Load())
+	deltaInputSize := inputSize.updateValue(p.inputSize.Load())
+	deltaOutputEvents := outputEvents.updateValue(p.outputEvents.Load())
+	deltaOutputSize := outputSize.updateValue(p.outputSize.Load())
+	deltaReads := reads.updateValue(p.readOps.Load())
+
+	myDeltas := &deltas{
+		deltaInputEvents,
+		deltaInputSize,
+		deltaOutputEvents,
+		deltaOutputSize,
+		deltaReads,
+	}
+
+	stats.GetCounter(p.subsystemName(), inputEventsCountMetric).Add(myDeltas.deltaInputEvents)
+	stats.GetCounter(p.subsystemName(), inputEventsSizeMetric).Add(myDeltas.deltaInputSize)
+	stats.GetCounter(p.subsystemName(), outputEventsCountMetric).Add(myDeltas.deltaOutputEvents)
+	stats.GetCounter(p.subsystemName(), outputEventsSizeMetric).Add(myDeltas.deltaOutputSize)
+	stats.GetCounter(p.subsystemName(), readOpsEventsSizeMetric).Add(myDeltas.deltaReads)
+
+	return myDeltas
+}
+
+func (p *Pipeline) maintenance() {
+	inputEvents := newDeltaWrapper()
+	inputSize := newDeltaWrapper()
+	outputEvents := newDeltaWrapper()
+	outputSize := newDeltaWrapper()
+	readOps := newDeltaWrapper()
+
 	for {
-		time.Sleep(interval)
+		time.Sleep(p.settings.MaintenanceInterval)
 		if p.shouldStop {
 			return
 		}
@@ -487,24 +595,8 @@ func (p *Pipeline) maintenance() {
 		p.antispamer.maintenance()
 		p.metricsHolder.maintenance()
 
-		totalCommitted := p.totalCommitted.Load()
-		deltaCommitted := int(totalCommitted - lastCommitted)
-
-		totalSize := p.totalSize.Load()
-		deltaSize := int(totalSize - lastSize)
-
-		rate := int(float64(deltaCommitted) * float64(time.Second) / float64(interval))
-		rateMb := float64(deltaSize) * float64(time.Second) / float64(interval) / 1024 / 1024
-
-		tc := totalCommitted
-		if totalCommitted == 0 {
-			tc = 1
-		}
-
-		p.logger.Infof("%q pipeline stats interval=%ds, active procs=%d/%d, queue=%d/%d, out=%d|%.1fMb, rate=%d/s|%.1fMb/s, total=%d|%.1fMb, avg size=%d, max size=%d", p.Name, interval/time.Second, p.activeProcs.Load(), p.procCount.Load(), p.settings.Capacity-p.eventPool.freeEventsCount, p.settings.Capacity, deltaCommitted, float64(deltaSize)/1024.0/1024.0, rate, rateMb, totalCommitted, float64(totalSize)/1024.0/1024.0, totalSize/tc, p.maxSize)
-
-		lastCommitted = totalCommitted
-		lastSize = totalSize
+		myDeltas := p.incMetrics(inputEvents, inputSize, outputEvents, outputSize, readOps)
+		p.logChanges(myDeltas)
 
 		if len(p.inSample) > 0 {
 			p.logger.Infof("%q pipeline input event sample: %s", p.Name, p.inSample)
@@ -535,7 +627,7 @@ func (p *Pipeline) DisableParallelism() {
 }
 
 func (p *Pipeline) GetEventsTotal() int {
-	return int(p.totalCommitted.Load())
+	return int(p.outputEvents.Load())
 }
 
 func (p *Pipeline) EnableEventLog() {

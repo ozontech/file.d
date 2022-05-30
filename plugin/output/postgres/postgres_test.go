@@ -10,6 +10,7 @@ import (
 	"github.com/cenkalti/backoff/v4"
 	"github.com/golang/mock/gomock"
 	"github.com/jackc/pgconn"
+	"github.com/jackc/pgproto3/v2"
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/pipeline"
 	mock_pg "github.com/ozontech/file.d/plugin/output/postgres/mock"
@@ -75,11 +76,11 @@ func TestPrivateOut(t *testing.T) {
 	ctx := context.Background()
 	var ctxMock = reflect.TypeOf((*context.Context)(nil)).Elem()
 
-	mockpool.EXPECT().Exec(
+	mockpool.EXPECT().Query(
 		gomock.AssignableToTypeOf(ctxMock),
 		"INSERT INTO table1 (str_uni_1,int_uni_1,int_1,timestamp_1) VALUES ($1,$2,$3,$4) ON CONFLICT(str_uni_1,int_uni_1) DO UPDATE SET int_1=EXCLUDED.int_1,timestamp_1=EXCLUDED.timestamp_1",
-		[]interface{}{strUniValue, intUniValue, intValue, time.Unix(int64(timestampValue), 0).Format(time.RFC3339)},
-	).Return(pgconn.CommandTag("some_tag"), nil).Times(1)
+		[]interface{}{preferSimpleProtocol, strUniValue, intUniValue, intValue, time.Unix(int64(timestampValue), 0).Format(time.RFC3339)},
+	).Return(&rowsForTest{}, nil).Times(1)
 
 	builder, err := NewQueryBuilder(columns, table)
 	require.NoError(t, err)
@@ -156,16 +157,16 @@ func TestPrivateOutWithRetry(t *testing.T) {
 	ctx := context.Background()
 	var ctxMock = reflect.TypeOf((*context.Context)(nil)).Elem()
 
-	mockpool.EXPECT().Exec(
+	mockpool.EXPECT().Query(
 		gomock.AssignableToTypeOf(ctxMock),
 		"INSERT INTO table1 (str_uni_1,int_1,timestamp_1) VALUES ($1,$2,$3) ON CONFLICT(str_uni_1) DO UPDATE SET int_1=EXCLUDED.int_1,timestamp_1=EXCLUDED.timestamp_1",
-		[]interface{}{strUniValue, intValue, time.Unix(int64(timestampValue), 0).Format(time.RFC3339)},
-	).Return(pgconn.CommandTag("some_tag"), errors.New("someError")).Times(2)
-	mockpool.EXPECT().Exec(
+		[]interface{}{preferSimpleProtocol, strUniValue, intValue, time.Unix(int64(timestampValue), 0).Format(time.RFC3339)},
+	).Return(&rowsForTest{}, errors.New("someError")).Times(2)
+	mockpool.EXPECT().Query(
 		gomock.AssignableToTypeOf(ctxMock),
 		"INSERT INTO table1 (str_uni_1,int_1,timestamp_1) VALUES ($1,$2,$3) ON CONFLICT(str_uni_1) DO UPDATE SET int_1=EXCLUDED.int_1,timestamp_1=EXCLUDED.timestamp_1",
-		[]interface{}{strUniValue, intValue, time.Unix(int64(timestampValue), 0).Format(time.RFC3339)},
-	).Return(pgconn.CommandTag("some_tag"), nil).Times(1)
+		[]interface{}{preferSimpleProtocol, strUniValue, intValue, time.Unix(int64(timestampValue), 0).Format(time.RFC3339)},
+	).Return(&rowsForTest{}, nil).Times(1)
 
 	builder, err := NewQueryBuilder(columns, table)
 	require.NoError(t, err)
@@ -315,11 +316,11 @@ func TestPrivateOutDeduplicatedEvents(t *testing.T) {
 	ctx := context.Background()
 	var ctxMock = reflect.TypeOf((*context.Context)(nil)).Elem()
 
-	mockpool.EXPECT().Exec(
+	mockpool.EXPECT().Query(
 		gomock.AssignableToTypeOf(ctxMock),
 		"INSERT INTO table1 (str_uni_1,int_uni_1,int_1,timestamp_1) VALUES ($1,$2,$3,$4) ON CONFLICT(str_uni_1,int_uni_1) DO UPDATE SET int_1=EXCLUDED.int_1,timestamp_1=EXCLUDED.timestamp_1",
-		[]interface{}{strUniValue, intUniValue, intValue, time.Unix(int64(timestampValue), 0).Format(time.RFC3339)},
-	).Return(pgconn.CommandTag("some_tag"), nil).Times(1)
+		[]interface{}{preferSimpleProtocol, strUniValue, intUniValue, intValue, time.Unix(int64(timestampValue), 0).Format(time.RFC3339)},
+	).Return(&rowsForTest{}, nil).Times(1)
 
 	builder, err := NewQueryBuilder(columns, table)
 	require.NoError(t, err)
@@ -497,12 +498,12 @@ func TestPrivateOutFewUniqueEventsYetWithDeduplicationEventsAnpooladEvents(t *te
 	ctx := context.Background()
 	var ctxMock = reflect.TypeOf((*context.Context)(nil)).Elem()
 
-	mockpool.EXPECT().Exec(
+	mockpool.EXPECT().Query(
 		gomock.AssignableToTypeOf(ctxMock),
 		"INSERT INTO table1 (str_uni_1,int_uni_1,int_1,timestamp_1) VALUES ($1,$2,$3,$4),($5,$6,$7,$8) ON CONFLICT(str_uni_1,int_uni_1) DO UPDATE SET int_1=EXCLUDED.int_1,timestamp_1=EXCLUDED.timestamp_1",
-		[]interface{}{strUniValue, intUniValue, intValue, time.Unix(int64(timestampValue), 0).Format(time.RFC3339),
+		[]interface{}{preferSimpleProtocol, strUniValue, intUniValue, intValue, time.Unix(int64(timestampValue), 0).Format(time.RFC3339),
 			secStrUniValue, secIntUniValue, secIntValue, time.Unix(int64(secTimestampValue), 0).Format(time.RFC3339)},
-	).Return(pgconn.CommandTag("some_tag"), nil).Times(1)
+	).Return(&rowsForTest{}, nil).Times(1)
 
 	builder, err := NewQueryBuilder(columns, table)
 	require.NoError(t, err)
@@ -533,3 +534,15 @@ func TestPrivateOutFewUniqueEventsYetWithDeduplicationEventsAnpooladEvents(t *te
 	}}
 	p.out(nil, batch)
 }
+
+// TODO replace with gomock
+type rowsForTest struct{}
+
+func (r rowsForTest) Close()                                         {}
+func (r rowsForTest) Err() error                                     { return nil }
+func (r rowsForTest) CommandTag() pgconn.CommandTag                  { return nil }
+func (r rowsForTest) FieldDescriptions() []pgproto3.FieldDescription { return nil }
+func (r rowsForTest) Next() bool                                     { return false }
+func (r rowsForTest) Scan(dest ...interface{}) error                 { return nil }
+func (r rowsForTest) Values() ([]interface{}, error)                 { return nil, nil }
+func (r rowsForTest) RawValues() [][]byte                            { return nil }

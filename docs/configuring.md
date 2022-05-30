@@ -3,6 +3,11 @@
 You can specify several pipelines with plugins and their parameters in a yaml format.  
 Examples can be found [here](./examples.md).
 
+### Logging
+Logging is configured with `LOG_LEVEL` environment variable ('info' by default).
+
+Logging level can be changed in runtime with standard zap handler (go.uber.org/zap@v1.18.1/http_handler.go) exposed at `/log/level`.
+
 ### Overriding by environment variables
 `file.d` can override config fields if you specify environment variables with `FILED_` prefix.  
 The name of the env will be divided by underscores and the config will set or override the config field by the resulted path.  

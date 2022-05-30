@@ -9,7 +9,7 @@ import (
 
 	sq "github.com/Masterminds/squirrel"
 	"github.com/cenkalti/backoff/v4"
-	"github.com/jackc/pgconn"
+	"github.com/jackc/pgx/v4"
 	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/consts"
@@ -30,13 +30,16 @@ var (
 )
 
 type PgxIface interface {
-	Exec(ctx context.Context, sql string, arguments ...interface{}) (pgconn.CommandTag, error)
+	Query(ctx context.Context, sql string, args ...interface{}) (pgx.Rows, error)
 	Close()
 }
 
 const (
 	outPluginType = "postgres"
 	subsystemName = "output_postgres"
+
+	// required for PgBouncers that doesn't support prepared statements.
+	preferSimpleProtocol = pgx.QuerySimpleProtocol(true)
 
 	// metrics
 	discardedEventCounter  = "event_discarded"
@@ -138,6 +141,7 @@ type Config struct {
 	//> @3@4@5@6
 	//>
 	//> Timeout for DB requests in milliseconds.
+	//> Timeouts can differ due using exponential backoff.
 	DBRequestTimeout  cfg.Duration `json:"db_request_timeout" default:"3000ms" parse:"duration"` //*
 	DBRequestTimeout_ time.Duration
 
@@ -335,16 +339,25 @@ func (p *Plugin) out(_ *pipeline.WorkerData, batch *pipeline.Batch) {
 		p.logger.Fatalf("Invalid SQL. query: %s, args: %v, err: %v", query, args, err)
 	}
 
+	var argsSliceInterface []interface{} = make([]interface{}, len(args)+1)
+
+	argsSliceInterface[0] = preferSimpleProtocol
+	for i := 1; i < len(args)+1; i++ {
+		argsSliceInterface[i] = args[i-1]
+	}
+
 	// Insert into pg with retry.
 	err = backoff.Retry(func() error {
 		ctx, cancel := context.WithTimeout(p.ctx, p.config.DBRequestTimeout_)
 		defer cancel()
 
 		p.logger.Info(query, args)
-		pgCommResult, err := p.pool.Exec(ctx, query, args...)
+		rows, err := p.pool.Query(ctx, query, argsSliceInterface...)
+		defer func() {
+			rows.Close()
+		}()
 		if err != nil {
-			p.logger.Infof("pgCommResult: %v, err: %s", pgCommResult, err.Error())
-
+			p.logger.Infof("rows: %v, err: %s", rows, err.Error())
 			return err
 		}
 		return nil
