@@ -10,12 +10,13 @@ import (
 	sq "github.com/Masterminds/squirrel"
 	"github.com/jackc/pgx/v4"
 	"github.com/jackc/pgx/v4/pgxpool"
+	insaneJSON "github.com/vitkovskii/insane-json"
+	"go.uber.org/zap"
+
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/stats"
-	insaneJSON "github.com/vitkovskii/insane-json"
-	"go.uber.org/zap"
 )
 
 /*{ introduction
@@ -89,28 +90,12 @@ type Config struct {
 
 	//> @3@4@5@6
 	//>
-	//> DB host.
-	Host string `json:"host" required:"true"` //*
-
-	//> @3@4@5@6
+	//> PostgreSQL connection string in URL or DSN format.
 	//>
-	//> Db port.
-	Port uint16 `json:"port" required:"true"` //*
-
-	//> @3@4@5@6
+	//> Example DSN:
 	//>
-	//> Dbname in pg.
-	DBName string `json:"dbname" required:"true"` //*
-
-	//> @3@4@5@6
-	//>
-	//> Pg user name.
-	Username string `json:"user" required:"true"` //*
-
-	//> @3@4@5@6
-	//>
-	//> Pg user pass.
-	Pass string `json:"password" required:"true"` //*
+	//> `user=user password=secret host=pg.example.com port=5432 dbname=mydb sslmode=disable pool_max_conns=10`
+	ConnString string `json:"conn_string" required:"true"` //*
 
 	//> @3@4@5@6
 	//>
@@ -220,22 +205,12 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	}
 	p.queryBuilder = queryBuilder
 
-	cfgString := fmt.Sprintf("user=%s password=%s host=%s port=%d dbname=%s pool_max_conns=1",
-		p.config.Username,
-		p.config.Pass,
-		p.config.Host,
-		p.config.Port,
-		p.config.DBName)
-
-	cfg, err := pgxpool.ParseConfig(cfgString)
+	pgCfg, err := p.parsePGConfig()
 	if err != nil {
 		p.logger.Fatalf("can't create pgsql config: %v", err)
 	}
-	cfg.LazyConnect = false
 
-	cfg.HealthCheckPeriod = p.config.DBHealthCheckPeriod_
-
-	pool, err := pgxpool.ConnectConfig(p.ctx, cfg)
+	pool, err := pgxpool.ConnectConfig(p.ctx, pgCfg)
 	if err != nil {
 		p.logger.Fatalf("can't create pgsql pool: %v", err)
 	}
@@ -354,7 +329,6 @@ func (p *Plugin) out(_ *pipeline.WorkerData, batch *pipeline.Batch) {
 			break
 		}
 	}
-	cancel()
 
 	if outErr != nil {
 		p.pool.Close()
@@ -416,4 +390,16 @@ func (p *Plugin) addFieldToValues(field column, sNode *insaneJSON.StrictNode) (i
 	default:
 		return nil, fmt.Errorf("%w, undefined col type: %d, col name: %s", ErrEventFieldHasWrongType, field.ColType, field.Name)
 	}
+}
+
+func (p *Plugin) parsePGConfig() (*pgxpool.Config, error) {
+	pgCfg, err := pgxpool.ParseConfig(p.config.ConnString)
+	if err != nil {
+		return nil, err
+	}
+
+	pgCfg.LazyConnect = false
+	pgCfg.HealthCheckPeriod = p.config.DBHealthCheckPeriod_
+
+	return pgCfg, nil
 }
