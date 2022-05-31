@@ -6,13 +6,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"go.uber.org/atomic"
+
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/test"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	"go.uber.org/atomic"
 )
 
 type testConfig struct {
@@ -59,7 +60,8 @@ func (c *testConfig) runPipeline(t *testing.T) {
 	tnow := time.Now()
 	for {
 		if time.Since(tnow) > 10*time.Second {
-			require.FailNow(t, "too long act")
+			require.True(t, c.eventsTotal >= len(outEvents))
+			return
 		}
 		if wgWithDeadline.Load() <= 0 {
 			break
