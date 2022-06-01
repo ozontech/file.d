@@ -18,6 +18,7 @@ import (
 
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
+	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/stats"
 )
@@ -45,6 +46,7 @@ var (
 type Plugin struct {
 	logger       *zap.SugaredLogger
 	client       *fasthttp.Client
+	endpoints    []*fasthttp.URI
 	cancel       context.CancelFunc
 	config       *Config
 	authHeader   []byte
@@ -154,11 +156,17 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		p.config.IndexValues = append(p.config.IndexValues, "@time")
 	}
 
-	for i, endpoint := range p.config.Endpoints {
+	for _, endpoint := range p.config.Endpoints {
 		if endpoint[len(endpoint)-1] == '/' {
 			endpoint = endpoint[:len(endpoint)-1]
 		}
-		p.config.Endpoints[i] = endpoint + "/_bulk?_source=false"
+
+		uri := &fasthttp.URI{}
+		if err := uri.Parse(nil, []byte(endpoint+"/_bulk?_source=false")); err != nil {
+			logger.Fatalf("can't parse ES endpoint %s: %s", endpoint, err.Error())
+		}
+
+		p.endpoints = append(p.endpoints, uri)
 	}
 
 	p.client = &fasthttp.Client{}
@@ -261,8 +269,8 @@ func (p *Plugin) send(body []byte) error {
 	resp := fasthttp.AcquireResponse()
 	defer fasthttp.ReleaseResponse(resp)
 
-	endpoint := p.config.Endpoints[rand.Int()%len(p.config.Endpoints)]
-	req.SetRequestURI(endpoint)
+	endpoint := p.endpoints[rand.Int()%len(p.endpoints)]
+	req.SetURI(endpoint)
 	req.SetBodyRaw(body)
 	req.Header.SetMethod(fasthttp.MethodPost)
 	req.Header.SetContentType(NDJSONContentType)
@@ -270,18 +278,18 @@ func (p *Plugin) send(body []byte) error {
 
 	if err := p.client.DoTimeout(req, resp, p.config.ConnectionTimeout_); err != nil {
 		time.Sleep(time.Second)
-		return fmt.Errorf("can't send batch to %s: %s", endpoint, err.Error())
+		return fmt.Errorf("can't send batch to %s: %s", endpoint.String(), err.Error())
 	}
 
 	respContent := resp.Body()
 
 	if statusCode := resp.Header.StatusCode(); statusCode < http.StatusOK || statusCode > http.StatusAccepted {
-		return fmt.Errorf("response status from %s isn't OK: status=%d, body=%s", endpoint, statusCode, string(respContent))
+		return fmt.Errorf("response status from %s isn't OK: status=%d, body=%s", endpoint.String(), statusCode, string(respContent))
 	}
 
 	root, err := insaneJSON.DecodeBytes(respContent)
 	if err != nil {
-		return fmt.Errorf("wrong response from %s: %s", endpoint, err.Error())
+		return fmt.Errorf("wrong response from %s: %s", endpoint.String(), err.Error())
 	}
 	defer insaneJSON.Release(root)
 
@@ -299,7 +307,7 @@ func (p *Plugin) send(body []byte) error {
 			stats.GetCounter(subsystemName, indexingErrors).Add(float64(errors))
 		}
 
-		p.controller.Error("some events from batch isn't written")
+		p.controller.Error("some events from batch aren't written")
 	}
 
 	return nil
