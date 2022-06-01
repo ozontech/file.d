@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	insaneJSON "github.com/vitkovskii/insane-json"
 
 	"github.com/ozontech/file.d/cfg"
@@ -62,8 +63,15 @@ func TestConfig(t *testing.T) {
 
 	p.Start(config, test.NewEmptyOutputPluginParams())
 
-	assert.Equal(t, "http://endpoint_1:9000/_bulk?_source=false", p.endpoints[0].String(), "wrong endpoint")
-	assert.Equal(t, "http://endpoint_2:9000/_bulk?_source=false", p.endpoints[1].String(), "wrong endpoint")
-	assert.Equal(t, "https://endpoint_3:9000/_bulk?_source=false", p.endpoints[2].String(), "wrong endpoint")
-	assert.Equal(t, "https://endpoint_4:9000/_bulk?_source=false", p.endpoints[3].String(), "wrong endpoint")
+	results := []string{
+		"http://endpoint_1:9000/_bulk?_source=false",
+		"http://endpoint_2:9000/_bulk?_source=false",
+		"https://endpoint_3:9000/_bulk?_source=false",
+		"https://endpoint_4:9000/_bulk?_source=false",
+	}
+
+	require.Len(t, p.endpoints, len(results))
+	for i := range results {
+		assert.Equal(t, results[i], p.endpoints[i].String())
+	}
 }
