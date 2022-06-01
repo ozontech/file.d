@@ -38,6 +38,10 @@ const (
 	NDJSONContentType = "application/x-ndjson"
 )
 
+var (
+	strAuthorization = []byte(fasthttp.HeaderAuthorization)
+)
+
 type Plugin struct {
 	logger       *zap.SugaredLogger
 	client       *fasthttp.Client
@@ -61,28 +65,22 @@ type Config struct {
 
 	//> @3@4@5@6
 	//>
-	//> Elastic username for Basic authentication (username and password).
+	//> Username for HTTP Basic Authentication.
 	Username string `json:"username"` //*
 
 	//> @3@4@5@6
 	//>
-	//> Elastic password for Basic authentication (username and password).
+	//> Password for HTTP Basic Authentication.
 	Password string `json:"password"` //*
 
 	//> @3@4@5@6
 	//>
-	//> Elastic secret token for API key authentication.
+	//> Base64-encoded token for authorization; if set, overrides username/password.
 	APIKey string `json:"api_key"` //*
 
 	//> @3@4@5@6
-	//>
-	//> Custom certificate authority used to sign the certificates of cluster nodes.
+	//> Path to a certificate authorities file with PEM encoding.
 	CACert string `json:"ca_cert"` //*
-
-	//> @3@4@5@6
-	//>
-	//> Custom certificate authority used to sign the certificates of cluster nodes.
-	CertificateFingerprint string `json:"certificate_fingerprint"` //*
 
 	//> @3@4@5@6
 	//>
@@ -356,7 +354,7 @@ func (p *Plugin) maintenance(_ *pipeline.WorkerData) {
 
 func (p *Plugin) getAuthHeader() []byte {
 	if p.config.APIKey != "" {
-		return []byte("Bearer " + p.config.APIKey)
+		return []byte("ApiKey " + p.config.APIKey)
 	} else if p.config.Username != "" && p.config.Password != "" {
 		credentials := []byte(p.config.Username + ":" + p.config.Password)
 		buf := make([]byte, base64.StdEncoding.EncodedLen(len(credentials)))
@@ -367,7 +365,6 @@ func (p *Plugin) getAuthHeader() []byte {
 }
 
 func (p *Plugin) setAuthHeader(req *fasthttp.Request) {
-	strAuthorization := []byte(fasthttp.HeaderAuthorization)
 	if p.authHeader != nil {
 		req.Header.SetBytesKV(strAuthorization, p.authHeader)
 	}

@@ -9,6 +9,29 @@ The list of elasticsearch endpoints in the following format: `SCHEMA://HOST:PORT
 
 <br>
 
+**`username`** *`string`* 
+
+Username for HTTP Basic Authentication.
+
+<br>
+
+**`password`** *`string`* 
+
+Password for HTTP Basic Authentication.
+
+<br>
+
+**`api_key`** *`string`* 
+
+Base64-encoded token for authorization; if set, overrides username/password.
+
+<br>
+
+**`ca_cert`** *`string`* 
+Path to a certificate authorities file with PEM encoding.
+
+<br>
+
 **`index_format`** *`string`* *`default=file-d-%`* 
 
 It defines the pattern of elasticsearch index name. Use `%` character as a placeholder. Use `index_values` to define values for the replacement.
