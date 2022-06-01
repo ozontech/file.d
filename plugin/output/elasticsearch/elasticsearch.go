@@ -37,6 +37,8 @@ const (
 	indexingErrors   = "index_error"
 
 	NDJSONContentType = "application/x-ndjson"
+
+	retryDelay = time.Second
 )
 
 var (
@@ -169,7 +171,10 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		p.endpoints = append(p.endpoints, uri)
 	}
 
-	p.client = &fasthttp.Client{}
+	p.client = &fasthttp.Client{
+		ReadTimeout:  p.config.ConnectionTimeout_ * 2,
+		WriteTimeout: p.config.ConnectionTimeout_ * 2,
+	}
 	var (
 		err    error
 		caCert []byte
@@ -277,13 +282,14 @@ func (p *Plugin) send(body []byte) error {
 	p.setAuthHeader(req)
 
 	if err := p.client.DoTimeout(req, resp, p.config.ConnectionTimeout_); err != nil {
-		time.Sleep(time.Second)
+		time.Sleep(retryDelay)
 		return fmt.Errorf("can't send batch to %s: %s", endpoint.String(), err.Error())
 	}
 
 	respContent := resp.Body()
 
 	if statusCode := resp.Header.StatusCode(); statusCode < http.StatusOK || statusCode > http.StatusAccepted {
+		time.Sleep(retryDelay)
 		return fmt.Errorf("response status from %s isn't OK: status=%d, body=%s", endpoint.String(), statusCode, string(respContent))
 	}
 
@@ -363,7 +369,8 @@ func (p *Plugin) maintenance(_ *pipeline.WorkerData) {
 func (p *Plugin) getAuthHeader() []byte {
 	if p.config.APIKey != "" {
 		return []byte("ApiKey " + p.config.APIKey)
-	} else if p.config.Username != "" && p.config.Password != "" {
+	}
+	if p.config.Username != "" && p.config.Password != "" {
 		credentials := []byte(p.config.Username + ":" + p.config.Password)
 		buf := make([]byte, base64.StdEncoding.EncodedLen(len(credentials)))
 		base64.StdEncoding.Encode(buf, credentials)
