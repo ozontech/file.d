@@ -4,13 +4,14 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	insaneJSON "github.com/vitkovskii/insane-json"
+
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/stats"
 	"github.com/ozontech/file.d/test"
-	"github.com/stretchr/testify/assert"
-	insaneJSON "github.com/vitkovskii/insane-json"
 )
 
 func TestAppendEvent(t *testing.T) {
@@ -41,11 +42,17 @@ func TestAppendEvent(t *testing.T) {
 }
 
 func TestConfig(t *testing.T) {
+	stats.InitStats()
 	p := &Plugin{}
 	config := &Config{
 		IndexFormat: "test-%",
-		Endpoints:   []string{"http://endpoint_1:9000", "http://endpoint_2:9000/"},
-		BatchSize:   "1",
+		Endpoints: []string{
+			"http://endpoint_1:9000",
+			"http://endpoint_2:9000/",
+			"https://endpoint_3:9000",
+			"https://endpoint_4:9000/",
+		},
+		BatchSize: "1",
 	}
 
 	err := cfg.Parse(config, map[string]int{"gomaxprocs": 1})
@@ -55,6 +62,8 @@ func TestConfig(t *testing.T) {
 
 	p.Start(config, test.NewEmptyOutputPluginParams())
 
-	assert.Equal(t, "http://endpoint_1:9000/_bulk?_source=false", p.config.Endpoints[0], "wrong endpoint")
-	assert.Equal(t, "http://endpoint_2:9000/_bulk?_source=false", p.config.Endpoints[1], "wrong endpoint")
+	assert.Equal(t, "http://endpoint_1:9000/_bulk?_source=false", p.endpoints[0].String(), "wrong endpoint")
+	assert.Equal(t, "http://endpoint_2:9000/_bulk?_source=false", p.endpoints[1].String(), "wrong endpoint")
+	assert.Equal(t, "https://endpoint_3:9000/_bulk?_source=false", p.endpoints[2].String(), "wrong endpoint")
+	assert.Equal(t, "https://endpoint_4:9000/_bulk?_source=false", p.endpoints[3].String(), "wrong endpoint")
 }
