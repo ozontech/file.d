@@ -20,6 +20,11 @@ import (
 	"github.com/ozontech/file.d/pipeline"
 )
 
+const (
+	subsystemLongPanicName = "long_panic"
+	panics                 = "panics"
+)
+
 type FileD struct {
 	config    *cfg.Config
 	httpAddr  string
@@ -53,6 +58,15 @@ func (f *FileD) Start() {
 
 func (f *FileD) initMetrics() {
 	metrics.InitStats()
+
+	metrics.RegisterCounter(&metrics.MetricDesc{
+		Subsystem: subsystemLongPanicName,
+		Name:      panics,
+		Help:      "Count of panics in the LongPanic",
+	})
+	longpanic.SetOnPanicHandler(func(_ error) {
+		metrics.GetCounter(subsystemLongPanicName, panics).Inc()
+	})
 }
 
 func (f *FileD) createRegistry() {
