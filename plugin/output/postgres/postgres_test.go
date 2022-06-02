@@ -7,10 +7,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cenkalti/backoff/v4"
 	"github.com/golang/mock/gomock"
 	"github.com/jackc/pgconn"
 	"github.com/jackc/pgproto3/v2"
+	"github.com/ozontech/file.d/consts"
+	"github.com/ozontech/file.d/expbackoff"
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/pipeline"
 	mock_pg "github.com/ozontech/file.d/plugin/output/postgres/mock"
@@ -85,11 +86,18 @@ func TestPrivateOut(t *testing.T) {
 	builder, err := NewQueryBuilder(columns, table)
 	require.NoError(t, err)
 
-	retryBackoff := backoff.WithMaxRetries(
-		backoff.WithContext(
-			backoff.NewExponentialBackOff(),
-			ctx),
-		uint64(retryCnt),
+	backOff := expbackoff.New(
+		ctx,
+		stats.GetCounter("random_test", "random_test"),
+		time.Second*5,
+		expbackoff.RetriesCfg{
+			Limited: true,
+			Limit:   10,
+		},
+		expbackoff.Multiplier(consts.ExpBackoffDefaultMultiplier),
+		expbackoff.RandomizationFactor(consts.ExpBackoffDefaultRndFactor),
+		expbackoff.InitialIntervalOpt(time.Second),
+		expbackoff.MaxInterval(time.Second*2),
 	)
 
 	p := &Plugin{
@@ -98,7 +106,7 @@ func TestPrivateOut(t *testing.T) {
 		pool:         pool,
 		logger:       testLogger,
 		ctx:          ctx,
-		backoff:      retryBackoff,
+		backOff:      backOff,
 	}
 
 	p.registerPluginMetrics()
@@ -171,11 +179,18 @@ func TestPrivateOutWithRetry(t *testing.T) {
 	builder, err := NewQueryBuilder(columns, table)
 	require.NoError(t, err)
 
-	retryBackoff := backoff.WithMaxRetries(
-		backoff.WithContext(
-			backoff.NewExponentialBackOff(),
-			ctx),
-		3,
+	backOff := expbackoff.New(
+		ctx,
+		stats.GetCounter("random_test", "random_test"),
+		time.Second*5,
+		expbackoff.RetriesCfg{
+			Limited: true,
+			Limit:   10,
+		},
+		expbackoff.Multiplier(consts.ExpBackoffDefaultMultiplier),
+		expbackoff.RandomizationFactor(consts.ExpBackoffDefaultRndFactor),
+		expbackoff.InitialIntervalOpt(time.Second),
+		expbackoff.MaxInterval(time.Second*2),
 	)
 
 	p := &Plugin{
@@ -184,7 +199,7 @@ func TestPrivateOutWithRetry(t *testing.T) {
 		pool:         pool,
 		logger:       testLogger,
 		ctx:          ctx,
-		backoff:      retryBackoff,
+		backOff:      backOff,
 	}
 
 	p.registerPluginMetrics()
@@ -237,17 +252,24 @@ func TestPrivateOutNoGoodEvents(t *testing.T) {
 	builder, err := NewQueryBuilder(columns, table)
 	require.NoError(t, err)
 
-	retryBackoff := backoff.WithMaxRetries(
-		backoff.WithContext(
-			backoff.NewExponentialBackOff(),
-			context.Background()),
-		uint64(retryCnt),
+	backOff := expbackoff.New(
+		context.Background(),
+		stats.GetCounter("random_test", "random_test"),
+		time.Second*5,
+		expbackoff.RetriesCfg{
+			Limited: true,
+			Limit:   10,
+		},
+		expbackoff.Multiplier(consts.ExpBackoffDefaultMultiplier),
+		expbackoff.RandomizationFactor(consts.ExpBackoffDefaultRndFactor),
+		expbackoff.InitialIntervalOpt(time.Second),
+		expbackoff.MaxInterval(time.Second*2),
 	)
 	p := &Plugin{
 		config:       &config,
 		queryBuilder: builder,
 		logger:       testLogger,
-		backoff:      retryBackoff,
+		backOff:      backOff,
 	}
 
 	p.registerPluginMetrics()
@@ -325,11 +347,18 @@ func TestPrivateOutDeduplicatedEvents(t *testing.T) {
 	builder, err := NewQueryBuilder(columns, table)
 	require.NoError(t, err)
 
-	retryBackoff := backoff.WithMaxRetries(
-		backoff.WithContext(
-			backoff.NewExponentialBackOff(),
-			ctx),
-		3,
+	backOff := expbackoff.New(
+		ctx,
+		stats.GetCounter("random_test", "random_test"),
+		time.Second*5,
+		expbackoff.RetriesCfg{
+			Limited: true,
+			Limit:   10,
+		},
+		expbackoff.Multiplier(consts.ExpBackoffDefaultMultiplier),
+		expbackoff.RandomizationFactor(consts.ExpBackoffDefaultRndFactor),
+		expbackoff.InitialIntervalOpt(time.Second),
+		expbackoff.MaxInterval(time.Second*2),
 	)
 	p := &Plugin{
 		config:       &config,
@@ -337,7 +366,7 @@ func TestPrivateOutDeduplicatedEvents(t *testing.T) {
 		pool:         pool,
 		logger:       testLogger,
 		ctx:          ctx,
-		backoff:      retryBackoff,
+		backOff:      backOff,
 	}
 
 	p.registerPluginMetrics()
@@ -508,11 +537,18 @@ func TestPrivateOutFewUniqueEventsYetWithDeduplicationEventsAnpooladEvents(t *te
 	builder, err := NewQueryBuilder(columns, table)
 	require.NoError(t, err)
 
-	retryBackoff := backoff.WithMaxRetries(
-		backoff.WithContext(
-			backoff.NewExponentialBackOff(),
-			ctx),
-		3,
+	backOff := expbackoff.New(
+		context.Background(),
+		stats.GetCounter("random_test", "random_test"),
+		time.Second*5,
+		expbackoff.RetriesCfg{
+			Limited: true,
+			Limit:   10,
+		},
+		expbackoff.Multiplier(consts.ExpBackoffDefaultMultiplier),
+		expbackoff.RandomizationFactor(consts.ExpBackoffDefaultRndFactor),
+		expbackoff.InitialIntervalOpt(time.Second),
+		expbackoff.MaxInterval(time.Second*2),
 	)
 	p := &Plugin{
 		config:       &config,
@@ -520,7 +556,7 @@ func TestPrivateOutFewUniqueEventsYetWithDeduplicationEventsAnpooladEvents(t *te
 		pool:         pool,
 		logger:       testLogger,
 		ctx:          ctx,
-		backoff:      retryBackoff,
+		backOff:      backOff,
 	}
 
 	p.registerPluginMetrics()

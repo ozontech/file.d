@@ -10,9 +10,9 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/cenkalti/backoff/v4"
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/consts"
+	"github.com/ozontech/file.d/expbackoff"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/stats"
@@ -32,13 +32,14 @@ const (
 )
 
 type Plugin struct {
+	ctx          context.Context
 	config       *Config
 	client       http.Client
 	logger       *zap.SugaredLogger
 	avgEventSize int
 	batcher      *pipeline.Batcher
 	controller   pipeline.OutputPluginController
-	backoff      backoff.BackOff
+	backoff      *expbackoff.BackOff
 }
 
 //! config-params
@@ -101,16 +102,19 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.config = config.(*Config)
 	p.client = p.newClient(p.config.RequestTimeout_)
 
-	ctx := context.TODO()
-	stdBackoff := backoff.NewExponentialBackOff()
-	stdBackoff.Multiplier = consts.ExpBackoffDefaultMultiplier
-	stdBackoff.RandomizationFactor = consts.ExpBackoffDefaultRndFactor
-	stdBackoff.InitialInterval = time.Second
-	stdBackoff.MaxInterval = stdBackoff.InitialInterval * 2
-	p.backoff = backoff.WithContext(stdBackoff, ctx)
-
 	p.registerPluginMetrics()
-
+	p.ctx = context.TODO()
+	p.backoff = expbackoff.New(
+		p.ctx,
+		stats.GetCounter(subsystemName, sendErrorCounter),
+		// No concrete time limit here.
+		time.Hour,
+		expbackoff.RetriesCfg{Limited: false},
+		expbackoff.Multiplier(consts.ExpBackoffDefaultMultiplier),
+		expbackoff.RandomizationFactor(consts.ExpBackoffDefaultRndFactor),
+		expbackoff.InitialIntervalOpt(time.Second),
+		expbackoff.MaxInterval(time.Second*2),
+	)
 	p.batcher = pipeline.NewBatcher(
 		params.PipelineName,
 		outPluginType,
@@ -123,7 +127,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		0,
 	)
 
-	p.batcher.Start(ctx)
+	p.batcher.Start(p.ctx)
 }
 
 func (p *Plugin) registerPluginMetrics() {
@@ -167,16 +171,16 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 	data.outBuf = outBuf
 
 	p.logger.Debugf("Trying to send: %s", outBuf)
-	_ = backoff.Retry(func() error {
+
+	_ = p.backoff.Exec(p.ctx, func(ctx context.Context) error {
 		sendErr := p.send(outBuf)
 		if sendErr != nil {
-			stats.GetCounter(subsystemName, sendErrorCounter).Inc()
 			p.logger.Errorf("can't send data to splunk address=%s: %s", p.config.Endpoint, sendErr.Error())
-
 			return sendErr
 		}
 		return nil
-	}, p.backoff)
+	})
+
 	p.logger.Debugf("Successfully sent: %s", outBuf)
 }
 

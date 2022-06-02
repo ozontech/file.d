@@ -8,14 +8,17 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cenkalti/backoff/v4"
+	"github.com/ozontech/file.d/consts"
+	"github.com/ozontech/file.d/expbackoff"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/stats"
 	"github.com/stretchr/testify/assert"
 	insaneJSON "github.com/vitkovskii/insane-json"
 	"go.uber.org/zap"
 )
 
 func TestSplunk(t *testing.T) {
+	stats.InitStats()
 	suites := []struct {
 		name     string
 		input    string
@@ -48,18 +51,22 @@ func TestSplunk(t *testing.T) {
 			defer testServer.Close()
 
 			ctx := context.TODO()
-			stdBackoff := backoff.NewExponentialBackOff()
-			stdBackoff.Multiplier = 1.2
-			stdBackoff.RandomizationFactor = 0.25
-			stdBackoff.InitialInterval = time.Second
-			stdBackoff.MaxInterval = stdBackoff.InitialInterval * 2
-
 			plugin := Plugin{
+				ctx: ctx,
 				config: &Config{
 					Endpoint: testServer.URL,
 				},
-				logger:  zap.NewExample().Sugar(),
-				backoff: backoff.WithContext(stdBackoff, ctx),
+				logger: zap.NewExample().Sugar(),
+				backoff: expbackoff.New(
+					ctx,
+					stats.GetCounter(subsystemName, sendErrorCounter),
+					time.Minute,
+					expbackoff.RetriesCfg{Limited: false},
+					expbackoff.Multiplier(consts.ExpBackoffDefaultMultiplier),
+					expbackoff.RandomizationFactor(consts.ExpBackoffDefaultRndFactor),
+					expbackoff.InitialIntervalOpt(time.Second),
+					expbackoff.MaxInterval(time.Second*2),
+				),
 			}
 
 			batch := pipeline.Batch{
