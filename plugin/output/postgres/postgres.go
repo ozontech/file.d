@@ -182,7 +182,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.config = config.(*Config)
 	p.ctx = context.Background()
 	if len(p.config.Columns) == 0 {
-		p.logger.Fatal("Can't start plugin, no fields in config")
+		p.logger.Fatal("can't start plugin, no fields in config")
 	}
 
 	if p.config.Retry < 1 {

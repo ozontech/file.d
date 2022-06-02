@@ -10,12 +10,13 @@ import (
 	"net/http"
 	"time"
 
+	insaneJSON "github.com/vitkovskii/insane-json"
+	"go.uber.org/zap"
+
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/stats"
-	insaneJSON "github.com/vitkovskii/insane-json"
-	"go.uber.org/zap"
 )
 
 /*{ introduction
@@ -155,13 +156,13 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 	insaneJSON.Release(root)
 	data.outBuf = outBuf
 
-	p.logger.Debugf("Trying to send: %s", outBuf)
+	p.logger.Debugf("trying to send: %s", outBuf)
 
 	for {
 		err := p.send(outBuf)
 		if err != nil {
 			stats.GetCounter(subsystemName, sendErrorCounter).Inc()
-			p.logger.Errorf("Can't send data to splunk address=%s: %s", p.config.Endpoint, err.Error())
+			p.logger.Errorf("can't send data to splunk address=%s: %s", p.config.Endpoint, err.Error())
 			time.Sleep(time.Second)
 
 			continue
@@ -169,7 +170,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 
 		break
 	}
-	p.logger.Debugf("Successfully sent: %s", outBuf)
+	p.logger.Debugf("successfully sent: %s", outBuf)
 }
 
 func (p *Plugin) maintenance(workerData *pipeline.WorkerData) {}
