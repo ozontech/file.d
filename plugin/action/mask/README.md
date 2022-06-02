@@ -43,5 +43,17 @@ Numbers of masking groups in expression, zero for mask all expression
 
 <br>
 
+**`max_count`** *`int`* 
+
+MaxCount limits the number of masked symbols in the masked output, if zero, no limit is set
+
+<br>
+
+**`replace_word`** *`string`* 
+
+ReplaceWord, if set, is used instead of asterisks for masking patterns that are of the same length or longer.
+
+<br>
+
 
 <br>*Generated using [__insane-doc__](https://github.com/vitkovskii/insane-doc)*
