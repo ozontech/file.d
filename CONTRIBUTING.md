@@ -55,6 +55,12 @@ git push origin <topic-branch-name>
 ```
 7. Open a pull request with a clear title and description.
 
+## Code style
+
+* log in lower case without a dot in the end of a sentence
+* log params by pattern: `name=value`, e.g. `logger.Errorf("can't parse url=%s", url)`
+* code comments should be written with a small letter without a dot at the end
+* comment the code with a small letter without a dot at the end
 
 ## Collaborating guidelines
 
