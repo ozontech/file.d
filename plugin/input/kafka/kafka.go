@@ -5,11 +5,12 @@ import (
 	"strings"
 
 	"github.com/Shopify/sarama"
+	"go.uber.org/zap"
+
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/longpanic"
+	"github.com/ozontech/file.d/metrics"
 	"github.com/ozontech/file.d/pipeline"
-	"github.com/ozontech/file.d/stats"
-	"go.uber.org/zap"
 )
 
 /*{ introduction
@@ -87,13 +88,13 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 }
 
 func (p *Plugin) registerPluginMetrics() {
-	stats.RegisterCounter(&stats.MetricDesc{
+	metrics.RegisterCounter(&metrics.MetricDesc{
 		Subsystem: subsystemName,
 		Name:      commitErrors,
 		Help:      "Number of kafka commit errors",
 	})
 
-	stats.RegisterCounter(&stats.MetricDesc{
+	metrics.RegisterCounter(&metrics.MetricDesc{
 		Subsystem: subsystemName,
 		Name:      consumeErrors,
 		Help:      "Number of kafka consume errors",
@@ -105,7 +106,7 @@ func (p *Plugin) consume(ctx context.Context) {
 	for {
 		err := p.consumerGroup.Consume(ctx, p.config.Topics, p)
 		if err != nil {
-			stats.GetCounter(subsystemName, consumeErrors).Inc()
+			metrics.GetCounter(subsystemName, consumeErrors).Inc()
 			p.logger.Errorf("can't consume from kafka: %s", err.Error())
 		}
 
@@ -121,7 +122,7 @@ func (p *Plugin) Stop() {
 
 func (p *Plugin) Commit(event *pipeline.Event) {
 	if p.session == nil {
-		stats.GetCounter(subsystemName, commitErrors).Inc()
+		metrics.GetCounter(subsystemName, commitErrors).Inc()
 		p.logger.Errorf("no kafka consumer session for event commit")
 		return
 	}

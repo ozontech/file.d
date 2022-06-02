@@ -13,17 +13,18 @@ import (
 
 	"github.com/golang/mock/gomock"
 	"github.com/minio/minio-go"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/stretchr/testify/assert"
+	"golang.org/x/net/context"
+
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/logger"
+	"github.com/ozontech/file.d/metrics"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/plugin/input/fake"
 	"github.com/ozontech/file.d/plugin/output/file"
 	mock_s3 "github.com/ozontech/file.d/plugin/output/s3/mock"
-	"github.com/ozontech/file.d/stats"
 	"github.com/ozontech/file.d/test"
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/stretchr/testify/assert"
-	"golang.org/x/net/context"
 )
 
 const targetFile = "filetests/log.log"
@@ -409,7 +410,7 @@ func TestStartWithMultiBuckets(t *testing.T) {
 }
 
 func newPipeline(t *testing.T, configOutput *Config, objStoreF objStoreFactory) *pipeline.Pipeline {
-	stats.InitStats()
+	metrics.InitStats()
 	t.Helper()
 	settings := &pipeline.Settings{
 		Capacity:            4096,
@@ -426,7 +427,7 @@ func newPipeline(t *testing.T, configOutput *Config, objStoreF objStoreFactory) 
 	p.DisableParallelism()
 	p.EnableEventLog()
 
-	stats.InitStats()
+	metrics.InitStats()
 
 	anyPlugin, _ := fake.Factory()
 	inputPlugin := anyPlugin.(*fake.Plugin)

@@ -15,8 +15,8 @@ import (
 
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
+	"github.com/ozontech/file.d/metrics"
 	"github.com/ozontech/file.d/pipeline"
-	"github.com/ozontech/file.d/stats"
 )
 
 /*{ introduction
@@ -117,7 +117,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 }
 
 func (p *Plugin) registerPluginMetrics() {
-	stats.RegisterCounter(&stats.MetricDesc{
+	metrics.RegisterCounter(&metrics.MetricDesc{
 		Name:      sendErrorCounter,
 		Subsystem: subsystemName,
 		Help:      "Total splunk send errors",
@@ -161,7 +161,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 	for {
 		err := p.send(outBuf)
 		if err != nil {
-			stats.GetCounter(subsystemName, sendErrorCounter).Inc()
+			metrics.GetCounter(subsystemName, sendErrorCounter).Inc()
 			p.logger.Errorf("can't send data to splunk address=%s: %s", p.config.Endpoint, err.Error())
 			time.Sleep(time.Second)
 

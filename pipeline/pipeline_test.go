@@ -4,10 +4,11 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
+	"github.com/ozontech/file.d/metrics"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/plugin/input/fake"
-	"github.com/ozontech/file.d/stats"
-	"github.com/stretchr/testify/require"
 )
 
 func getFakeInputInfo() *pipeline.InputPluginInfo {
@@ -26,7 +27,7 @@ func getFakeInputInfo() *pipeline.InputPluginInfo {
 }
 
 func TestInUnparsableMessages(t *testing.T) {
-	stats.InitStats()
+	metrics.InitStats()
 
 	name := "invalid_json"
 	message := []byte("{wHo Is Json: YoU MeAn SoN oF JoHn???")
@@ -80,7 +81,7 @@ func TestInUnparsableMessages(t *testing.T) {
 }
 
 func TestInInvalidMessages(t *testing.T) {
-	stats.InitStats()
+	metrics.InitStats()
 
 	cases := []struct {
 		name             string

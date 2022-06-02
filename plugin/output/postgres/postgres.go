@@ -15,8 +15,8 @@ import (
 
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
+	"github.com/ozontech/file.d/metrics"
 	"github.com/ozontech/file.d/pipeline"
-	"github.com/ozontech/file.d/stats"
 )
 
 /*{ introduction
@@ -164,12 +164,12 @@ func Factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 }
 
 func (p *Plugin) registerPluginMetrics() {
-	stats.RegisterCounter(&stats.MetricDesc{
+	metrics.RegisterCounter(&metrics.MetricDesc{
 		Name:      discardedEventCounter,
 		Subsystem: subsystemName,
 		Help:      "Total pgsql discarded messages",
 	})
-	stats.RegisterCounter(&stats.MetricDesc{
+	metrics.RegisterCounter(&metrics.MetricDesc{
 		Name:      duplicatedEventCounter,
 		Subsystem: subsystemName,
 		Help:      "Total pgsql duplicated messages",
@@ -259,13 +259,13 @@ func (p *Plugin) out(_ *pipeline.WorkerData, batch *pipeline.Batch) {
 		fieldValues, uniqueID, err := p.processEvent(event, pgFields, uniqFields)
 		if err != nil {
 			if errors.Is(err, ErrEventDoesntHaveField) {
-				stats.GetCounter(subsystemName, discardedEventCounter).Inc()
+				metrics.GetCounter(subsystemName, discardedEventCounter).Inc()
 				if p.config.Strict {
 					p.logger.Fatal(err)
 				}
 				p.logger.Error(err)
 			} else if errors.Is(err, ErrEventFieldHasWrongType) {
-				stats.GetCounter(subsystemName, discardedEventCounter).Inc()
+				metrics.GetCounter(subsystemName, discardedEventCounter).Inc()
 				if p.config.Strict {
 					p.logger.Fatal(err)
 				}
@@ -279,7 +279,7 @@ func (p *Plugin) out(_ *pipeline.WorkerData, batch *pipeline.Batch) {
 
 		// passes here only if event valid.
 		if _, ok := uniqueEventsMap[uniqueID]; ok {
-			stats.GetCounter(subsystemName, duplicatedEventCounter).Inc()
+			metrics.GetCounter(subsystemName, duplicatedEventCounter).Inc()
 			p.logger.Infof("event duplicated. Fields: %v, values: %v", pgFields, fieldValues)
 		} else {
 			uniqueEventsMap[uniqueID] = struct{}{}

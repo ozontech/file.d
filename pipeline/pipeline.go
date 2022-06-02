@@ -12,13 +12,14 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ozontech/file.d/decoder"
-	"github.com/ozontech/file.d/logger"
-	"github.com/ozontech/file.d/longpanic"
-	"github.com/ozontech/file.d/stats"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
+
+	"github.com/ozontech/file.d/decoder"
+	"github.com/ozontech/file.d/logger"
+	"github.com/ozontech/file.d/longpanic"
+	"github.com/ozontech/file.d/metrics"
 )
 
 const (
@@ -52,7 +53,7 @@ type InputPluginController interface {
 	UseSpread()                           // don't use stream field and spread all events across all processors
 	DisableStreams()                      // don't use stream field
 	SuggestDecoder(t decoder.DecoderType) // set decoder if pipeline uses "auto" value for decoder
-	IncReadOps()                          // inc read ops for stats
+	IncReadOps()                          // inc read ops for metrics
 }
 
 type ActionPluginController interface {
@@ -178,22 +179,22 @@ func (p *Pipeline) subsystemName() string {
 }
 
 func (p *Pipeline) registerMetrics() {
-	stats.RegisterCounter(&stats.MetricDesc{
+	metrics.RegisterCounter(&metrics.MetricDesc{
 		Subsystem: p.subsystemName(),
 		Name:      inputEventsCountMetric,
 		Help:      "Count of events on pipeline input",
 	})
-	stats.RegisterCounter(&stats.MetricDesc{
+	metrics.RegisterCounter(&metrics.MetricDesc{
 		Subsystem: p.subsystemName(),
 		Name:      inputEventsSizeMetric,
 		Help:      "Size of events on pipeline input",
 	})
-	stats.RegisterCounter(&stats.MetricDesc{
+	metrics.RegisterCounter(&metrics.MetricDesc{
 		Subsystem: p.subsystemName(),
 		Name:      outputEventsCountMetric,
 		Help:      "Count of events on pipeline output",
 	})
-	stats.RegisterCounter(&stats.MetricDesc{
+	metrics.RegisterCounter(&metrics.MetricDesc{
 		Subsystem: p.subsystemName(),
 		Name:      outputEventsSizeMetric,
 		Help:      "Size of events on pipeline output",
@@ -570,11 +571,11 @@ func (p *Pipeline) incMetrics(inputEvents, inputSize, outputEvents, outputSize, 
 		deltaReads,
 	}
 
-	stats.GetCounter(p.subsystemName(), inputEventsCountMetric).Add(myDeltas.deltaInputEvents)
-	stats.GetCounter(p.subsystemName(), inputEventsSizeMetric).Add(myDeltas.deltaInputSize)
-	stats.GetCounter(p.subsystemName(), outputEventsCountMetric).Add(myDeltas.deltaOutputEvents)
-	stats.GetCounter(p.subsystemName(), outputEventsSizeMetric).Add(myDeltas.deltaOutputSize)
-	stats.GetCounter(p.subsystemName(), readOpsEventsSizeMetric).Add(myDeltas.deltaReads)
+	metrics.GetCounter(p.subsystemName(), inputEventsCountMetric).Add(myDeltas.deltaInputEvents)
+	metrics.GetCounter(p.subsystemName(), inputEventsSizeMetric).Add(myDeltas.deltaInputSize)
+	metrics.GetCounter(p.subsystemName(), outputEventsCountMetric).Add(myDeltas.deltaOutputEvents)
+	metrics.GetCounter(p.subsystemName(), outputEventsSizeMetric).Add(myDeltas.deltaOutputSize)
+	metrics.GetCounter(p.subsystemName(), readOpsEventsSizeMetric).Add(myDeltas.deltaReads)
 
 	return myDeltas
 }
@@ -668,7 +669,7 @@ func (p *Pipeline) serveActionInfo(info ActionPluginStaticInfo) func(http.Respon
 			return
 		}
 
-		var actionMetric *metrics
+		var actionMetric *metric
 		for _, m := range p.metricsHolder.metrics {
 			if m.name == info.MetricName {
 				actionMetric = m

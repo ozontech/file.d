@@ -5,11 +5,12 @@ import (
 	"strings"
 	"time"
 
+	"go.uber.org/zap"
+
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
+	"github.com/ozontech/file.d/metrics"
 	"github.com/ozontech/file.d/pipeline"
-	"github.com/ozontech/file.d/stats"
-	"go.uber.org/zap"
 
 	"github.com/Shopify/sarama"
 )
@@ -124,7 +125,7 @@ func (p *Plugin) Out(event *pipeline.Event) {
 }
 
 func (p *Plugin) registerPluginMetrics() {
-	stats.RegisterCounter(&stats.MetricDesc{
+	metrics.RegisterCounter(&metrics.MetricDesc{
 		Name:      sendErrorCounter,
 		Subsystem: subsystemName,
 		Help:      "Total Kafka send errors",
@@ -173,7 +174,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 		for _, e := range errs {
 			p.logger.Errorf("can't write batch: %s", e.Err.Error())
 		}
-		stats.GetCounter(subsystemName, sendErrorCounter).Add(float64(len(errs)))
+		metrics.GetCounter(subsystemName, sendErrorCounter).Add(float64(len(errs)))
 
 		p.controller.Error("some events from batch were not written")
 	}

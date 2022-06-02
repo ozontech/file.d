@@ -5,12 +5,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ozontech/file.d/cfg"
-	"github.com/ozontech/file.d/fd"
-	"github.com/ozontech/file.d/pipeline"
-	"github.com/ozontech/file.d/stats"
 	insaneJSON "github.com/vitkovskii/insane-json"
 	"go.uber.org/zap"
+
+	"github.com/ozontech/file.d/cfg"
+	"github.com/ozontech/file.d/fd"
+	"github.com/ozontech/file.d/metrics"
+	"github.com/ozontech/file.d/pipeline"
 )
 
 /*{ introduction
@@ -202,7 +203,7 @@ func (p *Plugin) Out(event *pipeline.Event) {
 }
 
 func (p *Plugin) registerPluginMetrics() {
-	stats.RegisterCounter(&stats.MetricDesc{
+	metrics.RegisterCounter(&metrics.MetricDesc{
 		Name:      sendErrorCounter,
 		Subsystem: subsystemName,
 		Help:      "Total GELF send errors",
@@ -239,7 +240,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 
 			gelf, err := newClient(transportTCP, p.config.Endpoint, p.config.ConnectionTimeout_, false, nil)
 			if err != nil {
-				stats.GetCounter(subsystemName, sendErrorCounter).Inc()
+				metrics.GetCounter(subsystemName, sendErrorCounter).Inc()
 				p.logger.Errorf("can't connect to gelf endpoint address=%s: %s", p.config.Endpoint, err.Error())
 				time.Sleep(time.Second)
 				continue
@@ -249,7 +250,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 
 		_, err := data.gelf.send(outBuf)
 		if err != nil {
-			stats.GetCounter(subsystemName, sendErrorCounter).Inc()
+			metrics.GetCounter(subsystemName, sendErrorCounter).Inc()
 			p.logger.Errorf("can't send data to gelf address=%s, err: %s", p.config.Endpoint, err.Error())
 			_ = data.gelf.close()
 			data.gelf = nil

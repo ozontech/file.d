@@ -6,9 +6,10 @@ import (
 	"sync"
 	"time"
 
-	appVer "github.com/ozontech/file.d/version"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/atomic"
+
+	appVer "github.com/ozontech/file.d/version"
 )
 
 const PromNamespace = "file_d"
@@ -22,7 +23,7 @@ type metricsHolder struct {
 	metricsGen         int // generation is used to drop unused metrics from counters.
 	metricsGenTime     time.Time
 	metricsGenInterval time.Duration
-	metrics            []*metrics
+	metrics            []*metric
 	registry           *prometheus.Registry
 }
 
@@ -33,7 +34,7 @@ type counter struct {
 	size         *prometheus.CounterVec
 }
 
-type metrics struct {
+type metric struct {
 	name   string
 	labels []string
 
@@ -54,13 +55,13 @@ func newMetricsHolder(pipelineName string, registry *prometheus.Registry, metric
 		pipelineName: pipelineName,
 		registry:     registry,
 
-		metrics:            make([]*metrics, 0),
+		metrics:            make([]*metric, 0),
 		metricsGenInterval: metricsGenInterval,
 	}
 }
 
 func (m *metricsHolder) AddAction(metricName string, metricLabels []string) {
-	m.metrics = append(m.metrics, &metrics{
+	m.metrics = append(m.metrics, &metric{
 		name:   metricName,
 		labels: metricLabels,
 		root: &mNode{

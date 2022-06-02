@@ -7,13 +7,14 @@ import (
 	"time"
 
 	"github.com/euank/go-kmsg-parser/kmsgparser"
-	"github.com/ozontech/file.d/fd"
-	"github.com/ozontech/file.d/longpanic"
-	"github.com/ozontech/file.d/offset"
-	"github.com/ozontech/file.d/pipeline"
-	"github.com/ozontech/file.d/stats"
 	insaneJSON "github.com/vitkovskii/insane-json"
 	"go.uber.org/zap"
+
+	"github.com/ozontech/file.d/fd"
+	"github.com/ozontech/file.d/longpanic"
+	"github.com/ozontech/file.d/metrics"
+	"github.com/ozontech/file.d/offset"
+	"github.com/ozontech/file.d/pipeline"
 )
 
 const (
@@ -67,7 +68,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 
 	p.state = &state{}
 	if err := offset.LoadYAML(p.config.OffsetsFile, p.state); err != nil {
-		stats.GetCounter(subsystemName, offsetErrors).Inc()
+		metrics.GetCounter(subsystemName, offsetErrors).Inc()
 		p.logger.Error("can't load offset file: %s", err.Error())
 	}
 
@@ -82,7 +83,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 }
 
 func (p *Plugin) registerPluginMetrics() {
-	stats.RegisterCounter(&stats.MetricDesc{
+	metrics.RegisterCounter(&metrics.MetricDesc{
 		Name:      offsetErrors,
 		Subsystem: subsystemName,
 		Help:      "Number of errors occurred when saving/loading offset",
@@ -132,7 +133,7 @@ func (p *Plugin) Commit(event *pipeline.Event) {
 	p.state.TS = event.Offset
 
 	if err := offset.SaveYAML(p.config.OffsetsFile, p.state); err != nil {
-		stats.GetCounter(subsystemName, offsetErrors).Inc()
+		metrics.GetCounter(subsystemName, offsetErrors).Inc()
 		p.logger.Error("can't save offset file: %s", err.Error())
 	}
 }

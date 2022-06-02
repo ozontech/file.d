@@ -6,12 +6,13 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"go.uber.org/atomic"
+
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/test"
-	"github.com/stretchr/testify/assert"
-	"go.uber.org/atomic"
 )
 
 const contentPanics = `# ===next===

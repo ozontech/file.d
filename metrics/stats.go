@@ -1,4 +1,4 @@
-package stats
+package metrics
 
 import (
 	"github.com/ozontech/file.d/logger"
@@ -45,7 +45,7 @@ var statsGlobal *stats
 
 func InitStats() {
 	if statsGlobal != nil {
-		logger.Error("attempt to initialize stats more than once")
+		logger.Error("attempt to initialize metrics more than once")
 		return
 	}
 
@@ -162,6 +162,6 @@ func getKey(subsystem, metricName string) key {
 
 func checkStatsInitialized() {
 	if statsGlobal == nil {
-		logger.Panicf("stats package uninitialized")
+		logger.Panicf("metrics package uninitialized")
 	}
 }

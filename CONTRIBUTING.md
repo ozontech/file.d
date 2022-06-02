@@ -61,6 +61,7 @@ git push origin <topic-branch-name>
 * log params by pattern: `name=value`, e.g. `logger.Errorf("can't parse url=%s", url)`
 * code comments should be written with a small letter without a dot at the end
 * comment the code with a small letter without a dot at the end
+* split imports into 3 groups: stdlib, 3rd party, current project. 
 
 ## Collaborating guidelines
 
