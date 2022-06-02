@@ -1,0 +1,93 @@
+linters-settings:
+  gocyclo:
+    min-complexity: 15
+  maligned:
+    suggest-new: true
+  dupl:
+    threshold: 120
+  goconst:
+    min-len: 2
+    min-occurrences: 3
+  misspell:
+    locale: US
+  lll:
+    line-length: 140
+  gocritic:
+    enabled-tags:
+      - diagnostic
+      - experimental
+      - opinionated
+      - performance
+      - style
+    disabled-checks:
+      - whyNoLint
+
+linters:
+  enable:
+    - deadcode
+    - depguard
+    - dogsled
+    - dupl
+    - errcheck
+    - goconst
+    - gocritic
+    - revive
+    - gosec
+    - govet
+    - ineffassign
+    - lll
+    - maligned
+    - misspell
+    - nakedret
+    - prealloc
+    - structcheck
+    - typecheck
+    - unconvert
+    - unparam
+    - varcheck
+    - whitespace
+    # Do not enable:
+    # - wsl (too opinionated about newlines)
+    # - godox (todos are OK)
+    # - bodyclose (false positives on helper functions)
+    # - funlen (gocyclo is enough)
+    # - gochecknoglobals (we know when it is ok to use globals)
+    # - gochecknoinits (we know when it is ok to use inits)
+
+  disable:
+    # Disable until https://github.com/dominikh/go-tools/issues/1270 fix be released.
+    - staticcheck
+    - gosimple
+    - unused
+    - stylecheck
+
+issues:
+  exclude-use-default: false
+  exclude-rules:
+    # Exclude go:generate from lll
+    - source: "//go:generate"
+      linters: [ lll ]
+
+    # Exclude links from lll
+    - source: "// See https://"
+      linters: [ lll ]
+
+    # Disable linters that are annoying in tests.
+    - path: _test\.go
+      linters:
+        - gocyclo
+        - errcheck
+        - dupl
+        - gosec
+        - goconst
+        - gocognit
+        - scopelint
+        - lll
+
+    # Ignore shadowing of err.
+    - linters: [ govet ]
+      text: 'declaration of "(err|ctx)"'
+
+    # Ignore linters in main packages.
+    - path: cmd\/file\.d\.go
+      linters: [ gocognit, gocyclo ]
