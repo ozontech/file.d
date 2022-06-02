@@ -6,9 +6,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ozontech/file.d/logger"
 	insaneJSON "github.com/vitkovskii/insane-json"
 	"go.uber.org/atomic"
+
+	"github.com/ozontech/file.d/logger"
 )
 
 var eventSizeGCThreshold = 4 * 1024
@@ -186,6 +187,9 @@ func (e *Event) kindStr() string {
 }
 
 func (e *Event) String() string {
+	if e == nil {
+		return ""
+	}
 	return fmt.Sprintf("kind=%s, action=%d, source=%d/%s, stream=%s, stage=%s, json=%s", e.kindStr(), e.action.Load(), e.SourceID, e.SourceName, e.streamName, e.stageStr(), e.Root.EncodeToString())
 }
 
@@ -297,7 +301,11 @@ func (p *eventPool) dump() string {
 		o := logger.Header("events")
 		for i := 0; i < p.freeEventsCount; i++ {
 			event := p.events[i]
-			o += event.String() + "\n"
+			eventStr := event.String()
+			if eventStr == "" {
+				eventStr = "nil"
+			}
+			o += eventStr + "\n"
 		}
 
 		return o

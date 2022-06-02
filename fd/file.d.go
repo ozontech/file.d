@@ -10,13 +10,19 @@ import (
 	"runtime/debug"
 
 	"github.com/bitly/go-simplejson"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/longpanic"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/stats"
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
+)
+
+const (
+	subsystemLongPanicName = "long_panic"
+	panics                 = "panics"
 )
 
 type FileD struct {
@@ -52,6 +58,15 @@ func (f *FileD) Start() {
 
 func (f *FileD) initMetrics() {
 	stats.InitStats()
+
+	stats.RegisterCounter(&stats.MetricDesc{
+		Subsystem: subsystemLongPanicName,
+		Name:      panics,
+		Help:      "Count of panics in the LongPanic",
+	})
+	longpanic.SetOnPanicHandler(func(_ error) {
+		stats.GetCounter(subsystemLongPanicName, panics).Inc()
+	})
 }
 
 func (f *FileD) createRegistry() {
