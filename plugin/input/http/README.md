@@ -71,5 +71,18 @@ Which protocol to emulate.
 
 <br>
 
+**`ca_cert`** *`string`* 
+
+Path to a certificate authorities file with PEM encoding.
+
+<br>
+
+**`private_key`** *`string`* 
+
+Path to a private key for TLS.
+If both ca_cert and private_key are set, the server starts accepting connections in TLS mode.
+
+<br>
+
 
 <br>*Generated using [__insane-doc__](https://github.com/vitkovskii/insane-doc)*
