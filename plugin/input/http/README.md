@@ -73,13 +73,14 @@ Which protocol to emulate.
 
 **`ca_cert`** *`string`* 
 
-Path to a certificate authorities file with PEM encoding.
+CA certificate in PEM encoding. This can be a path or the content of the certificate.
+If both ca_cert and private_key are set, the server starts accepting connections in TLS mode.
 
 <br>
 
 **`private_key`** *`string`* 
 
-Path to a private key for TLS.
+CA private key in PEM encoding. This can be a path or the content of the key.
 If both ca_cert and private_key are set, the server starts accepting connections in TLS mode.
 
 <br>
