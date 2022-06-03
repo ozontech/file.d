@@ -101,6 +101,16 @@ type Config struct {
 	//>
 	//> Which protocol to emulate.
 	EmulateMode string `json:"emulate_mode" default:"no" options:"no|elasticsearch"` //*
+	//> @3@4@5@6
+	//>
+	//> Path to a certificate authorities file with PEM encoding.
+	// If both ca_cert and private_key are set, the server starts accepting connections in TLS mode.
+	CACert string `json:"ca_cert" default:""` //*
+	//> @3@4@5@6
+	//>
+	//> Path to a private key for TLS.
+	//> If both ca_cert and private_key are set, the server starts accepting connections in TLS mode.
+	PrivateKey string `json:"private_key" default:""` //*
 }
 
 func init() {
@@ -149,7 +159,22 @@ func (p *Plugin) registerPluginMetrics() {
 }
 
 func (p *Plugin) listenHTTP() {
-	err := p.server.ListenAndServe()
+	hasCert := p.config.CACert != ""
+	hasPrivate := p.config.PrivateKey != ""
+
+	var err error
+	if hasCert || hasPrivate {
+		if !hasCert {
+			logger.Error("private key is set, but CACert is not")
+		}
+		if !hasPrivate {
+			logger.Error("CACert is set, but private is not")
+		}
+		err = p.server.ListenAndServeTLS(p.config.CACert, p.config.PrivateKey)
+	} else {
+		err = p.server.ListenAndServe()
+	}
+
 	if err != nil {
 		logger.Fatalf("input plugin http listening error address=%q: %s", p.config.Address, err.Error())
 	}
