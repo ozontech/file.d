@@ -1,9 +1,16 @@
 package http
 
 import (
+	"bytes"
+	"crypto/tls"
+	"errors"
+	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"sync"
+
+	"go.uber.org/zap"
 
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/logger"
@@ -78,6 +85,13 @@ const (
 	httpErrorCounter = "http_errors"
 )
 
+var (
+	errPrivateKeyIsNotSet = errors.New("private key is set, but CACert is not")
+	errCACertIsNotSet     = errors.New("CACert is set, but private is not")
+
+	pemBegin = []byte("-----BEGIN")
+)
+
 type Plugin struct {
 	config     *Config
 	params     *pipeline.InputPluginParams
@@ -88,6 +102,7 @@ type Plugin struct {
 	sourceIDs  []pipeline.SourceID
 	sourceSeq  pipeline.SourceID
 	mu         *sync.Mutex
+	logger     *zap.SugaredLogger
 }
 
 //! config-params
@@ -103,12 +118,12 @@ type Config struct {
 	EmulateMode string `json:"emulate_mode" default:"no" options:"no|elasticsearch"` //*
 	//> @3@4@5@6
 	//>
-	//> Path to a certificate authorities file with PEM encoding.
-	// If both ca_cert and private_key are set, the server starts accepting connections in TLS mode.
+	//> CA certificate in PEM encoding. This can be a path or the content of the certificate.
+	//> If both ca_cert and private_key are set, the server starts accepting connections in TLS mode.
 	CACert string `json:"ca_cert" default:""` //*
 	//> @3@4@5@6
 	//>
-	//> Path to a private key for TLS.
+	//> CA private key in PEM encoding. This can be a path or the content of the key.
 	//> If both ca_cert and private_key are set, the server starts accepting connections in TLS mode.
 	PrivateKey string `json:"private_key" default:""` //*
 }
@@ -127,6 +142,7 @@ func Factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginParams) {
 	p.config = config.(*Config)
 	p.params = params
+	p.logger = params.Logger
 	p.readBuffs = &sync.Pool{}
 	p.eventBuffs = &sync.Pool{}
 	p.mu = &sync.Mutex{}
@@ -159,18 +175,12 @@ func (p *Plugin) registerPluginMetrics() {
 }
 
 func (p *Plugin) listenHTTP() {
-	hasCert := p.config.CACert != ""
-	hasPrivate := p.config.PrivateKey != ""
-
 	var err error
-	if hasCert || hasPrivate {
-		if !hasCert {
-			logger.Error("private key is set, but CACert is not")
+	if p.config.CACert != "" || p.config.PrivateKey != "" {
+		p.server.TLSConfig, err = p.fetchTLSConfig()
+		if err == nil {
+			err = p.server.ListenAndServeTLS("", "")
 		}
-		if !hasPrivate {
-			logger.Error("CACert is set, but private is not")
-		}
-		err = p.server.ListenAndServeTLS(p.config.CACert, p.config.PrivateKey)
 	} else {
 		err = p.server.ListenAndServe()
 	}
@@ -281,4 +291,46 @@ func (p *Plugin) Stop() {
 
 func (p *Plugin) Commit(_ *pipeline.Event) {
 	// todo: don't reply with OK till all events in request will be committed
+}
+
+func (p *Plugin) fetchTLSConfig() (*tls.Config, error) {
+	if p.config.CACert == "" {
+		return nil, errCACertIsNotSet
+	}
+	if p.config.PrivateKey == "" {
+		return nil, errPrivateKeyIsNotSet
+	}
+
+	var err error
+	caCert := []byte(p.config.CACert)
+	// is this path to the PEM encoded CA cert?
+	if !isPem(caCert) {
+		caCert, err = os.ReadFile(p.config.CACert)
+		if err != nil {
+			return nil, fmt.Errorf("can't read CA cert file=%q: %s", p.config.CACert, err.Error())
+		}
+	}
+
+	privateKey := []byte(p.config.PrivateKey)
+	// is this path to the PEM encoded private key?
+	if !isPem(privateKey) {
+		privateKey, err = os.ReadFile(p.config.PrivateKey)
+		if err != nil {
+			return nil, fmt.Errorf("can't read private key file=%q: %s", p.config.PrivateKey, err.Error())
+		}
+	}
+
+	config := &tls.Config{
+		Certificates: make([]tls.Certificate, 1),
+	}
+	config.Certificates[0], err = tls.X509KeyPair(caCert, privateKey)
+	if err != nil {
+		return nil, err
+	}
+
+	return config, nil
+}
+
+func isPem(s []byte) bool {
+	return bytes.Contains(s, pemBegin)
 }
