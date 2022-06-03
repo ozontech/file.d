@@ -10,9 +10,8 @@ import (
 	sq "github.com/Masterminds/squirrel"
 	"github.com/jackc/pgx/v4"
 	"github.com/jackc/pgx/v4/pgxpool"
+	"github.com/ozontech/file.d/backoff"
 	"github.com/ozontech/file.d/cfg"
-	"github.com/ozontech/file.d/consts"
-	"github.com/ozontech/file.d/expbackoff"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/stats"
@@ -71,7 +70,7 @@ type Plugin struct {
 	ctx        context.Context
 	cancelFunc context.CancelFunc
 
-	backOff      *expbackoff.BackOff
+	backOff      *backoff.BackOff
 	queryBuilder PgQueryBuilder
 	pool         PgxIface
 }
@@ -226,18 +225,18 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	}
 	p.pool = pool
 
-	p.backOff = expbackoff.New(
+	p.backOff = backoff.New(
 		p.ctx,
 		stats.GetCounter(subsystemName, discardedEventCounter),
 		p.config.RequestTimeout_,
-		expbackoff.RetriesCfg{
+		backoff.RetriesCfg{
 			Limited: true,
 			Limit:   uint64(p.config.Retry),
 		},
-		expbackoff.Multiplier(consts.ExpBackoffDefaultMultiplier),
-		expbackoff.RandomizationFactor(consts.ExpBackoffDefaultRndFactor),
-		expbackoff.InitialIntervalOpt(p.config.Retention_),
-		expbackoff.MaxInterval(p.config.Retention_*2),
+		backoff.Multiplier(backoff.ExpBackoffDefaultMultiplier),
+		backoff.RandomizationFactor(backoff.ExpBackoffDefaultRndFactor),
+		backoff.InitialIntervalOpt(p.config.Retention_),
+		backoff.MaxInterval(p.config.Retention_*2),
 	)
 
 	p.batcher = pipeline.NewBatcher(
@@ -332,20 +331,21 @@ func (p *Plugin) out(_ *pipeline.WorkerData, batch *pipeline.Batch) {
 	}
 
 	// Insert into pg with retry.
-	if err = p.backOff.Exec(p.ctx, func(ctx context.Context) error {
-		p.logger.Info(query, args)
+	if err = p.backOff.RetryWithMetrics(p.ctx, func(ctx context.Context) error {
 		rows, err := p.pool.Query(ctx, query, argsSliceInterface...)
 		defer func() {
-			rows.Close()
+			if rows != nil {
+				rows.Close()
+			}
 		}()
 		if err != nil {
-			p.logger.Errorf("rows: %v, err: %s", rows, err.Error())
+			p.logger.Errorf("can't insert query: %s, args: %v: %s", query, args, err.Error())
 			return err
 		}
 		return nil
 	}); err != nil {
 		p.pool.Close()
-		p.logger.Fatalf("Failed insert into %s. query: %s, args: %v, err: %v", p.config.Table, query, args, err)
+		p.logger.Fatalf("can't insert. query: %s, args: %v: %s", query, args, err.Error())
 	}
 }
 

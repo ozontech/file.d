@@ -10,8 +10,7 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/jackc/pgconn"
 	"github.com/jackc/pgproto3/v2"
-	"github.com/ozontech/file.d/consts"
-	"github.com/ozontech/file.d/expbackoff"
+	"github.com/ozontech/file.d/backoff"
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/pipeline"
 	mock_pg "github.com/ozontech/file.d/plugin/output/postgres/mock"
@@ -86,18 +85,18 @@ func TestPrivateOut(t *testing.T) {
 	builder, err := NewQueryBuilder(columns, table)
 	require.NoError(t, err)
 
-	backOff := expbackoff.New(
+	backOff := backoff.New(
 		ctx,
 		stats.GetCounter("random_test", "random_test"),
 		time.Second*5,
-		expbackoff.RetriesCfg{
+		backoff.RetriesCfg{
 			Limited: true,
 			Limit:   10,
 		},
-		expbackoff.Multiplier(consts.ExpBackoffDefaultMultiplier),
-		expbackoff.RandomizationFactor(consts.ExpBackoffDefaultRndFactor),
-		expbackoff.InitialIntervalOpt(time.Second),
-		expbackoff.MaxInterval(time.Second*2),
+		backoff.Multiplier(backoff.ExpBackoffDefaultMultiplier),
+		backoff.RandomizationFactor(backoff.ExpBackoffDefaultRndFactor),
+		backoff.InitialIntervalOpt(time.Second),
+		backoff.MaxInterval(time.Second*2),
 	)
 
 	p := &Plugin{
@@ -179,18 +178,18 @@ func TestPrivateOutWithRetry(t *testing.T) {
 	builder, err := NewQueryBuilder(columns, table)
 	require.NoError(t, err)
 
-	backOff := expbackoff.New(
+	backOff := backoff.New(
 		ctx,
 		stats.GetCounter("random_test", "random_test"),
 		time.Second*5,
-		expbackoff.RetriesCfg{
+		backoff.RetriesCfg{
 			Limited: true,
 			Limit:   10,
 		},
-		expbackoff.Multiplier(consts.ExpBackoffDefaultMultiplier),
-		expbackoff.RandomizationFactor(consts.ExpBackoffDefaultRndFactor),
-		expbackoff.InitialIntervalOpt(time.Second),
-		expbackoff.MaxInterval(time.Second*2),
+		backoff.Multiplier(backoff.ExpBackoffDefaultMultiplier),
+		backoff.RandomizationFactor(backoff.ExpBackoffDefaultRndFactor),
+		backoff.InitialIntervalOpt(time.Second),
+		backoff.MaxInterval(time.Second*2),
 	)
 
 	p := &Plugin{
@@ -252,18 +251,18 @@ func TestPrivateOutNoGoodEvents(t *testing.T) {
 	builder, err := NewQueryBuilder(columns, table)
 	require.NoError(t, err)
 
-	backOff := expbackoff.New(
+	backOff := backoff.New(
 		context.Background(),
 		stats.GetCounter("random_test", "random_test"),
 		time.Second*5,
-		expbackoff.RetriesCfg{
+		backoff.RetriesCfg{
 			Limited: true,
 			Limit:   10,
 		},
-		expbackoff.Multiplier(consts.ExpBackoffDefaultMultiplier),
-		expbackoff.RandomizationFactor(consts.ExpBackoffDefaultRndFactor),
-		expbackoff.InitialIntervalOpt(time.Second),
-		expbackoff.MaxInterval(time.Second*2),
+		backoff.Multiplier(backoff.ExpBackoffDefaultMultiplier),
+		backoff.RandomizationFactor(backoff.ExpBackoffDefaultRndFactor),
+		backoff.InitialIntervalOpt(time.Second),
+		backoff.MaxInterval(time.Second*2),
 	)
 	p := &Plugin{
 		config:       &config,
@@ -347,18 +346,18 @@ func TestPrivateOutDeduplicatedEvents(t *testing.T) {
 	builder, err := NewQueryBuilder(columns, table)
 	require.NoError(t, err)
 
-	backOff := expbackoff.New(
+	backOff := backoff.New(
 		ctx,
 		stats.GetCounter("random_test", "random_test"),
 		time.Second*5,
-		expbackoff.RetriesCfg{
+		backoff.RetriesCfg{
 			Limited: true,
 			Limit:   10,
 		},
-		expbackoff.Multiplier(consts.ExpBackoffDefaultMultiplier),
-		expbackoff.RandomizationFactor(consts.ExpBackoffDefaultRndFactor),
-		expbackoff.InitialIntervalOpt(time.Second),
-		expbackoff.MaxInterval(time.Second*2),
+		backoff.Multiplier(backoff.ExpBackoffDefaultMultiplier),
+		backoff.RandomizationFactor(backoff.ExpBackoffDefaultRndFactor),
+		backoff.InitialIntervalOpt(time.Second),
+		backoff.MaxInterval(time.Second*2),
 	)
 	p := &Plugin{
 		config:       &config,
@@ -537,18 +536,18 @@ func TestPrivateOutFewUniqueEventsYetWithDeduplicationEventsAnpooladEvents(t *te
 	builder, err := NewQueryBuilder(columns, table)
 	require.NoError(t, err)
 
-	backOff := expbackoff.New(
+	backOff := backoff.New(
 		context.Background(),
 		stats.GetCounter("random_test", "random_test"),
 		time.Second*5,
-		expbackoff.RetriesCfg{
+		backoff.RetriesCfg{
 			Limited: true,
 			Limit:   10,
 		},
-		expbackoff.Multiplier(consts.ExpBackoffDefaultMultiplier),
-		expbackoff.RandomizationFactor(consts.ExpBackoffDefaultRndFactor),
-		expbackoff.InitialIntervalOpt(time.Second),
-		expbackoff.MaxInterval(time.Second*2),
+		backoff.Multiplier(backoff.ExpBackoffDefaultMultiplier),
+		backoff.RandomizationFactor(backoff.ExpBackoffDefaultRndFactor),
+		backoff.InitialIntervalOpt(time.Second),
+		backoff.MaxInterval(time.Second*2),
 	)
 	p := &Plugin{
 		config:       &config,

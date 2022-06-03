@@ -10,9 +10,8 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/ozontech/file.d/backoff"
 	"github.com/ozontech/file.d/cfg"
-	"github.com/ozontech/file.d/consts"
-	"github.com/ozontech/file.d/expbackoff"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/stats"
@@ -39,7 +38,7 @@ type Plugin struct {
 	avgEventSize int
 	batcher      *pipeline.Batcher
 	controller   pipeline.OutputPluginController
-	backoff      *expbackoff.BackOff
+	backoff      *backoff.BackOff
 }
 
 //! config-params
@@ -104,16 +103,16 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 
 	p.registerPluginMetrics()
 	p.ctx = context.TODO()
-	p.backoff = expbackoff.New(
+	p.backoff = backoff.New(
 		p.ctx,
 		stats.GetCounter(subsystemName, sendErrorCounter),
 		// No concrete time limit here.
 		time.Hour,
-		expbackoff.RetriesCfg{Limited: false},
-		expbackoff.Multiplier(consts.ExpBackoffDefaultMultiplier),
-		expbackoff.RandomizationFactor(consts.ExpBackoffDefaultRndFactor),
-		expbackoff.InitialIntervalOpt(time.Second),
-		expbackoff.MaxInterval(time.Second*2),
+		backoff.RetriesCfg{Limited: false},
+		backoff.Multiplier(backoff.ExpBackoffDefaultMultiplier),
+		backoff.RandomizationFactor(backoff.ExpBackoffDefaultRndFactor),
+		backoff.InitialIntervalOpt(time.Second),
+		backoff.MaxInterval(time.Second*2),
 	)
 	p.batcher = pipeline.NewBatcher(
 		params.PipelineName,
@@ -172,7 +171,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 
 	p.logger.Debugf("Trying to send: %s", outBuf)
 
-	_ = p.backoff.Exec(p.ctx, func(ctx context.Context) error {
+	_ = p.backoff.RetryWithMetrics(p.ctx, func(ctx context.Context) error {
 		sendErr := p.send(outBuf)
 		if sendErr != nil {
 			p.logger.Errorf("can't send data to splunk address=%s: %s", p.config.Endpoint, sendErr.Error())

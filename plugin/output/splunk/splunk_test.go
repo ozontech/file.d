@@ -8,8 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ozontech/file.d/consts"
-	"github.com/ozontech/file.d/expbackoff"
+	"github.com/ozontech/file.d/backoff"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/stats"
 	"github.com/stretchr/testify/assert"
@@ -57,15 +56,15 @@ func TestSplunk(t *testing.T) {
 					Endpoint: testServer.URL,
 				},
 				logger: zap.NewExample().Sugar(),
-				backoff: expbackoff.New(
+				backoff: backoff.New(
 					ctx,
 					stats.GetCounter(subsystemName, sendErrorCounter),
 					time.Minute,
-					expbackoff.RetriesCfg{Limited: false},
-					expbackoff.Multiplier(consts.ExpBackoffDefaultMultiplier),
-					expbackoff.RandomizationFactor(consts.ExpBackoffDefaultRndFactor),
-					expbackoff.InitialIntervalOpt(time.Second),
-					expbackoff.MaxInterval(time.Second*2),
+					backoff.RetriesCfg{Limited: false},
+					backoff.Multiplier(backoff.ExpBackoffDefaultMultiplier),
+					backoff.RandomizationFactor(backoff.ExpBackoffDefaultRndFactor),
+					backoff.InitialIntervalOpt(time.Second),
+					backoff.MaxInterval(time.Second*2),
 				),
 			}
 
