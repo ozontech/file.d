@@ -36,10 +36,8 @@ linters:
     - govet
     - ineffassign
     - lll
-    - maligned
     - misspell
     - nakedret
-    - prealloc
     - structcheck
     - typecheck
     - unconvert
@@ -50,6 +48,8 @@ linters:
     # - wsl (too opinionated about newlines)
     # - godox (todos are OK)
     # - bodyclose (false positives on helper functions)
+    # - prealloc  (not worth it in scope of this project)
+    # - maligned  (same as prealloc)
     # - funlen (gocyclo is enough)
     # - gochecknoglobals (we know when it is ok to use globals)
     # - gochecknoinits (we know when it is ok to use inits)
