@@ -57,11 +57,10 @@ git push origin <topic-branch-name>
 
 ## Code style
 
-* log in lower case without a dot in the end of a sentence
-* log params by pattern: `name=value`, e.g. `logger.Errorf("can't parse url=%s", url)`
-* code comments should be written with a small letter without a dot at the end
-* comment the code with a small letter without a dot at the end
-* split imports into 3 groups: stdlib, 3rd party, current project. 
+* log in lower case without a dot in the end of a sentence;
+* log params by pattern: `name=value`, e.g. `logger.Errorf("can't parse url=%s", url)`;
+* code comments should be written with a small letter without a dot at the end;
+* split imports into 2 groups: stdlib and other packages; 
 
 ## Collaborating guidelines
 

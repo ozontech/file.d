@@ -1,3 +1,4 @@
+// Package metrics contains utilities for creating and getting file.d metrics.
 package metrics
 
 import (

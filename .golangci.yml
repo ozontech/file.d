@@ -29,8 +29,11 @@ linters:
     - dogsled
     - dupl
     - errcheck
+    - gochecknoglobals
     - goconst
     - gocritic
+    - goimports
+    - gosimple
     - revive
     - gosec
     - govet
@@ -38,10 +41,13 @@ linters:
     - lll
     - misspell
     - nakedret
+    - staticcheck
     - structcheck
+    - stylecheck
     - typecheck
     - unconvert
     - unparam
+    - unused
     - varcheck
     - whitespace
     # Do not enable:
@@ -51,15 +57,7 @@ linters:
     # - prealloc  (not worth it in scope of this project)
     # - maligned  (same as prealloc)
     # - funlen (gocyclo is enough)
-    # - gochecknoglobals (we know when it is ok to use globals)
     # - gochecknoinits (we know when it is ok to use inits)
-
-  disable:
-    # Disable until https://github.com/dominikh/go-tools/issues/1270 fix be released.
-    - staticcheck
-    - gosimple
-    - unused
-    - stylecheck
 
 issues:
   exclude-use-default: false
@@ -91,3 +89,9 @@ issues:
     # Ignore linters in main packages.
     - path: cmd\/file\.d\.go
       linters: [ gocognit, gocyclo ]
+
+run:
+  build-tags:
+    - e2e
+    - fuzz
+    - linux
