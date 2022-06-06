@@ -1,13 +1,9 @@
 package http
 
 import (
-	"bytes"
-	"crypto/tls"
 	"errors"
-	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"sync"
 
 	"go.uber.org/zap"
@@ -17,6 +13,7 @@ import (
 	"github.com/ozontech/file.d/longpanic"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/stats"
+	"github.com/ozontech/file.d/tls"
 )
 
 /*{ introduction
@@ -177,8 +174,10 @@ func (p *Plugin) registerPluginMetrics() {
 func (p *Plugin) listenHTTP() {
 	var err error
 	if p.config.CACert != "" || p.config.PrivateKey != "" {
-		p.server.TLSConfig, err = p.fetchTLSConfig(os.ReadFile)
+		tlsBuilder := tls.NewConfigBuilder()
+		err = tlsBuilder.AppendX509KeyPair(p.config.CACert, p.config.PrivateKey)
 		if err == nil {
+			p.server.TLSConfig = tlsBuilder.Build()
 			err = p.server.ListenAndServeTLS("", "")
 		}
 	} else {
@@ -291,46 +290,4 @@ func (p *Plugin) Stop() {
 
 func (p *Plugin) Commit(_ *pipeline.Event) {
 	// todo: don't reply with OK till all events in request will be committed
-}
-
-func (p *Plugin) fetchTLSConfig(readFile func(string) ([]byte, error)) (*tls.Config, error) {
-	if p.config.CACert == "" {
-		return nil, errCACertIsNotSet
-	}
-	if p.config.PrivateKey == "" {
-		return nil, errPrivateKeyIsNotSet
-	}
-
-	var err error
-	caCert := []byte(p.config.CACert)
-	// is this path to the PEM encoded CA cert?
-	if !isPem(caCert) {
-		caCert, err = readFile(p.config.CACert)
-		if err != nil {
-			return nil, fmt.Errorf("can't read CA cert file=%q: %s", p.config.CACert, err.Error())
-		}
-	}
-
-	privateKey := []byte(p.config.PrivateKey)
-	// is this path to the PEM encoded private key?
-	if !isPem(privateKey) {
-		privateKey, err = readFile(p.config.PrivateKey)
-		if err != nil {
-			return nil, fmt.Errorf("can't read private key file=%q: %s", p.config.PrivateKey, err.Error())
-		}
-	}
-
-	config := &tls.Config{
-		Certificates: make([]tls.Certificate, 1),
-	}
-	config.Certificates[0], err = tls.X509KeyPair(caCert, privateKey)
-	if err != nil {
-		return nil, err
-	}
-
-	return config, nil
-}
-
-func isPem(s []byte) bool {
-	return bytes.Contains(s, pemBegin)
 }
