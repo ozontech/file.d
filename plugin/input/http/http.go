@@ -177,7 +177,7 @@ func (p *Plugin) registerPluginMetrics() {
 func (p *Plugin) listenHTTP() {
 	var err error
 	if p.config.CACert != "" || p.config.PrivateKey != "" {
-		p.server.TLSConfig, err = p.fetchTLSConfig()
+		p.server.TLSConfig, err = p.fetchTLSConfig(os.ReadFile)
 		if err == nil {
 			err = p.server.ListenAndServeTLS("", "")
 		}
@@ -293,7 +293,7 @@ func (p *Plugin) Commit(_ *pipeline.Event) {
 	// todo: don't reply with OK till all events in request will be committed
 }
 
-func (p *Plugin) fetchTLSConfig() (*tls.Config, error) {
+func (p *Plugin) fetchTLSConfig(readFile func(string) ([]byte, error)) (*tls.Config, error) {
 	if p.config.CACert == "" {
 		return nil, errCACertIsNotSet
 	}
@@ -305,7 +305,7 @@ func (p *Plugin) fetchTLSConfig() (*tls.Config, error) {
 	caCert := []byte(p.config.CACert)
 	// is this path to the PEM encoded CA cert?
 	if !isPem(caCert) {
-		caCert, err = os.ReadFile(p.config.CACert)
+		caCert, err = readFile(p.config.CACert)
 		if err != nil {
 			return nil, fmt.Errorf("can't read CA cert file=%q: %s", p.config.CACert, err.Error())
 		}
@@ -314,7 +314,7 @@ func (p *Plugin) fetchTLSConfig() (*tls.Config, error) {
 	privateKey := []byte(p.config.PrivateKey)
 	// is this path to the PEM encoded private key?
 	if !isPem(privateKey) {
-		privateKey, err = os.ReadFile(p.config.PrivateKey)
+		privateKey, err = readFile(p.config.PrivateKey)
 		if err != nil {
 			return nil, fmt.Errorf("can't read private key file=%q: %s", p.config.PrivateKey, err.Error())
 		}
