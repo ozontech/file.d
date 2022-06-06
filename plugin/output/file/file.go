@@ -14,8 +14,6 @@ import (
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/longpanic"
 	"github.com/ozontech/file.d/pipeline"
-	"github.com/ozontech/file.d/plugin/output/file/timestamp"
-
 	"go.uber.org/zap"
 	"golang.org/x/net/context"
 )
@@ -46,7 +44,7 @@ type Plugin struct {
 
 	mu *sync.RWMutex
 
-	pairs *timestamp.Pair
+	pairOfTimestamps *pair
 }
 
 type data struct {
@@ -117,7 +115,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.tsFileName = "%s" + "-" + p.fileName
 
 	if p.config.TrackTimestamps {
-		p.pairs = timestamp.New(0, 0)
+		p.pairOfTimestamps = NewPair(0, 0)
 	}
 
 	p.batcher = pipeline.NewBatcher(
@@ -186,10 +184,11 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 		outBuf, _ = event.Encode(outBuf)
 		outBuf = append(outBuf, byte('\n'))
 
+		// TODO MOVE OUT OF CYCLE AND ADD MUTEX.
 		// writes first or last timestamps if found.
 		if p.config.TrackTimestamps {
 			ts := event.Root.Dig(p.config.TimestampField).AsUint64()
-			p.pairs.UpdatePair(ts)
+			p.pairOfTimestamps.UpdatePair(ts)
 		}
 	}
 	data.outBuf = outBuf
@@ -271,9 +270,9 @@ func (p *Plugin) sealUp() {
 	}
 	logger.Errorf("sealing in %d, newFile: %s", time.Now().Unix(), newFileName)
 	if p.SealUpCallback != nil {
-		var f, l uint64
+		f, l := uint64(0), uint64(0)
 		if p.config.TrackTimestamps {
-			f, l = p.pairs.Reset()
+			f, l = p.pairOfTimestamps.Reset()
 		}
 		longpanic.Go(func() { p.SealUpCallback(newFileName, f, l) })
 	}

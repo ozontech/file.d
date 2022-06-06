@@ -18,6 +18,7 @@ import (
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/plugin/output/file"
 	"github.com/ozontech/file.d/stats"
+	insaneJSON "github.com/vitkovskii/insane-json"
 	"go.uber.org/zap"
 )
 
@@ -149,7 +150,7 @@ func Factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 
 // Start initializes and runs plugin. This function calls by pipeline and have hardcoded dependencies.
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginParams) {
-	committerFabric, err := NewCommitterFabric(config.(*Config), params)
+	committerFabric, err := NewMetaSenderFabric(config.(*Config), params)
 	if err != nil {
 		params.Logger.Fatal(err)
 	}
@@ -166,7 +167,7 @@ func (p *Plugin) registerPluginMetrics() {
 }
 
 // StartInner initializes and runs plugin. Unlike `Start` arguments passed by aggregation which allows mocks testing.
-func (p *Plugin) StartInner(config pipeline.AnyConfig, params *pipeline.OutputPluginParams, objectStoreFactory objStoreFactory, commFabric CommitterFabric) {
+func (p *Plugin) StartInner(config pipeline.AnyConfig, params *pipeline.OutputPluginParams, objectStoreFactory objStoreFactory, metasenderFabric MetaSenderFabric) {
 	p.registerPluginMetrics()
 
 	p.controller = params.Controller
@@ -207,11 +208,10 @@ func (p *Plugin) StartInner(config pipeline.AnyConfig, params *pipeline.OutputPl
 	p.uploadCh = make(chan fileDTO, p.config.FileConfig.WorkersCount_*4)
 	p.compressCh = make(chan fileDTO, p.config.FileConfig.WorkersCount_)
 
-	// init and start commiter
-	if commFabric != nil {
-		p.commitMode = true
-		starter := commFabric.CommitterFunc()
-		p.commiterWrapper = starter()
+	// init and start metasender
+	if metasenderFabric != nil {
+		starter := metasenderFabric.MetaSenderStarterFunc()
+		p.metaSender = starter()
 		p.inputController = p.controller.(pipeline.InputPluginController)
 	}
 
@@ -232,6 +232,7 @@ func (p *Plugin) StartInner(config pipeline.AnyConfig, params *pipeline.OutputPl
 
 func (p *Plugin) Stop() {
 	p.outPlugins.Stop()
+	p.metaSender.Stop()
 }
 
 func (p *Plugin) Out(event *pipeline.Event) {
@@ -410,6 +411,23 @@ func (p *Plugin) addFileJobWithBucket(bucketName string) func(filename string, f
 	}
 }
 
+func (p *Plugin) sendMetadata(meta metadataDTO, constantPart string) error {
+	ev := &pipeline.Event{}
+	ev.SetAlienKind()
+	ev.Root = &insaneJSON.Root{}
+	err := ev.Root.DecodeString(fmt.Sprintf("{%s}", constantPart))
+	if err != nil {
+		return err
+	}
+	ev.Root.AddFieldNoAlloc(ev.Root, p.config.MetadataSenderCfg.FirstTimestampFieldForTrack).MutateToUint64(meta.leastTimestamp)
+	ev.Root.AddFieldNoAlloc(ev.Root, p.config.MetadataSenderCfg.LastTimestampFieldForTrack).MutateToUint64(meta.largestTimestamp)
+	ev.Root.AddFieldNoAlloc(ev.Root, p.config.MetadataSenderCfg.BucketNameFieldForTrack).MutateToString(meta.bucketName)
+	ev.Root.AddFieldNoAlloc(ev.Root, p.config.MetadataSenderCfg.S3UrlNameFieldForTrack).MutateToString(meta.s3Url)
+
+	p.metaSender.Out(ev)
+	return nil
+}
+
 func (p *Plugin) uploadWork() {
 	for compressed := range p.uploadCh {
 		sleepTime := attemptInterval
@@ -418,27 +436,21 @@ func (p *Plugin) uploadWork() {
 			if err == nil {
 				p.logger.Infof("successfully uploaded object: %v", compressed)
 
-				// send message to commiter
-				if p.config.CommitCfg != nil {
-					commiterData := make(map[string]interface{})
-					if p.config.CommitCfg.FirstTimestampFieldForTrack != "" {
-						commiterData[p.config.CommitCfg.FirstTimestampFieldForTrack] = compressed.firstTimestamp
-					}
-					if p.config.CommitCfg.LastTimestampFieldForTrack != "" {
-						commiterData[p.config.CommitCfg.LastTimestampFieldForTrack] = compressed.lastTimestamp
-					}
-					if p.config.CommitCfg.BucketNameFieldForTrack != "" {
-						commiterData[p.config.CommitCfg.BucketNameFieldForTrack] = compressed.bucketName
-					}
-					if p.config.CommitCfg.S3UrlNameFieldForTrack != "" {
-						commiterData[p.config.CommitCfg.S3UrlNameFieldForTrack] = compressed.fileName
-					}
-					err := p.commiterWrapper.CommitUpload(commiterData, p.config.CommitCfg.ConstantCommitMessagePart)
-					if err != nil {
-						p.logger.Fatalf("can't commit message of uploading: %s", err.Error())
+				// send metadata if required.
+				if p.config.MetadataSenderCfg != nil {
+					if err = p.sendMetadata(
+						metadataDTO{
+							leastTimestamp:   compressed.firstTimestamp,
+							largestTimestamp: compressed.lastTimestamp,
+							bucketName:       compressed.bucketName,
+							s3Url:            compressed.fileName,
+						},
+						p.config.MetadataSenderCfg.ConstantMessagePart,
+					); err != nil {
+						p.logger.Fatalf("can't send metadata: %s", err.Error())
 					}
 
-					p.logger.Infof("successfully commited to %s", p.config.CommitCfg.CommitterType)
+					p.logger.Infof("metadata successfully sent")
 				}
 
 				// delete archive after uploading

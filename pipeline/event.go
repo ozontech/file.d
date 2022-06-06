@@ -6,9 +6,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ozontech/file.d/logger"
 	insaneJSON "github.com/vitkovskii/insane-json"
 	"go.uber.org/atomic"
+
+	"github.com/ozontech/file.d/logger"
 )
 
 var eventSizeGCThreshold = 4 * 1024
@@ -41,11 +42,12 @@ const (
 	eventStageProcessor = 3
 	eventStageOutput    = 4
 
-	eventKindRegular      int32 = 0
-	eventKindIgnore       int32 = 1
-	eventKindTimeout      int32 = 2
-	eventKindUnlock       int32 = 3
-	eventKindCustomCommit int32 = 4
+	eventKindRegular int32 = iota
+	eventKindIgnore
+	eventKindTimeout
+	eventKindUnlock
+	// Alien event doesn't belong to eventPool and must be ignored by pipeline.
+	eventKindAlien
 )
 
 type eventStage int
@@ -140,12 +142,12 @@ func (e *Event) IsTimeoutKind() bool {
 	return e.kind.Load() == eventKindTimeout
 }
 
-func (e *Event) SetCustomCommitKind() {
-	e.kind.Swap(eventKindCustomCommit)
+func (e *Event) SetAlienKind() {
+	e.kind.Swap(eventKindAlien)
 }
 
-func (e *Event) IsCustomCommitKind() bool {
-	return e.kind.Load() == eventKindCustomCommit
+func (e *Event) IsAlienKind() bool {
+	return e.kind.Load() == eventKindAlien
 }
 
 func (e *Event) parseJSON(json []byte) error {
@@ -189,14 +191,17 @@ func (e *Event) kindStr() string {
 		return "DEPRECATED"
 	case eventKindTimeout:
 		return "TIMEOUT"
-	case eventKindCustomCommit:
-		return "CUSTOM_COMMIT"
+	case eventKindAlien:
+		return "ALIEN"
 	default:
 		return "UNKNOWN"
 	}
 }
 
 func (e *Event) String() string {
+	if e == nil {
+		return ""
+	}
 	return fmt.Sprintf("kind=%s, action=%d, source=%d/%s, stream=%s, stage=%s, json=%s", e.kindStr(), e.action.Load(), e.SourceID, e.SourceName, e.streamName, e.stageStr(), e.Root.EncodeToString())
 }
 
@@ -308,7 +313,11 @@ func (p *eventPool) dump() string {
 		o := logger.Header("events")
 		for i := 0; i < p.freeEventsCount; i++ {
 			event := p.events[i]
-			o += event.String() + "\n"
+			eventStr := event.String()
+			if eventStr == "" {
+				eventStr = "nil"
+			}
+			o += eventStr + "\n"
 		}
 
 		return o

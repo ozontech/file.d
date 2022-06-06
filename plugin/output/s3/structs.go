@@ -42,10 +42,10 @@ type singleBucketConfig struct {
 
 type MultiBuckets []singleBucketConfig
 
-type commitConfig struct {
+type metadataSenderConfig struct {
 	//> @3@4@5@6
-	//> Type of commiter. Now only Kafka type enabled.
-	CommitterType string `json:"type" default:""` //*
+	//> Type of metasender. Now only Kafka type enabled.
+	MetasenderType string `json:"type" default:""` //*
 
 	//> @3@4@5@6
 	//> Name of min timestamp in commiter message.
@@ -64,9 +64,9 @@ type commitConfig struct {
 	S3UrlNameFieldForTrack string `json:"s3_url_name_field_for_track"` //*
 
 	//> @3@4@5@6
-	//> Constant part of commit, must be valid json fields.
-	//> Useful to add some contant data to commiter message: `"service": "serviceName", "release": "v1.0.1"`
-	ConstantCommitMessagePart string `json:"contant_message_part"` //*
+	//> Constant part of metadata msg, must be valid json fields.
+	//> Useful to add some contant data to message: `"service": "serviceName", "release": "v1.0.1"`
+	ConstantMessagePart string `json:"contant_message_part"` //*
 	//> @3@4@5@6
 	KafkaCfg kafka.Config `json:"kafka_config" child:"true"` //*
 }
@@ -90,8 +90,7 @@ type Plugin struct {
 	uploadCh   chan fileDTO
 	compressor compressor
 
-	commitMode      bool
-	commiterWrapper *CommiterWrapper
+	metaSender      pipeline.OutputPlugin
 	inputController pipeline.InputPluginController
 }
 
@@ -136,9 +135,7 @@ type Config struct {
 	//> DynamicBucketsLimit regulates how many buckets can be created dynamically.
 	//> Prevents problems when some random strings in BucketEventField where
 	DynamicBucketsLimit int `json:"dynamic_buckets_limit" default:"32"` //*
-
-	// 2 phase commit section
 	//> @3@4@5@6
-	//> Describes config of commit.
-	CommitCfg *commitConfig `json:"commit_config" child:"true"` //*
+	//> Metadata sender config.
+	MetadataSenderCfg *metadataSenderConfig `json:"metadata_sender_config" child:"true"` //*
 }
