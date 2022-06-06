@@ -4,7 +4,19 @@ import (
 	"runtime"
 	"sync"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
+
+func TestEventPoolDump(t *testing.T) {
+	eventPool := newEventPool(2)
+	e := eventPool.get()
+	defer eventPool.back(e)
+
+	require.NotPanics(t, func() {
+		_ = eventPool.dump()
+	})
+}
 
 func BenchmarkEventPoolOneGoroutine(b *testing.B) {
 	const capacity = 32

@@ -43,7 +43,7 @@ type testS3Plugin struct {
 }
 
 func (p *testS3Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginParams) {
-	fabric, err := NewCommitterFabric(config.(*Config), params)
+	fabric, err := NewMetaSenderFabric(config.(*Config), params)
 	if err != nil {
 		params.Logger.Fatal(err)
 	}

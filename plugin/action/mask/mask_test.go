@@ -87,6 +87,22 @@ func TestMaskFunctions(t *testing.T) {
 			mustBeMasked: true,
 		},
 		{
+			name:         "ID-max_count",
+			input:        []byte("user details: Иванов Иван Иванович"),
+			masks:        Mask{Re: kDefaultIDRegExp, Groups: []int{0}, MaxCount: 10},
+			expected:     []byte("user details: **********"),
+			comment:      "ID masked with max_count",
+			mustBeMasked: true,
+		},
+		{
+			name:         "ID-replace_word",
+			input:        []byte("user details: Иванов Иван Иванович"),
+			masks:        Mask{Re: kDefaultIDRegExp, Groups: []int{0}, ReplaceWord: "***MASKED***"},
+			expected:     []byte("user details: ***MASKED***"),
+			comment:      "ID masked with replace word",
+			mustBeMasked: true,
+		},
+		{
 			name:         "2 card numbers and text",
 			input:        []byte("issued card number 3528-3889-3793-9946 and card number 4035-3005-3980-4083"),
 			expected:     []byte("issued card number ****-****-****-**** and card number ****-****-****-****"),
@@ -120,10 +136,13 @@ func TestMaskFunctions(t *testing.T) {
 		},
 	}
 
+	var plugin Plugin
+
 	for _, tCase := range suits {
 		t.Run(tCase.name, func(t *testing.T) {
 			buf := make([]byte, 0, 2048)
-			buf, masked := maskValue(tCase.input, buf, regexp.MustCompile(tCase.masks.Re), tCase.masks.Groups)
+			tCase.masks.Re_ = regexp.MustCompile(tCase.masks.Re)
+			buf, masked := plugin.maskValue(&tCase.masks, tCase.input, buf)
 			assert.Equal(t, string(tCase.expected), string(buf), tCase.comment)
 			assert.Equal(t, tCase.mustBeMasked, masked)
 		})
@@ -469,11 +488,16 @@ func createBenchInputString() []byte {
 }
 
 func BenchmarkMaskValue(b *testing.B) {
+	var plugin Plugin
 	input := createBenchInputString()
 	re := regexp.MustCompile(kDefaultCardRegExp)
 	grp := []int{0, 1, 2, 3}
+	mask := Mask{
+		Re_:    re,
+		Groups: grp,
+	}
 	buf := make([]byte, 0, 2048)
 	for i := 0; i < b.N; i++ {
-		buf, _ = maskValue(input, buf, re, grp)
+		buf, _ = plugin.maskValue(&mask, input, buf)
 	}
 }
