@@ -10,10 +10,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/test"
-	"github.com/stretchr/testify/assert"
 )
 
 func getInputInfo() *pipeline.InputPluginInfo {

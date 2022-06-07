@@ -3,15 +3,17 @@ package join
 import (
 	"fmt"
 	"strings"
-	"sync"
 	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"go.uber.org/atomic"
 
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/test"
-	"github.com/stretchr/testify/assert"
-	"go.uber.org/atomic"
 )
 
 const contentPanics = `# ===next===
@@ -149,6 +151,25 @@ example.com/sre/filed/pipeline.(*processor).process(0xc00052fb80, 0x7f89840e3178
 created by example.com/sre/filed/pipeline.(*processor).start
 	/Users/root/go/src/example.com/sre/filed/pipeline/processor.go:81 +0xe4
 Isn't panic
+
+# ===next===
+panic: interface conversion: *card.CheckUserDeleteResponse is not protoreflect.ProtoMessage: missing method ProtoReflect
+
+goroutine 1112 [running]:
+example.com/platform/somlib/pkg/mw/grpc/callopts.unaryClientInterceptor.func1({0x18bda78, 0xc002e47080}, {0x162a945, 0x1a}, {0x158e100, 0xc002e46e40}, {0x158d840, 0xc002e46e70}, 0x1, 0xc002e471a0, ...)
+    /builds/.cache/go/pkg/mod/example.com/platform/somlib@v1.12.4-alpha.3.0.20220525161738-c7c89a81036d/pkg/mw/grpc/callopts/interceptors.go:49 +0x205
+google.golang.org/grpc.getChainUnaryInvoker.func1({0x18bda78, 0xc002e47080}, {0x162a945, 0x1a}, {0x158e100, 0xc002e46e40}, {0x158d840, 0xc002e46e70}, 0xc0007d14c0, {0x0, ...})
+    /builds/.cache/go/pkg/mod/google.golang.org/grpc@v1.44.0/clientconn.go:360 +0x154
+example.com/platform/somlib/pkg/mw/grpc/circuitbreaker.(*RTCircuitBreakerGroup).UnaryClientInterceptor.func1.1({0x18bda78, 0xc002e47080})
+    /builds/.cache/go/pkg/mod/example.com/platform/somlib@v1.12.4-alpha.3.0.20220525161738-c7c89a81036d/pkg/mw/grpc/circuitbreaker/interceptors.go:23 +0x6b
+example.com/platform/circuit/v3.(*Circuit).run(0xc002e449c0, {0x18bda78, 0xc002e47080}, 0xc0007d1710)
+    /builds/.cache/go/pkg/mod/example.com/platform/circuit/v3@v3.1.2-0.20210115121924-4b7fb14c90d5/circuit.go:298 +0x2b7
+example.com/platform/circuit/v3.(*Circuit).Execute(0xc002e449c0, {0x18bda78, 0xc002e47080}, 0x162a945, 0x1a)
+    /builds/.cache/go/pkg/mod/example.com/platform/circuit/v3@v3.1.2-0.20210115121924-4b7fb14c90d5/circuit.go:235 +0x65
+example.com/platform/somlib/pkg/mw/grpc/circuitbreaker.(*RTCircuitBreakerGroup).UnaryClientInterceptor.func1({0x18bda78, 0xc002e47080}, {0x162a945, 0x1a}, {0x158e100, 0xc002e46e40}, {0x158d840, 0xc002e46e70}, 0xc0008bcf00, 0xc002e470b0, ...)
+    /builds/.cache/go/pkg/mod/example.com/platform/somlib@v1.12.4-alpha.3.0.20220525161738-c7c89a81036d/pkg/mw/grpc/circuitbreaker/interceptors.go:20 +0x18c
+google.golang.org/grpc.getChainUnaryInvoker.func1({0x18bda78, 0xc002e47080}, {0x162a945, 0x1a}, {0x158e100, 0xc002e46e40}, {0x158d840, 0xc002e46e70}, 0x7fd128bcbfff, {0x0, ...})
+    /builds/.cache/go/pkg/mod/google.golang.org/grpc@v1.44.0/clientconn.go:360 +0x154
 `
 
 const contentPostgres = `# ===next===
@@ -189,16 +210,16 @@ func TestSimpleJoin(t *testing.T) {
 		startPat    string
 		continuePat string
 		content     string
-		expEvents   int
+		expEvents   int32
 		iterations  int
 	}{
 		{
 			name:        "should_ok_for_panics",
 			startPat:    `/^(panic:)|(http: panic serving)/`,
-			continuePat: `/(^$)|(goroutine [0-9]+ \[)|(\([0-9]+x[0-9,a-f]+)|(\.go:[0-9]+ \+[0-9]x)|(\/.*\.go:[0-9]+)|(\(...\))|(main\.main\(\))|(created by .*\/.*\.)|(^\[signal)|(panic.+[0-9]x[0-9,a-f]+)/`,
+			continuePat: `/(^\s*$)|(goroutine [0-9]+ \[)|(\({?[0-9]+x[0-9,a-f]+)|(\.go:[0-9]+ \+[0-9]x)|(\/.*\.go:[0-9]+)|(\(...\))|(main\.main\(\))|(created by .*\/.*\.)|(^\[signal)|(panic.+[0-9]x[0-9,a-f]+)|(panic:)/`,
 			content:     contentPanics,
 			iterations:  100,
-			expEvents:   12 * 100,
+			expEvents:   13 * 100,
 		},
 		{
 			name:        "should_ok_for_postgres_logs",
@@ -245,22 +266,15 @@ func TestSimpleJoin(t *testing.T) {
 				"short_event_timeout",
 			)
 
-			wg := &sync.WaitGroup{}
-			wg.Add(tt.expEvents)
-
 			inEvents := atomic.Int32{}
-			var a, b int
 			input.SetInFn(func() {
-				a++
 				inEvents.Inc()
 			})
 
 			outEvents := atomic.Int32{}
 			lastID := atomic.Uint64{}
 			output.SetOutFn(func(e *pipeline.Event) {
-				b++
 				outEvents.Inc()
-				wg.Done()
 				id := lastID.Swap(e.SeqID)
 				if id != 0 && id >= e.SeqID {
 					panic("wrong id")
@@ -273,10 +287,23 @@ func TestSimpleJoin(t *testing.T) {
 				}
 			}
 
-			wg.Wait()
+			var (
+				i     = 0
+				iters = 100
+			)
+			for ; i < iters; i++ {
+				x := outEvents.Load()
+				if x < tt.expEvents {
+					time.Sleep(time.Millisecond * 100)
+					continue
+				}
+				break
+			}
+
 			p.Stop()
 
-			assert.Equal(t, int32(tt.expEvents), outEvents.Load(), "wrong out events count")
+			require.True(t, iters > i, "test timed out")
+			assert.Equal(t, tt.expEvents, outEvents.Load(), "wrong out events count")
 		})
 	}
 }

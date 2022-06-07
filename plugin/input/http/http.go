@@ -5,11 +5,14 @@ import (
 	"net/http"
 	"sync"
 
+	"go.uber.org/zap"
+
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/longpanic"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/stats"
+	"github.com/ozontech/file.d/tls"
 )
 
 /*{ introduction
@@ -88,6 +91,7 @@ type Plugin struct {
 	sourceIDs  []pipeline.SourceID
 	sourceSeq  pipeline.SourceID
 	mu         *sync.Mutex
+	logger     *zap.SugaredLogger
 }
 
 //! config-params
@@ -101,6 +105,16 @@ type Config struct {
 	//>
 	//> Which protocol to emulate.
 	EmulateMode string `json:"emulate_mode" default:"no" options:"no|elasticsearch"` //*
+	//> @3@4@5@6
+	//>
+	//> CA certificate in PEM encoding. This can be a path or the content of the certificate.
+	//> If both ca_cert and private_key are set, the server starts accepting connections in TLS mode.
+	CACert string `json:"ca_cert" default:""` //*
+	//> @3@4@5@6
+	//>
+	//> CA private key in PEM encoding. This can be a path or the content of the key.
+	//> If both ca_cert and private_key are set, the server starts accepting connections in TLS mode.
+	PrivateKey string `json:"private_key" default:""` //*
 }
 
 func init() {
@@ -117,6 +131,7 @@ func Factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginParams) {
 	p.config = config.(*Config)
 	p.params = params
+	p.logger = params.Logger
 	p.readBuffs = &sync.Pool{}
 	p.eventBuffs = &sync.Pool{}
 	p.mu = &sync.Mutex{}
@@ -149,7 +164,18 @@ func (p *Plugin) registerPluginMetrics() {
 }
 
 func (p *Plugin) listenHTTP() {
-	err := p.server.ListenAndServe()
+	var err error
+	if p.config.CACert != "" || p.config.PrivateKey != "" {
+		tlsBuilder := tls.NewConfigBuilder()
+		err = tlsBuilder.AppendX509KeyPair(p.config.CACert, p.config.PrivateKey)
+		if err == nil {
+			p.server.TLSConfig = tlsBuilder.Build()
+			err = p.server.ListenAndServeTLS("", "")
+		}
+	} else {
+		err = p.server.ListenAndServe()
+	}
+
 	if err != nil {
 		logger.Fatalf("input plugin http listening error address=%q: %s", p.config.Address, err.Error())
 	}
