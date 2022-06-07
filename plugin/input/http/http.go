@@ -1,7 +1,6 @@
 package http
 
 import (
-	"errors"
 	"io"
 	"net/http"
 	"sync"
@@ -80,13 +79,6 @@ curl "localhost:9200/_bulk" -H 'Content-Type: application/json' -d \
 const (
 	subsystemName    = "input_http"
 	httpErrorCounter = "http_errors"
-)
-
-var (
-	errPrivateKeyIsNotSet = errors.New("private key is set, but CACert is not")
-	errCACertIsNotSet     = errors.New("CACert is set, but private is not")
-
-	pemBegin = []byte("-----BEGIN")
 )
 
 type Plugin struct {

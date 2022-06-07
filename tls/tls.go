@@ -91,6 +91,7 @@ func (b ConfigBuilder) AppendCARoot(caCert string) error {
 
 	b.cfg.RootCAs = x509.NewCertPool()
 
+	// certContent can contain many certificates, we have to parse them all
 	for len(certContent) > 0 {
 		var block *pem.Block
 		block, certContent = pem.Decode(certContent)
@@ -113,7 +114,7 @@ func (b ConfigBuilder) AppendCARoot(caCert string) error {
 }
 
 // Build returns built tls config.
-func (b *ConfigBuilder) Build() *tls.Config {
+func (b ConfigBuilder) Build() *tls.Config {
 	return b.cfg
 }
 
