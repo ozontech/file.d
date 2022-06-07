@@ -2,16 +2,14 @@ package elasticsearch
 
 import (
 	"context"
-	"crypto/tls"
-	"crypto/x509"
 	"encoding/base64"
 	"fmt"
 	"math/rand"
 	"net/http"
-	"os"
 	"sync"
 	"time"
 
+	"github.com/ozontech/file.d/tls"
 	"github.com/valyala/fasthttp"
 	insaneJSON "github.com/vitkovskii/insane-json"
 	"go.uber.org/zap"
@@ -83,7 +81,7 @@ type Config struct {
 	APIKey string `json:"api_key"` //*
 
 	//> @3@4@5@6
-	//> Path to a certificate authorities file with PEM encoding.
+	//> Path or content of a PEM-encoded CA file.
 	CACert string `json:"ca_cert"` //*
 
 	//> @3@4@5@6
@@ -175,21 +173,15 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		ReadTimeout:  p.config.ConnectionTimeout_ * 2,
 		WriteTimeout: p.config.ConnectionTimeout_ * 2,
 	}
-	var (
-		err    error
-		caCert []byte
-	)
+
 	if p.config.CACert != "" {
-		caCert, err = os.ReadFile(p.config.CACert)
+		b := tls.NewConfigBuilder()
+		err := b.AppendCARoot(p.config.CACert)
 		if err != nil {
-			p.logger.Fatalf("can't read CACert file: %s", err.Error())
+			p.logger.Fatalf("can't append CA root: %s", err.Error())
 		}
 
-		certPool := x509.NewCertPool()
-		certPool.AppendCertsFromPEM(caCert)
-		p.client.TLSConfig = &tls.Config{
-			RootCAs: certPool,
-		}
+		p.client.TLSConfig = b.Build()
 	}
 
 	p.authHeader = p.getAuthHeader()

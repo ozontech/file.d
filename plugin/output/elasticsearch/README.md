@@ -28,7 +28,7 @@ Base64-encoded token for authorization; if set, overrides username/password.
 <br>
 
 **`ca_cert`** *`string`* 
-Path to a certificate authorities file with PEM encoding.
+Path or content of a PEM-encoded CA file.
 
 <br>
 
