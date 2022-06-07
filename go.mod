@@ -20,7 +20,7 @@ require (
 	github.com/rjeczalik/notify v0.9.3-0.20210809113154-3472d85e95cd
 	github.com/satori/go.uuid v1.2.0
 	github.com/stretchr/testify v1.7.0
-	github.com/valyala/fasthttp v1.34.0
+	github.com/valyala/fasthttp v1.37.0
 	github.com/vitkovskii/insane-json v0.1.3
 	go.uber.org/atomic v1.6.0
 	go.uber.org/automaxprocs v1.2.0
@@ -73,7 +73,7 @@ require (
 	github.com/jcmturner/gokrb5/v8 v8.4.2 // indirect
 	github.com/jcmturner/rpc/v2 v2.0.3 // indirect
 	github.com/json-iterator/go v1.1.9 // indirect
-	github.com/klauspost/compress v1.15.5 // indirect
+	github.com/klauspost/compress v1.15.0 // indirect
 	github.com/lann/builder v0.0.0-20180802200727-47ae307949d0 // indirect
 	github.com/lann/ps v0.0.0-20150810152359-62de8c46ede0 // indirect
 	github.com/lib/pq v1.10.4 // indirect
