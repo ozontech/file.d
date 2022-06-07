@@ -7,14 +7,13 @@ import (
 	"time"
 
 	"github.com/euank/go-kmsg-parser/kmsgparser"
-	insaneJSON "github.com/vitkovskii/insane-json"
-	"go.uber.org/zap"
-
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/longpanic"
 	"github.com/ozontech/file.d/metrics"
 	"github.com/ozontech/file.d/offset"
 	"github.com/ozontech/file.d/pipeline"
+	insaneJSON "github.com/vitkovskii/insane-json"
+	"go.uber.org/zap"
 )
 
 const (

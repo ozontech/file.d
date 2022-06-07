@@ -9,7 +9,6 @@ import (
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/longpanic"
 	"github.com/ozontech/file.d/metrics"
-
 	"go.uber.org/zap"
 )
 

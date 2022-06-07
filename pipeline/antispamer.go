@@ -4,10 +4,9 @@ import (
 	"sync"
 	"time"
 
-	"go.uber.org/atomic"
-
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/metrics"
+	"go.uber.org/atomic"
 )
 
 type antispamer struct {

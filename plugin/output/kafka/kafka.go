@@ -5,14 +5,12 @@ import (
 	"strings"
 	"time"
 
-	"go.uber.org/zap"
-
+	"github.com/Shopify/sarama"
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/metrics"
 	"github.com/ozontech/file.d/pipeline"
-
-	"github.com/Shopify/sarama"
+	"go.uber.org/zap"
 )
 
 /*{ introduction

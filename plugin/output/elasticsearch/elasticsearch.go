@@ -9,14 +9,12 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ozontech/file.d/cfg"
+	"github.com/ozontech/file.d/fd"
+	"github.com/ozontech/file.d/metrics"
+	"github.com/ozontech/file.d/pipeline"
 	insaneJSON "github.com/vitkovskii/insane-json"
 	"go.uber.org/zap"
-
-	"github.com/ozontech/file.d/cfg"
-	"github.com/ozontech/file.d/metrics"
-
-	"github.com/ozontech/file.d/fd"
-	"github.com/ozontech/file.d/pipeline"
 )
 
 /*{ introduction

@@ -15,13 +15,12 @@ import (
 	"time"
 
 	"github.com/minio/minio-go"
-	"go.uber.org/zap"
-
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/longpanic"
 	"github.com/ozontech/file.d/metrics"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/plugin/output/file"
+	"go.uber.org/zap"
 )
 
 /*{ introduction

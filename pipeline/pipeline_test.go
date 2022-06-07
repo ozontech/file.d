@@ -4,11 +4,10 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/stretchr/testify/require"
-
 	"github.com/ozontech/file.d/metrics"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/plugin/input/fake"
+	"github.com/stretchr/testify/require"
 )
 
 func getFakeInputInfo() *pipeline.InputPluginInfo {

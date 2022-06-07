@@ -10,13 +10,12 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/jackc/pgconn"
 	"github.com/jackc/pgproto3/v2"
-	"github.com/stretchr/testify/require"
-	insaneJSON "github.com/vitkovskii/insane-json"
-
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/metrics"
 	"github.com/ozontech/file.d/pipeline"
 	mock_pg "github.com/ozontech/file.d/plugin/output/postgres/mock"
+	"github.com/stretchr/testify/require"
+	insaneJSON "github.com/vitkovskii/insane-json"
 )
 
 func TestPrivateOut(t *testing.T) {

@@ -4,7 +4,6 @@ package metrics
 import (
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/version"
-
 	prom "github.com/prometheus/client_golang/prometheus"
 )
 

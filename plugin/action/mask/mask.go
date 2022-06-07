@@ -4,12 +4,11 @@ import (
 	"regexp"
 	"unicode/utf8"
 
-	insaneJSON "github.com/vitkovskii/insane-json"
-	"go.uber.org/zap"
-
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/metrics"
 	"github.com/ozontech/file.d/pipeline"
+	insaneJSON "github.com/vitkovskii/insane-json"
+	"go.uber.org/zap"
 )
 
 /*{ introduction
