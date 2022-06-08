@@ -12,7 +12,7 @@ import (
 	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
-	"github.com/ozontech/file.d/metrics"
+	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
 	insaneJSON "github.com/vitkovskii/insane-json"
 	"go.uber.org/zap"
@@ -39,7 +39,7 @@ const (
 	// required for PgBouncers that doesn't support prepared statements.
 	preferSimpleProtocol = pgx.QuerySimpleProtocol(true)
 
-	// metrics
+	// metric
 	discardedEventCounter  = "event_discarded"
 	duplicatedEventCounter = "event_duplicated"
 )
@@ -163,12 +163,12 @@ func Factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 }
 
 func (p *Plugin) registerPluginMetrics() {
-	metrics.RegisterCounter(&metrics.MetricDesc{
+	metric.RegisterCounter(&metric.MetricDesc{
 		Name:      discardedEventCounter,
 		Subsystem: subsystemName,
 		Help:      "Total pgsql discarded messages",
 	})
-	metrics.RegisterCounter(&metrics.MetricDesc{
+	metric.RegisterCounter(&metric.MetricDesc{
 		Name:      duplicatedEventCounter,
 		Subsystem: subsystemName,
 		Help:      "Total pgsql duplicated messages",
@@ -258,13 +258,13 @@ func (p *Plugin) out(_ *pipeline.WorkerData, batch *pipeline.Batch) {
 		fieldValues, uniqueID, err := p.processEvent(event, pgFields, uniqFields)
 		if err != nil {
 			if errors.Is(err, ErrEventDoesntHaveField) {
-				metrics.GetCounter(subsystemName, discardedEventCounter).Inc()
+				metric.GetCounter(subsystemName, discardedEventCounter).Inc()
 				if p.config.Strict {
 					p.logger.Fatal(err)
 				}
 				p.logger.Error(err)
 			} else if errors.Is(err, ErrEventFieldHasWrongType) {
-				metrics.GetCounter(subsystemName, discardedEventCounter).Inc()
+				metric.GetCounter(subsystemName, discardedEventCounter).Inc()
 				if p.config.Strict {
 					p.logger.Fatal(err)
 				}
@@ -278,7 +278,7 @@ func (p *Plugin) out(_ *pipeline.WorkerData, batch *pipeline.Batch) {
 
 		// passes here only if event valid.
 		if _, ok := uniqueEventsMap[uniqueID]; ok {
-			metrics.GetCounter(subsystemName, duplicatedEventCounter).Inc()
+			metric.GetCounter(subsystemName, duplicatedEventCounter).Inc()
 			p.logger.Infof("event duplicated. Fields: %v, values: %v", pgFields, fieldValues)
 		} else {
 			uniqueEventsMap[uniqueID] = struct{}{}

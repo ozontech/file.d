@@ -1,5 +1,5 @@
-// Package metrics contains utilities for creating and getting file.d metrics.
-package metrics
+// Package metric contains utilities for creating and getting file.d metric.
+package metric
 
 import (
 	"github.com/ozontech/file.d/logger"
@@ -45,7 +45,7 @@ var statsGlobal *stats
 
 func InitStats() {
 	if statsGlobal != nil {
-		logger.Error("attempt to initialize metrics more than once")
+		logger.Error("attempt to initialize metric more than once")
 		return
 	}
 
@@ -162,6 +162,6 @@ func getKey(subsystem, metricName string) key {
 
 func checkStatsInitialized() {
 	if statsGlobal == nil {
-		logger.Panicf("metrics package uninitialized")
+		logger.Panicf("metric package uninitialized")
 	}
 }

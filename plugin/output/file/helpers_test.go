@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ozontech/file.d/metrics"
+	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/plugin/input/fake"
 	"github.com/prometheus/client_golang/prometheus"
@@ -49,7 +49,7 @@ func checkDirFiles(t *testing.T, matches []string, totalSent int64, msg string) 
 }
 
 func newPipeline(t *testing.T, configOutput *Config) *pipeline.Pipeline {
-	metrics.InitStats()
+	metric.InitStats()
 	t.Helper()
 	settings := &pipeline.Settings{
 		Capacity:            4096,

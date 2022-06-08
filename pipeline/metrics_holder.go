@@ -23,7 +23,7 @@ type metricsHolder struct {
 	metricsGen         int // generation is used to drop unused metrics from counters.
 	metricsGenTime     time.Time
 	metricsGenInterval time.Duration
-	metrics            []*metric
+	metrics            []*metrics
 	registry           *prometheus.Registry
 }
 
@@ -34,7 +34,7 @@ type counter struct {
 	size         *prometheus.CounterVec
 }
 
-type metric struct {
+type metrics struct {
 	name   string
 	labels []string
 
@@ -55,13 +55,13 @@ func newMetricsHolder(pipelineName string, registry *prometheus.Registry, metric
 		pipelineName: pipelineName,
 		registry:     registry,
 
-		metrics:            make([]*metric, 0),
+		metrics:            make([]*metrics, 0),
 		metricsGenInterval: metricsGenInterval,
 	}
 }
 
 func (m *metricsHolder) AddAction(metricName string, metricLabels []string) {
-	m.metrics = append(m.metrics, &metric{
+	m.metrics = append(m.metrics, &metrics{
 		name:   metricName,
 		labels: metricLabels,
 		root: &mNode{

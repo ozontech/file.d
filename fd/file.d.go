@@ -13,7 +13,7 @@ import (
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/longpanic"
-	"github.com/ozontech/file.d/metrics"
+	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -56,15 +56,15 @@ func (f *FileD) Start() {
 }
 
 func (f *FileD) initMetrics() {
-	metrics.InitStats()
+	metric.InitStats()
 
-	metrics.RegisterCounter(&metrics.MetricDesc{
+	metric.RegisterCounter(&metric.MetricDesc{
 		Subsystem: subsystemLongPanicName,
 		Name:      panics,
 		Help:      "Count of panics in the LongPanic",
 	})
 	longpanic.SetOnPanicHandler(func(_ error) {
-		metrics.GetCounter(subsystemLongPanicName, panics).Inc()
+		metric.GetCounter(subsystemLongPanicName, panics).Inc()
 	})
 }
 

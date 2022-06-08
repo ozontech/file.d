@@ -15,7 +15,7 @@ import (
 	"github.com/ozontech/file.d/decoder"
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/longpanic"
-	"github.com/ozontech/file.d/metrics"
+	"github.com/ozontech/file.d/metric"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
@@ -52,7 +52,7 @@ type InputPluginController interface {
 	UseSpread()                           // don't use stream field and spread all events across all processors
 	DisableStreams()                      // don't use stream field
 	SuggestDecoder(t decoder.DecoderType) // set decoder if pipeline uses "auto" value for decoder
-	IncReadOps()                          // inc read ops for metrics
+	IncReadOps()                          // inc read ops for metric
 }
 
 type ActionPluginController interface {
@@ -178,22 +178,22 @@ func (p *Pipeline) subsystemName() string {
 }
 
 func (p *Pipeline) registerMetrics() {
-	metrics.RegisterCounter(&metrics.MetricDesc{
+	metric.RegisterCounter(&metric.MetricDesc{
 		Subsystem: p.subsystemName(),
 		Name:      inputEventsCountMetric,
 		Help:      "Count of events on pipeline input",
 	})
-	metrics.RegisterCounter(&metrics.MetricDesc{
+	metric.RegisterCounter(&metric.MetricDesc{
 		Subsystem: p.subsystemName(),
 		Name:      inputEventsSizeMetric,
 		Help:      "Size of events on pipeline input",
 	})
-	metrics.RegisterCounter(&metrics.MetricDesc{
+	metric.RegisterCounter(&metric.MetricDesc{
 		Subsystem: p.subsystemName(),
 		Name:      outputEventsCountMetric,
 		Help:      "Count of events on pipeline output",
 	})
-	metrics.RegisterCounter(&metrics.MetricDesc{
+	metric.RegisterCounter(&metric.MetricDesc{
 		Subsystem: p.subsystemName(),
 		Name:      outputEventsSizeMetric,
 		Help:      "Size of events on pipeline output",
@@ -570,11 +570,11 @@ func (p *Pipeline) incMetrics(inputEvents, inputSize, outputEvents, outputSize, 
 		deltaReads,
 	}
 
-	metrics.GetCounter(p.subsystemName(), inputEventsCountMetric).Add(myDeltas.deltaInputEvents)
-	metrics.GetCounter(p.subsystemName(), inputEventsSizeMetric).Add(myDeltas.deltaInputSize)
-	metrics.GetCounter(p.subsystemName(), outputEventsCountMetric).Add(myDeltas.deltaOutputEvents)
-	metrics.GetCounter(p.subsystemName(), outputEventsSizeMetric).Add(myDeltas.deltaOutputSize)
-	metrics.GetCounter(p.subsystemName(), readOpsEventsSizeMetric).Add(myDeltas.deltaReads)
+	metric.GetCounter(p.subsystemName(), inputEventsCountMetric).Add(myDeltas.deltaInputEvents)
+	metric.GetCounter(p.subsystemName(), inputEventsSizeMetric).Add(myDeltas.deltaInputSize)
+	metric.GetCounter(p.subsystemName(), outputEventsCountMetric).Add(myDeltas.deltaOutputEvents)
+	metric.GetCounter(p.subsystemName(), outputEventsSizeMetric).Add(myDeltas.deltaOutputSize)
+	metric.GetCounter(p.subsystemName(), readOpsEventsSizeMetric).Add(myDeltas.deltaReads)
 
 	return myDeltas
 }
@@ -668,7 +668,7 @@ func (p *Pipeline) serveActionInfo(info ActionPluginStaticInfo) func(http.Respon
 			return
 		}
 
-		var actionMetric *metric
+		var actionMetric *metrics
 		for _, m := range p.metricsHolder.metrics {
 			if m.name == info.MetricName {
 				actionMetric = m

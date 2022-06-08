@@ -11,7 +11,7 @@ import (
 
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
-	"github.com/ozontech/file.d/metrics"
+	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
 	insaneJSON "github.com/vitkovskii/insane-json"
 	"go.uber.org/zap"
@@ -167,13 +167,13 @@ func (p *Plugin) Out(event *pipeline.Event) {
 }
 
 func (p *Plugin) registerPluginMetrics() {
-	metrics.RegisterCounter(&metrics.MetricDesc{
+	metric.RegisterCounter(&metric.MetricDesc{
 		Name:      sendErrorCounter,
 		Subsystem: subsystemName,
 		Help:      "Total elasticsearch send errors",
 	})
 
-	metrics.RegisterCounter(&metrics.MetricDesc{
+	metric.RegisterCounter(&metric.MetricDesc{
 		Name:      indexingErrors,
 		Subsystem: subsystemName,
 		Help:      "Number of elasticsearch indexing errors",
@@ -202,7 +202,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 		endpoint := p.config.Endpoints[rand.Int()%len(p.config.Endpoints)]
 		resp, err := p.client.Post(endpoint, "application/x-ndjson", bytes.NewBuffer(data.outBuf))
 		if err != nil {
-			metrics.GetCounter(subsystemName, sendErrorCounter).Inc()
+			metric.GetCounter(subsystemName, sendErrorCounter).Inc()
 			p.logger.Errorf("can't send batch to %s, will try other endpoint: %s", endpoint, err.Error())
 			time.Sleep(time.Second)
 			continue
@@ -211,20 +211,20 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 		respContent, err := ioutil.ReadAll(resp.Body)
 		_ = resp.Body.Close()
 		if err != nil {
-			metrics.GetCounter(subsystemName, sendErrorCounter).Inc()
+			metric.GetCounter(subsystemName, sendErrorCounter).Inc()
 			p.logger.Errorf("can't read response from %s, will try other endpoint: %s", endpoint, err.Error())
 			continue
 		}
 
 		if resp.StatusCode < http.StatusOK || resp.StatusCode > http.StatusAccepted {
-			metrics.GetCounter(subsystemName, sendErrorCounter).Inc()
+			metric.GetCounter(subsystemName, sendErrorCounter).Inc()
 			p.logger.Errorf("response status from %s isn't OK, will try other endpoint: status=%d, body=%s", endpoint, resp.StatusCode, respContent)
 			continue
 		}
 
 		root, err := insaneJSON.DecodeBytes(respContent)
 		if err != nil {
-			metrics.GetCounter(subsystemName, sendErrorCounter).Inc()
+			metric.GetCounter(subsystemName, sendErrorCounter).Inc()
 			p.logger.Errorf("wrong response from %s, will try other endpoint: %s", endpoint, err.Error())
 			insaneJSON.Release(root)
 			continue
@@ -241,7 +241,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 			}
 
 			if errors != 0 {
-				metrics.GetCounter(subsystemName, indexingErrors).Add(float64(errors))
+				metric.GetCounter(subsystemName, indexingErrors).Add(float64(errors))
 			}
 
 			p.controller.Error("some events from batch isn't written")

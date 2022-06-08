@@ -6,7 +6,7 @@ import (
 
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/logger"
-	"github.com/ozontech/file.d/metrics"
+	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/test"
 	"github.com/stretchr/testify/assert"
@@ -14,7 +14,7 @@ import (
 )
 
 func TestAppendEvent(t *testing.T) {
-	metrics.InitStats()
+	metric.InitStats()
 	p := &Plugin{}
 	config := &Config{
 		Endpoints:   []string{"test"},

@@ -5,7 +5,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/ozontech/file.d/fd"
-	"github.com/ozontech/file.d/metrics"
+	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
 	insaneJSON "github.com/vitkovskii/insane-json"
 	"go.uber.org/zap"
@@ -166,7 +166,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 }
 
 func (p *Plugin) registerPluginMetrics() {
-	metrics.RegisterCounter(&metrics.MetricDesc{
+	metric.RegisterCounter(&metric.MetricDesc{
 		Name:      timesActivated,
 		Subsystem: *p.config.MetricSubsystemName,
 		Help:      "Number of times mask plugin found the provided pattern",
@@ -270,7 +270,7 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	}
 
 	if p.logMaskAppeared && maskApplied {
-		metrics.GetCounter(*p.config.MetricSubsystemName, timesActivated).Inc()
+		metric.GetCounter(*p.config.MetricSubsystemName, timesActivated).Inc()
 		p.logger.Infof("mask appeared to event, output string: %s", event.Root.EncodeToString())
 	}
 
