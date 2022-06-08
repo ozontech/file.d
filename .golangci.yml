@@ -21,6 +21,13 @@ linters-settings:
       - style
     disabled-checks:
       - whyNoLint
+      - commentFormatting # insane-doc syntax requires "//>" format
+  gosec:
+    excludes:
+      - G304 # Potential file inclusion via variable -- it's ok for this project
+  stylecheck:
+    checks:
+      - '-ST1021' # insane-doc syntax requires "//>" format
 
 linters:
   enable:
@@ -29,7 +36,6 @@ linters:
     - dogsled
     - dupl
     - errcheck
-    - gochecknoglobals
     - goconst
     - gocritic
     - goimports
@@ -57,6 +63,7 @@ linters:
     # - prealloc  (not worth it in scope of this project)
     # - maligned  (same as prealloc)
     # - funlen (gocyclo is enough)
+    # - gochecknoglobals (we know when it is ok to use globals)
     # - gochecknoinits (we know when it is ok to use inits)
 
 issues:
@@ -90,8 +97,22 @@ issues:
     - path: cmd\/file\.d\.go
       linters: [ gocognit, gocyclo ]
 
+    - linters: [ revive ]
+      text: "should have comment.+or be unexported"
+
+    # cfg package needs to parse variables with underscore
+    - linters: [ revive ]
+      text: "don't use underscores in Go names"
+
+    # cfg package needs to parse variables with underscore
+    - linters: [ revive ]
+      text: "struct field .+ should be .+"
+
+    # insane-doc syntax requires "//>" format
+    - linters: [ revive ]
+      text: "comment on exported (type|method) .+ should be of the form .+"
+
 run:
   build-tags:
     - e2e
     - fuzz
-    - linux
