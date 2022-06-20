@@ -5,9 +5,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/test"
 	"github.com/stretchr/testify/require"
 	insaneJSON "github.com/vitkovskii/insane-json"
+	"go.uber.org/atomic"
 )
 
 func TestPlugin_Do(t *testing.T) {
@@ -127,4 +130,33 @@ func TestPlugin_Do(t *testing.T) {
 			require.Equal(t, tc.ExpRoot, event.Root.EncodeToString())
 		})
 	}
+}
+
+func TestE2E_Plugin(t *testing.T) {
+	config := &Config{Format: "timestamp", Field: "timestamp"}
+
+	err := cfg.Parse(config, nil)
+	require.NoError(t, err)
+
+	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, config, pipeline.MatchModeAnd, nil, false))
+
+	outEvents := make([]*pipeline.Event, 0)
+	counter := atomic.Int32{}
+	output.SetOutFn(func(e *pipeline.Event) {
+		outEvents = append(outEvents, e)
+		counter.Dec()
+	})
+
+	counter.Add(1)
+	input.In(0, "test.log", 0, []byte(`{"message":123}`))
+
+	for counter.Load() != 0 {
+		time.Sleep(time.Millisecond * 10)
+	}
+	p.Stop()
+
+	require.Equal(t, 1, len(outEvents), "wrong out events count")
+	timestamp := outEvents[0].Root.Dig("timestamp")
+	require.NotNil(t, timestamp)
+	require.NotEqual(t, "", timestamp.EncodeToString(), "wrong out event")
 }

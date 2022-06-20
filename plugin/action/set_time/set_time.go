@@ -51,10 +51,10 @@ func factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 func (p *Plugin) Start(config pipeline.AnyConfig, _ *pipeline.ActionPluginParams) {
 	p.config = config.(*Config)
 
-	format, err := pipeline.ParseFormatName(p.config.Format_)
+	format, err := pipeline.ParseFormatName(p.config.Format)
 	if err != nil {
 		// to support custom formats
-		format = p.config.Format_
+		format = p.config.Format
 	}
 
 	p.config.Format_ = format
@@ -73,7 +73,7 @@ func (p *Plugin) do(event *pipeline.Event, t time.Time) pipeline.ActionResult {
 		return pipeline.ActionPass
 	}
 	if dateNode == nil {
-		dateNode = event.Root.AddFieldNoAlloc(event.Root, p.config.Field).MutateToObject()
+		dateNode = event.Root.AddFieldNoAlloc(event.Root, p.config.Field)
 	}
 
 	switch p.config.Format_ {
