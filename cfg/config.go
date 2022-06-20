@@ -262,7 +262,7 @@ func Parse(ptr interface{}, values map[string]int) error {
 // {
 // 	"T": 10,
 // 	"Child": { // has `child:true` in a tag
-// 		"T": null
+// 		"T": null // null or ptr
 // 	}
 // }
 // this function will set `config.Child.T = config.T`
@@ -283,7 +283,9 @@ func ParseChild(parent reflect.Value, v reflect.Value, values map[string]int) er
 			}
 		}
 
-		err := Parse(vIndirect.Addr().Interface(), values)
+		addr := vIndirect.Addr()
+		inter := addr.Interface()
+		err := Parse(inter, values)
 		if err != nil {
 			return err
 		}

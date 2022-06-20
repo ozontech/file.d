@@ -1,49 +1,35 @@
 package file
 
-// pair represents pair of given uints.
+// pair represents pair of given ints
 type pair struct {
-	least   float64
-	largest float64
+	min, max int64
 }
 
-// NewPair creates pair to timestamps.
-func NewPair(first, last float64) *pair {
-	return &pair{
-		least:   first,
-		largest: last,
-	}
+// NewPair creates float pair
+func NewPair() *pair {
+	return &pair{}
 }
 
-// UpdatePair compares ts with first and last members, trying to replace them.
-// It's not concurrent save.
-func (p *pair) UpdatePair(candidates ...float64) {
-	currLeast := p.least
-	currLargest := p.largest
-
+// UpdatePair compares and replaces min and max with candidates
+func (p *pair) UpdatePair(candidates ...int64) {
 	for _, candidate := range candidates {
-		if currLeast == 0 || candidate < currLeast {
-			currLeast = candidate
+		if p.min == 0 || candidate < p.min {
+			p.min = candidate
 		}
-		if candidate > currLargest {
-			currLargest = candidate
+		if candidate > p.max {
+			p.max = candidate
 		}
-	}
-
-	if p.least == 0 || currLeast < p.least {
-		p.least = currLeast
-	}
-	if currLargest > p.largest {
-		p.largest = currLargest
 	}
 }
 
-// Reset returns pair values and resets.
-func (p *pair) Reset() (float64, float64) {
-	least, largest := p.least, p.largest
-	p.least, p.largest = 0, 0
-	return least, largest
+// Reset returns min, max and resets
+func (p *pair) Reset() (min int64, max int64) {
+	min, max = p.min, p.max
+	p.min, p.max = 0, 0
+	return min, max
 }
 
-func (p *pair) Get() (float64, float64) {
-	return p.least, p.largest
+// Get returns current pair values
+func (p *pair) Get() (min int64, max int64) {
+	return p.min, p.max
 }

@@ -18,9 +18,10 @@ var (
 
 type objStoreFactory func(cfg *Config) (ObjectStoreClient, map[string]ObjectStoreClient, error)
 
+// minioClientsFactory returns factory for s3 clients
 func (p *Plugin) minioClientsFactory(cfg *Config) (ObjectStoreClient, map[string]ObjectStoreClient, error) {
 	minioClients := make(map[string]ObjectStoreClient)
-	// initialize minio clients object for main bucket.
+	// initialize minio clients object for main bucket
 	defaultClient, err := minio.New(cfg.Endpoint, cfg.AccessKey, cfg.SecretKey, cfg.Secure)
 	if err != nil {
 		return nil, nil, err
@@ -38,15 +39,16 @@ func (p *Plugin) minioClientsFactory(cfg *Config) (ObjectStoreClient, map[string
 	return defaultClient, minioClients, nil
 }
 
+// getStatucDirs returns dir of statis buckets
 func (p *Plugin) getStaticDirs(outPlugCount int) (map[string]string, error) {
-	// dir for all bucket files.
+	// dir for all bucket files
 	dir, _ := filepath.Split(p.config.FileConfig.TargetFile)
 
 	targetDirs := make(map[string]string, outPlugCount)
 	targetDirs[p.config.DefaultBucket] = dir
-	// multi_buckets from config are sub dirs on in Config.FileConfig.TargetFile dir.
+	// multi_buckets from config are sub dirs on in Config.FileConfig.TargetFile dir
 	for _, singleBucket := range p.config.MultiBuckets {
-		// todo bucket names can't intersect, add ability to have equal bucket names in different s3 servers.
+		// todo bucket names can't intersect, add ability to have equal bucket names in different s3 servers
 		if _, ok := targetDirs[singleBucket.Bucket]; ok {
 			return nil, fmt.Errorf("bucket name %s has duplicated", singleBucket.Bucket)
 		}
@@ -55,6 +57,7 @@ func (p *Plugin) getStaticDirs(outPlugCount int) (map[string]string, error) {
 	return targetDirs, nil
 }
 
+// getFileNames return file name for each bucket
 func (p *Plugin) getFileNames(outPlugCount int) map[string]string {
 	fileNames := make(map[string]string, outPlugCount)
 
@@ -78,12 +81,12 @@ func (p *Plugin) createPlugsFromDynamicBucketArtifacts(targetDirs map[string]str
 		return
 	}
 	for _, f := range dynamicDir {
-		// dir name == bucket. Were interested only in dirs.
+		// dir name == bucket. Were interested only in dirs
 		if !f.IsDir() {
 			continue
 		}
 
-		// If bucket was dynamic and now declared as static, we just ignore it.
+		// if bucket was dynamic and now declared as static, we just ignore it
 		if p.config.IsMultiBucketExists(f.Name()) {
 			continue
 		}
@@ -95,6 +98,7 @@ func (p *Plugin) createPlugsFromDynamicBucketArtifacts(targetDirs map[string]str
 	}
 }
 
+// createOutPlugin creates and returns file plugin for gives bucket
 func (p *Plugin) createOutPlugin(bucketName string) (*file.Plugin, error) {
 	exists, err := p.clients[bucketName].BucketExists(bucketName)
 	if err != nil {
@@ -107,10 +111,12 @@ func (p *Plugin) createOutPlugin(bucketName string) (*file.Plugin, error) {
 	anyPlugin, _ := file.Factory()
 	outPlugin := anyPlugin.(*file.Plugin)
 	outPlugin.SealUpCallback = p.addFileJobWithBucket(bucketName)
+	outPlugin.FileMetaCallback = p.genObjInfo(bucketName)
 
 	return outPlugin, nil
 }
 
+// startPlugins create and runs all underlying file plugins
 func (p *Plugin) startPlugins(Params *pipeline.OutputPluginParams, outPlugCount int, targetDirs, fileNames map[string]string) error {
 	outPlugins := make(map[string]file.Plugable, outPlugCount)
 	outPlugin, err := p.createOutPlugin(p.config.DefaultBucket)
@@ -120,7 +126,7 @@ func (p *Plugin) startPlugins(Params *pipeline.OutputPluginParams, outPlugCount 
 	outPlugins[p.config.DefaultBucket] = outPlugin
 	p.logger.Infof("bucket %s exists", p.config.DefaultBucket)
 
-	// If multi_buckets described on file.d config, check each of them as well.
+	// if multi_buckets described on file.d config, check each of them as well
 	for _, singleBucket := range p.config.MultiBuckets {
 		outPlugin, err := p.createOutPlugin(singleBucket.Bucket)
 		if err != nil {
@@ -144,8 +150,8 @@ func (p *Plugin) startPlugins(Params *pipeline.OutputPluginParams, outPlugCount 
 				Params: Params,
 			}
 		} else {
-			// For multi_buckets copy main config and replace file path with bucket sub dir path.
-			// Example /var/log/file.d.log => /var/log/static_bucket/bucketName/bucketName.log
+			// for multi_buckets copy main config and replace file path with bucket sub dir path
+			// example /var/log/file.d.log => /var/log/static_bucket/bucketName/bucketName.log
 			localBucketConfig := p.config.FileConfig
 			localBucketConfig.TargetFile = fmt.Sprintf("%s%s%s", targetDirs[bucketName], fileNames[bucketName], p.fileExtension)
 			starterData = pipeline.PluginsStarterData{
