@@ -27,7 +27,7 @@ func TestPlugin_Do(t *testing.T) {
 		{
 			Name: "unix",
 			Config: &Config{
-				Field_:  []string{"time"},
+				Field:   "time",
 				Format_: "timestamp",
 			},
 			Root: `{}`,
@@ -36,9 +36,20 @@ func TestPlugin_Do(t *testing.T) {
 			ExpRoot:   fmt.Sprintf(`{"time":%d}`, now.Unix()),
 		},
 		{
+			Name: "unix",
+			Config: &Config{
+				Field:   "time",
+				Format_: "timestampnano",
+			},
+			Root: `{}`,
+
+			ExpResult: pipeline.ActionPass,
+			ExpRoot:   fmt.Sprintf(`{"time":%d}`, now.UnixNano()),
+		},
+		{
 			Name: "custom format",
 			Config: &Config{
-				Field_:  []string{"my-time"},
+				Field:   "my-time",
 				Format_: "2006-01-02",
 			},
 			Root: `{}`,
@@ -47,9 +58,9 @@ func TestPlugin_Do(t *testing.T) {
 			ExpRoot:   fmt.Sprintf(`{"my-time":"%s"}`, now.Format("2006-01-02")),
 		},
 		{
-			Name: "known format",
+			Name: "rfc3339",
 			Config: &Config{
-				Field_:  []string{"myTime"},
+				Field:   "myTime",
 				Format_: "rfc3339",
 			},
 			Root: `{}`,
@@ -58,8 +69,9 @@ func TestPlugin_Do(t *testing.T) {
 			ExpRoot:   fmt.Sprintf(`{"myTime":"%s"}`, now.Format(time.RFC3339)),
 		},
 		{
-			Name: "override",
+			Name: "override false",
 			Config: &Config{
+				Field:    "time",
 				Format_:  "test",
 				Override: false,
 			},
@@ -69,16 +81,28 @@ func TestPlugin_Do(t *testing.T) {
 			ExpRoot:   `{"time":123}`,
 		},
 		{
-			Name: "deep field",
+			Name: "override true",
+			Config: &Config{
+				Field:    "time",
+				Format_:  time.RFC3339,
+				Override: true,
+			},
+			Root: `{"time":123}`,
+
+			ExpResult: pipeline.ActionPass,
+			ExpRoot:   fmt.Sprintf(`{"time":"%s"}`, now.Format(time.RFC3339)),
+		},
+		{
+			Name: "dots field",
 			Config: &Config{
 				Format_:  "timestampmilli",
-				Field_:   []string{"a", "b", "c"},
+				Field:    "a.b.c",
 				Override: true,
 			},
 			Root: `{"a":{"b":{"c":123}}}`,
 
 			ExpResult: pipeline.ActionPass,
-			ExpRoot:   fmt.Sprintf(`{"a":{"b":{"c":%d}}}`, now.UnixMilli()),
+			ExpRoot:   fmt.Sprintf(`{"a":{"b":{"c":123}},"a.b.c":%d}`, now.UnixMilli()),
 		},
 	}
 

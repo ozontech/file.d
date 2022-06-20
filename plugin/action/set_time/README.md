@@ -3,7 +3,7 @@
 It adds time field to the event.
 
 ### Config params
-**`field`** *`cfg.FieldSelector`* *`default=time`* 
+**`field`** *`string`* *`default=time`* *`required`* 
 
 The event field to put the time.
 
@@ -12,6 +12,12 @@ The event field to put the time.
 **`format`** *`string`* *`default=rfc3339nano`* *`required`* 
 
 Date format to parse a field. This could be one of
+
+<br>
+
+**`override`** *`bool`* *`default=true`* 
+
+Override field if exists.
 
 <br>
 

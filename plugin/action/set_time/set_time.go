@@ -3,10 +3,8 @@ package set_time
 import (
 	"time"
 
-	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/pipeline"
-	insaneJSON "github.com/vitkovskii/insane-json"
 )
 
 /*{ introduction
@@ -22,8 +20,7 @@ type Config struct {
 	//> @3@4@5@6
 	//>
 	//> The event field to put the time.
-	Field  cfg.FieldSelector `json:"field" parse:"selector" required:"false" default:"time"` //*
-	Field_ []string
+	Field string `json:"field" required:"true" default:"time"` //*
 
 	//> @3@4@5@6
 	//>
@@ -37,7 +34,7 @@ type Config struct {
 	//> @3@4@5@6
 	//>
 	//> Override field if exists.
-	Override bool `json:"override" default:"true"`
+	Override bool `json:"override" default:"true"` //*
 }
 
 func init() {
@@ -71,12 +68,12 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 }
 
 func (p *Plugin) do(event *pipeline.Event, t time.Time) pipeline.ActionResult {
-	dateNode := event.Root.Dig(p.config.Field_...)
+	dateNode := event.Root.Dig(p.config.Field)
 	if dateNode != nil && !p.config.Override {
 		return pipeline.ActionPass
 	}
 	if dateNode == nil {
-		dateNode = createNestedField(event.Root, p.config.Field_)
+		dateNode = event.Root.AddFieldNoAlloc(event.Root, p.config.Field).MutateToObject()
 	}
 
 	switch p.config.Format_ {
@@ -93,12 +90,4 @@ func (p *Plugin) do(event *pipeline.Event, t time.Time) pipeline.ActionResult {
 	}
 
 	return pipeline.ActionPass
-}
-
-func createNestedField(root *insaneJSON.Root, path []string) *insaneJSON.Node {
-	curr := root.Node
-	for _, p := range path {
-		curr = curr.AddFieldNoAlloc(root, p)
-	}
-	return curr
 }
