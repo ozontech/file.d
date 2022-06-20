@@ -6,6 +6,7 @@ import (
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/pipeline"
+	insaneJSON "github.com/vitkovskii/insane-json"
 )
 
 /*{ introduction
@@ -55,6 +56,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, _ *pipeline.ActionPluginParams
 
 	format, err := pipeline.ParseFormatName(p.config.Format_)
 	if err != nil {
+		// to support custom formats
 		format = p.config.Format_
 	}
 
@@ -74,7 +76,7 @@ func (p *Plugin) do(event *pipeline.Event, t time.Time) pipeline.ActionResult {
 		return pipeline.ActionPass
 	}
 	if dateNode == nil {
-		dateNode = event.Root.AddFieldNoAlloc(event.Root, p.config.Field_[0])
+		dateNode = createNestedField(event.Root, p.config.Field_)
 	}
 
 	switch p.config.Format_ {
@@ -91,4 +93,12 @@ func (p *Plugin) do(event *pipeline.Event, t time.Time) pipeline.ActionResult {
 	}
 
 	return pipeline.ActionPass
+}
+
+func createNestedField(root *insaneJSON.Root, path []string) *insaneJSON.Node {
+	curr := root.Node
+	for _, p := range path {
+		curr = curr.AddFieldNoAlloc(root, p)
+	}
+	return curr
 }

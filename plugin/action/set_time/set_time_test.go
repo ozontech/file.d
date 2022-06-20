@@ -60,12 +60,25 @@ func TestPlugin_Do(t *testing.T) {
 		{
 			Name: "override",
 			Config: &Config{
+				Format_:  "test",
 				Override: false,
 			},
 			Root: `{"time":123}`,
 
 			ExpResult: pipeline.ActionPass,
 			ExpRoot:   `{"time":123}`,
+		},
+		{
+			Name: "deep field",
+			Config: &Config{
+				Format_:  "timestampmilli",
+				Field_:   []string{"a", "b", "c"},
+				Override: true,
+			},
+			Root: `{"a":{"b":{"c":123}}}`,
+
+			ExpResult: pipeline.ActionPass,
+			ExpRoot:   fmt.Sprintf(`{"a":{"b":{"c":%d}}}`, now.UnixMilli()),
 		},
 	}
 
