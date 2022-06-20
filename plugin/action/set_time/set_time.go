@@ -74,7 +74,7 @@ func (p *Plugin) do(event *pipeline.Event, t time.Time) pipeline.ActionResult {
 		return pipeline.ActionPass
 	}
 	if dateNode == nil {
-		dateNode = event.Root.AddField(p.config.Field_[0])
+		dateNode = event.Root.AddFieldNoAlloc(event.Root, p.config.Field_[0])
 	}
 
 	switch p.config.Format_ {
