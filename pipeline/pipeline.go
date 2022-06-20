@@ -411,8 +411,7 @@ func (p *Pipeline) Error(err string) {
 }
 
 func (p *Pipeline) finalize(event *Event, notifyInput bool, backEvent bool) {
-	// AlienKind exists out of pull and must be immideamtely returned.
-	if event.IsTimeoutKind() || event.IsAlienKind() {
+	if event.IsTimeoutKind() {
 		return
 	}
 

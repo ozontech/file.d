@@ -1,6 +1,7 @@
 package s3
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -11,14 +12,15 @@ import (
 	"path/filepath"
 	"sort"
 	"strconv"
+	"sync"
 	"time"
 
+	"github.com/minio/minio-go"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/longpanic"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/plugin/output/file"
 	"github.com/ozontech/file.d/stats"
-	insaneJSON "github.com/vitkovskii/insane-json"
 	"go.uber.org/zap"
 )
 
@@ -122,6 +124,99 @@ var (
 	r = rand.New(rand.NewSource(time.Now().UnixNano()))
 )
 
+type ObjectStoreClient interface {
+	MakeBucket(bucketName string, location string) (err error)
+	BucketExists(bucketName string) (bool, error)
+	FPutObject(bucketName, objectName, filePath string, opts minio.PutObjectOptions) (n int64, err error)
+}
+
+type compressor interface {
+	compress(archiveName, fileName string)
+	getObjectOptions() minio.PutObjectOptions
+	getExtension() string
+	getName(fileName string) string
+}
+
+type fileDTO struct {
+	fileName,
+	bucketName,
+	objectName string
+}
+
+type singleBucketConfig struct {
+	// s3 section
+	Endpoint       string      `json:"endpoint" required:"true"`
+	AccessKey      string      `json:"access_key" required:"true"`
+	SecretKey      string      `json:"secret_key" required:"true"`
+	Bucket         string      `json:"bucket" required:"true"`
+	Secure         bool        `json:"secure" default:"false"`
+	FilePluginInfo file.Config `json:"file_plugin" required:"true"`
+}
+
+type MultiBuckets []singleBucketConfig
+
+type Plugin struct {
+	controller    pipeline.OutputPluginController
+	logger        *zap.SugaredLogger
+	config        *Config
+	params        *pipeline.OutputPluginParams
+	fileExtension string
+
+	// defaultClient separated from others to avoid locks with dynamic buckets.
+	defaultClient ObjectStoreClient
+	clients       map[string]ObjectStoreClient
+	limiter       *ObjectStoreClientLimiter
+
+	outPlugins            *file.Plugins
+	dynamicPlugCreationMu sync.Mutex
+
+	compressCh chan fileDTO
+	uploadCh   chan fileDTO
+	compressor compressor
+}
+
+//! config-params
+//^ config-params
+type Config struct {
+	//> @3@4@5@6
+	//> Under the hood this plugin uses /plugin/output/file/ to collect logs
+	FileConfig file.Config `json:"file_config" child:"true"` //*
+
+	//> @3@4@5@6
+	//> Compression type
+	CompressionType string `json:"compression_type" default:"zip" options:"zip"` //*
+
+	// s3 section
+	//> @3@4@5@6
+	//> Endpoint address of default bucket.
+	Endpoint string `json:"endpoint" required:"true"` //*
+	//> @3@4@5@6
+	//> s3 access key.
+	AccessKey string `json:"access_key" required:"true"` //*
+	//> @3@4@5@6
+	//> s3 secret key.
+	SecretKey string `json:"secret_key" required:"true"` //*
+	//> @3@4@5@6
+	//>  s3 default bucket.
+	DefaultBucket string `json:"bucket" required:"true"` //*
+	//> @3@4@5@6
+	//> MultiBuckets is additional buckets, which can also receive event.
+	//> Event must contain `bucket_name` field which value is s3 bucket name.
+	//> Events without `bucket_name` sends to DefaultBucket.
+	MultiBuckets `json:"multi_buckets" required:"false"` //*
+	//> @3@4@5@6
+	//> s3 connection secure option.
+	Secure bool `json:"secure" default:"false"` //*
+	//> @3@4@5@6
+	//> BucketEventField field change destination bucket of event to fields value.
+	//> Fallback to DefaultBucket if BucketEventField bucket doesn't exist.
+	BucketEventField string `json:"bucket_field_event" default:""` //*
+	//> @3@4@5@6
+	//> DynamicBucketsLimit regulates how many buckets can be created dynamically.
+	//> Prevents problems when some random strings in BucketEventField where
+	DynamicBucketsLimit int `json:"dynamic_buckets_limit" default:"32"` //*
+}
+
 func init() {
 	fd.DefaultPluginRegistry.RegisterOutput(&pipeline.PluginStaticInfo{
 		Type:    outPluginType,
@@ -135,12 +230,7 @@ func Factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 
 // Start initializes and runs plugin. This function calls by pipeline and have hardcoded dependencies.
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginParams) {
-	committerFabric, err := NewMetaSenderFabric(config.(*Config), params)
-	if err != nil {
-		params.Logger.Fatal(err)
-	}
-
-	p.StartInner(config, params, p.minioClientsFactory, committerFabric)
+	p.StartInner(config, params, p.minioClientsFactory)
 }
 
 func (p *Plugin) registerPluginMetrics() {
@@ -152,7 +242,7 @@ func (p *Plugin) registerPluginMetrics() {
 }
 
 // StartInner initializes and runs plugin. Unlike `Start` arguments passed by aggregation which allows mocks testing.
-func (p *Plugin) StartInner(config pipeline.AnyConfig, params *pipeline.OutputPluginParams, objectStoreFactory objStoreFactory, metasenderFabric MetaSenderFabric) {
+func (p *Plugin) StartInner(config pipeline.AnyConfig, params *pipeline.OutputPluginParams, objectStoreFactory objStoreFactory) {
 	p.registerPluginMetrics()
 
 	p.controller = params.Controller
@@ -193,13 +283,6 @@ func (p *Plugin) StartInner(config pipeline.AnyConfig, params *pipeline.OutputPl
 	p.uploadCh = make(chan fileDTO, p.config.FileConfig.WorkersCount_*4)
 	p.compressCh = make(chan fileDTO, p.config.FileConfig.WorkersCount_)
 
-	// init and start metasender
-	if metasenderFabric != nil {
-		starter := metasenderFabric.MetaSenderStarterFunc()
-		p.metaSender = starter()
-		p.inputController = p.controller.(pipeline.InputPluginController)
-	}
-
 	for i := 0; i < p.config.FileConfig.WorkersCount_; i++ {
 		longpanic.Go(p.uploadWork)
 		longpanic.Go(p.compressWork)
@@ -215,11 +298,12 @@ func (p *Plugin) StartInner(config pipeline.AnyConfig, params *pipeline.OutputPl
 	p.uploadExistingFiles(targetDirs, dynamicDirs, fileNames)
 }
 
+// Stop ends plugin job.
 func (p *Plugin) Stop() {
 	p.outPlugins.Stop()
-	p.metaSender.Stop()
 }
 
+// Out send event from file plugins.
 func (p *Plugin) Out(event *pipeline.Event) {
 	p.outPlugins.Out(event, pipeline.PluginSelector{
 		CondType:  pipeline.ByNameSelector,
@@ -238,7 +322,6 @@ func (c *Config) IsMultiBucketExists(bucketName string) bool {
 			return true
 		}
 	}
-
 	return false
 }
 
@@ -336,6 +419,9 @@ func (p *Plugin) tryRunNewPlugin(bucketName string) (isCreated bool) {
 	anyPlugin, _ := file.Factory()
 	outPlugin := anyPlugin.(*file.Plugin)
 	outPlugin.SealUpCallback = p.addFileJobWithBucket(bucketName)
+	if p.config.FileConfig.MetaCfg.StoreMeta {
+		outPlugin.FileMetaCallback = p.genObjInfo(bucketName)
+	}
 
 	localBucketConfig := p.config.FileConfig
 	localBucketConfig.TargetFile = fmt.Sprintf("%s%s%s", bucketDir, bucketName, p.fileExtension)
@@ -367,8 +453,12 @@ func (p *Plugin) uploadExistingFiles(targetDirs, dynamicDirs, fileNames map[stri
 		sort.Slice(compressedFiles, p.getSortFunc(compressedFiles))
 		// upload archive
 		for _, z := range compressedFiles {
-			p.logger.Infof("uploaded file: %s, bucket: %s", z, bucketName)
-			p.uploadCh <- fileDTO{fileName: z, bucketName: bucketName}
+			objName, ok := p.restoreObjectName(z)
+			if !ok {
+				objName = p.generateObjectName(z)
+			}
+
+			p.uploadCh <- fileDTO{fileName: z, bucketName: bucketName, objectName: objName}
 		}
 		// compress all files that we have in the dir
 		p.compressFilesInDir(bucketName, targetDirs, fileNames)
@@ -386,7 +476,11 @@ func (p *Plugin) compressFilesInDir(bucketName string, targetDirs, fileNames map
 	// sort files by creation time
 	sort.Slice(files, p.getSortFunc(files))
 	for _, f := range files {
-		p.compressCh <- fileDTO{fileName: f, bucketName: bucketName}
+		objName, ok := p.restoreObjectName(f + p.compressor.getExtension())
+		if !ok {
+			objName = p.generateObjectName(f)
+		}
+		p.compressCh <- fileDTO{fileName: f, bucketName: bucketName, objectName: objName}
 	}
 }
 
@@ -405,27 +499,23 @@ func (p *Plugin) getSortFunc(files []string) func(i, j int) bool {
 	}
 }
 
-func (p *Plugin) addFileJobWithBucket(bucketName string) func(filename string) {
-	return func(filename string) {
-		p.compressCh <- fileDTO{fileName: filename, bucketName: bucketName}
+// addFileJobWithBucket receives sealed log files
+func (p *Plugin) addFileJobWithBucket(bucketName string) func(filename, objectName string) {
+	return func(filename, objectName string) {
+		if objectName == "" {
+			objectName = p.generateObjectName(filename)
+		}
+		p.compressCh <- fileDTO{fileName: filename, objectName: objectName, bucketName: bucketName}
 	}
 }
 
-func (p *Plugin) sendMetadata(meta metadataDTO, constantPart string) error {
-	ev := &pipeline.Event{}
-	ev.SetAlienKind()
-	ev.Root = &insaneJSON.Root{}
-	err := ev.Root.DecodeString(fmt.Sprintf("{%s}", constantPart))
-	if err != nil {
-		return err
-	}
-	ev.Root.AddFieldNoAlloc(ev.Root, p.config.MetadataSenderCfg.FirstTimestampFieldForTrack).MutateToUint64(meta.leastTimestamp)
-	ev.Root.AddFieldNoAlloc(ev.Root, p.config.MetadataSenderCfg.LastTimestampFieldForTrack).MutateToUint64(meta.largestTimestamp)
-	ev.Root.AddFieldNoAlloc(ev.Root, p.config.MetadataSenderCfg.BucketNameFieldForTrack).MutateToString(meta.bucketName)
-	ev.Root.AddFieldNoAlloc(ev.Root, p.config.MetadataSenderCfg.S3UrlNameFieldForTrack).MutateToString(meta.s3Url)
+// genObjInfo returns new s3 object name, path and compressor extention
+func (p *Plugin) genObjInfo(bucket string) func(name string) (objectPath, ext string) {
+	return func(name string) (objectPath, ext string) {
+		objectName := p.generateObjectName(name + p.compressor.getExtension())
 
-	p.metaSender.Out(ev)
-	return nil
+		return filepath.Join(p.config.Endpoint, bucket, objectName), p.compressor.getExtension()
+	}
 }
 
 func (p *Plugin) uploadWork() {
@@ -435,22 +525,6 @@ func (p *Plugin) uploadWork() {
 			err := p.uploadToS3(compressed)
 			if err == nil {
 				p.logger.Infof("successfully uploaded object: %v", compressed)
-
-				// send metadata if required.
-				if p.config.MetadataSenderCfg != nil {
-					if err = p.sendMetadata(
-						metadataDTO{
-							bucketName: compressed.bucketName,
-							s3Url:      compressed.fileName,
-						},
-						p.config.MetadataSenderCfg.ConstantMessagePart,
-					); err != nil {
-						p.logger.Fatalf("can't send metadata: %s", err.Error())
-					}
-
-					p.logger.Infof("metadata successfully sent")
-				}
-
 				// delete archive after uploading
 				err = os.Remove(compressed.fileName)
 				if err != nil {
@@ -477,7 +551,7 @@ func (p *Plugin) compressWork() {
 			p.logger.Panicf("could not delete file: %s, error: %s", dto, err.Error())
 		}
 		dto.fileName = compressedName
-		p.uploadCh <- fileDTO{fileName: dto.fileName, bucketName: dto.bucketName}
+		p.uploadCh <- fileDTO{fileName: dto.fileName, objectName: dto.objectName, bucketName: dto.bucketName}
 	}
 }
 
@@ -490,7 +564,8 @@ func (p *Plugin) uploadToS3(compressedDTO fileDTO) error {
 	}
 
 	_, err := cl.FPutObject(
-		compressedDTO.bucketName, p.generateObjectName(compressedDTO.fileName),
+		compressedDTO.bucketName,
+		compressedDTO.objectName,
 		compressedDTO.fileName,
 		p.compressor.getObjectOptions(),
 	)
@@ -498,6 +573,7 @@ func (p *Plugin) uploadToS3(compressedDTO fileDTO) error {
 		stats.GetCounter(subsystemName, sendErrorCounter).Inc()
 		return fmt.Errorf("could not upload file: %s into bucket: %s, error: %s", compressedDTO.fileName, compressedDTO.bucketName, err.Error())
 	}
+
 	return nil
 }
 
@@ -506,6 +582,40 @@ func (p *Plugin) generateObjectName(name string) string {
 	n := strconv.FormatInt(r.Int63n(math.MaxInt64), 16)
 	n = n[len(n)-8:]
 	objectName := path.Base(name)
+
 	objectName = objectName[0 : len(objectName)-len(p.compressor.getExtension())]
 	return fmt.Sprintf("%s.%s%s", objectName, n, p.compressor.getExtension())
+}
+
+// restoreObjectName tries restore object name from sealed metafile
+func (p *Plugin) restoreObjectName(file string) (objectName string, success bool) {
+	if !p.config.FileConfig.MetaCfg.StoreMeta {
+		return "", false
+	}
+
+	metaFile, err := os.Open(filepath.Join(p.config.FileConfig.MetaCfg.MetaDataDir, p.config.FileConfig.MetaCfg.SealedMetaPrefix+filepath.Base(file)))
+	if err != nil {
+		p.logger.Errorf("can't open sealed_meta: %s", err.Error())
+		return "", false
+	}
+	defer metaFile.Close()
+
+	byteValue, err := ioutil.ReadAll(metaFile)
+	if err != nil {
+		p.logger.Errorf("can't read sealed_meta: %s", err.Error())
+		return "", false
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(byteValue), &result); err != nil {
+		p.logger.Errorf("can't unmarshal meta json: %s", err.Error())
+		return "", false
+	}
+
+	if objectName, ok := result[p.config.FileConfig.MetaCfg.SealedFileNameField]; ok {
+		if strVal, success := objectName.(string); success {
+			return strVal, success
+		}
+	}
+	return "", false
 }

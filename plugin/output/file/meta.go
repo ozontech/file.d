@@ -1,90 +1,113 @@
 package file
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path"
 	"path/filepath"
 	"sync"
-	"time"
 
 	"github.com/ozontech/file.d/offset"
 )
 
 const (
-	metaFilePrefix       = "meta_"
-	sealedMetafilePrefix = "sealed_"
-	firstTimestampField  = "first_timestamp"
-	lastTimestampField   = "last_timestamp"
+	metaFilePrefix      = "meta_"
+	firstTimestampField = "first_timestamp"
+	lastTimestampField  = "last_timestamp"
 )
 
 type meta struct {
-	filePreifx string
-	fileName   string
-	separator  string
-	dir        string
-	extention  string
+	filePreifx,
+	fileName,
+	separator,
+	dir,
+	extention,
+	sealedFileFieldName,
+	sealedFilePathFieldName string
+	staticMeta map[string]interface{}
 
 	fileMode int64
 	mu       sync.Mutex
 
 	finalFilePrefix string
-	finalFileDir    string
-
-	tsFileName string
-	file       *os.File
+	tsFileName      string
+	file            *os.File
 }
 
-func newMeta(
+type metaInit struct {
 	fileName,
 	separator,
 	dir,
 	extention,
-	finalFileDir,
 	filePrefix,
-	finalFilePrefix string,
-	fileMode int64,
-
-) *meta {
-	return &meta{
-		fileName:        fileName,
-		separator:       fileNameSeparator,
-		dir:             dir,
-		extention:       extention,
-		finalFileDir:    finalFileDir,
-		filePreifx:      filePrefix,
-		finalFilePrefix: finalFilePrefix,
-		fileMode:        fileMode,
-	}
+	sealedPrefix,
+	staticMeta,
+	sealedFileFieldName,
+	sealedFilePathFieldName string
+	fileMode int64
 }
 
-//sealup renames metafile to final_metafile (which stores for logging reasons) and deletes it.
-func (m *meta) sealUpCurrentMeta() error {
+type sealUpDTO struct {
+	firstTimestamp,
+	lastTimestamp int64
+	sealingLogFile,
+	sealingOuterPath string
+}
+
+func newMeta(init metaInit) (*meta, error) {
+	staticMetaMap := make(map[string]interface{})
+	metaString := init.staticMeta
+	if metaString != "" {
+		if err := json.Unmarshal([]byte(metaString), &staticMetaMap); err != nil {
+			return nil, err
+		}
+	}
+
+	return &meta{
+		fileName:                init.fileName,
+		separator:               init.separator,
+		dir:                     init.dir,
+		extention:               init.extention,
+		filePreifx:              init.filePrefix,
+		finalFilePrefix:         init.sealedPrefix,
+		fileMode:                init.fileMode,
+		sealedFileFieldName:     init.sealedFileFieldName,
+		sealedFilePathFieldName: init.sealedFilePathFieldName,
+		staticMeta:              staticMetaMap,
+	}, nil
+}
+
+// sealUpCurrentMeta creates finalized meta for sealed file
+func (m *meta) sealUpCurrentMeta(sealupDTO sealUpDTO) error {
 	// ignore during startup
 	if m.tsFileName == "" {
 		return nil
 	}
+	sealedName := m.finalFilePrefix + sealupDTO.sealingLogFile
+
+	if err := m.updateMetaFile(sealupDTO.firstTimestamp, sealupDTO.lastTimestamp, sealupDTO.sealingOuterPath); err != nil {
+		return err
+	}
 
 	currentMetaFileName := filepath.Join(m.dir, m.tsFileName)
-	if err := os.Rename(
-		currentMetaFileName,
-		filepath.Join(m.dir, m.finalFilePrefix+m.tsFileName),
-	); err != nil {
+	if err := os.Rename(currentMetaFileName, filepath.Join(m.dir, sealedName)); err != nil {
 		return fmt.Errorf("can't rename metafile: %s", err.Error())
 	}
 
 	return nil
 }
 
-// newMetaFile creates new or pulls up old file.
+// newMetaFile creates new or pulls up old file
 func (m *meta) newMetaFile(
 	filename string,
+	sealUp sealUpDTO,
 	timestamp int64,
 ) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if err := m.sealUpCurrentMeta(); err != nil {
+	if err := m.sealUpCurrentMeta(sealUp); err != nil {
 		return err
 	}
 
@@ -95,15 +118,27 @@ func (m *meta) newMetaFile(
 		return fmt.Errorf("can't glob: pattern=%s, err=%ss", pattern, err.Error())
 	}
 
-	// existing og meta means crash of prev run before if was saved to final file. Pull up old file instead of new
+	// Reuse old file
 	if len(matches) == 1 {
 		m.tsFileName = path.Base(matches[0])
 	} else {
-		m.tsFileName += ".yaml"
+		m.tsFileName += "." + m.extention
 	}
 	metaName := filepath.Join(m.dir, m.tsFileName)
 
-	metaFile, err := os.OpenFile(metaName, os.O_CREATE|os.O_APPEND|os.O_RDWR, os.FileMode(m.fileMode))
+	// creates meta dir if required
+	_, err = os.Stat(m.dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			if err = os.MkdirAll(m.dir, os.ModePerm); err != nil {
+				return fmt.Errorf("can't create meta dir: %s", err.Error())
+			}
+		} else {
+			return fmt.Errorf("can't check if meta dir exists: %s", err.Error())
+		}
+	}
+
+	metaFile, err := os.OpenFile(metaName, os.O_CREATE|os.O_APPEND|os.O_RDWR, os.ModePerm)
 	if err != nil {
 		return fmt.Errorf("could not open or create file: %s, error: %s", metaName, err.Error())
 	}
@@ -112,16 +147,23 @@ func (m *meta) newMetaFile(
 	return nil
 }
 
-func (m *meta) updateMetaFile(
-	firstTimestamp,
-	lastTimestamp float64,
-) error {
+func (m *meta) updateMetaFile(firstTimestamp, lastTimestamp int64, sealUpOuterPath string) error {
+	values := make(map[string]interface{})
+	for k, v := range m.staticMeta {
+		values[k] = v
+	}
+	values[firstTimestampField] = firstTimestamp
+	values[lastTimestampField] = lastTimestamp
+	values[m.sealedFileFieldName] = filepath.Base(sealUpOuterPath)
+	values[m.sealedFilePathFieldName] = sealUpOuterPath
+
+	return offset.SaveJson(filepath.Join(m.dir, m.tsFileName), values)
+}
+
+// updateMetaFileWithLock keeps meta in actual state
+func (m *meta) updateMetaFileWithLock(firstTimestamp, lastTimestamp int64) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	values := make(map[string]interface{})
-	values[firstTimestampField] = int64(firstTimestamp * float64(time.Second))
-	values[lastTimestampField] = int64(lastTimestamp * float64(time.Second))
-
-	return offset.SaveYAML(filepath.Join(m.dir, m.tsFileName), values)
+	return m.updateMetaFile(firstTimestamp, lastTimestamp, "")
 }

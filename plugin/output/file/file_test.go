@@ -1,7 +1,9 @@
 package file
 
 import (
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
@@ -20,6 +22,7 @@ import (
 const (
 	targetFile          = "filetests/log.log"
 	targetFileThreshold = "filetests/%d%slog.log"
+	metaFileDir         = "filetests/meta"
 )
 
 var (
@@ -136,6 +139,127 @@ func TestSealUpHasContent(t *testing.T) {
 			assert.EqualValues(t, len(d), info.Size())
 		}
 	}
+}
+
+func TestSealUpHasContentMetaOn(t *testing.T) {
+	cfg := Config{
+		TargetFile:         targetFile,
+		RetentionInterval_: 200 * time.Millisecond,
+		Layout:             "01",
+		FileMode_:          0o666,
+		MetaCfg: MetaConfig{
+			StoreMeta:               true,
+			MetaDataDir:             metaFileDir,
+			SealedMetaPrefix:        "sealed_meta_",
+			SealedFilePathFieldName: "sealed_file_path",
+			SealedFileNameField:     "sealed_file_name",
+		},
+	}
+
+	dir, file := filepath.Split(cfg.TargetFile)
+
+	extension := filepath.Ext(file)
+	test.ClearDir(t, dir)
+	createDir(t, dir)
+	defer test.ClearDir(t, dir)
+
+	d := []byte("some data")
+	testFileName := fmt.Sprintf(targetFileThreshold, time.Now().Unix(), fileNameSeparator)
+	f := createFile(t, testFileName, &d)
+	defer f.Close()
+	infoInitial, _ := f.Stat()
+	assert.NotZero(t, infoInitial.Size())
+
+	pair := NewPair()
+	min := int64(10)
+	max := int64(9999)
+	pair.UpdatePair(max, min)
+
+	p := Plugin{
+		config:           &cfg,
+		mu:               &sync.RWMutex{},
+		file:             f,
+		targetDir:        dir,
+		fileExtension:    extension,
+		fileName:         file[0 : len(file)-len(extension)],
+		tsFileName:       path.Base(testFileName),
+		pairOfTimestamps: pair,
+	}
+
+	objName := filepath.Join(metaFileDir, "heh12345.log.zip")
+	ext := ".zip"
+	p.FileMetaCallback = func(in string) (string, string) {
+		return objName, ext
+	}
+
+	metaWriter, err := newMeta(
+		metaInit{
+			fileName:                p.fileName,
+			separator:               fileNameSeparator,
+			dir:                     p.config.MetaCfg.MetaDataDir,
+			extention:               "json",
+			filePrefix:              metaFilePrefix,
+			sealedPrefix:            p.config.MetaCfg.SealedMetaPrefix,
+			sealedFileFieldName:     p.config.MetaCfg.SealedFileNameField,
+			sealedFilePathFieldName: p.config.MetaCfg.SealedFilePathFieldName,
+			fileMode:                p.config.FileMode_,
+			staticMeta:              p.config.MetaCfg.StaticMeta,
+		},
+	)
+	require.NoError(t, err)
+	now := time.Now().Unix()
+	metaWriter.newMetaFile(metaWriter.fileName, sealUpDTO{}, now)
+	p.metaWriter = metaWriter
+
+	// call func
+	p.sealUp()
+
+	// check work result
+	pattern := fmt.Sprintf("%s/*%s", p.targetDir, p.fileExtension)
+	matches := test.GetMatches(t, pattern)
+	assert.Equal(t, 2, len(matches))
+
+	// check new file was created and it is empty
+	info, err := p.file.Stat()
+	assert.EqualValues(t, 0, info.Size())
+	assert.NoError(t, err)
+
+	// check old file was renamed. And renamed file is not empty and contains data
+	for _, v := range matches {
+		if v != fmt.Sprintf("%s%s", dir, p.tsFileName) {
+			info, err := os.Stat(v)
+			assert.NoError(t, err)
+			assert.EqualValues(t, len(d), info.Size())
+		}
+	}
+
+	// check that meta files exists
+	metaPattern := fmt.Sprintf("%s/*", p.config.MetaCfg.MetaDataDir)
+	metaMatches := test.GetMatches(t, metaPattern)
+	fmt.Println(metaPattern, metaMatches)
+	assert.Equal(t, 2, len(metaMatches))
+
+	sealedMeta, err := os.Open(metaMatches[1])
+	require.NoError(t, err)
+	defer sealedMeta.Close()
+	fileBytes, _ := ioutil.ReadAll(sealedMeta)
+	dest := make(map[string]interface{})
+	json.Unmarshal(fileBytes, &dest)
+	require.NoError(t, err)
+
+	// check that sealed meta contains correct data
+	val, ok := dest["first_timestamp"]
+	assert.True(t, ok)
+	assert.Equal(t, float64(min), val)
+	val, ok = dest["last_timestamp"]
+	assert.True(t, ok)
+	assert.Equal(t, float64(max), val)
+	val, ok = dest[cfg.MetaCfg.SealedFileNameField]
+	assert.True(t, ok)
+	assert.Equal(t, filepath.Base(objName), val)
+	val, ok = dest[cfg.MetaCfg.SealedFilePathFieldName]
+	assert.True(t, ok)
+	assert.Equal(t, objName, val)
 }
 
 func TestSealUpNoContent(t *testing.T) {

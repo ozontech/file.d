@@ -46,8 +46,6 @@ const (
 	eventKindIgnore
 	eventKindTimeout
 	eventKindUnlock
-	// Alien event doesn't belong to eventPool and must be ignored by pipeline.
-	eventKindAlien
 )
 
 type eventStage int
@@ -142,14 +140,6 @@ func (e *Event) IsTimeoutKind() bool {
 	return e.kind.Load() == eventKindTimeout
 }
 
-func (e *Event) SetAlienKind() {
-	e.kind.Swap(eventKindAlien)
-}
-
-func (e *Event) IsAlienKind() bool {
-	return e.kind.Load() == eventKindAlien
-}
-
 func (e *Event) parseJSON(json []byte) error {
 	return e.Root.DecodeBytes(json)
 }
@@ -191,8 +181,6 @@ func (e *Event) kindStr() string {
 		return "DEPRECATED"
 	case eventKindTimeout:
 		return "TIMEOUT"
-	case eventKindAlien:
-		return "ALIEN"
 	default:
 		return "UNKNOWN"
 	}
