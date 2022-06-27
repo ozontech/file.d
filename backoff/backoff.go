@@ -2,7 +2,6 @@ package backoff
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
@@ -67,10 +66,8 @@ func (b *BackOff) RetryWithMetrics(ctx context.Context, executor func(ctx contex
 func new(opts ...Option) *backoff.ExponentialBackOff {
 	backoff := backoff.NewExponentialBackOff()
 	for _, opt := range opts {
-		fmt.Println("op", opt)
 		opt(backoff)
 	}
-	fmt.Println(backoff)
 	return backoff
 }
 

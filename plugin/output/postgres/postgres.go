@@ -132,8 +132,8 @@ type Config struct {
 	//> @3@4@5@6
 	//>
 	//> Timeout for DB health check.
-	HealthCheckPeriod  cfg.Duration `json:"db_health_check_period" default:"60s" parse:"duration"` //*
-	HealthCheckPeriod_ time.Duration
+	HealthCheckInterval  cfg.Duration `json:"db_health_check_interval" default:"60s" parse:"duration"` //*
+	HealthCheckInterval_ time.Duration
 
 	//> @3@4@5@6
 	//>
@@ -203,7 +203,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	if p.config.RequestTimeout_ < 1 {
 		p.logger.Fatal("'db_request_timeout' can't be <1")
 	}
-	if p.config.HealthCheckPeriod_ < 1 {
+	if p.config.HealthCheckInterval_ < 1 {
 		p.logger.Fatal("'db_health_check_period' can't be <1")
 	}
 
@@ -412,7 +412,7 @@ func (p *Plugin) parsePGConfig() (*pgxpool.Config, error) {
 	}
 
 	pgCfg.LazyConnect = false
-	pgCfg.HealthCheckPeriod = p.config.HealthCheckPeriod_
+	pgCfg.HealthCheckPeriod = p.config.HealthCheckInterval_
 
 	return pgCfg, nil
 }
