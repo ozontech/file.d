@@ -254,8 +254,8 @@ func (p *Plugin) serve(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *Plugin) processChunk(sourceID pipeline.SourceID, readBuff []byte, eventBuff []byte, isLastChunk bool) []byte {
-	pos := 0
-	nlPos := 0
+	pos := 0   // current position
+	nlPos := 0 // new line position
 	for pos < len(readBuff) {
 		if readBuff[pos] != '\n' {
 			pos++
