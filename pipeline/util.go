@@ -91,7 +91,8 @@ func ParseFormatName(formatName string) (string, error) {
 	}
 }
 
-func ParseLevel(level string) int {
+// ParseLevelAsNumber converts log level to the int representation according to the RFC-5424.
+func ParseLevelAsNumber(level string) int {
 	switch strings.ToLower(strings.TrimSpace(level)) {
 	case "0", "emergency":
 		return 0
@@ -110,10 +111,30 @@ func ParseLevel(level string) int {
 	case "7", "debug":
 		return 7
 	default:
-		return 6
+		return -1
 	}
 }
 
-func TrimSpaceFunc(r rune) bool {
-	return byte(r) == ' '
+// ParseLevelAsString converts log level to the string representation according to the RFC-5424.
+func ParseLevelAsString(level string) string {
+	switch strings.ToLower(strings.TrimSpace(level)) {
+	case "0", "emergency":
+		return "emergency"
+	case "1", "alert":
+		return "alert"
+	case "2", "critical", "crit":
+		return "critical"
+	case "3", "error", "err":
+		return "error"
+	case "4", "warning", "warn":
+		return "warning"
+	case "5", "notice":
+		return "notice"
+	case "6", "informational", "info":
+		return "informational"
+	case "7", "debug":
+		return "debug"
+	default:
+		return ""
+	}
 }
