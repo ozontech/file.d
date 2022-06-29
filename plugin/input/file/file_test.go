@@ -15,14 +15,15 @@ import (
 	"time"
 
 	"github.com/alecthomas/units"
-	"github.com/ozontech/file.d/cfg"
-	"github.com/ozontech/file.d/logger"
-	"github.com/ozontech/file.d/pipeline"
-	"github.com/ozontech/file.d/test"
 	uuid "github.com/satori/go.uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/atomic"
+
+	"github.com/ozontech/file.d/cfg"
+	"github.com/ozontech/file.d/logger"
+	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/test"
 )
 
 var (
@@ -962,7 +963,7 @@ func TestRotationRenameWhileNotWorking(t *testing.T) {
 
 func TestTruncation(t *testing.T) {
 	file := ""
-	x := atomic.NewInt32(2)
+	x := atomic.NewInt32(3)
 	run(&test.Case{
 		Prepare: func() {},
 		Act: func(p *pipeline.Pipeline) {

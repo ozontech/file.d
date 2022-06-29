@@ -188,6 +188,7 @@ func (jp *jobProvider) commit(event *pipeline.Event) {
 
 	value, has := job.offsets.get(streamName)
 	if value >= event.Offset {
+		defer job.mu.Unlock()
 		jp.logger.Panicf("offset corruption: committing=%d, current=%d, event id=%d, source=%d:%s", event.Offset, value, event.SeqID, event.SourceID, event.SourceName)
 	}
 
