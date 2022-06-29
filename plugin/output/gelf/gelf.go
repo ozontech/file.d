@@ -315,40 +315,6 @@ func (p *Plugin) makeBaseField(root *insaneJSON.Root, gelfFieldName string, conf
 	}
 }
 
-func (p *Plugin) makeTimestampField(root *insaneJSON.Root, timestampField string, timestampFieldFormat string) {
-	node := root.Dig(timestampField)
-	if node == nil {
-		return
-	}
-
-	now := float64(time.Now().UnixNano()) / float64(time.Second)
-	ts := now
-	if node.IsNumber() {
-		ts = node.AsFloat()
-		// is it in millis?
-		if ts > 1000000000000 {
-			ts = ts / 1000
-		}
-		// is it still in millis?
-		if ts > 1000000000000 {
-			ts = ts / 1000
-		}
-	} else if node.IsString() {
-		t, err := time.Parse(timestampFieldFormat, node.AsString())
-		if err == nil {
-			ts = float64(t.UnixNano()) / float64(time.Second)
-		}
-	}
-
-	// is event in the past? earlier than "Sunday, September 9, 2001 1:46:40 AM"
-	if ts < 1000000000 {
-		ts = now
-	}
-
-	root.AddFieldNoAlloc(root, "timestamp").MutateToFloat(ts)
-	node.Suicide()
-}
-
 func (p *Plugin) makeLevelField(root *insaneJSON.Root, levelField string) {
 	if levelField == "" {
 		return
@@ -424,4 +390,39 @@ func (p *Plugin) formatExtraField(encodeBuf []byte, name string) []byte {
 	}
 
 	return encodeBuf
+}
+
+func (p *Plugin) makeTimestampField(root *insaneJSON.Root, timestampField string, timestampFieldFormat string) {
+	node := root.Dig(timestampField)
+	if node == nil {
+		return
+	}
+
+	now := float64(time.Now().UnixNano()) / float64(time.Second)
+	ts := now
+	if node.IsNumber() {
+		ts = node.AsFloat()
+		// is it in millis?
+		if ts > 1000000000000 {
+			ts = ts / 1000
+		}
+		// is it still in millis?
+		if ts > 1000000000000 {
+			ts = ts / 1000
+		}
+	} else if node.IsString() {
+		t, err := time.Parse(timestampFieldFormat, node.AsString())
+		if err == nil {
+
+			ts = float64(t.UnixNano()) / float64(time.Second)
+		}
+	}
+
+	// is event in the past? earlier than "Sunday, September 9, 2001 1:46:40 AM"
+	if ts < 1000000000 {
+		ts = now
+	}
+
+	root.AddFieldNoAlloc(root, "timestamp").MutateToFloat(ts)
+	node.Suicide()
 }

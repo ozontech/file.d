@@ -42,10 +42,10 @@ const (
 	eventStageProcessor = 3
 	eventStageOutput    = 4
 
-	eventKindRegular int32 = 0
-	eventKindIgnore  int32 = 1
-	eventKindTimeout int32 = 2
-	eventKindUnlock  int32 = 3
+	eventKindRegular int32 = iota
+	eventKindIgnore
+	eventKindTimeout
+	eventKindUnlock
 )
 
 type eventStage int

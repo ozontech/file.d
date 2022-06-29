@@ -4,12 +4,14 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/stats"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	insaneJSON "github.com/vitkovskii/insane-json"
 )
 
@@ -132,4 +134,54 @@ func TestFormatEvent(t *testing.T) {
 		expected := strings.ReplaceAll(strings.ReplaceAll(test.formattedJSON, "\t", ""), "\n", "")
 		assert.Equal(t, expected, resultJSON, "wrong formatted event")
 	}
+}
+
+func TestMakeTimestampField(t *testing.T) {
+	cases := []struct {
+		name           string
+		jsonString     string
+		format         string
+		timestampField string
+		expectedOutput float64
+	}{
+		{
+			name:           "unix_timestamp",
+			jsonString:     `{"time": 1655739567}`,
+			format:         time.UnixDate,
+			timestampField: "time",
+			expectedOutput: float64(1.655739567e+09),
+		},
+		{
+			name:           "rfc3339nano",
+			jsonString:     `{"abc": "2023-06-09T10:50:25.384982073Z"}`,
+			format:         time.RFC3339Nano,
+			timestampField: "abc",
+			expectedOutput: float64(1.686307825384982e+09),
+		},
+	}
+
+	p := Plugin{}
+	for _, tCase := range cases {
+		t.Run(tCase.name, func(t *testing.T) {
+			root, err := insaneJSON.DecodeString(tCase.jsonString)
+			require.NoError(t, err)
+			defer insaneJSON.Release(root)
+
+			p.makeTimestampField(root, tCase.timestampField, tCase.format)
+			tsFloat := root.Dig("timestamp").AsFloat()
+			require.Equal(t, tCase.expectedOutput, tsFloat)
+		})
+	}
+}
+
+func TestMakeTimestampFieldFromNull(t *testing.T) {
+	root, err := insaneJSON.DecodeString("{}")
+	require.NoError(t, err)
+	defer insaneJSON.Release(root)
+
+	p := Plugin{}
+	p.makeTimestampField(root, "", "")
+
+	notExistsNode := root.Dig("timestamp")
+	require.Nil(t, notExistsNode)
 }

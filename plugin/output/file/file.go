@@ -14,7 +14,6 @@ import (
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/longpanic"
 	"github.com/ozontech/file.d/pipeline"
-
 	"go.uber.org/zap"
 	"golang.org/x/net/context"
 )
@@ -41,9 +40,14 @@ type Plugin struct {
 	fileName      string
 	tsFileName    string
 
-	SealUpCallback func(string)
+	SealUpCallback   func(string, string)
+	FileMetaCallback func(filename string) (fileOuterDestination, ext string)
 
 	mu *sync.RWMutex
+
+	timestampFileFormat string
+	metaWriter          *meta
+	pairOfTimestamps    *pair
 }
 
 type data struct {
@@ -83,6 +87,28 @@ type Config struct {
 	//> File mode for log files
 	FileMode  cfg.Base8 `json:"file_mode" default:"0666" parse:"base8"` //*
 	FileMode_ int64
+
+	//> MetaCfg describes metafile with sealfile desription
+	MetaCfg MetaConfig `json:"meta_config" child:"true"`
+}
+
+type MetaConfig struct {
+	//> Stores metadata of sealed files.
+	StoreMeta bool `json:"store_meta"` //*
+	//> MetaDataFile saves metainformation about sealed file.
+	MetaDataDir string `json:"metadata_dir" default:"/var/log/file-d.meta"` //*
+	//> SealedMetaPrefix defines prefix of sealed meta file
+	SealedMetaPrefix string `json:"sealed_metafile_prefix" default:"sealed_meta_"` //*
+	//> Which field of the event should be used as `timestamp` GELF field.
+	TimestampField string `json:"timestamp_field" default:"time"` //*
+	//> In which format timestamp field should be parsed.
+	TimestampFieldFormat string `json:"timestamp_field_format" default:"rfc3339nano" options:"ansic|unixdate|rubydate|rfc822|rfc822z|rfc850|rfc1123|rfc1123z|rfc3339|rfc3339nano|kitchen|stamp|stampmilli|stampmicro|stampnano"` //*
+	//> Static part of json meta.
+	StaticMeta string `json:"static_meta" default:""` //*
+	//> SealedFileNameField stores name of sead file
+	SealedFileNameField string `json:"sealed_filename_field" default:"sealed_name"` //*
+	//> SealedFilePathFieldName stores name of sead file with path
+	SealedFilePathFieldName string `json:"sealed_filepath_name_field" default:"sealed_path"` //*
 }
 
 func init() {
@@ -107,6 +133,38 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.fileName = file[0 : len(file)-len(p.fileExtension)]
 	p.tsFileName = "%s" + "-" + p.fileName
 
+	ctx, cancel := context.WithCancel(context.Background())
+	p.cancel = cancel
+
+	if p.config.MetaCfg.StoreMeta {
+		metaWriter, err := newMeta(
+			metaInit{
+				fileName:                p.fileName,
+				separator:               fileNameSeparator,
+				dir:                     p.config.MetaCfg.MetaDataDir,
+				extention:               "json",
+				filePrefix:              metaFilePrefix,
+				sealedPrefix:            p.config.MetaCfg.SealedMetaPrefix,
+				sealedFileFieldName:     p.config.MetaCfg.SealedFileNameField,
+				sealedFilePathFieldName: p.config.MetaCfg.SealedFilePathFieldName,
+				fileMode:                p.config.FileMode_,
+				staticMeta:              p.config.MetaCfg.StaticMeta,
+			},
+		)
+		if err != nil {
+			params.Logger.Fatalf("can't create meta: %s", err.Error())
+		}
+
+		p.metaWriter = metaWriter
+
+		format, err := pipeline.ParseFormatName(p.config.MetaCfg.TimestampFieldFormat)
+		if err != nil {
+			params.Logger.Fatalf("unknown time format: %s", err.Error())
+		}
+		p.timestampFileFormat = format
+		p.pairOfTimestamps = NewPair()
+	}
+
 	p.batcher = pipeline.NewBatcher(
 		params.PipelineName,
 		outPluginType,
@@ -120,16 +178,36 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	)
 
 	p.mu = &sync.RWMutex{}
-	ctx, cancel := context.WithCancel(context.Background())
-	p.cancel = cancel
 
 	if err := os.MkdirAll(p.targetDir, os.ModePerm); err != nil {
 		p.logger.Fatalf("could not create target dir: %s, error: %s", p.targetDir, err.Error())
 	}
 
 	p.idx = p.getStartIdx()
-	p.createNew()
+	p.startUpCreateNewFile()
 	p.setNextSealUpTime()
+
+	if p.config.MetaCfg.StoreMeta {
+		longpanic.Go(func() {
+			go func() {
+				for {
+					select {
+					case <-ctx.Done():
+						return
+					case <-time.After(p.config.RetentionInterval_ / 10):
+						p.mu.RLock()
+						min, max := p.pairOfTimestamps.Get()
+						p.mu.RUnlock()
+
+						if err := p.metaWriter.updateMetaFileWithLock(min, max); err != nil {
+							p.logger.Errorf("can't update meta: %s", err.Error())
+						}
+
+					}
+				}
+			}()
+		})
+	}
 
 	if p.file == nil {
 		p.logger.Panic("file struct is nil!")
@@ -169,11 +247,37 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 
 	outBuf := data.outBuf[:0]
 
+	minTs, maxTs := int64(0), int64(0)
 	for _, event := range batch.Events {
 		outBuf, _ = event.Encode(outBuf)
 		outBuf = append(outBuf, byte('\n'))
+
+		if p.config.MetaCfg.StoreMeta {
+			ts, err := event.Root.DigStrict("timestamp")
+			if err != nil {
+				p.logger.Errorf("doesn't have timestamp field: %s", err.Error())
+				continue
+			}
+			tsInt, err := ts.AsInt64()
+			if err != nil {
+				p.logger.Errorf("fime field isn't int64: %s", err.Error())
+				continue
+			}
+			if tsInt < minTs || minTs == 0 {
+				minTs = tsInt
+			}
+			if tsInt > maxTs {
+				maxTs = tsInt
+			}
+		}
 	}
 	data.outBuf = outBuf
+
+	if p.config.MetaCfg.StoreMeta {
+		p.mu.Lock()
+		p.pairOfTimestamps.UpdatePair(minTs, maxTs)
+		p.mu.Unlock()
+	}
 
 	p.write(outBuf)
 }
@@ -209,24 +313,55 @@ func (p *Plugin) write(data []byte) {
 	}
 }
 
-func (p *Plugin) createNew() {
-	p.tsFileName = fmt.Sprintf("%d%s%s%s", time.Now().Unix(), fileNameSeparator, p.fileName, p.fileExtension)
+// startUpCreateNewFile creates of restores log and meta files during startUp
+func (p *Plugin) startUpCreateNewFile() {
+	p.createNew("", "")
+}
+
+// createNew creates new or appends to existing log file
+func (p *Plugin) createNew(sealingLogFile, sealingOuterPath string) {
+	timestamp := time.Now().Unix()
+	// file name like: 1654785468_file-d.log
+	p.tsFileName = fmt.Sprintf("%d%s%s%s", timestamp, fileNameSeparator, p.fileName, p.fileExtension)
 	logger.Infof("tsFileName in createNew=%s", p.tsFileName)
-	f := fmt.Sprintf("%s%s", p.targetDir, p.tsFileName)
+	// full path like: /var/log/1654785468_file-d.log
+	fileName := fmt.Sprintf("%s%s", p.targetDir, p.tsFileName)
+	// search for old unsealed file
 	pattern := fmt.Sprintf("%s*%s%s%s", p.targetDir, fileNameSeparator, p.fileName, p.fileExtension)
 	matches, err := filepath.Glob(pattern)
 	if err != nil {
 		p.logger.Fatalf("can't glob: pattern=%s, err=%ss", pattern, err.Error())
 	}
+	// existense of file means crash of prev run before it was sealed. Pull up old file instead of new
 	if len(matches) == 1 {
 		p.tsFileName = path.Base(matches[0])
-		f = fmt.Sprintf("%s%s", p.targetDir, p.tsFileName)
+		fileName = fmt.Sprintf("%s%s", p.targetDir, p.tsFileName)
 	}
-	file, err := os.OpenFile(f, os.O_CREATE|os.O_APPEND|os.O_RDWR, os.FileMode(p.config.FileMode_))
+	file, err := os.OpenFile(fileName, os.O_CREATE|os.O_APPEND|os.O_RDWR, os.FileMode(p.config.FileMode_))
 	if err != nil {
-		p.logger.Panicf("could not open or create file: %s, error: %s", f, err.Error())
+		p.logger.Panicf("could not open or create file: %s, error: %s", fileName, err.Error())
 	}
 	p.file = file
+
+	// new meta file
+	if p.config.MetaCfg.StoreMeta {
+		// createNew() guarded by mutex on upper layer.
+		f, l := p.pairOfTimestamps.Reset()
+		err := p.metaWriter.newMetaFile(
+			p.fileName,
+			sealUpDTO{
+				sealingOuterPath: sealingOuterPath,
+				sealingLogFile:   sealingLogFile,
+				firstTimestamp:   f,
+				lastTimestamp:    l,
+			},
+			timestamp,
+		)
+
+		if err != nil {
+			p.logger.Panic(err)
+		}
+	}
 }
 
 // sealUp manages current file: renames, closes, and creates new.
@@ -240,19 +375,27 @@ func (p *Plugin) sealUp() {
 	}
 
 	// newFileName will be like: ".var/log/log_1_01-02-2009_15:04.log
-	newFileName := filepath.Join(p.targetDir, fmt.Sprintf("%s%s%d%s%s%s", p.fileName, fileNameSeparator, p.idx, fileNameSeparator, time.Now().Format(p.config.Layout), p.fileExtension))
-	p.rename(newFileName)
+	now := time.Now().Format(p.config.Layout)
+	finalOldFileName := filepath.Join(p.targetDir, fmt.Sprintf("%s%s%d%s%s%s", p.fileName, fileNameSeparator, p.idx, fileNameSeparator, now, p.fileExtension))
+	p.rename(finalOldFileName)
 	oldFile := p.file
 	p.mu.Lock()
-	p.createNew()
+
+	outerPath, ext := "", ""
+	if p.FileMetaCallback != nil {
+		outerPath, ext = p.FileMetaCallback(filepath.Base(finalOldFileName))
+	}
+
+	p.createNew(filepath.Base(finalOldFileName)+ext, outerPath)
 	p.nextSealUpTime = time.Now().Add(p.config.RetentionInterval_)
 	p.mu.Unlock()
 	if err := oldFile.Close(); err != nil {
 		p.logger.Panicf("could not close file: %s, error: %s", oldFile.Name(), err.Error())
 	}
-	logger.Errorf("sealing in %d, newFile: %s", time.Now().Unix(), newFileName)
+
+	logger.Errorf("sealing in %d, newFile: %s", time.Now().Unix(), finalOldFileName)
 	if p.SealUpCallback != nil {
-		longpanic.Go(func() { p.SealUpCallback(newFileName) })
+		longpanic.Go(func() { p.SealUpCallback(finalOldFileName, filepath.Base(outerPath)) })
 	}
 }
 
