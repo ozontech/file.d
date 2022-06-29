@@ -175,7 +175,7 @@ func TestProcessChunksContinueMany(t *testing.T) {
 	assert.Equal(t, 0, len(eventBuff), "wrong event")
 }
 
-func TestServe(t *testing.T) {
+func TestServeChunks(t *testing.T) {
 	p, _, output := test.NewPipelineMock(nil, "passive")
 	input := getInputInfo()
 	p.SetInput(input)
@@ -202,6 +202,36 @@ func TestServe(t *testing.T) {
 	p.Stop()
 
 	require.Equal(t, []string{`{"a":"1"}`, `{"b":"2"}`}, outEvents)
+}
+
+func TestServeChunksContinue(t *testing.T) {
+	p, _, output := test.NewPipelineMock(nil, "passive")
+	input := getInputInfo()
+	p.SetInput(input)
+	p.Start()
+
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
+
+	outEvents := make([]string, 0)
+	output.SetOutFn(func(event *pipeline.Event) {
+		outEvents = append(outEvents, event.Root.EncodeToString())
+		wg.Done()
+	})
+
+	body := make([]byte, 0, readBufDefaultLen*2)
+	body = append(body, `{"a":"`...)
+	body = append(body, strings.Repeat("a", cap(body))...)
+	body = append(body, `"}`...)
+
+	resp := httptest.NewRecorder()
+	input.Plugin.(*Plugin).serve(resp, httptest.NewRequest(http.MethodPost, "/logger", bytes.NewReader(body)))
+	require.Equal(t, http.StatusOK, resp.Result().StatusCode)
+
+	wg.Wait()
+	p.Stop()
+
+	require.Equal(t, []string{string(body)}, outEvents)
 }
 
 func BenchmarkHttpInputJson(b *testing.B) {

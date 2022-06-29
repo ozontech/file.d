@@ -79,6 +79,8 @@ curl "localhost:9200/_bulk" -H 'Content-Type: application/json' -d \
 const (
 	subsystemName    = "input_http"
 	httpErrorCounter = "http_errors"
+
+	readBufDefaultLen = 16 * 1024
 )
 
 type Plugin struct {
@@ -185,7 +187,7 @@ func (p *Plugin) newReadBuff() []byte {
 	if buff := p.readBuffs.Get(); buff != nil {
 		return *buff.(*[]byte)
 	}
-	return make([]byte, 16*1024)
+	return make([]byte, readBufDefaultLen)
 }
 
 func (p *Plugin) newEventBuffs() []byte {
