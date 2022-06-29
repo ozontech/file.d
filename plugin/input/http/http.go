@@ -79,6 +79,8 @@ curl "localhost:9200/_bulk" -H 'Content-Type: application/json' -d \
 const (
 	subsystemName    = "input_http"
 	httpErrorCounter = "http_errors"
+
+	readBufDefaultLen = 16 * 1024
 )
 
 type Plugin struct {
@@ -185,7 +187,7 @@ func (p *Plugin) newReadBuff() []byte {
 	if buff := p.readBuffs.Get(); buff != nil {
 		return *buff.(*[]byte)
 	}
-	return make([]byte, 16*1024)
+	return make([]byte, readBufDefaultLen)
 }
 
 func (p *Plugin) newEventBuffs() []byte {
@@ -235,7 +237,7 @@ func (p *Plugin) serve(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 
-		eventBuff = p.processChunk(sourceID, readBuff[:n], eventBuff)
+		eventBuff = p.processChunk(sourceID, readBuff[:n], eventBuff, n < len(readBuff))
 	}
 
 	_ = r.Body.Close()
@@ -251,9 +253,9 @@ func (p *Plugin) serve(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (p *Plugin) processChunk(sourceID pipeline.SourceID, readBuff []byte, eventBuff []byte) []byte {
-	pos := 0
-	nlPos := 0
+func (p *Plugin) processChunk(sourceID pipeline.SourceID, readBuff []byte, eventBuff []byte, isLastChunk bool) []byte {
+	pos := 0   // current position
+	nlPos := 0 // new line position
 	for pos < len(readBuff) {
 		if readBuff[pos] != '\n' {
 			pos++
@@ -272,7 +274,13 @@ func (p *Plugin) processChunk(sourceID pipeline.SourceID, readBuff []byte, event
 		nlPos = pos
 	}
 
-	eventBuff = append(eventBuff, readBuff[nlPos:]...)
+	if isLastChunk && nlPos != pos {
+		// flush buffers if we can't find the newline character
+		_ = p.controller.In(sourceID, "http", int64(pos), append(eventBuff, readBuff[nlPos:]...), true)
+		eventBuff = eventBuff[:0]
+	} else {
+		eventBuff = append(eventBuff, readBuff[nlPos:]...)
+	}
 
 	return eventBuff
 }
