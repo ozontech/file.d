@@ -22,18 +22,29 @@ type Plugin struct {
 type Config struct {
 	//> @3@4@5@6
 	//>
-	//> The event field name which log level.
+	//> The name of the event field to convert.
+	//> The value of the field will be converted to lower case and trimmed for parsing.
 	Field  cfg.FieldSelector `json:"field" parse:"selector" required:"false" default:"level"` //*
 	Field_ []string
 
 	//> @3@4@5@6
 	//>
-	//> Date format to convert to.
+	//> Style format to convert. Must be one of number or string.
+	//> Available RFC-5424 levels:
+	//> <ul>
+	//> <li>0: emergency</li>
+	//> <li>1: alert </li>
+	//> <li>2: critical </li>
+	//> <li>3: error </li>
+	//> <li>4: warning </li>
+	//> <li>5: notice </li>
+	//> <li>6: informational </li>
+	//> </ul>
 	Style string `json:"style" default:"number" options:"number|string"` //*
 
 	//> @3@4@5@6
 	//>
-	//> Default log level if field cannot be parsed. Pass empty, to skip set default level.
+	//> The default log level if the field cannot be parsed. If empty, no default level will be set.
 	DefaultLevel string `json:"default_level" default:""` //*
 
 	//> @3@4@5@6
