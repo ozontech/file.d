@@ -1,11 +1,12 @@
 package convert_log_level
 
 import (
-	"strconv"
+	"strings"
 
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/pipeline"
+	"go.uber.org/zap"
 )
 
 /*{ introduction
@@ -13,6 +14,7 @@ It converts the log level field according RFC-5424.
 }*/
 type Plugin struct {
 	config *Config
+	logger *zap.SugaredLogger
 }
 
 //! config-params
@@ -31,9 +33,8 @@ type Config struct {
 
 	//> @3@4@5@6
 	//>
-	//> Default log level if if cannot be parsed. Pass empty, to skip set default level.
-	DefaultLevel       string `json:"default_level" default:""` //*
-	defaultNumberLevel int
+	//> Default log level if field cannot be parsed. Pass empty, to skip set default level.
+	DefaultLevel string `json:"default_level" default:""` //*
 
 	//> @3@4@5@6
 	//>
@@ -54,14 +55,9 @@ func factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginParams) {
 	p.config = config.(*Config)
+	p.logger = params.Logger
 
-	if p.config.Style == "number" && p.config.DefaultLevel != "" {
-		var err error
-		p.config.defaultNumberLevel, err = strconv.Atoi(p.config.DefaultLevel)
-		if err != nil {
-			params.Logger.Fatalf("can't parse default log level for number style: %s", err.Error())
-		}
-	}
+	p.config.Style = strings.ToLower(strings.TrimSpace(p.config.Style))
 }
 
 func (p *Plugin) Stop() {
@@ -70,21 +66,31 @@ func (p *Plugin) Stop() {
 func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	node := event.Root.Dig(p.config.Field_...)
 	if node == nil {
+		// pass action if node does not exist and default level is not set
 		if p.config.DefaultLevel == "" {
 			return pipeline.ActionPass
 		}
-		node = event.Root.AddFieldNoAlloc(event.Root, "level").MutateToString(p.config.DefaultLevel)
+
+		// create field with default level
+		var err error
+		node, err = pipeline.CreateNestedField(event.Root, p.config.Field_)
+		if err != nil {
+			p.logger.Warn("can't create nested field: %s", err.Error())
+			return pipeline.ActionPass
+		}
+		node.MutateToString(p.config.DefaultLevel)
 	}
 
-	//isValidType := node.IsString() || node.IsNumber()
-	//if !isValidType {
-	//	if p.config.RemoveOnFail {
-	//		node.Suicide()
-	//		return pipeline.ActionPass
-	//	}
-	//}
+	if !node.IsString() && !node.IsNumber() {
+		p.logger.Warn("can't override field with value=%s", node.EncodeToString())
+		return pipeline.ActionPass
+	}
 
 	level := node.AsString()
+	if level == "" && p.config.DefaultLevel != "" {
+		level = p.config.DefaultLevel
+	}
+
 	var fail bool
 	if p.config.Style == "string" {
 		parsedLevel := pipeline.ParseLevelAsString(level)

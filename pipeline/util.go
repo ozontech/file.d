@@ -1,11 +1,18 @@
 package pipeline
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 	"strings"
 	"time"
 	"unsafe"
+
+	insaneJSON "github.com/vitkovskii/insane-json"
+)
+
+var (
+	ErrFieldNotObject = errors.New("can't write because it is not an object")
 )
 
 // Clone deeply copies string
@@ -137,4 +144,31 @@ func ParseLevelAsString(level string) string {
 	default:
 		return ""
 	}
+}
+
+// CreateNestedField creates nested field by the path.
+// For example, []string{"path.to", "object"} creates:
+// { "path.to": {"object": {} }
+// It returns ErrFieldNotObject if path contains not object field:
+// { "path.to": [] } - error
+// { "path.to": 1 } - error
+// { "path.to": {} } - ok
+// {} - ok
+func CreateNestedField(root *insaneJSON.Root, path []string) (*insaneJSON.Node, error) {
+	curr := root.Node
+	for _, p := range path {
+		node := curr.Dig(p)
+		if node == nil {
+			// if node does not exist on the path, then create object by the path
+			curr = curr.AddFieldNoAlloc(root, p).MutateToObject()
+		} else {
+			// if node exists check if it is an object
+			curr = node
+			if !curr.IsObject() {
+				return nil, ErrFieldNotObject
+			}
+		}
+	}
+
+	return curr, nil
 }
