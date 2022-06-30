@@ -103,3 +103,14 @@ func TestCreateNestedFieldNegative(t *testing.T) {
 		})
 	}
 }
+
+func TestLevelParsing(t *testing.T) {
+	testData := []string{"0", "1", "2", "3", "4", "5", "6", "7"}
+	for _, level := range testData {
+		expected := ParseLevelAsNumber(level)
+		got := ParseLevelAsNumber(ParseLevelAsString(level))
+
+		require.GreaterOrEqual(t, expected, 0)
+		require.Equal(t, got, expected)
+	}
+}
