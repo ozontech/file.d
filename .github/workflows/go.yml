@@ -7,9 +7,10 @@ on:
     branches: [ master ]
 
 jobs:
-
   build_and_test:
     runs-on: ubuntu-latest
+    env:
+      LOG_LEVEL: error
     steps:
     - uses: actions/checkout@v2
 
