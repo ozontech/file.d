@@ -14,7 +14,6 @@ import (
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
-	"github.com/ozontech/file.d/stats"
 	"github.com/ozontech/file.d/tls"
 	"github.com/valyala/fasthttp"
 	insaneJSON "github.com/vitkovskii/insane-json"

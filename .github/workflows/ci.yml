@@ -48,12 +48,13 @@ jobs:
         env:
           GOARCH: ${{ matrix.arch }}
           GOFLAGS: ${{ matrix.flags }}
-        run: go build -v ./...
+        run: go build ./...
 
       - name: Test
         env:
           GOARCH: ${{ matrix.arch }}
           GOFLAGS: ${{ matrix.flags }}
+          LOG_LEVEL: error
         run: go test -v ./...
 
   lint:
