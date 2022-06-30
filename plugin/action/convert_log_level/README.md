@@ -5,7 +5,7 @@ It converts the log level field according RFC-5424.
 **`field`** *`cfg.FieldSelector`* *`default=level`* 
 
 The name of the event field to convert.
-The value of the field will be converted to lower case and trimmed before parsing.
+The value of the field will be converted to lower case and trimmed for parsing.
 
 <br>
 
