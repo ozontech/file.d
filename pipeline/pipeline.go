@@ -198,6 +198,11 @@ func (p *Pipeline) registerMetrics() {
 		Name:      outputEventsSizeMetric,
 		Help:      "Size of events on pipeline output",
 	})
+	stats.RegisterCounter(&stats.MetricDesc{
+		Subsystem: p.subsystemName(),
+		Name:      readOpsEventsSizeMetric,
+		Help:      "Read OPS count",
+	})
 }
 
 // SetupHTTPHandlers creates handlers for plugin endpoints and pipeline info.
