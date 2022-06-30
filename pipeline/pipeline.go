@@ -198,7 +198,7 @@ func (p *Pipeline) registerMetrics() {
 		Name:      outputEventsSizeMetric,
 		Help:      "Size of events on pipeline output",
 	})
-	stats.RegisterCounter(&stats.MetricDesc{
+	metric.RegisterCounter(&metric.MetricDesc{
 		Subsystem: p.subsystemName(),
 		Name:      readOpsEventsSizeMetric,
 		Help:      "Read OPS count",

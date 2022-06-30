@@ -43,7 +43,7 @@ func TestAppendEvent(t *testing.T) {
 }
 
 func TestConfig(t *testing.T) {
-	stats.InitStats()
+	metric.InitStats()
 	p := &Plugin{}
 	config := &Config{
 		IndexFormat: "test-%",
