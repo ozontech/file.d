@@ -122,53 +122,35 @@ func ParseLevelAsNumber(level string) int {
 	}
 }
 
+var levelNames = []string{
+	"emergency",
+	"alert",
+	"critical",
+	"error",
+	"warning",
+	"notice",
+	"informational",
+	"debug",
+}
+
 // ParseLevelAsString converts log level to the string representation according to the RFC-5424.
 func ParseLevelAsString(level string) string {
-	switch strings.ToLower(strings.TrimSpace(level)) {
-	case "0", "emergency":
-		return "emergency"
-	case "1", "alert":
-		return "alert"
-	case "2", "critical", "crit":
-		return "critical"
-	case "3", "error", "err":
-		return "error"
-	case "4", "warning", "warn":
-		return "warning"
-	case "5", "notice":
-		return "notice"
-	case "6", "informational", "info":
-		return "informational"
-	case "7", "debug":
-		return "debug"
-	default:
+	parsed := ParseLevelAsNumber(level)
+	if parsed == -1 {
 		return ""
 	}
+	return levelNames[parsed]
 }
 
 // CreateNestedField creates nested field by the path.
 // For example, []string{"path.to", "object"} creates:
 // { "path.to": {"object": {} }
-// It returns ErrFieldNotObject if path contains not object field:
-// { "path.to": [] } - error
-// { "path.to": 1 } - error
-// { "path.to": {} } - ok
-// {} - ok
-func CreateNestedField(root *insaneJSON.Root, path []string) (*insaneJSON.Node, error) {
+// Warn: it overrides fields if it contains non-object type on the path. For example:
+// in: { "path.to": [{"userId":"12345"}] }, out: { "path.to": {"object": {}} }
+func CreateNestedField(root *insaneJSON.Root, path []string) *insaneJSON.Node {
 	curr := root.Node
 	for _, p := range path {
-		node := curr.Dig(p)
-		if node == nil {
-			// if node does not exist on the path, then create object by the path
-			curr = curr.AddFieldNoAlloc(root, p).MutateToObject()
-		} else {
-			// if node exists check if it is an object
-			curr = node
-			if !curr.IsObject() {
-				return nil, ErrFieldNotObject
-			}
-		}
+		curr = curr.AddFieldNoAlloc(root, p).MutateToObject()
 	}
-
-	return curr, nil
+	return curr
 }

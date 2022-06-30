@@ -48,6 +48,28 @@ func TestDo(t *testing.T) {
 			Out: []string{`{"info":{"level":{"a":"b"}}}`},
 		},
 		{
+			Name: "remove if object without default",
+			Config: Config{
+				Field:        "info.level",
+				Style:        "number",
+				DefaultLevel: "",
+				RemoveOnFail: true,
+			},
+			In:  []string{`{"info":{"level":{"a":"b"}}}`},
+			Out: []string{`{"info":{}}`},
+		},
+		{
+			Name: "override if object",
+			Config: Config{
+				Field:        "info.level",
+				Style:        "number",
+				DefaultLevel: "alert",
+				RemoveOnFail: true,
+			},
+			In:  []string{`{"info":{"level":{"a":"b"}}}`},
+			Out: []string{`{"info":{"level":1}}`},
+		},
+		{
 			Name: "pass if number",
 			Config: Config{
 				Field:        "info.level",
@@ -140,14 +162,23 @@ func TestDo(t *testing.T) {
 			Out: []string{`{"info":{"level":{"value":"alert"}}}`},
 		},
 		{
-			Name: "pass if field is array",
+			Name: "override if field is array",
 			Config: Config{
 				Field:        "info.level.value",
 				Style:        "string",
 				DefaultLevel: "alert",
 			},
 			In:  []string{`{"info":[]}`},
-			Out: []string{`{"info":[]}`},
+			Out: []string{`{"info":{"level":{"value":"alert"}}}`},
+		},
+		{
+			Name: "pass if default is not set",
+			Config: Config{
+				Field: "info.level",
+				Style: "number",
+			},
+			In:  []string{`{"info":{"level":[5]}}`},
+			Out: []string{`{"info":{"level":[5]}}`},
 		},
 		{
 			Name: "pass if field is nested array",
@@ -157,7 +188,7 @@ func TestDo(t *testing.T) {
 				DefaultLevel: "alert",
 			},
 			In:  []string{`{"info":{"level":{"a":{"b":[]}}}}`},
-			Out: []string{`{"info":{"level":{"a":{"b":[]}}}}`},
+			Out: []string{`{"info":{"level":{"a":{"b":{"c":{"value":1}}}}}}`},
 		},
 		{
 			Name: "pass if field is nested number",
@@ -167,7 +198,7 @@ func TestDo(t *testing.T) {
 				DefaultLevel: "alert",
 			},
 			In:  []string{`{"info":{"level":{"a":{"b":4}}}}`},
-			Out: []string{`{"info":{"level":{"a":{"b":4}}}}`},
+			Out: []string{`{"info":{"level":{"a":{"b":{"c":{"value":"alert"}}}}}}`},
 		},
 		{
 			Name: "create nested field with default level",

@@ -24,6 +24,11 @@ type Config struct {
 	//>
 	//> The name of the event field to convert.
 	//> The value of the field will be converted to lower case and trimmed for parsing.
+	//>
+	//> Warn: it overrides fields if it contains non-object type on the path. For example:
+	//> if `field` is `info.level` and input
+	//> `{ "info": [{"userId":"12345"}] }`,
+	//> output will be: `{ "info": {"level": <level>} }`
 	Field  cfg.FieldSelector `json:"field" parse:"selector" required:"false" default:"level"` //*
 	Field_ []string
 
@@ -45,17 +50,24 @@ type Config struct {
 	//> @3@4@5@6
 	//>
 	//> The default log level if the field cannot be parsed. If empty, no default level will be set.
+	//>
+	//> Also it uses if field contains non-object type. For example:
+	//> if `default_level` is `informational` and input:
+	//> `{"level":[5]}`
+	//> the output will be: `{"level":"informational"}`
 	DefaultLevel string `json:"default_level" default:""` //*
 
 	//> @3@4@5@6
 	//>
 	//> Remove field if conversion fails.
+	//> This can happen when the level is unknown. For example:
+	//> `{ "level": "my_error_level" }`
 	RemoveOnFail bool `json:"remove_on_fail" default:"false"` //*
 }
 
 func init() {
 	fd.DefaultPluginRegistry.RegisterAction(&pipeline.PluginStaticInfo{
-		Type:    "convert_date",
+		Type:    "convert_log_level",
 		Factory: factory,
 	})
 }
@@ -83,18 +95,8 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 		}
 
 		// create field with default level
-		var err error
-		node, err = pipeline.CreateNestedField(event.Root, p.config.Field_)
-		if err != nil {
-			p.logger.Warn("can't create nested field: %s", err.Error())
-			return pipeline.ActionPass
-		}
+		node = pipeline.CreateNestedField(event.Root, p.config.Field_)
 		node.MutateToString(p.config.DefaultLevel)
-	}
-
-	if !node.IsString() && !node.IsNumber() {
-		p.logger.Warn("can't override field with value=%s", node.EncodeToString())
-		return pipeline.ActionPass
 	}
 
 	level := node.AsString()
@@ -105,16 +107,14 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	var fail bool
 	if p.config.Style == "string" {
 		parsedLevel := pipeline.ParseLevelAsString(level)
-		if parsedLevel == "" {
-			fail = true
-		} else {
+		fail = parsedLevel == ""
+		if !fail {
 			node.MutateToString(parsedLevel)
 		}
 	} else {
 		parsedLevel := pipeline.ParseLevelAsNumber(level)
-		if parsedLevel == -1 {
-			fail = true
-		} else {
+		fail = parsedLevel == -1
+		if !fail {
 			node.MutateToInt(parsedLevel)
 		}
 	}

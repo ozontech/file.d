@@ -7,6 +7,11 @@ It converts the log level field according RFC-5424.
 The name of the event field to convert.
 The value of the field will be converted to lower case and trimmed for parsing.
 
+Warn: it overrides fields if it contains non-object type on the path. For example:
+if `field` is `info.level` and input
+`{ "info": [{"userId":"12345"}] }`,
+output will be: `{ "info": {"level": <level>} }`
+
 <br>
 
 **`style`** *`string`* *`default=number`* *`options=number|string`* 
@@ -29,11 +34,18 @@ Available RFC-5424 levels:
 
 The default log level if the field cannot be parsed. If empty, no default level will be set.
 
+Also it uses if field contains non-object type. For example:
+if `default_level` is `informational` and input:
+`{"level":[5]}`
+the output will be: `{"level":"informational"}`
+
 <br>
 
 **`remove_on_fail`** *`bool`* *`default=false`* 
 
 Remove field if conversion fails.
+This can happen when the level is unknown. For example:
+`{ "level": "my_error_level" }`
 
 <br>
 
