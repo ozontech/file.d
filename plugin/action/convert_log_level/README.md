@@ -16,7 +16,7 @@ Date format to convert to.
 
 **`default_level`** *`string`* 
 
-Default log level if if cannot be parsed. Pass empty, to skip set default level.
+Default log level if field cannot be parsed. Pass empty, to skip set default level.
 
 <br>
 
