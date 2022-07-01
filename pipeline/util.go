@@ -1,7 +1,6 @@
 package pipeline
 
 import (
-	"errors"
 	"fmt"
 	"reflect"
 	"strings"
@@ -9,10 +8,6 @@ import (
 	"unsafe"
 
 	insaneJSON "github.com/vitkovskii/insane-json"
-)
-
-var (
-	ErrFieldNotObject = errors.New("can't write because it is not an object")
 )
 
 // Clone deeply copies string
