@@ -3,7 +3,6 @@ package throttle
 import (
 	"fmt"
 	"math/rand"
-	"strconv"
 	"testing"
 	"time"
 
@@ -178,15 +177,13 @@ func TestMixedThrottle(t *testing.T) {
 	tconf.runPipeline(t)
 }
 
-func TestRedisThrottle(t *testing.T) {
+func TestRedisDistributedThrottle(t *testing.T) {
 	s, err := miniredis.Run()
 	require.NoError(t, err)
-
 	defer s.Close()
 
-	realLimit := 1
-	realLimitString := strconv.Itoa(realLimit)
-	require.Nil(t, s.Set("k8s_pod_pod_1_limit", realLimitString))
+	// set distributed redis limit
+	require.NoError(t, s.Set("k8s_pod_pod_1_limit", "1"))
 
 	defaultLimit := 20
 	eventsTotal := 3
@@ -195,21 +192,27 @@ func TestRedisThrottle(t *testing.T) {
 		Rules: []RuleConfig{
 			{Limit: int64(defaultLimit), LimitKind: "count"},
 		},
-		BucketsCount:         1,
-		BucketInterval:       "1s",
-		RedisRefreshInterval: "1ns",
-		RedisHost:            s.Addr(),
-		LimiterKind:          "redis",
-		ThrottleField:        "k8s_pod",
-		TimeField:            "",
-		// This limit will be rewritten by value in redis
-		DefaultLimit: int64(defaultLimit),
+		BucketsCount:          1,
+		BucketInterval:        "2s",
+		RedisRefreshInterval:  "100ms",
+		RedisHost:             s.Addr(),
+		LimiterKind:           "redis",
+		ThrottleField:         "k8s_pod",
+		TimeField:             "",
+		DefaultLimit:          int64(defaultLimit),
+		IsThrottleDistributed: true,
 	}
 	err = cfg.Parse(config, nil)
-	require.NoError(t, err)
+	if err != nil {
+		logger.Panic(err.Error())
+	}
 
 	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, config, pipeline.MatchModeAnd, nil, false))
-	time.Sleep(time.Second)
+
+	outEvents := make([]*pipeline.Event, 0)
+	output.SetOutFn(func(e *pipeline.Event) {
+		outEvents = append(outEvents, e)
+	})
 
 	sourceNames := []string{
 		`source_1`,
@@ -223,17 +226,77 @@ func TestRedisThrottle(t *testing.T) {
 		`{"time":"%s","k8s_ns":"not_matched","k8s_pod":"pod_1"}`,
 	}
 
-	outEvents := make([]*pipeline.Event, 0)
+	for i := 0; i < eventsTotal; i++ {
+		json := fmt.Sprintf(events[i], time.Now().Format(time.RFC3339Nano))
 
+		input.In(10, sourceNames[rand.Int()%len(sourceNames)], 0, []byte(json))
+
+		time.Sleep(300 * time.Millisecond)
+	}
+
+	p.Stop()
+
+	assert.Greater(t, eventsTotal, len(outEvents), "wrong in events count")
+}
+
+func TestRedisOrdinaryThrottle(t *testing.T) {
+	s, err := miniredis.Run()
+	require.NoError(t, err)
+	defer s.Close()
+
+	// set distributed redis limit
+	require.NoError(t, s.Set("k8s_pod_pod_1_limit", "1"))
+
+	defaultLimit := 20
+	eventsTotal := 3
+
+	config := &Config{
+		Rules: []RuleConfig{
+			{Limit: int64(defaultLimit), LimitKind: "count"},
+		},
+		BucketsCount:          1,
+		BucketInterval:        "2s",
+		RedisRefreshInterval:  "100ms",
+		RedisHost:             s.Addr(),
+		LimiterKind:           "redis",
+		ThrottleField:         "k8s_pod",
+		TimeField:             "",
+		DefaultLimit:          int64(defaultLimit),
+		IsThrottleDistributed: false,
+	}
+	err = cfg.Parse(config, nil)
+	if err != nil {
+		logger.Panic(err.Error())
+	}
+
+	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, config, pipeline.MatchModeAnd, nil, false))
+
+	outEvents := make([]*pipeline.Event, 0)
 	output.SetOutFn(func(e *pipeline.Event) {
 		outEvents = append(outEvents, e)
 	})
 
+	sourceNames := []string{
+		`source_1`,
+		`source_2`,
+		`source_3`,
+	}
+
+	events := []string{
+		`{"time":"%s","k8s_ns":"ns_1","k8s_pod":"pod_1"}`,
+		`{"time":"%s","k8s_ns":"ns_2","k8s_pod":"pod_1"}`,
+		`{"time":"%s","k8s_ns":"not_matched","k8s_pod":"pod_1"}`,
+	}
+
 	for i := 0; i < eventsTotal; i++ {
 		json := fmt.Sprintf(events[i], time.Now().Format(time.RFC3339Nano))
+
 		input.In(10, sourceNames[rand.Int()%len(sourceNames)], 0, []byte(json))
-		time.Sleep(time.Millisecond * 300)
+
+		time.Sleep(300 * time.Millisecond)
 	}
+
 	p.Stop()
+
 	assert.Greater(t, eventsTotal, len(outEvents), "wrong in events count")
 }

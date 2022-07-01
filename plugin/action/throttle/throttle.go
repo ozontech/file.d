@@ -1,7 +1,6 @@
 package throttle
 
 import (
-	"fmt"
 	"sync"
 	"time"
 
@@ -19,15 +18,6 @@ var (
 	limiters   = map[string]map[string]limiter{} // todo: cleanup this map?
 	limitersMu = &sync.RWMutex{}
 )
-
-// Interface with only necessary functions of the original redis.Client
-type redisClient interface {
-	Watch(func(tx *redis.Tx) error, ...string) error
-	Expire(key string, expiration time.Duration) *redis.BoolCmd
-	SetNX(key string, value interface{}, expiration time.Duration) *redis.BoolCmd
-	Get(key string) *redis.StringCmd
-	Ping() *redis.StatusCmd
-}
 
 const (
 	redisLimiterType    = "redis"
@@ -93,6 +83,11 @@ type Config struct {
 
 	//> @3@4@5@6
 	//>
+	//> RedisPassword
+	RedisPassword string `json:"redis_pass"`
+
+	//> @3@4@5@6
+	//>
 	//> How ofter try to sync global threshold and limit values
 	RedisRefreshInterval  cfg.Duration `json:"redis_refresh_interval" parse:"duration" default:"5s"`
 	RedisRefreshInterval_ time.Duration
@@ -117,6 +112,11 @@ type Config struct {
 	//> * `limit_kind` – the type of a limit: `count` - number of messages, `size` - total size from all messages
 	//> * `conditions` – the map of `event field name => event field value`. The conditions are checked using `AND` operator.
 	Rules []RuleConfig `json:"rules" default:"" slice:"true"` //*
+
+	//> @3@4@5@6
+	//>
+	//> IsThrottleDistributed regulates global tracing for service.
+	IsThrottleDistributed bool `json:"is_throttle_distributed" default:"false"` //*
 }
 
 type RuleConfig struct {
@@ -147,8 +147,9 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 
 	if p.config.LimiterKind == redisLimiterType {
 		p.redisClient = redis.NewClient(&redis.Options{
-			Network: "tcp",
-			Addr:    p.config.RedisHost,
+			Network:  "tcp",
+			Addr:     p.config.RedisHost,
+			Password: p.config.RedisPassword,
 		})
 
 		pingResp := p.redisClient.Ping()
@@ -175,6 +176,7 @@ func (p *Plugin) getNewLimiter(throttleField, limiterKey string, rule *rule) lim
 			p.config.BucketInterval_,
 			p.config.BucketsCount,
 			rule.limit,
+			p.config.IsThrottleDistributed,
 		)
 	case inMemoryLimiterType:
 		fallthrough
@@ -189,9 +191,8 @@ func (p *Plugin) Stop() {
 func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	if p.isAllowed(event) {
 		return pipeline.ActionPass
-	} else {
-		return pipeline.ActionDiscard
 	}
+	return pipeline.ActionDiscard
 }
 
 func (p *Plugin) isAllowed(event *pipeline.Event) bool {
@@ -235,7 +236,6 @@ func (p *Plugin) isAllowed(event *pipeline.Event) bool {
 			limiter, has = limiters[p.pipeline][limiterKey]
 			// we could already write it between `limitersMu.RUnlock()` and `limitersMu.Lock()`, so we need to check again
 			if !has {
-				fmt.Println(pipeline.ByteToStringUnsafe(p.limiterBuff[2:]))
 				limiter = p.getNewLimiter(
 					string(p.config.ThrottleField),
 					pipeline.ByteToStringUnsafe(p.limiterBuff[2:]),
