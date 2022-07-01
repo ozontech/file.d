@@ -51,6 +51,10 @@ func (l *inMemoryLimiter) isAllowed(event *pipeline.Event, ts time.Time) bool {
 // rebuildBuckets will rebuild buckets for given ts and returns actual bucket id
 // Not thread safe - use external lock!
 func (l *inMemoryLimiter) rebuildBuckets(ts time.Time) int {
+	if l == nil {
+		return -1
+	}
+
 	if l.minID == 0 {
 		l.minID = l.timeToBucketID(ts) - l.bucketCount + 1
 	}
