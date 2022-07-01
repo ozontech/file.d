@@ -9,6 +9,10 @@ import (
 	"go.uber.org/zap"
 )
 
+const (
+	emptyLevelStr = ""
+)
+
 /*{ introduction
 It converts the log level field according RFC-5424.
 }*/
@@ -44,6 +48,7 @@ type Config struct {
 	//> <li>4: warning </li>
 	//> <li>5: notice </li>
 	//> <li>6: informational </li>
+	//> <li>7: debug </li>
 	//> </ul>
 	Style string `json:"style" default:"number" options:"number|string"` //*
 
@@ -90,7 +95,7 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	node := event.Root.Dig(p.config.Field_...)
 	if node == nil {
 		// pass action if node does not exist and default level is not set
-		if p.config.DefaultLevel == "" {
+		if p.config.DefaultLevel == emptyLevelStr {
 			return pipeline.ActionPass
 		}
 
@@ -100,22 +105,22 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	}
 
 	level := node.AsString()
-	if level == "" && p.config.DefaultLevel != "" {
+	if level == emptyLevelStr && p.config.DefaultLevel != emptyLevelStr {
 		level = p.config.DefaultLevel
 	}
 
 	var fail bool
 	if p.config.Style == "string" {
 		parsedLevel := pipeline.ParseLevelAsString(level)
-		fail = parsedLevel == ""
+		fail = parsedLevel == pipeline.LevelUnknownStr
 		if !fail {
 			node.MutateToString(parsedLevel)
 		}
 	} else {
 		parsedLevel := pipeline.ParseLevelAsNumber(level)
-		fail = parsedLevel == -1
+		fail = parsedLevel == pipeline.LevelUnknown
 		if !fail {
-			node.MutateToInt(parsedLevel)
+			node.MutateToInt(int(parsedLevel))
 		}
 	}
 

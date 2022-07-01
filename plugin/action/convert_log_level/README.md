@@ -26,6 +26,7 @@ Available RFC-5424 levels:
 <li>4: warning </li>
 <li>5: notice </li>
 <li>6: informational </li>
+<li>7: debug </li>
 </ul>
 
 <br>

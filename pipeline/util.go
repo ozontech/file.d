@@ -93,27 +93,41 @@ func ParseFormatName(formatName string) (string, error) {
 	}
 }
 
+type LogLevel int
+
+const (
+	LevelUnknown LogLevel = iota - 1
+	LevelEmergency
+	LevelAlert
+	LevelCritical
+	LevelError
+	LevelWarning
+	LevelNotice
+	LevelInformational
+	LevelDebug
+)
+
 // ParseLevelAsNumber converts log level to the int representation according to the RFC-5424.
-func ParseLevelAsNumber(level string) int {
+func ParseLevelAsNumber(level string) LogLevel {
 	switch strings.ToLower(strings.TrimSpace(level)) {
 	case "0", "emergency":
-		return 0
+		return LevelEmergency
 	case "1", "alert":
-		return 1
+		return LevelAlert
 	case "2", "critical", "crit":
-		return 2
+		return LevelCritical
 	case "3", "error", "err":
-		return 3
+		return LevelError
 	case "4", "warning", "warn":
-		return 4
+		return LevelWarning
 	case "5", "notice":
-		return 5
+		return LevelNotice
 	case "6", "informational", "info":
-		return 6
+		return LevelInformational
 	case "7", "debug":
-		return 7
+		return LevelDebug
 	default:
-		return -1
+		return LevelUnknown
 	}
 }
 
@@ -128,11 +142,13 @@ var levelNames = []string{
 	"debug",
 }
 
+const LevelUnknownStr = ""
+
 // ParseLevelAsString converts log level to the string representation according to the RFC-5424.
 func ParseLevelAsString(level string) string {
 	parsed := ParseLevelAsNumber(level)
-	if parsed == -1 {
-		return ""
+	if parsed == LevelUnknown {
+		return LevelUnknownStr
 	}
 	return levelNames[parsed]
 }

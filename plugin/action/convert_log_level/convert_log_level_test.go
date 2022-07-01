@@ -172,7 +172,7 @@ func TestDo(t *testing.T) {
 			Out: []string{`{"info":{"level":{"value":"alert"}}}`},
 		},
 		{
-			Name: "pass if default is not set",
+			Name: "override if default is not set",
 			Config: Config{
 				Field: "info.level",
 				Style: "number",
@@ -181,7 +181,7 @@ func TestDo(t *testing.T) {
 			Out: []string{`{"info":{"level":[5]}}`},
 		},
 		{
-			Name: "pass if field is nested array",
+			Name: "override if field is nested array",
 			Config: Config{
 				Field:        "info.level.a.b.c.value",
 				Style:        "number",
@@ -191,7 +191,7 @@ func TestDo(t *testing.T) {
 			Out: []string{`{"info":{"level":{"a":{"b":{"c":{"value":1}}}}}}`},
 		},
 		{
-			Name: "pass if field is nested number",
+			Name: "override if field is nested number",
 			Config: Config{
 				Field:        "info.level.a.b.c.value",
 				Style:        "string",
