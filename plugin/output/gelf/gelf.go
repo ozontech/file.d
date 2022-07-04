@@ -361,7 +361,11 @@ func (p *Plugin) makeLevelField(root *insaneJSON.Root, levelField string) {
 
 	level := -1
 	if node.IsString() {
-		level = pipeline.ParseLevel(node.AsString())
+		parsedLevel := pipeline.ParseLevelAsNumber(node.AsString())
+		if parsedLevel == pipeline.LevelUnknown {
+			parsedLevel = pipeline.LevelInformational
+		}
+		level = int(parsedLevel)
 	}
 	if node.IsNumber() {
 		level = node.AsInt()
