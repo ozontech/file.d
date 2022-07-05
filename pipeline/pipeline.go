@@ -350,7 +350,6 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 	case decoder.JSON:
 		err := event.parseJSON(bytes)
 		if err != nil {
-			stats.GetCounter(p.subsystemName(), wrongEventFormat).Inc()
 			if p.settings.IsStrict {
 				p.logger.Fatalf("wrong json format offset=%d, length=%d, err=%s, source=%d:%s, json=%s", offset, length, err.Error(), sourceID, sourceName, bytes)
 			} else {
@@ -380,13 +379,8 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 		_ = event.Root.DecodeString("{}")
 		err := decoder.DecodePostgres(event.Root, bytes)
 		if err != nil {
-			stats.GetCounter(p.subsystemName(), wrongEventFormat).Inc()
-			if p.settings.IsStrict {
-				p.logger.Fatalf("wrong postgres format offset=%d, length=%d, err=%s, source=%d:%s, cri=%s", offset, length, err.Error(), sourceID, sourceName, bytes)
-			} else {
-				p.logger.Errorf("wrong postgres format offset=%d, length=%d, err=%s, source=%d:%s, cri=%s", offset, length, err.Error(), sourceID, sourceName, bytes)
-			}
-			p.eventPool.back(event)
+			p.logger.Fatalf("wrong postgres format offset=%d, length=%d, err=%s, source=%d:%s, cri=%s", offset, length, err.Error(), sourceID, sourceName, bytes)
+			// Dead route, never passed here.
 			return EventSeqIDError
 		}
 	default:
