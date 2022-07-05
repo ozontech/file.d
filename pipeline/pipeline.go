@@ -44,7 +44,8 @@ const (
 	outputEventsCountMetric = "output_events_count"
 	outputEventsSizeMetric  = "output_events_size"
 	readOpsEventsSizeMetric = "read_ops_count"
-	wrongEventFormat        = "wrong_event_format"
+
+	wrongEventCRIFormatMetric = "wrong_event_cri_format"
 )
 
 type finalizeFn = func(event *Event, notifyInput bool, backEvent bool)
@@ -207,8 +208,8 @@ func (p *Pipeline) registerMetrics() {
 	})
 	stats.RegisterCounter(&stats.MetricDesc{
 		Subsystem: p.subsystemName(),
-		Name:      wrongEventFormat,
-		Help:      "Wrong event format counter",
+		Name:      wrongEventCRIFormatMetric,
+		Help:      "Wrong event CRI format counter",
 	})
 }
 
@@ -366,7 +367,7 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 		_ = event.Root.DecodeString("{}")
 		err := decoder.DecodeCRI(event.Root, bytes)
 		if err != nil {
-			stats.GetCounter(p.subsystemName(), wrongEventFormat).Inc()
+			stats.GetCounter(p.subsystemName(), wrongEventCRIFormatMetric).Inc()
 			if p.settings.IsStrict {
 				p.logger.Fatalf("wrong cri format offset=%d, length=%d, err=%s, source=%d:%s, cri=%s", offset, length, err.Error(), sourceID, sourceName, bytes)
 			} else {
