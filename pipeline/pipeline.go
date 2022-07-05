@@ -44,6 +44,7 @@ const (
 	outputEventsCountMetric = "output_events_count"
 	outputEventsSizeMetric  = "output_events_size"
 	readOpsEventsSizeMetric = "read_ops_count"
+	wrongEventFormat        = "wrong_event_format"
 )
 
 type finalizeFn = func(event *Event, notifyInput bool, backEvent bool)
@@ -204,6 +205,11 @@ func (p *Pipeline) registerMetrics() {
 		Name:      readOpsEventsSizeMetric,
 		Help:      "Read OPS count",
 	})
+	stats.RegisterCounter(&stats.MetricDesc{
+		Subsystem: p.subsystemName(),
+		Name:      wrongEventFormat,
+		Help:      "Wrong event format counter",
+	})
 }
 
 // SetupHTTPHandlers creates handlers for plugin endpoints and pipeline info.
@@ -344,6 +350,7 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 	case decoder.JSON:
 		err := event.parseJSON(bytes)
 		if err != nil {
+			stats.GetCounter(p.subsystemName(), wrongEventFormat).Inc()
 			if p.settings.IsStrict {
 				p.logger.Fatalf("wrong json format offset=%d, length=%d, err=%s, source=%d:%s, json=%s", offset, length, err.Error(), sourceID, sourceName, bytes)
 			} else {
@@ -360,16 +367,26 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 		_ = event.Root.DecodeString("{}")
 		err := decoder.DecodeCRI(event.Root, bytes)
 		if err != nil {
-			p.logger.Fatalf("wrong cri format offset=%d, length=%d, err=%s, source=%d:%s, cri=%s", offset, length, err.Error(), sourceID, sourceName, bytes)
-			// Dead route, never passed here.
+			stats.GetCounter(p.subsystemName(), wrongEventFormat).Inc()
+			if p.settings.IsStrict {
+				p.logger.Fatalf("wrong cri format offset=%d, length=%d, err=%s, source=%d:%s, cri=%s", offset, length, err.Error(), sourceID, sourceName, bytes)
+			} else {
+				p.logger.Errorf("wrong cri format offset=%d, length=%d, err=%s, source=%d:%s, cri=%s", offset, length, err.Error(), sourceID, sourceName, bytes)
+			}
+			p.eventPool.back(event)
 			return EventSeqIDError
 		}
 	case decoder.POSTGRES:
 		_ = event.Root.DecodeString("{}")
 		err := decoder.DecodePostgres(event.Root, bytes)
 		if err != nil {
-			p.logger.Fatalf("wrong postgres format offset=%d, length=%d, err=%s, source=%d:%s, cri=%s", offset, length, err.Error(), sourceID, sourceName, bytes)
-			// Dead route, never passed here.
+			stats.GetCounter(p.subsystemName(), wrongEventFormat).Inc()
+			if p.settings.IsStrict {
+				p.logger.Fatalf("wrong postgres format offset=%d, length=%d, err=%s, source=%d:%s, cri=%s", offset, length, err.Error(), sourceID, sourceName, bytes)
+			} else {
+				p.logger.Errorf("wrong postgres format offset=%d, length=%d, err=%s, source=%d:%s, cri=%s", offset, length, err.Error(), sourceID, sourceName, bytes)
+			}
+			p.eventPool.back(event)
 			return EventSeqIDError
 		}
 	default:
