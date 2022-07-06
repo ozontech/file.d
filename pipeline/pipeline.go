@@ -339,6 +339,10 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 	isEmpty := length == 0 || (bytes[0] == '\n' && length == 1)
 	isSpam := p.antispamer.isSpam(sourceID, sourceName, isNewSource)
 	isLong := p.settings.MaxEventSize != 0 && length > p.settings.MaxEventSize
+
+	if isLong {
+		p.IncMaxEventSizeExceeded()
+	}
 	if isEmpty || isSpam || isLong {
 		return EventSeqIDError
 	}

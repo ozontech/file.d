@@ -85,18 +85,17 @@ func (w *worker) work(controller inputer, jobProvider *jobProvider, readBufferSi
 
 				scanned += pos + 1
 
+				if shouldCheckMax && len(accumBuf)+len(line) > w.maxEventSize {
+					controller.IncMaxEventSizeExceeded()
+					skipLine = true
+				}
+
 				// skip first event because file may be opened while event isn't completely written.
 				if skipLine {
 					job.shouldSkip.Store(false)
 					skipLine = false
 				} else {
 					inBuf := line
-					if shouldCheckMax && len(accumBuf)+len(inBuf) > w.maxEventSize {
-						controller.IncMaxEventSizeExceeded()
-						accumBuf = accumBuf[:0]
-						// skip the event
-						continue
-					}
 					// if some data have been accumulated then append the line to it
 					if len(accumBuf) != 0 {
 						accumBuf = append(accumBuf, line...)
@@ -107,6 +106,9 @@ func (w *worker) work(controller inputer, jobProvider *jobProvider, readBufferSi
 				accumBuf = accumBuf[:0]
 			}
 
+			if shouldCheckMax && len(accumBuf) > w.maxEventSize {
+				continue
+			}
 			accumBuf = append(accumBuf, buf...)
 		}
 
