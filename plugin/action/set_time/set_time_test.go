@@ -30,8 +30,8 @@ func TestPlugin_Do(t *testing.T) {
 		{
 			Name: "unix",
 			Config: &Config{
-				Field:   "time",
-				Format_: "timestamp",
+				Format: "timestamp",
+				Field:  "time",
 			},
 			Root: `{}`,
 
@@ -39,10 +39,10 @@ func TestPlugin_Do(t *testing.T) {
 			ExpRoot:   fmt.Sprintf(`{"time":%d}`, now.Unix()),
 		},
 		{
-			Name: "unix",
+			Name: "unix nano",
 			Config: &Config{
-				Field:   "time",
-				Format_: "timestampnano",
+				Format: "timestampnano",
+				Field:  "time",
 			},
 			Root: `{}`,
 
@@ -52,8 +52,8 @@ func TestPlugin_Do(t *testing.T) {
 		{
 			Name: "custom format",
 			Config: &Config{
-				Field:   "my-time",
-				Format_: "2006-01-02",
+				Format: "2006-01-02",
+				Field:  "my-time",
 			},
 			Root: `{}`,
 
@@ -63,8 +63,8 @@ func TestPlugin_Do(t *testing.T) {
 		{
 			Name: "rfc3339",
 			Config: &Config{
-				Field:   "myTime",
-				Format_: "rfc3339",
+				Format: "rfc3339",
+				Field:  "myTime",
 			},
 			Root: `{}`,
 
@@ -74,8 +74,8 @@ func TestPlugin_Do(t *testing.T) {
 		{
 			Name: "override false",
 			Config: &Config{
+				Format:   "test",
 				Field:    "time",
-				Format_:  "test",
 				Override: false,
 			},
 			Root: `{"time":123}`,
@@ -86,8 +86,8 @@ func TestPlugin_Do(t *testing.T) {
 		{
 			Name: "override true",
 			Config: &Config{
+				Format:   time.RFC3339,
 				Field:    "time",
-				Format_:  time.RFC3339,
 				Override: true,
 			},
 			Root: `{"time":123}`,
@@ -98,7 +98,7 @@ func TestPlugin_Do(t *testing.T) {
 		{
 			Name: "dots field",
 			Config: &Config{
-				Format_:  "timestampmilli",
+				Format:   "timestampmilli",
 				Field:    "a.b.c",
 				Override: true,
 			},
@@ -115,6 +115,9 @@ func TestPlugin_Do(t *testing.T) {
 	for _, tc := range tcs {
 		t.Run(tc.Name, func(t *testing.T) {
 			require.NoError(t, root.DecodeString(tc.Root))
+
+			err := cfg.Parse(tc.Config, nil)
+			require.NoError(t, err)
 
 			plugin := &Plugin{
 				config: tc.Config,
