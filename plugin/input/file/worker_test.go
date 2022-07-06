@@ -147,7 +147,7 @@ func TestWorkerWorkMultiData(t *testing.T) {
 			},
 		},
 		{
-			name:           "long event in the start of the file",
+			name:           "long event at the beginning of the file",
 			maxEventSize:   50,
 			readBufferSize: 1024,
 
@@ -164,7 +164,7 @@ func TestWorkerWorkMultiData(t *testing.T) {
 			},
 		},
 		{
-			name:           "long event in the start of the file",
+			name:           "long event at the end of the file",
 			maxEventSize:   50,
 			readBufferSize: 1024,
 
