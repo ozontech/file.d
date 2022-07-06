@@ -32,7 +32,6 @@ const (
 	DefaultEventTimeout        = time.Second * 30
 	DefaultFieldValue          = "not_set"
 	DefaultStreamName          = StreamName("not_set")
-	DefaultWaitForPanicTimeout = time.Minute
 
 	EventSeqIDError = uint64(0)
 
@@ -44,6 +43,7 @@ const (
 	outputEventsCountMetric = "output_events_count"
 	outputEventsSizeMetric  = "output_events_size"
 	readOpsEventsSizeMetric = "read_ops_count"
+	maxEventSizeExceeded    = "max_event_size_exceeded"
 
 	wrongEventCRIFormatMetric = "wrong_event_cri_format"
 )
@@ -56,6 +56,7 @@ type InputPluginController interface {
 	DisableStreams()                      // don't use stream field
 	SuggestDecoder(t decoder.DecoderType) // set decoder if pipeline uses "auto" value for decoder
 	IncReadOps()                          // inc read ops for stats
+	IncMaxEventSizeExceeded()             // inc max event size exceeded counter
 }
 
 type ActionPluginController interface {
@@ -176,6 +177,10 @@ func (p *Pipeline) IncReadOps() {
 	p.readOps.Inc()
 }
 
+func (p *Pipeline) IncMaxEventSizeExceeded() {
+	stats.GetCounter(p.subsystemName(), maxEventSizeExceeded).Inc()
+}
+
 func (p *Pipeline) subsystemName() string {
 	return "pipeline_" + p.Name
 }
@@ -210,6 +215,11 @@ func (p *Pipeline) registerMetrics() {
 		Subsystem: p.subsystemName(),
 		Name:      wrongEventCRIFormatMetric,
 		Help:      "Wrong event CRI format counter",
+	})
+	stats.RegisterCounter(&stats.MetricDesc{
+		Subsystem: p.subsystemName(),
+		Name:      maxEventSizeExceeded,
+		Help:      "Max event size exceeded counter",
 	})
 }
 

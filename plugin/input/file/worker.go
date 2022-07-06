@@ -18,6 +18,7 @@ type inputer interface {
 	// In processes event and returns it seq number.
 	In(sourceID pipeline.SourceID, sourceName string, offset int64, data []byte, isNewSource bool) uint64
 	IncReadOps()
+	IncMaxEventSizeExceeded()
 }
 
 func (w *worker) start(inputController inputer, jobProvider *jobProvider, readBufferSize int, logger *zap.SugaredLogger) {
@@ -90,13 +91,16 @@ func (w *worker) work(controller inputer, jobProvider *jobProvider, readBufferSi
 					skipLine = false
 				} else {
 					inBuf := line
+					if shouldCheckMax && len(accumBuf)+len(inBuf) > w.maxEventSize {
+						controller.IncMaxEventSizeExceeded()
+						accumBuf = accumBuf[:0]
+						// skip the event
+						continue
+					}
 					// if some data have been accumulated then append the line to it
 					if len(accumBuf) != 0 {
 						accumBuf = append(accumBuf, line...)
 						inBuf = accumBuf
-					}
-					if shouldCheckMax && len(inBuf) > w.maxEventSize {
-						break
 					}
 					job.lastEventSeq = controller.In(sourceID, sourceName, lastOffset+scanned, inBuf, isVirgin)
 				}
@@ -104,9 +108,6 @@ func (w *worker) work(controller inputer, jobProvider *jobProvider, readBufferSi
 			}
 
 			accumBuf = append(accumBuf, buf...)
-			if shouldCheckMax && len(accumBuf) > w.maxEventSize {
-				break
-			}
 		}
 
 		// tail of read is in accumBuf, save it

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"sync"
 	"testing"
 
@@ -15,17 +16,23 @@ import (
 )
 
 type inputerMock struct {
-	gotData []byte
+	gotData []string
 }
 
-func (i *inputerMock) IncReadOps()  {
+func (i *inputerMock) IncReadOps() {}
 
-}
+func (i *inputerMock) IncMaxEventSizeExceeded() {}
 
-func (i *inputerMock) In(sourceID pipeline.SourceID, sourceName string, offset int64, data []byte, isNewSource bool) uint64 {
-	i.gotData = make([]byte, len(data))
-	copy(i.gotData, data)
+func (i *inputerMock) In(_ pipeline.SourceID, _ string, _ int64, data []byte, _ bool) uint64 {
+	i.gotData = append(i.gotData, string(data))
 	return 0
+}
+
+func (i *inputerMock) lastData() string {
+	if len(i.gotData)-1 < 0 {
+		return ""
+	}
+	return i.gotData[len(i.gotData)-1]
 }
 
 func TestWorkerWork(t *testing.T) {
@@ -108,7 +115,145 @@ func TestWorkerWork(t *testing.T) {
 
 			w.work(&inputer, &jp, tt.readBufferSize, zap.L().Sugar().With("fd"))
 
-			assert.Equal(t, tt.expData, string(inputer.gotData))
+			assert.Equal(t, tt.expData, inputer.lastData())
+		})
+	}
+}
+
+func TestWorkerWorkMultiData(t *testing.T) {
+	tests := []struct {
+		name           string
+		maxEventSize   int
+		readBufferSize int
+
+		inData  string
+		outData []string
+	}{
+		{
+			name:           "long event",
+			maxEventSize:   50,
+			readBufferSize: 1024,
+
+			inData: fmt.Sprintf(`{"a":"a"}
+{"key":"%s"}
+{"a":"a"}
+{"key":"%s"}
+{"a":"a"}
+`, strings.Repeat("a", 50), strings.Repeat("a", 50)),
+			outData: []string{
+				`{"a":"a"}` + "\n",
+				`{"a":"a"}` + "\n",
+				`{"a":"a"}` + "\n",
+			},
+		},
+		{
+			name:           "long event in the start of the file",
+			maxEventSize:   50,
+			readBufferSize: 1024,
+
+			inData: fmt.Sprintf(`{"key":"%s"}
+{"a":"a"}
+{"a":"a"}
+{"key":"%s"}
+{"a":"a"}
+`, strings.Repeat("a", 50), strings.Repeat("a", 50)),
+			outData: []string{
+				`{"a":"a"}` + "\n",
+				`{"a":"a"}` + "\n",
+				`{"a":"a"}` + "\n",
+			},
+		},
+		{
+			name:           "long event in the start of the file",
+			maxEventSize:   50,
+			readBufferSize: 1024,
+
+			inData: fmt.Sprintf(`{"a":"a"}
+{"a":"a"}
+{"a":"a"}
+{"key":"%s"}
+{"key":"%s"}
+`, strings.Repeat("a", 50), strings.Repeat("a", 50)),
+			outData: []string{
+				`{"a":"a"}` + "\n",
+				`{"a":"a"}` + "\n",
+				`{"a":"a"}` + "\n",
+			},
+		},
+		{
+			name:           "small buffer",
+			maxEventSize:   50,
+			readBufferSize: 5,
+
+			inData: fmt.Sprintf(`{"a":"a"}
+{"a":"a"}
+{"key":"%s"}
+{"a":"a"}
+{"key":"%s"}
+`, strings.Repeat("a", 50), strings.Repeat("a", 50)),
+			outData: []string{
+				`{"a":"a"}` + "\n",
+				`{"a":"a"}` + "\n",
+				`{"a":"a"}` + "\n",
+			},
+		},
+		{
+			name:           "no new line",
+			maxEventSize:   50,
+			readBufferSize: 1024,
+
+			inData:  `{"a":"a"}`,
+			outData: nil, // TODO: it is ok? we don't send an event if we don't find a newline
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			w := &worker{maxEventSize: tt.maxEventSize}
+
+			f, err := os.CreateTemp("/tmp", "worker_test")
+			require.NoError(t, err)
+			_, _ = fmt.Fprint(f, tt.inData)
+
+			_, err = f.Seek(0, io.SeekStart)
+			require.NoError(t, err)
+
+			job := &Job{
+				file:       f,
+				shouldSkip: *atomic.NewBool(false),
+				offsets:    sliceMap{},
+				mu:         &sync.Mutex{},
+			}
+
+			jp := &jobProvider{
+				config:     &Config{},
+				controller: nil,
+				watcher:    &watcher{},
+				offsetDB:   &offsetDB{},
+				isStarted:  atomic.Bool{},
+				jobs: map[pipeline.SourceID]*Job{
+					1: job,
+				},
+				jobsMu:            &sync.RWMutex{},
+				jobsChan:          make(chan *Job, 2),
+				jobsLog:           []string{},
+				symlinks:          map[inodeID]string{},
+				symlinksMu:        &sync.Mutex{},
+				jobsDone:          &atomic.Int32{},
+				loadedOffsets:     map[pipeline.SourceID]*inodeOffsets{},
+				stopSaveOffsetsCh: make(chan bool),
+				stopReportCh:      make(chan bool),
+				stopMaintenanceCh: make(chan bool),
+				offsetsCommitted:  &atomic.Int64{},
+				logger:            &zap.SugaredLogger{},
+			}
+			jp.jobsChan <- job
+			jp.jobsChan <- nil
+
+			inputer := inputerMock{}
+			w.work(&inputer, jp, tt.readBufferSize, zap.L().Sugar().With("fd"))
+
+			assert.Equal(t, tt.outData, inputer.gotData)
 		})
 	}
 }
