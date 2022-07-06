@@ -30,6 +30,7 @@
     - [flatten](plugin/action/flatten/README.md)
     - [join](plugin/action/join/README.md)
     - [json_decode](plugin/action/json_decode/README.md)
+    - [json_encode](plugin/action/json_encode/README.md)
     - [keep_fields](plugin/action/keep_fields/README.md)
     - [mask](plugin/action/mask/README.md)
     - [modify](plugin/action/modify/README.md)
