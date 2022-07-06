@@ -315,6 +315,10 @@ The resulting event could look like:
 ```
 
 [More details...](plugin/action/rename/README.md)
+## set_time
+It adds time field to the event.
+
+[More details...](plugin/action/set_time/README.md)
 ## throttle
 It discards the events if pipeline throughput gets higher than a configured threshold.
 
