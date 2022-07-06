@@ -9,16 +9,18 @@ import (
 	"time"
 
 	"github.com/alecthomas/kingpin"
+	insaneJSON "github.com/vitkovskii/insane-json"
+	"go.uber.org/automaxprocs/maxprocs"
+
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/longpanic"
 	"github.com/ozontech/file.d/pipeline"
-	insaneJSON "github.com/vitkovskii/insane-json"
-	"go.uber.org/automaxprocs/maxprocs"
 
 	_ "github.com/ozontech/file.d/plugin/action/add_host"
 	_ "github.com/ozontech/file.d/plugin/action/convert_date"
+	_ "github.com/ozontech/file.d/plugin/action/convert_log_level"
 	_ "github.com/ozontech/file.d/plugin/action/debug"
 	_ "github.com/ozontech/file.d/plugin/action/discard"
 	_ "github.com/ozontech/file.d/plugin/action/flatten"

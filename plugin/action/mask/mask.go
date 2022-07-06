@@ -71,6 +71,16 @@ type Mask struct {
 	//>
 	//> Numbers of masking groups in expression, zero for mask all expression
 	Groups []int `json:"groups" required:"true"` //*
+
+	//> @3@4@5@6
+	//>
+	//> MaxCount limits the number of masked symbols in the masked output, if zero, no limit is set
+	MaxCount int `json:"max_count"` //*
+
+	//> @3@4@5@6
+	//>
+	//> ReplaceWord, if set, is used instead of asterisks for masking patterns that are of the same length or longer.
+	ReplaceWord string `json:"replace_word"` //*
 }
 
 func init() {
@@ -85,11 +95,10 @@ func factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 }
 
 func compileMasks(masks []Mask, logger *zap.SugaredLogger) []Mask {
-	out := make([]Mask, 0, len(masks))
-	for _, m := range masks {
-		out = append(out, compileMask(m, logger))
+	for i := range masks {
+		masks[i] = compileMask(masks[i], logger)
 	}
-	return out
+	return masks
 }
 
 func compileMask(m Mask, logger *zap.SugaredLogger) Mask {
@@ -98,9 +107,9 @@ func compileMask(m Mask, logger *zap.SugaredLogger) Mask {
 	if err != nil {
 		logger.Fatalf("error on compiling regexp, regexp=%s", m.Re)
 	}
-
-	groups := verifyGroupNumbers(m.Groups, re.NumSubexp(), logger)
-	return Mask{Re: m.Re, Re_: re, Groups: groups}
+	m.Re_ = re
+	m.Groups = verifyGroupNumbers(m.Groups, re.NumSubexp(), logger)
+	return m
 }
 
 func isGroupsUnique(groups []int) bool {
@@ -140,6 +149,11 @@ func verifyGroupNumbers(groups []int, totalGroups int, logger *zap.SugaredLogger
 
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginParams) {
 	p.config = config.(*Config)
+	for _, mask := range p.config.Masks {
+		if mask.MaxCount > 0 && mask.ReplaceWord != "" {
+			p.logger.Fatal("Invalid mask configuration")
+		}
+	}
 	p.maskBuf = make([]byte, 0, params.PipelineSettings.AvgEventSize)
 	p.sourceBuf = make([]byte, 0, params.PipelineSettings.AvgEventSize)
 	p.valueNodes = make([]*insaneJSON.Node, 0)
@@ -162,19 +176,25 @@ func (p *Plugin) registerPluginMetrics() {
 func (p *Plugin) Stop() {
 }
 
-func appendMask(dst, src []byte, begin, end int) ([]byte, int) {
+func (p *Plugin) appendMask(mask *Mask, dst, src []byte, begin, end int) ([]byte, int) {
 	runeCounter := utf8.RuneCount(src[begin:end])
+	if mask.ReplaceWord != "" {
+		dst = append(dst, []byte(mask.ReplaceWord)...)
+		return dst, len(src[begin:end]) - len(mask.ReplaceWord)
+	}
 	for j := 0; j < runeCounter; j++ {
+		if mask.MaxCount != 0 && j >= mask.MaxCount {
+			break
+		}
 		dst = append(dst, substitution)
 	}
-	offset := len(src[begin:end]) - runeCounter
-	return dst, offset
+	return dst, len(src[begin:end]) - runeCounter
 }
 
-func maskSection(dst, src []byte, begin, end int) ([]byte, int) {
+func (p *Plugin) maskSection(mask *Mask, dst, src []byte, begin, end int) ([]byte, int) {
 	dst = append(dst, src[:begin]...)
 
-	dst, offset := appendMask(dst, src, begin, end)
+	dst, offset := p.appendMask(mask, dst, src, begin, end)
 
 	if len(dst)+offset < len(src) {
 		dst = append(dst, src[end:]...)
@@ -184,8 +204,8 @@ func maskSection(dst, src []byte, begin, end int) ([]byte, int) {
 }
 
 // mask value returns masked value and bool answer was buf masked at all.
-func maskValue(value, buf []byte, re *regexp.Regexp, groups []int) ([]byte, bool) {
-	indexes := re.FindAllSubmatchIndex(value, -1)
+func (p *Plugin) maskValue(mask *Mask, value, buf []byte) ([]byte, bool) {
+	indexes := mask.Re_.FindAllSubmatchIndex(value, -1)
 	if len(indexes) == 0 {
 		return value, false
 	}
@@ -194,8 +214,9 @@ func maskValue(value, buf []byte, re *regexp.Regexp, groups []int) ([]byte, bool
 
 	offset := 0
 	for _, index := range indexes {
-		for _, grp := range groups {
-			value, offset = maskSection(
+		for _, grp := range mask.Groups {
+			value, offset = p.maskSection(
+				mask,
 				buf,
 				value,
 				index[grp*2]-offset,
@@ -239,7 +260,7 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 		p.sourceBuf = append(p.sourceBuf[:0], value...)
 		p.maskBuf = append(p.maskBuf[:0], p.sourceBuf...)
 		for _, mask := range p.config.Masks {
-			p.maskBuf, locApplied = maskValue(p.sourceBuf, p.maskBuf, mask.Re_, mask.Groups)
+			p.maskBuf, locApplied = p.maskValue(&mask, p.sourceBuf, p.maskBuf)
 			p.sourceBuf = p.maskBuf
 			if locApplied {
 				maskApplied = true

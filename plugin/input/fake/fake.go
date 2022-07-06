@@ -48,7 +48,7 @@ func (p *Plugin) In(sourceID pipeline.SourceID, sourceName string, offset int64,
 	if p.inFn != nil {
 		p.inFn()
 	}
-	p.controller.In(sourceID, sourceName, offset, bytes, false)
+	_ = p.controller.In(sourceID, sourceName, offset, bytes, false)
 }
 
 //> It sets up a hook to make sure the test event has been successfully committed.

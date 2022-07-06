@@ -8,6 +8,10 @@ It adds field containing hostname to an event.
 It converts field date/time data to different format.
 
 [More details...](plugin/action/convert_date/README.md)
+## convert_log_level
+It converts the log level field according RFC-5424.
+
+[More details...](plugin/action/convert_log_level/README.md)
 ## debug
 It logs event to stdout. Useful for debugging.
 
