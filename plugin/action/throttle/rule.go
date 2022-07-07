@@ -17,8 +17,8 @@ type rule struct {
 	limit  complexLimit
 }
 
-// NewRule returns new Limit instance.
-func NewRule(conditions map[string]string, limit complexLimit) *rule {
+// newRule returns new Limit instance.
+func newRule(conditions map[string]string, limit complexLimit) *rule {
 	var (
 		keys   = make([]string, 0, len(conditions))
 		values = make([]string, len(conditions))

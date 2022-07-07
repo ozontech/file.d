@@ -17,7 +17,7 @@ type limiter struct {
 	mu          sync.Mutex
 }
 
-func NewLimiter(interval time.Duration, bucketCount int, limit complexLimit) *limiter {
+func newLimiter(interval time.Duration, bucketCount int, limit complexLimit) *limiter {
 	return &limiter{
 		interval:    interval,
 		bucketCount: bucketCount,
@@ -61,9 +61,7 @@ func (l *limiter) isAllowed(event *pipeline.Event, ts time.Time) bool {
 	switch l.limit.kind {
 	default:
 		logger.Fatalf("unknown type of the limiter: %q", l.limit.kind)
-	case "":
-		fallthrough
-	case "count":
+	case "count", "":
 		l.buckets[index]++
 	case "size":
 		l.buckets[index] += int64(event.Size)

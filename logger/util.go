@@ -21,9 +21,8 @@ func Header(name string) string {
 func Cond(is bool, positive string, negative condFn) string {
 	if is {
 		return positive
-	} else {
-		return negative()
 	}
+	return negative()
 }
 
 func Numerate(content string) string {

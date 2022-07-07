@@ -3,7 +3,7 @@ package s3
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"path/filepath"
 
 	"github.com/minio/minio-go"
@@ -72,7 +72,7 @@ func (p *Plugin) getFileNames(outPlugCount int) map[string]string {
 // Try to create buckets from dirs lying in dynamic_dirs route
 func (p *Plugin) createPlugsFromDynamicBucketArtifacts(targetDirs map[string]string) {
 	dynamicDirsPath := filepath.Join(targetDirs[p.config.DefaultBucket], DynamicBucketDir)
-	dynamicDir, err := ioutil.ReadDir(dynamicDirsPath)
+	dynamicDir, err := os.ReadDir(dynamicDirsPath)
 	if err != nil {
 		p.logger.Infof("%s doesn't exist, won't restore dynamic s3 buckets", err.Error())
 		return
@@ -111,7 +111,7 @@ func (p *Plugin) createOutPlugin(bucketName string) (*file.Plugin, error) {
 	return outPlugin, nil
 }
 
-func (p *Plugin) startPlugins(Params *pipeline.OutputPluginParams, outPlugCount int, targetDirs, fileNames map[string]string) error {
+func (p *Plugin) startPlugins(params *pipeline.OutputPluginParams, outPlugCount int, targetDirs, fileNames map[string]string) error {
 	outPlugins := make(map[string]file.Plugable, outPlugCount)
 	outPlugin, err := p.createOutPlugin(p.config.DefaultBucket)
 	if err != nil {
@@ -141,7 +141,7 @@ func (p *Plugin) startPlugins(Params *pipeline.OutputPluginParams, outPlugCount 
 		if bucketName == p.config.DefaultBucket {
 			starterData = pipeline.PluginsStarterData{
 				Config: &p.config.FileConfig,
-				Params: Params,
+				Params: params,
 			}
 		} else {
 			// For multi_buckets copy main config and replace file path with bucket sub dir path.
@@ -150,7 +150,7 @@ func (p *Plugin) startPlugins(Params *pipeline.OutputPluginParams, outPlugCount 
 			localBucketConfig.TargetFile = fmt.Sprintf("%s%s%s", targetDirs[bucketName], fileNames[bucketName], p.fileExtension)
 			starterData = pipeline.PluginsStarterData{
 				Config: &localBucketConfig,
-				Params: Params,
+				Params: params,
 			}
 		}
 

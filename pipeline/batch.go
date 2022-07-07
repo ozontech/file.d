@@ -103,18 +103,17 @@ func NewBatcher(
 	}
 }
 
-func (b *Batcher) Start(ctx context.Context) {
+func (b *Batcher) Start(_ context.Context) {
 	b.mu = &sync.Mutex{}
 	b.seqMu = &sync.Mutex{}
 	b.cond = sync.NewCond(b.seqMu)
-	ctx, b.cancel = context.WithCancel(ctx)
 
 	b.freeBatches = make(chan *Batch, b.workerCount)
 	b.fullBatches = make(chan *Batch, b.workerCount)
 	for i := 0; i < b.workerCount; i++ {
 		b.freeBatches <- newBatch(b.batchSize, b.flushTimeout)
 		longpanic.Go(func() {
-			b.work(ctx)
+			b.work()
 		})
 	}
 
@@ -123,13 +122,13 @@ func (b *Batcher) Start(ctx context.Context) {
 
 type WorkerData interface{}
 
-func (b *Batcher) work(ctx context.Context) {
+func (b *Batcher) work() {
 	t := time.Now()
 	events := make([]*Event, 0)
 	data := WorkerData(nil)
 	for batch := range b.fullBatches {
 		b.outFn(&data, batch)
-		events = b.commitBatch(ctx, events, batch)
+		events = b.commitBatch(events, batch)
 
 		shouldRunMaintenance := b.maintenanceFn != nil && b.maintenanceInterval != 0 && time.Since(t) > b.maintenanceInterval
 		if shouldRunMaintenance {
@@ -139,7 +138,7 @@ func (b *Batcher) work(ctx context.Context) {
 	}
 }
 
-func (b *Batcher) commitBatch(ctx context.Context, events []*Event, batch *Batch) []*Event {
+func (b *Batcher) commitBatch(events []*Event, batch *Batch) []*Event {
 	// we need to release batch first and then commit events
 	// so lets swap local slice with batch slice to avoid data copying
 	events, batch.Events = batch.Events, events

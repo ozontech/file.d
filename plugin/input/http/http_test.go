@@ -3,9 +3,9 @@ package http
 import (
 	"bytes"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"runtime"
 	"strings"
 	"sync"
@@ -238,7 +238,7 @@ func BenchmarkHttpInputJson(b *testing.B) {
 	const NumWorkers = 128
 	const DocumentCount = 128 * 128 * 8
 
-	json, err := ioutil.ReadFile("../../../testdata/json/light.json")
+	json, err := os.ReadFile("../../../testdata/json/light.json")
 	if err != nil {
 		panic(err)
 	}
@@ -259,7 +259,7 @@ func BenchmarkHttpInputJson(b *testing.B) {
 			if err != nil {
 				panic(err)
 			}
-			_, _ = io.Copy(ioutil.Discard, resp.Body) // https://github.com/google/go-github/pull/317
+			_, _ = io.Copy(io.Discard, resp.Body) // https://github.com/google/go-github/pull/317
 			_ = resp.Body.Close()
 			if resp.StatusCode != 200 {
 				panic(resp.Status)

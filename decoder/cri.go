@@ -11,7 +11,8 @@ const (
 	criDelimiter = ' '
 )
 
-// Examples of format:
+// DecodeCRI descodes CRI format.
+// examples of format:
 // 2016-10-06T00:17:09.669794202Z stdout P log content 1
 // 2016-10-06T00:17:09.669794203Z stderr F log content
 func DecodeCRI(event *insaneJSON.Root, data []byte) error {

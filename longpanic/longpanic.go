@@ -1,4 +1,4 @@
-// package longpanic defines `Go` func that creates goroutine with defer
+// Package longpanic defines `Go` func that creates goroutine with defer
 // that waits for somebody to call `RecoverFromPanic` or panics after timeout.
 package longpanic
 
@@ -11,7 +11,7 @@ import (
 )
 
 // instance is a singleton with timeout that every `go func` call should use.
-var instance *LongPanic = NewLongPanic(time.Minute)
+var instance = NewLongPanic(time.Minute)
 
 // SetTimeout set the timeout after the program panics.
 func SetTimeout(timeout time.Duration) {

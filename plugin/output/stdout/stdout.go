@@ -34,7 +34,7 @@ func (p *Plugin) Start(_ pipeline.AnyConfig, params *pipeline.OutputPluginParams
 	p.controller = params.Controller
 }
 
-func (_ *Plugin) Stop() {}
+func (*Plugin) Stop() {}
 
 func (p *Plugin) Out(event *pipeline.Event) {
 	fmt.Println(event.Root.EncodeToString())

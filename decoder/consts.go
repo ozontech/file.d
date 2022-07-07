@@ -1,7 +1,7 @@
 package decoder
 
 const (
-	NO DecoderType = iota
+	NO Type = iota
 	AUTO
 	JSON
 	RAW
@@ -9,4 +9,4 @@ const (
 	POSTGRES
 )
 
-type DecoderType int
+type Type int

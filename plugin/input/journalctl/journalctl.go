@@ -95,17 +95,17 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 }
 
 func (p *Plugin) registerPluginMetrics() {
-	metric.RegisterCounter(&metric.MetricDesc{
+	metric.RegisterCounter(&metric.Desc{
 		Subsystem: subsystemName,
 		Name:      offsetErrors,
 		Help:      "Number of errors occurred when saving/loading offset",
 	})
-	metric.RegisterCounter(&metric.MetricDesc{
+	metric.RegisterCounter(&metric.Desc{
 		Subsystem: subsystemName,
 		Name:      journalCtlStopErrors,
 		Help:      "Total journalctl stop errors",
 	})
-	metric.RegisterCounter(&metric.MetricDesc{
+	metric.RegisterCounter(&metric.Desc{
 		Subsystem: subsystemName,
 		Name:      readerErrors,
 		Help:      "Total reader errors",

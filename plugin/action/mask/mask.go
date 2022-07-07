@@ -166,7 +166,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 }
 
 func (p *Plugin) registerPluginMetrics() {
-	metric.RegisterCounter(&metric.MetricDesc{
+	metric.RegisterCounter(&metric.Desc{
 		Name:      timesActivated,
 		Subsystem: *p.config.MetricSubsystemName,
 		Help:      "Number of times mask plugin found the provided pattern",

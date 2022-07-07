@@ -163,12 +163,12 @@ func Factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 }
 
 func (p *Plugin) registerPluginMetrics() {
-	metric.RegisterCounter(&metric.MetricDesc{
+	metric.RegisterCounter(&metric.Desc{
 		Name:      discardedEventCounter,
 		Subsystem: subsystemName,
 		Help:      "Total pgsql discarded messages",
 	})
-	metric.RegisterCounter(&metric.MetricDesc{
+	metric.RegisterCounter(&metric.Desc{
 		Name:      duplicatedEventCounter,
 		Subsystem: subsystemName,
 		Help:      "Total pgsql duplicated messages",
@@ -384,8 +384,6 @@ func (p *Plugin) addFieldToValues(field column, sNode *insaneJSON.StrictNode) (i
 			return nil, fmt.Errorf("%w, can't get %s as timestamp, err: %s", ErrEventFieldHasWrongType, field.Name, err.Error())
 		}
 		return time.Unix(int64(tint), 0).Format(time.RFC3339), nil
-	case unknownType:
-		fallthrough
 	default:
 		return nil, fmt.Errorf("%w, undefined col type: %d, col name: %s", ErrEventFieldHasWrongType, field.ColType, field.Name)
 	}

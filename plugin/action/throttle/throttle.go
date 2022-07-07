@@ -112,10 +112,10 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 	limitersMu.Unlock()
 
 	for _, r := range p.config.Rules {
-		p.rules = append(p.rules, NewRule(r.Conditions, complexLimit{r.Limit, r.LimitKind}))
+		p.rules = append(p.rules, newRule(r.Conditions, complexLimit{r.Limit, r.LimitKind}))
 	}
 
-	p.rules = append(p.rules, NewRule(map[string]string{}, complexLimit{p.config.DefaultLimit, p.config.LimitKind}))
+	p.rules = append(p.rules, newRule(map[string]string{}, complexLimit{p.config.DefaultLimit, p.config.LimitKind}))
 }
 
 func (p *Plugin) Stop() {
@@ -124,9 +124,8 @@ func (p *Plugin) Stop() {
 func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	if p.isAllowed(event) {
 		return pipeline.ActionPass
-	} else {
-		return pipeline.ActionDiscard
 	}
+	return pipeline.ActionDiscard
 }
 
 func (p *Plugin) isAllowed(event *pipeline.Event) bool {
@@ -170,7 +169,7 @@ func (p *Plugin) isAllowed(event *pipeline.Event) bool {
 			limiter, has = limiters[p.pipeline][limiterKey]
 			// we could already write it between `limitersMu.RUnlock()` and `limitersMu.Lock()`, so we need to check again
 			if !has {
-				limiter = NewLimiter(p.config.BucketInterval_, p.config.BucketsCount, rule.limit)
+				limiter = newLimiter(p.config.BucketInterval_, p.config.BucketsCount, rule.limit)
 				// alloc new string before adding new key to map
 				limiterKey = string(p.limiterBuff)
 				limiters[p.pipeline][limiterKey] = limiter

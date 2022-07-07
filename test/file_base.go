@@ -16,7 +16,7 @@ type Msg []byte
 
 func SendPack(t *testing.T, p *pipeline.Pipeline, msgs []Msg) int64 {
 	t.Helper()
-	var sent int64 = 0
+	var sent int64
 	for _, m := range msgs {
 		_ = p.In(0, "test", 0, m, false)
 		// count \n

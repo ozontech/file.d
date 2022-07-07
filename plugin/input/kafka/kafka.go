@@ -87,13 +87,13 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 }
 
 func (p *Plugin) registerPluginMetrics() {
-	metric.RegisterCounter(&metric.MetricDesc{
+	metric.RegisterCounter(&metric.Desc{
 		Subsystem: subsystemName,
 		Name:      commitErrors,
 		Help:      "Number of kafka commit errors",
 	})
 
-	metric.RegisterCounter(&metric.MetricDesc{
+	metric.RegisterCounter(&metric.Desc{
 		Subsystem: subsystemName,
 		Name:      consumeErrors,
 		Help:      "Number of kafka consume errors",

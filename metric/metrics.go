@@ -16,7 +16,7 @@ const (
 
 type metricType = int
 
-type MetricDesc struct {
+type Desc struct {
 	Subsystem string
 	Name      string
 	Help      string
@@ -57,7 +57,7 @@ func InitStats() {
 	statsGlobal.registerOwnMetrics()
 }
 
-func RegisterGauge(metricDesc *MetricDesc) {
+func RegisterGauge(metricDesc *Desc) {
 	maskPromGauge := prom.NewGauge(prom.GaugeOpts{
 		Namespace:   PromNamespace,
 		Subsystem:   metricDesc.Subsystem,
@@ -70,7 +70,7 @@ func RegisterGauge(metricDesc *MetricDesc) {
 	registerMetric(gaugeMetricType, keyInternal, maskPromGauge)
 }
 
-func RegisterCounter(metricDesc *MetricDesc) {
+func RegisterCounter(metricDesc *Desc) {
 	maskPromCounter := prom.NewCounter(prom.CounterOpts{
 		Namespace:   PromNamespace,
 		Subsystem:   metricDesc.Subsystem,
@@ -135,17 +135,17 @@ func registerMetric(mType metricType, k key, metric prom.Collector) {
 }
 
 func (s *stats) registerOwnMetrics() {
-	RegisterCounter(&MetricDesc{
+	RegisterCounter(&Desc{
 		Subsystem: subsystemName,
 		Name:      unregisteredCounter,
 		Help:      "Counter for unregistered metrics",
 	})
-	RegisterGauge(&MetricDesc{
+	RegisterGauge(&Desc{
 		Subsystem: subsystemName,
 		Name:      unregisteredGauge,
 		Help:      "Gauge for unregistered metrics",
 	})
-	RegisterCounter(&MetricDesc{
+	RegisterCounter(&Desc{
 		Subsystem: subsystemName,
 		Name:      duplicateCounter,
 		Help:      "Counter for duplicate metrics",

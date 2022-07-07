@@ -25,10 +25,10 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-func getLogFilename(prefix string, item *metaItem) string {
+func getLogFilename(item *metaItem) string {
 	return fmt.Sprintf(
 		"%s/%s_%s_%s-%s.log",
-		prefix,
+		"/k8s-logs",
 		item.podName,
 		item.namespace,
 		item.containerName,
@@ -78,8 +78,8 @@ func TestEnrichment(t *testing.T) {
 	putMeta(podInfo)
 	selfNodeName = "node_1"
 
-	var event *pipeline.Event = nil
-	filename := getLogFilename("/k8s-logs", item)
+	var event *pipeline.Event
+	filename := getLogFilename(item)
 	input.SetCommitFn(func(e *pipeline.Event) {
 		event = e
 		wg.Done()
@@ -110,7 +110,7 @@ func TestAllowedLabels(t *testing.T) {
 		containerID:   "4e0301b633eaa2bfdcafdeba59ba0c72a3815911a6a820bf273534b0f32d98e0",
 	}
 	putMeta(getPodInfo(item, true))
-	filename1 := getLogFilename("/k8s-logs", item)
+	filename1 := getLogFilename(item)
 
 	item = &metaItem{
 		nodeName:      "node_1",
@@ -120,7 +120,7 @@ func TestAllowedLabels(t *testing.T) {
 		containerID:   "4e0301b633eaa2bfdcafdeba59ba0c72a3815911a6a820bf273534b0f32d98e0",
 	}
 	putMeta(getPodInfo(item, false))
-	filename2 := getLogFilename("/k8s-logs", item)
+	filename2 := getLogFilename(item)
 
 	outEvents := make([]*pipeline.Event, 0)
 	output.SetOutFn(func(e *pipeline.Event) {
@@ -160,7 +160,7 @@ func TestK8SJoin(t *testing.T) {
 		wg.Done()
 	})
 
-	filename := getLogFilename("/k8s-logs", item)
+	filename := getLogFilename(item)
 	input.In(0, filename, 10, []byte(`{"ts":"time","stream":"stdout","log":"one line log 1\n"}`))
 	input.In(0, filename, 20, []byte(`{"ts":"time","stream":"stderr","log":"error "}`))
 	input.In(0, filename, 30, []byte(`{"ts":"time","stream":"stdout","log":"this "}`))

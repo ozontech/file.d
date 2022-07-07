@@ -157,7 +157,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 }
 
 func (p *Plugin) registerPluginMetrics() {
-	metric.RegisterCounter(&metric.MetricDesc{
+	metric.RegisterCounter(&metric.Desc{
 		Subsystem: subsystemName,
 		Name:      httpErrorCounter,
 		Help:      "Total http errors",

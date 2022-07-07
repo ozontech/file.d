@@ -95,7 +95,7 @@ type symlinkInfo struct {
 	inode    inodeID
 }
 
-func NewJobProvider(config *Config, controller pipeline.InputPluginController, logger *zap.SugaredLogger) *jobProvider {
+func NewJobProvider(config *Config, controller pipeline.InputPluginController, log *zap.SugaredLogger) *jobProvider {
 	jp := &jobProvider{
 		config:     config,
 		controller: controller,
@@ -116,16 +116,16 @@ func NewJobProvider(config *Config, controller pipeline.InputPluginController, l
 		stopReportCh:      make(chan bool, 1), // non-zero channel cause we don't wanna wait goroutine to stop
 		stopMaintenanceCh: make(chan bool, 1), // non-zero channel cause we don't wanna wait goroutine to stop
 
-		logger: logger,
+		logger: log,
 	}
 
-	jp.watcher = NewWatcher(
+	jp.watcher = newWatcher(
 		config.WatchingDir,
 		config.FilenamePattern,
 		config.DirPattern,
 		jp.processNotification,
 		config.ShouldWatchChanges,
-		logger,
+		log,
 	)
 
 	return jp
@@ -357,7 +357,7 @@ func sourceIDByStat(s os.FileInfo, symlink string) pipeline.SourceID {
 	symHash := inode * 8922886018542929
 	for _, c := range symlink {
 		symHash <<= 2
-		symHash -= 1
+		symHash--
 		symHash += int64(c) * 8460724049
 	}
 
@@ -404,12 +404,11 @@ func (jp *jobProvider) initJobOffset(operation offsetsOp, job *Job) {
 }
 
 // tryResumeJob job should be already locked and it'll be unlocked.
-func (jp *jobProvider) tryResumeJobAndUnlock(job *Job, filename string) bool {
+func (jp *jobProvider) tryResumeJobAndUnlock(job *Job, filename string) {
 	jp.logger.Debugf("job for %d:%s resumed", job.sourceID, job.filename)
 
 	if !job.isDone {
 		job.mu.Unlock()
-		return false
 	}
 
 	job.filename = filename
@@ -421,7 +420,6 @@ func (jp *jobProvider) tryResumeJobAndUnlock(job *Job, filename string) bool {
 
 	job.mu.Unlock()
 	jp.jobsChan <- job
-	return true
 }
 
 func (jp *jobProvider) continueJob(job *Job) {

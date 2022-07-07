@@ -2,7 +2,6 @@ package cfg
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"reflect"
 	"regexp"
@@ -13,6 +12,10 @@ import (
 	"github.com/bitly/go-simplejson"
 	"github.com/ghodss/yaml"
 	"github.com/ozontech/file.d/logger"
+)
+
+const (
+	trueStr = "true"
 )
 
 type Config struct {
@@ -53,7 +56,7 @@ func NewConfig() *Config {
 
 func NewConfigFromFile(path string) *Config {
 	logger.Infof("reading config %q", path)
-	yamlContents, err := ioutil.ReadFile(path)
+	yamlContents, err := os.ReadFile(path)
 	if err != nil {
 		logger.Fatalf("can't read config file %q: %s", path, err)
 	}
@@ -129,13 +132,13 @@ func parseConfig(json *simplejson.Json) *Config {
 	}
 	config.Vault.ShouldUse = config.Vault.Address != "" && config.Vault.Token != ""
 
-	pipelinesJson := json.Get("pipelines")
-	pipelines := pipelinesJson.MustMap()
+	pipelinesJSON := json.Get("pipelines")
+	pipelines := pipelinesJSON.MustMap()
 	if len(pipelines) == 0 {
 		logger.Fatalf("no pipelines defined in config")
 	}
 	for i := range pipelines {
-		raw := pipelinesJson.Get(i)
+		raw := pipelinesJSON.Get(i)
 		config.Pipelines[i] = &PipelineConfig{Raw: raw}
 	}
 
@@ -228,20 +231,20 @@ func Parse(ptr interface{}, values map[string]int) error {
 		tField := t.Field(i)
 
 		childTag := tField.Tag.Get("child")
-		if childTag == "true" {
+		if childTag == trueStr {
 			childs = append(childs, vField)
 			continue
 		}
 
 		sliceTag := tField.Tag.Get("slice")
-		if sliceTag == "true" {
+		if sliceTag == trueStr {
 			if err := ParseSlice(vField, values); err != nil {
 				return err
 			}
 			continue
 		}
 
-		err := ParseField(v, vField, tField, values)
+		err := ParseField(v, vField, &tField, values)
 		if err != nil {
 			return err
 		}
@@ -256,7 +259,7 @@ func Parse(ptr interface{}, values map[string]int) error {
 	return nil
 }
 
-// it isn't just a recursion
+// ParseChild it isn't just a recursion
 // it also captures values with the same name from parent
 // i.e. take this config:
 // {
@@ -296,9 +299,9 @@ func ParseSlice(v reflect.Value, values map[string]int) error {
 	return nil
 }
 
-func ParseField(v reflect.Value, vField reflect.Value, tField reflect.StructField, values map[string]int) error {
+func ParseField(v reflect.Value, vField reflect.Value, tField *reflect.StructField, values map[string]int) error {
 	tag := tField.Tag.Get("required")
-	required := tag == "true"
+	required := tag == trueStr
 
 	tag = tField.Tag.Get("default")
 	if tag != "" {
@@ -446,7 +449,7 @@ func ParseField(v reflect.Value, vField reflect.Value, tField reflect.StructFiel
 			if err != nil {
 				return fmt.Errorf("could not parse field %s, err: %s", tField.Name, err.Error())
 			}
-			finalField.SetInt(int64(value))
+			finalField.SetInt(value)
 
 		default:
 			return fmt.Errorf("unsupported parse type %q for field %s", tag, tField.Name)
@@ -464,7 +467,7 @@ func UnescapeMap(fields map[string]interface{}) map[string]string {
 	result := make(map[string]string)
 
 	for key, val := range fields {
-		if len(key) == 0 {
+		if key == "" {
 			continue
 		}
 
@@ -526,8 +529,8 @@ func CompileRegex(s string) (*regexp.Regexp, error) {
 		return nil, fmt.Errorf(`regexp is empty`)
 	}
 
-	if len(s) == 0 || s[0] != '/' || s[len(s)-1] != '/' {
-		return nil, fmt.Errorf(`regexp "%s" should be surounded by "/"`, s)
+	if s == "" || s[0] != '/' || s[len(s)-1] != '/' {
+		return nil, fmt.Errorf(`regexp "%s" should be surrounded by "/"`, s)
 	}
 
 	return regexp.Compile(s[1 : len(s)-1])

@@ -51,10 +51,10 @@ type finalizeFn = func(event *Event, notifyInput bool, backEvent bool)
 
 type InputPluginController interface {
 	In(sourceID SourceID, sourceName string, offset int64, data []byte, isNewSource bool) uint64
-	UseSpread()                           // don't use stream field and spread all events across all processors
-	DisableStreams()                      // don't use stream field
-	SuggestDecoder(t decoder.DecoderType) // set decoder if pipeline uses "auto" value for decoder
-	IncReadOps()                          // inc read ops for metric
+	UseSpread()                    // don't use stream field and spread all events across all processors
+	DisableStreams()               // don't use stream field
+	SuggestDecoder(t decoder.Type) // set decoder if pipeline uses "auto" value for decoder
+	IncReadOps()                   // inc read ops for metric
 }
 
 type ActionPluginController interface {
@@ -76,8 +76,8 @@ type Pipeline struct {
 	Name     string
 	settings *Settings
 
-	decoder          decoder.DecoderType // decoder set in the config
-	suggestedDecoder decoder.DecoderType // decoder suggested by input plugin, it is used when config decoder is set to "auto"
+	decoder          decoder.Type // decoder set in the config
+	suggestedDecoder decoder.Type // decoder suggested by input plugin, it is used when config decoder is set to "auto"
 
 	eventPool *eventPool
 	streamer  *streamer
@@ -180,32 +180,32 @@ func (p *Pipeline) subsystemName() string {
 }
 
 func (p *Pipeline) registerMetrics() {
-	metric.RegisterCounter(&metric.MetricDesc{
+	metric.RegisterCounter(&metric.Desc{
 		Subsystem: p.subsystemName(),
 		Name:      inputEventsCountMetric,
 		Help:      "Count of events on pipeline input",
 	})
-	metric.RegisterCounter(&metric.MetricDesc{
+	metric.RegisterCounter(&metric.Desc{
 		Subsystem: p.subsystemName(),
 		Name:      inputEventsSizeMetric,
 		Help:      "Size of events on pipeline input",
 	})
-	metric.RegisterCounter(&metric.MetricDesc{
+	metric.RegisterCounter(&metric.Desc{
 		Subsystem: p.subsystemName(),
 		Name:      outputEventsCountMetric,
 		Help:      "Count of events on pipeline output",
 	})
-	metric.RegisterCounter(&metric.MetricDesc{
+	metric.RegisterCounter(&metric.Desc{
 		Subsystem: p.subsystemName(),
 		Name:      outputEventsSizeMetric,
 		Help:      "Size of events on pipeline output",
 	})
-	metric.RegisterCounter(&metric.MetricDesc{
+	metric.RegisterCounter(&metric.Desc{
 		Subsystem: p.subsystemName(),
 		Name:      readOpsEventsSizeMetric,
 		Help:      "Read OPS count",
 	})
-	stats.RegisterCounter(&stats.MetricDesc{
+	metric.RegisterCounter(&metric.Desc{
 		Subsystem: p.subsystemName(),
 		Name:      wrongEventCRIFormatMetric,
 		Help:      "Wrong event CRI format counter",
@@ -233,7 +233,7 @@ func (p *Pipeline) SetupHTTPHandlers(mux *http.ServeMux) {
 	}
 
 	for i, info := range p.actionInfos {
-		mux.HandleFunc(fmt.Sprintf("%s/%d/info", prefix, i+1), p.serveActionInfo(*info))
+		mux.HandleFunc(fmt.Sprintf("%s/%d/info", prefix, i+1), p.serveActionInfo(info))
 		mux.HandleFunc(fmt.Sprintf("%s/%d/sample", prefix, i+1), p.serveActionSample(i))
 		for hName, handler := range info.PluginStaticInfo.Endpoints {
 			mux.HandleFunc(fmt.Sprintf("%s/%d/%s", prefix, i+1, hName), handler)
@@ -336,7 +336,7 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 	p.inputSize.Add(int64(length))
 
 	event := p.eventPool.get()
-	var dec decoder.DecoderType
+	var dec decoder.Type
 	if p.decoder == decoder.AUTO {
 		dec = p.suggestedDecoder
 	} else {
@@ -366,7 +366,7 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 		_ = event.Root.DecodeString("{}")
 		err := decoder.DecodeCRI(event.Root, bytes)
 		if err != nil {
-			stats.GetCounter(p.subsystemName(), wrongEventCRIFormatMetric).Inc()
+			metric.GetCounter(p.subsystemName(), wrongEventCRIFormatMetric).Inc()
 			if p.settings.IsStrict {
 				p.logger.Fatalf("wrong cri format offset=%d, length=%d, err=%s, source=%d:%s, cri=%s", offset, length, err.Error(), sourceID, sourceName, bytes)
 			} else {
@@ -485,7 +485,7 @@ func (p *Pipeline) initProcs() {
 }
 
 func (p *Pipeline) newProc() *processor {
-	proc := NewProcessor(
+	proc := newProcessor(
 		p.metricsHolder,
 		p.activeProcs,
 		p.output,
@@ -635,7 +635,7 @@ func (p *Pipeline) DisableStreams() {
 	p.disableStreams = true
 }
 
-func (p *Pipeline) SuggestDecoder(t decoder.DecoderType) {
+func (p *Pipeline) SuggestDecoder(t decoder.Type) {
 	p.suggestedDecoder = t
 }
 
@@ -669,7 +669,7 @@ func (p *Pipeline) servePipeline(w http.ResponseWriter, _ *http.Request) {
 
 // serveActionInfo creates a handlerFunc for the given action.
 // it returns metric values for the given action.
-func (p *Pipeline) serveActionInfo(info ActionPluginStaticInfo) func(http.ResponseWriter, *http.Request) {
+func (p *Pipeline) serveActionInfo(info *ActionPluginStaticInfo) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Add("Content-Type", "application/json")
 

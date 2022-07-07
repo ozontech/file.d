@@ -116,7 +116,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 }
 
 func (p *Plugin) registerPluginMetrics() {
-	metric.RegisterCounter(&metric.MetricDesc{
+	metric.RegisterCounter(&metric.Desc{
 		Name:      sendErrorCounter,
 		Subsystem: subsystemName,
 		Help:      "Total splunk send errors",

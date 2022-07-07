@@ -82,7 +82,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 }
 
 func (p *Plugin) registerPluginMetrics() {
-	metric.RegisterCounter(&metric.MetricDesc{
+	metric.RegisterCounter(&metric.Desc{
 		Name:      offsetErrors,
 		Subsystem: subsystemName,
 		Help:      "Number of errors occurred when saving/loading offset",

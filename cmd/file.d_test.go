@@ -4,8 +4,6 @@ package main
 
 import (
 	"fmt"
-	"github.com/ozontech/file.d/pipeline"
-	"github.com/stretchr/testify/require"
 	"io/ioutil"
 	"math/rand"
 	"os"
@@ -14,6 +12,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/ozontech/file.d/pipeline"
+	"github.com/stretchr/testify/require"
 
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
@@ -69,7 +70,7 @@ const testTime = 10 * time.Minute
 // TestEndToEnd creates near-realistic workload and setups a complex pipeline.
 // It's something like fuzz testing. file.d shouldn't crash/panic or hang for infinite time.
 // E.g. keep this test running while you are sleeping :)
-func TestEndToEnd(t *testing.T) {
+func TestEndToEnd(_ *testing.T) {
 	configFilename := "./../testdata/config/e2e.yaml"
 	iterationInterval := time.Second * 10
 	writerCount := 8
@@ -101,7 +102,7 @@ func TestEndToEnd(t *testing.T) {
 		}
 
 		time.Sleep(iterationInterval)
-		if time.Now().Sub(tm) > testTime {
+		if time.Since(tm) > testTime {
 			break
 		}
 	}

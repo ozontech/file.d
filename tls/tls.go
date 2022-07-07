@@ -25,7 +25,9 @@ type ConfigBuilder struct {
 // It helps to set up the tls config.
 func NewConfigBuilder() ConfigBuilder {
 	return ConfigBuilder{
-		cfg:      &tls.Config{},
+		cfg: &tls.Config{
+			MinVersion: tls.VersionTLS11,
+		},
 		readFile: os.ReadFile,
 	}
 }

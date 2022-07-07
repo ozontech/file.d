@@ -123,7 +123,7 @@ func (p *Plugin) Out(event *pipeline.Event) {
 }
 
 func (p *Plugin) registerPluginMetrics() {
-	metric.RegisterCounter(&metric.MetricDesc{
+	metric.RegisterCounter(&metric.Desc{
 		Name:      sendErrorCounter,
 		Subsystem: subsystemName,
 		Help:      "Total Kafka send errors",

@@ -27,7 +27,7 @@ func newAntispamer(threshold int, unbanIterations int, maintenanceInterval time.
 		logger.Infof("antispam enabled, threshold=%d/%d sec", threshold, maintenanceInterval/time.Second)
 	}
 
-	metric.RegisterGauge(&metric.MetricDesc{
+	metric.RegisterGauge(&metric.Desc{
 		Name:      antispamActive,
 		Subsystem: subsystemName,
 		Help:      "Gauge indicates whether the antispam is enabled",
@@ -35,7 +35,7 @@ func newAntispamer(threshold int, unbanIterations int, maintenanceInterval time.
 	// not enabled by default
 	metric.GetGauge(subsystemName, antispamActive).Set(0)
 
-	metric.RegisterCounter(&metric.MetricDesc{
+	metric.RegisterCounter(&metric.Desc{
 		Name:      antispamBanCount,
 		Subsystem: subsystemName,
 		Help:      "How many times a source was banned",

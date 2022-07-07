@@ -40,9 +40,9 @@ pipelines:
 }*/
 
 type Plugin struct {
-	config  *Config
-	logger  *zap.SugaredLogger
-	params  *pipeline.InputPluginParams
+	config *Config
+	logger *zap.SugaredLogger
+	params *pipeline.InputPluginParams
 
 	fp *file.Plugin
 }

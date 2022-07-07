@@ -218,13 +218,13 @@ func (p *Plugin) Out(event *pipeline.Event) {
 }
 
 func (p *Plugin) registerPluginMetrics() {
-	metric.RegisterCounter(&metric.MetricDesc{
+	metric.RegisterCounter(&metric.Desc{
 		Name:      sendErrorCounter,
 		Subsystem: subsystemName,
 		Help:      "Total elasticsearch send errors",
 	})
 
-	metric.RegisterCounter(&metric.MetricDesc{
+	metric.RegisterCounter(&metric.Desc{
 		Name:      indexingErrors,
 		Subsystem: subsystemName,
 		Help:      "Number of elasticsearch indexing errors",
@@ -295,7 +295,7 @@ func (p *Plugin) send(body []byte) error {
 		for _, node := range root.Dig("items").AsArray() {
 			errNode := node.Dig("index", "error")
 			if errNode != nil {
-				errors += 1
+				errors++
 				p.logger.Errorf("indexing error: %s", errNode.EncodeToString())
 			}
 		}

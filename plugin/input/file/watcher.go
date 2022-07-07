@@ -1,7 +1,6 @@
 package file
 
 import (
-	"io/ioutil"
 	"os"
 	"path/filepath"
 
@@ -22,9 +21,9 @@ type watcher struct {
 
 type notifyFn func(e notify.Event, filename string, stat os.FileInfo)
 
-// NewWatcher creates a watcher that see file creations in the path
+// newWatcher creates a watcher that see file creations in the path
 // and if they match filePattern and dirPattern, pass them to notifyFn.
-func NewWatcher(
+func newWatcher(
 	path string,
 	filenamePattern string,
 	dirPattern string,
@@ -81,7 +80,7 @@ func (w *watcher) stop() {
 }
 
 func (w *watcher) tryAddPath(path string) {
-	files, err := ioutil.ReadDir(path)
+	files, err := os.ReadDir(path)
 	if err != nil {
 		return
 	}

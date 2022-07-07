@@ -10,9 +10,9 @@ import (
 	insaneJSON "github.com/vitkovskii/insane-json"
 )
 
-// Clone deeply copies string
+// CloneString deeply copies string
 func CloneString(s string) string {
-	if len(s) == 0 {
+	if s == "" {
 		return ""
 	}
 	b := make([]byte, len(s))

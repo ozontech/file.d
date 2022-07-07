@@ -86,10 +86,10 @@ func main() {
 }
 
 func start() {
-	cfg := cfg.NewConfigFromFile(*config)
-	longpanic.SetTimeout(cfg.PanicTimeout)
+	config := cfg.NewConfigFromFile(*config)
+	longpanic.SetTimeout(config.PanicTimeout)
 
-	fileD = fd.New(cfg, *http)
+	fileD = fd.New(config, *http)
 	fileD.Start()
 }
 

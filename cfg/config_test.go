@@ -234,7 +234,7 @@ func TestApplyEnvs(t *testing.T) {
 			for _, env := range tt.environs {
 				errS := os.Setenv(env[0], env[1])
 				require.NoError(t, errS)
-				defer func(key string) {
+				defer func(key string) { // nolint:gocritic
 					errU := os.Unsetenv(key)
 					require.NoError(t, errU)
 				}(env[0])

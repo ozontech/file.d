@@ -33,7 +33,7 @@ func TestWatcher(t *testing.T) {
 			notifyFn := func(_ notify.Event, _ string, _ os.FileInfo) {
 				shouldCreate.Inc()
 			}
-			w := NewWatcher(path, tt.filenamePattern, tt.dirPattern, notifyFn, false, zap.L().Sugar())
+			w := newWatcher(path, tt.filenamePattern, tt.dirPattern, notifyFn, false, zap.L().Sugar())
 			w.start()
 			defer w.stop()
 

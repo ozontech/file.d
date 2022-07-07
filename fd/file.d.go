@@ -58,7 +58,7 @@ func (f *FileD) Start() {
 func (f *FileD) initMetrics() {
 	metric.InitStats()
 
-	metric.RegisterCounter(&metric.MetricDesc{
+	metric.RegisterCounter(&metric.Desc{
 		Subsystem: subsystemLongPanicName,
 		Name:      panics,
 		Help:      "Count of panics in the LongPanic",
@@ -166,10 +166,8 @@ func (f *FileD) setupAction(p *pipeline.Pipeline, index int, t string, actionJSO
 	if err != nil {
 		logger.Fatalf("can't extract match mode for action %d/%s in pipeline %q: %s", index, t, p.Name, err.Error())
 	}
-	matchInvert, err := extractMatchInvert(actionJSON)
-	if err != nil {
-		logger.Fatalf("can't extract invert match mode for action %d/%s in pipeline %q: %s", index, t, p.Name, err.Error())
-	}
+	matchInvert := extractMatchInvert(actionJSON)
+
 	conditions, err := extractConditions(actionJSON.Get("match_fields"))
 	if err != nil {
 		logger.Fatalf("can't extract conditions for action %d/%s in pipeline %q: %s", index, t, p.Name, err.Error())
@@ -236,13 +234,13 @@ func (f *FileD) getStaticInfo(pipelineConfig *cfg.PipelineConfig, pluginKind pip
 
 	logger.Infof("creating %s with type %q", pluginKind, t)
 	info := f.plugins.Get(pluginKind, t)
-	configJson, err := configJSON.Encode()
+	configRaw, err := configJSON.Encode()
 	if err != nil {
 		logger.Panicf("can't create config json for %s", t)
 	}
 
 	_, config := info.Factory()
-	err = json.Unmarshal(configJson, config)
+	err = json.Unmarshal(configRaw, config)
 	if err != nil {
 		return nil, fmt.Errorf("can't unmarshal config for %s: %s", pluginKind, err.Error())
 	}

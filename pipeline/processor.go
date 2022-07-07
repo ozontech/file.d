@@ -68,7 +68,7 @@ type processor struct {
 
 var id = 0
 
-func NewProcessor(
+func newProcessor(
 	metricsHolder *metricsHolder,
 	activeCounter *atomic.Int32,
 	output OutputPlugin,
@@ -93,13 +93,13 @@ func NewProcessor(
 	return processor
 }
 
-func (p *processor) start(params *PluginDefaultParams, logger *zap.SugaredLogger) {
+func (p *processor) start(params *PluginDefaultParams, log *zap.SugaredLogger) {
 	for i, action := range p.actions {
 		actionInfo := p.actionInfos[i]
 		action.Start(actionInfo.PluginStaticInfo.Config, &ActionPluginParams{
 			PluginDefaultParams: params,
 			Controller:          p,
-			Logger:              logger.Named("action").Named(actionInfo.Type),
+			Logger:              log.Named("action").Named(actionInfo.Type),
 		})
 	}
 
@@ -133,9 +133,8 @@ func (p *processor) dischargeStream(st *stream) {
 }
 
 func (p *processor) processSequence(event *Event) bool {
-	isSuccess := false
-	isPassed := false
-	isSuccess, isPassed, event = p.processEvent(event)
+	var isPassed bool
+	isPassed, event = p.processEvent(event)
 
 	if isPassed {
 		if event.IsUnlockKind() {
@@ -146,23 +145,23 @@ func (p *processor) processSequence(event *Event) bool {
 		p.output.Out(event)
 	}
 
-	return isSuccess
+	return true
 }
 
-func (p *processor) processEvent(event *Event) (isSuccess bool, isPassed bool, e *Event) {
+func (p *processor) processEvent(event *Event) (isPassed bool, e *Event) {
 	for {
 		if event.IsUnlockKind() {
-			return true, true, event
+			return true, event
 		}
 		stream := event.stream
 
 		if p.doActions(event) {
-			return true, true, event
+			return true, event
 		}
 
 		// no busy actions, so return.
 		if p.busyActionsTotal == 0 {
-			return true, false, nil
+			return false, nil
 		}
 
 		// there is busy action, waiting for next sequential event.
@@ -269,9 +268,8 @@ func (p *processor) isMatch(index int, event *Event) bool {
 
 	if mode == MatchModeOr {
 		return p.isMatchOr(conds, event)
-	} else {
-		return p.isMatchAnd(conds, event)
 	}
+	return p.isMatchAnd(conds, event)
 }
 
 func (p *processor) isMatchOr(conds MatchConditions, event *Event) bool {
