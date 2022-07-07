@@ -37,6 +37,7 @@
     - [parse_re2](plugin/action/parse_re2/README.md)
     - [remove_fields](plugin/action/remove_fields/README.md)
     - [rename](plugin/action/rename/README.md)
+    - [set_time](plugin/action/set_time/README.md)
     - [throttle](plugin/action/throttle/README.md)
 
   - Output
