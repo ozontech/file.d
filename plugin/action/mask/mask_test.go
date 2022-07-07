@@ -9,6 +9,7 @@ import (
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/test"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	insaneJSON "github.com/vitkovskii/insane-json"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -147,6 +148,34 @@ func TestMaskFunctions(t *testing.T) {
 			assert.Equal(t, tCase.mustBeMasked, masked)
 		})
 	}
+}
+
+func TestMaskAddExtraField(t *testing.T) {
+	input := `{"card":"5408-7430-0756-2004"}`
+	key := "extra_key"
+	val := "extra_val"
+	expOutput := `{"card":"****-****-****-****","extra_key":"extra_val"}`
+
+	root, err := insaneJSON.DecodeString(input)
+	require.NoError(t, err)
+	defer insaneJSON.Release(root)
+
+	event := &pipeline.Event{Root: root}
+
+	var plugin Plugin
+
+	plugin.config = &Config{
+		MaskedEventExtraField: key,
+		MaskedEventExtraValue: val,
+		Masks: []Mask{
+			{Re: kDefaultCardRegExp, Groups: []int{1, 2, 3, 4}},
+		},
+	}
+	plugin.config.Masks[0].Re_ = regexp.MustCompile(plugin.config.Masks[0].Re)
+
+	result := plugin.Do(event)
+	assert.Equal(t, pipeline.ActionPass, result)
+	assert.Equal(t, expOutput, event.Root.EncodeToString())
 }
 
 func TestGroupNumbers(t *testing.T) {
