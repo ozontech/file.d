@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path"
 	"strings"
 	"sync"
 	"testing"
@@ -67,10 +68,12 @@ func TestWorkerWork(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			w := &worker{maxEventSize: tt.maxEventSize}
-			inputer := inputerMock{}
 			f, err := os.CreateTemp("/tmp", "worker_test")
 			require.NoError(t, err)
+			info, err := f.Stat()
+			require.NoError(t, err)
+			defer os.Remove(path.Join("/tmp", info.Name()))
+
 			_, _ = fmt.Fprint(f, tt.inFile)
 			_, err = f.Seek(0, io.SeekStart)
 			require.NoError(t, err)
@@ -88,32 +91,18 @@ func TestWorkerWork(t *testing.T) {
 				offsets:        sliceMap{},
 				mu:             &sync.Mutex{},
 			}
-			jp := jobProvider{
-				config:     &Config{},
-				controller: nil,
-				watcher:    &watcher{},
-				offsetDB:   &offsetDB{},
-				isStarted:  atomic.Bool{},
-				jobs: map[pipeline.SourceID]*Job{
-					1: job,
-				},
-				jobsMu:            &sync.RWMutex{},
-				jobsChan:          make(chan *Job, 2),
-				jobsLog:           []string{},
-				symlinks:          map[inodeID]string{},
-				symlinksMu:        &sync.Mutex{},
-				jobsDone:          &atomic.Int32{},
-				loadedOffsets:     map[pipeline.SourceID]*inodeOffsets{},
-				stopSaveOffsetsCh: make(chan bool),
-				stopReportCh:      make(chan bool),
-				stopMaintenanceCh: make(chan bool),
-				offsetsCommitted:  &atomic.Int64{},
-				logger:            &zap.SugaredLogger{},
+			jp := NewJobProvider(&Config{}, nil, &zap.SugaredLogger{})
+			jp.jobsChan = make(chan *Job, 2)
+			jp.jobs = map[pipeline.SourceID]*Job{
+				1: job,
 			}
 			jp.jobsChan <- job
 			jp.jobsChan <- nil
 
-			w.work(&inputer, &jp, tt.readBufferSize, zap.L().Sugar().With("fd"))
+			w := &worker{maxEventSize: tt.maxEventSize}
+			inputer := inputerMock{}
+
+			w.work(&inputer, jp, tt.readBufferSize, zap.L().Sugar().With("fd"))
 
 			assert.Equal(t, tt.expData, inputer.lastData())
 		})
@@ -203,7 +192,7 @@ func TestWorkerWorkMultiData(t *testing.T) {
 			readBufferSize: 1024,
 
 			inData:  `{"a":"a"}`,
-			outData: nil, // TODO: it is ok? we don't send an event if we don't find a newline
+			outData: nil, // we don't send an event if we don't find a newline
 		},
 	}
 
@@ -213,6 +202,10 @@ func TestWorkerWorkMultiData(t *testing.T) {
 
 			f, err := os.CreateTemp("/tmp", "worker_test")
 			require.NoError(t, err)
+			info, err := f.Stat()
+			require.NoError(t, err)
+			defer os.Remove(path.Join("/tmp", info.Name()))
+
 			_, _ = fmt.Fprint(f, tt.inData)
 
 			_, err = f.Seek(0, io.SeekStart)
@@ -225,27 +218,10 @@ func TestWorkerWorkMultiData(t *testing.T) {
 				mu:         &sync.Mutex{},
 			}
 
-			jp := &jobProvider{
-				config:     &Config{},
-				controller: nil,
-				watcher:    &watcher{},
-				offsetDB:   &offsetDB{},
-				isStarted:  atomic.Bool{},
-				jobs: map[pipeline.SourceID]*Job{
-					1: job,
-				},
-				jobsMu:            &sync.RWMutex{},
-				jobsChan:          make(chan *Job, 2),
-				jobsLog:           []string{},
-				symlinks:          map[inodeID]string{},
-				symlinksMu:        &sync.Mutex{},
-				jobsDone:          &atomic.Int32{},
-				loadedOffsets:     map[pipeline.SourceID]*inodeOffsets{},
-				stopSaveOffsetsCh: make(chan bool),
-				stopReportCh:      make(chan bool),
-				stopMaintenanceCh: make(chan bool),
-				offsetsCommitted:  &atomic.Int64{},
-				logger:            &zap.SugaredLogger{},
+			jp := NewJobProvider(&Config{}, nil, &zap.SugaredLogger{})
+			jp.jobsChan = make(chan *Job, 2)
+			jp.jobs = map[pipeline.SourceID]*Job{
+				1: job,
 			}
 			jp.jobsChan <- job
 			jp.jobsChan <- nil

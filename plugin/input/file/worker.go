@@ -56,11 +56,14 @@ func (w *worker) work(controller inputer, jobProvider *jobProvider, readBufferSi
 		readTotal := int64(0)
 		scanned := int64(0)
 
+		// append the data of the old work, this happens when the event was not completely written to the file
+		// for example: {"level": "info", "message": "some...
+		// the end of the message can be added later and will be read in this iteration
 		accumBuf = append(accumBuf[:0], job.tail...)
 		for {
 			n, err := file.Read(readBuf)
 			controller.IncReadOps()
-			// if we read to end of file it's time to check truncation etc and process next job.
+			// if we read to end of file it's time to check truncation etc and process next job
 			if err == io.EOF || n == 0 {
 				isEOFReached = true
 				break
@@ -73,9 +76,13 @@ func (w *worker) work(controller inputer, jobProvider *jobProvider, readBufferSi
 			readTotal += read
 			buf := readBuf[:read]
 
+			// readBuf parsing loop
+			// It can contain either one long event that did not fit in the buffer, or many different events
 			for len(buf) != 0 {
-				// \n is a line separator, -1 means that the file doesn't have new valid logs.
+				// \n is a line separator, -1 means that the file doesn't have new valid logs
 				pos := int64(bytes.IndexByte(buf, '\n'))
+
+				// if this is not the end of the event
 				if pos == -1 {
 					scanned += int64(len(buf))
 					break
@@ -85,6 +92,7 @@ func (w *worker) work(controller inputer, jobProvider *jobProvider, readBufferSi
 
 				scanned += pos + 1
 
+				// check if the event fits into the max size, otherwise skip the event
 				if shouldCheckMax && len(accumBuf)+len(line) > w.maxEventSize {
 					controller.IncMaxEventSizeExceeded()
 					skipLine = true
@@ -103,9 +111,11 @@ func (w *worker) work(controller inputer, jobProvider *jobProvider, readBufferSi
 					}
 					job.lastEventSeq = controller.In(sourceID, sourceName, lastOffset+scanned, inBuf, isVirgin)
 				}
+				// restore the line buffer
 				accumBuf = accumBuf[:0]
 			}
 
+			// check the buffer size and limits to avoid OOM if event is long
 			if shouldCheckMax && len(accumBuf) > w.maxEventSize {
 				continue
 			}
