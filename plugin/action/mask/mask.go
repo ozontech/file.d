@@ -58,6 +58,15 @@ type Config struct {
 	//>
 	//> List of masks.
 	Masks []Mask `json:"masks"` //*
+
+	//> @3@4@5@6
+	//>
+	//> if set than MaskedEventExtraField: MaskedEventExtraValue will be written to event
+	MaskedEventExtraField string `json:"masked_event_extra_field"` //*
+
+	//> @3@4@5@6
+	//>
+	MaskedEventExtraValue string `json:"masked_event_extra_value"`
 }
 
 type Mask struct {
@@ -249,7 +258,7 @@ func getValueNodeList(currentNode *insaneJSON.Node, valueNodes []*insaneJSON.Nod
 func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	root := event.Root.Node
 
-	// apply vars need to check if mask was applied to event data and send metric.
+	// apply vars need to check if mask was applied to event data and send metric
 	maskApplied := false
 	locApplied := false
 
@@ -272,6 +281,9 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	if p.logMaskAppeared && maskApplied {
 		stats.GetCounter(*p.config.MetricSubsystemName, timesActivated).Inc()
 		p.logger.Infof("mask appeared to event, output string: %s", event.Root.EncodeToString())
+	}
+	if p.config.MaskedEventExtraField != "" && maskApplied {
+		event.Root.AddFieldNoAlloc(event.Root, p.config.MaskedEventExtraField).MutateToString(p.config.MaskedEventExtraValue)
 	}
 
 	return pipeline.ActionPass
