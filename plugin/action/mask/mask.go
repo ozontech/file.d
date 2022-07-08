@@ -51,7 +51,7 @@ type Plugin struct {
 type Config struct {
 	//> @3@4@5@6
 	//>
-	//> If set counterMetric with this name would be sent on metric_subsystem_name.mask_plugin
+	//> If set counterMetric with this name would be sent on metric_subsystem_name.mask_plugin.
 	MetricSubsystemName *string `json:"metric_subsystem_name" required:"false"` //*
 
 	//> @3@4@5@6
@@ -61,29 +61,29 @@ type Config struct {
 
 	//> @3@4@5@6
 	//>
-	//> if set than MaskedEventExtraField: MaskedEventExtraValue will be written to event
+	//> If set than MaskedEventExtraField: MaskedEventExtraValue will be written to event.
 	MaskedEventExtraField string `json:"masked_event_extra_field"` //*
 
 	//> @3@4@5@6
 	//>
-	MaskedEventExtraValue string `json:"masked_event_extra_value"`
+	MaskedEventExtraValue string `json:"masked_event_extra_value"` //*
 }
 
 type Mask struct {
 	//> @3@4@5@6
 	//>
-	//> Regular expression for masking
+	//> Regular expression for masking.
 	Re  string `json:"re" default:"" required:"true"` //*
 	Re_ *regexp.Regexp
 
 	//> @3@4@5@6
 	//>
-	//> Numbers of masking groups in expression, zero for mask all expression
+	//> Groups are numbers of masking groups in expression, zero for mask all expression.
 	Groups []int `json:"groups" required:"true"` //*
 
 	//> @3@4@5@6
 	//>
-	//> MaxCount limits the number of masked symbols in the masked output, if zero, no limit is set
+	//> MaxCount limits the number of masked symbols in the masked output, if zero, no limit is set.
 	MaxCount int `json:"max_count"` //*
 
 	//> @3@4@5@6
@@ -278,12 +278,12 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 		v.MutateToString(string(p.maskBuf))
 	}
 
+	if p.config.MaskedEventExtraField != "" && maskApplied {
+		event.Root.AddFieldNoAlloc(event.Root, p.config.MaskedEventExtraField).MutateToString(p.config.MaskedEventExtraValue)
+	}
 	if p.logMaskAppeared && maskApplied {
 		stats.GetCounter(*p.config.MetricSubsystemName, timesActivated).Inc()
 		p.logger.Infof("mask appeared to event, output string: %s", event.Root.EncodeToString())
-	}
-	if p.config.MaskedEventExtraField != "" && maskApplied {
-		event.Root.AddFieldNoAlloc(event.Root, p.config.MaskedEventExtraField).MutateToString(p.config.MaskedEventExtraValue)
 	}
 
 	return pipeline.ActionPass
