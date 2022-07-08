@@ -21,7 +21,7 @@ pipelines:
 ### Config params
 **`metric_subsystem_name`** *`*string`* 
 
-If set counterMetric with this name would be sent on metric_subsystem_name.mask_plugin
+If set counterMetric with this name would be sent on metric_subsystem_name.mask_plugin.
 
 <br>
 
@@ -31,21 +31,32 @@ List of masks.
 
 <br>
 
+**`masked_event_extra_field`** *`string`* 
+
+If set than MaskedEventExtraField: MaskedEventExtraValue will be written to event.
+
+<br>
+
+**`masked_event_extra_value`** *`string`* 
+
+
+<br>
+
 **`re`** *`string`* *`required`* 
 
-Regular expression for masking
+Regular expression for masking.
 
 <br>
 
 **`groups`** *`[]int`* *`required`* 
 
-Numbers of masking groups in expression, zero for mask all expression
+Groups are numbers of masking groups in expression, zero for mask all expression.
 
 <br>
 
 **`max_count`** *`int`* 
 
-MaxCount limits the number of masked symbols in the masked output, if zero, no limit is set
+MaxCount limits the number of masked symbols in the masked output, if zero, no limit is set.
 
 <br>
 
