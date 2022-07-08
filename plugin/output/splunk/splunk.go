@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/ozontech/file.d/backoff"
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/pipeline"
@@ -30,12 +31,14 @@ const (
 )
 
 type Plugin struct {
+	ctx          context.Context
 	config       *Config
 	client       http.Client
 	logger       *zap.SugaredLogger
 	avgEventSize int
 	batcher      *pipeline.Batcher
 	controller   pipeline.OutputPluginController
+	backoff      *backoff.BackOff
 }
 
 //! config-params
@@ -99,7 +102,18 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.client = p.newClient(p.config.RequestTimeout_)
 
 	p.registerPluginMetrics()
-
+	p.ctx = context.TODO()
+	p.backoff = backoff.New(
+		p.ctx,
+		stats.GetCounter(subsystemName, sendErrorCounter),
+		// No concrete time limit here.
+		time.Hour,
+		backoff.RetriesCfg{Limited: false},
+		backoff.Multiplier(backoff.ExpBackoffDefaultMultiplier),
+		backoff.RandomizationFactor(backoff.ExpBackoffDefaultRndFactor),
+		backoff.InitialIntervalOpt(time.Second),
+		backoff.MaxInterval(time.Second*2),
+	)
 	p.batcher = pipeline.NewBatcher(
 		params.PipelineName,
 		outPluginType,
@@ -112,7 +126,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		0,
 	)
 
-	p.batcher.Start(context.TODO())
+	p.batcher.Start(p.ctx)
 }
 
 func (p *Plugin) registerPluginMetrics() {
@@ -157,18 +171,15 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 
 	p.logger.Debugf("Trying to send: %s", outBuf)
 
-	for {
-		err := p.send(outBuf)
-		if err != nil {
-			stats.GetCounter(subsystemName, sendErrorCounter).Inc()
-			p.logger.Errorf("Can't send data to splunk address=%s: %s", p.config.Endpoint, err.Error())
-			time.Sleep(time.Second)
-
-			continue
+	_ = p.backoff.RetryWithMetrics(p.ctx, func(ctx context.Context) error {
+		sendErr := p.send(outBuf)
+		if sendErr != nil {
+			p.logger.Errorf("can't send data to splunk address=%s: %s", p.config.Endpoint, sendErr.Error())
+			return sendErr
 		}
+		return nil
+	})
 
-		break
-	}
 	p.logger.Debugf("Successfully sent: %s", outBuf)
 }
 

@@ -8,6 +8,7 @@ require (
 	github.com/alecthomas/kingpin v2.2.6+incompatible
 	github.com/alecthomas/units v0.0.0-20190924025748-f65c72e2690d
 	github.com/bitly/go-simplejson v0.5.0
+	github.com/cenkalti/backoff/v4 v4.1.2
 	github.com/euank/go-kmsg-parser v2.0.0+incompatible
 	github.com/ghodss/yaml v1.0.0
 	github.com/golang/mock v1.6.0

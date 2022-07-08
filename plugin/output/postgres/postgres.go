@@ -10,13 +10,13 @@ import (
 	sq "github.com/Masterminds/squirrel"
 	"github.com/jackc/pgx/v4"
 	"github.com/jackc/pgx/v4/pgxpool"
-	insaneJSON "github.com/vitkovskii/insane-json"
-	"go.uber.org/zap"
-
+	"github.com/ozontech/file.d/backoff"
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/stats"
+	insaneJSON "github.com/vitkovskii/insane-json"
+	"go.uber.org/zap"
 )
 
 /*{ introduction
@@ -43,6 +43,7 @@ const (
 	// metrics
 	discardedEventCounter  = "event_discarded"
 	duplicatedEventCounter = "event_duplicated"
+	sendErrorCounter       = "send_error"
 )
 
 type pgType int
@@ -69,13 +70,14 @@ type Plugin struct {
 	ctx        context.Context
 	cancelFunc context.CancelFunc
 
+	backOff      *backoff.BackOff
 	queryBuilder PgQueryBuilder
 	pool         PgxIface
 }
 
 type ConfigColumn struct {
 	Name       string `json:"name" required:"true"`
-	ColumnType string `json:"type" required:"true" options:"int|string|bool|timestamp"`
+	ColumnType string `json:"type" required:"true" options:"int|string|timestamp"`
 	Unique     bool   `json:"unique" default:"false"`
 }
 
@@ -123,14 +125,15 @@ type Config struct {
 	//> @3@4@5@6
 	//>
 	//> Timeout for DB requests in milliseconds.
-	DBRequestTimeout  cfg.Duration `json:"db_request_timeout" default:"3000ms" parse:"duration"` //*
-	DBRequestTimeout_ time.Duration
+	//> Timeouts can differ due using exponential backoff.
+	RequestTimeout  cfg.Duration `json:"db_request_timeout" default:"3000ms" parse:"duration"` //*
+	RequestTimeout_ time.Duration
 
 	//> @3@4@5@6
 	//>
 	//> Timeout for DB health check.
-	DBHealthCheckPeriod  cfg.Duration `json:"db_health_check_period" default:"60s" parse:"duration"` //*
-	DBHealthCheckPeriod_ time.Duration
+	HealthCheckInterval  cfg.Duration `json:"db_health_check_interval" default:"60s" parse:"duration"` //*
+	HealthCheckInterval_ time.Duration
 
 	//> @3@4@5@6
 	//>
@@ -174,8 +177,14 @@ func (p *Plugin) registerPluginMetrics() {
 		Subsystem: subsystemName,
 		Help:      "Total pgsql duplicated messages",
 	})
+	stats.RegisterCounter(&stats.MetricDesc{
+		Name:      sendErrorCounter,
+		Subsystem: subsystemName,
+		Help:      "Total pgsql send errors",
+	})
 }
 
+// Start plugin.
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginParams) {
 	p.controller = params.Controller
 	p.logger = params.Logger
@@ -191,10 +200,10 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	if p.config.Retention_ < 1 {
 		p.logger.Fatal("'renetion' can't be <1")
 	}
-	if p.config.DBRequestTimeout_ < 1 {
+	if p.config.RequestTimeout_ < 1 {
 		p.logger.Fatal("'db_request_timeout' can't be <1")
 	}
-	if p.config.DBHealthCheckPeriod_ < 1 {
+	if p.config.HealthCheckInterval_ < 1 {
 		p.logger.Fatal("'db_health_check_period' can't be <1")
 	}
 
@@ -216,6 +225,20 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	}
 	p.pool = pool
 
+	p.backOff = backoff.New(
+		p.ctx,
+		stats.GetCounter(subsystemName, discardedEventCounter),
+		p.config.RequestTimeout_,
+		backoff.RetriesCfg{
+			Limited: true,
+			Limit:   uint64(p.config.Retry),
+		},
+		backoff.Multiplier(backoff.ExpBackoffDefaultMultiplier),
+		backoff.RandomizationFactor(backoff.ExpBackoffDefaultRndFactor),
+		backoff.InitialIntervalOpt(p.config.Retention_),
+		backoff.MaxInterval(p.config.Retention_*2),
+	)
+
 	p.batcher = pipeline.NewBatcher(
 		params.PipelineName,
 		outPluginType,
@@ -235,6 +258,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.batcher.Start(ctx)
 }
 
+// Stop plug.
 func (p *Plugin) Stop() {
 	p.cancelFunc()
 	p.batcher.Stop()
@@ -306,33 +330,22 @@ func (p *Plugin) out(_ *pipeline.WorkerData, batch *pipeline.Batch) {
 		argsSliceInterface[i] = args[i-1]
 	}
 
-	var ctx context.Context
-	var cancel context.CancelFunc
-	var outErr error
 	// Insert into pg with retry.
-	for i := p.config.Retry; i > 0; i-- {
-		ctx, cancel = context.WithTimeout(p.ctx, p.config.DBRequestTimeout_)
-
-		p.logger.Info(query, args)
+	if err = p.backOff.RetryWithMetrics(p.ctx, func(ctx context.Context) error {
 		rows, err := p.pool.Query(ctx, query, argsSliceInterface...)
 		defer func() {
-			rows.Close()
+			if rows != nil {
+				rows.Close()
+			}
 		}()
 		if err != nil {
-			outErr = err
-			p.logger.Infof("rows: %v, err: %s", rows, err.Error())
-			cancel()
-			time.Sleep(p.config.Retention_)
-			continue
-		} else {
-			outErr = nil
-			break
+			p.logger.Errorf("can't insert query: %s, args: %v: %s", query, args, err.Error())
+			return err
 		}
-	}
-
-	if outErr != nil {
+		return nil
+	}); err != nil {
 		p.pool.Close()
-		p.logger.Fatalf("Failed insert into %s. query: %s, args: %v, err: %v", p.config.Table, query, args, outErr)
+		p.logger.Fatalf("can't insert. query: %s, args: %v: %s", query, args, err.Error())
 	}
 }
 
@@ -399,7 +412,7 @@ func (p *Plugin) parsePGConfig() (*pgxpool.Config, error) {
 	}
 
 	pgCfg.LazyConnect = false
-	pgCfg.HealthCheckPeriod = p.config.DBHealthCheckPeriod_
+	pgCfg.HealthCheckPeriod = p.config.HealthCheckInterval_
 
 	return pgCfg, nil
 }

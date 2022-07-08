@@ -1,18 +1,23 @@
 package splunk
 
 import (
+	"context"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
+	"github.com/ozontech/file.d/backoff"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/stats"
 	"github.com/stretchr/testify/assert"
 	insaneJSON "github.com/vitkovskii/insane-json"
 	"go.uber.org/zap"
 )
 
 func TestSplunk(t *testing.T) {
+	stats.InitStats()
 	suites := []struct {
 		name     string
 		input    string
@@ -44,11 +49,23 @@ func TestSplunk(t *testing.T) {
 			}))
 			defer testServer.Close()
 
+			ctx := context.TODO()
 			plugin := Plugin{
+				ctx: ctx,
 				config: &Config{
 					Endpoint: testServer.URL,
 				},
 				logger: zap.NewExample().Sugar(),
+				backoff: backoff.New(
+					ctx,
+					stats.GetCounter(subsystemName, sendErrorCounter),
+					time.Minute,
+					backoff.RetriesCfg{Limited: false},
+					backoff.Multiplier(backoff.ExpBackoffDefaultMultiplier),
+					backoff.RandomizationFactor(backoff.ExpBackoffDefaultRndFactor),
+					backoff.InitialIntervalOpt(time.Second),
+					backoff.MaxInterval(time.Second*2),
+				),
 			}
 
 			batch := pipeline.Batch{
