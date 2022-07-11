@@ -1,4 +1,4 @@
-VERSION ?= v0.5.5
+VERSION ?= v0.5.12
 UPSTREAM_BRANCH ?= origin/master
 
 .PHONY: prepare
@@ -8,7 +8,7 @@ prepare:
 .PHONY: build
 build: 
 	echo "Building for amd64..."
-	GOOS=linux GOARCH=amd64 go build -ldflags "-X main.version=${VERSION}" -v -o file.d ./cmd/file.d.go
+	GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "-X main.version=${VERSION}" -o file.d ./cmd/file.d.go
 
 .PHONY: build-for-current-system
 build-for-current-system:
@@ -76,7 +76,7 @@ push-images-all: push-images-version push-images-latest
 .PHONY: lint
 lint:
 	# installation: https://golangci-lint.run/usage/install/#local-installation
-	golangci-lint run --new-from-rev=${UPSTREAM_BRANCH}
+	golangci-lint run --new-from-rev=${UPSTREAM_BRANCH} --build-tags linux
 
 .PHONY: mock
 mock:
