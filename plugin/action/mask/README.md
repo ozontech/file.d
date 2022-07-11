@@ -33,7 +33,7 @@ List of masks.
 
 **`mask_applied_field`** *`string`* 
 
-If any mask has been applied then mask_applied_field will be set to mask_applied_value in the event.
+If any mask has been applied then `mask_applied_field` will be set to `mask_applied_value` in the event.
 
 <br>
 

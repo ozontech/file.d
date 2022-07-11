@@ -61,7 +61,7 @@ type Config struct {
 
 	//> @3@4@5@6
 	//>
-	//> If any mask has been applied then mask_applied_field will be set to mask_applied_value in the event.
+	//> If any mask has been applied then `mask_applied_field` will be set to `mask_applied_value` in the event.
 	MaskAppliedField string `json:"mask_applied_field"` //*
 
 	//> @3@4@5@6
