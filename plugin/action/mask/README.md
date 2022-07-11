@@ -31,13 +31,13 @@ List of masks.
 
 <br>
 
-**`masked_event_extra_field`** *`string`* 
+**`mask_applied_field`** *`string`* 
 
-If set than MaskedEventExtraField: MaskedEventExtraValue will be written to event.
+If any mask has been applied then mask_applied_field will be set to mask_applied_value in the event.
 
 <br>
 
-**`masked_event_extra_value`** *`string`* 
+**`mask_applied_value`** *`string`* 
 
 
 <br>

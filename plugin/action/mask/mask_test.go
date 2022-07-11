@@ -165,8 +165,8 @@ func TestMaskAddExtraField(t *testing.T) {
 	var plugin Plugin
 
 	plugin.config = &Config{
-		MaskedEventExtraField: key,
-		MaskedEventExtraValue: val,
+		MaskAppliedField: key,
+		MaskAppliedValue: val,
 		Masks: []Mask{
 			{Re: kDefaultCardRegExp, Groups: []int{1, 2, 3, 4}},
 		},

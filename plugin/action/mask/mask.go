@@ -61,12 +61,12 @@ type Config struct {
 
 	//> @3@4@5@6
 	//>
-	//> If set than MaskedEventExtraField: MaskedEventExtraValue will be written to event.
-	MaskedEventExtraField string `json:"masked_event_extra_field"` //*
+	//> If any mask has been applied then mask_applied_field will be set to mask_applied_value in the event.
+	MaskAppliedField string `json:"mask_applied_field"` //*
 
 	//> @3@4@5@6
 	//>
-	MaskedEventExtraValue string `json:"masked_event_extra_value"` //*
+	MaskAppliedValue string `json:"mask_applied_value"` //*
 }
 
 type Mask struct {
@@ -278,8 +278,8 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 		v.MutateToString(string(p.maskBuf))
 	}
 
-	if p.config.MaskedEventExtraField != "" && maskApplied {
-		event.Root.AddFieldNoAlloc(event.Root, p.config.MaskedEventExtraField).MutateToString(p.config.MaskedEventExtraValue)
+	if p.config.MaskAppliedField != "" && maskApplied {
+		event.Root.AddFieldNoAlloc(event.Root, p.config.MaskAppliedField).MutateToString(p.config.MaskAppliedValue)
 	}
 	if p.logMaskAppeared && maskApplied {
 		stats.GetCounter(*p.config.MetricSubsystemName, timesActivated).Inc()
