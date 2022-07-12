@@ -7,12 +7,13 @@ import (
 )
 
 type MultilineAction struct {
-	config       *Config
-	logger       *zap.SugaredLogger
-	params       *pipeline.ActionPluginParams
-	maxEventSize int
-	logBuff      []byte
-	logSize      int
+	config        *Config
+	logger        *zap.SugaredLogger
+	params        *pipeline.ActionPluginParams
+	maxEventSize  int
+	logBuff       []byte
+	logSize       int
+	skipNextEvent bool
 }
 
 const (
@@ -38,12 +39,7 @@ func (p *MultilineAction) Do(event *pipeline.Event) pipeline.ActionResult {
 	// todo: do same logic as in join plugin here to send not full logs
 	if event.IsTimeoutKind() {
 		p.logger.Errorf("can't read next sequential event for k8s pod stream")
-		p.logBuff = p.logBuff[:1]
-		return pipeline.ActionDiscard
-	}
-	if p.maxEventSize != 0 && p.logSize > p.maxEventSize {
-		p.logger.Errorf("logs will be discarded due to maxEventSize")
-		p.logBuff = p.logBuff[:1]
+		p.resetLogBuf()
 		return pipeline.ActionDiscard
 	}
 
@@ -66,8 +62,19 @@ func (p *MultilineAction) Do(event *pipeline.Event) pipeline.ActionResult {
 	shouldSplit := predictedLen > p.config.SplitEventSize
 	logFragmentLen := len(logFragment)
 	if logFragment[logFragmentLen-3:logFragmentLen-1] != `\n` && !shouldSplit {
-		p.logBuff = append(p.logBuff, logFragment[1:logFragmentLen-1]...)
+		if len(p.logBuff) < p.maxEventSize {
+			p.logBuff = append(p.logBuff, logFragment[1:logFragmentLen-1]...)
+		} else {
+			p.skipNextEvent = true
+			p.logger.Errorf("event chunk will be discarded due to max_event_size, source_name=%s", event.SourceName)
+		}
 		return pipeline.ActionCollapse
+	}
+
+	if p.skipNextEvent {
+		p.skipNextEvent = false
+		p.resetLogBuf()
+		return pipeline.ActionDiscard
 	}
 
 	ns, pod, container, _, success, podMeta := getMeta(event.SourceName)
@@ -126,10 +133,13 @@ func (p *MultilineAction) Do(event *pipeline.Event) pipeline.ActionResult {
 		l := len(event.Buf)
 		event.Buf = append(event.Buf, p.logBuff...)
 		event.Root.AddFieldNoAlloc(event.Root, "log").MutateToEscapedString(pipeline.ByteToStringUnsafe(event.Buf[l:]))
-
-		p.logBuff = p.logBuff[:1]
 	}
-	p.logSize = 0
+	p.resetLogBuf()
 
 	return pipeline.ActionPass
+}
+
+func (p *MultilineAction) resetLogBuf() {
+	p.logBuff = p.logBuff[:1]
+	p.logSize = 0
 }
