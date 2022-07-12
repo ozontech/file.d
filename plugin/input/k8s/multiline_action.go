@@ -62,7 +62,7 @@ func (p *MultilineAction) Do(event *pipeline.Event) pipeline.ActionResult {
 	shouldSplit := predictedLen > p.config.SplitEventSize
 	logFragmentLen := len(logFragment)
 	if logFragment[logFragmentLen-3:logFragmentLen-1] != `\n` && !shouldSplit {
-		if len(p.eventBuf) < p.maxEventSize {
+		if p.maxEventSize == 0 || len(p.eventBuf) < p.maxEventSize {
 			p.eventBuf = append(p.eventBuf, logFragment[1:logFragmentLen-1]...)
 		} else {
 			p.skipNextEvent = true
