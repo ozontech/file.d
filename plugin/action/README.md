@@ -78,6 +78,23 @@ It decodes a JSON string from the event field and merges the result with the eve
 If the decoded JSON isn't an object, the event will be skipped.
 
 [More details...](plugin/action/json_decode/README.md)
+## json_encode
+It replaces field with its JSON string representation.
+
+**Example:**
+```yaml
+pipelines:
+  example_pipeline:
+    ...
+    actions:
+    - type: json_encode
+      field: server
+    ...
+```
+It transforms `{"server":{"os":"linux","arch":"amd64"}}` into `{"server":"{\"os\":\"linux\",\"arch\":\"amd64\"}"}`.
+
+
+[More details...](plugin/action/json_encode/README.md)
 ## keep_fields
 It keeps the list of the event fields and removes others.
 
