@@ -1,6 +1,8 @@
 package k8s
 
 import (
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/ozontech/file.d/pipeline"
@@ -44,13 +46,13 @@ func TestMultilineAction_Do(t *testing.T) {
 			// because the buffer size check happens before adding to it
 			EventParts:    []string{`{"log": "hello"}`, `{"log": "  "}`, `{"log": "world\n"}`},
 			ActionResults: []pipeline.ActionResult{pipeline.ActionCollapse, pipeline.ActionCollapse, pipeline.ActionPass},
-			ExpectedRoot:  `{"log":"hello  world\n","k8s_node":"","k8s_namespace":"sre","k8s_pod":"advanced-logs-checker-1111111111-trtrq","k8s_container":"duty-bot","k8s_pod_label_allowed_label":"allowed_value"}`,
+			ExpectedRoot:  wrapK8sInfo(`hello  world\n`, item),
 		},
 		{
 			Name:          "continue process events",
 			EventParts:    []string{`{"log": "some "}`, `{"log": "other "}`, `{"log": "logs\n"}`},
 			ActionResults: []pipeline.ActionResult{pipeline.ActionCollapse, pipeline.ActionCollapse, pipeline.ActionPass},
-			ExpectedRoot:  `{"log":"some other logs\n","k8s_node":"","k8s_namespace":"sre","k8s_pod":"advanced-logs-checker-1111111111-trtrq","k8s_container":"duty-bot","k8s_pod_label_allowed_label":"allowed_value"}`,
+			ExpectedRoot:  wrapK8sInfo(`some other logs\n`, item),
 		},
 		{
 			Name:          "must discard long event",
@@ -63,13 +65,14 @@ func TestMultilineAction_Do(t *testing.T) {
 			// because the buffer size check happens before adding to it
 			EventParts:    []string{`{"log": "some "}`, `{"log": "other long long long long "}`, `{"log": "event\n"}`},
 			ActionResults: []pipeline.ActionResult{pipeline.ActionCollapse, pipeline.ActionCollapse, pipeline.ActionPass},
-			ExpectedRoot:  `{"log":"some other long long long long event\n","k8s_node":"","k8s_namespace":"sre","k8s_pod":"advanced-logs-checker-1111111111-trtrq","k8s_container":"duty-bot","k8s_pod_label_allowed_label":"allowed_value"}`,
+			ExpectedRoot:  wrapK8sInfo(`some other long long long long event\n`, item),
 		},
 	}
+	root := insaneJSON.Spawn()
+	defer insaneJSON.Release(root)
 
 	for _, tc := range tcs {
 		t.Run(tc.Name, func(t *testing.T) {
-			root := insaneJSON.Spawn()
 			for i, part := range tc.EventParts {
 				require.NoError(t, root.DecodeString(part))
 				event := &pipeline.Event{Root: root, SourceName: meta, Size: len(part)}
@@ -83,4 +86,149 @@ func TestMultilineAction_Do(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestMultilineAction_Do_shouldSplit(t *testing.T) {
+	plugin := &MultilineAction{}
+	config := &Config{
+		SplitEventSize: predictionLookahead * 4,
+	}
+	plugin.Start(config, &pipeline.ActionPluginParams{Logger: zap.S(), PluginDefaultParams: &pipeline.PluginDefaultParams{
+		PipelineSettings: &pipeline.Settings{},
+	}})
+
+	item := &metaItem{
+		nodeName:      "node_1",
+		namespace:     "sre",
+		podName:       "advanced-logs-checker-1111111111-trtrq",
+		containerName: "duty-bot",
+		containerID:   "4e0301b633eaa2bfdcafdeba59ba0c72a3815911a6a820bf273534b0f32d98e0",
+	}
+	meta := getLogFilename("k8s", item)
+	putMeta(getPodInfo(item, true))
+
+	var (
+		splitEventSize = predictionLookahead * 2
+		longChunk      = strings.Repeat("a", splitEventSize*2)
+	)
+
+	tcs := []struct {
+		Name             string
+		MaxEventSize     int
+		Message          string
+		ExpectedLogField string
+		ActionResult     pipeline.ActionResult
+	}{
+		{
+			Name:             "is last chunk and shouldSplit is false",
+			MaxEventSize:     1,
+			Message:          wrapLogContent(`hi\n`),
+			ExpectedLogField: `"hi\n"`,
+			ActionResult:     pipeline.ActionPass,
+		},
+		{
+			Name:             "is last chunk and shouldSplit is true",
+			MaxEventSize:     2,
+			Message:          wrapLogContent(longChunk + `\n`),
+			ExpectedLogField: fmt.Sprintf(`"%s\n"`, longChunk),
+			ActionResult:     pipeline.ActionPass,
+		},
+		{
+			Name:             "isnt last chunk and shouldSplit is true",
+			MaxEventSize:     4,
+			Message:          wrapLogContent(longChunk),
+			ExpectedLogField: fmt.Sprintf(`"%s"`, longChunk),
+			ActionResult:     pipeline.ActionPass,
+		},
+		{
+			Name:             "isnt last chunk and shouldSplit is false",
+			MaxEventSize:     10,
+			Message:          wrapLogContent(`hi`),
+			ExpectedLogField: `"hi"`,
+			ActionResult:     pipeline.ActionCollapse,
+		},
+		{
+			Name:             "end prev event",
+			MaxEventSize:     10,
+			Message:          wrapLogContent(`.\n`),
+			ExpectedLogField: `"hi.\n"`,
+			ActionResult:     pipeline.ActionPass,
+		},
+		// test max_log_size for chunks
+		{
+			Name:             "text log size too small chunk1",
+			MaxEventSize:     2,
+			Message:          wrapLogContent(`chunk1`),
+			ExpectedLogField: `"chunk1"`,
+			ActionResult:     pipeline.ActionCollapse,
+		},
+		{
+			Name:             "text log size too small chunk2",
+			MaxEventSize:     2,
+			Message:          wrapLogContent(`chunk2`),
+			ExpectedLogField: `"chunk2"`,
+			ActionResult:     pipeline.ActionCollapse,
+		},
+		{
+			Name:             "text log size too small chunk3",
+			MaxEventSize:     2,
+			Message:          wrapLogContent(`chunk3\n`),
+			ExpectedLogField: `"chunk3\n"`,
+			ActionResult:     pipeline.ActionDiscard,
+		},
+		// test max_log_size = 0
+		{
+			Name:             "max_log_size is 0 chunk1",
+			Message:          wrapLogContent(`chunk1`),
+			ExpectedLogField: `"chunk1"`,
+			ActionResult:     pipeline.ActionCollapse,
+		},
+		{
+			Name:             "max_log_size is 0 chunk2",
+			Message:          wrapLogContent(`chunk2`),
+			ExpectedLogField: `"chunk2"`,
+			ActionResult:     pipeline.ActionCollapse,
+		},
+		{
+			Name:             "max_log_size is 0 chunk3",
+			Message:          wrapLogContent(`chunk3\n`),
+			ExpectedLogField: `"chunk1chunk2chunk3\n"`,
+			ActionResult:     pipeline.ActionPass,
+		},
+		// test max_log_size = 5 and it is long last chunk
+		{
+			Name:             "long last chunk",
+			MaxEventSize:     5,
+			Message:          wrapLogContent(longChunk),
+			ExpectedLogField: fmt.Sprintf(`"%s"`, longChunk),
+			// it is ok because we will skip this event in the `pipeline.In` method
+			ActionResult: pipeline.ActionPass,
+		},
+	}
+
+	root := insaneJSON.Spawn()
+	defer insaneJSON.Release(root)
+
+	for _, tc := range tcs {
+		t.Run(tc.Name, func(t *testing.T) {
+			plugin.maxEventSize = tc.MaxEventSize
+			require.NoError(t, root.DecodeString(tc.Message))
+			event := &pipeline.Event{Root: root, SourceName: meta, Size: len(tc.Message)}
+
+			result := plugin.Do(event)
+
+			assert.Equalf(t, tc.ActionResult, result, "wrong action result")
+			assert.Equal(t, tc.ExpectedLogField, root.Dig("log").EncodeToString())
+		})
+	}
+}
+
+func wrapLogContent(s string) string {
+	return fmt.Sprintf(`{"log": "%s"}`, s)
+}
+
+func wrapK8sInfo(s string, item *metaItem) string {
+	return fmt.Sprintf(
+		`{"log":"%s","k8s_node":"%s","k8s_namespace":"%s","k8s_pod":"%s","k8s_container":"%s","k8s_pod_label_allowed_label":"allowed_value","k8s_node_label_zone":"z34"}`,
+		s, item.nodeName, item.namespace, item.podName, item.containerName)
 }
