@@ -1,7 +1,6 @@
 package s3
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -18,6 +17,7 @@ import (
 	"github.com/minio/minio-go"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/longpanic"
+	"github.com/ozontech/file.d/offset"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/plugin/output/file"
 	"github.com/ozontech/file.d/stats"
@@ -476,7 +476,7 @@ func (p *Plugin) compressFilesInDir(bucketName string, targetDirs, fileNames map
 	// sort files by creation time
 	sort.Slice(files, p.getSortFunc(files))
 	for _, f := range files {
-		objName, ok := p.restoreObjectName(f + p.compressor.getExtension())
+		objName, ok := p.restoreObjectName(fmt.Sprintf("%s%s", f, p.compressor.getExtension()))
 		if !ok {
 			objName = p.generateObjectName(f)
 		}
@@ -551,6 +551,7 @@ func (p *Plugin) compressWork() {
 			p.logger.Panicf("could not delete file: %s, error: %s", dto, err.Error())
 		}
 		dto.fileName = compressedName
+
 		p.uploadCh <- fileDTO{fileName: dto.fileName, objectName: dto.objectName, bucketName: dto.bucketName}
 	}
 }
@@ -593,22 +594,11 @@ func (p *Plugin) restoreObjectName(file string) (objectName string, success bool
 		return "", false
 	}
 
-	metaFile, err := os.Open(filepath.Join(p.config.FileConfig.MetaCfg.MetaDataDir, p.config.FileConfig.MetaCfg.SealedMetaPrefix+filepath.Base(file)))
-	if err != nil {
-		p.logger.Errorf("can't open sealed_meta: %s", err.Error())
-		return "", false
-	}
-	defer metaFile.Close()
-
-	byteValue, err := ioutil.ReadAll(metaFile)
-	if err != nil {
-		p.logger.Errorf("can't read sealed_meta: %s", err.Error())
-		return "", false
-	}
-
 	var result map[string]interface{}
-	if err := json.Unmarshal([]byte(byteValue), &result); err != nil {
-		p.logger.Errorf("can't unmarshal meta json: %s", err.Error())
+	if err := offset.LoadJson(filepath.Join(p.config.FileConfig.MetaCfg.MetaDataDir, fmt.Sprintf(
+		"%s%s", p.config.FileConfig.MetaCfg.SealedMetaPrefix, filepath.Base(file),
+	)), &result); err != nil {
+		p.logger.Error("can't restore s3 object name: %s", err.Error())
 		return "", false
 	}
 
@@ -617,5 +607,6 @@ func (p *Plugin) restoreObjectName(file string) (objectName string, success bool
 			return strVal, success
 		}
 	}
+
 	return "", false
 }

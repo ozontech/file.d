@@ -1,6 +1,7 @@
 package offset
 
 import (
+	"bytes"
 	"encoding/json"
 	"io"
 )
@@ -14,7 +15,11 @@ func (o *jsonValue) Load(r io.Reader) error {
 	if err != nil {
 		return err
 	}
-	return json.Unmarshal(b, o.value)
+
+	d := json.NewDecoder(bytes.NewReader(b))
+	d.UseNumber()
+
+	return d.Decode(o.value)
 }
 
 func (o *jsonValue) Save(w io.Writer) error {
@@ -39,10 +44,10 @@ func newJsonOffset(path string, value interface{}) *Offset {
 	return res
 }
 
-func LoadJson(path string, value interface{}) error {
-	return newJsonOffset(path, value).Load()
-}
-
 func SaveJson(path string, value interface{}) error {
 	return newJsonOffset(path, value).Save()
+}
+
+func LoadJson(path string, value interface{}) error {
+	return newJsonOffset(path, value).Load()
 }

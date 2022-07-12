@@ -43,12 +43,27 @@ func TestYAML(t *testing.T) {
 	assert.Equal(t, offset, loaded)
 }
 
-func TestSaveLoad(t *testing.T) {
+func TestSaveLoadYaml(t *testing.T) {
 	path := getTmpPath(t, "offset.yaml")
 	offset := testOffset{}
 	offset.set("some_name", 123)
 
 	err := SaveYAML(path, &offset)
+	assert.NoError(t, err)
+
+	loaded := testOffset{}
+	err = LoadYAML(path, &loaded)
+	assert.NoError(t, err)
+
+	assert.Equal(t, offset, loaded)
+}
+
+func TestSaveLoadJson(t *testing.T) {
+	path := getTmpPath(t, "offset.json")
+	offset := testOffset{}
+	offset.set("some_name", 12345)
+
+	err := SaveJson(path, &offset)
 	assert.NoError(t, err)
 
 	loaded := testOffset{}

@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"sync"
 
+	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/offset"
 )
 
@@ -18,11 +19,10 @@ const (
 )
 
 type meta struct {
-	filePreifx,
+	filePrefix,
 	fileName,
 	separator,
 	dir,
-	extention,
 	sealedFileFieldName,
 	sealedFilePathFieldName string
 	staticMeta map[string]interface{}
@@ -30,22 +30,16 @@ type meta struct {
 	fileMode int64
 	mu       sync.Mutex
 
-	finalFilePrefix string
-	tsFileName      string
-	file            *os.File
+	sealedFilePrefix string
+	tsFileName       string
+	file             *os.File
 }
 
 type metaInit struct {
+	config *Config
 	fileName,
 	separator,
-	dir,
-	extention,
-	filePrefix,
-	sealedPrefix,
-	staticMeta,
-	sealedFileFieldName,
-	sealedFilePathFieldName string
-	fileMode int64
+	filePrefix string
 }
 
 type sealUpDTO struct {
@@ -57,7 +51,7 @@ type sealUpDTO struct {
 
 func newMeta(init metaInit) (*meta, error) {
 	staticMetaMap := make(map[string]interface{})
-	metaString := init.staticMeta
+	metaString := init.config.MetaCfg.StaticMeta
 	if metaString != "" {
 		if err := json.Unmarshal([]byte(metaString), &staticMetaMap); err != nil {
 			return nil, err
@@ -67,24 +61,23 @@ func newMeta(init metaInit) (*meta, error) {
 	return &meta{
 		fileName:                init.fileName,
 		separator:               init.separator,
-		dir:                     init.dir,
-		extention:               init.extention,
-		filePreifx:              init.filePrefix,
-		finalFilePrefix:         init.sealedPrefix,
-		fileMode:                init.fileMode,
-		sealedFileFieldName:     init.sealedFileFieldName,
-		sealedFilePathFieldName: init.sealedFilePathFieldName,
+		dir:                     init.config.MetaCfg.MetaDataDir,
+		filePrefix:              init.filePrefix,
+		sealedFilePrefix:        init.config.MetaCfg.SealedMetaPrefix,
+		sealedFileFieldName:     init.config.MetaCfg.SealedFileNameField,
+		sealedFilePathFieldName: init.config.MetaCfg.SealedFilePathFieldName,
 		staticMeta:              staticMetaMap,
+		fileMode:                init.config.FileMode_,
 	}, nil
 }
 
-// sealUpCurrentMeta creates finalized meta for sealed file
+// sealUpCurrentMeta creates finalized meta for sealed file.
 func (m *meta) sealUpCurrentMeta(sealupDTO sealUpDTO) error {
 	// ignore during startup
 	if m.tsFileName == "" {
 		return nil
 	}
-	sealedName := m.finalFilePrefix + sealupDTO.sealingLogFile
+	sealedName := m.sealedFilePrefix + sealupDTO.sealingLogFile
 
 	if err := m.updateMetaFile(sealupDTO.firstTimestamp, sealupDTO.lastTimestamp, sealupDTO.sealingOuterPath); err != nil {
 		return err
@@ -103,6 +96,7 @@ func (m *meta) newMetaFile(
 	filename string,
 	sealUp sealUpDTO,
 	timestamp int64,
+	intPair *pair,
 ) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -111,22 +105,38 @@ func (m *meta) newMetaFile(
 		return err
 	}
 
-	m.tsFileName = fmt.Sprintf("%s%d%s%s", m.filePreifx, timestamp, m.separator, filename)
-	pattern := filepath.Join(m.dir, m.filePreifx+"*"+m.fileName+"."+m.extention)
+	m.tsFileName = fmt.Sprintf("%s%d%s%s", m.filePrefix, timestamp, m.separator, filename)
+	pattern := filepath.Join(m.dir, m.filePrefix+"*"+m.fileName+".json")
 	matches, err := filepath.Glob(pattern)
 	if err != nil {
 		return fmt.Errorf("can't glob: pattern=%s, err=%ss", pattern, err.Error())
 	}
-
 	// Reuse old file
 	if len(matches) == 1 {
 		m.tsFileName = path.Base(matches[0])
+
+		var result map[string]interface{}
+		err := offset.LoadJson(filepath.Join(m.dir, m.tsFileName), &result)
+		if err != nil {
+			logger.Errorf("can't load json meta: %s", err.Error())
+		}
+
+		// update pair after fail
+		if f, ok := result[firstTimestampField]; ok {
+			if err := intPair.UpdatePairJsonNumber(f); err != nil {
+				logger.Errorf("candidate isn't json.Number: %s", err.Error())
+			}
+		}
+		if f, ok := result[lastTimestampField]; ok {
+			if err := intPair.UpdatePairJsonNumber(f); err != nil {
+				logger.Errorf("candidate isn't json.Number: %s", err.Error())
+			}
+		}
 	} else {
-		m.tsFileName += "." + m.extention
+		m.tsFileName += ".json"
 	}
 	metaName := filepath.Join(m.dir, m.tsFileName)
 
-	// creates meta dir if required
 	_, err = os.Stat(m.dir)
 	if err != nil {
 		if os.IsNotExist(err) {

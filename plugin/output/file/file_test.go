@@ -194,21 +194,16 @@ func TestSealUpHasContentMetaOn(t *testing.T) {
 
 	metaWriter, err := newMeta(
 		metaInit{
-			fileName:                p.fileName,
-			separator:               fileNameSeparator,
-			dir:                     p.config.MetaCfg.MetaDataDir,
-			extention:               "json",
-			filePrefix:              metaFilePrefix,
-			sealedPrefix:            p.config.MetaCfg.SealedMetaPrefix,
-			sealedFileFieldName:     p.config.MetaCfg.SealedFileNameField,
-			sealedFilePathFieldName: p.config.MetaCfg.SealedFilePathFieldName,
-			fileMode:                p.config.FileMode_,
-			staticMeta:              p.config.MetaCfg.StaticMeta,
+			config:     &cfg,
+			fileName:   p.fileName,
+			separator:  fileNameSeparator,
+			filePrefix: metaFilePrefix,
 		},
 	)
 	require.NoError(t, err)
 	now := time.Now().Unix()
-	metaWriter.newMetaFile(metaWriter.fileName, sealUpDTO{}, now)
+	err = metaWriter.newMetaFile(metaWriter.fileName, sealUpDTO{}, now)
+	require.NoError(t, err)
 	p.metaWriter = metaWriter
 
 	// call func
