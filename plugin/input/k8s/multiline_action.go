@@ -11,8 +11,8 @@ type MultilineAction struct {
 	logger        *zap.SugaredLogger
 	params        *pipeline.ActionPluginParams
 	maxEventSize  int
-	logBuff       []byte
-	logSize       int
+	eventBuf      []byte
+	eventSize     int
 	skipNextEvent bool
 }
 
@@ -29,7 +29,7 @@ func (p *MultilineAction) Start(config pipeline.AnyConfig, params *pipeline.Acti
 	p.config.AllowedPodLabels_ = cfg.ListToMap(p.config.AllowedPodLabels)
 	p.config.AllowedNodeLabels_ = cfg.ListToMap(p.config.AllowedNodeLabels)
 
-	p.logBuff = append(p.logBuff, '"')
+	p.eventBuf = append(p.eventBuf, '"')
 }
 
 func (p *MultilineAction) Stop() {
@@ -57,13 +57,13 @@ func (p *MultilineAction) Do(event *pipeline.Event) pipeline.ActionResult {
 	// docker splits long logs by 16kb chunks, so let's join them
 	// look ahead to ensure we won't throw events longer than SplitEventSize
 	// lookahead value is much more than 16Kb because json may be escaped
-	p.logSize += event.Size
-	predictedLen := p.logSize + predictionLookahead
+	p.eventSize += event.Size
+	predictedLen := p.eventSize + predictionLookahead
 	shouldSplit := predictedLen > p.config.SplitEventSize
 	logFragmentLen := len(logFragment)
 	if logFragment[logFragmentLen-3:logFragmentLen-1] != `\n` && !shouldSplit {
-		if len(p.logBuff) < p.maxEventSize {
-			p.logBuff = append(p.logBuff, logFragment[1:logFragmentLen-1]...)
+		if len(p.eventBuf) < p.maxEventSize {
+			p.eventBuf = append(p.eventBuf, logFragment[1:logFragmentLen-1]...)
 		} else {
 			p.skipNextEvent = true
 			p.logger.Errorf("event chunk will be discarded due to max_event_size, source_name=%s", event.SourceName)
@@ -126,12 +126,12 @@ func (p *MultilineAction) Do(event *pipeline.Event) pipeline.ActionResult {
 		}
 	}
 
-	if len(p.logBuff) > 1 {
-		p.logBuff = append(p.logBuff, logFragment[1:logFragmentLen-1]...)
-		p.logBuff = append(p.logBuff, '"')
+	if len(p.eventBuf) > 1 {
+		p.eventBuf = append(p.eventBuf, logFragment[1:logFragmentLen-1]...)
+		p.eventBuf = append(p.eventBuf, '"')
 
 		l := len(event.Buf)
-		event.Buf = append(event.Buf, p.logBuff...)
+		event.Buf = append(event.Buf, p.eventBuf...)
 		event.Root.AddFieldNoAlloc(event.Root, "log").MutateToEscapedString(pipeline.ByteToStringUnsafe(event.Buf[l:]))
 	}
 	p.resetLogBuf()
@@ -140,6 +140,6 @@ func (p *MultilineAction) Do(event *pipeline.Event) pipeline.ActionResult {
 }
 
 func (p *MultilineAction) resetLogBuf() {
-	p.logBuff = p.logBuff[:1]
-	p.logSize = 0
+	p.eventBuf = p.eventBuf[:1]
+	p.eventSize = 0
 }
