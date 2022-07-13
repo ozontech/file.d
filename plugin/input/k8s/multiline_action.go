@@ -64,9 +64,11 @@ func (p *MultilineAction) Do(event *pipeline.Event) pipeline.ActionResult {
 	isEnd := logFragment[logFragmentLen-3:logFragmentLen-1] == `\n`
 	if !isEnd && !shouldSplit {
 		sizeAfterAppend := len(p.eventBuf) + len(logFragment)
+		// check buffer size before append
 		if p.maxEventSize == 0 || sizeAfterAppend < p.maxEventSize {
 			p.eventBuf = append(p.eventBuf, logFragment[1:logFragmentLen-1]...)
 		} else {
+			// skip event if max_event_size is exceeded
 			p.skipNextEvent = true
 			p.logger.Errorf("event chunk will be discarded due to max_event_size, source_name=%s", event.SourceName)
 		}
@@ -74,6 +76,7 @@ func (p *MultilineAction) Do(event *pipeline.Event) pipeline.ActionResult {
 	}
 
 	if p.skipNextEvent {
+		// wait chunk end
 		if !isEnd {
 			return pipeline.ActionCollapse
 		}

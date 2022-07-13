@@ -19,7 +19,7 @@ func TestMultilineAction_Do(t *testing.T) {
 	}
 	plugin.Start(config, &pipeline.ActionPluginParams{Logger: zap.S(), PluginDefaultParams: &pipeline.PluginDefaultParams{
 		PipelineSettings: &pipeline.Settings{
-			MaxEventSize: 10,
+			MaxEventSize: 20,
 		},
 	}})
 
@@ -42,7 +42,7 @@ func TestMultilineAction_Do(t *testing.T) {
 	}{
 		{
 			Name: "ok",
-			// these parts are longer than max_event_size (5+26+7=38 vs 10), but they will be passed
+			// these parts are longer than max_event_size (5+2+7=15 vs 10), but they will be passed
 			// because the buffer size check happens before adding to it
 			EventParts:    []string{`{"log": "hello"}`, `{"log": "  "}`, `{"log": "world\n"}`},
 			ActionResults: []pipeline.ActionResult{pipeline.ActionCollapse, pipeline.ActionCollapse, pipeline.ActionPass},
@@ -60,12 +60,10 @@ func TestMultilineAction_Do(t *testing.T) {
 			ActionResults: []pipeline.ActionResult{pipeline.ActionCollapse, pipeline.ActionCollapse, pipeline.ActionCollapse, pipeline.ActionDiscard},
 		},
 		{
-			Name: "continue process events 2",
-			// these parts are longer than max_event_size (5+26+7=38 vs 10), but they will be passed
-			// because the buffer size check happens before adding to it
+			Name:          "continue process events 2",
 			EventParts:    []string{`{"log": "some "}`, `{"log": "other long long long long "}`, `{"log": "event\n"}`},
-			ActionResults: []pipeline.ActionResult{pipeline.ActionCollapse, pipeline.ActionCollapse, pipeline.ActionPass},
-			ExpectedRoot:  wrapK8sInfo(`some other long long long long event\n`, item),
+			ActionResults: []pipeline.ActionResult{pipeline.ActionCollapse, pipeline.ActionCollapse, pipeline.ActionDiscard},
+			ExpectedRoot:  wrapK8sInfo(`event\n`, item),
 		},
 	}
 	root := insaneJSON.Spawn()
@@ -261,6 +259,6 @@ func wrapLogContent(s string) string {
 
 func wrapK8sInfo(s string, item *metaItem) string {
 	return fmt.Sprintf(
-		`{"log":"%s","k8s_node":"%s","k8s_namespace":"%s","k8s_pod":"%s","k8s_container":"%s","k8s_pod_label_allowed_label":"allowed_value","k8s_node_label_zone":"z34"}`,
-		s, item.nodeName, item.namespace, item.podName, item.containerName)
+		`{"log":"%s","k8s_node":"","k8s_namespace":"%s","k8s_pod":"%s","k8s_container":"%s","k8s_pod_label_allowed_label":"allowed_value"}`,
+		s, item.namespace, item.podName, item.containerName)
 }
