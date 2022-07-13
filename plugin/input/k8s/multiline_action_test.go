@@ -110,6 +110,7 @@ func TestMultilineAction_Do_shouldSplit(t *testing.T) {
 	var (
 		splitEventSize = predictionLookahead * 2
 		longChunk      = strings.Repeat("a", splitEventSize*2)
+		superLongChunk = strings.Repeat("a", predictionLookahead)
 	)
 
 	tcs := []struct {
@@ -204,6 +205,35 @@ func TestMultilineAction_Do_shouldSplit(t *testing.T) {
 			// it is ok because we will skip this event in the `pipeline.In` method
 			ActionResult: pipeline.ActionPass,
 		},
+		// even_size > split_event_size > max_event_size
+		{
+			Name:             "event_size super large 1",
+			MaxEventSize:     predictionLookahead + len(`""`),
+			Message:          wrapLogContent(superLongChunk),
+			ExpectedLogField: fmt.Sprintf(`"%s"`, superLongChunk),
+			ActionResult:     pipeline.ActionCollapse,
+		},
+		{
+			Name:             "event_size super large 2",
+			MaxEventSize:     predictionLookahead + len(`""`),
+			Message:          wrapLogContent(superLongChunk),
+			ExpectedLogField: fmt.Sprintf(`"%s"`, superLongChunk),
+			ActionResult:     pipeline.ActionCollapse,
+		},
+		{
+			Name:             "event_size super large 3",
+			MaxEventSize:     predictionLookahead + len(`""`),
+			Message:          wrapLogContent(superLongChunk),
+			ExpectedLogField: fmt.Sprintf(`"%s"`, superLongChunk),
+			ActionResult:     pipeline.ActionCollapse,
+		},
+		{
+			Name:             "event_size super large 4",
+			MaxEventSize:     predictionLookahead + len(`""`),
+			Message:          wrapLogContent(superLongChunk + `\n`),
+			ExpectedLogField: fmt.Sprintf(`"%s\n"`, strings.Repeat(superLongChunk, 1)),
+			ActionResult:     pipeline.ActionDiscard,
+		},
 	}
 
 	root := insaneJSON.Spawn()
@@ -216,9 +246,11 @@ func TestMultilineAction_Do_shouldSplit(t *testing.T) {
 			event := &pipeline.Event{Root: root, SourceName: meta, Size: len(tc.Message)}
 
 			result := plugin.Do(event)
+			resultRoot := root.Dig("log").EncodeToString()
 
 			assert.Equalf(t, tc.ActionResult, result, "wrong action result")
-			assert.Equal(t, tc.ExpectedLogField, root.Dig("log").EncodeToString())
+			assert.Equal(t, len(tc.ExpectedLogField), len(resultRoot))
+			assert.Equal(t, tc.ExpectedLogField, resultRoot)
 		})
 	}
 }
