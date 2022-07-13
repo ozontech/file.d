@@ -32,6 +32,8 @@ func TestMultilineAction_Do(t *testing.T) {
 	}
 	meta := getLogFilename("k8s", item)
 	putMeta(getPodInfo(item, true))
+	selfNodeName = "node_1"
+	nodeLabels = map[string]string{"zone": "z34"}
 
 	tcs := []struct {
 		Name       string
@@ -259,6 +261,6 @@ func wrapLogContent(s string) string {
 
 func wrapK8sInfo(s string, item *metaItem) string {
 	return fmt.Sprintf(
-		`{"log":"%s","k8s_node":"","k8s_namespace":"%s","k8s_pod":"%s","k8s_container":"%s","k8s_pod_label_allowed_label":"allowed_value"}`,
-		s, item.namespace, item.podName, item.containerName)
+		`{"log":"%s","k8s_node":"%s","k8s_namespace":"%s","k8s_pod":"%s","k8s_container":"%s","k8s_pod_label_allowed_label":"allowed_value","k8s_node_label_zone":"z34"}`,
+		s, item.nodeName, item.namespace, item.podName, item.containerName)
 }
