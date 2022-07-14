@@ -116,7 +116,7 @@ func (m *meta) newMetaFile(
 		m.tsFileName = path.Base(matches[0])
 
 		var result map[string]interface{}
-		err := offset.LoadJson(filepath.Join(m.dir, m.tsFileName), &result)
+		err := offset.LoadJSON(filepath.Join(m.dir, m.tsFileName), &result)
 		if err != nil {
 			logger.Errorf("can't load json meta: %s", err.Error())
 		}
@@ -167,7 +167,7 @@ func (m *meta) updateMetaFile(firstTimestamp, lastTimestamp int64, sealUpOuterPa
 	values[m.sealedFileFieldName] = filepath.Base(sealUpOuterPath)
 	values[m.sealedFilePathFieldName] = sealUpOuterPath
 
-	return offset.SaveJson(filepath.Join(m.dir, m.tsFileName), values)
+	return offset.SaveJSON(filepath.Join(m.dir, m.tsFileName), values)
 }
 
 // updateMetaFileWithLock keeps meta in actual state

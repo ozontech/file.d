@@ -419,7 +419,7 @@ func (p *Plugin) tryRunNewPlugin(bucketName string) (isCreated bool) {
 	anyPlugin, _ := file.Factory()
 	outPlugin := anyPlugin.(*file.Plugin)
 	outPlugin.SealUpCallback = p.addFileJobWithBucket(bucketName)
-	if p.config.FileConfig.MetaCfg.StoreMeta {
+	if p.config.FileConfig.MetaCfg.EnableMetaFiles {
 		outPlugin.FileMetaCallback = p.genObjInfo(bucketName)
 	}
 
@@ -590,12 +590,12 @@ func (p *Plugin) generateObjectName(name string) string {
 
 // restoreObjectName tries restore object name from sealed metafile
 func (p *Plugin) restoreObjectName(file string) (objectName string, success bool) {
-	if !p.config.FileConfig.MetaCfg.StoreMeta {
+	if !p.config.FileConfig.MetaCfg.EnableMetaFiles {
 		return "", false
 	}
 
 	var result map[string]interface{}
-	if err := offset.LoadJson(filepath.Join(p.config.FileConfig.MetaCfg.MetaDataDir, fmt.Sprintf(
+	if err := offset.LoadJSON(filepath.Join(p.config.FileConfig.MetaCfg.MetaDataDir, fmt.Sprintf(
 		"%s%s", p.config.FileConfig.MetaCfg.SealedMetaPrefix, filepath.Base(file),
 	)), &result); err != nil {
 		p.logger.Error("can't restore s3 object name: %s", err.Error())

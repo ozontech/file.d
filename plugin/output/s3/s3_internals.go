@@ -111,7 +111,7 @@ func (p *Plugin) createOutPlugin(bucketName string) (*file.Plugin, error) {
 	anyPlugin, _ := file.Factory()
 	outPlugin := anyPlugin.(*file.Plugin)
 	outPlugin.SealUpCallback = p.addFileJobWithBucket(bucketName)
-	if p.config.FileConfig.MetaCfg.StoreMeta {
+	if p.config.FileConfig.MetaCfg.EnableMetaFiles {
 		outPlugin.FileMetaCallback = p.genObjInfo(bucketName)
 	}
 

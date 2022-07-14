@@ -88,12 +88,12 @@ type Config struct {
 	FileMode_ int64
 
 	//> MetaCfg describes metafile with sealfile desription
-	MetaCfg MetaConfig `json:"meta_config" child:"true"`
+	MetaCfg MetaConfig `json:"meta_config" child:"true"` //*
 }
 
 type MetaConfig struct {
 	//> Stores metadata of sealed files.
-	StoreMeta bool `json:"store_meta"` //*
+	EnableMetaFiles bool `json:"enable_meta_files"` //*
 	//> MetaDataFile saves metainformation about sealed file.
 	MetaDataDir string `json:"metadata_dir" default:"/var/log/file-d.meta"` //*
 	//> SealedMetaPrefix defines prefix of sealed meta file
@@ -133,7 +133,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	ctx, cancel := context.WithCancel(context.Background())
 	p.cancel = cancel
 
-	if p.config.MetaCfg.StoreMeta {
+	if p.config.MetaCfg.EnableMetaFiles {
 		metaWriter, err := newMeta(
 			metaInit{
 				config:     p.config,
@@ -175,7 +175,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	}
 	p.setNextSealUpTime()
 
-	if p.config.MetaCfg.StoreMeta {
+	if p.config.MetaCfg.EnableMetaFiles {
 		longpanic.Go(func() {
 			for {
 				select {
@@ -240,7 +240,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 		outBuf, _ = event.Encode(outBuf)
 		outBuf = append(outBuf, byte('\n'))
 
-		if p.config.MetaCfg.StoreMeta {
+		if p.config.MetaCfg.EnableMetaFiles {
 			ts, err := event.Root.DigStrict(p.config.MetaCfg.TimestampField)
 			if err != nil {
 				p.logger.Errorf("doesn't have timestamp field: %s", err.Error())
@@ -248,7 +248,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 			}
 			tsInt, err := ts.AsInt64()
 			if err != nil {
-				p.logger.Errorf("fime field isn't int64: %s", err.Error())
+				p.logger.Errorf("time field isn't int64: %s", err.Error())
 				continue
 			}
 			if tsInt < minTs || minTs == 0 {
@@ -261,7 +261,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 	}
 	data.outBuf = outBuf
 
-	if p.config.MetaCfg.StoreMeta {
+	if p.config.MetaCfg.EnableMetaFiles {
 		// lock prevents values leaking from new log file to old meta file.
 		// it's possible without lock:
 		// 1. log file sealed
@@ -337,7 +337,7 @@ func (p *Plugin) createNew(sealingLogFile, sealingOuterPath string) error {
 	p.file = file
 
 	// new meta file
-	if p.config.MetaCfg.StoreMeta {
+	if p.config.MetaCfg.EnableMetaFiles {
 		// createNew() guarded by mutex on upper layer.
 		f, l := p.pairOfTimestamps.Reset()
 		if err := p.metaWriter.newMetaFile(

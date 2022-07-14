@@ -38,16 +38,16 @@ func (o *jsonValue) Save(w io.Writer) error {
 	return nil
 }
 
-func newJsonOffset(path string, value interface{}) *Offset {
+func newJSONOffset(path string, value interface{}) *Offset {
 	res := NewOffset(path)
 	res.Callback = &jsonValue{value}
 	return res
 }
 
-func SaveJson(path string, value interface{}) error {
-	return newJsonOffset(path, value).Save()
+func SaveJSON(path string, value interface{}) error {
+	return newJSONOffset(path, value).Save()
 }
 
-func LoadJson(path string, value interface{}) error {
-	return newJsonOffset(path, value).Load()
+func LoadJSON(path string, value interface{}) error {
+	return newJSONOffset(path, value).Load()
 }

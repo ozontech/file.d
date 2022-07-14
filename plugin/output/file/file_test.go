@@ -148,7 +148,7 @@ func TestSealUpHasContentMetaOn(t *testing.T) {
 		Layout:             "01",
 		FileMode_:          0o666,
 		MetaCfg: MetaConfig{
-			StoreMeta:               true,
+			EnableMetaFiles:         true,
 			MetaDataDir:             metaFileDir,
 			SealedMetaPrefix:        "sealed_meta_",
 			SealedFilePathFieldName: "sealed_file_path",

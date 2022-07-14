@@ -63,7 +63,7 @@ func TestSaveLoadJson(t *testing.T) {
 	offset := testOffset{}
 	offset.set("some_name", 12345)
 
-	err := SaveJson(path, &offset)
+	err := SaveJSON(path, &offset)
 	assert.NoError(t, err)
 
 	loaded := testOffset{}
