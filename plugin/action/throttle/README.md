@@ -26,17 +26,23 @@ It defines how to parse the time field format.
 
 **`default_limit`** *`int64`* *`default=5000`* 
 
-The default events limit that plugin allows per `interval`
+The default events limit that plugin allows per `interval`.
 
 <br>
 
 **`limit_kind`** *`string`* *`default=count`* *`options=count|size`* 
 
-What we're limiting: number of messages, or total size of the messages
+It defines subject of limiting: number of messages or total size of the messages.
 
 <br>
 
 **`buckets_count`** *`int`* *`default=60`* 
+
+Defines kind of backend.
+*`int`* *`default=60`* 
+
+It contains redis settings
+*`int`* *`default=60`* 
 
 How much time buckets to hold in the memory. E.g. if `buckets_count` is `60` and `interval` is `5m`,
 then `5 hours` will be covered. Events with time later than `now() - 5h` will be dropped even if threshold isn't exceeded.
@@ -56,6 +62,29 @@ Each object has the `limit` and `conditions` fields.
 * `limit` – the value which will override the `default_limit`, if `conditions` are met.
 * `limit_kind` – the type of a limit: `count` - number of messages, `size` - total size from all messages
 * `conditions` – the map of `event field name => event field value`. The conditions are checked using `AND` operator.
+
+<br>
+
+**`host`** *`string`* 
+
+
+<br>
+
+**`password`** *`string`* 
+
+Password to redis server.
+
+<br>
+
+**`refresh_interval`** *`cfg.Duration`* *`default=5s`* 
+
+Defines sync interval between global and local limiters.
+
+<br>
+
+**`timeout`** *`cfg.Duration`* *`default=1s`* 
+
+Defines redis timeout.
 
 <br>
 

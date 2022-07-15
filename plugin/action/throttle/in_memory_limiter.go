@@ -17,6 +17,7 @@ type inMemoryLimiter struct {
 	mu          sync.Mutex
 }
 
+// NewInMemoryLimiter returns limiter instance.
 func NewInMemoryLimiter(interval time.Duration, bucketCount int, limit complexLimit) *inMemoryLimiter {
 	return &inMemoryLimiter{
 		interval:    interval,
@@ -32,7 +33,6 @@ func (l *inMemoryLimiter) isAllowed(event *pipeline.Event, ts time.Time) bool {
 	defer l.mu.Unlock()
 
 	id := l.rebuildBuckets(ts)
-
 	index := id - l.minID
 	switch l.limit.kind {
 	default:
@@ -51,31 +51,31 @@ func (l *inMemoryLimiter) isAllowed(event *pipeline.Event, ts time.Time) bool {
 // rebuildBuckets will rebuild buckets for given ts and returns actual bucket id
 // Not thread safe - use external lock!
 func (l *inMemoryLimiter) rebuildBuckets(ts time.Time) int {
-	if l == nil {
-		return -1
-	}
-
+	currentTs := time.Now()
+	currentID := l.timeToBucketID(currentTs)
 	if l.minID == 0 {
-		l.minID = l.timeToBucketID(ts) - l.bucketCount + 1
+		// min id weren't set yet. It MUST be extracted from currentTs, because ts from event can be invalid (e.g. from 1970 or 2077 year)
+		l.minID = l.timeToBucketID(currentTs) - l.bucketCount + 1
 	}
 	maxID := l.minID + len(l.buckets) - 1
-	id := l.timeToBucketID(ts)
 
-	// inMemoryLimiter doesn't track that bucket anymore.
-	if id < l.minID {
-		return 0
-	}
-
-	// event from a new bucket, add N new buckets
-	if id > maxID {
-		n := id - maxID
+	// currentBucket exceed maxID. Create actual buckets
+	if currentID > maxID {
+		n := currentID - maxID
+		// add new buckets
 		for i := 0; i < n; i++ {
 			l.buckets = append(l.buckets, 0)
 		}
-		// remove old ones
+		// remove old buckets
 		l.buckets = l.buckets[n:]
-		// and set new min index
+		// update min buckets
 		l.minID += n
+	}
+	id := l.timeToBucketID(ts)
+
+	// events from past or future goes to lastest backet
+	if id < l.minID || id > maxID {
+		id = maxID
 	}
 	return id
 }
