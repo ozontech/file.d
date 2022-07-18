@@ -237,7 +237,11 @@ func (p *Plugin) serve(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 
-		eventBuff = p.processChunk(sourceID, readBuff[:n], eventBuff, n < len(readBuff))
+		eventBuff = p.processChunk(sourceID, readBuff[:n], eventBuff, false)
+	}
+
+	if len(eventBuff) > 0 {
+		eventBuff = p.processChunk(sourceID, readBuff[:0], eventBuff, true)
 	}
 
 	_ = r.Body.Close()
@@ -274,7 +278,7 @@ func (p *Plugin) processChunk(sourceID pipeline.SourceID, readBuff []byte, event
 		nlPos = pos
 	}
 
-	if isLastChunk && nlPos != pos {
+	if isLastChunk {
 		// flush buffers if we can't find the newline character
 		_ = p.controller.In(sourceID, "http", int64(pos), append(eventBuff, readBuff[nlPos:]...), true)
 		eventBuff = eventBuff[:0]

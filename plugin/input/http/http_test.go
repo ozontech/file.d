@@ -181,13 +181,9 @@ func TestServeChunks(t *testing.T) {
 	p.SetInput(input)
 	p.Start()
 
-	wg := &sync.WaitGroup{}
-	wg.Add(2)
-
 	outEvents := make([]string, 0)
 	output.SetOutFn(func(event *pipeline.Event) {
 		outEvents = append(outEvents, event.Root.EncodeToString())
-		wg.Done()
 	})
 
 	resp := httptest.NewRecorder()
@@ -198,10 +194,118 @@ func TestServeChunks(t *testing.T) {
 	input.Plugin.(*Plugin).serve(resp, httptest.NewRequest(http.MethodPost, "/logger", strings.NewReader(`{"b":"2"}`+"\n")))
 	require.Equal(t, http.StatusOK, resp.Result().StatusCode)
 
-	wg.Wait()
+	now := time.Now()
+	requests := 2
+	for len(outEvents) != requests {
+		time.Sleep(time.Millisecond * 50)
+		if time.Since(now) > time.Second*5 {
+			require.Fail(t, "timeout")
+		}
+	}
+
 	p.Stop()
 
 	require.Equal(t, []string{`{"a":"1"}`, `{"b":"2"}`}, outEvents)
+}
+
+type PartialReader struct {
+	body []byte
+	eof  bool
+	m    *sync.Mutex
+
+	offset        int
+	chunkReadDone bool
+}
+
+func NewPartialReader(body []byte) *PartialReader {
+	return &PartialReader{
+		body: body,
+		m:    &sync.Mutex{},
+	}
+}
+
+func (c *PartialReader) Read(to []byte) (int, error) {
+	c.m.Lock()
+	defer c.m.Unlock()
+
+	n := copy(to, c.body[c.offset:])
+	c.offset += n
+
+	if n == 0 && c.eof {
+		return 0, io.EOF
+	}
+
+	return n, nil
+}
+
+func (c *PartialReader) AppendBody(body string, isLast bool) {
+	c.m.Lock()
+	defer c.m.Unlock()
+
+	c.body = append(c.body, body...)
+	c.eof = isLast
+}
+
+func (c *PartialReader) WaitRead() {
+	for {
+		c.m.Lock()
+		done := len(c.body) == c.offset
+		c.m.Unlock()
+
+		if done {
+			return
+		}
+
+		time.Sleep(time.Millisecond * 10)
+	}
+}
+
+func TestServePartialRequest(t *testing.T) {
+	p, _, output := test.NewPipelineMock(nil, "passive")
+	input := getInputInfo()
+	p.SetInput(input)
+
+	outEvents := make([]string, 0)
+	output.SetOutFn(func(event *pipeline.Event) {
+		outEvents = append(outEvents, event.Root.EncodeToString())
+	})
+
+	p.Start()
+
+	resp := httptest.NewRecorder()
+	reader := NewPartialReader([]byte(`{"hello":"`))
+
+	doneCh := make(chan struct{})
+	go func() {
+		input.Plugin.(*Plugin).serve(resp, httptest.NewRequest(http.MethodPost, "/_bulk", reader))
+		close(doneCh)
+	}()
+
+	reader.WaitRead()
+	reader.AppendBody("world", false)
+	reader.WaitRead()
+	reader.AppendBody(`"}`+"\n", false)
+	reader.WaitRead()
+	reader.AppendBody(`{"next":"`, false)
+	reader.WaitRead()
+	reader.AppendBody(`ok"}`, true)
+
+	<-doneCh
+
+	require.Equal(t, http.StatusOK, resp.Result().StatusCode)
+
+	now := time.Now()
+	events := 2
+	for len(outEvents) != events {
+		time.Sleep(time.Millisecond * 10)
+		if time.Since(now) > time.Second*3 {
+			require.Fail(t, "timeout")
+		}
+	}
+
+	p.Stop()
+
+	require.Equal(t, []string{`{"hello":"world"}`, `{"next":"ok"}`}, outEvents)
 }
 
 func TestServeChunksContinue(t *testing.T) {
