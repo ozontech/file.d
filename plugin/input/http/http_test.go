@@ -181,9 +181,13 @@ func TestServeChunks(t *testing.T) {
 	p.SetInput(input)
 	p.Start()
 
+	wg := &sync.WaitGroup{}
+	wg.Add(2)
+
 	outEvents := make([]string, 0)
 	output.SetOutFn(func(event *pipeline.Event) {
 		outEvents = append(outEvents, event.Root.EncodeToString())
+		wg.Done()
 	})
 
 	resp := httptest.NewRecorder()
@@ -194,14 +198,7 @@ func TestServeChunks(t *testing.T) {
 	input.Plugin.(*Plugin).serve(resp, httptest.NewRequest(http.MethodPost, "/logger", strings.NewReader(`{"b":"2"}`+"\n")))
 	require.Equal(t, http.StatusOK, resp.Result().StatusCode)
 
-	now := time.Now()
-	requests := 2
-	for len(outEvents) != requests {
-		time.Sleep(time.Millisecond * 50)
-		if time.Since(now) > time.Second*5 {
-			require.Fail(t, "timeout")
-		}
-	}
+	wg.Wait()
 
 	p.Stop()
 
@@ -209,12 +206,10 @@ func TestServeChunks(t *testing.T) {
 }
 
 type PartialReader struct {
-	body []byte
-	eof  bool
-	m    *sync.Mutex
-
-	offset        int
-	chunkReadDone bool
+	body   []byte
+	eof    bool
+	m      *sync.Mutex
+	offset int
 }
 
 func NewPartialReader(body []byte) *PartialReader {
@@ -265,9 +260,13 @@ func TestServePartialRequest(t *testing.T) {
 	input := getInputInfo()
 	p.SetInput(input)
 
+	wg := sync.WaitGroup{}
+	wg.Add(2)
+
 	outEvents := make([]string, 0)
 	output.SetOutFn(func(event *pipeline.Event) {
 		outEvents = append(outEvents, event.Root.EncodeToString())
+		wg.Done()
 	})
 
 	p.Start()
@@ -294,14 +293,7 @@ func TestServePartialRequest(t *testing.T) {
 
 	require.Equal(t, http.StatusOK, resp.Result().StatusCode)
 
-	now := time.Now()
-	events := 2
-	for len(outEvents) != events {
-		time.Sleep(time.Millisecond * 10)
-		if time.Since(now) > time.Second*3 {
-			require.Fail(t, "timeout")
-		}
-	}
+	wg.Wait()
 
 	p.Stop()
 
