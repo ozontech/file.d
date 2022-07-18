@@ -199,7 +199,6 @@ func TestServeChunks(t *testing.T) {
 	require.Equal(t, http.StatusOK, resp.Result().StatusCode)
 
 	wg.Wait()
-
 	p.Stop()
 
 	require.Equal(t, []string{`{"a":"1"}`, `{"b":"2"}`}, outEvents)
@@ -294,7 +293,6 @@ func TestServePartialRequest(t *testing.T) {
 	require.Equal(t, http.StatusOK, resp.Result().StatusCode)
 
 	wg.Wait()
-
 	p.Stop()
 
 	require.Equal(t, []string{`{"hello":"world"}`, `{"next":"ok"}`}, outEvents)
