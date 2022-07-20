@@ -31,7 +31,6 @@ const (
 	DefaultEventTimeout        = time.Second * 30
 	DefaultFieldValue          = "not_set"
 	DefaultStreamName          = StreamName("not_set")
-	DefaultWaitForPanicTimeout = time.Minute
 
 	EventSeqIDError = uint64(0)
 
@@ -43,6 +42,7 @@ const (
 	outputEventsCountMetric = "output_events_count"
 	outputEventsSizeMetric  = "output_events_size"
 	readOpsEventsSizeMetric = "read_ops_count"
+	maxEventSizeExceeded    = "max_event_size_exceeded"
 
 	wrongEventCRIFormatMetric = "wrong_event_cri_format"
 )
@@ -55,6 +55,7 @@ type InputPluginController interface {
 	DisableStreams()                      // don't use stream field
 	SuggestDecoder(t decoder.DecoderType) // set decoder if pipeline uses "auto" value for decoder
 	IncReadOps()                          // inc read ops for metric
+	IncMaxEventSizeExceeded()             // inc max event size exceeded counter
 }
 
 type ActionPluginController interface {
@@ -175,6 +176,10 @@ func (p *Pipeline) IncReadOps() {
 	p.readOps.Inc()
 }
 
+func (p *Pipeline) IncMaxEventSizeExceeded() {
+	metric.GetCounter(p.subsystemName(), maxEventSizeExceeded).Inc()
+}
+
 func (p *Pipeline) subsystemName() string {
 	return "pipeline_" + p.Name
 }
@@ -205,10 +210,15 @@ func (p *Pipeline) registerMetrics() {
 		Name:      readOpsEventsSizeMetric,
 		Help:      "Read OPS count",
 	})
-	stats.RegisterCounter(&stats.MetricDesc{
+	metric.RegisterCounter(&metric.MetricDesc{
 		Subsystem: p.subsystemName(),
 		Name:      wrongEventCRIFormatMetric,
 		Help:      "Wrong event CRI format counter",
+	})
+	metric.RegisterCounter(&metric.MetricDesc{
+		Subsystem: p.subsystemName(),
+		Name:      maxEventSizeExceeded,
+		Help:      "Max event size exceeded counter",
 	})
 }
 
@@ -328,6 +338,10 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 	isEmpty := length == 0 || (bytes[0] == '\n' && length == 1)
 	isSpam := p.antispamer.isSpam(sourceID, sourceName, isNewSource)
 	isLong := p.settings.MaxEventSize != 0 && length > p.settings.MaxEventSize
+
+	if isLong {
+		p.IncMaxEventSizeExceeded()
+	}
 	if isEmpty || isSpam || isLong {
 		return EventSeqIDError
 	}
@@ -366,7 +380,7 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 		_ = event.Root.DecodeString("{}")
 		err := decoder.DecodeCRI(event.Root, bytes)
 		if err != nil {
-			stats.GetCounter(p.subsystemName(), wrongEventCRIFormatMetric).Inc()
+			metric.GetCounter(p.subsystemName(), wrongEventCRIFormatMetric).Inc()
 			if p.settings.IsStrict {
 				p.logger.Fatalf("wrong cri format offset=%d, length=%d, err=%s, source=%d:%s, cri=%s", offset, length, err.Error(), sourceID, sourceName, bytes)
 			} else {
