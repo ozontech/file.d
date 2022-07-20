@@ -20,6 +20,7 @@ jobs:
           - aarch64
         runner:
           - ubuntu-latest
+          - windows-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
