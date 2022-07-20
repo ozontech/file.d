@@ -14,13 +14,11 @@ jobs:
       matrix:
         go:
           - 1.18
-        flags: [""]
         arch:
           - amd64
-          - aarch64
         runner:
           - ubuntu-latest
-          - windows-latest
+          - macos-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
