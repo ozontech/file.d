@@ -87,7 +87,7 @@ func (c *counter) unregister(registry *prometheus.Registry) {
 }
 
 func (m *metricsHolder) nextMetricsGen() {
-	metricsGen := strconv.Itoa(m.metricsGen)
+	metricsGen := strconv.Itoa(m.metricsGen % 3) // 2 (for key variance) + 1 (since we must register first) == 3
 	for index, metrics := range m.metrics {
 		if metrics.name == "" {
 			continue
