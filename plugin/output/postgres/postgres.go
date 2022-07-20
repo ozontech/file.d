@@ -298,41 +298,42 @@ func (p *Plugin) out(_ *pipeline.WorkerData, batch *pipeline.Batch) {
 		p.logger.Fatalf("Invalid SQL. query: %s, args: %v, err: %v", query, args, err)
 	}
 
-	var argsSliceInterface []interface{} = make([]interface{}, len(args)+1)
+	var argsSliceInterface = make([]interface{}, len(args)+1)
 
 	argsSliceInterface[0] = preferSimpleProtocol
 	for i := 1; i < len(args)+1; i++ {
 		argsSliceInterface[i] = args[i-1]
 	}
 
-	var ctx context.Context
-	var cancel context.CancelFunc
-	var outErr error
 	// Insert into pg with retry.
 	for i := p.config.Retry; i > 0; i-- {
-		ctx, cancel = context.WithTimeout(p.ctx, p.config.DBRequestTimeout_)
-
-		p.logger.Info(query, args)
-		rows, err := p.pool.Query(ctx, query, argsSliceInterface...)
-		defer func() {
-			rows.Close()
-		}()
+		err = p.try(query, argsSliceInterface)
 		if err != nil {
-			outErr = err
-			p.logger.Infof("rows: %v, err: %s", rows, err.Error())
-			cancel()
+			p.logger.Errorf("can't exec query: %s", err.Error())
 			time.Sleep(p.config.Retention_)
 			continue
-		} else {
-			outErr = nil
-			break
 		}
+		break
 	}
 
-	if outErr != nil {
+	if err != nil {
 		p.pool.Close()
-		p.logger.Fatalf("Failed insert into %s. query: %s, args: %v, err: %v", p.config.Table, query, args, outErr)
+		p.logger.Fatalf("failed insert into %s. query: %s, args: %v, err: %v", p.config.Table, query, args, err)
 	}
+}
+
+func (p *Plugin) try(query string, argsSliceInterface []interface{}) error {
+	ctx, cancel := context.WithTimeout(p.ctx, p.config.DBRequestTimeout_)
+	defer cancel()
+
+	rows, err := p.pool.Query(ctx, query, argsSliceInterface...)
+	if err != nil {
+		return err
+	}
+
+	defer rows.Close()
+
+	return err
 }
 
 func (p *Plugin) processEvent(event *pipeline.Event, pgFields []column, uniqueFields map[string]pgType) (fieldValues []interface{}, uniqueID string, err error) {

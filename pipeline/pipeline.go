@@ -31,7 +31,6 @@ const (
 	DefaultEventTimeout        = time.Second * 30
 	DefaultFieldValue          = "not_set"
 	DefaultStreamName          = StreamName("not_set")
-	DefaultWaitForPanicTimeout = time.Minute
 
 	EventSeqIDError = uint64(0)
 
@@ -43,6 +42,7 @@ const (
 	outputEventsCountMetric = "output_events_count"
 	outputEventsSizeMetric  = "output_events_size"
 	readOpsEventsSizeMetric = "read_ops_count"
+	maxEventSizeExceeded    = "max_event_size_exceeded"
 
 	wrongEventCRIFormatMetric = "wrong_event_cri_format"
 )
@@ -51,10 +51,11 @@ type finalizeFn = func(event *Event, notifyInput bool, backEvent bool)
 
 type InputPluginController interface {
 	In(sourceID SourceID, sourceName string, offset int64, data []byte, isNewSource bool) uint64
-	UseSpread()                    // don't use stream field and spread all events across all processors
-	DisableStreams()               // don't use stream field
-	SuggestDecoder(t decoder.Type) // set decoder if pipeline uses "auto" value for decoder
-	IncReadOps()                   // inc read ops for metric
+	UseSpread()                           // don't use stream field and spread all events across all processors
+	DisableStreams()                      // don't use stream field
+	SuggestDecoder(t decoder.DecoderType) // set decoder if pipeline uses "auto" value for decoder
+	IncReadOps()                          // inc read ops for metric
+	IncMaxEventSizeExceeded()             // inc max event size exceeded counter
 }
 
 type ActionPluginController interface {
@@ -76,8 +77,8 @@ type Pipeline struct {
 	Name     string
 	settings *Settings
 
-	decoder          decoder.Type // decoder set in the config
-	suggestedDecoder decoder.Type // decoder suggested by input plugin, it is used when config decoder is set to "auto"
+	decoder          decoder.DecoderType // decoder set in the config
+	suggestedDecoder decoder.DecoderType // decoder suggested by input plugin, it is used when config decoder is set to "auto"
 
 	eventPool *eventPool
 	streamer  *streamer
@@ -175,40 +176,49 @@ func (p *Pipeline) IncReadOps() {
 	p.readOps.Inc()
 }
 
+func (p *Pipeline) IncMaxEventSizeExceeded() {
+	metric.GetCounter(p.subsystemName(), maxEventSizeExceeded).Inc()
+}
+
 func (p *Pipeline) subsystemName() string {
 	return "pipeline_" + p.Name
 }
 
 func (p *Pipeline) registerMetrics() {
-	metric.RegisterCounter(&metric.Desc{
+	metric.RegisterCounter(&metric.MetricDesc{
 		Subsystem: p.subsystemName(),
 		Name:      inputEventsCountMetric,
 		Help:      "Count of events on pipeline input",
 	})
-	metric.RegisterCounter(&metric.Desc{
+	metric.RegisterCounter(&metric.MetricDesc{
 		Subsystem: p.subsystemName(),
 		Name:      inputEventsSizeMetric,
 		Help:      "Size of events on pipeline input",
 	})
-	metric.RegisterCounter(&metric.Desc{
+	metric.RegisterCounter(&metric.MetricDesc{
 		Subsystem: p.subsystemName(),
 		Name:      outputEventsCountMetric,
 		Help:      "Count of events on pipeline output",
 	})
-	metric.RegisterCounter(&metric.Desc{
+	metric.RegisterCounter(&metric.MetricDesc{
 		Subsystem: p.subsystemName(),
 		Name:      outputEventsSizeMetric,
 		Help:      "Size of events on pipeline output",
 	})
-	metric.RegisterCounter(&metric.Desc{
+	metric.RegisterCounter(&metric.MetricDesc{
 		Subsystem: p.subsystemName(),
 		Name:      readOpsEventsSizeMetric,
 		Help:      "Read OPS count",
 	})
-	metric.RegisterCounter(&metric.Desc{
+	metric.RegisterCounter(&metric.MetricDesc{
 		Subsystem: p.subsystemName(),
 		Name:      wrongEventCRIFormatMetric,
 		Help:      "Wrong event CRI format counter",
+	})
+	metric.RegisterCounter(&metric.MetricDesc{
+		Subsystem: p.subsystemName(),
+		Name:      maxEventSizeExceeded,
+		Help:      "Max event size exceeded counter",
 	})
 }
 
@@ -233,7 +243,7 @@ func (p *Pipeline) SetupHTTPHandlers(mux *http.ServeMux) {
 	}
 
 	for i, info := range p.actionInfos {
-		mux.HandleFunc(fmt.Sprintf("%s/%d/info", prefix, i+1), p.serveActionInfo(info))
+		mux.HandleFunc(fmt.Sprintf("%s/%d/info", prefix, i+1), p.serveActionInfo(*info))
 		mux.HandleFunc(fmt.Sprintf("%s/%d/sample", prefix, i+1), p.serveActionSample(i))
 		for hName, handler := range info.PluginStaticInfo.Endpoints {
 			mux.HandleFunc(fmt.Sprintf("%s/%d/%s", prefix, i+1, hName), handler)
@@ -328,6 +338,10 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 	isEmpty := length == 0 || (bytes[0] == '\n' && length == 1)
 	isSpam := p.antispamer.isSpam(sourceID, sourceName, isNewSource)
 	isLong := p.settings.MaxEventSize != 0 && length > p.settings.MaxEventSize
+
+	if isLong {
+		p.IncMaxEventSizeExceeded()
+	}
 	if isEmpty || isSpam || isLong {
 		return EventSeqIDError
 	}
@@ -336,7 +350,7 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 	p.inputSize.Add(int64(length))
 
 	event := p.eventPool.get()
-	var dec decoder.Type
+	var dec decoder.DecoderType
 	if p.decoder == decoder.AUTO {
 		dec = p.suggestedDecoder
 	} else {
@@ -485,7 +499,7 @@ func (p *Pipeline) initProcs() {
 }
 
 func (p *Pipeline) newProc() *processor {
-	proc := newProcessor(
+	proc := NewProcessor(
 		p.metricsHolder,
 		p.activeProcs,
 		p.output,
@@ -635,7 +649,7 @@ func (p *Pipeline) DisableStreams() {
 	p.disableStreams = true
 }
 
-func (p *Pipeline) SuggestDecoder(t decoder.Type) {
+func (p *Pipeline) SuggestDecoder(t decoder.DecoderType) {
 	p.suggestedDecoder = t
 }
 
@@ -669,7 +683,7 @@ func (p *Pipeline) servePipeline(w http.ResponseWriter, _ *http.Request) {
 
 // serveActionInfo creates a handlerFunc for the given action.
 // it returns metric values for the given action.
-func (p *Pipeline) serveActionInfo(info *ActionPluginStaticInfo) func(http.ResponseWriter, *http.Request) {
+func (p *Pipeline) serveActionInfo(info ActionPluginStaticInfo) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Add("Content-Type", "application/json")
 

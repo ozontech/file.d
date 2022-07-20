@@ -32,7 +32,7 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 			avgInputEventSize = val
 		}
 
-		val = settings.Get("max_log_size").MustInt()
+		val = settings.Get("max_event_size").MustInt()
 		if val != 0 {
 			maxInputEventSize = val
 		}
