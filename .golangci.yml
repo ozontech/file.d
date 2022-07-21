@@ -1,8 +1,7 @@
 linters-settings:
-  gocyclo:
-    min-complexity: 15
-  maligned:
-    suggest-new: true
+  govet:
+    enable:
+      - composites
   dupl:
     threshold: 120
   goconst:
@@ -10,8 +9,6 @@ linters-settings:
     min-occurrences: 3
   misspell:
     locale: US
-  lll:
-    line-length: 140
   gocritic:
     enabled-tags:
       - diagnostic
@@ -22,6 +19,11 @@ linters-settings:
     disabled-checks:
       - whyNoLint
       - commentFormatting # insane-doc syntax requires "//>" format
+      - paramTypeCombine
+      - ptrToRefParam # we use interface pointer in many places
+      - unnamedResult
+      - sprintfQuotedString
+      - tooManyResultsChecker
   gosec:
     excludes:
       - G304 # Potential file inclusion via variable -- it's ok for this project
@@ -30,24 +32,21 @@ linters-settings:
       - '-ST1021' # insane-doc syntax requires "//>" format
 
 linters:
+  disable-all: true
   enable:
     - deadcode
     - depguard
     - dogsled
     - dupl
-    - errcheck
     - goconst
     - gocritic
     - goimports
     - gosimple
-    - revive
-    - gosec
     - govet
     - ineffassign
-    - lll
     - misspell
     - nakedret
-    - staticcheck
+    - prealloc
     - structcheck
     - stylecheck
     - typecheck
@@ -57,26 +56,15 @@ linters:
     - varcheck
     - whitespace
     # Do not enable:
-    # - wsl (too opinionated about newlines)
-    # - godox (todos are OK)
-    # - bodyclose (false positives on helper functions)
-    # - prealloc  (not worth it in scope of this project)
-    # - maligned  (same as prealloc)
-    # - funlen (gocyclo is enough)
+    # - staticcheck (does not work with golangci-lint 1.46.2 and go 1.18.2)
+    # - gosec (not worth it in scope of this project)
     # - gochecknoglobals (we know when it is ok to use globals)
     # - gochecknoinits (we know when it is ok to use inits)
+    # - errcheck
 
 issues:
   exclude-use-default: false
   exclude-rules:
-    # Exclude go:generate from lll
-    - source: "//go:generate"
-      linters: [ lll ]
-
-    # Exclude links from lll
-    - source: "// See https://"
-      linters: [ lll ]
-
     # Disable linters that are annoying in tests.
     - path: _test\.go
       linters:
@@ -85,32 +73,10 @@ issues:
         - dupl
         - gosec
         - goconst
-        - gocognit
-        - scopelint
-        - lll
 
     # Ignore shadowing of err.
     - linters: [ govet ]
       text: 'declaration of "(err|ctx)"'
-
-    # Ignore linters in main packages.
-    - path: cmd\/file\.d\.go
-      linters: [ gocognit, gocyclo ]
-
-    - linters: [ revive ]
-      text: "should have comment.+or be unexported"
-
-    # cfg package needs to parse variables with underscore
-    - linters: [ revive ]
-      text: "don't use underscores in Go names"
-
-    # cfg package needs to parse variables with underscore
-    - linters: [ revive ]
-      text: "struct field .+ should be .+"
-
-    # insane-doc syntax requires "//>" format
-    - linters: [ revive ]
-      text: "comment on exported (type|method) .+ should be of the form .+"
 
 run:
   build-tags:
