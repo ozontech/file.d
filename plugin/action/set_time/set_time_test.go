@@ -58,7 +58,7 @@ func TestPlugin_Do(t *testing.T) {
 			Root: `{}`,
 
 			ExpResult: pipeline.ActionPass,
-			ExpRoot:   fmt.Sprintf(`{"my-time":%q}`, now.Format("2006-01-02")),
+			ExpRoot:   fmt.Sprintf(`{"my-time":"%s"}`, now.Format("2006-01-02")),
 		},
 		{
 			Name: "rfc3339",
@@ -69,7 +69,7 @@ func TestPlugin_Do(t *testing.T) {
 			Root: `{}`,
 
 			ExpResult: pipeline.ActionPass,
-			ExpRoot:   fmt.Sprintf(`{"myTime":%q}`, now.Format(time.RFC3339)),
+			ExpRoot:   fmt.Sprintf(`{"myTime":"%s"}`, now.Format(time.RFC3339)),
 		},
 		{
 			Name: "override false",
@@ -93,7 +93,7 @@ func TestPlugin_Do(t *testing.T) {
 			Root: `{"time":123}`,
 
 			ExpResult: pipeline.ActionPass,
-			ExpRoot:   fmt.Sprintf(`{"time":%q}`, now.Format(time.RFC3339)),
+			ExpRoot:   fmt.Sprintf(`{"time":"%s"}`, now.Format(time.RFC3339)),
 		},
 		{
 			Name: "dots field",
