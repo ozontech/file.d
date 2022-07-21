@@ -31,6 +31,9 @@ func newBatch(quantity int, size int, timeout time.Duration) *Batch {
 	if size < 0 {
 		logger.Fatalf("why batch size less than 0?")
 	}
+	if quantity == 0 && size == 0 {
+		logger.Fatalf("batch limits are not set")
+	}
 
 	return &Batch{
 		maxQuantity: quantity,
