@@ -74,9 +74,9 @@ A maximum quantity of events to pack into one batch.
 
 <br>
 
-**`batch_size_bytes`** *`cfg.Expression`* *`default=1 * 1024 * 1024`* 
+**`batch_size_bytes`** *`cfg.Expression`* *`default=0`* 
 
-A maximum size of events per batch.
+A minimum size of events in a batch to send.
 If both batch_size and batch_size_bytes are set, they will work together.
 
 <br>

@@ -127,7 +127,7 @@ type Config struct {
 	//>
 	//> A minimum size of events in a batch to send.
 	//> If both batch_size and batch_size_bytes are set, they will work together.
-	BatchSizeBytes  cfg.Expression `json:"batch_size_bytes" default:"1 * 1024 * 1024" parse:"expression"` //*
+	BatchSizeBytes  cfg.Expression `json:"batch_size_bytes" default:"0" parse:"expression"` //*
 	BatchSizeBytes_ int
 
 	//> @3@4@5@6
