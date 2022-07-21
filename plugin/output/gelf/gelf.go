@@ -186,6 +186,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		p.controller,
 		p.config.WorkersCount_,
 		p.config.BatchSize_,
+		0,
 		p.config.BatchFlushTimeout_,
 		p.config.ReconnectInterval_,
 	)

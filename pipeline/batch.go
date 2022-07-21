@@ -11,37 +11,49 @@ import (
 )
 
 type Batch struct {
-	Events    []*Event
-	seq       int64
-	size      int
-	timeout   time.Duration
-	startTime time.Time
+	Events []*Event
+	// eventsSize contains total size of the Events in bytes
+	eventsSize int
+	seq        int64
+	timeout    time.Duration
+	startTime  time.Time
+
+	// maxQuantity max events per batch
+	maxQuantity int
+	// maxSize max size of events per batch in bytes
+	maxSize int
 }
 
-func newBatch(size int, timeout time.Duration) *Batch {
-	if size <= 0 {
-		logger.Fatalf("why batch size is 0?")
+func newBatch(quantity int, size int, timeout time.Duration) *Batch {
+	if quantity < 0 {
+		logger.Fatalf("why batch quantity less than 0?")
+	}
+	if size < 0 {
+		logger.Fatalf("why batch size less than 0?")
 	}
 
 	return &Batch{
-		size:    size,
-		timeout: timeout,
-		Events:  make([]*Event, 0, size),
+		maxQuantity: quantity,
+		maxSize:     size,
+		timeout:     timeout,
+		Events:      make([]*Event, 0, quantity),
 	}
 }
 
 func (b *Batch) reset() {
 	b.Events = b.Events[:0]
+	b.eventsSize = 0
 	b.startTime = time.Now()
 }
 
 func (b *Batch) append(e *Event) {
 	b.Events = append(b.Events, e)
+	b.eventsSize += e.Size
 }
 
 func (b *Batch) isReady() bool {
 	l := len(b.Events)
-	isFull := l == b.size
+	isFull := (b.maxQuantity != 0 && l == b.maxQuantity) || (b.maxSize != 0 && b.maxSize <= b.eventsSize)
 	isTimeout := l > 0 && time.Since(b.startTime) > b.timeout
 	return isFull || isTimeout
 }
@@ -53,7 +65,8 @@ type Batcher struct {
 	maintenanceFn       BatcherMaintenanceFn
 	controller          OutputPluginController
 	workerCount         int
-	batchSize           int
+	batchQuantity       int
+	batchSizeBytes      int
 	flushTimeout        time.Duration
 	maintenanceInterval time.Duration
 	// todo graceful shutdown with context.
@@ -87,6 +100,7 @@ func NewBatcher(
 	controller OutputPluginController,
 	workers int,
 	batchSize int,
+	batchSizeBytes int,
 	flushTimeout time.Duration,
 	maintenanceInterval time.Duration,
 ) *Batcher {
@@ -97,7 +111,8 @@ func NewBatcher(
 		maintenanceFn:       maintenanceFn,
 		controller:          controller,
 		workerCount:         workers,
-		batchSize:           batchSize,
+		batchQuantity:       batchSize,
+		batchSizeBytes:      batchSizeBytes,
 		flushTimeout:        flushTimeout,
 		maintenanceInterval: maintenanceInterval,
 	}
@@ -112,7 +127,7 @@ func (b *Batcher) Start(ctx context.Context) {
 	b.freeBatches = make(chan *Batch, b.workerCount)
 	b.fullBatches = make(chan *Batch, b.workerCount)
 	for i := 0; i < b.workerCount; i++ {
-		b.freeBatches <- newBatch(b.batchSize, b.flushTimeout)
+		b.freeBatches <- newBatch(b.batchQuantity, b.batchSizeBytes, b.flushTimeout)
 		longpanic.Go(func() {
 			b.work(ctx)
 		})

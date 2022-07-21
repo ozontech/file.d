@@ -57,7 +57,7 @@ func TestBatcher(t *testing.T) {
 		wg.Done()
 	}}
 
-	batcher := NewBatcher("test", "devnull", batcherOut, nil, batcherTail, 8, batchSize, time.Second, 0)
+	batcher := NewBatcher("test", "devnull", batcherOut, nil, batcherTail, 8, batchSize, 0, time.Second, 0)
 
 	ctx := context.TODO()
 	batcher.Start(ctx)
@@ -84,4 +84,65 @@ func TestBatcher(t *testing.T) {
 
 	assert.Equal(t, int32(eventCount), commitsCount.Load(), "wrong commits count")
 	assert.Equal(t, int32(eventCount/batchSize), batchCount.Load(), "wrong batches count")
+}
+
+func TestBatcherMaxSize(t *testing.T) {
+	eventCount := 10_000_000
+	batchSize := 1_000_000
+	eventSize := 1000
+	processors := 16
+
+	wg := sync.WaitGroup{}
+	wg.Add(eventCount)
+
+	batchCount := &atomic.Int32{}
+	batcherOut := func(workerData *WorkerData, batch *Batch) {
+		if *workerData == nil {
+			*workerData = batchCount
+		}
+		counter := (*workerData).(*atomic.Int32)
+		counter.Inc()
+	}
+
+	seqIDs := make(map[SourceID]uint64)
+	commitsCount := atomic.Int32{}
+	tail := &batcherTail{commit: func(event *Event) {
+		if _, has := seqIDs[event.SourceID]; !has {
+			seqIDs[event.SourceID] = event.SeqID
+		}
+		if event.SeqID < seqIDs[event.SourceID] {
+			logger.Panicf("wrong batch sequence:source=%d seq=%d, prev seq=%d", event.SourceID, event.SeqID, seqIDs[event.SourceID])
+		}
+		seqIDs[event.SourceID] = event.SeqID
+
+		commitsCount.Inc()
+		wg.Done()
+	}}
+
+	batcher := NewBatcher("test", "devnull", batcherOut, nil, tail, 8, 0, batchSize, time.Minute, 0)
+
+	batcher.Start(context.Background())
+
+	eventsCh := make(chan *Event, 1024)
+	go func() {
+		for i := 0; i < eventCount; i++ {
+			eventsCh <- &Event{SeqID: uint64(i), Size: eventSize}
+		}
+		close(eventsCh)
+	}()
+
+	for p := 0; p < processors; p++ {
+		go func(x int) {
+			for event := range eventsCh {
+				event.SourceID = SourceID(x)
+				batcher.Add(event)
+			}
+		}(p)
+	}
+
+	wg.Wait()
+	batcher.Stop()
+
+	assert.Equal(t, int32(eventCount), commitsCount.Load(), "wrong commits count")
+	assert.Equal(t, int32(eventCount/(batchSize/eventSize)), batchCount.Load(), "wrong batches count")
 }
