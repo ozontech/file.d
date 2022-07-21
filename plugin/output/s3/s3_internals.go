@@ -26,7 +26,8 @@ func (p *Plugin) minioClientsFactory(cfg *Config) (ObjectStoreClient, map[string
 		return nil, nil, err
 	}
 
-	for _, singleBucket := range cfg.MultiBuckets {
+	for i := range cfg.MultiBuckets {
+		singleBucket := cfg.MultiBuckets[i]
 		client, err := minio.New(singleBucket.Endpoint, singleBucket.AccessKey, singleBucket.SecretKey, singleBucket.Secure)
 		if err != nil {
 			return nil, nil, err
@@ -45,7 +46,8 @@ func (p *Plugin) getStaticDirs(outPlugCount int) (map[string]string, error) {
 	targetDirs := make(map[string]string, outPlugCount)
 	targetDirs[p.config.DefaultBucket] = dir
 	// multi_buckets from config are sub dirs on in Config.FileConfig.TargetFile dir.
-	for _, singleBucket := range p.config.MultiBuckets {
+	for i := range p.config.MultiBuckets {
+		singleBucket := &p.config.MultiBuckets[i]
 		// todo bucket names can't intersect, add ability to have equal bucket names in different s3 servers.
 		if _, ok := targetDirs[singleBucket.Bucket]; ok {
 			return nil, fmt.Errorf("bucket name %s has duplicated", singleBucket.Bucket)
@@ -63,7 +65,8 @@ func (p *Plugin) getFileNames(outPlugCount int) map[string]string {
 
 	mainFileName := f[0 : len(f)-len(p.fileExtension)]
 	fileNames[p.config.DefaultBucket] = mainFileName
-	for _, singleB := range p.config.MultiBuckets {
+	for i := range p.config.MultiBuckets {
+		singleB := &p.config.MultiBuckets[i]
 		fileNames[singleB.Bucket] = singleB.Bucket
 	}
 	return fileNames
@@ -71,6 +74,12 @@ func (p *Plugin) getFileNames(outPlugCount int) map[string]string {
 
 // Try to create buckets from dirs lying in dynamic_dirs route
 func (p *Plugin) createPlugsFromDynamicBucketArtifacts(targetDirs map[string]string) {
+	type Test struct {
+		A int
+	}
+
+	i := Test{4}
+	_ = i
 	dynamicDirsPath := filepath.Join(targetDirs[p.config.DefaultBucket], DynamicBucketDir)
 	dynamicDir, err := os.ReadDir(dynamicDirsPath)
 	if err != nil {
@@ -121,7 +130,8 @@ func (p *Plugin) startPlugins(params *pipeline.OutputPluginParams, outPlugCount 
 	p.logger.Infof("bucket %s exists", p.config.DefaultBucket)
 
 	// If multi_buckets described on file.d config, check each of them as well.
-	for _, singleBucket := range p.config.MultiBuckets {
+	for i := range p.config.MultiBuckets {
+		singleBucket := &p.config.MultiBuckets[i]
 		outPlugin, err := p.createOutPlugin(singleBucket.Bucket)
 		if err != nil {
 			return err

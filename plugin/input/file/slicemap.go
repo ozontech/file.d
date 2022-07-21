@@ -16,7 +16,7 @@ type kv struct {
 }
 
 func sliceFromMap(m map[pipeline.StreamName]int64) sliceMap {
-	var so sliceMap
+	so := make(sliceMap, len(m))
 	for k, v := range m {
 		so = append(so, kv{k, v})
 	}

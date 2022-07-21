@@ -45,7 +45,7 @@ func (p *testS3Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputP
 	p.StartWithMinio(config, params, p.objStoreF)
 }
 
-func fPutObjectOk(bucketName, objectName, filePath string, opts minio.PutObjectOptions) (n int64, err error) {
+func fPutObjectOk(bucketName, objectName, filePath string, opts minio.PutObjectOptions) (n int64, err error) { //nolint:gocritic // TODO: pass opts by pointer
 	logger.Infof("put object: %s, %s, %s", bucketName, objectName, filePath)
 	targetDir := fmt.Sprintf("./%s", bucketName)
 	if _, err := os.Stat(targetDir); os.IsNotExist(err) {
@@ -73,7 +73,7 @@ type putWithErr struct {
 	cancel context.CancelFunc
 }
 
-func (put *putWithErr) fPutObjectErr(bucketName, objectName, filePath string, opts minio.PutObjectOptions) (n int64, err error) {
+func (put *putWithErr) fPutObjectErr(bucketName, objectName, filePath string, opts minio.PutObjectOptions) (n int64, err error) { //nolint:gocritic // TODO: pass opts by pointer
 	select {
 	case <-put.ctx.Done():
 		logger.Info("put object")

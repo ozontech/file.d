@@ -220,7 +220,8 @@ func (c *Config) IsMultiBucketExists(bucketName string) bool {
 		return false
 	}
 
-	for _, bucket := range c.MultiBuckets {
+	for i := range c.MultiBuckets {
+		bucket := c.MultiBuckets[i]
 		if bucketName == bucket.Bucket {
 			return true
 		}

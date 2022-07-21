@@ -56,8 +56,6 @@ type Batcher struct {
 	batchSize           int
 	flushTimeout        time.Duration
 	maintenanceInterval time.Duration
-	// todo graceful shutdown with context.
-	cancel context.CancelFunc
 
 	shouldStop atomic.Bool
 	batch      *Batch

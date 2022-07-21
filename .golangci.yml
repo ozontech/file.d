@@ -1,8 +1,7 @@
 linters-settings:
-  gocyclo:
-    min-complexity: 15
-  maligned:
-    suggest-new: true
+  govet:
+    enable:
+      - composites
   dupl:
     threshold: 120
   goconst:
@@ -10,8 +9,6 @@ linters-settings:
     min-occurrences: 3
   misspell:
     locale: US
-  lll:
-    line-length: 140
   gocritic:
     enabled-tags:
       - diagnostic
@@ -23,9 +20,10 @@ linters-settings:
       - whyNoLint
       - commentFormatting # insane-doc syntax requires "//>" format
       - paramTypeCombine
-      - ptrToRefParam
+      - ptrToRefParam # we use interface pointer in many places
       - unnamedResult
       - sprintfQuotedString
+      - tooManyResultsChecker
   gosec:
     excludes:
       - G304 # Potential file inclusion via variable -- it's ok for this project
@@ -40,7 +38,6 @@ linters:
     - depguard
     - dogsled
     - dupl
-    - errcheck
     - goconst
     - gocritic
     - goimports
@@ -49,7 +46,7 @@ linters:
     - ineffassign
     - misspell
     - nakedret
-    - staticcheck
+    - prealloc
     - structcheck
     - stylecheck
     - typecheck
@@ -59,29 +56,15 @@ linters:
     - varcheck
     - whitespace
     # Do not enable:
-    # - wsl (too opinionated about newlines)
-    # - godox (todos are OK)
-    # - bodyclose (false positives on helper functions)
-    # - prealloc  (not worth it in scope of this project)
-    # - maligned  (same as prealloc)
-    # - funlen (gocyclo is enough)
+    # - staticcheck (does not work with golangci-lint 1.46.2 and go 1.18.2)
+    # - gosec (not worth it in scope of this project)
     # - gochecknoglobals (we know when it is ok to use globals)
     # - gochecknoinits (we know when it is ok to use inits)
-    # - gosec
-    # - lll
-    # - revive
+    # - errcheck
 
 issues:
   exclude-use-default: false
   exclude-rules:
-    # Exclude go:generate from lll
-    - source: "//go:generate"
-      linters: [ lll ]
-
-    # Exclude links from lll
-    - source: "// See https://"
-      linters: [ lll ]
-
     # Disable linters that are annoying in tests.
     - path: _test\.go
       linters:
@@ -90,20 +73,12 @@ issues:
         - dupl
         - gosec
         - goconst
-        - gocognit
-        - scopelint
-        - lll
 
     # Ignore shadowing of err.
     - linters: [ govet ]
       text: 'declaration of "(err|ctx)"'
 
-    # Ignore linters in main packages.
-    - path: cmd\/file\.d\.go
-      linters: [ gocognit, gocyclo ]
-
 run:
   build-tags:
     - e2e
     - fuzz
-    - linux

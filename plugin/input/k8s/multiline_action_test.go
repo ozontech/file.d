@@ -30,7 +30,7 @@ func TestMultilineAction_Do(t *testing.T) {
 		containerName: "duty-bot",
 		containerID:   "4e0301b633eaa2bfdcafdeba59ba0c72a3815911a6a820bf273534b0f32d98e0",
 	}
-	meta := getLogFilename("k8s", item)
+	meta := getLogFilename(item)
 	putMeta(getPodInfo(item, true))
 	selfNodeName = "node_1"
 	nodeLabels = map[string]string{"zone": "z34"}
@@ -104,7 +104,7 @@ func TestMultilineAction_Do_shouldSplit(t *testing.T) {
 		containerName: "duty-bot",
 		containerID:   "4e0301b633eaa2bfdcafdeba59ba0c72a3815911a6a820bf273534b0f32d98e0",
 	}
-	meta := getLogFilename("k8s", item)
+	meta := getLogFilename(item)
 	putMeta(getPodInfo(item, true))
 
 	var (

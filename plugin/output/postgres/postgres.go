@@ -48,7 +48,7 @@ type pgType int
 
 const (
 	// minimum required types for now.
-	unknownType pgType = iota
+	_ pgType = iota
 	pgString
 	pgInt
 	pgTimestamp
@@ -257,20 +257,21 @@ func (p *Plugin) out(_ *pipeline.WorkerData, batch *pipeline.Batch) {
 	for _, event := range batch.Events {
 		fieldValues, uniqueID, err := p.processEvent(event, pgFields, uniqFields)
 		if err != nil {
-			if errors.Is(err, ErrEventDoesntHaveField) {
+			switch {
+			case errors.Is(err, ErrEventDoesntHaveField):
 				metric.GetCounter(subsystemName, discardedEventCounter).Inc()
 				if p.config.Strict {
 					p.logger.Fatal(err)
 				}
 				p.logger.Error(err)
-			} else if errors.Is(err, ErrEventFieldHasWrongType) {
+			case errors.Is(err, ErrEventFieldHasWrongType):
 				metric.GetCounter(subsystemName, discardedEventCounter).Inc()
 				if p.config.Strict {
 					p.logger.Fatal(err)
 				}
 				p.logger.Error(err)
-			} else if err != nil { // protection from foolproof.
-				p.logger.Fatalf("undefined error: %w", err)
+			case err != nil: // protection from foolproof.
+				p.logger.Fatalf("undefined error: %v", err)
 			}
 
 			continue
