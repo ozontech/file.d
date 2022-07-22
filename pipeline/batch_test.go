@@ -57,7 +57,15 @@ func TestBatcher(t *testing.T) {
 		wg.Done()
 	}}
 
-	batcher := NewBatcher("test", "devnull", batcherOut, nil, batcherTail, 8, batchSize, 0, time.Second, 0)
+	batcher := NewBatcher(BatcherOptions{
+		PipelineName:   "test",
+		OutputType:     "devnull",
+		OutFn:          batcherOut,
+		Controller:     batcherTail,
+		Workers:        8,
+		BatchSizeCount: batchSize,
+		FlushTimeout:   time.Second,
+	})
 
 	ctx := context.TODO()
 	batcher.Start(ctx)
@@ -119,7 +127,15 @@ func TestBatcherMaxSize(t *testing.T) {
 		wg.Done()
 	}}
 
-	batcher := NewBatcher("test", "devnull", batcherOut, nil, tail, 8, 0, batchSize, time.Minute, 0)
+	batcher := NewBatcher(BatcherOptions{
+		PipelineName:   "test",
+		OutputType:     "devnull",
+		OutFn:          batcherOut,
+		Controller:     tail,
+		Workers:        8,
+		BatchSizeBytes: batchSize,
+		FlushTimeout:   time.Minute,
+	})
 
 	batcher.Start(context.Background())
 

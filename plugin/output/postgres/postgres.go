@@ -223,18 +223,16 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	}
 	p.pool = pool
 
-	p.batcher = pipeline.NewBatcher(
-		params.PipelineName,
-		outPluginType,
-		p.out,
-		nil,
-		p.controller,
-		p.config.WorkersCount_,
-		p.config.BatchSize_,
-		p.config.BatchSizeBytes_,
-		p.config.BatchFlushTimeout_,
-		0,
-	)
+	p.batcher = pipeline.NewBatcher(pipeline.BatcherOptions{
+		PipelineName:   params.PipelineName,
+		OutputType:     outPluginType,
+		OutFn:          p.out,
+		Controller:     p.controller,
+		Workers:        p.config.WorkersCount_,
+		BatchSizeCount: p.config.BatchSize_,
+		BatchSizeBytes: p.config.BatchSizeBytes_,
+		FlushTimeout:   p.config.BatchFlushTimeout_,
+	})
 
 	ctx, cancel := context.WithCancel(context.Background())
 	p.ctx = ctx
