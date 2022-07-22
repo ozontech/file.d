@@ -18,6 +18,8 @@ var (
 	// limiters should be shared across pipeline, so let's have a map by namespace and limiter name
 	limiters   = map[string]map[string]limiter{} // todo: cleanup this map?
 	limitersMu = &sync.RWMutex{}
+	// only one throttle plugin updates limiters. // todo: add concurrent update?
+	limiterSync = &sync.Once{}
 )
 
 const (
@@ -35,20 +37,19 @@ type redisClient interface {
 }
 type limiter interface {
 	isAllowed(event *pipeline.Event, ts time.Time) bool
+	sync()
 }
 
 /*{ introduction
 It discards the events if pipeline throughput gets higher than a configured threshold.
 }*/
 type Plugin struct {
-	ctx      context.Context
-	cancel   context.CancelFunc
-	logger   *zap.SugaredLogger
-	config   *Config
-	pipeline string
-
-	format string
-
+	ctx         context.Context
+	cancel      context.CancelFunc
+	logger      *zap.SugaredLogger
+	config      *Config
+	pipeline    string
+	format      string
 	redisClient redisClient
 
 	limiterBuf []byte
@@ -92,12 +93,12 @@ type Config struct {
 	//> @3@4@5@6
 	//>
 	//> Defines kind of backend.
-	LimitBackend string `json:"limit_backend" default:"memory" options:"memory|redis"`
+	LimiterBackend string `json:"limiter_backend" default:"memory" options:"memory|redis"` //*
 
 	//> @3@4@5@6
 	//>
 	//> It contains redis settings
-	RedisKindCfg RedisKindConfig `json:"redis_config" child:"true"`
+	RedisBackendCfg RedisKindConfig `json:"redis_backend_config" child:"true"` //*
 
 	//> @3@4@5@6
 	//>
@@ -135,8 +136,8 @@ type RedisKindConfig struct {
 	//> @3@4@5@6
 	//>
 	//> Defines sync interval between global and local limiters.
-	RefreshInterval  cfg.Duration `json:"refresh_interval" parse:"duration" default:"5s"` //*
-	RefreshInterval_ time.Duration
+	SyncInterval  cfg.Duration `json:"sync_interval" parse:"duration" default:"5s"` //*
+	SyncInterval_ time.Duration
 
 	//> @3@4@5@6
 	//>
@@ -181,20 +182,38 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 	}
 	p.format = format
 
-	if p.config.LimitBackend == redisBackend {
+	if p.config.LimiterBackend == redisBackend {
 		p.redisClient = redis.NewClient(
 			&redis.Options{
 				Network:      "tcp",
-				Addr:         p.config.RedisKindCfg.Host,
-				Password:     p.config.RedisKindCfg.Password,
-				ReadTimeout:  p.config.RedisKindCfg.Timeout_,
-				WriteTimeout: p.config.RedisKindCfg.Timeout_,
+				Addr:         p.config.RedisBackendCfg.Host,
+				Password:     p.config.RedisBackendCfg.Password,
+				ReadTimeout:  p.config.RedisBackendCfg.Timeout_,
+				WriteTimeout: p.config.RedisBackendCfg.Timeout_,
 			})
 
 		if pingResp := p.redisClient.Ping(); pingResp.Err() != nil {
 			p.logger.Fatalf("can't ping redis: %s", pingResp.Err())
 		}
 
+		ticker := time.NewTicker(p.config.RedisBackendCfg.SyncInterval_)
+
+		go limiterSync.Do(func() {
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-ticker.C:
+					limitersMu.RLock()
+					for _, limiterPipeline := range limiters {
+						for _, limiter := range limiterPipeline {
+							limiter.sync()
+						}
+					}
+					limitersMu.RUnlock()
+				}
+			}
+		})
 	}
 	for i, r := range p.config.Rules {
 		p.rules = append(p.rules, NewRule(r.Conditions, complexLimit{r.Limit, r.LimitKind}, i))
@@ -204,14 +223,13 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 }
 
 func (p *Plugin) getNewLimiter(throttleField, limiterKey string, rule *rule) limiter {
-	switch p.config.LimitBackend {
+	switch p.config.LimiterBackend {
 	case redisBackend:
 		return NewRedisLimiter(
 			p.ctx,
 			p.redisClient,
 			throttleField,
 			limiterKey,
-			p.config.RedisKindCfg.RefreshInterval_,
 			p.config.BucketInterval_,
 			p.config.BucketsCount,
 			rule.limit,
@@ -219,12 +237,13 @@ func (p *Plugin) getNewLimiter(throttleField, limiterKey string, rule *rule) lim
 	case inMemoryBackend:
 		return NewInMemoryLimiter(p.config.BucketInterval_, p.config.BucketsCount, rule.limit)
 	default:
-		p.logger.Panicf("unknown limiter kind: %s", p.config.LimitBackend)
+		p.logger.Panicf("unknown limiter kind: %s", p.config.LimiterBackend)
 	}
 
 	return nil
 }
 
+// Stop ends plugin activity.
 func (p *Plugin) Stop() {
 	p.cancel()
 }

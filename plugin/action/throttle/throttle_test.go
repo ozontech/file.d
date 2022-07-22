@@ -6,8 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/alicebob/miniredis/v2"
+	miniredis "github.com/alicebob/miniredis/v2"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/atomic"
 
 	"github.com/ozontech/file.d/cfg"
@@ -193,15 +194,15 @@ func TestRedisThrottle(t *testing.T) {
 		},
 		BucketsCount:   1,
 		BucketInterval: "2s",
-		RedisKindCfg: RedisKindConfig{
-			RefreshInterval: "100ms",
-			Host:            s.Addr(),
-			Password:        "",
+		RedisBackendCfg: RedisKindConfig{
+			SyncInterval: "100ms",
+			Host:         s.Addr(),
+			Password:     "",
 		},
-		LimitBackend:  "redis",
-		ThrottleField: "k8s_pod",
-		TimeField:     "",
-		DefaultLimit:  int64(defaultLimit),
+		LimiterBackend: "redis",
+		ThrottleField:  "k8s_pod",
+		TimeField:      "",
+		DefaultLimit:   int64(defaultLimit),
 	}
 	err = cfg.Parse(config, nil)
 	if err != nil {

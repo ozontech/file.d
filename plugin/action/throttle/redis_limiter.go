@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"strconv"
-	"sync"
 	"time"
 
 	"github.com/ozontech/file.d/logger"
@@ -16,7 +15,6 @@ const (
 )
 
 type redisLimiter struct {
-	mu    sync.Mutex
 	redis redisClient
 
 	// <keyPrefix>_
@@ -31,11 +29,12 @@ type redisLimiter struct {
 	totalLimiter *inMemoryLimiter
 }
 
+// NewRedisLimiter return instance of redis limiter.
 func NewRedisLimiter(
 	ctx context.Context,
 	redis redisClient,
 	throttleFieldName, throttleFieldValue string,
-	refreshInterval, bucketInterval time.Duration,
+	bucketInterval time.Duration,
 	bucketCount int,
 	limit complexLimit,
 ) *redisLimiter {
@@ -53,25 +52,10 @@ func NewRedisLimiter(
 	rl.keyPrefix.WriteString(throttleFieldValue)
 	rl.keyPrefix.WriteString("_")
 
-	ticker := time.NewTicker(refreshInterval)
-	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-				rl.sync()
-			}
-		}
-	}()
-
 	return rl
 }
 
 func (l *redisLimiter) isAllowed(event *pipeline.Event, ts time.Time) bool {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-
 	// count increment from last sync
 	isAllowed := l.incrementLimiter.isAllowed(event, ts)
 	if isAllowed {
@@ -83,17 +67,14 @@ func (l *redisLimiter) isAllowed(event *pipeline.Event, ts time.Time) bool {
 }
 
 func (l *redisLimiter) sync() {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-
-	// required to prevent current update of buckets via throttle plugin
+	// required to prevent concurrent update of buckets via throttle plugin
 	l.incrementLimiter.mu.Lock()
 	l.totalLimiter.mu.Lock()
 
 	n := time.Now()
 
 	// actualize buckets
-	_ = l.incrementLimiter.rebuildBuckets(n)
+	maxID := l.incrementLimiter.rebuildBuckets(n)
 	_ = l.totalLimiter.rebuildBuckets(n)
 
 	minID := l.totalLimiter.minID
@@ -114,51 +95,76 @@ func (l *redisLimiter) sync() {
 		bucketIDs = append(bucketIDs, minID+i)
 	}
 
-	l.syncLocalGlobalLimiters(keyPrefixLen, keyIdxs, bucketIDs)
-
 	l.totalLimiter.mu.Unlock()
 	l.incrementLimiter.mu.Unlock()
+
+	l.syncLocalGlobalLimiters(keyIdxs, bucketIDs, maxID)
 
 	l.updateKeyLimit(keyPrefixLen)
 }
 
-func (l *redisLimiter) syncLocalGlobalLimiters(keyPrefixLen int, keyIdxs, bucketIDs []int) {
+func (l *redisLimiter) syncLocalGlobalLimiters(keyIdxs, bucketIDs []int, maxID int) {
 	prefix := l.keyPrefix.String()
-	var wg sync.WaitGroup
 
-	wg.Add(len(bucketIDs))
 	for i, ID := range bucketIDs {
 		i := i
 		ID := ID
 
-		go func() {
-			defer wg.Done()
+		bucketIdx := keyIdxs[i]
 
-			stringID := strconv.Itoa(ID)
-			key := prefix + stringID
+		stringID := strconv.Itoa(ID)
+		key := prefix + stringID
 
-			intCmd := l.redis.IncrBy(key, l.incrementLimiter.buckets[keyIdxs[i]])
-			val, err := intCmd.Result()
-			if err != nil {
-				logger.Errorf("can't watch global limit for %s: %s", key, err.Error())
-				return
-			}
+		intCmd := l.redis.IncrBy(key, l.incrementLimiter.buckets[bucketIdx])
+		val, err := intCmd.Result()
+		if err != nil {
+			logger.Errorf("can't watch global limit for %s: %s", key, err.Error())
+			continue
+		}
 
-			l.incrementLimiter.buckets[keyIdxs[i]] = 0
-			l.totalLimiter.buckets[keyIdxs[i]] = val
+		l.updateLimiterValues(maxID, bucketIdx, val)
 
-			// for oldest bucket set lifetime equal to 1 bucket duration, for newest to (bucket count * bucket duration) + 1
-			l.redis.Expire(key, l.totalLimiter.interval+l.totalLimiter.interval*time.Duration(keyIdxs[i]))
-		}()
+		// for oldest bucket set lifetime equal to 1 bucket duration, for newest to (bucket count * bucket duration) + 1
+		l.redis.Expire(key, l.totalLimiter.interval+l.totalLimiter.interval*time.Duration(bucketIdx))
 	}
-	wg.Wait()
+}
+
+// updateLimiterValues checks probable shift of buckets and updates buckets values.
+func (l *redisLimiter) updateLimiterValues(maxID, bucketIdx int, totalLimiterVal int64) {
+	l.incrementLimiter.mu.Lock()
+	if l.incrementLimiter.maxID == maxID {
+		l.incrementLimiter.buckets[bucketIdx] = 0
+	} else {
+		// buckets were rebuild during request to redis
+		shift := l.incrementLimiter.maxID - maxID
+		currBucketIdx := bucketIdx - shift
+
+		// currBucketIdx < 0 means it become too old and must be ignored
+		if currBucketIdx > 0 {
+			l.incrementLimiter.buckets[currBucketIdx] = 0
+		}
+	}
+	l.incrementLimiter.mu.Unlock()
+
+	l.totalLimiter.mu.Lock()
+	if l.totalLimiter.maxID == maxID {
+		l.totalLimiter.buckets[bucketIdx] = totalLimiterVal
+	} else {
+		// buckets were rebuild during request to redis
+		shift := l.totalLimiter.maxID - maxID
+		currBucketIdx := bucketIdx - shift
+
+		// currBucketIdx < 0 means it become too old and must be ignored
+		if currBucketIdx > 0 {
+			l.totalLimiter.buckets[currBucketIdx] = totalLimiterVal
+		}
+	}
+	l.totalLimiter.mu.Unlock()
 }
 
 // updateKeyLimit reads key limit from redis and updates current limit.
 func (l *redisLimiter) updateKeyLimit(keyPrefixLen int) {
-	l.keyPrefix.Truncate(keyPrefixLen)
 	l.keyPrefix.WriteString(keySuffix)
-	defer func() { l.keyPrefix.Truncate(keyPrefixLen) }()
 
 	// try to set global limit to default
 	if b, err := l.redis.SetNX(l.keyPrefix.String(), l.totalLimiter.limit.value, 0).Result(); err == nil && !b {
@@ -168,4 +174,6 @@ func (l *redisLimiter) updateKeyLimit(keyPrefixLen int) {
 			l.incrementLimiter.limit.value = v
 		}
 	}
+
+	l.keyPrefix.Truncate(keyPrefixLen)
 }

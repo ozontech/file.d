@@ -14,6 +14,7 @@ type inMemoryLimiter struct {
 	buckets     []int64
 	interval    time.Duration // bucket interval
 	minID       int           // minimum bucket id
+	maxID       int           // max bucket id
 	mu          sync.Mutex
 }
 
@@ -26,6 +27,10 @@ func NewInMemoryLimiter(interval time.Duration, bucketCount int, limit complexLi
 
 		buckets: make([]int64, bucketCount),
 	}
+}
+
+func (l *inMemoryLimiter) sync() {
+
 }
 
 func (l *inMemoryLimiter) isAllowed(event *pipeline.Event, ts time.Time) bool {
@@ -55,7 +60,8 @@ func (l *inMemoryLimiter) rebuildBuckets(ts time.Time) int {
 	currentID := l.timeToBucketID(currentTs)
 	if l.minID == 0 {
 		// min id weren't set yet. It MUST be extracted from currentTs, because ts from event can be invalid (e.g. from 1970 or 2077 year)
-		l.minID = l.timeToBucketID(currentTs) - l.bucketCount + 1
+		l.maxID = l.timeToBucketID(currentTs)
+		l.minID = l.maxID - l.bucketCount + 1
 	}
 	maxID := l.minID + len(l.buckets) - 1
 
@@ -70,6 +76,7 @@ func (l *inMemoryLimiter) rebuildBuckets(ts time.Time) int {
 		l.buckets = l.buckets[n:]
 		// update min buckets
 		l.minID += n
+		l.maxID = currentID
 	}
 	id := l.timeToBucketID(ts)
 
