@@ -12,26 +12,28 @@ import (
 	"sync"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
+	"go.uber.org/atomic"
+	"go.uber.org/zap"
+
 	"github.com/ozontech/file.d/decoder"
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/longpanic"
 	"github.com/ozontech/file.d/stats"
-	"github.com/prometheus/client_golang/prometheus"
-	"go.uber.org/atomic"
-	"go.uber.org/zap"
 )
 
 const (
 	DefaultStreamField         = "stream"
 	DefaultCapacity            = 1024
-	DefaultAvgInputEventSize   = 16 * 1024
+	DefaultAvgInputEventSize   = 4 * 1024
 	DefaultMaxInputEventSize   = 0
 	DefaultJSONNodePoolSize    = 1024
 	DefaultMaintenanceInterval = time.Second * 5
 	DefaultEventTimeout        = time.Second * 30
 	DefaultFieldValue          = "not_set"
 	DefaultStreamName          = StreamName("not_set")
-	DefaultWaitForPanicTimeout = time.Minute
+
+	EventSeqIDError = uint64(0)
 
 	antispamUnbanIterations = 4
 	metricsGenInterval      = time.Hour
@@ -40,6 +42,10 @@ const (
 	inputEventsSizeMetric   = "input_events_size"
 	outputEventsCountMetric = "output_events_count"
 	outputEventsSizeMetric  = "output_events_size"
+	readOpsEventsSizeMetric = "read_ops_count"
+	maxEventSizeExceeded    = "max_event_size_exceeded"
+
+	wrongEventCRIFormatMetric = "wrong_event_cri_format"
 )
 
 type finalizeFn = func(event *Event, notifyInput bool, backEvent bool)
@@ -49,6 +55,8 @@ type InputPluginController interface {
 	UseSpread()                           // don't use stream field and spread all events across all processors
 	DisableStreams()                      // don't use stream field
 	SuggestDecoder(t decoder.DecoderType) // set decoder if pipeline uses "auto" value for decoder
+	IncReadOps()                          // inc read ops for stats
+	IncMaxEventSizeExceeded()             // inc max event size exceeded counter
 }
 
 type ActionPluginController interface {
@@ -107,6 +115,7 @@ type Pipeline struct {
 	inputSize       atomic.Int64
 	outputEvents    atomic.Int64
 	outputSize      atomic.Int64
+	readOps         atomic.Int64
 	maxSize         int
 }
 
@@ -164,6 +173,14 @@ func New(name string, settings *Settings, registry *prometheus.Registry) *Pipeli
 	return pipeline
 }
 
+func (p *Pipeline) IncReadOps() {
+	p.readOps.Inc()
+}
+
+func (p *Pipeline) IncMaxEventSizeExceeded() {
+	stats.GetCounter(p.subsystemName(), maxEventSizeExceeded).Inc()
+}
+
 func (p *Pipeline) subsystemName() string {
 	return "pipeline_" + p.Name
 }
@@ -188,6 +205,21 @@ func (p *Pipeline) registerMetrics() {
 		Subsystem: p.subsystemName(),
 		Name:      outputEventsSizeMetric,
 		Help:      "Size of events on pipeline output",
+	})
+	stats.RegisterCounter(&stats.MetricDesc{
+		Subsystem: p.subsystemName(),
+		Name:      readOpsEventsSizeMetric,
+		Help:      "Read OPS count",
+	})
+	stats.RegisterCounter(&stats.MetricDesc{
+		Subsystem: p.subsystemName(),
+		Name:      wrongEventCRIFormatMetric,
+		Help:      "Wrong event CRI format counter",
+	})
+	stats.RegisterCounter(&stats.MetricDesc{
+		Subsystem: p.subsystemName(),
+		Name:      maxEventSizeExceeded,
+		Help:      "Max event size exceeded counter",
 	})
 }
 
@@ -299,15 +331,20 @@ func (p *Pipeline) GetOutput() OutputPlugin {
 	return p.output
 }
 
-func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes []byte, isNewSource bool) uint64 {
+// In decodes message and passes it to event stream.
+func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes []byte, isNewSource bool) (seqID uint64) {
 	length := len(bytes)
 
-	// don't process shit.
+	// don't process mud.
 	isEmpty := length == 0 || (bytes[0] == '\n' && length == 1)
 	isSpam := p.antispamer.isSpam(sourceID, sourceName, isNewSource)
 	isLong := p.settings.MaxEventSize != 0 && length > p.settings.MaxEventSize
+
+	if isLong {
+		p.IncMaxEventSizeExceeded()
+	}
 	if isEmpty || isSpam || isLong {
-		return 0
+		return EventSeqIDError
 	}
 
 	p.inputEvents.Inc()
@@ -333,7 +370,9 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 			} else {
 				p.logger.Errorf("wrong json format offset=%d, length=%d, err=%s, source=%d:%s, json=%s", offset, length, err.Error(), sourceID, sourceName, bytes)
 			}
-			return 0
+			// Can't process event, return to pool.
+			p.eventPool.back(event)
+			return EventSeqIDError
 		}
 	case decoder.RAW:
 		_ = event.Root.DecodeString("{}")
@@ -342,15 +381,22 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 		_ = event.Root.DecodeString("{}")
 		err := decoder.DecodeCRI(event.Root, bytes)
 		if err != nil {
-			p.logger.Fatalf("wrong cri format offset=%d, length=%d, err=%s, source=%d:%s, cri=%s", offset, length, err.Error(), sourceID, sourceName, bytes)
-			return 0
+			stats.GetCounter(p.subsystemName(), wrongEventCRIFormatMetric).Inc()
+			if p.settings.IsStrict {
+				p.logger.Fatalf("wrong cri format offset=%d, length=%d, err=%s, source=%d:%s, cri=%s", offset, length, err.Error(), sourceID, sourceName, bytes)
+			} else {
+				p.logger.Errorf("wrong cri format offset=%d, length=%d, err=%s, source=%d:%s, cri=%s", offset, length, err.Error(), sourceID, sourceName, bytes)
+			}
+			p.eventPool.back(event)
+			return EventSeqIDError
 		}
 	case decoder.POSTGRES:
 		_ = event.Root.DecodeString("{}")
 		err := decoder.DecodePostgres(event.Root, bytes)
 		if err != nil {
 			p.logger.Fatalf("wrong postgres format offset=%d, length=%d, err=%s, source=%d:%s, cri=%s", offset, length, err.Error(), sourceID, sourceName, bytes)
-			return 0
+			// Dead route, never passed here.
+			return EventSeqIDError
 		}
 	default:
 		p.logger.Panicf("unknown decoder %d for pipeline %q", p.decoder, p.Name)
@@ -519,6 +565,7 @@ type deltas struct {
 	deltaInputSize    float64
 	deltaOutputEvents float64
 	deltaOutputSize   float64
+	deltaReads        float64
 }
 
 func (p *Pipeline) logChanges(myDeltas *deltas) {
@@ -528,33 +575,38 @@ func (p *Pipeline) logChanges(myDeltas *deltas) {
 	interval := p.settings.MaintenanceInterval
 	rate := int(myDeltas.deltaInputEvents * float64(time.Second) / float64(interval))
 	rateMb := myDeltas.deltaInputSize * float64(time.Second) / float64(interval) / 1024 / 1024
+	readOps := int(myDeltas.deltaReads * float64(time.Second) / float64(interval))
 	tc := int64(math.Max(float64(inputSize), 1))
 
 	p.logger.Infof(`%q pipeline stats interval=%ds, active procs=%d/%d, queue=%d/%d, out=%d|%.1fMb,`+
-		`rate=%d/s|%.1fMb/s, total=%d|%.1fMb, avg size=%d, max size=%d`,
+		`rate=%d/s|%.1fMb/s, read ops=%d/s, total=%d|%.1fMb, avg size=%d, max size=%d, pool fullness=%d/%d`,
 		p.Name, interval/time.Second, p.activeProcs.Load(), p.procCount.Load(),
 		p.settings.Capacity-p.eventPool.freeEventsCount, p.settings.Capacity,
-		int64(myDeltas.deltaInputEvents), float64(myDeltas.deltaInputSize)/1024.0/1024.0, rate, rateMb,
-		inputEvents, float64(inputSize)/1024.0/1024.0, inputSize/tc, p.maxSize)
+		int64(myDeltas.deltaInputEvents), float64(myDeltas.deltaInputSize)/1024.0/1024.0, rate, rateMb, readOps,
+		inputEvents, float64(inputSize)/1024.0/1024.0, inputSize/tc, p.maxSize,
+		p.eventPool.capacity-p.eventPool.freeEventsCount, p.eventPool.capacity)
 }
 
-func (p *Pipeline) incMetrics(inputEvents, inputSize, outputEvents, outputSize *DeltaWrapper) *deltas {
+func (p *Pipeline) incMetrics(inputEvents, inputSize, outputEvents, outputSize, reads *DeltaWrapper) *deltas {
 	deltaInputEvents := inputEvents.updateValue(p.inputEvents.Load())
 	deltaInputSize := inputSize.updateValue(p.inputSize.Load())
 	deltaOutputEvents := outputEvents.updateValue(p.outputEvents.Load())
 	deltaOutputSize := outputSize.updateValue(p.outputSize.Load())
+	deltaReads := reads.updateValue(p.readOps.Load())
 
 	myDeltas := &deltas{
 		deltaInputEvents,
 		deltaInputSize,
 		deltaOutputEvents,
 		deltaOutputSize,
+		deltaReads,
 	}
 
 	stats.GetCounter(p.subsystemName(), inputEventsCountMetric).Add(myDeltas.deltaInputEvents)
 	stats.GetCounter(p.subsystemName(), inputEventsSizeMetric).Add(myDeltas.deltaInputSize)
 	stats.GetCounter(p.subsystemName(), outputEventsCountMetric).Add(myDeltas.deltaOutputEvents)
 	stats.GetCounter(p.subsystemName(), outputEventsSizeMetric).Add(myDeltas.deltaOutputSize)
+	stats.GetCounter(p.subsystemName(), readOpsEventsSizeMetric).Add(myDeltas.deltaReads)
 
 	return myDeltas
 }
@@ -564,6 +616,7 @@ func (p *Pipeline) maintenance() {
 	inputSize := newDeltaWrapper()
 	outputEvents := newDeltaWrapper()
 	outputSize := newDeltaWrapper()
+	readOps := newDeltaWrapper()
 
 	for {
 		time.Sleep(p.settings.MaintenanceInterval)
@@ -574,7 +627,7 @@ func (p *Pipeline) maintenance() {
 		p.antispamer.maintenance()
 		p.metricsHolder.maintenance()
 
-		myDeltas := p.incMetrics(inputEvents, inputSize, outputEvents, outputSize)
+		myDeltas := p.incMetrics(inputEvents, inputSize, outputEvents, outputSize, readOps)
 		p.logChanges(myDeltas)
 
 		if len(p.inSample) > 0 {

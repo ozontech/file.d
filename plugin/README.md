@@ -150,6 +150,10 @@ It adds field containing hostname to an event.
 It converts field date/time data to different format.
 
 [More details...](plugin/action/convert_date/README.md)
+## convert_log_level
+It converts the log level field according RFC-5424.
+
+[More details...](plugin/action/convert_log_level/README.md)
 ## debug
 It logs event to stdout. Useful for debugging.
 
@@ -216,6 +220,23 @@ It decodes a JSON string from the event field and merges the result with the eve
 If the decoded JSON isn't an object, the event will be skipped.
 
 [More details...](plugin/action/json_decode/README.md)
+## json_encode
+It replaces field with its JSON string representation.
+
+**Example:**
+```yaml
+pipelines:
+  example_pipeline:
+    ...
+    actions:
+    - type: json_encode
+      field: server
+    ...
+```
+It transforms `{"server":{"os":"linux","arch":"amd64"}}` into `{"server":"{\"os\":\"linux\",\"arch\":\"amd64\"}"}`.
+
+
+[More details...](plugin/action/json_encode/README.md)
 ## keep_fields
 It keeps the list of the event fields and removes others.
 
@@ -311,6 +332,10 @@ The resulting event could look like:
 ```
 
 [More details...](plugin/action/rename/README.md)
+## set_time
+It adds time field to the event.
+
+[More details...](plugin/action/set_time/README.md)
 ## throttle
 It discards the events if pipeline throughput gets higher than a configured threshold.
 

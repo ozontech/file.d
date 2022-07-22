@@ -7,9 +7,10 @@ on:
     branches: [ master ]
 
 jobs:
-
   build_and_test:
     runs-on: ubuntu-latest
+    env:
+      LOG_LEVEL: error
     steps:
     - uses: actions/checkout@v2
 
@@ -37,4 +38,4 @@ jobs:
       with:
         only-new-issues: true
         # golangci-lint command line arguments
-        args: --timeout=5m0s
+        args: --timeout=5m0s --build-tags linux

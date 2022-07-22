@@ -5,15 +5,19 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"net/http/httptest"
 	"runtime"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/test"
-	"github.com/stretchr/testify/assert"
 )
 
 func getInputInfo() *pipeline.InputPluginInfo {
@@ -65,10 +69,9 @@ func TestProcessChunksMany(t *testing.T) {
 
 	chunk := []byte(`{"a":"1"}
 {"a":"2"}
-{"a":"3"}
-`)
+{"a":"3"}`)
 	eventBuff := make([]byte, 0)
-	eventBuff = input.processChunk(0, chunk, eventBuff)
+	eventBuff = input.processChunk(0, chunk, eventBuff, true)
 
 	wg.Wait()
 	p.Stop()
@@ -99,7 +102,7 @@ func TestProcessChunksEventBuff(t *testing.T) {
 {"a":"2"}
 {"a":"3"}`)
 	eventBuff := make([]byte, 0)
-	eventBuff = input.processChunk(0, chunk, eventBuff)
+	eventBuff = input.processChunk(0, chunk, eventBuff, false)
 
 	wg.Wait()
 	p.Stop()
@@ -130,7 +133,7 @@ func TestProcessChunksContinue(t *testing.T) {
 {"a":"3"}
 `)
 	eventBuff := []byte(`{"a":`)
-	eventBuff = input.processChunk(0, chunk, eventBuff)
+	eventBuff = input.processChunk(0, chunk, eventBuff, false)
 
 	wg.Wait()
 	p.Stop()
@@ -159,10 +162,10 @@ func TestProcessChunksContinueMany(t *testing.T) {
 
 	eventBuff := []byte(``)
 
-	eventBuff = input.processChunk(0, []byte(`{`), eventBuff)
-	eventBuff = input.processChunk(0, []byte(`"a"`), eventBuff)
-	eventBuff = input.processChunk(0, []byte(`:`), eventBuff)
-	eventBuff = input.processChunk(0, []byte(`"1"}`+"\n"), eventBuff)
+	eventBuff = input.processChunk(0, []byte(`{`), eventBuff, false)
+	eventBuff = input.processChunk(0, []byte(`"a"`), eventBuff, false)
+	eventBuff = input.processChunk(0, []byte(`:`), eventBuff, false)
+	eventBuff = input.processChunk(0, []byte(`"1"}`), eventBuff, true)
 
 	wg.Wait()
 	p.Stop()
@@ -170,6 +173,159 @@ func TestProcessChunksContinueMany(t *testing.T) {
 	assert.Equal(t, 1, len(outEvents), "wrong events count")
 	assert.Equal(t, `{"a":"1"}`, outEvents[0], "wrong event")
 	assert.Equal(t, 0, len(eventBuff), "wrong event")
+}
+
+func TestServeChunks(t *testing.T) {
+	p, _, output := test.NewPipelineMock(nil, "passive")
+	input := getInputInfo()
+	p.SetInput(input)
+	p.Start()
+
+	wg := &sync.WaitGroup{}
+	wg.Add(2)
+
+	outEvents := make([]string, 0)
+	output.SetOutFn(func(event *pipeline.Event) {
+		outEvents = append(outEvents, event.Root.EncodeToString())
+		wg.Done()
+	})
+
+	resp := httptest.NewRecorder()
+	input.Plugin.(*Plugin).serve(resp, httptest.NewRequest(http.MethodPost, "/logger", strings.NewReader(`{"a":"1"}`)))
+	require.Equal(t, http.StatusOK, resp.Result().StatusCode)
+
+	resp = httptest.NewRecorder()
+	input.Plugin.(*Plugin).serve(resp, httptest.NewRequest(http.MethodPost, "/logger", strings.NewReader(`{"b":"2"}`+"\n")))
+	require.Equal(t, http.StatusOK, resp.Result().StatusCode)
+
+	wg.Wait()
+	p.Stop()
+
+	require.Equal(t, []string{`{"a":"1"}`, `{"b":"2"}`}, outEvents)
+}
+
+type PartialReader struct {
+	body   []byte
+	eof    bool
+	m      *sync.Mutex
+	offset int
+}
+
+func NewPartialReader(body []byte) *PartialReader {
+	return &PartialReader{
+		body: body,
+		m:    &sync.Mutex{},
+	}
+}
+
+func (c *PartialReader) Read(to []byte) (int, error) {
+	c.m.Lock()
+	defer c.m.Unlock()
+
+	n := copy(to, c.body[c.offset:])
+	c.offset += n
+
+	if n == 0 && c.eof {
+		return 0, io.EOF
+	}
+
+	return n, nil
+}
+
+func (c *PartialReader) AppendBody(body string, isLast bool) {
+	c.m.Lock()
+	defer c.m.Unlock()
+
+	c.body = append(c.body, body...)
+	c.eof = isLast
+}
+
+func (c *PartialReader) WaitRead() {
+	for {
+		c.m.Lock()
+		done := len(c.body) == c.offset
+		c.m.Unlock()
+
+		if done {
+			return
+		}
+
+		time.Sleep(time.Millisecond * 10)
+	}
+}
+
+func TestServePartialRequest(t *testing.T) {
+	p, _, output := test.NewPipelineMock(nil, "passive")
+	input := getInputInfo()
+	p.SetInput(input)
+
+	wg := sync.WaitGroup{}
+	wg.Add(2)
+
+	outEvents := make([]string, 0)
+	output.SetOutFn(func(event *pipeline.Event) {
+		outEvents = append(outEvents, event.Root.EncodeToString())
+		wg.Done()
+	})
+
+	p.Start()
+
+	resp := httptest.NewRecorder()
+	reader := NewPartialReader([]byte(`{"hello":"`))
+
+	doneCh := make(chan struct{})
+	go func() {
+		input.Plugin.(*Plugin).serve(resp, httptest.NewRequest(http.MethodPost, "/_bulk", reader))
+		close(doneCh)
+	}()
+
+	reader.WaitRead()
+	reader.AppendBody("world", false)
+	reader.WaitRead()
+	reader.AppendBody(`"}`+"\n", false)
+	reader.WaitRead()
+	reader.AppendBody(`{"next":"`, false)
+	reader.WaitRead()
+	reader.AppendBody(`ok"}`, true)
+
+	<-doneCh
+
+	require.Equal(t, http.StatusOK, resp.Result().StatusCode)
+
+	wg.Wait()
+	p.Stop()
+
+	require.Equal(t, []string{`{"hello":"world"}`, `{"next":"ok"}`}, outEvents)
+}
+
+func TestServeChunksContinue(t *testing.T) {
+	p, _, output := test.NewPipelineMock(nil, "passive")
+	input := getInputInfo()
+	p.SetInput(input)
+	p.Start()
+
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
+
+	outEvents := make([]string, 0)
+	output.SetOutFn(func(event *pipeline.Event) {
+		outEvents = append(outEvents, event.Root.EncodeToString())
+		wg.Done()
+	})
+
+	body := make([]byte, 0, readBufDefaultLen*2)
+	body = append(body, `{"a":"`...)
+	body = append(body, strings.Repeat("a", cap(body))...)
+	body = append(body, `"}`...)
+
+	resp := httptest.NewRecorder()
+	input.Plugin.(*Plugin).serve(resp, httptest.NewRequest(http.MethodPost, "/logger", bytes.NewReader(body)))
+	require.Equal(t, http.StatusOK, resp.Result().StatusCode)
+
+	wg.Wait()
+	p.Stop()
+
+	require.Equal(t, []string{string(body)}, outEvents)
 }
 
 func BenchmarkHttpInputJson(b *testing.B) {
