@@ -1,8 +1,8 @@
 package stats
 
 import (
+	"github.com/ozontech/file.d/buildinfo"
 	"github.com/ozontech/file.d/logger"
-	"github.com/ozontech/file.d/version"
 
 	prom "github.com/prometheus/client_golang/prometheus"
 )
@@ -63,7 +63,7 @@ func RegisterGauge(metricDesc *MetricDesc) {
 		Subsystem:   metricDesc.Subsystem,
 		Name:        metricDesc.Name,
 		Help:        metricDesc.Help,
-		ConstLabels: map[string]string{"version": version.AppVersion},
+		ConstLabels: map[string]string{"version": buildinfo.Version},
 	})
 
 	keyInternal := key{PromNamespace, metricDesc.Subsystem, metricDesc.Name}
@@ -76,7 +76,7 @@ func RegisterCounter(metricDesc *MetricDesc) {
 		Subsystem:   metricDesc.Subsystem,
 		Name:        metricDesc.Name,
 		Help:        metricDesc.Help,
-		ConstLabels: map[string]string{"version": version.AppVersion},
+		ConstLabels: map[string]string{"version": buildinfo.Version},
 	})
 
 	keyInternal := key{PromNamespace, metricDesc.Subsystem, metricDesc.Name}
