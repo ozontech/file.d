@@ -66,7 +66,7 @@ var (
 )
 
 func main() {
-	logger.Infof("hi I am file.d %s %s", buildinfo.Version, buildinfo.BuildTime)
+	logger.Infof("hi i'm file.d version=%s %s", buildinfo.Version, buildinfo.BuildTime)
 
 	debug.SetGCPercent(gcPercent)
 	insaneJSON.DisableBeautifulErrors = true
