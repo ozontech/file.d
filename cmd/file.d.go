@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"github.com/ozontech/file.d/buildinfo"
 	"os"
 	"os/signal"
 	"runtime/debug"
@@ -52,13 +53,11 @@ import (
 	_ "github.com/ozontech/file.d/plugin/output/s3"
 	_ "github.com/ozontech/file.d/plugin/output/splunk"
 	_ "github.com/ozontech/file.d/plugin/output/stdout"
-	appVer "github.com/ozontech/file.d/version"
 )
 
 var (
-	fileD   *fd.FileD
-	exit    = make(chan bool)
-	version = "v0.0.1"
+	fileD *fd.FileD
+	exit  = make(chan bool)
 
 	config = kingpin.Flag("config", `config file name`).Required().ExistingFile()
 	http   = kingpin.Flag("http", `http listen addr eg. ":9000", "off" to disable`).Default(":9000").String()
@@ -67,11 +66,7 @@ var (
 )
 
 func main() {
-	kingpin.Version(version)
-	kingpin.Parse()
-	appVer.AppVersion = version
-
-	logger.Infof("hi!")
+	logger.Infof("hi i'm file.d version=%s %s", buildinfo.Version, buildinfo.BuildTime)
 
 	debug.SetGCPercent(gcPercent)
 	insaneJSON.DisableBeautifulErrors = true
