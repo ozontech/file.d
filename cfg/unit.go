@@ -22,6 +22,7 @@ const (
 // Alias must not contain spaces
 
 var UnitAlias = map[string]int{
+	"":   1,
 	"KB": KB, "KiB": KiB,
 	"MB": MB, "MiB": MiB,
 	"GB": GB, "GiB": GiB,

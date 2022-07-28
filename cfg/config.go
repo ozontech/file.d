@@ -451,11 +451,10 @@ func ParseField(v reflect.Value, vField reflect.Value, tField reflect.StructFiel
 		case "unit":
 			value, err := strconv.Atoi(strings.Split(vField.String(), " ")[0])
 			if err != nil {
-				return fmt.Errorf("could not parse number %d, err: %s", value, err.Error())
+				return fmt.Errorf("could not parse number %d, err: %w", value, err)
 			}
 			size := strings.TrimPrefix(vField.String(), strings.Split(vField.String(), " ")[0])
 			size = strings.TrimSpace(size)
-
 			if multiplier, ok := UnitAlias[size]; ok {
 				finalField.SetUint(uint64(value * multiplier))
 			} else {
