@@ -1,9 +1,10 @@
 package cfg
 
 const (
+	B = 1
 	// Decimal
 
-	KB = 1000
+	KB = 1000 * B
 	MB = 1000 * KB
 	GB = 1000 * MB
 	TB = 1000 * GB
@@ -11,7 +12,7 @@ const (
 
 	// Binary
 
-	KiB = 1024
+	KiB = 1024 * B
 	MiB = 1024 * KiB
 	GiB = 1024 * MiB
 	TiB = 1024 * GiB
@@ -22,10 +23,10 @@ const (
 // Alias must not contain spaces
 
 var UnitAlias = map[string]int{
-	"":   1,
 	"KB": KB, "KiB": KiB,
 	"MB": MB, "MiB": MiB,
 	"GB": GB, "GiB": GiB,
 	"TB": TB, "TiB": TiB,
 	"PB": PB, "PiB": PiB,
+	"B": B,
 }

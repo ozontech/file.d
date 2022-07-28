@@ -148,20 +148,36 @@ func TestParseUnitNumber(t *testing.T) {
 	s := &strUnit{T: "10"}
 	err := Parse(s, nil)
 
-	assert.Nil(t, err, "shouldn't be an error")
-	assert.Equal(t, uint(10), s.T_, "wrong value")
+	assert.Errorf(t, err, "shouldn't be an error")
+	assert.Equal(t, uint(0), s.T_, "wrong value")
 }
 
 func TestParseUnitNumberWithSpace(t *testing.T) {
 	s := &strUnit{T: "10 "}
 	err := Parse(s, nil)
 
-	assert.Nil(t, err, "shouldn't be an error")
-	assert.Equal(t, uint(10), s.T_, "wrong value")
+	assert.Errorf(t, err, "shouldn't be an error")
+	assert.Equal(t, uint(0), s.T_, "wrong value")
 }
 
 func TestParseUnitNumberWithAlias(t *testing.T) {
 	s := &strUnit{T: "10 MB"}
+	err := Parse(s, nil)
+
+	assert.Nil(t, err, "shouldn't be an error")
+	assert.Equal(t, uint(10000000), s.T_, "wrong value")
+}
+
+func TestParseUnitSpacePlusNumberWithAlias(t *testing.T) {
+	s := &strUnit{T: " 10 MB"}
+	err := Parse(s, nil)
+
+	assert.Error(t, err, "shouldn't be an error")
+	assert.Equal(t, uint(0), s.T_, "wrong value")
+}
+
+func TestParseUnitNumberWithAliasPlusSpace(t *testing.T) {
+	s := &strUnit{T: "10 MB "}
 	err := Parse(s, nil)
 
 	assert.Nil(t, err, "shouldn't be an error")
