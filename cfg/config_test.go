@@ -48,6 +48,11 @@ type strExpression struct {
 	T_ int
 }
 
+type strUnit struct {
+	T  string `parse:"unit"`
+	T_ uint
+}
+
 type hierarchyChild struct {
 	T string `required:"true"`
 }
@@ -137,6 +142,14 @@ func TestParseExpressionConst(t *testing.T) {
 
 	assert.Nil(t, err, "shouldn't be an error")
 	assert.Equal(t, 10, s.T_, "wrong value")
+}
+
+func TestParseUnit(t *testing.T) {
+	s := &strUnit{T: "10 MB"}
+	err := Parse(s, nil)
+
+	assert.Nil(t, err, "shouldn't be an error")
+	assert.Equal(t, uint(10000000), s.T_, "wrong value")
 }
 
 func TestParseFieldSelectorSimple(t *testing.T) {

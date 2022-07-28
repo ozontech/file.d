@@ -448,6 +448,20 @@ func ParseField(v reflect.Value, vField reflect.Value, tField reflect.StructFiel
 			}
 			finalField.SetInt(int64(value))
 
+		case "unit":
+			value, err := strconv.Atoi(strings.Split(vField.String(), " ")[0])
+			if err != nil {
+				return fmt.Errorf("could not parse number %d, err: %s", value, err.Error())
+			}
+			size := strings.TrimPrefix(vField.String(), strings.Split(vField.String(), " ")[0])
+			size = strings.TrimSpace(size)
+
+			if multiplier, ok := UnitAlias[size]; ok {
+				finalField.SetUint(uint64(value * multiplier))
+			} else {
+				return fmt.Errorf("unexpected alias %s", size)
+			}
+
 		default:
 			return fmt.Errorf("unsupported parse type %q for field %s", tag, tField.Name)
 		}
