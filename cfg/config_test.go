@@ -1,6 +1,7 @@
 package cfg
 
 import (
+	"errors"
 	"os"
 	"testing"
 	"time"
@@ -145,26 +146,117 @@ func TestParseExpressionConst(t *testing.T) {
 }
 
 func TestParseUnitInvalid(t *testing.T) {
-	TestList := []*strUnit{
-		{T: "10"}, {T: " 10"}, {T: "10 "},
-		{T: "MB"}, {T: " MB"}, {T: " MB"},
-		{T: " 1 B"}, {T: "something"}, {T: ""},
+	TestList := []struct {
+		strUnit       *strUnit
+		ExpectedError error
+		ExpectedValue uint
+	}{
+		{
+			strUnit:       &strUnit{T: "10"},
+			ExpectedError: errors.New("unexpected alias "),
+			ExpectedValue: 0,
+		},
+		{
+			strUnit:       &strUnit{T: " 10"},
+			ExpectedError: errors.New("could not parse number, err: strconv.Atoi: parsing \"\": invalid syntax"),
+			ExpectedValue: 0,
+		},
+		{
+			strUnit:       &strUnit{T: "10 "},
+			ExpectedError: errors.New("unexpected alias "),
+			ExpectedValue: 0,
+		},
+		{
+			strUnit:       &strUnit{T: " 1 MB"},
+			ExpectedError: errors.New("could not parse number, err: strconv.Atoi: parsing \"\": invalid syntax"),
+			ExpectedValue: 0,
+		},
+		{
+			strUnit:       &strUnit{T: " MB"},
+			ExpectedError: errors.New("could not parse number, err: strconv.Atoi: parsing \"\": invalid syntax"),
+			ExpectedValue: 0,
+		},
+		{
+			strUnit:       &strUnit{T: "MB "},
+			ExpectedError: errors.New("could not parse number, err: strconv.Atoi: parsing \"MB\": invalid syntax"),
+			ExpectedValue: 0,
+		},
+		{
+			strUnit:       &strUnit{T: "10 "},
+			ExpectedError: errors.New("unexpected alias "),
+			ExpectedValue: 0,
+		},
+		{
+			strUnit:       &strUnit{T: "something"},
+			ExpectedError: errors.New("could not parse number, err: strconv.Atoi: parsing \"something\": invalid syntax"),
+			ExpectedValue: 0,
+		},
+		{
+			strUnit:       &strUnit{T: ""},
+			ExpectedError: errors.New("could not parse number, err: strconv.Atoi: parsing \"\": invalid syntax"),
+			ExpectedValue: 0,
+		},
+		{
+			strUnit:       &strUnit{T: "999999999999999999999 B"},
+			ExpectedError: errors.New("could not parse number, err: strconv.Atoi: parsing \"999999999999999999999\": value out of range"),
+			ExpectedValue: 0,
+		},
+		// TODO: handle uint overflow situation
+		//{
+		//	strUnit:       &strUnit{T: "100000000000 PB"},
+		//	ExpectedError: errors.New("uint overflowed on product 100000000000 and PB"),
+		//	ExpectedValue: 0,
+		//},
 	}
 	for i := range TestList {
-		err := Parse(TestList[i], nil)
-		assert.Error(t, err, "shouldn't be an error")
-		assert.Equal(t, uint(0), TestList[i].T_, "wrong value")
+		err := Parse(TestList[i].strUnit, nil)
+		assert.Equal(t, err, TestList[i].ExpectedError, "wrong error")
+		assert.Equal(t, uint(0), TestList[i].strUnit.T_, "wrong value")
 	}
 }
 
-func TestParseUnit(t *testing.T) {
-	TestList := []*strUnit{
-		{T: "1 B"}, {T: "1  B"}, {T: "1 B "}, {T: "1  B "},
+func TestParseUnitValid(t *testing.T) {
+	TestList := []struct {
+		strUnit       *strUnit
+		ExpectedValue uint
+	}{
+		{
+			strUnit:       &strUnit{T: "10 MB"},
+			ExpectedValue: 10000000,
+		},
+		{
+			strUnit:       &strUnit{T: "10 mB"},
+			ExpectedValue: 10000000,
+		},
+		{
+			strUnit:       &strUnit{T: "10 Mb"},
+			ExpectedValue: 10000000,
+		},
+		{
+			strUnit:       &strUnit{T: "10 mb"},
+			ExpectedValue: 10000000,
+		},
+		{
+			strUnit:       &strUnit{T: "1 B"},
+			ExpectedValue: 1,
+		},
+		{
+			strUnit:       &strUnit{T: "1  B"},
+			ExpectedValue: 1,
+		},
+		{
+			strUnit:       &strUnit{T: "1 B "},
+			ExpectedValue: 1,
+		},
+		{
+			strUnit:       &strUnit{T: "1  B "},
+			ExpectedValue: 1,
+		},
 	}
 	for i := range TestList {
-		err := Parse(TestList[i], nil)
+		err := Parse(TestList[i].strUnit, nil)
 		assert.Nil(t, err, "shouldn't be an error")
-		assert.Equal(t, uint(1), TestList[i].T_, "wrong value")
+		assert.Equal(t, TestList[i].ExpectedValue, TestList[i].strUnit.T_, "wrong value")
 	}
 }
 
