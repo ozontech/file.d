@@ -2,16 +2,15 @@ package cfg
 
 const (
 	B = 1
-	// Decimal
 
+	// KB ,MB ,GB ,TB ,PB are Decimal
 	KB = 1000 * B
 	MB = 1000 * KB
 	GB = 1000 * MB
 	TB = 1000 * GB
 	PB = 1000 * TB
 
-	// Binary
-
+	// KiB ,MiB ,GiB ,TiB ,PiB are Binary
 	KiB = 1024 * B
 	MiB = 1024 * KiB
 	GiB = 1024 * MiB
@@ -19,14 +18,14 @@ const (
 	PiB = 1024 * TiB
 )
 
-// Use map to add alias.
-// Alias must not contain spaces
-
+// UnitAlias is map to add alias.
+// Alias must not contain space
+// Only lowercase letters should be used in the map, but aliases are case-insensitive
 var UnitAlias = map[string]int{
-	"KB": KB, "KiB": KiB,
-	"MB": MB, "MiB": MiB,
-	"GB": GB, "GiB": GiB,
-	"TB": TB, "TiB": TiB,
-	"PB": PB, "PiB": PiB,
-	"B": B,
+	"kb": KB, "kib": KiB,
+	"mb": MB, "mib": MiB,
+	"gb": GB, "gib": GiB,
+	"tb": TB, "tib": TiB,
+	"pb": PB, "pib": PiB,
+	"b": B,
 }
