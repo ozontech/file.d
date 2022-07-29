@@ -4,8 +4,6 @@ package main
 
 import (
 	"fmt"
-	"github.com/ozontech/file.d/pipeline"
-	"github.com/stretchr/testify/require"
 	"io/ioutil"
 	"math/rand"
 	"os"
@@ -14,6 +12,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/ozontech/file.d/pipeline"
+	"github.com/stretchr/testify/require"
 
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"

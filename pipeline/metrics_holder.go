@@ -2,10 +2,11 @@ package pipeline
 
 import (
 	"fmt"
-	"github.com/ozontech/file.d/buildinfo"
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/ozontech/file.d/buildinfo"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/atomic"

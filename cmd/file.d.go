@@ -2,12 +2,13 @@ package main
 
 import (
 	"context"
-	"github.com/ozontech/file.d/buildinfo"
 	"os"
 	"os/signal"
 	"runtime/debug"
 	"syscall"
 	"time"
+
+	"github.com/ozontech/file.d/buildinfo"
 
 	"github.com/alecthomas/kingpin"
 	insaneJSON "github.com/vitkovskii/insane-json"
@@ -55,18 +56,17 @@ import (
 	_ "github.com/ozontech/file.d/plugin/output/stdout"
 )
 
-var (
-	fileD *fd.FileD
-	exit  = make(chan bool)
-
-	config = kingpin.Flag("config", `config file name`).Required().ExistingFile()
-	http   = kingpin.Flag("http", `http listen addr eg. ":9000", "off" to disable`).Default(":9000").String()
-
+const (
 	gcPercent = 20
 )
 
 func main() {
 	logger.Infof("hi i'm file.d version=%s %s", buildinfo.Version, buildinfo.BuildTime)
+
+	config := kingpin.Flag("config", `config file name`).Required().ExistingFile()
+	http := kingpin.Flag("http", `http listen addr eg. ":9000", "off" to disable`).Default(":9000").String()
+
+	kingpin.Parse()
 
 	debug.SetGCPercent(gcPercent)
 	insaneJSON.DisableBeautifulErrors = true
@@ -74,22 +74,8 @@ func main() {
 
 	_, _ = maxprocs.Set(maxprocs.Logger(logger.Debugf))
 
-	go listenSignals()
-	longpanic.Go(start)
+	fileD := start(*config, *http)
 
-	<-exit
-	logger.Infof("see you soon...")
-}
-
-func start() {
-	cfg := cfg.NewConfigFromFile(*config)
-	longpanic.SetTimeout(cfg.PanicTimeout)
-
-	fileD = fd.New(cfg, *http)
-	fileD.Start()
-}
-
-func listenSignals() {
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, syscall.SIGHUP, syscall.SIGTERM, syscall.SIGINT)
 
@@ -107,7 +93,7 @@ func listenSignals() {
 			}
 			cancel()
 
-			start()
+			fileD = start(*config, *http)
 		case syscall.SIGINT, syscall.SIGTERM:
 			logger.Infof("SIGTERM or SIGINT received")
 
@@ -118,7 +104,15 @@ func listenSignals() {
 			}
 			cancel()
 
-			exit <- true
+			return
 		}
 	}
+}
+
+func start(config, http string) *fd.FileD {
+	c := cfg.NewConfigFromFile(config)
+	longpanic.SetTimeout(c.PanicTimeout)
+	fileD := fd.New(c, http)
+	fileD.Start()
+	return fileD
 }

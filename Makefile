@@ -2,6 +2,11 @@ VERSION ?= $(shell git describe --abbrev=4 --dirty --always --tags)
 TIME := $(shell date '+%Y-%m-%d_%H:%M:%S')
 UPSTREAM_BRANCH ?= origin/master
 
+.PHONY: fmt
+fmt:
+	goimports -l -w ./
+	gofmt -l -w ./
+
 .PHONY: prepare
 prepare:
 	docker login
@@ -76,8 +81,8 @@ push-images-all: push-images-version push-images-latest
 
 .PHONY: push-image
 push-image: build
-	docker build -t gitlab-registry.ozon.ru/sre/images/file-d:${VERSION} .
-	docker push gitlab-registry.ozon.ru/sre/images/file-d:${VERSION}
+	docker build -t ${REGISTRY}/file-d:${VERSION} .
+	docker push ${REGISTRY}/file-d:${VERSION}
 
 .PHONY: lint
 lint:
