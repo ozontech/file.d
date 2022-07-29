@@ -148,7 +148,7 @@ func TestParseUnitBadPractice(t *testing.T) {
 	TestTable := []*strUnit{
 		{T: "10"}, {T: " 10"}, {T: "10 "},
 		{T: "MB"}, {T: " MB"}, {T: " MB"},
-		{T: " 1 B"}, {T: "something"},
+		{T: " 1 B"}, {T: "something"}, {T: ""},
 	}
 	for i := range TestTable {
 		err := Parse(TestTable[i], nil)
