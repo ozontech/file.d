@@ -43,6 +43,7 @@ const (
 	// metrics
 	discardedEventCounter  = "event_discarded"
 	duplicatedEventCounter = "event_duplicated"
+	writtenEventCounter    = "event_written"
 )
 
 type pgType int
@@ -180,6 +181,11 @@ func (p *Plugin) registerPluginMetrics() {
 		Name:      duplicatedEventCounter,
 		Subsystem: subsystemName,
 		Help:      "Total pgsql duplicated messages",
+	})
+	stats.RegisterCounter(&stats.MetricDesc{
+		Name:      writtenEventCounter,
+		Subsystem: subsystemName,
+		Help:      "Total events written to pgsql",
 	})
 }
 
@@ -320,6 +326,7 @@ func (p *Plugin) out(_ *pipeline.WorkerData, batch *pipeline.Batch) {
 			time.Sleep(p.config.Retention_)
 			continue
 		}
+		stats.GetCounter(subsystemName, writtenEventCounter).Add(float64(len(uniqueEventsMap)))
 		break
 	}
 

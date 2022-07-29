@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"github.com/ozontech/file.d/buildinfo"
 	"os"
 	"os/signal"
 	"runtime/debug"
@@ -10,15 +9,12 @@ import (
 	"time"
 
 	"github.com/alecthomas/kingpin"
-	insaneJSON "github.com/vitkovskii/insane-json"
-	"go.uber.org/automaxprocs/maxprocs"
-
+	"github.com/ozontech/file.d/buildinfo"
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/longpanic"
 	"github.com/ozontech/file.d/pipeline"
-
 	_ "github.com/ozontech/file.d/plugin/action/add_host"
 	_ "github.com/ozontech/file.d/plugin/action/convert_date"
 	_ "github.com/ozontech/file.d/plugin/action/convert_log_level"
@@ -53,6 +49,8 @@ import (
 	_ "github.com/ozontech/file.d/plugin/output/s3"
 	_ "github.com/ozontech/file.d/plugin/output/splunk"
 	_ "github.com/ozontech/file.d/plugin/output/stdout"
+	insaneJSON "github.com/vitkovskii/insane-json"
+	"go.uber.org/automaxprocs/maxprocs"
 )
 
 var (
@@ -66,7 +64,10 @@ var (
 )
 
 func main() {
-	logger.Infof("hi i'm file.d version=%s %s", buildinfo.Version, buildinfo.BuildTime)
+	kingpin.Version(buildinfo.Version)
+	kingpin.Parse()
+
+	logger.Infof("Hi! I'm file.d version=%s %s", buildinfo.Version, buildinfo.BuildTime)
 
 	debug.SetGCPercent(gcPercent)
 	insaneJSON.DisableBeautifulErrors = true
