@@ -144,27 +144,27 @@ func TestParseExpressionConst(t *testing.T) {
 	assert.Equal(t, 10, s.T_, "wrong value")
 }
 
-func TestParseUnitBadPractice(t *testing.T) {
-	TestTable := []*strUnit{
+func TestParseUnitInvalid(t *testing.T) {
+	TestList := []*strUnit{
 		{T: "10"}, {T: " 10"}, {T: "10 "},
 		{T: "MB"}, {T: " MB"}, {T: " MB"},
 		{T: " 1 B"}, {T: "something"}, {T: ""},
 	}
-	for i := range TestTable {
-		err := Parse(TestTable[i], nil)
+	for i := range TestList {
+		err := Parse(TestList[i], nil)
 		assert.Error(t, err, "shouldn't be an error")
-		assert.Equal(t, uint(0), TestTable[i].T_, "wrong value")
+		assert.Equal(t, uint(0), TestList[i].T_, "wrong value")
 	}
 }
 
-func TestParseUnitGoodPractice(t *testing.T) {
-	TestTable := []*strUnit{
+func TestParseUnit(t *testing.T) {
+	TestList := []*strUnit{
 		{T: "1 B"}, {T: "1  B"}, {T: "1 B "}, {T: "1  B "},
 	}
-	for i := range TestTable {
-		err := Parse(TestTable[i], nil)
+	for i := range TestList {
+		err := Parse(TestList[i], nil)
 		assert.Nil(t, err, "shouldn't be an error")
-		assert.Equal(t, uint(1), TestTable[i].T_, "wrong value")
+		assert.Equal(t, uint(1), TestList[i].T_, "wrong value")
 	}
 }
 
