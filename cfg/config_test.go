@@ -144,52 +144,28 @@ func TestParseExpressionConst(t *testing.T) {
 	assert.Equal(t, 10, s.T_, "wrong value")
 }
 
-func TestParseUnitNumber(t *testing.T) {
-	s := &strUnit{T: "10"}
-	err := Parse(s, nil)
-
-	assert.Errorf(t, err, "shouldn't be an error")
-	assert.Equal(t, uint(0), s.T_, "wrong value")
+func TestParseUnitBadPractice(t *testing.T) {
+	TestTable := []*strUnit{
+		{T: "10"}, {T: " 10"}, {T: "10 "},
+		{T: "MB"}, {T: " MB"}, {T: " MB"},
+		{T: " 1 B"}, {T: "something"},
+	}
+	for i := range TestTable {
+		err := Parse(TestTable[i], nil)
+		assert.Error(t, err, "shouldn't be an error")
+		assert.Equal(t, uint(0), TestTable[i].T_, "wrong value")
+	}
 }
 
-func TestParseUnitNumberWithSpace(t *testing.T) {
-	s := &strUnit{T: "10 "}
-	err := Parse(s, nil)
-
-	assert.Errorf(t, err, "shouldn't be an error")
-	assert.Equal(t, uint(0), s.T_, "wrong value")
-}
-
-func TestParseUnitNumberWithAlias(t *testing.T) {
-	s := &strUnit{T: "10 MB"}
-	err := Parse(s, nil)
-
-	assert.Nil(t, err, "shouldn't be an error")
-	assert.Equal(t, uint(10000000), s.T_, "wrong value")
-}
-
-func TestParseUnitSpacePlusNumberWithAlias(t *testing.T) {
-	s := &strUnit{T: " 10 MB"}
-	err := Parse(s, nil)
-
-	assert.Error(t, err, "shouldn't be an error")
-	assert.Equal(t, uint(0), s.T_, "wrong value")
-}
-
-func TestParseUnitNumberWithAliasPlusSpace(t *testing.T) {
-	s := &strUnit{T: "10 MB "}
-	err := Parse(s, nil)
-
-	assert.Nil(t, err, "shouldn't be an error")
-	assert.Equal(t, uint(10000000), s.T_, "wrong value")
-}
-
-func TestParseUnitEmpty(t *testing.T) {
-	s := &strUnit{T: ""}
-	err := Parse(s, nil)
-
-	assert.Errorf(t, err, "should be an error")
-	assert.Equal(t, uint(0), s.T_, "wrong value")
+func TestParseUnitGoodPractice(t *testing.T) {
+	TestTable := []*strUnit{
+		{T: "1 B"}, {T: "1  B"}, {T: "1 B "}, {T: "1  B "},
+	}
+	for i := range TestTable {
+		err := Parse(TestTable[i], nil)
+		assert.Nil(t, err, "shouldn't be an error")
+		assert.Equal(t, uint(1), TestTable[i].T_, "wrong value")
+	}
 }
 
 func TestParseFieldSelectorSimple(t *testing.T) {
