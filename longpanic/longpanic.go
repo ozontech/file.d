@@ -5,8 +5,9 @@ package longpanic
 import (
 	"time"
 
-	"github.com/ozontech/file.d/logger"
 	"go.uber.org/atomic"
+
+	"github.com/ozontech/file.d/logger"
 )
 
 // instance is a singleton with timeout that every `go func` call should use.
@@ -38,10 +39,16 @@ func RecoverFromPanic() {
 	instance.RecoverFromPanic()
 }
 
+func SetOnPanicHandler(cb func(err error)) {
+	instance.SetOnPanicHandler(cb)
+}
+
 // LongPanic is a struct that holds an atomic and a timeout after a defer fn will panic.
 type LongPanic struct {
 	shouldPanic *atomic.Bool
 	timeout     time.Duration
+
+	panicHandler func(err error)
 }
 
 // NewLongPanic creates LongPanic.
@@ -75,6 +82,10 @@ func (l *LongPanic) WithRecover(fn func()) {
 // recover waits for somebody to reset the error plugin or panics after a timeout.
 func (l *LongPanic) recoverUntilTimeout() {
 	if err, ok := recover().(error); ok {
+		if l.panicHandler != nil {
+			l.panicHandler(err)
+		}
+
 		logger.Error(err.Error())
 		logger.Error("wait for somebody to restart plugins via endpoint")
 
@@ -97,4 +108,9 @@ func (l *LongPanic) recoverUntilTimeout() {
 // RecoverFromPanic is a signal to not wait for the panic and tries to continue the execution.
 func (l *LongPanic) RecoverFromPanic() {
 	l.shouldPanic.Store(false)
+}
+
+// SetOnPanicHandler setups callback when panic happened.
+func (l *LongPanic) SetOnPanicHandler(cb func(err error)) {
+	l.panicHandler = cb
 }

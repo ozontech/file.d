@@ -24,11 +24,13 @@
   - Action
     - [add_host](plugin/action/add_host/README.md)
     - [convert_date](plugin/action/convert_date/README.md)
+    - [convert_log_level](plugin/action/convert_log_level/README.md)
     - [debug](plugin/action/debug/README.md)
     - [discard](plugin/action/discard/README.md)
     - [flatten](plugin/action/flatten/README.md)
     - [join](plugin/action/join/README.md)
     - [json_decode](plugin/action/json_decode/README.md)
+    - [json_encode](plugin/action/json_encode/README.md)
     - [keep_fields](plugin/action/keep_fields/README.md)
     - [mask](plugin/action/mask/README.md)
     - [modify](plugin/action/modify/README.md)
@@ -36,6 +38,7 @@
     - [parse_re2](plugin/action/parse_re2/README.md)
     - [remove_fields](plugin/action/remove_fields/README.md)
     - [rename](plugin/action/rename/README.md)
+    - [set_time](plugin/action/set_time/README.md)
     - [throttle](plugin/action/throttle/README.md)
 
   - Output

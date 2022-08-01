@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 	"unsafe"
+
+	insaneJSON "github.com/vitkovskii/insane-json"
 )
 
 // Clone deeply copies string
@@ -91,29 +93,75 @@ func ParseFormatName(formatName string) (string, error) {
 	}
 }
 
-func ParseLevel(level string) int {
+type LogLevel int
+
+const (
+	LevelUnknown LogLevel = iota - 1
+	LevelEmergency
+	LevelAlert
+	LevelCritical
+	LevelError
+	LevelWarning
+	LevelNotice
+	LevelInformational
+	LevelDebug
+)
+
+// ParseLevelAsNumber converts log level to the int representation according to the RFC-5424.
+func ParseLevelAsNumber(level string) LogLevel {
 	switch strings.ToLower(strings.TrimSpace(level)) {
 	case "0", "emergency":
-		return 0
+		return LevelEmergency
 	case "1", "alert":
-		return 1
+		return LevelAlert
 	case "2", "critical", "crit":
-		return 2
+		return LevelCritical
 	case "3", "error", "err":
-		return 3
+		return LevelError
 	case "4", "warning", "warn":
-		return 4
+		return LevelWarning
 	case "5", "notice":
-		return 5
+		return LevelNotice
 	case "6", "informational", "info":
-		return 6
+		return LevelInformational
 	case "7", "debug":
-		return 7
+		return LevelDebug
 	default:
-		return 6
+		return LevelUnknown
 	}
 }
 
-func TrimSpaceFunc(r rune) bool {
-	return byte(r) == ' '
+var levelNames = []string{
+	"emergency",
+	"alert",
+	"critical",
+	"error",
+	"warning",
+	"notice",
+	"informational",
+	"debug",
+}
+
+const LevelUnknownStr = ""
+
+// ParseLevelAsString converts log level to the string representation according to the RFC-5424.
+func ParseLevelAsString(level string) string {
+	parsed := ParseLevelAsNumber(level)
+	if parsed == LevelUnknown {
+		return LevelUnknownStr
+	}
+	return levelNames[parsed]
+}
+
+// CreateNestedField creates nested field by the path.
+// For example, []string{"path.to", "object"} creates:
+// { "path.to": {"object": {} }
+// Warn: it overrides fields if it contains non-object type on the path. For example:
+// in: { "path.to": [{"userId":"12345"}] }, out: { "path.to": {"object": {}} }
+func CreateNestedField(root *insaneJSON.Root, path []string) *insaneJSON.Node {
+	curr := root.Node
+	for _, p := range path {
+		curr = curr.AddFieldNoAlloc(root, p).MutateToObject()
+	}
+	return curr
 }

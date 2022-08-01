@@ -8,33 +8,13 @@ In strict mode file.d will crash on events without required columns.
 
 <br>
 
-**`host`** *`string`* *`required`* 
+**`conn_string`** *`string`* *`required`* 
 
-DB host.
+PostgreSQL connection string in URL or DSN format.
 
-<br>
+Example DSN:
 
-**`port`** *`uint16`* *`required`* 
-
-Db port.
-
-<br>
-
-**`dbname`** *`string`* *`required`* 
-
-Dbname in pg.
-
-<br>
-
-**`user`** *`string`* *`required`* 
-
-Pg user name.
-
-<br>
-
-**`password`** *`string`* *`required`* 
-
-Pg user pass.
+`user=user password=secret host=pg.example.com port=5432 dbname=mydb sslmode=disable pool_max_conns=10`
 
 <br>
 
@@ -89,6 +69,13 @@ Maximum quantity of events to pack into one batch.
 <br>
 
 **`batch_size`** 
+<br>
+
+**`batch_size_bytes`** *`cfg.Expression`* *`default=0`* 
+
+A minimum size of events in a batch to send.
+If both batch_size and batch_size_bytes are set, they will work together.
+
 <br>
 
 **`batch_flush_timeout`** *`cfg.Duration`* *`default=200ms`* 

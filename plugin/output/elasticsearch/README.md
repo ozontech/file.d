@@ -9,6 +9,29 @@ The list of elasticsearch endpoints in the following format: `SCHEMA://HOST:PORT
 
 <br>
 
+**`username`** *`string`* 
+
+Username for HTTP Basic Authentication.
+
+<br>
+
+**`password`** *`string`* 
+
+Password for HTTP Basic Authentication.
+
+<br>
+
+**`api_key`** *`string`* 
+
+Base64-encoded token for authorization; if set, overrides username/password.
+
+<br>
+
+**`ca_cert`** *`string`* 
+Path or content of a PEM-encoded CA file.
+
+<br>
+
 **`index_format`** *`string`* *`default=file-d-%`* 
 
 It defines the pattern of elasticsearch index name. Use `%` character as a placeholder. Use `index_values` to define values for the replacement.
@@ -48,6 +71,13 @@ It defines how many workers will be instantiated to send batches.
 **`batch_size`** *`cfg.Expression`* *`default=capacity/4`* 
 
 A maximum quantity of events to pack into one batch.
+
+<br>
+
+**`batch_size_bytes`** *`cfg.Expression`* *`default=0`* 
+
+A minimum size of events in a batch to send.
+If both batch_size and batch_size_bytes are set, they will work together.
 
 <br>
 

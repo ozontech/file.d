@@ -9,6 +9,7 @@ import (
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/test"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	insaneJSON "github.com/vitkovskii/insane-json"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -87,6 +88,22 @@ func TestMaskFunctions(t *testing.T) {
 			mustBeMasked: true,
 		},
 		{
+			name:         "ID-max_count",
+			input:        []byte("user details: Иванов Иван Иванович"),
+			masks:        Mask{Re: kDefaultIDRegExp, Groups: []int{0}, MaxCount: 10},
+			expected:     []byte("user details: **********"),
+			comment:      "ID masked with max_count",
+			mustBeMasked: true,
+		},
+		{
+			name:         "ID-replace_word",
+			input:        []byte("user details: Иванов Иван Иванович"),
+			masks:        Mask{Re: kDefaultIDRegExp, Groups: []int{0}, ReplaceWord: "***MASKED***"},
+			expected:     []byte("user details: ***MASKED***"),
+			comment:      "ID masked with replace word",
+			mustBeMasked: true,
+		},
+		{
 			name:         "2 card numbers and text",
 			input:        []byte("issued card number 3528-3889-3793-9946 and card number 4035-3005-3980-4083"),
 			expected:     []byte("issued card number ****-****-****-**** and card number ****-****-****-****"),
@@ -120,14 +137,45 @@ func TestMaskFunctions(t *testing.T) {
 		},
 	}
 
+	var plugin Plugin
+
 	for _, tCase := range suits {
 		t.Run(tCase.name, func(t *testing.T) {
 			buf := make([]byte, 0, 2048)
-			buf, masked := maskValue(tCase.input, buf, regexp.MustCompile(tCase.masks.Re), tCase.masks.Groups)
+			tCase.masks.Re_ = regexp.MustCompile(tCase.masks.Re)
+			buf, masked := plugin.maskValue(&tCase.masks, tCase.input, buf)
 			assert.Equal(t, string(tCase.expected), string(buf), tCase.comment)
 			assert.Equal(t, tCase.mustBeMasked, masked)
 		})
 	}
+}
+
+func TestMaskAddExtraField(t *testing.T) {
+	input := `{"card":"5408-7430-0756-2004"}`
+	key := "extra_key"
+	val := "extra_val"
+	expOutput := `{"card":"****-****-****-****","extra_key":"extra_val"}`
+
+	root, err := insaneJSON.DecodeString(input)
+	require.NoError(t, err)
+	defer insaneJSON.Release(root)
+
+	event := &pipeline.Event{Root: root}
+
+	var plugin Plugin
+
+	plugin.config = &Config{
+		MaskAppliedField: key,
+		MaskAppliedValue: val,
+		Masks: []Mask{
+			{Re: kDefaultCardRegExp, Groups: []int{1, 2, 3, 4}},
+		},
+	}
+	plugin.config.Masks[0].Re_ = regexp.MustCompile(plugin.config.Masks[0].Re)
+
+	result := plugin.Do(event)
+	assert.Equal(t, pipeline.ActionPass, result)
+	assert.Equal(t, expOutput, event.Root.EncodeToString())
 }
 
 func TestGroupNumbers(t *testing.T) {
@@ -469,11 +517,16 @@ func createBenchInputString() []byte {
 }
 
 func BenchmarkMaskValue(b *testing.B) {
+	var plugin Plugin
 	input := createBenchInputString()
 	re := regexp.MustCompile(kDefaultCardRegExp)
 	grp := []int{0, 1, 2, 3}
+	mask := Mask{
+		Re_:    re,
+		Groups: grp,
+	}
 	buf := make([]byte, 0, 2048)
 	for i := 0; i < b.N; i++ {
-		buf, _ = maskValue(input, buf, re, grp)
+		buf, _ = plugin.maskValue(&mask, input, buf)
 	}
 }

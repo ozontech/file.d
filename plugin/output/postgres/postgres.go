@@ -8,14 +8,15 @@ import (
 	"time"
 
 	sq "github.com/Masterminds/squirrel"
-	"github.com/jackc/pgconn"
+	"github.com/jackc/pgx/v4"
 	"github.com/jackc/pgx/v4/pgxpool"
+	insaneJSON "github.com/vitkovskii/insane-json"
+	"go.uber.org/zap"
+
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/stats"
-	insaneJSON "github.com/vitkovskii/insane-json"
-	"go.uber.org/zap"
 )
 
 /*{ introduction
@@ -28,7 +29,7 @@ var (
 )
 
 type PgxIface interface {
-	Exec(ctx context.Context, sql string, arguments ...interface{}) (pgconn.CommandTag, error)
+	Query(ctx context.Context, sql string, args ...interface{}) (pgx.Rows, error)
 	Close()
 }
 
@@ -36,9 +37,13 @@ const (
 	outPluginType = "postgres"
 	subsystemName = "output_postgres"
 
+	// required for PgBouncers that doesn't support prepared statements.
+	preferSimpleProtocol = pgx.QuerySimpleProtocol(true)
+
 	// metrics
 	discardedEventCounter  = "event_discarded"
 	duplicatedEventCounter = "event_duplicated"
+	writtenEventCounter    = "event_written"
 )
 
 type pgType int
@@ -86,28 +91,12 @@ type Config struct {
 
 	//> @3@4@5@6
 	//>
-	//> DB host.
-	Host string `json:"host" required:"true"` //*
-
-	//> @3@4@5@6
+	//> PostgreSQL connection string in URL or DSN format.
 	//>
-	//> Db port.
-	Port uint16 `json:"port" required:"true"` //*
-
-	//> @3@4@5@6
+	//> Example DSN:
 	//>
-	//> Dbname in pg.
-	DBName string `json:"dbname" required:"true"` //*
-
-	//> @3@4@5@6
-	//>
-	//> Pg user name.
-	Username string `json:"user" required:"true"` //*
-
-	//> @3@4@5@6
-	//>
-	//> Pg user pass.
-	Pass string `json:"password" required:"true"` //*
+	//> `user=user password=secret host=pg.example.com port=5432 dbname=mydb sslmode=disable pool_max_conns=10`
+	ConnString string `json:"conn_string" required:"true"` //*
 
 	//> @3@4@5@6
 	//>
@@ -159,6 +148,13 @@ type Config struct {
 
 	//> @3@4@5@6
 	//>
+	//> A minimum size of events in a batch to send.
+	//> If both batch_size and batch_size_bytes are set, they will work together.
+	BatchSizeBytes  cfg.Expression `json:"batch_size_bytes" default:"0" parse:"expression"` //*
+	BatchSizeBytes_ int
+
+	//> @3@4@5@6
+	//>
 	//> After this timeout batch will be sent even if batch isn't completed.
 	BatchFlushTimeout  cfg.Duration `json:"batch_flush_timeout" default:"200ms" parse:"duration"` //*
 	BatchFlushTimeout_ time.Duration
@@ -185,6 +181,11 @@ func (p *Plugin) registerPluginMetrics() {
 		Name:      duplicatedEventCounter,
 		Subsystem: subsystemName,
 		Help:      "Total pgsql duplicated messages",
+	})
+	stats.RegisterCounter(&stats.MetricDesc{
+		Name:      writtenEventCounter,
+		Subsystem: subsystemName,
+		Help:      "Total events written to pgsql",
 	})
 }
 
@@ -217,38 +218,27 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	}
 	p.queryBuilder = queryBuilder
 
-	cfgString := fmt.Sprintf("user=%s password=%s host=%s port=%d dbname=%s pool_max_conns=1",
-		p.config.Username,
-		p.config.Pass,
-		p.config.Host,
-		p.config.Port,
-		p.config.DBName)
-
-	cfg, err := pgxpool.ParseConfig(cfgString)
+	pgCfg, err := p.parsePGConfig()
 	if err != nil {
 		p.logger.Fatalf("can't create pgsql config: %v", err)
 	}
-	cfg.LazyConnect = false
 
-	cfg.HealthCheckPeriod = p.config.DBHealthCheckPeriod_
-
-	pool, err := pgxpool.ConnectConfig(p.ctx, cfg)
+	pool, err := pgxpool.ConnectConfig(p.ctx, pgCfg)
 	if err != nil {
 		p.logger.Fatalf("can't create pgsql pool: %v", err)
 	}
 	p.pool = pool
 
-	p.batcher = pipeline.NewBatcher(
-		params.PipelineName,
-		outPluginType,
-		p.out,
-		nil,
-		p.controller,
-		p.config.WorkersCount_,
-		p.config.BatchSize_,
-		p.config.BatchFlushTimeout_,
-		0,
-	)
+	p.batcher = pipeline.NewBatcher(pipeline.BatcherOptions{
+		PipelineName:   params.PipelineName,
+		OutputType:     outPluginType,
+		OutFn:          p.out,
+		Controller:     p.controller,
+		Workers:        p.config.WorkersCount_,
+		BatchSizeCount: p.config.BatchSize_,
+		BatchSizeBytes: p.config.BatchSizeBytes_,
+		FlushTimeout:   p.config.BatchFlushTimeout_,
+	})
 
 	ctx, cancel := context.WithCancel(context.Background())
 	p.ctx = ctx
@@ -321,32 +311,43 @@ func (p *Plugin) out(_ *pipeline.WorkerData, batch *pipeline.Batch) {
 		p.logger.Fatalf("Invalid SQL. query: %s, args: %v, err: %v", query, args, err)
 	}
 
-	var ctx context.Context
-	var cancel context.CancelFunc
-	var outErr error
+	var argsSliceInterface = make([]interface{}, len(args)+1)
+
+	argsSliceInterface[0] = preferSimpleProtocol
+	for i := 1; i < len(args)+1; i++ {
+		argsSliceInterface[i] = args[i-1]
+	}
+
 	// Insert into pg with retry.
 	for i := p.config.Retry; i > 0; i-- {
-		ctx, cancel = context.WithTimeout(p.ctx, p.config.DBRequestTimeout_)
-
-		p.logger.Info(query, args)
-		pgCommResult, err := p.pool.Exec(ctx, query, args...)
+		err = p.try(query, argsSliceInterface)
 		if err != nil {
-			outErr = err
-			p.logger.Infof("pgCommResult: %v, err: %s", pgCommResult, err.Error())
-			cancel()
+			p.logger.Errorf("can't exec query: %s", err.Error())
 			time.Sleep(p.config.Retention_)
 			continue
-		} else {
-			outErr = nil
-			break
 		}
+		stats.GetCounter(subsystemName, writtenEventCounter).Add(float64(len(uniqueEventsMap)))
+		break
 	}
-	cancel()
 
-	if outErr != nil {
+	if err != nil {
 		p.pool.Close()
-		p.logger.Fatalf("Failed insert into %s. query: %s, args: %v, err: %v", p.config.Table, query, args, outErr)
+		p.logger.Fatalf("failed insert into %s. query: %s, args: %v, err: %v", p.config.Table, query, args, err)
 	}
+}
+
+func (p *Plugin) try(query string, argsSliceInterface []interface{}) error {
+	ctx, cancel := context.WithTimeout(p.ctx, p.config.DBRequestTimeout_)
+	defer cancel()
+
+	rows, err := p.pool.Query(ctx, query, argsSliceInterface...)
+	if err != nil {
+		return err
+	}
+
+	defer rows.Close()
+
+	return err
 }
 
 func (p *Plugin) processEvent(event *pipeline.Event, pgFields []column, uniqueFields map[string]pgType) (fieldValues []interface{}, uniqueID string, err error) {
@@ -403,4 +404,16 @@ func (p *Plugin) addFieldToValues(field column, sNode *insaneJSON.StrictNode) (i
 	default:
 		return nil, fmt.Errorf("%w, undefined col type: %d, col name: %s", ErrEventFieldHasWrongType, field.ColType, field.Name)
 	}
+}
+
+func (p *Plugin) parsePGConfig() (*pgxpool.Config, error) {
+	pgCfg, err := pgxpool.ParseConfig(p.config.ConnString)
+	if err != nil {
+		return nil, err
+	}
+
+	pgCfg.LazyConnect = false
+	pgCfg.HealthCheckPeriod = p.config.DBHealthCheckPeriod_
+
+	return pgCfg, nil
 }
