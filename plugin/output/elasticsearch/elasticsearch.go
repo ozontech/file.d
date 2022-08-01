@@ -125,6 +125,13 @@ type Config struct {
 
 	//> @3@4@5@6
 	//>
+	//> A minimum size of events in a batch to send.
+	//> If both batch_size and batch_size_bytes are set, they will work together.
+	BatchSizeBytes  cfg.Expression `json:"batch_size_bytes" default:"0" parse:"expression"` //*
+	BatchSizeBytes_ int
+
+	//> @3@4@5@6
+	//>
 	//> After this timeout batch will be sent even if batch isn't full.
 	BatchFlushTimeout  cfg.Duration `json:"batch_flush_timeout" default:"200ms" parse:"duration"` //*
 	BatchFlushTimeout_ time.Duration
@@ -191,17 +198,18 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.registerPluginMetrics()
 
 	p.logger.Infof("starting batcher: timeout=%d", p.config.BatchFlushTimeout_)
-	p.batcher = pipeline.NewBatcher(
-		params.PipelineName,
-		outPluginType,
-		p.out,
-		p.maintenance,
-		p.controller,
-		p.config.WorkersCount_,
-		p.config.BatchSize_,
-		p.config.BatchFlushTimeout_,
-		time.Minute,
-	)
+	p.batcher = pipeline.NewBatcher(pipeline.BatcherOptions{
+		PipelineName:        params.PipelineName,
+		OutputType:          outPluginType,
+		OutFn:               p.out,
+		MaintenanceFn:       p.maintenance,
+		Controller:          p.controller,
+		Workers:             p.config.WorkersCount_,
+		BatchSizeCount:      p.config.BatchSize_,
+		BatchSizeBytes:      p.config.BatchSizeBytes_,
+		FlushTimeout:        p.config.BatchFlushTimeout_,
+		MaintenanceInterval: time.Minute,
+	})
 
 	ctx, cancel := context.WithCancel(context.Background())
 	p.cancel = cancel

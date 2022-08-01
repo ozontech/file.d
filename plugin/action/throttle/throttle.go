@@ -141,6 +141,11 @@ type RedisKindConfig struct {
 
 	//> @3@4@5@6
 	//>
+	//> Defines num of parallel workers that will sync limits.
+	WorkersCount uint `json:"workers_count" default:"1"` //*
+
+	//> @3@4@5@6
+	//>
 	//> Defines redis timeout.
 	Timeout  cfg.Duration `json:"timeout" parse:"duration" default:"1s"` //*
 	Timeout_ time.Duration
@@ -183,6 +188,11 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 	p.format = format
 
 	if p.config.LimiterBackend == redisBackend {
+		if p.config.RedisBackendCfg.WorkersCount < 1 {
+			p.logger.Fatalf("workers_count must be > 0, passed: %d", p.config.RedisBackendCfg.WorkersCount)
+		}
+		sem := make(chan struct{}, p.config.RedisBackendCfg.WorkersCount)
+
 		p.redisClient = redis.NewClient(
 			&redis.Options{
 				Network:      "tcp",
@@ -199,18 +209,30 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 		ticker := time.NewTicker(p.config.RedisBackendCfg.SyncInterval_)
 
 		go limiterSync.Do(func() {
+			wg := &sync.WaitGroup{}
 			for {
 				select {
 				case <-ctx.Done():
 					return
 				case <-ticker.C:
 					limitersMu.RLock()
+
 					for _, limiterPipeline := range limiters {
-						for _, limiter := range limiterPipeline {
-							limiter.sync()
+						for _, lim := range limiterPipeline {
+							lim := lim
+							wg.Add(1)
+							sem <- struct{}{}
+							go func() {
+								defer wg.Done()
+								lim.sync()
+								<-sem
+							}()
 						}
 					}
+					wg.Wait()
+
 					limitersMu.RUnlock()
+
 				}
 			}
 		})

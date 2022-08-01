@@ -1,4 +1,5 @@
-VERSION ?= v0.6.0
+VERSION ?= $(shell git describe --abbrev=4 --always --tags)
+TIME := $(shell date '+%Y-%m-%d_%H:%M:%S')
 UPSTREAM_BRANCH ?= origin/master
 
 .PHONY: prepare
@@ -8,12 +9,12 @@ prepare:
 .PHONY: build
 build: 
 	echo "Building for amd64..."
-	GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "-X main.version=${VERSION}" -o file.d ./cmd/file.d.go
+	GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "-X github.com/ozontech/file.d/buildinfo.Version=${VERSION} -X github.com/ozontech/file.d/buildinfo.BuildTime=${TIME}" -o file.d ./cmd/file.d.go
 
 .PHONY: build-for-current-system
 build-for-current-system:
 	echo "Building for current architecture..."
-	go build -ldflags "-X main.version=${VERSION}" -v -o file.d ./cmd/file.d.go
+	go build -ldflags "-X github.com/ozontech/file.d/buildinfo.Version=${VERSION} -X github.com/ozontech/file.d/buildinfo.BuildTime=${TIME}" -v -o file.d ./cmd/file.d.go
 
 .PHONY: deps
 deps:
@@ -72,6 +73,11 @@ push-images-latest: prepare push-latest-linux-amd64
 
 .PHONY: push-images-all
 push-images-all: push-images-version push-images-latest
+
+.PHONY: push-image
+push-image: build
+	docker build -t gitlab-registry.ozon.ru/sre/images/file-d:${VERSION} .
+	docker push gitlab-registry.ozon.ru/sre/images/file-d:${VERSION}
 
 .PHONY: lint
 lint:

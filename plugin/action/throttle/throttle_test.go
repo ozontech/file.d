@@ -198,6 +198,7 @@ func TestRedisThrottle(t *testing.T) {
 			SyncInterval: "100ms",
 			Host:         s.Addr(),
 			Password:     "",
+			WorkersCount: 2,
 		},
 		LimiterBackend: "redis",
 		ThrottleField:  "k8s_pod",
