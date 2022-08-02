@@ -449,16 +449,22 @@ func ParseField(v reflect.Value, vField reflect.Value, tField reflect.StructFiel
 			finalField.SetInt(int64(value))
 
 		case "unit":
-			value, err := strconv.Atoi(strings.Split(vField.String(), " ")[0])
-			if err != nil {
-				return fmt.Errorf("could not parse number, err: %s", err.Error())
+			parts := strings.Split(vField.String(), " ")
+			if len(parts) != 2 {
+				return fmt.Errorf("invalid data format, the string must contain 2 parts separated by a space")
 			}
-			size := strings.TrimPrefix(vField.String(), strings.Split(vField.String(), " ")[0])
-			size = strings.ToLower(strings.TrimSpace(size))
-			if multiplier, ok := UnitAlias[size]; ok {
+			value, err := strconv.Atoi(parts[0])
+			if err != nil {
+				return fmt.Errorf(`can't parse uint: "%s" is not a number`, parts[0])
+			}
+			if value < 0 {
+				return fmt.Errorf("value must be positive")
+			}
+			alias := strings.ToLower(strings.TrimSpace(parts[1]))
+			if multiplier, ok := UnitAlias[alias]; ok {
 				finalField.SetUint(uint64(value * multiplier))
 			} else {
-				return fmt.Errorf("unexpected alias %s", size)
+				return fmt.Errorf(`unexpected alias "%s"`, alias)
 			}
 
 		default:

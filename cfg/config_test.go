@@ -153,52 +153,72 @@ func TestParseUnitInvalid(t *testing.T) {
 	}{
 		{
 			strUnit:       &strUnit{T: "10"},
-			ExpectedError: errors.New("unexpected alias "),
+			ExpectedError: errors.New("invalid data format, the string must contain 2 parts separated by a space"),
 			ExpectedValue: 0,
 		},
 		{
 			strUnit:       &strUnit{T: " 10"},
-			ExpectedError: errors.New("could not parse number, err: strconv.Atoi: parsing \"\": invalid syntax"),
+			ExpectedError: errors.New(`can't parse uint: "" is not a number`),
 			ExpectedValue: 0,
 		},
 		{
 			strUnit:       &strUnit{T: "10 "},
-			ExpectedError: errors.New("unexpected alias "),
+			ExpectedError: errors.New(`unexpected alias ""`),
 			ExpectedValue: 0,
 		},
 		{
 			strUnit:       &strUnit{T: " 1 MB"},
-			ExpectedError: errors.New("could not parse number, err: strconv.Atoi: parsing \"\": invalid syntax"),
+			ExpectedError: errors.New("invalid data format, the string must contain 2 parts separated by a space"),
 			ExpectedValue: 0,
 		},
 		{
 			strUnit:       &strUnit{T: " MB"},
-			ExpectedError: errors.New("could not parse number, err: strconv.Atoi: parsing \"\": invalid syntax"),
+			ExpectedError: errors.New(`can't parse uint: "" is not a number`),
 			ExpectedValue: 0,
 		},
 		{
 			strUnit:       &strUnit{T: "MB "},
-			ExpectedError: errors.New("could not parse number, err: strconv.Atoi: parsing \"MB\": invalid syntax"),
+			ExpectedError: errors.New(`can't parse uint: "MB" is not a number`),
 			ExpectedValue: 0,
 		},
 		{
 			strUnit:       &strUnit{T: "10 "},
-			ExpectedError: errors.New("unexpected alias "),
+			ExpectedError: errors.New(`unexpected alias ""`),
 			ExpectedValue: 0,
 		},
 		{
 			strUnit:       &strUnit{T: "something"},
-			ExpectedError: errors.New("could not parse number, err: strconv.Atoi: parsing \"something\": invalid syntax"),
+			ExpectedError: errors.New("invalid data format, the string must contain 2 parts separated by a space"),
+			ExpectedValue: 0,
+		},
+		{
+			strUnit:       &strUnit{T: "some thing"},
+			ExpectedError: errors.New(`can't parse uint: "some" is not a number`),
 			ExpectedValue: 0,
 		},
 		{
 			strUnit:       &strUnit{T: ""},
-			ExpectedError: errors.New("could not parse number, err: strconv.Atoi: parsing \"\": invalid syntax"),
+			ExpectedError: errors.New("invalid data format, the string must contain 2 parts separated by a space"),
 			ExpectedValue: 0,
 		},
 		{
 			strUnit:       &strUnit{T: "999999999999999999999 B"},
-			ExpectedError: errors.New("could not parse number, err: strconv.Atoi: parsing \"999999999999999999999\": value out of range"),
+			ExpectedError: errors.New(`can't parse uint: "999999999999999999999" is not a number`),
+			ExpectedValue: 0,
+		},
+		{
+			strUnit:       &strUnit{T: "1  B"},
+			ExpectedError: errors.New("invalid data format, the string must contain 2 parts separated by a space"),
+			ExpectedValue: 0,
+		},
+		{
+			strUnit:       &strUnit{T: "1 B "},
+			ExpectedError: errors.New("invalid data format, the string must contain 2 parts separated by a space"),
+			ExpectedValue: 0,
+		},
+		{
+			strUnit:       &strUnit{T: "-1 PB"},
+			ExpectedError: errors.New("value must be positive"),
 			ExpectedValue: 0,
 		},
 		// TODO: handle uint overflow situation
@@ -210,7 +230,7 @@ func TestParseUnitInvalid(t *testing.T) {
 	}
 	for i := range TestList {
 		err := Parse(TestList[i].strUnit, nil)
-		assert.Equal(t, err, TestList[i].ExpectedError, "wrong error")
+		assert.Equal(t, TestList[i].ExpectedError, err, "wrong error")
 		assert.Equal(t, uint(0), TestList[i].strUnit.T_, "wrong value")
 	}
 }
@@ -238,18 +258,6 @@ func TestParseUnitValid(t *testing.T) {
 		},
 		{
 			strUnit:       &strUnit{T: "1 B"},
-			ExpectedValue: 1,
-		},
-		{
-			strUnit:       &strUnit{T: "1  B"},
-			ExpectedValue: 1,
-		},
-		{
-			strUnit:       &strUnit{T: "1 B "},
-			ExpectedValue: 1,
-		},
-		{
-			strUnit:       &strUnit{T: "1  B "},
 			ExpectedValue: 1,
 		},
 	}
