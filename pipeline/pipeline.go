@@ -38,6 +38,7 @@ const (
 	antispamUnbanIterations = 4
 	metricsGenInterval      = time.Hour
 
+	workEventsGauge         = "work_events_gauge"
 	inputEventsCountMetric  = "input_events_count"
 	inputEventsSizeMetric   = "input_events_size"
 	outputEventsCountMetric = "output_events_count"
@@ -146,7 +147,7 @@ func New(name string, settings *Settings, registry *prometheus.Registry) *Pipeli
 
 		metricsHolder: newMetricsHolder(name, registry, metricsGenInterval),
 		streamer:      newStreamer(settings.EventTimeout),
-		eventPool:     newEventPool(settings.Capacity),
+		eventPool:     newEventPool(settings.Capacity, name),
 		antispamer:    newAntispamer(settings.AntispamThreshold, antispamUnbanIterations, settings.MaintenanceInterval),
 
 		eventLog:   make([]string, 0, 128),
@@ -186,6 +187,11 @@ func (p *Pipeline) subsystemName() string {
 }
 
 func (p *Pipeline) registerMetrics() {
+	stats.RegisterGauge(&stats.MetricDesc{
+		Subsystem: p.subsystemName(),
+		Name:      workEventsGauge,
+		Help:      "Running event counter",
+	})
 	stats.RegisterCounter(&stats.MetricDesc{
 		Subsystem: p.subsystemName(),
 		Name:      inputEventsCountMetric,
@@ -581,7 +587,7 @@ func (p *Pipeline) logChanges(myDeltas *deltas) {
 	p.logger.Infof(`%q pipeline stats interval=%ds, active procs=%d/%d, queue=%d/%d, out=%d|%.1fMb,`+
 		`rate=%d/s|%.1fMb/s, read ops=%d/s, total=%d|%.1fMb, avg size=%d, max size=%d, pool fullness=%d/%d`,
 		p.Name, interval/time.Second, p.activeProcs.Load(), p.procCount.Load(),
-		p.settings.Capacity-p.eventPool.freeEventsCount, p.settings.Capacity,
+		p.eventPool.workEventsCount, p.settings.Capacity,
 		int64(myDeltas.deltaInputEvents), float64(myDeltas.deltaInputSize)/1024.0/1024.0, rate, rateMb, readOps,
 		inputEvents, float64(inputSize)/1024.0/1024.0, inputSize/tc, p.maxSize,
 		p.eventPool.capacity-p.eventPool.freeEventsCount, p.eventPool.capacity)

@@ -2,6 +2,7 @@ package pipeline
 
 import (
 	"fmt"
+	"github.com/ozontech/file.d/stats"
 	"runtime"
 	"sync"
 	"time"
@@ -195,9 +196,11 @@ func (e *Event) String() string {
 
 // channels are slower than this implementation by ~20%
 type eventPool struct {
-	capacity int
+	capacity     int
+	pipelineName string
 
 	freeEventsCount int
+	workEventsCount atomic.Int64
 	getCounter      atomic.Int64
 	backCounter     atomic.Int64
 	events          []*Event
@@ -208,7 +211,7 @@ type eventPool struct {
 	getCond *sync.Cond
 }
 
-func newEventPool(capacity int) *eventPool {
+func newEventPool(capacity int, pipelineName string) *eventPool {
 	eventPool := &eventPool{
 		capacity:        capacity,
 		freeEventsCount: capacity,
@@ -260,7 +263,8 @@ func (p *eventPool) get() *Event {
 	event := p.events[x]
 	p.events[x] = nil
 	p.free2[x].Store(false)
-
+	p.workEventsCount.Inc()
+	stats.GetGauge(p.pipelineName, workEventsGauge).Inc()
 	event.reset()
 	return event
 }
@@ -290,9 +294,11 @@ func (p *eventPool) back(event *Event) {
 			tries = 0
 		}
 	}
-
 	p.events[x] = event
 	p.free1[x].Store(true)
+	p.workEventsCount.Dec()
+	stats.GetGauge(p.pipelineName, workEventsGauge).Dec()
+	// todo check benchmarks
 	p.getCond.Broadcast()
 }
 

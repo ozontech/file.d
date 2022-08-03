@@ -9,7 +9,7 @@ import (
 )
 
 func TestEventPoolDump(t *testing.T) {
-	eventPool := newEventPool(2)
+	eventPool := newEventPool(2, "")
 	e := eventPool.get()
 	defer eventPool.back(e)
 
@@ -21,7 +21,7 @@ func TestEventPoolDump(t *testing.T) {
 func BenchmarkEventPoolOneGoroutine(b *testing.B) {
 	const capacity = 32
 
-	p := newEventPool(capacity)
+	p := newEventPool(capacity, "")
 
 	for i := 0; i < b.N; i++ {
 		p.back(p.get())
@@ -31,7 +31,7 @@ func BenchmarkEventPoolOneGoroutine(b *testing.B) {
 func BenchmarkEventPoolManyGoroutines(b *testing.B) {
 	const capacity = 32
 
-	p := newEventPool(capacity)
+	p := newEventPool(capacity, "")
 
 	for i := 0; i < b.N; i++ {
 		wg := &sync.WaitGroup{}
@@ -51,7 +51,7 @@ func BenchmarkEventPoolManyGoroutines(b *testing.B) {
 func BenchmarkEventPoolSlowestPath(b *testing.B) {
 	const capacity = 32
 
-	p := newEventPool(capacity)
+	p := newEventPool(capacity, "")
 
 	for i := 0; i < b.N; i++ {
 		wg := &sync.WaitGroup{}
