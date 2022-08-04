@@ -42,6 +42,62 @@ func TestAppendEvent(t *testing.T) {
 	assert.Equal(t, expected, string(result), "wrong request content")
 }
 
+func TestAppendEventWithIndexOpType(t *testing.T) {
+	stats.InitStats()
+	p := &Plugin{}
+	config := &Config{
+		Endpoints:   []string{"test"},
+		IndexFormat: "test-%-index-%-%",
+		IndexValues: []string{"@time", "field_a", "field_b"},
+		BatchSize:   "1",
+		BatchOpType: "index",
+	}
+
+	err := cfg.Parse(config, map[string]int{"gomaxprocs": 1})
+	if err != nil {
+		logger.Panic(err.Error())
+	}
+
+	p.Start(config, test.NewEmptyOutputPluginParams())
+
+	p.time = "6666-66-66"
+	root, _ := insaneJSON.DecodeBytes([]byte(`{"field_a":"AAAA","field_b":"BBBB"}`))
+	defer insaneJSON.Release(root)
+
+	result := p.appendEvent(nil, &pipeline.Event{Root: root})
+
+	expected := fmt.Sprintf("%s\n%s\n", `{"index":{"_index":"test-6666-66-66-index-AAAA-BBBB"}}`, `{"field_a":"AAAA","field_b":"BBBB"}`)
+	assert.Equal(t, expected, string(result), "wrong request content")
+}
+
+func TestAppendEventWithCreateOpType(t *testing.T) {
+	stats.InitStats()
+	p := &Plugin{}
+	config := &Config{
+		Endpoints:   []string{"test"},
+		IndexFormat: "test-%-index-%-%",
+		IndexValues: []string{"@time", "field_a", "field_b"},
+		BatchSize:   "1",
+		BatchOpType: "create",
+	}
+
+	err := cfg.Parse(config, map[string]int{"gomaxprocs": 1})
+	if err != nil {
+		logger.Panic(err.Error())
+	}
+
+	p.Start(config, test.NewEmptyOutputPluginParams())
+
+	p.time = "6666-66-66"
+	root, _ := insaneJSON.DecodeBytes([]byte(`{"field_a":"AAAA","field_b":"BBBB"}`))
+	defer insaneJSON.Release(root)
+
+	result := p.appendEvent(nil, &pipeline.Event{Root: root})
+
+	expected := fmt.Sprintf("%s\n%s\n", `{"create":{"_index":"test-6666-66-66-index-AAAA-BBBB"}}`, `{"field_a":"AAAA","field_b":"BBBB"}`)
+	assert.Equal(t, expected, string(result), "wrong request content")
+}
+
 func TestConfig(t *testing.T) {
 	stats.InitStats()
 	p := &Plugin{}
