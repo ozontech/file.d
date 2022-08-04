@@ -18,10 +18,10 @@ const (
 	PiB = 1024 * TiB
 )
 
-// UnitAlias is map to add alias.
+// DataUnitAliases is map to add alias.
 // Alias must not contain space
 // Only lowercase letters should be used in the map, but aliases are case-insensitive
-var UnitAlias = map[string]int{
+var DataUnitAliases = map[string]int{
 	"kb": KB, "kib": KiB,
 	"mb": MB, "mib": MiB,
 	"gb": GB, "gib": GiB,

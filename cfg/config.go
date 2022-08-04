@@ -448,7 +448,7 @@ func ParseField(v reflect.Value, vField reflect.Value, tField reflect.StructFiel
 			}
 			finalField.SetInt(int64(value))
 
-		case "unit":
+		case "data_unit":
 			parts := strings.Split(vField.String(), " ")
 			if len(parts) != 2 {
 				return fmt.Errorf("invalid data format, the string must contain 2 parts separated by a space")
@@ -461,7 +461,7 @@ func ParseField(v reflect.Value, vField reflect.Value, tField reflect.StructFiel
 				return fmt.Errorf("value must be positive")
 			}
 			alias := strings.ToLower(strings.TrimSpace(parts[1]))
-			if multiplier, ok := UnitAlias[alias]; ok {
+			if multiplier, ok := DataUnitAliases[alias]; ok {
 				finalField.SetUint(uint64(value * multiplier))
 			} else {
 				return fmt.Errorf(`unexpected alias "%s"`, alias)

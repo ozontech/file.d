@@ -49,8 +49,8 @@ type strExpression struct {
 	T_ int
 }
 
-type strUnit struct {
-	T  string `parse:"unit"`
+type strDataUnit struct {
+	T  string `parse:"data_unit"`
 	T_ uint
 }
 
@@ -145,126 +145,126 @@ func TestParseExpressionConst(t *testing.T) {
 	assert.Equal(t, 10, s.T_, "wrong value")
 }
 
-func TestParseUnitInvalid(t *testing.T) {
+func TestParseDataUnitInvalid(t *testing.T) {
 	TestList := []struct {
-		strUnit       *strUnit
+		strDataUnit   *strDataUnit
 		ExpectedError error
 		ExpectedValue uint
 	}{
 		{
-			strUnit:       &strUnit{T: "10"},
+			strDataUnit:   &strDataUnit{T: "10"},
 			ExpectedError: errors.New("invalid data format, the string must contain 2 parts separated by a space"),
 			ExpectedValue: 0,
 		},
 		{
-			strUnit:       &strUnit{T: " 10"},
+			strDataUnit:   &strDataUnit{T: " 10"},
 			ExpectedError: errors.New(`can't parse uint: "" is not a number`),
 			ExpectedValue: 0,
 		},
 		{
-			strUnit:       &strUnit{T: "10 "},
+			strDataUnit:   &strDataUnit{T: "10 "},
 			ExpectedError: errors.New(`unexpected alias ""`),
 			ExpectedValue: 0,
 		},
 		{
-			strUnit:       &strUnit{T: " 1 MB"},
+			strDataUnit:   &strDataUnit{T: " 1 MB"},
 			ExpectedError: errors.New("invalid data format, the string must contain 2 parts separated by a space"),
 			ExpectedValue: 0,
 		},
 		{
-			strUnit:       &strUnit{T: " MB"},
+			strDataUnit:   &strDataUnit{T: " MB"},
 			ExpectedError: errors.New(`can't parse uint: "" is not a number`),
 			ExpectedValue: 0,
 		},
 		{
-			strUnit:       &strUnit{T: "MB "},
+			strDataUnit:   &strDataUnit{T: "MB "},
 			ExpectedError: errors.New(`can't parse uint: "MB" is not a number`),
 			ExpectedValue: 0,
 		},
 		{
-			strUnit:       &strUnit{T: "10 "},
+			strDataUnit:   &strDataUnit{T: "10 "},
 			ExpectedError: errors.New(`unexpected alias ""`),
 			ExpectedValue: 0,
 		},
 		{
-			strUnit:       &strUnit{T: "something"},
+			strDataUnit:   &strDataUnit{T: "something"},
 			ExpectedError: errors.New("invalid data format, the string must contain 2 parts separated by a space"),
 			ExpectedValue: 0,
 		},
 		{
-			strUnit:       &strUnit{T: "some thing"},
+			strDataUnit:   &strDataUnit{T: "some thing"},
 			ExpectedError: errors.New(`can't parse uint: "some" is not a number`),
 			ExpectedValue: 0,
 		},
 		{
-			strUnit:       &strUnit{T: ""},
+			strDataUnit:   &strDataUnit{T: ""},
 			ExpectedError: errors.New("invalid data format, the string must contain 2 parts separated by a space"),
 			ExpectedValue: 0,
 		},
 		{
-			strUnit:       &strUnit{T: "999999999999999999999 B"},
+			strDataUnit:   &strDataUnit{T: "999999999999999999999 B"},
 			ExpectedError: errors.New(`can't parse uint: "999999999999999999999" is not a number`),
 			ExpectedValue: 0,
 		},
 		{
-			strUnit:       &strUnit{T: "1  B"},
+			strDataUnit:   &strDataUnit{T: "1  B"},
 			ExpectedError: errors.New("invalid data format, the string must contain 2 parts separated by a space"),
 			ExpectedValue: 0,
 		},
 		{
-			strUnit:       &strUnit{T: "1 B "},
+			strDataUnit:   &strDataUnit{T: "1 B "},
 			ExpectedError: errors.New("invalid data format, the string must contain 2 parts separated by a space"),
 			ExpectedValue: 0,
 		},
 		{
-			strUnit:       &strUnit{T: "-1 PB"},
+			strDataUnit:   &strDataUnit{T: "-1 PB"},
 			ExpectedError: errors.New("value must be positive"),
 			ExpectedValue: 0,
 		},
 		// TODO: handle uint overflow situation
 		//{
-		//	strUnit:       &strUnit{T: "100000000000 PB"},
+		//	strDataUnit:       &strDataUnit{T: "100000000000 PB"},
 		//	ExpectedError: errors.New("uint overflowed on product 100000000000 and PB"),
 		//	ExpectedValue: 0,
 		//},
 	}
 	for i := range TestList {
-		err := Parse(TestList[i].strUnit, nil)
+		err := Parse(TestList[i].strDataUnit, nil)
 		assert.Equal(t, TestList[i].ExpectedError, err, "wrong error")
-		assert.Equal(t, uint(0), TestList[i].strUnit.T_, "wrong value")
+		assert.Equal(t, uint(0), TestList[i].strDataUnit.T_, "wrong value")
 	}
 }
 
-func TestParseUnitValid(t *testing.T) {
+func TestParseDataUnitValid(t *testing.T) {
 	TestList := []struct {
-		strUnit       *strUnit
+		strDataUnit   *strDataUnit
 		ExpectedValue uint
 	}{
 		{
-			strUnit:       &strUnit{T: "10 MB"},
+			strDataUnit:   &strDataUnit{T: "10 MB"},
 			ExpectedValue: 10000000,
 		},
 		{
-			strUnit:       &strUnit{T: "10 mB"},
+			strDataUnit:   &strDataUnit{T: "10 mB"},
 			ExpectedValue: 10000000,
 		},
 		{
-			strUnit:       &strUnit{T: "10 Mb"},
+			strDataUnit:   &strDataUnit{T: "10 Mb"},
 			ExpectedValue: 10000000,
 		},
 		{
-			strUnit:       &strUnit{T: "10 mb"},
+			strDataUnit:   &strDataUnit{T: "10 mb"},
 			ExpectedValue: 10000000,
 		},
 		{
-			strUnit:       &strUnit{T: "1 B"},
+			strDataUnit:   &strDataUnit{T: "1 B"},
 			ExpectedValue: 1,
 		},
 	}
 	for i := range TestList {
-		err := Parse(TestList[i].strUnit, nil)
+		err := Parse(TestList[i].strDataUnit, nil)
 		assert.Nil(t, err, "shouldn't be an error")
-		assert.Equal(t, TestList[i].ExpectedValue, TestList[i].strUnit.T_, "wrong value")
+		assert.Equal(t, TestList[i].ExpectedValue, TestList[i].strDataUnit.T_, "wrong value")
 	}
 }
 
