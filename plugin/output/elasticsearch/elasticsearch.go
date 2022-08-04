@@ -140,7 +140,7 @@ type Config struct {
 	//>
 	//> Operation type to be used in batch requests. It can be `index` or `create`. Default is `index`.
 	//> > Check out [_bulk API doc](https://www.elastic.co/guide/en/elasticsearch/reference/current/docs-bulk.html) for details.
-	BatchOpType string `json:"batch_op_type" default:"index"` //*
+	BatchOpType string `json:"batch_op_type" default:"index" options:"index|create"` //*
 }
 
 type data struct {
@@ -167,10 +167,6 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 
 	if len(p.config.IndexValues) == 0 {
 		p.config.IndexValues = append(p.config.IndexValues, "@time")
-	}
-
-	if p.config.BatchOpType != "index" && p.config.BatchOpType != "create" {
-		logger.Fatalf("op_type can be either 'index' or 'create'. '%s' is not supported", p.config.BatchOpType)
 	}
 
 	for _, endpoint := range p.config.Endpoints {
@@ -342,7 +338,9 @@ func (p *Plugin) appendEvent(outBuf []byte, event *pipeline.Event) []byte {
 }
 
 func (p *Plugin) appendIndexName(outBuf []byte, event *pipeline.Event) []byte {
-	outBuf = append(outBuf, fmt.Sprintf(`{"%s":{"_index":"`, p.config.BatchOpType)...)
+	outBuf = append(outBuf, `{"`...)
+	outBuf = append(outBuf, p.config.BatchOpType...)
+	outBuf = append(outBuf, `":{"_index":"`...)
 	replacements := 0
 	for _, c := range pipeline.StringToByteUnsafe(p.config.IndexFormat) {
 		if c != '%' {
