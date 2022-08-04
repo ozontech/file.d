@@ -187,11 +187,6 @@ func (p *Pipeline) subsystemName() string {
 }
 
 func (p *Pipeline) registerMetrics() {
-	stats.RegisterGauge(&stats.MetricDesc{
-		Subsystem: p.subsystemName(),
-		Name:      workEventsGauge,
-		Help:      "Running event counter",
-	})
 	stats.RegisterCounter(&stats.MetricDesc{
 		Subsystem: p.subsystemName(),
 		Name:      inputEventsCountMetric,
@@ -590,7 +585,7 @@ func (p *Pipeline) logChanges(myDeltas *deltas) {
 		p.eventPool.workEventsCount, p.settings.Capacity,
 		int64(myDeltas.deltaInputEvents), float64(myDeltas.deltaInputSize)/1024.0/1024.0, rate, rateMb, readOps,
 		inputEvents, float64(inputSize)/1024.0/1024.0, inputSize/tc, p.maxSize,
-		p.eventPool.capacity-p.eventPool.freeEventsCount, p.eventPool.capacity)
+		p.eventPool.workEventsCount, p.eventPool.capacity)
 }
 
 func (p *Pipeline) incMetrics(inputEvents, inputSize, outputEvents, outputSize, reads *DeltaWrapper) *deltas {

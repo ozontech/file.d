@@ -2,7 +2,6 @@ package pipeline
 
 import (
 	"fmt"
-	"github.com/ozontech/file.d/stats"
 	"runtime"
 	"sync"
 	"time"
@@ -11,6 +10,7 @@ import (
 	"go.uber.org/atomic"
 
 	"github.com/ozontech/file.d/logger"
+	"github.com/ozontech/file.d/stats"
 )
 
 var eventSizeGCThreshold = 4 * 1024
@@ -199,7 +199,6 @@ type eventPool struct {
 	capacity     int
 	pipelineName string
 
-	freeEventsCount int
 	workEventsCount atomic.Int64
 	getCounter      atomic.Int64
 	backCounter     atomic.Int64
@@ -213,12 +212,13 @@ type eventPool struct {
 
 func newEventPool(capacity int, pipelineName string) *eventPool {
 	eventPool := &eventPool{
-		capacity:        capacity,
-		freeEventsCount: capacity,
-		getMu:           &sync.Mutex{},
-		backCounter:     *atomic.NewInt64(int64(capacity)),
+		capacity:     capacity,
+		pipelineName: pipelineName,
+		getMu:        &sync.Mutex{},
+		backCounter:  *atomic.NewInt64(int64(capacity)),
 	}
 
+	eventPool.registerMetrics()
 	eventPool.getCond = sync.NewCond(eventPool.getMu)
 
 	for i := 0; i < capacity; i++ {
@@ -264,7 +264,7 @@ func (p *eventPool) get() *Event {
 	p.events[x] = nil
 	p.free2[x].Store(false)
 	p.workEventsCount.Inc()
-	stats.GetGauge(p.pipelineName, workEventsGauge).Inc()
+	stats.GetGauge(p.subsystemName(), workEventsGauge).Inc()
 	event.reset()
 	return event
 }
@@ -297,7 +297,7 @@ func (p *eventPool) back(event *Event) {
 	p.events[x] = event
 	p.free1[x].Store(true)
 	p.workEventsCount.Dec()
-	stats.GetGauge(p.pipelineName, workEventsGauge).Dec()
+	stats.GetGauge(p.subsystemName(), workEventsGauge).Dec()
 	// todo check benchmarks
 	p.getCond.Broadcast()
 }
@@ -305,7 +305,7 @@ func (p *eventPool) back(event *Event) {
 func (p *eventPool) dump() string {
 	out := logger.Cond(len(p.events) == 0, logger.Header("no events"), func() string {
 		o := logger.Header("events")
-		for i := 0; i < p.freeEventsCount; i++ {
+		for i := 0; i < p.capacity; i++ {
 			event := p.events[i]
 			eventStr := event.String()
 			if eventStr == "" {
@@ -318,4 +318,16 @@ func (p *eventPool) dump() string {
 	})
 
 	return out
+}
+
+func (p *eventPool) registerMetrics() {
+	stats.RegisterGauge(&stats.MetricDesc{
+		Subsystem: p.subsystemName(),
+		Name:      workEventsGauge,
+		Help:      "Running event counter",
+	})
+}
+
+func (p *eventPool) subsystemName() string {
+	return "pipeline_" + p.pipelineName
 }
