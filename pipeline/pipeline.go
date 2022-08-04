@@ -580,12 +580,11 @@ func (p *Pipeline) logChanges(myDeltas *deltas) {
 	tc := int64(math.Max(float64(inputSize), 1))
 
 	p.logger.Infof(`%q pipeline stats interval=%ds, active procs=%d/%d, queue=%d/%d, out=%d|%.1fMb,`+
-		`rate=%d/s|%.1fMb/s, read ops=%d/s, total=%d|%.1fMb, avg size=%d, max size=%d, pool fullness=%d/%d`,
+		`rate=%d/s|%.1fMb/s, read ops=%d/s, total=%d|%.1fMb, avg size=%d, max size=%d`,
 		p.Name, interval/time.Second, p.activeProcs.Load(), p.procCount.Load(),
 		p.eventPool.workEventsCount, p.settings.Capacity,
 		int64(myDeltas.deltaInputEvents), float64(myDeltas.deltaInputSize)/1024.0/1024.0, rate, rateMb, readOps,
-		inputEvents, float64(inputSize)/1024.0/1024.0, inputSize/tc, p.maxSize,
-		p.eventPool.workEventsCount, p.eventPool.capacity)
+		inputEvents, float64(inputSize)/1024.0/1024.0, inputSize/tc, p.maxSize)
 }
 
 func (p *Pipeline) incMetrics(inputEvents, inputSize, outputEvents, outputSize, reads *DeltaWrapper) *deltas {
