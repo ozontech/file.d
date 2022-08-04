@@ -52,6 +52,7 @@ type Plugin struct {
 	authHeader   []byte
 	avgEventSize int
 	time         string
+	headerPrefix string
 	batcher      *pipeline.Batcher
 	controller   pipeline.OutputPluginController
 	mu           *sync.Mutex
@@ -164,6 +165,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.avgEventSize = params.PipelineSettings.AvgEventSize
 	p.config = config.(*Config)
 	p.mu = &sync.Mutex{}
+	p.headerPrefix = `{"` + p.config.BatchOpType + `":{"_index":"`
 
 	if len(p.config.IndexValues) == 0 {
 		p.config.IndexValues = append(p.config.IndexValues, "@time")
@@ -338,9 +340,7 @@ func (p *Plugin) appendEvent(outBuf []byte, event *pipeline.Event) []byte {
 }
 
 func (p *Plugin) appendIndexName(outBuf []byte, event *pipeline.Event) []byte {
-	outBuf = append(outBuf, `{"`...)
-	outBuf = append(outBuf, p.config.BatchOpType...)
-	outBuf = append(outBuf, `":{"_index":"`...)
+	outBuf = append(outBuf, p.headerPrefix...)
 	replacements := 0
 	for _, c := range pipeline.StringToByteUnsafe(p.config.IndexFormat) {
 		if c != '%' {
