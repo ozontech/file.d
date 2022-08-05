@@ -199,12 +199,11 @@ type eventPool struct {
 	capacity     int
 	pipelineName string
 
-	workEventsCount atomic.Int64
-	getCounter      atomic.Int64
-	backCounter     atomic.Int64
-	events          []*Event
-	free1           []atomic.Bool
-	free2           []atomic.Bool
+	getCounter  atomic.Int64
+	backCounter atomic.Int64
+	events      []*Event
+	free1       []atomic.Bool
+	free2       []atomic.Bool
 
 	getMu   *sync.Mutex
 	getCond *sync.Cond
@@ -263,7 +262,6 @@ func (p *eventPool) get() *Event {
 	event := p.events[x]
 	p.events[x] = nil
 	p.free2[x].Store(false)
-	p.workEventsCount.Inc()
 	stats.GetGauge(p.subsystemName(), workEventsGauge).Inc()
 	event.reset()
 	return event
@@ -296,7 +294,6 @@ func (p *eventPool) back(event *Event) {
 	}
 	p.events[x] = event
 	p.free1[x].Store(true)
-	p.workEventsCount.Dec()
 	stats.GetGauge(p.subsystemName(), workEventsGauge).Dec()
 	// todo check benchmarks
 	p.getCond.Broadcast()

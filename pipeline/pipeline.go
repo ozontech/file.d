@@ -3,6 +3,7 @@ package pipeline
 import (
 	"encoding/json"
 	"fmt"
+	io_prometheus_client "github.com/prometheus/client_model/go"
 	"io"
 	"math"
 	"math/rand"
@@ -39,6 +40,7 @@ const (
 	metricsGenInterval      = time.Hour
 
 	workEventsGauge         = "work_events_gauge"
+	waitEventsGauge         = "wait_events_gauge"
 	inputEventsCountMetric  = "input_events_count"
 	inputEventsSizeMetric   = "input_events_size"
 	outputEventsCountMetric = "output_events_count"
@@ -187,6 +189,11 @@ func (p *Pipeline) subsystemName() string {
 }
 
 func (p *Pipeline) registerMetrics() {
+	stats.RegisterGauge(&stats.MetricDesc{
+		Subsystem: p.subsystemName(),
+		Name:      waitEventsGauge,
+		Help:      "Waiting events counter",
+	})
 	stats.RegisterCounter(&stats.MetricDesc{
 		Subsystem: p.subsystemName(),
 		Name:      inputEventsCountMetric,
@@ -351,7 +358,14 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 	p.inputEvents.Inc()
 	p.inputSize.Add(int64(length))
 
+	stats.GetGauge(p.subsystemName(), waitEventsGauge).Inc()
 	event := p.eventPool.get()
+	stats.GetGauge(p.subsystemName(), waitEventsGauge).Dec()
+	//go func() {
+	//	<-time.After(time.Second * time.Duration(rand.Intn(300)))
+	//	stats.GetGauge(p.subsystemName(), waitEventsGauge).Dec()
+	//}()
+
 	var dec decoder.DecoderType
 	if p.decoder == decoder.AUTO {
 		dec = p.suggestedDecoder
@@ -579,12 +593,29 @@ func (p *Pipeline) logChanges(myDeltas *deltas) {
 	readOps := int(myDeltas.deltaReads * float64(time.Second) / float64(interval))
 	tc := int64(math.Max(float64(inputSize), 1))
 
-	p.logger.Infof(`%q pipeline stats interval=%ds, active procs=%d/%d, queue=%d/%d, out=%d|%.1fMb,`+
+	workEventValue, err := p.GetValueGauge(p.eventPool.subsystemName(), workEventsGauge)
+	if err != nil {
+		p.logger.Infof("failed to get workEventValue: " + err.Error())
+	}
+	waitEventValue, err := p.GetValueGauge(p.subsystemName(), waitEventsGauge)
+	if err != nil {
+		p.logger.Infof("failed to get waitEventValue: " + err.Error())
+	}
+	p.logger.Infof(`%q pipeline stats interval=%ds, active procs=%d/%d, working events=%d/%d, in queue=%d, out=%d|%.1fMb,`+
 		`rate=%d/s|%.1fMb/s, read ops=%d/s, total=%d|%.1fMb, avg size=%d, max size=%d`,
 		p.Name, interval/time.Second, p.activeProcs.Load(), p.procCount.Load(),
-		p.eventPool.workEventsCount, p.settings.Capacity,
+		workEventValue, p.settings.Capacity, waitEventValue,
 		int64(myDeltas.deltaInputEvents), float64(myDeltas.deltaInputSize)/1024.0/1024.0, rate, rateMb, readOps,
 		inputEvents, float64(inputSize)/1024.0/1024.0, inputSize/tc, p.maxSize)
+}
+
+func (p *Pipeline) GetValueGauge(subsystemName, metricName string) (int, error) {
+	m := new(io_prometheus_client.Metric)
+	err := stats.GetGauge(subsystemName, metricName).Write(m)
+	if err != nil {
+		return 0, err
+	}
+	return int(*m.GetGauge().Value), nil
 }
 
 func (p *Pipeline) incMetrics(inputEvents, inputSize, outputEvents, outputSize, reads *DeltaWrapper) *deltas {
