@@ -87,5 +87,12 @@ After this timeout batch will be sent even if batch isn't full.
 
 <br>
 
+**`batch_op_type`** *`string`* *`default=index`* *`options=index|create`* 
+
+Operation type to be used in batch requests. It can be `index` or `create`. Default is `index`.
+> Check out [_bulk API doc](https://www.elastic.co/guide/en/elasticsearch/reference/current/docs-bulk.html) for details.
+
+<br>
+
 
 <br>*Generated using [__insane-doc__](https://github.com/vitkovskii/insane-doc)*
