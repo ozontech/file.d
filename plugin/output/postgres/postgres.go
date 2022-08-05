@@ -24,8 +24,9 @@ It sends the event batches to postgres db using pgx.
 }*/
 
 var (
-	ErrEventDoesntHaveField   = errors.New("event doesn't have field")
-	ErrEventFieldHasWrongType = errors.New("event field has wrong type")
+	ErrEventDoesntHaveField             = errors.New("event doesn't have field")
+	ErrEventFieldHasWrongType           = errors.New("event field has wrong type")
+	ErrTimestampFromDistantPastOrFuture = errors.New("event field contains timestamp < 1970 or > 9000 year")
 )
 
 type PgxIface interface {
@@ -44,6 +45,8 @@ const (
 	discardedEventCounter  = "event_discarded"
 	duplicatedEventCounter = "event_duplicated"
 	writtenEventCounter    = "event_written"
+
+	nineThousandYear = 221842627200
 )
 
 type pgType int
@@ -282,6 +285,12 @@ func (p *Plugin) out(_ *pipeline.WorkerData, batch *pipeline.Batch) {
 					p.logger.Fatal(err)
 				}
 				p.logger.Error(err)
+			} else if errors.Is(err, ErrTimestampFromDistantPastOrFuture) {
+				stats.GetCounter(subsystemName, discardedEventCounter).Inc()
+				if p.config.Strict {
+					p.logger.Fatal(err)
+				}
+				p.logger.Error(err)
 			} else if err != nil { // protection from foolproof.
 				p.logger.Fatalf("undefined error: %w", err)
 			}
@@ -397,6 +406,10 @@ func (p *Plugin) addFieldToValues(field column, sNode *insaneJSON.StrictNode) (i
 		tint, err := sNode.AsInt()
 		if err != nil {
 			return nil, fmt.Errorf("%w, can't get %s as timestamp, err: %s", ErrEventFieldHasWrongType, field.Name, err.Error())
+		}
+		// if timestamp < 1970-01-00-00 or > 9000-01-00-00
+		if tint < 0 || tint > nineThousandYear {
+			return nil, fmt.Errorf("%w, %s", ErrTimestampFromDistantPastOrFuture, field.Name)
 		}
 		return time.Unix(int64(tint), 0).Format(time.RFC3339), nil
 	case unknownType:
