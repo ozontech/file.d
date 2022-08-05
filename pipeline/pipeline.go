@@ -3,7 +3,6 @@ package pipeline
 import (
 	"encoding/json"
 	"fmt"
-	io_prometheus_client "github.com/prometheus/client_model/go"
 	"io"
 	"math"
 	"math/rand"
@@ -14,6 +13,7 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
+	io_prometheus_client "github.com/prometheus/client_model/go"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
 
@@ -361,10 +361,6 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 	stats.GetGauge(p.subsystemName(), waitEventsGauge).Inc()
 	event := p.eventPool.get()
 	stats.GetGauge(p.subsystemName(), waitEventsGauge).Dec()
-	//go func() {
-	//	<-time.After(time.Second * time.Duration(rand.Intn(300)))
-	//	stats.GetGauge(p.subsystemName(), waitEventsGauge).Dec()
-	//}()
 
 	var dec decoder.DecoderType
 	if p.decoder == decoder.AUTO {
