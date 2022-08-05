@@ -20,12 +20,13 @@ type Event struct {
 	Root *insaneJSON.Root
 	Buf  []byte
 
-	SeqID      uint64
-	Offset     int64
-	SourceID   SourceID
-	SourceName string
-	streamName StreamName
-	Size       int // last known event size, it may not be actual
+	EventSizeGCThreshold int
+	SeqID                uint64
+	Offset               int64
+	SourceID             SourceID
+	SourceName           string
+	streamName           StreamName
+	Size                 int // last known event size, it may not be actual
 
 	action atomic.Int64
 	next   *Event
@@ -50,10 +51,11 @@ const (
 
 type eventStage int
 
-func newEvent() *Event {
+func newEvent(eventSizeGCThreshold int) *Event {
 	return &Event{
-		Root: insaneJSON.Spawn(),
-		Buf:  make([]byte, 0, 1024),
+		EventSizeGCThreshold: eventSizeGCThreshold,
+		Root:                 insaneJSON.Spawn(),
+		Buf:                  make([]byte, 0, 1024),
 	}
 }
 
@@ -208,7 +210,7 @@ type eventPool struct {
 	getCond *sync.Cond
 }
 
-func newEventPool(capacity int) *eventPool {
+func newEventPool(capacity, eventSizeGCThreshold int) *eventPool {
 	eventPool := &eventPool{
 		capacity:        capacity,
 		freeEventsCount: capacity,
@@ -221,7 +223,7 @@ func newEventPool(capacity int) *eventPool {
 	for i := 0; i < capacity; i++ {
 		eventPool.free1 = append(eventPool.free1, *atomic.NewBool(true))
 		eventPool.free2 = append(eventPool.free2, *atomic.NewBool(true))
-		eventPool.events = append(eventPool.events, newEvent())
+		eventPool.events = append(eventPool.events, newEvent(eventSizeGCThreshold))
 	}
 
 	return eventPool

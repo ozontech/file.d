@@ -20,9 +20,15 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 	decoder := "auto"
 	isStrict := false
 	eventTimeout := pipeline.DefaultEventTimeout
+	eventSizeGCThreshold := pipeline.DefaultEventSizeGCThreshold
 
 	if settings != nil {
-		val := settings.Get("capacity").MustInt()
+		val := settings.Get("event_size_gc").MustInt()
+		if val != 0 {
+			eventSizeGCThreshold = val
+		}
+
+		val = settings.Get("capacity").MustInt()
 		if val != 0 {
 			capacity = val
 		}
@@ -72,15 +78,16 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 	}
 
 	return &pipeline.Settings{
-		Decoder:             decoder,
-		Capacity:            capacity,
-		AvgEventSize:        avgInputEventSize,
-		MaxEventSize:        maxInputEventSize,
-		AntispamThreshold:   antispamThreshold,
-		MaintenanceInterval: maintenanceInterval,
-		EventTimeout:        eventTimeout,
-		StreamField:         streamField,
-		IsStrict:            isStrict,
+		Decoder:              decoder,
+		Capacity:             capacity,
+		AvgEventSize:         avgInputEventSize,
+		MaxEventSize:         maxInputEventSize,
+		AntispamThreshold:    antispamThreshold,
+		MaintenanceInterval:  maintenanceInterval,
+		EventTimeout:         eventTimeout,
+		StreamField:          streamField,
+		IsStrict:             isStrict,
+		EventSizeGCThreshold: eventSizeGCThreshold,
 	}
 }
 

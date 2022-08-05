@@ -23,15 +23,16 @@ import (
 )
 
 const (
-	DefaultStreamField         = "stream"
-	DefaultCapacity            = 1024
-	DefaultAvgInputEventSize   = 4 * 1024
-	DefaultMaxInputEventSize   = 0
-	DefaultJSONNodePoolSize    = 1024
-	DefaultMaintenanceInterval = time.Second * 5
-	DefaultEventTimeout        = time.Second * 30
-	DefaultFieldValue          = "not_set"
-	DefaultStreamName          = StreamName("not_set")
+	DefaultStreamField          = "stream"
+	DefaultCapacity             = 1024
+	DefaultAvgInputEventSize    = 4 * 1024
+	DefaultMaxInputEventSize    = 0
+	DefaultJSONNodePoolSize     = 1024
+	DefaultMaintenanceInterval  = time.Second * 5
+	DefaultEventTimeout         = time.Second * 30
+	DefaultFieldValue           = "not_set"
+	DefaultStreamName           = StreamName("not_set")
+	DefaultEventSizeGCThreshold = 4 * 1024
 
 	EventSeqIDError = uint64(0)
 
@@ -120,15 +121,16 @@ type Pipeline struct {
 }
 
 type Settings struct {
-	Decoder             string
-	Capacity            int
-	MaintenanceInterval time.Duration
-	EventTimeout        time.Duration
-	AntispamThreshold   int
-	AvgEventSize        int
-	MaxEventSize        int
-	StreamField         string
-	IsStrict            bool
+	Decoder              string
+	Capacity             int
+	MaintenanceInterval  time.Duration
+	EventTimeout         time.Duration
+	AntispamThreshold    int
+	AvgEventSize         int
+	MaxEventSize         int
+	StreamField          string
+	IsStrict             bool
+	EventSizeGCThreshold int
 }
 
 // New creates new pipeline. Consider using `SetupHTTPHandlers` next.
@@ -146,7 +148,7 @@ func New(name string, settings *Settings, registry *prometheus.Registry) *Pipeli
 
 		metricsHolder: newMetricsHolder(name, registry, metricsGenInterval),
 		streamer:      newStreamer(settings.EventTimeout),
-		eventPool:     newEventPool(settings.Capacity),
+		eventPool:     newEventPool(settings.Capacity, settings.EventSizeGCThreshold),
 		antispamer:    newAntispamer(settings.AntispamThreshold, antispamUnbanIterations, settings.MaintenanceInterval),
 
 		eventLog:   make([]string, 0, 128),
