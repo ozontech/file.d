@@ -90,7 +90,7 @@ func unlockEvent(stream *stream) *Event {
 }
 
 func (e *Event) reset() {
-	if e.Size > eventSizeGCThreshold {
+	if e.Size > e.EventSizeGCThreshold {
 		e.Root.ReleaseBufMem()
 	}
 
