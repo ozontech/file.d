@@ -12,13 +12,14 @@ type complexLimit struct {
 }
 
 type rule struct {
-	fields []string // sorted list of used keys is used for combining limiter key.
-	values []string // values to check against. order is the same as for keys.
-	limit  complexLimit
+	fields      []string // sorted list of used keys is used for combining limiter key.
+	values      []string // values to check against. order is the same as for keys.
+	limit       complexLimit
+	byteIdxPart []byte
 }
 
 // NewRule returns new Limit instance.
-func NewRule(conditions map[string]string, limit complexLimit) *rule {
+func NewRule(conditions map[string]string, limit complexLimit, ruleNum int) *rule {
 	var (
 		keys   = make([]string, 0, len(conditions))
 		values = make([]string, len(conditions))
@@ -34,10 +35,12 @@ func NewRule(conditions map[string]string, limit complexLimit) *rule {
 		values[i] = conditions[k]
 	}
 
+	byteIdxPart := []byte{byte('a' + ruleNum), ':'}
 	return &rule{
-		fields: keys,
-		values: values,
-		limit:  limit,
+		fields:      keys,
+		values:      values,
+		limit:       limit,
+		byteIdxPart: byteIdxPart,
 	}
 }
 

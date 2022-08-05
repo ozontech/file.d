@@ -1,4 +1,4 @@
-VERSION ?= $(shell git describe --abbrev=4 --dirty --always --tags)
+VERSION ?= $(shell git describe --abbrev=4 --always --tags)
 TIME := $(shell date '+%Y-%m-%d_%H:%M:%S')
 UPSTREAM_BRANCH ?= origin/master
 
