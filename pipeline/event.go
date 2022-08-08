@@ -295,7 +295,6 @@ func (p *eventPool) back(event *Event) {
 	p.events[x] = event
 	p.free1[x].Store(true)
 	stats.GetGauge(p.subsystemName(), workEventsGauge).Dec()
-	// todo check benchmarks
 	p.getCond.Broadcast()
 }
 
