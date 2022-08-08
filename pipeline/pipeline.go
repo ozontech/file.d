@@ -23,16 +23,15 @@ import (
 )
 
 const (
-	DefaultStreamField          = "stream"
-	DefaultCapacity             = 1024
-	DefaultAvgInputEventSize    = 4 * 1024
-	DefaultMaxInputEventSize    = 0
-	DefaultJSONNodePoolSize     = 1024
-	DefaultMaintenanceInterval  = time.Second * 5
-	DefaultEventTimeout         = time.Second * 30
-	DefaultFieldValue           = "not_set"
-	DefaultStreamName           = StreamName("not_set")
-	DefaultEventSizeGCThreshold = 4 * 1024
+	DefaultStreamField         = "stream"
+	DefaultCapacity            = 1024
+	DefaultAvgInputEventSize   = 4 * 1024
+	DefaultMaxInputEventSize   = 0
+	DefaultJSONNodePoolSize    = 1024
+	DefaultMaintenanceInterval = time.Second * 5
+	DefaultEventTimeout        = time.Second * 30
+	DefaultFieldValue          = "not_set"
+	DefaultStreamName          = StreamName("not_set")
 
 	EventSeqIDError = uint64(0)
 
