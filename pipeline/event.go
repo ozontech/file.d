@@ -12,21 +12,18 @@ import (
 	"github.com/ozontech/file.d/logger"
 )
 
-var eventSizeGCThreshold = 4 * 1024
-
 type Event struct {
 	kind atomic.Int32
 
 	Root *insaneJSON.Root
 	Buf  []byte
 
-	EventSizeGCThreshold int
-	SeqID                uint64
-	Offset               int64
-	SourceID             SourceID
-	SourceName           string
-	streamName           StreamName
-	Size                 int // last known event size, it may not be actual
+	SeqID      uint64
+	Offset     int64
+	SourceID   SourceID
+	SourceName string
+	streamName StreamName
+	Size       int // last known event size, it may not be actual
 
 	action atomic.Int64
 	next   *Event
@@ -51,11 +48,10 @@ const (
 
 type eventStage int
 
-func newEvent(eventSizeGCThreshold int) *Event {
+func newEvent() *Event {
 	return &Event{
-		EventSizeGCThreshold: eventSizeGCThreshold,
-		Root:                 insaneJSON.Spawn(),
-		Buf:                  make([]byte, 0, 1024),
+		Root: insaneJSON.Spawn(),
+		Buf:  make([]byte, 0, 1024),
 	}
 }
 
@@ -89,8 +85,8 @@ func unlockEvent(stream *stream) *Event {
 	return event
 }
 
-func (e *Event) reset() {
-	if e.Size > e.EventSizeGCThreshold {
+func (e *Event) reset(avgEventSize int) {
+	if e.Size > avgEventSize {
 		e.Root.ReleaseBufMem()
 	}
 
@@ -199,6 +195,7 @@ func (e *Event) String() string {
 type eventPool struct {
 	capacity int
 
+	avgEventSize    int
 	freeEventsCount int
 	getCounter      atomic.Int64
 	backCounter     atomic.Int64
@@ -210,8 +207,9 @@ type eventPool struct {
 	getCond *sync.Cond
 }
 
-func newEventPool(capacity, eventSizeGCThreshold int) *eventPool {
+func newEventPool(capacity, avgEventSize int) *eventPool {
 	eventPool := &eventPool{
+		avgEventSize:    avgEventSize,
 		capacity:        capacity,
 		freeEventsCount: capacity,
 		getMu:           &sync.Mutex{},
@@ -223,7 +221,7 @@ func newEventPool(capacity, eventSizeGCThreshold int) *eventPool {
 	for i := 0; i < capacity; i++ {
 		eventPool.free1 = append(eventPool.free1, *atomic.NewBool(true))
 		eventPool.free2 = append(eventPool.free2, *atomic.NewBool(true))
-		eventPool.events = append(eventPool.events, newEvent(eventSizeGCThreshold))
+		eventPool.events = append(eventPool.events, newEvent())
 	}
 
 	return eventPool
@@ -263,7 +261,7 @@ func (p *eventPool) get() *Event {
 	p.events[x] = nil
 	p.free2[x].Store(false)
 
-	event.reset()
+	event.reset(p.avgEventSize)
 	return event
 }
 

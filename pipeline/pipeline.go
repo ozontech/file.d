@@ -121,16 +121,15 @@ type Pipeline struct {
 }
 
 type Settings struct {
-	Decoder              string
-	Capacity             int
-	MaintenanceInterval  time.Duration
-	EventTimeout         time.Duration
-	AntispamThreshold    int
-	AvgEventSize         int
-	MaxEventSize         int
-	StreamField          string
-	IsStrict             bool
-	EventSizeGCThreshold int
+	Decoder             string
+	Capacity            int
+	MaintenanceInterval time.Duration
+	EventTimeout        time.Duration
+	AntispamThreshold   int
+	AvgEventSize        int
+	MaxEventSize        int
+	StreamField         string
+	IsStrict            bool
 }
 
 // New creates new pipeline. Consider using `SetupHTTPHandlers` next.
@@ -148,7 +147,7 @@ func New(name string, settings *Settings, registry *prometheus.Registry) *Pipeli
 
 		metricsHolder: newMetricsHolder(name, registry, metricsGenInterval),
 		streamer:      newStreamer(settings.EventTimeout),
-		eventPool:     newEventPool(settings.Capacity, settings.EventSizeGCThreshold),
+		eventPool:     newEventPool(settings.Capacity, settings.AvgEventSize),
 		antispamer:    newAntispamer(settings.AntispamThreshold, antispamUnbanIterations, settings.MaintenanceInterval),
 
 		eventLog:   make([]string, 0, 128),
