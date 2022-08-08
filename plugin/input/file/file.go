@@ -6,8 +6,8 @@ import (
 
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
+	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
-	"github.com/ozontech/file.d/stats"
 	"go.uber.org/zap"
 )
 
@@ -202,7 +202,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 }
 
 func (p *Plugin) registerPluginMetrics() {
-	stats.RegisterCounter(&stats.MetricDesc{
+	metric.RegisterCounter(&metric.MetricDesc{
 		Subsystem: subsystemName,
 		Name:      possibleOffsetCorruptionCounter,
 		Help:      "Total number of possible offset corruptions",

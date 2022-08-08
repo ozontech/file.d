@@ -7,10 +7,10 @@ import (
 
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/logger"
+	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/plugin/input/fake"
 	"github.com/ozontech/file.d/plugin/output/devnull"
-	"github.com/ozontech/file.d/stats"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
@@ -95,7 +95,7 @@ func WaitForEvents(x *atomic.Int32) {
 }
 
 func NewPipeline(actions []*pipeline.ActionPluginStaticInfo, pipelineOpts ...string) *pipeline.Pipeline {
-	stats.InitStats()
+	metric.InitStats()
 	parallel := Opts(pipelineOpts).Has("parallel")
 	perf := Opts(pipelineOpts).Has("perf")
 	mock := Opts(pipelineOpts).Has("mock")

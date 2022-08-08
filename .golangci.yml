@@ -1,0 +1,84 @@
+linters-settings:
+  govet:
+    enable:
+      - composites
+  dupl:
+    threshold: 120
+  goconst:
+    min-len: 2
+    min-occurrences: 3
+  misspell:
+    locale: US
+  gocritic:
+    enabled-tags:
+      - diagnostic
+      - experimental
+      - opinionated
+      - performance
+      - style
+    disabled-checks:
+      - whyNoLint
+      - commentFormatting # insane-doc syntax requires "//>" format
+      - paramTypeCombine
+      - ptrToRefParam # we use interface pointer in many places
+      - unnamedResult
+      - sprintfQuotedString
+      - tooManyResultsChecker
+  gosec:
+    excludes:
+      - G304 # Potential file inclusion via variable -- it's ok for this project
+  stylecheck:
+    checks:
+      - '-ST1021' # insane-doc syntax requires "//>" format
+
+linters:
+  disable-all: true
+  enable:
+    - deadcode
+    - depguard
+    - dogsled
+    - dupl
+    - goconst
+    - gocritic
+    - goimports
+    - gosimple
+    - govet
+    - ineffassign
+    - misspell
+    - nakedret
+    - prealloc
+    - structcheck
+    - stylecheck
+    - typecheck
+    - unconvert
+    - unparam
+    - unused
+    - varcheck
+    - whitespace
+    # Do not enable:
+    # - staticcheck (does not work with golangci-lint 1.46.2 and go 1.18.2)
+    # - gosec (not worth it in scope of this project)
+    # - gochecknoglobals (we know when it is ok to use globals)
+    # - gochecknoinits (we know when it is ok to use inits)
+    # - errcheck
+
+issues:
+  exclude-use-default: false
+  exclude-rules:
+    # Disable linters that are annoying in tests.
+    - path: _test\.go
+      linters:
+        - gocyclo
+        - errcheck
+        - dupl
+        - gosec
+        - goconst
+
+    # Ignore shadowing of err.
+    - linters: [ govet ]
+      text: 'declaration of "(err|ctx)"'
+
+run:
+  build-tags:
+    - e2e
+    - fuzz

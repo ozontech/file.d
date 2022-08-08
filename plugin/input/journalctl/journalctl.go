@@ -4,9 +4,9 @@ package journalctl
 
 import (
 	"github.com/ozontech/file.d/fd"
+	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/offset"
 	"github.com/ozontech/file.d/pipeline"
-	"github.com/ozontech/file.d/stats"
 )
 
 /*{ introduction
@@ -77,7 +77,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 
 	p.offInfo = &offsetInfo{}
 	if err := offset.LoadYAML(p.config.OffsetsFile, p.offInfo); err != nil {
-		stats.GetCounter(subsystemName, offsetErrors).Inc()
+		metric.GetCounter(subsystemName, offsetErrors).Inc()
 		p.params.Logger.Error("can't load offset file: %s", err.Error())
 	}
 
@@ -95,17 +95,17 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 }
 
 func (p *Plugin) registerPluginMetrics() {
-	stats.RegisterCounter(&stats.MetricDesc{
+	metric.RegisterCounter(&metric.MetricDesc{
 		Subsystem: subsystemName,
 		Name:      offsetErrors,
 		Help:      "Number of errors occurred when saving/loading offset",
 	})
-	stats.RegisterCounter(&stats.MetricDesc{
+	metric.RegisterCounter(&metric.MetricDesc{
 		Subsystem: subsystemName,
 		Name:      journalCtlStopErrors,
 		Help:      "Total journalctl stop errors",
 	})
-	stats.RegisterCounter(&stats.MetricDesc{
+	metric.RegisterCounter(&metric.MetricDesc{
 		Subsystem: subsystemName,
 		Name:      readerErrors,
 		Help:      "Total reader errors",
@@ -115,12 +115,12 @@ func (p *Plugin) registerPluginMetrics() {
 func (p *Plugin) Stop() {
 	err := p.reader.stop()
 	if err != nil {
-		stats.GetCounter(subsystemName, journalCtlStopErrors).Inc()
+		metric.GetCounter(subsystemName, journalCtlStopErrors).Inc()
 		p.params.Logger.Error("can't stop journalctl cmd: %s", err.Error())
 	}
 
 	if err := offset.SaveYAML(p.config.OffsetsFile, p.offInfo); err != nil {
-		stats.GetCounter(subsystemName, offsetErrors).Inc()
+		metric.GetCounter(subsystemName, offsetErrors).Inc()
 		p.params.Logger.Error("can't save offset file: %s", err.Error())
 	}
 }
@@ -129,7 +129,7 @@ func (p *Plugin) Commit(event *pipeline.Event) {
 	p.offInfo.set(event.Root.Dig("__CURSOR").AsString())
 
 	if err := offset.SaveYAML(p.config.OffsetsFile, p.offInfo); err != nil {
-		stats.GetCounter(subsystemName, offsetErrors).Inc()
+		metric.GetCounter(subsystemName, offsetErrors).Inc()
 		p.params.Logger.Error("can't save offset file: %s", err.Error())
 	}
 }
