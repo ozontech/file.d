@@ -40,7 +40,6 @@ const (
 	metricsGenInterval      = time.Hour
 
 	workEventsGauge         = "work_events"
-	waitEventsGauge         = "wait_events"
 	inputEventsCountMetric  = "input_events_count"
 	inputEventsSizeMetric   = "input_events_size"
 	outputEventsCountMetric = "output_events_count"
@@ -584,7 +583,7 @@ func (p *Pipeline) logChanges(myDeltas *deltas) {
 
 	workEventValue, err := p.GetValueGauge(p.eventPool.subsystemName(), workEventsGauge)
 	if err != nil {
-		p.logger.Infof("failed to get workEventValue: " + err.Error())
+		p.logger.Infof("failed to get workEventValue: %s", err.Error())
 	}
 	p.logger.Infof(`%q pipeline stats interval=%ds, active procs=%d/%d, events in pool=%d/%d, events outside pool=%d/%d, out=%d|%.1fMb,`+
 		`rate=%d/s|%.1fMb/s, read ops=%d/s, total=%d|%.1fMb, avg size=%d, max size=%d`,
