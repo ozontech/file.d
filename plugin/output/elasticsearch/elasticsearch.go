@@ -51,6 +51,7 @@ type Plugin struct {
 	authHeader   []byte
 	avgEventSize int
 	time         string
+	headerPrefix string
 	batcher      *pipeline.Batcher
 	controller   pipeline.OutputPluginController
 	mu           *sync.Mutex
@@ -124,9 +125,22 @@ type Config struct {
 
 	//> @3@4@5@6
 	//>
+	//> A minimum size of events in a batch to send.
+	//> If both batch_size and batch_size_bytes are set, they will work together.
+	BatchSizeBytes  cfg.Expression `json:"batch_size_bytes" default:"0" parse:"expression"` //*
+	BatchSizeBytes_ int
+
+	//> @3@4@5@6
+	//>
 	//> After this timeout batch will be sent even if batch isn't full.
 	BatchFlushTimeout  cfg.Duration `json:"batch_flush_timeout" default:"200ms" parse:"duration"` //*
 	BatchFlushTimeout_ time.Duration
+
+	//> @3@4@5@6
+	//>
+	//> Operation type to be used in batch requests. It can be `index` or `create`. Default is `index`.
+	//> > Check out [_bulk API doc](https://www.elastic.co/guide/en/elasticsearch/reference/current/docs-bulk.html) for details.
+	BatchOpType string `json:"batch_op_type" default:"index" options:"index|create"` //*
 }
 
 type data struct {
@@ -150,6 +164,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.avgEventSize = params.PipelineSettings.AvgEventSize
 	p.config = config.(*Config)
 	p.mu = &sync.Mutex{}
+	p.headerPrefix = `{"` + p.config.BatchOpType + `":{"_index":"`
 
 	if len(p.config.IndexValues) == 0 {
 		p.config.IndexValues = append(p.config.IndexValues, "@time")
@@ -190,17 +205,18 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.registerPluginMetrics()
 
 	p.logger.Infof("starting batcher: timeout=%d", p.config.BatchFlushTimeout_)
-	p.batcher = pipeline.NewBatcher(
-		params.PipelineName,
-		outPluginType,
-		p.out,
-		p.maintenance,
-		p.controller,
-		p.config.WorkersCount_,
-		p.config.BatchSize_,
-		p.config.BatchFlushTimeout_,
-		time.Minute,
-	)
+	p.batcher = pipeline.NewBatcher(pipeline.BatcherOptions{
+		PipelineName:        params.PipelineName,
+		OutputType:          outPluginType,
+		OutFn:               p.out,
+		MaintenanceFn:       p.maintenance,
+		Controller:          p.controller,
+		Workers:             p.config.WorkersCount_,
+		BatchSizeCount:      p.config.BatchSize_,
+		BatchSizeBytes:      p.config.BatchSizeBytes_,
+		FlushTimeout:        p.config.BatchFlushTimeout_,
+		MaintenanceInterval: time.Minute,
+	})
 
 	ctx, cancel := context.WithCancel(context.Background())
 	p.cancel = cancel
@@ -323,7 +339,7 @@ func (p *Plugin) appendEvent(outBuf []byte, event *pipeline.Event) []byte {
 }
 
 func (p *Plugin) appendIndexName(outBuf []byte, event *pipeline.Event) []byte {
-	outBuf = append(outBuf, `{"index":{"_index":"`...)
+	outBuf = append(outBuf, p.headerPrefix...)
 	replacements := 0
 	for _, c := range pipeline.StringToByteUnsafe(p.config.IndexFormat) {
 		if c != '%' {

@@ -71,6 +71,13 @@ Maximum quantity of events to pack into one batch.
 **`batch_size`** 
 <br>
 
+**`batch_size_bytes`** *`cfg.Expression`* *`default=0`* 
+
+A minimum size of events in a batch to send.
+If both batch_size and batch_size_bytes are set, they will work together.
+
+<br>
+
 **`batch_flush_timeout`** *`cfg.Duration`* *`default=200ms`* 
 
 After this timeout batch will be sent even if batch isn't completed.

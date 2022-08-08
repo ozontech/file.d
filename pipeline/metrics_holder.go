@@ -6,10 +6,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ozontech/file.d/buildinfo"
+
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/atomic"
-
-	appVer "github.com/ozontech/file.d/version"
 )
 
 const PromNamespace = "file_d"
@@ -88,7 +88,7 @@ func (c *counter) unregister(registry *prometheus.Registry) {
 }
 
 func (m *metricsHolder) nextMetricsGen() {
-	metricsGen := strconv.Itoa(m.metricsGen)
+	metricsGen := strconv.Itoa(m.metricsGen % 3) // 2 (for key variance) + 1 (since we must register first) == 3
 	for index, metrics := range m.metrics {
 		if metrics.name == "" {
 			continue
@@ -103,7 +103,7 @@ func (m *metricsHolder) nextMetricsGen() {
 			Subsystem:   "pipeline_" + m.pipelineName,
 			Name:        metrics.name + "_events_count_total",
 			Help:        fmt.Sprintf("how many events processed by pipeline %q and #%d action", m.pipelineName, index),
-			ConstLabels: map[string]string{"gen": metricsGen, "version": appVer.AppVersion},
+			ConstLabels: map[string]string{"gen": metricsGen, "version": buildinfo.Version},
 		}
 		cnt.count = prometheus.NewCounterVec(opts, append([]string{"status"}, metrics.labels...))
 		opts = prometheus.CounterOpts{
@@ -111,7 +111,7 @@ func (m *metricsHolder) nextMetricsGen() {
 			Subsystem:   "pipeline_" + m.pipelineName,
 			Name:        metrics.name + "_events_size_total",
 			Help:        fmt.Sprintf("total size of events processed by pipeline %q and #%d action", m.pipelineName, index),
-			ConstLabels: map[string]string{"gen": metricsGen, "version": appVer.AppVersion},
+			ConstLabels: map[string]string{"gen": metricsGen, "version": buildinfo.Version},
 		}
 		cnt.size = prometheus.NewCounterVec(opts, append([]string{"status"}, metrics.labels...))
 
