@@ -1,6 +1,7 @@
 package cfg
 
 import (
+	"errors"
 	"os"
 	"testing"
 	"time"
@@ -46,6 +47,11 @@ type strOptions struct {
 type strExpression struct {
 	T  string `parse:"expression"`
 	T_ int
+}
+
+type strDataUnit struct {
+	T  string `parse:"data_unit"`
+	T_ uint
 }
 
 type hierarchyChild struct {
@@ -137,6 +143,129 @@ func TestParseExpressionConst(t *testing.T) {
 
 	assert.Nil(t, err, "shouldn't be an error")
 	assert.Equal(t, 10, s.T_, "wrong value")
+}
+
+func TestParseDataUnitInvalid(t *testing.T) {
+	TestList := []struct {
+		strDataUnit   *strDataUnit
+		ExpectedError error
+		ExpectedValue uint
+	}{
+		{
+			strDataUnit:   &strDataUnit{T: "10"},
+			ExpectedError: errors.New("invalid data format, the string must contain 2 parts separated by a space"),
+			ExpectedValue: 0,
+		},
+		{
+			strDataUnit:   &strDataUnit{T: " 10"},
+			ExpectedError: errors.New(`can't parse uint: "" is not a number`),
+			ExpectedValue: 0,
+		},
+		{
+			strDataUnit:   &strDataUnit{T: "10 "},
+			ExpectedError: errors.New(`unexpected alias ""`),
+			ExpectedValue: 0,
+		},
+		{
+			strDataUnit:   &strDataUnit{T: " 1 MB"},
+			ExpectedError: errors.New("invalid data format, the string must contain 2 parts separated by a space"),
+			ExpectedValue: 0,
+		},
+		{
+			strDataUnit:   &strDataUnit{T: " MB"},
+			ExpectedError: errors.New(`can't parse uint: "" is not a number`),
+			ExpectedValue: 0,
+		},
+		{
+			strDataUnit:   &strDataUnit{T: "MB "},
+			ExpectedError: errors.New(`can't parse uint: "MB" is not a number`),
+			ExpectedValue: 0,
+		},
+		{
+			strDataUnit:   &strDataUnit{T: "10 "},
+			ExpectedError: errors.New(`unexpected alias ""`),
+			ExpectedValue: 0,
+		},
+		{
+			strDataUnit:   &strDataUnit{T: "something"},
+			ExpectedError: errors.New("invalid data format, the string must contain 2 parts separated by a space"),
+			ExpectedValue: 0,
+		},
+		{
+			strDataUnit:   &strDataUnit{T: "some thing"},
+			ExpectedError: errors.New(`can't parse uint: "some" is not a number`),
+			ExpectedValue: 0,
+		},
+		{
+			strDataUnit:   &strDataUnit{T: ""},
+			ExpectedError: errors.New("invalid data format, the string must contain 2 parts separated by a space"),
+			ExpectedValue: 0,
+		},
+		{
+			strDataUnit:   &strDataUnit{T: "999999999999999999999 B"},
+			ExpectedError: errors.New(`can't parse uint: "999999999999999999999" is not a number`),
+			ExpectedValue: 0,
+		},
+		{
+			strDataUnit:   &strDataUnit{T: "1  B"},
+			ExpectedError: errors.New("invalid data format, the string must contain 2 parts separated by a space"),
+			ExpectedValue: 0,
+		},
+		{
+			strDataUnit:   &strDataUnit{T: "1 B "},
+			ExpectedError: errors.New("invalid data format, the string must contain 2 parts separated by a space"),
+			ExpectedValue: 0,
+		},
+		{
+			strDataUnit:   &strDataUnit{T: "-1 PB"},
+			ExpectedError: errors.New("value must be positive"),
+			ExpectedValue: 0,
+		},
+		// TODO: handle uint overflow situation
+		//{
+		//	strDataUnit:       &strDataUnit{T: "100000000000 PB"},
+		//	ExpectedError: errors.New("uint overflowed on product 100000000000 and PB"),
+		//	ExpectedValue: 0,
+		//},
+	}
+	for i := range TestList {
+		err := Parse(TestList[i].strDataUnit, nil)
+		assert.Equal(t, TestList[i].ExpectedError, err, "wrong error")
+		assert.Equal(t, uint(0), TestList[i].strDataUnit.T_, "wrong value")
+	}
+}
+
+func TestParseDataUnitValid(t *testing.T) {
+	TestList := []struct {
+		strDataUnit   *strDataUnit
+		ExpectedValue uint
+	}{
+		{
+			strDataUnit:   &strDataUnit{T: "10 MB"},
+			ExpectedValue: 10000000,
+		},
+		{
+			strDataUnit:   &strDataUnit{T: "10 mB"},
+			ExpectedValue: 10000000,
+		},
+		{
+			strDataUnit:   &strDataUnit{T: "10 Mb"},
+			ExpectedValue: 10000000,
+		},
+		{
+			strDataUnit:   &strDataUnit{T: "10 mb"},
+			ExpectedValue: 10000000,
+		},
+		{
+			strDataUnit:   &strDataUnit{T: "1 B"},
+			ExpectedValue: 1,
+		},
+	}
+	for i := range TestList {
+		err := Parse(TestList[i].strDataUnit, nil)
+		assert.Nil(t, err, "shouldn't be an error")
+		assert.Equal(t, TestList[i].ExpectedValue, TestList[i].strDataUnit.T_, "wrong value")
+	}
 }
 
 func TestParseFieldSelectorSimple(t *testing.T) {

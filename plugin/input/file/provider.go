@@ -11,6 +11,7 @@ import (
 
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/longpanic"
+	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/rjeczalik/notify"
 	"go.uber.org/atomic"
@@ -193,6 +194,7 @@ func (jp *jobProvider) commit(event *pipeline.Event) {
 	}
 
 	if value == 0 && event.Offset >= 16*1024*1024 {
+		metric.GetCounter(subsystemName, possibleOffsetCorruptionCounter).Inc()
 		jp.logger.Errorf("it maybe an offset corruption: committing=%d, current=%d, event id=%d, source=%d:%s", event.Offset, value, event.SeqID, event.SourceID, event.SourceName)
 	}
 

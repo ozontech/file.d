@@ -6,6 +6,7 @@ import (
 
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
+	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
 	"go.uber.org/zap"
 )
@@ -42,6 +43,11 @@ pipelines:
         persistence_mode: async
 ```
 }*/
+
+const (
+	subsystemName                   = "input_file"
+	possibleOffsetCorruptionCounter = "possible_offset_corruptions_total"
+)
 
 type Plugin struct {
 	config *Config
@@ -183,6 +189,8 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	p.params = params
 	p.config = config.(*Config)
 
+	p.registerPluginMetrics()
+
 	p.config.OffsetsFileTmp = p.config.OffsetsFile + ".atomic"
 
 	p.jobProvider = NewJobProvider(p.config, p.params.Controller, p.logger)
@@ -191,6 +199,14 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 
 	p.startWorkers()
 	p.jobProvider.start()
+}
+
+func (p *Plugin) registerPluginMetrics() {
+	metric.RegisterCounter(&metric.MetricDesc{
+		Subsystem: subsystemName,
+		Name:      possibleOffsetCorruptionCounter,
+		Help:      "Total number of possible offset corruptions",
+	})
 }
 
 func (p *Plugin) startWorkers() {

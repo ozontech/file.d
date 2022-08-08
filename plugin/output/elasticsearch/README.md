@@ -74,9 +74,23 @@ A maximum quantity of events to pack into one batch.
 
 <br>
 
+**`batch_size_bytes`** *`cfg.Expression`* *`default=0`* 
+
+A minimum size of events in a batch to send.
+If both batch_size and batch_size_bytes are set, they will work together.
+
+<br>
+
 **`batch_flush_timeout`** *`cfg.Duration`* *`default=200ms`* 
 
 After this timeout batch will be sent even if batch isn't full.
+
+<br>
+
+**`batch_op_type`** *`string`* *`default=index`* *`options=index|create`* 
+
+Operation type to be used in batch requests. It can be `index` or `create`. Default is `index`.
+> Check out [_bulk API doc](https://www.elastic.co/guide/en/elasticsearch/reference/current/docs-bulk.html) for details.
 
 <br>
 

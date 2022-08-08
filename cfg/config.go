@@ -448,6 +448,25 @@ func ParseField(v reflect.Value, vField reflect.Value, tField reflect.StructFiel
 			}
 			finalField.SetInt(int64(value))
 
+		case "data_unit":
+			parts := strings.Split(vField.String(), " ")
+			if len(parts) != 2 {
+				return fmt.Errorf("invalid data format, the string must contain 2 parts separated by a space")
+			}
+			value, err := strconv.Atoi(parts[0])
+			if err != nil {
+				return fmt.Errorf(`can't parse uint: "%s" is not a number`, parts[0])
+			}
+			if value < 0 {
+				return fmt.Errorf("value must be positive")
+			}
+			alias := strings.ToLower(strings.TrimSpace(parts[1]))
+			if multiplier, ok := DataUnitAliases[alias]; ok {
+				finalField.SetUint(uint64(value * multiplier))
+			} else {
+				return fmt.Errorf(`unexpected alias "%s"`, alias)
+			}
+
 		default:
 			return fmt.Errorf("unsupported parse type %q for field %s", tag, tField.Name)
 		}
