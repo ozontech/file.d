@@ -13,11 +13,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ozontech/file.d/pipeline"
-	"github.com/stretchr/testify/require"
-
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
+	"github.com/ozontech/file.d/pipeline"
 	_ "github.com/ozontech/file.d/plugin/action/discard"
 	_ "github.com/ozontech/file.d/plugin/action/json_decode"
 	_ "github.com/ozontech/file.d/plugin/action/keep_fields"
@@ -29,6 +27,7 @@ import (
 	_ "github.com/ozontech/file.d/plugin/output/devnull"
 	_ "github.com/ozontech/file.d/plugin/output/kafka"
 	uuid "github.com/satori/go.uuid"
+	"github.com/stretchr/testify/require"
 )
 
 var (

@@ -49,7 +49,7 @@ type pgType int
 
 const (
 	// minimum required types for now.
-	_ pgType = iota
+	unknownType pgType = iota
 	pgString
 	pgInt
 	pgTimestamp
@@ -269,21 +269,20 @@ func (p *Plugin) out(_ *pipeline.WorkerData, batch *pipeline.Batch) {
 	for _, event := range batch.Events {
 		fieldValues, uniqueID, err := p.processEvent(event, pgFields, uniqFields)
 		if err != nil {
-			switch {
-			case errors.Is(err, ErrEventDoesntHaveField):
+			if errors.Is(err, ErrEventDoesntHaveField) {
 				metric.GetCounter(subsystemName, discardedEventCounter).Inc()
 				if p.config.Strict {
 					p.logger.Fatal(err)
 				}
 				p.logger.Error(err)
-			case errors.Is(err, ErrEventFieldHasWrongType):
+			} else if errors.Is(err, ErrEventFieldHasWrongType) {
 				metric.GetCounter(subsystemName, discardedEventCounter).Inc()
 				if p.config.Strict {
 					p.logger.Fatal(err)
 				}
 				p.logger.Error(err)
-			case err != nil: // protection from foolproof.
-				p.logger.Fatalf("undefined error: %v", err)
+			} else if err != nil { // protection from foolproof.
+				p.logger.Fatalf("undefined error: %w", err)
 			}
 
 			continue
@@ -399,6 +398,8 @@ func (p *Plugin) addFieldToValues(field column, sNode *insaneJSON.StrictNode) (i
 			return nil, fmt.Errorf("%w, can't get %s as timestamp, err: %s", ErrEventFieldHasWrongType, field.Name, err.Error())
 		}
 		return time.Unix(int64(tint), 0).Format(time.RFC3339), nil
+	case unknownType:
+		fallthrough
 	default:
 		return nil, fmt.Errorf("%w, undefined col type: %d, col name: %s", ErrEventFieldHasWrongType, field.ColType, field.Name)
 	}

@@ -3,6 +3,7 @@ package s3
 import (
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"math"
 	"math/rand"
 	"os"
@@ -31,8 +32,7 @@ If appears we try to send event to this bucket instead of described here.
 > ⚠ Currently bucket names for bucket and multi_buckets can't intersect.
 
 > ⚠ If dynamic bucket moved to config it can leave some not send data behind.
-> To send this data to s3 move bucket dir from /var/log/dynamic_buckets/bucketName to
-/var/log/static_buckets/bucketName (/var/log is default path)
+> To send this data to s3 move bucket dir from /var/log/dynamic_buckets/bucketName to /var/log/static_buckets/bucketName (/var/log is default path)
 > and restart file.d
 
 **Example**
@@ -102,20 +102,21 @@ pipelines:
 }*/
 
 const (
-	outPluginType     = "s3"
-	subsystemName     = "output_s3"
-	fileNameSeparator = "_"
-	attemptInterval   = 1 * time.Second
-	dirSep            = "/"
-	StaticBucketDir   = "static_buckets"
-	DynamicBucketDir  = "dynamic_buckets"
+	outPluginType      = "s3"
+	subsystemName      = "output_s3"
+	fileNameSeparator  = "_"
+	attemptIntervalMin = 1 * time.Second
+	dirSep             = "/"
+	StaticBucketDir    = "static_buckets"
+	DynamicBucketDir   = "dynamic_buckets"
 
 	// errors
 	sendErrorCounter = "send_error"
 )
 
 var (
-	compressors = map[string]func(*zap.SugaredLogger) compressor{
+	attemptInterval = attemptIntervalMin
+	compressors     = map[string]func(*zap.SugaredLogger) compressor{
 		zipName: newZipCompressor,
 	}
 
@@ -220,8 +221,7 @@ func (c *Config) IsMultiBucketExists(bucketName string) bool {
 		return false
 	}
 
-	for i := range c.MultiBuckets {
-		bucket := c.MultiBuckets[i]
+	for _, bucket := range c.MultiBuckets {
 		if bucketName == bucket.Bucket {
 			return true
 		}
@@ -347,7 +347,7 @@ func (p *Plugin) getDynamicDirsArtifacts(targetDirs map[string]string) map[strin
 	dynamicDirs := make(map[string]string)
 
 	dynamicDirsPath := filepath.Join(targetDirs[p.config.DefaultBucket], DynamicBucketDir)
-	dynamicDir, err := os.ReadDir(dynamicDirsPath)
+	dynamicDir, err := ioutil.ReadDir(dynamicDirsPath)
 	// If no such dir, no dynamic dirs existed.
 	if err != nil {
 		return nil
@@ -456,8 +456,7 @@ func (p *Plugin) uploadExistingFiles(targetDirs, dynamicDirs, fileNames map[stri
 
 // compressFilesInDir compresses all files in dir
 func (p *Plugin) compressFilesInDir(bucketName string, targetDirs, fileNames map[string]string) {
-	pattern := fmt.Sprintf("%s/%s%s*%s*%s", targetDirs[bucketName], fileNames[bucketName],
-		fileNameSeparator, fileNameSeparator, p.fileExtension)
+	pattern := fmt.Sprintf("%s/%s%s*%s*%s", targetDirs[bucketName], fileNames[bucketName], fileNameSeparator, fileNameSeparator, p.fileExtension)
 	files, err := filepath.Glob(pattern)
 	if err != nil {
 		p.logger.Panicf("could not read dir: %s", targetDirs[bucketName])

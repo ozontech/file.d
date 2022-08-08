@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/ozontech/file.d/buildinfo"
-
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/atomic"
 )

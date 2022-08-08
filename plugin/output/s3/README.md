@@ -7,8 +7,7 @@ If appears we try to send event to this bucket instead of described here.
 > ⚠ Currently bucket names for bucket and multi_buckets can't intersect.
 
 > ⚠ If dynamic bucket moved to config it can leave some not send data behind.
-> To send this data to s3 move bucket dir from /var/log/dynamic_buckets/bucketName to
-/var/log/static_buckets/bucketName (/var/log is default path)
+> To send this data to s3 move bucket dir from /var/log/dynamic_buckets/bucketName to /var/log/static_buckets/bucketName (/var/log is default path)
 > and restart file.d
 
 **Example**

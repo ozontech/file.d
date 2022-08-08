@@ -311,7 +311,7 @@ func (p *Plugin) send(body []byte) error {
 		for _, node := range root.Dig("items").AsArray() {
 			errNode := node.Dig("index", "error")
 			if errNode != nil {
-				errors++
+				errors += 1
 				p.logger.Errorf("indexing error: %s", errNode.EncodeToString())
 			}
 		}

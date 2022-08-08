@@ -18,7 +18,6 @@ jobs:
           - amd64
         runner:
           - ubuntu-latest
-          - macos-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v3

@@ -43,7 +43,7 @@ func TestAppendEvent(t *testing.T) {
 }
 
 func TestAppendEventWithIndexOpType(t *testing.T) {
-	stats.InitStats()
+	metric.InitStats()
 	p := &Plugin{}
 	config := &Config{
 		Endpoints:   []string{"test"},
@@ -71,7 +71,7 @@ func TestAppendEventWithIndexOpType(t *testing.T) {
 }
 
 func TestAppendEventWithCreateOpType(t *testing.T) {
-	stats.InitStats()
+	metric.InitStats()
 	p := &Plugin{}
 	config := &Config{
 		Endpoints:   []string{"test"},
