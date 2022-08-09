@@ -12,8 +12,6 @@ import (
 	"github.com/ozontech/file.d/logger"
 )
 
-var eventSizeGCThreshold = 4 * 1024
-
 type Event struct {
 	kind atomic.Int32
 
@@ -87,8 +85,8 @@ func unlockEvent(stream *stream) *Event {
 	return event
 }
 
-func (e *Event) reset() {
-	if e.Size > eventSizeGCThreshold {
+func (e *Event) reset(avgEventSize int) {
+	if e.Size > avgEventSize {
 		e.Root.ReleaseBufMem()
 	}
 
@@ -197,6 +195,7 @@ func (e *Event) String() string {
 type eventPool struct {
 	capacity int
 
+	avgEventSize    int
 	freeEventsCount int
 	getCounter      atomic.Int64
 	backCounter     atomic.Int64
@@ -208,8 +207,9 @@ type eventPool struct {
 	getCond *sync.Cond
 }
 
-func newEventPool(capacity int) *eventPool {
+func newEventPool(capacity, avgEventSize int) *eventPool {
 	eventPool := &eventPool{
+		avgEventSize:    avgEventSize,
 		capacity:        capacity,
 		freeEventsCount: capacity,
 		getMu:           &sync.Mutex{},
@@ -261,7 +261,7 @@ func (p *eventPool) get() *Event {
 	p.events[x] = nil
 	p.free2[x].Store(false)
 
-	event.reset()
+	event.reset(p.avgEventSize)
 	return event
 }
 
