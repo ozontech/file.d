@@ -87,6 +87,6 @@ lint:
 .PHONY: mock
 mock:
 	@go get github.com/golang/mock/gomock
-	@go install github.com/golang/mock/mockgen
-	@~/go/bin/mockgen -source=plugin/output/s3/s3.go -destination=plugin/output/s3/mock/s3.go
-	@~/go/bin/mockgen -source=plugin/output/postgres/postgres.go -destination=plugin/output/postgres/mock/postgres.go
+	@mockgen -source=plugin/output/s3/structs.go -destination=plugin/output/s3/mock/s3.go
+	@mockgen -source=plugin/output/postgres/postgres.go -destination=plugin/output/postgres/mock/postgres.go
+	@mockgen -source=pipeline/plugin.go -destination=pipeline/mocks/pipeline_plugin_mock/plugin_mock.go -package=pipeline_plugin_mock

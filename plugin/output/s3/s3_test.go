@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"go.uber.org/atomic"
+
 	"github.com/golang/mock/gomock"
 	"github.com/minio/minio-go"
 	"github.com/ozontech/file.d/cfg"
@@ -21,7 +23,6 @@ import (
 	"github.com/ozontech/file.d/test"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
-	"go.uber.org/atomic"
 	"golang.org/x/net/context"
 )
 
@@ -42,7 +43,7 @@ type testS3Plugin struct {
 }
 
 func (p *testS3Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginParams) {
-	p.StartWithMinio(config, params, p.objStoreF)
+	p.StartInner(config, params, p.objStoreF)
 }
 
 func fPutObjectOk(bucketName, objectName, filePath string, opts minio.PutObjectOptions) (n int64, err error) {
