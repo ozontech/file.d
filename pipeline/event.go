@@ -13,8 +13,6 @@ import (
 	"github.com/ozontech/file.d/stats"
 )
 
-var eventSizeGCThreshold = 4 * 1024
-
 type Event struct {
 	kind atomic.Int32
 
@@ -88,8 +86,8 @@ func unlockEvent(stream *stream) *Event {
 	return event
 }
 
-func (e *Event) reset() {
-	if e.Size > eventSizeGCThreshold {
+func (e *Event) reset(avgEventSize int) {
+	if e.Size > avgEventSize {
 		e.Root.ReleaseBufMem()
 	}
 
@@ -199,22 +197,26 @@ type eventPool struct {
 	capacity     int
 	pipelineName string
 
-	getCounter  atomic.Int64
-	backCounter atomic.Int64
-	events      []*Event
-	free1       []atomic.Bool
-	free2       []atomic.Bool
+	avgEventSize    int
+	freeEventsCount int
+	getCounter      atomic.Int64
+	backCounter     atomic.Int64
+	events          []*Event
+	free1           []atomic.Bool
+	free2           []atomic.Bool
 
 	getMu   *sync.Mutex
 	getCond *sync.Cond
 }
 
-func newEventPool(capacity int, pipelineName string) *eventPool {
+func newEventPool(capacity, avgEventSize int,  pipelineName string) *eventPool {
 	eventPool := &eventPool{
-		capacity:     capacity,
+		avgEventSize:    avgEventSize,
 		pipelineName: pipelineName,
-		getMu:        &sync.Mutex{},
-		backCounter:  *atomic.NewInt64(int64(capacity)),
+		capacity:        capacity,
+		freeEventsCount: capacity,
+		getMu:           &sync.Mutex{},
+		backCounter:     *atomic.NewInt64(int64(capacity)),
 	}
 
 	eventPool.registerMetrics()
@@ -263,7 +265,7 @@ func (p *eventPool) get() *Event {
 	p.events[x] = nil
 	p.free2[x].Store(false)
 	stats.GetGauge(p.subsystemName(), workEventsGauge).Inc()
-	event.reset()
+	event.reset(p.avgEventSize)
 	return event
 }
 

@@ -9,16 +9,15 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ozontech/file.d/cfg"
+	"github.com/ozontech/file.d/fd"
+	"github.com/ozontech/file.d/logger"
+	"github.com/ozontech/file.d/metric"
+	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/tls"
 	"github.com/valyala/fasthttp"
 	insaneJSON "github.com/vitkovskii/insane-json"
 	"go.uber.org/zap"
-
-	"github.com/ozontech/file.d/cfg"
-	"github.com/ozontech/file.d/fd"
-	"github.com/ozontech/file.d/logger"
-	"github.com/ozontech/file.d/pipeline"
-	"github.com/ozontech/file.d/stats"
 )
 
 /*{ introduction
@@ -52,6 +51,7 @@ type Plugin struct {
 	authHeader   []byte
 	avgEventSize int
 	time         string
+	headerPrefix string
 	batcher      *pipeline.Batcher
 	controller   pipeline.OutputPluginController
 	mu           *sync.Mutex
@@ -135,6 +135,12 @@ type Config struct {
 	//> After this timeout batch will be sent even if batch isn't full.
 	BatchFlushTimeout  cfg.Duration `json:"batch_flush_timeout" default:"200ms" parse:"duration"` //*
 	BatchFlushTimeout_ time.Duration
+
+	//> @3@4@5@6
+	//>
+	//> Operation type to be used in batch requests. It can be `index` or `create`. Default is `index`.
+	//> > Check out [_bulk API doc](https://www.elastic.co/guide/en/elasticsearch/reference/current/docs-bulk.html) for details.
+	BatchOpType string `json:"batch_op_type" default:"index" options:"index|create"` //*
 }
 
 type data struct {
@@ -158,6 +164,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.avgEventSize = params.PipelineSettings.AvgEventSize
 	p.config = config.(*Config)
 	p.mu = &sync.Mutex{}
+	p.headerPrefix = `{"` + p.config.BatchOpType + `":{"_index":"`
 
 	if len(p.config.IndexValues) == 0 {
 		p.config.IndexValues = append(p.config.IndexValues, "@time")
@@ -227,13 +234,13 @@ func (p *Plugin) Out(event *pipeline.Event) {
 }
 
 func (p *Plugin) registerPluginMetrics() {
-	stats.RegisterCounter(&stats.MetricDesc{
+	metric.RegisterCounter(&metric.MetricDesc{
 		Name:      sendErrorCounter,
 		Subsystem: subsystemName,
 		Help:      "Total elasticsearch send errors",
 	})
 
-	stats.RegisterCounter(&stats.MetricDesc{
+	metric.RegisterCounter(&metric.MetricDesc{
 		Name:      indexingErrors,
 		Subsystem: subsystemName,
 		Help:      "Number of elasticsearch indexing errors",
@@ -260,7 +267,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 
 	for {
 		if err := p.send(data.outBuf); err != nil {
-			stats.GetCounter(subsystemName, sendErrorCounter).Inc()
+			metric.GetCounter(subsystemName, sendErrorCounter).Inc()
 			p.logger.Errorf("can't send to the elastic, will try other endpoint: %s", err.Error())
 		} else {
 			break
@@ -310,7 +317,7 @@ func (p *Plugin) send(body []byte) error {
 		}
 
 		if errors != 0 {
-			stats.GetCounter(subsystemName, indexingErrors).Add(float64(errors))
+			metric.GetCounter(subsystemName, indexingErrors).Add(float64(errors))
 		}
 
 		p.controller.Error("some events from batch aren't written")
@@ -332,7 +339,7 @@ func (p *Plugin) appendEvent(outBuf []byte, event *pipeline.Event) []byte {
 }
 
 func (p *Plugin) appendIndexName(outBuf []byte, event *pipeline.Event) []byte {
-	outBuf = append(outBuf, `{"index":{"_index":"`...)
+	outBuf = append(outBuf, p.headerPrefix...)
 	replacements := 0
 	for _, c := range pipeline.StringToByteUnsafe(p.config.IndexFormat) {
 		if c != '%' {

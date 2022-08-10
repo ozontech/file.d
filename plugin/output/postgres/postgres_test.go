@@ -11,15 +11,15 @@ import (
 	"github.com/jackc/pgconn"
 	"github.com/jackc/pgproto3/v2"
 	"github.com/ozontech/file.d/logger"
+	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
 	mock_pg "github.com/ozontech/file.d/plugin/output/postgres/mock"
-	"github.com/ozontech/file.d/stats"
 	"github.com/stretchr/testify/require"
 	insaneJSON "github.com/vitkovskii/insane-json"
 )
 
 func TestPrivateOut(t *testing.T) {
-	stats.InitStats()
+	metric.InitStats()
 
 	testLogger := logger.Instance
 
@@ -98,7 +98,7 @@ func TestPrivateOut(t *testing.T) {
 }
 
 func TestPrivateOutWithRetry(t *testing.T) {
-	stats.InitStats()
+	metric.InitStats()
 
 	testLogger := logger.Instance
 
@@ -175,7 +175,7 @@ func TestPrivateOutWithRetry(t *testing.T) {
 }
 
 func TestPrivateOutNoGoodEvents(t *testing.T) {
-	stats.InitStats()
+	metric.InitStats()
 
 	testLogger := logger.Instance
 
@@ -230,7 +230,7 @@ func TestPrivateOutNoGoodEvents(t *testing.T) {
 }
 
 func TestPrivateOutDeduplicatedEvents(t *testing.T) {
-	stats.InitStats()
+	metric.InitStats()
 
 	testLogger := logger.Instance
 
@@ -316,7 +316,7 @@ func TestPrivateOutDeduplicatedEvents(t *testing.T) {
 }
 
 func TestPrivateOutWrongTypeInField(t *testing.T) {
-	stats.InitStats()
+	metric.InitStats()
 
 	testLogger := logger.Instance
 
@@ -380,7 +380,7 @@ func TestPrivateOutWrongTypeInField(t *testing.T) {
 }
 
 func TestPrivateOutFewUniqueEventsYetWithDeduplicationEventsAnpooladEvents(t *testing.T) {
-	stats.InitStats()
+	metric.InitStats()
 
 	testLogger := logger.Instance
 

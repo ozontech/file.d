@@ -13,7 +13,7 @@ import (
 func TestEventPoolDump(t *testing.T) {
 	stats.InitStats()
 
-	eventPool := newEventPool(2, "")
+	eventPool := newEventPool(2, DefaultAvgInputEventSize, "")
 	e := eventPool.get()
 	defer eventPool.back(e)
 
@@ -26,7 +26,7 @@ func BenchmarkEventPoolOneGoroutine(b *testing.B) {
 	const capacity = 32
 	stats.InitStats()
 
-	p := newEventPool(capacity, "")
+	p := newEventPool(2, DefaultAvgInputEventSize, "")
 
 	for i := 0; i < b.N; i++ {
 		p.back(p.get())
@@ -37,7 +37,7 @@ func BenchmarkEventPoolManyGoroutines(b *testing.B) {
 	const capacity = 32
 	stats.InitStats()
 
-	p := newEventPool(capacity, "")
+	p := newEventPool(2, DefaultAvgInputEventSize, "")
 
 	for i := 0; i < b.N; i++ {
 		wg := &sync.WaitGroup{}
@@ -58,7 +58,7 @@ func BenchmarkEventPoolSlowestPath(b *testing.B) {
 	const capacity = 32
 	stats.InitStats()
 
-	p := newEventPool(capacity, "")
+	p := newEventPool(2, DefaultAvgInputEventSize, "")
 
 	for i := 0; i < b.N; i++ {
 		wg := &sync.WaitGroup{}

@@ -1,9 +1,9 @@
-package stats
+// Package metric contains utilities for creating and getting file.d metric.
+package metric
 
 import (
 	"github.com/ozontech/file.d/buildinfo"
 	"github.com/ozontech/file.d/logger"
-
 	prom "github.com/prometheus/client_golang/prometheus"
 )
 
@@ -45,7 +45,7 @@ var statsGlobal *stats
 
 func InitStats() {
 	if statsGlobal != nil {
-		logger.Error("attempt to initialize stats more than once")
+		logger.Error("attempt to initialize metric more than once")
 		return
 	}
 
@@ -162,6 +162,6 @@ func getKey(subsystem, metricName string) key {
 
 func checkStatsInitialized() {
 	if statsGlobal == nil {
-		logger.Panicf("stats package uninitialized")
+		logger.Panicf("metric package uninitialized")
 	}
 }
