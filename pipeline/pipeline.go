@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
-	io_prometheus_client "github.com/prometheus/client_model/go"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
 
@@ -592,6 +591,7 @@ type deltas struct {
 func (p *Pipeline) logChanges(myDeltas *deltas) {
 	inputSize := p.inputSize.Load()
 	inputEvents := p.inputEvents.Load()
+	workEventValue := p.eventPool.workEventPool.Load()
 
 	interval := p.settings.MaintenanceInterval
 	rate := int(myDeltas.deltaInputEvents * float64(time.Second) / float64(interval))
@@ -599,25 +599,12 @@ func (p *Pipeline) logChanges(myDeltas *deltas) {
 	readOps := int(myDeltas.deltaReads * float64(time.Second) / float64(interval))
 	tc := int64(math.Max(float64(inputSize), 1))
 
-	workEventValue, err := p.GetValueGauge(p.eventPool.subsystemName(), workEventsGauge)
-	if err != nil {
-		p.logger.Infof("failed to get workEventValue: %s", err.Error())
-	}
 	p.logger.Infof(`%q pipeline stats interval=%ds, active procs=%d/%d, events in pool=%d/%d, events outside pool=%d/%d, out=%d|%.1fMb,`+
 		`rate=%d/s|%.1fMb/s, read ops=%d/s, total=%d|%.1fMb, avg size=%d, max size=%d`,
 		p.Name, interval/time.Second, p.activeProcs.Load(), p.procCount.Load(),
-		workEventValue, p.settings.Capacity, p.settings.Capacity-workEventValue, p.settings.Capacity,
+		workEventValue, p.settings.Capacity, p.settings.Capacity-int(workEventValue), p.settings.Capacity,
 		int64(myDeltas.deltaInputEvents), float64(myDeltas.deltaInputSize)/1024.0/1024.0, rate, rateMb, readOps,
 		inputEvents, float64(inputSize)/1024.0/1024.0, inputSize/tc, p.maxSize)
-}
-
-func (p *Pipeline) GetValueGauge(subsystemName, metricName string) (int, error) {
-	m := new(io_prometheus_client.Metric)
-	err := metric.GetGauge(subsystemName, metricName).Write(m)
-	if err != nil {
-		return 0, err
-	}
-	return int(*m.GetGauge().Value), nil
 }
 
 func (p *Pipeline) incMetrics(inputEvents, inputSize, outputEvents, outputSize, reads, getOpsTotal *DeltaWrapper) *deltas {

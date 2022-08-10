@@ -7,11 +7,11 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/ozontech/file.d/stats"
+	"github.com/ozontech/file.d/metric"
 )
 
 func TestEventPoolDump(t *testing.T) {
-	stats.InitStats()
+	metric.InitStats()
 
 	eventPool := newEventPool(2, DefaultAvgInputEventSize, "")
 	e := eventPool.get()
@@ -24,7 +24,7 @@ func TestEventPoolDump(t *testing.T) {
 
 func BenchmarkEventPoolOneGoroutine(b *testing.B) {
 	const capacity = 32
-	stats.InitStats()
+	metric.InitStats()
 
 	p := newEventPool(2, DefaultAvgInputEventSize, "")
 
@@ -35,7 +35,7 @@ func BenchmarkEventPoolOneGoroutine(b *testing.B) {
 
 func BenchmarkEventPoolManyGoroutines(b *testing.B) {
 	const capacity = 32
-	stats.InitStats()
+	metric.InitStats()
 
 	p := newEventPool(2, DefaultAvgInputEventSize, "")
 
@@ -56,7 +56,7 @@ func BenchmarkEventPoolManyGoroutines(b *testing.B) {
 
 func BenchmarkEventPoolSlowestPath(b *testing.B) {
 	const capacity = 32
-	stats.InitStats()
+	metric.InitStats()
 
 	p := newEventPool(2, DefaultAvgInputEventSize, "")
 

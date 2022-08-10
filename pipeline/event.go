@@ -10,7 +10,7 @@ import (
 	"go.uber.org/atomic"
 
 	"github.com/ozontech/file.d/logger"
-	"github.com/ozontech/file.d/stats"
+	"github.com/ozontech/file.d/metric"
 )
 
 type Event struct {
@@ -197,26 +197,25 @@ type eventPool struct {
 	capacity     int
 	pipelineName string
 
-	avgEventSize    int
-	freeEventsCount int
-	getCounter      atomic.Int64
-	backCounter     atomic.Int64
-	events          []*Event
-	free1           []atomic.Bool
-	free2           []atomic.Bool
+	avgEventSize  int
+	workEventPool atomic.Int64
+	getCounter    atomic.Int64
+	backCounter   atomic.Int64
+	events        []*Event
+	free1         []atomic.Bool
+	free2         []atomic.Bool
 
 	getMu   *sync.Mutex
 	getCond *sync.Cond
 }
 
-func newEventPool(capacity, avgEventSize int,  pipelineName string) *eventPool {
+func newEventPool(capacity, avgEventSize int, pipelineName string) *eventPool {
 	eventPool := &eventPool{
-		avgEventSize:    avgEventSize,
+		avgEventSize: avgEventSize,
 		pipelineName: pipelineName,
-		capacity:        capacity,
-		freeEventsCount: capacity,
-		getMu:           &sync.Mutex{},
-		backCounter:     *atomic.NewInt64(int64(capacity)),
+		capacity:     capacity,
+		getMu:        &sync.Mutex{},
+		backCounter:  *atomic.NewInt64(int64(capacity)),
 	}
 
 	eventPool.registerMetrics()
@@ -264,7 +263,8 @@ func (p *eventPool) get() *Event {
 	event := p.events[x]
 	p.events[x] = nil
 	p.free2[x].Store(false)
-	stats.GetGauge(p.subsystemName(), workEventsGauge).Inc()
+	metric.GetGauge(p.subsystemName(), workEventsGauge).Inc()
+	p.workEventPool.Inc()
 	event.reset(p.avgEventSize)
 	return event
 }
@@ -296,7 +296,8 @@ func (p *eventPool) back(event *Event) {
 	}
 	p.events[x] = event
 	p.free1[x].Store(true)
-	stats.GetGauge(p.subsystemName(), workEventsGauge).Dec()
+	metric.GetGauge(p.subsystemName(), workEventsGauge).Dec()
+	p.workEventPool.Dec()
 	p.getCond.Broadcast()
 }
 
@@ -319,7 +320,7 @@ func (p *eventPool) dump() string {
 }
 
 func (p *eventPool) registerMetrics() {
-	stats.RegisterGauge(&stats.MetricDesc{
+	metric.RegisterGauge(&metric.MetricDesc{
 		Subsystem: p.subsystemName(),
 		Name:      workEventsGauge,
 		Help:      "Running event counter",
