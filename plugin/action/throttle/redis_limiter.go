@@ -33,7 +33,7 @@ type redisLimiter struct {
 func NewRedisLimiter(
 	ctx context.Context,
 	redis redisClient,
-	throttleFieldName, throttleFieldValue string,
+	pipelineName, throttleFieldName, throttleFieldValue string,
 	bucketInterval time.Duration,
 	bucketCount int,
 	limit complexLimit,
@@ -46,7 +46,9 @@ func NewRedisLimiter(
 
 	rl.keyPrefix = bytes.Buffer{}
 
-	// full name of keyPrefix will be $throttleFieldName_$throttleFieldValue_limit. `limit` added afterwards
+	// full name of keyPrefix will be pipelineName_throttleFieldName_throttleFieldValue_limit. `limit` added afterwards
+	rl.keyPrefix.WriteString(pipelineName)
+	rl.keyPrefix.WriteString("_")
 	rl.keyPrefix.WriteString(throttleFieldName)
 	rl.keyPrefix.WriteString("_")
 	rl.keyPrefix.WriteString(throttleFieldValue)

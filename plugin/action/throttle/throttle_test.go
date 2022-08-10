@@ -3,6 +3,7 @@ package throttle
 import (
 	"fmt"
 	"math/rand"
+	"sync"
 	"testing"
 	"time"
 
@@ -183,9 +184,9 @@ func TestRedisThrottle(t *testing.T) {
 	defer s.Close()
 
 	// set distributed redis limit
-	require.NoError(t, s.Set("k8s_pod_pod_1_limit", "1"))
+	require.NoError(t, s.Set("test_pipeline_k8s_pod_pod_1_limit", "1"))
 
-	defaultLimit := 20
+	defaultLimit := 3
 	eventsTotal := 3
 
 	config := &Config{
@@ -194,11 +195,11 @@ func TestRedisThrottle(t *testing.T) {
 		},
 		BucketsCount:   1,
 		BucketInterval: "2s",
-		RedisBackendCfg: RedisKindConfig{
+		RedisBackendCfg: RedisBackendConfig{
 			SyncInterval: "100ms",
 			Host:         s.Addr(),
 			Password:     "",
-			WorkersCount: 2,
+			WorkerCount:  2,
 		},
 		LimiterBackend: "redis",
 		ThrottleField:  "k8s_pod",
@@ -211,7 +212,6 @@ func TestRedisThrottle(t *testing.T) {
 	}
 
 	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, config, pipeline.MatchModeAnd, nil, false))
-
 	outEvents := make([]*pipeline.Event, 0)
 	output.SetOutFn(func(e *pipeline.Event) {
 		outEvents = append(outEvents, e)
@@ -240,4 +240,90 @@ func TestRedisThrottle(t *testing.T) {
 	p.Stop()
 
 	assert.Greater(t, eventsTotal, len(outEvents), "wrong in events count")
+}
+
+func TestRedisThrottleMultiPipes(t *testing.T) {
+	s, err := miniredis.Run()
+	require.NoError(t, err)
+	defer s.Close()
+
+	defaultLimit := 20
+
+	config := Config{
+		Rules: []RuleConfig{
+			{Limit: int64(defaultLimit), LimitKind: "count"},
+		},
+		BucketsCount:   1,
+		BucketInterval: "2m",
+		RedisBackendCfg: RedisBackendConfig{
+			SyncInterval: "10ms",
+			Host:         s.Addr(),
+			Password:     "",
+			WorkerCount:  2,
+		},
+		LimiterBackend: "redis",
+		ThrottleField:  "k8s_pod",
+		TimeField:      "",
+		DefaultLimit:   int64(defaultLimit),
+	}
+	err = cfg.Parse(&config, nil)
+	require.NoError(t, err)
+
+	muFirstPipe := sync.Mutex{}
+	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, &config, pipeline.MatchModeAnd, nil, false), "name")
+	outEvents := make([]*pipeline.Event, 0)
+	output.SetOutFn(func(e *pipeline.Event) {
+		muFirstPipe.Lock()
+		defer muFirstPipe.Unlock()
+		outEvents = append(outEvents, e)
+	})
+
+	muSecPipe := sync.Mutex{}
+	pSec, inputSec, outputSec := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, &config, pipeline.MatchModeAnd, nil, false), "name")
+	outEventsSec := make([]*pipeline.Event, 0)
+	outputSec.SetOutFn(func(e *pipeline.Event) {
+		muSecPipe.Lock()
+		defer muSecPipe.Unlock()
+		outEventsSec = append(outEventsSec, e)
+	})
+
+	// set distributed redis limit
+	require.NoError(t, s.Set(fmt.Sprintf("%s_%s", p.Name, "k8s_pod_pod_1_limit"), "1"))
+	require.NoError(t, s.Set(fmt.Sprintf("%s_%s", pSec.Name, "k8s_pod_pod_1_limit"), "5"))
+
+	sourceNames := []string{
+		`source_1`,
+		`source_2`,
+		`source_3`,
+	}
+
+	firstPipeEvents := []string{
+		`{"time":"%s","k8s_ns":"ns_1","k8s_pod":"pod_1"}`,
+		`{"time":"%s","k8s_ns":"ns_2","k8s_pod":"pod_1"}`,
+		`{"time":"%s","k8s_ns":"not_matched","k8s_pod":"pod_1"}`,
+	}
+	secondPipeEvents := []string{
+		`{"time":"%s","k8s_ns":"ns_1","k8s_pod":"pod_1"}`,
+		`{"time":"%s","k8s_ns":"ns_2","k8s_pod":"pod_1"}`,
+		`{"time":"%s","k8s_ns":"not_matched","k8s_pod":"pod_1"}`,
+		`{"time":"%s","k8s_ns":"ns_3","k8s_pod":"pod_1"}`,
+		`{"time":"%s","k8s_ns":"ns_4","k8s_pod":"pod_1"}`,
+	}
+	for i := 0; i < len(firstPipeEvents); i++ {
+		json := fmt.Sprintf(firstPipeEvents[i], time.Now().Format(time.RFC3339Nano))
+		input.In(10, sourceNames[rand.Int()%len(sourceNames)], 0, []byte(json))
+		// timeout required due shifting time call to redis
+		time.Sleep(100 * time.Millisecond)
+	}
+	// limit is 1 while events count is 3
+	assert.Greater(t, len(firstPipeEvents), len(outEvents), "wrong in events count")
+
+	for i := 0; i < len(secondPipeEvents); i++ {
+		json := fmt.Sprintf(secondPipeEvents[i], time.Now().Format(time.RFC3339Nano))
+		inputSec.In(10, sourceNames[rand.Int()%len(sourceNames)], 0, []byte(json))
+		// timeout required due shifting time call to redis
+		time.Sleep(100 * time.Millisecond)
+	}
+	// limit is 10 while events count 4, all passed
+	assert.Equal(t, len(secondPipeEvents), len(outEventsSec), "wrong in events count")
 }

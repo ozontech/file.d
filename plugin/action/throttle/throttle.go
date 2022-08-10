@@ -18,8 +18,8 @@ var (
 	// limiters should be shared across pipeline, so let's have a map by namespace and limiter name
 	limiters   = map[string]map[string]limiter{} // todo: cleanup this map?
 	limitersMu = &sync.RWMutex{}
-	// only one throttle plugin updates limiters. // todo: add concurrent update?
-	limiterSync = &sync.Once{}
+	// only one throttle plugin updates limiters.
+	limiterSyncMap = map[string]struct{}{}
 )
 
 const (
@@ -98,7 +98,7 @@ type Config struct {
 	//> @3@4@5@6
 	//>
 	//> It contains redis settings
-	RedisBackendCfg RedisKindConfig `json:"redis_backend_config" child:"true"` //*
+	RedisBackendCfg RedisBackendConfig `json:"redis_backend_config" child:"true"` //*
 
 	//> @3@4@5@6
 	//>
@@ -122,7 +122,7 @@ type Config struct {
 	Rules []RuleConfig `json:"rules" default:"" slice:"true"` //*
 }
 
-type RedisKindConfig struct {
+type RedisBackendConfig struct {
 	//> @3@4@5@6
 	//>
 	// Host:Port of redis server.
@@ -142,7 +142,7 @@ type RedisKindConfig struct {
 	//> @3@4@5@6
 	//>
 	//> Defines num of parallel workers that will sync limits.
-	WorkersCount uint `json:"workers_count" default:"1"` //*
+	WorkerCount int `json:"worker_count" default:"32"` //*
 
 	//> @3@4@5@6
 	//>
@@ -168,6 +168,18 @@ func factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 	return &Plugin{}, &Config{}
 }
 
+func (p *Plugin) syncWorker(ctx context.Context, jobCh <-chan limiter, jobDoneCh chan<- struct{}) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case job := <-jobCh:
+			job.sync()
+			jobDoneCh <- struct{}{}
+		}
+	}
+}
+
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginParams) {
 	p.config = config.(*Config)
 	p.logger = params.Logger
@@ -188,10 +200,9 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 	p.format = format
 
 	if p.config.LimiterBackend == redisBackend {
-		if p.config.RedisBackendCfg.WorkersCount < 1 {
-			p.logger.Fatalf("workers_count must be > 0, passed: %d", p.config.RedisBackendCfg.WorkersCount)
+		if p.config.RedisBackendCfg.WorkerCount < 1 {
+			p.logger.Fatalf("workers_count must be > 0, passed: %d", p.config.RedisBackendCfg.WorkerCount)
 		}
-		sem := make(chan struct{}, p.config.RedisBackendCfg.WorkersCount)
 
 		p.redisClient = redis.NewClient(
 			&redis.Options{
@@ -208,33 +219,45 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 
 		ticker := time.NewTicker(p.config.RedisBackendCfg.SyncInterval_)
 
-		go limiterSync.Do(func() {
-			wg := &sync.WaitGroup{}
-			for {
-				select {
-				case <-ctx.Done():
-					return
-				case <-ticker.C:
-					limitersMu.RLock()
+		limitersMu.Lock()
+		// run syncer at single throttle for one pipeline
+		if _, ok := limiterSyncMap[p.pipeline]; !ok {
+			go func() {
+				limiterSyncMap[p.pipeline] = struct{}{}
+				limitersMu.Unlock()
 
-					for _, limiterPipeline := range limiters {
-						for _, lim := range limiterPipeline {
-							lim := lim
-							wg.Add(1)
-							sem <- struct{}{}
-							go func() {
-								defer wg.Done()
-								lim.sync()
-								<-sem
-							}()
-						}
-					}
-					wg.Wait()
-					limitersMu.RUnlock()
+				jobs := make(chan limiter, p.config.RedisBackendCfg.WorkerCount)
+				jobsDone := make(chan struct{}, p.config.RedisBackendCfg.WorkerCount)
+
+				for i := 0; i < p.config.RedisBackendCfg.WorkerCount; i++ {
+					go p.syncWorker(ctx, jobs, jobsDone)
 				}
-			}
-		})
+
+				for {
+					select {
+					case <-ctx.Done():
+						close(jobs)
+						return
+					case <-ticker.C:
+						limitersMu.RLock()
+						jobsCount := 0
+
+						for _, lim := range limiters[p.pipeline] {
+							jobs <- lim
+							jobsCount++
+						}
+						for i := 0; i < jobsCount; i++ {
+							<-jobsDone
+						}
+						limitersMu.RUnlock()
+					}
+				}
+			}()
+		} else {
+			limitersMu.Unlock()
+		}
 	}
+
 	for i, r := range p.config.Rules {
 		p.rules = append(p.rules, NewRule(r.Conditions, complexLimit{r.Limit, r.LimitKind}, i))
 	}
@@ -248,6 +271,7 @@ func (p *Plugin) getNewLimiter(throttleField, limiterKey string, rule *rule) lim
 		return NewRedisLimiter(
 			p.ctx,
 			p.redisClient,
+			p.pipeline,
 			throttleField,
 			limiterKey,
 			p.config.BucketInterval_,
@@ -257,7 +281,7 @@ func (p *Plugin) getNewLimiter(throttleField, limiterKey string, rule *rule) lim
 	case inMemoryBackend:
 		return NewInMemoryLimiter(p.config.BucketInterval_, p.config.BucketsCount, rule.limit)
 	default:
-		p.logger.Panicf("unknown limiter kind: %s", p.config.LimiterBackend)
+		p.logger.Panicf("unknown limiter backend: %s", p.config.LimiterBackend)
 	}
 
 	return nil

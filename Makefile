@@ -74,11 +74,6 @@ push-images-latest: prepare push-latest-linux-amd64
 .PHONY: push-images-all
 push-images-all: push-images-version push-images-latest
 
-.PHONY: push-image
-push-image: build
-	docker build -t gitlab-registry.ozon.ru/sre/images/file-d:${VERSION} .
-	docker push gitlab-registry.ozon.ru/sre/images/file-d:${VERSION}
-
 .PHONY: lint
 lint:
 	# installation: https://golangci-lint.run/usage/install/#local-installation

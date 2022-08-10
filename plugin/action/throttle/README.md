@@ -42,7 +42,7 @@ Defines kind of backend.
 
 <br>
 
-**`redis_backend_config`** *`RedisKindConfig`* 
+**`redis_backend_config`** *`RedisBackendConfig`* 
 
 It contains redis settings
 
@@ -88,7 +88,7 @@ Defines sync interval between global and local limiters.
 
 <br>
 
-**`workers_count`** *`uint`* *`default=1`* 
+**`worker_count`** *`int`* *`default=32`* 
 
 Defines num of parallel workers that will sync limits.
 

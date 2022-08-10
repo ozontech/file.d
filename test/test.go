@@ -1,7 +1,9 @@
 package test
 
 import (
+	"math/rand"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -100,6 +102,7 @@ func NewPipeline(actions []*pipeline.ActionPluginStaticInfo, pipelineOpts ...str
 	perf := Opts(pipelineOpts).Has("perf")
 	mock := Opts(pipelineOpts).Has("mock")
 	passive := Opts(pipelineOpts).Has("passive")
+	name := Opts(pipelineOpts).Has("name")
 
 	eventTimeout := pipeline.DefaultEventTimeout
 	if Opts(pipelineOpts).Has("short_event_timeout") {
@@ -121,7 +124,13 @@ func NewPipeline(actions []*pipeline.ActionPluginStaticInfo, pipelineOpts ...str
 	}
 
 	http.DefaultServeMux = &http.ServeMux{}
-	p := pipeline.New("test_pipeline", settings, prometheus.NewRegistry())
+
+	pName := "test_pipeline"
+	if name {
+		pName += strconv.Itoa(rand.Int())
+	}
+
+	p := pipeline.New(pName, settings, prometheus.NewRegistry())
 	if !parallel {
 		p.DisableParallelism()
 	}
