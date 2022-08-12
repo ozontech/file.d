@@ -11,6 +11,7 @@ import (
 /*{ introduction
 It converts field date/time data to different format.
 }*/
+
 type Plugin struct {
 	config *Config
 }

@@ -20,6 +20,7 @@ pipelines:
     ...
 ```
 }*/
+
 type Plugin struct{}
 
 type Config struct{}

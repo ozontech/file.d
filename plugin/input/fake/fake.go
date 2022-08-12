@@ -8,6 +8,7 @@ import (
 /*{ introduction
 It provides an API to test pipelines and other plugins.
 }*/
+
 type Plugin struct {
 	controller pipeline.InputPluginController
 	commitFn   func(event *pipeline.Event)

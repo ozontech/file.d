@@ -12,6 +12,7 @@ import (
 /*{ introduction
 Reads `journalctl` output.
 }*/
+
 type Plugin struct {
 	params  *pipeline.InputPluginParams
 	config  *Config

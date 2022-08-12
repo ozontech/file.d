@@ -12,6 +12,7 @@ import (
 /*{ introduction
 It parses string from the event field using re2 expression with named subgroups and merges the result with the event root.
 }*/
+
 type Plugin struct {
 	config *Config
 

@@ -21,6 +21,7 @@ var (
 /*{ introduction
 It discards the events if pipeline throughput gets higher than a configured threshold.
 }*/
+
 type Plugin struct {
 	config   *Config
 	pipeline string

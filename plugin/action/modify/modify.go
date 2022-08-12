@@ -35,6 +35,7 @@ The resulting event could look like:
   }
 ```
 }*/
+
 type Plugin struct {
 	config *Config
 	logger *zap.SugaredLogger

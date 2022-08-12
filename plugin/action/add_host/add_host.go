@@ -10,6 +10,7 @@ import (
 /*{ introduction
 It adds field containing hostname to an event.
 }*/
+
 type Plugin struct {
 	config *Config
 }

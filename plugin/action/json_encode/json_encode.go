@@ -22,6 +22,7 @@ pipelines:
 It transforms `{"server":{"os":"linux","arch":"amd64"}}` into `{"server":"{\"os\":\"linux\",\"arch\":\"amd64\"}"}`.
 
 }*/
+
 type Plugin struct {
 	config *Config
 }

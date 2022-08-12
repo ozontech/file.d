@@ -10,6 +10,7 @@ import (
 /*{ introduction
 It adds time field to the event.
 }*/
+
 type Plugin struct {
 	config *Config
 }
