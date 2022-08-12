@@ -38,7 +38,6 @@ const (
 	antispamUnbanIterations = 4
 	metricsGenInterval      = time.Hour
 
-	inUseEventsGauge        = "in_use_events"
 	inputEventsCountMetric  = "input_events_count"
 	inputEventsSizeMetric   = "input_events_size"
 	outputEventsCountMetric = "output_events_count"
@@ -46,6 +45,7 @@ const (
 	readOpsEventsSizeMetric = "read_ops_count"
 	maxEventSizeExceeded    = "max_event_size_exceeded"
 	eventPoolCapacity       = "event_pool_capacity"
+	inUseEventsMetric       = "event_pool_in_use_events"
 
 	wrongEventCRIFormatMetric = "wrong_event_cri_format"
 )
@@ -191,8 +191,8 @@ func (p *Pipeline) subsystemName() string {
 func (p *Pipeline) registerMetrics() {
 	metric.RegisterGauge(&metric.MetricDesc{
 		Subsystem: p.subsystemName(),
-		Name:      inUseEventsGauge,
-		Help:      "Running events counter",
+		Name:      inUseEventsMetric,
+		Help:      "Count of pool events which is used for processing",
 	})
 	metric.RegisterGauge(&metric.MetricDesc{
 		Subsystem: p.subsystemName(),
@@ -589,7 +589,7 @@ type deltas struct {
 func (p *Pipeline) logChanges(myDeltas *deltas) {
 	inputSize := p.inputSize.Load()
 	inputEvents := p.inputEvents.Load()
-	workEventValue := p.eventPool.inUseEvents.Load()
+	inUseEvents := p.eventPool.inUseEvents.Load()
 
 	interval := p.settings.MaintenanceInterval
 	rate := int(myDeltas.deltaInputEvents * float64(time.Second) / float64(interval))
@@ -600,7 +600,7 @@ func (p *Pipeline) logChanges(myDeltas *deltas) {
 	p.logger.Infof(`%q pipeline stats interval=%ds, active procs=%d/%d, events in pool=%d/%d, events outside pool=%d/%d, out=%d|%.1fMb,`+
 		`rate=%d/s|%.1fMb/s, read ops=%d/s, total=%d|%.1fMb, avg size=%d, max size=%d`,
 		p.Name, interval/time.Second, p.activeProcs.Load(), p.procCount.Load(),
-		workEventValue, p.settings.Capacity, p.settings.Capacity-int(workEventValue), p.settings.Capacity,
+		inUseEvents, p.settings.Capacity, p.settings.Capacity-int(inUseEvents), p.settings.Capacity,
 		int64(myDeltas.deltaInputEvents), float64(myDeltas.deltaInputSize)/1024.0/1024.0, rate, rateMb, readOps,
 		inputEvents, float64(inputSize)/1024.0/1024.0, inputSize/tc, p.maxSize)
 }
@@ -630,7 +630,7 @@ func (p *Pipeline) incMetrics(inputEvents, inputSize, outputEvents, outputSize, 
 }
 
 func (p *Pipeline) setMetrics(inUseEvents atomic.Int64) {
-	metric.GetGauge(p.subsystemName(), inUseEventsGauge).Set(float64(inUseEvents.Load()))
+	metric.GetGauge(p.subsystemName(), inUseEventsMetric).Set(float64(inUseEvents.Load()))
 }
 
 func (p *Pipeline) maintenance() {
