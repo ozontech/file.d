@@ -38,7 +38,7 @@ const (
 	antispamUnbanIterations = 4
 	metricsGenInterval      = time.Hour
 
-	workEventsGauge         = "work_events"
+	inUseEventsGauge        = "in_use_events"
 	inputEventsCountMetric  = "input_events_count"
 	inputEventsSizeMetric   = "input_events_size"
 	outputEventsCountMetric = "output_events_count"
@@ -46,7 +46,6 @@ const (
 	readOpsEventsSizeMetric = "read_ops_count"
 	maxEventSizeExceeded    = "max_event_size_exceeded"
 	eventPoolCapacity       = "event_pool_capacity"
-	eventPoolGetTotal       = "event_pool_get_ops_total"
 
 	wrongEventCRIFormatMetric = "wrong_event_cri_format"
 )
@@ -149,7 +148,7 @@ func New(name string, settings *Settings, registry *prometheus.Registry) *Pipeli
 
 		metricsHolder: newMetricsHolder(name, registry, metricsGenInterval),
 		streamer:      newStreamer(settings.EventTimeout),
-		eventPool:     newEventPool(settings.Capacity, settings.AvgEventSize, name),
+		eventPool:     newEventPool(settings.Capacity, settings.AvgEventSize),
 		antispamer:    newAntispamer(settings.AntispamThreshold, antispamUnbanIterations, settings.MaintenanceInterval),
 
 		eventLog:   make([]string, 0, 128),
@@ -192,13 +191,13 @@ func (p *Pipeline) subsystemName() string {
 func (p *Pipeline) registerMetrics() {
 	metric.RegisterGauge(&metric.MetricDesc{
 		Subsystem: p.subsystemName(),
+		Name:      inUseEventsGauge,
+		Help:      "Running events counter",
+	})
+	metric.RegisterGauge(&metric.MetricDesc{
+		Subsystem: p.subsystemName(),
 		Name:      eventPoolCapacity,
 		Help:      "Pool capacity value",
-	})
-	metric.RegisterCounter(&metric.MetricDesc{
-		Subsystem: p.subsystemName(),
-		Name:      eventPoolGetTotal,
-		Help:      "Counter usage get total",
 	})
 	metric.RegisterCounter(&metric.MetricDesc{
 		Subsystem: p.subsystemName(),
@@ -585,13 +584,12 @@ type deltas struct {
 	deltaOutputEvents float64
 	deltaOutputSize   float64
 	deltaReads        float64
-	deltaGetOpsTotal  float64
 }
 
 func (p *Pipeline) logChanges(myDeltas *deltas) {
 	inputSize := p.inputSize.Load()
 	inputEvents := p.inputEvents.Load()
-	workEventValue := p.eventPool.workEventPool.Load()
+	workEventValue := p.eventPool.inUseEvents.Load()
 
 	interval := p.settings.MaintenanceInterval
 	rate := int(myDeltas.deltaInputEvents * float64(time.Second) / float64(interval))
@@ -607,13 +605,12 @@ func (p *Pipeline) logChanges(myDeltas *deltas) {
 		inputEvents, float64(inputSize)/1024.0/1024.0, inputSize/tc, p.maxSize)
 }
 
-func (p *Pipeline) incMetrics(inputEvents, inputSize, outputEvents, outputSize, reads, getOpsTotal *DeltaWrapper) *deltas {
+func (p *Pipeline) incMetrics(inputEvents, inputSize, outputEvents, outputSize, reads *DeltaWrapper) *deltas {
 	deltaInputEvents := inputEvents.updateValue(p.inputEvents.Load())
 	deltaInputSize := inputSize.updateValue(p.inputSize.Load())
 	deltaOutputEvents := outputEvents.updateValue(p.outputEvents.Load())
 	deltaOutputSize := outputSize.updateValue(p.outputSize.Load())
 	deltaReads := reads.updateValue(p.readOps.Load())
-	deltaGetOpsTotal := getOpsTotal.updateValue(p.eventPool.getCounter.Load())
 
 	myDeltas := &deltas{
 		deltaInputEvents,
@@ -621,7 +618,6 @@ func (p *Pipeline) incMetrics(inputEvents, inputSize, outputEvents, outputSize, 
 		deltaOutputEvents,
 		deltaOutputSize,
 		deltaReads,
-		deltaGetOpsTotal,
 	}
 
 	metric.GetCounter(p.subsystemName(), inputEventsCountMetric).Add(myDeltas.deltaInputEvents)
@@ -629,9 +625,12 @@ func (p *Pipeline) incMetrics(inputEvents, inputSize, outputEvents, outputSize, 
 	metric.GetCounter(p.subsystemName(), outputEventsCountMetric).Add(myDeltas.deltaOutputEvents)
 	metric.GetCounter(p.subsystemName(), outputEventsSizeMetric).Add(myDeltas.deltaOutputSize)
 	metric.GetCounter(p.subsystemName(), readOpsEventsSizeMetric).Add(myDeltas.deltaReads)
-	metric.GetCounter(p.subsystemName(), eventPoolGetTotal).Add(myDeltas.deltaGetOpsTotal)
 
 	return myDeltas
+}
+
+func (p *Pipeline) setMetrics(inUseEvents atomic.Int64) {
+	metric.GetGauge(p.subsystemName(), inUseEventsGauge).Set(float64(inUseEvents.Load()))
 }
 
 func (p *Pipeline) maintenance() {
@@ -640,7 +639,6 @@ func (p *Pipeline) maintenance() {
 	outputEvents := newDeltaWrapper()
 	outputSize := newDeltaWrapper()
 	readOps := newDeltaWrapper()
-	getOpsTotal := newDeltaWrapper()
 
 	for {
 		time.Sleep(p.settings.MaintenanceInterval)
@@ -651,7 +649,8 @@ func (p *Pipeline) maintenance() {
 		p.antispamer.maintenance()
 		p.metricsHolder.maintenance()
 
-		myDeltas := p.incMetrics(inputEvents, inputSize, outputEvents, outputSize, readOps, getOpsTotal)
+		myDeltas := p.incMetrics(inputEvents, inputSize, outputEvents, outputSize, readOps)
+		p.setMetrics(p.eventPool.inUseEvents)
 		p.logChanges(myDeltas)
 
 		if len(p.inSample) > 0 {

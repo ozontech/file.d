@@ -6,12 +6,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/prometheus/client_golang/prometheus"
 	insaneJSON "github.com/vitkovskii/insane-json"
 	"go.uber.org/atomic"
 
 	"github.com/ozontech/file.d/logger"
-	"github.com/ozontech/file.d/metric"
 )
 
 type Event struct {
@@ -195,33 +193,28 @@ func (e *Event) String() string {
 
 // channels are slower than this implementation by ~20%
 type eventPool struct {
-	capacity     int
-	pipelineName string
+	capacity int
 
-	avgEventSize      int
-	workEventPoolProm prometheus.Gauge
-	workEventPool     atomic.Int64
-	getCounter        atomic.Int64
-	backCounter       atomic.Int64
-	events            []*Event
-	free1             []atomic.Bool
-	free2             []atomic.Bool
+	avgEventSize int
+	inUseEvents  atomic.Int64
+	getCounter   atomic.Int64
+	backCounter  atomic.Int64
+	events       []*Event
+	free1        []atomic.Bool
+	free2        []atomic.Bool
 
 	getMu   *sync.Mutex
 	getCond *sync.Cond
 }
 
-func newEventPool(capacity, avgEventSize int, pipelineName string) *eventPool {
+func newEventPool(capacity, avgEventSize int) *eventPool {
 	eventPool := &eventPool{
 		avgEventSize: avgEventSize,
-		pipelineName: pipelineName,
 		capacity:     capacity,
 		getMu:        &sync.Mutex{},
 		backCounter:  *atomic.NewInt64(int64(capacity)),
 	}
 
-	eventPool.registerMetrics()
-	eventPool.setMetrics()
 	eventPool.getCond = sync.NewCond(eventPool.getMu)
 
 	for i := 0; i < capacity; i++ {
@@ -266,8 +259,7 @@ func (p *eventPool) get() *Event {
 	event := p.events[x]
 	p.events[x] = nil
 	p.free2[x].Store(false)
-	p.workEventPoolProm.Inc()
-	p.workEventPool.Inc()
+	p.inUseEvents.Inc()
 	event.reset(p.avgEventSize)
 	return event
 }
@@ -299,8 +291,7 @@ func (p *eventPool) back(event *Event) {
 	}
 	p.events[x] = event
 	p.free1[x].Store(true)
-	p.workEventPoolProm.Dec()
-	p.workEventPool.Dec()
+	p.inUseEvents.Dec()
 	p.getCond.Broadcast()
 }
 
@@ -320,20 +311,4 @@ func (p *eventPool) dump() string {
 	})
 
 	return out
-}
-
-func (p *eventPool) registerMetrics() {
-	metric.RegisterGauge(&metric.MetricDesc{
-		Subsystem: p.subsystemName(),
-		Name:      workEventsGauge,
-		Help:      "Running event counter",
-	})
-}
-
-func (p *eventPool) setMetrics() {
-	p.workEventPoolProm = metric.GetGauge(p.subsystemName(), workEventsGauge)
-}
-
-func (p *eventPool) subsystemName() string {
-	return "pipeline_" + p.pipelineName
 }

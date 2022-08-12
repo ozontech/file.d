@@ -6,14 +6,10 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-
-	"github.com/ozontech/file.d/metric"
 )
 
 func TestEventPoolDump(t *testing.T) {
-	metric.InitStats()
-
-	eventPool := newEventPool(2, DefaultAvgInputEventSize, "")
+	eventPool := newEventPool(2, DefaultAvgInputEventSize)
 	e := eventPool.get()
 	defer eventPool.back(e)
 
@@ -24,9 +20,8 @@ func TestEventPoolDump(t *testing.T) {
 
 func BenchmarkEventPoolOneGoroutine(b *testing.B) {
 	const capacity = 32
-	metric.InitStats()
 
-	p := newEventPool(capacity, DefaultAvgInputEventSize, "")
+	p := newEventPool(capacity, DefaultAvgInputEventSize)
 
 	for i := 0; i < b.N; i++ {
 		p.back(p.get())
@@ -35,9 +30,8 @@ func BenchmarkEventPoolOneGoroutine(b *testing.B) {
 
 func BenchmarkEventPoolManyGoroutines(b *testing.B) {
 	const capacity = 32
-	metric.InitStats()
 
-	p := newEventPool(capacity, DefaultAvgInputEventSize, "")
+	p := newEventPool(capacity, DefaultAvgInputEventSize)
 
 	for i := 0; i < b.N; i++ {
 		wg := &sync.WaitGroup{}
@@ -56,9 +50,8 @@ func BenchmarkEventPoolManyGoroutines(b *testing.B) {
 
 func BenchmarkEventPoolSlowestPath(b *testing.B) {
 	const capacity = 32
-	metric.InitStats()
 
-	p := newEventPool(capacity, DefaultAvgInputEventSize, "")
+	p := newEventPool(capacity, DefaultAvgInputEventSize)
 
 	for i := 0; i < b.N; i++ {
 		wg := &sync.WaitGroup{}
