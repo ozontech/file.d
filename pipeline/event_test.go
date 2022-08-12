@@ -26,7 +26,7 @@ func BenchmarkEventPoolOneGoroutine(b *testing.B) {
 	const capacity = 32
 	metric.InitStats()
 
-	p := newEventPool(2, DefaultAvgInputEventSize, "")
+	p := newEventPool(capacity, DefaultAvgInputEventSize, "")
 
 	for i := 0; i < b.N; i++ {
 		p.back(p.get())
@@ -37,7 +37,7 @@ func BenchmarkEventPoolManyGoroutines(b *testing.B) {
 	const capacity = 32
 	metric.InitStats()
 
-	p := newEventPool(2, DefaultAvgInputEventSize, "")
+	p := newEventPool(capacity, DefaultAvgInputEventSize, "")
 
 	for i := 0; i < b.N; i++ {
 		wg := &sync.WaitGroup{}
@@ -58,7 +58,7 @@ func BenchmarkEventPoolSlowestPath(b *testing.B) {
 	const capacity = 32
 	metric.InitStats()
 
-	p := newEventPool(2, DefaultAvgInputEventSize, "")
+	p := newEventPool(capacity, DefaultAvgInputEventSize, "")
 
 	for i := 0; i < b.N; i++ {
 		wg := &sync.WaitGroup{}

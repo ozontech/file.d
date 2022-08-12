@@ -199,7 +199,7 @@ type eventPool struct {
 	pipelineName string
 
 	avgEventSize      int
-	WorkEventPoolProm prometheus.Gauge
+	workEventPoolProm prometheus.Gauge
 	workEventPool     atomic.Int64
 	getCounter        atomic.Int64
 	backCounter       atomic.Int64
@@ -266,7 +266,7 @@ func (p *eventPool) get() *Event {
 	event := p.events[x]
 	p.events[x] = nil
 	p.free2[x].Store(false)
-	p.WorkEventPoolProm.Inc()
+	p.workEventPoolProm.Inc()
 	p.workEventPool.Inc()
 	event.reset(p.avgEventSize)
 	return event
@@ -299,7 +299,7 @@ func (p *eventPool) back(event *Event) {
 	}
 	p.events[x] = event
 	p.free1[x].Store(true)
-	p.WorkEventPoolProm.Dec()
+	p.workEventPoolProm.Dec()
 	p.workEventPool.Dec()
 	p.getCond.Broadcast()
 }
@@ -331,7 +331,7 @@ func (p *eventPool) registerMetrics() {
 }
 
 func (p *eventPool) setMetrics() {
-	p.WorkEventPoolProm = metric.GetGauge(p.subsystemName(), workEventsGauge)
+	p.workEventPoolProm = metric.GetGauge(p.subsystemName(), workEventsGauge)
 }
 
 func (p *eventPool) subsystemName() string {
