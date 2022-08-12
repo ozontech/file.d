@@ -73,6 +73,27 @@ pipelines:
 ```
 
 [More details...](plugin/action/join/README.md)
+## join_template
+Alias to "join" plugin with predefined `start` and `continue` parameters.
+
+> ⚠ Parsing the whole event flow could be very CPU intensive because the plugin uses regular expressions.
+> Consider `match_fields` parameter to process only particular events. Check out an example for details.
+
+**Example of joining Go panics**:
+```yaml
+pipelines:
+  example_pipeline:
+    ...
+    actions:
+    - type: join_template
+      template: go_panic
+      field: log
+      match_fields:
+        stream: stderr // apply only for events which was written to stderr to save CPU time
+    ...
+```
+
+[More details...](plugin/action/join_template/README.md)
 ## json_decode
 It decodes a JSON string from the event field and merges the result with the event root.
 If the decoded JSON isn't an object, the event will be skipped.
