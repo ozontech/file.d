@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/ozontech/file.d/logger"
-	"github.com/ozontech/file.d/stats"
+	"github.com/ozontech/file.d/metric"
 	"go.uber.org/atomic"
 )
 
@@ -27,15 +27,15 @@ func newAntispamer(threshold int, unbanIterations int, maintenanceInterval time.
 		logger.Infof("antispam enabled, threshold=%d/%d sec", threshold, maintenanceInterval/time.Second)
 	}
 
-	stats.RegisterGauge(&stats.MetricDesc{
+	metric.RegisterGauge(&metric.MetricDesc{
 		Name:      antispamActive,
 		Subsystem: subsystemName,
 		Help:      "Gauge indicates whether the antispam is enabled",
 	})
 	// not enabled by default
-	stats.GetGauge(subsystemName, antispamActive).Set(0)
+	metric.GetGauge(subsystemName, antispamActive).Set(0)
 
-	stats.RegisterCounter(&stats.MetricDesc{
+	metric.RegisterCounter(&metric.MetricDesc{
 		Name:      antispamBanCount,
 		Subsystem: subsystemName,
 		Help:      "How many times a source was banned",
@@ -77,8 +77,8 @@ func (p *antispamer) isSpam(id SourceID, name string, isNewSource bool) bool {
 	x := value.Inc()
 	if x == int32(p.threshold) {
 		value.Swap(int32(p.unbanIterations * p.threshold))
-		stats.GetGauge(subsystemName, antispamActive).Set(1)
-		stats.GetCounter(subsystemName, antispamBanCount).Inc()
+		metric.GetGauge(subsystemName, antispamActive).Set(1)
+		metric.GetCounter(subsystemName, antispamBanCount).Inc()
 		logger.Warnf("antispam: source has been banned id=%d, name=%s", id, name)
 	}
 
@@ -119,7 +119,7 @@ func (p *antispamer) maintenance() {
 	}
 
 	if allUnbanned {
-		stats.GetGauge(subsystemName, antispamActive).Set(0)
+		metric.GetGauge(subsystemName, antispamActive).Set(0)
 	} else {
 		logger.Info("antispam: there are banned sources")
 	}

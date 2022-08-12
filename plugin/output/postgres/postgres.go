@@ -10,13 +10,12 @@ import (
 	sq "github.com/Masterminds/squirrel"
 	"github.com/jackc/pgx/v4"
 	"github.com/jackc/pgx/v4/pgxpool"
-	insaneJSON "github.com/vitkovskii/insane-json"
-	"go.uber.org/zap"
-
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
+	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
-	"github.com/ozontech/file.d/stats"
+	insaneJSON "github.com/vitkovskii/insane-json"
+	"go.uber.org/zap"
 )
 
 /*{ introduction
@@ -24,8 +23,9 @@ It sends the event batches to postgres db using pgx.
 }*/
 
 var (
-	ErrEventDoesntHaveField   = errors.New("event doesn't have field")
-	ErrEventFieldHasWrongType = errors.New("event field has wrong type")
+	ErrEventDoesntHaveField             = errors.New("event doesn't have field")
+	ErrEventFieldHasWrongType           = errors.New("event field has wrong type")
+	ErrTimestampFromDistantPastOrFuture = errors.New("event field contains timestamp < 1970 or > 9000 year")
 )
 
 type PgxIface interface {
@@ -40,10 +40,12 @@ const (
 	// required for PgBouncers that doesn't support prepared statements.
 	preferSimpleProtocol = pgx.QuerySimpleProtocol(true)
 
-	// metrics
+	// metric
 	discardedEventCounter  = "event_discarded"
 	duplicatedEventCounter = "event_duplicated"
 	writtenEventCounter    = "event_written"
+
+	nineThousandYear = 221842627200
 )
 
 type pgType int
@@ -172,17 +174,17 @@ func Factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 }
 
 func (p *Plugin) registerPluginMetrics() {
-	stats.RegisterCounter(&stats.MetricDesc{
+	metric.RegisterCounter(&metric.MetricDesc{
 		Name:      discardedEventCounter,
 		Subsystem: subsystemName,
 		Help:      "Total pgsql discarded messages",
 	})
-	stats.RegisterCounter(&stats.MetricDesc{
+	metric.RegisterCounter(&metric.MetricDesc{
 		Name:      duplicatedEventCounter,
 		Subsystem: subsystemName,
 		Help:      "Total pgsql duplicated messages",
 	})
-	stats.RegisterCounter(&stats.MetricDesc{
+	metric.RegisterCounter(&metric.MetricDesc{
 		Name:      writtenEventCounter,
 		Subsystem: subsystemName,
 		Help:      "Total events written to pgsql",
@@ -195,7 +197,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.config = config.(*Config)
 	p.ctx = context.Background()
 	if len(p.config.Columns) == 0 {
-		p.logger.Fatal("Can't start plugin, no fields in config")
+		p.logger.Fatal("can't start plugin, no fields in config")
 	}
 
 	if p.config.Retry < 1 {
@@ -271,13 +273,19 @@ func (p *Plugin) out(_ *pipeline.WorkerData, batch *pipeline.Batch) {
 		fieldValues, uniqueID, err := p.processEvent(event, pgFields, uniqFields)
 		if err != nil {
 			if errors.Is(err, ErrEventDoesntHaveField) {
-				stats.GetCounter(subsystemName, discardedEventCounter).Inc()
+				metric.GetCounter(subsystemName, discardedEventCounter).Inc()
 				if p.config.Strict {
 					p.logger.Fatal(err)
 				}
 				p.logger.Error(err)
 			} else if errors.Is(err, ErrEventFieldHasWrongType) {
-				stats.GetCounter(subsystemName, discardedEventCounter).Inc()
+				metric.GetCounter(subsystemName, discardedEventCounter).Inc()
+				if p.config.Strict {
+					p.logger.Fatal(err)
+				}
+				p.logger.Error(err)
+			} else if errors.Is(err, ErrTimestampFromDistantPastOrFuture) {
+				metric.GetCounter(subsystemName, discardedEventCounter).Inc()
 				if p.config.Strict {
 					p.logger.Fatal(err)
 				}
@@ -291,7 +299,7 @@ func (p *Plugin) out(_ *pipeline.WorkerData, batch *pipeline.Batch) {
 
 		// passes here only if event valid.
 		if _, ok := uniqueEventsMap[uniqueID]; ok {
-			stats.GetCounter(subsystemName, duplicatedEventCounter).Inc()
+			metric.GetCounter(subsystemName, duplicatedEventCounter).Inc()
 			p.logger.Infof("event duplicated. Fields: %v, values: %v", pgFields, fieldValues)
 		} else {
 			uniqueEventsMap[uniqueID] = struct{}{}
@@ -326,7 +334,7 @@ func (p *Plugin) out(_ *pipeline.WorkerData, batch *pipeline.Batch) {
 			time.Sleep(p.config.Retention_)
 			continue
 		}
-		stats.GetCounter(subsystemName, writtenEventCounter).Add(float64(len(uniqueEventsMap)))
+		metric.GetCounter(subsystemName, writtenEventCounter).Add(float64(len(uniqueEventsMap)))
 		break
 	}
 
@@ -397,6 +405,10 @@ func (p *Plugin) addFieldToValues(field column, sNode *insaneJSON.StrictNode) (i
 		tint, err := sNode.AsInt()
 		if err != nil {
 			return nil, fmt.Errorf("%w, can't get %s as timestamp, err: %s", ErrEventFieldHasWrongType, field.Name, err.Error())
+		}
+		// if timestamp < 1970-01-00-00 or > 9000-01-00-00
+		if tint < 0 || tint > nineThousandYear {
+			return nil, fmt.Errorf("%w, %s", ErrTimestampFromDistantPastOrFuture, field.Name)
 		}
 		return time.Unix(int64(tint), 0).Format(time.RFC3339), nil
 	case unknownType:
