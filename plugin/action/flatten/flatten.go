@@ -26,19 +26,19 @@ type Plugin struct {
 	config *Config
 }
 
-//! config-params
-//^ config-params
+// ! config-params
+// ^ config-params
 type Config struct {
-	//> @3@4@5@6
-	//>
-	//> Defines the field that should be flattened.
-	Field  cfg.FieldSelector `json:"field" required:"true" parse:"selector"` //*
+	// > @3@4@5@6
+	// >
+	// > Defines the field that should be flattened.
+	Field  cfg.FieldSelector `json:"field" required:"true" parse:"selector"` // *
 	Field_ []string
 
-	//> @3@4@5@6
-	//>
-	//> Which prefix to use for extracted fields.
-	Prefix string `json:"prefix" default:""` //*
+	// > @3@4@5@6
+	// >
+	// > Which prefix to use for extracted fields.
+	Prefix string `json:"prefix" default:""` // *
 }
 
 func init() {

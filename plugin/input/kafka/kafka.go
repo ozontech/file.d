@@ -34,23 +34,23 @@ type Plugin struct {
 	idByTopic     map[string]int
 }
 
-//! config-params
-//^ config-params
+// ! config-params
+// ^ config-params
 type Config struct {
-	//> @3@4@5@6
-	//>
-	//> The name of kafka brokers to read from.
-	Brokers []string `json:"brokers" required:"true"` //*
+	// > @3@4@5@6
+	// >
+	// > The name of kafka brokers to read from.
+	Brokers []string `json:"brokers" required:"true"` // *
 
-	//> @3@4@5@6
-	//>
-	//> The list of kafka topics to read from.
-	Topics []string `json:"topics" required:"true"` //*
+	// > @3@4@5@6
+	// >
+	// > The list of kafka topics to read from.
+	Topics []string `json:"topics" required:"true"` // *
 
-	//> @3@4@5@6
-	//>
-	//> The name of consumer group to use.
-	ConsumerGroup string `json:"consumer_group" default:"file-d"` //*
+	// > @3@4@5@6
+	// >
+	// > The name of consumer group to use.
+	ConsumerGroup string `json:"consumer_group" default:"file-d"` // *
 }
 
 func init() {

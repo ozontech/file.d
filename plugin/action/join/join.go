@@ -74,31 +74,31 @@ type Plugin struct {
 	logger *zap.SugaredLogger
 }
 
-//! config-params
-//^ config-params
+// ! config-params
+// ^ config-params
 type Config struct {
-	//> @3@4@5@6
-	//>
-	//> The event field which will be checked for joining with each other.
-	Field  cfg.FieldSelector `json:"field" required:"true" parse:"selector"` //*
+	// > @3@4@5@6
+	// >
+	// > The event field which will be checked for joining with each other.
+	Field  cfg.FieldSelector `json:"field" required:"true" parse:"selector"` // *
 	Field_ []string
 
-	//> @3@4@5@6
-	//>
-	//> A regexp which will start the join sequence.
-	Start  cfg.Regexp `json:"start" required:"true" parse:"regexp"` //*
+	// > @3@4@5@6
+	// >
+	// > A regexp which will start the join sequence.
+	Start  cfg.Regexp `json:"start" required:"true" parse:"regexp"` // *
 	Start_ *regexp.Regexp
 
-	//> @3@4@5@6
-	//>
-	//> A regexp which will continue the join sequence.
-	Continue  cfg.Regexp `json:"continue" required:"true" parse:"regexp"` //*
+	// > @3@4@5@6
+	// >
+	// > A regexp which will continue the join sequence.
+	Continue  cfg.Regexp `json:"continue" required:"true" parse:"regexp"` // *
 	Continue_ *regexp.Regexp
 
-	//> @3@4@5@6
-	//>
-	//> Max size of the resulted event. If it is set and the event exceeds the limit, the event will be truncated.
-	MaxEventSize int `json:"max_event_size" default:"0"` //*
+	// > @3@4@5@6
+	// >
+	// > Max size of the resulted event. If it is set and the event exceeds the limit, the event will be truncated.
+	MaxEventSize int `json:"max_event_size" default:"0"` // *
 }
 
 func init() {

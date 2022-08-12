@@ -40,55 +40,55 @@ pipelines:
 }*/
 
 type Plugin struct {
-	config  *Config
-	logger  *zap.SugaredLogger
-	params  *pipeline.InputPluginParams
+	config *Config
+	logger *zap.SugaredLogger
+	params *pipeline.InputPluginParams
 
 	fp *file.Plugin
 }
 
 type Config struct {
-	//! config-params
-	//^ config-params
+	// ! config-params
+	// ^ config-params
 
-	//> @3@4@5@6
-	//>
-	//> Docker splits long logs by 16kb chunks. The plugin joins them back, but if an event is longer than this value in bytes, it will be split after all.
-	//> > Due to the optimization process it's not a strict rule. Events may be split even if they won't exceed the limit.
-	SplitEventSize int `json:"split_event_size" default:"1000000"` //*
+	// > @3@4@5@6
+	// >
+	// > Docker splits long logs by 16kb chunks. The plugin joins them back, but if an event is longer than this value in bytes, it will be split after all.
+	// > > Due to the optimization process it's not a strict rule. Events may be split even if they won't exceed the limit.
+	SplitEventSize int `json:"split_event_size" default:"1000000"` // *
 
-	//> @3@4@5@6
-	//>
-	//> If set, it defines which pod labels to add to the event, others will be ignored.
-	AllowedPodLabels  []string `json:"allowed_pod_labels" slice:"true"` //*
+	// > @3@4@5@6
+	// >
+	// > If set, it defines which pod labels to add to the event, others will be ignored.
+	AllowedPodLabels  []string `json:"allowed_pod_labels" slice:"true"` // *
 	AllowedPodLabels_ map[string]bool
 
-	//> @3@4@5@6
-	//>
-	//> If set, it defines which node labels to add to the event, others will be ignored.
-	AllowedNodeLabels  []string `json:"allowed_node_labels" slice:"true"` //*
+	// > @3@4@5@6
+	// >
+	// > If set, it defines which node labels to add to the event, others will be ignored.
+	AllowedNodeLabels  []string `json:"allowed_node_labels" slice:"true"` // *
 	AllowedNodeLabels_ map[string]bool
 
-	//> @3@4@5@6
-	//>
-	//> Skips retrieving Kubernetes meta information using Kubernetes API and adds only `k8s_node` field.
-	OnlyNode bool `json:"only_node" default:"false"` //*
+	// > @3@4@5@6
+	// >
+	// > Skips retrieving Kubernetes meta information using Kubernetes API and adds only `k8s_node` field.
+	OnlyNode bool `json:"only_node" default:"false"` // *
 
-	//> @3@4@5@6
-	//>
-	//> Kubernetes dir with container logs. It's like `watching_dir` parameter from [file plugin](/plugin/input/file/README.md) config.
-	WatchingDir  string `json:"watching_dir" default:"/var/log/containers"` //*
+	// > @3@4@5@6
+	// >
+	// > Kubernetes dir with container logs. It's like `watching_dir` parameter from [file plugin](/plugin/input/file/README.md) config.
+	WatchingDir  string `json:"watching_dir" default:"/var/log/containers"` // *
 	WatchingDir_ string
 
-	//> @3@4@5@6
-	//>
-	//> The filename to store offsets of processed files. It's like `offsets_file` parameter from [file plugin](/plugin/input/file/README.md) config.
-	OffsetsFile string `json:"offsets_file" required:"true"` //*
+	// > @3@4@5@6
+	// >
+	// > The filename to store offsets of processed files. It's like `offsets_file` parameter from [file plugin](/plugin/input/file/README.md) config.
+	OffsetsFile string `json:"offsets_file" required:"true"` // *
 
-	//> @3@4@5@6
-	//>
-	//> Under the hood this plugin uses [file plugin](/plugin/input/file/README.md) to collect logs from files. So you can change any [file plugin](/plugin/input/file/README.md) config parameter using `file_config` section. Check out an example.
-	FileConfig file.Config `json:"file_config" child:"true"` //*
+	// > @3@4@5@6
+	// >
+	// > Under the hood this plugin uses [file plugin](/plugin/input/file/README.md) to collect logs from files. So you can change any [file plugin](/plugin/input/file/README.md) config parameter using `file_config` section. Check out an example.
+	FileConfig file.Config `json:"file_config" child:"true"` // *
 }
 
 var startCounter atomic.Int32

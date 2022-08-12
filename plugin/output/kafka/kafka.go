@@ -39,52 +39,52 @@ type Plugin struct {
 	batcher  *pipeline.Batcher
 }
 
-//! config-params
-//^ config-params
+// ! config-params
+// ^ config-params
 type Config struct {
-	//> @3@4@5@6
-	//>
-	//> List of kafka brokers to write to.
-	Brokers []string `json:"brokers" required:"true"` //*
+	// > @3@4@5@6
+	// >
+	// > List of kafka brokers to write to.
+	Brokers []string `json:"brokers" required:"true"` // *
 
-	//> @3@4@5@6
-	//>
-	//> The default topic name if nothing will be found in the event field or `should_use_topic_field` isn't set.
-	DefaultTopic string `json:"default_topic" required:"true"` //*
+	// > @3@4@5@6
+	// >
+	// > The default topic name if nothing will be found in the event field or `should_use_topic_field` isn't set.
+	DefaultTopic string `json:"default_topic" required:"true"` // *
 
-	//> @3@4@5@6
-	//>
-	//> If set, the plugin will use topic name from the event field.
-	UseTopicField bool `json:"use_topic_field" default:"false"` //*
+	// > @3@4@5@6
+	// >
+	// > If set, the plugin will use topic name from the event field.
+	UseTopicField bool `json:"use_topic_field" default:"false"` // *
 
-	//> @3@4@5@6
-	//>
-	//> Which event field to use as topic name. It works only if `should_use_topic_field` is set.
-	TopicField string `json:"topic_field" default:"topic"` //*
+	// > @3@4@5@6
+	// >
+	// > Which event field to use as topic name. It works only if `should_use_topic_field` is set.
+	TopicField string `json:"topic_field" default:"topic"` // *
 
-	//> @3@4@5@6
-	//>
-	//> How many workers will be instantiated to send batches.
-	WorkersCount  cfg.Expression `json:"workers_count" default:"gomaxprocs*4" parse:"expression"` //*
+	// > @3@4@5@6
+	// >
+	// > How many workers will be instantiated to send batches.
+	WorkersCount  cfg.Expression `json:"workers_count" default:"gomaxprocs*4" parse:"expression"` // *
 	WorkersCount_ int
 
-	//> @3@4@5@6
-	//>
-	//> A maximum quantity of the events to pack into one batch.
-	BatchSize  cfg.Expression `json:"batch_size" default:"capacity/4" parse:"expression"` //*
+	// > @3@4@5@6
+	// >
+	// > A maximum quantity of the events to pack into one batch.
+	BatchSize  cfg.Expression `json:"batch_size" default:"capacity/4" parse:"expression"` // *
 	BatchSize_ int
 
-	//> @3@4@5@6
-	//>
-	//> A minimum size of events in a batch to send.
-	//> If both batch_size and batch_size_bytes are set, they will work together.
-	BatchSizeBytes  cfg.Expression `json:"batch_size_bytes" default:"0" parse:"expression"` //*
+	// > @3@4@5@6
+	// >
+	// > A minimum size of events in a batch to send.
+	// > If both batch_size and batch_size_bytes are set, they will work together.
+	BatchSizeBytes  cfg.Expression `json:"batch_size_bytes" default:"0" parse:"expression"` // *
 	BatchSizeBytes_ int
 
-	//> @3@4@5@6
-	//>
-	//> After this timeout the batch will be sent even if batch isn't full.
-	BatchFlushTimeout  cfg.Duration `json:"batch_flush_timeout" default:"200ms" parse:"duration"` //*
+	// > @3@4@5@6
+	// >
+	// > After this timeout the batch will be sent even if batch isn't full.
+	BatchFlushTimeout  cfg.Duration `json:"batch_flush_timeout" default:"200ms" parse:"duration"` // *
 	BatchFlushTimeout_ time.Duration
 }
 

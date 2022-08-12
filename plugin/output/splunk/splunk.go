@@ -38,48 +38,48 @@ type Plugin struct {
 	controller   pipeline.OutputPluginController
 }
 
-//! config-params
-//^ config-params
+// ! config-params
+// ^ config-params
 type Config struct {
-	//> @3@4@5@6
-	//>
-	//> A full URI address of splunk HEC endpoint. Format: `http://127.0.0.1:8088/services/collector`.
-	Endpoint string `json:"endpoint" required:"true"` //*
+	// > @3@4@5@6
+	// >
+	// > A full URI address of splunk HEC endpoint. Format: `http://127.0.0.1:8088/services/collector`.
+	Endpoint string `json:"endpoint" required:"true"` // *
 
-	//> @3@4@5@6
-	//>
-	//> Token for an authentication for a HEC endpoint.
-	Token string `json:"token" required:"true"` //*
+	// > @3@4@5@6
+	// >
+	// > Token for an authentication for a HEC endpoint.
+	Token string `json:"token" required:"true"` // *
 
-	//> @3@4@5@6
-	//>
-	//> How many workers will be instantiated to send batches.
-	WorkersCount  cfg.Expression `json:"workers_count" default:"gomaxprocs*4" parse:"expression"` //*
+	// > @3@4@5@6
+	// >
+	// > How many workers will be instantiated to send batches.
+	WorkersCount  cfg.Expression `json:"workers_count" default:"gomaxprocs*4" parse:"expression"` // *
 	WorkersCount_ int
 
-	//> @3@4@5@6
-	//>
-	//> Client timeout when sends requests to HTTP Event Collector.
-	RequestTimeout  cfg.Duration `json:"request_timeout" default:"1s" parse:"duration"` //*
+	// > @3@4@5@6
+	// >
+	// > Client timeout when sends requests to HTTP Event Collector.
+	RequestTimeout  cfg.Duration `json:"request_timeout" default:"1s" parse:"duration"` // *
 	RequestTimeout_ time.Duration
 
-	//> @3@4@5@6
-	//>
-	//> A maximum quantity of events to pack into one batch.
-	BatchSize  cfg.Expression `json:"batch_size" default:"capacity/4" parse:"expression"` //*
+	// > @3@4@5@6
+	// >
+	// > A maximum quantity of events to pack into one batch.
+	BatchSize  cfg.Expression `json:"batch_size" default:"capacity/4" parse:"expression"` // *
 	BatchSize_ int
 
-	//> @3@4@5@6
-	//>
-	//> A minimum size of events in a batch to send.
-	//> If both batch_size and batch_size_bytes are set, they will work together.
-	BatchSizeBytes  cfg.Expression `json:"batch_size_bytes" default:"0" parse:"expression"` //*
+	// > @3@4@5@6
+	// >
+	// > A minimum size of events in a batch to send.
+	// > If both batch_size and batch_size_bytes are set, they will work together.
+	BatchSizeBytes  cfg.Expression `json:"batch_size_bytes" default:"0" parse:"expression"` // *
 	BatchSizeBytes_ int
 
-	//> @3@4@5@6
-	//>
-	//> After this timeout the batch will be sent even if batch isn't completed.
-	BatchFlushTimeout  cfg.Duration `json:"batch_flush_timeout" default:"200ms" parse:"duration"` //*
+	// > @3@4@5@6
+	// >
+	// > After this timeout the batch will be sent even if batch isn't completed.
+	BatchFlushTimeout  cfg.Duration `json:"batch_flush_timeout" default:"200ms" parse:"duration"` // *
 	BatchFlushTimeout_ time.Duration
 }
 

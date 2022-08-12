@@ -14,13 +14,13 @@ type Plugin struct {
 	fieldsBuf []string
 }
 
-//! config-params
-//^ config-params
+// ! config-params
+// ^ config-params
 type Config struct {
-	//> @3@4@5@6
-	//>
-	//> The list of the fields to remove.
-	Fields []string `json:"fields"` //*
+	// > @3@4@5@6
+	// >
+	// > The list of the fields to remove.
+	Fields []string `json:"fields"` // *
 }
 
 func init() {

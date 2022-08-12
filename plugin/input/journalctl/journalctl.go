@@ -20,21 +20,21 @@ type Plugin struct {
 }
 
 type Config struct {
-	//! config-params
-	//^ config-params
+	// ! config-params
+	// ^ config-params
 
-	//> @3@4@5@6
-	//>
-	//> The filename to store offsets of processed messages.
-	OffsetsFile string `json:"offsets_file" required:"true"` //*
+	// > @3@4@5@6
+	// >
+	// > The filename to store offsets of processed messages.
+	OffsetsFile string `json:"offsets_file" required:"true"` // *
 
-	//> @3@4@5@6
-	//>
-	//> Additional args for `journalctl`.
-	//> Plugin forces "-o json" and "-c *cursor*" or "-n all", otherwise
-	//> you can use any additional args.
-	//>> Have a look at https://man7.org/linux/man-pages/man1/journalctl.1.html
-	JournalArgs []string `json:"journal_args" default:"-f -a"` //*
+	// > @3@4@5@6
+	// >
+	// > Additional args for `journalctl`.
+	// > Plugin forces "-o json" and "-c *cursor*" or "-n all", otherwise
+	// > you can use any additional args.
+	// >> Have a look at https://man7.org/linux/man-pages/man1/journalctl.1.html
+	JournalArgs []string `json:"journal_args" default:"-f -a"` // *
 
 	// for testing mostly
 	MaxLines int `json:"max_lines"`

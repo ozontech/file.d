@@ -14,19 +14,19 @@ type Plugin struct {
 	config *Config
 }
 
-//! config-params
-//^ config-params
+// ! config-params
+// ^ config-params
 type Config struct {
-	//> @3@4@5@6
-	//>
-	//> The event field to decode. Must be a string.
-	Field  cfg.FieldSelector `json:"field" parse:"selector" required:"true"` //*
+	// > @3@4@5@6
+	// >
+	// > The event field to decode. Must be a string.
+	Field  cfg.FieldSelector `json:"field" parse:"selector" required:"true"` // *
 	Field_ []string
 
-	//> @3@4@5@6
-	//>
-	//> A prefix to add to decoded object keys.
-	Prefix string `json:"prefix" default:""` //*
+	// > @3@4@5@6
+	// >
+	// > A prefix to add to decoded object keys.
+	Prefix string `json:"prefix" default:""` // *
 }
 
 func init() {
