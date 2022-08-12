@@ -48,94 +48,94 @@ type Plugin struct {
 	controller   pipeline.OutputPluginController
 }
 
-//! config-params
-//^ config-params
+// ! config-params
+// ^ config-params
 type Config struct {
-	//> @3@4@5@6
-	//>
-	//> An address of gelf endpoint. Format: `HOST:PORT`. E.g. `localhost:12201`.
-	Endpoint string `json:"endpoint" required:"true"` //*
+	// > @3@4@5@6
+	// >
+	// > An address of gelf endpoint. Format: `HOST:PORT`. E.g. `localhost:12201`.
+	Endpoint string `json:"endpoint" required:"true"` // *
 
-	//> @3@4@5@6
-	//>
-	//> The plugin reconnects to endpoint periodically using this interval. It is useful if an endpoint is a load balancer.
-	ReconnectInterval  cfg.Duration `json:"reconnect_interval" default:"1m" parse:"duration"` //*
+	// > @3@4@5@6
+	// >
+	// > The plugin reconnects to endpoint periodically using this interval. It is useful if an endpoint is a load balancer.
+	ReconnectInterval  cfg.Duration `json:"reconnect_interval" default:"1m" parse:"duration"` // *
 	ReconnectInterval_ time.Duration
 
-	//> @3@4@5@6
-	//>
-	//> How much time to wait for the connection?
-	ConnectionTimeout  cfg.Duration `json:"connection_timeout" default:"5s" parse:"duration"` //*
+	// > @3@4@5@6
+	// >
+	// > How much time to wait for the connection?
+	ConnectionTimeout  cfg.Duration `json:"connection_timeout" default:"5s" parse:"duration"` // *
 	ConnectionTimeout_ time.Duration
 
-	//> @3@4@5@6
-	//>
-	//> Which field of the event should be used as `host` GELF field.
-	HostField string `json:"host_field" default:"host"` //*
+	// > @3@4@5@6
+	// >
+	// > Which field of the event should be used as `host` GELF field.
+	HostField string `json:"host_field" default:"host"` // *
 
-	//> @3@4@5@6
-	//>
-	//>  Which field of the event should be used as `short_message` GELF field.
-	ShortMessageField string `json:"short_message_field" default:"message"` //*
+	// > @3@4@5@6
+	// >
+	// >  Which field of the event should be used as `short_message` GELF field.
+	ShortMessageField string `json:"short_message_field" default:"message"` // *
 
-	//> @3@4@5@6
-	//>
-	//>  The default value for `short_message` GELF field if nothing is found in the event.
-	DefaultShortMessageValue string `json:"default_short_message_value" default:"not set"` //*
+	// > @3@4@5@6
+	// >
+	// >  The default value for `short_message` GELF field if nothing is found in the event.
+	DefaultShortMessageValue string `json:"default_short_message_value" default:"not set"` // *
 
-	//> @3@4@5@6
-	//>
-	//> Which field of the event should be used as `full_message` GELF field.
-	FullMessageField string `json:"full_message_field" default:""` //*
+	// > @3@4@5@6
+	// >
+	// > Which field of the event should be used as `full_message` GELF field.
+	FullMessageField string `json:"full_message_field" default:""` // *
 
-	//> @3@4@5@6
-	//>
-	//> Which field of the event should be used as `timestamp` GELF field.
-	TimestampField string `json:"timestamp_field" default:"time"` //*
+	// > @3@4@5@6
+	// >
+	// > Which field of the event should be used as `timestamp` GELF field.
+	TimestampField string `json:"timestamp_field" default:"time"` // *
 
-	//> @3@4@5@6
-	//>
-	//> In which format timestamp field should be parsed.
-	TimestampFieldFormat string `json:"timestamp_field_format" default:"rfc3339nano" options:"ansic|unixdate|rubydate|rfc822|rfc822z|rfc850|rfc1123|rfc1123z|rfc3339|rfc3339nano|kitchen|stamp|stampmilli|stampmicro|stampnano"` //*
+	// > @3@4@5@6
+	// >
+	// > In which format timestamp field should be parsed.
+	TimestampFieldFormat string `json:"timestamp_field_format" default:"rfc3339nano" options:"ansic|unixdate|rubydate|rfc822|rfc822z|rfc850|rfc1123|rfc1123z|rfc3339|rfc3339nano|kitchen|stamp|stampmilli|stampmicro|stampnano"` // *
 
-	//> @3@4@5@6
-	//>
-	//> Which field of the event should be used as a `level` GELF field. Level field should contain level number or string according to RFC 5424:
-	//> * `7` or `debug`
-	//> * `6` or `info`
-	//> * `5` or `notice`
-	//> * `4` or `warning`
-	//> * `3` or `error`
-	//> * `2` or `critical`
-	//> * `1` or `alert`
-	//> * `0` or `emergency`
-	//>
-	//> Otherwise `6` will be used.
-	LevelField string `json:"level_field" default:"level"` //*
+	// > @3@4@5@6
+	// >
+	// > Which field of the event should be used as a `level` GELF field. Level field should contain level number or string according to RFC 5424:
+	// > * `7` or `debug`
+	// > * `6` or `info`
+	// > * `5` or `notice`
+	// > * `4` or `warning`
+	// > * `3` or `error`
+	// > * `2` or `critical`
+	// > * `1` or `alert`
+	// > * `0` or `emergency`
+	// >
+	// > Otherwise `6` will be used.
+	LevelField string `json:"level_field" default:"level"` // *
 
-	//> @3@4@5@6
-	//>
-	//> How many workers will be instantiated to send batches.
-	WorkersCount  cfg.Expression `json:"workers_count" default:"gomaxprocs*4" parse:"expression"` //*
+	// > @3@4@5@6
+	// >
+	// > How many workers will be instantiated to send batches.
+	WorkersCount  cfg.Expression `json:"workers_count" default:"gomaxprocs*4" parse:"expression"` // *
 	WorkersCount_ int
 
-	//> @3@4@5@6
-	//>
-	//> A maximum quantity of events to pack into one batch.
-	BatchSize  cfg.Expression `json:"batch_size" default:"capacity/4" parse:"expression"` //*
+	// > @3@4@5@6
+	// >
+	// > A maximum quantity of events to pack into one batch.
+	BatchSize  cfg.Expression `json:"batch_size" default:"capacity/4" parse:"expression"` // *
 	BatchSize_ int
 
-	//> @3@4@5@6
-	//>
-	//> A minimum size of events in a batch to send.
-	//> If both batch_size and batch_size_bytes are set, they will work together.
-	BatchSizeBytes  cfg.Expression `json:"batch_size_bytes" default:"0" parse:"expression"` //*
+	// > @3@4@5@6
+	// >
+	// > A minimum size of events in a batch to send.
+	// > If both batch_size and batch_size_bytes are set, they will work together.
+	BatchSizeBytes  cfg.Expression `json:"batch_size_bytes" default:"0" parse:"expression"` // *
 	BatchSizeBytes_ int
 
-	//> @3@4@5@6
-	//>
-	//> After this timeout the batch will be sent even if batch isn't completed.
-	BatchFlushTimeout  cfg.Duration `json:"batch_flush_timeout" default:"200ms" parse:"duration"` //*
+	// > @3@4@5@6
+	// >
+	// > After this timeout the batch will be sent even if batch isn't completed.
+	BatchFlushTimeout  cfg.Duration `json:"batch_flush_timeout" default:"200ms" parse:"duration"` // *
 	BatchFlushTimeout_ time.Duration
 
 	// fields converted to extra fields GELF format

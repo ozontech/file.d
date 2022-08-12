@@ -11,35 +11,36 @@ import (
 /*{ introduction
 It converts field date/time data to different format.
 }*/
+
 type Plugin struct {
 	config *Config
 }
 
-//! config-params
-//^ config-params
+// ! config-params
+// ^ config-params
 type Config struct {
-	//> @3@4@5@6
-	//>
-	//> The event field name which contains date information.
-	Field  cfg.FieldSelector `json:"field" parse:"selector" required:"false" default:"time"` //*
+	// > @3@4@5@6
+	// >
+	// > The event field name which contains date information.
+	Field  cfg.FieldSelector `json:"field" parse:"selector" required:"false" default:"time"` // *
 	Field_ []string
 
-	//> @3@4@5@6
-	//>
-	//> List of date formats to parse a field. Available list items should be one of `ansic|unixdate|rubydate|rfc822|rfc822z|rfc850|rfc1123|rfc1123z|rfc3339|rfc3339nano|kitchen|stamp|stampmilli|stampmicro|stampnano`.
-	SourceFormats  []string `json:"source_formats" default:"rfc3339nano,rfc3339"` //*
+	// > @3@4@5@6
+	// >
+	// > List of date formats to parse a field. Available list items should be one of `ansic|unixdate|rubydate|rfc822|rfc822z|rfc850|rfc1123|rfc1123z|rfc3339|rfc3339nano|kitchen|stamp|stampmilli|stampmicro|stampnano`.
+	SourceFormats  []string `json:"source_formats" default:"rfc3339nano,rfc3339"` // *
 	SourceFormats_ []string
 
-	//> @3@4@5@6
-	//>
-	//> Date format to convert to.
-	TargetFormat  string `json:"target_format" default:"timestamp"` //*
+	// > @3@4@5@6
+	// >
+	// > Date format to convert to.
+	TargetFormat  string `json:"target_format" default:"timestamp"` // *
 	TargetFormat_ string
 
-	//> @3@4@5@6
-	//>
-	//> Remove field if conversion fails.
-	RemoveOnFail bool `json:"remove_on_fail" default:"false"` //*
+	// > @3@4@5@6
+	// >
+	// > Remove field if conversion fails.
+	RemoveOnFail bool `json:"remove_on_fail" default:"false"` // *
 }
 
 func init() {

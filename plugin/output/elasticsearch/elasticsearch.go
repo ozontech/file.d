@@ -57,90 +57,90 @@ type Plugin struct {
 	mu           *sync.Mutex
 }
 
-//! config-params
-//^ config-params
+// ! config-params
+// ^ config-params
 type Config struct {
-	//> @3@4@5@6
-	//>
-	//> The list of elasticsearch endpoints in the following format: `SCHEMA://HOST:PORT`
-	Endpoints []string `json:"endpoints"  required:"true"` //*
+	// > @3@4@5@6
+	// >
+	// > The list of elasticsearch endpoints in the following format: `SCHEMA://HOST:PORT`
+	Endpoints []string `json:"endpoints"  required:"true"` // *
 
-	//> @3@4@5@6
-	//>
-	//> Username for HTTP Basic Authentication.
-	Username string `json:"username"` //*
+	// > @3@4@5@6
+	// >
+	// > Username for HTTP Basic Authentication.
+	Username string `json:"username"` // *
 
-	//> @3@4@5@6
-	//>
-	//> Password for HTTP Basic Authentication.
-	Password string `json:"password"` //*
+	// > @3@4@5@6
+	// >
+	// > Password for HTTP Basic Authentication.
+	Password string `json:"password"` // *
 
-	//> @3@4@5@6
-	//>
-	//> Base64-encoded token for authorization; if set, overrides username/password.
-	APIKey string `json:"api_key"` //*
+	// > @3@4@5@6
+	// >
+	// > Base64-encoded token for authorization; if set, overrides username/password.
+	APIKey string `json:"api_key"` // *
 
-	//> @3@4@5@6
-	//> Path or content of a PEM-encoded CA file.
-	CACert string `json:"ca_cert"` //*
+	// > @3@4@5@6
+	// > Path or content of a PEM-encoded CA file.
+	CACert string `json:"ca_cert"` // *
 
-	//> @3@4@5@6
-	//>
-	//> It defines the pattern of elasticsearch index name. Use `%` character as a placeholder. Use `index_values` to define values for the replacement.
-	//> E.g. if `index_format="my-index-%-%"` and `index_values="service,@@time"` and event is `{"service"="my-service"}`
-	//> then index for that event will be `my-index-my-service-2020-01-05`. First `%` replaced with `service` field of the event and the second
-	//> replaced with current time(see `time_format` option)
-	IndexFormat string `json:"index_format" default:"file-d-%"` //*
+	// > @3@4@5@6
+	// >
+	// > It defines the pattern of elasticsearch index name. Use `%` character as a placeholder. Use `index_values` to define values for the replacement.
+	// > E.g. if `index_format="my-index-%-%"` and `index_values="service,@@time"` and event is `{"service"="my-service"}`
+	// > then index for that event will be `my-index-my-service-2020-01-05`. First `%` replaced with `service` field of the event and the second
+	// > replaced with current time(see `time_format` option)
+	IndexFormat string `json:"index_format" default:"file-d-%"` // *
 
-	//> @3@4@5@6
-	//>
-	//> A comma-separated list of event fields which will be used for replacement `index_format`.
-	//> There is a special field `@@time` which equals the current time. Use the `time_format` to define a time format.
-	//> E.g. `[service, @@time]`
-	IndexValues []string `json:"index_values" default:"[@time]" slice:"true"` //*
+	// > @3@4@5@6
+	// >
+	// > A comma-separated list of event fields which will be used for replacement `index_format`.
+	// > There is a special field `@@time` which equals the current time. Use the `time_format` to define a time format.
+	// > E.g. `[service, @@time]`
+	IndexValues []string `json:"index_values" default:"[@time]" slice:"true"` // *
 
-	//> @3@4@5@6
-	//>
-	//> The time format pattern to use as value for the `@@time` placeholder.
-	//> > Check out [func Parse doc](https://golang.org/pkg/time/#Parse) for details.
-	TimeFormat string `json:"time_format" default:"2006-01-02"` //*
+	// > @3@4@5@6
+	// >
+	// > The time format pattern to use as value for the `@@time` placeholder.
+	// > > Check out [func Parse doc](https://golang.org/pkg/time/#Parse) for details.
+	TimeFormat string `json:"time_format" default:"2006-01-02"` // *
 
-	//> @3@4@5@6
-	//>
-	//> It defines how much time to wait for the connection.
-	ConnectionTimeout  cfg.Duration `json:"connection_timeout" default:"5s" parse:"duration"` //*
+	// > @3@4@5@6
+	// >
+	// > It defines how much time to wait for the connection.
+	ConnectionTimeout  cfg.Duration `json:"connection_timeout" default:"5s" parse:"duration"` // *
 	ConnectionTimeout_ time.Duration
 
-	//> @3@4@5@6
-	//>
-	//> It defines how many workers will be instantiated to send batches.
-	WorkersCount  cfg.Expression `json:"workers_count" default:"gomaxprocs*4" parse:"expression"` //*
+	// > @3@4@5@6
+	// >
+	// > It defines how many workers will be instantiated to send batches.
+	WorkersCount  cfg.Expression `json:"workers_count" default:"gomaxprocs*4" parse:"expression"` // *
 	WorkersCount_ int
 
-	//> @3@4@5@6
-	//>
-	//> A maximum quantity of events to pack into one batch.
-	BatchSize  cfg.Expression `json:"batch_size" default:"capacity/4"  parse:"expression"` //*
+	// > @3@4@5@6
+	// >
+	// > A maximum quantity of events to pack into one batch.
+	BatchSize  cfg.Expression `json:"batch_size" default:"capacity/4"  parse:"expression"` // *
 	BatchSize_ int
 
-	//> @3@4@5@6
-	//>
-	//> A minimum size of events in a batch to send.
-	//> If both batch_size and batch_size_bytes are set, they will work together.
-	BatchSizeBytes  cfg.Expression `json:"batch_size_bytes" default:"0" parse:"expression"` //*
+	// > @3@4@5@6
+	// >
+	// > A minimum size of events in a batch to send.
+	// > If both batch_size and batch_size_bytes are set, they will work together.
+	BatchSizeBytes  cfg.Expression `json:"batch_size_bytes" default:"0" parse:"expression"` // *
 	BatchSizeBytes_ int
 
-	//> @3@4@5@6
-	//>
-	//> After this timeout batch will be sent even if batch isn't full.
-	BatchFlushTimeout  cfg.Duration `json:"batch_flush_timeout" default:"200ms" parse:"duration"` //*
+	// > @3@4@5@6
+	// >
+	// > After this timeout batch will be sent even if batch isn't full.
+	BatchFlushTimeout  cfg.Duration `json:"batch_flush_timeout" default:"200ms" parse:"duration"` // *
 	BatchFlushTimeout_ time.Duration
 
-	//> @3@4@5@6
-	//>
-	//> Operation type to be used in batch requests. It can be `index` or `create`. Default is `index`.
-	//> > Check out [_bulk API doc](https://www.elastic.co/guide/en/elasticsearch/reference/current/docs-bulk.html) for details.
-	BatchOpType string `json:"batch_op_type" default:"index" options:"index|create"` //*
+	// > @3@4@5@6
+	// >
+	// > Operation type to be used in batch requests. It can be `index` or `create`. Default is `index`.
+	// > > Check out [_bulk API doc](https://www.elastic.co/guide/en/elasticsearch/reference/current/docs-bulk.html) for details.
+	BatchOpType string `json:"batch_op_type" default:"index" options:"index|create"` // *
 }
 
 type data struct {

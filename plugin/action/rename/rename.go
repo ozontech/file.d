@@ -33,6 +33,7 @@ The resulting event could look like:
   },
 ```
 }*/
+
 type Plugin struct {
 	paths          [][]string
 	names          []string

@@ -57,38 +57,38 @@ const (
 )
 
 type Config struct {
-	//> File name for log file.
-	//> defaultTargetFileName = TargetFile default value
-	TargetFile string `json:"target_file" default:"/var/log/file-d.log"` //*
+	// > File name for log file.
+	// > defaultTargetFileName = TargetFile default value
+	TargetFile string `json:"target_file" default:"/var/log/file-d.log"` // *
 
-	//> Interval of creation new file
-	RetentionInterval  cfg.Duration `json:"retention_interval" default:"1h" parse:"duration"` //*
+	// > Interval of creation new file
+	RetentionInterval  cfg.Duration `json:"retention_interval" default:"1h" parse:"duration"` // *
 	RetentionInterval_ time.Duration
 
-	//> Layout is added to targetFile after sealing up. Determines result file name
-	Layout string `json:"time_layout" default:"01-02-2006_15:04:05"` //*
+	// > Layout is added to targetFile after sealing up. Determines result file name
+	Layout string `json:"time_layout" default:"01-02-2006_15:04:05"` // *
 
-	//> How much workers will be instantiated to send batches.
-	WorkersCount  cfg.Expression `json:"workers_count" default:"gomaxprocs*4" parse:"expression"` //*
+	// > How much workers will be instantiated to send batches.
+	WorkersCount  cfg.Expression `json:"workers_count" default:"gomaxprocs*4" parse:"expression"` // *
 	WorkersCount_ int
 
-	//> Maximum quantity of events to pack into one batch.
-	BatchSize  cfg.Expression `json:"batch_size" default:"capacity/4" parse:"expression"` //*
+	// > Maximum quantity of events to pack into one batch.
+	BatchSize  cfg.Expression `json:"batch_size" default:"capacity/4" parse:"expression"` // *
 	BatchSize_ int
 
-	//> @3@4@5@6
-	//>
-	//> A minimum size of events in a batch to send.
-	//> If both batch_size and batch_size_bytes are set, they will work together.
-	BatchSizeBytes  cfg.Expression `json:"batch_size_bytes" default:"0" parse:"expression"` //*
+	// > @3@4@5@6
+	// >
+	// > A minimum size of events in a batch to send.
+	// > If both batch_size and batch_size_bytes are set, they will work together.
+	BatchSizeBytes  cfg.Expression `json:"batch_size_bytes" default:"0" parse:"expression"` // *
 	BatchSizeBytes_ int
 
-	//> After this timeout batch will be sent even if batch isn't completed.
-	BatchFlushTimeout  cfg.Duration `json:"batch_flush_timeout" default:"1s" parse:"duration"` //*
+	// > After this timeout batch will be sent even if batch isn't completed.
+	BatchFlushTimeout  cfg.Duration `json:"batch_flush_timeout" default:"1s" parse:"duration"` // *
 	BatchFlushTimeout_ time.Duration
 
-	//> File mode for log files
-	FileMode  cfg.Base8 `json:"file_mode" default:"0666" parse:"base8"` //*
+	// > File mode for log files
+	FileMode  cfg.Base8 `json:"file_mode" default:"0666" parse:"base8"` // *
 	FileMode_ int64
 }
 

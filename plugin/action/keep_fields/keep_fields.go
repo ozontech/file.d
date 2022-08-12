@@ -8,18 +8,19 @@ import (
 /*{ introduction
 It keeps the list of the event fields and removes others.
 }*/
+
 type Plugin struct {
 	config    *Config
 	fieldsBuf []string
 }
 
-//! config-params
-//^ config-params
+// ! config-params
+// ^ config-params
 type Config struct {
-	//> @3@4@5@6
-	//>
-	//> The list of the fields to keep.
-	Fields []string `json:"fields"` //*
+	// > @3@4@5@6
+	// >
+	// > The list of the fields to keep.
+	Fields []string `json:"fields"` // *
 }
 
 func init() {

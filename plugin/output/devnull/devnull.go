@@ -36,11 +36,11 @@ func (p *Plugin) Start(_ pipeline.AnyConfig, params *pipeline.OutputPluginParams
 	p.total = &atomic.Int64{}
 }
 
-//! fn-list
-//^ fn-list
+// ! fn-list
+// ^ fn-list
 
-//> It sets up a hook to make sure the test event passes successfully to output.
-func (p *Plugin) SetOutFn(fn func(event *pipeline.Event)) { //*
+// > It sets up a hook to make sure the test event passes successfully to output.
+func (p *Plugin) SetOutFn(fn func(event *pipeline.Event)) { // *
 	p.outFn = fn
 }
 

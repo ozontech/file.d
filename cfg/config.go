@@ -259,12 +259,14 @@ func Parse(ptr interface{}, values map[string]int) error {
 // it isn't just a recursion
 // it also captures values with the same name from parent
 // i.e. take this config:
-// {
-// 	"T": 10,
-// 	"Child": { // has `child:true` in a tag
-// 		"T": null
-// 	}
-// }
+//
+//	{
+//		"T": 10,
+//		"Child": { // has `child:true` in a tag
+//			"T": null
+//		}
+//	}
+//
 // this function will set `config.Child.T = config.T`
 // see file.d/cfg/config_test.go:TestHierarchy for an example
 func ParseChild(parent reflect.Value, v reflect.Value, values map[string]int) error {

@@ -47,24 +47,24 @@ type Plugin struct {
 	jp *join.Plugin
 }
 
-//! config-params
-//^ config-params
+// ! config-params
+// ^ config-params
 type Config struct {
-	//> @3@4@5@6
-	//>
-	//> The event field which will be checked for joining with each other.
-	Field  cfg.FieldSelector `json:"field" default:"log" required:"true" parse:"selector"` //*
+	// > @3@4@5@6
+	// >
+	// > The event field which will be checked for joining with each other.
+	Field  cfg.FieldSelector `json:"field" default:"log" required:"true" parse:"selector"` // *
 	Field_ []string
 
-	//> @3@4@5@6
-	//>
-	//> Max size of the resulted event. If it is set and the event exceeds the limit, the event will be truncated.
-	MaxEventSize int `json:"max_event_size" default:"0"` //*
+	// > @3@4@5@6
+	// >
+	// > Max size of the resulted event. If it is set and the event exceeds the limit, the event will be truncated.
+	MaxEventSize int `json:"max_event_size" default:"0"` // *
 
-	//> @3@4@5@6
-	//>
-	//> The name of the template. Available templates: `go_panic`.
-	Template string `json:"template" required:"true"` //*
+	// > @3@4@5@6
+	// >
+	// > The name of the template. Available templates: `go_panic`.
+	Template string `json:"template" required:"true"` // *
 }
 
 func init() {

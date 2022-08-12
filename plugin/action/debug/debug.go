@@ -9,6 +9,7 @@ import (
 /*{ introduction
 It logs event to stdout. Useful for debugging.
 }*/
+
 type Plugin struct{}
 
 type Config map[string]interface{}

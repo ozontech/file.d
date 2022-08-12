@@ -155,8 +155,10 @@ func runWriter(tempDir string, files int) {
 
 /*
 Plugins registered automatically after importing by init() function:
+
 	_ "github.com/ozontech/file.d/plugin/output/devnull"
 	_ "github.com/ozontech/file.d/plugin/output/elasticsearch"
+
 Moving plugin in sub dir in plugin dir will quit registration quietly.
 To prevent this let's check that DefaultPluginRegistry contains all plugins.
 Plugins "dmesg", "journalctl" linux based, they contain tag: //go:build linux.

@@ -511,6 +511,7 @@ For now maintenance consists of two stages:
 Symlinks maintenance detects if underlying file of symlink is changed.
 Job maintenance `fstat` tracked files to detect if new portion of data have been written to the file. If job is in `done` state when it releases and reopens file descriptor to allow third party software delete the file.
 }*/
+
 func (jp *jobProvider) maintenance() {
 	time.Sleep(jp.config.MaintenanceInterval_)
 	for {

@@ -10,17 +10,18 @@ import (
 /*{ introduction
 It adds field containing hostname to an event.
 }*/
+
 type Plugin struct {
 	config *Config
 }
 
-//! config-params
-//^ config-params
+// ! config-params
+// ^ config-params
 type Config struct {
-	//> @3@4@5@6
-	//>
-	//> The event field to which put the hostname. Must be a string.
-	Field string `json:"field" default:"host" required:"true"` //*
+	// > @3@4@5@6
+	// >
+	// > The event field to which put the hostname. Must be a string.
+	Field string `json:"field" default:"host" required:"true"` // *
 }
 
 func init() {

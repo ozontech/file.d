@@ -10,31 +10,32 @@ import (
 /*{ introduction
 It adds time field to the event.
 }*/
+
 type Plugin struct {
 	config *Config
 }
 
-//! config-params
-//^ config-params
+// ! config-params
+// ^ config-params
 type Config struct {
-	//> @3@4@5@6
-	//>
-	//> The event field to put the time.
-	Field string `json:"field" required:"true" default:"time"` //*
+	// > @3@4@5@6
+	// >
+	// > The event field to put the time.
+	Field string `json:"field" required:"true" default:"time"` // *
 
-	//> @3@4@5@6
-	//>
-	//> Date format to parse a field. This could be one of
+	// > @3@4@5@6
+	// >
+	// > Date format to parse a field. This could be one of
 	// `timestamp|timestampmilli|timestampmicro|timestampnano|ansic|unixdate|rubydate|rfc822|rfc822z|rfc850|rfc1123|rfc1123z|rfc3339|rfc3339nano|kitchen|stamp|stampmilli|stampmicro|stampnano`
 	// or custom time format.
 	// See: https://pkg.go.dev/time#Parse
-	Format  string `json:"format" default:"rfc3339nano" required:"true"` //*
+	Format  string `json:"format" default:"rfc3339nano" required:"true"` // *
 	Format_ string
 
-	//> @3@4@5@6
-	//>
-	//> Override field if exists.
-	Override bool `json:"override" default:"true"` //*
+	// > @3@4@5@6
+	// >
+	// > Override field if exists.
+	Override bool `json:"override" default:"true"` // *
 }
 
 func init() {

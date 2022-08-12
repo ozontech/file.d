@@ -22,17 +22,18 @@ pipelines:
 It transforms `{"server":{"os":"linux","arch":"amd64"}}` into `{"server":"{\"os\":\"linux\",\"arch\":\"amd64\"}"}`.
 
 }*/
+
 type Plugin struct {
 	config *Config
 }
 
-//! config-params
-//^ config-params
+// ! config-params
+// ^ config-params
 type Config struct {
-	//> @3@4@5@6
-	//>
-	//> The event field to encode. Must be a string.
-	Field  cfg.FieldSelector `json:"field" parse:"selector" required:"true"` //*
+	// > @3@4@5@6
+	// >
+	// > The event field to encode. Must be a string.
+	Field  cfg.FieldSelector `json:"field" parse:"selector" required:"true"` // *
 	Field_ []string
 }
 
