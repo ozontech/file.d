@@ -195,13 +195,13 @@ func (e *Event) String() string {
 type eventPool struct {
 	capacity int
 
-	avgEventSize    int
-	freeEventsCount int
-	getCounter      atomic.Int64
-	backCounter     atomic.Int64
-	events          []*Event
-	free1           []atomic.Bool
-	free2           []atomic.Bool
+	avgEventSize int
+	inUseEvents  atomic.Int64
+	getCounter   atomic.Int64
+	backCounter  atomic.Int64
+	events       []*Event
+	free1        []atomic.Bool
+	free2        []atomic.Bool
 
 	getMu   *sync.Mutex
 	getCond *sync.Cond
@@ -209,11 +209,10 @@ type eventPool struct {
 
 func newEventPool(capacity, avgEventSize int) *eventPool {
 	eventPool := &eventPool{
-		avgEventSize:    avgEventSize,
-		capacity:        capacity,
-		freeEventsCount: capacity,
-		getMu:           &sync.Mutex{},
-		backCounter:     *atomic.NewInt64(int64(capacity)),
+		avgEventSize: avgEventSize,
+		capacity:     capacity,
+		getMu:        &sync.Mutex{},
+		backCounter:  *atomic.NewInt64(int64(capacity)),
 	}
 
 	eventPool.getCond = sync.NewCond(eventPool.getMu)
@@ -260,7 +259,7 @@ func (p *eventPool) get() *Event {
 	event := p.events[x]
 	p.events[x] = nil
 	p.free2[x].Store(false)
-
+	p.inUseEvents.Inc()
 	event.reset(p.avgEventSize)
 	return event
 }
@@ -290,16 +289,16 @@ func (p *eventPool) back(event *Event) {
 			tries = 0
 		}
 	}
-
 	p.events[x] = event
 	p.free1[x].Store(true)
+	p.inUseEvents.Dec()
 	p.getCond.Broadcast()
 }
 
 func (p *eventPool) dump() string {
 	out := logger.Cond(len(p.events) == 0, logger.Header("no events"), func() string {
 		o := logger.Header("events")
-		for i := 0; i < p.freeEventsCount; i++ {
+		for i := 0; i < p.capacity; i++ {
 			event := p.events[i]
 			eventStr := event.String()
 			if eventStr == "" {

@@ -48,7 +48,7 @@ bench-file:
 
 .PHONY: gen-doc
 gen-doc:
-	@go install github.com/vitkovskii/insane-doc@latest
+	@go install github.com/vitkovskii/insane-doc@v0.0.1
 	@~/go/bin/insane-doc
 
 .PHONY: profile-file
