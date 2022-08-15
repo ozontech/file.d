@@ -148,6 +148,13 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	}
 
 	node := event.Root.Dig(p.config.Field_...)
+	if node == nil {
+		if p.isJoining {
+			p.flush()
+		}
+		return pipeline.ActionPass
+	}
+
 	value := node.AsString()
 
 	firstOK := false
