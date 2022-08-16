@@ -27,6 +27,12 @@ type redisLimiter struct {
 
 	// contains global values synced from redis
 	totalLimiter *inMemoryLimiter
+
+	// contains indexes of buckets in incrementLimiter for sync
+	keyIdxsForSync []int
+
+	// contains bucket IDs for keys in keyIdxsForSync
+	bucketIdsForSync []int
 }
 
 // NewRedisLimiter return instance of redis limiter.
@@ -44,6 +50,8 @@ func NewRedisLimiter(
 		totalLimiter:     NewInMemoryLimiter(bucketInterval, bucketCount, limit),
 	}
 
+	rl.keyIdxsForSync = make([]int, 0, bucketCount)
+	rl.bucketIdsForSync = make([]int, 0, bucketCount)
 	rl.keyPrefix = bytes.Buffer{}
 
 	// full name of keyPrefix will be pipelineName_throttleFieldName_throttleFieldValue_limit. `limit` added afterwards
@@ -61,7 +69,7 @@ func (l *redisLimiter) isAllowed(event *pipeline.Event, ts time.Time) bool {
 	// count increment from last sync
 	isAllowed := l.incrementLimiter.isAllowed(event, ts)
 	if isAllowed {
-		// count global limiter if distributed mode on and passed local limit
+		// count global limiter from last sync
 		isAllowed = l.totalLimiter.isAllowed(event, ts)
 	}
 
@@ -85,34 +93,33 @@ func (l *redisLimiter) sync() {
 	// get actual bucket value
 	keyPrefixLen := l.keyPrefix.Len()
 
-	keyIdxs := make([]int, 0, count)
-	bucketIDs := make([]int, 0, count)
-
 	for i := 0; i < count; i++ {
 		// no new events passed
 		if l.incrementLimiter.buckets[i] == 0 {
 			continue
 		}
-		keyIdxs = append(keyIdxs, i)
-		bucketIDs = append(bucketIDs, minID+i)
+		l.keyIdxsForSync = append(l.keyIdxsForSync, i)
+		l.bucketIdsForSync = append(l.bucketIdsForSync, minID+i)
 	}
 
 	l.totalLimiter.mu.Unlock()
 	l.incrementLimiter.mu.Unlock()
 
-	l.syncLocalGlobalLimiters(keyIdxs, bucketIDs, maxID)
-
+	l.syncLocalGlobalLimiters(maxID)
 	l.updateKeyLimit(keyPrefixLen)
+
+	l.keyIdxsForSync = l.keyIdxsForSync[:0]
+	l.bucketIdsForSync = l.bucketIdsForSync[:0]
 }
 
-func (l *redisLimiter) syncLocalGlobalLimiters(keyIdxs, bucketIDs []int, maxID int) {
+func (l *redisLimiter) syncLocalGlobalLimiters(maxID int) {
 	prefix := l.keyPrefix.String()
 
-	for i, ID := range bucketIDs {
+	for i, ID := range l.bucketIdsForSync {
 		i := i
 		ID := ID
 
-		bucketIdx := keyIdxs[i]
+		bucketIdx := l.keyIdxsForSync[i]
 
 		stringID := strconv.Itoa(ID)
 		key := prefix + stringID
@@ -126,7 +133,7 @@ func (l *redisLimiter) syncLocalGlobalLimiters(keyIdxs, bucketIDs []int, maxID i
 
 		l.updateLimiterValues(maxID, bucketIdx, val)
 
-		// for oldest bucket set lifetime equal to 1 bucket duration, for newest to (bucket count * bucket duration) + 1
+		// for oldest bucket set lifetime equal to 1 bucket duration, for newest equal to ((bucket count + 1) * bucket duration)
 		l.redis.Expire(key, l.totalLimiter.interval+l.totalLimiter.interval*time.Duration(bucketIdx))
 	}
 }

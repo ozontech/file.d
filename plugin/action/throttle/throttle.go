@@ -16,9 +16,8 @@ var (
 	defaultThrottleKey = "default"
 
 	// limiters should be shared across pipeline, so let's have a map by namespace and limiter name
-	limiters   = map[string]map[string]limiter{} // todo: cleanup this map?
-	limitersMu = &sync.RWMutex{}
-	// only one throttle plugin updates limiters.
+	limiters       = map[string]map[string]limiter{} // todo: cleanup this map?
+	limitersMu     = &sync.RWMutex{}
 	limiterSyncMap = map[string]struct{}{}
 )
 
@@ -168,14 +167,14 @@ func factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 	return &Plugin{}, &Config{}
 }
 
-func (p *Plugin) syncWorker(ctx context.Context, jobCh <-chan limiter, jobDoneCh chan<- struct{}) {
+func (p *Plugin) syncWorker(ctx context.Context, jobCh <-chan limiter, wg *sync.WaitGroup) {
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case job := <-jobCh:
 			job.sync()
-			jobDoneCh <- struct{}{}
+			wg.Done()
 		}
 	}
 }
@@ -220,6 +219,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 		ticker := time.NewTicker(p.config.RedisBackendCfg.SyncInterval_)
 
 		limitersMu.Lock()
+		wg := sync.WaitGroup{}
 		// run syncer at single throttle for one pipeline
 		if _, ok := limiterSyncMap[p.pipeline]; !ok {
 			go func() {
@@ -227,10 +227,10 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 				limitersMu.Unlock()
 
 				jobs := make(chan limiter, p.config.RedisBackendCfg.WorkerCount)
-				jobsDone := make(chan struct{}, p.config.RedisBackendCfg.WorkerCount)
+				//jobsDone := make(chan struct{}, p.config.RedisBackendCfg.WorkerCount)
 
 				for i := 0; i < p.config.RedisBackendCfg.WorkerCount; i++ {
-					go p.syncWorker(ctx, jobs, jobsDone)
+					go p.syncWorker(ctx, jobs, &wg)
 				}
 
 				for {
@@ -240,15 +240,12 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 						return
 					case <-ticker.C:
 						limitersMu.RLock()
-						jobsCount := 0
 
 						for _, lim := range limiters[p.pipeline] {
+							wg.Add(1)
 							jobs <- lim
-							jobsCount++
 						}
-						for i := 0; i < jobsCount; i++ {
-							<-jobsDone
-						}
+						wg.Wait()
 						limitersMu.RUnlock()
 					}
 				}
