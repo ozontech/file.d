@@ -6,13 +6,16 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ozontech/file.d/logger"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/atomic"
+
+	"github.com/ozontech/file.d/logger"
+	"github.com/ozontech/file.d/metric"
 )
 
 type batcherTail struct {
 	commit func(event *Event)
+	*metric.MetricsCtl
 }
 
 func (b *batcherTail) Commit(event *Event) {

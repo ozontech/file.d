@@ -52,6 +52,25 @@ const (
 
 type finalizeFn = func(event *Event, notifyInput bool, backEvent bool)
 
+type MetricsController interface {
+	MetricsCounters
+	MetricsGauges
+}
+
+type MetricsCounters interface {
+	RegisterCounter(name, help string)
+	IncCounter(name string)
+	AddCounter(name string, value float64)
+}
+
+type MetricsGauges interface {
+	RegisterGauge(name, help string)
+	IncGauge(name string)
+	DecGauge(name string)
+	AddGauge(name string, value float64)
+	SetGauge(name string, value float64)
+}
+
 type InputPluginController interface {
 	In(sourceID SourceID, sourceName string, offset int64, data []byte, isNewSource bool) uint64
 	UseSpread()                           // don't use stream field and spread all events across all processors
@@ -59,16 +78,19 @@ type InputPluginController interface {
 	SuggestDecoder(t decoder.DecoderType) // set decoder if pipeline uses "auto" value for decoder
 	IncReadOps()                          // inc read ops for metric
 	IncMaxEventSizeExceeded()             // inc max event size exceeded counter
+	MetricsController
 }
 
 type ActionPluginController interface {
 	Commit(event *Event)    // commit offset of held event and skip further processing
 	Propagate(event *Event) // throw held event back to pipeline
+	MetricsController
 }
 
 type OutputPluginController interface {
 	Commit(event *Event) // notify input plugin that event is successfully processed and save offsets
 	Error(err string)
+	MetricsController
 }
 
 type (
@@ -77,6 +99,7 @@ type (
 )
 
 type Pipeline struct {
+	*metric.MetricsCtl
 	Name     string
 	started  bool
 	settings *Settings
@@ -147,6 +170,7 @@ func New(name string, settings *Settings, registry *prometheus.Registry) *Pipeli
 			PipelineSettings: settings,
 		},
 
+		MetricsCtl:    metric.New(name),
 		metricsHolder: newMetricsHolder(name, registry, metricsGenInterval),
 		streamer:      newStreamer(settings.EventTimeout),
 		eventPool:     newEventPool(settings.Capacity, settings.AvgEventSize),
@@ -531,6 +555,7 @@ func (p *Pipeline) newProc() *processor {
 		p.output,
 		p.streamer,
 		p.finalize,
+		p.MetricsCtl,
 	)
 	for j, info := range p.actionInfos {
 		plugin, _ := info.Factory()

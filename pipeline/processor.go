@@ -3,6 +3,8 @@ package pipeline
 import (
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/longpanic"
+	"github.com/ozontech/file.d/metric"
+
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
 )
@@ -48,6 +50,7 @@ func allEventStatuses() []eventStatus {
 
 // processor is a goroutine which doing pipeline actions
 type processor struct {
+	*metric.MetricsCtl
 	id            int
 	streamer      *streamer
 	metricsHolder *metricsHolder
@@ -74,8 +77,10 @@ func NewProcessor(
 	output OutputPlugin,
 	streamer *streamer,
 	finalizeFn finalizeFn,
+	m *metric.MetricsCtl,
 ) *processor {
 	processor := &processor{
+		MetricsCtl:    m,
 		id:            id,
 		streamer:      streamer,
 		metricsHolder: metricsHolder,
