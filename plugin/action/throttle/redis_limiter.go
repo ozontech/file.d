@@ -18,8 +18,12 @@ type redisLimiter struct {
 	redis redisClient
 
 	// <keyPrefix>_
-	// will be used for bucket counter <keyPrefix>_<bucketID> and limit key <keyPrefix>_limit
+	// bucket counter prefix bucket id forms key in redis: <keyPrefix>_<bucketID>
 	keyPrefix bytes.Buffer
+
+	// <keyPrefix>_<keySuffix>
+	// limit key in redis
+	keyLimit string
 
 	// contains values which will be used for incrementing remote bucket counter
 	// buckets will be flushed after every sync to contain only increment value
@@ -61,6 +65,7 @@ func NewRedisLimiter(
 	rl.keyPrefix.WriteString("_")
 	rl.keyPrefix.WriteString(throttleFieldValue)
 	rl.keyPrefix.WriteString("_")
+	rl.keyLimit = rl.keyPrefix.String() + keySuffix
 
 	return rl
 }
@@ -90,9 +95,8 @@ func (l *redisLimiter) sync() {
 	minID := l.totalLimiter.minID
 	count := l.incrementLimiter.bucketCount
 
-	// get actual bucket value
-	keyPrefixLen := l.keyPrefix.Len()
-
+	l.keyIdxsForSync = l.keyIdxsForSync[:0]
+	l.bucketIdsForSync = l.bucketIdsForSync[:0]
 	for i := 0; i < count; i++ {
 		// no new events passed
 		if l.incrementLimiter.buckets[i] == 0 {
@@ -106,10 +110,7 @@ func (l *redisLimiter) sync() {
 	l.incrementLimiter.mu.Unlock()
 
 	l.syncLocalGlobalLimiters(maxID)
-	l.updateKeyLimit(keyPrefixLen)
-
-	l.keyIdxsForSync = l.keyIdxsForSync[:0]
-	l.bucketIdsForSync = l.bucketIdsForSync[:0]
+	l.updateKeyLimit()
 }
 
 func (l *redisLimiter) syncLocalGlobalLimiters(maxID int) {
@@ -172,17 +173,13 @@ func (l *redisLimiter) updateLimiterValues(maxID, bucketIdx int, totalLimiterVal
 }
 
 // updateKeyLimit reads key limit from redis and updates current limit.
-func (l *redisLimiter) updateKeyLimit(keyPrefixLen int) {
-	l.keyPrefix.WriteString(keySuffix)
-
+func (l *redisLimiter) updateKeyLimit() {
 	// try to set global limit to default
-	if b, err := l.redis.SetNX(l.keyPrefix.String(), l.totalLimiter.limit.value, 0).Result(); err == nil && !b {
+	if b, err := l.redis.SetNX(l.keyLimit, l.totalLimiter.limit.value, 0).Result(); err == nil && !b {
 		// global limit already exists - overwrite local limit
-		if v, err := l.redis.Get(l.keyPrefix.String()).Int64(); err == nil {
+		if v, err := l.redis.Get(l.keyLimit).Int64(); err == nil {
 			l.totalLimiter.limit.value = v
 			l.incrementLimiter.limit.value = v
 		}
 	}
-
-	l.keyPrefix.Truncate(keyPrefixLen)
 }

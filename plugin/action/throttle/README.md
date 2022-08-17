@@ -71,7 +71,7 @@ Each object has the `limit` and `conditions` fields.
 
 <br>
 
-**`host`** *`string`* 
+**`endpoint`** *`string`* 
 
 
 <br>

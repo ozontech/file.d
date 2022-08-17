@@ -124,8 +124,8 @@ type Config struct {
 type RedisBackendConfig struct {
 	//> @3@4@5@6
 	//>
-	// Host:Port of redis server.
-	Host string `json:"host"` //*
+	// Аddress of redis server. Format: HOST:PORT.
+	Endpoint string `json:"endpoint"` //*
 
 	//> @3@4@5@6
 	//>
@@ -206,7 +206,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 		p.redisClient = redis.NewClient(
 			&redis.Options{
 				Network:      "tcp",
-				Addr:         p.config.RedisBackendCfg.Host,
+				Addr:         p.config.RedisBackendCfg.Endpoint,
 				Password:     p.config.RedisBackendCfg.Password,
 				ReadTimeout:  p.config.RedisBackendCfg.Timeout_,
 				WriteTimeout: p.config.RedisBackendCfg.Timeout_,
@@ -222,13 +222,10 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 		wg := sync.WaitGroup{}
 		// run syncer at single throttle for one pipeline
 		if _, ok := limiterSyncMap[p.pipeline]; !ok {
+			limiterSyncMap[p.pipeline] = struct{}{}
+			limitersMu.Unlock()
 			go func() {
-				limiterSyncMap[p.pipeline] = struct{}{}
-				limitersMu.Unlock()
-
 				jobs := make(chan limiter, p.config.RedisBackendCfg.WorkerCount)
-				//jobsDone := make(chan struct{}, p.config.RedisBackendCfg.WorkerCount)
-
 				for i := 0; i < p.config.RedisBackendCfg.WorkerCount; i++ {
 					go p.syncWorker(ctx, jobs, &wg)
 				}

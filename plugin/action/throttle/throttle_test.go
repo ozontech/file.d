@@ -197,7 +197,7 @@ func TestRedisThrottle(t *testing.T) {
 		BucketInterval: "2s",
 		RedisBackendCfg: RedisBackendConfig{
 			SyncInterval: "100ms",
-			Host:         s.Addr(),
+			Endpoint:     s.Addr(),
 			Password:     "",
 			WorkerCount:  2,
 		},
@@ -257,7 +257,7 @@ func TestRedisThrottleMultiPipes(t *testing.T) {
 		BucketInterval: "2m",
 		RedisBackendCfg: RedisBackendConfig{
 			SyncInterval: "10ms",
-			Host:         s.Addr(),
+			Endpoint:     s.Addr(),
 			Password:     "",
 			WorkerCount:  2,
 		},
