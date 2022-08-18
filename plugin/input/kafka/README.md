@@ -23,8 +23,7 @@ The name of consumer group to use.
 
 **`channel_buffer_size`** *`int`* *`default=256`* 
 
-This permits the file.d to continue load some kafka messages
-in the background.
+The number of unprocessed messages in the buffer that are loaded in the background from kafka.
 
 <br>
 

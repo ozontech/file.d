@@ -60,8 +60,8 @@ func (s *streamer) stop() {
 	s.mu.Unlock()
 }
 
-func (s *streamer) putEvent(streamSourceID StreamID, streamName StreamName, event *Event) uint64 {
-	return s.getStream(streamSourceID, streamName).put(event)
+func (s *streamer) putEvent(streamID StreamID, streamName StreamName, event *Event) uint64 {
+	return s.getStream(streamID, streamName).put(event)
 }
 
 func (s *streamer) getStream(streamID StreamID, streamName StreamName) *stream {

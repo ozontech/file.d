@@ -434,8 +434,9 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 }
 
 func (p *Pipeline) streamEvent(event *Event) uint64 {
-	// spread events across all processors
 	streamID := StreamID(event.SourceID)
+
+	// spread events across all processors
 	if p.useSpread {
 		streamID = StreamID(event.SeqID % uint64(p.procCount.Load()))
 	}
