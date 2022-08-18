@@ -21,5 +21,12 @@ The name of consumer group to use.
 
 <br>
 
+**`channel_buffer_size`** *`int`* *`default=256`* 
+
+This permits the file.d to continue load some kafka messages
+in the background.
+
+<br>
+
 
 <br>*Generated using [__insane-doc__](https://github.com/vitkovskii/insane-doc)*

@@ -51,6 +51,12 @@ type Config struct {
 	// >
 	// > The name of consumer group to use.
 	ConsumerGroup string `json:"consumer_group" default:"file-d"` // *
+
+	// > @3@4@5@6
+	// >
+	// > This permits the file.d to continue load some kafka messages
+	// > in the background.
+	ChannelBufferSize int `json:"channel_buffer_size" default:"256"` // *
 }
 
 func init() {
@@ -133,6 +139,8 @@ func (p *Plugin) newConsumerGroup() sarama.ConsumerGroup {
 	config := sarama.NewConfig()
 	config.Consumer.Group.Rebalance.Strategy = sarama.BalanceStrategyRoundRobin
 	config.Version = sarama.V0_10_2_0
+	config.Consumer.Offsets.AutoCommit.Enable = false
+	config.ChannelBufferSize = p.config.ChannelBufferSize
 
 	consumerGroup, err := sarama.NewConsumerGroup(p.config.Brokers, p.config.ConsumerGroup, config)
 	if err != nil {
