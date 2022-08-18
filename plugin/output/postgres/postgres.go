@@ -23,8 +23,9 @@ It sends the event batches to postgres db using pgx.
 }*/
 
 var (
-	ErrEventDoesntHaveField   = errors.New("event doesn't have field")
-	ErrEventFieldHasWrongType = errors.New("event field has wrong type")
+	ErrEventDoesntHaveField             = errors.New("event doesn't have field")
+	ErrEventFieldHasWrongType           = errors.New("event field has wrong type")
+	ErrTimestampFromDistantPastOrFuture = errors.New("event field contains timestamp < 1970 or > 9000 year")
 )
 
 type PgxIface interface {
@@ -43,6 +44,8 @@ const (
 	discardedEventCounter  = "event_discarded"
 	duplicatedEventCounter = "event_duplicated"
 	writtenEventCounter    = "event_written"
+
+	nineThousandYear = 221842627200
 )
 
 type pgType int
@@ -79,83 +82,83 @@ type ConfigColumn struct {
 	Unique     bool   `json:"unique" default:"false"`
 }
 
-//! config-params
-//^ config-params
+// ! config-params
+// ^ config-params
 type Config struct {
-	//> @3@4@5@6
-	//>
-	//> In strict mode file.d will crash on events without required columns.
+	// > @3@4@5@6
+	// >
+	// > In strict mode file.d will crash on events without required columns.
 	// Otherwise events will be discarded.
-	Strict bool `json:"strict" default:"false"` //*
+	Strict bool `json:"strict" default:"false"` // *
 
-	//> @3@4@5@6
-	//>
-	//> PostgreSQL connection string in URL or DSN format.
-	//>
-	//> Example DSN:
-	//>
-	//> `user=user password=secret host=pg.example.com port=5432 dbname=mydb sslmode=disable pool_max_conns=10`
-	ConnString string `json:"conn_string" required:"true"` //*
+	// > @3@4@5@6
+	// >
+	// > PostgreSQL connection string in URL or DSN format.
+	// >
+	// > Example DSN:
+	// >
+	// > `user=user password=secret host=pg.example.com port=5432 dbname=mydb sslmode=disable pool_max_conns=10`
+	ConnString string `json:"conn_string" required:"true"` // *
 
-	//> @3@4@5@6
-	//>
-	//> Pg target table.
-	Table string `json:"table" required:"true"` //*
+	// > @3@4@5@6
+	// >
+	// > Pg target table.
+	Table string `json:"table" required:"true"` // *
 
-	//> @3@4@5@6
-	//>
-	//> Array of DB columns. Each column have:
-	//> name, type (int, string, timestamp - which int that will be converted to timestamptz of rfc3339)
-	//> and nullable options.
-	Columns []ConfigColumn `json:"columns" required:"true" slice:"true"` //*
+	// > @3@4@5@6
+	// >
+	// > Array of DB columns. Each column have:
+	// > name, type (int, string, timestamp - which int that will be converted to timestamptz of rfc3339)
+	// > and nullable options.
+	Columns []ConfigColumn `json:"columns" required:"true" slice:"true"` // *
 
-	//> @3@4@5@6
-	//>
-	//> Retries of insertion.
-	Retry int `json:"retry" default:"3"` //*
+	// > @3@4@5@6
+	// >
+	// > Retries of insertion.
+	Retry int `json:"retry" default:"3"` // *
 
-	//> @3@4@5@6
-	//>
-	//> Retention milliseconds for retry to DB.
-	Retention  cfg.Duration `json:"retention" default:"50ms" parse:"duration"` //*
+	// > @3@4@5@6
+	// >
+	// > Retention milliseconds for retry to DB.
+	Retention  cfg.Duration `json:"retention" default:"50ms" parse:"duration"` // *
 	Retention_ time.Duration
 
-	//> @3@4@5@6
-	//>
-	//> Timeout for DB requests in milliseconds.
-	DBRequestTimeout  cfg.Duration `json:"db_request_timeout" default:"3000ms" parse:"duration"` //*
+	// > @3@4@5@6
+	// >
+	// > Timeout for DB requests in milliseconds.
+	DBRequestTimeout  cfg.Duration `json:"db_request_timeout" default:"3000ms" parse:"duration"` // *
 	DBRequestTimeout_ time.Duration
 
-	//> @3@4@5@6
-	//>
-	//> Timeout for DB health check.
-	DBHealthCheckPeriod  cfg.Duration `json:"db_health_check_period" default:"60s" parse:"duration"` //*
+	// > @3@4@5@6
+	// >
+	// > Timeout for DB health check.
+	DBHealthCheckPeriod  cfg.Duration `json:"db_health_check_period" default:"60s" parse:"duration"` // *
 	DBHealthCheckPeriod_ time.Duration
 
-	//> @3@4@5@6
-	//>
-	//> How much workers will be instantiated to send batches.
-	WorkersCount  cfg.Expression `json:"workers_count" default:"gomaxprocs*4" parse:"expression"` //*
+	// > @3@4@5@6
+	// >
+	// > How much workers will be instantiated to send batches.
+	WorkersCount  cfg.Expression `json:"workers_count" default:"gomaxprocs*4" parse:"expression"` // *
 	WorkersCount_ int
 
-	//> @3@4@5@6
-	//>
-	//> Maximum quantity of events to pack into one batch.
-	BatchSize cfg.Expression `json:"batch_size" default:"capacity/4"  parse:"expression"` //*
-	//BatchSize  cfg.Expression `json:"batch_size" default:"capacity/4" parse:"expression"` //*
+	// > @3@4@5@6
+	// >
+	// > Maximum quantity of events to pack into one batch.
+	BatchSize cfg.Expression `json:"batch_size" default:"capacity/4"  parse:"expression"` // *
+	//BatchSize  cfg.Expression `json:"batch_size" default:"capacity/4" parse:"expression"` // *
 	BatchSize_ int
 
-	//> @3@4@5@6
-	//>
-	//> A minimum size of events in a batch to send.
-	//> If both batch_size and batch_size_bytes are set, they will work together.
-	BatchSizeBytes  cfg.Expression `json:"batch_size_bytes" default:"0" parse:"expression"` //*
+	// > @3@4@5@6
+	// >
+	// > A minimum size of events in a batch to send.
+	// > If both batch_size and batch_size_bytes are set, they will work together.
+	BatchSizeBytes  cfg.Expression `json:"batch_size_bytes" default:"0" parse:"expression"` // *
 	BatchSizeBytes_ int
 
-	//> @3@4@5@6
-	//>
-	//> After this timeout batch will be sent even if batch isn't completed.
-	BatchFlushTimeout  cfg.Duration `json:"batch_flush_timeout" default:"200ms" parse:"duration"` //*
+	// > @3@4@5@6
+	// >
+	// > After this timeout batch will be sent even if batch isn't completed.
+	BatchFlushTimeout  cfg.Duration `json:"batch_flush_timeout" default:"200ms" parse:"duration"` // *
 	BatchFlushTimeout_ time.Duration
 }
 
@@ -281,6 +284,12 @@ func (p *Plugin) out(_ *pipeline.WorkerData, batch *pipeline.Batch) {
 					p.logger.Fatal(err)
 				}
 				p.logger.Error(err)
+			} else if errors.Is(err, ErrTimestampFromDistantPastOrFuture) {
+				metric.GetCounter(subsystemName, discardedEventCounter).Inc()
+				if p.config.Strict {
+					p.logger.Fatal(err)
+				}
+				p.logger.Error(err)
 			} else if err != nil { // protection from foolproof.
 				p.logger.Fatalf("undefined error: %w", err)
 			}
@@ -396,6 +405,10 @@ func (p *Plugin) addFieldToValues(field column, sNode *insaneJSON.StrictNode) (i
 		tint, err := sNode.AsInt()
 		if err != nil {
 			return nil, fmt.Errorf("%w, can't get %s as timestamp, err: %s", ErrEventFieldHasWrongType, field.Name, err.Error())
+		}
+		// if timestamp < 1970-01-00-00 or > 9000-01-00-00
+		if tint < 0 || tint > nineThousandYear {
+			return nil, fmt.Errorf("%w, %s", ErrTimestampFromDistantPastOrFuture, field.Name)
 		}
 		return time.Unix(int64(tint), 0).Format(time.RFC3339), nil
 	case unknownType:

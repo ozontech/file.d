@@ -95,27 +95,27 @@ type Plugin struct {
 	logger     *zap.SugaredLogger
 }
 
-//! config-params
-//^ config-params
+// ! config-params
+// ^ config-params
 type Config struct {
-	//> @3@4@5@6
-	//>
-	//> An address to listen to. Omit ip/host to listen all network interfaces. E.g. `:88`
-	Address string `json:"address" default:":9200"` //*
-	//> @3@4@5@6
-	//>
-	//> Which protocol to emulate.
-	EmulateMode string `json:"emulate_mode" default:"no" options:"no|elasticsearch"` //*
-	//> @3@4@5@6
-	//>
-	//> CA certificate in PEM encoding. This can be a path or the content of the certificate.
-	//> If both ca_cert and private_key are set, the server starts accepting connections in TLS mode.
-	CACert string `json:"ca_cert" default:""` //*
-	//> @3@4@5@6
-	//>
-	//> CA private key in PEM encoding. This can be a path or the content of the key.
-	//> If both ca_cert and private_key are set, the server starts accepting connections in TLS mode.
-	PrivateKey string `json:"private_key" default:""` //*
+	// > @3@4@5@6
+	// >
+	// > An address to listen to. Omit ip/host to listen all network interfaces. E.g. `:88`
+	Address string `json:"address" default:":9200"` // *
+	// > @3@4@5@6
+	// >
+	// > Which protocol to emulate.
+	EmulateMode string `json:"emulate_mode" default:"no" options:"no|elasticsearch"` // *
+	// > @3@4@5@6
+	// >
+	// > CA certificate in PEM encoding. This can be a path or the content of the certificate.
+	// > If both ca_cert and private_key are set, the server starts accepting connections in TLS mode.
+	CACert string `json:"ca_cert" default:""` // *
+	// > @3@4@5@6
+	// >
+	// > CA private key in PEM encoding. This can be a path or the content of the key.
+	// > If both ca_cert and private_key are set, the server starts accepting connections in TLS mode.
+	PrivateKey string `json:"private_key" default:""` // *
 }
 
 func init() {

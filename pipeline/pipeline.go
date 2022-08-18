@@ -12,13 +12,14 @@ import (
 	"sync"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
+	"go.uber.org/atomic"
+	"go.uber.org/zap"
+
 	"github.com/ozontech/file.d/decoder"
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/longpanic"
 	"github.com/ozontech/file.d/metric"
-	"github.com/prometheus/client_golang/prometheus"
-	"go.uber.org/atomic"
-	"go.uber.org/zap"
 )
 
 const (
@@ -43,6 +44,8 @@ const (
 	outputEventsSizeMetric  = "output_events_size"
 	readOpsEventsSizeMetric = "read_ops_count"
 	maxEventSizeExceeded    = "max_event_size_exceeded"
+	eventPoolCapacity       = "event_pool_capacity"
+	inUseEventsMetric       = "event_pool_in_use_events"
 
 	wrongEventCRIFormatMetric = "wrong_event_cri_format"
 )
@@ -153,6 +156,7 @@ func New(name string, settings *Settings, registry *prometheus.Registry) *Pipeli
 	}
 
 	pipeline.registerMetrics()
+	pipeline.setDefaultMetrics()
 
 	switch settings.Decoder {
 	case "json":
@@ -185,6 +189,16 @@ func (p *Pipeline) subsystemName() string {
 }
 
 func (p *Pipeline) registerMetrics() {
+	metric.RegisterGauge(&metric.MetricDesc{
+		Subsystem: p.subsystemName(),
+		Name:      inUseEventsMetric,
+		Help:      "Count of pool events which is used for processing",
+	})
+	metric.RegisterGauge(&metric.MetricDesc{
+		Subsystem: p.subsystemName(),
+		Name:      eventPoolCapacity,
+		Help:      "Pool capacity value",
+	})
 	metric.RegisterCounter(&metric.MetricDesc{
 		Subsystem: p.subsystemName(),
 		Name:      inputEventsCountMetric,
@@ -220,6 +234,10 @@ func (p *Pipeline) registerMetrics() {
 		Name:      maxEventSizeExceeded,
 		Help:      "Max event size exceeded counter",
 	})
+}
+
+func (p *Pipeline) setDefaultMetrics() {
+	metric.GetGauge(p.subsystemName(), eventPoolCapacity).Set(float64(p.settings.Capacity))
 }
 
 // SetupHTTPHandlers creates handlers for plugin endpoints and pipeline info.
@@ -350,6 +368,7 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 	p.inputSize.Add(int64(length))
 
 	event := p.eventPool.get()
+
 	var dec decoder.DecoderType
 	if p.decoder == decoder.AUTO {
 		dec = p.suggestedDecoder
@@ -570,6 +589,7 @@ type deltas struct {
 func (p *Pipeline) logChanges(myDeltas *deltas) {
 	inputSize := p.inputSize.Load()
 	inputEvents := p.inputEvents.Load()
+	inUseEvents := p.eventPool.inUseEvents.Load()
 
 	interval := p.settings.MaintenanceInterval
 	rate := int(myDeltas.deltaInputEvents * float64(time.Second) / float64(interval))
@@ -577,13 +597,12 @@ func (p *Pipeline) logChanges(myDeltas *deltas) {
 	readOps := int(myDeltas.deltaReads * float64(time.Second) / float64(interval))
 	tc := int64(math.Max(float64(inputSize), 1))
 
-	p.logger.Infof(`%q pipeline stats interval=%ds, active procs=%d/%d, queue=%d/%d, out=%d|%.1fMb,`+
-		`rate=%d/s|%.1fMb/s, read ops=%d/s, total=%d|%.1fMb, avg size=%d, max size=%d, pool fullness=%d/%d`,
+	p.logger.Infof(`%q pipeline stats interval=%ds, active procs=%d/%d, events outside pool=%d/%d, events in pool=%d/%d, out=%d|%.1fMb,`+
+		`rate=%d/s|%.1fMb/s, read ops=%d/s, total=%d|%.1fMb, avg size=%d, max size=%d`,
 		p.Name, interval/time.Second, p.activeProcs.Load(), p.procCount.Load(),
-		p.settings.Capacity-p.eventPool.freeEventsCount, p.settings.Capacity,
+		inUseEvents, p.settings.Capacity, p.settings.Capacity-int(inUseEvents), p.settings.Capacity,
 		int64(myDeltas.deltaInputEvents), float64(myDeltas.deltaInputSize)/1024.0/1024.0, rate, rateMb, readOps,
-		inputEvents, float64(inputSize)/1024.0/1024.0, inputSize/tc, p.maxSize,
-		p.eventPool.capacity-p.eventPool.freeEventsCount, p.eventPool.capacity)
+		inputEvents, float64(inputSize)/1024.0/1024.0, inputSize/tc, p.maxSize)
 }
 
 func (p *Pipeline) incMetrics(inputEvents, inputSize, outputEvents, outputSize, reads *DeltaWrapper) *deltas {
@@ -610,6 +629,10 @@ func (p *Pipeline) incMetrics(inputEvents, inputSize, outputEvents, outputSize, 
 	return myDeltas
 }
 
+func (p *Pipeline) setMetrics(inUseEvents atomic.Int64) {
+	metric.GetGauge(p.subsystemName(), inUseEventsMetric).Set(float64(inUseEvents.Load()))
+}
+
 func (p *Pipeline) maintenance() {
 	inputEvents := newDeltaWrapper()
 	inputSize := newDeltaWrapper()
@@ -627,6 +650,7 @@ func (p *Pipeline) maintenance() {
 		p.metricsHolder.maintenance()
 
 		myDeltas := p.incMetrics(inputEvents, inputSize, outputEvents, outputSize, readOps)
+		p.setMetrics(p.eventPool.inUseEvents)
 		p.logChanges(myDeltas)
 
 		if len(p.inSample) > 0 {

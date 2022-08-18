@@ -10,6 +10,7 @@ import (
 It parses HTTP input using Elasticsearch `/_bulk` API format. It converts sources defining create/index actions to the events. Update/delete actions are ignored.
 > Check out the details in [Elastic Bulk API](https://www.elastic.co/guide/en/elasticsearch/reference/current/docs-bulk.html).
 }*/
+
 type Plugin struct {
 	logger      *zap.SugaredLogger
 	passNext    bool

@@ -34,14 +34,14 @@ type Plugin struct {
 	logger     *zap.SugaredLogger
 }
 
-//! config-params
-//^ config-params
+// ! config-params
+// ^ config-params
 type Config struct {
-	//> @3@4@5@6
-	//>
-	//> The filename to store offsets of processed messages.
-	//> > It's a `json` file. You can modify it manually.
-	OffsetsFile string `json:"offsets_file" required:"true"` //*
+	// > @3@4@5@6
+	// >
+	// > The filename to store offsets of processed messages.
+	// > > It's a `json` file. You can modify it manually.
+	OffsetsFile string `json:"offsets_file" required:"true"` // *
 }
 
 type state struct {
