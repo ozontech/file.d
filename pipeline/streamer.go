@@ -10,8 +10,10 @@ import (
 	"go.uber.org/atomic"
 )
 
+type StreamID uint64
+
 type streamer struct {
-	streams map[SourceID]map[StreamName]*stream
+	streams map[StreamID]map[StreamName]*stream
 	mu      *sync.RWMutex
 
 	shouldStop atomic.Bool
@@ -28,7 +30,7 @@ type streamer struct {
 
 func newStreamer(eventTimeout time.Duration) *streamer {
 	streamer := &streamer{
-		streams: make(map[SourceID]map[StreamName]*stream),
+		streams: make(map[StreamID]map[StreamName]*stream),
 		mu:      &sync.RWMutex{},
 		charged: make([]*stream, 0),
 
@@ -58,14 +60,14 @@ func (s *streamer) stop() {
 	s.mu.Unlock()
 }
 
-func (s *streamer) putEvent(sourceID SourceID, streamName StreamName, event *Event) uint64 {
-	return s.getStream(sourceID, streamName).put(event)
+func (s *streamer) putEvent(streamSourceID StreamID, streamName StreamName, event *Event) uint64 {
+	return s.getStream(streamSourceID, streamName).put(event)
 }
 
-func (s *streamer) getStream(sourceID SourceID, streamName StreamName) *stream {
+func (s *streamer) getStream(streamID StreamID, streamName StreamName) *stream {
 	// fast path, stream has been already created
 	s.mu.RLock()
-	st, has := s.streams[sourceID][streamName]
+	st, has := s.streams[streamID][streamName]
 	s.mu.RUnlock()
 	if has {
 		return st
@@ -74,20 +76,20 @@ func (s *streamer) getStream(sourceID SourceID, streamName StreamName) *stream {
 	// slow path, create new stream
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	st, has = s.streams[sourceID][streamName]
+	st, has = s.streams[streamID][streamName]
 	if has {
 		return st
 	}
 
-	_, has = s.streams[sourceID]
+	_, has = s.streams[streamID]
 	if !has {
-		s.streams[sourceID] = make(map[StreamName]*stream)
+		s.streams[streamID] = make(map[StreamName]*stream)
 	}
 
 	// copy streamName because it's unsafe []byte instead of regular string
 	streamNameCopy := StreamName([]byte(streamName))
-	st = newStream(streamNameCopy, sourceID, s)
-	s.streams[sourceID][streamNameCopy] = st
+	st = newStream(streamNameCopy, streamID, s)
+	s.streams[streamID][streamNameCopy] = st
 
 	return st
 }
@@ -179,7 +181,7 @@ func (s *streamer) dump() string {
 					state = "| DETACHING  |"
 				}
 
-				o += fmt.Sprintf("%d(%s) state=%s, away event id=%d, commit event id=%d, len=%d\n", stream.sourceID, stream.name, state, stream.awaySeq, stream.commitSeq, stream.len)
+				o += fmt.Sprintf("%d(%s) state=%s, away event id=%d, commit event id=%d, len=%d\n", stream.streamID, stream.name, state, stream.awaySeq, stream.commitSeq, stream.len)
 			}
 		}
 
@@ -189,7 +191,7 @@ func (s *streamer) dump() string {
 	out += logger.Cond(len(s.charged) == 0, logger.Header("charged streams empty"), func() string {
 		o := logger.Header("charged streams")
 		for _, s := range s.charged {
-			o += fmt.Sprintf("%d(%s)\n", s.sourceID, s.name)
+			o += fmt.Sprintf("%d(%s)\n", s.streamID, s.name)
 		}
 
 		return o
@@ -198,7 +200,7 @@ func (s *streamer) dump() string {
 	out += logger.Cond(len(s.blocked) == 0, logger.Header("blocked streams empty"), func() string {
 		o := logger.Header("blocked streams")
 		for _, s := range s.blocked {
-			o += fmt.Sprintf("%d(%s)\n", s.sourceID, s.name)
+			o += fmt.Sprintf("%d(%s)\n", s.streamID, s.name)
 		}
 
 		return o

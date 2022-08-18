@@ -435,9 +435,11 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 
 func (p *Pipeline) streamEvent(event *Event) uint64 {
 	// spread events across all processors
+	streamID := StreamID(event.SourceID)
 	if p.useSpread {
-		event.SourceID = SourceID(event.SeqID % uint64(p.procCount.Load()))
+		streamID = StreamID(event.SeqID % uint64(p.procCount.Load()))
 	}
+
 	if !p.disableStreams {
 		node := event.Root.Dig(p.settings.StreamField)
 		if node != nil {
@@ -445,7 +447,7 @@ func (p *Pipeline) streamEvent(event *Event) uint64 {
 		}
 	}
 
-	return p.streamer.putEvent(event.SourceID, event.streamName, event)
+	return p.streamer.putEvent(streamID, event.streamName, event)
 }
 
 func (p *Pipeline) Commit(event *Event) {

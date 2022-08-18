@@ -60,7 +60,7 @@ func newTimoutEvent(stream *stream) *Event {
 		Root:       insaneJSON.Spawn(),
 		stream:     stream,
 		SeqID:      stream.commitSeq.Load(),
-		SourceID:   stream.sourceID,
+		SourceID:   SourceID(stream.streamID),
 		SourceName: "timeout",
 		streamName: stream.name,
 	}
@@ -75,7 +75,7 @@ func unlockEvent(stream *stream) *Event {
 		Root:       nil,
 		stream:     stream,
 		SeqID:      stream.commitSeq.Load(),
-		SourceID:   stream.sourceID,
+		SourceID:   SourceID(stream.streamID),
 		SourceName: "unlock",
 		streamName: stream.name,
 	}

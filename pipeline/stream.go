@@ -21,7 +21,7 @@ type stream struct {
 	awaySeq    uint64
 
 	name      StreamName
-	sourceID  SourceID
+	streamID  StreamID
 	streamer  *streamer
 	blockTime time.Time
 
@@ -35,10 +35,10 @@ type stream struct {
 	last  *Event
 }
 
-func newStream(name StreamName, sourceID SourceID, streamer *streamer) *stream {
+func newStream(name StreamName, streamID StreamID, streamer *streamer) *stream {
 	stream := stream{
 		name:     name,
-		sourceID: sourceID,
+		streamID: streamID,
 		streamer: streamer,
 		mu:       &sync.Mutex{},
 	}
