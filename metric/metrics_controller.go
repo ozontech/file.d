@@ -22,12 +22,12 @@ func New(subsystem string) *MetricsCtl {
 }
 
 func (mc *MetricsCtl) RegisterCounter(name, help string) {
-	RegisterCounter(&MetricDesc{
+	registerCounter(&MetricDesc{
 		Subsystem: mc.subsystem,
 		Name:      name,
 		Help:      help,
 	})
-	mc.counters[name] = GetCounter(mc.subsystem, name)
+	mc.counters[name] = getCounter(mc.subsystem, name)
 }
 
 func (mc *MetricsCtl) IncCounter(name string) {
@@ -47,12 +47,12 @@ func (mc *MetricsCtl) AddCounter(name string, value float64) {
 }
 
 func (mc *MetricsCtl) RegisterGauge(name, help string) {
-	RegisterGauge(&MetricDesc{
+	registerGauge(&MetricDesc{
 		Subsystem: mc.subsystem,
 		Name:      name,
 		Help:      help,
 	})
-	mc.gauges[name] = GetGauge(mc.subsystem, name)
+	mc.gauges[name] = getGauge(mc.subsystem, name)
 }
 
 func (mc *MetricsCtl) IncGauge(name string) {

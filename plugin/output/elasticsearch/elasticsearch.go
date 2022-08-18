@@ -12,7 +12,6 @@ import (
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/logger"
-	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/tls"
 	"github.com/valyala/fasthttp"
@@ -234,17 +233,8 @@ func (p *Plugin) Out(event *pipeline.Event) {
 }
 
 func (p *Plugin) registerPluginMetrics() {
-	metric.RegisterCounter(&metric.MetricDesc{
-		Name:      sendErrorCounter,
-		Subsystem: subsystemName,
-		Help:      "Total elasticsearch send errors",
-	})
-
-	metric.RegisterCounter(&metric.MetricDesc{
-		Name:      indexingErrors,
-		Subsystem: subsystemName,
-		Help:      "Number of elasticsearch indexing errors",
-	})
+	p.controller.RegisterCounter(subsystemName+sendErrorCounter, "Total elasticsearch send errors")
+	p.controller.RegisterCounter(subsystemName+indexingErrors, "Number of elasticsearch indexing errors")
 }
 
 func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
@@ -267,7 +257,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 
 	for {
 		if err := p.send(data.outBuf); err != nil {
-			metric.GetCounter(subsystemName, sendErrorCounter).Inc()
+			p.controller.IncCounter(subsystemName + sendErrorCounter)
 			p.logger.Errorf("can't send to the elastic, will try other endpoint: %s", err.Error())
 		} else {
 			break
@@ -317,7 +307,7 @@ func (p *Plugin) send(body []byte) error {
 		}
 
 		if errors != 0 {
-			metric.GetCounter(subsystemName, indexingErrors).Add(float64(errors))
+			p.controller.AddCounter(subsystemName+indexingErrors, float64(errors))
 		}
 
 		p.controller.Error("some events from batch aren't written")

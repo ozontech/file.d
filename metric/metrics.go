@@ -57,7 +57,7 @@ func InitStats() {
 	statsGlobal.registerOwnMetrics()
 }
 
-func RegisterGauge(metricDesc *MetricDesc) {
+func registerGauge(metricDesc *MetricDesc) {
 	maskPromGauge := prom.NewGauge(prom.GaugeOpts{
 		Namespace:   PromNamespace,
 		Subsystem:   metricDesc.Subsystem,
@@ -70,7 +70,7 @@ func RegisterGauge(metricDesc *MetricDesc) {
 	registerMetric(gaugeMetricType, keyInternal, maskPromGauge)
 }
 
-func RegisterCounter(metricDesc *MetricDesc) {
+func registerCounter(metricDesc *MetricDesc) {
 	maskPromCounter := prom.NewCounter(prom.CounterOpts{
 		Namespace:   PromNamespace,
 		Subsystem:   metricDesc.Subsystem,
@@ -83,8 +83,8 @@ func RegisterCounter(metricDesc *MetricDesc) {
 	registerMetric(counterMetricType, keyInternal, maskPromCounter)
 }
 
-// GetCounter returns counter for a given metric.
-func GetCounter(subsystem, metricName string) prom.Counter {
+// getCounter returns counter for a given metric.
+func getCounter(subsystem, metricName string) prom.Counter {
 	checkStatsInitialized()
 
 	if val, ok := statsGlobal.counters[getKey(subsystem, metricName)]; ok {
@@ -101,7 +101,7 @@ func GetCounter(subsystem, metricName string) prom.Counter {
 }
 
 // GetGauge returns gauge for a given metric.
-func GetGauge(subsystem, metricName string) prom.Gauge {
+func getGauge(subsystem, metricName string) prom.Gauge {
 	checkStatsInitialized()
 
 	if val, ok := statsGlobal.gauges[getKey(subsystem, metricName)]; ok {
@@ -120,7 +120,7 @@ func registerMetric(mType metricType, k key, metric prom.Collector) {
 
 	if hasCounter || hasGauge {
 		logger.Errorf("rewriting existent metric")
-		GetCounter(subsystemName, duplicateCounter).Inc()
+		getCounter(subsystemName, duplicateCounter).Inc()
 	}
 
 	switch mType {
@@ -135,17 +135,17 @@ func registerMetric(mType metricType, k key, metric prom.Collector) {
 }
 
 func (s *stats) registerOwnMetrics() {
-	RegisterCounter(&MetricDesc{
+	registerCounter(&MetricDesc{
 		Subsystem: subsystemName,
 		Name:      unregisteredCounter,
 		Help:      "Counter for unregistered metrics",
 	})
-	RegisterGauge(&MetricDesc{
+	registerGauge(&MetricDesc{
 		Subsystem: subsystemName,
 		Name:      unregisteredGauge,
 		Help:      "Gauge for unregistered metrics",
 	})
-	RegisterCounter(&MetricDesc{
+	registerCounter(&MetricDesc{
 		Subsystem: subsystemName,
 		Name:      duplicateCounter,
 		Help:      "Counter for duplicate metrics",

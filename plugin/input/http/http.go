@@ -8,7 +8,6 @@ import (
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/longpanic"
-	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/tls"
 	"go.uber.org/zap"
@@ -157,11 +156,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 }
 
 func (p *Plugin) registerPluginMetrics() {
-	metric.RegisterCounter(&metric.MetricDesc{
-		Subsystem: subsystemName,
-		Name:      httpErrorCounter,
-		Help:      "Total http errors",
-	})
+	p.controller.RegisterCounter(subsystemName+httpErrorCounter, "Total http errors")
 }
 
 func (p *Plugin) listenHTTP() {
@@ -231,7 +226,7 @@ func (p *Plugin) serve(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if err != nil && err != io.EOF {
-			metric.GetCounter(subsystemName, httpErrorCounter).Inc()
+			p.params.Controller.IncCounter(subsystemName + httpErrorCounter)
 			logger.Errorf("http input read error: %s", err.Error())
 			break
 		}
@@ -251,7 +246,7 @@ func (p *Plugin) serve(w http.ResponseWriter, r *http.Request) {
 
 	_, err := w.Write(result)
 	if err != nil {
-		metric.GetCounter(subsystemName, httpErrorCounter).Inc()
+		p.params.Controller.IncCounter(subsystemName + httpErrorCounter)
 		logger.Errorf("can't write response: %s", err.Error())
 	}
 }

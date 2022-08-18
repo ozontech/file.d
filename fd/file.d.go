@@ -31,6 +31,7 @@ type FileD struct {
 	plugins   *PluginRegistry
 	Pipelines []*pipeline.Pipeline
 	server    *http.Server
+	metricCtl *metric.MetricsCtl
 }
 
 func New(config *cfg.Config, httpAddr string) *FileD {
@@ -58,13 +59,10 @@ func (f *FileD) Start() {
 func (f *FileD) initMetrics() {
 	metric.InitStats()
 
-	metric.RegisterCounter(&metric.MetricDesc{
-		Subsystem: subsystemLongPanicName,
-		Name:      panics,
-		Help:      "Count of panics in the LongPanic",
-	})
+	f.metricCtl = metric.New("file.d")
+	f.metricCtl.RegisterCounter(subsystemLongPanicName+panics, "Count of panics in the LongPanic")
 	longpanic.SetOnPanicHandler(func(_ error) {
-		metric.GetCounter(subsystemLongPanicName, panics).Inc()
+		f.metricCtl.IncCounter(subsystemLongPanicName + panics)
 	})
 }
 

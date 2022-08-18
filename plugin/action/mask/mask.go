@@ -5,7 +5,6 @@ import (
 	"unicode/utf8"
 
 	"github.com/ozontech/file.d/fd"
-	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
 	insaneJSON "github.com/vitkovskii/insane-json"
 	"go.uber.org/zap"
@@ -38,6 +37,7 @@ const (
 )
 
 type Plugin struct {
+	params          *pipeline.ActionPluginParams
 	config          *Config
 	sourceBuf       []byte
 	maskBuf         []byte
@@ -158,6 +158,7 @@ func verifyGroupNumbers(groups []int, totalGroups int, logger *zap.SugaredLogger
 
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginParams) {
 	p.config = config.(*Config)
+	p.params = params
 	for _, mask := range p.config.Masks {
 		if mask.MaxCount > 0 && mask.ReplaceWord != "" {
 			p.logger.Fatal("Invalid mask configuration")
@@ -175,11 +176,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 }
 
 func (p *Plugin) registerPluginMetrics() {
-	metric.RegisterCounter(&metric.MetricDesc{
-		Name:      timesActivated,
-		Subsystem: *p.config.MetricSubsystemName,
-		Help:      "Number of times mask plugin found the provided pattern",
-	})
+	p.params.Controller.RegisterCounter(*p.config.MetricSubsystemName+timesActivated, "Number of times mask plugin found the provided pattern")
 }
 
 func (p *Plugin) Stop() {
@@ -282,7 +279,7 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 		event.Root.AddFieldNoAlloc(event.Root, p.config.MaskAppliedField).MutateToString(p.config.MaskAppliedValue)
 	}
 	if p.logMaskAppeared && maskApplied {
-		metric.GetCounter(*p.config.MetricSubsystemName, timesActivated).Inc()
+		p.params.Controller.IncCounter(*p.config.MetricSubsystemName + timesActivated)
 		p.logger.Infof("mask appeared to event, output string: %s", event.Root.EncodeToString())
 	}
 

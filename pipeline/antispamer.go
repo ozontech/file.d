@@ -10,6 +10,7 @@ import (
 )
 
 type antispamer struct {
+	m               *metric.MetricsCtl
 	unbanIterations int
 	threshold       int
 	mu              *sync.RWMutex
@@ -22,30 +23,23 @@ const (
 	antispamBanCount = "ban_count"
 )
 
-func newAntispamer(threshold int, unbanIterations int, maintenanceInterval time.Duration) *antispamer {
+func newAntispamer(threshold int, unbanIterations int, maintenanceInterval time.Duration, m *metric.MetricsCtl) *antispamer {
 	if threshold != 0 {
 		logger.Infof("antispam enabled, threshold=%d/%d sec", threshold, maintenanceInterval/time.Second)
 	}
 
-	metric.RegisterGauge(&metric.MetricDesc{
-		Name:      antispamActive,
-		Subsystem: subsystemName,
-		Help:      "Gauge indicates whether the antispam is enabled",
-	})
+	m.RegisterGauge(subsystemName+antispamActive, "Gauge indicates whether the antispam is enabled")
 	// not enabled by default
-	metric.GetGauge(subsystemName, antispamActive).Set(0)
+	m.SetGauge(subsystemName+antispamActive, 0)
 
-	metric.RegisterCounter(&metric.MetricDesc{
-		Name:      antispamBanCount,
-		Subsystem: subsystemName,
-		Help:      "How many times a source was banned",
-	})
+	m.RegisterCounter(subsystemName+antispamBanCount, "How many times a source was banned")
 
 	return &antispamer{
 		threshold:       threshold,
 		unbanIterations: unbanIterations,
 		counters:        make(map[SourceID]*atomic.Int32),
 		mu:              &sync.RWMutex{},
+		m:               m,
 	}
 }
 
@@ -77,8 +71,8 @@ func (p *antispamer) isSpam(id SourceID, name string, isNewSource bool) bool {
 	x := value.Inc()
 	if x == int32(p.threshold) {
 		value.Swap(int32(p.unbanIterations * p.threshold))
-		metric.GetGauge(subsystemName, antispamActive).Set(1)
-		metric.GetCounter(subsystemName, antispamBanCount).Inc()
+		p.m.SetGauge(subsystemName+antispamActive, 1)
+		p.m.IncCounter(subsystemName + antispamBanCount)
 		logger.Warnf("antispam: source has been banned id=%d, name=%s", id, name)
 	}
 
@@ -119,7 +113,7 @@ func (p *antispamer) maintenance() {
 	}
 
 	if allUnbanned {
-		metric.GetGauge(subsystemName, antispamActive).Set(0)
+		p.m.SetGauge(subsystemName+antispamActive, 0)
 	} else {
 		logger.Info("antispam: there are banned sources")
 	}

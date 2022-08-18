@@ -1,10 +1,7 @@
-//go:build linux
-
 package journalctl
 
 import (
 	"github.com/ozontech/file.d/fd"
-	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/offset"
 	"github.com/ozontech/file.d/pipeline"
 )
@@ -78,7 +75,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 
 	p.offInfo = &offsetInfo{}
 	if err := offset.LoadYAML(p.config.OffsetsFile, p.offInfo); err != nil {
-		metric.GetCounter(subsystemName, offsetErrors).Inc()
+		p.params.Controller.IncCounter(subsystemName + offsetErrors)
 		p.params.Logger.Error("can't load offset file: %s", err.Error())
 	}
 
@@ -88,7 +85,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 		maxLines: p.config.MaxLines,
 		logger:   p.params.Logger,
 	}
-	p.reader = newJournalReader(readConfig)
+	p.reader = newJournalReader(readConfig, p.params)
 	p.reader.args = append(p.reader.args, p.config.JournalArgs...)
 	if err := p.reader.start(); err != nil {
 		p.params.Logger.Error("failure during start: %s", err.Error())
@@ -96,32 +93,20 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 }
 
 func (p *Plugin) registerPluginMetrics() {
-	metric.RegisterCounter(&metric.MetricDesc{
-		Subsystem: subsystemName,
-		Name:      offsetErrors,
-		Help:      "Number of errors occurred when saving/loading offset",
-	})
-	metric.RegisterCounter(&metric.MetricDesc{
-		Subsystem: subsystemName,
-		Name:      journalCtlStopErrors,
-		Help:      "Total journalctl stop errors",
-	})
-	metric.RegisterCounter(&metric.MetricDesc{
-		Subsystem: subsystemName,
-		Name:      readerErrors,
-		Help:      "Total reader errors",
-	})
+	p.params.Controller.RegisterCounter(subsystemName+offsetErrors, "Number of errors occurred when saving/loading offset")
+	p.params.Controller.RegisterCounter(subsystemName+journalCtlStopErrors, "Total journalctl stop errors")
+	p.params.Controller.RegisterCounter(subsystemName+readerErrors, "Total reader errors")
 }
 
 func (p *Plugin) Stop() {
 	err := p.reader.stop()
 	if err != nil {
-		metric.GetCounter(subsystemName, journalCtlStopErrors).Inc()
+		p.params.Controller.IncCounter(subsystemName + journalCtlStopErrors)
 		p.params.Logger.Error("can't stop journalctl cmd: %s", err.Error())
 	}
 
 	if err := offset.SaveYAML(p.config.OffsetsFile, p.offInfo); err != nil {
-		metric.GetCounter(subsystemName, offsetErrors).Inc()
+		p.params.Controller.IncCounter(subsystemName + offsetErrors)
 		p.params.Logger.Error("can't save offset file: %s", err.Error())
 	}
 }
@@ -130,7 +115,7 @@ func (p *Plugin) Commit(event *pipeline.Event) {
 	p.offInfo.set(event.Root.Dig("__CURSOR").AsString())
 
 	if err := offset.SaveYAML(p.config.OffsetsFile, p.offInfo); err != nil {
-		metric.GetCounter(subsystemName, offsetErrors).Inc()
+		p.params.Controller.IncCounter(subsystemName + offsetErrors)
 		p.params.Logger.Error("can't save offset file: %s", err.Error())
 	}
 }

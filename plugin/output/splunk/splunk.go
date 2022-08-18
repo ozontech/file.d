@@ -12,7 +12,6 @@ import (
 
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
-	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
 	insaneJSON "github.com/vitkovskii/insane-json"
 	"go.uber.org/zap"
@@ -123,11 +122,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 }
 
 func (p *Plugin) registerPluginMetrics() {
-	metric.RegisterCounter(&metric.MetricDesc{
-		Name:      sendErrorCounter,
-		Subsystem: subsystemName,
-		Help:      "Total splunk send errors",
-	})
+	p.controller.RegisterCounter(subsystemName+sendErrorCounter, "Total splunk send errors")
 }
 
 func (p *Plugin) Stop() {
@@ -167,7 +162,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 	for {
 		err := p.send(outBuf)
 		if err != nil {
-			metric.GetCounter(subsystemName, sendErrorCounter).Inc()
+			p.controller.IncCounter(subsystemName + sendErrorCounter)
 			p.logger.Errorf("can't send data to splunk address=%s: %s", p.config.Endpoint, err.Error())
 			time.Sleep(time.Second)
 

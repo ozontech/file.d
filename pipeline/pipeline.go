@@ -170,15 +170,15 @@ func New(name string, settings *Settings, registry *prometheus.Registry) *Pipeli
 			PipelineSettings: settings,
 		},
 
-		MetricsCtl:    metric.New(name),
 		metricsHolder: newMetricsHolder(name, registry, metricsGenInterval),
 		streamer:      newStreamer(settings.EventTimeout),
 		eventPool:     newEventPool(settings.Capacity, settings.AvgEventSize),
-		antispamer:    newAntispamer(settings.AntispamThreshold, antispamUnbanIterations, settings.MaintenanceInterval),
 
 		eventLog:   make([]string, 0, 128),
 		eventLogMu: &sync.Mutex{},
 	}
+	pipeline.MetricsCtl = metric.New(pipeline.subsystemName())
+	pipeline.antispamer = newAntispamer(settings.AntispamThreshold, antispamUnbanIterations, settings.MaintenanceInterval, pipeline.MetricsCtl)
 
 	pipeline.registerMetrics()
 	pipeline.setDefaultMetrics()
@@ -206,7 +206,7 @@ func (p *Pipeline) IncReadOps() {
 }
 
 func (p *Pipeline) IncMaxEventSizeExceeded() {
-	metric.GetCounter(p.subsystemName(), maxEventSizeExceeded).Inc()
+	p.IncCounter(maxEventSizeExceeded)
 }
 
 func (p *Pipeline) subsystemName() string {
@@ -214,55 +214,19 @@ func (p *Pipeline) subsystemName() string {
 }
 
 func (p *Pipeline) registerMetrics() {
-	metric.RegisterGauge(&metric.MetricDesc{
-		Subsystem: p.subsystemName(),
-		Name:      inUseEventsMetric,
-		Help:      "Count of pool events which is used for processing",
-	})
-	metric.RegisterGauge(&metric.MetricDesc{
-		Subsystem: p.subsystemName(),
-		Name:      eventPoolCapacity,
-		Help:      "Pool capacity value",
-	})
-	metric.RegisterCounter(&metric.MetricDesc{
-		Subsystem: p.subsystemName(),
-		Name:      inputEventsCountMetric,
-		Help:      "Count of events on pipeline input",
-	})
-	metric.RegisterCounter(&metric.MetricDesc{
-		Subsystem: p.subsystemName(),
-		Name:      inputEventsSizeMetric,
-		Help:      "Size of events on pipeline input",
-	})
-	metric.RegisterCounter(&metric.MetricDesc{
-		Subsystem: p.subsystemName(),
-		Name:      outputEventsCountMetric,
-		Help:      "Count of events on pipeline output",
-	})
-	metric.RegisterCounter(&metric.MetricDesc{
-		Subsystem: p.subsystemName(),
-		Name:      outputEventsSizeMetric,
-		Help:      "Size of events on pipeline output",
-	})
-	metric.RegisterCounter(&metric.MetricDesc{
-		Subsystem: p.subsystemName(),
-		Name:      readOpsEventsSizeMetric,
-		Help:      "Read OPS count",
-	})
-	metric.RegisterCounter(&metric.MetricDesc{
-		Subsystem: p.subsystemName(),
-		Name:      wrongEventCRIFormatMetric,
-		Help:      "Wrong event CRI format counter",
-	})
-	metric.RegisterCounter(&metric.MetricDesc{
-		Subsystem: p.subsystemName(),
-		Name:      maxEventSizeExceeded,
-		Help:      "Max event size exceeded counter",
-	})
+	p.RegisterGauge(inUseEventsMetric, "Count of pool events which is used for processing")
+	p.RegisterGauge(eventPoolCapacity, "Pool capacity value")
+	p.RegisterCounter(inputEventsCountMetric, "Count of events on pipeline input")
+	p.RegisterCounter(inputEventsSizeMetric, "Size of events on pipeline input")
+	p.RegisterCounter(outputEventsCountMetric, "Count of events on pipeline output")
+	p.RegisterCounter(outputEventsSizeMetric, "Size of events on pipeline output")
+	p.RegisterCounter(readOpsEventsSizeMetric, "Read OPS count")
+	p.RegisterCounter(wrongEventCRIFormatMetric, "Wrong event CRI format counter")
+	p.RegisterCounter(maxEventSizeExceeded, "Max event size exceeded counter")
 }
 
 func (p *Pipeline) setDefaultMetrics() {
-	metric.GetGauge(p.subsystemName(), eventPoolCapacity).Set(float64(p.settings.Capacity))
+	p.SetGauge(eventPoolCapacity, float64(p.settings.Capacity))
 }
 
 // SetupHTTPHandlers creates handlers for plugin endpoints and pipeline info.
@@ -427,7 +391,7 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 		_ = event.Root.DecodeString("{}")
 		err := decoder.DecodeCRI(event.Root, bytes)
 		if err != nil {
-			metric.GetCounter(p.subsystemName(), wrongEventCRIFormatMetric).Inc()
+			p.IncCounter(wrongEventCRIFormatMetric)
 			if p.settings.IsStrict {
 				p.logger.Fatalf("wrong cri format offset=%d, length=%d, err=%s, source=%d:%s, cri=%s", offset, length, err.Error(), sourceID, sourceName, bytes)
 			} else {
@@ -652,17 +616,17 @@ func (p *Pipeline) incMetrics(inputEvents, inputSize, outputEvents, outputSize, 
 		deltaReads,
 	}
 
-	metric.GetCounter(p.subsystemName(), inputEventsCountMetric).Add(myDeltas.deltaInputEvents)
-	metric.GetCounter(p.subsystemName(), inputEventsSizeMetric).Add(myDeltas.deltaInputSize)
-	metric.GetCounter(p.subsystemName(), outputEventsCountMetric).Add(myDeltas.deltaOutputEvents)
-	metric.GetCounter(p.subsystemName(), outputEventsSizeMetric).Add(myDeltas.deltaOutputSize)
-	metric.GetCounter(p.subsystemName(), readOpsEventsSizeMetric).Add(myDeltas.deltaReads)
+	p.AddCounter(inputEventsCountMetric, myDeltas.deltaInputEvents)
+	p.AddCounter(inputEventsSizeMetric, myDeltas.deltaInputSize)
+	p.AddCounter(outputEventsCountMetric, myDeltas.deltaOutputEvents)
+	p.AddCounter(outputEventsSizeMetric, myDeltas.deltaOutputSize)
+	p.AddCounter(readOpsEventsSizeMetric, myDeltas.deltaReads)
 
 	return myDeltas
 }
 
 func (p *Pipeline) setMetrics(inUseEvents atomic.Int64) {
-	metric.GetGauge(p.subsystemName(), inUseEventsMetric).Set(float64(inUseEvents.Load()))
+	p.SetGauge(inUseEventsMetric, float64(inUseEvents.Load()))
 }
 
 func (p *Pipeline) maintenance() {

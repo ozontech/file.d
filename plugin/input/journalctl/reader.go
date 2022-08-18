@@ -2,13 +2,13 @@ package journalctl
 
 import (
 	"bufio"
+	"github.com/ozontech/file.d/pipeline"
 	"io"
 	"os/exec"
 	"strings"
 
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/longpanic"
-	"github.com/ozontech/file.d/metric"
 	"go.uber.org/zap"
 )
 
@@ -22,13 +22,14 @@ type journalReaderConfig struct {
 
 //nolint:unused
 type journalReader struct {
+	params *pipeline.InputPluginParams
 	config *journalReaderConfig
 	cmd    *exec.Cmd
 	args   []string
 }
 
 //nolint:unused
-func readLines(r io.Reader, config *journalReaderConfig) {
+func readLines(r io.Reader, config *journalReaderConfig, params *pipeline.InputPluginParams) {
 	reader := bufio.NewReaderSize(r, 1024*1024*10) // max message size
 	totalLines := 0
 
@@ -47,13 +48,13 @@ func readLines(r io.Reader, config *journalReaderConfig) {
 			break
 		}
 		if err != nil {
-			metric.GetCounter(subsystemName, readerErrors).Inc()
+			params.Controller.IncCounter(subsystemName + readerErrors)
 			config.logger.Error(err)
 			continue
 		}
 		_, err = config.output.Write(bytes)
 		if err != nil {
-			metric.GetCounter(subsystemName, readerErrors).Inc()
+			params.Controller.IncCounter(subsystemName + readerErrors)
 			config.logger.Error(err)
 		}
 
@@ -65,8 +66,11 @@ func readLines(r io.Reader, config *journalReaderConfig) {
 }
 
 //nolint:deadcode,unused
-func newJournalReader(config *journalReaderConfig) *journalReader {
-	res := &journalReader{config: config}
+func newJournalReader(config *journalReaderConfig, params *pipeline.InputPluginParams) *journalReader {
+	res := &journalReader{
+		config: config,
+		params: params,
+	}
 	res.args = []string{
 		"-o", "json",
 	}
@@ -92,7 +96,7 @@ func (r *journalReader) start() error {
 		return err
 	}
 
-	longpanic.Go(func() { readLines(out, r.config) })
+	longpanic.Go(func() { readLines(out, r.config, r.params) })
 
 	return nil
 }
