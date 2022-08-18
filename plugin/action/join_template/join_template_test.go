@@ -169,6 +169,46 @@ example.com/platform/somlib/pkg/mw/grpc/circuitbreaker.(*RTCircuitBreakerGroup).
     /builds/.cache/go/pkg/mod/example.com/platform/somlib@v1.12.4-alpha.3.0.20220525161738-c7c89a81036d/pkg/mw/grpc/circuitbreaker/interceptors.go:20 +0x18c
 google.golang.org/grpc.getChainUnaryInvoker.func1({0x18bda78, 0xc002e47080}, {0x162a945, 0x1a}, {0x158e100, 0xc002e46e40}, {0x158d840, 0xc002e46e70}, 0x7fd128bcbfff, {0x0, ...})
     /builds/.cache/go/pkg/mod/google.golang.org/grpc@v1.44.0/clientconn.go:360 +0x154
+
+# ===next===
+panic: failed to create app
+
+goroutine 1 [running]:
+main.NewApp({{0x104dbf64c?, 0x14000180018?}, 0x1400018c008?}, {0x104d4b114?, 0x104ee8a68?})
+		/Users/root/go/src/app/main.go:172 +0x68
+main.initApp()
+		/Users/root/go/src/app/main.go:198 +0x394
+main.main()
+		/Users/root/go/src/app/main.go:205 +0x20
+
+# ===next===
+panic: operation failed
+
+goroutine 1 [running]:
+main.__(...)
+		/Users/root/go/src/app/main.go:209
+main.___()
+		/Users/root/go/src/app/main.go:203 +0xb4
+main.main()
+		/Users/root/go/src/app/main.go:217 +0x60
+
+# ===next===
+panic: process data failed
+        panic: close failed
+
+goroutine 18 [running]:
+main.CloseChannel(...)
+        /Users/root/go/src/app/main.go:214
+main.RunTask.func1.1()
+        /Users/root/go/src/app/main.go:226 +0x74
+panic({0x102feb9c0, 0x102ffc8d0})
+        /usr/local/go/src/runtime/panic.go:838 +0x204
+main.ProcessData(...)
+        /Users/root/go/src/app/main.go:218
+main.RunTask.func1()
+        /Users/root/go/src/app/main.go:231 +0x9c
+created by main.RunTask
+        /Users/root/go/src/app/main.go:223 +0x68
 `
 
 const contentPanicsWithNilNodes = `# ===next===
@@ -341,7 +381,7 @@ func TestSimpleJoin(t *testing.T) {
 			name:       "should_ok_for_panics",
 			content:    contentPanics,
 			iterations: 100,
-			expEvents:  13 * 100,
+			expEvents:  16 * 100,
 		},
 	}
 
