@@ -97,7 +97,6 @@ func WaitForEvents(x *atomic.Int32) {
 }
 
 func NewPipeline(actions []*pipeline.ActionPluginStaticInfo, pipelineOpts ...string) *pipeline.Pipeline {
-	metric.InitStats()
 	parallel := Opts(pipelineOpts).Has("parallel")
 	perf := Opts(pipelineOpts).Has("perf")
 	mock := Opts(pipelineOpts).Has("mock")
@@ -206,9 +205,25 @@ func NewEmptyOutputPluginParams() *pipeline.OutputPluginParams {
 			PipelineName:     "test_pipeline",
 			PipelineSettings: &pipeline.Settings{},
 		},
-		Controller: nil,
+		Controller: NewEmptyOutputPluginController(),
 		Logger:     zap.L().Sugar(),
 	}
+}
+
+func NewEmptyOutputPluginController() pipeline.OutputPluginController {
+	return &emptyOutputPluginController{MetricsCtl: metric.New("test_OutputController")}
+}
+
+type emptyOutputPluginController struct {
+	*metric.MetricsCtl
+}
+
+func (e *emptyOutputPluginController) Commit(event *pipeline.Event) {
+	logger.Error("used func Commit, that not realized")
+}
+
+func (e *emptyOutputPluginController) Error(err string) {
+	logger.Error("used func Error, that not realized")
 }
 
 func NewConfig(config interface{}, params map[string]int) interface{} {

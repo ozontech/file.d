@@ -193,7 +193,7 @@ func (jp *jobProvider) commit(event *pipeline.Event) {
 	}
 
 	if value == 0 && event.Offset >= 16*1024*1024 {
-		jp.controller.IncCounter(subsystemName + possibleOffsetCorruptionCounter)
+		jp.controller.IncCounter(possibleOffsetCorruptionCounter)
 		jp.logger.Errorf("it maybe an offset corruption: committing=%d, current=%d, event id=%d, source=%d:%s", event.Offset, value, event.SeqID, event.SourceID, event.SourceName)
 	}
 

@@ -1,3 +1,6 @@
+//go:build linux
+// +build linux
+
 package dmesg
 
 import (
@@ -13,9 +16,7 @@ import (
 )
 
 const (
-	subsystemName = "input_dmesg"
-
-	offsetErrors = "offset_errors"
+	offsetErrors = "input_dmesg_offset_errors"
 )
 
 /*{ introduction
@@ -63,7 +64,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 
 	p.state = &state{}
 	if err := offset.LoadYAML(p.config.OffsetsFile, p.state); err != nil {
-		p.controller.IncCounter(subsystemName + offsetErrors)
+		p.controller.IncCounter(offsetErrors)
 		p.logger.Error("can't load offset file: %s", err.Error())
 	}
 
@@ -78,7 +79,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 }
 
 func (p *Plugin) registerPluginMetrics() {
-	p.controller.RegisterCounter(subsystemName+offsetErrors, "Number of errors occurred when saving/loading offset")
+	p.controller.RegisterCounter(offsetErrors, "Number of errors occurred when saving/loading offset")
 }
 
 func (p *Plugin) read() {
@@ -124,7 +125,7 @@ func (p *Plugin) Commit(event *pipeline.Event) {
 	p.state.TS = event.Offset
 
 	if err := offset.SaveYAML(p.config.OffsetsFile, p.state); err != nil {
-		p.controller.IncCounter(subsystemName + offsetErrors)
+		p.controller.IncCounter(offsetErrors)
 		p.logger.Error("can't save offset file: %s", err.Error())
 	}
 }

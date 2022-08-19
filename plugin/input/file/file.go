@@ -44,8 +44,7 @@ pipelines:
 }*/
 
 const (
-	subsystemName                   = "input_file"
-	possibleOffsetCorruptionCounter = "possible_offset_corruptions_total"
+	possibleOffsetCorruptionCounter = "input_file_possible_offset_corruptions_total"
 )
 
 type Plugin struct {
@@ -201,7 +200,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 }
 
 func (p *Plugin) registerPluginMetrics() {
-	p.params.Controller.RegisterCounter(subsystemName+possibleOffsetCorruptionCounter, "Total number of possible offset corruptions")
+	p.params.Controller.RegisterCounter(possibleOffsetCorruptionCounter, "Total number of possible offset corruptions")
 }
 
 func (p *Plugin) startWorkers() {

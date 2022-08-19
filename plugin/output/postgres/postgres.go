@@ -34,15 +34,14 @@ type PgxIface interface {
 
 const (
 	outPluginType = "postgres"
-	subsystemName = "output_postgres"
 
 	// required for PgBouncers that doesn't support prepared statements.
 	preferSimpleProtocol = pgx.QuerySimpleProtocol(true)
 
 	// metric
-	discardedEventCounter  = "event_discarded"
-	duplicatedEventCounter = "event_duplicated"
-	writtenEventCounter    = "event_written"
+	discardedEventCounter  = "output_postgres_event_discarded"
+	duplicatedEventCounter = "output_postgres_event_duplicated"
+	writtenEventCounter    = "output_postgres_event_written"
 
 	nineThousandYear = 221842627200
 )
@@ -173,9 +172,9 @@ func Factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 }
 
 func (p *Plugin) registerPluginMetrics() {
-	p.controller.RegisterCounter(subsystemName+discardedEventCounter, "Total pgsql discarded messages")
-	p.controller.RegisterCounter(subsystemName+duplicatedEventCounter, "Total pgsql duplicated messages")
-	p.controller.RegisterCounter(subsystemName+writtenEventCounter, "Total events written to pgsql")
+	p.controller.RegisterCounter(discardedEventCounter, "Total pgsql discarded messages")
+	p.controller.RegisterCounter(duplicatedEventCounter, "Total pgsql duplicated messages")
+	p.controller.RegisterCounter(writtenEventCounter, "Total events written to pgsql")
 }
 
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginParams) {
@@ -260,19 +259,19 @@ func (p *Plugin) out(_ *pipeline.WorkerData, batch *pipeline.Batch) {
 		fieldValues, uniqueID, err := p.processEvent(event, pgFields, uniqFields)
 		if err != nil {
 			if errors.Is(err, ErrEventDoesntHaveField) {
-				p.controller.IncCounter(subsystemName + discardedEventCounter)
+				p.controller.IncCounter(discardedEventCounter)
 				if p.config.Strict {
 					p.logger.Fatal(err)
 				}
 				p.logger.Error(err)
 			} else if errors.Is(err, ErrEventFieldHasWrongType) {
-				p.controller.IncCounter(subsystemName + discardedEventCounter)
+				p.controller.IncCounter(discardedEventCounter)
 				if p.config.Strict {
 					p.logger.Fatal(err)
 				}
 				p.logger.Error(err)
 			} else if errors.Is(err, ErrTimestampFromDistantPastOrFuture) {
-				p.controller.IncCounter(subsystemName + discardedEventCounter)
+				p.controller.IncCounter(discardedEventCounter)
 				if p.config.Strict {
 					p.logger.Fatal(err)
 				}
@@ -286,7 +285,7 @@ func (p *Plugin) out(_ *pipeline.WorkerData, batch *pipeline.Batch) {
 
 		// passes here only if event valid.
 		if _, ok := uniqueEventsMap[uniqueID]; ok {
-			p.controller.IncCounter(subsystemName + duplicatedEventCounter)
+			p.controller.IncCounter(duplicatedEventCounter)
 			p.logger.Infof("event duplicated. Fields: %v, values: %v", pgFields, fieldValues)
 		} else {
 			uniqueEventsMap[uniqueID] = struct{}{}
@@ -321,7 +320,7 @@ func (p *Plugin) out(_ *pipeline.WorkerData, batch *pipeline.Batch) {
 			time.Sleep(p.config.Retention_)
 			continue
 		}
-		p.controller.AddCounter(subsystemName+writtenEventCounter, float64(len(uniqueEventsMap)))
+		p.controller.AddCounter(writtenEventCounter, float64(len(uniqueEventsMap)))
 		break
 	}
 

@@ -2,13 +2,14 @@ package journalctl
 
 import (
 	"bufio"
-	"github.com/ozontech/file.d/pipeline"
 	"io"
 	"os/exec"
 	"strings"
 
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/longpanic"
+	"github.com/ozontech/file.d/pipeline"
+
 	"go.uber.org/zap"
 )
 
@@ -48,13 +49,13 @@ func readLines(r io.Reader, config *journalReaderConfig, params *pipeline.InputP
 			break
 		}
 		if err != nil {
-			params.Controller.IncCounter(subsystemName + readerErrors)
+			params.Controller.IncCounter(readerErrors)
 			config.logger.Error(err)
 			continue
 		}
 		_, err = config.output.Write(bytes)
 		if err != nil {
-			params.Controller.IncCounter(subsystemName + readerErrors)
+			params.Controller.IncCounter(readerErrors)
 			config.logger.Error(err)
 		}
 

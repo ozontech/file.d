@@ -52,25 +52,6 @@ const (
 
 type finalizeFn = func(event *Event, notifyInput bool, backEvent bool)
 
-type MetricsController interface {
-	MetricsCounters
-	MetricsGauges
-}
-
-type MetricsCounters interface {
-	RegisterCounter(name, help string)
-	IncCounter(name string)
-	AddCounter(name string, value float64)
-}
-
-type MetricsGauges interface {
-	RegisterGauge(name, help string)
-	IncGauge(name string)
-	DecGauge(name string)
-	AddGauge(name string, value float64)
-	SetGauge(name string, value float64)
-}
-
 type InputPluginController interface {
 	In(sourceID SourceID, sourceName string, offset int64, data []byte, isNewSource bool) uint64
 	UseSpread()                           // don't use stream field and spread all events across all processors
@@ -91,6 +72,25 @@ type OutputPluginController interface {
 	Commit(event *Event) // notify input plugin that event is successfully processed and save offsets
 	Error(err string)
 	MetricsController
+}
+
+type MetricsController interface {
+	MetricsCounters
+	MetricsGauges
+}
+
+type MetricsCounters interface {
+	RegisterCounter(name, help string)
+	IncCounter(name string)
+	AddCounter(name string, value float64)
+}
+
+type MetricsGauges interface {
+	RegisterGauge(name, help string)
+	IncGauge(name string)
+	DecGauge(name string)
+	AddGauge(name string, value float64)
+	SetGauge(name string, value float64)
 }
 
 type (

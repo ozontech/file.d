@@ -26,11 +26,10 @@ If a network error occurs, the batch will infinitely try to be delivered to the 
 
 const (
 	outPluginType = "elasticsearch"
-	subsystemName = "output_elasticsearch"
 
 	// errors
-	sendErrorCounter = "send_error"
-	indexingErrors   = "index_error"
+	sendErrorCounter = "output_elasticsearch_send_error"
+	indexingErrors   = "output_elasticsearch_index_error"
 
 	NDJSONContentType = "application/x-ndjson"
 
@@ -233,8 +232,8 @@ func (p *Plugin) Out(event *pipeline.Event) {
 }
 
 func (p *Plugin) registerPluginMetrics() {
-	p.controller.RegisterCounter(subsystemName+sendErrorCounter, "Total elasticsearch send errors")
-	p.controller.RegisterCounter(subsystemName+indexingErrors, "Number of elasticsearch indexing errors")
+	p.controller.RegisterCounter(sendErrorCounter, "Total elasticsearch send errors")
+	p.controller.RegisterCounter(indexingErrors, "Number of elasticsearch indexing errors")
 }
 
 func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
@@ -257,7 +256,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 
 	for {
 		if err := p.send(data.outBuf); err != nil {
-			p.controller.IncCounter(subsystemName + sendErrorCounter)
+			p.controller.IncCounter(sendErrorCounter)
 			p.logger.Errorf("can't send to the elastic, will try other endpoint: %s", err.Error())
 		} else {
 			break
@@ -307,7 +306,7 @@ func (p *Plugin) send(body []byte) error {
 		}
 
 		if errors != 0 {
-			p.controller.AddCounter(subsystemName+indexingErrors, float64(errors))
+			p.controller.AddCounter(indexingErrors, float64(errors))
 		}
 
 		p.controller.Error("some events from batch aren't written")

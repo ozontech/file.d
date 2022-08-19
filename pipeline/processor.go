@@ -77,10 +77,10 @@ func NewProcessor(
 	output OutputPlugin,
 	streamer *streamer,
 	finalizeFn finalizeFn,
-	m *metric.MetricsCtl,
+	controller *metric.MetricsCtl,
 ) *processor {
 	processor := &processor{
-		MetricsCtl:    m,
+		MetricsCtl:    controller,
 		id:            id,
 		streamer:      streamer,
 		metricsHolder: metricsHolder,

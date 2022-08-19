@@ -6,10 +6,11 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/ozontech/file.d/pipeline"
 	"github.com/stretchr/testify/assert"
 	insaneJSON "github.com/vitkovskii/insane-json"
 	"go.uber.org/zap"
+
+	"github.com/ozontech/file.d/pipeline"
 )
 
 func TestSplunk(t *testing.T) {

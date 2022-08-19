@@ -10,13 +10,11 @@ import (
 
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/logger"
-	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/test"
 )
 
 func TestAppendEvent(t *testing.T) {
-	metric.InitStats()
 	p := &Plugin{}
 	config := &Config{
 		Endpoints:   []string{"test"},
@@ -43,7 +41,6 @@ func TestAppendEvent(t *testing.T) {
 }
 
 func TestAppendEventWithIndexOpType(t *testing.T) {
-	metric.InitStats()
 	p := &Plugin{}
 	config := &Config{
 		Endpoints:   []string{"test"},
@@ -71,7 +68,6 @@ func TestAppendEventWithIndexOpType(t *testing.T) {
 }
 
 func TestAppendEventWithCreateOpType(t *testing.T) {
-	metric.InitStats()
 	p := &Plugin{}
 	config := &Config{
 		Endpoints:   []string{"test"},
@@ -99,7 +95,6 @@ func TestAppendEventWithCreateOpType(t *testing.T) {
 }
 
 func TestConfig(t *testing.T) {
-	metric.InitStats()
 	p := &Plugin{}
 	config := &Config{
 		IndexFormat: "test-%",

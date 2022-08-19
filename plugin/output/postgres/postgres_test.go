@@ -10,17 +10,16 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/jackc/pgconn"
 	"github.com/jackc/pgproto3/v2"
-	"github.com/ozontech/file.d/logger"
-	"github.com/ozontech/file.d/metric"
-	"github.com/ozontech/file.d/pipeline"
-	mock_pg "github.com/ozontech/file.d/plugin/output/postgres/mock"
 	"github.com/stretchr/testify/require"
 	insaneJSON "github.com/vitkovskii/insane-json"
+
+	"github.com/ozontech/file.d/logger"
+	"github.com/ozontech/file.d/pipeline"
+	mock_pg "github.com/ozontech/file.d/plugin/output/postgres/mock"
+	"github.com/ozontech/file.d/test"
 )
 
 func TestPrivateOut(t *testing.T) {
-	metric.InitStats()
-
 	testLogger := logger.Instance
 
 	root := insaneJSON.Spawn()
@@ -89,6 +88,7 @@ func TestPrivateOut(t *testing.T) {
 		pool:         pool,
 		logger:       testLogger,
 		ctx:          ctx,
+		controller:   test.NewEmptyOutputPluginController(),
 	}
 
 	p.registerPluginMetrics()
@@ -98,8 +98,6 @@ func TestPrivateOut(t *testing.T) {
 }
 
 func TestPrivateOutWithRetry(t *testing.T) {
-	metric.InitStats()
-
 	testLogger := logger.Instance
 
 	root := insaneJSON.Spawn()
@@ -166,6 +164,7 @@ func TestPrivateOutWithRetry(t *testing.T) {
 		pool:         pool,
 		logger:       testLogger,
 		ctx:          ctx,
+		controller:   test.NewEmptyOutputPluginController(),
 	}
 
 	p.registerPluginMetrics()
@@ -175,8 +174,6 @@ func TestPrivateOutWithRetry(t *testing.T) {
 }
 
 func TestPrivateOutNoGoodEvents(t *testing.T) {
-	metric.InitStats()
-
 	testLogger := logger.Instance
 
 	root := insaneJSON.Spawn()
@@ -221,6 +218,7 @@ func TestPrivateOutNoGoodEvents(t *testing.T) {
 		config:       &config,
 		queryBuilder: builder,
 		logger:       testLogger,
+		controller:   test.NewEmptyOutputPluginController(),
 	}
 
 	p.registerPluginMetrics()
@@ -230,8 +228,6 @@ func TestPrivateOutNoGoodEvents(t *testing.T) {
 }
 
 func TestPrivateOutDeduplicatedEvents(t *testing.T) {
-	metric.InitStats()
-
 	testLogger := logger.Instance
 
 	root := insaneJSON.Spawn()
@@ -303,6 +299,7 @@ func TestPrivateOutDeduplicatedEvents(t *testing.T) {
 		pool:         pool,
 		logger:       testLogger,
 		ctx:          ctx,
+		controller:   test.NewEmptyOutputPluginController(),
 	}
 
 	p.registerPluginMetrics()
@@ -316,8 +313,6 @@ func TestPrivateOutDeduplicatedEvents(t *testing.T) {
 }
 
 func TestPrivateOutWrongTypeInField(t *testing.T) {
-	metric.InitStats()
-
 	testLogger := logger.Instance
 
 	root := insaneJSON.Spawn()
@@ -371,6 +366,7 @@ func TestPrivateOutWrongTypeInField(t *testing.T) {
 		config:       &config,
 		queryBuilder: builder,
 		logger:       testLogger,
+		controller:   test.NewEmptyOutputPluginController(),
 	}
 
 	p.registerPluginMetrics()
@@ -380,8 +376,6 @@ func TestPrivateOutWrongTypeInField(t *testing.T) {
 }
 
 func TestPrivateOutFewUniqueEventsYetWithDeduplicationEventsAnpooladEvents(t *testing.T) {
-	metric.InitStats()
-
 	testLogger := logger.Instance
 
 	root := insaneJSON.Spawn()
@@ -478,6 +472,7 @@ func TestPrivateOutFewUniqueEventsYetWithDeduplicationEventsAnpooladEvents(t *te
 		pool:         pool,
 		logger:       testLogger,
 		ctx:          ctx,
+		controller:   test.NewEmptyOutputPluginController(),
 	}
 
 	p.registerPluginMetrics()

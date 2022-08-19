@@ -17,10 +17,8 @@ It reads events from multiple Kafka topics using `sarama` library.
 }*/
 
 const (
-	subsystemName = "input_kafka"
-
-	commitErrors  = "commit_errors"
-	consumeErrors = "consume_errors"
+	commitErrors  = "input_kafka_commit_errors"
+	consumeErrors = "input_kafka_consume_errors"
 )
 
 type Plugin struct {
@@ -91,8 +89,8 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 }
 
 func (p *Plugin) registerPluginMetrics() {
-	p.controller.RegisterCounter(subsystemName+commitErrors, "Number of kafka commit errors")
-	p.controller.RegisterCounter(subsystemName+consumeErrors, "Number of kafka consume errors")
+	p.controller.RegisterCounter(commitErrors, "Number of kafka commit errors")
+	p.controller.RegisterCounter(consumeErrors, "Number of kafka consume errors")
 }
 
 func (p *Plugin) consume(ctx context.Context) {
@@ -100,7 +98,7 @@ func (p *Plugin) consume(ctx context.Context) {
 	for {
 		err := p.consumerGroup.Consume(ctx, p.config.Topics, p)
 		if err != nil {
-			p.controller.IncCounter(subsystemName + consumeErrors)
+			p.controller.IncCounter(consumeErrors)
 			p.logger.Errorf("can't consume from kafka: %s", err.Error())
 		}
 
@@ -116,7 +114,7 @@ func (p *Plugin) Stop() {
 
 func (p *Plugin) Commit(event *pipeline.Event) {
 	if p.session == nil {
-		p.controller.IncCounter(subsystemName + commitErrors)
+		p.controller.IncCounter(commitErrors)
 		p.logger.Errorf("no kafka consumer session for event commit")
 		return
 	}

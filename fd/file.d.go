@@ -20,8 +20,7 @@ import (
 )
 
 const (
-	subsystemLongPanicName = "long_panic"
-	panics                 = "panics"
+	longPanicCounter = "long_panic"
 )
 
 type FileD struct {
@@ -57,12 +56,10 @@ func (f *FileD) Start() {
 }
 
 func (f *FileD) initMetrics() {
-	metric.InitStats()
-
-	f.metricCtl = metric.New("file.d")
-	f.metricCtl.RegisterCounter(subsystemLongPanicName+panics, "Count of panics in the LongPanic")
+	f.metricCtl = metric.New("file_d")
+	f.metricCtl.RegisterCounter(longPanicCounter, "Count of panics in the LongPanic")
 	longpanic.SetOnPanicHandler(func(_ error) {
-		f.metricCtl.IncCounter(subsystemLongPanicName + panics)
+		f.metricCtl.IncCounter(longPanicCounter)
 	})
 }
 

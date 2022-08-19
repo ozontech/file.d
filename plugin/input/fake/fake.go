@@ -1,7 +1,10 @@
 package fake
 
 import (
+	"github.com/ozontech/file.d/decoder"
 	"github.com/ozontech/file.d/fd"
+	"github.com/ozontech/file.d/logger"
+	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
 )
 
@@ -25,7 +28,7 @@ func init() {
 }
 
 func Factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
-	return &Plugin{}, &Config{}
+	return &Plugin{controller: NewInputPluginController()}, &Config{}
 }
 
 func (p *Plugin) Start(_ pipeline.AnyConfig, params *pipeline.InputPluginParams) {
@@ -60,4 +63,38 @@ func (p *Plugin) SetCommitFn(fn func(event *pipeline.Event)) { // *
 // > It sets up a hook to make sure the test event has been passed to the plugin.
 func (p *Plugin) SetInFn(fn func()) { // *
 	p.inFn = fn
+}
+
+func NewInputPluginController() pipeline.InputPluginController {
+	return &emptyInputPluginController{MetricsCtl: metric.New("test_InputController")}
+}
+
+type emptyInputPluginController struct {
+	*metric.MetricsCtl
+}
+
+func (e emptyInputPluginController) In(sourceID pipeline.SourceID, sourceName string, offset int64, data []byte, isNewSource bool) uint64 {
+	logger.Error("used func In, that not realized")
+	return 0
+}
+
+func (e emptyInputPluginController) UseSpread() {
+	logger.Error("used func UseSpread, that not realized")
+}
+
+func (e emptyInputPluginController) DisableStreams() {
+	logger.Error("used func DisableStreams, that not realized")
+}
+
+func (e emptyInputPluginController) SuggestDecoder(t decoder.DecoderType) {
+	logger.Error("used func SuggestDecoder, that not realized")
+}
+
+func (e emptyInputPluginController) IncReadOps() {
+	logger.Error("used func IncReadOps, that not realized")
+}
+
+func (e emptyInputPluginController) IncMaxEventSizeExceeded() {
+	//TODO implement me
+	panic("implement me")
 }

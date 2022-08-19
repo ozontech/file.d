@@ -1,3 +1,5 @@
+//go:build linux
+
 package journalctl
 
 import (
@@ -75,7 +77,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 
 	p.offInfo = &offsetInfo{}
 	if err := offset.LoadYAML(p.config.OffsetsFile, p.offInfo); err != nil {
-		p.params.Controller.IncCounter(subsystemName + offsetErrors)
+		p.params.Controller.IncCounter(offsetErrors)
 		p.params.Logger.Error("can't load offset file: %s", err.Error())
 	}
 
@@ -93,20 +95,20 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 }
 
 func (p *Plugin) registerPluginMetrics() {
-	p.params.Controller.RegisterCounter(subsystemName+offsetErrors, "Number of errors occurred when saving/loading offset")
-	p.params.Controller.RegisterCounter(subsystemName+journalCtlStopErrors, "Total journalctl stop errors")
-	p.params.Controller.RegisterCounter(subsystemName+readerErrors, "Total reader errors")
+	p.params.Controller.RegisterCounter(offsetErrors, "Number of errors occurred when saving/loading offset")
+	p.params.Controller.RegisterCounter(journalCtlStopErrors, "Total journalctl stop errors")
+	p.params.Controller.RegisterCounter(readerErrors, "Total reader errors")
 }
 
 func (p *Plugin) Stop() {
 	err := p.reader.stop()
 	if err != nil {
-		p.params.Controller.IncCounter(subsystemName + journalCtlStopErrors)
+		p.params.Controller.IncCounter(journalCtlStopErrors)
 		p.params.Logger.Error("can't stop journalctl cmd: %s", err.Error())
 	}
 
 	if err := offset.SaveYAML(p.config.OffsetsFile, p.offInfo); err != nil {
-		p.params.Controller.IncCounter(subsystemName + offsetErrors)
+		p.params.Controller.IncCounter(offsetErrors)
 		p.params.Logger.Error("can't save offset file: %s", err.Error())
 	}
 }
@@ -115,7 +117,7 @@ func (p *Plugin) Commit(event *pipeline.Event) {
 	p.offInfo.set(event.Root.Dig("__CURSOR").AsString())
 
 	if err := offset.SaveYAML(p.config.OffsetsFile, p.offInfo); err != nil {
-		p.params.Controller.IncCounter(subsystemName + offsetErrors)
+		p.params.Controller.IncCounter(offsetErrors)
 		p.params.Logger.Error("can't save offset file: %s", err.Error())
 	}
 }

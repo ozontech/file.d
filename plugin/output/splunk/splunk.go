@@ -22,10 +22,8 @@ It sends events to splunk.
 }*/
 
 const (
-	outPluginType = "splunk"
-	subsystemName = "output_splunk"
-
-	sendErrorCounter = "send_error"
+	outPluginType    = "splunk"
+	sendErrorCounter = "output_splunk_send_error"
 )
 
 type Plugin struct {
@@ -122,7 +120,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 }
 
 func (p *Plugin) registerPluginMetrics() {
-	p.controller.RegisterCounter(subsystemName+sendErrorCounter, "Total splunk send errors")
+	p.controller.RegisterCounter(sendErrorCounter, "Total splunk send errors")
 }
 
 func (p *Plugin) Stop() {
@@ -162,7 +160,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 	for {
 		err := p.send(outBuf)
 		if err != nil {
-			p.controller.IncCounter(subsystemName + sendErrorCounter)
+			p.controller.IncCounter(sendErrorCounter)
 			p.logger.Errorf("can't send data to splunk address=%s: %s", p.config.Endpoint, err.Error())
 			time.Sleep(time.Second)
 

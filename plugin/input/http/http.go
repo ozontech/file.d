@@ -75,8 +75,7 @@ curl "localhost:9200/_bulk" -H 'Content-Type: application/json' -d \
 }*/
 
 const (
-	subsystemName    = "input_http"
-	httpErrorCounter = "http_errors"
+	httpErrorCounter = "input_http_errors"
 
 	readBufDefaultLen = 16 * 1024
 )
@@ -156,7 +155,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 }
 
 func (p *Plugin) registerPluginMetrics() {
-	p.controller.RegisterCounter(subsystemName+httpErrorCounter, "Total http errors")
+	p.controller.RegisterCounter(httpErrorCounter, "Total http errors")
 }
 
 func (p *Plugin) listenHTTP() {
@@ -226,7 +225,7 @@ func (p *Plugin) serve(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if err != nil && err != io.EOF {
-			p.params.Controller.IncCounter(subsystemName + httpErrorCounter)
+			p.params.Controller.IncCounter(httpErrorCounter)
 			logger.Errorf("http input read error: %s", err.Error())
 			break
 		}
@@ -246,7 +245,7 @@ func (p *Plugin) serve(w http.ResponseWriter, r *http.Request) {
 
 	_, err := w.Write(result)
 	if err != nil {
-		p.params.Controller.IncCounter(subsystemName + httpErrorCounter)
+		p.params.Controller.IncCounter(httpErrorCounter)
 		logger.Errorf("can't write response: %s", err.Error())
 	}
 }

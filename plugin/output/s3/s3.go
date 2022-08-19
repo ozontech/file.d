@@ -102,7 +102,6 @@ pipelines:
 
 const (
 	outPluginType      = "s3"
-	subsystemName      = "output_s3"
 	fileNameSeparator  = "_"
 	attemptIntervalMin = 1 * time.Second
 	dirSep             = "/"
@@ -110,7 +109,7 @@ const (
 	DynamicBucketDir   = "dynamic_buckets"
 
 	// errors
-	sendErrorCounter = "send_error"
+	sendErrorCounter = "output_s3_send_error"
 )
 
 var (
@@ -245,7 +244,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 }
 
 func (p *Plugin) registerPluginMetrics() {
-	p.controller.RegisterCounter(subsystemName+sendErrorCounter, "Total s3 send errors")
+	p.controller.RegisterCounter(sendErrorCounter, "Total s3 send errors")
 }
 
 func (p *Plugin) StartWithMinio(config pipeline.AnyConfig, params *pipeline.OutputPluginParams, factory objStoreFactory) {
@@ -533,7 +532,7 @@ func (p *Plugin) uploadToS3(compressedDTO fileDTO) error {
 		p.compressor.getObjectOptions(),
 	)
 	if err != nil {
-		p.controller.IncCounter(subsystemName + sendErrorCounter)
+		p.controller.IncCounter(sendErrorCounter)
 		return fmt.Errorf("could not upload file: %s into bucket: %s, error: %s", compressedDTO.fileName, compressedDTO.bucketName, err.Error())
 	}
 	return nil

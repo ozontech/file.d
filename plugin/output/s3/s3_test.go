@@ -11,18 +11,18 @@ import (
 
 	"github.com/golang/mock/gomock"
 	"github.com/minio/minio-go"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/stretchr/testify/assert"
+	"go.uber.org/atomic"
+	"golang.org/x/net/context"
+
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/logger"
-	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/plugin/input/fake"
 	"github.com/ozontech/file.d/plugin/output/file"
 	mock_s3 "github.com/ozontech/file.d/plugin/output/s3/mock"
 	"github.com/ozontech/file.d/test"
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/stretchr/testify/assert"
-	"go.uber.org/atomic"
-	"golang.org/x/net/context"
 )
 
 const targetFile = "filetests/log.log"
@@ -33,7 +33,7 @@ var (
 )
 
 func testFactory(objStoreF objStoreFactory) (pipeline.AnyPlugin, pipeline.AnyConfig) {
-	return &testS3Plugin{objStoreF: objStoreF}, &Config{}
+	return &testS3Plugin{objStoreF: objStoreF, Plugin: Plugin{controller: test.NewEmptyOutputPluginController()}}, &Config{}
 }
 
 type testS3Plugin struct {
@@ -408,7 +408,6 @@ func TestStartWithMultiBuckets(t *testing.T) {
 }
 
 func newPipeline(t *testing.T, configOutput *Config, objStoreF objStoreFactory) *pipeline.Pipeline {
-	metric.InitStats()
 	t.Helper()
 	settings := &pipeline.Settings{
 		Capacity:            4096,
@@ -424,8 +423,6 @@ func newPipeline(t *testing.T, configOutput *Config, objStoreF objStoreFactory) 
 	p := pipeline.New("test_pipeline", settings, prometheus.NewRegistry())
 	p.DisableParallelism()
 	p.EnableEventLog()
-
-	metric.InitStats()
 
 	anyPlugin, _ := fake.Factory()
 	inputPlugin := anyPlugin.(*fake.Plugin)

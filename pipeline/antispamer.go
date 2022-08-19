@@ -10,36 +10,34 @@ import (
 )
 
 type antispamer struct {
-	m               *metric.MetricsCtl
-	unbanIterations int
-	threshold       int
-	mu              *sync.RWMutex
-	counters        map[SourceID]*atomic.Int32
+	metricsController *metric.MetricsCtl
+	unbanIterations   int
+	threshold         int
+	mu                *sync.RWMutex
+	counters          map[SourceID]*atomic.Int32
 }
 
 const (
-	subsystemName    = "antispam"
-	antispamActive   = "active"
-	antispamBanCount = "ban_count"
+	antispamActive   = "antispam_active"
+	antispamBanCount = "antispam_ban_count"
 )
 
-func newAntispamer(threshold int, unbanIterations int, maintenanceInterval time.Duration, m *metric.MetricsCtl) *antispamer {
+func newAntispamer(threshold int, unbanIterations int, maintenanceInterval time.Duration, controller *metric.MetricsCtl) *antispamer {
 	if threshold != 0 {
 		logger.Infof("antispam enabled, threshold=%d/%d sec", threshold, maintenanceInterval/time.Second)
 	}
 
-	m.RegisterGauge(subsystemName+antispamActive, "Gauge indicates whether the antispam is enabled")
+	controller.RegisterGauge(antispamActive, "Gauge indicates whether the antispam is enabled")
 	// not enabled by default
-	m.SetGauge(subsystemName+antispamActive, 0)
-
-	m.RegisterCounter(subsystemName+antispamBanCount, "How many times a source was banned")
+	controller.SetGauge(antispamActive, 0)
+	controller.RegisterCounter(antispamBanCount, "How many times a source was banned")
 
 	return &antispamer{
-		threshold:       threshold,
-		unbanIterations: unbanIterations,
-		counters:        make(map[SourceID]*atomic.Int32),
-		mu:              &sync.RWMutex{},
-		m:               m,
+		threshold:         threshold,
+		unbanIterations:   unbanIterations,
+		counters:          make(map[SourceID]*atomic.Int32),
+		mu:                &sync.RWMutex{},
+		metricsController: controller,
 	}
 }
 
@@ -71,8 +69,8 @@ func (p *antispamer) isSpam(id SourceID, name string, isNewSource bool) bool {
 	x := value.Inc()
 	if x == int32(p.threshold) {
 		value.Swap(int32(p.unbanIterations * p.threshold))
-		p.m.SetGauge(subsystemName+antispamActive, 1)
-		p.m.IncCounter(subsystemName + antispamBanCount)
+		p.metricsController.SetGauge(antispamActive, 1)
+		p.metricsController.IncCounter(antispamBanCount)
 		logger.Warnf("antispam: source has been banned id=%d, name=%s", id, name)
 	}
 
@@ -113,7 +111,7 @@ func (p *antispamer) maintenance() {
 	}
 
 	if allUnbanned {
-		p.m.SetGauge(subsystemName+antispamActive, 0)
+		p.metricsController.SetGauge(antispamActive, 0)
 	} else {
 		logger.Info("antispam: there are banned sources")
 	}
