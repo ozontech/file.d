@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/ozontech/file.d/logger"
@@ -116,14 +117,17 @@ func (l *redisLimiter) sync() {
 func (l *redisLimiter) syncLocalGlobalLimiters(maxID int) {
 	prefix := l.keyPrefix.String()
 
+	builder := new(strings.Builder)
+
 	for i, ID := range l.bucketIdsForSync {
-		i := i
-		ID := ID
+		builder.Reset()
+		builder.WriteString(prefix)
 
 		bucketIdx := l.keyIdxsForSync[i]
 
 		stringID := strconv.Itoa(ID)
-		key := prefix + stringID
+		builder.WriteString(stringID)
+		key := builder.String()
 
 		intCmd := l.redis.IncrBy(key, l.incrementLimiter.buckets[bucketIdx])
 		val, err := intCmd.Result()

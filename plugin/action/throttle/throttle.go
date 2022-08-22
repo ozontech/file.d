@@ -16,9 +16,9 @@ var (
 	defaultThrottleKey = "default"
 
 	// limiters should be shared across pipeline, so let's have a map by namespace and limiter name
-	limiters       = map[string]map[string]limiter{} // todo: cleanup this map?
-	limitersMu     = &sync.RWMutex{}
-	limiterSyncMap = map[string]struct{}{}
+	limiters                           = map[string]map[string]limiter{} // todo: cleanup this map?
+	limitersMu                         = &sync.RWMutex{}
+	redisLimiterSynchronizationStarted = map[string]struct{}{}
 )
 
 const (
@@ -217,40 +217,14 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 			p.logger.Fatalf("can't ping redis: %s", pingResp.Err())
 		}
 
-		ticker := time.NewTicker(p.config.RedisBackendCfg.SyncInterval_)
-
 		limitersMu.Lock()
-		wg := sync.WaitGroup{}
-		// run syncer at single throttle for one pipeline
-		if _, ok := limiterSyncMap[p.pipeline]; !ok {
-			limiterSyncMap[p.pipeline] = struct{}{}
-			limitersMu.Unlock()
-			go func() {
-				jobs := make(chan limiter, p.config.RedisBackendCfg.WorkerCount)
-				for i := 0; i < p.config.RedisBackendCfg.WorkerCount; i++ {
-					go p.syncWorker(ctx, jobs, &wg)
-				}
+		// run sync only once per pipeline
+		if _, ok := redisLimiterSynchronizationStarted[p.pipeline]; !ok {
+			redisLimiterSynchronizationStarted[p.pipeline] = struct{}{}
 
-				for {
-					select {
-					case <-ctx.Done():
-						close(jobs)
-						return
-					case <-ticker.C:
-						limitersMu.RLock()
-
-						for _, lim := range limiters[p.pipeline] {
-							wg.Add(1)
-							jobs <- lim
-						}
-						wg.Wait()
-						limitersMu.RUnlock()
-					}
-				}
-			}()
-		} else {
-			limitersMu.Unlock()
+			go p.runSync(ctx)
 		}
+		limitersMu.Unlock()
 	}
 
 	for i, r := range p.config.Rules {
@@ -258,6 +232,34 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 	}
 
 	p.rules = append(p.rules, NewRule(map[string]string{}, complexLimit{p.config.DefaultLimit, p.config.LimitKind}, len(p.config.Rules)))
+}
+
+// runSync runs synchronization with redis.
+func (p *Plugin) runSync(ctx context.Context) {
+	ticker := time.NewTicker(p.config.RedisBackendCfg.SyncInterval_)
+	wg := sync.WaitGroup{}
+
+	jobs := make(chan limiter, p.config.RedisBackendCfg.WorkerCount)
+	for i := 0; i < p.config.RedisBackendCfg.WorkerCount; i++ {
+		go p.syncWorker(ctx, jobs, &wg)
+	}
+
+	for {
+		select {
+		case <-ctx.Done():
+			close(jobs)
+			return
+		case <-ticker.C:
+			limitersMu.RLock()
+
+			for _, lim := range limiters[p.pipeline] {
+				wg.Add(1)
+				jobs <- lim
+			}
+			wg.Wait()
+			limitersMu.RUnlock()
+		}
+	}
 }
 
 func (p *Plugin) getNewLimiter(throttleField, limiterKey string, rule *rule) limiter {
