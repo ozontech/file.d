@@ -16,29 +16,29 @@ const (
 
 type MetricsCtl struct {
 	subsystem string
-	counters  map[string]prom.Counter
-	gauges    map[string]prom.Gauge
+	counters  map[string]*prom.CounterVec
+	gauges    map[string]*prom.GaugeVec
 }
 
 func New(subsystem string) *MetricsCtl {
 	ctl := &MetricsCtl{
 		subsystem: subsystem,
-		counters:  make(map[string]prom.Counter),
-		gauges:    make(map[string]prom.Gauge),
+		counters:  make(map[string]*prom.CounterVec),
+		gauges:    make(map[string]*prom.GaugeVec),
 	}
-	ctl.RegisterCounter(unregisteredMetric, "Counter for unregistered metrics")
-	ctl.RegisterCounter(duplicateCounter, "Counter for duplicate metrics")
+	ctl.RegisterCounter(unregisteredMetric, "Counter for unregistered metrics", "source")
+	ctl.RegisterCounter(duplicateCounter, "Counter for duplicate metrics", "source")
 	return ctl
 }
 
-func (mc *MetricsCtl) RegisterCounter(name, help string) {
-	promCounter := prom.NewCounter(prom.CounterOpts{
+func (mc *MetricsCtl) RegisterCounter(name, help string, labels ...string) {
+	promCounter := prom.NewCounterVec(prom.CounterOpts{
 		Namespace:   PromNamespace,
 		Subsystem:   mc.subsystem,
 		Name:        name,
 		Help:        help,
 		ConstLabels: map[string]string{"version": buildinfo.Version},
-	})
+	}, labels)
 
 	if _, hasCounter := mc.counters[name]; hasCounter {
 		logger.Errorf("rewriting existent metric")
@@ -52,28 +52,28 @@ func (mc *MetricsCtl) RegisterCounter(name, help string) {
 
 func (mc *MetricsCtl) IncCounter(name string) {
 	if counter, ok := mc.counters[name]; ok {
-		counter.Inc()
+		counter.WithLabelValues().Inc()
 	} else {
-		mc.counters[unregisteredMetric].Inc()
+		mc.counters[unregisteredMetric].WithLabelValues(name).Inc()
 	}
 }
 
 func (mc *MetricsCtl) AddCounter(name string, value float64) {
 	if counter, ok := mc.counters[name]; ok {
-		counter.Add(value)
+		counter.WithLabelValues().Add(value)
 	} else {
-		mc.counters[unregisteredMetric].Inc()
+		mc.counters[unregisteredMetric].WithLabelValues(name).Inc()
 	}
 }
 
-func (mc *MetricsCtl) RegisterGauge(name, help string) {
-	promGauge := prom.NewGauge(prom.GaugeOpts{
+func (mc *MetricsCtl) RegisterGauge(name, help string, labels ...string) {
+	promGauge := prom.NewGaugeVec(prom.GaugeOpts{
 		Namespace:   PromNamespace,
 		Subsystem:   mc.subsystem,
 		Name:        name,
 		Help:        help,
 		ConstLabels: map[string]string{"version": buildinfo.Version},
-	})
+	}, labels)
 
 	if _, hasGauge := mc.gauges[name]; hasGauge {
 		logger.Errorf("rewriting existent metric")
@@ -87,32 +87,32 @@ func (mc *MetricsCtl) RegisterGauge(name, help string) {
 
 func (mc *MetricsCtl) IncGauge(name string) {
 	if gauge, ok := mc.gauges[name]; ok {
-		gauge.Inc()
+		gauge.WithLabelValues().Inc()
 	} else {
-		mc.counters[unregisteredMetric].Inc()
+		mc.counters[unregisteredMetric].WithLabelValues(name).Inc()
 	}
 }
 
 func (mc *MetricsCtl) DecGauge(name string) {
 	if gauge, ok := mc.gauges[name]; ok {
-		gauge.Dec()
+		gauge.WithLabelValues().Inc()
 	} else {
-		mc.counters[unregisteredMetric].Inc()
+		mc.counters[unregisteredMetric].WithLabelValues(name).Inc()
 	}
 }
 
 func (mc *MetricsCtl) AddGauge(name string, value float64) {
 	if gauge, ok := mc.gauges[name]; ok {
-		gauge.Add(value)
+		gauge.WithLabelValues().Add(value)
 	} else {
-		mc.counters[unregisteredMetric].Inc()
+		mc.counters[unregisteredMetric].WithLabelValues(name).Inc()
 	}
 }
 
 func (mc *MetricsCtl) SetGauge(name string, value float64) {
 	if gauge, ok := mc.gauges[name]; ok {
-		gauge.Set(value)
+		gauge.WithLabelValues().Set(value)
 	} else {
-		mc.counters[unregisteredMetric].Inc()
+		mc.counters[unregisteredMetric].WithLabelValues(name).Inc()
 	}
 }

@@ -22,22 +22,22 @@ const (
 	antispamBanCount = "antispam_ban_count"
 )
 
-func newAntispamer(threshold int, unbanIterations int, maintenanceInterval time.Duration, controller *metric.MetricsCtl) *antispamer {
+func newAntispamer(threshold int, unbanIterations int, maintenanceInterval time.Duration, metricsController *metric.MetricsCtl) *antispamer {
 	if threshold != 0 {
 		logger.Infof("antispam enabled, threshold=%d/%d sec", threshold, maintenanceInterval/time.Second)
 	}
 
-	controller.RegisterGauge(antispamActive, "Gauge indicates whether the antispam is enabled")
+	metricsController.RegisterGauge(antispamActive, "Gauge indicates whether the antispam is enabled")
 	// not enabled by default
-	controller.SetGauge(antispamActive, 0)
-	controller.RegisterCounter(antispamBanCount, "How many times a source was banned")
+	metricsController.SetGauge(antispamActive, 0)
+	metricsController.RegisterCounter(antispamBanCount, "How many times a source was banned")
 
 	return &antispamer{
 		threshold:         threshold,
 		unbanIterations:   unbanIterations,
 		counters:          make(map[SourceID]*atomic.Int32),
 		mu:                &sync.RWMutex{},
-		metricsController: controller,
+		metricsController: metricsController,
 	}
 }
 

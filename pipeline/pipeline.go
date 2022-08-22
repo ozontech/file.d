@@ -80,13 +80,13 @@ type MetricsController interface {
 }
 
 type MetricsCounters interface {
-	RegisterCounter(name, help string)
+	RegisterCounter(name, help string, labels ...string)
 	IncCounter(name string)
 	AddCounter(name string, value float64)
 }
 
 type MetricsGauges interface {
-	RegisterGauge(name, help string)
+	RegisterGauge(name, help string, labels ...string)
 	IncGauge(name string)
 	DecGauge(name string)
 	AddGauge(name string, value float64)
