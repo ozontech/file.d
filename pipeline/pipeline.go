@@ -78,6 +78,7 @@ type (
 
 type Pipeline struct {
 	Name     string
+	started  bool
 	settings *Settings
 
 	decoder          decoder.DecoderType // decoder set in the config
@@ -308,7 +309,10 @@ func (p *Pipeline) Start() {
 	p.streamer.start()
 
 	longpanic.Go(p.maintenance)
-	longpanic.Go(p.growProcs)
+	if !p.useSpread {
+		longpanic.Go(p.growProcs)
+	}
+	p.started = true
 }
 
 func (p *Pipeline) Stop() {
@@ -505,7 +509,10 @@ func (p *Pipeline) AddAction(info *ActionPluginStaticInfo) {
 
 func (p *Pipeline) initProcs() {
 	// default proc count is CPU cores * 2
-	procCount := runtime.GOMAXPROCS(0) * 2
+	procCount := runtime.GOMAXPROCS(0)
+	if !p.useSpread {
+		procCount *= 2
+	}
 	if p.singleProc {
 		procCount = 1
 	}
@@ -669,6 +676,9 @@ func (p *Pipeline) maintenance() {
 }
 
 func (p *Pipeline) UseSpread() {
+	if p.started {
+		panic("don't use (*Pipeline).UseSpread after the pipeline has started")
+	}
 	p.useSpread = true
 }
 
