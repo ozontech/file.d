@@ -57,5 +57,4 @@ TBD: throughput on production servers.
 * [License](/docs/license.md)
 
 Join our community in Telegram: https://t.me/file_d_community
-
 <br>*Generated using [__insane-doc__](https://github.com/vitkovskii/insane-doc)*
