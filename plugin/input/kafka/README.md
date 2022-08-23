@@ -21,5 +21,11 @@ The name of consumer group to use.
 
 <br>
 
+**`channel_buffer_size`** *`int`* *`default=256`* 
+
+The number of unprocessed messages in the buffer that are loaded in the background from kafka.
+
+<br>
+
 
 <br>*Generated using [__insane-doc__](https://github.com/vitkovskii/insane-doc)*

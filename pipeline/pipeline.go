@@ -78,6 +78,7 @@ type (
 
 type Pipeline struct {
 	Name     string
+	started  bool
 	settings *Settings
 
 	decoder          decoder.DecoderType // decoder set in the config
@@ -308,7 +309,10 @@ func (p *Pipeline) Start() {
 	p.streamer.start()
 
 	longpanic.Go(p.maintenance)
-	longpanic.Go(p.growProcs)
+	if !p.useSpread {
+		longpanic.Go(p.growProcs)
+	}
+	p.started = true
 }
 
 func (p *Pipeline) Stop() {
@@ -434,10 +438,13 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 }
 
 func (p *Pipeline) streamEvent(event *Event) uint64 {
+	streamID := StreamID(event.SourceID)
+
 	// spread events across all processors
 	if p.useSpread {
-		event.SourceID = SourceID(event.SeqID % uint64(p.procCount.Load()))
+		streamID = StreamID(event.SeqID % uint64(p.procCount.Load()))
 	}
+
 	if !p.disableStreams {
 		node := event.Root.Dig(p.settings.StreamField)
 		if node != nil {
@@ -445,7 +452,7 @@ func (p *Pipeline) streamEvent(event *Event) uint64 {
 		}
 	}
 
-	return p.streamer.putEvent(event.SourceID, event.streamName, event)
+	return p.streamer.putEvent(streamID, event.streamName, event)
 }
 
 func (p *Pipeline) Commit(event *Event) {
@@ -502,7 +509,7 @@ func (p *Pipeline) AddAction(info *ActionPluginStaticInfo) {
 
 func (p *Pipeline) initProcs() {
 	// default proc count is CPU cores * 2
-	procCount := runtime.GOMAXPROCS(0) * 2
+	procCount := runtime.GOMAXPROCS(0)
 	if p.singleProc {
 		procCount = 1
 	}
@@ -666,6 +673,9 @@ func (p *Pipeline) maintenance() {
 }
 
 func (p *Pipeline) UseSpread() {
+	if p.started {
+		p.logger.Panic("don't use (*Pipeline).UseSpread after the pipeline has started")
+	}
 	p.useSpread = true
 }
 
