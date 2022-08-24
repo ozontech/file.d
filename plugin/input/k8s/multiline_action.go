@@ -67,10 +67,11 @@ func (p *MultilineAction) Do(event *pipeline.Event) pipeline.ActionResult {
 		// check buffer size before append
 		if p.maxEventSize == 0 || sizeAfterAppend < p.maxEventSize {
 			p.eventBuf = append(p.eventBuf, logFragment[1:logFragmentLen-1]...)
-		} else {
+		} else if !p.skipNextEvent {
 			// skip event if max_event_size is exceeded
 			p.skipNextEvent = true
-			p.logger.Errorf("event chunk will be discarded due to max_event_size, source_name=%s", event.SourceName)
+			ns, pod, _, _, _, _ := getMeta(event.SourceName)
+			p.logger.Errorf("event chunk will be discarded due to max_event_size, source_name=%s, namespace=%s, pod=%s", event.SourceName, ns, pod)
 		}
 		return pipeline.ActionCollapse
 	}
