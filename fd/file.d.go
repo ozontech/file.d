@@ -31,6 +31,9 @@ type FileD struct {
 	Pipelines []*pipeline.Pipeline
 	server    *http.Server
 	metricCtl *metric.MetricsCtl
+
+	// file_d metric
+	longPanic *prometheus.CounterVec
 }
 
 func New(config *cfg.Config, httpAddr string) *FileD {
@@ -57,9 +60,9 @@ func (f *FileD) Start() {
 
 func (f *FileD) initMetrics() {
 	f.metricCtl = metric.New("file_d")
-	f.metricCtl.RegisterCounter(longPanicCounter, "Count of panics in the LongPanic")
+	f.longPanic = f.metricCtl.RegisterCounter(longPanicCounter, "Count of panics in the LongPanic")
 	longpanic.SetOnPanicHandler(func(_ error) {
-		f.metricCtl.IncCounter(longPanicCounter)
+		f.longPanic.WithLabelValues().Inc()
 	})
 }
 

@@ -5,12 +5,14 @@ import (
 	"net/http"
 	"sync"
 
+	"github.com/prometheus/client_golang/prometheus"
+	"go.uber.org/zap"
+
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/longpanic"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/tls"
-	"go.uber.org/zap"
 )
 
 /*{ introduction
@@ -91,6 +93,9 @@ type Plugin struct {
 	sourceSeq  pipeline.SourceID
 	mu         *sync.Mutex
 	logger     *zap.SugaredLogger
+
+	//plugin metric
+	httpError *prometheus.CounterVec
 }
 
 // ! config-params
@@ -155,7 +160,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 }
 
 func (p *Plugin) registerPluginMetrics() {
-	p.controller.RegisterCounter(httpErrorCounter, "Total http errors")
+	p.httpError = p.controller.RegisterCounter(httpErrorCounter, "Total http errors")
 }
 
 func (p *Plugin) listenHTTP() {
@@ -225,7 +230,7 @@ func (p *Plugin) serve(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if err != nil && err != io.EOF {
-			p.params.Controller.IncCounter(httpErrorCounter)
+			p.httpError.WithLabelValues().Inc()
 			logger.Errorf("http input read error: %s", err.Error())
 			break
 		}
@@ -245,7 +250,7 @@ func (p *Plugin) serve(w http.ResponseWriter, r *http.Request) {
 
 	_, err := w.Write(result)
 	if err != nil {
-		p.params.Controller.IncCounter(httpErrorCounter)
+		p.httpError.WithLabelValues().Inc()
 		logger.Errorf("can't write response: %s", err.Error())
 	}
 }

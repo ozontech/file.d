@@ -10,11 +10,13 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
+	insaneJSON "github.com/vitkovskii/insane-json"
+	"go.uber.org/zap"
+
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/pipeline"
-	insaneJSON "github.com/vitkovskii/insane-json"
-	"go.uber.org/zap"
 )
 
 /*{ introduction
@@ -33,6 +35,9 @@ type Plugin struct {
 	avgEventSize int
 	batcher      *pipeline.Batcher
 	controller   pipeline.OutputPluginController
+
+	//plugin metric
+	sendError *prometheus.CounterVec
 }
 
 // ! config-params
@@ -120,7 +125,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 }
 
 func (p *Plugin) registerPluginMetrics() {
-	p.controller.RegisterCounter(sendErrorCounter, "Total splunk send errors")
+	p.sendError = p.controller.RegisterCounter(sendErrorCounter, "Total splunk send errors")
 }
 
 func (p *Plugin) Stop() {
@@ -160,7 +165,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 	for {
 		err := p.send(outBuf)
 		if err != nil {
-			p.controller.IncCounter(sendErrorCounter)
+			p.sendError.WithLabelValues().Inc()
 			p.logger.Errorf("can't send data to splunk address=%s: %s", p.config.Endpoint, err.Error())
 			time.Sleep(time.Second)
 

@@ -3,13 +3,11 @@ package pipeline
 import (
 	"testing"
 
-	"github.com/ozontech/file.d/metric"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/atomic"
 )
 
 func TestPipeline_streamEvent(t *testing.T) {
-	metric.InitStats()
 
 	settings := &Settings{
 		Capacity: 5,

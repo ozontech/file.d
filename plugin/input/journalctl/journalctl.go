@@ -3,6 +3,8 @@
 package journalctl
 
 import (
+	"github.com/prometheus/client_golang/prometheus"
+
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/offset"
 	"github.com/ozontech/file.d/pipeline"
@@ -17,6 +19,11 @@ type Plugin struct {
 	config  *Config
 	reader  *journalReader
 	offInfo *offsetInfo
+
+	//plugin metrics
+	offsetErrorsCounter        *prometheus.CounterVec
+	journalCtlStopErrorCounter *prometheus.CounterVec
+	readerErrorsCounter        *prometheus.CounterVec
 }
 
 type Config struct {
@@ -77,7 +84,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 
 	p.offInfo = &offsetInfo{}
 	if err := offset.LoadYAML(p.config.OffsetsFile, p.offInfo); err != nil {
-		p.params.Controller.IncCounter(offsetErrors)
+		p.offsetErrorsCounter.WithLabelValues().Inc()
 		p.params.Logger.Error("can't load offset file: %s", err.Error())
 	}
 
@@ -87,7 +94,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 		maxLines: p.config.MaxLines,
 		logger:   p.params.Logger,
 	}
-	p.reader = newJournalReader(readConfig, p.params)
+	p.reader = newJournalReader(readConfig, p.readerErrorsCounter)
 	p.reader.args = append(p.reader.args, p.config.JournalArgs...)
 	if err := p.reader.start(); err != nil {
 		p.params.Logger.Error("failure during start: %s", err.Error())
@@ -95,20 +102,20 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 }
 
 func (p *Plugin) registerPluginMetrics() {
-	p.params.Controller.RegisterCounter(offsetErrors, "Number of errors occurred when saving/loading offset")
-	p.params.Controller.RegisterCounter(journalCtlStopErrors, "Total journalctl stop errors")
-	p.params.Controller.RegisterCounter(readerErrors, "Total reader errors")
+	p.offsetErrorsCounter = p.params.Controller.RegisterCounter(offsetErrors, "Number of errors occurred when saving/loading offset")
+	p.journalCtlStopErrorCounter = p.params.Controller.RegisterCounter(journalCtlStopErrors, "Total journalctl stop errors")
+	p.readerErrorsCounter = p.params.Controller.RegisterCounter(readerErrors, "Total reader errors")
 }
 
 func (p *Plugin) Stop() {
 	err := p.reader.stop()
 	if err != nil {
-		p.params.Controller.IncCounter(journalCtlStopErrors)
+		p.journalCtlStopErrorCounter.WithLabelValues().Inc()
 		p.params.Logger.Error("can't stop journalctl cmd: %s", err.Error())
 	}
 
 	if err := offset.SaveYAML(p.config.OffsetsFile, p.offInfo); err != nil {
-		p.params.Controller.IncCounter(offsetErrors)
+		p.offsetErrorsCounter.WithLabelValues().Inc()
 		p.params.Logger.Error("can't save offset file: %s", err.Error())
 	}
 }
@@ -117,7 +124,7 @@ func (p *Plugin) Commit(event *pipeline.Event) {
 	p.offInfo.set(event.Root.Dig("__CURSOR").AsString())
 
 	if err := offset.SaveYAML(p.config.OffsetsFile, p.offInfo); err != nil {
-		p.params.Controller.IncCounter(offsetErrors)
+		p.offsetErrorsCounter.WithLabelValues().Inc()
 		p.params.Logger.Error("can't save offset file: %s", err.Error())
 	}
 }

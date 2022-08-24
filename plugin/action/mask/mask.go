@@ -6,6 +6,7 @@ import (
 
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/pipeline"
+	prom "github.com/prometheus/client_golang/prometheus"
 	insaneJSON "github.com/vitkovskii/insane-json"
 	"go.uber.org/zap"
 )
@@ -44,6 +45,9 @@ type Plugin struct {
 	valueNodes      []*insaneJSON.Node
 	logger          *zap.SugaredLogger
 	logMaskAppeared bool
+
+	//plugin metric
+	timeActivatedCounter *prom.CounterVec
 }
 
 // ! config-params
@@ -176,7 +180,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 }
 
 func (p *Plugin) registerPluginMetrics() {
-	p.params.Controller.RegisterCounter(*p.config.MetricSubsystemName+timesActivated, "Number of times mask plugin found the provided pattern")
+	p.timeActivatedCounter = p.params.Controller.RegisterCounter(*p.config.MetricSubsystemName+timesActivated, "Number of times mask plugin found the provided pattern")
 }
 
 func (p *Plugin) Stop() {
@@ -279,7 +283,7 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 		event.Root.AddFieldNoAlloc(event.Root, p.config.MaskAppliedField).MutateToString(p.config.MaskAppliedValue)
 	}
 	if p.logMaskAppeared && maskApplied {
-		p.params.Controller.IncCounter(*p.config.MetricSubsystemName + timesActivated)
+		p.timeActivatedCounter.WithLabelValues().Inc()
 		p.logger.Infof("mask appeared to event, output string: %s", event.Root.EncodeToString())
 	}
 

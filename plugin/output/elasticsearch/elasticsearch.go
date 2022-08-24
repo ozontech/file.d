@@ -9,14 +9,16 @@ import (
 	"sync"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/valyala/fasthttp"
+	insaneJSON "github.com/vitkovskii/insane-json"
+	"go.uber.org/zap"
+
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/tls"
-	"github.com/valyala/fasthttp"
-	insaneJSON "github.com/vitkovskii/insane-json"
-	"go.uber.org/zap"
 )
 
 /*{ introduction
@@ -53,6 +55,10 @@ type Plugin struct {
 	batcher      *pipeline.Batcher
 	controller   pipeline.OutputPluginController
 	mu           *sync.Mutex
+
+	//plugin metric
+	sendError             *prometheus.CounterVec
+	indexingErrorsCounter *prometheus.CounterVec
 }
 
 // ! config-params
@@ -232,8 +238,8 @@ func (p *Plugin) Out(event *pipeline.Event) {
 }
 
 func (p *Plugin) registerPluginMetrics() {
-	p.controller.RegisterCounter(sendErrorCounter, "Total elasticsearch send errors")
-	p.controller.RegisterCounter(indexingErrors, "Number of elasticsearch indexing errors")
+	p.sendError = p.controller.RegisterCounter(sendErrorCounter, "Total elasticsearch send errors")
+	p.indexingErrorsCounter = p.controller.RegisterCounter(indexingErrors, "Number of elasticsearch indexing errors")
 }
 
 func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
@@ -256,7 +262,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 
 	for {
 		if err := p.send(data.outBuf); err != nil {
-			p.controller.IncCounter(sendErrorCounter)
+			p.sendError.WithLabelValues().Inc()
 			p.logger.Errorf("can't send to the elastic, will try other endpoint: %s", err.Error())
 		} else {
 			break
@@ -306,7 +312,7 @@ func (p *Plugin) send(body []byte) error {
 		}
 
 		if errors != 0 {
-			p.controller.AddCounter(indexingErrors, float64(errors))
+			p.indexingErrorsCounter.WithLabelValues().Add(float64(errors))
 		}
 
 		p.controller.Error("some events from batch aren't written")

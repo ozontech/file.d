@@ -8,6 +8,7 @@ import (
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/longpanic"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
 )
 
@@ -29,6 +30,10 @@ type Plugin struct {
 	cancel        context.CancelFunc
 	controller    pipeline.InputPluginController
 	idByTopic     map[string]int
+
+	//plugin metric
+	commitErrorsCounter  *prometheus.CounterVec
+	consumeErrorsCounter *prometheus.CounterVec
 }
 
 // ! config-params
@@ -89,8 +94,8 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 }
 
 func (p *Plugin) registerPluginMetrics() {
-	p.controller.RegisterCounter(commitErrors, "Number of kafka commit errors")
-	p.controller.RegisterCounter(consumeErrors, "Number of kafka consume errors")
+	p.commitErrorsCounter = p.controller.RegisterCounter(commitErrors, "Number of kafka commit errors")
+	p.consumeErrorsCounter = p.controller.RegisterCounter(consumeErrors, "Number of kafka consume errors")
 }
 
 func (p *Plugin) consume(ctx context.Context) {
@@ -98,7 +103,7 @@ func (p *Plugin) consume(ctx context.Context) {
 	for {
 		err := p.consumerGroup.Consume(ctx, p.config.Topics, p)
 		if err != nil {
-			p.controller.IncCounter(consumeErrors)
+			p.consumeErrorsCounter.WithLabelValues().Inc()
 			p.logger.Errorf("can't consume from kafka: %s", err.Error())
 		}
 
@@ -114,7 +119,7 @@ func (p *Plugin) Stop() {
 
 func (p *Plugin) Commit(event *pipeline.Event) {
 	if p.session == nil {
-		p.controller.IncCounter(commitErrors)
+		p.commitErrorsCounter.WithLabelValues().Inc()
 		p.logger.Errorf("no kafka consumer session for event commit")
 		return
 	}

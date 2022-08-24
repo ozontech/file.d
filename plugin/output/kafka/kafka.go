@@ -6,10 +6,12 @@ import (
 	"time"
 
 	"github.com/Shopify/sarama"
+	"github.com/prometheus/client_golang/prometheus"
+	"go.uber.org/zap"
+
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/pipeline"
-	"go.uber.org/zap"
 )
 
 /*{ introduction
@@ -34,6 +36,9 @@ type Plugin struct {
 
 	producer sarama.SyncProducer
 	batcher  *pipeline.Batcher
+
+	//plugin metrics
+	sendError *prometheus.CounterVec
 }
 
 // ! config-params
@@ -126,7 +131,7 @@ func (p *Plugin) Out(event *pipeline.Event) {
 }
 
 func (p *Plugin) registerPluginMetrics() {
-	p.controller.RegisterCounter(sendErrorCounter, "Total Kafka send errors")
+	p.sendError = p.controller.RegisterCounter(sendErrorCounter, "Total Kafka send errors")
 }
 
 func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
@@ -171,8 +176,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 		for _, e := range errs {
 			p.logger.Errorf("can't write batch: %s", e.Err.Error())
 		}
-		p.controller.AddCounter(sendErrorCounter, float64(len(errs)))
-
+		p.sendError.WithLabelValues().Add(float64(len(errs)))
 		p.controller.Error("some events from batch were not written")
 	}
 }

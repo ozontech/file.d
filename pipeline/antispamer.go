@@ -4,9 +4,11 @@ import (
 	"sync"
 	"time"
 
+	prom "github.com/prometheus/client_golang/prometheus"
+	"go.uber.org/atomic"
+
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/metric"
-	"go.uber.org/atomic"
 )
 
 type antispamer struct {
@@ -15,6 +17,9 @@ type antispamer struct {
 	threshold         int
 	mu                *sync.RWMutex
 	counters          map[SourceID]*atomic.Int32
+
+	antispamActiveGauge *prom.GaugeVec
+	antispamBanCounter  *prom.CounterVec
 }
 
 const (
@@ -26,19 +31,20 @@ func newAntispamer(threshold int, unbanIterations int, maintenanceInterval time.
 	if threshold != 0 {
 		logger.Infof("antispam enabled, threshold=%d/%d sec", threshold, maintenanceInterval/time.Second)
 	}
-
-	metricsController.RegisterGauge(antispamActive, "Gauge indicates whether the antispam is enabled")
-	// not enabled by default
-	metricsController.SetGauge(antispamActive, 0)
-	metricsController.RegisterCounter(antispamBanCount, "How many times a source was banned")
-
-	return &antispamer{
+	antispamer := &antispamer{
 		threshold:         threshold,
 		unbanIterations:   unbanIterations,
 		counters:          make(map[SourceID]*atomic.Int32),
 		mu:                &sync.RWMutex{},
 		metricsController: metricsController,
 	}
+
+	antispamer.antispamActiveGauge = metricsController.RegisterGauge(antispamActive, "Gauge indicates whether the antispam is enabled")
+	// not enabled by default
+	antispamer.antispamActiveGauge.WithLabelValues().Set(0)
+	antispamer.antispamBanCounter = metricsController.RegisterCounter(antispamBanCount, "How many times a source was banned")
+
+	return antispamer
 }
 
 func (p *antispamer) isSpam(id SourceID, name string, isNewSource bool) bool {
@@ -69,8 +75,8 @@ func (p *antispamer) isSpam(id SourceID, name string, isNewSource bool) bool {
 	x := value.Inc()
 	if x == int32(p.threshold) {
 		value.Swap(int32(p.unbanIterations * p.threshold))
-		p.metricsController.SetGauge(antispamActive, 1)
-		p.metricsController.IncCounter(antispamBanCount)
+		p.antispamActiveGauge.WithLabelValues().Set(1)
+		p.antispamBanCounter.WithLabelValues().Inc()
 		logger.Warnf("antispam: source has been banned id=%d, name=%s", id, name)
 	}
 
@@ -111,7 +117,7 @@ func (p *antispamer) maintenance() {
 	}
 
 	if allUnbanned {
-		p.metricsController.SetGauge(antispamActive, 0)
+		p.antispamActiveGauge.WithLabelValues().Set(0)
 	} else {
 		logger.Info("antispam: there are banned sources")
 	}

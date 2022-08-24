@@ -4,10 +4,12 @@ import (
 	"net/http"
 	"time"
 
+	prom "github.com/prometheus/client_golang/prometheus"
+	"go.uber.org/zap"
+
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/pipeline"
-	"go.uber.org/zap"
 )
 
 /*{ introduction
@@ -54,6 +56,9 @@ type Plugin struct {
 
 	workers     []*worker
 	jobProvider *jobProvider
+
+	//plugin metric
+	possibleOffsetCorruption *prom.CounterVec
 }
 
 type persistenceMode int
@@ -191,7 +196,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 
 	p.config.OffsetsFileTmp = p.config.OffsetsFile + ".atomic"
 
-	p.jobProvider = NewJobProvider(p.config, p.params.Controller, p.logger)
+	p.jobProvider = NewJobProvider(p.config, p.possibleOffsetCorruption, p.logger)
 
 	ResetterRegistryInstance.AddResetter(params.PipelineName, p)
 
@@ -200,7 +205,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 }
 
 func (p *Plugin) registerPluginMetrics() {
-	p.params.Controller.RegisterCounter(possibleOffsetCorruptionCounter, "Total number of possible offset corruptions")
+	p.possibleOffsetCorruption = p.params.Controller.RegisterCounter(possibleOffsetCorruptionCounter, "Total number of possible offset corruptions")
 }
 
 func (p *Plugin) startWorkers() {

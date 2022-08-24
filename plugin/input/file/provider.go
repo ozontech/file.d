@@ -9,12 +9,14 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/ozontech/file.d/logger"
-	"github.com/ozontech/file.d/longpanic"
-	"github.com/ozontech/file.d/pipeline"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/rjeczalik/notify"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
+
+	"github.com/ozontech/file.d/logger"
+	"github.com/ozontech/file.d/longpanic"
+	"github.com/ozontech/file.d/pipeline"
 )
 
 const (
@@ -26,10 +28,9 @@ const (
 )
 
 type jobProvider struct {
-	config     *Config
-	controller pipeline.InputPluginController
-	watcher    *watcher
-	offsetDB   *offsetDB
+	config   *Config
+	watcher  *watcher
+	offsetDB *offsetDB
 
 	isStarted atomic.Bool
 
@@ -52,6 +53,9 @@ type jobProvider struct {
 	// some debugging stuff
 	offsetsCommitted *atomic.Int64
 	logger           *zap.SugaredLogger
+
+	//provider metric
+	possibleOffsetCorruption *prometheus.CounterVec
 }
 
 type Job struct {
@@ -95,11 +99,10 @@ type symlinkInfo struct {
 	inode    inodeID
 }
 
-func NewJobProvider(config *Config, controller pipeline.InputPluginController, logger *zap.SugaredLogger) *jobProvider {
+func NewJobProvider(config *Config, possibleOffsetCorruptionCounter *prometheus.CounterVec, sugLogger *zap.SugaredLogger) *jobProvider {
 	jp := &jobProvider{
-		config:     config,
-		controller: controller,
-		offsetDB:   newOffsetDB(config.OffsetsFile, config.OffsetsFileTmp),
+		config:   config,
+		offsetDB: newOffsetDB(config.OffsetsFile, config.OffsetsFileTmp),
 
 		jobs:     make(map[pipeline.SourceID]*Job, config.MaxFiles),
 		jobsDone: atomic.NewInt32(0),
@@ -116,7 +119,8 @@ func NewJobProvider(config *Config, controller pipeline.InputPluginController, l
 		stopReportCh:      make(chan bool, 1), // non-zero channel cause we don't wanna wait goroutine to stop
 		stopMaintenanceCh: make(chan bool, 1), // non-zero channel cause we don't wanna wait goroutine to stop
 
-		logger: logger,
+		logger:                   sugLogger,
+		possibleOffsetCorruption: possibleOffsetCorruptionCounter,
 	}
 
 	jp.watcher = NewWatcher(
@@ -125,7 +129,7 @@ func NewJobProvider(config *Config, controller pipeline.InputPluginController, l
 		config.DirPattern,
 		jp.processNotification,
 		config.ShouldWatchChanges,
-		logger,
+		sugLogger,
 	)
 
 	return jp
@@ -193,7 +197,7 @@ func (jp *jobProvider) commit(event *pipeline.Event) {
 	}
 
 	if value == 0 && event.Offset >= 16*1024*1024 {
-		jp.controller.IncCounter(possibleOffsetCorruptionCounter)
+		jp.possibleOffsetCorruption.WithLabelValues().Inc()
 		jp.logger.Errorf("it maybe an offset corruption: committing=%d, current=%d, event id=%d, source=%d:%s", event.Offset, value, event.SeqID, event.SourceID, event.SourceName)
 	}
 
