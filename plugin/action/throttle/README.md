@@ -26,13 +26,25 @@ It defines how to parse the time field format.
 
 **`default_limit`** *`int64`* *`default=5000`* 
 
-The default events limit that plugin allows per `interval`
+The default events limit that plugin allows per `interval`.
 
 <br>
 
 **`limit_kind`** *`string`* *`default=count`* *`options=count|size`* 
 
-What we're limiting: number of messages, or total size of the messages
+It defines subject of limiting: number of messages or total size of the messages.
+
+<br>
+
+**`limiter_backend`** *`string`* *`default=memory`* *`options=memory|redis`* 
+
+Defines kind of backend.
+
+<br>
+
+**`redis_backend_config`** *`RedisBackendConfig`* 
+
+It contains redis settings
 
 <br>
 
@@ -56,6 +68,35 @@ Each object has the `limit` and `conditions` fields.
 * `limit` – the value which will override the `default_limit`, if `conditions` are met.
 * `limit_kind` – the type of a limit: `count` - number of messages, `size` - total size from all messages
 * `conditions` – the map of `event field name => event field value`. The conditions are checked using `AND` operator.
+
+<br>
+
+**`endpoint`** *`string`* 
+
+
+<br>
+
+**`password`** *`string`* 
+
+Password to redis server.
+
+<br>
+
+**`sync_interval`** *`cfg.Duration`* *`default=5s`* 
+
+Defines sync interval between global and local limiters.
+
+<br>
+
+**`worker_count`** *`int`* *`default=32`* 
+
+Defines num of parallel workers that will sync limits.
+
+<br>
+
+**`timeout`** *`cfg.Duration`* *`default=1s`* 
+
+Defines redis timeout.
 
 <br>
 
