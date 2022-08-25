@@ -34,17 +34,16 @@ pipelines:
 
 const (
 	substitution   = byte('*')
-	timesActivated = "times_activated"
+	timesActivated = "mask_times_activated"
 )
 
 type Plugin struct {
-	params          *pipeline.ActionPluginParams
-	config          *Config
-	sourceBuf       []byte
-	maskBuf         []byte
-	valueNodes      []*insaneJSON.Node
-	logger          *zap.SugaredLogger
-	logMaskAppeared bool
+	params     *pipeline.ActionPluginParams
+	config     *Config
+	sourceBuf  []byte
+	maskBuf    []byte
+	valueNodes []*insaneJSON.Node
+	logger     *zap.SugaredLogger
 
 	//plugin metric
 	timeActivatedCounter *prom.CounterVec
@@ -53,11 +52,6 @@ type Plugin struct {
 // ! config-params
 // ^ config-params
 type Config struct {
-	// > @3@4@5@6
-	// >
-	// > If set counterMetric with this name would be sent on metric_subsystem_name.mask_plugin.
-	MetricSubsystemName *string `json:"metric_subsystem_name" required:"false"` // *
-
 	// > @3@4@5@6
 	// >
 	// > List of masks.
@@ -165,7 +159,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 	p.params = params
 	for _, mask := range p.config.Masks {
 		if mask.MaxCount > 0 && mask.ReplaceWord != "" {
-			p.logger.Fatal("Invalid mask configuration")
+			p.logger.Fatal("invalid mask configuration")
 		}
 	}
 	p.maskBuf = make([]byte, 0, params.PipelineSettings.AvgEventSize)
@@ -173,14 +167,11 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 	p.valueNodes = make([]*insaneJSON.Node, 0)
 	p.logger = params.Logger
 	p.config.Masks = compileMasks(p.config.Masks, p.logger)
-	if p.config.MetricSubsystemName != nil {
-		p.logMaskAppeared = true
-		p.registerPluginMetrics()
-	}
+	p.registerPluginMetrics()
 }
 
 func (p *Plugin) registerPluginMetrics() {
-	p.timeActivatedCounter = p.params.Controller.RegisterCounter(*p.config.MetricSubsystemName+timesActivated, "Number of times mask plugin found the provided pattern")
+	p.timeActivatedCounter = p.params.Controller.RegisterCounter(timesActivated, "Number of times mask plugin found the provided pattern")
 }
 
 func (p *Plugin) Stop() {
@@ -282,7 +273,7 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	if p.config.MaskAppliedField != "" && maskApplied {
 		event.Root.AddFieldNoAlloc(event.Root, p.config.MaskAppliedField).MutateToString(p.config.MaskAppliedValue)
 	}
-	if p.logMaskAppeared && maskApplied {
+	if maskApplied {
 		p.timeActivatedCounter.WithLabelValues().Inc()
 		p.logger.Infof("mask appeared to event, output string: %s", event.Root.EncodeToString())
 	}

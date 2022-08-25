@@ -164,13 +164,21 @@ func TestMaskAddExtraField(t *testing.T) {
 
 	var plugin Plugin
 
-	plugin.config = &Config{
+	config := Config{
 		MaskAppliedField: key,
 		MaskAppliedValue: val,
 		Masks: []Mask{
 			{Re: kDefaultCardRegExp, Groups: []int{1, 2, 3, 4}},
 		},
 	}
+	plugin.Start(&config, &pipeline.ActionPluginParams{
+		PluginDefaultParams: &pipeline.PluginDefaultParams{
+			PipelineName:     "test_pipeline",
+			PipelineSettings: &pipeline.Settings{},
+		},
+		Controller: pipeline.NewActionOutputPluginController(),
+		Logger:     zap.L().Sugar(),
+	})
 	plugin.config.Masks[0].Re_ = regexp.MustCompile(plugin.config.Masks[0].Re)
 
 	result := plugin.Do(event)

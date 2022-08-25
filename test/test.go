@@ -9,7 +9,6 @@ import (
 
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/logger"
-	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/plugin/input/fake"
 	"github.com/ozontech/file.d/plugin/output/devnull"
@@ -205,25 +204,9 @@ func NewEmptyOutputPluginParams() *pipeline.OutputPluginParams {
 			PipelineName:     "test_pipeline",
 			PipelineSettings: &pipeline.Settings{},
 		},
-		Controller: NewEmptyOutputPluginController(),
+		Controller: pipeline.NewEmptyOutputPluginController(),
 		Logger:     zap.L().Sugar(),
 	}
-}
-
-func NewEmptyOutputPluginController() pipeline.OutputPluginController {
-	return &emptyOutputPluginController{Ctl: metric.New("test_OutputController")}
-}
-
-type emptyOutputPluginController struct {
-	*metric.Ctl
-}
-
-func (e *emptyOutputPluginController) Commit(event *pipeline.Event) {
-	logger.Error("used func Commit, that not realized")
-}
-
-func (e *emptyOutputPluginController) Error(err string) {
-	logger.Error("used func Error, that not realized")
 }
 
 func NewConfig(config interface{}, params map[string]int) interface{} {

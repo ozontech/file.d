@@ -8,8 +8,6 @@ import (
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/pipeline"
-	test_pg "github.com/ozontech/file.d/test"
-
 	"github.com/stretchr/testify/assert"
 	insaneJSON "github.com/vitkovskii/insane-json"
 )
@@ -121,7 +119,7 @@ func TestFormatEvent(t *testing.T) {
 					AvgEventSize: 128,
 				},
 			},
-			Controller: test_pg.NewEmptyOutputPluginController(),
+			Controller: pipeline.NewEmptyOutputPluginController(),
 		}
 		plugin.Start(config, params)
 		plugin.formatEvent([]byte{}, event)

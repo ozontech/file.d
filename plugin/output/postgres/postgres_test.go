@@ -16,7 +16,6 @@ import (
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/pipeline"
 	mock_pg "github.com/ozontech/file.d/plugin/output/postgres/mock"
-	"github.com/ozontech/file.d/test"
 )
 
 func TestPrivateOut(t *testing.T) {
@@ -88,7 +87,7 @@ func TestPrivateOut(t *testing.T) {
 		pool:         pool,
 		logger:       testLogger,
 		ctx:          ctx,
-		controller:   test.NewEmptyOutputPluginController(),
+		controller:   pipeline.NewEmptyOutputPluginController(),
 	}
 
 	p.registerPluginMetrics()
@@ -164,7 +163,7 @@ func TestPrivateOutWithRetry(t *testing.T) {
 		pool:         pool,
 		logger:       testLogger,
 		ctx:          ctx,
-		controller:   test.NewEmptyOutputPluginController(),
+		controller:   pipeline.NewEmptyOutputPluginController(),
 	}
 
 	p.registerPluginMetrics()
@@ -218,7 +217,7 @@ func TestPrivateOutNoGoodEvents(t *testing.T) {
 		config:       &config,
 		queryBuilder: builder,
 		logger:       testLogger,
-		controller:   test.NewEmptyOutputPluginController(),
+		controller:   pipeline.NewEmptyOutputPluginController(),
 	}
 
 	p.registerPluginMetrics()
@@ -299,7 +298,7 @@ func TestPrivateOutDeduplicatedEvents(t *testing.T) {
 		pool:         pool,
 		logger:       testLogger,
 		ctx:          ctx,
-		controller:   test.NewEmptyOutputPluginController(),
+		controller:   pipeline.NewEmptyOutputPluginController(),
 	}
 
 	p.registerPluginMetrics()
@@ -366,7 +365,7 @@ func TestPrivateOutWrongTypeInField(t *testing.T) {
 		config:       &config,
 		queryBuilder: builder,
 		logger:       testLogger,
-		controller:   test.NewEmptyOutputPluginController(),
+		controller:   pipeline.NewEmptyOutputPluginController(),
 	}
 
 	p.registerPluginMetrics()
@@ -472,7 +471,7 @@ func TestPrivateOutFewUniqueEventsYetWithDeduplicationEventsAnpooladEvents(t *te
 		pool:         pool,
 		logger:       testLogger,
 		ctx:          ctx,
-		controller:   test.NewEmptyOutputPluginController(),
+		controller:   pipeline.NewEmptyOutputPluginController(),
 	}
 
 	p.registerPluginMetrics()

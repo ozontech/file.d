@@ -19,12 +19,6 @@ pipelines:
 
 
 ### Config params
-**`metric_subsystem_name`** *`*string`* 
-
-If set counterMetric with this name would be sent on metric_subsystem_name.mask_plugin.
-
-<br>
-
 **`masks`** *`[]Mask`* 
 
 List of masks.
