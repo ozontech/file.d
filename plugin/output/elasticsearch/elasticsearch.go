@@ -30,8 +30,8 @@ const (
 	outPluginType = "elasticsearch"
 
 	// errors
-	sendErrorCounter = "output_elasticsearch_send_error"
-	indexingErrors   = "output_elasticsearch_index_error"
+	sendError      = "output_elasticsearch_send_error"
+	indexingErrors = "output_elasticsearch_index_error"
 
 	NDJSONContentType = "application/x-ndjson"
 
@@ -57,7 +57,7 @@ type Plugin struct {
 	mu           *sync.Mutex
 
 	//plugin metric
-	sendError             *prometheus.CounterVec
+	sendErrorCounter      *prometheus.CounterVec
 	indexingErrorsCounter *prometheus.CounterVec
 }
 
@@ -238,7 +238,7 @@ func (p *Plugin) Out(event *pipeline.Event) {
 }
 
 func (p *Plugin) registerPluginMetrics() {
-	p.sendError = p.controller.RegisterCounter(sendErrorCounter, "Total elasticsearch send errors")
+	p.sendErrorCounter = p.controller.RegisterCounter(sendError, "Total elasticsearch send errors")
 	p.indexingErrorsCounter = p.controller.RegisterCounter(indexingErrors, "Number of elasticsearch indexing errors")
 }
 
@@ -262,7 +262,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 
 	for {
 		if err := p.send(data.outBuf); err != nil {
-			p.sendError.WithLabelValues().Inc()
+			p.sendErrorCounter.WithLabelValues().Inc()
 			p.logger.Errorf("can't send to the elastic, will try other endpoint: %s", err.Error())
 		} else {
 			break

@@ -211,11 +211,11 @@ func NewEmptyOutputPluginParams() *pipeline.OutputPluginParams {
 }
 
 func NewEmptyOutputPluginController() pipeline.OutputPluginController {
-	return &emptyOutputPluginController{MetricsCtl: metric.New("test_OutputController")}
+	return &emptyOutputPluginController{Ctl: metric.New("test_OutputController")}
 }
 
 type emptyOutputPluginController struct {
-	*metric.MetricsCtl
+	*metric.Ctl
 }
 
 func (e *emptyOutputPluginController) Commit(event *pipeline.Event) {

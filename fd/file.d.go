@@ -20,7 +20,7 @@ import (
 )
 
 const (
-	longPanicCounter = "long_panic"
+	longPanic = "long_panic"
 )
 
 type FileD struct {
@@ -30,10 +30,10 @@ type FileD struct {
 	plugins   *PluginRegistry
 	Pipelines []*pipeline.Pipeline
 	server    *http.Server
-	metricCtl *metric.MetricsCtl
+	metricCtl *metric.Ctl
 
 	// file_d metric
-	longPanic *prometheus.CounterVec
+	longPanicCounter *prometheus.CounterVec
 }
 
 func New(config *cfg.Config, httpAddr string) *FileD {
@@ -60,9 +60,9 @@ func (f *FileD) Start() {
 
 func (f *FileD) initMetrics() {
 	f.metricCtl = metric.New("file_d")
-	f.longPanic = f.metricCtl.RegisterCounter(longPanicCounter, "Count of panics in the LongPanic")
+	f.longPanicCounter = f.metricCtl.RegisterCounter(longPanic, "Count of panics in the LongPanic")
 	longpanic.SetOnPanicHandler(func(_ error) {
-		f.longPanic.WithLabelValues().Inc()
+		f.longPanicCounter.WithLabelValues().Inc()
 	})
 }
 

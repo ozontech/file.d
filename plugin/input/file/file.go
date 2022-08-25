@@ -46,7 +46,7 @@ pipelines:
 }*/
 
 const (
-	possibleOffsetCorruptionCounter = "input_file_possible_offset_corruptions_total"
+	possibleOffsetCorruption = "input_file_possible_offset_corruptions_total"
 )
 
 type Plugin struct {
@@ -58,7 +58,7 @@ type Plugin struct {
 	jobProvider *jobProvider
 
 	//plugin metric
-	possibleOffsetCorruption *prom.CounterVec
+	possibleOffsetCorruptionCounter *prom.CounterVec
 }
 
 type persistenceMode int
@@ -196,7 +196,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 
 	p.config.OffsetsFileTmp = p.config.OffsetsFile + ".atomic"
 
-	p.jobProvider = NewJobProvider(p.config, p.possibleOffsetCorruption, p.logger)
+	p.jobProvider = NewJobProvider(p.config, p.possibleOffsetCorruptionCounter, p.logger)
 
 	ResetterRegistryInstance.AddResetter(params.PipelineName, p)
 
@@ -205,7 +205,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 }
 
 func (p *Plugin) registerPluginMetrics() {
-	p.possibleOffsetCorruption = p.params.Controller.RegisterCounter(possibleOffsetCorruptionCounter, "Total number of possible offset corruptions")
+	p.possibleOffsetCorruptionCounter = p.params.Controller.RegisterCounter(possibleOffsetCorruption, "Total number of possible offset corruptions")
 }
 
 func (p *Plugin) startWorkers() {

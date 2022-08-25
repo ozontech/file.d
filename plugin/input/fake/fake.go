@@ -66,11 +66,11 @@ func (p *Plugin) SetInFn(fn func()) { // *
 }
 
 func NewInputPluginController() pipeline.InputPluginController {
-	return &emptyInputPluginController{MetricsCtl: metric.New("test_InputController")}
+	return &emptyInputPluginController{Ctl: metric.New("test_InputController")}
 }
 
 type emptyInputPluginController struct {
-	*metric.MetricsCtl
+	*metric.Ctl
 }
 
 func (e emptyInputPluginController) In(sourceID pipeline.SourceID, sourceName string, offset int64, data []byte, isNewSource bool) uint64 {

@@ -15,7 +15,7 @@ import (
 
 type batcherTail struct {
 	commit func(event *Event)
-	*metric.MetricsCtl
+	*metric.Ctl
 }
 
 func (b *batcherTail) Commit(event *Event) {

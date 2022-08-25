@@ -41,9 +41,9 @@ const (
 	preferSimpleProtocol = pgx.QuerySimpleProtocol(true)
 
 	// metric
-	discardedEventCounter  = "output_postgres_event_discarded"
-	duplicatedEventCounter = "output_postgres_event_duplicated"
-	writtenEventCounter    = "output_postgres_event_written"
+	discardedEvent  = "output_postgres_event_discarded"
+	duplicatedEvent = "output_postgres_event_duplicated"
+	writtenEvent    = "output_postgres_event_written"
 
 	nineThousandYear = 221842627200
 )
@@ -76,9 +76,9 @@ type Plugin struct {
 	pool         PgxIface
 
 	//plugin`s metrics
-	discardedEvent  *prom.CounterVec
-	duplicatedEvent *prom.CounterVec
-	writtenEvent    *prom.CounterVec
+	discardedEventCounter  *prom.CounterVec
+	duplicatedEventCounter *prom.CounterVec
+	writtenEventCounter    *prom.CounterVec
 }
 
 type ConfigColumn struct {
@@ -179,9 +179,9 @@ func Factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 }
 
 func (p *Plugin) registerPluginMetrics() {
-	p.discardedEvent = p.controller.RegisterCounter(discardedEventCounter, "Total pgsql discarded messages")
-	p.duplicatedEvent = p.controller.RegisterCounter(duplicatedEventCounter, "Total pgsql duplicated messages")
-	p.writtenEvent = p.controller.RegisterCounter(writtenEventCounter, "Total events written to pgsql")
+	p.discardedEventCounter = p.controller.RegisterCounter(discardedEvent, "Total pgsql discarded messages")
+	p.duplicatedEventCounter = p.controller.RegisterCounter(duplicatedEvent, "Total pgsql duplicated messages")
+	p.writtenEventCounter = p.controller.RegisterCounter(writtenEvent, "Total events written to pgsql")
 }
 
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginParams) {
@@ -266,19 +266,19 @@ func (p *Plugin) out(_ *pipeline.WorkerData, batch *pipeline.Batch) {
 		fieldValues, uniqueID, err := p.processEvent(event, pgFields, uniqFields)
 		if err != nil {
 			if errors.Is(err, ErrEventDoesntHaveField) {
-				p.discardedEvent.WithLabelValues().Inc()
+				p.discardedEventCounter.WithLabelValues().Inc()
 				if p.config.Strict {
 					p.logger.Fatal(err)
 				}
 				p.logger.Error(err)
 			} else if errors.Is(err, ErrEventFieldHasWrongType) {
-				p.discardedEvent.WithLabelValues().Inc()
+				p.discardedEventCounter.WithLabelValues().Inc()
 				if p.config.Strict {
 					p.logger.Fatal(err)
 				}
 				p.logger.Error(err)
 			} else if errors.Is(err, ErrTimestampFromDistantPastOrFuture) {
-				p.discardedEvent.WithLabelValues().Inc()
+				p.discardedEventCounter.WithLabelValues().Inc()
 				if p.config.Strict {
 					p.logger.Fatal(err)
 				}
@@ -292,7 +292,7 @@ func (p *Plugin) out(_ *pipeline.WorkerData, batch *pipeline.Batch) {
 
 		// passes here only if event valid.
 		if _, ok := uniqueEventsMap[uniqueID]; ok {
-			p.duplicatedEvent.WithLabelValues().Inc()
+			p.duplicatedEventCounter.WithLabelValues().Inc()
 			p.logger.Infof("event duplicated. Fields: %v, values: %v", pgFields, fieldValues)
 		} else {
 			uniqueEventsMap[uniqueID] = struct{}{}
@@ -327,7 +327,7 @@ func (p *Plugin) out(_ *pipeline.WorkerData, batch *pipeline.Batch) {
 			time.Sleep(p.config.Retention_)
 			continue
 		}
-		p.writtenEvent.WithLabelValues().Add(float64(len(uniqueEventsMap)))
+		p.writtenEventCounter.WithLabelValues().Add(float64(len(uniqueEventsMap)))
 		break
 	}
 

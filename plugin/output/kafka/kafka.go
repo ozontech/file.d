@@ -19,8 +19,8 @@ It sends the event batches to kafka brokers using `sarama` lib.
 }*/
 
 const (
-	outPluginType    = "kafka"
-	sendErrorCounter = "output_kafka_send_errors"
+	outPluginType = "kafka"
+	sendError     = "output_kafka_send_errors"
 )
 
 type data struct {
@@ -38,7 +38,7 @@ type Plugin struct {
 	batcher  *pipeline.Batcher
 
 	//plugin metrics
-	sendError *prometheus.CounterVec
+	sendErrorCounter *prometheus.CounterVec
 }
 
 // ! config-params
@@ -131,7 +131,7 @@ func (p *Plugin) Out(event *pipeline.Event) {
 }
 
 func (p *Plugin) registerPluginMetrics() {
-	p.sendError = p.controller.RegisterCounter(sendErrorCounter, "Total Kafka send errors")
+	p.sendErrorCounter = p.controller.RegisterCounter(sendError, "Total Kafka send errors")
 }
 
 func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
@@ -176,7 +176,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 		for _, e := range errs {
 			p.logger.Errorf("can't write batch: %s", e.Err.Error())
 		}
-		p.sendError.WithLabelValues().Add(float64(len(errs)))
+		p.sendErrorCounter.WithLabelValues().Add(float64(len(errs)))
 		p.controller.Error("some events from batch were not written")
 	}
 }

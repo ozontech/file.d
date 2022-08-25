@@ -111,7 +111,7 @@ const (
 	DynamicBucketDir   = "dynamic_buckets"
 
 	// errors
-	sendErrorCounter = "output_s3_send_error"
+	sendError = "output_s3_send_error"
 )
 
 var (
@@ -157,7 +157,7 @@ type Plugin struct {
 	compressor compressor
 
 	//plugin metric
-	sendError *prometheus.CounterVec
+	sendErrorCounter *prometheus.CounterVec
 }
 
 type fileDTO struct {
@@ -249,7 +249,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 }
 
 func (p *Plugin) registerPluginMetrics() {
-	p.sendError = p.controller.RegisterCounter(sendErrorCounter, "Total s3 send errors")
+	p.sendErrorCounter = p.controller.RegisterCounter(sendError, "Total s3 send errors")
 }
 
 func (p *Plugin) StartWithMinio(config pipeline.AnyConfig, params *pipeline.OutputPluginParams, factory objStoreFactory) {
@@ -537,7 +537,7 @@ func (p *Plugin) uploadToS3(compressedDTO fileDTO) error {
 		p.compressor.getObjectOptions(),
 	)
 	if err != nil {
-		p.sendError.WithLabelValues().Inc()
+		p.sendErrorCounter.WithLabelValues().Inc()
 		return fmt.Errorf("could not upload file: %s into bucket: %s, error: %s", compressedDTO.fileName, compressedDTO.bucketName, err.Error())
 	}
 	return nil

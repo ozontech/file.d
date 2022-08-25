@@ -38,16 +38,16 @@ const (
 	antispamUnbanIterations = 4
 	metricsGenInterval      = time.Hour
 
-	inputEventsCountMetric  = "input_events_count"
-	inputEventsSizeMetric   = "input_events_size"
-	outputEventsCountMetric = "output_events_count"
-	outputEventsSizeMetric  = "output_events_size"
-	readOpsEventsSizeMetric = "read_ops_count"
-	maxEventSizeExceeded    = "max_event_size_exceeded"
-	eventPoolCapacity       = "event_pool_capacity"
-	inUseEventsMetric       = "event_pool_in_use_events"
+	inputEventsCount     = "input_events_count"
+	inputEventsSize      = "input_events_size"
+	outputEventsCount    = "output_events_count"
+	outputEventsSize     = "output_events_size"
+	readOpsEventsSize    = "read_ops_count"
+	maxEventSizeExceeded = "max_event_size_exceeded"
+	eventPoolCapacity    = "event_pool_capacity"
+	inUseEvents          = "event_pool_in_use_events"
 
-	wrongEventCRIFormatMetric = "wrong_event_cri_format"
+	wrongEventCRIFormat = "wrong_event_cri_format"
 )
 
 type finalizeFn = func(event *Event, notifyInput bool, backEvent bool)
@@ -85,7 +85,7 @@ type (
 )
 
 type Pipeline struct {
-	*metric.MetricsCtl
+	*metric.Ctl
 	Name     string
 	started  bool
 	settings *Settings
@@ -174,8 +174,8 @@ func New(name string, settings *Settings, registry *prometheus.Registry) *Pipeli
 		eventLog:   make([]string, 0, 128),
 		eventLogMu: &sync.Mutex{},
 	}
-	pipeline.MetricsCtl = metric.New(pipeline.subsystemName())
-	pipeline.antispamer = newAntispamer(settings.AntispamThreshold, antispamUnbanIterations, settings.MaintenanceInterval, pipeline.MetricsCtl)
+	pipeline.Ctl = metric.New(pipeline.subsystemName())
+	pipeline.antispamer = newAntispamer(settings.AntispamThreshold, antispamUnbanIterations, settings.MaintenanceInterval, pipeline.Ctl)
 
 	pipeline.registerMetrics()
 	pipeline.setDefaultMetrics()
@@ -211,14 +211,14 @@ func (p *Pipeline) subsystemName() string {
 }
 
 func (p *Pipeline) registerMetrics() {
-	p.inUseEventsGauge = p.RegisterGauge(inUseEventsMetric, "Count of pool events which is used for processing")
+	p.inUseEventsGauge = p.RegisterGauge(inUseEvents, "Count of pool events which is used for processing")
 	p.eventPoolCapacityGauge = p.RegisterGauge(eventPoolCapacity, "Pool capacity value")
-	p.inputEventsCountCounter = p.RegisterCounter(inputEventsCountMetric, "Count of events on pipeline input")
-	p.inputEventSizeCounter = p.RegisterCounter(inputEventsSizeMetric, "Size of events on pipeline input")
-	p.outputEventsCountCounter = p.RegisterCounter(outputEventsCountMetric, "Count of events on pipeline output")
-	p.outputEventSizeCounter = p.RegisterCounter(outputEventsSizeMetric, "Size of events on pipeline output")
-	p.readOpsEventsSizeCounter = p.RegisterCounter(readOpsEventsSizeMetric, "Read OPS count")
-	p.wrongEventCRIFormatCounter = p.RegisterCounter(wrongEventCRIFormatMetric, "Wrong event CRI format counter")
+	p.inputEventsCountCounter = p.RegisterCounter(inputEventsCount, "Count of events on pipeline input")
+	p.inputEventSizeCounter = p.RegisterCounter(inputEventsSize, "Size of events on pipeline input")
+	p.outputEventsCountCounter = p.RegisterCounter(outputEventsCount, "Count of events on pipeline output")
+	p.outputEventSizeCounter = p.RegisterCounter(outputEventsSize, "Size of events on pipeline output")
+	p.readOpsEventsSizeCounter = p.RegisterCounter(readOpsEventsSize, "Read OPS count")
+	p.wrongEventCRIFormatCounter = p.RegisterCounter(wrongEventCRIFormat, "Wrong event CRI format counter")
 	p.maxEventSizeExceededCounter = p.RegisterCounter(maxEventSizeExceeded, "Max event size exceeded counter")
 }
 
@@ -516,7 +516,7 @@ func (p *Pipeline) newProc() *processor {
 		p.output,
 		p.streamer,
 		p.finalize,
-		p.MetricsCtl,
+		p.Ctl,
 	)
 	for j, info := range p.actionInfos {
 		plugin, _ := info.Factory()

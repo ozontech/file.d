@@ -50,7 +50,7 @@ func allEventStatuses() []eventStatus {
 
 // processor is a goroutine which doing pipeline actions
 type processor struct {
-	*metric.MetricsCtl
+	*metric.Ctl
 	id            int
 	streamer      *streamer
 	metricsHolder *metricsHolder
@@ -77,10 +77,10 @@ func NewProcessor(
 	output OutputPlugin,
 	streamer *streamer,
 	finalizeFn finalizeFn,
-	controller *metric.MetricsCtl,
+	controller *metric.Ctl,
 ) *processor {
 	processor := &processor{
-		MetricsCtl:    controller,
+		Ctl:           controller,
 		id:            id,
 		streamer:      streamer,
 		metricsHolder: metricsHolder,

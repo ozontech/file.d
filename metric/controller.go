@@ -9,26 +9,26 @@ import (
 const (
 	PromNamespace = "file_d"
 
-	metricDuplicateCounter = "metric_duplicate_counter"
+	metricDuplicate = "metric_duplicate_counter"
 )
 
-type MetricsCtl struct {
+type Ctl struct {
 	subsystem string
 	counters  map[string]*prom.CounterVec
 	gauges    map[string]*prom.GaugeVec
 }
 
-func New(subsystem string) *MetricsCtl {
-	ctl := &MetricsCtl{
+func New(subsystem string) *Ctl {
+	ctl := &Ctl{
 		subsystem: subsystem,
 		counters:  make(map[string]*prom.CounterVec),
 		gauges:    make(map[string]*prom.GaugeVec),
 	}
-	ctl.RegisterCounter(metricDuplicateCounter, "Counter for duplicate metrics", "source")
+	ctl.RegisterCounter(metricDuplicate, "Counter for duplicate metrics", "source")
 	return ctl
 }
 
-func (mc *MetricsCtl) RegisterCounter(name, help string, labels ...string) *prom.CounterVec {
+func (mc *Ctl) RegisterCounter(name, help string, labels ...string) *prom.CounterVec {
 	promCounter := prom.NewCounterVec(prom.CounterOpts{
 		Namespace:   PromNamespace,
 		Subsystem:   mc.subsystem,
@@ -48,7 +48,7 @@ func (mc *MetricsCtl) RegisterCounter(name, help string, labels ...string) *prom
 	return promCounter
 }
 
-func (mc *MetricsCtl) RegisterGauge(name, help string, labels ...string) *prom.GaugeVec {
+func (mc *Ctl) RegisterGauge(name, help string, labels ...string) *prom.GaugeVec {
 	promGauge := prom.NewGaugeVec(prom.GaugeOpts{
 		Namespace:   PromNamespace,
 		Subsystem:   mc.subsystem,
@@ -68,7 +68,7 @@ func (mc *MetricsCtl) RegisterGauge(name, help string, labels ...string) *prom.G
 	return promGauge
 }
 
-func (mc *MetricsCtl) incMetricDuplicate(name string) {
+func (mc *Ctl) incMetricDuplicate(name string) {
 	logger.Errorf("rewriting existent metric")
-	mc.counters[metricDuplicateCounter].WithLabelValues(name).Inc()
+	mc.counters[metricDuplicate].WithLabelValues(name).Inc()
 }

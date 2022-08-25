@@ -77,7 +77,7 @@ curl "localhost:9200/_bulk" -H 'Content-Type: application/json' -d \
 }*/
 
 const (
-	httpErrorCounter = "input_http_errors"
+	httpError = "input_http_errors"
 
 	readBufDefaultLen = 16 * 1024
 )
@@ -95,7 +95,7 @@ type Plugin struct {
 	logger     *zap.SugaredLogger
 
 	//plugin metric
-	httpError *prometheus.CounterVec
+	httpErrorCounter *prometheus.CounterVec
 }
 
 // ! config-params
@@ -160,7 +160,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 }
 
 func (p *Plugin) registerPluginMetrics() {
-	p.httpError = p.controller.RegisterCounter(httpErrorCounter, "Total http errors")
+	p.httpErrorCounter = p.controller.RegisterCounter(httpError, "Total http errors")
 }
 
 func (p *Plugin) listenHTTP() {
@@ -230,7 +230,7 @@ func (p *Plugin) serve(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if err != nil && err != io.EOF {
-			p.httpError.WithLabelValues().Inc()
+			p.httpErrorCounter.WithLabelValues().Inc()
 			logger.Errorf("http input read error: %s", err.Error())
 			break
 		}
@@ -250,7 +250,7 @@ func (p *Plugin) serve(w http.ResponseWriter, r *http.Request) {
 
 	_, err := w.Write(result)
 	if err != nil {
-		p.httpError.WithLabelValues().Inc()
+		p.httpErrorCounter.WithLabelValues().Inc()
 		logger.Errorf("can't write response: %s", err.Error())
 	}
 }
