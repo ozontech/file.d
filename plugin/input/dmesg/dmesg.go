@@ -13,6 +13,7 @@ import (
 
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/longpanic"
+	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/offset"
 	"github.com/ozontech/file.d/pipeline"
 )
@@ -32,7 +33,7 @@ type Plugin struct {
 	parser     kmsgparser.Parser
 	logger     *zap.SugaredLogger
 
-	//plugin metric
+	//plugin metrics
 	offsetErrorsCounter *prometheus.CounterVec
 }
 
@@ -65,7 +66,6 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	p.logger = params.Logger
 	p.config = config.(*Config)
 	p.controller = params.Controller
-	p.registerPluginMetrics()
 
 	p.state = &state{}
 	if err := offset.LoadYAML(p.config.OffsetsFile, p.state); err != nil {
@@ -83,8 +83,8 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	longpanic.Go(p.read)
 }
 
-func (p *Plugin) registerPluginMetrics() {
-	p.offsetErrorsCounter = p.controller.RegisterCounter(offsetErrors, "Number of errors occurred when saving/loading offset")
+func (p *Plugin) RegisterPluginMetrics(ctl *metric.Ctl) {
+	p.offsetErrorsCounter = ctl.RegisterCounter(offsetErrors, "Number of errors occurred when saving/loading offset")
 }
 
 func (p *Plugin) read() {

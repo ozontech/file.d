@@ -2,6 +2,7 @@ package fake
 
 import (
 	"github.com/ozontech/file.d/fd"
+	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
 )
 
@@ -39,6 +40,9 @@ func (p *Plugin) Commit(event *pipeline.Event) {
 	if p.commitFn != nil {
 		p.commitFn(event)
 	}
+}
+
+func (p *Plugin) RegisterPluginMetrics(ctl *metric.Ctl) {
 }
 
 // ! fn-list

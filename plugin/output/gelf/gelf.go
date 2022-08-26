@@ -11,6 +11,7 @@ import (
 
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
+	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
 )
 
@@ -46,7 +47,7 @@ type Plugin struct {
 	batcher      *pipeline.Batcher
 	controller   pipeline.OutputPluginController
 
-	//plugin metric
+	//plugin metrics
 	sendErrorCounter *prom.CounterVec
 }
 
@@ -185,8 +186,6 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.config.timestampFieldFormat = format
 	p.config.levelField = pipeline.ByteToStringUnsafe(p.formatExtraField(nil, p.config.LevelField))
 
-	p.registerPluginMetrics()
-
 	p.batcher = pipeline.NewBatcher(pipeline.BatcherOptions{
 		PipelineName:        params.PipelineName,
 		OutputType:          outPluginType,
@@ -211,8 +210,8 @@ func (p *Plugin) Out(event *pipeline.Event) {
 	p.batcher.Add(event)
 }
 
-func (p *Plugin) registerPluginMetrics() {
-	p.sendErrorCounter = p.controller.RegisterCounter(sendError, "Total GELF send errors")
+func (p *Plugin) RegisterPluginMetrics(ctl *metric.Ctl) {
+	p.sendErrorCounter = ctl.RegisterCounter(sendError, "Total GELF send errors")
 }
 
 func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {

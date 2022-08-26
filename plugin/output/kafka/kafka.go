@@ -11,6 +11,7 @@ import (
 
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
+	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
 )
 
@@ -109,8 +110,6 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 
 	p.logger.Infof("workers count=%d, batch size=%d", p.config.WorkersCount_, p.config.BatchSize_)
 
-	p.registerPluginMetrics()
-
 	p.producer = p.newProducer()
 	p.batcher = pipeline.NewBatcher(pipeline.BatcherOptions{
 		PipelineName:   params.PipelineName,
@@ -130,8 +129,8 @@ func (p *Plugin) Out(event *pipeline.Event) {
 	p.batcher.Add(event)
 }
 
-func (p *Plugin) registerPluginMetrics() {
-	p.sendErrorCounter = p.controller.RegisterCounter(sendError, "Total Kafka send errors")
+func (p *Plugin) RegisterPluginMetrics(ctl *metric.Ctl) {
+	p.sendErrorCounter = ctl.RegisterCounter(sendError, "Total Kafka send errors")
 }
 
 func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {

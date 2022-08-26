@@ -20,6 +20,7 @@ import (
 
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/longpanic"
+	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/plugin/output/file"
 )
@@ -156,7 +157,7 @@ type Plugin struct {
 
 	compressor compressor
 
-	//plugin metric
+	//plugin metrics
 	sendErrorCounter *prometheus.CounterVec
 }
 
@@ -248,12 +249,11 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.StartWithMinio(config, params, p.minioClientsFactory)
 }
 
-func (p *Plugin) registerPluginMetrics() {
-	p.sendErrorCounter = p.controller.RegisterCounter(sendError, "Total s3 send errors")
+func (p *Plugin) RegisterPluginMetrics(ctl *metric.Ctl) {
+	p.sendErrorCounter = ctl.RegisterCounter(sendError, "Total s3 send errors")
 }
 
 func (p *Plugin) StartWithMinio(config pipeline.AnyConfig, params *pipeline.OutputPluginParams, factory objStoreFactory) {
-	p.registerPluginMetrics()
 
 	p.controller = params.Controller
 	p.logger = params.Logger

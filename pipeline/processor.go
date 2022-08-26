@@ -50,7 +50,6 @@ func allEventStatuses() []eventStatus {
 
 // processor is a goroutine which doing pipeline actions
 type processor struct {
-	*metric.Ctl
 	id            int
 	streamer      *streamer
 	metricsHolder *metricsHolder
@@ -67,6 +66,8 @@ type processor struct {
 	recoverFromPanic func()
 
 	metricsValues []string
+
+	metricCtl *metric.Ctl
 }
 
 var id = 0
@@ -80,7 +81,7 @@ func NewProcessor(
 	metricsController *metric.Ctl,
 ) *processor {
 	processor := &processor{
-		Ctl:           metricsController,
+		metricCtl:     metricsController,
 		id:            id,
 		streamer:      streamer,
 		metricsHolder: metricsHolder,
@@ -106,6 +107,7 @@ func (p *processor) start(params *PluginDefaultParams, logger *zap.SugaredLogger
 			Controller:          p,
 			Logger:              logger.Named("action").Named(actionInfo.Type),
 		})
+		action.RegisterPluginMetrics(p.metricCtl)
 	}
 
 	longpanic.Go(p.process)

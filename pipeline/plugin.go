@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"regexp"
 
+	"github.com/ozontech/file.d/metric"
 	"go.uber.org/zap"
 )
 
@@ -19,18 +20,21 @@ type InputPlugin interface {
 	Start(config AnyConfig, params *InputPluginParams)
 	Stop()
 	Commit(*Event)
+	RegisterPluginMetrics(ctl *metric.Ctl)
 }
 
 type ActionPlugin interface {
 	Start(config AnyConfig, params *ActionPluginParams)
 	Stop()
 	Do(*Event) ActionResult
+	RegisterPluginMetrics(ctl *metric.Ctl)
 }
 
 type OutputPlugin interface {
 	Start(config AnyConfig, params *OutputPluginParams)
 	Stop()
 	Out(*Event)
+	RegisterPluginMetrics(ctl *metric.Ctl)
 }
 
 type PluginsStarterData struct {

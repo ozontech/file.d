@@ -2,6 +2,7 @@ package devnull
 
 import (
 	"github.com/ozontech/file.d/fd"
+	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
 	"go.uber.org/atomic"
 )
@@ -54,3 +55,5 @@ func (p *Plugin) Out(event *pipeline.Event) {
 
 	p.controller.Commit(event)
 }
+
+func (p *Plugin) RegisterPluginMetrics(ctl *metric.Ctl) {}

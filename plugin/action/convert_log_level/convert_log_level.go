@@ -5,6 +5,7 @@ import (
 
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
+	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
 	"go.uber.org/zap"
 )
@@ -130,4 +131,7 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	}
 
 	return pipeline.ActionPass
+}
+
+func (p *Plugin) RegisterPluginMetrics(ctl *metric.Ctl) {
 }

@@ -5,6 +5,7 @@ import (
 
 	"github.com/ozontech/file.d/decoder"
 	"github.com/ozontech/file.d/fd"
+	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/plugin/input/file"
 	"go.uber.org/atomic"
@@ -145,4 +146,7 @@ func (p *Plugin) Commit(event *pipeline.Event) {
 
 func (p *Plugin) Stop() {
 	p.fp.Stop()
+}
+
+func (p *Plugin) RegisterPluginMetrics(ctl *metric.Ctl) {
 }

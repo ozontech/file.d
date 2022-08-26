@@ -2,6 +2,7 @@ package discard
 
 import (
 	"github.com/ozontech/file.d/fd"
+	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
 )
 
@@ -44,4 +45,7 @@ func (p *Plugin) Stop() {
 
 func (p *Plugin) Do(_ *pipeline.Event) pipeline.ActionResult {
 	return pipeline.ActionDiscard
+}
+
+func (p *Plugin) RegisterPluginMetrics(ctl *metric.Ctl) {
 }

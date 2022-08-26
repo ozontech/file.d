@@ -6,6 +6,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/ozontech/file.d/fd"
+	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/offset"
 	"github.com/ozontech/file.d/pipeline"
 )
@@ -80,8 +81,6 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	p.params = params
 	p.config = config.(*Config)
 
-	p.registerPluginMetrics()
-
 	p.offInfo = &offsetInfo{}
 	if err := offset.LoadYAML(p.config.OffsetsFile, p.offInfo); err != nil {
 		p.offsetErrorsCounter.WithLabelValues().Inc()
@@ -101,10 +100,10 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	}
 }
 
-func (p *Plugin) registerPluginMetrics() {
-	p.offsetErrorsCounter = p.params.Controller.RegisterCounter(offsetErrors, "Number of errors occurred when saving/loading offset")
-	p.journalCtlStopErrorCounter = p.params.Controller.RegisterCounter(journalCtlStopErrors, "Total journalctl stop errors")
-	p.readerErrorsCounter = p.params.Controller.RegisterCounter(readerErrors, "Total reader errors")
+func (p *Plugin) RegisterPluginMetrics(ctl *metric.Ctl) {
+	p.offsetErrorsCounter = ctl.RegisterCounter(offsetErrors, "Number of errors occurred when saving/loading offset")
+	p.journalCtlStopErrorCounter = ctl.RegisterCounter(journalCtlStopErrors, "Total journalctl stop errors")
+	p.readerErrorsCounter = ctl.RegisterCounter(readerErrors, "Total reader errors")
 }
 
 func (p *Plugin) Stop() {

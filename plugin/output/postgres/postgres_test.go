@@ -14,6 +14,7 @@ import (
 	insaneJSON "github.com/vitkovskii/insane-json"
 
 	"github.com/ozontech/file.d/logger"
+	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
 	mock_pg "github.com/ozontech/file.d/plugin/output/postgres/mock"
 )
@@ -90,7 +91,8 @@ func TestPrivateOut(t *testing.T) {
 		controller:   pipeline.NewEmptyOutputPluginController(),
 	}
 
-	p.registerPluginMetrics()
+	metricCtl := metric.New("test")
+	p.RegisterPluginMetrics(metricCtl)
 
 	batch := &pipeline.Batch{Events: []*pipeline.Event{{Root: root}}}
 	p.out(nil, batch)
@@ -166,7 +168,8 @@ func TestPrivateOutWithRetry(t *testing.T) {
 		controller:   pipeline.NewEmptyOutputPluginController(),
 	}
 
-	p.registerPluginMetrics()
+	metricCtl := metric.New("test")
+	p.RegisterPluginMetrics(metricCtl)
 
 	batch := &pipeline.Batch{Events: []*pipeline.Event{{Root: root}}}
 	p.out(nil, batch)
@@ -220,7 +223,8 @@ func TestPrivateOutNoGoodEvents(t *testing.T) {
 		controller:   pipeline.NewEmptyOutputPluginController(),
 	}
 
-	p.registerPluginMetrics()
+	metricCtl := metric.New("test")
+	p.RegisterPluginMetrics(metricCtl)
 
 	batch := &pipeline.Batch{Events: []*pipeline.Event{{Root: root}}}
 	p.out(nil, batch)
@@ -301,7 +305,8 @@ func TestPrivateOutDeduplicatedEvents(t *testing.T) {
 		controller:   pipeline.NewEmptyOutputPluginController(),
 	}
 
-	p.registerPluginMetrics()
+	metricCtl := metric.New("test")
+	p.RegisterPluginMetrics(metricCtl)
 
 	batch := &pipeline.Batch{Events: []*pipeline.Event{
 		{Root: root},
@@ -368,7 +373,8 @@ func TestPrivateOutWrongTypeInField(t *testing.T) {
 		controller:   pipeline.NewEmptyOutputPluginController(),
 	}
 
-	p.registerPluginMetrics()
+	metricCtl := metric.New("test")
+	p.RegisterPluginMetrics(metricCtl)
 
 	batch := &pipeline.Batch{Events: []*pipeline.Event{{Root: root}}}
 	p.out(nil, batch)
@@ -474,7 +480,8 @@ func TestPrivateOutFewUniqueEventsYetWithDeduplicationEventsAnpooladEvents(t *te
 		controller:   pipeline.NewEmptyOutputPluginController(),
 	}
 
-	p.registerPluginMetrics()
+	metricCtl := metric.New("test")
+	p.RegisterPluginMetrics(metricCtl)
 
 	batch := &pipeline.Batch{Events: []*pipeline.Event{
 		{Root: root},

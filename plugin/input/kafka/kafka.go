@@ -7,6 +7,7 @@ import (
 	"github.com/Shopify/sarama"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/longpanic"
+	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
@@ -31,7 +32,7 @@ type Plugin struct {
 	controller    pipeline.InputPluginController
 	idByTopic     map[string]int
 
-	//plugin metric
+	//plugin metrics
 	commitErrorsCounter  *prometheus.CounterVec
 	consumeErrorsCounter *prometheus.CounterVec
 }
@@ -76,7 +77,6 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	p.logger = params.Logger
 	p.config = config.(*Config)
 
-	p.registerPluginMetrics()
 	p.idByTopic = make(map[string]int)
 	for i, topic := range p.config.Topics {
 		p.idByTopic[topic] = i
@@ -93,9 +93,9 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	})
 }
 
-func (p *Plugin) registerPluginMetrics() {
-	p.commitErrorsCounter = p.controller.RegisterCounter(commitErrors, "Number of kafka commit errors")
-	p.consumeErrorsCounter = p.controller.RegisterCounter(consumeErrors, "Number of kafka consume errors")
+func (p *Plugin) RegisterPluginMetrics(ctl *metric.Ctl) {
+	p.commitErrorsCounter = ctl.RegisterCounter(commitErrors, "Number of kafka commit errors")
+	p.consumeErrorsCounter = ctl.RegisterCounter(consumeErrors, "Number of kafka consume errors")
 }
 
 func (p *Plugin) consume(ctx context.Context) {

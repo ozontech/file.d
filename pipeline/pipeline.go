@@ -59,19 +59,16 @@ type InputPluginController interface {
 	SuggestDecoder(t decoder.DecoderType) // set decoder if pipeline uses "auto" value for decoder
 	IncReadOps()                          // inc read ops for metric
 	IncMaxEventSizeExceeded()             // inc max event size exceeded counter
-	MetricsController
 }
 
 type ActionPluginController interface {
 	Commit(event *Event)    // commit offset of held event and skip further processing
 	Propagate(event *Event) // throw held event back to pipeline
-	MetricsController
 }
 
 type OutputPluginController interface {
 	Commit(event *Event) // notify input plugin that event is successfully processed and save offsets
 	Error(err string)
-	MetricsController
 }
 
 type MetricsController interface {
@@ -85,7 +82,6 @@ type (
 )
 
 type Pipeline struct {
-	*metric.Ctl
 	Name     string
 	started  bool
 	settings *Settings
@@ -115,6 +111,7 @@ type Pipeline struct {
 	outputInfo *OutputPluginInfo
 
 	metricsHolder *metricsHolder
+	metricsCtl    *metric.Ctl
 
 	// some debugging stuff
 	logger          *zap.SugaredLogger
@@ -168,14 +165,15 @@ func New(name string, settings *Settings, registry *prometheus.Registry) *Pipeli
 		},
 
 		metricsHolder: newMetricsHolder(name, registry, metricsGenInterval),
+		metricsCtl:    metric.New("pipeline_" + name),
 		streamer:      newStreamer(settings.EventTimeout),
 		eventPool:     newEventPool(settings.Capacity, settings.AvgEventSize),
 
 		eventLog:   make([]string, 0, 128),
 		eventLogMu: &sync.Mutex{},
 	}
-	pipeline.Ctl = metric.New(pipeline.subsystemName())
-	pipeline.antispamer = newAntispamer(settings.AntispamThreshold, antispamUnbanIterations, settings.MaintenanceInterval, pipeline.Ctl)
+
+	pipeline.antispamer = newAntispamer(settings.AntispamThreshold, antispamUnbanIterations, settings.MaintenanceInterval, pipeline.metricsCtl)
 
 	pipeline.registerMetrics()
 	pipeline.setDefaultMetrics()
@@ -206,20 +204,16 @@ func (p *Pipeline) IncMaxEventSizeExceeded() {
 	p.maxEventSizeExceededCounter.WithLabelValues().Inc()
 }
 
-func (p *Pipeline) subsystemName() string {
-	return "pipeline_" + p.Name
-}
-
 func (p *Pipeline) registerMetrics() {
-	p.inUseEventsGauge = p.RegisterGauge(inUseEvents, "Count of pool events which is used for processing")
-	p.eventPoolCapacityGauge = p.RegisterGauge(eventPoolCapacity, "Pool capacity value")
-	p.inputEventsCountCounter = p.RegisterCounter(inputEventsCount, "Count of events on pipeline input")
-	p.inputEventSizeCounter = p.RegisterCounter(inputEventsSize, "Size of events on pipeline input")
-	p.outputEventsCountCounter = p.RegisterCounter(outputEventsCount, "Count of events on pipeline output")
-	p.outputEventSizeCounter = p.RegisterCounter(outputEventsSize, "Size of events on pipeline output")
-	p.readOpsEventsSizeCounter = p.RegisterCounter(readOpsEventsSize, "Read OPS count")
-	p.wrongEventCRIFormatCounter = p.RegisterCounter(wrongEventCRIFormat, "Wrong event CRI format counter")
-	p.maxEventSizeExceededCounter = p.RegisterCounter(maxEventSizeExceeded, "Max event size exceeded counter")
+	p.inUseEventsGauge = p.metricsCtl.RegisterGauge(inUseEvents, "Count of pool events which is used for processing")
+	p.eventPoolCapacityGauge = p.metricsCtl.RegisterGauge(eventPoolCapacity, "Pool capacity value")
+	p.inputEventsCountCounter = p.metricsCtl.RegisterCounter(inputEventsCount, "Count of events on pipeline input")
+	p.inputEventSizeCounter = p.metricsCtl.RegisterCounter(inputEventsSize, "Size of events on pipeline input")
+	p.outputEventsCountCounter = p.metricsCtl.RegisterCounter(outputEventsCount, "Count of events on pipeline output")
+	p.outputEventSizeCounter = p.metricsCtl.RegisterCounter(outputEventsSize, "Size of events on pipeline output")
+	p.readOpsEventsSizeCounter = p.metricsCtl.RegisterCounter(readOpsEventsSize, "Read OPS count")
+	p.wrongEventCRIFormatCounter = p.metricsCtl.RegisterCounter(wrongEventCRIFormat, "Wrong event CRI format counter")
+	p.maxEventSizeExceededCounter = p.metricsCtl.RegisterCounter(maxEventSizeExceeded, "Max event size exceeded counter")
 }
 
 func (p *Pipeline) setDefaultMetrics() {
@@ -276,7 +270,9 @@ func (p *Pipeline) Start() {
 		Logger:              p.logger.Named("output " + p.outputInfo.Type),
 	}
 	p.logger.Infof("starting output plugin %q", p.outputInfo.Type)
+
 	p.output.Start(p.outputInfo.Config, outputParams)
+	p.output.RegisterPluginMetrics(p.metricsCtl)
 
 	p.logger.Infof("stating processors, count=%d", len(p.Procs))
 	for _, processor := range p.Procs {
@@ -289,7 +285,9 @@ func (p *Pipeline) Start() {
 		Controller:          p,
 		Logger:              p.logger.Named("input " + p.inputInfo.Type),
 	}
+
 	p.input.Start(p.inputInfo.Config, inputParams)
+	p.input.RegisterPluginMetrics(p.metricsCtl)
 
 	p.streamer.start()
 
@@ -516,7 +514,7 @@ func (p *Pipeline) newProc() *processor {
 		p.output,
 		p.streamer,
 		p.finalize,
-		p.Ctl,
+		p.metricsCtl,
 	)
 	for j, info := range p.actionInfos {
 		plugin, _ := info.Factory()

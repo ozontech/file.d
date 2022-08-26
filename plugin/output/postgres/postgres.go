@@ -16,6 +16,7 @@ import (
 
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
+	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
 )
 
@@ -75,7 +76,7 @@ type Plugin struct {
 	queryBuilder PgQueryBuilder
 	pool         PgxIface
 
-	//plugin`s metrics
+	//plugin metrics
 	discardedEventCounter  *prom.CounterVec
 	duplicatedEventCounter *prom.CounterVec
 	writtenEventCounter    *prom.CounterVec
@@ -178,10 +179,10 @@ func Factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 	return &Plugin{}, &Config{}
 }
 
-func (p *Plugin) registerPluginMetrics() {
-	p.discardedEventCounter = p.controller.RegisterCounter(discardedEvent, "Total pgsql discarded messages")
-	p.duplicatedEventCounter = p.controller.RegisterCounter(duplicatedEvent, "Total pgsql duplicated messages")
-	p.writtenEventCounter = p.controller.RegisterCounter(writtenEvent, "Total events written to pgsql")
+func (p *Plugin) RegisterPluginMetrics(ctl *metric.Ctl) {
+	p.discardedEventCounter = ctl.RegisterCounter(discardedEvent, "Total pgsql discarded messages")
+	p.duplicatedEventCounter = ctl.RegisterCounter(duplicatedEvent, "Total pgsql duplicated messages")
+	p.writtenEventCounter = ctl.RegisterCounter(writtenEvent, "Total events written to pgsql")
 }
 
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginParams) {
@@ -206,7 +207,6 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		p.logger.Fatal("'db_health_check_period' can't be <1")
 	}
 
-	p.registerPluginMetrics()
 	queryBuilder, err := NewQueryBuilder(p.config.Columns, p.config.Table)
 	if err != nil {
 		p.logger.Fatal(err)

@@ -17,6 +17,7 @@ import (
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/logger"
+	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/tls"
 )
@@ -56,7 +57,7 @@ type Plugin struct {
 	controller   pipeline.OutputPluginController
 	mu           *sync.Mutex
 
-	//plugin metric
+	//plugin metrics
 	sendErrorCounter      *prometheus.CounterVec
 	indexingErrorsCounter *prometheus.CounterVec
 }
@@ -206,8 +207,6 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 
 	p.maintenance(nil)
 
-	p.registerPluginMetrics()
-
 	p.logger.Infof("starting batcher: timeout=%d", p.config.BatchFlushTimeout_)
 	p.batcher = pipeline.NewBatcher(pipeline.BatcherOptions{
 		PipelineName:        params.PipelineName,
@@ -237,9 +236,9 @@ func (p *Plugin) Out(event *pipeline.Event) {
 	p.batcher.Add(event)
 }
 
-func (p *Plugin) registerPluginMetrics() {
-	p.sendErrorCounter = p.controller.RegisterCounter(sendError, "Total elasticsearch send errors")
-	p.indexingErrorsCounter = p.controller.RegisterCounter(indexingErrors, "Number of elasticsearch indexing errors")
+func (p *Plugin) RegisterPluginMetrics(ctl *metric.Ctl) {
+	p.sendErrorCounter = ctl.RegisterCounter(sendError, "Total elasticsearch send errors")
+	p.indexingErrorsCounter = ctl.RegisterCounter(indexingErrors, "Number of elasticsearch indexing errors")
 }
 
 func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {

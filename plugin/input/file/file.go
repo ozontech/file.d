@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/ozontech/file.d/metric"
 	prom "github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
 
@@ -57,7 +58,7 @@ type Plugin struct {
 	workers     []*worker
 	jobProvider *jobProvider
 
-	//plugin metric
+	//plugin metrics
 	possibleOffsetCorruptionCounter *prom.CounterVec
 }
 
@@ -192,8 +193,6 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	p.params = params
 	p.config = config.(*Config)
 
-	p.registerPluginMetrics()
-
 	p.config.OffsetsFileTmp = p.config.OffsetsFile + ".atomic"
 
 	p.jobProvider = NewJobProvider(p.config, p.possibleOffsetCorruptionCounter, p.logger)
@@ -204,8 +203,8 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	p.jobProvider.start()
 }
 
-func (p *Plugin) registerPluginMetrics() {
-	p.possibleOffsetCorruptionCounter = p.params.Controller.RegisterCounter(possibleOffsetCorruption, "Total number of possible offset corruptions")
+func (p *Plugin) RegisterPluginMetrics(ctl *metric.Ctl) {
+	p.possibleOffsetCorruptionCounter = ctl.RegisterCounter(possibleOffsetCorruption, "Total number of possible offset corruptions")
 }
 
 func (p *Plugin) startWorkers() {

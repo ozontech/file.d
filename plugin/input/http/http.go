@@ -11,6 +11,7 @@ import (
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/longpanic"
+	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/tls"
 )
@@ -94,7 +95,7 @@ type Plugin struct {
 	mu         *sync.Mutex
 	logger     *zap.SugaredLogger
 
-	//plugin metric
+	//plugin metrics
 	httpErrorCounter *prometheus.CounterVec
 }
 
@@ -143,8 +144,6 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	p.controller.DisableStreams()
 	p.sourceIDs = make([]pipeline.SourceID, 0)
 
-	p.registerPluginMetrics()
-
 	mux := http.NewServeMux()
 	switch p.config.EmulateMode {
 	case "elasticsearch":
@@ -159,8 +158,8 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	}
 }
 
-func (p *Plugin) registerPluginMetrics() {
-	p.httpErrorCounter = p.controller.RegisterCounter(httpError, "Total http errors")
+func (p *Plugin) RegisterPluginMetrics(ctl *metric.Ctl) {
+	p.httpErrorCounter = ctl.RegisterCounter(httpError, "Total http errors")
 }
 
 func (p *Plugin) listenHTTP() {

@@ -5,6 +5,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/ozontech/file.d/fd"
+	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
 	prom "github.com/prometheus/client_golang/prometheus"
 	insaneJSON "github.com/vitkovskii/insane-json"
@@ -45,7 +46,7 @@ type Plugin struct {
 	valueNodes []*insaneJSON.Node
 	logger     *zap.SugaredLogger
 
-	//plugin metric
+	//plugin metrics
 	timeActivatedCounter *prom.CounterVec
 }
 
@@ -167,11 +168,10 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 	p.valueNodes = make([]*insaneJSON.Node, 0)
 	p.logger = params.Logger
 	p.config.Masks = compileMasks(p.config.Masks, p.logger)
-	p.registerPluginMetrics()
 }
 
-func (p *Plugin) registerPluginMetrics() {
-	p.timeActivatedCounter = p.params.Controller.RegisterCounter(timesActivated, "Number of times mask plugin found the provided pattern")
+func (p *Plugin) RegisterPluginMetrics(ctl *metric.Ctl) {
+	p.timeActivatedCounter = ctl.RegisterCounter(timesActivated, "Number of times mask plugin found the provided pattern")
 }
 
 func (p *Plugin) Stop() {

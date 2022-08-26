@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/ozontech/file.d/fd"
+	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
 )
 
@@ -40,3 +41,5 @@ func (p *Plugin) Out(event *pipeline.Event) {
 	fmt.Println(event.Root.EncodeToString())
 	p.controller.Commit(event)
 }
+
+func (_ *Plugin) RegisterPluginMetrics(ctl *metric.Ctl) {}

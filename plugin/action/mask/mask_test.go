@@ -6,6 +6,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/test"
 	"github.com/stretchr/testify/assert"
@@ -179,6 +180,8 @@ func TestMaskAddExtraField(t *testing.T) {
 		Controller: pipeline.NewActionOutputPluginController(),
 		Logger:     zap.L().Sugar(),
 	})
+	metricCtl := metric.New("test")
+	plugin.RegisterPluginMetrics(metricCtl)
 	plugin.config.Masks[0].Re_ = regexp.MustCompile(plugin.config.Masks[0].Re)
 
 	result := plugin.Do(event)
