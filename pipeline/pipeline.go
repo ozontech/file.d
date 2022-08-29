@@ -264,7 +264,10 @@ func (p *Pipeline) Start() {
 	p.output.RegisterPluginMetrics(p.metricsCtl)
 
 	p.logger.Infof("stating processors, count=%d", len(p.Procs))
-	for _, processor := range p.Procs {
+	for i, processor := range p.Procs {
+		if i == 0 {
+			processor.registerMetrics()
+		}
 		processor.start(p.actionParams, p.logger)
 	}
 
@@ -303,6 +306,7 @@ func (p *Pipeline) Stop() {
 	p.logger.Infof("stopping %q output", p.Name)
 	p.output.Stop()
 
+	p.metricsCtl.UnregisterMetrics()
 	p.shouldStop = true
 }
 

@@ -107,10 +107,15 @@ func (p *processor) start(params *PluginDefaultParams, logger *zap.SugaredLogger
 			Controller:          p,
 			Logger:              logger.Named("action").Named(actionInfo.Type),
 		})
-		action.RegisterPluginMetrics(p.metricCtl)
 	}
 
 	longpanic.Go(p.process)
+}
+
+func (p *processor) registerMetrics() {
+	for _, action := range p.actions {
+		action.RegisterPluginMetrics(p.metricCtl)
+	}
 }
 
 func (p *processor) process() {

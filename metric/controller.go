@@ -62,3 +62,14 @@ func (mc *Ctl) RegisterGauge(name, help string, labels ...string) *prom.GaugeVec
 	prom.DefaultRegisterer.MustRegister(promGauge)
 	return promGauge
 }
+
+func (mc *Ctl) UnregisterMetrics() {
+	for key, metric := range mc.counters {
+		prom.Unregister(metric)
+		delete(mc.counters, key)
+	}
+	for key, metric := range mc.gauges {
+		prom.Unregister(metric)
+		delete(mc.counters, key)
+	}
+}
