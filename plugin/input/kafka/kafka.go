@@ -18,11 +18,6 @@ It reads events from multiple Kafka topics using `sarama` library.
 > It guarantees at "at-least-once delivery" due to the commitment mechanism.
 }*/
 
-const (
-	commitErrors  = "input_kafka_commit_errors"
-	consumeErrors = "input_kafka_consume_errors"
-)
-
 type Plugin struct {
 	config        *Config
 	logger        *zap.SugaredLogger
@@ -94,8 +89,8 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 }
 
 func (p *Plugin) RegisterPluginMetrics(ctl *metric.Ctl) {
-	p.commitErrorsCounter = ctl.RegisterCounter(commitErrors, "Number of kafka commit errors")
-	p.consumeErrorsCounter = ctl.RegisterCounter(consumeErrors, "Number of kafka consume errors")
+	p.commitErrorsCounter = ctl.RegisterCounter("input_kafka_commit_errors", "Number of kafka commit errors")
+	p.consumeErrorsCounter = ctl.RegisterCounter("input_kafka_consume_errors", "Number of kafka consume errors")
 }
 
 func (p *Plugin) consume(ctx context.Context) {

@@ -110,9 +110,6 @@ const (
 	dirSep             = "/"
 	StaticBucketDir    = "static_buckets"
 	DynamicBucketDir   = "dynamic_buckets"
-
-	// errors
-	sendError = "output_s3_send_error"
 )
 
 var (
@@ -250,7 +247,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 }
 
 func (p *Plugin) RegisterPluginMetrics(ctl *metric.Ctl) {
-	p.sendErrorCounter = ctl.RegisterCounter(sendError, "Total s3 send errors")
+	p.sendErrorCounter = ctl.RegisterCounter("output_s3_send_error", "Total s3 send errors")
 }
 
 func (p *Plugin) StartWithMinio(config pipeline.AnyConfig, params *pipeline.OutputPluginParams, factory objStoreFactory) {

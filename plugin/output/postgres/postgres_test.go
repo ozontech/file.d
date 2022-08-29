@@ -88,7 +88,6 @@ func TestPrivateOut(t *testing.T) {
 		pool:         pool,
 		logger:       testLogger,
 		ctx:          ctx,
-		controller:   pipeline.NewEmptyOutputPluginController(),
 	}
 
 	metricCtl := metric.New("test")
@@ -165,7 +164,6 @@ func TestPrivateOutWithRetry(t *testing.T) {
 		pool:         pool,
 		logger:       testLogger,
 		ctx:          ctx,
-		controller:   pipeline.NewEmptyOutputPluginController(),
 	}
 
 	metricCtl := metric.New("test")
@@ -220,7 +218,6 @@ func TestPrivateOutNoGoodEvents(t *testing.T) {
 		config:       &config,
 		queryBuilder: builder,
 		logger:       testLogger,
-		controller:   pipeline.NewEmptyOutputPluginController(),
 	}
 
 	metricCtl := metric.New("test")
@@ -302,7 +299,6 @@ func TestPrivateOutDeduplicatedEvents(t *testing.T) {
 		pool:         pool,
 		logger:       testLogger,
 		ctx:          ctx,
-		controller:   pipeline.NewEmptyOutputPluginController(),
 	}
 
 	metricCtl := metric.New("test")
@@ -370,7 +366,6 @@ func TestPrivateOutWrongTypeInField(t *testing.T) {
 		config:       &config,
 		queryBuilder: builder,
 		logger:       testLogger,
-		controller:   pipeline.NewEmptyOutputPluginController(),
 	}
 
 	metricCtl := metric.New("test")
@@ -477,7 +472,6 @@ func TestPrivateOutFewUniqueEventsYetWithDeduplicationEventsAnpooladEvents(t *te
 		pool:         pool,
 		logger:       testLogger,
 		ctx:          ctx,
-		controller:   pipeline.NewEmptyOutputPluginController(),
 	}
 
 	metricCtl := metric.New("test")

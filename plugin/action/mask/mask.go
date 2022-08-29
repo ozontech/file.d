@@ -34,8 +34,7 @@ pipelines:
 }*/
 
 const (
-	substitution   = byte('*')
-	timesActivated = "mask_times_activated"
+	substitution = byte('*')
 )
 
 type Plugin struct {
@@ -171,7 +170,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 }
 
 func (p *Plugin) RegisterPluginMetrics(ctl *metric.Ctl) {
-	p.timeActivatedCounter = ctl.RegisterCounter(timesActivated, "Number of times mask plugin found the provided pattern")
+	p.timeActivatedCounter = ctl.RegisterCounter("mask_times_activated", "Number of times mask plugin found the provided pattern")
 }
 
 func (p *Plugin) Stop() {

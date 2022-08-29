@@ -46,10 +46,6 @@ pipelines:
 ```
 }*/
 
-const (
-	possibleOffsetCorruption = "input_file_possible_offset_corruptions_total"
-)
-
 type Plugin struct {
 	config *Config
 	logger *zap.SugaredLogger
@@ -204,7 +200,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 }
 
 func (p *Plugin) RegisterPluginMetrics(ctl *metric.Ctl) {
-	p.possibleOffsetCorruptionCounter = ctl.RegisterCounter(possibleOffsetCorruption, "Total number of possible offset corruptions")
+	p.possibleOffsetCorruptionCounter = ctl.RegisterCounter("input_file_possible_offset_corruptions_total", "Total number of possible offset corruptions")
 }
 
 func (p *Plugin) startWorkers() {

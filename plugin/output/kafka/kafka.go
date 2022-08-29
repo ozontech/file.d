@@ -21,7 +21,6 @@ It sends the event batches to kafka brokers using `sarama` lib.
 
 const (
 	outPluginType = "kafka"
-	sendError     = "output_kafka_send_errors"
 )
 
 type data struct {
@@ -130,7 +129,7 @@ func (p *Plugin) Out(event *pipeline.Event) {
 }
 
 func (p *Plugin) RegisterPluginMetrics(ctl *metric.Ctl) {
-	p.sendErrorCounter = ctl.RegisterCounter(sendError, "Total Kafka send errors")
+	p.sendErrorCounter = ctl.RegisterCounter("output_kafka_send_errors", "Total Kafka send errors")
 }
 
 func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {

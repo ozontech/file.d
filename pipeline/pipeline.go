@@ -37,17 +37,6 @@ const (
 
 	antispamUnbanIterations = 4
 	metricsGenInterval      = time.Hour
-
-	inputEventsCount     = "input_events_count"
-	inputEventsSize      = "input_events_size"
-	outputEventsCount    = "output_events_count"
-	outputEventsSize     = "output_events_size"
-	readOpsEventsSize    = "read_ops_count"
-	maxEventSizeExceeded = "max_event_size_exceeded"
-	eventPoolCapacity    = "event_pool_capacity"
-	inUseEvents          = "event_pool_in_use_events"
-
-	wrongEventCRIFormat = "wrong_event_cri_format"
 )
 
 type finalizeFn = func(event *Event, notifyInput bool, backEvent bool)
@@ -205,15 +194,15 @@ func (p *Pipeline) IncMaxEventSizeExceeded() {
 }
 
 func (p *Pipeline) registerMetrics() {
-	p.inUseEventsGauge = p.metricsCtl.RegisterGauge(inUseEvents, "Count of pool events which is used for processing")
-	p.eventPoolCapacityGauge = p.metricsCtl.RegisterGauge(eventPoolCapacity, "Pool capacity value")
-	p.inputEventsCountCounter = p.metricsCtl.RegisterCounter(inputEventsCount, "Count of events on pipeline input")
-	p.inputEventSizeCounter = p.metricsCtl.RegisterCounter(inputEventsSize, "Size of events on pipeline input")
-	p.outputEventsCountCounter = p.metricsCtl.RegisterCounter(outputEventsCount, "Count of events on pipeline output")
-	p.outputEventSizeCounter = p.metricsCtl.RegisterCounter(outputEventsSize, "Size of events on pipeline output")
-	p.readOpsEventsSizeCounter = p.metricsCtl.RegisterCounter(readOpsEventsSize, "Read OPS count")
-	p.wrongEventCRIFormatCounter = p.metricsCtl.RegisterCounter(wrongEventCRIFormat, "Wrong event CRI format counter")
-	p.maxEventSizeExceededCounter = p.metricsCtl.RegisterCounter(maxEventSizeExceeded, "Max event size exceeded counter")
+	p.inUseEventsGauge = p.metricsCtl.RegisterGauge("event_pool_in_use_events", "Count of pool events which is used for processing")
+	p.eventPoolCapacityGauge = p.metricsCtl.RegisterGauge("event_pool_capacity", "Pool capacity value")
+	p.inputEventsCountCounter = p.metricsCtl.RegisterCounter("input_events_count", "Count of events on pipeline input")
+	p.inputEventSizeCounter = p.metricsCtl.RegisterCounter("input_events_size", "Size of events on pipeline input")
+	p.outputEventsCountCounter = p.metricsCtl.RegisterCounter("output_events_count", "Count of events on pipeline output")
+	p.outputEventSizeCounter = p.metricsCtl.RegisterCounter("output_events_size", "Size of events on pipeline output")
+	p.readOpsEventsSizeCounter = p.metricsCtl.RegisterCounter("read_ops_count", "Read OPS count")
+	p.wrongEventCRIFormatCounter = p.metricsCtl.RegisterCounter("wrong_event_cri_format", "Wrong event CRI format counter")
+	p.maxEventSizeExceededCounter = p.metricsCtl.RegisterCounter("max_event_size_exceeded", "Max event size exceeded counter")
 }
 
 func (p *Pipeline) setDefaultMetrics() {

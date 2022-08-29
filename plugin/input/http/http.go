@@ -78,8 +78,6 @@ curl "localhost:9200/_bulk" -H 'Content-Type: application/json' -d \
 }*/
 
 const (
-	httpError = "input_http_errors"
-
 	readBufDefaultLen = 16 * 1024
 )
 
@@ -159,7 +157,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 }
 
 func (p *Plugin) RegisterPluginMetrics(ctl *metric.Ctl) {
-	p.httpErrorCounter = ctl.RegisterCounter(httpError, "Total http errors")
+	p.httpErrorCounter = ctl.RegisterCounter("input_http_errors", "Total http errors")
 }
 
 func (p *Plugin) listenHTTP() {

@@ -26,7 +26,6 @@ It sends events to splunk.
 
 const (
 	outPluginType = "splunk"
-	sendError     = "output_splunk_send_error"
 )
 
 type Plugin struct {
@@ -124,7 +123,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 }
 
 func (p *Plugin) RegisterPluginMetrics(ctl *metric.Ctl) {
-	p.sendErrorCounter = ctl.RegisterCounter(sendError, "Total splunk send errors")
+	p.sendErrorCounter = ctl.RegisterCounter("output_splunk_send_error", "Total splunk send errors")
 }
 
 func (p *Plugin) Stop() {

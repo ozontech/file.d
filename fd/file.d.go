@@ -19,10 +19,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
-const (
-	longPanic = "long_panic"
-)
-
 type FileD struct {
 	config    *cfg.Config
 	httpAddr  string
@@ -60,7 +56,7 @@ func (f *FileD) Start() {
 
 func (f *FileD) initMetrics() {
 	f.metricCtl = metric.New("file_d")
-	f.longPanicCounter = f.metricCtl.RegisterCounter(longPanic, "Count of panics in the LongPanic")
+	f.longPanicCounter = f.metricCtl.RegisterCounter("long_panic", "Count of panics in the LongPanic")
 	longpanic.SetOnPanicHandler(func(_ error) {
 		f.longPanicCounter.WithLabelValues().Inc()
 	})

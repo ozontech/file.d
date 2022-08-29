@@ -41,11 +41,6 @@ const (
 	// required for PgBouncers that doesn't support prepared statements.
 	preferSimpleProtocol = pgx.QuerySimpleProtocol(true)
 
-	// metric
-	discardedEvent  = "output_postgres_event_discarded"
-	duplicatedEvent = "output_postgres_event_duplicated"
-	writtenEvent    = "output_postgres_event_written"
-
 	nineThousandYear = 221842627200
 )
 
@@ -180,9 +175,9 @@ func Factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 }
 
 func (p *Plugin) RegisterPluginMetrics(ctl *metric.Ctl) {
-	p.discardedEventCounter = ctl.RegisterCounter(discardedEvent, "Total pgsql discarded messages")
-	p.duplicatedEventCounter = ctl.RegisterCounter(duplicatedEvent, "Total pgsql duplicated messages")
-	p.writtenEventCounter = ctl.RegisterCounter(writtenEvent, "Total events written to pgsql")
+	p.discardedEventCounter = ctl.RegisterCounter("output_postgres_event_discarded", "Total pgsql discarded messages")
+	p.duplicatedEventCounter = ctl.RegisterCounter("output_postgres_event_duplicated", "Total pgsql duplicated messages")
+	p.writtenEventCounter = ctl.RegisterCounter("output_postgres_event_written", "Total events written to pgsql")
 }
 
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginParams) {

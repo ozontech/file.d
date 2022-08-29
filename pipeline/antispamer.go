@@ -22,11 +22,6 @@ type antispamer struct {
 	antispamBanCounter  *prom.CounterVec
 }
 
-const (
-	antispamActive = "antispam_active"
-	antispamBan    = "antispam_ban_count"
-)
-
 func newAntispamer(threshold int, unbanIterations int, maintenanceInterval time.Duration, metricsController *metric.Ctl) *antispamer {
 	if threshold != 0 {
 		logger.Infof("antispam enabled, threshold=%d/%d sec", threshold, maintenanceInterval/time.Second)
@@ -39,10 +34,10 @@ func newAntispamer(threshold int, unbanIterations int, maintenanceInterval time.
 		metricsController: metricsController,
 	}
 
-	antispamer.antispamActiveGauge = metricsController.RegisterGauge(antispamActive, "Gauge indicates whether the antispam is enabled")
+	antispamer.antispamActiveGauge = metricsController.RegisterGauge("antispam_active", "Gauge indicates whether the antispam is enabled")
 	// not enabled by default
 	antispamer.antispamActiveGauge.WithLabelValues().Set(0)
-	antispamer.antispamBanCounter = metricsController.RegisterCounter(antispamBan, "How many times a source was banned")
+	antispamer.antispamBanCounter = metricsController.RegisterCounter("antispam_ban_count", "How many times a source was banned")
 
 	return antispamer
 }

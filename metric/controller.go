@@ -8,8 +8,6 @@ import (
 
 const (
 	PromNamespace = "file_d"
-
-	metricDuplicate = "metric_duplicate_counter"
 )
 
 type Ctl struct {
@@ -24,7 +22,6 @@ func New(subsystem string) *Ctl {
 		counters:  make(map[string]*prom.CounterVec),
 		gauges:    make(map[string]*prom.GaugeVec),
 	}
-	ctl.RegisterCounter(metricDuplicate, "Counter for duplicate metrics", "source")
 	return ctl
 }
 
@@ -38,8 +35,7 @@ func (mc *Ctl) RegisterCounter(name, help string, labels ...string) *prom.Counte
 	}, labels)
 
 	if _, hasCounter := mc.counters[name]; hasCounter {
-		mc.incMetricDuplicate(name)
-		return mc.counters[name]
+		logger.Panicf("attempt to register counter twice name=%s, subsystem=%s", name, mc.subsystem)
 	}
 
 	mc.counters[name] = promCounter
@@ -58,17 +54,11 @@ func (mc *Ctl) RegisterGauge(name, help string, labels ...string) *prom.GaugeVec
 	}, labels)
 
 	if _, hasGauge := mc.gauges[name]; hasGauge {
-		mc.incMetricDuplicate(name)
-		return mc.gauges[name]
+		logger.Panicf("attempt to register gauge twice name=%s, subsystem=%s", name, mc.subsystem)
 	}
 
 	mc.gauges[name] = promGauge
 	prom.DefaultRegisterer.Unregister(promGauge)
 	prom.DefaultRegisterer.MustRegister(promGauge)
 	return promGauge
-}
-
-func (mc *Ctl) incMetricDuplicate(name string) {
-	logger.Errorf("rewriting existent metric")
-	mc.counters[metricDuplicate].WithLabelValues(name).Inc()
 }

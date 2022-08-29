@@ -36,8 +36,6 @@ Allowed characters in field names are letters, numbers, underscores, dashes, and
 
 const (
 	outPluginType = "gelf"
-	// errors
-	sendError = "output_gelf_send_error"
 )
 
 type Plugin struct {
@@ -211,7 +209,7 @@ func (p *Plugin) Out(event *pipeline.Event) {
 }
 
 func (p *Plugin) RegisterPluginMetrics(ctl *metric.Ctl) {
-	p.sendErrorCounter = ctl.RegisterCounter(sendError, "Total GELF send errors")
+	p.sendErrorCounter = ctl.RegisterCounter("output_gelf_send_error", "Total GELF send errors")
 }
 
 func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {

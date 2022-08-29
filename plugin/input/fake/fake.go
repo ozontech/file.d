@@ -26,7 +26,7 @@ func init() {
 }
 
 func Factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
-	return &Plugin{controller: pipeline.NewEmptyInputPluginController()}, &Config{}
+	return &Plugin{}, &Config{}
 }
 
 func (p *Plugin) Start(_ pipeline.AnyConfig, params *pipeline.InputPluginParams) {

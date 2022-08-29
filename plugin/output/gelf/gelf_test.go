@@ -119,7 +119,6 @@ func TestFormatEvent(t *testing.T) {
 					AvgEventSize: 128,
 				},
 			},
-			Controller: pipeline.NewEmptyOutputPluginController(),
 		}
 		plugin.Start(config, params)
 		plugin.formatEvent([]byte{}, event)

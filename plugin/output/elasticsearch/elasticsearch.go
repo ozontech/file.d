@@ -28,15 +28,9 @@ If a network error occurs, the batch will infinitely try to be delivered to the 
 }*/
 
 const (
-	outPluginType = "elasticsearch"
-
-	// errors
-	sendError      = "output_elasticsearch_send_error"
-	indexingErrors = "output_elasticsearch_index_error"
-
+	outPluginType     = "elasticsearch"
 	NDJSONContentType = "application/x-ndjson"
-
-	retryDelay = time.Second
+	retryDelay        = time.Second
 )
 
 var (
@@ -237,8 +231,8 @@ func (p *Plugin) Out(event *pipeline.Event) {
 }
 
 func (p *Plugin) RegisterPluginMetrics(ctl *metric.Ctl) {
-	p.sendErrorCounter = ctl.RegisterCounter(sendError, "Total elasticsearch send errors")
-	p.indexingErrorsCounter = ctl.RegisterCounter(indexingErrors, "Number of elasticsearch indexing errors")
+	p.sendErrorCounter = ctl.RegisterCounter("output_elasticsearch_send_error", "Total elasticsearch send errors")
+	p.indexingErrorsCounter = ctl.RegisterCounter("output_elasticsearch_index_error", "Number of elasticsearch indexing errors")
 }
 
 func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {

@@ -204,8 +204,7 @@ func NewEmptyOutputPluginParams() *pipeline.OutputPluginParams {
 			PipelineName:     "test_pipeline",
 			PipelineSettings: &pipeline.Settings{},
 		},
-		Controller: pipeline.NewEmptyOutputPluginController(),
-		Logger:     zap.L().Sugar(),
+		Logger: zap.L().Sugar(),
 	}
 }
 

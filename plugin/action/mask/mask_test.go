@@ -177,8 +177,7 @@ func TestMaskAddExtraField(t *testing.T) {
 			PipelineName:     "test_pipeline",
 			PipelineSettings: &pipeline.Settings{},
 		},
-		Controller: pipeline.NewActionOutputPluginController(),
-		Logger:     zap.L().Sugar(),
+		Logger: zap.L().Sugar(),
 	})
 	metricCtl := metric.New("test")
 	plugin.RegisterPluginMetrics(metricCtl)

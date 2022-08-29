@@ -33,7 +33,7 @@ var (
 )
 
 func testFactory(objStoreF objStoreFactory) (pipeline.AnyPlugin, pipeline.AnyConfig) {
-	return &testS3Plugin{objStoreF: objStoreF, Plugin: Plugin{controller: pipeline.NewEmptyOutputPluginController()}}, &Config{}
+	return &testS3Plugin{objStoreF: objStoreF}, &Config{}
 }
 
 type testS3Plugin struct {
