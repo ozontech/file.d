@@ -1,10 +1,11 @@
 package file
 
 import (
-	"go.uber.org/atomic"
 	"os"
 	"sync"
 	"testing"
+
+	"go.uber.org/atomic"
 
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/stretchr/testify/assert"

@@ -1,9 +1,10 @@
 package pipeline
 
 import (
-	"github.com/stretchr/testify/assert"
 	"math/rand"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestDeltaWrapper(t *testing.T) {

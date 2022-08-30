@@ -84,3 +84,8 @@ mock:
 	go install github.com/golang/mock/mockgen
 	mockgen -source=plugin/output/s3/s3.go -destination=plugin/output/s3/mock/s3.go
 	mockgen -source=plugin/output/postgres/postgres.go -destination=plugin/output/postgres/mock/postgres.go
+
+.PHONY: fmt
+fmt:
+	goimports -l -w ./
+	gofmt -l -w ./
