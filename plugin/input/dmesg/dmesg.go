@@ -7,15 +7,14 @@ import (
 	"time"
 
 	"github.com/euank/go-kmsg-parser/kmsgparser"
-	"github.com/prometheus/client_golang/prometheus"
-	insaneJSON "github.com/vitkovskii/insane-json"
-	"go.uber.org/zap"
-
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/longpanic"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/offset"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/prometheus/client_golang/prometheus"
+	insaneJSON "github.com/vitkovskii/insane-json"
+	"go.uber.org/zap"
 )
 
 const (
@@ -33,7 +32,7 @@ type Plugin struct {
 	parser     kmsgparser.Parser
 	logger     *zap.SugaredLogger
 
-	//plugin metrics
+	// plugin metrics
 	offsetErrorsCounter *prometheus.CounterVec
 }
 
@@ -83,7 +82,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	longpanic.Go(p.read)
 }
 
-func (p *Plugin) RegisterPluginMetrics(ctl *metric.Ctl) {
+func (p *Plugin) RegisterMetrics(ctl *metric.Ctl) {
 	p.offsetErrorsCounter = ctl.RegisterCounter(offsetErrors, "Number of errors occurred when saving/loading offset")
 }
 

@@ -260,14 +260,12 @@ func (p *Pipeline) Start() {
 	}
 	p.logger.Infof("starting output plugin %q", p.outputInfo.Type)
 
+	p.output.RegisterMetrics(p.metricsCtl)
 	p.output.Start(p.outputInfo.Config, outputParams)
-	p.output.RegisterPluginMetrics(p.metricsCtl)
 
 	p.logger.Infof("stating processors, count=%d", len(p.Procs))
-	for i, processor := range p.Procs {
-		if i == 0 {
-			processor.registerMetrics()
-		}
+	for _, processor := range p.Procs {
+		processor.registerMetrics(p.metricsCtl)
 		processor.start(p.actionParams, p.logger)
 	}
 
@@ -278,8 +276,8 @@ func (p *Pipeline) Start() {
 		Logger:              p.logger.Named("input " + p.inputInfo.Type),
 	}
 
+	p.input.RegisterMetrics(p.metricsCtl)
 	p.input.Start(p.inputInfo.Config, inputParams)
-	p.input.RegisterPluginMetrics(p.metricsCtl)
 
 	p.streamer.start()
 
@@ -556,6 +554,7 @@ func (p *Pipeline) expandProcs() {
 	for x := 0; x < int(to-from); x++ {
 		proc := p.newProc()
 		p.Procs = append(p.Procs, proc)
+		proc.registerMetrics(p.metricsCtl)
 		proc.start(p.actionParams, p.logger)
 	}
 

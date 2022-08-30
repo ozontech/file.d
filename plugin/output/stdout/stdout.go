@@ -42,4 +42,4 @@ func (p *Plugin) Out(event *pipeline.Event) {
 	p.controller.Commit(event)
 }
 
-func (_ *Plugin) RegisterPluginMetrics(ctl *metric.Ctl) {}
+func (_ *Plugin) RegisterMetrics(ctl *metric.Ctl) {}

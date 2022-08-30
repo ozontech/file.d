@@ -10,12 +10,10 @@ import (
 	"go.uber.org/atomic"
 
 	"github.com/ozontech/file.d/logger"
-	"github.com/ozontech/file.d/metric"
 )
 
 type batcherTail struct {
 	commit func(event *Event)
-	*metric.Ctl
 }
 
 func (b *batcherTail) Commit(event *Event) {

@@ -1,8 +1,6 @@
 package metric
 
 import (
-	"github.com/ozontech/file.d/buildinfo"
-	"github.com/ozontech/file.d/logger"
 	prom "github.com/prometheus/client_golang/prometheus"
 )
 
@@ -27,15 +25,14 @@ func New(subsystem string) *Ctl {
 
 func (mc *Ctl) RegisterCounter(name, help string, labels ...string) *prom.CounterVec {
 	promCounter := prom.NewCounterVec(prom.CounterOpts{
-		Namespace:   PromNamespace,
-		Subsystem:   mc.subsystem,
-		Name:        name,
-		Help:        help,
-		ConstLabels: map[string]string{"version": buildinfo.Version},
+		Namespace: PromNamespace,
+		Subsystem: mc.subsystem,
+		Name:      name,
+		Help:      help,
 	}, labels)
 
-	if _, hasCounter := mc.counters[name]; hasCounter {
-		logger.Panicf("attempt to register counter twice name=%s, subsystem=%s", name, mc.subsystem)
+	if metric, hasCounter := mc.counters[name]; hasCounter {
+		return metric
 	}
 
 	mc.counters[name] = promCounter
@@ -46,15 +43,14 @@ func (mc *Ctl) RegisterCounter(name, help string, labels ...string) *prom.Counte
 
 func (mc *Ctl) RegisterGauge(name, help string, labels ...string) *prom.GaugeVec {
 	promGauge := prom.NewGaugeVec(prom.GaugeOpts{
-		Namespace:   PromNamespace,
-		Subsystem:   mc.subsystem,
-		Name:        name,
-		Help:        help,
-		ConstLabels: map[string]string{"version": buildinfo.Version},
+		Namespace: PromNamespace,
+		Subsystem: mc.subsystem,
+		Name:      name,
+		Help:      help,
 	}, labels)
 
-	if _, hasGauge := mc.gauges[name]; hasGauge {
-		logger.Panicf("attempt to register gauge twice name=%s, subsystem=%s", name, mc.subsystem)
+	if metric, hasGauge := mc.gauges[name]; hasGauge {
+		return metric
 	}
 
 	mc.gauges[name] = promGauge

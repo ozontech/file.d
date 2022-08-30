@@ -87,5 +87,5 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	return pipeline.ActionDiscard
 }
 
-func (p *Plugin) RegisterPluginMetrics(ctl *metric.Ctl) {
+func (p *Plugin) RegisterMetrics(ctl *metric.Ctl) {
 }

@@ -4,13 +4,12 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/ozontech/file.d/metric"
-	prom "github.com/prometheus/client_golang/prometheus"
-	"go.uber.org/zap"
-
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
+	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
+	prom "github.com/prometheus/client_golang/prometheus"
+	"go.uber.org/zap"
 )
 
 /*{ introduction
@@ -54,7 +53,7 @@ type Plugin struct {
 	workers     []*worker
 	jobProvider *jobProvider
 
-	//plugin metrics
+	// plugin metrics
 	possibleOffsetCorruptionCounter *prom.CounterVec
 }
 
@@ -199,7 +198,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	p.jobProvider.start()
 }
 
-func (p *Plugin) RegisterPluginMetrics(ctl *metric.Ctl) {
+func (p *Plugin) RegisterMetrics(ctl *metric.Ctl) {
 	p.possibleOffsetCorruptionCounter = ctl.RegisterCounter("input_file_possible_offset_corruptions_total", "Total number of possible offset corruptions")
 }
 

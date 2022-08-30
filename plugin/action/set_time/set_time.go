@@ -94,5 +94,5 @@ func (p *Plugin) do(event *pipeline.Event, t time.Time) pipeline.ActionResult {
 	return pipeline.ActionPass
 }
 
-func (p *Plugin) RegisterPluginMetrics(ctl *metric.Ctl) {
+func (p *Plugin) RegisterMetrics(ctl *metric.Ctl) {
 }

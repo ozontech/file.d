@@ -115,5 +115,5 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	return p.jp.Do(event)
 }
 
-func (p *Plugin) RegisterPluginMetrics(ctl *metric.Ctl) {
+func (p *Plugin) RegisterMetrics(ctl *metric.Ctl) {
 }

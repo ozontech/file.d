@@ -45,7 +45,7 @@ type Plugin struct {
 	valueNodes []*insaneJSON.Node
 	logger     *zap.SugaredLogger
 
-	//plugin metrics
+	//  plugin metrics
 	timeActivatedCounter *prom.CounterVec
 }
 
@@ -169,7 +169,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 	p.config.Masks = compileMasks(p.config.Masks, p.logger)
 }
 
-func (p *Plugin) RegisterPluginMetrics(ctl *metric.Ctl) {
+func (p *Plugin) RegisterMetrics(ctl *metric.Ctl) {
 	p.timeActivatedCounter = ctl.RegisterCounter("mask_times_activated", "Number of times mask plugin found the provided pattern")
 }
 

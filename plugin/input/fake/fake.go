@@ -42,7 +42,7 @@ func (p *Plugin) Commit(event *pipeline.Event) {
 	}
 }
 
-func (p *Plugin) RegisterPluginMetrics(ctl *metric.Ctl) {
+func (p *Plugin) RegisterMetrics(ctl *metric.Ctl) {
 }
 
 // ! fn-list

@@ -148,5 +148,5 @@ func (p *Plugin) Stop() {
 	p.fp.Stop()
 }
 
-func (p *Plugin) RegisterPluginMetrics(ctl *metric.Ctl) {
+func (p *Plugin) RegisterMetrics(ctl *metric.Ctl) {
 }

@@ -9,14 +9,13 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/ozontech/file.d/logger"
+	"github.com/ozontech/file.d/longpanic"
+	"github.com/ozontech/file.d/pipeline"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/rjeczalik/notify"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
-
-	"github.com/ozontech/file.d/logger"
-	"github.com/ozontech/file.d/longpanic"
-	"github.com/ozontech/file.d/pipeline"
 )
 
 const (
@@ -54,7 +53,7 @@ type jobProvider struct {
 	offsetsCommitted *atomic.Int64
 	logger           *zap.SugaredLogger
 
-	//provider metric
+	//provider metrics
 	possibleOffsetCorruption *prometheus.CounterVec
 }
 

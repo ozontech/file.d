@@ -15,17 +15,15 @@ import (
 	"github.com/ozontech/file.d/longpanic"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
-
 	"go.uber.org/zap"
 	"golang.org/x/net/context"
 )
 
-// todo: поглядеть не нарушает ли логику и не ломает ли тесты
 type Plugable interface {
 	Start(config pipeline.AnyConfig, params *pipeline.OutputPluginParams)
 	Out(event *pipeline.Event)
 	Stop()
-	RegisterPluginMetrics(ctl *metric.Ctl)
+	RegisterMetrics(ctl *metric.Ctl)
 }
 
 type Plugin struct {
@@ -163,7 +161,7 @@ func (p *Plugin) Out(event *pipeline.Event) {
 	p.batcher.Add(event)
 }
 
-func (p *Plugin) RegisterPluginMetrics(ctl *metric.Ctl) {
+func (p *Plugin) RegisterMetrics(ctl *metric.Ctl) {
 }
 
 func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {

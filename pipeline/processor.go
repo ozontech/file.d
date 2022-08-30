@@ -66,8 +66,6 @@ type processor struct {
 	recoverFromPanic func()
 
 	metricsValues []string
-
-	metricCtl *metric.Ctl
 }
 
 var id = 0
@@ -81,7 +79,6 @@ func NewProcessor(
 	metricsController *metric.Ctl,
 ) *processor {
 	processor := &processor{
-		metricCtl:     metricsController,
 		id:            id,
 		streamer:      streamer,
 		metricsHolder: metricsHolder,
@@ -112,9 +109,9 @@ func (p *processor) start(params *PluginDefaultParams, logger *zap.SugaredLogger
 	longpanic.Go(p.process)
 }
 
-func (p *processor) registerMetrics() {
+func (p *processor) registerMetrics(ctl *metric.Ctl) {
 	for _, action := range p.actions {
-		action.RegisterPluginMetrics(p.metricCtl)
+		action.RegisterMetrics(ctl)
 	}
 }
 

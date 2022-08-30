@@ -10,14 +10,13 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/prometheus/client_golang/prometheus"
-	insaneJSON "github.com/vitkovskii/insane-json"
-	"go.uber.org/zap"
-
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/prometheus/client_golang/prometheus"
+	insaneJSON "github.com/vitkovskii/insane-json"
+	"go.uber.org/zap"
 )
 
 /*{ introduction
@@ -36,7 +35,7 @@ type Plugin struct {
 	batcher      *pipeline.Batcher
 	controller   pipeline.OutputPluginController
 
-	//plugin metrics
+	// plugin metrics
 	sendErrorCounter *prometheus.CounterVec
 }
 
@@ -122,7 +121,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.batcher.Start(context.TODO())
 }
 
-func (p *Plugin) RegisterPluginMetrics(ctl *metric.Ctl) {
+func (p *Plugin) RegisterMetrics(ctl *metric.Ctl) {
 	p.sendErrorCounter = ctl.RegisterCounter("output_splunk_send_error", "Total splunk send errors")
 }
 

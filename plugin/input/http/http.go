@@ -5,15 +5,14 @@ import (
 	"net/http"
 	"sync"
 
-	"github.com/prometheus/client_golang/prometheus"
-	"go.uber.org/zap"
-
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/longpanic"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/tls"
+	"github.com/prometheus/client_golang/prometheus"
+	"go.uber.org/zap"
 )
 
 /*{ introduction
@@ -93,7 +92,7 @@ type Plugin struct {
 	mu         *sync.Mutex
 	logger     *zap.SugaredLogger
 
-	//plugin metrics
+	// plugin metrics
 	httpErrorCounter *prometheus.CounterVec
 }
 
@@ -156,7 +155,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	}
 }
 
-func (p *Plugin) RegisterPluginMetrics(ctl *metric.Ctl) {
+func (p *Plugin) RegisterMetrics(ctl *metric.Ctl) {
 	p.httpErrorCounter = ctl.RegisterCounter("input_http_errors", "Total http errors")
 }
 

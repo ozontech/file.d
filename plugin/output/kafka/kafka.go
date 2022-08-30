@@ -6,13 +6,12 @@ import (
 	"time"
 
 	"github.com/Shopify/sarama"
-	"github.com/prometheus/client_golang/prometheus"
-	"go.uber.org/zap"
-
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/prometheus/client_golang/prometheus"
+	"go.uber.org/zap"
 )
 
 /*{ introduction
@@ -37,7 +36,7 @@ type Plugin struct {
 	producer sarama.SyncProducer
 	batcher  *pipeline.Batcher
 
-	//plugin metrics
+	// plugin metrics
 	sendErrorCounter *prometheus.CounterVec
 }
 
@@ -128,7 +127,7 @@ func (p *Plugin) Out(event *pipeline.Event) {
 	p.batcher.Add(event)
 }
 
-func (p *Plugin) RegisterPluginMetrics(ctl *metric.Ctl) {
+func (p *Plugin) RegisterMetrics(ctl *metric.Ctl) {
 	p.sendErrorCounter = ctl.RegisterCounter("output_kafka_send_errors", "Total Kafka send errors")
 }
 

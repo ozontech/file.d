@@ -9,17 +9,16 @@ import (
 	"sync"
 	"time"
 
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/valyala/fasthttp"
-	insaneJSON "github.com/vitkovskii/insane-json"
-	"go.uber.org/zap"
-
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/tls"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/valyala/fasthttp"
+	insaneJSON "github.com/vitkovskii/insane-json"
+	"go.uber.org/zap"
 )
 
 /*{ introduction
@@ -51,7 +50,7 @@ type Plugin struct {
 	controller   pipeline.OutputPluginController
 	mu           *sync.Mutex
 
-	//plugin metrics
+	// plugin metrics
 	sendErrorCounter      *prometheus.CounterVec
 	indexingErrorsCounter *prometheus.CounterVec
 }
@@ -230,7 +229,7 @@ func (p *Plugin) Out(event *pipeline.Event) {
 	p.batcher.Add(event)
 }
 
-func (p *Plugin) RegisterPluginMetrics(ctl *metric.Ctl) {
+func (p *Plugin) RegisterMetrics(ctl *metric.Ctl) {
 	p.sendErrorCounter = ctl.RegisterCounter("output_elasticsearch_send_error", "Total elasticsearch send errors")
 	p.indexingErrorsCounter = ctl.RegisterCounter("output_elasticsearch_index_error", "Number of elasticsearch indexing errors")
 }

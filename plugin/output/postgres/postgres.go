@@ -10,14 +10,13 @@ import (
 	sq "github.com/Masterminds/squirrel"
 	"github.com/jackc/pgx/v4"
 	"github.com/jackc/pgx/v4/pgxpool"
-	prom "github.com/prometheus/client_golang/prometheus"
-	insaneJSON "github.com/vitkovskii/insane-json"
-	"go.uber.org/zap"
-
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
+	prom "github.com/prometheus/client_golang/prometheus"
+	insaneJSON "github.com/vitkovskii/insane-json"
+	"go.uber.org/zap"
 )
 
 /*{ introduction
@@ -71,7 +70,7 @@ type Plugin struct {
 	queryBuilder PgQueryBuilder
 	pool         PgxIface
 
-	//plugin metrics
+	// plugin metrics
 	discardedEventCounter  *prom.CounterVec
 	duplicatedEventCounter *prom.CounterVec
 	writtenEventCounter    *prom.CounterVec
@@ -174,7 +173,7 @@ func Factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 	return &Plugin{}, &Config{}
 }
 
-func (p *Plugin) RegisterPluginMetrics(ctl *metric.Ctl) {
+func (p *Plugin) RegisterMetrics(ctl *metric.Ctl) {
 	p.discardedEventCounter = ctl.RegisterCounter("output_postgres_event_discarded", "Total pgsql discarded messages")
 	p.duplicatedEventCounter = ctl.RegisterCounter("output_postgres_event_duplicated", "Total pgsql duplicated messages")
 	p.writtenEventCounter = ctl.RegisterCounter("output_postgres_event_written", "Total events written to pgsql")

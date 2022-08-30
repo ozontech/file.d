@@ -180,7 +180,7 @@ func TestMaskAddExtraField(t *testing.T) {
 		Logger: zap.L().Sugar(),
 	})
 	metricCtl := metric.New("test")
-	plugin.RegisterPluginMetrics(metricCtl)
+	plugin.RegisterMetrics(metricCtl)
 	plugin.config.Masks[0].Re_ = regexp.MustCompile(plugin.config.Masks[0].Re)
 
 	result := plugin.Do(event)

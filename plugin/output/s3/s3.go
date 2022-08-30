@@ -15,14 +15,13 @@ import (
 	"time"
 
 	"github.com/minio/minio-go"
-	"github.com/prometheus/client_golang/prometheus"
-	"go.uber.org/zap"
-
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/longpanic"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/plugin/output/file"
+	"github.com/prometheus/client_golang/prometheus"
+	"go.uber.org/zap"
 )
 
 /*{ introduction
@@ -154,7 +153,7 @@ type Plugin struct {
 
 	compressor compressor
 
-	//plugin metrics
+	// plugin metrics
 	sendErrorCounter *prometheus.CounterVec
 }
 
@@ -246,7 +245,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.StartWithMinio(config, params, p.minioClientsFactory)
 }
 
-func (p *Plugin) RegisterPluginMetrics(ctl *metric.Ctl) {
+func (p *Plugin) RegisterMetrics(ctl *metric.Ctl) {
 	p.sendErrorCounter = ctl.RegisterCounter("output_s3_send_error", "Total s3 send errors")
 }
 

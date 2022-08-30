@@ -11,11 +11,6 @@ import (
 
 	"github.com/golang/mock/gomock"
 	"github.com/minio/minio-go"
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/stretchr/testify/assert"
-	"go.uber.org/atomic"
-	"golang.org/x/net/context"
-
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/pipeline"
@@ -23,6 +18,10 @@ import (
 	"github.com/ozontech/file.d/plugin/output/file"
 	mock_s3 "github.com/ozontech/file.d/plugin/output/s3/mock"
 	"github.com/ozontech/file.d/test"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/stretchr/testify/assert"
+	"go.uber.org/atomic"
+	"golang.org/x/net/context"
 )
 
 const targetFile = "filetests/log.log"

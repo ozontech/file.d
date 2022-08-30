@@ -3,12 +3,11 @@
 package journalctl
 
 import (
-	"github.com/prometheus/client_golang/prometheus"
-
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/offset"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 /*{ introduction
@@ -21,7 +20,7 @@ type Plugin struct {
 	reader  *journalReader
 	offInfo *offsetInfo
 
-	//plugin metrics
+	//  plugin metrics
 	offsetErrorsCounter        *prometheus.CounterVec
 	journalCtlStopErrorCounter *prometheus.CounterVec
 	readerErrorsCounter        *prometheus.CounterVec
@@ -100,7 +99,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	}
 }
 
-func (p *Plugin) RegisterPluginMetrics(ctl *metric.Ctl) {
+func (p *Plugin) RegisterMetrics(ctl *metric.Ctl) {
 	p.offsetErrorsCounter = ctl.RegisterCounter("input_journalctl_offset_errors", "Number of errors occurred when saving/loading offset")
 	p.journalCtlStopErrorCounter = ctl.RegisterCounter("input_journalctl_stop_errors", "Total journalctl stop errors")
 	p.readerErrorsCounter = ctl.RegisterCounter("input_journalctl_reader_errors", "Total reader errors")

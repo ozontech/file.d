@@ -36,7 +36,7 @@ func (p *MultilineAction) Start(config pipeline.AnyConfig, params *pipeline.Acti
 func (p *MultilineAction) Stop() {
 }
 
-func (p *MultilineAction) RegisterPluginMetrics(ctl *metric.Ctl) {
+func (p *MultilineAction) RegisterMetrics(ctl *metric.Ctl) {
 }
 
 func (p *MultilineAction) Do(event *pipeline.Event) pipeline.ActionResult {

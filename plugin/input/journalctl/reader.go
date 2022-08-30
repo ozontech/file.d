@@ -6,12 +6,11 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/prometheus/client_golang/prometheus"
-	"go.uber.org/zap"
-
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/longpanic"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/prometheus/client_golang/prometheus"
+	"go.uber.org/zap"
 )
 
 //nolint:unused
@@ -29,13 +28,13 @@ type journalReader struct {
 	cmd    *exec.Cmd
 	args   []string
 
-	//reader metric
-	readerErrorsCounter *prometheus.CounterVec
+	// reader metrics
+	readerErrorsMetric *prometheus.CounterVec
 }
 
 //nolint:unused
-func readLines(r io.Reader, config *journalReaderConfig, readerErrorsCounter *prometheus.CounterVec) {
-	reader := bufio.NewReaderSize(r, 1024*1024*10) // max message size
+func (r *journalReader) readLines(rd io.Reader, config *journalReaderConfig) {
+	reader := bufio.NewReaderSize(rd, 1024*1024*10) // max message size
 	totalLines := 0
 
 	// cursor will point to the last message, that we sent
@@ -53,13 +52,13 @@ func readLines(r io.Reader, config *journalReaderConfig, readerErrorsCounter *pr
 			break
 		}
 		if err != nil {
-			readerErrorsCounter.WithLabelValues().Inc()
+			r.readerErrorsMetric.WithLabelValues().Inc()
 			config.logger.Error(err)
 			continue
 		}
 		_, err = config.output.Write(bytes)
 		if err != nil {
-			readerErrorsCounter.WithLabelValues().Inc()
+			r.readerErrorsMetric.WithLabelValues().Inc()
 			config.logger.Error(err)
 		}
 
@@ -73,8 +72,8 @@ func readLines(r io.Reader, config *journalReaderConfig, readerErrorsCounter *pr
 //nolint:deadcode,unused
 func newJournalReader(config *journalReaderConfig, readerErrorsCounter *prometheus.CounterVec) *journalReader {
 	res := &journalReader{
-		config:              config,
-		readerErrorsCounter: readerErrorsCounter,
+		config:             config,
+		readerErrorsMetric: readerErrorsCounter,
 	}
 	res.args = []string{
 		"-o", "json",
@@ -101,7 +100,7 @@ func (r *journalReader) start() error {
 		return err
 	}
 
-	longpanic.Go(func() { readLines(out, r.config, r.readerErrorsCounter) })
+	longpanic.Go(func() { r.readLines(out, r.config) })
 
 	return nil
 }

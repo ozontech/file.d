@@ -356,5 +356,5 @@ func (p *Plugin) isAllowed(event *pipeline.Event) bool {
 	return true
 }
 
-func (p *Plugin) RegisterPluginMetrics(ctl *metric.Ctl) {
+func (p *Plugin) RegisterMetrics(ctl *metric.Ctl) {
 }
