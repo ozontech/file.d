@@ -43,6 +43,7 @@ func TestWorkerWork(t *testing.T) {
 		inFile         string
 		readBufferSize int
 		expData        string
+		offsets        sliceMap
 	}{
 		{
 			name:           "should_ok_when_read_1_line",
@@ -64,6 +65,19 @@ func TestWorkerWork(t *testing.T) {
 			inFile:         "abc\n",
 			readBufferSize: 1024,
 			expData:        "",
+		},
+		{
+			name:           "should_skip_line_that_was_written_before_restart",
+			maxEventSize:   1 << 16,
+			inFile:         "len_ten___\nnext_msg\n",
+			readBufferSize: 1024,
+			expData:        "next_msg\n",
+			offsets: sliceMap{
+				{
+					stream: "stderr",
+					offset: int64(len("len_ten___\n")),
+				},
+			},
 		},
 	}
 	for _, tt := range tests {
@@ -88,7 +102,7 @@ func TestWorkerWork(t *testing.T) {
 				isVirgin:       false,
 				isDone:         false,
 				shouldSkip:     *atomic.NewBool(false),
-				offsets:        sliceMap{},
+				offsets:        tt.offsets,
 				mu:             &sync.Mutex{},
 			}
 			jp := NewJobProvider(&Config{}, nil, &zap.SugaredLogger{})

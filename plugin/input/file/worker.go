@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/ozontech/file.d/longpanic"
+	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
 	"go.uber.org/zap"
 )
@@ -109,7 +110,15 @@ func (w *worker) work(controller inputer, jobProvider *jobProvider, readBufferSi
 						accumBuf = append(accumBuf, line...)
 						inBuf = accumBuf
 					}
-					job.lastEventSeq = controller.In(sourceID, sourceName, lastOffset+scanned, inBuf, isVirgin)
+
+					currOffset := lastOffset + scanned
+					// after restart file reads
+					if currOffset > job.offsets.getMaxOffset() {
+						job.lastEventSeq = controller.In(sourceID, sourceName, currOffset, inBuf, isVirgin)
+					} else {
+						job.lastEventSeq = pipeline.EventSeqIDError
+						metric.GetCounter(subsystemName, alreadyWrittenEventsSkippedCounter).Inc()
+					}
 				}
 				// restore the line buffer
 				accumBuf = accumBuf[:0]

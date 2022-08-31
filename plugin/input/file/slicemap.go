@@ -41,3 +41,15 @@ func (so *sliceMap) set(streamName pipeline.StreamName, offset int64) {
 	}
 	*so = append(*so, kv{streamName, offset})
 }
+
+func (so *sliceMap) getMaxOffset() int64 {
+	max := int64(0)
+	for i := range *so {
+		curr := (*so)[i].offset
+		if curr > max {
+			max = curr
+		}
+	}
+
+	return max
+}

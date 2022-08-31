@@ -45,8 +45,9 @@ pipelines:
 }*/
 
 const (
-	subsystemName                   = "input_file"
-	possibleOffsetCorruptionCounter = "possible_offset_corruptions_total"
+	subsystemName                      = "input_file"
+	possibleOffsetCorruptionCounter    = "possible_offset_corruptions_total"
+	alreadyWrittenEventsSkippedCounter = "already_written_event_skipped_total"
 )
 
 type Plugin struct {
@@ -206,6 +207,11 @@ func (p *Plugin) registerPluginMetrics() {
 		Subsystem: subsystemName,
 		Name:      possibleOffsetCorruptionCounter,
 		Help:      "Total number of possible offset corruptions",
+	})
+	metric.RegisterCounter(&metric.MetricDesc{
+		Subsystem: subsystemName,
+		Name:      alreadyWrittenEventsSkippedCounter,
+		Help:      "Total number of skipped events that was already written",
 	})
 }
 
