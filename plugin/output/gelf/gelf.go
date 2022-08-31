@@ -45,7 +45,7 @@ type Plugin struct {
 	controller   pipeline.OutputPluginController
 
 	// plugin metrics
-	sendErrorCounter *prom.CounterVec
+	sendErrorMetric *prom.CounterVec
 }
 
 // ! config-params
@@ -208,7 +208,7 @@ func (p *Plugin) Out(event *pipeline.Event) {
 }
 
 func (p *Plugin) RegisterMetrics(ctl *metric.Ctl) {
-	p.sendErrorCounter = ctl.RegisterCounter("output_gelf_send_error", "Total GELF send errors")
+	p.sendErrorMetric = ctl.RegisterCounter("output_gelf_send_error", "Total GELF send errors")
 }
 
 func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
@@ -241,7 +241,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 
 			gelf, err := newClient(transportTCP, p.config.Endpoint, p.config.ConnectionTimeout_, false, nil)
 			if err != nil {
-				p.sendErrorCounter.WithLabelValues().Inc()
+				p.sendErrorMetric.WithLabelValues().Inc()
 				p.logger.Errorf("can't connect to gelf endpoint address=%s: %s", p.config.Endpoint, err.Error())
 				time.Sleep(time.Second)
 				continue
@@ -251,7 +251,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 
 		_, err := data.gelf.send(outBuf)
 		if err != nil {
-			p.sendErrorCounter.WithLabelValues().Inc()
+			p.sendErrorMetric.WithLabelValues().Inc()
 			p.logger.Errorf("can't send data to gelf address=%s, err: %s", p.config.Endpoint, err.Error())
 			_ = data.gelf.close()
 			data.gelf = nil

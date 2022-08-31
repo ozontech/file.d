@@ -6,10 +6,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ozontech/file.d/logger"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/atomic"
-
-	"github.com/ozontech/file.d/logger"
 )
 
 type batcherTail struct {

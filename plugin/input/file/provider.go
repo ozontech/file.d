@@ -54,7 +54,7 @@ type jobProvider struct {
 	logger           *zap.SugaredLogger
 
 	//provider metrics
-	possibleOffsetCorruption *prometheus.CounterVec
+	possibleOffsetCorruptionMetric *prometheus.CounterVec
 }
 
 type Job struct {
@@ -98,7 +98,7 @@ type symlinkInfo struct {
 	inode    inodeID
 }
 
-func NewJobProvider(config *Config, possibleOffsetCorruptionCounter *prometheus.CounterVec, sugLogger *zap.SugaredLogger) *jobProvider {
+func NewJobProvider(config *Config, possibleOffsetCorruptionMetric *prometheus.CounterVec, sugLogger *zap.SugaredLogger) *jobProvider {
 	jp := &jobProvider{
 		config:   config,
 		offsetDB: newOffsetDB(config.OffsetsFile, config.OffsetsFileTmp),
@@ -118,8 +118,8 @@ func NewJobProvider(config *Config, possibleOffsetCorruptionCounter *prometheus.
 		stopReportCh:      make(chan bool, 1), // non-zero channel cause we don't wanna wait goroutine to stop
 		stopMaintenanceCh: make(chan bool, 1), // non-zero channel cause we don't wanna wait goroutine to stop
 
-		logger:                   sugLogger,
-		possibleOffsetCorruption: possibleOffsetCorruptionCounter,
+		logger:                         sugLogger,
+		possibleOffsetCorruptionMetric: possibleOffsetCorruptionMetric,
 	}
 
 	jp.watcher = NewWatcher(
@@ -196,7 +196,7 @@ func (jp *jobProvider) commit(event *pipeline.Event) {
 	}
 
 	if value == 0 && event.Offset >= 16*1024*1024 {
-		jp.possibleOffsetCorruption.WithLabelValues().Inc()
+		jp.possibleOffsetCorruptionMetric.WithLabelValues().Inc()
 		jp.logger.Errorf("it maybe an offset corruption: committing=%d, current=%d, event id=%d, source=%d:%s", event.Offset, value, event.SeqID, event.SourceID, event.SourceName)
 	}
 

@@ -51,8 +51,8 @@ type Plugin struct {
 	mu           *sync.Mutex
 
 	// plugin metrics
-	sendErrorCounter      *prometheus.CounterVec
-	indexingErrorsCounter *prometheus.CounterVec
+	sendErrorMetric      *prometheus.CounterVec
+	indexingErrorsMetric *prometheus.CounterVec
 }
 
 // ! config-params
@@ -230,8 +230,8 @@ func (p *Plugin) Out(event *pipeline.Event) {
 }
 
 func (p *Plugin) RegisterMetrics(ctl *metric.Ctl) {
-	p.sendErrorCounter = ctl.RegisterCounter("output_elasticsearch_send_error", "Total elasticsearch send errors")
-	p.indexingErrorsCounter = ctl.RegisterCounter("output_elasticsearch_index_error", "Number of elasticsearch indexing errors")
+	p.sendErrorMetric = ctl.RegisterCounter("output_elasticsearch_send_error", "Total elasticsearch send errors")
+	p.indexingErrorsMetric = ctl.RegisterCounter("output_elasticsearch_index_error", "Number of elasticsearch indexing errors")
 }
 
 func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
@@ -254,7 +254,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 
 	for {
 		if err := p.send(data.outBuf); err != nil {
-			p.sendErrorCounter.WithLabelValues().Inc()
+			p.sendErrorMetric.WithLabelValues().Inc()
 			p.logger.Errorf("can't send to the elastic, will try other endpoint: %s", err.Error())
 		} else {
 			break
@@ -304,7 +304,7 @@ func (p *Plugin) send(body []byte) error {
 		}
 
 		if errors != 0 {
-			p.indexingErrorsCounter.WithLabelValues().Add(float64(errors))
+			p.indexingErrorsMetric.WithLabelValues().Add(float64(errors))
 		}
 
 		p.controller.Error("some events from batch aren't written")

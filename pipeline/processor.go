@@ -4,7 +4,6 @@ import (
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/longpanic"
 	"github.com/ozontech/file.d/metric"
-
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
 )

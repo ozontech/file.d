@@ -37,7 +37,7 @@ type Plugin struct {
 	batcher  *pipeline.Batcher
 
 	// plugin metrics
-	sendErrorCounter *prometheus.CounterVec
+	sendErrorMetric *prometheus.CounterVec
 }
 
 // ! config-params
@@ -128,7 +128,7 @@ func (p *Plugin) Out(event *pipeline.Event) {
 }
 
 func (p *Plugin) RegisterMetrics(ctl *metric.Ctl) {
-	p.sendErrorCounter = ctl.RegisterCounter("output_kafka_send_errors", "Total Kafka send errors")
+	p.sendErrorMetric = ctl.RegisterCounter("output_kafka_send_errors", "Total Kafka send errors")
 }
 
 func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
@@ -173,7 +173,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 		for _, e := range errs {
 			p.logger.Errorf("can't write batch: %s", e.Err.Error())
 		}
-		p.sendErrorCounter.WithLabelValues().Add(float64(len(errs)))
+		p.sendErrorMetric.WithLabelValues().Add(float64(len(errs)))
 		p.controller.Error("some events from batch were not written")
 	}
 }

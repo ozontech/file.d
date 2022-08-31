@@ -28,8 +28,8 @@ type Plugin struct {
 	idByTopic     map[string]int
 
 	// plugin metrics
-	commitErrorsCounter  *prometheus.CounterVec
-	consumeErrorsCounter *prometheus.CounterVec
+	commitErrorsMetric  *prometheus.CounterVec
+	consumeErrorsMetric *prometheus.CounterVec
 }
 
 // ! config-params
@@ -89,8 +89,8 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 }
 
 func (p *Plugin) RegisterMetrics(ctl *metric.Ctl) {
-	p.commitErrorsCounter = ctl.RegisterCounter("input_kafka_commit_errors", "Number of kafka commit errors")
-	p.consumeErrorsCounter = ctl.RegisterCounter("input_kafka_consume_errors", "Number of kafka consume errors")
+	p.commitErrorsMetric = ctl.RegisterCounter("input_kafka_commit_errors", "Number of kafka commit errors")
+	p.consumeErrorsMetric = ctl.RegisterCounter("input_kafka_consume_errors", "Number of kafka consume errors")
 }
 
 func (p *Plugin) consume(ctx context.Context) {
@@ -98,7 +98,7 @@ func (p *Plugin) consume(ctx context.Context) {
 	for {
 		err := p.consumerGroup.Consume(ctx, p.config.Topics, p)
 		if err != nil {
-			p.consumeErrorsCounter.WithLabelValues().Inc()
+			p.consumeErrorsMetric.WithLabelValues().Inc()
 			p.logger.Errorf("can't consume from kafka: %s", err.Error())
 		}
 
@@ -114,7 +114,7 @@ func (p *Plugin) Stop() {
 
 func (p *Plugin) Commit(event *pipeline.Event) {
 	if p.session == nil {
-		p.commitErrorsCounter.WithLabelValues().Inc()
+		p.commitErrorsMetric.WithLabelValues().Inc()
 		p.logger.Errorf("no kafka consumer session for event commit")
 		return
 	}
