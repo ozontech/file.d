@@ -134,9 +134,16 @@ func parseConfig(json *simplejson.Json) *Config {
 	if len(pipelines) == 0 {
 		logger.Fatalf("no pipelines defined in config")
 	}
-	for i := range pipelines {
-		raw := pipelinesJson.Get(i)
-		config.Pipelines[i] = &PipelineConfig{Raw: raw}
+	for name := range pipelines {
+		matched, err := regexp.MatchString("^[a-zA-Z_]+$", name)
+		if err != nil {
+			logger.Fatal(err)
+		}
+		if !matched {
+			logger.Fatalf(`pipeline name "%s" not satisfy regexp pattern ^[a-zA-Z_]+$`, err.Error())
+		}
+		raw := pipelinesJson.Get(name)
+		config.Pipelines[name] = &PipelineConfig{Raw: raw}
 	}
 
 	panicTimeoutStr, err := json.Get("panic_timeout").String()
