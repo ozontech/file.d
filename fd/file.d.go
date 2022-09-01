@@ -179,10 +179,7 @@ func (f *FileD) setupAction(p *pipeline.Pipeline, index int, t string, actionJSO
 	configJSON := makeActionJSON(actionJSON)
 
 	_, config := info.Factory()
-	dec := json.NewDecoder(bytes.NewReader(configJSON))
-	dec.DisallowUnknownFields()
-	err = dec.Decode(config)
-	if err != nil {
+	if err := DecodeConfig(config, configJSON); err != nil {
 		logger.Fatalf("can't unmarshal config for %s action in pipeline %q: %s", info.Type, p.Name, err.Error())
 	}
 
@@ -243,12 +240,8 @@ func (f *FileD) getStaticInfo(pipelineConfig *cfg.PipelineConfig, pluginKind pip
 	if err != nil {
 		logger.Panicf("can't create config json for %s", t)
 	}
-
 	_, config := info.Factory()
-	dec := json.NewDecoder(bytes.NewReader(configJson))
-	dec.DisallowUnknownFields()
-	err = dec.Decode(config)
-	if err != nil {
+	if err := DecodeConfig(config, configJson); err != nil {
 		return nil, fmt.Errorf("can't unmarshal config for %s: %s", pluginKind, err.Error())
 	}
 
@@ -261,6 +254,12 @@ func (f *FileD) getStaticInfo(pipelineConfig *cfg.PipelineConfig, pluginKind pip
 	infoCopy.Config = config
 
 	return &infoCopy, nil
+}
+
+func DecodeConfig(config pipeline.AnyConfig, configJson []byte) error {
+	dec := json.NewDecoder(bytes.NewReader(configJson))
+	dec.DisallowUnknownFields()
+	return dec.Decode(config)
 }
 
 func (f *FileD) Stop(ctx context.Context) error {

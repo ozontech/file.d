@@ -4,8 +4,6 @@ package main
 
 import (
 	"fmt"
-	"github.com/ozontech/file.d/pipeline"
-	"github.com/stretchr/testify/require"
 	"io/ioutil"
 	"math/rand"
 	"os"
@@ -17,17 +15,23 @@ import (
 
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
+	"github.com/ozontech/file.d/pipeline"
 	_ "github.com/ozontech/file.d/plugin/action/discard"
 	_ "github.com/ozontech/file.d/plugin/action/json_decode"
 	_ "github.com/ozontech/file.d/plugin/action/keep_fields"
 	_ "github.com/ozontech/file.d/plugin/action/rename"
 	_ "github.com/ozontech/file.d/plugin/action/throttle"
 	_ "github.com/ozontech/file.d/plugin/input/fake"
-	_ "github.com/ozontech/file.d/plugin/input/file"
+	"github.com/ozontech/file.d/plugin/input/file"
+	http2 "github.com/ozontech/file.d/plugin/input/http"
 	k8s2 "github.com/ozontech/file.d/plugin/input/k8s"
 	_ "github.com/ozontech/file.d/plugin/output/devnull"
+	"github.com/ozontech/file.d/plugin/output/gelf"
 	_ "github.com/ozontech/file.d/plugin/output/kafka"
+	"github.com/ozontech/file.d/plugin/output/splunk"
 	uuid "github.com/satori/go.uuid"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 var (
@@ -210,5 +214,62 @@ func TestThatPluginsAreImported(t *testing.T) {
 	for _, pluginName := range output {
 		pluginInfo := fd.DefaultPluginRegistry.Get(pipeline.PluginKindOutput, pluginName)
 		require.NotNil(t, pluginInfo)
+	}
+}
+
+type testConfig struct {
+	factory    func() (pipeline.AnyPlugin, pipeline.AnyConfig)
+	configJSON string
+}
+
+func TestConfigParseValid(t *testing.T) {
+	testList := []testConfig{
+		{
+			factory:    file.Factory,
+			configJSON: `{"offsets_op":"tail","persistence_mode":"sync","watching_dir":"/var/"}`,
+		},
+		{
+			factory:    http2.Factory,
+			configJSON: `{"address": ":9001","emulate_mode":"yes"}`,
+		},
+		{
+			factory:    k8s2.Factory,
+			configJSON: `{"split_event_size":1000,"watching_dir":"/var/log/containers/","offsets_file":"/data/k8s-offsets.yaml"}`,
+		},
+		{
+			factory:    gelf.Factory,
+			configJSON: `{"endpoint":"graylog.svc.cluster.local:12201","reconnect_interval":"1m","default_short_message_value":"message isn't provided"}`,
+		},
+		{
+			factory:    splunk.Factory,
+			configJSON: `{"endpoint":"splunk_endpoint","token":"value_token"}`,
+		},
+	}
+	for _, tl := range testList {
+		_, config := tl.factory()
+		err := fd.DecodeConfig(config, []byte(tl.configJSON))
+		assert.NoError(t, err, "shouldn't be an error")
+	}
+}
+
+func TestConfigParseInvalid(t *testing.T) {
+	testList := []testConfig{
+		{
+			factory:    http2.Factory,
+			configJSON: `{"address": ":9001","emulate_mode":"yes","un_exist_field":"bla-bla"}`,
+		},
+		{
+			factory:    k8s2.Factory,
+			configJSON: `{"split_event_size":pp,"watching_dir":"/var/log/containers/","offsets_file":"/data/k8s-offsets.yaml"}`,
+		},
+		{
+			factory:    gelf.Factory,
+			configJSON: `{"reconnect_interval_1":"1m","default_short_message_value":"message isn't provided"}`,
+		},
+	}
+	for _, tl := range testList {
+		_, config := tl.factory()
+		err := fd.DecodeConfig(config, []byte(tl.configJSON))
+		assert.Error(t, err, "should be an error")
 	}
 }

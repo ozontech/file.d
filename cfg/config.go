@@ -135,12 +135,8 @@ func parseConfig(json *simplejson.Json) *Config {
 		logger.Fatalf("no pipelines defined in config")
 	}
 	for name := range pipelines {
-		matched, err := regexp.MatchString("^[a-zA-Z_]+$", name)
-		if err != nil {
+		if err := validatePipelineName(name); err != nil {
 			logger.Fatal(err)
-		}
-		if !matched {
-			logger.Fatalf(`pipeline name "%s" not satisfy regexp pattern ^[a-zA-Z_]+$`, err.Error())
 		}
 		raw := pipelinesJson.Get(name)
 		config.Pipelines[name] = &PipelineConfig{Raw: raw}
@@ -161,6 +157,17 @@ func parseConfig(json *simplejson.Json) *Config {
 	config.PanicTimeout = panicTimeout
 
 	return config
+}
+
+func validatePipelineName(name string) error {
+	matched, err := regexp.MatchString("^[a-zA-Z_]+$", name)
+	if err != nil {
+		return err
+	}
+	if !matched {
+		return fmt.Errorf(`pipeline name "%s" not satisfy regexp pattern ^[a-zA-Z_]+$`, name)
+	}
+	return nil
 }
 
 func applyVault(vault secreter, json *simplejson.Json) {
