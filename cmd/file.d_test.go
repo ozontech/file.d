@@ -218,6 +218,7 @@ func TestThatPluginsAreImported(t *testing.T) {
 }
 
 type testConfig struct {
+	name       string
 	factory    func() (pipeline.AnyPlugin, pipeline.AnyConfig)
 	configJSON string
 }
@@ -225,51 +226,65 @@ type testConfig struct {
 func TestConfigParseValid(t *testing.T) {
 	testList := []testConfig{
 		{
+			name:       "file",
 			factory:    file.Factory,
 			configJSON: `{"offsets_op":"tail","persistence_mode":"sync","watching_dir":"/var/"}`,
 		},
 		{
+			name:       "http",
 			factory:    http2.Factory,
 			configJSON: `{"address": ":9001","emulate_mode":"yes"}`,
 		},
 		{
+			name:       "k8s",
 			factory:    k8s2.Factory,
 			configJSON: `{"split_event_size":1000,"watching_dir":"/var/log/containers/","offsets_file":"/data/k8s-offsets.yaml"}`,
 		},
 		{
+			name:       "gelf",
 			factory:    gelf.Factory,
 			configJSON: `{"endpoint":"graylog.svc.cluster.local:12201","reconnect_interval":"1m","default_short_message_value":"message isn't provided"}`,
 		},
 		{
+			name:       "splunk",
 			factory:    splunk.Factory,
 			configJSON: `{"endpoint":"splunk_endpoint","token":"value_token"}`,
 		},
 	}
 	for _, tl := range testList {
-		_, config := tl.factory()
-		err := fd.DecodeConfig(config, []byte(tl.configJSON))
-		assert.NoError(t, err, "shouldn't be an error")
+		t.Run(tl.name, func(t *testing.T) {
+			t.Parallel()
+			_, config := tl.factory()
+			err := fd.DecodeConfig(config, []byte(tl.configJSON))
+			assert.NoError(t, err, "shouldn't be an error")
+		})
 	}
 }
 
 func TestConfigParseInvalid(t *testing.T) {
 	testList := []testConfig{
 		{
+			name:       "http",
 			factory:    http2.Factory,
 			configJSON: `{"address": ":9001","emulate_mode":"yes","un_exist_field":"bla-bla"}`,
 		},
 		{
+			name:       "k8s",
 			factory:    k8s2.Factory,
 			configJSON: `{"split_event_size":pp,"watching_dir":"/var/log/containers/","offsets_file":"/data/k8s-offsets.yaml"}`,
 		},
 		{
+			name:       "gelf",
 			factory:    gelf.Factory,
 			configJSON: `{"reconnect_interval_1":"1m","default_short_message_value":"message isn't provided"}`,
 		},
 	}
 	for _, tl := range testList {
-		_, config := tl.factory()
-		err := fd.DecodeConfig(config, []byte(tl.configJSON))
-		assert.Error(t, err, "should be an error")
+		t.Run(tl.name, func(t *testing.T) {
+			t.Parallel()
+			_, config := tl.factory()
+			err := fd.DecodeConfig(config, []byte(tl.configJSON))
+			assert.Error(t, err, "should be an error")
+		})
 	}
 }

@@ -230,6 +230,7 @@ func (f *FileD) getStaticInfo(pipelineConfig *cfg.PipelineConfig, pluginKind pip
 		return nil, fmt.Errorf("no %s plugin provided", pluginKind)
 	}
 	t := configJSON.Get("type").MustString()
+	// delete for success decode into config
 	configJSON.Del("type")
 	if t == "" {
 		return nil, fmt.Errorf("%s doesn't have type", pluginKind)

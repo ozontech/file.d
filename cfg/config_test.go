@@ -483,13 +483,13 @@ func TestParseDefaultInt(t *testing.T) {
 func TestPipelineValidatorValid(t *testing.T) {
 	testName := []string{"pipeline_name", "PipeLine_NAME", "pipelinename", "PIPELINENAME"}
 	for _, tl := range testName {
-		assert.NoErrorf(t, validatePipelineName(tl), `pipeline name "%s" should be valid`, tl)
+		assert.NoError(t, validatePipelineName(tl))
 	}
 }
 
 func TestPipelineValidatorInvalid(t *testing.T) {
 	testName := []string{"Pipeline-name", "pipeline-name", "<pipeline_name>", "пайплайн_нейм"}
 	for _, tl := range testName {
-		assert.Errorf(t, validatePipelineName(tl), `pipeline name "%s" should be invalid`, tl)
+		assert.Error(t, validatePipelineName(tl))
 	}
 }
