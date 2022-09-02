@@ -10,6 +10,7 @@ import (
 
 const (
 	nginxDateFmt = "2006/01/02 15:04:05"
+	parseDate    = false
 )
 
 func spaceSplit(b []byte, limit int) []int {
@@ -31,16 +32,19 @@ func DecodeNginxError(event *insaneJSON.Root, data []byte) error {
 	}
 
 	tBuf := data[:split[1]]
-	d, err := time.Parse(nginxDateFmt, string(tBuf))
-	if err != nil {
-		return fmt.Errorf("date in wrong format=%s", string(tBuf))
+	if parseDate {
+		d, err := time.Parse(nginxDateFmt, string(tBuf))
+		if err != nil {
+			return fmt.Errorf("date in wrong format=%s", string(tBuf))
+		}
+		tBuf = []byte(d.Format("2006/01/02 15:04:05"))
 	}
 
 	if split[2]-split[1] < 4 {
 		return errors.New("incorrect level format")
 	}
 
-	event.AddFieldNoAlloc(event, "time").MutateToBytesCopy(event, []byte(d.Format(time.RFC3339)))
+	event.AddFieldNoAlloc(event, "time").MutateToBytesCopy(event, tBuf)
 	event.AddFieldNoAlloc(event, "level").MutateToBytesCopy(event, data[split[1]+2:split[2]-1])
 	if len(data) > split[2] {
 		event.AddFieldNoAlloc(event, "message").MutateToBytesCopy(event, data[split[2]+1:])

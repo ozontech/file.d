@@ -426,8 +426,12 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 		_ = event.Root.DecodeString("{}")
 		err := decoder.DecodeNginxError(event.Root, bytes)
 		if err != nil {
-			p.logger.Errorf("wrong nginx error log format offset=%d, length=%d, err=%s, source=%d:%s, cri=%s", offset, length, err.Error(), sourceID, sourceName, bytes)
-			// Dead route, never passed here.
+			if p.settings.IsStrict {
+				p.logger.Fatalf("wrong nginx error log format offset=%d, length=%d, err=%s, source=%d:%s, cri=%s", offset, length, err.Error(), sourceID, sourceName, bytes)
+			} else {
+				p.logger.Errorf("wrong nginx error log format offset=%d, length=%d, err=%s, source=%d:%s, cri=%s", offset, length, err.Error(), sourceID, sourceName, bytes)
+			}
+			p.eventPool.back(event)
 			return EventSeqIDError
 		}
 	default:

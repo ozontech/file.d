@@ -55,7 +55,7 @@ func TestDecodeNginxFields(t *testing.T) {
 	}
 
 	d := root.Dig("time")
-	if d == nil || d.AsString() != "2022-08-18T09:36:34Z" {
+	if d == nil || d.AsString() != "2022/08/18 09:36:34" {
 		t.Fatal("incorrect time")
 	}
 
