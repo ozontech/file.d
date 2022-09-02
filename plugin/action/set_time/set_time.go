@@ -4,8 +4,8 @@ import (
 	"time"
 
 	"github.com/ozontech/file.d/fd"
-	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/plugin"
 )
 
 /*{ introduction
@@ -14,6 +14,7 @@ It adds time field to the event.
 
 type Plugin struct {
 	config *Config
+	plugin.EmptyMetricRegister
 }
 
 // ! config-params
@@ -92,7 +93,4 @@ func (p *Plugin) do(event *pipeline.Event, t time.Time) pipeline.ActionResult {
 	}
 
 	return pipeline.ActionPass
-}
-
-func (p *Plugin) RegisterMetrics(ctl *metric.Ctl) {
 }

@@ -5,8 +5,8 @@ import (
 
 	"github.com/ozontech/file.d/decoder"
 	"github.com/ozontech/file.d/fd"
-	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/plugin"
 	"github.com/ozontech/file.d/plugin/input/file"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
@@ -46,6 +46,7 @@ type Plugin struct {
 	params *pipeline.InputPluginParams
 
 	fp *file.Plugin
+	plugin.EmptyMetricRegister
 }
 
 type Config struct {
@@ -146,7 +147,4 @@ func (p *Plugin) Commit(event *pipeline.Event) {
 
 func (p *Plugin) Stop() {
 	p.fp.Stop()
-}
-
-func (p *Plugin) RegisterMetrics(ctl *metric.Ctl) {
 }

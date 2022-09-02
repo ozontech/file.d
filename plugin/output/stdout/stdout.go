@@ -4,8 +4,8 @@ import (
 	"fmt"
 
 	"github.com/ozontech/file.d/fd"
-	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/plugin"
 )
 
 /*{ introduction
@@ -16,6 +16,7 @@ const outPluginType = "stdout"
 
 type Plugin struct {
 	controller pipeline.OutputPluginController
+	plugin.EmptyMetricRegister
 }
 
 type Config struct{}
@@ -41,5 +42,3 @@ func (p *Plugin) Out(event *pipeline.Event) {
 	fmt.Println(event.Root.EncodeToString())
 	p.controller.Commit(event)
 }
-
-func (_ *Plugin) RegisterMetrics(ctl *metric.Ctl) {}

@@ -4,8 +4,8 @@ import (
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/logger"
-	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/plugin"
 	"github.com/ozontech/file.d/plugin/action/join"
 )
 
@@ -46,6 +46,7 @@ type Plugin struct {
 	config *Config
 
 	jp *join.Plugin
+	plugin.EmptyMetricRegister
 }
 
 // ! config-params
@@ -113,7 +114,4 @@ func (p *Plugin) Stop() {
 
 func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	return p.jp.Do(event)
-}
-
-func (p *Plugin) RegisterMetrics(ctl *metric.Ctl) {
 }

@@ -3,8 +3,8 @@ package modify
 import (
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
-	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/plugin"
 	"go.uber.org/zap"
 )
 
@@ -42,6 +42,7 @@ type Plugin struct {
 	logger *zap.SugaredLogger
 	ops    map[string][]cfg.SubstitutionOp
 	buf    []byte
+	plugin.EmptyMetricRegister
 }
 
 type Config map[string]string
@@ -97,7 +98,4 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	}
 
 	return pipeline.ActionPass
-}
-
-func (p *Plugin) RegisterMetrics(ctl *metric.Ctl) {
 }

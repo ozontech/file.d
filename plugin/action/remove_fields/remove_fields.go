@@ -3,8 +3,8 @@ package remove_fields
 import (
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/logger"
-	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/plugin"
 )
 
 /*{ introduction
@@ -14,6 +14,7 @@ It removes the list of the event fields and keeps others.
 type Plugin struct {
 	config    *Config
 	fieldsBuf []string
+	plugin.EmptyMetricRegister
 }
 
 // ! config-params
@@ -58,7 +59,4 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	}
 
 	return pipeline.ActionPass
-}
-
-func (p *Plugin) RegisterMetrics(ctl *metric.Ctl) {
 }

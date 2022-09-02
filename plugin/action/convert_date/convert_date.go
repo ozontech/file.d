@@ -5,8 +5,8 @@ import (
 
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
-	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/plugin"
 )
 
 /*{ introduction
@@ -15,6 +15,7 @@ It converts field date/time data to different format.
 
 type Plugin struct {
 	config *Config
+	plugin.EmptyMetricRegister
 }
 
 // ! config-params
@@ -105,7 +106,4 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	}
 
 	return pipeline.ActionPass
-}
-
-func (p *Plugin) RegisterMetrics(ctl *metric.Ctl) {
 }

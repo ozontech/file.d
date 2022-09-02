@@ -3,15 +3,17 @@ package debug
 import (
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/logger"
-	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/plugin"
 )
 
 /*{ introduction
 It logs event to stdout. Useful for debugging.
 }*/
 
-type Plugin struct{}
+type Plugin struct {
+	plugin.EmptyMetricRegister
+}
 
 type Config map[string]interface{}
 
@@ -37,7 +39,4 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	logger.Infof("%s", buf)
 
 	return pipeline.ActionPass
-}
-
-func (p *Plugin) RegisterMetrics(ctl *metric.Ctl) {
 }

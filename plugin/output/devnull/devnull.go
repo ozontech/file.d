@@ -2,8 +2,8 @@ package devnull
 
 import (
 	"github.com/ozontech/file.d/fd"
-	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/plugin"
 	"go.uber.org/atomic"
 )
 
@@ -17,6 +17,7 @@ type Plugin struct {
 	controller pipeline.OutputPluginController
 	outFn      func(event *pipeline.Event)
 	total      *atomic.Int64
+	plugin.EmptyMetricRegister
 }
 
 type Config struct{}
@@ -55,5 +56,3 @@ func (p *Plugin) Out(event *pipeline.Event) {
 
 	p.controller.Commit(event)
 }
-
-func (p *Plugin) RegisterMetrics(ctl *metric.Ctl) {}

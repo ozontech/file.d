@@ -5,8 +5,8 @@ import (
 
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
-	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/plugin"
 	"go.uber.org/zap"
 )
 
@@ -73,6 +73,7 @@ type Plugin struct {
 	maxEventSize int
 
 	logger *zap.SugaredLogger
+	plugin.EmptyMetricRegister
 }
 
 // ! config-params
@@ -188,7 +189,4 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 		p.flush()
 	}
 	return pipeline.ActionPass
-}
-
-func (p *Plugin) RegisterMetrics(ctl *metric.Ctl) {
 }

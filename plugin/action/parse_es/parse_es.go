@@ -2,8 +2,8 @@ package parse_es
 
 import (
 	"github.com/ozontech/file.d/fd"
-	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/plugin"
 	"go.uber.org/zap"
 )
 
@@ -17,6 +17,7 @@ type Plugin struct {
 	passNext    bool
 	discardNext bool
 	isStrict    bool
+	plugin.EmptyMetricRegister
 }
 
 type Config struct{}
@@ -85,7 +86,4 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	p.logger.Error("wrong ES input format, expected action, got: %s", root.EncodeToString())
 
 	return pipeline.ActionDiscard
-}
-
-func (p *Plugin) RegisterMetrics(ctl *metric.Ctl) {
 }

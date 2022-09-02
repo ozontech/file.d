@@ -2,8 +2,8 @@ package fake
 
 import (
 	"github.com/ozontech/file.d/fd"
-	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/plugin"
 )
 
 /*{ introduction
@@ -14,6 +14,7 @@ type Plugin struct {
 	controller pipeline.InputPluginController
 	commitFn   func(event *pipeline.Event)
 	inFn       func()
+	plugin.EmptyMetricRegister
 }
 
 type Config struct{}
@@ -40,9 +41,6 @@ func (p *Plugin) Commit(event *pipeline.Event) {
 	if p.commitFn != nil {
 		p.commitFn(event)
 	}
-}
-
-func (p *Plugin) RegisterMetrics(ctl *metric.Ctl) {
 }
 
 // ! fn-list

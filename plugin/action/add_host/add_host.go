@@ -4,8 +4,8 @@ import (
 	"os"
 
 	"github.com/ozontech/file.d/fd"
-	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/plugin"
 )
 
 /*{ introduction
@@ -14,6 +14,7 @@ It adds field containing hostname to an event.
 
 type Plugin struct {
 	config *Config
+	plugin.EmptyMetricRegister
 }
 
 // ! config-params
@@ -49,7 +50,4 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	event.Root.AddFieldNoAlloc(event.Root, p.config.Field).MutateToString(hostname)
 
 	return pipeline.ActionPass
-}
-
-func (p *Plugin) RegisterMetrics(ctl *metric.Ctl) {
 }

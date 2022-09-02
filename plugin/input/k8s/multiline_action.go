@@ -2,8 +2,8 @@ package k8s
 
 import (
 	"github.com/ozontech/file.d/cfg"
-	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/plugin"
 	"go.uber.org/zap"
 )
 
@@ -15,6 +15,7 @@ type MultilineAction struct {
 	eventBuf      []byte
 	eventSize     int
 	skipNextEvent bool
+	plugin.EmptyMetricRegister
 }
 
 const (
@@ -34,9 +35,6 @@ func (p *MultilineAction) Start(config pipeline.AnyConfig, params *pipeline.Acti
 }
 
 func (p *MultilineAction) Stop() {
-}
-
-func (p *MultilineAction) RegisterMetrics(ctl *metric.Ctl) {
 }
 
 func (p *MultilineAction) Do(event *pipeline.Event) pipeline.ActionResult {
