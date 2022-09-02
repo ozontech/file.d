@@ -1,6 +1,8 @@
 package plugin
 
-import "github.com/ozontech/file.d/metric"
+import (
+	"github.com/ozontech/file.d/metric"
+)
 
 type EmptyMetricRegister struct{}
 

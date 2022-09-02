@@ -152,7 +152,7 @@ type Plugin struct {
 	uploadCh   chan fileDTO
 
 	compressor compressor
-
+	metricCtl  *metric.Ctl
 	// plugin metrics
 	sendErrorMetric *prometheus.CounterVec
 }
@@ -247,6 +247,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 
 func (p *Plugin) RegisterMetrics(ctl *metric.Ctl) {
 	p.sendErrorMetric = ctl.RegisterCounter("output_s3_send_error", "Total s3 send errors")
+	p.metricCtl = ctl
 }
 
 func (p *Plugin) StartWithMinio(config pipeline.AnyConfig, params *pipeline.OutputPluginParams, factory objStoreFactory) {
@@ -412,6 +413,7 @@ func (p *Plugin) tryRunNewPlugin(bucketName string) (isCreated bool) {
 
 	localBucketConfig := p.config.FileConfig
 	localBucketConfig.TargetFile = fmt.Sprintf("%s%s%s", bucketDir, bucketName, p.fileExtension)
+	outPlugin.RegisterMetrics(p.metricCtl)
 	outPlugin.Start(&localBucketConfig, p.params)
 
 	p.outPlugins.Add(bucketName, outPlugin)
