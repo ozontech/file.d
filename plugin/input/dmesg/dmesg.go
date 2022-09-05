@@ -118,7 +118,7 @@ func (p *Plugin) read() {
 
 		out = root.Encode(out[:0])
 
-		p.controller.In(0, "", ts, out, false)
+		p.controller.In(0, "", ts, out, false, nil)
 	}
 }
 

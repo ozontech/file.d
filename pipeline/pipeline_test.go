@@ -42,7 +42,7 @@ func TestInUnparsableMessages(t *testing.T) {
 
 		pipe.SetInput(getFakeInputInfo())
 
-		seqID := pipe.In(sourceID, "kafka", offset, message, false)
+		seqID := pipe.In(sourceID, "kafka", offset, message, false, nil)
 		require.Equal(t, pipeline.EventSeqIDError, seqID)
 
 		refPipe := reflect.ValueOf(pipe)
@@ -118,8 +118,85 @@ func TestInInvalidMessages(t *testing.T) {
 
 			pipe.SetInput(getFakeInputInfo())
 
-			seqID := pipe.In(tCase.sourceID, "kafka", tCase.offset, tCase.message, false)
+			seqID := pipe.In(tCase.sourceID, "kafka", tCase.offset, tCase.message, false, nil)
 			require.Equal(t, pipeline.EventSeqIDError, seqID)
 		})
 	}
+}
+
+func TestSkipOldOffsets(t *testing.T) {
+	metric.InitStats()
+
+	messageStdErrCommitted := []byte(`{"stream":"stderr","message":"gogogo"}`)
+	messageStdOutCommitted := []byte(`{"stream":"stdout","message":"i was committed"}`)
+	messageStdErrNOTCommittedPart1 := []byte(`{"stream":"stderr","message":"i wasn't committed, pod were killed"}`)
+	messageStdErrNOTCommittedPart2 := []byte(`{"stream":"stderr","message":"me either %("}`)
+	messageStdOutCommittedLast := []byte(`{"stream":"stdout","message":"final stdout"}`)
+	messageStdOutNotCommitted := []byte(`{"stream":"stdout","message":"commit me please"}`)
+
+	stdErrStartPos := int64(len(messageStdErrCommitted))
+
+	offsetsMap := pipeline.SliceFromMap(map[pipeline.StreamName]int64{
+		"stderr": stdErrStartPos,
+		"stdout": stdErrStartPos +
+			int64(len(messageStdOutCommitted)) +
+			int64(len(messageStdErrNOTCommittedPart1)) +
+			int64(len(messageStdErrNOTCommittedPart2)) +
+			int64(len(messageStdOutCommittedLast)),
+	})
+
+	pipelineSettings := &pipeline.Settings{Capacity: 5, Decoder: "json", StreamField: "stream"}
+	sourceID := pipeline.SourceID(1<<16 + int(1))
+	pipe := pipeline.New("test_pipeline", pipelineSettings, nil)
+	pipe.SetInput(getFakeInputInfo())
+
+	seqID := pipe.In(sourceID, "file_in", stdErrStartPos+int64(len(messageStdOutCommitted)), messageStdOutCommitted, false, offsetsMap)
+	// First stdout event already written. Skip it.
+	require.Equal(t, pipeline.EventSeqIDError, seqID)
+
+	seqID = pipe.In(sourceID, "file_in",
+		stdErrStartPos+
+			int64(len(messageStdOutCommitted))+
+			int64(len(messageStdErrNOTCommittedPart1)),
+		messageStdErrNOTCommittedPart1,
+		false,
+		offsetsMap)
+	// Stderr msg that weren't committed.
+	require.Equal(t, uint64(1), seqID)
+
+	seqID = pipe.In(sourceID, "file_in",
+		stdErrStartPos+
+			int64(len(messageStdOutCommitted))+
+			int64(len(messageStdErrNOTCommittedPart1))+
+			int64(len(messageStdErrNOTCommittedPart2)),
+		messageStdErrNOTCommittedPart2,
+		false,
+		offsetsMap)
+	// Second part of stderr msg that weren't committed.
+	require.Equal(t, uint64(2), seqID)
+
+	seqID = pipe.In(sourceID, "file_in",
+		stdErrStartPos+
+			int64(len(messageStdOutCommitted))+
+			int64(len(messageStdErrNOTCommittedPart1))+
+			int64(len(messageStdErrNOTCommittedPart2))+
+			int64(len(messageStdOutCommittedLast)),
+		messageStdOutCommittedLast,
+		false,
+		offsetsMap)
+	// Last committed stdout message. Skip.
+	require.Equal(t, uint64(0), seqID)
+
+	seqID = pipe.In(sourceID, "file_in",
+		stdErrStartPos+
+			int64(len(messageStdOutCommitted))+
+			int64(len(messageStdErrNOTCommittedPart1))+
+			int64(len(messageStdErrNOTCommittedPart2))+
+			int64(len(messageStdOutCommittedLast))+
+			int64(len(messageStdOutNotCommitted)),
+		messageStdOutNotCommitted,
+		false,
+		offsetsMap)
+	// Last committed stdout message. Skip.
+	require.Equal(t, uint64(1), seqID)
 }

@@ -74,7 +74,7 @@ Save operation takes three steps:
 
 <br>
 
-**`async_interval`** ! *`cfg.Duration`*  *`default=1s`*    <br> <br> Offsets saving interval. Only used if `persistence_mode` is set to `async`.
+**`async_interval`** ! *`cfg.Duration`*  *`default=1s`*    <br> <br> Offsets saving interval. Only used if `persistence_mode` is Set to `async`.
 <br>
 
 **`read_buffer_size`** *`int`* *`default=131072`* 
@@ -93,10 +93,10 @@ The max amount of opened files. If the limit is exceeded, `file.d` will exit wit
 
 **`offsets_op`** *`string`* *`default=continue`* *`options=continue|tail|reset`* 
 
-An offset operation which will be performed when you add a file as a job:
-*  `continue` – uses an offset file
-*  `tail` – sets an offset to the end of the file
-*  `reset` – resets an offset to the beginning of the file
+An Offset operation which will be performed when you add a file as a job:
+*  `continue` – uses an Offset file
+*  `tail` – sets an Offset to the end of the file
+*  `reset` – resets an Offset to the beginning of the file
 > It is only used on an initial scan of `watching_dir`. Files that will be caught up later during work will always use `reset` operation.
 
 <br>
@@ -107,7 +107,7 @@ It defines how many workers will be instantiated.
 Each worker:
 * Reads files (I/O bound)
 * Decodes events (CPU bound)
-> We recommend to set it to 4x-8x of CPU cores.
+> We recommend to Set it to 4x-8x of CPU cores.
 
 <br>
 

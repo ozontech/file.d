@@ -26,12 +26,12 @@ func TestPipeline_streamEvent(t *testing.T) {
 	event.streamName = DefaultStreamName
 	event.SeqID = 123456789
 
-	p.streamEvent(event)
+	p.streamEvent(event, nil)
 
 	assert.Equal(t, event, p.streamer.getStream(streamID, DefaultStreamName).first)
 
 	p.UseSpread()
-	p.streamEvent(event)
+	p.streamEvent(event, nil)
 
 	expectedStreamID := StreamID(event.SeqID % uint64(procs))
 

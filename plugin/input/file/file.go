@@ -119,7 +119,7 @@ type Config struct {
 	PersistenceMode  string `json:"persistence_mode" default:"async" options:"async|sync"` // *
 	PersistenceMode_ persistenceMode
 
-	AsyncInterval  cfg.Duration `json:"async_interval" default:"1s" parse:"duration"` // *! @3 @4 @5 @6 <br> <br> Offsets saving interval. Only used if `persistence_mode` is set to `async`.
+	AsyncInterval  cfg.Duration `json:"async_interval" default:"1s" parse:"duration"` // *! @3 @4 @5 @6 <br> <br> offsets saving interval. Only used if `persistence_mode` is Set to `async`.
 	AsyncInterval_ time.Duration
 
 	// > @3@4@5@6
@@ -206,7 +206,7 @@ func (p *Plugin) registerPluginMetrics() {
 	metric.RegisterCounter(&metric.MetricDesc{
 		Subsystem: subsystemName,
 		Name:      possibleOffsetCorruptionCounter,
-		Help:      "Total number of possible offset corruptions",
+		Help:      "Total number of possible Offset corruptions",
 	})
 	metric.RegisterCounter(&metric.MetricDesc{
 		Subsystem: subsystemName,
