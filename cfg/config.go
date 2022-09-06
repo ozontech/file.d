@@ -389,9 +389,9 @@ func ParseField(v reflect.Value, vField reflect.Value, tField reflect.StructFiel
 
 			finalField.SetInt(int64(result))
 		case "list-map":
-			listMap := make(map[string]bool)
-
 			parts := strings.Split(vField.String(), ",")
+			listMap := make(map[string]bool, len(parts))
+
 			for _, part := range parts {
 				cleanPart := strings.TrimSpace(part)
 				listMap[cleanPart] = true
@@ -399,9 +399,9 @@ func ParseField(v reflect.Value, vField reflect.Value, tField reflect.StructFiel
 
 			finalField.Set(reflect.ValueOf(listMap))
 		case "list":
-			list := make([]string, 0)
-
 			parts := strings.Split(vField.String(), ",")
+			list := make([]string, 0, len(parts))
+
 			for _, part := range parts {
 				cleanPart := strings.TrimSpace(part)
 				list = append(list, cleanPart)
@@ -548,7 +548,7 @@ func ParseFieldSelector(selector string) []string {
 }
 
 func ListToMap(a []string) map[string]bool {
-	result := make(map[string]bool)
+	result := make(map[string]bool, len(a))
 	for _, key := range a {
 		result[key] = true
 	}
