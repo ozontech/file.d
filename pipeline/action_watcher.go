@@ -141,15 +141,15 @@ func (s *sample) ready() <-chan bool {
 
 func (s *sample) Marshal() []byte {
 	type Result struct {
-		ProcessorID int                    `json:"processor_id"`
-		EventBefore map[string]interface{} `json:"event_before"`
-		EventAfter  map[string]interface{} `json:"event_after"`
-		EventStatus string                 `json:"event_status"`
+		ProcessorID int            `json:"processor_id"`
+		EventBefore map[string]any `json:"event_before"`
+		EventAfter  map[string]any `json:"event_after"`
+		EventStatus string         `json:"event_status"`
 	}
 	r := Result{
 		ProcessorID: s.procID,
-		EventBefore: map[string]interface{}{},
-		EventAfter:  map[string]interface{}{},
+		EventBefore: map[string]any{},
+		EventAfter:  map[string]any{},
 		EventStatus: string(s.eventStatus),
 	}
 	_ = json.Unmarshal(s.eventBefore, &r.EventBefore)

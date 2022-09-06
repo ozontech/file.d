@@ -7,7 +7,7 @@ import (
 )
 
 type yamlValue struct {
-	value interface{}
+	value any
 }
 
 func (o *yamlValue) Load(r io.Reader) error {
@@ -30,16 +30,16 @@ func (o *yamlValue) Save(w io.Writer) error {
 	return nil
 }
 
-func newYAMLOffset(path string, value interface{}) *Offset {
+func newYAMLOffset(path string, value any) *Offset {
 	res := NewOffset(path)
 	res.Callback = &yamlValue{value}
 	return res
 }
 
-func LoadYAML(path string, value interface{}) error {
+func LoadYAML(path string, value any) error {
 	return newYAMLOffset(path, value).Load()
 }
 
-func SaveYAML(path string, value interface{}) error {
+func SaveYAML(path string, value any) error {
 	return newYAMLOffset(path, value).Save()
 }

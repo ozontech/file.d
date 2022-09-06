@@ -103,9 +103,9 @@ type OutputPluginInfo struct {
 	*PluginRuntimeInfo
 }
 
-type AnyPlugin interface{}
+type AnyPlugin any
 
-type AnyConfig interface{}
+type AnyConfig any
 
 type PluginFactory func() (AnyPlugin, AnyConfig)
 

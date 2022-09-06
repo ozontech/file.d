@@ -29,7 +29,7 @@ var (
 )
 
 type PgxIface interface {
-	Query(ctx context.Context, sql string, args ...interface{}) (pgx.Rows, error)
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
 	Close()
 }
 
@@ -319,7 +319,7 @@ func (p *Plugin) out(_ *pipeline.WorkerData, batch *pipeline.Batch) {
 		p.logger.Fatalf("Invalid SQL. query: %s, args: %v, err: %v", query, args, err)
 	}
 
-	var argsSliceInterface = make([]interface{}, len(args)+1)
+	var argsSliceInterface = make([]any, len(args)+1)
 
 	argsSliceInterface[0] = preferSimpleProtocol
 	for i := 1; i < len(args)+1; i++ {
@@ -344,7 +344,7 @@ func (p *Plugin) out(_ *pipeline.WorkerData, batch *pipeline.Batch) {
 	}
 }
 
-func (p *Plugin) try(query string, argsSliceInterface []interface{}) error {
+func (p *Plugin) try(query string, argsSliceInterface []any) error {
 	ctx, cancel := context.WithTimeout(p.ctx, p.config.DBRequestTimeout_)
 	defer cancel()
 
@@ -358,8 +358,8 @@ func (p *Plugin) try(query string, argsSliceInterface []interface{}) error {
 	return err
 }
 
-func (p *Plugin) processEvent(event *pipeline.Event, pgFields []column, uniqueFields map[string]pgType) (fieldValues []interface{}, uniqueID string, err error) {
-	fieldValues = make([]interface{}, 0, len(pgFields))
+func (p *Plugin) processEvent(event *pipeline.Event, pgFields []column, uniqueFields map[string]pgType) (fieldValues []any, uniqueID string, err error) {
+	fieldValues = make([]any, 0, len(pgFields))
 	uniqueID = ""
 
 	for _, field := range pgFields {
@@ -387,7 +387,7 @@ func (p *Plugin) processEvent(event *pipeline.Event, pgFields []column, uniqueFi
 	return fieldValues, uniqueID, nil
 }
 
-func (p *Plugin) addFieldToValues(field column, sNode *insaneJSON.StrictNode) (interface{}, error) {
+func (p *Plugin) addFieldToValues(field column, sNode *insaneJSON.StrictNode) (any, error) {
 	switch field.ColType {
 	case pgString:
 		lVal, err := sNode.AsString()
