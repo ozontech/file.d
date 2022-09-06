@@ -78,9 +78,9 @@ func (l *inMemoryLimiter) rebuildBuckets(ts time.Time) int {
 	}
 	id := l.timeToBucketID(ts)
 
-	// events from past or future goes to lastest backet
-	if id < l.minID || id > maxID {
-		id = maxID
+	// events from past or future goes to the latest bucket
+	if id < l.minID || id > l.maxID {
+		id = l.maxID
 	}
 	return id
 }
