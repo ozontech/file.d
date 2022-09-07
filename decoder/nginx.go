@@ -28,7 +28,7 @@ func spaceSplit(b []byte, limit int) []int {
 func DecodeNginxError(event *insaneJSON.Root, data []byte) error {
 	split := spaceSplit(data, 3)
 	if len(split) < 3 {
-		return errors.New("incorrect format")
+		return errors.New("incorrect format, missing required fields")
 	}
 
 	tBuf := data[:split[1]]
@@ -41,11 +41,11 @@ func DecodeNginxError(event *insaneJSON.Root, data []byte) error {
 	}
 
 	if split[2]-split[1] < 4 {
-		return errors.New("incorrect level format")
+		return errors.New("incorrect log level format, too short")
 	}
 
 	event.AddFieldNoAlloc(event, "time").MutateToBytesCopy(event, tBuf)
-	event.AddFieldNoAlloc(event, "level").MutateToBytesCopy(event, data[split[1]+2:split[2]-1])
+	event.AddFieldNoAlloc(event, "level").MutateToBytesCopy(event, data[split[1]+2:split[2]-1]) // from nginx error level
 	if len(data) > split[2] {
 		event.AddFieldNoAlloc(event, "message").MutateToBytesCopy(event, data[split[2]+1:])
 	}
