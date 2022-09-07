@@ -367,7 +367,7 @@ func TestStartWithMultiBuckets(t *testing.T) {
 	// check deletion upload log files
 	for _, pattern := range patterns {
 		match := test.GetMatches(t, pattern)
-		assert.Equal(t, 1, len(match), "no matches for: ", pattern)
+		assert.Equalf(t, 1, len(match), "problem with match count for: %s", pattern)
 		test.CheckZero(t, match[0], "log file is not nil")
 	}
 
@@ -378,7 +378,7 @@ func TestStartWithMultiBuckets(t *testing.T) {
 
 	for _, pattern := range patterns {
 		match := test.GetMatches(t, pattern)
-		assert.Equal(t, 1, len(match))
+		assert.Equalf(t, 1, len(match), "problem with match count for: %s", pattern)
 		test.CheckZero(t, match[0], "log file is not empty")
 	}
 
@@ -387,13 +387,13 @@ func TestStartWithMultiBuckets(t *testing.T) {
 
 	// failed during writing
 	test.SendPack(t, p, tests.thirdPack)
-	time.Sleep(200 * time.Millisecond)
+	time.Sleep(220 * time.Millisecond)
 	p.Stop()
 
 	// check log file not empty
 	for _, pattern := range patterns {
 		match := test.GetMatches(t, pattern)
-		assert.Equal(t, 1, len(match))
+		assert.Equalf(t, 1, len(match), "problem with match count for: %s", pattern)
 		test.CheckNotZero(t, match[0], fmt.Sprintf("log file data missed for: %s", pattern))
 	}
 	// time.Sleep(sealUpFileSleep)
