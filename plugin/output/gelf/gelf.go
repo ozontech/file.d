@@ -245,7 +245,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 		if data.gelf == nil {
 			p.logger.Infof("connecting to gelf address=%s", p.config.Endpoint)
 
-			gelf, err := newClient(transportTCP, p.config.Endpoint, p.config.ConnectionTimeout_, false, nil)
+			gelf, err := newClient(p.config.Endpoint, p.config.ConnectionTimeout_, false, nil)
 			if err != nil {
 				metric.GetCounter(subsystemName, sendErrorCounter).Inc()
 				p.logger.Errorf("can't connect to gelf endpoint address=%s: %s", p.config.Endpoint, err.Error())

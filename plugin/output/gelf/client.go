@@ -6,22 +6,20 @@ import (
 	"time"
 )
 
-type network string
-
-const transportTCP network = "tcp"
+const transportTCP string = "tcp"
 
 type client struct {
 	conn    net.Conn
 	timeout time.Duration
 }
 
-func newClient(network network, address string, timeout time.Duration, useTLS bool, tlsConfig *tls.Config) (c *client, err error) {
+func newClient(address string, timeout time.Duration, useTLS bool, tlsConfig *tls.Config) (c *client, err error) {
 	c = &client{timeout: timeout}
 
 	if useTLS {
-		c.conn, err = tls.DialWithDialer(&net.Dialer{Timeout: timeout}, string(network), address, tlsConfig)
+		c.conn, err = tls.DialWithDialer(&net.Dialer{Timeout: timeout}, transportTCP, address, tlsConfig)
 	} else {
-		c.conn, err = net.DialTimeout(string(network), address, timeout)
+		c.conn, err = net.DialTimeout(transportTCP, address, timeout)
 	}
 
 	return c, err
