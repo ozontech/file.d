@@ -160,12 +160,12 @@ func parseConfig(json *simplejson.Json) *Config {
 }
 
 func validatePipelineName(name string) error {
-	matched, err := regexp.MatchString("^[a-zA-Z_]+$", name)
+	matched, err := regexp.MatchString("^[a-zA-Z0-9_]+$", name)
 	if err != nil {
 		return err
 	}
 	if !matched {
-		return fmt.Errorf(`pipeline name "%s" not satisfy regexp pattern ^[a-zA-Z_]+$`, name)
+		return fmt.Errorf(`pipeline name "%s" not satisfy regexp pattern ^[a-zA-Z0-9_]+$`, name)
 	}
 	return nil
 }
