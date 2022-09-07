@@ -13,13 +13,13 @@ type client struct {
 	timeout time.Duration
 }
 
-func newClient(address string, timeout time.Duration, useTLS bool, tlsConfig *tls.Config) (c *client, err error) {
-	c = &client{timeout: timeout}
+func newClient(address string, connTimeout, writeTimeout time.Duration, useTLS bool, tlsConfig *tls.Config) (c *client, err error) {
+	c = &client{timeout: writeTimeout}
 
 	if useTLS {
-		c.conn, err = tls.DialWithDialer(&net.Dialer{Timeout: timeout}, transportTCP, address, tlsConfig)
+		c.conn, err = tls.DialWithDialer(&net.Dialer{Timeout: connTimeout}, transportTCP, address, tlsConfig)
 	} else {
-		c.conn, err = net.DialTimeout(transportTCP, address, timeout)
+		c.conn, err = net.DialTimeout(transportTCP, address, connTimeout)
 	}
 
 	return c, err
