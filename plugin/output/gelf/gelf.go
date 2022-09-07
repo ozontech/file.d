@@ -65,9 +65,10 @@ type Config struct {
 	// > @3@4@5@6
 	// >
 	// > How much time to wait for the connection?
-	ConnectionTimeout  cfg.Duration  `json:"connection_timeout" default:"5s" parse:"duration"` // *
-	ConnectionTimeout_ time.Duration // > @3@4@5@6
+	ConnectionTimeout  cfg.Duration `json:"connection_timeout" default:"5s" parse:"duration"` // *
+	ConnectionTimeout_ time.Duration
 
+	// > @3@4@5@6
 	// >
 	// > How much time to wait for the connection?
 	WriteTimeout  cfg.Duration `json:"write_timeout" default:"10s" parse:"duration"` // *

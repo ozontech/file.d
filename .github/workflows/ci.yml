@@ -106,5 +106,8 @@ jobs:
       - name: Generate doc
         run: make gen-doc
 
+      - name: Generate mocks
+        run: make mock
+
       - name: Check git diff
         run: git diff --exit-code
