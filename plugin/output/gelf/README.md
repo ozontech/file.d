@@ -35,6 +35,12 @@ How much time to wait for the connection?
 
 <br>
 
+**`write_timeout`** *`cfg.Duration`* *`default=10s`* 
+
+How much time to wait for the connection?
+
+<br>
+
 **`host_field`** *`string`* *`default=host`* 
 
 Which field of the event should be used as `host` GELF field.

@@ -1,6 +1,6 @@
 //go:build linux
 
-package journalctl
+package journald
 
 import (
 	"os"

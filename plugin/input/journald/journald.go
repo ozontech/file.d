@@ -1,6 +1,6 @@
 //go:build linux
 
-package journalctl
+package journald
 
 import (
 	"github.com/ozontech/file.d/fd"
@@ -10,7 +10,7 @@ import (
 )
 
 /*{ introduction
-Reads `journalctl` output.
+Reads `journald` output.
 }*/
 
 type Plugin struct {
@@ -31,10 +31,10 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
-	// > Additional args for `journalctl`.
+	// > Additional args for `journald`.
 	// > Plugin forces "-o json" and "-c *cursor*" or "-n all", otherwise
 	// > you can use any additional args.
-	// >> Have a look at https://man7.org/linux/man-pages/man1/journalctl.1.html
+	// >> Have a look at https://man7.org/linux/man-pages/man1/journald.1.html
 	JournalArgs []string `json:"journal_args" default:"-f -a"` // *
 
 	// for testing mostly
@@ -54,14 +54,14 @@ func (o *offsetInfo) set(cursor string) {
 }
 
 func (p *Plugin) Write(bytes []byte) (int, error) {
-	p.params.Controller.In(0, "journalctl", p.offInfo.current, bytes, false)
+	p.params.Controller.In(0, "journald", p.offInfo.current, bytes, false)
 	p.offInfo.current++
 	return len(bytes), nil
 }
 
 func init() {
 	fd.DefaultPluginRegistry.RegisterInput(&pipeline.PluginStaticInfo{
-		Type:    "journalctl",
+		Type:    "journald",
 		Factory: Factory,
 	})
 }
@@ -103,8 +103,8 @@ func (p *Plugin) registerPluginMetrics() {
 	})
 	metric.RegisterCounter(&metric.MetricDesc{
 		Subsystem: subsystemName,
-		Name:      journalCtlStopErrors,
-		Help:      "Total journalctl stop errors",
+		Name:      journaldStopErrors,
+		Help:      "Total journald stop errors",
 	})
 	metric.RegisterCounter(&metric.MetricDesc{
 		Subsystem: subsystemName,
@@ -116,8 +116,8 @@ func (p *Plugin) registerPluginMetrics() {
 func (p *Plugin) Stop() {
 	err := p.reader.stop()
 	if err != nil {
-		metric.GetCounter(subsystemName, journalCtlStopErrors).Inc()
-		p.params.Logger.Error("can't stop journalctl cmd: %s", err.Error())
+		metric.GetCounter(subsystemName, journaldStopErrors).Inc()
+		p.params.Logger.Error("can't stop journald cmd: %s", err.Error())
 	}
 
 	if err := offset.SaveYAML(p.config.OffsetsFile, p.offInfo); err != nil {

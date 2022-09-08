@@ -17,7 +17,7 @@
     - [fake](plugin/input/fake/README.md)
     - [file](plugin/input/file/README.md)
     - [http](plugin/input/http/README.md)
-    - [journalctl](plugin/input/journalctl/README.md)
+    - [journald](plugin/input/journald/README.md)
     - [k8s](plugin/input/k8s/README.md)
     - [kafka](plugin/input/kafka/README.md)
 

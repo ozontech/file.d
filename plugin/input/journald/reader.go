@@ -1,4 +1,4 @@
-package journalctl
+package journald
 
 import (
 	"bufio"

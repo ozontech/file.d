@@ -103,10 +103,10 @@ curl "localhost:9200/_bulk" -H 'Content-Type: application/json' -d \
 
 
 [More details...](plugin/input/http/README.md)
-## journalctl
-Reads `journalctl` output.
+## journald
+Reads `journald` output.
 
-[More details...](plugin/input/journalctl/README.md)
+[More details...](plugin/input/journald/README.md)
 ## k8s
 It reads Kubernetes logs and also adds pod meta-information. Also, it joins split logs into a single event.
 
