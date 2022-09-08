@@ -53,6 +53,7 @@ linters:
     - unconvert
     - unparam
     - unused
+    - usestdlibvars
     - varcheck
     - whitespace
     # Do not enable:

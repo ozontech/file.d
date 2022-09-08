@@ -1,7 +1,6 @@
 package file
 
 import (
-	"go.uber.org/atomic"
 	"os"
 	"sync"
 	"testing"
@@ -9,6 +8,7 @@ import (
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/atomic"
 )
 
 func TestParseOffsets(t *testing.T) {

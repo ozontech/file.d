@@ -71,8 +71,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	p.controller = params.Controller
 	p.logger = params.Logger
 	p.config = config.(*Config)
-
-	p.idByTopic = make(map[string]int)
+	p.idByTopic = make(map[string]int, len(p.config.Topics))
 	for i, topic := range p.config.Topics {
 		p.idByTopic[topic] = i
 	}
