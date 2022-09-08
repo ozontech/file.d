@@ -308,7 +308,6 @@ func putMeta(podData *corev1.Pod) {
 	}
 
 	podCopy := podData
-	// podCopy := podData.DeepCopy()
 
 	pod := podName(podCopy.Name)
 	ns := namespace(podCopy.Namespace)

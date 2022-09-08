@@ -67,7 +67,6 @@ func (s *stream) commit(event *Event) {
 		return
 	}
 	s.commitSeq.Store(event.SeqID)
-	//s.commitSeq = event.SeqID
 
 	if s.isDetaching {
 		s.tryDetach()

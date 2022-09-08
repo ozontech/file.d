@@ -120,7 +120,6 @@ func (p *Plugin) serveElasticsearchTemplate(w http.ResponseWriter, _ *http.Reque
 
 func (p *Plugin) serveElasticsearchInfo(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodGet && r.RequestURI == "/" {
-
 		_, err := w.Write(info)
 		if err != nil {
 			logger.Errorf("can't write response: %s", err.Error())

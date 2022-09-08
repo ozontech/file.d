@@ -230,25 +230,27 @@ func tryGetSecret(vault secreter, field *simplejson.Json) (string, bool) {
 // Parse holy shit! who write this function?
 func Parse(ptr interface{}, values map[string]int) error {
 	v := reflect.ValueOf(ptr).Elem()
-	t := v.Type()
+	typ := v.Type()
 
-	if t.Kind() != reflect.Struct {
+	if typ.Kind() != reflect.Struct {
 		return nil
 	}
 
+	const t = "true"
+
 	childs := make([]reflect.Value, 0)
-	for i := 0; i < t.NumField(); i++ {
+	for i := 0; i < typ.NumField(); i++ {
 		vField := v.Field(i)
-		tField := t.Field(i)
+		tField := typ.Field(i)
 
 		childTag := tField.Tag.Get("child")
-		if childTag == "true" {
+		if childTag == t {
 			childs = append(childs, vField)
 			continue
 		}
 
 		sliceTag := tField.Tag.Get("slice")
-		if sliceTag == "true" {
+		if sliceTag == t {
 			if err := ParseSlice(vField, values); err != nil {
 				return err
 			}
@@ -462,7 +464,7 @@ func ParseField(v reflect.Value, vField reflect.Value, tField reflect.StructFiel
 			if err != nil {
 				return fmt.Errorf("could not parse field %s, err: %s", tField.Name, err.Error())
 			}
-			finalField.SetInt(int64(value))
+			finalField.SetInt(value)
 
 		case "data_unit":
 			parts := strings.Split(vField.String(), " ")
@@ -499,7 +501,7 @@ func UnescapeMap(fields map[string]interface{}) map[string]string {
 	result := make(map[string]string)
 
 	for key, val := range fields {
-		if len(key) == 0 {
+		if key == "" {
 			continue
 		}
 
@@ -561,8 +563,8 @@ func CompileRegex(s string) (*regexp.Regexp, error) {
 		return nil, fmt.Errorf(`regexp is empty`)
 	}
 
-	if len(s) == 0 || s[0] != '/' || s[len(s)-1] != '/' {
-		return nil, fmt.Errorf(`regexp "%s" should be surounded by "/"`, s)
+	if s == "" || s[0] != '/' || s[len(s)-1] != '/' {
+		return nil, fmt.Errorf(`regexp "%s" should be surrounded by "/"`, s)
 	}
 
 	return regexp.Compile(s[1 : len(s)-1])

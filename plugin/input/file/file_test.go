@@ -214,7 +214,7 @@ func addBytes(file string, data []byte, isLine bool, sync bool) {
 	}
 }
 
-func addString(file string, str string, isLine bool, sync bool) {
+func addString(file string, str string, isLine, isSync bool) {
 	f, err := os.OpenFile(file, os.O_APPEND|os.O_WRONLY, perm)
 	if err != nil {
 		panic(err.Error())
@@ -231,7 +231,7 @@ func addString(file string, str string, isLine bool, sync bool) {
 		}
 	}
 
-	if sync {
+	if isSync {
 		err = f.Sync()
 		if err != nil {
 			panic(err.Error())
@@ -249,7 +249,6 @@ func addLines(file string, from int, to int) int {
 
 	size := 0
 	for i := from; i < to; i++ {
-
 		if _, err = f.WriteString(strPrefix); err != nil {
 			panic(err.Error())
 		}
@@ -271,7 +270,7 @@ func addLines(file string, from int, to int) int {
 }
 
 func getContent(file string) string {
-	content, err := ioutil.ReadFile(file)
+	content, err := os.ReadFile(file)
 	if err != nil {
 		panic(err)
 	}
@@ -757,11 +756,12 @@ func TestReadManyCharsParallelRace(t *testing.T) {
 	_ = cfg.Parse(config, nil)
 
 	overhead := 100
-	s := ""
+	var s strings.Builder
+	s.Grow(config.ReadBufferSize + overhead)
 	for i := 0; i < config.ReadBufferSize+overhead; i++ {
-		s = s + "a"
+		s.WriteString("a")
 	}
-	json1 := []byte(fmt.Sprintf(`{"data":"%s"}`+"\n"+`{"data":"666"}`+"\n", s))
+	json1 := []byte(fmt.Sprintf(`{"data":"%s"}`+"\n"+`{"data":"666"}`+"\n", s.String()))
 	json2 := []byte(fmt.Sprintf(`{"data":"666"}` + "\n"))
 	lineCount := 3
 	blockCount := 128

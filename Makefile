@@ -75,8 +75,7 @@ push-images-all: push-images-version push-images-latest
 
 .PHONY: lint
 lint:
-	# installation: https://golangci-lint.run/usage/install/#local-installation
-	golangci-lint run --new-from-rev=${UPSTREAM_BRANCH}
+	go run github.com/golangci/golangci-lint/cmd/golangci-lint@v1.49.0 run --new-from-rev=${UPSTREAM_BRANCH}
 
 .PHONY: mock
 mock:

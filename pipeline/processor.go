@@ -93,13 +93,13 @@ func NewProcessor(
 	return processor
 }
 
-func (p *processor) start(params *PluginDefaultParams, logger *zap.SugaredLogger) {
+func (p *processor) start(params *PluginDefaultParams, log *zap.SugaredLogger) {
 	for i, action := range p.actions {
 		actionInfo := p.actionInfos[i]
 		action.Start(actionInfo.PluginStaticInfo.Config, &ActionPluginParams{
 			PluginDefaultParams: params,
 			Controller:          p,
-			Logger:              logger.Named("action").Named(actionInfo.Type),
+			Logger:              log.Named("action").Named(actionInfo.Type),
 		})
 	}
 

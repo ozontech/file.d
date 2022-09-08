@@ -62,7 +62,7 @@ func fPutObjectOk(bucketName, objectName, filePath string, opts minio.PutObjectO
 	defer f.Close()
 
 	if _, err := f.WriteString(fmt.Sprintf("%s | from '%s' to b: `%s` as obj: `%s`\n", time.Now().String(), filePath, bucketName, objectName)); err != nil {
-		return 0, fmt.Errorf(err.Error())
+		return 0, err
 	}
 
 	return 1, nil
@@ -92,7 +92,7 @@ func (put *putWithErr) fPutObjectErr(bucketName, objectName, filePath string, op
 		}
 
 		if _, err := f.WriteString(fmt.Sprintf("%s | from '%s' to b: `%s` as obj: `%s`\n", time.Now().String(), filePath, bucketName, objectName)); err != nil {
-			return 0, fmt.Errorf(err.Error())
+			return 0, err
 		}
 		return 1, nil
 	default:
@@ -201,7 +201,6 @@ func TestStart(t *testing.T) {
 	match = test.GetMatches(t, pattern)
 	assert.Equal(t, 1, len(match))
 	test.CheckNotZero(t, match[0], "log file data missed")
-	// time.Sleep(sealUpFileSleep)
 
 	// restart like after crash
 	p.Start()
@@ -396,7 +395,6 @@ func TestStartWithMultiBuckets(t *testing.T) {
 		assert.Equal(t, 1, len(match))
 		test.CheckNotZero(t, match[0], fmt.Sprintf("log file data missed for: %s", pattern))
 	}
-	// time.Sleep(sealUpFileSleep)
 
 	// restart like after crash
 	p.Start()
