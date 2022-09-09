@@ -41,6 +41,8 @@ func TestSaveLoad(t *testing.T) {
 	offset := testOffset{}
 	offset.set("some_name", 123)
 
+	test := 1
+	_ = test
 	err := SaveYAML(path, &offset)
 	assert.NoError(t, err)
 
