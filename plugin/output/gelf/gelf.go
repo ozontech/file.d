@@ -70,6 +70,12 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
+	// > How much time to wait for the connection?
+	WriteTimeout  cfg.Duration `json:"write_timeout" default:"10s" parse:"duration"` // *
+	WriteTimeout_ time.Duration
+
+	// > @3@4@5@6
+	// >
 	// > Which field of the event should be used as `host` GELF field.
 	HostField string `json:"host_field" default:"host"` // *
 
@@ -245,7 +251,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 		if data.gelf == nil {
 			p.logger.Infof("connecting to gelf address=%s", p.config.Endpoint)
 
-			gelf, err := newClient(transportTCP, p.config.Endpoint, p.config.ConnectionTimeout_, false, nil)
+			gelf, err := newClient(p.config.Endpoint, p.config.ConnectionTimeout_, p.config.WriteTimeout_, false, nil)
 			if err != nil {
 				metric.GetCounter(subsystemName, sendErrorCounter).Inc()
 				p.logger.Errorf("can't connect to gelf endpoint address=%s: %s", p.config.Endpoint, err.Error())

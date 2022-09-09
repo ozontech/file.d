@@ -6,45 +6,32 @@ import (
 	"time"
 )
 
-type network string
-
-const transportTCP network = "tcp"
+const transportTCP string = "tcp"
 
 type client struct {
-	useTLS    bool
-	stdClient net.Conn
-	tlsClient *tls.Conn
+	conn    net.Conn
+	timeout time.Duration
 }
 
-func newClient(network network, address string, timeout time.Duration, useTLS bool, tlsConfig *tls.Config) (*client, error) {
-	if useTLS {
-		c, err := tls.DialWithDialer(&net.Dialer{Timeout: timeout}, string(network), address, tlsConfig)
-		if err != nil {
-			return nil, err
-		}
+func newClient(address string, connTimeout, writeTimeout time.Duration, useTLS bool, tlsConfig *tls.Config) (c *client, err error) {
+	c = &client{timeout: writeTimeout}
 
-		return &client{tlsClient: c}, nil
+	if useTLS {
+		c.conn, err = tls.DialWithDialer(&net.Dialer{Timeout: connTimeout}, transportTCP, address, tlsConfig)
 	} else {
-		c, err := net.DialTimeout(string(network), address, timeout)
-		if err != nil {
-			return nil, err
-		}
-		return &client{stdClient: c}, nil
+		c.conn, err = net.DialTimeout(transportTCP, address, connTimeout)
 	}
+
+	return c, err
 }
 
 func (g *client) send(data []byte) (int, error) {
-	if g.useTLS {
-		return g.tlsClient.Write(data)
-	} else {
-		return g.stdClient.Write(data)
+	if err := g.conn.SetWriteDeadline(time.Now().Add(g.timeout)); err != nil {
+		return 0, err
 	}
+	return g.conn.Write(data)
 }
 
 func (g *client) close() error {
-	if g.useTLS {
-		return g.tlsClient.Close()
-	} else {
-		return g.stdClient.Close()
-	}
+	return g.conn.Close()
 }

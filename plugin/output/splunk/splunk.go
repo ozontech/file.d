@@ -196,7 +196,7 @@ func (p *Plugin) newClient(timeout time.Duration) http.Client {
 func (p *Plugin) send(data []byte) error {
 	r := bytes.NewReader(data)
 	// todo pass context from parent.
-	req, err := http.NewRequestWithContext(context.Background(), "POST", p.config.Endpoint, r)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, p.config.Endpoint, r)
 	if err != nil {
 		return fmt.Errorf("can't create request: %w", err)
 	}
@@ -208,7 +208,7 @@ func (p *Plugin) send(data []byte) error {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("can't send request: %s", resp.Status)
 	}
 

@@ -69,7 +69,7 @@ jobs:
       - name: Lint
         uses: golangci/golangci-lint-action@v3
         with:
-          version: v1.45.2
+          version: v1.49.0
           only-new-issues: true
           args: --timeout 5m
 
@@ -105,6 +105,9 @@ jobs:
 
       - name: Generate doc
         run: make gen-doc
+
+      - name: Generate mocks
+        run: make mock
 
       - name: Check git diff
         run: git diff --exit-code

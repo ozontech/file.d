@@ -481,7 +481,7 @@ func TestParseDefaultInt(t *testing.T) {
 }
 
 func TestPipelineValidatorValid(t *testing.T) {
-	testName := []string{"pipeline_name", "PipeLine_NAME", "pipelinename", "PIPELINENAME"}
+	testName := []string{"pipeline_name", "PipeLine_NAME", "pipelinename", "PIPELINENAME", "pipeline_k8s"}
 	for _, tl := range testName {
 		assert.NoError(t, validatePipelineName(tl))
 	}
