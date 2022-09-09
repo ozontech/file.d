@@ -355,7 +355,7 @@ func BenchmarkHttpInputJson(b *testing.B) {
 			}
 			_, _ = io.Copy(ioutil.Discard, resp.Body) // https://github.com/google/go-github/pull/317
 			_ = resp.Body.Close()
-			if resp.StatusCode != 200 {
+			if resp.StatusCode != http.StatusOK {
 				panic(resp.Status)
 			}
 		}
