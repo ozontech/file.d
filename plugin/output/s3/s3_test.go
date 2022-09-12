@@ -6,8 +6,10 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 	"time"
+	"unsafe"
 
 	"github.com/golang/mock/gomock"
 	"github.com/minio/minio-go"
@@ -21,6 +23,7 @@ import (
 	"github.com/ozontech/file.d/test"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/atomic"
 	"golang.org/x/net/context"
 )
@@ -28,8 +31,9 @@ import (
 const targetFile = "filetests/log.log"
 
 var (
-	dir, _   = filepath.Split(targetFile)
-	fileName atomic.String
+	dir, _           = filepath.Split(targetFile)
+	fileName         atomic.String
+	pipelineCapacity = 4096
 )
 
 func testFactory(objStoreF objStoreFactory) (pipeline.AnyPlugin, pipeline.AnyConfig) {
@@ -166,7 +170,7 @@ func TestStart(t *testing.T) {
 		return s3MockClient, map[string]ObjectStoreClient{
 			bucketName: s3MockClient,
 		}, nil
-	})
+	}, pipelineCapacity)
 	assert.NotNil(t, p, "could not create new pipeline")
 	p.Start()
 	time.Sleep(300 * time.Microsecond)
@@ -355,7 +359,7 @@ func TestStartWithMultiBuckets(t *testing.T) {
 			buckets[2]:    s3MockClient,
 			dynamicBucket: s3MockClient,
 		}, nil
-	})
+	}, pipelineCapacity)
 	assert.NotNil(t, p, "could not create new pipeline")
 	p.Start()
 	time.Sleep(300 * time.Microsecond)
@@ -387,9 +391,31 @@ func TestStartWithMultiBuckets(t *testing.T) {
 
 	// failed during writing
 	test.SendPack(t, p, tests.thirdPack)
-	time.Sleep(220 * time.Millisecond)
-	p.Stop()
 
+	ctx, _ := context.WithTimeout(context.Background(), time.Millisecond*300)
+	eventPool := reflect.ValueOf(p).Elem().FieldByName("eventPool")
+	f := func(ctx context.Context) {
+		ch := make(chan reflect.Value, 1)
+		// wait until all events passed pipeline.
+		for {
+			ch <- eventPool.Elem().FieldByName("backCounter")
+			select {
+			case <-ctx.Done():
+				require.True(t, false, "time passed out test failed")
+			case eventsCounter := <-ch:
+				//extract backCounter value
+				eventsCnt := reflect.NewAt(eventsCounter.Type(), unsafe.Pointer(eventsCounter.UnsafeAddr())).Elem()
+				value := eventsCnt.Interface().(atomic.Int64)
+				if int64(pipelineCapacity+len(tests.firstPack)+len(tests.secondPack)+len(tests.thirdPack)) == value.Load() {
+					return
+				}
+				time.Sleep(time.Millisecond * 5)
+			}
+		}
+	}
+
+	f(ctx)
+	p.Stop()
 	// check log file not empty
 	for _, pattern := range patterns {
 		match := test.GetMatches(t, pattern)
@@ -407,11 +433,11 @@ func TestStartWithMultiBuckets(t *testing.T) {
 	assert.True(t, size3 > size2)
 }
 
-func newPipeline(t *testing.T, configOutput *Config, objStoreF objStoreFactory) *pipeline.Pipeline {
+func newPipeline(t *testing.T, configOutput *Config, objStoreF objStoreFactory, pipelineCapacity int) *pipeline.Pipeline {
 	metric.InitStats()
 	t.Helper()
 	settings := &pipeline.Settings{
-		Capacity:            4096,
+		Capacity:            pipelineCapacity,
 		MaintenanceInterval: time.Second * 10,
 		//MaintenanceInterval: time.Second * 100000,
 		AntispamThreshold: 0,
@@ -475,7 +501,7 @@ func TestStartPanic(t *testing.T) {
 	assert.NoError(t, err)
 	p := newPipeline(t, config, func(cfg *Config) (ObjectStoreClient, map[string]ObjectStoreClient, error) {
 		return nil, nil, nil
-	})
+	}, pipelineCapacity)
 
 	assert.NotNil(t, p, "could not create new pipeline")
 
@@ -552,7 +578,7 @@ func TestStartWithSendProblems(t *testing.T) {
 		return s3MockClient, map[string]ObjectStoreClient{
 			bucketName: s3MockClient,
 		}, nil
-	})
+	}, pipelineCapacity)
 
 	assert.NotNil(t, p, "could not create new pipeline")
 
