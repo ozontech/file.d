@@ -198,9 +198,12 @@ func TestStart(t *testing.T) {
 
 	// failed during writing
 	test.SendPack(t, p, tests.thirdPack)
-	time.Sleep(200 * time.Millisecond)
-	p.Stop()
 
+	ctx, _ := context.WithTimeout(context.Background(), time.Millisecond*300)
+	//use this function instead of time.Sleep()
+	//this increases the chance of realizing the tested situation
+	WaitStoppingProcessing(ctx, t, p, pipelineCapacity+len(tests.firstPack)+len(tests.secondPack)+len(tests.thirdPack))
+	p.Stop()
 	// check log file not empty
 	match = test.GetMatches(t, pattern)
 	assert.Equal(t, 1, len(match))
@@ -393,28 +396,9 @@ func TestStartWithMultiBuckets(t *testing.T) {
 	test.SendPack(t, p, tests.thirdPack)
 
 	ctx, _ := context.WithTimeout(context.Background(), time.Millisecond*300)
-	eventPool := reflect.ValueOf(p).Elem().FieldByName("eventPool")
-	f := func(ctx context.Context) {
-		ch := make(chan reflect.Value, 1)
-		// wait until all events passed pipeline.
-		for {
-			ch <- eventPool.Elem().FieldByName("backCounter")
-			select {
-			case <-ctx.Done():
-				require.True(t, false, "time passed out test failed")
-			case eventsCounter := <-ch:
-				//extract backCounter value
-				eventsCnt := reflect.NewAt(eventsCounter.Type(), unsafe.Pointer(eventsCounter.UnsafeAddr())).Elem()
-				value := eventsCnt.Interface().(atomic.Int64)
-				if int64(pipelineCapacity+len(tests.firstPack)+len(tests.secondPack)+len(tests.thirdPack)) == value.Load() {
-					return
-				}
-				time.Sleep(time.Millisecond * 5)
-			}
-		}
-	}
-
-	f(ctx)
+	//use this function instead of time.Sleep()
+	//this increases the chance of realizing the tested situation
+	WaitStoppingProcessing(ctx, t, p, pipelineCapacity+len(tests.firstPack)+len(tests.secondPack)+len(tests.thirdPack))
 	p.Stop()
 	// check log file not empty
 	for _, pattern := range patterns {
@@ -478,6 +462,27 @@ func newPipeline(t *testing.T, configOutput *Config, objStoreF objStoreFactory, 
 	},
 	)
 	return p
+}
+
+func WaitStoppingProcessing(ctx context.Context, t *testing.T, p *pipeline.Pipeline, limit int) {
+	ch := make(chan reflect.Value, 1)
+	eventPool := reflect.ValueOf(p).Elem().FieldByName("eventPool")
+	// wait until all events passed pipeline.
+	for {
+		ch <- eventPool.Elem().FieldByName("backCounter")
+		select {
+		case <-ctx.Done():
+			require.True(t, false, "time passed out test failed")
+		case eventsCounter := <-ch:
+			//extract backCounter value
+			eventsCnt := reflect.NewAt(eventsCounter.Type(), unsafe.Pointer(eventsCounter.UnsafeAddr())).Elem()
+			value := eventsCnt.Interface().(atomic.Int64)
+			if int64(limit) == value.Load() {
+				return
+			}
+			time.Sleep(time.Millisecond * 5)
+		}
+	}
 }
 
 func TestStartPanic(t *testing.T) {
