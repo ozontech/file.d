@@ -24,7 +24,7 @@ func (i *inputerMock) IncReadOps() {}
 
 func (i *inputerMock) IncMaxEventSizeExceeded() {}
 
-func (i *inputerMock) In(_ pipeline.SourceID, _ string, _ int64, data []byte, _ bool, savedOffsets pipeline.SliceMap) uint64 {
+func (i *inputerMock) In(_ pipeline.SourceID, _ string, _ int64, data []byte, _ bool) uint64 {
 	i.gotData = append(i.gotData, string(data))
 	return 0
 }
@@ -43,7 +43,6 @@ func TestWorkerWork(t *testing.T) {
 		inFile         string
 		readBufferSize int
 		expData        string
-		offsets        pipeline.SliceMap
 	}{
 		{
 			name:           "should_ok_when_read_1_line",
@@ -89,7 +88,6 @@ func TestWorkerWork(t *testing.T) {
 				isVirgin:       false,
 				isDone:         false,
 				shouldSkip:     *atomic.NewBool(false),
-				offsets:        tt.offsets,
 				mu:             &sync.Mutex{},
 			}
 			jp := NewJobProvider(&Config{}, nil, &zap.SugaredLogger{})
@@ -215,7 +213,7 @@ func TestWorkerWorkMultiData(t *testing.T) {
 			job := &Job{
 				file:       f,
 				shouldSkip: *atomic.NewBool(false),
-				offsets:    pipeline.SliceMap{},
+				offsets:    sliceMap{},
 				mu:         &sync.Mutex{},
 			}
 

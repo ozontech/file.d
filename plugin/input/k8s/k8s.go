@@ -146,3 +146,8 @@ func (p *Plugin) Commit(event *pipeline.Event) {
 func (p *Plugin) Stop() {
 	p.fp.Stop()
 }
+
+// IsPassedEvent shows if event were already passed.
+func (p *Plugin) IsPassedEvent(event *pipeline.Event) bool {
+	return false
+}

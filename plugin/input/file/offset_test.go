@@ -67,7 +67,7 @@ func TestParallel(t *testing.T) {
     stderr: 300
 `
 	jobs := make(map[pipeline.SourceID]*Job)
-	offsets := pipeline.SliceMap{pipeline.KV{Stream: "stdout", Offset: 111}, pipeline.KV{Stream: "stderr", Offset: 222}}
+	offsets := sliceMap{kv{stream: "stdout", offset: 111}, kv{stream: "stderr", offset: 222}}
 	jobs[0] = &Job{
 		file:           nil,
 		inode:          2343,

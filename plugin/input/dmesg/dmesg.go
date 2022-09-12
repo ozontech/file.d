@@ -118,7 +118,7 @@ func (p *Plugin) read() {
 
 		out = root.Encode(out[:0])
 
-		p.controller.In(0, "", ts, out, false, nil)
+		p.controller.In(0, "", ts, out, false)
 	}
 }
 
@@ -135,4 +135,9 @@ func (p *Plugin) Commit(event *pipeline.Event) {
 		metric.GetCounter(subsystemName, offsetErrors).Inc()
 		p.logger.Error("can't save offset file: %s", err.Error())
 	}
+}
+
+// IsPassedEvent shows if event were already passed.
+func (p *Plugin) IsPassedEvent(event *pipeline.Event) bool {
+	return false
 }

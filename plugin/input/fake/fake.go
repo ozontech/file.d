@@ -61,3 +61,8 @@ func (p *Plugin) SetCommitFn(fn func(event *pipeline.Event)) { // *
 func (p *Plugin) SetInFn(fn func()) { // *
 	p.inFn = fn
 }
+
+// IsPassedEvent shows if event were already passed.
+func (p *Plugin) IsPassedEvent(event *pipeline.Event) bool {
+	return false
+}

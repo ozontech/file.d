@@ -294,3 +294,8 @@ func (p *Plugin) Stop() {
 func (p *Plugin) Commit(_ *pipeline.Event) {
 	// todo: don't reply with OK till all events in request will be committed
 }
+
+// IsPassedEvent shows if event were already passed.
+func (p *Plugin) IsPassedEvent(event *pipeline.Event) bool {
+	return false
+}

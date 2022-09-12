@@ -111,14 +111,6 @@ func (w *worker) work(controller inputer, jobProvider *jobProvider, readBufferSi
 					}
 
 					job.lastEventSeq = controller.In(sourceID, sourceName, lastOffset+scanned, inBuf, isVirgin)
-					//currOffset :=
-					// after restart file reads
-					//if currOffset > job.offsets.GetMaxOffset() {
-
-					//} else {
-					//	job.lastEventSeq = pipeline.EventSeqIDError
-					//	metric.GetCounter(subsystemName, alreadyWrittenEventsSkippedCounter).Inc()
-					//}
 				}
 				// restore the line buffer
 				accumBuf = accumBuf[:0]

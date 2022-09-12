@@ -134,3 +134,8 @@ func (p *Plugin) Commit(event *pipeline.Event) {
 		p.params.Logger.Error("can't save offset file: %s", err.Error())
 	}
 }
+
+// IsPassedEvent shows if event were already passed.
+func (p *Plugin) IsPassedEvent(event *pipeline.Event) bool {
+	return false
+}

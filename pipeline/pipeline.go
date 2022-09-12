@@ -438,6 +438,7 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 }
 
 func (p *Pipeline) streamEvent(event *Event) uint64 {
+	var streamName StreamName
 	streamID := StreamID(event.SourceID)
 
 	// spread events across all processors
@@ -448,17 +449,16 @@ func (p *Pipeline) streamEvent(event *Event) uint64 {
 	if !p.disableStreams {
 		node := event.Root.Dig(p.settings.StreamField)
 		if node != nil {
-			event.streamName = StreamName(node.AsString())
+			streamName = StreamName(node.AsString())
+			event.streamName = streamName
+		}
+
+		// event already passed during previous process
+		// Skip it.
+		if passed := p.input.IsPassedEvent(event); passed {
+			return EventSeqIDError
 		}
 	}
-
-	/*if savedOffsets != nil {
-		if offset, exist := savedOffsets.Get(event.streamName); exist {
-			if offset >= event.Offset {
-				return EventSeqIDError
-			}
-		}
-	}*/
 
 	return p.streamer.putEvent(streamID, event.streamName, event)
 }

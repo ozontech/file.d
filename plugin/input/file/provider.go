@@ -67,14 +67,14 @@ type Job struct {
 	ignoreEventsLE uint64 // events with seq id less or equal than this should be ignored in terms offset commitment
 	lastEventSeq   uint64
 
-	isVirgin   bool // it should be Set to false if job hits isDone=true at the first time
+	isVirgin   bool // it should be set to false if job hits isDone=true at the first time
 	isDone     bool
 	shouldSkip atomic.Bool
 
-	// offsets is a SliceMap of streamName to offset.
-	// Unlike map[string]int, SliceMap can work with mutable strings when using unsafe conversion from []byte.
+	// offsets is a sliceMap of streamName to offset.
+	// Unlike map[string]int, sliceMap can work with mutable strings when using unsafe conversion from []byte.
 	// Also it is likely not slower than map implementation for 1-2 streams case.
-	offsets pipeline.SliceMap
+	offsets sliceMap
 
 	mu *sync.Mutex
 }
@@ -187,7 +187,7 @@ func (jp *jobProvider) commit(event *pipeline.Event) {
 		return
 	}
 
-	value, has := job.offsets.Get(streamName)
+	value, has := job.offsets.get(streamName)
 	if value >= event.Offset {
 		defer job.mu.Unlock()
 		jp.logger.Panicf("offset corruption: committing=%d, current=%d, event id=%d, source=%d:%s", event.Offset, value, event.SeqID, event.SourceID, event.SourceName)
@@ -195,15 +195,15 @@ func (jp *jobProvider) commit(event *pipeline.Event) {
 
 	if value == 0 && event.Offset >= 16*1024*1024 {
 		metric.GetCounter(subsystemName, possibleOffsetCorruptionCounter).Inc()
-		jp.logger.Errorf("it maybe an Offset corruption: committing=%d, current=%d, event id=%d, source=%d:%s", event.Offset, value, event.SeqID, event.SourceID, event.SourceName)
+		jp.logger.Errorf("it maybe an offset corruption: committing=%d, current=%d, event id=%d, source=%d:%s", event.Offset, value, event.SeqID, event.SourceID, event.SourceName)
 	}
 
-	// streamName isn't actually a string, but unsafe []byte, so copy it when adding to the SliceMap
+	// streamName isn't actually a string, but unsafe []byte, so copy it when adding to the sliceMap
 	if has {
-		job.offsets.Set(streamName, event.Offset)
+		job.offsets.set(streamName, event.Offset)
 	} else {
 		streamNameCopy := pipeline.StreamName(event.StreamNameBytes())
-		job.offsets.Set(streamNameCopy, event.Offset)
+		job.offsets.set(streamNameCopy, event.Offset)
 	}
 
 	job.mu.Unlock()
@@ -394,7 +394,7 @@ func (jp *jobProvider) initJobOffset(operation offsetsOp, job *Job) {
 			return
 		}
 
-		job.offsets = pipeline.SliceFromMap(offsets.streams)
+		job.offsets = sliceFromMap(offsets.streams)
 		// find min Offset to start read from it
 		minOffset := int64(math.MaxInt64)
 		for _, offset := range offsets.streams {
@@ -460,7 +460,7 @@ func (jp *jobProvider) truncateJob(job *Job) {
 	job.seek(0, io.SeekStart, "truncation")
 
 	for _, strOff := range job.offsets {
-		job.offsets.Set(strOff.Stream, 0)
+		job.offsets.set(strOff.stream, 0)
 	}
 
 	jp.logger.Infof("job %d:%s was truncated, reading will start over, events with id less than %d will be ignored", job.sourceID, job.filename, job.ignoreEventsLE)
