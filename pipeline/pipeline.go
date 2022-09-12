@@ -53,7 +53,7 @@ const (
 type finalizeFn = func(event *Event, notifyInput bool, backEvent bool)
 
 type InputPluginController interface {
-	In(sourceID SourceID, sourceName string, offset int64, data []byte, isNewSource bool, savedOffsets SliceMap) uint64
+	In(sourceID SourceID, sourceName string, offset int64, data []byte, isNewSource bool) uint64
 	UseSpread()                           // don't use stream field and spread all events across all processors
 	DisableStreams()                      // don't use stream field
 	SuggestDecoder(t decoder.DecoderType) // set decoder if pipeline uses "auto" value for decoder
@@ -353,7 +353,7 @@ func (p *Pipeline) GetOutput() OutputPlugin {
 }
 
 // In decodes message and passes it to event stream.
-func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes []byte, isNewSource bool, savedOffsets SliceMap) (seqID uint64) {
+func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes []byte, isNewSource bool) (seqID uint64) {
 	length := len(bytes)
 
 	// don't process mud.
@@ -434,10 +434,10 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 		p.inSample = event.Root.Encode(p.inSample)
 	}
 
-	return p.streamEvent(event, savedOffsets)
+	return p.streamEvent(event)
 }
 
-func (p *Pipeline) streamEvent(event *Event, savedOffsets SliceMap) uint64 {
+func (p *Pipeline) streamEvent(event *Event) uint64 {
 	streamID := StreamID(event.SourceID)
 
 	// spread events across all processors
@@ -452,13 +452,13 @@ func (p *Pipeline) streamEvent(event *Event, savedOffsets SliceMap) uint64 {
 		}
 	}
 
-	if savedOffsets != nil {
+	/*if savedOffsets != nil {
 		if offset, exist := savedOffsets.Get(event.streamName); exist {
 			if offset >= event.Offset {
 				return EventSeqIDError
 			}
 		}
-	}
+	}*/
 
 	return p.streamer.putEvent(streamID, event.streamName, event)
 }

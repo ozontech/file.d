@@ -42,7 +42,7 @@ func TestInUnparsableMessages(t *testing.T) {
 
 		pipe.SetInput(getFakeInputInfo())
 
-		seqID := pipe.In(sourceID, "kafka", offset, message, false, nil)
+		seqID := pipe.In(sourceID, "kafka", offset, message, false)
 		require.Equal(t, pipeline.EventSeqIDError, seqID)
 
 		refPipe := reflect.ValueOf(pipe)
@@ -118,12 +118,13 @@ func TestInInvalidMessages(t *testing.T) {
 
 			pipe.SetInput(getFakeInputInfo())
 
-			seqID := pipe.In(tCase.sourceID, "kafka", tCase.offset, tCase.message, false, nil)
+			seqID := pipe.In(tCase.sourceID, "kafka", tCase.offset, tCase.message, false)
 			require.Equal(t, pipeline.EventSeqIDError, seqID)
 		})
 	}
 }
 
+/*
 func TestSkipOldOffsets(t *testing.T) {
 	metric.InitStats()
 
@@ -150,7 +151,7 @@ func TestSkipOldOffsets(t *testing.T) {
 	pipe := pipeline.New("test_pipeline", pipelineSettings, nil)
 	pipe.SetInput(getFakeInputInfo())
 
-	seqID := pipe.In(sourceID, "file_in", stdErrStartPos+int64(len(messageStdOutCommitted)), messageStdOutCommitted, false, offsetsMap)
+	seqID := pipe.In(sourceID, "file_in", stdErrStartPos+int64(len(messageStdOutCommitted)), messageStdOutCommitted, false)
 	// First stdout event already written. Skip it.
 	require.Equal(t, pipeline.EventSeqIDError, seqID)
 
@@ -200,3 +201,4 @@ func TestSkipOldOffsets(t *testing.T) {
 	// Last committed stdout message. Skip.
 	require.Equal(t, uint64(1), seqID)
 }
+*/

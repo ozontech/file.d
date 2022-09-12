@@ -16,7 +16,7 @@ type worker struct {
 
 type inputer interface {
 	// In processes event and returns it seq number.
-	In(sourceID pipeline.SourceID, sourceName string, offset int64, data []byte, isNewSource bool, savedOffsets pipeline.SliceMap) uint64
+	In(sourceID pipeline.SourceID, sourceName string, offset int64, data []byte, isNewSource bool) uint64
 	IncReadOps()
 	IncMaxEventSizeExceeded()
 }
@@ -110,7 +110,7 @@ func (w *worker) work(controller inputer, jobProvider *jobProvider, readBufferSi
 						inBuf = accumBuf
 					}
 
-					job.lastEventSeq = controller.In(sourceID, sourceName, lastOffset+scanned, inBuf, isVirgin, job.offsets)
+					job.lastEventSeq = controller.In(sourceID, sourceName, lastOffset+scanned, inBuf, isVirgin)
 					//currOffset :=
 					// after restart file reads
 					//if currOffset > job.offsets.GetMaxOffset() {
