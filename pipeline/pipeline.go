@@ -1,6 +1,7 @@
 package pipeline
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -807,4 +808,24 @@ func writeErr(w io.Writer, err string) {
 		Error: err,
 	})
 	_, _ = w.Write(respErr)
+}
+
+type Test struct {
+	*Pipeline
+}
+
+func (p *Test) WaitStoppingProcessing(ctx context.Context, limit int) error {
+	// wait until all events passed pipeline.
+	for {
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("time passed out test failed")
+		default:
+			//extract backCounter value
+			if int64(limit) == p.eventPool.backCounter.Load() {
+				return nil
+			}
+			time.Sleep(time.Millisecond * 5)
+		}
+	}
 }

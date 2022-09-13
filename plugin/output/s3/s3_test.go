@@ -6,10 +6,8 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"reflect"
 	"testing"
 	"time"
-	"unsafe"
 
 	"github.com/golang/mock/gomock"
 	"github.com/minio/minio-go"
@@ -23,7 +21,6 @@ import (
 	"github.com/ozontech/file.d/test"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"go.uber.org/atomic"
 	"golang.org/x/net/context"
 )
@@ -165,8 +162,8 @@ func TestStart(t *testing.T) {
 
 	err := cfg.Parse(config, map[string]int{"gomaxprocs": 1, "capacity": 64})
 	assert.NoError(t, err)
-
-	p := newPipeline(t, config, func(cfg *Config) (ObjectStoreClient, map[string]ObjectStoreClient, error) {
+	var p pipeline.Test
+	p.Pipeline = newPipeline(t, config, func(cfg *Config) (ObjectStoreClient, map[string]ObjectStoreClient, error) {
 		return s3MockClient, map[string]ObjectStoreClient{
 			bucketName: s3MockClient,
 		}, nil
@@ -175,7 +172,7 @@ func TestStart(t *testing.T) {
 	p.Start()
 	time.Sleep(300 * time.Microsecond)
 
-	test.SendPack(t, p, tests.firstPack)
+	test.SendPack(t, p.Pipeline, tests.firstPack)
 	time.Sleep(time.Second)
 	size1 := test.CheckNotZero(t, fileName.Load(), "s3 data is missed after first pack")
 
@@ -186,7 +183,7 @@ func TestStart(t *testing.T) {
 
 	// initial sending the second pack
 	// no special situations
-	test.SendPack(t, p, tests.secondPack)
+	test.SendPack(t, p.Pipeline, tests.secondPack)
 	time.Sleep(time.Second)
 
 	match = test.GetMatches(t, pattern)
@@ -197,12 +194,13 @@ func TestStart(t *testing.T) {
 	assert.True(t, size2 > size1)
 
 	// failed during writing
-	test.SendPack(t, p, tests.thirdPack)
+	test.SendPack(t, p.Pipeline, tests.thirdPack)
 
 	ctx, _ := context.WithTimeout(context.Background(), time.Millisecond*300)
 	//use this function instead of time.Sleep()
 	//this increases the chance of realizing the tested situation
-	WaitStoppingProcessing(ctx, t, p, pipelineCapacity+len(tests.firstPack)+len(tests.secondPack)+len(tests.thirdPack))
+	err = p.WaitStoppingProcessing(ctx, pipelineCapacity+len(tests.firstPack)+len(tests.secondPack)+len(tests.thirdPack))
+	assert.Nil(t, err, "try to restart test")
 	p.Stop()
 	// check log file not empty
 	match = test.GetMatches(t, pattern)
@@ -355,7 +353,8 @@ func TestStartWithMultiBuckets(t *testing.T) {
 	err := cfg.Parse(config, map[string]int{"gomaxprocs": 1, "capacity": 64})
 	assert.NoError(t, err)
 
-	p := newPipeline(t, config, func(cfg *Config) (ObjectStoreClient, map[string]ObjectStoreClient, error) {
+	var p pipeline.Test
+	p.Pipeline = newPipeline(t, config, func(cfg *Config) (ObjectStoreClient, map[string]ObjectStoreClient, error) {
 		return s3MockClient, map[string]ObjectStoreClient{
 			buckets[0]:    s3MockClient,
 			buckets[1]:    s3MockClient,
@@ -367,7 +366,7 @@ func TestStartWithMultiBuckets(t *testing.T) {
 	p.Start()
 	time.Sleep(300 * time.Microsecond)
 
-	test.SendPack(t, p, tests.firstPack)
+	test.SendPack(t, p.Pipeline, tests.firstPack)
 	time.Sleep(time.Second)
 	size1 := test.CheckNotZero(t, fileName.Load(), "s3 data is missed after first pack")
 
@@ -380,7 +379,7 @@ func TestStartWithMultiBuckets(t *testing.T) {
 
 	// initial sending the second pack
 	// no special situations
-	test.SendPack(t, p, tests.secondPack)
+	test.SendPack(t, p.Pipeline, tests.secondPack)
 	time.Sleep(time.Second)
 
 	for _, pattern := range patterns {
@@ -393,12 +392,13 @@ func TestStartWithMultiBuckets(t *testing.T) {
 	assert.True(t, size2 > size1)
 
 	// failed during writing
-	test.SendPack(t, p, tests.thirdPack)
+	test.SendPack(t, p.Pipeline, tests.thirdPack)
 
 	ctx, _ := context.WithTimeout(context.Background(), time.Millisecond*300)
 	//use this function instead of time.Sleep()
 	//this increases the chance of realizing the tested situation
-	WaitStoppingProcessing(ctx, t, p, pipelineCapacity+len(tests.firstPack)+len(tests.secondPack)+len(tests.thirdPack))
+	err = p.WaitStoppingProcessing(ctx, pipelineCapacity+len(tests.firstPack)+len(tests.secondPack)+len(tests.thirdPack))
+	assert.Nil(t, err, "try to restart test")
 	p.Stop()
 	// check log file not empty
 	for _, pattern := range patterns {
@@ -462,27 +462,6 @@ func newPipeline(t *testing.T, configOutput *Config, objStoreF objStoreFactory, 
 	},
 	)
 	return p
-}
-
-func WaitStoppingProcessing(ctx context.Context, t *testing.T, p *pipeline.Pipeline, limit int) {
-	ch := make(chan reflect.Value, 1)
-	eventPool := reflect.ValueOf(p).Elem().FieldByName("eventPool")
-	// wait until all events passed pipeline.
-	for {
-		ch <- eventPool.Elem().FieldByName("backCounter")
-		select {
-		case <-ctx.Done():
-			require.True(t, false, "time passed out test failed")
-		case eventsCounter := <-ch:
-			//extract backCounter value
-			eventsCnt := reflect.NewAt(eventsCounter.Type(), unsafe.Pointer(eventsCounter.UnsafeAddr())).Elem()
-			value := eventsCnt.Interface().(atomic.Int64)
-			if int64(limit) == value.Load() {
-				return
-			}
-			time.Sleep(time.Millisecond * 5)
-		}
-	}
 }
 
 func TestStartPanic(t *testing.T) {
