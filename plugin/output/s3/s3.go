@@ -427,7 +427,7 @@ func (p *Plugin) tryRunNewPlugin(bucketName string) (isCreated bool) {
 
 // uploadExistingFiles gets files from dirs, sorts it, compresses it if it's need, and then upload to s3.
 func (p *Plugin) uploadExistingFiles(targetDirs, dynamicDirs, fileNames map[string]string) {
-	allDirs := make(map[string]string)
+	allDirs := make(map[string]string, len(dynamicDirs)+len(targetDirs))
 	for k, v := range dynamicDirs {
 		allDirs[k] = v
 	}

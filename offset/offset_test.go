@@ -3,7 +3,6 @@ package offset
 import (
 	"bytes"
 	"fmt"
-	"os"
 	"path/filepath"
 	"testing"
 
@@ -18,12 +17,6 @@ type testOffset struct {
 func (o *testOffset) set(name string, value int) {
 	o.Name = name
 	o.Value = value
-}
-
-func getTmpPath(t *testing.T, file string) string {
-	res, err := os.MkdirTemp("", "file.d")
-	assert.NoError(t, err)
-	return filepath.Join(res, file)
 }
 
 func TestYAML(t *testing.T) {
@@ -44,7 +37,7 @@ func TestYAML(t *testing.T) {
 }
 
 func TestSaveLoad(t *testing.T) {
-	path := getTmpPath(t, "offset.yaml")
+	path := filepath.Join(t.TempDir(), "offset.yaml")
 	offset := testOffset{}
 	offset.set("some_name", 123)
 
@@ -59,7 +52,7 @@ func TestSaveLoad(t *testing.T) {
 }
 
 func TestAppendFile(t *testing.T) {
-	path := getTmpPath(t, "offset.yaml")
+	path := filepath.Join(t.TempDir(), "offset.yaml")
 	for i := 1; i < 5; i++ {
 		offset := testOffset{}
 		offset.set(fmt.Sprintf("iter_%d", i), i)
@@ -77,7 +70,7 @@ func TestAppendFile(t *testing.T) {
 
 // check, that no errors will happen
 func TestNoFile(t *testing.T) {
-	path := getTmpPath(t, "offset.yaml")
+	path := filepath.Join(t.TempDir(), "offset.yaml")
 
 	loaded := testOffset{}
 	err := LoadYAML(path, &loaded)

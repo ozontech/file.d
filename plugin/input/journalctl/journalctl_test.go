@@ -3,7 +3,6 @@
 package journalctl
 
 import (
-	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -14,12 +13,6 @@ import (
 	"github.com/ozontech/file.d/test"
 	"github.com/stretchr/testify/assert"
 )
-
-func getTmpPath(t *testing.T, file string) string {
-	res, err := os.MkdirTemp("", "file.d")
-	assert.NoError(t, err)
-	return filepath.Join(res, file)
-}
 
 func setInput(p *pipeline.Pipeline, config *Config, t *testing.T) {
 	p.SetInput(&pipeline.InputPluginInfo{
@@ -50,7 +43,7 @@ func setOutput(p *pipeline.Pipeline, out func(event *pipeline.Event)) {
 
 func TestPipeline(t *testing.T) {
 	p := test.NewPipeline(nil, "passive")
-	config := &Config{OffsetsFile: getTmpPath(t, "offset.yaml"), MaxLines: 10}
+	config := &Config{OffsetsFile: filepath.Join(t.TempDir(), "offset.yaml"), MaxLines: 10}
 	err := cfg.Parse(config, nil)
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"-f", "-a"}, config.JournalArgs)
@@ -71,7 +64,7 @@ func TestPipeline(t *testing.T) {
 }
 
 func TestOffsets(t *testing.T) {
-	offsetPath := getTmpPath(t, "offset.yaml")
+	offsetPath := filepath.Join(t.TempDir(), "offset.yaml")
 
 	config := &Config{OffsetsFile: offsetPath, MaxLines: 5}
 	err := cfg.Parse(config, nil)
