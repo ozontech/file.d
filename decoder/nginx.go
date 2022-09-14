@@ -37,7 +37,7 @@ func DecodeNginxError(event *insaneJSON.Root, data []byte) error {
 		if err != nil {
 			return fmt.Errorf("date in wrong format=%s", string(tBuf))
 		}
-		tBuf = []byte(d.Format("2006/01/02 15:04:05"))
+		tBuf = []byte(d.Format(nginxDateFmt))
 	}
 
 	if split[2]-split[1] < 4 {
