@@ -168,6 +168,8 @@ func New(name string, settings *Settings, registry *prometheus.Registry) *Pipeli
 		pipeline.decoder = decoder.CRI
 	case "postgres":
 		pipeline.decoder = decoder.POSTGRES
+	case "nginx_error":
+		pipeline.decoder = decoder.NGINX_ERROR
 	case "auto":
 		pipeline.decoder = decoder.AUTO
 	default:
@@ -418,6 +420,18 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 		if err != nil {
 			p.logger.Fatalf("wrong postgres format offset=%d, length=%d, err=%s, source=%d:%s, cri=%s", offset, length, err.Error(), sourceID, sourceName, bytes)
 			// Dead route, never passed here.
+			return EventSeqIDError
+		}
+	case decoder.NGINX_ERROR:
+		_ = event.Root.DecodeString("{}")
+		err := decoder.DecodeNginxError(event.Root, bytes)
+		if err != nil {
+			if p.settings.IsStrict {
+				p.logger.Fatalf("wrong nginx error log format offset=%d, length=%d, err=%s, source=%d:%s, cri=%s", offset, length, err.Error(), sourceID, sourceName, bytes)
+			} else {
+				p.logger.Errorf("wrong nginx error log format offset=%d, length=%d, err=%s, source=%d:%s, cri=%s", offset, length, err.Error(), sourceID, sourceName, bytes)
+			}
+			p.eventPool.back(event)
 			return EventSeqIDError
 		}
 	default:
