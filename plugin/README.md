@@ -428,7 +428,7 @@ pipelines:
           field: message
     output:
       type: s3
-      file_plugin:
+      file_config:
         retention_interval: 10s
       # endpoint, access_key, secret_key, bucket are required.
       endpoint: "s3.fake_host.org:80"
