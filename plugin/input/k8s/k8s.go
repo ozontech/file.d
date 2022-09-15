@@ -117,6 +117,7 @@ func Factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 	return &Plugin{}, &Config{}
 }
 
+// Start plugin.
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginParams) {
 	p.logger = params.Logger
 	p.params = params
@@ -139,15 +140,17 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	p.fp.Start(&p.config.FileConfig, params)
 }
 
+// Commit event.
 func (p *Plugin) Commit(event *pipeline.Event) {
 	p.fp.Commit(event)
 }
 
+// Stop plugin work.
 func (p *Plugin) Stop() {
 	p.fp.Stop()
 }
 
-// IsPassedEvent shows if event were already passed.
-func (p *Plugin) IsPassedEvent(event *pipeline.Event) bool {
-	return false
+// PassEvent decides pass or discard event.
+func (p *Plugin) PassEvent(event *pipeline.Event) bool {
+	return p.fp.PassEvent(event)
 }

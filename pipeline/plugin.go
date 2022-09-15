@@ -19,7 +19,7 @@ type InputPlugin interface {
 	Start(config AnyConfig, params *InputPluginParams)
 	Stop()
 	Commit(*Event)
-	IsPassedEvent(event *Event) bool
+	PassEvent(event *Event) bool
 }
 
 type ActionPlugin interface {

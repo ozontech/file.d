@@ -135,7 +135,7 @@ func (p *Plugin) Commit(event *pipeline.Event) {
 	}
 }
 
-// IsPassedEvent shows if event were already passed.
-func (p *Plugin) IsPassedEvent(event *pipeline.Event) bool {
-	return false
+// PassEvent decides pass or discard event.
+func (p *Plugin) PassEvent(event *pipeline.Event) bool {
+	return true
 }

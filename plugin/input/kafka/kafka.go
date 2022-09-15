@@ -179,7 +179,7 @@ func disassembleSourceID(sourceID pipeline.SourceID) (index int, partition int32
 	return
 }
 
-// IsPassedEvent shows if event were already passed.
-func (p *Plugin) IsPassedEvent(event *pipeline.Event) bool {
-	return false
+// PassEvent decides pass or discard event.
+func (p *Plugin) PassEvent(event *pipeline.Event) bool {
+	return true
 }

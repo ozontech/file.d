@@ -119,7 +119,7 @@ type Config struct {
 	PersistenceMode  string `json:"persistence_mode" default:"async" options:"async|sync"` // *
 	PersistenceMode_ persistenceMode
 
-	AsyncInterval  cfg.Duration `json:"async_interval" default:"1s" parse:"duration"` // *! @3 @4 @5 @6 <br> <br> offsets saving interval. Only used if `persistence_mode` is set to `async`.
+	AsyncInterval  cfg.Duration `json:"async_interval" default:"1s" parse:"duration"` // *! @3 @4 @5 @6 <br> <br> Offsets saving interval. Only used if `persistence_mode` is set to `async`.
 	AsyncInterval_ time.Duration
 
 	// > @3@4@5@6
@@ -241,15 +241,24 @@ func (p *Plugin) Stop() {
 	p.jobProvider.stop()
 }
 
-// IsPassedEvent shows if event were passed.
-func (p *Plugin) IsPassedEvent(event *pipeline.Event) bool {
+// PassEvent decides pass or discard event.
+func (p *Plugin) PassEvent(event *pipeline.Event) bool {
 	p.jobProvider.jobsMu.RLock()
 	job := p.jobProvider.jobs[event.SourceID]
 	p.jobProvider.jobsMu.RUnlock()
 
-	offset, exist := job.offsets.get(pipeline.StreamName(event.StreamNameBytes()))
+	savedOffset, exist := job.offsets.get(pipeline.StreamName(event.StreamNameBytes()))
 	if !exist {
+		// this is new savedOffset therefore message new as well.
+		return true
+	}
+	// event.Offset must be newer that saved one. Otherwise, this event was passed&committed
+	// and file-d went down after commit
+	pass := event.Offset > savedOffset
+	if !pass {
+		metric.GetCounter(subsystemName, alreadyWrittenEventsSkippedCounter).Inc()
 		return false
 	}
-	return offset >= event.Offset
+
+	return true
 }
