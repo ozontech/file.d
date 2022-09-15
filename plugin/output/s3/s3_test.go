@@ -28,9 +28,8 @@ import (
 const targetFile = "filetests/log.log"
 
 var (
-	dir, _           = filepath.Split(targetFile)
-	fileName         atomic.String
-	pipelineCapacity = 4096
+	dir, _   = filepath.Split(targetFile)
+	fileName atomic.String
 )
 
 func testFactory(objStoreF objStoreFactory) (pipeline.AnyPlugin, pipeline.AnyConfig) {
@@ -162,12 +161,12 @@ func TestStart(t *testing.T) {
 
 	err := cfg.Parse(config, map[string]int{"gomaxprocs": 1, "capacity": 64})
 	assert.NoError(t, err)
-	var p pipeline.Test
-	p.Pipeline = newPipeline(t, config, func(cfg *Config) (ObjectStoreClient, map[string]ObjectStoreClient, error) {
+
+	p := newTestPipeline(t, config, func(cfg *Config) (ObjectStoreClient, map[string]ObjectStoreClient, error) {
 		return s3MockClient, map[string]ObjectStoreClient{
 			bucketName: s3MockClient,
 		}, nil
-	}, pipelineCapacity)
+	})
 	assert.NotNil(t, p, "could not create new pipeline")
 	p.Start()
 	time.Sleep(300 * time.Microsecond)
@@ -197,9 +196,11 @@ func TestStart(t *testing.T) {
 	test.SendPack(t, p.Pipeline, tests.thirdPack)
 
 	ctx, _ := context.WithTimeout(context.Background(), time.Millisecond*300)
+
 	//use this function instead of time.Sleep()
 	//this increases the chance of realizing the tested situation
-	err = p.WaitStoppingProcessing(ctx, pipelineCapacity+len(tests.firstPack)+len(tests.secondPack)+len(tests.thirdPack))
+
+	err = p.WaitStoppingProcessing(ctx, len(tests.firstPack)+len(tests.secondPack)+len(tests.thirdPack))
 	assert.Nil(t, err, "try to restart test")
 	p.Stop()
 	// check log file not empty
@@ -353,15 +354,14 @@ func TestStartWithMultiBuckets(t *testing.T) {
 	err := cfg.Parse(config, map[string]int{"gomaxprocs": 1, "capacity": 64})
 	assert.NoError(t, err)
 
-	var p pipeline.Test
-	p.Pipeline = newPipeline(t, config, func(cfg *Config) (ObjectStoreClient, map[string]ObjectStoreClient, error) {
+	p := newTestPipeline(t, config, func(cfg *Config) (ObjectStoreClient, map[string]ObjectStoreClient, error) {
 		return s3MockClient, map[string]ObjectStoreClient{
 			buckets[0]:    s3MockClient,
 			buckets[1]:    s3MockClient,
 			buckets[2]:    s3MockClient,
 			dynamicBucket: s3MockClient,
 		}, nil
-	}, pipelineCapacity)
+	})
 	assert.NotNil(t, p, "could not create new pipeline")
 	p.Start()
 	time.Sleep(300 * time.Microsecond)
@@ -395,9 +395,11 @@ func TestStartWithMultiBuckets(t *testing.T) {
 	test.SendPack(t, p.Pipeline, tests.thirdPack)
 
 	ctx, _ := context.WithTimeout(context.Background(), time.Millisecond*300)
+
 	//use this function instead of time.Sleep()
 	//this increases the chance of realizing the tested situation
-	err = p.WaitStoppingProcessing(ctx, pipelineCapacity+len(tests.firstPack)+len(tests.secondPack)+len(tests.thirdPack))
+
+	err = p.WaitStoppingProcessing(ctx, len(tests.firstPack)+len(tests.secondPack)+len(tests.thirdPack))
 	assert.Nil(t, err, "try to restart test")
 	p.Stop()
 	// check log file not empty
@@ -417,11 +419,11 @@ func TestStartWithMultiBuckets(t *testing.T) {
 	assert.True(t, size3 > size2)
 }
 
-func newPipeline(t *testing.T, configOutput *Config, objStoreF objStoreFactory, pipelineCapacity int) *pipeline.Pipeline {
+func newPipeline(t *testing.T, configOutput *Config, objStoreF objStoreFactory) *pipeline.Pipeline {
 	metric.InitStats()
 	t.Helper()
 	settings := &pipeline.Settings{
-		Capacity:            pipelineCapacity,
+		Capacity:            4096,
 		MaintenanceInterval: time.Second * 10,
 		//MaintenanceInterval: time.Second * 100000,
 		AntispamThreshold: 0,
@@ -464,6 +466,10 @@ func newPipeline(t *testing.T, configOutput *Config, objStoreF objStoreFactory, 
 	return p
 }
 
+func newTestPipeline(t *testing.T, configOutput *Config, objStoreF objStoreFactory) pipeline.Test {
+	return pipeline.Test{Pipeline: newPipeline(t, configOutput, objStoreF)}
+}
+
 func TestStartPanic(t *testing.T) {
 	test.ClearDir(t, dir)
 	fileConfig := file.Config{}
@@ -485,7 +491,7 @@ func TestStartPanic(t *testing.T) {
 	assert.NoError(t, err)
 	p := newPipeline(t, config, func(cfg *Config) (ObjectStoreClient, map[string]ObjectStoreClient, error) {
 		return nil, nil, nil
-	}, pipelineCapacity)
+	})
 
 	assert.NotNil(t, p, "could not create new pipeline")
 
@@ -562,7 +568,7 @@ func TestStartWithSendProblems(t *testing.T) {
 		return s3MockClient, map[string]ObjectStoreClient{
 			bucketName: s3MockClient,
 		}, nil
-	}, pipelineCapacity)
+	})
 
 	assert.NotNil(t, p, "could not create new pipeline")
 

@@ -819,10 +819,10 @@ func (p *Test) WaitStoppingProcessing(ctx context.Context, limit int) error {
 	for {
 		select {
 		case <-ctx.Done():
-			return fmt.Errorf("time passed out test failed")
+			return ctx.Err()
 		default:
 			//extract backCounter value
-			if int64(limit) == p.eventPool.backCounter.Load() {
+			if int64(limit+p.settings.Capacity) == p.eventPool.backCounter.Load() {
 				return nil
 			}
 			time.Sleep(time.Millisecond * 5)
