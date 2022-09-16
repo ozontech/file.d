@@ -206,7 +206,7 @@ func (p *Plugin) registerPluginMetrics() {
 	metric.RegisterCounter(&metric.MetricDesc{
 		Subsystem: subsystemName,
 		Name:      possibleOffsetCorruptionCounter,
-		Help:      "Total number of possible Offset corruptions",
+		Help:      "Total number of possible offset corruptions",
 	})
 	metric.RegisterCounter(&metric.MetricDesc{
 		Subsystem: subsystemName,

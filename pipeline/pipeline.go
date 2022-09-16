@@ -430,10 +430,6 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 	event.streamName = DefaultStreamName
 	event.Size = len(bytes)
 
-	if len(p.inSample) == 0 {
-		p.inSample = event.Root.Encode(p.inSample)
-	}
-
 	return p.streamEvent(event)
 }
 
@@ -456,6 +452,10 @@ func (p *Pipeline) streamEvent(event *Event) uint64 {
 			p.eventPool.back(event)
 			return EventSeqIDError
 		}
+	}
+
+	if len(p.inSample) == 0 {
+		p.inSample = event.Root.Encode(p.inSample)
 	}
 
 	return p.streamer.putEvent(streamID, event.streamName, event)
