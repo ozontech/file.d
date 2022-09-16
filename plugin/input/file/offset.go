@@ -3,7 +3,6 @@ package file
 import (
 	"fmt"
 	"io/ioutil"
-	"math"
 	"math/rand"
 	"os"
 	"strconv"
@@ -70,26 +69,7 @@ func (o *offsetDB) load() (fpOffsets, error) {
 		return make(fpOffsets), fmt.Errorf("can't load offsets file: %w", err)
 	}
 
-	return o.collapse(offsets), nil
-}
-
-// collapse all streams in one file, so we should seek file to
-// min offset to make sure logs from all streams will be delivered at-least-once
-func (o *offsetDB) collapse(inodeOffsets fpOffsets) fpOffsets {
-	for _, inode := range inodeOffsets {
-		minOffset := int64(math.MaxInt64)
-		for _, offset := range inode.streams {
-			if offset < minOffset {
-				minOffset = offset
-			}
-		}
-
-		for key := range inode.streams {
-			inode.streams[key] = minOffset
-		}
-	}
-
-	return inodeOffsets
+	return offsets, nil
 }
 
 func (o *offsetDB) parse(content string) (fpOffsets, error) {

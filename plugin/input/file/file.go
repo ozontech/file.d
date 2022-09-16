@@ -45,8 +45,9 @@ pipelines:
 }*/
 
 const (
-	subsystemName                   = "input_file"
-	possibleOffsetCorruptionCounter = "possible_offset_corruptions_total"
+	subsystemName                      = "input_file"
+	possibleOffsetCorruptionCounter    = "possible_offset_corruptions_total"
+	alreadyWrittenEventsSkippedCounter = "already_written_event_skipped_total"
 )
 
 type Plugin struct {
@@ -207,6 +208,11 @@ func (p *Plugin) registerPluginMetrics() {
 		Name:      possibleOffsetCorruptionCounter,
 		Help:      "Total number of possible offset corruptions",
 	})
+	metric.RegisterCounter(&metric.MetricDesc{
+		Subsystem: subsystemName,
+		Name:      alreadyWrittenEventsSkippedCounter,
+		Help:      "Total number of skipped events that was already written",
+	})
 }
 
 func (p *Plugin) startWorkers() {
@@ -233,4 +239,26 @@ func (p *Plugin) Stop() {
 
 	p.logger.Infof("stopping job provider")
 	p.jobProvider.stop()
+}
+
+// PassEvent decides pass or discard event.
+func (p *Plugin) PassEvent(event *pipeline.Event) bool {
+	p.jobProvider.jobsMu.RLock()
+	job := p.jobProvider.jobs[event.SourceID]
+	p.jobProvider.jobsMu.RUnlock()
+
+	savedOffset, exist := job.offsets.get(pipeline.StreamName(event.StreamNameBytes()))
+	if !exist {
+		// this is new savedOffset therefore message new as well.
+		return true
+	}
+	// event.Offset must be newer that saved one. Otherwise, this event was passed&committed
+	// and file-d went down after commit
+	pass := event.Offset > savedOffset
+	if !pass {
+		metric.GetCounter(subsystemName, alreadyWrittenEventsSkippedCounter).Inc()
+		return false
+	}
+
+	return true
 }
