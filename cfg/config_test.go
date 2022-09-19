@@ -50,7 +50,7 @@ type strExpression struct {
 }
 
 type strDataUnit struct {
-	T  string `parse:"data_unit"`
+	T  DataUnit `parse:"data_unit"`
 	T_ uint
 }
 

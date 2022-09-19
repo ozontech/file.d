@@ -100,7 +100,7 @@ func (put *putWithErr) fPutObjectErr(bucketName, objectName, filePath string, op
 	}
 }
 
-func TestStart(t *testing.T) {
+func TestStarts(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skip long tests in short mode")
 	}
@@ -124,7 +124,6 @@ func TestStart(t *testing.T) {
 		thirdPack: []test.Msg{
 			test.Msg(`{"level":"error","ts":"2019-08-21T11:43:25.865Z","message":"get_items_error_123","trace_id":"3ea4a6589d06bb3f","span_id":"deddd718684b10a","get_items_error":"product: error while consuming CoverImage: context canceled","get_items_error_option":"CoverImage","get_items_error_cause":"context canceled","get_items_error_cause_type":"context_cancelled"}`),
 			test.Msg(`{"level":"error","ts":"2019-08-21T11:43:25.865Z","message":"get_items_error_123","trace_id":"3ea4a6589d06bb3f","span_id":"deddd718684b10a","get_items_error":"product: error while consuming CoverImage: context canceled","get_items_error_option":"CoverImage","get_items_error_cause":"context canceled","get_items_error_cause_type":"context_cancelled"}`),
-			test.Msg(`{"level":"error","ts":"2019-08-21T11:43:25.865Z","message":"get_items_error_123","trace_id":"3ea4a6589d06bb3f","span_id":"deddd718684b10a","get_items_error":"product: error while consuming CoverImage: context canceled","get_items_error_option":"CoverImage","get_items_error_cause":"context canceled","get_items_error_cause_type":"context_cancelled"}`),
 		},
 	}
 
@@ -141,9 +140,10 @@ func TestStart(t *testing.T) {
 
 	fileConfig := file.Config{
 		TargetFile:        targetFile,
-		RetentionInterval: "300ms",
+		RetentionInterval: "2s",
 		Layout:            "01",
 		BatchFlushTimeout: "100ms",
+		RetentionSize:     "1000 B",
 	}
 	config := &Config{
 		FileConfig:      fileConfig,
@@ -172,7 +172,7 @@ func TestStart(t *testing.T) {
 	time.Sleep(300 * time.Microsecond)
 
 	test.SendPack(t, p, tests.firstPack)
-	time.Sleep(time.Second)
+	time.Sleep(700 * time.Millisecond)
 	size1 := test.CheckNotZero(t, fileName.Load(), "s3 data is missed after first pack")
 
 	// check deletion upload log files
@@ -183,7 +183,7 @@ func TestStart(t *testing.T) {
 	// initial sending the second pack
 	// no special situations
 	test.SendPack(t, p, tests.secondPack)
-	time.Sleep(time.Second)
+	time.Sleep(700 * time.Millisecond)
 
 	match = test.GetMatches(t, pattern)
 	assert.Equal(t, 1, len(match))
@@ -194,20 +194,17 @@ func TestStart(t *testing.T) {
 
 	// failed during writing
 	test.SendPack(t, p, tests.thirdPack)
-	time.Sleep(200 * time.Millisecond)
+	time.Sleep(700 * time.Millisecond)
 	p.Stop()
 
 	// check log file not empty
 	match = test.GetMatches(t, pattern)
 	assert.Equal(t, 1, len(match))
 	test.CheckNotZero(t, match[0], "log file data missed")
-	// time.Sleep(sealUpFileSleep)
 
 	// restart like after crash
 	p.Start()
-
-	time.Sleep(time.Second)
-
+	time.Sleep(3 * time.Second)
 	size3 := test.CheckNotZero(t, fileName.Load(), "s3 data missed after third pack")
 	assert.True(t, size3 > size2)
 }
@@ -266,12 +263,6 @@ func TestStartWithMultiBuckets(t *testing.T) {
 			test.Msg(fmt.Sprintf(`{"bucket_name": "%s", "level":"error","ts":"2019-08-21T11:43:25.865Z","message":"get_items_error_1","trace_id":"3ea4a6589d06bb3f","span_id":"deddd718684b10a","get_items_error":"product: error while consuming CoverImage: context canceled","get_items_error_option":"CoverImage","get_items_error_cause":"context canceled","get_items_error_cause_type":"context_cancelled"}`, buckets[2])),
 			// msg to not exist multi_bucket, will send to main bucket.
 			test.Msg(fmt.Sprintf(`{"bucket_name": "%s", "level":"error","ts":"2019-08-21T11:43:25.865Z","message":"get_items_error_1","trace_id":"3ea4a6589d06bb3f","span_id":"deddd718684b10a","get_items_error":"product: error while consuming CoverImage: context canceled","get_items_error_option":"CoverImage","get_items_error_cause":"context canceled","get_items_error_cause_type":"context_cancelled"}`, dynamicBucket)),
-			// msg to defaultBucket.
-			test.Msg(`{"level":"error","ts":"2019-08-21T11:43:25.865Z","message":"get_items_error_1","trace_id":"3ea4a6589d06bb3f","span_id":"deddd718684b10a","get_items_error":"product: error while consuming CoverImage: context canceled","get_items_error_option":"CoverImage","get_items_error_cause":"context canceled","get_items_error_cause_type":"context_cancelled"}`),
-			// msg to first of multi_buckets.
-			test.Msg(fmt.Sprintf(`{"bucket_name": "%s", "level":"error","ts":"2019-08-21T11:43:25.865Z","message":"get_items_error_1","trace_id":"3ea4a6589d06bb3f","span_id":"deddd718684b10a","get_items_error":"product: error while consuming CoverImage: context canceled","get_items_error_option":"CoverImage","get_items_error_cause":"context canceled","get_items_error_cause_type":"context_cancelled"}`, buckets[1])),
-			// msg to second of multi_buckets.
-			test.Msg(fmt.Sprintf(`{"bucket_name": "%s", "level":"error","ts":"2019-08-21T11:43:25.865Z","message":"get_items_error_1","trace_id":"3ea4a6589d06bb3f","span_id":"deddd718684b10a","get_items_error":"product: error while consuming CoverImage: context canceled","get_items_error_option":"CoverImage","get_items_error_cause":"context canceled","get_items_error_cause_type":"context_cancelled"}`, buckets[2])),
 		},
 	}
 
@@ -302,9 +293,10 @@ func TestStartWithMultiBuckets(t *testing.T) {
 
 	fileConfig := file.Config{
 		TargetFile:        targetFile,
-		RetentionInterval: "300ms",
+		RetentionInterval: "3s",
 		Layout:            "01",
 		BatchFlushTimeout: "100ms",
+		RetentionSize:     "500 B",
 	}
 	config := &Config{
 		FileConfig:       fileConfig,
@@ -361,7 +353,7 @@ func TestStartWithMultiBuckets(t *testing.T) {
 	time.Sleep(300 * time.Microsecond)
 
 	test.SendPack(t, p, tests.firstPack)
-	time.Sleep(time.Second)
+	time.Sleep(1 * time.Second)
 	size1 := test.CheckNotZero(t, fileName.Load(), "s3 data is missed after first pack")
 
 	// check deletion upload log files
@@ -374,7 +366,7 @@ func TestStartWithMultiBuckets(t *testing.T) {
 	// initial sending the second pack
 	// no special situations
 	test.SendPack(t, p, tests.secondPack)
-	time.Sleep(time.Second)
+	time.Sleep(1 * time.Second)
 
 	for _, pattern := range patterns {
 		match := test.GetMatches(t, pattern)
@@ -387,7 +379,7 @@ func TestStartWithMultiBuckets(t *testing.T) {
 
 	// failed during writing
 	test.SendPack(t, p, tests.thirdPack)
-	time.Sleep(200 * time.Millisecond)
+	time.Sleep(1 * time.Second)
 	p.Stop()
 
 	// check log file not empty
@@ -400,9 +392,7 @@ func TestStartWithMultiBuckets(t *testing.T) {
 
 	// restart like after crash
 	p.Start()
-
-	time.Sleep(time.Second)
-
+	time.Sleep(5 * time.Second)
 	size3 := test.CheckNotZero(t, fileName.Load(), "s3 data missed after third pack")
 	assert.True(t, size3 > size2)
 }

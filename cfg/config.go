@@ -28,6 +28,7 @@ type (
 	FieldSelector string
 	Regexp        string
 	Base8         string
+	DataUnit      string
 )
 
 type PipelineConfig struct {

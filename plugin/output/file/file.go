@@ -44,6 +44,10 @@ type Plugin struct {
 	SealUpCallback func(string)
 
 	mu *sync.RWMutex
+
+	retentionChan chan bool
+	fileSize      uint
+	fileIsFully   bool
 }
 
 type data struct {
@@ -64,6 +68,10 @@ type Config struct {
 	// > Interval of creation new file
 	RetentionInterval  cfg.Duration `json:"retention_interval" default:"1h" parse:"duration"` // *
 	RetentionInterval_ time.Duration
+
+	// > Interval of creation new file
+	RetentionSize  cfg.DataUnit `json:"retention_size" default:"1023 B" parse:"data_unit"` // *
+	RetentionSize_ uint
 
 	// > Layout is added to targetFile after sealing up. Determines result file name
 	Layout string `json:"time_layout" default:"01-02-2006_15:04:05"` // *
@@ -104,6 +112,7 @@ func Factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 }
 
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginParams) {
+
 	p.controller = params.Controller
 	p.logger = params.Logger
 	p.config = config.(*Config)
@@ -113,6 +122,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.fileExtension = filepath.Ext(file)
 	p.fileName = file[0 : len(file)-len(p.fileExtension)]
 	p.tsFileName = "%s" + "-" + p.fileName
+	p.retentionChan = make(chan bool)
 
 	p.batcher = pipeline.NewBatcher(pipeline.BatcherOptions{
 		PipelineName:   params.PipelineName,
@@ -143,7 +153,6 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	if p.nextSealUpTime.IsZero() {
 		p.logger.Panic("next seal up time is nil!")
 	}
-
 	longpanic.Go(func() {
 		p.fileSealUpTicker(ctx)
 	})
@@ -188,6 +197,8 @@ func (p *Plugin) fileSealUpTicker(ctx context.Context) {
 	for {
 		timer := time.NewTimer(time.Until(p.nextSealUpTime))
 		select {
+		case <-p.retentionChan:
+			p.sealUp()
 		case <-timer.C:
 			p.sealUp()
 		case <-ctx.Done():
@@ -208,10 +219,16 @@ func (p *Plugin) setNextSealUpTime() {
 }
 
 func (p *Plugin) write(data []byte) {
-	p.mu.RLock()
-	defer p.mu.RUnlock()
-	if _, err := p.file.Write(data); err != nil {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	size, err := p.file.Write(data)
+	if err != nil {
 		p.logger.Fatalf("could not write into the file: %s, error: %s", p.file.Name(), err.Error())
+	}
+	p.fileSize += uint(size)
+	if p.config.RetentionSize_ < p.fileSize && !p.fileIsFully {
+		p.fileIsFully = true
+		p.retentionChan <- true
 	}
 }
 
@@ -252,6 +269,8 @@ func (p *Plugin) sealUp() {
 	p.mu.Lock()
 	p.createNew()
 	p.nextSealUpTime = time.Now().Add(p.config.RetentionInterval_)
+	p.fileIsFully = false
+	p.fileSize = 0
 	p.mu.Unlock()
 	if err := oldFile.Close(); err != nil {
 		p.logger.Panicf("could not close file: %s, error: %s", oldFile.Name(), err.Error())
