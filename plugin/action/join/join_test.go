@@ -115,7 +115,7 @@ func TestSimpleJoin(t *testing.T) {
 			expEvents:   7 * 100,
 		},
 		{
-			name:        "should_ok_for_postgres_logs",
+			name:        "should_ok_for_postgres_logs_with_negate",
 			startPat:    startPattern,
 			continuePat: startPattern,
 			content:     contentPostgres,
