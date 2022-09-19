@@ -84,6 +84,7 @@ mock:
 	go run github.com/golang/mock/mockgen@v1.6.0 -source=plugin/output/postgres/postgres.go -destination=plugin/output/postgres/mock/postgres.go
 
 .PHONY: fmt
-fmt:
+fmt: gen-doc mock
+	go mod tidy
 	goimports -l -w ./
 	gofmt -l -w ./

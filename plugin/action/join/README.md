@@ -48,7 +48,7 @@ Max size of the resulted event. If it is set and the event exceeds the limit, th
 
 **`negate`** *`bool`* *`default=false`* 
 
-Negate reverse match logic for Continue (lets you implement negative lookahead)
+Negate match logic for Continue (lets you implement negative lookahead while joining lines)
 
 <br>
 
