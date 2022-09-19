@@ -4,7 +4,6 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
 	"math/rand"
 	"os"
 	"path"
@@ -87,8 +86,8 @@ func TestEndToEnd(t *testing.T) {
 	k8s2.MetaWaitTimeout = time.Millisecond
 	k8s2.MaintenanceInterval = time.Millisecond * 100
 
-	filesDir, _ := ioutil.TempDir("", "file.d")
-	offsetsDir, _ := ioutil.TempDir("", "file.d")
+	filesDir := t.TempDir()
+	offsetsDir := t.TempDir()
 
 	config := cfg.NewConfigFromFile(configFilename)
 	input := config.Pipelines["test"].Raw.Get("input")

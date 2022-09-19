@@ -21,6 +21,7 @@ type InputPlugin interface {
 	Stop()
 	Commit(*Event)
 	RegisterMetrics(ctl *metric.Ctl)
+	PassEvent(event *Event) bool
 }
 
 type ActionPlugin interface {
