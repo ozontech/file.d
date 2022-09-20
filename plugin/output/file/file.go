@@ -70,7 +70,7 @@ type Config struct {
 	RetentionInterval_ time.Duration
 
 	// > Interval of creation new file
-	RetentionSize  cfg.DataUnit `json:"retention_size" default:"1023 B" parse:"data_unit"` // *
+	RetentionSize  cfg.DataUnit `json:"retention_size" default:"1 PB" parse:"data_unit"` // *
 	RetentionSize_ uint
 
 	// > Layout is added to targetFile after sealing up. Determines result file name
@@ -198,6 +198,7 @@ func (p *Plugin) fileSealUpTicker(ctx context.Context) {
 		timer := time.NewTimer(time.Until(p.nextSealUpTime))
 		select {
 		case <-p.retentionChan:
+			timer.Stop()
 			p.sealUp()
 		case <-timer.C:
 			p.sealUp()
@@ -258,6 +259,7 @@ func (p *Plugin) sealUp() {
 	if err != nil {
 		p.logger.Panicf("could not get info about file: %s, error: %s", p.file.Name(), err.Error())
 	}
+	p.nextSealUpTime = time.Now().Add(p.config.RetentionInterval_)
 	if info.Size() == 0 {
 		return
 	}
@@ -268,14 +270,13 @@ func (p *Plugin) sealUp() {
 	oldFile := p.file
 	p.mu.Lock()
 	p.createNew()
-	p.nextSealUpTime = time.Now().Add(p.config.RetentionInterval_)
 	p.fileIsFully = false
 	p.fileSize = 0
 	p.mu.Unlock()
 	if err := oldFile.Close(); err != nil {
 		p.logger.Panicf("could not close file: %s, error: %s", oldFile.Name(), err.Error())
 	}
-	logger.Errorf("sealing in %d, newFile: %s", time.Now().Unix(), newFileName)
+	logger.Infof("sealing in %d, newFile: %s", time.Now().Unix(), newFileName)
 	if p.SealUpCallback != nil {
 		longpanic.Go(func() { p.SealUpCallback(newFileName) })
 	}
