@@ -1,8 +1,6 @@
 package file
 
-import (
-	"github.com/ozontech/file.d/pipeline"
-)
+import "github.com/ozontech/file.d/pipeline"
 
 // sliceMap is a map of streamName to offset.
 // It could be just map[k]v, but Go > 1.17 internal map implementation can't
@@ -16,7 +14,7 @@ type kv struct {
 }
 
 func sliceFromMap(m map[pipeline.StreamName]int64) sliceMap {
-	var so sliceMap
+	so := make(sliceMap, 0, len(m))
 	for k, v := range m {
 		so = append(so, kv{k, v})
 	}

@@ -395,11 +395,14 @@ func (jp *jobProvider) initJobOffset(operation offsetsOp, job *Job) {
 		}
 
 		job.offsets = sliceFromMap(offsets.streams)
-		// seek to any offset since whey all equal at start time
+		// find min Offset to start read from it
+		minOffset := int64(math.MaxInt64)
 		for _, offset := range offsets.streams {
-			job.seek(offset, io.SeekStart, "job initialization")
-			return
+			if offset < minOffset {
+				minOffset = offset
+			}
 		}
+		job.seek(minOffset, io.SeekStart, "job initialization")
 	default:
 		jp.logger.Panicf("unknown offsets op: %d", jp.config.OffsetsOp_)
 	}

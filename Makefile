@@ -80,7 +80,11 @@ lint:
 
 .PHONY: mock
 mock:
-	go get github.com/golang/mock/gomock
-	go install github.com/golang/mock/mockgen
-	mockgen -source=plugin/output/s3/s3.go -destination=plugin/output/s3/mock/s3.go
-	mockgen -source=plugin/output/postgres/postgres.go -destination=plugin/output/postgres/mock/postgres.go
+	go run github.com/golang/mock/mockgen@v1.6.0 -source=plugin/output/s3/s3.go -destination=plugin/output/s3/mock/s3.go
+	go run github.com/golang/mock/mockgen@v1.6.0 -source=plugin/output/postgres/postgres.go -destination=plugin/output/postgres/mock/postgres.go
+
+.PHONY: fmt
+fmt: gen-doc mock
+	go mod tidy
+	goimports -l -w ./
+	gofmt -l -w ./

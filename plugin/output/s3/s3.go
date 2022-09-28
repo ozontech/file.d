@@ -52,7 +52,7 @@ pipelines:
           field: message
     output:
       type: s3
-      file_plugin:
+      file_config:
         retention_interval: 10s
       # endpoint, access_key, secret_key, bucket are required.
       endpoint: "s3.fake_host.org:80"
@@ -427,7 +427,7 @@ func (p *Plugin) tryRunNewPlugin(bucketName string) (isCreated bool) {
 
 // uploadExistingFiles gets files from dirs, sorts it, compresses it if it's need, and then upload to s3.
 func (p *Plugin) uploadExistingFiles(targetDirs, dynamicDirs, fileNames map[string]string) {
-	allDirs := make(map[string]string)
+	allDirs := make(map[string]string, len(dynamicDirs)+len(targetDirs))
 	for k, v := range dynamicDirs {
 		allDirs[k] = v
 	}

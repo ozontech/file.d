@@ -75,7 +75,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	p.config = config.(*Config)
 
 	p.registerPluginMetrics()
-	p.idByTopic = make(map[string]int)
+	p.idByTopic = make(map[string]int, len(p.config.Topics))
 	for i, topic := range p.config.Topics {
 		p.idByTopic[topic] = i
 	}
@@ -177,4 +177,9 @@ func disassembleSourceID(sourceID pipeline.SourceID) (index int, partition int32
 	partition = int32(sourceID & 0xFFFF)
 
 	return
+}
+
+// PassEvent decides pass or discard event.
+func (p *Plugin) PassEvent(event *pipeline.Event) bool {
+	return true
 }

@@ -109,6 +109,7 @@ func (w *worker) work(controller inputer, jobProvider *jobProvider, readBufferSi
 						accumBuf = append(accumBuf, line...)
 						inBuf = accumBuf
 					}
+
 					job.lastEventSeq = controller.In(sourceID, sourceName, lastOffset+scanned, inBuf, isVirgin)
 				}
 				// restore the line buffer

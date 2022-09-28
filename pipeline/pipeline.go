@@ -168,6 +168,8 @@ func New(name string, settings *Settings, registry *prometheus.Registry) *Pipeli
 		pipeline.decoder = decoder.CRI
 	case "postgres":
 		pipeline.decoder = decoder.POSTGRES
+	case "nginx_error":
+		pipeline.decoder = decoder.NGINX_ERROR
 	case "auto":
 		pipeline.decoder = decoder.AUTO
 	default:
@@ -420,6 +422,18 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 			// Dead route, never passed here.
 			return EventSeqIDError
 		}
+	case decoder.NGINX_ERROR:
+		_ = event.Root.DecodeString("{}")
+		err := decoder.DecodeNginxError(event.Root, bytes)
+		if err != nil {
+			if p.settings.IsStrict {
+				p.logger.Fatalf("wrong nginx error log format offset=%d, length=%d, err=%s, source=%d:%s, cri=%s", offset, length, err.Error(), sourceID, sourceName, bytes)
+			} else {
+				p.logger.Errorf("wrong nginx error log format offset=%d, length=%d, err=%s, source=%d:%s, cri=%s", offset, length, err.Error(), sourceID, sourceName, bytes)
+			}
+			p.eventPool.back(event)
+			return EventSeqIDError
+		}
 	default:
 		p.logger.Panicf("unknown decoder %d for pipeline %q", p.decoder, p.Name)
 	}
@@ -429,10 +443,6 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 	event.SourceName = sourceName
 	event.streamName = DefaultStreamName
 	event.Size = len(bytes)
-
-	if len(p.inSample) == 0 {
-		p.inSample = event.Root.Encode(p.inSample)
-	}
 
 	return p.streamEvent(event)
 }
@@ -450,6 +460,16 @@ func (p *Pipeline) streamEvent(event *Event) uint64 {
 		if node != nil {
 			event.streamName = StreamName(node.AsString())
 		}
+
+		if pass := p.input.PassEvent(event); !pass {
+			// Can't process event, return to pool.
+			p.eventPool.back(event)
+			return EventSeqIDError
+		}
+	}
+
+	if len(p.inSample) == 0 {
+		p.inSample = event.Root.Encode(p.inSample)
 	}
 
 	return p.streamer.putEvent(streamID, event.streamName, event)
