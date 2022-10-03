@@ -48,7 +48,7 @@ func (mr *MockPgxIfaceMockRecorder) Close() *gomock.Call {
 }
 
 // Query mocks base method.
-func (m *MockPgxIface) Query(ctx context.Context, sql string, args ...interface{}) (pgx.Rows, error) {
+func (m *MockPgxIface) Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error) {
 	m.ctrl.T.Helper()
 	varargs := []interface{}{ctx, sql}
 	for _, a := range args {
