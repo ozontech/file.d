@@ -169,6 +169,16 @@ type Config struct {
 	// >
 	// > It turns on watching for file modifications. Turning it on cause more CPU work, but it is more probable to catch file truncation
 	ShouldWatchChanges bool `json:"should_watch_file_changes" default:"false"` // *
+
+	// > @3@4@5@6
+	// >
+	// > Max Number of open file descriptors per pod. Pod gets blacklisted if higher
+	Throttle int `json:"throttle" default:"200"` // *
+
+	// > @3@4@5@6
+	// >
+	// > Max Number of open file descriptors per pod. Pod gets warning if higher
+	Alarm int `json:"alarm" default:"100"` // *
 }
 
 func init() {
@@ -200,6 +210,8 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 
 	p.startWorkers()
 	p.jobProvider.start()
+
+	p.logger.Warnf("file plugin started, throttle is: %d, alarm is: %d", p.config.Throttle, p.config.Alarm)
 }
 
 func (p *Plugin) registerPluginMetrics() {

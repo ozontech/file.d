@@ -74,9 +74,37 @@ func (f *FileD) createRegistry() {
 	f.registry.MustRegister(prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}))
 	f.registry.MustRegister(prometheus.NewGoCollector())
 
+	f.registry.MustRegister(FilesOpen, FilesAlarm, FilesThrottle)
+
 	prometheus.DefaultGatherer = f.registry
 	prometheus.DefaultRegisterer = f.registry
 }
+
+var (
+	FilesOpen = prometheus.NewGaugeVec( // debug metric, TODO: delete
+		prometheus.GaugeOpts{
+			Namespace: "filed",
+			Subsystem: "files",
+			Name:      "open",
+		},
+		[]string{"p_pod", "p_container"})
+
+	FilesThrottle = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "filed",
+			Subsystem: "files",
+			Name:      "throttle",
+		},
+		[]string{"p_pod", "p_container"})
+
+	FilesAlarm = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "filed",
+			Subsystem: "files",
+			Name:      "alarm",
+		},
+		[]string{"p_pod", "p_container"})
+)
 
 func (f *FileD) startPipelines() {
 	f.Pipelines = f.Pipelines[:0]

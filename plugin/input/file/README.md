@@ -135,5 +135,17 @@ It turns on watching for file modifications. Turning it on cause more CPU work, 
 
 <br>
 
+**`throttle`** *`int`* *`default=200`* 
+
+Max Number of open file descriptors per pod. Pod gets blacklisted if higher
+
+<br>
+
+**`alarm`** *`int`* *`default=100`* 
+
+Max Number of open file descriptors per pod. Pod gets warning if higher
+
+<br>
+
 
 <br>*Generated using [__insane-doc__](https://github.com/vitkovskii/insane-doc)*
