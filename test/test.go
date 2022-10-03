@@ -211,7 +211,7 @@ func NewEmptyOutputPluginParams() *pipeline.OutputPluginParams {
 	}
 }
 
-func NewConfig(config interface{}, params map[string]int) interface{} {
+func NewConfig(config any, params map[string]int) any {
 	err := cfg.Parse(config, params)
 	if err != nil {
 		logger.Panicf("wrong config: %s", err.Error())

@@ -55,50 +55,50 @@ func init() {
 	Instance.Infof("Logger initialized with level: %s", level)
 }
 
-func Debug(args ...interface{}) {
+func Debug(args ...any) {
 	Instance.Debug(args...)
 }
 
-func Info(args ...interface{}) {
+func Info(args ...any) {
 	Instance.Info(args...)
 }
 
-func Warn(args ...interface{}) {
+func Warn(args ...any) {
 	Instance.Warn(args...)
 }
 
-func Error(args ...interface{}) {
+func Error(args ...any) {
 	Instance.Error(args...)
 }
 
-func Panic(args ...interface{}) {
+func Panic(args ...any) {
 	Instance.Panic(args...)
 }
 
-func Fatal(args ...interface{}) {
+func Fatal(args ...any) {
 	Instance.Fatal(args...)
 }
 
-func Debugf(template string, args ...interface{}) {
+func Debugf(template string, args ...any) {
 	Instance.Debugf(template, args...)
 }
 
-func Infof(template string, args ...interface{}) {
+func Infof(template string, args ...any) {
 	Instance.Infof(template, args...)
 }
 
-func Warnf(template string, args ...interface{}) {
+func Warnf(template string, args ...any) {
 	Instance.Warnf(template, args...)
 }
 
-func Errorf(template string, args ...interface{}) {
+func Errorf(template string, args ...any) {
 	Instance.Errorf(template, args...)
 }
 
-func Panicf(template string, args ...interface{}) {
+func Panicf(template string, args ...any) {
 	Instance.Panicf(template, args...)
 }
 
-func Fatalf(template string, args ...interface{}) {
+func Fatalf(template string, args ...any) {
 	Instance.Fatalf(template, args...)
 }

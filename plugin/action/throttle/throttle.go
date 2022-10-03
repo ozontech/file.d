@@ -30,7 +30,7 @@ const (
 type redisClient interface {
 	IncrBy(key string, value int64) *redis.IntCmd
 	Expire(key string, expiration time.Duration) *redis.BoolCmd
-	SetNX(key string, value interface{}, expiration time.Duration) *redis.BoolCmd
+	SetNX(key string, value any, expiration time.Duration) *redis.BoolCmd
 	Get(key string) *redis.StringCmd
 	Ping() *redis.StatusCmd
 }

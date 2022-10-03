@@ -121,7 +121,7 @@ func (b *Batcher) Start(ctx context.Context) {
 	longpanic.Go(b.heartbeat)
 }
 
-type WorkerData interface{}
+type WorkerData any
 
 func (b *Batcher) work(ctx context.Context) {
 	t := time.Now()

@@ -40,7 +40,7 @@ type Plugin struct {
 	preserveFields bool
 }
 
-type Config map[string]interface{}
+type Config map[string]any
 
 func init() {
 	fd.DefaultPluginRegistry.RegisterAction(&pipeline.PluginStaticInfo{
@@ -55,7 +55,7 @@ func factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 
 func (p *Plugin) Start(config pipeline.AnyConfig, _ *pipeline.ActionPluginParams) {
 	sharedConfig := *config.(*Config)
-	localConfig := make(map[string]interface{}, len(sharedConfig)) // clone shared config to be able to modify it
+	localConfig := make(map[string]any, len(sharedConfig)) // clone shared config to be able to modify it
 	for k, v := range sharedConfig {
 		localConfig[k] = v
 	}

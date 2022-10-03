@@ -147,13 +147,13 @@ func initInformer() {
 	}
 	podListWatcher := cache.NewListWatchFromClient(client.CoreV1().RESTClient(), "pods", "", selector)
 	_, c := cache.NewIndexerInformer(podListWatcher, &corev1.Pod{}, metaExpireDuration/4, cache.ResourceEventHandlerFuncs{
-		AddFunc: func(obj interface{}) {
+		AddFunc: func(obj any) {
 			putMeta(obj.(*corev1.Pod))
 		},
-		UpdateFunc: func(old interface{}, obj interface{}) {
+		UpdateFunc: func(old any, obj any) {
 			putMeta(obj.(*corev1.Pod))
 		},
-		DeleteFunc: func(obj interface{}) {
+		DeleteFunc: func(obj any) {
 		},
 	}, cache.Indexers{})
 	controller = c

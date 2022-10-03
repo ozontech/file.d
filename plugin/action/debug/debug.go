@@ -12,7 +12,7 @@ It logs event to stdout. Useful for debugging.
 
 type Plugin struct{}
 
-type Config map[string]interface{}
+type Config map[string]any
 
 func init() {
 	fd.DefaultPluginRegistry.RegisterAction(&pipeline.PluginStaticInfo{
