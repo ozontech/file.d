@@ -20,7 +20,7 @@ func TestPipeline_streamEvent(t *testing.T) {
 	streamID := StreamID(123123)
 	procs := int32(7)
 	p.procCount = atomic.NewInt32(procs)
-
+	p.input = &TestInputPlugin{}
 	event := newEvent()
 	event.SourceID = SourceID(streamID)
 	event.streamName = DefaultStreamName
@@ -36,4 +36,14 @@ func TestPipeline_streamEvent(t *testing.T) {
 	expectedStreamID := StreamID(event.SeqID % uint64(procs))
 
 	assert.Equal(t, event, p.streamer.getStream(expectedStreamID, DefaultStreamName).first)
+}
+
+// Can't use fake plugin here dye cycle import
+type TestInputPlugin struct{}
+
+func (p *TestInputPlugin) Start(config AnyConfig, params *InputPluginParams) {}
+func (p *TestInputPlugin) Stop()                                             {}
+func (p *TestInputPlugin) Commit(*Event)                                     {}
+func (p *TestInputPlugin) PassEvent(event *Event) bool {
+	return true
 }

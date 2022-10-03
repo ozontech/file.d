@@ -61,3 +61,8 @@ func (p *Plugin) SetCommitFn(fn func(event *pipeline.Event)) { // *
 func (p *Plugin) SetInFn(fn func()) { // *
 	p.inFn = fn
 }
+
+// PassEvent decides pass or discard event.
+func (p *Plugin) PassEvent(event *pipeline.Event) bool {
+	return true
+}

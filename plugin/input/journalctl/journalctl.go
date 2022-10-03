@@ -134,3 +134,8 @@ func (p *Plugin) Commit(event *pipeline.Event) {
 		p.params.Logger.Error("can't save offset file: %s", err.Error())
 	}
 }
+
+// PassEvent decides pass or discard event.
+func (p *Plugin) PassEvent(event *pipeline.Event) bool {
+	return true
+}

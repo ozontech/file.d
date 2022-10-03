@@ -70,6 +70,7 @@ type Plugin struct {
 	initial      *pipeline.Event
 	buff         []byte
 	maxEventSize int
+	negate       bool
 
 	logger *zap.SugaredLogger
 }
@@ -99,6 +100,11 @@ type Config struct {
 	// >
 	// > Max size of the resulted event. If it is set and the event exceeds the limit, the event will be truncated.
 	MaxEventSize int `json:"max_event_size" default:"0"` // *
+
+	// > @3@4@5@6
+	// >
+	// > Negate match logic for Continue (lets you implement negative lookahead while joining lines)
+	Negate bool `json:"negate" default:"false"` // *
 }
 
 func init() {
@@ -118,6 +124,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 	p.isJoining = false
 	p.buff = make([]byte, 0, params.PipelineSettings.AvgEventSize)
 	p.maxEventSize = p.config.MaxEventSize
+	p.negate = p.config.Negate
 	p.logger = params.Logger
 }
 
@@ -175,6 +182,9 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 
 	if p.isJoining {
 		nextOK := p.config.Continue_.MatchString(value)
+		if p.negate {
+			nextOK = !nextOK
+		}
 		if nextOK {
 			if p.maxEventSize == 0 || len(p.buff) < p.maxEventSize {
 				p.buff = append(p.buff, value...)

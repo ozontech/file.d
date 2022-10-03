@@ -7,6 +7,7 @@ const (
 	RAW
 	CRI
 	POSTGRES
+	NGINX_ERROR
 )
 
 type DecoderType int

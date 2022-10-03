@@ -88,7 +88,6 @@ func TestWorkerWork(t *testing.T) {
 				isVirgin:       false,
 				isDone:         false,
 				shouldSkip:     *atomic.NewBool(false),
-				offsets:        sliceMap{},
 				mu:             &sync.Mutex{},
 			}
 			jp := NewJobProvider(&Config{}, nil, &zap.SugaredLogger{})

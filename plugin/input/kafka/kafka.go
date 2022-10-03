@@ -178,3 +178,8 @@ func disassembleSourceID(sourceID pipeline.SourceID) (index int, partition int32
 
 	return
 }
+
+// PassEvent decides pass or discard event.
+func (p *Plugin) PassEvent(event *pipeline.Event) bool {
+	return true
+}
