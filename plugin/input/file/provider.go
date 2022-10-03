@@ -169,18 +169,6 @@ func (jp *jobProvider) start() {
 
 	longpanic.Go(jp.reportStats)
 	longpanic.Go(jp.maintenance)
-	longpanic.Go(jp.throttleMaintenance)
-}
-
-func (jp *jobProvider) throttleMaintenance() {
-	ticker := time.NewTicker(time.Hour)
-	for x := range ticker.C {
-		if x.Hour() == 0 {
-			jp.throttleMu.Lock()
-			jp.throttleMap = map[key]bool{}
-			jp.throttleMu.Unlock()
-		}
-	}
 }
 
 func (jp *jobProvider) stop() {
