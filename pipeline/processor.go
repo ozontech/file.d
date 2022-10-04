@@ -75,7 +75,6 @@ func NewProcessor(
 	output OutputPlugin,
 	streamer *streamer,
 	finalizeFn finalizeFn,
-	metricsController *metric.Ctl,
 ) *processor {
 	processor := &processor{
 		id:            id,

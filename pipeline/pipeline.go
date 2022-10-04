@@ -142,6 +142,8 @@ type Settings struct {
 
 // New creates new pipeline. Consider using `SetupHTTPHandlers` next.
 func New(name string, settings *Settings, registry *prometheus.Registry) *Pipeline {
+	metricCtl := metric.New("pipeline_" + name)
+
 	pipeline := &Pipeline{
 		Name:           name,
 		logger:         logger.Instance.Named(name),
@@ -154,15 +156,14 @@ func New(name string, settings *Settings, registry *prometheus.Registry) *Pipeli
 		},
 
 		metricsHolder: newMetricsHolder(name, registry, metricsGenInterval),
-		metricsCtl:    metric.New("pipeline_" + name),
+		metricsCtl:    metricCtl,
 		streamer:      newStreamer(settings.EventTimeout),
 		eventPool:     newEventPool(settings.Capacity, settings.AvgEventSize),
+		antispamer:    newAntispamer(settings.AntispamThreshold, antispamUnbanIterations, settings.MaintenanceInterval, metricCtl),
 
 		eventLog:   make([]string, 0, 128),
 		eventLogMu: &sync.Mutex{},
 	}
-
-	pipeline.antispamer = newAntispamer(settings.AntispamThreshold, antispamUnbanIterations, settings.MaintenanceInterval, pipeline.metricsCtl)
 
 	pipeline.registerMetrics()
 	pipeline.setDefaultMetrics()
@@ -306,7 +307,6 @@ func (p *Pipeline) Stop() {
 	p.logger.Infof("stopping %q output", p.Name)
 	p.output.Stop()
 
-	p.metricsCtl.UnregisterMetrics()
 	p.shouldStop = true
 }
 
@@ -525,7 +525,6 @@ func (p *Pipeline) newProc() *processor {
 		p.output,
 		p.streamer,
 		p.finalize,
-		p.metricsCtl,
 	)
 	for j, info := range p.actionInfos {
 		plugin, _ := info.Factory()

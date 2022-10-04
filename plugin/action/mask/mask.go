@@ -38,7 +38,6 @@ const (
 )
 
 type Plugin struct {
-	params     *pipeline.ActionPluginParams
 	config     *Config
 	sourceBuf  []byte
 	maskBuf    []byte
@@ -156,7 +155,6 @@ func verifyGroupNumbers(groups []int, totalGroups int, logger *zap.SugaredLogger
 
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginParams) {
 	p.config = config.(*Config)
-	p.params = params
 	for _, mask := range p.config.Masks {
 		if mask.MaxCount > 0 && mask.ReplaceWord != "" {
 			p.logger.Fatal("invalid mask configuration")

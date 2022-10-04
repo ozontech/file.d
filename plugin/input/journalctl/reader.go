@@ -8,7 +8,6 @@ import (
 
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/longpanic"
-	"github.com/ozontech/file.d/pipeline"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
 )
@@ -23,7 +22,6 @@ type journalReaderConfig struct {
 
 //nolint:unused
 type journalReader struct {
-	params *pipeline.InputPluginParams
 	config *journalReaderConfig
 	cmd    *exec.Cmd
 	args   []string

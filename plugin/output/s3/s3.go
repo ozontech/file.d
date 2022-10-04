@@ -103,7 +103,6 @@ pipelines:
 }*/
 
 const (
-	outPluginType      = "s3"
 	fileNameSeparator  = "_"
 	attemptIntervalMin = 1 * time.Second
 	dirSep             = "/"
@@ -232,7 +231,7 @@ func (c *Config) IsMultiBucketExists(bucketName string) bool {
 
 func init() {
 	fd.DefaultPluginRegistry.RegisterOutput(&pipeline.PluginStaticInfo{
-		Type:    outPluginType,
+		Type:    "s3",
 		Factory: Factory,
 	})
 }

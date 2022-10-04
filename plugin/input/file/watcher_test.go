@@ -50,7 +50,7 @@ func TestWatcher(t *testing.T) {
 			err = f2.Close()
 			require.NoError(t, err)
 
-			time.Sleep(100 * time.Millisecond)
+			time.Sleep(10 * time.Millisecond)
 
 			f1, err = os.OpenFile(f1Name, os.O_WRONLY, 0o600)
 			require.NoError(t, err)
@@ -59,12 +59,12 @@ func TestWatcher(t *testing.T) {
 			err = f1.Close()
 			require.NoError(t, err)
 
-			time.Sleep(100 * time.Millisecond)
+			time.Sleep(10 * time.Millisecond)
 
 			err = os.Remove(f1Name)
 			require.NoError(t, err)
 
-			time.Sleep(100 * time.Millisecond)
+			time.Sleep(10 * time.Millisecond)
 
 			require.Equal(t, int64(2), shouldCreate.Load())
 		})
