@@ -15,7 +15,7 @@ type Plugin struct {
 	plugin.EmptyMetricRegister
 }
 
-type Config map[string]interface{}
+type Config map[string]any
 
 func init() {
 	fd.DefaultPluginRegistry.RegisterAction(&pipeline.PluginStaticInfo{

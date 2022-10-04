@@ -228,7 +228,7 @@ func tryGetSecret(vault secreter, field *simplejson.Json) (string, bool) {
 }
 
 // Parse holy shit! who write this function?
-func Parse(ptr interface{}, values map[string]int) error {
+func Parse(ptr any, values map[string]int) error {
 	v := reflect.ValueOf(ptr).Elem()
 	t := v.Type()
 
@@ -495,7 +495,7 @@ func ParseField(v reflect.Value, vField reflect.Value, tField reflect.StructFiel
 	return nil
 }
 
-func UnescapeMap(fields map[string]interface{}) map[string]string {
+func UnescapeMap(fields map[string]any) map[string]string {
 	result := make(map[string]string)
 
 	for key, val := range fields {

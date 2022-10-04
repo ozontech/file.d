@@ -96,6 +96,7 @@ Start: event 8
 `
 
 func TestSimpleJoin(t *testing.T) {
+	const startPattern = `/^\d\d\d\d-\d\d-\d\d \d\d:\d\d:\d\d.*?\[\d+\] => .+?client=.+?,db=.+?,user=.+:.*/`
 	cases := []struct {
 		name        string
 		startPat    string
@@ -103,14 +104,24 @@ func TestSimpleJoin(t *testing.T) {
 		content     string
 		expEvents   int32
 		iterations  int
+		negate      bool
 	}{
 		{
 			name:        "should_ok_for_postgres_logs",
-			startPat:    `/^\d\d\d\d-\d\d-\d\d \d\d:\d\d:\d\d.*?\[\d+\] => .+?client=.+?,db=.+?,user=.+:.*/`,
+			startPat:    startPattern,
 			continuePat: `/.+/`,
 			content:     contentPostgres,
 			iterations:  100,
 			expEvents:   7 * 100,
+		},
+		{
+			name:        "should_ok_for_postgres_logs_with_negate",
+			startPat:    startPattern,
+			continuePat: startPattern,
+			content:     contentPostgres,
+			iterations:  100,
+			expEvents:   7 * 100,
+			negate:      true,
 		},
 	}
 
@@ -131,6 +142,7 @@ func TestSimpleJoin(t *testing.T) {
 				Field:    "log",
 				Start:    cfg.Regexp(tt.startPat),
 				Continue: cfg.Regexp(tt.continuePat),
+				Negate:   tt.negate,
 			}
 
 			err := cfg.Parse(config, nil)
