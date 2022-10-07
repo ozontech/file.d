@@ -109,9 +109,7 @@ func TestStart(t *testing.T) {
 	tests := struct {
 		firstPack  []test.Msg
 		secondPack []test.Msg
-		thirdPack1 []test.Msg
-		thirdPack2 []test.Msg
-		fourthPack []test.Msg
+		thirdPack  []test.Msg
 	}{
 		firstPack: []test.Msg{
 			test.Msg(`{"level":"error","ts":"2019-08-21T11:43:25.865Z","message":"get_items_error_1","trace_id":"3ea4a6589d06bb3f","span_id":"deddd718684b10a","get_items_error":"product: error while consuming CoverImage: context canceled","get_items_error_option":"CoverImage","get_items_error_cause":"context canceled","get_items_error_cause_type":"context_canceled"}`),
@@ -123,19 +121,9 @@ func TestStart(t *testing.T) {
 			test.Msg(`{"level":"error","ts":"2019-08-21T11:43:25.865Z","message":"get_items_error_12","trace_id":"3ea4a6589d06bb3f","span_id":"deddd718684b10a","get_items_error":"product: error while consuming CoverImage: context canceled","get_items_error_option":"CoverImage","get_items_error_cause":"context canceled","get_items_error_cause_type":"context_canceled"}`),
 			test.Msg(`{"level":"error","ts":"2019-08-21T11:43:25.865Z","message":"get_items_error_12","trace_id":"3ea4a6589d06bb3f","span_id":"deddd718684b10a","get_items_error":"product: error while consuming CoverImage: context canceled","get_items_error_option":"CoverImage","get_items_error_cause":"context canceled","get_items_error_cause_type":"context_canceled"}`),
 		},
-		thirdPack1: []test.Msg{
+		thirdPack: []test.Msg{
 			test.Msg(`{"level":"error","ts":"2019-08-21T11:43:25.865Z","message":"get_items_error_1231","trace_id":"3ea4a6589d06bb3f","span_id":"deddd718684b10a","get_items_error":"product: error while consuming CoverImage: context canceled","get_items_error_option":"CoverImage","get_items_error_cause":"context canceled","get_items_error_cause_type":"context_canceled"}`),
 			test.Msg(`{"level":"error","ts":"2019-08-21T11:43:25.865Z","message":"get_items_error_1231","trace_id":"3ea4a6589d06bb3f","span_id":"deddd718684b10a","get_items_error":"product: error while consuming CoverImage: context canceled","get_items_error_option":"CoverImage","get_items_error_cause":"context canceled","get_items_error_cause_type":"context_canceled"}`),
-		},
-		thirdPack2: []test.Msg{
-			test.Msg(`{"level":"error","ts":"2019-08-21T11:43:25.865Z","message":"get_items_error_1232","trace_id":"3ea4a6589d06bb3f","span_id":"deddd718684b10a","get_items_error":"product: error while consuming CoverImage: context canceled","get_items_error_option":"CoverImage","get_items_error_cause":"context canceled","get_items_error_cause_type":"context_canceled"}`),
-			test.Msg(`{"level":"error","ts":"2019-08-21T11:43:25.865Z","message":"get_items_error_1232","trace_id":"3ea4a6589d06bb3f","span_id":"deddd718684b10a","get_items_error":"product: error while consuming CoverImage: context canceled","get_items_error_option":"CoverImage","get_items_error_cause":"context canceled","get_items_error_cause_type":"context_canceled"}`),
-			test.Msg(`{"level":"error","ts":"2019-08-21T11:43:25.865Z","message":"get_items_error_1232","trace_id":"3ea4a6589d06bb3f","span_id":"deddd718684b10a","get_items_error":"product: error while consuming CoverImage: context canceled","get_items_error_option":"CoverImage","get_items_error_cause":"context canceled","get_items_error_cause_type":"context_canceled"}`),
-		},
-		fourthPack: []test.Msg{
-			test.Msg(`{"level":"error","ts":"2019-08-21T11:43:25.865Z","message":"get_items_error_124","trace_id":"3ea4a6589d06bb3f","span_id":"deddd718684b10a","get_items_error":"product: error while consuming CoverImage: context canceled","get_items_error_option":"CoverImage","get_items_error_cause":"context canceled","get_items_error_cause_type":"context_canceled"}`),
-			test.Msg(`{"level":"error","ts":"2019-08-21T11:43:25.865Z","message":"get_items_error_124","trace_id":"3ea4a6589d06bb3f","span_id":"deddd718684b10a","get_items_error":"product: error while consuming CoverImage: context canceled","get_items_error_option":"CoverImage","get_items_error_cause":"context canceled","get_items_error_cause_type":"context_canceled"}`),
-			test.Msg(`{"level":"error","ts":"2019-08-21T11:43:25.865Z","message":"get_items_error_124","trace_id":"3ea4a6589d06bb3f","span_id":"deddd718684b10a","get_items_error":"product: error while consuming CoverImage: context canceled","get_items_error_option":"CoverImage","get_items_error_cause":"context canceled","get_items_error_cause_type":"context_canceled"}`),
 		},
 	}
 
@@ -152,7 +140,7 @@ func TestStart(t *testing.T) {
 
 	fileConfig := file.Config{
 		TargetFile:        targetFile,
-		RetentionInterval: "1000s",
+		RetentionInterval: "3s",
 		Layout:            "01",
 		BatchFlushTimeout: "100ms",
 		RetentionSize:     "1000 B",
@@ -204,7 +192,7 @@ func TestStart(t *testing.T) {
 	size2 := test.CheckNotZero(t, fileName.Load(), "s3 data missed after second pack")
 	assert.True(t, size2 > size1)
 	// failed during writing
-	test.SendPack(t, p, tests.thirdPack1)
+	test.SendPack(t, p, tests.thirdPack)
 	time.Sleep(400 * time.Millisecond)
 	p.Stop()
 
@@ -214,21 +202,9 @@ func TestStart(t *testing.T) {
 	test.CheckNotZero(t, match[0], "log file data missed")
 	// restart like after crash
 	p.Start()
-	time.Sleep(1 * time.Second)
-	test.SendPack(t, p, tests.thirdPack2)
-	time.Sleep(400 * time.Millisecond)
+	time.Sleep(6 * time.Second)
 	size3 := test.CheckNotZero(t, fileName.Load(), "s3 data missed after third pack")
 	assert.True(t, size3 > size2)
-
-	test.SendPack(t, p, tests.fourthPack)
-	time.Sleep(2 * time.Second)
-
-	match = test.GetMatches(t, pattern)
-	assert.Equal(t, 1, len(match))
-	test.CheckZero(t, match[0], "log file is not empty")
-
-	size4 := test.CheckNotZero(t, fileName.Load(), "s3 data missed after second pack")
-	assert.True(t, size4 > size3)
 }
 
 func TestStartWithMultiBuckets(t *testing.T) {
@@ -243,7 +219,6 @@ func TestStartWithMultiBuckets(t *testing.T) {
 		firstPack  []test.Msg
 		secondPack []test.Msg
 		thirdPack  []test.Msg
-		fourthPack []test.Msg
 	}{
 		firstPack: []test.Msg{
 			// msg to main bucket.
@@ -287,22 +262,6 @@ func TestStartWithMultiBuckets(t *testing.T) {
 			// msg to not exist multi_bucket, will send to main bucket.
 			test.Msg(fmt.Sprintf(`{"bucket_name": "%s", "level":"error","ts":"2019-08-21T11:43:25.865Z","message":"get_items_error_1","trace_id":"3ea4a6589d06bb3f","span_id":"deddd718684b10a","get_items_error":"product: error while consuming CoverImage: context canceled","get_items_error_option":"CoverImage","get_items_error_cause":"context canceled","get_items_error_cause_type":"context_canceled"}`, dynamicBucket)),
 		},
-		fourthPack: []test.Msg{
-			// msg to main bucket.
-			test.Msg(`{"level":"error","ts":"2019-08-21T11:43:25.865Z","message":"get_items_error_1","trace_id":"3ea4a6589d06bb3f","span_id":"deddd718684b10a","get_items_error":"product: error while consuming CoverImage: context canceled","get_items_error_option":"CoverImage","get_items_error_cause":"context canceled","get_items_error_cause_type":"context_canceled"}`),
-			// msg to first of multi_buckets.
-			test.Msg(fmt.Sprintf(`{"bucket_name": "%s", "level":"error","ts":"2019-08-21T11:43:25.865Z","message":"get_items_error_1","trace_id":"3ea4a6589d06bb3f","span_id":"deddd718684b10a","get_items_error":"product: error while consuming CoverImage: context canceled","get_items_error_option":"CoverImage","get_items_error_cause":"context canceled","get_items_error_cause_type":"context_canceled"}`, buckets[1])),
-			// msg to second of multi_buckets.
-			test.Msg(fmt.Sprintf(`{"bucket_name": "%s", "level":"error","ts":"2019-08-21T11:43:25.865Z","message":"get_items_error_1","trace_id":"3ea4a6589d06bb3f","span_id":"deddd718684b10a","get_items_error":"product: error while consuming CoverImage: context canceled","get_items_error_option":"CoverImage","get_items_error_cause":"context canceled","get_items_error_cause_type":"context_canceled"}`, buckets[2])),
-			// msg to not exist multi_bucket, will send to main bucket.
-			test.Msg(fmt.Sprintf(`{"bucket_name": "%s", "level":"error","ts":"2019-08-21T11:43:25.865Z","message":"get_items_error_1","trace_id":"3ea4a6589d06bb3f","span_id":"deddd718684b10a","get_items_error":"product: error while consuming CoverImage: context canceled","get_items_error_option":"CoverImage","get_items_error_cause":"context canceled","get_items_error_cause_type":"context_canceled"}`, dynamicBucket)),
-			// msg to defaultBucket.
-			test.Msg(`{"level":"error","ts":"2019-08-21T11:43:25.865Z","message":"get_items_error_1","trace_id":"3ea4a6589d06bb3f","span_id":"deddd718684b10a","get_items_error":"product: error while consuming CoverImage: context canceled","get_items_error_option":"CoverImage","get_items_error_cause":"context canceled","get_items_error_cause_type":"context_canceled"}`),
-			// msg to first of multi_buckets.
-			test.Msg(fmt.Sprintf(`{"bucket_name": "%s", "level":"error","ts":"2019-08-21T11:43:25.865Z","message":"get_items_error_1","trace_id":"3ea4a6589d06bb3f","span_id":"deddd718684b10a","get_items_error":"product: error while consuming CoverImage: context canceled","get_items_error_option":"CoverImage","get_items_error_cause":"context canceled","get_items_error_cause_type":"context_canceled"}`, buckets[1])),
-			// msg to second of multi_buckets.
-			test.Msg(fmt.Sprintf(`{"bucket_name": "%s", "level":"error","ts":"2019-08-21T11:43:25.865Z","message":"get_items_error_1","trace_id":"3ea4a6589d06bb3f","span_id":"deddd718684b10a","get_items_error":"product: error while consuming CoverImage: context canceled","get_items_error_option":"CoverImage","get_items_error_cause":"context canceled","get_items_error_cause_type":"context_canceled"}`, buckets[2])),
-		},
 	}
 
 	// patternMain for parent log file
@@ -332,7 +291,7 @@ func TestStartWithMultiBuckets(t *testing.T) {
 
 	fileConfig := file.Config{
 		TargetFile:        targetFile,
-		RetentionInterval: "40s",
+		RetentionInterval: "2s",
 		Layout:            "01",
 		BatchFlushTimeout: "100ms",
 		RetentionSize:     "500 B",
@@ -430,18 +389,9 @@ func TestStartWithMultiBuckets(t *testing.T) {
 
 	// restart like after crash
 	p.Start()
-
-	test.SendPack(t, p, tests.fourthPack)
-	time.Sleep(1 * time.Second)
-
-	for _, pattern := range patterns {
-		match := test.GetMatches(t, pattern)
-		assert.Equal(t, 1, len(match))
-		test.CheckZero(t, match[0], "log file is not empty")
-	}
-
-	size4 := test.CheckNotZero(t, fileName.Load(), "s3 data missed after second pack")
-	assert.True(t, size4 > size2)
+	time.Sleep(6 * time.Second)
+	size3 := test.CheckNotZero(t, fileName.Load(), "s3 data missed after second pack")
+	assert.True(t, size3 > size2)
 }
 
 func newPipeline(t *testing.T, configOutput *Config, objStoreF objStoreFactory) *pipeline.Pipeline {

@@ -49,6 +49,8 @@ func (s *streamer) start() {
 }
 
 func (s *streamer) stop() {
+	s.shouldStop.Store(true)
+
 	s.mu.Lock()
 	for _, source := range s.streams {
 		for _, stream := range source {
@@ -114,6 +116,7 @@ func (s *streamer) joinStream() *stream {
 	s.charged = s.charged[:l-1]
 	s.chargedMu.Unlock()
 	stream.attach()
+
 	return stream
 }
 
@@ -145,7 +148,6 @@ func (s *streamer) resetBlocked(stream *stream) {
 
 func (s *streamer) heartbeat() {
 	streams := make([]*stream, 0)
-	s.shouldStop.Store(false)
 	for {
 		time.Sleep(time.Millisecond * 200)
 		if s.shouldStop.Load() {

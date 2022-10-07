@@ -127,12 +127,6 @@ func (p *processor) dischargeStream(st *stream) {
 			return
 		}
 		if !p.processSequence(event) {
-			p.streamer.shouldStop.Store(true)
-			for _, source := range p.streamer.streams {
-				for _, stream := range source {
-					stream.isAttached = false
-				}
-			}
 			return
 		}
 	}

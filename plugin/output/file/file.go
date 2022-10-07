@@ -112,7 +112,6 @@ func Factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 }
 
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginParams) {
-
 	p.controller = params.Controller
 	p.logger = params.Logger
 	p.config = config.(*Config)
@@ -153,6 +152,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	if p.nextSealUpTime.IsZero() {
 		p.logger.Panic("next seal up time is nil!")
 	}
+
 	longpanic.Go(func() {
 		p.fileSealUpTicker(ctx)
 	})
@@ -198,7 +198,6 @@ func (p *Plugin) fileSealUpTicker(ctx context.Context) {
 		timer := time.NewTimer(time.Until(p.nextSealUpTime))
 		select {
 		case <-p.retentionChan:
-			timer.Stop()
 			p.sealUp()
 		case <-timer.C:
 			p.sealUp()
@@ -220,8 +219,8 @@ func (p *Plugin) setNextSealUpTime() {
 }
 
 func (p *Plugin) write(data []byte) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
+	p.mu.RLock()
+	defer p.mu.RUnlock()
 	size, err := p.file.Write(data)
 	if err != nil {
 		p.logger.Fatalf("could not write into the file: %s, error: %s", p.file.Name(), err.Error())
