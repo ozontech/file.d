@@ -152,7 +152,9 @@ type Plugin struct {
 
 	compressor compressor
 	metricCtl  *metric.Ctl
+
 	// plugin metrics
+
 	sendErrorMetric *prometheus.CounterVec
 }
 

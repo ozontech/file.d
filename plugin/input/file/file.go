@@ -54,6 +54,7 @@ type Plugin struct {
 	jobProvider *jobProvider
 
 	// plugin metrics
+
 	possibleOffsetCorruptionMetric    *prom.CounterVec
 	alreadyWrittenEventsSkippedMetric *prom.CounterVec
 }

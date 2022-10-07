@@ -26,7 +26,7 @@ It transforms `{"server":{"os":"linux","arch":"amd64"}}` into `{"server":"{\"os\
 
 type Plugin struct {
 	config *Config
-	plugin.EmptyMetricRegister
+	plugin.NoMetricsPlugin
 }
 
 // ! config-params

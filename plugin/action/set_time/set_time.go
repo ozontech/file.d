@@ -14,7 +14,7 @@ It adds time field to the event.
 
 type Plugin struct {
 	config *Config
-	plugin.EmptyMetricRegister
+	plugin.NoMetricsPlugin
 }
 
 // ! config-params

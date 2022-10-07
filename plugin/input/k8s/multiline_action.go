@@ -15,7 +15,7 @@ type MultilineAction struct {
 	eventBuf      []byte
 	eventSize     int
 	skipNextEvent bool
-	plugin.EmptyMetricRegister
+	plugin.NoMetricsPlugin
 }
 
 const (

@@ -26,7 +26,7 @@ It transforms `{"animal":{"type":"cat","paws":4}}` into `{"pet_type":"b","pet_pa
 
 type Plugin struct {
 	config *Config
-	plugin.EmptyMetricRegister
+	plugin.NoMetricsPlugin
 }
 
 // ! config-params

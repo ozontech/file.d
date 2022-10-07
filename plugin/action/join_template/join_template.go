@@ -46,7 +46,7 @@ type Plugin struct {
 	config *Config
 
 	jp *join.Plugin
-	plugin.EmptyMetricRegister
+	plugin.NoMetricsPlugin
 }
 
 // ! config-params

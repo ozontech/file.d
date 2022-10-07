@@ -172,8 +172,7 @@ func TestMaskAddExtraField(t *testing.T) {
 			{Re: kDefaultCardRegExp, Groups: []int{1, 2, 3, 4}},
 		},
 	}
-	metricCtl := metric.New("test")
-	plugin.RegisterMetrics(metricCtl)
+	plugin.RegisterMetrics(metric.New("test"))
 	plugin.Start(&config, &pipeline.ActionPluginParams{
 		PluginDefaultParams: &pipeline.PluginDefaultParams{
 			PipelineName:     "test_pipeline",

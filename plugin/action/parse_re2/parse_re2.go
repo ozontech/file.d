@@ -18,7 +18,7 @@ type Plugin struct {
 	config *Config
 
 	re *regexp.Regexp
-	plugin.EmptyMetricRegister
+	plugin.NoMetricsPlugin
 }
 
 // ! config-params

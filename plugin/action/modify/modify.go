@@ -42,7 +42,7 @@ type Plugin struct {
 	logger *zap.SugaredLogger
 	ops    map[string][]cfg.SubstitutionOp
 	buf    []byte
-	plugin.EmptyMetricRegister
+	plugin.NoMetricsPlugin
 }
 
 type Config map[string]string

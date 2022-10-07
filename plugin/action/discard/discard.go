@@ -23,7 +23,7 @@ pipelines:
 }*/
 
 type Plugin struct {
-	plugin.EmptyMetricRegister
+	plugin.NoMetricsPlugin
 }
 
 type Config struct{}

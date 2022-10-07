@@ -24,16 +24,16 @@ func New(subsystem string) *Ctl {
 }
 
 func (mc *Ctl) RegisterCounter(name, help string, labels ...string) *prom.CounterVec {
+	if metric, hasCounter := mc.counters[name]; hasCounter {
+		return metric
+	}
+
 	promCounter := prom.NewCounterVec(prom.CounterOpts{
 		Namespace: PromNamespace,
 		Subsystem: mc.subsystem,
 		Name:      name,
 		Help:      help,
 	}, labels)
-
-	if metric, hasCounter := mc.counters[name]; hasCounter {
-		return metric
-	}
 
 	mc.counters[name] = promCounter
 	prom.DefaultRegisterer.Unregister(promCounter)
@@ -42,16 +42,16 @@ func (mc *Ctl) RegisterCounter(name, help string, labels ...string) *prom.Counte
 }
 
 func (mc *Ctl) RegisterGauge(name, help string, labels ...string) *prom.GaugeVec {
+	if metric, hasGauge := mc.gauges[name]; hasGauge {
+		return metric
+	}
+
 	promGauge := prom.NewGaugeVec(prom.GaugeOpts{
 		Namespace: PromNamespace,
 		Subsystem: mc.subsystem,
 		Name:      name,
 		Help:      help,
 	}, labels)
-
-	if metric, hasGauge := mc.gauges[name]; hasGauge {
-		return metric
-	}
 
 	mc.gauges[name] = promGauge
 	prom.DefaultRegisterer.Unregister(promGauge)

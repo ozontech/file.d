@@ -14,7 +14,7 @@ It writes events to stdout(also known as console).
 
 type Plugin struct {
 	controller pipeline.OutputPluginController
-	plugin.EmptyMetricRegister
+	plugin.NoMetricsPlugin
 }
 
 type Config struct{}

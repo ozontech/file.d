@@ -31,6 +31,7 @@ type FileD struct {
 	metricCtl *metric.Ctl
 
 	// file_d metrics
+
 	longPanicMetric *prometheus.CounterVec
 	versionMetric   *prometheus.CounterVec
 }

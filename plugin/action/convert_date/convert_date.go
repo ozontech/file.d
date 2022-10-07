@@ -15,7 +15,7 @@ It converts field date/time data to different format.
 
 type Plugin struct {
 	config *Config
-	plugin.EmptyMetricRegister
+	plugin.NoMetricsPlugin
 }
 
 // ! config-params

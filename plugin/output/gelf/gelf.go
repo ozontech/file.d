@@ -45,6 +45,7 @@ type Plugin struct {
 	controller   pipeline.OutputPluginController
 
 	// plugin metrics
+
 	sendErrorMetric *prom.CounterVec
 }
 

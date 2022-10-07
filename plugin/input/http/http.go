@@ -93,6 +93,7 @@ type Plugin struct {
 	logger     *zap.SugaredLogger
 
 	// plugin metrics
+
 	httpErrorMetric *prometheus.CounterVec
 }
 

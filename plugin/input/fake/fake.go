@@ -14,7 +14,7 @@ type Plugin struct {
 	controller pipeline.InputPluginController
 	commitFn   func(event *pipeline.Event)
 	inFn       func()
-	plugin.EmptyMetricRegister
+	plugin.NoMetricsPlugin
 }
 
 type Config struct{}

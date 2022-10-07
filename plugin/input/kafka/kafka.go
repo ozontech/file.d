@@ -28,6 +28,7 @@ type Plugin struct {
 	idByTopic     map[string]int
 
 	// plugin metrics
+
 	commitErrorsMetric  *prometheus.CounterVec
 	consumeErrorsMetric *prometheus.CounterVec
 }

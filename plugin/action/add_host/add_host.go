@@ -14,7 +14,7 @@ It adds field containing hostname to an event.
 
 type Plugin struct {
 	config *Config
-	plugin.EmptyMetricRegister
+	plugin.NoMetricsPlugin
 }
 
 // ! config-params

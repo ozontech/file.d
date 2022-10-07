@@ -21,7 +21,7 @@ It converts the log level field according RFC-5424.
 type Plugin struct {
 	config *Config
 	logger *zap.SugaredLogger
-	plugin.EmptyMetricRegister
+	plugin.NoMetricsPlugin
 }
 
 // ! config-params

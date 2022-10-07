@@ -14,7 +14,7 @@ If the decoded JSON isn't an object, the event will be skipped.
 
 type Plugin struct {
 	config *Config
-	plugin.EmptyMetricRegister
+	plugin.NoMetricsPlugin
 }
 
 // ! config-params

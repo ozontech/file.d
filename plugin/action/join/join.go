@@ -74,7 +74,7 @@ type Plugin struct {
 	negate       bool
 
 	logger *zap.SugaredLogger
-	plugin.EmptyMetricRegister
+	plugin.NoMetricsPlugin
 }
 
 // ! config-params

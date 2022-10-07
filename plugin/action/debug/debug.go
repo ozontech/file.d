@@ -12,7 +12,7 @@ It logs event to stdout. Useful for debugging.
 }*/
 
 type Plugin struct {
-	plugin.EmptyMetricRegister
+	plugin.NoMetricsPlugin
 }
 
 type Config map[string]any

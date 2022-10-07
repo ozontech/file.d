@@ -39,7 +39,7 @@ type Plugin struct {
 	paths          [][]string
 	names          []string
 	preserveFields bool
-	plugin.EmptyMetricRegister
+	plugin.NoMetricsPlugin
 }
 
 type Config map[string]any

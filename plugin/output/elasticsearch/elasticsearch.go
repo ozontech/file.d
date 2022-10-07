@@ -51,6 +51,7 @@ type Plugin struct {
 	mu           *sync.Mutex
 
 	// plugin metrics
+
 	sendErrorMetric      *prometheus.CounterVec
 	indexingErrorsMetric *prometheus.CounterVec
 }

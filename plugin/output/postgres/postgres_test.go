@@ -89,8 +89,7 @@ func TestPrivateOut(t *testing.T) {
 		ctx:          ctx,
 	}
 
-	metricCtl := metric.New("test")
-	p.RegisterMetrics(metricCtl)
+	p.RegisterMetrics(metric.New("test"))
 
 	batch := &pipeline.Batch{Events: []*pipeline.Event{{Root: root}}}
 	p.out(nil, batch)
@@ -165,8 +164,7 @@ func TestPrivateOutWithRetry(t *testing.T) {
 		ctx:          ctx,
 	}
 
-	metricCtl := metric.New("test")
-	p.RegisterMetrics(metricCtl)
+	p.RegisterMetrics(metric.New("test"))
 
 	batch := &pipeline.Batch{Events: []*pipeline.Event{{Root: root}}}
 	p.out(nil, batch)
@@ -219,8 +217,7 @@ func TestPrivateOutNoGoodEvents(t *testing.T) {
 		logger:       testLogger,
 	}
 
-	metricCtl := metric.New("test")
-	p.RegisterMetrics(metricCtl)
+	p.RegisterMetrics(metric.New("test"))
 
 	batch := &pipeline.Batch{Events: []*pipeline.Event{{Root: root}}}
 	p.out(nil, batch)
@@ -300,8 +297,7 @@ func TestPrivateOutDeduplicatedEvents(t *testing.T) {
 		ctx:          ctx,
 	}
 
-	metricCtl := metric.New("test")
-	p.RegisterMetrics(metricCtl)
+	p.RegisterMetrics(metric.New("test"))
 
 	batch := &pipeline.Batch{Events: []*pipeline.Event{
 		{Root: root},
@@ -367,8 +363,7 @@ func TestPrivateOutWrongTypeInField(t *testing.T) {
 		logger:       testLogger,
 	}
 
-	metricCtl := metric.New("test")
-	p.RegisterMetrics(metricCtl)
+	p.RegisterMetrics(metric.New("test"))
 
 	batch := &pipeline.Batch{Events: []*pipeline.Event{{Root: root}}}
 	p.out(nil, batch)
@@ -473,8 +468,7 @@ func TestPrivateOutFewUniqueEventsYetWithDeduplicationEventsAnpooladEvents(t *te
 		ctx:          ctx,
 	}
 
-	metricCtl := metric.New("test")
-	p.RegisterMetrics(metricCtl)
+	p.RegisterMetrics(metric.New("test"))
 
 	batch := &pipeline.Batch{Events: []*pipeline.Event{
 		{Root: root},

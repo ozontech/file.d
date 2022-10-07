@@ -36,6 +36,7 @@ type Plugin struct {
 	controller   pipeline.OutputPluginController
 
 	// plugin metrics
+
 	sendErrorMetric *prometheus.CounterVec
 }
 

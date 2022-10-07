@@ -37,6 +37,7 @@ type Plugin struct {
 	batcher  *pipeline.Batcher
 
 	// plugin metrics
+
 	sendErrorMetric *prometheus.CounterVec
 }
 

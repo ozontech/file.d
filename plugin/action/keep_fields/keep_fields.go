@@ -13,7 +13,7 @@ It keeps the list of the event fields and removes others.
 type Plugin struct {
 	config    *Config
 	fieldsBuf []string
-	plugin.EmptyMetricRegister
+	plugin.NoMetricsPlugin
 }
 
 // ! config-params

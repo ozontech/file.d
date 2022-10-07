@@ -50,10 +50,12 @@ type jobProvider struct {
 	stopMaintenanceCh chan bool
 
 	// some debugging stuff
+
 	offsetsCommitted *atomic.Int64
 	logger           *zap.SugaredLogger
 
 	//provider metrics
+
 	possibleOffsetCorruptionMetric *prometheus.CounterVec
 }
 

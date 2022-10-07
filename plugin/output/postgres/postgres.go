@@ -71,6 +71,7 @@ type Plugin struct {
 	pool         PgxIface
 
 	// plugin metrics
+
 	discardedEventMetric  *prom.CounterVec
 	duplicatedEventMetric *prom.CounterVec
 	writtenEventMetric    *prom.CounterVec

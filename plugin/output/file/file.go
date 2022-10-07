@@ -46,7 +46,7 @@ type Plugin struct {
 	SealUpCallback func(string)
 
 	mu *sync.RWMutex
-	plugin.EmptyMetricRegister
+	plugin.NoMetricsPlugin
 }
 
 type data struct {

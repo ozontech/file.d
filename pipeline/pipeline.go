@@ -60,11 +60,6 @@ type OutputPluginController interface {
 	Error(err string)
 }
 
-type MetricsController interface {
-	RegisterCounter(name, help string, labels ...string) *prometheus.CounterVec
-	RegisterGauge(name, help string, labels ...string) *prometheus.GaugeVec
-}
-
 type (
 	SourceID   uint64
 	StreamName string
@@ -117,6 +112,7 @@ type Pipeline struct {
 	maxSize         int
 
 	//all pipeline`s metrics
+
 	inUseEventsMetric          *prometheus.GaugeVec
 	eventPoolCapacityMetric    *prometheus.GaugeVec
 	inputEventsCountMetric     *prometheus.CounterVec

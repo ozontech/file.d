@@ -55,7 +55,7 @@ type Plugin struct {
 
 	limiterBuf []byte
 	rules      []*rule
-	plugin.EmptyMetricRegister
+	plugin.NoMetricsPlugin
 }
 
 // ! config-params

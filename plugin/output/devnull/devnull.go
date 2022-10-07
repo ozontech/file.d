@@ -15,7 +15,7 @@ type Plugin struct {
 	controller pipeline.OutputPluginController
 	outFn      func(event *pipeline.Event)
 	total      *atomic.Int64
-	plugin.EmptyMetricRegister
+	plugin.NoMetricsPlugin
 }
 
 type Config struct{}

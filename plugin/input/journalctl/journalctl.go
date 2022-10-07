@@ -21,6 +21,7 @@ type Plugin struct {
 	offInfo *offsetInfo
 
 	//  plugin metrics
+
 	offsetErrorsMetric        *prometheus.CounterVec
 	journalCtlStopErrorMetric *prometheus.CounterVec
 	readerErrorsMetric        *prometheus.CounterVec

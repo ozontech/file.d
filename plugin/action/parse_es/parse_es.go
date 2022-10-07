@@ -17,7 +17,7 @@ type Plugin struct {
 	passNext    bool
 	discardNext bool
 	isStrict    bool
-	plugin.EmptyMetricRegister
+	plugin.NoMetricsPlugin
 }
 
 type Config struct{}
