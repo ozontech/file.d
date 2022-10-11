@@ -87,7 +87,7 @@ var (
 			Subsystem: "files",
 			Name:      "open",
 		},
-		[]string{"p_pod", "p_container"})
+		[]string{"file_source"})
 
 	FilesThrottle = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
@@ -95,7 +95,7 @@ var (
 			Subsystem: "files",
 			Name:      "throttle",
 		},
-		[]string{"p_pod", "p_container"})
+		[]string{"file_source"})
 
 	FilesAlarm = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
@@ -103,7 +103,7 @@ var (
 			Subsystem: "files",
 			Name:      "alarm",
 		},
-		[]string{"p_pod", "p_container"})
+		[]string{"file_source"})
 )
 
 func (f *FileD) startPipelines() {

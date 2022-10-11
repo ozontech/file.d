@@ -29,11 +29,6 @@ const (
 	maintenanceResultNoop    = 4
 )
 
-type key struct {
-	pod       string
-	container string
-}
-
 type jobProvider struct {
 	config     *Config
 	controller pipeline.InputPluginController
@@ -62,9 +57,9 @@ type jobProvider struct {
 	offsetsCommitted *atomic.Int64
 	logger           *zap.SugaredLogger
 
-	throttleMu  sync.Mutex
-	fdOpenMap   map[key]int
-	throttleMap map[key]bool
+	throttleMu  *sync.RWMutex
+	fdOpenMap   map[string]int
+	throttleMap map[string]bool
 }
 
 type Job struct {
@@ -86,7 +81,8 @@ type Job struct {
 	// offsets is a sliceMap of streamName to offset.
 	// Unlike map[string]int, sliceMap can work with mutable strings when using unsafe conversion from []byte.
 	// Also it is likely not slower than map implementation for 1-2 streams case.
-	offsets sliceMap
+	offsets       sliceMap
+	fileSourceKey string
 
 	mu *sync.Mutex
 }
@@ -131,8 +127,9 @@ func NewJobProvider(config *Config, controller pipeline.InputPluginController, l
 
 		logger: logger,
 
-		fdOpenMap:   map[key]int{},
-		throttleMap: map[key]bool{},
+		throttleMu:  &sync.RWMutex{},
+		fdOpenMap:   map[string]int{},
+		throttleMap: map[string]bool{},
 	}
 
 	jp.watcher = NewWatcher(
@@ -278,7 +275,7 @@ func (jp *jobProvider) refreshSymlink(symlink string, inode inodeID, isWrite boo
 	jp.refreshFile(stat, filename, symlink, isWrite)
 }
 
-func parseLogFilename(name string) (pod, container, uniq string) {
+func parsePodFilename(name string) (k, uniq string) {
 	if name[len(name)-4:] != ".log" {
 		return
 	}
@@ -287,10 +284,10 @@ func parseLogFilename(name string) (pod, container, uniq string) {
 	if len(split) < 3 {
 		return
 	}
-	container = split[len(split)-2]
+	container := split[len(split)-2]
 	uniq = split[len(split)-3]
-	pod, _, _ = strings.Cut(uniq, "-")
-	return
+	pod, _, _ := strings.Cut(uniq, "-")
+	return pod + "_" + container, uniq
 }
 
 func (jp *jobProvider) refreshFile(stat os.FileInfo, filename string, symlink string, isWrite bool) {
@@ -309,9 +306,15 @@ func (jp *jobProvider) refreshFile(stat os.FileInfo, filename string, symlink st
 	}
 
 	// new file
-	if jp.checkBlacklistedPermanent(filename) {
-		jp.logger.Warnf("pod is blacklisted, ignoring %s", filename)
-		return
+
+	var uniqKey string
+	if fn, ok := throttleKeyFns[jp.config.ThrottleKeyFn]; ok {
+		uniq, blacklisted := jp.blacklistPermanent(fn, filename)
+		if blacklisted {
+			jp.logger.Warnf("blacklisted, ignoring %s", filename)
+			return
+		}
+		uniqKey = uniq
 	}
 
 	file, err := os.Open(filename)
@@ -320,72 +323,71 @@ func (jp *jobProvider) refreshFile(stat os.FileInfo, filename string, symlink st
 		return
 	}
 
-	jp.addJob(file, stat, filename, symlink)
+	jp.addJob(file, stat, filename, symlink, uniqKey)
 }
 
-// checkBlacklistedPermanent returns true if pod is blacklisted, blacklisting is temporary, acc. to number of open files
+// throttleOnly returns true if file source is throttled
 //
 //nolint:deadcode,unused
-func (jp *jobProvider) checkBlacklistedTemporary(filename string) bool {
-	container, pod, _ := parseLogFilename(filename)
-	if container == "" || pod == "" {
+func (jp *jobProvider) throttleOnly(fn throttleParseFnType, filename string) bool {
+	k, uniq := fn(filename)
+	if k == "" || uniq == "" {
 		return false
 	}
-	k := key{pod, container}
 
 	jp.throttleMu.Lock()
 	defer jp.throttleMu.Unlock()
 
 	fds := jp.fdOpenMap[k]
 	if fds >= jp.config.Alarm {
-		fd.FilesAlarm.WithLabelValues(pod, container).Inc()
+		fd.FilesAlarm.WithLabelValues(k).Inc()
 	}
 
 	if fds >= jp.config.Throttle {
-		fd.FilesThrottle.WithLabelValues(pod, container).Inc()
+		fd.FilesThrottle.WithLabelValues(k).Inc()
 		return true
 	}
 
 	jp.fdOpenMap[k]++
 
-	fd.FilesOpen.WithLabelValues(pod, container).Inc()
+	fd.FilesOpen.WithLabelValues(k).Inc()
 	return false
 }
 
-// checkBlacklistedPermanent returns true if pod is blacklisted, blacklisting is permanent (requires pod restart)
-func (jp *jobProvider) checkBlacklistedPermanent(filename string) bool {
-	container, pod, uniq := parseLogFilename(filename)
-	if container == "" || pod == "" || uniq == "" {
-		return false
+// blacklistPermanent returns true if file source is blacklisted, blacklisting is permanent
+//
+//nolint:deadcode,unused
+func (jp *jobProvider) blacklistPermanent(fn throttleParseFnType, filename string) (string, bool) {
+	k, uniq := fn(filename)
+
+	// ignore parse errors, they never gets blacklisted
+	if k == "" || uniq == "" {
+		return uniq, false
 	}
 
 	jp.throttleMu.Lock()
 	defer jp.throttleMu.Unlock()
 
-	k := key{pod, container}
-	k_uniq := key{uniq, container}
-
-	if jp.throttleMap[k_uniq] {
-		fd.FilesThrottle.WithLabelValues(pod, container).Inc()
-		fd.FilesAlarm.WithLabelValues(pod, container).Inc()
-		return true
+	if jp.throttleMap[uniq] {
+		fd.FilesAlarm.WithLabelValues(k).Inc()
+		return uniq, true
 	}
 
 	fds := jp.fdOpenMap[k]
 	if fds >= jp.config.Alarm {
-		fd.FilesAlarm.WithLabelValues(pod, container).Inc()
+		fd.FilesAlarm.WithLabelValues(k).Inc()
 	}
 
 	if fds >= jp.config.Throttle {
-		jp.throttleMap[k_uniq] = true
-		fd.FilesThrottle.WithLabelValues(pod, container).Inc()
-		return true
+		jp.throttleMap[uniq] = true
+		fd.FilesThrottle.WithLabelValues(uniq).Inc()
+		return uniq, true
 	}
 
 	jp.fdOpenMap[k]++
 
-	fd.FilesOpen.WithLabelValues(pod, container).Inc()
-	return false
+	fd.FilesOpen.WithLabelValues(k).Inc()
+	return uniq, false
 }
 
 func (jp *jobProvider) checkFileWasTruncated(job *Job, size int64) {
@@ -396,7 +398,7 @@ func (jp *jobProvider) checkFileWasTruncated(job *Job, size int64) {
 	}
 }
 
-func (jp *jobProvider) addJob(file *os.File, stat os.FileInfo, filename string, symlink string) {
+func (jp *jobProvider) addJob(file *os.File, stat os.FileInfo, filename string, symlink string, uniq string) {
 	sourceID := sourceIDByStat(stat, symlink)
 
 	jp.jobsMu.Lock()
@@ -423,7 +425,8 @@ func (jp *jobProvider) addJob(file *os.File, stat os.FileInfo, filename string, 
 		isDone:     true,
 		shouldSkip: *atomic.NewBool(false),
 
-		offsets: nil,
+		offsets:       nil,
+		fileSourceKey: uniq,
 
 		mu: &sync.Mutex{},
 	}
@@ -689,6 +692,17 @@ func (jp *jobProvider) maintenanceJob(job *Job) int {
 	file := job.file
 	inode := job.inode
 
+	//uniq := job.fileSourceKey
+	//jp.throttleMu.RLock()
+	//if jp.throttleMap[uniq] {
+	//	jp.throttleMu.RUnlock()
+	//	jp.logger.Warnf("trying: file source %+v throttled, deleted job for: %s", uniq, filename)
+	//	jp.deleteJobAndUnlock(job)
+	//	jp.logger.Warnf("file source %+v throttled, deleted job for: %s", uniq, filename)
+	//	return maintenanceResultDeleted
+	//}
+	//jp.throttleMu.RUnlock()
+
 	if !isDone {
 		job.mu.Unlock()
 		return maintenanceResultNotDone
@@ -762,13 +776,14 @@ func (jp *jobProvider) maintenanceJob(job *Job) int {
 // deleteJob job should be already locked and it'll be unlocked
 func (jp *jobProvider) deleteJobAndUnlock(job *Job) {
 
-	container, pod, _ := parseLogFilename(job.filename)
-	if container != "" && pod != "" {
-		fd.FilesOpen.WithLabelValues(pod, container).Dec()
-		k := key{pod, container}
-		jp.throttleMu.Lock()
-		jp.fdOpenMap[k]--
-		jp.throttleMu.Unlock()
+	if fn, ok := throttleKeyFns[jp.config.ThrottleKeyFn]; ok {
+		k, uniq := fn(job.filename)
+		if k != "" && uniq != "" {
+			fd.FilesOpen.WithLabelValues(k).Dec()
+			jp.throttleMu.Lock()
+			jp.fdOpenMap[k]--
+			jp.throttleMu.Unlock()
+		}
 	}
 
 	if !job.isDone {

@@ -69,6 +69,19 @@ const (
 
 type offsetsOp int
 
+type (
+	// returns key and unique key
+	// metrics and file count is done by key, blacklisting - by unique key
+	// this lets implement auto de-blacklisting
+	throttleParseFnType func(name string) (k, uniq string)
+)
+
+var (
+	throttleKeyFns = map[string]throttleParseFnType{
+		"pod": parsePodFilename,
+	}
+)
+
 const (
 	// ! "offsetsOp" #1 /`(.+)`/
 	offsetsOpContinue offsetsOp = iota // * `continue` – uses an offset file
@@ -172,13 +185,18 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
-	// > Max Number of open file descriptors per pod. Pod gets blacklisted if higher
-	Throttle int `json:"throttle" default:"200"` // *
+	// > Max Number of open file descriptors per file source. File source gets blacklisted if higher
+	Throttle int `json:"throttle" default:"80"` // *
 
 	// > @3@4@5@6
 	// >
-	// > Max Number of open file descriptors per pod. Pod gets warning if higher
-	Alarm int `json:"alarm" default:"100"` // *
+	// > Max Number of open file descriptors per file source. File source gets warning if higher
+	Alarm int `json:"alarm" default:"60"` // *
+
+	// > @3@4@5@6
+	// >
+	// > ThrottleKeyFn is a function mapping file name to a file source, if not defined, throttling is disabled
+	ThrottleKeyFn string `json:"throttle_key_fn" default:""` // *
 }
 
 func init() {
@@ -211,7 +229,9 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	p.startWorkers()
 	p.jobProvider.start()
 
-	p.logger.Warnf("file plugin started, throttle is: %d, alarm is: %d", p.config.Throttle, p.config.Alarm)
+	if _, ok := throttleKeyFns[p.config.ThrottleKeyFn]; ok {
+		p.logger.Warnf("file plugin started, throttle is: %d, alarm is: %d", p.config.Throttle, p.config.Alarm)
+	}
 }
 
 func (p *Plugin) registerPluginMetrics() {

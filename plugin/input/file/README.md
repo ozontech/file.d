@@ -135,15 +135,21 @@ It turns on watching for file modifications. Turning it on cause more CPU work, 
 
 <br>
 
-**`throttle`** *`int`* *`default=200`* 
+**`throttle`** *`int`* *`default=80`* 
 
-Max Number of open file descriptors per pod. Pod gets blacklisted if higher
+Max Number of open file descriptors per file source. File source gets blacklisted if higher
 
 <br>
 
-**`alarm`** *`int`* *`default=100`* 
+**`alarm`** *`int`* *`default=60`* 
 
-Max Number of open file descriptors per pod. Pod gets warning if higher
+Max Number of open file descriptors per file source. File source gets warning if higher
+
+<br>
+
+**`throttle_key_fn`** *`string`* 
+
+ThrottleKeyFn is a function mapping file name to a file source, if not defined, throttling is disabled
 
 <br>
 
