@@ -2,6 +2,7 @@ package k8s
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/ozontech/file.d/decoder"
 	"github.com/ozontech/file.d/fd"
@@ -135,7 +136,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 		p.params.Controller.SuggestDecoder(decoder.CRI)
 	}
 
-	p.fp = &file.Plugin{}
+	p.fp = file.NewFilePlugin(parsePodFilename)
 
 	p.fp.Start(&p.config.FileConfig, params)
 }
@@ -153,4 +154,19 @@ func (p *Plugin) Stop() {
 // PassEvent decides pass or discard event.
 func (p *Plugin) PassEvent(event *pipeline.Event) bool {
 	return p.fp.PassEvent(event)
+}
+
+func parsePodFilename(name string) (k, uniq string) {
+	if name[len(name)-4:] != ".log" {
+		return
+	}
+
+	split := strings.Split(name, "/")
+	if len(split) < 3 {
+		return
+	}
+	container := split[len(split)-2]
+	uniq = split[len(split)-3]
+	pod, _, _ := strings.Cut(uniq, "-")
+	return pod + "_" + container, uniq
 }

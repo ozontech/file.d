@@ -57,6 +57,14 @@ type Plugin struct {
 
 	workers     []*worker
 	jobProvider *jobProvider
+
+	parse throttleParseFnType
+}
+
+func NewFilePlugin(parse throttleParseFnType) *Plugin {
+	return &Plugin{
+		parse: parse,
+	}
 }
 
 type persistenceMode int
@@ -74,12 +82,6 @@ type (
 	// metrics and file count is done by key, blacklisting - by unique key
 	// this lets implement auto de-blacklisting
 	throttleParseFnType func(name string) (k, uniq string)
-)
-
-var (
-	throttleKeyFns = map[string]throttleParseFnType{
-		"pod": parsePodFilename,
-	}
 )
 
 const (
@@ -192,11 +194,6 @@ type Config struct {
 	// >
 	// > Max Number of open file descriptors per file source. File source gets warning if higher
 	Alarm int `json:"alarm" default:"60"` // *
-
-	// > @3@4@5@6
-	// >
-	// > ThrottleKeyFn is a function mapping file name to a file source, if not defined, throttling is disabled
-	ThrottleKeyFn string `json:"throttle_key_fn" default:""` // *
 }
 
 func init() {
@@ -222,14 +219,14 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 
 	p.config.OffsetsFileTmp = p.config.OffsetsFile + ".atomic"
 
-	p.jobProvider = NewJobProvider(p.config, p.params.Controller, p.logger)
+	p.jobProvider = NewJobProvider(p.config, p.params.Controller, p.logger, p.parse)
 
 	ResetterRegistryInstance.AddResetter(params.PipelineName, p)
 
 	p.startWorkers()
 	p.jobProvider.start()
 
-	if _, ok := throttleKeyFns[p.config.ThrottleKeyFn]; ok {
+	if p.parse != nil {
 		p.logger.Warnf("file plugin started, throttle is: %d, alarm is: %d", p.config.Throttle, p.config.Alarm)
 	}
 }

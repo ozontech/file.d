@@ -147,11 +147,5 @@ Max Number of open file descriptors per file source. File source gets warning if
 
 <br>
 
-**`throttle_key_fn`** *`string`* 
-
-ThrottleKeyFn is a function mapping file name to a file source, if not defined, throttling is disabled
-
-<br>
-
 
 <br>*Generated using [__insane-doc__](https://github.com/vitkovskii/insane-doc)*

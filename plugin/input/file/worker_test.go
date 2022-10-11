@@ -90,7 +90,7 @@ func TestWorkerWork(t *testing.T) {
 				shouldSkip:     *atomic.NewBool(false),
 				mu:             &sync.Mutex{},
 			}
-			jp := NewJobProvider(&Config{}, nil, &zap.SugaredLogger{})
+			jp := NewJobProvider(&Config{}, nil, &zap.SugaredLogger{}, nil)
 			jp.jobsChan = make(chan *Job, 2)
 			jp.jobs = map[pipeline.SourceID]*Job{
 				1: job,
@@ -217,7 +217,7 @@ func TestWorkerWorkMultiData(t *testing.T) {
 				mu:         &sync.Mutex{},
 			}
 
-			jp := NewJobProvider(&Config{}, nil, &zap.SugaredLogger{})
+			jp := NewJobProvider(&Config{}, nil, &zap.SugaredLogger{}, nil)
 			jp.jobsChan = make(chan *Job, 2)
 			jp.jobs = map[pipeline.SourceID]*Job{
 				1: job,

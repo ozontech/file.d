@@ -246,3 +246,9 @@ func TestParseLogFilename(t *testing.T) {
 	assert.Equal(t, containerName("duty-bot"), container)
 	assert.Equal(t, containerID("4e0301b633eaa2bfdcafdeba59ba0c72a3815911a6a820bf273534b0f32d98e0"), cid)
 }
+
+func TestParsePodFilename(t *testing.T) {
+	k, uniq := parsePodFilename("/var/log/pods/bx_cdp-data-manager-release-cdp-5396-cron-re-tasks-27748185-hgl65_64f4808f-377a-423f-b47b-8f0d89da6f2f/xds-init-partB/0.log")
+	assert.Equal(t, "bx_cdp_xds-init-partB", k)
+	assert.Equal(t, "bx_cdp-data-manager-release-cdp-5396-cron-re-tasks-27748185-hgl65_64f4808f-377a-423f-b47b-8f0d89da6f2f", uniq)
+}

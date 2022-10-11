@@ -5,7 +5,6 @@ import (
 	"math"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -60,6 +59,8 @@ type jobProvider struct {
 	throttleMu  *sync.RWMutex
 	fdOpenMap   map[string]int
 	throttleMap map[string]bool
+
+	parse throttleParseFnType
 }
 
 type Job struct {
@@ -104,7 +105,7 @@ type symlinkInfo struct {
 	inode    inodeID
 }
 
-func NewJobProvider(config *Config, controller pipeline.InputPluginController, logger *zap.SugaredLogger) *jobProvider {
+func NewJobProvider(config *Config, controller pipeline.InputPluginController, logger *zap.SugaredLogger, parse throttleParseFnType) *jobProvider {
 	jp := &jobProvider{
 		config:     config,
 		controller: controller,
@@ -130,6 +131,8 @@ func NewJobProvider(config *Config, controller pipeline.InputPluginController, l
 		throttleMu:  &sync.RWMutex{},
 		fdOpenMap:   map[string]int{},
 		throttleMap: map[string]bool{},
+
+		parse: parse,
 	}
 
 	jp.watcher = NewWatcher(
@@ -275,21 +278,6 @@ func (jp *jobProvider) refreshSymlink(symlink string, inode inodeID, isWrite boo
 	jp.refreshFile(stat, filename, symlink, isWrite)
 }
 
-func parsePodFilename(name string) (k, uniq string) {
-	if name[len(name)-4:] != ".log" {
-		return
-	}
-
-	split := strings.Split(name, "/")
-	if len(split) < 3 {
-		return
-	}
-	container := split[len(split)-2]
-	uniq = split[len(split)-3]
-	pod, _, _ := strings.Cut(uniq, "-")
-	return pod + "_" + container, uniq
-}
-
 func (jp *jobProvider) refreshFile(stat os.FileInfo, filename string, symlink string, isWrite bool) {
 	sourceID := sourceIDByStat(stat, symlink)
 	jp.jobsMu.RLock()
@@ -306,10 +294,9 @@ func (jp *jobProvider) refreshFile(stat os.FileInfo, filename string, symlink st
 	}
 
 	// new file
-
 	var uniqKey string
-	if fn, ok := throttleKeyFns[jp.config.ThrottleKeyFn]; ok {
-		uniq, blacklisted := jp.blacklistPermanent(fn, filename)
+	if jp.parse != nil {
+		uniq, blacklisted := jp.blacklistPermanent(jp.parse, filename)
 		if blacklisted {
 			jp.logger.Warnf("blacklisted, ignoring %s", filename)
 			return
@@ -326,38 +313,11 @@ func (jp *jobProvider) refreshFile(stat os.FileInfo, filename string, symlink st
 	jp.addJob(file, stat, filename, symlink, uniqKey)
 }
 
-// throttleOnly returns true if file source is throttled
-//
-//nolint:deadcode,unused
-func (jp *jobProvider) throttleOnly(fn throttleParseFnType, filename string) bool {
-	k, uniq := fn(filename)
-	if k == "" || uniq == "" {
-		return false
-	}
-
-	jp.throttleMu.Lock()
-	defer jp.throttleMu.Unlock()
-
-	fds := jp.fdOpenMap[k]
-	if fds >= jp.config.Alarm {
-		fd.FilesAlarm.WithLabelValues(k).Inc()
-	}
-
-	if fds >= jp.config.Throttle {
-		fd.FilesThrottle.WithLabelValues(k).Inc()
-		return true
-	}
-
-	jp.fdOpenMap[k]++
-
-	fd.FilesOpen.WithLabelValues(k).Inc()
-	return false
-}
-
 // blacklistPermanent returns true if file source is blacklisted, blacklisting is permanent
-//
-//nolint:deadcode,unused
 func (jp *jobProvider) blacklistPermanent(fn throttleParseFnType, filename string) (string, bool) {
+	if fn == nil {
+		return "", false
+	}
 	k, uniq := fn(filename)
 
 	// ignore parse errors, they never gets blacklisted
@@ -776,8 +736,8 @@ func (jp *jobProvider) maintenanceJob(job *Job) int {
 // deleteJob job should be already locked and it'll be unlocked
 func (jp *jobProvider) deleteJobAndUnlock(job *Job) {
 
-	if fn, ok := throttleKeyFns[jp.config.ThrottleKeyFn]; ok {
-		k, uniq := fn(job.filename)
+	if jp.parse != nil {
+		k, uniq := jp.parse(job.filename)
 		if k != "" && uniq != "" {
 			fd.FilesOpen.WithLabelValues(k).Dec()
 			jp.throttleMu.Lock()
