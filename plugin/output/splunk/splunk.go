@@ -14,6 +14,7 @@ import (
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/prometheus/client_golang/prometheus"
 	insaneJSON "github.com/vitkovskii/insane-json"
 	"go.uber.org/zap"
 )
@@ -24,9 +25,6 @@ It sends events to splunk.
 
 const (
 	outPluginType = "splunk"
-	subsystemName = "output_splunk"
-
-	sendErrorCounter = "send_error"
 )
 
 type Plugin struct {
@@ -36,6 +34,10 @@ type Plugin struct {
 	avgEventSize int
 	batcher      *pipeline.Batcher
 	controller   pipeline.OutputPluginController
+
+	// plugin metrics
+
+	sendErrorMetric *prometheus.CounterVec
 }
 
 // ! config-params
@@ -105,8 +107,6 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.config = config.(*Config)
 	p.client = p.newClient(p.config.RequestTimeout_)
 
-	p.registerPluginMetrics()
-
 	p.batcher = pipeline.NewBatcher(pipeline.BatcherOptions{
 		PipelineName:   params.PipelineName,
 		OutputType:     outPluginType,
@@ -122,12 +122,8 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.batcher.Start(context.TODO())
 }
 
-func (p *Plugin) registerPluginMetrics() {
-	metric.RegisterCounter(&metric.MetricDesc{
-		Name:      sendErrorCounter,
-		Subsystem: subsystemName,
-		Help:      "Total splunk send errors",
-	})
+func (p *Plugin) RegisterMetrics(ctl *metric.Ctl) {
+	p.sendErrorMetric = ctl.RegisterCounter("output_splunk_send_error", "Total splunk send errors")
 }
 
 func (p *Plugin) Stop() {
@@ -167,7 +163,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 	for {
 		err := p.send(outBuf)
 		if err != nil {
-			metric.GetCounter(subsystemName, sendErrorCounter).Inc()
+			p.sendErrorMetric.WithLabelValues().Inc()
 			p.logger.Errorf("can't send data to splunk address=%s: %s", p.config.Endpoint, err.Error())
 			time.Sleep(time.Second)
 

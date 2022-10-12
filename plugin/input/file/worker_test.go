@@ -9,6 +9,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -90,7 +91,9 @@ func TestWorkerWork(t *testing.T) {
 				shouldSkip:     *atomic.NewBool(false),
 				mu:             &sync.Mutex{},
 			}
-			jp := NewJobProvider(&Config{}, nil, &zap.SugaredLogger{})
+			ctl := metric.New("test")
+			possibleOffsetCorruptionMetric := ctl.RegisterCounter("worker", "help_test")
+			jp := NewJobProvider(&Config{}, possibleOffsetCorruptionMetric, &zap.SugaredLogger{})
 			jp.jobsChan = make(chan *Job, 2)
 			jp.jobs = map[pipeline.SourceID]*Job{
 				1: job,
@@ -217,7 +220,9 @@ func TestWorkerWorkMultiData(t *testing.T) {
 				mu:         &sync.Mutex{},
 			}
 
-			jp := NewJobProvider(&Config{}, nil, &zap.SugaredLogger{})
+			ctl := metric.New("test")
+			possibleOffsetCorruptionMetric := ctl.RegisterCounter("worker", "help_test")
+			jp := NewJobProvider(&Config{}, possibleOffsetCorruptionMetric, &zap.SugaredLogger{})
 			jp.jobsChan = make(chan *Job, 2)
 			jp.jobs = map[pipeline.SourceID]*Job{
 				1: job,

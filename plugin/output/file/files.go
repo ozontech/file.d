@@ -4,6 +4,7 @@ import (
 	"sync"
 
 	"github.com/ozontech/file.d/logger"
+	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
 )
 
@@ -15,10 +16,11 @@ type Plugins struct {
 	// they separated from plugins to avoid races and reduce locking complexity.
 	dynamicPlugins map[string]Plugable
 	mu             sync.RWMutex
+	metricCtl      *metric.Ctl
 }
 
-func NewFilePlugins(plugins map[string]Plugable) *Plugins {
-	return &Plugins{plugins: plugins, dynamicPlugins: make(map[string]Plugable)}
+func NewFilePlugins(plugins map[string]Plugable, metricCtl *metric.Ctl) *Plugins {
+	return &Plugins{plugins: plugins, dynamicPlugins: make(map[string]Plugable), metricCtl: metricCtl}
 }
 
 func (p *Plugins) Out(event *pipeline.Event, selector pipeline.PluginSelector) {
@@ -47,6 +49,7 @@ func (p *Plugins) Start(starterData pipeline.PluginsStarterMap) {
 	defer p.mu.Unlock()
 
 	for plugName, plug := range p.plugins {
+		plug.RegisterMetrics(p.metricCtl)
 		plug.Start(starterData[plugName].Config, starterData[plugName].Params)
 	}
 }

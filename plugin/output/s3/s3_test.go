@@ -13,7 +13,6 @@ import (
 	"github.com/minio/minio-go"
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/logger"
-	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/plugin/input/fake"
 	"github.com/ozontech/file.d/plugin/output/file"
@@ -408,7 +407,6 @@ func TestStartWithMultiBuckets(t *testing.T) {
 }
 
 func newPipeline(t *testing.T, configOutput *Config, objStoreF objStoreFactory) *pipeline.Pipeline {
-	metric.InitStats()
 	t.Helper()
 	settings := &pipeline.Settings{
 		Capacity:            4096,
@@ -424,8 +422,6 @@ func newPipeline(t *testing.T, configOutput *Config, objStoreF objStoreFactory) 
 	p := pipeline.New("test_pipeline", settings, prometheus.NewRegistry())
 	p.DisableParallelism()
 	p.EnableEventLog()
-
-	metric.InitStats()
 
 	anyPlugin, _ := fake.Factory()
 	inputPlugin := anyPlugin.(*fake.Plugin)

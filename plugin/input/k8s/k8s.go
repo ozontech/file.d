@@ -5,8 +5,10 @@ import (
 
 	"github.com/ozontech/file.d/decoder"
 	"github.com/ozontech/file.d/fd"
+	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/plugin/input/file"
+
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
 )
@@ -114,7 +116,7 @@ func MultilineActionFactory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 }
 
 func Factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
-	return &Plugin{}, &Config{}
+	return &Plugin{fp: &file.Plugin{}}, &Config{}
 }
 
 // Start plugin.
@@ -135,8 +137,6 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 		p.params.Controller.SuggestDecoder(decoder.CRI)
 	}
 
-	p.fp = &file.Plugin{}
-
 	p.fp.Start(&p.config.FileConfig, params)
 }
 
@@ -148,6 +148,10 @@ func (p *Plugin) Commit(event *pipeline.Event) {
 // Stop plugin work.
 func (p *Plugin) Stop() {
 	p.fp.Stop()
+}
+
+func (p *Plugin) RegisterMetrics(ctl *metric.Ctl) {
+	p.fp.RegisterMetrics(ctl)
 }
 
 // PassEvent decides pass or discard event.

@@ -14,6 +14,7 @@ import (
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
+	prom "github.com/prometheus/client_golang/prometheus"
 	insaneJSON "github.com/vitkovskii/insane-json"
 	"go.uber.org/zap"
 )
@@ -35,15 +36,9 @@ type PgxIface interface {
 
 const (
 	outPluginType = "postgres"
-	subsystemName = "output_postgres"
 
 	// required for PgBouncers that doesn't support prepared statements.
 	preferSimpleProtocol = pgx.QuerySimpleProtocol(true)
-
-	// metric
-	discardedEventCounter  = "event_discarded"
-	duplicatedEventCounter = "event_duplicated"
-	writtenEventCounter    = "event_written"
 
 	nineThousandYear = 221842627200
 )
@@ -74,6 +69,12 @@ type Plugin struct {
 
 	queryBuilder PgQueryBuilder
 	pool         PgxIface
+
+	// plugin metrics
+
+	discardedEventMetric  *prom.CounterVec
+	duplicatedEventMetric *prom.CounterVec
+	writtenEventMetric    *prom.CounterVec
 }
 
 type ConfigColumn struct {
@@ -173,22 +174,10 @@ func Factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 	return &Plugin{}, &Config{}
 }
 
-func (p *Plugin) registerPluginMetrics() {
-	metric.RegisterCounter(&metric.MetricDesc{
-		Name:      discardedEventCounter,
-		Subsystem: subsystemName,
-		Help:      "Total pgsql discarded messages",
-	})
-	metric.RegisterCounter(&metric.MetricDesc{
-		Name:      duplicatedEventCounter,
-		Subsystem: subsystemName,
-		Help:      "Total pgsql duplicated messages",
-	})
-	metric.RegisterCounter(&metric.MetricDesc{
-		Name:      writtenEventCounter,
-		Subsystem: subsystemName,
-		Help:      "Total events written to pgsql",
-	})
+func (p *Plugin) RegisterMetrics(ctl *metric.Ctl) {
+	p.discardedEventMetric = ctl.RegisterCounter("output_postgres_event_discarded", "Total pgsql discarded messages")
+	p.duplicatedEventMetric = ctl.RegisterCounter("output_postgres_event_duplicated", "Total pgsql duplicated messages")
+	p.writtenEventMetric = ctl.RegisterCounter("output_postgres_event_written", "Total events written to pgsql")
 }
 
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginParams) {
@@ -213,7 +202,6 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		p.logger.Fatal("'db_health_check_period' can't be <1")
 	}
 
-	p.registerPluginMetrics()
 	queryBuilder, err := NewQueryBuilder(p.config.Columns, p.config.Table)
 	if err != nil {
 		p.logger.Fatal(err)
@@ -273,19 +261,19 @@ func (p *Plugin) out(_ *pipeline.WorkerData, batch *pipeline.Batch) {
 		fieldValues, uniqueID, err := p.processEvent(event, pgFields, uniqFields)
 		if err != nil {
 			if errors.Is(err, ErrEventDoesntHaveField) {
-				metric.GetCounter(subsystemName, discardedEventCounter).Inc()
+				p.discardedEventMetric.WithLabelValues().Inc()
 				if p.config.Strict {
 					p.logger.Fatal(err)
 				}
 				p.logger.Error(err)
 			} else if errors.Is(err, ErrEventFieldHasWrongType) {
-				metric.GetCounter(subsystemName, discardedEventCounter).Inc()
+				p.discardedEventMetric.WithLabelValues().Inc()
 				if p.config.Strict {
 					p.logger.Fatal(err)
 				}
 				p.logger.Error(err)
 			} else if errors.Is(err, ErrTimestampFromDistantPastOrFuture) {
-				metric.GetCounter(subsystemName, discardedEventCounter).Inc()
+				p.discardedEventMetric.WithLabelValues().Inc()
 				if p.config.Strict {
 					p.logger.Fatal(err)
 				}
@@ -299,7 +287,7 @@ func (p *Plugin) out(_ *pipeline.WorkerData, batch *pipeline.Batch) {
 
 		// passes here only if event valid.
 		if _, ok := uniqueEventsMap[uniqueID]; ok {
-			metric.GetCounter(subsystemName, duplicatedEventCounter).Inc()
+			p.duplicatedEventMetric.WithLabelValues().Inc()
 			p.logger.Infof("event duplicated. Fields: %v, values: %v", pgFields, fieldValues)
 		} else {
 			uniqueEventsMap[uniqueID] = struct{}{}
@@ -334,7 +322,7 @@ func (p *Plugin) out(_ *pipeline.WorkerData, batch *pipeline.Batch) {
 			time.Sleep(p.config.Retention_)
 			continue
 		}
-		metric.GetCounter(subsystemName, writtenEventCounter).Add(float64(len(uniqueEventsMap)))
+		p.writtenEventMetric.WithLabelValues().Add(float64(len(uniqueEventsMap)))
 		break
 	}
 
