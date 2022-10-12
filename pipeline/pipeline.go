@@ -258,7 +258,8 @@ func (p *Pipeline) SetupHTTPHandlers(mux *http.ServeMux) {
 
 	prefix := "/pipelines/" + p.Name
 	mux.HandleFunc(prefix, p.servePipeline)
-
+	prefixBanList := fmt.Sprintf("/pipelines/%s/ban_list", p.Name)
+	mux.HandleFunc(prefixBanList, p.servePipelineBanList)
 	for hName, handler := range p.inputInfo.PluginStaticInfo.Endpoints {
 		mux.HandleFunc(fmt.Sprintf("%s/0/%s", prefix, hName), handler)
 	}
@@ -731,6 +732,14 @@ func (p *Pipeline) servePipeline(w http.ResponseWriter, _ *http.Request) {
 	_, _ = w.Write([]byte(logger.Header("pipeline " + p.Name)))
 	_, _ = w.Write([]byte(p.streamer.dump()))
 	_, _ = w.Write([]byte(p.eventPool.dump()))
+
+	_, _ = w.Write([]byte("</p></pre></body></html>"))
+}
+
+func (p *Pipeline) servePipelineBanList(w http.ResponseWriter, _ *http.Request) {
+	_, _ = w.Write([]byte("<html><body><pre><p>"))
+	_, _ = w.Write([]byte(logger.Header("pipeline " + p.Name)))
+	_, _ = w.Write([]byte(p.antispamer.dump()))
 
 	_, _ = w.Write([]byte("</p></pre></body></html>"))
 }

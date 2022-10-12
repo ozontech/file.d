@@ -1,6 +1,7 @@
 package pipeline
 
 import (
+	"fmt"
 	"sync"
 	"time"
 
@@ -13,7 +14,12 @@ type antispamer struct {
 	unbanIterations int
 	threshold       int
 	mu              *sync.RWMutex
-	counters        map[SourceID]*atomic.Int32
+	sources         map[SourceID]*source
+}
+
+type source struct {
+	counter atomic.Int32
+	name    string
 }
 
 const (
@@ -44,78 +50,80 @@ func newAntispamer(threshold int, unbanIterations int, maintenanceInterval time.
 	return &antispamer{
 		threshold:       threshold,
 		unbanIterations: unbanIterations,
-		counters:        make(map[SourceID]*atomic.Int32),
+		sources:         make(map[SourceID]*source),
 		mu:              &sync.RWMutex{},
 	}
 }
 
-func (p *antispamer) isSpam(id SourceID, name string, isNewSource bool) bool {
-	if p.threshold == 0 {
+func (a *antispamer) isSpam(id SourceID, name string, isNewSource bool) bool {
+	if a.threshold == 0 {
 		return false
 	}
 
-	p.mu.RLock()
-	value, has := p.counters[id]
-	p.mu.RUnlock()
+	a.mu.RLock()
+	src, has := a.sources[id]
+	a.mu.RUnlock()
 
 	if !has {
-		p.mu.Lock()
-		if newValue, has := p.counters[id]; has {
-			value = newValue
+		a.mu.Lock()
+		if newSrc, has := a.sources[id]; has {
+			src = newSrc
 		} else {
-			value = &atomic.Int32{}
-			p.counters[id] = value
+			a.sources[id] = &source{
+				counter: atomic.Int32{},
+				name:    name,
+			}
 		}
-		p.mu.Unlock()
+		a.mu.Unlock()
 	}
 
 	if isNewSource {
-		value.Swap(0)
+		src.counter.Swap(0)
 		return false
 	}
 
-	x := value.Inc()
-	if x == int32(p.threshold) {
-		value.Swap(int32(p.unbanIterations * p.threshold))
+	x := src.counter.Inc()
+	if x == int32(a.threshold) {
+		src.counter.Swap(int32(a.unbanIterations * a.threshold))
 		metric.GetGauge(subsystemName, antispamActive).Set(1)
 		metric.GetCounter(subsystemName, antispamBanCount).Inc()
 		logger.Warnf("antispam: source has been banned id=%d, name=%s", id, name)
 	}
 
-	return x >= int32(p.threshold)
+	return x >= int32(a.threshold)
 }
 
-func (p *antispamer) maintenance() {
-	p.mu.Lock()
+func (a *antispamer) maintenance() {
+	a.mu.Lock()
 
 	allUnbanned := true
-	for source, counter := range p.counters {
-		x := int(counter.Load())
+	for sourceId, source := range a.sources {
+		x := int(source.counter.Load())
 
 		if x == 0 {
-			delete(p.counters, source)
+			delete(a.sources, sourceId)
 			continue
 		}
 
-		isMore := x >= p.threshold
-		x -= p.threshold
+		isMore := x >= a.threshold
+		x -= a.threshold
 		if x < 0 {
 			x = 0
 		}
 
-		if isMore && x < p.threshold {
-			logger.Infof("antispam: source has been unbanned id=%d", source)
+		if isMore && x < a.threshold {
+			logger.Infof("antispam: source has been unbanned id=%d", sourceId)
 		}
 
-		if x >= p.threshold {
+		if x >= a.threshold {
 			allUnbanned = false
 		}
 
-		if x > p.unbanIterations*p.threshold {
-			x = p.unbanIterations * p.threshold
+		if x > a.unbanIterations*a.threshold {
+			x = a.unbanIterations * a.threshold
 		}
 
-		counter.Swap(int32(x))
+		source.counter.Swap(int32(x))
 	}
 
 	if allUnbanned {
@@ -124,5 +132,19 @@ func (p *antispamer) maintenance() {
 		logger.Info("antispam: there are banned sources")
 	}
 
-	p.mu.Unlock()
+	a.mu.Unlock()
+}
+
+func (a *antispamer) dump() string {
+	out := logger.Cond(len(a.sources) == 0, logger.Header("no banned"), func() string {
+		o := logger.Header("banned sources")
+		a.mu.RLock()
+		for s, count := range a.sources {
+			o += fmt.Sprintf("source_id: %d, source_name: %s, events_counter: %d\n", s, count.name, count.counter)
+		}
+		a.mu.RUnlock()
+		return o
+	})
+
+	return out
 }
