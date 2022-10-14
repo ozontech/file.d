@@ -131,7 +131,7 @@ func (p *Plugin) startPlugins(Params *pipeline.OutputPluginParams, outPlugCount 
 	}
 
 	p.logger.Info("outPlugins ready")
-	p.outPlugins = file.NewFilePlugins(outPlugins)
+	p.outPlugins = file.NewFilePlugins(outPlugins, p.metricCtl)
 	p.createPlugsFromDynamicBucketArtifacts(targetDirs)
 
 	starterMap := make(pipeline.PluginsStarterMap, outPlugCount)
@@ -156,7 +156,8 @@ func (p *Plugin) startPlugins(Params *pipeline.OutputPluginParams, outPlugCount 
 
 		starterMap[bucketName] = starterData
 	}
-	p.outPlugins.Start(starterMap)
+
+	p.outPlugins.Start(starterMap, p.metricCtl)
 
 	return nil
 }

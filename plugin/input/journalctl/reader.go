@@ -8,7 +8,7 @@ import (
 
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/longpanic"
-	"github.com/ozontech/file.d/metric"
+	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
 )
 
@@ -25,11 +25,14 @@ type journalReader struct {
 	config *journalReaderConfig
 	cmd    *exec.Cmd
 	args   []string
+
+	// reader metrics
+	readerErrorsMetric *prometheus.CounterVec
 }
 
 //nolint:unused
-func readLines(r io.Reader, config *journalReaderConfig) {
-	reader := bufio.NewReaderSize(r, 1024*1024*10) // max message size
+func (r *journalReader) readLines(rd io.Reader, config *journalReaderConfig) {
+	reader := bufio.NewReaderSize(rd, 1024*1024*10) // max message size
 	totalLines := 0
 
 	// cursor will point to the last message, that we sent
@@ -47,13 +50,13 @@ func readLines(r io.Reader, config *journalReaderConfig) {
 			break
 		}
 		if err != nil {
-			metric.GetCounter(subsystemName, readerErrors).Inc()
+			r.readerErrorsMetric.WithLabelValues().Inc()
 			config.logger.Error(err)
 			continue
 		}
 		_, err = config.output.Write(bytes)
 		if err != nil {
-			metric.GetCounter(subsystemName, readerErrors).Inc()
+			r.readerErrorsMetric.WithLabelValues().Inc()
 			config.logger.Error(err)
 		}
 
@@ -65,8 +68,11 @@ func readLines(r io.Reader, config *journalReaderConfig) {
 }
 
 //nolint:deadcode,unused
-func newJournalReader(config *journalReaderConfig) *journalReader {
-	res := &journalReader{config: config}
+func newJournalReader(config *journalReaderConfig, readerErrorsCounter *prometheus.CounterVec) *journalReader {
+	res := &journalReader{
+		config:             config,
+		readerErrorsMetric: readerErrorsCounter,
+	}
 	res.args = []string{
 		"-o", "json",
 	}
@@ -92,7 +98,7 @@ func (r *journalReader) start() error {
 		return err
 	}
 
-	longpanic.Go(func() { readLines(out, r.config) })
+	longpanic.Go(func() { r.readLines(out, r.config) })
 
 	return nil
 }

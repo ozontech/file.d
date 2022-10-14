@@ -5,6 +5,7 @@ import (
 
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/plugin"
 )
 
 /*{ introduction
@@ -13,6 +14,7 @@ It adds time field to the event.
 
 type Plugin struct {
 	config *Config
+	plugin.NoMetricsPlugin
 }
 
 // ! config-params

@@ -3,6 +3,7 @@ package file
 import (
 	"testing"
 
+	"github.com/ozontech/file.d/metric"
 	"github.com/stretchr/testify/require"
 )
 
@@ -16,7 +17,7 @@ func TestPluginsExists(t *testing.T) {
 		{
 			name: "not_exists",
 			prepareFunc: func() *Plugins {
-				return NewFilePlugins(nil)
+				return NewFilePlugins(nil, metric.New("test"))
 			},
 			search:   "somePlugin",
 			expected: false,
@@ -26,7 +27,7 @@ func TestPluginsExists(t *testing.T) {
 			prepareFunc: func() *Plugins {
 				return NewFilePlugins(map[string]Plugable{
 					"EXISTS": nil,
-				})
+				}, metric.New("test"))
 			},
 			search:   "EXISTS",
 			expected: true,
@@ -52,7 +53,7 @@ func TestPluginsIsStatic(t *testing.T) {
 		{
 			name: "not_static",
 			prepareFunc: func() *Plugins {
-				return NewFilePlugins(nil)
+				return NewFilePlugins(nil, metric.New("test"))
 			},
 			search:   "kekw",
 			expected: false,
@@ -62,7 +63,7 @@ func TestPluginsIsStatic(t *testing.T) {
 			prepareFunc: func() *Plugins {
 				return NewFilePlugins(map[string]Plugable{
 					"plugname": nil,
-				})
+				}, metric.New("test"))
 			},
 			search:   "plugname",
 			expected: true,
@@ -88,7 +89,7 @@ func TestPluginsIsDynamic(t *testing.T) {
 		{
 			name: "not_dynamic",
 			prepareFunc: func() *Plugins {
-				return NewFilePlugins(nil)
+				return NewFilePlugins(nil, metric.New("test"))
 			},
 			search:   "kekw",
 			expected: false,
@@ -96,7 +97,7 @@ func TestPluginsIsDynamic(t *testing.T) {
 		{
 			name: "dynamic",
 			prepareFunc: func() *Plugins {
-				plugins := NewFilePlugins(nil)
+				plugins := NewFilePlugins(nil, metric.New("test"))
 				plugins.dynamicPlugins["dynamic_plug"] = nil
 
 				return plugins
@@ -120,7 +121,7 @@ func TestPluginsExistsIsStaticIsDynamic(t *testing.T) {
 	dynamicPlug := "def"
 	plugins := NewFilePlugins(map[string]Plugable{
 		staticPlug: nil,
-	})
+	}, metric.New("test"))
 	plugins.Add(dynamicPlug, nil)
 
 	require.True(t, plugins.Exists(staticPlug))

@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ozontech/file.d/metric"
+
 	"github.com/ozontech/file.d/logger"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/atomic"
@@ -57,6 +59,7 @@ func TestBatcher(t *testing.T) {
 		wg.Done()
 	}}
 
+	ctl := metric.New("test")
 	batcher := NewBatcher(BatcherOptions{
 		PipelineName:   "test",
 		OutputType:     "devnull",
@@ -65,7 +68,7 @@ func TestBatcher(t *testing.T) {
 		Workers:        8,
 		BatchSizeCount: batchSize,
 		FlushTimeout:   time.Second,
-	})
+	}, ctl)
 
 	ctx := context.TODO()
 	batcher.Start(ctx)
@@ -127,6 +130,7 @@ func TestBatcherMaxSize(t *testing.T) {
 		wg.Done()
 	}}
 
+	ctl := metric.New("test")
 	batcher := NewBatcher(BatcherOptions{
 		PipelineName:   "test",
 		OutputType:     "devnull",
@@ -135,7 +139,7 @@ func TestBatcherMaxSize(t *testing.T) {
 		Workers:        8,
 		BatchSizeBytes: batchSize,
 		FlushTimeout:   time.Minute,
-	})
+	}, ctl)
 
 	batcher.Start(context.Background())
 

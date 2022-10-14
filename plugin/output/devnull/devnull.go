@@ -2,7 +2,9 @@ package devnull
 
 import (
 	"github.com/ozontech/file.d/fd"
+	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/plugin"
 	"go.uber.org/atomic"
 )
 
@@ -10,19 +12,18 @@ import (
 It provides an API to test pipelines and other plugins.
 }*/
 
-const outPluginType = "devnull"
-
 type Plugin struct {
 	controller pipeline.OutputPluginController
 	outFn      func(event *pipeline.Event)
 	total      *atomic.Int64
+	plugin.NoMetricsPlugin
 }
 
 type Config struct{}
 
 func init() {
 	fd.DefaultPluginRegistry.RegisterOutput(&pipeline.PluginStaticInfo{
-		Type:    outPluginType,
+		Type:    "devnull",
 		Factory: Factory,
 	})
 }
@@ -31,7 +32,7 @@ func Factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 	return &Plugin{}, &Config{}
 }
 
-func (p *Plugin) Start(_ pipeline.AnyConfig, params *pipeline.OutputPluginParams) {
+func (p *Plugin) Start(_ pipeline.AnyConfig, params *pipeline.OutputPluginParams, ctl *metric.Ctl) {
 	p.controller = params.Controller
 	p.total = &atomic.Int64{}
 }
@@ -56,6 +57,6 @@ func (p *Plugin) Out(event *pipeline.Event) {
 }
 
 // GetObservabilityInfo returns observability info about plugin.
-func (p *Plugin) GetObservabilityInfo() map[string]pipeline.OutPluginObservabilityInfo {
-	return nil
+func (p *Plugin) GetObservabilityInfo() pipeline.OutPluginObservabilityInfo {
+	return pipeline.OutPluginObservabilityInfo{}
 }

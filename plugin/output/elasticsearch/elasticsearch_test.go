@@ -4,19 +4,19 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/ozontech/file.d/metric"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	insaneJSON "github.com/vitkovskii/insane-json"
 
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/logger"
-	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/test"
 )
 
 func TestAppendEvent(t *testing.T) {
-	metric.InitStats()
 	p := &Plugin{}
 	config := &Config{
 		Endpoints:   []string{"test"},
@@ -30,7 +30,8 @@ func TestAppendEvent(t *testing.T) {
 		logger.Panic(err.Error())
 	}
 
-	p.Start(config, test.NewEmptyOutputPluginParams())
+	ctl := metric.New("test")
+	p.Start(config, test.NewEmptyOutputPluginParams(), ctl)
 
 	p.time = "6666-66-66"
 	root, _ := insaneJSON.DecodeBytes([]byte(`{"field_a":"AAAA","field_b":"BBBB"}`))
@@ -43,7 +44,6 @@ func TestAppendEvent(t *testing.T) {
 }
 
 func TestAppendEventWithIndexOpType(t *testing.T) {
-	metric.InitStats()
 	p := &Plugin{}
 	config := &Config{
 		Endpoints:   []string{"test"},
@@ -58,7 +58,8 @@ func TestAppendEventWithIndexOpType(t *testing.T) {
 		logger.Panic(err.Error())
 	}
 
-	p.Start(config, test.NewEmptyOutputPluginParams())
+	ctl := metric.New("test")
+	p.Start(config, test.NewEmptyOutputPluginParams(), ctl)
 
 	p.time = "6666-66-66"
 	root, _ := insaneJSON.DecodeBytes([]byte(`{"field_a":"AAAA","field_b":"BBBB"}`))
@@ -71,7 +72,6 @@ func TestAppendEventWithIndexOpType(t *testing.T) {
 }
 
 func TestAppendEventWithCreateOpType(t *testing.T) {
-	metric.InitStats()
 	p := &Plugin{}
 	config := &Config{
 		Endpoints:   []string{"test"},
@@ -86,7 +86,8 @@ func TestAppendEventWithCreateOpType(t *testing.T) {
 		logger.Panic(err.Error())
 	}
 
-	p.Start(config, test.NewEmptyOutputPluginParams())
+	ctl := metric.New("test")
+	p.Start(config, test.NewEmptyOutputPluginParams(), ctl)
 
 	p.time = "6666-66-66"
 	root, _ := insaneJSON.DecodeBytes([]byte(`{"field_a":"AAAA","field_b":"BBBB"}`))
@@ -99,7 +100,6 @@ func TestAppendEventWithCreateOpType(t *testing.T) {
 }
 
 func TestConfig(t *testing.T) {
-	metric.InitStats()
 	p := &Plugin{}
 	config := &Config{
 		IndexFormat: "test-%",
@@ -117,7 +117,8 @@ func TestConfig(t *testing.T) {
 		logger.Panic(err.Error())
 	}
 
-	p.Start(config, test.NewEmptyOutputPluginParams())
+	ctl := metric.New("test")
+	p.Start(config, test.NewEmptyOutputPluginParams(), ctl)
 
 	results := []string{
 		"http://endpoint_1:9000/_bulk?_source=false",

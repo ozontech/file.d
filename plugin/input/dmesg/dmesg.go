@@ -12,14 +12,9 @@ import (
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/offset"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/prometheus/client_golang/prometheus"
 	insaneJSON "github.com/vitkovskii/insane-json"
 	"go.uber.org/zap"
-)
-
-const (
-	subsystemName = "input_dmesg"
-
-	offsetErrors = "offset_errors"
 )
 
 /*{ introduction
@@ -32,6 +27,10 @@ type Plugin struct {
 	controller pipeline.InputPluginController
 	parser     kmsgparser.Parser
 	logger     *zap.SugaredLogger
+
+	// plugin metrics
+
+	offsetErrorsMetric *prometheus.CounterVec
 }
 
 // ! config-params
@@ -63,11 +62,10 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	p.logger = params.Logger
 	p.config = config.(*Config)
 	p.controller = params.Controller
-	p.registerPluginMetrics()
 
 	p.state = &state{}
 	if err := offset.LoadYAML(p.config.OffsetsFile, p.state); err != nil {
-		metric.GetCounter(subsystemName, offsetErrors).Inc()
+		p.offsetErrorsMetric.WithLabelValues().Inc()
 		p.logger.Error("can't load offset file: %s", err.Error())
 	}
 
@@ -81,12 +79,8 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	longpanic.Go(p.read)
 }
 
-func (p *Plugin) registerPluginMetrics() {
-	metric.RegisterCounter(&metric.MetricDesc{
-		Name:      offsetErrors,
-		Subsystem: subsystemName,
-		Help:      "Number of errors occurred when saving/loading offset",
-	})
+func (p *Plugin) RegisterMetrics(ctl *metric.Ctl) {
+	p.offsetErrorsMetric = ctl.RegisterCounter("input_dmesg_offset_errors", "Number of errors occurred when saving/loading offset")
 }
 
 func (p *Plugin) read() {
@@ -132,7 +126,7 @@ func (p *Plugin) Commit(event *pipeline.Event) {
 	p.state.TS = event.Offset
 
 	if err := offset.SaveYAML(p.config.OffsetsFile, p.state); err != nil {
-		metric.GetCounter(subsystemName, offsetErrors).Inc()
+		p.offsetErrorsMetric.WithLabelValues().Inc()
 		p.logger.Error("can't save offset file: %s", err.Error())
 	}
 }

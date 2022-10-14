@@ -1,6 +1,7 @@
 package pipeline
 
 import (
+	"embed"
 	"encoding/json"
 	"fmt"
 	"github.com/ozontech/file.d/logger"
@@ -8,6 +9,9 @@ import (
 	"net/http"
 	"text/template"
 )
+
+//go:embed htmltpl
+var pipeline_tpl embed.FS
 
 type pluginsObservabilityInfo struct {
 	In            inObservabilityInfo       `json:"in"`
@@ -22,6 +26,8 @@ type inObservabilityInfo struct {
 type outObservabilityInfo struct {
 	PluginName      string           `json:"plugin_name"`
 	BatcherCounters []batcherCounter `json:"batcher_counters"`
+	BatcherMinWait  BatcherTimeDTO   `json:"batcher_min_wait"`
+	BatcherMaxWait  BatcherTimeDTO   `json:"batcher_max_wait"`
 }
 
 type batcherCounter struct {
@@ -54,15 +60,11 @@ func (p *Pipeline) boardInfo(
 	}
 	result.In = in
 
-	out := outObservabilityInfo{
-		PluginName: outputInfo.Type,
-	}
-
 	batcherCounters := make([]batcherCounter, 0, len(batcherTimeKeys))
 	obsInfo := p.output.GetObservabilityInfo()
-	if obsInfo.BatcherInfo != nil {
+	if obsInfo.BatcherInformation.CommittedCounters != nil {
 		for _, timePoint := range batcherTimeKeys {
-			cnt, ok := obsInfo.BatcherInfo[timePoint]
+			cnt, ok := obsInfo.BatcherInformation.CommittedCounters[timePoint]
 			if !ok {
 				cnt = 0
 			}
@@ -73,7 +75,13 @@ func (p *Pipeline) boardInfo(
 			batcherCounters = append(batcherCounters, pair)
 		}
 	}
+
+	out := outObservabilityInfo{
+		PluginName: outputInfo.Type,
+	}
 	out.BatcherCounters = batcherCounters
+	out.BatcherMinWait = obsInfo.BatcherInformation.MinWait
+	out.BatcherMaxWait = obsInfo.BatcherInformation.MaxWait
 
 	result.Out = out
 
@@ -149,7 +157,7 @@ func (p *Pipeline) serveBoardInfo(
 	actionInfos []*ActionPluginStaticInfo,
 	outputInfo *OutputPluginInfo) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, _ *http.Request) {
-		tmpl, err := template.ParseFiles("pipeline/htmltpl/pipeline_info.html")
+		tmpl, err := template.ParseFS(pipeline_tpl, "htmltpl/pipeline_info.html")
 		if err != nil {
 			logger.Errorf("can't parse html template: %s", err.Error())
 			_, _ = w.Write([]byte(fmt.Sprintf("<hmtl><body>can't parse html: %s", err.Error())))

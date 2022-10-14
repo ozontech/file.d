@@ -15,6 +15,7 @@ import (
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/tls"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/valyala/fasthttp"
 	insaneJSON "github.com/vitkovskii/insane-json"
 	"go.uber.org/zap"
@@ -26,16 +27,9 @@ If a network error occurs, the batch will infinitely try to be delivered to the 
 }*/
 
 const (
-	outPluginType = "elasticsearch"
-	subsystemName = "output_elasticsearch"
-
-	// errors
-	sendErrorCounter = "send_error"
-	indexingErrors   = "index_error"
-
+	outPluginType     = "elasticsearch"
 	NDJSONContentType = "application/x-ndjson"
-
-	retryDelay = time.Second
+	retryDelay        = time.Second
 )
 
 var (
@@ -55,6 +49,10 @@ type Plugin struct {
 	batcher      *pipeline.Batcher
 	controller   pipeline.OutputPluginController
 	mu           *sync.Mutex
+
+	// plugin metrics
+	sendErrorMetric      *prometheus.CounterVec
+	indexingErrorsMetric *prometheus.CounterVec
 }
 
 // ! config-params
@@ -158,7 +156,7 @@ func Factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 	return &Plugin{}, &Config{}
 }
 
-func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginParams) {
+func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginParams, ctl *metric.Ctl) {
 	p.controller = params.Controller
 	p.logger = params.Logger
 	p.avgEventSize = params.PipelineSettings.AvgEventSize
@@ -202,8 +200,6 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 
 	p.maintenance(nil)
 
-	p.registerPluginMetrics()
-
 	p.logger.Infof("starting batcher: timeout=%d", p.config.BatchFlushTimeout_)
 	p.batcher = pipeline.NewBatcher(pipeline.BatcherOptions{
 		PipelineName:        params.PipelineName,
@@ -216,7 +212,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		BatchSizeBytes:      p.config.BatchSizeBytes_,
 		FlushTimeout:        p.config.BatchFlushTimeout_,
 		MaintenanceInterval: time.Minute,
-	})
+	}, ctl)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	p.cancel = cancel
@@ -233,18 +229,9 @@ func (p *Plugin) Out(event *pipeline.Event) {
 	p.batcher.Add(event)
 }
 
-func (p *Plugin) registerPluginMetrics() {
-	metric.RegisterCounter(&metric.MetricDesc{
-		Name:      sendErrorCounter,
-		Subsystem: subsystemName,
-		Help:      "Total elasticsearch send errors",
-	})
-
-	metric.RegisterCounter(&metric.MetricDesc{
-		Name:      indexingErrors,
-		Subsystem: subsystemName,
-		Help:      "Number of elasticsearch indexing errors",
-	})
+func (p *Plugin) RegisterMetrics(ctl *metric.Ctl) {
+	p.sendErrorMetric = ctl.RegisterCounter("output_elasticsearch_send_error", "Total elasticsearch send errors")
+	p.indexingErrorsMetric = ctl.RegisterCounter("output_elasticsearch_index_error", "Number of elasticsearch indexing errors")
 }
 
 func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
@@ -267,7 +254,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 
 	for {
 		if err := p.send(data.outBuf); err != nil {
-			metric.GetCounter(subsystemName, sendErrorCounter).Inc()
+			p.sendErrorMetric.WithLabelValues().Inc()
 			p.logger.Errorf("can't send to the elastic, will try other endpoint: %s", err.Error())
 		} else {
 			break
@@ -317,7 +304,7 @@ func (p *Plugin) send(body []byte) error {
 		}
 
 		if errors != 0 {
-			metric.GetCounter(subsystemName, indexingErrors).Add(float64(errors))
+			p.indexingErrorsMetric.WithLabelValues().Add(float64(errors))
 		}
 
 		p.controller.Error("some events from batch aren't written")
@@ -394,9 +381,9 @@ func (p *Plugin) setAuthHeader(req *fasthttp.Request) {
 
 // GetObservabilityInfo returns observability info about plugin.
 func (p *Plugin) GetObservabilityInfo() pipeline.OutPluginObservabilityInfo {
-	batcherCounters := p.batcher.GetCommitterCounters(time.Now())
+	batcherCounters := p.batcher.GetBatcherInfo(time.Now())
 
 	return pipeline.OutPluginObservabilityInfo{
-		BatcherInfo: batcherCounters,
+		BatcherInformation: batcherCounters,
 	}
 }

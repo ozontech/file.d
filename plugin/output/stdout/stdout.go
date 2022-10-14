@@ -2,25 +2,27 @@ package stdout
 
 import (
 	"fmt"
+
 	"github.com/ozontech/file.d/fd"
+	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/plugin"
 )
 
 /*{ introduction
 It writes events to stdout(also known as console).
 }*/
 
-const outPluginType = "stdout"
-
 type Plugin struct {
 	controller pipeline.OutputPluginController
+	plugin.NoMetricsPlugin
 }
 
 type Config struct{}
 
 func init() {
 	fd.DefaultPluginRegistry.RegisterOutput(&pipeline.PluginStaticInfo{
-		Type:    outPluginType,
+		Type:    "stdout",
 		Factory: Factory,
 	})
 }
@@ -29,7 +31,7 @@ func Factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 	return &Plugin{}, &Config{}
 }
 
-func (p *Plugin) Start(_ pipeline.AnyConfig, params *pipeline.OutputPluginParams) {
+func (p *Plugin) Start(_ pipeline.AnyConfig, params *pipeline.OutputPluginParams, ctl *metric.Ctl) {
 	p.controller = params.Controller
 }
 

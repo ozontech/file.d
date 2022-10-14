@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"regexp"
 
+	"github.com/ozontech/file.d/metric"
 	"go.uber.org/zap"
 )
 
@@ -19,6 +20,7 @@ type InputPlugin interface {
 	Start(config AnyConfig, params *InputPluginParams)
 	Stop()
 	Commit(*Event)
+	RegisterMetrics(ctl *metric.Ctl)
 	PassEvent(event *Event) bool
 }
 
@@ -26,13 +28,15 @@ type ActionPlugin interface {
 	Start(config AnyConfig, params *ActionPluginParams)
 	Stop()
 	Do(*Event) ActionResult
+	RegisterMetrics(ctl *metric.Ctl)
 }
 
 type OutputPlugin interface {
-	Start(config AnyConfig, params *OutputPluginParams)
+	Start(config AnyConfig, params *OutputPluginParams, ctl *metric.Ctl)
 	Stop()
 	Out(*Event)
 	GetObservabilityInfo() OutPluginObservabilityInfo
+	RegisterMetrics(ctl *metric.Ctl)
 }
 
 type PluginsStarterData struct {
@@ -144,5 +148,5 @@ const (
 )
 
 type OutPluginObservabilityInfo struct {
-	BatcherInfo map[int64]int64
+	BatcherInformation BatcherInfo
 }

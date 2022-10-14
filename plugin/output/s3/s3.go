@@ -20,6 +20,7 @@ import (
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/plugin/output/file"
+	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
 )
 
@@ -102,16 +103,11 @@ pipelines:
 }*/
 
 const (
-	outPluginType      = "s3"
-	subsystemName      = "output_s3"
 	fileNameSeparator  = "_"
 	attemptIntervalMin = 1 * time.Second
 	dirSep             = "/"
 	StaticBucketDir    = "static_buckets"
 	DynamicBucketDir   = "dynamic_buckets"
-
-	// errors
-	sendErrorCounter = "send_error"
 )
 
 var (
@@ -155,6 +151,10 @@ type Plugin struct {
 	uploadCh   chan fileDTO
 
 	compressor compressor
+	metricCtl  *metric.Ctl
+
+	// plugin metrics
+	sendErrorMetric *prometheus.CounterVec
 }
 
 type fileDTO struct {
@@ -232,7 +232,7 @@ func (c *Config) IsMultiBucketExists(bucketName string) bool {
 
 func init() {
 	fd.DefaultPluginRegistry.RegisterOutput(&pipeline.PluginStaticInfo{
-		Type:    outPluginType,
+		Type:    "s3",
 		Factory: Factory,
 	})
 }
@@ -245,16 +245,12 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.StartWithMinio(config, params, p.minioClientsFactory)
 }
 
-func (p *Plugin) registerPluginMetrics() {
-	metric.RegisterCounter(&metric.MetricDesc{
-		Name:      sendErrorCounter,
-		Subsystem: subsystemName,
-		Help:      "Total s3 send errors",
-	})
+func (p *Plugin) RegisterMetrics(ctl *metric.Ctl) {
+	p.sendErrorMetric = ctl.RegisterCounter("output_s3_send_error", "Total s3 send errors")
+	p.metricCtl = ctl
 }
 
 func (p *Plugin) StartWithMinio(config pipeline.AnyConfig, params *pipeline.OutputPluginParams, factory objStoreFactory) {
-	p.registerPluginMetrics()
 
 	p.controller = params.Controller
 	p.logger = params.Logger
@@ -417,7 +413,8 @@ func (p *Plugin) tryRunNewPlugin(bucketName string) (isCreated bool) {
 
 	localBucketConfig := p.config.FileConfig
 	localBucketConfig.TargetFile = fmt.Sprintf("%s%s%s", bucketDir, bucketName, p.fileExtension)
-	outPlugin.Start(&localBucketConfig, p.params)
+	outPlugin.RegisterMetrics(p.metricCtl)
+	outPlugin.Start(&localBucketConfig, p.params, p.metricCtl)
 
 	p.outPlugins.Add(bucketName, outPlugin)
 	p.limiter.Increment()
@@ -538,7 +535,7 @@ func (p *Plugin) uploadToS3(compressedDTO fileDTO) error {
 		p.compressor.getObjectOptions(),
 	)
 	if err != nil {
-		metric.GetCounter(subsystemName, sendErrorCounter).Inc()
+		p.sendErrorMetric.WithLabelValues().Inc()
 		return fmt.Errorf("could not upload file: %s into bucket: %s, error: %s", compressedDTO.fileName, compressedDTO.bucketName, err.Error())
 	}
 	return nil

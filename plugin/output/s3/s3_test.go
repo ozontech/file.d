@@ -9,11 +9,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ozontech/file.d/metric"
+
 	"github.com/golang/mock/gomock"
 	"github.com/minio/minio-go"
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/logger"
-	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/plugin/input/fake"
 	"github.com/ozontech/file.d/plugin/output/file"
@@ -41,7 +42,7 @@ type testS3Plugin struct {
 	objStoreF objStoreFactory
 }
 
-func (p *testS3Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginParams) {
+func (p *testS3Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginParams, ctl *metric.Ctl) {
 	p.StartWithMinio(config, params, p.objStoreF)
 }
 
@@ -408,7 +409,6 @@ func TestStartWithMultiBuckets(t *testing.T) {
 }
 
 func newPipeline(t *testing.T, configOutput *Config, objStoreF objStoreFactory) *pipeline.Pipeline {
-	metric.InitStats()
 	t.Helper()
 	settings := &pipeline.Settings{
 		Capacity:            4096,
@@ -424,8 +424,6 @@ func newPipeline(t *testing.T, configOutput *Config, objStoreF objStoreFactory) 
 	p := pipeline.New("test_pipeline", settings, prometheus.NewRegistry())
 	p.DisableParallelism()
 	p.EnableEventLog()
-
-	metric.InitStats()
 
 	anyPlugin, _ := fake.Factory()
 	inputPlugin := anyPlugin.(*fake.Plugin)

@@ -3,6 +3,7 @@ package k8s
 import (
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/plugin"
 	"go.uber.org/zap"
 )
 
@@ -14,6 +15,7 @@ type MultilineAction struct {
 	eventBuf      []byte
 	eventSize     int
 	skipNextEvent bool
+	plugin.NoMetricsPlugin
 }
 
 const (

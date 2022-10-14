@@ -9,7 +9,6 @@ import (
 )
 
 func TestPipeline_streamEvent(t *testing.T) {
-	metric.InitStats()
 
 	settings := &Settings{
 		Capacity: 5,
@@ -47,3 +46,4 @@ func (p *TestInputPlugin) Commit(*Event)                                     {}
 func (p *TestInputPlugin) PassEvent(event *Event) bool {
 	return true
 }
+func (p *TestInputPlugin) RegisterMetrics(ctl *metric.Ctl) {}

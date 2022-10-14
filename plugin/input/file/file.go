@@ -8,6 +8,7 @@ import (
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
+	prom "github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
 )
 
@@ -44,12 +45,6 @@ pipelines:
 ```
 }*/
 
-const (
-	subsystemName                      = "input_file"
-	possibleOffsetCorruptionCounter    = "possible_offset_corruptions_total"
-	alreadyWrittenEventsSkippedCounter = "already_written_event_skipped_total"
-)
-
 type Plugin struct {
 	config *Config
 	logger *zap.SugaredLogger
@@ -57,6 +52,11 @@ type Plugin struct {
 
 	workers     []*worker
 	jobProvider *jobProvider
+
+	// plugin metrics
+
+	possibleOffsetCorruptionMetric    *prom.CounterVec
+	alreadyWrittenEventsSkippedMetric *prom.CounterVec
 }
 
 type persistenceMode int
@@ -190,11 +190,9 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	p.params = params
 	p.config = config.(*Config)
 
-	p.registerPluginMetrics()
-
 	p.config.OffsetsFileTmp = p.config.OffsetsFile + ".atomic"
 
-	p.jobProvider = NewJobProvider(p.config, p.params.Controller, p.logger)
+	p.jobProvider = NewJobProvider(p.config, p.possibleOffsetCorruptionMetric, p.logger)
 
 	ResetterRegistryInstance.AddResetter(params.PipelineName, p)
 
@@ -202,17 +200,9 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	p.jobProvider.start()
 }
 
-func (p *Plugin) registerPluginMetrics() {
-	metric.RegisterCounter(&metric.MetricDesc{
-		Subsystem: subsystemName,
-		Name:      possibleOffsetCorruptionCounter,
-		Help:      "Total number of possible offset corruptions",
-	})
-	metric.RegisterCounter(&metric.MetricDesc{
-		Subsystem: subsystemName,
-		Name:      alreadyWrittenEventsSkippedCounter,
-		Help:      "Total number of skipped events that was already written",
-	})
+func (p *Plugin) RegisterMetrics(ctl *metric.Ctl) {
+	p.possibleOffsetCorruptionMetric = ctl.RegisterCounter("input_file_possible_offset_corruptions_total", "Total number of possible offset corruptions")
+	p.alreadyWrittenEventsSkippedMetric = ctl.RegisterCounter("input_file_already_written_event_skipped_total", "Total number of skipped events that was already written")
 }
 
 func (p *Plugin) startWorkers() {
@@ -256,7 +246,7 @@ func (p *Plugin) PassEvent(event *pipeline.Event) bool {
 	// and file-d went down after commit
 	pass := event.Offset > savedOffset
 	if !pass {
-		metric.GetCounter(subsystemName, alreadyWrittenEventsSkippedCounter).Inc()
+		p.alreadyWrittenEventsSkippedMetric.WithLabelValues().Inc()
 		return false
 	}
 

@@ -6,6 +6,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/test"
 	"github.com/stretchr/testify/assert"
@@ -164,13 +165,21 @@ func TestMaskAddExtraField(t *testing.T) {
 
 	var plugin Plugin
 
-	plugin.config = &Config{
+	config := Config{
 		MaskAppliedField: key,
 		MaskAppliedValue: val,
 		Masks: []Mask{
 			{Re: kDefaultCardRegExp, Groups: []int{1, 2, 3, 4}},
 		},
 	}
+	plugin.RegisterMetrics(metric.New("test"))
+	plugin.Start(&config, &pipeline.ActionPluginParams{
+		PluginDefaultParams: &pipeline.PluginDefaultParams{
+			PipelineName:     "test_pipeline",
+			PipelineSettings: &pipeline.Settings{},
+		},
+		Logger: zap.L().Sugar(),
+	})
 	plugin.config.Masks[0].Re_ = regexp.MustCompile(plugin.config.Masks[0].Re)
 
 	result := plugin.Do(event)

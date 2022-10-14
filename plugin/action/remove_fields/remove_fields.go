@@ -4,6 +4,7 @@ import (
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/plugin"
 )
 
 /*{ introduction
@@ -13,6 +14,7 @@ It removes the list of the event fields and keeps others.
 type Plugin struct {
 	config    *Config
 	fieldsBuf []string
+	plugin.NoMetricsPlugin
 }
 
 // ! config-params
