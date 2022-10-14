@@ -5,11 +5,10 @@ import (
 	"sync"
 	"testing"
 
-	"go.uber.org/atomic"
-
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/atomic"
 )
 
 func TestParseOffsets(t *testing.T) {

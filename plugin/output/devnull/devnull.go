@@ -3,6 +3,7 @@ package devnull
 import (
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/plugin"
 	"go.uber.org/atomic"
 )
 
@@ -10,19 +11,18 @@ import (
 It provides an API to test pipelines and other plugins.
 }*/
 
-const outPluginType = "devnull"
-
 type Plugin struct {
 	controller pipeline.OutputPluginController
 	outFn      func(event *pipeline.Event)
 	total      *atomic.Int64
+	plugin.NoMetricsPlugin
 }
 
 type Config struct{}
 
 func init() {
 	fd.DefaultPluginRegistry.RegisterOutput(&pipeline.PluginStaticInfo{
-		Type:    outPluginType,
+		Type:    "devnull",
 		Factory: Factory,
 	})
 }

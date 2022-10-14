@@ -9,6 +9,7 @@ import (
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
+	prom "github.com/prometheus/client_golang/prometheus"
 	insaneJSON "github.com/vitkovskii/insane-json"
 	"go.uber.org/zap"
 )
@@ -34,10 +35,6 @@ Allowed characters in field names are letters, numbers, underscores, dashes, and
 
 const (
 	outPluginType = "gelf"
-	subsystemName = "output_gelf"
-
-	// errors
-	sendErrorCounter = "send_error"
 )
 
 type Plugin struct {
@@ -46,6 +43,10 @@ type Plugin struct {
 	avgEventSize int
 	batcher      *pipeline.Batcher
 	controller   pipeline.OutputPluginController
+
+	// plugin metrics
+
+	sendErrorMetric *prom.CounterVec
 }
 
 // ! config-params
@@ -189,8 +190,6 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.config.timestampFieldFormat = format
 	p.config.levelField = pipeline.ByteToStringUnsafe(p.formatExtraField(nil, p.config.LevelField))
 
-	p.registerPluginMetrics()
-
 	p.batcher = pipeline.NewBatcher(pipeline.BatcherOptions{
 		PipelineName:        params.PipelineName,
 		OutputType:          outPluginType,
@@ -215,12 +214,8 @@ func (p *Plugin) Out(event *pipeline.Event) {
 	p.batcher.Add(event)
 }
 
-func (p *Plugin) registerPluginMetrics() {
-	metric.RegisterCounter(&metric.MetricDesc{
-		Name:      sendErrorCounter,
-		Subsystem: subsystemName,
-		Help:      "Total GELF send errors",
-	})
+func (p *Plugin) RegisterMetrics(ctl *metric.Ctl) {
+	p.sendErrorMetric = ctl.RegisterCounter("output_gelf_send_error", "Total GELF send errors")
 }
 
 func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
@@ -253,7 +248,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 
 			gelf, err := newClient(p.config.Endpoint, p.config.ConnectionTimeout_, p.config.WriteTimeout_, false, nil)
 			if err != nil {
-				metric.GetCounter(subsystemName, sendErrorCounter).Inc()
+				p.sendErrorMetric.WithLabelValues().Inc()
 				p.logger.Errorf("can't connect to gelf endpoint address=%s: %s", p.config.Endpoint, err.Error())
 				time.Sleep(time.Second)
 				continue
@@ -263,7 +258,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 
 		_, err := data.gelf.send(outBuf)
 		if err != nil {
-			metric.GetCounter(subsystemName, sendErrorCounter).Inc()
+			p.sendErrorMetric.WithLabelValues().Inc()
 			p.logger.Errorf("can't send data to gelf address=%s, err: %s", p.config.Endpoint, err.Error())
 			_ = data.gelf.close()
 			data.gelf = nil

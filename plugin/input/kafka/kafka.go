@@ -9,6 +9,7 @@ import (
 	"github.com/ozontech/file.d/longpanic"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
 )
 
@@ -16,13 +17,6 @@ import (
 It reads events from multiple Kafka topics using `sarama` library.
 > It guarantees at "at-least-once delivery" due to the commitment mechanism.
 }*/
-
-const (
-	subsystemName = "input_kafka"
-
-	commitErrors  = "commit_errors"
-	consumeErrors = "consume_errors"
-)
 
 type Plugin struct {
 	config        *Config
@@ -32,6 +26,11 @@ type Plugin struct {
 	cancel        context.CancelFunc
 	controller    pipeline.InputPluginController
 	idByTopic     map[string]int
+
+	// plugin metrics
+
+	commitErrorsMetric  *prometheus.CounterVec
+	consumeErrorsMetric *prometheus.CounterVec
 }
 
 // ! config-params
@@ -73,8 +72,6 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	p.controller = params.Controller
 	p.logger = params.Logger
 	p.config = config.(*Config)
-
-	p.registerPluginMetrics()
 	p.idByTopic = make(map[string]int, len(p.config.Topics))
 	for i, topic := range p.config.Topics {
 		p.idByTopic[topic] = i
@@ -91,18 +88,9 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	})
 }
 
-func (p *Plugin) registerPluginMetrics() {
-	metric.RegisterCounter(&metric.MetricDesc{
-		Subsystem: subsystemName,
-		Name:      commitErrors,
-		Help:      "Number of kafka commit errors",
-	})
-
-	metric.RegisterCounter(&metric.MetricDesc{
-		Subsystem: subsystemName,
-		Name:      consumeErrors,
-		Help:      "Number of kafka consume errors",
-	})
+func (p *Plugin) RegisterMetrics(ctl *metric.Ctl) {
+	p.commitErrorsMetric = ctl.RegisterCounter("input_kafka_commit_errors", "Number of kafka commit errors")
+	p.consumeErrorsMetric = ctl.RegisterCounter("input_kafka_consume_errors", "Number of kafka consume errors")
 }
 
 func (p *Plugin) consume(ctx context.Context) {
@@ -110,7 +98,7 @@ func (p *Plugin) consume(ctx context.Context) {
 	for {
 		err := p.consumerGroup.Consume(ctx, p.config.Topics, p)
 		if err != nil {
-			metric.GetCounter(subsystemName, consumeErrors).Inc()
+			p.consumeErrorsMetric.WithLabelValues().Inc()
 			p.logger.Errorf("can't consume from kafka: %s", err.Error())
 		}
 
@@ -126,7 +114,7 @@ func (p *Plugin) Stop() {
 
 func (p *Plugin) Commit(event *pipeline.Event) {
 	if p.session == nil {
-		metric.GetCounter(subsystemName, commitErrors).Inc()
+		p.commitErrorsMetric.WithLabelValues().Inc()
 		p.logger.Errorf("no kafka consumer session for event commit")
 		return
 	}

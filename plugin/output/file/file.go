@@ -13,8 +13,9 @@ import (
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/longpanic"
+	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
-
+	"github.com/ozontech/file.d/plugin"
 	"go.uber.org/zap"
 	"golang.org/x/net/context"
 )
@@ -23,6 +24,7 @@ type Plugable interface {
 	Start(config pipeline.AnyConfig, params *pipeline.OutputPluginParams)
 	Out(event *pipeline.Event)
 	Stop()
+	RegisterMetrics(ctl *metric.Ctl)
 }
 
 type Plugin struct {
@@ -44,6 +46,7 @@ type Plugin struct {
 	SealUpCallback func(string)
 
 	mu *sync.RWMutex
+	plugin.NoMetricsPlugin
 }
 
 type data struct {

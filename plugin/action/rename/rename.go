@@ -4,6 +4,7 @@ import (
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/plugin"
 )
 
 /*{ introduction
@@ -38,6 +39,7 @@ type Plugin struct {
 	paths          [][]string
 	names          []string
 	preserveFields bool
+	plugin.NoMetricsPlugin
 }
 
 type Config map[string]any

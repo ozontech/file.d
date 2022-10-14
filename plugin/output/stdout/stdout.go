@@ -5,23 +5,23 @@ import (
 
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/plugin"
 )
 
 /*{ introduction
 It writes events to stdout(also known as console).
 }*/
 
-const outPluginType = "stdout"
-
 type Plugin struct {
 	controller pipeline.OutputPluginController
+	plugin.NoMetricsPlugin
 }
 
 type Config struct{}
 
 func init() {
 	fd.DefaultPluginRegistry.RegisterOutput(&pipeline.PluginStaticInfo{
-		Type:    outPluginType,
+		Type:    "stdout",
 		Factory: Factory,
 	})
 }

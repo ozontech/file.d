@@ -11,6 +11,7 @@ import (
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/tls"
+	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
 )
 
@@ -76,9 +77,6 @@ curl "localhost:9200/_bulk" -H 'Content-Type: application/json' -d \
 }*/
 
 const (
-	subsystemName    = "input_http"
-	httpErrorCounter = "http_errors"
-
 	readBufDefaultLen = 16 * 1024
 )
 
@@ -93,6 +91,10 @@ type Plugin struct {
 	sourceSeq  pipeline.SourceID
 	mu         *sync.Mutex
 	logger     *zap.SugaredLogger
+
+	// plugin metrics
+
+	httpErrorMetric *prometheus.CounterVec
 }
 
 // ! config-params
@@ -140,8 +142,6 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	p.controller.DisableStreams()
 	p.sourceIDs = make([]pipeline.SourceID, 0)
 
-	p.registerPluginMetrics()
-
 	mux := http.NewServeMux()
 	switch p.config.EmulateMode {
 	case "elasticsearch":
@@ -156,12 +156,8 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	}
 }
 
-func (p *Plugin) registerPluginMetrics() {
-	metric.RegisterCounter(&metric.MetricDesc{
-		Subsystem: subsystemName,
-		Name:      httpErrorCounter,
-		Help:      "Total http errors",
-	})
+func (p *Plugin) RegisterMetrics(ctl *metric.Ctl) {
+	p.httpErrorMetric = ctl.RegisterCounter("input_http_errors", "Total http errors")
 }
 
 func (p *Plugin) listenHTTP() {
@@ -231,7 +227,7 @@ func (p *Plugin) serve(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if err != nil && err != io.EOF {
-			metric.GetCounter(subsystemName, httpErrorCounter).Inc()
+			p.httpErrorMetric.WithLabelValues().Inc()
 			logger.Errorf("http input read error: %s", err.Error())
 			break
 		}
@@ -251,7 +247,7 @@ func (p *Plugin) serve(w http.ResponseWriter, r *http.Request) {
 
 	_, err := w.Write(result)
 	if err != nil {
-		metric.GetCounter(subsystemName, httpErrorCounter).Inc()
+		p.httpErrorMetric.WithLabelValues().Inc()
 		logger.Errorf("can't write response: %s", err.Error())
 	}
 }

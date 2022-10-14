@@ -19,8 +19,6 @@ import (
 )
 
 func TestPrivateOut(t *testing.T) {
-	metric.InitStats()
-
 	testLogger := logger.Instance
 
 	root := insaneJSON.Spawn()
@@ -91,15 +89,13 @@ func TestPrivateOut(t *testing.T) {
 		ctx:          ctx,
 	}
 
-	p.registerPluginMetrics()
+	p.RegisterMetrics(metric.New("test"))
 
 	batch := &pipeline.Batch{Events: []*pipeline.Event{{Root: root}}}
 	p.out(nil, batch)
 }
 
 func TestPrivateOutWithRetry(t *testing.T) {
-	metric.InitStats()
-
 	testLogger := logger.Instance
 
 	root := insaneJSON.Spawn()
@@ -168,15 +164,13 @@ func TestPrivateOutWithRetry(t *testing.T) {
 		ctx:          ctx,
 	}
 
-	p.registerPluginMetrics()
+	p.RegisterMetrics(metric.New("test"))
 
 	batch := &pipeline.Batch{Events: []*pipeline.Event{{Root: root}}}
 	p.out(nil, batch)
 }
 
 func TestPrivateOutNoGoodEvents(t *testing.T) {
-	metric.InitStats()
-
 	testLogger := logger.Instance
 
 	root := insaneJSON.Spawn()
@@ -223,15 +217,13 @@ func TestPrivateOutNoGoodEvents(t *testing.T) {
 		logger:       testLogger,
 	}
 
-	p.registerPluginMetrics()
+	p.RegisterMetrics(metric.New("test"))
 
 	batch := &pipeline.Batch{Events: []*pipeline.Event{{Root: root}}}
 	p.out(nil, batch)
 }
 
 func TestPrivateOutDeduplicatedEvents(t *testing.T) {
-	metric.InitStats()
-
 	testLogger := logger.Instance
 
 	root := insaneJSON.Spawn()
@@ -305,7 +297,7 @@ func TestPrivateOutDeduplicatedEvents(t *testing.T) {
 		ctx:          ctx,
 	}
 
-	p.registerPluginMetrics()
+	p.RegisterMetrics(metric.New("test"))
 
 	batch := &pipeline.Batch{Events: []*pipeline.Event{
 		{Root: root},
@@ -316,8 +308,6 @@ func TestPrivateOutDeduplicatedEvents(t *testing.T) {
 }
 
 func TestPrivateOutWrongTypeInField(t *testing.T) {
-	metric.InitStats()
-
 	testLogger := logger.Instance
 
 	root := insaneJSON.Spawn()
@@ -373,15 +363,13 @@ func TestPrivateOutWrongTypeInField(t *testing.T) {
 		logger:       testLogger,
 	}
 
-	p.registerPluginMetrics()
+	p.RegisterMetrics(metric.New("test"))
 
 	batch := &pipeline.Batch{Events: []*pipeline.Event{{Root: root}}}
 	p.out(nil, batch)
 }
 
 func TestPrivateOutFewUniqueEventsYetWithDeduplicationEventsAnpooladEvents(t *testing.T) {
-	metric.InitStats()
-
 	testLogger := logger.Instance
 
 	root := insaneJSON.Spawn()
@@ -480,7 +468,7 @@ func TestPrivateOutFewUniqueEventsYetWithDeduplicationEventsAnpooladEvents(t *te
 		ctx:          ctx,
 	}
 
-	p.registerPluginMetrics()
+	p.RegisterMetrics(metric.New("test"))
 
 	batch := &pipeline.Batch{Events: []*pipeline.Event{
 		{Root: root},

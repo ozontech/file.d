@@ -6,6 +6,7 @@ import (
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/plugin"
 	insaneJSON "github.com/vitkovskii/insane-json"
 )
 
@@ -17,6 +18,7 @@ type Plugin struct {
 	config *Config
 
 	re *regexp.Regexp
+	plugin.NoMetricsPlugin
 }
 
 // ! config-params

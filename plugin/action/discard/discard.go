@@ -3,6 +3,7 @@ package discard
 import (
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/plugin"
 )
 
 /*{ introduction
@@ -21,7 +22,9 @@ pipelines:
 ```
 }*/
 
-type Plugin struct{}
+type Plugin struct {
+	plugin.NoMetricsPlugin
+}
 
 type Config struct{}
 

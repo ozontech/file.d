@@ -11,6 +11,7 @@ import (
 	"runtime/debug"
 
 	"github.com/bitly/go-simplejson"
+	"github.com/ozontech/file.d/buildinfo"
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/longpanic"
@@ -20,11 +21,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
-const (
-	subsystemLongPanicName = "long_panic"
-	panics                 = "panics"
-)
-
 type FileD struct {
 	config    *cfg.Config
 	httpAddr  string
@@ -32,6 +28,12 @@ type FileD struct {
 	plugins   *PluginRegistry
 	Pipelines []*pipeline.Pipeline
 	server    *http.Server
+	metricCtl *metric.Ctl
+
+	// file_d metrics
+
+	longPanicMetric *prometheus.CounterVec
+	versionMetric   *prometheus.CounterVec
 }
 
 func New(config *cfg.Config, httpAddr string) *FileD {
@@ -57,15 +59,12 @@ func (f *FileD) Start() {
 }
 
 func (f *FileD) initMetrics() {
-	metric.InitStats()
-
-	metric.RegisterCounter(&metric.MetricDesc{
-		Subsystem: subsystemLongPanicName,
-		Name:      panics,
-		Help:      "Count of panics in the LongPanic",
-	})
+	f.metricCtl = metric.New("file_d")
+	f.longPanicMetric = f.metricCtl.RegisterCounter("long_panic", "Count of panics in the LongPanic")
+	f.versionMetric = f.metricCtl.RegisterCounter("version", "", "version")
+	f.versionMetric.WithLabelValues(buildinfo.Version).Inc()
 	longpanic.SetOnPanicHandler(func(_ error) {
-		metric.GetCounter(subsystemLongPanicName, panics).Inc()
+		f.longPanicMetric.WithLabelValues().Inc()
 	})
 }
 
