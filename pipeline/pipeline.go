@@ -38,14 +38,15 @@ const (
 	antispamUnbanIterations = 4
 	metricsGenInterval      = time.Hour
 
-	inputEventsCountMetric  = "input_events_count"
-	inputEventsSizeMetric   = "input_events_size"
-	outputEventsCountMetric = "output_events_count"
-	outputEventsSizeMetric  = "output_events_size"
-	readOpsEventsSizeMetric = "read_ops_count"
-	maxEventSizeExceeded    = "max_event_size_exceeded"
-	eventPoolCapacity       = "event_pool_capacity"
-	inUseEventsMetric       = "event_pool_in_use_events"
+	inputEventsCountMetric   = "input_events_count"
+	inputEventsSizeMetric    = "input_events_size"
+	outputEventsCountMetric  = "output_events_count"
+	outputEventsSizeMetric   = "output_events_size"
+	readOpsEventsSizeMetric  = "read_ops_count"
+	maxEventSizeExceeded     = "max_event_size_exceeded"
+	eventPoolCapacity        = "event_pool_capacity"
+	inUseEventsMetric        = "event_pool_in_use_events"
+	batcherCommitCountMetric = "batcher_commit_count"
 
 	wrongEventCRIFormatMetric = "wrong_event_cri_format"
 )
@@ -274,6 +275,9 @@ func (p *Pipeline) SetupHTTPHandlers(mux *http.ServeMux) {
 	for hName, handler := range p.outputInfo.PluginStaticInfo.Endpoints {
 		mux.HandleFunc(fmt.Sprintf("%s/%d/%s", prefix, len(p.actionInfos)+1, hName), handler)
 	}
+
+	mux.HandleFunc(fmt.Sprintf("%s/server_stats", prefix), p.serveBoardInfo(p.inputInfo, p.actionInfos, p.outputInfo))
+	mux.HandleFunc(fmt.Sprintf("%s/server_stats_json", prefix), p.serveBoardInfoJSON(p.inputInfo, p.actionInfos, p.outputInfo))
 }
 
 func (p *Pipeline) Start() {
@@ -745,6 +749,11 @@ func (p *Pipeline) serveActionInfo(info ActionPluginStaticInfo) func(http.Respon
 			Status string `json:"status"`
 			Count  int    `json:"count"`
 		}
+		type Info struct {
+			PluginName string  `json:"plugin_name"`
+			MetricName string  `json:"metric_name"`
+			Events     []Event `json:"events"`
+		}
 
 		if info.MetricName == "" {
 			writeErr(w, "If you want to see a statistic about events, consider adding `metric_name` to the action's configuration.")
@@ -767,6 +776,9 @@ func (p *Pipeline) serveActionInfo(info ActionPluginStaticInfo) func(http.Respon
 			eventStatusReceived,
 			eventStatusDiscarded,
 			eventStatusPassed,
+			eventStatusNotMatched,
+			eventStatusCollapse,
+			eventStatusHold,
 		} {
 			c := actionMetric.current.totalCounter[string(status)]
 			if c == nil {
@@ -778,7 +790,12 @@ func (p *Pipeline) serveActionInfo(info ActionPluginStaticInfo) func(http.Respon
 			})
 		}
 
-		resp, _ := json.Marshal(events)
+		info := Info{
+			PluginName: info.Type,
+			MetricName: info.MetricName,
+			Events:     events,
+		}
+		resp, _ := json.Marshal(info)
 		_, _ = w.Write(resp)
 	}
 }

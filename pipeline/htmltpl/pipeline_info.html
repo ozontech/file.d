@@ -1,0 +1,102 @@
+<html>
+<head>
+    <style>
+    body {
+            color:white;
+            background:rgb(17, 18, 23);
+            padding:20px;
+            font-size:14px;
+            font-family: Roboto, Helvetica, Arial, sans-serif;
+    }
+    .row{
+        width: 100%;
+        padding: 20px;
+        background: #191b1f;
+    }
+    .par{
+        margin: 0 0 5px 0
+    }
+    .statuses{
+        display: flex;
+        flex-direction:column;
+        padding: 5px 5px 5px 10px;
+    }
+    .status{
+        display: flex;
+        justify-content: space-between;
+    }
+    .header{
+        font-size: 20px;
+        padding: 0 0 10px 0;
+    }
+    .container{
+        display: flex;
+        justify-content: space-between;
+    }
+    .container-inner{
+        width: 45%;
+    }
+    .row-wrapper{
+        display: flex;
+        border: 1px solid #404144;
+        margin: 0 0 20px 0;
+    }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="container-inner">
+        <div>
+            <div class="header">In plugin</div>
+            <div class="row-wrapper">
+                <div class="row">
+                    <div class="par">plugin: {{ .In.PluginName }} </div>
+                </div>
+            </div>
+        </div>
+        <div>
+            <div class="header">Out plugin</div>
+            <div class="row-wrapper">
+                <div class="row">
+                    <div class="par">plugin: {{ .Out.PluginName }} </div>
+                    <div class="par">Batches committed:</div>
+                    {{ range .Out.BatcherCounters}}
+                        <div class="par"> {{ .BatchesCommitted }} in {{ .Seconds }} seconds</div>
+                    {{end}}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container-inner">
+        <div class="header">Action plugins</div>
+        {{ range .ActionPlugins }}
+            <div class="row-wrapper">
+                {{ if .Tracked }}
+                <div class="row">
+                    <div class="par">plugin: {{ .PluginName }}</div>
+                    <div class="par">metric: {{ .MetricName }}</div>
+                </div>
+                <div class="row">
+                    <div class="par">statuses: </div>
+                        <div class="statuses">
+                            {{ range .Statuses }}
+                            <div class="status" style="color:{{.Color}};">
+                                <div>{{ .Name }}:</div>
+                                <div>{{ .Count}}</div>
+                            </div>
+                            {{ end }}
+                        </div>
+                </div>
+                {{ else }}
+                <div class="row">
+                    <div class="par">plugin: {{ .PluginName }}</div>
+                    <div class="par">"metric_name" didn't set in config. </div>
+                </div>
+                {{ end }}
+            </div>
+        {{ end }}
+    </div>
+</div>
+</body>
+</html>

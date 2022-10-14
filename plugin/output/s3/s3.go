@@ -552,3 +552,8 @@ func (p *Plugin) generateObjectName(name string) string {
 	objectName = objectName[0 : len(objectName)-len(p.compressor.getExtension())]
 	return fmt.Sprintf("%s.%s%s", objectName, n, p.compressor.getExtension())
 }
+
+// GetObservabilityInfo returns observability info about plugin.
+func (p *Plugin) GetObservabilityInfo() pipeline.OutPluginObservabilityInfo {
+	return pipeline.OutPluginObservabilityInfo{}
+}

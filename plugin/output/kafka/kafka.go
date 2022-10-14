@@ -208,3 +208,12 @@ func (p *Plugin) newProducer() sarama.SyncProducer {
 	p.logger.Infof("producer created with brokers %q", strings.Join(p.config.Brokers, ","))
 	return producer
 }
+
+// GetObservabilityInfo returns observability info about plugin.
+func (p *Plugin) GetObservabilityInfo() pipeline.OutPluginObservabilityInfo {
+	batcherCounters := p.batcher.GetCommitterCounters(time.Now())
+
+	return pipeline.OutPluginObservabilityInfo{
+		BatcherInfo: batcherCounters,
+	}
+}

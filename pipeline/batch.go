@@ -2,6 +2,7 @@ package pipeline
 
 import (
 	"context"
+	"github.com/ozontech/file.d/metric"
 	"sync"
 	"time"
 
@@ -9,6 +10,8 @@ import (
 	"github.com/ozontech/file.d/longpanic"
 	"go.uber.org/atomic"
 )
+
+var batcherTimeKeys = []int64{5, 15, 30, 60, 300, 900, 1800, 3600}
 
 type Batch struct {
 	Events []*Event
@@ -79,6 +82,9 @@ type Batcher struct {
 
 	outSeq    int64
 	commitSeq int64
+
+	committedCountersMu sync.RWMutex
+	committedCounters   map[int64]int64
 }
 
 type (
@@ -99,8 +105,9 @@ type (
 	}
 )
 
+// NewBatcher returns batcher that commits vector of messages.
 func NewBatcher(opts BatcherOptions) *Batcher {
-	return &Batcher{opts: opts}
+	return &Batcher{opts: opts, committedCounters: make(map[int64]int64)}
 }
 
 func (b *Batcher) Start(ctx context.Context) {
@@ -118,10 +125,53 @@ func (b *Batcher) Start(ctx context.Context) {
 		})
 	}
 
+	// delete old counters
+	go func() {
+		for {
+			t := time.NewTicker(time.Second * 30)
+			select {
+			case <-ctx.Done():
+				return
+			case <-t.C:
+				now := time.Now()
+				b.deleteOldCommittedCounters(now)
+			}
+		}
+	}()
 	longpanic.Go(b.heartbeat)
 }
 
 type WorkerData any
+
+// deleteOldCommittedCounters removes old
+func (b *Batcher) deleteOldCommittedCounters(now time.Time) {
+	b.committedCountersMu.Lock()
+	defer b.committedCountersMu.Unlock()
+
+	for k := range b.committedCounters {
+		if now.Unix()-k > int64(time.Hour) {
+			delete(b.committedCounters, k)
+		}
+	}
+}
+
+func (b *Batcher) GetCommitterCounters(now time.Time) map[int64]int64 {
+	b.committedCountersMu.RLock()
+	defer b.committedCountersMu.RUnlock()
+
+	counters := make(map[int64]int64)
+
+	nowUnix := now.Unix()
+	// sum for last N seconds
+	for k, v := range b.committedCounters {
+		for _, secondsRange := range batcherTimeKeys {
+			if (nowUnix - k) < secondsRange {
+				counters[secondsRange] += v
+			}
+		}
+	}
+	return counters
+}
 
 func (b *Batcher) work(ctx context.Context) {
 	t := time.Now()
@@ -130,6 +180,10 @@ func (b *Batcher) work(ctx context.Context) {
 	for batch := range b.fullBatches {
 		b.opts.OutFn(&data, batch)
 		events = b.commitBatch(ctx, events, batch)
+
+		b.committedCountersMu.Lock()
+		b.committedCounters[time.Now().Unix()]++
+		b.committedCountersMu.Unlock()
 
 		shouldRunMaintenance := b.opts.MaintenanceFn != nil && b.opts.MaintenanceInterval != 0 && time.Since(t) > b.opts.MaintenanceInterval
 		if shouldRunMaintenance {
@@ -146,10 +200,11 @@ func (b *Batcher) commitBatch(ctx context.Context, events []*Event, batch *Batch
 
 	batchSeq := batch.seq
 
-	// lets restore the sequence of batches to make sure input will commit offsets incrementally
+	// let's restore the sequence of batches to make sure input will commit offsets incrementally
 	b.seqMu.Lock()
 	for b.commitSeq != batchSeq {
 		b.cond.Wait()
+		// todo get min-max wait time.
 	}
 	b.commitSeq++
 
@@ -217,4 +272,12 @@ func (b *Batcher) Stop() {
 	// todo add scenario without races.
 	close(b.freeBatches)
 	close(b.fullBatches)
+}
+
+func (b *Batcher) registerBatcherMetrics(subsystemName string) {
+	metric.RegisterGauge(&metric.MetricDesc{
+		Subsystem: subsystemName,
+		Name:      batcherCommitCountMetric,
+		Help:      "Number of committed batches",
+	})
 }

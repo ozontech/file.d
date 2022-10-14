@@ -2,7 +2,6 @@ package stdout
 
 import (
 	"fmt"
-
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/pipeline"
 )
@@ -39,4 +38,9 @@ func (_ *Plugin) Stop() {}
 func (p *Plugin) Out(event *pipeline.Event) {
 	fmt.Println(event.Root.EncodeToString())
 	p.controller.Commit(event)
+}
+
+// GetObservabilityInfo returns observability info about plugin.
+func (p *Plugin) GetObservabilityInfo() pipeline.OutPluginObservabilityInfo {
+	return pipeline.OutPluginObservabilityInfo{}
 }

@@ -391,3 +391,12 @@ func (p *Plugin) setAuthHeader(req *fasthttp.Request) {
 		req.Header.SetBytesKV(strAuthorization, p.authHeader)
 	}
 }
+
+// GetObservabilityInfo returns observability info about plugin.
+func (p *Plugin) GetObservabilityInfo() pipeline.OutPluginObservabilityInfo {
+	batcherCounters := p.batcher.GetCommitterCounters(time.Now())
+
+	return pipeline.OutPluginObservabilityInfo{
+		BatcherInfo: batcherCounters,
+	}
+}

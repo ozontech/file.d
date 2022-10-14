@@ -443,3 +443,12 @@ func (p *Plugin) formatExtraField(encodeBuf []byte, name string) []byte {
 
 	return encodeBuf
 }
+
+// GetObservabilityInfo returns observability info about plugin.
+func (p *Plugin) GetObservabilityInfo() pipeline.OutPluginObservabilityInfo {
+	batcherCounters := p.batcher.GetCommitterCounters(time.Now())
+
+	return pipeline.OutPluginObservabilityInfo{
+		BatcherInfo: batcherCounters,
+	}
+}

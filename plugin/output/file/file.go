@@ -103,6 +103,7 @@ func Factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 	return &Plugin{}, &Config{}
 }
 
+// Start runs plugin.
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginParams) {
 	p.controller = params.Controller
 	p.logger = params.Logger
@@ -151,7 +152,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 }
 
 func (p *Plugin) Stop() {
-	// we MUST NOT close file, through p.file.Close(), fileSealUpTicker already do this duty.
+	// we MUST NOT close file, through p.file.Close(), fileSealUpTicker already do this duty
 	p.batcher.Stop()
 	p.cancel()
 }
@@ -168,7 +169,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 	}
 	data := (*workerData).(*data)
 
-	// handle to much memory consumption
+	// handle too much memory consumption
 	if cap(data.outBuf) > p.config.BatchSize_*p.avgEventSize {
 		data.outBuf = make([]byte, 0, p.config.BatchSize_*p.avgEventSize)
 	}
@@ -290,4 +291,13 @@ func (p *Plugin) getStartIdx() int {
 	}
 	idx++
 	return idx
+}
+
+// GetObservabilityInfo returns observability info about plugin.
+func (p *Plugin) GetObservabilityInfo() pipeline.OutPluginObservabilityInfo {
+	batcherCounters := p.batcher.GetCommitterCounters(time.Now())
+
+	return pipeline.OutPluginObservabilityInfo{
+		BatcherInfo: batcherCounters,
+	}
 }

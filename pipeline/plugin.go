@@ -32,6 +32,7 @@ type OutputPlugin interface {
 	Start(config AnyConfig, params *OutputPluginParams)
 	Stop()
 	Out(*Event)
+	GetObservabilityInfo() OutPluginObservabilityInfo
 }
 
 type PluginsStarterData struct {
@@ -141,3 +142,7 @@ const (
 	UnknownSelector ConditionType = iota
 	ByNameSelector
 )
+
+type OutPluginObservabilityInfo struct {
+	BatcherInfo map[int64]int64
+}

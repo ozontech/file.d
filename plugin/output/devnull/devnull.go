@@ -54,3 +54,8 @@ func (p *Plugin) Out(event *pipeline.Event) {
 
 	p.controller.Commit(event)
 }
+
+// GetObservabilityInfo returns observability info about plugin.
+func (p *Plugin) GetObservabilityInfo() map[string]pipeline.OutPluginObservabilityInfo {
+	return nil
+}

@@ -234,3 +234,12 @@ func (p *Plugin) send(data []byte) error {
 
 	return nil
 }
+
+// GetObservabilityInfo returns observability info about plugin.
+func (p *Plugin) GetObservabilityInfo() pipeline.OutPluginObservabilityInfo {
+	batcherCounters := p.batcher.GetCommitterCounters(time.Now())
+
+	return pipeline.OutPluginObservabilityInfo{
+		BatcherInfo: batcherCounters,
+	}
+}
