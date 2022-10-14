@@ -13,22 +13,20 @@ import (
 
 type antispamer struct {
 	metricsController *metric.Ctl
-	unbanIterations int
-	threshold       int
-	mu              *sync.RWMutex
-	sources         map[SourceID]*source
+	unbanIterations   int
+	threshold         int
+	mu                *sync.RWMutex
+	sources           map[SourceID]*source
 
 	// antispamer metrics
 	antispamActiveMetric *prom.GaugeVec
-	antispamBanMetric    *prom.CounterVec
+	antispamBanMetric    *prom.GaugeVec
 }
 
 type source struct {
 	counter atomic.Int32
 	name    string
 }
-
-
 
 func newAntispamer(threshold int, unbanIterations int, maintenanceInterval time.Duration, metricsController *metric.Ctl) *antispamer {
 	if threshold != 0 {
@@ -37,7 +35,7 @@ func newAntispamer(threshold int, unbanIterations int, maintenanceInterval time.
 	antispamer := &antispamer{
 		threshold:         threshold,
 		unbanIterations:   unbanIterations,
-		sources:          make(map[SourceID]*source),
+		sources:           make(map[SourceID]*source),
 		mu:                &sync.RWMutex{},
 		metricsController: metricsController,
 	}
@@ -45,7 +43,7 @@ func newAntispamer(threshold int, unbanIterations int, maintenanceInterval time.
 	antispamer.antispamActiveMetric = metricsController.RegisterGauge("antispam_active", "Gauge indicates whether the antispam is enabled")
 	// not enabled by default
 	antispamer.antispamActiveMetric.WithLabelValues().Set(0)
-	antispamer.antispamBanMetric = metricsController.RegisterCounter("antispam_ban_count", "How many times a source was banned")
+	antispamer.antispamBanMetric = metricsController.RegisterGauge("antispam_banned", "How many times a source was banned")
 
 	return antispamer
 }
@@ -92,11 +90,11 @@ func (a *antispamer) maintenance() {
 	a.mu.Lock()
 
 	allUnbanned := true
-	for sourceId, source := range a.sources {
+	for sourceID, source := range a.sources {
 		x := int(source.counter.Load())
 
 		if x == 0 {
-			delete(a.sources, sourceId)
+			delete(a.sources, sourceID)
 			continue
 		}
 
@@ -107,7 +105,8 @@ func (a *antispamer) maintenance() {
 		}
 
 		if isMore && x < a.threshold {
-			logger.Infof("antispam: source has been unbanned id=%d", sourceId)
+			a.antispamBanMetric.WithLabelValues().Dec()
+			logger.Infof("antispam: source has been unbanned id=%d", sourceID)
 		}
 
 		if x >= a.threshold {
@@ -134,8 +133,11 @@ func (a *antispamer) dump() string {
 	out := logger.Cond(len(a.sources) == 0, logger.Header("no banned"), func() string {
 		o := logger.Header("banned sources")
 		a.mu.RLock()
-		for s, count := range a.sources {
-			o += fmt.Sprintf("source_id: %d, source_name: %s, events_counter: %d\n", s, count.name, count.counter)
+		for s, source := range a.sources {
+			value := source.counter.Load()
+			if int(value) >= a.threshold {
+				o += fmt.Sprintf("source_id: %d, source_name: %s, events_counter: %d\n", s, source.name, value)
+			}
 		}
 		a.mu.RUnlock()
 		return o
