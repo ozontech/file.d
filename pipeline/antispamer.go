@@ -62,10 +62,11 @@ func (a *antispamer) isSpam(id SourceID, name string, isNewSource bool) bool {
 		if newSrc, has := a.sources[id]; has {
 			src = newSrc
 		} else {
-			a.sources[id] = &source{
+			src = &source{
 				counter: atomic.Int32{},
 				name:    name,
 			}
+			a.sources[id] = src
 		}
 		a.mu.Unlock()
 	}
