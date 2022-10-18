@@ -223,7 +223,8 @@ func (p *Pipeline) SetupHTTPHandlers(mux *http.ServeMux) {
 
 	prefix := "/pipelines/" + p.Name
 	mux.HandleFunc(prefix, p.servePipeline)
-
+	prefixBanList := fmt.Sprintf("/pipelines/%s/ban_list", p.Name)
+	mux.HandleFunc(prefixBanList, p.servePipelineBanList)
 	for hName, handler := range p.inputInfo.PluginStaticInfo.Endpoints {
 		mux.HandleFunc(fmt.Sprintf("%s/0/%s", prefix, hName), handler)
 	}
@@ -240,6 +241,7 @@ func (p *Pipeline) SetupHTTPHandlers(mux *http.ServeMux) {
 		mux.HandleFunc(fmt.Sprintf("%s/%d/%s", prefix, len(p.actionInfos)+1, hName), handler)
 	}
 
+	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.FS(pipelineTpl))))
 	mux.HandleFunc(fmt.Sprintf("%s/server_stats", prefix), p.serveBoardInfo(p.inputInfo, p.actionInfos, p.outputInfo))
 	mux.HandleFunc(fmt.Sprintf("%s/server_stats_json", prefix), p.serveBoardInfoJSON(p.inputInfo, p.actionInfos, p.outputInfo))
 }
@@ -587,7 +589,25 @@ type deltas struct {
 	deltaReads        float64
 }
 
-func (p *Pipeline) logChanges(myDeltas *deltas) {
+type logChangesDTO struct {
+	PipelineName     string        `json:"pipeline_name"`
+	Interval         time.Duration `json:"interval"`
+	ActiveProcs      int32         `json:"active_procs"`
+	ProcsCount       int32         `json:"procs_count"`
+	InUseEvents      int           `json:"in_use_events"`
+	EventsCapacity   int           `json:"events_capacity"`
+	DeltaInputEvents int64         `json:"delta_input_events"` // out
+	DeltaInputSize   float64       `json:"delta_input_size"`
+	Rate             int           `json:"rate"`
+	RateMB           float64       `json:"rate_mb"`
+	ReadOps          int           `json:"read_ops"`
+	InputEvents      int64         `json:"input_events"`
+	InputTotalSize   float64       `json:"input_total_size"`
+	AvgEventSize     int64         `json:"avg_event_size"`
+	MaxEventSize     int           `json:"max_event_size"`
+}
+
+func (p *Pipeline) logChanges(myDeltas *deltas) logChangesDTO {
 	inputSize := p.inputSize.Load()
 	inputEvents := p.inputEvents.Load()
 	inUseEvents := p.eventPool.inUseEvents.Load()
@@ -598,12 +618,25 @@ func (p *Pipeline) logChanges(myDeltas *deltas) {
 	readOps := int(myDeltas.deltaReads * float64(time.Second) / float64(interval))
 	tc := int64(math.Max(float64(inputSize), 1))
 
-	p.logger.Infof(`%q pipeline stats interval=%ds, active procs=%d/%d, events outside pool=%d/%d, events in pool=%d/%d, out=%d|%.1fMb,`+
-		`rate=%d/s|%.1fMb/s, read ops=%d/s, total=%d|%.1fMb, avg size=%d, max size=%d`,
-		p.Name, interval/time.Second, p.activeProcs.Load(), p.procCount.Load(),
-		inUseEvents, p.settings.Capacity, p.settings.Capacity-int(inUseEvents), p.settings.Capacity,
-		int64(myDeltas.deltaInputEvents), float64(myDeltas.deltaInputSize)/1024.0/1024.0, rate, rateMb, readOps,
-		inputEvents, float64(inputSize)/1024.0/1024.0, inputSize/tc, p.maxSize)
+	dto := logChangesDTO{
+		PipelineName:     p.Name,
+		Interval:         interval / time.Second,                             // 'interval' show duration of this entire stat
+		ActiveProcs:      p.activeProcs.Load(),                               // how many procs working in this quantum of time
+		ProcsCount:       p.procCount.Load(),                                 // total procs count
+		InUseEvents:      int(inUseEvents),                                   // events in use right now
+		EventsCapacity:   p.settings.Capacity,                                // events total cap
+		DeltaInputEvents: int64(myDeltas.deltaInputEvents),                   // 'out' shows cumulative sum during last 5 sec
+		DeltaInputSize:   float64(myDeltas.deltaInputSize) / 1024.0 / 1024.0, //
+		Rate:             rate,                                               // 'rate' is throughput mb/sec during last 5 sec
+		RateMB:           rateMb,
+		ReadOps:          readOps, // 'read ops' shows how many read ops/sec
+		InputEvents:      inputEvents,
+		InputTotalSize:   float64(inputSize) / 1024.0 / 1024.0, // 'total' shows events counter and overall size during
+		AvgEventSize:     inputSize / tc,                       // 'avg size' shows agv size of event
+		MaxEventSize:     p.maxSize,                            // 'max size' shows maximum size of event
+	}
+
+	return dto
 }
 
 func (p *Pipeline) incMetrics(inputEvents, inputSize, outputEvents, outputSize, reads *DeltaWrapper) *deltas {
@@ -652,7 +685,21 @@ func (p *Pipeline) maintenance() {
 
 		myDeltas := p.incMetrics(inputEvents, inputSize, outputEvents, outputSize, readOps)
 		p.setMetrics(p.eventPool.inUseEvents)
-		p.logChanges(myDeltas)
+		logChanges := p.logChanges(myDeltas)
+
+		p.logger.Infof(`%q pipeline stats interval=%ds, active procs=%d/%d, events outside pool=%d/%d, events in pool=%d/%d, out=%d|%.1fMb,`+
+			` rate=%d/s|%.1fMb/s, read ops=%d/s, total=%d|%.1fMb, avg size=%d, max size=%d`,
+			logChanges.PipelineName,                       // pipeline name
+			logChanges.Interval,                           // 'interval' show duration of this entire stat
+			logChanges.ActiveProcs, logChanges.ProcsCount, // how many procs working in this quantum of time
+			logChanges.InUseEvents, logChanges.EventsCapacity, // 'events outside pool' counts events is use
+			logChanges.EventsCapacity-logChanges.InUseEvents, logChanges.EventsCapacity, // 'events in pool' counts free events in pool
+			logChanges.DeltaInputEvents, logChanges.DeltaInputSize, //  'out' shows cumulative sum during last 5 sec
+			logChanges.Rate, logChanges.RateMB, // 'rate' is throughput mb/sec during last 5 sec
+			logChanges.ReadOps,                                // 'read ops' shows how many read ops/sec
+			logChanges.InputEvents, logChanges.InputTotalSize, // 'total' shows events counter and overall size during
+			logChanges.AvgEventSize, // 'avg size' shows agv size of event
+			logChanges.MaxEventSize) // 'max size' shows maximum size of event
 
 		if len(p.inSample) > 0 {
 			p.logger.Infof("%q pipeline input event sample: %s", p.Name, p.inSample)
@@ -705,6 +752,14 @@ func (p *Pipeline) servePipeline(w http.ResponseWriter, _ *http.Request) {
 	_, _ = w.Write([]byte(logger.Header("pipeline " + p.Name)))
 	_, _ = w.Write([]byte(p.streamer.dump()))
 	_, _ = w.Write([]byte(p.eventPool.dump()))
+
+	_, _ = w.Write([]byte("</p></pre></body></html>"))
+}
+
+func (p *Pipeline) servePipelineBanList(w http.ResponseWriter, _ *http.Request) {
+	_, _ = w.Write([]byte("<html><body><pre><p>"))
+	_, _ = w.Write([]byte(logger.Header("pipeline " + p.Name)))
+	_, _ = w.Write([]byte(p.antispamer.dump()))
 
 	_, _ = w.Write([]byte("</p></pre></body></html>"))
 }

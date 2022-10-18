@@ -11,12 +11,13 @@ import (
 )
 
 //go:embed htmltpl
-var pipeline_tpl embed.FS
+var pipelineTpl embed.FS
 
 type pluginsObservabilityInfo struct {
 	In            inObservabilityInfo       `json:"in"`
 	Out           outObservabilityInfo      `json:"out"`
 	ActionPlugins []actionObservabilityInfo `json:"actions"`
+	LogChanges    logChangesDTO             `json:"log_changes"`
 }
 
 type inObservabilityInfo struct {
@@ -54,6 +55,15 @@ func (p *Pipeline) boardInfo(
 	outputInfo *OutputPluginInfo,
 ) pluginsObservabilityInfo {
 	result := pluginsObservabilityInfo{}
+
+	inputEvents := newDeltaWrapper()
+	inputSize := newDeltaWrapper()
+	outputEvents := newDeltaWrapper()
+	outputSize := newDeltaWrapper()
+	readOps := newDeltaWrapper()
+
+	localDeltas := p.incMetrics(inputEvents, inputSize, outputEvents, outputSize, readOps)
+	result.LogChanges = p.logChanges(localDeltas)
 
 	in := inObservabilityInfo{
 		PluginName: inputInfo.Type,
@@ -157,16 +167,27 @@ func (p *Pipeline) serveBoardInfo(
 	actionInfos []*ActionPluginStaticInfo,
 	outputInfo *OutputPluginInfo) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, _ *http.Request) {
-		tmpl, err := template.ParseFS(pipeline_tpl, "htmltpl/pipeline_info.html")
+		tmpl, err := template.ParseFS(pipelineTpl, "htmltpl/pipeline_info.html")
 		if err != nil {
 			logger.Errorf("can't parse html template: %s", err.Error())
 			_, _ = w.Write([]byte(fmt.Sprintf("<hmtl><body>can't parse html: %s", err.Error())))
 			return
 		}
 
-		boardInfo := p.boardInfo(inputInfo, actionInfos, outputInfo)
+		funcMap := template.FuncMap{
+			// The name "title" is what the function will be called in the template text.
+			"title": func(a int) int {
+				return a + 1
+			},
+		}
+		/*	tmpl = tmpl.Funcs(template.FuncMap{
+			"subtract": func(a, b int) int {
+				return a - b
+			},
+		})*/
 
-		err = tmpl.Execute(w, boardInfo)
+		boardInfo := p.boardInfo(inputInfo, actionInfos, outputInfo)
+		err = tmpl.Funcs(funcMap).Execute(w, boardInfo)
 		if err != nil {
 			logger.Errorf("can't execute html template: %s", err.Error())
 			_, _ = w.Write([]byte(fmt.Sprintf("<hmtl><body>can't render html: %s", err.Error())))
