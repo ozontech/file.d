@@ -303,11 +303,13 @@ func (p *Plugin) isAllowed(event *pipeline.Event) bool {
 
 	if len(p.config.TimeField_) != 0 {
 		tsValue := event.Root.Dig(p.config.TimeField_...).AsString()
-		t, err := time.Parse(p.format, tsValue)
-		if err != nil || ts.IsZero() {
-			p.logger.Warnf("can't parse field %q using format %s: %s", p.config.TimeField, p.config.TimeFieldFormat, tsValue)
-		} else {
-			ts = t
+		if tsValue != "" {
+			t, err := time.Parse(p.format, tsValue)
+			if err != nil || ts.IsZero() {
+				p.logger.Warnf("can't parse field %q using format %s: %s", p.config.TimeField, p.config.TimeFieldFormat, tsValue)
+			} else {
+				ts = t
+			}
 		}
 	}
 
