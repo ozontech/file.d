@@ -1,6 +1,7 @@
 package test
 
 import (
+	"bufio"
 	"os"
 	"path/filepath"
 	"testing"
@@ -57,4 +58,19 @@ func CheckNotZero(t *testing.T, target string, msg string) int64 {
 		assert.NotZero(t, info.Size(), msg)
 	}
 	return info.Size()
+}
+
+func CountLines(t *testing.T, pattern string) int {
+	matches, err := filepath.Glob(pattern)
+	assert.NoError(t, err)
+	lineCount := 0
+	for _, match := range matches {
+		file, err := os.Open(match)
+		assert.NoError(t, err, "file cannot open for reading")
+		fileScanner := bufio.NewScanner(file)
+		for fileScanner.Scan() {
+			lineCount++
+		}
+	}
+	return lineCount
 }
