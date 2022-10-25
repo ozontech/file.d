@@ -4,6 +4,9 @@ import (
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/plugin"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+	"time"
 )
 
 /*{ introduction
@@ -22,11 +25,21 @@ pipelines:
 ```
 }*/
 
+const (
+	tickTime = 1 * time.Second
+	first    = 1
+)
+
 type Plugin struct {
+	config *Config
+	logger *zap.SugaredLogger
 	plugin.NoMetricsPlugin
 }
 
-type Config struct{}
+type Config struct {
+	IsLogging  bool `json:"is_logging" default:"false"`
+	Thereafter int  `json:"thereafter" default:"100"`
+}
 
 func init() {
 	fd.DefaultPluginRegistry.RegisterAction(&pipeline.PluginStaticInfo{
@@ -39,12 +52,21 @@ func factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 	return &Plugin{}, &Config{}
 }
 
-func (p *Plugin) Start(_ pipeline.AnyConfig, _ *pipeline.ActionPluginParams) {
+func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginParams) {
+	p.config = config.(*Config)
+
+	// new logger with sampler
+	p.logger = zap.New(
+		zapcore.NewSamplerWithOptions(params.Logger.Desugar().Core(), tickTime, first, p.config.Thereafter),
+	).Named("fd").Named("action").Named("discard").Sugar()
 }
 
 func (p *Plugin) Stop() {
 }
 
-func (p *Plugin) Do(_ *pipeline.Event) pipeline.ActionResult {
+func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
+	if p.config.IsLogging {
+		p.logger.Infof("discarded event: %s", event.Root.EncodeToString())
+	}
 	return pipeline.ActionDiscard
 }
