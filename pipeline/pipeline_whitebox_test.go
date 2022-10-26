@@ -47,3 +47,6 @@ func (p *TestInputPlugin) PassEvent(event *Event) bool {
 	return true
 }
 func (p *TestInputPlugin) RegisterMetrics(ctl *metric.Ctl) {}
+func (p *TestInputPlugin) GetObservabilityInfo() (InPluginObservabilityInfo, error) {
+	return InPluginObservabilityInfo{}, nil
+}

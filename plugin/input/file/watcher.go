@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 
+	"go.uber.org/atomic"
+
 	"github.com/ozontech/file.d/longpanic"
 	"github.com/rjeczalik/notify"
 	"go.uber.org/zap"
@@ -18,6 +20,7 @@ type watcher struct {
 	watcherCh         chan notify.EventInfo
 	shouldWatchWrites bool
 	logger            *zap.SugaredLogger
+	fdCounter         atomic.Int64
 }
 
 type notifyFn func(e notify.Event, filename string, stat os.FileInfo)
@@ -93,6 +96,7 @@ func (w *watcher) tryAddPath(path string) {
 			continue
 		}
 
+		w.fdCounter.Inc()
 		w.notify(notify.Create, filepath.Join(path, file.Name()))
 	}
 }

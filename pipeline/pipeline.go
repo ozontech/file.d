@@ -193,11 +193,11 @@ func (p *Pipeline) IncMaxEventSizeExceeded() {
 }
 
 func (p *Pipeline) registerMetrics() {
-	p.inUseEventsMetric = p.metricsCtl.RegisterGauge("event_pool_in_use_events", "Count of pool events which is used for processing")
+	p.inUseEventsMetric = p.metricsCtl.RegisterGauge("event_pool_in_use_events", "FileCount of pool events which is used for processing")
 	p.eventPoolCapacityMetric = p.metricsCtl.RegisterGauge("event_pool_capacity", "Pool capacity value")
-	p.inputEventsCountMetric = p.metricsCtl.RegisterCounter("input_events_count", "Count of events on pipeline input")
+	p.inputEventsCountMetric = p.metricsCtl.RegisterCounter("input_events_count", "FileCount of events on pipeline input")
 	p.inputEventSizeMetric = p.metricsCtl.RegisterCounter("input_events_size", "Size of events on pipeline input")
-	p.outputEventsCountMetric = p.metricsCtl.RegisterCounter("output_events_count", "Count of events on pipeline output")
+	p.outputEventsCountMetric = p.metricsCtl.RegisterCounter("output_events_count", "FileCount of events on pipeline output")
 	p.outputEventSizeMetric = p.metricsCtl.RegisterCounter("output_events_size", "Size of events on pipeline output")
 	p.readOpsEventsSizeMetric = p.metricsCtl.RegisterCounter("read_ops_count", "Read OPS count")
 	p.wrongEventCRIFormatMetric = p.metricsCtl.RegisterCounter("wrong_event_cri_format", "Wrong event CRI format counter")
@@ -241,7 +241,6 @@ func (p *Pipeline) SetupHTTPHandlers(mux *http.ServeMux) {
 		mux.HandleFunc(fmt.Sprintf("%s/%d/%s", prefix, len(p.actionInfos)+1, hName), handler)
 	}
 
-	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.FS(pipelineTpl))))
 	mux.HandleFunc(fmt.Sprintf("%s/server_stats", prefix), p.serveBoardInfo(p.inputInfo, p.actionInfos, p.outputInfo))
 	mux.HandleFunc(fmt.Sprintf("%s/server_stats_json", prefix), p.serveBoardInfoJSON(p.inputInfo, p.actionInfos, p.outputInfo))
 }
@@ -589,7 +588,7 @@ type deltas struct {
 	deltaReads        float64
 }
 
-type logChangesDTO struct {
+type LogChangesDTO struct {
 	PipelineName     string        `json:"pipeline_name"`
 	Interval         time.Duration `json:"interval"`
 	ActiveProcs      int32         `json:"active_procs"`
@@ -607,7 +606,7 @@ type logChangesDTO struct {
 	MaxEventSize     int           `json:"max_event_size"`
 }
 
-func (p *Pipeline) logChanges(myDeltas *deltas) logChangesDTO {
+func (p *Pipeline) LogChanges(myDeltas *deltas) LogChangesDTO {
 	inputSize := p.inputSize.Load()
 	inputEvents := p.inputEvents.Load()
 	inUseEvents := p.eventPool.inUseEvents.Load()
@@ -618,16 +617,16 @@ func (p *Pipeline) logChanges(myDeltas *deltas) logChangesDTO {
 	readOps := int(myDeltas.deltaReads * float64(time.Second) / float64(interval))
 	tc := int64(math.Max(float64(inputSize), 1))
 
-	dto := logChangesDTO{
+	dto := LogChangesDTO{
 		PipelineName:     p.Name,
-		Interval:         interval / time.Second,                             // 'interval' show duration of this entire stat
-		ActiveProcs:      p.activeProcs.Load(),                               // how many procs working in this quantum of time
-		ProcsCount:       p.procCount.Load(),                                 // total procs count
-		InUseEvents:      int(inUseEvents),                                   // events in use right now
-		EventsCapacity:   p.settings.Capacity,                                // events total cap
-		DeltaInputEvents: int64(myDeltas.deltaInputEvents),                   // 'out' shows cumulative sum during last 5 sec
-		DeltaInputSize:   float64(myDeltas.deltaInputSize) / 1024.0 / 1024.0, //
-		Rate:             rate,                                               // 'rate' is throughput mb/sec during last 5 sec
+		Interval:         interval / time.Second,           // 'interval' show duration of this entire stat
+		ActiveProcs:      p.activeProcs.Load(),             // how many procs working in this quantum of time
+		ProcsCount:       p.procCount.Load(),               // total procs count
+		InUseEvents:      int(inUseEvents),                 // events in use right now
+		EventsCapacity:   p.settings.Capacity,              // events total cap
+		DeltaInputEvents: int64(myDeltas.deltaInputEvents), // 'out' shows cumulative sum during last 5 sec
+		DeltaInputSize:   myDeltas.deltaInputSize / 1024.0 / 1024.0,
+		Rate:             rate, // 'rate' is throughput mb/sec during last 5 sec
 		RateMB:           rateMb,
 		ReadOps:          readOps, // 'read ops' shows how many read ops/sec
 		InputEvents:      inputEvents,
@@ -685,7 +684,7 @@ func (p *Pipeline) maintenance() {
 
 		myDeltas := p.incMetrics(inputEvents, inputSize, outputEvents, outputSize, readOps)
 		p.setMetrics(p.eventPool.inUseEvents)
-		logChanges := p.logChanges(myDeltas)
+		logChanges := p.LogChanges(myDeltas)
 
 		p.logger.Infof(`%q pipeline stats interval=%ds, active procs=%d/%d, events outside pool=%d/%d, events in pool=%d/%d, out=%d|%.1fMb,`+
 			` rate=%d/s|%.1fMb/s, read ops=%d/s, total=%d|%.1fMb, avg size=%d, max size=%d`,

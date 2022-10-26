@@ -219,7 +219,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	}
 	p.pool = pool
 
-	p.batcher = pipeline.NewBatcher(pipeline.BatcherOptions{
+	p.batcher = pipeline.NewBatcher(&pipeline.BatcherOptions{
 		PipelineName:   params.PipelineName,
 		OutputType:     outPluginType,
 		OutFn:          p.out,

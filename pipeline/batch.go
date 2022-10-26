@@ -73,7 +73,7 @@ func (b *Batch) isReady() bool {
 }
 
 type Batcher struct {
-	opts BatcherOptions
+	opts *BatcherOptions
 	// todo graceful shutdown with context.
 	cancel context.CancelFunc
 
@@ -139,7 +139,7 @@ type (
 )
 
 // NewBatcher returns batcher that commits vector of messages.
-func NewBatcher(opts BatcherOptions, ctl *metric.Ctl) *Batcher {
+func NewBatcher(opts *BatcherOptions, ctl *metric.Ctl) *Batcher {
 	batcher := &Batcher{
 		opts:               opts,
 		committedCounters:  make(map[int64]int64),
@@ -164,7 +164,7 @@ func (b *Batcher) Start(ctx context.Context) {
 		})
 	}
 
-	// delete old commited counters
+	// delete old committed counters
 	go b.invalidateOldCommittedCounters(ctx, keepBatcherCommitsCount)
 
 	batcherTimeChan := make(chan BatcherTimeDTO, b.opts.Workers)
@@ -192,7 +192,6 @@ func (b *Batcher) invalidateOldCommittedCounters(ctx context.Context, seconds in
 			b.committedCountersMu.Unlock()
 		}
 	}
-
 }
 
 func (b *Batcher) updateCommitWaitValues(ctx context.Context, batcherTimeChan <-chan BatcherTimeDTO) {

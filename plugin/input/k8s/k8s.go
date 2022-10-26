@@ -158,3 +158,8 @@ func (p *Plugin) RegisterMetrics(ctl *metric.Ctl) {
 func (p *Plugin) PassEvent(event *pipeline.Event) bool {
 	return p.fp.PassEvent(event)
 }
+
+// GetObservabilityInfo returns info about file plugin.
+func (p *Plugin) GetObservabilityInfo() (pipeline.InPluginObservabilityInfo, error) {
+	return p.fp.GetObservabilityInfo()
+}

@@ -190,7 +190,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.config.timestampFieldFormat = format
 	p.config.levelField = pipeline.ByteToStringUnsafe(p.formatExtraField(nil, p.config.LevelField))
 
-	p.batcher = pipeline.NewBatcher(pipeline.BatcherOptions{
+	p.batcher = pipeline.NewBatcher(&pipeline.BatcherOptions{
 		PipelineName:        params.PipelineName,
 		OutputType:          outPluginType,
 		OutFn:               p.out,

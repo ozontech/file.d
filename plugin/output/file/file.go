@@ -118,7 +118,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.fileName = file[0 : len(file)-len(p.fileExtension)]
 	p.tsFileName = "%s" + "-" + p.fileName
 
-	p.batcher = pipeline.NewBatcher(pipeline.BatcherOptions{
+	p.batcher = pipeline.NewBatcher(&pipeline.BatcherOptions{
 		PipelineName:   params.PipelineName,
 		OutputType:     outPluginType,
 		OutFn:          p.out,

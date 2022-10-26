@@ -4,7 +4,7 @@ const content = `
             <img class="logo" src="/static/htmltpl/file.d.png" alt="FILE.D">
         </div>
         <div >
-            Join our community in <a class="link" href="https://t.me/file_d_community">Telegram</a>
+            Join our community in <a class="link" href="https://t.me/file_d_community" target="_blank">Telegram</a>
         </div>
 </div>
 </div>

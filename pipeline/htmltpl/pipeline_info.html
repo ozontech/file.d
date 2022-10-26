@@ -1,103 +1,13 @@
 <html>
 <head>
-    <style>
-        body {
-            color: white;
-            background: rgb(17, 18, 23);
-            padding: 20px;
-            font-size: 14px;
-            font-family: Roboto, Helvetica, Arial, sans-serif;
-        }
-
-        .row {
-            width: 100%;
-            padding: 20px;
-            background: #191b1f;
-        }
-
-        .inner-row {
-            background: #282b30;
-            padding: 10px;
-
-        }
-
-        .border {
-            border: 2px solid #65676d;
-            border-radius: 3px;
-        }
-
-        .border-tiny {
-            border: 1px solid #404144;
-            border-radius: 1px;
-        }
-
-        .with-bottom-margin {
-            margin: 0 0 15px;
-        }
-
-        .par {
-            margin: 0 0 5px 0
-        }
-
-        .statuses {
-            display: flex;
-            flex-direction: column;
-            padding: 5px 5px 5px 10px;
-        }
-
-        .status {
-            display: flex;
-            justify-content: space-between;
-        }
-
-        .header {
-            font-size: 20px;
-            padding: 0 0 10px 0;
-            display: flex;
-            align-items: flex-end;
-            justify-content: space-between;
-            margin: 0 0 10px;
-        }
-
-        .container {
-            display: flex;
-            justify-content: space-between;
-        }
-
-        .container-inner {
-            width: 45%;
-        }
-
-        .row-wrapper {
-            display: flex;
-            border: 1px solid #404144;
-            border-radius: 1px;
-            margin: 0 0 20px 0;
-        }
-
-        .logo-wrapper {
-            max-width: 150px;;
-        }
-
-        .logo {
-            max-width: 100%;
-        }
-
-        .link {
-            color: #0d8bf0
-        }
-
-        .col {
-            flex-direction: column;
-        }
-
-        .margin-bot {
-            margin: 0 0 30px;
-        }
-    </style>
+    <link rel="stylesheet" href="/static/htmltpl/style.css">
+    <link rel="stylesheet" href="/static/htmltpl/sortable_table.css">
 </head>
 <body>
-<div id="header"></div>
+<div id="header" style="height: 61px;"></div>
+<div class="margin-bot">
+    <a class="link header" href="/pipelines/"> Start page</a>
+</div>
 <div class="container">
     <div class="container-inner">
         <div>
@@ -122,6 +32,40 @@
             <div class="row-wrapper">
                 <div class="row">
                     <div class="par">plugin: {{ .In.PluginName }}</div>
+                    {{ if .In.WatchFiles}}
+                        <div class="par"> files: {{ .In.FdCount }}, file descriptors : {{ .In.FileCount }}</div>
+                        {{ $length := len .In.FDs }} {{ if ne $length 0 }}
+                        <button onclick="toggle_table()">Show/hide <f></f>d</button>
+                        <div class="table-wrap" id="hide" style="display: none">
+                            <table class="sortable">
+                                <thead>
+                                <tr>
+                                    <th>
+                                        <button class="btn-sort">
+                                            FD Count
+                                            <span aria-hidden="true"></span>
+                                        </button>
+                                    </th>
+                                    <th aria-sort="ascending">
+                                        <button class="btn-sort">
+                                            Filename
+                                            <span aria-hidden="true"></span>
+                                        </button>
+                                    </th>
+                                </tr>
+                                </thead>
+                                <tbody>
+                                {{ range $filename, $count := .In.FDs }}
+                                <tr>
+                                    <td class="num"> {{ $count }} </td>
+                                    <td> {{ $filename }}</td>
+                                </tr>
+                                {{ end }}
+                                </tbody>
+                            </table>
+                        </div>
+                        {{ end }}
+                    {{ end }}
                 </div>
             </div>
         </div>
@@ -183,5 +127,6 @@
     </div>
 </div>
 <script src="/static/htmltpl/header.js" ></script>
+<script src="/static/htmltpl/sortable_table.js" ></script>
 </body>
 </html>

@@ -110,7 +110,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.logger.Infof("workers count=%d, batch size=%d", p.config.WorkersCount_, p.config.BatchSize_)
 
 	p.producer = p.newProducer()
-	p.batcher = pipeline.NewBatcher(pipeline.BatcherOptions{
+	p.batcher = pipeline.NewBatcher(&pipeline.BatcherOptions{
 		PipelineName:   params.PipelineName,
 		OutputType:     outPluginType,
 		OutFn:          p.out,

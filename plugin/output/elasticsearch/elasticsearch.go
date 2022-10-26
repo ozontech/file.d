@@ -201,7 +201,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.maintenance(nil)
 
 	p.logger.Infof("starting batcher: timeout=%d", p.config.BatchFlushTimeout_)
-	p.batcher = pipeline.NewBatcher(pipeline.BatcherOptions{
+	p.batcher = pipeline.NewBatcher(&pipeline.BatcherOptions{
 		PipelineName:        params.PipelineName,
 		OutputType:          outPluginType,
 		OutFn:               p.out,

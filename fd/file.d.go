@@ -9,6 +9,8 @@ import (
 	_ "net/http/pprof"
 	"runtime"
 	"runtime/debug"
+	"text/template"
+	"time"
 
 	"github.com/bitly/go-simplejson"
 	"github.com/ozontech/file.d/buildinfo"
@@ -60,7 +62,7 @@ func (f *FileD) Start() {
 
 func (f *FileD) initMetrics() {
 	f.metricCtl = metric.New("file_d")
-	f.longPanicMetric = f.metricCtl.RegisterCounter("long_panic", "Count of panics in the LongPanic")
+	f.longPanicMetric = f.metricCtl.RegisterCounter("long_panic", "FileCount of panics in the LongPanic")
 	f.versionMetric = f.metricCtl.RegisterCounter("version", "", "version")
 	f.versionMetric.WithLabelValues(buildinfo.Version).Inc()
 	longpanic.SetOnPanicHandler(func(_ error) {
@@ -82,6 +84,9 @@ func (f *FileD) startPipelines() {
 	for name, config := range f.config.Pipelines {
 		f.addPipeline(name, config)
 	}
+
+	// register HTTP methods with info about all pipelines and app
+	f.setupCommonHTTPHandlers()
 	for _, p := range f.Pipelines {
 		p.Start()
 	}
@@ -303,4 +308,52 @@ func (f *FileD) serveFreeOsMem(_ http.ResponseWriter, _ *http.Request) {
 
 func (f *FileD) serveLiveReady(_ http.ResponseWriter, _ *http.Request) {
 	logger.Infof("live/ready OK")
+}
+
+func (f *FileD) setupCommonHTTPHandlers() {
+	mux := http.DefaultServeMux
+
+	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.FS(pipeline.PipelineTpl))))
+	mux.HandleFunc("/pipelines/", f.servePipelines())
+}
+
+type pipeInfo struct {
+	In         pipeline.InPluginObservabilityInfo
+	Out        pipeline.OutPluginObservabilityInfo
+	LogChanges pipeline.LogChangesDTO
+}
+
+func (f *FileD) servePipelines() func(http.ResponseWriter, *http.Request) {
+	return func(w http.ResponseWriter, _ *http.Request) {
+		tmpl, err := template.ParseFS(pipeline.PipelineTpl, "htmltpl/start_page.html")
+		if err != nil {
+			logger.Errorf("can't parse html template: %s", err.Error())
+			_, _ = fmt.Fprintf(w, "<hmtl><body>can't parse html: %s", err.Error())
+			return
+		}
+
+		pipesInfo := []pipeInfo{}
+		for _, pipe := range f.Pipelines {
+			info := pipeInfo{}
+			in, err := pipe.GetInput().GetObservabilityInfo()
+			if err != nil {
+				logger.Errorf("can't get pipeline observability info: %s", err.Error())
+				_, _ = fmt.Fprintf(w, "<hmtl><body>can't get pipeline observability info: %s", err.Error())
+				return
+			}
+			info.In = in
+			info.Out = pipe.GetOutput().GetObservabilityInfo()
+			info.LogChanges = pipe.LogChanges(pipe.GetDeltas())
+			info.LogChanges.Interval *= time.Second
+
+			pipesInfo = append(pipesInfo, info)
+		}
+
+		err = tmpl.Execute(w, pipesInfo)
+		if err != nil {
+			logger.Errorf("can't execute html template: %s", err.Error())
+			_, _ = fmt.Fprintf(w, "<hmtl><body>can't render html: %s", err.Error())
+			return
+		}
+	}
 }

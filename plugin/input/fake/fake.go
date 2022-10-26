@@ -68,3 +68,8 @@ func (p *Plugin) SetInFn(fn func()) { // *
 func (p *Plugin) PassEvent(event *pipeline.Event) bool {
 	return true
 }
+
+// GetObservabilityInfo returns plugin info.
+func (p *Plugin) GetObservabilityInfo() (pipeline.InPluginObservabilityInfo, error) {
+	return pipeline.InPluginObservabilityInfo{}, nil
+}

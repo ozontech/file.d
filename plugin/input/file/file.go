@@ -252,3 +252,25 @@ func (p *Plugin) PassEvent(event *pipeline.Event) bool {
 
 	return true
 }
+
+// GetObservabilityInfo returns info about file plugin.
+func (p *Plugin) GetObservabilityInfo() (pipeline.InPluginObservabilityInfo, error) {
+	offsets, err := p.jobProvider.offsetDB.load()
+	if err != nil {
+		return pipeline.InPluginObservabilityInfo{}, err
+	}
+
+	Files := make(map[string]int, len(offsets))
+	for _, offset := range offsets {
+		Files[offset.filename]++
+	}
+
+	return pipeline.InPluginObservabilityInfo{
+		WatcherInfo: pipeline.WatcherInfo{
+			IsValid:   true,
+			FdCount:   int64(len(offsets)),
+			FdInfo:    Files,
+			FileCount: int64(len(Files)),
+		},
+	}, nil
+}

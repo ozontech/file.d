@@ -22,6 +22,7 @@ type InputPlugin interface {
 	Commit(*Event)
 	RegisterMetrics(ctl *metric.Ctl)
 	PassEvent(event *Event) bool
+	GetObservabilityInfo() (InPluginObservabilityInfo, error)
 }
 
 type ActionPlugin interface {
@@ -149,4 +150,15 @@ const (
 
 type OutPluginObservabilityInfo struct {
 	BatcherInformation BatcherInfo
+}
+
+type InPluginObservabilityInfo struct {
+	WatcherInfo WatcherInfo
+}
+
+type WatcherInfo struct {
+	IsValid   bool
+	FdCount   int64
+	FileCount int64
+	FdInfo    map[string]int
 }

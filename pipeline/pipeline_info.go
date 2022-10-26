@@ -4,24 +4,30 @@ import (
 	"embed"
 	"encoding/json"
 	"fmt"
-	"github.com/ozontech/file.d/logger"
-	"go.uber.org/atomic"
 	"net/http"
 	"text/template"
+	"time"
+
+	"github.com/ozontech/file.d/logger"
+	"go.uber.org/atomic"
 )
 
 //go:embed htmltpl
-var pipelineTpl embed.FS
+var PipelineTpl embed.FS
 
 type pluginsObservabilityInfo struct {
 	In            inObservabilityInfo       `json:"in"`
 	Out           outObservabilityInfo      `json:"out"`
 	ActionPlugins []actionObservabilityInfo `json:"actions"`
-	LogChanges    logChangesDTO             `json:"log_changes"`
+	LogChanges    LogChangesDTO             `json:"log_changes"`
 }
 
 type inObservabilityInfo struct {
-	PluginName string `json:"plugin_name"`
+	PluginName string         `json:"plugin_name"`
+	WatchFiles bool           `json:"watch_files"`
+	FdCount    int64          `json:"fd_count"`
+	FileCount  int64          `json:"file_count"`
+	FDs        map[string]int `json:"fds"`
 }
 
 type outObservabilityInfo struct {
@@ -49,25 +55,40 @@ type actionEventStatus struct {
 	Color string `json:"color"`
 }
 
-func (p *Pipeline) boardInfo(
-	inputInfo *InputPluginInfo,
-	actionInfos []*ActionPluginStaticInfo,
-	outputInfo *OutputPluginInfo,
-) pluginsObservabilityInfo {
-	result := pluginsObservabilityInfo{}
-
+func (p *Pipeline) GetDeltas() *deltas {
 	inputEvents := newDeltaWrapper()
 	inputSize := newDeltaWrapper()
 	outputEvents := newDeltaWrapper()
 	outputSize := newDeltaWrapper()
 	readOps := newDeltaWrapper()
 
-	localDeltas := p.incMetrics(inputEvents, inputSize, outputEvents, outputSize, readOps)
-	result.LogChanges = p.logChanges(localDeltas)
+	return p.incMetrics(inputEvents, inputSize, outputEvents, outputSize, readOps)
+}
 
+func (p *Pipeline) boardInfo(
+	inputInfo *InputPluginInfo,
+	actionInfos []*ActionPluginStaticInfo,
+	outputInfo *OutputPluginInfo,
+) (pluginsObservabilityInfo, error) {
+	result := pluginsObservabilityInfo{}
+	changes := p.LogChanges(p.GetDeltas())
+	changes.Interval *= time.Second
+
+	result.LogChanges = changes
 	in := inObservabilityInfo{
 		PluginName: inputInfo.Type,
 	}
+	inInfo, err := p.input.GetObservabilityInfo()
+	if err != nil {
+		return pluginsObservabilityInfo{}, err
+	}
+	if inInfo.WatcherInfo.IsValid {
+		in.WatchFiles = true
+		in.FdCount = inInfo.WatcherInfo.FdCount
+		in.FileCount = inInfo.WatcherInfo.FileCount
+		in.FDs = inInfo.WatcherInfo.FdInfo
+	}
+
 	result.In = in
 
 	batcherCounters := make([]batcherCounter, 0, len(batcherTimeKeys))
@@ -144,7 +165,7 @@ func (p *Pipeline) boardInfo(
 		result.ActionPlugins = append(result.ActionPlugins, action)
 	}
 
-	return result
+	return result, nil
 }
 
 func (p *Pipeline) serveBoardInfoJSON(inputInfo *InputPluginInfo,
@@ -152,10 +173,13 @@ func (p *Pipeline) serveBoardInfoJSON(inputInfo *InputPluginInfo,
 	outputInfo *OutputPluginInfo) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Add("Content-Type", "application/json")
-		result := p.boardInfo(inputInfo, actionInfos, outputInfo)
+		result, err := p.boardInfo(inputInfo, actionInfos, outputInfo)
+		if err != nil {
+			_, _ = fmt.Fprintf(w, "can't get board info: %s", err.Error())
+		}
 		bytes, err := json.Marshal(result)
 		if err != nil {
-			_, _ = w.Write([]byte(fmt.Sprintf("can't get json info: %s", err.Error())))
+			_, _ = fmt.Fprintf(w, "can't get json info: %s", err.Error())
 		}
 
 		_, _ = w.Write(bytes)
@@ -167,30 +191,21 @@ func (p *Pipeline) serveBoardInfo(
 	actionInfos []*ActionPluginStaticInfo,
 	outputInfo *OutputPluginInfo) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, _ *http.Request) {
-		tmpl, err := template.ParseFS(pipelineTpl, "htmltpl/pipeline_info.html")
+		tmpl, err := template.ParseFS(PipelineTpl, "htmltpl/pipeline_info.html")
 		if err != nil {
 			logger.Errorf("can't parse html template: %s", err.Error())
-			_, _ = w.Write([]byte(fmt.Sprintf("<hmtl><body>can't parse html: %s", err.Error())))
+			_, _ = fmt.Fprintf(w, "<hmtl><body>can't parse html: %s", err.Error())
 			return
 		}
 
-		funcMap := template.FuncMap{
-			// The name "title" is what the function will be called in the template text.
-			"title": func(a int) int {
-				return a + 1
-			},
+		boardInfo, err := p.boardInfo(inputInfo, actionInfos, outputInfo)
+		if err != nil {
+			_, _ = fmt.Fprintf(w, "can't get board info: %s", err.Error())
 		}
-		/*	tmpl = tmpl.Funcs(template.FuncMap{
-			"subtract": func(a, b int) int {
-				return a - b
-			},
-		})*/
-
-		boardInfo := p.boardInfo(inputInfo, actionInfos, outputInfo)
-		err = tmpl.Funcs(funcMap).Execute(w, boardInfo)
+		err = tmpl.Execute(w, boardInfo)
 		if err != nil {
 			logger.Errorf("can't execute html template: %s", err.Error())
-			_, _ = w.Write([]byte(fmt.Sprintf("<hmtl><body>can't render html: %s", err.Error())))
+			_, _ = fmt.Fprintf(w, "<hmtl><body>can't render html: %s", err.Error())
 			return
 		}
 	}

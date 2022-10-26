@@ -60,7 +60,7 @@ func TestBatcher(t *testing.T) {
 	}}
 
 	ctl := metric.New("test")
-	batcher := NewBatcher(BatcherOptions{
+	batcher := NewBatcher(&BatcherOptions{
 		PipelineName:   "test",
 		OutputType:     "devnull",
 		OutFn:          batcherOut,
@@ -131,7 +131,7 @@ func TestBatcherMaxSize(t *testing.T) {
 	}}
 
 	ctl := metric.New("test")
-	batcher := NewBatcher(BatcherOptions{
+	batcher := NewBatcher(&BatcherOptions{
 		PipelineName:   "test",
 		OutputType:     "devnull",
 		OutFn:          batcherOut,
