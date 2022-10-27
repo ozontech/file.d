@@ -1,12 +1,13 @@
 package discard
 
 import (
+	"time"
+
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/plugin"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
-	"time"
 )
 
 /*{ introduction
@@ -26,7 +27,7 @@ pipelines:
 }*/
 
 const (
-	tickTime = 1 * time.Second
+	tickTime = time.Second
 	first    = 1
 )
 
@@ -55,7 +56,6 @@ func factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginParams) {
 	p.config = config.(*Config)
 
-	// new logger with sampler
 	p.logger = zap.New(
 		zapcore.NewSamplerWithOptions(params.Logger.Desugar().Core(), tickTime, first, p.config.Thereafter),
 	).Named("fd").Named("action").Named("discard").Sugar()

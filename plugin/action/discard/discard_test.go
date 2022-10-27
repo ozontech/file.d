@@ -22,7 +22,7 @@ func TestDiscardAnd(t *testing.T) {
 		},
 	}
 
-	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, nil, pipeline.MatchModeAnd, conds, false))
+	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, &Config{}, pipeline.MatchModeAnd, conds, false))
 
 	wg := &sync.WaitGroup{}
 	wg.Add(10)
@@ -66,7 +66,7 @@ func TestDiscardOr(t *testing.T) {
 		},
 	}
 
-	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, nil, pipeline.MatchModeOr, conds, false))
+	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, &Config{}, pipeline.MatchModeOr, conds, false))
 
 	wg := &sync.WaitGroup{}
 	wg.Add(8)
@@ -110,7 +110,7 @@ func TestDiscardRegex(t *testing.T) {
 		},
 	}
 
-	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, nil, pipeline.MatchModeOr, conds, false))
+	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, &Config{}, pipeline.MatchModeOr, conds, false))
 
 	wg := &sync.WaitGroup{}
 	wg.Add(11)
@@ -151,7 +151,7 @@ func TestDiscardMatchInvert(t *testing.T) {
 		},
 	}
 
-	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, nil, pipeline.MatchModeAnd, conds, true))
+	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, &Config{}, pipeline.MatchModeAnd, conds, true))
 
 	wg := &sync.WaitGroup{}
 	wg.Add(9)
