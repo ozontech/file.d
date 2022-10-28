@@ -13,7 +13,7 @@ jobs:
       fail-fast: false
       matrix:
         go:
-          - 1.18
+          - 1.19
         arch:
           - amd64
         runner:
@@ -90,7 +90,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v3
         with:
-          go-version: 1.18
+          go-version: 1.19
 
       - name: Lint
         uses: golangci/golangci-lint-action@v3
@@ -108,7 +108,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v3
         with:
-          go-version: 1.18
+          go-version: 1.19
 
       - name: Get Go environment
         id: go-env
@@ -143,7 +143,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v3
         with:
-          go-version: 1.18
+          go-version: 1.19
 
       - name: Get Go environment
         id: go-env
