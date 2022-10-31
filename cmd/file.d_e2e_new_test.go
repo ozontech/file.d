@@ -1,10 +1,12 @@
-//go:build e2e
+//go:build e2e_new
 
 package main
 
 import (
 	"bytes"
+	"context"
 	"fmt"
+	"log"
 	http2 "net/http"
 	"os"
 	"path"
@@ -18,6 +20,7 @@ import (
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/test"
 	uuid "github.com/satori/go.uuid"
+	"github.com/segmentio/kafka-go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -69,6 +72,18 @@ func TestE2EStabilityWorkCase(t *testing.T) {
 			},
 			cfgPath:  "./../testdata/config/e2e_cfg/http_file.yaml",
 			pipeName: "test_http_file",
+		},
+		{
+			e2eTest: &kafkaFile{
+				topic:             "quickstart5",
+				broker:            "localhost:9092",
+				outputNamePattern: "/file-d.log",
+				lines:             500,
+				retTime:           "1s",
+				partition:         4,
+			},
+			cfgPath:  "/Users/dsmolonogov/GolandProjects/file.d/testdata/config/e2e_cfg/kafka_file.yaml",
+			pipeName: "test_kafka_file",
 		},
 	}
 
@@ -178,4 +193,61 @@ func (h *httpFile) Validate(t *testing.T) {
 	matches := test.GetMatches(t, logFilePattern)
 	assert.True(t, len(matches) > 0, "There are no files")
 	require.Equal(t, h.count*h.lines, test.CountLines(t, logFilePattern))
+}
+
+// Struct for kafka-file plugin e2e test
+type kafkaFile struct {
+	topic             string
+	broker            string
+	filesDir          string
+	outputNamePattern string
+	lines             int
+	retTime           string
+	partition         int
+}
+
+func (k *kafkaFile) AddConfigSettings(t *testing.T, conf *cfg.Config, pipeName string) {
+	k.filesDir = t.TempDir()
+	output := conf.Pipelines[pipeName].Raw.Get("output")
+	output.Set("target_file", k.filesDir+k.outputNamePattern)
+	output.Set("retention_interval", k.retTime)
+}
+
+func (k *kafkaFile) Send(t *testing.T) {
+	time.Sleep(10 * time.Second)
+	connections := make([]*kafka.Conn, k.partition)
+	for i := 0; i < k.partition; i++ {
+		conn, err := kafka.DialLeader(context.Background(), "tcp", "localhost:9092", k.topic, i)
+		if err != nil {
+			log.Fatal("failed to dial leader:", err)
+		}
+		conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+		connections[i] = conn
+	}
+
+	for i := 0; i < k.lines; i++ {
+		for _, conn := range connections {
+			_, err := conn.WriteMessages(
+				kafka.Message{Value: []byte(`{"key":"value"}`)},
+			)
+			if err != nil {
+				log.Fatal("failed to write messages:", err)
+			}
+		}
+	}
+
+	for _, conn := range connections {
+		if err := conn.Close(); err != nil {
+			log.Fatal("failed to close writer:", err)
+		}
+	}
+	// waiting for files to be processed
+	time.Sleep(time.Second * 10)
+}
+
+func (k *kafkaFile) Validate(t *testing.T) {
+	logFilePattern := fmt.Sprintf("%s/%s*%s", k.filesDir, "file-d", ".log")
+	matches := test.GetMatches(t, logFilePattern)
+	assert.True(t, len(matches) > 0, "There are no files")
+	require.Equal(t, k.lines*k.partition, test.CountLines(t, logFilePattern))
 }

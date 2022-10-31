@@ -1,0 +1,12 @@
+pipelines:
+  test_kafka_file:
+    input:
+      type: kafka
+      brokers: [
+        'localhost:9092'
+      ]
+      topics: [
+        'quickstart5',
+      ]
+    output:
+      type: file
