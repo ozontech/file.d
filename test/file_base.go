@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/stretchr/testify/assert"
@@ -73,4 +74,14 @@ func CountLines(t *testing.T, pattern string) int {
 		}
 	}
 	return lineCount
+}
+
+func WaitProcessEvents(t *testing.T, count int, checkInterval, maxTime time.Duration, pattern string) {
+	tf := time.Now().Add(maxTime)
+	for tf.After(time.Now()) {
+		if count == CountLines(t, pattern) {
+			return
+		}
+		time.Sleep(checkInterval)
+	}
 }
