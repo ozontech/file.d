@@ -193,7 +193,7 @@ func (p *Pipeline) IncMaxEventSizeExceeded() {
 }
 
 func (p *Pipeline) registerMetrics() {
-	p.inUseEventsMetric = p.metricsCtl.RegisterGauge("event_pool_in_use_events", "FileCount of pool events which is used for processing")
+	p.inUseEventsMetric = p.metricsCtl.RegisterGauge("event_pool_in_use_events", "Count of pool events which is used for processing")
 	p.eventPoolCapacityMetric = p.metricsCtl.RegisterGauge("event_pool_capacity", "Pool capacity value")
 	p.inputEventsCountMetric = p.metricsCtl.RegisterCounter("input_events_count", "FileCount of events on pipeline input")
 	p.inputEventSizeMetric = p.metricsCtl.RegisterCounter("input_events_size", "Size of events on pipeline input")
@@ -588,7 +588,7 @@ type deltas struct {
 	deltaReads        float64
 }
 
-type LogChangesDTO struct {
+type ChangesDTO struct {
 	PipelineName     string        `json:"pipeline_name"`
 	Interval         time.Duration `json:"interval"`
 	ActiveProcs      int32         `json:"active_procs"`
@@ -606,7 +606,8 @@ type LogChangesDTO struct {
 	MaxEventSize     int           `json:"max_event_size"`
 }
 
-func (p *Pipeline) LogChanges(myDeltas *deltas) LogChangesDTO {
+// GetChanges returns info about pipeline.
+func (p *Pipeline) GetChanges(myDeltas *deltas) ChangesDTO {
 	inputSize := p.inputSize.Load()
 	inputEvents := p.inputEvents.Load()
 	inUseEvents := p.eventPool.inUseEvents.Load()
@@ -617,7 +618,7 @@ func (p *Pipeline) LogChanges(myDeltas *deltas) LogChangesDTO {
 	readOps := int(myDeltas.deltaReads * float64(time.Second) / float64(interval))
 	tc := int64(math.Max(float64(inputSize), 1))
 
-	dto := LogChangesDTO{
+	dto := ChangesDTO{
 		PipelineName:     p.Name,
 		Interval:         interval / time.Second,           // 'interval' show duration of this entire stat
 		ActiveProcs:      p.activeProcs.Load(),             // how many procs working in this quantum of time
@@ -684,21 +685,21 @@ func (p *Pipeline) maintenance() {
 
 		myDeltas := p.incMetrics(inputEvents, inputSize, outputEvents, outputSize, readOps)
 		p.setMetrics(p.eventPool.inUseEvents)
-		logChanges := p.LogChanges(myDeltas)
+		changes := p.GetChanges(myDeltas)
 
 		p.logger.Infof(`%q pipeline stats interval=%ds, active procs=%d/%d, events outside pool=%d/%d, events in pool=%d/%d, out=%d|%.1fMb,`+
 			` rate=%d/s|%.1fMb/s, read ops=%d/s, total=%d|%.1fMb, avg size=%d, max size=%d`,
-			logChanges.PipelineName,                       // pipeline name
-			logChanges.Interval,                           // 'interval' show duration of this entire stat
-			logChanges.ActiveProcs, logChanges.ProcsCount, // how many procs working in this quantum of time
-			logChanges.InUseEvents, logChanges.EventsCapacity, // 'events outside pool' counts events is use
-			logChanges.EventsCapacity-logChanges.InUseEvents, logChanges.EventsCapacity, // 'events in pool' counts free events in pool
-			logChanges.DeltaInputEvents, logChanges.DeltaInputSize, //  'out' shows cumulative sum during last 5 sec
-			logChanges.Rate, logChanges.RateMB, // 'rate' is throughput mb/sec during last 5 sec
-			logChanges.ReadOps,                                // 'read ops' shows how many read ops/sec
-			logChanges.InputEvents, logChanges.InputTotalSize, // 'total' shows events counter and overall size during
-			logChanges.AvgEventSize, // 'avg size' shows agv size of event
-			logChanges.MaxEventSize) // 'max size' shows maximum size of event
+			changes.PipelineName,                    // pipeline name
+			changes.Interval,                        // 'interval' show duration of this entire stat
+			changes.ActiveProcs, changes.ProcsCount, // how many procs working in this quantum of time
+			changes.InUseEvents, changes.EventsCapacity, // 'events outside pool' counts events is use
+			changes.EventsCapacity-changes.InUseEvents, changes.EventsCapacity, // 'events in pool' counts free events in pool
+			changes.DeltaInputEvents, changes.DeltaInputSize, //  'out' shows cumulative sum during last 5 sec
+			changes.Rate, changes.RateMB, // 'rate' is throughput mb/sec during last 5 sec
+			changes.ReadOps,                             // 'read ops' shows how many read ops/sec
+			changes.InputEvents, changes.InputTotalSize, // 'total' shows events counter and overall size during
+			changes.AvgEventSize, // 'avg size' shows agv size of event
+			changes.MaxEventSize) // 'max size' shows maximum size of event
 
 		if len(p.inSample) > 0 {
 			p.logger.Infof("%q pipeline input event sample: %s", p.Name, p.inSample)

@@ -76,6 +76,13 @@ const (
 	offsetsOpReset                     // * `reset` – resets an offset to the beginning of the file
 )
 
+const (
+	// observability consts
+	FdCount   = "FdCount"
+	FdInfo    = "FdInfo"
+	FileCount = "FileCount"
+)
+
 type Config struct {
 	// ! config-params
 	// ^ config-params
@@ -119,7 +126,10 @@ type Config struct {
 	PersistenceMode  string `json:"persistence_mode" default:"async" options:"async|sync"` // *
 	PersistenceMode_ persistenceMode
 
-	AsyncInterval  cfg.Duration `json:"async_interval" default:"1s" parse:"duration"` // *! @3 @4 @5 @6 <br> <br> Offsets saving interval. Only used if `persistence_mode` is set to `async`.
+	// > @3@4@5@6
+	// >
+	// > Offsets saving interval. Only used if `persistence_mode` is set to `async`.
+	AsyncInterval  cfg.Duration `json:"async_interval" default:"1s" parse:"duration"` // *
 	AsyncInterval_ time.Duration
 
 	// > @3@4@5@6
@@ -266,11 +276,8 @@ func (p *Plugin) GetObservabilityInfo() (pipeline.InPluginObservabilityInfo, err
 	}
 
 	return pipeline.InPluginObservabilityInfo{
-		WatcherInfo: pipeline.WatcherInfo{
-			IsValid:   true,
-			FdCount:   int64(len(offsets)),
-			FdInfo:    Files,
-			FileCount: int64(len(Files)),
-		},
+		FdCount:   int64(len(offsets)),
+		FdInfo:    Files,
+		FileCount: int64(len(Files)),
 	}, nil
 }

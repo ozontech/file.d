@@ -4,30 +4,32 @@ import (
 	"embed"
 	"encoding/json"
 	"fmt"
+	"html/template"
 	"net/http"
-	"text/template"
 	"time"
 
 	"github.com/ozontech/file.d/logger"
 	"go.uber.org/atomic"
 )
 
-//go:embed htmltpl
+//go:embed template
 var PipelineTpl embed.FS
+
+const (
+	InfoPipelineHTML = "template/html/pipeline_info.html"
+	StartPageHTML    = "template/html/start_page.html"
+)
 
 type pluginsObservabilityInfo struct {
 	In            inObservabilityInfo       `json:"in"`
 	Out           outObservabilityInfo      `json:"out"`
 	ActionPlugins []actionObservabilityInfo `json:"actions"`
-	LogChanges    LogChangesDTO             `json:"log_changes"`
+	Changes       ChangesDTO                `json:"changes"`
 }
 
 type inObservabilityInfo struct {
-	PluginName string         `json:"plugin_name"`
-	WatchFiles bool           `json:"watch_files"`
-	FdCount    int64          `json:"fd_count"`
-	FileCount  int64          `json:"file_count"`
-	FDs        map[string]int `json:"fds"`
+	PluginName string `json:"plugin_name"`
+	InfoMap    map[string]any
 }
 
 type outObservabilityInfo struct {
@@ -71,25 +73,19 @@ func (p *Pipeline) boardInfo(
 	outputInfo *OutputPluginInfo,
 ) (pluginsObservabilityInfo, error) {
 	result := pluginsObservabilityInfo{}
-	changes := p.LogChanges(p.GetDeltas())
+	changes := p.GetChanges(p.GetDeltas())
 	changes.Interval *= time.Second
 
-	result.LogChanges = changes
-	in := inObservabilityInfo{
-		PluginName: inputInfo.Type,
-	}
+	result.Changes = changes
 	inInfo, err := p.input.GetObservabilityInfo()
 	if err != nil {
 		return pluginsObservabilityInfo{}, err
 	}
-	if inInfo.WatcherInfo.IsValid {
-		in.WatchFiles = true
-		in.FdCount = inInfo.WatcherInfo.FdCount
-		in.FileCount = inInfo.WatcherInfo.FileCount
-		in.FDs = inInfo.WatcherInfo.FdInfo
-	}
 
-	result.In = in
+	result.In = inObservabilityInfo{
+		PluginName: inputInfo.Type,
+		InfoMap:    inInfo,
+	}
 
 	batcherCounters := make([]batcherCounter, 0, len(batcherTimeKeys))
 	obsInfo := p.output.GetObservabilityInfo()
@@ -190,11 +186,14 @@ func (p *Pipeline) serveBoardInfo(
 	inputInfo *InputPluginInfo,
 	actionInfos []*ActionPluginStaticInfo,
 	outputInfo *OutputPluginInfo) func(http.ResponseWriter, *http.Request) {
+	tmpl, parseFSErr := template.ParseFS(PipelineTpl, InfoPipelineHTML)
+	if parseFSErr != nil {
+		logger.Errorf("can't parse html template: %s", parseFSErr.Error())
+	}
+
 	return func(w http.ResponseWriter, _ *http.Request) {
-		tmpl, err := template.ParseFS(PipelineTpl, "htmltpl/pipeline_info.html")
-		if err != nil {
-			logger.Errorf("can't parse html template: %s", err.Error())
-			_, _ = fmt.Fprintf(w, "<hmtl><body>can't parse html: %s", err.Error())
+		if parseFSErr != nil {
+			_, _ = fmt.Fprintf(w, "<html><body>can't parse html: %s</body></html>", parseFSErr.Error())
 			return
 		}
 
@@ -205,7 +204,7 @@ func (p *Pipeline) serveBoardInfo(
 		err = tmpl.Execute(w, boardInfo)
 		if err != nil {
 			logger.Errorf("can't execute html template: %s", err.Error())
-			_, _ = fmt.Fprintf(w, "<hmtl><body>can't render html: %s", err.Error())
+			_, _ = fmt.Fprintf(w, "<html><body>can't render html: %s</body></html>", err.Error())
 			return
 		}
 	}

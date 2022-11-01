@@ -74,7 +74,10 @@ Save operation takes three steps:
 
 <br>
 
-**`async_interval`** ! *`cfg.Duration`*  *`default=1s`*    <br> <br> Offsets saving interval. Only used if `persistence_mode` is set to `async`.
+**`async_interval`** *`cfg.Duration`* *`default=1s`* 
+
+Offsets saving interval. Only used if `persistence_mode` is set to `async`.
+
 <br>
 
 **`read_buffer_size`** *`int`* *`default=131072`* 

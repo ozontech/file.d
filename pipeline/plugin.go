@@ -152,13 +152,7 @@ type OutPluginObservabilityInfo struct {
 	BatcherInformation BatcherInfo
 }
 
-type InPluginObservabilityInfo struct {
-	WatcherInfo WatcherInfo
-}
-
-type WatcherInfo struct {
-	IsValid   bool
-	FdCount   int64
-	FileCount int64
-	FdInfo    map[string]int
-}
+// InPluginObservabilityInfo is map with `any` value type.
+// Pipeline doesn't work with Plugin inner details.
+// Instead of this html template parses map.
+type InPluginObservabilityInfo map[string]any

@@ -1,0 +1,129 @@
+<html>
+<head>
+    <link rel="stylesheet" href="/static/template/css/style.css">
+    <link rel="stylesheet" href="/static/template/css/sortable_table.css">
+</head>
+<body>
+<div id="header" style="height: 61px;"></div>
+<div class="margin-bot">
+    <a class="link header" href="/pipelines"> Start page</a>
+</div>
+<div class="container">
+    <div class="container-inner">
+        <div>
+            <div class="header">Pipeline info </div>
+            <div class="row-wrapper border-tiny">
+                <div class="row">
+                    <div class="par">pipeline name: {{ .Changes.PipelineName }}</div>
+                    <div class="par">interval: {{ .Changes.Interval }}</div>
+                    <div class="par">active procs: {{ .Changes.ActiveProcs }} | {{ .Changes.ProcsCount }}</div>
+                    <div class="par">events in use: {{ .Changes.InUseEvents }} | {{ .Changes.EventsCapacity }}</div>
+                    <div class="par">out: {{ .Changes.DeltaInputEvents }} | {{ printf "%.1f" .Changes.DeltaInputSize }}MB</div>
+                    <div class="par">rate: {{ .Changes.Rate }}/s | {{ printf "%.1f" .Changes.RateMB }}MB/s</div>
+                    <div class="par">read ops: {{ .Changes.ReadOps }} </div>
+                    <div class="par">total: {{ .Changes.InputEvents }} | {{ printf "%.1f" .Changes.InputTotalSize }}MB</div>
+                    <div class="par">avg event size: {{ .Changes.AvgEventSize }} </div>
+                    <div class="par">max event size: {{ .Changes.MaxEventSize }} </div>
+                </div>
+            </div>
+        </div>
+        <div>
+            <div class="header">In plugin</div>
+            <div class="row-wrapper">
+                <div class="row">
+                    <div class="par">plugin: {{ .In.PluginName }}</div>
+                    <div class="par"> files: {{ index .In.InfoMap `FdCount` }}, file descriptors : {{ index .In.InfoMap `FileCount` }}</div>
+                    {{ $length := len .In.InfoMap.FdInfo }} {{ if ne $length 0 }}
+                    <button onclick="toggle_table()">Show/hide fd</button>
+                    <div class="table-wrap" id="hide" style="display: none">
+                        <table class="sortable">
+                            <thead>
+                            <tr>
+                                <th>
+                                    <button class="btn-sort">
+                                        FD Count
+                                        <span aria-hidden="true"></span>
+                                    </button>
+                                </th>
+                                <th aria-sort="ascending">
+                                    <button class="btn-sort">
+                                        Filename
+                                        <span aria-hidden="true"></span>
+                                    </button>
+                                </th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            {{ range $filename, $count := .In.InfoMap.FdInfo }}
+                            <tr>
+                                <td class="num"> {{ $count }} </td>
+                                <td> {{ $filename }}</td>
+                            </tr>
+                            {{ end }}
+                            </tbody>
+                        </table>
+                    </div>
+                    {{ end }}
+                </div>
+            </div>
+        </div>
+        <div>
+            <div class="header">Out plugin</div>
+            <div class="row-wrapper">
+                <div class="row">
+                    <div class="par">plugin: {{ .Out.PluginName }}</div>
+                    <div class="par">Batcher min-max commit time in 5 min:</div>
+                    <div class="inner-row with-bottom-margin border">
+                        <div class="par">Min wait:</div>
+                        <div class="par">{{ .Out.BatcherMinWait.Duration }} at {{ .Out.BatcherMinWait.TimeRFC3339 }}
+                        </div>
+                        <div class="par">Max wait:</div>
+                        <div class="par">{{ .Out.BatcherMaxWait.Duration }} at {{ .Out.BatcherMaxWait.TimeRFC3339 }}
+                        </div>
+                    </div>
+
+                    <div class="par">Batches committed:</div>
+                    <div class="inner-row with-bottom-margin border">
+                        {{ range .Out.BatcherCounters}}
+                        <div class="par"> {{ .BatchesCommitted }} in {{ .Seconds }} seconds</div>
+                        {{end}}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container-inner">
+        <div class="header">Action plugins</div>
+        {{ range .ActionPlugins }}
+        <div class="row-wrapper">
+            {{ if .Tracked }}
+            <div class="row">
+                <div class="par">plugin: {{ .PluginName }}</div>
+                <div class="par">metric: {{ .MetricName }}</div>
+            </div>
+            <div class="row">
+                <div class="par">statuses:</div>
+                <div class="inner-row border">
+                    {{ range .Statuses }}
+                    <div class="status" style="color:{{.Color}};">
+                        <div>{{ .Name }}:</div>
+                        <div>{{ .Count}}</div>
+                    </div>
+                    {{ end }}
+                </div>
+            </div>
+            {{ else }}
+            <div class="row">
+                <div class="par">plugin: {{ .PluginName }}</div>
+                <div class="par">"metric_name" didn't set in config.</div>
+            </div>
+            {{ end }}
+        </div>
+        {{ end }}
+    </div>
+</div>
+<script src="/static/template/js/header.js" ></script>
+<script src="/static/template/js/sortable_table.js" ></script>
+</body>
+</html>

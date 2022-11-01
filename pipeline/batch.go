@@ -92,15 +92,16 @@ type Batcher struct {
 	commitSeq int64
 
 	// for observability purposes
-	committedCountersMu sync.RWMutex
 	// committedCounters contains pair: timestamp - number of commits during timestamp
-	committedCounters map[int64]int64
+	committedCountersMu sync.RWMutex
+	committedCounters   map[int64]int64
 
 	// batcherTimeWaitMap contains two timestamps and durations of fastest and slowest committed batches during
 	// last 5 minutes. At index 0 lies fastest at index 1 lies slowest
-	batcherTimeWaitMap map[int64]BatcherTimeDTO
 	batcherTimeMu      sync.RWMutex
-	batcherTimeChan    chan BatcherTimeDTO
+	batcherTimeWaitMap map[int64]BatcherTimeDTO
+
+	batcherTimeChan chan BatcherTimeDTO
 
 	// metrics
 	batchesCommittedMetric *prometheus.CounterVec
