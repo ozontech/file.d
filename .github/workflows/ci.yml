@@ -180,10 +180,10 @@ jobs:
       - name: Create containers
         uses: isbang/compose-action@v1.4.0
         with:
-          compose-file: "./.github/workflows/e2e_test/docker-compose-kafka.yml"
+          compose-file: "./e2e/kafka_file/docker-compose-kafka.yml"
 
       - name: Create Kafka Topic
-        run: docker exec e2e_test_kafka_1 kafka-topics.sh --bootstrap-server kafka:9092 --create --topic quickstart5 --partitions 4
+        run: docker exec kafka_file_kafka_1 kafka-topics.sh --bootstrap-server kafka:9092 --create --topic quickstart5 --partitions 4
 
       - name: Run e2e tests
         run: go test ./cmd/... -coverprofile=profile_e2e.out -covermode=atomic --tags=e2e_new -count=1 -timeout=3m
