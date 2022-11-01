@@ -162,3 +162,22 @@ jobs:
 
       - name: Download dependencies
         run: go mod download && go mod tidy
+
+  e2e_test:
+    runs-on: ubuntu-latest
+    needs:
+      - test
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Create containers
+        uses: isbang/compose-action@v1.4.0
+        with:
+          compose-file: "./.github/workflows/e2e_test/docker-compose-kafka.yml"
+
+      - name: Create Kafka Topic
+        run: docker exec e2e_test_kafka_1 kafka-topics.sh --bootstrap-server kafka:9092 --create --topic quickstart5 --partitions 4
+
+      - name: Run e2e tests
+        run: go test ./cmd/... --tags=e2e_new -count=1 -timeout=2m
