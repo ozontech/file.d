@@ -82,7 +82,7 @@ func TestE2EStabilityWorkCase(t *testing.T) {
 				retTime:           "1s",
 				partition:         4,
 			},
-			cfgPath:  "/Users/dsmolonogov/GolandProjects/file.d/testdata/config/e2e_cfg/kafka_file.yaml",
+			cfgPath:  "./../testdata/config/e2e_cfg/kafka_file.yaml",
 			pipeName: "test_kafka_file",
 		},
 	}
@@ -221,7 +221,7 @@ func (k *kafkaFile) Send(t *testing.T) {
 		if err != nil {
 			log.Fatal("failed to dial leader:", err)
 		}
-		conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+		conn.SetWriteDeadline(time.Now().Add(20 * time.Second))
 		connections[i] = conn
 	}
 
