@@ -3,6 +3,7 @@ package pipeline
 import (
 	"net/http"
 	"regexp"
+	"strings"
 
 	"github.com/ozontech/file.d/metric"
 	"go.uber.org/zap"
@@ -119,16 +120,33 @@ type MatchConditions []MatchCondition
 type MatchCondition struct {
 	// Slice for nested fields. Separator is a dot symbol.
 	Field  []string
-	Value  string
+	Values []string
 	Regexp *regexp.Regexp
+}
+
+func (mc *MatchCondition) valueExists(s string, byPrefix bool) bool {
+	var match bool
+	for i := range mc.Values {
+		if byPrefix {
+			match = strings.HasPrefix(s, mc.Values[i])
+		} else {
+			match = mc.Values[i] == s
+		}
+		if match {
+			break
+		}
+	}
+	return match
 }
 
 type MatchMode int
 
 const (
-	MatchModeAnd     MatchMode = 0
-	MatchModeOr      MatchMode = 1
-	MatchModeUnknown MatchMode = 2
+	MatchModeAnd MatchMode = iota
+	MatchModeOr
+	MatchModeAndPrefix
+	MatchModeOrPrefix
+	MatchModeUnknown
 )
 
 // PluginSelector the only valid value for now is ByNameSelector

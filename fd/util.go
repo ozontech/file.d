@@ -2,6 +2,7 @@ package fd
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/bitly/go-simplejson"
@@ -84,16 +85,20 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 	}
 }
 
-func extractMatchMode(actionJSON *simplejson.Json) (pipeline.MatchMode, error) {
+func extractMatchMode(actionJSON *simplejson.Json) pipeline.MatchMode {
 	mm := actionJSON.Get("match_mode").MustString()
-	if mm != "or" && mm != "and" && mm != "" {
-		return pipeline.MatchModeUnknown, fmt.Errorf("unknown match mode %q must be or/and", mm)
+	switch strings.ToLower(strings.TrimSpace(mm)) {
+	case "", "and":
+		return pipeline.MatchModeAnd
+	case "or":
+		return pipeline.MatchModeOr
+	case "and_prefix":
+		return pipeline.MatchModeAndPrefix
+	case "or_prefix":
+		return pipeline.MatchModeOrPrefix
+	default:
+		return pipeline.MatchModeUnknown
 	}
-	matchMode := pipeline.MatchModeAnd
-	if mm == "or" {
-		matchMode = pipeline.MatchModeOr
-	}
-	return matchMode, nil
 }
 
 func extractMatchInvert(actionJSON *simplejson.Json) (bool, error) {
@@ -104,22 +109,37 @@ func extractMatchInvert(actionJSON *simplejson.Json) (bool, error) {
 func extractConditions(condJSON *simplejson.Json) (pipeline.MatchConditions, error) {
 	conditions := make(pipeline.MatchConditions, 0)
 	for field := range condJSON.MustMap() {
-		value := condJSON.Get(field).MustString()
+		value := condJSON.Get(field).Interface()
 
 		condition := pipeline.MatchCondition{
 			Field: cfg.ParseFieldSelector(field),
 		}
 
-		if len(value) > 0 && value[0] == '/' {
-			r, err := cfg.CompileRegex(value)
-			if err != nil {
-				return nil, fmt.Errorf("can't compile regexp %s: %w", value, err)
+		if value, ok := value.(string); ok {
+			if len(value) > 0 && value[0] == '/' {
+				r, err := cfg.CompileRegex(value)
+				if err != nil {
+					return nil, fmt.Errorf("can't compile regexp %s: %w", value, err)
+				}
+				condition.Regexp = r
+			} else {
+				condition.Values = []string{value}
 			}
-			condition.Regexp = r
-		} else {
-			condition.Value = value
+
+			conditions = append(conditions, condition)
+			continue
 		}
-		conditions = append(conditions, condition)
+
+		if vals, ok := value.([]any); ok {
+			condition.Values = make([]string, 0, len(vals))
+
+			for _, val := range vals {
+				condition.Values = append(condition.Values, val.(string))
+			}
+
+			conditions = append(conditions, condition)
+			continue
+		}
 	}
 
 	return conditions, nil
