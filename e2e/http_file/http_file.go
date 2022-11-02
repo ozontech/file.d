@@ -15,6 +15,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// In this test creates Count clients in parallel. Each client writes Lines of messages to the server.
+// They are processed by the pipeline. We wait for the end of processing and fix the number of processed messages.
+
 // Config for http-file plugin e2e test
 type Config struct {
 	FilesDir string
@@ -23,38 +26,40 @@ type Config struct {
 	RetTime  string
 }
 
-func (h *Config) Configure(t *testing.T, conf *cfg.Config, pipelineName string) {
-	h.FilesDir = t.TempDir()
+// Configure sets additional fields for input and output plugins
+func (c *Config) Configure(t *testing.T, conf *cfg.Config, pipelineName string) {
+	c.FilesDir = t.TempDir()
 	output := conf.Pipelines[pipelineName].Raw.Get("output")
-	output.Set("target_file", path.Join(h.FilesDir, "file-d.log"))
-	output.Set("retention_interval", h.RetTime)
+	output.Set("target_file", path.Join(c.FilesDir, "file-d.log"))
+	output.Set("retention_interval", c.RetTime)
 }
 
-func (h *Config) Send(t *testing.T) {
+// Send creates Count http clients and sends Lines of requests from each
+func (c *Config) Send(t *testing.T) {
 	wg := &sync.WaitGroup{}
-	wg.Add(h.Count)
-	for i := 0; i < h.Count; i++ {
+	wg.Add(c.Count)
+	for i := 0; i < c.Count; i++ {
 		go func() {
+			defer wg.Done()
 			cl := http.DefaultClient
-			for i := 0; i < h.Lines; i++ {
+			for j := 0; j < c.Lines; j++ {
 				rd := bytes.NewReader([]byte(`{"first_field":"second_field"}`))
 				req, err := http.NewRequest(http.MethodPost, "http://localhost:9200/", rd)
 				assert.Nil(t, err, "bad format http request")
-				_, err = cl.Do(req)
-				if err != nil {
+				if _, err = cl.Do(req); err != nil {
 					log.Fatalf("failed to make request: %s", err.Error())
 				}
 			}
-			wg.Done()
 		}()
 	}
 	wg.Wait()
 }
 
-func (h *Config) Validate(t *testing.T) {
-	logFilePattern := path.Join(h.FilesDir, "file-d*.log")
-	test.WaitProcessEvents(t, h.Count*h.Lines, time.Second, 10*time.Second, logFilePattern)
+// Validate waits for the message processing to complete
+func (c *Config) Validate(t *testing.T) {
+	logFilePattern := path.Join(c.FilesDir, "file-d*.log")
+	test.WaitProcessEvents(t, c.Count*c.Lines, 3*time.Second, 20*time.Second, logFilePattern)
 	matches := test.GetMatches(t, logFilePattern)
-	assert.True(t, len(matches) > 0, "There are no files")
-	require.Equal(t, h.Count*h.Lines, test.CountLines(t, logFilePattern))
+	assert.True(t, len(matches) > 0, "there are no files")
+	require.Equal(t, c.Count*c.Lines, test.CountLines(t, logFilePattern))
 }

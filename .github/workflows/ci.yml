@@ -32,6 +32,7 @@ jobs:
         run: |
           echo "::set-output name=cache::$(go env GOCACHE)"
           echo "::set-output name=modcache::$(go env GOMODCACHE)"
+
       - name: Set up cache
         uses: actions/cache@v3
         with:
@@ -116,6 +117,7 @@ jobs:
         run: |
           echo "::set-output name=cache::$(go env GOCACHE)"
           echo "::set-output name=modcache::$(go env GOMODCACHE)"
+
       - name: Set up cache
         uses: actions/cache@v3
         with:
@@ -151,6 +153,7 @@ jobs:
         run: |
           echo "::set-output name=cache::$(go env GOCACHE)"
           echo "::set-output name=modcache::$(go env GOMODCACHE)"
+
       - name: Set up cache
         uses: actions/cache@v3
         with:
@@ -177,16 +180,30 @@ jobs:
         with:
           go-version: 1.19
 
-      - name: Create containers
-        uses: isbang/compose-action@v1.4.0
+      - name: Get Go environment
+        id: go-env
+        run: |
+          echo "::set-output name=cache::$(go env GOCACHE)"
+          echo "::set-output name=modcache::$(go env GOMODCACHE)"
+
+      - name: Set up cache
+        uses: actions/cache@v3
         with:
-          compose-file: "./e2e/kafka_file/docker-compose-kafka.yml"
+          path: |
+            ${{ steps.go-env.outputs.cache }}
+            ${{ steps.go-env.outputs.modcache }}
+          key: test-${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            test-${{ runner.os }}-go-
+
+      - name: Run Docker-compose
+        run: docker-compose -f ./e2e/kafka_file/docker-compose-kafka.yml up -d
 
       - name: Create Kafka Topic
         run: docker exec kafka_file_kafka_1 kafka-topics.sh --bootstrap-server kafka:9092 --create --topic quickstart5 --partitions 4
 
       - name: Run e2e tests
-        run: go test ./e2e/... -coverprofile=profile_e2e.out -covermode=atomic --tags=e2e_new -count=1 -timeout=3m -coverpkg=./...
+        run: go test ./e2e -coverprofile=profile_e2e.out -covermode=atomic --tags=e2e_new -count=1 -timeout=3m -coverpkg=./...
 
       - name: Upload artifact
         uses: actions/upload-artifact@v3

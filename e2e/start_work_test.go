@@ -60,8 +60,12 @@ type e2eTest interface {
 	Validate(t *testing.T)
 }
 
-func startForTest(t *testing.T, e e2eTest, configPath, pipelineName string) *fd.FileD {
+func startForTest(t *testing.T, e e2eTest, configPath string) *fd.FileD {
 	conf := cfg.NewConfigFromFile(configPath)
+	var pipelineName string
+	for pipelineName = range conf.Pipelines {
+		break
+	}
 	e.Configure(t, conf, pipelineName)
 	filed := fd.New(conf, "off")
 	filed.Start()
@@ -71,8 +75,7 @@ func startForTest(t *testing.T, e e2eTest, configPath, pipelineName string) *fd.
 func TestE2EStabilityWorkCase(t *testing.T) {
 	testsList := []struct {
 		e2eTest
-		cfgPath      string
-		pipelineName string
+		cfgPath string
 	}{
 		{
 			e2eTest: &file_file.Config{
@@ -80,8 +83,7 @@ func TestE2EStabilityWorkCase(t *testing.T) {
 				Lines:   500,
 				RetTime: "1s",
 			},
-			cfgPath:      "./file_file/config.yml",
-			pipelineName: "test_file_file",
+			cfgPath: "./file_file/config.yml",
 		},
 		{
 			e2eTest: &http_file.Config{
@@ -89,31 +91,29 @@ func TestE2EStabilityWorkCase(t *testing.T) {
 				Lines:   500,
 				RetTime: "1s",
 			},
-			cfgPath:      "./http_file/config.yml",
-			pipelineName: "test_http_file",
+			cfgPath: "./http_file/config.yml",
 		},
 		{
 			e2eTest: &kafka_file.Config{
 				Topic:     "quickstart5",
 				Broker:    "localhost:9092",
-				Lines:     500,
+				Count:     500,
 				RetTime:   "1s",
 				Partition: 4,
 			},
-			cfgPath:      "./kafka_file/config.yml",
-			pipelineName: "test_kafka_file",
+			cfgPath: "./kafka_file/config.yml",
 		},
 	}
 
 	for _, test := range testsList {
-		filed := startForTest(t, test.e2eTest, test.cfgPath, test.pipelineName)
+		filed := startForTest(t, test.e2eTest, test.cfgPath)
 		test.Send(t)
 		test.Validate(t)
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		err := filed.Stop(ctx)
 		cancel()
 		if err != nil {
-			log.Fatalf("failed to close filed: %s", err.Error())
+			log.Fatalf("failed to stop filed: %s", err.Error())
 		}
 	}
 }

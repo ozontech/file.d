@@ -67,7 +67,7 @@ func CountLines(t *testing.T, pattern string) int {
 	lineCount := 0
 	for _, match := range matches {
 		file, err := os.Open(match)
-		assert.NoError(t, err, "file cannot open for reading")
+		assert.NoError(t, err, "can't open file")
 		fileScanner := bufio.NewScanner(file)
 		for fileScanner.Scan() {
 			lineCount++
