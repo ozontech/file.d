@@ -179,22 +179,15 @@ var MatchModes = map[string]MatchMode{
 	// > And prefix mode
 	"and_prefix": MatchModeAndPrefix, // *
 	// > Or prefix mode
-	"or_prefix": MatchModeOr, // *
+	"or_prefix": MatchModeOrPrefix, // *
 }
 
 func MatchModeFromString(mm string) MatchMode {
-	switch strings.ToLower(strings.TrimSpace(mm)) {
-	case "", "and":
-		return MatchModeAnd
-	case "or":
-		return MatchModeOr
-	case "and_prefix":
-		return MatchModeAndPrefix
-	case "or_prefix":
-		return MatchModeOrPrefix
-	default:
+	mode, ok := MatchModes[strings.ToLower(strings.TrimSpace(mm))]
+	if !ok {
 		return MatchModeUnknown
 	}
+	return mode
 }
 
 // PluginSelector the only valid value for now is ByNameSelector
