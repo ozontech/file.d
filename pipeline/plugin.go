@@ -149,6 +149,21 @@ const (
 	MatchModeUnknown
 )
 
+func MatchModeFromString(mm string) MatchMode {
+	switch strings.ToLower(strings.TrimSpace(mm)) {
+	case "", "and":
+		return MatchModeAnd
+	case "or":
+		return MatchModeOr
+	case "and_prefix":
+		return MatchModeAndPrefix
+	case "or_prefix":
+		return MatchModeOrPrefix
+	default:
+		return MatchModeUnknown
+	}
+}
+
 // PluginSelector the only valid value for now is ByNameSelector
 // and only value is string type. It can be expanded with a custom type in the future.
 type PluginSelector struct {

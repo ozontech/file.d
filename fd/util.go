@@ -2,7 +2,6 @@ package fd
 
 import (
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/bitly/go-simplejson"
@@ -87,18 +86,7 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 
 func extractMatchMode(actionJSON *simplejson.Json) pipeline.MatchMode {
 	mm := actionJSON.Get("match_mode").MustString()
-	switch strings.ToLower(strings.TrimSpace(mm)) {
-	case "", "and":
-		return pipeline.MatchModeAnd
-	case "or":
-		return pipeline.MatchModeOr
-	case "and_prefix":
-		return pipeline.MatchModeAndPrefix
-	case "or_prefix":
-		return pipeline.MatchModeOrPrefix
-	default:
-		return pipeline.MatchModeUnknown
-	}
+	return pipeline.MatchModeFromString(mm)
 }
 
 func extractMatchInvert(actionJSON *simplejson.Json) (bool, error) {
@@ -109,13 +97,13 @@ func extractMatchInvert(actionJSON *simplejson.Json) (bool, error) {
 func extractConditions(condJSON *simplejson.Json) (pipeline.MatchConditions, error) {
 	conditions := make(pipeline.MatchConditions, 0)
 	for field := range condJSON.MustMap() {
-		value := condJSON.Get(field).Interface()
+		obj := condJSON.Get(field).Interface()
 
 		condition := pipeline.MatchCondition{
 			Field: cfg.ParseFieldSelector(field),
 		}
 
-		if value, ok := value.(string); ok {
+		if value, ok := obj.(string); ok {
 			if len(value) > 0 && value[0] == '/' {
 				r, err := cfg.CompileRegex(value)
 				if err != nil {
@@ -130,11 +118,15 @@ func extractConditions(condJSON *simplejson.Json) (pipeline.MatchConditions, err
 			continue
 		}
 
-		if vals, ok := value.([]any); ok {
-			condition.Values = make([]string, 0, len(vals))
+		if jsonValues, ok := obj.([]any); ok {
+			condition.Values = make([]string, 0, len(jsonValues))
 
-			for _, val := range vals {
-				condition.Values = append(condition.Values, val.(string))
+			for _, jsonValue := range jsonValues {
+				val, ok := jsonValue.(string)
+				if !ok {
+					return nil, fmt.Errorf("can't parse %v as string", jsonValue)
+				}
+				condition.Values = append(condition.Values, val)
 			}
 
 			conditions = append(conditions, condition)

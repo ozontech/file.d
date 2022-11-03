@@ -125,12 +125,12 @@ Patterns must have a list ([]) or string type, not a number or null.
 
 ### Supported match modes
 
-File.d supports regexp patterns, but it may spend a lot of CPU. Prefer `(or|and)_prefix` or exact matches if you
+File.d supports regexp patterns, but it may spend a lot of CPU. Prefer `(or|and)_prefix` or exact match if you
 can.
 
 #### `or`
 
-Allows to find a match in listed patterns by regexp `/(^coredsn.*)|(^etcd_backup.*)/` or exact
+It allows to find a match in listed patterns by regexp `/(^coredsn.*)|(^etcd_backup.*)/` or exact
 comparison (`val == configVal`).
 
 ```
@@ -140,25 +140,26 @@ pipelines:
       - type: discard
         match_fields:
           k8s_namespace: [payment, tarifficator] # exact compare one of values
-          k8s_pod: payment-api
-        match_mode: and
+          k8s_pod: /^payment-api.*/
+        match_mode: or
 ```
 
 And if we process some logs:
 
 ```
-{"k8s_namespace": "payment", "k8s_pod":"payment-api"} # pass
+{"k8s_namespace": "payment", "k8s_pod":"payment-api-abcd"} # pass
 {"k8s_namespace": "tarifficator", "k8s_pod":"payment-api"} # pass
-{"k8s_namespace": "map", "k8s_pod":"payment-api"} # reject
-{"k8s_namespace": "payment", "k8s_pod":"map-api"} # reject
-{"k8s_namespace": "tariff", "k8s_pod":"tarifficator"} # reject
+{"k8s_namespace": "map", "k8s_pod":"payment-api"} # pass
+{"k8s_namespace": "payment", "k8s_pod":"map-api"} # pass
+{"k8s_namespace": "tarifficator", "k8s_pod":"tarifficator-go-api"} # pass
+{"k8s_namespace": "sre", "k8s_pod":"cpu-quotas-abcd-1234"} # reject
 ```
 
 #### `or_prefix`
 
-Allows to find a prefix in the field value.
+It allows to find a prefix in the field value.
 If you pass a regexp (config value which starts with `/`) it will find pattern, without prefix, like `or`.
-I.e. it will work like `or` mode. So, this mod makes sense to use without regexps.
+I.e. it will work like `or` mode. So, it makes sense to use this mod without regexps.
 
 ```
 pipelines:
@@ -183,8 +184,8 @@ And if we process some logs:
 
 ### `and`
 
-Allows to find a match in listed patterns like `or` and `or_prefix` modes, but processing log must pass all conditions,
-not one.
+It allows to find a match in listed patterns like `or` and `or_prefix` modes. 
+Event must have matches in all listed fields.
 
 For example:
 
@@ -194,7 +195,7 @@ pipelines:
     actions:
       - type: discard
         match_fields:
-          k8s_namespace: payment
+          k8s_namespace: [payment, tariff]
           k8s_pod: "/^payment-api-.*/"
         match_mode: and
 ```
@@ -209,6 +210,10 @@ And if we process some logs:
 ```
 
 ### `and_prefix`
+
+It allows to find a prefix in the field value.
+If you pass a regexp (config value which starts with `/`) it will find pattern, without prefix, like `and`.
+I.e. it will work like `and` mode. So, it makes sense to use this mod without regexps.
 
 ```
 pipelines:
@@ -229,10 +234,6 @@ And if we process some logs:
 {"k8s_namespace": "map", "k8s_pod":"payment-api-abcd-1234"} # reject
 {"k8s_namespace": "payment", "k8s_pod":"payment-api"} # reject
 ```
-
-Allows to find a prefix in the field value.
-If you pass a regexp (config value which starts with `/`) it will find pattern, without prefix, like `and`.
-I.e. it will work like `and` mode. So, this mod makes sense to use without regexps.
 
 ### Some advanced examples
 
