@@ -123,134 +123,6 @@ It discards logs if that contain the field `k8s_namespace` with any listed value
 
 Patterns must have a list ([]) or string type, not a number or null.
 
-### Supported match modes
-
-File.d supports regexp patterns, but it may spend a lot of CPU. Prefer `(or|and)_prefix` or exact match if you
-can.
-
-#### `or`
-
-It allows to find a match in listed patterns by regexp `/(^coredsn.*)|(^etcd_backup.*)/` or exact
-comparison (`val == configVal`).
-
-```yaml
-pipelines:
-  test:
-    actions:
-      - type: discard
-        match_fields:
-          k8s_namespace: [payment, tarifficator] # exact compare one of values
-          k8s_pod: /^payment-api.*/
-        match_mode: or
-```
-
-And if we process some logs:
-
-```
-{"k8s_namespace": "payment", "k8s_pod":"payment-api-abcd"} # pass
-{"k8s_namespace": "tarifficator", "k8s_pod":"payment-api"} # pass
-{"k8s_namespace": "map", "k8s_pod":"payment-api"} # pass
-{"k8s_namespace": "payment", "k8s_pod":"map-api"} # pass
-{"k8s_namespace": "tarifficator", "k8s_pod":"tarifficator-go-api"} # pass
-{"k8s_namespace": "sre", "k8s_pod":"cpu-quotas-abcd-1234"} # reject
-```
-
-#### `or_prefix`
-
-It allows to find a prefix in the field value.
-If you pass a regexp (config value which starts with `/`) it will find pattern, without prefix, like `or`.
-I.e. it will work like `or` mode. So, it makes sense to use this mod without regexps.
-
-```
-pipelines:
-  test:
-    actions:
-      - type: discard
-        match_fields:
-          k8s_namespace: [payment, tarifficator]
-          k8s_pod: payment-api
-        match_mode: or_prefix
-```
-
-And if we process some logs:
-
-```
-{"k8s_namespace": "payment", "k8s_pod":"payment-api-abcd-1234"} # pass
-{"k8s_namespace": "payment", "k8s_pod":"checkout"} # pass
-{"k8s_namespace": "map", "k8s_pod":"map-go-api-abcd-1234"} # reject
-{"k8s_namespace": "map", "k8s_pod":"payment-api"} # pass
-{"k8s_namespace": "tariff", "k8s_pod":"tarifficator"} # pass
-```
-
-### `and`
-
-It allows to find a match in listed patterns like `or` and `or_prefix` modes. 
-Event must have matches in all listed fields.
-
-For example:
-
-```
-pipelines:
-  test:
-    actions:
-      - type: discard
-        match_fields:
-          k8s_namespace: [payment, tariff]
-          k8s_pod: "/^payment-api-.*/"
-        match_mode: and
-```
-
-And if we process some logs:
-
-```
-{"k8s_namespace": "payment", "k8s_pod":"payment-api-abcd-1234"} # pass
-{"k8s_namespace": "payment", "k8s_pod":"checkout"} # reject
-{"k8s_namespace": "map", "k8s_pod":"payment-api-abcd-1234"} # reject
-{"k8s_namespace": "payment", "k8s_pod":"payment-api"} # reject
-```
-
-### `and_prefix`
-
-It allows to find a prefix in the field value.
-If you pass a regexp (config value which starts with `/`) it will find pattern, without prefix, like `and`.
-I.e. it will work like `and` mode. So, it makes sense to use this mod without regexps.
-
-```
-pipelines:
-  test:
-    actions:
-      - type: discard
-        match_fields:
-          k8s_namespace: payment
-          k8s_pod: payment-api-
-        match_mode: and_prefix
-```
-
-And if we process some logs:
-
-```
-{"k8s_namespace": "payment", "k8s_pod":"payment-api-abcd-1234"} # pass
-{"k8s_namespace": "payment", "k8s_pod":"checkout"} # reject
-{"k8s_namespace": "map", "k8s_pod":"payment-api-abcd-1234"} # reject
-{"k8s_namespace": "payment", "k8s_pod":"payment-api"} # reject
-```
-
-### Some advanced examples
-
-```yaml
-pipelines:
-  test:
-    actions:
-      # set field (`pipeline_kafka_topic`) value (`stg-k8s-travel-logs`) if k8s_namespace is `payment` 
-      # *and* `service` is `lms-go-service-sorter-system-vanderlande-driver`
-      - type: modify
-        pipeline_kafka_topic: stg-k8s-travel-logs
-        match_fields:
-          k8s_namespace: payment
-          service: go-payment-api
-        match_mode: and
-```
-
 ### Match modes
 #### And
 `match_mode: and` — matches fields with AND operator
@@ -264,34 +136,92 @@ pipelines:
         match_fields:
           k8s_namespace: [payment, tarifficator] # use exact match
           k8s_pod: /^payment-api.*/              # use regexp match
-        match_mode: or
+        match_mode: and
 ```
 
-And if we process some logs:
-
+result:
 ```
-{"k8s_namespace": "payment", "k8s_pod":"payment-api-abcd"}         # pass
-{"k8s_namespace": "tarifficator", "k8s_pod":"payment-api"}         # pass
-{"k8s_namespace": "map", "k8s_pod":"payment-api"}                  # pass
-{"k8s_namespace": "payment", "k8s_pod":"map-api"}                  # pass
-{"k8s_namespace": "tarifficator", "k8s_pod":"tarifficator-go-api"} # pass
-{"k8s_namespace": "sre", "k8s_pod":"cpu-quotas-abcd-1234"}         # discard
+{"k8s_namespace": "payment", "k8s_pod":"payment-api-abcd"}         # won't be discarded
+{"k8s_namespace": "tarifficator", "k8s_pod":"payment-api"}         # discarded
 ```
 
 <br>
 
 #### Or
-Or mode
+`match_mode: or` — matches fields with OR operator
+
+Example:
+```yaml
+pipelines:
+  test:
+    actions:
+      - type: discard
+        match_fields:
+          k8s_namespace: [payment, tarifficator] # use exact match
+          k8s_pod: /^payment-api.*/              # use regexp match
+        match_mode: or
+```
+
+result:
+```
+{"k8s_namespace": "payment", "k8s_pod":"payment-api-abcd"} # won't be discarded
+{"k8s_namespace": "tarifficator", "k8s_pod":"payment-api"} # won't be discarded
+{"k8s_namespace": "map", "k8s_pod":"payment-api"} # won't be discarded
+{"k8s_namespace": "payment", "k8s_pod":"map-api"} # won't be discarded
+{"k8s_namespace": "tarifficator", "k8s_pod":"tarifficator-go-api"} # won't be discarded
+{"k8s_namespace": "sre", "k8s_pod":"cpu-quotas-abcd-1234"} # discarded
+```
 
 <br>
 
 #### AndPrefix
-And prefix mode
+`match_mode: and_prefix` — matches fields with AND operator
+
+Example:
+```yaml
+pipelines:
+  test:
+    actions:
+      - type: discard
+        match_fields:
+          k8s_namespace: payment # use prefix match
+          k8s_pod: payment-api- # use prefix match
+        match_mode: and_prefix
+ ```
+
+result:
+```
+{"k8s_namespace": "payment", "k8s_pod":"payment-api-abcd-1234"} # won't be discarded
+{"k8s_namespace": "payment", "k8s_pod":"checkout"} # discarded
+{"k8s_namespace": "map", "k8s_pod":"payment-api-abcd-1234"} # discarded
+{"k8s_namespace": "payment", "k8s_pod":"payment-api"} # discarded
+```
 
 <br>
 
-#### Or
-Or prefix mode
+#### OrPrefix
+`match_mode: or_prefix` — matches fields with OR operator
+
+Example:
+```yaml
+pipelines:
+  test:
+    actions:
+      - type: discard
+        match_fields:
+          k8s_namespace: [payment, tarifficator] # use prefix match
+          k8s_pod: /-api-.*/ # use regexp match
+        match_mode: or_prefix
+```
+
+result:
+```
+{"k8s_namespace": "payment", "k8s_pod":"payment-api-abcd-1234"} # won't be discarded
+{"k8s_namespace": "payment", "k8s_pod":"checkout"} # won't be discarded
+{"k8s_namespace": "map", "k8s_pod":"map-go-api-abcd-1234"} # discarded
+{"k8s_namespace": "map", "k8s_pod":"payment-api"} # won't be discarded
+{"k8s_namespace": "tariff", "k8s_pod":"tarifficator"} # won't be discarded
+```
 
 <br>
 

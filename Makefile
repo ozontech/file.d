@@ -51,7 +51,7 @@ gen-doc:
 	go run github.com/vitkovskii/insane-doc@v0.0.3
 
 .PHONY: gen-doc-local
-gen-doc:
+gen-doc-local:
 	insane-doc
 
 .PHONY: profile-file

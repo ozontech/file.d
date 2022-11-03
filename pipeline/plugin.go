@@ -154,6 +154,7 @@ const (
 
 var MatchModes = map[string]MatchMode{
 	"": MatchModeAnd,
+
 	// > @3 — matches fields with AND operator
 	// >
 	// > Example:
@@ -174,11 +175,77 @@ var MatchModes = map[string]MatchMode{
 	// > {"k8s_namespace": "tarifficator", "k8s_pod":"payment-api"}         # discarded
 	// > ```
 	"and": MatchModeAnd, // *
-	// > Or mode
+
+	// > @3 — matches fields with OR operator
+	// >
+	// > Example:
+	// > ```yaml
+	// > pipelines:
+	// >   test:
+	// >     actions:
+	// >       - type: discard
+	// >         match_fields:
+	// >           k8s_namespace: [payment, tarifficator] # use exact match
+	// >           k8s_pod: /^payment-api.*/              # use regexp match
+	// >         match_mode: or
+	// > ```
+	// >
+	// > result:
+	// > ```
+	// > {"k8s_namespace": "payment", "k8s_pod":"payment-api-abcd"} # won't be discarded
+	// > {"k8s_namespace": "tarifficator", "k8s_pod":"payment-api"} # won't be discarded
+	// > {"k8s_namespace": "map", "k8s_pod":"payment-api"} # won't be discarded
+	// > {"k8s_namespace": "payment", "k8s_pod":"map-api"} # won't be discarded
+	// > {"k8s_namespace": "tarifficator", "k8s_pod":"tarifficator-go-api"} # won't be discarded
+	// > {"k8s_namespace": "sre", "k8s_pod":"cpu-quotas-abcd-1234"} # discarded
+	// > ```
 	"or": MatchModeOr, // *
-	// > And prefix mode
+
+	// > @3 — matches fields with AND operator
+	// >
+	// > Example:
+	// > ```yaml
+	// > pipelines:
+	// >   test:
+	// >     actions:
+	// >       - type: discard
+	// >         match_fields:
+	// >           k8s_namespace: payment # use prefix match
+	// >           k8s_pod: payment-api- # use prefix match
+	// >         match_mode: and_prefix
+	// >  ```
+	// >
+	// > result:
+	// > ```
+	// > {"k8s_namespace": "payment", "k8s_pod":"payment-api-abcd-1234"} # won't be discarded
+	// > {"k8s_namespace": "payment", "k8s_pod":"checkout"} # discarded
+	// > {"k8s_namespace": "map", "k8s_pod":"payment-api-abcd-1234"} # discarded
+	// > {"k8s_namespace": "payment", "k8s_pod":"payment-api"} # discarded
+	// > ```
 	"and_prefix": MatchModeAndPrefix, // *
-	// > Or prefix mode
+
+	// > @3 — matches fields with OR operator
+	// >
+	// > Example:
+	// > ```yaml
+	// > pipelines:
+	// >   test:
+	// >     actions:
+	// >       - type: discard
+	// >         match_fields:
+	// >           k8s_namespace: [payment, tarifficator] # use prefix match
+	// >           k8s_pod: /-api-.*/ # use regexp match
+	// >         match_mode: or_prefix
+	// > ```
+	// >
+	// > result:
+	// > ```
+	// > {"k8s_namespace": "payment", "k8s_pod":"payment-api-abcd-1234"} # won't be discarded
+	// > {"k8s_namespace": "payment", "k8s_pod":"checkout"} # won't be discarded
+	// > {"k8s_namespace": "map", "k8s_pod":"map-go-api-abcd-1234"} # discarded
+	// > {"k8s_namespace": "map", "k8s_pod":"payment-api"} # won't be discarded
+	// > {"k8s_namespace": "tariff", "k8s_pod":"tarifficator"} # won't be discarded
+	// > ```
 	"or_prefix": MatchModeOrPrefix, // *
 }
 
