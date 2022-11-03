@@ -102,7 +102,7 @@ s3 secret key.
 <br>
 
 **`bucket`** *`string`* *`required`* 
-s3 default bucket.
+ s3 default bucket.
 
 <br>
 

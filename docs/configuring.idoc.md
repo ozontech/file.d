@@ -133,7 +133,7 @@ can.
 It allows to find a match in listed patterns by regexp `/(^coredsn.*)|(^etcd_backup.*)/` or exact
 comparison (`val == configVal`).
 
-```
+```yaml
 pipelines:
   test:
     actions:
@@ -250,3 +250,6 @@ pipelines:
           service: go-payment-api
         match_mode: and
 ```
+
+### Match modes
+@match-modes|header-description

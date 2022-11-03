@@ -48,7 +48,11 @@ bench-file:
 
 .PHONY: gen-doc
 gen-doc:
-	go run github.com/vitkovskii/insane-doc@v0.0.2
+	go run github.com/vitkovskii/insane-doc@v0.0.3
+
+.PHONY: gen-doc-local
+gen-doc:
+	insane-doc
 
 .PHONY: profile-file
 profile-file:

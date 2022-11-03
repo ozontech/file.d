@@ -149,6 +149,39 @@ const (
 	MatchModeUnknown
 )
 
+// ! match-modes
+// ^ match-modes
+
+var MatchModes = map[string]MatchMode{
+	"": MatchModeAnd,
+	// > @3 — matches fields with AND operator
+	// >
+	// > Example:
+	// > ```yaml
+	// > pipelines:
+	// >   test:
+	// >     actions:
+	// >       - type: discard
+	// >         match_fields:
+	// >           k8s_namespace: [payment, tarifficator] # use exact match
+	// >           k8s_pod: /^payment-api.*/              # use regexp match
+	// >         match_mode: and
+	// > ```
+	// >
+	// > result:
+	// > ```
+	// > {"k8s_namespace": "payment", "k8s_pod":"payment-api-abcd"}         # won't be discarded
+	// > {"k8s_namespace": "tarifficator", "k8s_pod":"payment-api"}         # discarded
+	// > ```
+	"and": MatchModeAnd, // *
+	// > Or mode
+	"or": MatchModeOr, // *
+	// > And prefix mode
+	"and_prefix": MatchModeAndPrefix, // *
+	// > Or prefix mode
+	"or_prefix": MatchModeOr, // *
+}
+
 func MatchModeFromString(mm string) MatchMode {
 	switch strings.ToLower(strings.TrimSpace(mm)) {
 	case "", "and":
