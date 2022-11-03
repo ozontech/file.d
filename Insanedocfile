@@ -5,6 +5,7 @@ decorators:
   config-params: '_ _ /*`%s`* / /*`default=%s`* / /*`%s`* / /*`options=%s`* /'
   fn-list: '_ _ /`%s`/'
 templates:
+  - template: docs/*.idoc.md
   - template: plugin/*/*/README.idoc.md
     files: ["*.go"]
   - template: plugin/*/README.idoc.md

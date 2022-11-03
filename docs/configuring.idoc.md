@@ -249,5 +249,3 @@ pipelines:
           service: go-payment-api
         match_mode: and
 ```
-
-<br>*Generated using [__insane-doc__](https://github.com/vitkovskii/insane-doc)*
