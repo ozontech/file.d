@@ -9,6 +9,7 @@ import (
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/plugin"
 	"go.uber.org/zap"
 )
 
@@ -30,7 +31,7 @@ const (
 type redisClient interface {
 	IncrBy(key string, value int64) *redis.IntCmd
 	Expire(key string, expiration time.Duration) *redis.BoolCmd
-	SetNX(key string, value interface{}, expiration time.Duration) *redis.BoolCmd
+	SetNX(key string, value any, expiration time.Duration) *redis.BoolCmd
 	Get(key string) *redis.StringCmd
 	Ping() *redis.StatusCmd
 }
@@ -54,6 +55,7 @@ type Plugin struct {
 
 	limiterBuf []byte
 	rules      []*rule
+	plugin.NoMetricsPlugin
 }
 
 // ! config-params

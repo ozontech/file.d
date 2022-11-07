@@ -19,8 +19,6 @@ import (
 )
 
 func TestPrivateOut(t *testing.T) {
-	metric.InitStats()
-
 	testLogger := logger.Instance
 
 	root := insaneJSON.Spawn()
@@ -77,7 +75,7 @@ func TestPrivateOut(t *testing.T) {
 	mockpool.EXPECT().Query(
 		gomock.AssignableToTypeOf(ctxMock),
 		"INSERT INTO table1 (str_uni_1,int_uni_1,int_1,timestamp_1) VALUES ($1,$2,$3,$4) ON CONFLICT(str_uni_1,int_uni_1) DO UPDATE SET int_1=EXCLUDED.int_1,timestamp_1=EXCLUDED.timestamp_1",
-		[]interface{}{preferSimpleProtocol, strUniValue, intUniValue, intValue, time.Unix(int64(timestampValue), 0).Format(time.RFC3339)},
+		[]any{preferSimpleProtocol, strUniValue, intUniValue, intValue, time.Unix(int64(timestampValue), 0).Format(time.RFC3339)},
 	).Return(&rowsForTest{}, nil).Times(1)
 
 	builder, err := NewQueryBuilder(columns, table)
@@ -91,15 +89,13 @@ func TestPrivateOut(t *testing.T) {
 		ctx:          ctx,
 	}
 
-	p.registerPluginMetrics()
+	p.RegisterMetrics(metric.New("test"))
 
 	batch := &pipeline.Batch{Events: []*pipeline.Event{{Root: root}}}
 	p.out(nil, batch)
 }
 
 func TestPrivateOutWithRetry(t *testing.T) {
-	metric.InitStats()
-
 	testLogger := logger.Instance
 
 	root := insaneJSON.Spawn()
@@ -149,12 +145,12 @@ func TestPrivateOutWithRetry(t *testing.T) {
 	mockpool.EXPECT().Query(
 		gomock.AssignableToTypeOf(ctxMock),
 		"INSERT INTO table1 (str_uni_1,int_1,timestamp_1) VALUES ($1,$2,$3) ON CONFLICT(str_uni_1) DO UPDATE SET int_1=EXCLUDED.int_1,timestamp_1=EXCLUDED.timestamp_1",
-		[]interface{}{preferSimpleProtocol, strUniValue, intValue, time.Unix(int64(timestampValue), 0).Format(time.RFC3339)},
+		[]any{preferSimpleProtocol, strUniValue, intValue, time.Unix(int64(timestampValue), 0).Format(time.RFC3339)},
 	).Return(&rowsForTest{}, errors.New("someError")).Times(2)
 	mockpool.EXPECT().Query(
 		gomock.AssignableToTypeOf(ctxMock),
 		"INSERT INTO table1 (str_uni_1,int_1,timestamp_1) VALUES ($1,$2,$3) ON CONFLICT(str_uni_1) DO UPDATE SET int_1=EXCLUDED.int_1,timestamp_1=EXCLUDED.timestamp_1",
-		[]interface{}{preferSimpleProtocol, strUniValue, intValue, time.Unix(int64(timestampValue), 0).Format(time.RFC3339)},
+		[]any{preferSimpleProtocol, strUniValue, intValue, time.Unix(int64(timestampValue), 0).Format(time.RFC3339)},
 	).Return(&rowsForTest{}, nil).Times(1)
 
 	builder, err := NewQueryBuilder(columns, table)
@@ -168,15 +164,13 @@ func TestPrivateOutWithRetry(t *testing.T) {
 		ctx:          ctx,
 	}
 
-	p.registerPluginMetrics()
+	p.RegisterMetrics(metric.New("test"))
 
 	batch := &pipeline.Batch{Events: []*pipeline.Event{{Root: root}}}
 	p.out(nil, batch)
 }
 
 func TestPrivateOutNoGoodEvents(t *testing.T) {
-	metric.InitStats()
-
 	testLogger := logger.Instance
 
 	root := insaneJSON.Spawn()
@@ -223,15 +217,13 @@ func TestPrivateOutNoGoodEvents(t *testing.T) {
 		logger:       testLogger,
 	}
 
-	p.registerPluginMetrics()
+	p.RegisterMetrics(metric.New("test"))
 
 	batch := &pipeline.Batch{Events: []*pipeline.Event{{Root: root}}}
 	p.out(nil, batch)
 }
 
 func TestPrivateOutDeduplicatedEvents(t *testing.T) {
-	metric.InitStats()
-
 	testLogger := logger.Instance
 
 	root := insaneJSON.Spawn()
@@ -291,7 +283,7 @@ func TestPrivateOutDeduplicatedEvents(t *testing.T) {
 	mockpool.EXPECT().Query(
 		gomock.AssignableToTypeOf(ctxMock),
 		"INSERT INTO table1 (str_uni_1,int_uni_1,int_1,timestamp_1) VALUES ($1,$2,$3,$4) ON CONFLICT(str_uni_1,int_uni_1) DO UPDATE SET int_1=EXCLUDED.int_1,timestamp_1=EXCLUDED.timestamp_1",
-		[]interface{}{preferSimpleProtocol, strUniValue, intUniValue, intValue, time.Unix(int64(timestampValue), 0).Format(time.RFC3339)},
+		[]any{preferSimpleProtocol, strUniValue, intUniValue, intValue, time.Unix(int64(timestampValue), 0).Format(time.RFC3339)},
 	).Return(&rowsForTest{}, nil).Times(1)
 
 	builder, err := NewQueryBuilder(columns, table)
@@ -305,7 +297,7 @@ func TestPrivateOutDeduplicatedEvents(t *testing.T) {
 		ctx:          ctx,
 	}
 
-	p.registerPluginMetrics()
+	p.RegisterMetrics(metric.New("test"))
 
 	batch := &pipeline.Batch{Events: []*pipeline.Event{
 		{Root: root},
@@ -316,8 +308,6 @@ func TestPrivateOutDeduplicatedEvents(t *testing.T) {
 }
 
 func TestPrivateOutWrongTypeInField(t *testing.T) {
-	metric.InitStats()
-
 	testLogger := logger.Instance
 
 	root := insaneJSON.Spawn()
@@ -373,15 +363,13 @@ func TestPrivateOutWrongTypeInField(t *testing.T) {
 		logger:       testLogger,
 	}
 
-	p.registerPluginMetrics()
+	p.RegisterMetrics(metric.New("test"))
 
 	batch := &pipeline.Batch{Events: []*pipeline.Event{{Root: root}}}
 	p.out(nil, batch)
 }
 
 func TestPrivateOutFewUniqueEventsYetWithDeduplicationEventsAnpooladEvents(t *testing.T) {
-	metric.InitStats()
-
 	testLogger := logger.Instance
 
 	root := insaneJSON.Spawn()
@@ -465,7 +453,7 @@ func TestPrivateOutFewUniqueEventsYetWithDeduplicationEventsAnpooladEvents(t *te
 	mockpool.EXPECT().Query(
 		gomock.AssignableToTypeOf(ctxMock),
 		"INSERT INTO table1 (str_uni_1,int_uni_1,int_1,timestamp_1) VALUES ($1,$2,$3,$4),($5,$6,$7,$8) ON CONFLICT(str_uni_1,int_uni_1) DO UPDATE SET int_1=EXCLUDED.int_1,timestamp_1=EXCLUDED.timestamp_1",
-		[]interface{}{preferSimpleProtocol, strUniValue, intUniValue, intValue, time.Unix(int64(timestampValue), 0).Format(time.RFC3339),
+		[]any{preferSimpleProtocol, strUniValue, intUniValue, intValue, time.Unix(int64(timestampValue), 0).Format(time.RFC3339),
 			secStrUniValue, secIntUniValue, secIntValue, time.Unix(int64(secTimestampValue), 0).Format(time.RFC3339)},
 	).Return(&rowsForTest{}, nil).Times(1)
 
@@ -480,7 +468,7 @@ func TestPrivateOutFewUniqueEventsYetWithDeduplicationEventsAnpooladEvents(t *te
 		ctx:          ctx,
 	}
 
-	p.registerPluginMetrics()
+	p.RegisterMetrics(metric.New("test"))
 
 	batch := &pipeline.Batch{Events: []*pipeline.Event{
 		{Root: root},
@@ -500,6 +488,6 @@ func (r rowsForTest) Err() error                                     { return ni
 func (r rowsForTest) CommandTag() pgconn.CommandTag                  { return nil }
 func (r rowsForTest) FieldDescriptions() []pgproto3.FieldDescription { return nil }
 func (r rowsForTest) Next() bool                                     { return false }
-func (r rowsForTest) Scan(dest ...interface{}) error                 { return nil }
-func (r rowsForTest) Values() ([]interface{}, error)                 { return nil, nil }
+func (r rowsForTest) Scan(dest ...any) error                         { return nil }
+func (r rowsForTest) Values() ([]any, error)                         { return nil, nil }
 func (r rowsForTest) RawValues() [][]byte                            { return nil }

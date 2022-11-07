@@ -3,6 +3,7 @@ package fake
 import (
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/plugin"
 )
 
 /*{ introduction
@@ -13,6 +14,7 @@ type Plugin struct {
 	controller pipeline.InputPluginController
 	commitFn   func(event *pipeline.Event)
 	inFn       func()
+	plugin.NoMetricsPlugin
 }
 
 type Config struct{}

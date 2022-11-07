@@ -10,6 +10,7 @@ import (
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
 )
 
@@ -19,9 +20,6 @@ It sends the event batches to kafka brokers using `sarama` lib.
 
 const (
 	outPluginType = "kafka"
-	subsystemName = "output_kafka"
-
-	sendErrorCounter = "send_errors"
 )
 
 type data struct {
@@ -37,6 +35,10 @@ type Plugin struct {
 
 	producer sarama.SyncProducer
 	batcher  *pipeline.Batcher
+
+	// plugin metrics
+
+	sendErrorMetric *prometheus.CounterVec
 }
 
 // ! config-params
@@ -107,8 +109,6 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 
 	p.logger.Infof("workers count=%d, batch size=%d", p.config.WorkersCount_, p.config.BatchSize_)
 
-	p.registerPluginMetrics()
-
 	p.producer = p.newProducer()
 	p.batcher = pipeline.NewBatcher(pipeline.BatcherOptions{
 		PipelineName:   params.PipelineName,
@@ -128,12 +128,8 @@ func (p *Plugin) Out(event *pipeline.Event) {
 	p.batcher.Add(event)
 }
 
-func (p *Plugin) registerPluginMetrics() {
-	metric.RegisterCounter(&metric.MetricDesc{
-		Name:      sendErrorCounter,
-		Subsystem: subsystemName,
-		Help:      "Total Kafka send errors",
-	})
+func (p *Plugin) RegisterMetrics(ctl *metric.Ctl) {
+	p.sendErrorMetric = ctl.RegisterCounter("output_kafka_send_errors", "Total Kafka send errors")
 }
 
 func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
@@ -178,8 +174,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 		for _, e := range errs {
 			p.logger.Errorf("can't write batch: %s", e.Err.Error())
 		}
-		metric.GetCounter(subsystemName, sendErrorCounter).Add(float64(len(errs)))
-
+		p.sendErrorMetric.WithLabelValues().Add(float64(len(errs)))
 		p.controller.Error("some events from batch were not written")
 	}
 }

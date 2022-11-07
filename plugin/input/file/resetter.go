@@ -129,7 +129,7 @@ func deleteOneOffsetByField(o *offsetDB, fieldName string, fieldVal uint64) {
 		logger.Panicf("can't read file, try to reset all file. Error: %s", err.Error())
 	}
 
-	files := make([]map[string]interface{}, 0)
+	files := make([]map[string]any, 0)
 	err = yaml.Unmarshal(f, &files)
 	if err != nil {
 		logger.Panicf("can't unmarshal file, try to reset all file. err: %s file:\n%s", err.Error(), f)

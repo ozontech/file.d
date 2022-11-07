@@ -13,16 +13,35 @@ import (
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/longpanic"
+	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
-
+	"github.com/ozontech/file.d/plugin"
 	"go.uber.org/zap"
 	"golang.org/x/net/context"
 )
+
+/*{ introduction
+This plugin implements writing to file.
+Can be used on its own, but is also part of the s3 plugin.
+
+**An example for discarding informational and debug logs:**
+```yaml
+pipelines:
+  example_pipeline:
+    ...
+    output:
+      type: file
+      retention_interval: 3h
+      target_file: /var/log/file-d.log
+    ...
+```
+}*/
 
 type Plugable interface {
 	Start(config pipeline.AnyConfig, params *pipeline.OutputPluginParams)
 	Out(event *pipeline.Event)
 	Stop()
+	RegisterMetrics(ctl *metric.Ctl)
 }
 
 type Plugin struct {
@@ -44,6 +63,7 @@ type Plugin struct {
 	SealUpCallback func(string)
 
 	mu *sync.RWMutex
+	plugin.NoMetricsPlugin
 
 	retentionChan chan bool
 	fileSize      uint
@@ -60,26 +80,40 @@ const (
 	fileNameSeparator = "_"
 )
 
+// ! config-params
+// ^ config-params
 type Config struct {
+	// > @3@4@5@6
+	// >
 	// > File name for log file.
 	// > defaultTargetFileName = TargetFile default value
 	TargetFile string `json:"target_file" default:"/var/log/file-d.log"` // *
 
+	// > @3@4@5@6
+	// >
 	// > Interval of creation new file
 	RetentionInterval  cfg.Duration `json:"retention_interval" default:"1h" parse:"duration"` // *
 	RetentionInterval_ time.Duration
 
-	// > Interval of creation new file
+	// > @3@4@5@6
+	// >
+	// > Interval of creation new file (by file size)
 	RetentionSize  cfg.DataUnit `json:"retention_size" default:"1 PB" parse:"data_unit"` // *
 	RetentionSize_ uint
 
+	// > @3@4@5@6
+	// >
 	// > Layout is added to targetFile after sealing up. Determines result file name
 	Layout string `json:"time_layout" default:"01-02-2006_15:04:05"` // *
 
+	// > @3@4@5@6
+	// >
 	// > How much workers will be instantiated to send batches.
 	WorkersCount  cfg.Expression `json:"workers_count" default:"gomaxprocs*4" parse:"expression"` // *
 	WorkersCount_ int
 
+	// > @3@4@5@6
+	// >
 	// > Maximum quantity of events to pack into one batch.
 	BatchSize  cfg.Expression `json:"batch_size" default:"capacity/4" parse:"expression"` // *
 	BatchSize_ int
@@ -91,10 +125,14 @@ type Config struct {
 	BatchSizeBytes  cfg.Expression `json:"batch_size_bytes" default:"0" parse:"expression"` // *
 	BatchSizeBytes_ int
 
+	// > @3@4@5@6
+	// >
 	// > After this timeout batch will be sent even if batch isn't completed.
 	BatchFlushTimeout  cfg.Duration `json:"batch_flush_timeout" default:"1s" parse:"duration"` // *
 	BatchFlushTimeout_ time.Duration
 
+	// > @3@4@5@6
+	// >
 	// > File mode for log files
 	FileMode  cfg.Base8 `json:"file_mode" default:"0666" parse:"base8"` // *
 	FileMode_ int64
@@ -250,6 +288,8 @@ func (p *Plugin) createNew() {
 		p.logger.Panicf("could not open or create file: %s, error: %s", f, err.Error())
 	}
 	p.file = file
+	p.fileIsFully = false
+	p.fileSize = 0
 }
 
 // sealUp manages current file: renames, closes, and creates new.
@@ -258,6 +298,7 @@ func (p *Plugin) sealUp() {
 	if err != nil {
 		p.logger.Panicf("could not get info about file: %s, error: %s", p.file.Name(), err.Error())
 	}
+	// this must be before the size check, otherwise if the size is 0 then the sealUp will be retried
 	p.nextSealUpTime = time.Now().Add(p.config.RetentionInterval_)
 	if info.Size() == 0 {
 		return
@@ -269,8 +310,6 @@ func (p *Plugin) sealUp() {
 	oldFile := p.file
 	p.mu.Lock()
 	p.createNew()
-	p.fileIsFully = false
-	p.fileSize = 0
 	p.mu.Unlock()
 	if err := oldFile.Close(); err != nil {
 		p.logger.Panicf("could not close file: %s, error: %s", oldFile.Name(), err.Error())

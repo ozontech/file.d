@@ -46,6 +46,12 @@ Max size of the resulted event. If it is set and the event exceeds the limit, th
 
 <br>
 
+**`negate`** *`bool`* *`default=false`* 
+
+Negate match logic for Continue (lets you implement negative lookahead while joining lines)
+
+<br>
+
 
 ### Understanding start/continue regexps
 **No joining:**

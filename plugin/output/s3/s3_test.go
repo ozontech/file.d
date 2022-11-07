@@ -13,7 +13,6 @@ import (
 	"github.com/minio/minio-go"
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/logger"
-	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/plugin/input/fake"
 	"github.com/ozontech/file.d/plugin/output/file"
@@ -122,8 +121,8 @@ func TestStart(t *testing.T) {
 			test.Msg(`{"level":"error","ts":"2019-08-21T11:43:25.865Z","message":"get_items_error_12","trace_id":"3ea4a6589d06bb3f","span_id":"deddd718684b10a","get_items_error":"product: error while consuming CoverImage: context canceled","get_items_error_option":"CoverImage","get_items_error_cause":"context canceled","get_items_error_cause_type":"context_canceled"}`),
 		},
 		thirdPack: []test.Msg{
-			test.Msg(`{"level":"error","ts":"2019-08-21T11:43:25.865Z","message":"get_items_error_1231","trace_id":"3ea4a6589d06bb3f","span_id":"deddd718684b10a","get_items_error":"product: error while consuming CoverImage: context canceled","get_items_error_option":"CoverImage","get_items_error_cause":"context canceled","get_items_error_cause_type":"context_canceled"}`),
-			test.Msg(`{"level":"error","ts":"2019-08-21T11:43:25.865Z","message":"get_items_error_1231","trace_id":"3ea4a6589d06bb3f","span_id":"deddd718684b10a","get_items_error":"product: error while consuming CoverImage: context canceled","get_items_error_option":"CoverImage","get_items_error_cause":"context canceled","get_items_error_cause_type":"context_canceled"}`),
+			test.Msg(`{"level":"error","ts":"2019-08-21T11:43:25.865Z","message":"get_items_error_123","trace_id":"3ea4a6589d06bb3f","span_id":"deddd718684b10a","get_items_error":"product: error while consuming CoverImage: context canceled","get_items_error_option":"CoverImage","get_items_error_cause":"context canceled","get_items_error_cause_type":"context_canceled"}`),
+			test.Msg(`{"level":"error","ts":"2019-08-21T11:43:25.865Z","message":"get_items_error_123","trace_id":"3ea4a6589d06bb3f","span_id":"deddd718684b10a","get_items_error":"product: error while consuming CoverImage: context canceled","get_items_error_option":"CoverImage","get_items_error_cause":"context canceled","get_items_error_cause_type":"context_canceled"}`),
 		},
 	}
 
@@ -169,10 +168,10 @@ func TestStart(t *testing.T) {
 	})
 	assert.NotNil(t, p, "could not create new pipeline")
 	p.Start()
-	time.Sleep(1 * time.Second)
+	time.Sleep(300 * time.Microsecond)
 
 	test.SendPack(t, p, tests.firstPack)
-	time.Sleep(1 * time.Second)
+	time.Sleep(time.Second)
 	size1 := test.CheckNotZero(t, fileName.Load(), "s3 data is missed after first pack")
 
 	// check deletion upload log files
@@ -183,7 +182,7 @@ func TestStart(t *testing.T) {
 	// initial sending the second pack
 	// no special situations
 	test.SendPack(t, p, tests.secondPack)
-	time.Sleep(1 * time.Second)
+	time.Sleep(time.Second)
 
 	match = test.GetMatches(t, pattern)
 	assert.Equal(t, 1, len(match))
@@ -351,7 +350,7 @@ func TestStartWithMultiBuckets(t *testing.T) {
 	time.Sleep(300 * time.Microsecond)
 
 	test.SendPack(t, p, tests.firstPack)
-	time.Sleep(1 * time.Second)
+	time.Sleep(time.Second)
 	size1 := test.CheckNotZero(t, fileName.Load(), "s3 data is missed after first pack")
 
 	// check deletion upload log files
@@ -364,7 +363,7 @@ func TestStartWithMultiBuckets(t *testing.T) {
 	// initial sending the second pack
 	// no special situations
 	test.SendPack(t, p, tests.secondPack)
-	time.Sleep(1 * time.Second)
+	time.Sleep(time.Second)
 
 	for _, pattern := range patterns {
 		match := test.GetMatches(t, pattern)
@@ -377,7 +376,7 @@ func TestStartWithMultiBuckets(t *testing.T) {
 
 	// failed during writing
 	test.SendPack(t, p, tests.thirdPack)
-	time.Sleep(1 * time.Second)
+	time.Sleep(time.Second)
 	p.Stop()
 
 	// check log file not empty
@@ -390,12 +389,11 @@ func TestStartWithMultiBuckets(t *testing.T) {
 	// restart like after crash
 	p.Start()
 	time.Sleep(6 * time.Second)
-	size3 := test.CheckNotZero(t, fileName.Load(), "s3 data missed after second pack")
+	size3 := test.CheckNotZero(t, fileName.Load(), "s3 data missed after third pack")
 	assert.True(t, size3 > size2)
 }
 
 func newPipeline(t *testing.T, configOutput *Config, objStoreF objStoreFactory) *pipeline.Pipeline {
-	metric.InitStats()
 	t.Helper()
 	settings := &pipeline.Settings{
 		Capacity:            4096,
@@ -411,8 +409,6 @@ func newPipeline(t *testing.T, configOutput *Config, objStoreF objStoreFactory) 
 	p := pipeline.New("test_pipeline", settings, prometheus.NewRegistry())
 	p.DisableParallelism()
 	p.EnableEventLog()
-
-	metric.InitStats()
 
 	anyPlugin, _ := fake.Factory()
 	inputPlugin := anyPlugin.(*fake.Plugin)

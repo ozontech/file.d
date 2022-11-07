@@ -4,6 +4,7 @@ import (
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/plugin"
 	"go.uber.org/zap"
 )
 
@@ -41,6 +42,7 @@ type Plugin struct {
 	logger *zap.SugaredLogger
 	ops    map[string][]cfg.SubstitutionOp
 	buf    []byte
+	plugin.NoMetricsPlugin
 }
 
 type Config map[string]string

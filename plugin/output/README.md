@@ -9,6 +9,23 @@ It sends events into Elasticsearch. It uses `_bulk` API to send events in batche
 If a network error occurs, the batch will infinitely try to be delivered to the random endpoint.
 
 [More details...](plugin/output/elasticsearch/README.md)
+## file
+This plugin implements writing to file.
+Can be used on its own, but is also part of the s3 plugin.
+
+**An example for discarding informational and debug logs:**
+```yaml
+pipelines:
+  example_pipeline:
+    ...
+    output:
+      type: file
+      retention_interval: 3h
+      target_file: /var/log/file-d.log
+    ...
+```
+
+[More details...](plugin/output/file/README.md)
 ## gelf
 It sends event batches to the GELF endpoint. Transport level protocol TCP or UDP is configurable.
 > It doesn't support UDP chunking. So don't use UDP if event size may be greater than 8192.

@@ -45,6 +45,7 @@
   - Output
     - [devnull](plugin/output/devnull/README.md)
     - [elasticsearch](plugin/output/elasticsearch/README.md)
+    - [file](plugin/output/file/README.md)
     - [gelf](plugin/output/gelf/README.md)
     - [kafka](plugin/output/kafka/README.md)
     - [postgres](plugin/output/postgres/README.md)

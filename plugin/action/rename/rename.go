@@ -4,6 +4,7 @@ import (
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/plugin"
 )
 
 /*{ introduction
@@ -38,9 +39,10 @@ type Plugin struct {
 	paths          [][]string
 	names          []string
 	preserveFields bool
+	plugin.NoMetricsPlugin
 }
 
-type Config map[string]interface{}
+type Config map[string]any
 
 func init() {
 	fd.DefaultPluginRegistry.RegisterAction(&pipeline.PluginStaticInfo{
@@ -55,7 +57,7 @@ func factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 
 func (p *Plugin) Start(config pipeline.AnyConfig, _ *pipeline.ActionPluginParams) {
 	sharedConfig := *config.(*Config)
-	localConfig := make(map[string]interface{}, len(sharedConfig)) // clone shared config to be able to modify it
+	localConfig := make(map[string]any, len(sharedConfig)) // clone shared config to be able to modify it
 	for k, v := range sharedConfig {
 		localConfig[k] = v
 	}

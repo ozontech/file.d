@@ -5,6 +5,7 @@ import (
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/plugin"
 	"github.com/ozontech/file.d/plugin/action/join"
 )
 
@@ -45,6 +46,7 @@ type Plugin struct {
 	config *Config
 
 	jp *join.Plugin
+	plugin.NoMetricsPlugin
 }
 
 // ! config-params
