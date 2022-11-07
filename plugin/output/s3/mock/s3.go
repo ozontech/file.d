@@ -5,6 +5,7 @@
 package mock_s3
 
 import (
+	context "context"
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
@@ -49,19 +50,19 @@ func (mr *MockObjectStoreClientMockRecorder) BucketExists(bucketName interface{}
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BucketExists", reflect.TypeOf((*MockObjectStoreClient)(nil).BucketExists), bucketName)
 }
 
-// FPutObject mocks base method.
-func (m *MockObjectStoreClient) FPutObject(bucketName, objectName, filePath string, opts minio.PutObjectOptions) (int64, error) {
+// FPutObjectWithContext mocks base method.
+func (m *MockObjectStoreClient) FPutObjectWithContext(ctx context.Context, bucketName, objectName, filePath string, opts minio.PutObjectOptions) (int64, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "FPutObject", bucketName, objectName, filePath, opts)
+	ret := m.ctrl.Call(m, "FPutObjectWithContext", ctx, bucketName, objectName, filePath, opts)
 	ret0, _ := ret[0].(int64)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// FPutObject indicates an expected call of FPutObject.
-func (mr *MockObjectStoreClientMockRecorder) FPutObject(bucketName, objectName, filePath, opts interface{}) *gomock.Call {
+// FPutObjectWithContext indicates an expected call of FPutObjectWithContext.
+func (mr *MockObjectStoreClientMockRecorder) FPutObjectWithContext(ctx, bucketName, objectName, filePath, opts interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FPutObject", reflect.TypeOf((*MockObjectStoreClient)(nil).FPutObject), bucketName, objectName, filePath, opts)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FPutObjectWithContext", reflect.TypeOf((*MockObjectStoreClient)(nil).FPutObjectWithContext), ctx, bucketName, objectName, filePath, opts)
 }
 
 // MakeBucket mocks base method.

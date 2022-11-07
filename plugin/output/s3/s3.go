@@ -1,6 +1,7 @@
 package s3
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -15,6 +16,7 @@ import (
 	"time"
 
 	"github.com/minio/minio-go"
+	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/longpanic"
 	"github.com/ozontech/file.d/metric"
@@ -122,7 +124,7 @@ var (
 type ObjectStoreClient interface {
 	MakeBucket(bucketName string, location string) (err error)
 	BucketExists(bucketName string) (bool, error)
-	FPutObject(bucketName, objectName, filePath string, opts minio.PutObjectOptions) (n int64, err error)
+	FPutObjectWithContext(ctx context.Context, bucketName, objectName, filePath string, opts minio.PutObjectOptions) (n int64, err error)
 }
 
 type compressor interface {
@@ -155,7 +157,8 @@ type Plugin struct {
 
 	// plugin metrics
 
-	sendErrorMetric *prometheus.CounterVec
+	sendErrorMetric  *prometheus.CounterVec
+	uploadFileMetric *prometheus.CounterVec
 }
 
 type fileDTO struct {
@@ -178,43 +181,63 @@ type MultiBuckets []singleBucketConfig
 // ^ config-params
 type Config struct {
 	// > @3@4@5@6
-	// > Under the hood this plugin uses /plugin/output/file/ to collect logs
+	// >
+	// > Under the hood this plugin uses /plugin/output/file/ to collect logs.
 	FileConfig file.Config `json:"file_config" child:"true"` // *
 
 	// > @3@4@5@6
-	// > Compression type
+	// >
+	// > Compressed files format.
 	CompressionType string `json:"compression_type" default:"zip" options:"zip"` // *
 
 	// s3 section
+	// > @3@4@5@6
+	// >
+	// > Address of default bucket.
+	Endpoint string `json:"endpoint" required:"true"` // *
 
 	// > @3@4@5@6
-	// > Endpoint address of default bucket.
-	Endpoint string `json:"endpoint" required:"true"` // *
-	// > @3@4@5@6
-	// > s3 access key.
+	// >
+	// > S3 access key.
 	AccessKey string `json:"access_key" required:"true"` // *
+
 	// > @3@4@5@6
-	// > s3 secret key.
+	// >
+	// > S3 secret key.
 	SecretKey string `json:"secret_key" required:"true"` // *
+
 	// > @3@4@5@6
-	// >  s3 default bucket.
+	// >
+	// > Main S3 bucket.
 	DefaultBucket string `json:"bucket" required:"true"` // *
+
 	// > @3@4@5@6
-	// > MultiBuckets is additional buckets, which can also receive event.
-	// > Event must contain `bucket_name` field which value is s3 bucket name.
-	// > Events without `bucket_name` sends to DefaultBucket.
+	// >
+	// > Additional buckets, which can also receive event.
+	// > Event with bucket_name field sends to such s3 bucket.
 	MultiBuckets `json:"multi_buckets" required:"false"` // *
+
 	// > @3@4@5@6
-	// > s3 connection secure option.
+	// >
+	// > S3 connection secure option.
 	Secure bool `json:"secure" default:"false"` // *
+
 	// > @3@4@5@6
-	// > BucketEventField field change destination bucket of event to fields value.
+	// >
+	// > Change destination bucket of event.
 	// > Fallback to DefaultBucket if BucketEventField bucket doesn't exist.
 	BucketEventField string `json:"bucket_field_event" default:""` // *
+
 	// > @3@4@5@6
-	// > DynamicBucketsLimit regulates how many buckets can be created dynamically.
-	// > Prevents problems when some random strings in BucketEventField where
+	// >
+	// > Regulates number of buckets that can be created dynamically.
 	DynamicBucketsLimit int `json:"dynamic_buckets_limit" default:"32"` // *
+
+	// > @3@4@5@6
+	// >
+	// > Sets upload timeout.
+	UploadTimeout  cfg.Duration `json:"upload_timeout" default:"1m" parse:"duration"` // *
+	UploadTimeout_ time.Duration
 }
 
 func (c *Config) IsMultiBucketExists(bucketName string) bool {
@@ -248,6 +271,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 
 func (p *Plugin) RegisterMetrics(ctl *metric.Ctl) {
 	p.sendErrorMetric = ctl.RegisterCounter("output_s3_send_error", "Total s3 send errors")
+	p.uploadFileMetric = ctl.RegisterCounter("output_s3_upload_file", "Total files upload", "bucket_name")
 	p.metricCtl = ctl
 }
 
@@ -304,6 +328,7 @@ func (p *Plugin) StartWithMinio(config pipeline.AnyConfig, params *pipeline.Outp
 	}
 
 	p.uploadExistingFiles(targetDirs, dynamicDirs, fileNames)
+	p.logger.Info("old files uploaded")
 }
 
 func (p *Plugin) Stop() {
@@ -319,24 +344,24 @@ func (p *Plugin) Out(event *pipeline.Event) {
 
 // getBucketName decides which s3 bucket shall receive event.
 func (p *Plugin) getBucketName(event *pipeline.Event) string {
-	bucketName := event.Root.Dig(p.config.BucketEventField).AsString()
-	// no BucketEventField in message, it's DefaultBucket, showtime.
+	bucketName := pipeline.CloneString(event.Root.Dig(p.config.BucketEventField).AsString())
 
+	// no BucketEventField in message, it's DefaultBucket, showtime
 	if bucketName == "" {
 		return p.config.DefaultBucket
 	}
-	// Bucket exists.
+
 	if p.outPlugins.Exists(bucketName) {
 		return bucketName
 	}
 
-	// Try to create dynamic bucketName.
+	// try to create dynamic bucketName
 	if created := p.tryRunNewPlugin(bucketName); created {
-		// Succeed, return new bucketName.
+		// succeed, return new bucketName
 		return bucketName
 	}
 
-	// Failed to create, fallback on DefaultBucket.
+	// failed to create, fallback on DefaultBucket
 	return p.config.DefaultBucket
 }
 
@@ -491,9 +516,11 @@ func (p *Plugin) uploadWork() {
 	for compressed := range p.uploadCh {
 		sleepTime := attemptInterval
 		for {
+			p.logger.Infof("starting upload s3 object. fileName=%s, bucketName=%s", compressed.fileName, compressed.bucketName)
 			err := p.uploadToS3(compressed)
 			if err == nil {
-				p.logger.Infof("successfully uploaded object: %s", compressed)
+				p.uploadFileMetric.WithLabelValues(compressed.bucketName).Inc()
+				p.logger.Infof("successfully uploaded object=%s", compressed.fileName)
 				// delete archive after uploading
 				err = os.Remove(compressed.fileName)
 				if err != nil {
@@ -511,6 +538,8 @@ func (p *Plugin) uploadWork() {
 // compressWork compress file from channel and then delete source file
 func (p *Plugin) compressWork() {
 	for dto := range p.compressCh {
+		p.logger.Infof("compress fileName=%s, bucketName=%s", dto.fileName, dto.bucketName)
+
 		compressedName := p.compressor.getName(dto.fileName)
 		p.compressor.compress(compressedName, dto.fileName)
 		// delete old file
@@ -530,11 +559,16 @@ func (p *Plugin) uploadToS3(compressedDTO fileDTO) error {
 		cl = p.defaultClient
 	}
 
-	_, err := cl.FPutObject(
+	ctx, cancel := context.WithTimeout(context.Background(), p.config.UploadTimeout_)
+	defer cancel()
+
+	_, err := cl.FPutObjectWithContext(
+		ctx,
 		compressedDTO.bucketName, p.generateObjectName(compressedDTO.fileName),
 		compressedDTO.fileName,
 		p.compressor.getObjectOptions(),
 	)
+
 	if err != nil {
 		p.sendErrorMetric.WithLabelValues().Inc()
 		return fmt.Errorf("could not upload file: %s into bucket: %s, error: %s", compressedDTO.fileName, compressedDTO.bucketName, err.Error())
