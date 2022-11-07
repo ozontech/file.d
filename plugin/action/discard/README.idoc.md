@@ -1,4 +1,5 @@
 # Discard plugin
 @introduction
 
-> No config params
+### Config params
+@config-params|description

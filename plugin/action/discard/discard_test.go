@@ -110,7 +110,7 @@ func TestDiscardRegex(t *testing.T) {
 		},
 	}
 
-	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, &Config{}, pipeline.MatchModeOr, conds, false))
+	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, &Config{IsLogging: true, Thereafter: 1}, pipeline.MatchModeOr, conds, false))
 
 	wg := &sync.WaitGroup{}
 	wg.Add(11)

@@ -20,6 +20,8 @@ pipelines:
     ...
     actions:
     - type: discard
+      is_logging: true
+      thereafter: 100
       match_fields:
         level: /info|debug/
     ...
@@ -33,13 +35,23 @@ const (
 
 type Plugin struct {
 	config *Config
-	logger *zap.SugaredLogger
+	logger *zap.Logger
 	plugin.NoMetricsPlugin
 }
 
 type Config struct {
-	IsLogging  bool `json:"is_logging" default:"false"`
-	Thereafter int  `json:"thereafter" default:"100"`
+	// ! config-params
+	// ^ config-params
+
+	// > @3@4@5@6
+	// >
+	// > Field that includes logging (with sampling).
+	IsLogging bool `json:"is_logging" default:"false"` // *
+
+	// > @3@4@5@6
+	// >
+	// > If logging is enabled, then every Thereafter log is written.
+	Thereafter int `json:"thereafter" default:"100"` // *
 }
 
 func init() {
@@ -58,7 +70,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 
 	p.logger = zap.New(
 		zapcore.NewSamplerWithOptions(params.Logger.Desugar().Core(), tickTime, first, p.config.Thereafter),
-	).Named("fd").Named("action").Named("discard").Sugar()
+	).Named("fd").Named("action").Named("discard")
 }
 
 func (p *Plugin) Stop() {
@@ -66,7 +78,7 @@ func (p *Plugin) Stop() {
 
 func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	if p.config.IsLogging {
-		p.logger.Infof("discarded event: %s", event.Root.EncodeToString())
+		p.logger.Info("discarded event: ", zap.Stringer("json", event))
 	}
 	return pipeline.ActionDiscard
 }

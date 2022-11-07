@@ -168,6 +168,8 @@ pipelines:
     ...
     actions:
     - type: discard
+      is_logging: true
+      thereafter: 100
       match_fields:
         level: /info|debug/
     ...
