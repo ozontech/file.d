@@ -95,8 +95,8 @@ func TestE2EStabilityWorkCase(t *testing.T) {
 		},
 		{
 			e2eTest: &kafka_file.Config{
-				Topic:     "quickstart5",
-				Broker:    "localhost:9092",
+				Topics:    []string{"quickstart"},
+				Brokers:   []string{"localhost:9092"},
 				Count:     500,
 				RetTime:   "1s",
 				Partition: 4,

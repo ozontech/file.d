@@ -2,6 +2,7 @@ package test
 
 import (
 	"bufio"
+	"log"
 	"os"
 	"path/filepath"
 	"testing"
@@ -67,7 +68,9 @@ func CountLines(t *testing.T, pattern string) int {
 	lineCount := 0
 	for _, match := range matches {
 		file, err := os.Open(match)
-		assert.NoError(t, err, "can't open file")
+		if err != nil {
+			log.Fatalf("can't open file: %s", err.Error())
+		}
 		fileScanner := bufio.NewScanner(file)
 		for fileScanner.Scan() {
 			lineCount++

@@ -29,6 +29,7 @@ type Config struct {
 // Configure sets additional fields for input and output plugins
 func (c *Config) Configure(t *testing.T, conf *cfg.Config, pipelineName string) {
 	c.FilesDir = t.TempDir()
+
 	output := conf.Pipelines[pipelineName].Raw.Get("output")
 	output.Set("target_file", path.Join(c.FilesDir, "file-d.log"))
 	output.Set("retention_interval", c.RetTime)
@@ -45,7 +46,9 @@ func (c *Config) Send(t *testing.T) {
 			for j := 0; j < c.Lines; j++ {
 				rd := bytes.NewReader([]byte(`{"first_field":"second_field"}`))
 				req, err := http.NewRequest(http.MethodPost, "http://localhost:9200/", rd)
-				assert.Nil(t, err, "bad format http request")
+				if err != nil {
+					log.Fatalf("bad format http request: %s", err.Error())
+				}
 				if _, err = cl.Do(req); err != nil {
 					log.Fatalf("failed to make request: %s", err.Error())
 				}
@@ -60,6 +63,6 @@ func (c *Config) Validate(t *testing.T) {
 	logFilePattern := path.Join(c.FilesDir, "file-d*.log")
 	test.WaitProcessEvents(t, c.Count*c.Lines, 3*time.Second, 20*time.Second, logFilePattern)
 	matches := test.GetMatches(t, logFilePattern)
-	assert.True(t, len(matches) > 0, "there are no files")
-	require.Equal(t, c.Count*c.Lines, test.CountLines(t, logFilePattern))
+	assert.True(t, len(matches) > 0, "no files with processed events")
+	require.Equal(t, c.Count*c.Lines, test.CountLines(t, logFilePattern), "wrong number of processed events")
 }

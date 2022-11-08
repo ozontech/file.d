@@ -199,8 +199,8 @@ jobs:
       - name: Run Docker-compose
         run: docker-compose -f ./e2e/kafka_file/docker-compose-kafka.yml up -d
 
-      - name: Create Kafka Topic
-        run: docker exec kafka_file_kafka_1 kafka-topics.sh --bootstrap-server kafka:9092 --create --topic quickstart5 --partitions 4
+      - name: Set offset 0
+        run: docker exec kafka_file_kafka_1 kafka-consumer-groups.sh --bootstrap-server kafka:9092 --group file-d --reset-offsets --to-earliest --all-topics
 
       - name: Run e2e tests
         run: go test ./e2e -coverprofile=profile_e2e.out -covermode=atomic --tags=e2e_new -count=1 -timeout=3m -coverpkg=./...

@@ -32,6 +32,7 @@ type Config struct {
 func (c *Config) Configure(t *testing.T, conf *cfg.Config, pipelineName string) {
 	c.FilesDir = t.TempDir()
 	offsetsDir := t.TempDir()
+
 	input := conf.Pipelines[pipelineName].Raw.Get("input")
 	input.Set("watching_dir", c.FilesDir)
 	input.Set("filename_pattern", "pod_ns_container-*")
@@ -73,6 +74,6 @@ func (c *Config) Validate(t *testing.T) {
 	logFilePattern := path.Join(c.FilesDir, "file-d*.log")
 	test.WaitProcessEvents(t, c.Count*c.Lines, 3*time.Second, 20*time.Second, logFilePattern)
 	matches := test.GetMatches(t, logFilePattern)
-	assert.True(t, len(matches) > 0, "there are no files")
-	require.Equal(t, c.Count*c.Lines, test.CountLines(t, logFilePattern))
+	assert.True(t, len(matches) > 0, "no files with processed events")
+	require.Equal(t, c.Count*c.Lines, test.CountLines(t, logFilePattern), "wrong number of processed events")
 }

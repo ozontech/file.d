@@ -18,8 +18,8 @@ import (
 
 // Config for kafka-file plugin e2e test
 type Config struct {
-	Topic     string
-	Broker    string
+	Topics    []string
+	Brokers   []string
 	FilesDir  string
 	Count     int
 	RetTime   string
@@ -29,23 +29,25 @@ type Config struct {
 // Configure sets additional fields for input and output plugins
 func (c *Config) Configure(t *testing.T, conf *cfg.Config, pipelineName string) {
 	c.FilesDir = t.TempDir()
+
 	output := conf.Pipelines[pipelineName].Raw.Get("output")
 	output.Set("target_file", path.Join(c.FilesDir, "file-d.log"))
 	output.Set("retention_interval", c.RetTime)
+
+	input := conf.Pipelines[pipelineName].Raw.Get("input")
+	input.Set("brokers", c.Brokers)
+	input.Set("topics", c.Topics)
 }
 
 // Send creates a Partition of messages (one for each partition) and sends them Count times to kafka
 func (c *Config) Send(t *testing.T) {
-	time.Sleep(1 * time.Second)
-	brokers := make([]string, 1)
-	brokers[0] = c.Broker
-
+	time.Sleep(10 * time.Second)
 	config := sarama.NewConfig()
 	config.Producer.Flush.Frequency = time.Millisecond
 	config.Producer.Return.Errors = true
 	config.Producer.Return.Successes = true
 
-	producer, err := sarama.NewSyncProducer(brokers, config)
+	producer, err := sarama.NewSyncProducer(c.Brokers, config)
 	if err != nil {
 		log.Fatalf("failed to create async producer: %s", err.Error())
 	}
@@ -54,7 +56,7 @@ func (c *Config) Send(t *testing.T) {
 
 	for i := range msgs {
 		msgs[i] = &sarama.ProducerMessage{}
-		msgs[i].Topic = c.Topic
+		msgs[i].Topic = c.Topics[0]
 		msgs[i].Value = message
 		msgs[i].Partition = int32(i)
 	}
@@ -71,6 +73,6 @@ func (c *Config) Validate(t *testing.T) {
 	logFilePattern := path.Join(c.FilesDir, "file-d*.log")
 	test.WaitProcessEvents(t, c.Count*c.Partition, 3*time.Second, 20*time.Second, logFilePattern)
 	matches := test.GetMatches(t, logFilePattern)
-	assert.True(t, len(matches) > 0, "there are no files")
-	require.Equal(t, c.Count*c.Partition, test.CountLines(t, logFilePattern))
+	assert.True(t, len(matches) > 0, "no files with processed events")
+	require.Equal(t, c.Count*c.Partition, test.CountLines(t, logFilePattern), "wrong number of processed events")
 }
