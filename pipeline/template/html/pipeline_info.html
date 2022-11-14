@@ -32,10 +32,11 @@
             <div class="row-wrapper">
                 <div class="row">
                     <div class="par">plugin: {{ .In.PluginName }}</div>
-                    <div class="par"> files: {{ index .In.InfoMap `FdCount` }}, file descriptors : {{ index .In.InfoMap `FileCount` }}</div>
-                    {{ $length := len .In.InfoMap.FdInfo }} {{ if ne $length 0 }}
-                    <button onclick="toggle_table()">Show/hide fd</button>
-                    <div class="table-wrap" id="hide" style="display: none">
+                    {{ if .In.InfoMap.FdInfo }}
+                        <div class="par"> files: {{ index .In.InfoMap `FdCount` }}, file descriptors : {{ index .In.InfoMap `FileCount` }}</div>
+                        {{$length := len .In.InfoMap.FdInfo }} {{ if ne $length 0 }}
+                        <button onclick="toggle_table()">Show/hide fd</button>
+                        <div class="table-wrap" id="hide" style="display: none">
                         <table class="sortable">
                             <thead>
                             <tr>
@@ -63,6 +64,7 @@
                             </tbody>
                         </table>
                     </div>
+                        {{ end }}
                     {{ end }}
                 </div>
             </div>
@@ -80,13 +82,6 @@
                         <div class="par">Max wait:</div>
                         <div class="par">{{ .Out.BatcherMaxWait.Duration }} at {{ .Out.BatcherMaxWait.TimeRFC3339 }}
                         </div>
-                    </div>
-
-                    <div class="par">Batches committed:</div>
-                    <div class="inner-row with-bottom-margin border">
-                        {{ range .Out.BatcherCounters}}
-                        <div class="par"> {{ .BatchesCommitted }} in {{ .Seconds }} seconds</div>
-                        {{end}}
                     </div>
                 </div>
             </div>

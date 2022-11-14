@@ -270,14 +270,14 @@ func (p *Plugin) GetObservabilityInfo() (pipeline.InPluginObservabilityInfo, err
 		return pipeline.InPluginObservabilityInfo{}, err
 	}
 
-	Files := make(map[string]int, len(offsets))
+	files := make(map[string]int, len(offsets))
 	for _, offset := range offsets {
-		Files[offset.filename]++
+		files[offset.filename]++
 	}
 
 	return pipeline.InPluginObservabilityInfo{
 		FdCount:   int64(len(offsets)),
-		FdInfo:    Files,
-		FileCount: int64(len(Files)),
+		FdInfo:    files,
+		FileCount: int64(len(files)),
 	}, nil
 }

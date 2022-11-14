@@ -33,10 +33,9 @@ type inObservabilityInfo struct {
 }
 
 type outObservabilityInfo struct {
-	PluginName      string           `json:"plugin_name"`
-	BatcherCounters []batcherCounter `json:"batcher_counters"`
-	BatcherMinWait  BatcherTimeDTO   `json:"batcher_min_wait"`
-	BatcherMaxWait  BatcherTimeDTO   `json:"batcher_max_wait"`
+	PluginName     string         `json:"plugin_name"`
+	BatcherMinWait BatcherTimeDTO `json:"batcher_min_wait"`
+	BatcherMaxWait BatcherTimeDTO `json:"batcher_max_wait"`
 }
 
 type batcherCounter struct {
@@ -87,26 +86,11 @@ func (p *Pipeline) boardInfo(
 		InfoMap:    inInfo,
 	}
 
-	batcherCounters := make([]batcherCounter, 0, len(batcherTimeKeys))
 	obsInfo := p.output.GetObservabilityInfo()
-	if obsInfo.BatcherInformation.CommittedCounters != nil {
-		for _, timePoint := range batcherTimeKeys {
-			cnt, ok := obsInfo.BatcherInformation.CommittedCounters[timePoint]
-			if !ok {
-				cnt = 0
-			}
-			pair := batcherCounter{
-				Seconds:          timePoint,
-				BatchesCommitted: cnt,
-			}
-			batcherCounters = append(batcherCounters, pair)
-		}
-	}
 
 	out := outObservabilityInfo{
 		PluginName: outputInfo.Type,
 	}
-	out.BatcherCounters = batcherCounters
 	out.BatcherMinWait = obsInfo.BatcherInformation.MinWait
 	out.BatcherMaxWait = obsInfo.BatcherInformation.MaxWait
 

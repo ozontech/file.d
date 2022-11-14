@@ -19,6 +19,8 @@ const (
 	// how long in seconds should keep
 	keepMinMaxBatcherInfo   = 300
 	keepBatcherCommitsCount = 3600
+	minWaitIndex            = 0
+	maxWaitIndex            = 1
 )
 
 type Batch struct {
@@ -91,20 +93,16 @@ type Batcher struct {
 	outSeq    int64
 	commitSeq int64
 
-	// for observability purposes
-	// committedCounters contains pair: timestamp - number of commits during timestamp
-	committedCountersMu sync.RWMutex
-	committedCounters   map[int64]int64
-
-	// batcherTimeWaitMap contains two timestamps and durations of fastest and slowest committed batches during
+	// batcherTimeWaitArr contains two timestamps and durations of fastest and slowest committed batches during
 	// last 5 minutes. At index 0 lies fastest at index 1 lies slowest
-	batcherTimeMu      sync.RWMutex
-	batcherTimeWaitMap map[int64]BatcherTimeDTO
-
-	batcherTimeChan chan BatcherTimeDTO
+	batcherTimeWaitArr [2]BatcherTimeAtomic
 
 	// metrics
 	batchesCommittedMetric *prometheus.CounterVec
+	committedHistogram     *prometheus.HistogramVec
+}
+
+type batcherTimeWait struct {
 }
 
 type WorkerData any
@@ -127,24 +125,25 @@ type (
 	}
 
 	BatcherTimeDTO struct {
-		TimeRFC3339 string        `json:"timeRFC3339"`
-		Timestamp   int64         `json:"timestamp"`
-		Duration    time.Duration `json:"duration"`
+		TimeRFC3339 string
+		Timestamp   int64
+		Duration    time.Duration
+	}
+
+	BatcherTimeAtomic struct {
+		Timestamp atomic.Int64
+		Duration  atomic.Duration
 	}
 
 	BatcherInfo struct {
-		CommittedCounters map[int64]int64 `json:"committedCounters"`
-		MinWait           BatcherTimeDTO  `json:"minWait"`
-		MaxWait           BatcherTimeDTO  `json:"maxWait"`
+		MinWait BatcherTimeDTO
+		MaxWait BatcherTimeDTO
 	}
 )
 
 // NewBatcher returns batcher that commits vector of messages.
 func NewBatcher(opts *BatcherOptions, ctl *metric.Ctl) *Batcher {
-	batcher := &Batcher{
-		opts:               opts,
-		committedCounters:  make(map[int64]int64),
-		batcherTimeWaitMap: make(map[int64]BatcherTimeDTO)}
+	batcher := &Batcher{opts: opts}
 	batcher.registerBatcherMetrics(ctl)
 
 	return batcher
@@ -165,81 +164,23 @@ func (b *Batcher) Start(ctx context.Context) {
 		})
 	}
 
-	// delete old committed counters
-	go b.invalidateOldCommittedCounters(ctx, keepBatcherCommitsCount)
-
-	batcherTimeChan := make(chan BatcherTimeDTO, b.opts.Workers)
-	b.batcherTimeChan = batcherTimeChan
-	go b.updateCommitWaitValues(ctx, batcherTimeChan)
-
 	longpanic.Go(b.heartbeat)
 }
 
-// invalidateOldCommittedCounters removes old committed counters
-func (b *Batcher) invalidateOldCommittedCounters(ctx context.Context, seconds int64) {
-	for {
-		t := time.NewTicker(time.Second * 30)
-		select {
-		case <-ctx.Done():
-			return
-		case <-t.C:
-			now := time.Now()
-			b.committedCountersMu.Lock()
-			for k := range b.committedCounters {
-				if now.Unix()-k > seconds {
-					delete(b.committedCounters, k)
-				}
-			}
-			b.committedCountersMu.Unlock()
-		}
-	}
-}
-
-func (b *Batcher) updateCommitWaitValues(ctx context.Context, batcherTimeChan <-chan BatcherTimeDTO) {
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case dto := <-batcherTimeChan:
-			b.batcherTimeMu.Lock()
-			// update value if it's not set, lesser than existed one of if existed one is stale
-			value, ok := b.batcherTimeWaitMap[0]
-			if !ok || (value.Duration == 0) || (dto.Duration < value.Duration) || time.Now().Unix()-value.Timestamp > keepMinMaxBatcherInfo {
-				b.batcherTimeWaitMap[0] = dto
-			}
-
-			// update value if it's not set, more than existed one of if existed one is stale
-			value, ok = b.batcherTimeWaitMap[1]
-			if !ok || (value.Duration == 0) || (dto.Duration > value.Duration) || time.Now().Unix()-value.Timestamp > keepMinMaxBatcherInfo {
-				b.batcherTimeWaitMap[1] = dto
-			}
-			b.batcherTimeMu.Unlock()
-		}
-	}
-}
-
+// GetBatcherInfo returns observability info of batcher state.
 func (b *Batcher) GetBatcherInfo(now time.Time) BatcherInfo {
 	info := BatcherInfo{}
-	counters := make(map[int64]int64)
 
-	nowUnix := now.Unix()
-
-	// sum for last N time keys
-	b.committedCountersMu.RLock()
-	for k, v := range b.committedCounters {
-		for _, secondsRange := range batcherTimeKeys {
-			if (nowUnix - k) < secondsRange {
-				counters[secondsRange] += v
-			}
-		}
+	info.MinWait = BatcherTimeDTO{
+		TimeRFC3339: time.Unix(b.batcherTimeWaitArr[minWaitIndex].Timestamp.Load(), 0).Format(time.RFC3339),
+		Timestamp:   b.batcherTimeWaitArr[minWaitIndex].Timestamp.Load(),
+		Duration:    b.batcherTimeWaitArr[minWaitIndex].Duration.Load(),
 	}
-	b.committedCountersMu.RUnlock()
-	info.CommittedCounters = counters
-
-	b.batcherTimeMu.RLock()
-	info.MinWait = b.batcherTimeWaitMap[0]
-	info.MaxWait = b.batcherTimeWaitMap[1]
-	b.batcherTimeMu.RUnlock()
+	info.MaxWait = BatcherTimeDTO{
+		TimeRFC3339: time.Unix(b.batcherTimeWaitArr[maxWaitIndex].Timestamp.Load(), 0).Format(time.RFC3339),
+		Timestamp:   b.batcherTimeWaitArr[maxWaitIndex].Timestamp.Load(),
+		Duration:    b.batcherTimeWaitArr[maxWaitIndex].Duration.Load(),
+	}
 
 	return info
 }
@@ -266,14 +207,21 @@ func (b *Batcher) work(ctx context.Context) {
 
 func (b *Batcher) saveObservabilityInfo(waitStart time.Time) {
 	waitEnd := time.Now()
-	b.committedCountersMu.Lock()
-	b.committedCounters[waitEnd.Unix()]++
-	b.committedCountersMu.Unlock()
+	waitEndUnix := waitEnd.Unix()
 
-	b.batcherTimeChan <- BatcherTimeDTO{
-		TimeRFC3339: waitEnd.Format(time.RFC3339),
-		Timestamp:   waitEnd.Unix(),
-		Duration:    waitEnd.Sub(waitStart),
+	duration := waitEnd.Sub(waitStart)
+	// update value if it's not set, lesser than existed one of if existed one is stale
+	currentMin := b.batcherTimeWaitArr[minWaitIndex]
+	if currentMin.Duration.Load() == 0 || duration < currentMin.Duration.Load() || waitEndUnix-currentMin.Timestamp.Load() > keepMinMaxBatcherInfo {
+		b.batcherTimeWaitArr[minWaitIndex].Timestamp.Store(waitEndUnix)
+		b.batcherTimeWaitArr[minWaitIndex].Duration.Store(duration)
+	}
+
+	// update value if it's not set, higher than existed one of if existed one is stale
+	currentMax := b.batcherTimeWaitArr[maxWaitIndex]
+	if currentMax.Duration.Load() == 0 || duration > currentMax.Duration.Load() || waitEndUnix-currentMax.Timestamp.Load() > keepMinMaxBatcherInfo {
+		b.batcherTimeWaitArr[maxWaitIndex].Timestamp.Store(waitEndUnix)
+		b.batcherTimeWaitArr[maxWaitIndex].Duration.Store(duration)
 	}
 }
 
@@ -317,6 +265,7 @@ func (b *Batcher) heartbeat() {
 	}
 }
 
+// Add adds new event to batch.
 func (b *Batcher) Add(event *Event) {
 	b.mu.Lock()
 
@@ -326,7 +275,7 @@ func (b *Batcher) Add(event *Event) {
 	b.trySendBatchAndUnlock(batch)
 }
 
-// trySendBatch mu should be locked and it'll be unlocked after execution of this function
+// trySendBatch mu should be locked, and it'll be unlocked after execution of this function.
 func (b *Batcher) trySendBatchAndUnlock(batch *Batch) {
 	if !batch.isReady() {
 		b.mu.Unlock()
@@ -349,6 +298,7 @@ func (b *Batcher) getBatch() *Batch {
 	return b.batch
 }
 
+// Stop stops batcher work.
 func (b *Batcher) Stop() {
 	b.shouldStop.Store(true)
 
