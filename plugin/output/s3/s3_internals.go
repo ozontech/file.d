@@ -3,7 +3,7 @@ package s3
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"path/filepath"
 
 	"github.com/minio/minio-go"
@@ -72,7 +72,7 @@ func (p *Plugin) getFileNames(outPlugCount int) map[string]string {
 // Try to create buckets from dirs lying in dynamic_dirs route
 func (p *Plugin) createPlugsFromDynamicBucketArtifacts(targetDirs map[string]string) {
 	dynamicDirsPath := filepath.Join(targetDirs[p.config.DefaultBucket], DynamicBucketDir)
-	dynamicDir, err := ioutil.ReadDir(dynamicDirsPath)
+	dynamicDir, err := os.ReadDir(dynamicDirsPath)
 	if err != nil {
 		p.logger.Infof("%s doesn't exist, won't restore dynamic s3 buckets", err.Error())
 		return

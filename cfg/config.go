@@ -2,7 +2,6 @@ package cfg
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"reflect"
 	"regexp"
@@ -53,7 +52,7 @@ func NewConfig() *Config {
 
 func NewConfigFromFile(path string) *Config {
 	logger.Infof("reading config %q", path)
-	yamlContents, err := ioutil.ReadFile(path)
+	yamlContents, err := os.ReadFile(path)
 	if err != nil {
 		logger.Fatalf("can't read config file %q: %s", path, err)
 	}
