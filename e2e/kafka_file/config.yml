@@ -2,5 +2,6 @@ pipelines:
   test_kafka_file:
     input:
       type: kafka
+      offset: oldest
     output:
       type: file

@@ -16,6 +16,28 @@ import (
 /*{ introduction
 It reads events from multiple Kafka topics using `sarama` library.
 > It guarantees at "at-least-once delivery" due to the commitment mechanism.
+
+**Example**
+Standard example:
+```yaml
+pipelines:
+  example_pipeline:
+    input:
+      type: kafka
+      brokers: [kafka:9092, kafka:9091]
+      topics: [topic1, topic2]
+      offset: newest
+    # output plugin is not important in this case, let's emulate s3 output.
+    output:
+      type: s3
+      file_config:
+        retention_interval: 10s
+      endpoint: "s3.fake_host.org:80"
+      access_key: "access_key1"
+      secret_key: "secret_key2"
+      bucket: "bucket-logs"
+      bucket_field_event: "bucket_name"
+```
 }*/
 
 type Plugin struct {
@@ -55,6 +77,13 @@ type Config struct {
 	// >
 	// > The number of unprocessed messages in the buffer that are loaded in the background from kafka.
 	ChannelBufferSize int `json:"channel_buffer_size" default:"256"` // *
+
+	// > @3@4@5@6
+	// >
+	// > The newest and oldest values is used when a consumer starts but there is no committed offset for the assigned partition.
+	// > * *`newest`* - read messages from the last one that arrived
+	// > * *`oldest`* - read messages from the last one available
+	Offset string `json:"offset" default:"newest" options:"oldest|newest"` // *
 }
 
 func init() {
@@ -127,6 +156,15 @@ func (p *Plugin) newConsumerGroup() sarama.ConsumerGroup {
 	config.Consumer.Group.Rebalance.Strategy = sarama.BalanceStrategyRoundRobin
 	config.Version = sarama.V0_10_2_0
 	config.ChannelBufferSize = p.config.ChannelBufferSize
+
+	switch p.config.Offset {
+	case "oldest":
+		config.Consumer.Offsets.Initial = sarama.OffsetOldest
+	case "newest":
+		config.Consumer.Offsets.Initial = sarama.OffsetNewest
+	default:
+		p.logger.Fatalf("unexpected value of the offset field: %s", p.config.Offset)
+	}
 
 	consumerGroup, err := sarama.NewConsumerGroup(p.config.Brokers, p.config.ConsumerGroup, config)
 	if err != nil {

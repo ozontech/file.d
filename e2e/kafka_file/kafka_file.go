@@ -41,7 +41,6 @@ func (c *Config) Configure(t *testing.T, conf *cfg.Config, pipelineName string) 
 
 // Send creates a Partition of messages (one for each partition) and sends them Count times to kafka
 func (c *Config) Send(t *testing.T) {
-	time.Sleep(10 * time.Second)
 	config := sarama.NewConfig()
 	config.Producer.Flush.Frequency = time.Millisecond
 	config.Producer.Return.Errors = true
