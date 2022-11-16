@@ -456,6 +456,8 @@ github.com/valyala/fasthttp v1.37.0/go.mod h1:t/G+3rLek+CyY9bnIE+YlMRddxVAAGjhxn
 github.com/valyala/tcplisten v1.0.0/go.mod h1:T0xQ8SeCZGxckz9qRXTfG43PvQ/mcWh7FwZEA7Ioqkc=
 github.com/vitkovskii/insane-json v0.1.3 h1:/FQ9OH7qeHOEteL8GBaxXGGdeJCY31n2weRA1jlq8cA=
 github.com/vitkovskii/insane-json v0.1.3/go.mod h1:xQyYcnFJ8ElboaEZG805SrQ7I4QupForGkm0/TnRaZ8=
+github.com/vitkovskii/insane-json v0.1.6 h1:3HhFvVbcoh4o4E74krA/HX7WbTuk4U5Nv4B4inrb/qs=
+github.com/vitkovskii/insane-json v0.1.6/go.mod h1:xQyYcnFJ8ElboaEZG805SrQ7I4QupForGkm0/TnRaZ8=
 github.com/xdg/scram v1.0.3/go.mod h1:lB8K/P019DLNhemzwFU4jHLhdvlE6uDZjXFejJXr49I=
 github.com/xdg/stringprep v1.0.3/go.mod h1:Jhud4/sHMO4oL310DaZAKk9ZaJ08SJfe+sJh0HrGL1Y=
 github.com/yuin/goldmark v1.1.27/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=

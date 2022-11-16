@@ -13,12 +13,12 @@ import (
 func TestDiscardAnd(t *testing.T) {
 	conds := pipeline.MatchConditions{
 		pipeline.MatchCondition{
-			Field: []string{"field1"},
-			Value: "value1",
+			Field:  []string{"field1"},
+			Values: []string{"value1"},
 		},
 		pipeline.MatchCondition{
-			Field: []string{"field2"},
-			Value: "value2",
+			Field:  []string{"field2"},
+			Values: []string{"value2"},
 		},
 	}
 
@@ -57,12 +57,12 @@ func TestDiscardAnd(t *testing.T) {
 func TestDiscardOr(t *testing.T) {
 	conds := pipeline.MatchConditions{
 		pipeline.MatchCondition{
-			Field: []string{"field1"},
-			Value: "value1",
+			Field:  []string{"field1"},
+			Values: []string{"value1"},
 		},
 		pipeline.MatchCondition{
-			Field: []string{"field2"},
-			Value: "value2",
+			Field:  []string{"field2"},
+			Values: []string{"value2"},
 		},
 	}
 
@@ -146,8 +146,8 @@ func TestDiscardMatchInvert(t *testing.T) {
 	// only this value should appear
 	conds := pipeline.MatchConditions{
 		pipeline.MatchCondition{
-			Field: []string{"field2"},
-			Value: "value2",
+			Field:  []string{"field2"},
+			Values: []string{"value2"},
 		},
 	}
 
