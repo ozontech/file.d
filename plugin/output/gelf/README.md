@@ -49,13 +49,13 @@ Which field of the event should be used as `host` GELF field.
 
 **`short_message_field`** *`string`* *`default=message`* 
 
-Which field of the event should be used as `short_message` GELF field.
+ Which field of the event should be used as `short_message` GELF field.
 
 <br>
 
 **`default_short_message_value`** *`string`* *`default=not set`* 
 
-The default value for `short_message` GELF field if nothing is found in the event.
+ The default value for `short_message` GELF field if nothing is found in the event.
 
 <br>
 

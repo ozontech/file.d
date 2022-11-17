@@ -81,8 +81,8 @@ type Config struct {
 	// > @3@4@5@6
 	// >
 	// > The newest and oldest values is used when a consumer starts but there is no committed offset for the assigned partition.
-	// > * *`newest`* - read messages from the last one that arrived
-	// > * *`oldest`* - read messages from the last one available
+	// > * *`newest`* - set offset to the newest message
+	// > * *`oldest`* - set offset to the oldest message
 	Offset string `json:"offset" default:"newest" options:"oldest|newest"` // *
 }
 

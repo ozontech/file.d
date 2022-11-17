@@ -35,7 +35,7 @@ func init() {
 	Instance = zap.New(
 		zapcore.NewCore(
 			zapcore.NewConsoleEncoder(zapcore.EncoderConfig{
-				// TimeKey:        "ts",
+				TimeKey:        "ts",
 				LevelKey:       "level",
 				NameKey:        "Instance",
 				CallerKey:      "caller",

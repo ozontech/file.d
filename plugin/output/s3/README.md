@@ -77,56 +77,70 @@ pipelines:
 
 ### Config params
 **`file_config`** *`file.Config`* 
-Under the hood this plugin uses /plugin/output/file/ to collect logs
+
+Under the hood this plugin uses /plugin/output/file/ to collect logs.
 
 <br>
 
 **`compression_type`** *`string`* *`default=zip`* *`options=zip`* 
-Compression type
+
+Compressed files format.
 
 <br>
 
 **`endpoint`** *`string`* *`required`* 
-Endpoint address of default bucket.
+
+Address of default bucket.
 
 <br>
 
 **`access_key`** *`string`* *`required`* 
-s3 access key.
+
+S3 access key.
 
 <br>
 
 **`secret_key`** *`string`* *`required`* 
-s3 secret key.
+
+S3 secret key.
 
 <br>
 
 **`bucket`** *`string`* *`required`* 
-s3 default bucket.
+
+Main S3 bucket.
 
 <br>
 
 **`multi_buckets`** *``json:"multi_buckets"`* 
-MultiBuckets is additional buckets, which can also receive event.
-Event must contain `bucket_name` field which value is s3 bucket name.
-Events without `bucket_name` sends to DefaultBucket.
+
+Additional buckets, which can also receive event.
+Event with bucket_name field sends to such s3 bucket.
 
 <br>
 
 **`secure`** *`bool`* *`default=false`* 
-s3 connection secure option.
+
+S3 connection secure option.
 
 <br>
 
 **`bucket_field_event`** *`string`* 
-BucketEventField field change destination bucket of event to fields value.
+
+Change destination bucket of event.
 Fallback to DefaultBucket if BucketEventField bucket doesn't exist.
 
 <br>
 
 **`dynamic_buckets_limit`** *`int`* *`default=32`* 
-DynamicBucketsLimit regulates how many buckets can be created dynamically.
-Prevents problems when some random strings in BucketEventField where
+
+Regulates number of buckets that can be created dynamically.
+
+<br>
+
+**`upload_timeout`** *`cfg.Duration`* *`default=1m`* 
+
+Sets upload timeout.
 
 <br>
 

@@ -4,7 +4,6 @@ package e2e_test
 
 import (
 	"context"
-	"log"
 	"testing"
 	"time"
 
@@ -48,6 +47,7 @@ import (
 	_ "github.com/ozontech/file.d/plugin/output/s3"
 	_ "github.com/ozontech/file.d/plugin/output/splunk"
 	_ "github.com/ozontech/file.d/plugin/output/stdout"
+	"github.com/stretchr/testify/assert"
 )
 
 // e2eTest is the general interface for e2e tests
@@ -74,10 +74,12 @@ func startForTest(t *testing.T, e e2eTest, configPath string) *fd.FileD {
 
 func TestE2EStabilityWorkCase(t *testing.T) {
 	testsList := []struct {
+		name string
 		e2eTest
 		cfgPath string
 	}{
 		{
+			name: "file_file",
 			e2eTest: &file_file.Config{
 				Count:   10,
 				Lines:   500,
@@ -86,6 +88,7 @@ func TestE2EStabilityWorkCase(t *testing.T) {
 			cfgPath: "./file_file/config.yml",
 		},
 		{
+			name: "http_file",
 			e2eTest: &http_file.Config{
 				Count:   10,
 				Lines:   500,
@@ -94,6 +97,7 @@ func TestE2EStabilityWorkCase(t *testing.T) {
 			cfgPath: "./http_file/config.yml",
 		},
 		{
+			name: "kafka_file",
 			e2eTest: &kafka_file.Config{
 				Topics:    []string{"quickstart"},
 				Brokers:   []string{"localhost:9092"},
@@ -104,16 +108,17 @@ func TestE2EStabilityWorkCase(t *testing.T) {
 			cfgPath: "./kafka_file/config.yml",
 		},
 	}
-
 	for _, test := range testsList {
-		filed := startForTest(t, test.e2eTest, test.cfgPath)
-		test.Send(t)
-		test.Validate(t)
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		err := filed.Stop(ctx)
-		cancel()
-		if err != nil {
-			log.Fatalf("failed to stop filed: %s", err.Error())
-		}
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			filed := startForTest(t, test.e2eTest, test.cfgPath)
+			test.Send(t)
+			test.Validate(t)
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			err := filed.Stop(ctx)
+			cancel()
+			assert.NoError(t, err)
+		})
 	}
 }

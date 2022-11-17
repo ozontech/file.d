@@ -52,8 +52,8 @@ The number of unprocessed messages in the buffer that are loaded in the backgrou
 **`offset`** *`string`* *`default=newest`* *`options=oldest|newest`* 
 
 The newest and oldest values is used when a consumer starts but there is no committed offset for the assigned partition.
-* *`newest`* - read messages from the last one that arrived
-* *`oldest`* - read messages from the last one available
+* *`newest`* - set offset to the newest message
+* *`oldest`* - set offset to the oldest message
 
 <br>
 
