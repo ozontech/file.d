@@ -4,7 +4,6 @@ import (
 	"context"
 	"os"
 	"os/signal"
-	"runtime/debug"
 	"syscall"
 	"time"
 
@@ -59,12 +58,12 @@ var (
 	fileD *fd.FileD
 	exit  = make(chan bool)
 
-	config        = kingpin.Flag("config", `config file name`).Required().ExistingFile()
-	http          = kingpin.Flag("http", `http listen addr eg. ":9000", "off" to disable`).Default(":9000").String()
-	gcPercent     = kingpin.Flag("gc-percent", `GOGC value https://pkg.go.dev/runtime`).Default("50").Int()
+	config        = kingpin.Flag("config", `Config file name`).Required().ExistingFile()
+	http          = kingpin.Flag("http", `HTTP listen addr eg. ":9000", "off" to disable`).Default(":9000").String()
 	memLimitRatio = kingpin.Flag(
 		"mem-limit-ratio",
-		`value to set GOMEMLIMIT (https://pkg.go.dev/runtime) with the value from the cgroup's memory limit and given ratio. Default is disabled (0)`,
+		`Value to set GOMEMLIMIT (https://pkg.go.dev/runtime) with the value from the cgroup's memory limit and given ratio. `+
+			`If there is a need to reduce the load GC, it is recommended to set 0.9. Default is disabled.`,
 	).Default("0").Float64()
 )
 
@@ -130,16 +129,14 @@ func listenSignals() {
 }
 
 func setRuntimeSettings() {
-	debug.SetGCPercent(*gcPercent)
-
-	var memLimit int64
-	if *memLimitRatio != 0 {
-		var err error
-		memLimit, err = memlimit.SetGoMemLimit(*memLimitRatio)
-		if err != nil {
-			logger.Fatal("can't set GOMEMLIMIT: %s", err)
-		}
+	if *memLimitRatio == 0 {
+		return
 	}
 
-	logger.Warnf("GOGC=%v, GOMEMLIMIT=%v", *gcPercent, memLimit)
+	memLimit, err := memlimit.SetGoMemLimit(*memLimitRatio)
+	if err != nil {
+		logger.Fatal("can't set GOMEMLIMIT: %s", err)
+	}
+	logger.Warnf("GOMEMLIMIT=%v", memLimit)
+
 }
