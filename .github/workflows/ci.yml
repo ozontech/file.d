@@ -162,3 +162,6 @@ jobs:
 
       - name: Download dependencies
         run: go mod download && go mod tidy
+
+      - name: Check git diff
+        run: git diff --exit-code

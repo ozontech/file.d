@@ -4,10 +4,10 @@ import (
 	"context"
 	"os"
 	"os/signal"
-	"runtime/debug"
 	"syscall"
 	"time"
 
+	"github.com/KimMachineGun/automemlimit/memlimit"
 	"github.com/alecthomas/kingpin"
 	"github.com/ozontech/file.d/buildinfo"
 	"github.com/ozontech/file.d/cfg"
@@ -58,10 +58,13 @@ var (
 	fileD *fd.FileD
 	exit  = make(chan bool)
 
-	config = kingpin.Flag("config", `config file name`).Required().ExistingFile()
-	http   = kingpin.Flag("http", `http listen addr eg. ":9000", "off" to disable`).Default(":9000").String()
-
-	gcPercent = 20
+	config        = kingpin.Flag("config", `Config file name`).Required().ExistingFile()
+	http          = kingpin.Flag("http", `HTTP listen addr eg. ":9000", "off" to disable`).Default(":9000").String()
+	memLimitRatio = kingpin.Flag(
+		"mem-limit-ratio",
+		`Value to set GOMEMLIMIT (https://pkg.go.dev/runtime) with the value from the cgroup's memory limit and given ratio. `+
+			`If there is a need to reduce the load GC, it is recommended to set 0.9. Default is disabled.`,
+	).Default("0").Float64()
 )
 
 func main() {
@@ -70,7 +73,7 @@ func main() {
 
 	logger.Infof("Hi! I'm file.d version=%s %s", buildinfo.Version, buildinfo.BuildTime)
 
-	debug.SetGCPercent(gcPercent)
+	setRuntimeSettings()
 	insaneJSON.DisableBeautifulErrors = true
 	insaneJSON.StartNodePoolSize = pipeline.DefaultJSONNodePoolSize
 
@@ -84,10 +87,10 @@ func main() {
 }
 
 func start() {
-	cfg := cfg.NewConfigFromFile(*config)
-	longpanic.SetTimeout(cfg.PanicTimeout)
+	appCfg := cfg.NewConfigFromFile(*config)
+	longpanic.SetTimeout(appCfg.PanicTimeout)
 
-	fileD = fd.New(cfg, *http)
+	fileD = fd.New(appCfg, *http)
 	fileD.Start()
 }
 
@@ -123,4 +126,17 @@ func listenSignals() {
 			exit <- true
 		}
 	}
+}
+
+func setRuntimeSettings() {
+	if *memLimitRatio == 0 {
+		return
+	}
+
+	memLimit, err := memlimit.SetGoMemLimit(*memLimitRatio)
+	if err != nil {
+		logger.Fatal("can't set GOMEMLIMIT: %s", err)
+	}
+	logger.Warnf("GOMEMLIMIT=%v", memLimit)
+
 }
