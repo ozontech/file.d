@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"math"
 	"math/rand"
 	"os"
@@ -369,7 +368,7 @@ func (p *Plugin) getDynamicDirsArtifacts(targetDirs map[string]string) map[strin
 	dynamicDirs := make(map[string]string)
 
 	dynamicDirsPath := filepath.Join(targetDirs[p.config.DefaultBucket], DynamicBucketDir)
-	dynamicDir, err := ioutil.ReadDir(dynamicDirsPath)
+	dynamicDir, err := os.ReadDir(dynamicDirsPath)
 	// If no such dir, no dynamic dirs existed.
 	if err != nil {
 		return nil

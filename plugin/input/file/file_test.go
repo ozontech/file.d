@@ -2,7 +2,6 @@ package file
 
 import (
 	"fmt"
-	"io/ioutil"
 	"math/rand"
 	"os"
 	"path"
@@ -271,7 +270,7 @@ func addLines(file string, from int, to int) int {
 }
 
 func getContent(file string) string {
-	content, err := ioutil.ReadFile(file)
+	content, err := os.ReadFile(file)
 	if err != nil {
 		panic(err)
 	}
@@ -280,7 +279,7 @@ func getContent(file string) string {
 }
 
 func getContentBytes(file string) []byte {
-	content, err := ioutil.ReadFile(file)
+	content, err := os.ReadFile(file)
 	if err != nil {
 		panic(err)
 	}
@@ -1138,11 +1137,7 @@ func BenchmarkLightJsonReadPar(b *testing.B) {
 	for n := 0; n < b.N; n++ {
 		p, _, output := test.NewPipelineMock(nil, "passive", "perf")
 
-		f, err := os.MkdirTemp("", "off")
-		if err != nil {
-			panic(err.Error())
-		}
-		offsetsDir = f
+		offsetsDir = b.TempDir()
 		p.SetInput(getInputInfo())
 
 		wg := &sync.WaitGroup{}
