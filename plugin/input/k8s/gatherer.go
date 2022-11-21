@@ -1,7 +1,6 @@
 package k8s
 
 import (
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -423,7 +422,7 @@ func parseLogFilename(fullFilename string) (namespace, podName, containerName, c
 }
 
 func getNamespace() string {
-	data, err := ioutil.ReadFile("/var/run/secrets/kubernetes.io/serviceaccount/namespace")
+	data, err := os.ReadFile("/var/run/secrets/kubernetes.io/serviceaccount/namespace")
 	if err != nil {
 		return ""
 	}
