@@ -1,6 +1,7 @@
 package file_file
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"path"
@@ -52,7 +53,7 @@ func (c *Config) Send(t *testing.T) {
 			defer wg.Done()
 			u1 := strings.ReplaceAll(uuid.NewV4().String(), "-", "")
 			u2 := strings.ReplaceAll(uuid.NewV4().String(), "-", "")
-			name := path.Join(c.FilesDir, "pod_ns_container-"+u1+u2+".log")
+			name := path.Join(c.FilesDir, fmt.Sprintf("pod_ns_container-%s%s.log", u1, u2))
 			file, err := os.Create(name)
 			if err != nil {
 				log.Fatalf("failed to create file: %s", err.Error())

@@ -3,7 +3,7 @@
 package e2e_test
 
 import (
-	"context"
+	"log"
 	"testing"
 	"time"
 
@@ -47,7 +47,6 @@ import (
 	_ "github.com/ozontech/file.d/plugin/output/s3"
 	_ "github.com/ozontech/file.d/plugin/output/splunk"
 	_ "github.com/ozontech/file.d/plugin/output/stdout"
-	"github.com/stretchr/testify/assert"
 )
 
 // e2eTest is the general interface for e2e tests
@@ -60,24 +59,14 @@ type e2eTest interface {
 	Validate(t *testing.T)
 }
 
-func startForTest(t *testing.T, e e2eTest, configPath string) *fd.FileD {
-	conf := cfg.NewConfigFromFile(configPath)
-	var pipelineName string
-	for pipelineName = range conf.Pipelines {
-		break
-	}
-	e.Configure(t, conf, pipelineName)
-	filed := fd.New(conf, "off")
-	filed.Start()
-	return filed
+type E2ETest struct {
+	name    string
+	cfgPath string
+	e2eTest
 }
 
 func TestE2EStabilityWorkCase(t *testing.T) {
-	testsList := []struct {
-		name string
-		e2eTest
-		cfgPath string
-	}{
+	testsList := []E2ETest{
 		{
 			name: "file_file",
 			e2eTest: &file_file.Config{
@@ -108,17 +97,49 @@ func TestE2EStabilityWorkCase(t *testing.T) {
 			cfgPath: "./kafka_file/config.yml",
 		},
 	}
+
+	startForTest(t, testsList)
+
 	for _, test := range testsList {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
-			filed := startForTest(t, test.e2eTest, test.cfgPath)
 			test.Send(t)
 			test.Validate(t)
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			err := filed.Stop(ctx)
-			cancel()
-			assert.NoError(t, err)
 		})
 	}
+}
+
+func startForTest(t *testing.T, tests []E2ETest) *fd.FileD {
+	configs := make([]*cfg.Config, len(tests))
+	for i, test := range tests {
+		conf := cfg.NewConfigFromFile(test.cfgPath)
+		if _, ok := conf.Pipelines[test.name]; !ok {
+			log.Fatalf("pipeline name must be named the same as the name of the test")
+		}
+		test.Configure(t, conf, test.name)
+		configs[i] = conf
+	}
+
+	cfg := MergeConfigs(configs)
+	filed := fd.New(cfg, "off")
+	filed.Start()
+	return filed
+}
+
+func MergeConfigs(configs []*cfg.Config) *cfg.Config {
+	mergedConfig := new(cfg.Config)
+	mergedConfig.Pipelines = make(map[string]*cfg.PipelineConfig)
+	mergedConfig.PanicTimeout = time.Millisecond
+
+	for _, config := range configs {
+		for pipelineName, pipelineConfig := range config.Pipelines {
+			if _, ok := mergedConfig.Pipelines[pipelineName]; ok {
+				log.Fatalf(`pipeline with such name = %s alredy exist`, pipelineName)
+			}
+			mergedConfig.Pipelines[pipelineName] = pipelineConfig
+		}
+	}
+
+	return mergedConfig
 }

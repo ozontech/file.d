@@ -1,5 +1,5 @@
 pipelines:
-  test_file_file:
+  file_file:
     input:
       type: file
       persistence_mode: async

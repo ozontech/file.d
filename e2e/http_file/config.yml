@@ -1,5 +1,5 @@
 pipelines:
-  test_http_file:
+  http_file:
     input:
       type: http
     actions:

@@ -1,5 +1,5 @@
 pipelines:
-  test_kafka_file:
+  kafka_file:
     input:
       type: kafka
       offset: oldest
