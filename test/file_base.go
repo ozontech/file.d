@@ -1,9 +1,12 @@
 package test
 
 import (
+	"bufio"
+	"log"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/stretchr/testify/assert"
@@ -57,4 +60,31 @@ func CheckNotZero(t *testing.T, target string, msg string) int64 {
 		assert.NotZero(t, info.Size(), msg)
 	}
 	return info.Size()
+}
+
+func CountLines(t *testing.T, pattern string) int {
+	matches, err := filepath.Glob(pattern)
+	assert.NoError(t, err)
+	lineCount := 0
+	for _, match := range matches {
+		file, err := os.Open(match)
+		if err != nil {
+			log.Fatalf("can't open file: %s", err.Error())
+		}
+		fileScanner := bufio.NewScanner(file)
+		for fileScanner.Scan() {
+			lineCount++
+		}
+	}
+	return lineCount
+}
+
+func WaitProcessEvents(t *testing.T, count int, checkInterval, maxTime time.Duration, pattern string) {
+	tf := time.Now().Add(maxTime)
+	for tf.After(time.Now()) {
+		if count == CountLines(t, pattern) {
+			return
+		}
+		time.Sleep(checkInterval)
+	}
 }

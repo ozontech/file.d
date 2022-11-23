@@ -251,6 +251,7 @@ func TestConfigParseValid(t *testing.T) {
 		},
 	}
 	for _, tl := range testList {
+		tl := tl
 		t.Run(tl.name, func(t *testing.T) {
 			t.Parallel()
 			_, config := tl.factory()
@@ -279,6 +280,7 @@ func TestConfigParseInvalid(t *testing.T) {
 		},
 	}
 	for _, tl := range testList {
+		tl := tl
 		t.Run(tl.name, func(t *testing.T) {
 			t.Parallel()
 			_, config := tl.factory()

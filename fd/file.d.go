@@ -264,7 +264,10 @@ func DecodeConfig(config pipeline.AnyConfig, configJson []byte) error {
 
 func (f *FileD) Stop(ctx context.Context) error {
 	logger.Infof("stopping pipelines=%d", len(f.Pipelines))
-	err := f.server.Shutdown(ctx)
+	var err error
+	if f.server != nil {
+		err = f.server.Shutdown(ctx)
+	}
 	for _, p := range f.Pipelines {
 		p.Stop()
 	}
