@@ -57,6 +57,7 @@ func newEvent() *Event {
 
 func newTimeoutEvent(stream *stream) *Event {
 	event := &Event{
+		Root:       nil,
 		stream:     stream,
 		SeqID:      stream.commitSeq.Load(),
 		SourceID:   SourceID(stream.streamID),
