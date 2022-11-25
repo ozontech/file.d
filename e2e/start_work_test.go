@@ -121,13 +121,13 @@ func startForTest(t *testing.T, tests []E2ETest) *fd.FileD {
 		configs[i] = conf
 	}
 
-	cfg := MergeConfigs(configs)
-	filed := fd.New(cfg, "off")
+	conf := mergeConfigs(configs)
+	filed := fd.New(conf, "off")
 	filed.Start()
 	return filed
 }
 
-func MergeConfigs(configs []*cfg.Config) *cfg.Config {
+func mergeConfigs(configs []*cfg.Config) *cfg.Config {
 	mergedConfig := new(cfg.Config)
 	mergedConfig.Pipelines = make(map[string]*cfg.PipelineConfig)
 	mergedConfig.PanicTimeout = time.Millisecond
