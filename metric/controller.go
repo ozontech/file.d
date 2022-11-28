@@ -10,6 +10,7 @@ const (
 
 type Ctl struct {
 	subsystem string
+	register  *prom.Registry
 	counters  map[string]*prom.CounterVec
 	gauges    map[string]*prom.GaugeVec
 }
@@ -19,6 +20,7 @@ func New(subsystem string) *Ctl {
 		subsystem: subsystem,
 		counters:  make(map[string]*prom.CounterVec),
 		gauges:    make(map[string]*prom.GaugeVec),
+		register:  prom.NewRegistry(),
 	}
 	return ctl
 }
@@ -54,7 +56,7 @@ func (mc *Ctl) RegisterGauge(name, help string, labels ...string) *prom.GaugeVec
 	}, labels)
 
 	mc.gauges[name] = promGauge
-	prom.DefaultRegisterer.Unregister(promGauge)
-	prom.DefaultRegisterer.MustRegister(promGauge)
+	mc.register.Unregister(promGauge)
+	mc.register.MustRegister(promGauge)
 	return promGauge
 }
