@@ -67,7 +67,6 @@ func (s *stream) commit(event *Event) {
 		return
 	}
 	s.commitSeq.Store(event.SeqID)
-	//s.commitSeq = event.SeqID
 
 	if s.isDetaching {
 		s.tryDetach()
@@ -183,7 +182,7 @@ func (s *stream) tryUnblock() bool {
 		logger.Panicf("why events are different? away event id=%d, commit event id=%d", s.awaySeq, s.commitSeq)
 	}
 
-	timeoutEvent := newTimoutEvent(s)
+	timeoutEvent := newTimeoutEvent(s)
 	s.last = timeoutEvent
 	s.first = timeoutEvent
 
