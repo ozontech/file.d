@@ -2,7 +2,6 @@ package file
 
 import (
 	"fmt"
-	"io/ioutil"
 	"math/rand"
 	"os"
 	"strconv"
@@ -59,7 +58,7 @@ func (o *offsetDB) load() (fpOffsets, error) {
 		logger.Fatalf("can't load offsets, file %s is dir")
 	}
 
-	content, err := ioutil.ReadFile(o.curOffsetsFile)
+	content, err := os.ReadFile(o.curOffsetsFile)
 	if err != nil {
 		logger.Panicf("can't read offset file: %s", err.Error())
 	}

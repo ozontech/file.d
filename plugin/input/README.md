@@ -138,5 +138,27 @@ pipelines:
 It reads events from multiple Kafka topics using `sarama` library.
 > It guarantees at "at-least-once delivery" due to the commitment mechanism.
 
+**Example**
+Standard example:
+```yaml
+pipelines:
+  example_pipeline:
+    input:
+      type: kafka
+      brokers: [kafka:9092, kafka:9091]
+      topics: [topic1, topic2]
+      offset: newest
+    # output plugin is not important in this case, let's emulate s3 output.
+    output:
+      type: s3
+      file_config:
+        retention_interval: 10s
+      endpoint: "s3.fake_host.org:80"
+      access_key: "access_key1"
+      secret_key: "secret_key2"
+      bucket: "bucket-logs"
+      bucket_field_event: "bucket_name"
+```
+
 [More details...](plugin/input/kafka/README.md)
 <br>*Generated using [__insane-doc__](https://github.com/vitkovskii/insane-doc)*

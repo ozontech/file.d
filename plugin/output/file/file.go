@@ -260,7 +260,7 @@ func (p *Plugin) sealUp() {
 	if err := oldFile.Close(); err != nil {
 		p.logger.Panicf("could not close file: %s, error: %s", oldFile.Name(), err.Error())
 	}
-	logger.Errorf("sealing in %d, newFile: %s", time.Now().Unix(), newFileName)
+	logger.Infof("sealing file, newFileName=%s", newFileName)
 	if p.SealUpCallback != nil {
 		longpanic.Go(func() { p.SealUpCallback(newFileName) })
 	}

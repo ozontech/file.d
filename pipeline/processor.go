@@ -274,14 +274,14 @@ func (p *processor) isMatch(index int, event *Event) bool {
 	conds := info.MatchConditions
 	mode := info.MatchMode
 
-	if mode == MatchModeOr {
-		return p.isMatchOr(conds, event)
+	if mode == MatchModeOr || mode == MatchModeOrPrefix {
+		return p.isMatchOr(conds, event, mode == MatchModeOrPrefix)
 	} else {
-		return p.isMatchAnd(conds, event)
+		return p.isMatchAnd(conds, event, mode == MatchModeAndPrefix)
 	}
 }
 
-func (p *processor) isMatchOr(conds MatchConditions, event *Event) bool {
+func (p *processor) isMatchOr(conds MatchConditions, event *Event, byPrefix bool) bool {
 	for _, cond := range conds {
 		node := event.Root.Dig(cond.Field...)
 		if node == nil {
@@ -291,10 +291,12 @@ func (p *processor) isMatchOr(conds MatchConditions, event *Event) bool {
 		match := false
 		if cond.Regexp != nil {
 			match = cond.Regexp.MatchString(value)
-		} else {
-			match = value == cond.Value
+			if match {
+				return true
+			}
 		}
 
+		match = cond.valueExists(value, byPrefix)
 		if match {
 			return true
 		}
@@ -303,7 +305,7 @@ func (p *processor) isMatchOr(conds MatchConditions, event *Event) bool {
 	return false
 }
 
-func (p *processor) isMatchAnd(conds MatchConditions, event *Event) bool {
+func (p *processor) isMatchAnd(conds MatchConditions, event *Event, byPrefix bool) bool {
 	for _, cond := range conds {
 		node := event.Root.Dig(cond.Field...)
 		if node == nil {
@@ -314,10 +316,12 @@ func (p *processor) isMatchAnd(conds MatchConditions, event *Event) bool {
 		match := false
 		if cond.Regexp != nil {
 			match = cond.Regexp.MatchString(value)
-		} else {
-			match = value == cond.Value
+			if !match {
+				return false
+			}
 		}
 
+		match = cond.valueExists(value, byPrefix)
 		if !match {
 			return false
 		}

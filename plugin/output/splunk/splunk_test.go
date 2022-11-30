@@ -1,7 +1,7 @@
 package splunk
 
 import (
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -35,7 +35,7 @@ func TestSplunk(t *testing.T) {
 
 			var response []byte
 			testServer := httptest.NewServer(http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
-				response, err = ioutil.ReadAll(req.Body)
+				response, err = io.ReadAll(req.Body)
 				if err != nil {
 					t.Fatal(err)
 				}

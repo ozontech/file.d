@@ -55,9 +55,9 @@ func newEvent() *Event {
 	}
 }
 
-func newTimoutEvent(stream *stream) *Event {
+func newTimeoutEvent(stream *stream) *Event {
 	event := &Event{
-		Root:       insaneJSON.Spawn(),
+		Root:       nil,
 		stream:     stream,
 		SeqID:      stream.commitSeq.Load(),
 		SourceID:   SourceID(stream.streamID),

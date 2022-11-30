@@ -46,8 +46,8 @@ func (p *testS3Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputP
 	p.StartWithMinio(config, params, p.objStoreF)
 }
 
-func fPutObjectOk(bucketName, objectName, filePath string, opts minio.PutObjectOptions) (n int64, err error) {
-	logger.Infof("put object: %s, %s, %s", bucketName, objectName, filePath)
+//nolint:gocritic
+func fPutObjectOk(ctx context.Context, bucketName, objectName, filePath string, opts minio.PutObjectOptions) (n int64, err error) {
 	targetDir := fmt.Sprintf("./%s", bucketName)
 	if _, err := os.Stat(targetDir); os.IsNotExist(err) {
 		if err := os.MkdirAll(targetDir, os.ModePerm); err != nil {
@@ -74,11 +74,10 @@ type putWithErr struct {
 	cancel context.CancelFunc
 }
 
-func (put *putWithErr) fPutObjectErr(bucketName, objectName, filePath string, opts minio.PutObjectOptions) (n int64, err error) {
+//nolint:gocritic
+func (put *putWithErr) fPutObjectErr(ctx context.Context, bucketName, objectName, filePath string, opts minio.PutObjectOptions) (n int64, err error) {
 	select {
 	case <-put.ctx.Done():
-		logger.Info("put object")
-
 		targetDir := fmt.Sprintf("./%s", bucketName)
 		if _, err := os.Stat(targetDir); os.IsNotExist(err) {
 			if err := os.MkdirAll(targetDir, os.ModePerm); err != nil {
@@ -138,7 +137,7 @@ func TestStart(t *testing.T) {
 	defer ctl.Finish()
 	s3MockClient := mock_s3.NewMockObjectStoreClient(ctl)
 	s3MockClient.EXPECT().BucketExists(bucketName).Return(true, nil).AnyTimes()
-	s3MockClient.EXPECT().FPutObject(bucketName, gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(fPutObjectOk).AnyTimes()
+	s3MockClient.EXPECT().FPutObjectWithContext(gomock.Any(), bucketName, gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(fPutObjectOk).AnyTimes()
 
 	fileConfig := file.Config{
 		TargetFile:        targetFile,
@@ -288,18 +287,20 @@ func TestStartWithMultiBuckets(t *testing.T) {
 	defer ctl.Finish()
 
 	s3MockClient := mock_s3.NewMockObjectStoreClient(ctl)
-	//dynamicBucket
+
+	// dynamicBucket
 	for _, bucketName := range buckets {
 		s3MockClient.EXPECT().BucketExists(bucketName).Return(true, nil).AnyTimes()
-		s3MockClient.EXPECT().FPutObject(bucketName, gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(fPutObjectOk).AnyTimes()
+
+		s3MockClient.EXPECT().FPutObjectWithContext(gomock.Any(), bucketName, gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(fPutObjectOk).AnyTimes()
 	}
-	// At first dynamic bucket doesn't exist
+	// at first dynamic bucket doesn't exist
 	s3MockClient.EXPECT().BucketExists(dynamicBucket).Return(false, nil).Times(1)
-	// Successful creation on bucket.
+	// successful creation on bucket
 	s3MockClient.EXPECT().MakeBucket(dynamicBucket, "").Return(nil).Times(1)
-	// Now s3 answers that bucket exists.
+	// s3 answers that bucket exists
 	s3MockClient.EXPECT().BucketExists(dynamicBucket).Return(true, nil).AnyTimes()
-	s3MockClient.EXPECT().FPutObject(dynamicBucket, gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(fPutObjectOk).AnyTimes()
+	s3MockClient.EXPECT().FPutObjectWithContext(gomock.Any(), dynamicBucket, gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(fPutObjectOk).AnyTimes()
 
 	fileConfig := file.Config{
 		TargetFile:        targetFile,
@@ -523,7 +524,7 @@ func TestStartWithSendProblems(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	withErr := putWithErr{ctx: ctx, cancel: cancel}
-	s3MockClient.EXPECT().FPutObject(bucketName, gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(withErr.fPutObjectErr).AnyTimes()
+	s3MockClient.EXPECT().FPutObjectWithContext(gomock.Any(), bucketName, gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(withErr.fPutObjectErr).AnyTimes()
 
 	fileConfig := file.Config{
 		TargetFile:        targetFile,

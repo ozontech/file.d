@@ -3,6 +3,7 @@ package pipeline
 import (
 	"net/http"
 	"regexp"
+	"strings"
 
 	"github.com/ozontech/file.d/metric"
 	"go.uber.org/zap"
@@ -121,17 +122,142 @@ type MatchConditions []MatchCondition
 type MatchCondition struct {
 	// Slice for nested fields. Separator is a dot symbol.
 	Field  []string
-	Value  string
+	Values []string
 	Regexp *regexp.Regexp
+}
+
+func (mc *MatchCondition) valueExists(s string, byPrefix bool) bool {
+	var match bool
+	for i := range mc.Values {
+		if byPrefix {
+			match = strings.HasPrefix(s, mc.Values[i])
+		} else {
+			match = mc.Values[i] == s
+		}
+		if match {
+			break
+		}
+	}
+	return match
 }
 
 type MatchMode int
 
 const (
-	MatchModeAnd     MatchMode = 0
-	MatchModeOr      MatchMode = 1
-	MatchModeUnknown MatchMode = 2
+	MatchModeAnd MatchMode = iota
+	MatchModeOr
+	MatchModeAndPrefix
+	MatchModeOrPrefix
+	MatchModeUnknown
 )
+
+// ! match-modes
+// ^ match-modes
+
+var MatchModes = map[string]MatchMode{
+	"": MatchModeAnd,
+
+	// > @3 — matches fields with AND operator
+	// >
+	// > Example:
+	// > ```yaml
+	// > pipelines:
+	// >   test:
+	// >     actions:
+	// >       - type: discard
+	// >         match_fields:
+	// >           k8s_namespace: [payment, tarifficator] # use exact match
+	// >           k8s_pod: /^payment-api.*/              # use regexp match
+	// >         match_mode: and
+	// > ```
+	// >
+	// > result:
+	// > ```
+	// > {"k8s_namespace": "payment", "k8s_pod":"payment-api-abcd"}         # won't be discarded
+	// > {"k8s_namespace": "tarifficator", "k8s_pod":"payment-api"}         # discarded
+	// > ```
+	"and": MatchModeAnd, // *
+
+	// > @3 — matches fields with OR operator
+	// >
+	// > Example:
+	// > ```yaml
+	// > pipelines:
+	// >   test:
+	// >     actions:
+	// >       - type: discard
+	// >         match_fields:
+	// >           k8s_namespace: [payment, tarifficator] # use exact match
+	// >           k8s_pod: /^payment-api.*/              # use regexp match
+	// >         match_mode: or
+	// > ```
+	// >
+	// > result:
+	// > ```
+	// > {"k8s_namespace": "payment", "k8s_pod":"payment-api-abcd"} # won't be discarded
+	// > {"k8s_namespace": "tarifficator", "k8s_pod":"payment-api"} # won't be discarded
+	// > {"k8s_namespace": "map", "k8s_pod":"payment-api"} # won't be discarded
+	// > {"k8s_namespace": "payment", "k8s_pod":"map-api"} # won't be discarded
+	// > {"k8s_namespace": "tarifficator", "k8s_pod":"tarifficator-go-api"} # won't be discarded
+	// > {"k8s_namespace": "sre", "k8s_pod":"cpu-quotas-abcd-1234"} # discarded
+	// > ```
+	"or": MatchModeOr, // *
+
+	// > @3 — matches fields with AND operator
+	// >
+	// > Example:
+	// > ```yaml
+	// > pipelines:
+	// >   test:
+	// >     actions:
+	// >       - type: discard
+	// >         match_fields:
+	// >           k8s_namespace: payment # use prefix match
+	// >           k8s_pod: payment-api- # use prefix match
+	// >         match_mode: and_prefix
+	// >  ```
+	// >
+	// > result:
+	// > ```
+	// > {"k8s_namespace": "payment", "k8s_pod":"payment-api-abcd-1234"} # won't be discarded
+	// > {"k8s_namespace": "payment", "k8s_pod":"checkout"} # discarded
+	// > {"k8s_namespace": "map", "k8s_pod":"payment-api-abcd-1234"} # discarded
+	// > {"k8s_namespace": "payment", "k8s_pod":"payment-api"} # discarded
+	// > ```
+	"and_prefix": MatchModeAndPrefix, // *
+
+	// > @3 — matches fields with OR operator
+	// >
+	// > Example:
+	// > ```yaml
+	// > pipelines:
+	// >   test:
+	// >     actions:
+	// >       - type: discard
+	// >         match_fields:
+	// >           k8s_namespace: [payment, tarifficator] # use prefix match
+	// >           k8s_pod: /-api-.*/ # use regexp match
+	// >         match_mode: or_prefix
+	// > ```
+	// >
+	// > result:
+	// > ```
+	// > {"k8s_namespace": "payment", "k8s_pod":"payment-api-abcd-1234"} # won't be discarded
+	// > {"k8s_namespace": "payment", "k8s_pod":"checkout"} # won't be discarded
+	// > {"k8s_namespace": "map", "k8s_pod":"map-go-api-abcd-1234"} # discarded
+	// > {"k8s_namespace": "map", "k8s_pod":"payment-api"} # won't be discarded
+	// > {"k8s_namespace": "tariff", "k8s_pod":"tarifficator"} # won't be discarded
+	// > ```
+	"or_prefix": MatchModeOrPrefix, // *
+}
+
+func MatchModeFromString(mm string) MatchMode {
+	mode, ok := MatchModes[strings.ToLower(strings.TrimSpace(mm))]
+	if !ok {
+		return MatchModeUnknown
+	}
+	return mode
+}
 
 // PluginSelector the only valid value for now is ByNameSelector
 // and only value is string type. It can be expanded with a custom type in the future.

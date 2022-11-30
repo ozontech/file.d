@@ -110,6 +110,10 @@ func (l *redisLimiter) sync() {
 	l.totalLimiter.mu.Unlock()
 	l.incrementLimiter.mu.Unlock()
 
+	if len(l.bucketIdsForSync) == 0 {
+		return
+	}
+
 	l.syncLocalGlobalLimiters(maxID)
 	l.updateKeyLimit()
 }
