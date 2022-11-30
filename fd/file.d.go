@@ -82,8 +82,6 @@ func (f *FileD) startPipelines(mux *http.ServeMux) {
 	for name, config := range f.config.Pipelines {
 		f.addPipeline(mux, name, config)
 	}
-	// register HTTP methods with info about all pipelines and app
-	mux.HandleFunc("/pipelines", f.servePipelines())
 	for _, p := range f.Pipelines {
 		p.Start()
 	}
@@ -284,7 +282,6 @@ func (f *FileD) startHTTP() *http.ServeMux {
 	mux.HandleFunc("/freeosmem", f.serveFreeOsMem)
 	mux.Handle("/metrics", promhttp.Handler())
 	mux.Handle("/log/level", logger.Level)
-	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.FS(pipeline.PipelineTpl))))
 
 	f.server = &http.Server{Addr: f.httpAddr, Handler: mux}
 	longpanic.Go(f.listenHTTP)

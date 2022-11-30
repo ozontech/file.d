@@ -1,19 +1,13 @@
 package pipeline
 
 import (
-	"embed"
 	"encoding/json"
 	"fmt"
-	"html/template"
 	"net/http"
 	"time"
 
-	"github.com/ozontech/file.d/logger"
 	"go.uber.org/atomic"
 )
-
-//go:embed template
-var PipelineTpl embed.FS
 
 const (
 	InfoPipelineHTML = "template/html/pipeline_info.html"
@@ -163,33 +157,5 @@ func (p *Pipeline) serveBoardInfoJSON(inputInfo *InputPluginInfo,
 		}
 
 		_, _ = w.Write(bytes)
-	}
-}
-
-func (p *Pipeline) serveBoardInfo(
-	inputInfo *InputPluginInfo,
-	actionInfos []*ActionPluginStaticInfo,
-	outputInfo *OutputPluginInfo) func(http.ResponseWriter, *http.Request) {
-	tmpl, parseFSErr := template.ParseFS(PipelineTpl, InfoPipelineHTML)
-	if parseFSErr != nil {
-		logger.Errorf("can't parse html template: %s", parseFSErr.Error())
-	}
-
-	return func(w http.ResponseWriter, _ *http.Request) {
-		if parseFSErr != nil {
-			_, _ = fmt.Fprintf(w, "<html><body>can't parse html: %s</body></html>", parseFSErr.Error())
-			return
-		}
-
-		boardInfo, err := p.boardInfo(inputInfo, actionInfos, outputInfo)
-		if err != nil {
-			_, _ = fmt.Fprintf(w, "can't get board info: %s", err.Error())
-		}
-		err = tmpl.Execute(w, boardInfo)
-		if err != nil {
-			logger.Errorf("can't execute html template: %s", err.Error())
-			_, _ = fmt.Fprintf(w, "<html><body>can't render html: %s</body></html>", err.Error())
-			return
-		}
 	}
 }

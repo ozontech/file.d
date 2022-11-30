@@ -195,9 +195,9 @@ func (p *Pipeline) IncMaxEventSizeExceeded() {
 func (p *Pipeline) registerMetrics() {
 	p.inUseEventsMetric = p.metricsCtl.RegisterGauge("event_pool_in_use_events", "Count of pool events which is used for processing")
 	p.eventPoolCapacityMetric = p.metricsCtl.RegisterGauge("event_pool_capacity", "Pool capacity value")
-	p.inputEventsCountMetric = p.metricsCtl.RegisterCounter("input_events_count", "FileCount of events on pipeline input")
+	p.inputEventsCountMetric = p.metricsCtl.RegisterCounter("input_events_count", "Count of events on pipeline input")
 	p.inputEventSizeMetric = p.metricsCtl.RegisterCounter("input_events_size", "Size of events on pipeline input")
-	p.outputEventsCountMetric = p.metricsCtl.RegisterCounter("output_events_count", "FileCount of events on pipeline output")
+	p.outputEventsCountMetric = p.metricsCtl.RegisterCounter("output_events_count", "Count of events on pipeline output")
 	p.outputEventSizeMetric = p.metricsCtl.RegisterCounter("output_events_size", "Size of events on pipeline output")
 	p.readOpsEventsSizeMetric = p.metricsCtl.RegisterCounter("read_ops_count", "Read OPS count")
 	p.wrongEventCRIFormatMetric = p.metricsCtl.RegisterCounter("wrong_event_cri_format", "Wrong event CRI format counter")
@@ -241,7 +241,6 @@ func (p *Pipeline) SetupHTTPHandlers(mux *http.ServeMux) {
 		mux.HandleFunc(fmt.Sprintf("%s/%d/%s", prefix, len(p.actionInfos)+1, hName), handler)
 	}
 
-	mux.HandleFunc(fmt.Sprintf("%s/server_stats", prefix), p.serveBoardInfo(p.inputInfo, p.actionInfos, p.outputInfo))
 	mux.HandleFunc(fmt.Sprintf("%s/server_stats_json", prefix), p.serveBoardInfoJSON(p.inputInfo, p.actionInfos, p.outputInfo))
 }
 
