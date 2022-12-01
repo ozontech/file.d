@@ -14,6 +14,7 @@ import (
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
 	mock_pg "github.com/ozontech/file.d/plugin/output/postgres/mock"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/require"
 	insaneJSON "github.com/vitkovskii/insane-json"
 )
@@ -89,7 +90,7 @@ func TestPrivateOut(t *testing.T) {
 		ctx:          ctx,
 	}
 
-	p.RegisterMetrics(metric.New("test"))
+	p.RegisterMetrics(metric.New("test", prometheus.NewRegistry()))
 
 	batch := &pipeline.Batch{Events: []*pipeline.Event{{Root: root}}}
 	p.out(nil, batch)
@@ -164,7 +165,7 @@ func TestPrivateOutWithRetry(t *testing.T) {
 		ctx:          ctx,
 	}
 
-	p.RegisterMetrics(metric.New("test"))
+	p.RegisterMetrics(metric.New("test", prometheus.NewRegistry()))
 
 	batch := &pipeline.Batch{Events: []*pipeline.Event{{Root: root}}}
 	p.out(nil, batch)
@@ -217,7 +218,7 @@ func TestPrivateOutNoGoodEvents(t *testing.T) {
 		logger:       testLogger,
 	}
 
-	p.RegisterMetrics(metric.New("test"))
+	p.RegisterMetrics(metric.New("test", prometheus.NewRegistry()))
 
 	batch := &pipeline.Batch{Events: []*pipeline.Event{{Root: root}}}
 	p.out(nil, batch)
@@ -297,7 +298,7 @@ func TestPrivateOutDeduplicatedEvents(t *testing.T) {
 		ctx:          ctx,
 	}
 
-	p.RegisterMetrics(metric.New("test"))
+	p.RegisterMetrics(metric.New("test", prometheus.NewRegistry()))
 
 	batch := &pipeline.Batch{Events: []*pipeline.Event{
 		{Root: root},
@@ -363,7 +364,7 @@ func TestPrivateOutWrongTypeInField(t *testing.T) {
 		logger:       testLogger,
 	}
 
-	p.RegisterMetrics(metric.New("test"))
+	p.RegisterMetrics(metric.New("test", prometheus.NewRegistry()))
 
 	batch := &pipeline.Batch{Events: []*pipeline.Event{{Root: root}}}
 	p.out(nil, batch)
@@ -468,7 +469,7 @@ func TestPrivateOutFewUniqueEventsYetWithDeduplicationEventsAnpooladEvents(t *te
 		ctx:          ctx,
 	}
 
-	p.RegisterMetrics(metric.New("test"))
+	p.RegisterMetrics(metric.New("test", prometheus.NewRegistry()))
 
 	batch := &pipeline.Batch{Events: []*pipeline.Event{
 		{Root: root},

@@ -11,6 +11,7 @@ import (
 
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/atomic"
@@ -91,7 +92,7 @@ func TestWorkerWork(t *testing.T) {
 				shouldSkip:     *atomic.NewBool(false),
 				mu:             &sync.Mutex{},
 			}
-			ctl := metric.New("test")
+			ctl := metric.New("test", prometheus.NewRegistry())
 			possibleOffsetCorruptionMetric := ctl.RegisterCounter("worker", "help_test")
 			jp := NewJobProvider(&Config{}, possibleOffsetCorruptionMetric, &zap.SugaredLogger{})
 			jp.jobsChan = make(chan *Job, 2)
@@ -220,7 +221,7 @@ func TestWorkerWorkMultiData(t *testing.T) {
 				mu:         &sync.Mutex{},
 			}
 
-			ctl := metric.New("test")
+			ctl := metric.New("test", prometheus.NewRegistry())
 			possibleOffsetCorruptionMetric := ctl.RegisterCounter("worker", "help_test")
 			jp := NewJobProvider(&Config{}, possibleOffsetCorruptionMetric, &zap.SugaredLogger{})
 			jp.jobsChan = make(chan *Job, 2)

@@ -59,7 +59,7 @@ func (f *FileD) Start() {
 }
 
 func (f *FileD) initMetrics() {
-	f.metricCtl = metric.New("file_d")
+	f.metricCtl = metric.New("file_d", f.registry)
 	f.longPanicMetric = f.metricCtl.RegisterCounter("long_panic", "Count of panics in the LongPanic")
 	f.versionMetric = f.metricCtl.RegisterCounter("version", "", "version")
 	f.versionMetric.WithLabelValues(buildinfo.Version).Inc()
@@ -72,9 +72,6 @@ func (f *FileD) createRegistry() {
 	f.registry = prometheus.NewRegistry()
 	f.registry.MustRegister(prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}))
 	f.registry.MustRegister(prometheus.NewGoCollector())
-
-	prometheus.DefaultGatherer = f.registry
-	prometheus.DefaultRegisterer = f.registry
 }
 
 func (f *FileD) startPipelines() {
@@ -285,7 +282,9 @@ func (f *FileD) startHTTP() {
 	mux.HandleFunc("/live", f.serveLiveReady)
 	mux.HandleFunc("/ready", f.serveLiveReady)
 	mux.HandleFunc("/freeosmem", f.serveFreeOsMem)
-	mux.Handle("/metrics", promhttp.Handler())
+	mux.Handle("/metrics", promhttp.InstrumentMetricHandler(
+		f.registry, promhttp.HandlerFor(f.registry, promhttp.HandlerOpts{}),
+	))
 	mux.Handle("/log/level", logger.Level)
 
 	f.server = &http.Server{Addr: f.httpAddr, Handler: mux}

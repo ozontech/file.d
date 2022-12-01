@@ -15,12 +15,12 @@ type Ctl struct {
 	gauges    map[string]*prom.GaugeVec
 }
 
-func New(subsystem string) *Ctl {
+func New(subsystem string, registry *prom.Registry) *Ctl {
 	ctl := &Ctl{
 		subsystem: subsystem,
 		counters:  make(map[string]*prom.CounterVec),
 		gauges:    make(map[string]*prom.GaugeVec),
-		register:  prom.NewRegistry(),
+		register:  registry,
 	}
 	return ctl
 }
@@ -38,8 +38,8 @@ func (mc *Ctl) RegisterCounter(name, help string, labels ...string) *prom.Counte
 	}, labels)
 
 	mc.counters[name] = promCounter
-	prom.DefaultRegisterer.Unregister(promCounter)
-	prom.DefaultRegisterer.MustRegister(promCounter)
+	mc.register.Unregister(promCounter)
+	mc.register.MustRegister(promCounter)
 	return promCounter
 }
 
