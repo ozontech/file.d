@@ -16,6 +16,7 @@ import (
 	"github.com/ozontech/file.d/longpanic"
 	"github.com/ozontech/file.d/pipeline"
 	_ "github.com/ozontech/file.d/plugin/action/add_host"
+	_ "github.com/ozontech/file.d/plugin/action/add_source_name"
 	_ "github.com/ozontech/file.d/plugin/action/convert_date"
 	_ "github.com/ozontech/file.d/plugin/action/convert_log_level"
 	_ "github.com/ozontech/file.d/plugin/action/debug"

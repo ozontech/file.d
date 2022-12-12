@@ -4,6 +4,10 @@
 It adds field containing hostname to an event.
 
 [More details...](plugin/action/add_host/README.md)
+## add_source_name
+It adds field containing source name to an event.
+
+[More details...](plugin/action/add_source_name/README.md)
 ## convert_date
 It converts field date/time data to different format.
 
