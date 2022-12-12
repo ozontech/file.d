@@ -3,7 +3,6 @@ package s3
 import (
 	"bufio"
 	"fmt"
-	"net/http"
 	"os"
 	"path/filepath"
 	"testing"
@@ -419,7 +418,6 @@ func newPipeline(t *testing.T, configOutput *Config, objStoreF objStoreFactory) 
 		Decoder:           "json",
 	}
 
-	http.DefaultServeMux = &http.ServeMux{}
 	p := pipeline.New("test_pipeline", settings, prometheus.NewRegistry())
 	p.DisableParallelism()
 	p.EnableEventLog()

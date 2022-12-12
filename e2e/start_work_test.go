@@ -5,6 +5,7 @@ package e2e_test
 import (
 	"context"
 	"log"
+	"strconv"
 	"testing"
 	"time"
 
@@ -100,10 +101,11 @@ func TestE2EStabilityWorkCase(t *testing.T) {
 		},
 	}
 
-	for _, test := range testsList {
+	for num, test := range testsList {
 		test := test
+		num := num
 		t.Run(test.name, func(t *testing.T) {
-			fd := startForTest(t, test)
+			fd := startForTest(t, test, num)
 			t.Parallel()
 			test.Send(t)
 			test.Validate(t)
@@ -115,14 +117,15 @@ func TestE2EStabilityWorkCase(t *testing.T) {
 	}
 }
 
-func startForTest(t *testing.T, test E2ETest) *fd.FileD {
+func startForTest(t *testing.T, test E2ETest, num int) *fd.FileD {
 	conf := cfg.NewConfigFromFile(test.cfgPath)
 	if _, ok := conf.Pipelines[test.name]; !ok {
 		log.Fatalf("pipeline name must be named the same as the name of the test")
 	}
 	test.Configure(t, conf, test.name)
 
-	filed := fd.New(conf, "off")
+	// for each file.d its own port
+	filed := fd.New(conf, ":808"+strconv.Itoa(num))
 	filed.Start()
 	return filed
 }

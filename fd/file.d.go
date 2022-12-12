@@ -28,6 +28,7 @@ type FileD struct {
 	plugins   *PluginRegistry
 	Pipelines []*pipeline.Pipeline
 	server    *http.Server
+	mux       *http.ServeMux
 	metricCtl *metric.Ctl
 
 	// file_d metrics
@@ -40,6 +41,7 @@ func New(config *cfg.Config, httpAddr string) *FileD {
 	return &FileD{
 		config:    config,
 		httpAddr:  httpAddr,
+		mux:       http.NewServeMux(),
 		plugins:   DefaultPluginRegistry,
 		Pipelines: make([]*pipeline.Pipeline, 0),
 	}
@@ -85,7 +87,7 @@ func (f *FileD) startPipelines() {
 }
 
 func (f *FileD) addPipeline(name string, config *cfg.PipelineConfig) {
-	mux := http.DefaultServeMux
+	mux := f.mux
 	settings := extractPipelineParams(config.Raw.Get("settings"))
 
 	values := map[string]int{
@@ -277,7 +279,7 @@ func (f *FileD) startHTTP() {
 		return
 	}
 
-	mux := http.DefaultServeMux
+	mux := f.mux
 
 	mux.HandleFunc("/live", f.serveLiveReady)
 	mux.HandleFunc("/ready", f.serveLiveReady)
@@ -293,7 +295,7 @@ func (f *FileD) startHTTP() {
 
 func (f *FileD) listenHTTP() {
 	err := f.server.ListenAndServe()
-	if err != nil {
+	if err != http.ErrServerClosed {
 		logger.Fatalf("http listening error address=%q: %s", f.httpAddr, err.Error())
 	}
 }
