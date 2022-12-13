@@ -1,4 +1,4 @@
-package add_source_name
+package add_file_name
 
 import (
 	"github.com/ozontech/file.d/fd"
@@ -7,7 +7,8 @@ import (
 )
 
 /*{ introduction
-It adds field containing source name to an event.
+It adds a field containing the file name to the event.
+It is only applicable for input plugins k8s  and file.
 }*/
 
 type Plugin struct {
@@ -20,8 +21,8 @@ type Plugin struct {
 type Config struct {
 	// > @3@4@5@6
 	// >
-	// > The event field to which put the source name. Must be a string.
-	Field string `json:"field" default:"source_name" required:"true"` // *
+	// > The event field to which put the file name. Must be a string.
+	Field string `json:"field" default:"file_name" required:"true"` // *
 }
 
 func init() {

@@ -1,4 +1,4 @@
-# Host adding plugin
+# File name adding plugin
 @introduction
 
 ### Config params
