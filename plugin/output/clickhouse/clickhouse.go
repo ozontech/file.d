@@ -28,6 +28,12 @@ var (
 	ErrTimestampFromDistantPastOrFuture = errors.New("event field contains timestamp < 1970 or > 9000 year")
 )
 
+type DBIface interface {
+	Ping() (error)
+	Close() (error)
+	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
+}
+
 const (
 	outPluginType = "clickhouse"
 
@@ -59,7 +65,7 @@ type Plugin struct {
 	cancelFunc context.CancelFunc
 
 	queryBuilder ClickhouseQueryBuilder
-	conn       *sql.DB
+	conn       DBIface
 
 	// plugin metrics
 

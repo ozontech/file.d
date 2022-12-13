@@ -6,63 +6,79 @@ package mock_clickhouse
 
 import (
 	context "context"
+	sql "database/sql"
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
-	pgx "github.com/jackc/pgx/v4"
 )
 
-// MockPgxIface is a mock of PgxIface interface.
-type MockPgxIface struct {
+// MockDBIface is a mock of DBIface interface.
+type MockDBIface struct {
 	ctrl     *gomock.Controller
-	recorder *MockPgxIfaceMockRecorder
+	recorder *MockDBIfaceMockRecorder
 }
 
-// MockPgxIfaceMockRecorder is the mock recorder for MockPgxIface.
-type MockPgxIfaceMockRecorder struct {
-	mock *MockPgxIface
+// MockDBIfaceMockRecorder is the mock recorder for MockDBIface.
+type MockDBIfaceMockRecorder struct {
+	mock *MockDBIface
 }
 
-// NewMockPgxIface creates a new mock instance.
-func NewMockPgxIface(ctrl *gomock.Controller) *MockPgxIface {
-	mock := &MockPgxIface{ctrl: ctrl}
-	mock.recorder = &MockPgxIfaceMockRecorder{mock}
+// NewMockDBIface creates a new mock instance.
+func NewMockDBIface(ctrl *gomock.Controller) *MockDBIface {
+	mock := &MockDBIface{ctrl: ctrl}
+	mock.recorder = &MockDBIfaceMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockPgxIface) EXPECT() *MockPgxIfaceMockRecorder {
+func (m *MockDBIface) EXPECT() *MockDBIfaceMockRecorder {
 	return m.recorder
 }
 
 // Close mocks base method.
-func (m *MockPgxIface) Close() {
+func (m *MockDBIface) Close() error {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "Close")
+	ret := m.ctrl.Call(m, "Close")
+	ret0, _ := ret[0].(error)
+	return ret0
 }
 
 // Close indicates an expected call of Close.
-func (mr *MockPgxIfaceMockRecorder) Close() *gomock.Call {
+func (mr *MockDBIfaceMockRecorder) Close() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*MockPgxIface)(nil).Close))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*MockDBIface)(nil).Close))
 }
 
-// Query mocks base method.
-func (m *MockPgxIface) Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error) {
+// ExecContext mocks base method.
+func (m *MockDBIface) ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error) {
 	m.ctrl.T.Helper()
-	varargs := []interface{}{ctx, sql}
+	varargs := []interface{}{ctx, query}
 	for _, a := range args {
 		varargs = append(varargs, a)
 	}
-	ret := m.ctrl.Call(m, "Query", varargs...)
-	ret0, _ := ret[0].(pgx.Rows)
+	ret := m.ctrl.Call(m, "ExecContext", varargs...)
+	ret0, _ := ret[0].(sql.Result)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// Query indicates an expected call of Query.
-func (mr *MockPgxIfaceMockRecorder) Query(ctx, sql interface{}, args ...interface{}) *gomock.Call {
+// ExecContext indicates an expected call of ExecContext.
+func (mr *MockDBIfaceMockRecorder) ExecContext(ctx, query interface{}, args ...interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]interface{}{ctx, sql}, args...)
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Query", reflect.TypeOf((*MockPgxIface)(nil).Query), varargs...)
+	varargs := append([]interface{}{ctx, query}, args...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExecContext", reflect.TypeOf((*MockDBIface)(nil).ExecContext), varargs...)
+}
+
+// Ping mocks base method.
+func (m *MockDBIface) Ping() error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Ping")
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Ping indicates an expected call of Ping.
+func (mr *MockDBIfaceMockRecorder) Ping() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Ping", reflect.TypeOf((*MockDBIface)(nil).Ping))
 }
