@@ -3,7 +3,6 @@ package clickhouse
 import (
 	"errors"
 	"fmt"
-	"strings"
 
 	sq "github.com/Masterminds/squirrel"
 )
@@ -13,32 +12,22 @@ var ErrEmptyTableName = errors.New("table name can't be empty string")
 
 type column struct {
 	Name    string
-	ColType pgType
-	Unique  bool
+	ColType chType
 }
 
-type PgQueryBuilder interface {
-	GetPgFields() []column
-	GetUniqueFields() map[string]pgType
+type ClickhouseQueryBuilder interface {
+	GetClickhouseFields() []column
 	GetInsertBuilder() sq.InsertBuilder
-	GetPostfix() string
 }
 
-const (
-	doNothingPostfix = "ON CONFLICT (%s) DO NOTHING"
-	doUpdatePostfix  = "ON CONFLICT(%s) DO UPDATE SET %s"
-)
-
-type pgQueryBuilder struct {
+type chQueryBuilder struct {
 	fields       []column
-	uniqFields   map[string]pgType
 	queryBuilder sq.InsertBuilder
-	postfix      string
 }
 
 // NewQueryBuilder returns new instance of builder.
-func NewQueryBuilder(cfgColumns []ConfigColumn, table string) (PgQueryBuilder, error) {
-	qb := &pgQueryBuilder{}
+func NewQueryBuilder(cfgColumns []ConfigColumn, table string) (ClickhouseQueryBuilder, error) {
+	qb := &chQueryBuilder{}
 
 	if len(cfgColumns) == 0 {
 		return nil, ErrNoColumns
@@ -47,98 +36,56 @@ func NewQueryBuilder(cfgColumns []ConfigColumn, table string) (PgQueryBuilder, e
 		return nil, ErrEmptyTableName
 	}
 
-	pgFields, uniqueColumns, err := qb.initPgFields(cfgColumns)
-	qb.fields = pgFields
+	chFields, err := qb.initClickhouseFields(cfgColumns)
+	qb.fields = chFields
 	if err != nil {
 		return nil, err
 	}
-	qb.uniqFields = uniqueColumns
-	query, postfix := qb.createQuery(pgFields, table)
+	query := qb.createQuery(chFields, table)
 	qb.queryBuilder = query
-	qb.postfix = postfix
 
 	return qb, nil
 }
 
-// GetPgFields returns actucal pg columns.
-func (qb *pgQueryBuilder) GetPgFields() []column {
+// GetClickhouseFields returns actucal ch columns.
+func (qb *chQueryBuilder) GetClickhouseFields() []column {
 	return qb.fields
 }
 
 // GetInsertBuilder returns base builder with with table name and column names.
-func (qb *pgQueryBuilder) GetInsertBuilder() sq.InsertBuilder {
+func (qb *chQueryBuilder) GetInsertBuilder() sq.InsertBuilder {
 	return qb.queryBuilder
 }
 
-// GetPostfix returns postfix: "ON CONFLICT" clause.
-func (qb *pgQueryBuilder) GetPostfix() string {
-	return qb.postfix
-}
-
-// GetUniqueFields returns unique fields.
-func (qb *pgQueryBuilder) GetUniqueFields() map[string]pgType {
-	return qb.uniqFields
-}
-
-func (qb *pgQueryBuilder) initPgFields(cfgColumns []ConfigColumn) ([]column, map[string]pgType, error) {
-	pgFields := make([]column, 0, len(cfgColumns))
-	uniqFields := make(map[string]pgType)
+func (qb *chQueryBuilder) initClickhouseFields(cfgColumns []ConfigColumn) ([]column, error) {
+	chFields := make([]column, 0, len(cfgColumns))
 	for _, col := range cfgColumns {
-		var colType pgType
+		var colType chType
 		switch col.ColumnType {
 		case colTypeInt:
-			colType = pgInt
+			colType = chInt
 		case colTypeString:
-			colType = pgString
+			colType = chString
 		case colTypeTimestamp:
-			colType = pgTimestamp
+			colType = chTimestamp
 		default:
-			return nil, nil, fmt.Errorf("invalid pg type: %v", col.ColumnType)
+			return nil, fmt.Errorf("invalid ch type: %v", col.ColumnType)
 		}
 
-		pgFields = append(pgFields, column{
+		chFields = append(chFields, column{
 			Name:    col.Name,
 			ColType: colType,
-			Unique:  col.Unique,
 		})
-		if col.Unique {
-			uniqFields[col.Name] = colType
-		}
 	}
 
-	return pgFields, uniqFields, nil
+	return chFields, nil
 }
 
-func (qb *pgQueryBuilder) createQuery(pgFields []column, table string) (sq.InsertBuilder, string) {
-	postfix := ""
-	uniqFields := []string{}
-	updateableFields := make([]string, 0, len(pgFields))
-	fieldsName := make([]string, 0, len(pgFields))
-	for _, field := range pgFields {
+func (qb *chQueryBuilder) createQuery(chFields []column, table string) (sq.InsertBuilder) {
+	fieldsName := make([]string, 0, len(chFields))
+	for _, field := range chFields {
 		fieldsName = append(fieldsName, field.Name)
-		if field.Unique {
-			uniqFields = append(uniqFields, field.Name)
-		} else {
-			updateableFields = append(updateableFields, field.Name)
-		}
-	}
-	if len(uniqFields) > 0 && len(updateableFields) > 0 {
-		// ON CONFLICT (col1unique, col3unique) DO UPDATE SET col1updateable=EXCLUDED.col1updateable
-		updatePostfix := make([]string, 0, len(updateableFields))
-
-		uniquePostfixString := strings.Join(uniqFields, ",")
-
-		for _, field := range updateableFields {
-			updatePostfix = append(updatePostfix, field+"=EXCLUDED."+field)
-		}
-		updatePostfixString := strings.Join(updatePostfix, ",")
-
-		postfix = fmt.Sprintf(doUpdatePostfix, uniquePostfixString, updatePostfixString)
-	} else if len(uniqFields) > 0 {
-		// ON CONFLICT (col1, col2, col3) DO NOTHING
-		uniquePostfixString := strings.Join(uniqFields, ",")
-		postfix = fmt.Sprintf(doNothingPostfix, uniquePostfixString)
 	}
 
-	return sq.Insert(table).Columns(fieldsName...), postfix
+	return sq.Insert(table).Columns(fieldsName...)
 }

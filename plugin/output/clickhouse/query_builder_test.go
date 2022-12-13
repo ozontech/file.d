@@ -198,7 +198,7 @@ func TestNewQueryBuilderSuccess(t *testing.T) {
 	}
 }
 
-func TestGetPgFields(t *testing.T) {
+func TestGetClickhouseFields(t *testing.T) {
 	columns := []ConfigColumn{
 		{
 			Name:       "uni_str_col",
@@ -230,7 +230,7 @@ func TestGetPgFields(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, queryBuilder)
 
-	pgColumns := queryBuilder.GetPgFields()
+	pgColumns := queryBuilder.GetClickhouseFields()
 	require.Equal(t, expectedPgColumns, pgColumns)
 }
 

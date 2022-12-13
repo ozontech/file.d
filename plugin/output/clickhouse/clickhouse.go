@@ -4,12 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strconv"
 	"time"
 
 	sq "github.com/Masterminds/squirrel"
-	"github.com/jackc/pgx/v4"
-	"github.com/jackc/pgx/v4/pgxpool"
+	"database/sql"
+	_ "github.com/ClickHouse/clickhouse-go/v2"
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/metric"
@@ -29,28 +28,20 @@ var (
 	ErrTimestampFromDistantPastOrFuture = errors.New("event field contains timestamp < 1970 or > 9000 year")
 )
 
-type PgxIface interface {
-	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
-	Close()
-}
-
 const (
 	outPluginType = "clickhouse"
-
-	// required for PgBouncers that doesn't support prepared statements.
-	preferSimpleProtocol = pgx.QuerySimpleProtocol(true)
 
 	nineThousandYear = 221842627200
 )
 
-type pgType int
+type chType int
 
 const (
 	// minimum required types for now.
-	unknownType pgType = iota
-	pgString
-	pgInt
-	pgTimestamp
+	unknownType chType = iota // TODO:
+	chString // TODO:
+	chInt // TODO:
+	chTimestamp // TODO:
 )
 
 const (
@@ -67,13 +58,12 @@ type Plugin struct {
 	ctx        context.Context
 	cancelFunc context.CancelFunc
 
-	queryBuilder PgQueryBuilder
-	pool         PgxIface
+	queryBuilder ClickhouseQueryBuilder
+	conn       *sql.DB
 
 	// plugin metrics
 
 	discardedEventMetric  *prom.CounterVec
-	duplicatedEventMetric *prom.CounterVec
 	writtenEventMetric    *prom.CounterVec
 }
 
@@ -98,7 +88,7 @@ type Config struct {
 	// >
 	// > Example DSN:
 	// >
-	// > `user=user password=secret host=pg.example.com port=5432 dbname=mydb sslmode=disable pool_max_conns=10`
+	// > `clickhouse://username:password@host1:9000,host2:9000/database?dial_timeout=200ms&max_execution_time=60`
 	ConnString string `json:"conn_string" required:"true"` // *
 
 	// > @3@4@5@6
@@ -176,7 +166,6 @@ func Factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 
 func (p *Plugin) RegisterMetrics(ctl *metric.Ctl) {
 	p.discardedEventMetric = ctl.RegisterCounter("output_clickhouse_event_discarded", "Total ??? discarded messages")
-	p.duplicatedEventMetric = ctl.RegisterCounter("output_clickhouse_event_duplicated", "Total ??? duplicated messages")
 	p.writtenEventMetric = ctl.RegisterCounter("output_clickhouse_event_written", "Total events written to ???")
 }
 
@@ -208,16 +197,16 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	}
 	p.queryBuilder = queryBuilder
 
-	pgCfg, err := p.parsePGConfig()
+	// TODO: employ p.config.DBHealthCheckPeriod_ or remove it from the config
+	conn, err := sql.Open("clickhouse", p.config.ConnString)
 	if err != nil {
-		p.logger.Fatalf("can't create pgsql config: %v", err)
+		p.logger.Fatalf("can't create sql.DB: %v", err)
 	}
-
-	pool, err := pgxpool.ConnectConfig(p.ctx, pgCfg)
+	err = conn.Ping()
 	if err != nil {
-		p.logger.Fatalf("can't create pgsql pool: %v", err)
+		p.logger.Fatalf("can't connect clickhouse: %v", err)
 	}
-	p.pool = pool
+	p.conn = conn
 
 	p.batcher = pipeline.NewBatcher(pipeline.BatcherOptions{
 		PipelineName:   params.PipelineName,
@@ -240,7 +229,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 func (p *Plugin) Stop() {
 	p.cancelFunc()
 	p.batcher.Stop()
-	p.pool.Close()
+	p.conn.Close()
 }
 
 func (p *Plugin) Out(event *pipeline.Event) {
@@ -251,14 +240,13 @@ func (p *Plugin) out(_ *pipeline.WorkerData, batch *pipeline.Batch) {
 	// _ *pipeline.WorkerData - doesn't required in this plugin, we can't parse
 	// events for uniques through bytes.
 	builder := p.queryBuilder.GetInsertBuilder()
-	pgFields := p.queryBuilder.GetPgFields()
-	uniqFields := p.queryBuilder.GetUniqueFields()
+	chFields := p.queryBuilder.GetClickhouseFields()
 
-	// Deduplicate events, pg can't do upsert with duplication.
-	uniqueEventsMap := make(map[string]struct{}, len(batch.Events))
+	// contrary to postgres we don't mess with deduplication
+	// it's to be handled on Clickhouse side if necessary
 
 	for _, event := range batch.Events {
-		fieldValues, uniqueID, err := p.processEvent(event, pgFields, uniqFields)
+		fieldValues, err := p.processEvent(event, chFields)
 		if err != nil {
 			if errors.Is(err, ErrEventDoesntHaveField) {
 				p.discardedEventMetric.WithLabelValues().Inc()
@@ -286,35 +274,23 @@ func (p *Plugin) out(_ *pipeline.WorkerData, batch *pipeline.Batch) {
 		}
 
 		// passes here only if event valid.
-		if _, ok := uniqueEventsMap[uniqueID]; ok {
-			p.duplicatedEventMetric.WithLabelValues().Inc()
-			p.logger.Infof("event duplicated. Fields: %v, values: %v", pgFields, fieldValues)
-		} else {
-			uniqueEventsMap[uniqueID] = struct{}{}
-			builder = builder.Values(fieldValues...)
-		}
+		builder = builder.Values(fieldValues...)
 	}
 
-	builder = builder.Suffix(p.queryBuilder.GetPostfix()).PlaceholderFormat(sq.Dollar)
-
-	// no valid events passed.
-	if len(uniqueEventsMap) == 0 {
-		return
-	}
+	builder = builder.PlaceholderFormat(sq.Question)
 
 	query, args, err := builder.ToSql()
 	if err != nil {
 		p.logger.Fatalf("Invalid SQL. query: %s, args: %v, err: %v", query, args, err)
 	}
 
-	var argsSliceInterface = make([]any, len(args)+1)
+	var argsSliceInterface = make([]any, len(args)) // TODO: check if args needed
 
-	argsSliceInterface[0] = preferSimpleProtocol
 	for i := 1; i < len(args)+1; i++ {
 		argsSliceInterface[i] = args[i-1]
 	}
 
-	// Insert into pg with retry.
+	// Insert into Clickhouse with retry.
 	for i := p.config.Retry; i > 0; i-- {
 		err = p.try(query, argsSliceInterface)
 		if err != nil {
@@ -322,12 +298,12 @@ func (p *Plugin) out(_ *pipeline.WorkerData, batch *pipeline.Batch) {
 			time.Sleep(p.config.Retention_)
 			continue
 		}
-		p.writtenEventMetric.WithLabelValues().Add(float64(len(uniqueEventsMap)))
+		p.writtenEventMetric.WithLabelValues().Add(float64(len(batch.Events)))
 		break
 	}
 
 	if err != nil {
-		p.pool.Close()
+		p.conn.Close()
 		p.logger.Fatalf("failed insert into %s. query: %s, args: %v, err: %v", p.config.Table, query, args, err)
 	}
 }
@@ -336,60 +312,49 @@ func (p *Plugin) try(query string, argsSliceInterface []any) error {
 	ctx, cancel := context.WithTimeout(p.ctx, p.config.DBRequestTimeout_)
 	defer cancel()
 
-	rows, err := p.pool.Query(ctx, query, argsSliceInterface...)
+	_, err := p.conn.ExecContext(ctx, query, argsSliceInterface...) // TODO:
 	if err != nil {
 		return err
 	}
 
-	defer rows.Close()
-
 	return err
 }
 
-func (p *Plugin) processEvent(event *pipeline.Event, pgFields []column, uniqueFields map[string]pgType) (fieldValues []any, uniqueID string, err error) {
-	fieldValues = make([]any, 0, len(pgFields))
-	uniqueID = ""
+func (p *Plugin) processEvent(event *pipeline.Event, chFields []column) (fieldValues []any, err error) {
+	fieldValues = make([]any, 0, len(chFields))
 
-	for _, field := range pgFields {
+	for _, field := range chFields {
 		fieldNode, err := event.Root.DigStrict(field.Name)
 		if err != nil {
-			return nil, "", fmt.Errorf("%w. required field %s", ErrEventDoesntHaveField, field.Name)
+			return nil, fmt.Errorf("%w. required field %s", ErrEventDoesntHaveField, field.Name)
 		}
 
 		lVal, err := p.addFieldToValues(field, fieldNode)
 		if err != nil {
-			return nil, "", err
+			return nil, err
 		}
 
 		fieldValues = append(fieldValues, lVal)
-
-		if _, ok := uniqueFields[field.Name]; ok {
-			if field.ColType == pgInt || field.ColType == pgTimestamp {
-				uniqueID += strconv.Itoa(lVal.(int))
-			} else {
-				uniqueID += lVal.(string)
-			}
-		}
 	}
 
-	return fieldValues, uniqueID, nil
+	return fieldValues, nil
 }
 
 func (p *Plugin) addFieldToValues(field column, sNode *insaneJSON.StrictNode) (any, error) {
 	switch field.ColType {
-	case pgString:
+	case chString:
 		lVal, err := sNode.AsString()
 		if err != nil {
 			return nil, fmt.Errorf("%w, can't get %s as string, err: %s", ErrEventFieldHasWrongType, field.Name, err.Error())
 		}
 		return lVal, nil
-	case pgInt:
+	case chInt:
 		lVal, err := sNode.AsInt()
 		if err != nil {
 			return nil, fmt.Errorf("%w, can't get %s as int, err: %s", ErrEventFieldHasWrongType, field.Name, err.Error())
 		}
 		return lVal, nil
-	case pgTimestamp:
+	case chTimestamp:
 		tint, err := sNode.AsInt()
 		if err != nil {
 			return nil, fmt.Errorf("%w, can't get %s as timestamp, err: %s", ErrEventFieldHasWrongType, field.Name, err.Error())
@@ -406,14 +371,3 @@ func (p *Plugin) addFieldToValues(field column, sNode *insaneJSON.StrictNode) (a
 	}
 }
 
-func (p *Plugin) parsePGConfig() (*pgxpool.Config, error) {
-	pgCfg, err := pgxpool.ParseConfig(p.config.ConnString)
-	if err != nil {
-		return nil, err
-	}
-
-	pgCfg.LazyConnect = false
-	pgCfg.HealthCheckPeriod = p.config.DBHealthCheckPeriod_
-
-	return pgCfg, nil
-}
