@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/ozontech/file.d/metric"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/atomic"
 )
@@ -14,7 +15,7 @@ func TestPipeline_streamEvent(t *testing.T) {
 		Capacity: 5,
 		Decoder:  "json",
 	}
-	p := New("test", settings, nil)
+	p := New("test", settings, prometheus.NewRegistry())
 
 	streamID := StreamID(123123)
 	procs := int32(7)

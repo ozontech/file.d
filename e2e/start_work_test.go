@@ -3,7 +3,9 @@
 package e2e_test
 
 import (
+	"context"
 	"log"
+	"strconv"
 	"testing"
 	"time"
 
@@ -47,6 +49,7 @@ import (
 	_ "github.com/ozontech/file.d/plugin/output/s3"
 	_ "github.com/ozontech/file.d/plugin/output/splunk"
 	_ "github.com/ozontech/file.d/plugin/output/stdout"
+	"github.com/stretchr/testify/assert"
 )
 
 // e2eTest is the general interface for e2e tests
@@ -98,48 +101,31 @@ func TestE2EStabilityWorkCase(t *testing.T) {
 		},
 	}
 
-	startForTest(t, testsList)
-
-	for _, test := range testsList {
+	for num, test := range testsList {
 		test := test
+		num := num
 		t.Run(test.name, func(t *testing.T) {
+			fd := startForTest(t, test, num)
 			t.Parallel()
 			test.Send(t)
 			test.Validate(t)
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			err := fd.Stop(ctx)
+			cancel()
+			assert.NoError(t, err)
 		})
 	}
 }
 
-func startForTest(t *testing.T, tests []E2ETest) *fd.FileD {
-	configs := make([]*cfg.Config, len(tests))
-	for i, test := range tests {
-		conf := cfg.NewConfigFromFile(test.cfgPath)
-		if _, ok := conf.Pipelines[test.name]; !ok {
-			log.Fatalf("pipeline name must be named the same as the name of the test")
-		}
-		test.Configure(t, conf, test.name)
-		configs[i] = conf
+func startForTest(t *testing.T, test E2ETest, num int) *fd.FileD {
+	conf := cfg.NewConfigFromFile(test.cfgPath)
+	if _, ok := conf.Pipelines[test.name]; !ok {
+		log.Fatalf("pipeline name must be named the same as the name of the test")
 	}
+	test.Configure(t, conf, test.name)
 
-	conf := mergeConfigs(configs)
-	filed := fd.New(conf, "off")
+	// for each file.d its own port
+	filed := fd.New(conf, ":808"+strconv.Itoa(num))
 	filed.Start()
 	return filed
-}
-
-func mergeConfigs(configs []*cfg.Config) *cfg.Config {
-	mergedConfig := new(cfg.Config)
-	mergedConfig.Pipelines = make(map[string]*cfg.PipelineConfig)
-	mergedConfig.PanicTimeout = time.Millisecond
-
-	for _, config := range configs {
-		for pipelineName, pipelineConfig := range config.Pipelines {
-			if _, ok := mergedConfig.Pipelines[pipelineName]; ok {
-				log.Fatalf(`pipeline with such name = %s alredy exist`, pipelineName)
-			}
-			mergedConfig.Pipelines[pipelineName] = pipelineConfig
-		}
-	}
-
-	return mergedConfig
 }
