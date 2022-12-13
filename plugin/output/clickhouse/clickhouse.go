@@ -292,8 +292,8 @@ func (p *Plugin) out(_ *pipeline.WorkerData, batch *pipeline.Batch) {
 
 	var argsSliceInterface = make([]any, len(args)) // TODO: check if args needed
 
-	for i := 1; i < len(args)+1; i++ {
-		argsSliceInterface[i] = args[i-1]
+	for i := 0; i < len(args); i++ {
+		argsSliceInterface[i] = args[i]
 	}
 
 	// Insert into Clickhouse with retry.
