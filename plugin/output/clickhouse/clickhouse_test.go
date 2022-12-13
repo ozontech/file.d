@@ -8,12 +8,10 @@ import (
 	"time"
 
 	"github.com/golang/mock/gomock"
-	"github.com/jackc/pgconn"
-	"github.com/jackc/pgproto3/v2"
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
-	mock_pg "github.com/ozontech/file.d/plugin/output/postgres/mock"
+	mock_ch "github.com/ozontech/file.d/plugin/output/clickhouse/mock"
 	"github.com/stretchr/testify/require"
 	insaneJSON "github.com/vitkovskii/insane-json"
 )
@@ -28,22 +26,18 @@ func TestPrivateOut(t *testing.T) {
 		{
 			Name:       "str_uni_1",
 			ColumnType: "string",
-			Unique:     true,
 		},
 		{
 			Name:       "int_uni_1",
 			ColumnType: "int",
-			Unique:     true,
 		},
 		{
 			Name:       "int_1",
 			ColumnType: "int",
-			Unique:     false,
 		},
 		{
 			Name:       "timestamp_1",
 			ColumnType: "timestamp",
-			Unique:     false,
 		},
 	}
 
@@ -66,17 +60,17 @@ func TestPrivateOut(t *testing.T) {
 
 	ctl := gomock.NewController(t)
 	defer ctl.Finish()
-	mockpool := mock_pg.NewMockPgxIface(ctl)
-	pool := mockpool
+	mockdb := mock_ch.NewMockDBIface(ctl)
+	db := mockdb
 
 	ctx := context.Background()
 	var ctxMock = reflect.TypeOf((*context.Context)(nil)).Elem()
 
-	mockpool.EXPECT().Query(
+	mockdb.EXPECT().ExecContext(
 		gomock.AssignableToTypeOf(ctxMock),
-		"INSERT INTO table1 (str_uni_1,int_uni_1,int_1,timestamp_1) VALUES ($1,$2,$3,$4) ON CONFLICT(str_uni_1,int_uni_1) DO UPDATE SET int_1=EXCLUDED.int_1,timestamp_1=EXCLUDED.timestamp_1",
-		[]any{preferSimpleProtocol, strUniValue, intUniValue, intValue, time.Unix(int64(timestampValue), 0).Format(time.RFC3339)},
-	).Return(&rowsForTest{}, nil).Times(1)
+		"INSERT INTO table1 (str_uni_1,int_uni_1,int_1,timestamp_1) VALUES (?,?,?,?)",
+		[]any{strUniValue, intUniValue, intValue, time.Unix(int64(timestampValue), 0).Format(time.RFC3339)},
+	).Return(&resultForTest{}, nil).Times(1)
 
 	builder, err := NewQueryBuilder(columns, table)
 	require.NoError(t, err)
@@ -84,7 +78,7 @@ func TestPrivateOut(t *testing.T) {
 	p := &Plugin{
 		config:       &config,
 		queryBuilder: builder,
-		pool:         pool,
+		conn:         db,
 		logger:       testLogger,
 		ctx:          ctx,
 	}
@@ -105,17 +99,14 @@ func TestPrivateOutWithRetry(t *testing.T) {
 		{
 			Name:       "str_uni_1",
 			ColumnType: "string",
-			Unique:     true,
 		},
 		{
 			Name:       "int_1",
 			ColumnType: "int",
-			Unique:     false,
 		},
 		{
 			Name:       "timestamp_1",
 			ColumnType: "timestamp",
-			Unique:     false,
 		},
 	}
 
@@ -136,22 +127,22 @@ func TestPrivateOutWithRetry(t *testing.T) {
 
 	ctl := gomock.NewController(t)
 	defer ctl.Finish()
-	mockpool := mock_pg.NewMockPgxIface(ctl)
-	pool := mockpool
+	mockdb := mock_ch.NewMockDBIface(ctl)
+	db := mockdb
 
 	ctx := context.Background()
 	var ctxMock = reflect.TypeOf((*context.Context)(nil)).Elem()
 
-	mockpool.EXPECT().Query(
+	mockdb.EXPECT().ExecContext(
 		gomock.AssignableToTypeOf(ctxMock),
 		"INSERT INTO table1 (str_uni_1,int_1,timestamp_1) VALUES ($1,$2,$3) ON CONFLICT(str_uni_1) DO UPDATE SET int_1=EXCLUDED.int_1,timestamp_1=EXCLUDED.timestamp_1",
-		[]any{preferSimpleProtocol, strUniValue, intValue, time.Unix(int64(timestampValue), 0).Format(time.RFC3339)},
-	).Return(&rowsForTest{}, errors.New("someError")).Times(2)
-	mockpool.EXPECT().Query(
+		[]any{strUniValue, intValue, time.Unix(int64(timestampValue), 0).Format(time.RFC3339)},
+	).Return(&resultForTest{}, errors.New("someError")).Times(2)
+	mockdb.EXPECT().ExecContext(
 		gomock.AssignableToTypeOf(ctxMock),
 		"INSERT INTO table1 (str_uni_1,int_1,timestamp_1) VALUES ($1,$2,$3) ON CONFLICT(str_uni_1) DO UPDATE SET int_1=EXCLUDED.int_1,timestamp_1=EXCLUDED.timestamp_1",
-		[]any{preferSimpleProtocol, strUniValue, intValue, time.Unix(int64(timestampValue), 0).Format(time.RFC3339)},
-	).Return(&rowsForTest{}, nil).Times(1)
+		[]any{strUniValue, intValue, time.Unix(int64(timestampValue), 0).Format(time.RFC3339)},
+	).Return(&resultForTest{}, nil).Times(1)
 
 	builder, err := NewQueryBuilder(columns, table)
 	require.NoError(t, err)
@@ -159,7 +150,7 @@ func TestPrivateOutWithRetry(t *testing.T) {
 	p := &Plugin{
 		config:       &config,
 		queryBuilder: builder,
-		pool:         pool,
+		conn:         db,
 		logger:       testLogger,
 		ctx:          ctx,
 	}
@@ -180,17 +171,14 @@ func TestPrivateOutNoGoodEvents(t *testing.T) {
 		{
 			Name:       "str_uni_1",
 			ColumnType: "string",
-			Unique:     true,
 		},
 		{
 			Name:       "int_1",
 			ColumnType: "int",
-			Unique:     false,
 		},
 		{
 			Name:       "timestamp_1",
 			ColumnType: "timestamp",
-			Unique:     false,
 		},
 	}
 
@@ -233,21 +221,18 @@ func TestPrivateOutDeduplicatedEvents(t *testing.T) {
 		{
 			Name:       "str_uni_1",
 			ColumnType: "string",
-			Unique:     true},
+		},
 		{
 			Name:       "int_uni_1",
 			ColumnType: "int",
-			Unique:     true,
 		},
 		{
 			Name:       "int_1",
 			ColumnType: "int",
-			Unique:     false,
 		},
 		{
 			Name:       "timestamp_1",
 			ColumnType: "timestamp",
-			Unique:     false,
 		},
 	}
 
@@ -274,17 +259,17 @@ func TestPrivateOutDeduplicatedEvents(t *testing.T) {
 
 	ctl := gomock.NewController(t)
 	defer ctl.Finish()
-	mockpool := mock_pg.NewMockPgxIface(ctl)
-	pool := mockpool
+	mockdb := mock_ch.NewMockDBIface(ctl)
+	db := mockdb
 
 	ctx := context.Background()
 	var ctxMock = reflect.TypeOf((*context.Context)(nil)).Elem()
 
-	mockpool.EXPECT().Query(
+	mockdb.EXPECT().ExecContext(
 		gomock.AssignableToTypeOf(ctxMock),
 		"INSERT INTO table1 (str_uni_1,int_uni_1,int_1,timestamp_1) VALUES ($1,$2,$3,$4) ON CONFLICT(str_uni_1,int_uni_1) DO UPDATE SET int_1=EXCLUDED.int_1,timestamp_1=EXCLUDED.timestamp_1",
-		[]any{preferSimpleProtocol, strUniValue, intUniValue, intValue, time.Unix(int64(timestampValue), 0).Format(time.RFC3339)},
-	).Return(&rowsForTest{}, nil).Times(1)
+		[]any{strUniValue, intUniValue, intValue, time.Unix(int64(timestampValue), 0).Format(time.RFC3339)},
+	).Return(&resultForTest{}, nil).Times(1)
 
 	builder, err := NewQueryBuilder(columns, table)
 	require.NoError(t, err)
@@ -292,7 +277,7 @@ func TestPrivateOutDeduplicatedEvents(t *testing.T) {
 	p := &Plugin{
 		config:       &config,
 		queryBuilder: builder,
-		pool:         pool,
+		conn:         db,
 		logger:       testLogger,
 		ctx:          ctx,
 	}
@@ -317,22 +302,18 @@ func TestPrivateOutWrongTypeInField(t *testing.T) {
 		{
 			Name:       "str_uni_1",
 			ColumnType: "string",
-			Unique:     true,
 		},
 		{
 			Name:       "int_uni_1",
 			ColumnType: "int",
-			Unique:     true,
 		},
 		{
 			Name:       "int_1",
 			ColumnType: "int",
-			Unique:     false,
 		},
 		{
 			Name:       "timestamp_1",
 			ColumnType: "timestamp",
-			Unique:     false,
 		},
 	}
 
@@ -369,7 +350,7 @@ func TestPrivateOutWrongTypeInField(t *testing.T) {
 	p.out(nil, batch)
 }
 
-func TestPrivateOutFewUniqueEventsYetWithDeduplicationEventsAnpooladEvents(t *testing.T) {
+func TestPrivateOutFewUniqueEventsYetWithDeduplicationEventsAndbadEvents(t *testing.T) {
 	testLogger := logger.Instance
 
 	root := insaneJSON.Spawn()
@@ -385,21 +366,18 @@ func TestPrivateOutFewUniqueEventsYetWithDeduplicationEventsAnpooladEvents(t *te
 		{
 			Name:       "str_uni_1",
 			ColumnType: "string",
-			Unique:     true},
+		},
 		{
 			Name:       "int_uni_1",
 			ColumnType: "int",
-			Unique:     true,
 		},
 		{
 			Name:       "int_1",
 			ColumnType: "int",
-			Unique:     false,
 		},
 		{
 			Name:       "timestamp_1",
 			ColumnType: "timestamp",
-			Unique:     false,
 		},
 	}
 
@@ -444,18 +422,18 @@ func TestPrivateOutFewUniqueEventsYetWithDeduplicationEventsAnpooladEvents(t *te
 
 	ctl := gomock.NewController(t)
 	defer ctl.Finish()
-	mockpool := mock_pg.NewMockPgxIface(ctl)
-	pool := mockpool
+	mockdb := mock_ch.NewMockDBIface(ctl)
+	db := mockdb
 
 	ctx := context.Background()
 	var ctxMock = reflect.TypeOf((*context.Context)(nil)).Elem()
 
-	mockpool.EXPECT().Query(
+	mockdb.EXPECT().ExecContext(
 		gomock.AssignableToTypeOf(ctxMock),
 		"INSERT INTO table1 (str_uni_1,int_uni_1,int_1,timestamp_1) VALUES ($1,$2,$3,$4),($5,$6,$7,$8) ON CONFLICT(str_uni_1,int_uni_1) DO UPDATE SET int_1=EXCLUDED.int_1,timestamp_1=EXCLUDED.timestamp_1",
-		[]any{preferSimpleProtocol, strUniValue, intUniValue, intValue, time.Unix(int64(timestampValue), 0).Format(time.RFC3339),
+		[]any{strUniValue, intUniValue, intValue, time.Unix(int64(timestampValue), 0).Format(time.RFC3339),
 			secStrUniValue, secIntUniValue, secIntValue, time.Unix(int64(secTimestampValue), 0).Format(time.RFC3339)},
-	).Return(&rowsForTest{}, nil).Times(1)
+	).Return(&resultForTest{}, nil).Times(1)
 
 	builder, err := NewQueryBuilder(columns, table)
 	require.NoError(t, err)
@@ -463,7 +441,7 @@ func TestPrivateOutFewUniqueEventsYetWithDeduplicationEventsAnpooladEvents(t *te
 	p := &Plugin{
 		config:       &config,
 		queryBuilder: builder,
-		pool:         pool,
+		conn:         db,
 		logger:       testLogger,
 		ctx:          ctx,
 	}
@@ -481,13 +459,7 @@ func TestPrivateOutFewUniqueEventsYetWithDeduplicationEventsAnpooladEvents(t *te
 }
 
 // TODO replace with gomock
-type rowsForTest struct{}
+type resultForTest struct{}
 
-func (r rowsForTest) Close()                                         {}
-func (r rowsForTest) Err() error                                     { return nil }
-func (r rowsForTest) CommandTag() pgconn.CommandTag                  { return nil }
-func (r rowsForTest) FieldDescriptions() []pgproto3.FieldDescription { return nil }
-func (r rowsForTest) Next() bool                                     { return false }
-func (r rowsForTest) Scan(dest ...any) error                         { return nil }
-func (r rowsForTest) Values() ([]any, error)                         { return nil, nil }
-func (r rowsForTest) RawValues() [][]byte                            { return nil }
+func (r resultForTest) LastInsertId() (int64, error)                    { return 1, nil }
+func (r resultForTest) RowsAffected() (int64, error)                    { return 1, nil }
