@@ -1,13 +1,14 @@
 # Action plugins
 
+## add_file_name
+It adds a field containing the file name to the event.
+It is only applicable for input plugins k8s and file.
+
+[More details...](plugin/action/add_file_name/README.md)
 ## add_host
 It adds field containing hostname to an event.
 
 [More details...](plugin/action/add_host/README.md)
-## add_source_name
-It adds field containing source name to an event.
-
-[More details...](plugin/action/add_source_name/README.md)
 ## convert_date
 It converts field date/time data to different format.
 
