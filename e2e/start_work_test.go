@@ -47,6 +47,7 @@ import (
 	_ "github.com/ozontech/file.d/plugin/output/s3"
 	_ "github.com/ozontech/file.d/plugin/output/splunk"
 	_ "github.com/ozontech/file.d/plugin/output/stdout"
+	_ "github.com/ozontech/file.d/plugin/output/clickhouse"
 )
 
 // e2eTest is the general interface for e2e tests

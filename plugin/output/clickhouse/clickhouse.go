@@ -1,4 +1,4 @@
-package postgres
+package clickhouse
 
 import (
 	"context"
@@ -20,7 +20,7 @@ import (
 )
 
 /*{ introduction
-It sends the event batches to postgres db using pgx.
+It sends the event batches to clickhouse db using clickhouse-go.
 }*/
 
 var (
@@ -35,7 +35,7 @@ type PgxIface interface {
 }
 
 const (
-	outPluginType = "postgres"
+	outPluginType = "clickhouse"
 
 	// required for PgBouncers that doesn't support prepared statements.
 	preferSimpleProtocol = pgx.QuerySimpleProtocol(true)
@@ -94,7 +94,7 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
-	// > PostgreSQL connection string in URL or DSN format.
+	// > ClickhouseSQL connection string in DSN format.
 	// >
 	// > Example DSN:
 	// >
@@ -175,9 +175,9 @@ func Factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 }
 
 func (p *Plugin) RegisterMetrics(ctl *metric.Ctl) {
-	p.discardedEventMetric = ctl.RegisterCounter("output_postgres_event_discarded", "Total pgsql discarded messages")
-	p.duplicatedEventMetric = ctl.RegisterCounter("output_postgres_event_duplicated", "Total pgsql duplicated messages")
-	p.writtenEventMetric = ctl.RegisterCounter("output_postgres_event_written", "Total events written to pgsql")
+	p.discardedEventMetric = ctl.RegisterCounter("output_clickhouse_event_discarded", "Total ??? discarded messages")
+	p.duplicatedEventMetric = ctl.RegisterCounter("output_clickhouse_event_duplicated", "Total ??? duplicated messages")
+	p.writtenEventMetric = ctl.RegisterCounter("output_clickhouse_event_written", "Total events written to ???")
 }
 
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginParams) {

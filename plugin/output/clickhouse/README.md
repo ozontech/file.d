@@ -10,7 +10,7 @@ In strict mode file.d will crash on events without required columns.
 
 **`conn_string`** *`string`* *`required`* 
 
-PostgreSQL connection string in URL or DSN format.
+Clickhouse connection string in DSN format.
 
 Example DSN:
 
