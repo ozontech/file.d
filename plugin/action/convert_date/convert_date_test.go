@@ -34,7 +34,7 @@ func TestConvert(t *testing.T) {
 		wg.Done()
 	})
 
-	input.In(0, "test.log", 0, []byte(`{"time":998578502}`))
+	input.In(0, "test.log", 0, []byte(`{"time":998578502}`), pipeline.NewMeta())
 
 	wg.Wait()
 	p.Stop()
@@ -67,7 +67,7 @@ func TestConvertFail(t *testing.T) {
 		wg.Done()
 	})
 
-	input.In(0, "test.log", 0, []byte(`{"time":"XXX"}`))
+	input.In(0, "test.log", 0, []byte(`{"time":"XXX"}`), pipeline.NewMeta())
 
 	wg.Wait()
 	p.Stop()

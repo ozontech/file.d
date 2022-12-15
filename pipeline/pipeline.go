@@ -42,7 +42,7 @@ const (
 type finalizeFn = func(event *Event, notifyInput bool, backEvent bool)
 
 type InputPluginController interface {
-	In(sourceID SourceID, sourceName string, offset int64, data []byte, isNewSource bool) uint64
+	In(sourceID SourceID, sourceName string, offset int64, data []byte, isNewSource bool, meta Meta) uint64
 	UseSpread()                           // don't use stream field and spread all events across all processors
 	DisableStreams()                      // don't use stream field
 	SuggestDecoder(t decoder.DecoderType) // set decoder if pipeline uses "auto" value for decoder
@@ -82,6 +82,7 @@ type Pipeline struct {
 	shouldStop     bool
 
 	input      InputPlugin
+	metaList   MetaList
 	inputInfo  *InputPluginInfo
 	antispamer *antispamer
 
@@ -150,6 +151,7 @@ func New(name string, settings *Settings, registry *prometheus.Registry) *Pipeli
 			PipelineName:     name,
 			PipelineSettings: settings,
 		},
+		metaList: NewMetaList(),
 
 		metricsHolder: newMetricsHolder(name, registry, metricsGenInterval),
 		metricsCtl:    metricCtl,
@@ -325,8 +327,12 @@ func (p *Pipeline) GetOutput() OutputPlugin {
 	return p.output
 }
 
+func (p *Pipeline) SetMetaList(ml MetaList) {
+	p.metaList = ml
+}
+
 // In decodes message and passes it to event stream.
-func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes []byte, isNewSource bool) (seqID uint64) {
+func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes []byte, isNewSource bool, meta Meta) (seqID uint64) {
 	length := len(bytes)
 
 	// don't process mud.
@@ -414,6 +420,7 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 	event.SourceName = sourceName
 	event.streamName = DefaultStreamName
 	event.Size = len(bytes)
+	meta.tryInclude(p.metaList, event)
 
 	return p.streamEvent(event)
 }

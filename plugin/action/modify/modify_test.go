@@ -21,7 +21,7 @@ func TestModify(t *testing.T) {
 		wg.Done()
 	})
 
-	input.In(0, "test.log", 0, []byte(`{"existing_field":"existing_value"}`))
+	input.In(0, "test.log", 0, []byte(`{"existing_field":"existing_value"}`), pipeline.NewMeta())
 
 	wg.Wait()
 	p.Stop()

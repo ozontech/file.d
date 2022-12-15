@@ -116,11 +116,12 @@ func (f *FileD) addPipeline(name string, config *cfg.PipelineConfig) {
 }
 
 func (f *FileD) setupInput(p *pipeline.Pipeline, pipelineConfig *cfg.PipelineConfig, values map[string]int) error {
-	inputInfo, err := f.getStaticInfo(pipelineConfig, pipeline.PluginKindInput, values)
+	inputInfo, meta, err := f.getInputStaticInfo(pipelineConfig, pipeline.PluginKindInput, values)
 	if err != nil {
 		return err
 	}
 
+	p.SetMetaList(meta)
 	p.SetInput(&pipeline.InputPluginInfo{
 		PluginStaticInfo:  inputInfo,
 		PluginRuntimeInfo: f.instantiatePlugin(inputInfo),
@@ -202,7 +203,7 @@ func (f *FileD) setupAction(p *pipeline.Pipeline, index int, t string, actionJSO
 }
 
 func (f *FileD) setupOutput(p *pipeline.Pipeline, pipelineConfig *cfg.PipelineConfig, values map[string]int) error {
-	info, err := f.getStaticInfo(pipelineConfig, pipeline.PluginKindOutput, values)
+	info, err := f.getOutputStaticInfo(pipelineConfig, pipeline.PluginKindOutput, values)
 	if err != nil {
 		return err
 	}
@@ -223,12 +224,33 @@ func (f *FileD) instantiatePlugin(info *pipeline.PluginStaticInfo) *pipeline.Plu
 	}
 }
 
-func (f *FileD) getStaticInfo(pipelineConfig *cfg.PipelineConfig, pluginKind pipeline.PluginKind, values map[string]int) (*pipeline.PluginStaticInfo, error) {
+func (f *FileD) getInputStaticInfo(pipelineConfig *cfg.PipelineConfig, pluginKind pipeline.PluginKind, values map[string]int) (*pipeline.PluginStaticInfo, pipeline.MetaList, error) {
+	configJSON := pipelineConfig.Raw.Get(string(pluginKind))
+	if configJSON.MustMap() == nil {
+		return nil, nil, fmt.Errorf("no %s plugin provided", pluginKind)
+	}
+
+	mt := getMetaInfo(configJSON)
+	info, err := f.getStaticInfo(configJSON, pluginKind, values)
+	if err != nil {
+		return nil, nil, err
+	} else {
+		return info, mt, err
+	}
+}
+
+func (f *FileD) getOutputStaticInfo(pipelineConfig *cfg.PipelineConfig, pluginKind pipeline.PluginKind, values map[string]int) (*pipeline.PluginStaticInfo, error) {
 	configJSON := pipelineConfig.Raw.Get(string(pluginKind))
 	if configJSON.MustMap() == nil {
 		return nil, fmt.Errorf("no %s plugin provided", pluginKind)
 	}
+
+	return f.getStaticInfo(configJSON, pluginKind, values)
+}
+
+func (f *FileD) getStaticInfo(configJSON *simplejson.Json, pluginKind pipeline.PluginKind, values map[string]int) (*pipeline.PluginStaticInfo, error) {
 	t := configJSON.Get("type").MustString()
+
 	// delete for success decode into config
 	configJSON.Del("type")
 	if t == "" {
@@ -254,6 +276,15 @@ func (f *FileD) getStaticInfo(pipelineConfig *cfg.PipelineConfig, pluginKind pip
 	infoCopy.Config = config
 
 	return &infoCopy, nil
+}
+
+func getMetaInfo(configJSON *simplejson.Json) pipeline.MetaList {
+	mt := pipeline.NewMetaList()
+	for _, s := range configJSON.Get("include_meta").MustStringArray(make([]string, 0)) {
+		mt[s] = struct{}{}
+	}
+	configJSON.Del("include_meta")
+	return mt
 }
 
 func DecodeConfig(config pipeline.AnyConfig, configJson []byte) error {

@@ -271,3 +271,27 @@ const (
 	UnknownSelector ConditionType = iota
 	ByNameSelector
 )
+
+type MetaList map[string]struct{}
+
+func NewMetaList() MetaList {
+	return make(map[string]struct{})
+}
+
+type Meta map[string]string
+
+func NewMeta() Meta {
+	return make(map[string]string)
+}
+
+func (m Meta) Add(key, value string) {
+	m[key] = value
+}
+
+func (m Meta) tryInclude(ml MetaList, event *Event) {
+	for key, value := range m {
+		if _, ok := ml[key]; ok {
+			event.Root.AddFieldNoAlloc(event.Root, "meta_"+key).MutateToString(value)
+		}
+	}
+}

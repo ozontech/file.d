@@ -237,7 +237,7 @@ func TestDo(t *testing.T) {
 			})
 
 			for _, log := range tc.In {
-				input.In(0, "test.log", 0, []byte(log))
+				input.In(0, "test.log", 0, []byte(log), pipeline.NewMeta())
 			}
 
 			now := time.Now()

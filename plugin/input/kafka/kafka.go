@@ -188,7 +188,7 @@ func (p *Plugin) Cleanup(sarama.ConsumerGroupSession) error {
 func (p *Plugin) ConsumeClaim(_ sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
 	for message := range claim.Messages() {
 		sourceID := assembleSourceID(p.idByTopic[message.Topic], message.Partition)
-		_ = p.controller.In(sourceID, "kafka", message.Offset, message.Value, true)
+		_ = p.controller.In(sourceID, "kafka", message.Offset, message.Value, true, pipeline.NewMeta())
 	}
 
 	return nil

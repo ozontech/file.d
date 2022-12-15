@@ -17,7 +17,6 @@ But update events don't work with symlinks, so watcher also periodically manuall
 > In order to reduce potential harm of truncation, you can turn on notifications of file changes.
 > By default the plugin is notified only on file creations. Note that following for changes is more CPU intensive.
 
-> ⚠ Use add_file_name plugin if you want to add filename to events.
 
 **Reading docker container log files:**
 ```yaml

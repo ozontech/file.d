@@ -85,7 +85,7 @@ func TestEnrichment(t *testing.T) {
 		wg.Done()
 	})
 
-	input.In(0, filename, 0, []byte(`{"time":"time","log":"log\n"}`))
+	input.In(0, filename, 0, []byte(`{"time":"time","log":"log\n"}`), pipeline.NewMeta())
 
 	wg.Wait()
 	p.Stop()
@@ -128,8 +128,8 @@ func TestAllowedLabels(t *testing.T) {
 		wg.Done()
 	})
 
-	input.In(0, filename1, 0, []byte(`{"time":"time","log":"log\n"}`))
-	input.In(0, filename2, 0, []byte(`{"time":"time","log":"log\n"}`))
+	input.In(0, filename1, 0, []byte(`{"time":"time","log":"log\n"}`), pipeline.NewMeta())
+	input.In(0, filename2, 0, []byte(`{"time":"time","log":"log\n"}`), pipeline.NewMeta())
 
 	wg.Wait()
 	p.Stop()
@@ -161,14 +161,14 @@ func TestK8SJoin(t *testing.T) {
 	})
 
 	filename := getLogFilename("/k8s-logs", item)
-	input.In(0, filename, 10, []byte(`{"ts":"time","stream":"stdout","log":"one line log 1\n"}`))
-	input.In(0, filename, 20, []byte(`{"ts":"time","stream":"stderr","log":"error "}`))
-	input.In(0, filename, 30, []byte(`{"ts":"time","stream":"stdout","log":"this "}`))
-	input.In(0, filename, 40, []byte(`{"ts":"time","stream":"stdout","log":"is "}`))
-	input.In(0, filename, 50, []byte(`{"ts":"time","stream":"stdout","log":"joined "}`))
-	input.In(0, filename, 60, []byte(`{"ts":"time","stream":"stdout","log":"log 2\n"}`))
-	input.In(0, filename, 70, []byte(`{"ts":"time","stream":"stderr","log":"joined\n"}`))
-	input.In(0, filename, 80, []byte(`{"ts":"time","stream":"stdout","log":"one line log 3\n"}`))
+	input.In(0, filename, 10, []byte(`{"ts":"time","stream":"stdout","log":"one line log 1\n"}`), pipeline.NewMeta())
+	input.In(0, filename, 20, []byte(`{"ts":"time","stream":"stderr","log":"error "}`), pipeline.NewMeta())
+	input.In(0, filename, 30, []byte(`{"ts":"time","stream":"stdout","log":"this "}`), pipeline.NewMeta())
+	input.In(0, filename, 40, []byte(`{"ts":"time","stream":"stdout","log":"is "}`), pipeline.NewMeta())
+	input.In(0, filename, 50, []byte(`{"ts":"time","stream":"stdout","log":"joined "}`), pipeline.NewMeta())
+	input.In(0, filename, 60, []byte(`{"ts":"time","stream":"stdout","log":"log 2\n"}`), pipeline.NewMeta())
+	input.In(0, filename, 70, []byte(`{"ts":"time","stream":"stderr","log":"joined\n"}`), pipeline.NewMeta())
+	input.In(0, filename, 80, []byte(`{"ts":"time","stream":"stdout","log":"one line log 3\n"}`), pipeline.NewMeta())
 
 	wg.Wait()
 	p.Stop()

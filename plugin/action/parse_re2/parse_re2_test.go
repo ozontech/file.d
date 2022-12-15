@@ -37,7 +37,7 @@ func TestDecode(t *testing.T) {
 		wg.Done()
 	})
 
-	input.In(0, "test.log", 0, []byte(`{"log":"2021-06-22 16:24:27 GMT [7291] => [2-1] client=test_client,db=test_db,user=test_user LOG:  listening on IPv4 address \"0.0.0.0\", port 5432"}`))
+	input.In(0, "test.log", 0, []byte(`{"log":"2021-06-22 16:24:27 GMT [7291] => [2-1] client=test_client,db=test_db,user=test_user LOG:  listening on IPv4 address \"0.0.0.0\", port 5432"}`), pipeline.NewMeta())
 
 	wg.Wait()
 	p.Stop()

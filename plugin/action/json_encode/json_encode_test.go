@@ -33,7 +33,7 @@ func TestEncode(t *testing.T) {
 		wg.Done()
 	})
 
-	input.In(0, "test.log", 0, []byte(`{"server":{"os":"linux","arch":"amd64"}}`))
+	input.In(0, "test.log", 0, []byte(`{"server":{"os":"linux","arch":"amd64"}}`), pipeline.NewMeta())
 
 	wg.Wait()
 	p.Stop()

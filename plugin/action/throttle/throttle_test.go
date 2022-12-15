@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	miniredis "github.com/alicebob/miniredis/v2"
+	"github.com/alicebob/miniredis/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/atomic"
@@ -52,7 +52,7 @@ func (c *testConfig) runPipeline(t *testing.T) {
 		index := rand.Int() % len(formats)
 		// Format like RFC3339Nano, but nanoseconds are zero-padded, thus all times have equal length.
 		json := fmt.Sprintf(formats[index], time.Now().UTC().Format("2006-01-02T15:04:05.000000000Z07:00"))
-		input.In(10, sourceNames[rand.Int()%len(sourceNames)], 0, []byte(json))
+		input.In(10, sourceNames[rand.Int()%len(sourceNames)], 0, []byte(json), pipeline.NewMeta())
 		if time.Since(startTime) > c.workTime {
 			break
 		}
@@ -232,7 +232,7 @@ func TestRedisThrottle(t *testing.T) {
 	for i := 0; i < eventsTotal; i++ {
 		json := fmt.Sprintf(events[i], time.Now().Format(time.RFC3339Nano))
 
-		input.In(10, sourceNames[rand.Int()%len(sourceNames)], 0, []byte(json))
+		input.In(10, sourceNames[rand.Int()%len(sourceNames)], 0, []byte(json), pipeline.NewMeta())
 
 		time.Sleep(300 * time.Millisecond)
 	}
@@ -311,7 +311,7 @@ func TestRedisThrottleMultiPipes(t *testing.T) {
 	}
 	for i := 0; i < len(firstPipeEvents); i++ {
 		json := fmt.Sprintf(firstPipeEvents[i], time.Now().Format(time.RFC3339Nano))
-		input.In(10, sourceNames[rand.Int()%len(sourceNames)], 0, []byte(json))
+		input.In(10, sourceNames[rand.Int()%len(sourceNames)], 0, []byte(json), pipeline.NewMeta())
 		// timeout required due shifting time call to redis
 		time.Sleep(100 * time.Millisecond)
 	}
@@ -320,7 +320,7 @@ func TestRedisThrottleMultiPipes(t *testing.T) {
 
 	for i := 0; i < len(secondPipeEvents); i++ {
 		json := fmt.Sprintf(secondPipeEvents[i], time.Now().Format(time.RFC3339Nano))
-		inputSec.In(10, sourceNames[rand.Int()%len(sourceNames)], 0, []byte(json))
+		inputSec.In(10, sourceNames[rand.Int()%len(sourceNames)], 0, []byte(json), pipeline.NewMeta())
 		// timeout required due shifting time call to redis
 		time.Sleep(100 * time.Millisecond)
 	}

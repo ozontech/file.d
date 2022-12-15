@@ -475,7 +475,7 @@ func TestPlugin(t *testing.T) {
 			})
 
 			for _, in := range s.input {
-				input.In(0, "test.log", 0, []byte(in))
+				input.In(0, "test.log", 0, []byte(in), pipeline.NewMeta())
 			}
 
 			wg.Wait()

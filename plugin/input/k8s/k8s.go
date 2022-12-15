@@ -28,8 +28,6 @@ An information which plugin adds:
 * `k8s_container` – pod container name;
 * `k8s_label_*` – pod labels.
 
-> ⚠ Use add_file_name plugin if you want to add filename to events.
-
 **Example:**
 ```yaml
 pipelines:

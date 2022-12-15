@@ -112,7 +112,7 @@ func (p *Plugin) read() {
 
 		out = root.Encode(out[:0])
 
-		p.controller.In(0, "dmesg", ts, out, false)
+		p.controller.In(0, "dmesg", ts, out, false, pipeline.NewMeta())
 	}
 }
 

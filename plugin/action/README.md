@@ -1,10 +1,5 @@
 # Action plugins
 
-## add_file_name
-It adds a field containing the file name to the event.
-It is only applicable for input plugins k8s  and file.
-
-[More details...](plugin/action/add_file_name/README.md)
 ## add_host
 It adds field containing hostname to an event.
 

@@ -263,10 +263,10 @@ func (p *Plugin) processChunk(sourceID pipeline.SourceID, readBuff []byte, event
 
 		if len(eventBuff) != 0 {
 			eventBuff = append(eventBuff, readBuff[nlPos:pos]...)
-			_ = p.controller.In(sourceID, "http", int64(pos), eventBuff, true)
+			_ = p.controller.In(sourceID, "http", int64(pos), eventBuff, true, pipeline.NewMeta())
 			eventBuff = eventBuff[:0]
 		} else {
-			_ = p.controller.In(sourceID, "http", int64(pos), readBuff[nlPos:pos], true)
+			_ = p.controller.In(sourceID, "http", int64(pos), readBuff[nlPos:pos], true, pipeline.NewMeta())
 		}
 
 		pos++
@@ -275,7 +275,7 @@ func (p *Plugin) processChunk(sourceID pipeline.SourceID, readBuff []byte, event
 
 	if isLastChunk {
 		// flush buffers if we can't find the newline character
-		_ = p.controller.In(sourceID, "http", int64(pos), append(eventBuff, readBuff[nlPos:]...), true)
+		_ = p.controller.In(sourceID, "http", int64(pos), append(eventBuff, readBuff[nlPos:]...), true, pipeline.NewMeta())
 		eventBuff = eventBuff[:0]
 	} else {
 		eventBuff = append(eventBuff, readBuff[nlPos:]...)

@@ -22,7 +22,7 @@ func TestModify(t *testing.T) {
 		wg.Done()
 	})
 
-	input.In(0, "test.log", 0, []byte(`{}`))
+	input.In(0, "test.log", 0, []byte(`{}`), pipeline.NewMeta())
 
 	wg.Wait()
 	p.Stop()
