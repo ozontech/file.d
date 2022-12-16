@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"testing"
 	"time"
+	"fmt"
 
 	"github.com/golang/mock/gomock"
 	"github.com/ozontech/file.d/logger"
@@ -135,12 +136,12 @@ func TestPrivateOutWithRetry(t *testing.T) {
 
 	mockdb.EXPECT().ExecContext(
 		gomock.AssignableToTypeOf(ctxMock),
-		"INSERT INTO table1 (str_uni_1,int_1,timestamp_1) VALUES ($1,$2,$3) ON CONFLICT(str_uni_1) DO UPDATE SET int_1=EXCLUDED.int_1,timestamp_1=EXCLUDED.timestamp_1",
+		"INSERT INTO table1 (str_uni_1,int_1,timestamp_1) VALUES (?,?,?)",
 		[]any{strUniValue, intValue, time.Unix(int64(timestampValue), 0).Format(time.RFC3339)},
 	).Return(&resultForTest{}, errors.New("someError")).Times(2)
 	mockdb.EXPECT().ExecContext(
 		gomock.AssignableToTypeOf(ctxMock),
-		"INSERT INTO table1 (str_uni_1,int_1,timestamp_1) VALUES ($1,$2,$3) ON CONFLICT(str_uni_1) DO UPDATE SET int_1=EXCLUDED.int_1,timestamp_1=EXCLUDED.timestamp_1",
+		"INSERT INTO table1 (str_uni_1,int_1,timestamp_1) VALUES (?,?,?)",
 		[]any{strUniValue, intValue, time.Unix(int64(timestampValue), 0).Format(time.RFC3339)},
 	).Return(&resultForTest{}, nil).Times(1)
 
@@ -198,17 +199,19 @@ func TestPrivateOutNoGoodEvents(t *testing.T) {
 
 	builder, err := NewQueryBuilder(columns, table)
 	require.NoError(t, err)
-
+	
 	p := &Plugin{
 		config:       &config,
 		queryBuilder: builder,
 		logger:       testLogger,
 	}
-
+	
 	p.RegisterMetrics(metric.New("test"))
-
+	
 	batch := &pipeline.Batch{Events: []*pipeline.Event{{Root: root}}}
+	fmt.Println(1)
 	p.out(nil, batch)
+	fmt.Println(2)
 }
 
 func TestPrivateOutDeduplicatedEvents(t *testing.T) {
