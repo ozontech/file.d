@@ -251,6 +251,7 @@ func (p *Plugin) out(_ *pipeline.WorkerData, batch *pipeline.Batch) {
 	// contrary to postgres we don't mess with deduplication
 	// it's to be handled on Clickhouse side if necessary
 
+	validEvents := 0
 	for _, event := range batch.Events {
 		fieldValues, err := p.processEvent(event, chFields)
 		if err != nil {
@@ -281,9 +282,15 @@ func (p *Plugin) out(_ *pipeline.WorkerData, batch *pipeline.Batch) {
 
 		// passes here only if event valid.
 		builder = builder.Values(fieldValues...)
+		validEvents += 1
 	}
 
 	builder = builder.PlaceholderFormat(sq.Question)
+
+	// no valid events passed.
+	if validEvents == 0 {
+		return
+	}
 
 	query, args, err := builder.ToSql()
 	if err != nil {
