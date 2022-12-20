@@ -99,14 +99,13 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
-	// > Pg target table.
+	// > Clickhouse target table.
 	Table string `json:"table" required:"true"` // *
 
 	// > @3@4@5@6
 	// >
 	// > Array of DB columns. Each column have:
-	// > name, type (int, string, timestamp - which int that will be converted to timestamptz of rfc3339)
-	// > and nullable options.
+	// > name and type (int, string, timestamp - which int that will be converted to timestamptz of rfc3339)
 	Columns []ConfigColumn `json:"columns" required:"true" slice:"true"` // *
 
 	// > @3@4@5@6
@@ -125,12 +124,6 @@ type Config struct {
 	// > Timeout for DB requests in milliseconds.
 	DBRequestTimeout  cfg.Duration `json:"db_request_timeout" default:"3000ms" parse:"duration"` // *
 	DBRequestTimeout_ time.Duration
-
-	// > @3@4@5@6
-	// >
-	// > Timeout for DB health check.
-	DBHealthCheckPeriod  cfg.Duration `json:"db_health_check_period" default:"60s" parse:"duration"` // *
-	DBHealthCheckPeriod_ time.Duration
 
 	// > @3@4@5@6
 	// >
@@ -193,9 +186,6 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	if p.config.DBRequestTimeout_ < 1 {
 		p.logger.Fatal("'db_request_timeout' can't be <1")
 	}
-	if p.config.DBHealthCheckPeriod_ < 1 {
-		p.logger.Fatal("'db_health_check_period' can't be <1")
-	}
 
 	queryBuilder, err := NewQueryBuilder(p.config.Columns, p.config.Table)
 	if err != nil {
@@ -203,7 +193,6 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	}
 	p.queryBuilder = queryBuilder
 
-	// TODO: employ p.config.DBHealthCheckPeriod_ or remove it from the config
 	conn, err := sql.Open("clickhouse", p.config.ConnString)
 	if err != nil {
 		p.logger.Fatalf("can't create sql.DB: %v", err)
