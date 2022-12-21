@@ -78,7 +78,7 @@ func TestPrivateOut(t *testing.T) {
 	p := &Plugin{
 		config:       &config,
 		queryBuilder: builder,
-		conn:         db,
+		pool:         db,
 		logger:       testLogger,
 		ctx:          ctx,
 	}
@@ -150,7 +150,7 @@ func TestPrivateOutWithRetry(t *testing.T) {
 	p := &Plugin{
 		config:       &config,
 		queryBuilder: builder,
-		conn:         db,
+		pool:         db,
 		logger:       testLogger,
 		ctx:          ctx,
 	}
@@ -356,7 +356,7 @@ func TestPrivateOutFewUniqueEventsYetWithBadEvents(t *testing.T) {
 	p := &Plugin{
 		config:       &config,
 		queryBuilder: builder,
-		conn:         db,
+		pool:         db,
 		logger:       testLogger,
 		ctx:          ctx,
 	}

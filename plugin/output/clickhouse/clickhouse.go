@@ -65,7 +65,7 @@ type Plugin struct {
 	cancelFunc context.CancelFunc
 
 	queryBuilder ClickhouseQueryBuilder
-	conn       DBIface
+	pool       DBIface
 
 	// plugin metrics
 
@@ -193,15 +193,20 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	}
 	p.queryBuilder = queryBuilder
 
-	conn, err := sql.Open("clickhouse", p.config.ConnString)
+	pool, err := sql.Open("clickhouse", p.config.ConnString)
 	if err != nil {
 		p.logger.Fatalf("can't create sql.DB: %v", err)
 	}
-	err = conn.Ping()
+
+	pool.SetConnMaxLifetime(0)
+	pool.SetMaxIdleConns(p.config.WorkersCount_)
+	pool.SetMaxOpenConns(p.config.WorkersCount_)
+
+	err = pool.Ping()
 	if err != nil {
 		p.logger.Fatalf("can't connect clickhouse: %v", err)
 	}
-	p.conn = conn
+	p.pool = pool
 
 	p.batcher = pipeline.NewBatcher(pipeline.BatcherOptions{
 		PipelineName:   params.PipelineName,
@@ -224,7 +229,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 func (p *Plugin) Stop() {
 	p.cancelFunc()
 	p.batcher.Stop()
-	p.conn.Close()
+	p.pool.Close()
 }
 
 func (p *Plugin) Out(event *pipeline.Event) {
@@ -305,7 +310,7 @@ func (p *Plugin) out(_ *pipeline.WorkerData, batch *pipeline.Batch) {
 	}
 
 	if err != nil {
-		p.conn.Close()
+		p.pool.Close()
 		p.logger.Fatalf("failed insert into %s. query: %s, args: %v, err: %v", p.config.Table, query, args, err)
 	}
 }
@@ -314,7 +319,7 @@ func (p *Plugin) try(query string, argsSliceInterface []any) error {
 	ctx, cancel := context.WithTimeout(p.ctx, p.config.DBRequestTimeout_)
 	defer cancel()
 
-	_, err := p.conn.ExecContext(ctx, query, argsSliceInterface...) // TODO:
+	_, err := p.pool.ExecContext(ctx, query, argsSliceInterface...) // TODO:
 	if err != nil {
 		return err
 	}
