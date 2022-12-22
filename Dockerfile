@@ -7,4 +7,4 @@ WORKDIR /file.d
 
 COPY ./file.d .
 
-CMD [ "./file.d" ]
+CMD [ "./file.d", "--config", "/my-config.yaml" ]
