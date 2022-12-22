@@ -68,6 +68,8 @@ func (qb *chQueryBuilder) initClickhouseFields(cfgColumns []ConfigColumn) ([]col
 			colType = chString
 		case colTypeTimestamp:
 			colType = chTimestamp
+		case colTypeTimestring:
+			colType = chTimestring
 		default:
 			return nil, fmt.Errorf("invalid ch type: %v", col.ColumnType)
 		}

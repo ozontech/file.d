@@ -44,16 +44,19 @@ type chType int
 
 const (
 	// minimum required types for now.
-	unknownType chType = iota // TODO:
-	chString // TODO:
-	chInt // TODO:
-	chTimestamp // TODO:
+	unknownType chType = iota 
+	chString 
+	chInt 
+	chTimestamp 
+	chTimestring // k8s input produces time as an RFC3339 string instead of int, at least in my setup
+	             // it is incompatible with Clickhouse and has to be trimmed
 )
 
 const (
 	colTypeInt       = "int"
 	colTypeString    = "string"
 	colTypeTimestamp = "timestamp"
+	colTypeTimestring = "timestring"
 )
 
 type Plugin struct {
@@ -75,8 +78,7 @@ type Plugin struct {
 
 type ConfigColumn struct {
 	Name       string `json:"name" required:"true"`
-	ColumnType string `json:"type" required:"true" options:"int|string|bool|timestamp"`
-	Unique     bool   `json:"unique" default:"false"`
+	ColumnType string `json:"type" required:"true" options:"int|string|bool|timestamp|timestring"`
 }
 
 // ! config-params
@@ -371,6 +373,16 @@ func (p *Plugin) addFieldToValues(field column, sNode *insaneJSON.StrictNode) (a
 			return nil, fmt.Errorf("%w, %s", ErrTimestampFromDistantPastOrFuture, field.Name)
 		}
 		return time.Unix(int64(tint), 0).Format(time.RFC3339), nil
+	case chTimestring:
+		nLen := 19
+		lVal, err := sNode.AsString()
+		if err != nil {
+			return nil, fmt.Errorf("%w, can't get %s as string, err: %s", ErrEventFieldHasWrongType, field.Name, err.Error())
+		}
+		if len([]rune(lVal)) < nLen {
+			return nil, fmt.Errorf("%w, can't get %s as timestring, as it's shorter than %d symbols", ErrEventFieldHasWrongType, field.Name, nLen)
+		}
+		return lVal[:nLen], nil
 	case unknownType:
 		fallthrough
 	default:
