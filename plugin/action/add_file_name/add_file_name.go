@@ -34,7 +34,7 @@ type Config struct {
 
 func init() {
 	fd.DefaultPluginRegistry.RegisterAction(&pipeline.PluginStaticInfo{
-		Type:    "add_source_name",
+		Type:    "add_file_name",
 		Factory: factory,
 	})
 }
