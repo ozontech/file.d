@@ -28,6 +28,7 @@ type FileD struct {
 	plugins   *PluginRegistry
 	Pipelines []*pipeline.Pipeline
 	server    *http.Server
+	mux       *http.ServeMux
 	metricCtl *metric.Ctl
 
 	// file_d metrics
@@ -40,6 +41,7 @@ func New(config *cfg.Config, httpAddr string) *FileD {
 	return &FileD{
 		config:    config,
 		httpAddr:  httpAddr,
+		mux:       http.NewServeMux(),
 		plugins:   DefaultPluginRegistry,
 		Pipelines: make([]*pipeline.Pipeline, 0),
 	}
@@ -59,7 +61,7 @@ func (f *FileD) Start() {
 }
 
 func (f *FileD) initMetrics() {
-	f.metricCtl = metric.New("file_d")
+	f.metricCtl = metric.New("file_d", f.registry)
 	f.longPanicMetric = f.metricCtl.RegisterCounter("long_panic", "Count of panics in the LongPanic")
 	f.versionMetric = f.metricCtl.RegisterCounter("version", "", "version")
 	f.versionMetric.WithLabelValues(buildinfo.Version).Inc()
@@ -72,9 +74,6 @@ func (f *FileD) createRegistry() {
 	f.registry = prometheus.NewRegistry()
 	f.registry.MustRegister(prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}))
 	f.registry.MustRegister(prometheus.NewGoCollector())
-
-	prometheus.DefaultGatherer = f.registry
-	prometheus.DefaultRegisterer = f.registry
 }
 
 func (f *FileD) startPipelines() {
@@ -88,7 +87,7 @@ func (f *FileD) startPipelines() {
 }
 
 func (f *FileD) addPipeline(name string, config *cfg.PipelineConfig) {
-	mux := http.DefaultServeMux
+	mux := f.mux
 	settings := extractPipelineParams(config.Raw.Get("settings"))
 
 	values := map[string]int{
@@ -280,12 +279,14 @@ func (f *FileD) startHTTP() {
 		return
 	}
 
-	mux := http.DefaultServeMux
+	mux := f.mux
 
 	mux.HandleFunc("/live", f.serveLiveReady)
 	mux.HandleFunc("/ready", f.serveLiveReady)
 	mux.HandleFunc("/freeosmem", f.serveFreeOsMem)
-	mux.Handle("/metrics", promhttp.Handler())
+	mux.Handle("/metrics", promhttp.InstrumentMetricHandler(
+		f.registry, promhttp.HandlerFor(f.registry, promhttp.HandlerOpts{}),
+	))
 	mux.Handle("/log/level", logger.Level)
 
 	f.server = &http.Server{Addr: f.httpAddr, Handler: mux}
@@ -294,7 +295,7 @@ func (f *FileD) startHTTP() {
 
 func (f *FileD) listenHTTP() {
 	err := f.server.ListenAndServe()
-	if err != nil {
+	if err != http.ErrServerClosed {
 		logger.Fatalf("http listening error address=%q: %s", f.httpAddr, err.Error())
 	}
 }

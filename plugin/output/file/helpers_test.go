@@ -1,7 +1,6 @@
 package file
 
 import (
-	"net/http"
 	"os"
 	"testing"
 	"time"
@@ -58,7 +57,6 @@ func newPipeline(t *testing.T, configOutput *Config) *pipeline.Pipeline {
 		Decoder:             "json",
 	}
 
-	http.DefaultServeMux = &http.ServeMux{}
 	p := pipeline.New("test_pipeline", settings, prometheus.NewRegistry())
 	p.DisableParallelism()
 	p.EnableEventLog()

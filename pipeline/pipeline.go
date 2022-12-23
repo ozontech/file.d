@@ -138,7 +138,7 @@ type Settings struct {
 
 // New creates new pipeline. Consider using `SetupHTTPHandlers` next.
 func New(name string, settings *Settings, registry *prometheus.Registry) *Pipeline {
-	metricCtl := metric.New("pipeline_" + name)
+	metricCtl := metric.New("pipeline_"+name, registry)
 
 	pipeline := &Pipeline{
 		Name:           name,
