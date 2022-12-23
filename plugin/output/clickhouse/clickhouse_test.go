@@ -371,6 +371,63 @@ func TestPrivateOutFewUniqueEventsYetWithBadEvents(t *testing.T) {
 	p.out(nil, batch)
 }
 
+func TestPrivateOutEventWithTimestring(t *testing.T) {
+	testLogger := logger.Instance
+
+	root := insaneJSON.Spawn()
+	defer insaneJSON.Release(root)
+
+	columns := []ConfigColumn{
+		{
+			Name:       "time",
+			ColumnType: "timestring",
+		},
+	}
+
+	strTimeValue := "2022-12-11T20:20:10.037011974Z"
+
+	root.AddField(columns[0].Name).MutateToString(strTimeValue)
+
+	table := "table1"
+
+	config := Config{
+		Columns: columns,
+		Retry:   3,
+	}
+
+	ctl := gomock.NewController(t)
+	defer ctl.Finish()
+	mockdb := mock_ch.NewMockDBIface(ctl)
+	db := mockdb
+
+	ctx := context.Background()
+	var ctxMock = reflect.TypeOf((*context.Context)(nil)).Elem()
+
+	mockdb.EXPECT().ExecContext(
+		gomock.AssignableToTypeOf(ctxMock),
+		"INSERT INTO table1 (time,timens) VALUES (?,?)",
+		[]any{"2022-12-11T20:20:10", int32(37011974)},
+	).Return(&resultForTest{}, nil).Times(1)
+
+	builder, err := NewQueryBuilder(columns, table)
+	require.NoError(t, err)
+
+	p := &Plugin{
+		config:       &config,
+		queryBuilder: builder,
+		pool:         db,
+		logger:       testLogger,
+		ctx:          ctx,
+	}
+
+	p.RegisterMetrics(metric.New("test"))
+
+	batch := &pipeline.Batch{Events: []*pipeline.Event{
+		{Root: root},
+	}}
+	p.out(nil, batch)
+}
+
 // TODO replace with gomock
 type resultForTest struct{}
 

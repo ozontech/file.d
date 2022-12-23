@@ -181,6 +181,10 @@ func TestGetClickhouseFields(t *testing.T) {
 			Name:       "int_col",
 			ColumnType: "int",
 		},
+		{
+			Name:       "time",
+			ColumnType: "timestring",
+		},
 	}
 	table := "some_table"
 
@@ -188,10 +192,22 @@ func TestGetClickhouseFields(t *testing.T) {
 		{
 			Name:    columns[0].Name,
 			ColType: chString,
+			Out:	 columns[0].Name,
 		},
 		{
 			Name:    columns[1].Name,
 			ColType: chInt,
+			Out:	 columns[1].Name,
+		},
+		{
+			Name:    columns[2].Name,
+			ColType: chTimestring,
+			Out:	 columns[2].Name,
+		},
+		{
+			Name:    columns[2].Name,
+			ColType: chNanostring,
+			Out:	 columns[2].Name + "ns",
 		},
 	}
 

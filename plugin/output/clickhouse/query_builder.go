@@ -13,6 +13,7 @@ var ErrEmptyTableName = errors.New("table name can't be empty string")
 type column struct {
 	Name    string
 	ColType chType
+	Out		string
 }
 
 type ClickhouseQueryBuilder interface {
@@ -61,15 +62,25 @@ func (qb *chQueryBuilder) initClickhouseFields(cfgColumns []ConfigColumn) ([]col
 	chFields := make([]column, 0, len(cfgColumns))
 	for _, col := range cfgColumns {
 		var colType chType
+		var colOut string
 		switch col.ColumnType {
 		case colTypeInt:
 			colType = chInt
+			colOut = col.Name
 		case colTypeString:
 			colType = chString
+			colOut = col.Name
 		case colTypeTimestamp:
 			colType = chTimestamp
+			colOut = col.Name
 		case colTypeTimestring:
-			colType = chTimestring
+			chFields = append(chFields, column{
+				Name:    col.Name,
+				ColType: chTimestring,
+				Out:	col.Name,
+			})
+			colType = chNanostring
+			colOut = col.Name + "ns"
 		default:
 			return nil, fmt.Errorf("invalid ch type: %v", col.ColumnType)
 		}
@@ -77,6 +88,7 @@ func (qb *chQueryBuilder) initClickhouseFields(cfgColumns []ConfigColumn) ([]col
 		chFields = append(chFields, column{
 			Name:    col.Name,
 			ColType: colType,
+			Out:     colOut,
 		})
 	}
 
@@ -86,7 +98,7 @@ func (qb *chQueryBuilder) initClickhouseFields(cfgColumns []ConfigColumn) ([]col
 func (qb *chQueryBuilder) createQuery(chFields []column, table string) (sq.InsertBuilder) {
 	fieldsName := make([]string, 0, len(chFields))
 	for _, field := range chFields {
-		fieldsName = append(fieldsName, field.Name)
+		fieldsName = append(fieldsName, field.Out)
 	}
 
 	return sq.Insert(table).Columns(fieldsName...)
