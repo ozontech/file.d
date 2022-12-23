@@ -405,8 +405,8 @@ func TestPrivateOutEventWithTimestring(t *testing.T) {
 
 	mockdb.EXPECT().ExecContext(
 		gomock.AssignableToTypeOf(ctxMock),
-		"INSERT INTO table1 (time,timens) VALUES (?,?)",
-		[]any{"2022-12-11T20:20:10", int32(37011974)},
+		"INSERT INTO table1 (time,timems) VALUES (?,?)",
+		[]any{"2022-12-11T20:20:10", int16(37)},
 	).Return(&resultForTest{}, nil).Times(1)
 
 	builder, err := NewQueryBuilder(columns, table)

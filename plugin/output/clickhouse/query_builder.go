@@ -79,8 +79,8 @@ func (qb *chQueryBuilder) initClickhouseFields(cfgColumns []ConfigColumn) ([]col
 				ColType: chTimestring,
 				Out:	col.Name,
 			})
-			colType = chNanostring
-			colOut = col.Name + "ns"
+			colType = chMilliseconds
+			colOut = col.Name + "ms"
 		default:
 			return nil, fmt.Errorf("invalid ch type: %v", col.ColumnType)
 		}

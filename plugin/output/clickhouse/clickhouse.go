@@ -49,8 +49,9 @@ const (
 	chString 
 	chInt 
 	chTimestamp 
-	chTimestring // k8s input produces time as 2022-12-11T20:20:10.037011974Z string instead of int, at least in my setup
-	chNanostring // it is incompatible with Clickhouse and has to be split into two fields: datetime and nanoseconds
+	chTimestring // k8s input produces time as 2022-12-11T20:20:10.037011974Z or 2022-12-11T20:20:10.037Z string 
+	             // instead of int, at least in my setup
+	chMilliseconds // it is incompatible with Clickhouse and has to be split into two fields: datetime and milliseconds
 )
 
 const (
@@ -384,8 +385,8 @@ func (p *Plugin) addFieldToValues(field column, sNode *insaneJSON.StrictNode) (a
 			return nil, fmt.Errorf("%w, can't get %s as timestring, as it's shorter than %d symbols", ErrEventFieldHasWrongType, field.Name, nLen)
 		}
 		return lVal[:nLen], nil
-	case chNanostring:
-		nLen := 30
+	case chMilliseconds:
+		nLen := 23
 		lVal, err := sNode.AsString()
 		if err != nil {
 			return nil, fmt.Errorf("%w, can't get %s as string, err: %s", ErrEventFieldHasWrongType, field.Name, err.Error())
@@ -393,11 +394,11 @@ func (p *Plugin) addFieldToValues(field column, sNode *insaneJSON.StrictNode) (a
 		if len([]rune(lVal)) < nLen {
 			return nil, fmt.Errorf("%w, can't get %s as nanostring, as it's shorter than %d symbols", ErrEventFieldHasWrongType, field.Name, nLen)
 		}
-		nVal, err := strconv.ParseInt(lVal[20:29], 10, 32)
+		nVal, err := strconv.ParseInt(lVal[20:23], 10, 16)
 		if err != nil {
 			return nil, fmt.Errorf("%w, can't get %s as nanostring, can't convert %s to Int32", ErrEventFieldHasWrongType, field.Name, lVal[20:29])
 		}
-		return int32(nVal), nil
+		return int16(nVal), nil
 	case unknownType:
 		fallthrough
 	default:

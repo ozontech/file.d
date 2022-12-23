@@ -206,8 +206,8 @@ func TestGetClickhouseFields(t *testing.T) {
 		},
 		{
 			Name:    columns[2].Name,
-			ColType: chNanostring,
-			Out:	 columns[2].Name + "ns",
+			ColType: chMilliseconds,
+			Out:	 columns[2].Name + "ms",
 		},
 	}
 
