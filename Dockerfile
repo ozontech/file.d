@@ -1,5 +1,5 @@
 # Build
-FROM golang:1.19-alpine AS build
+FROM --platform=$BUILDPLATFORM golang:1.19-alpine AS build
 
 RUN apk update
 RUN apk add git
@@ -12,7 +12,11 @@ RUN go mod download
 
 COPY . .
 
-RUN CGO_ENABLED=0 go build -trimpath \
+ENV CGO_ENABLED 0
+ENV GOOS linux
+ENV GOARCH amd64
+
+RUN go build -trimpath \
     -ldflags "-X github.com/ozontech/file.d/buildinfo.Version=$(git describe --abbrev=4 --dirty --always --tags) \
     -X github.com/ozontech/file.d/buildinfo.BuildTime=$(date '+%Y-%m-%d_%H:%M:%S')" \
     -o file.d ./cmd/file.d.go
