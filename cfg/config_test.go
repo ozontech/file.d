@@ -2,7 +2,6 @@ package cfg
 
 import (
 	"errors"
-	"os"
 	"testing"
 	"time"
 
@@ -361,15 +360,61 @@ func TestApplyEnvs(t *testing.T) {
 			json, err := simplejson.NewJson([]byte(tt.json))
 			require.NoError(t, err)
 			for _, env := range tt.environs {
-				errS := os.Setenv(env[0], env[1])
-				require.NoError(t, errS)
-				defer func(key string) {
-					errU := os.Unsetenv(key)
-					require.NoError(t, errU)
-				}(env[0])
+				t.Setenv(env[0], env[1])
 			}
 
 			err = applyEnvs(json)
+
+			if tt.wantErr == "" {
+				require.NoError(t, err)
+				got, errEnc := json.Encode()
+				require.NoError(t, errEnc)
+				require.JSONEq(t, tt.wantJSON, string(got))
+			} else {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestApplyEnvsV2(t *testing.T) {
+	tests := []struct {
+		name     string
+		json     string
+		environs [][]string
+		wantJSON string
+		wantErr  string
+	}{
+		{
+			name: "replace_map",
+			json: `{"vault":{"address": "$VAULT_HOST", "token": "$VAULT_TOKEN", "key": "value"}}`,
+			environs: [][]string{
+				{"VAULT_HOST", "http://127.0.0.1"},
+				{"VAULT_TOKEN", "example_token"},
+			},
+			wantJSON: `{"vault": {"address": "http://127.0.0.1", "token": "example_token", "key": "value"}}`,
+		},
+		{
+			name: "replace_array",
+			json: `{"vault":[{"address": "$VAULT_HOST"}, {"token": "$VAULT_TOKEN"}, {"key": "value"}]}`,
+			environs: [][]string{
+				{"VAULT_HOST", "http://127.0.0.1"},
+				{"VAULT_TOKEN", "example_token"},
+			},
+			wantJSON: `{"vault": [{"address": "http://127.0.0.1"}, {"token": "example_token"}, {"key": "value"}]}`,
+		},
+	}
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			json, err := simplejson.NewJson([]byte(tt.json))
+			require.NoError(t, err)
+			for _, env := range tt.environs {
+				t.Setenv(env[0], env[1])
+			}
+
+			err = applyEnvsV2(json)
 
 			if tt.wantErr == "" {
 				require.NoError(t, err)

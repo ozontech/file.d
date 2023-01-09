@@ -73,6 +73,11 @@ func NewConfigFromFile(path string) *Config {
 		logger.Fatalf("can't get config values from environments: %s", err.Error())
 	}
 
+	err = applyEnvsV2(json)
+	if err != nil {
+		logger.Fatalf("can't get config values from environments: %s", err.Error())
+	}
+
 	config := parseConfig(json)
 	if !config.Vault.ShouldUse {
 		return config
@@ -108,6 +113,43 @@ func applyEnvs(json *simplejson.Json) error {
 	}
 
 	return nil
+}
+
+func applyEnvsV2(json *simplejson.Json) error {
+	envReg := regexp.MustCompile(`^\$[A-Za-z0-9\-_]+$`)
+	jsonMap, err := json.Map()
+	if err != nil {
+		return err
+	}
+	recursiveSetEnvs(jsonMap, envReg)
+	return nil
+}
+
+// recursive traversal of a simplejson object
+func recursiveSetEnvs(json interface{}, rgx *regexp.Regexp) {
+	switch jsonConvert := json.(type) {
+	case map[string]interface{}:
+		for key, value := range jsonConvert {
+			// try to convert to a string, if successful, then tryResetValue
+			if str, ok := value.(string); ok {
+				jsonConvert[key] = tryResetValue(str, rgx)
+			} else {
+				recursiveSetEnvs(jsonConvert[key], rgx)
+			}
+		}
+	case []interface{}:
+		for i := range jsonConvert {
+			recursiveSetEnvs(jsonConvert[i], rgx)
+		}
+	}
+}
+
+func tryResetValue(str string, rgx *regexp.Regexp) string {
+	if ok := rgx.MatchString(str); ok {
+		str = strings.TrimPrefix(str, "$")
+		return os.Getenv(str)
+	}
+	return str
 }
 
 func parseConfig(json *simplejson.Json) *Config {
