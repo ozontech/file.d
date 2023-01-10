@@ -99,6 +99,7 @@ type Pipeline struct {
 
 	// some debugging stuff
 	logger          *zap.SugaredLogger
+	sampleLogger    *zap.SugaredLogger
 	eventLogEnabled bool
 	eventLog        []string
 	eventLogMu      *sync.Mutex
@@ -143,6 +144,7 @@ func New(name string, settings *Settings, registry *prometheus.Registry) *Pipeli
 	pipeline := &Pipeline{
 		Name:           name,
 		logger:         logger.Instance.Named(name),
+		sampleLogger:   logger.SampleInstance.Named(name),
 		settings:       settings,
 		useSpread:      false,
 		disableStreams: false,
@@ -266,7 +268,7 @@ func (p *Pipeline) Start() {
 	p.logger.Infof("stating processors, count=%d", len(p.Procs))
 	for _, processor := range p.Procs {
 		processor.registerMetrics(p.metricsCtl)
-		processor.start(p.actionParams, p.logger)
+		processor.start(p.actionParams, p.logger, p.sampleLogger)
 	}
 
 	p.logger.Infof("starting input plugin %q", p.inputInfo.Type)
@@ -571,7 +573,7 @@ func (p *Pipeline) expandProcs() {
 		proc := p.newProc()
 		p.Procs = append(p.Procs, proc)
 		proc.registerMetrics(p.metricsCtl)
-		proc.start(p.actionParams, p.logger)
+		proc.start(p.actionParams, p.logger, p.sampleLogger)
 	}
 
 	p.procCount.Swap(to)

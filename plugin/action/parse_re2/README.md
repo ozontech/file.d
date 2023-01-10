@@ -14,5 +14,11 @@ A prefix to add to decoded object keys.
 
 <br>
 
+**`is_logging`** *`bool`* *`default=false`* 
+
+Field that includes logging (with sampling).
+
+<br>
+
 
 <br>*Generated using [__insane-doc__](https://github.com/vitkovskii/insane-doc)*

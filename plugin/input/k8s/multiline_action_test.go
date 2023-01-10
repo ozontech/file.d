@@ -17,11 +17,15 @@ func TestMultilineAction_Do(t *testing.T) {
 	config := &Config{
 		SplitEventSize: predictionLookahead * 4,
 	}
-	plugin.Start(config, &pipeline.ActionPluginParams{Logger: zap.S(), PluginDefaultParams: &pipeline.PluginDefaultParams{
-		PipelineSettings: &pipeline.Settings{
-			MaxEventSize: 20,
+	plugin.Start(config, &pipeline.ActionPluginParams{
+		Logger:       zap.S(),
+		SampleLogger: zap.S(),
+		PluginDefaultParams: &pipeline.PluginDefaultParams{
+			PipelineSettings: &pipeline.Settings{
+				MaxEventSize: 20,
+			},
 		},
-	}})
+	})
 
 	item := &metaItem{
 		nodeName:      "node_1",
@@ -93,9 +97,13 @@ func TestMultilineAction_Do_shouldSplit(t *testing.T) {
 	config := &Config{
 		SplitEventSize: predictionLookahead * 4,
 	}
-	plugin.Start(config, &pipeline.ActionPluginParams{Logger: zap.S(), PluginDefaultParams: &pipeline.PluginDefaultParams{
-		PipelineSettings: &pipeline.Settings{},
-	}})
+	plugin.Start(config, &pipeline.ActionPluginParams{
+		Logger:       zap.S(),
+		SampleLogger: zap.S(),
+		PluginDefaultParams: &pipeline.PluginDefaultParams{
+			PipelineSettings: &pipeline.Settings{},
+		},
+	})
 
 	item := &metaItem{
 		nodeName:      "node_1",

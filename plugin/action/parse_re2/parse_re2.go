@@ -8,6 +8,7 @@ import (
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/plugin"
 	insaneJSON "github.com/vitkovskii/insane-json"
+	"go.uber.org/zap"
 )
 
 /*{ introduction
@@ -15,9 +16,9 @@ It parses string from the event field using re2 expression with named subgroups 
 }*/
 
 type Plugin struct {
-	config *Config
-
-	re *regexp.Regexp
+	config       *Config
+	sampleLogger *zap.SugaredLogger
+	re           *regexp.Regexp
 	plugin.NoMetricsPlugin
 }
 
@@ -39,6 +40,11 @@ type Config struct {
 	// >
 	// > A prefix to add to decoded object keys.
 	Prefix string `json:"prefix" default:""` // *
+
+	// > @3@4@5@6
+	// >
+	// > Field that includes logging (with sampling).
+	IsLogging bool `json:"is_logging" default:"false"` // *
 }
 
 func init() {
@@ -52,8 +58,9 @@ func factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 	return &Plugin{}, &Config{}
 }
 
-func (p *Plugin) Start(config pipeline.AnyConfig, _ *pipeline.ActionPluginParams) {
+func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginParams) {
 	p.config = config.(*Config)
+	p.sampleLogger = params.SampleLogger
 
 	p.re = regexp.MustCompile(p.config.Re2)
 }
@@ -70,6 +77,9 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	sm := p.re.FindSubmatch(jsonNode.AsBytes())
 
 	if len(sm) == 0 {
+		if p.config.IsLogging {
+			p.sampleLogger.Info("event is not parsed: ", zap.Stringer("json", event))
+		}
 		return pipeline.ActionPass
 	}
 

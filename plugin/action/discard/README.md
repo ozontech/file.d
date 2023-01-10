@@ -13,6 +13,12 @@ pipelines:
     ...
 ```
 
-> No config params
+### Config params
+**`is_logging`** *`bool`* *`default=false`* 
+
+Field that includes logging (with sampling).
+
+<br>
+
 
 <br>*Generated using [__insane-doc__](https://github.com/vitkovskii/insane-doc)*

@@ -179,7 +179,8 @@ func TestMaskAddExtraField(t *testing.T) {
 			PipelineName:     "test_pipeline",
 			PipelineSettings: &pipeline.Settings{},
 		},
-		Logger: zap.L().Sugar(),
+		Logger:       zap.L().Sugar(),
+		SampleLogger: zap.L().Sugar(),
 	})
 	plugin.config.Masks[0].Re_ = regexp.MustCompile(plugin.config.Masks[0].Re)
 

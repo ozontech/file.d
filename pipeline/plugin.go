@@ -52,8 +52,9 @@ type PluginDefaultParams struct {
 
 type ActionPluginParams struct {
 	*PluginDefaultParams
-	Controller ActionPluginController
-	Logger     *zap.SugaredLogger
+	Controller   ActionPluginController
+	Logger       *zap.SugaredLogger
+	SampleLogger *zap.SugaredLogger
 }
 
 type OutputPluginParams struct {

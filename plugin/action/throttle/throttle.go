@@ -45,13 +45,14 @@ It discards the events if pipeline throughput gets higher than a configured thre
 }*/
 
 type Plugin struct {
-	ctx         context.Context
-	cancel      context.CancelFunc
-	logger      *zap.SugaredLogger
-	config      *Config
-	pipeline    string
-	format      string
-	redisClient redisClient
+	ctx          context.Context
+	cancel       context.CancelFunc
+	logger       *zap.SugaredLogger
+	sampleLogger *zap.SugaredLogger
+	config       *Config
+	pipeline     string
+	format       string
+	redisClient  redisClient
 
 	limiterBuf []byte
 	rules      []*rule
@@ -185,6 +186,7 @@ func (p *Plugin) syncWorker(ctx context.Context, jobCh <-chan limiter, wg *sync.
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginParams) {
 	p.config = config.(*Config)
 	p.logger = params.Logger
+	p.sampleLogger = params.SampleLogger
 	p.pipeline = params.PipelineName
 	p.limiterBuf = make([]byte, 0)
 	ctx, cancel := context.WithCancel(context.Background())
@@ -303,11 +305,12 @@ func (p *Plugin) isAllowed(event *pipeline.Event) bool {
 
 	if len(p.config.TimeField_) != 0 {
 		tsValue := event.Root.Dig(p.config.TimeField_...).AsString()
-		t, err := time.Parse(p.format, tsValue)
-		if err != nil || ts.IsZero() {
-			p.logger.Warnf("can't parse field %q using format %s: %s", p.config.TimeField, p.config.TimeFieldFormat, tsValue)
-		} else {
-			ts = t
+		if tsValue != "" {
+			if t, err := time.Parse(p.format, tsValue); err != nil || ts.IsZero() {
+				p.sampleLogger.Warnf("can't parse field=%q using format=%s time=%s", p.config.TimeField, p.config.TimeFieldFormat, tsValue)
+			} else {
+				ts = t
+			}
 		}
 	}
 

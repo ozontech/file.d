@@ -4,6 +4,7 @@ import (
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/plugin"
+	"go.uber.org/zap"
 )
 
 /*{ introduction
@@ -23,10 +24,19 @@ pipelines:
 }*/
 
 type Plugin struct {
+	config       *Config
+	sampleLogger *zap.SugaredLogger
 	plugin.NoMetricsPlugin
 }
 
-type Config struct{}
+// ! config-params
+// ^ config-params
+type Config struct {
+	// > @3@4@5@6
+	// >
+	// > Field that includes logging (with sampling).
+	IsLogging bool `json:"is_logging" default:"false"` // *
+}
 
 func init() {
 	fd.DefaultPluginRegistry.RegisterAction(&pipeline.PluginStaticInfo{
@@ -39,12 +49,17 @@ func factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 	return &Plugin{}, &Config{}
 }
 
-func (p *Plugin) Start(_ pipeline.AnyConfig, _ *pipeline.ActionPluginParams) {
+func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginParams) {
+	p.config = config.(*Config)
+	p.sampleLogger = params.SampleLogger
 }
 
 func (p *Plugin) Stop() {
 }
 
-func (p *Plugin) Do(_ *pipeline.Event) pipeline.ActionResult {
+func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
+	if p.config.IsLogging {
+		p.sampleLogger.Info("discarded event: ", zap.Stringer("json", event))
+	}
 	return pipeline.ActionDiscard
 }
