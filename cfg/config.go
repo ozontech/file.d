@@ -73,11 +73,6 @@ func NewConfigFromFile(path string) *Config {
 		logger.Fatalf("can't get config values from environments: %s", err.Error())
 	}
 
-	err = applyEnvsV2(json)
-	if err != nil {
-		logger.Fatalf("can't get config values from environments: %s", err.Error())
-	}
-
 	config := parseConfig(json)
 	if !config.Vault.ShouldUse {
 		return config
@@ -89,7 +84,7 @@ func NewConfigFromFile(path string) *Config {
 	}
 
 	for _, p := range config.Pipelines {
-		applyVault(vault, p.Raw)
+		mapFields(vault, p.Raw)
 	}
 
 	logger.Infof("config parsed, found %d pipelines", len(config.Pipelines))
@@ -113,43 +108,6 @@ func applyEnvs(json *simplejson.Json) error {
 	}
 
 	return nil
-}
-
-func applyEnvsV2(json *simplejson.Json) error {
-	envReg := regexp.MustCompile(`^\$[A-Za-z0-9\-_]+$`)
-	jsonMap, err := json.Map()
-	if err != nil {
-		return err
-	}
-	recursiveSetEnvs(jsonMap, envReg)
-	return nil
-}
-
-// recursive traversal of a simplejson object
-func recursiveSetEnvs(json interface{}, rgx *regexp.Regexp) {
-	switch jsonConvert := json.(type) {
-	case map[string]interface{}:
-		for key, value := range jsonConvert {
-			// try to convert to a string, if successful, then tryResetValue
-			if str, ok := value.(string); ok {
-				jsonConvert[key] = tryResetValue(str, rgx)
-			} else {
-				recursiveSetEnvs(jsonConvert[key], rgx)
-			}
-		}
-	case []interface{}:
-		for i := range jsonConvert {
-			recursiveSetEnvs(jsonConvert[i], rgx)
-		}
-	}
-}
-
-func tryResetValue(str string, rgx *regexp.Regexp) string {
-	if ok := rgx.MatchString(str); ok {
-		str = strings.TrimPrefix(str, "$")
-		return os.Getenv(str)
-	}
-	return str
 }
 
 func parseConfig(json *simplejson.Json) *Config {
@@ -211,38 +169,51 @@ func validatePipelineName(name string) error {
 	return nil
 }
 
-func applyVault(vault secreter, json *simplejson.Json) {
+// work with vault secreter and environment variables
+func mapFields(vault secreter, json *simplejson.Json) {
 	if a, err := json.Array(); err == nil {
 		for i := range a {
 			field := json.GetIndex(i)
-			if value, ok := tryGetSecret(vault, field); ok {
+			if value, ok := tryMapField(vault, field); ok {
 				a[i] = value
 
 				continue
 			}
-			applyVault(vault, field)
+			mapFields(vault, field)
 		}
 	}
 
 	if m, err := json.Map(); err == nil {
 		for k := range m {
 			field := json.Get(k)
-			if value, ok := tryGetSecret(vault, field); ok {
+			if value, ok := tryMapField(vault, field); ok {
 				json.Set(k, value)
 
 				continue
 			}
-			applyVault(vault, field)
+			mapFields(vault, field)
 		}
 	}
 }
 
-func tryGetSecret(vault secreter, field *simplejson.Json) (string, bool) {
+func tryMapField(vault secreter, field *simplejson.Json) (string, bool) {
 	s, err := field.String()
 	if err != nil {
 		return "", false
 	}
 
+	if value, ok := tryGetSecret(vault, s); ok {
+		return value, ok
+	}
+
+	if value, ok := tryGetEnv(s); ok {
+		return value, ok
+	}
+
+	return "", false
+}
+
+func tryGetSecret(vault secreter, s string) (string, bool) {
 	// escape symbols.
 	if strings.HasPrefix(s, `\vault(`) {
 		s = strings.ReplaceAll(s, `\vault(`, "vault(")
@@ -266,6 +237,27 @@ func tryGetSecret(vault secreter, field *simplejson.Json) (string, bool) {
 
 	logger.Infof("success getting secret %q and %q", pathAndKey[0], pathAndKey[1])
 	return secret, true
+}
+
+func tryGetEnv(s string) (string, bool) {
+	// escape symbols.
+	if strings.HasPrefix(s, `\env(`) {
+		s = strings.ReplaceAll(s, `\env(`, "env(")
+		return s, true
+	}
+
+	if !strings.HasPrefix(s, "env(") || !strings.HasSuffix(s, ")") {
+		return "", false
+	}
+
+	envName := strings.TrimPrefix(s, "env(")
+	envName = strings.TrimSuffix(envName, ")")
+
+	env, ok := os.LookupEnv(envName)
+	if !ok {
+		logger.Fatalf("can't GetEnv: %s", envName)
+	}
+	return env, true
 }
 
 // Parse holy shit! who write this function?
