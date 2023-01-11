@@ -400,7 +400,11 @@ func (v *vaultMock) GetSecret(path, key string) (string, error) {
 	return v.secretResult, v.secretErr
 }
 
-func TestApplyVault(t *testing.T) {
+func (v *vaultMock) tryApply(s string) (string, bool) {
+	return tryApplySecreter(v, s)
+}
+
+func TestApplyConfigFuncs(t *testing.T) {
 	tests := []struct {
 		name         string
 		environs     [][]string
@@ -500,9 +504,11 @@ func TestApplyVault(t *testing.T) {
 			for _, env := range tt.environs {
 				t.Setenv(env[0], env[1])
 			}
-			vault := newVaultMock(t, tt.secretPath, tt.secretKey, tt.secretResult, tt.secretErr)
 
-			mapFields(vault, json)
+			vault := newVaultMock(t, tt.secretPath, tt.secretKey, tt.secretResult, tt.secretErr)
+			apps := []funcApplier{vault, &envs{}}
+
+			applyConfigFuncs(apps, json)
 
 			if tt.wantErr == "" {
 				require.NoError(t, err)

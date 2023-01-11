@@ -74,17 +74,25 @@ func NewConfigFromFile(path string) *Config {
 	}
 
 	config := parseConfig(json)
-	if !config.Vault.ShouldUse {
-		return config
+	var apps []funcApplier
+
+	// add applicator for env variables
+	apps = append(apps, &envs{})
+
+	// if vault is used then set value otherwise it is empty variable
+	vault := &vault{}
+	if config.Vault.ShouldUse {
+		vault, err = newVault(config.Vault.Address, config.Vault.Token)
+		if err != nil {
+			logger.Fatalf("can't create vault client: %s", err.Error())
+		}
 	}
 
-	vault, err := newVault(config.Vault.Address, config.Vault.Token)
-	if err != nil {
-		logger.Fatalf("can't create vault client: %s", err.Error())
-	}
+	// add applicator for vault
+	apps = append(apps, vault)
 
 	for _, p := range config.Pipelines {
-		mapFields(vault, p.Raw)
+		applyConfigFuncs(apps, p.Raw)
 	}
 
 	logger.Infof("config parsed, found %d pipelines", len(config.Pipelines))
@@ -169,95 +177,49 @@ func validatePipelineName(name string) error {
 	return nil
 }
 
-// work with vault secreter and environment variables
-func mapFields(vault secreter, json *simplejson.Json) {
+func applyConfigFuncs(apps []funcApplier, json *simplejson.Json) {
+	for _, app := range apps {
+		applyConfigFunc(app, json)
+	}
+}
+
+func applyConfigFunc(app funcApplier, json *simplejson.Json) {
 	if a, err := json.Array(); err == nil {
 		for i := range a {
 			field := json.GetIndex(i)
-			if value, ok := tryMapField(vault, field); ok {
+			if value, ok := tryApplyFunc(app, field); ok {
 				a[i] = value
 
 				continue
 			}
-			mapFields(vault, field)
+			applyConfigFunc(app, field)
 		}
 	}
 
 	if m, err := json.Map(); err == nil {
 		for k := range m {
 			field := json.Get(k)
-			if value, ok := tryMapField(vault, field); ok {
+			if value, ok := tryApplyFunc(app, field); ok {
 				json.Set(k, value)
 
 				continue
 			}
-			mapFields(vault, field)
+			applyConfigFunc(app, field)
 		}
 	}
 }
 
-func tryMapField(vault secreter, field *simplejson.Json) (string, bool) {
+func tryApplyFunc(app funcApplier, field *simplejson.Json) (string, bool) {
 	s, err := field.String()
 	if err != nil {
 		return "", false
 	}
 
-	if value, ok := tryGetSecret(vault, s); ok {
-		return value, ok
-	}
-
-	if value, ok := tryGetEnv(s); ok {
+	if value, ok := app.tryApply(s); ok {
 		return value, ok
 	}
 
 	return "", false
-}
-
-func tryGetSecret(vault secreter, s string) (string, bool) {
-	// escape symbols.
-	if strings.HasPrefix(s, `\vault(`) {
-		s = strings.ReplaceAll(s, `\vault(`, "vault(")
-		return s, true
-	}
-
-	if !strings.HasPrefix(s, "vault(") || !strings.HasSuffix(s, ")") {
-		return "", false
-	}
-
-	args := strings.TrimPrefix(s, "vault(")
-	args = strings.TrimSuffix(args, ")")
-	noSpaces := strings.ReplaceAll(args, " ", "")
-	pathAndKey := strings.Split(noSpaces, ",")
-
-	logger.Infof("get secrets for %q and %q", pathAndKey[0], pathAndKey[1])
-	secret, err := vault.GetSecret(pathAndKey[0], pathAndKey[1])
-	if err != nil {
-		logger.Fatalf("can't GetSecret: %s", err.Error())
-	}
-
-	logger.Infof("success getting secret %q and %q", pathAndKey[0], pathAndKey[1])
-	return secret, true
-}
-
-func tryGetEnv(s string) (string, bool) {
-	// escape symbols.
-	if strings.HasPrefix(s, `\env(`) {
-		s = strings.ReplaceAll(s, `\env(`, "env(")
-		return s, true
-	}
-
-	if !strings.HasPrefix(s, "env(") || !strings.HasSuffix(s, ")") {
-		return "", false
-	}
-
-	envName := strings.TrimPrefix(s, "env(")
-	envName = strings.TrimSuffix(envName, ")")
-
-	env, ok := os.LookupEnv(envName)
-	if !ok {
-		logger.Fatalf("can't GetEnv: %s", envName)
-	}
-	return env, true
 }
 
 // Parse holy shit! who write this function?
