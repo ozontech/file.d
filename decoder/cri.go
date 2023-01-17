@@ -42,6 +42,10 @@ func DecodeCRI(event *insaneJSON.Root, data []byte) error {
 	tags := data[:pos]
 	data = data[pos+1:]
 
+	if len(tags) == 0 {
+		return fmt.Errorf("log tag is empty")
+	}
+
 	isPartial := tags[0] == 'P'
 
 	// log
