@@ -2,85 +2,72 @@ package clickhouse
 
 import (
 	"context"
-	"errors"
-	"fmt"
+	"strings"
 	"time"
-	"strconv"
 
-	sq "github.com/Masterminds/squirrel"
-	"database/sql"
-	_ "github.com/ClickHouse/clickhouse-go/v2"
+	"github.com/ClickHouse/ch-go"
+	"github.com/ClickHouse/ch-go/chpool"
+	"github.com/ClickHouse/ch-go/proto"
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/tls"
 	prom "github.com/prometheus/client_golang/prometheus"
-	insaneJSON "github.com/vitkovskii/insane-json"
 	"go.uber.org/zap"
 )
+
+var _ ch.Options
+var _ chpool.Client
 
 /*{ introduction
 It sends the event batches to clickhouse db using clickhouse-go.
 }*/
 
-var (
-	ErrEventDoesntHaveField             = errors.New("event doesn't have field")
-	ErrEventFieldHasWrongType           = errors.New("event field has wrong type")
-	ErrTimestampFromDistantPastOrFuture = errors.New("event field contains timestamp < 1970 or > 9000 year")
-)
-
-type DBIface interface {
-	Ping() (error)
-	Close() (error)
-	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
-}
-
 const (
 	outPluginType = "clickhouse"
-
-	nineThousandYear = 221842627200
 )
 
-type chType int
-
-const (
-	// minimum required types for now.
-	unknownType chType = iota 
-	chString 
-	chInt 
-	chTimestamp 
-	chTimestring // k8s input produces time as 2022-12-11T20:20:10.037011974Z or 2022-12-11T20:20:10.037Z string 
-	             // instead of int, at least in my setup
-	chMilliseconds // it is incompatible with Clickhouse and has to be split into two fields: datetime and milliseconds
-)
-
-const (
-	colTypeInt       = "int"
-	colTypeString    = "string"
-	colTypeTimestamp = "timestamp"
-	colTypeTimestring = "timestring"
-)
+type Clickhouse interface {
+	Ping(ctx context.Context) error
+	Close()
+	Do(ctx context.Context, query ch.Query) error
+}
 
 type Plugin struct {
-	controller pipeline.OutputPluginController
 	logger     *zap.SugaredLogger
 	config     *Config
 	batcher    *pipeline.Batcher
 	ctx        context.Context
 	cancelFunc context.CancelFunc
 
-	queryBuilder ClickhouseQueryBuilder
-	pool       DBIface
+	avgEventSize int
+	pool         Clickhouse
 
 	// plugin metrics
 
-	discardedEventMetric  *prom.CounterVec
-	writtenEventMetric    *prom.CounterVec
+	execErrorsMetric   *prom.CounterVec
+	writtenEventMetric *prom.CounterVec
 }
 
-type ConfigColumn struct {
-	Name       string `json:"name" required:"true"`
-	ColumnType string `json:"type" required:"true" options:"int|string|bool|timestamp|timestring"`
+type Setting struct {
+	Key       string `json:"key"`
+	Value     string `json:"value"`
+	Important bool   `json:"important"`
+}
+
+type Settings []Setting
+
+func (s Settings) toProtoSettings() []ch.Setting {
+	var result []ch.Setting
+	for _, setting := range s {
+		result = append(result, ch.Setting{
+			Key:       setting.Key,
+			Value:     setting.Value,
+			Important: setting.Important,
+		})
+	}
+	return result
 }
 
 // ! config-params
@@ -88,34 +75,50 @@ type ConfigColumn struct {
 type Config struct {
 	// > @3@4@5@6
 	// >
-	// > In strict mode file.d will crash on events without required columns.
-	// Otherwise events will be discarded.
-	Strict bool `json:"strict" default:"false"` // *
-
-	// > @3@4@5@6
-	// >
 	// > ClickhouseSQL connection string in DSN format.
 	// >
 	// > Example DSN:
 	// >
-	// > `clickhouse://username:password@host1:9000,host2:9000/database?dial_timeout=200ms&max_execution_time=60`
-	ConnString string `json:"conn_string" required:"true"` // *
+	// > `clickhouse://username:password@host1:9000,host2:9000/database?dial_timeout=200ms&max_execution_time=60&compress=true`
+	// >
+	// > Read more about the query values in the doc: https://github.com/ClickHouse/clickhouse-go#dsn
+	Address string `json:"address" required:"true"` // *
+
+	Database string
+
+	// > @3@4@5@6
+	// >
+	// > CA certificate in PEM encoding. This can be a path or the content of the certificate.
+	// > If both ca_cert and private_key are set, the server starts accepting connections in TLS mode.
+	CACert string `json:"ca_cert" default:""` // *
 
 	// > @3@4@5@6
 	// >
 	// > Clickhouse target table.
 	Table string `json:"table" required:"true"` // *
 
-	// > @3@4@5@6
+	Schema Schema `json:"schema"`
+
 	// >
-	// > Array of DB columns. Each column have:
-	// > name and type (int, string, timestamp - which int that will be converted to timestamptz of rfc3339)
-	Columns []ConfigColumn `json:"columns" required:"true" slice:"true"` // *
+
+	Compression string `default:"none" options:"disabled,lz4,zstd,none"`
 
 	// > @3@4@5@6
 	// >
 	// > Retries of insertion.
-	Retry int `json:"retry" default:"3"` // *
+	Retry int `json:"retry" default:"5"` // *
+	// > @3@4@5@6
+	// >
+	// > Allowing Clickhouse to discard extra data.
+	// > If disabled and extra data found, Clickhouse throws an error and file.d will infinitely retry invalid requests.
+	// > If you want to disable the settings, check the `keep_fields` plugin to prevent the appearance of extra data.
+	SkipUnknownFields bool `json:"skip_unknown_fields" default:"true"`
+
+	// > @3@4@5@6
+	// >
+	// > Additional settings to the Clickhouse.
+	// > All settings list: https://clickhouse.com/docs/en/operations/settings/settings
+	ClickhouseSettings Settings
 
 	// > @3@4@5@6
 	// >
@@ -138,8 +141,7 @@ type Config struct {
 	// > @3@4@5@6
 	// >
 	// > Maximum quantity of events to pack into one batch.
-	BatchSize cfg.Expression `json:"batch_size" default:"capacity/4"  parse:"expression"` // *
-	//BatchSize  cfg.Expression `json:"batch_size" default:"capacity/4" parse:"expression"` // *
+	BatchSize  cfg.Expression `json:"batch_size" default:"capacity/4"  parse:"expression"` // *
 	BatchSize_ int
 
 	// > @3@4@5@6
@@ -168,66 +170,96 @@ func Factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 }
 
 func (p *Plugin) RegisterMetrics(ctl *metric.Ctl) {
-	p.discardedEventMetric = ctl.RegisterCounter("output_clickhouse_event_discarded", "Total ??? discarded messages")
+	p.execErrorsMetric = ctl.RegisterCounter("output_clickhouse_errors", "Total clickhouse exec errors")
 	p.writtenEventMetric = ctl.RegisterCounter("output_clickhouse_event_written", "Total events written to ???")
 }
 
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginParams) {
-	p.controller = params.Controller
 	p.logger = params.Logger
 	p.config = config.(*Config)
-	p.ctx = context.Background()
-	if len(p.config.Columns) == 0 {
-		p.logger.Fatal("can't start plugin, no fields in config")
-	}
+	p.ctx, p.cancelFunc = context.WithCancel(context.Background())
+	p.avgEventSize = params.PipelineSettings.AvgEventSize
 
 	if p.config.Retry < 1 {
 		p.logger.Fatal("'retry' can't be <1")
 	}
 	if p.config.Retention_ < 1 {
-		p.logger.Fatal("'renetion' can't be <1")
+		p.logger.Fatal("'retention' can't be <1")
 	}
 	if p.config.DBRequestTimeout_ < 1 {
 		p.logger.Fatal("'db_request_timeout' can't be <1")
 	}
-
-	queryBuilder, err := NewQueryBuilder(p.config.Columns, p.config.Table)
-	if err != nil {
-		p.logger.Fatal(err)
-	}
-	p.queryBuilder = queryBuilder
-
-	pool, err := sql.Open("clickhouse", p.config.ConnString)
-	if err != nil {
-		p.logger.Fatalf("can't create sql.DB: %v", err)
+	if _, err := parseSchema(p.config.Schema); err != nil {
+		p.logger.Fatalf("invalid database schema: %s", err)
 	}
 
-	pool.SetConnMaxLifetime(0)
-	pool.SetMaxIdleConns(p.config.WorkersCount_)
-	pool.SetMaxOpenConns(p.config.WorkersCount_)
+	{
+		var compression ch.Compression
+		switch strings.ToLower(p.config.Compression) {
+		default:
+			fallthrough
+		case "disabled":
+			compression = ch.CompressionDisabled
+		case "lz4":
+			compression = ch.CompressionLZ4
+		case "zstd":
+			compression = ch.CompressionZSTD
+		case "none":
+			compression = ch.CompressionNone
+		}
 
-	err = pool.Ping()
-	if err != nil {
-		p.logger.Fatalf("can't connect clickhouse: %v", err)
+		var b tls.ConfigBuilder
+		if p.config.CACert != "" {
+			b := tls.NewConfigBuilder()
+			err := b.AppendCARoot(p.config.CACert)
+			if err != nil {
+				p.logger.Fatalf("can't append CA root: %s", err.Error())
+			}
+		}
+
+		var err error
+		p.pool, err = chpool.Dial(p.ctx, chpool.Options{
+			ClientOptions: ch.Options{
+				Logger:                       p.logger.Desugar(),
+				Address:                      p.config.Address,
+				Database:                     p.config.Database,
+				User:                         "",
+				Password:                     "",
+				QuotaKey:                     "",
+				Compression:                  compression,
+				Settings:                     p.config.ClickhouseSettings.toProtoSettings(),
+				Dialer:                       nil,
+				DialTimeout:                  time.Second * 10,
+				TLS:                          b.Build(),
+				ProtocolVersion:              0,
+				HandshakeTimeout:             time.Second * 10,
+				OpenTelemetryInstrumentation: false,
+				TracerProvider:               nil,
+				MeterProvider:                nil,
+			},
+			MaxConnLifetime:   0,
+			MaxConnIdleTime:   0,
+			MaxConns:          0,
+			MinConns:          0,
+			HealthCheckPeriod: 0,
+		})
+		if err != nil {
+			p.logger.Fatalf("create clickhouse pool: %s", err)
+		}
 	}
-	p.pool = pool
 
 	p.batcher = pipeline.NewBatcher(pipeline.BatcherOptions{
 		PipelineName:   params.PipelineName,
 		OutputType:     outPluginType,
 		OutFn:          p.out,
-		Controller:     p.controller,
+		Controller:     params.Controller,
 		Workers:        p.config.WorkersCount_,
 		BatchSizeCount: p.config.BatchSize_,
 		BatchSizeBytes: p.config.BatchSizeBytes_,
 		FlushTimeout:   p.config.BatchFlushTimeout_,
 	})
 
-	ctx, cancel := context.WithCancel(context.Background())
-	p.ctx = ctx
-	p.cancelFunc = cancel
-
-	p.batcher.Start(ctx)
+	p.batcher.Start(p.ctx)
 }
 
 func (p *Plugin) Stop() {
@@ -240,169 +272,92 @@ func (p *Plugin) Out(event *pipeline.Event) {
 	p.batcher.Add(event)
 }
 
-func (p *Plugin) out(_ *pipeline.WorkerData, batch *pipeline.Batch) {
-	// _ *pipeline.WorkerData - doesn't required in this plugin, we can't parse
-	// events for uniques through bytes.
-	builder := p.queryBuilder.GetInsertBuilder()
-	chFields := p.queryBuilder.GetClickhouseFields()
+type AppendableString interface {
+	Append(string)
+}
 
-	// contrary to postgres we don't mess with deduplication
-	// it's to be handled on Clickhouse side if necessary
+type AppendableBool interface {
+	Append(bool)
+}
 
-	validEvents := 0
+func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
+	if *workerData == nil {
+		// we don't check the error, schema already validated in the Start
+		schema, _ := parseSchema(p.config.Schema)
+		*workerData = schema
+	}
+
+	input := (*workerData).(proto.Input)
+
+	input.Reset()
+
 	for _, event := range batch.Events {
-		fieldValues, err := p.processEvent(event, chFields)
-		if err != nil {
-			if errors.Is(err, ErrEventDoesntHaveField) {
-				p.discardedEventMetric.WithLabelValues().Inc()
-				if p.config.Strict {
-					p.logger.Fatal(err)
-				}
-				p.logger.Error(err)
-			} else if errors.Is(err, ErrEventFieldHasWrongType) {
-				p.discardedEventMetric.WithLabelValues().Inc()
-				if p.config.Strict {
-					p.logger.Fatal(err)
-				}
-				p.logger.Error(err)
-			} else if errors.Is(err, ErrTimestampFromDistantPastOrFuture) {
-				p.discardedEventMetric.WithLabelValues().Inc()
-				if p.config.Strict {
-					p.logger.Fatal(err)
-				}
-				p.logger.Error(err)
-			} else if err != nil { // protection from foolproof.
-				p.logger.Fatalf("undefined error: %w", err)
+		for _, col := range input {
+			node, err := event.Root.DigStrict(col.Name) // {"level": "info"}
+			if err != nil {
+				continue
 			}
 
-			continue
+			// На стороне insaneJSON мы должны вывести тип, используя конфиг, скастовать значение в any
+			// Driver сходит в clickhouse и узнает все столбы и их типы
+			// распарсит типы (и будет это делать каждый запрос)
+			// при append драйвер рефлексией пойдет сравнивать
+			// if data.(int32) || data.(*int32) || data.(sql.NullInt32) || data.(*sql.NullInt32) {
+			//   columnInt32.Append(int32Data)
+			// }
+			// если произошел мисматч типов, то драйвер вернет ошибку
+
+			t := col.Data.Type() // String
+			if t == "String" {
+				node.AsString()
+			}
+			if t.IsArray() {
+				panic("todo")
+			} else {
+				isComposite := t.Elem() != ""
+				if isComposite {
+					panic("todo")
+				}
+				t := t.String()
+
+				if strings.HasPrefix(t, "Int") {
+					n, err := node.AsInt()
+					if err != nil {
+						continue
+					}
+					t = t[len("Int"):]
+					switch t {
+					case "8":
+						_ = n
+					}
+				}
+			}
+
+			var differentTypes bool
+			// t := t.String()
+			// if strings.Index(t, string(proto.ColumnTypeString)) {
+			// 	data, err := node.AsString()
+			// 	differentTypes = strings.Index(t, string(proto.ColumnTypeString)) == -1
+			// 	if !differentTypes {
+			// 		col, ok := col.Data.(AppendableString)
+			// 		differentTypes = ok
+			// 		if ok {
+			// 			col.Append(data)
+			// 		}
+			// 	}
+			// }
+
+			if differentTypes {
+				p.logger.Warnf("can't append %s to the %s bacause of different types", col.Name, p.config.Table)
+			}
 		}
-
-		// passes here only if event valid.
-		builder = builder.Values(fieldValues...)
-		validEvents += 1
-	}
-
-	builder = builder.PlaceholderFormat(sq.Question)
-
-	// no valid events passed.
-	if validEvents == 0 {
-		return
-	}
-
-	query, args, err := builder.ToSql()
-	if err != nil {
-		p.logger.Fatalf("Invalid SQL. query: %s, args: %v, err: %v", query, args, err)
-	}
-
-	var argsSliceInterface = make([]any, len(args)) // TODO: check if args needed
-
-	for i := 0; i < len(args); i++ {
-		argsSliceInterface[i] = args[i]
-	}
-
-	// Insert into Clickhouse with retry.
-	for i := p.config.Retry; i > 0; i-- {
-		err = p.try(query, argsSliceInterface)
-		if err != nil {
-			p.logger.Errorf("can't exec query: %s", err.Error())
-			time.Sleep(p.config.Retention_)
-			continue
-		}
-		p.writtenEventMetric.WithLabelValues().Add(float64(len(batch.Events)))
-		break
-	}
-
-	if err != nil {
-		p.pool.Close()
-		p.logger.Fatalf("failed insert into %s. query: %s, args: %v, err: %v", p.config.Table, query, args, err)
 	}
 }
 
-func (p *Plugin) try(query string, argsSliceInterface []any) error {
+func (p *Plugin) try(ctx context.Context, query string) error {
 	ctx, cancel := context.WithTimeout(p.ctx, p.config.DBRequestTimeout_)
 	defer cancel()
 
-	_, err := p.pool.ExecContext(ctx, query, argsSliceInterface...) // TODO:
-	if err != nil {
-		return err
-	}
-
-	return err
+	// err := p.pool.Do(ctx, query)
+	return nil
 }
-
-func (p *Plugin) processEvent(event *pipeline.Event, chFields []column) (fieldValues []any, err error) {
-	fieldValues = make([]any, 0, len(chFields))
-
-	for _, field := range chFields {
-		fieldNode, err := event.Root.DigStrict(field.Name)
-		if err != nil {
-			return nil, fmt.Errorf("%w. required field %s", ErrEventDoesntHaveField, field.Name)
-		}
-
-		lVal, err := p.addFieldToValues(field, fieldNode)
-		if err != nil {
-			return nil, err
-		}
-
-		fieldValues = append(fieldValues, lVal)
-	}
-
-	return fieldValues, nil
-}
-
-func (p *Plugin) addFieldToValues(field column, sNode *insaneJSON.StrictNode) (any, error) {
-	switch field.ColType {
-	case chString:
-		lVal, err := sNode.AsString()
-		if err != nil {
-			return nil, fmt.Errorf("%w, can't get %s as string, err: %s", ErrEventFieldHasWrongType, field.Name, err.Error())
-		}
-		return lVal, nil
-	case chInt:
-		lVal, err := sNode.AsInt()
-		if err != nil {
-			return nil, fmt.Errorf("%w, can't get %s as int, err: %s", ErrEventFieldHasWrongType, field.Name, err.Error())
-		}
-		return lVal, nil
-	case chTimestamp:
-		tint, err := sNode.AsInt()
-		if err != nil {
-			return nil, fmt.Errorf("%w, can't get %s as timestamp, err: %s", ErrEventFieldHasWrongType, field.Name, err.Error())
-		}
-		// if timestamp < 1970-01-00-00 or > 9000-01-00-00
-		if tint < 0 || tint > nineThousandYear {
-			return nil, fmt.Errorf("%w, %s", ErrTimestampFromDistantPastOrFuture, field.Name)
-		}
-		return time.Unix(int64(tint), 0).Format(time.RFC3339), nil
-	case chTimestring:
-		nLen := 19
-		lVal, err := sNode.AsString()
-		if err != nil {
-			return nil, fmt.Errorf("%w, can't get %s as string, err: %s", ErrEventFieldHasWrongType, field.Name, err.Error())
-		}
-		if len([]rune(lVal)) < nLen {
-			return nil, fmt.Errorf("%w, can't get %s as timestring, as it's shorter than %d symbols", ErrEventFieldHasWrongType, field.Name, nLen)
-		}
-		return lVal[:nLen], nil
-	case chMilliseconds:
-		nLen := 23
-		lVal, err := sNode.AsString()
-		if err != nil {
-			return nil, fmt.Errorf("%w, can't get %s as string, err: %s", ErrEventFieldHasWrongType, field.Name, err.Error())
-		}
-		if len([]rune(lVal)) < nLen {
-			return nil, fmt.Errorf("%w, can't get %s as nanostring, as it's shorter than %d symbols", ErrEventFieldHasWrongType, field.Name, nLen)
-		}
-		nVal, err := strconv.ParseInt(lVal[20:23], 10, 16)
-		if err != nil {
-			return nil, fmt.Errorf("%w, can't get %s as nanostring, can't convert %s to Int32", ErrEventFieldHasWrongType, field.Name, lVal[20:29])
-		}
-		return int16(nVal), nil
-	case unknownType:
-		fallthrough
-	default:
-		return nil, fmt.Errorf("%w, undefined col type: %d, col name: %s", ErrEventFieldHasWrongType, field.ColType, field.Name)
-	}
-}
-

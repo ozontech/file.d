@@ -146,7 +146,7 @@ type Config struct {
 	// >
 	// > Maximum quantity of events to pack into one batch.
 	BatchSize cfg.Expression `json:"batch_size" default:"capacity/4"  parse:"expression"` // *
-	//BatchSize  cfg.Expression `json:"batch_size" default:"capacity/4" parse:"expression"` // *
+	// BatchSize  cfg.Expression `json:"batch_size" default:"capacity/4" parse:"expression"` // *
 	BatchSize_ int
 
 	// > @3@4@5@6
@@ -193,7 +193,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		p.logger.Fatal("'retry' can't be <1")
 	}
 	if p.config.Retention_ < 1 {
-		p.logger.Fatal("'renetion' can't be <1")
+		p.logger.Fatal("'retention' can't be <1")
 	}
 	if p.config.DBRequestTimeout_ < 1 {
 		p.logger.Fatal("'db_request_timeout' can't be <1")
