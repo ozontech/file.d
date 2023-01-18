@@ -2,7 +2,6 @@ package cfg
 
 import (
 	"errors"
-	"os"
 	"testing"
 	"time"
 
@@ -361,12 +360,7 @@ func TestApplyEnvs(t *testing.T) {
 			json, err := simplejson.NewJson([]byte(tt.json))
 			require.NoError(t, err)
 			for _, env := range tt.environs {
-				errS := os.Setenv(env[0], env[1])
-				require.NoError(t, errS)
-				defer func(key string) {
-					errU := os.Unsetenv(key)
-					require.NoError(t, errU)
-				}(env[0])
+				t.Setenv(env[0], env[1])
 			}
 
 			err = applyEnvs(json)
@@ -406,18 +400,24 @@ func (v *vaultMock) GetSecret(path, key string) (string, error) {
 	return v.secretResult, v.secretErr
 }
 
-func TestApplyVault(t *testing.T) {
-	tests := []struct {
-		name     string
-		json     string
-		wantJSON string
-		wantErr  string
+func (v *vaultMock) tryApply(s string) (string, bool) {
+	return tryApplySecreter(v, s)
+}
 
-		secretKey, secretPath, secretResult string
-		secretErr                           error
+func TestApplyConfigFuncs(t *testing.T) {
+	tests := []struct {
+		name         string
+		environs     [][]string
+		json         string
+		wantJSON     string
+		wantErr      string
+		secretKey    string
+		secretPath   string
+		secretResult string
+		secretErr    error
 	}{
 		{
-			name:         "should_ok",
+			name:         "should_ok_vault",
 			json:         `{"welcome": {"input": {"type": "vault(test/test, value)"}}}`,
 			secretPath:   "test/test",
 			secretKey:    "value",
@@ -425,7 +425,29 @@ func TestApplyVault(t *testing.T) {
 			wantJSON:     `{"welcome": {"input": {"type": "result"}}}`,
 		},
 		{
-			name:         "should_ok_when_value_in_array",
+			name: "should_ok_env",
+			environs: [][]string{
+				{"ENV_1", "VAL_1"},
+			},
+			json:         `{"welcome": {"input": {"type": "env(ENV_1)"}}}`,
+			secretPath:   "test/test",
+			secretKey:    "value",
+			secretResult: "result",
+			wantJSON:     `{"welcome": {"input": {"type": "VAL_1"}}}`,
+		},
+		{
+			name: "should_ok_env_and_vault",
+			environs: [][]string{
+				{"ENV_1", "VAL_1"},
+			},
+			json:         `{"welcome": {"input": {"type_1": "env(ENV_1)", "type_2": "vault(test/test, value)"}}}`,
+			secretPath:   "test/test",
+			secretKey:    "value",
+			secretResult: "result",
+			wantJSON:     `{"welcome": {"input": {"type_1": "VAL_1","type_2": "result"}}}`,
+		},
+		{
+			name:         "should_ok_when_vault_in_array",
 			json:         `{"welcome": {"input": {"type": ["vault(test/test, value)"]}}}`,
 			secretPath:   "test/test",
 			secretKey:    "value",
@@ -433,23 +455,60 @@ func TestApplyVault(t *testing.T) {
 			wantJSON:     `{"welcome": {"input": {"type": ["result"]}}}`,
 		},
 		{
+			name: "should_ok_when_env_in_array",
+			environs: [][]string{
+				{"ENV_1", "VAL_1"},
+			},
+			json:         `{"welcome": {"input": {"type": ["env(ENV_1)"]}}}`,
+			secretPath:   "test/test",
+			secretKey:    "value",
+			secretResult: "result",
+			wantJSON:     `{"welcome": {"input": {"type": ["VAL_1"]}}}`,
+		},
+		{
+			name: "should_ok_when_env_and_vault_in_array",
+			environs: [][]string{
+				{"ENV_1", "VAL_1"},
+			},
+			json:         `{"welcome": {"input": {"type": ["env(ENV_1)","vault(test/test, value)"]}}}`,
+			secretPath:   "test/test",
+			secretKey:    "value",
+			secretResult: "result",
+			wantJSON:     `{"welcome": {"input": {"type": ["VAL_1","result"]}}}`,
+		},
+		{
 			name:     "should_ok_when_vault_field_escaped",
 			json:     `{"welcome": {"input": {"type": "\\vault(test/test, value)"}}}`,
 			wantJSON: `{"welcome": {"input": {"type": "vault(test/test, value)"}}}`,
+		},
+		{
+			name:     "should_ok_when_env_field_escaped",
+			json:     `{"welcome": {"input": {"type": "\\env(ENV_1)"}}}`,
+			wantJSON: `{"welcome": {"input": {"type": "env(ENV_1)"}}}`,
 		},
 		{
 			name:     "should_ok_when_vault_syntax_invalid_no_bracket",
 			json:     `{"welcome": {"input": {"type": "vault(test/test, value"}}}`,
 			wantJSON: `{"welcome": {"input": {"type": "vault(test/test, value"}}}`,
 		},
+		{
+			name:     "should_ok_when_env_syntax_invalid_no_bracket",
+			json:     `{"welcome": {"input": {"type": "env(ENV_1"}}}`,
+			wantJSON: `{"welcome": {"input": {"type": "env(ENV_1"}}}`,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			json, err := simplejson.NewJson([]byte(tt.json))
 			require.NoError(t, err)
-			vault := newVaultMock(t, tt.secretPath, tt.secretKey, tt.secretResult, tt.secretErr)
+			for _, env := range tt.environs {
+				t.Setenv(env[0], env[1])
+			}
 
-			applyVault(vault, json)
+			vault := newVaultMock(t, tt.secretPath, tt.secretKey, tt.secretResult, tt.secretErr)
+			apps := []funcApplier{vault, &envs{}}
+
+			applyConfigFuncs(apps, json)
 
 			if tt.wantErr == "" {
 				require.NoError(t, err)

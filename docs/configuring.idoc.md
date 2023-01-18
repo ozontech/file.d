@@ -39,7 +39,7 @@ vault:
   token: example_token
   address: http://127.0.0.1:8200
 pipelines:
-  k8s_kafka_example:
+  example:
     input:
       type: file
       filename_pattern: vault(secret/prod/file_settings, filename_pattern)
@@ -52,6 +52,28 @@ Then you can write any field-string in both arrays and dictionaries using syntax
 and `file.d` tries to connect to Vault and get the secret from there.  
 If you need to pass a literal string that begins with `vault(`, you should escape the value with a
 backslash: `\vault(path/to/secret, key)`.
+
+### Env support
+
+Consider this config:
+
+```yaml
+pipelines:
+  example:
+    input:
+      type: fake
+    output:
+      type: devnull
+    actions:
+      - type: modify
+        field: env(ENV_NAME)
+```
+
+`file.d` supports getting environment variables. Then you can write any
+field-string in both arrays and dictionaries using syntax `env(ENV_NAME)`,  
+and `file.d` tries to get environment variable value. If you need to pass
+a literal string that begins with `env(`, you should escape the value with a
+backslash: `\env(ENV_NAME)`.
 
 ### Do action if match
 
