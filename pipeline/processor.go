@@ -258,6 +258,9 @@ func (p *processor) tryResetBusy(index int) {
 }
 
 func (p *processor) countEvent(event *Event, actionIndex int, status eventStatus) {
+	if event.IsTimeoutKind() {
+		return
+	}
 	p.metricsValues = p.metricsHolder.count(event, actionIndex, status, p.metricsValues)
 }
 
