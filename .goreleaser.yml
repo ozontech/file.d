@@ -7,7 +7,6 @@ env:
 checksum:
   name_template: '{{ .ProjectName }}_checksums.txt'
 release:
-  draft: true
   prerelease: auto
 
 archives: 

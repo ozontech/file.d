@@ -4,6 +4,7 @@ import (
 	"os"
 
 	"github.com/ozontech/file.d/fd"
+	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/plugin"
 )
@@ -13,7 +14,8 @@ It adds field containing hostname to an event.
 }*/
 
 type Plugin struct {
-	config *Config
+	hostname string
+	config   *Config
 	plugin.NoMetricsPlugin
 }
 
@@ -39,15 +41,18 @@ func factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 
 func (p *Plugin) Start(config pipeline.AnyConfig, _ *pipeline.ActionPluginParams) {
 	p.config = config.(*Config)
+
+	var err error
+	p.hostname, err = os.Hostname()
+	if err != nil {
+		logger.Fatal(err)
+	}
 }
 
 func (p *Plugin) Stop() {
 }
 
 func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
-	hostname, _ := os.Hostname()
-
-	event.Root.AddFieldNoAlloc(event.Root, p.config.Field).MutateToString(hostname)
-
+	event.Root.AddFieldNoAlloc(event.Root, p.config.Field).MutateToString(p.hostname)
 	return pipeline.ActionPass
 }

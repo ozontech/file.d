@@ -26,3 +26,10 @@ func TestCRIFull(t *testing.T) {
 	assert.Equal(t, "stdout", root.Dig("stream").AsString())
 	assert.Equal(t, "full content 2\n", root.Dig("log").AsString())
 }
+
+func TestCRIError(t *testing.T) {
+	root := insaneJSON.Spawn()
+	err := DecodeCRI(root, []byte("2016-10-06T00:17:09.669794202Z stdout  full content 3\n"))
+
+	assert.Error(t, err, "there must be an error")
+}
