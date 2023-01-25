@@ -1,6 +1,8 @@
 package cfg
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"os"
 	"reflect"
@@ -28,6 +30,30 @@ type (
 	Regexp        string
 	Base8         string
 )
+
+var _ json.Unmarshaler = new(Expression)
+
+func (e *Expression) UnmarshalJSON(raw []byte) error {
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.UseNumber()
+
+	var value any
+	err := decoder.Decode(&value)
+	if err != nil {
+		return err
+	}
+
+	switch value := value.(type) {
+	case json.Number:
+		*e = Expression(value.String())
+	case string:
+		*e = Expression(value)
+	default:
+		return fmt.Errorf("can't cast %T to the Expression", value)
+	}
+
+	return nil
+}
 
 type PipelineConfig struct {
 	Raw *simplejson.Json
