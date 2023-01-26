@@ -189,7 +189,7 @@ func (p *processor) doActions(event *Event) (isPassed bool) {
 		event.action.Store(int64(index))
 		p.countEvent(event, index, eventStatusReceived)
 
-		if !event.IsTimeoutKind() && !p.busyActions[index] {
+		if !p.busyActions[index] && !event.IsTimeoutKind() {
 			if !p.isMatch(index, event) {
 				p.countEvent(event, index, eventStatusNotMatched)
 				continue
