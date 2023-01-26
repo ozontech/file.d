@@ -189,11 +189,11 @@ func (p *processor) doActions(event *Event) (isPassed bool) {
 		event.action.Store(int64(index))
 		p.countEvent(event, index, eventStatusReceived)
 
-		isMatch := p.isMatch(index, event)
-
-		if !isMatch {
-			p.countEvent(event, index, eventStatusNotMatched)
-			continue
+		if !event.IsTimeoutKind() && !p.busyActions[index] {
+			if !p.isMatch(index, event) {
+				p.countEvent(event, index, eventStatusNotMatched)
+				continue
+			}
 		}
 
 		p.actionWatcher.setEventBefore(index, event)
@@ -262,14 +262,6 @@ func (p *processor) countEvent(event *Event, actionIndex int, status eventStatus
 }
 
 func (p *processor) isMatch(index int, event *Event) bool {
-	if event.IsTimeoutKind() {
-		return true
-	}
-
-	if p.busyActions[index] {
-		return true
-	}
-
 	info := p.actionInfos[index]
 	conds := info.MatchConditions
 	mode := info.MatchMode
