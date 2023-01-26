@@ -111,7 +111,7 @@ type Pipeline struct {
 	readOps         atomic.Int64
 	maxSize         int
 
-	//all pipeline`s metrics
+	// all pipeline`s metrics
 
 	inUseEventsMetric          *prometheus.GaugeVec
 	eventPoolCapacityMetric    *prometheus.GaugeVec
@@ -727,8 +727,8 @@ func (p *Pipeline) serveActionInfo(info ActionPluginStaticInfo) func(http.Respon
 		}
 
 		if info.MetricName == "" {
-			writeErr(w, "If you want to see a statistic about events, consider adding `metric_name` to the action's configuration.")
 			w.WriteHeader(http.StatusBadRequest)
+			writeErr(w, "If you want to see a statistic about events, consider adding `metric_name` to the action's configuration.")
 
 			return
 		}
@@ -771,8 +771,8 @@ func (p *Pipeline) serveActionSample(actionIndex int) func(http.ResponseWriter, 
 		w.Header().Add("Content-Type", "application/json")
 
 		if p.activeProcs.Load() <= 0 || p.procCount.Load() <= 0 {
-			writeErr(w, "There are no active processors")
 			w.WriteHeader(http.StatusBadRequest)
+			writeErr(w, "There are no active processors")
 
 			return
 		}
@@ -792,8 +792,8 @@ func (p *Pipeline) serveActionSample(actionIndex int) func(http.ResponseWriter, 
 		case firstSample := <-samples:
 			_, _ = w.Write(firstSample.Marshal())
 		case <-time.After(timeout):
-			writeErr(w, "Timeout while try to display an event before and after the action processing.")
 			w.WriteHeader(http.StatusInternalServerError)
+			writeErr(w, "Timeout while try to display an event before and after the action processing.")
 		}
 	}
 }
