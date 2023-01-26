@@ -1,6 +1,7 @@
 package cfg
 
 import (
+	"encoding/json"
 	"errors"
 	"testing"
 	"time"
@@ -221,11 +222,11 @@ func TestParseDataUnitInvalid(t *testing.T) {
 			ExpectedValue: 0,
 		},
 		// TODO: handle uint overflow situation
-		//{
+		// {
 		//	strDataUnit:       &strDataUnit{T: "100000000000 PB"},
 		//	ExpectedError: errors.New("uint overflowed on product 100000000000 and PB"),
 		//	ExpectedValue: 0,
-		//},
+		// },
 	}
 	for i := range TestList {
 		err := Parse(TestList[i].strDataUnit, nil)
@@ -551,4 +552,22 @@ func TestPipelineValidatorInvalid(t *testing.T) {
 	for _, tl := range testName {
 		assert.Error(t, validatePipelineName(tl))
 	}
+}
+
+func TestExpression_UnmarshalJSON(t *testing.T) {
+	val := struct {
+		E1 Expression `parse:"expression"`
+		E2 Expression `parse:"expression"`
+		E3 Expression `parse:"expression"`
+	}{}
+
+	require.NoError(t, json.Unmarshal([]byte(`{
+		"E1": 1,
+		"E2": "2",
+		"E3": "2+2"
+	}`), &val))
+
+	require.Equal(t, Expression("1"), val.E1)
+	require.Equal(t, Expression("2"), val.E2)
+	require.Equal(t, Expression("2+2"), val.E3)
 }
