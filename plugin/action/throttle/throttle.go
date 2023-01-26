@@ -84,7 +84,7 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
-	// > The default events limit that plugin allows per `interval`.
+	// > The default events limit that plugin allows per `bucket_interval`.
 	DefaultLimit int64 `json:"default_limit" default:"5000"` // *
 
 	// > @3@4@5@6
@@ -104,7 +104,7 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
-	// > How much time buckets to hold in the memory. E.g. if `buckets_count` is `60` and `interval` is `5m`,
+	// > How much time buckets to hold in the memory. E.g. if `buckets_count` is `60` and `bucket_interval` is `5m`,
 	// > then `5 hours` will be covered. Events with time later than `now() - 5h` will be dropped even if threshold isn't exceeded.
 	BucketsCount int `json:"buckets_count" default:"60"` // *
 

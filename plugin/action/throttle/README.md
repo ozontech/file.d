@@ -26,7 +26,7 @@ It defines how to parse the time field format.
 
 **`default_limit`** *`int64`* *`default=5000`* 
 
-The default events limit that plugin allows per `interval`.
+The default events limit that plugin allows per `bucket_interval`.
 
 <br>
 
@@ -50,7 +50,7 @@ It contains redis settings
 
 **`buckets_count`** *`int`* *`default=60`* 
 
-How much time buckets to hold in the memory. E.g. if `buckets_count` is `60` and `interval` is `5m`,
+How much time buckets to hold in the memory. E.g. if `buckets_count` is `60` and `bucket_interval` is `5m`,
 then `5 hours` will be covered. Events with time later than `now() - 5h` will be dropped even if threshold isn't exceeded.
 
 <br>
