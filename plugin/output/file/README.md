@@ -4,14 +4,17 @@ It sends event batches into files.
 ### Config params
 **`target_file`** *`string`* *`default=/var/log/file-d.log`* 
 
-File name for log file.
-defaultTargetFileName = TargetFile default value
+File path to write events to.
+Each rotated file will be named with current unix timestamp.
+
+For example, if `target_file` is `/var/log/file-d.log`
+file will be `/var/log/1893445200_file-d.log`
 
 <br>
 
 **`retention_interval`** *`cfg.Duration`* *`default=1h`* 
 
-Interval of creation new file
+How often to rotate a particular file.
 
 <br>
 

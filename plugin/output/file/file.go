@@ -68,13 +68,16 @@ const (
 type Config struct {
 	// > @3@4@5@6
 	// >
-	// > File name for log file.
-	// > defaultTargetFileName = TargetFile default value
+	// > File path to write events to.
+	// > Each rotated file will be named with current unix timestamp.
+	// >
+	// > For example, if `target_file` is `/var/log/file-d.log`
+	// > file will be `/var/log/1893445200_file-d.log`
 	TargetFile string `json:"target_file" default:"/var/log/file-d.log"` // *
 
 	// > @3@4@5@6
 	// >
-	// > Interval of creation new file
+	// > How often to rotate a particular file.
 	RetentionInterval  cfg.Duration `json:"retention_interval" default:"1h" parse:"duration"` // *
 	RetentionInterval_ time.Duration
 
