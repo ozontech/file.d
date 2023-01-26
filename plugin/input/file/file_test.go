@@ -188,7 +188,7 @@ func addDataFile(file *os.File, data []byte) {
 	}
 }
 
-func addBytes(file string, data []byte, isLine bool, sync bool) {
+func addBytes(file string, data []byte, isLine bool, doSync bool) {
 	f, err := os.OpenFile(file, os.O_APPEND|os.O_WRONLY, perm)
 	if err != nil {
 		panic(err.Error())
@@ -205,7 +205,7 @@ func addBytes(file string, data []byte, isLine bool, sync bool) {
 		}
 	}
 
-	if sync {
+	if doSync {
 		err = f.Sync()
 		if err != nil {
 			panic(err.Error())
@@ -213,7 +213,7 @@ func addBytes(file string, data []byte, isLine bool, sync bool) {
 	}
 }
 
-func addString(file string, str string, isLine bool, sync bool) {
+func addString(file string, str string, isLine bool, doSync bool) {
 	f, err := os.OpenFile(file, os.O_APPEND|os.O_WRONLY, perm)
 	if err != nil {
 		panic(err.Error())
@@ -230,7 +230,7 @@ func addString(file string, str string, isLine bool, sync bool) {
 		}
 	}
 
-	if sync {
+	if doSync {
 		err = f.Sync()
 		if err != nil {
 			panic(err.Error())
@@ -248,7 +248,6 @@ func addLines(file string, from int, to int) int {
 
 	size := 0
 	for i := from; i < to; i++ {
-
 		if _, err = f.WriteString(strPrefix); err != nil {
 			panic(err.Error())
 		}
@@ -593,9 +592,9 @@ func TestReadBufferOverflow(t *testing.T) {
 	_ = cfg.Parse(config, nil)
 	firstLine := `"`
 	for i := 0; i < config.ReadBufferSize+overhead; i++ {
-		firstLine = firstLine + "a"
+		firstLine += "a"
 	}
-	firstLine = firstLine + `"`
+	firstLine += `"`
 
 	secondLine := "666"
 
@@ -758,7 +757,7 @@ func TestReadManyCharsParallelRace(t *testing.T) {
 	overhead := 100
 	s := ""
 	for i := 0; i < config.ReadBufferSize+overhead; i++ {
-		s = s + "a"
+		s += "a"
 	}
 	json1 := []byte(fmt.Sprintf(`{"data":"%s"}`+"\n"+`{"data":"666"}`+"\n", s))
 	json2 := []byte(fmt.Sprintf(`{"data":"666"}` + "\n"))
@@ -1061,7 +1060,7 @@ func TestTruncationSeq(t *testing.T) {
 	p.Stop()
 }
 
-//func TestRenameRotationInsane(t *testing.T) {
+// func TestRenameRotationInsane(t *testing.T) {
 //	p, _, _ := test.NewPipelineMock(nil, "passive")
 //	p.SetInput(getInputInfo())
 //	input := p.GetInput().(*Plugin)
@@ -1106,7 +1105,7 @@ func TestTruncationSeq(t *testing.T) {
 //
 //	assert.Equal(t, filesCount*8, p.GetEventsTotal(), "wrong events count")
 //	assertOffsetsAreEqual(t, genOffsetsContentMultiple(files, 4*19), getContent(input.config.OffsetsFile))
-//}
+// }
 
 func BenchmarkLightJsonReadPar(b *testing.B) {
 	lines := 128 * 64

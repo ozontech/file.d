@@ -26,7 +26,8 @@ func (p *Plugin) minioClientsFactory(cfg *Config) (ObjectStoreClient, map[string
 		return nil, nil, err
 	}
 
-	for _, singleBucket := range cfg.MultiBuckets {
+	for i := range cfg.MultiBuckets {
+		singleBucket := &cfg.MultiBuckets[i]
 		client, err := minio.New(singleBucket.Endpoint, singleBucket.AccessKey, singleBucket.SecretKey, singleBucket.Secure)
 		if err != nil {
 			return nil, nil, err
@@ -45,7 +46,8 @@ func (p *Plugin) getStaticDirs(outPlugCount int) (map[string]string, error) {
 	targetDirs := make(map[string]string, outPlugCount)
 	targetDirs[p.config.DefaultBucket] = dir
 	// multi_buckets from config are sub dirs on in Config.FileConfig.TargetFile dir.
-	for _, singleBucket := range p.config.MultiBuckets {
+	for i := range p.config.MultiBuckets {
+		singleBucket := &p.config.MultiBuckets[i]
 		// todo bucket names can't intersect, add ability to have equal bucket names in different s3 servers.
 		if _, ok := targetDirs[singleBucket.Bucket]; ok {
 			return nil, fmt.Errorf("bucket name %s has duplicated", singleBucket.Bucket)
@@ -63,7 +65,8 @@ func (p *Plugin) getFileNames(outPlugCount int) map[string]string {
 
 	mainFileName := f[0 : len(f)-len(p.fileExtension)]
 	fileNames[p.config.DefaultBucket] = mainFileName
-	for _, singleB := range p.config.MultiBuckets {
+	for i := range p.config.MultiBuckets {
+		singleB := p.config.MultiBuckets[i]
 		fileNames[singleB.Bucket] = singleB.Bucket
 	}
 	return fileNames
@@ -111,7 +114,7 @@ func (p *Plugin) createOutPlugin(bucketName string) (*file.Plugin, error) {
 	return outPlugin, nil
 }
 
-func (p *Plugin) startPlugins(Params *pipeline.OutputPluginParams, outPlugCount int, targetDirs, fileNames map[string]string) error {
+func (p *Plugin) startPlugins(params *pipeline.OutputPluginParams, outPlugCount int, targetDirs, fileNames map[string]string) error {
 	outPlugins := make(map[string]file.Plugable, outPlugCount)
 	outPlugin, err := p.createOutPlugin(p.config.DefaultBucket)
 	if err != nil {
@@ -121,7 +124,8 @@ func (p *Plugin) startPlugins(Params *pipeline.OutputPluginParams, outPlugCount 
 	p.logger.Infof("bucket %s exists", p.config.DefaultBucket)
 
 	// If multi_buckets described on file.d config, check each of them as well.
-	for _, singleBucket := range p.config.MultiBuckets {
+	for i := range p.config.MultiBuckets {
+		singleBucket := &p.config.MultiBuckets[i]
 		outPlugin, err := p.createOutPlugin(singleBucket.Bucket)
 		if err != nil {
 			return err
@@ -141,7 +145,7 @@ func (p *Plugin) startPlugins(Params *pipeline.OutputPluginParams, outPlugCount 
 		if bucketName == p.config.DefaultBucket {
 			starterData = pipeline.PluginsStarterData{
 				Config: &p.config.FileConfig,
-				Params: Params,
+				Params: params,
 			}
 		} else {
 			// For multi_buckets copy main config and replace file path with bucket sub dir path.
@@ -150,7 +154,7 @@ func (p *Plugin) startPlugins(Params *pipeline.OutputPluginParams, outPlugCount 
 			localBucketConfig.TargetFile = fmt.Sprintf("%s%s%s", targetDirs[bucketName], fileNames[bucketName], p.fileExtension)
 			starterData = pipeline.PluginsStarterData{
 				Config: &localBucketConfig,
-				Params: Params,
+				Params: params,
 			}
 		}
 

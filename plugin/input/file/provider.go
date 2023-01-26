@@ -54,7 +54,7 @@ type jobProvider struct {
 	offsetsCommitted *atomic.Int64
 	logger           *zap.SugaredLogger
 
-	//provider metrics
+	// provider metrics
 
 	possibleOffsetCorruptionMetric *prometheus.CounterVec
 }
@@ -413,12 +413,11 @@ func (jp *jobProvider) initJobOffset(operation offsetsOp, job *Job) {
 }
 
 // tryResumeJob job should be already locked and it'll be unlocked.
-func (jp *jobProvider) tryResumeJobAndUnlock(job *Job, filename string) bool {
+func (jp *jobProvider) tryResumeJobAndUnlock(job *Job, filename string) {
 	jp.logger.Debugf("job for %d:%s resumed", job.sourceID, job.filename)
 
 	if !job.isDone {
 		job.mu.Unlock()
-		return false
 	}
 
 	job.filename = filename
@@ -430,7 +429,6 @@ func (jp *jobProvider) tryResumeJobAndUnlock(job *Job, filename string) bool {
 
 	job.mu.Unlock()
 	jp.jobsChan <- job
-	return true
 }
 
 func (jp *jobProvider) continueJob(job *Job) {

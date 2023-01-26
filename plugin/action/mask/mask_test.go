@@ -514,7 +514,7 @@ func createBenchInputString() []byte {
 	unmatchable := `{"field1":"Просто строка которая не заменяется"}`
 	matchableCoeff := 0.1 // percentage of matchable input
 	totalCount := 50
-	matchableCount := (int)((float64)(totalCount) * matchableCoeff)
+	matchableCount := int(float64(totalCount) * matchableCoeff)
 	builder := strings.Builder{}
 	for i := 0; i < totalCount; i++ {
 		if i <= matchableCount {

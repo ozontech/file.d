@@ -14,7 +14,7 @@ func Test_extractConditions(t *testing.T) {
 	got, err := extractConditions(j)
 	require.NoError(t, err)
 	expected := pipeline.MatchConditions{
-		{
+		pipeline.MatchCondition{
 			Field:  []string{"service"},
 			Values: []string{"address-api", "tarifficator-api", "card-api", "teams-api"},
 		},
@@ -26,7 +26,7 @@ func Test_extractConditions(t *testing.T) {
 	got, err = extractConditions(j)
 	require.NoError(t, err)
 	expected = pipeline.MatchConditions{
-		{
+		pipeline.MatchCondition{
 			Field:  []string{"service"},
 			Values: []string{"address-api"},
 		},

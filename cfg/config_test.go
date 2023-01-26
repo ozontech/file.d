@@ -358,17 +358,17 @@ func TestApplyEnvs(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			json, err := simplejson.NewJson([]byte(tt.json))
+			object, err := simplejson.NewJson([]byte(tt.json))
 			require.NoError(t, err)
 			for _, env := range tt.environs {
 				t.Setenv(env[0], env[1])
 			}
 
-			err = applyEnvs(json)
+			err = applyEnvs(object)
 
 			if tt.wantErr == "" {
 				require.NoError(t, err)
-				got, errEnc := json.Encode()
+				got, errEnc := object.Encode()
 				require.NoError(t, errEnc)
 				require.JSONEq(t, tt.wantJSON, string(got))
 			} else {
@@ -500,7 +500,7 @@ func TestApplyConfigFuncs(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			json, err := simplejson.NewJson([]byte(tt.json))
+			object, err := simplejson.NewJson([]byte(tt.json))
 			require.NoError(t, err)
 			for _, env := range tt.environs {
 				t.Setenv(env[0], env[1])
@@ -509,11 +509,11 @@ func TestApplyConfigFuncs(t *testing.T) {
 			vault := newVaultMock(t, tt.secretPath, tt.secretKey, tt.secretResult, tt.secretErr)
 			apps := []funcApplier{vault, &envs{}}
 
-			applyConfigFuncs(apps, json)
+			applyConfigFuncs(apps, object)
 
 			if tt.wantErr == "" {
 				require.NoError(t, err)
-				got, errEnc := json.Encode()
+				got, errEnc := object.Encode()
 				require.NoError(t, errEnc)
 				require.JSONEq(t, tt.wantJSON, string(got))
 			} else {
