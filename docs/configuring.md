@@ -11,6 +11,39 @@ Logging level can be changed in runtime with
 [standard zap handler](https://github.com/uber-go/zap/blob/v1.23.0/http_handler.go#L33-L70)
 exposed at `/log/level`.
 
+### Actions debugging
+
+To debug any working action you must enable http server via '-http' flag
+and visit an endpoint `/pipelines/<pipeline_name>/<plugin_index_in_config>/sample`.
+It will show 1 sample of the in/out events.
+
+For example:
+```yaml
+pipelines:
+  http_file:
+    input:
+      type: http
+    actions:
+      - type: discard
+        match_fields:
+          should_drop: ok
+        match_mode: or
+      - type: join
+        field: log
+        start: '/^(panic:)|(http: panic serving)/'
+        continue: '/(^$)|(goroutine [0-9]+ \[)|(\([0-9]+x[0-9,a-f]+)|(\.go:[0-9]+ \+[0-9]x)|(\/.*\.go:[0-9]+)|(\(...\))|(main\.main\(\))|(created by .*\/.*\.)|(^\[signal)|(panic.+[0-9]x[0-9,a-f]+)|(panic:)/'
+        match_fields:
+          stream: stderr
+    output:
+      type: file
+```
+
+If `-http=':9090'` debug endpoints will be:
+
+`http://127.0.0.1:9090/pipelines/http_file/1/sample` - for the discard plugin
+
+`http://127.0.0.1:9090/pipelines/http_file/2/sample` - for the join plugin
+
 ### Overriding by environment variables
 
 `file.d` can override config fields if you specify environment variables with `FILED_` prefix.  
@@ -146,22 +179,26 @@ It discards logs if that contain the field `k8s_namespace` with any listed value
 Patterns must have a list ([]) or string type, not a number or null.
 
 ### Match modes
+
 #### And
+
 `match_mode: and` — matches fields with AND operator
 
 Example:
+
 ```yaml
 pipelines:
   test:
     actions:
       - type: discard
         match_fields:
-          k8s_namespace: [payment, tarifficator] # use exact match
+          k8s_namespace: [ payment, tarifficator ] # use exact match
           k8s_pod: /^payment-api.*/              # use regexp match
         match_mode: and
 ```
 
 result:
+
 ```
 {"k8s_namespace": "payment", "k8s_pod":"payment-api-abcd"}         # won't be discarded
 {"k8s_namespace": "tarifficator", "k8s_pod":"payment-api"}         # discarded
@@ -170,21 +207,24 @@ result:
 <br>
 
 #### Or
+
 `match_mode: or` — matches fields with OR operator
 
 Example:
+
 ```yaml
 pipelines:
   test:
     actions:
       - type: discard
         match_fields:
-          k8s_namespace: [payment, tarifficator] # use exact match
+          k8s_namespace: [ payment, tarifficator ] # use exact match
           k8s_pod: /^payment-api.*/              # use regexp match
         match_mode: or
 ```
 
 result:
+
 ```
 {"k8s_namespace": "payment", "k8s_pod":"payment-api-abcd"} # won't be discarded
 {"k8s_namespace": "tarifficator", "k8s_pod":"payment-api"} # won't be discarded
@@ -197,9 +237,11 @@ result:
 <br>
 
 #### AndPrefix
+
 `match_mode: and_prefix` — matches fields with AND operator
 
 Example:
+
 ```yaml
 pipelines:
   test:
@@ -212,6 +254,7 @@ pipelines:
  ```
 
 result:
+
 ```
 {"k8s_namespace": "payment", "k8s_pod":"payment-api-abcd-1234"} # won't be discarded
 {"k8s_namespace": "payment", "k8s_pod":"checkout"} # discarded
@@ -222,21 +265,24 @@ result:
 <br>
 
 #### OrPrefix
+
 `match_mode: or_prefix` — matches fields with OR operator
 
 Example:
+
 ```yaml
 pipelines:
   test:
     actions:
       - type: discard
         match_fields:
-          k8s_namespace: [payment, tarifficator] # use prefix match
+          k8s_namespace: [ payment, tarifficator ] # use prefix match
           k8s_pod: /-api-.*/ # use regexp match
         match_mode: or_prefix
 ```
 
 result:
+
 ```
 {"k8s_namespace": "payment", "k8s_pod":"payment-api-abcd-1234"} # won't be discarded
 {"k8s_namespace": "payment", "k8s_pod":"checkout"} # won't be discarded
