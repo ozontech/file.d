@@ -190,9 +190,6 @@ func (p *processor) doActions(event *Event) (isPassed bool) {
 		p.countEvent(event, index, eventStatusReceived)
 
 		isMatch := p.isMatch(index, event)
-		if p.actionInfos[index].MatchInvert {
-			isMatch = !isMatch
-		}
 
 		if !isMatch {
 			p.countEvent(event, index, eventStatusNotMatched)
@@ -276,12 +273,19 @@ func (p *processor) isMatch(index int, event *Event) bool {
 	info := p.actionInfos[index]
 	conds := info.MatchConditions
 	mode := info.MatchMode
+	match := false
 
 	if mode == MatchModeOr || mode == MatchModeOrPrefix {
-		return p.isMatchOr(conds, event, mode == MatchModeOrPrefix)
+		match = p.isMatchOr(conds, event, mode == MatchModeOrPrefix)
 	} else {
-		return p.isMatchAnd(conds, event, mode == MatchModeAndPrefix)
+		match = p.isMatchAnd(conds, event, mode == MatchModeAndPrefix)
 	}
+
+	if info.MatchInvert {
+		match = !match
+	}
+
+	return match
 }
 
 func (p *processor) isMatchOr(conds MatchConditions, event *Event, byPrefix bool) bool {
