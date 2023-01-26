@@ -20,6 +20,10 @@ import (
 	"golang.org/x/net/context"
 )
 
+/*{ introduction
+It sends event batches into files.
+}*/
+
 type Plugable interface {
 	Start(config pipeline.AnyConfig, params *pipeline.OutputPluginParams)
 	Out(event *pipeline.Event)
@@ -59,22 +63,34 @@ const (
 	fileNameSeparator = "_"
 )
 
+// ! config-params
+// ^ config-params
 type Config struct {
+	// > @3@4@5@6
+	// >
 	// > File name for log file.
 	// > defaultTargetFileName = TargetFile default value
 	TargetFile string `json:"target_file" default:"/var/log/file-d.log"` // *
 
+	// > @3@4@5@6
+	// >
 	// > Interval of creation new file
 	RetentionInterval  cfg.Duration `json:"retention_interval" default:"1h" parse:"duration"` // *
 	RetentionInterval_ time.Duration
 
+	// > @3@4@5@6
+	// >
 	// > Layout is added to targetFile after sealing up. Determines result file name
 	Layout string `json:"time_layout" default:"01-02-2006_15:04:05"` // *
 
+	// > @3@4@5@6
+	// >
 	// > How much workers will be instantiated to send batches.
 	WorkersCount  cfg.Expression `json:"workers_count" default:"gomaxprocs*4" parse:"expression"` // *
 	WorkersCount_ int
 
+	// > @3@4@5@6
+	// >
 	// > Maximum quantity of events to pack into one batch.
 	BatchSize  cfg.Expression `json:"batch_size" default:"capacity/4" parse:"expression"` // *
 	BatchSize_ int
@@ -86,10 +102,14 @@ type Config struct {
 	BatchSizeBytes  cfg.Expression `json:"batch_size_bytes" default:"0" parse:"expression"` // *
 	BatchSizeBytes_ int
 
+	// > @3@4@5@6
+	// >
 	// > After this timeout batch will be sent even if batch isn't completed.
 	BatchFlushTimeout  cfg.Duration `json:"batch_flush_timeout" default:"1s" parse:"duration"` // *
 	BatchFlushTimeout_ time.Duration
 
+	// > @3@4@5@6
+	// >
 	// > File mode for log files
 	FileMode  cfg.Base8 `json:"file_mode" default:"0666" parse:"base8"` // *
 	FileMode_ int64
