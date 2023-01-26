@@ -110,7 +110,11 @@ func (aw *actionWatcher) setEventBefore(index int, event *Event) {
 		if s == nil || len(s.eventBefore) > 0 {
 			continue
 		}
-		s.eventBefore = event.Root.EncodeToByte()
+
+		s.eventBefore = []byte("<timeout event>")
+		if !event.IsTimeoutKind() {
+			s.eventBefore = event.Root.EncodeToByte()
+		}
 	}
 }
 
@@ -129,7 +133,10 @@ func (aw *actionWatcher) setEventAfter(index int, event *Event, result eventStat
 			return
 		}
 
-		s.eventAfter = event.Root.EncodeToByte()
+		s.eventAfter = []byte("<timeout event>")
+		if !event.IsTimeoutKind() {
+			s.eventAfter = event.Root.EncodeToByte()
+		}
 		s.eventStatus = result
 		s.readyCh <- true
 	}
