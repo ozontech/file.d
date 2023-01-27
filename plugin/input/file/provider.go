@@ -418,6 +418,7 @@ func (jp *jobProvider) tryResumeJobAndUnlock(job *Job, filename string) {
 
 	if !job.isDone {
 		job.mu.Unlock()
+		return
 	}
 
 	job.filename = filename
