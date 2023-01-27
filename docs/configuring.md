@@ -179,26 +179,22 @@ It discards logs if that contain the field `k8s_namespace` with any listed value
 Patterns must have a list ([]) or string type, not a number or null.
 
 ### Match modes
-
 #### And
-
 `match_mode: and` — matches fields with AND operator
 
 Example:
-
 ```yaml
 pipelines:
   test:
     actions:
       - type: discard
         match_fields:
-          k8s_namespace: [ payment, tarifficator ] # use exact match
+          k8s_namespace: [payment, tarifficator] # use exact match
           k8s_pod: /^payment-api.*/              # use regexp match
         match_mode: and
 ```
 
 result:
-
 ```
 {"k8s_namespace": "payment", "k8s_pod":"payment-api-abcd"}         # won't be discarded
 {"k8s_namespace": "tarifficator", "k8s_pod":"payment-api"}         # discarded
@@ -207,24 +203,21 @@ result:
 <br>
 
 #### Or
-
 `match_mode: or` — matches fields with OR operator
 
 Example:
-
 ```yaml
 pipelines:
   test:
     actions:
       - type: discard
         match_fields:
-          k8s_namespace: [ payment, tarifficator ] # use exact match
+          k8s_namespace: [payment, tarifficator] # use exact match
           k8s_pod: /^payment-api.*/              # use regexp match
         match_mode: or
 ```
 
 result:
-
 ```
 {"k8s_namespace": "payment", "k8s_pod":"payment-api-abcd"} # won't be discarded
 {"k8s_namespace": "tarifficator", "k8s_pod":"payment-api"} # won't be discarded
@@ -237,11 +230,9 @@ result:
 <br>
 
 #### AndPrefix
-
 `match_mode: and_prefix` — matches fields with AND operator
 
 Example:
-
 ```yaml
 pipelines:
   test:
@@ -254,7 +245,6 @@ pipelines:
  ```
 
 result:
-
 ```
 {"k8s_namespace": "payment", "k8s_pod":"payment-api-abcd-1234"} # won't be discarded
 {"k8s_namespace": "payment", "k8s_pod":"checkout"} # discarded
@@ -265,24 +255,21 @@ result:
 <br>
 
 #### OrPrefix
-
 `match_mode: or_prefix` — matches fields with OR operator
 
 Example:
-
 ```yaml
 pipelines:
   test:
     actions:
       - type: discard
         match_fields:
-          k8s_namespace: [ payment, tarifficator ] # use prefix match
+          k8s_namespace: [payment, tarifficator] # use prefix match
           k8s_pod: /-api-.*/ # use regexp match
         match_mode: or_prefix
 ```
 
 result:
-
 ```
 {"k8s_namespace": "payment", "k8s_pod":"payment-api-abcd-1234"} # won't be discarded
 {"k8s_namespace": "payment", "k8s_pod":"checkout"} # won't be discarded

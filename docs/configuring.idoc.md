@@ -11,6 +11,39 @@ Logging level can be changed in runtime with
 [standard zap handler](https://github.com/uber-go/zap/blob/v1.23.0/http_handler.go#L33-L70)
 exposed at `/log/level`.
 
+### Actions debugging
+
+To debug any working action you must enable http server via '-http' flag
+and visit an endpoint `/pipelines/<pipeline_name>/<plugin_index_in_config>/sample`.
+It will show 1 sample of the in/out events.
+
+For example:
+```yaml
+pipelines:
+  http_file:
+    input:
+      type: http
+    actions:
+      - type: discard
+        match_fields:
+          should_drop: ok
+        match_mode: or
+      - type: join
+        field: log
+        start: '/^(panic:)|(http: panic serving)/'
+        continue: '/(^$)|(goroutine [0-9]+ \[)|(\([0-9]+x[0-9,a-f]+)|(\.go:[0-9]+ \+[0-9]x)|(\/.*\.go:[0-9]+)|(\(...\))|(main\.main\(\))|(created by .*\/.*\.)|(^\[signal)|(panic.+[0-9]x[0-9,a-f]+)|(panic:)/'
+        match_fields:
+          stream: stderr
+    output:
+      type: file
+```
+
+If `-http=':9090'` debug endpoints will be:
+
+`http://127.0.0.1:9090/pipelines/http_file/1/sample` - for the discard plugin
+
+`http://127.0.0.1:9090/pipelines/http_file/2/sample` - for the join plugin
+
 ### Overriding by environment variables
 
 `file.d` can override config fields if you specify environment variables with `FILED_` prefix.  
