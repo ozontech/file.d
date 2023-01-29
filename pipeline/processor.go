@@ -201,36 +201,71 @@ func (p *processor) doActions(event *Event) (isPassed bool) {
 
 		p.actionWatcher.setEventBefore(index, event)
 
-		switch action.Do(event) {
-		case ActionPass:
-			p.countEvent(event, index, eventStatusPassed)
-			p.tryResetBusy(index)
-			p.actionWatcher.setEventAfter(index, event, eventStatusPassed)
-		case ActionDiscard:
-			p.countEvent(event, index, eventStatusDiscarded)
-			p.tryResetBusy(index)
-			// can't notify input here, because previous events may delay, and we'll get offset sequence corruption.
-			p.finalize(event, false, true)
-			p.actionWatcher.setEventAfter(index, event, eventStatusDiscarded)
-			return false
-		case ActionCollapse:
-			p.countEvent(event, index, eventStatusCollapse)
-			p.tryMarkBusy(index)
-			// can't notify input here, because previous events may delay, and we'll get offset sequence corruption.
-			p.finalize(event, false, true)
-			p.actionWatcher.setEventAfter(index, event, eventStatusCollapse)
-			return false
-		case ActionHold:
-			p.countEvent(event, index, eventStatusHold)
-			p.tryMarkBusy(index)
+		result := p.doAction(action, event)
 
-			p.finalize(event, false, false)
-			p.actionWatcher.setEventAfter(index, event, eventStatusHold)
+		p.countEvent(event, index, result.status)
+		p.actionWatcher.setEventAfter(index, event, result.status)
+
+		if result.actionBusy {
+			p.tryMarkBusy(index)
+		} else {
+			p.tryResetBusy(index)
+		}
+
+		if !result.doNextAction {
+			// can't notify input here, because previous events may delay, and we'll get offset sequence corruption.
+			p.finalize(event, false, !result.holdEvent)
 			return false
 		}
 	}
 
 	return true
+}
+
+type processActionResult struct {
+	status eventStatus
+	// doNextAction the event can be pass in a next action.
+	doNextAction bool
+	// actionBusy means the processor must wait next event in the stream.
+	actionBusy bool
+	// holdEvent means the action keeps the event.
+	holdEvent bool
+}
+
+func (p *processor) doAction(action ActionPlugin, event *Event) processActionResult {
+	switch action.Do(event) {
+	case ActionPass:
+		return processActionResult{
+			status:       eventStatusPassed,
+			doNextAction: true,
+			actionBusy:   false,
+			holdEvent:    false,
+		}
+	case ActionDiscard:
+		return processActionResult{
+			status:       eventStatusDiscarded,
+			doNextAction: false,
+			actionBusy:   false,
+			holdEvent:    false,
+		}
+	case ActionCollapse:
+		return processActionResult{
+			status:       eventStatusCollapse,
+			doNextAction: false,
+			actionBusy:   true,
+			holdEvent:    false,
+		}
+	case ActionHold:
+		return processActionResult{
+			status:       eventStatusHold,
+			doNextAction: false,
+			actionBusy:   true,
+			holdEvent:    true,
+		}
+	default:
+		logger.Panic("unreachable")
+		panic("_")
+	}
 }
 
 func (p *processor) tryMarkBusy(index int) {
