@@ -69,7 +69,7 @@ type processor struct {
 
 var id = 0
 
-func NewProcessor(
+func newProcessor(
 	metricsHolder *metricsHolder,
 	activeCounter *atomic.Int32,
 	output OutputPlugin,
@@ -351,8 +351,10 @@ func (p *processor) Commit(event *Event) {
 	p.finalize(event, false, true)
 }
 
+// Propagate flushes an event after ActionHold.
 func (p *processor) Propagate(event *Event) {
-	event.action.Inc()
+	nextActionIdx := event.action.Inc()
+	p.tryResetBusy(int(nextActionIdx - 1))
 	p.processSequence(event)
 }
 
