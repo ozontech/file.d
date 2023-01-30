@@ -188,14 +188,11 @@ func (p *processor) doActions(event *Event) (isPassed bool) {
 		event.action.Store(int64(index))
 		p.countEvent(event, index, eventStatusReceived)
 
-		isMatch := p.isMatch(index, event)
-		if p.actionInfos[index].MatchInvert {
-			isMatch = !isMatch
-		}
-
-		if !isMatch {
-			p.countEvent(event, index, eventStatusNotMatched)
-			continue
+		if !p.busyActions[index] && !event.IsTimeoutKind() {
+			if !p.isMatch(index, event) {
+				p.countEvent(event, index, eventStatusNotMatched)
+				continue
+			}
 		}
 
 		p.actionWatcher.setEventBefore(index, event)
@@ -264,23 +261,22 @@ func (p *processor) countEvent(event *Event, actionIndex int, status eventStatus
 }
 
 func (p *processor) isMatch(index int, event *Event) bool {
-	if event.IsTimeoutKind() {
-		return true
-	}
-
-	if p.busyActions[index] {
-		return true
-	}
-
 	info := p.actionInfos[index]
 	conds := info.MatchConditions
 	mode := info.MatchMode
+	match := false
 
 	if mode == MatchModeOr || mode == MatchModeOrPrefix {
-		return p.isMatchOr(conds, event, mode == MatchModeOrPrefix)
+		match = p.isMatchOr(conds, event, mode == MatchModeOrPrefix)
 	} else {
-		return p.isMatchAnd(conds, event, mode == MatchModeAndPrefix)
+		match = p.isMatchAnd(conds, event, mode == MatchModeAndPrefix)
 	}
+
+	if info.MatchInvert {
+		match = !match
+	}
+
+	return match
 }
 
 func (p *processor) isMatchOr(conds MatchConditions, event *Event, byPrefix bool) bool {
