@@ -137,6 +137,14 @@ func TestMaskFunctions(t *testing.T) {
 			masks:        Mask{Re: kCardWithStarOrSpaceOrNoDelimitersRegExp, Groups: []int{1, 2, 3}},
 			mustBeMasked: true,
 		},
+		{
+			name:         "Individual entrepreneur",
+			input:        []byte("Individual entrepreneur Ivanov Ivan Ivanovich"),
+			expected:     []byte("Individual entrepreneur Ivanov Ivan Ivanovich"),
+			comment:      "do not replace matched value",
+			masks:        Mask{Re: "Individual entrepreneur"},
+			mustBeMasked: true,
+		},
 	}
 
 	var plugin Plugin
