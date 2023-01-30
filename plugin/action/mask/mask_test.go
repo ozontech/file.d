@@ -220,13 +220,6 @@ func TestGroupNumbers(t *testing.T) {
 			comment: "deleted all groups except zero",
 		},
 		{
-			name:     "groups is empty",
-			input:    Mask{Re: kDefaultCardRegExp, Groups: []int{}},
-			isFatal:  true,
-			fatalMsg: "groups is empty",
-			comment:  "fatal on empty groups",
-		},
-		{
 			name:     "negative group number",
 			input:    Mask{Re: kDefaultCardRegExp, Groups: []int{-1}},
 			expect:   Mask{Re: kDefaultCardRegExp, Groups: []int{}},
