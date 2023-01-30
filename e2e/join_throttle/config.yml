@@ -1,0 +1,26 @@
+pipelines:
+  join_throttle:
+    settings:
+      event_timeout: 500ms
+    input:
+      type: file
+      persistence_mode: async
+      watching_dir: SOME_DIR
+      offsets_file: SOME_FILE
+      offsets_op: reset
+    actions:
+      - type: join
+        field: message
+        start: '/^start/'
+        continue: '/^continue/'
+      - type: modify
+        ts: '2009-11-10T23:00:00Z'
+      - type: throttle
+        bucket_interval: 1m
+        buckets_count: 60
+        default_limit: 100
+        throttle_field: service
+        time_field: ts
+    output:
+      type: file
+      target_file: SOME_FILE
