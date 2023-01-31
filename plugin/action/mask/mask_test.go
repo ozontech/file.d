@@ -137,6 +137,14 @@ func TestMaskFunctions(t *testing.T) {
 			masks:        Mask{Re: kCardWithStarOrSpaceOrNoDelimitersRegExp, Groups: []int{1, 2, 3}},
 			mustBeMasked: true,
 		},
+		{
+			name:         "Individual entrepreneur",
+			input:        []byte("Individual entrepreneur Ivanov Ivan Ivanovich"),
+			expected:     []byte("Individual entrepreneur Ivanov Ivan Ivanovich"),
+			comment:      "do not replace matched value",
+			masks:        Mask{Re: "Individual entrepreneur"},
+			mustBeMasked: true,
+		},
 	}
 
 	var plugin Plugin
@@ -210,13 +218,6 @@ func TestGroupNumbers(t *testing.T) {
 			expect:  Mask{Re: kDefaultCardRegExp, Groups: []int{0}},
 			isFatal: false,
 			comment: "deleted all groups except zero",
-		},
-		{
-			name:     "groups is empty",
-			input:    Mask{Re: kDefaultCardRegExp, Groups: []int{}},
-			isFatal:  true,
-			fatalMsg: "groups is empty",
-			comment:  "fatal on empty groups",
 		},
 		{
 			name:     "negative group number",
