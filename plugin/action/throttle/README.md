@@ -100,5 +100,23 @@ Defines redis timeout.
 
 <br>
 
+**`max_retries`** *`int`* *`default=3`* 
+
+Defines redis maximum number of retries. If set to 0, no retries will happen.
+
+<br>
+
+**`min_retry_backoff`** *`cfg.Duration`* *`default=200ms`* 
+
+Defines redis minimum backoff between each retry. If set to -1, disables backoff.
+
+<br>
+
+**`max_retry_backoff`** *`cfg.Duration`* *`default=1s`* 
+
+Defines redis maximum backoff between each retry. If set to -1, disables backoff.
+
+<br>
+
 
 <br>*Generated using [__insane-doc__](https://github.com/vitkovskii/insane-doc)*
