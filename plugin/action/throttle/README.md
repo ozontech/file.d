@@ -106,15 +106,15 @@ Defines redis maximum number of retries. If set to 0, no retries will happen.
 
 <br>
 
-**`min_retry_backoff`** *`cfg.Duration`* *`default=200ms`* 
+**`min_retry_backoff`** *`cfg.Duration`* *`default=8ms`* 
 
-Defines redis minimum backoff between each retry. If set to -1, disables backoff.
+Defines redis minimum backoff between each retry. If set to 0, sets default 8ms. If set to -1, disables backoff.
 
 <br>
 
-**`max_retry_backoff`** *`cfg.Duration`* *`default=1s`* 
+**`max_retry_backoff`** *`cfg.Duration`* *`default=512ms`* 
 
-Defines redis maximum backoff between each retry. If set to -1, disables backoff.
+Defines redis maximum backoff between each retry. If set to 0, sets default 512ms. If set to -1, disables backoff.
 
 <br>
 

@@ -159,14 +159,14 @@ type RedisBackendConfig struct {
 
 	// > @3@4@5@6
 	// >
-	// > Defines redis minimum backoff between each retry. If set to -1, disables backoff.
-	MinRetryBackoff  cfg.Duration `json:"min_retry_backoff" parse:"duration" default:"200ms"` // *
+	// > Defines redis minimum backoff between each retry. If set to 0, sets default 8ms. If set to -1, disables backoff.
+	MinRetryBackoff  cfg.Duration `json:"min_retry_backoff" parse:"duration" default:"8ms"` // *
 	MinRetryBackoff_ time.Duration
 
 	// > @3@4@5@6
 	// >
-	// > Defines redis maximum backoff between each retry. If set to -1, disables backoff.
-	MaxRetryBackoff  cfg.Duration `json:"max_retry_backoff" parse:"duration" default:"1s"` // *
+	// > Defines redis maximum backoff between each retry. If set to 0, sets default 512ms. If set to -1, disables backoff.
+	MaxRetryBackoff  cfg.Duration `json:"max_retry_backoff" parse:"duration" default:"512ms"` // *
 	MaxRetryBackoff_ time.Duration
 }
 
