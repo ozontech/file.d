@@ -2,7 +2,6 @@ package http_file
 
 import (
 	"bytes"
-	"log"
 	"net/http"
 	"path"
 	"sync"
@@ -35,6 +34,12 @@ func (c *Config) Configure(t *testing.T, conf *cfg.Config, pipelineName string) 
 	output.Set("retention_interval", c.RetTime)
 }
 
+var samples = [][]byte{
+	[]byte(`{"ok":"google"}`),
+	[]byte(`{"ping":"pong"}`),
+	[]byte(`{"hello":"world"}`),
+}
+
 // Send creates Count http clients and sends Lines of requests from each
 func (c *Config) Send(t *testing.T) {
 	wg := &sync.WaitGroup{}
@@ -42,16 +47,14 @@ func (c *Config) Send(t *testing.T) {
 	for i := 0; i < c.Count; i++ {
 		go func() {
 			defer wg.Done()
-			cl := http.DefaultClient
+
+			cl := http.Client{}
 			for j := 0; j < c.Lines; j++ {
-				rd := bytes.NewReader([]byte(`{"first_field":"second_field"}`))
+				rd := bytes.NewReader(samples[j%len(samples)])
 				req, err := http.NewRequest(http.MethodPost, "http://localhost:9200/", rd)
-				if err != nil {
-					log.Fatalf("bad format http request: %s", err.Error())
-				}
-				if _, err = cl.Do(req); err != nil {
-					log.Fatalf("failed to make request: %s", err.Error())
-				}
+				require.NoError(t, err)
+				_, err = cl.Do(req)
+				require.NoError(t, err)
 			}
 		}()
 	}
