@@ -2,6 +2,7 @@ package clickhouse
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 
@@ -10,15 +11,13 @@ import (
 	"github.com/ClickHouse/ch-go/proto"
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
+	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/tls"
 	prom "github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
 )
-
-var _ ch.Options
-var _ chpool.Client
 
 /*{ introduction
 It sends the event batches to clickhouse db using clickhouse-go.
@@ -99,9 +98,7 @@ type Config struct {
 
 	Schema Schema `json:"schema"`
 
-	// >
-
-	Compression string `default:"none" options:"disabled,lz4,zstd,none"`
+	Compression string `default:"none" options:"disabled|lz4|zstd|none"`
 
 	// > @3@4@5@6
 	// >
@@ -189,7 +186,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	if p.config.DBRequestTimeout_ < 1 {
 		p.logger.Fatal("'db_request_timeout' can't be <1")
 	}
-	if _, err := parseSchema(p.config.Schema); err != nil {
+	if _, err := insaneColumns(p.config.Schema); err != nil {
 		p.logger.Fatalf("invalid database schema: %s", err)
 	}
 
@@ -272,92 +269,43 @@ func (p *Plugin) Out(event *pipeline.Event) {
 	p.batcher.Add(event)
 }
 
-type AppendableString interface {
-	Append(string)
-}
-
-type AppendableBool interface {
-	Append(bool)
-}
-
 func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 	if *workerData == nil {
 		// we don't check the error, schema already validated in the Start
-		schema, _ := parseSchema(p.config.Schema)
+		schema, _ := insaneColumns(p.config.Schema)
 		*workerData = schema
 	}
 
-	input := (*workerData).(proto.Input)
-
-	input.Reset()
+	input := (*workerData).([]InsaneColumn)
+	for i := range input {
+		input[i].ColInput.Reset()
+	}
 
 	for _, event := range batch.Events {
 		for _, col := range input {
-			node, err := event.Root.DigStrict(col.Name) // {"level": "info"}
+			node, err := event.Root.DigStrict(col.Name)
 			if err != nil {
 				continue
 			}
 
-			// На стороне insaneJSON мы должны вывести тип, используя конфиг, скастовать значение в any
-			// Driver сходит в clickhouse и узнает все столбы и их типы
-			// распарсит типы (и будет это делать каждый запрос)
-			// при append драйвер рефлексией пойдет сравнивать
-			// if data.(int32) || data.(*int32) || data.(sql.NullInt32) || data.(*sql.NullInt32) {
-			//   columnInt32.Append(int32Data)
-			// }
-			// если произошел мисматч типов, то драйвер вернет ошибку
-
-			t := col.Data.Type() // String
-			if t == "String" {
-				node.AsString()
-			}
-			if t.IsArray() {
-				panic("todo")
-			} else {
-				isComposite := t.Elem() != ""
-				if isComposite {
-					panic("todo")
-				}
-				t := t.String()
-
-				if strings.HasPrefix(t, "Int") {
-					n, err := node.AsInt()
-					if err != nil {
-						continue
-					}
-					t = t[len("Int"):]
-					switch t {
-					case "8":
-						_ = n
-					}
-				}
-			}
-
-			var differentTypes bool
-			// t := t.String()
-			// if strings.Index(t, string(proto.ColumnTypeString)) {
-			// 	data, err := node.AsString()
-			// 	differentTypes = strings.Index(t, string(proto.ColumnTypeString)) == -1
-			// 	if !differentTypes {
-			// 		col, ok := col.Data.(AppendableString)
-			// 		differentTypes = ok
-			// 		if ok {
-			// 			col.Append(data)
-			// 		}
-			// 	}
-			// }
-
-			if differentTypes {
-				p.logger.Warnf("can't append %s to the %s bacause of different types", col.Name, p.config.Table)
+			if err := col.ColInput.Append(node); err != nil {
+				logger.Warnf("append: %s", err)
 			}
 		}
 	}
-}
 
-func (p *Plugin) try(ctx context.Context, query string) error {
-	ctx, cancel := context.WithTimeout(p.ctx, p.config.DBRequestTimeout_)
-	defer cancel()
-
-	// err := p.pool.Do(ctx, query)
-	return nil
+	var queryInput proto.Input
+	for i := range input {
+		queryInput = append(queryInput, proto.InputColumn{
+			Name: input[i].Name,
+			Data: input[i].ColInput,
+		})
+	}
+	err := p.pool.Do(p.ctx, ch.Query{
+		Body:  fmt.Sprintf("INSERT INTO %s VALUES", p.config.Table),
+		Input: queryInput,
+	})
+	if err != nil {
+		logger.Fatalf("do: %s", err.Error())
+	}
 }

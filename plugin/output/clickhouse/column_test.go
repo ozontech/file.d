@@ -39,7 +39,7 @@ func Test_parseSchema(t *testing.T) {
 		},
 	}
 
-	got, err := parseSchema(schema)
+	got, err := insaneColumns(schema)
 	require.NoError(t, err)
 	require.Equal(t, expected, got)
 }
