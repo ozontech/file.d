@@ -36,7 +36,6 @@ func checkDirFiles(t *testing.T, matches []string, totalSent int64, msg string) 
 	t.Helper()
 	totalSize := int64(0)
 	for _, m := range matches {
-
 		info, err := os.Stat(m)
 		assert.NoError(t, err, msg)
 		assert.NotNil(t, info, msg)

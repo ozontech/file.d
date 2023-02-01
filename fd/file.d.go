@@ -165,10 +165,7 @@ func (f *FileD) setupAction(p *pipeline.Pipeline, index int, t string, actionJSO
 	if matchMode == pipeline.MatchModeUnknown {
 		logger.Fatalf("unknown match_mode value for action %d/%s in pipeline %q", index, t, p.Name)
 	}
-	matchInvert, err := extractMatchInvert(actionJSON)
-	if err != nil {
-		logger.Fatalf("can't extract invert match mode for action %d/%s in pipeline %q: %s", index, t, p.Name, err.Error())
-	}
+	matchInvert := extractMatchInvert(actionJSON)
 	conditions, err := extractConditions(actionJSON.Get("match_fields"))
 	if err != nil {
 		logger.Fatalf("can't extract conditions for action %d/%s in pipeline %q: %s", index, t, p.Name, err.Error())
