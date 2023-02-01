@@ -31,4 +31,4 @@ WORKDIR /file.d
 
 COPY --from=build /file.d/file.d /file.d/file.d
 
-CMD [ "./file.d", "--config", "/my-config.yaml" ]
+CMD [ "./file.d" ]

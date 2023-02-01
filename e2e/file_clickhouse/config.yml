@@ -1,0 +1,16 @@
+pipelines:
+  file_clickhouse:
+    input:
+      type: file
+    output:
+      type: clickhouse
+      address: 127.0.0.1:9000
+      table: test_table_insert
+      schema:
+        columns:
+          - name: c1
+            type: String
+          - name: c2
+            type: Int8
+          - name: c3
+            type: Int16

@@ -42,6 +42,7 @@ import (
 	_ "github.com/ozontech/file.d/plugin/input/journalctl"
 	_ "github.com/ozontech/file.d/plugin/input/k8s"
 	_ "github.com/ozontech/file.d/plugin/input/kafka"
+	_ "github.com/ozontech/file.d/plugin/output/clickhouse"
 	_ "github.com/ozontech/file.d/plugin/output/devnull"
 	_ "github.com/ozontech/file.d/plugin/output/elasticsearch"
 	_ "github.com/ozontech/file.d/plugin/output/file"
@@ -51,7 +52,6 @@ import (
 	_ "github.com/ozontech/file.d/plugin/output/s3"
 	_ "github.com/ozontech/file.d/plugin/output/splunk"
 	_ "github.com/ozontech/file.d/plugin/output/stdout"
-	_ "github.com/ozontech/file.d/plugin/output/clickhouse"
 	insaneJSON "github.com/vitkovskii/insane-json"
 	"go.uber.org/automaxprocs/maxprocs"
 )
