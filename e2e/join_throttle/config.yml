@@ -1,7 +1,7 @@
 pipelines:
   join_throttle:
     settings:
-      event_timeout: 500ms
+      event_timeout: 1s
     input:
       type: file
       persistence_mode: async

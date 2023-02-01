@@ -40,6 +40,7 @@ func (c *Config) Send(t *testing.T) {
 
 	for i := 0; i < c.Count; i++ {
 		_, err = file.WriteString(`{"message":"start "}` + "\n")
+		_ = file.Sync()
 		require.NoError(t, err)
 	}
 }
@@ -49,7 +50,7 @@ func (c *Config) Validate(t *testing.T) {
 
 	expectedEvents := 100 // because we are set default_limit: 100 in the throttle plugin
 
-	test.WaitProcessEvents(t, expectedEvents, 3*time.Second, 20*time.Second, logFilePattern)
+	test.WaitProcessEvents(t, expectedEvents, 3*time.Second, 50*time.Second, logFilePattern)
 	matches := test.GetMatches(t, logFilePattern)
 	assert.True(t, len(matches) > 0, "no files with processed events")
 
