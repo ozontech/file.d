@@ -66,7 +66,7 @@ func (p *Plugin) getFileNames(outPlugCount int) map[string]string {
 	mainFileName := f[0 : len(f)-len(p.fileExtension)]
 	fileNames[p.config.DefaultBucket] = mainFileName
 	for i := range p.config.MultiBuckets {
-		singleB := p.config.MultiBuckets[i]
+		singleB := &p.config.MultiBuckets[i]
 		fileNames[singleB.Bucket] = singleB.Bucket
 	}
 	return fileNames
