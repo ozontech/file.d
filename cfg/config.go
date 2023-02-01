@@ -16,6 +16,8 @@ import (
 	"github.com/ozontech/file.d/logger"
 )
 
+const trueValue = "true"
+
 type Config struct {
 	Vault        VaultConfig
 	PanicTimeout time.Duration
@@ -89,17 +91,17 @@ func NewConfigFromFile(path string) *Config {
 		logger.Fatalf("can't parse config file yaml %q: %s", path, err.Error())
 	}
 
-	json, err := simplejson.NewJson(jsonContents)
+	object, err := simplejson.NewJson(jsonContents)
 	if err != nil {
 		logger.Fatalf("can't convert config to json %q: %s", path, err.Error())
 	}
 
-	err = applyEnvs(json)
+	err = applyEnvs(object)
 	if err != nil {
 		logger.Fatalf("can't get config values from environments: %s", err.Error())
 	}
 
-	config := parseConfig(json)
+	config := parseConfig(object)
 	var apps []funcApplier
 
 	// add applicator for env variables
@@ -126,7 +128,7 @@ func NewConfigFromFile(path string) *Config {
 	return config
 }
 
-func applyEnvs(json *simplejson.Json) error {
+func applyEnvs(object *simplejson.Json) error {
 	for _, env := range os.Environ() {
 		kv := strings.SplitN(env, "=", 2)
 		if len(kv) != 2 {
@@ -137,16 +139,16 @@ func applyEnvs(json *simplejson.Json) error {
 		if strings.HasPrefix(k, "FILED_") {
 			lower := strings.ToLower(k)
 			path := strings.Split(lower, "_")[1:]
-			json.SetPath(path, v)
+			object.SetPath(path, v)
 		}
 	}
 
 	return nil
 }
 
-func parseConfig(json *simplejson.Json) *Config {
+func parseConfig(object *simplejson.Json) *Config {
 	config := NewConfig()
-	vault := json.Get("vault")
+	vault := object.Get("vault")
 	var err error
 
 	addr := vault.Get("address")
@@ -162,7 +164,7 @@ func parseConfig(json *simplejson.Json) *Config {
 	}
 	config.Vault.ShouldUse = config.Vault.Address != "" && config.Vault.Token != ""
 
-	pipelinesJson := json.Get("pipelines")
+	pipelinesJson := object.Get("pipelines")
 	pipelines := pipelinesJson.MustMap()
 	if len(pipelines) == 0 {
 		logger.Fatalf("no pipelines defined in config")
@@ -175,7 +177,7 @@ func parseConfig(json *simplejson.Json) *Config {
 		config.Pipelines[name] = &PipelineConfig{Raw: raw}
 	}
 
-	panicTimeoutStr, err := json.Get("panic_timeout").String()
+	panicTimeoutStr, err := object.Get("panic_timeout").String()
 	if err != nil {
 		logger.Warnf("can't get panic_timeout: %s", err.Error())
 	}
@@ -203,16 +205,16 @@ func validatePipelineName(name string) error {
 	return nil
 }
 
-func applyConfigFuncs(apps []funcApplier, json *simplejson.Json) {
+func applyConfigFuncs(apps []funcApplier, object *simplejson.Json) {
 	for _, app := range apps {
-		applyConfigFunc(app, json)
+		applyConfigFunc(app, object)
 	}
 }
 
-func applyConfigFunc(app funcApplier, json *simplejson.Json) {
-	if a, err := json.Array(); err == nil {
+func applyConfigFunc(app funcApplier, object *simplejson.Json) {
+	if a, err := object.Array(); err == nil {
 		for i := range a {
-			field := json.GetIndex(i)
+			field := object.GetIndex(i)
 			if value, ok := tryApplyFunc(app, field); ok {
 				a[i] = value
 
@@ -222,11 +224,11 @@ func applyConfigFunc(app funcApplier, json *simplejson.Json) {
 		}
 	}
 
-	if m, err := json.Map(); err == nil {
+	if m, err := object.Map(); err == nil {
 		for k := range m {
-			field := json.Get(k)
+			field := object.Get(k)
 			if value, ok := tryApplyFunc(app, field); ok {
-				json.Set(k, value)
+				object.Set(k, value)
 
 				continue
 			}
@@ -263,20 +265,20 @@ func Parse(ptr any, values map[string]int) error {
 		tField := t.Field(i)
 
 		childTag := tField.Tag.Get("child")
-		if childTag == "true" {
+		if childTag == trueValue {
 			childs = append(childs, vField)
 			continue
 		}
 
 		sliceTag := tField.Tag.Get("slice")
-		if sliceTag == "true" {
+		if sliceTag == trueValue {
 			if err := ParseSlice(vField, values); err != nil {
 				return err
 			}
 			continue
 		}
 
-		err := ParseField(v, vField, tField, values)
+		err := ParseField(v, vField, &tField, values)
 		if err != nil {
 			return err
 		}
@@ -333,9 +335,9 @@ func ParseSlice(v reflect.Value, values map[string]int) error {
 	return nil
 }
 
-func ParseField(v reflect.Value, vField reflect.Value, tField reflect.StructField, values map[string]int) error {
+func ParseField(v reflect.Value, vField reflect.Value, tField *reflect.StructField, values map[string]int) error {
 	tag := tField.Tag.Get("required")
-	required := tag == "true"
+	required := tag == trueValue
 
 	tag = tField.Tag.Get("default")
 	if tag != "" {
@@ -483,7 +485,7 @@ func ParseField(v reflect.Value, vField reflect.Value, tField reflect.StructFiel
 			if err != nil {
 				return fmt.Errorf("could not parse field %s, err: %s", tField.Name, err.Error())
 			}
-			finalField.SetInt(int64(value))
+			finalField.SetInt(value)
 
 		case "data_unit":
 			parts := strings.Split(vField.String(), " ")
@@ -520,7 +522,7 @@ func UnescapeMap(fields map[string]any) map[string]string {
 	result := make(map[string]string)
 
 	for key, val := range fields {
-		if len(key) == 0 {
+		if key == "" {
 			continue
 		}
 
@@ -582,8 +584,8 @@ func CompileRegex(s string) (*regexp.Regexp, error) {
 		return nil, fmt.Errorf(`regexp is empty`)
 	}
 
-	if len(s) == 0 || s[0] != '/' || s[len(s)-1] != '/' {
-		return nil, fmt.Errorf(`regexp "%s" should be surounded by "/"`, s)
+	if s == "" || s[0] != '/' || s[len(s)-1] != '/' {
+		return nil, fmt.Errorf(`regexp "%s" should be surrounded by "/"`, s)
 	}
 
 	return regexp.Compile(s[1 : len(s)-1])

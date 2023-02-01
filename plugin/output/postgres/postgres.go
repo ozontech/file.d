@@ -47,7 +47,7 @@ type pgType int
 
 const (
 	// minimum required types for now.
-	unknownType pgType = iota
+	_ pgType = iota
 	pgString
 	pgInt
 	pgTimestamp
@@ -260,25 +260,26 @@ func (p *Plugin) out(_ *pipeline.WorkerData, batch *pipeline.Batch) {
 	for _, event := range batch.Events {
 		fieldValues, uniqueID, err := p.processEvent(event, pgFields, uniqFields)
 		if err != nil {
-			if errors.Is(err, ErrEventDoesntHaveField) {
+			switch {
+			case errors.Is(err, ErrEventDoesntHaveField):
 				p.discardedEventMetric.WithLabelValues().Inc()
 				if p.config.Strict {
 					p.logger.Fatal(err)
 				}
 				p.logger.Error(err)
-			} else if errors.Is(err, ErrEventFieldHasWrongType) {
+			case errors.Is(err, ErrEventFieldHasWrongType):
 				p.discardedEventMetric.WithLabelValues().Inc()
 				if p.config.Strict {
 					p.logger.Fatal(err)
 				}
 				p.logger.Error(err)
-			} else if errors.Is(err, ErrTimestampFromDistantPastOrFuture) {
+			case errors.Is(err, ErrTimestampFromDistantPastOrFuture):
 				p.discardedEventMetric.WithLabelValues().Inc()
 				if p.config.Strict {
 					p.logger.Fatal(err)
 				}
 				p.logger.Error(err)
-			} else if err != nil { // protection from foolproof.
+			case err != nil: // protection from foolproof.
 				p.logger.Fatalf("undefined error: %w", err)
 			}
 
@@ -399,8 +400,6 @@ func (p *Plugin) addFieldToValues(field column, sNode *insaneJSON.StrictNode) (a
 			return nil, fmt.Errorf("%w, %s", ErrTimestampFromDistantPastOrFuture, field.Name)
 		}
 		return time.Unix(int64(tint), 0).Format(time.RFC3339), nil
-	case unknownType:
-		fallthrough
 	default:
 		return nil, fmt.Errorf("%w, undefined col type: %d, col name: %s", ErrEventFieldHasWrongType, field.ColType, field.Name)
 	}

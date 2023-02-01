@@ -140,5 +140,4 @@ func setRuntimeSettings() {
 		logger.Fatal("can't set GOMEMLIMIT: %s", err)
 	}
 	logger.Warnf("GOMEMLIMIT=%v", memLimit)
-
 }
