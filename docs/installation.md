@@ -2,14 +2,20 @@
 
 ## Docker
 
-Images are available on [docker hub](https://hub.docker.com/r/ozontech/file.d).
+Images are available on [GitHub container registry](https://github.com/ozontech/file.d/pkgs/container/file.d).
 
 Mount config from /my-config.yaml and start `file.d` with this config: <br>
-`docker run -v /my-config.yaml:/my-config.yaml ozonru/file.d:latest-linux-amd64 /file.d/file.d --config /my-config.yaml`
+`docker run -v /my-config.yaml:/my-config.yaml ghcr.io/ozontech/file.d:v0.8.9 /file.d/file.d --config /my-config.yaml`
 
-## Downloads
-To be filled
+## Precompiled binaries
 
-## Packages
-To be filled
+Precompiled binaries for released versions are available in the
+[GitHub releases](https://github.com/ozontech/file.d/releases).
 
+## From source
+
+You can install a binary release using Go:
+
+```shell
+go install -ldflags "-X github.com/ozontech/file.d/buildinfo.Version=v0.8.9" github.com/ozontech/file.d/cmd/file.d@v0.8.9
+```

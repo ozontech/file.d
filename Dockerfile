@@ -19,7 +19,7 @@ ENV GOARCH amd64
 RUN go build -trimpath \
     -ldflags "-X github.com/ozontech/file.d/buildinfo.Version=$(git describe --abbrev=4 --dirty --always --tags) \
     -X github.com/ozontech/file.d/buildinfo.BuildTime=$(date '+%Y-%m-%d_%H:%M:%S')" \
-    -o file.d ./cmd/file.d.go
+    -o file.d ./cmd/file.d
 
 # Deploy
 FROM ubuntu:20.04

@@ -9,12 +9,12 @@ prepare:
 .PHONY: build
 build: 
 	echo "Building for amd64..."
-	GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "-X github.com/ozontech/file.d/buildinfo.Version=${VERSION} -X github.com/ozontech/file.d/buildinfo.BuildTime=${TIME}" -o file.d ./cmd/file.d.go
+	GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "-X github.com/ozontech/file.d/buildinfo.Version=${VERSION} -X github.com/ozontech/file.d/buildinfo.BuildTime=${TIME}" -o file.d ./cmd/file.d
 
 .PHONY: build-for-current-system
 build-for-current-system:
 	echo "Building for current architecture..."
-	go build -ldflags "-X github.com/ozontech/file.d/buildinfo.Version=${VERSION} -X github.com/ozontech/file.d/buildinfo.BuildTime=${TIME}" -v -o file.d ./cmd/file.d.go
+	go build -ldflags "-X github.com/ozontech/file.d/buildinfo.Version=${VERSION} -X github.com/ozontech/file.d/buildinfo.BuildTime=${TIME}" -v -o file.d ./cmd/file.d
 
 .PHONY: deps
 deps:
