@@ -111,7 +111,7 @@ type Pipeline struct {
 	readOps         atomic.Int64
 	maxSize         int
 
-	//all pipeline`s metrics
+	// all pipeline`s metrics
 
 	inUseEventsMetric          *prometheus.GaugeVec
 	eventPoolCapacityMetric    *prometheus.GaugeVec
@@ -516,7 +516,7 @@ func (p *Pipeline) initProcs() {
 }
 
 func (p *Pipeline) newProc() *processor {
-	proc := NewProcessor(
+	proc := newProcessor(
 		p.metricsHolder,
 		p.activeProcs,
 		p.output,
