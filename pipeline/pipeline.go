@@ -516,7 +516,7 @@ func (p *Pipeline) initProcs() {
 }
 
 func (p *Pipeline) newProc() *processor {
-	proc := NewProcessor(
+	proc := newProcessor(
 		p.metricsHolder,
 		p.activeProcs,
 		p.output,
