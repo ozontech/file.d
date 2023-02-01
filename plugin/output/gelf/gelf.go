@@ -336,11 +336,11 @@ func (p *Plugin) makeTimestampField(root *insaneJSON.Root, timestampField string
 		ts = node.AsFloat()
 		// is it in millis?
 		if ts > 1000000000000 {
-			ts = ts / 1000
+			ts /= 1000
 		}
 		// is it still in millis?
 		if ts > 1000000000000 {
-			ts = ts / 1000
+			ts /= 1000
 		}
 	} else if node.IsString() {
 		t, err := time.Parse(timestampFieldFormat, node.AsString())

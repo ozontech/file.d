@@ -10,7 +10,6 @@ import (
 )
 
 func TestPipeline_streamEvent(t *testing.T) {
-
 	settings := &Settings{
 		Capacity: 5,
 		Decoder:  "json",

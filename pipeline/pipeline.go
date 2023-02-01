@@ -230,7 +230,7 @@ func (p *Pipeline) SetupHTTPHandlers(mux *http.ServeMux) {
 	}
 
 	for i, info := range p.actionInfos {
-		mux.HandleFunc(fmt.Sprintf("%s/%d/info", prefix, i+1), p.serveActionInfo(*info))
+		mux.HandleFunc(fmt.Sprintf("%s/%d/info", prefix, i+1), p.serveActionInfo(info))
 		mux.HandleFunc(fmt.Sprintf("%s/%d/sample", prefix, i+1), p.serveActionSample(i))
 		for hName, handler := range info.PluginStaticInfo.Endpoints {
 			mux.HandleFunc(fmt.Sprintf("%s/%d/%s", prefix, i+1, hName), handler)
@@ -600,7 +600,7 @@ func (p *Pipeline) logChanges(myDeltas *deltas) {
 		`rate=%d/s|%.1fMb/s, read ops=%d/s, total=%d|%.1fMb, avg size=%d, max size=%d`,
 		p.Name, interval/time.Second, p.activeProcs.Load(), p.procCount.Load(),
 		inUseEvents, p.settings.Capacity, p.settings.Capacity-int(inUseEvents), p.settings.Capacity,
-		int64(myDeltas.deltaInputEvents), float64(myDeltas.deltaInputSize)/1024.0/1024.0, rate, rateMb, readOps,
+		int64(myDeltas.deltaInputEvents), myDeltas.deltaInputSize/1024.0/1024.0, rate, rateMb, readOps,
 		inputEvents, float64(inputSize)/1024.0/1024.0, inputSize/tc, p.maxSize)
 }
 
@@ -717,7 +717,7 @@ func (p *Pipeline) servePipelineBanList(w http.ResponseWriter, _ *http.Request) 
 
 // serveActionInfo creates a handlerFunc for the given action.
 // it returns metric values for the given action.
-func (p *Pipeline) serveActionInfo(info ActionPluginStaticInfo) func(http.ResponseWriter, *http.Request) {
+func (p *Pipeline) serveActionInfo(info *ActionPluginStaticInfo) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Add("Content-Type", "application/json")
 

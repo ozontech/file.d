@@ -257,9 +257,10 @@ func cleanUpItems(items []*metaItem) {
 	}
 }
 
-func getMeta(fullFilename string) (ns namespace, pod podName, container containerName, cid containerID, success bool, podMeta *podMeta) {
+func getMeta(fullFilename string) (ns namespace, pod podName, container containerName, success bool, podMeta *podMeta) {
 	podMeta = nil
 	success = false
+	var cid containerID
 	ns, pod, container, cid = parseLogFilename(fullFilename)
 
 	i := time.Nanosecond
@@ -307,7 +308,6 @@ func putMeta(podData *corev1.Pod) {
 	}
 
 	podCopy := podData
-	// podCopy := podData.DeepCopy()
 
 	pod := podName(podCopy.Name)
 	ns := namespace(podCopy.Namespace)

@@ -244,7 +244,8 @@ func (c *Config) IsMultiBucketExists(bucketName string) bool {
 		return false
 	}
 
-	for _, bucket := range c.MultiBuckets {
+	for i := range c.MultiBuckets {
+		bucket := &c.MultiBuckets[i]
 		if bucketName == bucket.Bucket {
 			return true
 		}
@@ -275,7 +276,6 @@ func (p *Plugin) RegisterMetrics(ctl *metric.Ctl) {
 }
 
 func (p *Plugin) StartWithMinio(config pipeline.AnyConfig, params *pipeline.OutputPluginParams, factory objStoreFactory) {
-
 	p.controller = params.Controller
 	p.logger = params.Logger
 	p.config = config.(*Config)
