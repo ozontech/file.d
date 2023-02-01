@@ -8,18 +8,19 @@ pipelines:
   k8s_kafka_example:
     input:
       type: k8s
-      persistence_mode: async
+      file_config:
+        persistence_mode: async
+        filename_pattern: "*"
       watching_dir: /var/log/containers/
-      filename_pattern: "*"
       offsets_file: /data/k8s-offsets.yaml
-      labels_whitelist: [app, jobid]            # add only these labels
+      allowed_pod_labels: [app, jobid]            # add only these labels
     actions:
     - type: discard                             # discard some events 
       match_fields:
         k8s_namespace: /kube-system|ingress/    # regex
         k8s_container: /file-d/
       match_mode: or
-    - type: join                                # join goland panics from stderr
+    - type: join                                # join golang panics from stderr
       field: log
       start: '/^(panic:)|(http: panic serving)/'
       continue: '/(^\s*$)|(goroutine [0-9]+ \[)|(\([0-9]+x[0-9,a-f]+)|(\.go:[0-9]+ \+[0-9]x)|(\/.*\.go:[0-9]+)|(\(...\))|(main\.main\(\))|(created by .*\/.*\.)|(^\[signal)|(panic.+[0-9]x[0-9,a-f]+)|(panic:)/'
@@ -28,8 +29,8 @@ pipelines:
     - type: throttle                            # throttle pod logs if throughput is more than 3000/minute
       default_limit: 3000
       throttle_field: k8s_pod
-      interval: 1m
-      buckets: 60
+      bucket_interval: 1m
+      buckets_count: 60
     - type: keep_fields                         # keep only meaningful fields of event
       fields: [time, stream, log, k8s_namespace, k8s_pod, k8s_container, k8s_node, k8s_label_app, k8s_label_jobid]
     output:

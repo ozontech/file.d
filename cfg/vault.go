@@ -2,8 +2,10 @@ package cfg
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/hashicorp/vault/api"
+	"github.com/ozontech/file.d/logger"
 )
 
 type secreter interface {
@@ -28,6 +30,9 @@ func newVault(addr, token string) (*vault, error) {
 }
 
 func (v *vault) GetSecret(path, key string) (string, error) {
+	if v.c == nil {
+		logger.Fatalf("can't get secret without connection vault api.Client")
+	}
 	c := v.c
 	secret, err := c.Logical().Read(path)
 	if err != nil {
@@ -40,4 +45,34 @@ func (v *vault) GetSecret(path, key string) (string, error) {
 	}
 
 	return str, nil
+}
+
+func (v *vault) tryApply(s string) (string, bool) {
+	return tryApplySecreter(v, s)
+}
+
+func tryApplySecreter(secreter secreter, s string) (string, bool) {
+	// escape symbols.
+	if strings.HasPrefix(s, `\vault(`) {
+		s = strings.ReplaceAll(s, `\vault(`, "vault(")
+		return s, true
+	}
+
+	if !strings.HasPrefix(s, "vault(") || !strings.HasSuffix(s, ")") {
+		return "", false
+	}
+
+	args := strings.TrimPrefix(s, "vault(")
+	args = strings.TrimSuffix(args, ")")
+	noSpaces := strings.ReplaceAll(args, " ", "")
+	pathAndKey := strings.Split(noSpaces, ",")
+
+	logger.Infof("get secrets for %q and %q", pathAndKey[0], pathAndKey[1])
+	secret, err := secreter.GetSecret(pathAndKey[0], pathAndKey[1])
+	if err != nil {
+		logger.Fatalf("can't GetSecret: %s", err.Error())
+	}
+
+	logger.Infof("success getting secret %q and %q", pathAndKey[0], pathAndKey[1])
+	return secret, true
 }

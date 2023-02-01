@@ -9,6 +9,7 @@ import (
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/test"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	insaneJSON "github.com/vitkovskii/insane-json"
@@ -136,6 +137,14 @@ func TestMaskFunctions(t *testing.T) {
 			masks:        Mask{Re: kCardWithStarOrSpaceOrNoDelimitersRegExp, Groups: []int{1, 2, 3}},
 			mustBeMasked: true,
 		},
+		{
+			name:         "Individual entrepreneur",
+			input:        []byte("Individual entrepreneur Ivanov Ivan Ivanovich"),
+			expected:     []byte("Individual entrepreneur Ivanov Ivan Ivanovich"),
+			comment:      "do not replace matched value",
+			masks:        Mask{Re: "Individual entrepreneur"},
+			mustBeMasked: true,
+		},
 	}
 
 	var plugin Plugin
@@ -172,7 +181,7 @@ func TestMaskAddExtraField(t *testing.T) {
 			{Re: kDefaultCardRegExp, Groups: []int{1, 2, 3, 4}},
 		},
 	}
-	plugin.RegisterMetrics(metric.New("test"))
+	plugin.RegisterMetrics(metric.New("test", prometheus.NewRegistry()))
 	plugin.Start(&config, &pipeline.ActionPluginParams{
 		PluginDefaultParams: &pipeline.PluginDefaultParams{
 			PipelineName:     "test_pipeline",
@@ -209,13 +218,6 @@ func TestGroupNumbers(t *testing.T) {
 			expect:  Mask{Re: kDefaultCardRegExp, Groups: []int{0}},
 			isFatal: false,
 			comment: "deleted all groups except zero",
-		},
-		{
-			name:     "groups is empty",
-			input:    Mask{Re: kDefaultCardRegExp, Groups: []int{}},
-			isFatal:  true,
-			fatalMsg: "groups is empty",
-			comment:  "fatal on empty groups",
 		},
 		{
 			name:     "negative group number",

@@ -2,7 +2,6 @@ package test
 
 import (
 	"math/rand"
-	"net/http"
 	"strconv"
 	"strings"
 	"time"
@@ -120,8 +119,6 @@ func NewPipeline(actions []*pipeline.ActionPluginStaticInfo, pipelineOpts ...str
 		StreamField:         "stream",
 		Decoder:             "json",
 	}
-
-	http.DefaultServeMux = &http.ServeMux{}
 
 	pName := "test_pipeline"
 	if name {

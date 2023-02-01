@@ -9,6 +9,10 @@ It sends events into Elasticsearch. It uses `_bulk` API to send events in batche
 If a network error occurs, the batch will infinitely try to be delivered to the random endpoint.
 
 [More details...](plugin/output/elasticsearch/README.md)
+## file
+It sends event batches into files.
+
+[More details...](plugin/output/file/README.md)
 ## gelf
 It sends event batches to the GELF endpoint. Transport level protocol TCP or UDP is configurable.
 > It doesn't support UDP chunking. So don't use UDP if event size may be greater than 8192.

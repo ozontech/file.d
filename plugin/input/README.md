@@ -27,6 +27,7 @@ But update events don't work with symlinks, so watcher also periodically manuall
 > In order to reduce potential harm of truncation, you can turn on notifications of file changes.
 > By default the plugin is notified only on file creations. Note that following for changes is more CPU intensive.
 
+> ⚠ Use add_file_name plugin if you want to add filename to events.
 
 **Reading docker container log files:**
 ```yaml
@@ -76,10 +77,10 @@ pipelines:
     output:
       # Let's write to kafka example.
       type: kafka
-        brokers: [kafka-local:9092, kafka-local:9091]
-        default_topic: yourtopic-k8s-data
-        use_topic_field: true
-        topic_field: pipeline_kafka_topic
+      brokers: [kafka-local:9092, kafka-local:9091]
+      default_topic: yourtopic-k8s-data
+      use_topic_field: true
+      topic_field: pipeline_kafka_topic
 
       # Or we can write to file:
       # type: file
@@ -120,6 +121,8 @@ An information which plugin adds:
 * `k8s_namespace` – pod namespace name;
 * `k8s_container` – pod container name;
 * `k8s_label_*` – pod labels.
+
+> ⚠ Use add_file_name plugin if you want to add filename to events.
 
 **Example:**
 ```yaml

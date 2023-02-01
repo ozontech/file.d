@@ -1,6 +1,8 @@
 package cfg
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"os"
 	"reflect"
@@ -28,6 +30,30 @@ type (
 	Regexp        string
 	Base8         string
 )
+
+var _ json.Unmarshaler = new(Expression)
+
+func (e *Expression) UnmarshalJSON(raw []byte) error {
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.UseNumber()
+
+	var value any
+	err := decoder.Decode(&value)
+	if err != nil {
+		return err
+	}
+
+	switch value := value.(type) {
+	case json.Number:
+		*e = Expression(value.String())
+	case string:
+		*e = Expression(value)
+	default:
+		return fmt.Errorf("can't cast %T to the Expression", value)
+	}
+
+	return nil
+}
 
 type PipelineConfig struct {
 	Raw *simplejson.Json
@@ -74,17 +100,25 @@ func NewConfigFromFile(path string) *Config {
 	}
 
 	config := parseConfig(json)
-	if !config.Vault.ShouldUse {
-		return config
+	var apps []funcApplier
+
+	// add applicator for env variables
+	apps = append(apps, &envs{})
+
+	// if vault is used then set value otherwise it is empty variable
+	vault := &vault{}
+	if config.Vault.ShouldUse {
+		vault, err = newVault(config.Vault.Address, config.Vault.Token)
+		if err != nil {
+			logger.Fatalf("can't create vault client: %s", err.Error())
+		}
 	}
 
-	vault, err := newVault(config.Vault.Address, config.Vault.Token)
-	if err != nil {
-		logger.Fatalf("can't create vault client: %s", err.Error())
-	}
+	// add applicator for vault
+	apps = append(apps, vault)
 
 	for _, p := range config.Pipelines {
-		applyVault(vault, p.Raw)
+		applyConfigFuncs(apps, p.Raw)
 	}
 
 	logger.Infof("config parsed, found %d pipelines", len(config.Pipelines))
@@ -169,61 +203,49 @@ func validatePipelineName(name string) error {
 	return nil
 }
 
-func applyVault(vault secreter, json *simplejson.Json) {
+func applyConfigFuncs(apps []funcApplier, json *simplejson.Json) {
+	for _, app := range apps {
+		applyConfigFunc(app, json)
+	}
+}
+
+func applyConfigFunc(app funcApplier, json *simplejson.Json) {
 	if a, err := json.Array(); err == nil {
 		for i := range a {
 			field := json.GetIndex(i)
-			if value, ok := tryGetSecret(vault, field); ok {
+			if value, ok := tryApplyFunc(app, field); ok {
 				a[i] = value
 
 				continue
 			}
-			applyVault(vault, field)
+			applyConfigFunc(app, field)
 		}
 	}
 
 	if m, err := json.Map(); err == nil {
 		for k := range m {
 			field := json.Get(k)
-			if value, ok := tryGetSecret(vault, field); ok {
+			if value, ok := tryApplyFunc(app, field); ok {
 				json.Set(k, value)
 
 				continue
 			}
-			applyVault(vault, field)
+			applyConfigFunc(app, field)
 		}
 	}
 }
 
-func tryGetSecret(vault secreter, field *simplejson.Json) (string, bool) {
+func tryApplyFunc(app funcApplier, field *simplejson.Json) (string, bool) {
 	s, err := field.String()
 	if err != nil {
 		return "", false
 	}
 
-	// escape symbols.
-	if strings.HasPrefix(s, `\vault(`) {
-		s = strings.ReplaceAll(s, `\vault(`, "vault(")
-		return s, true
+	if value, ok := app.tryApply(s); ok {
+		return value, ok
 	}
 
-	if !strings.HasPrefix(s, "vault(") || !strings.HasSuffix(s, ")") {
-		return "", false
-	}
-
-	args := strings.TrimPrefix(s, "vault(")
-	args = strings.TrimSuffix(args, ")")
-	noSpaces := strings.ReplaceAll(args, " ", "")
-	pathAndKey := strings.Split(noSpaces, ",")
-
-	logger.Infof("get secrets for %q and %q", pathAndKey[0], pathAndKey[1])
-	secret, err := vault.GetSecret(pathAndKey[0], pathAndKey[1])
-	if err != nil {
-		logger.Fatalf("can't GetSecret: %s", err.Error())
-	}
-
-	logger.Infof("success getting secret %q and %q", pathAndKey[0], pathAndKey[1])
-	return secret, true
+	return "", false
 }
 
 // Parse holy shit! who write this function?

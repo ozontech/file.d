@@ -33,10 +33,10 @@ pipelines:
     output:
       # Let's write to kafka example.
       type: kafka
-        brokers: [kafka-local:9092, kafka-local:9091]
-        default_topic: yourtopic-k8s-data
-        use_topic_field: true
-        topic_field: pipeline_kafka_topic
+      brokers: [kafka-local:9092, kafka-local:9091]
+      default_topic: yourtopic-k8s-data
+      use_topic_field: true
+      topic_field: pipeline_kafka_topic
 
       # Or we can write to file:
       # type: file

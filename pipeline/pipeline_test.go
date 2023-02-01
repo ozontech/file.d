@@ -6,6 +6,7 @@ import (
 
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/plugin/input/fake"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/require"
 )
 
@@ -35,7 +36,7 @@ func TestInUnparsableMessages(t *testing.T) {
 	sourceID := pipeline.SourceID(3<<16 + int(10))
 
 	t.Run(name, func(t *testing.T) {
-		pipe := pipeline.New("test_pipeline", pipelineSettings, nil)
+		pipe := pipeline.New("test_pipeline", pipelineSettings, prometheus.NewRegistry())
 
 		pipe.SetInput(getFakeInputInfo())
 
@@ -109,7 +110,7 @@ func TestInInvalidMessages(t *testing.T) {
 
 	for _, tCase := range cases {
 		t.Run(tCase.name, func(t *testing.T) {
-			pipe := pipeline.New("test_pipeline", tCase.pipelineSettings, nil)
+			pipe := pipeline.New("test_pipeline", tCase.pipelineSettings, prometheus.NewRegistry())
 
 			pipe.SetInput(getFakeInputInfo())
 

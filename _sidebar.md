@@ -22,6 +22,7 @@
     - [kafka](plugin/input/kafka/README.md)
 
   - Action
+    - [add_file_name](plugin/action/add_file_name/README.md)
     - [add_host](plugin/action/add_host/README.md)
     - [convert_date](plugin/action/convert_date/README.md)
     - [convert_log_level](plugin/action/convert_log_level/README.md)
@@ -45,6 +46,7 @@
   - Output
     - [devnull](plugin/output/devnull/README.md)
     - [elasticsearch](plugin/output/elasticsearch/README.md)
+    - [file](plugin/output/file/README.md)
     - [gelf](plugin/output/gelf/README.md)
     - [kafka](plugin/output/kafka/README.md)
     - [postgres](plugin/output/postgres/README.md)

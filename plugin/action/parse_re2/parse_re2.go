@@ -5,8 +5,9 @@ import (
 
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
+	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
-	"github.com/ozontech/file.d/plugin"
+	prom "github.com/prometheus/client_golang/prometheus"
 	insaneJSON "github.com/vitkovskii/insane-json"
 )
 
@@ -16,9 +17,10 @@ It parses string from the event field using re2 expression with named subgroups 
 
 type Plugin struct {
 	config *Config
+	re     *regexp.Regexp
 
-	re *regexp.Regexp
-	plugin.NoMetricsPlugin
+	// plugin metrics
+	eventNotMatchingPatternMetric *prom.CounterVec
 }
 
 // ! config-params
@@ -70,6 +72,7 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	sm := p.re.FindSubmatch(jsonNode.AsBytes())
 
 	if len(sm) == 0 {
+		p.eventNotMatchingPatternMetric.WithLabelValues().Inc()
 		return pipeline.ActionPass
 	}
 
@@ -97,4 +100,8 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	insaneJSON.Release(root)
 
 	return pipeline.ActionPass
+}
+
+func (p *Plugin) RegisterMetrics(ctl *metric.Ctl) {
+	p.eventNotMatchingPatternMetric = ctl.RegisterCounter("action_parse_re2_event_not_matching_pattern", "Total events not matching pattern")
 }

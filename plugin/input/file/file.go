@@ -31,6 +31,7 @@ But update events don't work with symlinks, so watcher also periodically manuall
 > In order to reduce potential harm of truncation, you can turn on notifications of file changes.
 > By default the plugin is notified only on file creations. Note that following for changes is more CPU intensive.
 
+> ⚠ Use add_file_name plugin if you want to add filename to events.
 
 **Reading docker container log files:**
 ```yaml
@@ -237,7 +238,10 @@ func (p *Plugin) PassEvent(event *pipeline.Event) bool {
 	job := p.jobProvider.jobs[event.SourceID]
 	p.jobProvider.jobsMu.RUnlock()
 
+	job.mu.Lock()
 	savedOffset, exist := job.offsets.get(pipeline.StreamName(event.StreamNameBytes()))
+	job.mu.Unlock()
+
 	if !exist {
 		// this is new savedOffset therefore message new as well.
 		return true

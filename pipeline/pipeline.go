@@ -111,7 +111,7 @@ type Pipeline struct {
 	readOps         atomic.Int64
 	maxSize         int
 
-	//all pipeline`s metrics
+	// all pipeline`s metrics
 
 	inUseEventsMetric          *prometheus.GaugeVec
 	eventPoolCapacityMetric    *prometheus.GaugeVec
@@ -138,7 +138,7 @@ type Settings struct {
 
 // New creates new pipeline. Consider using `SetupHTTPHandlers` next.
 func New(name string, settings *Settings, registry *prometheus.Registry) *Pipeline {
-	metricCtl := metric.New("pipeline_" + name)
+	metricCtl := metric.New("pipeline_"+name, registry)
 
 	pipeline := &Pipeline{
 		Name:           name,
@@ -516,7 +516,7 @@ func (p *Pipeline) initProcs() {
 }
 
 func (p *Pipeline) newProc() *processor {
-	proc := NewProcessor(
+	proc := newProcessor(
 		p.metricsHolder,
 		p.activeProcs,
 		p.output,

@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/ozontech/file.d/metric"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/require"
 )
 
@@ -17,7 +18,7 @@ func TestPluginsExists(t *testing.T) {
 		{
 			name: "not_exists",
 			prepareFunc: func() *Plugins {
-				return NewFilePlugins(nil, metric.New("test"))
+				return NewFilePlugins(nil, metric.New("test", prometheus.NewRegistry()))
 			},
 			search:   "somePlugin",
 			expected: false,
@@ -27,7 +28,7 @@ func TestPluginsExists(t *testing.T) {
 			prepareFunc: func() *Plugins {
 				return NewFilePlugins(map[string]Plugable{
 					"EXISTS": nil,
-				}, metric.New("test"))
+				}, metric.New("test", prometheus.NewRegistry()))
 			},
 			search:   "EXISTS",
 			expected: true,
@@ -53,7 +54,7 @@ func TestPluginsIsStatic(t *testing.T) {
 		{
 			name: "not_static",
 			prepareFunc: func() *Plugins {
-				return NewFilePlugins(nil, metric.New("test"))
+				return NewFilePlugins(nil, metric.New("test", prometheus.NewRegistry()))
 			},
 			search:   "kekw",
 			expected: false,
@@ -63,7 +64,7 @@ func TestPluginsIsStatic(t *testing.T) {
 			prepareFunc: func() *Plugins {
 				return NewFilePlugins(map[string]Plugable{
 					"plugname": nil,
-				}, metric.New("test"))
+				}, metric.New("test", prometheus.NewRegistry()))
 			},
 			search:   "plugname",
 			expected: true,
@@ -89,7 +90,7 @@ func TestPluginsIsDynamic(t *testing.T) {
 		{
 			name: "not_dynamic",
 			prepareFunc: func() *Plugins {
-				return NewFilePlugins(nil, metric.New("test"))
+				return NewFilePlugins(nil, metric.New("test", prometheus.NewRegistry()))
 			},
 			search:   "kekw",
 			expected: false,
@@ -97,7 +98,7 @@ func TestPluginsIsDynamic(t *testing.T) {
 		{
 			name: "dynamic",
 			prepareFunc: func() *Plugins {
-				plugins := NewFilePlugins(nil, metric.New("test"))
+				plugins := NewFilePlugins(nil, metric.New("test", prometheus.NewRegistry()))
 				plugins.dynamicPlugins["dynamic_plug"] = nil
 
 				return plugins
@@ -121,7 +122,7 @@ func TestPluginsExistsIsStaticIsDynamic(t *testing.T) {
 	dynamicPlug := "def"
 	plugins := NewFilePlugins(map[string]Plugable{
 		staticPlug: nil,
-	}, metric.New("test"))
+	}, metric.New("test", prometheus.NewRegistry()))
 	plugins.Add(dynamicPlug, nil)
 
 	require.True(t, plugins.Exists(staticPlug))
