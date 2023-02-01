@@ -238,7 +238,10 @@ func (p *Plugin) PassEvent(event *pipeline.Event) bool {
 	job := p.jobProvider.jobs[event.SourceID]
 	p.jobProvider.jobsMu.RUnlock()
 
+	job.mu.Lock()
 	savedOffset, exist := job.offsets.get(pipeline.StreamName(event.StreamNameBytes()))
+	job.mu.Unlock()
+
 	if !exist {
 		// this is new savedOffset therefore message new as well.
 		return true
