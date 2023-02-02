@@ -7,14 +7,7 @@ import (
 	insaneJSON "github.com/vitkovskii/insane-json"
 )
 
-type Schema struct {
-	Columns []Column `json:"columns"`
-}
-
-type Column struct {
-	Name string `json:"name"`
-	Type string `json:"type"`
-}
+//go:generate go run ./colgenerator
 
 type InsaneColumn struct {
 	Name     string
@@ -27,7 +20,7 @@ type InsaneColInput interface {
 	Reset()
 }
 
-func insaneColumns(schema Schema) ([]InsaneColumn, error) {
+func inferInsaneColInputs(schema Schema) ([]InsaneColumn, error) {
 	var columns []InsaneColumn
 	for _, col := range schema.Columns {
 		if col.Type == "" {
@@ -44,13 +37,13 @@ func insaneColumns(schema Schema) ([]InsaneColumn, error) {
 		}
 		switch auto.Data.Type() {
 		case proto.ColumnTypeString:
-			col.ColInput = StringAppender{auto.Data.(*proto.ColStr)}
+			col.ColInput = ColStr{auto.Data.(*proto.ColStr)}
 		case proto.ColumnTypeInt8:
-			col.ColInput = Int8Appender{auto.Data.(*proto.ColInt8)}
+			col.ColInput = ColInt8{auto.Data.(*proto.ColInt8)}
 		case proto.ColumnTypeInt16:
-			col.ColInput = Int16Appender{auto.Data.(*proto.ColInt16)}
+			col.ColInput = ColInt16{auto.Data.(*proto.ColInt16)}
 		case proto.ColumnTypeEnum8, proto.ColumnTypeEnum16:
-			col.ColInput = EnumAppender{auto.Data.(*proto.ColEnum)}
+			col.ColInput = ColEnum{auto.Data.(*proto.ColEnum)}
 		default:
 			panic("unimplemented")
 		}

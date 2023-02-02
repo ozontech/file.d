@@ -1,11 +1,9 @@
 package clickhouse
 
 import (
-	"context"
 	"testing"
 
 	"github.com/ClickHouse/ch-go/proto"
-	"github.com/ClickHouse/clickhouse-go/v2"
 	"github.com/stretchr/testify/require"
 )
 
@@ -15,7 +13,8 @@ func Test_parseSchema(t *testing.T) {
 			Name: "message",
 			Type: "String",
 		},
-		{ // { schema: [ {"name": "level", "type": "LowCardinality(String)"} ] ] }
+		{
+			// { schema: [ {"name": "level", "type": "LowCardinality(String)"} ] ] }
 			Name: "level",
 			Type: "LowCardinality(String)",
 		},
@@ -39,16 +38,7 @@ func Test_parseSchema(t *testing.T) {
 		},
 	}
 
-	got, err := insaneColumns(schema)
+	got, err := inferInsaneColInputs(schema)
 	require.NoError(t, err)
 	require.Equal(t, expected, got)
-}
-
-func TestClickouse(t *testing.T) {
-	opts, err := clickhouse.ParseDSN("clickhouse://localhost:9000")
-	require.NoError(t, err)
-	driver, err := clickhouse.Open(opts)
-	require.NoError(t, err)
-	err = driver.Exec(context.Background(), "insert into test3 (A,B,C,D) values($1, $2, $3, $4)", 1, 2, 3, 4)
-	require.NoError(t, err)
 }

@@ -69,6 +69,15 @@ func (s Settings) toProtoSettings() []ch.Setting {
 	return result
 }
 
+type Schema struct {
+	Columns []Column `json:"columns"`
+}
+
+type Column struct {
+	Name string `json:"name"`
+	Type string `json:"type"`
+}
+
 // ! config-params
 // ^ config-params
 type Config struct {
@@ -186,7 +195,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	if p.config.DBRequestTimeout_ < 1 {
 		p.logger.Fatal("'db_request_timeout' can't be <1")
 	}
-	if _, err := insaneColumns(p.config.Schema); err != nil {
+	if _, err := inferInsaneColInputs(p.config.Schema); err != nil {
 		p.logger.Fatalf("invalid database schema: %s", err)
 	}
 
@@ -272,7 +281,7 @@ func (p *Plugin) Out(event *pipeline.Event) {
 func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 	if *workerData == nil {
 		// we don't check the error, schema already validated in the Start
-		schema, _ := insaneColumns(p.config.Schema)
+		schema, _ := inferInsaneColInputs(p.config.Schema)
 		*workerData = schema
 	}
 
