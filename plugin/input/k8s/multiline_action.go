@@ -72,7 +72,7 @@ func (p *MultilineAction) Do(event *pipeline.Event) pipeline.ActionResult {
 		} else if !p.skipNextEvent {
 			// skip event if max_event_size is exceeded
 			p.skipNextEvent = true
-			ns, pod, _, _, _, _ := getMeta(event.SourceName)
+			ns, pod, _, _, _ := getMeta(event.SourceName)
 			p.logger.Errorf("event chunk will be discarded due to max_event_size, source_name=%s, namespace=%s, pod=%s", event.SourceName, ns, pod)
 		}
 		return pipeline.ActionCollapse
@@ -88,7 +88,7 @@ func (p *MultilineAction) Do(event *pipeline.Event) pipeline.ActionResult {
 		return pipeline.ActionDiscard
 	}
 
-	ns, pod, container, _, success, podMeta := getMeta(event.SourceName)
+	ns, pod, container, success, podMeta := getMeta(event.SourceName)
 
 	if shouldSplit {
 		p.logger.Warnf("too long k8s event found, it'll be split, ns=%s pod=%s container=%s consider increase split_event_size, split_event_size=%d, predicted event size=%d", ns, pod, container, p.config.SplitEventSize, predictedLen)

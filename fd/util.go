@@ -89,9 +89,9 @@ func extractMatchMode(actionJSON *simplejson.Json) pipeline.MatchMode {
 	return pipeline.MatchModeFromString(mm)
 }
 
-func extractMatchInvert(actionJSON *simplejson.Json) (bool, error) {
+func extractMatchInvert(actionJSON *simplejson.Json) bool {
 	invertMatchMode := actionJSON.Get("match_invert").MustBool()
-	return invertMatchMode, nil
+	return invertMatchMode
 }
 
 func extractConditions(condJSON *simplejson.Json) (pipeline.MatchConditions, error) {

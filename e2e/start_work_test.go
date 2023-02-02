@@ -12,6 +12,7 @@ import (
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/e2e/file_file"
 	"github.com/ozontech/file.d/e2e/http_file"
+	"github.com/ozontech/file.d/e2e/join_throttle"
 	"github.com/ozontech/file.d/e2e/kafka_file"
 	"github.com/ozontech/file.d/fd"
 	_ "github.com/ozontech/file.d/plugin/action/add_host"
@@ -98,6 +99,13 @@ func TestE2EStabilityWorkCase(t *testing.T) {
 				Partition: 4,
 			},
 			cfgPath: "./kafka_file/config.yml",
+		},
+		{
+			name: "join_throttle",
+			e2eTest: &join_throttle.Config{
+				Count: 1000,
+			},
+			cfgPath: "./join_throttle/config.yml",
 		},
 	}
 

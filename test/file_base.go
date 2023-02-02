@@ -2,7 +2,6 @@ package test
 
 import (
 	"bufio"
-	"log"
 	"os"
 	"path/filepath"
 	"testing"
@@ -10,6 +9,7 @@ import (
 
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // The file_base contains helpers function for testing file base output plugins
@@ -68,13 +68,14 @@ func CountLines(t *testing.T, pattern string) int {
 	lineCount := 0
 	for _, match := range matches {
 		file, err := os.Open(match)
-		if err != nil {
-			log.Fatalf("can't open file: %s", err.Error())
-		}
+		require.NoError(t, err)
+
 		fileScanner := bufio.NewScanner(file)
 		for fileScanner.Scan() {
 			lineCount++
 		}
+
+		require.NoError(t, file.Close())
 	}
 	return lineCount
 }
@@ -82,7 +83,7 @@ func CountLines(t *testing.T, pattern string) int {
 func WaitProcessEvents(t *testing.T, count int, checkInterval, maxTime time.Duration, pattern string) {
 	tf := time.Now().Add(maxTime)
 	for tf.After(time.Now()) {
-		if count == CountLines(t, pattern) {
+		if count <= CountLines(t, pattern) {
 			return
 		}
 		time.Sleep(checkInterval)
