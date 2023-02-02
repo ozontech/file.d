@@ -3,10 +3,12 @@ package pipeline
 import (
 	"fmt"
 	"reflect"
+	"strconv"
 	"strings"
 	"time"
 	"unsafe"
 
+	"github.com/ozontech/file.d/decoder"
 	insaneJSON "github.com/vitkovskii/insane-json"
 )
 
@@ -88,9 +90,43 @@ func ParseFormatName(formatName string) (string, error) {
 		return time.StampMicro, nil
 	case "stampnano":
 		return time.StampNano, nil
+	case "nginx_errorlog":
+		return decoder.NginxDateFmt, nil
 	default:
 		return "", fmt.Errorf("unknown format name %q, should be one of %s", formatName, formats)
 	}
+}
+
+func ParseTime(format, value string) (time.Time, error) {
+	if format == "timestamp" {
+		return ParseTimestamp(value)
+	}
+	return time.Parse(format, value)
+}
+
+func ParseTimestamp(value string) (time.Time, error) {
+	numbers := strings.Split(value, ".")
+	var sec, nsec int64
+	var err error
+	switch len(numbers) {
+	case 1:
+		sec, err = strconv.ParseInt(numbers[0], 10, 64)
+		if err != nil {
+			return time.Time{}, err
+		}
+	case 2:
+		sec, err = strconv.ParseInt(numbers[0], 10, 64)
+		if err != nil {
+			return time.Time{}, err
+		}
+		nsec, err = strconv.ParseInt(numbers[1], 10, 64)
+		if err != nil {
+			return time.Time{}, err
+		}
+	default:
+		return time.Time{}, fmt.Errorf("unexpected time format")
+	}
+	return time.Unix(sec, nsec), nil
 }
 
 type LogLevel int

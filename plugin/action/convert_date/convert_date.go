@@ -1,8 +1,6 @@
 package convert_date
 
 import (
-	"time"
-
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/pipeline"
@@ -87,7 +85,7 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	if isValidType {
 		date := dateNode.AsString()
 		for _, format := range p.config.SourceFormats_ {
-			t, err := time.Parse(format, date)
+			t, err := pipeline.ParseTime(format, date)
 			if err == nil {
 				if p.config.TargetFormat_ == "timestamp" {
 					dateNode.MutateToInt(int(t.Unix()))

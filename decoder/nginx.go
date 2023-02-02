@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	nginxDateFmt = "2006/01/02 15:04:05"
+	NginxDateFmt = "2006/01/02 15:04:05"
 	parseDate    = false
 )
 
@@ -33,11 +33,11 @@ func DecodeNginxError(event *insaneJSON.Root, data []byte) error {
 
 	tBuf := data[:split[1]]
 	if parseDate {
-		d, err := time.Parse(nginxDateFmt, string(tBuf))
+		d, err := time.Parse(NginxDateFmt, string(tBuf))
 		if err != nil {
 			return fmt.Errorf("date in wrong format=%s", string(tBuf))
 		}
-		tBuf = []byte(d.Format(nginxDateFmt))
+		tBuf = []byte(d.Format(NginxDateFmt))
 	}
 
 	if split[2]-split[1] < 4 {
