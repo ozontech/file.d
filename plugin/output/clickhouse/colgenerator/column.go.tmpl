@@ -35,6 +35,30 @@ type {{ $chTypeName }} struct {
 
 var _ InsaneColInput = (*{{ $chTypeName }})(nil)
 
+func New{{- $chTypeName }}(nullable bool) *{{ $chTypeName }} {
+	{{- if $type.CannotBeNull  }}
+	 return &{{ $chTypeName }}{
+        col: &{{ $chTypeRef }}{},
+    }
+	{{- else }}
+	var (
+        col *{{ $chTypeRef }}
+        nullCol {{ $chTypeNull }}
+    )
+    if !nullable {
+        col = &{{ $chTypeRef }}{}
+    } else {
+        nullCol = {{ $chTypeNull }}{}
+    }
+
+    return &{{ $chTypeName }}{
+        col: col,
+        nullCol: nullCol,
+        nullable: nullable,
+    }
+    {{- end}}
+}
+
 func (t *{{ $chTypeName }}) Append(node *insaneJSON.StrictNode) error {
 	if node == nil {
 		{{- if $type.CannotBeNull }}

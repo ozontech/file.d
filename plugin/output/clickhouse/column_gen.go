@@ -27,6 +27,24 @@ type ColStr struct {
 
 var _ InsaneColInput = (*ColStr)(nil)
 
+func NewColStr(nullable bool) *ColStr {
+	var (
+		col     *proto.ColStr
+		nullCol proto.ColNullable[string]
+	)
+	if !nullable {
+		col = &proto.ColStr{}
+	} else {
+		nullCol = proto.ColNullable[string]{}
+	}
+
+	return &ColStr{
+		col:      col,
+		nullCol:  nullCol,
+		nullable: nullable,
+	}
+}
+
 func (t *ColStr) Append(node *insaneJSON.StrictNode) error {
 	if node == nil {
 		if !t.nullable {
@@ -86,6 +104,12 @@ type ColEnum struct {
 
 var _ InsaneColInput = (*ColEnum)(nil)
 
+func NewColEnum(nullable bool) *ColEnum {
+	return &ColEnum{
+		col: &proto.ColEnum{},
+	}
+}
+
 func (t *ColEnum) Append(node *insaneJSON.StrictNode) error {
 	if node == nil {
 		return ErrNodeIsNil
@@ -127,6 +151,24 @@ type ColInt8 struct {
 }
 
 var _ InsaneColInput = (*ColInt8)(nil)
+
+func NewColInt8(nullable bool) *ColInt8 {
+	var (
+		col     *proto.ColInt8
+		nullCol proto.ColNullable[int8]
+	)
+	if !nullable {
+		col = &proto.ColInt8{}
+	} else {
+		nullCol = proto.ColNullable[int8]{}
+	}
+
+	return &ColInt8{
+		col:      col,
+		nullCol:  nullCol,
+		nullable: nullable,
+	}
+}
 
 func (t *ColInt8) Append(node *insaneJSON.StrictNode) error {
 	if node == nil {
@@ -189,6 +231,24 @@ type ColInt16 struct {
 
 var _ InsaneColInput = (*ColInt16)(nil)
 
+func NewColInt16(nullable bool) *ColInt16 {
+	var (
+		col     *proto.ColInt16
+		nullCol proto.ColNullable[int16]
+	)
+	if !nullable {
+		col = &proto.ColInt16{}
+	} else {
+		nullCol = proto.ColNullable[int16]{}
+	}
+
+	return &ColInt16{
+		col:      col,
+		nullCol:  nullCol,
+		nullable: nullable,
+	}
+}
+
 func (t *ColInt16) Append(node *insaneJSON.StrictNode) error {
 	if node == nil {
 		if !t.nullable {
@@ -249,6 +309,24 @@ type ColInt32 struct {
 }
 
 var _ InsaneColInput = (*ColInt32)(nil)
+
+func NewColInt32(nullable bool) *ColInt32 {
+	var (
+		col     *proto.ColInt32
+		nullCol proto.ColNullable[int32]
+	)
+	if !nullable {
+		col = &proto.ColInt32{}
+	} else {
+		nullCol = proto.ColNullable[int32]{}
+	}
+
+	return &ColInt32{
+		col:      col,
+		nullCol:  nullCol,
+		nullable: nullable,
+	}
+}
 
 func (t *ColInt32) Append(node *insaneJSON.StrictNode) error {
 	if node == nil {
@@ -311,6 +389,24 @@ type ColInt64 struct {
 
 var _ InsaneColInput = (*ColInt64)(nil)
 
+func NewColInt64(nullable bool) *ColInt64 {
+	var (
+		col     *proto.ColInt64
+		nullCol proto.ColNullable[int64]
+	)
+	if !nullable {
+		col = &proto.ColInt64{}
+	} else {
+		nullCol = proto.ColNullable[int64]{}
+	}
+
+	return &ColInt64{
+		col:      col,
+		nullCol:  nullCol,
+		nullable: nullable,
+	}
+}
+
 func (t *ColInt64) Append(node *insaneJSON.StrictNode) error {
 	if node == nil {
 		if !t.nullable {
@@ -371,6 +467,24 @@ type ColInt128 struct {
 }
 
 var _ InsaneColInput = (*ColInt128)(nil)
+
+func NewColInt128(nullable bool) *ColInt128 {
+	var (
+		col     *proto.ColInt128
+		nullCol proto.ColNullable[proto.Int128]
+	)
+	if !nullable {
+		col = &proto.ColInt128{}
+	} else {
+		nullCol = proto.ColNullable[proto.Int128]{}
+	}
+
+	return &ColInt128{
+		col:      col,
+		nullCol:  nullCol,
+		nullable: nullable,
+	}
+}
 
 func (t *ColInt128) Append(node *insaneJSON.StrictNode) error {
 	if node == nil {
@@ -433,6 +547,24 @@ type ColInt256 struct {
 
 var _ InsaneColInput = (*ColInt256)(nil)
 
+func NewColInt256(nullable bool) *ColInt256 {
+	var (
+		col     *proto.ColInt256
+		nullCol proto.ColNullable[proto.Int256]
+	)
+	if !nullable {
+		col = &proto.ColInt256{}
+	} else {
+		nullCol = proto.ColNullable[proto.Int256]{}
+	}
+
+	return &ColInt256{
+		col:      col,
+		nullCol:  nullCol,
+		nullable: nullable,
+	}
+}
+
 func (t *ColInt256) Append(node *insaneJSON.StrictNode) error {
 	if node == nil {
 		if !t.nullable {
@@ -493,6 +625,24 @@ type ColUInt8 struct {
 }
 
 var _ InsaneColInput = (*ColUInt8)(nil)
+
+func NewColUInt8(nullable bool) *ColUInt8 {
+	var (
+		col     *proto.ColUInt8
+		nullCol proto.ColNullable[uint8]
+	)
+	if !nullable {
+		col = &proto.ColUInt8{}
+	} else {
+		nullCol = proto.ColNullable[uint8]{}
+	}
+
+	return &ColUInt8{
+		col:      col,
+		nullCol:  nullCol,
+		nullable: nullable,
+	}
+}
 
 func (t *ColUInt8) Append(node *insaneJSON.StrictNode) error {
 	if node == nil {
@@ -555,6 +705,24 @@ type ColUInt16 struct {
 
 var _ InsaneColInput = (*ColUInt16)(nil)
 
+func NewColUInt16(nullable bool) *ColUInt16 {
+	var (
+		col     *proto.ColUInt16
+		nullCol proto.ColNullable[uint16]
+	)
+	if !nullable {
+		col = &proto.ColUInt16{}
+	} else {
+		nullCol = proto.ColNullable[uint16]{}
+	}
+
+	return &ColUInt16{
+		col:      col,
+		nullCol:  nullCol,
+		nullable: nullable,
+	}
+}
+
 func (t *ColUInt16) Append(node *insaneJSON.StrictNode) error {
 	if node == nil {
 		if !t.nullable {
@@ -615,6 +783,24 @@ type ColUInt32 struct {
 }
 
 var _ InsaneColInput = (*ColUInt32)(nil)
+
+func NewColUInt32(nullable bool) *ColUInt32 {
+	var (
+		col     *proto.ColUInt32
+		nullCol proto.ColNullable[uint32]
+	)
+	if !nullable {
+		col = &proto.ColUInt32{}
+	} else {
+		nullCol = proto.ColNullable[uint32]{}
+	}
+
+	return &ColUInt32{
+		col:      col,
+		nullCol:  nullCol,
+		nullable: nullable,
+	}
+}
 
 func (t *ColUInt32) Append(node *insaneJSON.StrictNode) error {
 	if node == nil {
@@ -677,6 +863,24 @@ type ColUInt64 struct {
 
 var _ InsaneColInput = (*ColUInt64)(nil)
 
+func NewColUInt64(nullable bool) *ColUInt64 {
+	var (
+		col     *proto.ColUInt64
+		nullCol proto.ColNullable[uint64]
+	)
+	if !nullable {
+		col = &proto.ColUInt64{}
+	} else {
+		nullCol = proto.ColNullable[uint64]{}
+	}
+
+	return &ColUInt64{
+		col:      col,
+		nullCol:  nullCol,
+		nullable: nullable,
+	}
+}
+
 func (t *ColUInt64) Append(node *insaneJSON.StrictNode) error {
 	if node == nil {
 		if !t.nullable {
@@ -737,6 +941,24 @@ type ColUInt128 struct {
 }
 
 var _ InsaneColInput = (*ColUInt128)(nil)
+
+func NewColUInt128(nullable bool) *ColUInt128 {
+	var (
+		col     *proto.ColUInt128
+		nullCol proto.ColNullable[proto.UInt128]
+	)
+	if !nullable {
+		col = &proto.ColUInt128{}
+	} else {
+		nullCol = proto.ColNullable[proto.UInt128]{}
+	}
+
+	return &ColUInt128{
+		col:      col,
+		nullCol:  nullCol,
+		nullable: nullable,
+	}
+}
 
 func (t *ColUInt128) Append(node *insaneJSON.StrictNode) error {
 	if node == nil {
@@ -799,6 +1021,24 @@ type ColUInt256 struct {
 
 var _ InsaneColInput = (*ColUInt256)(nil)
 
+func NewColUInt256(nullable bool) *ColUInt256 {
+	var (
+		col     *proto.ColUInt256
+		nullCol proto.ColNullable[proto.UInt256]
+	)
+	if !nullable {
+		col = &proto.ColUInt256{}
+	} else {
+		nullCol = proto.ColNullable[proto.UInt256]{}
+	}
+
+	return &ColUInt256{
+		col:      col,
+		nullCol:  nullCol,
+		nullable: nullable,
+	}
+}
+
 func (t *ColUInt256) Append(node *insaneJSON.StrictNode) error {
 	if node == nil {
 		if !t.nullable {
@@ -860,6 +1100,24 @@ type ColFloat32 struct {
 
 var _ InsaneColInput = (*ColFloat32)(nil)
 
+func NewColFloat32(nullable bool) *ColFloat32 {
+	var (
+		col     *proto.ColFloat32
+		nullCol proto.ColNullable[float32]
+	)
+	if !nullable {
+		col = &proto.ColFloat32{}
+	} else {
+		nullCol = proto.ColNullable[float32]{}
+	}
+
+	return &ColFloat32{
+		col:      col,
+		nullCol:  nullCol,
+		nullable: nullable,
+	}
+}
+
 func (t *ColFloat32) Append(node *insaneJSON.StrictNode) error {
 	if node == nil {
 		if !t.nullable {
@@ -920,6 +1178,24 @@ type ColFloat64 struct {
 }
 
 var _ InsaneColInput = (*ColFloat64)(nil)
+
+func NewColFloat64(nullable bool) *ColFloat64 {
+	var (
+		col     *proto.ColFloat64
+		nullCol proto.ColNullable[float64]
+	)
+	if !nullable {
+		col = &proto.ColFloat64{}
+	} else {
+		nullCol = proto.ColNullable[float64]{}
+	}
+
+	return &ColFloat64{
+		col:      col,
+		nullCol:  nullCol,
+		nullable: nullable,
+	}
+}
 
 func (t *ColFloat64) Append(node *insaneJSON.StrictNode) error {
 	if node == nil {
