@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/ClickHouse/ch-go/proto"
-	insaneJSON "github.com/vitkovskii/insane-json"
 )
 
 //go:generate go run ./colgenerator
@@ -12,12 +11,6 @@ import (
 type InsaneColumn struct {
 	Name     string
 	ColInput InsaneColInput
-}
-
-type InsaneColInput interface {
-	proto.ColInput
-	Append(node *insaneJSON.StrictNode) error
-	Reset()
 }
 
 func inferInsaneColInputs(schema Schema) ([]InsaneColumn, error) {

@@ -3,10 +3,20 @@
 package clickhouse
 
 import (
-	"fmt"
+	"errors"
 
 	"github.com/ClickHouse/ch-go/proto"
 	insaneJSON "github.com/vitkovskii/insane-json"
+)
+
+type InsaneColInput interface {
+	proto.ColInput
+	Append(node *insaneJSON.StrictNode) error
+	Reset()
+}
+
+var (
+	ErrNodeIsNil = errors.New("node is nil, but column is not")
 )
 {{- range $type := .Types }}
 {{- $chTypeName :=  printf "%s%s" "Col" $type.ProtoName }}
@@ -15,7 +25,7 @@ import (
 
 type {{ $chTypeName }} struct {
 	{{- if $type.CannotBeNull }}
-	col      *{{ $chTypeRef }}
+	col *{{ $chTypeRef }}
 	{{- else }}
 	col      *{{ $chTypeRef }}
 	nullCol  {{ $chTypeNull }}
@@ -23,13 +33,15 @@ type {{ $chTypeName }} struct {
 	{{- end }}
 }
 
+var _ InsaneColInput = (*{{ $chTypeName }})(nil)
+
 func (t *{{ $chTypeName }}) Append(node *insaneJSON.StrictNode) error {
 	if node == nil {
 		{{- if $type.CannotBeNull }}
-		return fmt.Errorf("node is nul, but column is not")
+		return ErrNodeIsNil
 		{{- else }}
 		if !t.nullable {
-			return fmt.Errorf("node is nil, but column is not")
+			return ErrNodeIsNil
 		}
 		t.nullCol.Append(proto.Null[{{- $type.GoName }}]())
 		return nil
@@ -73,5 +85,38 @@ func (t *{{ $chTypeName }}) SetNullable() {
 	{{- if not $type.CannotBeNull }}
     t.nullable = true
 	{{- end }}
+}
+
+func (t *{{ $chTypeName }}) Type() proto.ColumnType {
+    {{- if $type.CannotBeNull }}
+    return t.col.Type()
+	{{- else }}
+	if t.nullable {
+		return t.col.Type()
+	}
+	return t.nullCol.Type()
+    {{- end }}
+}
+
+func (t *{{ $chTypeName }}) Rows() int {
+    {{- if $type.CannotBeNull }}
+    return t.col.Rows()
+	{{- else }}
+	if t.nullable {
+		return t.col.Rows()
+	}
+	return t.nullCol.Rows()
+    {{- end }}
+}
+
+func (t *{{ $chTypeName }}) EncodeColumn(buffer *proto.Buffer) {
+    {{- if $type.CannotBeNull }}
+    t.col.EncodeColumn(buffer)
+	{{- else }}
+	if t.nullable {
+		t.col.EncodeColumn(buffer)
+	}
+	t.nullCol.EncodeColumn(buffer)
+    {{- end }}
 }
 {{- end }}
