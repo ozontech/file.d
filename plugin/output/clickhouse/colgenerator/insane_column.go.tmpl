@@ -35,7 +35,7 @@ var (
 	ErrNodeIsNil = errors.New("node is nil, but column is not")
 )
 
-{{ range $type := .Types }}
+{{- range $type := .Types }}
 
 {{- $chTypeName :=  printf "Col%s" $type.ProtoName }}
 {{- $chTypeRef := printf "proto.%s" $chTypeName }}
@@ -46,7 +46,7 @@ type {{ $chTypeName }} struct {
 	col *{{ $chTypeRef }}
 	{{- else }}
 	col      *{{ $chTypeRef }}
-	nullCol  {{ $chTypeNull }}
+	nullCol  *{{ $chTypeNull }}
 	nullable bool
 	{{- end }}
 }
@@ -61,7 +61,7 @@ func New{{- $chTypeName }}(nullable bool) *{{ $chTypeName }} {
 	{{- else }}
     return &{{ $chTypeName }}{
         col: &{{ $chTypeRef }}{},
-        nullCol: {{ $chTypeNull }}{},
+        nullCol: proto.NewColNullable(proto.ColumnOf[{{$type.GoName}}](&{{ $chTypeRef }}{})),
         nullable: nullable,
     }
     {{- end}}
@@ -113,20 +113,14 @@ func (t *{{ $chTypeName }}) Reset() {
 	{{- end }}
 }
 
-func (t *{{ $chTypeName }}) SetNullable() {
-	{{- if not $type.CannotBeNull }}
-    t.nullable = true
-	{{- end }}
-}
-
 func (t *{{ $chTypeName }}) Type() proto.ColumnType {
     {{- if $type.CannotBeNull }}
     return t.col.Type()
 	{{- else }}
 	if t.nullable {
-		return t.col.Type()
+		return t.nullCol.Type()
 	}
-	return t.nullCol.Type()
+	return t.col.Type()
     {{- end }}
 }
 
@@ -135,9 +129,9 @@ func (t *{{ $chTypeName }}) Rows() int {
     return t.col.Rows()
 	{{- else }}
 	if t.nullable {
-		return t.col.Rows()
+		return t.nullCol.Rows()
 	}
-	return t.nullCol.Rows()
+	return t.col.Rows()
     {{- end }}
 }
 
@@ -146,9 +140,10 @@ func (t *{{ $chTypeName }}) EncodeColumn(buffer *proto.Buffer) {
     t.col.EncodeColumn(buffer)
 	{{- else }}
 	if t.nullable {
-		t.col.EncodeColumn(buffer)
+		t.nullCol.EncodeColumn(buffer)
+		return
 	}
-	t.nullCol.EncodeColumn(buffer)
+	t.col.EncodeColumn(buffer)
     {{- end }}
 }
 {{- end }}

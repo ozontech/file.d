@@ -37,7 +37,9 @@ func (c *Config) Configure(t *testing.T, conf *cfg.Config, pipelineName string) 
 (
     c1 String,
     c2 Int8,
-    c3 Int16
+    c3 Int16,
+    c4 Nullable(Int16),
+    c5 Nullable(String)
 ) ENGINE = Memory;`})
 	require.NoError(t, err)
 
@@ -51,8 +53,9 @@ func (c *Config) Configure(t *testing.T, conf *cfg.Config, pipelineName string) 
 }
 
 var samples = [][]byte{
-	[]byte(`{ "c1": "1", "c2": 2, "c3": 3 }`),
-	[]byte(`{ "c1": "hello world", "c2": 42, "c3": 24 }`),
+	[]byte(`{ "c1": "str", "c2": 2, "c3": 3 }`),
+	[]byte(`{ "c1": "str", "c2": 42, "c3": 24 }`),
+	[]byte(`{ "c1": "str", "c2": 8, "c3": 1, "c4": null, "c5": "nullable" }`),
 }
 
 func (c *Config) Send(t *testing.T) {
@@ -80,5 +83,5 @@ func (c *Config) Validate(t *testing.T) {
 		},
 	})
 	require.NoError(t, err)
-	require.Equal(t, uint64(c.Count), cnt.Row(0))
+	require.Equal(t, c.Count, int(cnt.Row(0)))
 }

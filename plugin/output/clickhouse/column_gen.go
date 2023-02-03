@@ -65,7 +65,7 @@ var (
 
 type ColStr struct {
 	col      *proto.ColStr
-	nullCol  proto.ColNullable[string]
+	nullCol  *proto.ColNullable[string]
 	nullable bool
 }
 
@@ -74,7 +74,7 @@ var _ InsaneColInput = (*ColStr)(nil)
 func NewColStr(nullable bool) *ColStr {
 	return &ColStr{
 		col:      &proto.ColStr{},
-		nullCol:  proto.ColNullable[string]{},
+		nullCol:  proto.NewColNullable(proto.ColumnOf[string](&proto.ColStr{})),
 		nullable: nullable,
 	}
 }
@@ -107,29 +107,26 @@ func (t *ColStr) Reset() {
 	t.nullCol.Reset()
 }
 
-func (t *ColStr) SetNullable() {
-	t.nullable = true
-}
-
 func (t *ColStr) Type() proto.ColumnType {
 	if t.nullable {
-		return t.col.Type()
+		return t.nullCol.Type()
 	}
-	return t.nullCol.Type()
+	return t.col.Type()
 }
 
 func (t *ColStr) Rows() int {
 	if t.nullable {
-		return t.col.Rows()
+		return t.nullCol.Rows()
 	}
-	return t.nullCol.Rows()
+	return t.col.Rows()
 }
 
 func (t *ColStr) EncodeColumn(buffer *proto.Buffer) {
 	if t.nullable {
-		t.col.EncodeColumn(buffer)
+		t.nullCol.EncodeColumn(buffer)
+		return
 	}
-	t.nullCol.EncodeColumn(buffer)
+	t.col.EncodeColumn(buffer)
 }
 
 type ColEnum8 struct {
@@ -161,9 +158,6 @@ func (t *ColEnum8) Append(node *insaneJSON.StrictNode) error {
 
 func (t *ColEnum8) Reset() {
 	t.col.Reset()
-}
-
-func (t *ColEnum8) SetNullable() {
 }
 
 func (t *ColEnum8) Type() proto.ColumnType {
@@ -209,9 +203,6 @@ func (t *ColEnum16) Reset() {
 	t.col.Reset()
 }
 
-func (t *ColEnum16) SetNullable() {
-}
-
 func (t *ColEnum16) Type() proto.ColumnType {
 	return t.col.Type()
 }
@@ -226,7 +217,7 @@ func (t *ColEnum16) EncodeColumn(buffer *proto.Buffer) {
 
 type ColInt8 struct {
 	col      *proto.ColInt8
-	nullCol  proto.ColNullable[int8]
+	nullCol  *proto.ColNullable[int8]
 	nullable bool
 }
 
@@ -235,7 +226,7 @@ var _ InsaneColInput = (*ColInt8)(nil)
 func NewColInt8(nullable bool) *ColInt8 {
 	return &ColInt8{
 		col:      &proto.ColInt8{},
-		nullCol:  proto.ColNullable[int8]{},
+		nullCol:  proto.NewColNullable(proto.ColumnOf[int8](&proto.ColInt8{})),
 		nullable: nullable,
 	}
 }
@@ -268,34 +259,31 @@ func (t *ColInt8) Reset() {
 	t.nullCol.Reset()
 }
 
-func (t *ColInt8) SetNullable() {
-	t.nullable = true
-}
-
 func (t *ColInt8) Type() proto.ColumnType {
 	if t.nullable {
-		return t.col.Type()
+		return t.nullCol.Type()
 	}
-	return t.nullCol.Type()
+	return t.col.Type()
 }
 
 func (t *ColInt8) Rows() int {
 	if t.nullable {
-		return t.col.Rows()
+		return t.nullCol.Rows()
 	}
-	return t.nullCol.Rows()
+	return t.col.Rows()
 }
 
 func (t *ColInt8) EncodeColumn(buffer *proto.Buffer) {
 	if t.nullable {
-		t.col.EncodeColumn(buffer)
+		t.nullCol.EncodeColumn(buffer)
+		return
 	}
-	t.nullCol.EncodeColumn(buffer)
+	t.col.EncodeColumn(buffer)
 }
 
 type ColInt16 struct {
 	col      *proto.ColInt16
-	nullCol  proto.ColNullable[int16]
+	nullCol  *proto.ColNullable[int16]
 	nullable bool
 }
 
@@ -304,7 +292,7 @@ var _ InsaneColInput = (*ColInt16)(nil)
 func NewColInt16(nullable bool) *ColInt16 {
 	return &ColInt16{
 		col:      &proto.ColInt16{},
-		nullCol:  proto.ColNullable[int16]{},
+		nullCol:  proto.NewColNullable(proto.ColumnOf[int16](&proto.ColInt16{})),
 		nullable: nullable,
 	}
 }
@@ -337,34 +325,31 @@ func (t *ColInt16) Reset() {
 	t.nullCol.Reset()
 }
 
-func (t *ColInt16) SetNullable() {
-	t.nullable = true
-}
-
 func (t *ColInt16) Type() proto.ColumnType {
 	if t.nullable {
-		return t.col.Type()
+		return t.nullCol.Type()
 	}
-	return t.nullCol.Type()
+	return t.col.Type()
 }
 
 func (t *ColInt16) Rows() int {
 	if t.nullable {
-		return t.col.Rows()
+		return t.nullCol.Rows()
 	}
-	return t.nullCol.Rows()
+	return t.col.Rows()
 }
 
 func (t *ColInt16) EncodeColumn(buffer *proto.Buffer) {
 	if t.nullable {
-		t.col.EncodeColumn(buffer)
+		t.nullCol.EncodeColumn(buffer)
+		return
 	}
-	t.nullCol.EncodeColumn(buffer)
+	t.col.EncodeColumn(buffer)
 }
 
 type ColInt32 struct {
 	col      *proto.ColInt32
-	nullCol  proto.ColNullable[int32]
+	nullCol  *proto.ColNullable[int32]
 	nullable bool
 }
 
@@ -373,7 +358,7 @@ var _ InsaneColInput = (*ColInt32)(nil)
 func NewColInt32(nullable bool) *ColInt32 {
 	return &ColInt32{
 		col:      &proto.ColInt32{},
-		nullCol:  proto.ColNullable[int32]{},
+		nullCol:  proto.NewColNullable(proto.ColumnOf[int32](&proto.ColInt32{})),
 		nullable: nullable,
 	}
 }
@@ -406,34 +391,31 @@ func (t *ColInt32) Reset() {
 	t.nullCol.Reset()
 }
 
-func (t *ColInt32) SetNullable() {
-	t.nullable = true
-}
-
 func (t *ColInt32) Type() proto.ColumnType {
 	if t.nullable {
-		return t.col.Type()
+		return t.nullCol.Type()
 	}
-	return t.nullCol.Type()
+	return t.col.Type()
 }
 
 func (t *ColInt32) Rows() int {
 	if t.nullable {
-		return t.col.Rows()
+		return t.nullCol.Rows()
 	}
-	return t.nullCol.Rows()
+	return t.col.Rows()
 }
 
 func (t *ColInt32) EncodeColumn(buffer *proto.Buffer) {
 	if t.nullable {
-		t.col.EncodeColumn(buffer)
+		t.nullCol.EncodeColumn(buffer)
+		return
 	}
-	t.nullCol.EncodeColumn(buffer)
+	t.col.EncodeColumn(buffer)
 }
 
 type ColInt64 struct {
 	col      *proto.ColInt64
-	nullCol  proto.ColNullable[int64]
+	nullCol  *proto.ColNullable[int64]
 	nullable bool
 }
 
@@ -442,7 +424,7 @@ var _ InsaneColInput = (*ColInt64)(nil)
 func NewColInt64(nullable bool) *ColInt64 {
 	return &ColInt64{
 		col:      &proto.ColInt64{},
-		nullCol:  proto.ColNullable[int64]{},
+		nullCol:  proto.NewColNullable(proto.ColumnOf[int64](&proto.ColInt64{})),
 		nullable: nullable,
 	}
 }
@@ -475,34 +457,31 @@ func (t *ColInt64) Reset() {
 	t.nullCol.Reset()
 }
 
-func (t *ColInt64) SetNullable() {
-	t.nullable = true
-}
-
 func (t *ColInt64) Type() proto.ColumnType {
 	if t.nullable {
-		return t.col.Type()
+		return t.nullCol.Type()
 	}
-	return t.nullCol.Type()
+	return t.col.Type()
 }
 
 func (t *ColInt64) Rows() int {
 	if t.nullable {
-		return t.col.Rows()
+		return t.nullCol.Rows()
 	}
-	return t.nullCol.Rows()
+	return t.col.Rows()
 }
 
 func (t *ColInt64) EncodeColumn(buffer *proto.Buffer) {
 	if t.nullable {
-		t.col.EncodeColumn(buffer)
+		t.nullCol.EncodeColumn(buffer)
+		return
 	}
-	t.nullCol.EncodeColumn(buffer)
+	t.col.EncodeColumn(buffer)
 }
 
 type ColInt128 struct {
 	col      *proto.ColInt128
-	nullCol  proto.ColNullable[proto.Int128]
+	nullCol  *proto.ColNullable[proto.Int128]
 	nullable bool
 }
 
@@ -511,7 +490,7 @@ var _ InsaneColInput = (*ColInt128)(nil)
 func NewColInt128(nullable bool) *ColInt128 {
 	return &ColInt128{
 		col:      &proto.ColInt128{},
-		nullCol:  proto.ColNullable[proto.Int128]{},
+		nullCol:  proto.NewColNullable(proto.ColumnOf[proto.Int128](&proto.ColInt128{})),
 		nullable: nullable,
 	}
 }
@@ -544,34 +523,31 @@ func (t *ColInt128) Reset() {
 	t.nullCol.Reset()
 }
 
-func (t *ColInt128) SetNullable() {
-	t.nullable = true
-}
-
 func (t *ColInt128) Type() proto.ColumnType {
 	if t.nullable {
-		return t.col.Type()
+		return t.nullCol.Type()
 	}
-	return t.nullCol.Type()
+	return t.col.Type()
 }
 
 func (t *ColInt128) Rows() int {
 	if t.nullable {
-		return t.col.Rows()
+		return t.nullCol.Rows()
 	}
-	return t.nullCol.Rows()
+	return t.col.Rows()
 }
 
 func (t *ColInt128) EncodeColumn(buffer *proto.Buffer) {
 	if t.nullable {
-		t.col.EncodeColumn(buffer)
+		t.nullCol.EncodeColumn(buffer)
+		return
 	}
-	t.nullCol.EncodeColumn(buffer)
+	t.col.EncodeColumn(buffer)
 }
 
 type ColInt256 struct {
 	col      *proto.ColInt256
-	nullCol  proto.ColNullable[proto.Int256]
+	nullCol  *proto.ColNullable[proto.Int256]
 	nullable bool
 }
 
@@ -580,7 +556,7 @@ var _ InsaneColInput = (*ColInt256)(nil)
 func NewColInt256(nullable bool) *ColInt256 {
 	return &ColInt256{
 		col:      &proto.ColInt256{},
-		nullCol:  proto.ColNullable[proto.Int256]{},
+		nullCol:  proto.NewColNullable(proto.ColumnOf[proto.Int256](&proto.ColInt256{})),
 		nullable: nullable,
 	}
 }
@@ -613,34 +589,31 @@ func (t *ColInt256) Reset() {
 	t.nullCol.Reset()
 }
 
-func (t *ColInt256) SetNullable() {
-	t.nullable = true
-}
-
 func (t *ColInt256) Type() proto.ColumnType {
 	if t.nullable {
-		return t.col.Type()
+		return t.nullCol.Type()
 	}
-	return t.nullCol.Type()
+	return t.col.Type()
 }
 
 func (t *ColInt256) Rows() int {
 	if t.nullable {
-		return t.col.Rows()
+		return t.nullCol.Rows()
 	}
-	return t.nullCol.Rows()
+	return t.col.Rows()
 }
 
 func (t *ColInt256) EncodeColumn(buffer *proto.Buffer) {
 	if t.nullable {
-		t.col.EncodeColumn(buffer)
+		t.nullCol.EncodeColumn(buffer)
+		return
 	}
-	t.nullCol.EncodeColumn(buffer)
+	t.col.EncodeColumn(buffer)
 }
 
 type ColUInt8 struct {
 	col      *proto.ColUInt8
-	nullCol  proto.ColNullable[uint8]
+	nullCol  *proto.ColNullable[uint8]
 	nullable bool
 }
 
@@ -649,7 +622,7 @@ var _ InsaneColInput = (*ColUInt8)(nil)
 func NewColUInt8(nullable bool) *ColUInt8 {
 	return &ColUInt8{
 		col:      &proto.ColUInt8{},
-		nullCol:  proto.ColNullable[uint8]{},
+		nullCol:  proto.NewColNullable(proto.ColumnOf[uint8](&proto.ColUInt8{})),
 		nullable: nullable,
 	}
 }
@@ -682,34 +655,31 @@ func (t *ColUInt8) Reset() {
 	t.nullCol.Reset()
 }
 
-func (t *ColUInt8) SetNullable() {
-	t.nullable = true
-}
-
 func (t *ColUInt8) Type() proto.ColumnType {
 	if t.nullable {
-		return t.col.Type()
+		return t.nullCol.Type()
 	}
-	return t.nullCol.Type()
+	return t.col.Type()
 }
 
 func (t *ColUInt8) Rows() int {
 	if t.nullable {
-		return t.col.Rows()
+		return t.nullCol.Rows()
 	}
-	return t.nullCol.Rows()
+	return t.col.Rows()
 }
 
 func (t *ColUInt8) EncodeColumn(buffer *proto.Buffer) {
 	if t.nullable {
-		t.col.EncodeColumn(buffer)
+		t.nullCol.EncodeColumn(buffer)
+		return
 	}
-	t.nullCol.EncodeColumn(buffer)
+	t.col.EncodeColumn(buffer)
 }
 
 type ColUInt16 struct {
 	col      *proto.ColUInt16
-	nullCol  proto.ColNullable[uint16]
+	nullCol  *proto.ColNullable[uint16]
 	nullable bool
 }
 
@@ -718,7 +688,7 @@ var _ InsaneColInput = (*ColUInt16)(nil)
 func NewColUInt16(nullable bool) *ColUInt16 {
 	return &ColUInt16{
 		col:      &proto.ColUInt16{},
-		nullCol:  proto.ColNullable[uint16]{},
+		nullCol:  proto.NewColNullable(proto.ColumnOf[uint16](&proto.ColUInt16{})),
 		nullable: nullable,
 	}
 }
@@ -751,34 +721,31 @@ func (t *ColUInt16) Reset() {
 	t.nullCol.Reset()
 }
 
-func (t *ColUInt16) SetNullable() {
-	t.nullable = true
-}
-
 func (t *ColUInt16) Type() proto.ColumnType {
 	if t.nullable {
-		return t.col.Type()
+		return t.nullCol.Type()
 	}
-	return t.nullCol.Type()
+	return t.col.Type()
 }
 
 func (t *ColUInt16) Rows() int {
 	if t.nullable {
-		return t.col.Rows()
+		return t.nullCol.Rows()
 	}
-	return t.nullCol.Rows()
+	return t.col.Rows()
 }
 
 func (t *ColUInt16) EncodeColumn(buffer *proto.Buffer) {
 	if t.nullable {
-		t.col.EncodeColumn(buffer)
+		t.nullCol.EncodeColumn(buffer)
+		return
 	}
-	t.nullCol.EncodeColumn(buffer)
+	t.col.EncodeColumn(buffer)
 }
 
 type ColUInt32 struct {
 	col      *proto.ColUInt32
-	nullCol  proto.ColNullable[uint32]
+	nullCol  *proto.ColNullable[uint32]
 	nullable bool
 }
 
@@ -787,7 +754,7 @@ var _ InsaneColInput = (*ColUInt32)(nil)
 func NewColUInt32(nullable bool) *ColUInt32 {
 	return &ColUInt32{
 		col:      &proto.ColUInt32{},
-		nullCol:  proto.ColNullable[uint32]{},
+		nullCol:  proto.NewColNullable(proto.ColumnOf[uint32](&proto.ColUInt32{})),
 		nullable: nullable,
 	}
 }
@@ -820,34 +787,31 @@ func (t *ColUInt32) Reset() {
 	t.nullCol.Reset()
 }
 
-func (t *ColUInt32) SetNullable() {
-	t.nullable = true
-}
-
 func (t *ColUInt32) Type() proto.ColumnType {
 	if t.nullable {
-		return t.col.Type()
+		return t.nullCol.Type()
 	}
-	return t.nullCol.Type()
+	return t.col.Type()
 }
 
 func (t *ColUInt32) Rows() int {
 	if t.nullable {
-		return t.col.Rows()
+		return t.nullCol.Rows()
 	}
-	return t.nullCol.Rows()
+	return t.col.Rows()
 }
 
 func (t *ColUInt32) EncodeColumn(buffer *proto.Buffer) {
 	if t.nullable {
-		t.col.EncodeColumn(buffer)
+		t.nullCol.EncodeColumn(buffer)
+		return
 	}
-	t.nullCol.EncodeColumn(buffer)
+	t.col.EncodeColumn(buffer)
 }
 
 type ColUInt64 struct {
 	col      *proto.ColUInt64
-	nullCol  proto.ColNullable[uint64]
+	nullCol  *proto.ColNullable[uint64]
 	nullable bool
 }
 
@@ -856,7 +820,7 @@ var _ InsaneColInput = (*ColUInt64)(nil)
 func NewColUInt64(nullable bool) *ColUInt64 {
 	return &ColUInt64{
 		col:      &proto.ColUInt64{},
-		nullCol:  proto.ColNullable[uint64]{},
+		nullCol:  proto.NewColNullable(proto.ColumnOf[uint64](&proto.ColUInt64{})),
 		nullable: nullable,
 	}
 }
@@ -889,34 +853,31 @@ func (t *ColUInt64) Reset() {
 	t.nullCol.Reset()
 }
 
-func (t *ColUInt64) SetNullable() {
-	t.nullable = true
-}
-
 func (t *ColUInt64) Type() proto.ColumnType {
 	if t.nullable {
-		return t.col.Type()
+		return t.nullCol.Type()
 	}
-	return t.nullCol.Type()
+	return t.col.Type()
 }
 
 func (t *ColUInt64) Rows() int {
 	if t.nullable {
-		return t.col.Rows()
+		return t.nullCol.Rows()
 	}
-	return t.nullCol.Rows()
+	return t.col.Rows()
 }
 
 func (t *ColUInt64) EncodeColumn(buffer *proto.Buffer) {
 	if t.nullable {
-		t.col.EncodeColumn(buffer)
+		t.nullCol.EncodeColumn(buffer)
+		return
 	}
-	t.nullCol.EncodeColumn(buffer)
+	t.col.EncodeColumn(buffer)
 }
 
 type ColUInt128 struct {
 	col      *proto.ColUInt128
-	nullCol  proto.ColNullable[proto.UInt128]
+	nullCol  *proto.ColNullable[proto.UInt128]
 	nullable bool
 }
 
@@ -925,7 +886,7 @@ var _ InsaneColInput = (*ColUInt128)(nil)
 func NewColUInt128(nullable bool) *ColUInt128 {
 	return &ColUInt128{
 		col:      &proto.ColUInt128{},
-		nullCol:  proto.ColNullable[proto.UInt128]{},
+		nullCol:  proto.NewColNullable(proto.ColumnOf[proto.UInt128](&proto.ColUInt128{})),
 		nullable: nullable,
 	}
 }
@@ -958,34 +919,31 @@ func (t *ColUInt128) Reset() {
 	t.nullCol.Reset()
 }
 
-func (t *ColUInt128) SetNullable() {
-	t.nullable = true
-}
-
 func (t *ColUInt128) Type() proto.ColumnType {
 	if t.nullable {
-		return t.col.Type()
+		return t.nullCol.Type()
 	}
-	return t.nullCol.Type()
+	return t.col.Type()
 }
 
 func (t *ColUInt128) Rows() int {
 	if t.nullable {
-		return t.col.Rows()
+		return t.nullCol.Rows()
 	}
-	return t.nullCol.Rows()
+	return t.col.Rows()
 }
 
 func (t *ColUInt128) EncodeColumn(buffer *proto.Buffer) {
 	if t.nullable {
-		t.col.EncodeColumn(buffer)
+		t.nullCol.EncodeColumn(buffer)
+		return
 	}
-	t.nullCol.EncodeColumn(buffer)
+	t.col.EncodeColumn(buffer)
 }
 
 type ColUInt256 struct {
 	col      *proto.ColUInt256
-	nullCol  proto.ColNullable[proto.UInt256]
+	nullCol  *proto.ColNullable[proto.UInt256]
 	nullable bool
 }
 
@@ -994,7 +952,7 @@ var _ InsaneColInput = (*ColUInt256)(nil)
 func NewColUInt256(nullable bool) *ColUInt256 {
 	return &ColUInt256{
 		col:      &proto.ColUInt256{},
-		nullCol:  proto.ColNullable[proto.UInt256]{},
+		nullCol:  proto.NewColNullable(proto.ColumnOf[proto.UInt256](&proto.ColUInt256{})),
 		nullable: nullable,
 	}
 }
@@ -1027,34 +985,31 @@ func (t *ColUInt256) Reset() {
 	t.nullCol.Reset()
 }
 
-func (t *ColUInt256) SetNullable() {
-	t.nullable = true
-}
-
 func (t *ColUInt256) Type() proto.ColumnType {
 	if t.nullable {
-		return t.col.Type()
+		return t.nullCol.Type()
 	}
-	return t.nullCol.Type()
+	return t.col.Type()
 }
 
 func (t *ColUInt256) Rows() int {
 	if t.nullable {
-		return t.col.Rows()
+		return t.nullCol.Rows()
 	}
-	return t.nullCol.Rows()
+	return t.col.Rows()
 }
 
 func (t *ColUInt256) EncodeColumn(buffer *proto.Buffer) {
 	if t.nullable {
-		t.col.EncodeColumn(buffer)
+		t.nullCol.EncodeColumn(buffer)
+		return
 	}
-	t.nullCol.EncodeColumn(buffer)
+	t.col.EncodeColumn(buffer)
 }
 
 type ColFloat32 struct {
 	col      *proto.ColFloat32
-	nullCol  proto.ColNullable[float32]
+	nullCol  *proto.ColNullable[float32]
 	nullable bool
 }
 
@@ -1063,7 +1018,7 @@ var _ InsaneColInput = (*ColFloat32)(nil)
 func NewColFloat32(nullable bool) *ColFloat32 {
 	return &ColFloat32{
 		col:      &proto.ColFloat32{},
-		nullCol:  proto.ColNullable[float32]{},
+		nullCol:  proto.NewColNullable(proto.ColumnOf[float32](&proto.ColFloat32{})),
 		nullable: nullable,
 	}
 }
@@ -1096,34 +1051,31 @@ func (t *ColFloat32) Reset() {
 	t.nullCol.Reset()
 }
 
-func (t *ColFloat32) SetNullable() {
-	t.nullable = true
-}
-
 func (t *ColFloat32) Type() proto.ColumnType {
 	if t.nullable {
-		return t.col.Type()
+		return t.nullCol.Type()
 	}
-	return t.nullCol.Type()
+	return t.col.Type()
 }
 
 func (t *ColFloat32) Rows() int {
 	if t.nullable {
-		return t.col.Rows()
+		return t.nullCol.Rows()
 	}
-	return t.nullCol.Rows()
+	return t.col.Rows()
 }
 
 func (t *ColFloat32) EncodeColumn(buffer *proto.Buffer) {
 	if t.nullable {
-		t.col.EncodeColumn(buffer)
+		t.nullCol.EncodeColumn(buffer)
+		return
 	}
-	t.nullCol.EncodeColumn(buffer)
+	t.col.EncodeColumn(buffer)
 }
 
 type ColFloat64 struct {
 	col      *proto.ColFloat64
-	nullCol  proto.ColNullable[float64]
+	nullCol  *proto.ColNullable[float64]
 	nullable bool
 }
 
@@ -1132,7 +1084,7 @@ var _ InsaneColInput = (*ColFloat64)(nil)
 func NewColFloat64(nullable bool) *ColFloat64 {
 	return &ColFloat64{
 		col:      &proto.ColFloat64{},
-		nullCol:  proto.ColNullable[float64]{},
+		nullCol:  proto.NewColNullable(proto.ColumnOf[float64](&proto.ColFloat64{})),
 		nullable: nullable,
 	}
 }
@@ -1165,27 +1117,24 @@ func (t *ColFloat64) Reset() {
 	t.nullCol.Reset()
 }
 
-func (t *ColFloat64) SetNullable() {
-	t.nullable = true
-}
-
 func (t *ColFloat64) Type() proto.ColumnType {
 	if t.nullable {
-		return t.col.Type()
+		return t.nullCol.Type()
 	}
-	return t.nullCol.Type()
+	return t.col.Type()
 }
 
 func (t *ColFloat64) Rows() int {
 	if t.nullable {
-		return t.col.Rows()
+		return t.nullCol.Rows()
 	}
-	return t.nullCol.Rows()
+	return t.col.Rows()
 }
 
 func (t *ColFloat64) EncodeColumn(buffer *proto.Buffer) {
 	if t.nullable {
-		t.col.EncodeColumn(buffer)
+		t.nullCol.EncodeColumn(buffer)
+		return
 	}
-	t.nullCol.EncodeColumn(buffer)
+	t.col.EncodeColumn(buffer)
 }

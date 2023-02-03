@@ -315,6 +315,6 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 		Input: queryInput,
 	})
 	if err != nil {
-		logger.Fatalf("do: %s", err.Error())
+		p.logger.Fatalf("do: %s", err.Error())
 	}
 }
