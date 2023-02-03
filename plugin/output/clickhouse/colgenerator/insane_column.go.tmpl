@@ -57,15 +57,15 @@ var _ InsaneColInput = (*{{ $chTypeName }})(nil)
 func New{{- $chTypeName }}(nullable bool) *{{ $chTypeName }} {
 	{{- if $type.CannotBeNull  }}
 	 return &{{ $chTypeName }}{
-        col: &{{ $chTypeRef }}{},
-    }
+		col: &{{ $chTypeRef }}{},
+	}
 	{{- else }}
-    return &{{ $chTypeName }}{
-        col: &{{ $chTypeRef }}{},
-        nullCol: proto.NewColNullable(proto.ColumnOf[{{$type.GoName}}](&{{ $chTypeRef }}{})),
-        nullable: nullable,
-    }
-    {{- end}}
+	return &{{ $chTypeName }}{
+		col:     &{{ $chTypeRef }}{},
+		nullCol: proto.NewColNullable(proto.ColumnOf[{{$type.GoName}}](&{{ $chTypeRef }}{})),
+		nullable: nullable,
+	}
+	{{- end}}
 }
 
 func (t *{{ $chTypeName }}) Append(node *insaneJSON.StrictNode) error {
@@ -80,12 +80,12 @@ func (t *{{ $chTypeName }}) Append(node *insaneJSON.StrictNode) error {
 		return nil
 		{{- end }}
 	}
-	{{ if $type.CannotConvert }}
+	{{ if $type.CannotConvert -}}
 	val, err := node.{{- $type.InsaneConvertFunc }}()
-    if err != nil {
+	if err != nil {
 		return err
-    }
-	{{ else }}
+	}
+	{{ else -}}
 	v, err := node.{{- $type.InsaneConvertFunc }}()
 	if err != nil {
 		return err
@@ -94,57 +94,57 @@ func (t *{{ $chTypeName }}) Append(node *insaneJSON.StrictNode) error {
 	val := {{ $type.GoName}}FromInt(v)
 	{{- else }}
 	val := {{ $type.GoName }}(v)
-	{{- end}}
 	{{- end }}
-	{{- if not $type.CannotBeNull }}
+	{{ end }}
+	{{- if not $type.CannotBeNull -}}
 	if t.nullable {
-	    t.nullCol.Append(proto.NewNullable(val))
+		t.nullCol.Append(proto.NewNullable(val))
 		return nil
 	}
 	{{- end }}
-    t.col.Append(val)
+	t.col.Append(val)
 
 	return nil
 }
 
 func (t *{{ $chTypeName }}) Reset() {
-    t.col.Reset()
+	t.col.Reset()
 	{{- if not $type.CannotBeNull }}
-    t.nullCol.Reset()
+	t.nullCol.Reset()
 	{{- end }}
 }
 
 func (t *{{ $chTypeName }}) Type() proto.ColumnType {
-    {{- if $type.CannotBeNull }}
-    return t.col.Type()
+	{{- if $type.CannotBeNull }}
+	return t.col.Type()
 	{{- else }}
 	if t.nullable {
 		return t.nullCol.Type()
 	}
 	return t.col.Type()
-    {{- end }}
+	{{- end }}
 }
 
 func (t *{{ $chTypeName }}) Rows() int {
-    {{- if $type.CannotBeNull }}
-    return t.col.Rows()
+	{{- if $type.CannotBeNull }}
+	return t.col.Rows()
 	{{- else }}
 	if t.nullable {
 		return t.nullCol.Rows()
 	}
 	return t.col.Rows()
-    {{- end }}
+	{{- end }}
 }
 
 func (t *{{ $chTypeName }}) EncodeColumn(buffer *proto.Buffer) {
-    {{- if $type.CannotBeNull }}
-    t.col.EncodeColumn(buffer)
+	{{- if $type.CannotBeNull }}
+	t.col.EncodeColumn(buffer)
 	{{- else }}
 	if t.nullable {
 		t.nullCol.EncodeColumn(buffer)
 		return
 	}
 	t.col.EncodeColumn(buffer)
-    {{- end }}
+	{{- end }}
 }
 {{- end }}

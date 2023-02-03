@@ -21,6 +21,8 @@ func insaneInfer(auto proto.ColAuto) (InsaneColInput, error) {
 	t := strings.TrimSuffix(strings.TrimPrefix(auto.Type().String(), "Nullable("), ")")
 	nullable := auto.Type().Base() == proto.ColumnTypeNullable
 	switch proto.ColumnType(t) {
+	case proto.ColumnTypeBool:
+		return NewColBool(nullable), nil
 	case proto.ColumnTypeString:
 		return NewColStr(nullable), nil
 	case proto.ColumnTypeEnum8:
@@ -64,6 +66,70 @@ var (
 	ErrNodeIsNil = errors.New("node is nil, but column is not")
 )
 
+type ColBool struct {
+	col      *proto.ColBool
+	nullCol  *proto.ColNullable[bool]
+	nullable bool
+}
+
+var _ InsaneColInput = (*ColBool)(nil)
+
+func NewColBool(nullable bool) *ColBool {
+	return &ColBool{
+		col:      &proto.ColBool{},
+		nullCol:  proto.NewColNullable(proto.ColumnOf[bool](&proto.ColBool{})),
+		nullable: nullable,
+	}
+}
+
+func (t *ColBool) Append(node *insaneJSON.StrictNode) error {
+	if node.IsNil() || node.IsNull() {
+		if !t.nullable {
+			return ErrNodeIsNil
+		}
+		t.nullCol.Append(proto.Null[bool]())
+		return nil
+	}
+	val, err := node.AsBool()
+	if err != nil {
+		return err
+	}
+	if t.nullable {
+		t.nullCol.Append(proto.NewNullable(val))
+		return nil
+	}
+	t.col.Append(val)
+
+	return nil
+}
+
+func (t *ColBool) Reset() {
+	t.col.Reset()
+	t.nullCol.Reset()
+}
+
+func (t *ColBool) Type() proto.ColumnType {
+	if t.nullable {
+		return t.nullCol.Type()
+	}
+	return t.col.Type()
+}
+
+func (t *ColBool) Rows() int {
+	if t.nullable {
+		return t.nullCol.Rows()
+	}
+	return t.col.Rows()
+}
+
+func (t *ColBool) EncodeColumn(buffer *proto.Buffer) {
+	if t.nullable {
+		t.nullCol.EncodeColumn(buffer)
+		return
+	}
+	t.col.EncodeColumn(buffer)
+}
+
 type ColStr struct {
 	col      *proto.ColStr
 	nullCol  *proto.ColNullable[string]
@@ -88,12 +154,10 @@ func (t *ColStr) Append(node *insaneJSON.StrictNode) error {
 		t.nullCol.Append(proto.Null[string]())
 		return nil
 	}
-
 	val, err := node.AsString()
 	if err != nil {
 		return err
 	}
-
 	if t.nullable {
 		t.nullCol.Append(proto.NewNullable(val))
 		return nil
@@ -146,12 +210,12 @@ func (t *ColEnum8) Append(node *insaneJSON.StrictNode) error {
 	if node.IsNil() || node.IsNull() {
 		return ErrNodeIsNil
 	}
-
 	v, err := node.AsInt()
 	if err != nil {
 		return err
 	}
 	val := proto.Enum8(v)
+
 	t.col.Append(val)
 
 	return nil
@@ -189,12 +253,12 @@ func (t *ColEnum16) Append(node *insaneJSON.StrictNode) error {
 	if node.IsNil() || node.IsNull() {
 		return ErrNodeIsNil
 	}
-
 	v, err := node.AsInt()
 	if err != nil {
 		return err
 	}
 	val := proto.Enum16(v)
+
 	t.col.Append(val)
 
 	return nil
@@ -240,7 +304,6 @@ func (t *ColInt8) Append(node *insaneJSON.StrictNode) error {
 		t.nullCol.Append(proto.Null[int8]())
 		return nil
 	}
-
 	v, err := node.AsInt()
 	if err != nil {
 		return err
@@ -306,7 +369,6 @@ func (t *ColInt16) Append(node *insaneJSON.StrictNode) error {
 		t.nullCol.Append(proto.Null[int16]())
 		return nil
 	}
-
 	v, err := node.AsInt()
 	if err != nil {
 		return err
@@ -372,7 +434,6 @@ func (t *ColInt32) Append(node *insaneJSON.StrictNode) error {
 		t.nullCol.Append(proto.Null[int32]())
 		return nil
 	}
-
 	v, err := node.AsInt()
 	if err != nil {
 		return err
@@ -438,7 +499,6 @@ func (t *ColInt64) Append(node *insaneJSON.StrictNode) error {
 		t.nullCol.Append(proto.Null[int64]())
 		return nil
 	}
-
 	v, err := node.AsInt()
 	if err != nil {
 		return err
@@ -504,7 +564,6 @@ func (t *ColInt128) Append(node *insaneJSON.StrictNode) error {
 		t.nullCol.Append(proto.Null[proto.Int128]())
 		return nil
 	}
-
 	v, err := node.AsInt()
 	if err != nil {
 		return err
@@ -570,7 +629,6 @@ func (t *ColInt256) Append(node *insaneJSON.StrictNode) error {
 		t.nullCol.Append(proto.Null[proto.Int256]())
 		return nil
 	}
-
 	v, err := node.AsInt()
 	if err != nil {
 		return err
@@ -636,7 +694,6 @@ func (t *ColUInt8) Append(node *insaneJSON.StrictNode) error {
 		t.nullCol.Append(proto.Null[uint8]())
 		return nil
 	}
-
 	v, err := node.AsInt()
 	if err != nil {
 		return err
@@ -702,7 +759,6 @@ func (t *ColUInt16) Append(node *insaneJSON.StrictNode) error {
 		t.nullCol.Append(proto.Null[uint16]())
 		return nil
 	}
-
 	v, err := node.AsInt()
 	if err != nil {
 		return err
@@ -768,7 +824,6 @@ func (t *ColUInt32) Append(node *insaneJSON.StrictNode) error {
 		t.nullCol.Append(proto.Null[uint32]())
 		return nil
 	}
-
 	v, err := node.AsInt()
 	if err != nil {
 		return err
@@ -834,7 +889,6 @@ func (t *ColUInt64) Append(node *insaneJSON.StrictNode) error {
 		t.nullCol.Append(proto.Null[uint64]())
 		return nil
 	}
-
 	v, err := node.AsInt()
 	if err != nil {
 		return err
@@ -900,7 +954,6 @@ func (t *ColUInt128) Append(node *insaneJSON.StrictNode) error {
 		t.nullCol.Append(proto.Null[proto.UInt128]())
 		return nil
 	}
-
 	v, err := node.AsInt()
 	if err != nil {
 		return err
@@ -966,7 +1019,6 @@ func (t *ColUInt256) Append(node *insaneJSON.StrictNode) error {
 		t.nullCol.Append(proto.Null[proto.UInt256]())
 		return nil
 	}
-
 	v, err := node.AsInt()
 	if err != nil {
 		return err
@@ -1032,7 +1084,6 @@ func (t *ColFloat32) Append(node *insaneJSON.StrictNode) error {
 		t.nullCol.Append(proto.Null[float32]())
 		return nil
 	}
-
 	v, err := node.AsInt()
 	if err != nil {
 		return err
@@ -1098,7 +1149,6 @@ func (t *ColFloat64) Append(node *insaneJSON.StrictNode) error {
 		t.nullCol.Append(proto.Null[float64]())
 		return nil
 	}
-
 	v, err := node.AsInt()
 	if err != nil {
 		return err

@@ -39,6 +39,12 @@ func main() {
 
 	data := TemplateData{Types: []Type{
 		{
+			ProtoName:         "Bool",
+			InsaneConvertFunc: "AsBool",
+			GoName:            "bool",
+			CannotConvert:     true,
+		},
+		{
 			ProtoName:         "Str",
 			ProtoAlias:        "String",
 			InsaneConvertFunc: "AsString",
