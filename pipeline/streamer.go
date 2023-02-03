@@ -181,7 +181,7 @@ func (s *streamer) dump() string {
 					state = "| DETACHING  |"
 				}
 
-				o += fmt.Sprintf("%d(%s) state=%s, away event id=%d, commit event id=%d, len=%d\n", stream.streamID, stream.name, state, stream.awaySeq, stream.commitSeq, stream.len)
+				o += fmt.Sprintf("%d(%s) state=%s, away event id=%d, commit event id=%d, len=%d\n", stream.streamID, stream.name, state, stream.awaySeq, stream.commitSeq.Load(), stream.len)
 			}
 		}
 
