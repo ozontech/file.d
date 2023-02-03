@@ -86,7 +86,6 @@ lint:
 mock:
 	go run github.com/golang/mock/mockgen@v1.6.0 -source=plugin/output/s3/s3.go -destination=plugin/output/s3/mock/s3.go
 	go run github.com/golang/mock/mockgen@v1.6.0 -source=plugin/output/postgres/postgres.go -destination=plugin/output/postgres/mock/postgres.go
-	go run github.com/golang/mock/mockgen@v1.6.0 -source=plugin/output/clickhouse/clickhouse.go -destination=plugin/output/clickhouse/mock/clickhouse.go
 
 .PHONY: fmt
 fmt: gen-doc mock

@@ -53,8 +53,8 @@ func (c *Config) Configure(t *testing.T, conf *cfg.Config, pipelineName string) 
 }
 
 var samples = [][]byte{
-	[]byte(`{ "c1": "str", "c2": 2, "c3": 3 }`),
-	[]byte(`{ "c1": "str", "c2": 42, "c3": 24 }`),
+	[]byte(`{ "c1": "str", "c2": 2, "c3": 3, "c4": 2, "c5": null }`),
+	[]byte(`{ "c1": "str", "c2": 42, "c3": 24, "c4": null, "c5": null }`),
 	[]byte(`{ "c1": "str", "c2": 8, "c3": 1, "c4": null, "c5": "nullable" }`),
 }
 

@@ -5,6 +5,7 @@ package clickhouse
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/ClickHouse/ch-go/proto"
 	insaneJSON "github.com/vitkovskii/insane-json"
@@ -17,9 +18,9 @@ type InsaneColInput interface {
 }
 
 func insaneInfer(auto proto.ColAuto) (InsaneColInput, error) {
-	t := auto.Type()
-	nullable := t.Base() == proto.ColumnTypeNullable
-	switch t {
+	t := strings.TrimSuffix(strings.TrimPrefix(auto.Type().String(), "Nullable("), ")")
+	nullable := auto.Type().Base() == proto.ColumnTypeNullable
+	switch proto.ColumnType(t) {
 	{{- range $type := .Types }}
 	{{ $protoTypeName := or $type.ProtoAlias $type.ProtoName -}}
 
@@ -27,7 +28,7 @@ func insaneInfer(auto proto.ColAuto) (InsaneColInput, error) {
 		return New{{ printf "Col%s" $type.ProtoName }}(nullable), nil
 	{{- end }}
 	default:
-		return nil, fmt.Errorf("inference for type %s is not supported", t.String())
+		return nil, fmt.Errorf("inference for type %s is not supported", auto.Type().String())
 	}
 }
 
@@ -68,7 +69,7 @@ func New{{- $chTypeName }}(nullable bool) *{{ $chTypeName }} {
 }
 
 func (t *{{ $chTypeName }}) Append(node *insaneJSON.StrictNode) error {
-	if node == nil {
+	if node.IsNil() || node.IsNull() {
 		{{- if $type.CannotBeNull }}
 		return ErrNodeIsNil
 		{{- else }}

@@ -14,3 +14,7 @@ pipelines:
             type: Int8
           - name: c3
             type: Int16
+          - name: c4
+            type: Nullable(Int16)
+          - name: c5
+            type: Nullable(String)

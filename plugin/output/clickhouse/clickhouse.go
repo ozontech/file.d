@@ -298,11 +298,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 
 	for _, event := range batch.Events {
 		for _, col := range input {
-			node, err := event.Root.DigStrict(col.Name)
-			if err != nil {
-				continue
-			}
-
+			node, _ := event.Root.DigStrict(col.Name)
 			if err := col.ColInput.Append(node); err != nil {
 				logger.Warnf("append: %s", err)
 			}
