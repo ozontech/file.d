@@ -4,7 +4,7 @@ pipelines:
       type: file
     output:
       type: clickhouse
-      address: 127.0.0.1:9000
+      address: 127.0.0.1:9001
       table: test_table_insert
       schema:
         columns:

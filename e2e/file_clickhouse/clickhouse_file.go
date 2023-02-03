@@ -24,7 +24,9 @@ type Config struct {
 func (c *Config) Configure(t *testing.T, conf *cfg.Config, pipelineName string) {
 	ctx := context.Background()
 
-	conn, err := ch.Dial(ctx, ch.Options{})
+	conn, err := ch.Dial(ctx, ch.Options{
+		Address: "127.0.0.1:9001",
+	})
 	require.NoError(t, err)
 	c.conn = conn
 

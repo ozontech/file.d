@@ -3,8 +3,7 @@ services:
   server:
     image: yandex/clickhouse-server
     ports:
-      - "9000:9000"
-
+      - "9000:9001"
     ulimits:
       nproc: 65535
       nofile:
