@@ -12,16 +12,22 @@ const (
 	outputFileName = "column_gen.go"
 )
 
-//go:embed column.go.tmpl
+//go:embed insane_column.go.tmpl
 var columnTemplateRaw string
 
 type Type struct {
-	ProtoName         string
+	ProtoName string
+	// 'String' has 'Str' alias in the ch-go library
+	ProtoAlias string
+	// insaneJSON.node's encode function
 	InsaneConvertFunc string
-	GoName            string
-	CannotConvert     bool
-	CannotBeNull      bool
-	IsComplexNumber   bool
+	// Go name of the type, e.g. int8, string
+	GoName string
+	// Can not cast to Go type
+	CannotConvert bool
+	CannotBeNull  bool
+	// integers with 128-256 bits
+	IsComplexNumber bool
 }
 
 type TemplateData struct {
@@ -34,16 +40,22 @@ func main() {
 	data := TemplateData{Types: []Type{
 		{
 			ProtoName:         "Str",
+			ProtoAlias:        "String",
 			InsaneConvertFunc: "AsString",
 			GoName:            "string",
 			CannotConvert:     true,
 		},
 		{
-			ProtoName:         "Enum",
-			InsaneConvertFunc: "AsString",
-			GoName:            "proto.ColEnum",
+			ProtoName:         "Enum8",
+			InsaneConvertFunc: "AsInt",
+			GoName:            "proto.Enum8",
 			CannotBeNull:      true,
-			CannotConvert:     true,
+		},
+		{
+			ProtoName:         "Enum16",
+			InsaneConvertFunc: "AsInt",
+			GoName:            "proto.Enum16",
+			CannotBeNull:      true,
 		},
 		{
 			ProtoName:         "Int8",

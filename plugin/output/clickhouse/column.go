@@ -25,22 +25,15 @@ func inferInsaneColInputs(schema Schema) ([]InsaneColumn, error) {
 			return nil, fmt.Errorf("inref: %w", err)
 		}
 
-		col := InsaneColumn{
-			Name: col.Name,
+		insaneCol, err := insaneInfer(auto)
+		if err != nil {
+			return nil, err
 		}
-		switch auto.Data.Type() {
-		case proto.ColumnTypeString:
-			col.ColInput = NewColStr(false)
-		case proto.ColumnTypeInt8:
-			col.ColInput = NewColInt8(false)
-		case proto.ColumnTypeInt16:
-			col.ColInput = NewColInt16(false)
-		case proto.ColumnTypeEnum8, proto.ColumnTypeEnum16:
-			col.ColInput = NewColEnum(false)
-		default:
-			panic("unimplemented")
-		}
-		columns = append(columns, col)
+
+		columns = append(columns, InsaneColumn{
+			Name:     col.Name,
+			ColInput: insaneCol,
+		})
 	}
 
 	return columns, nil

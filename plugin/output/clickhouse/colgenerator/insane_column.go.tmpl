@@ -4,6 +4,7 @@ package clickhouse
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/ClickHouse/ch-go/proto"
 	insaneJSON "github.com/vitkovskii/insane-json"
@@ -15,12 +16,29 @@ type InsaneColInput interface {
 	Reset()
 }
 
+func insaneInfer(auto proto.ColAuto) (InsaneColInput, error) {
+	t := auto.Type()
+	nullable := t.Base() == proto.ColumnTypeNullable
+	switch t {
+	{{- range $type := .Types }}
+	{{ $protoTypeName := or $type.ProtoAlias $type.ProtoName -}}
+
+	case {{ printf "proto.ColumnType%s" $protoTypeName  }}:
+		return New{{ printf "Col%s" $type.ProtoName }}(nullable), nil
+	{{- end }}
+	default:
+		return nil, fmt.Errorf("inference for type %s is not supported", t.String())
+	}
+}
+
 var (
 	ErrNodeIsNil = errors.New("node is nil, but column is not")
 )
-{{- range $type := .Types }}
-{{- $chTypeName :=  printf "%s%s" "Col" $type.ProtoName }}
-{{- $chTypeRef := printf "%s.%s" "proto" $chTypeName }}
+
+{{ range $type := .Types }}
+
+{{- $chTypeName :=  printf "Col%s" $type.ProtoName }}
+{{- $chTypeRef := printf "proto.%s" $chTypeName }}
 {{- $chTypeNull := printf "proto.ColNullable[%s]" $type.GoName }}
 
 type {{ $chTypeName }} struct {
@@ -41,19 +59,9 @@ func New{{- $chTypeName }}(nullable bool) *{{ $chTypeName }} {
         col: &{{ $chTypeRef }}{},
     }
 	{{- else }}
-	var (
-        col *{{ $chTypeRef }}
-        nullCol {{ $chTypeNull }}
-    )
-    if !nullable {
-        col = &{{ $chTypeRef }}{}
-    } else {
-        nullCol = {{ $chTypeNull }}{}
-    }
-
     return &{{ $chTypeName }}{
-        col: col,
-        nullCol: nullCol,
+        col: &{{ $chTypeRef }}{},
+        nullCol: {{ $chTypeNull }}{},
         nullable: nullable,
     }
     {{- end}}
