@@ -1,44 +1,59 @@
-# postgres output
-It sends the event batches to clickhouse db using ???. TODO: rewrite the instructions
+# clickhouse output
+It sends the event batches to Clickhouse database using
+[Native format](https://clickhouse.com/docs/en/interfaces/formats/#native) and
+[Native protocol](https://clickhouse.com/docs/en/interfaces/tcp/).
+
+File.d uses low level Go client - [ch-go](https://github.com/ClickHouse/ch-go) to provide these features.
 
 ### Config params
-**`strict`** *`bool`* *`default=false`* 
+**`address`** *`string`* *`required`* 
 
-In strict mode file.d will crash on events without required columns.
+TCP Clickhouse address, e.g. 127.0.0.1:9000.
 
 <br>
 
-**`conn_string`** *`string`* *`required`* 
+**`ca_cert`** *`string`* 
 
-Clickhouse connection string in DSN format.
-
-Example DSN:
-
-`user=user password=secret host=pg.example.com port=5432 dbname=mydb sslmode=disable pool_max_conns=10`
+CA certificate in PEM encoding. This can be a path or the content of the certificate.
 
 <br>
 
 **`table`** *`string`* *`required`* 
 
-Pg target table.
+Clickhouse database name to search the table.
+*`string`* *`required`* 
+
+Clickhouse target table.
 
 <br>
 
-**`columns`** *`[]ConfigColumn`* *`required`* 
+**`retry`** *`int`* *`default=10`* 
 
-Array of DB columns. Each column have:
-name, type (int, string, timestamp - which int that will be converted to timestamptz of rfc3339)
-and nullable options.
+Table schema to use [Native format](https://clickhouse.com/docs/en/interfaces/formats/#native).
+*`int`* *`default=10`* 
 
-<br>
+The level of the Compression.
+Disabled - lowest CPU overhead.
+LZ4 - medium CPU overhead.
+ZSTD - high CPU overhead.
+None - uses no compression but data has checksums.
+*`int`* *`default=10`* 
 
-**`retry`** *`int`* *`default=3`* 
-
-Retries of insertion.
+Retries of insertion. If file.d cannot insert for this number of attempts,
+file.d will fall with non-zero exit code.
 
 <br>
 
 **`retention`** *`cfg.Duration`* *`default=50ms`* 
+
+Allowing Clickhouse to discard extra data.
+If disabled and extra data found, Clickhouse throws an error and file.d will infinitely retry invalid requests.
+If you want to disable the settings, check the `keep_fields` plugin to prevent the appearance of extra data.
+*`cfg.Duration`* *`default=50ms`* 
+
+Additional settings to the Clickhouse.
+Settings list: https://clickhouse.com/docs/en/operations/settings/settings
+*`cfg.Duration`* *`default=50ms`* 
 
 Retention milliseconds for retry to DB.
 
@@ -47,12 +62,6 @@ Retention milliseconds for retry to DB.
 **`db_request_timeout`** *`cfg.Duration`* *`default=3000ms`* 
 
 Timeout for DB requests in milliseconds.
-
-<br>
-
-**`db_health_check_period`** *`cfg.Duration`* *`default=60s`* 
-
-Timeout for DB health check.
 
 <br>
 
@@ -66,9 +75,6 @@ How much workers will be instantiated to send batches.
 
 Maximum quantity of events to pack into one batch.
 
-<br>
-
-**`batch_size`** 
 <br>
 
 **`batch_size_bytes`** *`cfg.Expression`* *`default=0`* 

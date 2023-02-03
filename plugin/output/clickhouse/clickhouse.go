@@ -3,6 +3,7 @@ package clickhouse
 import (
 	"context"
 	"fmt"
+	"runtime"
 	"strings"
 	"time"
 
@@ -20,7 +21,11 @@ import (
 )
 
 /*{ introduction
-It sends the event batches to clickhouse db using clickhouse-go.
+It sends the event batches to Clickhouse database using
+[Native format](https://clickhouse.com/docs/en/interfaces/formats/#native) and
+[Native protocol](https://clickhouse.com/docs/en/interfaces/tcp/).
+
+File.d uses low level Go client - [ch-go](https://github.com/ClickHouse/ch-go) to provide these features.
 }*/
 
 const (
@@ -83,47 +88,55 @@ type Column struct {
 type Config struct {
 	// > @3@4@5@6
 	// >
-	// > ClickhouseSQL connection string in DSN format.
-	// >
-	// > Example DSN:
-	// >
-	// > `clickhouse://username:password@host1:9000,host2:9000/database?dial_timeout=200ms&max_execution_time=60&compress=true`
-	// >
-	// > Read more about the query values in the doc: https://github.com/ClickHouse/clickhouse-go#dsn
+	// > TCP Clickhouse address, e.g. 127.0.0.1:9000.
 	Address string `json:"address" required:"true"` // *
-
-	Database string
 
 	// > @3@4@5@6
 	// >
 	// > CA certificate in PEM encoding. This can be a path or the content of the certificate.
-	// > If both ca_cert and private_key are set, the server starts accepting connections in TLS mode.
 	CACert string `json:"ca_cert" default:""` // *
+
+	// > @3@4@5@6
+	// >
+	// > Clickhouse database name to search the table.
+	Database string
 
 	// > @3@4@5@6
 	// >
 	// > Clickhouse target table.
 	Table string `json:"table" required:"true"` // *
 
-	Schema Schema `json:"schema"`
-
-	Compression string `default:"none" options:"disabled|lz4|zstd|none"`
+	// > @3@4@5@6
+	// >
+	// > Table schema to use [Native format](https://clickhouse.com/docs/en/interfaces/formats/#native).
+	Schema Schema `json:"schema" required:"true"`
 
 	// > @3@4@5@6
 	// >
-	// > Retries of insertion.
-	Retry int `json:"retry" default:"5"` // *
+	// > The level of the Compression.
+	// > Disabled - lowest CPU overhead.
+	// > LZ4 - medium CPU overhead.
+	// > ZSTD - high CPU overhead.
+	// > None - uses no compression but data has checksums.
+	Compression string `default:"disabled" options:"disabled|lz4|zstd|none"`
+
+	// > @3@4@5@6
+	// >
+	// > Retries of insertion. If file.d cannot insert for this number of attempts,
+	// > file.d will fall with non-zero exit code.
+	Retry int `json:"retry" default:"10"` // *
+
 	// > @3@4@5@6
 	// >
 	// > Allowing Clickhouse to discard extra data.
 	// > If disabled and extra data found, Clickhouse throws an error and file.d will infinitely retry invalid requests.
 	// > If you want to disable the settings, check the `keep_fields` plugin to prevent the appearance of extra data.
-	SkipUnknownFields bool `json:"skip_unknown_fields" default:"true"`
+	// SkipUnknownFields bool `json:"skip_unknown_fields" default:"true"`
 
 	// > @3@4@5@6
 	// >
 	// > Additional settings to the Clickhouse.
-	// > All settings list: https://clickhouse.com/docs/en/operations/settings/settings
+	// > Settings list: https://clickhouse.com/docs/en/operations/settings/settings
 	ClickhouseSettings Settings
 
 	// > @3@4@5@6
@@ -199,59 +212,52 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		p.logger.Fatalf("invalid database schema: %s", err)
 	}
 
-	{
-		var compression ch.Compression
-		switch strings.ToLower(p.config.Compression) {
-		default:
-			fallthrough
-		case "disabled":
-			compression = ch.CompressionDisabled
-		case "lz4":
-			compression = ch.CompressionLZ4
-		case "zstd":
-			compression = ch.CompressionZSTD
-		case "none":
-			compression = ch.CompressionNone
-		}
+	var compression ch.Compression
+	switch strings.ToLower(p.config.Compression) {
+	default:
+		fallthrough
+	case "disabled":
+		compression = ch.CompressionDisabled
+	case "lz4":
+		compression = ch.CompressionLZ4
+	case "zstd":
+		compression = ch.CompressionZSTD
+	case "none":
+		compression = ch.CompressionNone
+	}
 
-		var b tls.ConfigBuilder
-		if p.config.CACert != "" {
-			b := tls.NewConfigBuilder()
-			err := b.AppendCARoot(p.config.CACert)
-			if err != nil {
-				p.logger.Fatalf("can't append CA root: %s", err.Error())
-			}
-		}
-
-		var err error
-		p.pool, err = chpool.Dial(p.ctx, chpool.Options{
-			ClientOptions: ch.Options{
-				Logger:                       p.logger.Desugar(),
-				Address:                      p.config.Address,
-				Database:                     p.config.Database,
-				User:                         "",
-				Password:                     "",
-				QuotaKey:                     "",
-				Compression:                  compression,
-				Settings:                     p.config.ClickhouseSettings.toProtoSettings(),
-				Dialer:                       nil,
-				DialTimeout:                  time.Second * 10,
-				TLS:                          b.Build(),
-				ProtocolVersion:              0,
-				HandshakeTimeout:             time.Second * 10,
-				OpenTelemetryInstrumentation: false,
-				TracerProvider:               nil,
-				MeterProvider:                nil,
-			},
-			MaxConnLifetime:   0,
-			MaxConnIdleTime:   0,
-			MaxConns:          0,
-			MinConns:          0,
-			HealthCheckPeriod: 0,
-		})
+	var b tls.ConfigBuilder
+	if p.config.CACert != "" {
+		b := tls.NewConfigBuilder()
+		err := b.AppendCARoot(p.config.CACert)
 		if err != nil {
-			p.logger.Fatalf("create clickhouse pool: %s", err)
+			p.logger.Fatalf("can't append CA root: %s", err.Error())
 		}
+	}
+
+	var err error
+	p.pool, err = chpool.Dial(p.ctx, chpool.Options{
+		ClientOptions: ch.Options{
+			Logger:           p.logger.Desugar(),
+			Address:          p.config.Address,
+			Database:         p.config.Database,
+			User:             "",
+			Password:         "",
+			QuotaKey:         "",
+			Compression:      compression,
+			Settings:         p.config.ClickhouseSettings.toProtoSettings(),
+			DialTimeout:      time.Second * 10,
+			TLS:              b.Build(),
+			HandshakeTimeout: time.Minute,
+		},
+		MaxConnLifetime:   time.Minute * 30,
+		MaxConnIdleTime:   time.Minute * 5,
+		MaxConns:          int32(runtime.GOMAXPROCS(0) * 4),
+		MinConns:          int32(runtime.GOMAXPROCS(0)),
+		HealthCheckPeriod: time.Minute,
+	})
+	if err != nil {
+		p.logger.Fatalf("create clickhouse connection pool: %s", err)
 	}
 
 	p.batcher = pipeline.NewBatcher(pipeline.BatcherOptions{
@@ -310,11 +316,25 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 			Data: input[i].ColInput,
 		})
 	}
-	err := p.pool.Do(p.ctx, ch.Query{
+
+	var err error
+	for i := 0; i < p.config.Retry; i++ {
+		err = p.do(queryInput)
+		if err == nil {
+			break
+		}
+		logger.Errorf("can't insert to the table: %s", err)
+	}
+	if err != nil {
+		p.logger.Fatalf("can't insert to the table after %d retries: %s", p.config.Retry, err.Error())
+	}
+}
+
+func (p *Plugin) do(queryInput proto.Input) error {
+	ctx, cancel := context.WithTimeout(p.ctx, p.config.DBRequestTimeout_)
+	defer cancel()
+	return p.pool.Do(ctx, ch.Query{
 		Body:  fmt.Sprintf("INSERT INTO %s VALUES", p.config.Table),
 		Input: queryInput,
 	})
-	if err != nil {
-		p.logger.Fatalf("do: %s", err.Error())
-	}
 }

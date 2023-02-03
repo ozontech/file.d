@@ -1,5 +1,13 @@
 # Output plugins
 
+## clickhouse
+It sends the event batches to Clickhouse database using
+[Native format](https://clickhouse.com/docs/en/interfaces/formats/#native) and
+[Native protocol](https://clickhouse.com/docs/en/interfaces/tcp/).
+
+File.d uses low level Go client - [ch-go](https://github.com/ClickHouse/ch-go) to provide these features.
+
+[More details...](plugin/output/clickhouse/README.md)
 ## devnull
 It provides an API to test pipelines and other plugins.
 
