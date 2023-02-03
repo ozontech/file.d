@@ -58,7 +58,7 @@ type Setting struct {
 type Settings []Setting
 
 func (s Settings) toProtoSettings() []ch.Setting {
-	var result []ch.Setting
+	result := make([]ch.Setting, 0, len(s))
 	for _, setting := range s {
 		result = append(result, ch.Setting{
 			Key:       setting.Key,

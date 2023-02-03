@@ -30,6 +30,7 @@ func (c *Config) Configure(t *testing.T, conf *cfg.Config, pipelineName string) 
 
 	err = conn.Do(ctx, ch.Query{
 		Body: `DROP TABLE IF EXISTS test_table_insert`})
+	require.NoError(t, err)
 
 	err = conn.Do(ctx, ch.Query{
 		Body: `CREATE TABLE IF NOT EXISTS test_table_insert

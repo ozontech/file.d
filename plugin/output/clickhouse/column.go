@@ -14,7 +14,7 @@ type InsaneColumn struct {
 }
 
 func inferInsaneColInputs(schema Schema) ([]InsaneColumn, error) {
-	var columns []InsaneColumn
+	columns := make([]InsaneColumn, 0, len(schema.Columns))
 	for _, col := range schema.Columns {
 		if col.Type == "" {
 			return nil, fmt.Errorf("empty column type")
