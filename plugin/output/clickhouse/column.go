@@ -30,13 +30,13 @@ func inferInsaneColInputs(schema Schema) ([]InsaneColumn, error) {
 		}
 		switch auto.Data.Type() {
 		case proto.ColumnTypeString:
-			col.ColInput = ColStr{auto.Data.(*proto.ColStr)}
+			col.ColInput = NewColStr(false)
 		case proto.ColumnTypeInt8:
-			col.ColInput = ColInt8{auto.Data.(*proto.ColInt8)}
+			col.ColInput = NewColInt8(false)
 		case proto.ColumnTypeInt16:
-			col.ColInput = ColInt16{auto.Data.(*proto.ColInt16)}
+			col.ColInput = NewColInt16(false)
 		case proto.ColumnTypeEnum8, proto.ColumnTypeEnum16:
-			col.ColInput = ColEnum{auto.Data.(*proto.ColEnum)}
+			col.ColInput = NewColEnum(false)
 		default:
 			panic("unimplemented")
 		}
