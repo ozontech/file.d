@@ -111,8 +111,8 @@ func TestE2EStabilityWorkCase(t *testing.T) {
 		},
 		{
 			name:    "file_clickhouse",
+			e2eTest: &file_clickhouse.Config{Count: 50},
 			cfgPath: "./file_clickhouse/config.yml",
-			e2eTest: &file_clickhouse.Config{Count: 10},
 		},
 	}
 
@@ -140,7 +140,7 @@ func startForTest(t *testing.T, test E2ETest, num int) *fd.FileD {
 	test.Configure(t, conf, test.name)
 
 	// for each file.d its own port
-	filed := fd.New(conf, ":808"+strconv.Itoa(num))
+	filed := fd.New(conf, ":1508"+strconv.Itoa(num))
 	filed.Start()
 	return filed
 }
