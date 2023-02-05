@@ -2,6 +2,10 @@ package kafka
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
+	"fmt"
+	"io/ioutil"
 	"strings"
 	"time"
 
@@ -88,6 +92,32 @@ type Config struct {
 	// > After this timeout the batch will be sent even if batch isn't full.
 	BatchFlushTimeout  cfg.Duration `json:"batch_flush_timeout" default:"200ms" parse:"duration"` // *
 	BatchFlushTimeout_ time.Duration
+
+	// > @3@4@5@6
+	// >
+	// > If set, the plugin will use SASL authentications mechanism.
+	SaslEnabled bool `json:"kafka_sasl_enabled" default:"false"` // *
+
+	// > @3@4@5@6
+	// >
+	// > If set, the plugin will use SASL authentications mechanism.
+	SaslUsername string `json:"kafka_sasl_username" default:"user"` // *
+
+	// > @3@4@5@6
+	// >
+	// > If set, the plugin will use SASL authentications mechanism.
+	SaslPassword string `json:"kafka_sasl_password" default:"password"` // *
+
+	// > @3@4@5@6
+	// >
+	// > If set, the plugin will use SSL connections method.
+	SaslSslEnabled bool `json:"kafka_ssl_enabled" default:"true"` // *
+
+	// > @3@4@5@6
+	// >
+	// > If SaslSslEnabled, the plugin will use path to the PEM certificate.
+	SaslPemPath string `json:"kafka_path_pem" default:"/file.d/certs"` // *
+
 }
 
 func init() {
@@ -188,6 +218,35 @@ func (p *Plugin) Stop() {
 
 func (p *Plugin) newProducer() sarama.SyncProducer {
 	config := sarama.NewConfig()
+	config.ClientID = "sasl_scram_client"
+	// kafka auth sasl
+	if p.config.SaslEnabled == true {
+		config.Net.SASL.Enable = true
+		config.Net.SASL.Handshake = true
+		config.Net.SASL.User = p.config.SaslUsername
+		config.Net.SASL.Password = p.config.SaslPassword
+		config.Net.SASL.SCRAMClientGeneratorFunc = func() sarama.SCRAMClient { return &XDGSCRAMClient{HashGeneratorFcn: SHA512} }
+		config.Net.SASL.Mechanism = sarama.SASLMechanism(sarama.SASLTypeSCRAMSHA512)
+
+		// If SSL connection - required PEM
+		if p.config.SaslSslEnabled == true {
+			certs := x509.NewCertPool()
+			pemPath := p.config.SaslPemPath
+			pemData, err := ioutil.ReadFile(pemPath)
+			if err != nil {
+				fmt.Println("Couldn't load cert: ", err.Error())
+				// Handle the error
+			}
+			certs.AppendCertsFromPEM(pemData)
+
+			config.Net.TLS.Enable = true
+			config.Net.TLS.Config = &tls.Config{
+				InsecureSkipVerify: true,
+				RootCAs:            certs,
+			}
+		}
+	}
+
 	config.Producer.Partitioner = sarama.NewRoundRobinPartitioner
 	config.Producer.Flush.Messages = p.config.BatchSize_
 	// kafka plugin itself cares for flush frequency, but we are using batcher so disable it.
