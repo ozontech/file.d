@@ -227,23 +227,23 @@ func (p *Plugin) newProducer() sarama.SyncProducer {
 		config.Net.SASL.Password = p.config.SaslPassword
 		config.Net.SASL.SCRAMClientGeneratorFunc = func() sarama.SCRAMClient { return &XDGSCRAMClient{HashGeneratorFcn: SHA512} }
 		config.Net.SASL.Mechanism = sarama.SASLMechanism(sarama.SASLTypeSCRAMSHA512)
+	}
 
-		// If SSL connection - required PEM
-		if p.config.SaslSslEnabled == true {
-			certs := x509.NewCertPool()
-			pemPath := p.config.SaslPemPath
-			pemData, err := ioutil.ReadFile(pemPath)
-			if err != nil {
-				fmt.Println("Couldn't load cert: ", err.Error())
-				// Handle the error
-			}
-			certs.AppendCertsFromPEM(pemData)
+	// kafka connect via SSL with PEM
+	if p.config.SaslSslEnabled == true {
+		certs := x509.NewCertPool()
+		pemPath := p.config.SaslPemPath
+		pemData, err := ioutil.ReadFile(pemPath)
+		if err != nil {
+			fmt.Println("Couldn't load cert: ", err.Error())
+			// Handle the error
+		}
+		certs.AppendCertsFromPEM(pemData)
 
-			config.Net.TLS.Enable = true
-			config.Net.TLS.Config = &tls.Config{
-				InsecureSkipVerify: true,
-				RootCAs:            certs,
-			}
+		config.Net.TLS.Enable = true
+		config.Net.TLS.Config = &tls.Config{
+			InsecureSkipVerify: true,
+			RootCAs:            certs,
 		}
 	}
 
