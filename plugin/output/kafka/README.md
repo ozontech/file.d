@@ -51,5 +51,41 @@ After this timeout the batch will be sent even if batch isn't full.
 
 <br>
 
+**`kafka_sasl_enabled`** *`bool`* *`default=false`* 
+
+If set, the plugin will use SASL authentications mechanism.
+
+<br>
+
+**`kafka_sasl_username`** *`string`* *`default=user`* 
+
+If set, the plugin will use SASL authentications mechanism.
+
+<br>
+
+**`kafka_sasl_password`** *`string`* *`default=password`* 
+
+If set, the plugin will use SASL authentications mechanism.
+
+<br>
+
+**`kafka_ssl_enabled`** *`bool`* *`default=true`* 
+
+If set, the plugin will use SSL connections method.
+
+<br>
+
+**`kafka_ssl_skip_verify`** *`bool`* *`default=false`* 
+
+If set, the plugin will use skip SSL verification.
+
+<br>
+
+**`kafka_path_pem`** *`string`* *`default=/file.d/certs`* 
+
+If SaslSslEnabled, the plugin will use path to the PEM certificate.
+
+<br>
+
 
 <br>*Generated using [__insane-doc__](https://github.com/vitkovskii/insane-doc)*
