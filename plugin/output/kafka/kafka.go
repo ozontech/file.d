@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
-	"fmt"
 	"io/ioutil"
 	"strings"
 	"time"
@@ -112,6 +111,11 @@ type Config struct {
 	// >
 	// > If set, the plugin will use SSL connections method.
 	SaslSslEnabled bool `json:"kafka_ssl_enabled" default:"true"` // *
+
+	// > @3@4@5@6
+	// >
+	// > If set, the plugin will use skip SSL verification.
+	SaslSslSkipVerify bool `json:"kafka_ssl_skip_verify" default:"false"` // *
 
 	// > @3@4@5@6
 	// >
@@ -235,14 +239,13 @@ func (p *Plugin) newProducer() sarama.SyncProducer {
 		pemPath := p.config.SaslPemPath
 		pemData, err := ioutil.ReadFile(pemPath)
 		if err != nil {
-			fmt.Println("Couldn't load cert: ", err.Error())
-			// Handle the error
+			p.logger.Fatalf("can't load cert: ", err.Error())
 		}
 		certs.AppendCertsFromPEM(pemData)
 
 		config.Net.TLS.Enable = true
 		config.Net.TLS.Config = &tls.Config{
-			InsecureSkipVerify: true,
+			InsecureSkipVerify: p.config.SaslSslSkipVerify,
 			RootCAs:            certs,
 		}
 	}
