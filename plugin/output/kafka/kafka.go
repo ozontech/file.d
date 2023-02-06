@@ -4,7 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
-	"io/ioutil"
+	"os"
 	"strings"
 	"time"
 
@@ -224,7 +224,7 @@ func (p *Plugin) newProducer() sarama.SyncProducer {
 	config := sarama.NewConfig()
 	config.ClientID = "sasl_scram_client"
 	// kafka auth sasl
-	if p.config.SaslEnabled == true {
+	if p.config.SaslEnabled {
 		config.Net.SASL.Enable = true
 		config.Net.SASL.Handshake = true
 		config.Net.SASL.User = p.config.SaslUsername
@@ -234,10 +234,10 @@ func (p *Plugin) newProducer() sarama.SyncProducer {
 	}
 
 	// kafka connect via SSL with PEM
-	if p.config.SaslSslEnabled == true {
+	if p.config.SaslSslEnabled {
 		certs := x509.NewCertPool()
 		pemPath := p.config.SaslPemPath
-		pemData, err := ioutil.ReadFile(pemPath)
+		pemData, err := os.ReadFile(pemPath)
 		if err != nil {
 			p.logger.Fatalf("can't load cert: ", err.Error())
 		}
