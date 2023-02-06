@@ -22,7 +22,7 @@ func inferInsaneColInputs(schema Schema) ([]InsaneColumn, error) {
 
 		auto := proto.ColAuto{}
 		if err := auto.Infer(proto.ColumnType(col.Type)); err != nil {
-			return nil, fmt.Errorf("inref: %w", err)
+			return nil, fmt.Errorf("infer: %w", err)
 		}
 
 		insaneCol, err := insaneInfer(auto)

@@ -18,42 +18,62 @@ CA certificate in PEM encoding. This can be a path or the content of the certifi
 
 <br>
 
-**`table`** *`string`* *`required`* 
+**`database`** *`string`* *`default=default`* 
 
 Clickhouse database name to search the table.
-*`string`* *`required`* 
+
+<br>
+
+**`user`** *`string`* *`default=default`* 
+
+Clickhouse database user.
+
+<br>
+
+**`password`** *`string`* 
+
+Clickhouse database password.
+
+<br>
+
+**`quota_key`** *`string`* 
+
+Clickhouse quota key.
+
+<br>
+
+**`table`** *`string`* *`required`* 
 
 Clickhouse target table.
 
 <br>
 
-**`retry`** *`int`* *`default=10`* 
+**`schema`** *`Schema`* *`required`* 
 
 Table schema to use [Native format](https://clickhouse.com/docs/en/interfaces/formats/#native).
-*`int`* *`default=10`* 
 
-The level of the Compression.
-Disabled - lowest CPU overhead.
-LZ4 - medium CPU overhead.
-ZSTD - high CPU overhead.
-None - uses no compression but data has checksums.
-*`int`* *`default=10`* 
+<br>
+
+**`retry`** *`int`* *`default=10`* 
 
 Retries of insertion. If file.d cannot insert for this number of attempts,
 file.d will fall with non-zero exit code.
 
 <br>
 
-**`retention`** *`cfg.Duration`* *`default=50ms`* 
+**`clickhouse_settings`** *`Settings`* 
 
 Allowing Clickhouse to discard extra data.
 If disabled and extra data found, Clickhouse throws an error and file.d will infinitely retry invalid requests.
 If you want to disable the settings, check the `keep_fields` plugin to prevent the appearance of extra data.
-*`cfg.Duration`* *`default=50ms`* 
+*`Settings`* 
 
 Additional settings to the Clickhouse.
 Settings list: https://clickhouse.com/docs/en/operations/settings/settings
-*`cfg.Duration`* *`default=50ms`* 
+
+<br>
+
+**`retention`** *`cfg.Duration`* *`default=50ms`* 
 
 Retention milliseconds for retry to DB.
 

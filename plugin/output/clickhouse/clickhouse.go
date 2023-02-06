@@ -3,7 +3,6 @@ package clickhouse
 import (
 	"context"
 	"fmt"
-	"runtime"
 	"strings"
 	"time"
 
@@ -99,7 +98,22 @@ type Config struct {
 	// > @3@4@5@6
 	// >
 	// > Clickhouse database name to search the table.
-	Database string
+	Database string `json:"database" default:"default"` // *
+
+	// > @3@4@5@6
+	// >
+	// > Clickhouse database user.
+	User string `json:"user" default:"default"` // *
+
+	// > @3@4@5@6
+	// >
+	// > Clickhouse database password.
+	Password string `json:"password" default:""` // *
+
+	// > @3@4@5@6
+	// >
+	// > Clickhouse quota key.
+	QuotaKey string `json:"quota_key" default:""` // *
 
 	// > @3@4@5@6
 	// >
@@ -109,7 +123,7 @@ type Config struct {
 	// > @3@4@5@6
 	// >
 	// > Table schema to use [Native format](https://clickhouse.com/docs/en/interfaces/formats/#native).
-	Schema Schema `json:"schema" required:"true"`
+	Schema Schema `json:"schema" required:"true"` // *
 
 	// > @3@4@5@6
 	// >
@@ -118,7 +132,7 @@ type Config struct {
 	// > LZ4 - medium CPU overhead.
 	// > ZSTD - high CPU overhead.
 	// > None - uses no compression but data has checksums.
-	Compression string `default:"disabled" options:"disabled|lz4|zstd|none"`
+	Compression string `default:"disabled" options:"disabled|lz4|zstd|none"` // *
 
 	// > @3@4@5@6
 	// >
@@ -137,7 +151,7 @@ type Config struct {
 	// >
 	// > Additional settings to the Clickhouse.
 	// > Settings list: https://clickhouse.com/docs/en/operations/settings/settings
-	ClickhouseSettings Settings
+	ClickhouseSettings Settings `json:"clickhouse_settings"` // *
 
 	// > @3@4@5@6
 	// >
@@ -238,12 +252,12 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	var err error
 	p.pool, err = chpool.Dial(p.ctx, chpool.Options{
 		ClientOptions: ch.Options{
-			Logger:           p.logger.Desugar(),
+			Logger:           p.logger.Desugar().Named("driver"),
 			Address:          p.config.Address,
 			Database:         p.config.Database,
-			User:             "",
-			Password:         "",
-			QuotaKey:         "",
+			User:             p.config.User,
+			Password:         p.config.Password,
+			QuotaKey:         p.config.QuotaKey,
 			Compression:      compression,
 			Settings:         p.config.ClickhouseSettings.toProtoSettings(),
 			DialTimeout:      time.Second * 10,
@@ -252,8 +266,8 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		},
 		MaxConnLifetime:   time.Minute * 30,
 		MaxConnIdleTime:   time.Minute * 5,
-		MaxConns:          int32(runtime.GOMAXPROCS(0) * 4),
-		MinConns:          int32(runtime.GOMAXPROCS(0)),
+		MaxConns:          int32(p.config.WorkersCount_),
+		MinConns:          int32(p.config.WorkersCount_),
 		HealthCheckPeriod: time.Minute,
 	})
 	if err != nil {
@@ -319,6 +333,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 		if err == nil {
 			break
 		}
+		time.Sleep(p.config.Retention_)
 		logger.Errorf("can't insert to the table: %s", err)
 	}
 	if err != nil {
