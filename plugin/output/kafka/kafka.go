@@ -2,7 +2,6 @@ package kafka
 
 import (
 	"context"
-	"crypto/tls"
 	"strings"
 	"time"
 
