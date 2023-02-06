@@ -108,7 +108,7 @@ type Config struct {
 	// > @3@4@5@6
 	// >
 	// > If set, the plugin will use SSL connections method.
-	SaslSslEnabled bool `json:"is_ssl_enabled" default:"true"` // *
+	SaslSslEnabled bool `json:"is_ssl_enabled" default:"false"` // *
 
 	// > @3@4@5@6
 	// >

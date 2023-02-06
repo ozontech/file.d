@@ -69,7 +69,7 @@ If set, the plugin will use SASL authentications mechanism.
 
 <br>
 
-**`is_ssl_enabled`** *`bool`* *`default=true`* 
+**`is_ssl_enabled`** *`bool`* *`default=false`* 
 
 If set, the plugin will use SSL connections method.
 
