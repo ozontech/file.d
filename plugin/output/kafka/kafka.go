@@ -3,8 +3,6 @@ package kafka
 import (
 	"context"
 	"crypto/tls"
-	"crypto/x509"
-	"os"
 	"strings"
 	"time"
 
@@ -13,6 +11,7 @@ import (
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/tls"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
 )
@@ -95,32 +94,32 @@ type Config struct {
 	// > @3@4@5@6
 	// >
 	// > If set, the plugin will use SASL authentications mechanism.
-	SaslEnabled bool `json:"kafka_sasl_enabled" default:"false"` // *
+	SaslEnabled bool `json:"is_sasl_enabled" default:"false"` // *
 
 	// > @3@4@5@6
 	// >
 	// > If set, the plugin will use SASL authentications mechanism.
-	SaslUsername string `json:"kafka_sasl_username" default:"user"` // *
+	SaslUsername string `json:"sasl_username" default:"user"` // *
 
 	// > @3@4@5@6
 	// >
 	// > If set, the plugin will use SASL authentications mechanism.
-	SaslPassword string `json:"kafka_sasl_password" default:"password"` // *
+	SaslPassword string `json:"sasl_password" default:"password"` // *
 
 	// > @3@4@5@6
 	// >
 	// > If set, the plugin will use SSL connections method.
-	SaslSslEnabled bool `json:"kafka_ssl_enabled" default:"true"` // *
+	SaslSslEnabled bool `json:"is_ssl_enabled" default:"true"` // *
 
 	// > @3@4@5@6
 	// >
 	// > If set, the plugin will use skip SSL verification.
-	SaslSslSkipVerify bool `json:"kafka_ssl_skip_verify" default:"false"` // *
+	SaslSslSkipVerify bool `json:"ssl_skip_verify" default:"false"` // *
 
 	// > @3@4@5@6
 	// >
 	// > If SaslSslEnabled, the plugin will use path to the PEM certificate.
-	SaslPemPath string `json:"kafka_path_pem" default:"/file.d/certs"` // *
+	SaslPem string `json:"pem_file" default:"/file.d/certs"` // *
 
 }
 
@@ -235,19 +234,13 @@ func (p *Plugin) newProducer() sarama.SyncProducer {
 
 	// kafka connect via SSL with PEM
 	if p.config.SaslSslEnabled {
-		certs := x509.NewCertPool()
-		pemPath := p.config.SaslPemPath
-		pemData, err := os.ReadFile(pemPath)
-		if err != nil {
-			p.logger.Fatalf("can't load cert: ", err.Error())
-		}
-		certs.AppendCertsFromPEM(pemData)
-
 		config.Net.TLS.Enable = true
-		config.Net.TLS.Config = &tls.Config{
-			InsecureSkipVerify: p.config.SaslSslSkipVerify,
-			RootCAs:            certs,
+
+		tlsCfg := tls.NewConfigBuilder()
+		if err := tlsCfg.AppendCARoot(p.config.SaslPem); err != nil {
+			p.logger.Fatalf("can't load cert: %s", err.Error())
 		}
+		config.Net.TLS.Config = tlsCfg.Build()
 	}
 
 	config.Producer.Partitioner = sarama.NewRoundRobinPartitioner
