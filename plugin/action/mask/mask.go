@@ -132,10 +132,6 @@ func isGroupsUnique(groups []int) bool {
 }
 
 func verifyGroupNumbers(groups []int, totalGroups int, logger *zap.SugaredLogger) []int {
-	if len(groups) == 0 {
-		logger.Fatal("groups is empty")
-	}
-
 	if !isGroupsUnique(groups) {
 		logger.Fatalf("groups numbers must be unique, groups numbers=%v", groups)
 	}

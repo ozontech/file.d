@@ -63,8 +63,6 @@ func (b *Batch) isReady() bool {
 
 type Batcher struct {
 	opts BatcherOptions
-	// todo graceful shutdown with context.
-	cancel context.CancelFunc
 
 	shouldStop atomic.Bool
 	batch      *Batch
@@ -99,22 +97,22 @@ type (
 	}
 )
 
-func NewBatcher(opts BatcherOptions) *Batcher {
+func NewBatcher(opts BatcherOptions) *Batcher { // nolint: gocritic // hugeParam is ok here
 	return &Batcher{opts: opts}
 }
 
-func (b *Batcher) Start(ctx context.Context) {
+// todo graceful shutdown with context.
+func (b *Batcher) Start(_ context.Context) {
 	b.mu = &sync.Mutex{}
 	b.seqMu = &sync.Mutex{}
 	b.cond = sync.NewCond(b.seqMu)
-	ctx, b.cancel = context.WithCancel(ctx)
 
 	b.freeBatches = make(chan *Batch, b.opts.Workers)
 	b.fullBatches = make(chan *Batch, b.opts.Workers)
 	for i := 0; i < b.opts.Workers; i++ {
 		b.freeBatches <- newBatch(b.opts.BatchSizeCount, b.opts.BatchSizeBytes, b.opts.FlushTimeout)
 		longpanic.Go(func() {
-			b.work(ctx)
+			b.work()
 		})
 	}
 
@@ -123,13 +121,13 @@ func (b *Batcher) Start(ctx context.Context) {
 
 type WorkerData any
 
-func (b *Batcher) work(ctx context.Context) {
+func (b *Batcher) work() {
 	t := time.Now()
 	events := make([]*Event, 0)
 	data := WorkerData(nil)
 	for batch := range b.fullBatches {
 		b.opts.OutFn(&data, batch)
-		events = b.commitBatch(ctx, events, batch)
+		events = b.commitBatch(events, batch)
 
 		shouldRunMaintenance := b.opts.MaintenanceFn != nil && b.opts.MaintenanceInterval != 0 && time.Since(t) > b.opts.MaintenanceInterval
 		if shouldRunMaintenance {
@@ -139,7 +137,7 @@ func (b *Batcher) work(ctx context.Context) {
 	}
 }
 
-func (b *Batcher) commitBatch(ctx context.Context, events []*Event, batch *Batch) []*Event {
+func (b *Batcher) commitBatch(events []*Event, batch *Batch) []*Event {
 	// we need to release batch first and then commit events
 	// so lets swap local slice with batch slice to avoid data copying
 	events, batch.Events = batch.Events, events

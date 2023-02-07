@@ -14,7 +14,7 @@ import (
 
 // Clone deeply copies string
 func CloneString(s string) string {
-	if len(s) == 0 {
+	if s == "" {
 		return ""
 	}
 	b := make([]byte, len(s))

@@ -88,6 +88,5 @@ func TestCompress(t *testing.T) {
 		assert.NoError(t, err)
 		err = r.Close()
 		assert.NoError(t, err)
-
 	}
 }

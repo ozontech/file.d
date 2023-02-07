@@ -38,31 +38,22 @@ func (r *PluginRegistry) GetActionByType(t string) *pipeline.PluginStaticInfo {
 }
 
 func (r *PluginRegistry) RegisterInput(info *pipeline.PluginStaticInfo) {
-	err := r.register(pipeline.PluginKindInput, info)
-	if err != nil {
-		logger.Fatalf("can't register input plugin %q: %s", info.Type, err.Error())
-	}
+	r.register(pipeline.PluginKindInput, info)
 }
 
 func (r *PluginRegistry) RegisterAction(info *pipeline.PluginStaticInfo) {
-	err := r.register(pipeline.PluginKindAction, info)
-	if err != nil {
-		logger.Fatalf("can't register action plugin %q: %s", info.Type, err.Error())
-	}
+	r.register(pipeline.PluginKindAction, info)
 }
 
 func (r *PluginRegistry) RegisterOutput(info *pipeline.PluginStaticInfo) {
-	err := r.register(pipeline.PluginKindOutput, info)
-	if err != nil {
-		logger.Fatalf("can't register output plugin %q: %s", info.Type, err.Error())
-	}
+	r.register(pipeline.PluginKindOutput, info)
 }
 
 func (r *PluginRegistry) MakeID(pluginKind pipeline.PluginKind, pluginType string) string {
 	return string(pluginKind) + "_" + pluginType
 }
 
-func (r *PluginRegistry) register(pluginKind pipeline.PluginKind, info *pipeline.PluginStaticInfo) error {
+func (r *PluginRegistry) register(pluginKind pipeline.PluginKind, info *pipeline.PluginStaticInfo) {
 	id := r.MakeID(pluginKind, info.Type)
 	_, alreadyHave := r.plugins[id]
 	if alreadyHave {
@@ -71,6 +62,4 @@ func (r *PluginRegistry) register(pluginKind pipeline.PluginKind, info *pipeline
 
 	r.plugins[id] = info
 	logger.Infof("plugin %s/%s registered", pluginKind, info.Type)
-
-	return nil
 }

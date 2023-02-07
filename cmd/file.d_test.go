@@ -104,7 +104,7 @@ func TestEndToEnd(t *testing.T) {
 		}
 
 		time.Sleep(iterationInterval)
-		if time.Now().Sub(tm) > testTime {
+		if time.Since(tm) > testTime {
 			break
 		}
 	}
@@ -124,13 +124,13 @@ func runWriter(tempDir string, files int) {
 		u1 := strings.ReplaceAll(uuid.NewV4().String(), "-", "")
 		u2 := strings.ReplaceAll(uuid.NewV4().String(), "-", "")
 		name := path.Join(tempDir, "pod_ns_container-"+u1+u2+".log")
-		file, _ := os.Create(name)
+		logFile, _ := os.Create(name)
 
 		lines := 100000
 		for l := 0; l < lines; l++ {
 			for _, line := range panicLines {
-				_, _ = file.WriteString(line)
-				_, _ = file.Write([]byte{'\n'})
+				_, _ = logFile.WriteString(line)
+				_, _ = logFile.Write([]byte{'\n'})
 			}
 
 			stream := "stderr"
@@ -139,16 +139,16 @@ func runWriter(tempDir string, files int) {
 			}
 			if rand.Int()%100 == 0 {
 				for k := 0; k < 8; k++ {
-					_, _ = file.WriteString(fmt.Sprintf(multilineJSON, stream))
-					_, _ = file.Write([]byte{'\n'})
+					_, _ = logFile.WriteString(fmt.Sprintf(multilineJSON, stream))
+					_, _ = logFile.Write([]byte{'\n'})
 				}
 			}
-			_, _ = file.WriteString(fmt.Sprintf(jsons[rand.Int()%len(jsons)], stream))
-			_, _ = file.Write([]byte{'\n'})
+			_, _ = logFile.WriteString(fmt.Sprintf(jsons[rand.Int()%len(jsons)], stream))
+			_, _ = logFile.Write([]byte{'\n'})
 		}
 
 		time.Sleep(time.Second * 1)
-		_ = file.Close()
+		_ = logFile.Close()
 		err := os.Remove(name)
 		if err != nil {
 			panic(err.Error())

@@ -87,10 +87,10 @@ func (p *Plugins) IsStatic(plugName string) bool {
 }
 
 // IsDynamic tells is plugin created from events.
-func (p *Plugins) IsDynamic(PlugName string) bool {
+func (p *Plugins) IsDynamic(plugName string) bool {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 
-	_, ok := p.dynamicPlugins[PlugName]
+	_, ok := p.dynamicPlugins[plugName]
 	return ok
 }

@@ -10,6 +10,7 @@ import (
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/tls"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
 )
@@ -88,6 +89,37 @@ type Config struct {
 	// > After this timeout the batch will be sent even if batch isn't full.
 	BatchFlushTimeout  cfg.Duration `json:"batch_flush_timeout" default:"200ms" parse:"duration"` // *
 	BatchFlushTimeout_ time.Duration
+
+	// > @3@4@5@6
+	// >
+	// > If set, the plugin will use SASL authentications mechanism.
+	SaslEnabled bool `json:"is_sasl_enabled" default:"false"` // *
+
+	// > @3@4@5@6
+	// >
+	// > If set, the plugin will use SASL authentications mechanism.
+	SaslUsername string `json:"sasl_username" default:"user"` // *
+
+	// > @3@4@5@6
+	// >
+	// > If set, the plugin will use SASL authentications mechanism.
+	SaslPassword string `json:"sasl_password" default:"password"` // *
+
+	// > @3@4@5@6
+	// >
+	// > If set, the plugin will use SSL connections method.
+	SaslSslEnabled bool `json:"is_ssl_enabled" default:"false"` // *
+
+	// > @3@4@5@6
+	// >
+	// > If set, the plugin will use skip SSL verification.
+	SaslSslSkipVerify bool `json:"ssl_skip_verify" default:"false"` // *
+
+	// > @3@4@5@6
+	// >
+	// > If SaslSslEnabled, the plugin will use path to the PEM certificate.
+	SaslPem string `json:"pem_file" default:"/file.d/certs"` // *
+
 }
 
 func init() {
@@ -188,6 +220,28 @@ func (p *Plugin) Stop() {
 
 func (p *Plugin) newProducer() sarama.SyncProducer {
 	config := sarama.NewConfig()
+	config.ClientID = "sasl_scram_client"
+	// kafka auth sasl
+	if p.config.SaslEnabled {
+		config.Net.SASL.Enable = true
+		config.Net.SASL.Handshake = true
+		config.Net.SASL.User = p.config.SaslUsername
+		config.Net.SASL.Password = p.config.SaslPassword
+		config.Net.SASL.SCRAMClientGeneratorFunc = func() sarama.SCRAMClient { return &XDGSCRAMClient{HashGeneratorFcn: SHA512} }
+		config.Net.SASL.Mechanism = sarama.SASLMechanism(sarama.SASLTypeSCRAMSHA512)
+	}
+
+	// kafka connect via SSL with PEM
+	if p.config.SaslSslEnabled {
+		config.Net.TLS.Enable = true
+
+		tlsCfg := tls.NewConfigBuilder()
+		if err := tlsCfg.AppendCARoot(p.config.SaslPem); err != nil {
+			p.logger.Fatalf("can't load cert: %s", err.Error())
+		}
+		config.Net.TLS.Config = tlsCfg.Build()
+	}
+
 	config.Producer.Partitioner = sarama.NewRoundRobinPartitioner
 	config.Producer.Flush.Messages = p.config.BatchSize_
 	// kafka plugin itself cares for flush frequency, but we are using batcher so disable it.
