@@ -12,7 +12,7 @@ import (
 )
 
 func TestConvert(t *testing.T) {
-	config := &Config{SourceFormats: []string{"rfc3339nano", "rfc3339", "ansic"}}
+	config := &Config{SourceFormats: []string{"rfc3339nano", "rfc3339", "ansic", "timestamp", "nginx_errorlog"}}
 
 	err := cfg.Parse(config, nil)
 	if err != nil {
@@ -21,7 +21,7 @@ func TestConvert(t *testing.T) {
 
 	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, config, pipeline.MatchModeAnd, nil, false))
 	wg := &sync.WaitGroup{}
-	wg.Add(1)
+	wg.Add(3)
 
 	inEvents := 0
 	input.SetInFn(func() {
@@ -35,13 +35,18 @@ func TestConvert(t *testing.T) {
 	})
 
 	input.In(0, "test.log", 0, []byte(`{"time":998578502}`))
+	input.In(0, "test.log", 0, []byte(`{"time":998578999.1346}`))
+	input.In(0, "test.log", 0, []byte(`{"time":"2022/02/07 13:06:14"}`))
 
 	wg.Wait()
 	p.Stop()
 
-	assert.Equal(t, 1, inEvents, "wrong in events count")
-	assert.Equal(t, 1, len(outEvents), "wrong out events count")
+	assert.Equal(t, 3, inEvents, "wrong in events count")
+	assert.Equal(t, 3, len(outEvents), "wrong out events count")
+
 	assert.Equal(t, `{"time":998578502}`, outEvents[0].Root.EncodeToString(), "wrong out event")
+	assert.Equal(t, `{"time":998578999}`, outEvents[1].Root.EncodeToString(), "wrong out event")
+	assert.Equal(t, `{"time":1644239174}`, outEvents[2].Root.EncodeToString(), "wrong out event")
 }
 
 func TestConvertFail(t *testing.T) {

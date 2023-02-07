@@ -27,7 +27,7 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
-	// > List of date formats to parse a field. Available list items should be one of `ansic|unixdate|rubydate|rfc822|rfc822z|rfc850|rfc1123|rfc1123z|rfc3339|rfc3339nano|kitchen|stamp|stampmilli|stampmicro|stampnano`.
+	// > List of date formats to parse a field. Available list items should be one of `ansic|unixdate|rubydate|rfc822|rfc822z|rfc850|rfc1123|rfc1123z|rfc3339|rfc3339nano|kitchen|stamp|stampmilli|stampmicro|stampnano|timestamp|nginx_errorlog`.
 	SourceFormats  []string `json:"source_formats" default:"rfc3339nano,rfc3339"` // *
 	SourceFormats_ []string
 

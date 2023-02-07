@@ -56,7 +56,10 @@ func StringToByteUnsafe(s string) (b []byte) {
 }
 */
 
-const formats = "ansic|unixdate|rubydate|rfc822|rfc822z|rfc850|rfc1123|rfc1123z|rfc3339|rfc3339nano|kitchen|stamp|stampmilli|stampmicro|stampnano"
+const (
+	formats   = "ansic|unixdate|rubydate|rfc822|rfc822z|rfc850|rfc1123|rfc1123z|rfc3339|rfc3339nano|kitchen|stamp|stampmilli|stampmicro|stampnano|timestamp|nginx_errorlog"
+	Timestamp = "timestamp"
+)
 
 func ParseFormatName(formatName string) (string, error) {
 	switch strings.ToLower(strings.TrimSpace(formatName)) {
@@ -92,19 +95,21 @@ func ParseFormatName(formatName string) (string, error) {
 		return time.StampNano, nil
 	case "nginx_errorlog":
 		return decoder.NginxDateFmt, nil
+	case Timestamp:
+		return Timestamp, nil
 	default:
 		return "", fmt.Errorf("unknown format name %q, should be one of %s", formatName, formats)
 	}
 }
 
 func ParseTime(format, value string) (time.Time, error) {
-	if format == "timestamp" {
-		return ParseTimestamp(value)
+	if format == Timestamp {
+		return parseTimestamp(value)
 	}
 	return time.Parse(format, value)
 }
 
-func ParseTimestamp(value string) (time.Time, error) {
+func parseTimestamp(value string) (time.Time, error) {
 	numbers := strings.Split(value, ".")
 	var sec, nsec int64
 	var err error
