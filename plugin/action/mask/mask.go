@@ -2,6 +2,7 @@ package mask
 
 import (
 	"regexp"
+	"strings"
 	"unicode/utf8"
 
 	"github.com/ozontech/file.d/fd"
@@ -65,6 +66,11 @@ type Config struct {
 	// > @3@4@5@6
 	// >
 	MaskAppliedValue string `json:"mask_applied_value"` // *
+
+	// > @3@4@5@6
+	// >
+	// > Lists the event fields to add to the metric.
+	MetricLabels []string `json:"mask_applied_metric_labels"` // *
 }
 
 type Mask struct {
@@ -167,7 +173,21 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 }
 
 func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
-	p.maskAppliedMetric = ctl.RegisterCounter("mask_applied_total", "Number of times mask plugin found the provided pattern")
+	uniq := make(map[string]struct{})
+	labelNames := make([]string, 0, len(p.config.MetricLabels))
+	for _, label := range p.config.MetricLabels {
+		if len(label) == 0 {
+			p.logger.Fatal("empty label name")
+		}
+		if _, ok := uniq[label]; ok {
+			p.logger.Fatal("metric labels must be unique")
+		}
+		uniq[label] = struct{}{}
+
+		labelNames = append(labelNames, label)
+	}
+
+	p.maskAppliedMetric = ctl.RegisterCounter("mask_applied_total", "Number of times mask plugin found the provided pattern", labelNames...)
 }
 
 func (p *Plugin) Stop() {
@@ -269,8 +289,19 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	if p.config.MaskAppliedField != "" && maskApplied {
 		event.Root.AddFieldNoAlloc(event.Root, p.config.MaskAppliedField).MutateToString(p.config.MaskAppliedValue)
 	}
+
 	if maskApplied {
-		p.maskAppliedMetric.WithLabelValues().Inc()
+		labelValues := make([]string, 0, len(p.config.MetricLabels))
+		for _, labelValuePath := range p.config.MetricLabels {
+			value := "not_set"
+			if node := event.Root.Dig(labelValuePath); node != nil {
+				value = strings.Clone(node.AsString())
+			}
+
+			labelValues = append(labelValues, value)
+		}
+
+		p.maskAppliedMetric.WithLabelValues(labelValues...).Inc()
 
 		if ce := p.logger.Check(zap.DebugLevel, "mask appeared to event"); ce != nil {
 			ce.Write(zap.String("event", event.Root.EncodeToString()))

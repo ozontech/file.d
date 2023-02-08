@@ -276,6 +276,7 @@ func (p *Pipeline) Start() {
 	p.logger.Infof("stating processors, count=%d", len(p.Procs))
 	for _, processor := range p.Procs {
 		processor.start(p.actionParams, p.logger)
+		processor.registerMetrics(p.metricsCtl)
 	}
 
 	p.logger.Infof("starting input plugin %q", p.inputInfo.Type)
