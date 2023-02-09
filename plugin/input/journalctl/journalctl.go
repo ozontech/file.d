@@ -120,7 +120,7 @@ func (p *Plugin) Stop() {
 }
 
 func (p *Plugin) Commit(event *pipeline.Event) {
-	p.offInfo.set(event.Root.Dig("__CURSOR").AsString())
+	p.offInfo.set(pipeline.CloneString(event.Root.Dig("__CURSOR").AsString()))
 
 	if err := offset.SaveYAML(p.config.OffsetsFile, p.offInfo); err != nil {
 		p.offsetErrorsMetric.WithLabelValues().Inc()
