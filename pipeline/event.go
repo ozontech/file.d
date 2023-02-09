@@ -41,7 +41,7 @@ const (
 	eventStageOutput    = 4
 
 	eventKindRegular int32 = 0
-	eventKindIgnore  int32 = 1
+	eventKindChild         = 1
 	eventKindTimeout int32 = 2
 	eventKindUnlock  int32 = 3
 )
@@ -114,10 +114,6 @@ func (e *Event) IsRegularKind() bool {
 	return e.kind.Load() == eventKindRegular
 }
 
-func (e *Event) SetIgnoreKind() {
-	e.kind.Swap(eventKindIgnore)
-}
-
 func (e *Event) IsUnlockKind() bool {
 	return e.kind.Load() == eventKindUnlock
 }
@@ -136,6 +132,14 @@ func (e *Event) SetTimeoutKind() {
 
 func (e *Event) IsTimeoutKind() bool {
 	return e.kind.Load() == eventKindTimeout
+}
+
+func (e *Event) SetChildKind() {
+	e.kind.Swap(eventKindChild)
+}
+
+func (e *Event) IsChildKind() bool {
+	return e.kind.Load() == eventKindChild
 }
 
 func (e *Event) parseJSON(json []byte) error {
@@ -175,8 +179,6 @@ func (e *Event) kindStr() string {
 	switch e.kind.Load() {
 	case eventKindRegular:
 		return "REGULAR"
-	case eventKindIgnore:
-		return "DEPRECATED"
 	case eventKindTimeout:
 		return "TIMEOUT"
 	default:

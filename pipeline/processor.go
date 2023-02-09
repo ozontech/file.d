@@ -4,6 +4,7 @@ import (
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/longpanic"
 	"github.com/ozontech/file.d/metric"
+	insaneJSON "github.com/vitkovskii/insane-json"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
 )
@@ -351,6 +352,13 @@ func (p *processor) Propagate(event *Event) {
 	nextActionIdx := event.action.Inc()
 	p.tryResetBusy(int(nextActionIdx - 1))
 	p.processSequence(event)
+}
+
+func (p *processor) Spawn(parent *Event, node *insaneJSON.Node) {
+	child := *parent
+	child.Root = &insaneJSON.Root{Node: node}
+	child.SetChildKind()
+	p.Propagate(&child)
 }
 
 func (p *processor) RecoverFromPanic() {

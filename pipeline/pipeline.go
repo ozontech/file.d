@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
+	insaneJSON "github.com/vitkovskii/insane-json"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
 
@@ -53,6 +54,7 @@ type InputPluginController interface {
 type ActionPluginController interface {
 	Commit(event *Event)    // commit offset of held event and skip further processing
 	Propagate(event *Event) // throw held event back to pipeline
+	Spawn(parent *Event, node *insaneJSON.Node)
 }
 
 type OutputPluginController interface {
@@ -459,7 +461,8 @@ func (p *Pipeline) Error(err string) {
 }
 
 func (p *Pipeline) finalize(event *Event, notifyInput bool, backEvent bool) {
-	if event.IsTimeoutKind() {
+	kind := event.kind.Load()
+	if kind == eventKindTimeout || kind == eventKindChild {
 		return
 	}
 

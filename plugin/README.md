@@ -351,6 +351,31 @@ It parses HTTP input using Elasticsearch `/_bulk` API format. It converts source
 It parses string from the event field using re2 expression with named subgroups and merges the result with the event root.
 
 [More details...](plugin/action/parse_re2/README.md)
+## remap
+It splits array of objects into different events.
+
+For example:
+```json
+{
+	"data": [
+		{ "message": "go" },
+		{ "message": "rust" },
+		{ "message": "c++" }
+	]
+}
+```
+
+Remap produces:
+```json
+{ "message": "go" },
+{ "message": "rust" },
+{ "message": "c++" }
+```
+
+Parent event will be discarded.
+If the value of the JSON field is not an array of objects, then the event will be pass unchanged.
+
+[More details...](plugin/action/remap/README.md)
 ## remove_fields
 It removes the list of the event fields and keeps others.
 
