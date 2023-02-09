@@ -14,7 +14,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func setInput(p *pipeline.Pipeline, config *Config, t *testing.T) {
+func setInput(p *pipeline.Pipeline, config *Config) {
 	p.SetInput(&pipeline.InputPluginInfo{
 		PluginStaticInfo: &pipeline.PluginStaticInfo{
 			Config: config,
@@ -48,7 +48,7 @@ func TestPipeline(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"-f", "-a"}, config.JournalArgs)
 
-	setInput(p, config, t)
+	setInput(p, config)
 
 	total := 0
 	setOutput(p, func(event *pipeline.Event) {
@@ -75,7 +75,7 @@ func TestOffsets(t *testing.T) {
 	for i := 0; i < 2; i++ {
 		p := test.NewPipeline(nil, "passive")
 
-		setInput(p, config, t)
+		setInput(p, config)
 		setOutput(p, func(event *pipeline.Event) {
 			cursors[event.Root.Dig("__CURSOR").AsString()]++
 		})
