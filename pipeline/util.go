@@ -8,7 +8,6 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/ozontech/file.d/decoder"
 	insaneJSON "github.com/vitkovskii/insane-json"
 )
 
@@ -57,8 +56,9 @@ func StringToByteUnsafe(s string) (b []byte) {
 */
 
 const (
-	formats   = "ansic|unixdate|rubydate|rfc822|rfc822z|rfc850|rfc1123|rfc1123z|rfc3339|rfc3339nano|kitchen|stamp|stampmilli|stampmicro|stampnano|timestamp|nginx_errorlog"
-	Timestamp = "timestamp"
+	formats      = "ansic|unixdate|rubydate|rfc822|rfc822z|rfc850|rfc1123|rfc1123z|rfc3339|rfc3339nano|kitchen|stamp|stampmilli|stampmicro|stampnano|timestamp|nginx_errorlog"
+	UnixTime     = "unixtime"
+	nginxDateFmt = "2006/01/02 15:04:05"
 )
 
 func ParseFormatName(formatName string) (string, error) {
@@ -94,16 +94,16 @@ func ParseFormatName(formatName string) (string, error) {
 	case "stampnano":
 		return time.StampNano, nil
 	case "nginx_errorlog":
-		return decoder.NginxDateFmt, nil
-	case Timestamp:
-		return Timestamp, nil
+		return nginxDateFmt, nil
+	case UnixTime:
+		return UnixTime, nil
 	default:
 		return "", fmt.Errorf("unknown format name %q, should be one of %s", formatName, formats)
 	}
 }
 
 func ParseTime(format, value string) (time.Time, error) {
-	if format == Timestamp {
+	if format == UnixTime {
 		return parseTimestamp(value)
 	}
 	return time.Parse(format, value)

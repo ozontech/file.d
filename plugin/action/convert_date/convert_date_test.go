@@ -12,7 +12,7 @@ import (
 )
 
 func TestConvert(t *testing.T) {
-	config := &Config{SourceFormats: []string{"rfc3339nano", "rfc3339", "ansic", "timestamp", "nginx_errorlog"}}
+	config := &Config{SourceFormats: []string{"rfc3339nano", "rfc3339", "ansic", pipeline.UnixTime, "nginx_errorlog"}}
 
 	err := cfg.Parse(config, nil)
 	if err != nil {

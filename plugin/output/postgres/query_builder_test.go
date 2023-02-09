@@ -72,7 +72,7 @@ func TestNewQueryBuilderSuccess(t *testing.T) {
 				},
 				{
 					Name:       "some_timestamp_col",
-					ColumnType: "timestamp",
+					ColumnType: colTypeTimestamp,
 					Unique:     false,
 				},
 				{
@@ -103,7 +103,7 @@ func TestNewQueryBuilderSuccess(t *testing.T) {
 				},
 				{
 					Name:       "timestamp_col",
-					ColumnType: "timestamp",
+					ColumnType: colTypeTimestamp,
 					Unique:     false,
 				},
 				{
@@ -133,7 +133,7 @@ func TestNewQueryBuilderSuccess(t *testing.T) {
 				},
 				{
 					Name:       "timestamp_col",
-					ColumnType: "timestamp",
+					ColumnType: colTypeTimestamp,
 					Unique:     true,
 				},
 				{
@@ -143,7 +143,7 @@ func TestNewQueryBuilderSuccess(t *testing.T) {
 				},
 				{
 					Name:       "other_timestamp_col",
-					ColumnType: "timestamp",
+					ColumnType: colTypeTimestamp,
 					Unique:     false,
 				},
 			},
@@ -167,7 +167,7 @@ func TestNewQueryBuilderSuccess(t *testing.T) {
 				},
 				{
 					Name:       "timestamp_col",
-					ColumnType: "timestamp",
+					ColumnType: colTypeTimestamp,
 					Unique:     true,
 				},
 				{
@@ -177,7 +177,7 @@ func TestNewQueryBuilderSuccess(t *testing.T) {
 				},
 				{
 					Name:       "other_timestamp_col",
-					ColumnType: "timestamp",
+					ColumnType: colTypeTimestamp,
 					Unique:     true,
 				},
 			},
@@ -298,7 +298,7 @@ func TestGetUniqueFields(t *testing.T) {
 		},
 		{
 			Name:       "uni_timestamp_col",
-			ColumnType: "timestamp",
+			ColumnType: colTypeTimestamp,
 			Unique:     true,
 		},
 		{
