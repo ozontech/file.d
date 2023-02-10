@@ -34,16 +34,18 @@ type Event struct {
 }
 
 const (
-	eventStagePool      = 0
-	eventStageInput     = 1
-	eventStageStream    = 2
-	eventStageProcessor = 3
-	eventStageOutput    = 4
+	eventStagePool = iota
+	eventStageInput
+	eventStageStream
+	eventStageProcessor
+	eventStageOutput
+)
 
-	eventKindRegular int32 = 0
-	eventKindChild         = 1
-	eventKindTimeout int32 = 2
-	eventKindUnlock  int32 = 3
+const (
+	eventKindRegular int32 = iota
+	eventKindChild
+	eventKindTimeout
+	eventKindUnlock
 )
 
 type eventStage int
