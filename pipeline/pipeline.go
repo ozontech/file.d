@@ -52,9 +52,8 @@ type InputPluginController interface {
 }
 
 type ActionPluginController interface {
-	Commit(event *Event)    // commit offset of held event and skip further processing
 	Propagate(event *Event) // throw held event back to pipeline
-	Spawn(parent *Event, node *insaneJSON.Node)
+	Spawn(parent *Event, nodes []*insaneJSON.Node)
 }
 
 type OutputPluginController interface {
@@ -483,7 +482,7 @@ func (p *Pipeline) finalize(event *Event, notifyInput bool, backEvent bool) {
 	// todo: avoid event.stream.commit(event)
 	event.stream.commit(event)
 
-	if !backEvent {
+	if !backEvent || kind == eventKindLastChild {
 		return
 	}
 

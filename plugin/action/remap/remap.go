@@ -5,6 +5,7 @@ import (
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/plugin"
+	insaneJSON "github.com/vitkovskii/insane-json"
 	"go.uber.org/zap"
 )
 
@@ -71,27 +72,28 @@ func (p *Plugin) Stop() {
 }
 
 func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
-	node := event.Root.Dig(p.config.Field_...)
-	if !node.IsArray() {
-		p.logger.Warn("skip an event because is not an array", zap.String("type", node.TypeStr()))
+	data := event.Root.Dig(p.config.Field_...)
+	if !data.IsArray() {
+		p.logger.Warn("skip an event because is not an array", zap.String("type", data.TypeStr()))
 		return pipeline.ActionPass
 	}
 
-	var anyObject bool
-	for _, elem := range node.AsArray() {
+	nodeArray := data.AsArray()
+	dataElements := make([]*insaneJSON.Node, 0, len(nodeArray))
+	for _, elem := range nodeArray {
 		if !elem.IsObject() {
-			p.logger.Warn("skip an event because %s is not an object", zap.String("type", node.TypeStr()))
+			p.logger.Warn("skip an event because %s is not an object", zap.String("type", data.TypeStr()))
 			continue
 		}
-		anyObject = true
-		p.pluginController.Spawn(event, elem)
+		dataElements = append(dataElements, elem)
 	}
 
-	if anyObject {
-		// discard event if the array contains one or more objects
-		return pipeline.ActionDiscard
+	if len(dataElements) == 0 {
+		// zero array or an array that does not contain objects
+		return pipeline.ActionPass
 	}
 
-	// zero array or an array that does not contain objects
-	return pipeline.ActionPass
+	p.pluginController.Spawn(event, dataElements)
+
+	return pipeline.ActionDiscard
 }

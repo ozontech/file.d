@@ -13,17 +13,17 @@ type ActionResult int
 
 const (
 	// ActionPass pass event to the next action in a pipeline
-	ActionPass ActionResult = 0
+	ActionPass ActionResult = iota
 	// ActionCollapse skip further processing of event and request next event from the same stream and source as current
 	// plugin may receive event with eventKindTimeout if it takes to long to read next event from same stream
-	ActionCollapse ActionResult = 2
+	ActionCollapse
 	// ActionDiscard skip further processing of event and request next event from any stream and source
-	ActionDiscard ActionResult = 1
+	ActionDiscard
 	// ActionHold hold event in a plugin and request next event from the same stream and source as current.
 	// same as ActionCollapse but held event should be manually committed or returned into pipeline.
 	// check out Commit()/Propagate() functions in InputPluginController.
 	// plugin may receive event with eventKindTimeout if it takes to long to read next event from same stream.
-	ActionHold ActionResult = 3
+	ActionHold
 )
 
 type eventStatus string
@@ -354,11 +354,19 @@ func (p *processor) Propagate(event *Event) {
 	p.processSequence(event)
 }
 
-func (p *processor) Spawn(parent *Event, node *insaneJSON.Node) {
-	child := *parent
-	child.Root = &insaneJSON.Root{Node: node}
-	child.SetChildKind()
-	p.Propagate(&child)
+func (p *processor) Spawn(parent *Event, nodes []*insaneJSON.Node) {
+	for i, node := range nodes {
+		child := *parent
+		child.Root = &insaneJSON.Root{Node: node}
+
+		if i == len(nodes)-1 {
+			child.SetChildKind()
+		} else {
+			child.SetLastChildKind()
+		}
+
+		p.Propagate(&child)
+	}
 }
 
 func (p *processor) RecoverFromPanic() {
