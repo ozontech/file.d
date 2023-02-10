@@ -56,7 +56,7 @@ func StringToByteUnsafe(s string) (b []byte) {
 */
 
 const (
-	formats      = "ansic|unixdate|rubydate|rfc822|rfc822z|rfc850|rfc1123|rfc1123z|rfc3339|rfc3339nano|kitchen|stamp|stampmilli|stampmicro|stampnano|timestamp|nginx_errorlog"
+	formats      = "ansic|unixdate|rubydate|rfc822|rfc822z|rfc850|rfc1123|rfc1123z|rfc3339|rfc3339nano|kitchen|stamp|stampmilli|stampmicro|stampnano|unixtime|nginx_errorlog"
 	UnixTime     = "unixtime"
 	nginxDateFmt = "2006/01/02 15:04:05"
 )
@@ -104,12 +104,12 @@ func ParseFormatName(formatName string) (string, error) {
 
 func ParseTime(format, value string) (time.Time, error) {
 	if format == UnixTime {
-		return parseTimestamp(value)
+		return parseUnixTime(value)
 	}
 	return time.Parse(format, value)
 }
 
-func parseTimestamp(value string) (time.Time, error) {
+func parseUnixTime(value string) (time.Time, error) {
 	numbers := strings.Split(value, ".")
 	var sec, nsec int64
 	var err error

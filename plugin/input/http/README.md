@@ -47,7 +47,7 @@ Setup:
 ```
 # run server.
 # config.yaml should contains yaml config above.
-go run cmd/file.d.go --config=config.yaml
+go run ./cmd/file.d --config=config.yaml
 
 # now do requests.
 curl "localhost:9200/_bulk" -H 'Content-Type: application/json' -d \
