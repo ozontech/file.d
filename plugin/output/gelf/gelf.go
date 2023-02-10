@@ -103,7 +103,7 @@ type Config struct {
 	// > @3@4@5@6
 	// >
 	// > In which format timestamp field should be parsed.
-	TimestampFieldFormat string `json:"timestamp_field_format" default:"rfc3339nano" options:"ansic|unixdate|rubydate|rfc822|rfc822z|rfc850|rfc1123|rfc1123z|rfc3339|rfc3339nano|kitchen|stamp|stampmilli|stampmicro|stampnano"` // *
+	TimestampFieldFormat string `json:"timestamp_field_format" default:"rfc3339nano" options:"ansic|unixdate|rubydate|rfc822|rfc822z|rfc850|rfc1123|rfc1123z|rfc3339|rfc3339nano|kitchen|stamp|stampmilli|stampmicro|stampnano|unixtime"` // *
 
 	// > @3@4@5@6
 	// >
@@ -343,7 +343,7 @@ func (p *Plugin) makeTimestampField(root *insaneJSON.Root, timestampField string
 			ts /= 1000
 		}
 	} else if node.IsString() {
-		t, err := time.Parse(timestampFieldFormat, node.AsString())
+		t, err := pipeline.ParseTime(timestampFieldFormat, node.AsString())
 		if err == nil {
 			ts = float64(t.UnixNano()) / float64(time.Second)
 		}
