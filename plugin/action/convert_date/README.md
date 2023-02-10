@@ -10,11 +10,11 @@ The event field name which contains date information.
 
 **`source_formats`** *`[]string`* *`default=rfc3339nano,rfc3339`* 
 
-List of date formats to parse a field. Available list items should be one of `ansic|unixdate|rubydate|rfc822|rfc822z|rfc850|rfc1123|rfc1123z|rfc3339|rfc3339nano|kitchen|stamp|stampmilli|stampmicro|stampnano`.
+List of date formats to parse a field. Available list items should be one of `ansic|unixdate|rubydate|rfc822|rfc822z|rfc850|rfc1123|rfc1123z|rfc3339|rfc3339nano|kitchen|stamp|stampmilli|stampmicro|stampnano|unixtime|nginx_errorlog`.
 
 <br>
 
-**`target_format`** *`string`* *`default=timestamp`* 
+**`target_format`** *`string`* *`default=unixtime`* 
 
 Date format to convert to.
 

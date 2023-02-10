@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	miniredis "github.com/alicebob/miniredis/v2"
+	"github.com/alicebob/miniredis/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/atomic"
@@ -31,7 +31,7 @@ var formats = []string{
 	`{"time":"%s","k8s_ns":"not_matched","k8s_pod":"pod_3"}`,
 }
 
-func (c *testConfig) runPipeline(t *testing.T) {
+func (c *testConfig) runPipeline() {
 	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, c.config, pipeline.MatchModeAnd, nil, false))
 	wgWithDeadline := atomic.NewInt32(int32(c.eventsTotal))
 
@@ -103,7 +103,7 @@ func TestThrottle(t *testing.T) {
 	workTime := config.BucketInterval_ * time.Duration(iterations)
 
 	tconf := testConfig{t, config, eventsTotal, workTime}
-	tconf.runPipeline(t)
+	tconf.runPipeline()
 }
 
 func TestSizeThrottle(t *testing.T) {
@@ -140,7 +140,7 @@ func TestSizeThrottle(t *testing.T) {
 	workTime := config.BucketInterval_ * time.Duration(iterations)
 
 	tconf := testConfig{t, config, eventsTotal, workTime}
-	tconf.runPipeline(t)
+	tconf.runPipeline()
 }
 
 func TestMixedThrottle(t *testing.T) {
@@ -175,7 +175,7 @@ func TestMixedThrottle(t *testing.T) {
 	workTime := config.BucketInterval_ * time.Duration(iterations)
 
 	tconf := testConfig{t, config, eventsTotal, workTime}
-	tconf.runPipeline(t)
+	tconf.runPipeline()
 }
 
 func TestRedisThrottle(t *testing.T) {

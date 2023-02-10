@@ -80,7 +80,7 @@ type Config struct {
 	// > @3@4@5@6
 	// >
 	// > It defines how to parse the time field format.
-	TimeFieldFormat string `json:"time_field_format" default:"rfc3339nano" options:"ansic|unixdate|rubydate|rfc822|rfc822z|rfc850|rfc1123|rfc1123z|rfc3339|rfc3339nano|kitchen|stamp|stampmilli|stampmicro|stampnano"` // *
+	TimeFieldFormat string `json:"time_field_format" default:"rfc3339nano" options:"ansic|unixdate|rubydate|rfc822|rfc822z|rfc850|rfc1123|rfc1123z|rfc3339|rfc3339nano|kitchen|stamp|stampmilli|stampmicro|stampnano|unixtime|nginx_errorlog"` // *
 
 	// > @3@4@5@6
 	// >
@@ -323,7 +323,7 @@ func (p *Plugin) isAllowed(event *pipeline.Event) bool {
 
 	if len(p.config.TimeField_) != 0 {
 		tsValue := event.Root.Dig(p.config.TimeField_...).AsString()
-		t, err := time.Parse(p.format, tsValue)
+		t, err := pipeline.ParseTime(p.format, tsValue)
 		if err != nil || ts.IsZero() {
 			p.logger.Warnf("can't parse field %q using format %s: %s", p.config.TimeField, p.config.TimeFieldFormat, tsValue)
 		} else {
