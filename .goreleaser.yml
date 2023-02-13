@@ -16,7 +16,7 @@ archives:
       amd64: x86_64
 
 builds:
-  - main: ./cmd
+  - main: ./cmd/file.d
     goos:
       - linux
       - darwin
