@@ -168,6 +168,20 @@ type RedisBackendConfig struct {
 	// > Defines redis maximum backoff between each retry. If set to 0, sets default 512ms. If set to -1, disables backoff.
 	MaxRetryBackoff  cfg.Duration `json:"max_retry_backoff" parse:"duration" default:"512ms"` // *
 	MaxRetryBackoff_ time.Duration
+
+	// > @3@4@5@6
+	// >
+	// > Defines the event field from which values are used as limiter keys. Serves as an override of the default limiter keys naming pattern.
+	// > If not set limiter keys are formed using pipeline name, throttle field and throttle field value.
+	LimiterKeyField  cfg.FieldSelector `json:"limiter_key_field" default:"" parse:"selector"` // *
+	LimiterKeyField_ []string
+
+	// > @3@4@5@6
+	// >
+	// > Defines field with limit inside json object stored in value
+	// > (e.g. if set to "limit", values must be of kind `{"limit":"<int>",...}`).
+	// > If not set limiter values are considered as non-json data.
+	LimiterValueField string `json:"limiter_value_field" default:""` // *
 }
 
 type RuleConfig struct {
@@ -284,7 +298,7 @@ func (p *Plugin) runSync(ctx context.Context) {
 	}
 }
 
-func (p *Plugin) getNewLimiter(throttleField, limiterKey string, rule *rule) limiter {
+func (p *Plugin) getNewLimiter(throttleField, limiterKey, keyLimitOverride string, rule *rule) limiter {
 	switch p.config.LimiterBackend {
 	case redisBackend:
 		return NewRedisLimiter(
@@ -296,6 +310,8 @@ func (p *Plugin) getNewLimiter(throttleField, limiterKey string, rule *rule) lim
 			p.config.BucketInterval_,
 			p.config.BucketsCount,
 			rule.limit,
+			keyLimitOverride,
+			p.config.RedisBackendCfg.LimiterValueField,
 		)
 	case inMemoryBackend:
 		return NewInMemoryLimiter(p.config.BucketInterval_, p.config.BucketsCount, rule.limit)
@@ -338,6 +354,10 @@ func (p *Plugin) isAllowed(event *pipeline.Event) bool {
 			throttleKey = val
 		}
 	}
+	keyLimitOverride := ""
+	if len(p.config.RedisBackendCfg.LimiterKeyField_) > 0 {
+		keyLimitOverride = event.Root.Dig(p.config.RedisBackendCfg.LimiterKeyField_...).AsString()
+	}
 
 	for _, rule := range p.rules {
 		if !rule.isMatch(event) {
@@ -362,6 +382,7 @@ func (p *Plugin) isAllowed(event *pipeline.Event) bool {
 				limiter = p.getNewLimiter(
 					string(p.config.ThrottleField),
 					pipeline.ByteToStringUnsafe(limiterKeyBytes),
+					keyLimitOverride,
 					rule,
 				)
 				// alloc new string before adding new key to map
