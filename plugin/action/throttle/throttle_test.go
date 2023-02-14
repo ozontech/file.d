@@ -327,3 +327,73 @@ func TestRedisThrottleMultiPipes(t *testing.T) {
 	// limit is 10 while events count 4, all passed
 	assert.Equal(t, len(secondPipeEvents), len(outEventsSec), "wrong in events count")
 }
+
+func TestRedisThrottleWithCustomLimitData(t *testing.T) {
+	s, err := miniredis.Run()
+	require.NoError(t, err)
+	defer s.Close()
+
+	// set distributed redis limit
+	require.NoError(t, s.Set("custom_limit_key", `{"count_limit":"1"}`))
+
+	defaultLimit := 3
+	eventsTotal := 3
+	config := &Config{
+		Rules: []RuleConfig{
+			{Limit: int64(defaultLimit), LimitKind: "count"},
+		},
+		BucketsCount:   1,
+		BucketInterval: "2s",
+		RedisBackendCfg: RedisBackendConfig{
+			SyncInterval:      "100ms",
+			Endpoint:          s.Addr(),
+			Password:          "",
+			WorkerCount:       2,
+			LimiterKeyField:   "throttle_key",
+			LimiterKeyField_:  []string{"throttle_key"},
+			LimiterValueField: "count_limit",
+		},
+		LimiterBackend: "redis",
+		ThrottleField:  "k8s_pod",
+		TimeField:      "",
+		DefaultLimit:   int64(defaultLimit),
+	}
+	err = cfg.Parse(config, nil)
+	if err != nil {
+		logger.Panic(err.Error())
+	}
+
+	p, input, output := test.NewPipelineMock(
+		test.NewActionPluginStaticInfo(factory, config, pipeline.MatchModeAnd, nil, false),
+		"name",
+	)
+	outEvents := make([]*pipeline.Event, 0)
+	output.SetOutFn(func(e *pipeline.Event) {
+		outEvents = append(outEvents, e)
+	})
+
+	sourceNames := []string{
+		`source_1`,
+		`source_2`,
+		`source_3`,
+	}
+
+	events := []string{
+		`{"time":"%s","k8s_ns":"ns_1","k8s_pod":"pod_1","throttle_key":"custom_limit_key"}`,
+		`{"time":"%s","k8s_ns":"ns_2","k8s_pod":"pod_1","throttle_key":"custom_limit_key"}`,
+		`{"time":"%s","k8s_ns":"not_matched","k8s_pod":"pod_1","throttle_key":"custom_limit_key"}`,
+	}
+
+	nowTs := time.Now().Format(time.RFC3339Nano)
+	for i := 0; i < eventsTotal; i++ {
+		json := fmt.Sprintf(events[i], nowTs)
+
+		input.In(10, sourceNames[rand.Int()%len(sourceNames)], 0, []byte(json))
+
+		time.Sleep(300 * time.Millisecond)
+	}
+
+	p.Stop()
+
+	assert.Greater(t, eventsTotal, len(outEvents), "wrong in events count")
+}
