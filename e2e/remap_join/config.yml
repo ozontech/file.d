@@ -1,7 +1,7 @@
 pipelines:
   remap_join:
     settings:
-      event_timeout: 10s
+      event_timeout: 1h
     input:
       type: file
       persistence_mode: async

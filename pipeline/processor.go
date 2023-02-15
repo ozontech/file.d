@@ -354,12 +354,34 @@ func (p *processor) Propagate(event *Event) {
 	p.processSequence(event)
 }
 
+// Spawn the children of the parent and process in the actions.
+// Any attempts to ActionHold or ActionCollapse the event will be suppressed by timeout events.
 func (p *processor) Spawn(parent *Event, nodes []*insaneJSON.Node) {
 	for _, node := range nodes {
 		child := *parent
 		child.Root = &insaneJSON.Root{Node: node}
 		child.SetChildKind()
-		p.Propagate(&child)
+		nextActionIdx := child.action.Inc()
+		p.tryResetBusy(int(nextActionIdx - 1))
+
+		ok := p.doActions(&child)
+		if ok {
+			p.output.Out(&child)
+		}
+	}
+
+	if p.busyActionsTotal == 0 {
+		return
+	}
+
+	for i, busy := range p.busyActions {
+		if !busy {
+			continue
+		}
+
+		timeout := newTimeoutEvent(parent.stream)
+		timeout.action.Store(int64(i))
+		p.doActions(timeout)
 	}
 }
 

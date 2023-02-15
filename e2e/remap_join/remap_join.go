@@ -4,12 +4,12 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/test"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -39,7 +39,7 @@ func (c *Config) Send(t *testing.T) {
 	defer file.Close()
 
 	for i := 0; i < c.Count; i++ {
-		_, err = file.WriteString(`{ "data": [ {"message":"start "}, {"message":"continue"} ]` + "\n")
+		_, err = file.WriteString(`{ "data": [{ "message": "start " }, { "message": "continue" }] }` + "\n")
 		_ = file.Sync()
 		require.NoError(t, err)
 	}
@@ -48,9 +48,18 @@ func (c *Config) Send(t *testing.T) {
 func (c *Config) Validate(t *testing.T) {
 	logFilePattern := path.Join(c.outputDir, "*")
 
-	expectedEvents := 2 * c.Count
+	expectedEvents := c.Count
 
 	test.WaitProcessEvents(t, expectedEvents, 50*time.Millisecond, 50*time.Second, logFilePattern)
 	got := test.CountLines(t, logFilePattern)
-	assert.Equal(t, expectedEvents, got)
+
+	files := test.GetMatches(t, logFilePattern)
+
+	require.Equal(t, 1, len(files))
+	outputFile := files[0]
+	outputFileContent, err := os.ReadFile(outputFile)
+	require.NoError(t, err)
+	require.Equal(t, strings.Repeat(`{"message":"start continue"}`+"\n", expectedEvents), string(outputFileContent))
+
+	require.Equal(t, expectedEvents, got)
 }

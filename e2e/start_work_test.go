@@ -14,6 +14,7 @@ import (
 	"github.com/ozontech/file.d/e2e/http_file"
 	"github.com/ozontech/file.d/e2e/join_throttle"
 	"github.com/ozontech/file.d/e2e/kafka_file"
+	"github.com/ozontech/file.d/e2e/remap_join"
 	"github.com/ozontech/file.d/fd"
 	_ "github.com/ozontech/file.d/plugin/action/add_host"
 	_ "github.com/ozontech/file.d/plugin/action/convert_date"
@@ -107,6 +108,13 @@ func TestE2EStabilityWorkCase(t *testing.T) {
 				Count: 1000,
 			},
 			cfgPath: "./join_throttle/config.yml",
+		},
+		{
+			name: "remap_join",
+			e2eTest: &remap_join.Config{
+				Count: 100,
+			},
+			cfgPath: "./remap_join/config.yml",
 		},
 	}
 
