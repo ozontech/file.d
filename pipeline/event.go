@@ -190,6 +190,8 @@ func (e *Event) kindStr() string {
 	switch e.kind.Load() {
 	case eventKindRegular:
 		return "REGULAR"
+	case eventKindChildParent:
+		return "PARENT"
 	case eventKindTimeout:
 		return "TIMEOUT"
 	default:
