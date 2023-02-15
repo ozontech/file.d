@@ -30,6 +30,7 @@ import (
 	_ "github.com/ozontech/file.d/plugin/action/modify"
 	_ "github.com/ozontech/file.d/plugin/action/parse_es"
 	_ "github.com/ozontech/file.d/plugin/action/parse_re2"
+	_ "github.com/ozontech/file.d/plugin/action/remap"
 	_ "github.com/ozontech/file.d/plugin/action/remove_fields"
 	_ "github.com/ozontech/file.d/plugin/action/rename"
 	_ "github.com/ozontech/file.d/plugin/action/set_time"

@@ -94,11 +94,9 @@ func FuzzKafka(f *testing.F) {
 			t: t,
 		}
 
-		data := pipeline.Batch{
-			Events: []*pipeline.Event{
-				newEvent(t, topicField, topicVal, key, val),
-			},
-		}
-		p.out(&worker, &data)
+		data := pipeline.NewPreparedBatch([]*pipeline.Event{
+			newEvent(t, topicField, topicVal, key, val),
+		})
+		p.out(&worker, data)
 	})
 }

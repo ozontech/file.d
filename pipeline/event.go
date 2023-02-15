@@ -44,7 +44,7 @@ const (
 const (
 	eventKindRegular int32 = iota
 	eventKindChild
-	eventKindLastChild
+	eventKindChildParent
 	eventKindTimeout
 	eventKindUnlock
 )
@@ -145,12 +145,12 @@ func (e *Event) IsChildKind() bool {
 	return e.kind.Load() == eventKindChild
 }
 
-func (e *Event) SetLastChildKind() {
-	e.kind.Swap(eventKindLastChild)
+func (e *Event) SetChildParentKind() {
+	e.kind.Swap(eventKindChildParent)
 }
 
-func (e *Event) IsLastChildKind() bool {
-	return e.kind.Load() == eventKindLastChild
+func (e *Event) IsChildParentKind() bool {
+	return e.kind.Load() == eventKindChildParent
 }
 
 func (e *Event) parseJSON(json []byte) error {

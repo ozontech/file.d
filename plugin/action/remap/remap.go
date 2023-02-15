@@ -79,21 +79,23 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	}
 
 	nodeArray := data.AsArray()
-	dataElements := make([]*insaneJSON.Node, 0, len(nodeArray))
+	children := make([]*insaneJSON.Node, 0, len(nodeArray))
 	for _, elem := range nodeArray {
 		if !elem.IsObject() {
 			p.logger.Warn("skip an event because %s is not an object", zap.String("type", data.TypeStr()))
 			continue
 		}
-		dataElements = append(dataElements, elem)
+		children = append(children, elem)
 	}
 
-	if len(dataElements) == 0 {
+	if len(children) == 0 {
 		// zero array or an array that does not contain objects
 		return pipeline.ActionPass
 	}
 
-	p.pluginController.Spawn(event, dataElements)
+	p.pluginController.Spawn(event, children)
 
-	return pipeline.ActionDiscard
+	event.SetChildParentKind()
+
+	return pipeline.ActionPass
 }

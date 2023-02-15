@@ -482,7 +482,7 @@ func (p *Pipeline) finalize(event *Event, notifyInput bool, backEvent bool) {
 	// todo: avoid event.stream.commit(event)
 	event.stream.commit(event)
 
-	if !backEvent || kind == eventKindLastChild {
+	if !backEvent {
 		return
 	}
 

@@ -11,7 +11,10 @@ import (
 )
 
 type Batch struct {
-	Events []*Event
+	events        []*Event
+	iteratorIndex int
+	parentsCount  int
+
 	// eventsSize contains total size of the Events in bytes
 	eventsSize int
 	seq        int64
@@ -22,6 +25,13 @@ type Batch struct {
 	maxSizeCount int
 	// maxSizeBytes max size of events per batch in bytes
 	maxSizeBytes int
+}
+
+func NewPreparedBatch(events []*Event) *Batch {
+	b := &Batch{}
+	b.reset()
+	b.events = events
+	return b
 }
 
 func newBatch(maxSizeCount int, maxSizeBytes int, timeout time.Duration) *Batch {
@@ -35,30 +45,56 @@ func newBatch(maxSizeCount int, maxSizeBytes int, timeout time.Duration) *Batch 
 		logger.Fatalf("batch limits are not set")
 	}
 
-	return &Batch{
+	b := &Batch{
 		maxSizeCount: maxSizeCount,
 		maxSizeBytes: maxSizeBytes,
 		timeout:      timeout,
-		Events:       make([]*Event, 0, maxSizeCount),
+		events:       make([]*Event, 0, maxSizeCount),
 	}
+	b.reset()
+
+	return b
 }
 
 func (b *Batch) reset() {
-	b.Events = b.Events[:0]
+	b.events = b.events[:0]
+	b.iteratorIndex = -1
+	b.parentsCount = 0
 	b.eventsSize = 0
 	b.startTime = time.Now()
 }
 
 func (b *Batch) append(e *Event) {
-	b.Events = append(b.Events, e)
+	if e.IsChildParentKind() {
+		b.parentsCount++
+	}
+
+	b.events = append(b.events, e)
 	b.eventsSize += e.Size
 }
 
 func (b *Batch) isReady() bool {
-	l := len(b.Events)
+	l := len(b.events) - b.parentsCount
 	isFull := (b.maxSizeCount != 0 && l == b.maxSizeCount) || (b.maxSizeBytes != 0 && b.maxSizeBytes <= b.eventsSize)
 	isTimeout := l > 0 && time.Since(b.startTime) > b.timeout
 	return isFull || isTimeout
+}
+
+func (b *Batch) Next() bool {
+	b.iteratorIndex++
+	for ; b.iteratorIndex < len(b.events); b.iteratorIndex++ {
+		next := b.events[b.iteratorIndex]
+		if next.IsChildParentKind() {
+			continue
+		}
+		break
+	}
+
+	return b.iteratorIndex < len(b.events)
+}
+
+func (b *Batch) Value() *Event {
+	return b.events[b.iteratorIndex]
 }
 
 type Batcher struct {
@@ -140,7 +176,7 @@ func (b *Batcher) work() {
 func (b *Batcher) commitBatch(events []*Event, batch *Batch) []*Event {
 	// we need to release batch first and then commit events
 	// so lets swap local slice with batch slice to avoid data copying
-	events, batch.Events = batch.Events, events
+	events, batch.events = batch.events, events
 
 	batchSeq := batch.seq
 
@@ -152,6 +188,9 @@ func (b *Batcher) commitBatch(events []*Event, batch *Batch) []*Event {
 	b.commitSeq++
 
 	for _, e := range events {
+		if e.IsChildKind() {
+			continue
+		}
 		b.opts.Controller.Commit(e)
 	}
 

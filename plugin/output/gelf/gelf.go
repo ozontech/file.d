@@ -234,7 +234,8 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 
 	outBuf := data.outBuf[:0]
 	encodeBuf := data.encodeBuf[:0]
-	for _, event := range batch.Events {
+	for batch.Next() {
+		event := batch.Value()
 		encodeBuf = p.formatEvent(encodeBuf, event)
 		outBuf, _ = event.Encode(outBuf)
 		outBuf = append(outBuf, byte(0))

@@ -167,7 +167,7 @@ func (p *Plugin) RegisterMetrics(ctl *metric.Ctl) {
 func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 	if *workerData == nil {
 		*workerData = &data{
-			messages: make([]*sarama.ProducerMessage, p.config.BatchSize_),
+			messages: make([]*sarama.ProducerMessage, 0, p.config.BatchSize_),
 			outBuf:   make([]byte, 0, p.config.BatchSize_*p.avgEventSize),
 		}
 	}
@@ -180,7 +180,9 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 
 	outBuf := data.outBuf[:0]
 	start := 0
-	for i, event := range batch.Events {
+	i := 0
+	for ; batch.Next(); i++ {
+		event := batch.Value()
 		outBuf, start = event.Encode(outBuf)
 
 		topic := p.config.DefaultTopic
@@ -200,7 +202,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 
 	data.outBuf = outBuf
 
-	err := p.producer.SendMessages(data.messages[:len(batch.Events)])
+	err := p.producer.SendMessages(data.messages[:i])
 	if err != nil {
 		errs := err.(sarama.ProducerErrors)
 		for _, e := range errs {

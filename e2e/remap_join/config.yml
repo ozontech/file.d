@@ -1,0 +1,19 @@
+pipelines:
+  remap_join:
+    settings:
+      event_timeout: 10s
+    input:
+      type: file
+      persistence_mode: async
+      watching_dir: SOME_DIR
+      offsets_file: SOME_FILE
+      offsets_op: reset
+    actions:
+      - type: remap
+        field: data
+      - type: join
+        field: message
+        start: '/^start/'
+        continue: '/^continue/'
+    output:
+      type: file

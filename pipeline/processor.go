@@ -355,16 +355,10 @@ func (p *processor) Propagate(event *Event) {
 }
 
 func (p *processor) Spawn(parent *Event, nodes []*insaneJSON.Node) {
-	for i, node := range nodes {
+	for _, node := range nodes {
 		child := *parent
 		child.Root = &insaneJSON.Root{Node: node}
-
-		if i == len(nodes)-1 {
-			child.SetChildKind()
-		} else {
-			child.SetLastChildKind()
-		}
-
+		child.SetChildKind()
 		p.Propagate(&child)
 	}
 }

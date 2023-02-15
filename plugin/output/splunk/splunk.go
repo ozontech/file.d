@@ -150,8 +150,8 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 	root := insaneJSON.Spawn()
 	outBuf := data.outBuf[:0]
 
-	for _, event := range batch.Events {
-		root.AddField("event").MutateToNode(event.Root.Node)
+	for batch.Next() {
+		root.AddField("event").MutateToNode(batch.Value().Root.Node)
 		outBuf = root.Encode(outBuf)
 		_ = root.DecodeString("{}")
 	}

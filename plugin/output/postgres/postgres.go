@@ -255,10 +255,10 @@ func (p *Plugin) out(_ *pipeline.WorkerData, batch *pipeline.Batch) {
 	uniqFields := p.queryBuilder.GetUniqueFields()
 
 	// Deduplicate events, pg can't do upsert with duplication.
-	uniqueEventsMap := make(map[string]struct{}, len(batch.Events))
+	uniqueEventsMap := make(map[string]struct{}, p.config.BatchSize_)
 
-	for _, event := range batch.Events {
-		fieldValues, uniqueID, err := p.processEvent(event, pgFields, uniqFields)
+	for batch.Next() {
+		fieldValues, uniqueID, err := p.processEvent(batch.Value(), pgFields, uniqFields)
 		if err != nil {
 			switch {
 			case errors.Is(err, ErrEventDoesntHaveField):

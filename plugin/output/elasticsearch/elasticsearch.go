@@ -249,8 +249,8 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 	}
 
 	data.outBuf = data.outBuf[:0]
-	for _, event := range batch.Events {
-		data.outBuf = p.appendEvent(data.outBuf, event)
+	for batch.Next() {
+		data.outBuf = p.appendEvent(data.outBuf, batch.Value())
 	}
 
 	for {
