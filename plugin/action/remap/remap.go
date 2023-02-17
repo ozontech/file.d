@@ -72,7 +72,15 @@ func (p *Plugin) Stop() {
 }
 
 func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
+	if event.IsChildKind() {
+		return pipeline.ActionPass
+	}
+
 	data := event.Root.Dig(p.config.Field_...)
+	if data == nil {
+		return pipeline.ActionPass
+	}
+
 	if !data.IsArray() {
 		p.logger.Warn("skip an event because is not an array", zap.String("type", data.TypeStr()))
 		return pipeline.ActionPass

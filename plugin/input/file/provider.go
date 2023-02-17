@@ -186,7 +186,7 @@ func (jp *jobProvider) commit(event *pipeline.Event) {
 
 	job.mu.Lock()
 	// commit offsets only not ignored AND regular events
-	if !event.IsRegularKind() || event.SeqID <= job.ignoreEventsLE {
+	if (!event.IsRegularKind() && !event.IsChildParentKind()) || event.SeqID <= job.ignoreEventsLE {
 		job.mu.Unlock()
 		return
 	}

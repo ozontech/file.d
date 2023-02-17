@@ -461,7 +461,11 @@ func (p *Pipeline) Error(err string) {
 
 func (p *Pipeline) finalize(event *Event, notifyInput bool, backEvent bool) {
 	kind := event.kind.Load()
-	if kind == eventKindTimeout || kind == eventKindChild {
+	if kind == eventKindTimeout {
+		return
+	}
+	if kind == eventKindChild {
+		p.commitSample(event)
 		return
 	}
 
@@ -470,8 +474,8 @@ func (p *Pipeline) finalize(event *Event, notifyInput bool, backEvent bool) {
 		p.outputEvents.Inc()
 		p.outputSize.Add(int64(event.Size))
 
-		if len(p.outSample) == 0 && rand.Int()&1 == 1 {
-			p.outSample = event.Root.Encode(p.outSample)
+		if kind != eventKindChildParent {
+			p.commitSample(event)
 		}
 
 		if event.Size > p.maxSize {
@@ -493,6 +497,12 @@ func (p *Pipeline) finalize(event *Event, notifyInput bool, backEvent bool) {
 	}
 
 	p.eventPool.back(event)
+}
+
+func (p *Pipeline) commitSample(event *Event) {
+	if len(p.outSample) == 0 && rand.Int()&1 == 1 {
+		p.outSample = event.Root.Encode(p.outSample)
+	}
 }
 
 func (p *Pipeline) AddAction(info *ActionPluginStaticInfo) {

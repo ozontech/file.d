@@ -142,7 +142,7 @@ func startForTest(t *testing.T, test E2ETest, num int) *fd.FileD {
 	test.Configure(t, conf, test.name)
 
 	// for each file.d its own port
-	filed := fd.New(conf, ":808"+strconv.Itoa(num))
+	filed := fd.New(conf, ":1508"+strconv.Itoa(num))
 	filed.Start()
 	return filed
 }

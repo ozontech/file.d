@@ -361,6 +361,7 @@ func (p *processor) Spawn(parent *Event, nodes []*insaneJSON.Node) {
 		child := *parent
 		child.Root = &insaneJSON.Root{Node: node}
 		child.SetChildKind()
+
 		nextActionIdx := child.action.Inc()
 		p.tryResetBusy(int(nextActionIdx - 1))
 
