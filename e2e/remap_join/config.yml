@@ -15,5 +15,7 @@ pipelines:
         field: message
         start: '/^start/'
         continue: '/^continue/'
+      - type: modify
+        service: remapper
     output:
       type: file

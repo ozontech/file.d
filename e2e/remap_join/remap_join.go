@@ -59,7 +59,7 @@ func (c *Config) Validate(t *testing.T) {
 	outputFile := files[0]
 	outputFileContent, err := os.ReadFile(outputFile)
 	require.NoError(t, err)
-	require.Equal(t, strings.Repeat(`{"message":"start continue"}`+"\n", expectedEvents), string(outputFileContent))
+	require.Equal(t, strings.Repeat(`{"message":"start continue","service":"remapper"}`+"\n", expectedEvents), string(outputFileContent))
 
 	require.Equal(t, expectedEvents, got)
 }

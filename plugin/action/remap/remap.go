@@ -103,7 +103,5 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 
 	p.pluginController.Spawn(event, children)
 
-	event.SetChildParentKind()
-
 	return pipeline.ActionPass
 }

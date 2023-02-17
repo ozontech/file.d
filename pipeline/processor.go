@@ -203,6 +203,10 @@ func (p *processor) doActions(event *Event) (isPassed bool) {
 			p.countEvent(event, index, eventStatusPassed)
 			p.tryResetBusy(index)
 			p.actionWatcher.setEventAfter(index, event, eventStatusPassed)
+
+			if event.IsChildParentKind() {
+				return true
+			}
 		case ActionDiscard:
 			p.countEvent(event, index, eventStatusDiscarded)
 			p.tryResetBusy(index)
@@ -357,17 +361,20 @@ func (p *processor) Propagate(event *Event) {
 // Spawn the children of the parent and process in the actions.
 // Any attempts to ActionHold or ActionCollapse the event will be suppressed by timeout events.
 func (p *processor) Spawn(parent *Event, nodes []*insaneJSON.Node) {
+	parent.SetChildParentKind()
+
 	for _, node := range nodes {
-		child := *parent
-		child.Root = &insaneJSON.Root{Node: node}
+		child := newEvent()
+		parent.children = append(parent.children, child)
+		child.Root.Node = node // TODO: does `child.Root.Node` leak here?
 		child.SetChildKind()
 
 		nextActionIdx := child.action.Inc()
 		p.tryResetBusy(int(nextActionIdx - 1))
 
-		ok := p.doActions(&child)
+		ok := p.doActions(child)
 		if ok {
-			p.output.Out(&child)
+			p.output.Out(child)
 		}
 	}
 

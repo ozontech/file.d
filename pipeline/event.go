@@ -15,6 +15,8 @@ import (
 type Event struct {
 	kind atomic.Int32
 
+	children []*Event
+
 	Root *insaneJSON.Root
 	Buf  []byte
 
