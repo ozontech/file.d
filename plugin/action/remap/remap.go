@@ -90,7 +90,7 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	children := make([]*insaneJSON.Node, 0, len(nodeArray))
 	for _, elem := range nodeArray {
 		if !elem.IsObject() {
-			p.logger.Warn("skip an event because %s is not an object", zap.String("type", data.TypeStr()))
+			p.logger.Warn("skip an event because it is not an object", zap.String("type", data.TypeStr()))
 			continue
 		}
 		children = append(children, elem)
@@ -103,5 +103,5 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 
 	p.pluginController.Spawn(event, children)
 
-	return pipeline.ActionPass
+	return pipeline.ActionSpawned
 }

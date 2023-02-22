@@ -24,6 +24,7 @@ const (
 	// check out Commit()/Propagate() functions in InputPluginController.
 	// plugin may receive event with eventKindTimeout if it takes to long to read next event from same stream.
 	ActionHold
+	ActionSpawned = 4
 )
 
 type eventStatus string
@@ -198,13 +199,14 @@ func (p *processor) doActions(event *Event) (isPassed bool) {
 
 		p.actionWatcher.setEventBefore(index, event)
 
-		switch action.Do(event) {
-		case ActionPass:
+		result := action.Do(event)
+		switch result {
+		case ActionPass, ActionSpawned:
 			p.countEvent(event, index, eventStatusPassed)
 			p.tryResetBusy(index)
 			p.actionWatcher.setEventAfter(index, event, eventStatusPassed)
 
-			if event.IsChildParentKind() {
+			if result == ActionSpawned {
 				return true
 			}
 		case ActionDiscard:
@@ -362,18 +364,18 @@ func (p *processor) Propagate(event *Event) {
 // Any attempts to ActionHold or ActionCollapse the event will be suppressed by timeout events.
 func (p *processor) Spawn(parent *Event, nodes []*insaneJSON.Node) {
 	parent.SetChildParentKind()
+	nextActionIdx := parent.action.Load() + 1
 
 	for _, node := range nodes {
 		child := newEvent()
 		parent.children = append(parent.children, child)
 		child.Root.Node = node // TODO: does `child.Root.Node` leak here?
 		child.SetChildKind()
-
-		nextActionIdx := child.action.Inc()
-		p.tryResetBusy(int(nextActionIdx - 1))
+		child.action.Store(nextActionIdx)
 
 		ok := p.doActions(child)
 		if ok {
+			child.stage = eventStageOutput
 			p.output.Out(child)
 		}
 	}

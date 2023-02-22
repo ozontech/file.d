@@ -188,9 +188,6 @@ func (b *Batcher) commitBatch(events []*Event, batch *Batch) []*Event {
 	b.commitSeq++
 
 	for _, e := range events {
-		if e.IsChildKind() {
-			continue
-		}
 		b.opts.Controller.Commit(e)
 	}
 

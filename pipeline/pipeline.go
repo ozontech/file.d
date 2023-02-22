@@ -499,6 +499,7 @@ func (p *Pipeline) finalize(event *Event, notifyInput bool, backEvent bool) {
 	for _, e := range event.children {
 		insaneJSON.Release(e.Root)
 	}
+	event.children = event.children[:0]
 	p.eventPool.back(event)
 }
 
