@@ -13,7 +13,6 @@ import (
 type Batch struct {
 	events        []*Event
 	iteratorIndex int
-	parentsCount  int
 
 	// eventsSize contains total size of the Events in bytes
 	eventsSize int
@@ -59,23 +58,18 @@ func newBatch(maxSizeCount int, maxSizeBytes int, timeout time.Duration) *Batch 
 func (b *Batch) reset() {
 	b.events = b.events[:0]
 	b.iteratorIndex = -1
-	b.parentsCount = 0
 	b.eventsSize = 0
 	b.startTime = time.Now()
 }
 
 func (b *Batch) append(e *Event) {
-	if e.IsChildParentKind() {
-		b.parentsCount++
-	}
-
 	b.events = append(b.events, e)
 	b.eventsSize += e.Size
 }
 
 func (b *Batch) isReady() bool {
-	l := len(b.events) - b.parentsCount
-	isFull := (b.maxSizeCount != 0 && l == b.maxSizeCount) || (b.maxSizeBytes != 0 && b.maxSizeBytes <= b.eventsSize)
+	l := len(b.events)
+	isFull := (b.maxSizeCount != 0 && l >= b.maxSizeCount) || (b.maxSizeBytes != 0 && b.maxSizeBytes <= b.eventsSize)
 	isTimeout := l > 0 && time.Since(b.startTime) > b.timeout
 	return isFull || isTimeout
 }

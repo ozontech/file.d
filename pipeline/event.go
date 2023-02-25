@@ -108,6 +108,7 @@ func (e *Event) reset(avgEventSize int) {
 	e.next = nil
 	e.action = atomic.Int64{}
 	e.stream = nil
+	e.children = e.children[:0]
 	e.kind.Swap(eventKindRegular)
 }
 
