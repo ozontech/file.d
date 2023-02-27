@@ -43,6 +43,9 @@ type redisLimiter struct {
 
 	// json field with limit value
 	valField string
+
+	// limit default value to set if limit key does not exist in redis
+	defaultVal string
 }
 
 // NewRedisLimiter return instance of redis limiter.
@@ -78,6 +81,13 @@ func NewRedisLimiter(
 		rl.keyLimit = rl.keyPrefix.String() + keySuffix
 	} else {
 		rl.keyLimit = keyLimitOverride
+	}
+	if valField == "" {
+		rl.defaultVal = strconv.FormatInt(limit.value, 10)
+	} else {
+		// no err check since valField is string
+		valKey, _ := json.Marshal(valField)
+		rl.defaultVal = fmt.Sprintf("{%s:%v}", valKey, limit.value)
 	}
 
 	return rl
@@ -195,61 +205,45 @@ func (l *redisLimiter) updateLimiterValues(maxID, bucketIdx int, totalLimiterVal
 }
 
 func getLimitValFromJson(data []byte, valField string) (int64, error) {
-	var limitVal any
-	var v int64
-	var err error
-	var m map[string]any
-	if err = json.Unmarshal(data, &m); err != nil {
-		return v, fmt.Errorf("failed to unmarshal map: %w", err)
+	var m map[string]json.Number
+	reader := bytes.NewReader(data)
+	if err := json.NewDecoder(reader).Decode(&m); err != nil {
+		return 0, fmt.Errorf("failed to unmarshal map: %w", err)
 	}
 	limitVal, has := m[valField]
 	if !has {
-		return v, fmt.Errorf("no %q key in map", valField)
+		return 0, fmt.Errorf("no %q key in map", valField)
 	}
-	switch val := limitVal.(type) {
-	case string:
-		if v, err = strconv.ParseInt(val, 10, 64); err != nil {
-			return v, fmt.Errorf("failed to convert value to int64: %v", err)
-		}
-	case float64:
-		v = int64(val)
-	default:
-		return v, fmt.Errorf("invalid type of val in map under %q key", valField)
-	}
-	return v, nil
+	return limitVal.Int64()
 }
 
 // updateKeyLimit reads key limit from redis and updates current limit.
 func (l *redisLimiter) updateKeyLimit() error {
+	var b bool
+	var err error
+	var limitVal int64
 	// try to set global limit to default
-	val := strconv.FormatInt(l.totalLimiter.limit.value, 10)
-	if l.valField != "" {
-		val = fmt.Sprintf(`{"%s":"%s"}`, l.valField, val)
-	}
-	if b, err := l.redis.SetNX(l.keyLimit, val, 0).Result(); err == nil && !b {
-		// global limit already exists - overwrite local limit
-		if v := l.redis.Get(l.keyLimit); err == nil {
-			var limitVal int64
-			if l.valField != "" {
-				var jsonData []byte
-				if jsonData, err = v.Bytes(); err != nil {
-					return fmt.Errorf("failed to convert redis value to bytes: %w", err)
-				}
-				if limitVal, err = getLimitValFromJson(jsonData, l.valField); err != nil {
-					return fmt.Errorf("failed to get limit value from redis json: %w", err)
-				}
-			} else {
-				if limitVal, err = v.Int64(); err != nil {
-					return fmt.Errorf("failed to convert redis value to int64: %w", err)
-				}
-			}
-			l.totalLimiter.limit.value = limitVal
-			l.incrementLimiter.limit.value = limitVal
-		} else {
-			return fmt.Errorf("failed to get value from redis by key %q: %w", l.keyLimit, err)
-		}
-	} else if err != nil {
+	if b, err = l.redis.SetNX(l.keyLimit, l.defaultVal, 0).Result(); err != nil {
 		return fmt.Errorf("failed to set redis value by key %q: %w", l.keyLimit, err)
+	} else if b {
+		return nil
 	}
+	// global limit already exists - overwrite local limit
+	v := l.redis.Get(l.keyLimit)
+	if l.valField != "" {
+		var jsonData []byte
+		if jsonData, err = v.Bytes(); err != nil {
+			return fmt.Errorf("failed to convert redis value to bytes: %w", err)
+		}
+		if limitVal, err = getLimitValFromJson(jsonData, l.valField); err != nil {
+			return fmt.Errorf("failed to get limit value from redis json: %w", err)
+		}
+	} else {
+		if limitVal, err = v.Int64(); err != nil {
+			return fmt.Errorf("failed to convert redis value to int64: %w", err)
+		}
+	}
+	l.totalLimiter.limit.value = limitVal
+	l.incrementLimiter.limit.value = limitVal
 	return nil
 }
