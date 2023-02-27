@@ -2,6 +2,7 @@ package throttle
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"time"
 
@@ -356,7 +357,7 @@ func (p *Plugin) isAllowed(event *pipeline.Event) bool {
 	}
 	keyLimitOverride := ""
 	if len(p.config.RedisBackendCfg.LimiterKeyField_) > 0 {
-		keyLimitOverride = event.Root.Dig(p.config.RedisBackendCfg.LimiterKeyField_...).AsString()
+		keyLimitOverride = strings.Clone(event.Root.Dig(p.config.RedisBackendCfg.LimiterKeyField_...).AsString())
 	}
 
 	for _, rule := range p.rules {
