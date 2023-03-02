@@ -21,10 +21,14 @@ func TestPlugin_Do(t *testing.T) {
 	const total = children + parents
 	wg.Add(total)
 
-	outEvents := make([]*pipeline.Event, 0)
+	splitted := make([]string, 0)
 	output.SetOutFn(func(e *pipeline.Event) {
-		outEvents = append(outEvents, e)
-		wg.Done()
+		defer wg.Done()
+		if e.IsChildParentKind() {
+			return
+		}
+
+		splitted = append(splitted, strings.Clone(e.Root.Dig("message").AsString()))
 	})
 
 	input.In(0, "test.log", 0, []byte(`{ 
@@ -45,14 +49,6 @@ func TestPlugin_Do(t *testing.T) {
 	wg.Wait()
 	p.Stop()
 
-	require.Equal(t, total, len(outEvents))
-
-	result := make([]string, 0, len(outEvents))
-	for _, e := range outEvents {
-		if e.IsChildParentKind() {
-			continue
-		}
-		result = append(result, strings.Clone(e.Root.Dig("message").AsString()))
-	}
-	require.Equal(t, []string{"go", "rust", "c++", "python", "ruby", "js"}, result)
+	require.Equal(t, children, len(splitted))
+	require.Equal(t, []string{"go", "rust", "c++", "python", "ruby", "js"}, splitted)
 }
