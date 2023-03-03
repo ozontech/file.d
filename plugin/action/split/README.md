@@ -12,7 +12,7 @@ For example:
 }
 ```
 
-Remap produces:
+Split produces:
 ```json
 { "message": "go" },
 { "message": "rust" },

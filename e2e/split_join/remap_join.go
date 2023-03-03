@@ -1,4 +1,4 @@
-package remap_join
+package split_join
 
 import (
 	"os"
@@ -60,10 +60,10 @@ func (c *Config) Validate(t *testing.T) {
 	outputFile := files[0]
 	outputFileContent, err := os.ReadFile(outputFile)
 	require.NoError(t, err)
-	require.Equal(t, strings.Repeat(`{"hello":"world","k8s_pod_label_app":"remapper"}`+"\n"+
-		`{"message":"start continue","k8s_pod_label_app":"remapper"}`+"\n"+
-		`{"file":".d","k8s_pod_label_app":"remapper"}`+"\n"+
-		`{"open":"source","k8s_pod_label_app":"remapper"}`+"\n",
+	require.Equal(t, strings.Repeat(`{"hello":"world","k8s_pod_label_app":"splitter"}`+"\n"+
+		`{"message":"start continue","k8s_pod_label_app":"splitter"}`+"\n"+
+		`{"file":".d","k8s_pod_label_app":"splitter"}`+"\n"+
+		`{"open":"source","k8s_pod_label_app":"splitter"}`+"\n",
 		c.count), string(outputFileContent))
 
 	require.Equal(t, expectedEvents, got)

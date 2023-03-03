@@ -369,7 +369,7 @@ func (p *processor) Spawn(parent *Event, nodes []*insaneJSON.Node) {
 	for _, node := range nodes {
 		child := newEvent()
 		parent.children = append(parent.children, child)
-		child.Root.Node = node // TODO: does `child.Root.Node` leak here?
+		child.Root.MutateToNode(node)
 		child.SetChildKind()
 		child.action.Store(nextActionIdx)
 

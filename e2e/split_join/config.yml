@@ -1,5 +1,5 @@
 pipelines:
-  remap_join:
+  split_join:
     settings:
       event_timeout: 1h
     input:
@@ -9,14 +9,14 @@ pipelines:
       offsets_file: SOME_FILE
       offsets_op: reset
     actions:
-      - type: remap
+      - type: split
         field: data
       - type: join
         field: message
         start: '/^start/'
         continue: '/^continue/'
       - type: modify
-        service: remapper
+        service: splitter
       - type: rename
         service: 'k8s_pod_label_app'
     output:

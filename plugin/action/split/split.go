@@ -1,4 +1,4 @@
-package remap
+package split
 
 import (
 	"github.com/ozontech/file.d/cfg"
@@ -23,7 +23,7 @@ For example:
 }
 ```
 
-Remap produces:
+Split produces:
 ```json
 { "message": "go" },
 { "message": "rust" },
@@ -53,7 +53,7 @@ type Config struct {
 
 func init() {
 	fd.DefaultPluginRegistry.RegisterAction(&pipeline.PluginStaticInfo{
-		Type:    "remap",
+		Type:    "split",
 		Factory: factory,
 	})
 }

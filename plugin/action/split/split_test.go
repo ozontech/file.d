@@ -1,4 +1,4 @@
-package remap
+package split
 
 import (
 	"strings"
