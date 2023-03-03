@@ -11,8 +11,11 @@ import (
 )
 
 type Batch struct {
-	events        []*Event
+	events []*Event
+	// iteratorIndex is a next event index in the events slice to implement iterator pattern
 	iteratorIndex int
+	// hasIterableEvents is the truth if the Batch contains events that can be return by the iterator
+	hasIterableEvents bool
 
 	// eventsSize contains total size of the Events in bytes
 	eventsSize int
@@ -59,21 +62,40 @@ func (b *Batch) reset() {
 	b.events = b.events[:0]
 	b.iteratorIndex = -1
 	b.eventsSize = 0
+	b.hasIterableEvents = false
 	b.startTime = time.Now()
 }
 
 func (b *Batch) append(e *Event) {
+	if b.hasIterableEvents || !e.IsChildParentKind() { // we check hasIterableEvents to optimize atomic read
+		b.hasIterableEvents = true
+	}
+
 	b.events = append(b.events, e)
 	b.eventsSize += e.Size
 }
 
 func (b *Batch) isReady() bool {
+	if len(b.events) == 0 {
+		// batch is empty
+		return false
+	}
+	if !b.hasIterableEvents {
+		// batch contains only parents
+		return true
+	}
+
 	l := len(b.events)
 	isFull := (b.maxSizeCount != 0 && l >= b.maxSizeCount) || (b.maxSizeBytes != 0 && b.maxSizeBytes <= b.eventsSize)
+	if isFull {
+		return true
+	}
+
 	isTimeout := l > 0 && time.Since(b.startTime) > b.timeout
-	return isFull || isTimeout
+	return isTimeout
 }
 
+// Next prepares the next event for reading with the Value method.
 func (b *Batch) Next() bool {
 	b.iteratorIndex++
 	for ; b.iteratorIndex < len(b.events); b.iteratorIndex++ {
@@ -156,7 +178,9 @@ func (b *Batcher) work() {
 	events := make([]*Event, 0)
 	data := WorkerData(nil)
 	for batch := range b.fullBatches {
-		b.opts.OutFn(&data, batch)
+		if batch.hasIterableEvents {
+			b.opts.OutFn(&data, batch)
+		}
 		events = b.commitBatch(events, batch)
 
 		shouldRunMaintenance := b.opts.MaintenanceFn != nil && b.opts.MaintenanceInterval != 0 && time.Since(t) > b.opts.MaintenanceInterval

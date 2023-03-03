@@ -110,10 +110,8 @@ func TestE2EStabilityWorkCase(t *testing.T) {
 			cfgPath: "./join_throttle/config.yml",
 		},
 		{
-			name: "remap_join",
-			e2eTest: &remap_join.Config{
-				Count: 100,
-			},
+			name:    "remap_join",
+			e2eTest: &remap_join.Config{},
 			cfgPath: "./remap_join/config.yml",
 		},
 	}

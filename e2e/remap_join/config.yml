@@ -17,5 +17,7 @@ pipelines:
         continue: '/^continue/'
       - type: modify
         service: remapper
+      - type: rename
+        service: 'k8s_pod_label_app'
     output:
       type: file
