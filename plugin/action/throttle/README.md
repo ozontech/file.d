@@ -118,5 +118,20 @@ Defines redis maximum backoff between each retry. If set to 0, sets default 512m
 
 <br>
 
+**`limiter_key_field`** *`cfg.FieldSelector`* 
+
+Defines the event field from which values are used as limiter keys. Serves as an override of the default limiter keys naming pattern.
+If not set limiter keys are formed using pipeline name, throttle field and throttle field value.
+
+<br>
+
+**`limiter_value_field`** *`string`* 
+
+Defines field with limit inside json object stored in value
+(e.g. if set to "limit", values must be of kind `{"limit":"<int>",...}`).
+If not set limiter values are considered as non-json data.
+
+<br>
+
 
 <br>*Generated using [__insane-doc__](https://github.com/vitkovskii/insane-doc)*
