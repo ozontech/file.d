@@ -116,8 +116,6 @@ var (
 	compressors     = map[string]func(*zap.SugaredLogger) compressor{
 		zipName: newZipCompressor,
 	}
-
-	r = rand.New(rand.NewSource(time.Now().UnixNano()))
 )
 
 type ObjectStoreClient interface {
@@ -158,6 +156,9 @@ type Plugin struct {
 
 	sendErrorMetric  *prometheus.CounterVec
 	uploadFileMetric *prometheus.CounterVec
+
+	rnd   rand.Rand
+	rndMx sync.Mutex
 }
 
 type fileDTO struct {
@@ -266,6 +267,7 @@ func Factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 }
 
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginParams) {
+	p.rnd = *rand.New(rand.NewSource(time.Now().UnixNano()))
 	p.StartWithMinio(config, params, p.minioClientsFactory)
 }
 
@@ -577,9 +579,15 @@ func (p *Plugin) uploadToS3(compressedDTO fileDTO) error {
 
 // generateObjectName generates object name by compressed file name
 func (p *Plugin) generateObjectName(name string) string {
-	n := strconv.FormatInt(r.Int63n(math.MaxInt64), 16)
+	n := strconv.FormatInt(p.nextRandomValue(), 16)
 	n = n[len(n)-8:]
 	objectName := path.Base(name)
 	objectName = objectName[0 : len(objectName)-len(p.compressor.getExtension())]
 	return fmt.Sprintf("%s.%s%s", objectName, n, p.compressor.getExtension())
+}
+
+func (p *Plugin) nextRandomValue() int64 {
+	p.rndMx.Lock()
+	defer p.rndMx.Unlock()
+	return p.rnd.Int63n(math.MaxInt64)
 }
