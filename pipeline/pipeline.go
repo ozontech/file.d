@@ -79,7 +79,7 @@ type Pipeline struct {
 	useSpread      bool
 	disableStreams bool
 	singleProc     bool
-	shouldStop     bool
+	shouldStop     atomic.Bool
 
 	input      InputPlugin
 	inputInfo  *InputPluginInfo
@@ -304,7 +304,7 @@ func (p *Pipeline) Stop() {
 	p.logger.Infof("stopping %q output", p.Name)
 	p.output.Stop()
 
-	p.shouldStop = true
+	p.shouldStop.Store(true)
 }
 
 func (p *Pipeline) SetInput(info *InputPluginInfo) {
@@ -542,7 +542,7 @@ func (p *Pipeline) growProcs() {
 	t := time.Now()
 	for {
 		time.Sleep(interval)
-		if p.shouldStop {
+		if p.shouldStop.Load() {
 			return
 		}
 		if p.procCount.Load() != p.activeProcs.Load() {
@@ -641,7 +641,7 @@ func (p *Pipeline) maintenance() {
 
 	for {
 		time.Sleep(p.settings.MaintenanceInterval)
-		if p.shouldStop {
+		if p.shouldStop.Load() {
 			return
 		}
 
