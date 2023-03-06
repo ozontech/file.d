@@ -102,14 +102,16 @@ type Pipeline struct {
 	eventLogEnabled bool
 	eventLog        []string
 	eventLogMu      *sync.Mutex
-	inSample        []byte
-	outSample       []byte
-	inputEvents     atomic.Int64
-	inputSize       atomic.Int64
-	outputEvents    atomic.Int64
-	outputSize      atomic.Int64
-	readOps         atomic.Int64
-	maxSize         int
+
+	inSample  []byte
+	outSample []byte
+
+	inputEvents  atomic.Int64
+	inputSize    atomic.Int64
+	outputEvents atomic.Int64
+	outputSize   atomic.Int64
+	readOps      atomic.Int64
+	maxSize      atomic.Int64
 
 	// all pipeline`s metrics
 
@@ -472,8 +474,8 @@ func (p *Pipeline) finalize(event *Event, notifyInput bool, backEvent bool) {
 			p.outSample = event.Root.Encode(p.outSample)
 		}
 
-		if event.Size > p.maxSize {
-			p.maxSize = event.Size
+		if eventSize := int64(event.Size); eventSize > p.maxSize.Load() {
+			p.maxSize.Store(eventSize)
 		}
 	}
 
