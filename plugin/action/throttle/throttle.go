@@ -229,7 +229,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 
 	format, err := pipeline.ParseFormatName(p.config.TimeFieldFormat)
 	if err != nil {
-		format = p.format
+		format = p.config.TimeFieldFormat
 	}
 	p.format = format
 

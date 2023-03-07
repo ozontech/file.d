@@ -127,7 +127,7 @@ func (p *Plugin) Commit(event *pipeline.Event) {
 
 	if err := offset.SaveYAML(p.config.OffsetsFile, p.state); err != nil {
 		p.offsetErrorsMetric.WithLabelValues().Inc()
-		p.logger.Error("can't save offset file: %s", err.Error())
+		p.logger.Errorf("can't save offset file: %s", err.Error())
 	}
 }
 
