@@ -41,7 +41,6 @@ func (c *Config) Send(t *testing.T) {
 
 	for i := 0; i < c.count; i++ {
 		_, err = file.WriteString(`{ "data": [ { "hello": "world" }, { "message": "start " }, { "message": "continue" }, { "file": ".d" }, { "open": "source" } ] }` + "\n")
-		_ = file.Sync()
 		require.NoError(t, err)
 	}
 }
