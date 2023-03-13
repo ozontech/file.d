@@ -186,7 +186,7 @@ func (m *metricsHolder) count(event *Event, actionIndex int, eventStatus eventSt
 }
 
 func (m *metricsHolder) maintenance() {
-	if time.Since(m.metricsGenTime) < metricsGenInterval {
+	if time.Since(m.metricsGenTime) < m.metricsGenInterval {
 		return
 	}
 

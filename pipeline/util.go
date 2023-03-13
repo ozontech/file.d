@@ -151,7 +151,7 @@ const (
 // ParseLevelAsNumber converts log level to the int representation according to the RFC-5424.
 func ParseLevelAsNumber(level string) LogLevel {
 	switch strings.ToLower(strings.TrimSpace(level)) {
-	case "0", "emergency":
+	case "0", "emergency", "fatal", "panic", "dpanic":
 		return LevelEmergency
 	case "1", "alert":
 		return LevelAlert
