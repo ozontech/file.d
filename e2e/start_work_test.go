@@ -111,7 +111,7 @@ func TestE2EStabilityWorkCase(t *testing.T) {
 		},
 		{
 			name:    "file_clickhouse",
-			e2eTest: &file_clickhouse.Config{Count: 50},
+			e2eTest: &file_clickhouse.Config{},
 			cfgPath: "./file_clickhouse/config.yml",
 		},
 	}

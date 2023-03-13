@@ -38,7 +38,7 @@ type Clickhouse interface {
 }
 
 type Plugin struct {
-	logger     *zap.SugaredLogger
+	logger     *zap.Logger
 	config     *Config
 	batcher    *pipeline.Batcher
 	ctx        context.Context
@@ -73,11 +73,9 @@ func (s Settings) toProtoSettings() []ch.Setting {
 	return result
 }
 
-type Schema struct {
-	Columns []Column `json:"columns"`
-}
-
 type Column struct {
+	// TODO: allow to set default value
+	// TODO: allow to set column aliases to find value in the JSON log
 	Name string `json:"name"`
 	Type string `json:"type"`
 }
@@ -122,8 +120,8 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
-	// > Table schema to use [Native format](https://clickhouse.com/docs/en/interfaces/formats/#native).
-	Schema Schema `json:"schema" required:"true"` // *
+	// > Clickhouse table columns. Each column must contain `name` and `type`.
+	Columns []Column `json:"columns" required:"true"` // *
 
 	// > @3@4@5@6
 	// >
@@ -164,6 +162,24 @@ type Config struct {
 	// > Timeout for DB requests in milliseconds.
 	DBRequestTimeout  cfg.Duration `json:"db_request_timeout" default:"3000ms" parse:"duration"` // *
 	DBRequestTimeout_ time.Duration
+
+	// > @3@4@5@6
+	// >
+	// > How long a connection lives before it is killed and recreated.
+	MaxConnLifetime  cfg.Duration `json:"max_conn_lifetime" default:"30m" parse:"duration"` // *
+	MaxConnLifetime_ time.Duration
+
+	// > @3@4@5@6
+	// >
+	// > How long an unused connection lives before it is killed.
+	MaxConnIdleTime  cfg.Duration `json:"max_conn_idle_time" default:"5m" parse:"duration"` // *
+	MaxConnIdleTime_ time.Duration
+
+	// > @3@4@5@6
+	// >
+	// > How often to check that idle connections is time to kill.
+	HealthCheckPeriod  cfg.Duration `json:"health_check_period" default:"1m" parse:"duration"` // *
+	HealthCheckPeriod_ time.Duration
 
 	// > @3@4@5@6
 	// >
@@ -208,7 +224,7 @@ func (p *Plugin) RegisterMetrics(ctl *metric.Ctl) {
 }
 
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginParams) {
-	p.logger = params.Logger
+	p.logger = params.Logger.Desugar()
 	p.config = config.(*Config)
 	p.ctx, p.cancelFunc = context.WithCancel(context.Background())
 	p.avgEventSize = params.PipelineSettings.AvgEventSize
@@ -222,8 +238,8 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	if p.config.DBRequestTimeout_ < 1 {
 		p.logger.Fatal("'db_request_timeout' can't be <1")
 	}
-	if _, err := inferInsaneColInputs(p.config.Schema); err != nil {
-		p.logger.Fatalf("invalid database schema: %s", err)
+	if _, err := inferInsaneColInputs(p.config.Columns); err != nil {
+		p.logger.Fatal("invalid database schema", zap.Error(err))
 	}
 
 	var compression ch.Compression
@@ -245,14 +261,14 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		b := tls.NewConfigBuilder()
 		err := b.AppendCARoot(p.config.CACert)
 		if err != nil {
-			p.logger.Fatalf("can't append CA root: %s", err.Error())
+			p.logger.Fatal("can't append CA root", zap.Error(err))
 		}
 	}
 
 	var err error
 	p.pool, err = chpool.Dial(p.ctx, chpool.Options{
 		ClientOptions: ch.Options{
-			Logger:           p.logger.Desugar().Named("driver"),
+			Logger:           p.logger.Named("driver"),
 			Address:          p.config.Address,
 			Database:         p.config.Database,
 			User:             p.config.User,
@@ -264,14 +280,14 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 			TLS:              b.Build(),
 			HandshakeTimeout: time.Minute,
 		},
-		MaxConnLifetime:   time.Minute * 30,
-		MaxConnIdleTime:   time.Minute * 5,
+		MaxConnLifetime:   p.config.MaxConnLifetime_,
+		MaxConnIdleTime:   p.config.MaxConnIdleTime_,
 		MaxConns:          int32(p.config.WorkersCount_),
 		MinConns:          int32(p.config.WorkersCount_),
-		HealthCheckPeriod: time.Minute,
+		HealthCheckPeriod: p.config.HealthCheckPeriod_,
 	})
 	if err != nil {
-		p.logger.Fatalf("create clickhouse connection pool: %s", err)
+		p.logger.Fatal("create clickhouse connection pool: %s", zap.Error(err))
 	}
 
 	p.batcher = pipeline.NewBatcher(pipeline.BatcherOptions{
@@ -301,7 +317,7 @@ func (p *Plugin) Out(event *pipeline.Event) {
 func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 	if *workerData == nil {
 		// we don't check the error, schema already validated in the Start
-		schema, _ := inferInsaneColInputs(p.config.Schema)
+		schema, _ := inferInsaneColInputs(p.config.Columns)
 		*workerData = schema
 	}
 
@@ -314,7 +330,8 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 		for _, col := range input {
 			node, _ := event.Root.DigStrict(col.Name)
 			if err := col.ColInput.Append(node); err != nil {
-				logger.Warnf("append: %s", err)
+				// TODO: handle case when we can't append in the batch, e.g. columns is not nullable, but value it is
+				p.logger.Fatal("can't append value in the batch", zap.Error(err))
 			}
 		}
 	}
@@ -337,7 +354,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 		logger.Errorf("can't insert to the table: %s", err)
 	}
 	if err != nil {
-		p.logger.Fatalf("can't insert to the table after %d retries: %s", p.config.Retry, err.Error())
+		p.logger.Fatal("can't insert to the table", zap.Int("retries", p.config.Retry), zap.Error(err))
 	}
 }
 

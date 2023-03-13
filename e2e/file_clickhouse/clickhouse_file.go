@@ -16,12 +16,13 @@ import (
 
 type Config struct {
 	inputDir string
-	Count    int
+	count    int
 
 	conn *ch.Client
 }
 
 func (c *Config) Configure(t *testing.T, conf *cfg.Config, pipelineName string) {
+	c.count = 256
 	ctx := context.Background()
 
 	conn, err := ch.Dial(ctx, ch.Options{
@@ -65,7 +66,7 @@ func (c *Config) Send(t *testing.T) {
 	require.NoError(t, err)
 	defer file.Close()
 
-	for i := 0; i < c.Count; i++ {
+	for i := 0; i < c.count; i++ {
 		_, err = file.Write(samples[i%len(samples)])
 		require.NoError(t, err)
 		_, err = file.WriteString("\n")
@@ -74,16 +75,26 @@ func (c *Config) Send(t *testing.T) {
 }
 
 func (c *Config) Validate(t *testing.T) {
-	time.Sleep(time.Second * 5)
 	ctx := context.Background()
 
-	cnt := proto.ColUInt64{}
-	err := c.conn.Do(ctx, ch.Query{
-		Body: `select count(*) from test_table_insert;`,
-		Result: proto.Results{
-			{Name: "count()", Data: &cnt},
-		},
-	})
-	require.NoError(t, err)
-	require.Equal(t, c.Count, int(cnt.Row(0)))
+	var rows int
+	for i := 0; i < 100; i++ {
+		cnt := proto.ColUInt64{}
+		err := c.conn.Do(ctx, ch.Query{
+			Body: `select count(*) from test_table_insert;`,
+			Result: proto.Results{
+				{Name: "count()", Data: &cnt},
+			},
+		})
+		require.NoError(t, err)
+
+		rows = int(cnt.Row(0))
+		if rows != c.count {
+			time.Sleep(time.Millisecond * 100)
+			continue
+		}
+	}
+
+	require.Equal(t, c.count, rows)
+	time.Sleep(time.Second * 2)
 }

@@ -13,9 +13,9 @@ type InsaneColumn struct {
 	ColInput InsaneColInput
 }
 
-func inferInsaneColInputs(schema Schema) ([]InsaneColumn, error) {
-	columns := make([]InsaneColumn, 0, len(schema.Columns))
-	for _, col := range schema.Columns {
+func inferInsaneColInputs(columns []Column) ([]InsaneColumn, error) {
+	insaneColumns := make([]InsaneColumn, 0, len(columns))
+	for _, col := range columns {
 		if col.Type == "" {
 			return nil, fmt.Errorf("empty column type")
 		}
@@ -30,11 +30,11 @@ func inferInsaneColInputs(schema Schema) ([]InsaneColumn, error) {
 			return nil, err
 		}
 
-		columns = append(columns, InsaneColumn{
+		insaneColumns = append(insaneColumns, InsaneColumn{
 			Name:     col.Name,
 			ColInput: insaneCol,
 		})
 	}
 
-	return columns, nil
+	return insaneColumns, nil
 }

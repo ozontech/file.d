@@ -6,15 +6,14 @@ pipelines:
       type: clickhouse
       address: 127.0.0.1:9001
       table: test_table_insert
-      schema:
-        columns:
-          - name: c1
-            type: String
-          - name: c2
-            type: Int8
-          - name: c3
-            type: Int16
-          - name: c4
-            type: Nullable(Int16)
-          - name: c5
-            type: Nullable(String)
+      columns:
+        - name: c1
+          type: String
+        - name: c2
+          type: Int8
+        - name: c3
+          type: Int16
+        - name: c4
+          type: Nullable(Int16)
+        - name: c5
+          type: Nullable(String)

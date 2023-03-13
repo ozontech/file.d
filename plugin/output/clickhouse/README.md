@@ -48,9 +48,9 @@ Clickhouse target table.
 
 <br>
 
-**`schema`** *`Schema`* *`required`* 
+**`columns`** *`[]Column`* *`required`* 
 
-Table schema to use [Native format](https://clickhouse.com/docs/en/interfaces/formats/#native).
+Clickhouse table columns. Each column must contain `name` and `type`.
 
 <br>
 
@@ -82,6 +82,24 @@ Retention milliseconds for retry to DB.
 **`db_request_timeout`** *`cfg.Duration`* *`default=3000ms`* 
 
 Timeout for DB requests in milliseconds.
+
+<br>
+
+**`max_conn_lifetime`** *`cfg.Duration`* *`default=30m`* 
+
+How long a connection lives before it is killed and recreated.
+
+<br>
+
+**`max_conn_idle_time`** *`cfg.Duration`* *`default=5m`* 
+
+How long an unused connection lives before it is killed.
+
+<br>
+
+**`health_check_period`** *`cfg.Duration`* *`default=1m`* 
+
+How often to check that idle connections is time to kill.
 
 <br>
 
