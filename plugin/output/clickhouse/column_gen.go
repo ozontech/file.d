@@ -24,33 +24,33 @@ func insaneInfer(auto proto.ColAuto) (InsaneColInput, error) {
 	case proto.ColumnTypeBool:
 		return NewColBool(nullable), nil
 	case proto.ColumnTypeString:
-		return NewColStr(nullable), nil
+		return NewColString(nullable), nil
 	case proto.ColumnTypeEnum8:
 		return NewColEnum8(nullable), nil
 	case proto.ColumnTypeEnum16:
 		return NewColEnum16(nullable), nil
 	case proto.ColumnTypeInt8:
 		return NewColInt8(nullable), nil
-	case proto.ColumnTypeInt16:
-		return NewColInt16(nullable), nil
-	case proto.ColumnTypeInt32:
-		return NewColInt32(nullable), nil
-	case proto.ColumnTypeInt64:
-		return NewColInt64(nullable), nil
-	case proto.ColumnTypeInt128:
-		return NewColInt128(nullable), nil
-	case proto.ColumnTypeInt256:
-		return NewColInt256(nullable), nil
 	case proto.ColumnTypeUInt8:
 		return NewColUInt8(nullable), nil
+	case proto.ColumnTypeInt16:
+		return NewColInt16(nullable), nil
 	case proto.ColumnTypeUInt16:
 		return NewColUInt16(nullable), nil
+	case proto.ColumnTypeInt32:
+		return NewColInt32(nullable), nil
 	case proto.ColumnTypeUInt32:
 		return NewColUInt32(nullable), nil
+	case proto.ColumnTypeInt64:
+		return NewColInt64(nullable), nil
 	case proto.ColumnTypeUInt64:
 		return NewColUInt64(nullable), nil
+	case proto.ColumnTypeInt128:
+		return NewColInt128(nullable), nil
 	case proto.ColumnTypeUInt128:
 		return NewColUInt128(nullable), nil
+	case proto.ColumnTypeInt256:
+		return NewColInt256(nullable), nil
 	case proto.ColumnTypeUInt256:
 		return NewColUInt256(nullable), nil
 	case proto.ColumnTypeFloat32:
@@ -130,23 +130,23 @@ func (t *ColBool) EncodeColumn(buffer *proto.Buffer) {
 	t.col.EncodeColumn(buffer)
 }
 
-type ColStr struct {
+type ColString struct {
 	col      *proto.ColStr
 	nullCol  *proto.ColNullable[string]
 	nullable bool
 }
 
-var _ InsaneColInput = (*ColStr)(nil)
+var _ InsaneColInput = (*ColString)(nil)
 
-func NewColStr(nullable bool) *ColStr {
-	return &ColStr{
+func NewColString(nullable bool) *ColString {
+	return &ColString{
 		col:      &proto.ColStr{},
 		nullCol:  proto.NewColNullable(proto.ColumnOf[string](&proto.ColStr{})),
 		nullable: nullable,
 	}
 }
 
-func (t *ColStr) Append(node *insaneJSON.StrictNode) error {
+func (t *ColString) Append(node *insaneJSON.StrictNode) error {
 	if node.IsNil() || node.IsNull() {
 		if !t.nullable {
 			return ErrNodeIsNil
@@ -167,26 +167,26 @@ func (t *ColStr) Append(node *insaneJSON.StrictNode) error {
 	return nil
 }
 
-func (t *ColStr) Reset() {
+func (t *ColString) Reset() {
 	t.col.Reset()
 	t.nullCol.Reset()
 }
 
-func (t *ColStr) Type() proto.ColumnType {
+func (t *ColString) Type() proto.ColumnType {
 	if t.nullable {
 		return t.nullCol.Type()
 	}
 	return t.col.Type()
 }
 
-func (t *ColStr) Rows() int {
+func (t *ColString) Rows() int {
 	if t.nullable {
 		return t.nullCol.Rows()
 	}
 	return t.col.Rows()
 }
 
-func (t *ColStr) EncodeColumn(buffer *proto.Buffer) {
+func (t *ColString) EncodeColumn(buffer *proto.Buffer) {
 	if t.nullable {
 		t.nullCol.EncodeColumn(buffer)
 		return
@@ -215,7 +215,6 @@ func (t *ColEnum8) Append(node *insaneJSON.StrictNode) error {
 		return err
 	}
 	val := proto.Enum8(v)
-
 	t.col.Append(val)
 
 	return nil
@@ -258,7 +257,6 @@ func (t *ColEnum16) Append(node *insaneJSON.StrictNode) error {
 		return err
 	}
 	val := proto.Enum16(v)
-
 	t.col.Append(val)
 
 	return nil
@@ -345,331 +343,6 @@ func (t *ColInt8) EncodeColumn(buffer *proto.Buffer) {
 	t.col.EncodeColumn(buffer)
 }
 
-type ColInt16 struct {
-	col      *proto.ColInt16
-	nullCol  *proto.ColNullable[int16]
-	nullable bool
-}
-
-var _ InsaneColInput = (*ColInt16)(nil)
-
-func NewColInt16(nullable bool) *ColInt16 {
-	return &ColInt16{
-		col:      &proto.ColInt16{},
-		nullCol:  proto.NewColNullable(proto.ColumnOf[int16](&proto.ColInt16{})),
-		nullable: nullable,
-	}
-}
-
-func (t *ColInt16) Append(node *insaneJSON.StrictNode) error {
-	if node.IsNil() || node.IsNull() {
-		if !t.nullable {
-			return ErrNodeIsNil
-		}
-		t.nullCol.Append(proto.Null[int16]())
-		return nil
-	}
-	v, err := node.AsInt()
-	if err != nil {
-		return err
-	}
-	val := int16(v)
-	if t.nullable {
-		t.nullCol.Append(proto.NewNullable(val))
-		return nil
-	}
-	t.col.Append(val)
-
-	return nil
-}
-
-func (t *ColInt16) Reset() {
-	t.col.Reset()
-	t.nullCol.Reset()
-}
-
-func (t *ColInt16) Type() proto.ColumnType {
-	if t.nullable {
-		return t.nullCol.Type()
-	}
-	return t.col.Type()
-}
-
-func (t *ColInt16) Rows() int {
-	if t.nullable {
-		return t.nullCol.Rows()
-	}
-	return t.col.Rows()
-}
-
-func (t *ColInt16) EncodeColumn(buffer *proto.Buffer) {
-	if t.nullable {
-		t.nullCol.EncodeColumn(buffer)
-		return
-	}
-	t.col.EncodeColumn(buffer)
-}
-
-type ColInt32 struct {
-	col      *proto.ColInt32
-	nullCol  *proto.ColNullable[int32]
-	nullable bool
-}
-
-var _ InsaneColInput = (*ColInt32)(nil)
-
-func NewColInt32(nullable bool) *ColInt32 {
-	return &ColInt32{
-		col:      &proto.ColInt32{},
-		nullCol:  proto.NewColNullable(proto.ColumnOf[int32](&proto.ColInt32{})),
-		nullable: nullable,
-	}
-}
-
-func (t *ColInt32) Append(node *insaneJSON.StrictNode) error {
-	if node.IsNil() || node.IsNull() {
-		if !t.nullable {
-			return ErrNodeIsNil
-		}
-		t.nullCol.Append(proto.Null[int32]())
-		return nil
-	}
-	v, err := node.AsInt()
-	if err != nil {
-		return err
-	}
-	val := int32(v)
-	if t.nullable {
-		t.nullCol.Append(proto.NewNullable(val))
-		return nil
-	}
-	t.col.Append(val)
-
-	return nil
-}
-
-func (t *ColInt32) Reset() {
-	t.col.Reset()
-	t.nullCol.Reset()
-}
-
-func (t *ColInt32) Type() proto.ColumnType {
-	if t.nullable {
-		return t.nullCol.Type()
-	}
-	return t.col.Type()
-}
-
-func (t *ColInt32) Rows() int {
-	if t.nullable {
-		return t.nullCol.Rows()
-	}
-	return t.col.Rows()
-}
-
-func (t *ColInt32) EncodeColumn(buffer *proto.Buffer) {
-	if t.nullable {
-		t.nullCol.EncodeColumn(buffer)
-		return
-	}
-	t.col.EncodeColumn(buffer)
-}
-
-type ColInt64 struct {
-	col      *proto.ColInt64
-	nullCol  *proto.ColNullable[int64]
-	nullable bool
-}
-
-var _ InsaneColInput = (*ColInt64)(nil)
-
-func NewColInt64(nullable bool) *ColInt64 {
-	return &ColInt64{
-		col:      &proto.ColInt64{},
-		nullCol:  proto.NewColNullable(proto.ColumnOf[int64](&proto.ColInt64{})),
-		nullable: nullable,
-	}
-}
-
-func (t *ColInt64) Append(node *insaneJSON.StrictNode) error {
-	if node.IsNil() || node.IsNull() {
-		if !t.nullable {
-			return ErrNodeIsNil
-		}
-		t.nullCol.Append(proto.Null[int64]())
-		return nil
-	}
-	v, err := node.AsInt()
-	if err != nil {
-		return err
-	}
-	val := int64(v)
-	if t.nullable {
-		t.nullCol.Append(proto.NewNullable(val))
-		return nil
-	}
-	t.col.Append(val)
-
-	return nil
-}
-
-func (t *ColInt64) Reset() {
-	t.col.Reset()
-	t.nullCol.Reset()
-}
-
-func (t *ColInt64) Type() proto.ColumnType {
-	if t.nullable {
-		return t.nullCol.Type()
-	}
-	return t.col.Type()
-}
-
-func (t *ColInt64) Rows() int {
-	if t.nullable {
-		return t.nullCol.Rows()
-	}
-	return t.col.Rows()
-}
-
-func (t *ColInt64) EncodeColumn(buffer *proto.Buffer) {
-	if t.nullable {
-		t.nullCol.EncodeColumn(buffer)
-		return
-	}
-	t.col.EncodeColumn(buffer)
-}
-
-type ColInt128 struct {
-	col      *proto.ColInt128
-	nullCol  *proto.ColNullable[proto.Int128]
-	nullable bool
-}
-
-var _ InsaneColInput = (*ColInt128)(nil)
-
-func NewColInt128(nullable bool) *ColInt128 {
-	return &ColInt128{
-		col:      &proto.ColInt128{},
-		nullCol:  proto.NewColNullable(proto.ColumnOf[proto.Int128](&proto.ColInt128{})),
-		nullable: nullable,
-	}
-}
-
-func (t *ColInt128) Append(node *insaneJSON.StrictNode) error {
-	if node.IsNil() || node.IsNull() {
-		if !t.nullable {
-			return ErrNodeIsNil
-		}
-		t.nullCol.Append(proto.Null[proto.Int128]())
-		return nil
-	}
-	v, err := node.AsInt()
-	if err != nil {
-		return err
-	}
-	val := proto.Int128FromInt(v)
-	if t.nullable {
-		t.nullCol.Append(proto.NewNullable(val))
-		return nil
-	}
-	t.col.Append(val)
-
-	return nil
-}
-
-func (t *ColInt128) Reset() {
-	t.col.Reset()
-	t.nullCol.Reset()
-}
-
-func (t *ColInt128) Type() proto.ColumnType {
-	if t.nullable {
-		return t.nullCol.Type()
-	}
-	return t.col.Type()
-}
-
-func (t *ColInt128) Rows() int {
-	if t.nullable {
-		return t.nullCol.Rows()
-	}
-	return t.col.Rows()
-}
-
-func (t *ColInt128) EncodeColumn(buffer *proto.Buffer) {
-	if t.nullable {
-		t.nullCol.EncodeColumn(buffer)
-		return
-	}
-	t.col.EncodeColumn(buffer)
-}
-
-type ColInt256 struct {
-	col      *proto.ColInt256
-	nullCol  *proto.ColNullable[proto.Int256]
-	nullable bool
-}
-
-var _ InsaneColInput = (*ColInt256)(nil)
-
-func NewColInt256(nullable bool) *ColInt256 {
-	return &ColInt256{
-		col:      &proto.ColInt256{},
-		nullCol:  proto.NewColNullable(proto.ColumnOf[proto.Int256](&proto.ColInt256{})),
-		nullable: nullable,
-	}
-}
-
-func (t *ColInt256) Append(node *insaneJSON.StrictNode) error {
-	if node.IsNil() || node.IsNull() {
-		if !t.nullable {
-			return ErrNodeIsNil
-		}
-		t.nullCol.Append(proto.Null[proto.Int256]())
-		return nil
-	}
-	v, err := node.AsInt()
-	if err != nil {
-		return err
-	}
-	val := proto.Int256FromInt(v)
-	if t.nullable {
-		t.nullCol.Append(proto.NewNullable(val))
-		return nil
-	}
-	t.col.Append(val)
-
-	return nil
-}
-
-func (t *ColInt256) Reset() {
-	t.col.Reset()
-	t.nullCol.Reset()
-}
-
-func (t *ColInt256) Type() proto.ColumnType {
-	if t.nullable {
-		return t.nullCol.Type()
-	}
-	return t.col.Type()
-}
-
-func (t *ColInt256) Rows() int {
-	if t.nullable {
-		return t.nullCol.Rows()
-	}
-	return t.col.Rows()
-}
-
-func (t *ColInt256) EncodeColumn(buffer *proto.Buffer) {
-	if t.nullable {
-		t.nullCol.EncodeColumn(buffer)
-		return
-	}
-	t.col.EncodeColumn(buffer)
-}
-
 type ColUInt8 struct {
 	col      *proto.ColUInt8
 	nullCol  *proto.ColNullable[uint8]
@@ -728,6 +401,71 @@ func (t *ColUInt8) Rows() int {
 }
 
 func (t *ColUInt8) EncodeColumn(buffer *proto.Buffer) {
+	if t.nullable {
+		t.nullCol.EncodeColumn(buffer)
+		return
+	}
+	t.col.EncodeColumn(buffer)
+}
+
+type ColInt16 struct {
+	col      *proto.ColInt16
+	nullCol  *proto.ColNullable[int16]
+	nullable bool
+}
+
+var _ InsaneColInput = (*ColInt16)(nil)
+
+func NewColInt16(nullable bool) *ColInt16 {
+	return &ColInt16{
+		col:      &proto.ColInt16{},
+		nullCol:  proto.NewColNullable(proto.ColumnOf[int16](&proto.ColInt16{})),
+		nullable: nullable,
+	}
+}
+
+func (t *ColInt16) Append(node *insaneJSON.StrictNode) error {
+	if node.IsNil() || node.IsNull() {
+		if !t.nullable {
+			return ErrNodeIsNil
+		}
+		t.nullCol.Append(proto.Null[int16]())
+		return nil
+	}
+	v, err := node.AsInt()
+	if err != nil {
+		return err
+	}
+	val := int16(v)
+	if t.nullable {
+		t.nullCol.Append(proto.NewNullable(val))
+		return nil
+	}
+	t.col.Append(val)
+
+	return nil
+}
+
+func (t *ColInt16) Reset() {
+	t.col.Reset()
+	t.nullCol.Reset()
+}
+
+func (t *ColInt16) Type() proto.ColumnType {
+	if t.nullable {
+		return t.nullCol.Type()
+	}
+	return t.col.Type()
+}
+
+func (t *ColInt16) Rows() int {
+	if t.nullable {
+		return t.nullCol.Rows()
+	}
+	return t.col.Rows()
+}
+
+func (t *ColInt16) EncodeColumn(buffer *proto.Buffer) {
 	if t.nullable {
 		t.nullCol.EncodeColumn(buffer)
 		return
@@ -800,6 +538,71 @@ func (t *ColUInt16) EncodeColumn(buffer *proto.Buffer) {
 	t.col.EncodeColumn(buffer)
 }
 
+type ColInt32 struct {
+	col      *proto.ColInt32
+	nullCol  *proto.ColNullable[int32]
+	nullable bool
+}
+
+var _ InsaneColInput = (*ColInt32)(nil)
+
+func NewColInt32(nullable bool) *ColInt32 {
+	return &ColInt32{
+		col:      &proto.ColInt32{},
+		nullCol:  proto.NewColNullable(proto.ColumnOf[int32](&proto.ColInt32{})),
+		nullable: nullable,
+	}
+}
+
+func (t *ColInt32) Append(node *insaneJSON.StrictNode) error {
+	if node.IsNil() || node.IsNull() {
+		if !t.nullable {
+			return ErrNodeIsNil
+		}
+		t.nullCol.Append(proto.Null[int32]())
+		return nil
+	}
+	v, err := node.AsInt()
+	if err != nil {
+		return err
+	}
+	val := int32(v)
+	if t.nullable {
+		t.nullCol.Append(proto.NewNullable(val))
+		return nil
+	}
+	t.col.Append(val)
+
+	return nil
+}
+
+func (t *ColInt32) Reset() {
+	t.col.Reset()
+	t.nullCol.Reset()
+}
+
+func (t *ColInt32) Type() proto.ColumnType {
+	if t.nullable {
+		return t.nullCol.Type()
+	}
+	return t.col.Type()
+}
+
+func (t *ColInt32) Rows() int {
+	if t.nullable {
+		return t.nullCol.Rows()
+	}
+	return t.col.Rows()
+}
+
+func (t *ColInt32) EncodeColumn(buffer *proto.Buffer) {
+	if t.nullable {
+		t.nullCol.EncodeColumn(buffer)
+		return
+	}
+	t.col.EncodeColumn(buffer)
+}
+
 type ColUInt32 struct {
 	col      *proto.ColUInt32
 	nullCol  *proto.ColNullable[uint32]
@@ -858,6 +661,71 @@ func (t *ColUInt32) Rows() int {
 }
 
 func (t *ColUInt32) EncodeColumn(buffer *proto.Buffer) {
+	if t.nullable {
+		t.nullCol.EncodeColumn(buffer)
+		return
+	}
+	t.col.EncodeColumn(buffer)
+}
+
+type ColInt64 struct {
+	col      *proto.ColInt64
+	nullCol  *proto.ColNullable[int64]
+	nullable bool
+}
+
+var _ InsaneColInput = (*ColInt64)(nil)
+
+func NewColInt64(nullable bool) *ColInt64 {
+	return &ColInt64{
+		col:      &proto.ColInt64{},
+		nullCol:  proto.NewColNullable(proto.ColumnOf[int64](&proto.ColInt64{})),
+		nullable: nullable,
+	}
+}
+
+func (t *ColInt64) Append(node *insaneJSON.StrictNode) error {
+	if node.IsNil() || node.IsNull() {
+		if !t.nullable {
+			return ErrNodeIsNil
+		}
+		t.nullCol.Append(proto.Null[int64]())
+		return nil
+	}
+	v, err := node.AsInt()
+	if err != nil {
+		return err
+	}
+	val := int64(v)
+	if t.nullable {
+		t.nullCol.Append(proto.NewNullable(val))
+		return nil
+	}
+	t.col.Append(val)
+
+	return nil
+}
+
+func (t *ColInt64) Reset() {
+	t.col.Reset()
+	t.nullCol.Reset()
+}
+
+func (t *ColInt64) Type() proto.ColumnType {
+	if t.nullable {
+		return t.nullCol.Type()
+	}
+	return t.col.Type()
+}
+
+func (t *ColInt64) Rows() int {
+	if t.nullable {
+		return t.nullCol.Rows()
+	}
+	return t.col.Rows()
+}
+
+func (t *ColInt64) EncodeColumn(buffer *proto.Buffer) {
 	if t.nullable {
 		t.nullCol.EncodeColumn(buffer)
 		return
@@ -930,6 +798,71 @@ func (t *ColUInt64) EncodeColumn(buffer *proto.Buffer) {
 	t.col.EncodeColumn(buffer)
 }
 
+type ColInt128 struct {
+	col      *proto.ColInt128
+	nullCol  *proto.ColNullable[proto.Int128]
+	nullable bool
+}
+
+var _ InsaneColInput = (*ColInt128)(nil)
+
+func NewColInt128(nullable bool) *ColInt128 {
+	return &ColInt128{
+		col:      &proto.ColInt128{},
+		nullCol:  proto.NewColNullable(proto.ColumnOf[proto.Int128](&proto.ColInt128{})),
+		nullable: nullable,
+	}
+}
+
+func (t *ColInt128) Append(node *insaneJSON.StrictNode) error {
+	if node.IsNil() || node.IsNull() {
+		if !t.nullable {
+			return ErrNodeIsNil
+		}
+		t.nullCol.Append(proto.Null[proto.Int128]())
+		return nil
+	}
+	v, err := node.AsInt()
+	if err != nil {
+		return err
+	}
+	val := proto.Int128FromInt(v)
+	if t.nullable {
+		t.nullCol.Append(proto.NewNullable(val))
+		return nil
+	}
+	t.col.Append(val)
+
+	return nil
+}
+
+func (t *ColInt128) Reset() {
+	t.col.Reset()
+	t.nullCol.Reset()
+}
+
+func (t *ColInt128) Type() proto.ColumnType {
+	if t.nullable {
+		return t.nullCol.Type()
+	}
+	return t.col.Type()
+}
+
+func (t *ColInt128) Rows() int {
+	if t.nullable {
+		return t.nullCol.Rows()
+	}
+	return t.col.Rows()
+}
+
+func (t *ColInt128) EncodeColumn(buffer *proto.Buffer) {
+	if t.nullable {
+		t.nullCol.EncodeColumn(buffer)
+		return
+	}
+	t.col.EncodeColumn(buffer)
+}
+
 type ColUInt128 struct {
 	col      *proto.ColUInt128
 	nullCol  *proto.ColNullable[proto.UInt128]
@@ -988,6 +921,71 @@ func (t *ColUInt128) Rows() int {
 }
 
 func (t *ColUInt128) EncodeColumn(buffer *proto.Buffer) {
+	if t.nullable {
+		t.nullCol.EncodeColumn(buffer)
+		return
+	}
+	t.col.EncodeColumn(buffer)
+}
+
+type ColInt256 struct {
+	col      *proto.ColInt256
+	nullCol  *proto.ColNullable[proto.Int256]
+	nullable bool
+}
+
+var _ InsaneColInput = (*ColInt256)(nil)
+
+func NewColInt256(nullable bool) *ColInt256 {
+	return &ColInt256{
+		col:      &proto.ColInt256{},
+		nullCol:  proto.NewColNullable(proto.ColumnOf[proto.Int256](&proto.ColInt256{})),
+		nullable: nullable,
+	}
+}
+
+func (t *ColInt256) Append(node *insaneJSON.StrictNode) error {
+	if node.IsNil() || node.IsNull() {
+		if !t.nullable {
+			return ErrNodeIsNil
+		}
+		t.nullCol.Append(proto.Null[proto.Int256]())
+		return nil
+	}
+	v, err := node.AsInt()
+	if err != nil {
+		return err
+	}
+	val := proto.Int256FromInt(v)
+	if t.nullable {
+		t.nullCol.Append(proto.NewNullable(val))
+		return nil
+	}
+	t.col.Append(val)
+
+	return nil
+}
+
+func (t *ColInt256) Reset() {
+	t.col.Reset()
+	t.nullCol.Reset()
+}
+
+func (t *ColInt256) Type() proto.ColumnType {
+	if t.nullable {
+		return t.nullCol.Type()
+	}
+	return t.col.Type()
+}
+
+func (t *ColInt256) Rows() int {
+	if t.nullable {
+		return t.nullCol.Rows()
+	}
+	return t.col.Rows()
+}
+
+func (t *ColInt256) EncodeColumn(buffer *proto.Buffer) {
 	if t.nullable {
 		t.nullCol.EncodeColumn(buffer)
 		return
