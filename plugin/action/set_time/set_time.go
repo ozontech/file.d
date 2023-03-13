@@ -28,7 +28,7 @@ type Config struct {
 	// > @3@4@5@6
 	// >
 	// > Date format to parse a field. This could be one of
-	// `timestamp|timestampmilli|timestampmicro|timestampnano|ansic|unixdate|rubydate|rfc822|rfc822z|rfc850|rfc1123|rfc1123z|rfc3339|rfc3339nano|kitchen|stamp|stampmilli|stampmicro|stampnano`
+	// `unixtime|timestampmilli|timestampmicro|timestampnano|ansic|unixdate|rubydate|rfc822|rfc822z|rfc850|rfc1123|rfc1123z|rfc3339|rfc3339nano|kitchen|stamp|stampmilli|stampmicro|stampnano`
 	// or custom time format.
 	// See: https://pkg.go.dev/time#Parse
 	Format  string `json:"format" default:"rfc3339nano" required:"true"` // *
@@ -80,7 +80,7 @@ func (p *Plugin) do(event *pipeline.Event, t time.Time) pipeline.ActionResult {
 	}
 
 	switch p.config.Format_ {
-	case "timestamp":
+	case pipeline.UnixTime:
 		dateNode.MutateToInt64(t.Unix())
 	case "timestampmilli":
 		dateNode.MutateToInt64(t.UnixMilli())

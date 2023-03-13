@@ -1,4 +1,4 @@
-file.d
+/file.d
 *.pprof
 *.test
 ozon*

@@ -3,7 +3,6 @@
 Example of decoder for nginx logs with line joins
 
 ```yml
-
 pipelines:
   example:
     actions:

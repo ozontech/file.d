@@ -2,6 +2,7 @@ package throttle
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"time"
 
@@ -80,7 +81,7 @@ type Config struct {
 	// > @3@4@5@6
 	// >
 	// > It defines how to parse the time field format.
-	TimeFieldFormat string `json:"time_field_format" default:"rfc3339nano" options:"ansic|unixdate|rubydate|rfc822|rfc822z|rfc850|rfc1123|rfc1123z|rfc3339|rfc3339nano|kitchen|stamp|stampmilli|stampmicro|stampnano"` // *
+	TimeFieldFormat string `json:"time_field_format" default:"rfc3339nano" options:"ansic|unixdate|rubydate|rfc822|rfc822z|rfc850|rfc1123|rfc1123z|rfc3339|rfc3339nano|kitchen|stamp|stampmilli|stampmicro|stampnano|unixtime|nginx_errorlog"` // *
 
 	// > @3@4@5@6
 	// >
@@ -151,6 +152,37 @@ type RedisBackendConfig struct {
 	// > Defines redis timeout.
 	Timeout  cfg.Duration `json:"timeout" parse:"duration" default:"1s"` // *
 	Timeout_ time.Duration
+
+	// > @3@4@5@6
+	// >
+	// > Defines redis maximum number of retries. If set to 0, no retries will happen.
+	MaxRetries int `json:"max_retries" default:"3"` // *
+
+	// > @3@4@5@6
+	// >
+	// > Defines redis minimum backoff between each retry. If set to 0, sets default 8ms. If set to -1, disables backoff.
+	MinRetryBackoff  cfg.Duration `json:"min_retry_backoff" parse:"duration" default:"8ms"` // *
+	MinRetryBackoff_ time.Duration
+
+	// > @3@4@5@6
+	// >
+	// > Defines redis maximum backoff between each retry. If set to 0, sets default 512ms. If set to -1, disables backoff.
+	MaxRetryBackoff  cfg.Duration `json:"max_retry_backoff" parse:"duration" default:"512ms"` // *
+	MaxRetryBackoff_ time.Duration
+
+	// > @3@4@5@6
+	// >
+	// > Defines the event field from which values are used as limiter keys. Serves as an override of the default limiter keys naming pattern.
+	// > If not set limiter keys are formed using pipeline name, throttle field and throttle field value.
+	LimiterKeyField  cfg.FieldSelector `json:"limiter_key_field" default:"" parse:"selector"` // *
+	LimiterKeyField_ []string
+
+	// > @3@4@5@6
+	// >
+	// > Defines field with limit inside json object stored in value
+	// > (e.g. if set to "limit", values must be of kind `{"limit":"<int>",...}`).
+	// > If not set limiter values are considered as non-json data.
+	LimiterValueField string `json:"limiter_value_field" default:""` // *
 }
 
 type RuleConfig struct {
@@ -197,7 +229,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 
 	format, err := pipeline.ParseFormatName(p.config.TimeFieldFormat)
 	if err != nil {
-		format = p.format
+		format = p.config.TimeFieldFormat
 	}
 	p.format = format
 
@@ -208,11 +240,14 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 
 		p.redisClient = redis.NewClient(
 			&redis.Options{
-				Network:      "tcp",
-				Addr:         p.config.RedisBackendCfg.Endpoint,
-				Password:     p.config.RedisBackendCfg.Password,
-				ReadTimeout:  p.config.RedisBackendCfg.Timeout_,
-				WriteTimeout: p.config.RedisBackendCfg.Timeout_,
+				Network:         "tcp",
+				Addr:            p.config.RedisBackendCfg.Endpoint,
+				Password:        p.config.RedisBackendCfg.Password,
+				ReadTimeout:     p.config.RedisBackendCfg.Timeout_,
+				WriteTimeout:    p.config.RedisBackendCfg.Timeout_,
+				MaxRetries:      p.config.RedisBackendCfg.MaxRetries,
+				MinRetryBackoff: p.config.RedisBackendCfg.MinRetryBackoff_,
+				MaxRetryBackoff: p.config.RedisBackendCfg.MaxRetryBackoff_,
 			})
 
 		if pingResp := p.redisClient.Ping(); pingResp.Err() != nil {
@@ -264,7 +299,7 @@ func (p *Plugin) runSync(ctx context.Context) {
 	}
 }
 
-func (p *Plugin) getNewLimiter(throttleField, limiterKey string, rule *rule) limiter {
+func (p *Plugin) getNewLimiter(throttleField, limiterKey, keyLimitOverride string, rule *rule) limiter {
 	switch p.config.LimiterBackend {
 	case redisBackend:
 		return NewRedisLimiter(
@@ -276,6 +311,8 @@ func (p *Plugin) getNewLimiter(throttleField, limiterKey string, rule *rule) lim
 			p.config.BucketInterval_,
 			p.config.BucketsCount,
 			rule.limit,
+			keyLimitOverride,
+			p.config.RedisBackendCfg.LimiterValueField,
 		)
 	case inMemoryBackend:
 		return NewInMemoryLimiter(p.config.BucketInterval_, p.config.BucketsCount, rule.limit)
@@ -303,7 +340,7 @@ func (p *Plugin) isAllowed(event *pipeline.Event) bool {
 
 	if len(p.config.TimeField_) != 0 {
 		tsValue := event.Root.Dig(p.config.TimeField_...).AsString()
-		t, err := time.Parse(p.format, tsValue)
+		t, err := pipeline.ParseTime(p.format, tsValue)
 		if err != nil || ts.IsZero() {
 			p.logger.Warnf("can't parse field %q using format %s: %s", p.config.TimeField, p.config.TimeFieldFormat, tsValue)
 		} else {
@@ -317,6 +354,10 @@ func (p *Plugin) isAllowed(event *pipeline.Event) bool {
 		if val != "" {
 			throttleKey = val
 		}
+	}
+	keyLimitOverride := ""
+	if len(p.config.RedisBackendCfg.LimiterKeyField_) > 0 {
+		keyLimitOverride = strings.Clone(event.Root.Dig(p.config.RedisBackendCfg.LimiterKeyField_...).AsString())
 	}
 
 	for _, rule := range p.rules {
@@ -342,6 +383,7 @@ func (p *Plugin) isAllowed(event *pipeline.Event) bool {
 				limiter = p.getNewLimiter(
 					string(p.config.ThrottleField),
 					pipeline.ByteToStringUnsafe(limiterKeyBytes),
+					keyLimitOverride,
 					rule,
 				)
 				// alloc new string before adding new key to map

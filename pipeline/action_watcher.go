@@ -97,6 +97,8 @@ func (aw *actionWatcher) deleteSample(actionIdx int, sample *sample) {
 	aw.samplesLen.Dec()
 }
 
+var timeoutEvent = []byte("<timeout event>")
+
 // setEventBefore sets events before for every sample.
 func (aw *actionWatcher) setEventBefore(index int, event *Event) {
 	if aw.samplesLen.Load() <= 0 {
@@ -110,7 +112,11 @@ func (aw *actionWatcher) setEventBefore(index int, event *Event) {
 		if s == nil || len(s.eventBefore) > 0 {
 			continue
 		}
-		s.eventBefore = event.Root.EncodeToByte()
+
+		s.eventBefore = timeoutEvent
+		if !event.IsTimeoutKind() {
+			s.eventBefore = event.Root.EncodeToByte()
+		}
 	}
 }
 
@@ -129,7 +135,10 @@ func (aw *actionWatcher) setEventAfter(index int, event *Event, result eventStat
 			return
 		}
 
-		s.eventAfter = event.Root.EncodeToByte()
+		s.eventAfter = timeoutEvent
+		if !event.IsTimeoutKind() {
+			s.eventAfter = event.Root.EncodeToByte()
+		}
 		s.eventStatus = result
 		s.readyCh <- true
 	}

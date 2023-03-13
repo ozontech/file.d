@@ -40,7 +40,7 @@ func main() {
 ```
 
 #### 3. Run file.d with new buckets
-`sudo go run cmd/file.d.go --config=testconfig.yaml`
+`sudo go run ./cmd/file.d --config=testconfig.yaml`
 
 Example config:
 ```yaml

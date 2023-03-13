@@ -1,8 +1,6 @@
 package convert_date
 
 import (
-	"time"
-
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/pipeline"
@@ -29,14 +27,14 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
-	// > List of date formats to parse a field. Available list items should be one of `ansic|unixdate|rubydate|rfc822|rfc822z|rfc850|rfc1123|rfc1123z|rfc3339|rfc3339nano|kitchen|stamp|stampmilli|stampmicro|stampnano`.
+	// > List of date formats to parse a field. Available list items should be one of `ansic|unixdate|rubydate|rfc822|rfc822z|rfc850|rfc1123|rfc1123z|rfc3339|rfc3339nano|kitchen|stamp|stampmilli|stampmicro|stampnano|unixtime|nginx_errorlog`.
 	SourceFormats  []string `json:"source_formats" default:"rfc3339nano,rfc3339"` // *
 	SourceFormats_ []string
 
 	// > @3@4@5@6
 	// >
 	// > Date format to convert to.
-	TargetFormat  string `json:"target_format" default:"timestamp"` // *
+	TargetFormat  string `json:"target_format" default:"unixtime"` // *
 	TargetFormat_ string
 
 	// > @3@4@5@6
@@ -87,9 +85,9 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	if isValidType {
 		date := dateNode.AsString()
 		for _, format := range p.config.SourceFormats_ {
-			t, err := time.Parse(format, date)
+			t, err := pipeline.ParseTime(format, date)
 			if err == nil {
-				if p.config.TargetFormat_ == "timestamp" {
+				if p.config.TargetFormat_ == pipeline.UnixTime {
 					dateNode.MutateToInt(int(t.Unix()))
 				} else {
 					dateNode.MutateToString(t.Format(p.config.TargetFormat_))

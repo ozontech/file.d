@@ -18,7 +18,7 @@ If not set, the current time will be taken.
 
 <br>
 
-**`time_field_format`** *`string`* *`default=rfc3339nano`* *`options=ansic|unixdate|rubydate|rfc822|rfc822z|rfc850|rfc1123|rfc1123z|rfc3339|rfc3339nano|kitchen|stamp|stampmilli|stampmicro|stampnano`* 
+**`time_field_format`** *`string`* *`default=rfc3339nano`* *`options=ansic|unixdate|rubydate|rfc822|rfc822z|rfc850|rfc1123|rfc1123z|rfc3339|rfc3339nano|kitchen|stamp|stampmilli|stampmicro|stampnano|unixtime|nginx_errorlog`* 
 
 It defines how to parse the time field format.
 
@@ -97,6 +97,39 @@ Defines num of parallel workers that will sync limits.
 **`timeout`** *`cfg.Duration`* *`default=1s`* 
 
 Defines redis timeout.
+
+<br>
+
+**`max_retries`** *`int`* *`default=3`* 
+
+Defines redis maximum number of retries. If set to 0, no retries will happen.
+
+<br>
+
+**`min_retry_backoff`** *`cfg.Duration`* *`default=8ms`* 
+
+Defines redis minimum backoff between each retry. If set to 0, sets default 8ms. If set to -1, disables backoff.
+
+<br>
+
+**`max_retry_backoff`** *`cfg.Duration`* *`default=512ms`* 
+
+Defines redis maximum backoff between each retry. If set to 0, sets default 512ms. If set to -1, disables backoff.
+
+<br>
+
+**`limiter_key_field`** *`cfg.FieldSelector`* 
+
+Defines the event field from which values are used as limiter keys. Serves as an override of the default limiter keys naming pattern.
+If not set limiter keys are formed using pipeline name, throttle field and throttle field value.
+
+<br>
+
+**`limiter_value_field`** *`string`* 
+
+Defines field with limit inside json object stored in value
+(e.g. if set to "limit", values must be of kind `{"limit":"<int>",...}`).
+If not set limiter values are considered as non-json data.
 
 <br>
 

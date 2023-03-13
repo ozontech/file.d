@@ -19,7 +19,7 @@ Please make sure to read our [contributing guide](/CONTRIBUTING.md) before creat
 Well, we already have several similar tools: vector, filebeat, logstash, fluend-d, fluent-bit, etc.
 
 Performance tests state that best ones achieve a throughput of roughly 100MB/sec. 
-Guys, it's 2022 now. HDDs and NICs can handle the throughput of a **few GB/sec** and CPUs processes **dozens of GB/sec**. Are you sure **100MB/sec** is what we deserve? Are you sure it is fast?
+Guys, it's 2023 now. HDDs and NICs can handle the throughput of a **few GB/sec** and CPUs processes **dozens of GB/sec**. Are you sure **100MB/sec** is what we deserve? Are you sure it is fast?
 
 ## Main features
 * Fast: more than 10x faster compared to similar tools

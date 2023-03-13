@@ -30,7 +30,7 @@ func TestPlugin_Do(t *testing.T) {
 		{
 			Name: "unix",
 			Config: &Config{
-				Format: "timestamp",
+				Format: pipeline.UnixTime,
 				Field:  "time",
 			},
 			Root: `{}`,
@@ -136,7 +136,7 @@ func TestPlugin_Do(t *testing.T) {
 }
 
 func TestE2E_Plugin(t *testing.T) {
-	config := &Config{Format: "timestamp", Field: "timestamp"}
+	config := &Config{Format: pipeline.UnixTime, Field: "timestamp"}
 
 	err := cfg.Parse(config, nil)
 	require.NoError(t, err)

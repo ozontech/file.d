@@ -43,7 +43,7 @@ func TestPrivateOut(t *testing.T) {
 		},
 		{
 			Name:       "timestamp_1",
-			ColumnType: "timestamp",
+			ColumnType: colTypeTimestamp,
 			Unique:     false,
 		},
 	}
@@ -115,7 +115,7 @@ func TestPrivateOutWithRetry(t *testing.T) {
 		},
 		{
 			Name:       "timestamp_1",
-			ColumnType: "timestamp",
+			ColumnType: colTypeTimestamp,
 			Unique:     false,
 		},
 	}
@@ -190,7 +190,7 @@ func TestPrivateOutNoGoodEvents(t *testing.T) {
 		},
 		{
 			Name:       "timestamp_1",
-			ColumnType: "timestamp",
+			ColumnType: colTypeTimestamp,
 			Unique:     false,
 		},
 	}
@@ -247,7 +247,7 @@ func TestPrivateOutDeduplicatedEvents(t *testing.T) {
 		},
 		{
 			Name:       "timestamp_1",
-			ColumnType: "timestamp",
+			ColumnType: colTypeTimestamp,
 			Unique:     false,
 		},
 	}
@@ -332,7 +332,7 @@ func TestPrivateOutWrongTypeInField(t *testing.T) {
 		},
 		{
 			Name:       "timestamp_1",
-			ColumnType: "timestamp",
+			ColumnType: colTypeTimestamp,
 			Unique:     false,
 		},
 	}
@@ -399,7 +399,7 @@ func TestPrivateOutFewUniqueEventsYetWithDeduplicationEventsAnpooladEvents(t *te
 		},
 		{
 			Name:       "timestamp_1",
-			ColumnType: "timestamp",
+			ColumnType: colTypeTimestamp,
 			Unique:     false,
 		},
 	}
