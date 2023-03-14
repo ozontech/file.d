@@ -34,13 +34,12 @@ It discards the events if pipeline throughput gets higher than a configured thre
 }*/
 
 type Plugin struct {
-	ctx         context.Context
-	cancel      context.CancelFunc
-	logger      *zap.SugaredLogger
-	config      *Config
-	pipeline    string
-	format      string
-	redisClient redisClient
+	ctx      context.Context
+	cancel   context.CancelFunc
+	logger   *zap.SugaredLogger
+	config   *Config
+	pipeline string
+	format   string
 
 	limitersMap *limitersMap
 	limiterBuf  []byte
@@ -85,7 +84,8 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
-	// > Defines kind of backend.
+	// > Defines kind of backend. When redis backend is chosen and if by any reason plugin cannot connect to redis,
+	// > it will fallback to in-memory limiters.
 	LimiterBackend string `json:"limiter_backend" default:"memory" options:"memory|redis"` // *
 
 	// > @3@4@5@6
