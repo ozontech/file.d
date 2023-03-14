@@ -493,3 +493,47 @@ func TestThrottleLimiterExpiration(t *testing.T) {
 		throttleMapsCleanup()
 	})
 }
+
+func TestThrottleRedisFallbackToInMemory(t *testing.T) {
+	buckets := 2
+	limitA := 2
+	limitB := 3
+	defaultLimit := 20
+
+	iterations := 5
+
+	totalBuckets := iterations + 1
+	defaultLimitDelta := totalBuckets * defaultLimit
+	eventsTotal := totalBuckets*(limitA+limitB) + defaultLimitDelta
+
+	config := &Config{
+		Rules: []RuleConfig{
+			{Limit: int64(limitA), Conditions: map[string]string{"k8s_ns": "ns_1"}},
+			{Limit: int64(limitB), Conditions: map[string]string{"k8s_ns": "ns_2"}},
+		},
+		RedisBackendCfg: RedisBackendConfig{
+			Endpoint:     "invalid_redis",
+			Password:     "",
+			SyncInterval: "100ms",
+			WorkerCount:  2,
+		},
+		BucketsCount:   buckets,
+		BucketInterval: "100ms",
+		ThrottleField:  "k8s_pod",
+		TimeField:      "",
+		DefaultLimit:   int64(defaultLimit),
+		LimiterBackend: "redis",
+	}
+	err := cfg.Parse(config, nil)
+	if err != nil {
+		logger.Panic(err.Error())
+	}
+
+	workTime := config.BucketInterval_ * time.Duration(iterations)
+
+	tconf := testConfig{t, config, eventsTotal, workTime}
+	tconf.runPipeline()
+	t.Cleanup(func() {
+		throttleMapsCleanup()
+	})
+}
