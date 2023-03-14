@@ -213,15 +213,15 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 	}
 	p.format = format
 
-	if p.config.RedisBackendCfg.WorkerCount < 1 {
-		p.logger.Fatalf("workers_count must be > 0, passed: %d", p.config.RedisBackendCfg.WorkerCount)
-	}
-
 	limitersMu.Lock()
 	// init limitersMap only once per pipeline
 	if _, has := limiters[p.pipeline]; !has {
 		var redisOpts *redis.Options
 		if p.config.LimiterBackend == redisBackend {
+			if p.config.RedisBackendCfg.WorkerCount < 1 {
+				p.logger.Fatalf("workers_count must be > 0, passed: %d", p.config.RedisBackendCfg.WorkerCount)
+			}
+
 			redisOpts = &redis.Options{
 				Network:         "tcp",
 				Addr:            p.config.RedisBackendCfg.Endpoint,
