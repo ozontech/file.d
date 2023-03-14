@@ -12,6 +12,8 @@ import (
 
 const (
 	outputFileName = "column_gen.go"
+
+	goTypeTime = "time.Time"
 )
 
 //go:embed insane_column.go.tmpl
@@ -44,7 +46,7 @@ func (t Type) LibChTypeNameFull() string {
 	return "proto.Col" + t.LibChTypeName()
 }
 
-func (t Type) LibChTypeNullableNameFull() string {
+func (t Type) NullableTypeName() string {
 	return fmt.Sprintf("proto.ColNullable[%s]", t.GoName)
 }
 
@@ -58,9 +60,21 @@ func (t Type) InsaneConvertFunc() string {
 		return "AsBool"
 	case "string":
 		return "AsString"
+	case goTypeTime:
+		return "AsInt"
 	default:
 		return "AsInt"
 	}
+}
+
+func (t Type) ConvertInsaneJSONValue(varName string) string {
+	if t.IsComplexNumber {
+		return fmt.Sprintf("%sFromInt(%s)", t.GoName, varName)
+	}
+	if t.GoName == goTypeTime {
+		return fmt.Sprintf("time.Unix(int64(%s), 0)", varName)
+	}
+	return fmt.Sprintf("%s(%s)", t.GoName, varName)
 }
 
 type TemplateData struct {
@@ -152,6 +166,11 @@ func clickhouseTypes() []Type {
 		Type{
 			chTypeName: "Float64",
 			GoName:     "float64",
+		},
+		Type{
+			chTypeName:   "DateTime",
+			GoName:       goTypeTime,
+			CannotBeNull: true,
 		},
 	)
 

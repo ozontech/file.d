@@ -2,6 +2,10 @@ pipelines:
   file_clickhouse:
     input:
       type: file
+    actions:
+      - type: set_time
+        format: unixtime
+        field: ts
     output:
       type: clickhouse
       address: 127.0.0.1:9001
@@ -17,3 +21,5 @@ pipelines:
           type: Nullable(Int16)
         - name: c5
           type: Nullable(String)
+        - name: ts
+          type: DateTime

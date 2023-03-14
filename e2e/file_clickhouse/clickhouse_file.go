@@ -42,7 +42,8 @@ func (c *Config) Configure(t *testing.T, conf *cfg.Config, pipelineName string) 
     c2 Int8,
     c3 Int16,
     c4 Nullable(Int16),
-    c5 Nullable(String)
+    c5 Nullable(String),
+    ts DateTime
 ) ENGINE = Memory;`})
 	require.NoError(t, err)
 
