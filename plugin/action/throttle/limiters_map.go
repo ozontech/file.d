@@ -98,9 +98,11 @@ func newLimitersMap(lmCfg limitersMapConfig, redisOpts *redis.Options) *limiters
 	if redisOpts != nil {
 		client := redis.NewClient(redisOpts)
 		if pingResp := client.Ping(); pingResp.Err() != nil {
-			lm.logger.Fatalf("can't ping redis: %s", pingResp.Err())
+			lm.logger.Errorf("can't ping redis: %s", pingResp.Err())
+			lm.logger.Warn("couldn't connect to redis, falling back to in-memory limiters")
+		} else {
+			lm.limiterCfg.redisClient = client
 		}
-		lm.limiterCfg.redisClient = client
 	}
 	return lm
 }
@@ -168,18 +170,24 @@ func (l *limitersMap) maintenance() {
 func (l *limitersMap) getNewLimiter(throttleKey, keyLimitOverride string, rule *rule) limiter {
 	switch l.limiterCfg.backend {
 	case redisBackend:
-		return NewRedisLimiter(
-			l.limiterCfg.ctx,
-			l.limiterCfg.redisClient,
-			l.limiterCfg.pipeline,
-			l.limiterCfg.throttleField,
-			throttleKey,
-			l.limiterCfg.bucketInterval,
-			l.limiterCfg.bucketsCount,
-			rule.limit,
-			keyLimitOverride,
-			l.limiterCfg.limiterValueField,
-		)
+		var lim limiter
+		if l.limiterCfg.redisClient != nil {
+			lim = NewRedisLimiter(
+				l.limiterCfg.ctx,
+				l.limiterCfg.redisClient,
+				l.limiterCfg.pipeline,
+				l.limiterCfg.throttleField,
+				throttleKey,
+				l.limiterCfg.bucketInterval,
+				l.limiterCfg.bucketsCount,
+				rule.limit,
+				keyLimitOverride,
+				l.limiterCfg.limiterValueField,
+			)
+		} else {
+			lim = NewInMemoryLimiter(l.limiterCfg.bucketInterval, l.limiterCfg.bucketsCount, rule.limit)
+		}
+		return lim
 	case inMemoryBackend:
 		return NewInMemoryLimiter(l.limiterCfg.bucketInterval, l.limiterCfg.bucketsCount, rule.limit)
 	default:
