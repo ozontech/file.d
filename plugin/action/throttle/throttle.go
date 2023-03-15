@@ -235,6 +235,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 		}
 		lmCfg := limitersMapConfig{
 			limitersExpiration: p.config.LimiterExpiration_,
+			isStrict:           params.PipelineSettings.IsStrict,
 			logger:             p.logger,
 			limiterCfg: &limiterConfig{
 				ctx:               p.ctx,
