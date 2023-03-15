@@ -256,6 +256,7 @@ func (p *Plugin) out(_ *pipeline.WorkerData, batch *pipeline.Batch) {
 
 	// Deduplicate events, pg can't do upsert with duplication.
 	uniqueEventsMap := make(map[string]struct{}, len(batch.Events))
+	var anyValidValue bool
 
 	for _, event := range batch.Events {
 		fieldValues, uniqueID, err := p.processEvent(event, pgFields, uniqFields)
@@ -291,15 +292,18 @@ func (p *Plugin) out(_ *pipeline.WorkerData, batch *pipeline.Batch) {
 			p.duplicatedEventMetric.WithLabelValues().Inc()
 			p.logger.Infof("event duplicated. Fields: %v, values: %v", pgFields, fieldValues)
 		} else {
-			uniqueEventsMap[uniqueID] = struct{}{}
+			if uniqueID != "" {
+				uniqueEventsMap[uniqueID] = struct{}{}
+			}
 			builder = builder.Values(fieldValues...)
+			anyValidValue = true
 		}
 	}
 
 	builder = builder.Suffix(p.queryBuilder.GetPostfix()).PlaceholderFormat(sq.Dollar)
 
 	// no valid events passed.
-	if len(uniqueEventsMap) == 0 {
+	if !anyValidValue {
 		return
 	}
 

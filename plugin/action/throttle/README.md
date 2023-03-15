@@ -71,6 +71,12 @@ Each object has the `limit` and `conditions` fields.
 
 <br>
 
+**`limiter_expiration`** *`cfg.Duration`* *`default=30m`* 
+
+Time interval after which unused limiters are removed.
+
+<br>
+
 **`endpoint`** *`string`* 
 
 

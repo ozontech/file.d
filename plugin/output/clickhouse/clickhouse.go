@@ -31,7 +31,6 @@ const (
 )
 
 type Clickhouse interface {
-	Ping(ctx context.Context) error
 	Close()
 	Do(ctx context.Context, query ch.Query) error
 }
@@ -141,13 +140,6 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
-	// > Allowing Clickhouse to discard extra data.
-	// > If disabled and extra data found, Clickhouse throws an error and file.d will infinitely retry invalid requests.
-	// > If you want to disable the settings, check the `keep_fields` plugin to prevent the appearance of extra data.
-	// SkipUnknownFields bool `json:"skip_unknown_fields" default:"true"`
-
-	// > @3@4@5@6
-	// >
 	// > Additional settings to the Clickhouse.
 	// > Settings list: https://clickhouse.com/docs/en/operations/settings/settings
 	ClickhouseSettings Settings `json:"clickhouse_settings"` // *
@@ -228,7 +220,6 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.logger = params.Logger.Desugar()
 	p.config = config.(*Config)
 	p.ctx, p.cancelFunc = context.WithCancel(context.Background())
-	p.avgEventSize = params.PipelineSettings.AvgEventSize
 
 	if p.config.Retry < 1 {
 		p.logger.Fatal("'retry' can't be <1")

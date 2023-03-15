@@ -7,39 +7,27 @@ import (
 	"time"
 
 	"github.com/go-redis/redis"
+	prom "github.com/prometheus/client_golang/prometheus"
+	"go.uber.org/zap"
+
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
+	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
-	"github.com/ozontech/file.d/plugin"
-	"go.uber.org/zap"
 )
 
 var (
 	defaultThrottleKey = "default"
 
 	// limiters should be shared across pipeline, so let's have a map by namespace and limiter name
-	limiters                           = map[string]map[string]limiter{} // todo: cleanup this map?
-	limitersMu                         = &sync.RWMutex{}
-	redisLimiterSynchronizationStarted = map[string]struct{}{}
+	limiters   = map[string]*limitersMap{}
+	limitersMu = &sync.RWMutex{}
 )
 
 const (
 	redisBackend    = "redis"
 	inMemoryBackend = "memory"
 )
-
-// interface with only necessary functions of the original redis.Client
-type redisClient interface {
-	IncrBy(key string, value int64) *redis.IntCmd
-	Expire(key string, expiration time.Duration) *redis.BoolCmd
-	SetNX(key string, value any, expiration time.Duration) *redis.BoolCmd
-	Get(key string) *redis.StringCmd
-	Ping() *redis.StatusCmd
-}
-type limiter interface {
-	isAllowed(event *pipeline.Event, ts time.Time) bool
-	sync()
-}
 
 /*{ introduction
 It discards the events if pipeline throughput gets higher than a configured threshold.
@@ -54,9 +42,11 @@ type Plugin struct {
 	format      string
 	redisClient redisClient
 
-	limiterBuf []byte
-	rules      []*rule
-	plugin.NoMetricsPlugin
+	limitersMap *limitersMap
+	limiterBuf  []byte
+	rules       []*rule
+
+	limitersMapSizeMetric *prom.GaugeVec
 }
 
 // ! config-params
@@ -123,6 +113,12 @@ type Config struct {
 	// > * `limit_kind` – the type of a limit: `count` - number of messages, `size` - total size from all messages
 	// > * `conditions` – the map of `event field name => event field value`. The conditions are checked using `AND` operator.
 	Rules []RuleConfig `json:"rules" default:"" slice:"true"` // *
+
+	// > @3@4@5@6
+	// >
+	// > Time interval after which unused limiters are removed.
+	LimiterExpiration  cfg.Duration `json:"limiter_expiration" parse:"duration" default:"30m"` // *
+	LimiterExpiration_ time.Duration
 }
 
 type RedisBackendConfig struct {
@@ -202,18 +198,6 @@ func factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 	return &Plugin{}, &Config{}
 }
 
-func (p *Plugin) syncWorker(ctx context.Context, jobCh <-chan limiter, wg *sync.WaitGroup) {
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case job := <-jobCh:
-			job.sync()
-			wg.Done()
-		}
-	}
-}
-
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginParams) {
 	p.config = config.(*Config)
 	p.logger = params.Logger
@@ -223,23 +207,22 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 	p.ctx = ctx
 	p.cancel = cancel
 
-	limitersMu.Lock()
-	limiters[p.pipeline] = map[string]limiter{}
-	limitersMu.Unlock()
-
 	format, err := pipeline.ParseFormatName(p.config.TimeFieldFormat)
 	if err != nil {
 		format = p.config.TimeFieldFormat
 	}
 	p.format = format
 
-	if p.config.LimiterBackend == redisBackend {
-		if p.config.RedisBackendCfg.WorkerCount < 1 {
-			p.logger.Fatalf("workers_count must be > 0, passed: %d", p.config.RedisBackendCfg.WorkerCount)
-		}
+	if p.config.RedisBackendCfg.WorkerCount < 1 {
+		p.logger.Fatalf("workers_count must be > 0, passed: %d", p.config.RedisBackendCfg.WorkerCount)
+	}
 
-		p.redisClient = redis.NewClient(
-			&redis.Options{
+	limitersMu.Lock()
+	// init limitersMap only once per pipeline
+	if _, has := limiters[p.pipeline]; !has {
+		var redisOpts *redis.Options
+		if p.config.LimiterBackend == redisBackend {
+			redisOpts = &redis.Options{
 				Network:         "tcp",
 				Addr:            p.config.RedisBackendCfg.Endpoint,
 				Password:        p.config.RedisBackendCfg.Password,
@@ -248,21 +231,34 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 				MaxRetries:      p.config.RedisBackendCfg.MaxRetries,
 				MinRetryBackoff: p.config.RedisBackendCfg.MinRetryBackoff_,
 				MaxRetryBackoff: p.config.RedisBackendCfg.MaxRetryBackoff_,
-			})
-
-		if pingResp := p.redisClient.Ping(); pingResp.Err() != nil {
-			p.logger.Fatalf("can't ping redis: %s", pingResp.Err())
+			}
 		}
-
-		limitersMu.Lock()
-		// run sync only once per pipeline
-		if _, ok := redisLimiterSynchronizationStarted[p.pipeline]; !ok {
-			redisLimiterSynchronizationStarted[p.pipeline] = struct{}{}
-
-			go p.runSync(ctx)
+		lmCfg := limitersMapConfig{
+			limitersExpiration: p.config.LimiterExpiration_,
+			logger:             p.logger,
+			limiterCfg: &limiterConfig{
+				ctx:               p.ctx,
+				backend:           p.config.LimiterBackend,
+				pipeline:          p.pipeline,
+				throttleField:     string(p.config.ThrottleField),
+				bucketInterval:    p.config.BucketInterval_,
+				bucketsCount:      p.config.BucketsCount,
+				limiterValueField: p.config.RedisBackendCfg.LimiterValueField,
+			},
+			mapSizeMetric: p.limitersMapSizeMetric,
 		}
-		limitersMu.Unlock()
+		limiters[p.pipeline] = newLimitersMap(lmCfg, redisOpts)
+		if p.config.LimiterBackend == redisBackend {
+			// run sync only once per pipeline
+			go limiters[p.pipeline].runSync(ctx,
+				p.config.RedisBackendCfg.WorkerCount,
+				p.config.RedisBackendCfg.SyncInterval_,
+			)
+		}
+		go limiters[p.pipeline].maintenance()
 	}
+	p.limitersMap = limiters[p.pipeline]
+	limitersMu.Unlock()
 
 	for i, r := range p.config.Rules {
 		p.rules = append(p.rules, NewRule(r.Conditions, complexLimit{r.Limit, r.LimitKind}, i))
@@ -271,56 +267,11 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 	p.rules = append(p.rules, NewRule(map[string]string{}, complexLimit{p.config.DefaultLimit, p.config.LimitKind}, len(p.config.Rules)))
 }
 
-// runSync runs synchronization with redis.
-func (p *Plugin) runSync(ctx context.Context) {
-	ticker := time.NewTicker(p.config.RedisBackendCfg.SyncInterval_)
-	wg := sync.WaitGroup{}
-
-	jobs := make(chan limiter, p.config.RedisBackendCfg.WorkerCount)
-	for i := 0; i < p.config.RedisBackendCfg.WorkerCount; i++ {
-		go p.syncWorker(ctx, jobs, &wg)
-	}
-
-	for {
-		select {
-		case <-ctx.Done():
-			close(jobs)
-			return
-		case <-ticker.C:
-			limitersMu.RLock()
-
-			for _, lim := range limiters[p.pipeline] {
-				wg.Add(1)
-				jobs <- lim
-			}
-			wg.Wait()
-			limitersMu.RUnlock()
-		}
-	}
-}
-
-func (p *Plugin) getNewLimiter(throttleField, limiterKey, keyLimitOverride string, rule *rule) limiter {
-	switch p.config.LimiterBackend {
-	case redisBackend:
-		return NewRedisLimiter(
-			p.ctx,
-			p.redisClient,
-			p.pipeline,
-			throttleField,
-			limiterKey,
-			p.config.BucketInterval_,
-			p.config.BucketsCount,
-			rule.limit,
-			keyLimitOverride,
-			p.config.RedisBackendCfg.LimiterValueField,
-		)
-	case inMemoryBackend:
-		return NewInMemoryLimiter(p.config.BucketInterval_, p.config.BucketsCount, rule.limit)
-	default:
-		p.logger.Panicf("unknown limiter backend: %s", p.config.LimiterBackend)
-	}
-
-	return nil
+func (p *Plugin) RegisterMetrics(ctl *metric.Ctl) {
+	p.limitersMapSizeMetric = ctl.RegisterGauge(
+		"throttle_limiter_map_size",
+		"Size of internal map of throttle limiters",
+	)
 }
 
 // Stop ends plugin activity.
@@ -364,36 +315,8 @@ func (p *Plugin) isAllowed(event *pipeline.Event) bool {
 		if !rule.isMatch(event) {
 			continue
 		}
-
-		p.limiterBuf = append(p.limiterBuf[:0], rule.byteIdxPart...)
-		p.limiterBuf = append(p.limiterBuf, throttleKey...)
-		limiterKey := pipeline.ByteToStringUnsafe(p.limiterBuf)
-
-		limitersMu.RLock()
-		limiter, has := limiters[p.pipeline][limiterKey]
-		limitersMu.RUnlock()
-
-		// fast check with read lock
-		if !has {
-			limitersMu.Lock()
-			limiter, has = limiters[p.pipeline][limiterKey]
-			// we could already write it between `limitersMu.RUnlock()` and `limitersMu.Lock()`, so we need to check again
-			if !has {
-				limiterKeyBytes := p.limiterBuf[2:]
-				limiter = p.getNewLimiter(
-					string(p.config.ThrottleField),
-					pipeline.ByteToStringUnsafe(limiterKeyBytes),
-					keyLimitOverride,
-					rule,
-				)
-				// alloc new string before adding new key to map
-				limiterKey = string(p.limiterBuf)
-				limiters[p.pipeline][limiterKey] = limiter
-			}
-			limitersMu.Unlock()
-		}
-
-		return limiter.isAllowed(event, ts)
+		lim := p.limitersMap.getOrAdd(throttleKey, keyLimitOverride, rule)
+		return lim.isAllowed(event, ts)
 	}
 
 	return true
