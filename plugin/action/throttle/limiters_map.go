@@ -2,6 +2,7 @@ package throttle
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
@@ -57,6 +58,7 @@ type limiterConfig struct {
 // limitersMapConfig configuration of limiters map.
 type limitersMapConfig struct {
 	limitersExpiration time.Duration
+	isStrict           bool
 	logger             *zap.SugaredLogger
 
 	limiterCfg *limiterConfig
@@ -98,7 +100,11 @@ func newLimitersMap(lmCfg limitersMapConfig, redisOpts *redis.Options) *limiters
 	if redisOpts != nil {
 		client := redis.NewClient(redisOpts)
 		if pingResp := client.Ping(); pingResp.Err() != nil {
-			lm.logger.Errorf("can't ping redis: %s", pingResp.Err())
+			msg := fmt.Sprintf("can't ping redis: %s", pingResp.Err())
+			if lmCfg.isStrict {
+				lm.logger.Fatal(msg)
+			}
+			lm.logger.Error(msg)
 			lm.logger.Warn("couldn't connect to redis, falling back to in-memory limiters")
 		} else {
 			lm.limiterCfg.redisClient = client
