@@ -44,8 +44,7 @@ type Plugin struct {
 
 	query string
 
-	avgEventSize int
-	pool         Clickhouse
+	pool Clickhouse
 
 	// plugin metrics
 
@@ -153,7 +152,7 @@ type Config struct {
 	// > @3@4@5@6
 	// >
 	// > Timeout for DB requests in milliseconds.
-	DBRequestTimeout  cfg.Duration `json:"db_request_timeout" default:"3000ms" parse:"duration"` // *
+	DBRequestTimeout  cfg.Duration `json:"db_request_timeout" default:"10s" parse:"duration"` // *
 	DBRequestTimeout_ time.Duration
 
 	// > @3@4@5@6
@@ -177,6 +176,7 @@ type Config struct {
 	// > @3@4@5@6
 	// >
 	// > How much workers will be instantiated to send batches.
+	// > It also configures the amount of minimum and maximum number of database connections.
 	WorkersCount  cfg.Expression `json:"workers_count" default:"gomaxprocs*4" parse:"expression"` // *
 	WorkersCount_ int
 
@@ -330,12 +330,12 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 		}
 	}
 
-	var queryInput proto.Input
+	queryInput := make(proto.Input, len(input))
 	for i := range input {
-		queryInput = append(queryInput, proto.InputColumn{
+		queryInput[i] = proto.InputColumn{
 			Name: input[i].Name,
 			Data: input[i].ColInput,
-		})
+		}
 	}
 
 	var err error

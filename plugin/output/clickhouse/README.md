@@ -63,11 +63,6 @@ file.d will fall with non-zero exit code.
 
 **`clickhouse_settings`** *`Settings`* 
 
-Allowing Clickhouse to discard extra data.
-If disabled and extra data found, Clickhouse throws an error and file.d will infinitely retry invalid requests.
-If you want to disable the settings, check the `keep_fields` plugin to prevent the appearance of extra data.
-*`Settings`* 
-
 Additional settings to the Clickhouse.
 Settings list: https://clickhouse.com/docs/en/operations/settings/settings
 
@@ -79,7 +74,7 @@ Retention milliseconds for retry to DB.
 
 <br>
 
-**`db_request_timeout`** *`cfg.Duration`* *`default=3000ms`* 
+**`db_request_timeout`** *`cfg.Duration`* *`default=10s`* 
 
 Timeout for DB requests in milliseconds.
 
@@ -106,6 +101,7 @@ How often to check that idle connections is time to kill.
 **`workers_count`** *`cfg.Expression`* *`default=gomaxprocs*4`* 
 
 How much workers will be instantiated to send batches.
+It also configures the amount of minimum and maximum number of database connections.
 
 <br>
 
