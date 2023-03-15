@@ -11,7 +11,6 @@ import (
 	"github.com/ClickHouse/ch-go/proto"
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
-	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/tls"
@@ -44,13 +43,15 @@ type Plugin struct {
 	ctx        context.Context
 	cancelFunc context.CancelFunc
 
+	query string
+
 	avgEventSize int
 	pool         Clickhouse
 
 	// plugin metrics
 
-	execErrorsMetric   *prom.CounterVec
-	writtenEventMetric *prom.CounterVec
+	insertErrorsMetric *prom.CounterVec
+	queriesCountMetric *prom.CounterVec
 }
 
 type Setting struct {
@@ -219,8 +220,8 @@ func Factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 }
 
 func (p *Plugin) RegisterMetrics(ctl *metric.Ctl) {
-	p.execErrorsMetric = ctl.RegisterCounter("output_clickhouse_errors", "Total clickhouse exec errors")
-	p.writtenEventMetric = ctl.RegisterCounter("output_clickhouse_event_written", "Total events written to ???")
+	p.insertErrorsMetric = ctl.RegisterCounter("output_clickhouse_errors", "Total clickhouse insert errors")
+	p.queriesCountMetric = ctl.RegisterCounter("output_clickhouse_queries_count", "How many queries sent by clickhouse output plugin")
 }
 
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginParams) {
@@ -241,6 +242,8 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	if _, err := inferInsaneColInputs(p.config.Columns); err != nil {
 		p.logger.Fatal("invalid database schema", zap.Error(err))
 	}
+
+	p.query = fmt.Sprintf("INSERT INTO %s VALUES", p.config.Table)
 
 	var compression ch.Compression
 	switch strings.ToLower(p.config.Compression) {
@@ -350,19 +353,25 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 		if err == nil {
 			break
 		}
+		p.insertErrorsMetric.WithLabelValues().Inc()
 		time.Sleep(p.config.Retention_)
-		logger.Errorf("can't insert to the table: %s", err)
+		p.logger.Error("an attempt to insert a batch failed", zap.Error(err))
 	}
 	if err != nil {
-		p.logger.Fatal("can't insert to the table", zap.Int("retries", p.config.Retry), zap.Error(err))
+		p.logger.Fatal("can't insert to the table", zap.Error(err),
+			zap.Int("retries", p.config.Retry),
+			zap.String("table", p.config.Table))
 	}
 }
 
 func (p *Plugin) do(queryInput proto.Input) error {
+	defer p.queriesCountMetric.WithLabelValues().Inc()
+
 	ctx, cancel := context.WithTimeout(p.ctx, p.config.DBRequestTimeout_)
 	defer cancel()
+
 	return p.pool.Do(ctx, ch.Query{
-		Body:  fmt.Sprintf("INSERT INTO %s VALUES", p.config.Table),
+		Body:  p.query,
 		Input: queryInput,
 	})
 }
