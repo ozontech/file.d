@@ -234,6 +234,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 			}
 		}
 		lmCfg := limitersMapConfig{
+			ctx:                p.ctx,
 			limitersExpiration: p.config.LimiterExpiration_,
 			isStrict:           params.PipelineSettings.IsStrict,
 			logger:             p.logger,
@@ -251,12 +252,12 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 		limiters[p.pipeline] = newLimitersMap(lmCfg, redisOpts)
 		if p.config.LimiterBackend == redisBackend {
 			// run sync only once per pipeline
-			go limiters[p.pipeline].runSync(ctx,
+			go limiters[p.pipeline].runSync(p.ctx,
 				p.config.RedisBackendCfg.WorkerCount,
 				p.config.RedisBackendCfg.SyncInterval_,
 			)
 		}
-		go limiters[p.pipeline].maintenance()
+		go limiters[p.pipeline].maintenance(p.ctx)
 	}
 	p.limitersMap = limiters[p.pipeline]
 	limitersMu.Unlock()
