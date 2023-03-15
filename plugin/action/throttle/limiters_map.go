@@ -14,7 +14,10 @@ import (
 	"github.com/ozontech/file.d/pipeline"
 )
 
-const maintenanceInterval = time.Second
+const (
+	maintenanceInterval    = time.Second
+	redisReconnectInterval = 30 * time.Minute
+)
 
 // interface with only necessary functions of the original redis.Client
 type redisClient interface {
@@ -69,13 +72,14 @@ type limitersMapConfig struct {
 // limitersMap is auxiliary type for storing the map of strings to limiters with additional info for cleanup
 // and thread safe map operations handling.
 type limitersMap struct {
-	lims        map[string]*limiterWithGen
-	mu          *sync.RWMutex
-	limiterBuf  []byte
-	activeTasks atomic.Uint32
-	curGen      int64
-	limitersExp int64
-	logger      *zap.SugaredLogger
+	lims             map[string]*limiterWithGen
+	mu               *sync.RWMutex
+	limiterBuf       []byte
+	activeTasks      atomic.Uint32
+	curGen           int64
+	limitersExp      int64
+	isRedisConnected bool
+	logger           *zap.SugaredLogger
 
 	limiterCfg *limiterConfig
 
@@ -98,19 +102,36 @@ func newLimitersMap(lmCfg limitersMapConfig, redisOpts *redis.Options) *limiters
 		mapSizeMetric: lmCfg.mapSizeMetric,
 	}
 	if redisOpts != nil {
-		client := redis.NewClient(redisOpts)
-		if pingResp := client.Ping(); pingResp.Err() != nil {
+		lm.limiterCfg.redisClient = redis.NewClient(redisOpts)
+		if pingResp := lm.limiterCfg.redisClient.Ping(); pingResp.Err() != nil {
 			msg := fmt.Sprintf("can't ping redis: %s", pingResp.Err())
 			if lmCfg.isStrict {
 				lm.logger.Fatal(msg)
 			}
 			lm.logger.Error(msg)
-			lm.logger.Warn("couldn't connect to redis, falling back to in-memory limiters")
+			lm.logger.Warnf(
+				"couldn't connect to redis, falling back to in-memory limiters, reconnection attempts will happen every %s interval",
+				redisReconnectInterval,
+			)
+			go lm.tryRedisReconnect()
 		} else {
-			lm.limiterCfg.redisClient = client
+			lm.isRedisConnected = true
 		}
 	}
 	return lm
+}
+
+func (l *limitersMap) tryRedisReconnect() {
+	for {
+		time.Sleep(redisReconnectInterval)
+		if pingResp := l.limiterCfg.redisClient.Ping(); pingResp.Err() == nil {
+			l.mu.Lock()
+			l.isRedisConnected = true
+			l.mu.Unlock()
+			l.logger.Info("connected to redis")
+			return
+		}
+	}
 }
 
 func (l *limitersMap) syncWorker(jobCh <-chan limiter, wg *sync.WaitGroup) {
@@ -122,6 +143,17 @@ func (l *limitersMap) syncWorker(jobCh <-chan limiter, wg *sync.WaitGroup) {
 
 // runSync starts procedure of limiters sync with workers count and interval set in limitersMap.
 func (l *limitersMap) runSync(ctx context.Context, workerCount int, syncInterval time.Duration) {
+	// if redis failed to connect, wait for successful reconnect before starting workers
+	for {
+		l.mu.RLock()
+		if l.isRedisConnected {
+			l.mu.RUnlock()
+			break
+		}
+		l.mu.RUnlock()
+		time.Sleep(redisReconnectInterval)
+	}
+
 	wg := sync.WaitGroup{}
 
 	jobs := make(chan limiter, workerCount)
@@ -177,7 +209,7 @@ func (l *limitersMap) getNewLimiter(throttleKey, keyLimitOverride string, rule *
 	switch l.limiterCfg.backend {
 	case redisBackend:
 		var lim limiter
-		if l.limiterCfg.redisClient != nil {
+		if l.isRedisConnected {
 			lim = NewRedisLimiter(
 				l.limiterCfg.ctx,
 				l.limiterCfg.redisClient,
