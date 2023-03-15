@@ -60,6 +60,7 @@ type limiterConfig struct {
 
 // limitersMapConfig configuration of limiters map.
 type limitersMapConfig struct {
+	ctx                context.Context
 	limitersExpiration time.Duration
 	isStrict           bool
 	logger             *zap.SugaredLogger
@@ -72,6 +73,7 @@ type limitersMapConfig struct {
 // limitersMap is auxiliary type for storing the map of strings to limiters with additional info for cleanup
 // and thread safe map operations handling.
 type limitersMap struct {
+	ctx              context.Context
 	lims             map[string]*limiterWithGen
 	mu               *sync.RWMutex
 	limiterBuf       []byte
@@ -89,6 +91,7 @@ type limitersMap struct {
 func newLimitersMap(lmCfg limitersMapConfig, redisOpts *redis.Options) *limitersMap {
 	nowTs := time.Now().UnixMicro()
 	lm := &limitersMap{
+		ctx:         lmCfg.ctx,
 		lims:        make(map[string]*limiterWithGen),
 		mu:          &sync.RWMutex{},
 		limiterBuf:  make([]byte, 0),
@@ -113,7 +116,7 @@ func newLimitersMap(lmCfg limitersMapConfig, redisOpts *redis.Options) *limiters
 				"couldn't connect to redis, falling back to in-memory limiters, reconnection attempts will happen every %s interval",
 				redisReconnectInterval,
 			)
-			go lm.tryRedisReconnect()
+			go lm.tryRedisReconnect(lm.ctx)
 		} else {
 			lm.isRedisConnected = true
 		}
@@ -121,15 +124,20 @@ func newLimitersMap(lmCfg limitersMapConfig, redisOpts *redis.Options) *limiters
 	return lm
 }
 
-func (l *limitersMap) tryRedisReconnect() {
+func (l *limitersMap) tryRedisReconnect(ctx context.Context) {
+	ticker := time.NewTicker(redisReconnectInterval)
 	for {
-		time.Sleep(redisReconnectInterval)
-		if pingResp := l.limiterCfg.redisClient.Ping(); pingResp.Err() == nil {
-			l.mu.Lock()
-			l.isRedisConnected = true
-			l.mu.Unlock()
-			l.logger.Info("connected to redis")
+		select {
+		case <-ctx.Done():
 			return
+		case <-ticker.C:
+			if pingResp := l.limiterCfg.redisClient.Ping(); pingResp.Err() == nil {
+				l.mu.Lock()
+				l.isRedisConnected = true
+				l.mu.Unlock()
+				l.logger.Info("connected to redis")
+				return
+			}
 		}
 	}
 }
@@ -185,22 +193,27 @@ func (l *limitersMap) runSync(ctx context.Context, workerCount int, syncInterval
 // current time in microseconds, every limiter in the map has its own generation indicating last time it was acquired.
 // If the difference between the current generation of the map and the limiter's generation is greater than the
 // limiters expiration, the limiter's key is deleted from the map.
-func (l *limitersMap) maintenance() {
+func (l *limitersMap) maintenance(ctx context.Context) {
+	ticker := time.NewTicker(maintenanceInterval)
 	for {
-		time.Sleep(maintenanceInterval)
-		l.mu.Lock()
-		// find expired limiters and remove them
-		nowTs := time.Now().UnixMicro()
-		l.curGen = nowTs
-		for key, lim := range l.lims {
-			if nowTs-lim.gen.Load() < l.limitersExp {
-				continue
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			l.mu.Lock()
+			// find expired limiters and remove them
+			nowTs := time.Now().UnixMicro()
+			l.curGen = nowTs
+			for key, lim := range l.lims {
+				if nowTs-lim.gen.Load() < l.limitersExp {
+					continue
+				}
+				delete(l.lims, key)
 			}
-			delete(l.lims, key)
+			mapSize := float64(len(l.lims))
+			l.mapSizeMetric.WithLabelValues().Set(mapSize)
+			l.mu.Unlock()
 		}
-		mapSize := float64(len(l.lims))
-		l.mapSizeMetric.WithLabelValues().Set(mapSize)
-		l.mu.Unlock()
 	}
 }
 
