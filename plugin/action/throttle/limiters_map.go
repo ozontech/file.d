@@ -113,7 +113,7 @@ func newLimitersMap(lmCfg limitersMapConfig, redisOpts *redis.Options) *limiters
 			}
 			lm.logger.Error(msg)
 			lm.logger.Warnf(
-				"couldn't connect to redis, falling back to in-memory limiters, reconnection attempts will happen every %s interval",
+				"sync with redis won't start until successful connect, reconnection attempts will happen every %s",
 				redisReconnectInterval,
 			)
 			go lm.tryRedisReconnect(lm.ctx)
@@ -221,24 +221,18 @@ func (l *limitersMap) maintenance(ctx context.Context) {
 func (l *limitersMap) getNewLimiter(throttleKey, keyLimitOverride string, rule *rule) limiter {
 	switch l.limiterCfg.backend {
 	case redisBackend:
-		var lim limiter
-		if l.isRedisConnected {
-			lim = NewRedisLimiter(
-				l.limiterCfg.ctx,
-				l.limiterCfg.redisClient,
-				l.limiterCfg.pipeline,
-				l.limiterCfg.throttleField,
-				throttleKey,
-				l.limiterCfg.bucketInterval,
-				l.limiterCfg.bucketsCount,
-				rule.limit,
-				keyLimitOverride,
-				l.limiterCfg.limiterValueField,
-			)
-		} else {
-			lim = NewInMemoryLimiter(l.limiterCfg.bucketInterval, l.limiterCfg.bucketsCount, rule.limit)
-		}
-		return lim
+		return NewRedisLimiter(
+			l.limiterCfg.ctx,
+			l.limiterCfg.redisClient,
+			l.limiterCfg.pipeline,
+			l.limiterCfg.throttleField,
+			throttleKey,
+			l.limiterCfg.bucketInterval,
+			l.limiterCfg.bucketsCount,
+			rule.limit,
+			keyLimitOverride,
+			l.limiterCfg.limiterValueField,
+		)
 	case inMemoryBackend:
 		return NewInMemoryLimiter(l.limiterCfg.bucketInterval, l.limiterCfg.bucketsCount, rule.limit)
 	default:
