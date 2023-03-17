@@ -1,12 +1,25 @@
 package clickhouse
 
 import (
+	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/ClickHouse/ch-go/proto"
+	insaneJSON "github.com/vitkovskii/insane-json"
 )
 
 //go:generate go run ./colgenerator
+
+var (
+	ErrNodeIsNil = errors.New("node is nil, but column is not")
+)
+
+type InsaneColInput interface {
+	proto.ColInput
+	Append(node *insaneJSON.StrictNode) error
+	Reset()
+}
 
 type InsaneColumn struct {
 	Name     string
@@ -37,4 +50,53 @@ func inferInsaneColInputs(columns []Column) ([]InsaneColumn, error) {
 	}
 
 	return insaneColumns, nil
+}
+
+func insaneInfer(auto proto.ColAuto) (InsaneColInput, error) {
+	t := strings.TrimSuffix(strings.TrimPrefix(auto.Type().String(), "Nullable("), ")")
+	nullable := auto.Type().Base() == proto.ColumnTypeNullable
+	switch proto.ColumnType(t) {
+	case proto.ColumnTypeBool:
+		return NewColBool(nullable), nil
+	case proto.ColumnTypeString:
+		return NewColString(nullable), nil
+	case proto.ColumnTypeInt8:
+		return NewColInt8(nullable), nil
+	case proto.ColumnTypeUInt8:
+		return NewColUInt8(nullable), nil
+	case proto.ColumnTypeInt16:
+		return NewColInt16(nullable), nil
+	case proto.ColumnTypeUInt16:
+		return NewColUInt16(nullable), nil
+	case proto.ColumnTypeInt32:
+		return NewColInt32(nullable), nil
+	case proto.ColumnTypeUInt32:
+		return NewColUInt32(nullable), nil
+	case proto.ColumnTypeInt64:
+		return NewColInt64(nullable), nil
+	case proto.ColumnTypeUInt64:
+		return NewColUInt64(nullable), nil
+	case proto.ColumnTypeInt128:
+		return NewColInt128(nullable), nil
+	case proto.ColumnTypeUInt128:
+		return NewColUInt128(nullable), nil
+	case proto.ColumnTypeInt256:
+		return NewColInt256(nullable), nil
+	case proto.ColumnTypeUInt256:
+		return NewColUInt256(nullable), nil
+	case proto.ColumnTypeFloat32:
+		return NewColFloat32(nullable), nil
+	case proto.ColumnTypeFloat64:
+		return NewColFloat64(nullable), nil
+	case proto.ColumnTypeDateTime:
+		return NewColDateTime(), nil
+	default:
+		switch auto.Type().Base() {
+		case proto.ColumnTypeEnum8:
+			return NewColEnum8(auto.Data.(*proto.ColEnum)), nil
+		case proto.ColumnTypeEnum16:
+			return NewColEnum16(auto.Data.(*proto.ColEnum)), nil
+		}
+		return nil, fmt.Errorf("inference for type %q is not supported", auto.Type().String())
+	}
 }

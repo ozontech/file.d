@@ -1,10 +1,13 @@
 package main
 
 import (
+	"bytes"
 	_ "embed"
 	"fmt"
-	"html/template"
+	"go/format"
 	"os"
+	"strings"
+	"text/template"
 
 	"github.com/ClickHouse/ch-go/proto"
 	"github.com/ozontech/file.d/logger"
@@ -14,6 +17,7 @@ const (
 	outputFileName = "column_gen.go"
 
 	goTypeTime = "time.Time"
+	goTypeEnum = "proto.Enum"
 )
 
 //go:embed insane_column.go.tmpl
@@ -27,7 +31,7 @@ type Type struct {
 	CannotConvert bool
 	CannotBeNull  bool
 	// integers with 128-256 bits
-	IsComplexNumber bool
+	isComplexNumber bool
 }
 
 func (t Type) ChTypeName() string {
@@ -38,6 +42,9 @@ func (t Type) LibChTypeName() string {
 	if t.ChTypeName() == string(proto.ColumnTypeString) {
 		// 'String' named as 'Str' in the ch-go library
 		return "Str"
+	}
+	if t.GoName == goTypeEnum {
+		return "Enum"
 	}
 	return t.ChTypeName()
 }
@@ -58,7 +65,7 @@ func (t Type) InsaneConvertFunc() string {
 	switch t.GoName {
 	case "bool":
 		return "AsBool"
-	case "string":
+	case "string", goTypeEnum:
 		return "AsString"
 	case goTypeTime:
 		return "AsInt"
@@ -67,14 +74,84 @@ func (t Type) InsaneConvertFunc() string {
 	}
 }
 
+type FuncArg struct {
+	Name, Type string
+}
+
+func (t Type) CtorArgs() []FuncArg {
+	if t.GoName == goTypeEnum {
+		return []FuncArg{
+			{
+				Name: "col",
+				Type: "*proto.ColEnum",
+			},
+		}
+	}
+	if t.CannotBeNull {
+		return []FuncArg{}
+	}
+	return []FuncArg{
+		{
+			Name: "nullable",
+			Type: "bool",
+		},
+	}
+}
+
+func (t Type) Ctor() string {
+	b := strings.Builder{}
+	b.WriteString(fmt.Sprintf("func New%s(", t.ColumnTypeName()))
+	for i, arg := range t.CtorArgs() {
+		if i != 0 {
+			b.WriteString(",")
+		}
+		b.WriteString(arg.Name)
+		b.WriteString(" ")
+		b.WriteString(arg.Type)
+	}
+	b.WriteString(fmt.Sprintf(") *%s {\n", t.ColumnTypeName()))
+
+	b.WriteString(fmt.Sprintf("\treturn &%s{\n", t.ColumnTypeName()))
+	if t.CannotBeNull {
+		if t.GoName == goTypeEnum {
+			b.WriteString("\t\tcol: col,\n")
+		} else {
+			b.WriteString(fmt.Sprintf("\t\tcol: &%s{},\n", t.LibChTypeNameFull()))
+		}
+	} else {
+		b.WriteString(fmt.Sprintf("\t\tcol:      &%s{},\n", t.LibChTypeNameFull()))
+		b.WriteString(fmt.Sprintf("\t\tnullCol:  proto.NewColNullable(proto.ColumnOf[%s](&%s{})),\n", t.GoName, t.LibChTypeNameFull()))
+		b.WriteString("\t\tnullable: nullable,\n")
+	}
+	b.WriteString("\t}\n")
+	b.WriteString("}")
+
+	return b.String()
+}
+
+func (t Type) CallCtor() string {
+	var args strings.Builder
+	for _, arg := range t.CtorArgs() {
+		args.WriteString(arg.Name)
+	}
+	return fmt.Sprintf("New%s(%s)", t.ColumnTypeName(), args.String())
+}
+
 func (t Type) ConvertInsaneJSONValue(varName string) string {
-	if t.IsComplexNumber {
+	if t.isComplexNumber {
 		return fmt.Sprintf("%sFromInt(%s)", t.GoName, varName)
 	}
 	if t.GoName == goTypeTime {
 		return fmt.Sprintf("time.Unix(int64(%s), 0)", varName)
 	}
+	if t.GoName == goTypeEnum {
+		return varName
+	}
 	return fmt.Sprintf("%s(%s)", t.GoName, varName)
+}
+
+func (t Type) Preparable() bool {
+	return t.GoName == goTypeEnum
 }
 
 type TemplateData struct {
@@ -84,16 +161,26 @@ type TemplateData struct {
 func main() {
 	columnTemplate := template.Must(template.New("column").Parse(columnTemplateRaw))
 
+	types := clickhouseTypes()
+
+	buf := new(bytes.Buffer)
+	if err := columnTemplate.Execute(buf, TemplateData{Types: types}); err != nil {
+		logger.Panic(err)
+	}
+	result, err := format.Source(buf.Bytes())
+	if err != nil {
+		logger.Panic(err)
+	}
+
 	f, err := os.Create(outputFileName)
 	if err != nil {
-		logger.Fatal(err)
+		logger.Panic(err)
 	}
 	defer f.Close()
 
-	types := clickhouseTypes()
-
-	if err := columnTemplate.Execute(f, TemplateData{Types: types}); err != nil {
-		logger.Fatal(err)
+	_, err = f.Write(result)
+	if err != nil {
+		logger.Panic(err)
 	}
 
 	logger.Info("done")
@@ -112,14 +199,16 @@ func clickhouseTypes() []Type {
 			CannotConvert: true,
 		},
 		{
-			chTypeName:   "Enum8",
-			GoName:       "proto.Enum8",
-			CannotBeNull: true,
+			chTypeName:    "Enum8",
+			GoName:        goTypeEnum,
+			CannotBeNull:  true,
+			CannotConvert: true,
 		},
 		{
-			chTypeName:   "Enum16",
-			GoName:       "proto.Enum16",
-			CannotBeNull: true,
+			chTypeName:    "Enum16",
+			GoName:        goTypeEnum,
+			CannotBeNull:  true,
+			CannotConvert: true,
 		},
 	}
 
@@ -142,22 +231,22 @@ func clickhouseTypes() []Type {
 		Type{
 			chTypeName:      "Int128",
 			GoName:          "proto.Int128",
-			IsComplexNumber: true,
+			isComplexNumber: true,
 		},
 		Type{
 			chTypeName:      "UInt128",
 			GoName:          "proto.UInt128",
-			IsComplexNumber: true,
+			isComplexNumber: true,
 		},
 		Type{
 			chTypeName:      "Int256",
 			GoName:          "proto.Int256",
-			IsComplexNumber: true,
+			isComplexNumber: true,
 		},
 		Type{
 			chTypeName:      "UInt256",
 			GoName:          "proto.UInt256",
-			IsComplexNumber: true,
+			isComplexNumber: true,
 		},
 		Type{
 			chTypeName: "Float32",

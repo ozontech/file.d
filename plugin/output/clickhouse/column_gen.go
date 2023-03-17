@@ -3,70 +3,10 @@
 package clickhouse
 
 import (
-	"errors"
-	"fmt"
-	"strings"
 	"time"
 
 	"github.com/ClickHouse/ch-go/proto"
 	insaneJSON "github.com/vitkovskii/insane-json"
-)
-
-type InsaneColInput interface {
-	proto.ColInput
-	Append(node *insaneJSON.StrictNode) error
-	Reset()
-}
-
-func insaneInfer(auto proto.ColAuto) (InsaneColInput, error) {
-	t := strings.TrimSuffix(strings.TrimPrefix(auto.Type().String(), "Nullable("), ")")
-	nullable := auto.Type().Base() == proto.ColumnTypeNullable
-	switch proto.ColumnType(t) {
-	case proto.ColumnTypeBool:
-		return NewColBool(nullable), nil
-	case proto.ColumnTypeString:
-		return NewColString(nullable), nil
-	case proto.ColumnTypeEnum8:
-		return NewColEnum8(nullable), nil
-	case proto.ColumnTypeEnum16:
-		return NewColEnum16(nullable), nil
-	case proto.ColumnTypeInt8:
-		return NewColInt8(nullable), nil
-	case proto.ColumnTypeUInt8:
-		return NewColUInt8(nullable), nil
-	case proto.ColumnTypeInt16:
-		return NewColInt16(nullable), nil
-	case proto.ColumnTypeUInt16:
-		return NewColUInt16(nullable), nil
-	case proto.ColumnTypeInt32:
-		return NewColInt32(nullable), nil
-	case proto.ColumnTypeUInt32:
-		return NewColUInt32(nullable), nil
-	case proto.ColumnTypeInt64:
-		return NewColInt64(nullable), nil
-	case proto.ColumnTypeUInt64:
-		return NewColUInt64(nullable), nil
-	case proto.ColumnTypeInt128:
-		return NewColInt128(nullable), nil
-	case proto.ColumnTypeUInt128:
-		return NewColUInt128(nullable), nil
-	case proto.ColumnTypeInt256:
-		return NewColInt256(nullable), nil
-	case proto.ColumnTypeUInt256:
-		return NewColUInt256(nullable), nil
-	case proto.ColumnTypeFloat32:
-		return NewColFloat32(nullable), nil
-	case proto.ColumnTypeFloat64:
-		return NewColFloat64(nullable), nil
-	case proto.ColumnTypeDateTime:
-		return NewColDateTime(nullable), nil
-	default:
-		return nil, fmt.Errorf("inference for type %s is not supported", auto.Type().String())
-	}
-}
-
-var (
-	ErrNodeIsNil = errors.New("node is nil, but column is not")
 )
 
 type ColBool struct {
@@ -75,7 +15,9 @@ type ColBool struct {
 	nullable bool
 }
 
-var _ InsaneColInput = (*ColBool)(nil)
+var (
+	_ InsaneColInput = (*ColBool)(nil)
+)
 
 func NewColBool(nullable bool) *ColBool {
 	return &ColBool{
@@ -139,7 +81,9 @@ type ColString struct {
 	nullable bool
 }
 
-var _ InsaneColInput = (*ColString)(nil)
+var (
+	_ InsaneColInput = (*ColString)(nil)
+)
 
 func NewColString(nullable bool) *ColString {
 	return &ColString{
@@ -198,14 +142,17 @@ func (t *ColString) EncodeColumn(buffer *proto.Buffer) {
 }
 
 type ColEnum8 struct {
-	col *proto.ColEnum8
+	col *proto.ColEnum
 }
 
-var _ InsaneColInput = (*ColEnum8)(nil)
+var (
+	_ InsaneColInput   = (*ColEnum8)(nil)
+	_ proto.Preparable = (*ColEnum8)(nil)
+)
 
-func NewColEnum8(nullable bool) *ColEnum8 {
+func NewColEnum8(col *proto.ColEnum) *ColEnum8 {
 	return &ColEnum8{
-		col: &proto.ColEnum8{},
+		col: col,
 	}
 }
 
@@ -213,11 +160,10 @@ func (t *ColEnum8) Append(node *insaneJSON.StrictNode) error {
 	if node == nil || node.IsNull() {
 		return ErrNodeIsNil
 	}
-	v, err := node.AsInt()
+	val, err := node.AsString()
 	if err != nil {
 		return err
 	}
-	val := proto.Enum8(v)
 	t.col.Append(val)
 
 	return nil
@@ -239,15 +185,22 @@ func (t *ColEnum8) EncodeColumn(buffer *proto.Buffer) {
 	t.col.EncodeColumn(buffer)
 }
 
-type ColEnum16 struct {
-	col *proto.ColEnum16
+func (t *ColEnum8) Prepare() error {
+	return t.col.Prepare()
 }
 
-var _ InsaneColInput = (*ColEnum16)(nil)
+type ColEnum16 struct {
+	col *proto.ColEnum
+}
 
-func NewColEnum16(nullable bool) *ColEnum16 {
+var (
+	_ InsaneColInput   = (*ColEnum16)(nil)
+	_ proto.Preparable = (*ColEnum16)(nil)
+)
+
+func NewColEnum16(col *proto.ColEnum) *ColEnum16 {
 	return &ColEnum16{
-		col: &proto.ColEnum16{},
+		col: col,
 	}
 }
 
@@ -255,11 +208,10 @@ func (t *ColEnum16) Append(node *insaneJSON.StrictNode) error {
 	if node == nil || node.IsNull() {
 		return ErrNodeIsNil
 	}
-	v, err := node.AsInt()
+	val, err := node.AsString()
 	if err != nil {
 		return err
 	}
-	val := proto.Enum16(v)
 	t.col.Append(val)
 
 	return nil
@@ -281,13 +233,19 @@ func (t *ColEnum16) EncodeColumn(buffer *proto.Buffer) {
 	t.col.EncodeColumn(buffer)
 }
 
+func (t *ColEnum16) Prepare() error {
+	return t.col.Prepare()
+}
+
 type ColInt8 struct {
 	col      *proto.ColInt8
 	nullCol  *proto.ColNullable[int8]
 	nullable bool
 }
 
-var _ InsaneColInput = (*ColInt8)(nil)
+var (
+	_ InsaneColInput = (*ColInt8)(nil)
+)
 
 func NewColInt8(nullable bool) *ColInt8 {
 	return &ColInt8{
@@ -352,7 +310,9 @@ type ColUInt8 struct {
 	nullable bool
 }
 
-var _ InsaneColInput = (*ColUInt8)(nil)
+var (
+	_ InsaneColInput = (*ColUInt8)(nil)
+)
 
 func NewColUInt8(nullable bool) *ColUInt8 {
 	return &ColUInt8{
@@ -417,7 +377,9 @@ type ColInt16 struct {
 	nullable bool
 }
 
-var _ InsaneColInput = (*ColInt16)(nil)
+var (
+	_ InsaneColInput = (*ColInt16)(nil)
+)
 
 func NewColInt16(nullable bool) *ColInt16 {
 	return &ColInt16{
@@ -482,7 +444,9 @@ type ColUInt16 struct {
 	nullable bool
 }
 
-var _ InsaneColInput = (*ColUInt16)(nil)
+var (
+	_ InsaneColInput = (*ColUInt16)(nil)
+)
 
 func NewColUInt16(nullable bool) *ColUInt16 {
 	return &ColUInt16{
@@ -547,7 +511,9 @@ type ColInt32 struct {
 	nullable bool
 }
 
-var _ InsaneColInput = (*ColInt32)(nil)
+var (
+	_ InsaneColInput = (*ColInt32)(nil)
+)
 
 func NewColInt32(nullable bool) *ColInt32 {
 	return &ColInt32{
@@ -612,7 +578,9 @@ type ColUInt32 struct {
 	nullable bool
 }
 
-var _ InsaneColInput = (*ColUInt32)(nil)
+var (
+	_ InsaneColInput = (*ColUInt32)(nil)
+)
 
 func NewColUInt32(nullable bool) *ColUInt32 {
 	return &ColUInt32{
@@ -677,7 +645,9 @@ type ColInt64 struct {
 	nullable bool
 }
 
-var _ InsaneColInput = (*ColInt64)(nil)
+var (
+	_ InsaneColInput = (*ColInt64)(nil)
+)
 
 func NewColInt64(nullable bool) *ColInt64 {
 	return &ColInt64{
@@ -742,7 +712,9 @@ type ColUInt64 struct {
 	nullable bool
 }
 
-var _ InsaneColInput = (*ColUInt64)(nil)
+var (
+	_ InsaneColInput = (*ColUInt64)(nil)
+)
 
 func NewColUInt64(nullable bool) *ColUInt64 {
 	return &ColUInt64{
@@ -807,7 +779,9 @@ type ColInt128 struct {
 	nullable bool
 }
 
-var _ InsaneColInput = (*ColInt128)(nil)
+var (
+	_ InsaneColInput = (*ColInt128)(nil)
+)
 
 func NewColInt128(nullable bool) *ColInt128 {
 	return &ColInt128{
@@ -872,7 +846,9 @@ type ColUInt128 struct {
 	nullable bool
 }
 
-var _ InsaneColInput = (*ColUInt128)(nil)
+var (
+	_ InsaneColInput = (*ColUInt128)(nil)
+)
 
 func NewColUInt128(nullable bool) *ColUInt128 {
 	return &ColUInt128{
@@ -937,7 +913,9 @@ type ColInt256 struct {
 	nullable bool
 }
 
-var _ InsaneColInput = (*ColInt256)(nil)
+var (
+	_ InsaneColInput = (*ColInt256)(nil)
+)
 
 func NewColInt256(nullable bool) *ColInt256 {
 	return &ColInt256{
@@ -1002,7 +980,9 @@ type ColUInt256 struct {
 	nullable bool
 }
 
-var _ InsaneColInput = (*ColUInt256)(nil)
+var (
+	_ InsaneColInput = (*ColUInt256)(nil)
+)
 
 func NewColUInt256(nullable bool) *ColUInt256 {
 	return &ColUInt256{
@@ -1067,7 +1047,9 @@ type ColFloat32 struct {
 	nullable bool
 }
 
-var _ InsaneColInput = (*ColFloat32)(nil)
+var (
+	_ InsaneColInput = (*ColFloat32)(nil)
+)
 
 func NewColFloat32(nullable bool) *ColFloat32 {
 	return &ColFloat32{
@@ -1132,7 +1114,9 @@ type ColFloat64 struct {
 	nullable bool
 }
 
-var _ InsaneColInput = (*ColFloat64)(nil)
+var (
+	_ InsaneColInput = (*ColFloat64)(nil)
+)
 
 func NewColFloat64(nullable bool) *ColFloat64 {
 	return &ColFloat64{
@@ -1195,9 +1179,11 @@ type ColDateTime struct {
 	col *proto.ColDateTime
 }
 
-var _ InsaneColInput = (*ColDateTime)(nil)
+var (
+	_ InsaneColInput = (*ColDateTime)(nil)
+)
 
-func NewColDateTime(nullable bool) *ColDateTime {
+func NewColDateTime() *ColDateTime {
 	return &ColDateTime{
 		col: &proto.ColDateTime{},
 	}

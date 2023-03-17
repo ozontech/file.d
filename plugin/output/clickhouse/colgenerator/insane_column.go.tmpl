@@ -3,36 +3,10 @@
 package clickhouse
 
 import (
-	"errors"
-	"fmt"
-	"strings"
 	"time"
 
 	"github.com/ClickHouse/ch-go/proto"
 	insaneJSON "github.com/vitkovskii/insane-json"
-)
-
-type InsaneColInput interface {
-	proto.ColInput
-	Append(node *insaneJSON.StrictNode) error
-	Reset()
-}
-
-func insaneInfer(auto proto.ColAuto) (InsaneColInput, error) {
-	t := strings.TrimSuffix(strings.TrimPrefix(auto.Type().String(), "Nullable("), ")")
-	nullable := auto.Type().Base() == proto.ColumnTypeNullable
-	switch proto.ColumnType(t) {
-	{{- range $type := .Types }}
-	case {{ printf "proto.ColumnType%s" $type.ChTypeName  }}:
-		return New{{ $type.ColumnTypeName }}(nullable), nil
-	{{- end }}
-	default:
-		return nil, fmt.Errorf("inference for type %s is not supported", auto.Type().String())
-	}
-}
-
-var (
-	ErrNodeIsNil = errors.New("node is nil, but column is not")
 )
 
 {{- range $type := .Types }}
@@ -47,21 +21,14 @@ type {{ $type.ColumnTypeName }} struct {
 	{{- end }}
 }
 
-var _ InsaneColInput = (*{{ $type.ColumnTypeName }})(nil)
+var (
+	_ InsaneColInput = (*{{ $type.ColumnTypeName }})(nil)
+	{{- if $type.Preparable }}
+	_ proto.Preparable = (*{{ $type.ColumnTypeName }})(nil)
+	{{- end }}
+)
 
-func New{{- $type.ColumnTypeName }}(nullable bool) *{{ $type.ColumnTypeName }} {
-	{{- if $type.CannotBeNull  }}
-	return &{{ $type.ColumnTypeName }}{
-		col: &{{ $type.LibChTypeNameFull }}{},
-	}
-	{{- else }}
-	return &{{ $type.ColumnTypeName }}{
-		col:      &{{ $type.LibChTypeNameFull }}{},
-		nullCol:  proto.NewColNullable(proto.ColumnOf[{{$type.GoName}}](&{{ $type.LibChTypeNameFull }}{})),
-		nullable: nullable,
-	}
-	{{- end}}
-}
+{{ $type.Ctor }}
 
 func (t *{{ $type.ColumnTypeName }}) Append(node *insaneJSON.StrictNode) error {
 	if node == nil || node.IsNull() {
@@ -139,4 +106,11 @@ func (t *{{ $type.ColumnTypeName }}) EncodeColumn(buffer *proto.Buffer) {
 	t.col.EncodeColumn(buffer)
 	{{- end }}
 }
-{{- end }}
+
+{{ if $type.Preparable }}
+func (t *{{ $type.ColumnTypeName }}) Prepare() error {
+	return t.col.Prepare()
+}
+{{ end }}
+
+{{ end }}

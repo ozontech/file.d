@@ -43,6 +43,7 @@ func (c *Config) Configure(t *testing.T, conf *cfg.Config, pipelineName string) 
     c3 Int16,
     c4 Nullable(Int16),
     c5 Nullable(String),
+    level Enum8('error'=1, 'warn'=2, 'info'=3, 'debug'=4),
     ts DateTime
 ) ENGINE = Memory;`})
 	require.NoError(t, err)
@@ -57,9 +58,9 @@ func (c *Config) Configure(t *testing.T, conf *cfg.Config, pipelineName string) 
 }
 
 var samples = [][]byte{
-	[]byte(`{ "c1": "str", "c2": 2, "c3": 3, "c4": 2, "c5": null }`),
-	[]byte(`{ "c1": "str", "c2": 42, "c3": 24, "c4": null, "c5": null }`),
-	[]byte(`{ "c1": "str", "c2": 8, "c3": 1, "c4": null, "c5": "nullable" }`),
+	[]byte(`{ "c1": "str", "c2": 2, "c3": 3, "c4": 2, "c5": null, "level": "info" }`),
+	[]byte(`{ "c1": "str", "c2": 42, "c3": 24, "c4": null, "c5": null, "level": "warn" }`),
+	[]byte(`{ "c1": "str", "c2": 8, "c3": 1, "c4": null, "c5": "nullable", "level": "error" }`),
 }
 
 func (c *Config) Send(t *testing.T) {

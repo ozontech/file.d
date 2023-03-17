@@ -10,6 +10,7 @@ pipelines:
       type: clickhouse
       address: 127.0.0.1:9001
       table: test_table_insert
+      db_request_timeout: 1m
       columns:
         - name: c1
           type: String
@@ -21,5 +22,7 @@ pipelines:
           type: Nullable(Int16)
         - name: c5
           type: Nullable(String)
+        - name: level
+          type: Enum8('error'=1, 'warn'=2, 'info'=3, 'debug'=4)
         - name: ts
           type: DateTime
