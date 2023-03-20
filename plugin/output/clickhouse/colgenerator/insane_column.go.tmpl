@@ -4,6 +4,8 @@ package clickhouse
 
 import (
 	"time"
+	"fmt"
+	"net/netip"
 
 	"github.com/ClickHouse/ch-go/proto"
 	insaneJSON "github.com/vitkovskii/insane-json"
@@ -52,7 +54,9 @@ func (t *{{ $type.ColumnTypeName }}) Append(node *insaneJSON.StrictNode) error {
 	if err != nil {
 		return err
 	}
-	val := {{ $type.ConvertInsaneJSONValue "v" }}
+
+	{{ $type.ConvertInsaneJSONValue }}
+
 	{{ end }}
 	{{- if not $type.CannotBeNull -}}
 	if t.nullable {

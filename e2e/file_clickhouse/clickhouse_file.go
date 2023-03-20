@@ -44,6 +44,8 @@ func (c *Config) Configure(t *testing.T, conf *cfg.Config, pipelineName string) 
     c4 Nullable(Int16),
     c5 Nullable(String),
     level Enum8('error'=1, 'warn'=2, 'info'=3, 'debug'=4),
+    ipv4 Nullable(IPv4),
+    ipv6 Nullable(IPv6),
     ts DateTime,
 	created_at DateTime64(6, 'UTC') DEFAULT now()
 ) ENGINE = Memory;`})
@@ -59,8 +61,8 @@ func (c *Config) Configure(t *testing.T, conf *cfg.Config, pipelineName string) 
 }
 
 var samples = [][]byte{
-	[]byte(`{ "c1": "str", "c2": 2, "c3": 3, "c4": 2, "c5": null, "level": "info" }`),
-	[]byte(`{ "c1": "str", "c2": 42, "c3": 24, "c4": null, "c5": null, "level": "warn" }`),
+	[]byte(`{ "c1": "str", "c2": 2, "c3": 3, "c4": 2, "c5": null, "level": "info", "ipv4": "127.0.0.1", "ipv6": "0000:0000:0000:0000:0000:0000:0000:0001" }`),
+	[]byte(`{ "c1": "str", "c2": 42, "c3": 24, "c4": null, "c5": null, "level": "warn", "extra_field": "discard" }`),
 	[]byte(`{ "c1": "str", "c2": 8, "c3": 1, "c4": null, "c5": "nullable", "level": "error" }`),
 }
 

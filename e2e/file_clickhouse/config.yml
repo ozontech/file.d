@@ -24,5 +24,9 @@ pipelines:
           type: Nullable(String)
         - name: level
           type: Enum8('error'=1, 'warn'=2, 'info'=3, 'debug'=4)
+        - name: ipv4
+          type: Nullable(IPv4)
+        - name: ipv6
+          type: Nullable(IPv6)
         - name: ts
           type: DateTime

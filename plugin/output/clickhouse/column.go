@@ -90,6 +90,10 @@ func insaneInfer(auto proto.ColAuto) (InsaneColInput, error) {
 		return NewColFloat64(nullable), nil
 	case proto.ColumnTypeDateTime:
 		return NewColDateTime(), nil
+	case proto.ColumnTypeIPv4:
+		return NewColIPv4(nullable), nil
+	case proto.ColumnTypeIPv6:
+		return NewColIPv6(nullable), nil
 	default:
 		switch auto.Type().Base() {
 		case proto.ColumnTypeEnum8:

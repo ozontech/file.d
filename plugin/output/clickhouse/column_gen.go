@@ -3,6 +3,8 @@
 package clickhouse
 
 import (
+	"fmt"
+	"net/netip"
 	"time"
 
 	"github.com/ClickHouse/ch-go/proto"
@@ -267,7 +269,9 @@ func (t *ColInt8) Append(node *insaneJSON.StrictNode) error {
 	if err != nil {
 		return err
 	}
+
 	val := int8(v)
+
 	if t.nullable {
 		t.nullCol.Append(proto.NewNullable(val))
 		return nil
@@ -334,7 +338,9 @@ func (t *ColUInt8) Append(node *insaneJSON.StrictNode) error {
 	if err != nil {
 		return err
 	}
+
 	val := uint8(v)
+
 	if t.nullable {
 		t.nullCol.Append(proto.NewNullable(val))
 		return nil
@@ -401,7 +407,9 @@ func (t *ColInt16) Append(node *insaneJSON.StrictNode) error {
 	if err != nil {
 		return err
 	}
+
 	val := int16(v)
+
 	if t.nullable {
 		t.nullCol.Append(proto.NewNullable(val))
 		return nil
@@ -468,7 +476,9 @@ func (t *ColUInt16) Append(node *insaneJSON.StrictNode) error {
 	if err != nil {
 		return err
 	}
+
 	val := uint16(v)
+
 	if t.nullable {
 		t.nullCol.Append(proto.NewNullable(val))
 		return nil
@@ -535,7 +545,9 @@ func (t *ColInt32) Append(node *insaneJSON.StrictNode) error {
 	if err != nil {
 		return err
 	}
+
 	val := int32(v)
+
 	if t.nullable {
 		t.nullCol.Append(proto.NewNullable(val))
 		return nil
@@ -602,7 +614,9 @@ func (t *ColUInt32) Append(node *insaneJSON.StrictNode) error {
 	if err != nil {
 		return err
 	}
+
 	val := uint32(v)
+
 	if t.nullable {
 		t.nullCol.Append(proto.NewNullable(val))
 		return nil
@@ -669,7 +683,9 @@ func (t *ColInt64) Append(node *insaneJSON.StrictNode) error {
 	if err != nil {
 		return err
 	}
+
 	val := int64(v)
+
 	if t.nullable {
 		t.nullCol.Append(proto.NewNullable(val))
 		return nil
@@ -736,7 +752,9 @@ func (t *ColUInt64) Append(node *insaneJSON.StrictNode) error {
 	if err != nil {
 		return err
 	}
+
 	val := uint64(v)
+
 	if t.nullable {
 		t.nullCol.Append(proto.NewNullable(val))
 		return nil
@@ -803,7 +821,9 @@ func (t *ColInt128) Append(node *insaneJSON.StrictNode) error {
 	if err != nil {
 		return err
 	}
+
 	val := proto.Int128FromInt(v)
+
 	if t.nullable {
 		t.nullCol.Append(proto.NewNullable(val))
 		return nil
@@ -870,7 +890,9 @@ func (t *ColUInt128) Append(node *insaneJSON.StrictNode) error {
 	if err != nil {
 		return err
 	}
+
 	val := proto.UInt128FromInt(v)
+
 	if t.nullable {
 		t.nullCol.Append(proto.NewNullable(val))
 		return nil
@@ -937,7 +959,9 @@ func (t *ColInt256) Append(node *insaneJSON.StrictNode) error {
 	if err != nil {
 		return err
 	}
+
 	val := proto.Int256FromInt(v)
+
 	if t.nullable {
 		t.nullCol.Append(proto.NewNullable(val))
 		return nil
@@ -1004,7 +1028,9 @@ func (t *ColUInt256) Append(node *insaneJSON.StrictNode) error {
 	if err != nil {
 		return err
 	}
+
 	val := proto.UInt256FromInt(v)
+
 	if t.nullable {
 		t.nullCol.Append(proto.NewNullable(val))
 		return nil
@@ -1071,7 +1097,9 @@ func (t *ColFloat32) Append(node *insaneJSON.StrictNode) error {
 	if err != nil {
 		return err
 	}
+
 	val := float32(v)
+
 	if t.nullable {
 		t.nullCol.Append(proto.NewNullable(val))
 		return nil
@@ -1138,7 +1166,9 @@ func (t *ColFloat64) Append(node *insaneJSON.StrictNode) error {
 	if err != nil {
 		return err
 	}
+
 	val := float64(v)
+
 	if t.nullable {
 		t.nullCol.Append(proto.NewNullable(val))
 		return nil
@@ -1197,7 +1227,9 @@ func (t *ColDateTime) Append(node *insaneJSON.StrictNode) error {
 	if err != nil {
 		return err
 	}
+
 	val := time.Unix(int64(v), 0)
+
 	t.col.Append(val)
 
 	return nil
@@ -1216,5 +1248,157 @@ func (t *ColDateTime) Rows() int {
 }
 
 func (t *ColDateTime) EncodeColumn(buffer *proto.Buffer) {
+	t.col.EncodeColumn(buffer)
+}
+
+type ColIPv4 struct {
+	col      *proto.ColIPv4
+	nullCol  *proto.ColNullable[proto.IPv4]
+	nullable bool
+}
+
+var (
+	_ InsaneColInput = (*ColIPv4)(nil)
+)
+
+func NewColIPv4(nullable bool) *ColIPv4 {
+	return &ColIPv4{
+		col:      &proto.ColIPv4{},
+		nullCol:  proto.NewColNullable(proto.ColumnOf[proto.IPv4](&proto.ColIPv4{})),
+		nullable: nullable,
+	}
+}
+
+func (t *ColIPv4) Append(node *insaneJSON.StrictNode) error {
+	if node == nil || node.IsNull() {
+		if !t.nullable {
+			return ErrNodeIsNil
+		}
+		t.nullCol.Append(proto.Null[proto.IPv4]())
+		return nil
+	}
+	v, err := node.AsString()
+	if err != nil {
+		return err
+	}
+
+	addr, err := netip.ParseAddr(v)
+	if err != nil {
+		return err
+	}
+	if !addr.Is4() {
+		return fmt.Errorf("invalid IPv4 value, val=%s", v)
+	}
+	val := proto.ToIPv4(addr)
+
+	if t.nullable {
+		t.nullCol.Append(proto.NewNullable(val))
+		return nil
+	}
+	t.col.Append(val)
+
+	return nil
+}
+
+func (t *ColIPv4) Reset() {
+	t.col.Reset()
+	t.nullCol.Reset()
+}
+
+func (t *ColIPv4) Type() proto.ColumnType {
+	if t.nullable {
+		return t.nullCol.Type()
+	}
+	return t.col.Type()
+}
+
+func (t *ColIPv4) Rows() int {
+	if t.nullable {
+		return t.nullCol.Rows()
+	}
+	return t.col.Rows()
+}
+
+func (t *ColIPv4) EncodeColumn(buffer *proto.Buffer) {
+	if t.nullable {
+		t.nullCol.EncodeColumn(buffer)
+		return
+	}
+	t.col.EncodeColumn(buffer)
+}
+
+type ColIPv6 struct {
+	col      *proto.ColIPv6
+	nullCol  *proto.ColNullable[proto.IPv6]
+	nullable bool
+}
+
+var (
+	_ InsaneColInput = (*ColIPv6)(nil)
+)
+
+func NewColIPv6(nullable bool) *ColIPv6 {
+	return &ColIPv6{
+		col:      &proto.ColIPv6{},
+		nullCol:  proto.NewColNullable(proto.ColumnOf[proto.IPv6](&proto.ColIPv6{})),
+		nullable: nullable,
+	}
+}
+
+func (t *ColIPv6) Append(node *insaneJSON.StrictNode) error {
+	if node == nil || node.IsNull() {
+		if !t.nullable {
+			return ErrNodeIsNil
+		}
+		t.nullCol.Append(proto.Null[proto.IPv6]())
+		return nil
+	}
+	v, err := node.AsString()
+	if err != nil {
+		return err
+	}
+
+	addr, err := netip.ParseAddr(v)
+	if err != nil {
+		return err
+	}
+	if !addr.Is6() {
+		return fmt.Errorf("invalid IPv6 value, val=%s", v)
+	}
+	val := proto.ToIPv6(addr)
+
+	if t.nullable {
+		t.nullCol.Append(proto.NewNullable(val))
+		return nil
+	}
+	t.col.Append(val)
+
+	return nil
+}
+
+func (t *ColIPv6) Reset() {
+	t.col.Reset()
+	t.nullCol.Reset()
+}
+
+func (t *ColIPv6) Type() proto.ColumnType {
+	if t.nullable {
+		return t.nullCol.Type()
+	}
+	return t.col.Type()
+}
+
+func (t *ColIPv6) Rows() int {
+	if t.nullable {
+		return t.nullCol.Rows()
+	}
+	return t.col.Rows()
+}
+
+func (t *ColIPv6) EncodeColumn(buffer *proto.Buffer) {
+	if t.nullable {
+		t.nullCol.EncodeColumn(buffer)
+		return
+	}
 	t.col.EncodeColumn(buffer)
 }
