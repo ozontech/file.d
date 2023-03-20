@@ -6,6 +6,12 @@ pipelines:
       - type: set_time
         format: unixtime
         field: ts
+      - type: set_time
+        format: unixtime
+        field: ts_with_tz
+      - type: set_time
+        format: timestampnano
+        field: ts64
     output:
       type: clickhouse
       address: 127.0.0.1:9001
@@ -30,3 +36,7 @@ pipelines:
           type: Nullable(IPv6)
         - name: ts
           type: DateTime
+        - name: ts_with_tz
+          type: DateTime('Europe/Moscow')
+        - name: ts64
+          type: DateTime64(9, 'UTC')

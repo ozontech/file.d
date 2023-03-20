@@ -39,6 +39,7 @@ Clickhouse database password.
 **`quota_key`** *`string`* 
 
 Clickhouse quota key.
+https://clickhouse.com/docs/en/operations/quotas
 
 <br>
 
@@ -51,6 +52,16 @@ Clickhouse target table.
 **`columns`** *`[]Column`* *`required`* 
 
 Clickhouse table columns. Each column must contain `name` and `type`.
+File.d supports next data types:
+* Signed and unsigned integers from 8 to 64 bits.
+If you set 128-256 bits - file.d will cast the number to the int64.
+* DateTime, DateTime64
+* String
+* Enum8, Enum16
+* Bool
+* Nullable
+* IPv4, IPv6
+If you need more types, please, create an issue.
 
 <br>
 

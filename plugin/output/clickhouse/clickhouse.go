@@ -123,13 +123,14 @@ type Config struct {
 	// >
 	// > Clickhouse table columns. Each column must contain `name` and `type`.
 	// > File.d supports next data types:
-	// > [Signed and unsigned integers](https://clickhouse.com/docs/en/sql-reference/data-types/int-uint) from 8 to 64 bits.
-	// > If you set 128-256 bits - file.d will limit the number as if it were int64.
-	// > DateTime - 32 bits only.
-	// > String
-	// > Enum8, Enum16
-	// > Bool
-	// > Nullable
+	// > * Signed and unsigned integers from 8 to 64 bits.
+	// > If you set 128-256 bits - file.d will cast the number to the int64.
+	// > * DateTime, DateTime64
+	// > * String
+	// > * Enum8, Enum16
+	// > * Bool
+	// > * Nullable
+	// > * IPv4, IPv6
 	// > If you need more types, please, create an issue.
 	Columns []Column `json:"columns" required:"true"` // *
 
@@ -338,7 +339,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 			node, _ := event.Root.DigStrict(col.Name)
 			if err := col.ColInput.Append(node); err != nil {
 				// TODO: handle case when we can't append in the batch, e.g. columns is not nullable, but value it is
-				p.logger.Fatal("can't append value in the batch", zap.Error(err))
+				p.logger.Fatal("can't append value in the batch", zap.Error(err), zap.String("column", col.Name))
 			}
 		}
 	}

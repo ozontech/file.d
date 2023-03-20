@@ -47,6 +47,8 @@ func (c *Config) Configure(t *testing.T, conf *cfg.Config, pipelineName string) 
     ipv4 Nullable(IPv4),
     ipv6 Nullable(IPv6),
     ts DateTime,
+    ts_with_tz DateTime('Europe/Moscow'),
+    ts64 DateTime64(9, 'UTC'),
 	created_at DateTime64(6, 'UTC') DEFAULT now()
 ) ENGINE = Memory;`})
 	require.NoError(t, err)

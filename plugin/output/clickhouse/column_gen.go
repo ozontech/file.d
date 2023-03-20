@@ -1213,9 +1213,9 @@ var (
 	_ InsaneColInput = (*ColDateTime)(nil)
 )
 
-func NewColDateTime() *ColDateTime {
+func NewColDateTime(col *proto.ColDateTime) *ColDateTime {
 	return &ColDateTime{
-		col: &proto.ColDateTime{},
+		col: col,
 	}
 }
 
@@ -1248,6 +1248,52 @@ func (t *ColDateTime) Rows() int {
 }
 
 func (t *ColDateTime) EncodeColumn(buffer *proto.Buffer) {
+	t.col.EncodeColumn(buffer)
+}
+
+type ColDateTime64 struct {
+	col *proto.ColDateTime64
+}
+
+var (
+	_ InsaneColInput = (*ColDateTime64)(nil)
+)
+
+func NewColDateTime64(col *proto.ColDateTime64) *ColDateTime64 {
+	return &ColDateTime64{
+		col: col,
+	}
+}
+
+func (t *ColDateTime64) Append(node *insaneJSON.StrictNode) error {
+	if node == nil || node.IsNull() {
+		return ErrNodeIsNil
+	}
+	v, err := node.AsInt()
+	if err != nil {
+		return err
+	}
+
+	val := time.Unix(0, int64(v))
+
+	t.col.Append(val)
+
+	return nil
+}
+
+func (t *ColDateTime64) Reset() {
+	t.col.Reset()
+}
+
+func (t *ColDateTime64) Type() proto.ColumnType {
+	return t.col.Type()
+}
+
+func (t *ColDateTime64) Rows() int {
+	return t.col.Rows()
+}
+
+func (t *ColDateTime64) EncodeColumn(buffer *proto.Buffer) {
 	t.col.EncodeColumn(buffer)
 }
 

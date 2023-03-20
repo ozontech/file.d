@@ -7,6 +7,17 @@ import (
 	"github.com/ClickHouse/ch-go/proto"
 )
 
+type Type struct {
+	chTypeName string
+	// Go name of the type, e.g. int8, string
+	GoName string
+	// Can not cast to Go type
+	CannotConvert bool
+	CannotBeNull  bool
+	// integers with 128-256 bits
+	isComplexNumber bool
+}
+
 func (t Type) ChTypeName() string {
 	return t.chTypeName
 }
@@ -41,20 +52,27 @@ type FuncArg struct {
 func (t Type) CtorArgs() []FuncArg {
 	if t.GoName == goTypeEnum {
 		return []FuncArg{
-			{
-				Name: "col",
-				Type: "*proto.ColEnum",
-			},
+			{Name: "col", Type: "*proto.ColEnum"},
 		}
 	}
+
+	if t.chTypeName == "DateTime" {
+		return []FuncArg{
+			{Name: "col", Type: "*proto.ColDateTime"},
+		}
+	}
+	if t.chTypeName == "DateTime64" {
+		return []FuncArg{
+			{Name: "col", Type: "*proto.ColDateTime64"},
+		}
+	}
+
 	if t.CannotBeNull {
 		return []FuncArg{}
 	}
+
 	return []FuncArg{
-		{
-			Name: "nullable",
-			Type: "bool",
-		},
+		{Name: "nullable", Type: "bool"},
 	}
 }
 
@@ -84,8 +102,8 @@ func (t Type) Ctor() string {
 
 	{
 		mappingName := t.LibChTypeNameFull()
-		if t.GoName == goTypeEnum {
-			// from existing value
+		if t.GoName == goTypeEnum || t.chTypeName == "DateTime" || t.chTypeName == "DateTime64" {
+			// assign existing column
 			mappingName = "col"
 		} else {
 			// new column
@@ -119,9 +137,14 @@ func (t Type) ConvertInsaneJSONValue() string {
 	if t.isComplexNumber {
 		return fmt.Sprintf("val := %sFromInt(v)", t.GoName)
 	}
+
 	if t.GoName == goTypeTime {
-		return "val := time.Unix(int64(v), 0)"
+		if t.chTypeName == string(proto.ColumnTypeDateTime) {
+			return "val := time.Unix(int64(v), 0)"
+		}
+		return "val := time.Unix(0, int64(v))"
 	}
+
 	if t.GoName == goTypeIPv4 || t.GoName == goTypeIPv6 {
 		ipVer := "4"
 		if t.GoName == goTypeIPv6 {

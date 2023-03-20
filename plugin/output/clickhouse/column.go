@@ -3,7 +3,6 @@ package clickhouse
 import (
 	"errors"
 	"fmt"
-	"strings"
 
 	"github.com/ClickHouse/ch-go/proto"
 	insaneJSON "github.com/vitkovskii/insane-json"
@@ -53,9 +52,15 @@ func inferInsaneColInputs(columns []Column) ([]InsaneColumn, error) {
 }
 
 func insaneInfer(auto proto.ColAuto) (InsaneColInput, error) {
-	t := strings.TrimSuffix(strings.TrimPrefix(auto.Type().String(), "Nullable("), ")")
 	nullable := auto.Type().Base() == proto.ColumnTypeNullable
-	switch proto.ColumnType(t) {
+
+	t := auto.Type()
+	if nullable {
+		// trim "Nullable()"
+		t = t.Elem()
+	}
+
+	switch t {
 	case proto.ColumnTypeBool:
 		return NewColBool(nullable), nil
 	case proto.ColumnTypeString:
@@ -89,7 +94,7 @@ func insaneInfer(auto proto.ColAuto) (InsaneColInput, error) {
 	case proto.ColumnTypeFloat64:
 		return NewColFloat64(nullable), nil
 	case proto.ColumnTypeDateTime:
-		return NewColDateTime(), nil
+		return NewColDateTime(auto.Data.(*proto.ColDateTime)), nil
 	case proto.ColumnTypeIPv4:
 		return NewColIPv4(nullable), nil
 	case proto.ColumnTypeIPv6:
@@ -100,6 +105,10 @@ func insaneInfer(auto proto.ColAuto) (InsaneColInput, error) {
 			return NewColEnum8(auto.Data.(*proto.ColEnum)), nil
 		case proto.ColumnTypeEnum16:
 			return NewColEnum16(auto.Data.(*proto.ColEnum)), nil
+		case proto.ColumnTypeDateTime:
+			return NewColDateTime(auto.Data.(*proto.ColDateTime)), nil
+		case proto.ColumnTypeDateTime64:
+			return NewColDateTime64(auto.Data.(*proto.ColDateTime64)), nil
 		}
 		return nil, fmt.Errorf("inference for type %q is not supported", auto.Type().String())
 	}

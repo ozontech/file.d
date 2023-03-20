@@ -23,17 +23,6 @@ const (
 //go:embed insane_column.go.tmpl
 var columnTemplateRaw string
 
-type Type struct {
-	chTypeName string
-	// Go name of the type, e.g. int8, string
-	GoName string
-	// Can not cast to Go type
-	CannotConvert bool
-	CannotBeNull  bool
-	// integers with 128-256 bits
-	isComplexNumber bool
-}
-
 type TemplateData struct {
 	Types []Type
 }
@@ -139,6 +128,11 @@ func clickhouseTypes() []Type {
 		},
 		Type{
 			chTypeName:   "DateTime",
+			GoName:       goTypeTime,
+			CannotBeNull: true,
+		},
+		Type{
+			chTypeName:   "DateTime64",
 			GoName:       goTypeTime,
 			CannotBeNull: true,
 		},
