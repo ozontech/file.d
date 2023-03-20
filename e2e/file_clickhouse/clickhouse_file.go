@@ -44,7 +44,8 @@ func (c *Config) Configure(t *testing.T, conf *cfg.Config, pipelineName string) 
     c4 Nullable(Int16),
     c5 Nullable(String),
     level Enum8('error'=1, 'warn'=2, 'info'=3, 'debug'=4),
-    ts DateTime
+    ts DateTime,
+	created_at DateTime64(6, 'UTC') DEFAULT now()
 ) ENGINE = Memory;`})
 	require.NoError(t, err)
 

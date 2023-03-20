@@ -3,6 +3,7 @@ package clickhouse
 import (
 	"context"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -44,6 +45,7 @@ type Plugin struct {
 
 	query string
 
+	// TODO: support shards
 	pool Clickhouse
 
 	// plugin metrics
@@ -74,7 +76,6 @@ func (s Settings) toProtoSettings() []ch.Setting {
 
 type Column struct {
 	// TODO: allow to set default value
-	// TODO: allow to set column aliases to find value in the JSON log
 	Name string `json:"name"`
 	Type string `json:"type"`
 }
@@ -110,6 +111,7 @@ type Config struct {
 	// > @3@4@5@6
 	// >
 	// > Clickhouse quota key.
+	// > https://clickhouse.com/docs/en/operations/quotas
 	QuotaKey string `json:"quota_key" default:""` // *
 
 	// > @3@4@5@6
@@ -120,6 +122,15 @@ type Config struct {
 	// > @3@4@5@6
 	// >
 	// > Clickhouse table columns. Each column must contain `name` and `type`.
+	// > File.d supports next data types:
+	// > [Signed and unsigned integers](https://clickhouse.com/docs/en/sql-reference/data-types/int-uint) from 8 to 64 bits.
+	// > If you set 128-256 bits - file.d will limit the number as if it were int64.
+	// > DateTime - 32 bits only.
+	// > String
+	// > Enum8, Enum16
+	// > Bool
+	// > Nullable
+	// > If you need more types, please, create an issue.
 	Columns []Column `json:"columns" required:"true"` // *
 
 	// > @3@4@5@6
@@ -234,7 +245,8 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		p.logger.Fatal("invalid database schema", zap.Error(err))
 	}
 
-	p.query = fmt.Sprintf("INSERT INTO %s VALUES", p.config.Table)
+	columnNames := p.getColumnNames()
+	p.query = fmt.Sprintf("INSERT INTO %s(%s) VALUES", p.config.Table, strings.Join(columnNames, ", "))
 
 	var compression ch.Compression
 	switch strings.ToLower(p.config.Compression) {
@@ -260,7 +272,8 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	}
 
 	var err error
-	p.pool, err = chpool.Dial(p.ctx, chpool.Options{
+	maxConns := math.Ceil(float64(p.config.WorkersCount_) * 1.5)
+	p.pool, err = chpool.New(p.ctx, chpool.Options{
 		ClientOptions: ch.Options{
 			Logger:           p.logger.Named("driver"),
 			Address:          p.config.Address,
@@ -276,12 +289,12 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		},
 		MaxConnLifetime:   p.config.MaxConnLifetime_,
 		MaxConnIdleTime:   p.config.MaxConnIdleTime_,
-		MaxConns:          int32(p.config.WorkersCount_),
+		MaxConns:          int32(maxConns),
 		MinConns:          int32(p.config.WorkersCount_),
 		HealthCheckPeriod: p.config.HealthCheckPeriod_,
 	})
 	if err != nil {
-		p.logger.Fatal("create clickhouse connection pool: %s", zap.Error(err))
+		p.logger.Fatal("create clickhouse connection pool", zap.Error(err))
 	}
 
 	p.batcher = pipeline.NewBatcher(pipeline.BatcherOptions{
@@ -365,4 +378,12 @@ func (p *Plugin) do(queryInput proto.Input) error {
 		Body:  p.query,
 		Input: queryInput,
 	})
+}
+
+func (p *Plugin) getColumnNames() []string {
+	columns := make([]string, len(p.config.Columns))
+	for i, col := range p.config.Columns {
+		columns[i] = fmt.Sprintf("%q", col.Name)
+	}
+	return columns
 }
