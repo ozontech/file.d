@@ -39,7 +39,7 @@ It defines subject of limiting: number of messages or total size of the messages
 **`limiter_backend`** *`string`* *`default=memory`* *`options=memory|redis`* 
 
 Defines kind of backend. When redis backend is chosen and if by any reason plugin cannot connect to redis,
-it will fallback to in-memory limiters.
+limiters will not start syncing with redis until successful reconnect.
 
 <br>
 

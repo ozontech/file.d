@@ -85,7 +85,7 @@ type Config struct {
 	// > @3@4@5@6
 	// >
 	// > Defines kind of backend. When redis backend is chosen and if by any reason plugin cannot connect to redis,
-	// > it will fallback to in-memory limiters.
+	// > limiters will not start syncing with redis until successful reconnect.
 	LimiterBackend string `json:"limiter_backend" default:"memory" options:"memory|redis"` // *
 
 	// > @3@4@5@6
