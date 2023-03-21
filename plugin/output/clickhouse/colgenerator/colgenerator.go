@@ -14,10 +14,7 @@ import (
 const (
 	outputFileName = "column_gen.go"
 
-	goTypeTime = "time.Time"
 	goTypeEnum = "proto.Enum"
-	goTypeIPv4 = "proto.IPv4"
-	goTypeIPv6 = "proto.IPv6"
 )
 
 //go:embed insane_column.go.tmpl
@@ -59,26 +56,26 @@ func main() {
 func clickhouseTypes() []Type {
 	types := []Type{
 		{
-			chTypeName:    "Bool",
+			ChTypeName:    "Bool",
 			GoName:        "bool",
 			CannotConvert: true,
 		},
 		{
-			chTypeName:    "String",
+			ChTypeName:    "String",
 			GoName:        "string",
 			CannotConvert: true,
 		},
 		{
-			chTypeName:    "Enum8",
-			GoName:        goTypeEnum,
-			CannotBeNull:  true,
-			CannotConvert: true,
+			ChTypeName:   "Enum8",
+			GoName:       goTypeEnum,
+			CannotBeNull: true,
+			CustomImpl:   true,
 		},
 		{
-			chTypeName:    "Enum16",
-			GoName:        goTypeEnum,
-			CannotBeNull:  true,
-			CannotConvert: true,
+			ChTypeName:   "Enum16",
+			GoName:       goTypeEnum,
+			CannotBeNull: true,
+			CustomImpl:   true,
 		},
 	}
 
@@ -91,7 +88,7 @@ func clickhouseTypes() []Type {
 				protoName = "U" + protoName
 			}
 			types = append(types, Type{
-				chTypeName: protoName,
+				ChTypeName: protoName,
 				GoName:     goName,
 			})
 		}
@@ -99,50 +96,54 @@ func clickhouseTypes() []Type {
 
 	types = append(types,
 		Type{
-			chTypeName:      "Int128",
+			ChTypeName:      "Int128",
 			GoName:          "proto.Int128",
 			isComplexNumber: true,
 		},
 		Type{
-			chTypeName:      "UInt128",
+			ChTypeName:      "UInt128",
 			GoName:          "proto.UInt128",
 			isComplexNumber: true,
 		},
 		Type{
-			chTypeName:      "Int256",
+			ChTypeName:      "Int256",
 			GoName:          "proto.Int256",
 			isComplexNumber: true,
 		},
 		Type{
-			chTypeName:      "UInt256",
+			ChTypeName:      "UInt256",
 			GoName:          "proto.UInt256",
 			isComplexNumber: true,
 		},
 		Type{
-			chTypeName: "Float32",
+			ChTypeName: "Float32",
 			GoName:     "float32",
 		},
 		Type{
-			chTypeName: "Float64",
+			ChTypeName: "Float64",
 			GoName:     "float64",
 		},
 		Type{
-			chTypeName:   "DateTime",
-			GoName:       goTypeTime,
+			ChTypeName:   "DateTime",
+			GoName:       "time.Time",
 			CannotBeNull: true,
+			CustomImpl:   true,
 		},
 		Type{
-			chTypeName:   "DateTime64",
-			GoName:       goTypeTime,
+			ChTypeName:   "DateTime64",
+			GoName:       "time.Time",
 			CannotBeNull: true,
+			CustomImpl:   true,
 		},
 		Type{
-			chTypeName: "IPv4",
-			GoName:     goTypeIPv4,
+			ChTypeName: "IPv4",
+			GoName:     "proto.IPv4",
+			CustomImpl: true,
 		},
 		Type{
-			chTypeName: "IPv6",
-			GoName:     goTypeIPv6,
+			ChTypeName: "IPv6",
+			GoName:     "proto.IPv6",
+			CustomImpl: true,
 		},
 	)
 

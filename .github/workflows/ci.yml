@@ -178,6 +178,9 @@ jobs:
       - name: Generate mocks
         run: make mock
 
+      - name: Go generate
+        run: go generate ./...
+
       - name: Check git diff
         run: git diff --exit-code
 

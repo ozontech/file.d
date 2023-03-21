@@ -108,7 +108,8 @@ func insaneInfer(auto proto.ColAuto) (InsaneColInput, error) {
 		case proto.ColumnTypeDateTime:
 			return NewColDateTime(auto.Data.(*proto.ColDateTime)), nil
 		case proto.ColumnTypeDateTime64:
-			return NewColDateTime64(auto.Data.(*proto.ColDateTime64)), nil
+			col := auto.Data.(*proto.ColDateTime64)
+			return NewColDateTime64(col, col.Precision.Scale()), nil
 		}
 		return nil, fmt.Errorf("inference for type %q is not supported", auto.Type().String())
 	}

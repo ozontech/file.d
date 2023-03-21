@@ -86,7 +86,7 @@ type Config struct {
 	// > @3@4@5@6
 	// >
 	// > TCP Clickhouse address, e.g. 127.0.0.1:9000.
-	Address string `json:"address" required:"true"` // *
+	Addresses []string `json:"addresses" required:"true"` // *
 
 	// > @3@4@5@6
 	// >
@@ -272,12 +272,16 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		}
 	}
 
+	if len(p.config.Addresses) != 1 {
+		p.logger.Fatal("shards are not yet supported")
+	}
+
 	var err error
 	maxConns := math.Ceil(float64(p.config.WorkersCount_) * 1.5)
 	p.pool, err = chpool.New(p.ctx, chpool.Options{
 		ClientOptions: ch.Options{
 			Logger:           p.logger.Named("driver"),
-			Address:          p.config.Address,
+			Address:          p.config.Addresses[0],
 			Database:         p.config.Database,
 			User:             p.config.User,
 			Password:         p.config.Password,

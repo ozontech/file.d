@@ -3,35 +3,50 @@
 package clickhouse
 
 import (
-	"time"
-	"fmt"
-	"net/netip"
-
 	"github.com/ClickHouse/ch-go/proto"
 	insaneJSON "github.com/vitkovskii/insane-json"
 )
 
-{{- range $type := .Types }}
+{{ range $type := .Types }}
 
+{{ if not $type.CustomImpl }}
+// {{ $type.ColumnTypeName }} represents Clickhouse {{ $type.ChTypeName }} type.
 type {{ $type.ColumnTypeName }} struct {
-	{{- if $type.CannotBeNull }}
 	col *{{ $type.LibChTypeNameFull }}
-	{{- else }}
-	col      *{{ $type.LibChTypeNameFull }}
+	{{- if not $type.CannotBeNull }}
 	nullCol  *{{ $type.NullableTypeName }}
 	nullable bool
 	{{- end }}
 }
+{{ else }}
+// struct {{ $type.ColumnTypeName }} defined and implemented in another file
+{{ end }}
 
-var (
-	_ InsaneColInput = (*{{ $type.ColumnTypeName }})(nil)
-	{{- if $type.Preparable }}
-	_ proto.Preparable = (*{{ $type.ColumnTypeName }})(nil)
-	{{- end }}
-)
+var _ InsaneColInput = (*{{ $type.ColumnTypeName }})(nil)
+{{- if $type.Preparable }}
+var _ proto.Preparable = (*{{ $type.ColumnTypeName }})(nil)
+{{- end }}
 
-{{ $type.Ctor }}
 
+{{ if not $type.CustomImpl }}
+
+{{ if $type.CannotBeNull  }}
+func New{{- $type.ColumnTypeName }}() *{{ $type.ColumnTypeName }} {
+	return &{{ $type.ColumnTypeName }}{
+		col: &{{ $type.LibChTypeNameFull }}{},
+	}
+}
+{{ else }}
+func New{{- $type.ColumnTypeName }}(nullable bool) *{{ $type.ColumnTypeName }} {
+	return &{{ $type.ColumnTypeName }}{
+		col:      new({{ $type.LibChTypeNameFull }}),
+		nullCol:  new({{ $type.LibChTypeNameFull }}).Nullable(),
+		nullable: nullable,
+	}
+}
+{{ end }}
+
+// Append the insaneJSON.Node to the batch.
 func (t *{{ $type.ColumnTypeName }}) Append(node *insaneJSON.StrictNode) error {
 	if node == nil || node.IsNull() {
 		{{- if $type.CannotBeNull }}
@@ -55,7 +70,7 @@ func (t *{{ $type.ColumnTypeName }}) Append(node *insaneJSON.StrictNode) error {
 		return err
 	}
 
-	{{ $type.ConvertInsaneJSONValue }}
+	val := {{ $type.ConvertInsaneJSONValue }}(v)
 
 	{{ end }}
 	{{- if not $type.CannotBeNull -}}
@@ -69,6 +84,7 @@ func (t *{{ $type.ColumnTypeName }}) Append(node *insaneJSON.StrictNode) error {
 
 	return nil
 }
+{{ end }}
 
 func (t *{{ $type.ColumnTypeName }}) Reset() {
 	t.col.Reset()
@@ -112,6 +128,7 @@ func (t *{{ $type.ColumnTypeName }}) EncodeColumn(buffer *proto.Buffer) {
 }
 
 {{ if $type.Preparable }}
+// Prepare the column before sending.
 func (t *{{ $type.ColumnTypeName }}) Prepare() error {
 	return t.col.Prepare()
 }

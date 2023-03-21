@@ -14,7 +14,8 @@ pipelines:
         field: ts64
     output:
       type: clickhouse
-      address: 127.0.0.1:9001
+      addresses:
+        - 127.0.0.1:9001
       table: test_table_insert
       db_request_timeout: 1m
       columns:
