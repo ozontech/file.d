@@ -1,7 +1,6 @@
 package clickhouse
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/ClickHouse/ch-go/proto"
@@ -9,10 +8,6 @@ import (
 )
 
 //go:generate go run ./colgenerator
-
-var (
-	ErrNodeIsNil = errors.New("node is nil, but column is not")
-)
 
 type InsaneColInput interface {
 	proto.ColInput

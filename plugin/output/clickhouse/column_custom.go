@@ -1,12 +1,18 @@
 package clickhouse
 
 import (
+	"errors"
 	"fmt"
 	"net/netip"
 	"time"
 
 	"github.com/ClickHouse/ch-go/proto"
 	insaneJSON "github.com/vitkovskii/insane-json"
+)
+
+var (
+	ErrNodeIsNil        = errors.New("node is nil, but column is not")
+	ErrInvalidIPVersion = errors.New("IP is valid, but the version does not match the column")
 )
 
 // ColDateTime represents Clickhouse DateTime type.
@@ -92,17 +98,13 @@ func (t *ColIPv4) Append(node *insaneJSON.StrictNode) error {
 		return nil
 	}
 
-	v, err := node.AsString()
+	addr, err := ipFromNode(node)
 	if err != nil {
 		return err
 	}
 
-	addr, err := netip.ParseAddr(v)
-	if err != nil {
-		return err
-	}
 	if !addr.Is4() {
-		return fmt.Errorf("invalid IPv6 value, val=%s", v)
+		return ErrInvalidIPVersion
 	}
 
 	val := proto.ToIPv4(addr)
@@ -140,18 +142,15 @@ func (t *ColIPv6) Append(node *insaneJSON.StrictNode) error {
 		return nil
 	}
 
-	v, err := node.AsString()
+	addr, err := ipFromNode(node)
 	if err != nil {
 		return err
 	}
 
-	addr, err := netip.ParseAddr(v)
-	if err != nil {
-		return err
-	}
 	if !addr.Is6() {
-		return fmt.Errorf("invalid IPv6 value, val=%s", v)
+		return ErrInvalidIPVersion
 	}
+
 	val := proto.ToIPv6(addr)
 
 	if t.nullable {
@@ -209,4 +208,18 @@ func (t *ColEnum16) Append(node *insaneJSON.StrictNode) error {
 	t.col.Append(val)
 
 	return nil
+}
+
+func ipFromNode(node *insaneJSON.StrictNode) (netip.Addr, error) {
+	v, err := node.AsString()
+	if err != nil {
+		return netip.Addr{}, err
+	}
+
+	addr, err := netip.ParseAddr(v)
+	if err != nil {
+		return netip.Addr{}, fmt.Errorf("extract ip form json node: %w", err)
+	}
+
+	return addr, nil
 }

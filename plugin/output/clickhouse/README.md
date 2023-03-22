@@ -6,9 +6,18 @@ It sends the event batches to Clickhouse database using
 File.d uses low level Go client - [ch-go](https://github.com/ClickHouse/ch-go) to provide these features.
 
 ### Config params
-**`address`** *`string`* *`required`* 
+**`addresses`** *`[]string`* *`required`* 
 
-TCP Clickhouse address, e.g. 127.0.0.1:9000.
+TCP Clickhouse addresses, e.g.: 127.0.0.1:9000.
+Check the insert_strategy to find out how File.d will behave with a list of addresses.
+
+<br>
+
+**`insert_strategy`** *`string`* *`default=round_robin`* *`options=round_robin|in_order`* 
+
+If more than one addresses are set, File.d will insert batches depends on the strategy:
+round_robin - File.d will send requests in the round-robin order.
+in_order - File.d will send requests starting from the first address, ending with the number of retries.
 
 <br>
 
@@ -54,7 +63,7 @@ Clickhouse target table.
 Clickhouse table columns. Each column must contain `name` and `type`.
 File.d supports next data types:
 * Signed and unsigned integers from 8 to 64 bits.
-If you set 128-256 bits - file.d will cast the number to the int64.
+If you set 128-256 bits - File.d will cast the number to the int64.
 * DateTime, DateTime64
 * String
 * Enum8, Enum16
@@ -67,8 +76,8 @@ If you need more types, please, create an issue.
 
 **`retry`** *`int`* *`default=10`* 
 
-Retries of insertion. If file.d cannot insert for this number of attempts,
-file.d will fall with non-zero exit code.
+Retries of insertion. If File.d cannot insert for this number of attempts,
+File.d will fall with non-zero exit code.
 
 <br>
 

@@ -16,6 +16,7 @@ import (
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/tls"
 	prom "github.com/prometheus/client_golang/prometheus"
+	"go.uber.org/atomic"
 	"go.uber.org/zap"
 )
 
@@ -46,7 +47,8 @@ type Plugin struct {
 	query string
 
 	// TODO: support shards
-	pool Clickhouse
+	instances []Clickhouse
+	requestID atomic.Int64
 
 	// plugin metrics
 
@@ -80,13 +82,29 @@ type Column struct {
 	Type string `json:"type"`
 }
 
+type InsertStrategy byte
+
+const (
+	StrategyRoundRobin InsertStrategy = iota
+	StrategyInOrder
+)
+
 // ! config-params
 // ^ config-params
 type Config struct {
 	// > @3@4@5@6
 	// >
-	// > TCP Clickhouse address, e.g. 127.0.0.1:9000.
+	// > TCP Clickhouse addresses, e.g.: 127.0.0.1:9000.
+	// > Check the insert_strategy to find out how File.d will behave with a list of addresses.
 	Addresses []string `json:"addresses" required:"true"` // *
+
+	// > @3@4@5@6
+	// >
+	// > If more than one addresses are set, File.d will insert batches depends on the strategy:
+	// > round_robin - File.d will send requests in the round-robin order.
+	// > in_order - File.d will send requests starting from the first address, ending with the number of retries.
+	InsertStrategy  string `json:"insert_strategy" default:"round_robin" options:"round_robin|in_order"` // *
+	InsertStrategy_ InsertStrategy
 
 	// > @3@4@5@6
 	// >
@@ -124,7 +142,7 @@ type Config struct {
 	// > Clickhouse table columns. Each column must contain `name` and `type`.
 	// > File.d supports next data types:
 	// > * Signed and unsigned integers from 8 to 64 bits.
-	// > If you set 128-256 bits - file.d will cast the number to the int64.
+	// > If you set 128-256 bits - File.d will cast the number to the int64.
 	// > * DateTime, DateTime64
 	// > * String
 	// > * Enum8, Enum16
@@ -145,8 +163,8 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
-	// > Retries of insertion. If file.d cannot insert for this number of attempts,
-	// > file.d will fall with non-zero exit code.
+	// > Retries of insertion. If File.d cannot insert for this number of attempts,
+	// > File.d will fall with non-zero exit code.
 	Retry int `json:"retry" default:"10"` // *
 
 	// > @3@4@5@6
@@ -246,6 +264,13 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		p.logger.Fatal("invalid database schema", zap.Error(err))
 	}
 
+	switch p.config.InsertStrategy {
+	case "round_robin":
+		p.config.InsertStrategy_ = StrategyRoundRobin
+	case "in_order":
+		p.config.InsertStrategy_ = StrategyInOrder
+	}
+
 	columnNames := p.getColumnNames()
 	p.query = fmt.Sprintf("INSERT INTO %s(%s) VALUES", p.config.Table, strings.Join(columnNames, ", "))
 
@@ -272,34 +297,32 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		}
 	}
 
-	if len(p.config.Addresses) != 1 {
-		p.logger.Fatal("shards are not yet supported")
-	}
-
-	var err error
 	maxConns := math.Ceil(float64(p.config.WorkersCount_) * 1.5)
-	p.pool, err = chpool.New(p.ctx, chpool.Options{
-		ClientOptions: ch.Options{
-			Logger:           p.logger.Named("driver"),
-			Address:          p.config.Addresses[0],
-			Database:         p.config.Database,
-			User:             p.config.User,
-			Password:         p.config.Password,
-			QuotaKey:         p.config.QuotaKey,
-			Compression:      compression,
-			Settings:         p.config.ClickhouseSettings.toProtoSettings(),
-			DialTimeout:      time.Second * 10,
-			TLS:              b.Build(),
-			HandshakeTimeout: time.Minute,
-		},
-		MaxConnLifetime:   p.config.MaxConnLifetime_,
-		MaxConnIdleTime:   p.config.MaxConnIdleTime_,
-		MaxConns:          int32(maxConns),
-		MinConns:          int32(p.config.WorkersCount_),
-		HealthCheckPeriod: p.config.HealthCheckPeriod_,
-	})
-	if err != nil {
-		p.logger.Fatal("create clickhouse connection pool", zap.Error(err))
+	for _, addr := range p.config.Addresses {
+		pool, err := chpool.New(p.ctx, chpool.Options{
+			ClientOptions: ch.Options{
+				Logger:           p.logger.Named("driver"),
+				Address:          addr,
+				Database:         p.config.Database,
+				User:             p.config.User,
+				Password:         p.config.Password,
+				QuotaKey:         p.config.QuotaKey,
+				Compression:      compression,
+				Settings:         p.config.ClickhouseSettings.toProtoSettings(),
+				DialTimeout:      time.Second * 10,
+				TLS:              b.Build(),
+				HandshakeTimeout: time.Minute,
+			},
+			MaxConnLifetime:   p.config.MaxConnLifetime_,
+			MaxConnIdleTime:   p.config.MaxConnIdleTime_,
+			MaxConns:          int32(maxConns),
+			MinConns:          int32(p.config.WorkersCount_),
+			HealthCheckPeriod: p.config.HealthCheckPeriod_,
+		})
+		if err != nil {
+			p.logger.Fatal("create clickhouse connection pool", zap.Error(err), zap.String("addr", addr))
+		}
+		p.instances = append(p.instances, pool)
 	}
 
 	p.batcher = pipeline.NewBatcher(pipeline.BatcherOptions{
@@ -319,7 +342,9 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 func (p *Plugin) Stop() {
 	p.cancelFunc()
 	p.batcher.Stop()
-	p.pool.Close()
+	for _, clickhouse := range p.instances {
+		clickhouse.Close()
+	}
 }
 
 func (p *Plugin) Out(event *pipeline.Event) {
@@ -357,8 +382,10 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 	}
 
 	var err error
-	for i := 0; i < p.config.Retry; i++ {
-		err = p.do(queryInput)
+	for try := 0; try < p.config.Retry; try++ {
+		requestID := p.requestID.Inc()
+		clickhouse := p.getInstance(requestID, try)
+		err = p.do(clickhouse, queryInput)
 		if err == nil {
 			break
 		}
@@ -373,13 +400,13 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 	}
 }
 
-func (p *Plugin) do(queryInput proto.Input) error {
+func (p *Plugin) do(clickhouse Clickhouse, queryInput proto.Input) error {
 	defer p.queriesCountMetric.WithLabelValues().Inc()
 
 	ctx, cancel := context.WithTimeout(p.ctx, p.config.DBRequestTimeout_)
 	defer cancel()
 
-	return p.pool.Do(ctx, ch.Query{
+	return clickhouse.Do(ctx, ch.Query{
 		Body:  p.query,
 		Input: queryInput,
 	})
@@ -391,4 +418,15 @@ func (p *Plugin) getColumnNames() []string {
 		columns[i] = fmt.Sprintf("%q", col.Name)
 	}
 	return columns
+}
+
+func (p *Plugin) getInstance(requestID int64, retry int) Clickhouse {
+	var instanceIdx int
+	switch p.config.InsertStrategy_ {
+	case StrategyInOrder:
+		instanceIdx = retry % len(p.instances)
+	case StrategyRoundRobin:
+		instanceIdx = int(requestID) % len(p.instances)
+	}
+	return p.instances[instanceIdx]
 }

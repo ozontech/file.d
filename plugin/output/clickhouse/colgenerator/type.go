@@ -27,7 +27,7 @@ func (t Type) ConvertInsaneJSONValue() string {
 	if t.isComplexNumber {
 		return fmt.Sprintf("%sFromInt", t.GoName)
 	}
-	return fmt.Sprintf("%s", t.GoName)
+	return t.GoName
 }
 
 func (t Type) InsaneConvertFunc() string {
