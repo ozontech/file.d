@@ -80,7 +80,7 @@ type limitersMap struct {
 	activeTasks      atomic.Uint32
 	curGen           int64
 	limitersExp      int64
-	isRedisConnected bool
+	isRedisConnected atomic.Bool
 	logger           *zap.SugaredLogger
 
 	limiterCfg *limiterConfig
@@ -91,14 +91,15 @@ type limitersMap struct {
 func newLimitersMap(lmCfg limitersMapConfig, redisOpts *redis.Options) *limitersMap {
 	nowTs := time.Now().UnixMicro()
 	lm := &limitersMap{
-		ctx:         lmCfg.ctx,
-		lims:        make(map[string]*limiterWithGen),
-		mu:          &sync.RWMutex{},
-		limiterBuf:  make([]byte, 0),
-		activeTasks: *atomic.NewUint32(0),
-		curGen:      nowTs,
-		limitersExp: lmCfg.limitersExpiration.Microseconds(),
-		logger:      lmCfg.logger,
+		ctx:              lmCfg.ctx,
+		lims:             make(map[string]*limiterWithGen),
+		mu:               &sync.RWMutex{},
+		limiterBuf:       make([]byte, 0),
+		activeTasks:      *atomic.NewUint32(0),
+		curGen:           nowTs,
+		limitersExp:      lmCfg.limitersExpiration.Microseconds(),
+		isRedisConnected: *atomic.NewBool(false),
+		logger:           lmCfg.logger,
 
 		limiterCfg: lmCfg.limiterCfg,
 
@@ -118,7 +119,7 @@ func newLimitersMap(lmCfg limitersMapConfig, redisOpts *redis.Options) *limiters
 			)
 			go lm.tryRedisReconnect(lm.ctx)
 		} else {
-			lm.isRedisConnected = true
+			lm.isRedisConnected.Store(true)
 		}
 	}
 	return lm
@@ -132,9 +133,7 @@ func (l *limitersMap) tryRedisReconnect(ctx context.Context) {
 			return
 		case <-ticker.C:
 			if pingResp := l.limiterCfg.redisClient.Ping(); pingResp.Err() == nil {
-				l.mu.Lock()
-				l.isRedisConnected = true
-				l.mu.Unlock()
+				l.isRedisConnected.Store(true)
 				l.logger.Info("connected to redis")
 				return
 			}
@@ -153,12 +152,9 @@ func (l *limitersMap) syncWorker(jobCh <-chan limiter, wg *sync.WaitGroup) {
 func (l *limitersMap) runSync(ctx context.Context, workerCount int, syncInterval time.Duration) {
 	// if redis failed to connect, wait for successful reconnect before starting workers
 	for {
-		l.mu.RLock()
-		if l.isRedisConnected {
-			l.mu.RUnlock()
+		if l.isRedisConnected.Load() {
 			break
 		}
-		l.mu.RUnlock()
 		time.Sleep(redisReconnectInterval)
 	}
 
