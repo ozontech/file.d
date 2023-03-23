@@ -42,7 +42,7 @@ type Plugin struct {
 	sourceBuf  []byte
 	maskBuf    []byte
 	valueNodes []*insaneJSON.Node
-	logger     *zap.SugaredLogger
+	logger     *zap.Logger
 
 	//  plugin metrics
 
@@ -101,18 +101,18 @@ func factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 	return &Plugin{}, &Config{}
 }
 
-func compileMasks(masks []Mask, logger *zap.SugaredLogger) []Mask {
+func compileMasks(masks []Mask, logger *zap.Logger) []Mask {
 	for i := range masks {
 		masks[i] = compileMask(masks[i], logger)
 	}
 	return masks
 }
 
-func compileMask(m Mask, logger *zap.SugaredLogger) Mask {
-	logger.Infof("compiling, re=%s, groups=%v", m.Re, m.Groups)
+func compileMask(m Mask, logger *zap.Logger) Mask {
+	logger.Info("compiling", zap.String("re", m.Re), zap.Ints("groups", m.Groups))
 	re, err := regexp.Compile(m.Re)
 	if err != nil {
-		logger.Fatalf("error on compiling regexp, regexp=%s", m.Re)
+		logger.Fatal("error on compiling regexp", zap.String("re", m.Re))
 	}
 	m.Re_ = re
 	m.Groups = verifyGroupNumbers(m.Groups, re.NumSubexp(), logger)
@@ -131,18 +131,18 @@ func isGroupsUnique(groups []int) bool {
 	return true
 }
 
-func verifyGroupNumbers(groups []int, totalGroups int, logger *zap.SugaredLogger) []int {
+func verifyGroupNumbers(groups []int, totalGroups int, logger *zap.Logger) []int {
 	if !isGroupsUnique(groups) {
-		logger.Fatalf("groups numbers must be unique, groups numbers=%v", groups)
+		logger.Fatal("groups numbers must be unique", zap.Ints("groups_numbers", groups))
 	}
 
 	if len(groups) > totalGroups {
-		logger.Fatalf("there are many groups, groups=%d, totalGroups=%d", len(groups), totalGroups)
+		logger.Fatal("there are many groups", zap.Int("groups", len(groups)), zap.Int("total_groups", totalGroups))
 	}
 
 	for _, g := range groups {
 		if g > totalGroups || g < 0 {
-			logger.Fatalf("wrong group number, number=%d", g)
+			logger.Fatal("wrong group number", zap.Int("number", g))
 		} else if g == 0 {
 			return []int{0}
 		}
@@ -160,7 +160,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 	p.maskBuf = make([]byte, 0, params.PipelineSettings.AvgEventSize)
 	p.sourceBuf = make([]byte, 0, params.PipelineSettings.AvgEventSize)
 	p.valueNodes = make([]*insaneJSON.Node, 0)
-	p.logger = params.Logger
+	p.logger = params.Logger.Desugar()
 	p.config.Masks = compileMasks(p.config.Masks, p.logger)
 }
 
@@ -269,7 +269,10 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	}
 	if maskApplied {
 		p.maskAppliedMetric.WithLabelValues().Inc()
-		p.logger.Infof("mask appeared to event, output string: %s", event.Root.EncodeToString())
+
+		if ce := p.logger.Check(zap.DebugLevel, "mask appeared to event"); ce != nil {
+			ce.Write(zap.String("event", event.Root.EncodeToString()))
+		}
 	}
 
 	return pipeline.ActionPass
