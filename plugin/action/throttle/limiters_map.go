@@ -2,6 +2,8 @@ package throttle
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"sync"
 	"time"
 
@@ -13,7 +15,10 @@ import (
 	"github.com/ozontech/file.d/pipeline"
 )
 
-const maintenanceInterval = time.Second
+const (
+	maintenanceInterval    = time.Second
+	redisReconnectInterval = 30 * time.Minute
+)
 
 // interface with only necessary functions of the original redis.Client
 type redisClient interface {
@@ -56,7 +61,9 @@ type limiterConfig struct {
 
 // limitersMapConfig configuration of limiters map.
 type limitersMapConfig struct {
+	ctx                context.Context
 	limitersExpiration time.Duration
+	isStrict           bool
 	logger             *zap.SugaredLogger
 
 	limiterCfg *limiterConfig
@@ -67,13 +74,15 @@ type limitersMapConfig struct {
 // limitersMap is auxiliary type for storing the map of strings to limiters with additional info for cleanup
 // and thread safe map operations handling.
 type limitersMap struct {
-	lims        map[string]*limiterWithGen
-	mu          *sync.RWMutex
-	limiterBuf  []byte
-	activeTasks atomic.Uint32
-	curGen      int64
-	limitersExp int64
-	logger      *zap.SugaredLogger
+	ctx              context.Context
+	lims             map[string]*limiterWithGen
+	mu               *sync.RWMutex
+	limiterBuf       []byte
+	activeTasks      atomic.Uint32
+	curGen           int64
+	limitersExp      int64
+	isRedisConnected bool
+	logger           *zap.SugaredLogger
 
 	limiterCfg *limiterConfig
 
@@ -83,6 +92,7 @@ type limitersMap struct {
 func newLimitersMap(lmCfg limitersMapConfig, redisOpts *redis.Options) *limitersMap {
 	nowTs := time.Now().UnixMicro()
 	lm := &limitersMap{
+		ctx:         lmCfg.ctx,
 		lims:        make(map[string]*limiterWithGen),
 		mu:          &sync.RWMutex{},
 		limiterBuf:  make([]byte, 0),
@@ -96,11 +106,20 @@ func newLimitersMap(lmCfg limitersMapConfig, redisOpts *redis.Options) *limiters
 		mapSizeMetric: lmCfg.mapSizeMetric,
 	}
 	if redisOpts != nil {
-		client := redis.NewClient(redisOpts)
-		if pingResp := client.Ping(); pingResp.Err() != nil {
-			lm.logger.Fatalf("can't ping redis: %s", pingResp.Err())
+		lm.limiterCfg.redisClient = redis.NewClient(redisOpts)
+		if pingResp := lm.limiterCfg.redisClient.Ping(); pingResp.Err() != nil {
+			msg := fmt.Sprintf("can't ping redis: %s", pingResp.Err())
+			if lmCfg.isStrict {
+				lm.logger.Fatal(msg)
+			}
+			lm.logger.Error(msg)
+			lm.logger.Warnf(
+				"sync with redis won't start until successful connect, reconnection attempts will happen every %s",
+				redisReconnectInterval,
+			)
+		} else {
+			lm.isRedisConnected = true
 		}
-		lm.limiterCfg.redisClient = client
 	}
 	return lm
 }
@@ -112,8 +131,33 @@ func (l *limitersMap) syncWorker(jobCh <-chan limiter, wg *sync.WaitGroup) {
 	}
 }
 
+func (l *limitersMap) waitRedisReconnect(ctx context.Context) {
+	if l.isRedisConnected {
+		return
+	}
+	ticker := time.NewTicker(redisReconnectInterval)
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if pingResp := l.limiterCfg.redisClient.Ping(); pingResp.Err() == nil {
+				l.isRedisConnected = true
+				l.logger.Info("connected to redis")
+				return
+			}
+		}
+	}
+}
+
 // runSync starts procedure of limiters sync with workers count and interval set in limitersMap.
 func (l *limitersMap) runSync(ctx context.Context, workerCount int, syncInterval time.Duration) {
+	// if redis failed to connect, wait for successful reconnect before starting workers
+	l.waitRedisReconnect(ctx)
+	if errors.Is(ctx.Err(), context.Canceled) {
+		return
+	}
+
 	wg := sync.WaitGroup{}
 
 	jobs := make(chan limiter, workerCount)
@@ -145,22 +189,27 @@ func (l *limitersMap) runSync(ctx context.Context, workerCount int, syncInterval
 // current time in microseconds, every limiter in the map has its own generation indicating last time it was acquired.
 // If the difference between the current generation of the map and the limiter's generation is greater than the
 // limiters expiration, the limiter's key is deleted from the map.
-func (l *limitersMap) maintenance() {
+func (l *limitersMap) maintenance(ctx context.Context) {
+	ticker := time.NewTicker(maintenanceInterval)
 	for {
-		time.Sleep(maintenanceInterval)
-		l.mu.Lock()
-		// find expired limiters and remove them
-		nowTs := time.Now().UnixMicro()
-		l.curGen = nowTs
-		for key, lim := range l.lims {
-			if nowTs-lim.gen.Load() < l.limitersExp {
-				continue
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			l.mu.Lock()
+			// find expired limiters and remove them
+			nowTs := time.Now().UnixMicro()
+			l.curGen = nowTs
+			for key, lim := range l.lims {
+				if nowTs-lim.gen.Load() < l.limitersExp {
+					continue
+				}
+				delete(l.lims, key)
 			}
-			delete(l.lims, key)
+			mapSize := float64(len(l.lims))
+			l.mapSizeMetric.WithLabelValues().Set(mapSize)
+			l.mu.Unlock()
 		}
-		mapSize := float64(len(l.lims))
-		l.mapSizeMetric.WithLabelValues().Set(mapSize)
-		l.mu.Unlock()
 	}
 }
 

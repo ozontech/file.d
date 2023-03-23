@@ -34,13 +34,12 @@ It discards the events if pipeline throughput gets higher than a configured thre
 }*/
 
 type Plugin struct {
-	ctx         context.Context
-	cancel      context.CancelFunc
-	logger      *zap.SugaredLogger
-	config      *Config
-	pipeline    string
-	format      string
-	redisClient redisClient
+	ctx      context.Context
+	cancel   context.CancelFunc
+	logger   *zap.SugaredLogger
+	config   *Config
+	pipeline string
+	format   string
 
 	limitersMap *limitersMap
 	limiterBuf  []byte
@@ -85,7 +84,8 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
-	// > Defines kind of backend.
+	// > Defines kind of backend. When redis backend is chosen and if by any reason plugin cannot connect to redis,
+	// > limiters will not start syncing with redis until successful reconnect.
 	LimiterBackend string `json:"limiter_backend" default:"memory" options:"memory|redis"` // *
 
 	// > @3@4@5@6
@@ -213,15 +213,15 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 	}
 	p.format = format
 
-	if p.config.RedisBackendCfg.WorkerCount < 1 {
-		p.logger.Fatalf("workers_count must be > 0, passed: %d", p.config.RedisBackendCfg.WorkerCount)
-	}
-
 	limitersMu.Lock()
 	// init limitersMap only once per pipeline
 	if _, has := limiters[p.pipeline]; !has {
 		var redisOpts *redis.Options
 		if p.config.LimiterBackend == redisBackend {
+			if p.config.RedisBackendCfg.WorkerCount < 1 {
+				p.logger.Fatalf("workers_count must be > 0, passed: %d", p.config.RedisBackendCfg.WorkerCount)
+			}
+
 			redisOpts = &redis.Options{
 				Network:         "tcp",
 				Addr:            p.config.RedisBackendCfg.Endpoint,
@@ -234,7 +234,9 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 			}
 		}
 		lmCfg := limitersMapConfig{
+			ctx:                p.ctx,
 			limitersExpiration: p.config.LimiterExpiration_,
+			isStrict:           params.PipelineSettings.IsStrict,
 			logger:             p.logger,
 			limiterCfg: &limiterConfig{
 				ctx:               p.ctx,
@@ -250,12 +252,12 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 		limiters[p.pipeline] = newLimitersMap(lmCfg, redisOpts)
 		if p.config.LimiterBackend == redisBackend {
 			// run sync only once per pipeline
-			go limiters[p.pipeline].runSync(ctx,
+			go limiters[p.pipeline].runSync(p.ctx,
 				p.config.RedisBackendCfg.WorkerCount,
 				p.config.RedisBackendCfg.SyncInterval_,
 			)
 		}
-		go limiters[p.pipeline].maintenance()
+		go limiters[p.pipeline].maintenance(p.ctx)
 	}
 	p.limitersMap = limiters[p.pipeline]
 	limitersMu.Unlock()
