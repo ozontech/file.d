@@ -32,7 +32,7 @@ require (
 	golang.org/x/net v0.7.0
 	gopkg.in/yaml.v3 v3.0.1
 	k8s.io/api v0.0.0-20190620084959-7cf5895f2711
-	k8s.io/apimachinery v0.0.0-20190704094625-facf06a8f4b8
+	k8s.io/apimachinery v0.15.7
 	k8s.io/client-go v11.0.0+incompatible
 )
 
@@ -43,6 +43,7 @@ require (
 	github.com/go-faster/errors v0.6.1 // indirect
 	github.com/go-logr/logr v1.2.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
+	github.com/google/go-cmp v0.5.9 // indirect
 	github.com/google/uuid v1.3.0 // indirect
 	github.com/hashicorp/go-version v1.6.0 // indirect
 	github.com/jackc/puddle/v2 v2.2.0 // indirect
