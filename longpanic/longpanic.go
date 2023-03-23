@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"go.uber.org/atomic"
+	"go.uber.org/zap"
 
 	"github.com/ozontech/file.d/logger"
 )
@@ -86,7 +87,7 @@ func (l *LongPanic) recoverUntilTimeout() {
 			l.panicHandler(err)
 		}
 
-		logger.Error(err.Error())
+		logger.Error(err.Error(), zap.Stack("stacktrace"))
 		logger.Error("wait for somebody to restart plugins via endpoint")
 
 		l.shouldPanic.Store(true)

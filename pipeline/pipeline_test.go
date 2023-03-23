@@ -65,11 +65,13 @@ func TestInUnparsableMessages(t *testing.T) {
 			free1idxUint := reflect.
 				Indirect(free1slice.Index(i)).
 				FieldByName("v").
+				FieldByName("v").
 				Uint()
 			require.EqualValues(t, uint32(1), free1idxUint)
 
 			free2idxUint := reflect.
 				Indirect(free2slice.Index(i)).
+				FieldByName("v").
 				FieldByName("v").
 				Uint()
 			require.EqualValues(t, uint32(1), free2idxUint)

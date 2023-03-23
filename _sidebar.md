@@ -44,6 +44,7 @@
     - [throttle](plugin/action/throttle/README.md)
 
   - Output
+    - [clickhouse](plugin/output/clickhouse/README.md)
     - [devnull](plugin/output/devnull/README.md)
     - [elasticsearch](plugin/output/elasticsearch/README.md)
     - [file](plugin/output/file/README.md)

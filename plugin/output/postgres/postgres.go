@@ -193,7 +193,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		p.logger.Fatal("'retry' can't be <1")
 	}
 	if p.config.Retention_ < 1 {
-		p.logger.Fatal("'renetion' can't be <1")
+		p.logger.Fatal("'retention' can't be <1")
 	}
 	if p.config.DBRequestTimeout_ < 1 {
 		p.logger.Fatal("'db_request_timeout' can't be <1")

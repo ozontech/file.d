@@ -91,8 +91,11 @@ jobs:
           restore-keys: |
             test-${{ runner.os }}-go-
 
-      - name: Run Docker-compose
+      - name: Run Kafka
         run: docker-compose -f ./e2e/kafka_file/docker-compose-kafka.yml up -d
+
+      - name: Run Clickhouse
+        run: docker-compose -f ./e2e/file_clickhouse/docker-compose.yml up -d
 
       - name: E2E
         run: go test ./e2e -coverprofile=profile_e2e.out -covermode=atomic -tags=e2e_new -timeout=3m -coverpkg=./...
@@ -174,6 +177,9 @@ jobs:
 
       - name: Generate mocks
         run: make mock
+
+      - name: Go generate
+        run: go generate ./...
 
       - name: Check git diff
         run: git diff --exit-code
