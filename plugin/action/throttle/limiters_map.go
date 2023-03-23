@@ -2,6 +2,7 @@ package throttle
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -80,7 +81,7 @@ type limitersMap struct {
 	activeTasks      atomic.Uint32
 	curGen           int64
 	limitersExp      int64
-	isRedisConnected atomic.Bool
+	isRedisConnected bool
 	logger           *zap.SugaredLogger
 
 	limiterCfg *limiterConfig
@@ -91,15 +92,14 @@ type limitersMap struct {
 func newLimitersMap(lmCfg limitersMapConfig, redisOpts *redis.Options) *limitersMap {
 	nowTs := time.Now().UnixMicro()
 	lm := &limitersMap{
-		ctx:              lmCfg.ctx,
-		lims:             make(map[string]*limiterWithGen),
-		mu:               &sync.RWMutex{},
-		limiterBuf:       make([]byte, 0),
-		activeTasks:      *atomic.NewUint32(0),
-		curGen:           nowTs,
-		limitersExp:      lmCfg.limitersExpiration.Microseconds(),
-		isRedisConnected: *atomic.NewBool(false),
-		logger:           lmCfg.logger,
+		ctx:         lmCfg.ctx,
+		lims:        make(map[string]*limiterWithGen),
+		mu:          &sync.RWMutex{},
+		limiterBuf:  make([]byte, 0),
+		activeTasks: *atomic.NewUint32(0),
+		curGen:      nowTs,
+		limitersExp: lmCfg.limitersExpiration.Microseconds(),
+		logger:      lmCfg.logger,
 
 		limiterCfg: lmCfg.limiterCfg,
 
@@ -117,28 +117,11 @@ func newLimitersMap(lmCfg limitersMapConfig, redisOpts *redis.Options) *limiters
 				"sync with redis won't start until successful connect, reconnection attempts will happen every %s",
 				redisReconnectInterval,
 			)
-			go lm.tryRedisReconnect(lm.ctx)
 		} else {
-			lm.isRedisConnected.Store(true)
+			lm.isRedisConnected = true
 		}
 	}
 	return lm
-}
-
-func (l *limitersMap) tryRedisReconnect(ctx context.Context) {
-	ticker := time.NewTicker(redisReconnectInterval)
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			if pingResp := l.limiterCfg.redisClient.Ping(); pingResp.Err() == nil {
-				l.isRedisConnected.Store(true)
-				l.logger.Info("connected to redis")
-				return
-			}
-		}
-	}
 }
 
 func (l *limitersMap) syncWorker(jobCh <-chan limiter, wg *sync.WaitGroup) {
@@ -148,14 +131,31 @@ func (l *limitersMap) syncWorker(jobCh <-chan limiter, wg *sync.WaitGroup) {
 	}
 }
 
+func (l *limitersMap) waitRedisReconnect(ctx context.Context) {
+	if l.isRedisConnected {
+		return
+	}
+	ticker := time.NewTicker(redisReconnectInterval)
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if pingResp := l.limiterCfg.redisClient.Ping(); pingResp.Err() == nil {
+				l.isRedisConnected = true
+				l.logger.Info("connected to redis")
+				return
+			}
+		}
+	}
+}
+
 // runSync starts procedure of limiters sync with workers count and interval set in limitersMap.
 func (l *limitersMap) runSync(ctx context.Context, workerCount int, syncInterval time.Duration) {
 	// if redis failed to connect, wait for successful reconnect before starting workers
-	for {
-		if l.isRedisConnected.Load() {
-			break
-		}
-		time.Sleep(redisReconnectInterval)
+	l.waitRedisReconnect(ctx)
+	if errors.Is(ctx.Err(), context.Canceled) {
+		return
 	}
 
 	wg := sync.WaitGroup{}
