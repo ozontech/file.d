@@ -2,7 +2,7 @@ package clickhouse
 
 import (
 	"context"
-	"fmt"
+	"encoding/json"
 	"math"
 	"strings"
 	"time"
@@ -260,9 +260,13 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	if p.config.DBRequestTimeout_ < 1 {
 		p.logger.Fatal("'db_request_timeout' can't be <1")
 	}
-	if _, err := inferInsaneColInputs(p.config.Columns); err != nil {
+
+	schema, err := inferInsaneColInputs(p.config.Columns)
+	if err != nil {
 		p.logger.Fatal("invalid database schema", zap.Error(err))
 	}
+	input := inputFromColumns(schema)
+	p.query = input.Into(p.config.Table)
 
 	switch p.config.InsertStrategy {
 	case "round_robin":
@@ -270,9 +274,6 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	case "in_order":
 		p.config.InsertStrategy_ = StrategyInOrder
 	}
-
-	columnNames := p.getColumnNames()
-	p.query = fmt.Sprintf("INSERT INTO %s(%s) VALUES", p.config.Table, strings.Join(columnNames, ", "))
 
 	var compression ch.Compression
 	switch strings.ToLower(p.config.Compression) {
@@ -351,33 +352,42 @@ func (p *Plugin) Out(event *pipeline.Event) {
 	p.batcher.Add(event)
 }
 
+type data struct {
+	cols  []InsaneColumn
+	input proto.Input
+}
+
+func (d data) reset() {
+	for i := range d.cols {
+		d.cols[i].ColInput.Reset()
+	}
+}
+
 func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 	if *workerData == nil {
 		// we don't check the error, schema already validated in the Start
-		schema, _ := inferInsaneColInputs(p.config.Columns)
-		*workerData = schema
-	}
-
-	input := (*workerData).([]InsaneColumn)
-	for i := range input {
-		input[i].ColInput.Reset()
-	}
-
-	for _, event := range batch.Events {
-		for _, col := range input {
-			node, _ := event.Root.DigStrict(col.Name)
-			if err := col.ColInput.Append(node); err != nil {
-				// TODO: handle case when we can't append in the batch, e.g. columns is not nullable, but value it is
-				p.logger.Fatal("can't append value in the batch", zap.Error(err), zap.String("column", col.Name))
-			}
+		columns, _ := inferInsaneColInputs(p.config.Columns)
+		input := inputFromColumns(columns)
+		*workerData = data{
+			cols:  columns,
+			input: input,
 		}
 	}
 
-	queryInput := make(proto.Input, len(input))
-	for i := range input {
-		queryInput[i] = proto.InputColumn{
-			Name: input[i].Name,
-			Data: input[i].ColInput,
+	data := (*workerData).(data)
+	data.reset()
+
+	for _, event := range batch.Events {
+		for _, col := range data.cols {
+			node, _ := event.Root.DigStrict(col.Name)
+			if err := col.ColInput.Append(node); err != nil {
+				// TODO: handle case when we can't append in the batch, e.g. columns is not nullable, but value it is
+				p.logger.Fatal("can't append value in the batch",
+					zap.Error(err),
+					zap.String("column", col.Name),
+					zap.Any("event", json.RawMessage(event.Root.EncodeToByte())),
+				)
+			}
 		}
 	}
 
@@ -385,7 +395,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 	for try := 0; try < p.config.Retry; try++ {
 		requestID := p.requestID.Inc()
 		clickhouse := p.getInstance(requestID, try)
-		err = p.do(clickhouse, queryInput)
+		err = p.do(clickhouse, data.input)
 		if err == nil {
 			break
 		}
@@ -410,14 +420,6 @@ func (p *Plugin) do(clickhouse Clickhouse, queryInput proto.Input) error {
 		Body:  p.query,
 		Input: queryInput,
 	})
-}
-
-func (p *Plugin) getColumnNames() []string {
-	columns := make([]string, len(p.config.Columns))
-	for i, col := range p.config.Columns {
-		columns[i] = fmt.Sprintf("%q", col.Name)
-	}
-	return columns
 }
 
 func (p *Plugin) getInstance(requestID int64, retry int) Clickhouse {

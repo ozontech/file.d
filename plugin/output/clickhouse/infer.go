@@ -109,3 +109,14 @@ func insaneInfer(auto proto.ColAuto) (InsaneColInput, error) {
 		return nil, fmt.Errorf("inference for type %q is not supported", auto.Type().String())
 	}
 }
+
+func inputFromColumns(cols []InsaneColumn) proto.Input {
+	input := make(proto.Input, len(cols))
+	for i := range cols {
+		input[i] = proto.InputColumn{
+			Name: cols[i].Name,
+			Data: cols[i].ColInput,
+		}
+	}
+	return input
+}

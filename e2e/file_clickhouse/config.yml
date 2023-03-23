@@ -11,7 +11,7 @@ pipelines:
         field: ts_with_tz
       - type: set_time
         format: timestampnano
-        field: ts64
+        field: ts64_auto
     output:
       type: clickhouse
       addresses:
@@ -40,4 +40,6 @@ pipelines:
         - name: ts_with_tz
           type: DateTime('Europe/Moscow')
         - name: ts64
+          type: DateTime64(3, 'UTC')
+        - name: ts64_auto
           type: DateTime64(9, 'UTC')
