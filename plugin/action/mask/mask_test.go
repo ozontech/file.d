@@ -224,7 +224,7 @@ func TestGroupNumbers(t *testing.T) {
 			input:    Mask{Re: kDefaultCardRegExp, Groups: []int{-1}},
 			expect:   Mask{Re: kDefaultCardRegExp, Groups: []int{}},
 			isFatal:  true,
-			fatalMsg: "wrong group number, number=-1",
+			fatalMsg: "wrong group number",
 			comment:  "fatal on negative group number",
 		},
 		{
@@ -232,7 +232,7 @@ func TestGroupNumbers(t *testing.T) {
 			input:    Mask{Re: kDefaultCardRegExp, Groups: []int{11}},
 			expect:   Mask{Re: kDefaultCardRegExp, Groups: []int{}},
 			isFatal:  true,
-			fatalMsg: "wrong group number, number=11",
+			fatalMsg: "wrong group number",
 			comment:  "fatal on checking group number",
 		},
 		{
@@ -247,49 +247,49 @@ func TestGroupNumbers(t *testing.T) {
 			input:    Mask{Re: "(err", Groups: []int{1}},
 			expect:   Mask{Re: kDefaultCardRegExp, Groups: []int{}},
 			isFatal:  true,
-			fatalMsg: "error on compiling regexp, regexp=(err",
+			fatalMsg: "error on compiling regexp",
 			comment:  "fatal on compiling regexp",
 		},
 		{
 			name:     "big value of group number with zero first",
 			input:    Mask{Re: kDefaultCardRegExp, Groups: []int{0, 1, 2, 3, 4, 5}},
 			isFatal:  true,
-			fatalMsg: "there are many groups, groups=6, totalGroups=4",
+			fatalMsg: "there are many groups",
 			comment:  "fatal error",
 		},
 		{
 			name:     "big value of group number with zero last",
 			input:    Mask{Re: kDefaultCardRegExp, Groups: []int{1, 2, 3, 4, 5, 0}},
 			isFatal:  true,
-			fatalMsg: "there are many groups, groups=6, totalGroups=4",
+			fatalMsg: "there are many groups",
 			comment:  "fatal error",
 		},
 		{
 			name:     "many value of group number",
 			input:    Mask{Re: kDefaultCardRegExp, Groups: []int{1, 2, 3, 4, 5}},
 			isFatal:  true,
-			fatalMsg: "there are many groups, groups=5, totalGroups=4",
+			fatalMsg: "there are many groups",
 			comment:  "group 5 not exists in regex",
 		},
 		{
 			name:     "wrong value of group number",
 			input:    Mask{Re: kDefaultCardRegExp, Groups: []int{6}},
 			isFatal:  true,
-			fatalMsg: "wrong group number, number=6",
+			fatalMsg: "wrong group number",
 			comment:  "group 6 not exists in regex",
 		},
 		{
 			name:     "wrong negative value of group number",
 			input:    Mask{Re: kDefaultCardRegExp, Groups: []int{-6}},
 			isFatal:  true,
-			fatalMsg: "wrong group number, number=-6",
+			fatalMsg: "wrong group number",
 			comment:  "group -6 not exists in regex",
 		},
 		{
 			name:     "groups numbers not unique",
 			input:    Mask{Re: kDefaultCardRegExp, Groups: []int{1, 1, 1}},
 			isFatal:  true,
-			fatalMsg: "groups numbers must be unique, groups numbers=[1 1 1]",
+			fatalMsg: "groups numbers must be unique",
 			comment:  "not unique value",
 		},
 	}
@@ -302,12 +302,12 @@ func TestGroupNumbers(t *testing.T) {
 					func() {
 						compileMask(
 							s.input,
-							zap.NewNop().WithOptions(zap.OnFatal(zapcore.WriteThenPanic)).Sugar(),
+							zap.NewNop().WithOptions(zap.WithFatalHook(zapcore.WriteThenPanic)),
 						)
 					},
 					s.comment)
 			} else {
-				res := compileMask(s.input, zap.NewNop().Sugar())
+				res := compileMask(s.input, zap.NewNop())
 				assert.NotNil(t, res.Re_, s.comment)
 				assert.Equal(t, res.Re, s.expect.Re, s.comment)
 				assert.Equal(t, res.Groups, s.expect.Groups, s.comment)
