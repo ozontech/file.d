@@ -94,9 +94,21 @@ Retention milliseconds for retry to DB.
 
 <br>
 
-**`db_request_timeout`** *`cfg.Duration`* *`default=10s`* 
+**`insert_timeout`** *`cfg.Duration`* *`default=10s`* 
 
-Timeout for DB requests in milliseconds.
+Timeout for each insert request.
+
+<br>
+
+**`max_conns`** *`cfg.Expression`* *`default=gomaxprocs*4`* 
+
+Max connections in the connection pool.
+
+<br>
+
+**`min_conns`** *`cfg.Expression`* *`default=gomaxprocs*1`* 
+
+Min connections in the connection pool.
 
 <br>
 

@@ -3,7 +3,6 @@ package clickhouse
 import (
 	"context"
 	"encoding/json"
-	"math"
 	"strings"
 	"time"
 
@@ -181,9 +180,21 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
-	// > Timeout for DB requests in milliseconds.
-	DBRequestTimeout  cfg.Duration `json:"db_request_timeout" default:"10s" parse:"duration"` // *
-	DBRequestTimeout_ time.Duration
+	// > Timeout for each insert request.
+	InsertTimeout  cfg.Duration `json:"insert_timeout" default:"10s" parse:"duration"` // *
+	InsertTimeout_ time.Duration
+
+	// > @3@4@5@6
+	// >
+	// > Max connections in the connection pool.
+	MaxConns  cfg.Expression `json:"max_conns" default:"gomaxprocs*4"  parse:"expression"` // *
+	MaxConns_ int32
+
+	// > @3@4@5@6
+	// >
+	// > Min connections in the connection pool.
+	MinConns  cfg.Expression `json:"min_conns" default:"gomaxprocs*1"  parse:"expression"` // *
+	MinConns_ int32
 
 	// > @3@4@5@6
 	// >
@@ -257,7 +268,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	if p.config.Retention_ < 1 {
 		p.logger.Fatal("'retention' can't be <1")
 	}
-	if p.config.DBRequestTimeout_ < 1 {
+	if p.config.InsertTimeout_ < 1 {
 		p.logger.Fatal("'db_request_timeout' can't be <1")
 	}
 
@@ -298,7 +309,6 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		}
 	}
 
-	maxConns := math.Ceil(float64(p.config.WorkersCount_) * 1.5)
 	for _, addr := range p.config.Addresses {
 		pool, err := chpool.New(p.ctx, chpool.Options{
 			ClientOptions: ch.Options{
@@ -316,8 +326,8 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 			},
 			MaxConnLifetime:   p.config.MaxConnLifetime_,
 			MaxConnIdleTime:   p.config.MaxConnIdleTime_,
-			MaxConns:          int32(maxConns),
-			MinConns:          int32(p.config.WorkersCount_),
+			MaxConns:          p.config.MaxConns_,
+			MinConns:          p.config.MinConns_,
 			HealthCheckPeriod: p.config.HealthCheckPeriod_,
 		})
 		if err != nil {
@@ -413,7 +423,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 func (p *Plugin) do(clickhouse Clickhouse, queryInput proto.Input) error {
 	defer p.queriesCountMetric.WithLabelValues().Inc()
 
-	ctx, cancel := context.WithTimeout(p.ctx, p.config.DBRequestTimeout_)
+	ctx, cancel := context.WithTimeout(p.ctx, p.config.InsertTimeout_)
 	defer cancel()
 
 	return clickhouse.Do(ctx, ch.Query{
