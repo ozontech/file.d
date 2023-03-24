@@ -15,8 +15,8 @@ type Antispammer struct {
 	metricsController *metric.Ctl
 	unbanIterations   int
 	threshold         int
-	mu                *sync.RWMutex
-	sources           map[uint64]*source
+	mu                sync.RWMutex
+	sources           map[uint64]source
 
 	// antispammer metrics
 	antispamActiveMetric *prom.GaugeVec
@@ -35,8 +35,8 @@ func NewAntispammer(threshold int, unbanIterations int, maintenanceInterval time
 	antispamer := &Antispammer{
 		threshold:         threshold,
 		unbanIterations:   unbanIterations,
-		sources:           make(map[uint64]*source),
-		mu:                &sync.RWMutex{},
+		sources:           make(map[uint64]source),
+		mu:                sync.RWMutex{},
 		metricsController: metricsController,
 	}
 
@@ -62,7 +62,7 @@ func (a *Antispammer) IsSpam(id uint64, name string, isNewSource bool) bool {
 		if newSrc, has := a.sources[id]; has {
 			src = newSrc
 		} else {
-			src = &source{
+			src = source{
 				counter: atomic.Int32{},
 				name:    name,
 			}
