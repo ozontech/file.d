@@ -1,4 +1,4 @@
-package pipeline
+package antispammer
 
 import (
 	"fmt"
@@ -11,14 +11,14 @@ import (
 	"go.uber.org/atomic"
 )
 
-type antispamer struct {
+type Antispammer struct {
 	metricsController *metric.Ctl
 	unbanIterations   int
 	threshold         int
 	mu                *sync.RWMutex
-	sources           map[SourceID]*source
+	sources           map[uint64]*source
 
-	// antispamer metrics
+	// antispammer metrics
 	antispamActiveMetric *prom.GaugeVec
 	antispamBanMetric    *prom.GaugeVec
 }
@@ -28,14 +28,14 @@ type source struct {
 	name    string
 }
 
-func newAntispamer(threshold int, unbanIterations int, maintenanceInterval time.Duration, metricsController *metric.Ctl) *antispamer {
+func NewAntispammer(threshold int, unbanIterations int, maintenanceInterval time.Duration, metricsController *metric.Ctl) *Antispammer {
 	if threshold != 0 {
 		logger.Infof("antispam enabled, threshold=%d/%d sec", threshold, maintenanceInterval/time.Second)
 	}
-	antispamer := &antispamer{
+	antispamer := &Antispammer{
 		threshold:         threshold,
 		unbanIterations:   unbanIterations,
-		sources:           make(map[SourceID]*source),
+		sources:           make(map[uint64]*source),
 		mu:                &sync.RWMutex{},
 		metricsController: metricsController,
 	}
@@ -48,7 +48,7 @@ func newAntispamer(threshold int, unbanIterations int, maintenanceInterval time.
 	return antispamer
 }
 
-func (a *antispamer) isSpam(id SourceID, name string, isNewSource bool) bool {
+func (a *Antispammer) IsSpam(id uint64, name string, isNewSource bool) bool {
 	if a.threshold == 0 {
 		return false
 	}
@@ -87,7 +87,7 @@ func (a *antispamer) isSpam(id SourceID, name string, isNewSource bool) bool {
 	return x >= int32(a.threshold)
 }
 
-func (a *antispamer) maintenance() {
+func (a *Antispammer) Maintenance() {
 	a.mu.Lock()
 
 	allUnbanned := true
@@ -130,7 +130,7 @@ func (a *antispamer) maintenance() {
 	a.mu.Unlock()
 }
 
-func (a *antispamer) dump() string {
+func (a *Antispammer) Dump() string {
 	out := logger.Cond(len(a.sources) == 0, logger.Header("no banned"), func() string {
 		o := logger.Header("banned sources")
 		a.mu.RLock()

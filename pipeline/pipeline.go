@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ozontech/file.d/pipeline/antispammer"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
@@ -83,7 +84,7 @@ type Pipeline struct {
 
 	input      InputPlugin
 	inputInfo  *InputPluginInfo
-	antispamer *antispamer
+	antispamer *antispammer.Antispammer
 
 	actionInfos  []*ActionPluginStaticInfo
 	Procs        []*processor
@@ -155,7 +156,7 @@ func New(name string, settings *Settings, registry *prometheus.Registry) *Pipeli
 		metricsCtl:    metricCtl,
 		streamer:      newStreamer(settings.EventTimeout),
 		eventPool:     newEventPool(settings.Capacity, settings.AvgEventSize),
-		antispamer:    newAntispamer(settings.AntispamThreshold, antispamUnbanIterations, settings.MaintenanceInterval, metricCtl),
+		antispamer:    antispammer.NewAntispammer(settings.AntispamThreshold, antispamUnbanIterations, settings.MaintenanceInterval, metricCtl),
 
 		eventLog:   make([]string, 0, 128),
 		eventLogMu: &sync.Mutex{},
@@ -331,7 +332,7 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 
 	// don't process mud.
 	isEmpty := length == 0 || (bytes[0] == '\n' && length == 1)
-	isSpam := p.antispamer.isSpam(sourceID, sourceName, isNewSource)
+	isSpam := p.antispamer.IsSpam(uint64(sourceID), sourceName, isNewSource)
 	isLong := p.settings.MaxEventSize != 0 && length > p.settings.MaxEventSize
 
 	if isLong {
@@ -645,7 +646,7 @@ func (p *Pipeline) maintenance() {
 			return
 		}
 
-		p.antispamer.maintenance()
+		p.antispamer.Maintenance()
 		p.metricsHolder.maintenance()
 
 		myDeltas := p.incMetrics(inputEvents, inputSize, outputEvents, outputSize, readOps)
@@ -710,7 +711,7 @@ func (p *Pipeline) servePipeline(w http.ResponseWriter, _ *http.Request) {
 func (p *Pipeline) servePipelineBanList(w http.ResponseWriter, _ *http.Request) {
 	_, _ = w.Write([]byte("<html><body><pre><p>"))
 	_, _ = w.Write([]byte(logger.Header("pipeline " + p.Name)))
-	_, _ = w.Write([]byte(p.antispamer.dump()))
+	_, _ = w.Write([]byte(p.antispamer.Dump()))
 
 	_, _ = w.Write([]byte("</p></pre></body></html>"))
 }
