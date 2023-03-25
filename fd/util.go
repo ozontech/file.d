@@ -95,14 +95,16 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 }
 
 func extractExceptions(settings *simplejson.Json) ([]antispam.Exception, error) {
-	var excepts []antispam.Exception
-
 	exceptionsRaw := settings.Get("antispam_exceptions")
+	if exceptionsRaw.Interface() == nil {
+		return nil, nil
+	}
 	arr, err := exceptionsRaw.Array()
 	if err != nil {
 		return nil, fmt.Errorf("cast to array: %s", err)
 	}
 
+	excepts := make([]antispam.Exception, 0, len(arr))
 	for i := range arr {
 		exception := exceptionsRaw.GetIndex(i)
 

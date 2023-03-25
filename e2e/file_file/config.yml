@@ -1,5 +1,12 @@
 pipelines:
   file_file:
+    settings:
+      antispam_threshold: 1000
+      antispam_exceptions:
+        - condition: 'prefix'
+          value: panic
+        - condition: 'contains'
+          value: panic
     input:
       type: file
       persistence_mode: async
