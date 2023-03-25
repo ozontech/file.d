@@ -2,17 +2,20 @@ package fd
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/bitly/go-simplejson"
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/pipeline/antispam"
 )
 
 func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 	capacity := pipeline.DefaultCapacity
 	antispamThreshold := 0
+	var antispamExceptions []antispam.Exception
 	avgInputEventSize := pipeline.DefaultAvgInputEventSize
 	maxInputEventSize := pipeline.DefaultMaxInputEventSize
 	streamField := pipeline.DefaultStreamField
@@ -68,6 +71,12 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 		antispamThreshold = settings.Get("antispam_threshold").MustInt()
 		antispamThreshold *= int(maintenanceInterval / time.Second)
 
+		var err error
+		antispamExceptions, err = extractExceptions(settings)
+		if err != nil {
+			logger.Fatalf("extract exceptions: %s", err)
+		}
+
 		isStrict = settings.Get("is_strict").MustBool()
 	}
 
@@ -77,11 +86,51 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 		AvgEventSize:        avgInputEventSize,
 		MaxEventSize:        maxInputEventSize,
 		AntispamThreshold:   antispamThreshold,
+		AntispamExceptions:  antispamExceptions,
 		MaintenanceInterval: maintenanceInterval,
 		EventTimeout:        eventTimeout,
 		StreamField:         streamField,
 		IsStrict:            isStrict,
 	}
+}
+
+func extractExceptions(settings *simplejson.Json) ([]antispam.Exception, error) {
+	var excepts []antispam.Exception
+
+	exceptionsRaw := settings.Get("antispam_exceptions")
+	arr, err := exceptionsRaw.Array()
+	if err != nil {
+		return nil, fmt.Errorf("cast to array: %s", err)
+	}
+
+	for i := range arr {
+		exception := exceptionsRaw.GetIndex(i)
+
+		var cond antispam.Condition
+		condRaw := strings.ToLower(exception.Get("condition").MustString())
+		switch condRaw {
+		case "prefix":
+			cond = antispam.ConditionPrefix
+		case "contains":
+			cond = antispam.ConditionContains
+		case "suffix":
+			cond = antispam.ConditionSuffix
+		default:
+			return nil, fmt.Errorf("condition %s does not exist", condRaw)
+		}
+
+		caseInsensitive := exception.Get("case_insensitive").MustBool()
+
+		if cond == antispam.ConditionContains && caseInsensitive {
+			return nil, fmt.Errorf("сase insensitive for the 'contains' condtition is not supported")
+		}
+
+		val := exception.Get("value").MustString()
+
+		excepts = append(excepts, antispam.NewException(val, cond, caseInsensitive))
+	}
+
+	return excepts, nil
 }
 
 func extractMatchMode(actionJSON *simplejson.Json) pipeline.MatchMode {

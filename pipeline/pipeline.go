@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ozontech/file.d/pipeline/antispammer"
+	"github.com/ozontech/file.d/pipeline/antispam"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
@@ -84,7 +84,7 @@ type Pipeline struct {
 
 	input      InputPlugin
 	inputInfo  *InputPluginInfo
-	antispamer *antispammer.Antispammer
+	antispamer *antispam.Antispammer
 
 	actionInfos  []*ActionPluginStaticInfo
 	Procs        []*processor
@@ -131,6 +131,7 @@ type Settings struct {
 	MaintenanceInterval time.Duration
 	EventTimeout        time.Duration
 	AntispamThreshold   int
+	AntispamExceptions  []antispam.Exception
 	AvgEventSize        int
 	MaxEventSize        int
 	StreamField         string
@@ -140,6 +141,8 @@ type Settings struct {
 // New creates new pipeline. Consider using `SetupHTTPHandlers` next.
 func New(name string, settings *Settings, registry *prometheus.Registry) *Pipeline {
 	metricCtl := metric.New("pipeline_"+name, registry)
+
+	lg := logger.Instance.Named(name)
 
 	pipeline := &Pipeline{
 		Name:           name,
@@ -156,7 +159,14 @@ func New(name string, settings *Settings, registry *prometheus.Registry) *Pipeli
 		metricsCtl:    metricCtl,
 		streamer:      newStreamer(settings.EventTimeout),
 		eventPool:     newEventPool(settings.Capacity, settings.AvgEventSize),
-		antispamer:    antispammer.NewAntispammer(settings.AntispamThreshold, antispamUnbanIterations, settings.MaintenanceInterval, metricCtl),
+		antispamer: antispam.NewAntispammer(antispam.Options{
+			MaintenanceInterval: settings.MaintenanceInterval,
+			Threshold:           settings.AntispamThreshold,
+			UnbanIterations:     antispamUnbanIterations,
+			Logger:              lg.Desugar().Named("antispam"),
+			MetricsController:   metricCtl,
+			Exceptions:          settings.AntispamExceptions,
+		}),
 
 		eventLog:   make([]string, 0, 128),
 		eventLogMu: &sync.Mutex{},
@@ -332,7 +342,7 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 
 	// don't process mud.
 	isEmpty := length == 0 || (bytes[0] == '\n' && length == 1)
-	isSpam := p.antispamer.IsSpam(uint64(sourceID), sourceName, isNewSource)
+	isSpam := p.antispamer.IsSpam(uint64(sourceID), sourceName, isNewSource, bytes)
 	isLong := p.settings.MaxEventSize != 0 && length > p.settings.MaxEventSize
 
 	if isLong {
