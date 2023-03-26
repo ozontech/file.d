@@ -67,7 +67,7 @@ func NewAntispammer(o Options) *Antispammer {
 		),
 		exceptionMetric: o.MetricsController.RegisterCounter("antispam_exceptions",
 			"How many times an exception match with an event",
-			"condition", "value",
+			"cond", "value",
 		),
 	}
 

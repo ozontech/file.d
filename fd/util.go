@@ -109,7 +109,7 @@ func extractExceptions(settings *simplejson.Json) ([]antispam.Exception, error) 
 		exception := exceptionsRaw.GetIndex(i)
 
 		var cond antispam.Condition
-		condRaw := strings.ToLower(exception.Get("condition").MustString())
+		condRaw := strings.ToLower(exception.Get("cond").MustString())
 		switch condRaw {
 		case "prefix":
 			cond = antispam.ConditionPrefix

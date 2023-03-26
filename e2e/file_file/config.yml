@@ -3,9 +3,9 @@ pipelines:
     settings:
       antispam_threshold: 1000
       antispam_exceptions:
-        - condition: 'prefix'
+        - cond: 'prefix'
           value: panic
-        - condition: 'contains'
+        - cond: 'contains'
           value: panic
     input:
       type: file
