@@ -40,6 +40,7 @@ type Rule struct {
 	// CaseInsensitive is the truth then Match results in a lowercase search value.
 	// Not available fo the ModeContains because performance issues may arise.
 	CaseInsensitive bool `json:"case_insensitive"`
+	Invert          bool `json:"invert"`
 }
 
 func NewRule(values []string, mode Mode, caseInsensitive bool) Rule {
@@ -61,6 +62,14 @@ func NewRule(values []string, mode Mode, caseInsensitive bool) Rule {
 }
 
 func (e *Rule) Match(raw []byte) bool {
+	ok := e.match(raw)
+	if e.Invert {
+		ok = !ok
+	}
+	return ok
+}
+
+func (e *Rule) match(raw []byte) bool {
 	if e.Mode == ModeContains {
 		for i := range e.Values {
 			if bytes.Contains(raw, []byte(e.Values[i])) {
