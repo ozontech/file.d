@@ -8,60 +8,60 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestException_Match(t *testing.T) {
+func TestRule_Match(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
 		name   string
-		except Exception
+		except Rule
 		arg    []byte
 		want   bool
 	}{
 		{
 			name:   "prefix ok",
-			except: NewException(`{"level":"error"`, ConditionPrefix, false),
+			except: NewRule([]string{`{"level":"error"`}, ModePrefix, false),
 			arg:    []byte(`{"level":"error","message":"some message"}`),
 			want:   true,
 		},
 		{
 			name:   "prefix not ok",
-			except: NewException(`{"level":"info"`, ConditionPrefix, false),
+			except: NewRule([]string{`{"level":"info"`}, ModePrefix, false),
 			arg:    []byte(`{"level":"error","message":"some message"}`),
 			want:   false,
 		},
 		{
 			name:   "prefix ignore case",
-			except: NewException(`{"level":"info"`, ConditionPrefix, true),
+			except: NewRule([]string{`{"level":"info"`}, ModePrefix, true),
 			arg:    []byte(`{"level":"INFO","message":"some message"}`),
 			want:   true,
 		},
 		{
 			name:   "suffix ok",
-			except: NewException(`"level":"error"}`, ConditionSuffix, false),
+			except: NewRule([]string{`"level":"error"}`}, ModeSuffix, false),
 			arg:    []byte(`{"message":"some message","level":"error"}`),
 			want:   true,
 		},
 		{
 			name:   "suffix not ok",
-			except: NewException(`{"level":"info"`, ConditionSuffix, false),
+			except: NewRule([]string{`{"level":"info"`}, ModeSuffix, false),
 			arg:    []byte(`{"message":"some message","level":"error"}`),
 			want:   false,
 		},
 		{
 			name:   "suffix ignore case",
-			except: NewException(`"level":"Info"}`, ConditionSuffix, true),
+			except: NewRule([]string{`"level":"Info"}`}, ModeSuffix, true),
 			arg:    []byte(`{"message":"some message","level":"INFO"}`),
 			want:   true,
 		},
 		{
 			name:   "contains ok",
-			except: NewException(`"level":"panic"`, ConditionContains, false),
+			except: NewRule([]string{`"level":"panic"`}, ModeContains, false),
 			arg:    []byte(`{"time":"18:00", "event":"dinner", "level":"panic", "ok":"google"}`),
 			want:   true,
 		},
 		{
 			name:   "contains not ok",
-			except: NewException(`"level":"fatal"`, ConditionContains, false),
+			except: NewRule([]string{`"level":"fatal"`}, ModeContains, false),
 			arg:    []byte(`{"time":"18:00", "event":"dinner", "level":"panic", "ok":"google"}`),
 			want:   false,
 		},
@@ -83,43 +83,76 @@ func TestException_Match(t *testing.T) {
 
 const rawEvent = `{"level":"error","ts":"2019-08-21T11:43:25.865Z","message":"get_items_error_1","trace_id":"3ea4a6589d06bb3f","span_id":"deddd718684b10a","get_items_error":"product: error while consuming CoverImage: context canceled","get_items_error_option":"CoverImage","get_items_error_cause":"context canceled","get_items_error_cause_type":"context_canceled"}`
 
-func TestException_Match_ZeroAlloc(t *testing.T) {
-	allocs := testing.AllocsPerRun(10, func() {
-		e := NewException(`"ts":"2019-08-21T11:43:25.865Z"`, ConditionContains, false)
-		require.True(t, e.Match([]byte(rawEvent)))
-	})
-	assert.Equal(t, 0.0, allocs)
+func TestRule_Match_ZeroAlloc(t *testing.T) {
+	rule := NewRule(
+		[]string{`"ts":"2019-08-21T11:43:25.865Z"`, `get_items_error_1`, `"trace_id":"3ea4a6589d06bb3f"`},
+		ModeContains,
+		false,
+	)
+	{
+		allocs := testing.AllocsPerRun(10, func() {
+			require.True(t, rule.Match([]byte(rawEvent)))
+		})
+		assert.Equal(t, 0.0, allocs)
+	}
 
-	allocs = testing.AllocsPerRun(10, func() {
-		e := NewException(`{"level":"error"`, ConditionPrefix, true)
-		assert.True(t, e.Match([]byte(rawEvent)))
-	})
-	assert.Equal(t, 1.0, allocs) // ToLower requires memory allocation
+	rule.Values = []string{`{"level":"error"`}
+	rule.Mode = ModePrefix
+	{
+		allocs := testing.AllocsPerRun(10, func() {
+			e := NewRule([]string{`{"level":"error"`}, ModePrefix, false)
+			assert.True(t, e.Match([]byte(rawEvent)))
+		})
+		assert.Equal(t, 0.0, allocs)
+	}
+
+	rule.CaseInsensitive = true
+	{
+		allocs := testing.AllocsPerRun(10, func() {
+			assert.True(t, rule.Match([]byte(rawEvent)))
+		})
+		assert.Equal(t, 1.0, allocs) // ToLower requires memory allocation
+	}
 }
 
-func BenchmarkException_Match(b *testing.B) {
+func BenchmarkRule_Match(b *testing.B) {
 	for _, insensitive := range []bool{false, true} {
 		b.Run(fmt.Sprintf("prefix_%v", insensitive), func(b *testing.B) {
-			e := NewException(`{"level":"error"`, ConditionPrefix, insensitive)
+			e := NewRule([]string{`{"level":"error"`}, ModePrefix, insensitive)
 			runMatchBench(b, &e)
 		})
 
 		b.Run(fmt.Sprintf("suffix_%v", insensitive), func(b *testing.B) {
-			e := NewException(`"context_canceled"}`, ConditionSuffix, insensitive)
+			e := NewRule([]string{`"context_canceled"}`}, ModeSuffix, insensitive)
 			runMatchBench(b, &e)
 		})
 	}
 
 	b.Run("contains", func(b *testing.B) {
-		e := NewException(`get_items_error_1`, ConditionContains, false)
+		e := NewRule([]string{`get_items_error_1`}, ModeContains, false)
 		runMatchBench(b, &e)
 	})
 }
 
-func runMatchBench(b *testing.B, e *Exception) {
+func runMatchBench(b *testing.B, e *Rule) {
 	for i := 0; i < b.N; i++ {
 		if !e.Match([]byte(rawEvent)) {
 			b.Fatalf("value should match")
 		}
 	}
+}
+
+func TestException_Match(t *testing.T) {
+	e := Exception{
+		Cond: CondAnd,
+		Rules: []Rule{
+			NewRule([]string{"404"}, ModePrefix, true),
+			NewRule([]string{"ok"}, ModePrefix, true),
+		},
+	}
+	require.False(t, e.Match([]byte("ok")))
+
+	e.Cond = CondOr
+
+	require.True(t, e.Match([]byte("ok")))
 }

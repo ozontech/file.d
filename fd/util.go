@@ -1,8 +1,8 @@
 package fd
 
 import (
+	"encoding/json"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/bitly/go-simplejson"
@@ -95,44 +95,17 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 }
 
 func extractExceptions(settings *simplejson.Json) ([]antispam.Exception, error) {
-	exceptionsRaw := settings.Get("antispam_exceptions")
-	if exceptionsRaw.Interface() == nil {
-		return nil, nil
-	}
-	arr, err := exceptionsRaw.Array()
+	raw, err := settings.Get("antispam_exceptions").MarshalJSON()
 	if err != nil {
-		return nil, fmt.Errorf("cast to array: %s", err)
+		return nil, err
 	}
 
-	excepts := make([]antispam.Exception, 0, len(arr))
-	for i := range arr {
-		exception := exceptionsRaw.GetIndex(i)
-
-		var cond antispam.Condition
-		condRaw := strings.ToLower(exception.Get("cond").MustString())
-		switch condRaw {
-		case "prefix":
-			cond = antispam.ConditionPrefix
-		case "contains":
-			cond = antispam.ConditionContains
-		case "suffix":
-			cond = antispam.ConditionSuffix
-		default:
-			return nil, fmt.Errorf("condition %s does not exist", condRaw)
-		}
-
-		caseInsensitive := exception.Get("case_insensitive").MustBool()
-
-		if cond == antispam.ConditionContains && caseInsensitive {
-			return nil, fmt.Errorf("сase insensitive for the 'contains' condtition is not supported")
-		}
-
-		val := exception.Get("value").MustString()
-
-		excepts = append(excepts, antispam.NewException(val, cond, caseInsensitive))
+	var exceptions []antispam.Exception
+	if err := json.Unmarshal(raw, &exceptions); err != nil {
+		return nil, err
 	}
 
-	return excepts, nil
+	return exceptions, nil
 }
 
 func extractMatchMode(actionJSON *simplejson.Json) pipeline.MatchMode {

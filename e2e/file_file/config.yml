@@ -3,10 +3,12 @@ pipelines:
     settings:
       antispam_threshold: 1000
       antispam_exceptions:
-        - cond: 'prefix'
-          value: panic
-        - cond: 'contains'
-          value: panic
+        - cond: 'and'
+          rules:
+            - mode: 'prefix'
+              values: [ 'panic', ' panic' ]
+            - mode: 'contains'
+              values: [ 'service:"alerts-agent"' ]
     input:
       type: file
       persistence_mode: async

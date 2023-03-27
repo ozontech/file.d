@@ -67,7 +67,7 @@ func NewAntispammer(o Options) *Antispammer {
 		),
 		exceptionMetric: o.MetricsController.RegisterCounter("antispam_exceptions",
 			"How many times an exception match with an event",
-			"cond", "value",
+			"name",
 		),
 	}
 
@@ -85,7 +85,9 @@ func (a *Antispammer) IsSpam(id uint64, name string, isNewSource bool, event []b
 	for i := 0; i < len(a.exceptions); i++ {
 		e := &a.exceptions[i]
 		if e.Match(event) {
-			a.exceptionMetric.WithLabelValues(e.Condition.String(), e.Value)
+			if e.Name != "" {
+				a.exceptionMetric.WithLabelValues(e.Name).Inc()
+			}
 			return false
 		}
 	}
