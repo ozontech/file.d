@@ -1,6 +1,7 @@
 package fd
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"time"
@@ -100,8 +101,11 @@ func extractExceptions(settings *simplejson.Json) ([]antispam.Exception, error) 
 		return nil, err
 	}
 
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.DisallowUnknownFields()
+
 	var exceptions []antispam.Exception
-	if err := json.Unmarshal(raw, &exceptions); err != nil {
+	if err := dec.Decode(&exceptions); err != nil {
 		return nil, err
 	}
 
