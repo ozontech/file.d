@@ -146,7 +146,7 @@ func (e *Exception) Match(data []byte) bool {
 		}
 	}
 
-	if e.Cond == CondAnd {
+	if e.Cond == CondAnd { // nolint: gosimple
 		// all matches are true
 		return true
 	}
