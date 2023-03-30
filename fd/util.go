@@ -1,6 +1,8 @@
 package fd
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -8,11 +10,13 @@ import (
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/pipeline/antispam"
 )
 
 func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 	capacity := pipeline.DefaultCapacity
 	antispamThreshold := 0
+	var antispamExceptions []antispam.Exception
 	avgInputEventSize := pipeline.DefaultAvgInputEventSize
 	maxInputEventSize := pipeline.DefaultMaxInputEventSize
 	streamField := pipeline.DefaultStreamField
@@ -67,6 +71,16 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 
 		antispamThreshold = settings.Get("antispam_threshold").MustInt()
 		antispamThreshold *= int(maintenanceInterval / time.Second)
+		if antispamThreshold < 0 {
+			logger.Warn("negative antispam_threshold value, antispam disabled")
+			antispamThreshold = 0
+		}
+
+		var err error
+		antispamExceptions, err = extractExceptions(settings)
+		if err != nil {
+			logger.Fatalf("extract exceptions: %s", err)
+		}
 
 		isStrict = settings.Get("is_strict").MustBool()
 	}
@@ -77,11 +91,29 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 		AvgEventSize:        avgInputEventSize,
 		MaxEventSize:        maxInputEventSize,
 		AntispamThreshold:   antispamThreshold,
+		AntispamExceptions:  antispamExceptions,
 		MaintenanceInterval: maintenanceInterval,
 		EventTimeout:        eventTimeout,
 		StreamField:         streamField,
 		IsStrict:            isStrict,
 	}
+}
+
+func extractExceptions(settings *simplejson.Json) ([]antispam.Exception, error) {
+	raw, err := settings.Get("antispam_exceptions").MarshalJSON()
+	if err != nil {
+		return nil, err
+	}
+
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.DisallowUnknownFields()
+
+	var exceptions []antispam.Exception
+	if err := dec.Decode(&exceptions); err != nil {
+		return nil, err
+	}
+
+	return exceptions, nil
 }
 
 func extractMatchMode(actionJSON *simplejson.Json) pipeline.MatchMode {

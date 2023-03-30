@@ -152,15 +152,19 @@ func parseConfig(object *simplejson.Json) *Config {
 	var err error
 
 	addr := vault.Get("address")
-	config.Vault.Address, err = addr.String()
-	if err != nil {
-		logger.Warnf("can't parse vault address: %s", err.Error())
+	if addr.Interface() != nil {
+		config.Vault.Address, err = addr.String()
+		if err != nil {
+			logger.Panicf("can't parse vault address: %s", err.Error())
+		}
 	}
 
 	token := vault.Get("token")
-	config.Vault.Token, err = token.String()
-	if err != nil {
-		logger.Warnf("can't parse vault token: %s", err.Error())
+	if token.Interface() != nil {
+		config.Vault.Token, err = token.String()
+		if err != nil {
+			logger.Panicf("can't parse vault token: %s", err.Error())
+		}
 	}
 	config.Vault.ShouldUse = config.Vault.Address != "" && config.Vault.Token != ""
 
@@ -177,19 +181,18 @@ func parseConfig(object *simplejson.Json) *Config {
 		config.Pipelines[name] = &PipelineConfig{Raw: raw}
 	}
 
-	panicTimeoutStr, err := object.Get("panic_timeout").String()
-	if err != nil {
-		logger.Warnf("can't get panic_timeout: %s", err.Error())
+	config.PanicTimeout = time.Minute
+	panicTimeoutRaw := object.Get("panic_timeout")
+	if panicTimeoutRaw.Interface() != nil {
+		panicTimeoutStr, err := panicTimeoutRaw.String()
+		if err != nil {
+			logger.Panicf("can't get panic_timeout: %s", err.Error())
+		}
+		config.PanicTimeout, err = time.ParseDuration(panicTimeoutStr)
+		if err != nil {
+			logger.Panicf("can't parse panic_timeout: %s", err.Error())
+		}
 	}
-	if panicTimeoutStr == "" {
-		panicTimeoutStr = "1m"
-	}
-
-	panicTimeout, err := time.ParseDuration(panicTimeoutStr)
-	if err != nil {
-		logger.Panicf("can't parse panic_timeout: %s", err.Error())
-	}
-	config.PanicTimeout = panicTimeout
 
 	return config
 }

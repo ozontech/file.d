@@ -61,5 +61,5 @@ func (r *PluginRegistry) register(pluginKind pipeline.PluginKind, info *pipeline
 	}
 
 	r.plugins[id] = info
-	logger.Infof("plugin %s/%s registered", pluginKind, info.Type)
+	logger.Debugf("plugin %s/%s registered", pluginKind, info.Type)
 }
