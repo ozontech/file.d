@@ -45,7 +45,7 @@ type Rule struct {
 
 func NewRule(values []string, mode Mode, caseInsensitive bool) Rule {
 	if caseInsensitive && mode == ModeContains {
-		panic(fmt.Errorf("сase insensitive for the 'contains' condtition is not supported"))
+		panic(fmt.Errorf("сase insensitive for the 'contains' condition is not supported"))
 	}
 
 	if caseInsensitive {

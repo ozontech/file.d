@@ -71,6 +71,10 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 
 		antispamThreshold = settings.Get("antispam_threshold").MustInt()
 		antispamThreshold *= int(maintenanceInterval / time.Second)
+		if antispamThreshold < 0 {
+			logger.Warn("negative antispam_threshold value, antispam disabled")
+			antispamThreshold = 0
+		}
 
 		var err error
 		antispamExceptions, err = extractExceptions(settings)

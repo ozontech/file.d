@@ -47,7 +47,7 @@ type Options struct {
 }
 
 func NewAntispammer(o Options) *Antispammer {
-	if o.Threshold != 0 {
+	if o.Threshold > 0 {
 		o.Logger.Info("antispam enabled",
 			zap.Int("threshold", o.Threshold),
 			zap.Duration("maintenance", o.MaintenanceInterval))
@@ -78,7 +78,7 @@ func NewAntispammer(o Options) *Antispammer {
 }
 
 func (a *Antispammer) IsSpam(id uint64, name string, isNewSource bool, event []byte) bool {
-	if a.threshold == 0 {
+	if a.threshold <= 0 {
 		return false
 	}
 

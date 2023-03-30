@@ -146,7 +146,7 @@ func New(name string, settings *Settings, registry *prometheus.Registry) *Pipeli
 
 	pipeline := &Pipeline{
 		Name:           name,
-		logger:         logger.Instance.Named(name),
+		logger:         lg,
 		settings:       settings,
 		useSpread:      false,
 		disableStreams: false,
