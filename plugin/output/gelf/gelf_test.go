@@ -8,6 +8,7 @@ import (
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/test"
 	"github.com/stretchr/testify/assert"
 	insaneJSON "github.com/vitkovskii/insane-json"
 )
@@ -92,8 +93,8 @@ func TestFormatEvent(t *testing.T) {
 		},
 	}
 
-	for _, test := range tests {
-		root, err := insaneJSON.DecodeString(test.eventJSON)
+	for _, tc := range tests {
+		root, err := insaneJSON.DecodeString(tc.eventJSON)
 		if err != nil {
 			panic(err.Error())
 		}
@@ -101,7 +102,7 @@ func TestFormatEvent(t *testing.T) {
 
 		plugin := Plugin{}
 		config := &Config{}
-		err = json.Unmarshal([]byte(test.configJSON), config)
+		err = json.Unmarshal([]byte(tc.configJSON), config)
 		if err != nil {
 			logger.Panicf(err.Error())
 		}
@@ -111,21 +112,12 @@ func TestFormatEvent(t *testing.T) {
 			logger.Panicf(err.Error())
 		}
 
-		params := &pipeline.OutputPluginParams{
-			PluginDefaultParams: &pipeline.PluginDefaultParams{
-				PipelineName: "name",
-				PipelineSettings: &pipeline.Settings{
-					Capacity:     128,
-					AvgEventSize: 128,
-				},
-			},
-		}
-		plugin.Start(config, params)
+		plugin.Start(config, test.NewEmptyOutputPluginParams())
 		plugin.formatEvent([]byte{}, event)
 
 		resultJSON := event.Root.EncodeToString()
 
-		expected := strings.ReplaceAll(strings.ReplaceAll(test.formattedJSON, "\t", ""), "\n", "")
+		expected := strings.ReplaceAll(strings.ReplaceAll(tc.formattedJSON, "\t", ""), "\n", "")
 		assert.Equal(t, expected, resultJSON, "wrong formatted event")
 	}
 }

@@ -49,19 +49,19 @@ type PluginDefaultParams struct {
 }
 
 type ActionPluginParams struct {
-	*PluginDefaultParams
+	PluginDefaultParams
 	Controller ActionPluginController
 	Logger     *zap.SugaredLogger
 }
 
 type OutputPluginParams struct {
-	*PluginDefaultParams
+	PluginDefaultParams
 	Controller OutputPluginController
 	Logger     *zap.SugaredLogger
 }
 
 type InputPluginParams struct {
-	*PluginDefaultParams
+	PluginDefaultParams
 	Controller InputPluginController
 	Logger     *zap.SugaredLogger
 }

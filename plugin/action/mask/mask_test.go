@@ -6,10 +6,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/test"
-	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	insaneJSON "github.com/vitkovskii/insane-json"
@@ -181,14 +179,7 @@ func TestMaskAddExtraField(t *testing.T) {
 			{Re: kDefaultCardRegExp, Groups: []int{1, 2, 3, 4}},
 		},
 	}
-	plugin.Start(&config, &pipeline.ActionPluginParams{
-		PluginDefaultParams: &pipeline.PluginDefaultParams{
-			PipelineName:     "test_pipeline",
-			PipelineSettings: &pipeline.Settings{},
-			MetricCtl:        metric.New("test", prometheus.NewRegistry()),
-		},
-		Logger: zap.L().Sugar(),
-	})
+	plugin.Start(&config, test.NewEmptyActionPluginParams())
 	plugin.config.Masks[0].Re_ = regexp.MustCompile(plugin.config.Masks[0].Re)
 
 	result := plugin.Do(event)

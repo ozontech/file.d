@@ -193,11 +193,11 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 
 	p.config.OffsetsFileTmp = p.config.OffsetsFile + ".atomic"
 
+	p.registerMetrics(params.MetricCtl)
+
 	p.jobProvider = NewJobProvider(p.config, p.possibleOffsetCorruptionMetric, p.logger)
 
 	ResetterRegistryInstance.AddResetter(params.PipelineName, p)
-
-	p.registerMetrics(params.MetricCtl)
 
 	p.startWorkers()
 	p.jobProvider.start()
