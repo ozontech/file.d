@@ -69,8 +69,14 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
-	// > Lists the event fields to add to the metric.
-	MetricLabels []string `json:"mask_applied_metric_labels"` // *
+	// > The metric name of the regular expressions applied.
+	MetricName string `json:"applied_metric_name" default:"mask_applied_total"` // *
+
+	// > @3@4@5@6
+	// >
+	// > Lists the event fields to add to the metric. Blank list means no labels.
+	// > Important note: labels metrics are not currently being cleared.
+	MetricLabels []string `json:"applied_metric_labels"` // *
 }
 
 type Mask struct {
@@ -173,10 +179,13 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 }
 
 func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
+	if p.config.MetricName == "" {
+		return
+	}
 	uniq := make(map[string]struct{})
 	labelNames := make([]string, 0, len(p.config.MetricLabels))
 	for _, label := range p.config.MetricLabels {
-		if len(label) == 0 {
+		if label == "" {
 			p.logger.Fatal("empty label name")
 		}
 		if _, ok := uniq[label]; ok {
@@ -187,7 +196,7 @@ func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 		labelNames = append(labelNames, label)
 	}
 
-	p.maskAppliedMetric = ctl.RegisterCounter("mask_applied_total", "Number of times mask plugin found the provided pattern", labelNames...)
+	p.maskAppliedMetric = ctl.RegisterCounter(p.config.MetricName, "Number of times mask plugin found the provided pattern", labelNames...)
 }
 
 func (p *Plugin) Stop() {
@@ -290,7 +299,7 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 		event.Root.AddFieldNoAlloc(event.Root, p.config.MaskAppliedField).MutateToString(p.config.MaskAppliedValue)
 	}
 
-	if maskApplied {
+	if maskApplied && p.config.MetricName != "" {
 		labelValues := make([]string, 0, len(p.config.MetricLabels))
 		for _, labelValuePath := range p.config.MetricLabels {
 			value := "not_set"
