@@ -106,6 +106,8 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 		p.idByTopic[topic] = i
 	}
 
+	p.registerMetrics(params.MetricCtl)
+
 	ctx, cancel := context.WithCancel(context.Background())
 	p.cancel = cancel
 	p.consumerGroup = p.newConsumerGroup()
@@ -117,7 +119,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	})
 }
 
-func (p *Plugin) RegisterMetrics(ctl *metric.Ctl) {
+func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 	p.commitErrorsMetric = ctl.RegisterCounter("input_kafka_commit_errors", "Number of kafka commit errors")
 	p.consumeErrorsMetric = ctl.RegisterCounter("input_kafka_consume_errors", "Number of kafka consume errors")
 }
@@ -206,6 +208,6 @@ func disassembleSourceID(sourceID pipeline.SourceID) (index int, partition int32
 }
 
 // PassEvent decides pass or discard event.
-func (p *Plugin) PassEvent(event *pipeline.Event) bool {
+func (p *Plugin) PassEvent(_ *pipeline.Event) bool {
 	return true
 }

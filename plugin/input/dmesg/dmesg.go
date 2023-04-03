@@ -76,10 +76,12 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 
 	p.parser = parser
 
+	p.registerMetrics(params.MetricCtl)
+
 	longpanic.Go(p.read)
 }
 
-func (p *Plugin) RegisterMetrics(ctl *metric.Ctl) {
+func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 	p.offsetErrorsMetric = ctl.RegisterCounter("input_dmesg_offset_errors", "Number of errors occurred when saving/loading offset")
 }
 

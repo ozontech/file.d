@@ -252,7 +252,7 @@ func Factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 	return &Plugin{}, &Config{}
 }
 
-func (p *Plugin) RegisterMetrics(ctl *metric.Ctl) {
+func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 	p.insertErrorsMetric = ctl.RegisterCounter("output_clickhouse_errors", "Total clickhouse insert errors")
 	p.queriesCountMetric = ctl.RegisterCounter("output_clickhouse_queries_count", "How many queries sent by clickhouse output plugin")
 }
@@ -271,6 +271,8 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	if p.config.InsertTimeout_ < 1 {
 		p.logger.Fatal("'db_request_timeout' can't be <1")
 	}
+
+	p.registerMetrics(params.MetricCtl)
 
 	schema, err := inferInsaneColInputs(p.config.Columns)
 	if err != nil {

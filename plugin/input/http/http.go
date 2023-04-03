@@ -142,6 +142,8 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	p.controller.DisableStreams()
 	p.sourceIDs = make([]pipeline.SourceID, 0)
 
+	p.registerMetrics(params.MetricCtl)
+
 	mux := http.NewServeMux()
 	switch p.config.EmulateMode {
 	case "elasticsearch":
@@ -156,7 +158,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	}
 }
 
-func (p *Plugin) RegisterMetrics(ctl *metric.Ctl) {
+func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 	p.httpErrorMetric = ctl.RegisterCounter("input_http_errors", "Total http errors")
 }
 
@@ -292,6 +294,6 @@ func (p *Plugin) Commit(_ *pipeline.Event) {
 }
 
 // PassEvent decides pass or discard event.
-func (p *Plugin) PassEvent(event *pipeline.Event) bool {
+func (p *Plugin) PassEvent(_ *pipeline.Event) bool {
 	return true
 }

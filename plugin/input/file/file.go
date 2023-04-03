@@ -197,11 +197,13 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 
 	ResetterRegistryInstance.AddResetter(params.PipelineName, p)
 
+	p.registerMetrics(params.MetricCtl)
+
 	p.startWorkers()
 	p.jobProvider.start()
 }
 
-func (p *Plugin) RegisterMetrics(ctl *metric.Ctl) {
+func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 	p.possibleOffsetCorruptionMetric = ctl.RegisterCounter("input_file_possible_offset_corruptions_total", "Total number of possible offset corruptions")
 	p.alreadyWrittenEventsSkippedMetric = ctl.RegisterCounter("input_file_already_written_event_skipped_total", "Total number of skipped events that was already written")
 }

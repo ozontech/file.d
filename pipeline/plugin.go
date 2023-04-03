@@ -21,7 +21,6 @@ type InputPlugin interface {
 	Start(config AnyConfig, params *InputPluginParams)
 	Stop()
 	Commit(*Event)
-	RegisterMetrics(ctl *metric.Ctl)
 	PassEvent(event *Event) bool
 }
 
@@ -29,14 +28,12 @@ type ActionPlugin interface {
 	Start(config AnyConfig, params *ActionPluginParams)
 	Stop()
 	Do(*Event) ActionResult
-	RegisterMetrics(ctl *metric.Ctl)
 }
 
 type OutputPlugin interface {
 	Start(config AnyConfig, params *OutputPluginParams)
 	Stop()
 	Out(*Event)
-	RegisterMetrics(ctl *metric.Ctl)
 }
 
 type PluginsStarterData struct {
@@ -48,6 +45,7 @@ type PluginsStarterMap map[string]PluginsStarterData
 type PluginDefaultParams struct {
 	PipelineName     string
 	PipelineSettings *Settings
+	MetricCtl        *metric.Ctl
 }
 
 type ActionPluginParams struct {

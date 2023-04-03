@@ -213,6 +213,8 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 	}
 	p.format = format
 
+	p.registerMetrics(params.MetricCtl)
+
 	limitersMu.Lock()
 	// init limitersMap only once per pipeline
 	if _, has := limiters[p.pipeline]; !has {
@@ -269,7 +271,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 	p.rules = append(p.rules, NewRule(map[string]string{}, complexLimit{p.config.DefaultLimit, p.config.LimitKind}, len(p.config.Rules)))
 }
 
-func (p *Plugin) RegisterMetrics(ctl *metric.Ctl) {
+func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 	p.limitersMapSizeMetric = ctl.RegisterGauge(
 		"throttle_limiter_map_size",
 		"Size of internal map of throttle limiters",

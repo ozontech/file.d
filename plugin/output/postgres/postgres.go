@@ -174,7 +174,7 @@ func Factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 	return &Plugin{}, &Config{}
 }
 
-func (p *Plugin) RegisterMetrics(ctl *metric.Ctl) {
+func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 	p.discardedEventMetric = ctl.RegisterCounter("output_postgres_event_discarded", "Total pgsql discarded messages")
 	p.duplicatedEventMetric = ctl.RegisterCounter("output_postgres_event_duplicated", "Total pgsql duplicated messages")
 	p.writtenEventMetric = ctl.RegisterCounter("output_postgres_event_written", "Total events written to pgsql")
@@ -201,6 +201,8 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	if p.config.DBHealthCheckPeriod_ < 1 {
 		p.logger.Fatal("'db_health_check_period' can't be <1")
 	}
+
+	p.registerMetrics(params.MetricCtl)
 
 	queryBuilder, err := NewQueryBuilder(p.config.Columns, p.config.Table)
 	if err != nil {

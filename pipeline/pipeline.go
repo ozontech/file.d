@@ -96,7 +96,6 @@ type Pipeline struct {
 	outputInfo *OutputPluginInfo
 
 	metricsHolder *metricsHolder
-	metricsCtl    *metric.Ctl
 
 	// some debugging stuff
 	logger          *zap.SugaredLogger
@@ -153,10 +152,10 @@ func New(name string, settings *Settings, registry *prometheus.Registry) *Pipeli
 		actionParams: &PluginDefaultParams{
 			PipelineName:     name,
 			PipelineSettings: settings,
+			MetricCtl:        metricCtl,
 		},
 
 		metricsHolder: newMetricsHolder(name, registry, metricsGenInterval),
-		metricsCtl:    metricCtl,
 		streamer:      newStreamer(settings.EventTimeout),
 		eventPool:     newEventPool(settings.Capacity, settings.AvgEventSize),
 		antispamer: antispam.NewAntispammer(antispam.Options{
@@ -204,15 +203,15 @@ func (p *Pipeline) IncMaxEventSizeExceeded() {
 }
 
 func (p *Pipeline) registerMetrics() {
-	p.inUseEventsMetric = p.metricsCtl.RegisterGauge("event_pool_in_use_events", "Count of pool events which is used for processing")
-	p.eventPoolCapacityMetric = p.metricsCtl.RegisterGauge("event_pool_capacity", "Pool capacity value")
-	p.inputEventsCountMetric = p.metricsCtl.RegisterCounter("input_events_count", "Count of events on pipeline input")
-	p.inputEventSizeMetric = p.metricsCtl.RegisterCounter("input_events_size", "Size of events on pipeline input")
-	p.outputEventsCountMetric = p.metricsCtl.RegisterCounter("output_events_count", "Count of events on pipeline output")
-	p.outputEventSizeMetric = p.metricsCtl.RegisterCounter("output_events_size", "Size of events on pipeline output")
-	p.readOpsEventsSizeMetric = p.metricsCtl.RegisterCounter("read_ops_count", "Read OPS count")
-	p.wrongEventCRIFormatMetric = p.metricsCtl.RegisterCounter("wrong_event_cri_format", "Wrong event CRI format counter")
-	p.maxEventSizeExceededMetric = p.metricsCtl.RegisterCounter("max_event_size_exceeded", "Max event size exceeded counter")
+	p.inUseEventsMetric = p.actionParams.MetricCtl.RegisterGauge("event_pool_in_use_events", "Count of pool events which is used for processing")
+	p.eventPoolCapacityMetric = p.actionParams.MetricCtl.RegisterGauge("event_pool_capacity", "Pool capacity value")
+	p.inputEventsCountMetric = p.actionParams.MetricCtl.RegisterCounter("input_events_count", "Count of events on pipeline input")
+	p.inputEventSizeMetric = p.actionParams.MetricCtl.RegisterCounter("input_events_size", "Size of events on pipeline input")
+	p.outputEventsCountMetric = p.actionParams.MetricCtl.RegisterCounter("output_events_count", "Count of events on pipeline output")
+	p.outputEventSizeMetric = p.actionParams.MetricCtl.RegisterCounter("output_events_size", "Size of events on pipeline output")
+	p.readOpsEventsSizeMetric = p.actionParams.MetricCtl.RegisterCounter("read_ops_count", "Read OPS count")
+	p.wrongEventCRIFormatMetric = p.actionParams.MetricCtl.RegisterCounter("wrong_event_cri_format", "Wrong event CRI format counter")
+	p.maxEventSizeExceededMetric = p.actionParams.MetricCtl.RegisterCounter("max_event_size_exceeded", "Max event size exceeded counter")
 }
 
 func (p *Pipeline) setDefaultMetrics() {
@@ -271,12 +270,10 @@ func (p *Pipeline) Start() {
 	}
 	p.logger.Infof("starting output plugin %q", p.outputInfo.Type)
 
-	p.output.RegisterMetrics(p.metricsCtl)
 	p.output.Start(p.outputInfo.Config, outputParams)
 
 	p.logger.Infof("stating processors, count=%d", len(p.Procs))
 	for _, processor := range p.Procs {
-		processor.registerMetrics(p.metricsCtl)
 		processor.start(p.actionParams, p.logger)
 	}
 
@@ -287,7 +284,6 @@ func (p *Pipeline) Start() {
 		Logger:              p.logger.Named("input " + p.inputInfo.Type),
 	}
 
-	p.input.RegisterMetrics(p.metricsCtl)
 	p.input.Start(p.inputInfo.Config, inputParams)
 
 	p.streamer.start()
@@ -599,7 +595,6 @@ func (p *Pipeline) expandProcs() {
 	for x := 0; x < int(to-from); x++ {
 		proc := p.newProc()
 		p.Procs = append(p.Procs, proc)
-		proc.registerMetrics(p.metricsCtl)
 		proc.start(p.actionParams, p.logger)
 	}
 

@@ -218,6 +218,8 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	ctx, cancel := context.WithCancel(context.Background())
 	p.cancel = cancel
 
+	p.registerMetrics(params.MetricCtl)
+
 	p.batcher.Start(ctx)
 }
 
@@ -230,7 +232,7 @@ func (p *Plugin) Out(event *pipeline.Event) {
 	p.batcher.Add(event)
 }
 
-func (p *Plugin) RegisterMetrics(ctl *metric.Ctl) {
+func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 	p.sendErrorMetric = ctl.RegisterCounter("output_elasticsearch_send_error", "Total elasticsearch send errors")
 	p.indexingErrorsMetric = ctl.RegisterCounter("output_elasticsearch_index_error", "Number of elasticsearch indexing errors")
 }

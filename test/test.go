@@ -8,6 +8,7 @@ import (
 
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/logger"
+	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/plugin/input/fake"
 	"github.com/ozontech/file.d/plugin/output/devnull"
@@ -200,6 +201,7 @@ func NewEmptyOutputPluginParams() *pipeline.OutputPluginParams {
 		PluginDefaultParams: &pipeline.PluginDefaultParams{
 			PipelineName:     "test_pipeline",
 			PipelineSettings: &pipeline.Settings{},
+			MetricCtl:        metric.New("test", prometheus.NewRegistry()),
 		},
 		Logger: zap.L().Sugar(),
 	}

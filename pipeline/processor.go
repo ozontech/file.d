@@ -3,7 +3,6 @@ package pipeline
 import (
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/longpanic"
-	"github.com/ozontech/file.d/metric"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
 )
@@ -105,12 +104,6 @@ func (p *processor) start(params *PluginDefaultParams, log *zap.SugaredLogger) {
 	}
 
 	longpanic.Go(p.process)
-}
-
-func (p *processor) registerMetrics(ctl *metric.Ctl) {
-	for _, action := range p.actions {
-		action.RegisterMetrics(ctl)
-	}
 }
 
 func (p *processor) process() {

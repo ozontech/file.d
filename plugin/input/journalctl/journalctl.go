@@ -87,6 +87,8 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 		p.params.Logger.Error("can't load offset file: %s", err.Error())
 	}
 
+	p.registerMetrics(params.MetricCtl)
+
 	readConfig := &journalReaderConfig{
 		output:   p,
 		cursor:   p.offInfo.Cursor,
@@ -100,7 +102,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	}
 }
 
-func (p *Plugin) RegisterMetrics(ctl *metric.Ctl) {
+func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 	p.offsetErrorsMetric = ctl.RegisterCounter("input_journalctl_offset_errors", "Number of errors occurred when saving/loading offset")
 	p.journalCtlStopErrorMetric = ctl.RegisterCounter("input_journalctl_stop_errors", "Total journalctl stop errors")
 	p.readerErrorsMetric = ctl.RegisterCounter("input_journalctl_reader_errors", "Total reader errors")
