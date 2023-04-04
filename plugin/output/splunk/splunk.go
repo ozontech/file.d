@@ -105,9 +105,8 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.logger = params.Logger
 	p.avgEventSize = params.PipelineSettings.AvgEventSize
 	p.config = config.(*Config)
-	p.client = p.newClient(p.config.RequestTimeout_)
-
 	p.registerMetrics(params.MetricCtl)
+	p.client = p.newClient(p.config.RequestTimeout_)
 
 	p.batcher = pipeline.NewBatcher(pipeline.BatcherOptions{
 		PipelineName:   params.PipelineName,

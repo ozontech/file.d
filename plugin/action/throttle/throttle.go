@@ -200,6 +200,8 @@ func factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginParams) {
 	p.config = config.(*Config)
+	p.registerMetrics(params.MetricCtl)
+
 	p.logger = params.Logger
 	p.pipeline = params.PipelineName
 	p.limiterBuf = make([]byte, 0)
@@ -212,8 +214,6 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 		format = p.config.TimeFieldFormat
 	}
 	p.format = format
-
-	p.registerMetrics(params.MetricCtl)
 
 	limitersMu.Lock()
 	// init limitersMap only once per pipeline

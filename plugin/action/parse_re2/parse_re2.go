@@ -56,9 +56,9 @@ func factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginParams) {
 	p.config = config.(*Config)
+	p.registerMetrics(params.MetricCtl)
 
 	p.re = regexp.MustCompile(p.config.Re2)
-	p.registerMetrics(params.MetricCtl)
 }
 
 func (p *Plugin) Stop() {

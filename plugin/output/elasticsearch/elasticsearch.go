@@ -162,6 +162,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.logger = params.Logger
 	p.avgEventSize = params.PipelineSettings.AvgEventSize
 	p.config = config.(*Config)
+	p.registerMetrics(params.MetricCtl)
 	p.mu = &sync.Mutex{}
 	p.headerPrefix = `{"` + p.config.BatchOpType + `":{"_index":"`
 
@@ -217,8 +218,6 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 
 	ctx, cancel := context.WithCancel(context.Background())
 	p.cancel = cancel
-
-	p.registerMetrics(params.MetricCtl)
 
 	p.batcher.Start(ctx)
 }

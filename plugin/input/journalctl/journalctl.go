@@ -80,14 +80,13 @@ func Factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginParams) {
 	p.params = params
 	p.config = config.(*Config)
+	p.registerMetrics(params.MetricCtl)
 
 	p.offInfo = &offsetInfo{}
 	if err := offset.LoadYAML(p.config.OffsetsFile, p.offInfo); err != nil {
 		p.offsetErrorsMetric.WithLabelValues().Inc()
 		p.params.Logger.Error("can't load offset file: %s", err.Error())
 	}
-
-	p.registerMetrics(params.MetricCtl)
 
 	readConfig := &journalReaderConfig{
 		output:   p,

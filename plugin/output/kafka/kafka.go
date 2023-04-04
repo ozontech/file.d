@@ -138,10 +138,9 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.logger = params.Logger
 	p.avgEventSize = params.PipelineSettings.AvgEventSize
 	p.controller = params.Controller
+	p.registerMetrics(params.MetricCtl)
 
 	p.logger.Infof("workers count=%d, batch size=%d", p.config.WorkersCount_, p.config.BatchSize_)
-
-	p.registerMetrics(params.MetricCtl)
 
 	p.producer = p.newProducer()
 	p.batcher = pipeline.NewBatcher(pipeline.BatcherOptions{

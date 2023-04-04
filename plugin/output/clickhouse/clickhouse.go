@@ -260,6 +260,7 @@ func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginParams) {
 	p.logger = params.Logger.Desugar()
 	p.config = config.(*Config)
+	p.registerMetrics(params.MetricCtl)
 	p.ctx, p.cancelFunc = context.WithCancel(context.Background())
 
 	if p.config.Retry < 1 {
@@ -271,8 +272,6 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	if p.config.InsertTimeout_ < 1 {
 		p.logger.Fatal("'db_request_timeout' can't be <1")
 	}
-
-	p.registerMetrics(params.MetricCtl)
 
 	schema, err := inferInsaneColInputs(p.config.Columns)
 	if err != nil {

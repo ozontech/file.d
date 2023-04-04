@@ -62,6 +62,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	p.logger = params.Logger
 	p.config = config.(*Config)
 	p.controller = params.Controller
+	p.registerMetrics(params.MetricCtl)
 
 	p.state = &state{}
 	if err := offset.LoadYAML(p.config.OffsetsFile, p.state); err != nil {
@@ -75,8 +76,6 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	}
 
 	p.parser = parser
-
-	p.registerMetrics(params.MetricCtl)
 
 	longpanic.Go(p.read)
 }

@@ -135,14 +135,14 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	p.config = config.(*Config)
 	p.params = params
 	p.logger = params.Logger
+	p.registerMetrics(params.MetricCtl)
+
 	p.readBuffs = &sync.Pool{}
 	p.eventBuffs = &sync.Pool{}
 	p.mu = &sync.Mutex{}
 	p.controller = params.Controller
 	p.controller.DisableStreams()
 	p.sourceIDs = make([]pipeline.SourceID, 0)
-
-	p.registerMetrics(params.MetricCtl)
 
 	mux := http.NewServeMux()
 	switch p.config.EmulateMode {

@@ -185,6 +185,8 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.logger = params.Logger
 	p.config = config.(*Config)
 	p.ctx = context.Background()
+	p.registerMetrics(params.MetricCtl)
+
 	if len(p.config.Columns) == 0 {
 		p.logger.Fatal("can't start plugin, no fields in config")
 	}
@@ -201,8 +203,6 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	if p.config.DBHealthCheckPeriod_ < 1 {
 		p.logger.Fatal("'db_health_check_period' can't be <1")
 	}
-
-	p.registerMetrics(params.MetricCtl)
 
 	queryBuilder, err := NewQueryBuilder(p.config.Columns, p.config.Table)
 	if err != nil {
