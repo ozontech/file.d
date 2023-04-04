@@ -152,7 +152,6 @@ type Plugin struct {
 	uploadCh   chan fileDTO
 
 	compressor compressor
-	metricCtl  *metric.Ctl
 
 	// plugin metrics
 
@@ -266,13 +265,13 @@ func Factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 }
 
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginParams) {
+	p.registerMetrics(params.MetricCtl)
 	p.StartWithMinio(config, params, p.minioClientsFactory)
 }
 
-func (p *Plugin) RegisterMetrics(ctl *metric.Ctl) {
+func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 	p.sendErrorMetric = ctl.RegisterCounter("output_s3_send_error", "Total s3 send errors")
 	p.uploadFileMetric = ctl.RegisterCounter("output_s3_upload_file", "Total files upload", "bucket_name")
-	p.metricCtl = ctl
 }
 
 func (p *Plugin) StartWithMinio(config pipeline.AnyConfig, params *pipeline.OutputPluginParams, factory objStoreFactory) {
@@ -438,7 +437,6 @@ func (p *Plugin) tryRunNewPlugin(bucketName string) (isCreated bool) {
 
 	localBucketConfig := p.config.FileConfig
 	localBucketConfig.TargetFile = fmt.Sprintf("%s%s%s", bucketDir, bucketName, p.fileExtension)
-	outPlugin.RegisterMetrics(p.metricCtl)
 	outPlugin.Start(&localBucketConfig, p.params)
 
 	p.outPlugins.Add(bucketName, outPlugin)

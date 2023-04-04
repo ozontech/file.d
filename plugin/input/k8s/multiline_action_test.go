@@ -6,10 +6,10 @@ import (
 	"testing"
 
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/test"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	insaneJSON "github.com/vitkovskii/insane-json"
-	"go.uber.org/zap"
 )
 
 func TestMultilineAction_Do(t *testing.T) {
@@ -17,11 +17,9 @@ func TestMultilineAction_Do(t *testing.T) {
 	config := &Config{
 		SplitEventSize: predictionLookahead * 4,
 	}
-	plugin.Start(config, &pipeline.ActionPluginParams{Logger: zap.S(), PluginDefaultParams: &pipeline.PluginDefaultParams{
-		PipelineSettings: &pipeline.Settings{
-			MaxEventSize: 20,
-		},
-	}})
+	params := test.NewEmptyActionPluginParams()
+	params.PipelineSettings = &pipeline.Settings{MaxEventSize: 20}
+	plugin.Start(config, params)
 
 	item := &metaItem{
 		nodeName:      "node_1",
@@ -93,9 +91,7 @@ func TestMultilineAction_Do_shouldSplit(t *testing.T) {
 	config := &Config{
 		SplitEventSize: predictionLookahead * 4,
 	}
-	plugin.Start(config, &pipeline.ActionPluginParams{Logger: zap.S(), PluginDefaultParams: &pipeline.PluginDefaultParams{
-		PipelineSettings: &pipeline.Settings{},
-	}})
+	plugin.Start(config, test.NewEmptyActionPluginParams())
 
 	item := &metaItem{
 		nodeName:      "node_1",

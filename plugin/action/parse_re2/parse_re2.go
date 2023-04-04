@@ -54,8 +54,9 @@ func factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 	return &Plugin{}, &Config{}
 }
 
-func (p *Plugin) Start(config pipeline.AnyConfig, _ *pipeline.ActionPluginParams) {
+func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginParams) {
 	p.config = config.(*Config)
+	p.registerMetrics(params.MetricCtl)
 
 	p.re = regexp.MustCompile(p.config.Re2)
 }
@@ -102,6 +103,6 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	return pipeline.ActionPass
 }
 
-func (p *Plugin) RegisterMetrics(ctl *metric.Ctl) {
+func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 	p.eventNotMatchingPatternMetric = ctl.RegisterCounter("action_parse_re2_event_not_matching_pattern", "Total events not matching pattern")
 }

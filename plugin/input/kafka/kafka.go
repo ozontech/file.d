@@ -101,6 +101,8 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	p.controller = params.Controller
 	p.logger = params.Logger
 	p.config = config.(*Config)
+	p.registerMetrics(params.MetricCtl)
+
 	p.idByTopic = make(map[string]int, len(p.config.Topics))
 	for i, topic := range p.config.Topics {
 		p.idByTopic[topic] = i
@@ -117,7 +119,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	})
 }
 
-func (p *Plugin) RegisterMetrics(ctl *metric.Ctl) {
+func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 	p.commitErrorsMetric = ctl.RegisterCounter("input_kafka_commit_errors", "Number of kafka commit errors")
 	p.consumeErrorsMetric = ctl.RegisterCounter("input_kafka_consume_errors", "Number of kafka consume errors")
 }
@@ -206,6 +208,6 @@ func disassembleSourceID(sourceID pipeline.SourceID) (index int, partition int32
 }
 
 // PassEvent decides pass or discard event.
-func (p *Plugin) PassEvent(event *pipeline.Event) bool {
+func (p *Plugin) PassEvent(_ *pipeline.Event) bool {
 	return true
 }

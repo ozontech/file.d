@@ -5,7 +5,6 @@ import (
 
 	"github.com/ozontech/file.d/decoder"
 	"github.com/ozontech/file.d/fd"
-	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/plugin/input/file"
 
@@ -150,10 +149,6 @@ func (p *Plugin) Commit(event *pipeline.Event) {
 // Stop plugin work.
 func (p *Plugin) Stop() {
 	p.fp.Stop()
-}
-
-func (p *Plugin) RegisterMetrics(ctl *metric.Ctl) {
-	p.fp.RegisterMetrics(ctl)
 }
 
 // PassEvent decides pass or discard event.

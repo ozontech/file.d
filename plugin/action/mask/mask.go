@@ -152,6 +152,8 @@ func verifyGroupNumbers(groups []int, totalGroups int, logger *zap.Logger) []int
 
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginParams) {
 	p.config = config.(*Config)
+	p.registerMetrics(params.MetricCtl)
+
 	for _, mask := range p.config.Masks {
 		if mask.MaxCount > 0 && mask.ReplaceWord != "" {
 			p.logger.Fatal("invalid mask configuration")
@@ -164,7 +166,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 	p.config.Masks = compileMasks(p.config.Masks, p.logger)
 }
 
-func (p *Plugin) RegisterMetrics(ctl *metric.Ctl) {
+func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 	p.maskAppliedMetric = ctl.RegisterCounter("mask_applied_total", "Number of times mask plugin found the provided pattern")
 }
 

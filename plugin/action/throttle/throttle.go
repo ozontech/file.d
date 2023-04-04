@@ -200,6 +200,8 @@ func factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginParams) {
 	p.config = config.(*Config)
+	p.registerMetrics(params.MetricCtl)
+
 	p.logger = params.Logger
 	p.pipeline = params.PipelineName
 	p.limiterBuf = make([]byte, 0)
@@ -269,7 +271,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 	p.rules = append(p.rules, NewRule(map[string]string{}, complexLimit{p.config.DefaultLimit, p.config.LimitKind}, len(p.config.Rules)))
 }
 
-func (p *Plugin) RegisterMetrics(ctl *metric.Ctl) {
+func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 	p.limitersMapSizeMetric = ctl.RegisterGauge(
 		"throttle_limiter_map_size",
 		"Size of internal map of throttle limiters",

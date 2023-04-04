@@ -105,6 +105,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.logger = params.Logger
 	p.avgEventSize = params.PipelineSettings.AvgEventSize
 	p.config = config.(*Config)
+	p.registerMetrics(params.MetricCtl)
 	p.client = p.newClient(p.config.RequestTimeout_)
 
 	p.batcher = pipeline.NewBatcher(pipeline.BatcherOptions{
@@ -122,7 +123,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.batcher.Start(context.TODO())
 }
 
-func (p *Plugin) RegisterMetrics(ctl *metric.Ctl) {
+func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 	p.sendErrorMetric = ctl.RegisterCounter("output_splunk_send_error", "Total splunk send errors")
 }
 
@@ -175,7 +176,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 	p.logger.Debugf("successfully sent: %s", outBuf)
 }
 
-func (p *Plugin) maintenance(workerData *pipeline.WorkerData) {}
+func (p *Plugin) maintenance(_ *pipeline.WorkerData) {}
 
 func (p *Plugin) newClient(timeout time.Duration) http.Client {
 	return http.Client{

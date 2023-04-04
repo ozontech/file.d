@@ -40,6 +40,7 @@ type testS3Plugin struct {
 }
 
 func (p *testS3Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginParams) {
+	p.registerMetrics(params.MetricCtl)
 	p.StartWithMinio(config, params, p.objStoreF)
 }
 
