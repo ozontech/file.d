@@ -1,5 +1,5 @@
 # Build
-FROM --platform=$BUILDPLATFORM golang:1.19-alpine AS build
+FROM --platform=$BUILDPLATFORM golang:1.20-alpine AS build
 
 RUN apk update
 RUN apk add git

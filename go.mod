@@ -1,6 +1,6 @@
 module github.com/ozontech/file.d
 
-go 1.19
+go 1.20
 
 require (
 	github.com/ClickHouse/ch-go v0.53.1
