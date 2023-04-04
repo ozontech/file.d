@@ -5,6 +5,12 @@ on:
     branches: [ master ]
   pull_request:
     branches: [ master ]
+  schedule:
+    - cron: '0 10 * * 1' # run "At 10:00 on Monday"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test:
@@ -12,36 +18,17 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        go:
-          - 1.19
-        arch:
-          - amd64
-        runner:
-          - ubuntu-latest
+        go: [ '1.20' ]
+        arch: [ amd64 ]
+        runner: [ ubuntu-latest ]
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
 
       - name: Install Go
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v4
         with:
           go-version: ${{ matrix.go }}
-
-      - name: Get Go environment
-        id: go-env
-        run: |
-          echo "::set-output name=cache::$(go env GOCACHE)"
-          echo "::set-output name=modcache::$(go env GOMODCACHE)"
-
-      - name: Set up cache
-        uses: actions/cache@v3
-        with:
-          path: |
-            ${{ steps.go-env.outputs.cache }}
-            ${{ steps.go-env.outputs.modcache }}
-          key: test-${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            test-${{ runner.os }}-go-
 
       - name: Build
         env:
@@ -71,25 +58,9 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Install Go
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v4
         with:
-          go-version: 1.19
-
-      - name: Get Go environment
-        id: go-env
-        run: |
-          echo "::set-output name=cache::$(go env GOCACHE)"
-          echo "::set-output name=modcache::$(go env GOMODCACHE)"
-
-      - name: Set up cache
-        uses: actions/cache@v3
-        with:
-          path: |
-            ${{ steps.go-env.outputs.cache }}
-            ${{ steps.go-env.outputs.modcache }}
-          key: test-${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            test-${{ runner.os }}-go-
+          go-version: '1.20'
 
       - name: Run Kafka
         run: docker-compose -f ./e2e/kafka_file/docker-compose-kafka.yml up -d
@@ -134,16 +105,22 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Install Go
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v4
         with:
-          go-version: 1.19
+          go-version: '1.20'
 
       - name: Lint
         uses: golangci/golangci-lint-action@v3
         with:
-          version: v1.49.0
+          version: latest
           only-new-issues: true
           args: --timeout 5m
+          # Package/build cache already provided above.
+          #
+          # Disable module cache.
+          skip-pkg-cache: true
+          # Disable build cache.
+          skip-build-cache: true
 
   check-generate:
     runs-on: ubuntu-latest
@@ -152,34 +129,12 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Install Go
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v4
         with:
-          go-version: 1.19
+          go-version: '1.20'
 
-      - name: Get Go environment
-        id: go-env
-        run: |
-          echo "::set-output name=cache::$(go env GOCACHE)"
-          echo "::set-output name=modcache::$(go env GOMODCACHE)"
-
-      - name: Set up cache
-        uses: actions/cache@v3
-        with:
-          path: |
-            ${{ steps.go-env.outputs.cache }}
-            ${{ steps.go-env.outputs.modcache }}
-          key: check-generate-${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            check-generate-${{ runner.os }}-go-
-
-      - name: Generate doc
-        run: make gen-doc
-
-      - name: Generate mocks
-        run: make mock
-
-      - name: Go generate
-        run: go generate ./...
+      - name: Generate
+        run: make generate
 
       - name: Check git diff
         run: git diff --exit-code
@@ -191,28 +146,15 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Install Go
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v4
         with:
-          go-version: 1.19
+          go-version: '1.20'
 
-      - name: Get Go environment
-        id: go-env
-        run: |
-          echo "::set-output name=cache::$(go env GOCACHE)"
-          echo "::set-output name=modcache::$(go env GOMODCACHE)"
-
-      - name: Set up cache
-        uses: actions/cache@v3
-        with:
-          path: |
-            ${{ steps.go-env.outputs.cache }}
-            ${{ steps.go-env.outputs.modcache }}
-          key: check-mod-${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            check-mod-${{ runner.os }}-go-
-
-      - name: Download dependencies
+      - name: Download Go dependencies
         run: go mod download && go mod tidy
+
+      - name: Verify modules
+        run: go mod verify
 
       - name: Check git diff
         run: git diff --exit-code
