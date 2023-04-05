@@ -17,7 +17,7 @@ require (
 	github.com/golang/mock v1.6.0
 	github.com/hashicorp/vault/api v1.1.1
 	github.com/jackc/pgconn v1.11.0
-	github.com/jackc/pgproto3/v2 v2.2.0
+	github.com/jackc/pgproto3/v2 v2.3.2
 	github.com/jackc/pgx/v4 v4.15.0
 	github.com/minio/minio-go v6.0.14+incompatible
 	github.com/prometheus/client_golang v1.11.1
