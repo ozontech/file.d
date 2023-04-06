@@ -169,8 +169,10 @@ var MatchModes = map[string]MatchMode{
 	// >
 	// > result:
 	// > ```
-	// > {"k8s_namespace": "payment", "k8s_pod":"payment-api-abcd"}         # won't be discarded
+	// > {"k8s_namespace": "payment", "k8s_pod":"payment-api-abcd"}         # discarded
 	// > {"k8s_namespace": "tarifficator", "k8s_pod":"payment-api"}         # discarded
+	// > {"k8s_namespace": "payment-tarifficator", "k8s_pod":"payment-api"} # won't be discarded
+	// > {"k8s_namespace": "tarifficator", "k8s_pod":"no-payment-api"}      # won't be discarded
 	// > ```
 	"and": MatchModeAnd, // *
 
@@ -190,12 +192,12 @@ var MatchModes = map[string]MatchMode{
 	// >
 	// > result:
 	// > ```
-	// > {"k8s_namespace": "payment", "k8s_pod":"payment-api-abcd"} # won't be discarded
-	// > {"k8s_namespace": "tarifficator", "k8s_pod":"payment-api"} # won't be discarded
-	// > {"k8s_namespace": "map", "k8s_pod":"payment-api"} # won't be discarded
-	// > {"k8s_namespace": "payment", "k8s_pod":"map-api"} # won't be discarded
-	// > {"k8s_namespace": "tarifficator", "k8s_pod":"tarifficator-go-api"} # won't be discarded
-	// > {"k8s_namespace": "sre", "k8s_pod":"cpu-quotas-abcd-1234"} # discarded
+	// > {"k8s_namespace": "payment", "k8s_pod":"payment-api-abcd"}         # discarded
+	// > {"k8s_namespace": "tarifficator", "k8s_pod":"payment-api"}         # discarded
+	// > {"k8s_namespace": "map", "k8s_pod":"payment-api"}                  # discarded
+	// > {"k8s_namespace": "payment", "k8s_pod":"map-api"}                  # discarded
+	// > {"k8s_namespace": "tarifficator", "k8s_pod":"tarifficator-go-api"} # discarded
+	// > {"k8s_namespace": "sre", "k8s_pod":"cpu-quotas-abcd-1234"}         # won't be discarded
 	// > ```
 	"or": MatchModeOr, // *
 
@@ -215,10 +217,11 @@ var MatchModes = map[string]MatchMode{
 	// >
 	// > result:
 	// > ```
-	// > {"k8s_namespace": "payment", "k8s_pod":"payment-api-abcd-1234"} # won't be discarded
-	// > {"k8s_namespace": "payment", "k8s_pod":"checkout"} # discarded
-	// > {"k8s_namespace": "map", "k8s_pod":"payment-api-abcd-1234"} # discarded
-	// > {"k8s_namespace": "payment", "k8s_pod":"payment-api"} # discarded
+	// > {"k8s_namespace": "payment", "k8s_pod":"payment-api-abcd-1234"}    # discarded
+	// > {"k8s_namespace": "payment-2", "k8s_pod":"payment-api-abcd-1234"}  # discarded
+	// > {"k8s_namespace": "payment", "k8s_pod":"checkout"}                 # won't be discarded
+	// > {"k8s_namespace": "map", "k8s_pod":"payment-api-abcd-1234"}        # won't be discarded
+	// > {"k8s_namespace": "payment-abcd", "k8s_pod":"payment-api"}         # won't be discarded
 	// > ```
 	"and_prefix": MatchModeAndPrefix, // *
 
@@ -238,11 +241,12 @@ var MatchModes = map[string]MatchMode{
 	// >
 	// > result:
 	// > ```
-	// > {"k8s_namespace": "payment", "k8s_pod":"payment-api-abcd-1234"} # won't be discarded
-	// > {"k8s_namespace": "payment", "k8s_pod":"checkout"} # won't be discarded
-	// > {"k8s_namespace": "map", "k8s_pod":"map-go-api-abcd-1234"} # discarded
-	// > {"k8s_namespace": "map", "k8s_pod":"payment-api"} # won't be discarded
-	// > {"k8s_namespace": "tariff", "k8s_pod":"tarifficator"} # won't be discarded
+	// > {"k8s_namespace": "payment", "k8s_pod":"payment-api-abcd-1234"}    # discarded
+	// > {"k8s_namespace": "payment", "k8s_pod":"checkout"}                 # discarded
+	// > {"k8s_namespace": "map", "k8s_pod":"map-go-api-abcd-1234"}         # discarded
+	// > {"k8s_namespace": "map", "k8s_pod":"payment-api"}                  # won't be discarded
+	// > {"k8s_namespace": "map", "k8s_pod":"payment-api-abcd-1234"}        # discarded
+	// > {"k8s_namespace": "tariff", "k8s_pod":"tarifficator"}              # won't be discarded
 	// > ```
 	"or_prefix": MatchModeOrPrefix, // *
 }
