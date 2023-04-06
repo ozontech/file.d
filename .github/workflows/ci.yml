@@ -139,7 +139,7 @@ jobs:
         uses: golangci/golangci-lint-action@v3
         with:
           version: latest
-          only-new-issues: true
+          only-new-issues: false
           args: --timeout 5m
           # Package/build cache already provided above.
           #
