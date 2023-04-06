@@ -139,11 +139,11 @@ func runWriter(tempDir string, files int) {
 			}
 			if rand.Int()%100 == 0 {
 				for k := 0; k < 8; k++ {
-					_, _ = logFile.WriteString(fmt.Sprintf(multilineJSON, stream))
+					_, _ = fmt.Fprintf(logFile, multilineJSON, stream)
 					_, _ = logFile.Write([]byte{'\n'})
 				}
 			}
-			_, _ = logFile.WriteString(fmt.Sprintf(jsons[rand.Int()%len(jsons)], stream))
+			_, _ = fmt.Fprintf(logFile, jsons[rand.Intn(len(jsons))], stream)
 			_, _ = logFile.Write([]byte{'\n'})
 		}
 

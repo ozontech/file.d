@@ -50,7 +50,7 @@ profile-file:
 .PHONY: lint
 lint:
 	# installation: https://golangci-lint.run/usage/install/#local-installation
-	golangci-lint run --new-from-rev=${UPSTREAM_BRANCH}
+	golangci-lint run
 
 .PHONY: mock
 mock:
