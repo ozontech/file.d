@@ -16,8 +16,8 @@ require (
 	github.com/go-redis/redis v6.15.9+incompatible
 	github.com/golang/mock v1.6.0
 	github.com/hashicorp/vault/api v1.1.1
-	github.com/jackc/pgconn v1.11.0
-	github.com/jackc/pgproto3/v2 v2.2.0
+	github.com/jackc/pgconn v1.14.0
+	github.com/jackc/pgproto3/v2 v2.3.2
 	github.com/jackc/pgx/v4 v4.15.0
 	github.com/minio/minio-go v6.0.14+incompatible
 	github.com/prometheus/client_golang v1.11.1
@@ -98,7 +98,7 @@ require (
 	github.com/jackc/chunkreader/v2 v2.0.1 // indirect
 	github.com/jackc/pgio v1.0.0 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
-	github.com/jackc/pgservicefile v0.0.0-20200714003250-2b9c44734f2b // indirect
+	github.com/jackc/pgservicefile v0.0.0-20221227161230-091c0ba34f0a // indirect
 	github.com/jackc/pgtype v1.10.0 // indirect
 	github.com/jackc/puddle v1.2.2-0.20220404125616-4e959849469a // indirect
 	github.com/jcmturner/aescts/v2 v2.0.0 // indirect
@@ -131,7 +131,7 @@ require (
 	github.com/xdg-go/scram v1.1.2
 	github.com/yuin/gopher-lua v0.0.0-20200816102855-ee81675732da // indirect
 	go.uber.org/multierr v1.10.0 // indirect
-	golang.org/x/crypto v0.0.0-20220722155217-630584e8d5aa // indirect
+	golang.org/x/crypto v0.6.0 // indirect
 	golang.org/x/oauth2 v0.0.0-20190604053449-0f29369cfe45 // indirect
 	golang.org/x/sys v0.5.0 // indirect
 	golang.org/x/term v0.5.0 // indirect
