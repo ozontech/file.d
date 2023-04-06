@@ -242,17 +242,18 @@ func (l *limitersMap) getNewLimiter(throttleKey, keyLimitOverride string, rule *
 // sets its generation to the current limiters map generation, adds to map under the given key
 // and returns created limiter.
 func (l *limitersMap) getOrAdd(throttleKey, keyLimitOverride string, rule *rule) limiter {
-	l.limiterBuf = append(l.limiterBuf[:0], rule.byteIdxPart...)
-	l.limiterBuf = append(l.limiterBuf, throttleKey...)
-	key := string(l.limiterBuf)
 	// fast check with read lock
 	l.mu.RLock()
+	l.limiterBuf = append(l.limiterBuf[:0], rule.byteIdxPart...)
+	l.limiterBuf = append(l.limiterBuf, throttleKey...)
+	key := pipeline.ByteToStringUnsafe(l.limiterBuf)
 	lim, has := l.lims[key]
 	if has {
 		lim.gen.Store(l.curGen)
 		l.mu.RUnlock()
 		return lim
 	}
+	key = string(l.limiterBuf)
 	l.mu.RUnlock()
 	// we could already write it between `l.mu.RUnlock()` and `l.mu.Lock()`, so we need to check again
 	l.mu.Lock()
