@@ -10,7 +10,6 @@ import (
 	"github.com/alicebob/miniredis/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/atomic"
 
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/logger"
@@ -40,13 +39,11 @@ func throttleMapsCleanup() {
 }
 
 func (c *testConfig) runPipeline() {
-	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, c.config, pipeline.MatchModeAnd, nil, false)) //, "name")
-	wgWithDeadline := atomic.NewInt32(int32(c.eventsTotal))
+	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, c.config, pipeline.MatchModeAnd, nil, false))
 
 	outEvents := make([]*pipeline.Event, 0)
 	output.SetOutFn(func(e *pipeline.Event) {
 		outEvents = append(outEvents, e)
-		wgWithDeadline.Dec()
 	})
 
 	sourceNames := []string{
@@ -56,8 +53,15 @@ func (c *testConfig) runPipeline() {
 	}
 
 	startTime := time.Now()
-	for {
-		index := rand.Int() % len(formats)
+	// correction for the start time so the plugin processes expected amount of buckets
+	bucketIntervalNS := c.config.BucketInterval_.Nanoseconds()
+	for startTime.UnixNano()%bucketIntervalNS > bucketIntervalNS/2 || startTime.UnixNano()%bucketIntervalNS < bucketIntervalNS/5 {
+		time.Sleep(c.config.BucketInterval_ / 10)
+		startTime = time.Now()
+	}
+
+	for i := 0; ; i++ {
+		index := i % len(formats)
 		// Format like RFC3339Nano, but nanoseconds are zero-padded, thus all times have equal length.
 		json := fmt.Sprintf(formats[index], time.Now().UTC().Format("2006-01-02T15:04:05.000000000Z07:00"))
 		input.In(10, sourceNames[rand.Int()%len(sourceNames)], 0, []byte(json))
@@ -65,19 +69,14 @@ func (c *testConfig) runPipeline() {
 			break
 		}
 	}
+	// this is to ensure the plugin processed events for the last bucket
+	time.Sleep(c.config.BucketInterval_ / 5)
 
 	p.Stop()
-	tnow := time.Now()
-	for {
-		if wgWithDeadline.Load() <= 0 || time.Since(tnow) > 10*time.Second {
-			break
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
 
 	// if we have not generated the required amount messages for any bucket,
 	// then we check the amount generated messages (outEvents) does not exceed the limit (eventsTotal)
-	assert.LessOrEqual(c.t, c.eventsTotal, len(outEvents), "wrong in events count")
+	assert.Equal(c.t, c.eventsTotal, len(outEvents), "wrong out events count")
 }
 
 func TestThrottle(t *testing.T) {
@@ -164,11 +163,12 @@ func TestMixedThrottle(t *testing.T) {
 	limitB := avgMessageSize * 3
 	defaultLimit := 20
 
+	dateLen := len("2006-01-02T15:04:05.999999999Z")
 	iterations := 5
 
 	totalBuckets := iterations + 1
 	defaultLimitDelta := totalBuckets * defaultLimit
-	eventsTotal := totalBuckets*(limitA+(limitB/avgMessageSize)) + defaultLimitDelta
+	eventsTotal := totalBuckets*(limitA+(limitB/(len(formats[1])+dateLen-2))) + defaultLimitDelta
 
 	config := &Config{
 		Rules: []RuleConfig{
