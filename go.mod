@@ -21,7 +21,7 @@ require (
 	github.com/jackc/pgx/v4 v4.15.0
 	github.com/minio/minio-go v6.0.14+incompatible
 	github.com/prometheus/client_golang v1.11.1
-	github.com/rjeczalik/notify v0.9.3-0.20210809113154-3472d85e95cd
+	github.com/rjeczalik/notify v0.9.3
 	github.com/satori/go.uuid v1.2.0
 	github.com/stretchr/testify v1.8.2
 	github.com/valyala/fasthttp v1.37.0
