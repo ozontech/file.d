@@ -21,7 +21,7 @@ type testConfig struct {
 	t           *testing.T
 	config      *Config
 	eventsTotal int
-	workTime    time.Duration
+	iterations  int
 }
 
 var formats = []string{
@@ -41,6 +41,8 @@ func throttleMapsCleanup() {
 func (c *testConfig) runPipeline() {
 	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, c.config, pipeline.MatchModeAnd, nil, false))
 
+	limMap := limiters[p.Name]
+
 	outEvents := make([]*pipeline.Event, 0)
 	output.SetOutFn(func(e *pipeline.Event) {
 		outEvents = append(outEvents, e)
@@ -52,30 +54,40 @@ func (c *testConfig) runPipeline() {
 		`source_3`,
 	}
 
-	startTime := time.Now()
-	// correction for the start time so the plugin processes expected amount of buckets
-	bucketIntervalNS := c.config.BucketInterval_.Nanoseconds()
-	for startTime.UnixNano()%bucketIntervalNS > bucketIntervalNS/2 || startTime.UnixNano()%bucketIntervalNS < bucketIntervalNS/5 {
-		time.Sleep(c.config.BucketInterval_ / 10)
-		startTime = time.Now()
-	}
+	// generating much more events per iteration than we need so that all buckets are filled
+	genEventsCnt := 10 * c.eventsTotal
 
-	for i := 0; ; i++ {
-		index := i % len(formats)
-		// Format like RFC3339Nano, but nanoseconds are zero-padded, thus all times have equal length.
-		json := fmt.Sprintf(formats[index], time.Now().UTC().Format("2006-01-02T15:04:05.000000000Z07:00"))
-		input.In(10, sourceNames[rand.Int()%len(sourceNames)], 0, []byte(json))
-		if time.Since(startTime) > c.workTime {
-			break
-		}
+	bucketIntervalNS := c.config.BucketInterval_.Nanoseconds()
+	startTime := time.Now()
+	if startTime.UnixNano()%bucketIntervalNS > bucketIntervalNS/2 {
+		startTime.Add(c.config.BucketInterval_ / 2)
 	}
-	// this is to ensure the plugin processed events for the last bucket
-	time.Sleep(c.config.BucketInterval_ / 5)
+	for i := 0; i < c.iterations; i++ {
+		curTime := startTime.Add(time.Duration(i) * c.config.BucketInterval_)
+		limMap.mu.Lock()
+		limMap.nowFn = func() time.Time {
+			return curTime
+		}
+		for _, lim := range limMap.lims {
+			lim.setNowFn(func() time.Time {
+				return curTime
+			})
+		}
+		limMap.mu.Unlock()
+		curTimeStr := curTime.UTC().Format("2006-01-02T15:04:05.000000000Z07:00")
+		for j := 0; j < genEventsCnt; j++ {
+			index := j % len(formats)
+			// Format like RFC3339Nano, but nanoseconds are zero-padded, thus all times have equal length.
+			json := fmt.Sprintf(formats[index], curTimeStr)
+			input.In(10, sourceNames[rand.Int()%len(sourceNames)], 0, []byte(json))
+		}
+		// just to make sure that events from the current iteration are processed in the plugin
+		time.Sleep(10 * time.Millisecond)
+	}
 
 	p.Stop()
 
-	// if we have not generated the required amount messages for any bucket,
-	// then we check the amount generated messages (outEvents) does not exceed the limit (eventsTotal)
+	// check that we passed expected amount of events
 	assert.Equal(c.t, c.eventsTotal, len(outEvents), "wrong out events count")
 }
 
@@ -87,9 +99,8 @@ func TestThrottle(t *testing.T) {
 
 	iterations := 5
 
-	totalBuckets := iterations + 1
-	defaultLimitDelta := totalBuckets * defaultLimit
-	eventsTotal := totalBuckets*(limitA+limitB) + defaultLimitDelta
+	defaultLimitDelta := iterations * defaultLimit
+	eventsTotal := iterations*(limitA+limitB) + defaultLimitDelta
 
 	config := &Config{
 		Rules: []RuleConfig{
@@ -107,9 +118,7 @@ func TestThrottle(t *testing.T) {
 		logger.Panic(err.Error())
 	}
 
-	workTime := config.BucketInterval_ * time.Duration(iterations)
-
-	tconf := testConfig{t, config, eventsTotal, workTime}
+	tconf := testConfig{t, config, eventsTotal, iterations}
 	tconf.runPipeline()
 	t.Cleanup(func() {
 		throttleMapsCleanup()
@@ -126,9 +135,8 @@ func TestSizeThrottle(t *testing.T) {
 	dateLen := len("2006-01-02T15:04:05.999999999Z")
 	iterations := 5
 
-	totalBuckets := iterations + 1
 	eventsPerBucket := limitA/(len(formats[0])+dateLen-2) + limitB/(len(formats[1])+dateLen-2) + defaultLimit/(len(formats[2])+dateLen-2)
-	eventsTotal := totalBuckets * eventsPerBucket
+	eventsTotal := iterations * eventsPerBucket
 
 	config := &Config{
 		Rules: []RuleConfig{
@@ -147,9 +155,7 @@ func TestSizeThrottle(t *testing.T) {
 		logger.Panic(err.Error())
 	}
 
-	workTime := config.BucketInterval_ * time.Duration(iterations)
-
-	tconf := testConfig{t, config, eventsTotal, workTime}
+	tconf := testConfig{t, config, eventsTotal, iterations}
 	tconf.runPipeline()
 	t.Cleanup(func() {
 		throttleMapsCleanup()
@@ -166,9 +172,8 @@ func TestMixedThrottle(t *testing.T) {
 	dateLen := len("2006-01-02T15:04:05.999999999Z")
 	iterations := 5
 
-	totalBuckets := iterations + 1
-	defaultLimitDelta := totalBuckets * defaultLimit
-	eventsTotal := totalBuckets*(limitA+(limitB/(len(formats[1])+dateLen-2))) + defaultLimitDelta
+	defaultLimitDelta := iterations * defaultLimit
+	eventsTotal := iterations*(limitA+(limitB/(len(formats[1])+dateLen-2))) + defaultLimitDelta
 
 	config := &Config{
 		Rules: []RuleConfig{
@@ -186,9 +191,7 @@ func TestMixedThrottle(t *testing.T) {
 		logger.Panic(err.Error())
 	}
 
-	workTime := config.BucketInterval_ * time.Duration(iterations)
-
-	tconf := testConfig{t, config, eventsTotal, workTime}
+	tconf := testConfig{t, config, eventsTotal, iterations}
 	tconf.runPipeline()
 	t.Cleanup(func() {
 		throttleMapsCleanup()
@@ -502,9 +505,8 @@ func TestThrottleRedisFallbackToInMemory(t *testing.T) {
 
 	iterations := 5
 
-	totalBuckets := iterations + 1
-	defaultLimitDelta := totalBuckets * defaultLimit
-	eventsTotal := totalBuckets*(limitA+limitB) + defaultLimitDelta
+	defaultLimitDelta := iterations * defaultLimit
+	eventsTotal := iterations*(limitA+limitB) + defaultLimitDelta
 
 	config := &Config{
 		Rules: []RuleConfig{
@@ -529,9 +531,7 @@ func TestThrottleRedisFallbackToInMemory(t *testing.T) {
 		logger.Panic(err.Error())
 	}
 
-	workTime := config.BucketInterval_ * time.Duration(iterations)
-
-	tconf := testConfig{t, config, eventsTotal, workTime}
+	tconf := testConfig{t, config, eventsTotal, iterations}
 	tconf.runPipeline()
 	t.Cleanup(func() {
 		throttleMapsCleanup()
