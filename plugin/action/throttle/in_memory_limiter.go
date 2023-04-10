@@ -16,16 +16,21 @@ type inMemoryLimiter struct {
 	minID       int           // minimum bucket id
 	maxID       int           // max bucket id
 	mu          sync.Mutex
+
+	// nowFn is passed to create limiters and required for test purposes
+	nowFn func() time.Time
 }
 
 // NewInMemoryLimiter returns limiter instance.
-func NewInMemoryLimiter(interval time.Duration, bucketCount int, limit complexLimit) *inMemoryLimiter {
+func NewInMemoryLimiter(interval time.Duration, bucketCount int, limit complexLimit, nowFn func() time.Time) *inMemoryLimiter {
 	return &inMemoryLimiter{
 		interval:    interval,
 		bucketCount: bucketCount,
 		limit:       limit,
 
 		buckets: make([]int64, bucketCount),
+
+		nowFn: nowFn,
 	}
 }
 
@@ -54,7 +59,7 @@ func (l *inMemoryLimiter) isAllowed(event *pipeline.Event, ts time.Time) bool {
 // rebuildBuckets will rebuild buckets for given ts and returns actual bucket id
 // Not thread safe - use external lock!
 func (l *inMemoryLimiter) rebuildBuckets(ts time.Time) int {
-	currentTs := time.Now()
+	currentTs := l.nowFn()
 	currentID := l.timeToBucketID(currentTs)
 	if l.minID == 0 {
 		// min id weren't set yet. It MUST be extracted from currentTs, because ts from event can be invalid (e.g. from 1970 or 2077 year)
@@ -88,4 +93,8 @@ func (l *inMemoryLimiter) rebuildBuckets(ts time.Time) int {
 // timeToBucketID converts time to bucketID.
 func (l *inMemoryLimiter) timeToBucketID(t time.Time) int {
 	return int(t.UnixNano() / l.interval.Nanoseconds())
+}
+
+func (l *inMemoryLimiter) setNowFn(fn func() time.Time) {
+	l.nowFn = fn
 }

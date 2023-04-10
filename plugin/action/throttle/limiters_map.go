@@ -32,6 +32,9 @@ type redisClient interface {
 type limiter interface {
 	isAllowed(event *pipeline.Event, ts time.Time) bool
 	sync()
+
+	// setNowFn is used for testing purposes
+	setNowFn(fn func() time.Time)
 }
 
 // limiterWithGen is a wrapper for the limiter interface with added generation field.
@@ -84,6 +87,9 @@ type limitersMap struct {
 	isRedisConnected bool
 	logger           *zap.SugaredLogger
 
+	// nowFn is passed to create limiters and required for test purposes
+	nowFn func() time.Time
+
 	limiterCfg *limiterConfig
 
 	mapSizeMetric *prom.GaugeVec
@@ -100,6 +106,7 @@ func newLimitersMap(lmCfg limitersMapConfig, redisOpts *redis.Options) *limiters
 		curGen:      nowTs,
 		limitersExp: lmCfg.limitersExpiration.Microseconds(),
 		logger:      lmCfg.logger,
+		nowFn:       time.Now,
 
 		limiterCfg: lmCfg.limiterCfg,
 
@@ -228,9 +235,10 @@ func (l *limitersMap) getNewLimiter(throttleKey, keyLimitOverride string, rule *
 			rule.limit,
 			keyLimitOverride,
 			l.limiterCfg.limiterValueField,
+			l.nowFn,
 		)
 	case inMemoryBackend:
-		return NewInMemoryLimiter(l.limiterCfg.bucketInterval, l.limiterCfg.bucketsCount, rule.limit)
+		return NewInMemoryLimiter(l.limiterCfg.bucketInterval, l.limiterCfg.bucketsCount, rule.limit, l.nowFn)
 	default:
 		l.logger.Panicf("unknown limiter backend: %s", l.limiterCfg.backend)
 	}
@@ -246,14 +254,14 @@ func (l *limitersMap) getOrAdd(throttleKey, keyLimitOverride string, rule *rule)
 	l.mu.RLock()
 	l.limiterBuf = append(l.limiterBuf[:0], rule.byteIdxPart...)
 	l.limiterBuf = append(l.limiterBuf, throttleKey...)
-	key := pipeline.ByteToStringUnsafe(l.limiterBuf)
-	lim, has := l.lims[key]
+	lim, has := l.lims[string(l.limiterBuf)]
 	if has {
 		lim.gen.Store(l.curGen)
 		l.mu.RUnlock()
 		return lim
 	}
-	key = string(l.limiterBuf)
+	// copy limiter key, to avoid data races
+	key := string(l.limiterBuf)
 	l.mu.RUnlock()
 	// we could already write it between `l.mu.RUnlock()` and `l.mu.Lock()`, so we need to check again
 	l.mu.Lock()
