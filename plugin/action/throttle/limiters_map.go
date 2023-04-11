@@ -277,3 +277,16 @@ func (l *limitersMap) getOrAdd(throttleKey, keyLimitOverride string, rule *rule)
 	l.mu.Unlock()
 	return lim
 }
+
+// setNowFn is used for testing purposes. Sets custom now func.
+// If propagate flag is true, sets the given nowFn to all existing limiters in map.
+func (l *limitersMap) setNowFn(nowFn func() time.Time, propagate bool) {
+	l.mu.Lock()
+	l.nowFn = nowFn
+	if propagate {
+		for _, lim := range l.lims {
+			lim.setNowFn(nowFn)
+		}
+	}
+	l.mu.Unlock()
+}
