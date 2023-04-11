@@ -96,5 +96,7 @@ func (l *inMemoryLimiter) timeToBucketID(t time.Time) int {
 }
 
 func (l *inMemoryLimiter) setNowFn(fn func() time.Time) {
+	l.mu.Lock()
 	l.nowFn = fn
+	l.mu.Unlock()
 }
