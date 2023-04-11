@@ -64,16 +64,9 @@ func (c *testConfig) runPipeline() {
 	}
 	for i := 0; i < c.iterations; i++ {
 		curTime := startTime.Add(time.Duration(i) * c.config.BucketInterval_)
-		limMap.mu.Lock()
-		limMap.nowFn = func() time.Time {
+		limMap.setNowFn(func() time.Time {
 			return curTime
-		}
-		for _, lim := range limMap.lims {
-			lim.setNowFn(func() time.Time {
-				return curTime
-			})
-		}
-		limMap.mu.Unlock()
+		}, true)
 		curTimeStr := curTime.UTC().Format("2006-01-02T15:04:05.000000000Z07:00")
 		for j := 0; j < genEventsCnt; j++ {
 			index := j % len(formats)
