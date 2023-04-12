@@ -11,6 +11,8 @@ Available values for decoders param:
 + postgres -- parses postgres format from log into event (e.g. `2021-06-22 16:24:27 GMT [7291] => [3-1] client=test_client,db=test_db,user=test_user LOG:  listening on Unix socket \"/var/run/postgresql/.s.PGSQL.5432\"\n`)
 + nginx_error -- parses nginx error log format from log into event (e.g. `2022/08/17 10:49:27 [error] 2725122#2725122: *792412315 lua udp socket read timed out, context: ngx.timer`)
 
+**Note**: currently `auto` is available only for usage with k8s input plugin.
+
 ### Nginx decoder
 
 Example of decoder for nginx logs with line joins
