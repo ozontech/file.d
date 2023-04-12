@@ -58,11 +58,12 @@ func NewRedisLimiter(
 	limit complexLimit,
 	keyLimitOverride string,
 	valField string,
+	nowFn func() time.Time,
 ) *redisLimiter {
 	rl := &redisLimiter{
 		redis:            redis,
-		incrementLimiter: NewInMemoryLimiter(bucketInterval, bucketCount, limit),
-		totalLimiter:     NewInMemoryLimiter(bucketInterval, bucketCount, limit),
+		incrementLimiter: NewInMemoryLimiter(bucketInterval, bucketCount, limit, nowFn),
+		totalLimiter:     NewInMemoryLimiter(bucketInterval, bucketCount, limit, nowFn),
 		valField:         valField,
 	}
 
@@ -246,4 +247,9 @@ func (l *redisLimiter) updateKeyLimit() error {
 	l.totalLimiter.limit.value = limitVal
 	l.incrementLimiter.limit.value = limitVal
 	return nil
+}
+
+func (l *redisLimiter) setNowFn(fn func() time.Time) {
+	l.incrementLimiter.setNowFn(fn)
+	l.totalLimiter.setNowFn(fn)
 }
