@@ -284,4 +284,32 @@ result:
 
 <br>
 
+
+### Decoders
+
+If you have logs in specific non-json format, you can specify decoder type in pipeline settings. By default `json` decoder is used. More details can be found [here](../decoder/readme.md).
+
+```yml
+pipelines:
+  example:
+    settings:
+      decoder: 'nginx_error'
+    input:
+      type: file
+      watching_dir: /dir
+      offsets_file: /dir/offsets
+      filename_pattern: "error.log"
+      persistence_mode: async
+    output:
+      type: stdout
+    actions:
+      - type: join
+        field: message
+        start: '/^\d{1,7}#\d{1,7}\:.*/'
+        continue: '/(^\w+)/'
+      - type: convert_date
+        source_formats: ['2006/01/02 15:04:05']
+        target_format: 'rfc822'
+```
+
 <br>*Generated using [__insane-doc__](https://github.com/vitkovskii/insane-doc)*
