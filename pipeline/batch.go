@@ -11,7 +11,8 @@ import (
 )
 
 type Batch struct {
-	Events []*Event
+	Events     []*Event
+	eventsCopy []*Event
 	// eventsSize contains total size of the Events in bytes
 	eventsSize int
 	seq        int64
@@ -144,15 +145,21 @@ func (b *Batcher) commitBatch(events []*Event, batch *Batch) []*Event {
 
 	batchSeq := batch.seq
 
-	// lets restore the sequence of batches to make sure input will commit offsets incrementally
+	// we sent a packet, so we don’t need buffers and insaneJSON.Root,
+	// so we can only copy the information we need and release the events
+	eventsCopy := batch.copyHeadlessEvents(events)
+	b.opts.Controller.ReleaseEvents(events)
+	events = eventsCopy
+
+	// let's restore the sequence of batches to make sure input will commit offsets incrementally
 	b.seqMu.Lock()
 	for b.commitSeq != batchSeq {
 		b.cond.Wait()
 	}
 	b.commitSeq++
 
-	for _, e := range events {
-		b.opts.Controller.Commit(e)
+	for i := range events {
+		b.opts.Controller.Commit(events[i], false)
 	}
 
 	b.cond.Broadcast()
@@ -215,4 +222,24 @@ func (b *Batcher) Stop() {
 	// todo add scenario without races.
 	close(b.freeBatches)
 	close(b.fullBatches)
+}
+
+// copyHeadlessEvents copies events without Root and other reusable buffers.
+func (b *Batch) copyHeadlessEvents(events []*Event) []*Event {
+	if cap(b.eventsCopy) < len(events) {
+		b.eventsCopy = make([]*Event, len(events))
+	}
+
+	b.eventsCopy = b.eventsCopy[:len(events)]
+
+	for i := range events {
+		cp := *events[i]
+		cp.Buf = nil
+		cp.next = nil
+		cp.Root = nil
+
+		b.eventsCopy[i] = &cp
+	}
+
+	return b.eventsCopy
 }

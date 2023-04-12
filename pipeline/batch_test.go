@@ -8,6 +8,7 @@ import (
 
 	"github.com/ozontech/file.d/logger"
 	"github.com/stretchr/testify/assert"
+	insaneJSON "github.com/vitkovskii/insane-json"
 	"go.uber.org/atomic"
 )
 
@@ -15,8 +16,17 @@ type batcherTail struct {
 	commit func(event *Event)
 }
 
-func (b *batcherTail) Commit(event *Event) {
-	b.commit(event)
+func (b *batcherTail) ReleaseEvents(events []*Event) {
+	for _, event := range events {
+		insaneJSON.Release(event.Root)
+	}
+}
+
+func (b *batcherTail) Commit(events *Event, backEvents bool) {
+	b.commit(events)
+	if backEvents {
+		b.ReleaseEvents([]*Event{events})
+	}
 }
 
 func (b *batcherTail) Error(err string) {
