@@ -4,7 +4,7 @@ In pipeline settings there is a parameter for choosing desired decoding format.
 By default every pipeline utilizes json decoder, which tries to parse json from log.
 
 Available values for decoders param:
-+ auto -- selects decoder type depending on input (e.g. for k8s input plugin, if cri type is `docker`, it suggests `json` decoder, otherwise `cri` decoder)
++ auto -- selects decoder type depending on input (e.g. for k8s input plugin, the decoder will be selected depending on container runtime version)
 + json -- parses json format from log into event
 + raw -- writes raw log into event `message` field
 + cri -- parses cri format from log into event (e.g. `2016-10-06T00:17:09.669794203Z stderr F log content`)
