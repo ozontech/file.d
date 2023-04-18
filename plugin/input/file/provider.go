@@ -129,7 +129,7 @@ func NewJobProvider(config *Config, possibleOffsetCorruptionMetric *prometheus.C
 		config.FilenamePattern,
 		config.DirPattern,
 		jp.processNotification,
-		config.ShouldWatchChanges,
+		config.ShouldWatchChanges.Value,
 		sugLogger,
 	)
 

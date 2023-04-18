@@ -3,6 +3,7 @@ package set_time
 import (
 	"time"
 
+	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/pipeline"
 )
@@ -35,7 +36,7 @@ type Config struct {
 	// > @3@4@5@6
 	// >
 	// > Override field if exists.
-	Override bool `json:"override" default:"true"` // *
+	Override cfg.Bool `json:"override" default:"true"` // *
 }
 
 func init() {
@@ -70,7 +71,7 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 
 func (p *Plugin) do(event *pipeline.Event, t time.Time) pipeline.ActionResult {
 	dateNode := event.Root.Dig(p.config.Field)
-	if dateNode != nil && !p.config.Override {
+	if dateNode != nil && !p.config.Override.Value {
 		return pipeline.ActionPass
 	}
 	if dateNode == nil {

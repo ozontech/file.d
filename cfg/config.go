@@ -3,6 +3,7 @@ package cfg
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"reflect"
@@ -53,6 +54,26 @@ func (e *Expression) UnmarshalJSON(raw []byte) error {
 	default:
 		return fmt.Errorf("can't cast %T to the Expression", value)
 	}
+
+	return nil
+}
+
+type Bool struct {
+	set   bool
+	Value bool
+}
+
+var _ json.Unmarshaler = new(Bool)
+
+func (b *Bool) UnmarshalJSON(raw []byte) error {
+	var val bool
+	err := json.Unmarshal(raw, &val)
+	if err != nil {
+		return err
+	}
+
+	b.set = true
+	b.Value = val
 
 	return nil
 }
@@ -281,9 +302,9 @@ func Parse(ptr any, values map[string]int) error {
 			continue
 		}
 
-		err := ParseField(v, vField, &tField, values)
+		err := parseField(v, vField, &tField, values)
 		if err != nil {
-			return err
+			return fmt.Errorf("parse field %s of the type %s (%s): %s", tField.Name, t.Name(), t.PkgPath(), err)
 		}
 	}
 
@@ -338,7 +359,9 @@ func ParseSlice(v reflect.Value, values map[string]int) error {
 	return nil
 }
 
-func ParseField(v reflect.Value, vField reflect.Value, tField *reflect.StructField, values map[string]int) error {
+var errUnimplemented = errors.New("'default' tag is not implemented for the type")
+
+func parseField(v reflect.Value, vField reflect.Value, tField *reflect.StructField, values map[string]int) error {
 	tag := tField.Tag.Get("required")
 	required := tag == trueValue
 
@@ -366,6 +389,29 @@ func ParseField(v reflect.Value, vField reflect.Value, tField *reflect.StructFie
 					vField.Index(i).SetString(v)
 				}
 			}
+		case reflect.Struct:
+			switch vField.Type().Name() {
+			case reflect.TypeOf(Bool{}).Name():
+				b, ok := vField.Interface().(Bool)
+				if !ok {
+					return fmt.Errorf("cant cast to Bool")
+				}
+
+				if !b.set {
+					defaultValue, err := strconv.ParseBool(tag)
+					if err != nil {
+						return fmt.Errorf("parse bool in the 'default' tag: %s", err)
+					}
+					b.Value = defaultValue
+					b.set = true
+				}
+
+				vField.Set(reflect.ValueOf(b))
+			default:
+				return errUnimplemented
+			}
+		default:
+			return errUnimplemented
 		}
 	}
 
