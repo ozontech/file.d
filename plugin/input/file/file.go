@@ -169,7 +169,7 @@ type Config struct {
 	// > @3@4@5@6
 	// >
 	// > It turns on watching for file modifications. Turning it on cause more CPU work, but it is more probable to catch file truncation
-	ShouldWatchChanges bool `json:"should_watch_file_changes" default:"false"` // *
+	ShouldWatchChanges *bool `json:"should_watch_file_changes" default:"false"` // *
 }
 
 func init() {

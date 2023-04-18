@@ -3,6 +3,7 @@ package cfg
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"reflect"
@@ -281,9 +282,9 @@ func Parse(ptr any, values map[string]int) error {
 			continue
 		}
 
-		err := ParseField(v, vField, &tField, values)
+		err := parseField(v, vField, &tField, values)
 		if err != nil {
-			return err
+			return fmt.Errorf("parse field %s of the type %s (%s): %s", tField.Name, t.Name(), t.PkgPath(), err)
 		}
 	}
 
@@ -338,7 +339,9 @@ func ParseSlice(v reflect.Value, values map[string]int) error {
 	return nil
 }
 
-func ParseField(v reflect.Value, vField reflect.Value, tField *reflect.StructField, values map[string]int) error {
+var errUnimplemented = errors.New("'default' tag is not implemented for the type")
+
+func parseField(v reflect.Value, vField reflect.Value, tField *reflect.StructField, values map[string]int) error {
 	tag := tField.Tag.Get("required")
 	required := tag == trueValue
 
@@ -366,6 +369,22 @@ func ParseField(v reflect.Value, vField reflect.Value, tField *reflect.StructFie
 					vField.Index(i).SetString(v)
 				}
 			}
+		case reflect.Pointer:
+			val := vField.Interface()
+			switch val := val.(type) {
+			case *bool:
+				if val == nil {
+					defaultValue, err := strconv.ParseBool(tag)
+					if err != nil {
+						return fmt.Errorf("default value for field %s should be bool, got=%s: %w", tField.Name, tag, err)
+					}
+					vField.Set(reflect.ValueOf(&defaultValue))
+				}
+			default:
+				return errUnimplemented
+			}
+		default:
+			return errUnimplemented
 		}
 	}
 
