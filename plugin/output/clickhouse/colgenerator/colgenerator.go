@@ -64,6 +64,7 @@ func clickhouseTypes() []Type {
 			ChTypeName:    "String",
 			GoName:        "string",
 			CannotConvert: true,
+			CustomImpl:    true,
 		},
 		{
 			ChTypeName:   "Enum8",

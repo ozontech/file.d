@@ -73,44 +73,9 @@ func (t *ColBool) EncodeColumn(buffer *proto.Buffer) {
 	t.col.EncodeColumn(buffer)
 }
 
-// ColString represents Clickhouse String type.
-type ColString struct {
-	col      *proto.ColStr
-	nullCol  *proto.ColNullable[string]
-	nullable bool
-}
+// struct ColString defined and implemented in another file
 
 var _ InsaneColInput = (*ColString)(nil)
-
-func NewColString(nullable bool) *ColString {
-	return &ColString{
-		col:      new(proto.ColStr),
-		nullCol:  new(proto.ColStr).Nullable(),
-		nullable: nullable,
-	}
-}
-
-// Append the insaneJSON.Node to the batch.
-func (t *ColString) Append(node *insaneJSON.StrictNode) error {
-	if node == nil || node.IsNull() {
-		if !t.nullable {
-			return ErrNodeIsNil
-		}
-		t.nullCol.Append(proto.Null[string]())
-		return nil
-	}
-	val, err := node.AsString()
-	if err != nil {
-		return err
-	}
-	if t.nullable {
-		t.nullCol.Append(proto.NewNullable(val))
-		return nil
-	}
-	t.col.Append(val)
-
-	return nil
-}
 
 func (t *ColString) Reset() {
 	t.col.Reset()

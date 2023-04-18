@@ -210,6 +210,51 @@ func (t *ColEnum16) Append(node *insaneJSON.StrictNode) error {
 	return nil
 }
 
+// ColString represents Clickhouse String type.
+type ColString struct {
+	col      *proto.ColStr
+	nullCol  *proto.ColNullable[string]
+	nullable bool
+	strict   bool
+}
+
+func NewColString(nullable bool, strict bool) *ColString {
+	return &ColString{
+		col:      new(proto.ColStr),
+		nullCol:  new(proto.ColStr).Nullable(),
+		nullable: nullable,
+		strict:   strict,
+	}
+}
+
+// Append the insaneJSON.Node to the batch.
+func (t *ColString) Append(node *insaneJSON.StrictNode) error {
+	if node == nil || node.IsNull() {
+		if !t.nullable {
+			return ErrNodeIsNil
+		}
+		t.nullCol.Append(proto.Null[string]())
+		return nil
+	}
+
+	val, err := node.AsString()
+	// if it is not a string
+	if err != nil {
+		if t.strict {
+			return fmt.Errorf("disable strict mode to append any value to the String column")
+		}
+		val = node.EncodeToString()
+	}
+
+	if t.nullable {
+		t.nullCol.Append(proto.NewNullable(val))
+	} else {
+		t.col.Append(val)
+	}
+
+	return nil
+}
+
 func ipFromNode(node *insaneJSON.StrictNode) (netip.Addr, error) {
 	v, err := node.AsString()
 	if err != nil {

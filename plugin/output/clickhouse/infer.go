@@ -20,7 +20,7 @@ type InsaneColumn struct {
 	ColInput InsaneColInput
 }
 
-func inferInsaneColInputs(columns []Column) ([]InsaneColumn, error) {
+func inferInsaneColInputs(columns []Column, strict bool) ([]InsaneColumn, error) {
 	insaneColumns := make([]InsaneColumn, 0, len(columns))
 	for _, col := range columns {
 		if col.Type == "" {
@@ -32,7 +32,7 @@ func inferInsaneColInputs(columns []Column) ([]InsaneColumn, error) {
 			return nil, fmt.Errorf("infer: %w", err)
 		}
 
-		insaneCol, err := insaneInfer(auto)
+		insaneCol, err := insaneInfer(auto, strict)
 		if err != nil {
 			return nil, err
 		}
@@ -46,7 +46,7 @@ func inferInsaneColInputs(columns []Column) ([]InsaneColumn, error) {
 	return insaneColumns, nil
 }
 
-func insaneInfer(auto proto.ColAuto) (InsaneColInput, error) {
+func insaneInfer(auto proto.ColAuto, strict bool) (InsaneColInput, error) {
 	nullable := auto.Type().Base() == proto.ColumnTypeNullable
 
 	t := auto.Type()
@@ -59,7 +59,7 @@ func insaneInfer(auto proto.ColAuto) (InsaneColInput, error) {
 	case proto.ColumnTypeBool:
 		return NewColBool(nullable), nil
 	case proto.ColumnTypeString:
-		return NewColString(nullable), nil
+		return NewColString(nullable, strict), nil
 	case proto.ColumnTypeInt8:
 		return NewColInt8(nullable), nil
 	case proto.ColumnTypeUInt8:

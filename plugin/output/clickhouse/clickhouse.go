@@ -153,6 +153,14 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
+	// > If false, file.d will try to cast event type to column type.
+	// For example, if an event value is an object, but the column type is a String,
+	// the object will be encoded to string.
+	// > If true, file.d will fall when types are mismatched.
+	StrictTypes bool `json:"strict_types" default:"true"` // *
+
+	// > @3@4@5@6
+	// >
 	// > The level of the Compression.
 	// > Disabled - lowest CPU overhead.
 	// > LZ4 - medium CPU overhead.
@@ -273,7 +281,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		p.logger.Fatal("'db_request_timeout' can't be <1")
 	}
 
-	schema, err := inferInsaneColInputs(p.config.Columns)
+	schema, err := inferInsaneColInputs(p.config.Columns, p.config.StrictTypes)
 	if err != nil {
 		p.logger.Fatal("invalid database schema", zap.Error(err))
 	}
@@ -377,7 +385,7 @@ func (d data) reset() {
 func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 	if *workerData == nil {
 		// we don't check the error, schema already validated in the Start
-		columns, _ := inferInsaneColInputs(p.config.Columns)
+		columns, _ := inferInsaneColInputs(p.config.Columns, p.config.StrictTypes)
 		input := inputFromColumns(columns)
 		*workerData = data{
 			cols:  columns,
