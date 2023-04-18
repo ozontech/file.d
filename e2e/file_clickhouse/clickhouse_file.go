@@ -1,6 +1,7 @@
 package file_clickhouse
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"net/netip"
@@ -71,7 +72,7 @@ func (c *Config) Configure(t *testing.T, conf *cfg.Config, pipelineName string) 
 	c.sampleTime = time.Now()
 	c.samples = []Sample{
 		{
-			C1:       "1",
+			C1:       json.RawMessage(`"1"`),
 			C2:       2,
 			C3:       3,
 			C4:       proto.NewNullable(int16(4)),
@@ -84,7 +85,7 @@ func (c *Config) Configure(t *testing.T, conf *cfg.Config, pipelineName string) 
 			TS64:     c.sampleTime,
 		},
 		{
-			C1:       "2",
+			C1:       json.RawMessage(`549023`),
 			C2:       42,
 			C3:       101,
 			C4:       proto.NewNullable(int16(6)),
@@ -97,7 +98,7 @@ func (c *Config) Configure(t *testing.T, conf *cfg.Config, pipelineName string) 
 			TS64:     c.sampleTime,
 		},
 		{
-			C1:       "3",
+			C1:       json.RawMessage(`{"type":"append object as string"}`),
 			C2:       42,
 			C3:       101,
 			C4:       proto.NewNullable(int16(5425)),
@@ -120,7 +121,8 @@ func (c *Config) Send(t *testing.T) {
 	}()
 
 	for i := range c.samples {
-		sampleRaw, _ := json.Marshal(&c.samples[i])
+		sampleRaw, err := json.Marshal(&c.samples[i])
+		require.NoError(t, err)
 		_, err = file.Write(sampleRaw)
 		require.NoError(t, err)
 		_, err = file.WriteString("\n")
@@ -185,12 +187,18 @@ func (c *Config) Validate(t *testing.T) {
 			proto.ResultColumn{Name: "ts64", Data: ts64},
 			proto.ResultColumn{Name: "ts64_auto", Data: ts64Auto},
 		},
+		OnResult: func(_ context.Context, _ proto.Block) error {
+			return nil
+		},
 	}))
 
 	assert.Equal(t, len(c.samples), c1.Rows())
 	for i := 0; i < c1.Rows(); i++ {
 		sample := c.samples[i]
-		assert.Equal(t, sample.C1, c1.Row(i))
+
+		c1Expected, _ := json.Marshal(sample.C1)
+		assert.Equal(t, string(trim(c1Expected)), c1.Row(i))
+
 		assert.Equal(t, sample.C2, c2.Row(i))
 		assert.Equal(t, sample.C3, c3.Row(i))
 		assert.Equal(t, sample.C4, c4.Row(i))
@@ -208,4 +216,10 @@ func (c *Config) Validate(t *testing.T) {
 		assert.True(t, ts64Auto.Row(i).After(sample.TS64), "%s before %s", ts64Auto.Row(i).String(), sample.TS64.String()) // we are use set_time plugin and override this value
 		assert.Equal(t, "UTC", ts64Auto.Row(i).Location().String())
 	}
+}
+
+func trim(val []byte) []byte {
+	val = bytes.TrimPrefix(val, []byte("\""))
+	val = bytes.TrimSuffix(val, []byte("\""))
+	return val
 }

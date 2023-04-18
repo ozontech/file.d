@@ -3,6 +3,7 @@ pipelines:
     input:
       type: file
     actions:
+      - type: debug
       - type: set_time
         format: unixtime
         field: ts

@@ -8,7 +8,7 @@ import (
 )
 
 type Sample struct {
-	C1       string                     `json:"c1"`
+	C1       json.RawMessage            `json:"c1"`
 	C2       int8                       `json:"c2"`
 	C3       int16                      `json:"c3"`
 	C4       proto.Nullable[int16]      `json:"c4"`
@@ -44,17 +44,17 @@ func (s *Sample) MarshalJSON() ([]byte, error) {
 	}
 
 	return json.Marshal(struct {
-		C1       string `json:"c1,omitempty"`
-		C2       int8   `json:"c2,omitempty"`
-		C3       int16  `json:"c3,omitempty"`
-		C4       int16  `json:"c4,omitempty"`
-		C5       string `json:"c5,omitempty"`
-		Level    string `json:"level,omitempty"`
-		Ipv4     string `json:"ipv4,omitempty"`
-		Ipv6     string `json:"ipv6,omitempty"`
-		TS       int64  `json:"ts"`
-		TSWithTZ int64  `json:"ts_with_tz"`
-		TS64     int64  `json:"ts64"`
+		C1       json.RawMessage `json:"c1,omitempty"`
+		C2       int8            `json:"c2,omitempty"`
+		C3       int16           `json:"c3,omitempty"`
+		C4       int16           `json:"c4,omitempty"`
+		C5       string          `json:"c5,omitempty"`
+		Level    string          `json:"level,omitempty"`
+		Ipv4     string          `json:"ipv4,omitempty"`
+		Ipv6     string          `json:"ipv6,omitempty"`
+		TS       int64           `json:"ts"`
+		TSWithTZ int64           `json:"ts_with_tz"`
+		TS64     int64           `json:"ts64"`
 	}{
 		C1:       s.C1,
 		C2:       s.C2,
