@@ -1,3 +1,5 @@
+ARG DEPLOY_IMAGE=ubuntu:20.04
+
 # Build
 FROM --platform=$BUILDPLATFORM golang:1.20-alpine AS build
 
@@ -22,7 +24,7 @@ RUN go build -trimpath \
     -o file.d ./cmd/file.d
 
 # Deploy
-FROM ubuntu:20.04
+FROM $DEPLOY_IMAGE
 
 RUN apt update
 RUN apt install systemd strace tcpdump traceroute telnet iotop curl jq iputils-ping htop -y
