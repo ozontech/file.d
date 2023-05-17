@@ -2,7 +2,6 @@ package s3
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"math"
 	"math/rand"
@@ -318,11 +317,8 @@ func (p *Plugin) StartWithMinio(config pipeline.AnyConfig, params *pipeline.Outp
 		longpanic.Go(p.compressWork)
 	}
 	err = p.startPlugins(params, outPlugCount, targetDirs, fileNames)
-	if errors.Is(err, ErrCreateOutputPluginCantCheckBucket) {
-		p.logger.Panic(err.Error())
-	}
-	if errors.Is(err, ErrCreateOutputPluginNoSuchBucket) {
-		p.logger.Fatal(err.Error())
+	if err != nil {
+		p.logger.Fatal("can't start plugin", zap.Error(err))
 	}
 
 	p.uploadExistingFiles(targetDirs, dynamicDirs, fileNames)
