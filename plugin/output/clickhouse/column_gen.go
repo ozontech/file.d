@@ -25,7 +25,7 @@ func NewColBool(nullable bool) *ColBool {
 }
 
 // Append the insaneJSON.Node to the batch.
-func (t *ColBool) Append(node *insaneJSON.StrictNode) error {
+func (t *ColBool) Append(node *insaneJSON.Node) error {
 	if node == nil || node.IsNull() {
 		if !t.nullable {
 			return ErrNodeIsNil
@@ -33,10 +33,7 @@ func (t *ColBool) Append(node *insaneJSON.StrictNode) error {
 		t.nullCol.Append(proto.Null[bool]())
 		return nil
 	}
-	val, err := node.AsBool()
-	if err != nil {
-		return err
-	}
+	val := node.AsBool()
 	if t.nullable {
 		t.nullCol.Append(proto.NewNullable(val))
 		return nil
@@ -174,7 +171,7 @@ func NewColInt8(nullable bool) *ColInt8 {
 }
 
 // Append the insaneJSON.Node to the batch.
-func (t *ColInt8) Append(node *insaneJSON.StrictNode) error {
+func (t *ColInt8) Append(node *insaneJSON.Node) error {
 	if node == nil || node.IsNull() {
 		if !t.nullable {
 			return ErrNodeIsNil
@@ -182,13 +179,7 @@ func (t *ColInt8) Append(node *insaneJSON.StrictNode) error {
 		t.nullCol.Append(proto.Null[int8]())
 		return nil
 	}
-	v, err := node.AsInt()
-	if err != nil {
-		return err
-	}
-
-	val := int8(v)
-
+	val := int8(node.AsInt())
 	if t.nullable {
 		t.nullCol.Append(proto.NewNullable(val))
 		return nil
@@ -243,7 +234,7 @@ func NewColUInt8(nullable bool) *ColUInt8 {
 }
 
 // Append the insaneJSON.Node to the batch.
-func (t *ColUInt8) Append(node *insaneJSON.StrictNode) error {
+func (t *ColUInt8) Append(node *insaneJSON.Node) error {
 	if node == nil || node.IsNull() {
 		if !t.nullable {
 			return ErrNodeIsNil
@@ -251,13 +242,7 @@ func (t *ColUInt8) Append(node *insaneJSON.StrictNode) error {
 		t.nullCol.Append(proto.Null[uint8]())
 		return nil
 	}
-	v, err := node.AsInt()
-	if err != nil {
-		return err
-	}
-
-	val := uint8(v)
-
+	val := uint8(node.AsInt())
 	if t.nullable {
 		t.nullCol.Append(proto.NewNullable(val))
 		return nil
@@ -312,7 +297,7 @@ func NewColInt16(nullable bool) *ColInt16 {
 }
 
 // Append the insaneJSON.Node to the batch.
-func (t *ColInt16) Append(node *insaneJSON.StrictNode) error {
+func (t *ColInt16) Append(node *insaneJSON.Node) error {
 	if node == nil || node.IsNull() {
 		if !t.nullable {
 			return ErrNodeIsNil
@@ -320,13 +305,7 @@ func (t *ColInt16) Append(node *insaneJSON.StrictNode) error {
 		t.nullCol.Append(proto.Null[int16]())
 		return nil
 	}
-	v, err := node.AsInt()
-	if err != nil {
-		return err
-	}
-
-	val := int16(v)
-
+	val := int16(node.AsInt())
 	if t.nullable {
 		t.nullCol.Append(proto.NewNullable(val))
 		return nil
@@ -381,7 +360,7 @@ func NewColUInt16(nullable bool) *ColUInt16 {
 }
 
 // Append the insaneJSON.Node to the batch.
-func (t *ColUInt16) Append(node *insaneJSON.StrictNode) error {
+func (t *ColUInt16) Append(node *insaneJSON.Node) error {
 	if node == nil || node.IsNull() {
 		if !t.nullable {
 			return ErrNodeIsNil
@@ -389,13 +368,7 @@ func (t *ColUInt16) Append(node *insaneJSON.StrictNode) error {
 		t.nullCol.Append(proto.Null[uint16]())
 		return nil
 	}
-	v, err := node.AsInt()
-	if err != nil {
-		return err
-	}
-
-	val := uint16(v)
-
+	val := uint16(node.AsInt())
 	if t.nullable {
 		t.nullCol.Append(proto.NewNullable(val))
 		return nil
@@ -450,7 +423,7 @@ func NewColInt32(nullable bool) *ColInt32 {
 }
 
 // Append the insaneJSON.Node to the batch.
-func (t *ColInt32) Append(node *insaneJSON.StrictNode) error {
+func (t *ColInt32) Append(node *insaneJSON.Node) error {
 	if node == nil || node.IsNull() {
 		if !t.nullable {
 			return ErrNodeIsNil
@@ -458,13 +431,7 @@ func (t *ColInt32) Append(node *insaneJSON.StrictNode) error {
 		t.nullCol.Append(proto.Null[int32]())
 		return nil
 	}
-	v, err := node.AsInt()
-	if err != nil {
-		return err
-	}
-
-	val := int32(v)
-
+	val := int32(node.AsInt())
 	if t.nullable {
 		t.nullCol.Append(proto.NewNullable(val))
 		return nil
@@ -519,7 +486,7 @@ func NewColUInt32(nullable bool) *ColUInt32 {
 }
 
 // Append the insaneJSON.Node to the batch.
-func (t *ColUInt32) Append(node *insaneJSON.StrictNode) error {
+func (t *ColUInt32) Append(node *insaneJSON.Node) error {
 	if node == nil || node.IsNull() {
 		if !t.nullable {
 			return ErrNodeIsNil
@@ -527,13 +494,7 @@ func (t *ColUInt32) Append(node *insaneJSON.StrictNode) error {
 		t.nullCol.Append(proto.Null[uint32]())
 		return nil
 	}
-	v, err := node.AsInt()
-	if err != nil {
-		return err
-	}
-
-	val := uint32(v)
-
+	val := uint32(node.AsInt())
 	if t.nullable {
 		t.nullCol.Append(proto.NewNullable(val))
 		return nil
@@ -588,7 +549,7 @@ func NewColInt64(nullable bool) *ColInt64 {
 }
 
 // Append the insaneJSON.Node to the batch.
-func (t *ColInt64) Append(node *insaneJSON.StrictNode) error {
+func (t *ColInt64) Append(node *insaneJSON.Node) error {
 	if node == nil || node.IsNull() {
 		if !t.nullable {
 			return ErrNodeIsNil
@@ -596,13 +557,7 @@ func (t *ColInt64) Append(node *insaneJSON.StrictNode) error {
 		t.nullCol.Append(proto.Null[int64]())
 		return nil
 	}
-	v, err := node.AsInt()
-	if err != nil {
-		return err
-	}
-
-	val := int64(v)
-
+	val := int64(node.AsInt())
 	if t.nullable {
 		t.nullCol.Append(proto.NewNullable(val))
 		return nil
@@ -657,7 +612,7 @@ func NewColUInt64(nullable bool) *ColUInt64 {
 }
 
 // Append the insaneJSON.Node to the batch.
-func (t *ColUInt64) Append(node *insaneJSON.StrictNode) error {
+func (t *ColUInt64) Append(node *insaneJSON.Node) error {
 	if node == nil || node.IsNull() {
 		if !t.nullable {
 			return ErrNodeIsNil
@@ -665,13 +620,7 @@ func (t *ColUInt64) Append(node *insaneJSON.StrictNode) error {
 		t.nullCol.Append(proto.Null[uint64]())
 		return nil
 	}
-	v, err := node.AsInt()
-	if err != nil {
-		return err
-	}
-
-	val := uint64(v)
-
+	val := uint64(node.AsInt())
 	if t.nullable {
 		t.nullCol.Append(proto.NewNullable(val))
 		return nil
@@ -726,7 +675,7 @@ func NewColInt128(nullable bool) *ColInt128 {
 }
 
 // Append the insaneJSON.Node to the batch.
-func (t *ColInt128) Append(node *insaneJSON.StrictNode) error {
+func (t *ColInt128) Append(node *insaneJSON.Node) error {
 	if node == nil || node.IsNull() {
 		if !t.nullable {
 			return ErrNodeIsNil
@@ -734,13 +683,7 @@ func (t *ColInt128) Append(node *insaneJSON.StrictNode) error {
 		t.nullCol.Append(proto.Null[proto.Int128]())
 		return nil
 	}
-	v, err := node.AsInt()
-	if err != nil {
-		return err
-	}
-
-	val := proto.Int128FromInt(v)
-
+	val := proto.Int128FromInt(node.AsInt())
 	if t.nullable {
 		t.nullCol.Append(proto.NewNullable(val))
 		return nil
@@ -795,7 +738,7 @@ func NewColUInt128(nullable bool) *ColUInt128 {
 }
 
 // Append the insaneJSON.Node to the batch.
-func (t *ColUInt128) Append(node *insaneJSON.StrictNode) error {
+func (t *ColUInt128) Append(node *insaneJSON.Node) error {
 	if node == nil || node.IsNull() {
 		if !t.nullable {
 			return ErrNodeIsNil
@@ -803,13 +746,7 @@ func (t *ColUInt128) Append(node *insaneJSON.StrictNode) error {
 		t.nullCol.Append(proto.Null[proto.UInt128]())
 		return nil
 	}
-	v, err := node.AsInt()
-	if err != nil {
-		return err
-	}
-
-	val := proto.UInt128FromInt(v)
-
+	val := proto.UInt128FromInt(node.AsInt())
 	if t.nullable {
 		t.nullCol.Append(proto.NewNullable(val))
 		return nil
@@ -864,7 +801,7 @@ func NewColInt256(nullable bool) *ColInt256 {
 }
 
 // Append the insaneJSON.Node to the batch.
-func (t *ColInt256) Append(node *insaneJSON.StrictNode) error {
+func (t *ColInt256) Append(node *insaneJSON.Node) error {
 	if node == nil || node.IsNull() {
 		if !t.nullable {
 			return ErrNodeIsNil
@@ -872,13 +809,7 @@ func (t *ColInt256) Append(node *insaneJSON.StrictNode) error {
 		t.nullCol.Append(proto.Null[proto.Int256]())
 		return nil
 	}
-	v, err := node.AsInt()
-	if err != nil {
-		return err
-	}
-
-	val := proto.Int256FromInt(v)
-
+	val := proto.Int256FromInt(node.AsInt())
 	if t.nullable {
 		t.nullCol.Append(proto.NewNullable(val))
 		return nil
@@ -933,7 +864,7 @@ func NewColUInt256(nullable bool) *ColUInt256 {
 }
 
 // Append the insaneJSON.Node to the batch.
-func (t *ColUInt256) Append(node *insaneJSON.StrictNode) error {
+func (t *ColUInt256) Append(node *insaneJSON.Node) error {
 	if node == nil || node.IsNull() {
 		if !t.nullable {
 			return ErrNodeIsNil
@@ -941,13 +872,7 @@ func (t *ColUInt256) Append(node *insaneJSON.StrictNode) error {
 		t.nullCol.Append(proto.Null[proto.UInt256]())
 		return nil
 	}
-	v, err := node.AsInt()
-	if err != nil {
-		return err
-	}
-
-	val := proto.UInt256FromInt(v)
-
+	val := proto.UInt256FromInt(node.AsInt())
 	if t.nullable {
 		t.nullCol.Append(proto.NewNullable(val))
 		return nil
@@ -984,47 +909,9 @@ func (t *ColUInt256) EncodeColumn(buffer *proto.Buffer) {
 	t.col.EncodeColumn(buffer)
 }
 
-// ColFloat32 represents Clickhouse Float32 type.
-type ColFloat32 struct {
-	col      *proto.ColFloat32
-	nullCol  *proto.ColNullable[float32]
-	nullable bool
-}
+// struct ColFloat32 defined and implemented in another file
 
 var _ InsaneColInput = (*ColFloat32)(nil)
-
-func NewColFloat32(nullable bool) *ColFloat32 {
-	return &ColFloat32{
-		col:      new(proto.ColFloat32),
-		nullCol:  new(proto.ColFloat32).Nullable(),
-		nullable: nullable,
-	}
-}
-
-// Append the insaneJSON.Node to the batch.
-func (t *ColFloat32) Append(node *insaneJSON.StrictNode) error {
-	if node == nil || node.IsNull() {
-		if !t.nullable {
-			return ErrNodeIsNil
-		}
-		t.nullCol.Append(proto.Null[float32]())
-		return nil
-	}
-	v, err := node.AsInt()
-	if err != nil {
-		return err
-	}
-
-	val := float32(v)
-
-	if t.nullable {
-		t.nullCol.Append(proto.NewNullable(val))
-		return nil
-	}
-	t.col.Append(val)
-
-	return nil
-}
 
 func (t *ColFloat32) Reset() {
 	t.col.Reset()
@@ -1053,47 +940,9 @@ func (t *ColFloat32) EncodeColumn(buffer *proto.Buffer) {
 	t.col.EncodeColumn(buffer)
 }
 
-// ColFloat64 represents Clickhouse Float64 type.
-type ColFloat64 struct {
-	col      *proto.ColFloat64
-	nullCol  *proto.ColNullable[float64]
-	nullable bool
-}
+// struct ColFloat64 defined and implemented in another file
 
 var _ InsaneColInput = (*ColFloat64)(nil)
-
-func NewColFloat64(nullable bool) *ColFloat64 {
-	return &ColFloat64{
-		col:      new(proto.ColFloat64),
-		nullCol:  new(proto.ColFloat64).Nullable(),
-		nullable: nullable,
-	}
-}
-
-// Append the insaneJSON.Node to the batch.
-func (t *ColFloat64) Append(node *insaneJSON.StrictNode) error {
-	if node == nil || node.IsNull() {
-		if !t.nullable {
-			return ErrNodeIsNil
-		}
-		t.nullCol.Append(proto.Null[float64]())
-		return nil
-	}
-	v, err := node.AsInt()
-	if err != nil {
-		return err
-	}
-
-	val := float64(v)
-
-	if t.nullable {
-		t.nullCol.Append(proto.NewNullable(val))
-		return nil
-	}
-	t.col.Append(val)
-
-	return nil
-}
 
 func (t *ColFloat64) Reset() {
 	t.col.Reset()

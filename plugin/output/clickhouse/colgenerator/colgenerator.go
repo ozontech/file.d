@@ -119,10 +119,12 @@ func clickhouseTypes() []Type {
 		Type{
 			ChTypeName: "Float32",
 			GoName:     "float32",
+			CustomImpl: true,
 		},
 		Type{
 			ChTypeName: "Float64",
 			GoName:     "float64",
+			CustomImpl: true,
 		},
 		Type{
 			ChTypeName:   "DateTime",

@@ -74,13 +74,6 @@ If you need more types, please, create an issue.
 
 <br>
 
-**`strict_types`** *`bool`* *`default=true`* 
-
-If false, file.d will try to cast event type to column type.
-If true, file.d will fall when types are mismatched.
-
-<br>
-
 **`retry`** *`int`* *`default=10`* 
 
 Retries of insertion. If File.d cannot insert for this number of attempts,

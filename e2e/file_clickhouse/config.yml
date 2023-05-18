@@ -3,16 +3,23 @@ pipelines:
     input:
       type: file
     actions:
-      - type: debug
       - type: set_time
         format: unixtime
         field: ts
+        override: false
       - type: set_time
         format: unixtime
         field: ts_with_tz
+        override: false
       - type: set_time
         format: timestampnano
         field: ts64_auto
+        override: true
+      - type: set_time
+        format: rfc3339nano
+        field: ts_rfc3339nano
+        override: true
+      - type: debug
     output:
       type: clickhouse
       addresses:
@@ -44,3 +51,9 @@ pipelines:
           type: DateTime64(3, 'UTC')
         - name: ts64_auto
           type: DateTime64(9, 'UTC')
+        - name: ts_rfc3339nano
+          type: DateTime64(9)
+        - name: f32
+          type: Float32
+        - name: f64
+          type: Float64

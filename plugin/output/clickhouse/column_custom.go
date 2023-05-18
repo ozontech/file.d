@@ -4,10 +4,12 @@ import (
 	"errors"
 	"fmt"
 	"net/netip"
+	"strconv"
 	"time"
 
 	"github.com/ClickHouse/ch-go/proto"
 	insaneJSON "github.com/vitkovskii/insane-json"
+	"go.uber.org/zap"
 )
 
 var (
@@ -26,17 +28,24 @@ func NewColDateTime(col *proto.ColDateTime) *ColDateTime {
 	}
 }
 
-func (t *ColDateTime) Append(node *insaneJSON.StrictNode) error {
+func (t *ColDateTime) Append(node *insaneJSON.Node) error {
 	if node == nil || node.IsNull() {
 		return ErrNodeIsNil
 	}
 
-	v, err := node.AsInt()
-	if err != nil {
-		return err
+	var val time.Time
+	switch {
+	case node.IsNumber():
+		val = time.Unix(int64(node.AsInt()), 0)
+	case node.IsString():
+		var err error
+		val, err = time.Parse(time.RFC3339Nano, node.AsString())
+		if err != nil {
+			return fmt.Errorf("parse time as RFC3339Nano: %w", err)
+		}
+	default:
+		return fmt.Errorf("value=%q is not a string or number", node.EncodeToString())
 	}
-
-	val := time.Unix(int64(v), 0)
 
 	t.col.Append(val)
 
@@ -56,18 +65,26 @@ func NewColDateTime64(col *proto.ColDateTime64, scale int64) *ColDateTime64 {
 	}
 }
 
-func (t *ColDateTime64) Append(node *insaneJSON.StrictNode) error {
+func (t *ColDateTime64) Append(node *insaneJSON.Node) error {
 	if node == nil || node.IsNull() {
 		return ErrNodeIsNil
 	}
 
-	v, err := node.AsInt64()
-	if err != nil {
-		return err
+	var val time.Time
+	switch {
+	case node.IsNumber():
+		v := node.AsInt64()
+		nsec := v * t.scale
+		val = time.Unix(nsec/1e9, nsec%1e9)
+	case node.IsString():
+		var err error
+		val, err = time.Parse(time.RFC3339Nano, node.AsString())
+		if err != nil {
+			return fmt.Errorf("parse time as RFC3339Nano: %w", err)
+		}
+	default:
+		return fmt.Errorf("value=%q is not a string or number", node.EncodeToString())
 	}
-
-	nsec := v * t.scale
-	val := time.Unix(nsec/1e9, nsec%1e9)
 
 	t.col.Append(val)
 
@@ -89,7 +106,7 @@ func NewColIPv4(nullable bool) *ColIPv4 {
 	}
 }
 
-func (t *ColIPv4) Append(node *insaneJSON.StrictNode) error {
+func (t *ColIPv4) Append(node *insaneJSON.Node) error {
 	if node == nil || node.IsNull() {
 		if !t.nullable {
 			return ErrNodeIsNil
@@ -133,7 +150,7 @@ func NewColIPv6(nullable bool) *ColIPv6 {
 	}
 }
 
-func (t *ColIPv6) Append(node *insaneJSON.StrictNode) error {
+func (t *ColIPv6) Append(node *insaneJSON.Node) error {
 	if node == nil || node.IsNull() {
 		if !t.nullable {
 			return ErrNodeIsNil
@@ -173,14 +190,11 @@ func NewColEnum8(col *proto.ColEnum) *ColEnum8 {
 	}
 }
 
-func (t *ColEnum8) Append(node *insaneJSON.StrictNode) error {
+func (t *ColEnum8) Append(node *insaneJSON.Node) error {
 	if node == nil || node.IsNull() {
 		return ErrNodeIsNil
 	}
-	val, err := node.AsString()
-	if err != nil {
-		return err
-	}
+	val := node.AsString()
 	t.col.Append(val)
 
 	return nil
@@ -197,14 +211,11 @@ func NewColEnum16(col *proto.ColEnum) *ColEnum8 {
 	}
 }
 
-func (t *ColEnum16) Append(node *insaneJSON.StrictNode) error {
+func (t *ColEnum16) Append(node *insaneJSON.Node) error {
 	if node == nil || node.IsNull() {
 		return ErrNodeIsNil
 	}
-	val, err := node.AsString()
-	if err != nil {
-		return err
-	}
+	val := node.AsString()
 	t.col.Append(val)
 
 	return nil
@@ -215,20 +226,20 @@ type ColString struct {
 	col      *proto.ColStr
 	nullCol  *proto.ColNullable[string]
 	nullable bool
-	strict   bool
+	logger   *zap.Logger
 }
 
-func NewColString(nullable bool, strict bool) *ColString {
+func NewColString(nullable bool, logger *zap.Logger) *ColString {
 	return &ColString{
 		col:      new(proto.ColStr),
 		nullCol:  new(proto.ColStr).Nullable(),
 		nullable: nullable,
-		strict:   strict,
+		logger:   logger,
 	}
 }
 
 // Append the insaneJSON.Node to the batch.
-func (t *ColString) Append(node *insaneJSON.StrictNode) error {
+func (t *ColString) Append(node *insaneJSON.Node) error {
 	if node == nil || node.IsNull() {
 		if !t.nullable {
 			return ErrNodeIsNil
@@ -237,13 +248,12 @@ func (t *ColString) Append(node *insaneJSON.StrictNode) error {
 		return nil
 	}
 
-	val, err := node.AsString()
-	// if it is not a string
-	if err != nil {
-		if t.strict {
-			return fmt.Errorf("disable strict mode to append any value to the String column")
-		}
+	var val string
+	if node.IsString() {
+		val = node.AsString()
+	} else {
 		val = node.EncodeToString()
+		t.logger.Warn("appending non-string value to the String column", zap.String("value", val))
 	}
 
 	if t.nullable {
@@ -255,15 +265,92 @@ func (t *ColString) Append(node *insaneJSON.StrictNode) error {
 	return nil
 }
 
-func ipFromNode(node *insaneJSON.StrictNode) (netip.Addr, error) {
-	v, err := node.AsString()
-	if err != nil {
-		return netip.Addr{}, err
+// ColFloat32 represents Clickhouse Float32 type.
+type ColFloat32 struct {
+	col      *proto.ColFloat32
+	nullCol  *proto.ColNullable[float32]
+	nullable bool
+}
+
+func NewColFloat32(nullable bool) *ColFloat32 {
+	return &ColFloat32{
+		col:      new(proto.ColFloat32),
+		nullCol:  new(proto.ColFloat32).Nullable(),
+		nullable: nullable,
 	}
+}
+
+// Append the insaneJSON.Node to the batch.
+func (t *ColFloat32) Append(node *insaneJSON.Node) error {
+	if node == nil || node.IsNull() {
+		if !t.nullable {
+			return ErrNodeIsNil
+		}
+		t.nullCol.Append(proto.Null[float32]())
+		return nil
+	}
+	v := node.AsString()
+
+	val, err := strconv.ParseFloat(v, 32)
+	if err != nil {
+		return fmt.Errorf("parse float (val=%q): %w", v, err)
+	}
+
+	if t.nullable {
+		t.nullCol.Append(proto.NewNullable(float32(val)))
+		return nil
+	}
+	t.col.Append(float32(val))
+
+	return nil
+}
+
+// ColFloat64 represents Clickhouse Float64 type.
+type ColFloat64 struct {
+	col      *proto.ColFloat64
+	nullCol  *proto.ColNullable[float64]
+	nullable bool
+}
+
+func NewColFloat64(nullable bool) *ColFloat64 {
+	return &ColFloat64{
+		col:      new(proto.ColFloat64),
+		nullCol:  new(proto.ColFloat64).Nullable(),
+		nullable: nullable,
+	}
+}
+
+// Append the insaneJSON.Node to the batch.
+func (t *ColFloat64) Append(node *insaneJSON.Node) error {
+	if node == nil || node.IsNull() {
+		if !t.nullable {
+			return ErrNodeIsNil
+		}
+		t.nullCol.Append(proto.Null[float64]())
+		return nil
+	}
+	v := node.AsString()
+
+	val, err := strconv.ParseFloat(v, 64)
+	if err != nil {
+		return fmt.Errorf("parse float (val=%q): %w", v, err)
+	}
+
+	if t.nullable {
+		t.nullCol.Append(proto.NewNullable(val))
+		return nil
+	}
+	t.col.Append(val)
+
+	return nil
+}
+
+func ipFromNode(node *insaneJSON.Node) (netip.Addr, error) {
+	v := node.AsString()
 
 	addr, err := netip.ParseAddr(v)
 	if err != nil {
-		return netip.Addr{}, fmt.Errorf("extract ip form json node: %w", err)
+		return netip.Addr{}, fmt.Errorf("extract ip form json node (val=%q): %w", node.EncodeToString(), err)
 	}
 
 	return addr, nil

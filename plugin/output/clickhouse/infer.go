@@ -2,16 +2,19 @@ package clickhouse
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/ClickHouse/ch-go/proto"
 	insaneJSON "github.com/vitkovskii/insane-json"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
 //go:generate go run ./colgenerator
 
 type InsaneColInput interface {
 	proto.ColInput
-	Append(node *insaneJSON.StrictNode) error
+	Append(node *insaneJSON.Node) error
 	Reset()
 }
 
@@ -20,7 +23,7 @@ type InsaneColumn struct {
 	ColInput InsaneColInput
 }
 
-func inferInsaneColInputs(columns []Column, strict bool) ([]InsaneColumn, error) {
+func inferInsaneColInputs(columns []Column, logger *zap.Logger) ([]InsaneColumn, error) {
 	insaneColumns := make([]InsaneColumn, 0, len(columns))
 	for _, col := range columns {
 		if col.Type == "" {
@@ -32,7 +35,7 @@ func inferInsaneColInputs(columns []Column, strict bool) ([]InsaneColumn, error)
 			return nil, fmt.Errorf("infer: %w", err)
 		}
 
-		insaneCol, err := insaneInfer(auto, strict)
+		insaneCol, err := insaneInfer(auto, logger)
 		if err != nil {
 			return nil, err
 		}
@@ -46,7 +49,7 @@ func inferInsaneColInputs(columns []Column, strict bool) ([]InsaneColumn, error)
 	return insaneColumns, nil
 }
 
-func insaneInfer(auto proto.ColAuto, strict bool) (InsaneColInput, error) {
+func insaneInfer(auto proto.ColAuto, logger *zap.Logger) (InsaneColInput, error) {
 	nullable := auto.Type().Base() == proto.ColumnTypeNullable
 
 	t := auto.Type()
@@ -55,11 +58,18 @@ func insaneInfer(auto proto.ColAuto, strict bool) (InsaneColInput, error) {
 		t = t.Elem()
 	}
 
+	logger = zap.New(zapcore.NewSamplerWithOptions(
+		logger.Core(),
+		time.Second*10,
+		1,
+		0,
+	)).With(zap.String("note", "this log is sampled"))
+
 	switch t {
 	case proto.ColumnTypeBool:
 		return NewColBool(nullable), nil
 	case proto.ColumnTypeString:
-		return NewColString(nullable, strict), nil
+		return NewColString(nullable, logger.Named("col_string")), nil
 	case proto.ColumnTypeInt8:
 		return NewColInt8(nullable), nil
 	case proto.ColumnTypeUInt8:

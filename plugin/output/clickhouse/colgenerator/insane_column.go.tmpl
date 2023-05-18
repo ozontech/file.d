@@ -47,7 +47,7 @@ func New{{- $type.ColumnTypeName }}(nullable bool) *{{ $type.ColumnTypeName }} {
 {{ end }}
 
 // Append the insaneJSON.Node to the batch.
-func (t *{{ $type.ColumnTypeName }}) Append(node *insaneJSON.StrictNode) error {
+func (t *{{ $type.ColumnTypeName }}) Append(node *insaneJSON.Node) error {
 	if node == nil || node.IsNull() {
 		{{- if $type.CannotBeNull }}
 		return ErrNodeIsNil
@@ -60,18 +60,9 @@ func (t *{{ $type.ColumnTypeName }}) Append(node *insaneJSON.StrictNode) error {
 		{{- end }}
 	}
 	{{ if $type.CannotConvert -}}
-	val, err := node.{{- $type.InsaneConvertFunc }}()
-	if err != nil {
-		return err
-	}
+	val := node.{{- $type.InsaneConvertFunc }}()
 	{{ else -}}
-	v, err := node.{{- $type.InsaneConvertFunc }}()
-	if err != nil {
-		return err
-	}
-
-	val := {{ $type.ConvertInsaneJSONValue }}(v)
-
+	val := {{ $type.ConvertInsaneJSONValue }}(node.{{- $type.InsaneConvertFunc }}())
 	{{ end }}
 	{{- if not $type.CannotBeNull -}}
 	if t.nullable {
