@@ -150,6 +150,10 @@ func (m *metricsHolder) count(event *Event, actionIndex int, eventStatus eventSt
 		return valuesBuf
 	}
 
+	if metrics.skipStatus && eventStatus == eventStatusReceived {
+		return valuesBuf
+	}
+
 	valuesBuf = valuesBuf[:0]
 	if !m.skipStatus {
 		valuesBuf = append(valuesBuf, string(eventStatus))
@@ -177,11 +181,12 @@ func (m *metricsHolder) count(event *Event, actionIndex int, eventStatus eventSt
 					key = string(node.AsBytes()) // make string from []byte to make map string keys works good
 				}
 
-				mn.childs[key] = mNode{
+				nextMN = mNode{
 					childs: make(map[string]mNode),
 					self:   key,
 					mu:     &sync.RWMutex{},
 				}
+				mn.childs[key] = nextMN
 			}
 			mn.mu.Unlock()
 		}

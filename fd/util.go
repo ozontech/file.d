@@ -185,6 +185,7 @@ func makeActionJSON(actionJSON *simplejson.Json) []byte {
 	actionJSON.Del("match_mode")
 	actionJSON.Del("metric_name")
 	actionJSON.Del("metric_labels")
+	actionJSON.Del("metric_skip_status")
 	actionJSON.Del("match_invert")
 	configJson, err := actionJSON.Encode()
 	if err != nil {
