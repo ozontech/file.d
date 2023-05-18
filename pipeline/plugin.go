@@ -90,11 +90,12 @@ type InputPluginInfo struct {
 type ActionPluginStaticInfo struct {
 	*PluginStaticInfo
 
-	MetricName      string
-	MetricLabels    []string
-	MatchConditions MatchConditions
-	MatchMode       MatchMode
-	MatchInvert     bool
+	MetricName       string
+	MetricLabels     []string
+	MetricSkipStatus bool
+	MatchConditions  MatchConditions
+	MatchMode        MatchMode
+	MatchInvert      bool
 }
 
 type ActionPluginInfo struct {
@@ -270,6 +271,6 @@ type ConditionType int
 
 const (
 	// UnknownSelector value is default, therefore it's safer to use it as default unknown value.
-	UnknownSelector ConditionType = iota
+	_ ConditionType = iota
 	ByNameSelector
 )

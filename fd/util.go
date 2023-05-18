@@ -169,13 +169,14 @@ func extractConditions(condJSON *simplejson.Json) (pipeline.MatchConditions, err
 	return conditions, nil
 }
 
-func extractMetrics(actionJSON *simplejson.Json) (string, []string) {
+func extractMetrics(actionJSON *simplejson.Json) (string, []string, bool) {
 	metricName := actionJSON.Get("metric_name").MustString()
 	metricLabels := actionJSON.Get("metric_labels").MustStringArray()
 	if metricLabels == nil {
 		metricLabels = []string{}
 	}
-	return metricName, metricLabels
+	skipStatus := actionJSON.Get("metric_skip_status").MustBool()
+	return metricName, metricLabels, skipStatus
 }
 
 func makeActionJSON(actionJSON *simplejson.Json) []byte {
