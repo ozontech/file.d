@@ -24,7 +24,6 @@ type metricsHolder struct {
 	metricsGenInterval time.Duration
 	metrics            []metrics
 	registry           *prometheus.Registry
-	skipStatus         bool
 }
 
 type counter struct {
@@ -99,7 +98,7 @@ func (m *metricsHolder) nextMetricsGen() {
 		}
 
 		labels := make([]string, 0, len(metrics.labels)+1)
-		if !m.skipStatus {
+		if !metrics.skipStatus {
 			labels = append(labels, "status")
 		}
 		labels = append(labels, metrics.labels...)
@@ -155,7 +154,7 @@ func (m *metricsHolder) count(event *Event, actionIndex int, eventStatus eventSt
 	}
 
 	valuesBuf = valuesBuf[:0]
-	if !m.skipStatus {
+	if !metrics.skipStatus {
 		valuesBuf = append(valuesBuf, string(eventStatus))
 	}
 
