@@ -98,7 +98,7 @@ func (m *metricsHolder) nextMetricsGen() {
 			continue
 		}
 
-		labels := make([]string, 0, len(metrics.labels))
+		labels := make([]string, 0, len(metrics.labels)+1)
 		if !m.skipStatus {
 			labels = append(labels, "status")
 		}

@@ -270,7 +270,5 @@ type PluginSelector struct {
 type ConditionType int
 
 const (
-	// UnknownSelector value is default, therefore it's safer to use it as default unknown value.
-	_ ConditionType = iota
-	ByNameSelector
+	ByNameSelector = iota + 1
 )
