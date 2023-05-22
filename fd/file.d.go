@@ -170,7 +170,7 @@ func (f *FileD) setupAction(p *pipeline.Pipeline, index int, t string, actionJSO
 	if err != nil {
 		logger.Fatalf("can't extract conditions for action %d/%s in pipeline %q: %s", index, t, p.Name, err.Error())
 	}
-	metricName, metricLabels := extractMetrics(actionJSON)
+	metricName, metricLabels, skipStatus := extractMetrics(actionJSON)
 	configJSON := makeActionJSON(actionJSON)
 
 	_, config := info.Factory()
@@ -193,6 +193,7 @@ func (f *FileD) setupAction(p *pipeline.Pipeline, index int, t string, actionJSO
 		MatchMode:        matchMode,
 		MetricName:       metricName,
 		MetricLabels:     metricLabels,
+		MetricSkipStatus: skipStatus,
 		MatchInvert:      matchInvert,
 	})
 }
