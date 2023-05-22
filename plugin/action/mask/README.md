@@ -36,6 +36,19 @@ If any mask has been applied then `mask_applied_field` will be set to `mask_appl
 
 <br>
 
+**`applied_metric_name`** *`string`* *`default=mask_applied_total`* 
+
+The metric name of the regular expressions applied.
+
+<br>
+
+**`applied_metric_labels`** *`[]string`* 
+
+Lists the event fields to add to the metric. Blank list means no labels.
+Important note: labels metrics are not currently being cleared.
+
+<br>
+
 **`re`** *`string`* *`required`* 
 
 Regular expression for masking.
