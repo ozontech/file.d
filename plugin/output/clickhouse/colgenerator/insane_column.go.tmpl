@@ -4,7 +4,6 @@ package clickhouse
 
 import (
 	"github.com/ClickHouse/ch-go/proto"
-	insaneJSON "github.com/vitkovskii/insane-json"
 )
 
 {{ range $type := .Types }}
@@ -47,7 +46,7 @@ func New{{- $type.ColumnTypeName }}(nullable bool) *{{ $type.ColumnTypeName }} {
 {{ end }}
 
 // Append the insaneJSON.Node to the batch.
-func (t *{{ $type.ColumnTypeName }}) Append(node *insaneJSON.StrictNode) error {
+func (t *{{ $type.ColumnTypeName }}) Append(node InsaneNode) error {
 	if node == nil || node.IsNull() {
 		{{- if $type.CannotBeNull }}
 		return ErrNodeIsNil
@@ -72,7 +71,7 @@ func (t *{{ $type.ColumnTypeName }}) Append(node *insaneJSON.StrictNode) error {
 
 	val := {{ $type.ConvertInsaneJSONValue }}(v)
 
-	{{ end }}
+	{{ end -}}
 	{{- if not $type.CannotBeNull -}}
 	if t.nullable {
 		t.nullCol.Append(proto.NewNullable(val))

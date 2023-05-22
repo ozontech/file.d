@@ -153,6 +153,19 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
+	// > If true, file.d will fall when types are mismatched.
+	// >
+	// > If false, file.d will cast any JSON type to the column type.
+	// > For example, if an event value is a Number, but the column type is a Bool,
+	// > the Number will be converted to the "true" if the value is "1".
+	// > But if the value is an Object and the column is an Int
+	// > File.d converts the Object to "0" to prevent fall.
+	// >
+	// > Note: String column accepts any json type - the value will be encoded to JSON.
+	StrictTypes bool `json:"strict_types" default:"true"` // *
+
+	// > @3@4@5@6
+	// >
 	// > The level of the Compression.
 	// > Disabled - lowest CPU overhead.
 	// > LZ4 - medium CPU overhead.
@@ -273,7 +286,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		p.logger.Fatal("'db_request_timeout' can't be <1")
 	}
 
-	schema, err := inferInsaneColInputs(p.config.Columns)
+	schema, err := inferInsaneColInputs(p.config.Columns, p.logger)
 	if err != nil {
 		p.logger.Fatal("invalid database schema", zap.Error(err))
 	}
@@ -377,7 +390,7 @@ func (d data) reset() {
 func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 	if *workerData == nil {
 		// we don't check the error, schema already validated in the Start
-		columns, _ := inferInsaneColInputs(p.config.Columns)
+		columns, _ := inferInsaneColInputs(p.config.Columns, p.logger)
 		input := inputFromColumns(columns)
 		*workerData = data{
 			cols:  columns,
@@ -390,9 +403,16 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 
 	for _, event := range batch.Events {
 		for _, col := range data.cols {
-			node, _ := event.Root.DigStrict(col.Name)
-			if err := col.ColInput.Append(node); err != nil {
-				// TODO: handle case when we can't append in the batch, e.g. columns is not nullable, but value it is
+			node := event.Root.Dig(col.Name)
+
+			var insaneNode InsaneNode
+			if node != nil && p.config.StrictTypes {
+				insaneNode = node.MutateToStrict()
+			} else if node != nil {
+				insaneNode = NonStrictNode{node}
+			}
+
+			if err := col.ColInput.Append(insaneNode); err != nil {
 				p.logger.Fatal("can't append value in the batch",
 					zap.Error(err),
 					zap.String("column", col.Name),

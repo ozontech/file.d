@@ -4,7 +4,6 @@ package clickhouse
 
 import (
 	"github.com/ClickHouse/ch-go/proto"
-	insaneJSON "github.com/vitkovskii/insane-json"
 )
 
 // ColBool represents Clickhouse Bool type.
@@ -25,7 +24,7 @@ func NewColBool(nullable bool) *ColBool {
 }
 
 // Append the insaneJSON.Node to the batch.
-func (t *ColBool) Append(node *insaneJSON.StrictNode) error {
+func (t *ColBool) Append(node InsaneNode) error {
 	if node == nil || node.IsNull() {
 		if !t.nullable {
 			return ErrNodeIsNil
@@ -73,44 +72,9 @@ func (t *ColBool) EncodeColumn(buffer *proto.Buffer) {
 	t.col.EncodeColumn(buffer)
 }
 
-// ColString represents Clickhouse String type.
-type ColString struct {
-	col      *proto.ColStr
-	nullCol  *proto.ColNullable[string]
-	nullable bool
-}
+// struct ColString defined and implemented in another file
 
 var _ InsaneColInput = (*ColString)(nil)
-
-func NewColString(nullable bool) *ColString {
-	return &ColString{
-		col:      new(proto.ColStr),
-		nullCol:  new(proto.ColStr).Nullable(),
-		nullable: nullable,
-	}
-}
-
-// Append the insaneJSON.Node to the batch.
-func (t *ColString) Append(node *insaneJSON.StrictNode) error {
-	if node == nil || node.IsNull() {
-		if !t.nullable {
-			return ErrNodeIsNil
-		}
-		t.nullCol.Append(proto.Null[string]())
-		return nil
-	}
-	val, err := node.AsString()
-	if err != nil {
-		return err
-	}
-	if t.nullable {
-		t.nullCol.Append(proto.NewNullable(val))
-		return nil
-	}
-	t.col.Append(val)
-
-	return nil
-}
 
 func (t *ColString) Reset() {
 	t.col.Reset()
@@ -209,7 +173,7 @@ func NewColInt8(nullable bool) *ColInt8 {
 }
 
 // Append the insaneJSON.Node to the batch.
-func (t *ColInt8) Append(node *insaneJSON.StrictNode) error {
+func (t *ColInt8) Append(node InsaneNode) error {
 	if node == nil || node.IsNull() {
 		if !t.nullable {
 			return ErrNodeIsNil
@@ -278,7 +242,7 @@ func NewColUInt8(nullable bool) *ColUInt8 {
 }
 
 // Append the insaneJSON.Node to the batch.
-func (t *ColUInt8) Append(node *insaneJSON.StrictNode) error {
+func (t *ColUInt8) Append(node InsaneNode) error {
 	if node == nil || node.IsNull() {
 		if !t.nullable {
 			return ErrNodeIsNil
@@ -347,7 +311,7 @@ func NewColInt16(nullable bool) *ColInt16 {
 }
 
 // Append the insaneJSON.Node to the batch.
-func (t *ColInt16) Append(node *insaneJSON.StrictNode) error {
+func (t *ColInt16) Append(node InsaneNode) error {
 	if node == nil || node.IsNull() {
 		if !t.nullable {
 			return ErrNodeIsNil
@@ -416,7 +380,7 @@ func NewColUInt16(nullable bool) *ColUInt16 {
 }
 
 // Append the insaneJSON.Node to the batch.
-func (t *ColUInt16) Append(node *insaneJSON.StrictNode) error {
+func (t *ColUInt16) Append(node InsaneNode) error {
 	if node == nil || node.IsNull() {
 		if !t.nullable {
 			return ErrNodeIsNil
@@ -485,7 +449,7 @@ func NewColInt32(nullable bool) *ColInt32 {
 }
 
 // Append the insaneJSON.Node to the batch.
-func (t *ColInt32) Append(node *insaneJSON.StrictNode) error {
+func (t *ColInt32) Append(node InsaneNode) error {
 	if node == nil || node.IsNull() {
 		if !t.nullable {
 			return ErrNodeIsNil
@@ -554,7 +518,7 @@ func NewColUInt32(nullable bool) *ColUInt32 {
 }
 
 // Append the insaneJSON.Node to the batch.
-func (t *ColUInt32) Append(node *insaneJSON.StrictNode) error {
+func (t *ColUInt32) Append(node InsaneNode) error {
 	if node == nil || node.IsNull() {
 		if !t.nullable {
 			return ErrNodeIsNil
@@ -623,7 +587,7 @@ func NewColInt64(nullable bool) *ColInt64 {
 }
 
 // Append the insaneJSON.Node to the batch.
-func (t *ColInt64) Append(node *insaneJSON.StrictNode) error {
+func (t *ColInt64) Append(node InsaneNode) error {
 	if node == nil || node.IsNull() {
 		if !t.nullable {
 			return ErrNodeIsNil
@@ -692,7 +656,7 @@ func NewColUInt64(nullable bool) *ColUInt64 {
 }
 
 // Append the insaneJSON.Node to the batch.
-func (t *ColUInt64) Append(node *insaneJSON.StrictNode) error {
+func (t *ColUInt64) Append(node InsaneNode) error {
 	if node == nil || node.IsNull() {
 		if !t.nullable {
 			return ErrNodeIsNil
@@ -761,7 +725,7 @@ func NewColInt128(nullable bool) *ColInt128 {
 }
 
 // Append the insaneJSON.Node to the batch.
-func (t *ColInt128) Append(node *insaneJSON.StrictNode) error {
+func (t *ColInt128) Append(node InsaneNode) error {
 	if node == nil || node.IsNull() {
 		if !t.nullable {
 			return ErrNodeIsNil
@@ -830,7 +794,7 @@ func NewColUInt128(nullable bool) *ColUInt128 {
 }
 
 // Append the insaneJSON.Node to the batch.
-func (t *ColUInt128) Append(node *insaneJSON.StrictNode) error {
+func (t *ColUInt128) Append(node InsaneNode) error {
 	if node == nil || node.IsNull() {
 		if !t.nullable {
 			return ErrNodeIsNil
@@ -899,7 +863,7 @@ func NewColInt256(nullable bool) *ColInt256 {
 }
 
 // Append the insaneJSON.Node to the batch.
-func (t *ColInt256) Append(node *insaneJSON.StrictNode) error {
+func (t *ColInt256) Append(node InsaneNode) error {
 	if node == nil || node.IsNull() {
 		if !t.nullable {
 			return ErrNodeIsNil
@@ -968,7 +932,7 @@ func NewColUInt256(nullable bool) *ColUInt256 {
 }
 
 // Append the insaneJSON.Node to the batch.
-func (t *ColUInt256) Append(node *insaneJSON.StrictNode) error {
+func (t *ColUInt256) Append(node InsaneNode) error {
 	if node == nil || node.IsNull() {
 		if !t.nullable {
 			return ErrNodeIsNil
@@ -1019,47 +983,9 @@ func (t *ColUInt256) EncodeColumn(buffer *proto.Buffer) {
 	t.col.EncodeColumn(buffer)
 }
 
-// ColFloat32 represents Clickhouse Float32 type.
-type ColFloat32 struct {
-	col      *proto.ColFloat32
-	nullCol  *proto.ColNullable[float32]
-	nullable bool
-}
+// struct ColFloat32 defined and implemented in another file
 
 var _ InsaneColInput = (*ColFloat32)(nil)
-
-func NewColFloat32(nullable bool) *ColFloat32 {
-	return &ColFloat32{
-		col:      new(proto.ColFloat32),
-		nullCol:  new(proto.ColFloat32).Nullable(),
-		nullable: nullable,
-	}
-}
-
-// Append the insaneJSON.Node to the batch.
-func (t *ColFloat32) Append(node *insaneJSON.StrictNode) error {
-	if node == nil || node.IsNull() {
-		if !t.nullable {
-			return ErrNodeIsNil
-		}
-		t.nullCol.Append(proto.Null[float32]())
-		return nil
-	}
-	v, err := node.AsInt()
-	if err != nil {
-		return err
-	}
-
-	val := float32(v)
-
-	if t.nullable {
-		t.nullCol.Append(proto.NewNullable(val))
-		return nil
-	}
-	t.col.Append(val)
-
-	return nil
-}
 
 func (t *ColFloat32) Reset() {
 	t.col.Reset()
@@ -1088,47 +1014,9 @@ func (t *ColFloat32) EncodeColumn(buffer *proto.Buffer) {
 	t.col.EncodeColumn(buffer)
 }
 
-// ColFloat64 represents Clickhouse Float64 type.
-type ColFloat64 struct {
-	col      *proto.ColFloat64
-	nullCol  *proto.ColNullable[float64]
-	nullable bool
-}
+// struct ColFloat64 defined and implemented in another file
 
 var _ InsaneColInput = (*ColFloat64)(nil)
-
-func NewColFloat64(nullable bool) *ColFloat64 {
-	return &ColFloat64{
-		col:      new(proto.ColFloat64),
-		nullCol:  new(proto.ColFloat64).Nullable(),
-		nullable: nullable,
-	}
-}
-
-// Append the insaneJSON.Node to the batch.
-func (t *ColFloat64) Append(node *insaneJSON.StrictNode) error {
-	if node == nil || node.IsNull() {
-		if !t.nullable {
-			return ErrNodeIsNil
-		}
-		t.nullCol.Append(proto.Null[float64]())
-		return nil
-	}
-	v, err := node.AsInt()
-	if err != nil {
-		return err
-	}
-
-	val := float64(v)
-
-	if t.nullable {
-		t.nullCol.Append(proto.NewNullable(val))
-		return nil
-	}
-	t.col.Append(val)
-
-	return nil
-}
 
 func (t *ColFloat64) Reset() {
 	t.col.Reset()
