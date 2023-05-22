@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/ClickHouse/ch-go/proto"
-	insaneJSON "github.com/vitkovskii/insane-json"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -14,7 +13,7 @@ import (
 
 type InsaneColInput interface {
 	proto.ColInput
-	Append(node *insaneJSON.Node) error
+	Append(node InsaneNode) error
 	Reset()
 }
 

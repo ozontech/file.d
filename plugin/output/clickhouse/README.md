@@ -74,6 +74,20 @@ If you need more types, please, create an issue.
 
 <br>
 
+**`strict_types`** *`bool`* *`default=true`* 
+
+If true, file.d will fall when types are mismatched.
+
+If false, file.d will cast any JSON type to the column type.
+For example, if an event value is a Number, but the column type is a Bool,
+the Number will be converted to the "true" if the value is "1".
+But if the value is an Object and the column is an Int
+File.d converts the Object to "0" to prevent fall.
+
+Note: String column accepts any json type - the value will be encoded to JSON.
+
+<br>
+
 **`retry`** *`int`* *`default=10`* 
 
 Retries of insertion. If File.d cannot insert for this number of attempts,

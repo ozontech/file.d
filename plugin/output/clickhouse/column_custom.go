@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/ClickHouse/ch-go/proto"
-	insaneJSON "github.com/vitkovskii/insane-json"
 	"go.uber.org/zap"
 )
 
@@ -28,7 +27,7 @@ func NewColDateTime(col *proto.ColDateTime) *ColDateTime {
 	}
 }
 
-func (t *ColDateTime) Append(node *insaneJSON.Node) error {
+func (t *ColDateTime) Append(node InsaneNode) error {
 	if node == nil || node.IsNull() {
 		return ErrNodeIsNil
 	}
@@ -36,12 +35,17 @@ func (t *ColDateTime) Append(node *insaneJSON.Node) error {
 	var val time.Time
 	switch {
 	case node.IsNumber():
-		val = time.Unix(int64(node.AsInt()), 0)
+		nodeVal, err := node.AsInt64()
+		if err != nil {
+			return err
+		}
+
+		val = time.Unix(nodeVal, 0)
 	case node.IsString():
 		var err error
-		val, err = time.Parse(time.RFC3339Nano, node.AsString())
+		val, err = parseRFC3339Nano(node)
 		if err != nil {
-			return fmt.Errorf("parse time as RFC3339Nano: %w", err)
+			return err
 		}
 	default:
 		return fmt.Errorf("value=%q is not a string or number", node.EncodeToString())
@@ -65,7 +69,7 @@ func NewColDateTime64(col *proto.ColDateTime64, scale int64) *ColDateTime64 {
 	}
 }
 
-func (t *ColDateTime64) Append(node *insaneJSON.Node) error {
+func (t *ColDateTime64) Append(node InsaneNode) error {
 	if node == nil || node.IsNull() {
 		return ErrNodeIsNil
 	}
@@ -73,14 +77,19 @@ func (t *ColDateTime64) Append(node *insaneJSON.Node) error {
 	var val time.Time
 	switch {
 	case node.IsNumber():
-		v := node.AsInt64()
+		v, err := node.AsInt64()
+		if err != nil {
+			return err
+		}
+
+		// convert to nanoseconds
 		nsec := v * t.scale
 		val = time.Unix(nsec/1e9, nsec%1e9)
 	case node.IsString():
 		var err error
-		val, err = time.Parse(time.RFC3339Nano, node.AsString())
+		val, err = parseRFC3339Nano(node)
 		if err != nil {
-			return fmt.Errorf("parse time as RFC3339Nano: %w", err)
+			return err
 		}
 	default:
 		return fmt.Errorf("value=%q is not a string or number", node.EncodeToString())
@@ -106,7 +115,7 @@ func NewColIPv4(nullable bool) *ColIPv4 {
 	}
 }
 
-func (t *ColIPv4) Append(node *insaneJSON.Node) error {
+func (t *ColIPv4) Append(node InsaneNode) error {
 	if node == nil || node.IsNull() {
 		if !t.nullable {
 			return ErrNodeIsNil
@@ -150,7 +159,7 @@ func NewColIPv6(nullable bool) *ColIPv6 {
 	}
 }
 
-func (t *ColIPv6) Append(node *insaneJSON.Node) error {
+func (t *ColIPv6) Append(node InsaneNode) error {
 	if node == nil || node.IsNull() {
 		if !t.nullable {
 			return ErrNodeIsNil
@@ -190,11 +199,15 @@ func NewColEnum8(col *proto.ColEnum) *ColEnum8 {
 	}
 }
 
-func (t *ColEnum8) Append(node *insaneJSON.Node) error {
+func (t *ColEnum8) Append(node InsaneNode) error {
 	if node == nil || node.IsNull() {
 		return ErrNodeIsNil
 	}
-	val := node.AsString()
+	val, err := node.AsString()
+	if err != nil {
+		return err
+	}
+
 	t.col.Append(val)
 
 	return nil
@@ -211,11 +224,15 @@ func NewColEnum16(col *proto.ColEnum) *ColEnum8 {
 	}
 }
 
-func (t *ColEnum16) Append(node *insaneJSON.Node) error {
+func (t *ColEnum16) Append(node InsaneNode) error {
 	if node == nil || node.IsNull() {
 		return ErrNodeIsNil
 	}
-	val := node.AsString()
+	val, err := node.AsString()
+	if err != nil {
+		return err
+	}
+
 	t.col.Append(val)
 
 	return nil
@@ -239,7 +256,7 @@ func NewColString(nullable bool, logger *zap.Logger) *ColString {
 }
 
 // Append the insaneJSON.Node to the batch.
-func (t *ColString) Append(node *insaneJSON.Node) error {
+func (t *ColString) Append(node InsaneNode) error {
 	if node == nil || node.IsNull() {
 		if !t.nullable {
 			return ErrNodeIsNil
@@ -250,7 +267,11 @@ func (t *ColString) Append(node *insaneJSON.Node) error {
 
 	var val string
 	if node.IsString() {
-		val = node.AsString()
+		var err error
+		val, err = node.AsString()
+		if err != nil {
+			return err
+		}
 	} else {
 		val = node.EncodeToString()
 		t.logger.Warn("appending non-string value to the String column", zap.String("value", val))
@@ -281,7 +302,7 @@ func NewColFloat32(nullable bool) *ColFloat32 {
 }
 
 // Append the insaneJSON.Node to the batch.
-func (t *ColFloat32) Append(node *insaneJSON.Node) error {
+func (t *ColFloat32) Append(node InsaneNode) error {
 	if node == nil || node.IsNull() {
 		if !t.nullable {
 			return ErrNodeIsNil
@@ -289,7 +310,10 @@ func (t *ColFloat32) Append(node *insaneJSON.Node) error {
 		t.nullCol.Append(proto.Null[float32]())
 		return nil
 	}
-	v := node.AsString()
+	v, err := node.AsString()
+	if err != nil {
+		return err
+	}
 
 	val, err := strconv.ParseFloat(v, 32)
 	if err != nil {
@@ -321,7 +345,7 @@ func NewColFloat64(nullable bool) *ColFloat64 {
 }
 
 // Append the insaneJSON.Node to the batch.
-func (t *ColFloat64) Append(node *insaneJSON.Node) error {
+func (t *ColFloat64) Append(node InsaneNode) error {
 	if node == nil || node.IsNull() {
 		if !t.nullable {
 			return ErrNodeIsNil
@@ -329,7 +353,10 @@ func (t *ColFloat64) Append(node *insaneJSON.Node) error {
 		t.nullCol.Append(proto.Null[float64]())
 		return nil
 	}
-	v := node.AsString()
+	v, err := node.AsString()
+	if err != nil {
+		return err
+	}
 
 	val, err := strconv.ParseFloat(v, 64)
 	if err != nil {
@@ -345,8 +372,11 @@ func (t *ColFloat64) Append(node *insaneJSON.Node) error {
 	return nil
 }
 
-func ipFromNode(node *insaneJSON.Node) (netip.Addr, error) {
-	v := node.AsString()
+func ipFromNode(node InsaneNode) (netip.Addr, error) {
+	v, err := node.AsString()
+	if err != nil {
+		return netip.Addr{}, err
+	}
 
 	addr, err := netip.ParseAddr(v)
 	if err != nil {
@@ -354,4 +384,17 @@ func ipFromNode(node *insaneJSON.Node) (netip.Addr, error) {
 	}
 
 	return addr, nil
+}
+
+func parseRFC3339Nano(node InsaneNode) (time.Time, error) {
+	nodeVal, err := node.AsString()
+	if err != nil {
+		return time.Time{}, err
+	}
+
+	t, err := time.Parse(time.RFC3339Nano, nodeVal)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("parse time as RFC3339Nano: %w", err)
+	}
+	return t, nil
 }
