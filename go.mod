@@ -25,7 +25,7 @@ require (
 	github.com/satori/go.uuid v1.2.0
 	github.com/stretchr/testify v1.8.2
 	github.com/valyala/fasthttp v1.37.0
-	github.com/vitkovskii/insane-json v0.1.6
+	github.com/vitkovskii/insane-json v0.1.7
 	go.uber.org/atomic v1.11.0
 	go.uber.org/automaxprocs v1.5.2
 	go.uber.org/zap v1.24.0
