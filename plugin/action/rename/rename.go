@@ -34,13 +34,15 @@ The resulting event could look like:
 ```
 }*/
 
+const (
+	overrideKey = "override"
+)
+
 type Plugin struct {
 	paths          [][]string
 	names          []string
 	preserveFields bool
 }
-
-type Config map[string]any
 
 func init() {
 	fd.DefaultPluginRegistry.RegisterAction(&pipeline.PluginStaticInfo{
@@ -55,21 +57,20 @@ func factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 
 func (p *Plugin) Start(config pipeline.AnyConfig, _ *pipeline.ActionPluginParams) {
 	sharedConfig := *config.(*Config)
-	localConfig := make(map[string]any, len(sharedConfig)) // clone shared config to be able to modify it
-	for k, v := range sharedConfig {
-		localConfig[k] = v
-	}
+	conf := sharedConfig.Clone() // clone shared config to be able to modify it
 
-	p.preserveFields = localConfig["override"] == nil || !localConfig["override"].(bool)
+	val, idx := conf.Find(overrideKey)
 
-	delete(localConfig, "override")
-	m := cfg.UnescapeMap(localConfig)
+	p.preserveFields = idx == NotFoundIdx || val == "false"
 
-	for path, name := range m {
+	conf.Remove(overrideKey)
+	conf = unescapeMap(conf)
+
+	conf.ForEach(func(path string, name string) {
 		selector := cfg.ParseFieldSelector(path)
 		p.paths = append(p.paths, selector)
 		p.names = append(p.names, name)
-	}
+	})
 }
 
 func (p *Plugin) Stop() {
@@ -93,4 +94,19 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	}
 
 	return pipeline.ActionPass
+}
+
+func unescapeMap(fields Config) Config {
+	newConfig := make(Config, 0, len(fields))
+	fields.ForEach(func(key string, value string) {
+		if key == "" {
+			return
+		}
+
+		if key[0] == '_' {
+			key = key[1:]
+		}
+		newConfig.Append(key, value)
+	})
+	return newConfig
 }
