@@ -33,10 +33,6 @@ func (c *Config) Remove(key string) {
 		return
 	}
 
-	if idx == len(*c) {
-
-	}
-
 	*c = append((*c)[:idx], (*c)[idx+2:]...)
 }
 
@@ -73,7 +69,7 @@ func (c *Config) UnmarshalJSON(bytes []byte) error {
 	for _, field := range fields {
 		key := strings.Clone(field.AsString())
 		value := strings.Clone(field.AsFieldValue().AsString())
-		*c = append(*c, key, value)
+		c.Append(key, value)
 	}
 
 	return nil
