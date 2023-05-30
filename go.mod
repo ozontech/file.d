@@ -3,7 +3,7 @@ module github.com/ozontech/file.d
 go 1.20
 
 require (
-	github.com/ClickHouse/ch-go v0.55.0
+	github.com/ClickHouse/ch-go v0.56.0
 	github.com/KimMachineGun/automemlimit v0.2.6
 	github.com/Masterminds/squirrel v1.5.2
 	github.com/Shopify/sarama v1.38.1
@@ -23,7 +23,7 @@ require (
 	github.com/prometheus/client_golang v1.11.1
 	github.com/rjeczalik/notify v0.9.3
 	github.com/satori/go.uuid v1.2.0
-	github.com/stretchr/testify v1.8.2
+	github.com/stretchr/testify v1.8.3
 	github.com/valyala/fasthttp v1.47.0
 	github.com/vitkovskii/insane-json v0.1.7
 	go.uber.org/atomic v1.11.0
@@ -56,11 +56,11 @@ require (
 	github.com/segmentio/asm v1.2.0 // indirect
 	github.com/xdg-go/pbkdf2 v1.0.0 // indirect
 	github.com/xdg-go/stringprep v1.0.4 // indirect
-	go.opentelemetry.io/otel v1.15.0 // indirect
-	go.opentelemetry.io/otel/metric v0.38.0 // indirect
-	go.opentelemetry.io/otel/trace v1.15.0 // indirect
+	go.opentelemetry.io/otel v1.16.0 // indirect
+	go.opentelemetry.io/otel/metric v1.16.0 // indirect
+	go.opentelemetry.io/otel/trace v1.16.0 // indirect
 	golang.org/x/mod v0.8.0 // indirect
-	golang.org/x/sync v0.1.0 // indirect
+	golang.org/x/sync v0.2.0 // indirect
 	golang.org/x/tools v0.6.0 // indirect
 )
 
