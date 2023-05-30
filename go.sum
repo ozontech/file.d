@@ -405,8 +405,8 @@ github.com/valyala/bytebufferpool v1.0.0/go.mod h1:6bBcMArwyJ5K/AmCkWv1jt77kVWyC
 github.com/valyala/fasthttp v1.37.0 h1:7WHCyI7EAkQMVmrfBhWTCOaeROb1aCBiTopx63LkMbE=
 github.com/valyala/fasthttp v1.37.0/go.mod h1:t/G+3rLek+CyY9bnIE+YlMRddxVAAGjhxndDB4i4C0I=
 github.com/valyala/tcplisten v1.0.0/go.mod h1:T0xQ8SeCZGxckz9qRXTfG43PvQ/mcWh7FwZEA7Ioqkc=
-github.com/vitkovskii/insane-json v0.1.6 h1:3HhFvVbcoh4o4E74krA/HX7WbTuk4U5Nv4B4inrb/qs=
-github.com/vitkovskii/insane-json v0.1.6/go.mod h1:xQyYcnFJ8ElboaEZG805SrQ7I4QupForGkm0/TnRaZ8=
+github.com/vitkovskii/insane-json v0.1.7 h1:A84WpQ/xGw8SSzzbLTkTI6PD2IYAVWjTlgaxN/rCAnw=
+github.com/vitkovskii/insane-json v0.1.7/go.mod h1:xQyYcnFJ8ElboaEZG805SrQ7I4QupForGkm0/TnRaZ8=
 github.com/xdg-go/pbkdf2 v1.0.0 h1:Su7DPu48wXMwC3bs7MCNG+z4FhcyEuz5dlvchbq0B0c=
 github.com/xdg-go/pbkdf2 v1.0.0/go.mod h1:jrpuAogTd400dnrH08LKmI/xc1MbPOebTwRqcT5RDeI=
 github.com/xdg-go/scram v1.1.2 h1:FHX5I5B4i4hKRVRBCFRxq1iQRej7WO3hhBuJf+UUySY=
