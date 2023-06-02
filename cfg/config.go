@@ -12,8 +12,8 @@ import (
 	"time"
 
 	"github.com/bitly/go-simplejson"
-	"github.com/ghodss/yaml"
 	"github.com/ozontech/file.d/logger"
+	"sigs.k8s.io/yaml"
 )
 
 const trueValue = "true"

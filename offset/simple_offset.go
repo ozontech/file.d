@@ -3,7 +3,7 @@ package offset
 import (
 	"io"
 
-	"github.com/ghodss/yaml"
+	"sigs.k8s.io/yaml"
 )
 
 type yamlValue struct {
