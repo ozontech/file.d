@@ -239,6 +239,7 @@ func (t *ColEnum16) Append(node InsaneNode) error {
 
 // ColString represents Clickhouse String type.
 type ColString struct {
+	// col contains values for the String type.
 	col *proto.ColStr
 
 	// nullCol contains nullable values for the Nullable(String) type.
