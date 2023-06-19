@@ -17,6 +17,8 @@ type Type struct {
 	isComplexNumber bool
 	// CustomImpl skips ctor and struct generation if truth
 	CustomImpl bool
+	// LowCardinality truth if the type can be low cardinality.
+	LowCardinality bool
 }
 
 func (t Type) ColumnTypeName() string {
@@ -43,6 +45,10 @@ func (t Type) InsaneConvertFunc() string {
 
 // Preparable returns truth if the column must contain Prepare function
 func (t Type) Preparable() bool {
+	return t.IsEnum() || t.LowCardinality
+}
+
+func (t Type) IsEnum() bool {
 	return t.GoName == goTypeEnum
 }
 
@@ -63,4 +69,8 @@ func (t Type) LibChTypeNameFull() string {
 
 func (t Type) NullableTypeName() string {
 	return fmt.Sprintf("proto.ColNullable[%s]", t.GoName)
+}
+
+func (t Type) LowCardinalityTypeName() string {
+	return fmt.Sprintf("proto.ColLowCardinality[%s]", t.GoName)
 }

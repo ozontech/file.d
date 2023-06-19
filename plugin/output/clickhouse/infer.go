@@ -2,11 +2,8 @@ package clickhouse
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/ClickHouse/ch-go/proto"
-	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
 )
 
 //go:generate go run ./colgenerator
@@ -22,7 +19,7 @@ type InsaneColumn struct {
 	ColInput InsaneColInput
 }
 
-func inferInsaneColInputs(columns []Column, logger *zap.Logger) ([]InsaneColumn, error) {
+func inferInsaneColInputs(columns []Column) ([]InsaneColumn, error) {
 	insaneColumns := make([]InsaneColumn, 0, len(columns))
 	for _, col := range columns {
 		if col.Type == "" {
@@ -34,7 +31,7 @@ func inferInsaneColInputs(columns []Column, logger *zap.Logger) ([]InsaneColumn,
 			return nil, fmt.Errorf("infer: %w", err)
 		}
 
-		insaneCol, err := insaneInfer(auto, logger)
+		insaneCol, err := insaneInfer(auto)
 		if err != nil {
 			return nil, err
 		}
@@ -48,27 +45,22 @@ func inferInsaneColInputs(columns []Column, logger *zap.Logger) ([]InsaneColumn,
 	return insaneColumns, nil
 }
 
-func insaneInfer(auto proto.ColAuto, logger *zap.Logger) (InsaneColInput, error) {
-	nullable := auto.Type().Base() == proto.ColumnTypeNullable
+func insaneInfer(auto proto.ColAuto) (InsaneColInput, error) {
+	base := auto.Type().Base()
+	nullable := base == proto.ColumnTypeNullable
+	lowCardinality := base == proto.ColumnTypeLowCardinality
 
 	t := auto.Type()
-	if nullable {
-		// trim "Nullable()"
+	if nullable || lowCardinality {
+		// trim "Nullable()" | "LowCardinality()"
 		t = t.Elem()
 	}
-
-	logger = zap.New(zapcore.NewSamplerWithOptions(
-		logger.Core(),
-		time.Second*10,
-		1,
-		0,
-	)).With(zap.String("note", "this log is sampled"))
 
 	switch t {
 	case proto.ColumnTypeBool:
 		return NewColBool(nullable), nil
 	case proto.ColumnTypeString:
-		return NewColString(nullable, logger.Named("col_string")), nil
+		return NewColString(nullable, lowCardinality), nil
 	case proto.ColumnTypeInt8:
 		return NewColInt8(nullable), nil
 	case proto.ColumnTypeUInt8:
@@ -104,7 +96,7 @@ func insaneInfer(auto proto.ColAuto, logger *zap.Logger) (InsaneColInput, error)
 	case proto.ColumnTypeIPv6:
 		return NewColIPv6(nullable), nil
 	default:
-		switch auto.Type().Base() {
+		switch base {
 		case proto.ColumnTypeEnum8:
 			return NewColEnum8(auto.Data.(*proto.ColEnum)), nil
 		case proto.ColumnTypeEnum16:

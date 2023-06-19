@@ -8,19 +8,20 @@ import (
 )
 
 type Sample struct {
-	C1       json.RawMessage            `json:"c1"`
-	C2       int8                       `json:"c2"`
-	C3       int16                      `json:"c3"`
-	C4       proto.Nullable[int16]      `json:"c4"`
-	C5       proto.Nullable[string]     `json:"c5"`
-	Level    proto.Enum8                `json:"level"`
-	IPv4     proto.Nullable[proto.IPv4] `json:"ipv4"`
-	IPv6     proto.Nullable[proto.IPv6] `json:"ipv6"`
-	TS       time.Time                  `json:"ts"`
-	TSWithTZ time.Time                  `json:"ts_with_tz"`
-	TS64     time.Time                  `json:"ts_64"`
-	F32      float32                    `json:"f32"`
-	F64      float64                    `json:"f64"`
+	C1       json.RawMessage
+	C2       int8
+	C3       int16
+	C4       proto.Nullable[int16]
+	C5       proto.Nullable[string]
+	Level    proto.Enum8
+	IPv4     proto.Nullable[proto.IPv4]
+	IPv6     proto.Nullable[proto.IPv6]
+	TS       time.Time
+	TSWithTZ time.Time
+	TS64     time.Time
+	F32      float32
+	F64      float64
+	LcStr    string
 
 	// we are set this in the set_time action
 	TS64Auto      time.Time `json:"ts_64_auto"`
@@ -57,11 +58,12 @@ func (s *Sample) MarshalJSON() ([]byte, error) {
 		Level    string          `json:"level,omitempty"`
 		Ipv4     string          `json:"ipv4,omitempty"`
 		Ipv6     string          `json:"ipv6,omitempty"`
-		F32      float32         `json:"f32"`
-		F64      float64         `json:"f64"`
-		TS       int64           `json:"ts"`
+		F32      float32         `json:"f32,omitempty"`
+		F64      float64         `json:"f64,omitempty"`
+		TS       int32           `json:"ts"`
 		TSWithTZ int64           `json:"ts_with_tz"`
 		TS64     int64           `json:"ts64"`
+		LcStr    string          `json:"lc_str,omitempty"`
 	}{
 		C1:       s.C1,
 		C2:       s.C2,
@@ -73,8 +75,9 @@ func (s *Sample) MarshalJSON() ([]byte, error) {
 		Ipv6:     ipv6,
 		F32:      s.F32,
 		F64:      s.F64,
-		TS:       s.TS.Unix(),
+		TS:       int32(s.TS.Unix()),
 		TSWithTZ: s.TS.Unix(),
 		TS64:     s.TS64.UnixMilli(),
+		LcStr:    s.LcStr,
 	})
 }

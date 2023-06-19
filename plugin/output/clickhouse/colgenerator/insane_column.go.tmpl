@@ -11,11 +11,14 @@ import (
 {{ if not $type.CustomImpl }}
 // {{ $type.ColumnTypeName }} represents Clickhouse {{ $type.ChTypeName }} type.
 type {{ $type.ColumnTypeName }} struct {
+	// col contains values for the {{ $type.ChTypeName }} type.
 	col *{{ $type.LibChTypeNameFull }}
-	{{- if not $type.CannotBeNull }}
+	{{ if not $type.CannotBeNull }}
+	// nullCol contains nullable values for the Nullable({{ $type.ChTypeName }}) type.
 	nullCol  *{{ $type.NullableTypeName }}
+	// nullable the truth if the column is nullable.
 	nullable bool
-	{{- end }}
+	{{ end }}
 }
 {{ else }}
 // struct {{ $type.ColumnTypeName }} defined and implemented in another file
@@ -90,46 +93,69 @@ func (t *{{ $type.ColumnTypeName }}) Reset() {
 	{{- if not $type.CannotBeNull }}
 	t.nullCol.Reset()
 	{{- end }}
+	{{- if $type.LowCardinality }}
+	t.lcCol.Reset()
+	{{- end }}
 }
 
 func (t *{{ $type.ColumnTypeName }}) Type() proto.ColumnType {
-	{{- if $type.CannotBeNull }}
-	return t.col.Type()
-	{{- else }}
+	{{- if not $type.CannotBeNull }}
 	if t.nullable {
 		return t.nullCol.Type()
 	}
-	return t.col.Type()
 	{{- end }}
+	{{- if $type.LowCardinality }}
+	if t.lc {
+		return t.lcCol.Type()
+	}
+	{{- end }}
+	return t.col.Type()
 }
 
 func (t *{{ $type.ColumnTypeName }}) Rows() int {
-	{{- if $type.CannotBeNull }}
-	return t.col.Rows()
-	{{- else }}
+	{{- if not $type.CannotBeNull }}
 	if t.nullable {
 		return t.nullCol.Rows()
 	}
-	return t.col.Rows()
 	{{- end }}
+	{{- if $type.LowCardinality }}
+	if t.lc {
+		return t.lcCol.Rows()
+	}
+	{{- end }}
+	return t.col.Rows()
 }
 
 func (t *{{ $type.ColumnTypeName }}) EncodeColumn(buffer *proto.Buffer) {
-	{{- if $type.CannotBeNull }}
-	t.col.EncodeColumn(buffer)
-	{{- else }}
+	{{- if not $type.CannotBeNull }}
 	if t.nullable {
 		t.nullCol.EncodeColumn(buffer)
 		return
 	}
-	t.col.EncodeColumn(buffer)
 	{{- end }}
+	{{- if $type.LowCardinality }}
+	if t.lc {
+		t.lcCol.EncodeColumn(buffer)
+		return
+	}
+	{{- end }}
+	t.col.EncodeColumn(buffer)
 }
 
 {{ if $type.Preparable }}
 // Prepare the column before sending.
 func (t *{{ $type.ColumnTypeName }}) Prepare() error {
+	{{- if $type.LowCardinality }}
+	if t.lc {
+		return t.lcCol.Prepare()
+	}
+	{{- end }}
+
+	{{- if $type.IsEnum }}
 	return t.col.Prepare()
+	{{- else }}
+	return nil
+	{{- end }}
 }
 {{ end }}
 

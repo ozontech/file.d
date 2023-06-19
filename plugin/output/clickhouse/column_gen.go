@@ -8,8 +8,12 @@ import (
 
 // ColBool represents Clickhouse Bool type.
 type ColBool struct {
-	col      *proto.ColBool
-	nullCol  *proto.ColNullable[bool]
+	// col contains values for the Bool type.
+	col *proto.ColBool
+
+	// nullCol contains nullable values for the Nullable(Bool) type.
+	nullCol *proto.ColNullable[bool]
+	// nullable the truth if the column is nullable.
 	nullable bool
 }
 
@@ -75,15 +79,20 @@ func (t *ColBool) EncodeColumn(buffer *proto.Buffer) {
 // struct ColString defined and implemented in another file
 
 var _ InsaneColInput = (*ColString)(nil)
+var _ proto.Preparable = (*ColString)(nil)
 
 func (t *ColString) Reset() {
 	t.col.Reset()
 	t.nullCol.Reset()
+	t.lcCol.Reset()
 }
 
 func (t *ColString) Type() proto.ColumnType {
 	if t.nullable {
 		return t.nullCol.Type()
+	}
+	if t.lc {
+		return t.lcCol.Type()
 	}
 	return t.col.Type()
 }
@@ -91,6 +100,9 @@ func (t *ColString) Type() proto.ColumnType {
 func (t *ColString) Rows() int {
 	if t.nullable {
 		return t.nullCol.Rows()
+	}
+	if t.lc {
+		return t.lcCol.Rows()
 	}
 	return t.col.Rows()
 }
@@ -100,7 +112,19 @@ func (t *ColString) EncodeColumn(buffer *proto.Buffer) {
 		t.nullCol.EncodeColumn(buffer)
 		return
 	}
+	if t.lc {
+		t.lcCol.EncodeColumn(buffer)
+		return
+	}
 	t.col.EncodeColumn(buffer)
+}
+
+// Prepare the column before sending.
+func (t *ColString) Prepare() error {
+	if t.lc {
+		return t.lcCol.Prepare()
+	}
+	return nil
 }
 
 // struct ColEnum8 defined and implemented in another file
@@ -157,8 +181,12 @@ func (t *ColEnum16) Prepare() error {
 
 // ColInt8 represents Clickhouse Int8 type.
 type ColInt8 struct {
-	col      *proto.ColInt8
-	nullCol  *proto.ColNullable[int8]
+	// col contains values for the Int8 type.
+	col *proto.ColInt8
+
+	// nullCol contains nullable values for the Nullable(Int8) type.
+	nullCol *proto.ColNullable[int8]
+	// nullable the truth if the column is nullable.
 	nullable bool
 }
 
@@ -226,8 +254,12 @@ func (t *ColInt8) EncodeColumn(buffer *proto.Buffer) {
 
 // ColUInt8 represents Clickhouse UInt8 type.
 type ColUInt8 struct {
-	col      *proto.ColUInt8
-	nullCol  *proto.ColNullable[uint8]
+	// col contains values for the UInt8 type.
+	col *proto.ColUInt8
+
+	// nullCol contains nullable values for the Nullable(UInt8) type.
+	nullCol *proto.ColNullable[uint8]
+	// nullable the truth if the column is nullable.
 	nullable bool
 }
 
@@ -295,8 +327,12 @@ func (t *ColUInt8) EncodeColumn(buffer *proto.Buffer) {
 
 // ColInt16 represents Clickhouse Int16 type.
 type ColInt16 struct {
-	col      *proto.ColInt16
-	nullCol  *proto.ColNullable[int16]
+	// col contains values for the Int16 type.
+	col *proto.ColInt16
+
+	// nullCol contains nullable values for the Nullable(Int16) type.
+	nullCol *proto.ColNullable[int16]
+	// nullable the truth if the column is nullable.
 	nullable bool
 }
 
@@ -364,8 +400,12 @@ func (t *ColInt16) EncodeColumn(buffer *proto.Buffer) {
 
 // ColUInt16 represents Clickhouse UInt16 type.
 type ColUInt16 struct {
-	col      *proto.ColUInt16
-	nullCol  *proto.ColNullable[uint16]
+	// col contains values for the UInt16 type.
+	col *proto.ColUInt16
+
+	// nullCol contains nullable values for the Nullable(UInt16) type.
+	nullCol *proto.ColNullable[uint16]
+	// nullable the truth if the column is nullable.
 	nullable bool
 }
 
@@ -433,8 +473,12 @@ func (t *ColUInt16) EncodeColumn(buffer *proto.Buffer) {
 
 // ColInt32 represents Clickhouse Int32 type.
 type ColInt32 struct {
-	col      *proto.ColInt32
-	nullCol  *proto.ColNullable[int32]
+	// col contains values for the Int32 type.
+	col *proto.ColInt32
+
+	// nullCol contains nullable values for the Nullable(Int32) type.
+	nullCol *proto.ColNullable[int32]
+	// nullable the truth if the column is nullable.
 	nullable bool
 }
 
@@ -502,8 +546,12 @@ func (t *ColInt32) EncodeColumn(buffer *proto.Buffer) {
 
 // ColUInt32 represents Clickhouse UInt32 type.
 type ColUInt32 struct {
-	col      *proto.ColUInt32
-	nullCol  *proto.ColNullable[uint32]
+	// col contains values for the UInt32 type.
+	col *proto.ColUInt32
+
+	// nullCol contains nullable values for the Nullable(UInt32) type.
+	nullCol *proto.ColNullable[uint32]
+	// nullable the truth if the column is nullable.
 	nullable bool
 }
 
@@ -571,8 +619,12 @@ func (t *ColUInt32) EncodeColumn(buffer *proto.Buffer) {
 
 // ColInt64 represents Clickhouse Int64 type.
 type ColInt64 struct {
-	col      *proto.ColInt64
-	nullCol  *proto.ColNullable[int64]
+	// col contains values for the Int64 type.
+	col *proto.ColInt64
+
+	// nullCol contains nullable values for the Nullable(Int64) type.
+	nullCol *proto.ColNullable[int64]
+	// nullable the truth if the column is nullable.
 	nullable bool
 }
 
@@ -640,8 +692,12 @@ func (t *ColInt64) EncodeColumn(buffer *proto.Buffer) {
 
 // ColUInt64 represents Clickhouse UInt64 type.
 type ColUInt64 struct {
-	col      *proto.ColUInt64
-	nullCol  *proto.ColNullable[uint64]
+	// col contains values for the UInt64 type.
+	col *proto.ColUInt64
+
+	// nullCol contains nullable values for the Nullable(UInt64) type.
+	nullCol *proto.ColNullable[uint64]
+	// nullable the truth if the column is nullable.
 	nullable bool
 }
 
@@ -709,8 +765,12 @@ func (t *ColUInt64) EncodeColumn(buffer *proto.Buffer) {
 
 // ColInt128 represents Clickhouse Int128 type.
 type ColInt128 struct {
-	col      *proto.ColInt128
-	nullCol  *proto.ColNullable[proto.Int128]
+	// col contains values for the Int128 type.
+	col *proto.ColInt128
+
+	// nullCol contains nullable values for the Nullable(Int128) type.
+	nullCol *proto.ColNullable[proto.Int128]
+	// nullable the truth if the column is nullable.
 	nullable bool
 }
 
@@ -778,8 +838,12 @@ func (t *ColInt128) EncodeColumn(buffer *proto.Buffer) {
 
 // ColUInt128 represents Clickhouse UInt128 type.
 type ColUInt128 struct {
-	col      *proto.ColUInt128
-	nullCol  *proto.ColNullable[proto.UInt128]
+	// col contains values for the UInt128 type.
+	col *proto.ColUInt128
+
+	// nullCol contains nullable values for the Nullable(UInt128) type.
+	nullCol *proto.ColNullable[proto.UInt128]
+	// nullable the truth if the column is nullable.
 	nullable bool
 }
 
@@ -847,8 +911,12 @@ func (t *ColUInt128) EncodeColumn(buffer *proto.Buffer) {
 
 // ColInt256 represents Clickhouse Int256 type.
 type ColInt256 struct {
-	col      *proto.ColInt256
-	nullCol  *proto.ColNullable[proto.Int256]
+	// col contains values for the Int256 type.
+	col *proto.ColInt256
+
+	// nullCol contains nullable values for the Nullable(Int256) type.
+	nullCol *proto.ColNullable[proto.Int256]
+	// nullable the truth if the column is nullable.
 	nullable bool
 }
 
@@ -916,8 +984,12 @@ func (t *ColInt256) EncodeColumn(buffer *proto.Buffer) {
 
 // ColUInt256 represents Clickhouse UInt256 type.
 type ColUInt256 struct {
-	col      *proto.ColUInt256
-	nullCol  *proto.ColNullable[proto.UInt256]
+	// col contains values for the UInt256 type.
+	col *proto.ColUInt256
+
+	// nullCol contains nullable values for the Nullable(UInt256) type.
+	nullCol *proto.ColNullable[proto.UInt256]
+	// nullable the truth if the column is nullable.
 	nullable bool
 }
 

@@ -57,3 +57,5 @@ pipelines:
           type: Float32
         - name: f64
           type: Float64
+        - name: lc_str
+          type: LowCardinality(String)
