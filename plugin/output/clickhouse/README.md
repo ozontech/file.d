@@ -70,6 +70,7 @@ If you set 128-256 bits - File.d will cast the number to the int64.
 * Bool
 * Nullable
 * IPv4, IPv6
+* LowCardinality(String)
 If you need more types, please, create an issue.
 
 <br>

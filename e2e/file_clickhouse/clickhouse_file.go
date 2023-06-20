@@ -60,6 +60,7 @@ func (c *Config) Configure(t *testing.T, conf *cfg.Config, pipelineName string) 
 		    ts_rfc3339nano DateTime64(9),
 		    f32 Float32,
 		    f64 Float64,
+		    lc_str LowCardinality(String),
 			created_at DateTime64(6, 'UTC') DEFAULT now()
 		) ENGINE = Memory`,
 	})
@@ -87,6 +88,9 @@ func (c *Config) Configure(t *testing.T, conf *cfg.Config, pipelineName string) 
 			TS:       c.sampleTime,
 			TSWithTZ: c.sampleTime,
 			TS64:     c.sampleTime,
+			F32:      123.45,
+			F64:      0.6789,
+			LcStr:    "0558cee0-dd11-4304-9a15-1ad53d151fed",
 		},
 		{
 			C1:       json.RawMessage(`549023`),
@@ -100,6 +104,9 @@ func (c *Config) Configure(t *testing.T, conf *cfg.Config, pipelineName string) 
 			TS:       c.sampleTime,
 			TSWithTZ: c.sampleTime,
 			TS64:     c.sampleTime,
+			F32:      153.93068,
+			F64:      32.02867104,
+			LcStr:    "cc578a55-8f57-4475-9355-67dfccac9e8d",
 		},
 		{
 			C1:       json.RawMessage(`{"type":"append object as string"}`),
@@ -113,8 +120,9 @@ func (c *Config) Configure(t *testing.T, conf *cfg.Config, pipelineName string) 
 			TS:       c.sampleTime,
 			TSWithTZ: c.sampleTime,
 			TS64:     c.sampleTime,
-			F32:      542.12345454545454,
+			F32:      542.1235,
 			F64:      0.5555555555555555,
+			LcStr:    "cc578a55-8f57-4475-9355-67dfccac9e8d",
 		},
 	}
 }
@@ -179,12 +187,13 @@ func (c *Config) Validate(t *testing.T) {
 		ts3339nano = new(proto.ColDateTime64)
 		f32        = new(proto.ColFloat32)
 		f64        = new(proto.ColFloat64)
+		lcStr      = new(proto.ColStr).LowCardinality()
 	)
 	ts64.WithPrecision(proto.PrecisionMilli)
 	ts64Auto.WithPrecision(proto.PrecisionNano)
 
 	require.NoError(t, c.conn.Do(c.ctx, ch.Query{
-		Body: `select c1, c2, c3, c4, c5, level, ipv4, ipv6, ts, ts_with_tz, ts64, ts64_auto, ts_rfc3339nano, f32, f64
+		Body: `select c1, c2, c3, c4, c5, level, ipv4, ipv6, ts, ts_with_tz, ts64, ts64_auto, ts_rfc3339nano, f32, f64, lc_str
 			from test_table_insert
 			order by c1`,
 		Result: proto.Results{
@@ -203,6 +212,7 @@ func (c *Config) Validate(t *testing.T) {
 			proto.ResultColumn{Name: "ts_rfc3339nano", Data: ts3339nano},
 			proto.ResultColumn{Name: "f32", Data: f32},
 			proto.ResultColumn{Name: "f64", Data: f64},
+			proto.ResultColumn{Name: "lc_str", Data: lcStr},
 		},
 		OnResult: func(_ context.Context, _ proto.Block) error {
 			return nil
@@ -227,6 +237,7 @@ func (c *Config) Validate(t *testing.T) {
 		a.Greater(ts3339nano.Row(0), time.Now().Add(-time.Second*20))
 		a.Equal(sample.F32, f32.Row(i))
 		a.Equal(sample.F64, f64.Row(i))
+		a.Equal(sample.LcStr, lcStr.Row(i))
 
 		a.Equal(sample.TSWithTZ.Unix(), tsWithTz.Row(i).Unix())
 		a.Equal("Europe/Moscow", tsWithTz.Row(i).Location().String())

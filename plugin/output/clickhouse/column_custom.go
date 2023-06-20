@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/ClickHouse/ch-go/proto"
-	"go.uber.org/zap"
 )
 
 var (
@@ -240,18 +239,29 @@ func (t *ColEnum16) Append(node InsaneNode) error {
 
 // ColString represents Clickhouse String type.
 type ColString struct {
-	col      *proto.ColStr
-	nullCol  *proto.ColNullable[string]
+	// col contains values for the String type.
+	col *proto.ColStr
+
+	// nullCol contains nullable values for the Nullable(String) type.
+	nullCol *proto.ColNullable[string]
+	// nullable the truth if the column is nullable.
 	nullable bool
-	logger   *zap.Logger
+
+	// lcCol contains LowCardinality values for the LowCardinality(proto.ColLowCardinality[String]) type.
+	lcCol *proto.ColLowCardinality[string]
+	// lc the truth if the column is LowCardinality.
+	lc bool
 }
 
-func NewColString(nullable bool, logger *zap.Logger) *ColString {
+var _ proto.StateEncoder = (*ColString)(nil)
+
+func NewColString(nullable, lowCardinality bool) *ColString {
 	return &ColString{
 		col:      new(proto.ColStr),
 		nullCol:  new(proto.ColStr).Nullable(),
 		nullable: nullable,
-		logger:   logger,
+		lcCol:    new(proto.ColStr).LowCardinality(),
+		lc:       lowCardinality,
 	}
 }
 
@@ -274,16 +284,24 @@ func (t *ColString) Append(node InsaneNode) error {
 		}
 	} else {
 		val = node.EncodeToString()
-		t.logger.Warn("appending non-string value to the String column", zap.String("value", val))
 	}
 
-	if t.nullable {
+	switch {
+	case t.nullable:
 		t.nullCol.Append(proto.NewNullable(val))
-	} else {
+	case t.lc:
+		t.lcCol.Append(val)
+	default:
 		t.col.Append(val)
 	}
 
 	return nil
+}
+
+func (t *ColString) EncodeState(b *proto.Buffer) {
+	if t.lc {
+		t.lcCol.EncodeState(b)
+	}
 }
 
 // ColFloat32 represents Clickhouse Float32 type.

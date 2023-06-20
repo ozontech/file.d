@@ -148,6 +148,7 @@ type Config struct {
 	// > * Bool
 	// > * Nullable
 	// > * IPv4, IPv6
+	// > * LowCardinality(String)
 	// > If you need more types, please, create an issue.
 	Columns []Column `json:"columns" required:"true"` // *
 
@@ -286,7 +287,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		p.logger.Fatal("'db_request_timeout' can't be <1")
 	}
 
-	schema, err := inferInsaneColInputs(p.config.Columns, p.logger)
+	schema, err := inferInsaneColInputs(p.config.Columns)
 	if err != nil {
 		p.logger.Fatal("invalid database schema", zap.Error(err))
 	}
@@ -390,7 +391,7 @@ func (d data) reset() {
 func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 	if *workerData == nil {
 		// we don't check the error, schema already validated in the Start
-		columns, _ := inferInsaneColInputs(p.config.Columns, p.logger)
+		columns, _ := inferInsaneColInputs(p.config.Columns)
 		input := inputFromColumns(columns)
 		*workerData = data{
 			cols:  columns,

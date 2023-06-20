@@ -61,10 +61,11 @@ func clickhouseTypes() []Type {
 			CannotConvert: true,
 		},
 		{
-			ChTypeName:    "String",
-			GoName:        "string",
-			CannotConvert: true,
-			CustomImpl:    true,
+			ChTypeName:     "String",
+			GoName:         "string",
+			CannotConvert:  true,
+			CustomImpl:     true,
+			LowCardinality: true,
 		},
 		{
 			ChTypeName:   "Enum8",

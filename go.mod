@@ -3,7 +3,7 @@ module github.com/ozontech/file.d
 go 1.20
 
 require (
-	github.com/ClickHouse/ch-go v0.56.0
+	github.com/ClickHouse/ch-go v0.56.1
 	github.com/KimMachineGun/automemlimit v0.2.6
 	github.com/Masterminds/squirrel v1.5.2
 	github.com/Shopify/sarama v1.38.1
@@ -22,7 +22,7 @@ require (
 	github.com/prometheus/client_golang v1.11.1
 	github.com/rjeczalik/notify v0.9.3
 	github.com/satori/go.uuid v1.2.0
-	github.com/stretchr/testify v1.8.3
+	github.com/stretchr/testify v1.8.4
 	github.com/valyala/fasthttp v1.47.0
 	github.com/vitkovskii/insane-json v0.1.7
 	github.com/xdg-go/scram v1.1.2
