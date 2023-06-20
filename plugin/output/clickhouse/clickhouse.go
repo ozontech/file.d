@@ -150,12 +150,13 @@ type Config struct {
 	// > * IPv4, IPv6
 	// > * LowCardinality(String)
 	// > * Array(String)
+	// >
 	// > If you need more types, please, create an issue.
 	Columns []Column `json:"columns" required:"true"` // *
 
 	// > @3@4@5@6
 	// >
-	// > If true, file.d will fail when types are mismatched.
+	// > If true, file.d fails when types are mismatched.
 	// >
 	// > If false, file.d will cast any JSON type to the column type.
 	// >

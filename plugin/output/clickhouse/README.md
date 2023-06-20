@@ -72,13 +72,14 @@ If you set 128-256 bits - File.d will cast the number to the int64.
 * IPv4, IPv6
 * LowCardinality(String)
 * Array(String)
+
 If you need more types, please, create an issue.
 
 <br>
 
 **`strict_types`** *`bool`* *`default=true`* 
 
-If true, file.d will fail when types are mismatched.
+If true, file.d fails when types are mismatched.
 
 If false, file.d will cast any JSON type to the column type.
 
