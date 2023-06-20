@@ -59,3 +59,5 @@ pipelines:
           type: Float64
         - name: lc_str
           type: LowCardinality(String)
+        - name: str_arr
+          type: Array(String)

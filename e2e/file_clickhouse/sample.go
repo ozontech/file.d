@@ -22,6 +22,7 @@ type Sample struct {
 	F32      float32
 	F64      float64
 	LcStr    string
+	StrArr   []string
 
 	// we are set this in the set_time action
 	TS64Auto      time.Time `json:"ts_64_auto"`
@@ -64,6 +65,7 @@ func (s *Sample) MarshalJSON() ([]byte, error) {
 		TSWithTZ int64           `json:"ts_with_tz"`
 		TS64     int64           `json:"ts64"`
 		LcStr    string          `json:"lc_str,omitempty"`
+		StrArr   []string        `json:"str_arr"`
 	}{
 		C1:       s.C1,
 		C2:       s.C2,
@@ -79,5 +81,6 @@ func (s *Sample) MarshalJSON() ([]byte, error) {
 		TSWithTZ: s.TS.Unix(),
 		TS64:     s.TS64.UnixMilli(),
 		LcStr:    s.LcStr,
+		StrArr:   s.StrArr,
 	})
 }

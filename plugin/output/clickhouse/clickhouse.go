@@ -408,7 +408,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 
 			var insaneNode InsaneNode
 			if node != nil && p.config.StrictTypes {
-				insaneNode = node.MutateToStrict()
+				insaneNode = StrictNode{node.MutateToStrict()}
 			} else if node != nil {
 				insaneNode = NonStrictNode{node}
 			}
