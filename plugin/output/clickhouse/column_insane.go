@@ -47,6 +47,10 @@ type NonStrictNode struct {
 }
 
 func (n NonStrictNode) AsStringArray() ([]string, error) {
+	if n.Node == nil || n.Node.IsNull() {
+		return []string{}, nil
+	}
+
 	var vals []string
 	if n.IsArray() {
 		arr := n.AsArray()
