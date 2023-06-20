@@ -46,68 +46,75 @@ func inferInsaneColInputs(columns []Column) ([]InsaneColumn, error) {
 }
 
 func insaneInfer(auto proto.ColAuto) (InsaneColInput, error) {
-	base := auto.Type().Base()
-	nullable := base == proto.ColumnTypeNullable
-	lowCardinality := base == proto.ColumnTypeLowCardinality
+	parent := auto.Type().Base()
+	nullable := parent == proto.ColumnTypeNullable
+	lowCardinality := parent == proto.ColumnTypeLowCardinality
 
-	t := auto.Type()
+	child := auto.Type()
 	if nullable || lowCardinality {
-		// trim "Nullable()" | "LowCardinality()"
-		t = t.Elem()
+		// trim "Nullable()", "LowCardinality()"
+		child = child.Elem()
 	}
 
-	switch t {
-	case proto.ColumnTypeBool:
-		return NewColBool(nullable), nil
-	case proto.ColumnTypeString:
-		return NewColString(nullable, lowCardinality), nil
-	case proto.ColumnTypeInt8:
-		return NewColInt8(nullable), nil
-	case proto.ColumnTypeUInt8:
-		return NewColUInt8(nullable), nil
-	case proto.ColumnTypeInt16:
-		return NewColInt16(nullable), nil
-	case proto.ColumnTypeUInt16:
-		return NewColUInt16(nullable), nil
-	case proto.ColumnTypeInt32:
-		return NewColInt32(nullable), nil
-	case proto.ColumnTypeUInt32:
-		return NewColUInt32(nullable), nil
-	case proto.ColumnTypeInt64:
-		return NewColInt64(nullable), nil
-	case proto.ColumnTypeUInt64:
-		return NewColUInt64(nullable), nil
-	case proto.ColumnTypeInt128:
-		return NewColInt128(nullable), nil
-	case proto.ColumnTypeUInt128:
-		return NewColUInt128(nullable), nil
-	case proto.ColumnTypeInt256:
-		return NewColInt256(nullable), nil
-	case proto.ColumnTypeUInt256:
-		return NewColUInt256(nullable), nil
-	case proto.ColumnTypeFloat32:
-		return NewColFloat32(nullable), nil
-	case proto.ColumnTypeFloat64:
-		return NewColFloat64(nullable), nil
+	switch parent {
+	case proto.ColumnTypeEnum8:
+		return NewColEnum8(auto.Data.(*proto.ColEnum)), nil
+	case proto.ColumnTypeEnum16:
+		return NewColEnum16(auto.Data.(*proto.ColEnum)), nil
 	case proto.ColumnTypeDateTime:
 		return NewColDateTime(auto.Data.(*proto.ColDateTime)), nil
-	case proto.ColumnTypeIPv4:
-		return NewColIPv4(nullable), nil
-	case proto.ColumnTypeIPv6:
-		return NewColIPv6(nullable), nil
+	case proto.ColumnTypeDateTime64:
+		col := auto.Data.(*proto.ColDateTime64)
+		return NewColDateTime64(col, col.Precision.Scale()), nil
+	case proto.ColumnTypeArray:
+		child := child.Elem()
+		if child == proto.ColumnTypeString {
+			return NewColStringArray(), nil
+		}
+		return nil, fmt.Errorf("array of type %q is not supported", child.String())
 	default:
-		switch base {
-		case proto.ColumnTypeEnum8:
-			return NewColEnum8(auto.Data.(*proto.ColEnum)), nil
-		case proto.ColumnTypeEnum16:
-			return NewColEnum16(auto.Data.(*proto.ColEnum)), nil
+		switch child {
+		case proto.ColumnTypeBool:
+			return NewColBool(nullable), nil
+		case proto.ColumnTypeString:
+			return NewColString(nullable, lowCardinality), nil
+		case proto.ColumnTypeInt8:
+			return NewColInt8(nullable), nil
+		case proto.ColumnTypeUInt8:
+			return NewColUInt8(nullable), nil
+		case proto.ColumnTypeInt16:
+			return NewColInt16(nullable), nil
+		case proto.ColumnTypeUInt16:
+			return NewColUInt16(nullable), nil
+		case proto.ColumnTypeInt32:
+			return NewColInt32(nullable), nil
+		case proto.ColumnTypeUInt32:
+			return NewColUInt32(nullable), nil
+		case proto.ColumnTypeInt64:
+			return NewColInt64(nullable), nil
+		case proto.ColumnTypeUInt64:
+			return NewColUInt64(nullable), nil
+		case proto.ColumnTypeInt128:
+			return NewColInt128(nullable), nil
+		case proto.ColumnTypeUInt128:
+			return NewColUInt128(nullable), nil
+		case proto.ColumnTypeInt256:
+			return NewColInt256(nullable), nil
+		case proto.ColumnTypeUInt256:
+			return NewColUInt256(nullable), nil
+		case proto.ColumnTypeFloat32:
+			return NewColFloat32(nullable), nil
+		case proto.ColumnTypeFloat64:
+			return NewColFloat64(nullable), nil
 		case proto.ColumnTypeDateTime:
 			return NewColDateTime(auto.Data.(*proto.ColDateTime)), nil
-		case proto.ColumnTypeDateTime64:
-			col := auto.Data.(*proto.ColDateTime64)
-			return NewColDateTime64(col, col.Precision.Scale()), nil
+		case proto.ColumnTypeIPv4:
+			return NewColIPv4(nullable), nil
+		case proto.ColumnTypeIPv6:
+			return NewColIPv6(nullable), nil
+		default:
+			return nil, fmt.Errorf("inference for type %q is not supported", auto.Type().String())
 		}
-		return nil, fmt.Errorf("inference for type %q is not supported", auto.Type().String())
 	}
 }
 

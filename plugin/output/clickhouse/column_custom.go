@@ -275,15 +275,9 @@ func (t *ColString) Append(node InsaneNode) error {
 		return nil
 	}
 
-	var val string
-	if node.IsString() {
-		var err error
-		val, err = node.AsString()
-		if err != nil {
-			return err
-		}
-	} else {
-		val = node.EncodeToString()
+	val, err := node.AsString()
+	if err != nil {
+		return fmt.Errorf("converting node to the string: %w", err)
 	}
 
 	switch {

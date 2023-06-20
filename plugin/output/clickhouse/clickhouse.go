@@ -149,20 +149,26 @@ type Config struct {
 	// > * Nullable
 	// > * IPv4, IPv6
 	// > * LowCardinality(String)
+	// > * Array(String)
+	// >
 	// > If you need more types, please, create an issue.
 	Columns []Column `json:"columns" required:"true"` // *
 
 	// > @3@4@5@6
 	// >
-	// > If true, file.d will fall when types are mismatched.
+	// > If true, file.d fails when types are mismatched.
 	// >
 	// > If false, file.d will cast any JSON type to the column type.
-	// > For example, if an event value is a Number, but the column type is a Bool,
-	// > the Number will be converted to the "true" if the value is "1".
+	// >
+	// > For example, if strict_types is false and an event value is a Number,
+	// > but the column type is a Bool, the Number will be converted to the "true"
+	// > if the value is "1".
 	// > But if the value is an Object and the column is an Int
 	// > File.d converts the Object to "0" to prevent fall.
 	// >
-	// > Note: String column accepts any json type - the value will be encoded to JSON.
+	// > In the non-strict mode, for String and Array(String) columns the value will be encoded to JSON.
+	// >
+	// > If the strict mode is enabled file.d fails (exit with code 1) in above examples.
 	StrictTypes bool `json:"strict_types" default:"true"` // *
 
 	// > @3@4@5@6
@@ -408,7 +414,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 
 			var insaneNode InsaneNode
 			if node != nil && p.config.StrictTypes {
-				insaneNode = node.MutateToStrict()
+				insaneNode = StrictNode{node.MutateToStrict()}
 			} else if node != nil {
 				insaneNode = NonStrictNode{node}
 			}
