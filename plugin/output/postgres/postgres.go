@@ -66,6 +66,7 @@ type Plugin struct {
 	batcher    *pipeline.Batcher
 	ctx        context.Context
 	cancelFunc context.CancelFunc
+	isStrict   bool
 
 	queryBuilder PgQueryBuilder
 	pool         PgxIface
@@ -88,8 +89,7 @@ type ConfigColumn struct {
 type Config struct {
 	// > @3@4@5@6
 	// >
-	// > In strict mode file.d will crash on events without required columns.
-	// Otherwise events will be discarded.
+	// > Deprecated. Use `is_strict` flag in pipeline settings instead.
 	Strict bool `json:"strict" default:"false"` // *
 
 	// > @3@4@5@6
@@ -183,6 +183,7 @@ func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginParams) {
 	p.controller = params.Controller
 	p.logger = params.Logger
+	p.isStrict = params.PipelineSettings.IsStrict
 	p.config = config.(*Config)
 	p.ctx = context.Background()
 	p.registerMetrics(params.MetricCtl)
@@ -266,19 +267,19 @@ func (p *Plugin) out(_ *pipeline.WorkerData, batch *pipeline.Batch) {
 			switch {
 			case errors.Is(err, ErrEventDoesntHaveField):
 				p.discardedEventMetric.WithLabelValues().Inc()
-				if p.config.Strict {
+				if p.isStrict {
 					p.logger.Fatal(err)
 				}
 				p.logger.Error(err)
 			case errors.Is(err, ErrEventFieldHasWrongType):
 				p.discardedEventMetric.WithLabelValues().Inc()
-				if p.config.Strict {
+				if p.isStrict {
 					p.logger.Fatal(err)
 				}
 				p.logger.Error(err)
 			case errors.Is(err, ErrTimestampFromDistantPastOrFuture):
 				p.discardedEventMetric.WithLabelValues().Inc()
-				if p.config.Strict {
+				if p.isStrict {
 					p.logger.Fatal(err)
 				}
 				p.logger.Error(err)

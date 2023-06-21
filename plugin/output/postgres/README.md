@@ -1,10 +1,10 @@
-# postgres output
+# Postgres output
 It sends the event batches to postgres db using pgx.
 
 ### Config params
 **`strict`** *`bool`* *`default=false`* 
 
-In strict mode file.d will crash on events without required columns.
+Deprecated. Use `is_strict` flag in pipeline settings instead.
 
 <br>
 
