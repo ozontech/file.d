@@ -1,4 +1,4 @@
-package antispam
+package matchrule
 
 import (
 	"fmt"
@@ -143,7 +143,7 @@ func runMatchBench(b *testing.B, e *Rule) {
 }
 
 func TestException_Match(t *testing.T) {
-	e := Exception{
+	e := RuleSet{
 		Cond: CondAnd,
 		Rules: []Rule{
 			NewRule([]string{"404"}, ModePrefix, true),

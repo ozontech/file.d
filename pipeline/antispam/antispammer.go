@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ozontech/file.d/cfg/matchrule"
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/metric"
 	prom "github.com/prometheus/client_golang/prometheus"
@@ -21,7 +22,7 @@ type Antispammer struct {
 	threshold       int
 	mu              sync.RWMutex
 	sources         map[uint64]source
-	exceptions      []Exception
+	exceptions      []matchrule.RuleSet
 
 	logger *zap.Logger
 
@@ -40,7 +41,7 @@ type Options struct {
 	MaintenanceInterval time.Duration
 	Threshold           int
 	UnbanIterations     int
-	Exceptions          []Exception
+	Exceptions          []matchrule.RuleSet
 
 	Logger            *zap.Logger
 	MetricsController *metric.Ctl
