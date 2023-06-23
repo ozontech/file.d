@@ -262,7 +262,7 @@ func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 	for i := range p.config.Masks {
 		mask := &p.config.Masks[i]
 		if mask.MetricName == p.config.AppliedMetricName {
-			p.logger.Warn(
+			p.logger.Error(
 				"mask cannot have metric with the same name as the plugin",
 				zap.String("metric_name", mask.MetricName),
 			)
