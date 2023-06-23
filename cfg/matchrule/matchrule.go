@@ -15,12 +15,12 @@ var (
 )
 
 func (m *Mode) UnmarshalJSON(i []byte) error {
-	switch string(i) {
-	case `"prefix"`:
+	switch {
+	case bytes.Equal(i, modePrefixBytes):
 		*m = ModePrefix
-	case `"contains"`:
+	case bytes.Equal(i, modeContainsBytes):
 		*m = ModeContains
-	case `"suffix"`:
+	case bytes.Equal(i, modeSuffixBytes):
 		*m = ModeSuffix
 	default:
 		return fmt.Errorf("unknown mode %s", string(i))
@@ -32,6 +32,12 @@ const (
 	ModePrefix Mode = iota
 	ModeContains
 	ModeSuffix
+)
+
+var (
+	modePrefixBytes   = []byte(`"prefix"`)
+	modeContainsBytes = []byte(`"contains"`)
+	modeSuffixBytes   = []byte(`"suffix"`)
 )
 
 type Rule struct {
