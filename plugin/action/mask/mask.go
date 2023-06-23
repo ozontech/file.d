@@ -190,8 +190,6 @@ func compileMask(m *Mask, logger *zap.Logger) {
 		}
 		m.Re_ = re
 		m.Groups = verifyGroupNumbers(m.Groups, re.NumSubexp(), logger)
-	} else if len(m.Groups) > 0 {
-		logger.Warn("regex is not specified, groups will not be applied")
 	}
 	for _, matchRule := range m.MatchRules {
 		if len(matchRule.Rules) == 0 {
@@ -307,6 +305,10 @@ func (p *Plugin) maskSection(mask *Mask, dst, src []byte, begin, end int) ([]byt
 }
 
 func (p *Plugin) applyMaskMetric(mask *Mask, event *pipeline.Event) {
+	if mask.appliedMetric == nil {
+		return
+	}
+
 	labelValues := make([]string, 0, len(mask.MetricLabels))
 	for _, labelValuePath := range mask.MetricLabels {
 		value := "not_set"
@@ -317,9 +319,7 @@ func (p *Plugin) applyMaskMetric(mask *Mask, event *pipeline.Event) {
 		labelValues = append(labelValues, value)
 	}
 
-	if mask.appliedMetric != nil {
-		mask.appliedMetric.WithLabelValues(labelValues...).Inc()
-	}
+	mask.appliedMetric.WithLabelValues(labelValues...).Inc()
 
 	if ce := p.logger.Check(zap.DebugLevel, "mask appeared to event"); ce != nil {
 		ce.Write(zap.String("event", event.Root.EncodeToString()))

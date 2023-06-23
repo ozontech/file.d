@@ -84,10 +84,13 @@ func NewRule(values []string, mode Mode, caseInsensitive bool) Rule {
 	}
 }
 
-func (e *Rule) calcValueSizes() {
+func (e *Rule) processValues() {
 	minValueSize := math.MaxInt
 	maxValueSize := 0
 	for i := range e.Values {
+		if e.CaseInsensitive {
+			e.Values[i] = strings.ToLower(e.Values[i])
+		}
 		if len(e.Values[i]) > maxValueSize {
 			maxValueSize = len(e.Values[i])
 		}
@@ -109,7 +112,7 @@ func (e *Rule) Match(raw []byte) bool {
 
 func (e *Rule) match(raw []byte) bool {
 	if e.maxValueSize == 0 {
-		e.calcValueSizes()
+		e.processValues()
 	}
 	if len(raw) < e.minValueSize {
 		return false
@@ -173,10 +176,10 @@ type Cond byte
 var _ json.Unmarshaler = (*Cond)(nil)
 
 func (c *Cond) UnmarshalJSON(i []byte) error {
-	switch string(i) {
-	case `"and"`:
+	switch {
+	case bytes.Equal(i, condAndBytes):
 		*c = CondAnd
-	case `"or"`:
+	case bytes.Equal(i, condOrBytes):
 		*c = CondOr
 	default:
 		return fmt.Errorf("unknown condition %s", string(i))
@@ -187,6 +190,11 @@ func (c *Cond) UnmarshalJSON(i []byte) error {
 const (
 	CondAnd Cond = iota
 	CondOr
+)
+
+var (
+	condAndBytes = []byte(`"and"`)
+	condOrBytes  = []byte(`"or"`)
 )
 
 type RuleSet struct {
