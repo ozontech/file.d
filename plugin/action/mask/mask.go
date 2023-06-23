@@ -40,9 +40,14 @@ const (
 )
 
 type Plugin struct {
-	config     *Config
-	sourceBuf  []byte
-	maskBuf    []byte
+	config *Config
+
+	// sourceBuf buffer for storing node value initial and transformed
+	sourceBuf []byte
+	// maskBuf buffer for storing data in the process of masking
+	// (data before masked entry, its replacement and data after masked entry)
+	maskBuf []byte
+
 	valueNodes []*insaneJSON.Node
 	logger     *zap.Logger
 
