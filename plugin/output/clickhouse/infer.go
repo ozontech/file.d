@@ -28,7 +28,7 @@ func inferInsaneColInputs(columns []Column) ([]InsaneColumn, error) {
 
 		auto := proto.ColAuto{}
 		if err := auto.Infer(proto.ColumnType(col.Type)); err != nil {
-			return nil, fmt.Errorf("infer: %w", err)
+			return nil, fmt.Errorf("auto infer: %w", err)
 		}
 
 		insaneCol, err := insaneInfer(auto)
@@ -112,6 +112,8 @@ func insaneInfer(auto proto.ColAuto) (InsaneColInput, error) {
 			return NewColIPv4(nullable), nil
 		case proto.ColumnTypeIPv6:
 			return NewColIPv6(nullable), nil
+		case proto.ColumnTypeUUID:
+			return NewColUUID(nullable), nil
 		default:
 			return nil, fmt.Errorf("inference for type %q is not supported", auto.Type().String())
 		}
