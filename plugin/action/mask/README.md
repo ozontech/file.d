@@ -79,26 +79,26 @@ ReplaceWord, if set, is used instead of asterisks for masking patterns that are 
 
 <br>
 
-**`mask_applied_field`** *`string`* 
+**`applied_field`** *`string`* 
 
-If the mask has been applied then `mask_applied_field` will be set to `mask_applied_value` in the event.
-
-<br>
-
-**`mask_applied_value`** *`string`* 
-
-Value to be set in `mask_applied_field`.
+If the mask has been applied then `applied_field` will be set to `applied_value` in the event.
 
 <br>
 
-**`applied_metric_name`** *`string`* 
+**`applied_value`** *`string`* 
+
+Value to be set in `applied_field`.
+
+<br>
+
+**`metric_name`** *`string`* 
 
 The metric name of the regular expressions applied.
 The metric name for a mask cannot be the same as metric name for plugin.
 
 <br>
 
-**`applied_metric_labels`** *`[]string`* 
+**`metric_labels`** *`[]string`* 
 
 Lists the event fields to add to the metric. Blank list means no labels.
 Important note: labels metrics are not currently being cleared.
