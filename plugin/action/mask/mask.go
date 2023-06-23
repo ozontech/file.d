@@ -240,7 +240,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 	p.config = config.(*Config)
 
 	for i := range p.config.Masks {
-		mask := p.config.Masks[i]
+		mask := &p.config.Masks[i]
 		if mask.MaxCount > 0 && mask.ReplaceWord != "" {
 			p.logger.Fatal("invalid mask configuration")
 		}
