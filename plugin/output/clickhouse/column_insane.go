@@ -69,6 +69,9 @@ func (n NonStrictNode) AsInt() (int, error) {
 }
 
 func (n NonStrictNode) AsString() (string, error) {
+	if n.IsNil() || n.IsNull() {
+		return "", nil
+	}
 	return nonStrictAsString(n.Node), nil
 }
 

@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/ClickHouse/ch-go/proto"
+	"github.com/google/uuid"
 )
 
 type Sample struct {
@@ -24,9 +25,12 @@ type Sample struct {
 	LcStr    string
 	StrArr   []string
 
+	UUID         uuid.UUID
+	UUIDNullable uuid.NullUUID
+
 	// we are set this in the set_time action
-	TS64Auto      time.Time `json:"ts_64_auto"`
-	TSRFC3339Nano time.Time `json:"ts_rfc3339nano"`
+	TS64Auto      time.Time
+	TSRFC3339Nano time.Time
 }
 
 var _ json.Marshaler = (*Sample)(nil)
@@ -66,21 +70,26 @@ func (s *Sample) MarshalJSON() ([]byte, error) {
 		TS64     int64           `json:"ts64"`
 		LcStr    string          `json:"lc_str,omitempty"`
 		StrArr   []string        `json:"str_arr"`
+
+		UUID         string        `json:"uuid,omitempty"`
+		UUIDNullable uuid.NullUUID `json:"uuid_nullable,omitempty"`
 	}{
-		C1:       s.C1,
-		C2:       s.C2,
-		C3:       s.C3,
-		C4:       s.C4.Value,
-		C5:       s.C5.Value,
-		Level:    levelToString[s.Level],
-		Ipv4:     ipv4,
-		Ipv6:     ipv6,
-		F32:      s.F32,
-		F64:      s.F64,
-		TS:       int32(s.TS.Unix()),
-		TSWithTZ: s.TS.Unix(),
-		TS64:     s.TS64.UnixMilli(),
-		LcStr:    s.LcStr,
-		StrArr:   s.StrArr,
+		C1:           s.C1,
+		C2:           s.C2,
+		C3:           s.C3,
+		C4:           s.C4.Value,
+		C5:           s.C5.Value,
+		Level:        levelToString[s.Level],
+		Ipv4:         ipv4,
+		Ipv6:         ipv6,
+		F32:          s.F32,
+		F64:          s.F64,
+		TS:           int32(s.TS.Unix()),
+		TSWithTZ:     s.TS.Unix(),
+		TS64:         s.TS64.UnixMilli(),
+		LcStr:        s.LcStr,
+		StrArr:       s.StrArr,
+		UUID:         s.UUID.String(),
+		UUIDNullable: s.UUIDNullable,
 	})
 }
