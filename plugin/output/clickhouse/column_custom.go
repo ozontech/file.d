@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/ClickHouse/ch-go/proto"
+	"github.com/google/uuid"
 )
 
 var (
@@ -384,6 +385,49 @@ func (t *ColFloat64) Append(node InsaneNode) error {
 	return nil
 }
 
+type ColUUID struct {
+	col *proto.ColUUID
+
+	nullCol  *proto.ColNullable[uuid.UUID]
+	nullable bool
+}
+
+func NewColUUID(nullable bool) *ColUUID {
+	return &ColUUID{
+		col: &proto.ColUUID{},
+
+		nullCol:  proto.NewColNullable[uuid.UUID](&proto.ColUUID{}),
+		nullable: nullable,
+	}
+}
+
+func (t *ColUUID) Append(node InsaneNode) error {
+	if node == nil || node.IsNull() {
+		if !t.nullable {
+			return ErrNodeIsNil
+		}
+		t.nullCol.Append(proto.Null[uuid.UUID]())
+		return nil
+	}
+
+	uuidRaw, err := node.AsString()
+	if err != nil {
+		return err
+	}
+	val, err := uuid.Parse(uuidRaw)
+	if err != nil {
+		return fmt.Errorf("parsing uuid: %w", err)
+	}
+
+	if t.nullable {
+		t.nullCol.Append(proto.NewNullable(val))
+		return nil
+	}
+	t.col.Append(val)
+
+	return nil
+}
+
 func ipFromNode(node InsaneNode) (netip.Addr, error) {
 	v, err := node.AsString()
 	if err != nil {
@@ -392,7 +436,7 @@ func ipFromNode(node InsaneNode) (netip.Addr, error) {
 
 	addr, err := netip.ParseAddr(v)
 	if err != nil {
-		return netip.Addr{}, fmt.Errorf("extract ip form json node (val=%q): %w", node.EncodeToString(), err)
+		return netip.Addr{}, fmt.Errorf("extract ip form json node val=%q: %w", v, err)
 	}
 
 	return addr, nil
