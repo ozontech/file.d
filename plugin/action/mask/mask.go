@@ -5,6 +5,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/ozontech/file.d/cfg/matchrule"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
@@ -39,9 +40,14 @@ const (
 )
 
 type Plugin struct {
-	config     *Config
-	sourceBuf  []byte
-	maskBuf    []byte
+	config *Config
+
+	// sourceBuf buffer for storing node value initial and transformed
+	sourceBuf []byte
+	// maskBuf buffer for storing data in the process of masking
+	// (data before masked entry, its replacement and data after masked entry)
+	maskBuf []byte
+
 	valueNodes []*insaneJSON.Node
 	logger     *zap.Logger
 
@@ -82,14 +88,19 @@ type Config struct {
 type Mask struct {
 	// > @3@4@5@6
 	// >
+	// > List of matching rules to filter out events before checking regular expression for masking.
+	MatchRules []matchrule.RuleSet `json:"match_rules"` // *
+
+	// > @3@4@5@6
+	// >
 	// > Regular expression for masking.
-	Re  string `json:"re" default:"" required:"true"` // *
+	Re  string `json:"re" default:""` // *
 	Re_ *regexp.Regexp
 
 	// > @3@4@5@6
 	// >
 	// > Groups are numbers of masking groups in expression, zero for mask all expression.
-	Groups []int `json:"groups" required:"true"` // *
+	Groups []int `json:"groups"` // *
 
 	// > @3@4@5@6
 	// >
@@ -100,6 +111,31 @@ type Mask struct {
 	// >
 	// > ReplaceWord, if set, is used instead of asterisks for masking patterns that are of the same length or longer.
 	ReplaceWord string `json:"replace_word"` // *
+
+	// > @3@4@5@6
+	// >
+	// > If the mask has been applied then `applied_field` will be set to `applied_value` in the event.
+	AppliedField string `json:"applied_field"` // *
+
+	// > @3@4@5@6
+	// >
+	// > Value to be set in `applied_field`.
+	AppliedValue string `json:"applied_value"` // *
+
+	// > @3@4@5@6
+	// >
+	// > The metric name of the regular expressions applied.
+	// > The metric name for a mask cannot be the same as metric name for plugin.
+	MetricName string `json:"metric_name"` // *
+
+	// > @3@4@5@6
+	// >
+	// > Lists the event fields to add to the metric. Blank list means no labels.
+	// > Important note: labels metrics are not currently being cleared.
+	MetricLabels []string `json:"metric_labels"` // *
+
+	// mask metric
+	appliedMetric *prom.CounterVec
 }
 
 func init() {
@@ -113,22 +149,58 @@ func factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 	return &Plugin{}, &Config{}
 }
 
+func (p *Plugin) makeMetric(ctl *metric.Ctl, name, help string, labels ...string) *prom.CounterVec {
+	if name == "" {
+		return nil
+	}
+
+	uniq := make(map[string]struct{})
+	labelNames := make([]string, 0, len(labels))
+	for _, label := range labels {
+		if label == "" {
+			p.logger.Fatal("empty label name")
+		}
+		if _, ok := uniq[label]; ok {
+			p.logger.Fatal("metric labels must be unique")
+		}
+		uniq[label] = struct{}{}
+
+		labelNames = append(labelNames, label)
+	}
+
+	return ctl.RegisterCounter(name, help, labelNames...)
+}
+
 func compileMasks(masks []Mask, logger *zap.Logger) []Mask {
 	for i := range masks {
-		masks[i] = compileMask(masks[i], logger)
+		compileMask(&masks[i], logger)
 	}
 	return masks
 }
 
-func compileMask(m Mask, logger *zap.Logger) Mask {
-	logger.Info("compiling", zap.String("re", m.Re), zap.Ints("groups", m.Groups))
-	re, err := regexp.Compile(m.Re)
-	if err != nil {
-		logger.Fatal("error on compiling regexp", zap.String("re", m.Re))
+func compileMask(m *Mask, logger *zap.Logger) {
+	if m.Re == "" && len(m.MatchRules) == 0 {
+		logger.Fatal("mask must have either nonempty regex or ruleset, or both")
 	}
-	m.Re_ = re
-	m.Groups = verifyGroupNumbers(m.Groups, re.NumSubexp(), logger)
-	return m
+	if m.Re != "" {
+		logger.Info("compiling", zap.String("re", m.Re), zap.Ints("groups", m.Groups))
+		re, err := regexp.Compile(m.Re)
+		if err != nil {
+			logger.Fatal("error on compiling regexp", zap.String("re", m.Re))
+		}
+		m.Re_ = re
+		m.Groups = verifyGroupNumbers(m.Groups, re.NumSubexp(), logger)
+	}
+	for _, matchRule := range m.MatchRules {
+		if len(matchRule.Rules) == 0 {
+			logger.Fatal("ruleset must contain at least one rule")
+		}
+		for _, rule := range matchRule.Rules {
+			if len(rule.Values) == 0 {
+				logger.Fatal("rule in ruleset must have at least one value")
+			}
+		}
+	}
 }
 
 func isGroupsUnique(groups []int) bool {
@@ -164,9 +236,9 @@ func verifyGroupNumbers(groups []int, totalGroups int, logger *zap.Logger) []int
 
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginParams) {
 	p.config = config.(*Config)
-	p.registerMetrics(params.MetricCtl)
 
-	for _, mask := range p.config.Masks {
+	for i := range p.config.Masks {
+		mask := &p.config.Masks[i]
 		if mask.MaxCount > 0 && mask.ReplaceWord != "" {
 			p.logger.Fatal("invalid mask configuration")
 		}
@@ -176,28 +248,30 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 	p.valueNodes = make([]*insaneJSON.Node, 0)
 	p.logger = params.Logger.Desugar()
 	p.config.Masks = compileMasks(p.config.Masks, p.logger)
+	p.registerMetrics(params.MetricCtl)
 }
 
 func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
-	if p.config.AppliedMetricName == "" {
-		return
-	}
-
-	uniq := make(map[string]struct{})
-	labelNames := make([]string, 0, len(p.config.AppliedMetricLabels))
-	for _, label := range p.config.AppliedMetricLabels {
-		if label == "" {
-			p.logger.Fatal("empty label name")
+	p.maskAppliedMetric = p.makeMetric(ctl,
+		p.config.AppliedMetricName,
+		"Number of times mask plugin found the provided pattern",
+		p.config.AppliedMetricLabels...,
+	)
+	for i := range p.config.Masks {
+		mask := &p.config.Masks[i]
+		if mask.MetricName == p.config.AppliedMetricName {
+			p.logger.Error(
+				"mask cannot have metric with the same name as the plugin",
+				zap.String("metric_name", mask.MetricName),
+			)
+			continue
 		}
-		if _, ok := uniq[label]; ok {
-			p.logger.Fatal("metric labels must be unique")
-		}
-		uniq[label] = struct{}{}
-
-		labelNames = append(labelNames, label)
+		mask.appliedMetric = p.makeMetric(ctl,
+			mask.MetricName,
+			"Number of times mask found in the provided pattern",
+			mask.MetricLabels...,
+		)
 	}
-
-	p.maskAppliedMetric = ctl.RegisterCounter(p.config.AppliedMetricName, "Number of times mask plugin found the provided pattern", labelNames...)
 }
 
 func (p *Plugin) Stop() {
@@ -230,11 +304,54 @@ func (p *Plugin) maskSection(mask *Mask, dst, src []byte, begin, end int) ([]byt
 	return dst, offset
 }
 
+func (p *Plugin) applyMaskMetric(mask *Mask, event *pipeline.Event) {
+	if mask.appliedMetric == nil {
+		return
+	}
+
+	labelValues := make([]string, 0, len(mask.MetricLabels))
+	for _, labelValuePath := range mask.MetricLabels {
+		value := "not_set"
+		if node := event.Root.Dig(labelValuePath); node != nil {
+			value = strings.Clone(node.AsString())
+		}
+
+		labelValues = append(labelValues, value)
+	}
+
+	mask.appliedMetric.WithLabelValues(labelValues...).Inc()
+
+	if ce := p.logger.Check(zap.DebugLevel, "mask appeared to event"); ce != nil {
+		ce.Write(zap.String("event", event.Root.EncodeToString()))
+	}
+}
+
 // mask value returns masked value and bool answer was buf masked at all.
 func (p *Plugin) maskValue(mask *Mask, value, buf []byte) ([]byte, bool) {
+	buf = append(buf[:0], value...)
+	skip := true
+	for i := range mask.MatchRules {
+		if mask.MatchRules[i].Match(value) {
+			skip = false
+			break
+		}
+	}
+	if skip && len(mask.MatchRules) > 0 {
+		return buf, false
+	}
+
+	if mask.Re == "" {
+		return buf, true
+	}
+
 	indexes := mask.Re_.FindAllSubmatchIndex(value, -1)
 	if len(indexes) == 0 {
-		return value, false
+		return buf, false
+	}
+	// special case, groups can be an empty slice,
+	// but the mask is considered as applied for accounting metrics
+	if len(mask.Groups) == 0 {
+		return buf, true
 	}
 
 	buf = buf[:0]
@@ -286,12 +403,21 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 		value := v.AsBytes()
 		p.sourceBuf = append(p.sourceBuf[:0], value...)
 		p.maskBuf = append(p.maskBuf[:0], p.sourceBuf...)
-		for _, mask := range p.config.Masks {
-			p.maskBuf, locApplied = p.maskValue(&mask, p.sourceBuf, p.maskBuf)
-			p.sourceBuf = p.maskBuf
-			if locApplied {
-				maskApplied = true
+		for i := range p.config.Masks {
+			mask := &p.config.Masks[i]
+			p.maskBuf, locApplied = p.maskValue(mask, p.sourceBuf, p.maskBuf)
+			p.sourceBuf = append(p.sourceBuf[:0], p.maskBuf...)
+			if !locApplied {
+				continue
 			}
+			if mask.AppliedField != "" {
+				event.Root.AddFieldNoAlloc(event.Root, mask.AppliedField).MutateToString(mask.AppliedValue)
+			}
+			if mask.MetricName != "" {
+				p.applyMaskMetric(mask, event)
+			}
+
+			maskApplied = true
 		}
 		v.MutateToString(string(p.maskBuf))
 	}
