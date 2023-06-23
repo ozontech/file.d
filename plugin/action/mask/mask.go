@@ -114,28 +114,28 @@ type Mask struct {
 
 	// > @3@4@5@6
 	// >
-	// > If the mask has been applied then `mask_applied_field` will be set to `mask_applied_value` in the event.
-	MaskAppliedField string `json:"mask_applied_field"` // *
+	// > If the mask has been applied then `applied_field` will be set to `applied_value` in the event.
+	AppliedField string `json:"applied_field"` // *
 
 	// > @3@4@5@6
 	// >
-	// > Value to be set in `mask_applied_field`.
-	MaskAppliedValue string `json:"mask_applied_value"` // *
+	// > Value to be set in `applied_field`.
+	AppliedValue string `json:"applied_value"` // *
 
 	// > @3@4@5@6
 	// >
 	// > The metric name of the regular expressions applied.
 	// > The metric name for a mask cannot be the same as metric name for plugin.
-	AppliedMetricName string `json:"applied_metric_name"` // *
+	MetricName string `json:"metric_name"` // *
 
 	// > @3@4@5@6
 	// >
 	// > Lists the event fields to add to the metric. Blank list means no labels.
 	// > Important note: labels metrics are not currently being cleared.
-	AppliedMetricLabels []string `json:"applied_metric_labels"` // *
+	MetricLabels []string `json:"metric_labels"` // *
 
 	// mask metric
-	maskAppliedMetric *prom.CounterVec
+	appliedMetric *prom.CounterVec
 }
 
 func init() {
@@ -261,17 +261,17 @@ func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 	)
 	for i := range p.config.Masks {
 		mask := &p.config.Masks[i]
-		if mask.AppliedMetricName == p.config.AppliedMetricName {
+		if mask.MetricName == p.config.AppliedMetricName {
 			p.logger.Warn(
 				"mask cannot have metric with the same name as the plugin",
-				zap.String("metric_name", mask.AppliedMetricName),
+				zap.String("metric_name", mask.MetricName),
 			)
 			continue
 		}
-		mask.maskAppliedMetric = p.makeMetric(ctl,
-			mask.AppliedMetricName,
+		mask.appliedMetric = p.makeMetric(ctl,
+			mask.MetricName,
 			"Number of times mask found in the provided pattern",
-			mask.AppliedMetricLabels...,
+			mask.MetricLabels...,
 		)
 	}
 }
@@ -307,8 +307,8 @@ func (p *Plugin) maskSection(mask *Mask, dst, src []byte, begin, end int) ([]byt
 }
 
 func (p *Plugin) applyMaskMetric(mask *Mask, event *pipeline.Event) {
-	labelValues := make([]string, 0, len(mask.AppliedMetricLabels))
-	for _, labelValuePath := range mask.AppliedMetricLabels {
+	labelValues := make([]string, 0, len(mask.MetricLabels))
+	for _, labelValuePath := range mask.MetricLabels {
 		value := "not_set"
 		if node := event.Root.Dig(labelValuePath); node != nil {
 			value = strings.Clone(node.AsString())
@@ -317,8 +317,8 @@ func (p *Plugin) applyMaskMetric(mask *Mask, event *pipeline.Event) {
 		labelValues = append(labelValues, value)
 	}
 
-	if mask.maskAppliedMetric != nil {
-		mask.maskAppliedMetric.WithLabelValues(labelValues...).Inc()
+	if mask.appliedMetric != nil {
+		mask.appliedMetric.WithLabelValues(labelValues...).Inc()
 	}
 
 	if ce := p.logger.Check(zap.DebugLevel, "mask appeared to event"); ce != nil {
@@ -410,10 +410,10 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 			if !locApplied {
 				continue
 			}
-			if mask.MaskAppliedField != "" {
-				event.Root.AddFieldNoAlloc(event.Root, mask.MaskAppliedField).MutateToString(mask.MaskAppliedValue)
+			if mask.AppliedField != "" {
+				event.Root.AddFieldNoAlloc(event.Root, mask.AppliedField).MutateToString(mask.AppliedValue)
 			}
-			if mask.AppliedMetricName != "" {
+			if mask.MetricName != "" {
 				p.applyMaskMetric(mask, event)
 			}
 
