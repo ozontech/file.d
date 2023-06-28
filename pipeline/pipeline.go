@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ozontech/file.d/cfg/matchrule"
 	"github.com/ozontech/file.d/pipeline/antispam"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/atomic"
@@ -130,7 +131,7 @@ type Settings struct {
 	MaintenanceInterval time.Duration
 	EventTimeout        time.Duration
 	AntispamThreshold   int
-	AntispamExceptions  []antispam.Exception
+	AntispamExceptions  []matchrule.RuleSet
 	AvgEventSize        int
 	MaxEventSize        int
 	StreamField         string

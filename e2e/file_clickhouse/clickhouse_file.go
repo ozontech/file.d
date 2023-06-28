@@ -13,6 +13,7 @@ import (
 
 	"github.com/ClickHouse/ch-go"
 	"github.com/ClickHouse/ch-go/proto"
+	"github.com/google/uuid"
 	"github.com/ozontech/file.d/cfg"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -62,6 +63,8 @@ func (c *Config) Configure(t *testing.T, conf *cfg.Config, pipelineName string) 
 		    f64 Float64,
 		    lc_str LowCardinality(String),
 		    str_arr Array(String),
+		    uuid UUID,
+		    uuid_nullable Nullable(UUID),
 			created_at DateTime64(6, 'UTC') DEFAULT now()
 		) ENGINE = Memory`,
 	})
@@ -78,55 +81,61 @@ func (c *Config) Configure(t *testing.T, conf *cfg.Config, pipelineName string) 
 	c.sampleTime = time.Now()
 	c.samples = []Sample{
 		{
-			C1:       json.RawMessage(`"1"`),
-			C2:       2,
-			C3:       3,
-			C4:       proto.NewNullable(int16(4)),
-			C5:       proto.Null[string](),
-			Level:    3,
-			IPv4:     proto.NewNullable(proto.ToIPv4(netip.MustParseAddr("127.0.0.1"))),
-			IPv6:     proto.NewNullable(proto.ToIPv6(netip.MustParseAddr("0000:0000:0000:0000:0000:0000:0000:0001"))),
-			TS:       c.sampleTime,
-			TSWithTZ: c.sampleTime,
-			TS64:     c.sampleTime,
-			F32:      123.45,
-			F64:      0.6789,
-			LcStr:    "0558cee0-dd11-4304-9a15-1ad53d151fed",
-			StrArr:   []string{"improve", "error handling"},
+			C1:           json.RawMessage(`"1"`),
+			C2:           2,
+			C3:           3,
+			C4:           proto.NewNullable(int16(4)),
+			C5:           proto.Null[string](),
+			Level:        3,
+			IPv4:         proto.NewNullable(proto.ToIPv4(netip.MustParseAddr("127.0.0.1"))),
+			IPv6:         proto.NewNullable(proto.ToIPv6(netip.MustParseAddr("0000:0000:0000:0000:0000:0000:0000:0001"))),
+			TS:           c.sampleTime,
+			TSWithTZ:     c.sampleTime,
+			TS64:         c.sampleTime,
+			F32:          123.45,
+			F64:          0.6789,
+			LcStr:        "0558cee0-dd11-4304-9a15-1ad53d151fed",
+			StrArr:       []string{"improve", "error handling"},
+			UUID:         uuid.New(),
+			UUIDNullable: uuid.NullUUID{UUID: uuid.New(), Valid: true},
 		},
 		{
-			C1:       json.RawMessage(`549023`),
-			C2:       42,
-			C3:       101,
-			C4:       proto.NewNullable(int16(6)),
-			C5:       proto.NewNullable("ping pong"),
-			Level:    2,
-			IPv4:     proto.Null[proto.IPv4](),
-			IPv6:     proto.Null[proto.IPv6](),
-			TS:       c.sampleTime,
-			TSWithTZ: c.sampleTime,
-			TS64:     c.sampleTime,
-			F32:      153.93068,
-			F64:      32.02867104,
-			LcStr:    "cc578a55-8f57-4475-9355-67dfccac9e8d",
-			StrArr:   nil,
+			C1:           json.RawMessage(`549023`),
+			C2:           42,
+			C3:           101,
+			C4:           proto.NewNullable(int16(6)),
+			C5:           proto.NewNullable("ping pong"),
+			Level:        2,
+			IPv4:         proto.Null[proto.IPv4](),
+			IPv6:         proto.Null[proto.IPv6](),
+			TS:           c.sampleTime,
+			TSWithTZ:     c.sampleTime,
+			TS64:         c.sampleTime,
+			F32:          153.93068,
+			F64:          32.02867104,
+			LcStr:        "cc578a55-8f57-4475-9355-67dfccac9e8d",
+			StrArr:       nil,
+			UUID:         uuid.New(),
+			UUIDNullable: uuid.NullUUID{},
 		},
 		{
-			C1:       json.RawMessage(`{"type":"append object as string"}`),
-			C2:       42,
-			C3:       101,
-			C4:       proto.NewNullable(int16(5425)),
-			C5:       proto.NewNullable("ok google"),
-			Level:    1,
-			IPv4:     proto.Null[proto.IPv4](),
-			IPv6:     proto.Null[proto.IPv6](),
-			TS:       c.sampleTime,
-			TSWithTZ: c.sampleTime,
-			TS64:     c.sampleTime,
-			F32:      542.1235,
-			F64:      0.5555555555555555,
-			LcStr:    "cc578a55-8f57-4475-9355-67dfccac9e8d",
-			StrArr:   []string{},
+			C1:           json.RawMessage(`{"type":"append object as string"}`),
+			C2:           42,
+			C3:           101,
+			C4:           proto.NewNullable(int16(5425)),
+			C5:           proto.NewNullable("ok google"),
+			Level:        1,
+			IPv4:         proto.Null[proto.IPv4](),
+			IPv6:         proto.Null[proto.IPv6](),
+			TS:           c.sampleTime,
+			TSWithTZ:     c.sampleTime,
+			TS64:         c.sampleTime,
+			F32:          542.1235,
+			F64:          0.5555555555555555,
+			LcStr:        "cc578a55-8f57-4475-9355-67dfccac9e8d",
+			StrArr:       []string{},
+			UUID:         uuid.New(),
+			UUIDNullable: uuid.NullUUID{},
 		},
 	}
 }
@@ -176,29 +185,31 @@ func (c *Config) Validate(t *testing.T) {
 	a.Equal(len(c.samples), rows)
 
 	var (
-		c1         = new(proto.ColStr)
-		c2         = new(proto.ColInt8)
-		c3         = new(proto.ColInt16)
-		c4         = new(proto.ColInt16).Nullable()
-		c5         = new(proto.ColStr).Nullable()
-		level      = new(proto.ColEnum8)
-		ipv4       = new(proto.ColIPv4).Nullable()
-		ipv6       = new(proto.ColIPv6).Nullable()
-		ts         = new(proto.ColDateTime)
-		tsWithTz   = new(proto.ColDateTime)
-		ts64       = new(proto.ColDateTime64)
-		ts64Auto   = new(proto.ColDateTime64)
-		ts3339nano = new(proto.ColDateTime64)
-		f32        = new(proto.ColFloat32)
-		f64        = new(proto.ColFloat64)
-		lcStr      = new(proto.ColStr).LowCardinality()
-		strArr     = new(proto.ColStr).Array()
+		c1          = new(proto.ColStr)
+		c2          = new(proto.ColInt8)
+		c3          = new(proto.ColInt16)
+		c4          = new(proto.ColInt16).Nullable()
+		c5          = new(proto.ColStr).Nullable()
+		level       = new(proto.ColEnum8)
+		ipv4        = new(proto.ColIPv4).Nullable()
+		ipv6        = new(proto.ColIPv6).Nullable()
+		ts          = new(proto.ColDateTime)
+		tsWithTz    = new(proto.ColDateTime)
+		ts64        = new(proto.ColDateTime64)
+		ts64Auto    = new(proto.ColDateTime64)
+		ts3339nano  = new(proto.ColDateTime64)
+		f32         = new(proto.ColFloat32)
+		f64         = new(proto.ColFloat64)
+		lcStr       = new(proto.ColStr).LowCardinality()
+		strArr      = new(proto.ColStr).Array()
+		uid         = new(proto.ColUUID)
+		uidNullable = proto.NewColNullable[uuid.UUID](new(proto.ColUUID))
 	)
 	ts64.WithPrecision(proto.PrecisionMilli)
 	ts64Auto.WithPrecision(proto.PrecisionNano)
 
 	require.NoError(t, c.conn.Do(c.ctx, ch.Query{
-		Body: `select c1, c2, c3, c4, c5, level, ipv4, ipv6, ts, ts_with_tz, ts64, ts64_auto, ts_rfc3339nano, f32, f64, lc_str, str_arr
+		Body: `select c1, c2, c3, c4, c5, level, ipv4, ipv6, ts, ts_with_tz, ts64, ts64_auto, ts_rfc3339nano, f32, f64, lc_str, str_arr, uuid, uuid_nullable
 			from test_table_insert
 			order by c1`,
 		Result: proto.Results{
@@ -219,6 +230,8 @@ func (c *Config) Validate(t *testing.T) {
 			proto.ResultColumn{Name: "f64", Data: f64},
 			proto.ResultColumn{Name: "lc_str", Data: lcStr},
 			proto.ResultColumn{Name: "str_arr", Data: strArr},
+			proto.ResultColumn{Name: "uuid", Data: uid},
+			proto.ResultColumn{Name: "uuid_nullable", Data: uidNullable},
 		},
 		OnResult: func(_ context.Context, _ proto.Block) error {
 			return nil
@@ -244,6 +257,8 @@ func (c *Config) Validate(t *testing.T) {
 		a.Equal(sample.F32, f32.Row(i))
 		a.Equal(sample.F64, f64.Row(i))
 		a.Equal(sample.LcStr, lcStr.Row(i))
+		a.Equal(sample.UUID, uid.Row(i))
+		a.Equal(sample.UUIDNullable.UUID, uidNullable.Row(i).Value)
 
 		a.Equal(sample.TSWithTZ.Unix(), tsWithTz.Row(i).Unix())
 		a.Equal("Europe/Moscow", tsWithTz.Row(i).Location().String())

@@ -36,7 +36,7 @@ type joinTemplates map[string]struct {
 
 var templates = joinTemplates{
 	"go_panic": {
-		startRePat:    "/^(panic:)|(http: panic serving)/",
+		startRePat:    "/^(panic:)|(http: panic serving)|^(fatal error:)/",
 		continueRePat: "/(^\\s*$)|(goroutine [0-9]+ \\[)|(\\.go:[0-9]+)|(created by .*\\/?.*\\.)|(^\\[signal)|(panic.+[0-9]x[0-9,a-f]+)|(panic:)|([A-Za-z_]+[A-Za-z0-9_]*\\)?\\.[A-Za-z0-9_]+\\(.*\\))/",
 	},
 }

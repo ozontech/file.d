@@ -61,3 +61,7 @@ pipelines:
           type: LowCardinality(String)
         - name: str_arr
           type: Array(String)
+        - name: uuid
+          type: UUID
+        - name: uuid_nullable
+          type: Nullable(UUID)

@@ -6,6 +6,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/ozontech/file.d/cfg/matchrule"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/test"
 	"github.com/stretchr/testify/assert"
@@ -190,95 +191,95 @@ func TestMaskAddExtraField(t *testing.T) {
 func TestGroupNumbers(t *testing.T) {
 	suits := []struct {
 		name     string
-		input    Mask
-		expect   Mask
+		input    *Mask
+		expect   *Mask
 		isFatal  bool
 		fatalMsg string
 		comment  string
 	}{
 		{
 			name:    "simple test",
-			input:   Mask{Re: kDefaultCardRegExp, Groups: []int{1, 2, 3}},
-			expect:  Mask{Re: kDefaultCardRegExp, Groups: []int{1, 2, 3}},
+			input:   &Mask{Re: kDefaultCardRegExp, Groups: []int{1, 2, 3}},
+			expect:  &Mask{Re: kDefaultCardRegExp, Groups: []int{1, 2, 3}},
 			isFatal: false,
 			comment: "mask successfully compiled",
 		},
 		{
 			name:    "groups contains `zero`",
-			input:   Mask{Re: kDefaultCardRegExp, Groups: []int{0, 1, 2, 3}},
-			expect:  Mask{Re: kDefaultCardRegExp, Groups: []int{0}},
+			input:   &Mask{Re: kDefaultCardRegExp, Groups: []int{0, 1, 2, 3}},
+			expect:  &Mask{Re: kDefaultCardRegExp, Groups: []int{0}},
 			isFatal: false,
 			comment: "deleted all groups except zero",
 		},
 		{
 			name:     "negative group number",
-			input:    Mask{Re: kDefaultCardRegExp, Groups: []int{-1}},
-			expect:   Mask{Re: kDefaultCardRegExp, Groups: []int{}},
+			input:    &Mask{Re: kDefaultCardRegExp, Groups: []int{-1}},
+			expect:   &Mask{Re: kDefaultCardRegExp, Groups: []int{}},
 			isFatal:  true,
 			fatalMsg: "wrong group number",
 			comment:  "fatal on negative group number",
 		},
 		{
 			name:     "big value of group number",
-			input:    Mask{Re: kDefaultCardRegExp, Groups: []int{11}},
-			expect:   Mask{Re: kDefaultCardRegExp, Groups: []int{}},
+			input:    &Mask{Re: kDefaultCardRegExp, Groups: []int{11}},
+			expect:   &Mask{Re: kDefaultCardRegExp, Groups: []int{}},
 			isFatal:  true,
 			fatalMsg: "wrong group number",
 			comment:  "fatal on checking group number",
 		},
 		{
 			name:    "zero in group numbers",
-			input:   Mask{Re: kDefaultCardRegExp, Groups: []int{0}},
-			expect:  Mask{Re: kDefaultCardRegExp, Groups: []int{0}},
+			input:   &Mask{Re: kDefaultCardRegExp, Groups: []int{0}},
+			expect:  &Mask{Re: kDefaultCardRegExp, Groups: []int{0}},
 			isFatal: false,
 			comment: "compiling success",
 		},
 		{
 			name:     "error in expression",
-			input:    Mask{Re: "(err", Groups: []int{1}},
-			expect:   Mask{Re: kDefaultCardRegExp, Groups: []int{}},
+			input:    &Mask{Re: "(err", Groups: []int{1}},
+			expect:   &Mask{Re: kDefaultCardRegExp, Groups: []int{}},
 			isFatal:  true,
 			fatalMsg: "error on compiling regexp",
 			comment:  "fatal on compiling regexp",
 		},
 		{
 			name:     "big value of group number with zero first",
-			input:    Mask{Re: kDefaultCardRegExp, Groups: []int{0, 1, 2, 3, 4, 5}},
+			input:    &Mask{Re: kDefaultCardRegExp, Groups: []int{0, 1, 2, 3, 4, 5}},
 			isFatal:  true,
 			fatalMsg: "there are many groups",
 			comment:  "fatal error",
 		},
 		{
 			name:     "big value of group number with zero last",
-			input:    Mask{Re: kDefaultCardRegExp, Groups: []int{1, 2, 3, 4, 5, 0}},
+			input:    &Mask{Re: kDefaultCardRegExp, Groups: []int{1, 2, 3, 4, 5, 0}},
 			isFatal:  true,
 			fatalMsg: "there are many groups",
 			comment:  "fatal error",
 		},
 		{
 			name:     "many value of group number",
-			input:    Mask{Re: kDefaultCardRegExp, Groups: []int{1, 2, 3, 4, 5}},
+			input:    &Mask{Re: kDefaultCardRegExp, Groups: []int{1, 2, 3, 4, 5}},
 			isFatal:  true,
 			fatalMsg: "there are many groups",
 			comment:  "group 5 not exists in regex",
 		},
 		{
 			name:     "wrong value of group number",
-			input:    Mask{Re: kDefaultCardRegExp, Groups: []int{6}},
+			input:    &Mask{Re: kDefaultCardRegExp, Groups: []int{6}},
 			isFatal:  true,
 			fatalMsg: "wrong group number",
 			comment:  "group 6 not exists in regex",
 		},
 		{
 			name:     "wrong negative value of group number",
-			input:    Mask{Re: kDefaultCardRegExp, Groups: []int{-6}},
+			input:    &Mask{Re: kDefaultCardRegExp, Groups: []int{-6}},
 			isFatal:  true,
 			fatalMsg: "wrong group number",
 			comment:  "group -6 not exists in regex",
 		},
 		{
 			name:     "groups numbers not unique",
-			input:    Mask{Re: kDefaultCardRegExp, Groups: []int{1, 1, 1}},
+			input:    &Mask{Re: kDefaultCardRegExp, Groups: []int{1, 1, 1}},
 			isFatal:  true,
 			fatalMsg: "groups numbers must be unique",
 			comment:  "not unique value",
@@ -298,7 +299,11 @@ func TestGroupNumbers(t *testing.T) {
 					},
 					s.comment)
 			} else {
-				res := compileMask(s.input, zap.NewNop())
+				res := &Mask{
+					Re:     s.input.Re,
+					Groups: s.input.Groups,
+				}
+				compileMask(res, zap.NewNop())
 				assert.NotNil(t, res.Re_, s.comment)
 				assert.Equal(t, res.Re, s.expect.Re, s.comment)
 				assert.Equal(t, res.Groups, s.expect.Groups, s.comment)
@@ -499,6 +504,196 @@ func createConfig() Config {
 		},
 	}
 	return config
+}
+
+//nolint:funlen
+func TestPluginWithComplexMasks(t *testing.T) {
+	suits := []struct {
+		name         string
+		masks        []Mask
+		metricName   string
+		metricLabels []string
+		input        []string
+		expected     []string
+		comment      string
+	}{
+		{
+			name: "single mask w single ruleset & re w replace",
+			masks: []Mask{
+				{
+					MatchRules: []matchrule.RuleSet{
+						{
+							Cond: matchrule.CondAnd,
+							Rules: []matchrule.Rule{
+								{
+									Values:          []string{"prefix1", "1prefix"},
+									Mode:            matchrule.ModePrefix,
+									CaseInsensitive: true,
+								},
+								{
+									Values:          []string{"suffix1", "1suffix"},
+									Mode:            matchrule.ModeSuffix,
+									CaseInsensitive: true,
+								},
+							},
+						},
+					},
+					Re:           `(to\_mask)`,
+					Groups:       []int{0},
+					ReplaceWord:  "REPLACED",
+					AppliedField: "mask_field",
+					AppliedValue: "mask_value",
+					MetricName:   "test_mask_metric",
+					MetricLabels: []string{"service"},
+				},
+			},
+			metricName:   "test_metric",
+			metricLabels: []string{"service"},
+			input: []string{
+				`{"field1":"prefix1 to_mask suffix1","service":"test"}`,
+				`{"field1":"1prefix to_mask 1suffix"}`,
+				`{"field1":"prefix1 test suffix1"}`,
+				`{"field1":"prefix2 to_mask suffix2"}`,
+			},
+			expected: []string{
+				`{"field1":"prefix1 REPLACED suffix1","service":"test","mask_field":"mask_value"}`,
+				`{"field1":"1prefix REPLACED 1suffix","mask_field":"mask_value"}`,
+				`{"field1":"prefix1 test suffix1"}`,
+				`{"field1":"prefix2 to_mask suffix2"}`,
+			},
+			comment: "single mask with single ruleset and regex with replace word",
+		},
+		{
+			name: "single mask w multi ruleset & single re w replace",
+			masks: []Mask{
+				{
+					MatchRules: []matchrule.RuleSet{
+						{
+							Cond: matchrule.CondAnd,
+							Rules: []matchrule.Rule{
+								{
+									Values:          []string{"prefix1", "1prefix"},
+									Mode:            matchrule.ModePrefix,
+									CaseInsensitive: true,
+								},
+								{
+									Values:          []string{"suffix1", "1suffix"},
+									Mode:            matchrule.ModeSuffix,
+									CaseInsensitive: true,
+								},
+							},
+						},
+						{
+							Cond: matchrule.CondAnd,
+							Rules: []matchrule.Rule{
+								{
+									Values:          []string{"prefix2", "2prefix"},
+									Mode:            matchrule.ModePrefix,
+									CaseInsensitive: true,
+								},
+								{
+									Values:          []string{"suffix2", "2suffix"},
+									Mode:            matchrule.ModeSuffix,
+									CaseInsensitive: true,
+								},
+							},
+						},
+					},
+					Re:           `(to\_mask)`,
+					Groups:       []int{0},
+					ReplaceWord:  "REPLACED",
+					AppliedField: "mask_field",
+					AppliedValue: "mask_value",
+				},
+			},
+			input: []string{
+				`{"field1":"prefix1 to_mask suffix1"}`,
+				`{"field1":"1prefix to_mask 1suffix"}`,
+				`{"field1":"prefix1 test suffix1"}`,
+				`{"field1":"prefix2 to_mask suffix2"}`,
+			},
+			expected: []string{
+				`{"field1":"prefix1 REPLACED suffix1","mask_field":"mask_value"}`,
+				`{"field1":"1prefix REPLACED 1suffix","mask_field":"mask_value"}`,
+				`{"field1":"prefix1 test suffix1"}`,
+				`{"field1":"prefix2 REPLACED suffix2","mask_field":"mask_value"}`,
+			},
+			comment: "single mask with multi rulesets and regex with replace word",
+		},
+		{
+			name: "single mask w single ruleset & wo re",
+			masks: []Mask{
+				{
+					MatchRules: []matchrule.RuleSet{
+						{
+							Cond: matchrule.CondAnd,
+							Rules: []matchrule.Rule{
+								{
+									Values:          []string{"prefix1", "1prefix"},
+									Mode:            matchrule.ModePrefix,
+									CaseInsensitive: true,
+								},
+								{
+									Values:          []string{"suffix1", "1suffix"},
+									Mode:            matchrule.ModeSuffix,
+									CaseInsensitive: true,
+								},
+							},
+						},
+					},
+					AppliedField: "mask_field",
+					AppliedValue: "mask_value",
+				},
+			},
+			input: []string{
+				`{"field1":"prefix1 to_mask suffix1"}`,
+				`{"field1":"1prefix to_mask 1suffix"}`,
+				`{"field1":"prefix1 test suffix1"}`,
+				`{"field1":"prefix2 to_mask suffix2"}`,
+			},
+			expected: []string{
+				`{"field1":"prefix1 to_mask suffix1","mask_field":"mask_value"}`,
+				`{"field1":"1prefix to_mask 1suffix","mask_field":"mask_value"}`,
+				`{"field1":"prefix1 test suffix1","mask_field":"mask_value"}`,
+				`{"field1":"prefix2 to_mask suffix2"}`,
+			},
+			comment: "single mask with single ruleset and without regex",
+		},
+	}
+
+	for _, s := range suits {
+		t.Run(s.name, func(t *testing.T) {
+			config := Config{
+				Masks:               s.masks,
+				AppliedMetricName:   s.metricName,
+				AppliedMetricLabels: s.metricLabels,
+			}
+			sut, input, output := test.NewPipelineMock(
+				test.NewActionPluginStaticInfo(factory, &config,
+					pipeline.MatchModeAnd,
+					nil,
+					false))
+			wg := sync.WaitGroup{}
+			wg.Add(len(s.input))
+
+			outEvents := make([]*pipeline.Event, 0)
+			output.SetOutFn(func(e *pipeline.Event) {
+				outEvents = append(outEvents, e)
+				wg.Done()
+			})
+
+			for _, in := range s.input {
+				input.In(0, "test.log", 0, []byte(in))
+			}
+
+			wg.Wait()
+			sut.Stop()
+
+			for i := range s.expected {
+				assert.Equal(t, s.expected[i], outEvents[i].Root.EncodeToString(), s.comment)
+			}
+		})
+	}
 }
 
 func createBenchInputString() []byte {

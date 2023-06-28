@@ -149,6 +149,11 @@ func clickhouseTypes() []Type {
 			GoName:     "proto.IPv6",
 			CustomImpl: true,
 		},
+		Type{
+			ChTypeName: "UUID",
+			GoName:     "uuid.UUID",
+			CustomImpl: true,
+		},
 	)
 
 	return types

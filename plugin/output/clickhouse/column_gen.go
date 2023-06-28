@@ -1218,3 +1218,34 @@ func (t *ColIPv6) EncodeColumn(buffer *proto.Buffer) {
 	}
 	t.col.EncodeColumn(buffer)
 }
+
+// struct ColUUID defined and implemented in another file
+
+var _ InsaneColInput = (*ColUUID)(nil)
+
+func (t *ColUUID) Reset() {
+	t.col.Reset()
+	t.nullCol.Reset()
+}
+
+func (t *ColUUID) Type() proto.ColumnType {
+	if t.nullable {
+		return t.nullCol.Type()
+	}
+	return t.col.Type()
+}
+
+func (t *ColUUID) Rows() int {
+	if t.nullable {
+		return t.nullCol.Rows()
+	}
+	return t.col.Rows()
+}
+
+func (t *ColUUID) EncodeColumn(buffer *proto.Buffer) {
+	if t.nullable {
+		t.nullCol.EncodeColumn(buffer)
+		return
+	}
+	t.col.EncodeColumn(buffer)
+}
