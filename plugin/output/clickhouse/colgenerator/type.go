@@ -38,6 +38,16 @@ func (t Type) InsaneConvertFunc() string {
 		return "AsBool"
 	case "string":
 		return "AsString"
+	case IPv4Name:
+		return "AsIPv4"
+	case IPv6Name:
+		return "AsIPv6"
+	case UUIDName:
+		return "AsUUID"
+	case "float32":
+		return "AsFloat32"
+	case "float64":
+		return "AsFloat64"
 	default:
 		return "AsInt"
 	}

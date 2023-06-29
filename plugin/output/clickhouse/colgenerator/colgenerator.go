@@ -17,6 +17,17 @@ const (
 	goTypeEnum = "proto.Enum"
 )
 
+const (
+	IPv4Name    = "proto.IPv4"
+	IPv6Name    = "proto.IPv6"
+	UUIDName    = "uuid.UUID"
+	TimeName    = "time.Time"
+	Int128Name  = "proto.Int128"
+	UInt128Name = "proto.UInt128"
+	Int256Name  = "proto.Int256"
+	UInt256Name = "proto.UInt256"
+)
+
 //go:embed insane_column.go.tmpl
 var columnTemplateRaw string
 
@@ -99,60 +110,60 @@ func clickhouseTypes() []Type {
 	types = append(types,
 		Type{
 			ChTypeName:      "Int128",
-			GoName:          "proto.Int128",
+			GoName:          Int128Name,
 			isComplexNumber: true,
 		},
 		Type{
 			ChTypeName:      "UInt128",
-			GoName:          "proto.UInt128",
+			GoName:          UInt128Name,
 			isComplexNumber: true,
 		},
 		Type{
 			ChTypeName:      "Int256",
-			GoName:          "proto.Int256",
+			GoName:          Int256Name,
 			isComplexNumber: true,
 		},
 		Type{
 			ChTypeName:      "UInt256",
-			GoName:          "proto.UInt256",
+			GoName:          UInt256Name,
 			isComplexNumber: true,
 		},
 		Type{
-			ChTypeName: "Float32",
-			GoName:     "float32",
-			CustomImpl: true,
+			ChTypeName:    "Float32",
+			GoName:        "float32",
+			CannotConvert: true,
 		},
 		Type{
-			ChTypeName: "Float64",
-			GoName:     "float64",
-			CustomImpl: true,
+			ChTypeName:    "Float64",
+			GoName:        "float64",
+			CannotConvert: true,
 		},
 		Type{
 			ChTypeName:   "DateTime",
-			GoName:       "time.Time",
+			GoName:       TimeName,
 			CannotBeNull: true,
 			CustomImpl:   true,
 		},
 		Type{
 			ChTypeName:   "DateTime64",
-			GoName:       "time.Time",
+			GoName:       TimeName,
 			CannotBeNull: true,
 			CustomImpl:   true,
 		},
 		Type{
-			ChTypeName: "IPv4",
-			GoName:     "proto.IPv4",
-			CustomImpl: true,
+			ChTypeName:    "IPv4",
+			GoName:        IPv4Name,
+			CannotConvert: true,
 		},
 		Type{
-			ChTypeName: "IPv6",
-			GoName:     "proto.IPv6",
-			CustomImpl: true,
+			ChTypeName:    "IPv6",
+			GoName:        IPv6Name,
+			CannotConvert: true,
 		},
 		Type{
-			ChTypeName: "UUID",
-			GoName:     "uuid.UUID",
-			CustomImpl: true,
+			ChTypeName:    "UUID",
+			GoName:        UUIDName,
+			CannotConvert: true,
 		},
 	)
 

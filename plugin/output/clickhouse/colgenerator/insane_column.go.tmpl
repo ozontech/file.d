@@ -4,6 +4,7 @@ package clickhouse
 
 import (
 	"github.com/ClickHouse/ch-go/proto"
+	"github.com/google/uuid"
 )
 
 {{ range $type := .Types }}
@@ -61,12 +62,12 @@ func (t *{{ $type.ColumnTypeName }}) Append(node InsaneNode) error {
 		return nil
 		{{- end }}
 	}
-	{{ if $type.CannotConvert -}}
+	{{ if $type.CannotConvert }}
 	val, err := node.{{- $type.InsaneConvertFunc }}()
 	if err != nil {
 		return err
 	}
-	{{ else -}}
+	{{ else }}
 	v, err := node.{{- $type.InsaneConvertFunc }}()
 	if err != nil {
 		return err
@@ -74,13 +75,13 @@ func (t *{{ $type.ColumnTypeName }}) Append(node InsaneNode) error {
 
 	val := {{ $type.ConvertInsaneJSONValue }}(v)
 
-	{{ end -}}
-	{{- if not $type.CannotBeNull -}}
+	{{ end }}
+	{{ if not $type.CannotBeNull }}
 	if t.nullable {
 		t.nullCol.Append(proto.NewNullable(val))
 		return nil
 	}
-	{{ end -}}
+	{{ end }}
 
 	t.col.Append(val)
 
