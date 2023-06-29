@@ -269,11 +269,8 @@ func (p *Plugin) out(_ *pipeline.WorkerData, batch *pipeline.Batch) {
 		fieldValues, uniqueID, err := p.processEvent(event, pgFields, uniqFields)
 		if err != nil {
 			switch {
-			case errors.Is(err, errors.Join(
-				ErrEventDoesntHaveField,
-				ErrEventFieldHasWrongType,
-				ErrTimestampFromDistantPastOrFuture,
-			)):
+			case errors.Is(err, ErrEventDoesntHaveField), errors.Is(err, ErrEventFieldHasWrongType),
+				errors.Is(err, ErrTimestampFromDistantPastOrFuture):
 				p.discardedEventMetric.WithLabelValues().Inc()
 				if p.config.StrictFields || p.config.Strict {
 					p.logger.Fatal(err)
