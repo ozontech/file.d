@@ -3,7 +3,6 @@ package clickhouse
 import (
 	"errors"
 	"fmt"
-	"time"
 
 	"github.com/ClickHouse/ch-go/proto"
 )
@@ -28,23 +27,9 @@ func (t *ColDateTime) Append(node InsaneNode) error {
 		return ErrNodeIsNil
 	}
 
-	var val time.Time
-	switch {
-	case node.IsNumber():
-		nodeVal, err := node.AsInt64()
-		if err != nil {
-			return err
-		}
-
-		val = time.Unix(nodeVal, 0)
-	case node.IsString():
-		var err error
-		val, err = parseRFC3339Nano(node)
-		if err != nil {
-			return err
-		}
-	default:
-		return fmt.Errorf("value=%q is not a string or number", node.EncodeToString())
+	val, err := node.AsTime(proto.PrecisionSecond.Scale())
+	if err != nil {
+		return fmt.Errorf("converting node to time: %w", err)
 	}
 
 	t.col.Append(val)
@@ -70,25 +55,9 @@ func (t *ColDateTime64) Append(node InsaneNode) error {
 		return ErrNodeIsNil
 	}
 
-	var val time.Time
-	switch {
-	case node.IsNumber():
-		v, err := node.AsInt64()
-		if err != nil {
-			return err
-		}
-
-		// convert to nanoseconds
-		nsec := v * t.scale
-		val = time.Unix(nsec/1e9, nsec%1e9)
-	case node.IsString():
-		var err error
-		val, err = parseRFC3339Nano(node)
-		if err != nil {
-			return err
-		}
-	default:
-		return fmt.Errorf("value=%q is not a string or number", node.EncodeToString())
+	val, err := node.AsTime(t.scale)
+	if err != nil {
+		return fmt.Errorf("converting to time: %w", err)
 	}
 
 	t.col.Append(val)

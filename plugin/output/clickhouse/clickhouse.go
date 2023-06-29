@@ -17,6 +17,7 @@ import (
 	prom "github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
 /*{ introduction
@@ -420,11 +421,24 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 			}
 
 			if err := col.ColInput.Append(insaneNode); err != nil {
-				p.logger.Fatal("can't append value in the batch",
+				lvl := zapcore.ErrorLevel
+				if p.config.StrictTypes {
+					lvl = zapcore.FatalLevel
+				}
+				p.logger.Log(lvl, "can't append value in the batch",
 					zap.Error(err),
 					zap.String("column", col.Name),
 					zap.Any("event", json.RawMessage(event.Root.EncodeToByte())),
 				)
+
+				err := col.ColInput.Append(ZeroValueNode{})
+				if err != nil {
+					p.logger.Fatal("why err isn't nil?",
+						zap.Error(err),
+						zap.String("column", col.Name),
+						zap.Any("event", json.RawMessage(event.Root.EncodeToByte())),
+					)
+				}
 			}
 		}
 	}
