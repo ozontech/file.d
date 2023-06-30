@@ -38,7 +38,9 @@ type Clickhouse interface {
 }
 
 type Plugin struct {
-	logger     *zap.Logger
+	logger        *zap.Logger
+	samplerLogger *zap.Logger
+
 	config     *Config
 	batcher    *pipeline.Batcher
 	ctx        context.Context
@@ -77,7 +79,6 @@ func (s Settings) toProtoSettings() []ch.Setting {
 }
 
 type Column struct {
-	// TODO: allow to set default value
 	Name string `json:"name"`
 	Type string `json:"type"`
 }
@@ -280,6 +281,11 @@ func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginParams) {
 	p.logger = params.Logger.Desugar()
+
+	p.samplerLogger = p.logger.WithOptions(zap.WrapCore(func(core zapcore.Core) zapcore.Core {
+		return zapcore.NewSamplerWithOptions(p.logger.Core(), time.Second, 5, 0)
+	}))
+
 	p.config = config.(*Config)
 	p.registerMetrics(params.MetricCtl)
 	p.ctx, p.cancelFunc = context.WithCancel(context.Background())
@@ -426,11 +432,13 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 			}
 
 			if err := col.ColInput.Append(insaneNode); err != nil {
-				p.logger.Log(lvl, "can't append value in the batch",
-					zap.Error(err),
-					zap.String("column", col.Name),
-					zap.Any("event", json.RawMessage(event.Root.EncodeToByte())),
-				)
+				if ce := p.samplerLogger.Check(lvl, "can't append value in the batch"); ce != nil {
+					ce.Write(
+						zap.Error(err),
+						zap.String("column", col.Name),
+						zap.Any("event", json.RawMessage(event.Root.EncodeToByte())),
+					)
+				}
 
 				err := col.ColInput.Append(ZeroValueNode{})
 				if err != nil {
