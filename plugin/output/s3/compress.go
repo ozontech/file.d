@@ -34,15 +34,22 @@ func (z *zipCompressor) compress(archiveName, fileName string) {
 	if err != nil {
 		z.logger.Panicf("could not create zip file: %s, error: %s", archiveName, err.Error())
 	}
-	defer newZipFile.Close()
+	defer func(newZipFile *os.File) {
+		_ = newZipFile.Close()
+	}(newZipFile)
+
 	zipWriter := zip.NewWriter(newZipFile)
-	defer zipWriter.Close()
+	defer func(zipWriter *zip.Writer) {
+		_ = zipWriter.Close()
+	}(zipWriter)
 
 	fileToZip, err := os.Open(fileName)
 	if err != nil {
 		z.logger.Panicf("could not open file: %s, error: %s", fileName, err.Error())
 	}
-	defer fileToZip.Close()
+	defer func(fileToZip *os.File) {
+		_ = fileToZip.Close()
+	}(fileToZip)
 	info, err := fileToZip.Stat()
 	if err != nil {
 		z.logger.Panicf("could not get file information for file: %s, error: %s", fileName, err.Error())

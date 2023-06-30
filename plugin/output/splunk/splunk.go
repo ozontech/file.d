@@ -203,7 +203,9 @@ func (p *Plugin) send(data []byte) error {
 	if err != nil {
 		return fmt.Errorf("can't send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func(Body io.ReadCloser) {
+		_ = Body.Close()
+	}(resp.Body)
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("can't send request: %s", resp.Status)

@@ -409,6 +409,11 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 	data := (*workerData).(data)
 	data.reset()
 
+	lvl := zapcore.ErrorLevel
+	if p.config.StrictTypes {
+		lvl = zapcore.FatalLevel
+	}
+
 	for _, event := range batch.Events {
 		for _, col := range data.cols {
 			node := event.Root.Dig(col.Name)
@@ -421,10 +426,6 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 			}
 
 			if err := col.ColInput.Append(insaneNode); err != nil {
-				lvl := zapcore.ErrorLevel
-				if p.config.StrictTypes {
-					lvl = zapcore.FatalLevel
-				}
 				p.logger.Log(lvl, "can't append value in the batch",
 					zap.Error(err),
 					zap.String("column", col.Name),

@@ -17,7 +17,7 @@ func TestZeroValueNode(t *testing.T) {
 	enum8 := new(proto.ColEnum)
 	r.NoError(enum8.Infer("Enum8('error'=1, 'info'=2, ''=3)"))
 	enum16 := new(proto.ColEnum)
-	r.NoError(enum16.Infer("Enum8('error'=1, 'info'=2, ''=3)"))
+	r.NoError(enum16.Infer("Enum16('error'=1, 'info'=2, ''=3)"))
 
 	columns := []InsaneColInput{
 		NewColDateTime(&proto.ColDateTime{Location: utcLoc}),

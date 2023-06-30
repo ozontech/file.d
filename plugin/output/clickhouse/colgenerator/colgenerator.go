@@ -54,7 +54,9 @@ func main() {
 	if err != nil {
 		logger.Panic(err)
 	}
-	defer f.Close()
+	defer func(f *os.File) {
+		_ = f.Close()
+	}(f)
 
 	_, err = f.Write(result)
 	if err != nil {
