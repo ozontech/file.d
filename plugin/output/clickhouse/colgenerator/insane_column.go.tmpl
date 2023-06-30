@@ -14,7 +14,7 @@ import (
 type {{ $type.ColumnTypeName }} struct {
 	// col contains values for the {{ $type.ChTypeName }} type.
 	col *{{ $type.LibChTypeNameFull }}
-	{{ if not $type.CannotBeNull }}
+	{{ if $type.Nullable }}
 	// nullCol contains nullable values for the Nullable({{ $type.ChTypeName }}) type.
 	nullCol  *{{ $type.NullableTypeName }}
 	// nullable the truth if the column is nullable.
@@ -33,18 +33,18 @@ var _ proto.Preparable = (*{{ $type.ColumnTypeName }})(nil)
 
 {{ if not $type.CustomImpl }}
 
-{{ if $type.CannotBeNull  }}
-func New{{- $type.ColumnTypeName }}() *{{ $type.ColumnTypeName }} {
+{{ if $type.Nullable  }}
+func New{{- $type.ColumnTypeName }}(nullable bool) *{{ $type.ColumnTypeName }} {
 	return &{{ $type.ColumnTypeName }}{
-		col: &{{ $type.LibChTypeNameFull }}{},
+	col:      new({{ $type.LibChTypeNameFull }}),
+			nullCol:  new({{ $type.LibChTypeNameFull }}).Nullable(),
+				nullable: nullable,
 	}
 }
 {{ else }}
-func New{{- $type.ColumnTypeName }}(nullable bool) *{{ $type.ColumnTypeName }} {
+func New{{- $type.ColumnTypeName }}() *{{ $type.ColumnTypeName }} {
 	return &{{ $type.ColumnTypeName }}{
-		col:      new({{ $type.LibChTypeNameFull }}),
-		nullCol:  new({{ $type.LibChTypeNameFull }}).Nullable(),
-		nullable: nullable,
+	col: &{{ $type.LibChTypeNameFull }}{},
 	}
 }
 {{ end }}
@@ -52,7 +52,7 @@ func New{{- $type.ColumnTypeName }}(nullable bool) *{{ $type.ColumnTypeName }} {
 // Append the insaneJSON.Node to the batch.
 func (t *{{ $type.ColumnTypeName }}) Append(node InsaneNode) error {
 	if node == nil || node.IsNull() {
-		{{- if $type.CannotBeNull }}
+		{{- if not $type.Nullable }}
 		return ErrNodeIsNil
 		{{- else }}
 		if !t.nullable {
@@ -62,21 +62,20 @@ func (t *{{ $type.ColumnTypeName }}) Append(node InsaneNode) error {
 		return nil
 		{{- end }}
 	}
-	{{ if $type.CannotConvert }}
-	val, err := node.{{- $type.InsaneConvertFunc }}()
-	if err != nil {
-		return err
-	}
-	{{ else }}
+	{{ if $type.Convertable }}
 	v, err := node.{{- $type.InsaneConvertFunc }}()
 	if err != nil {
 		return err
 	}
 
 	val := {{ $type.ConvertInsaneJSONValue }}(v)
-
+	{{ else }}
+	val, err := node.{{- $type.InsaneConvertFunc }}()
+	if err != nil {
+		return err
+	}
 	{{ end }}
-	{{ if not $type.CannotBeNull }}
+	{{ if $type.Nullable }}
 	if t.nullable {
 		t.nullCol.Append(proto.NewNullable(val))
 		return nil
@@ -91,7 +90,7 @@ func (t *{{ $type.ColumnTypeName }}) Append(node InsaneNode) error {
 
 func (t *{{ $type.ColumnTypeName }}) Reset() {
 	t.col.Reset()
-	{{- if not $type.CannotBeNull }}
+	{{- if $type.Nullable }}
 	t.nullCol.Reset()
 	{{- end }}
 	{{- if $type.LowCardinality }}
@@ -100,7 +99,7 @@ func (t *{{ $type.ColumnTypeName }}) Reset() {
 }
 
 func (t *{{ $type.ColumnTypeName }}) Type() proto.ColumnType {
-	{{- if not $type.CannotBeNull }}
+	{{- if $type.Nullable }}
 	if t.nullable {
 		return t.nullCol.Type()
 	}
@@ -114,7 +113,7 @@ func (t *{{ $type.ColumnTypeName }}) Type() proto.ColumnType {
 }
 
 func (t *{{ $type.ColumnTypeName }}) Rows() int {
-	{{- if not $type.CannotBeNull }}
+	{{- if $type.Nullable }}
 	if t.nullable {
 		return t.nullCol.Rows()
 	}
@@ -128,7 +127,7 @@ func (t *{{ $type.ColumnTypeName }}) Rows() int {
 }
 
 func (t *{{ $type.ColumnTypeName }}) EncodeColumn(buffer *proto.Buffer) {
-	{{- if not $type.CannotBeNull }}
+	{{- if $type.Nullable }}
 	if t.nullable {
 		t.nullCol.EncodeColumn(buffer)
 		return

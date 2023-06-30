@@ -69,28 +69,26 @@ func main() {
 func clickhouseTypes() []Type {
 	types := []Type{
 		{
-			ChTypeName:    "Bool",
-			GoName:        "bool",
-			CannotConvert: true,
+			ChTypeName: "Bool",
+			GoName:     "bool",
+			Nullable:   true,
 		},
 		{
 			ChTypeName:     "String",
 			GoName:         "string",
-			CannotConvert:  true,
+			Nullable:       true,
 			CustomImpl:     true,
 			LowCardinality: true,
 		},
 		{
-			ChTypeName:   "Enum8",
-			GoName:       goTypeEnum,
-			CannotBeNull: true,
-			CustomImpl:   true,
+			ChTypeName: "Enum8",
+			GoName:     goTypeEnum,
+			CustomImpl: true,
 		},
 		{
-			ChTypeName:   "Enum16",
-			GoName:       goTypeEnum,
-			CannotBeNull: true,
-			CustomImpl:   true,
+			ChTypeName: "Enum16",
+			GoName:     goTypeEnum,
+			CustomImpl: true,
 		},
 	}
 
@@ -103,8 +101,10 @@ func clickhouseTypes() []Type {
 				protoName = "U" + protoName
 			}
 			types = append(types, Type{
-				ChTypeName: protoName,
-				GoName:     goName,
+				ChTypeName:  protoName,
+				GoName:      goName,
+				Convertable: true,
+				Nullable:    true,
 			})
 		}
 	}
@@ -113,59 +113,65 @@ func clickhouseTypes() []Type {
 		Type{
 			ChTypeName:      "Int128",
 			GoName:          Int128Name,
+			Convertable:     true,
+			Nullable:        true,
 			isComplexNumber: true,
 		},
 		Type{
 			ChTypeName:      "UInt128",
 			GoName:          UInt128Name,
+			Convertable:     true,
+			Nullable:        true,
 			isComplexNumber: true,
 		},
 		Type{
 			ChTypeName:      "Int256",
 			GoName:          Int256Name,
+			Convertable:     true,
+			Nullable:        true,
 			isComplexNumber: true,
 		},
 		Type{
 			ChTypeName:      "UInt256",
 			GoName:          UInt256Name,
+			Convertable:     true,
+			Nullable:        true,
 			isComplexNumber: true,
 		},
 		Type{
-			ChTypeName:    "Float32",
-			GoName:        "float32",
-			CannotConvert: true,
+			ChTypeName: "Float32",
+			GoName:     "float32",
+			Nullable:   true,
 		},
 		Type{
-			ChTypeName:    "Float64",
-			GoName:        "float64",
-			CannotConvert: true,
+			ChTypeName: "Float64",
+			GoName:     "float64",
+			Nullable:   true,
 		},
 		Type{
-			ChTypeName:   "DateTime",
-			GoName:       TimeName,
-			CannotBeNull: true,
-			CustomImpl:   true,
+			ChTypeName: "DateTime",
+			GoName:     TimeName,
+			CustomImpl: true,
 		},
 		Type{
-			ChTypeName:   "DateTime64",
-			GoName:       TimeName,
-			CannotBeNull: true,
-			CustomImpl:   true,
+			ChTypeName: "DateTime64",
+			GoName:     TimeName,
+			CustomImpl: true,
 		},
 		Type{
-			ChTypeName:    "IPv4",
-			GoName:        IPv4Name,
-			CannotConvert: true,
+			ChTypeName: "IPv4",
+			GoName:     IPv4Name,
+			Nullable:   true,
 		},
 		Type{
-			ChTypeName:    "IPv6",
-			GoName:        IPv6Name,
-			CannotConvert: true,
+			ChTypeName: "IPv6",
+			GoName:     IPv6Name,
+			Nullable:   true,
 		},
 		Type{
-			ChTypeName:    "UUID",
-			GoName:        UUIDName,
-			CannotConvert: true,
+			ChTypeName: "UUID",
+			GoName:     UUIDName,
+			Nullable:   true,
 		},
 	)
 
