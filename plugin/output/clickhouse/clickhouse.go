@@ -3,6 +3,7 @@ package clickhouse
 import (
 	"context"
 	"encoding/json"
+	"net"
 	"strings"
 	"time"
 
@@ -338,6 +339,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	}
 
 	for _, addr := range p.config.Addresses {
+		addr = addrWithDefaultPort(addr, "9000")
 		pool, err := chpool.New(p.ctx, chpool.Options{
 			ClientOptions: ch.Options{
 				Logger:           p.logger.Named("driver"),
@@ -492,4 +494,16 @@ func (p *Plugin) getInstance(requestID int64, retry int) Clickhouse {
 		instanceIdx = int(requestID) % len(p.instances)
 	}
 	return p.instances[instanceIdx]
+}
+
+func addrWithDefaultPort(addr string, defaultPort string) string {
+	_, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		// port isn't specified
+		return net.JoinHostPort(addr, defaultPort)
+	}
+	if port == "" {
+		return addr + defaultPort
+	}
+	return addr
 }
