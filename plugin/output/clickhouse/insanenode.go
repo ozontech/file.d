@@ -206,6 +206,9 @@ func (n NonStrictNode) AsTime(scale int64) (time.Time, error) {
 	return t, nil
 }
 
+// ZeroValueNode returns a null-value for all called methods.
+// It is usually used to insert a zero-value into a column
+// if the field type of the event does not match the column type.
 type ZeroValueNode struct{}
 
 func (z ZeroValueNode) AsInt() (int, error) {
