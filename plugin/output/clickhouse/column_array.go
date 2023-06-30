@@ -19,9 +19,13 @@ func NewColStringArray() *ColStringArray {
 var _ InsaneColInput = (*ColStringArray)(nil)
 
 func (t *ColStringArray) Append(array InsaneNode) error {
-	vals, err := array.AsStringArray()
-	if err != nil {
-		return fmt.Errorf("converting node to the string array: %w", err)
+	var vals []string
+	if array != nil {
+		var err error
+		vals, err = array.AsStringArray()
+		if err != nil {
+			return fmt.Errorf("converting node to the string array: %w", err)
+		}
 	}
 
 	t.ColArr.Append(vals)

@@ -23,7 +23,7 @@ type Sample struct {
 	F32      float32
 	F64      float64
 	LcStr    string
-	StrArr   []string
+	StrArr   *[]string
 
 	UUID         uuid.UUID
 	UUIDNullable uuid.NullUUID
@@ -69,7 +69,7 @@ func (s *Sample) MarshalJSON() ([]byte, error) {
 		TSWithTZ int64           `json:"ts_with_tz"`
 		TS64     int64           `json:"ts64"`
 		LcStr    string          `json:"lc_str,omitempty"`
-		StrArr   []string        `json:"str_arr"`
+		StrArr   *[]string       `json:"str_arr"`
 
 		UUID         string        `json:"uuid,omitempty"`
 		UUIDNullable uuid.NullUUID `json:"uuid_nullable,omitempty"`

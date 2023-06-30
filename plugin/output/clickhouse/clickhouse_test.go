@@ -6,6 +6,7 @@ import (
 
 	"github.com/golang/mock/gomock"
 	mockclickhouse "github.com/ozontech/file.d/plugin/output/clickhouse/mock"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestPlugin_getInstance(t *testing.T) {
@@ -90,5 +91,45 @@ func TestPlugin_getInstance(t *testing.T) {
 				t.Fatal("instances are not equal")
 			}
 		})
+	}
+}
+
+func Test_addrWithDefaultPort(t *testing.T) {
+	defaultPort := "9000"
+	tests := []struct {
+		addr string
+		want string
+	}{
+		{
+			addr: "127.0.0.1:9333",
+			want: "127.0.0.1:9333",
+		},
+		{
+			addr: "127.0.0.1",
+			want: "127.0.0.1:9000",
+		},
+		{
+			addr: "1.1.1.1:",
+			want: "1.1.1.1:9000",
+		},
+		{
+			addr: "google.com:9333",
+			want: "google.com:9333",
+		},
+		{
+			addr: "google.com",
+			want: "google.com:9000",
+		},
+		{
+			addr: "api.google.com:9333",
+			want: "api.google.com:9333",
+		},
+		{
+			addr: "api.google.com",
+			want: "api.google.com:9000",
+		},
+	}
+	for _, tt := range tests {
+		assert.Equal(t, tt.want, addrWithDefaultPort(tt.addr, defaultPort))
 	}
 }
