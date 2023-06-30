@@ -95,6 +95,10 @@ func (s StrictNode) AsTime(scale int64) (time.Time, error) {
 }
 
 func (s StrictNode) AsStringArray() ([]string, error) {
+	if s.StrictNode == nil || s.IsNull() {
+		return nil, nil
+	}
+
 	arr, err := s.AsArray()
 	if err != nil {
 		return nil, err
@@ -115,7 +119,7 @@ type NonStrictNode struct {
 
 func (n NonStrictNode) AsStringArray() ([]string, error) {
 	if n.Node == nil || n.Node.IsNull() {
-		return []string{}, nil
+		return nil, nil
 	}
 
 	var vals []string

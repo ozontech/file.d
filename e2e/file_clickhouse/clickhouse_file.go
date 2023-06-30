@@ -95,7 +95,7 @@ func (c *Config) Configure(t *testing.T, conf *cfg.Config, pipelineName string) 
 			F32:          123.45,
 			F64:          0.6789,
 			LcStr:        "0558cee0-dd11-4304-9a15-1ad53d151fed",
-			StrArr:       []string{"improve", "error handling"},
+			StrArr:       &[]string{"improve", "error handling"},
 			UUID:         uuid.New(),
 			UUIDNullable: uuid.NullUUID{UUID: uuid.New(), Valid: true},
 		},
@@ -133,7 +133,7 @@ func (c *Config) Configure(t *testing.T, conf *cfg.Config, pipelineName string) 
 			F32:          542.1235,
 			F64:          0.5555555555555555,
 			LcStr:        "cc578a55-8f57-4475-9355-67dfccac9e8d",
-			StrArr:       []string{},
+			StrArr:       &[]string{},
 			UUID:         uuid.New(),
 			UUIDNullable: uuid.NullUUID{},
 		},
@@ -259,6 +259,12 @@ func (c *Config) Validate(t *testing.T) {
 		a.Equal(sample.LcStr, lcStr.Row(i))
 		a.Equal(sample.UUID, uid.Row(i))
 		a.Equal(sample.UUIDNullable.UUID, uidNullable.Row(i).Value)
+
+		if sample.StrArr == nil || len(*sample.StrArr) == 0 {
+			a.Equal([]string(nil), strArr.Row(i))
+		} else {
+			a.Equal(*sample.StrArr, strArr.Row(i))
+		}
 
 		a.Equal(sample.TSWithTZ.Unix(), tsWithTz.Row(i).Unix())
 		a.Equal("Europe/Moscow", tsWithTz.Row(i).Location().String())
