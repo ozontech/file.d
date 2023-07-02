@@ -21,6 +21,8 @@ require (
 	github.com/jackc/pgx/v4 v4.18.1
 	github.com/minio/minio-go v6.0.14+incompatible
 	github.com/prometheus/client_golang v1.11.1
+	github.com/prometheus/client_model v0.2.0
+	github.com/prometheus/common v0.26.0
 	github.com/rjeczalik/notify v0.9.3
 	github.com/satori/go.uuid v1.2.0
 	github.com/stretchr/testify v1.8.4
@@ -109,8 +111,6 @@ require (
 	github.com/pascaldekloe/name v1.0.1 // indirect
 	github.com/pierrec/lz4/v4 v4.1.18 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
-	github.com/prometheus/client_model v0.2.0 // indirect
-	github.com/prometheus/common v0.26.0 // indirect
 	github.com/prometheus/procfs v0.6.0 // indirect
 	github.com/rcrowley/go-metrics v0.0.0-20201227073835-cf1acfcdf475 // indirect
 	github.com/ryanuber/go-glob v1.0.0 // indirect

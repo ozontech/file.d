@@ -55,6 +55,7 @@ type InputPluginController interface {
 type ActionPluginController interface {
 	Commit(event *Event)    // commit offset of held event and skip further processing
 	Propagate(event *Event) // throw held event back to pipeline
+	ActionTypeByIndex(idx int) (string, bool)
 }
 
 type OutputPluginController interface {
@@ -139,10 +140,8 @@ type Settings struct {
 }
 
 // New creates new pipeline. Consider using `SetupHTTPHandlers` next.
-func New(name string, settings *Settings, registry *prometheus.Registry) *Pipeline {
+func New(name string, settings *Settings, registry *prometheus.Registry, lg *zap.SugaredLogger) *Pipeline {
 	metricCtl := metric.New("pipeline_"+name, registry)
-
-	lg := logger.Instance.Named(name)
 
 	pipeline := &Pipeline{
 		Name:           name,

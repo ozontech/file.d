@@ -97,13 +97,16 @@ func (f *FileD) addPipeline(name string, config *cfg.PipelineConfig) {
 
 	logger.Infof("creating pipeline %q: capacity=%d, stream field=%s, decoder=%s", name, settings.Capacity, settings.StreamField, settings.Decoder)
 
-	p := pipeline.New(name, settings, f.registry)
+	p := pipeline.New(name, settings, f.registry, logger.Instance.Named(name))
 	err := f.setupInput(p, config, values)
 	if err != nil {
 		logger.Fatalf("can't create pipeline %q: %s", name, err.Error())
 	}
 
-	f.setupActions(p, config, values)
+	actions := config.Raw.Get("actions")
+	if err := SetupActions(p, f.plugins, actions, values); err != nil {
+		logger.Fatalf("can't create pipeline %q: %s", name, err.Error())
+	}
 
 	err = f.setupOutput(p, config, values)
 	if err != nil {
@@ -126,7 +129,10 @@ func (f *FileD) setupInput(p *pipeline.Pipeline, pipelineConfig *cfg.PipelineCon
 	})
 
 	for _, actionType := range inputInfo.AdditionalActions {
-		actionInfo := f.plugins.GetActionByType(actionType)
+		actionInfo, err := f.plugins.GetActionByType(actionType)
+		if err != nil {
+			return err
+		}
 
 		infoCopy := *actionInfo
 		infoCopy.Config = inputInfo.Config
@@ -141,46 +147,50 @@ func (f *FileD) setupInput(p *pipeline.Pipeline, pipelineConfig *cfg.PipelineCon
 	return nil
 }
 
-func (f *FileD) setupActions(p *pipeline.Pipeline, pipelineConfig *cfg.PipelineConfig, values map[string]int) {
-	actions := pipelineConfig.Raw.Get("actions")
+func SetupActions(p *pipeline.Pipeline, plugins *PluginRegistry, actions *simplejson.Json, values map[string]int) error {
 	for index := range actions.MustArray() {
 		actionJSON := actions.GetIndex(index)
 		if actionJSON.MustMap() == nil {
-			logger.Fatalf("empty action #%d for pipeline %q", index, p.Name)
+			return fmt.Errorf("empty action #%d for pipeline %q", index, p.Name)
 		}
 
 		t := actionJSON.Get("type").MustString()
 		if t == "" {
-			logger.Fatalf("action #%d doesn't provide type %q", index, p.Name)
+			return fmt.Errorf("action #%d doesn't provide type %q", index, p.Name)
 		}
-		f.setupAction(p, index, t, actionJSON, values)
+		if err := setupAction(p, plugins, index, t, actionJSON, values); err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
-func (f *FileD) setupAction(p *pipeline.Pipeline, index int, t string, actionJSON *simplejson.Json, values map[string]int) {
-	logger.Infof("creating action with type %q for pipeline %q", t, p.Name)
-	info := f.plugins.GetActionByType(t)
+func setupAction(p *pipeline.Pipeline, plugins *PluginRegistry, index int, t string, actionJSON *simplejson.Json, values map[string]int) error {
+	info, err := plugins.GetActionByType(t)
+	if err != nil {
+		return err
+	}
 
 	matchMode := extractMatchMode(actionJSON)
 	if matchMode == pipeline.MatchModeUnknown {
-		logger.Fatalf("unknown match_mode value for action %d/%s in pipeline %q", index, t, p.Name)
+		return fmt.Errorf("unknown match_mode value for action %d/%s", index, t)
 	}
 	matchInvert := extractMatchInvert(actionJSON)
 	conditions, err := extractConditions(actionJSON.Get("match_fields"))
 	if err != nil {
-		logger.Fatalf("can't extract conditions for action %d/%s in pipeline %q: %s", index, t, p.Name, err.Error())
+		return fmt.Errorf("can't extract conditions for action %d/%s: %s", index, t, err.Error())
 	}
 	metricName, metricLabels, skipStatus := extractMetrics(actionJSON)
 	configJSON := makeActionJSON(actionJSON)
 
 	_, config := info.Factory()
 	if err := DecodeConfig(config, configJSON); err != nil {
-		logger.Fatalf("can't unmarshal config for %s action in pipeline %q: %s", info.Type, p.Name, err.Error())
+		return fmt.Errorf("can't unmarshal config for %s action: %s", info.Type, err.Error())
 	}
 
 	err = cfg.Parse(config, values)
 	if err != nil {
-		logger.Fatalf("wrong config for %q action in pipeline %q: %s", info.Type, p.Name, err.Error())
+		return fmt.Errorf("wrong config for %q action: %s", info.Type, err.Error())
 	}
 
 	infoCopy := *info
@@ -196,6 +206,7 @@ func (f *FileD) setupAction(p *pipeline.Pipeline, index int, t string, actionJSO
 		MetricSkipStatus: skipStatus,
 		MatchInvert:      matchInvert,
 	})
+	return nil
 }
 
 func (f *FileD) setupOutput(p *pipeline.Pipeline, pipelineConfig *cfg.PipelineConfig, values map[string]int) error {
@@ -232,7 +243,10 @@ func (f *FileD) getStaticInfo(pipelineConfig *cfg.PipelineConfig, pluginKind pip
 		return nil, fmt.Errorf("%s doesn't have type", pluginKind)
 	}
 	logger.Infof("creating %s with type %q", pluginKind, t)
-	info := f.plugins.Get(pluginKind, t)
+	info, err := f.plugins.Get(pluginKind, t)
+	if err != nil {
+		return nil, err
+	}
 	configJson, err := configJSON.Encode()
 	if err != nil {
 		logger.Panicf("can't create config json for %s", t)

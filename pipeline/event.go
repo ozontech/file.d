@@ -191,6 +191,10 @@ func (e *Event) String() string {
 	return fmt.Sprintf("kind=%s, action=%d, source=%d/%s, stream=%s, stage=%s, json=%s", e.kindStr(), e.action.Load(), e.SourceID, e.SourceName, e.streamName, e.stageStr(), e.Root.EncodeToString())
 }
 
+func (e *Event) Action() int {
+	return int(e.action.Load())
+}
+
 // channels are slower than this implementation by ~20%
 type eventPool struct {
 	capacity int
