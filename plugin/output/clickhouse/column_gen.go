@@ -4,6 +4,7 @@ package clickhouse
 
 import (
 	"github.com/ClickHouse/ch-go/proto"
+	"github.com/google/uuid"
 )
 
 // ColBool represents Clickhouse Bool type.
@@ -36,14 +37,17 @@ func (t *ColBool) Append(node InsaneNode) error {
 		t.nullCol.Append(proto.Null[bool]())
 		return nil
 	}
+
 	val, err := node.AsBool()
 	if err != nil {
 		return err
 	}
+
 	if t.nullable {
 		t.nullCol.Append(proto.NewNullable(val))
 		return nil
 	}
+
 	t.col.Append(val)
 
 	return nil
@@ -209,6 +213,7 @@ func (t *ColInt8) Append(node InsaneNode) error {
 		t.nullCol.Append(proto.Null[int8]())
 		return nil
 	}
+
 	v, err := node.AsInt()
 	if err != nil {
 		return err
@@ -220,6 +225,7 @@ func (t *ColInt8) Append(node InsaneNode) error {
 		t.nullCol.Append(proto.NewNullable(val))
 		return nil
 	}
+
 	t.col.Append(val)
 
 	return nil
@@ -282,6 +288,7 @@ func (t *ColUInt8) Append(node InsaneNode) error {
 		t.nullCol.Append(proto.Null[uint8]())
 		return nil
 	}
+
 	v, err := node.AsInt()
 	if err != nil {
 		return err
@@ -293,6 +300,7 @@ func (t *ColUInt8) Append(node InsaneNode) error {
 		t.nullCol.Append(proto.NewNullable(val))
 		return nil
 	}
+
 	t.col.Append(val)
 
 	return nil
@@ -355,6 +363,7 @@ func (t *ColInt16) Append(node InsaneNode) error {
 		t.nullCol.Append(proto.Null[int16]())
 		return nil
 	}
+
 	v, err := node.AsInt()
 	if err != nil {
 		return err
@@ -366,6 +375,7 @@ func (t *ColInt16) Append(node InsaneNode) error {
 		t.nullCol.Append(proto.NewNullable(val))
 		return nil
 	}
+
 	t.col.Append(val)
 
 	return nil
@@ -428,6 +438,7 @@ func (t *ColUInt16) Append(node InsaneNode) error {
 		t.nullCol.Append(proto.Null[uint16]())
 		return nil
 	}
+
 	v, err := node.AsInt()
 	if err != nil {
 		return err
@@ -439,6 +450,7 @@ func (t *ColUInt16) Append(node InsaneNode) error {
 		t.nullCol.Append(proto.NewNullable(val))
 		return nil
 	}
+
 	t.col.Append(val)
 
 	return nil
@@ -501,6 +513,7 @@ func (t *ColInt32) Append(node InsaneNode) error {
 		t.nullCol.Append(proto.Null[int32]())
 		return nil
 	}
+
 	v, err := node.AsInt()
 	if err != nil {
 		return err
@@ -512,6 +525,7 @@ func (t *ColInt32) Append(node InsaneNode) error {
 		t.nullCol.Append(proto.NewNullable(val))
 		return nil
 	}
+
 	t.col.Append(val)
 
 	return nil
@@ -574,6 +588,7 @@ func (t *ColUInt32) Append(node InsaneNode) error {
 		t.nullCol.Append(proto.Null[uint32]())
 		return nil
 	}
+
 	v, err := node.AsInt()
 	if err != nil {
 		return err
@@ -585,6 +600,7 @@ func (t *ColUInt32) Append(node InsaneNode) error {
 		t.nullCol.Append(proto.NewNullable(val))
 		return nil
 	}
+
 	t.col.Append(val)
 
 	return nil
@@ -647,6 +663,7 @@ func (t *ColInt64) Append(node InsaneNode) error {
 		t.nullCol.Append(proto.Null[int64]())
 		return nil
 	}
+
 	v, err := node.AsInt()
 	if err != nil {
 		return err
@@ -658,6 +675,7 @@ func (t *ColInt64) Append(node InsaneNode) error {
 		t.nullCol.Append(proto.NewNullable(val))
 		return nil
 	}
+
 	t.col.Append(val)
 
 	return nil
@@ -720,6 +738,7 @@ func (t *ColUInt64) Append(node InsaneNode) error {
 		t.nullCol.Append(proto.Null[uint64]())
 		return nil
 	}
+
 	v, err := node.AsInt()
 	if err != nil {
 		return err
@@ -731,6 +750,7 @@ func (t *ColUInt64) Append(node InsaneNode) error {
 		t.nullCol.Append(proto.NewNullable(val))
 		return nil
 	}
+
 	t.col.Append(val)
 
 	return nil
@@ -793,6 +813,7 @@ func (t *ColInt128) Append(node InsaneNode) error {
 		t.nullCol.Append(proto.Null[proto.Int128]())
 		return nil
 	}
+
 	v, err := node.AsInt()
 	if err != nil {
 		return err
@@ -804,6 +825,7 @@ func (t *ColInt128) Append(node InsaneNode) error {
 		t.nullCol.Append(proto.NewNullable(val))
 		return nil
 	}
+
 	t.col.Append(val)
 
 	return nil
@@ -866,6 +888,7 @@ func (t *ColUInt128) Append(node InsaneNode) error {
 		t.nullCol.Append(proto.Null[proto.UInt128]())
 		return nil
 	}
+
 	v, err := node.AsInt()
 	if err != nil {
 		return err
@@ -877,6 +900,7 @@ func (t *ColUInt128) Append(node InsaneNode) error {
 		t.nullCol.Append(proto.NewNullable(val))
 		return nil
 	}
+
 	t.col.Append(val)
 
 	return nil
@@ -939,6 +963,7 @@ func (t *ColInt256) Append(node InsaneNode) error {
 		t.nullCol.Append(proto.Null[proto.Int256]())
 		return nil
 	}
+
 	v, err := node.AsInt()
 	if err != nil {
 		return err
@@ -950,6 +975,7 @@ func (t *ColInt256) Append(node InsaneNode) error {
 		t.nullCol.Append(proto.NewNullable(val))
 		return nil
 	}
+
 	t.col.Append(val)
 
 	return nil
@@ -1012,6 +1038,7 @@ func (t *ColUInt256) Append(node InsaneNode) error {
 		t.nullCol.Append(proto.Null[proto.UInt256]())
 		return nil
 	}
+
 	v, err := node.AsInt()
 	if err != nil {
 		return err
@@ -1023,6 +1050,7 @@ func (t *ColUInt256) Append(node InsaneNode) error {
 		t.nullCol.Append(proto.NewNullable(val))
 		return nil
 	}
+
 	t.col.Append(val)
 
 	return nil
@@ -1055,9 +1083,51 @@ func (t *ColUInt256) EncodeColumn(buffer *proto.Buffer) {
 	t.col.EncodeColumn(buffer)
 }
 
-// struct ColFloat32 defined and implemented in another file
+// ColFloat32 represents Clickhouse Float32 type.
+type ColFloat32 struct {
+	// col contains values for the Float32 type.
+	col *proto.ColFloat32
+
+	// nullCol contains nullable values for the Nullable(Float32) type.
+	nullCol *proto.ColNullable[float32]
+	// nullable the truth if the column is nullable.
+	nullable bool
+}
 
 var _ InsaneColInput = (*ColFloat32)(nil)
+
+func NewColFloat32(nullable bool) *ColFloat32 {
+	return &ColFloat32{
+		col:      new(proto.ColFloat32),
+		nullCol:  new(proto.ColFloat32).Nullable(),
+		nullable: nullable,
+	}
+}
+
+// Append the insaneJSON.Node to the batch.
+func (t *ColFloat32) Append(node InsaneNode) error {
+	if node == nil || node.IsNull() {
+		if !t.nullable {
+			return ErrNodeIsNil
+		}
+		t.nullCol.Append(proto.Null[float32]())
+		return nil
+	}
+
+	val, err := node.AsFloat32()
+	if err != nil {
+		return err
+	}
+
+	if t.nullable {
+		t.nullCol.Append(proto.NewNullable(val))
+		return nil
+	}
+
+	t.col.Append(val)
+
+	return nil
+}
 
 func (t *ColFloat32) Reset() {
 	t.col.Reset()
@@ -1086,9 +1156,51 @@ func (t *ColFloat32) EncodeColumn(buffer *proto.Buffer) {
 	t.col.EncodeColumn(buffer)
 }
 
-// struct ColFloat64 defined and implemented in another file
+// ColFloat64 represents Clickhouse Float64 type.
+type ColFloat64 struct {
+	// col contains values for the Float64 type.
+	col *proto.ColFloat64
+
+	// nullCol contains nullable values for the Nullable(Float64) type.
+	nullCol *proto.ColNullable[float64]
+	// nullable the truth if the column is nullable.
+	nullable bool
+}
 
 var _ InsaneColInput = (*ColFloat64)(nil)
+
+func NewColFloat64(nullable bool) *ColFloat64 {
+	return &ColFloat64{
+		col:      new(proto.ColFloat64),
+		nullCol:  new(proto.ColFloat64).Nullable(),
+		nullable: nullable,
+	}
+}
+
+// Append the insaneJSON.Node to the batch.
+func (t *ColFloat64) Append(node InsaneNode) error {
+	if node == nil || node.IsNull() {
+		if !t.nullable {
+			return ErrNodeIsNil
+		}
+		t.nullCol.Append(proto.Null[float64]())
+		return nil
+	}
+
+	val, err := node.AsFloat64()
+	if err != nil {
+		return err
+	}
+
+	if t.nullable {
+		t.nullCol.Append(proto.NewNullable(val))
+		return nil
+	}
+
+	t.col.Append(val)
+
+	return nil
+}
 
 func (t *ColFloat64) Reset() {
 	t.col.Reset()
@@ -1157,9 +1269,51 @@ func (t *ColDateTime64) EncodeColumn(buffer *proto.Buffer) {
 	t.col.EncodeColumn(buffer)
 }
 
-// struct ColIPv4 defined and implemented in another file
+// ColIPv4 represents Clickhouse IPv4 type.
+type ColIPv4 struct {
+	// col contains values for the IPv4 type.
+	col *proto.ColIPv4
+
+	// nullCol contains nullable values for the Nullable(IPv4) type.
+	nullCol *proto.ColNullable[proto.IPv4]
+	// nullable the truth if the column is nullable.
+	nullable bool
+}
 
 var _ InsaneColInput = (*ColIPv4)(nil)
+
+func NewColIPv4(nullable bool) *ColIPv4 {
+	return &ColIPv4{
+		col:      new(proto.ColIPv4),
+		nullCol:  new(proto.ColIPv4).Nullable(),
+		nullable: nullable,
+	}
+}
+
+// Append the insaneJSON.Node to the batch.
+func (t *ColIPv4) Append(node InsaneNode) error {
+	if node == nil || node.IsNull() {
+		if !t.nullable {
+			return ErrNodeIsNil
+		}
+		t.nullCol.Append(proto.Null[proto.IPv4]())
+		return nil
+	}
+
+	val, err := node.AsIPv4()
+	if err != nil {
+		return err
+	}
+
+	if t.nullable {
+		t.nullCol.Append(proto.NewNullable(val))
+		return nil
+	}
+
+	t.col.Append(val)
+
+	return nil
+}
 
 func (t *ColIPv4) Reset() {
 	t.col.Reset()
@@ -1188,9 +1342,51 @@ func (t *ColIPv4) EncodeColumn(buffer *proto.Buffer) {
 	t.col.EncodeColumn(buffer)
 }
 
-// struct ColIPv6 defined and implemented in another file
+// ColIPv6 represents Clickhouse IPv6 type.
+type ColIPv6 struct {
+	// col contains values for the IPv6 type.
+	col *proto.ColIPv6
+
+	// nullCol contains nullable values for the Nullable(IPv6) type.
+	nullCol *proto.ColNullable[proto.IPv6]
+	// nullable the truth if the column is nullable.
+	nullable bool
+}
 
 var _ InsaneColInput = (*ColIPv6)(nil)
+
+func NewColIPv6(nullable bool) *ColIPv6 {
+	return &ColIPv6{
+		col:      new(proto.ColIPv6),
+		nullCol:  new(proto.ColIPv6).Nullable(),
+		nullable: nullable,
+	}
+}
+
+// Append the insaneJSON.Node to the batch.
+func (t *ColIPv6) Append(node InsaneNode) error {
+	if node == nil || node.IsNull() {
+		if !t.nullable {
+			return ErrNodeIsNil
+		}
+		t.nullCol.Append(proto.Null[proto.IPv6]())
+		return nil
+	}
+
+	val, err := node.AsIPv6()
+	if err != nil {
+		return err
+	}
+
+	if t.nullable {
+		t.nullCol.Append(proto.NewNullable(val))
+		return nil
+	}
+
+	t.col.Append(val)
+
+	return nil
+}
 
 func (t *ColIPv6) Reset() {
 	t.col.Reset()
@@ -1219,9 +1415,51 @@ func (t *ColIPv6) EncodeColumn(buffer *proto.Buffer) {
 	t.col.EncodeColumn(buffer)
 }
 
-// struct ColUUID defined and implemented in another file
+// ColUUID represents Clickhouse UUID type.
+type ColUUID struct {
+	// col contains values for the UUID type.
+	col *proto.ColUUID
+
+	// nullCol contains nullable values for the Nullable(UUID) type.
+	nullCol *proto.ColNullable[uuid.UUID]
+	// nullable the truth if the column is nullable.
+	nullable bool
+}
 
 var _ InsaneColInput = (*ColUUID)(nil)
+
+func NewColUUID(nullable bool) *ColUUID {
+	return &ColUUID{
+		col:      new(proto.ColUUID),
+		nullCol:  new(proto.ColUUID).Nullable(),
+		nullable: nullable,
+	}
+}
+
+// Append the insaneJSON.Node to the batch.
+func (t *ColUUID) Append(node InsaneNode) error {
+	if node == nil || node.IsNull() {
+		if !t.nullable {
+			return ErrNodeIsNil
+		}
+		t.nullCol.Append(proto.Null[uuid.UUID]())
+		return nil
+	}
+
+	val, err := node.AsUUID()
+	if err != nil {
+		return err
+	}
+
+	if t.nullable {
+		t.nullCol.Append(proto.NewNullable(val))
+		return nil
+	}
+
+	t.col.Append(val)
+
+	return nil
+}
 
 func (t *ColUUID) Reset() {
 	t.col.Reset()

@@ -3,6 +3,7 @@ package clickhouse
 import (
 	"context"
 	"encoding/json"
+	"net"
 	"strings"
 	"time"
 
@@ -17,6 +18,7 @@ import (
 	prom "github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
 /*{ introduction
@@ -37,7 +39,9 @@ type Clickhouse interface {
 }
 
 type Plugin struct {
-	logger     *zap.Logger
+	logger        *zap.Logger
+	samplerLogger *zap.Logger
+
 	config     *Config
 	batcher    *pipeline.Batcher
 	ctx        context.Context
@@ -76,7 +80,6 @@ func (s Settings) toProtoSettings() []ch.Setting {
 }
 
 type Column struct {
-	// TODO: allow to set default value
 	Name string `json:"name"`
 	Type string `json:"type"`
 }
@@ -279,6 +282,11 @@ func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginParams) {
 	p.logger = params.Logger.Desugar()
+
+	p.samplerLogger = p.logger.WithOptions(zap.WrapCore(func(core zapcore.Core) zapcore.Core {
+		return zapcore.NewSamplerWithOptions(p.logger.Core(), time.Second, 5, 0)
+	}))
+
 	p.config = config.(*Config)
 	p.registerMetrics(params.MetricCtl)
 	p.ctx, p.cancelFunc = context.WithCancel(context.Background())
@@ -331,6 +339,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	}
 
 	for _, addr := range p.config.Addresses {
+		addr = addrWithDefaultPort(addr, "9000")
 		pool, err := chpool.New(p.ctx, chpool.Options{
 			ClientOptions: ch.Options{
 				Logger:           p.logger.Named("driver"),
@@ -408,6 +417,11 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 	data := (*workerData).(data)
 	data.reset()
 
+	lvl := zapcore.ErrorLevel
+	if p.config.StrictTypes {
+		lvl = zapcore.FatalLevel
+	}
+
 	for _, event := range batch.Events {
 		for _, col := range data.cols {
 			node := event.Root.Dig(col.Name)
@@ -420,11 +434,22 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 			}
 
 			if err := col.ColInput.Append(insaneNode); err != nil {
-				p.logger.Fatal("can't append value in the batch",
-					zap.Error(err),
-					zap.String("column", col.Name),
-					zap.Any("event", json.RawMessage(event.Root.EncodeToByte())),
-				)
+				if ce := p.samplerLogger.Check(lvl, "can't append value in the batch"); ce != nil {
+					ce.Write(
+						zap.Error(err),
+						zap.String("column", col.Name),
+						zap.Any("event", json.RawMessage(event.Root.EncodeToByte())),
+					)
+				}
+
+				err := col.ColInput.Append(ZeroValueNode{})
+				if err != nil {
+					p.logger.Fatal("why err isn't nil?",
+						zap.Error(err),
+						zap.String("column", col.Name),
+						zap.Any("event", json.RawMessage(event.Root.EncodeToByte())),
+					)
+				}
 			}
 		}
 	}
@@ -469,4 +494,16 @@ func (p *Plugin) getInstance(requestID int64, retry int) Clickhouse {
 		instanceIdx = int(requestID) % len(p.instances)
 	}
 	return p.instances[instanceIdx]
+}
+
+func addrWithDefaultPort(addr string, defaultPort string) string {
+	_, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		// port isn't specified
+		return net.JoinHostPort(addr, defaultPort)
+	}
+	if port == "" {
+		return addr + defaultPort
+	}
+	return addr
 }
