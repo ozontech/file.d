@@ -88,9 +88,14 @@ type ConfigColumn struct {
 type Config struct {
 	// > @3@4@5@6
 	// >
-	// > In strict mode file.d will crash on events without required columns.
-	// Otherwise events will be discarded.
+	// > Deprecated. Use `strict_fields` flag instead.
 	Strict bool `json:"strict" default:"false"` // *
+
+	// > @3@4@5@6
+	// >
+	// > In strict mode file.d will crash on events without required fields.
+	// Otherwise, events will be discarded.
+	StrictFields bool `json:"strict_fields" default:"false"` // *
 
 	// > @3@4@5@6
 	// >
@@ -264,25 +269,14 @@ func (p *Plugin) out(_ *pipeline.WorkerData, batch *pipeline.Batch) {
 		fieldValues, uniqueID, err := p.processEvent(event, pgFields, uniqFields)
 		if err != nil {
 			switch {
-			case errors.Is(err, ErrEventDoesntHaveField):
+			case errors.Is(err, ErrEventDoesntHaveField), errors.Is(err, ErrEventFieldHasWrongType),
+				errors.Is(err, ErrTimestampFromDistantPastOrFuture):
 				p.discardedEventMetric.WithLabelValues().Inc()
-				if p.config.Strict {
+				if p.config.StrictFields || p.config.Strict {
 					p.logger.Fatal(err)
 				}
 				p.logger.Error(err)
-			case errors.Is(err, ErrEventFieldHasWrongType):
-				p.discardedEventMetric.WithLabelValues().Inc()
-				if p.config.Strict {
-					p.logger.Fatal(err)
-				}
-				p.logger.Error(err)
-			case errors.Is(err, ErrTimestampFromDistantPastOrFuture):
-				p.discardedEventMetric.WithLabelValues().Inc()
-				if p.config.Strict {
-					p.logger.Fatal(err)
-				}
-				p.logger.Error(err)
-			case err != nil: // protection from foolproof.
+			default: // protection from foolproof.
 				p.logger.Fatalf("undefined error: %w", err)
 			}
 
