@@ -15,7 +15,7 @@ import (
 type Batch struct {
 	Events []*Event
 
-	eventsOffsets []Event
+	eventOffsets []*Event
 
 	// eventsSize contains total size of the Events in bytes
 	eventsSize int
@@ -73,7 +73,6 @@ type Batcher struct {
 	batch      *Batch
 
 	// cycle of batches: freeBatches => fullBatches, fullBatches => freeBatches
-	// TODO get rid of freeBatches, fullBatches system, which prevents from graceful degradation.
 	freeBatches chan *Batch
 	fullBatches chan *Batch
 	mu          *sync.Mutex
@@ -136,14 +135,13 @@ type WorkerData any
 
 func (b *Batcher) work() {
 	t := time.Now()
-	events := make([]*Event, 0)
 	data := WorkerData(nil)
 	for batch := range b.fullBatches {
 		now := time.Now()
 		b.opts.OutFn(&data, batch)
 		b.batchOutFnSeconds.WithLabelValues().Observe(time.Since(now).Seconds())
 
-		events = b.commitBatch(events, batch)
+		b.commitBatch(batch)
 
 		shouldRunMaintenance := b.opts.MaintenanceFn != nil && b.opts.MaintenanceInterval != 0 && time.Since(t) > b.opts.MaintenanceInterval
 		if shouldRunMaintenance {
@@ -153,18 +151,13 @@ func (b *Batcher) work() {
 	}
 }
 
-func (b *Batcher) commitBatch(events []*Event, batch *Batch) []*Event {
-	// we need to release batch first and then commit events
-	// so lets swap local slice with batch slice to avoid data copying
-	events, batch.Events = batch.Events, events
-
+func (b *Batcher) commitBatch(batch *Batch) {
 	batchSeq := batch.seq
 
 	// we sent a batch, so we don’t need buffers and insaneJSON.Root,
 	// so we can only copy the information we need and release the events
-	eventOffsets := batch.copyEventOffsets(events)
-	b.opts.Controller.ReleaseEvents(events)
-	events = eventOffsets
+	events := batch.copyEventOffsets(batch.Events)
+	b.opts.Controller.ReleaseEvents(batch.Events)
 
 	now := time.Now()
 	// let's restore the sequence of batches to make sure input will commit offsets incrementally
@@ -179,12 +172,10 @@ func (b *Batcher) commitBatch(events []*Event, batch *Batch) []*Event {
 		b.opts.Controller.Commit(events[i], false)
 	}
 
-	b.cond.Broadcast()
+	b.freeBatches <- batch
 	b.seqMu.Unlock()
 
-	b.freeBatches <- batch
-
-	return events
+	b.cond.Broadcast()
 }
 
 func (b *Batcher) heartbeat() {
@@ -236,23 +227,28 @@ func (b *Batcher) getBatch() *Batch {
 func (b *Batcher) Stop() {
 	b.shouldStop.Store(true)
 
-	// todo add scenario without races.
+	b.seqMu.Lock()
+	defer b.seqMu.Unlock()
+
 	close(b.freeBatches)
 	close(b.fullBatches)
 }
 
 // copyEventOffsets copies events without Root and other reusable buffers.
 func (b *Batch) copyEventOffsets(events []*Event) []*Event {
-	if len(b.eventsOffsets) < len(events) {
-		b.eventsOffsets = make([]Event, len(events))
+	if len(b.eventOffsets) < len(events) {
+		b.eventOffsets = make([]*Event, len(events))
+		prealloc := make([]Event, len(events)) // store the events nearly to be more cache friendly
+		for i := range b.eventOffsets {
+			b.eventOffsets[i] = &prealloc[i]
+		}
 	}
 
-	eventsInfo := make([]*Event, len(events))
 	for i := range events {
-		b.eventsOffsets[i].Offset = events[i].Offset
-		b.eventsOffsets[i].SourceID = events[i].SourceID
-		eventsInfo[i] = &b.eventsOffsets[i]
+		events[i].CopyTo(b.eventOffsets[i])
+		b.eventOffsets[i].Buf = nil
+		b.eventOffsets[i].Root = nil
 	}
 
-	return eventsInfo
+	return b.eventOffsets[:len(events)]
 }

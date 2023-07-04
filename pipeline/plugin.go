@@ -24,13 +24,6 @@ type InputPlugin interface {
 	PassEvent(event *Event) bool
 }
 
-// SourceIDCommiter describes an output plugin method that allows you to commit sourceID events,
-// logically extensions OutputPluginController,
-// but not required for implementation.
-type SourceIDCommiter interface {
-	CommitSourceIDs([]SourceID)
-}
-
 type ActionPlugin interface {
 	Start(config AnyConfig, params *ActionPluginParams)
 	Stop()

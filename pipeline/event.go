@@ -6,10 +6,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ozontech/file.d/logger"
 	insaneJSON "github.com/vitkovskii/insane-json"
 	"go.uber.org/atomic"
-
-	"github.com/ozontech/file.d/logger"
 )
 
 type Event struct {
@@ -186,6 +185,10 @@ func (e *Event) String() string {
 		return ""
 	}
 	return fmt.Sprintf("kind=%s, action=%d, source=%d/%s, stream=%s, stage=%s, json=%s", e.kindStr(), e.action.Load(), e.SourceID, e.SourceName, e.streamName, e.stageStr(), e.Root.EncodeToString())
+}
+
+func (e *Event) CopyTo(event *Event) {
+	*event = *e
 }
 
 // channels are slower than this implementation by ~20%
