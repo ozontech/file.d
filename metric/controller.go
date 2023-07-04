@@ -11,8 +11,8 @@ const (
 )
 
 var (
-	secondsBuckets     = prometheus.ExponentialBuckets(0.001, 2, 16) // covers range from 1ms to 32s
-	SecondsBucketsLong = prometheus.ExponentialBuckets(0.005, 2, 16) // covers range from 5ms to 167s
+	SecondsBucketsDetailed = prometheus.ExponentialBuckets(0.0005, 2, 16) // covers range from 500us to 16.384s
+	SecondsBucketsLong     = prometheus.ExponentialBuckets(0.005, 2, 16)  // covers range from 5ms to 163.84s
 )
 
 type Ctl struct {

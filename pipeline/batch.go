@@ -115,7 +115,7 @@ func (b *Batcher) Start(_ context.Context) {
 	b.batchOutFnSeconds = b.opts.MetricCtl.
 		RegisterHistogram("batcher_out_fn_seconds", "", metric.SecondsBucketsLong)
 	b.commitWaitingSeconds = b.opts.MetricCtl.
-		RegisterHistogram("batcher_commit_waiting_seconds", "", metric.SecondsBucketsLong)
+		RegisterHistogram("batcher_commit_waiting_seconds", "", metric.SecondsBucketsDetailed)
 
 	b.freeBatches = make(chan *Batch, b.opts.Workers)
 	b.fullBatches = make(chan *Batch, b.opts.Workers)
