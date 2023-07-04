@@ -14,7 +14,7 @@ import (
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
-	prom "github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus"
 	insaneJSON "github.com/vitkovskii/insane-json"
 	"go.uber.org/zap"
 )
@@ -72,9 +72,9 @@ type Plugin struct {
 
 	// plugin metrics
 
-	discardedEventMetric  *prom.CounterVec
-	duplicatedEventMetric *prom.CounterVec
-	writtenEventMetric    *prom.CounterVec
+	discardedEventMetric  *prometheus.CounterVec
+	duplicatedEventMetric *prometheus.CounterVec
+	writtenEventMetric    *prometheus.CounterVec
 }
 
 type ConfigColumn struct {
