@@ -22,7 +22,7 @@ type metricsHolder struct {
 	metricsGen         int // generation is used to drop unused metrics from counters.
 	metricsGenTime     time.Time
 	metricsGenInterval time.Duration
-	metrics            []*metrics
+	metrics            []metrics
 	registry           *prometheus.Registry
 }
 
@@ -34,37 +34,40 @@ type counter struct {
 }
 
 type metrics struct {
-	name   string
-	labels []string
+	name       string
+	labels     []string
+	skipStatus bool
 
-	root *mNode
+	root mNode
 
 	current  counter
 	previous counter
 }
 
 type mNode struct {
-	childs map[string]*mNode
+	childs map[string]mNode
 	mu     *sync.RWMutex
 	self   string
 }
 
-func newMetricsHolder(pipelineName string, registry *prometheus.Registry, metricsGenInterval time.Duration) *metricsHolder {
+func newMetricsHolder(pipelineName string, registry *prometheus.Registry,
+	metricsGenInterval time.Duration) *metricsHolder {
 	return &metricsHolder{
 		pipelineName: pipelineName,
 		registry:     registry,
 
-		metrics:            make([]*metrics, 0),
+		metrics:            make([]metrics, 0),
 		metricsGenInterval: metricsGenInterval,
 	}
 }
 
-func (m *metricsHolder) AddAction(metricName string, metricLabels []string) {
-	m.metrics = append(m.metrics, &metrics{
-		name:   metricName,
-		labels: metricLabels,
-		root: &mNode{
-			childs: make(map[string]*mNode),
+func (m *metricsHolder) AddAction(metricName string, metricLabels []string, skipStatus bool) {
+	m.metrics = append(m.metrics, metrics{
+		name:       metricName,
+		labels:     metricLabels,
+		skipStatus: skipStatus,
+		root: mNode{
+			childs: make(map[string]mNode),
 			mu:     &sync.RWMutex{},
 		},
 		current:  counter{nil, make(map[string]*atomic.Uint64), nil},
@@ -88,10 +91,17 @@ func (c *counter) unregister(registry *prometheus.Registry) {
 
 func (m *metricsHolder) nextMetricsGen() {
 	metricsGen := strconv.Itoa(m.metricsGen % 3) // 2 (for key variance) + 1 (since we must register first) == 3
-	for index, metrics := range m.metrics {
+	for index := range m.metrics {
+		metrics := &m.metrics[index]
 		if metrics.name == "" {
 			continue
 		}
+
+		labels := make([]string, 0, len(metrics.labels)+1)
+		if !metrics.skipStatus {
+			labels = append(labels, "status")
+		}
+		labels = append(labels, metrics.labels...)
 
 		cnt := counter{nil, make(map[string]*atomic.Uint64), nil}
 		for _, st := range allEventStatuses() {
@@ -104,7 +114,7 @@ func (m *metricsHolder) nextMetricsGen() {
 			Help:        fmt.Sprintf("how many events processed by pipeline %q and #%d action", m.pipelineName, index),
 			ConstLabels: map[string]string{"gen": metricsGen, "version": buildinfo.Version},
 		}
-		cnt.count = prometheus.NewCounterVec(opts, append([]string{"status"}, metrics.labels...))
+		cnt.count = prometheus.NewCounterVec(opts, labels)
 		opts = prometheus.CounterOpts{
 			Namespace:   PromNamespace,
 			Subsystem:   "pipeline_" + m.pipelineName,
@@ -112,7 +122,7 @@ func (m *metricsHolder) nextMetricsGen() {
 			Help:        fmt.Sprintf("total size of events processed by pipeline %q and #%d action", m.pipelineName, index),
 			ConstLabels: map[string]string{"gen": metricsGen, "version": buildinfo.Version},
 		}
-		cnt.size = prometheus.NewCounterVec(opts, append([]string{"status"}, metrics.labels...))
+		cnt.size = prometheus.NewCounterVec(opts, labels)
 
 		obsolete := metrics.previous
 
@@ -134,13 +144,19 @@ func (m *metricsHolder) count(event *Event, actionIndex int, eventStatus eventSt
 		return valuesBuf
 	}
 
-	metrics := m.metrics[actionIndex]
+	metrics := &m.metrics[actionIndex]
 	if metrics.name == "" {
 		return valuesBuf
 	}
 
+	if metrics.skipStatus && eventStatus == eventStatusReceived {
+		return valuesBuf
+	}
+
 	valuesBuf = valuesBuf[:0]
-	valuesBuf = append(valuesBuf, string(eventStatus))
+	if !metrics.skipStatus {
+		valuesBuf = append(valuesBuf, string(eventStatus))
+	}
 
 	mn := metrics.root
 	for _, field := range metrics.labels {
@@ -164,8 +180,8 @@ func (m *metricsHolder) count(event *Event, actionIndex int, eventStatus eventSt
 					key = string(node.AsBytes()) // make string from []byte to make map string keys works good
 				}
 
-				nextMN = &mNode{
-					childs: make(map[string]*mNode),
+				nextMN = mNode{
+					childs: make(map[string]mNode),
 					self:   key,
 					mu:     &sync.RWMutex{},
 				}

@@ -196,8 +196,10 @@ pipelines:
 
 result:
 ```
-{"k8s_namespace": "payment", "k8s_pod":"payment-api-abcd"}         # won't be discarded
+{"k8s_namespace": "payment", "k8s_pod":"payment-api-abcd"}         # discarded
 {"k8s_namespace": "tarifficator", "k8s_pod":"payment-api"}         # discarded
+{"k8s_namespace": "payment-tarifficator", "k8s_pod":"payment-api"} # won't be discarded
+{"k8s_namespace": "tarifficator", "k8s_pod":"no-payment-api"}      # won't be discarded
 ```
 
 <br>
@@ -219,12 +221,12 @@ pipelines:
 
 result:
 ```
-{"k8s_namespace": "payment", "k8s_pod":"payment-api-abcd"} # won't be discarded
-{"k8s_namespace": "tarifficator", "k8s_pod":"payment-api"} # won't be discarded
-{"k8s_namespace": "map", "k8s_pod":"payment-api"} # won't be discarded
-{"k8s_namespace": "payment", "k8s_pod":"map-api"} # won't be discarded
-{"k8s_namespace": "tarifficator", "k8s_pod":"tarifficator-go-api"} # won't be discarded
-{"k8s_namespace": "sre", "k8s_pod":"cpu-quotas-abcd-1234"} # discarded
+{"k8s_namespace": "payment", "k8s_pod":"payment-api-abcd"}         # discarded
+{"k8s_namespace": "tarifficator", "k8s_pod":"payment-api"}         # discarded
+{"k8s_namespace": "map", "k8s_pod":"payment-api"}                  # discarded
+{"k8s_namespace": "payment", "k8s_pod":"map-api"}                  # discarded
+{"k8s_namespace": "tarifficator", "k8s_pod":"tarifficator-go-api"} # discarded
+{"k8s_namespace": "sre", "k8s_pod":"cpu-quotas-abcd-1234"}         # won't be discarded
 ```
 
 <br>
@@ -246,10 +248,11 @@ pipelines:
 
 result:
 ```
-{"k8s_namespace": "payment", "k8s_pod":"payment-api-abcd-1234"} # won't be discarded
-{"k8s_namespace": "payment", "k8s_pod":"checkout"} # discarded
-{"k8s_namespace": "map", "k8s_pod":"payment-api-abcd-1234"} # discarded
-{"k8s_namespace": "payment", "k8s_pod":"payment-api"} # discarded
+{"k8s_namespace": "payment", "k8s_pod":"payment-api-abcd-1234"}    # discarded
+{"k8s_namespace": "payment-2", "k8s_pod":"payment-api-abcd-1234"}  # discarded
+{"k8s_namespace": "payment", "k8s_pod":"checkout"}                 # won't be discarded
+{"k8s_namespace": "map", "k8s_pod":"payment-api-abcd-1234"}        # won't be discarded
+{"k8s_namespace": "payment-abcd", "k8s_pod":"payment-api"}         # won't be discarded
 ```
 
 <br>
@@ -271,13 +274,42 @@ pipelines:
 
 result:
 ```
-{"k8s_namespace": "payment", "k8s_pod":"payment-api-abcd-1234"} # won't be discarded
-{"k8s_namespace": "payment", "k8s_pod":"checkout"} # won't be discarded
-{"k8s_namespace": "map", "k8s_pod":"map-go-api-abcd-1234"} # discarded
-{"k8s_namespace": "map", "k8s_pod":"payment-api"} # won't be discarded
-{"k8s_namespace": "tariff", "k8s_pod":"tarifficator"} # won't be discarded
+{"k8s_namespace": "payment", "k8s_pod":"payment-api-abcd-1234"}    # discarded
+{"k8s_namespace": "payment", "k8s_pod":"checkout"}                 # discarded
+{"k8s_namespace": "map", "k8s_pod":"map-go-api-abcd-1234"}         # discarded
+{"k8s_namespace": "map", "k8s_pod":"payment-api"}                  # won't be discarded
+{"k8s_namespace": "map", "k8s_pod":"payment-api-abcd-1234"}        # discarded
+{"k8s_namespace": "tariff", "k8s_pod":"tarifficator"}              # won't be discarded
 ```
 
 <br>
+
+
+### Decoders
+
+If you have logs in specific non-json format, you can specify decoder type in pipeline settings. By default `json` decoder is used. More details can be found [here](../decoder/readme.md).
+
+```yml
+pipelines:
+  example:
+    settings:
+      decoder: 'nginx_error'
+    input:
+      type: file
+      watching_dir: /dir
+      offsets_file: /dir/offsets
+      filename_pattern: "error.log"
+      persistence_mode: async
+    output:
+      type: stdout
+    actions:
+      - type: join
+        field: message
+        start: '/^\d{1,7}#\d{1,7}\:.*/'
+        continue: '/(^\w+)/'
+      - type: convert_date
+        source_formats: ['2006/01/02 15:04:05']
+        target_format: 'rfc822'
+```
 
 <br>*Generated using [__insane-doc__](https://github.com/vitkovskii/insane-doc)*

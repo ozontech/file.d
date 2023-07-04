@@ -28,7 +28,9 @@ func (o *Offset) Load() error {
 		}
 		return err
 	}
-	defer file.Close()
+	defer func(file *os.File) {
+		_ = file.Close()
+	}(file)
 
 	return o.Callback.Load(file)
 }
@@ -42,7 +44,9 @@ func (o *Offset) saveToTmp() error {
 	if err != nil {
 		return err
 	}
-	defer file.Close()
+	defer func(file *os.File) {
+		_ = file.Close()
+	}(file)
 	return o.Callback.Save(file)
 }
 

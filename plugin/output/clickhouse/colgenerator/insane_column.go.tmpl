@@ -4,7 +4,7 @@ package clickhouse
 
 import (
 	"github.com/ClickHouse/ch-go/proto"
-	insaneJSON "github.com/vitkovskii/insane-json"
+	"github.com/google/uuid"
 )
 
 {{ range $type := .Types }}
@@ -12,11 +12,14 @@ import (
 {{ if not $type.CustomImpl }}
 // {{ $type.ColumnTypeName }} represents Clickhouse {{ $type.ChTypeName }} type.
 type {{ $type.ColumnTypeName }} struct {
+	// col contains values for the {{ $type.ChTypeName }} type.
 	col *{{ $type.LibChTypeNameFull }}
-	{{- if not $type.CannotBeNull }}
+	{{ if $type.Nullable }}
+	// nullCol contains nullable values for the Nullable({{ $type.ChTypeName }}) type.
 	nullCol  *{{ $type.NullableTypeName }}
+	// nullable the truth if the column is nullable.
 	nullable bool
-	{{- end }}
+	{{ end }}
 }
 {{ else }}
 // struct {{ $type.ColumnTypeName }} defined and implemented in another file
@@ -30,26 +33,26 @@ var _ proto.Preparable = (*{{ $type.ColumnTypeName }})(nil)
 
 {{ if not $type.CustomImpl }}
 
-{{ if $type.CannotBeNull  }}
-func New{{- $type.ColumnTypeName }}() *{{ $type.ColumnTypeName }} {
+{{ if $type.Nullable  }}
+func New{{- $type.ColumnTypeName }}(nullable bool) *{{ $type.ColumnTypeName }} {
 	return &{{ $type.ColumnTypeName }}{
-		col: &{{ $type.LibChTypeNameFull }}{},
+	col:      new({{ $type.LibChTypeNameFull }}),
+			nullCol:  new({{ $type.LibChTypeNameFull }}).Nullable(),
+				nullable: nullable,
 	}
 }
 {{ else }}
-func New{{- $type.ColumnTypeName }}(nullable bool) *{{ $type.ColumnTypeName }} {
+func New{{- $type.ColumnTypeName }}() *{{ $type.ColumnTypeName }} {
 	return &{{ $type.ColumnTypeName }}{
-		col:      new({{ $type.LibChTypeNameFull }}),
-		nullCol:  new({{ $type.LibChTypeNameFull }}).Nullable(),
-		nullable: nullable,
+	col: &{{ $type.LibChTypeNameFull }}{},
 	}
 }
 {{ end }}
 
 // Append the insaneJSON.Node to the batch.
-func (t *{{ $type.ColumnTypeName }}) Append(node *insaneJSON.StrictNode) error {
+func (t *{{ $type.ColumnTypeName }}) Append(node InsaneNode) error {
 	if node == nil || node.IsNull() {
-		{{- if $type.CannotBeNull }}
+		{{- if not $type.Nullable }}
 		return ErrNodeIsNil
 		{{- else }}
 		if !t.nullable {
@@ -59,26 +62,25 @@ func (t *{{ $type.ColumnTypeName }}) Append(node *insaneJSON.StrictNode) error {
 		return nil
 		{{- end }}
 	}
-	{{ if $type.CannotConvert -}}
-	val, err := node.{{- $type.InsaneConvertFunc }}()
-	if err != nil {
-		return err
-	}
-	{{ else -}}
+	{{ if $type.Convertable }}
 	v, err := node.{{- $type.InsaneConvertFunc }}()
 	if err != nil {
 		return err
 	}
 
 	val := {{ $type.ConvertInsaneJSONValue }}(v)
-
+	{{ else }}
+	val, err := node.{{- $type.InsaneConvertFunc }}()
+	if err != nil {
+		return err
+	}
 	{{ end }}
-	{{- if not $type.CannotBeNull -}}
+	{{ if $type.Nullable }}
 	if t.nullable {
 		t.nullCol.Append(proto.NewNullable(val))
 		return nil
 	}
-	{{ end -}}
+	{{ end }}
 
 	t.col.Append(val)
 
@@ -88,49 +90,72 @@ func (t *{{ $type.ColumnTypeName }}) Append(node *insaneJSON.StrictNode) error {
 
 func (t *{{ $type.ColumnTypeName }}) Reset() {
 	t.col.Reset()
-	{{- if not $type.CannotBeNull }}
+	{{- if $type.Nullable }}
 	t.nullCol.Reset()
+	{{- end }}
+	{{- if $type.LowCardinality }}
+	t.lcCol.Reset()
 	{{- end }}
 }
 
 func (t *{{ $type.ColumnTypeName }}) Type() proto.ColumnType {
-	{{- if $type.CannotBeNull }}
-	return t.col.Type()
-	{{- else }}
+	{{- if $type.Nullable }}
 	if t.nullable {
 		return t.nullCol.Type()
 	}
-	return t.col.Type()
 	{{- end }}
+	{{- if $type.LowCardinality }}
+	if t.lc {
+		return t.lcCol.Type()
+	}
+	{{- end }}
+	return t.col.Type()
 }
 
 func (t *{{ $type.ColumnTypeName }}) Rows() int {
-	{{- if $type.CannotBeNull }}
-	return t.col.Rows()
-	{{- else }}
+	{{- if $type.Nullable }}
 	if t.nullable {
 		return t.nullCol.Rows()
 	}
-	return t.col.Rows()
 	{{- end }}
+	{{- if $type.LowCardinality }}
+	if t.lc {
+		return t.lcCol.Rows()
+	}
+	{{- end }}
+	return t.col.Rows()
 }
 
 func (t *{{ $type.ColumnTypeName }}) EncodeColumn(buffer *proto.Buffer) {
-	{{- if $type.CannotBeNull }}
-	t.col.EncodeColumn(buffer)
-	{{- else }}
+	{{- if $type.Nullable }}
 	if t.nullable {
 		t.nullCol.EncodeColumn(buffer)
 		return
 	}
-	t.col.EncodeColumn(buffer)
 	{{- end }}
+	{{- if $type.LowCardinality }}
+	if t.lc {
+		t.lcCol.EncodeColumn(buffer)
+		return
+	}
+	{{- end }}
+	t.col.EncodeColumn(buffer)
 }
 
 {{ if $type.Preparable }}
 // Prepare the column before sending.
 func (t *{{ $type.ColumnTypeName }}) Prepare() error {
+	{{- if $type.LowCardinality }}
+	if t.lc {
+		return t.lcCol.Prepare()
+	}
+	{{- end }}
+
+	{{- if $type.IsEnum }}
 	return t.col.Prepare()
+	{{- else }}
+	return nil
+	{{- end }}
 }
 {{ end }}
 

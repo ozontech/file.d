@@ -34,9 +34,9 @@ linters-settings:
 linters:
   disable-all: true
   enable:
-    - depguard
     - dogsled
     - dupl
+    - errcheck
     - goconst
     - gocritic
     - goimports
@@ -58,7 +58,6 @@ linters:
     # - gosec (not worth it in scope of this project)
     # - gochecknoglobals (we know when it is ok to use globals)
     # - gochecknoinits (we know when it is ok to use inits)
-    # - errcheck
 
 issues:
   exclude-use-default: false

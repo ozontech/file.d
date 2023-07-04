@@ -291,16 +291,19 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 }
 
 func (p *Plugin) isAllowed(event *pipeline.Event) bool {
-	ts := time.Now()
+	var ts time.Time
 
 	if len(p.config.TimeField_) != 0 {
 		tsValue := event.Root.Dig(p.config.TimeField_...).AsString()
 		t, err := pipeline.ParseTime(p.format, tsValue)
-		if err != nil || ts.IsZero() {
+		if err != nil || t.IsZero() {
 			p.logger.Warnf("can't parse field %q using format %s: %s", p.config.TimeField, p.config.TimeFieldFormat, tsValue)
+			ts = time.Now()
 		} else {
 			ts = t
 		}
+	} else {
+		ts = time.Now()
 	}
 
 	throttleKey := defaultThrottleKey

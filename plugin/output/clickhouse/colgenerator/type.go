@@ -5,18 +5,20 @@ import (
 )
 
 type Type struct {
-	// ChTypeName is Clickhouse type name e.g. String, Int32
+	// ChTypeName is Clickhouse type name e.g. String, Int32.
 	ChTypeName string
-	// Go name of the type, e.g. int8, string
+	// Go name of the type, e.g. int8, string.
 	GoName string
-	// CannotConvert can not cast to Go type
-	CannotConvert bool
-	// CannotBeNull
-	CannotBeNull bool
-	// isComplexNumber integers with 128-256 bits
+	// Convertable can cast to Go type.
+	Convertable bool
+	// Nullable can be null.
+	Nullable bool
+	// isComplexNumber integers with 128-256 bits.
 	isComplexNumber bool
-	// CustomImpl skips ctor and struct generation if truth
+	// CustomImpl skips ctor and struct generation if truth.
 	CustomImpl bool
+	// LowCardinality truth if the type can be low cardinality.
+	LowCardinality bool
 }
 
 func (t Type) ColumnTypeName() string {
@@ -36,6 +38,16 @@ func (t Type) InsaneConvertFunc() string {
 		return "AsBool"
 	case "string":
 		return "AsString"
+	case IPv4Name:
+		return "AsIPv4"
+	case IPv6Name:
+		return "AsIPv6"
+	case UUIDName:
+		return "AsUUID"
+	case "float32":
+		return "AsFloat32"
+	case "float64":
+		return "AsFloat64"
 	default:
 		return "AsInt"
 	}
@@ -43,6 +55,10 @@ func (t Type) InsaneConvertFunc() string {
 
 // Preparable returns truth if the column must contain Prepare function
 func (t Type) Preparable() bool {
+	return t.IsEnum() || t.LowCardinality
+}
+
+func (t Type) IsEnum() bool {
 	return t.GoName == goTypeEnum
 }
 
@@ -63,4 +79,8 @@ func (t Type) LibChTypeNameFull() string {
 
 func (t Type) NullableTypeName() string {
 	return fmt.Sprintf("proto.ColNullable[%s]", t.GoName)
+}
+
+func (t Type) LowCardinalityTypeName() string {
+	return fmt.Sprintf("proto.ColLowCardinality[%s]", t.GoName)
 }

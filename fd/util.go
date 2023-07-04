@@ -8,15 +8,15 @@ import (
 
 	"github.com/bitly/go-simplejson"
 	"github.com/ozontech/file.d/cfg"
+	"github.com/ozontech/file.d/cfg/matchrule"
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/pipeline"
-	"github.com/ozontech/file.d/pipeline/antispam"
 )
 
 func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 	capacity := pipeline.DefaultCapacity
 	antispamThreshold := 0
-	var antispamExceptions []antispam.Exception
+	var antispamExceptions []matchrule.RuleSet
 	avgInputEventSize := pipeline.DefaultAvgInputEventSize
 	maxInputEventSize := pipeline.DefaultMaxInputEventSize
 	streamField := pipeline.DefaultStreamField
@@ -99,7 +99,7 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 	}
 }
 
-func extractExceptions(settings *simplejson.Json) ([]antispam.Exception, error) {
+func extractExceptions(settings *simplejson.Json) ([]matchrule.RuleSet, error) {
 	raw, err := settings.Get("antispam_exceptions").MarshalJSON()
 	if err != nil {
 		return nil, err
@@ -108,7 +108,7 @@ func extractExceptions(settings *simplejson.Json) ([]antispam.Exception, error) 
 	dec := json.NewDecoder(bytes.NewReader(raw))
 	dec.DisallowUnknownFields()
 
-	var exceptions []antispam.Exception
+	var exceptions []matchrule.RuleSet
 	if err := dec.Decode(&exceptions); err != nil {
 		return nil, err
 	}
@@ -169,13 +169,14 @@ func extractConditions(condJSON *simplejson.Json) (pipeline.MatchConditions, err
 	return conditions, nil
 }
 
-func extractMetrics(actionJSON *simplejson.Json) (string, []string) {
+func extractMetrics(actionJSON *simplejson.Json) (string, []string, bool) {
 	metricName := actionJSON.Get("metric_name").MustString()
 	metricLabels := actionJSON.Get("metric_labels").MustStringArray()
 	if metricLabels == nil {
 		metricLabels = []string{}
 	}
-	return metricName, metricLabels
+	skipStatus := actionJSON.Get("metric_skip_status").MustBool()
+	return metricName, metricLabels, skipStatus
 }
 
 func makeActionJSON(actionJSON *simplejson.Json) []byte {
@@ -184,6 +185,7 @@ func makeActionJSON(actionJSON *simplejson.Json) []byte {
 	actionJSON.Del("match_mode")
 	actionJSON.Del("metric_name")
 	actionJSON.Del("metric_labels")
+	actionJSON.Del("metric_skip_status")
 	actionJSON.Del("match_invert")
 	configJson, err := actionJSON.Encode()
 	if err != nil {

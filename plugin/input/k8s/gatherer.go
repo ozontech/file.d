@@ -257,11 +257,11 @@ func cleanUpItems(items []*metaItem) {
 	}
 }
 
-func getMeta(fullFilename string) (ns namespace, pod podName, container containerName, success bool, podMeta *podMeta) {
-	podMeta = nil
-	success = false
+func getMeta(fullFilename string) (namespace, podName, containerName, bool, *podMeta) {
+	var podMeta *podMeta
+	var success bool
 	var cid containerID
-	ns, pod, container, cid = parseLogFilename(fullFilename)
+	ns, pod, container, cid := parseLogFilename(fullFilename)
 
 	i := time.Nanosecond
 	for {
@@ -277,12 +277,12 @@ func getMeta(fullFilename string) (ns namespace, pod podName, container containe
 
 			success = true
 			podMeta = pm
-			return
+			return ns, pod, container, success, podMeta
 		}
 
 		// fast skip blacklisted pods
 		if isInBlackList {
-			return
+			return ns, pod, container, success, podMeta
 		}
 
 		time.Sleep(metaRecheckInterval)
@@ -297,7 +297,7 @@ func getMeta(fullFilename string) (ns namespace, pod podName, container containe
 			metaDataMu.Unlock()
 			localLogger.Errorf("pod %q have blacklisted, cause k8s meta retrieve timeout ns=%s container=%s cid=%s", string(pod), string(ns), string(container), string(cid))
 
-			return
+			return ns, pod, container, success, podMeta
 		}
 	}
 }

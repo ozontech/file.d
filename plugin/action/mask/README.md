@@ -36,13 +36,32 @@ If any mask has been applied then `mask_applied_field` will be set to `mask_appl
 
 <br>
 
-**`re`** *`string`* *`required`* 
+**`applied_metric_name`** *`string`* *`default=mask_applied_total`* 
+
+The metric name of the regular expressions applied.
+
+<br>
+
+**`applied_metric_labels`** *`[]string`* 
+
+Lists the event fields to add to the metric. Blank list means no labels.
+Important note: labels metrics are not currently being cleared.
+
+<br>
+
+**`match_rules`** *`[]matchrule.RuleSet`* 
+
+List of matching rules to filter out events before checking regular expression for masking.
+
+<br>
+
+**`re`** *`string`* 
 
 Regular expression for masking.
 
 <br>
 
-**`groups`** *`[]int`* *`required`* 
+**`groups`** *`[]int`* 
 
 Groups are numbers of masking groups in expression, zero for mask all expression.
 
@@ -57,6 +76,32 @@ MaxCount limits the number of masked symbols in the masked output, if zero, no l
 **`replace_word`** *`string`* 
 
 ReplaceWord, if set, is used instead of asterisks for masking patterns that are of the same length or longer.
+
+<br>
+
+**`applied_field`** *`string`* 
+
+If the mask has been applied then `applied_field` will be set to `applied_value` in the event.
+
+<br>
+
+**`applied_value`** *`string`* 
+
+Value to be set in `applied_field`.
+
+<br>
+
+**`metric_name`** *`string`* 
+
+The metric name of the regular expressions applied.
+The metric name for a mask cannot be the same as metric name for plugin.
+
+<br>
+
+**`metric_labels`** *`[]string`* 
+
+Lists the event fields to add to the metric. Blank list means no labels.
+Important note: labels metrics are not currently being cleared.
 
 <br>
 

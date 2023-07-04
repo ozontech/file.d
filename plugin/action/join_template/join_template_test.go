@@ -209,6 +209,15 @@ main.RunTask.func1()
         /Users/root/go/src/app/main.go:231 +0x9c
 created by main.RunTask
         /Users/root/go/src/app/main.go:223 +0x68
+
+# ===next===
+fatal error: unexpected signal during runtime execution
+[signal SIGSEGV: segmentation violation code=0x1 addr=0x0 pc=0x0]runtime stack:
+runtime.throw({0xa41e95?, 0x43997b82d0?})
+	/usr/lib/sdk/golang/src/runtime/panic.go:1047 +0x5d fp=0x7fffefd63c90 sp=0x7fffefd63c60 pc=0x4c28dd
+runtime.sigpanic()
+	/usr/lib/sdk/golang/src/runtime/signal_unix.go:819 +0x369 fp=0x7fffefd63ce0 sp=0x7fffefd63c90 pc=0x4d8309goroutine 1 [syscall, locked to thread]:
+runtime.cgocall(0x8fc1e0, 0xc00012ef20)
 `
 
 const contentPanicsWithNilNodes = `# ===next===
@@ -368,6 +377,16 @@ example.com/platform/somlib/pkg/mw/grpc/circuitbreaker.(*RTCircuitBreakerGroup).
     /builds/.cache/go/pkg/mod/example.com/platform/somlib@v1.12.4-alpha.3.0.20220525161738-c7c89a81036d/pkg/mw/grpc/circuitbreaker/interceptors.go:20 +0x18c
 google.golang.org/grpc.getChainUnaryInvoker.func1({0x18bda78, 0xc002e47080}, {0x162a945, 0x1a}, {0x158e100, 0xc002e46e40}, {0x158d840, 0xc002e46e70}, 0x7fd128bcbfff, {0x0, ...})
     /builds/.cache/go/pkg/mod/google.golang.org/grpc@v1.44.0/clientconn.go:360 +0x154
+
+# ===next===
+fatal error: unexpected signal during runtime execution
+[signal SIGSEGV: segmentation violation code=0x1 addr=0x0 pc=0x0]runtime stack:
+runtime.throw({0xa41e95?, 0x43997b82d0?})
+	/usr/lib/sdk/golang/src/runtime/panic.go:1047 +0x5d fp=0x7fffefd63c90 sp=0x7fffefd63c60 pc=0x4c28dd
+runtime.sigpanic()
+	/usr/lib/sdk/golang/src/runtime/signal_unix.go:819 +0x369 fp=0x7fffefd63ce0 sp=0x7fffefd63c90 pc=0x4d8309goroutine 1 [syscall, locked to thread]:
+NilNode:some message
+runtime.cgocall(0x8fc1e0, 0xc00012ef20)
 `
 
 func TestSimpleJoin(t *testing.T) {
@@ -381,7 +400,7 @@ func TestSimpleJoin(t *testing.T) {
 			name:       "should_ok_for_panics",
 			content:    contentPanics,
 			iterations: 100,
-			expEvents:  16 * 100,
+			expEvents:  17 * 100,
 		},
 	}
 
@@ -468,7 +487,7 @@ func TestJoinAfterNilNode(t *testing.T) {
 			name:       "should_ok_for_panics",
 			content:    contentPanicsWithNilNodes,
 			iterations: 100,
-			expEvents:  20 * 100,
+			expEvents:  23 * 100,
 		},
 	}
 	for _, tt := range cases {

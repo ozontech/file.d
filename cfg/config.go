@@ -12,8 +12,8 @@ import (
 	"time"
 
 	"github.com/bitly/go-simplejson"
-	"github.com/ghodss/yaml"
 	"github.com/ozontech/file.d/logger"
+	"sigs.k8s.io/yaml"
 )
 
 const trueValue = "true"
@@ -519,24 +519,6 @@ func ParseField(v reflect.Value, vField reflect.Value, tField *reflect.StructFie
 	}
 
 	return nil
-}
-
-func UnescapeMap(fields map[string]any) map[string]string {
-	result := make(map[string]string)
-
-	for key, val := range fields {
-		if key == "" {
-			continue
-		}
-
-		if key[0] == '_' {
-			key = key[1:]
-		}
-
-		result[key] = val.(string)
-	}
-
-	return result
 }
 
 func ParseFieldSelector(selector string) []string {

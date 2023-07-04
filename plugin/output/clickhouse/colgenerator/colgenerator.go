@@ -17,6 +17,17 @@ const (
 	goTypeEnum = "proto.Enum"
 )
 
+const (
+	IPv4Name    = "proto.IPv4"
+	IPv6Name    = "proto.IPv6"
+	UUIDName    = "uuid.UUID"
+	TimeName    = "time.Time"
+	Int128Name  = "proto.Int128"
+	UInt128Name = "proto.UInt128"
+	Int256Name  = "proto.Int256"
+	UInt256Name = "proto.UInt256"
+)
+
 //go:embed insane_column.go.tmpl
 var columnTemplateRaw string
 
@@ -43,7 +54,9 @@ func main() {
 	if err != nil {
 		logger.Panic(err)
 	}
-	defer f.Close()
+	defer func(f *os.File) {
+		_ = f.Close()
+	}(f)
 
 	_, err = f.Write(result)
 	if err != nil {
@@ -56,26 +69,26 @@ func main() {
 func clickhouseTypes() []Type {
 	types := []Type{
 		{
-			ChTypeName:    "Bool",
-			GoName:        "bool",
-			CannotConvert: true,
+			ChTypeName: "Bool",
+			GoName:     "bool",
+			Nullable:   true,
 		},
 		{
-			ChTypeName:    "String",
-			GoName:        "string",
-			CannotConvert: true,
+			ChTypeName:     "String",
+			GoName:         "string",
+			Nullable:       true,
+			CustomImpl:     true,
+			LowCardinality: true,
 		},
 		{
-			ChTypeName:   "Enum8",
-			GoName:       goTypeEnum,
-			CannotBeNull: true,
-			CustomImpl:   true,
+			ChTypeName: "Enum8",
+			GoName:     goTypeEnum,
+			CustomImpl: true,
 		},
 		{
-			ChTypeName:   "Enum16",
-			GoName:       goTypeEnum,
-			CannotBeNull: true,
-			CustomImpl:   true,
+			ChTypeName: "Enum16",
+			GoName:     goTypeEnum,
+			CustomImpl: true,
 		},
 	}
 
@@ -88,8 +101,10 @@ func clickhouseTypes() []Type {
 				protoName = "U" + protoName
 			}
 			types = append(types, Type{
-				ChTypeName: protoName,
-				GoName:     goName,
+				ChTypeName:  protoName,
+				GoName:      goName,
+				Convertable: true,
+				Nullable:    true,
 			})
 		}
 	}
@@ -97,53 +112,66 @@ func clickhouseTypes() []Type {
 	types = append(types,
 		Type{
 			ChTypeName:      "Int128",
-			GoName:          "proto.Int128",
+			GoName:          Int128Name,
+			Convertable:     true,
+			Nullable:        true,
 			isComplexNumber: true,
 		},
 		Type{
 			ChTypeName:      "UInt128",
-			GoName:          "proto.UInt128",
+			GoName:          UInt128Name,
+			Convertable:     true,
+			Nullable:        true,
 			isComplexNumber: true,
 		},
 		Type{
 			ChTypeName:      "Int256",
-			GoName:          "proto.Int256",
+			GoName:          Int256Name,
+			Convertable:     true,
+			Nullable:        true,
 			isComplexNumber: true,
 		},
 		Type{
 			ChTypeName:      "UInt256",
-			GoName:          "proto.UInt256",
+			GoName:          UInt256Name,
+			Convertable:     true,
+			Nullable:        true,
 			isComplexNumber: true,
 		},
 		Type{
 			ChTypeName: "Float32",
 			GoName:     "float32",
+			Nullable:   true,
 		},
 		Type{
 			ChTypeName: "Float64",
 			GoName:     "float64",
+			Nullable:   true,
 		},
 		Type{
-			ChTypeName:   "DateTime",
-			GoName:       "time.Time",
-			CannotBeNull: true,
-			CustomImpl:   true,
+			ChTypeName: "DateTime",
+			GoName:     TimeName,
+			CustomImpl: true,
 		},
 		Type{
-			ChTypeName:   "DateTime64",
-			GoName:       "time.Time",
-			CannotBeNull: true,
-			CustomImpl:   true,
+			ChTypeName: "DateTime64",
+			GoName:     TimeName,
+			CustomImpl: true,
 		},
 		Type{
 			ChTypeName: "IPv4",
-			GoName:     "proto.IPv4",
-			CustomImpl: true,
+			GoName:     IPv4Name,
+			Nullable:   true,
 		},
 		Type{
 			ChTypeName: "IPv6",
-			GoName:     "proto.IPv6",
-			CustomImpl: true,
+			GoName:     IPv6Name,
+			Nullable:   true,
+		},
+		Type{
+			ChTypeName: "UUID",
+			GoName:     UUIDName,
+			Nullable:   true,
 		},
 	)
 

@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ozontech/file.d/cfg/matchrule"
 	"github.com/ozontech/file.d/pipeline/antispam"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/atomic"
@@ -130,7 +131,7 @@ type Settings struct {
 	MaintenanceInterval time.Duration
 	EventTimeout        time.Duration
 	AntispamThreshold   int
-	AntispamExceptions  []antispam.Exception
+	AntispamExceptions  []matchrule.RuleSet
 	AvgEventSize        int
 	MaxEventSize        int
 	StreamField         string
@@ -527,7 +528,7 @@ func (p *Pipeline) finalize(event *Event, notifyInput bool, backEvent bool) {
 
 func (p *Pipeline) AddAction(info *ActionPluginStaticInfo) {
 	p.actionInfos = append(p.actionInfos, info)
-	p.metricsHolder.AddAction(info.MetricName, info.MetricLabels)
+	p.metricsHolder.AddAction(info.MetricName, info.MetricLabels, info.MetricSkipStatus)
 }
 
 func (p *Pipeline) initProcs() {
@@ -765,15 +766,15 @@ func (p *Pipeline) serveActionInfo(info *ActionPluginStaticInfo) func(http.Respo
 		}
 
 		var actionMetric *metrics
-		for _, m := range p.metricsHolder.metrics {
+		for i := range p.metricsHolder.metrics {
+			m := &p.metricsHolder.metrics[i]
 			if m.name == info.MetricName {
 				actionMetric = m
-
 				break
 			}
 		}
 
-		events := []Event{}
+		var events []Event
 		for _, status := range []eventStatus{
 			eventStatusReceived,
 			eventStatusDiscarded,

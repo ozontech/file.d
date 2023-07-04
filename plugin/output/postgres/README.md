@@ -1,10 +1,16 @@
-# postgres output
+# Postgres output
 It sends the event batches to postgres db using pgx.
 
 ### Config params
 **`strict`** *`bool`* *`default=false`* 
 
-In strict mode file.d will crash on events without required columns.
+Deprecated. Use `strict_fields` flag instead.
+
+<br>
+
+**`strict_fields`** *`bool`* *`default=false`* 
+
+In strict mode file.d will crash on events without required fields.
 
 <br>
 

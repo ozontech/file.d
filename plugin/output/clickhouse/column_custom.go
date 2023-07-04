@@ -3,16 +3,12 @@ package clickhouse
 import (
 	"errors"
 	"fmt"
-	"net/netip"
-	"time"
 
 	"github.com/ClickHouse/ch-go/proto"
-	insaneJSON "github.com/vitkovskii/insane-json"
 )
 
 var (
-	ErrNodeIsNil        = errors.New("node is nil, but column is not")
-	ErrInvalidIPVersion = errors.New("IP is valid, but the version does not match the column")
+	ErrNodeIsNil = errors.New("node is nil, but column is not")
 )
 
 // ColDateTime represents Clickhouse DateTime type.
@@ -26,17 +22,15 @@ func NewColDateTime(col *proto.ColDateTime) *ColDateTime {
 	}
 }
 
-func (t *ColDateTime) Append(node *insaneJSON.StrictNode) error {
+func (t *ColDateTime) Append(node InsaneNode) error {
 	if node == nil || node.IsNull() {
 		return ErrNodeIsNil
 	}
 
-	v, err := node.AsInt()
+	val, err := node.AsTime(proto.PrecisionSecond.Scale())
 	if err != nil {
-		return err
+		return fmt.Errorf("converting node to time: %w", err)
 	}
-
-	val := time.Unix(int64(v), 0)
 
 	t.col.Append(val)
 
@@ -56,107 +50,16 @@ func NewColDateTime64(col *proto.ColDateTime64, scale int64) *ColDateTime64 {
 	}
 }
 
-func (t *ColDateTime64) Append(node *insaneJSON.StrictNode) error {
+func (t *ColDateTime64) Append(node InsaneNode) error {
 	if node == nil || node.IsNull() {
 		return ErrNodeIsNil
 	}
 
-	v, err := node.AsInt64()
+	val, err := node.AsTime(t.scale)
 	if err != nil {
-		return err
+		return fmt.Errorf("converting to time: %w", err)
 	}
 
-	nsec := v * t.scale
-	val := time.Unix(nsec/1e9, nsec%1e9)
-
-	t.col.Append(val)
-
-	return nil
-}
-
-// ColIPv4 represents Clickhouse IPv4 type.
-type ColIPv4 struct {
-	col      *proto.ColIPv4
-	nullCol  *proto.ColNullable[proto.IPv4]
-	nullable bool
-}
-
-func NewColIPv4(nullable bool) *ColIPv4 {
-	return &ColIPv4{
-		col:      new(proto.ColIPv4),
-		nullCol:  new(proto.ColIPv4).Nullable(),
-		nullable: nullable,
-	}
-}
-
-func (t *ColIPv4) Append(node *insaneJSON.StrictNode) error {
-	if node == nil || node.IsNull() {
-		if !t.nullable {
-			return ErrNodeIsNil
-		}
-		t.nullCol.Append(proto.Null[proto.IPv4]())
-		return nil
-	}
-
-	addr, err := ipFromNode(node)
-	if err != nil {
-		return err
-	}
-
-	if !addr.Is4() {
-		return ErrInvalidIPVersion
-	}
-
-	val := proto.ToIPv4(addr)
-
-	if t.nullable {
-		t.nullCol.Append(proto.NewNullable(val))
-		return nil
-	}
-	t.col.Append(val)
-
-	return nil
-}
-
-// ColIPv6 represents Clickhouse IPv6 type.
-type ColIPv6 struct {
-	col      *proto.ColIPv6
-	nullCol  *proto.ColNullable[proto.IPv6]
-	nullable bool
-}
-
-func NewColIPv6(nullable bool) *ColIPv6 {
-	return &ColIPv6{
-		col:      new(proto.ColIPv6),
-		nullCol:  new(proto.ColIPv6).Nullable(),
-		nullable: nullable,
-	}
-}
-
-func (t *ColIPv6) Append(node *insaneJSON.StrictNode) error {
-	if node == nil || node.IsNull() {
-		if !t.nullable {
-			return ErrNodeIsNil
-		}
-		t.nullCol.Append(proto.Null[proto.IPv6]())
-		return nil
-	}
-
-	addr, err := ipFromNode(node)
-	if err != nil {
-		return err
-	}
-
-	if !addr.Is6() {
-		return ErrInvalidIPVersion
-	}
-
-	val := proto.ToIPv6(addr)
-
-	if t.nullable {
-		t.nullCol.Append(proto.NewNullable(val))
-		return nil
-	}
 	t.col.Append(val)
 
 	return nil
@@ -173,7 +76,7 @@ func NewColEnum8(col *proto.ColEnum) *ColEnum8 {
 	}
 }
 
-func (t *ColEnum8) Append(node *insaneJSON.StrictNode) error {
+func (t *ColEnum8) Append(node InsaneNode) error {
 	if node == nil || node.IsNull() {
 		return ErrNodeIsNil
 	}
@@ -181,6 +84,8 @@ func (t *ColEnum8) Append(node *insaneJSON.StrictNode) error {
 	if err != nil {
 		return err
 	}
+
+	// TODO: check that this val is valid for the enum
 	t.col.Append(val)
 
 	return nil
@@ -197,7 +102,7 @@ func NewColEnum16(col *proto.ColEnum) *ColEnum8 {
 	}
 }
 
-func (t *ColEnum16) Append(node *insaneJSON.StrictNode) error {
+func (t *ColEnum16) Append(node InsaneNode) error {
 	if node == nil || node.IsNull() {
 		return ErrNodeIsNil
 	}
@@ -205,21 +110,70 @@ func (t *ColEnum16) Append(node *insaneJSON.StrictNode) error {
 	if err != nil {
 		return err
 	}
+
+	// TODO: check that this val is valid for the enum
 	t.col.Append(val)
 
 	return nil
 }
 
-func ipFromNode(node *insaneJSON.StrictNode) (netip.Addr, error) {
-	v, err := node.AsString()
-	if err != nil {
-		return netip.Addr{}, err
+// ColString represents Clickhouse String type.
+type ColString struct {
+	// col contains values for the String type.
+	col *proto.ColStr
+
+	// nullCol contains nullable values for the Nullable(String) type.
+	nullCol *proto.ColNullable[string]
+	// nullable the truth if the column is nullable.
+	nullable bool
+
+	// lcCol contains LowCardinality values for the LowCardinality(proto.ColLowCardinality[String]) type.
+	lcCol *proto.ColLowCardinality[string]
+	// lc the truth if the column is LowCardinality.
+	lc bool
+}
+
+var _ proto.StateEncoder = (*ColString)(nil)
+
+func NewColString(nullable, lowCardinality bool) *ColString {
+	return &ColString{
+		col:      new(proto.ColStr),
+		nullCol:  new(proto.ColStr).Nullable(),
+		nullable: nullable,
+		lcCol:    new(proto.ColStr).LowCardinality(),
+		lc:       lowCardinality,
+	}
+}
+
+// Append the insaneJSON.Node to the batch.
+func (t *ColString) Append(node InsaneNode) error {
+	if node == nil || node.IsNull() {
+		if !t.nullable {
+			return ErrNodeIsNil
+		}
+		t.nullCol.Append(proto.Null[string]())
+		return nil
 	}
 
-	addr, err := netip.ParseAddr(v)
+	val, err := node.AsString()
 	if err != nil {
-		return netip.Addr{}, fmt.Errorf("extract ip form json node: %w", err)
+		return fmt.Errorf("converting node to the string: %w", err)
 	}
 
-	return addr, nil
+	switch {
+	case t.nullable:
+		t.nullCol.Append(proto.NewNullable(val))
+	case t.lc:
+		t.lcCol.Append(val)
+	default:
+		t.col.Append(val)
+	}
+
+	return nil
+}
+
+func (t *ColString) EncodeState(b *proto.Buffer) {
+	if t.lc {
+		t.lcCol.EncodeState(b)
+	}
 }
