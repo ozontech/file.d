@@ -202,6 +202,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		BatchSizeBytes:      p.config.BatchSizeBytes_,
 		FlushTimeout:        p.config.BatchFlushTimeout_,
 		MaintenanceInterval: p.config.ReconnectInterval_,
+		MetricCtl:           params.MetricCtl,
 	})
 
 	p.batcher.Start(context.TODO())

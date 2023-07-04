@@ -10,6 +10,10 @@ const (
 	PromNamespace = "file_d"
 )
 
+var (
+	SecondsBucketsLong = prom.ExponentialBuckets(0.005, 2, 16) // covers range from 5ms to 167s
+)
+
 type Ctl struct {
 	subsystem string
 	register  *prom.Registry
