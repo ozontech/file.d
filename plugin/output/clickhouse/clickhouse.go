@@ -15,7 +15,7 @@ import (
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/tls"
-	prom "github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -55,8 +55,8 @@ type Plugin struct {
 
 	// plugin metrics
 
-	insertErrorsMetric *prom.CounterVec
-	queriesCountMetric *prom.CounterVec
+	insertErrorsMetric *prometheus.CounterVec
+	queriesCountMetric *prometheus.CounterVec
 }
 
 type Setting struct {
@@ -375,6 +375,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		BatchSizeCount: p.config.BatchSize_,
 		BatchSizeBytes: p.config.BatchSizeBytes_,
 		FlushTimeout:   p.config.BatchFlushTimeout_,
+		MetricCtl:      params.MetricCtl,
 	})
 
 	p.batcher.Start(p.ctx)

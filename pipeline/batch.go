@@ -7,6 +7,8 @@ import (
 
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/longpanic"
+	"github.com/ozontech/file.d/metric"
+	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/atomic"
 )
 
@@ -80,6 +82,9 @@ type Batcher struct {
 
 	outSeq    int64
 	commitSeq int64
+
+	batchOutFnSeconds    *prometheus.HistogramVec
+	commitWaitingSeconds *prometheus.HistogramVec
 }
 
 type (
@@ -97,6 +102,7 @@ type (
 		BatchSizeBytes      int
 		FlushTimeout        time.Duration
 		MaintenanceInterval time.Duration
+		MetricCtl           *metric.Ctl
 	}
 )
 
@@ -109,6 +115,10 @@ func (b *Batcher) Start(_ context.Context) {
 	b.mu = &sync.Mutex{}
 	b.seqMu = &sync.Mutex{}
 	b.cond = sync.NewCond(b.seqMu)
+	b.batchOutFnSeconds = b.opts.MetricCtl.
+		RegisterHistogram("batcher_out_fn_seconds", "", metric.SecondsBucketsLong)
+	b.commitWaitingSeconds = b.opts.MetricCtl.
+		RegisterHistogram("batcher_commit_waiting_seconds", "", metric.SecondsBucketsDetailed)
 
 	b.freeBatches = make(chan *Batch, b.opts.Workers)
 	b.fullBatches = make(chan *Batch, b.opts.Workers)
@@ -129,7 +139,10 @@ func (b *Batcher) work() {
 	events := make([]*Event, 0)
 	data := WorkerData(nil)
 	for batch := range b.fullBatches {
+		now := time.Now()
 		b.opts.OutFn(&data, batch)
+		b.batchOutFnSeconds.WithLabelValues().Observe(time.Since(now).Seconds())
+
 		events = b.commitBatch(events, batch)
 
 		shouldRunMaintenance := b.opts.MaintenanceFn != nil && b.opts.MaintenanceInterval != 0 && time.Since(t) > b.opts.MaintenanceInterval
@@ -153,12 +166,14 @@ func (b *Batcher) commitBatch(events []*Event, batch *Batch) []*Event {
 	b.opts.Controller.ReleaseEvents(events)
 	events = eventOffsets
 
+	now := time.Now()
 	// let's restore the sequence of batches to make sure input will commit offsets incrementally
 	b.seqMu.Lock()
 	for b.commitSeq != batchSeq {
 		b.cond.Wait()
 	}
 	b.commitSeq++
+	b.commitWaitingSeconds.WithLabelValues().Observe(time.Since(now).Seconds())
 
 	for i := range events {
 		b.opts.Controller.Commit(events[i], false)

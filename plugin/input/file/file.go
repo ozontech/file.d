@@ -8,7 +8,7 @@ import (
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
-	prom "github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
 )
 
@@ -56,8 +56,8 @@ type Plugin struct {
 
 	// plugin metrics
 
-	possibleOffsetCorruptionMetric    *prom.CounterVec
-	alreadyWrittenEventsSkippedMetric *prom.CounterVec
+	possibleOffsetCorruptionMetric    *prometheus.CounterVec
+	alreadyWrittenEventsSkippedMetric *prometheus.CounterVec
 }
 
 type persistenceMode int
