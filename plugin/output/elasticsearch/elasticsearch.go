@@ -214,6 +214,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		BatchSizeBytes:      p.config.BatchSizeBytes_,
 		FlushTimeout:        p.config.BatchFlushTimeout_,
 		MaintenanceInterval: time.Minute,
+		MetricCtl:           params.MetricCtl,
 	})
 
 	ctx, cancel := context.WithCancel(context.Background())

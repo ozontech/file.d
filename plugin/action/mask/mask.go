@@ -9,7 +9,7 @@ import (
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
-	prom "github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus"
 	insaneJSON "github.com/vitkovskii/insane-json"
 	"go.uber.org/zap"
 )
@@ -53,7 +53,7 @@ type Plugin struct {
 
 	//  plugin metrics
 
-	maskAppliedMetric *prom.CounterVec
+	maskAppliedMetric *prometheus.CounterVec
 }
 
 // ! config-params
@@ -135,7 +135,7 @@ type Mask struct {
 	MetricLabels []string `json:"metric_labels"` // *
 
 	// mask metric
-	appliedMetric *prom.CounterVec
+	appliedMetric *prometheus.CounterVec
 }
 
 func init() {
@@ -149,7 +149,7 @@ func factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 	return &Plugin{}, &Config{}
 }
 
-func (p *Plugin) makeMetric(ctl *metric.Ctl, name, help string, labels ...string) *prom.CounterVec {
+func (p *Plugin) makeMetric(ctl *metric.Ctl, name, help string, labels ...string) *prometheus.CounterVec {
 	if name == "" {
 		return nil
 	}

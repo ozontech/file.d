@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/go-redis/redis"
-	prom "github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
 
 	"github.com/ozontech/file.d/cfg"
@@ -45,7 +45,7 @@ type Plugin struct {
 	limiterBuf  []byte
 	rules       []*rule
 
-	limitersMapSizeMetric *prom.GaugeVec
+	limitersMapSizeMetric *prometheus.GaugeVec
 }
 
 // ! config-params
