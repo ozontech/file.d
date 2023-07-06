@@ -37,8 +37,8 @@ const (
 
 	EventSeqIDError = uint64(0)
 
-	antispamUnbanIterations = 4
-	metricsGenInterval      = time.Hour
+	antispamUnbanIterations    = 4
+	metricHolderUpdateInterval = time.Minute * 30
 )
 
 type finalizeFn = func(event *Event, notifyInput bool, backEvent bool)
@@ -87,16 +87,18 @@ type Pipeline struct {
 	inputInfo  *InputPluginInfo
 	antispamer *antispam.Antispammer
 
-	actionInfos  []*ActionPluginStaticInfo
-	Procs        []*processor
-	procCount    *atomic.Int32
-	activeProcs  *atomic.Int32
-	actionParams PluginDefaultParams
+	actionInfos   []*ActionPluginStaticInfo
+	actionMetrics actionMetrics
+	actionParams  PluginDefaultParams
+
+	Procs       []*processor
+	procCount   *atomic.Int32
+	activeProcs *atomic.Int32
 
 	output     OutputPlugin
 	outputInfo *OutputPluginInfo
 
-	metricsHolder *metricsHolder
+	metricHolder *metric.Holder
 
 	// some debugging stuff
 	logger          *zap.SugaredLogger
@@ -113,7 +115,6 @@ type Pipeline struct {
 	maxSize         int
 
 	// all pipeline`s metrics
-
 	inUseEventsMetric          *prometheus.GaugeVec
 	eventPoolCapacityMetric    *prometheus.GaugeVec
 	inputEventsCountMetric     *prometheus.CounterVec
@@ -155,10 +156,13 @@ func New(name string, settings *Settings, registry *prometheus.Registry) *Pipeli
 			PipelineSettings: settings,
 			MetricCtl:        metricCtl,
 		},
-
-		metricsHolder: newMetricsHolder(name, registry, metricsGenInterval),
-		streamer:      newStreamer(settings.EventTimeout),
-		eventPool:     newEventPool(settings.Capacity, settings.AvgEventSize),
+		actionMetrics: actionMetrics{
+			m:  make(map[string]*actionMetric),
+			mu: new(sync.RWMutex),
+		},
+		metricHolder: metric.NewHolder(registry, metricHolderUpdateInterval),
+		streamer:     newStreamer(settings.EventTimeout),
+		eventPool:    newEventPool(settings.Capacity, settings.AvgEventSize),
 		antispamer: antispam.NewAntispammer(antispam.Options{
 			MaintenanceInterval: settings.MaintenanceInterval,
 			Threshold:           settings.AntispamThreshold,
@@ -263,7 +267,7 @@ func (p *Pipeline) Start() {
 	}
 
 	p.initProcs()
-	p.metricsHolder.start()
+	p.metricHolder.Start()
 
 	outputParams := &OutputPluginParams{
 		PluginDefaultParams: p.actionParams,
@@ -305,6 +309,7 @@ func (p *Pipeline) Stop() {
 		processor.stop()
 	}
 
+	p.metricHolder.Stop()
 	p.streamer.stop()
 
 	p.logger.Infof("stopping %q input", p.Name)
@@ -520,9 +525,73 @@ func (p *Pipeline) finalize(event *Event, notifyInput bool, backEvent bool) {
 	p.eventPool.back(event)
 }
 
+type actionMetric struct {
+	count *metric.CounterVecWrapper
+	size  *metric.CounterVecWrapper
+	// totalCounter is a map of eventStatus to counter for `/info` endpoint.
+	totalCounter map[string]*atomic.Uint64
+}
+
+type actionMetrics struct {
+	m  map[string]*actionMetric
+	mu *sync.RWMutex
+}
+
+func (am *actionMetrics) set(name string, m *actionMetric) {
+	if name == "" {
+		return
+	}
+
+	am.mu.Lock()
+	am.m[name] = m
+	am.mu.Unlock()
+}
+
+func (am *actionMetrics) get(name string) *actionMetric {
+	if name == "" {
+		return nil
+	}
+
+	am.mu.RLock()
+	defer am.mu.RUnlock()
+	return am.m[name]
+}
+
 func (p *Pipeline) AddAction(info *ActionPluginStaticInfo) {
 	p.actionInfos = append(p.actionInfos, info)
-	p.metricsHolder.AddAction(info.MetricName, info.MetricLabels, info.MetricSkipStatus)
+
+	mCtl := p.actionParams.MetricCtl
+
+	labels := make([]string, 0, len(info.MetricLabels)+1)
+	if !info.MetricSkipStatus {
+		labels = append(labels, "status")
+	}
+	labels = append(labels, info.MetricLabels...)
+
+	count := mCtl.RegisterCounter(
+		info.MetricName+"_events_count_total",
+		fmt.Sprintf("how many events processed by pipeline %q and #%d action", p.Name, len(p.actionInfos)-1),
+		labels...,
+	)
+	countWrapper := p.metricHolder.AddCounterVec(count)
+
+	size := mCtl.RegisterCounter(
+		info.MetricName+"_events_size_total",
+		fmt.Sprintf("total size of events processed by pipeline %q and #%d action", p.Name, len(p.actionInfos)-1),
+		labels...,
+	)
+	sizeWrapper := p.metricHolder.AddCounterVec(size)
+
+	totalCounter := make(map[string]*atomic.Uint64)
+	for _, st := range allEventStatuses() {
+		totalCounter[string(st)] = atomic.NewUint64(0)
+	}
+
+	p.actionMetrics.set(info.MetricName, &actionMetric{
+		count:        countWrapper,
+		size:         sizeWrapper,
+		totalCounter: totalCounter,
+	})
 }
 
 func (p *Pipeline) initProcs() {
@@ -544,7 +613,7 @@ func (p *Pipeline) initProcs() {
 
 func (p *Pipeline) newProc() *processor {
 	proc := newProcessor(
-		p.metricsHolder,
+		&p.actionMetrics,
 		p.activeProcs,
 		p.output,
 		p.streamer,
@@ -672,7 +741,7 @@ func (p *Pipeline) maintenance() {
 		}
 
 		p.antispamer.Maintenance()
-		p.metricsHolder.maintenance()
+		p.metricHolder.Maintenance()
 
 		myDeltas := p.incMetrics(inputEvents, inputSize, outputEvents, outputSize, readOps)
 		p.setMetrics(p.eventPool.inUseEvents)
@@ -759,14 +828,7 @@ func (p *Pipeline) serveActionInfo(info *ActionPluginStaticInfo) func(http.Respo
 			return
 		}
 
-		var actionMetric *metrics
-		for i := range p.metricsHolder.metrics {
-			m := &p.metricsHolder.metrics[i]
-			if m.name == info.MetricName {
-				actionMetric = m
-				break
-			}
-		}
+		actionMetric := p.actionMetrics.get(info.MetricName)
 
 		var events []Event
 		for _, status := range []eventStatus{
@@ -774,7 +836,7 @@ func (p *Pipeline) serveActionInfo(info *ActionPluginStaticInfo) func(http.Respo
 			eventStatusDiscarded,
 			eventStatusPassed,
 		} {
-			c := actionMetric.current.totalCounter[string(status)]
+			c := actionMetric.totalCounter[string(status)]
 			if c == nil {
 				c = atomic.NewUint64(0)
 			}
