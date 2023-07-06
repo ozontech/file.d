@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/go-redis/redis"
-	prom "github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
 
@@ -71,7 +71,7 @@ type limitersMapConfig struct {
 
 	limiterCfg *limiterConfig
 
-	mapSizeMetric *prom.GaugeVec
+	mapSizeMetric *prometheus.GaugeVec
 }
 
 // limitersMap is auxiliary type for storing the map of strings to limiters with additional info for cleanup
@@ -92,7 +92,7 @@ type limitersMap struct {
 
 	limiterCfg *limiterConfig
 
-	mapSizeMetric *prom.GaugeVec
+	mapSizeMetric *prometheus.GaugeVec
 }
 
 func newLimitersMap(lmCfg limitersMapConfig, redisOpts *redis.Options) *limitersMap {

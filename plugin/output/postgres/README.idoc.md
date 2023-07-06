@@ -1,4 +1,4 @@
-# postgres output
+# Postgres output
 @introduction
 
 ### Config params

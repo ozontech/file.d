@@ -9,7 +9,7 @@ import (
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
-	prom "github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus"
 	insaneJSON "github.com/vitkovskii/insane-json"
 	"go.uber.org/zap"
 )
@@ -46,7 +46,7 @@ type Plugin struct {
 
 	// plugin metrics
 
-	sendErrorMetric *prom.CounterVec
+	sendErrorMetric *prometheus.CounterVec
 }
 
 // ! config-params
@@ -202,6 +202,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		BatchSizeBytes:      p.config.BatchSizeBytes_,
 		FlushTimeout:        p.config.BatchFlushTimeout_,
 		MaintenanceInterval: p.config.ReconnectInterval_,
+		MetricCtl:           params.MetricCtl,
 	})
 
 	p.batcher.Start(context.TODO())

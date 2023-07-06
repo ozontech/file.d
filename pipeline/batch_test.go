@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/ozontech/file.d/logger"
+	"github.com/ozontech/file.d/metric"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/atomic"
 )
@@ -65,6 +67,7 @@ func TestBatcher(t *testing.T) {
 		Workers:        8,
 		BatchSizeCount: batchSize,
 		FlushTimeout:   time.Second,
+		MetricCtl:      metric.New("", prometheus.NewRegistry()),
 	})
 
 	ctx := context.TODO()
@@ -135,6 +138,7 @@ func TestBatcherMaxSize(t *testing.T) {
 		Workers:        8,
 		BatchSizeBytes: batchSize,
 		FlushTimeout:   time.Minute,
+		MetricCtl:      metric.New("", prometheus.NewRegistry()),
 	})
 
 	batcher.Start(context.Background())
