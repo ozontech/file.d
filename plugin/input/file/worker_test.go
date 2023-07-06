@@ -92,7 +92,7 @@ func TestWorkerWork(t *testing.T) {
 				shouldSkip:     *atomic.NewBool(false),
 				mu:             &sync.Mutex{},
 			}
-			ctl := metric.New("test", prometheus.NewRegistry())
+			ctl := metric.NewCtl("test", prometheus.NewRegistry())
 			possibleOffsetCorruptionMetric := ctl.RegisterCounter("worker", "help_test")
 			jp := NewJobProvider(&Config{}, possibleOffsetCorruptionMetric, &zap.SugaredLogger{})
 			jp.jobsChan = make(chan *Job, 2)
@@ -221,7 +221,7 @@ func TestWorkerWorkMultiData(t *testing.T) {
 				mu:         &sync.Mutex{},
 			}
 
-			ctl := metric.New("test", prometheus.NewRegistry())
+			ctl := metric.NewCtl("test", prometheus.NewRegistry())
 			possibleOffsetCorruptionMetric := ctl.RegisterCounter("worker", "help_test")
 			jp := NewJobProvider(&Config{}, possibleOffsetCorruptionMetric, &zap.SugaredLogger{})
 			jp.jobsChan = make(chan *Job, 2)

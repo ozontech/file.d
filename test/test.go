@@ -225,7 +225,7 @@ func newDefaultParams() pipeline.PluginDefaultParams {
 	return pipeline.PluginDefaultParams{
 		PipelineName:     "test_pipeline",
 		PipelineSettings: &pipeline.Settings{},
-		MetricCtl:        metric.New("test", prometheus.NewRegistry()),
+		MetricCtl:        metric.NewCtl("test", prometheus.NewRegistry()),
 	}
 }
 

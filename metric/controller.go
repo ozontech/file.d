@@ -24,7 +24,7 @@ type Ctl struct {
 	histogramMx *sync.Mutex
 }
 
-func New(subsystem string, registry *prom.Registry) *Ctl {
+func NewCtl(subsystem string, registry *prom.Registry) *Ctl {
 	ctl := &Ctl{
 		subsystem:   subsystem,
 		counters:    make(map[string]*prom.CounterVec),

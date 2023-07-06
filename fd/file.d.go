@@ -61,7 +61,7 @@ func (f *FileD) Start() {
 }
 
 func (f *FileD) initMetrics() {
-	f.metricCtl = metric.New("file_d", f.registry)
+	f.metricCtl = metric.NewCtl("file_d", f.registry)
 	f.longPanicMetric = f.metricCtl.RegisterCounter("long_panic", "Count of panics in the LongPanic")
 	f.versionMetric = f.metricCtl.RegisterCounter("version", "", "version")
 	f.versionMetric.WithLabelValues(buildinfo.Version).Inc()
