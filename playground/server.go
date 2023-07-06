@@ -137,9 +137,9 @@ loop:
 		case <-ctx.Done():
 			h.logger.Warn("request timed out")
 			break loop
-		default:
+		case event := <-events:
 			result = append(result, ProcessResult{
-				Event: <-events,
+				Event: event,
 			})
 			if len(result) >= len(req.Events) {
 				break loop
