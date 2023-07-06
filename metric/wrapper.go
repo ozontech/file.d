@@ -4,7 +4,7 @@ import (
 	"sync"
 	"time"
 
-	prom "github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 type (
@@ -12,22 +12,22 @@ type (
 		changeTime time.Time
 		active     bool
 		labels     []string
-		registrar  chan<- prom.Collector
+		registrar  chan<- prometheus.Collector
 	}
 
 	CounterWrapper struct {
 		wrapper
-		counter prom.Counter
+		counter prometheus.Counter
 	}
 
 	GaugeWrapper struct {
 		wrapper
-		gauge prom.Gauge
+		gauge prometheus.Gauge
 	}
 
 	HistogramWrapper struct {
 		wrapper
-		histogram prom.Histogram
+		histogram prometheus.Histogram
 	}
 
 	wrapperType interface {
@@ -35,24 +35,24 @@ type (
 	}
 
 	wrapperVec[T wrapperType] struct {
-		elems     map[prom.Metric]*T
+		elems     map[prometheus.Metric]*T
 		mu        *sync.RWMutex
-		registrar chan<- prom.Collector
+		registrar chan<- prometheus.Collector
 	}
 
 	CounterVecWrapper struct {
 		wrapperVec[CounterWrapper]
-		vec *prom.CounterVec
+		vec *prometheus.CounterVec
 	}
 
 	GaugeVecWrapper struct {
 		wrapperVec[GaugeWrapper]
-		vec *prom.GaugeVec
+		vec *prometheus.GaugeVec
 	}
 
 	HistogramVecWrapper struct {
 		wrapperVec[HistogramWrapper]
-		vec *prom.HistogramVec
+		vec *prometheus.HistogramVec
 	}
 )
 
@@ -119,7 +119,7 @@ func (gv *GaugeVecWrapper) WithLabelValues(lvs ...string) *GaugeWrapper {
 }
 
 func (hv *HistogramVecWrapper) WithLabelValues(lvs ...string) *HistogramWrapper {
-	h := hv.vec.WithLabelValues(lvs...).(prom.Histogram)
+	h := hv.vec.WithLabelValues(lvs...).(prometheus.Histogram)
 	if hw := hv.getElem(h); hw != nil {
 		return hw
 	}
@@ -129,7 +129,7 @@ func (hv *HistogramVecWrapper) WithLabelValues(lvs ...string) *HistogramWrapper 
 	return hw
 }
 
-func newWrapper(r chan<- prom.Collector, labels ...string) wrapper {
+func newWrapper(r chan<- prometheus.Collector, labels ...string) wrapper {
 	w := wrapper{
 		active:    true,
 		registrar: r,
@@ -143,7 +143,7 @@ func newWrapper(r chan<- prom.Collector, labels ...string) wrapper {
 	return w
 }
 
-func (w *wrapper) update(col prom.Collector) {
+func (w *wrapper) update(col prometheus.Collector) {
 	w.changeTime = nowTime
 	if !w.active {
 		// Need re-register only metrics without labels.
@@ -156,68 +156,68 @@ func (w *wrapper) update(col prom.Collector) {
 	}
 }
 
-func newCounterWrapper(c prom.Counter, r chan<- prom.Collector, labels ...string) *CounterWrapper {
+func newCounterWrapper(c prometheus.Counter, r chan<- prometheus.Collector, labels ...string) *CounterWrapper {
 	return &CounterWrapper{
 		counter: c,
 		wrapper: newWrapper(r, labels...),
 	}
 }
 
-func newGaugeWrapper(g prom.Gauge, r chan<- prom.Collector, labels ...string) *GaugeWrapper {
+func newGaugeWrapper(g prometheus.Gauge, r chan<- prometheus.Collector, labels ...string) *GaugeWrapper {
 	return &GaugeWrapper{
 		gauge:   g,
 		wrapper: newWrapper(r, labels...),
 	}
 }
 
-func newHistogramWrapper(h prom.Histogram, r chan<- prom.Collector, labels ...string) *HistogramWrapper {
+func newHistogramWrapper(h prometheus.Histogram, r chan<- prometheus.Collector, labels ...string) *HistogramWrapper {
 	return &HistogramWrapper{
 		histogram: h,
 		wrapper:   newWrapper(r, labels...),
 	}
 }
 
-func newWrapperVec[T wrapperType](r chan<- prom.Collector) wrapperVec[T] {
+func newWrapperVec[T wrapperType](r chan<- prometheus.Collector) wrapperVec[T] {
 	return wrapperVec[T]{
-		elems:     make(map[prom.Metric]*T),
+		elems:     make(map[prometheus.Metric]*T),
 		mu:        new(sync.RWMutex),
 		registrar: r,
 	}
 }
 
-func (wv *wrapperVec[T]) getElem(m prom.Metric) *T {
+func (wv *wrapperVec[T]) getElem(m prometheus.Metric) *T {
 	wv.mu.RLock()
 	defer wv.mu.RUnlock()
 	return wv.elems[m]
 }
 
-func (wv *wrapperVec[T]) setElem(m prom.Metric, elem *T) {
+func (wv *wrapperVec[T]) setElem(m prometheus.Metric, elem *T) {
 	wv.mu.Lock()
 	wv.elems[m] = elem
 	wv.mu.Unlock()
 }
 
-func (wv *wrapperVec[T]) deleteElem(m prom.Metric) {
+func (wv *wrapperVec[T]) deleteElem(m prometheus.Metric) {
 	wv.mu.Lock()
 	delete(wv.elems, m)
 	wv.mu.Unlock()
 }
 
-func newCounterVecWrapper(cv *prom.CounterVec, r chan<- prom.Collector) *CounterVecWrapper {
+func newCounterVecWrapper(cv *prometheus.CounterVec, r chan<- prometheus.Collector) *CounterVecWrapper {
 	return &CounterVecWrapper{
 		vec:        cv,
 		wrapperVec: newWrapperVec[CounterWrapper](r),
 	}
 }
 
-func newGaugeVecWrapper(gv *prom.GaugeVec, r chan<- prom.Collector) *GaugeVecWrapper {
+func newGaugeVecWrapper(gv *prometheus.GaugeVec, r chan<- prometheus.Collector) *GaugeVecWrapper {
 	return &GaugeVecWrapper{
 		vec:        gv,
 		wrapperVec: newWrapperVec[GaugeWrapper](r),
 	}
 }
 
-func newHistogramVecWrapper(hv *prom.HistogramVec, r chan<- prom.Collector) *HistogramVecWrapper {
+func newHistogramVecWrapper(hv *prometheus.HistogramVec, r chan<- prometheus.Collector) *HistogramVecWrapper {
 	return &HistogramVecWrapper{
 		vec:        hv,
 		wrapperVec: newWrapperVec[HistogramWrapper](r),
