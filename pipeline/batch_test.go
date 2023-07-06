@@ -67,7 +67,7 @@ func TestBatcher(t *testing.T) {
 		Workers:        8,
 		BatchSizeCount: batchSize,
 		FlushTimeout:   time.Second,
-		MetricCtl:      metric.New("", prometheus.NewRegistry()),
+		MetricCtl:      metric.NewCtl("", prometheus.NewRegistry()),
 	})
 
 	ctx := context.TODO()
@@ -138,7 +138,7 @@ func TestBatcherMaxSize(t *testing.T) {
 		Workers:        8,
 		BatchSizeBytes: batchSize,
 		FlushTimeout:   time.Minute,
-		MetricCtl:      metric.New("", prometheus.NewRegistry()),
+		MetricCtl:      metric.NewCtl("", prometheus.NewRegistry()),
 	})
 
 	batcher.Start(context.Background())
