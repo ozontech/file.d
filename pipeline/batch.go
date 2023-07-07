@@ -12,6 +12,14 @@ import (
 	"go.uber.org/atomic"
 )
 
+type BatchStatus byte
+
+const (
+	BatchStatusNotReady BatchStatus = iota
+	BatchStatusMaxSizeExceeded
+	BatchStatusTimeoutExceeded
+)
+
 type Batch struct {
 	Events []*Event
 
@@ -27,6 +35,7 @@ type Batch struct {
 	maxSizeCount int
 	// maxSizeBytes max size of events per batch in bytes
 	maxSizeBytes int
+	status       BatchStatus
 }
 
 func newBatch(maxSizeCount, maxSizeBytes int, timeout time.Duration) *Batch {
@@ -51,6 +60,7 @@ func newBatch(maxSizeCount, maxSizeBytes int, timeout time.Duration) *Batch {
 func (b *Batch) reset() {
 	b.Events = b.Events[:0]
 	b.eventsSize = 0
+	b.status = BatchStatusNotReady
 	b.startTime = time.Now()
 }
 
@@ -59,11 +69,17 @@ func (b *Batch) append(e *Event) {
 	b.eventsSize += e.Size
 }
 
-func (b *Batch) isReady() bool {
+func (b *Batch) updateStatus() BatchStatus {
 	l := len(b.Events)
-	isFull := (b.maxSizeCount != 0 && l == b.maxSizeCount) || (b.maxSizeBytes != 0 && b.maxSizeBytes <= b.eventsSize)
-	isTimeout := l > 0 && time.Since(b.startTime) > b.timeout
-	return isFull || isTimeout
+	switch {
+	case (b.maxSizeCount != 0 && l == b.maxSizeCount) || (b.maxSizeBytes != 0 && b.maxSizeBytes <= b.eventsSize):
+		b.status = BatchStatusMaxSizeExceeded
+	case l > 0 && time.Since(b.startTime) > b.timeout:
+		b.status = BatchStatusTimeoutExceeded
+	default:
+		b.status = BatchStatusNotReady
+	}
+	return b.status
 }
 
 type Batcher struct {
@@ -82,8 +98,11 @@ type Batcher struct {
 	outSeq    int64
 	commitSeq int64
 
-	batchOutFnSeconds    *prometheus.HistogramVec
-	commitWaitingSeconds *prometheus.HistogramVec
+	batchOutFnSeconds    prometheus.Observer
+	commitWaitingSeconds prometheus.Observer
+	workersInProgress    prometheus.Gauge
+	batchesDoneByMaxSize prometheus.Counter
+	batchesDoneByTimeout prometheus.Counter
 }
 
 type (
@@ -115,9 +134,16 @@ func (b *Batcher) Start(_ context.Context) {
 	b.seqMu = &sync.Mutex{}
 	b.cond = sync.NewCond(b.seqMu)
 	b.batchOutFnSeconds = b.opts.MetricCtl.
-		RegisterHistogram("batcher_out_fn_seconds", "", metric.SecondsBucketsLong)
+		RegisterHistogram("batcher_out_fn_seconds", "", metric.SecondsBucketsLong).WithLabelValues()
 	b.commitWaitingSeconds = b.opts.MetricCtl.
-		RegisterHistogram("batcher_commit_waiting_seconds", "", metric.SecondsBucketsDetailed)
+		RegisterHistogram("batcher_commit_waiting_seconds", "", metric.SecondsBucketsDetailed).WithLabelValues()
+	b.workersInProgress = b.opts.MetricCtl.
+		RegisterGauge("batcher_workers_in_progress", "").WithLabelValues()
+
+	jobsDone := b.opts.MetricCtl.
+		RegisterCounter("batcher_jobs_done_total", "", "status")
+	b.batchesDoneByMaxSize = jobsDone.WithLabelValues("max_size_exceeded")
+	b.batchesDoneByTimeout = jobsDone.WithLabelValues("timeout_exceeded")
 
 	b.freeBatches = make(chan *Batch, b.opts.Workers)
 	b.fullBatches = make(chan *Batch, b.opts.Workers)
@@ -137,9 +163,11 @@ func (b *Batcher) work() {
 	t := time.Now()
 	data := WorkerData(nil)
 	for batch := range b.fullBatches {
+		b.workersInProgress.Inc()
+
 		now := time.Now()
 		b.opts.OutFn(&data, batch)
-		b.batchOutFnSeconds.WithLabelValues().Observe(time.Since(now).Seconds())
+		b.batchOutFnSeconds.Observe(time.Since(now).Seconds())
 
 		b.commitBatch(batch)
 
@@ -147,6 +175,16 @@ func (b *Batcher) work() {
 		if shouldRunMaintenance {
 			t = time.Now()
 			b.opts.MaintenanceFn(&data)
+		}
+
+		b.workersInProgress.Dec()
+		switch batch.status {
+		case BatchStatusMaxSizeExceeded:
+			b.batchesDoneByMaxSize.Inc()
+		case BatchStatusTimeoutExceeded:
+			b.batchesDoneByTimeout.Inc()
+		default:
+			logger.Panic("unreachable")
 		}
 	}
 }
@@ -166,7 +204,7 @@ func (b *Batcher) commitBatch(batch *Batch) {
 		b.cond.Wait()
 	}
 	b.commitSeq++
-	b.commitWaitingSeconds.WithLabelValues().Observe(time.Since(now).Seconds())
+	b.commitWaitingSeconds.Observe(time.Since(now).Seconds())
 
 	for i := range events {
 		b.opts.Controller.Commit(events[i], false)
@@ -201,9 +239,9 @@ func (b *Batcher) Add(event *Event) {
 	b.trySendBatchAndUnlock(batch)
 }
 
-// trySendBatch mu should be locked and it'll be unlocked after execution of this function
+// trySendBatch mu should be locked, and it'll be unlocked after execution of this function
 func (b *Batcher) trySendBatchAndUnlock(batch *Batch) {
-	if !batch.isReady() {
+	if batch.updateStatus() == BatchStatusNotReady {
 		b.mu.Unlock()
 		return
 	}
