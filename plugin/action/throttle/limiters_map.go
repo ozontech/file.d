@@ -71,7 +71,7 @@ type limitersMapConfig struct {
 
 	limiterCfg *limiterConfig
 
-	mapSizeMetric *prometheus.GaugeVec
+	mapSizeMetric prometheus.Gauge
 }
 
 // limitersMap is auxiliary type for storing the map of strings to limiters with additional info for cleanup
@@ -92,7 +92,7 @@ type limitersMap struct {
 
 	limiterCfg *limiterConfig
 
-	mapSizeMetric *prometheus.GaugeVec
+	mapSizeMetric prometheus.Gauge
 }
 
 func newLimitersMap(lmCfg limitersMapConfig, redisOpts *redis.Options) *limitersMap {
@@ -214,7 +214,7 @@ func (l *limitersMap) maintenance(ctx context.Context) {
 				delete(l.lims, key)
 			}
 			mapSize := float64(len(l.lims))
-			l.mapSizeMetric.WithLabelValues().Set(mapSize)
+			l.mapSizeMetric.Set(mapSize)
 			l.mu.Unlock()
 		}
 	}

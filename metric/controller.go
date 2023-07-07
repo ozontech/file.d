@@ -19,90 +19,145 @@ type Ctl struct {
 	subsystem string
 	register  *prometheus.Registry
 
-	counters  map[string]*prometheus.CounterVec
-	counterMx *sync.Mutex
+	counters  map[string]prometheus.Counter
+	counterMx *sync.RWMutex
 
-	gauges  map[string]*prometheus.GaugeVec
-	gaugeMx *sync.Mutex
+	counterVecs  map[string]*prometheus.CounterVec
+	counterVecMx *sync.RWMutex
 
-	histograms  map[string]*prometheus.HistogramVec
-	histogramMx *sync.Mutex
+	gauges  map[string]prometheus.Gauge
+	gaugeMx *sync.RWMutex
+
+	gaugeVecs  map[string]*prometheus.GaugeVec
+	gaugeVecMx *sync.RWMutex
+
+	histograms  map[string]prometheus.Histogram
+	histogramMx *sync.RWMutex
+
+	histogramVecs  map[string]*prometheus.HistogramVec
+	histogramVecMx *sync.RWMutex
 }
 
 func NewCtl(subsystem string, registry *prometheus.Registry) *Ctl {
 	ctl := &Ctl{
-		subsystem:   subsystem,
-		counters:    make(map[string]*prometheus.CounterVec),
-		counterMx:   new(sync.Mutex),
-		gauges:      make(map[string]*prometheus.GaugeVec),
-		gaugeMx:     new(sync.Mutex),
-		histograms:  make(map[string]*prometheus.HistogramVec),
-		histogramMx: new(sync.Mutex),
-		register:    registry,
+		subsystem:      subsystem,
+		register:       registry,
+		counters:       make(map[string]prometheus.Counter),
+		counterMx:      new(sync.RWMutex),
+		counterVecs:    make(map[string]*prometheus.CounterVec),
+		counterVecMx:   new(sync.RWMutex),
+		gauges:         make(map[string]prometheus.Gauge),
+		gaugeMx:        new(sync.RWMutex),
+		gaugeVecs:      make(map[string]*prometheus.GaugeVec),
+		gaugeVecMx:     new(sync.RWMutex),
+		histograms:     make(map[string]prometheus.Histogram),
+		histogramMx:    new(sync.RWMutex),
+		histogramVecs:  make(map[string]*prometheus.HistogramVec),
+		histogramVecMx: new(sync.RWMutex),
 	}
 	return ctl
 }
 
-func (mc *Ctl) RegisterCounter(name, help string, labels ...string) *prometheus.CounterVec {
-	mc.counterMx.Lock()
-	defer mc.counterMx.Unlock()
-
-	if metric, hasCounter := mc.counters[name]; hasCounter {
-		return metric
+func (mc *Ctl) RegisterCounter(name, help string) prometheus.Counter {
+	newCounter := func() prometheus.Counter {
+		return prometheus.NewCounter(prometheus.CounterOpts{
+			Namespace: PromNamespace,
+			Subsystem: mc.subsystem,
+			Name:      name,
+			Help:      help,
+		})
 	}
 
-	promCounter := prometheus.NewCounterVec(prometheus.CounterOpts{
-		Namespace: PromNamespace,
-		Subsystem: mc.subsystem,
-		Name:      name,
-		Help:      help,
-	}, labels)
-
-	mc.counters[name] = promCounter
-	mc.register.Unregister(promCounter)
-	mc.register.MustRegister(promCounter)
-	return promCounter
+	return registerMetric(mc.register, name, mc.counters, mc.counterMx, newCounter)
 }
 
-func (mc *Ctl) RegisterGauge(name, help string, labels ...string) *prometheus.GaugeVec {
-	mc.gaugeMx.Lock()
-	defer mc.gaugeMx.Unlock()
-
-	if metric, hasGauge := mc.gauges[name]; hasGauge {
-		return metric
+func (mc *Ctl) RegisterCounterVec(name, help string, labels ...string) *prometheus.CounterVec {
+	newCounterVec := func() *prometheus.CounterVec {
+		return prometheus.NewCounterVec(prometheus.CounterOpts{
+			Namespace: PromNamespace,
+			Subsystem: mc.subsystem,
+			Name:      name,
+			Help:      help,
+		}, labels)
 	}
 
-	promGauge := prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Namespace: PromNamespace,
-		Subsystem: mc.subsystem,
-		Name:      name,
-		Help:      help,
-	}, labels)
-
-	mc.gauges[name] = promGauge
-	mc.register.Unregister(promGauge)
-	mc.register.MustRegister(promGauge)
-	return promGauge
+	return registerMetric(mc.register, name, mc.counterVecs, mc.counterVecMx, newCounterVec)
 }
 
-func (mc *Ctl) RegisterHistogram(name, help string, buckets []float64, labels ...string) *prometheus.HistogramVec {
-	mc.histogramMx.Lock()
-	defer mc.histogramMx.Unlock()
+func (mc *Ctl) RegisterGauge(name, help string) prometheus.Gauge {
+	newGauge := func() prometheus.Gauge {
+		return prometheus.NewGauge(prometheus.GaugeOpts{
+			Namespace: PromNamespace,
+			Subsystem: mc.subsystem,
+			Name:      name,
+			Help:      help,
+		})
+	}
 
-	if metric, hasHistogram := mc.histograms[name]; hasHistogram {
+	return registerMetric(mc.register, name, mc.gauges, mc.gaugeMx, newGauge)
+}
+
+func (mc *Ctl) RegisterGaugeVec(name, help string, labels ...string) *prometheus.GaugeVec {
+	newGaugeVec := func() *prometheus.GaugeVec {
+		return prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Namespace: PromNamespace,
+			Subsystem: mc.subsystem,
+			Name:      name,
+			Help:      help,
+		}, labels)
+	}
+
+	return registerMetric(mc.register, name, mc.gaugeVecs, mc.gaugeVecMx, newGaugeVec)
+}
+
+func (mc *Ctl) RegisterHistogram(name, help string, buckets []float64) prometheus.Histogram {
+	newHistogram := func() prometheus.Histogram {
+		return prometheus.NewHistogram(prometheus.HistogramOpts{
+			Namespace: PromNamespace,
+			Subsystem: mc.subsystem,
+			Name:      name,
+			Help:      help,
+			Buckets:   buckets,
+		})
+	}
+
+	return registerMetric(mc.register, name, mc.histograms, mc.histogramMx, newHistogram)
+}
+
+func (mc *Ctl) RegisterHistogramVec(name, help string, buckets []float64, labels ...string) *prometheus.HistogramVec {
+	newHistogramVec := func() *prometheus.HistogramVec {
+		return prometheus.NewHistogramVec(prometheus.HistogramOpts{
+			Namespace: PromNamespace,
+			Subsystem: mc.subsystem,
+			Name:      name,
+			Help:      help,
+			Buckets:   buckets,
+		}, labels)
+	}
+
+	return registerMetric(mc.register, name, mc.histogramVecs, mc.histogramVecMx, newHistogramVec)
+}
+
+func registerMetric[T prometheus.Collector](register *prometheus.Registry, name string,
+	metrics map[string]T, mx *sync.RWMutex, newMetric func() T,
+) T {
+	mx.RLock()
+	metric, has := metrics[name]
+	mx.RUnlock()
+	if has {
 		return metric
 	}
 
-	promHistogram := prometheus.NewHistogramVec(prometheus.HistogramOpts{
-		Namespace: PromNamespace,
-		Subsystem: mc.subsystem,
-		Name:      name,
-		Help:      help,
-		Buckets:   buckets,
-	}, labels)
+	mx.Lock()
+	defer mx.Unlock()
+	metric, has = metrics[name]
+	if !has {
+		metric = newMetric()
 
-	mc.histograms[name] = promHistogram
-	mc.register.Unregister(promHistogram)
-	mc.register.MustRegister(promHistogram)
-	return promHistogram
+		metrics[name] = metric
+		register.Unregister(metric)
+		register.MustRegister(metric)
+	}
+
+	return metric
 }

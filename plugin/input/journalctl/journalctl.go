@@ -21,10 +21,9 @@ type Plugin struct {
 	offInfo *offsetInfo
 
 	//  plugin metrics
-
-	offsetErrorsMetric        *prometheus.CounterVec
-	journalCtlStopErrorMetric *prometheus.CounterVec
-	readerErrorsMetric        *prometheus.CounterVec
+	offsetErrorsMetric        prometheus.Counter
+	journalCtlStopErrorMetric prometheus.Counter
+	readerErrorsMetric        prometheus.Counter
 }
 
 type Config struct {
@@ -84,7 +83,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 
 	p.offInfo = &offsetInfo{}
 	if err := offset.LoadYAML(p.config.OffsetsFile, p.offInfo); err != nil {
-		p.offsetErrorsMetric.WithLabelValues().Inc()
+		p.offsetErrorsMetric.Inc()
 		p.params.Logger.Error("can't load offset file: %s", err.Error())
 	}
 
@@ -110,12 +109,12 @@ func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 func (p *Plugin) Stop() {
 	err := p.reader.stop()
 	if err != nil {
-		p.journalCtlStopErrorMetric.WithLabelValues().Inc()
+		p.journalCtlStopErrorMetric.Inc()
 		p.params.Logger.Error("can't stop journalctl cmd: %s", err.Error())
 	}
 
 	if err := offset.SaveYAML(p.config.OffsetsFile, p.offInfo); err != nil {
-		p.offsetErrorsMetric.WithLabelValues().Inc()
+		p.offsetErrorsMetric.Inc()
 		p.params.Logger.Error("can't save offset file: %s", err.Error())
 	}
 }
@@ -124,7 +123,7 @@ func (p *Plugin) Commit(event *pipeline.Event) {
 	p.offInfo.set(pipeline.CloneString(event.Root.Dig("__CURSOR").AsString()))
 
 	if err := offset.SaveYAML(p.config.OffsetsFile, p.offInfo); err != nil {
-		p.offsetErrorsMetric.WithLabelValues().Inc()
+		p.offsetErrorsMetric.Inc()
 		p.params.Logger.Error("can't save offset file: %s", err.Error())
 	}
 }

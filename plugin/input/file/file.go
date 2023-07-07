@@ -55,9 +55,8 @@ type Plugin struct {
 	jobProvider *jobProvider
 
 	// plugin metrics
-
-	possibleOffsetCorruptionMetric    *prometheus.CounterVec
-	alreadyWrittenEventsSkippedMetric *prometheus.CounterVec
+	possibleOffsetCorruptionMetric    prometheus.Counter
+	alreadyWrittenEventsSkippedMetric prometheus.Counter
 }
 
 type persistenceMode int
@@ -251,7 +250,7 @@ func (p *Plugin) PassEvent(event *pipeline.Event) bool {
 	// and file-d went down after commit
 	pass := event.Offset > savedOffset
 	if !pass {
-		p.alreadyWrittenEventsSkippedMetric.WithLabelValues().Inc()
+		p.alreadyWrittenEventsSkippedMetric.Inc()
 		return false
 	}
 

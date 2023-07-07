@@ -27,7 +27,7 @@ type journalReader struct {
 	args   []string
 
 	// reader metrics
-	readerErrorsMetric *prometheus.CounterVec
+	readerErrorsMetric prometheus.Counter
 }
 
 //nolint:unused
@@ -50,13 +50,13 @@ func (r *journalReader) readLines(rd io.Reader, config *journalReaderConfig) {
 			break
 		}
 		if err != nil {
-			r.readerErrorsMetric.WithLabelValues().Inc()
+			r.readerErrorsMetric.Inc()
 			config.logger.Error(err)
 			continue
 		}
 		_, err = config.output.Write(bytes)
 		if err != nil {
-			r.readerErrorsMetric.WithLabelValues().Inc()
+			r.readerErrorsMetric.Inc()
 			config.logger.Error(err)
 		}
 
@@ -68,7 +68,7 @@ func (r *journalReader) readLines(rd io.Reader, config *journalReaderConfig) {
 }
 
 //nolint:deadcode,unused
-func newJournalReader(config *journalReaderConfig, readerErrorsCounter *prometheus.CounterVec) *journalReader {
+func newJournalReader(config *journalReaderConfig, readerErrorsCounter prometheus.Counter) *journalReader {
 	res := &journalReader{
 		config:             config,
 		readerErrorsMetric: readerErrorsCounter,

@@ -51,9 +51,8 @@ type Plugin struct {
 	mu           *sync.Mutex
 
 	// plugin metrics
-
-	sendErrorMetric      *prometheus.CounterVec
-	indexingErrorsMetric *prometheus.CounterVec
+	sendErrorMetric      prometheus.Counter
+	indexingErrorsMetric prometheus.Counter
 }
 
 // ! config-params
@@ -257,7 +256,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 
 	for {
 		if err := p.send(data.outBuf); err != nil {
-			p.sendErrorMetric.WithLabelValues().Inc()
+			p.sendErrorMetric.Inc()
 			p.logger.Errorf("can't send to the elastic, will try other endpoint: %s", err.Error())
 		} else {
 			break
@@ -307,7 +306,7 @@ func (p *Plugin) send(body []byte) error {
 		}
 
 		if errors != 0 {
-			p.indexingErrorsMetric.WithLabelValues().Add(float64(errors))
+			p.indexingErrorsMetric.Add(float64(errors))
 		}
 
 		p.controller.Error("some events from batch aren't written")

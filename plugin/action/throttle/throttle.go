@@ -45,7 +45,8 @@ type Plugin struct {
 	limiterBuf  []byte
 	rules       []*rule
 
-	limitersMapSizeMetric *prometheus.GaugeVec
+	// plugin metrics
+	limitersMapSizeMetric prometheus.Gauge
 }
 
 // ! config-params

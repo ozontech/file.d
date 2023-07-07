@@ -45,8 +45,7 @@ type Plugin struct {
 	controller   pipeline.OutputPluginController
 
 	// plugin metrics
-
-	sendErrorMetric *prometheus.CounterVec
+	sendErrorMetric prometheus.Counter
 }
 
 // ! config-params
@@ -250,7 +249,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 
 			gelf, err := newClient(p.config.Endpoint, p.config.ConnectionTimeout_, p.config.WriteTimeout_, false, nil)
 			if err != nil {
-				p.sendErrorMetric.WithLabelValues().Inc()
+				p.sendErrorMetric.Inc()
 				p.logger.Errorf("can't connect to gelf endpoint address=%s: %s", p.config.Endpoint, err.Error())
 				time.Sleep(time.Second)
 				continue
@@ -260,7 +259,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 
 		_, err := data.gelf.send(outBuf)
 		if err != nil {
-			p.sendErrorMetric.WithLabelValues().Inc()
+			p.sendErrorMetric.Inc()
 			p.logger.Errorf("can't send data to gelf address=%s, err: %s", p.config.Endpoint, err.Error())
 			_ = data.gelf.close()
 			data.gelf = nil

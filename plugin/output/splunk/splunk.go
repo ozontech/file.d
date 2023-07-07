@@ -36,8 +36,7 @@ type Plugin struct {
 	controller   pipeline.OutputPluginController
 
 	// plugin metrics
-
-	sendErrorMetric *prometheus.CounterVec
+	sendErrorMetric prometheus.Counter
 }
 
 // ! config-params
@@ -165,7 +164,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 	for {
 		err := p.send(outBuf)
 		if err != nil {
-			p.sendErrorMetric.WithLabelValues().Inc()
+			p.sendErrorMetric.Inc()
 			p.logger.Errorf("can't send data to splunk address=%s: %s", p.config.Endpoint, err.Error())
 			time.Sleep(time.Second)
 

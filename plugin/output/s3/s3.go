@@ -153,8 +153,7 @@ type Plugin struct {
 	compressor compressor
 
 	// plugin metrics
-
-	sendErrorMetric  *prometheus.CounterVec
+	sendErrorMetric  prometheus.Counter
 	uploadFileMetric *prometheus.CounterVec
 }
 
@@ -270,7 +269,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 
 func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 	p.sendErrorMetric = ctl.RegisterCounter("output_s3_send_error", "Total s3 send errors")
-	p.uploadFileMetric = ctl.RegisterCounter("output_s3_upload_file", "Total files upload", "bucket_name")
+	p.uploadFileMetric = ctl.RegisterCounterVec("output_s3_upload_file", "Total files upload", "bucket_name")
 }
 
 func (p *Plugin) StartWithMinio(config pipeline.AnyConfig, params *pipeline.OutputPluginParams, factory objStoreFactory) {
@@ -563,7 +562,7 @@ func (p *Plugin) uploadToS3(compressedDTO fileDTO) error {
 	)
 
 	if err != nil {
-		p.sendErrorMetric.WithLabelValues().Inc()
+		p.sendErrorMetric.Inc()
 		return fmt.Errorf("could not upload file: %s into bucket: %s, error: %s", compressedDTO.fileName, compressedDTO.bucketName, err.Error())
 	}
 	return nil

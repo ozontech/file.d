@@ -52,7 +52,6 @@ type Plugin struct {
 	logger     *zap.Logger
 
 	//  plugin metrics
-
 	maskAppliedMetric *prometheus.CounterVec
 }
 
@@ -168,7 +167,7 @@ func (p *Plugin) makeMetric(ctl *metric.Ctl, name, help string, labels ...string
 		labelNames = append(labelNames, label)
 	}
 
-	return ctl.RegisterCounter(name, help, labelNames...)
+	return ctl.RegisterCounterVec(name, help, labelNames...)
 }
 
 func compileMasks(masks []Mask, logger *zap.Logger) []Mask {

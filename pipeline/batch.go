@@ -80,8 +80,8 @@ type Batcher struct {
 	outSeq    int64
 	commitSeq int64
 
-	batchOutFnSeconds    *prometheus.HistogramVec
-	commitWaitingSeconds *prometheus.HistogramVec
+	batchOutFnSeconds    prometheus.Histogram
+	commitWaitingSeconds prometheus.Histogram
 }
 
 type (
@@ -138,7 +138,7 @@ func (b *Batcher) work() {
 	for batch := range b.fullBatches {
 		now := time.Now()
 		b.opts.OutFn(&data, batch)
-		b.batchOutFnSeconds.WithLabelValues().Observe(time.Since(now).Seconds())
+		b.batchOutFnSeconds.Observe(time.Since(now).Seconds())
 
 		events = b.commitBatch(events, batch)
 
@@ -164,7 +164,7 @@ func (b *Batcher) commitBatch(events []*Event, batch *Batch) []*Event {
 		b.cond.Wait()
 	}
 	b.commitSeq++
-	b.commitWaitingSeconds.WithLabelValues().Observe(time.Since(now).Seconds())
+	b.commitWaitingSeconds.Observe(time.Since(now).Seconds())
 
 	for _, e := range events {
 		b.opts.Controller.Commit(e)

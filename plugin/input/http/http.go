@@ -93,8 +93,7 @@ type Plugin struct {
 	logger     *zap.SugaredLogger
 
 	// plugin metrics
-
-	httpErrorMetric *prometheus.CounterVec
+	httpErrorMetric prometheus.Counter
 }
 
 // ! config-params
@@ -229,7 +228,7 @@ func (p *Plugin) serve(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if err != nil && err != io.EOF {
-			p.httpErrorMetric.WithLabelValues().Inc()
+			p.httpErrorMetric.Inc()
 			logger.Errorf("http input read error: %s", err.Error())
 			break
 		}
@@ -249,7 +248,7 @@ func (p *Plugin) serve(w http.ResponseWriter, r *http.Request) {
 
 	_, err := w.Write(result)
 	if err != nil {
-		p.httpErrorMetric.WithLabelValues().Inc()
+		p.httpErrorMetric.Inc()
 		logger.Errorf("can't write response: %s", err.Error())
 	}
 }

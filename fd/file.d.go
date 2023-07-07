@@ -32,8 +32,7 @@ type FileD struct {
 	metricCtl *metric.Ctl
 
 	// file_d metrics
-
-	longPanicMetric *prometheus.CounterVec
+	longPanicMetric prometheus.Counter
 	versionMetric   *prometheus.CounterVec
 }
 
@@ -63,10 +62,10 @@ func (f *FileD) Start() {
 func (f *FileD) initMetrics() {
 	f.metricCtl = metric.NewCtl("file_d", f.registry)
 	f.longPanicMetric = f.metricCtl.RegisterCounter("long_panic", "Count of panics in the LongPanic")
-	f.versionMetric = f.metricCtl.RegisterCounter("version", "", "version")
+	f.versionMetric = f.metricCtl.RegisterCounterVec("version", "", "version")
 	f.versionMetric.WithLabelValues(buildinfo.Version).Inc()
 	longpanic.SetOnPanicHandler(func(_ error) {
-		f.longPanicMetric.WithLabelValues().Inc()
+		f.longPanicMetric.Inc()
 	})
 }
 
