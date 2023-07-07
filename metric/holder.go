@@ -9,7 +9,7 @@ import (
 
 const genTimeInterval = time.Second
 
-var nowTime time.Time
+var nowTime = time.Now()
 
 type Holder struct {
 	registry     *prometheus.Registry
@@ -38,6 +38,7 @@ func NewHolder(registry *prometheus.Registry, holdInterval time.Duration) *Holde
 }
 
 func (h *Holder) Start() {
+	h.updateTime = time.Now()
 	go h.genTime()
 	go h.registerMetrics()
 }
