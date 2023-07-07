@@ -80,8 +80,10 @@ type Batcher struct {
 	outSeq    int64
 	commitSeq int64
 
-	batchOutFnSeconds    *prometheus.HistogramVec
-	commitWaitingSeconds *prometheus.HistogramVec
+	batchOutFnSeconds    prometheus.Observer
+	commitWaitingSeconds prometheus.Observer
+	workersInProgress    prometheus.Gauge
+	jobsDoneTotal        prometheus.Counter
 }
 
 type (
@@ -113,9 +115,13 @@ func (b *Batcher) Start(_ context.Context) {
 	b.seqMu = &sync.Mutex{}
 	b.cond = sync.NewCond(b.seqMu)
 	b.batchOutFnSeconds = b.opts.MetricCtl.
-		RegisterHistogram("batcher_out_fn_seconds", "", metric.SecondsBucketsLong)
+		RegisterHistogram("batcher_out_fn_seconds", "", metric.SecondsBucketsLong).WithLabelValues()
 	b.commitWaitingSeconds = b.opts.MetricCtl.
-		RegisterHistogram("batcher_commit_waiting_seconds", "", metric.SecondsBucketsDetailed)
+		RegisterHistogram("batcher_commit_waiting_seconds", "", metric.SecondsBucketsDetailed).WithLabelValues()
+	b.workersInProgress = b.opts.MetricCtl.
+		RegisterGauge("batcher_workers_in_progress", "").WithLabelValues()
+	b.jobsDoneTotal = b.opts.MetricCtl.
+		RegisterCounter("batcher_jobs_done_total", "").WithLabelValues()
 
 	b.freeBatches = make(chan *Batch, b.opts.Workers)
 	b.fullBatches = make(chan *Batch, b.opts.Workers)
@@ -136,9 +142,11 @@ func (b *Batcher) work() {
 	events := make([]*Event, 0)
 	data := WorkerData(nil)
 	for batch := range b.fullBatches {
+		b.workersInProgress.Inc()
+
 		now := time.Now()
 		b.opts.OutFn(&data, batch)
-		b.batchOutFnSeconds.WithLabelValues().Observe(time.Since(now).Seconds())
+		b.batchOutFnSeconds.Observe(time.Since(now).Seconds())
 
 		events = b.commitBatch(events, batch)
 
@@ -147,6 +155,9 @@ func (b *Batcher) work() {
 			t = time.Now()
 			b.opts.MaintenanceFn(&data)
 		}
+
+		b.workersInProgress.Dec()
+		b.jobsDoneTotal.Inc()
 	}
 }
 
@@ -164,7 +175,7 @@ func (b *Batcher) commitBatch(events []*Event, batch *Batch) []*Event {
 		b.cond.Wait()
 	}
 	b.commitSeq++
-	b.commitWaitingSeconds.WithLabelValues().Observe(time.Since(now).Seconds())
+	b.commitWaitingSeconds.Observe(time.Since(now).Seconds())
 
 	for _, e := range events {
 		b.opts.Controller.Commit(e)
