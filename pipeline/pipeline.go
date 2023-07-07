@@ -123,6 +123,7 @@ type Pipeline struct {
 	readOpsEventsSizeMetric    *prometheus.CounterVec
 	wrongEventCRIFormatMetric  *prometheus.CounterVec
 	maxEventSizeExceededMetric *prometheus.CounterVec
+	eventPoolLatency           prometheus.Observer
 }
 
 type Settings struct {
@@ -214,6 +215,9 @@ func (p *Pipeline) registerMetrics() {
 	p.readOpsEventsSizeMetric = m.RegisterCounter("read_ops_count", "Read OPS count")
 	p.wrongEventCRIFormatMetric = m.RegisterCounter("wrong_event_cri_format", "Wrong event CRI format counter")
 	p.maxEventSizeExceededMetric = m.RegisterCounter("max_event_size_exceeded", "Max event size exceeded counter")
+	p.eventPoolLatency = m.RegisterHistogram("event_pool_latency_seconds",
+		"How long we are wait an event from the pool", metric.SecondsBucketsDetailed).
+		WithLabelValues()
 }
 
 func (p *Pipeline) setDefaultMetrics() {
@@ -389,7 +393,9 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 	p.inputEvents.Inc()
 	p.inputSize.Add(int64(length))
 
+	now := time.Now()
 	event := p.eventPool.get()
+	p.eventPoolLatency.Observe(time.Since(now).Seconds())
 
 	switch dec {
 	case decoder.JSON:
