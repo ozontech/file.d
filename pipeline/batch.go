@@ -168,7 +168,8 @@ func (b *Batcher) work() {
 		b.opts.OutFn(&data, batch)
 		b.batchOutFnSeconds.Observe(time.Since(now).Seconds())
 
-		events = b.commitBatch(events, batch)
+		var status BatchStatus
+		events, status = b.commitBatch(events, batch)
 
 		shouldRunMaintenance := b.opts.MaintenanceFn != nil && b.opts.MaintenanceInterval != 0 && time.Since(t) > b.opts.MaintenanceInterval
 		if shouldRunMaintenance {
@@ -177,7 +178,7 @@ func (b *Batcher) work() {
 		}
 
 		b.workersInProgress.Dec()
-		switch batch.status {
+		switch status {
 		case BatchStatusMaxSizeExceeded:
 			b.batchesDoneByMaxSize.Inc()
 		case BatchStatusTimeoutExceeded:
@@ -188,7 +189,7 @@ func (b *Batcher) work() {
 	}
 }
 
-func (b *Batcher) commitBatch(events []*Event, batch *Batch) []*Event {
+func (b *Batcher) commitBatch(events []*Event, batch *Batch) ([]*Event, BatchStatus) {
 	// we need to release batch first and then commit events
 	// so lets swap local slice with batch slice to avoid data copying
 	events, batch.Events = batch.Events, events
@@ -211,9 +212,10 @@ func (b *Batcher) commitBatch(events []*Event, batch *Batch) []*Event {
 	b.cond.Broadcast()
 	b.seqMu.Unlock()
 
+	status := batch.status
 	b.freeBatches <- batch
 
-	return events
+	return events, status
 }
 
 func (b *Batcher) heartbeat() {
