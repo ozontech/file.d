@@ -24,10 +24,10 @@ func (b *batcherTail) ReleaseEvents(events []*Event) {
 	}
 }
 
-func (b *batcherTail) Commit(events *Event, backEvents bool) {
-	b.commit(events)
+func (b *batcherTail) Commit(event *Event, backEvents bool) {
+	b.commit(event)
 	if backEvents {
-		b.ReleaseEvents([]*Event{events})
+		b.ReleaseEvents([]*Event{event})
 	}
 }
 
