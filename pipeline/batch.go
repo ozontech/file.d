@@ -169,7 +169,7 @@ func (b *Batcher) work() {
 		b.opts.OutFn(&data, batch)
 		b.batchOutFnSeconds.Observe(time.Since(now).Seconds())
 
-		b.commitBatch(batch)
+		status := b.commitBatch(batch)
 
 		shouldRunMaintenance := b.opts.MaintenanceFn != nil && b.opts.MaintenanceInterval != 0 && time.Since(t) > b.opts.MaintenanceInterval
 		if shouldRunMaintenance {
@@ -178,7 +178,7 @@ func (b *Batcher) work() {
 		}
 
 		b.workersInProgress.Dec()
-		switch batch.status {
+		switch status {
 		case BatchStatusMaxSizeExceeded:
 			b.batchesDoneByMaxSize.Inc()
 		case BatchStatusTimeoutExceeded:
@@ -189,7 +189,7 @@ func (b *Batcher) work() {
 	}
 }
 
-func (b *Batcher) commitBatch(batch *Batch) {
+func (b *Batcher) commitBatch(batch *Batch) BatchStatus {
 	batchSeq := batch.seq
 
 	// we sent a batch, so we don’t need buffers and insaneJSON.Root,
@@ -210,10 +210,12 @@ func (b *Batcher) commitBatch(batch *Batch) {
 		b.opts.Controller.Commit(events[i], false)
 	}
 
+	status := batch.status
 	b.freeBatches <- batch
 	b.seqMu.Unlock()
-
 	b.cond.Broadcast()
+
+	return status
 }
 
 func (b *Batcher) heartbeat() {
