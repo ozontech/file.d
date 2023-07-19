@@ -212,8 +212,8 @@ func (b *Batcher) commitBatch(batch *Batch) BatchStatus {
 
 	status := batch.status
 	b.freeBatches <- batch
-	b.seqMu.Unlock()
 	b.cond.Broadcast()
+	b.seqMu.Unlock()
 
 	return status
 }
