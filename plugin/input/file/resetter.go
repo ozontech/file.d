@@ -8,7 +8,6 @@ import (
 	"sync"
 
 	"github.com/ozontech/file.d/logger"
-	"github.com/ozontech/file.d/longpanic"
 	"gopkg.in/yaml.v3"
 )
 
@@ -96,8 +95,6 @@ func (r *resetter) reset(request *http.Request) {
 		logger.Panicf("can't load offsets: %s", err.Error())
 	}
 	jp.loadedOffsets = offsets
-
-	longpanic.RecoverFromPanic()
 }
 
 func (r *resetter) truncateJobs(truncateAll bool, inode, sourceID uint64) {

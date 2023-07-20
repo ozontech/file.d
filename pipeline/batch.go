@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/ozontech/file.d/logger"
-	"github.com/ozontech/file.d/longpanic"
 	"github.com/ozontech/file.d/metric"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/atomic"
@@ -149,12 +148,10 @@ func (b *Batcher) Start(_ context.Context) {
 	b.fullBatches = make(chan *Batch, b.opts.Workers)
 	for i := 0; i < b.opts.Workers; i++ {
 		b.freeBatches <- newBatch(b.opts.BatchSizeCount, b.opts.BatchSizeBytes, b.opts.FlushTimeout)
-		longpanic.Go(func() {
-			b.work()
-		})
+		go b.work()
 	}
 
-	longpanic.Go(b.heartbeat)
+	go b.heartbeat()
 }
 
 type WorkerData any

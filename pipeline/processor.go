@@ -2,7 +2,6 @@ package pipeline
 
 import (
 	"github.com/ozontech/file.d/logger"
-	"github.com/ozontech/file.d/longpanic"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
 )
@@ -103,7 +102,7 @@ func (p *processor) start(params PluginDefaultParams, log *zap.SugaredLogger) {
 		})
 	}
 
-	longpanic.Go(p.process)
+	go p.process()
 }
 
 func (p *processor) process() {

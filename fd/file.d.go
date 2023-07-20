@@ -14,7 +14,6 @@ import (
 	"github.com/ozontech/file.d/buildinfo"
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/logger"
-	"github.com/ozontech/file.d/longpanic"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/prometheus/client_golang/prometheus"
@@ -33,8 +32,7 @@ type FileD struct {
 
 	// file_d metrics
 
-	longPanicMetric *prometheus.CounterVec
-	versionMetric   *prometheus.CounterVec
+	versionMetric *prometheus.CounterVec
 }
 
 func New(config *cfg.Config, httpAddr string) *FileD {
@@ -62,12 +60,8 @@ func (f *FileD) Start() {
 
 func (f *FileD) initMetrics() {
 	f.metricCtl = metric.New("file_d", f.registry)
-	f.longPanicMetric = f.metricCtl.RegisterCounter("long_panic", "Count of panics in the LongPanic")
 	f.versionMetric = f.metricCtl.RegisterCounter("version", "", "version")
 	f.versionMetric.WithLabelValues(buildinfo.Version).Inc()
-	longpanic.SetOnPanicHandler(func(_ error) {
-		f.longPanicMetric.WithLabelValues().Inc()
-	})
 }
 
 func (f *FileD) createRegistry() {
@@ -295,7 +289,7 @@ func (f *FileD) startHTTP() {
 	mux.Handle("/log/level", logger.Level)
 
 	f.server = &http.Server{Addr: f.httpAddr, Handler: mux}
-	longpanic.Go(f.listenHTTP)
+	go f.listenHTTP()
 }
 
 func (f *FileD) listenHTTP() {

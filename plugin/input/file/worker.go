@@ -5,7 +5,6 @@ import (
 	"io"
 	"os"
 
-	"github.com/ozontech/file.d/longpanic"
 	"github.com/ozontech/file.d/pipeline"
 	"go.uber.org/zap"
 )
@@ -22,7 +21,7 @@ type inputer interface {
 }
 
 func (w *worker) start(inputController inputer, jobProvider *jobProvider, readBufferSize int, logger *zap.SugaredLogger) {
-	longpanic.Go(func() { w.work(inputController, jobProvider, readBufferSize, logger) })
+	go w.work(inputController, jobProvider, readBufferSize, logger)
 }
 
 func (w *worker) work(controller inputer, jobProvider *jobProvider, readBufferSize int, logger *zap.SugaredLogger) {
