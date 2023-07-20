@@ -13,14 +13,14 @@ const (
 	// ActionPass pass event to the next action in a pipeline
 	ActionPass ActionResult = 0
 	// ActionCollapse skip further processing of event and request next event from the same stream and source as current
-	// plugin may receive event with eventKindTimeout if it takes to long to read next event from same stream
+	// plugin may receive event with EventKindTimeout if it takes to long to read next event from same stream
 	ActionCollapse ActionResult = 2
 	// ActionDiscard skip further processing of event and request next event from any stream and source
 	ActionDiscard ActionResult = 1
 	// ActionHold hold event in a plugin and request next event from the same stream and source as current.
 	// same as ActionCollapse but held event should be manually committed or returned into pipeline.
 	// check out Commit()/Propagate() functions in InputPluginController.
-	// plugin may receive event with eventKindTimeout if it takes to long to read next event from same stream.
+	// plugin may receive event with EventKindTimeout if it takes to long to read next event from same stream.
 	ActionHold ActionResult = 3
 )
 
@@ -333,10 +333,6 @@ func (p *processor) AddActionPlugin(info *ActionPluginInfo) {
 	p.actions = append(p.actions, info.Plugin.(ActionPlugin))
 	p.actionInfos = append(p.actionInfos, info.ActionPluginStaticInfo)
 	p.busyActions = append(p.busyActions, false)
-}
-
-func (p *processor) Commit(event *Event) {
-	p.finalize(event, false, true)
 }
 
 // Propagate flushes an event after ActionHold.

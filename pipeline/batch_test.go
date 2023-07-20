@@ -10,6 +10,7 @@ import (
 	"github.com/ozontech/file.d/metric"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
+	insaneJSON "github.com/vitkovskii/insane-json"
 	"go.uber.org/atomic"
 )
 
@@ -17,8 +18,17 @@ type batcherTail struct {
 	commit func(event *Event)
 }
 
-func (b *batcherTail) Commit(event *Event) {
+func (b *batcherTail) ReleaseEvents(events []*Event) {
+	for _, event := range events {
+		insaneJSON.Release(event.Root)
+	}
+}
+
+func (b *batcherTail) Commit(event *Event, backEvents bool) {
 	b.commit(event)
+	if backEvents {
+		b.ReleaseEvents([]*Event{event})
+	}
 }
 
 func (b *batcherTail) Error(err string) {
