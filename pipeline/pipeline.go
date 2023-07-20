@@ -20,7 +20,6 @@ import (
 
 	"github.com/ozontech/file.d/decoder"
 	"github.com/ozontech/file.d/logger"
-	"github.com/ozontech/file.d/longpanic"
 	"github.com/ozontech/file.d/metric"
 )
 
@@ -294,9 +293,9 @@ func (p *Pipeline) Start() {
 
 	p.streamer.start()
 
-	longpanic.Go(p.maintenance)
+	go p.maintenance()
 	if !p.useSpread {
-		longpanic.Go(p.growProcs)
+		go p.growProcs()
 	}
 	p.started = true
 }

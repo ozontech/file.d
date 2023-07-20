@@ -16,7 +16,6 @@ import (
 	"github.com/minio/minio-go"
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
-	"github.com/ozontech/file.d/longpanic"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/plugin/output/file"
@@ -313,8 +312,8 @@ func (p *Plugin) StartWithMinio(config pipeline.AnyConfig, params *pipeline.Outp
 	p.compressCh = make(chan fileDTO, p.config.FileConfig.WorkersCount_)
 
 	for i := 0; i < p.config.FileConfig.WorkersCount_; i++ {
-		longpanic.Go(p.uploadWork)
-		longpanic.Go(p.compressWork)
+		go p.uploadWork()
+		go p.compressWork()
 	}
 	err = p.startPlugins(params, outPlugCount, targetDirs, fileNames)
 	if err != nil {

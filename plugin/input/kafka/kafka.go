@@ -6,7 +6,6 @@ import (
 
 	"github.com/Shopify/sarama"
 	"github.com/ozontech/file.d/fd"
-	"github.com/ozontech/file.d/longpanic"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/prometheus/client_golang/prometheus"
@@ -114,9 +113,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	p.controller.UseSpread()
 	p.controller.DisableStreams()
 
-	longpanic.Go(func() {
-		p.consume(ctx)
-	})
+	go p.consume(ctx)
 }
 
 func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
