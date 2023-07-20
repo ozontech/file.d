@@ -17,12 +17,14 @@ type Event struct {
 	Root *insaneJSON.Root
 	Buf  []byte
 
-	SeqID      uint64
-	Offset     int64
-	SourceID   SourceID
-	SourceName string
-	streamName StreamName
-	Size       int // last known event size, it may not be actual
+	SeqID  uint64
+	Offset int64
+	// Some input plugins have string offset (t.g. journalctl)
+	OffsetString string
+	SourceID     SourceID
+	SourceName   string
+	streamName   StreamName
+	Size         int // last known event size, it may not be actual
 
 	action atomic.Int64
 	next   *Event

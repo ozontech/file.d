@@ -121,7 +121,7 @@ func (p *Plugin) Stop() {
 }
 
 func (p *Plugin) Commit(event *pipeline.Event) {
-	p.offInfo.set(pipeline.CloneString(event.Root.Dig("__CURSOR").AsString()))
+	p.offInfo.set(event.OffsetString)
 
 	if err := offset.SaveYAML(p.config.OffsetsFile, p.offInfo); err != nil {
 		p.offsetErrorsMetric.WithLabelValues().Inc()
@@ -131,5 +131,7 @@ func (p *Plugin) Commit(event *pipeline.Event) {
 
 // PassEvent decides pass or discard event.
 func (p *Plugin) PassEvent(event *pipeline.Event) bool {
+	// TODO: review the approach
+	event.OffsetString = pipeline.CloneString(event.Root.Dig("__CURSOR").AsString())
 	return true
 }
