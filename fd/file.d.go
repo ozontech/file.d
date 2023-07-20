@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/pprof"
 	"runtime"
@@ -18,6 +19,7 @@ import (
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"go.uber.org/atomic"
 )
 
 type FileD struct {
@@ -288,6 +290,26 @@ func (f *FileD) startHTTP() {
 	))
 	mux.Handle("/log/level", logger.Level)
 
+	// serve value changers to set runtime values
+	mux.Handle("/runtime/mutex-profile-fraction", valueChangerHandler{
+		changeValue: func(n int) {
+			runtime.SetMutexProfileFraction(n)
+		},
+		getValue: func() int {
+			return runtime.SetMutexProfileFraction(-1)
+		},
+	})
+	oldBlockProfileRate := atomic.Int64{}
+	mux.Handle("/runtime/block-profile-rate", valueChangerHandler{
+		changeValue: func(n int) {
+			oldBlockProfileRate.Store(int64(n))
+			runtime.SetBlockProfileRate(n)
+		},
+		getValue: func() int {
+			return int(oldBlockProfileRate.Load())
+		},
+	})
+
 	f.server = &http.Server{Addr: f.httpAddr, Handler: mux}
 	go f.listenHTTP()
 }
@@ -306,4 +328,46 @@ func (f *FileD) serveFreeOsMem(_ http.ResponseWriter, _ *http.Request) {
 
 func (f *FileD) serveLiveReady(_ http.ResponseWriter, _ *http.Request) {
 	logger.Infof("live/ready OK")
+}
+
+type valueChangerHandler struct {
+	changeValue func(n int)
+	getValue    func() int
+}
+
+var _ http.Handler = valueChangerHandler{}
+
+func (h valueChangerHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	defer func(body io.ReadCloser) {
+		_ = body.Close()
+	}(r.Body)
+
+	switch r.Method {
+	case http.MethodPut:
+		req := struct {
+			Value int `json:"value"`
+		}{}
+
+		dec := json.NewDecoder(r.Body)
+		dec.DisallowUnknownFields()
+		if err := dec.Decode(&req); err != nil {
+			http.Error(w, fmt.Sprintf("decode request: %s", err), http.StatusBadRequest)
+			return
+		}
+
+		h.changeValue(req.Value)
+
+		// return current value
+		fallthrough
+	case http.MethodGet:
+		res := struct {
+			Value int `json:"value"`
+		}{
+			Value: h.getValue(),
+		}
+
+		_ = json.NewEncoder(w).Encode(res)
+	default:
+		http.Error(w, "", http.StatusMethodNotAllowed)
+	}
 }
