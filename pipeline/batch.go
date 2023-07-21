@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/ozontech/file.d/logger"
-	"github.com/ozontech/file.d/longpanic"
 	"github.com/ozontech/file.d/metric"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/atomic"
@@ -22,6 +21,9 @@ const (
 
 type Batch struct {
 	Events []*Event
+
+	eventOffsets []*Event
+
 	// eventsSize contains total size of the Events in bytes
 	eventsSize int
 	seq        int64
@@ -35,7 +37,7 @@ type Batch struct {
 	status       BatchStatus
 }
 
-func newBatch(maxSizeCount int, maxSizeBytes int, timeout time.Duration) *Batch {
+func newBatch(maxSizeCount, maxSizeBytes int, timeout time.Duration) *Batch {
 	if maxSizeCount < 0 {
 		logger.Fatalf("why batch max count less than 0?")
 	}
@@ -86,7 +88,6 @@ type Batcher struct {
 	batch      *Batch
 
 	// cycle of batches: freeBatches => fullBatches, fullBatches => freeBatches
-	// TODO get rid of freeBatches, fullBatches system, which prevents from graceful degradation.
 	freeBatches chan *Batch
 	fullBatches chan *Batch
 	mu          *sync.Mutex
@@ -147,19 +148,16 @@ func (b *Batcher) Start(_ context.Context) {
 	b.fullBatches = make(chan *Batch, b.opts.Workers)
 	for i := 0; i < b.opts.Workers; i++ {
 		b.freeBatches <- newBatch(b.opts.BatchSizeCount, b.opts.BatchSizeBytes, b.opts.FlushTimeout)
-		longpanic.Go(func() {
-			b.work()
-		})
+		go b.work()
 	}
 
-	longpanic.Go(b.heartbeat)
+	go b.heartbeat()
 }
 
 type WorkerData any
 
 func (b *Batcher) work() {
 	t := time.Now()
-	events := make([]*Event, 0)
 	data := WorkerData(nil)
 	for batch := range b.fullBatches {
 		b.workersInProgress.Inc()
@@ -168,8 +166,7 @@ func (b *Batcher) work() {
 		b.opts.OutFn(&data, batch)
 		b.batchOutFnSeconds.Observe(time.Since(now).Seconds())
 
-		var status BatchStatus
-		events, status = b.commitBatch(events, batch)
+		status := b.commitBatch(batch)
 
 		shouldRunMaintenance := b.opts.MaintenanceFn != nil && b.opts.MaintenanceInterval != 0 && time.Since(t) > b.opts.MaintenanceInterval
 		if shouldRunMaintenance {
@@ -189,15 +186,16 @@ func (b *Batcher) work() {
 	}
 }
 
-func (b *Batcher) commitBatch(events []*Event, batch *Batch) ([]*Event, BatchStatus) {
-	// we need to release batch first and then commit events
-	// so lets swap local slice with batch slice to avoid data copying
-	events, batch.Events = batch.Events, events
-
+func (b *Batcher) commitBatch(batch *Batch) BatchStatus {
 	batchSeq := batch.seq
 
+	// we sent a batch, so we don’t need buffers and insaneJSON.Root,
+	// so we can only copy the information we need and release the events
+	events := batch.copyEventOffsets(batch.Events)
+	b.opts.Controller.ReleaseEvents(batch.Events)
+
 	now := time.Now()
-	// lets restore the sequence of batches to make sure input will commit offsets incrementally
+	// let's restore the sequence of batches to make sure input will commit offsets incrementally
 	b.seqMu.Lock()
 	for b.commitSeq != batchSeq {
 		b.cond.Wait()
@@ -205,17 +203,16 @@ func (b *Batcher) commitBatch(events []*Event, batch *Batch) ([]*Event, BatchSta
 	b.commitSeq++
 	b.commitWaitingSeconds.Observe(time.Since(now).Seconds())
 
-	for _, e := range events {
-		b.opts.Controller.Commit(e)
+	for i := range events {
+		b.opts.Controller.Commit(events[i], false)
 	}
-
-	b.cond.Broadcast()
-	b.seqMu.Unlock()
 
 	status := batch.status
 	b.freeBatches <- batch
+	b.cond.Broadcast()
+	b.seqMu.Unlock()
 
-	return events, status
+	return status
 }
 
 func (b *Batcher) heartbeat() {
@@ -267,7 +264,28 @@ func (b *Batcher) getBatch() *Batch {
 func (b *Batcher) Stop() {
 	b.shouldStop.Store(true)
 
-	// todo add scenario without races.
+	b.seqMu.Lock()
+	defer b.seqMu.Unlock()
+
 	close(b.freeBatches)
 	close(b.fullBatches)
+}
+
+// copyEventOffsets copies events without Root and other reusable buffers.
+func (b *Batch) copyEventOffsets(events []*Event) []*Event {
+	if len(b.eventOffsets) < len(events) {
+		b.eventOffsets = make([]*Event, len(events))
+		prealloc := make([]Event, len(events)) // store the events nearly to be more cache friendly
+		for i := range b.eventOffsets {
+			b.eventOffsets[i] = &prealloc[i]
+		}
+	}
+
+	for i := range events {
+		events[i].CopyTo(b.eventOffsets[i])
+		b.eventOffsets[i].Buf = nil
+		b.eventOffsets[i].Root = nil
+	}
+
+	return b.eventOffsets[:len(events)]
 }

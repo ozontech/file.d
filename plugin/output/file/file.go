@@ -12,7 +12,6 @@ import (
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/logger"
-	"github.com/ozontech/file.d/longpanic"
 	"github.com/ozontech/file.d/pipeline"
 	"go.uber.org/zap"
 	"golang.org/x/net/context"
@@ -167,9 +166,8 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		p.logger.Panic("next seal up time is nil!")
 	}
 
-	longpanic.Go(func() {
-		p.fileSealUpTicker(ctx)
-	})
+	go p.fileSealUpTicker(ctx)
+
 	p.batcher.Start(ctx)
 }
 
@@ -281,7 +279,7 @@ func (p *Plugin) sealUp() {
 	}
 	logger.Infof("sealing file, newFileName=%s", newFileName)
 	if p.SealUpCallback != nil {
-		longpanic.Go(func() { p.SealUpCallback(newFileName) })
+		go p.SealUpCallback(newFileName)
 	}
 }
 

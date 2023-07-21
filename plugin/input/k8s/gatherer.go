@@ -7,7 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ozontech/file.d/longpanic"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"
@@ -88,10 +87,10 @@ func enableGatherer(l *zap.SugaredLogger) {
 	if !DisableMetaUpdates {
 		initGatherer()
 
-		longpanic.Go(func() { controller.Run(informerStop) })
+		go controller.Run(informerStop)
 	}
 
-	longpanic.Go(maintenance)
+	go maintenance()
 }
 
 func disableGatherer() {

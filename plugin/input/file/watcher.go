@@ -4,7 +4,6 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/ozontech/file.d/longpanic"
 	"github.com/rjeczalik/notify"
 	"go.uber.org/zap"
 )
@@ -67,7 +66,7 @@ func (w *watcher) start() {
 		return
 	}
 
-	longpanic.Go(w.watch)
+	go w.watch()
 
 	w.tryAddPath(w.path)
 }

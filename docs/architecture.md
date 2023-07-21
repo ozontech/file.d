@@ -26,11 +26,3 @@ Input plugin has the index of zero, output plugin has the last index.
 Actions also have the standard endpoints `/info` and `/sample`.  
 If the action has `metric_name`, it will be collected and can be viewed via the `/info` endpoint.  
 The `/sample` handler stores and shows an event before and after processing, so you can debug the action better.  
-
-#### `longpanic` and `/reset`
-Every goroutine can (and should) use `longpanic.Go` and `longpanic.WithRecover` functions.  
-`longpanic.Go` is a goroutine wrapper that panics only after a timeout that you can set in pipeline settings.  
-`longpanic.WithRecover` is essentially the same but it runs a function synchronously.  
-It helps to debug the app, because you can see the state of failed file.d via API.  
-Also you can restart the failed plugin via API, i.e. with the `/reset` endpoint of `file` input plugin.  
-In case of nobody call API, it will panic with the given error message.  

@@ -14,7 +14,6 @@ import (
 	"github.com/ozontech/file.d/cfg/matchrule"
 	"github.com/ozontech/file.d/decoder"
 	"github.com/ozontech/file.d/logger"
-	"github.com/ozontech/file.d/longpanic"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline/antispam"
 	"github.com/prometheus/client_golang/prometheus"
@@ -52,13 +51,13 @@ type InputPluginController interface {
 }
 
 type ActionPluginController interface {
-	Commit(event *Event)    // commit offset of held event and skip further processing
 	Propagate(event *Event) // throw held event back to pipeline
 }
 
 type OutputPluginController interface {
-	Commit(event *Event) // notify input plugin that event is successfully processed and save offsets
+	Commit(event *Event, backEvent bool) // notify input plugin that event is successfully processed and save offsets
 	Error(err string)
+	ReleaseEvents(events []*Event)
 }
 
 type (
@@ -80,7 +79,7 @@ type Pipeline struct {
 	useSpread      bool
 	disableStreams bool
 	singleProc     bool
-	shouldStop     bool
+	shouldStop     atomic.Bool
 
 	input      InputPlugin
 	inputInfo  *InputPluginInfo
@@ -104,14 +103,15 @@ type Pipeline struct {
 	eventLogEnabled bool
 	eventLog        []string
 	eventLogMu      *sync.Mutex
-	inSample        []byte
-	outSample       []byte
-	inputEvents     atomic.Int64
-	inputSize       atomic.Int64
-	outputEvents    atomic.Int64
-	outputSize      atomic.Int64
-	readOps         atomic.Int64
-	maxSize         int
+
+	inSample  []byte
+	outSample []byte
+
+	inputEvents  atomic.Int64
+	inputSize    atomic.Int64
+	outputEvents atomic.Int64
+	outputSize   atomic.Int64
+	readOps      atomic.Int64
 
 	// all pipeline`s metrics
 
@@ -307,9 +307,9 @@ func (p *Pipeline) Start() {
 
 	p.streamer.start()
 
-	longpanic.Go(p.maintenance)
+	go p.maintenance()
 	if !p.useSpread {
-		longpanic.Go(p.growProcs)
+		go p.growProcs()
 	}
 	p.started = true
 }
@@ -330,7 +330,7 @@ func (p *Pipeline) Stop() {
 	p.logger.Info("stopping output")
 	p.output.Stop()
 
-	p.shouldStop = true
+	p.shouldStop.Store(true)
 }
 
 func (p *Pipeline) SetInput(info *InputPluginInfo) {
@@ -513,8 +513,14 @@ func (p *Pipeline) streamEvent(event *Event) uint64 {
 	return p.streamer.putEvent(streamID, event.streamName, event)
 }
 
-func (p *Pipeline) Commit(event *Event) {
-	p.finalize(event, true, true)
+func (p *Pipeline) Commit(event *Event, backEvents bool) {
+	p.finalize(event, true, backEvents)
+}
+
+func (p *Pipeline) ReleaseEvents(events []*Event) {
+	for i := range events {
+		p.eventPool.back(events[i])
+	}
 }
 
 func (p *Pipeline) Error(err string) {
@@ -534,18 +540,6 @@ func (p *Pipeline) finalize(event *Event, notifyInput bool, backEvent bool) {
 		p.input.Commit(event)
 		p.outputEvents.Inc()
 		p.outputSize.Add(int64(event.Size))
-
-		if ce := p.sampleLoggerOut.Check(zapcore.InfoLevel, "output event sample"); ce != nil {
-			p.outSample = p.outSample[:0]
-			p.outSample = event.Root.Encode(p.outSample)
-			ce.Write(
-				zap.Any("sample", json.RawMessage(p.outSample)),
-			)
-		}
-
-		if event.Size > p.maxSize {
-			p.maxSize = event.Size
-		}
 	}
 
 	// todo: avoid event.stream.commit(event)
@@ -555,7 +549,7 @@ func (p *Pipeline) finalize(event *Event, notifyInput bool, backEvent bool) {
 		return
 	}
 
-	if p.eventLogEnabled {
+	if p.eventLogEnabled && event.Root != nil {
 		p.eventLogMu.Lock()
 		p.eventLog = append(p.eventLog, event.Root.EncodeToString())
 		p.eventLogMu.Unlock()
@@ -613,7 +607,7 @@ func (p *Pipeline) growProcs() {
 	t := time.Now()
 	for {
 		time.Sleep(interval)
-		if p.shouldStop {
+		if p.shouldStop.Load() {
 			return
 		}
 		if p.procCount.Load() != p.activeProcs.Load() {
@@ -668,11 +662,11 @@ func (p *Pipeline) logChanges(myDeltas *deltas) {
 		tc := int64(math.Max(float64(inputSize), 1))
 
 		stat := fmt.Sprintf(`interval=%ds, active procs=%d/%d, events in use=%d/%d, out=%d|%.1fMb,`+
-			` rate=%d/s|%.1fMb/s, read ops=%d/s, total=%d|%.1fMb, avg size=%d, max size=%d`,
+			` rate=%d/s|%.1fMb/s, read ops=%d/s, total=%d|%.1fMb, avg size=%d`,
 			interval/time.Second, p.activeProcs.Load(), p.procCount.Load(),
 			inUseEvents, p.settings.Capacity,
 			int64(myDeltas.deltaInputEvents), myDeltas.deltaInputSize/1024.0/1024.0, rate, rateMb, readOps,
-			inputEvents, float64(inputSize)/1024.0/1024.0, inputSize/tc, p.maxSize)
+			inputEvents, float64(inputSize)/1024.0/1024.0, inputSize/tc)
 
 		ce.Write(zap.String("stat", stat))
 	}
@@ -715,7 +709,7 @@ func (p *Pipeline) maintenance() {
 
 	for {
 		time.Sleep(p.settings.MaintenanceInterval)
-		if p.shouldStop {
+		if p.shouldStop.Load() {
 			return
 		}
 
