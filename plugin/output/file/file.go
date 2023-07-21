@@ -12,10 +12,7 @@ import (
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/logger"
-	"github.com/ozontech/file.d/longpanic"
-	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
-	"github.com/ozontech/file.d/plugin"
 	"go.uber.org/zap"
 	"golang.org/x/net/context"
 )
@@ -28,7 +25,6 @@ type Plugable interface {
 	Start(config pipeline.AnyConfig, params *pipeline.OutputPluginParams)
 	Out(event *pipeline.Event)
 	Stop()
-	RegisterMetrics(ctl *metric.Ctl)
 }
 
 type Plugin struct {
@@ -50,7 +46,6 @@ type Plugin struct {
 	SealUpCallback func(string)
 
 	mu *sync.RWMutex
-	plugin.NoMetricsPlugin
 }
 
 type data struct {
@@ -149,6 +144,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		BatchSizeCount: p.config.BatchSize_,
 		BatchSizeBytes: p.config.BatchSizeBytes_,
 		FlushTimeout:   p.config.BatchFlushTimeout_,
+		MetricCtl:      params.MetricCtl,
 	})
 
 	p.mu = &sync.RWMutex{}
@@ -170,9 +166,8 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		p.logger.Panic("next seal up time is nil!")
 	}
 
-	longpanic.Go(func() {
-		p.fileSealUpTicker(ctx)
-	})
+	go p.fileSealUpTicker(ctx)
+
 	p.batcher.Start(ctx)
 }
 
@@ -284,7 +279,7 @@ func (p *Plugin) sealUp() {
 	}
 	logger.Infof("sealing file, newFileName=%s", newFileName)
 	if p.SealUpCallback != nil {
-		longpanic.Go(func() { p.SealUpCallback(newFileName) })
+		go p.SealUpCallback(newFileName)
 	}
 }
 

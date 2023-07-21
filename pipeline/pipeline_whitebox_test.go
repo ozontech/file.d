@@ -3,7 +3,6 @@ package pipeline
 import (
 	"testing"
 
-	"github.com/ozontech/file.d/metric"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/atomic"
@@ -40,10 +39,9 @@ func TestPipeline_streamEvent(t *testing.T) {
 // Can't use fake plugin here dye cycle import
 type TestInputPlugin struct{}
 
-func (p *TestInputPlugin) Start(config AnyConfig, params *InputPluginParams) {}
-func (p *TestInputPlugin) Stop()                                             {}
-func (p *TestInputPlugin) Commit(*Event)                                     {}
-func (p *TestInputPlugin) PassEvent(event *Event) bool {
+func (p *TestInputPlugin) Start(_ AnyConfig, _ *InputPluginParams) {}
+func (p *TestInputPlugin) Stop()                                   {}
+func (p *TestInputPlugin) Commit(_ *Event)                         {}
+func (p *TestInputPlugin) PassEvent(_ *Event) bool {
 	return true
 }
-func (p *TestInputPlugin) RegisterMetrics(ctl *metric.Ctl) {}

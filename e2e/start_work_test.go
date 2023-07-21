@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/ozontech/file.d/cfg"
+	"github.com/ozontech/file.d/e2e/file_clickhouse"
 	"github.com/ozontech/file.d/e2e/file_file"
 	"github.com/ozontech/file.d/e2e/http_file"
 	"github.com/ozontech/file.d/e2e/join_throttle"
@@ -41,6 +42,7 @@ import (
 	_ "github.com/ozontech/file.d/plugin/input/journalctl"
 	_ "github.com/ozontech/file.d/plugin/input/k8s"
 	_ "github.com/ozontech/file.d/plugin/input/kafka"
+	_ "github.com/ozontech/file.d/plugin/output/clickhouse"
 	_ "github.com/ozontech/file.d/plugin/output/devnull"
 	_ "github.com/ozontech/file.d/plugin/output/elasticsearch"
 	_ "github.com/ozontech/file.d/plugin/output/file"
@@ -107,6 +109,11 @@ func TestE2EStabilityWorkCase(t *testing.T) {
 			},
 			cfgPath: "./join_throttle/config.yml",
 		},
+		{
+			name:    "file_clickhouse",
+			e2eTest: &file_clickhouse.Config{},
+			cfgPath: "./file_clickhouse/config.yml",
+		},
 	}
 
 	for num, test := range testsList {
@@ -133,7 +140,7 @@ func startForTest(t *testing.T, test E2ETest, num int) *fd.FileD {
 	test.Configure(t, conf, test.name)
 
 	// for each file.d its own port
-	filed := fd.New(conf, ":808"+strconv.Itoa(num))
+	filed := fd.New(conf, ":1508"+strconv.Itoa(num))
 	filed.Start()
 	return filed
 }

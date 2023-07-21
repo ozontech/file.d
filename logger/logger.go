@@ -34,20 +34,20 @@ func init() {
 
 	Instance = zap.New(
 		zapcore.NewCore(
-			zapcore.NewConsoleEncoder(zapcore.EncoderConfig{
+			zapcore.NewJSONEncoder(zapcore.EncoderConfig{
 				TimeKey:        "ts",
 				LevelKey:       "level",
-				NameKey:        "Instance",
+				NameKey:        "logger",
 				CallerKey:      "caller",
 				MessageKey:     "message",
 				StacktraceKey:  "stacktrace",
 				LineEnding:     zapcore.DefaultLineEnding,
 				EncodeLevel:    zapcore.LowercaseLevelEncoder,
-				EncodeTime:     zapcore.ISO8601TimeEncoder,
-				EncodeDuration: zapcore.SecondsDurationEncoder,
+				EncodeTime:     zapcore.RFC3339NanoTimeEncoder,
+				EncodeDuration: zapcore.StringDurationEncoder,
 				EncodeCaller:   zapcore.ShortCallerEncoder,
 			}),
-			zapcore.AddSync(os.Stdout),
+			zapcore.AddSync(os.Stderr),
 			Level,
 		),
 	).Sugar().Named("fd")

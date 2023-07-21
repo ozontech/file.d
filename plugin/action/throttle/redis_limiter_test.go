@@ -327,6 +327,7 @@ func Test_updateKeyLimit(t *testing.T) {
 				defaultLimit,
 				tt.args.keyLimitOverride,
 				tt.args.valField,
+				time.Now,
 			)
 			err := lim.updateKeyLimit()
 			errMsg := ""

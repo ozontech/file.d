@@ -12,13 +12,14 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ozontech/file.d/cfg/matchrule"
+	"github.com/ozontech/file.d/pipeline/antispam"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
 
 	"github.com/ozontech/file.d/decoder"
 	"github.com/ozontech/file.d/logger"
-	"github.com/ozontech/file.d/longpanic"
 	"github.com/ozontech/file.d/metric"
 )
 
@@ -51,13 +52,13 @@ type InputPluginController interface {
 }
 
 type ActionPluginController interface {
-	Commit(event *Event)    // commit offset of held event and skip further processing
 	Propagate(event *Event) // throw held event back to pipeline
 }
 
 type OutputPluginController interface {
-	Commit(event *Event) // notify input plugin that event is successfully processed and save offsets
+	Commit(event *Event, backEvent bool) // notify input plugin that event is successfully processed and save offsets
 	Error(err string)
+	ReleaseEvents(events []*Event)
 }
 
 type (
@@ -83,19 +84,18 @@ type Pipeline struct {
 
 	input      InputPlugin
 	inputInfo  *InputPluginInfo
-	antispamer *antispamer
+	antispamer *antispam.Antispammer
 
 	actionInfos  []*ActionPluginStaticInfo
 	Procs        []*processor
 	procCount    *atomic.Int32
 	activeProcs  *atomic.Int32
-	actionParams *PluginDefaultParams
+	actionParams PluginDefaultParams
 
 	output     OutputPlugin
 	outputInfo *OutputPluginInfo
 
 	metricsHolder *metricsHolder
-	metricsCtl    *metric.Ctl
 
 	// some debugging stuff
 	logger          *zap.SugaredLogger
@@ -124,6 +124,7 @@ type Pipeline struct {
 	readOpsEventsSizeMetric    *prometheus.CounterVec
 	wrongEventCRIFormatMetric  *prometheus.CounterVec
 	maxEventSizeExceededMetric *prometheus.CounterVec
+	eventPoolLatency           prometheus.Observer
 }
 
 type Settings struct {
@@ -132,6 +133,7 @@ type Settings struct {
 	MaintenanceInterval time.Duration
 	EventTimeout        time.Duration
 	AntispamThreshold   int
+	AntispamExceptions  []matchrule.RuleSet
 	AvgEventSize        int
 	MaxEventSize        int
 	StreamField         string
@@ -142,22 +144,31 @@ type Settings struct {
 func New(name string, settings *Settings, registry *prometheus.Registry) *Pipeline {
 	metricCtl := metric.New("pipeline_"+name, registry)
 
+	lg := logger.Instance.Named(name)
+
 	pipeline := &Pipeline{
 		Name:           name,
-		logger:         logger.Instance.Named(name),
+		logger:         lg,
 		settings:       settings,
 		useSpread:      false,
 		disableStreams: false,
-		actionParams: &PluginDefaultParams{
+		actionParams: PluginDefaultParams{
 			PipelineName:     name,
 			PipelineSettings: settings,
+			MetricCtl:        metricCtl,
 		},
 
 		metricsHolder: newMetricsHolder(name, registry, metricsGenInterval),
-		metricsCtl:    metricCtl,
 		streamer:      newStreamer(settings.EventTimeout),
 		eventPool:     newEventPool(settings.Capacity, settings.AvgEventSize),
-		antispamer:    newAntispamer(settings.AntispamThreshold, antispamUnbanIterations, settings.MaintenanceInterval, metricCtl),
+		antispamer: antispam.NewAntispammer(antispam.Options{
+			MaintenanceInterval: settings.MaintenanceInterval,
+			Threshold:           settings.AntispamThreshold,
+			UnbanIterations:     antispamUnbanIterations,
+			Logger:              lg.Desugar().Named("antispam"),
+			MetricsController:   metricCtl,
+			Exceptions:          settings.AntispamExceptions,
+		}),
 
 		eventLog:   make([]string, 0, 128),
 		eventLogMu: &sync.Mutex{},
@@ -195,15 +206,19 @@ func (p *Pipeline) IncMaxEventSizeExceeded() {
 }
 
 func (p *Pipeline) registerMetrics() {
-	p.inUseEventsMetric = p.metricsCtl.RegisterGauge("event_pool_in_use_events", "Count of pool events which is used for processing")
-	p.eventPoolCapacityMetric = p.metricsCtl.RegisterGauge("event_pool_capacity", "Pool capacity value")
-	p.inputEventsCountMetric = p.metricsCtl.RegisterCounter("input_events_count", "Count of events on pipeline input")
-	p.inputEventSizeMetric = p.metricsCtl.RegisterCounter("input_events_size", "Size of events on pipeline input")
-	p.outputEventsCountMetric = p.metricsCtl.RegisterCounter("output_events_count", "Count of events on pipeline output")
-	p.outputEventSizeMetric = p.metricsCtl.RegisterCounter("output_events_size", "Size of events on pipeline output")
-	p.readOpsEventsSizeMetric = p.metricsCtl.RegisterCounter("read_ops_count", "Read OPS count")
-	p.wrongEventCRIFormatMetric = p.metricsCtl.RegisterCounter("wrong_event_cri_format", "Wrong event CRI format counter")
-	p.maxEventSizeExceededMetric = p.metricsCtl.RegisterCounter("max_event_size_exceeded", "Max event size exceeded counter")
+	m := p.actionParams.MetricCtl
+	p.inUseEventsMetric = m.RegisterGauge("event_pool_in_use_events", "Count of pool events which is used for processing")
+	p.eventPoolCapacityMetric = m.RegisterGauge("event_pool_capacity", "Pool capacity value")
+	p.inputEventsCountMetric = m.RegisterCounter("input_events_count", "Count of events on pipeline input")
+	p.inputEventSizeMetric = m.RegisterCounter("input_events_size", "Size of events on pipeline input")
+	p.outputEventsCountMetric = m.RegisterCounter("output_events_count", "Count of events on pipeline output")
+	p.outputEventSizeMetric = m.RegisterCounter("output_events_size", "Size of events on pipeline output")
+	p.readOpsEventsSizeMetric = m.RegisterCounter("read_ops_count", "Read OPS count")
+	p.wrongEventCRIFormatMetric = m.RegisterCounter("wrong_event_cri_format", "Wrong event CRI format counter")
+	p.maxEventSizeExceededMetric = m.RegisterCounter("max_event_size_exceeded", "Max event size exceeded counter")
+	p.eventPoolLatency = m.RegisterHistogram("event_pool_latency_seconds",
+		"How long we are wait an event from the pool", metric.SecondsBucketsDetailed).
+		WithLabelValues()
 }
 
 func (p *Pipeline) setDefaultMetrics() {
@@ -258,16 +273,14 @@ func (p *Pipeline) Start() {
 	outputParams := &OutputPluginParams{
 		PluginDefaultParams: p.actionParams,
 		Controller:          p,
-		Logger:              p.logger.Named("output " + p.outputInfo.Type),
+		Logger:              p.logger.Named("output_" + p.outputInfo.Type),
 	}
 	p.logger.Infof("starting output plugin %q", p.outputInfo.Type)
 
-	p.output.RegisterMetrics(p.metricsCtl)
 	p.output.Start(p.outputInfo.Config, outputParams)
 
 	p.logger.Infof("stating processors, count=%d", len(p.Procs))
 	for _, processor := range p.Procs {
-		processor.registerMetrics(p.metricsCtl)
 		processor.start(p.actionParams, p.logger)
 	}
 
@@ -275,17 +288,16 @@ func (p *Pipeline) Start() {
 	inputParams := &InputPluginParams{
 		PluginDefaultParams: p.actionParams,
 		Controller:          p,
-		Logger:              p.logger.Named("input " + p.inputInfo.Type),
+		Logger:              p.logger.Named("input_" + p.inputInfo.Type),
 	}
 
-	p.input.RegisterMetrics(p.metricsCtl)
 	p.input.Start(p.inputInfo.Config, inputParams)
 
 	p.streamer.start()
 
-	longpanic.Go(p.maintenance)
+	go p.maintenance()
 	if !p.useSpread {
-		longpanic.Go(p.growProcs)
+		go p.growProcs()
 	}
 	p.started = true
 }
@@ -333,22 +345,21 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 
 	// don't process mud.
 	isEmpty := length == 0 || (bytes[0] == '\n' && length == 1)
-	isSpam := p.antispamer.isSpam(sourceID, sourceName, isNewSource)
-	isLong := p.settings.MaxEventSize != 0 && length > p.settings.MaxEventSize
-
-	if isLong {
-		p.IncMaxEventSizeExceeded()
-	}
-	if isEmpty || isSpam || isLong {
+	if isEmpty {
 		return EventSeqIDError
 	}
 
-	p.inputEvents.Inc()
-	p.inputSize.Add(int64(length))
+	isLong := p.settings.MaxEventSize != 0 && length > p.settings.MaxEventSize
+	if isLong {
+		p.IncMaxEventSizeExceeded()
+		return EventSeqIDError
+	}
 
-	event := p.eventPool.get()
-
-	var dec decoder.DecoderType
+	var (
+		dec decoder.DecoderType
+		row decoder.CRIRow
+		err error
+	)
 	if p.decoder == decoder.AUTO {
 		dec = p.suggestedDecoder
 	} else {
@@ -356,7 +367,36 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 	}
 	if dec == decoder.NO {
 		dec = decoder.JSON
+	} else if dec == decoder.CRI {
+		row, err = decoder.DecodeCRI(bytes)
+		if err != nil {
+			p.wrongEventCRIFormatMetric.WithLabelValues().Inc()
+			p.Error(fmt.Sprintf("wrong cri format offset=%d, length=%d, err=%s, source=%d:%s, cri=%s", offset, length, err.Error(), sourceID, sourceName, bytes))
+			return EventSeqIDError
+		}
 	}
+
+	// Skip IsSpam for partial logs is necessary to avoid the case
+	// when some parts of a large event have got into the ban,
+	// thereby cutting off a piece of the event.
+	// This is only possible if the event was written in CRI format and has Partial status.
+	// For other encoding formats this is not relevant as they always come in full.
+	// The event is Partial if it is larger than the driver configuration.
+	// For example, for containerd this setting is called max_container_log_line_size
+	// https://github.com/containerd/containerd/blob/f7f2be732159a411eae46b78bfdb479b133a823b/pkg/cri/config/config.go#L263-L266
+	if !row.IsPartial {
+		isSpam := p.antispamer.IsSpam(uint64(sourceID), sourceName, isNewSource, bytes)
+		if isSpam {
+			return EventSeqIDError
+		}
+	}
+
+	p.inputEvents.Inc()
+	p.inputSize.Add(int64(length))
+
+	now := time.Now()
+	event := p.eventPool.get()
+	p.eventPoolLatency.Observe(time.Since(now).Seconds())
 
 	switch dec {
 	case decoder.JSON:
@@ -376,17 +416,9 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 		event.Root.AddFieldNoAlloc(event.Root, "message").MutateToBytesCopy(event.Root, bytes[:len(bytes)-1])
 	case decoder.CRI:
 		_ = event.Root.DecodeString("{}")
-		err := decoder.DecodeCRI(event.Root, bytes)
-		if err != nil {
-			p.wrongEventCRIFormatMetric.WithLabelValues().Inc()
-			if p.settings.IsStrict {
-				p.logger.Fatalf("wrong cri format offset=%d, length=%d, err=%s, source=%d:%s, cri=%s", offset, length, err.Error(), sourceID, sourceName, bytes)
-			} else {
-				p.logger.Errorf("wrong cri format offset=%d, length=%d, err=%s, source=%d:%s, cri=%s", offset, length, err.Error(), sourceID, sourceName, bytes)
-			}
-			p.eventPool.back(event)
-			return EventSeqIDError
-		}
+		event.Root.AddFieldNoAlloc(event.Root, "log").MutateToBytesCopy(event.Root, row.Log)
+		event.Root.AddFieldNoAlloc(event.Root, "time").MutateToBytesCopy(event.Root, row.Time)
+		event.Root.AddFieldNoAlloc(event.Root, "stream").MutateToBytesCopy(event.Root, row.Stream)
 	case decoder.POSTGRES:
 		_ = event.Root.DecodeString("{}")
 		err := decoder.DecodePostgres(event.Root, bytes)
@@ -448,8 +480,14 @@ func (p *Pipeline) streamEvent(event *Event) uint64 {
 	return p.streamer.putEvent(streamID, event.streamName, event)
 }
 
-func (p *Pipeline) Commit(event *Event) {
-	p.finalize(event, true, true)
+func (p *Pipeline) Commit(event *Event, backEvents bool) {
+	p.finalize(event, true, backEvents)
+}
+
+func (p *Pipeline) ReleaseEvents(events []*Event) {
+	for i := range events {
+		p.eventPool.back(events[i])
+	}
 }
 
 func (p *Pipeline) Error(err string) {
@@ -470,7 +508,7 @@ func (p *Pipeline) finalize(event *Event, notifyInput bool, backEvent bool) {
 		p.outputEvents.Inc()
 		p.outputSize.Add(int64(event.Size))
 
-		if len(p.outSample) == 0 && rand.Int()&1 == 1 {
+		if event.Root != nil && len(p.outSample) == 0 && rand.Int()&1 == 1 {
 			p.outSample = event.Root.Encode(p.outSample)
 		}
 
@@ -486,7 +524,7 @@ func (p *Pipeline) finalize(event *Event, notifyInput bool, backEvent bool) {
 		return
 	}
 
-	if p.eventLogEnabled {
+	if p.eventLogEnabled && event.Root != nil {
 		p.eventLogMu.Lock()
 		p.eventLog = append(p.eventLog, event.Root.EncodeToString())
 		p.eventLogMu.Unlock()
@@ -497,7 +535,7 @@ func (p *Pipeline) finalize(event *Event, notifyInput bool, backEvent bool) {
 
 func (p *Pipeline) AddAction(info *ActionPluginStaticInfo) {
 	p.actionInfos = append(p.actionInfos, info)
-	p.metricsHolder.AddAction(info.MetricName, info.MetricLabels)
+	p.metricsHolder.AddAction(info.MetricName, info.MetricLabels, info.MetricSkipStatus)
 }
 
 func (p *Pipeline) initProcs() {
@@ -572,7 +610,6 @@ func (p *Pipeline) expandProcs() {
 	for x := 0; x < int(to-from); x++ {
 		proc := p.newProc()
 		p.Procs = append(p.Procs, proc)
-		proc.registerMetrics(p.metricsCtl)
 		proc.start(p.actionParams, p.logger)
 	}
 
@@ -647,7 +684,7 @@ func (p *Pipeline) maintenance() {
 			return
 		}
 
-		p.antispamer.maintenance()
+		p.antispamer.Maintenance()
 		p.metricsHolder.maintenance()
 
 		myDeltas := p.incMetrics(inputEvents, inputSize, outputEvents, outputSize, readOps)
@@ -712,7 +749,7 @@ func (p *Pipeline) servePipeline(w http.ResponseWriter, _ *http.Request) {
 func (p *Pipeline) servePipelineBanList(w http.ResponseWriter, _ *http.Request) {
 	_, _ = w.Write([]byte("<html><body><pre><p>"))
 	_, _ = w.Write([]byte(logger.Header("pipeline " + p.Name)))
-	_, _ = w.Write([]byte(p.antispamer.dump()))
+	_, _ = w.Write([]byte(p.antispamer.Dump()))
 
 	_, _ = w.Write([]byte("</p></pre></body></html>"))
 }
@@ -736,15 +773,15 @@ func (p *Pipeline) serveActionInfo(info *ActionPluginStaticInfo) func(http.Respo
 		}
 
 		var actionMetric *metrics
-		for _, m := range p.metricsHolder.metrics {
+		for i := range p.metricsHolder.metrics {
+			m := &p.metricsHolder.metrics[i]
 			if m.name == info.MetricName {
 				actionMetric = m
-
 				break
 			}
 		}
 
-		events := []Event{}
+		var events []Event
 		for _, status := range []eventStatus{
 			eventStatusReceived,
 			eventStatusDiscarded,

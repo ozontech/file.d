@@ -1,5 +1,14 @@
 pipelines:
   file_file:
+    settings:
+      antispam_threshold: 1000
+      antispam_exceptions:
+        - cond: 'and'
+          rules:
+            - mode: 'prefix'
+              values: [ 'panic', ' panic' ]
+            - mode: 'contains'
+              values: [ 'service:"alerts-agent"' ]
     input:
       type: file
       persistence_mode: async

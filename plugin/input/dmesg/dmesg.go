@@ -8,7 +8,6 @@ import (
 
 	"github.com/euank/go-kmsg-parser/kmsgparser"
 	"github.com/ozontech/file.d/fd"
-	"github.com/ozontech/file.d/longpanic"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/offset"
 	"github.com/ozontech/file.d/pipeline"
@@ -62,6 +61,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	p.logger = params.Logger
 	p.config = config.(*Config)
 	p.controller = params.Controller
+	p.registerMetrics(params.MetricCtl)
 
 	p.state = &state{}
 	if err := offset.LoadYAML(p.config.OffsetsFile, p.state); err != nil {
@@ -76,10 +76,10 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 
 	p.parser = parser
 
-	longpanic.Go(p.read)
+	go p.read()
 }
 
-func (p *Plugin) RegisterMetrics(ctl *metric.Ctl) {
+func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 	p.offsetErrorsMetric = ctl.RegisterCounter("input_dmesg_offset_errors", "Number of errors occurred when saving/loading offset")
 }
 
@@ -127,7 +127,7 @@ func (p *Plugin) Commit(event *pipeline.Event) {
 
 	if err := offset.SaveYAML(p.config.OffsetsFile, p.state); err != nil {
 		p.offsetErrorsMetric.WithLabelValues().Inc()
-		p.logger.Error("can't save offset file: %s", err.Error())
+		p.logger.Errorf("can't save offset file: %s", err.Error())
 	}
 }
 

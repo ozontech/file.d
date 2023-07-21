@@ -12,16 +12,15 @@ import (
 	"time"
 
 	"github.com/bitly/go-simplejson"
-	"github.com/ghodss/yaml"
 	"github.com/ozontech/file.d/logger"
+	"sigs.k8s.io/yaml"
 )
 
 const trueValue = "true"
 
 type Config struct {
-	Vault        VaultConfig
-	PanicTimeout time.Duration
-	Pipelines    map[string]*PipelineConfig
+	Vault     VaultConfig
+	Pipelines map[string]*PipelineConfig
 }
 
 type (
@@ -152,15 +151,19 @@ func parseConfig(object *simplejson.Json) *Config {
 	var err error
 
 	addr := vault.Get("address")
-	config.Vault.Address, err = addr.String()
-	if err != nil {
-		logger.Warnf("can't parse vault address: %s", err.Error())
+	if addr.Interface() != nil {
+		config.Vault.Address, err = addr.String()
+		if err != nil {
+			logger.Panicf("can't parse vault address: %s", err.Error())
+		}
 	}
 
 	token := vault.Get("token")
-	config.Vault.Token, err = token.String()
-	if err != nil {
-		logger.Warnf("can't parse vault token: %s", err.Error())
+	if token.Interface() != nil {
+		config.Vault.Token, err = token.String()
+		if err != nil {
+			logger.Panicf("can't parse vault token: %s", err.Error())
+		}
 	}
 	config.Vault.ShouldUse = config.Vault.Address != "" && config.Vault.Token != ""
 
@@ -176,20 +179,6 @@ func parseConfig(object *simplejson.Json) *Config {
 		raw := pipelinesJson.Get(name)
 		config.Pipelines[name] = &PipelineConfig{Raw: raw}
 	}
-
-	panicTimeoutStr, err := object.Get("panic_timeout").String()
-	if err != nil {
-		logger.Warnf("can't get panic_timeout: %s", err.Error())
-	}
-	if panicTimeoutStr == "" {
-		panicTimeoutStr = "1m"
-	}
-
-	panicTimeout, err := time.ParseDuration(panicTimeoutStr)
-	if err != nil {
-		logger.Panicf("can't parse panic_timeout: %s", err.Error())
-	}
-	config.PanicTimeout = panicTimeout
 
 	return config
 }
@@ -516,24 +505,6 @@ func ParseField(v reflect.Value, vField reflect.Value, tField *reflect.StructFie
 	}
 
 	return nil
-}
-
-func UnescapeMap(fields map[string]any) map[string]string {
-	result := make(map[string]string)
-
-	for key, val := range fields {
-		if key == "" {
-			continue
-		}
-
-		if key[0] == '_' {
-			key = key[1:]
-		}
-
-		result[key] = val.(string)
-	}
-
-	return result
 }
 
 func ParseFieldSelector(selector string) []string {

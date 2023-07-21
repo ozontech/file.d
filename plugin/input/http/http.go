@@ -7,7 +7,6 @@ import (
 
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/logger"
-	"github.com/ozontech/file.d/longpanic"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/tls"
@@ -135,6 +134,8 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	p.config = config.(*Config)
 	p.params = params
 	p.logger = params.Logger
+	p.registerMetrics(params.MetricCtl)
+
 	p.readBuffs = &sync.Pool{}
 	p.eventBuffs = &sync.Pool{}
 	p.mu = &sync.Mutex{}
@@ -152,11 +153,11 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	p.server = &http.Server{Addr: p.config.Address, Handler: mux}
 
 	if p.config.Address != "off" {
-		longpanic.Go(p.listenHTTP)
+		go p.listenHTTP()
 	}
 }
 
-func (p *Plugin) RegisterMetrics(ctl *metric.Ctl) {
+func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 	p.httpErrorMetric = ctl.RegisterCounter("input_http_errors", "Total http errors")
 }
 
@@ -292,6 +293,6 @@ func (p *Plugin) Commit(_ *pipeline.Event) {
 }
 
 // PassEvent decides pass or discard event.
-func (p *Plugin) PassEvent(event *pipeline.Event) bool {
+func (p *Plugin) PassEvent(_ *pipeline.Event) bool {
 	return true
 }

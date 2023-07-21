@@ -8,7 +8,7 @@ import (
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
-	prom "github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
 )
 
@@ -56,8 +56,8 @@ type Plugin struct {
 
 	// plugin metrics
 
-	possibleOffsetCorruptionMetric    *prom.CounterVec
-	alreadyWrittenEventsSkippedMetric *prom.CounterVec
+	possibleOffsetCorruptionMetric    *prometheus.CounterVec
+	alreadyWrittenEventsSkippedMetric *prometheus.CounterVec
 }
 
 type persistenceMode int
@@ -190,6 +190,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	p.logger = params.Logger
 	p.params = params
 	p.config = config.(*Config)
+	p.registerMetrics(params.MetricCtl)
 
 	p.config.OffsetsFileTmp = p.config.OffsetsFile + ".atomic"
 
@@ -201,7 +202,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	p.jobProvider.start()
 }
 
-func (p *Plugin) RegisterMetrics(ctl *metric.Ctl) {
+func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 	p.possibleOffsetCorruptionMetric = ctl.RegisterCounter("input_file_possible_offset_corruptions_total", "Total number of possible offset corruptions")
 	p.alreadyWrittenEventsSkippedMetric = ctl.RegisterCounter("input_file_already_written_event_skipped_total", "Total number of skipped events that was already written")
 }

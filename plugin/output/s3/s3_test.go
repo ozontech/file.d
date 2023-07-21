@@ -42,6 +42,7 @@ type testS3Plugin struct {
 
 func (p *testS3Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginParams) {
 	p.Plugin.rnd = *rand.New(rand.NewSource(time.Now().UnixNano()))
+	p.registerMetrics(params.MetricCtl)
 	p.StartWithMinio(config, params, p.objStoreF)
 }
 
@@ -557,7 +558,7 @@ func TestStartWithSendProblems(t *testing.T) {
 	time.Sleep(writeFileSleep)
 	time.Sleep(sealUpFileSleep)
 
-	noSentToS3(t)
+	assert.True(t, isNoSentToS3())
 
 	matches := test.GetMatches(t, zipPattern)
 
@@ -585,7 +586,7 @@ func TestStartWithSendProblems(t *testing.T) {
 		test.CheckNotZero(t, m, "zip file is empty")
 	}
 
-	noSentToS3(t)
+	assert.True(t, isNoSentToS3())
 
 	cancel()
 
@@ -637,10 +638,7 @@ func TestStartWithSendProblems(t *testing.T) {
 	assert.GreaterOrEqual(t, lineCounter, 3)
 }
 
-func noSentToS3(t *testing.T) {
-	t.Helper()
-	// check no sent
+func isNoSentToS3() bool {
 	_, err := os.Stat(fileName.Load())
-	assert.Error(t, err)
-	assert.True(t, os.IsNotExist(err))
+	return err != nil && os.IsNotExist(err)
 }

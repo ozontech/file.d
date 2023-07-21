@@ -21,7 +21,6 @@ type InputPlugin interface {
 	Start(config AnyConfig, params *InputPluginParams)
 	Stop()
 	Commit(*Event)
-	RegisterMetrics(ctl *metric.Ctl)
 	PassEvent(event *Event) bool
 }
 
@@ -29,14 +28,12 @@ type ActionPlugin interface {
 	Start(config AnyConfig, params *ActionPluginParams)
 	Stop()
 	Do(*Event) ActionResult
-	RegisterMetrics(ctl *metric.Ctl)
 }
 
 type OutputPlugin interface {
 	Start(config AnyConfig, params *OutputPluginParams)
 	Stop()
 	Out(*Event)
-	RegisterMetrics(ctl *metric.Ctl)
 }
 
 type PluginsStarterData struct {
@@ -48,22 +45,23 @@ type PluginsStarterMap map[string]PluginsStarterData
 type PluginDefaultParams struct {
 	PipelineName     string
 	PipelineSettings *Settings
+	MetricCtl        *metric.Ctl
 }
 
 type ActionPluginParams struct {
-	*PluginDefaultParams
+	PluginDefaultParams
 	Controller ActionPluginController
 	Logger     *zap.SugaredLogger
 }
 
 type OutputPluginParams struct {
-	*PluginDefaultParams
+	PluginDefaultParams
 	Controller OutputPluginController
 	Logger     *zap.SugaredLogger
 }
 
 type InputPluginParams struct {
-	*PluginDefaultParams
+	PluginDefaultParams
 	Controller InputPluginController
 	Logger     *zap.SugaredLogger
 }
@@ -92,11 +90,12 @@ type InputPluginInfo struct {
 type ActionPluginStaticInfo struct {
 	*PluginStaticInfo
 
-	MetricName      string
-	MetricLabels    []string
-	MatchConditions MatchConditions
-	MatchMode       MatchMode
-	MatchInvert     bool
+	MetricName       string
+	MetricLabels     []string
+	MetricSkipStatus bool
+	MatchConditions  MatchConditions
+	MatchMode        MatchMode
+	MatchInvert      bool
 }
 
 type ActionPluginInfo struct {
@@ -171,8 +170,10 @@ var MatchModes = map[string]MatchMode{
 	// >
 	// > result:
 	// > ```
-	// > {"k8s_namespace": "payment", "k8s_pod":"payment-api-abcd"}         # won't be discarded
+	// > {"k8s_namespace": "payment", "k8s_pod":"payment-api-abcd"}         # discarded
 	// > {"k8s_namespace": "tarifficator", "k8s_pod":"payment-api"}         # discarded
+	// > {"k8s_namespace": "payment-tarifficator", "k8s_pod":"payment-api"} # won't be discarded
+	// > {"k8s_namespace": "tarifficator", "k8s_pod":"no-payment-api"}      # won't be discarded
 	// > ```
 	"and": MatchModeAnd, // *
 
@@ -192,12 +193,12 @@ var MatchModes = map[string]MatchMode{
 	// >
 	// > result:
 	// > ```
-	// > {"k8s_namespace": "payment", "k8s_pod":"payment-api-abcd"} # won't be discarded
-	// > {"k8s_namespace": "tarifficator", "k8s_pod":"payment-api"} # won't be discarded
-	// > {"k8s_namespace": "map", "k8s_pod":"payment-api"} # won't be discarded
-	// > {"k8s_namespace": "payment", "k8s_pod":"map-api"} # won't be discarded
-	// > {"k8s_namespace": "tarifficator", "k8s_pod":"tarifficator-go-api"} # won't be discarded
-	// > {"k8s_namespace": "sre", "k8s_pod":"cpu-quotas-abcd-1234"} # discarded
+	// > {"k8s_namespace": "payment", "k8s_pod":"payment-api-abcd"}         # discarded
+	// > {"k8s_namespace": "tarifficator", "k8s_pod":"payment-api"}         # discarded
+	// > {"k8s_namespace": "map", "k8s_pod":"payment-api"}                  # discarded
+	// > {"k8s_namespace": "payment", "k8s_pod":"map-api"}                  # discarded
+	// > {"k8s_namespace": "tarifficator", "k8s_pod":"tarifficator-go-api"} # discarded
+	// > {"k8s_namespace": "sre", "k8s_pod":"cpu-quotas-abcd-1234"}         # won't be discarded
 	// > ```
 	"or": MatchModeOr, // *
 
@@ -217,10 +218,11 @@ var MatchModes = map[string]MatchMode{
 	// >
 	// > result:
 	// > ```
-	// > {"k8s_namespace": "payment", "k8s_pod":"payment-api-abcd-1234"} # won't be discarded
-	// > {"k8s_namespace": "payment", "k8s_pod":"checkout"} # discarded
-	// > {"k8s_namespace": "map", "k8s_pod":"payment-api-abcd-1234"} # discarded
-	// > {"k8s_namespace": "payment", "k8s_pod":"payment-api"} # discarded
+	// > {"k8s_namespace": "payment", "k8s_pod":"payment-api-abcd-1234"}    # discarded
+	// > {"k8s_namespace": "payment-2", "k8s_pod":"payment-api-abcd-1234"}  # discarded
+	// > {"k8s_namespace": "payment", "k8s_pod":"checkout"}                 # won't be discarded
+	// > {"k8s_namespace": "map", "k8s_pod":"payment-api-abcd-1234"}        # won't be discarded
+	// > {"k8s_namespace": "payment-abcd", "k8s_pod":"payment-api"}         # won't be discarded
 	// > ```
 	"and_prefix": MatchModeAndPrefix, // *
 
@@ -240,11 +242,12 @@ var MatchModes = map[string]MatchMode{
 	// >
 	// > result:
 	// > ```
-	// > {"k8s_namespace": "payment", "k8s_pod":"payment-api-abcd-1234"} # won't be discarded
-	// > {"k8s_namespace": "payment", "k8s_pod":"checkout"} # won't be discarded
-	// > {"k8s_namespace": "map", "k8s_pod":"map-go-api-abcd-1234"} # discarded
-	// > {"k8s_namespace": "map", "k8s_pod":"payment-api"} # won't be discarded
-	// > {"k8s_namespace": "tariff", "k8s_pod":"tarifficator"} # won't be discarded
+	// > {"k8s_namespace": "payment", "k8s_pod":"payment-api-abcd-1234"}    # discarded
+	// > {"k8s_namespace": "payment", "k8s_pod":"checkout"}                 # discarded
+	// > {"k8s_namespace": "map", "k8s_pod":"map-go-api-abcd-1234"}         # discarded
+	// > {"k8s_namespace": "map", "k8s_pod":"payment-api"}                  # won't be discarded
+	// > {"k8s_namespace": "map", "k8s_pod":"payment-api-abcd-1234"}        # discarded
+	// > {"k8s_namespace": "tariff", "k8s_pod":"tarifficator"}              # won't be discarded
 	// > ```
 	"or_prefix": MatchModeOrPrefix, // *
 }
@@ -267,7 +270,5 @@ type PluginSelector struct {
 type ConditionType int
 
 const (
-	// UnknownSelector value is default, therefore it's safer to use it as default unknown value.
-	UnknownSelector ConditionType = iota
-	ByNameSelector
+	ByNameSelector = iota + 1
 )

@@ -1,7 +1,6 @@
 package s3
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -9,11 +8,6 @@ import (
 	"github.com/minio/minio-go"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/plugin/output/file"
-)
-
-var (
-	ErrCreateOutputPluginCantCheckBucket = errors.New("could not check bucket")
-	ErrCreateOutputPluginNoSuchBucket    = errors.New("bucket doesn't exist")
 )
 
 type objStoreFactory func(cfg *Config) (ObjectStoreClient, map[string]ObjectStoreClient, error)
@@ -101,10 +95,10 @@ func (p *Plugin) createPlugsFromDynamicBucketArtifacts(targetDirs map[string]str
 func (p *Plugin) createOutPlugin(bucketName string) (*file.Plugin, error) {
 	exists, err := p.clients[bucketName].BucketExists(bucketName)
 	if err != nil {
-		return nil, fmt.Errorf("%w %s with error: %s", ErrCreateOutputPluginCantCheckBucket, bucketName, err.Error())
+		return nil, fmt.Errorf("could not check bucket %q: %w", bucketName, err)
 	}
 	if !exists {
-		return nil, fmt.Errorf("%w %s ", ErrCreateOutputPluginNoSuchBucket, bucketName)
+		return nil, fmt.Errorf("bucket %q doesn't exist", bucketName)
 	}
 
 	anyPlugin, _ := file.Factory()
@@ -135,7 +129,7 @@ func (p *Plugin) startPlugins(params *pipeline.OutputPluginParams, outPlugCount 
 	}
 
 	p.logger.Info("outPlugins ready")
-	p.outPlugins = file.NewFilePlugins(outPlugins, p.metricCtl)
+	p.outPlugins = file.NewFilePlugins(outPlugins)
 	p.createPlugsFromDynamicBucketArtifacts(targetDirs)
 
 	starterMap := make(pipeline.PluginsStarterMap, outPlugCount)

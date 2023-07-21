@@ -10,7 +10,6 @@ import (
 	"github.com/alicebob/miniredis/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/atomic"
 
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/logger"
@@ -22,7 +21,7 @@ type testConfig struct {
 	t           *testing.T
 	config      *Config
 	eventsTotal int
-	workTime    time.Duration
+	iterations  int
 }
 
 var formats = []string{
@@ -31,14 +30,22 @@ var formats = []string{
 	`{"time":"%s","k8s_ns":"not_matched","k8s_pod":"pod_3"}`,
 }
 
+func throttleMapsCleanup() {
+	limitersMu.Lock()
+	for k := range limiters {
+		delete(limiters, k)
+	}
+	limitersMu.Unlock()
+}
+
 func (c *testConfig) runPipeline() {
 	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, c.config, pipeline.MatchModeAnd, nil, false))
-	wgWithDeadline := atomic.NewInt32(int32(c.eventsTotal))
+
+	limMap := limiters[p.Name]
 
 	outEvents := make([]*pipeline.Event, 0)
 	output.SetOutFn(func(e *pipeline.Event) {
 		outEvents = append(outEvents, e)
-		wgWithDeadline.Dec()
 	})
 
 	sourceNames := []string{
@@ -47,29 +54,34 @@ func (c *testConfig) runPipeline() {
 		`source_3`,
 	}
 
-	startTime := time.Now()
-	for {
-		index := rand.Int() % len(formats)
-		// Format like RFC3339Nano, but nanoseconds are zero-padded, thus all times have equal length.
-		json := fmt.Sprintf(formats[index], time.Now().UTC().Format("2006-01-02T15:04:05.000000000Z07:00"))
-		input.In(10, sourceNames[rand.Int()%len(sourceNames)], 0, []byte(json))
-		if time.Since(startTime) > c.workTime {
-			break
-		}
-	}
+	// generating much more events per iteration than we need so that all buckets are filled
+	genEventsCnt := 10 * c.eventsTotal
 
-	p.Stop()
-	tnow := time.Now()
-	for {
-		if wgWithDeadline.Load() <= 0 || time.Since(tnow) > 10*time.Second {
-			break
+	bucketIntervalNS := c.config.BucketInterval_.Nanoseconds()
+	startTime := time.Now()
+	if startTime.UnixNano()%bucketIntervalNS > bucketIntervalNS/2 {
+		startTime.Add(c.config.BucketInterval_ / 2)
+	}
+	for i := 0; i < c.iterations; i++ {
+		curTime := startTime.Add(time.Duration(i) * c.config.BucketInterval_)
+		limMap.setNowFn(func() time.Time {
+			return curTime
+		}, true)
+		curTimeStr := curTime.UTC().Format("2006-01-02T15:04:05.000000000Z07:00")
+		for j := 0; j < genEventsCnt; j++ {
+			index := j % len(formats)
+			// Format like RFC3339Nano, but nanoseconds are zero-padded, thus all times have equal length.
+			json := fmt.Sprintf(formats[index], curTimeStr)
+			input.In(10, sourceNames[rand.Int()%len(sourceNames)], 0, []byte(json))
 		}
+		// just to make sure that events from the current iteration are processed in the plugin
 		time.Sleep(10 * time.Millisecond)
 	}
 
-	// if we have not generated the required amount messages for any bucket,
-	// then we check the amount generated messages (outEvents) does not exceed the limit (eventsTotal)
-	assert.True(c.t, c.eventsTotal <= len(outEvents), "wrong in events count")
+	p.Stop()
+
+	// check that we passed expected amount of events
+	assert.Equal(c.t, c.eventsTotal, len(outEvents), "wrong out events count")
 }
 
 func TestThrottle(t *testing.T) {
@@ -80,9 +92,8 @@ func TestThrottle(t *testing.T) {
 
 	iterations := 5
 
-	totalBuckets := iterations + 1
-	defaultLimitDelta := totalBuckets * defaultLimit
-	eventsTotal := totalBuckets*(limitA+limitB) + defaultLimitDelta
+	defaultLimitDelta := iterations * defaultLimit
+	eventsTotal := iterations*(limitA+limitB) + defaultLimitDelta
 
 	config := &Config{
 		Rules: []RuleConfig{
@@ -100,10 +111,11 @@ func TestThrottle(t *testing.T) {
 		logger.Panic(err.Error())
 	}
 
-	workTime := config.BucketInterval_ * time.Duration(iterations)
-
-	tconf := testConfig{t, config, eventsTotal, workTime}
+	tconf := testConfig{t, config, eventsTotal, iterations}
 	tconf.runPipeline()
+	t.Cleanup(func() {
+		throttleMapsCleanup()
+	})
 }
 
 func TestSizeThrottle(t *testing.T) {
@@ -116,9 +128,8 @@ func TestSizeThrottle(t *testing.T) {
 	dateLen := len("2006-01-02T15:04:05.999999999Z")
 	iterations := 5
 
-	totalBuckets := iterations + 1
 	eventsPerBucket := limitA/(len(formats[0])+dateLen-2) + limitB/(len(formats[1])+dateLen-2) + defaultLimit/(len(formats[2])+dateLen-2)
-	eventsTotal := totalBuckets * eventsPerBucket
+	eventsTotal := iterations * eventsPerBucket
 
 	config := &Config{
 		Rules: []RuleConfig{
@@ -137,10 +148,11 @@ func TestSizeThrottle(t *testing.T) {
 		logger.Panic(err.Error())
 	}
 
-	workTime := config.BucketInterval_ * time.Duration(iterations)
-
-	tconf := testConfig{t, config, eventsTotal, workTime}
+	tconf := testConfig{t, config, eventsTotal, iterations}
 	tconf.runPipeline()
+	t.Cleanup(func() {
+		throttleMapsCleanup()
+	})
 }
 
 func TestMixedThrottle(t *testing.T) {
@@ -150,11 +162,11 @@ func TestMixedThrottle(t *testing.T) {
 	limitB := avgMessageSize * 3
 	defaultLimit := 20
 
+	dateLen := len("2006-01-02T15:04:05.999999999Z")
 	iterations := 5
 
-	totalBuckets := iterations + 1
-	defaultLimitDelta := totalBuckets * defaultLimit
-	eventsTotal := totalBuckets*(limitA+(limitB/avgMessageSize)) + defaultLimitDelta
+	defaultLimitDelta := iterations * defaultLimit
+	eventsTotal := iterations*(limitA+(limitB/(len(formats[1])+dateLen-2))) + defaultLimitDelta
 
 	config := &Config{
 		Rules: []RuleConfig{
@@ -172,10 +184,11 @@ func TestMixedThrottle(t *testing.T) {
 		logger.Panic(err.Error())
 	}
 
-	workTime := config.BucketInterval_ * time.Duration(iterations)
-
-	tconf := testConfig{t, config, eventsTotal, workTime}
+	tconf := testConfig{t, config, eventsTotal, iterations}
 	tconf.runPipeline()
+	t.Cleanup(func() {
+		throttleMapsCleanup()
+	})
 }
 
 func TestRedisThrottle(t *testing.T) {
@@ -196,9 +209,9 @@ func TestRedisThrottle(t *testing.T) {
 		BucketsCount:   1,
 		BucketInterval: "2s",
 		RedisBackendCfg: RedisBackendConfig{
-			SyncInterval: "100ms",
 			Endpoint:     s.Addr(),
 			Password:     "",
+			SyncInterval: "100ms",
 			WorkerCount:  2,
 		},
 		LimiterBackend: "redis",
@@ -240,6 +253,9 @@ func TestRedisThrottle(t *testing.T) {
 	p.Stop()
 
 	assert.Greater(t, eventsTotal, len(outEvents), "wrong in events count")
+	t.Cleanup(func() {
+		throttleMapsCleanup()
+	})
 }
 
 func TestRedisThrottleMultiPipes(t *testing.T) {
@@ -256,9 +272,9 @@ func TestRedisThrottleMultiPipes(t *testing.T) {
 		BucketsCount:   1,
 		BucketInterval: "2m",
 		RedisBackendCfg: RedisBackendConfig{
-			SyncInterval: "10ms",
 			Endpoint:     s.Addr(),
 			Password:     "",
+			SyncInterval: "10ms",
 			WorkerCount:  2,
 		},
 		LimiterBackend: "redis",
@@ -326,6 +342,9 @@ func TestRedisThrottleMultiPipes(t *testing.T) {
 	}
 	// limit is 10 while events count 4, all passed
 	assert.Equal(t, len(secondPipeEvents), len(outEventsSec), "wrong in events count")
+	t.Cleanup(func() {
+		throttleMapsCleanup()
+	})
 }
 
 func TestRedisThrottleWithCustomLimitData(t *testing.T) {
@@ -345,13 +364,13 @@ func TestRedisThrottleWithCustomLimitData(t *testing.T) {
 		BucketsCount:   1,
 		BucketInterval: "2s",
 		RedisBackendCfg: RedisBackendConfig{
-			SyncInterval:      "100ms",
 			Endpoint:          s.Addr(),
 			Password:          "",
-			WorkerCount:       2,
 			LimiterKeyField:   "throttle_key",
 			LimiterKeyField_:  []string{"throttle_key"},
 			LimiterValueField: "count_limit",
+			SyncInterval:      "100ms",
+			WorkerCount:       2,
 		},
 		LimiterBackend: "redis",
 		ThrottleField:  "k8s_pod",
@@ -396,4 +415,118 @@ func TestRedisThrottleWithCustomLimitData(t *testing.T) {
 	p.Stop()
 
 	assert.Greater(t, eventsTotal, len(outEvents), "wrong in events count")
+	t.Cleanup(func() {
+		throttleMapsCleanup()
+	})
+}
+
+func TestThrottleLimiterExpiration(t *testing.T) {
+	defaultLimit := 3
+	eventsTotal := 3
+	config := &Config{
+		Rules: []RuleConfig{
+			{Limit: int64(defaultLimit), LimitKind: "count"},
+		},
+		BucketsCount:      1,
+		BucketInterval:    "100ms",
+		ThrottleField:     "k8s_pod",
+		TimeField:         "",
+		DefaultLimit:      int64(defaultLimit),
+		LimiterExpiration: "300ms",
+	}
+	err := cfg.Parse(config, nil)
+	if err != nil {
+		logger.Panic(err.Error())
+	}
+
+	p, input, output := test.NewPipelineMock(
+		test.NewActionPluginStaticInfo(factory, config, pipeline.MatchModeAnd, nil, false),
+		"name",
+	)
+	outEvents := make([]*pipeline.Event, 0)
+	output.SetOutFn(func(e *pipeline.Event) {
+		outEvents = append(outEvents, e)
+	})
+
+	sourceNames := []string{
+		`source_1`,
+		`source_2`,
+		`source_3`,
+	}
+
+	events := []string{
+		`{"time":"%s","k8s_ns":"ns_1","k8s_pod":"pod_1","throttle_key":"custom_limit_key"}`,
+		`{"time":"%s","k8s_ns":"ns_2","k8s_pod":"pod_1","throttle_key":"custom_limit_key"}`,
+		`{"time":"%s","k8s_ns":"not_matched","k8s_pod":"pod_1","throttle_key":"custom_limit_key"}`,
+	}
+
+	nowTs := time.Now().Format(time.RFC3339Nano)
+	for i := 0; i < eventsTotal; i++ {
+		json := fmt.Sprintf(events[i], nowTs)
+
+		input.In(10, sourceNames[rand.Int()%len(sourceNames)], 0, []byte(json))
+
+		time.Sleep(10 * time.Millisecond)
+	}
+	limitersMu.RLock()
+	lm, has := limiters[p.Name]
+	limitersMu.RUnlock()
+	assert.True(t, has, "key must exist in the map")
+	assert.NotNil(t, lm, "the map object must be non-nil")
+	lm.mu.RLock()
+	lim, has := lm.lims["a:pod_1"]
+	lm.mu.RUnlock()
+	assert.True(t, has, "key must exist in the map")
+	assert.NotNil(t, lim, "the map object must be non-nil")
+	time.Sleep(time.Second)
+	lm.mu.RLock()
+	_, has = lm.lims["a:pod_1"]
+	lm.mu.RUnlock()
+	assert.False(t, has, "key must not exist in the map")
+
+	p.Stop()
+	t.Cleanup(func() {
+		throttleMapsCleanup()
+	})
+}
+
+func TestThrottleRedisFallbackToInMemory(t *testing.T) {
+	buckets := 2
+	limitA := 2
+	limitB := 3
+	defaultLimit := 20
+
+	iterations := 5
+
+	defaultLimitDelta := iterations * defaultLimit
+	eventsTotal := iterations*(limitA+limitB) + defaultLimitDelta
+
+	config := &Config{
+		Rules: []RuleConfig{
+			{Limit: int64(limitA), Conditions: map[string]string{"k8s_ns": "ns_1"}},
+			{Limit: int64(limitB), Conditions: map[string]string{"k8s_ns": "ns_2"}},
+		},
+		RedisBackendCfg: RedisBackendConfig{
+			Endpoint:     "invalid_redis",
+			Password:     "",
+			SyncInterval: "100ms",
+			WorkerCount:  2,
+		},
+		BucketsCount:   buckets,
+		BucketInterval: "100ms",
+		ThrottleField:  "k8s_pod",
+		TimeField:      "",
+		DefaultLimit:   int64(defaultLimit),
+		LimiterBackend: "redis",
+	}
+	err := cfg.Parse(config, nil)
+	if err != nil {
+		logger.Panic(err.Error())
+	}
+
+	tconf := testConfig{t, config, eventsTotal, iterations}
+	tconf.runPipeline()
+	t.Cleanup(func() {
+		throttleMapsCleanup()
+	})
 }

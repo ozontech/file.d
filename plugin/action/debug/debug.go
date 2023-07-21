@@ -4,16 +4,13 @@ import (
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/pipeline"
-	"github.com/ozontech/file.d/plugin"
 )
 
 /*{ introduction
 It logs event to stdout. Useful for debugging.
 }*/
 
-type Plugin struct {
-	plugin.NoMetricsPlugin
-}
+type Plugin struct{}
 
 type Config map[string]any
 
