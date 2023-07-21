@@ -141,8 +141,6 @@ func New(name string, settings *Settings, registry *prometheus.Registry) *Pipeli
 
 	lg := logger.Instance.Named(name).Desugar()
 
-	lg = lg.With(zap.String("pipeline", name))
-
 	pipeline := &Pipeline{
 		Name:           name,
 		logger:         lg,

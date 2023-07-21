@@ -3,6 +3,7 @@ package logger
 import (
 	"os"
 	"strings"
+	"time"
 
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -35,15 +36,17 @@ func init() {
 	Instance = zap.New(
 		zapcore.NewCore(
 			zapcore.NewJSONEncoder(zapcore.EncoderConfig{
-				TimeKey:        "ts",
-				LevelKey:       "level",
-				NameKey:        "logger",
-				CallerKey:      "caller",
-				MessageKey:     "message",
-				StacktraceKey:  "stacktrace",
-				LineEnding:     zapcore.DefaultLineEnding,
-				EncodeLevel:    zapcore.LowercaseLevelEncoder,
-				EncodeTime:     zapcore.RFC3339NanoTimeEncoder,
+				TimeKey:       "ts",
+				LevelKey:      "level",
+				NameKey:       "logger",
+				CallerKey:     "caller",
+				MessageKey:    "message",
+				StacktraceKey: "stacktrace",
+				LineEnding:    zapcore.DefaultLineEnding,
+				EncodeLevel:   zapcore.LowercaseLevelEncoder,
+				EncodeTime: func(time time.Time, encoder zapcore.PrimitiveArrayEncoder) {
+					zapcore.RFC3339NanoTimeEncoder(time.UTC(), encoder)
+				},
 				EncodeDuration: zapcore.StringDurationEncoder,
 				EncodeCaller:   zapcore.ShortCallerEncoder,
 			}),
