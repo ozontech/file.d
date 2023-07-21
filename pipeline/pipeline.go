@@ -80,7 +80,7 @@ type Pipeline struct {
 	useSpread      bool
 	disableStreams bool
 	singleProc     bool
-	shouldStop     bool
+	shouldStop     atomic.Bool
 
 	input      InputPlugin
 	inputInfo  *InputPluginInfo
@@ -102,14 +102,15 @@ type Pipeline struct {
 	eventLogEnabled bool
 	eventLog        []string
 	eventLogMu      *sync.Mutex
-	inSample        []byte
-	outSample       []byte
-	inputEvents     atomic.Int64
-	inputSize       atomic.Int64
-	outputEvents    atomic.Int64
-	outputSize      atomic.Int64
-	readOps         atomic.Int64
-	maxSize         int
+
+	inSample  []byte
+	outSample []byte
+
+	inputEvents  atomic.Int64
+	inputSize    atomic.Int64
+	outputEvents atomic.Int64
+	outputSize   atomic.Int64
+	readOps      atomic.Int64
 
 	// all pipeline`s metrics
 
@@ -316,7 +317,7 @@ func (p *Pipeline) Stop() {
 	p.logger.Infof("stopping %q output", p.Name)
 	p.output.Stop()
 
-	p.shouldStop = true
+	p.shouldStop.Store(true)
 }
 
 func (p *Pipeline) SetInput(info *InputPluginInfo) {
@@ -509,10 +510,6 @@ func (p *Pipeline) finalize(event *Event, notifyInput bool, backEvent bool) {
 		if event.Root != nil && len(p.outSample) == 0 && rand.Int()&1 == 1 {
 			p.outSample = event.Root.Encode(p.outSample)
 		}
-
-		if event.Size > p.maxSize {
-			p.maxSize = event.Size
-		}
 	}
 
 	// todo: avoid event.stream.commit(event)
@@ -580,7 +577,7 @@ func (p *Pipeline) growProcs() {
 	t := time.Now()
 	for {
 		time.Sleep(interval)
-		if p.shouldStop {
+		if p.shouldStop.Load() {
 			return
 		}
 		if p.procCount.Load() != p.activeProcs.Load() {
@@ -634,11 +631,11 @@ func (p *Pipeline) logChanges(myDeltas *deltas) {
 	tc := int64(math.Max(float64(inputSize), 1))
 
 	p.logger.Infof(`%q pipeline stats interval=%ds, active procs=%d/%d, events outside pool=%d/%d, events in pool=%d/%d, out=%d|%.1fMb,`+
-		`rate=%d/s|%.1fMb/s, read ops=%d/s, total=%d|%.1fMb, avg size=%d, max size=%d`,
+		`rate=%d/s|%.1fMb/s, read ops=%d/s, total=%d|%.1fMb, avg size=%d`,
 		p.Name, interval/time.Second, p.activeProcs.Load(), p.procCount.Load(),
 		inUseEvents, p.settings.Capacity, p.settings.Capacity-int(inUseEvents), p.settings.Capacity,
 		int64(myDeltas.deltaInputEvents), myDeltas.deltaInputSize/1024.0/1024.0, rate, rateMb, readOps,
-		inputEvents, float64(inputSize)/1024.0/1024.0, inputSize/tc, p.maxSize)
+		inputEvents, float64(inputSize)/1024.0/1024.0, inputSize/tc)
 }
 
 func (p *Pipeline) incMetrics(inputEvents, inputSize, outputEvents, outputSize, reads *DeltaWrapper) *deltas {
@@ -678,7 +675,7 @@ func (p *Pipeline) maintenance() {
 
 	for {
 		time.Sleep(p.settings.MaintenanceInterval)
-		if p.shouldStop {
+		if p.shouldStop.Load() {
 			return
 		}
 

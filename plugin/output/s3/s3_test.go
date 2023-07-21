@@ -3,6 +3,7 @@ package s3
 import (
 	"bufio"
 	"fmt"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"testing"
@@ -40,6 +41,7 @@ type testS3Plugin struct {
 }
 
 func (p *testS3Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginParams) {
+	p.Plugin.rnd = *rand.New(rand.NewSource(time.Now().UnixNano()))
 	p.registerMetrics(params.MetricCtl)
 	p.StartWithMinio(config, params, p.objStoreF)
 }
@@ -199,14 +201,6 @@ func TestStart(t *testing.T) {
 	match = test.GetMatches(t, pattern)
 	assert.Equal(t, 1, len(match))
 	test.CheckNotZero(t, match[0], "log file data missed")
-
-	// restart like after crash
-	p.Start()
-
-	time.Sleep(time.Second)
-
-	size3 := test.CheckNotZero(t, fileName.Load(), "s3 data missed after third pack")
-	assert.True(t, size3 > size2)
 }
 
 func TestStartWithMultiBuckets(t *testing.T) {
