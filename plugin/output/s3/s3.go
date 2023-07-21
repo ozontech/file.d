@@ -517,7 +517,7 @@ func (p *Plugin) uploadWork() {
 				p.logger.Infof("successfully uploaded object=%s", compressed.fileName)
 				// delete archive after uploading
 				err = os.Remove(compressed.fileName)
-				if err != nil {
+				if err != nil && !os.IsNotExist(err) {
 					p.logger.Panicf("could not delete file: %s, err: %s", compressed, err.Error())
 				}
 				break
@@ -537,7 +537,7 @@ func (p *Plugin) compressWork() {
 		compressedName := p.compressor.getName(dto.fileName)
 		p.compressor.compress(compressedName, dto.fileName)
 		// delete old file
-		if err := os.Remove(dto.fileName); err != nil {
+		if err := os.Remove(dto.fileName); err != nil && !os.IsNotExist(err) {
 			p.logger.Panicf("could not delete file: %s, error: %s", dto, err.Error())
 		}
 		dto.fileName = compressedName
