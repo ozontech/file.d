@@ -98,14 +98,9 @@ type Pipeline struct {
 
 	// some debugging stuff
 	logger          *zap.Logger
-	sampleLoggerIn  *zap.Logger
-	sampleLoggerOut *zap.Logger
 	eventLogEnabled bool
 	eventLog        []string
 	eventLogMu      *sync.Mutex
-
-	inSample  []byte
-	outSample []byte
 
 	inputEvents  atomic.Int64
 	inputSize    atomic.Int64
@@ -148,22 +143,12 @@ func New(name string, settings *Settings, registry *prometheus.Registry) *Pipeli
 
 	lg = lg.With(zap.String("pipeline", name))
 
-	sampleOpts := zapcore.NewSamplerWithOptions(lg.Core(), time.Second*5, 1, 0)
-	inSampler := lg.WithOptions(zap.WrapCore(func(core zapcore.Core) zapcore.Core {
-		return sampleOpts
-	}))
-	outSampler := lg.WithOptions(zap.WrapCore(func(core zapcore.Core) zapcore.Core {
-		return sampleOpts
-	}))
-
 	pipeline := &Pipeline{
-		Name:            name,
-		logger:          lg,
-		sampleLoggerIn:  inSampler,
-		sampleLoggerOut: outSampler,
-		settings:        settings,
-		useSpread:       false,
-		disableStreams:  false,
+		Name:           name,
+		logger:         lg,
+		settings:       settings,
+		useSpread:      false,
+		disableStreams: false,
 		actionParams: PluginDefaultParams{
 			PipelineName:     name,
 			PipelineSettings: settings,
@@ -500,14 +485,6 @@ func (p *Pipeline) streamEvent(event *Event) uint64 {
 			p.eventPool.back(event)
 			return EventSeqIDError
 		}
-	}
-
-	if ce := p.sampleLoggerIn.Check(zapcore.InfoLevel, "input event sample"); ce != nil {
-		p.inSample = p.inSample[:0]
-		p.inSample = event.Root.Encode(p.inSample)
-		ce.Write(
-			zap.Any("sample", json.RawMessage(p.inSample)),
-		)
 	}
 
 	return p.streamer.putEvent(streamID, event.streamName, event)
