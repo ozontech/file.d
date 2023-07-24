@@ -28,7 +28,7 @@ require (
 	github.com/vitkovskii/insane-json v0.1.7
 	github.com/xdg-go/scram v1.1.2
 	go.uber.org/atomic v1.11.0
-	go.uber.org/automaxprocs v1.5.2
+	go.uber.org/automaxprocs v1.5.3
 	go.uber.org/zap v1.24.0
 	golang.org/x/net v0.12.0
 	gopkg.in/yaml.v3 v3.0.1
