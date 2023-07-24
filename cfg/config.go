@@ -394,9 +394,15 @@ func ParseField(v reflect.Value, vField reflect.Value, tField *reflect.StructFie
 			fields := ParseFieldSelector(vField.String())
 			finalField.Set(reflect.ValueOf(fields))
 		case "duration":
-			result, err := time.ParseDuration(vField.String())
-			if err != nil {
-				return fmt.Errorf("field %s has wrong duration format: %s", tField.Name, err.Error())
+			var result time.Duration
+
+			fieldValue := vField.String()
+			if fieldValue != "" {
+				var err error
+				result, err = time.ParseDuration(fieldValue)
+				if err != nil {
+					return fmt.Errorf("field %s has wrong duration format: %s", tField.Name, err.Error())
+				}
 			}
 
 			finalField.SetInt(int64(result))
