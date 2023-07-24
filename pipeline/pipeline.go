@@ -268,7 +268,7 @@ func (p *Pipeline) Start() {
 	outputParams := &OutputPluginParams{
 		PluginDefaultParams: p.actionParams,
 		Controller:          p,
-		Logger:              p.logger.Sugar().Named("output_" + p.outputInfo.Type),
+		Logger:              p.logger.Sugar().Named("output").Named(p.outputInfo.Type),
 	}
 	p.logger.Info("starting output plugin", zap.String("name", p.outputInfo.Type))
 
@@ -283,7 +283,7 @@ func (p *Pipeline) Start() {
 	inputParams := &InputPluginParams{
 		PluginDefaultParams: p.actionParams,
 		Controller:          p,
-		Logger:              p.logger.Sugar().Named("input_" + p.inputInfo.Type),
+		Logger:              p.logger.Sugar().Named("input").Named(p.inputInfo.Type),
 	}
 
 	p.input.Start(p.inputInfo.Config, inputParams)

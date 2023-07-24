@@ -66,7 +66,6 @@ func (p *Plugin) Start(anyConfig pipeline.AnyConfig, params *pipeline.ActionPlug
 
 	parentLogger := params.Logger.Desugar()
 
-	parentLogger.Sugar().Errorf("%v %v %v", config.Interval_, config.First, config.Thereafter)
 	if config.Interval_ != 0 {
 		// enable sampler
 		p.logger = parentLogger.WithOptions(zap.WrapCore(func(core zapcore.Core) zapcore.Core {
