@@ -219,6 +219,7 @@ func (p *processor) doActions(event *Event) (isPassed bool, lastAction int) {
 		}
 	}
 
+	// return the last action index as the event has passed all the actions
 	return true, l - 1
 }
 
