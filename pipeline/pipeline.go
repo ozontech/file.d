@@ -406,6 +406,7 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 				zap.Int64("offset", offset),
 				zap.Int("length", length),
 				zap.Uint64("source", uint64(sourceID)),
+				zap.String("source_name", sourceName),
 				zap.ByteString("json", bytes))
 
 			// Can't process event, return to pool.
@@ -428,7 +429,8 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 				zap.Int64("offset", offset),
 				zap.Int("length", length),
 				zap.Uint64("source", uint64(sourceID)),
-				zap.ByteString("json", bytes))
+				zap.String("source_name", sourceName),
+				zap.ByteString("log", bytes))
 
 			// Dead route, never passed here.
 			return EventSeqIDError
@@ -446,7 +448,8 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 				zap.Int64("offset", offset),
 				zap.Int("length", length),
 				zap.Uint64("source", uint64(sourceID)),
-				zap.ByteString("json", bytes))
+				zap.String("source_name", sourceName),
+				zap.ByteString("log", bytes))
 
 			p.eventPool.back(event)
 			return EventSeqIDError
@@ -604,7 +607,7 @@ func (p *Pipeline) expandProcs() {
 	to := from * 2
 	p.logger.Info("processors count expanded from %d to %d", zap.Int32("old", from), zap.Int32("new", to))
 	if to > 10000 {
-		p.logger.Error("too many processors", zap.Int32("new", to))
+		p.logger.Warn("too many processors", zap.Int32("new", to))
 	}
 
 	for x := 0; x < int(to-from); x++ {
