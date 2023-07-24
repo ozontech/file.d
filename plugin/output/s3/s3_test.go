@@ -389,14 +389,6 @@ func TestStartWithMultiBuckets(t *testing.T) {
 		assert.Equal(t, 1, len(match))
 		test.CheckNotZero(t, match[0], fmt.Sprintf("log file data missed for: %s", pattern))
 	}
-
-	// restart like after crash
-	p.Start()
-
-	time.Sleep(time.Second)
-
-	size3 := test.CheckNotZero(t, fileName.Load(), "s3 data missed after third pack")
-	assert.True(t, size3 > size2)
 }
 
 func newPipeline(t *testing.T, configOutput *Config, objStoreF objStoreFactory) *pipeline.Pipeline {

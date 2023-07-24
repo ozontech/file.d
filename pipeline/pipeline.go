@@ -674,8 +674,8 @@ func (p *Pipeline) incMetrics(inputEvents, inputSize, outputEvents, outputSize, 
 	return myDeltas
 }
 
-func (p *Pipeline) setMetrics(inUseEvents atomic.Int64) {
-	p.inUseEventsMetric.WithLabelValues().Set(float64(inUseEvents.Load()))
+func (p *Pipeline) setMetrics(inUseEvents int64) {
+	p.inUseEventsMetric.WithLabelValues().Set(float64(inUseEvents))
 }
 
 func (p *Pipeline) maintenance() {
@@ -695,7 +695,7 @@ func (p *Pipeline) maintenance() {
 		p.metricsHolder.maintenance()
 
 		myDeltas := p.incMetrics(inputEvents, inputSize, outputEvents, outputSize, readOps)
-		p.setMetrics(p.eventPool.inUseEvents)
+		p.setMetrics(p.eventPool.inUseEvents.Load())
 		p.logChanges(myDeltas)
 	}
 }
@@ -728,6 +728,9 @@ func (p *Pipeline) EnableEventLog() {
 }
 
 func (p *Pipeline) GetEventLogItem(index int) string {
+	p.eventLogMu.Lock()
+	defer p.eventLogMu.Unlock()
+
 	if index >= len(p.eventLog) {
 		p.logger.Fatal("can't find log item", zap.Int("index", index))
 	}
