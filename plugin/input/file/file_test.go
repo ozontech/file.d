@@ -1039,7 +1039,6 @@ func TestTruncationSeq(t *testing.T) {
 				for {
 					time.Sleep(50 * time.Millisecond)
 					if size.Load() > int32(truncationSize) {
-						fmt.Println("truncate")
 						size.Swap(0)
 						_ = file.Truncate(0)
 						truncations++
