@@ -264,6 +264,8 @@ func (b *Batcher) getBatch() *Batch {
 func (b *Batcher) Stop() {
 	b.shouldStop.Store(true)
 
+	b.mu.Lock()
+	defer b.mu.Unlock()
 	b.seqMu.Lock()
 	defer b.seqMu.Unlock()
 
