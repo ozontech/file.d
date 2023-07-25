@@ -55,6 +55,13 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
+      - name: Run benchmarks
+        if: ${{ !contains(matrix.flags, '-race') }}
+        env:
+          GOARCH: ${{ matrix.arch }}
+          GOFLAGS: ${{ matrix.flags }}
+        run: go test --timeout=15m --benchtime=3x --benchmem --bench="BenchmarkLightJsonReadPar" --run=$^. ./plugin/input/file/...
+
   e2e_test:
     runs-on: ubuntu-latest
     steps:
