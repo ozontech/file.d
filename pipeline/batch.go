@@ -8,7 +8,6 @@ import (
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/metric"
 	"github.com/prometheus/client_golang/prometheus"
-	"go.uber.org/atomic"
 )
 
 type BatchStatus byte
@@ -84,16 +83,18 @@ func (b *Batch) updateStatus() BatchStatus {
 type Batcher struct {
 	opts BatcherOptions
 
-	shouldStop atomic.Bool
-	batch      *Batch
+	batch *Batch
 
 	// cycle of batches: freeBatches => fullBatches, fullBatches => freeBatches
 	freeBatches chan *Batch
 	fullBatches chan *Batch
-	mu          *sync.Mutex
-	seqMu       *sync.Mutex
-	cond        *sync.Cond
+	workersWg   sync.WaitGroup
 
+	mu         sync.Mutex
+	shouldStop bool
+
+	seqMu     *sync.Mutex
+	cond      *sync.Cond
 	outSeq    int64
 	commitSeq int64
 
@@ -124,30 +125,38 @@ type (
 )
 
 func NewBatcher(opts BatcherOptions) *Batcher { // nolint: gocritic // hugeParam is ok here
-	return &Batcher{opts: opts}
+	ctl := opts.MetricCtl
+	jobsDone := ctl.RegisterCounter("batcher_jobs_done_total", "", "status")
+
+	freeBatches := make(chan *Batch, opts.Workers)
+	fullBatches := make(chan *Batch, opts.Workers)
+	for i := 0; i < opts.Workers; i++ {
+		freeBatches <- newBatch(opts.BatchSizeCount, opts.BatchSizeBytes, opts.FlushTimeout)
+	}
+
+	seqMu := &sync.Mutex{}
+	return &Batcher{
+		seqMu:                seqMu,
+		cond:                 sync.NewCond(seqMu),
+		freeBatches:          freeBatches,
+		fullBatches:          fullBatches,
+		opts:                 opts,
+		batchOutFnSeconds:    ctl.RegisterHistogram("batcher_out_fn_seconds", "", metric.SecondsBucketsLong).WithLabelValues(),
+		commitWaitingSeconds: ctl.RegisterHistogram("batcher_commit_waiting_seconds", "", metric.SecondsBucketsDetailed).WithLabelValues(),
+		workersInProgress:    ctl.RegisterGauge("batcher_workers_in_progress", "").WithLabelValues(),
+		batchesDoneByMaxSize: jobsDone.WithLabelValues("max_size_exceeded"),
+		batchesDoneByTimeout: jobsDone.WithLabelValues("timeout_exceeded"),
+	}
 }
 
-// todo graceful shutdown with context.
-func (b *Batcher) Start(_ context.Context) {
-	b.mu = &sync.Mutex{}
-	b.seqMu = &sync.Mutex{}
-	b.cond = sync.NewCond(b.seqMu)
-	b.batchOutFnSeconds = b.opts.MetricCtl.
-		RegisterHistogram("batcher_out_fn_seconds", "", metric.SecondsBucketsLong).WithLabelValues()
-	b.commitWaitingSeconds = b.opts.MetricCtl.
-		RegisterHistogram("batcher_commit_waiting_seconds", "", metric.SecondsBucketsDetailed).WithLabelValues()
-	b.workersInProgress = b.opts.MetricCtl.
-		RegisterGauge("batcher_workers_in_progress", "").WithLabelValues()
+func (b *Batcher) Start(ctx context.Context) {
+	go func() {
+		<-ctx.Done()
+		b.Stop()
+	}()
 
-	jobsDone := b.opts.MetricCtl.
-		RegisterCounter("batcher_jobs_done_total", "", "status")
-	b.batchesDoneByMaxSize = jobsDone.WithLabelValues("max_size_exceeded")
-	b.batchesDoneByTimeout = jobsDone.WithLabelValues("timeout_exceeded")
-
-	b.freeBatches = make(chan *Batch, b.opts.Workers)
-	b.fullBatches = make(chan *Batch, b.opts.Workers)
+	b.workersWg.Add(b.opts.Workers)
 	for i := 0; i < b.opts.Workers; i++ {
-		b.freeBatches <- newBatch(b.opts.BatchSizeCount, b.opts.BatchSizeBytes, b.opts.FlushTimeout)
 		go b.work()
 	}
 
@@ -157,6 +166,8 @@ func (b *Batcher) Start(_ context.Context) {
 type WorkerData any
 
 func (b *Batcher) work() {
+	defer b.workersWg.Done()
+
 	t := time.Now()
 	data := WorkerData(nil)
 	for batch := range b.fullBatches {
@@ -217,11 +228,12 @@ func (b *Batcher) commitBatch(batch *Batch) BatchStatus {
 
 func (b *Batcher) heartbeat() {
 	for {
-		if b.shouldStop.Load() {
+		b.mu.Lock()
+		if b.shouldStop {
+			b.mu.Unlock()
 			return
 		}
 
-		b.mu.Lock()
 		batch := b.getBatch()
 		b.trySendBatchAndUnlock(batch)
 
@@ -231,6 +243,11 @@ func (b *Batcher) heartbeat() {
 
 func (b *Batcher) Add(event *Event) {
 	b.mu.Lock()
+
+	if b.shouldStop {
+		b.mu.Unlock()
+		return
+	}
 
 	batch := b.getBatch()
 	batch.append(event)
@@ -262,15 +279,14 @@ func (b *Batcher) getBatch() *Batch {
 }
 
 func (b *Batcher) Stop() {
-	b.shouldStop.Store(true)
-
 	b.mu.Lock()
-	defer b.mu.Unlock()
-	b.seqMu.Lock()
-	defer b.seqMu.Unlock()
+	if !b.shouldStop {
+		b.shouldStop = true
+		close(b.fullBatches)
+	}
+	b.mu.Unlock()
 
-	close(b.freeBatches)
-	close(b.fullBatches)
+	b.workersWg.Wait()
 }
 
 // copyEventOffsets copies events without Root and other reusable buffers.
