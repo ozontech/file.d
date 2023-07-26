@@ -554,12 +554,13 @@ func (p *Pipeline) initProcs() {
 
 	p.Procs = make([]*processor, 0, procCount)
 	for i := 0; i < procCount; i++ {
-		p.Procs = append(p.Procs, p.newProc())
+		p.Procs = append(p.Procs, p.newProc(i))
 	}
 }
 
-func (p *Pipeline) newProc() *processor {
+func (p *Pipeline) newProc(id int) *processor {
 	proc := newProcessor(
+		id,
 		p.metricsHolder,
 		p.activeProcs,
 		p.output,
@@ -611,7 +612,7 @@ func (p *Pipeline) expandProcs() {
 	}
 
 	for x := 0; x < int(to-from); x++ {
-		proc := p.newProc()
+		proc := p.newProc(p.Procs[from].id + x)
 		p.Procs = append(p.Procs, proc)
 		proc.start(p.actionParams, p.logger.Sugar())
 	}

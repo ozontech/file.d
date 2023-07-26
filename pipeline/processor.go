@@ -65,9 +65,8 @@ type processor struct {
 	metricsValues []string
 }
 
-var id = 0
-
 func newProcessor(
+	id int,
 	metricsHolder *metricsHolder,
 	activeCounter *atomic.Int32,
 	output OutputPlugin,
@@ -86,8 +85,6 @@ func newProcessor(
 
 		metricsValues: make([]string, 0),
 	}
-
-	id++
 
 	return processor
 }
