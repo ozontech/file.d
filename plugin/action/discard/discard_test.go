@@ -164,8 +164,8 @@ func TestDiscardMatchInvert(t *testing.T) {
 
 	outEvents := make([]*pipeline.Event, 0)
 	output.SetOutFn(func(e *pipeline.Event) {
-		wg.Done()
 		outEvents = append(outEvents, e)
+		wg.Done()
 	})
 
 	input.In(0, "test", 0, []byte(`{"field1":"not_value1"}`))
