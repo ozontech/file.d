@@ -6,6 +6,7 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -496,7 +497,10 @@ func TestStartWithSendProblems(t *testing.T) {
 
 	writeFileSleep := 100*time.Millisecond + 100*time.Millisecond
 	sealUpFileSleep := 2*200*time.Millisecond + 500*time.Millisecond
+
 	test.ClearDir(t, dir)
+	assert.Equal(t, 0, len(test.GetMatches(t, zipPattern)))
+
 	ctl := gomock.NewController(t)
 	defer ctl.Finish()
 
@@ -546,7 +550,7 @@ func TestStartWithSendProblems(t *testing.T) {
 
 	matches := test.GetMatches(t, zipPattern)
 
-	assert.Equal(t, 1, len(matches))
+	assert.Equal(t, 1, len(matches), strings.Join(matches, ", "))
 	test.CheckNotZero(t, matches[0], "zip file after seal up and compress is not ok")
 
 	matches = test.GetMatches(t, pattern)

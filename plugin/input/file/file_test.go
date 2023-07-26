@@ -101,8 +101,11 @@ func renameFile(oldFile string, newFile string) {
 }
 
 func closeFile(f *os.File) {
-	err := f.Close()
-	if err != nil {
+	if err := f.Sync(); err != nil {
+		panic(err)
+	}
+
+	if err := f.Close(); err != nil {
 		panic(err.Error())
 	}
 }
@@ -1012,7 +1015,7 @@ func TestTruncationSeq(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			lwg := &sync.WaitGroup{}
-			truncations := 0
+			truncations := atomic.Int32{}
 			size := atomic.Int32{}
 			name := createTempFile()
 			file, err := os.OpenFile(name, os.O_APPEND|os.O_WRONLY, perm)
@@ -1028,7 +1031,7 @@ func TestTruncationSeq(t *testing.T) {
 					if rand.Int()%300 == 0 {
 						time.Sleep(time.Millisecond * 200)
 					}
-					if truncations > truncationCount {
+					if int(truncations.Load()) > truncationCount {
 						break
 					}
 				}
@@ -1041,8 +1044,7 @@ func TestTruncationSeq(t *testing.T) {
 					if size.Load() > int32(truncationSize) {
 						size.Swap(0)
 						_ = file.Truncate(0)
-						truncations++
-						if truncations > truncationCount {
+						if int(truncations.Inc()) > truncationCount {
 							break
 						}
 					}
