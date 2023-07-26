@@ -606,13 +606,13 @@ func (p *Pipeline) expandProcs() {
 
 	from := p.procCount.Load()
 	to := from * 2
-	p.logger.Info("processors count expanded from %d to %d", zap.Int32("old", from), zap.Int32("new", to))
+	p.logger.Info("processors count expanded", zap.Int32("old", from), zap.Int32("new", to))
 	if to > 10000 {
 		p.logger.Warn("too many processors", zap.Int32("new", to))
 	}
 
 	for x := 0; x < int(to-from); x++ {
-		proc := p.newProc(p.Procs[from].id + x)
+		proc := p.newProc(p.Procs[from-1].id + x)
 		p.Procs = append(p.Procs, proc)
 		proc.start(p.actionParams, p.logger.Sugar())
 	}
