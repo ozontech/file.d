@@ -107,14 +107,16 @@ func NewPipeline(actions []*pipeline.ActionPluginStaticInfo, pipelineOpts ...str
 	if Opts(pipelineOpts).Has("short_event_timeout") {
 		eventTimeout = 10 * time.Millisecond
 	}
+	capacity := 256
 
 	if perf {
 		parallel = true
+		capacity = 10000
 	}
 
 	settings := &pipeline.Settings{
-		Capacity:            4096,
-		MaintenanceInterval: time.Second * 10,
+		Capacity:            capacity,
+		MaintenanceInterval: time.Second * 5,
 		EventTimeout:        eventTimeout,
 		AntispamThreshold:   0,
 		AvgEventSize:        2048,

@@ -85,7 +85,7 @@ func pluginConfig(opts ...string) *Config {
 		OffsetsFile:         filepath.Join(offsetsDir, offsetsFile),
 		PersistenceMode:     "async",
 		OffsetsOp:           op,
-		MaintenanceInterval: "100ms",
+		MaintenanceInterval: "5s",
 	}
 
 	_ = cfg.Parse(config, map[string]int{"gomaxprocs": runtime.GOMAXPROCS(0)})
