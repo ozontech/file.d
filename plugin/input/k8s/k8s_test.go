@@ -3,6 +3,7 @@ package k8s
 import (
 	"fmt"
 	"os"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -153,10 +154,11 @@ func TestK8SJoin(t *testing.T) {
 	podInfo := getPodInfo(item, true)
 	putMeta(podInfo)
 
-	outEvents := make([]*pipeline.Event, 0)
+	outLogs := make([]string, 0)
+	outOffsets := make([]int64, 0)
 	output.SetOutFn(func(e *pipeline.Event) {
-		event := *e
-		outEvents = append(outEvents, &event)
+		outLogs = append(outLogs, strings.Clone(e.Root.Dig("log").AsEscapedString()))
+		outOffsets = append(outOffsets, e.Offset)
 		wg.Done()
 	})
 
@@ -173,7 +175,7 @@ func TestK8SJoin(t *testing.T) {
 	wg.Wait()
 	p.Stop()
 
-	assert.Equal(t, 4, len(outEvents))
+	assert.Equal(t, 4, len(outLogs))
 
 	logs := []string{"\"one line log 1\\n\"", "\"error joined\\n\"", "\"this is joined log 2\\n\"", "\"one line log 3\\n\""}
 	offsets := []int64{10, 70, 60, 80}
@@ -198,10 +200,10 @@ func TestK8SJoin(t *testing.T) {
 		offsets = offsets[:len(offsets)-1]
 	}
 
-	check(outEvents[0].Root.Dig("log").AsEscapedString(), outEvents[0].Offset)
-	check(outEvents[1].Root.Dig("log").AsEscapedString(), outEvents[1].Offset)
-	check(outEvents[2].Root.Dig("log").AsEscapedString(), outEvents[2].Offset)
-	check(outEvents[3].Root.Dig("log").AsEscapedString(), outEvents[3].Offset)
+	check(outLogs[0], outOffsets[0])
+	check(outLogs[1], outOffsets[1])
+	check(outLogs[2], outOffsets[2])
+	check(outLogs[3], outOffsets[3])
 }
 
 func TestCleanUp(t *testing.T) {
