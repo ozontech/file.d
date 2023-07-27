@@ -57,8 +57,11 @@ func TestPipeline(t *testing.T) {
 	wg.Add(lines)
 	setOutput(p, func(event *pipeline.Event) {
 		assert.Equal(t, int(event.Offset), total)
-		wg.Done()
 		total++
+		if total > lines {
+			t.Fatal("'total' more than lines")
+		}
+		wg.Done()
 	})
 
 	p.Start()
