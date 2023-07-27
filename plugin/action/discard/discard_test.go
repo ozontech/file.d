@@ -121,10 +121,10 @@ func TestDiscardRegex(t *testing.T) {
 		inEvents++
 	})
 
-	outEvents := make([]*pipeline.Event, 0)
+	cntOutEvents := 0
 	output.SetOutFn(func(e *pipeline.Event) {
+		cntOutEvents++
 		wg.Done()
-		outEvents = append(outEvents, e)
 	})
 
 	input.In(0, "test.log", 0, []byte(`{"field1":"0000 one 0000"}`))
@@ -139,7 +139,7 @@ func TestDiscardRegex(t *testing.T) {
 	p.Stop()
 
 	assert.Equal(t, 7, inEvents, "wrong in events count")
-	assert.Equal(t, 4, len(outEvents), "wrong out events count")
+	assert.Equal(t, 4, cntOutEvents, "wrong out events count")
 }
 
 func TestDiscardMatchInvert(t *testing.T) {
