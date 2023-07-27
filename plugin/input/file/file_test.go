@@ -477,7 +477,7 @@ func TestReadContinue(t *testing.T) {
 			}
 
 			for i := range inputEvents {
-				require.Equal(t, inputEvents[i], outputEvents[i], "wrong event")
+				require.Equalf(t, inputEvents[i], outputEvents[i], "wrong event, all events: %v", inputEvents)
 			}
 
 			assertOffsetsAreEqual(t, genOffsetsContent(file, size), getContent(getConfigByPipeline(p).OffsetsFile))
