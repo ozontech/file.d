@@ -4,6 +4,7 @@ package journalctl
 
 import (
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 
@@ -89,7 +90,7 @@ func TestOffsets(t *testing.T) {
 
 		setInput(p, config)
 		setOutput(p, func(event *pipeline.Event) {
-			cursors[event.Root.Dig("__CURSOR").AsString()]++
+			cursors[strings.Clone(event.Root.Dig("__CURSOR").AsString())]++
 			wg.Done()
 		})
 

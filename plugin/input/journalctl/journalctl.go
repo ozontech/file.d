@@ -97,7 +97,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	p.reader = newJournalReader(readConfig, p.readerErrorsMetric)
 	p.reader.args = append(p.reader.args, p.config.JournalArgs...)
 	if err := p.reader.start(); err != nil {
-		p.params.Logger.Error("failure during start: %s", err.Error())
+		p.params.Logger.Fatal("failure during start: %s", err.Error())
 	}
 }
 
@@ -130,6 +130,6 @@ func (p *Plugin) Commit(event *pipeline.Event) {
 }
 
 // PassEvent decides pass or discard event.
-func (p *Plugin) PassEvent(event *pipeline.Event) bool {
+func (p *Plugin) PassEvent(_ *pipeline.Event) bool {
 	return true
 }
