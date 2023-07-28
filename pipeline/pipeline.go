@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"math"
-	"math/rand"
 	"net/http"
 	"runtime"
 	"strconv"
@@ -13,15 +12,14 @@ import (
 	"time"
 
 	"github.com/ozontech/file.d/cfg/matchrule"
+	"github.com/ozontech/file.d/decoder"
+	"github.com/ozontech/file.d/logger"
+	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline/antispam"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
-
-	"github.com/ozontech/file.d/decoder"
-	"github.com/ozontech/file.d/logger"
-	"github.com/ozontech/file.d/longpanic"
-	"github.com/ozontech/file.d/metric"
+	"go.uber.org/zap/zapcore"
 )
 
 const (
@@ -54,13 +52,13 @@ type InputPluginController interface {
 }
 
 type ActionPluginController interface {
-	Commit(event *Event)    // commit offset of held event and skip further processing
 	Propagate(event *Event) // throw held event back to pipeline
 }
 
 type OutputPluginController interface {
-	Commit(event *Event) // notify input plugin that event is successfully processed and save offsets
+	Commit(event *Event, backEvent bool) // notify input plugin that event is successfully processed and save offsets
 	Error(err string)
+	ReleaseEvents(events []*Event)
 }
 
 type (
@@ -82,7 +80,7 @@ type Pipeline struct {
 	useSpread      bool
 	disableStreams bool
 	singleProc     bool
-	shouldStop     bool
+	shouldStop     atomic.Bool
 
 	input      InputPlugin
 	inputInfo  *InputPluginInfo
@@ -102,18 +100,16 @@ type Pipeline struct {
 	metricHolder *metric.Holder
 
 	// some debugging stuff
-	logger          *zap.SugaredLogger
+	logger          *zap.Logger
 	eventLogEnabled bool
 	eventLog        []string
 	eventLogMu      *sync.Mutex
-	inSample        []byte
-	outSample       []byte
-	inputEvents     atomic.Int64
-	inputSize       atomic.Int64
-	outputEvents    atomic.Int64
-	outputSize      atomic.Int64
-	readOps         atomic.Int64
-	maxSize         int
+
+	inputEvents  atomic.Int64
+	inputSize    atomic.Int64
+	outputEvents atomic.Int64
+	outputSize   atomic.Int64
+	readOps      atomic.Int64
 
 	// all pipeline`s metrics
 	inUseEventsMetric          prometheus.Gauge
@@ -145,7 +141,7 @@ type Settings struct {
 func New(name string, settings *Settings, registry *prometheus.Registry) *Pipeline {
 	metricCtl := metric.NewCtl("pipeline_"+name, registry)
 
-	lg := logger.Instance.Named(name)
+	lg := logger.Instance.Named(name).Desugar()
 
 	pipeline := &Pipeline{
 		Name:           name,
@@ -169,7 +165,7 @@ func New(name string, settings *Settings, registry *prometheus.Registry) *Pipeli
 			MaintenanceInterval: settings.MaintenanceInterval,
 			Threshold:           settings.AntispamThreshold,
 			UnbanIterations:     antispamUnbanIterations,
-			Logger:              lg.Desugar().Named("antispam"),
+			Logger:              lg.Named("antispam"),
 			MetricsController:   metricCtl,
 			Exceptions:          settings.AntispamExceptions,
 		}),
@@ -195,7 +191,7 @@ func New(name string, settings *Settings, registry *prometheus.Registry) *Pipeli
 	case "auto":
 		pipeline.decoder = decoder.AUTO
 	default:
-		pipeline.logger.Fatalf("unknown decoder %q for pipeline %q", settings.Decoder, name)
+		pipeline.logger.Fatal("unknown decoder", zap.String("decoder", settings.Decoder))
 	}
 
 	return pipeline
@@ -235,10 +231,10 @@ func (p *Pipeline) setDefaultMetrics() {
 // Actions also have the standard endpoints `/info` and `/sample`.
 func (p *Pipeline) SetupHTTPHandlers(mux *http.ServeMux) {
 	if p.input == nil {
-		p.logger.Panicf("input isn't set for pipeline %q", p.Name)
+		p.logger.Panic("input isn't set")
 	}
 	if p.output == nil {
-		p.logger.Panicf("output isn't set for pipeline %q", p.Name)
+		p.logger.Panic("output isn't set")
 	}
 
 	prefix := "/pipelines/" + p.Name
@@ -264,10 +260,10 @@ func (p *Pipeline) SetupHTTPHandlers(mux *http.ServeMux) {
 
 func (p *Pipeline) Start() {
 	if p.input == nil {
-		p.logger.Panicf("input isn't set for pipeline %q", p.Name)
+		p.logger.Panic("input isn't set")
 	}
 	if p.output == nil {
-		p.logger.Panicf("output isn't set for pipeline %q", p.Name)
+		p.logger.Panic("output isn't set")
 	}
 
 	p.initProcs()
@@ -276,39 +272,39 @@ func (p *Pipeline) Start() {
 	outputParams := &OutputPluginParams{
 		PluginDefaultParams: p.actionParams,
 		Controller:          p,
-		Logger:              p.logger.Named("output_" + p.outputInfo.Type),
+		Logger:              p.logger.Sugar().Named("output").Named(p.outputInfo.Type),
 	}
-	p.logger.Infof("starting output plugin %q", p.outputInfo.Type)
+	p.logger.Info("starting output plugin", zap.String("name", p.outputInfo.Type))
 
 	p.output.Start(p.outputInfo.Config, outputParams)
 
-	p.logger.Infof("stating processors, count=%d", len(p.Procs))
+	p.logger.Info("stating processors", zap.Int("count", len(p.Procs)))
 	for _, processor := range p.Procs {
-		processor.start(p.actionParams, p.logger)
+		processor.start(p.actionParams, p.logger.Sugar())
 	}
 
-	p.logger.Infof("starting input plugin %q", p.inputInfo.Type)
+	p.logger.Info("starting input plugin", zap.String("name", p.inputInfo.Type))
 	inputParams := &InputPluginParams{
 		PluginDefaultParams: p.actionParams,
 		Controller:          p,
-		Logger:              p.logger.Named("input_" + p.inputInfo.Type),
+		Logger:              p.logger.Sugar().Named("input").Named(p.inputInfo.Type),
 	}
 
 	p.input.Start(p.inputInfo.Config, inputParams)
 
 	p.streamer.start()
 
-	longpanic.Go(p.maintenance)
+	go p.maintenance()
 	if !p.useSpread {
-		longpanic.Go(p.growProcs)
+		go p.growProcs()
 	}
 	p.started = true
 }
 
 func (p *Pipeline) Stop() {
-	p.logger.Infof("stopping pipeline %q, total committed=%d", p.Name, p.outputEvents.Load())
+	p.logger.Info("stopping pipeline", zap.Int64("committed", p.outputEvents.Load()))
 
-	p.logger.Infof("stopping processors count=%d", len(p.Procs))
+	p.logger.Info("stopping processors", zap.Int("count", len(p.Procs)))
 	for _, processor := range p.Procs {
 		processor.stop()
 	}
@@ -316,13 +312,13 @@ func (p *Pipeline) Stop() {
 	p.metricHolder.Stop()
 	p.streamer.stop()
 
-	p.logger.Infof("stopping %q input", p.Name)
+	p.logger.Info("stopping input")
 	p.input.Stop()
 
-	p.logger.Infof("stopping %q output", p.Name)
+	p.logger.Info("stopping output")
 	p.output.Stop()
 
-	p.shouldStop = true
+	p.shouldStop.Store(true)
 }
 
 func (p *Pipeline) SetInput(info *InputPluginInfo) {
@@ -406,11 +402,18 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 	case decoder.JSON:
 		err := event.parseJSON(bytes)
 		if err != nil {
+			level := zapcore.ErrorLevel
 			if p.settings.IsStrict {
-				p.logger.Fatalf("wrong json format offset=%d, length=%d, err=%s, source=%d:%s, json=%s", offset, length, err.Error(), sourceID, sourceName, bytes)
-			} else {
-				p.logger.Errorf("wrong json format offset=%d, length=%d, err=%s, source=%d:%s, json=%s", offset, length, err.Error(), sourceID, sourceName, bytes)
+				level = zapcore.FatalLevel
 			}
+
+			p.logger.Log(level, "wrong json format", zap.Error(err),
+				zap.Int64("offset", offset),
+				zap.Int("length", length),
+				zap.Uint64("source", uint64(sourceID)),
+				zap.String("source_name", sourceName),
+				zap.ByteString("json", bytes))
+
 			// Can't process event, return to pool.
 			p.eventPool.back(event)
 			return EventSeqIDError
@@ -427,7 +430,13 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 		_ = event.Root.DecodeString("{}")
 		err := decoder.DecodePostgres(event.Root, bytes)
 		if err != nil {
-			p.logger.Fatalf("wrong postgres format offset=%d, length=%d, err=%s, source=%d:%s, cri=%s", offset, length, err.Error(), sourceID, sourceName, bytes)
+			p.logger.Fatal("wrong postgres format", zap.Error(err),
+				zap.Int64("offset", offset),
+				zap.Int("length", length),
+				zap.Uint64("source", uint64(sourceID)),
+				zap.String("source_name", sourceName),
+				zap.ByteString("log", bytes))
+
 			// Dead route, never passed here.
 			return EventSeqIDError
 		}
@@ -435,16 +444,23 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 		_ = event.Root.DecodeString("{}")
 		err := decoder.DecodeNginxError(event.Root, bytes)
 		if err != nil {
+			level := zapcore.ErrorLevel
 			if p.settings.IsStrict {
-				p.logger.Fatalf("wrong nginx error log format offset=%d, length=%d, err=%s, source=%d:%s, cri=%s", offset, length, err.Error(), sourceID, sourceName, bytes)
-			} else {
-				p.logger.Errorf("wrong nginx error log format offset=%d, length=%d, err=%s, source=%d:%s, cri=%s", offset, length, err.Error(), sourceID, sourceName, bytes)
+				level = zapcore.FatalLevel
 			}
+
+			p.logger.Log(level, "wrong nginx error log format", zap.Error(err),
+				zap.Int64("offset", offset),
+				zap.Int("length", length),
+				zap.Uint64("source", uint64(sourceID)),
+				zap.String("source_name", sourceName),
+				zap.ByteString("log", bytes))
+
 			p.eventPool.back(event)
 			return EventSeqIDError
 		}
 	default:
-		p.logger.Panicf("unknown decoder %d for pipeline %q", p.decoder, p.Name)
+		p.logger.Panic("unknown decoder", zap.Int("decoder", int(dec)))
 	}
 
 	event.Offset = offset
@@ -477,15 +493,17 @@ func (p *Pipeline) streamEvent(event *Event) uint64 {
 		}
 	}
 
-	if len(p.inSample) == 0 {
-		p.inSample = event.Root.Encode(p.inSample)
-	}
-
 	return p.streamer.putEvent(streamID, event.streamName, event)
 }
 
-func (p *Pipeline) Commit(event *Event) {
-	p.finalize(event, true, true)
+func (p *Pipeline) Commit(event *Event, backEvents bool) {
+	p.finalize(event, true, backEvents)
+}
+
+func (p *Pipeline) ReleaseEvents(events []*Event) {
+	for i := range events {
+		p.eventPool.back(events[i])
+	}
 }
 
 func (p *Pipeline) Error(err string) {
@@ -505,14 +523,6 @@ func (p *Pipeline) finalize(event *Event, notifyInput bool, backEvent bool) {
 		p.input.Commit(event)
 		p.outputEvents.Inc()
 		p.outputSize.Add(int64(event.Size))
-
-		if len(p.outSample) == 0 && rand.Int()&1 == 1 {
-			p.outSample = event.Root.Encode(p.outSample)
-		}
-
-		if event.Size > p.maxSize {
-			p.maxSize = event.Size
-		}
 	}
 
 	// todo: avoid event.stream.commit(event)
@@ -522,7 +532,7 @@ func (p *Pipeline) finalize(event *Event, notifyInput bool, backEvent bool) {
 		return
 	}
 
-	if p.eventLogEnabled {
+	if p.eventLogEnabled && event.Root != nil {
 		p.eventLogMu.Lock()
 		p.eventLog = append(p.eventLog, event.Root.EncodeToString())
 		p.eventLogMu.Unlock()
@@ -606,19 +616,20 @@ func (p *Pipeline) initProcs() {
 	if p.singleProc {
 		procCount = 1
 	}
-	p.logger.Infof("starting pipeline %q: procs=%d", p.Name, procCount)
+	p.logger.Info("starting pipeline", zap.Int("procs", procCount))
 
 	p.procCount = atomic.NewInt32(int32(procCount))
 	p.activeProcs = atomic.NewInt32(0)
 
 	p.Procs = make([]*processor, 0, procCount)
 	for i := 0; i < procCount; i++ {
-		p.Procs = append(p.Procs, p.newProc())
+		p.Procs = append(p.Procs, p.newProc(i))
 	}
 }
 
-func (p *Pipeline) newProc() *processor {
+func (p *Pipeline) newProc(id int) *processor {
 	proc := newProcessor(
+		id,
 		&p.actionMetrics,
 		p.activeProcs,
 		p.output,
@@ -644,7 +655,7 @@ func (p *Pipeline) growProcs() {
 	t := time.Now()
 	for {
 		time.Sleep(interval)
-		if p.shouldStop {
+		if p.shouldStop.Load() {
 			return
 		}
 		if p.procCount.Load() != p.activeProcs.Load() {
@@ -664,15 +675,15 @@ func (p *Pipeline) expandProcs() {
 
 	from := p.procCount.Load()
 	to := from * 2
-	p.logger.Infof("processors count expanded from %d to %d", from, to)
+	p.logger.Info("processors count expanded from %d to %d", zap.Int32("old", from), zap.Int32("new", to))
 	if to > 10000 {
-		p.logger.Warnf("too many processors: %d", to)
+		p.logger.Warn("too many processors", zap.Int32("new", to))
 	}
 
 	for x := 0; x < int(to-from); x++ {
-		proc := p.newProc()
+		proc := p.newProc(p.Procs[from].id + x)
 		p.Procs = append(p.Procs, proc)
-		proc.start(p.actionParams, p.logger)
+		proc.start(p.actionParams, p.logger.Sugar())
 	}
 
 	p.procCount.Swap(to)
@@ -687,22 +698,26 @@ type deltas struct {
 }
 
 func (p *Pipeline) logChanges(myDeltas *deltas) {
-	inputSize := p.inputSize.Load()
-	inputEvents := p.inputEvents.Load()
-	inUseEvents := p.eventPool.inUseEvents.Load()
+	if ce := p.logger.Check(zapcore.InfoLevel, "pipeline stats"); ce != nil {
+		inputSize := p.inputSize.Load()
+		inputEvents := p.inputEvents.Load()
+		inUseEvents := p.eventPool.inUseEvents.Load()
 
-	interval := p.settings.MaintenanceInterval
-	rate := int(myDeltas.deltaInputEvents * float64(time.Second) / float64(interval))
-	rateMb := myDeltas.deltaInputSize * float64(time.Second) / float64(interval) / 1024 / 1024
-	readOps := int(myDeltas.deltaReads * float64(time.Second) / float64(interval))
-	tc := int64(math.Max(float64(inputSize), 1))
+		interval := p.settings.MaintenanceInterval
+		rate := int(myDeltas.deltaInputEvents * float64(time.Second) / float64(interval))
+		rateMb := myDeltas.deltaInputSize * float64(time.Second) / float64(interval) / 1024 / 1024
+		readOps := int(myDeltas.deltaReads * float64(time.Second) / float64(interval))
+		tc := int64(math.Max(float64(inputSize), 1))
 
-	p.logger.Infof(`%q pipeline stats interval=%ds, active procs=%d/%d, events outside pool=%d/%d, events in pool=%d/%d, out=%d|%.1fMb,`+
-		`rate=%d/s|%.1fMb/s, read ops=%d/s, total=%d|%.1fMb, avg size=%d, max size=%d`,
-		p.Name, interval/time.Second, p.activeProcs.Load(), p.procCount.Load(),
-		inUseEvents, p.settings.Capacity, p.settings.Capacity-int(inUseEvents), p.settings.Capacity,
-		int64(myDeltas.deltaInputEvents), myDeltas.deltaInputSize/1024.0/1024.0, rate, rateMb, readOps,
-		inputEvents, float64(inputSize)/1024.0/1024.0, inputSize/tc, p.maxSize)
+		stat := fmt.Sprintf(`interval=%ds, active procs=%d/%d, events in use=%d/%d, out=%d|%.1fMb,`+
+			` rate=%d/s|%.1fMb/s, read ops=%d/s, total=%d|%.1fMb, avg size=%d`,
+			interval/time.Second, p.activeProcs.Load(), p.procCount.Load(),
+			inUseEvents, p.settings.Capacity,
+			int64(myDeltas.deltaInputEvents), myDeltas.deltaInputSize/1024.0/1024.0, rate, rateMb, readOps,
+			inputEvents, float64(inputSize)/1024.0/1024.0, inputSize/tc)
+
+		ce.Write(zap.String("stat", stat))
+	}
 }
 
 func (p *Pipeline) incMetrics(inputEvents, inputSize, outputEvents, outputSize, reads *DeltaWrapper) *deltas {
@@ -729,8 +744,8 @@ func (p *Pipeline) incMetrics(inputEvents, inputSize, outputEvents, outputSize, 
 	return myDeltas
 }
 
-func (p *Pipeline) setMetrics(inUseEvents atomic.Int64) {
-	p.inUseEventsMetric.Set(float64(inUseEvents.Load()))
+func (p *Pipeline) setMetrics(inUseEvents int64) {
+	p.inUseEventsMetric.Set(float64(inUseEvents))
 }
 
 func (p *Pipeline) maintenance() {
@@ -742,7 +757,7 @@ func (p *Pipeline) maintenance() {
 
 	for {
 		time.Sleep(p.settings.MaintenanceInterval)
-		if p.shouldStop {
+		if p.shouldStop.Load() {
 			return
 		}
 
@@ -750,18 +765,8 @@ func (p *Pipeline) maintenance() {
 		p.metricHolder.Maintenance()
 
 		myDeltas := p.incMetrics(inputEvents, inputSize, outputEvents, outputSize, readOps)
-		p.setMetrics(p.eventPool.inUseEvents)
+		p.setMetrics(p.eventPool.inUseEvents.Load())
 		p.logChanges(myDeltas)
-
-		if len(p.inSample) > 0 {
-			p.logger.Infof("%q pipeline input event sample: %s", p.Name, p.inSample)
-			p.inSample = p.inSample[:0]
-		}
-
-		if len(p.outSample) > 0 {
-			p.logger.Infof("%q pipeline output event sample: %s", p.Name, p.outSample)
-			p.outSample = p.outSample[:0]
-		}
 	}
 }
 
@@ -793,8 +798,11 @@ func (p *Pipeline) EnableEventLog() {
 }
 
 func (p *Pipeline) GetEventLogItem(index int) string {
+	p.eventLogMu.Lock()
+	defer p.eventLogMu.Unlock()
+
 	if index >= len(p.eventLog) {
-		p.logger.Fatalf("can't find log item with index %d", index)
+		p.logger.Fatal("can't find log item", zap.Int("index", index))
 	}
 	return p.eventLog[index]
 }

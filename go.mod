@@ -3,20 +3,20 @@ module github.com/ozontech/file.d
 go 1.20
 
 require (
-	github.com/ClickHouse/ch-go v0.57.0
+	github.com/ClickHouse/ch-go v0.58.0
 	github.com/KimMachineGun/automemlimit v0.2.6
-	github.com/Masterminds/squirrel v1.5.2
+	github.com/Masterminds/squirrel v1.5.4
 	github.com/Shopify/sarama v1.38.1
 	github.com/alecthomas/kingpin v2.2.6+incompatible
 	github.com/alecthomas/units v0.0.0-20190924025748-f65c72e2690d
-	github.com/alicebob/miniredis/v2 v2.30.1
+	github.com/alicebob/miniredis/v2 v2.30.4
 	github.com/bitly/go-simplejson v0.5.0
 	github.com/euank/go-kmsg-parser v2.0.0+incompatible
 	github.com/go-redis/redis v6.15.9+incompatible
 	github.com/golang/mock v1.6.0
 	github.com/google/uuid v1.3.0
-	github.com/hashicorp/vault/api v1.9.1
-	github.com/jackc/pgconn v1.14.0
+	github.com/hashicorp/vault/api v1.9.2
+	github.com/jackc/pgconn v1.14.1
 	github.com/jackc/pgproto3/v2 v2.3.2
 	github.com/jackc/pgx/v4 v4.18.1
 	github.com/minio/minio-go v6.0.14+incompatible
@@ -24,13 +24,13 @@ require (
 	github.com/rjeczalik/notify v0.9.3
 	github.com/satori/go.uuid v1.2.0
 	github.com/stretchr/testify v1.8.4
-	github.com/valyala/fasthttp v1.47.0
+	github.com/valyala/fasthttp v1.48.0
 	github.com/vitkovskii/insane-json v0.1.7
 	github.com/xdg-go/scram v1.1.2
 	go.uber.org/atomic v1.11.0
-	go.uber.org/automaxprocs v1.5.2
+	go.uber.org/automaxprocs v1.5.3
 	go.uber.org/zap v1.24.0
-	golang.org/x/net v0.10.0
+	golang.org/x/net v0.12.0
 	gopkg.in/yaml.v3 v3.0.1
 	k8s.io/api v0.0.0-20190620084959-7cf5895f2711
 	k8s.io/apimachinery v0.0.0-20190704094625-facf06a8f4b8
@@ -59,6 +59,7 @@ require (
 	github.com/go-faster/city v1.0.1 // indirect
 	github.com/go-faster/errors v0.6.1 // indirect
 	github.com/go-ini/ini v1.62.0 // indirect
+	github.com/go-jose/go-jose/v3 v3.0.0 // indirect
 	github.com/go-logr/logr v1.2.4 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/godbus/dbus/v5 v5.0.4 // indirect
@@ -94,7 +95,7 @@ require (
 	github.com/jcmturner/gokrb5/v8 v8.4.3 // indirect
 	github.com/jcmturner/rpc/v2 v2.0.3 // indirect
 	github.com/json-iterator/go v1.1.11 // indirect
-	github.com/klauspost/compress v1.16.6 // indirect
+	github.com/klauspost/compress v1.16.7 // indirect
 	github.com/lann/builder v0.0.0-20180802200727-47ae307949d0 // indirect
 	github.com/lann/ps v0.0.0-20150810152359-62de8c46ede0 // indirect
 	github.com/lib/pq v1.10.4 // indirect
@@ -126,20 +127,19 @@ require (
 	go.opentelemetry.io/otel/metric v1.16.0 // indirect
 	go.opentelemetry.io/otel/trace v1.16.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
-	golang.org/x/crypto v0.7.0 // indirect
+	golang.org/x/crypto v0.11.0 // indirect
 	golang.org/x/mod v0.8.0 // indirect
 	golang.org/x/oauth2 v0.0.0-20190604053449-0f29369cfe45 // indirect
 	golang.org/x/sync v0.3.0 // indirect
-	golang.org/x/sys v0.8.0 // indirect
-	golang.org/x/term v0.8.0 // indirect
-	golang.org/x/text v0.9.0 // indirect
+	golang.org/x/sys v0.10.0 // indirect
+	golang.org/x/term v0.10.0 // indirect
+	golang.org/x/text v0.11.0 // indirect
 	golang.org/x/time v0.0.0-20200416051211-89c76fbcd5d1 // indirect
 	golang.org/x/tools v0.6.0 // indirect
 	google.golang.org/appengine v1.4.0 // indirect
 	google.golang.org/protobuf v1.27.1 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/ini.v1 v1.62.0 // indirect
-	gopkg.in/square/go-jose.v2 v2.5.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	k8s.io/klog v0.3.3 // indirect
 	k8s.io/utils v0.0.0-20190829053155-3a4a5477acf8 // indirect

@@ -9,12 +9,6 @@ checksum:
 release:
   prerelease: auto
 
-archives: 
-  - replacements:
-      darwin: Darwin
-      linux: Linux
-      amd64: x86_64
-
 builds:
   - main: ./cmd/file.d
     goos:

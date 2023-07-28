@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/ozontech/file.d/logger"
-	"github.com/ozontech/file.d/longpanic"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
 )
@@ -98,7 +97,7 @@ func (r *journalReader) start() error {
 		return err
 	}
 
-	longpanic.Go(func() { r.readLines(out, r.config) })
+	go r.readLines(out, r.config)
 
 	return nil
 }

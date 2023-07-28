@@ -16,7 +16,6 @@ import (
 	"github.com/minio/minio-go"
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
-	"github.com/ozontech/file.d/longpanic"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/plugin/output/file"
@@ -115,8 +114,6 @@ var (
 	compressors     = map[string]func(*zap.SugaredLogger) compressor{
 		zipName: newZipCompressor,
 	}
-
-	r = rand.New(rand.NewSource(time.Now().UnixNano()))
 )
 
 type ObjectStoreClient interface {
@@ -155,6 +152,9 @@ type Plugin struct {
 	// plugin metrics
 	sendErrorMetric  prometheus.Counter
 	uploadFileMetric *prometheus.CounterVec
+
+	rnd   rand.Rand
+	rndMx sync.Mutex
 }
 
 type fileDTO struct {
@@ -263,6 +263,7 @@ func Factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 }
 
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginParams) {
+	p.rnd = *rand.New(rand.NewSource(time.Now().UnixNano()))
 	p.registerMetrics(params.MetricCtl)
 	p.StartWithMinio(config, params, p.minioClientsFactory)
 }
@@ -312,8 +313,8 @@ func (p *Plugin) StartWithMinio(config pipeline.AnyConfig, params *pipeline.Outp
 	p.compressCh = make(chan fileDTO, p.config.FileConfig.WorkersCount_)
 
 	for i := 0; i < p.config.FileConfig.WorkersCount_; i++ {
-		longpanic.Go(p.uploadWork)
-		longpanic.Go(p.compressWork)
+		go p.uploadWork()
+		go p.compressWork()
 	}
 	err = p.startPlugins(params, outPlugCount, targetDirs, fileNames)
 	if err != nil {
@@ -515,7 +516,7 @@ func (p *Plugin) uploadWork() {
 				p.logger.Infof("successfully uploaded object=%s", compressed.fileName)
 				// delete archive after uploading
 				err = os.Remove(compressed.fileName)
-				if err != nil {
+				if err != nil && !os.IsNotExist(err) {
 					p.logger.Panicf("could not delete file: %s, err: %s", compressed, err.Error())
 				}
 				break
@@ -535,7 +536,7 @@ func (p *Plugin) compressWork() {
 		compressedName := p.compressor.getName(dto.fileName)
 		p.compressor.compress(compressedName, dto.fileName)
 		// delete old file
-		if err := os.Remove(dto.fileName); err != nil {
+		if err := os.Remove(dto.fileName); err != nil && !os.IsNotExist(err) {
 			p.logger.Panicf("could not delete file: %s, error: %s", dto, err.Error())
 		}
 		dto.fileName = compressedName
@@ -570,9 +571,15 @@ func (p *Plugin) uploadToS3(compressedDTO fileDTO) error {
 
 // generateObjectName generates object name by compressed file name
 func (p *Plugin) generateObjectName(name string) string {
-	n := strconv.FormatInt(r.Int63n(math.MaxInt64), 16)
+	n := strconv.FormatInt(p.nextRandomValue(), 16)
 	n = n[len(n)-8:]
 	objectName := path.Base(name)
 	objectName = objectName[0 : len(objectName)-len(p.compressor.getExtension())]
 	return fmt.Sprintf("%s.%s%s", objectName, n, p.compressor.getExtension())
+}
+
+func (p *Plugin) nextRandomValue() int64 {
+	p.rndMx.Lock()
+	defer p.rndMx.Unlock()
+	return p.rnd.Int63n(math.MaxInt64)
 }

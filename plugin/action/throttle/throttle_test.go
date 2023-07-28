@@ -340,6 +340,10 @@ func TestRedisThrottleMultiPipes(t *testing.T) {
 		// timeout required due shifting time call to redis
 		time.Sleep(100 * time.Millisecond)
 	}
+
+	muSecPipe.Lock()
+	defer muSecPipe.Unlock()
+
 	// limit is 10 while events count 4, all passed
 	assert.Equal(t, len(secondPipeEvents), len(outEventsSec), "wrong in events count")
 	t.Cleanup(func() {

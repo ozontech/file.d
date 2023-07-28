@@ -19,9 +19,8 @@ import (
 const trueValue = "true"
 
 type Config struct {
-	Vault        VaultConfig
-	PanicTimeout time.Duration
-	Pipelines    map[string]*PipelineConfig
+	Vault     VaultConfig
+	Pipelines map[string]*PipelineConfig
 }
 
 type (
@@ -179,19 +178,6 @@ func parseConfig(object *simplejson.Json) *Config {
 		}
 		raw := pipelinesJson.Get(name)
 		config.Pipelines[name] = &PipelineConfig{Raw: raw}
-	}
-
-	config.PanicTimeout = time.Minute
-	panicTimeoutRaw := object.Get("panic_timeout")
-	if panicTimeoutRaw.Interface() != nil {
-		panicTimeoutStr, err := panicTimeoutRaw.String()
-		if err != nil {
-			logger.Panicf("can't get panic_timeout: %s", err.Error())
-		}
-		config.PanicTimeout, err = time.ParseDuration(panicTimeoutStr)
-		if err != nil {
-			logger.Panicf("can't parse panic_timeout: %s", err.Error())
-		}
 	}
 
 	return config
@@ -408,9 +394,15 @@ func ParseField(v reflect.Value, vField reflect.Value, tField *reflect.StructFie
 			fields := ParseFieldSelector(vField.String())
 			finalField.Set(reflect.ValueOf(fields))
 		case "duration":
-			result, err := time.ParseDuration(vField.String())
-			if err != nil {
-				return fmt.Errorf("field %s has wrong duration format: %s", tField.Name, err.Error())
+			var result time.Duration
+
+			fieldValue := vField.String()
+			if fieldValue != "" {
+				var err error
+				result, err = time.ParseDuration(fieldValue)
+				if err != nil {
+					return fmt.Errorf("field %s has wrong duration format: %s", tField.Name, err.Error())
+				}
 			}
 
 			finalField.SetInt(int64(result))

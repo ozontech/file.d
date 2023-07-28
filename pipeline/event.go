@@ -6,10 +6,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ozontech/file.d/logger"
 	insaneJSON "github.com/vitkovskii/insane-json"
 	"go.uber.org/atomic"
-
-	"github.com/ozontech/file.d/logger"
 )
 
 type Event struct {
@@ -39,11 +38,14 @@ const (
 	eventStageStream    = 2
 	eventStageProcessor = 3
 	eventStageOutput    = 4
+)
 
-	eventKindRegular int32 = 0
-	eventKindIgnore  int32 = 1
-	eventKindTimeout int32 = 2
-	eventKindUnlock  int32 = 3
+type Kind byte
+
+const (
+	EventKindRegular Kind = iota
+	EventKindTimeout
+	EventKindUnlock
 )
 
 type eventStage int
@@ -103,7 +105,7 @@ func (e *Event) reset(avgEventSize int) {
 	e.next = nil
 	e.action = atomic.Int64{}
 	e.stream = nil
-	e.kind.Swap(eventKindRegular)
+	e.kind.Swap(int32(EventKindRegular))
 }
 
 func (e *Event) StreamNameBytes() []byte {
@@ -111,31 +113,27 @@ func (e *Event) StreamNameBytes() []byte {
 }
 
 func (e *Event) IsRegularKind() bool {
-	return e.kind.Load() == eventKindRegular
-}
-
-func (e *Event) SetIgnoreKind() {
-	e.kind.Swap(eventKindIgnore)
+	return Kind(e.kind.Load()) == EventKindRegular
 }
 
 func (e *Event) IsUnlockKind() bool {
-	return e.kind.Load() == eventKindUnlock
+	return Kind(e.kind.Load()) == EventKindUnlock
 }
 
 func (e *Event) SetUnlockKind() {
-	e.kind.Swap(eventKindUnlock)
+	e.kind.Swap(int32(EventKindUnlock))
 }
 
 func (e *Event) IsIgnoreKind() bool {
-	return e.kind.Load() == eventKindUnlock
+	return Kind(e.kind.Load()) == EventKindUnlock
 }
 
 func (e *Event) SetTimeoutKind() {
-	e.kind.Swap(eventKindTimeout)
+	e.kind.Swap(int32(EventKindTimeout))
 }
 
 func (e *Event) IsTimeoutKind() bool {
-	return e.kind.Load() == eventKindTimeout
+	return Kind(e.kind.Load()) == EventKindTimeout
 }
 
 func (e *Event) parseJSON(json []byte) error {
@@ -172,12 +170,10 @@ func (e *Event) stageStr() string {
 }
 
 func (e *Event) kindStr() string {
-	switch e.kind.Load() {
-	case eventKindRegular:
+	switch Kind(e.kind.Load()) {
+	case EventKindRegular:
 		return "REGULAR"
-	case eventKindIgnore:
-		return "DEPRECATED"
-	case eventKindTimeout:
+	case EventKindTimeout:
 		return "TIMEOUT"
 	default:
 		return "UNKNOWN"
@@ -189,6 +185,10 @@ func (e *Event) String() string {
 		return ""
 	}
 	return fmt.Sprintf("kind=%s, action=%d, source=%d/%s, stream=%s, stage=%s, json=%s", e.kindStr(), e.action.Load(), e.SourceID, e.SourceName, e.streamName, e.stageStr(), e.Root.EncodeToString())
+}
+
+func (e *Event) CopyTo(event *Event) {
+	*event = *e
 }
 
 // channels are slower than this implementation by ~20%

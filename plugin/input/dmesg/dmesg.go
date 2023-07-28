@@ -8,7 +8,6 @@ import (
 
 	"github.com/euank/go-kmsg-parser/kmsgparser"
 	"github.com/ozontech/file.d/fd"
-	"github.com/ozontech/file.d/longpanic"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/offset"
 	"github.com/ozontech/file.d/pipeline"
@@ -76,7 +75,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 
 	p.parser = parser
 
-	longpanic.Go(p.read)
+	go p.read()
 }
 
 func (p *Plugin) registerMetrics(ctl *metric.Ctl) {

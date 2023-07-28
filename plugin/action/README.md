@@ -18,7 +18,24 @@ It converts the log level field according RFC-5424.
 
 [More details...](plugin/action/convert_log_level/README.md)
 ## debug
-It logs event to stdout. Useful for debugging.
+It logs event to stderr. Useful for debugging.
+
+It may sample by logging the `first` N entries each tick.
+If more events are seen during the same `interval`,
+every `thereafter` message is logged and the rest are dropped.
+
+For example,
+
+```yaml
+- type: debug
+  interval: 1s
+  first: 10
+  thereafter: 5
+```
+
+This will log the first 10 events in a one second interval as-is.
+Following that, it will allow through every 5th event in that interval.
+
 
 [More details...](plugin/action/debug/README.md)
 ## discard
