@@ -9,50 +9,42 @@ import (
 
 const genTimeInterval = time.Second
 
-var nowTime = time.Now()
+var nowTime time.Time
 
 type Holder struct {
 	registry     *prometheus.Registry
-	updateTime   time.Time
-	holdInterval time.Duration
+	holdDuration time.Duration
 	metrics      metrics
 
-	regChan     chan prometheus.Collector
-	regChanStop chan struct{}
+	regChan chan prometheus.Collector
 
 	genTimeTicker *time.Ticker
 	genTimeStop   chan struct{}
 }
 
-func NewHolder(registry *prometheus.Registry, holdInterval time.Duration) *Holder {
+func NewHolder(registry *prometheus.Registry, holdDuration time.Duration) *Holder {
 	return &Holder{
 		registry:     registry,
-		holdInterval: holdInterval,
+		holdDuration: holdDuration,
 		metrics:      newMetrics(),
 
-		regChan:     make(chan prometheus.Collector),
-		regChanStop: make(chan struct{}),
+		regChan: make(chan prometheus.Collector),
 
 		genTimeStop: make(chan struct{}),
 	}
 }
 
 func (h *Holder) Start() {
-	h.updateTime = time.Now()
 	go h.genTime()
 	go h.registerMetrics()
 }
 
 func (h *Holder) Stop() {
-	h.regChanStop <- struct{}{}
+	close(h.regChan)
 	h.genTimeStop <- struct{}{}
 }
 
 func (h *Holder) Maintenance() {
-	if time.Since(h.updateTime) < h.holdInterval {
-		return
-	}
-
 	h.updateMetrics()
 }
 
@@ -195,83 +187,67 @@ func newMetrics() metrics {
 	}
 }
 
+func (h *Holder) updateMetric(col prometheus.Collector, wr *wrapper) {
+	if wr.isObsolete(h.holdDuration) {
+		h.registry.Unregister(col)
+		wr.active = false
+	}
+}
+
+func updateMetricVec[T wrapperType](h *Holder, metricVec *prometheus.MetricVec, wrVec *wrapperVec[T], metric prometheus.Metric, wr *wrapper) {
+	if wr.isObsolete(h.holdDuration) {
+		metricVec.DeleteLabelValues(wr.labels...)
+		wrVec.deleteElem(metric)
+		wr.active = false
+	}
+}
+
 // updateMetrics delete old metrics, that aren't in use since last update.
 func (h *Holder) updateMetrics() {
-	needDeleteMetric := func(wr *wrapper) bool {
-		return wr.active && wr.changeTime.Before(h.updateTime)
-	}
-
-	updateMetric := func(col prometheus.Collector, wr *wrapper) {
-		if needDeleteMetric(wr) {
-			h.registry.Unregister(col)
-			wr.active = false
-		}
-	}
-
-	updateMetricVec := func(vec *prometheus.MetricVec, wr *wrapper) bool {
-		if needDeleteMetric(wr) {
-			vec.DeleteLabelValues(wr.labels...)
-			wr.active = false
-		}
-		return !wr.active
-	}
-
 	for _, cw := range h.metrics.counters {
-		updateMetric(cw.counter, &cw.wrapper)
+		h.updateMetric(cw.counter, &cw.wrapper)
 	}
 
 	for _, gw := range h.metrics.gauges {
-		updateMetric(gw.gauge, &gw.wrapper)
+		h.updateMetric(gw.gauge, &gw.wrapper)
 	}
 
 	for _, hw := range h.metrics.histograms {
-		updateMetric(hw.histogram, &hw.wrapper)
+		h.updateMetric(hw.histogram, &hw.wrapper)
 	}
 
 	for _, cvw := range h.metrics.counterVecs {
 		for _, cw := range cvw.elems {
-			if updateMetricVec(cvw.vec.MetricVec, &cw.wrapper) {
-				cvw.deleteElem(cw.counter)
-			}
+			updateMetricVec(h, cvw.vec.MetricVec, &cvw.wrapperVec, cw.counter, &cw.wrapper)
 		}
 	}
 
 	for _, gvw := range h.metrics.gaugeVecs {
 		for _, gw := range gvw.elems {
-			if updateMetricVec(gvw.vec.MetricVec, &gw.wrapper) {
-				gvw.deleteElem(gw.gauge)
-			}
+			updateMetricVec(h, gvw.vec.MetricVec, &gvw.wrapperVec, gw.gauge, &gw.wrapper)
 		}
 	}
 
 	for _, hvw := range h.metrics.histogramVecs {
 		for _, hw := range hvw.elems {
-			if updateMetricVec(hvw.vec.MetricVec, &hw.wrapper) {
-				hvw.deleteElem(hw.histogram)
-			}
+			updateMetricVec(h, hvw.vec.MetricVec, &hvw.wrapperVec, hw.histogram, &hw.wrapper)
 		}
 	}
-
-	h.updateTime = time.Now()
 }
 
 func (h *Holder) registerMetrics() {
-	for {
-		select {
-		case col := <-h.regChan:
-			h.registry.MustRegister(col)
-		case <-h.regChanStop:
-			return
-		}
+	for col := range h.regChan {
+		h.registry.MustRegister(col)
 	}
 }
 
 func (h *Holder) genTime() {
 	h.genTimeTicker = time.NewTicker(genTimeInterval)
+	nowTime = time.Now()
 	for {
 		select {
-		case <-h.genTimeTicker.C:
-			nowTime = time.Now()
+		case t := <-h.genTimeTicker.C:
+			nowTime = t
 		case <-h.genTimeStop:
 			h.genTimeTicker.Stop()
 			return

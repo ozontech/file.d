@@ -156,6 +156,10 @@ func (w *wrapper) update(col prometheus.Collector) {
 	}
 }
 
+func (w *wrapper) isObsolete(holdDuration time.Duration) bool {
+	return w.active && nowTime.Sub(w.changeTime) > holdDuration
+}
+
 func newCounterWrapper(c prometheus.Counter, r chan<- prometheus.Collector, labels ...string) *CounterWrapper {
 	return &CounterWrapper{
 		counter: c,

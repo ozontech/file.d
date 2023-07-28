@@ -37,8 +37,9 @@ const (
 
 	EventSeqIDError = uint64(0)
 
-	antispamUnbanIterations    = 4
-	metricHolderUpdateInterval = time.Minute * 30
+	antispamUnbanIterations = 4
+
+	metricHoldDuration = time.Minute * 30
 )
 
 type finalizeFn = func(event *Event, notifyInput bool, backEvent bool)
@@ -161,7 +162,7 @@ func New(name string, settings *Settings, registry *prometheus.Registry) *Pipeli
 			m:  make(map[string]*actionMetric),
 			mu: new(sync.RWMutex),
 		},
-		metricHolder: metric.NewHolder(registry, metricHolderUpdateInterval),
+		metricHolder: metric.NewHolder(registry, metricHoldDuration),
 		streamer:     newStreamer(settings.EventTimeout),
 		eventPool:    newEventPool(settings.Capacity, settings.AvgEventSize),
 		antispamer: antispam.NewAntispammer(antispam.Options{

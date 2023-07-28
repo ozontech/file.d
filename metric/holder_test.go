@@ -10,14 +10,15 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-const testHolderUpdateInterval = 3 * time.Second
+const testHoldDuration = 3 * time.Second
 
 func newTestHolder() *Holder {
-	return NewHolder(prometheus.NewRegistry(), testHolderUpdateInterval)
+	return NewHolder(prometheus.NewRegistry(), testHoldDuration)
 }
 
 func TestHolder_Maintenance(t *testing.T) {
 	h := newTestHolder()
+	h.Start()
 
 	counter := prometheus.NewCounter(prometheus.CounterOpts{
 		Namespace: "test_holder",
@@ -48,14 +49,13 @@ func TestHolder_Maintenance(t *testing.T) {
 	assert.Equal(t, float64(1), testutil.ToFloat64(counterVecWrapper.WithLabelValues("val1").counter))
 	assert.Equal(t, float64(2), testutil.ToFloat64(counterVecWrapper.WithLabelValues("val2").counter))
 
-	h.Start()
-	time.Sleep(time.Second)
+	time.Sleep(testHoldDuration/2 + 100*time.Millisecond)
 
 	// use one metric, so it is not will be removed by holder
 	counterVecWrapper.WithLabelValues("val1").Inc()
 
-	time.Sleep(testHolderUpdateInterval)
-	h.updateMetrics()
+	time.Sleep(testHoldDuration / 2)
+	h.Maintenance()
 
 	// counterWrapper became inactive (unregister by holder), but its value is preserved.
 	assert.Equal(t, float64(2), testutil.ToFloat64(counterWrapper.counter))
@@ -64,8 +64,6 @@ func TestHolder_Maintenance(t *testing.T) {
 	// counterVecWrapper lost metric with label `val2`, its remove by holder.
 	assert.Equal(t, 1, testutil.CollectAndCount(counterVecWrapper.vec))
 	assert.Equal(t, float64(2), testutil.ToFloat64(counterVecWrapper.WithLabelValues("val1").counter))
-
-	time.Sleep(time.Second)
 
 	// use other metrics to make them active again
 	counterWrapper.Add(3)
