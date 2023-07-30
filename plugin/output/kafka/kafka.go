@@ -189,7 +189,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 		if p.config.UseTopicField {
 			fieldValue := event.Root.Dig(p.config.TopicField).AsString()
 			if fieldValue != "" {
-				topic = pipeline.CloneString(fieldValue)
+				topic = strings.Clone(fieldValue)
 			}
 		}
 

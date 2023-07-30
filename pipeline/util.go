@@ -11,16 +11,6 @@ import (
 	insaneJSON "github.com/vitkovskii/insane-json"
 )
 
-// Clone deeply copies string
-func CloneString(s string) string {
-	if s == "" {
-		return ""
-	}
-	b := make([]byte, len(s))
-	copy(b, s)
-	return *(*string)(unsafe.Pointer(&b))
-}
-
 // ByteToStringUnsafe converts byte slice to string without memory copy
 // This creates mutable string, thus unsafe method, should be used with caution (never modify provided byte slice)
 func ByteToStringUnsafe(b []byte) string {

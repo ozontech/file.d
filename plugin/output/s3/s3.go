@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -339,7 +340,7 @@ func (p *Plugin) Out(event *pipeline.Event) {
 
 // getBucketName decides which s3 bucket shall receive event.
 func (p *Plugin) getBucketName(event *pipeline.Event) string {
-	bucketName := pipeline.CloneString(event.Root.Dig(p.config.BucketEventField).AsString())
+	bucketName := strings.Clone(event.Root.Dig(p.config.BucketEventField).AsString())
 
 	// no BucketEventField in message, it's DefaultBucket, showtime
 	if bucketName == "" {
