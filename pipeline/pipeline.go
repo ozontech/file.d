@@ -612,7 +612,7 @@ func (p *Pipeline) expandProcs() {
 	}
 
 	for x := 0; x < int(to-from); x++ {
-		proc := p.newProc(p.Procs[from].id + x)
+		proc := p.newProc(p.Procs[from-1].id + x)
 		p.Procs = append(p.Procs, proc)
 		proc.start(p.actionParams, p.logger.Sugar())
 	}

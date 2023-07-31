@@ -16,9 +16,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        flags: [ '' ]
         go: [ '1.20' ]
         arch: [ amd64 ]
         runner: [ ubuntu-latest ]
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+            flags: -race
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -40,7 +45,7 @@ jobs:
           GOARCH: ${{ matrix.arch }}
           GOFLAGS: ${{ matrix.flags }}
           LOG_LEVEL: error
-        run: go test -coverprofile=profile.out -covermode=atomic -coverpkg=./... ./...
+        run: go test -coverprofile=profile.out -covermode=atomic -v -coverpkg=./... ./...
 
       - name: Upload artifact
         uses: actions/upload-artifact@v3
@@ -49,6 +54,13 @@ jobs:
           path: profile.out
           if-no-files-found: error
           retention-days: 1
+
+      - name: Run benchmarks
+        if: ${{ !contains(matrix.flags, '-race') }}
+        env:
+          GOARCH: ${{ matrix.arch }}
+          GOFLAGS: ${{ matrix.flags }}
+        run: go test --timeout=15m --benchtime=3x --benchmem --bench="BenchmarkLightJsonReadPar" --run=$^ ./plugin/input/file/...
 
   e2e_test:
     runs-on: ubuntu-latest

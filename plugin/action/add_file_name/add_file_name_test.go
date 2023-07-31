@@ -1,6 +1,7 @@
 package add_file_name
 
 import (
+	"strings"
 	"sync"
 	"testing"
 
@@ -15,9 +16,9 @@ func TestModify(t *testing.T) {
 	wg := &sync.WaitGroup{}
 	wg.Add(2)
 
-	outEvents := make([]*pipeline.Event, 0)
+	outEvents := make([]string, 0)
 	output.SetOutFn(func(e *pipeline.Event) {
-		outEvents = append(outEvents, e)
+		outEvents = append(outEvents, strings.Clone(e.Root.Dig("file").AsString()))
 		wg.Done()
 	})
 
@@ -28,6 +29,6 @@ func TestModify(t *testing.T) {
 	p.Stop()
 
 	assert.Equal(t, 2, len(outEvents), "wrong out events count")
-	assert.Equal(t, "my_file", outEvents[0].Root.Dig("file").AsString(), "wrong field value")
-	assert.Equal(t, "my_file", outEvents[1].Root.Dig("file").AsString(), "wrong field value")
+	assert.Equal(t, "my_file", outEvents[0], "wrong field value")
+	assert.Equal(t, "my_file", outEvents[1], "wrong field value")
 }
