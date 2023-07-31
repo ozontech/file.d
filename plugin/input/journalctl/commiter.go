@@ -60,10 +60,6 @@ func (a *AsyncCommiter) Commit(event *pipeline.Event) {
 	a.Lock()
 	defer a.Unlock()
 
-	if !a.debouncer.Ready() {
-		return
-	}
-
 	a.debouncer.Do(func() {
 		a.save(offInfo)
 	})

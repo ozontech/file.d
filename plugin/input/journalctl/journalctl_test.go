@@ -3,19 +3,16 @@
 package journalctl
 
 import (
-	"path"
 	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/plugin/output/devnull"
 	"github.com/ozontech/file.d/test"
 	"github.com/stretchr/testify/assert"
-	insaneJSON "github.com/vitkovskii/insane-json"
 )
 
 func setInput(p *pipeline.Pipeline, config *Config) {
@@ -109,29 +106,4 @@ func TestOffsets(t *testing.T) {
 	for _, cnt := range cursors {
 		assert.Equal(t, 1, cnt)
 	}
-}
-
-func BenchmarkName(b *testing.B) {
-	p := Plugin{config: &Config{
-		OffsetsFile: path.Join(b.TempDir(), "offsets.yaml"),
-	}}
-	p.commiter = NewSyncCommiter(p.sync)
-
-	event := &pipeline.Event{Root: insaneJSON.Spawn()}
-	defer insaneJSON.Release(event.Root)
-
-	p.config.PersistenceMode_ = persistenceModeSync
-	b.Run("sync", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
-			p.Commit(event)
-		}
-	})
-
-	p.commiter = NewAsyncCommiter(NewDebouncer(time.Second), p.sync)
-	p.config.PersistenceMode_ = persistenceModeAsync
-	b.Run("async", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
-			p.Commit(event)
-		}
-	})
 }
