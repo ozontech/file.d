@@ -101,10 +101,6 @@ func renameFile(oldFile string, newFile string) {
 }
 
 func closeFile(f *os.File) {
-	if err := f.Sync(); err != nil {
-		panic(err)
-	}
-
 	if err := f.Close(); err != nil {
 		panic(err.Error())
 	}
@@ -805,6 +801,7 @@ func TestReadManyPreparedFilesRace(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skip long tests in short mode")
 	}
+
 	lineCount := 2
 	blockCount := 128 * 128
 	fileCount := 32

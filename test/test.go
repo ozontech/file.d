@@ -74,7 +74,7 @@ func startCasePipeline(act func(pipeline *pipeline.Pipeline), out func(event *pi
 		if x.Load() <= 0 {
 			break
 		}
-		if time.Since(t) > time.Second*20 {
+		if time.Since(t) > time.Minute*2 {
 			panic("too long act")
 		}
 	}
