@@ -79,23 +79,33 @@ func TestEnrichment(t *testing.T) {
 	putMeta(podInfo)
 	selfNodeName = "node_1"
 
-	var event *pipeline.Event = nil
-	filename := getLogFilename("/k8s-logs", item)
+	var (
+		k8sPod           string
+		k8sNamespace     string
+		k8sContainer     string
+		k8sNode          string
+		k8sNodeLabelZone string
+	)
 	input.SetCommitFn(func(e *pipeline.Event) {
-		event = e
+		k8sPod = strings.Clone(e.Root.Dig("k8s_pod").AsString())
+		k8sNamespace = strings.Clone(e.Root.Dig("k8s_namespace").AsString())
+		k8sContainer = strings.Clone(e.Root.Dig("k8s_container").AsString())
+		k8sNode = strings.Clone(e.Root.Dig("k8s_node").AsString())
+		k8sNodeLabelZone = strings.Clone(e.Root.Dig("k8s_node_label_zone").AsString())
 		wg.Done()
 	})
 
+	filename := getLogFilename("/k8s-logs", item)
 	input.In(0, filename, 0, []byte(`{"time":"time","log":"log\n"}`))
 
 	wg.Wait()
 	p.Stop()
 
-	assert.Equal(t, "advanced-logs-checker-1566485760-trtrq", event.Root.Dig("k8s_pod").AsString(), "wrong event field")
-	assert.Equal(t, "sre", event.Root.Dig("k8s_namespace").AsString(), "wrong event field")
-	assert.Equal(t, "duty-bot", event.Root.Dig("k8s_container").AsString(), "wrong event field")
-	assert.Equal(t, "node_1", event.Root.Dig("k8s_node").AsString(), "wrong event field")
-	assert.Equal(t, "z34", event.Root.Dig("k8s_node_label_zone").AsString(), "wrong event field")
+	assert.Equal(t, "advanced-logs-checker-1566485760-trtrq", k8sPod, "wrong event field")
+	assert.Equal(t, "sre", k8sNamespace, "wrong event field")
+	assert.Equal(t, "duty-bot", k8sContainer, "wrong event field")
+	assert.Equal(t, "node_1", k8sNode, "wrong event field")
+	assert.Equal(t, "z34", k8sNodeLabelZone, "wrong event field")
 }
 
 func TestAllowedLabels(t *testing.T) {
