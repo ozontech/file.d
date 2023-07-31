@@ -10,7 +10,7 @@ require (
 	github.com/alecthomas/kingpin v2.2.6+incompatible
 	github.com/alecthomas/units v0.0.0-20190924025748-f65c72e2690d
 	github.com/alicebob/miniredis/v2 v2.30.4
-	github.com/bitly/go-simplejson v0.5.0
+	github.com/bitly/go-simplejson v0.5.1
 	github.com/euank/go-kmsg-parser v2.0.0+incompatible
 	github.com/go-redis/redis v6.15.9+incompatible
 	github.com/golang/mock v1.6.0
@@ -44,7 +44,6 @@ require (
 	github.com/andybalholm/brotli v1.0.5 // indirect
 	github.com/benbjohnson/clock v1.1.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
-	github.com/bmizerany/assert v0.0.0-20160611221934-b7ed37b82869 // indirect
 	github.com/cenkalti/backoff/v3 v3.0.0 // indirect
 	github.com/cespare/xxhash/v2 v2.1.1 // indirect
 	github.com/cilium/ebpf v0.9.1 // indirect
