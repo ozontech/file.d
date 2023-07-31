@@ -144,7 +144,7 @@ func newWrapper(r chan<- prometheus.Collector, labels ...string) wrapper {
 }
 
 func (w *wrapper) update(col prometheus.Collector) {
-	w.changeTime = nowTime
+	w.changeTime = getNowTime()
 	if !w.active {
 		// Need re-register only metrics without labels.
 		// MetricVecs have a shared metric-descriptor,
@@ -157,7 +157,7 @@ func (w *wrapper) update(col prometheus.Collector) {
 }
 
 func (w *wrapper) isObsolete(holdDuration time.Duration) bool {
-	return w.active && nowTime.Sub(w.changeTime) > holdDuration
+	return w.active && getNowTime().Sub(w.changeTime) > holdDuration
 }
 
 func newCounterWrapper(c prometheus.Counter, r chan<- prometheus.Collector, labels ...string) *CounterWrapper {

@@ -18,7 +18,10 @@ func newTestHolder() *Holder {
 
 func TestHolder_Maintenance(t *testing.T) {
 	h := newTestHolder()
-	h.Start()
+	go h.registerMetrics()
+
+	startTime := time.Now()
+	setNowTime(startTime)
 
 	counter := prometheus.NewCounter(prometheus.CounterOpts{
 		Namespace: "test_holder",
@@ -49,12 +52,12 @@ func TestHolder_Maintenance(t *testing.T) {
 	assert.Equal(t, float64(1), testutil.ToFloat64(counterVecWrapper.WithLabelValues("val1").counter))
 	assert.Equal(t, float64(2), testutil.ToFloat64(counterVecWrapper.WithLabelValues("val2").counter))
 
-	time.Sleep(testHoldDuration/2 + 100*time.Millisecond)
+	setNowTime(startTime.Add(testHoldDuration - time.Second))
 
 	// use one metric, so it is not will be removed by holder
 	counterVecWrapper.WithLabelValues("val1").Inc()
 
-	time.Sleep(testHoldDuration / 2)
+	setNowTime(startTime.Add(testHoldDuration + time.Second))
 	h.Maintenance()
 
 	// counterWrapper became inactive (unregister by holder), but its value is preserved.
@@ -76,7 +79,7 @@ func TestHolder_Maintenance(t *testing.T) {
 	assert.Equal(t, float64(2), testutil.ToFloat64(counterVecWrapper.WithLabelValues("val1").counter))
 	assert.Equal(t, float64(1), testutil.ToFloat64(counterVecWrapper.WithLabelValues("val2").counter))
 
-	h.Stop()
+	close(h.regChan)
 }
 
 func TestHolder_AddCounter(t *testing.T) {

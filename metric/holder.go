@@ -9,7 +9,22 @@ import (
 
 const genTimeInterval = time.Second
 
-var nowTime time.Time
+var (
+	nowTime   time.Time
+	nowTimeMx = new(sync.RWMutex)
+)
+
+func setNowTime(t time.Time) {
+	nowTimeMx.Lock()
+	nowTime = t
+	nowTimeMx.Unlock()
+}
+
+func getNowTime() time.Time {
+	nowTimeMx.RLock()
+	defer nowTimeMx.RUnlock()
+	return nowTime
+}
 
 type Holder struct {
 	registry     *prometheus.Registry
@@ -243,11 +258,11 @@ func (h *Holder) registerMetrics() {
 
 func (h *Holder) genTime() {
 	h.genTimeTicker = time.NewTicker(genTimeInterval)
-	nowTime = time.Now()
+	setNowTime(time.Now())
 	for {
 		select {
 		case t := <-h.genTimeTicker.C:
-			nowTime = t
+			setNowTime(t)
 		case <-h.genTimeStop:
 			h.genTimeTicker.Stop()
 			return

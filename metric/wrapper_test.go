@@ -2,6 +2,7 @@ package metric
 
 import (
 	"testing"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
@@ -54,6 +55,9 @@ func TestWrapper_update(t *testing.T) {
 			checkChan: false,
 		},
 	}
+
+	setNowTime(time.Now())
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			w := &wrapper{
@@ -68,7 +72,7 @@ func TestWrapper_update(t *testing.T) {
 				}()
 			}
 			w.update(tt.col)
-			assert.Equal(t, nowTime, w.changeTime)
+			assert.Equal(t, getNowTime(), w.changeTime)
 			assert.Equal(t, true, w.active)
 		})
 	}
