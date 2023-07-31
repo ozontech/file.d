@@ -36,7 +36,7 @@ func (a *SyncCommiter) Shutdown() {
 }
 
 type AsyncCommiter struct {
-	sync.Mutex
+	mu sync.Mutex
 
 	offset    atomic.Pointer[offsetInfo]
 	debouncer Debouncer
@@ -57,8 +57,8 @@ func (a *AsyncCommiter) Commit(event *pipeline.Event) {
 	a.offset.Store(&offInfo)
 
 	// save offsets
-	a.Lock()
-	defer a.Unlock()
+	a.mu.Lock()
+	defer a.mu.Unlock()
 
 	a.debouncer.Do(func() {
 		a.save(offInfo)
@@ -66,8 +66,8 @@ func (a *AsyncCommiter) Commit(event *pipeline.Event) {
 }
 
 func (a *AsyncCommiter) Shutdown() {
-	a.Lock()
-	defer a.Unlock()
+	a.mu.Lock()
+	defer a.mu.Unlock()
 
 	a.debouncer.Do(func() {
 		a.save(*a.offset.Load())
