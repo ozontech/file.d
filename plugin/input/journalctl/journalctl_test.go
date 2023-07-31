@@ -114,8 +114,8 @@ func TestOffsets(t *testing.T) {
 func BenchmarkName(b *testing.B) {
 	p := Plugin{config: &Config{
 		OffsetsFile: path.Join(b.TempDir(), "offsets.yaml"),
-	}, offsetsDebouncer: NewDebouncer(time.Millisecond * 200)}
-	p.offInfo.Store(&offsetInfo{})
+	}}
+	p.commiter = NewSyncCommiter(p.sync)
 
 	event := &pipeline.Event{Root: insaneJSON.Spawn()}
 	defer insaneJSON.Release(event.Root)
@@ -127,6 +127,7 @@ func BenchmarkName(b *testing.B) {
 		}
 	})
 
+	p.commiter = NewAsyncCommiter(NewDebouncer(time.Second), p.sync)
 	p.config.PersistenceMode_ = persistenceModeAsync
 	b.Run("async", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
