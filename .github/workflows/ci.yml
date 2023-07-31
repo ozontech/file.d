@@ -45,7 +45,7 @@ jobs:
           GOARCH: ${{ matrix.arch }}
           GOFLAGS: ${{ matrix.flags }}
           LOG_LEVEL: error
-        run: go test -coverprofile=profile.out -covermode=atomic -coverpkg=./... ./...
+        run: go test -coverprofile=profile.out -covermode=atomic -v -coverpkg=./... ./...
 
       - name: Upload artifact
         uses: actions/upload-artifact@v3

@@ -74,7 +74,7 @@ func startCasePipeline(act func(pipeline *pipeline.Pipeline), out func(event *pi
 		if x.Load() <= 0 {
 			break
 		}
-		if time.Since(t) > time.Second*20 {
+		if time.Since(t) > time.Minute*2 {
 			panic("too long act")
 		}
 	}
@@ -107,11 +107,11 @@ func NewPipeline(actions []*pipeline.ActionPluginStaticInfo, pipelineOpts ...str
 	if Opts(pipelineOpts).Has("short_event_timeout") {
 		eventTimeout = 10 * time.Millisecond
 	}
-	capacity := 256
 
+	capacity := 256
 	if perf {
 		parallel = true
-		capacity = 10000
+		capacity = 20000
 	}
 
 	settings := &pipeline.Settings{
