@@ -3,10 +3,10 @@ package http
 import (
 	"io"
 	"net/http"
+	"strings"
 	"sync"
 
 	"github.com/ozontech/file.d/fd"
-	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/tls"
@@ -80,16 +80,18 @@ const (
 )
 
 type Plugin struct {
-	config     *Config
+	config           *Config
+	uniqBearerTokens map[string]struct{}
+
 	params     *pipeline.InputPluginParams
-	readBuffs  *sync.Pool
-	eventBuffs *sync.Pool
+	readBuffs  sync.Pool
+	eventBuffs sync.Pool
 	controller pipeline.InputPluginController
 	server     *http.Server
 	sourceIDs  []pipeline.SourceID
 	sourceSeq  pipeline.SourceID
-	mu         *sync.Mutex
-	logger     *zap.SugaredLogger
+	mu         sync.Mutex
+	logger     *zap.Logger
 
 	// plugin metrics
 
@@ -117,6 +119,31 @@ type Config struct {
 	// > CA private key in PEM encoding. This can be a path or the content of the key.
 	// > If both ca_cert and private_key are set, the server starts accepting connections in TLS mode.
 	PrivateKey string `json:"private_key" default:""` // *
+
+	// > @3@4@5@6
+	// >
+	// > Auth config.
+	// > Disabled by default.
+	// > See AuthConfig for details.
+	// > You can use 'debug' log level to debug authorizations.
+	Auth AuthConfig `json:"auth" child:"true"`
+}
+
+type AuthStrategy byte
+
+const (
+	StrategyUnknown AuthStrategy = iota
+	StrategyDisabled
+	StrategyBasic
+	StrategyBearer
+)
+
+type AuthConfig struct {
+	Strategy  string `json:"strategy" default:"disabled" options:"disabled|basic|bearer"`
+	Strategy_ AuthStrategy
+	Passwords map[string]string `json:"passwords"`
+	Tokens    []string          `json:"tokens"`
+	//WithMeta  bool              `json:"with_meta"` // TODO: allow to set meta to the event
 }
 
 func init() {
@@ -133,12 +160,19 @@ func Factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginParams) {
 	p.config = config.(*Config)
 	p.params = params
-	p.logger = params.Logger
+	p.logger = params.Logger.Desugar()
 	p.registerMetrics(params.MetricCtl)
 
-	p.readBuffs = &sync.Pool{}
-	p.eventBuffs = &sync.Pool{}
-	p.mu = &sync.Mutex{}
+	switch p.config.Auth.Strategy_ {
+	case StrategyBearer:
+		p.uniqBearerTokens = make(map[string]struct{}, len(p.config.Auth.Tokens))
+		for _, token := range p.config.Auth.Tokens {
+			p.uniqBearerTokens[token] = struct{}{}
+		}
+	case StrategyUnknown:
+		p.logger.Fatal("unknown strategy, available: basic, bearer, disabled")
+	}
+
 	p.controller = params.Controller
 	p.controller.DisableStreams()
 	p.sourceIDs = make([]pipeline.SourceID, 0)
@@ -175,7 +209,7 @@ func (p *Plugin) listenHTTP() {
 	}
 
 	if err != nil {
-		logger.Fatalf("input plugin http listening error address=%q: %s", p.config.Address, err.Error())
+		p.logger.Fatal("input plugin http listening error", zap.String("addr", p.config.Address), zap.Error(err))
 	}
 }
 
@@ -215,21 +249,34 @@ func (p *Plugin) putSourceID(x pipeline.SourceID) {
 }
 
 func (p *Plugin) serve(w http.ResponseWriter, r *http.Request) {
+	ok := p.auth(r)
+	if !ok {
+		p.logger.Debug("auth failed",
+			zap.String("user_agent", r.UserAgent()),
+			zap.Any("headers", r.Header),
+			zap.String("remote_addr", r.RemoteAddr),
+		)
+		http.Error(w, "auth failed", http.StatusUnauthorized)
+		return
+	}
+
 	readBuff := p.newReadBuff()
 	eventBuff := p.newEventBuffs()
 
 	sourceID := p.getSourceID()
 	defer p.putSourceID(sourceID)
 
+	total := 0
 	for {
 		n, err := r.Body.Read(readBuff)
+		total += n
 		if n == 0 && err == io.EOF {
 			break
 		}
 
 		if err != nil && err != io.EOF {
 			p.httpErrorMetric.WithLabelValues().Inc()
-			logger.Errorf("http input read error: %s", err.Error())
+			p.logger.Error("http input read error", zap.Error(err))
 			break
 		}
 
@@ -242,14 +289,13 @@ func (p *Plugin) serve(w http.ResponseWriter, r *http.Request) {
 
 	_ = r.Body.Close()
 
-	// https://staticcheck.io/docs/checks/#SA6002
 	p.readBuffs.Put(&readBuff)
 	p.eventBuffs.Put(&eventBuff)
 
 	_, err := w.Write(result)
 	if err != nil {
 		p.httpErrorMetric.WithLabelValues().Inc()
-		logger.Errorf("can't write response: %s", err.Error())
+		p.logger.Error("can't write response", zap.Error(err))
 	}
 }
 
@@ -295,4 +341,36 @@ func (p *Plugin) Commit(_ *pipeline.Event) {
 // PassEvent decides pass or discard event.
 func (p *Plugin) PassEvent(_ *pipeline.Event) bool {
 	return true
+}
+
+func (p *Plugin) auth(req *http.Request) bool {
+	switch p.config.Auth.Strategy_ {
+	case StrategyDisabled:
+		return true
+	case StrategyBasic:
+		return p.authBasic(req)
+	case StrategyBearer:
+		return p.authBearer(req)
+	default:
+		panic("unreachable")
+	}
+}
+
+func (p *Plugin) authBasic(req *http.Request) bool {
+	username, password, ok := req.BasicAuth()
+	if !ok {
+		return false
+	}
+	return p.config.Auth.Passwords[username] == password
+}
+
+func (p *Plugin) authBearer(req *http.Request) bool {
+	authHeader := req.Header.Get("Authorization")
+	const prefix = "Bearer "
+	if len(authHeader) < len(prefix)+1 || !strings.HasPrefix(authHeader, prefix) {
+		return false
+	}
+	token := authHeader[len(prefix):]
+	_, ok := p.uniqBearerTokens[token]
+	return ok
 }
