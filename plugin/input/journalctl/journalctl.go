@@ -3,8 +3,9 @@
 package journalctl
 
 import (
-	"sync/atomic"
+	"time"
 
+	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/offset"
@@ -21,9 +22,10 @@ type Plugin struct {
 	params        *pipeline.InputPluginParams
 	config        *Config
 	reader        *journalReader
-	offInfo       atomic.Pointer[offsetInfo]
 	currentOffset int64
 	logger        *zap.Logger
+
+	commiter Commiter
 
 	//  plugin metrics
 
@@ -32,10 +34,17 @@ type Plugin struct {
 	readerErrorsMetric        *prometheus.CounterVec
 }
 
-type Config struct {
-	// ! config-params
-	// ^ config-params
+type persistenceMode int
 
+const (
+	// ! "persistenceMode" #1 /`([a-z]+)`/
+	persistenceModeAsync persistenceMode = iota // * `async` – it periodically saves the offsets using `async_interval`. The saving operation is skipped if offsets haven't been changed. Suitable, in most cases, it guarantees at least one delivery and makes almost no overhead.
+	persistenceModeSync                         // * `sync` – saves offsets as part of event commitment. It's very slow but excludes the possibility of event duplication in extreme situations like power loss.
+)
+
+// ! config-params
+// ^ config-params
+type Config struct {
 	// > @3@4@5@6
 	// >
 	// > The filename to store offsets of processed messages.
@@ -51,6 +60,24 @@ type Config struct {
 
 	// for testing mostly
 	MaxLines int `json:"max_lines"`
+
+	// > @3@4@5@6
+	// >
+	// > It defines how to save the offsets file:
+	// > @persistenceMode|comment-list
+	// >
+	// > Save operation takes three steps:
+	// > *  Write the temporary file with all offsets;
+	// > *  Call `fsync()` on it;
+	// > *  Rename the temporary file to the original one.
+	PersistenceMode  string `json:"persistence_mode" default:"async" options:"async|sync"` // *
+	PersistenceMode_ persistenceMode
+
+	// > @3@4@5@6
+	// >
+	// > Offsets saving interval. Only used if `persistence_mode` is set to `async`.
+	AsyncInterval  cfg.Duration `json:"async_interval" default:"1s" parse:"duration"`
+	AsyncInterval_ time.Duration
 }
 
 type offsetInfo struct {
@@ -91,7 +118,15 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 		p.offsetErrorsMetric.WithLabelValues().Inc()
 		p.logger.Error("can't load offset file", zap.Error(err))
 	}
-	p.offInfo.Store(offInfo)
+
+	if p.config.PersistenceMode_ == persistenceModeAsync {
+		if p.config.AsyncInterval_ < 0 {
+			p.logger.Fatal("invalid async interval", zap.Duration("interval", p.config.AsyncInterval_))
+		}
+		p.commiter = NewAsyncCommiter(NewDebouncer(p.config.AsyncInterval_), p.sync)
+	} else {
+		p.commiter = NewSyncCommiter(p.sync)
+	}
 
 	readConfig := &journalReaderConfig{
 		output:   p,
@@ -119,18 +154,14 @@ func (p *Plugin) Stop() {
 		p.logger.Error("can't stop journalctl cmd", zap.Error(err))
 	}
 
-	offsets := *p.offInfo.Load()
-	if err := offset.SaveYAML(p.config.OffsetsFile, offsets); err != nil {
-		p.offsetErrorsMetric.WithLabelValues().Inc()
-		p.logger.Error("can't save offset file", zap.Error(err))
-	}
+	p.commiter.Shutdown()
 }
 
 func (p *Plugin) Commit(event *pipeline.Event) {
-	offInfo := *p.offInfo.Load()
-	offInfo.set(pipeline.CloneString(event.Root.Dig("__CURSOR").AsString()))
-	p.offInfo.Store(&offInfo)
+	p.commiter.Commit(event)
+}
 
+func (p *Plugin) sync(offInfo offsetInfo) {
 	if err := offset.SaveYAML(p.config.OffsetsFile, offInfo); err != nil {
 		p.offsetErrorsMetric.WithLabelValues().Inc()
 		p.logger.Error("can't save offset file", zap.Error(err))
