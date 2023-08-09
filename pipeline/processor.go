@@ -65,9 +65,8 @@ type processor struct {
 	metricsValues []string
 }
 
-var id = 0
-
 func newProcessor(
+	id int,
 	metricsHolder *metricsHolder,
 	activeCounter *atomic.Int32,
 	output OutputPlugin,
@@ -86,8 +85,6 @@ func newProcessor(
 
 		metricsValues: make([]string, 0),
 	}
-
-	id++
 
 	return processor
 }
@@ -154,9 +151,11 @@ func (p *processor) processEvent(event *Event) (isPassed bool, e *Event) {
 		}
 		stream := event.stream
 
-		if p.doActions(event) {
+		passed, lastAction := p.doActions(event)
+		if passed {
 			return true, event
 		}
+		event = nil // this event can be returned to the pool
 
 		// no busy actions, so return.
 		if p.busyActionsTotal == 0 {
@@ -164,20 +163,19 @@ func (p *processor) processEvent(event *Event) (isPassed bool, e *Event) {
 		}
 
 		// there is busy action, waiting for next sequential event.
-		action := event.action
 		event = stream.blockGet()
 		if event.IsTimeoutKind() {
 			// pass timeout directly to plugin which requested next sequential event.
-			event.action = action
+			event.action = lastAction
 		}
 	}
 }
 
-func (p *processor) doActions(event *Event) (isPassed bool) {
+func (p *processor) doActions(event *Event) (isPassed bool, lastAction int) {
 	l := len(p.actions)
-	for index := int(event.action.Load()); index < l; index++ {
+	for index := event.action; index < l; index++ {
 		action := p.actions[index]
-		event.action.Store(int64(index))
+		event.action = index
 		p.countEvent(event, index, eventStatusReceived)
 
 		if !p.busyActions[index] && !event.IsTimeoutKind() {
@@ -200,25 +198,26 @@ func (p *processor) doActions(event *Event) (isPassed bool) {
 			// can't notify input here, because previous events may delay, and we'll get offset sequence corruption.
 			p.finalize(event, false, true)
 			p.actionWatcher.setEventAfter(index, event, eventStatusDiscarded)
-			return false
+			return false, index
 		case ActionCollapse:
 			p.countEvent(event, index, eventStatusCollapse)
 			p.tryMarkBusy(index)
 			// can't notify input here, because previous events may delay, and we'll get offset sequence corruption.
 			p.finalize(event, false, true)
 			p.actionWatcher.setEventAfter(index, event, eventStatusCollapse)
-			return false
+			return false, index
 		case ActionHold:
 			p.countEvent(event, index, eventStatusHold)
 			p.tryMarkBusy(index)
 
 			p.finalize(event, false, false)
 			p.actionWatcher.setEventAfter(index, event, eventStatusHold)
-			return false
+			return false, index
 		}
 	}
 
-	return true
+	// return the last action index as the event has passed all the actions
+	return true, l - 1
 }
 
 func (p *processor) tryMarkBusy(index int) {
@@ -336,8 +335,9 @@ func (p *processor) AddActionPlugin(info *ActionPluginInfo) {
 
 // Propagate flushes an event after ActionHold.
 func (p *processor) Propagate(event *Event) {
-	nextActionIdx := event.action.Inc()
-	p.tryResetBusy(int(nextActionIdx - 1))
+	event.action++
+	nextActionIdx := event.action
+	p.tryResetBusy(nextActionIdx - 1)
 	p.processSequence(event)
 }
 

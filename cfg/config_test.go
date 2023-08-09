@@ -35,11 +35,6 @@ type strDefault struct {
 	T string `default:"sync"`
 }
 
-type strDuration struct {
-	T  Duration `default:"5s" parse:"duration"`
-	T_ time.Duration
-}
-
 type strOptions struct {
 	T string `default:"async" options:"async|sync"`
 }
@@ -100,11 +95,30 @@ func TestParseDefault(t *testing.T) {
 }
 
 func TestParseDuration(t *testing.T) {
-	s := &strDuration{}
-	err := Parse(s, nil)
+	t.Parallel()
+	r := require.New(t)
 
-	assert.NoError(t, err, "shouldn't be an error")
-	assert.Equal(t, time.Second*5, s.T_, "wrong value")
+	t.Run("with_default", func(t *testing.T) {
+		t.Parallel()
+
+		s := &struct {
+			T  Duration `default:"5s" parse:"duration"`
+			T_ time.Duration
+		}{}
+		r.NoError(Parse(s, nil))
+		r.Equal(time.Second*5, s.T_)
+	})
+
+	t.Run("without_default", func(t *testing.T) {
+		t.Parallel()
+
+		s := &struct {
+			T  Duration `parse:"duration"`
+			T_ time.Duration
+		}{}
+		r.NoError(Parse(s, nil))
+		r.Equal(time.Duration(0), s.T_)
+	})
 }
 
 func TestParseOptionsOk(t *testing.T) {

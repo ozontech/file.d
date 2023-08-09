@@ -85,7 +85,7 @@ func pluginConfig(opts ...string) *Config {
 		OffsetsFile:         filepath.Join(offsetsDir, offsetsFile),
 		PersistenceMode:     "async",
 		OffsetsOp:           op,
-		MaintenanceInterval: "100ms",
+		MaintenanceInterval: "5s",
 	}
 
 	_ = cfg.Parse(config, map[string]int{"gomaxprocs": runtime.GOMAXPROCS(0)})
@@ -101,8 +101,7 @@ func renameFile(oldFile string, newFile string) {
 }
 
 func closeFile(f *os.File) {
-	err := f.Close()
-	if err != nil {
+	if err := f.Close(); err != nil {
 		panic(err.Error())
 	}
 }
@@ -474,7 +473,7 @@ func TestReadContinue(t *testing.T) {
 			}
 
 			for i := range inputEvents {
-				require.Equal(t, inputEvents[i], outputEvents[i], "wrong event")
+				require.Equalf(t, inputEvents[i], outputEvents[i], "wrong event, all events: %v", inputEvents)
 			}
 
 			assertOffsetsAreEqual(t, genOffsetsContent(file, size), getContent(getConfigByPipeline(p).OffsetsFile))
@@ -802,6 +801,7 @@ func TestReadManyPreparedFilesRace(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skip long tests in short mode")
 	}
+
 	lineCount := 2
 	blockCount := 128 * 128
 	fileCount := 32
@@ -1012,7 +1012,7 @@ func TestTruncationSeq(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			lwg := &sync.WaitGroup{}
-			truncations := 0
+			truncations := atomic.Int32{}
 			size := atomic.Int32{}
 			name := createTempFile()
 			file, err := os.OpenFile(name, os.O_APPEND|os.O_WRONLY, perm)
@@ -1028,7 +1028,7 @@ func TestTruncationSeq(t *testing.T) {
 					if rand.Int()%300 == 0 {
 						time.Sleep(time.Millisecond * 200)
 					}
-					if truncations > truncationCount {
+					if int(truncations.Load()) > truncationCount {
 						break
 					}
 				}
@@ -1039,11 +1039,9 @@ func TestTruncationSeq(t *testing.T) {
 				for {
 					time.Sleep(50 * time.Millisecond)
 					if size.Load() > int32(truncationSize) {
-						fmt.Println("truncate")
 						size.Swap(0)
 						_ = file.Truncate(0)
-						truncations++
-						if truncations > truncationCount {
+						if int(truncations.Inc()) > truncationCount {
 							break
 						}
 					}

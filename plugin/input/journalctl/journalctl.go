@@ -3,11 +3,15 @@
 package journalctl
 
 import (
+	"strings"
+	"sync/atomic"
+
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/offset"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/prometheus/client_golang/prometheus"
+	"go.uber.org/zap"
 )
 
 /*{ introduction
@@ -15,10 +19,12 @@ Reads `journalctl` output.
 }*/
 
 type Plugin struct {
-	params  *pipeline.InputPluginParams
-	config  *Config
-	reader  *journalReader
-	offInfo *offsetInfo
+	params        *pipeline.InputPluginParams
+	config        *Config
+	reader        *journalReader
+	offInfo       atomic.Pointer[offsetInfo]
+	currentOffset int64
+	logger        *zap.Logger
 
 	//  plugin metrics
 
@@ -51,8 +57,6 @@ type Config struct {
 type offsetInfo struct {
 	Offset int64  `json:"offset"`
 	Cursor string `json:"cursor"`
-
-	current int64
 }
 
 func (o *offsetInfo) set(cursor string) {
@@ -61,8 +65,8 @@ func (o *offsetInfo) set(cursor string) {
 }
 
 func (p *Plugin) Write(bytes []byte) (int, error) {
-	p.params.Controller.In(0, "journalctl", p.offInfo.current, bytes, false)
-	p.offInfo.current++
+	p.params.Controller.In(0, "journalctl", p.currentOffset, bytes, false)
+	p.currentOffset++
 	return len(bytes), nil
 }
 
@@ -80,24 +84,26 @@ func Factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginParams) {
 	p.params = params
 	p.config = config.(*Config)
+	p.logger = params.Logger.Desugar()
 	p.registerMetrics(params.MetricCtl)
 
-	p.offInfo = &offsetInfo{}
-	if err := offset.LoadYAML(p.config.OffsetsFile, p.offInfo); err != nil {
+	offInfo := &offsetInfo{}
+	if err := offset.LoadYAML(p.config.OffsetsFile, offInfo); err != nil {
 		p.offsetErrorsMetric.WithLabelValues().Inc()
-		p.params.Logger.Error("can't load offset file: %s", err.Error())
+		p.logger.Error("can't load offset file", zap.Error(err))
 	}
+	p.offInfo.Store(offInfo)
 
 	readConfig := &journalReaderConfig{
 		output:   p,
-		cursor:   p.offInfo.Cursor,
+		cursor:   offInfo.Cursor,
 		maxLines: p.config.MaxLines,
-		logger:   p.params.Logger,
+		logger:   p.logger,
 	}
 	p.reader = newJournalReader(readConfig, p.readerErrorsMetric)
 	p.reader.args = append(p.reader.args, p.config.JournalArgs...)
 	if err := p.reader.start(); err != nil {
-		p.params.Logger.Error("failure during start: %s", err.Error())
+		p.logger.Fatal("failure during start", zap.Error(err))
 	}
 }
 
@@ -111,21 +117,24 @@ func (p *Plugin) Stop() {
 	err := p.reader.stop()
 	if err != nil {
 		p.journalCtlStopErrorMetric.WithLabelValues().Inc()
-		p.params.Logger.Error("can't stop journalctl cmd: %s", err.Error())
+		p.logger.Error("can't stop journalctl cmd", zap.Error(err))
 	}
 
-	if err := offset.SaveYAML(p.config.OffsetsFile, p.offInfo); err != nil {
+	offsets := *p.offInfo.Load()
+	if err := offset.SaveYAML(p.config.OffsetsFile, offsets); err != nil {
 		p.offsetErrorsMetric.WithLabelValues().Inc()
-		p.params.Logger.Error("can't save offset file: %s", err.Error())
+		p.logger.Error("can't save offset file", zap.Error(err))
 	}
 }
 
 func (p *Plugin) Commit(event *pipeline.Event) {
-	p.offInfo.set(event.OffsetString)
+	offInfo := *p.offInfo.Load()
+	offInfo.set(strings.Clone(event.OffsetString))
+	p.offInfo.Store(&offInfo)
 
-	if err := offset.SaveYAML(p.config.OffsetsFile, p.offInfo); err != nil {
+	if err := offset.SaveYAML(p.config.OffsetsFile, offInfo); err != nil {
 		p.offsetErrorsMetric.WithLabelValues().Inc()
-		p.params.Logger.Error("can't save offset file: %s", err.Error())
+		p.logger.Error("can't save offset file", zap.Error(err))
 	}
 }
 

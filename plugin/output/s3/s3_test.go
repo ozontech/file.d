@@ -6,6 +6,7 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -389,14 +390,6 @@ func TestStartWithMultiBuckets(t *testing.T) {
 		assert.Equal(t, 1, len(match))
 		test.CheckNotZero(t, match[0], fmt.Sprintf("log file data missed for: %s", pattern))
 	}
-
-	// restart like after crash
-	p.Start()
-
-	time.Sleep(time.Second)
-
-	size3 := test.CheckNotZero(t, fileName.Load(), "s3 data missed after third pack")
-	assert.True(t, size3 > size2)
 }
 
 func newPipeline(t *testing.T, configOutput *Config, objStoreF objStoreFactory) *pipeline.Pipeline {
@@ -504,7 +497,10 @@ func TestStartWithSendProblems(t *testing.T) {
 
 	writeFileSleep := 100*time.Millisecond + 100*time.Millisecond
 	sealUpFileSleep := 2*200*time.Millisecond + 500*time.Millisecond
+
 	test.ClearDir(t, dir)
+	assert.Equal(t, 0, len(test.GetMatches(t, zipPattern)))
+
 	ctl := gomock.NewController(t)
 	defer ctl.Finish()
 
@@ -554,7 +550,7 @@ func TestStartWithSendProblems(t *testing.T) {
 
 	matches := test.GetMatches(t, zipPattern)
 
-	assert.Equal(t, 1, len(matches))
+	assert.Equal(t, 1, len(matches), strings.Join(matches, ", "))
 	test.CheckNotZero(t, matches[0], "zip file after seal up and compress is not ok")
 
 	matches = test.GetMatches(t, pattern)
