@@ -9,7 +9,7 @@ require (
 	github.com/Shopify/sarama v1.38.1
 	github.com/alecthomas/kingpin v2.2.6+incompatible
 	github.com/alecthomas/units v0.0.0-20190924025748-f65c72e2690d
-	github.com/alicebob/miniredis/v2 v2.30.4
+	github.com/alicebob/miniredis/v2 v2.30.5
 	github.com/bitly/go-simplejson v0.5.1
 	github.com/euank/go-kmsg-parser v2.0.0+incompatible
 	github.com/go-redis/redis v6.15.9+incompatible
