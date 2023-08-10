@@ -378,7 +378,14 @@ func ParseField(v reflect.Value, vField reflect.Value, tField *reflect.StructFie
 
 		finalField := v.FieldByName(tField.Name + "_")
 		if finalField != (reflect.Value{}) {
-			finalField.SetInt(int64(idx))
+			switch finalField.Kind() {
+			case reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64, reflect.Int:
+				finalField.SetInt(int64(idx))
+			case reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uint:
+				finalField.SetUint(uint64(idx))
+			default:
+				return fmt.Errorf("final field must be an integer")
+			}
 		}
 	}
 

@@ -35,7 +35,7 @@ type strDefault struct {
 	T string `default:"sync"`
 }
 
-type PersistenceMode int8
+type PersistenceMode byte
 
 const (
 	PersistenceModeAsync PersistenceMode = iota
@@ -146,7 +146,7 @@ func TestParseOptionsErr(t *testing.T) {
 	err := Parse(s, nil)
 
 	assert.NotNil(t, err, "should be an error")
-	assert.Equal(t, PersistenceMode(-1), s.T_)
+	assert.Equal(t, PersistenceMode(0), s.T_)
 }
 
 func TestParseExpressionMul(t *testing.T) {
