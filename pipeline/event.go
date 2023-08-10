@@ -190,10 +190,6 @@ func (e *Event) String() string {
 	return fmt.Sprintf("kind=%s, action=%d, source=%d/%s, stream=%s, stage=%s, json=%s", e.kind.String(), e.action, e.SourceID, e.SourceName, e.streamName, e.stageStr(), e.Root.EncodeToString())
 }
 
-func (e *Event) CopyTo(event *Event) {
-	*event = *e
-}
-
 // channels are slower than this implementation by ~20%
 type eventPool struct {
 	capacity int
