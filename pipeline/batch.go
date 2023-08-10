@@ -21,8 +21,6 @@ const (
 type Batch struct {
 	Events []*Event
 
-	eventOffsets []*Event
-
 	// eventsSize contains total size of the Events in bytes
 	eventsSize int
 	seq        int64
@@ -200,10 +198,11 @@ func (b *Batcher) work() {
 func (b *Batcher) commitBatch(batch *Batch) BatchStatus {
 	batchSeq := batch.seq
 
-	// we sent a batch, so we don’t need buffers and insaneJSON.Root,
-	// so we can only copy the information we need and release the events
-	events := batch.copyEventOffsets(batch.Events)
-	b.opts.Controller.ReleaseEvents(batch.Events)
+	// When we sent the batch, we don’t need buffers and insaneJSON.Root.
+	// We can copy the information we need and release the events to reuse them.
+	// But at the moment it's hard to maintain -- plugins
+	// can reuse specific Event fields in the Commit func,
+	// like .Root, .streamName, .Buf
 
 	now := time.Now()
 	// let's restore the sequence of batches to make sure input will commit offsets incrementally
@@ -214,8 +213,8 @@ func (b *Batcher) commitBatch(batch *Batch) BatchStatus {
 	b.commitSeq++
 	b.commitWaitingSeconds.Observe(time.Since(now).Seconds())
 
-	for i := range events {
-		b.opts.Controller.Commit(events[i], false)
+	for i := range batch.Events {
+		b.opts.Controller.Commit(batch.Events[i])
 	}
 
 	status := batch.status
@@ -287,23 +286,4 @@ func (b *Batcher) Stop() {
 	b.mu.Unlock()
 
 	b.workersWg.Wait()
-}
-
-// copyEventOffsets copies events without Root and other reusable buffers.
-func (b *Batch) copyEventOffsets(events []*Event) []*Event {
-	if len(b.eventOffsets) < len(events) {
-		b.eventOffsets = make([]*Event, len(events))
-		prealloc := make([]Event, len(events)) // store the events nearly to be more cache friendly
-		for i := range b.eventOffsets {
-			b.eventOffsets[i] = &prealloc[i]
-		}
-	}
-
-	for i := range events {
-		events[i].CopyTo(b.eventOffsets[i])
-		b.eventOffsets[i].Buf = nil
-		b.eventOffsets[i].Root = nil
-	}
-
-	return b.eventOffsets[:len(events)]
 }
