@@ -50,5 +50,5 @@ func (p *Plugin) Out(event *pipeline.Event) {
 		p.outFn(event)
 	}
 
-	p.controller.Commit(event, true)
+	p.controller.Commit(event)
 }

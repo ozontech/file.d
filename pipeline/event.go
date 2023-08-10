@@ -17,14 +17,12 @@ type Event struct {
 	Root *insaneJSON.Root
 	Buf  []byte
 
-	SeqID  uint64
-	Offset int64
-	// Some input plugins have string offset (t.g. journalctl)
-	OffsetString string
-	SourceID     SourceID
-	SourceName   string
-	streamName   StreamName
-	Size         int // last known event size, it may not be actual
+	SeqID      uint64
+	Offset     int64
+	SourceID   SourceID
+	SourceName string
+	streamName StreamName
+	Size       int // last known event size, it may not be actual
 
 	action int
 	next   *Event
@@ -188,10 +186,6 @@ func (e *Event) String() string {
 		return ""
 	}
 	return fmt.Sprintf("kind=%s, action=%d, source=%d/%s, stream=%s, stage=%s, json=%s", e.kind.String(), e.action, e.SourceID, e.SourceName, e.streamName, e.stageStr(), e.Root.EncodeToString())
-}
-
-func (e *Event) CopyTo(event *Event) {
-	*event = *e
 }
 
 // channels are slower than this implementation by ~20%
