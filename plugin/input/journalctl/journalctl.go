@@ -137,3 +137,7 @@ func (p *Plugin) Commit(event *pipeline.Event) {
 		p.logger.Error("can't save offset file", zap.Error(err))
 	}
 }
+
+func (p *Plugin) PassEvent(event *pipeline.Event) bool {
+	return true
+}
