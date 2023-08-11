@@ -3,6 +3,7 @@
 package journalctl
 
 import (
+	"strings"
 	"sync/atomic"
 
 	"github.com/ozontech/file.d/fd"
@@ -128,7 +129,7 @@ func (p *Plugin) Stop() {
 
 func (p *Plugin) Commit(event *pipeline.Event) {
 	offInfo := *p.offInfo.Load()
-	offInfo.set(pipeline.CloneString(event.Root.Dig("__CURSOR").AsString()))
+	offInfo.set(strings.Clone(event.Root.Dig("__CURSOR").AsString()))
 	p.offInfo.Store(&offInfo)
 
 	if err := offset.SaveYAML(p.config.OffsetsFile, offInfo); err != nil {
@@ -137,7 +138,6 @@ func (p *Plugin) Commit(event *pipeline.Event) {
 	}
 }
 
-// PassEvent decides pass or discard event.
-func (p *Plugin) PassEvent(_ *pipeline.Event) bool {
+func (p *Plugin) PassEvent(event *pipeline.Event) bool {
 	return true
 }

@@ -64,6 +64,17 @@ jobs:
 
   e2e_test:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        flags: [ '' ]
+        go: [ '1.20' ]
+        arch: [ amd64 ]
+        runner: [ ubuntu-latest ]
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+            flags: -race
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -75,12 +86,16 @@ jobs:
           cache: true
 
       - name: Run Kafka
-        run: docker-compose -f ./e2e/kafka_file/docker-compose-kafka.yml up -d
+        run: docker compose -f ./e2e/kafka_file/docker-compose-kafka.yml up -d
 
       - name: Run Clickhouse
-        run: docker-compose -f ./e2e/file_clickhouse/docker-compose.yml up -d
+        run: docker compose -f ./e2e/file_clickhouse/docker-compose.yml up -d
 
       - name: E2E
+        env:
+          GOARCH: ${{ matrix.arch }}
+          GOFLAGS: ${{ matrix.flags }}
+          LOG_LEVEL: error
         run: go test ./e2e -coverprofile=profile_e2e.out -covermode=atomic -tags=e2e_new -timeout=3m -coverpkg=./...
 
       - name: Upload artifact

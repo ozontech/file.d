@@ -362,16 +362,30 @@ func ParseField(v reflect.Value, vField reflect.Value, tField *reflect.StructFie
 			return fmt.Errorf("options deals with strings only, but field %s has %s type", tField.Name, tField.Type.Name())
 		}
 
+		idx := -1
 		found := false
-		for _, part := range parts {
+		for i, part := range parts {
 			if vField.String() == part {
 				found = true
+				idx = i
 				break
 			}
 		}
 
 		if !found {
 			return fmt.Errorf("field %s should be one of %s, got=%s", tField.Name, tag, vField.String())
+		}
+
+		finalField := v.FieldByName(tField.Name + "_")
+		if finalField != (reflect.Value{}) {
+			switch finalField.Kind() {
+			case reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64, reflect.Int:
+				finalField.SetInt(int64(idx))
+			case reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uint:
+				finalField.SetUint(uint64(idx))
+			default:
+				return fmt.Errorf("final field must be an integer")
+			}
 		}
 	}
 
