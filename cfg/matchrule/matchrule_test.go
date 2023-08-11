@@ -8,6 +8,16 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func newRule(values []string, mode Mode, insensitive bool) Rule {
+	r := Rule{
+		Values:          values,
+		Mode:            mode,
+		CaseInsensitive: insensitive,
+	}
+	r.Prepare()
+	return r
+}
+
 func TestRule_Match(t *testing.T) {
 	t.Parallel()
 
@@ -19,49 +29,49 @@ func TestRule_Match(t *testing.T) {
 	}{
 		{
 			name:   "prefix ok",
-			except: NewRule([]string{`{"level":"error"`}, ModePrefix, false),
+			except: newRule([]string{`{"level":"error"`}, ModePrefix, false),
 			arg:    []byte(`{"level":"error","message":"some message"}`),
 			want:   true,
 		},
 		{
 			name:   "prefix not ok",
-			except: NewRule([]string{`{"level":"info"`}, ModePrefix, false),
+			except: newRule([]string{`{"level":"info"`}, ModePrefix, false),
 			arg:    []byte(`{"level":"error","message":"some message"}`),
 			want:   false,
 		},
 		{
 			name:   "prefix ignore case",
-			except: NewRule([]string{`{"level":"info"`}, ModePrefix, true),
+			except: newRule([]string{`{"level":"info"`}, ModePrefix, true),
 			arg:    []byte(`{"level":"INFO","message":"some message"}`),
 			want:   true,
 		},
 		{
 			name:   "suffix ok",
-			except: NewRule([]string{`"level":"error"}`}, ModeSuffix, false),
+			except: newRule([]string{`"level":"error"}`}, ModeSuffix, false),
 			arg:    []byte(`{"message":"some message","level":"error"}`),
 			want:   true,
 		},
 		{
 			name:   "suffix not ok",
-			except: NewRule([]string{`{"level":"info"`}, ModeSuffix, false),
+			except: newRule([]string{`{"level":"info"`}, ModeSuffix, false),
 			arg:    []byte(`{"message":"some message","level":"error"}`),
 			want:   false,
 		},
 		{
 			name:   "suffix ignore case",
-			except: NewRule([]string{`"level":"Info"}`}, ModeSuffix, true),
+			except: newRule([]string{`"level":"Info"}`}, ModeSuffix, true),
 			arg:    []byte(`{"message":"some message","level":"INFO"}`),
 			want:   true,
 		},
 		{
 			name:   "contains ok",
-			except: NewRule([]string{`"level":"panic"`}, ModeContains, false),
+			except: newRule([]string{`"level":"panic"`}, ModeContains, false),
 			arg:    []byte(`{"time":"18:00", "event":"dinner", "level":"panic", "ok":"google"}`),
 			want:   true,
 		},
 		{
 			name:   "contains not ok",
-			except: NewRule([]string{`"level":"fatal"`}, ModeContains, false),
+			except: newRule([]string{`"level":"fatal"`}, ModeContains, false),
 			arg:    []byte(`{"time":"18:00", "event":"dinner", "level":"panic", "ok":"google"}`),
 			want:   false,
 		},
@@ -84,7 +94,7 @@ func TestRule_Match(t *testing.T) {
 const rawEvent = `{"level":"error","ts":"2019-08-21T11:43:25.865Z","message":"get_items_error_1","trace_id":"3ea4a6589d06bb3f","span_id":"deddd718684b10a","get_items_error":"product: error while consuming CoverImage: context canceled","get_items_error_option":"CoverImage","get_items_error_cause":"context canceled","get_items_error_cause_type":"context_canceled"}`
 
 func TestRule_Match_ZeroAlloc(t *testing.T) {
-	rule := NewRule(
+	rule := newRule(
 		[]string{`"ts":"2019-08-21T11:43:25.865Z"`, `get_items_error_1`, `"trace_id":"3ea4a6589d06bb3f"`},
 		ModeContains,
 		false,
@@ -100,7 +110,7 @@ func TestRule_Match_ZeroAlloc(t *testing.T) {
 	rule.Mode = ModePrefix
 	{
 		allocs := testing.AllocsPerRun(10, func() {
-			e := NewRule([]string{`{"level":"error"`}, ModePrefix, false)
+			e := newRule([]string{`{"level":"error"`}, ModePrefix, false)
 			assert.True(t, e.Match([]byte(rawEvent)))
 		})
 		assert.Equal(t, 0.0, allocs)
@@ -118,18 +128,18 @@ func TestRule_Match_ZeroAlloc(t *testing.T) {
 func BenchmarkRule_Match(b *testing.B) {
 	for _, insensitive := range []bool{false, true} {
 		b.Run(fmt.Sprintf("prefix_%v", insensitive), func(b *testing.B) {
-			e := NewRule([]string{`{"level":"error"`}, ModePrefix, insensitive)
+			e := newRule([]string{`{"level":"error"`}, ModePrefix, insensitive)
 			runMatchBench(b, &e)
 		})
 
 		b.Run(fmt.Sprintf("suffix_%v", insensitive), func(b *testing.B) {
-			e := NewRule([]string{`"context_canceled"}`}, ModeSuffix, insensitive)
+			e := newRule([]string{`"context_canceled"}`}, ModeSuffix, insensitive)
 			runMatchBench(b, &e)
 		})
 	}
 
 	b.Run("contains", func(b *testing.B) {
-		e := NewRule([]string{`get_items_error_1`}, ModeContains, false)
+		e := newRule([]string{`get_items_error_1`}, ModeContains, false)
 		runMatchBench(b, &e)
 	})
 }
@@ -146,8 +156,8 @@ func TestException_Match(t *testing.T) {
 	e := RuleSet{
 		Cond: CondAnd,
 		Rules: []Rule{
-			NewRule([]string{"404"}, ModePrefix, true),
-			NewRule([]string{"ok"}, ModePrefix, true),
+			newRule([]string{"404"}, ModePrefix, true),
+			newRule([]string{"ok"}, ModePrefix, true),
 		},
 	}
 	require.False(t, e.Match([]byte("ok")))
