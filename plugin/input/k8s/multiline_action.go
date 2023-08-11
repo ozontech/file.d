@@ -7,7 +7,10 @@ import (
 )
 
 type MultilineAction struct {
-	config        *Config
+	config            *Config
+	allowedPodLabels  map[string]bool
+	allowedNodeLabels map[string]bool
+
 	logger        *zap.SugaredLogger
 	params        *pipeline.ActionPluginParams
 	maxEventSize  int
@@ -26,8 +29,8 @@ func (p *MultilineAction) Start(config pipeline.AnyConfig, params *pipeline.Acti
 	p.maxEventSize = params.PipelineSettings.MaxEventSize
 	p.config = config.(*Config)
 
-	p.config.AllowedPodLabels_ = cfg.ListToMap(p.config.AllowedPodLabels)
-	p.config.AllowedNodeLabels_ = cfg.ListToMap(p.config.AllowedNodeLabels)
+	p.allowedPodLabels = cfg.ListToMap(p.config.AllowedPodLabels)
+	p.allowedNodeLabels = cfg.ListToMap(p.config.AllowedNodeLabels)
 
 	p.eventBuf = append(p.eventBuf, '"')
 }
@@ -105,8 +108,8 @@ func (p *MultilineAction) Do(event *pipeline.Event) pipeline.ActionResult {
 		}
 
 		for labelName, labelValue := range podMeta.Labels {
-			if len(p.config.AllowedPodLabels_) != 0 {
-				_, has := p.config.AllowedPodLabels_[labelName]
+			if len(p.allowedPodLabels) != 0 {
+				_, has := p.allowedPodLabels[labelName]
 
 				if !has {
 					continue
@@ -120,8 +123,8 @@ func (p *MultilineAction) Do(event *pipeline.Event) pipeline.ActionResult {
 		}
 
 		for labelName, labelValue := range nodeLabels {
-			if len(p.config.AllowedNodeLabels_) != 0 {
-				_, has := p.config.AllowedNodeLabels_[labelName]
+			if len(p.allowedNodeLabels) != 0 {
+				_, has := p.allowedNodeLabels[labelName]
 
 				if !has {
 					continue
