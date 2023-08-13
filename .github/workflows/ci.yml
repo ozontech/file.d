@@ -17,7 +17,7 @@ jobs:
       fail-fast: false
       matrix:
         flags: [ '' ]
-        go: [ '1.20' ]
+        go: [ '1.21' ]
         arch: [ amd64 ]
         runner: [ ubuntu-latest ]
         include:
@@ -68,7 +68,7 @@ jobs:
       fail-fast: false
       matrix:
         flags: [ '' ]
-        go: [ '1.20' ]
+        go: [ '1.21' ]
         arch: [ amd64 ]
         runner: [ ubuntu-latest ]
         include:
@@ -82,7 +82,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v4
         with:
-          go-version: '1.20'
+          go-version: '1.21'
           cache: true
 
       - name: Run Kafka
@@ -134,7 +134,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v4
         with:
-          go-version: '1.20'
+          go-version: '1.21'
           cache: true
 
       - name: Lint
@@ -159,7 +159,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v4
         with:
-          go-version: '1.20'
+          go-version: '1.21'
           cache: true
 
       - name: Generate doc
@@ -183,7 +183,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v4
         with:
-          go-version: '1.20'
+          go-version: '1.21'
           cache: true
 
       - name: Download dependencies
