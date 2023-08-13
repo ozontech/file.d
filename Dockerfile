@@ -1,11 +1,10 @@
+ARG APP_IMAGE=ubuntu:latest
+
 # Build
 FROM --platform=$BUILDPLATFORM golang:1.21-alpine AS build
 
 ARG VERSION
 ARG BUILD_TIME
-
-RUN apk update
-RUN apk add git
 
 WORKDIR /file.d
 
@@ -25,7 +24,7 @@ RUN go build -trimpath \
     -o file.d ./cmd/file.d
 
 # Deploy
-FROM ubuntu:20.04
+FROM $APP_IMAGE
 
 RUN apt update
 RUN apt install systemd strace tcpdump traceroute telnet iotop curl jq iputils-ping htop -y
