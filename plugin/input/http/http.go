@@ -367,7 +367,7 @@ func (p *Plugin) authBasic(req *http.Request) bool {
 func (p *Plugin) authBearer(req *http.Request) bool {
 	authHeader := req.Header.Get("Authorization")
 	const prefix = "Bearer "
-	if len(authHeader) < len(prefix)+1 || !strings.HasPrefix(authHeader, prefix) {
+	if len(authHeader) <= len(prefix) || !strings.HasPrefix(authHeader, prefix) {
 		return false
 	}
 	token := authHeader[len(prefix):]
