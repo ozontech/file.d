@@ -48,5 +48,5 @@ jobs:
           push: true
           build-args: |
             VERSION=${{ steps.set-version.outputs.VERSION }}
-            APP_IMAGE=${{ matrix.app_image }}
-          tags: ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}:${{ steps.set-version.outputs.VERSION }}${{ matrix.image.suffix }}
+            APP_IMAGE=${{ matrix.image.name }}
+          tags: ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}:$GITHUB_REF_NAME${{ matrix.image.suffix }}
