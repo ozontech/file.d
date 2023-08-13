@@ -1,5 +1,8 @@
 # Build
-FROM --platform=$BUILDPLATFORM golang:1.20-alpine AS build
+FROM --platform=$BUILDPLATFORM golang:1.21-alpine AS build
+
+ARG VERSION
+ARG BUILD_TIME
 
 RUN apk update
 RUN apk add git
@@ -17,8 +20,8 @@ ENV GOOS linux
 ENV GOARCH amd64
 
 RUN go build -trimpath \
-    -ldflags "-X github.com/ozontech/file.d/buildinfo.Version=$(git describe --abbrev=4 --dirty --always --tags) \
-    -X github.com/ozontech/file.d/buildinfo.BuildTime=$(date '+%Y-%m-%d_%H:%M:%S')" \
+    -ldflags "-X github.com/ozontech/file.d/buildinfo.Version=${VERSION} \
+    -X github.com/ozontech/file.d/buildinfo.BuildTime=${BUILD_TIME}" \
     -o file.d ./cmd/file.d
 
 # Deploy

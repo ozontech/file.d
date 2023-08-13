@@ -35,4 +35,6 @@ jobs:
         uses: docker/build-push-action@v4
         with:
           push: true
+          build-args:
+            - 'VERSION=${{ VERSION }}'
           tags: ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}:${{ steps.set-version.outputs.VERSION }}
