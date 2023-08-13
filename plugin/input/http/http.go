@@ -132,8 +132,7 @@ type Config struct {
 type AuthStrategy byte
 
 const (
-	StrategyUnknown AuthStrategy = iota
-	StrategyDisabled
+	StrategyDisabled AuthStrategy = iota
 	StrategyBasic
 	StrategyBearer
 )
@@ -169,8 +168,6 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 		for _, token := range p.config.Auth.Tokens {
 			p.uniqBearerTokens[token] = struct{}{}
 		}
-	case StrategyUnknown:
-		p.logger.Fatal("unknown strategy, available: basic, bearer, disabled")
 	}
 
 	p.controller = params.Controller
