@@ -49,4 +49,4 @@ jobs:
           build-args: |
             VERSION=${{ steps.set-version.outputs.VERSION }}
             APP_IMAGE=${{ matrix.image.name }}
-          tags: ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}:$GITHUB_REF_NAME${{ matrix.image.suffix }}
+          tags: ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}:${{ env.GITHUB_REF_NAME }}${{ matrix.image.suffix }}
