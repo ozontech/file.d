@@ -5,12 +5,7 @@ UPSTREAM_BRANCH ?= origin/master
 .PHONY: build
 build: 
 	echo "Building for amd64..."
-	GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "-X github.com/ozontech/file.d/buildinfo.Version=${VERSION} -X github.com/ozontech/file.d/buildinfo.BuildTime=${TIME}" -o file.d ./cmd/file.d
-
-.PHONY: build-for-current-system
-build-for-current-system:
-	echo "Building for current architecture..."
-	go build -ldflags "-X github.com/ozontech/file.d/buildinfo.Version=${VERSION} -X github.com/ozontech/file.d/buildinfo.BuildTime=${TIME}" -v -o file.d ./cmd/file.d
+	GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "-X github.com/ozontech/file.d/buildinfo.Version=${VERSION}" -o file.d ./cmd/file.d
 
 .PHONY: cover
 cover:
@@ -43,14 +38,9 @@ bench-file:
 gen-doc:
 	go run github.com/vitkovskii/insane-doc@v0.0.3
 
-.PHONY: profile-file
-profile-file:
-	go test -bench LightJsonReadPar ./plugin/input/file -v -count 1 -run -benchmem -benchtime 1x -cpuprofile cpu.pprof -memprofile mem.pprof -mutexprofile mutex.pprof
-
 .PHONY: lint
 lint:
-	# installation: https://golangci-lint.run/usage/install/#local-installation
-	golangci-lint run
+	go run github.com/golangci/golangci-lint/cmd/golangci-lint@latest run
 
 .PHONY: mock
 mock:

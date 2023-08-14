@@ -12,18 +12,11 @@ concurrency:
 
 jobs:
   test:
-    runs-on: ${{ matrix.runner }}
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        flags: [ '' ]
-        go: [ '1.20' ]
-        arch: [ amd64 ]
-        runner: [ ubuntu-latest ]
-        include:
-          - arch: amd64
-            runner: ubuntu-latest
-            flags: -race
+        flags: [ '', '-race' ]
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -31,18 +24,14 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v4
         with:
-          go-version: ${{ matrix.go }}
+          go-version: '1.21'
           cache: true
 
       - name: Build
-        env:
-          GOARCH: ${{ matrix.arch }}
-          GOFLAGS: ${{ matrix.flags }}
         run: go build ./...
 
       - name: Test
         env:
-          GOARCH: ${{ matrix.arch }}
           GOFLAGS: ${{ matrix.flags }}
           LOG_LEVEL: error
         run: go test -coverprofile=profile.out -covermode=atomic -v -coverpkg=./... ./...
@@ -51,15 +40,16 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: coverage
-          path: profile.out
+          path: |
+            profile.out
+            profile_race.out
           if-no-files-found: error
           retention-days: 1
 
       - name: Run benchmarks
         if: ${{ !contains(matrix.flags, '-race') }}
         env:
-          GOARCH: ${{ matrix.arch }}
-          GOFLAGS: ${{ matrix.flags }}
+          LOG_LEVEL: error
         run: go test --timeout=15m --benchtime=3x --benchmem --bench="BenchmarkLightJsonReadPar" --run=$^ ./plugin/input/file/...
 
   e2e_test:
@@ -67,14 +57,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        flags: [ '' ]
-        go: [ '1.20' ]
-        arch: [ amd64 ]
-        runner: [ ubuntu-latest ]
-        include:
-          - arch: amd64
-            runner: ubuntu-latest
-            flags: -race
+        flags: [ '', '-race' ]
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -82,7 +65,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v4
         with:
-          go-version: '1.20'
+          go-version: '1.21'
           cache: true
 
       - name: Run Kafka
@@ -93,7 +76,6 @@ jobs:
 
       - name: E2E
         env:
-          GOARCH: ${{ matrix.arch }}
           GOFLAGS: ${{ matrix.flags }}
           LOG_LEVEL: error
         run: go test ./e2e -coverprofile=profile_e2e.out -covermode=atomic -tags=e2e_new -timeout=3m -coverpkg=./...
@@ -102,7 +84,9 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: coverage
-          path: profile_e2e.out
+          path: |
+            profile_e2e.out
+            profile_e2e_race.out
           if-no-files-found: error
           retention-days: 1
 
@@ -123,7 +107,7 @@ jobs:
       - name: Send coverage
         uses: codecov/codecov-action@v3
         with:
-          files: profile.out, profile_e2e.out
+          files: profile.out, profile_race.out, profile_e2e.out, profile_e2e_race.out,
 
   lint:
     runs-on: ubuntu-latest
@@ -134,7 +118,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v4
         with:
-          go-version: '1.20'
+          go-version: '1.21'
           cache: true
 
       - name: Lint
@@ -159,7 +143,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v4
         with:
-          go-version: '1.20'
+          go-version: '1.21'
           cache: true
 
       - name: Generate doc
@@ -183,7 +167,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v4
         with:
-          go-version: '1.20'
+          go-version: '1.21'
           cache: true
 
       - name: Download dependencies
