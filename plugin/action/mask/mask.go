@@ -237,6 +237,7 @@ func verifyGroupNumbers(groups []int, totalGroups int, logger *zap.Logger) []int
 
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginParams) {
 	p.config = config.(*Config)
+	p.config.Masks = append([]Mask(nil), p.config.Masks...) // make a local copy of the masks
 
 	for i := range p.config.Masks {
 		mask := &p.config.Masks[i]
