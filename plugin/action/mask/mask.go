@@ -89,7 +89,7 @@ type Mask struct {
 	// > @3@4@5@6
 	// >
 	// > List of matching rules to filter out events before checking regular expression for masking.
-	MatchRules []matchrule.RuleSet `json:"match_rules"` // *
+	MatchRules matchrule.RuleSets `json:"match_rules"` // *
 
 	// > @3@4@5@6
 	// >
@@ -191,7 +191,7 @@ func compileMask(m *Mask, logger *zap.Logger) {
 		m.Re_ = re
 		m.Groups = verifyGroupNumbers(m.Groups, re.NumSubexp(), logger)
 	}
-	for _, matchRule := range m.MatchRules {
+	for i, matchRule := range m.MatchRules {
 		if len(matchRule.Rules) == 0 {
 			logger.Fatal("ruleset must contain at least one rule")
 		}
@@ -200,6 +200,7 @@ func compileMask(m *Mask, logger *zap.Logger) {
 				logger.Fatal("rule in ruleset must have at least one value")
 			}
 		}
+		m.MatchRules[i].Prepare()
 	}
 }
 
@@ -236,6 +237,7 @@ func verifyGroupNumbers(groups []int, totalGroups int, logger *zap.Logger) []int
 
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginParams) {
 	p.config = config.(*Config)
+	p.config.Masks = append([]Mask(nil), p.config.Masks...) // make a local copy of the masks
 
 	for i := range p.config.Masks {
 		mask := &p.config.Masks[i]

@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"math"
 	"strings"
 )
 
@@ -64,72 +63,62 @@ type Rule struct {
 
 	minValueSize int
 	maxValueSize int
+	prepared     bool
 }
 
-func NewRule(values []string, mode Mode, caseInsensitive bool) Rule {
-	if caseInsensitive && mode == ModeContains {
-		panic(fmt.Errorf("сase insensitive for the 'contains' condition is not supported"))
+func (r *Rule) Prepare() {
+	if len(r.Values) == 0 {
+		return
 	}
 
-	for i := range values {
-		if caseInsensitive {
-			values[i] = strings.ToLower(values[i])
+	minValueSize := len(r.Values[0])
+	maxValueSize := len(r.Values[0])
+	for i := range r.Values {
+		if r.CaseInsensitive {
+			r.Values[i] = strings.ToLower(r.Values[i])
+		}
+		if len(r.Values[i]) > maxValueSize {
+			maxValueSize = len(r.Values[i])
+		}
+		if len(r.Values[i]) < minValueSize {
+			minValueSize = len(r.Values[i])
 		}
 	}
 
-	return Rule{
-		Values:          values,
-		Mode:            mode,
-		CaseInsensitive: caseInsensitive,
-	}
+	r.minValueSize = minValueSize
+	r.maxValueSize = maxValueSize
+	r.prepared = true
 }
 
-func (e *Rule) processValues() {
-	minValueSize := math.MaxInt
-	maxValueSize := 0
-	for i := range e.Values {
-		if e.CaseInsensitive {
-			e.Values[i] = strings.ToLower(e.Values[i])
-		}
-		if len(e.Values[i]) > maxValueSize {
-			maxValueSize = len(e.Values[i])
-		}
-		if len(e.Values[i]) < minValueSize {
-			minValueSize = len(e.Values[i])
-		}
+func (r *Rule) Match(raw []byte) bool {
+	if !r.prepared {
+		panic("rule must be prepared")
 	}
-	e.minValueSize = minValueSize
-	e.maxValueSize = maxValueSize
-}
 
-func (e *Rule) Match(raw []byte) bool {
-	ok := e.match(raw)
-	if e.Invert {
+	ok := r.match(raw)
+	if r.Invert {
 		ok = !ok
 	}
 	return ok
 }
 
-func (e *Rule) match(raw []byte) bool {
-	if e.maxValueSize == 0 {
-		e.processValues()
-	}
-	if len(raw) < e.minValueSize {
+func (r *Rule) match(raw []byte) bool {
+	if len(raw) < r.minValueSize {
 		return false
 	}
 
 	var data []byte
 
-	if e.Mode == ModeContains {
+	if r.Mode == ModeContains {
 		data = raw
-		if e.CaseInsensitive {
+		if r.CaseInsensitive {
 			data = bytes.ToLower(data)
 		}
-		for i := range e.Values {
-			if len(data) < len(e.Values[i]) {
+		for i := range r.Values {
+			if len(data) < len(r.Values[i]) {
 				continue
 			}
-			if bytes.Contains(data, []byte(e.Values[i])) {
+			if bytes.Contains(data, []byte(r.Values[i])) {
 				return true
 			}
 		}
@@ -137,26 +126,26 @@ func (e *Rule) match(raw []byte) bool {
 	}
 
 	var cutData []byte
-	if len(raw) < e.maxValueSize {
+	if len(raw) < r.maxValueSize {
 		cutData = raw
 	} else {
-		switch e.Mode {
+		switch r.Mode {
 		case ModePrefix:
-			cutData = raw[:e.maxValueSize]
+			cutData = raw[:r.maxValueSize]
 		case ModeSuffix:
-			cutData = raw[len(raw)-e.maxValueSize:]
+			cutData = raw[len(raw)-r.maxValueSize:]
 		}
 	}
 
-	if e.CaseInsensitive {
+	if r.CaseInsensitive {
 		cutData = bytes.ToLower(cutData)
 	}
 
-	for _, value := range e.Values {
+	for _, value := range r.Values {
 		if len(cutData) < len(value) {
 			continue
 		}
-		switch e.Mode {
+		switch r.Mode {
 		case ModePrefix:
 			data = cutData[:len(value)]
 		case ModeSuffix:
@@ -214,27 +203,41 @@ type RuleSet struct {
 	Rules []Rule `json:"rules" default:"" slice:"true"` // *
 }
 
-func (e *RuleSet) Match(data []byte) bool {
-	if len(e.Rules) == 0 {
+func (rs *RuleSet) Prepare() {
+	for i := range rs.Rules {
+		rs.Rules[i].Prepare()
+	}
+}
+
+func (rs *RuleSet) Match(data []byte) bool {
+	if len(rs.Rules) == 0 {
 		return false
 	}
 
-	for i := range e.Rules {
-		rule := &e.Rules[i]
+	for i := range rs.Rules {
+		rule := &rs.Rules[i]
 
 		match := rule.Match(data)
-		if match && e.Cond == CondOr {
+		if match && rs.Cond == CondOr {
 			return true
 		}
-		if !match && e.Cond == CondAnd {
+		if !match && rs.Cond == CondAnd {
 			return false
 		}
 	}
 
-	if e.Cond == CondAnd { // nolint: gosimple
+	if rs.Cond == CondAnd { // nolint: gosimple
 		// all matches are true
 		return true
 	}
 
 	return false
+}
+
+type RuleSets []RuleSet
+
+func (rs RuleSets) Prepare() {
+	for i := range rs {
+		rs[i].Prepare()
+	}
 }
