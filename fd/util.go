@@ -16,7 +16,7 @@ import (
 func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 	capacity := pipeline.DefaultCapacity
 	antispamThreshold := 0
-	var antispamExceptions []matchrule.RuleSet
+	var antispamExceptions matchrule.RuleSets
 	avgInputEventSize := pipeline.DefaultAvgInputEventSize
 	maxInputEventSize := pipeline.DefaultMaxInputEventSize
 	streamField := pipeline.DefaultStreamField
@@ -81,6 +81,7 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 		if err != nil {
 			logger.Fatalf("extract exceptions: %s", err)
 		}
+		antispamExceptions.Prepare()
 
 		isStrict = settings.Get("is_strict").MustBool()
 	}
@@ -99,7 +100,7 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 	}
 }
 
-func extractExceptions(settings *simplejson.Json) ([]matchrule.RuleSet, error) {
+func extractExceptions(settings *simplejson.Json) (matchrule.RuleSets, error) {
 	raw, err := settings.Get("antispam_exceptions").MarshalJSON()
 	if err != nil {
 		return nil, err
@@ -108,7 +109,7 @@ func extractExceptions(settings *simplejson.Json) ([]matchrule.RuleSet, error) {
 	dec := json.NewDecoder(bytes.NewReader(raw))
 	dec.DisallowUnknownFields()
 
-	var exceptions []matchrule.RuleSet
+	var exceptions matchrule.RuleSets
 	if err := dec.Decode(&exceptions); err != nil {
 		return nil, err
 	}

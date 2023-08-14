@@ -127,7 +127,7 @@ type Settings struct {
 	MaintenanceInterval time.Duration
 	EventTimeout        time.Duration
 	AntispamThreshold   int
-	AntispamExceptions  []matchrule.RuleSet
+	AntispamExceptions  matchrule.RuleSets
 	AvgEventSize        int
 	MaxEventSize        int
 	StreamField         string

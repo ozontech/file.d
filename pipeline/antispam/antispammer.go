@@ -22,7 +22,7 @@ type Antispammer struct {
 	threshold       int
 	mu              sync.RWMutex
 	sources         map[uint64]source
-	exceptions      []matchrule.RuleSet
+	exceptions      matchrule.RuleSets
 
 	logger *zap.Logger
 
@@ -41,7 +41,7 @@ type Options struct {
 	MaintenanceInterval time.Duration
 	Threshold           int
 	UnbanIterations     int
-	Exceptions          []matchrule.RuleSet
+	Exceptions          matchrule.RuleSets
 
 	Logger            *zap.Logger
 	MetricsController *metric.Ctl
