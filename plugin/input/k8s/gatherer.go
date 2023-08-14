@@ -325,7 +325,8 @@ func putMeta(podData *corev1.Pod) {
 	metaDataMu.Unlock()
 
 	// normal containers
-	for _, status := range podCopy.Status.ContainerStatuses {
+	for i := range podCopy.Status.ContainerStatuses {
+		status := &podCopy.Status.ContainerStatuses[i]
 		putContainerMeta(ns, pod, status.ContainerID, podCopy)
 
 		if status.LastTerminationState.Terminated != nil {
@@ -334,7 +335,8 @@ func putMeta(podData *corev1.Pod) {
 	}
 
 	// init containers
-	for _, status := range podCopy.Status.InitContainerStatuses {
+	for i := range podCopy.Status.InitContainerStatuses {
+		status := &podCopy.Status.InitContainerStatuses[i]
 		putContainerMeta(ns, pod, status.ContainerID, podCopy)
 
 		if status.LastTerminationState.Terminated != nil {
