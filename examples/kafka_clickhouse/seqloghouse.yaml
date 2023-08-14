@@ -1,0 +1,62 @@
+pipelines:
+  seqloghouse:
+    input:
+      type: kafka
+      brokers:
+        - kafka-dc1-0.logging-kafka-dc1.logging.svc.local.k8s.o3.ru:9092
+        - kafka-dc1-1.logging-kafka-dc1.logging.svc.local.k8s.o3.ru:9092
+        - kafka-dc1-2.logging-kafka-dc1.logging.svc.local.k8s.o3.ru:9092
+      consumer_group: seqloghouse
+      topics:
+        - obs-seq-db-logs
+    output:
+      addresses:
+        - ozon.ru:9000
+      columns:
+        - name: time
+          type: DateTime
+        - name: level
+          type: Enum8('emergency'=1, 'alert'=2, 'critical'=3, 'error'=4, 'warning'=5, 'notice'=6, 'informational'=7, 'debug'=8)
+        - name: zone
+          type: Enum8('z501'=1, 'z502'=2, 'z503'=3)
+        - name: k8s_pod_label_app
+          type: LowCardinality(String)
+        - name: env
+          type: LowCardinality(String)
+        - name: message
+          type: String
+      database: seq_db_clickhouse
+      insert_strategy: round_robin
+      insert_timeout: 5s
+      password: default
+      strict_types: false
+      table: logs
+      type: clickhouse
+      user: default
+    settings:
+      capacity: 32
+    actions:
+      - type: json_decode
+        field: log
+        metric_labels:
+          - k8s_pod_label_app
+        metric_name: input
+      - type: debug
+      - type: rename
+        k8s_node_label_topology\.kubernetes\.io/zone: zone
+      - type: convert_date
+        field: ts
+        remove_on_fail: true
+        source_formats:
+          - rfc3339nano
+          - rfc3339
+        target_format: unixtime
+      - type: set_time
+        field: ts
+        format: unixtime
+        override: false
+      - type: convert_log_level
+        default_level: info
+        field: level
+        remove_on_fail: true
+        style: string

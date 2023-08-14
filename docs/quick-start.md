@@ -18,5 +18,5 @@
 4. `file.d` will use data file as an input and your terminal as an output. So you'll see a welcome message.
 
 ## What's next?
-1. Check out [more complex examples](/docs/examples.md) 
+1. Check out [more complex examples](/examples/README.md) 
 2. [Configure](/docs/configuring.md) your own pipeline 

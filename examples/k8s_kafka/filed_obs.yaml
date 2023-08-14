@@ -1,0 +1,184 @@
+pipelines:
+  k8s:
+    input:
+      type: k8s
+      allowed_node_labels:
+        - topology.kubernetes.io/zone
+      allowed_pod_labels:
+        - app
+        - jobid
+        - logs-audit
+        - logs-sensitive
+        - cron
+      offsets_file: /data/k8s-offsets.yaml
+    output:
+      type: kafka
+      brokers:
+        - kafka-dc1-0.logging-kafka-dc1.logging.svc.local.k8s.o3.ru:9092
+        - kafka-dc1-1.logging-kafka-dc1.logging.svc.local.k8s.o3.ru:9092
+        - kafka-dc1-2.logging-kafka-dc1.logging.svc.local.k8s.o3.ru:9092
+      default_topic: infra-ts-k8s-logs
+      topic_field: pipeline_kafka_topic
+      use_topic_field: true
+    settings:
+      antispam_threshold: 2000
+      capacity: 256
+      is_strict: false
+      max_event_size: 262144
+    actions:
+      - # Discard logs from some services by container/pod/namespace name
+      - type: discard
+        match_mode: or_prefix
+        match_fields:
+          k8s_container:
+            - cherkizon-event-manager
+            - graylog
+            - file-d
+            - logd
+            - k8s-audit
+            - ingresslogs
+            - ippools-exporter
+          k8s_namespace:
+            - ingress-nginx
+            - moon
+          k8s_pod:
+            - coredns
+            - etcd-backup
+            - ingress-nginx-controller
+            - metrics-server
+        metric_labels:
+          - k8s_pod_label_app
+          - k8s_pod
+          - k8s_container
+        metric_name: k8s
+        # Discard logs from the namespace gitlab and pods with prefix runner-
+      - type: discard
+        match_fields:
+          k8s_namespace: gitlab-
+          k8s_pod: runner-
+        match_mode: and_prefix
+      - type: join
+        field: log
+        start: /^\s*(?i)Unhandled exception/
+        continue: /(^\s*at\s.*)|(\s*--->)|(^(?i)\s*--- End of)|(\.?\w+\.?Exception:)/
+        match_fields:
+          stream: stderr
+        metric_name: join_csharp_exceptions
+      - type: join_template
+        field: log
+        match_fields:
+          stream: stderr
+        metric_name: join_template
+        template: go_panic
+        # Throttle logs by pod using limits from redis
+      - type: throttle
+        bucket_interval: 1m
+        buckets_count: 60
+        default_limit: 3000
+        limiter_backend: memory
+        # Do not throttle some services
+        match_fields:
+          accessAudit: "true"
+          k8s_pod_label_app:
+            - alerts-agent
+            - exterlog
+            - warden
+            - warden-logger
+            - warden-informer
+            - s3front
+            - eventrouter
+        match_invert: true
+        match_mode: or
+        metric_labels:
+          - k8s_pod_label_app
+          - k8s_pod
+          - k8s_container
+        metric_name: throttle
+        redis_backend_config:
+          endpoint: ""
+          password: ""
+          sync_interval: 2s
+          timeout: 1s
+        throttle_field: k8s_pod
+        time_field: time
+        time_field_format: rfc3339nano
+      - type: rename
+        k8s_pod_label_logs-audit: logs-audit
+        k8s_pod_label_logs-sensitive: logs-sensitive
+        metric_name: rename
+        override: true
+        # remove non-system fields
+      - type: keep_fields
+        fields:
+          - time
+          - stream
+          - log
+          - k8s_namespace
+          - k8s_pod
+          - k8s_container
+          - k8s_node
+          - k8s_pod_label_app
+          - k8s_pod_label_cron
+          - k8s_pod_label_jobid
+          - k8s_node_label_topology.kubernetes.io/zone
+          - logs-audit
+          - logs-sensitive
+          - access_token_leaked
+        metric_name: keep_fields
+        # Each log has {"k8s_cluster": "obs", ... other fields}
+        # to identify source
+      - type: modify
+        k8s_cluster: obs
+      - type: modify
+        env: infra-ts
+        # Redirect logs to the `obs-seq-db-logs` topic
+        # for the specific services
+        #
+        # Note: `k8s_pod_label_app` passes k8s plugin, more info here:
+        # https://github.com/ozontech/file.d/tree/master/plugin/input/k8s
+      - type: modify
+        match_fields:
+          k8s_pod_label_app:
+            - seqdb-dev
+            - seqdb-stg
+            - seqdb-infra
+            - seqdb-cold-infra
+            - seqdb-lb
+        pipeline_kafka_topic: obs-seq-db-logs
+
+  kubelet:
+    actions:
+      # Decode journald raw log
+      - field: MESSAGE
+        type: json_decode
+      - service: kubelet
+        type: modify
+      - __HOSTNAME: k8s_node
+        override: true
+        type: rename
+      - MESSAGE: message
+        type: rename
+      - k8s_cluster: obs
+        type: modify
+      - env: infra-ts
+        type: modify
+    input:
+      journal_args:
+        - -f
+        - -a
+        - -u
+        - kubelet
+        - -D
+        - /journal/
+      offsets_file: /data/kubelet-offset.yaml
+      type: journalctl
+    output:
+      brokers:
+        - kafka-dc1-0.logging-kafka-dc1.logging.svc.local.k8s.o3.ru:9092
+        - kafka-dc1-1.logging-kafka-dc1.logging.svc.local.k8s.o3.ru:9092
+        - kafka-dc1-2.logging-kafka-dc1.logging.svc.local.k8s.o3.ru:9092
+      default_topic: infra-ts-kubelet-logs
+      type: kafka
+    settings:
+      capacity: 256
+      max_event_size: 262144

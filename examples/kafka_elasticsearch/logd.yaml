@@ -1,0 +1,186 @@
+pipelines:
+  logd:
+    input:
+      brokers:
+        - kafka-dc1-0.logging-kafka-dc1.logging.svc.local.k8s.o3.ru:9092
+        - kafka-dc1-1.logging-kafka-dc1.logging.svc.local.k8s.o3.ru:9092
+        - kafka-dc1-2.logging-kafka-dc1.logging.svc.local.k8s.o3.ru:9092
+      channel_buffer_size: 512
+      consumer_group: logd
+      topics:
+        - infra-ts-k8s-logs
+        - infra-ts-kubelet-logs
+        - infra-ts-k8s-splunk-logs
+        - infra-ts-k8s-audit-logs
+        - infra-ts-interlog
+        - infra-ts-ingress-logs
+        - infra-ts-dmesg-logs
+      type: kafka
+    output:
+      batch_flush_timeout: 200ms
+      batch_size: 500 * 1
+      batch_size_bytes: 5242880 * 1
+      connection_timeout: 30s
+      endpoints:
+        - http://seq-proxy.logging.svc.local.k8s.o3.ru:9002
+      index_format: seq-db
+      type: elasticsearch
+      workers_count: 4 * 1
+    settings:
+      capacity: 2000
+    actions:
+      - type: json_decode
+        field: log
+        metric_labels:
+          - k8s_pod_label_app
+        metric_name: input
+        metric_skip_status: true # skip the "status" label to reduce metric cardinality
+        # Discard logs that should be stored in splunk, not elasticsearch
+      - type: discard
+        match_fields:
+          log-direction: splunk
+          logs-sensitive: "true"
+        match_mode: or
+        # Normalize some fields
+      - type: rename
+        k8s_label_app: service
+        k8s_pod_label_app: service
+        log: message
+        msg: message
+        override: true
+        syslog.identifier: service
+        systemd.unit: service
+      - type: rename
+        k8s_label_jobid: ci_job_id
+        k8s_node_label_topology\.kubernetes\.io/zone: zone
+        k8s_pod_label_jobid: ci_job_id
+      - type: modify
+        source: unknown
+      - type: rename
+        k8s_node: source
+        override: true
+      - type: flatten
+        field: EventId
+        prefix: EventId_
+      - type: flatten
+        field: event
+        match_fields:
+          service: eventrouter
+        prefix: event_
+      - type: flatten
+        field: event_involvedObject
+        match_fields:
+          service: eventrouter
+        prefix: event_involvedObject_
+      - type: rename
+        event_message: message
+        metric_labels:
+          - service
+          - level
+          - k8s_pod_label_cron
+        metric_name: output
+        metric_skip_status: true
+      - type: rename
+        _ts: timestamp
+        override: true
+        requestReceivedTimestamp: timestamp
+        time: timestamp
+        ts: timestamp
+        # Parse logged time. Drop field if any error
+      - field: timestamp
+        remove_on_fail: true
+        source_formats:
+          - rfc3339nano
+          - rfc3339
+          - "2006-01-02 15:04:05.999"
+        target_format: "2006-01-02 15:04:05.999"
+        type: convert_date
+        # Append timestamp field if it is not present
+      - field: timestamp
+        format: "2006-01-02 15:04:05.999"
+        override: false
+        type: set_time
+        # Graylog's system fields
+        # We need it to keep it backwards compatible.
+      - streams: _streams
+        type: rename
+      - streams: '{"streams": []}'
+        type: modify
+      - field: streams
+        type: json_decode
+        # Convert levels into numbers,
+        # but we are recommend to use string style
+      - default_level: info
+        field: level
+        remove_on_fail: true
+        style: number
+        type: convert_log_level
+        # Find leaked cookies and replace these with the `replace_word`
+      - type: mask
+        applied_metric_name: mask_applied_cookie_total
+        mask_applied_field: access_token_leaked
+        mask_applied_value: found
+        masks:
+          - groups:
+              - 1
+            re: (\d\.\d{1,10}\.[0-9a-zA-Z\-\/_]{15,}\.\d{1,5}\.[0-9a-zA-Z\-\/_]+\.\d{0,14}\.\d{14}\.[0-9a-zA-Z\-\/_]{35,})
+            replace_word: SECMASKED
+        # Find and replace JWT tokens
+      - type: mask
+        applied_metric_name: mask_applied_jwt_total
+        mask_applied_field: access_token_leaked
+        mask_applied_value: jwt_token
+        masks:
+          - groups:
+              - 1
+            match_rules:
+              - cond: and
+                # Find prefix of the JWT token without RegExp
+                rules:
+                  - case_insensitive: false
+                    invert: true
+                    mode: contains
+                    values:
+                      - eyJhbGciOiJIUzI1NiIsIm96b25pZCI6Im5v
+                  - case_insensitive: false
+                    mode: contains
+                    values:
+                      - eyJhbGciOiJFUz
+                      - eyJhbGciOiJSUz
+                      - eyJhbGciOiJIUz
+                      - eyJhbGciOiJQUz
+                      - eyJ0eXAiOiJqd3
+                      - eyJ0eXAiOiJKV1
+                      - eyJraWQiOi
+            # Fallback to the RegExp if the rules are passes
+            re: ((?:eyJhbGciOiJFUz|eyJhbGciOiJSUz|eyJhbGciOiJIUz|eyJhbGciOiJQUz|eyJ0eXAiOiJqd3|eyJ0eXAiOiJKV1|eyJraWQiOi)[a-zA-Z0-9\-_]+\.[a-zA-Z0-9\-_]+\.[a-zA-Z0-9\-_]+)
+            replace_word: JWT_MASKED
+      - type: mask
+        applied_metric_labels:
+          - service
+        applied_metric_name: sec_dataleak_geo
+        mask_applied_field: access_token_leaked
+        mask_applied_value: leak_geo
+        masks:
+          - match_rules:
+              - rules:
+                  - case_insensitive: false
+                    mode: contains
+                    values:
+                      - Россия
+                      - Russia
+                      - Город
+                      - Область
+                      - Край
+                      - Посёлок
+                      - Район
+                      - Flat
+                      - Street
+                      - Улица
+                      - Проспект
+                      - Шоссе
+                      - Дом
+                      - Квартира
+                      - Участок
+                      - Москва
+                      - Санкт-Петербург

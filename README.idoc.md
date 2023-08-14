@@ -50,7 +50,7 @@ TBD: throughput on production servers.
 ## What's next
 * [Quick start](/docs/quick-start.md)
 * [Installation](/docs/installation.md)
-* [Examples](/docs/examples.md)
+* [Examples](/examples)
 * [Configuring](/docs/configuring.md)
 * [Architecture](/docs/architecture.md)
 * [Testing](/docs/testing.md)

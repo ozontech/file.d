@@ -1,7 +1,7 @@
 # Configuring
 
 You can specify several pipelines with plugins and their parameters in a yaml format.  
-Examples can be found [here](./examples.md).
+Examples can be found [here](/examples/README.md).
 
 ### Logging
 
