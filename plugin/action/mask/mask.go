@@ -40,7 +40,7 @@ const (
 )
 
 type Plugin struct {
-	config *Config
+	config Config
 
 	// sourceBuf buffer for storing node value initial and transformed
 	sourceBuf []byte
@@ -236,8 +236,8 @@ func verifyGroupNumbers(groups []int, totalGroups int, logger *zap.Logger) []int
 }
 
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginParams) {
-	p.config = config.(*Config)
-	p.config.Masks = append([]Mask(nil), p.config.Masks...) // make a local copy of the masks
+	p.config = *config.(*Config)                            // copy shared config
+	p.config.Masks = append([]Mask(nil), p.config.Masks...) // copy shared masks
 
 	for i := range p.config.Masks {
 		mask := &p.config.Masks[i]
