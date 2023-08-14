@@ -14,14 +14,18 @@ jobs:
       fail-fast: false
       matrix:
         image:
-          - name: 'ubuntu:18.04'
-            suffix: '-ubuntu18.04'
-          - name: 'ubuntu:20.04'
-            suffix: '-ubuntu20.04'
-          - name: 'ubuntu:22.04'
-            suffix: '-ubuntu22.04'
           - name: 'ubuntu:latest'
             suffix: ''
+          - name: 'ubuntu:22.04'
+            suffix: '-ubuntu22.04'
+          - name: 'ubuntu:20.04'
+            suffix: '-ubuntu20.04'
+          - name: 'ubuntu:18.04'
+            suffix: '-ubuntu18.04'
+          - name: 'alpine'
+            suffix: '-alpine'
+          - name: 'scratch'
+            suffix: '-scratch'
     steps:
       - uses: actions/checkout@v3
 
@@ -40,6 +44,8 @@ jobs:
         uses: docker/build-push-action@v4
         with:
           push: true
+          file: ./build/package/Dockerfile
+          platforms: linux/amd64,linux/arm64
           build-args: |
             VERSION=${{ github.ref_name }}
             APP_IMAGE=${{ matrix.image.name }}
