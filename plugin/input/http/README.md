@@ -44,7 +44,7 @@ pipelines:
 ```
 
 Setup:
-```
+```bash
 # run server.
 # config.yaml should contains yaml config above.
 go run ./cmd/file.d --config=config.yaml
@@ -54,9 +54,7 @@ curl "localhost:9200/_bulk" -H 'Content-Type: application/json' -d \
 '{"index":{"_index":"index-main","_type":"span"}}
 {"message": "hello", "kind": "normal"}
 '
-
-##
-
+```
 
 ### Config params
 **`address`** *`string`* *`default=:9200`* 
@@ -82,6 +80,30 @@ If both ca_cert and private_key are set, the server starts accepting connections
 
 CA private key in PEM encoding. This can be a path or the content of the key.
 If both ca_cert and private_key are set, the server starts accepting connections in TLS mode.
+
+<br>
+
+**`auth`** *`AuthConfig`* 
+
+Auth config.
+Disabled by default.
+See AuthConfig for details.
+You can use 'debug' log level to debug authorizations.
+
+<br>
+
+**`strategy`** *`string`* *`default=disabled`* *`options=disabled|basic|bearer`* 
+
+AuthStrategy.Strategy describes strategy to use.
+
+<br>
+
+**`secrets`** *`map[string]string`* 
+
+AuthStrategy.Secrets describes secrets in key-value format.
+If the `strategy` is basic, then the key is the login, the value is the password.
+If the `strategy` is bearer, then the key is the name, the value is the Bearer token.
+Key uses in the http_input_total metric.
 
 <br>
 

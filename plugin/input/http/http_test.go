@@ -39,7 +39,7 @@ func getInputInfo(config *Config) *pipeline.InputPluginInfo {
 func TestProcessChunksMany(t *testing.T) {
 	t.Parallel()
 	p, _, output := test.NewPipelineMock(nil, "passive")
-	p.SetInput(getInputInfo(&Config{}))
+	p.SetInput(getInputInfo(&Config{Address: ":0"}))
 	input := p.GetInput().(*Plugin)
 	p.Start()
 
@@ -71,7 +71,7 @@ func TestProcessChunksMany(t *testing.T) {
 func TestProcessChunksEventBuff(t *testing.T) {
 	t.Parallel()
 	p, _, output := test.NewPipelineMock(nil, "passive")
-	p.SetInput(getInputInfo(&Config{}))
+	p.SetInput(getInputInfo(&Config{Address: ":0"}))
 	input := p.GetInput().(*Plugin)
 	p.Start()
 
@@ -102,7 +102,7 @@ func TestProcessChunksEventBuff(t *testing.T) {
 func TestProcessChunksContinue(t *testing.T) {
 	t.Parallel()
 	p, _, output := test.NewPipelineMock(nil, "passive")
-	p.SetInput(getInputInfo(&Config{}))
+	p.SetInput(getInputInfo(&Config{Address: ":0"}))
 	input := p.GetInput().(*Plugin)
 	p.Start()
 
@@ -135,7 +135,7 @@ func TestProcessChunksContinue(t *testing.T) {
 func TestProcessChunksContinueMany(t *testing.T) {
 	t.Parallel()
 	p, _, output := test.NewPipelineMock(nil, "passive")
-	p.SetInput(getInputInfo(&Config{}))
+	p.SetInput(getInputInfo(&Config{Address: ":0"}))
 	input := p.GetInput().(*Plugin)
 	p.Start()
 
@@ -166,7 +166,7 @@ func TestProcessChunksContinueMany(t *testing.T) {
 func TestServeChunks(t *testing.T) {
 	t.Parallel()
 	p, _, output := test.NewPipelineMock(nil, "passive")
-	input := getInputInfo(&Config{})
+	input := getInputInfo(&Config{Address: ":0"})
 	p.SetInput(input)
 	p.Start()
 
@@ -246,7 +246,7 @@ func (c *PartialReader) WaitRead() {
 func TestServePartialRequest(t *testing.T) {
 	t.Parallel()
 	p, _, output := test.NewPipelineMock(nil, "passive")
-	input := getInputInfo(&Config{})
+	input := getInputInfo(&Config{Address: ":0"})
 	p.SetInput(input)
 
 	wg := sync.WaitGroup{}
@@ -291,7 +291,7 @@ func TestServePartialRequest(t *testing.T) {
 func TestServeChunksContinue(t *testing.T) {
 	t.Parallel()
 	p, _, output := test.NewPipelineMock(nil, "passive")
-	input := getInputInfo(&Config{})
+	input := getInputInfo(&Config{Address: ":0"})
 	p.SetInput(input)
 	p.Start()
 
@@ -323,9 +323,6 @@ func TestPluginAuth(t *testing.T) {
 	t.Parallel()
 	r := require.New(t)
 
-	conf := &Config{}
-	inputInfo := getInputInfo(conf)
-
 	newReq := func(authHeader string) *http.Request {
 		return &http.Request{
 			Header: map[string][]string{
@@ -339,23 +336,22 @@ func TestPluginAuth(t *testing.T) {
 
 	tests := []struct {
 		Name       string
-		Strategy   AuthStrategy
+		Strategy   string
 		Request    *http.Request
-		Tokens     map[string]struct{}
-		Passwords  map[string]string
+		Secrets    map[string]string
 		ShouldPass bool
 	}{
 		{
 			Name:       "disabled ok",
-			Strategy:   StrategyDisabled,
+			Strategy:   "disabled",
 			ShouldPass: true,
 			Request:    &http.Request{},
 		},
 		// basic test
 		{
 			Name:     "basic ok",
-			Strategy: StrategyBasic,
-			Passwords: map[string]string{
+			Strategy: "basic",
+			Secrets: map[string]string{
 				"ozon": "zonzon",
 			},
 			Request:    newReq("Basic " + encBasic("ozon:zonzon")),
@@ -363,8 +359,8 @@ func TestPluginAuth(t *testing.T) {
 		},
 		{
 			Name:     "basic reject",
-			Strategy: StrategyBasic,
-			Passwords: map[string]string{
+			Strategy: "basic",
+			Secrets: map[string]string{
 				"ozon": "zonzon",
 			},
 			Request:    newReq("Basic " + encBasic("user:password")),
@@ -373,47 +369,57 @@ func TestPluginAuth(t *testing.T) {
 		// bearer test
 		{
 			Name:       "bearer reject",
-			Strategy:   StrategyBearer,
-			Tokens:     map[string]struct{}{},
+			Strategy:   "bearer",
+			Secrets:    map[string]string{},
 			Request:    newReq("Bearer test"),
 			ShouldPass: false,
 		},
 		{
 			Name:     "bearer ok",
-			Strategy: StrategyBearer,
-			Tokens: map[string]struct{}{
-				"ozon": {},
+			Strategy: "bearer",
+			Secrets: map[string]string{
+				"ozon": "ozon",
 			},
 			Request:    newReq("Bearer ozon"),
 			ShouldPass: true,
 		},
 		{
 			Name:     "bearer pass one char",
-			Strategy: StrategyBearer,
-			Tokens: map[string]struct{}{
-				"1": {},
+			Strategy: "bearer",
+			Secrets: map[string]string{
+				"1": "1",
 			},
 			Request:    newReq("Bearer 1"),
 			ShouldPass: true,
 		},
 		{
 			Name:       "empty bearer",
-			Strategy:   StrategyBearer,
-			Tokens:     map[string]struct{}{},
+			Strategy:   "bearer",
+			Secrets:    map[string]string{},
 			Request:    newReq("Bearer"),
 			ShouldPass: false,
 		},
 	}
 
-	plugin := inputInfo.Plugin.(*Plugin)
-	plugin.config = conf
+	pipelineMock, _, _ := test.NewPipelineMock(nil, "passive")
+
 	for _, tc := range tests {
 		t.Run(tc.Name, func(t *testing.T) {
-			conf.Auth.Strategy_ = tc.Strategy
-			conf.Auth.Passwords = tc.Passwords
-			plugin.uniqBearerTokens = tc.Tokens
+			conf := &Config{
+				Auth: AuthConfig{
+					Strategy: tc.Strategy,
+					Secrets:  tc.Secrets,
+				},
+				Address: "off",
+			}
+			inputInfo := getInputInfo(conf)
+			pipelineMock.SetInput(inputInfo)
+			// init http plugin
+			pipelineMock.Start()
+			pipelineMock.Stop()
 
-			ok := plugin.auth(tc.Request)
+			ok := inputInfo.Plugin.(*Plugin).auth(tc.Request)
+
 			r.Equal(tc.ShouldPass, ok)
 		})
 	}
@@ -457,7 +463,7 @@ func BenchmarkHttpInputJson(b *testing.B) {
 	for n := 0; n < b.N; n++ {
 		p, _, output := test.NewPipelineMock(nil, "passive", "perf")
 
-		p.SetInput(getInputInfo(&Config{Address: "127.0.0.1:9200"}))
+		p.SetInput(getInputInfo(&Config{Address: ":0"}))
 
 		wg := &sync.WaitGroup{}
 		wg.Add(DocumentCount * 2) // 2 rows in each file

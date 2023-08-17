@@ -60,7 +60,7 @@ pipelines:
 ```
 
 Setup:
-```
+```bash
 # run server.
 # config.yaml should contains yaml config above.
 go run ./cmd/file.d --config=config.yaml
@@ -70,9 +70,7 @@ curl "localhost:9200/_bulk" -H 'Content-Type: application/json' -d \
 '{"index":{"_index":"index-main","_type":"span"}}
 {"message": "hello", "kind": "normal"}
 '
-
-##
-
+```
 }*/
 
 const (
@@ -80,8 +78,8 @@ const (
 )
 
 type Plugin struct {
-	config           *Config
-	uniqBearerTokens map[string]struct{}
+	config            *Config
+	nameByBearerToken map[string]string
 
 	params     *pipeline.InputPluginParams
 	readBuffs  sync.Pool
@@ -95,7 +93,8 @@ type Plugin struct {
 
 	// plugin metrics
 
-	httpErrorMetric *prometheus.CounterVec
+	httpInputMetrics map[string]prometheus.Counter
+	httpErrorMetric  *prometheus.CounterVec
 }
 
 // ! config-params
@@ -126,7 +125,7 @@ type Config struct {
 	// > Disabled by default.
 	// > See AuthConfig for details.
 	// > You can use 'debug' log level to debug authorizations.
-	Auth AuthConfig `json:"auth" child:"true"`
+	Auth AuthConfig `json:"auth" child:"true"` // *
 }
 
 type AuthStrategy byte
@@ -137,12 +136,21 @@ const (
 	StrategyBearer
 )
 
+// ! config-params
+// ^ config-params
 type AuthConfig struct {
-	Strategy  string `json:"strategy" default:"disabled" options:"disabled|basic|bearer"`
+	// > @3@4@5@6
+	// >
+	// > AuthStrategy.Strategy describes strategy to use.
+	Strategy  string `json:"strategy" default:"disabled" options:"disabled|basic|bearer"` // *
 	Strategy_ AuthStrategy
-	Passwords map[string]string `json:"passwords"`
-	Tokens    []string          `json:"tokens"`
-	//WithMeta  bool              `json:"with_meta"` // TODO: allow to set meta to the event
+	// > @3@4@5@6
+	// >
+	// > AuthStrategy.Secrets describes secrets in key-value format.
+	// > If the `strategy` is basic, then the key is the login, the value is the password.
+	// > If the `strategy` is bearer, then the key is the name, the value is the Bearer token.
+	// > Key uses in the http_input_total metric.
+	Secrets map[string]string `json:"secrets"` // *
 }
 
 func init() {
@@ -162,11 +170,10 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	p.logger = params.Logger.Desugar()
 	p.registerMetrics(params.MetricCtl)
 
-	switch p.config.Auth.Strategy_ {
-	case StrategyBearer:
-		p.uniqBearerTokens = make(map[string]struct{}, len(p.config.Auth.Tokens))
-		for _, token := range p.config.Auth.Tokens {
-			p.uniqBearerTokens[token] = struct{}{}
+	if p.config.Auth.Strategy_ == StrategyBearer {
+		p.nameByBearerToken = make(map[string]string, len(p.config.Auth.Secrets))
+		for name, token := range p.config.Auth.Secrets {
+			p.nameByBearerToken[token] = name
 		}
 	}
 
@@ -190,6 +197,16 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 
 func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 	p.httpErrorMetric = ctl.RegisterCounter("input_http_errors", "Total http errors")
+
+	if p.config.Auth.Strategy_ == StrategyDisabled {
+		return
+	}
+
+	httpAuthTotal := ctl.RegisterCounter("http_auth_total", "", "secret_name")
+	p.httpInputMetrics = make(map[string]prometheus.Counter, len(p.config.Auth.Secrets))
+	for key := range p.config.Auth.Secrets {
+		p.httpInputMetrics[key] = httpAuthTotal.WithLabelValues(key)
+	}
 }
 
 func (p *Plugin) listenHTTP() {
@@ -341,33 +358,42 @@ func (p *Plugin) PassEvent(_ *pipeline.Event) bool {
 }
 
 func (p *Plugin) auth(req *http.Request) bool {
-	switch p.config.Auth.Strategy_ {
-	case StrategyDisabled:
+	if p.config.Auth.Strategy_ == StrategyDisabled {
 		return true
+	}
+
+	var secretName string
+	var ok bool
+	switch p.config.Auth.Strategy_ {
 	case StrategyBasic:
-		return p.authBasic(req)
+		secretName, ok = p.authBasic(req)
 	case StrategyBearer:
-		return p.authBearer(req)
+		secretName, ok = p.authBearer(req)
 	default:
 		panic("unreachable")
 	}
-}
-
-func (p *Plugin) authBasic(req *http.Request) bool {
-	username, password, ok := req.BasicAuth()
 	if !ok {
 		return false
 	}
-	return p.config.Auth.Passwords[username] == password
+	p.httpInputMetrics[secretName].Inc()
+	return true
 }
 
-func (p *Plugin) authBearer(req *http.Request) bool {
+func (p *Plugin) authBasic(req *http.Request) (string, bool) {
+	username, password, ok := req.BasicAuth()
+	if !ok {
+		return username, false
+	}
+	return username, p.config.Auth.Secrets[username] == password
+}
+
+func (p *Plugin) authBearer(req *http.Request) (string, bool) {
 	authHeader := req.Header.Get("Authorization")
 	const prefix = "Bearer "
 	if len(authHeader) <= len(prefix) || !strings.HasPrefix(authHeader, prefix) {
-		return false
+		return "", false
 	}
 	token := authHeader[len(prefix):]
-	_, ok := p.uniqBearerTokens[token]
-	return ok
+	name, ok := p.nameByBearerToken[token]
+	return name, ok
 }
