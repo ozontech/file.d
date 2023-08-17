@@ -198,15 +198,14 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 	p.httpErrorMetric = ctl.RegisterCounter("input_http_errors", "Total http errors")
 
-	if p.config.Auth.Strategy_ == StrategyDisabled {
-		return
+	if p.config.Auth.Strategy_ != StrategyDisabled {
+		httpAuthTotal := ctl.RegisterCounter("http_auth_total", "", "secret_name")
+		p.httpInputMetrics = make(map[string]prometheus.Counter, len(p.config.Auth.Secrets))
+		for key := range p.config.Auth.Secrets {
+			p.httpInputMetrics[key] = httpAuthTotal.WithLabelValues(key)
+		}
 	}
 
-	httpAuthTotal := ctl.RegisterCounter("http_auth_total", "", "secret_name")
-	p.httpInputMetrics = make(map[string]prometheus.Counter, len(p.config.Auth.Secrets))
-	for key := range p.config.Auth.Secrets {
-		p.httpInputMetrics[key] = httpAuthTotal.WithLabelValues(key)
-	}
 }
 
 func (p *Plugin) listenHTTP() {
@@ -265,7 +264,7 @@ func (p *Plugin) putSourceID(x pipeline.SourceID) {
 func (p *Plugin) serve(w http.ResponseWriter, r *http.Request) {
 	ok := p.auth(r)
 	if !ok {
-		p.logger.Debug("auth failed",
+		p.logger.Warn("auth failed",
 			zap.String("user_agent", r.UserAgent()),
 			zap.Any("headers", r.Header),
 			zap.String("remote_addr", r.RemoteAddr),
