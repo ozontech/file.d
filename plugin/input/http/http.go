@@ -200,7 +200,7 @@ func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 	p.httpErrorMetric = ctl.RegisterCounter("input_http_errors", "Total http errors")
 
 	if p.config.Auth.Strategy_ != StrategyDisabled {
-		httpAuthTotal := ctl.RegisterCounter("http_auth_total", "", "secret_name")
+		httpAuthTotal := ctl.RegisterCounter("http_auth_success_total", "", "secret_name")
 		p.successfulAuthTotal = make(map[string]prometheus.Counter, len(p.config.Auth.Secrets))
 		for key := range p.config.Auth.Secrets {
 			p.successfulAuthTotal[key] = httpAuthTotal.WithLabelValues(key)
