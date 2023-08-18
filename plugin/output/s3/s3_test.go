@@ -620,7 +620,6 @@ func TestStartWithSendProblems(t *testing.T) {
 	scanner := bufio.NewScanner(f)
 	lineCounter := 0
 	for scanner.Scan() {
-		fmt.Println(scanner.Text())
 		lineCounter++
 	}
 	assert.GreaterOrEqual(t, lineCounter, 3)
