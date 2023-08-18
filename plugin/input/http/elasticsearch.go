@@ -107,14 +107,14 @@ func (p *Plugin) elasticsearch(mux *http.ServeMux) {
 func (p *Plugin) serveElasticsearchXPack(w http.ResponseWriter, _ *http.Request) {
 	_, err := w.Write(xpack)
 	if err != nil {
-		p.logger.Error("can't write response: %s", zap.Error(err))
+		p.logger.Error("can't write response", zap.Error(err))
 	}
 }
 
 func (p *Plugin) serveElasticsearchTemplate(w http.ResponseWriter, _ *http.Request) {
 	_, err := w.Write(empty)
 	if err != nil {
-		p.logger.Error("can't write response: %s", zap.Error(err))
+		p.logger.Error("can't write response", zap.Error(err))
 	}
 }
 
@@ -122,7 +122,7 @@ func (p *Plugin) serveElasticsearchInfo(w http.ResponseWriter, r *http.Request) 
 	if r.Method == http.MethodGet && r.RequestURI == "/" {
 		_, err := w.Write(info)
 		if err != nil {
-			p.logger.Error("can't write response: %s", zap.Error(err))
+			p.logger.Error("can't write response", zap.Error(err))
 		}
 		return
 	}

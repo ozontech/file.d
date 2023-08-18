@@ -205,7 +205,6 @@ func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 			p.httpInputMetrics[key] = httpAuthTotal.WithLabelValues(key)
 		}
 	}
-
 }
 
 func (p *Plugin) listenHTTP() {
@@ -279,10 +278,8 @@ func (p *Plugin) serve(w http.ResponseWriter, r *http.Request) {
 	sourceID := p.getSourceID()
 	defer p.putSourceID(sourceID)
 
-	total := 0
 	for {
 		n, err := r.Body.Read(readBuff)
-		total += n
 		if n == 0 && err == io.EOF {
 			break
 		}
