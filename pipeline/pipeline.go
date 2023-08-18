@@ -299,7 +299,7 @@ func (p *Pipeline) Start() {
 func (p *Pipeline) Stop() {
 	p.logger.Info("stopping pipeline", zap.Int64("committed", p.outputEvents.Load()))
 
-	p.logger.Info("stopping processors", zap.Int("count", len(p.Procs)))
+	p.logger.Info("stopping processors", zap.Int32("count", p.procCount.Load()))
 	for _, processor := range p.Procs {
 		processor.stop()
 	}
