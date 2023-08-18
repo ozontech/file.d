@@ -1,6 +1,7 @@
 package k8s
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -119,18 +120,21 @@ func initGatherer() {
 		panic("")
 	}
 
-	initNodeInfo()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+
+	initNodeInfo(ctx)
 	initInformer()
-	initRuntime()
+	initRuntime(ctx)
 }
 
-func initNodeInfo() {
+func initNodeInfo(ctx context.Context) {
 	podName, err := os.Hostname()
 	if err != nil {
 		localLogger.Fatalf("can't get host name for k8s plugin: %s", err.Error())
 		panic("")
 	}
-	pod, err := client.CoreV1().Pods(getNamespace()).Get(podName, metav1.GetOptions{})
+	pod, err := client.CoreV1().Pods(getNamespace()).Get(ctx, podName, metav1.GetOptions{})
 	if err != nil {
 		localLogger.Fatalf("can't detect node name for k8s plugin using pod %q: %s", podName, err.Error())
 		panic("")
@@ -157,8 +161,8 @@ func initInformer() {
 	controller = c
 }
 
-func initRuntime() {
-	node, err := client.CoreV1().Nodes().Get(selfNodeName, metav1.GetOptions{})
+func initRuntime(ctx context.Context) {
+	node, err := client.CoreV1().Nodes().Get(ctx, selfNodeName, metav1.GetOptions{})
 	if err != nil || node == nil {
 		localLogger.Fatalf("can't detect CRI runtime for node %s, api call is unsuccessful: %s", node, err.Error())
 		panic("_")
@@ -321,7 +325,8 @@ func putMeta(podData *corev1.Pod) {
 	metaDataMu.Unlock()
 
 	// normal containers
-	for _, status := range podCopy.Status.ContainerStatuses {
+	for i := range podCopy.Status.ContainerStatuses {
+		status := &podCopy.Status.ContainerStatuses[i]
 		putContainerMeta(ns, pod, status.ContainerID, podCopy)
 
 		if status.LastTerminationState.Terminated != nil {
@@ -330,7 +335,8 @@ func putMeta(podData *corev1.Pod) {
 	}
 
 	// init containers
-	for _, status := range podCopy.Status.InitContainerStatuses {
+	for i := range podCopy.Status.InitContainerStatuses {
+		status := &podCopy.Status.InitContainerStatuses[i]
 		putContainerMeta(ns, pod, status.ContainerID, podCopy)
 
 		if status.LastTerminationState.Terminated != nil {
