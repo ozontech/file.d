@@ -88,7 +88,7 @@ If both ca_cert and private_key are set, the server starts accepting connections
 Auth config.
 Disabled by default.
 See AuthConfig for details.
-You can use 'debug' log level to debug authorizations.
+You can use 'warn' log level for logging authorizations.
 
 <br>
 

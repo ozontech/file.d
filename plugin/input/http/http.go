@@ -93,8 +93,9 @@ type Plugin struct {
 
 	// plugin metrics
 
-	httpInputMetrics map[string]prometheus.Counter
-	httpErrorMetric  *prometheus.CounterVec
+	successfulAuthTotal map[string]prometheus.Counter
+	failedAuthTotal     prometheus.Counter
+	httpErrorMetric     *prometheus.CounterVec
 }
 
 // ! config-params
@@ -124,7 +125,7 @@ type Config struct {
 	// > Auth config.
 	// > Disabled by default.
 	// > See AuthConfig for details.
-	// > You can use 'debug' log level to debug authorizations.
+	// > You can use 'warn' log level for logging authorizations.
 	Auth AuthConfig `json:"auth" child:"true"` // *
 }
 
@@ -200,10 +201,11 @@ func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 
 	if p.config.Auth.Strategy_ != StrategyDisabled {
 		httpAuthTotal := ctl.RegisterCounter("http_auth_total", "", "secret_name")
-		p.httpInputMetrics = make(map[string]prometheus.Counter, len(p.config.Auth.Secrets))
+		p.successfulAuthTotal = make(map[string]prometheus.Counter, len(p.config.Auth.Secrets))
 		for key := range p.config.Auth.Secrets {
-			p.httpInputMetrics[key] = httpAuthTotal.WithLabelValues(key)
+			p.successfulAuthTotal[key] = httpAuthTotal.WithLabelValues(key)
 		}
+		p.failedAuthTotal = ctl.RegisterCounter("http_auth_fails_total", "").WithLabelValues()
 	}
 }
 
@@ -369,9 +371,10 @@ func (p *Plugin) auth(req *http.Request) bool {
 		panic("unreachable")
 	}
 	if !ok {
+		p.failedAuthTotal.Inc()
 		return false
 	}
-	p.httpInputMetrics[secretName].Inc()
+	p.successfulAuthTotal[secretName].Inc()
 	return true
 }
 
@@ -386,7 +389,7 @@ func (p *Plugin) authBasic(req *http.Request) (string, bool) {
 func (p *Plugin) authBearer(req *http.Request) (string, bool) {
 	authHeader := req.Header.Get("Authorization")
 	const prefix = "Bearer "
-	if len(authHeader) <= len(prefix) || !strings.HasPrefix(authHeader, prefix) {
+	if !strings.HasPrefix(authHeader, prefix) {
 		return "", false
 	}
 	token := authHeader[len(prefix):]
