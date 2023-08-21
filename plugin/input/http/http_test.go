@@ -2,10 +2,12 @@ package http
 
 import (
 	"bytes"
+	"compress/gzip"
 	"encoding/base64"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"runtime"
 	"strings"
@@ -180,11 +182,11 @@ func TestServeChunks(t *testing.T) {
 	})
 
 	resp := httptest.NewRecorder()
-	input.Plugin.(*Plugin).serve(resp, httptest.NewRequest(http.MethodPost, "/logger", strings.NewReader(`{"a":"1"}`)))
+	input.Plugin.(*Plugin).ServeHTTP(resp, httptest.NewRequest(http.MethodPost, "/logger", strings.NewReader(`{"a":"1"}`)))
 	require.Equal(t, http.StatusOK, resp.Result().StatusCode)
 
 	resp = httptest.NewRecorder()
-	input.Plugin.(*Plugin).serve(resp, httptest.NewRequest(http.MethodPost, "/logger", strings.NewReader(`{"b":"2"}`+"\n")))
+	input.Plugin.(*Plugin).ServeHTTP(resp, httptest.NewRequest(http.MethodPost, "/logger", strings.NewReader(`{"b":"2"}`+"\n")))
 	require.Equal(t, http.StatusOK, resp.Result().StatusCode)
 
 	wg.Wait()
@@ -265,7 +267,7 @@ func TestServePartialRequest(t *testing.T) {
 
 	doneCh := make(chan struct{})
 	go func() {
-		input.Plugin.(*Plugin).serve(resp, httptest.NewRequest(http.MethodPost, "/_bulk", reader))
+		input.Plugin.(*Plugin).ServeHTTP(resp, httptest.NewRequest(http.MethodPost, "/_bulk", reader))
 		close(doneCh)
 	}()
 
@@ -310,7 +312,7 @@ func TestServeChunksContinue(t *testing.T) {
 	body = append(body, `"}`...)
 
 	resp := httptest.NewRecorder()
-	input.Plugin.(*Plugin).serve(resp, httptest.NewRequest(http.MethodPost, "/logger", bytes.NewReader(body)))
+	input.Plugin.(*Plugin).ServeHTTP(resp, httptest.NewRequest(http.MethodPost, "/logger", bytes.NewReader(body)))
 	require.Equal(t, http.StatusOK, resp.Result().StatusCode)
 
 	wg.Wait()
@@ -490,5 +492,100 @@ func BenchmarkHttpInputJson(b *testing.B) {
 		wg.Wait()
 
 		p.Stop()
+	}
+}
+
+func TestGzip(t *testing.T) {
+	t.Parallel()
+	r := require.New(t)
+
+	gzipHeaders := http.Header{"Content-Encoding": []string{"gzip"}}
+
+	newReq := func(rawUrl, method string, body string, headers http.Header, useGzip bool) *http.Request {
+		bodyReader := io.Reader(strings.NewReader(body))
+		if useGzip {
+			buf := new(bytes.Buffer)
+
+			gzw := gzip.NewWriter(buf)
+			_, _ = gzw.Write([]byte(body))
+			r.NoError(gzw.Close())
+
+			bodyReader = buf
+		}
+
+		u, err := url.Parse(rawUrl)
+		r.NoError(err)
+
+		return &http.Request{
+			Header: headers,
+			Body:   io.NopCloser(bodyReader),
+			URL:    u,
+			Method: method,
+		}
+	}
+
+	tests := []struct {
+		Name               string
+		Request            *http.Request
+		ExpectedStatusCode int
+		ExpectedBody       string
+		ExpectedEvents     int
+	}{
+		{
+			Name:               "process bulk",
+			Request:            newReq("_bulk", http.MethodPost, strings.Repeat(`{"ping": "pong"}`+"\n", 10), nil, false),
+			ExpectedStatusCode: http.StatusOK,
+			ExpectedBody:       string(result),
+			ExpectedEvents:     10,
+		},
+		{
+			Name:               "process gzipped bulk",
+			Request:            newReq("_bulk", http.MethodPost, strings.Repeat(`{"ok": "google"}`+"\n", 10), gzipHeaders, true),
+			ExpectedStatusCode: http.StatusOK,
+			ExpectedBody:       string(result),
+			ExpectedEvents:     10,
+		},
+		{
+			Name:               "discards invalid requests",
+			Request:            newReq("_bulk", http.MethodPost, `{"ok": "google"}`, gzipHeaders, false),
+			ExpectedStatusCode: http.StatusBadRequest,
+			ExpectedEvents:     0,
+		},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.Name, func(t *testing.T) {
+			t.Parallel()
+
+			pipelineMock, _, output := test.NewPipelineMock(nil, "passive")
+
+			conf := &Config{Address: "off"}
+			inputInfo := getInputInfo(conf)
+
+			pipelineMock.SetInput(inputInfo)
+			// init http plugin
+			pipelineMock.Start()
+
+			wg := sync.WaitGroup{}
+			wg.Add(tc.ExpectedEvents)
+			cnt := 0
+			output.SetOutFn(func(event *pipeline.Event) {
+				cnt++
+				wg.Done()
+			})
+
+			rec := httptest.NewRecorder()
+
+			inputInfo.Plugin.(*Plugin).ServeHTTP(rec, tc.Request)
+
+			r.Equal(tc.ExpectedStatusCode, rec.Code)
+			if tc.ExpectedBody != "" {
+				r.Equal(tc.ExpectedBody, rec.Body.String())
+			}
+
+			wg.Wait()
+			pipelineMock.Stop()
+		})
 	}
 }
