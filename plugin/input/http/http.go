@@ -287,6 +287,21 @@ func (p *Plugin) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.Header().Add("Content-Type", "application/json")
 		w.Header().Set("X-Elastic-Product", "Elasticsearch")
 
+		switch path {
+		case "/_bulk":
+			p.serveBulk(w, r)
+			return
+		case "/":
+			p.serveElasticsearchInfo(w, r)
+			return
+		case "/_xpack":
+			p.serveElasticsearchXPack(w, r)
+			return
+		case "/_license":
+			p.serveElasticsearchLicense(w, r)
+			return
+		}
+
 		if strings.HasPrefix(path, "/_ilm/policy") {
 			_, _ = w.Write(empty)
 			return
@@ -308,23 +323,8 @@ func (p *Plugin) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		switch path {
-		case "/":
-			p.serveElasticsearchInfo(w, r)
-			return
-		case "/_xpack":
-			p.serveElasticsearchXPack(w, r)
-			return
-		case "/_license":
-			p.serveElasticsearchLicense(w, r)
-			return
-		case "/_bulk":
-			p.serveBulk(w, r)
-			return
-		default:
-			p.logger.Error("unknown elasticsearch request", zap.String("uri", r.RequestURI), zap.String("method", r.Method))
-			return
-		}
+		p.logger.Error("unknown elasticsearch request", zap.String("uri", r.RequestURI), zap.String("method", r.Method))
+		return
 	case EmulateModeNo:
 		p.serveBulk(w, r)
 		return
