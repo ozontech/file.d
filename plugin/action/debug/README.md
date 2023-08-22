@@ -33,5 +33,12 @@ Check the example above for more information.
 
 <br>
 
+**`message`** *`string`* *`default=event sample`* 
+
+'message' field content.
+Use it to determine which 'debug' action has written the log.
+
+<br>
+
 
 <br>*Generated using [__insane-doc__](https://github.com/vitkovskii/insane-doc)*
