@@ -2,6 +2,8 @@ package debug
 
 import (
 	"encoding/json"
+	"fmt"
+	"sync"
 	"time"
 
 	"github.com/ozontech/file.d/cfg"
@@ -10,6 +12,8 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
+
+const eventField = "event"
 
 /*{ introduction
 It logs event to stderr. Useful for debugging.
@@ -34,6 +38,7 @@ Following that, it will allow through every 5th event in that interval.
 
 type Plugin struct {
 	logger *zap.Logger
+	config *Config
 }
 
 // ! config-params
@@ -48,6 +53,12 @@ type Config struct {
 	// >
 	// > Check the example above for more information.
 	Thereafter int `json:"thereafter"` // *
+
+	// > @3@4@5@6
+	// >
+	// > 'message' field content.
+	// > Use it to determine which 'debug' action has written the log.
+	Message string `json:"message" default:"event sample"` // *
 }
 
 func init() {
@@ -62,29 +73,49 @@ func factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 }
 
 func (p *Plugin) Start(anyConfig pipeline.AnyConfig, params *pipeline.ActionPluginParams) {
-	config := anyConfig.(*Config)
+	p.config = anyConfig.(*Config)
 
-	parentLogger := params.Logger.Desugar()
-
-	if config.Interval_ != 0 {
-		// enable sampler
-		p.logger = parentLogger.WithOptions(zap.WrapCore(func(core zapcore.Core) zapcore.Core {
-			return zapcore.NewSamplerWithOptions(parentLogger.Core(), config.Interval_, config.First, config.Thereafter)
-		}))
-	} else {
-		p.logger = parentLogger
+	lg := params.Logger.Desugar()
+	if p.config.Message == eventField {
+		lg.Fatal(fmt.Sprintf("the %s is reserved", eventField))
 	}
+
+	p.setupLogger(params.PipelineName, lg, p.config)
 }
 
 func (p *Plugin) Stop() {
 }
 
 func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
-	if ce := p.logger.Check(zapcore.InfoLevel, "new event"); ce != nil {
+	if ce := p.logger.Check(zapcore.InfoLevel, p.config.Message); ce != nil {
 		ce.Write(
 			zap.Int64("offset", event.Offset),
-			zap.Any("event", json.RawMessage(event.Root.EncodeToString())),
+			zap.Any(eventField, json.RawMessage(event.Root.EncodeToString())),
 		)
 	}
 	return pipeline.ActionPass
+}
+
+var (
+	loggerByPipeline   = make(map[string]*zap.Logger)
+	loggerByPipelineMu sync.Mutex
+)
+
+func (p *Plugin) setupLogger(pipelineName string, parentLogger *zap.Logger, config *Config) {
+	loggerByPipelineMu.Lock()
+	defer loggerByPipelineMu.Unlock()
+
+	lg, ok := loggerByPipeline[pipelineName]
+	if !ok {
+		if config.Interval_ != 0 {
+			// enable sampler
+			lg = parentLogger.WithOptions(zap.WrapCore(func(core zapcore.Core) zapcore.Core {
+				return zapcore.NewSamplerWithOptions(parentLogger.Core(), config.Interval_, config.First, config.Thereafter)
+			}))
+		} else {
+			lg = parentLogger
+		}
+		loggerByPipeline[pipelineName] = lg
+	}
+	p.logger = lg
 }
