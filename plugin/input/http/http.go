@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/klauspost/compress/gzip"
 	"github.com/ozontech/file.d/fd"
@@ -79,26 +80,31 @@ const (
 )
 
 type Plugin struct {
+	mu sync.Mutex
+
+	server            *http.Server
 	config            *Config
 	nameByBearerToken map[string]string
+	logger            *zap.Logger
 
 	params     *pipeline.InputPluginParams
-	readBuffs  sync.Pool
-	eventBuffs sync.Pool
 	controller pipeline.InputPluginController
-	server     *http.Server
-	sourceIDs  []pipeline.SourceID
-	sourceSeq  pipeline.SourceID
-	mu         sync.Mutex
-	logger     *zap.Logger
+
+	sourceIDs []pipeline.SourceID
+	sourceSeq pipeline.SourceID
+
+	gzipReaderPool sync.Pool
+	readBuffs      sync.Pool
+	eventBuffs     sync.Pool
 
 	// plugin metrics
 
-	successfulAuthTotal map[string]prometheus.Counter
-	failedAuthTotal     prometheus.Counter
-	httpErrorMetric     *prometheus.CounterVec
-
-	gzipReaderPool sync.Pool
+	successfulAuthTotal   map[string]prometheus.Counter
+	failedAuthTotal       prometheus.Counter
+	errorsTotal           prometheus.Counter
+	bulkRequestsDoneTotal prometheus.Counter
+	requestsInProgress    prometheus.Gauge
+	processBulkSeconds    prometheus.Observer
 }
 
 type EmulateMode byte
@@ -204,7 +210,10 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 }
 
 func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
-	p.httpErrorMetric = ctl.RegisterCounter("input_http_errors", "Total http errors")
+	p.bulkRequestsDoneTotal = ctl.RegisterCounter("bulk_requests_done_total", "").WithLabelValues()
+	p.requestsInProgress = ctl.RegisterGauge("requests_in_progress", "").WithLabelValues()
+	p.processBulkSeconds = ctl.RegisterHistogram("process_bulk_seconds", "", metric.SecondsBucketsDetailed).WithLabelValues()
+	p.errorsTotal = ctl.RegisterCounter("input_http_errors", "Total http errors").WithLabelValues()
 
 	if p.config.Auth.Strategy_ != StrategyDisabled {
 		httpAuthTotal := ctl.RegisterCounter("http_auth_success_total", "", "secret_name")
@@ -272,6 +281,8 @@ func (p *Plugin) putSourceID(x pipeline.SourceID) {
 func (p *Plugin) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ok := p.auth(r)
 	if !ok {
+		p.failedAuthTotal.Inc()
+		p.errorsTotal.Inc()
 		p.logger.Warn("auth failed",
 			zap.String("user_agent", r.UserAgent()),
 			zap.Any("headers", r.Header),
@@ -339,10 +350,14 @@ func (p *Plugin) serveBulk(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	start := time.Now()
+	p.requestsInProgress.Inc()
+
 	reader := io.Reader(r.Body)
 	if r.Header.Get("Content-Encoding") == "gzip" {
 		zr, err := p.acquireGzipReader(reader)
 		if err != nil {
+			p.errorsTotal.Inc()
 			p.logger.Error("can't read gzipped body", zap.Error(err))
 			http.Error(w, "can't read gzipped body", http.StatusBadRequest)
 			return
@@ -352,12 +367,17 @@ func (p *Plugin) serveBulk(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := p.processBulk(reader); err != nil {
-		p.httpErrorMetric.WithLabelValues().Inc()
+		p.errorsTotal.Inc()
 		p.logger.Error("http input read error", zap.Error(err))
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, "http input read error", http.StatusBadRequest)
 		return
 	}
+
 	_, _ = w.Write(result)
+
+	p.requestsInProgress.Dec()
+	p.bulkRequestsDoneTotal.Inc()
+	p.processBulkSeconds.Observe(time.Since(start).Seconds())
 }
 
 func (p *Plugin) processBulk(r io.Reader) error {
@@ -449,7 +469,6 @@ func (p *Plugin) auth(req *http.Request) bool {
 		panic("unreachable")
 	}
 	if !ok {
-		p.failedAuthTotal.Inc()
 		return false
 	}
 	p.successfulAuthTotal[secretName].Inc()
