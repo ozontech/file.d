@@ -12,7 +12,7 @@ import (
 )
 
 type Event struct {
-	kind atomic.Int32
+	kind Kind
 
 	Root *insaneJSON.Root
 	Buf  []byte
@@ -24,7 +24,7 @@ type Event struct {
 	streamName StreamName
 	Size       int // last known event size, it may not be actual
 
-	action atomic.Int64
+	action int
 	next   *Event
 	stream *stream
 
@@ -47,6 +47,18 @@ const (
 	EventKindTimeout
 	EventKindUnlock
 )
+
+func (k Kind) String() string {
+	switch k {
+	case EventKindRegular:
+		return "REGULAR"
+	case EventKindTimeout:
+		return "TIMEOUT"
+	case EventKindUnlock:
+		return "UNLOCK"
+	}
+	return "UNKNOWN"
+}
 
 type eventStage int
 
@@ -103,9 +115,9 @@ func (e *Event) reset(avgEventSize int) {
 	e.Buf = e.Buf[:0]
 	e.stage = eventStageInput
 	e.next = nil
-	e.action = atomic.Int64{}
+	e.action = 0
 	e.stream = nil
-	e.kind.Swap(int32(EventKindRegular))
+	e.kind = EventKindRegular
 }
 
 func (e *Event) StreamNameBytes() []byte {
@@ -113,27 +125,27 @@ func (e *Event) StreamNameBytes() []byte {
 }
 
 func (e *Event) IsRegularKind() bool {
-	return Kind(e.kind.Load()) == EventKindRegular
+	return e.kind == EventKindRegular
 }
 
 func (e *Event) IsUnlockKind() bool {
-	return Kind(e.kind.Load()) == EventKindUnlock
+	return e.kind == EventKindUnlock
 }
 
 func (e *Event) SetUnlockKind() {
-	e.kind.Swap(int32(EventKindUnlock))
+	e.kind = EventKindUnlock
 }
 
 func (e *Event) IsIgnoreKind() bool {
-	return Kind(e.kind.Load()) == EventKindUnlock
+	return e.kind == EventKindUnlock
 }
 
 func (e *Event) SetTimeoutKind() {
-	e.kind.Swap(int32(EventKindTimeout))
+	e.kind = EventKindTimeout
 }
 
 func (e *Event) IsTimeoutKind() bool {
-	return Kind(e.kind.Load()) == EventKindTimeout
+	return e.kind == EventKindTimeout
 }
 
 func (e *Event) parseJSON(json []byte) error {
@@ -169,26 +181,11 @@ func (e *Event) stageStr() string {
 	}
 }
 
-func (e *Event) kindStr() string {
-	switch Kind(e.kind.Load()) {
-	case EventKindRegular:
-		return "REGULAR"
-	case EventKindTimeout:
-		return "TIMEOUT"
-	default:
-		return "UNKNOWN"
-	}
-}
-
 func (e *Event) String() string {
 	if e == nil {
 		return ""
 	}
-	return fmt.Sprintf("kind=%s, action=%d, source=%d/%s, stream=%s, stage=%s, json=%s", e.kindStr(), e.action.Load(), e.SourceID, e.SourceName, e.streamName, e.stageStr(), e.Root.EncodeToString())
-}
-
-func (e *Event) CopyTo(event *Event) {
-	*event = *e
+	return fmt.Sprintf("kind=%s, action=%d, source=%d/%s, stream=%s, stage=%s, json=%s", e.kind.String(), e.action, e.SourceID, e.SourceName, e.streamName, e.stageStr(), e.Root.EncodeToString())
 }
 
 // channels are slower than this implementation by ~20%

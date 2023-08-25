@@ -3,10 +3,10 @@ package http
 import (
 	"io"
 	"net/http"
+	"strings"
 	"sync"
 
 	"github.com/ozontech/file.d/fd"
-	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/tls"
@@ -60,7 +60,7 @@ pipelines:
 ```
 
 Setup:
-```
+```bash
 # run server.
 # config.yaml should contains yaml config above.
 go run ./cmd/file.d --config=config.yaml
@@ -70,9 +70,7 @@ curl "localhost:9200/_bulk" -H 'Content-Type: application/json' -d \
 '{"index":{"_index":"index-main","_type":"span"}}
 {"message": "hello", "kind": "normal"}
 '
-
-##
-
+```
 }*/
 
 const (
@@ -80,19 +78,24 @@ const (
 )
 
 type Plugin struct {
-	config     *Config
+	config            *Config
+	nameByBearerToken map[string]string
+
 	params     *pipeline.InputPluginParams
-	readBuffs  *sync.Pool
-	eventBuffs *sync.Pool
+	readBuffs  sync.Pool
+	eventBuffs sync.Pool
 	controller pipeline.InputPluginController
 	server     *http.Server
 	sourceIDs  []pipeline.SourceID
 	sourceSeq  pipeline.SourceID
-	mu         *sync.Mutex
-	logger     *zap.SugaredLogger
+	mu         sync.Mutex
+	logger     *zap.Logger
 
 	// plugin metrics
-	httpErrorMetric prometheus.Counter
+
+	successfulAuthTotal map[string]prometheus.Counter
+	failedAuthTotal     prometheus.Counter
+	httpErrorMetric     prometheus.Counter
 }
 
 // ! config-params
@@ -116,6 +119,39 @@ type Config struct {
 	// > CA private key in PEM encoding. This can be a path or the content of the key.
 	// > If both ca_cert and private_key are set, the server starts accepting connections in TLS mode.
 	PrivateKey string `json:"private_key" default:""` // *
+
+	// > @3@4@5@6
+	// >
+	// > Auth config.
+	// > Disabled by default.
+	// > See AuthConfig for details.
+	// > You can use 'warn' log level for logging authorizations.
+	Auth AuthConfig `json:"auth" child:"true"` // *
+}
+
+type AuthStrategy byte
+
+const (
+	StrategyDisabled AuthStrategy = iota
+	StrategyBasic
+	StrategyBearer
+)
+
+// ! config-params
+// ^ config-params
+type AuthConfig struct {
+	// > @3@4@5@6
+	// >
+	// > AuthStrategy.Strategy describes strategy to use.
+	Strategy  string `json:"strategy" default:"disabled" options:"disabled|basic|bearer"` // *
+	Strategy_ AuthStrategy
+	// > @3@4@5@6
+	// >
+	// > AuthStrategy.Secrets describes secrets in key-value format.
+	// > If the `strategy` is basic, then the key is the login, the value is the password.
+	// > If the `strategy` is bearer, then the key is the name, the value is the Bearer token.
+	// > Key uses in the http_input_total metric.
+	Secrets map[string]string `json:"secrets"` // *
 }
 
 func init() {
@@ -132,12 +168,16 @@ func Factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginParams) {
 	p.config = config.(*Config)
 	p.params = params
-	p.logger = params.Logger
+	p.logger = params.Logger.Desugar()
 	p.registerMetrics(params.MetricCtl)
 
-	p.readBuffs = &sync.Pool{}
-	p.eventBuffs = &sync.Pool{}
-	p.mu = &sync.Mutex{}
+	if p.config.Auth.Strategy_ == StrategyBearer {
+		p.nameByBearerToken = make(map[string]string, len(p.config.Auth.Secrets))
+		for name, token := range p.config.Auth.Secrets {
+			p.nameByBearerToken[token] = name
+		}
+	}
+
 	p.controller = params.Controller
 	p.controller.DisableStreams()
 	p.sourceIDs = make([]pipeline.SourceID, 0)
@@ -158,6 +198,15 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 
 func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 	p.httpErrorMetric = ctl.RegisterCounter("input_http_errors", "Total http errors")
+
+	if p.config.Auth.Strategy_ != StrategyDisabled {
+		httpAuthTotal := ctl.RegisterCounterVec("http_auth_success_total", "", "secret_name")
+		p.successfulAuthTotal = make(map[string]prometheus.Counter, len(p.config.Auth.Secrets))
+		for key := range p.config.Auth.Secrets {
+			p.successfulAuthTotal[key] = httpAuthTotal.WithLabelValues(key)
+		}
+		p.failedAuthTotal = ctl.RegisterCounter("http_auth_fails_total", "")
+	}
 }
 
 func (p *Plugin) listenHTTP() {
@@ -174,7 +223,7 @@ func (p *Plugin) listenHTTP() {
 	}
 
 	if err != nil {
-		logger.Fatalf("input plugin http listening error address=%q: %s", p.config.Address, err.Error())
+		p.logger.Fatal("input plugin http listening error", zap.String("addr", p.config.Address), zap.Error(err))
 	}
 }
 
@@ -214,6 +263,17 @@ func (p *Plugin) putSourceID(x pipeline.SourceID) {
 }
 
 func (p *Plugin) serve(w http.ResponseWriter, r *http.Request) {
+	ok := p.auth(r)
+	if !ok {
+		p.logger.Warn("auth failed",
+			zap.String("user_agent", r.UserAgent()),
+			zap.Any("headers", r.Header),
+			zap.String("remote_addr", r.RemoteAddr),
+		)
+		http.Error(w, "auth failed", http.StatusUnauthorized)
+		return
+	}
+
 	readBuff := p.newReadBuff()
 	eventBuff := p.newEventBuffs()
 
@@ -228,7 +288,7 @@ func (p *Plugin) serve(w http.ResponseWriter, r *http.Request) {
 
 		if err != nil && err != io.EOF {
 			p.httpErrorMetric.Inc()
-			logger.Errorf("http input read error: %s", err.Error())
+			p.logger.Error("http input read error", zap.Error(err))
 			break
 		}
 
@@ -241,14 +301,13 @@ func (p *Plugin) serve(w http.ResponseWriter, r *http.Request) {
 
 	_ = r.Body.Close()
 
-	// https://staticcheck.io/docs/checks/#SA6002
 	p.readBuffs.Put(&readBuff)
 	p.eventBuffs.Put(&eventBuff)
 
 	_, err := w.Write(result)
 	if err != nil {
 		p.httpErrorMetric.Inc()
-		logger.Errorf("can't write response: %s", err.Error())
+		p.logger.Error("can't write response", zap.Error(err))
 	}
 }
 
@@ -294,4 +353,46 @@ func (p *Plugin) Commit(_ *pipeline.Event) {
 // PassEvent decides pass or discard event.
 func (p *Plugin) PassEvent(_ *pipeline.Event) bool {
 	return true
+}
+
+func (p *Plugin) auth(req *http.Request) bool {
+	if p.config.Auth.Strategy_ == StrategyDisabled {
+		return true
+	}
+
+	var secretName string
+	var ok bool
+	switch p.config.Auth.Strategy_ {
+	case StrategyBasic:
+		secretName, ok = p.authBasic(req)
+	case StrategyBearer:
+		secretName, ok = p.authBearer(req)
+	default:
+		panic("unreachable")
+	}
+	if !ok {
+		p.failedAuthTotal.Inc()
+		return false
+	}
+	p.successfulAuthTotal[secretName].Inc()
+	return true
+}
+
+func (p *Plugin) authBasic(req *http.Request) (string, bool) {
+	username, password, ok := req.BasicAuth()
+	if !ok {
+		return username, false
+	}
+	return username, p.config.Auth.Secrets[username] == password
+}
+
+func (p *Plugin) authBearer(req *http.Request) (string, bool) {
+	authHeader := req.Header.Get("Authorization")
+	const prefix = "Bearer "
+	if !strings.HasPrefix(authHeader, prefix) {
+		return "", false
+	}
+	token := authHeader[len(prefix):]
+	name, ok := p.nameByBearerToken[token]
+	return name, ok
 }

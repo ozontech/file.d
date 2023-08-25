@@ -80,7 +80,6 @@ type limitersMap struct {
 	ctx              context.Context
 	lims             map[string]*limiterWithGen
 	mu               *sync.RWMutex
-	limiterBuf       []byte
 	activeTasks      atomic.Uint32
 	curGen           int64
 	limitersExp      int64
@@ -101,7 +100,6 @@ func newLimitersMap(lmCfg limitersMapConfig, redisOpts *redis.Options) *limiters
 		ctx:         lmCfg.ctx,
 		lims:        make(map[string]*limiterWithGen),
 		mu:          &sync.RWMutex{},
-		limiterBuf:  make([]byte, 0),
 		activeTasks: *atomic.NewUint32(0),
 		curGen:      nowTs,
 		limitersExp: lmCfg.limitersExpiration.Microseconds(),
@@ -249,33 +247,34 @@ func (l *limitersMap) getNewLimiter(throttleKey, keyLimitOverride string, rule *
 // to the current limiters map generation and returns limiter. Otherwise creates new limiter,
 // sets its generation to the current limiters map generation, adds to map under the given key
 // and returns created limiter.
-func (l *limitersMap) getOrAdd(throttleKey, keyLimitOverride string, rule *rule) limiter {
+func (l *limitersMap) getOrAdd(throttleKey, keyLimitOverride string, limiterBuf []byte, rule *rule) (limiter, []byte) {
+	limiterBuf = append(limiterBuf[:0], rule.byteIdxPart...)
+	limiterBuf = append(limiterBuf, throttleKey...)
+
 	// fast check with read lock
 	l.mu.RLock()
-	l.limiterBuf = append(l.limiterBuf[:0], rule.byteIdxPart...)
-	l.limiterBuf = append(l.limiterBuf, throttleKey...)
-	lim, has := l.lims[string(l.limiterBuf)]
+	lim, has := l.lims[string(limiterBuf)]
 	if has {
 		lim.gen.Store(l.curGen)
 		l.mu.RUnlock()
-		return lim
+		return lim, limiterBuf
 	}
-	// copy limiter key, to avoid data races
-	key := string(l.limiterBuf)
 	l.mu.RUnlock()
+	// copy limiter key, to avoid data races
+	key := string(limiterBuf)
 	// we could already write it between `l.mu.RUnlock()` and `l.mu.Lock()`, so we need to check again
 	l.mu.Lock()
 	lim, has = l.lims[key]
 	if has {
 		lim.gen.Store(l.curGen)
 		l.mu.Unlock()
-		return lim
+		return lim, limiterBuf
 	}
 	newLim := l.getNewLimiter(throttleKey, keyLimitOverride, rule)
 	lim = newLimiterWithGen(newLim, l.curGen)
 	l.lims[key] = lim
 	l.mu.Unlock()
-	return lim
+	return lim, limiterBuf
 }
 
 // setNowFn is used for testing purposes. Sets custom now func.

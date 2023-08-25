@@ -4,6 +4,7 @@ package journalctl
 
 import (
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 
@@ -56,8 +57,11 @@ func TestPipeline(t *testing.T) {
 	wg.Add(lines)
 	setOutput(p, func(event *pipeline.Event) {
 		assert.Equal(t, int(event.Offset), total)
-		wg.Done()
 		total++
+		if total > lines {
+			t.Fatal("'total' more than lines")
+		}
+		wg.Done()
 	})
 
 	p.Start()
@@ -89,7 +93,7 @@ func TestOffsets(t *testing.T) {
 
 		setInput(p, config)
 		setOutput(p, func(event *pipeline.Event) {
-			cursors[event.Root.Dig("__CURSOR").AsString()]++
+			cursors[strings.Clone(event.Root.Dig("__CURSOR").AsString())]++
 			wg.Done()
 		})
 

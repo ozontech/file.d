@@ -205,7 +205,6 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 
 	p.logger = params.Logger
 	p.pipeline = params.PipelineName
-	p.limiterBuf = make([]byte, 0)
 	ctx, cancel := context.WithCancel(context.Background())
 	p.ctx = ctx
 	p.cancel = cancel
@@ -323,7 +322,8 @@ func (p *Plugin) isAllowed(event *pipeline.Event) bool {
 		if !rule.isMatch(event) {
 			continue
 		}
-		lim := p.limitersMap.getOrAdd(throttleKey, keyLimitOverride, rule)
+		var lim limiter
+		lim, p.limiterBuf = p.limitersMap.getOrAdd(throttleKey, keyLimitOverride, p.limiterBuf, rule)
 		return lim.isAllowed(event, ts)
 	}
 

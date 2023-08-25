@@ -56,9 +56,8 @@ type ActionPluginController interface {
 }
 
 type OutputPluginController interface {
-	Commit(event *Event, backEvent bool) // notify input plugin that event is successfully processed and save offsets
+	Commit(event *Event) // notify input plugin that event is successfully processed and save offsets
 	Error(err string)
-	ReleaseEvents(events []*Event)
 }
 
 type (
@@ -130,7 +129,7 @@ type Settings struct {
 	MaintenanceInterval time.Duration
 	EventTimeout        time.Duration
 	AntispamThreshold   int
-	AntispamExceptions  []matchrule.RuleSet
+	AntispamExceptions  matchrule.RuleSets
 	AvgEventSize        int
 	MaxEventSize        int
 	StreamField         string
@@ -304,7 +303,7 @@ func (p *Pipeline) Start() {
 func (p *Pipeline) Stop() {
 	p.logger.Info("stopping pipeline", zap.Int64("committed", p.outputEvents.Load()))
 
-	p.logger.Info("stopping processors", zap.Int("count", len(p.Procs)))
+	p.logger.Info("stopping processors", zap.Int32("count", p.procCount.Load()))
 	for _, processor := range p.Procs {
 		processor.stop()
 	}
@@ -496,14 +495,8 @@ func (p *Pipeline) streamEvent(event *Event) uint64 {
 	return p.streamer.putEvent(streamID, event.streamName, event)
 }
 
-func (p *Pipeline) Commit(event *Event, backEvents bool) {
-	p.finalize(event, true, backEvents)
-}
-
-func (p *Pipeline) ReleaseEvents(events []*Event) {
-	for i := range events {
-		p.eventPool.back(events[i])
-	}
+func (p *Pipeline) Commit(event *Event) {
+	p.finalize(event, true, true)
 }
 
 func (p *Pipeline) Error(err string) {
@@ -532,7 +525,7 @@ func (p *Pipeline) finalize(event *Event, notifyInput bool, backEvent bool) {
 		return
 	}
 
-	if p.eventLogEnabled && event.Root != nil {
+	if p.eventLogEnabled {
 		p.eventLogMu.Lock()
 		p.eventLog = append(p.eventLog, event.Root.EncodeToString())
 		p.eventLogMu.Unlock()
@@ -659,11 +652,12 @@ func (p *Pipeline) growProcs() {
 			return
 		}
 		if p.procCount.Load() != p.activeProcs.Load() {
-			t = time.Now()
+			continue
 		}
 
 		if time.Since(t) > interval {
 			p.expandProcs()
+			t = time.Now()
 		}
 	}
 }
@@ -681,7 +675,7 @@ func (p *Pipeline) expandProcs() {
 	}
 
 	for x := 0; x < int(to-from); x++ {
-		proc := p.newProc(p.Procs[from].id + x)
+		proc := p.newProc(p.Procs[from-1].id + x)
 		p.Procs = append(p.Procs, proc)
 		proc.start(p.actionParams, p.logger.Sugar())
 	}

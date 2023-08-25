@@ -166,16 +166,16 @@ func (p *processor) processEvent(event *Event) (isPassed bool, e *Event) {
 		event = stream.blockGet()
 		if event.IsTimeoutKind() {
 			// pass timeout directly to plugin which requested next sequential event.
-			event.action.Store(int64(lastAction))
+			event.action = lastAction
 		}
 	}
 }
 
 func (p *processor) doActions(event *Event) (isPassed bool, lastAction int) {
 	l := len(p.actions)
-	for index := int(event.action.Load()); index < l; index++ {
+	for index := event.action; index < l; index++ {
 		action := p.actions[index]
-		event.action.Store(int64(index))
+		event.action = index
 		p.countEvent(event, index, eventStatusReceived)
 
 		if !p.busyActions[index] && !event.IsTimeoutKind() {
@@ -361,8 +361,9 @@ func (p *processor) AddActionPlugin(info *ActionPluginInfo) {
 
 // Propagate flushes an event after ActionHold.
 func (p *processor) Propagate(event *Event) {
-	nextActionIdx := event.action.Inc()
-	p.tryResetBusy(int(nextActionIdx - 1))
+	event.action++
+	nextActionIdx := event.action
+	p.tryResetBusy(nextActionIdx - 1)
 	p.processSequence(event)
 }
 

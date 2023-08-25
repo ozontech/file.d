@@ -490,15 +490,14 @@ func (jp *jobProvider) reportStats() {
 		case <-jp.stopReportCh:
 			return
 		default:
-			jp.jobsMu.RLock()
+			jp.jobsMu.Lock()
 			l := len(jp.jobs)
-			jp.jobsMu.RUnlock()
+			jp.jobsLog = jp.jobsLog[:0]
+			jp.jobsMu.Unlock()
 
 			savesTotal := jp.offsetDB.savesTotal.Load() - lastSaves
 			lastSaves = savesTotal
 			jp.logger.Infof("file plugin stats for last %d seconds: offsets saves=%d, jobs done=%d, jobs total=%d", jp.config.ReportInterval_/time.Second, savesTotal, jp.jobsDone.Load(), l)
-
-			jp.jobsLog = jp.jobsLog[:0]
 
 			time.Sleep(jp.config.ReportInterval_)
 		}

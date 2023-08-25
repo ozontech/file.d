@@ -1,3 +1,5 @@
+//go:build linux
+
 package journalctl
 
 import (
@@ -6,20 +8,17 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/ozontech/file.d/logger"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
 )
 
-//nolint:unused
 type journalReaderConfig struct {
 	output   io.Writer
 	cursor   string
-	logger   *zap.SugaredLogger
+	logger   *zap.Logger
 	maxLines int
 }
 
-//nolint:unused
 type journalReader struct {
 	config *journalReaderConfig
 	cmd    *exec.Cmd
@@ -29,7 +28,6 @@ type journalReader struct {
 	readerErrorsMetric prometheus.Counter
 }
 
-//nolint:unused
 func (r *journalReader) readLines(rd io.Reader, config *journalReaderConfig) {
 	reader := bufio.NewReaderSize(rd, 1024*1024*10) // max message size
 	totalLines := 0
@@ -39,7 +37,7 @@ func (r *journalReader) readLines(rd io.Reader, config *journalReaderConfig) {
 	if config.cursor != "" {
 		_, _, err := reader.ReadLine()
 		if err != nil {
-			logger.Fatalf(err.Error())
+			r.config.logger.Fatal(err.Error())
 		}
 	}
 
@@ -50,13 +48,13 @@ func (r *journalReader) readLines(rd io.Reader, config *journalReaderConfig) {
 		}
 		if err != nil {
 			r.readerErrorsMetric.Inc()
-			config.logger.Error(err)
+			r.config.logger.Error(err.Error())
 			continue
 		}
 		_, err = config.output.Write(bytes)
 		if err != nil {
 			r.readerErrorsMetric.Inc()
-			config.logger.Error(err)
+			r.config.logger.Error(err.Error())
 		}
 
 		totalLines++
@@ -66,7 +64,6 @@ func (r *journalReader) readLines(rd io.Reader, config *journalReaderConfig) {
 	}
 }
 
-//nolint:deadcode,unused
 func newJournalReader(config *journalReaderConfig, readerErrorsCounter prometheus.Counter) *journalReader {
 	res := &journalReader{
 		config:             config,
@@ -83,9 +80,8 @@ func newJournalReader(config *journalReaderConfig, readerErrorsCounter prometheu
 	return res
 }
 
-//nolint:unused
 func (r *journalReader) start() error {
-	r.config.logger.Infof(`running "journalctl %s"`, strings.Join(r.args, " "))
+	r.config.logger.Info(`running journalctl`, zap.String("args", strings.Join(r.args, " ")))
 	r.cmd = exec.Command("journalctl", r.args...)
 
 	out, err := r.cmd.StdoutPipe()
@@ -102,7 +98,6 @@ func (r *journalReader) start() error {
 	return nil
 }
 
-//nolint:unused
 func (r *journalReader) stop() error {
 	return r.cmd.Process.Kill()
 }

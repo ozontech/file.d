@@ -85,7 +85,7 @@ func pluginConfig(opts ...string) *Config {
 		OffsetsFile:         filepath.Join(offsetsDir, offsetsFile),
 		PersistenceMode:     "async",
 		OffsetsOp:           op,
-		MaintenanceInterval: "100ms",
+		MaintenanceInterval: "5s",
 	}
 
 	_ = cfg.Parse(config, map[string]int{"gomaxprocs": runtime.GOMAXPROCS(0)})
@@ -101,10 +101,6 @@ func renameFile(oldFile string, newFile string) {
 }
 
 func closeFile(f *os.File) {
-	if err := f.Sync(); err != nil {
-		panic(err)
-	}
-
 	if err := f.Close(); err != nil {
 		panic(err.Error())
 	}
@@ -477,7 +473,7 @@ func TestReadContinue(t *testing.T) {
 			}
 
 			for i := range inputEvents {
-				require.Equal(t, inputEvents[i], outputEvents[i], "wrong event")
+				require.Equalf(t, inputEvents[i], outputEvents[i], "wrong event, all events: %v", inputEvents)
 			}
 
 			assertOffsetsAreEqual(t, genOffsetsContent(file, size), getContent(getConfigByPipeline(p).OffsetsFile))
@@ -805,6 +801,7 @@ func TestReadManyPreparedFilesRace(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skip long tests in short mode")
 	}
+
 	lineCount := 2
 	blockCount := 128 * 128
 	fileCount := 32
