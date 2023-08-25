@@ -583,11 +583,12 @@ func (p *Pipeline) growProcs() {
 			return
 		}
 		if p.procCount.Load() != p.activeProcs.Load() {
-			t = time.Now()
+			continue
 		}
 
 		if time.Since(t) > interval {
 			p.expandProcs()
+			t = time.Now()
 		}
 	}
 }
