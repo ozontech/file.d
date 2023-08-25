@@ -10,7 +10,7 @@ import (
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
-	"github.com/ozontech/file.d/tls"
+	"github.com/ozontech/file.d/xtls"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
 )
@@ -219,7 +219,7 @@ func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 func (p *Plugin) listenHTTP() {
 	var err error
 	if p.config.CACert != "" || p.config.PrivateKey != "" {
-		tlsBuilder := tls.NewConfigBuilder()
+		tlsBuilder := xtls.NewConfigBuilder()
 		err = tlsBuilder.AppendX509KeyPair(p.config.CACert, p.config.PrivateKey)
 		if err == nil {
 			p.server.TLSConfig = tlsBuilder.Build()

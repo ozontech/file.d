@@ -14,7 +14,7 @@ import (
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
-	"github.com/ozontech/file.d/tls"
+	"github.com/ozontech/file.d/xtls"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/valyala/fasthttp"
 	insaneJSON "github.com/vitkovskii/insane-json"
@@ -189,7 +189,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	}
 
 	if p.config.CACert != "" {
-		b := tls.NewConfigBuilder()
+		b := xtls.NewConfigBuilder()
 		err := b.AppendCARoot(p.config.CACert)
 		if err != nil {
 			p.logger.Fatalf("can't append CA root: %s", err.Error())
