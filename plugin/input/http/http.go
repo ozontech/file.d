@@ -5,11 +5,13 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"time"
 
+	"github.com/klauspost/compress/gzip"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
-	"github.com/ozontech/file.d/tls"
+	"github.com/ozontech/file.d/xtls"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
 )
@@ -78,25 +80,39 @@ const (
 )
 
 type Plugin struct {
+	mu sync.Mutex
+
+	server            *http.Server
 	config            *Config
 	nameByBearerToken map[string]string
+	logger            *zap.Logger
 
 	params     *pipeline.InputPluginParams
-	readBuffs  sync.Pool
-	eventBuffs sync.Pool
 	controller pipeline.InputPluginController
-	server     *http.Server
-	sourceIDs  []pipeline.SourceID
-	sourceSeq  pipeline.SourceID
-	mu         sync.Mutex
-	logger     *zap.Logger
+
+	sourceIDs []pipeline.SourceID
+	sourceSeq pipeline.SourceID
+
+	gzipReaderPool sync.Pool
+	readBuffs      sync.Pool
+	eventBuffs     sync.Pool
 
 	// plugin metrics
 
-	successfulAuthTotal map[string]prometheus.Counter
-	failedAuthTotal     prometheus.Counter
-	httpErrorMetric     prometheus.Counter
+	successfulAuthTotal   map[string]prometheus.Counter
+	failedAuthTotal       prometheus.Counter
+	errorsTotal           prometheus.Counter
+	bulkRequestsDoneTotal prometheus.Counter
+	requestsInProgress    prometheus.Gauge
+	processBulkSeconds    prometheus.Observer
 }
+
+type EmulateMode byte
+
+const (
+	EmulateModeNo EmulateMode = iota
+	EmulateModeElasticSearch
+)
 
 // ! config-params
 // ^ config-params
@@ -108,7 +124,8 @@ type Config struct {
 	// > @3@4@5@6
 	// >
 	// > Which protocol to emulate.
-	EmulateMode string `json:"emulate_mode" default:"no" options:"no|elasticsearch"` // *
+	EmulateMode  string `json:"emulate_mode" default:"no" options:"no|elasticsearch"` // *
+	EmulateMode_ EmulateMode
 	// > @3@4@5@6
 	// >
 	// > CA certificate in PEM encoding. This can be a path or the content of the certificate.
@@ -182,14 +199,10 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	p.controller.DisableStreams()
 	p.sourceIDs = make([]pipeline.SourceID, 0)
 
-	mux := http.NewServeMux()
-	switch p.config.EmulateMode {
-	case "elasticsearch":
-		p.elasticsearch(mux)
-	case "no":
-		mux.HandleFunc("/", p.serve)
+	p.server = &http.Server{
+		Addr:    p.config.Address,
+		Handler: http.Handler(p),
 	}
-	p.server = &http.Server{Addr: p.config.Address, Handler: mux}
 
 	if p.config.Address != "off" {
 		go p.listenHTTP()
@@ -197,7 +210,10 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 }
 
 func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
-	p.httpErrorMetric = ctl.RegisterCounter("input_http_errors", "Total http errors")
+	p.bulkRequestsDoneTotal = ctl.RegisterCounter("bulk_requests_done_total", "")
+	p.requestsInProgress = ctl.RegisterGauge("requests_in_progress", "")
+	p.processBulkSeconds = ctl.RegisterHistogram("process_bulk_seconds", "", metric.SecondsBucketsDetailed)
+	p.errorsTotal = ctl.RegisterCounter("input_http_errors", "Total http errors")
 
 	if p.config.Auth.Strategy_ != StrategyDisabled {
 		httpAuthTotal := ctl.RegisterCounterVec("http_auth_success_total", "", "secret_name")
@@ -212,7 +228,7 @@ func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 func (p *Plugin) listenHTTP() {
 	var err error
 	if p.config.CACert != "" || p.config.PrivateKey != "" {
-		tlsBuilder := tls.NewConfigBuilder()
+		tlsBuilder := xtls.NewConfigBuilder()
 		err = tlsBuilder.AppendX509KeyPair(p.config.CACert, p.config.PrivateKey)
 		if err == nil {
 			p.server.TLSConfig = tlsBuilder.Build()
@@ -262,9 +278,11 @@ func (p *Plugin) putSourceID(x pipeline.SourceID) {
 	p.mu.Unlock()
 }
 
-func (p *Plugin) serve(w http.ResponseWriter, r *http.Request) {
+func (p *Plugin) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ok := p.auth(r)
 	if !ok {
+		p.failedAuthTotal.Inc()
+		p.errorsTotal.Inc()
 		p.logger.Warn("auth failed",
 			zap.String("user_agent", r.UserAgent()),
 			zap.Any("headers", r.Header),
@@ -274,22 +292,111 @@ func (p *Plugin) serve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	path := r.URL.Path
+	switch p.config.EmulateMode_ {
+	case EmulateModeElasticSearch:
+		w.Header().Add("Content-Type", "application/json")
+		w.Header().Set("X-Elastic-Product", "Elasticsearch")
+
+		switch path {
+		case "/_bulk":
+			p.serveBulk(w, r)
+			return
+		case "/":
+			p.serveElasticsearchInfo(w, r)
+			return
+		case "/_xpack":
+			p.serveElasticsearchXPack(w, r)
+			return
+		case "/_license":
+			p.serveElasticsearchLicense(w, r)
+			return
+		}
+
+		if strings.HasPrefix(path, "/_ilm/policy") {
+			_, _ = w.Write(empty)
+			return
+		}
+		if strings.HasPrefix(path, "/_index_template") {
+			_, _ = w.Write(empty)
+			return
+		}
+		if strings.HasPrefix(path, "/_template") {
+			_, _ = w.Write(empty)
+			return
+		}
+		if strings.HasPrefix(path, "/_ingest") {
+			_, _ = w.Write(empty)
+			return
+		}
+		if strings.HasPrefix(path, "/_nodes") {
+			_, _ = w.Write(empty)
+			return
+		}
+
+		p.logger.Error("unknown elasticsearch request", zap.String("uri", r.RequestURI), zap.String("method", r.Method))
+		return
+	case EmulateModeNo:
+		p.serveBulk(w, r)
+		return
+	default:
+		panic("unreachable")
+	}
+}
+
+func (p *Plugin) serveBulk(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "", http.StatusMethodNotAllowed)
+		return
+	}
+
+	start := time.Now()
+	p.requestsInProgress.Inc()
+
+	reader := io.Reader(r.Body)
+	if r.Header.Get("Content-Encoding") == "gzip" {
+		zr, err := p.acquireGzipReader(reader)
+		if err != nil {
+			p.errorsTotal.Inc()
+			p.logger.Error("can't read gzipped body", zap.Error(err))
+			http.Error(w, "can't read gzipped body", http.StatusBadRequest)
+			return
+		}
+		defer p.putGzipReader(zr)
+		reader = zr
+	}
+
+	if err := p.processBulk(reader); err != nil {
+		p.errorsTotal.Inc()
+		p.logger.Error("http input read error", zap.Error(err))
+		http.Error(w, "http input read error", http.StatusBadRequest)
+		return
+	}
+
+	_, _ = w.Write(result)
+
+	p.requestsInProgress.Dec()
+	p.bulkRequestsDoneTotal.Inc()
+	p.processBulkSeconds.Observe(time.Since(start).Seconds())
+}
+
+func (p *Plugin) processBulk(r io.Reader) error {
 	readBuff := p.newReadBuff()
 	eventBuff := p.newEventBuffs()
+	defer p.readBuffs.Put(&readBuff)
+	defer p.eventBuffs.Put(&eventBuff)
 
 	sourceID := p.getSourceID()
 	defer p.putSourceID(sourceID)
 
 	for {
-		n, err := r.Body.Read(readBuff)
+		n, err := r.Read(readBuff)
 		if n == 0 && err == io.EOF {
 			break
 		}
 
 		if err != nil && err != io.EOF {
-			p.httpErrorMetric.Inc()
-			p.logger.Error("http input read error", zap.Error(err))
-			break
+			return err
 		}
 
 		eventBuff = p.processChunk(sourceID, readBuff[:n], eventBuff, false)
@@ -299,16 +406,7 @@ func (p *Plugin) serve(w http.ResponseWriter, r *http.Request) {
 		eventBuff = p.processChunk(sourceID, readBuff[:0], eventBuff, true)
 	}
 
-	_ = r.Body.Close()
-
-	p.readBuffs.Put(&readBuff)
-	p.eventBuffs.Put(&eventBuff)
-
-	_, err := w.Write(result)
-	if err != nil {
-		p.httpErrorMetric.Inc()
-		p.logger.Error("can't write response", zap.Error(err))
-	}
+	return nil
 }
 
 func (p *Plugin) processChunk(sourceID pipeline.SourceID, readBuff []byte, eventBuff []byte, isLastChunk bool) []byte {
@@ -371,7 +469,6 @@ func (p *Plugin) auth(req *http.Request) bool {
 		panic("unreachable")
 	}
 	if !ok {
-		p.failedAuthTotal.Inc()
 		return false
 	}
 	p.successfulAuthTotal[secretName].Inc()
@@ -395,4 +492,19 @@ func (p *Plugin) authBearer(req *http.Request) (string, bool) {
 	token := authHeader[len(prefix):]
 	name, ok := p.nameByBearerToken[token]
 	return name, ok
+}
+
+func (p *Plugin) acquireGzipReader(r io.Reader) (*gzip.Reader, error) {
+	anyReader := p.gzipReaderPool.Get()
+	if anyReader == nil {
+		return gzip.NewReader(r)
+	}
+	gzReader := anyReader.(*gzip.Reader)
+	err := gzReader.Reset(r)
+	return gzReader, err
+}
+
+func (p *Plugin) putGzipReader(reader *gzip.Reader) {
+	_ = reader.Close()
+	p.gzipReaderPool.Put(reader)
 }

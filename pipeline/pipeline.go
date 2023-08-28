@@ -216,7 +216,7 @@ func (p *Pipeline) registerMetrics() {
 	p.wrongEventCRIFormatMetric = m.RegisterCounter("wrong_event_cri_format", "Wrong event CRI format counter")
 	p.maxEventSizeExceededMetric = m.RegisterCounter("max_event_size_exceeded", "Max event size exceeded counter")
 	p.eventPoolLatency = m.RegisterHistogram("event_pool_latency_seconds",
-		"How long we are wait an event from the pool", metric.SecondsBucketsDetailed)
+		"How long we are wait an event from the pool", metric.SecondsBucketsDetailedNano)
 }
 
 func (p *Pipeline) setDefaultMetrics() {

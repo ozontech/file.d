@@ -101,6 +101,7 @@ var (
 	loggerByPipelineMu sync.Mutex
 )
 
+// return shared logger between concurrent running processors
 func (p *Plugin) setupLogger(pipelineName string, parentLogger *zap.Logger, config *Config) {
 	loggerByPipelineMu.Lock()
 	defer loggerByPipelineMu.Unlock()

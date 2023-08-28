@@ -10,7 +10,7 @@ import (
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
-	"github.com/ozontech/file.d/tls"
+	"github.com/ozontech/file.d/xtls"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
 )
@@ -236,7 +236,7 @@ func (p *Plugin) newProducer() sarama.SyncProducer {
 	if p.config.SaslSslEnabled {
 		config.Net.TLS.Enable = true
 
-		tlsCfg := tls.NewConfigBuilder()
+		tlsCfg := xtls.NewConfigBuilder()
 		if err := tlsCfg.AppendCARoot(p.config.SaslPem); err != nil {
 			p.logger.Fatalf("can't load cert: %s", err.Error())
 		}

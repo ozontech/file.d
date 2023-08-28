@@ -14,7 +14,7 @@ import (
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
-	"github.com/ozontech/file.d/tls"
+	"github.com/ozontech/file.d/xtls"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
@@ -322,9 +322,9 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		compression = ch.CompressionNone
 	}
 
-	var b tls.ConfigBuilder
+	var b xtls.ConfigBuilder
 	if p.config.CACert != "" {
-		b := tls.NewConfigBuilder()
+		b := xtls.NewConfigBuilder()
 		err := b.AppendCARoot(p.config.CACert)
 		if err != nil {
 			p.logger.Fatal("can't append CA root", zap.Error(err))
