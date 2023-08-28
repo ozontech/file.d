@@ -7,34 +7,13 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-const genTimeInterval = time.Second
-
-var (
-	nowTime   time.Time
-	nowTimeMx = new(sync.RWMutex)
-)
-
-func setNowTime(t time.Time) {
-	nowTimeMx.Lock()
-	nowTime = t
-	nowTimeMx.Unlock()
-}
-
-func getNowTime() time.Time {
-	nowTimeMx.RLock()
-	defer nowTimeMx.RUnlock()
-	return nowTime
-}
-
 type Holder struct {
 	registry     *prometheus.Registry
 	holdDuration time.Duration
 	metrics      metrics
 
-	regChan chan prometheus.Collector
-
-	genTimeTicker *time.Ticker
-	genTimeStop   chan struct{}
+	regChan             chan prometheus.Collector
+	onceStart, onceStop sync.Once
 }
 
 func NewHolder(registry *prometheus.Registry, holdDuration time.Duration) *Holder {
@@ -42,21 +21,20 @@ func NewHolder(registry *prometheus.Registry, holdDuration time.Duration) *Holde
 		registry:     registry,
 		holdDuration: holdDuration,
 		metrics:      newMetrics(),
-
-		regChan: make(chan prometheus.Collector),
-
-		genTimeStop: make(chan struct{}),
 	}
 }
 
 func (h *Holder) Start() {
-	go h.genTime()
-	go h.registerMetrics()
+	h.onceStart.Do(func() {
+		h.regChan = make(chan prometheus.Collector)
+		go h.registerMetrics()
+	})
 }
 
 func (h *Holder) Stop() {
-	close(h.regChan)
-	h.genTimeStop <- struct{}{}
+	h.onceStop.Do(func() {
+		close(h.regChan)
+	})
 }
 
 func (h *Holder) Maintenance() {
@@ -253,19 +231,5 @@ func (h *Holder) updateMetrics() {
 func (h *Holder) registerMetrics() {
 	for col := range h.regChan {
 		h.registry.MustRegister(col)
-	}
-}
-
-func (h *Holder) genTime() {
-	h.genTimeTicker = time.NewTicker(genTimeInterval)
-	setNowTime(time.Now())
-	for {
-		select {
-		case t := <-h.genTimeTicker.C:
-			setNowTime(t)
-		case <-h.genTimeStop:
-			h.genTimeTicker.Stop()
-			return
-		}
 	}
 }

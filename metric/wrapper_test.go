@@ -6,6 +6,8 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/ozontech/file.d/xtime"
 )
 
 func TestWrapper_update(t *testing.T) {
@@ -56,7 +58,8 @@ func TestWrapper_update(t *testing.T) {
 		},
 	}
 
-	setNowTime(time.Now())
+	xtime.SetNowTime(time.Now())
+	curInaccurateTime := xtime.GetInaccurateTime()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -72,7 +75,7 @@ func TestWrapper_update(t *testing.T) {
 				}()
 			}
 			w.update(tt.col)
-			assert.Equal(t, getNowTime(), w.changeTime)
+			assert.Equal(t, curInaccurateTime, w.changeTime)
 			assert.Equal(t, true, w.active)
 		})
 	}

@@ -8,6 +8,8 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/ozontech/file.d/xtime"
 )
 
 const testHoldDuration = 3 * time.Second
@@ -18,10 +20,10 @@ func newTestHolder() *Holder {
 
 func TestHolder_Maintenance(t *testing.T) {
 	h := newTestHolder()
-	go h.registerMetrics()
+	h.Start()
 
 	startTime := time.Now()
-	setNowTime(startTime)
+	xtime.SetNowTime(startTime)
 
 	counter := prometheus.NewCounter(prometheus.CounterOpts{
 		Namespace: "test_holder",
@@ -52,12 +54,12 @@ func TestHolder_Maintenance(t *testing.T) {
 	assert.Equal(t, float64(1), testutil.ToFloat64(counterVecWrapper.WithLabelValues("val1").counter))
 	assert.Equal(t, float64(2), testutil.ToFloat64(counterVecWrapper.WithLabelValues("val2").counter))
 
-	setNowTime(startTime.Add(testHoldDuration - time.Second))
+	xtime.SetNowTime(startTime.Add(testHoldDuration - time.Second))
 
-	// use one metric, so it is not will be removed by holder
+	// use one metric, so it won't be removed by holder
 	counterVecWrapper.WithLabelValues("val1").Inc()
 
-	setNowTime(startTime.Add(testHoldDuration + time.Second))
+	xtime.SetNowTime(startTime.Add(testHoldDuration + time.Second))
 	h.Maintenance()
 
 	// counterWrapper became inactive (unregister by holder), but its value is preserved.
@@ -79,7 +81,7 @@ func TestHolder_Maintenance(t *testing.T) {
 	assert.Equal(t, float64(2), testutil.ToFloat64(counterVecWrapper.WithLabelValues("val1").counter))
 	assert.Equal(t, float64(1), testutil.ToFloat64(counterVecWrapper.WithLabelValues("val2").counter))
 
-	close(h.regChan)
+	h.Stop()
 }
 
 func TestHolder_AddCounter(t *testing.T) {

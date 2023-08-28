@@ -19,14 +19,11 @@ func GetInaccurateTime() time.Time {
 
 func Start() {
 	ticker := time.NewTicker(updateTimeInterval)
-	for {
-		select {
-		case t := <-ticker.C:
-			setNowTime(t)
-		}
+	for t := range ticker.C {
+		SetNowTime(t)
 	}
 }
 
-func setNowTime(t time.Time) {
+func SetNowTime(t time.Time) {
 	nowTime.Store(t.UnixNano())
 }

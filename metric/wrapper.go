@@ -5,6 +5,8 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
+
+	"github.com/ozontech/file.d/xtime"
 )
 
 type (
@@ -144,7 +146,7 @@ func newWrapper(r chan<- prometheus.Collector, labels ...string) wrapper {
 }
 
 func (w *wrapper) update(col prometheus.Collector) {
-	w.changeTime = getNowTime()
+	w.changeTime = xtime.GetInaccurateTime()
 	if !w.active {
 		// Need re-register only metrics without labels.
 		// MetricVecs have a shared metric-descriptor,
@@ -157,7 +159,7 @@ func (w *wrapper) update(col prometheus.Collector) {
 }
 
 func (w *wrapper) isObsolete(holdDuration time.Duration) bool {
-	return w.active && getNowTime().Sub(w.changeTime) > holdDuration
+	return w.active && xtime.GetInaccurateTime().Sub(w.changeTime) > holdDuration
 }
 
 func newCounterWrapper(c prometheus.Counter, r chan<- prometheus.Collector, labels ...string) *CounterWrapper {
