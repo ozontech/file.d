@@ -3,62 +3,62 @@ package decoder
 import (
 	"bytes"
 	"fmt"
-
-	insaneJSON "github.com/vitkovskii/insane-json"
 )
 
 const (
 	criDelimiter = ' '
 )
 
+type CRIRow struct {
+	Log, Time, Stream []byte
+	IsPartial         bool
+}
+
+// DecodeCRI decodes CRI formatted event.
 // Examples of format:
 // 2016-10-06T00:17:09.669794202Z stdout P log content 1
 // 2016-10-06T00:17:09.669794203Z stderr F log content
-func DecodeCRI(event *insaneJSON.Root, data []byte) error {
+func DecodeCRI(data []byte) (row CRIRow, _ error) {
 	// time
 	pos := bytes.IndexByte(data, criDelimiter)
 	if pos < 0 {
-		return fmt.Errorf("timestamp is not found")
+		return row, fmt.Errorf("timestamp is not found")
 	}
 
-	time := data[:pos]
+	row.Time = data[:pos]
 	data = data[pos+1:]
 
 	// stream type
 	pos = bytes.IndexByte(data, criDelimiter)
 	if pos < 0 {
-		return fmt.Errorf("stream type is not found")
+		return row, fmt.Errorf("stream type is not found")
 	}
 
-	stream := data[:pos]
+	row.Stream = data[:pos]
 	data = data[pos+1:]
 
 	// tags
 	pos = bytes.IndexByte(data, criDelimiter)
 	if pos < 0 {
-		return fmt.Errorf("log tag is not found")
+		return row, fmt.Errorf("log tag is not found")
 	}
 
 	tags := data[:pos]
 	data = data[pos+1:]
 
 	if len(tags) == 0 {
-		return fmt.Errorf("log tag is empty")
+		return row, fmt.Errorf("log tag is empty")
 	}
 
-	isPartial := tags[0] == 'P'
+	row.IsPartial = tags[0] == 'P'
 
-	// log
 	log := data
-
 	// remove \n from log for partial logs
-	if isPartial {
+	if row.IsPartial {
 		log = log[:len(log)-1]
 	}
 
-	event.AddFieldNoAlloc(event, "log").MutateToBytesCopy(event, log)
-	event.AddFieldNoAlloc(event, "time").MutateToBytesCopy(event, time)
-	event.AddFieldNoAlloc(event, "stream").MutateToBytesCopy(event, stream)
+	row.Log = log
 
-	return nil
+	return row, nil
 }

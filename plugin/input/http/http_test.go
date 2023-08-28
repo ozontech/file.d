@@ -2,9 +2,12 @@ package http
 
 import (
 	"bytes"
+	"compress/gzip"
+	"encoding/base64"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"runtime"
 	"strings"
@@ -12,31 +15,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/test"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-func getInputInfo() *pipeline.InputPluginInfo {
-	input, _ := Factory()
-	return &pipeline.InputPluginInfo{
-		PluginStaticInfo: &pipeline.PluginStaticInfo{
-			Type:    "",
-			Factory: nil,
-			Config:  &Config{Address: "off"},
-		},
-		PluginRuntimeInfo: &pipeline.PluginRuntimeInfo{
-			Plugin: input,
-			ID:     "",
-		},
-	}
-}
-
-func getInputInfoWithAddr() *pipeline.InputPluginInfo {
-	config := &Config{Address: ":9200"}
+func getInputInfo(config *Config) *pipeline.InputPluginInfo {
 	_ = cfg.Parse(config, map[string]int{"gomaxprocs": runtime.GOMAXPROCS(0)})
 	input, _ := Factory()
 	return &pipeline.InputPluginInfo{
@@ -53,8 +39,9 @@ func getInputInfoWithAddr() *pipeline.InputPluginInfo {
 }
 
 func TestProcessChunksMany(t *testing.T) {
+	t.Parallel()
 	p, _, output := test.NewPipelineMock(nil, "passive")
-	p.SetInput(getInputInfo())
+	p.SetInput(getInputInfo(&Config{Address: ":0"}))
 	input := p.GetInput().(*Plugin)
 	p.Start()
 
@@ -84,8 +71,9 @@ func TestProcessChunksMany(t *testing.T) {
 }
 
 func TestProcessChunksEventBuff(t *testing.T) {
+	t.Parallel()
 	p, _, output := test.NewPipelineMock(nil, "passive")
-	p.SetInput(getInputInfo())
+	p.SetInput(getInputInfo(&Config{Address: ":0"}))
 	input := p.GetInput().(*Plugin)
 	p.Start()
 
@@ -114,8 +102,9 @@ func TestProcessChunksEventBuff(t *testing.T) {
 }
 
 func TestProcessChunksContinue(t *testing.T) {
+	t.Parallel()
 	p, _, output := test.NewPipelineMock(nil, "passive")
-	p.SetInput(getInputInfo())
+	p.SetInput(getInputInfo(&Config{Address: ":0"}))
 	input := p.GetInput().(*Plugin)
 	p.Start()
 
@@ -146,8 +135,9 @@ func TestProcessChunksContinue(t *testing.T) {
 }
 
 func TestProcessChunksContinueMany(t *testing.T) {
+	t.Parallel()
 	p, _, output := test.NewPipelineMock(nil, "passive")
-	p.SetInput(getInputInfo())
+	p.SetInput(getInputInfo(&Config{Address: ":0"}))
 	input := p.GetInput().(*Plugin)
 	p.Start()
 
@@ -176,8 +166,9 @@ func TestProcessChunksContinueMany(t *testing.T) {
 }
 
 func TestServeChunks(t *testing.T) {
+	t.Parallel()
 	p, _, output := test.NewPipelineMock(nil, "passive")
-	input := getInputInfo()
+	input := getInputInfo(&Config{Address: ":0"})
 	p.SetInput(input)
 	p.Start()
 
@@ -191,11 +182,11 @@ func TestServeChunks(t *testing.T) {
 	})
 
 	resp := httptest.NewRecorder()
-	input.Plugin.(*Plugin).serve(resp, httptest.NewRequest(http.MethodPost, "/logger", strings.NewReader(`{"a":"1"}`)))
+	input.Plugin.(*Plugin).ServeHTTP(resp, httptest.NewRequest(http.MethodPost, "/logger", strings.NewReader(`{"a":"1"}`)))
 	require.Equal(t, http.StatusOK, resp.Result().StatusCode)
 
 	resp = httptest.NewRecorder()
-	input.Plugin.(*Plugin).serve(resp, httptest.NewRequest(http.MethodPost, "/logger", strings.NewReader(`{"b":"2"}`+"\n")))
+	input.Plugin.(*Plugin).ServeHTTP(resp, httptest.NewRequest(http.MethodPost, "/logger", strings.NewReader(`{"b":"2"}`+"\n")))
 	require.Equal(t, http.StatusOK, resp.Result().StatusCode)
 
 	wg.Wait()
@@ -255,8 +246,9 @@ func (c *PartialReader) WaitRead() {
 }
 
 func TestServePartialRequest(t *testing.T) {
+	t.Parallel()
 	p, _, output := test.NewPipelineMock(nil, "passive")
-	input := getInputInfo()
+	input := getInputInfo(&Config{Address: ":0"})
 	p.SetInput(input)
 
 	wg := sync.WaitGroup{}
@@ -275,7 +267,7 @@ func TestServePartialRequest(t *testing.T) {
 
 	doneCh := make(chan struct{})
 	go func() {
-		input.Plugin.(*Plugin).serve(resp, httptest.NewRequest(http.MethodPost, "/_bulk", reader))
+		input.Plugin.(*Plugin).ServeHTTP(resp, httptest.NewRequest(http.MethodPost, "/_bulk", reader))
 		close(doneCh)
 	}()
 
@@ -299,8 +291,9 @@ func TestServePartialRequest(t *testing.T) {
 }
 
 func TestServeChunksContinue(t *testing.T) {
+	t.Parallel()
 	p, _, output := test.NewPipelineMock(nil, "passive")
-	input := getInputInfo()
+	input := getInputInfo(&Config{Address: ":0"})
 	p.SetInput(input)
 	p.Start()
 
@@ -319,13 +312,119 @@ func TestServeChunksContinue(t *testing.T) {
 	body = append(body, `"}`...)
 
 	resp := httptest.NewRecorder()
-	input.Plugin.(*Plugin).serve(resp, httptest.NewRequest(http.MethodPost, "/logger", bytes.NewReader(body)))
+	input.Plugin.(*Plugin).ServeHTTP(resp, httptest.NewRequest(http.MethodPost, "/logger", bytes.NewReader(body)))
 	require.Equal(t, http.StatusOK, resp.Result().StatusCode)
 
 	wg.Wait()
 	p.Stop()
 
 	require.Equal(t, []string{string(body)}, outEvents)
+}
+
+func TestPluginAuth(t *testing.T) {
+	t.Parallel()
+	r := require.New(t)
+
+	newReq := func(authHeader string) *http.Request {
+		return &http.Request{
+			Header: map[string][]string{
+				"Authorization": {authHeader},
+			},
+		}
+	}
+	encBasic := func(s string) string {
+		return base64.StdEncoding.EncodeToString([]byte(s))
+	}
+
+	tests := []struct {
+		Name       string
+		Strategy   string
+		Request    *http.Request
+		Secrets    map[string]string
+		ShouldPass bool
+	}{
+		{
+			Name:       "disabled ok",
+			Strategy:   "disabled",
+			ShouldPass: true,
+			Request:    &http.Request{},
+		},
+		// basic test
+		{
+			Name:     "basic ok",
+			Strategy: "basic",
+			Secrets: map[string]string{
+				"ozon": "zonzon",
+			},
+			Request:    newReq("Basic " + encBasic("ozon:zonzon")),
+			ShouldPass: true,
+		},
+		{
+			Name:     "basic reject",
+			Strategy: "basic",
+			Secrets: map[string]string{
+				"ozon": "zonzon",
+			},
+			Request:    newReq("Basic " + encBasic("user:password")),
+			ShouldPass: false,
+		},
+		// bearer test
+		{
+			Name:       "bearer reject",
+			Strategy:   "bearer",
+			Secrets:    map[string]string{},
+			Request:    newReq("Bearer test"),
+			ShouldPass: false,
+		},
+		{
+			Name:     "bearer ok",
+			Strategy: "bearer",
+			Secrets: map[string]string{
+				"ozon": "ozon",
+			},
+			Request:    newReq("Bearer ozon"),
+			ShouldPass: true,
+		},
+		{
+			Name:     "bearer pass one char",
+			Strategy: "bearer",
+			Secrets: map[string]string{
+				"1": "1",
+			},
+			Request:    newReq("Bearer 1"),
+			ShouldPass: true,
+		},
+		{
+			Name:       "empty bearer",
+			Strategy:   "bearer",
+			Secrets:    map[string]string{},
+			Request:    newReq("Bearer"),
+			ShouldPass: false,
+		},
+	}
+
+	pipelineMock, _, _ := test.NewPipelineMock(nil, "passive")
+
+	for _, tc := range tests {
+		t.Run(tc.Name, func(t *testing.T) {
+			conf := &Config{
+				Auth: AuthConfig{
+					Strategy: tc.Strategy,
+					Secrets:  tc.Secrets,
+				},
+				Address: "off",
+			}
+			inputInfo := getInputInfo(conf)
+			pipelineMock.SetInput(inputInfo)
+			// init http plugin
+			pipelineMock.Start()
+			pipelineMock.Stop()
+
+			ok := inputInfo.Plugin.(*Plugin).auth(tc.Request)
+
+			r.Equal(tc.ShouldPass, ok)
+		})
+	}
 }
 
 func BenchmarkHttpInputJson(b *testing.B) {
@@ -366,7 +465,7 @@ func BenchmarkHttpInputJson(b *testing.B) {
 	for n := 0; n < b.N; n++ {
 		p, _, output := test.NewPipelineMock(nil, "passive", "perf")
 
-		p.SetInput(getInputInfoWithAddr())
+		p.SetInput(getInputInfo(&Config{Address: ":0"}))
 
 		wg := &sync.WaitGroup{}
 		wg.Add(DocumentCount * 2) // 2 rows in each file
@@ -393,5 +492,100 @@ func BenchmarkHttpInputJson(b *testing.B) {
 		wg.Wait()
 
 		p.Stop()
+	}
+}
+
+func TestGzip(t *testing.T) {
+	t.Parallel()
+	r := require.New(t)
+
+	gzipHeaders := http.Header{"Content-Encoding": []string{"gzip"}}
+
+	newReq := func(rawUrl, method string, body string, headers http.Header, useGzip bool) *http.Request {
+		bodyReader := io.Reader(strings.NewReader(body))
+		if useGzip {
+			buf := new(bytes.Buffer)
+
+			gzw := gzip.NewWriter(buf)
+			_, _ = gzw.Write([]byte(body))
+			r.NoError(gzw.Close())
+
+			bodyReader = buf
+		}
+
+		u, err := url.Parse(rawUrl)
+		r.NoError(err)
+
+		return &http.Request{
+			Header: headers,
+			Body:   io.NopCloser(bodyReader),
+			URL:    u,
+			Method: method,
+		}
+	}
+
+	tests := []struct {
+		Name               string
+		Request            *http.Request
+		ExpectedStatusCode int
+		ExpectedBody       string
+		ExpectedEvents     int
+	}{
+		{
+			Name:               "process bulk",
+			Request:            newReq("_bulk", http.MethodPost, strings.Repeat(`{"ping": "pong"}`+"\n", 10), nil, false),
+			ExpectedStatusCode: http.StatusOK,
+			ExpectedBody:       string(result),
+			ExpectedEvents:     10,
+		},
+		{
+			Name:               "process gzipped bulk",
+			Request:            newReq("_bulk", http.MethodPost, strings.Repeat(`{"ok": "google"}`+"\n", 10), gzipHeaders, true),
+			ExpectedStatusCode: http.StatusOK,
+			ExpectedBody:       string(result),
+			ExpectedEvents:     10,
+		},
+		{
+			Name:               "discards invalid requests",
+			Request:            newReq("_bulk", http.MethodPost, `{"ok": "google"}`, gzipHeaders, false),
+			ExpectedStatusCode: http.StatusBadRequest,
+			ExpectedEvents:     0,
+		},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.Name, func(t *testing.T) {
+			t.Parallel()
+
+			pipelineMock, _, output := test.NewPipelineMock(nil, "passive")
+
+			conf := &Config{Address: "off"}
+			inputInfo := getInputInfo(conf)
+
+			pipelineMock.SetInput(inputInfo)
+			// init http plugin
+			pipelineMock.Start()
+
+			wg := sync.WaitGroup{}
+			wg.Add(tc.ExpectedEvents)
+			cnt := 0
+			output.SetOutFn(func(event *pipeline.Event) {
+				cnt++
+				wg.Done()
+			})
+
+			rec := httptest.NewRecorder()
+
+			inputInfo.Plugin.(*Plugin).ServeHTTP(rec, tc.Request)
+
+			r.Equal(tc.ExpectedStatusCode, rec.Code)
+			if tc.ExpectedBody != "" {
+				r.Equal(tc.ExpectedBody, rec.Body.String())
+			}
+
+			wg.Wait()
+			pipelineMock.Stop()
+		})
 	}
 }

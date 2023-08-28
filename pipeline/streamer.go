@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/ozontech/file.d/logger"
-	"github.com/ozontech/file.d/longpanic"
 	"go.uber.org/atomic"
 )
 
@@ -45,7 +44,7 @@ func newStreamer(eventTimeout time.Duration) *streamer {
 }
 
 func (s *streamer) start() {
-	longpanic.Go(s.heartbeat)
+	go s.heartbeat()
 }
 
 func (s *streamer) stop() {
@@ -181,7 +180,7 @@ func (s *streamer) dump() string {
 					state = "| DETACHING  |"
 				}
 
-				o += fmt.Sprintf("%d(%s) state=%s, away event id=%d, commit event id=%d, len=%d\n", stream.streamID, stream.name, state, stream.awaySeq, stream.commitSeq, stream.len)
+				o += fmt.Sprintf("%d(%s) state=%s, away event id=%d, commit event id=%d, len=%d\n", stream.streamID, stream.name, state, stream.awaySeq, stream.commitSeq.Load(), stream.len)
 			}
 		}
 

@@ -2,7 +2,6 @@ package s3
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"math"
 	"math/rand"
@@ -17,7 +16,6 @@ import (
 	"github.com/minio/minio-go"
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
-	"github.com/ozontech/file.d/longpanic"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/plugin/output/file"
@@ -116,8 +114,6 @@ var (
 	compressors     = map[string]func(*zap.SugaredLogger) compressor{
 		zipName: newZipCompressor,
 	}
-
-	r = rand.New(rand.NewSource(time.Now().UnixNano()))
 )
 
 type ObjectStoreClient interface {
@@ -152,12 +148,14 @@ type Plugin struct {
 	uploadCh   chan fileDTO
 
 	compressor compressor
-	metricCtl  *metric.Ctl
 
 	// plugin metrics
 
 	sendErrorMetric  *prometheus.CounterVec
 	uploadFileMetric *prometheus.CounterVec
+
+	rnd   rand.Rand
+	rndMx sync.Mutex
 }
 
 type fileDTO struct {
@@ -266,13 +264,14 @@ func Factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 }
 
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginParams) {
+	p.rnd = *rand.New(rand.NewSource(time.Now().UnixNano()))
+	p.registerMetrics(params.MetricCtl)
 	p.StartWithMinio(config, params, p.minioClientsFactory)
 }
 
-func (p *Plugin) RegisterMetrics(ctl *metric.Ctl) {
+func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 	p.sendErrorMetric = ctl.RegisterCounter("output_s3_send_error", "Total s3 send errors")
 	p.uploadFileMetric = ctl.RegisterCounter("output_s3_upload_file", "Total files upload", "bucket_name")
-	p.metricCtl = ctl
 }
 
 func (p *Plugin) StartWithMinio(config pipeline.AnyConfig, params *pipeline.OutputPluginParams, factory objStoreFactory) {
@@ -315,15 +314,12 @@ func (p *Plugin) StartWithMinio(config pipeline.AnyConfig, params *pipeline.Outp
 	p.compressCh = make(chan fileDTO, p.config.FileConfig.WorkersCount_)
 
 	for i := 0; i < p.config.FileConfig.WorkersCount_; i++ {
-		longpanic.Go(p.uploadWork)
-		longpanic.Go(p.compressWork)
+		go p.uploadWork()
+		go p.compressWork()
 	}
 	err = p.startPlugins(params, outPlugCount, targetDirs, fileNames)
-	if errors.Is(err, ErrCreateOutputPluginCantCheckBucket) {
-		p.logger.Panic(err.Error())
-	}
-	if errors.Is(err, ErrCreateOutputPluginNoSuchBucket) {
-		p.logger.Fatal(err.Error())
+	if err != nil {
+		p.logger.Fatal("can't start plugin", zap.Error(err))
 	}
 
 	p.uploadExistingFiles(targetDirs, dynamicDirs, fileNames)
@@ -438,7 +434,6 @@ func (p *Plugin) tryRunNewPlugin(bucketName string) (isCreated bool) {
 
 	localBucketConfig := p.config.FileConfig
 	localBucketConfig.TargetFile = fmt.Sprintf("%s%s%s", bucketDir, bucketName, p.fileExtension)
-	outPlugin.RegisterMetrics(p.metricCtl)
 	outPlugin.Start(&localBucketConfig, p.params)
 
 	p.outPlugins.Add(bucketName, outPlugin)
@@ -522,7 +517,7 @@ func (p *Plugin) uploadWork() {
 				p.logger.Infof("successfully uploaded object=%s", compressed.fileName)
 				// delete archive after uploading
 				err = os.Remove(compressed.fileName)
-				if err != nil {
+				if err != nil && !os.IsNotExist(err) {
 					p.logger.Panicf("could not delete file: %s, err: %s", compressed, err.Error())
 				}
 				break
@@ -542,7 +537,7 @@ func (p *Plugin) compressWork() {
 		compressedName := p.compressor.getName(dto.fileName)
 		p.compressor.compress(compressedName, dto.fileName)
 		// delete old file
-		if err := os.Remove(dto.fileName); err != nil {
+		if err := os.Remove(dto.fileName); err != nil && !os.IsNotExist(err) {
 			p.logger.Panicf("could not delete file: %s, error: %s", dto, err.Error())
 		}
 		dto.fileName = compressedName
@@ -577,9 +572,15 @@ func (p *Plugin) uploadToS3(compressedDTO fileDTO) error {
 
 // generateObjectName generates object name by compressed file name
 func (p *Plugin) generateObjectName(name string) string {
-	n := strconv.FormatInt(r.Int63n(math.MaxInt64), 16)
+	n := strconv.FormatInt(p.nextRandomValue(), 16)
 	n = n[len(n)-8:]
 	objectName := path.Base(name)
 	objectName = objectName[0 : len(objectName)-len(p.compressor.getExtension())]
 	return fmt.Sprintf("%s.%s%s", objectName, n, p.compressor.getExtension())
+}
+
+func (p *Plugin) nextRandomValue() int64 {
+	p.rndMx.Lock()
+	defer p.rndMx.Unlock()
+	return p.rnd.Int63n(math.MaxInt64)
 }

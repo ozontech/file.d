@@ -6,7 +6,6 @@ import (
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/pipeline"
-	"github.com/ozontech/file.d/plugin"
 	"go.uber.org/zap"
 )
 
@@ -74,7 +73,6 @@ type Plugin struct {
 	negate       bool
 
 	logger *zap.SugaredLogger
-	plugin.NoMetricsPlugin
 }
 
 // ! config-params

@@ -1,11 +1,14 @@
 package fd
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"time"
 
 	"github.com/bitly/go-simplejson"
 	"github.com/ozontech/file.d/cfg"
+	"github.com/ozontech/file.d/cfg/matchrule"
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/pipeline"
 )
@@ -13,6 +16,7 @@ import (
 func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 	capacity := pipeline.DefaultCapacity
 	antispamThreshold := 0
+	var antispamExceptions matchrule.RuleSets
 	avgInputEventSize := pipeline.DefaultAvgInputEventSize
 	maxInputEventSize := pipeline.DefaultMaxInputEventSize
 	streamField := pipeline.DefaultStreamField
@@ -67,6 +71,17 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 
 		antispamThreshold = settings.Get("antispam_threshold").MustInt()
 		antispamThreshold *= int(maintenanceInterval / time.Second)
+		if antispamThreshold < 0 {
+			logger.Warn("negative antispam_threshold value, antispam disabled")
+			antispamThreshold = 0
+		}
+
+		var err error
+		antispamExceptions, err = extractExceptions(settings)
+		if err != nil {
+			logger.Fatalf("extract exceptions: %s", err)
+		}
+		antispamExceptions.Prepare()
 
 		isStrict = settings.Get("is_strict").MustBool()
 	}
@@ -77,11 +92,29 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 		AvgEventSize:        avgInputEventSize,
 		MaxEventSize:        maxInputEventSize,
 		AntispamThreshold:   antispamThreshold,
+		AntispamExceptions:  antispamExceptions,
 		MaintenanceInterval: maintenanceInterval,
 		EventTimeout:        eventTimeout,
 		StreamField:         streamField,
 		IsStrict:            isStrict,
 	}
+}
+
+func extractExceptions(settings *simplejson.Json) (matchrule.RuleSets, error) {
+	raw, err := settings.Get("antispam_exceptions").MarshalJSON()
+	if err != nil {
+		return nil, err
+	}
+
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.DisallowUnknownFields()
+
+	var exceptions matchrule.RuleSets
+	if err := dec.Decode(&exceptions); err != nil {
+		return nil, err
+	}
+
+	return exceptions, nil
 }
 
 func extractMatchMode(actionJSON *simplejson.Json) pipeline.MatchMode {
@@ -137,13 +170,14 @@ func extractConditions(condJSON *simplejson.Json) (pipeline.MatchConditions, err
 	return conditions, nil
 }
 
-func extractMetrics(actionJSON *simplejson.Json) (string, []string) {
+func extractMetrics(actionJSON *simplejson.Json) (string, []string, bool) {
 	metricName := actionJSON.Get("metric_name").MustString()
 	metricLabels := actionJSON.Get("metric_labels").MustStringArray()
 	if metricLabels == nil {
 		metricLabels = []string{}
 	}
-	return metricName, metricLabels
+	skipStatus := actionJSON.Get("metric_skip_status").MustBool()
+	return metricName, metricLabels, skipStatus
 }
 
 func makeActionJSON(actionJSON *simplejson.Json) []byte {
@@ -152,6 +186,7 @@ func makeActionJSON(actionJSON *simplejson.Json) []byte {
 	actionJSON.Del("match_mode")
 	actionJSON.Del("metric_name")
 	actionJSON.Del("metric_labels")
+	actionJSON.Del("metric_skip_status")
 	actionJSON.Del("match_invert")
 	configJson, err := actionJSON.Encode()
 	if err != nil {

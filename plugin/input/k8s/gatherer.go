@@ -1,13 +1,13 @@
 package k8s
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/ozontech/file.d/longpanic"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"
@@ -88,10 +88,10 @@ func enableGatherer(l *zap.SugaredLogger) {
 	if !DisableMetaUpdates {
 		initGatherer()
 
-		longpanic.Go(func() { controller.Run(informerStop) })
+		go controller.Run(informerStop)
 	}
 
-	longpanic.Go(maintenance)
+	go maintenance()
 }
 
 func disableGatherer() {
@@ -120,18 +120,21 @@ func initGatherer() {
 		panic("")
 	}
 
-	initNodeInfo()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+
+	initNodeInfo(ctx)
 	initInformer()
-	initRuntime()
+	initRuntime(ctx)
 }
 
-func initNodeInfo() {
+func initNodeInfo(ctx context.Context) {
 	podName, err := os.Hostname()
 	if err != nil {
 		localLogger.Fatalf("can't get host name for k8s plugin: %s", err.Error())
 		panic("")
 	}
-	pod, err := client.CoreV1().Pods(getNamespace()).Get(podName, metav1.GetOptions{})
+	pod, err := client.CoreV1().Pods(getNamespace()).Get(ctx, podName, metav1.GetOptions{})
 	if err != nil {
 		localLogger.Fatalf("can't detect node name for k8s plugin using pod %q: %s", podName, err.Error())
 		panic("")
@@ -158,8 +161,8 @@ func initInformer() {
 	controller = c
 }
 
-func initRuntime() {
-	node, err := client.CoreV1().Nodes().Get(selfNodeName, metav1.GetOptions{})
+func initRuntime(ctx context.Context) {
+	node, err := client.CoreV1().Nodes().Get(ctx, selfNodeName, metav1.GetOptions{})
 	if err != nil || node == nil {
 		localLogger.Fatalf("can't detect CRI runtime for node %s, api call is unsuccessful: %s", node, err.Error())
 		panic("_")
@@ -257,11 +260,11 @@ func cleanUpItems(items []*metaItem) {
 	}
 }
 
-func getMeta(fullFilename string) (ns namespace, pod podName, container containerName, success bool, podMeta *podMeta) {
-	podMeta = nil
-	success = false
+func getMeta(fullFilename string) (namespace, podName, containerName, bool, *podMeta) {
+	var podMeta *podMeta
+	var success bool
 	var cid containerID
-	ns, pod, container, cid = parseLogFilename(fullFilename)
+	ns, pod, container, cid := parseLogFilename(fullFilename)
 
 	i := time.Nanosecond
 	for {
@@ -277,12 +280,12 @@ func getMeta(fullFilename string) (ns namespace, pod podName, container containe
 
 			success = true
 			podMeta = pm
-			return
+			return ns, pod, container, success, podMeta
 		}
 
 		// fast skip blacklisted pods
 		if isInBlackList {
-			return
+			return ns, pod, container, success, podMeta
 		}
 
 		time.Sleep(metaRecheckInterval)
@@ -297,7 +300,7 @@ func getMeta(fullFilename string) (ns namespace, pod podName, container containe
 			metaDataMu.Unlock()
 			localLogger.Errorf("pod %q have blacklisted, cause k8s meta retrieve timeout ns=%s container=%s cid=%s", string(pod), string(ns), string(container), string(cid))
 
-			return
+			return ns, pod, container, success, podMeta
 		}
 	}
 }
@@ -322,7 +325,8 @@ func putMeta(podData *corev1.Pod) {
 	metaDataMu.Unlock()
 
 	// normal containers
-	for _, status := range podCopy.Status.ContainerStatuses {
+	for i := range podCopy.Status.ContainerStatuses {
+		status := &podCopy.Status.ContainerStatuses[i]
 		putContainerMeta(ns, pod, status.ContainerID, podCopy)
 
 		if status.LastTerminationState.Terminated != nil {
@@ -331,7 +335,8 @@ func putMeta(podData *corev1.Pod) {
 	}
 
 	// init containers
-	for _, status := range podCopy.Status.InitContainerStatuses {
+	for i := range podCopy.Status.InitContainerStatuses {
+		status := &podCopy.Status.InitContainerStatuses[i]
 		putContainerMeta(ns, pod, status.ContainerID, podCopy)
 
 		if status.LastTerminationState.Terminated != nil {

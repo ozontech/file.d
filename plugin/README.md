@@ -89,7 +89,7 @@ pipelines:
 ```
 
 Setup:
-```
+```bash
 # run server.
 # config.yaml should contains yaml config above.
 go run ./cmd/file.d --config=config.yaml
@@ -99,9 +99,7 @@ curl "localhost:9200/_bulk" -H 'Content-Type: application/json' -d \
 '{"index":{"_index":"index-main","_type":"span"}}
 {"message": "hello", "kind": "normal"}
 '
-
-##
-
+```
 
 [More details...](plugin/input/http/README.md)
 ## journalctl
@@ -185,7 +183,24 @@ It converts the log level field according RFC-5424.
 
 [More details...](plugin/action/convert_log_level/README.md)
 ## debug
-It logs event to stdout. Useful for debugging.
+It logs event to stderr. Useful for debugging.
+
+It may sample by logging the `first` N entries each tick.
+If more events are seen during the same `interval`,
+every `thereafter` message is logged and the rest are dropped.
+
+For example,
+
+```yaml
+- type: debug
+  interval: 1s
+  first: 10
+  thereafter: 5
+```
+
+This will log the first 10 events in a one second interval as-is.
+Following that, it will allow through every 5th event in that interval.
+
 
 [More details...](plugin/action/debug/README.md)
 ## discard
@@ -418,6 +433,14 @@ It discards the events if pipeline throughput gets higher than a configured thre
 [More details...](plugin/action/throttle/README.md)
 
 # Outputs
+## clickhouse
+It sends the event batches to Clickhouse database using
+[Native format](https://clickhouse.com/docs/en/interfaces/formats/#native) and
+[Native protocol](https://clickhouse.com/docs/en/interfaces/tcp/).
+
+File.d uses low level Go client - [ch-go](https://github.com/ClickHouse/ch-go) to provide these features.
+
+[More details...](plugin/output/clickhouse/README.md)
 ## devnull
 It provides an API to test pipelines and other plugins.
 

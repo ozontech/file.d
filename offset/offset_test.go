@@ -27,8 +27,6 @@ func TestYAML(t *testing.T) {
 	err := (&yamlValue{&offset}).Save(buffer)
 	assert.NoError(t, err)
 
-	fmt.Println(buffer.String())
-
 	loaded := testOffset{}
 	err = (&yamlValue{&loaded}).Load(buffer)
 	assert.NoError(t, err)

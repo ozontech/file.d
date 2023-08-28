@@ -23,6 +23,34 @@ type mockProducer struct {
 	t *testing.T
 }
 
+func (m *mockProducer) TxnStatus() sarama.ProducerTxnStatusFlag {
+	return 0
+}
+
+func (m *mockProducer) IsTransactional() bool {
+	return false
+}
+
+func (m *mockProducer) BeginTxn() error {
+	return nil
+}
+
+func (m *mockProducer) CommitTxn() error {
+	return nil
+}
+
+func (m *mockProducer) AbortTxn() error {
+	return nil
+}
+
+func (m *mockProducer) AddOffsetsToTxn(offsets map[string][]*sarama.PartitionOffsetMetadata, groupId string) error {
+	return nil
+}
+
+func (m *mockProducer) AddMessageToTxn(msg *sarama.ConsumerMessage, groupId string, metadata *string) error {
+	return nil
+}
+
 func (m *mockProducer) ensureTopic(msg *sarama.ProducerMessage) {
 	val, err := msg.Value.Encode()
 	require.NoError(m.t, err)

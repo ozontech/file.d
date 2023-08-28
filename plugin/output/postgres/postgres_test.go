@@ -90,7 +90,7 @@ func TestPrivateOut(t *testing.T) {
 		ctx:          ctx,
 	}
 
-	p.RegisterMetrics(metric.New("test", prometheus.NewRegistry()))
+	p.registerMetrics(metric.New("test", prometheus.NewRegistry()))
 
 	batch := pipeline.NewPreparedBatch([]*pipeline.Event{{Root: root}})
 	p.out(nil, batch)
@@ -165,7 +165,7 @@ func TestPrivateOutWithRetry(t *testing.T) {
 		ctx:          ctx,
 	}
 
-	p.RegisterMetrics(metric.New("test", prometheus.NewRegistry()))
+	p.registerMetrics(metric.New("test", prometheus.NewRegistry()))
 
 	batch := pipeline.NewPreparedBatch([]*pipeline.Event{{Root: root}})
 	p.out(nil, batch)
@@ -218,7 +218,7 @@ func TestPrivateOutNoGoodEvents(t *testing.T) {
 		logger:       testLogger,
 	}
 
-	p.RegisterMetrics(metric.New("test", prometheus.NewRegistry()))
+	p.registerMetrics(metric.New("test", prometheus.NewRegistry()))
 
 	batch := pipeline.NewPreparedBatch([]*pipeline.Event{{Root: root}})
 	p.out(nil, batch)
@@ -298,7 +298,7 @@ func TestPrivateOutDeduplicatedEvents(t *testing.T) {
 		ctx:          ctx,
 	}
 
-	p.RegisterMetrics(metric.New("test", prometheus.NewRegistry()))
+	p.registerMetrics(metric.New("test", prometheus.NewRegistry()))
 
 	batch := pipeline.NewPreparedBatch([]*pipeline.Event{
 		{Root: root},
@@ -364,7 +364,7 @@ func TestPrivateOutWrongTypeInField(t *testing.T) {
 		logger:       testLogger,
 	}
 
-	p.RegisterMetrics(metric.New("test", prometheus.NewRegistry()))
+	p.registerMetrics(metric.New("test", prometheus.NewRegistry()))
 
 	batch := pipeline.NewPreparedBatch([]*pipeline.Event{{Root: root}})
 	p.out(nil, batch)
@@ -469,7 +469,7 @@ func TestPrivateOutFewUniqueEventsYetWithDeduplicationEventsAnpooladEvents(t *te
 		ctx:          ctx,
 	}
 
-	p.RegisterMetrics(metric.New("test", prometheus.NewRegistry()))
+	p.registerMetrics(metric.New("test", prometheus.NewRegistry()))
 
 	batch := pipeline.NewPreparedBatch([]*pipeline.Event{
 		{Root: root},
@@ -489,6 +489,6 @@ func (r rowsForTest) Err() error                                     { return ni
 func (r rowsForTest) CommandTag() pgconn.CommandTag                  { return nil }
 func (r rowsForTest) FieldDescriptions() []pgproto3.FieldDescription { return nil }
 func (r rowsForTest) Next() bool                                     { return false }
-func (r rowsForTest) Scan(dest ...any) error                         { return nil }
+func (r rowsForTest) Scan(_ ...any) error                            { return nil }
 func (r rowsForTest) Values() ([]any, error)                         { return nil, nil }
 func (r rowsForTest) RawValues() [][]byte                            { return nil }

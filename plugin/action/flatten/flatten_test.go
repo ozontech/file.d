@@ -21,16 +21,18 @@ func TestFlatten(t *testing.T) {
 	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, config, pipeline.MatchModeAnd, nil, false))
 
 	wg := &sync.WaitGroup{}
-	acceptedEvents := make([]*pipeline.Event, 0)
+	acceptedEvents := 0
 	input.SetCommitFn(func(e *pipeline.Event) {
+		acceptedEvents++
 		wg.Done()
-		acceptedEvents = append(acceptedEvents, e)
 	})
 
-	dumpedEvents := make([]*pipeline.Event, 0)
+	dumpedEvents := 0
+	rawEvent := ""
 	output.SetOutFn(func(e *pipeline.Event) {
+		rawEvent = e.Root.EncodeToString()
+		dumpedEvents++
 		wg.Done()
-		dumpedEvents = append(dumpedEvents, e)
 	})
 
 	input.In(0, "test.log", 0, []byte(`{"complex":{"a":"b","c":"d"}}`))
@@ -39,7 +41,7 @@ func TestFlatten(t *testing.T) {
 	wg.Wait()
 	p.Stop()
 
-	assert.Equal(t, 1, len(acceptedEvents), "wrong in events count")
-	assert.Equal(t, 1, len(dumpedEvents), "wrong out events count")
-	assert.Equal(t, `{"flat_a":"b","flat_c":"d"}`, dumpedEvents[0].Root.EncodeToString(), "wrong out events count")
+	assert.Equal(t, 1, acceptedEvents)
+	assert.Equal(t, 1, dumpedEvents)
+	assert.Equal(t, `{"flat_a":"b","flat_c":"d"}`, rawEvent, "wrong out events count")
 }

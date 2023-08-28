@@ -6,14 +6,13 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ozontech/file.d/logger"
 	insaneJSON "github.com/vitkovskii/insane-json"
 	"go.uber.org/atomic"
-
-	"github.com/ozontech/file.d/logger"
 )
 
 type Event struct {
-	kind atomic.Int32
+	kind Kind
 
 	children []*Event
 
@@ -27,7 +26,7 @@ type Event struct {
 	streamName StreamName
 	Size       int // last known event size, it may not be actual
 
-	action atomic.Int64
+	action int
 	next   *Event
 	stream *stream
 
@@ -43,13 +42,29 @@ const (
 	eventStageOutput
 )
 
+type Kind byte
+
 const (
-	eventKindRegular int32 = iota
+	EventKindRegular Kind = iota
 	eventKindChild
 	eventKindChildParent
-	eventKindTimeout
-	eventKindUnlock
+	EventKindTimeout
+	EventKindUnlock
 )
+
+func (k Kind) String() string {
+	switch k {
+	case EventKindRegular:
+		return "REGULAR"
+	case EventKindTimeout:
+		return "TIMEOUT"
+	case eventKindChildParent:
+		return "PARENT"
+	case EventKindUnlock:
+		return "UNLOCK"
+	}
+	return "UNKNOWN"
+}
 
 type eventStage int
 
@@ -106,10 +121,10 @@ func (e *Event) reset(avgEventSize int) {
 	e.Buf = e.Buf[:0]
 	e.stage = eventStageInput
 	e.next = nil
-	e.action = atomic.Int64{}
+	e.action = 0
 	e.stream = nil
 	e.children = e.children[:0]
-	e.kind.Swap(eventKindRegular)
+	e.kind = EventKindRegular
 }
 
 func (e *Event) StreamNameBytes() []byte {
@@ -117,43 +132,43 @@ func (e *Event) StreamNameBytes() []byte {
 }
 
 func (e *Event) IsRegularKind() bool {
-	return e.kind.Load() == eventKindRegular
+	return e.kind == EventKindRegular
 }
 
 func (e *Event) IsUnlockKind() bool {
-	return e.kind.Load() == eventKindUnlock
+	return e.kind == EventKindUnlock
 }
 
 func (e *Event) SetUnlockKind() {
-	e.kind.Swap(eventKindUnlock)
+	e.kind = EventKindUnlock
 }
 
 func (e *Event) IsIgnoreKind() bool {
-	return e.kind.Load() == eventKindUnlock
+	return e.kind == EventKindUnlock
 }
 
 func (e *Event) SetTimeoutKind() {
-	e.kind.Swap(eventKindTimeout)
+	e.kind = EventKindTimeout
 }
 
 func (e *Event) IsTimeoutKind() bool {
-	return e.kind.Load() == eventKindTimeout
+	return e.kind == EventKindTimeout
 }
 
 func (e *Event) SetChildKind() {
-	e.kind.Swap(eventKindChild)
+	e.kind = eventKindChild
 }
 
 func (e *Event) IsChildKind() bool {
-	return e.kind.Load() == eventKindChild
+	return e.kind == eventKindChild
 }
 
 func (e *Event) SetChildParentKind() {
-	e.kind.Swap(eventKindChildParent)
+	e.kind = eventKindChildParent
 }
 
 func (e *Event) IsChildParentKind() bool {
-	return e.kind.Load() == eventKindChildParent
+	return e.kind == eventKindChildParent
 }
 
 func (e *Event) parseJSON(json []byte) error {
@@ -189,24 +204,11 @@ func (e *Event) stageStr() string {
 	}
 }
 
-func (e *Event) kindStr() string {
-	switch e.kind.Load() {
-	case eventKindRegular:
-		return "REGULAR"
-	case eventKindChildParent:
-		return "PARENT"
-	case eventKindTimeout:
-		return "TIMEOUT"
-	default:
-		return "UNKNOWN"
-	}
-}
-
 func (e *Event) String() string {
 	if e == nil {
 		return ""
 	}
-	return fmt.Sprintf("kind=%s, action=%d, source=%d/%s, stream=%s, stage=%s, json=%s", e.kindStr(), e.action.Load(), e.SourceID, e.SourceName, e.streamName, e.stageStr(), e.Root.EncodeToString())
+	return fmt.Sprintf("kind=%s, action=%d, source=%d/%s, stream=%s, stage=%s, json=%s", e.kind.String(), e.action, e.SourceID, e.SourceName, e.streamName, e.stageStr(), e.Root.EncodeToString())
 }
 
 // channels are slower than this implementation by ~20%

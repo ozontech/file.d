@@ -4,8 +4,9 @@ package journalctl
 
 import (
 	"path/filepath"
+	"strings"
+	"sync"
 	"testing"
-	"time"
 
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/pipeline"
@@ -43,7 +44,8 @@ func setOutput(p *pipeline.Pipeline, out func(event *pipeline.Event)) {
 
 func TestPipeline(t *testing.T) {
 	p := test.NewPipeline(nil, "passive")
-	config := &Config{OffsetsFile: filepath.Join(t.TempDir(), "offset.yaml"), MaxLines: 10}
+	const lines = 10
+	config := &Config{OffsetsFile: filepath.Join(t.TempDir(), "offset.yaml"), MaxLines: lines}
 	err := cfg.Parse(config, nil)
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"-f", "-a"}, config.JournalArgs)
@@ -51,13 +53,19 @@ func TestPipeline(t *testing.T) {
 	setInput(p, config)
 
 	total := 0
+	wg := sync.WaitGroup{}
+	wg.Add(lines)
 	setOutput(p, func(event *pipeline.Event) {
 		assert.Equal(t, int(event.Offset), total)
 		total++
+		if total > lines {
+			t.Fatal("'total' more than lines")
+		}
+		wg.Done()
 	})
 
 	p.Start()
-	time.Sleep(time.Millisecond * 300)
+	wg.Wait()
 	p.Stop()
 
 	assert.Equal(t, 10, total)
@@ -66,26 +74,35 @@ func TestPipeline(t *testing.T) {
 func TestOffsets(t *testing.T) {
 	offsetPath := filepath.Join(t.TempDir(), "offset.yaml")
 
-	config := &Config{OffsetsFile: offsetPath, MaxLines: 5}
+	const lines = 5
+
+	config := &Config{OffsetsFile: offsetPath, MaxLines: lines}
 	err := cfg.Parse(config, nil)
 	assert.NoError(t, err)
 
 	cursors := map[string]int{}
 
-	for i := 0; i < 2; i++ {
+	const iters = 2
+	const total = lines * iters
+
+	for i := 0; i < iters; i++ {
 		p := test.NewPipeline(nil, "passive")
+
+		wg := sync.WaitGroup{}
+		wg.Add(lines)
 
 		setInput(p, config)
 		setOutput(p, func(event *pipeline.Event) {
-			cursors[event.Root.Dig("__CURSOR").AsString()]++
+			cursors[strings.Clone(event.Root.Dig("__CURSOR").AsString())]++
+			wg.Done()
 		})
 
 		p.Start()
-		time.Sleep(time.Millisecond * 300)
+		wg.Wait()
 		p.Stop()
 	}
 
-	assert.Equal(t, 10, len(cursors))
+	assert.Equal(t, total, len(cursors))
 	for _, cnt := range cursors {
 		assert.Equal(t, 1, cnt)
 	}

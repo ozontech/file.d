@@ -38,7 +38,8 @@ It defines subject of limiting: number of messages or total size of the messages
 
 **`limiter_backend`** *`string`* *`default=memory`* *`options=memory|redis`* 
 
-Defines kind of backend.
+Defines kind of backend. When redis backend is chosen and if by any reason plugin cannot connect to redis,
+limiters will not start syncing with redis until successful reconnect.
 
 <br>
 
@@ -68,6 +69,12 @@ Each object has the `limit` and `conditions` fields.
 * `limit` – the value which will override the `default_limit`, if `conditions` are met.
 * `limit_kind` – the type of a limit: `count` - number of messages, `size` - total size from all messages
 * `conditions` – the map of `event field name => event field value`. The conditions are checked using `AND` operator.
+
+<br>
+
+**`limiter_expiration`** *`cfg.Duration`* *`default=30m`* 
+
+Time interval after which unused limiters are removed.
 
 <br>
 

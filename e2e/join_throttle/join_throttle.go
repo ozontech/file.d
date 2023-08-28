@@ -36,7 +36,9 @@ func (c *Config) Configure(t *testing.T, conf *cfg.Config, pipelineName string) 
 func (c *Config) Send(t *testing.T) {
 	file, err := os.Create(path.Join(c.inputDir, "input.log"))
 	require.NoError(t, err)
-	defer file.Close()
+	defer func(file *os.File) {
+		_ = file.Close()
+	}(file)
 
 	for i := 0; i < c.Count; i++ {
 		_, err = file.WriteString(`{"message":"start "}` + "\n")

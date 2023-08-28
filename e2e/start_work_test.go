@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/ozontech/file.d/cfg"
+	"github.com/ozontech/file.d/e2e/file_clickhouse"
 	"github.com/ozontech/file.d/e2e/file_file"
 	"github.com/ozontech/file.d/e2e/http_file"
 	"github.com/ozontech/file.d/e2e/join_throttle"
@@ -43,6 +44,7 @@ import (
 	_ "github.com/ozontech/file.d/plugin/input/journalctl"
 	_ "github.com/ozontech/file.d/plugin/input/k8s"
 	_ "github.com/ozontech/file.d/plugin/input/kafka"
+	_ "github.com/ozontech/file.d/plugin/output/clickhouse"
 	_ "github.com/ozontech/file.d/plugin/output/devnull"
 	_ "github.com/ozontech/file.d/plugin/output/elasticsearch"
 	_ "github.com/ozontech/file.d/plugin/output/file"
@@ -113,6 +115,11 @@ func TestE2EStabilityWorkCase(t *testing.T) {
 			name:    "split_join",
 			e2eTest: &split_join.Config{},
 			cfgPath: "./split_join/config.yml",
+		},
+		{
+			name:    "file_clickhouse",
+			e2eTest: &file_clickhouse.Config{},
+			cfgPath: "./file_clickhouse/config.yml",
 		},
 	}
 

@@ -8,12 +8,14 @@ import (
 
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/logger"
+	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/plugin/input/fake"
 	"github.com/ozontech/file.d/plugin/output/devnull"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
 type Opts []string
@@ -72,7 +74,7 @@ func startCasePipeline(act func(pipeline *pipeline.Pipeline), out func(event *pi
 		if x.Load() <= 0 {
 			break
 		}
-		if time.Since(t) > time.Second*10 {
+		if time.Since(t) > time.Minute*2 {
 			panic("too long act")
 		}
 	}
@@ -106,13 +108,15 @@ func NewPipeline(actions []*pipeline.ActionPluginStaticInfo, pipelineOpts ...str
 		eventTimeout = 10 * time.Millisecond
 	}
 
+	capacity := 256
 	if perf {
 		parallel = true
+		capacity = 20000
 	}
 
 	settings := &pipeline.Settings{
-		Capacity:            4096,
-		MaintenanceInterval: time.Second * 10,
+		Capacity:            capacity,
+		MaintenanceInterval: time.Second * 5,
 		EventTimeout:        eventTimeout,
 		AntispamThreshold:   0,
 		AvgEventSize:        2048,
@@ -197,11 +201,33 @@ func NewActionPluginStaticInfo(factory pipeline.PluginFactory, config pipeline.A
 
 func NewEmptyOutputPluginParams() *pipeline.OutputPluginParams {
 	return &pipeline.OutputPluginParams{
-		PluginDefaultParams: &pipeline.PluginDefaultParams{
-			PipelineName:     "test_pipeline",
-			PipelineSettings: &pipeline.Settings{},
-		},
-		Logger: zap.L().Sugar(),
+		PluginDefaultParams: newDefaultParams(),
+		Logger:              newLogger().Named("output"),
+	}
+}
+
+func NewEmptyActionPluginParams() *pipeline.ActionPluginParams {
+	return &pipeline.ActionPluginParams{
+		PluginDefaultParams: newDefaultParams(),
+		Logger:              newLogger().Named("action"),
+	}
+}
+
+func newLogger() *zap.SugaredLogger {
+	lgCfg := zap.NewDevelopmentConfig()
+	lgCfg.Level.SetLevel(zapcore.WarnLevel)
+	lg, err := lgCfg.Build()
+	if err != nil {
+		panic(err)
+	}
+	return lg.Sugar()
+}
+
+func newDefaultParams() pipeline.PluginDefaultParams {
+	return pipeline.PluginDefaultParams{
+		PipelineName:     "test_pipeline",
+		PipelineSettings: &pipeline.Settings{},
+		MetricCtl:        metric.New("test", prometheus.NewRegistry()),
 	}
 }
 

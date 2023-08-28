@@ -88,7 +88,7 @@ pipelines:
 ```
 
 Setup:
-```
+```bash
 # run server.
 # config.yaml should contains yaml config above.
 go run ./cmd/file.d --config=config.yaml
@@ -98,9 +98,7 @@ curl "localhost:9200/_bulk" -H 'Content-Type: application/json' -d \
 '{"index":{"_index":"index-main","_type":"span"}}
 {"message": "hello", "kind": "normal"}
 '
-
-##
-
+```
 
 [More details...](plugin/input/http/README.md)
 ## journalctl

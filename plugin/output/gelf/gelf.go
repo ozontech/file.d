@@ -9,7 +9,7 @@ import (
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
-	prom "github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus"
 	insaneJSON "github.com/vitkovskii/insane-json"
 	"go.uber.org/zap"
 )
@@ -46,7 +46,7 @@ type Plugin struct {
 
 	// plugin metrics
 
-	sendErrorMetric *prom.CounterVec
+	sendErrorMetric *prometheus.CounterVec
 }
 
 // ! config-params
@@ -177,6 +177,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.logger = params.Logger
 	p.avgEventSize = params.PipelineSettings.AvgEventSize
 	p.config = config.(*Config)
+	p.registerMetrics(params.MetricCtl)
 
 	p.config.hostField = pipeline.ByteToStringUnsafe(p.formatExtraField(nil, p.config.HostField))
 	p.config.shortMessageField = pipeline.ByteToStringUnsafe(p.formatExtraField(nil, p.config.ShortMessageField))
@@ -201,6 +202,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		BatchSizeBytes:      p.config.BatchSizeBytes_,
 		FlushTimeout:        p.config.BatchFlushTimeout_,
 		MaintenanceInterval: p.config.ReconnectInterval_,
+		MetricCtl:           params.MetricCtl,
 	})
 
 	p.batcher.Start(context.TODO())
@@ -214,7 +216,7 @@ func (p *Plugin) Out(event *pipeline.Event) {
 	p.batcher.Add(event)
 }
 
-func (p *Plugin) RegisterMetrics(ctl *metric.Ctl) {
+func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 	p.sendErrorMetric = ctl.RegisterCounter("output_gelf_send_error", "Total GELF send errors")
 }
 

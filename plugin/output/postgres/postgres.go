@@ -14,7 +14,7 @@ import (
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
-	prom "github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus"
 	insaneJSON "github.com/vitkovskii/insane-json"
 	"go.uber.org/zap"
 )
@@ -72,9 +72,9 @@ type Plugin struct {
 
 	// plugin metrics
 
-	discardedEventMetric  *prom.CounterVec
-	duplicatedEventMetric *prom.CounterVec
-	writtenEventMetric    *prom.CounterVec
+	discardedEventMetric  *prometheus.CounterVec
+	duplicatedEventMetric *prometheus.CounterVec
+	writtenEventMetric    *prometheus.CounterVec
 }
 
 type ConfigColumn struct {
@@ -88,9 +88,14 @@ type ConfigColumn struct {
 type Config struct {
 	// > @3@4@5@6
 	// >
-	// > In strict mode file.d will crash on events without required columns.
-	// Otherwise events will be discarded.
+	// > Deprecated. Use `strict_fields` flag instead.
 	Strict bool `json:"strict" default:"false"` // *
+
+	// > @3@4@5@6
+	// >
+	// > In strict mode file.d will crash on events without required fields.
+	// Otherwise, events will be discarded.
+	StrictFields bool `json:"strict_fields" default:"false"` // *
 
 	// > @3@4@5@6
 	// >
@@ -174,7 +179,7 @@ func Factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 	return &Plugin{}, &Config{}
 }
 
-func (p *Plugin) RegisterMetrics(ctl *metric.Ctl) {
+func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 	p.discardedEventMetric = ctl.RegisterCounter("output_postgres_event_discarded", "Total pgsql discarded messages")
 	p.duplicatedEventMetric = ctl.RegisterCounter("output_postgres_event_duplicated", "Total pgsql duplicated messages")
 	p.writtenEventMetric = ctl.RegisterCounter("output_postgres_event_written", "Total events written to pgsql")
@@ -185,6 +190,8 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.logger = params.Logger
 	p.config = config.(*Config)
 	p.ctx = context.Background()
+	p.registerMetrics(params.MetricCtl)
+
 	if len(p.config.Columns) == 0 {
 		p.logger.Fatal("can't start plugin, no fields in config")
 	}
@@ -193,7 +200,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		p.logger.Fatal("'retry' can't be <1")
 	}
 	if p.config.Retention_ < 1 {
-		p.logger.Fatal("'renetion' can't be <1")
+		p.logger.Fatal("'retention' can't be <1")
 	}
 	if p.config.DBRequestTimeout_ < 1 {
 		p.logger.Fatal("'db_request_timeout' can't be <1")
@@ -228,6 +235,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		BatchSizeCount: p.config.BatchSize_,
 		BatchSizeBytes: p.config.BatchSizeBytes_,
 		FlushTimeout:   p.config.BatchFlushTimeout_,
+		MetricCtl:      params.MetricCtl,
 	})
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -256,30 +264,20 @@ func (p *Plugin) out(_ *pipeline.WorkerData, batch *pipeline.Batch) {
 
 	// Deduplicate events, pg can't do upsert with duplication.
 	uniqueEventsMap := make(map[string]struct{}, p.config.BatchSize_)
+	var anyValidValue bool
 
 	for batch.Next() {
 		fieldValues, uniqueID, err := p.processEvent(batch.Value(), pgFields, uniqFields)
 		if err != nil {
 			switch {
-			case errors.Is(err, ErrEventDoesntHaveField):
+			case errors.Is(err, ErrEventDoesntHaveField), errors.Is(err, ErrEventFieldHasWrongType),
+				errors.Is(err, ErrTimestampFromDistantPastOrFuture):
 				p.discardedEventMetric.WithLabelValues().Inc()
-				if p.config.Strict {
+				if p.config.StrictFields || p.config.Strict {
 					p.logger.Fatal(err)
 				}
 				p.logger.Error(err)
-			case errors.Is(err, ErrEventFieldHasWrongType):
-				p.discardedEventMetric.WithLabelValues().Inc()
-				if p.config.Strict {
-					p.logger.Fatal(err)
-				}
-				p.logger.Error(err)
-			case errors.Is(err, ErrTimestampFromDistantPastOrFuture):
-				p.discardedEventMetric.WithLabelValues().Inc()
-				if p.config.Strict {
-					p.logger.Fatal(err)
-				}
-				p.logger.Error(err)
-			case err != nil: // protection from foolproof.
+			default: // protection from foolproof.
 				p.logger.Fatalf("undefined error: %w", err)
 			}
 
@@ -291,15 +289,18 @@ func (p *Plugin) out(_ *pipeline.WorkerData, batch *pipeline.Batch) {
 			p.duplicatedEventMetric.WithLabelValues().Inc()
 			p.logger.Infof("event duplicated. Fields: %v, values: %v", pgFields, fieldValues)
 		} else {
-			uniqueEventsMap[uniqueID] = struct{}{}
+			if uniqueID != "" {
+				uniqueEventsMap[uniqueID] = struct{}{}
+			}
 			builder = builder.Values(fieldValues...)
+			anyValidValue = true
 		}
 	}
 
 	builder = builder.Suffix(p.queryBuilder.GetPostfix()).PlaceholderFormat(sq.Dollar)
 
 	// no valid events passed.
-	if len(uniqueEventsMap) == 0 {
+	if !anyValidValue {
 		return
 	}
 
