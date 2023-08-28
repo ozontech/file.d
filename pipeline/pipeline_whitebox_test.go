@@ -23,17 +23,25 @@ func TestPipeline_streamEvent(t *testing.T) {
 	event.SourceID = SourceID(streamID)
 	event.streamName = DefaultStreamName
 	event.SeqID = 123456789
+	key := streamKey{
+		ID:   streamID,
+		Name: DefaultStreamName,
+	}
 
 	p.streamEvent(event)
 
-	assert.Equal(t, event, p.streamer.getStream(streamID, DefaultStreamName).first)
+	assert.Equal(t, event, p.streamer.getStream(key).first)
 
 	p.UseSpread()
 	p.streamEvent(event)
 
 	expectedStreamID := StreamID(event.SeqID % uint64(procs))
 
-	assert.Equal(t, event, p.streamer.getStream(expectedStreamID, DefaultStreamName).first)
+	key = streamKey{
+		ID:   expectedStreamID,
+		Name: DefaultStreamName,
+	}
+	assert.Equal(t, event, p.streamer.getStream(key).first)
 }
 
 // Can't use fake plugin here dye cycle import
