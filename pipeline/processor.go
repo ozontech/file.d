@@ -352,16 +352,16 @@ func (p *processor) Propagate(event *Event) {
 // Any attempts to ActionHold or ActionCollapse the event will be suppressed by timeout events.
 func (p *processor) Spawn(parent *Event, nodes []*insaneJSON.Node) {
 	parent.SetChildParentKind()
-	nextActionIdx := parent.action.Load() + 1
+	nextActionIdx := parent.action + 1
 
 	for _, node := range nodes {
 		child := newEvent()
 		parent.children = append(parent.children, child)
 		child.Root.MutateToNode(node)
 		child.SetChildKind()
-		child.action.Store(nextActionIdx)
+		child.action = nextActionIdx
 
-		ok := p.doActions(child)
+		ok, _ := p.doActions(child)
 		if ok {
 			child.stage = eventStageOutput
 			p.output.Out(child)
@@ -378,7 +378,7 @@ func (p *processor) Spawn(parent *Event, nodes []*insaneJSON.Node) {
 		}
 
 		timeout := newTimeoutEvent(parent.stream)
-		timeout.action.Store(int64(i))
+		timeout.action = i
 		p.doActions(timeout)
 	}
 }

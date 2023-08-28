@@ -412,7 +412,8 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 	data := (*workerData).(data)
 	data.reset()
 
-	for _, event := range batch.Events {
+	for batch.Next() {
+		event := batch.Value()
 		for _, col := range data.cols {
 			node := event.Root.Dig(col.Name)
 

@@ -505,7 +505,7 @@ func (p *Pipeline) Error(err string) {
 }
 
 func (p *Pipeline) finalize(event *Event, notifyInput bool, backEvent bool) {
-	if event.IsTimeoutKind() {
+	if event.IsTimeoutKind() || event.IsChildKind() {
 		return
 	}
 

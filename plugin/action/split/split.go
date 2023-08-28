@@ -4,7 +4,6 @@ import (
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/pipeline"
-	"github.com/ozontech/file.d/plugin"
 	insaneJSON "github.com/vitkovskii/insane-json"
 	"go.uber.org/zap"
 )
@@ -38,7 +37,6 @@ type Plugin struct {
 	config           *Config
 	logger           *zap.Logger
 	pluginController pipeline.ActionPluginController
-	plugin.NoMetricsPlugin
 }
 
 // ! config-params

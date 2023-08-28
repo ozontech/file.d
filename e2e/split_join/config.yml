@@ -4,9 +4,6 @@ pipelines:
       event_timeout: 1h
     input:
       type: file
-      persistence_mode: async
-      watching_dir: SOME_DIR
-      offsets_file: SOME_FILE
       offsets_op: reset
     actions:
       - type: split
