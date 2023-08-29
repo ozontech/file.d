@@ -3,6 +3,7 @@ package kafka
 import (
 	"context"
 	"strings"
+	"sync"
 
 	"github.com/Shopify/sarama"
 	"github.com/ozontech/file.d/fd"
@@ -47,6 +48,9 @@ type Plugin struct {
 	cancel        context.CancelFunc
 	controller    pipeline.InputPluginController
 	idByTopic     map[string]int
+
+	workerChBySource map[pipeline.SourceID]chan *sarama.ConsumerMessage
+	workerChMu       sync.RWMutex
 
 	// plugin metrics
 
@@ -112,6 +116,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	p.consumerGroup = p.newConsumerGroup()
 	p.controller.UseSpread()
 	p.controller.DisableStreams()
+	p.workerChBySource = make(map[pipeline.SourceID]chan *sarama.ConsumerMessage)
 
 	go p.consume(ctx)
 }
@@ -187,10 +192,49 @@ func (p *Plugin) Cleanup(sarama.ConsumerGroupSession) error {
 func (p *Plugin) ConsumeClaim(_ sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
 	for message := range claim.Messages() {
 		sourceID := assembleSourceID(p.idByTopic[message.Topic], message.Partition)
-		_ = p.controller.In(sourceID, "kafka", message.Offset, message.Value, true)
+		workerCh, itsNew := p.acquireWorker(sourceID)
+		// it is a new worker
+		// start processing the channel
+		if itsNew {
+			go p.processSaramaMessage(sourceID, workerCh)
+		}
+		workerCh <- message
 	}
 
 	return nil
+}
+
+func (p *Plugin) acquireWorker(id pipeline.SourceID) (_ chan *sarama.ConsumerMessage, itsNew bool) {
+	p.workerChMu.RLock()
+	ch, has := p.workerChBySource[id]
+	p.workerChMu.RUnlock()
+	if has {
+		return ch, false
+	}
+
+	p.workerChMu.Lock()
+	defer p.workerChMu.Unlock()
+
+	ch, has = p.workerChBySource[id]
+	if has {
+		return ch, false
+	}
+
+	// create the job channel and start the worker
+
+	// the maximum number of sarama.ConsumerMessage waiting to be processed
+	const buffSize = 4
+
+	ch = make(chan *sarama.ConsumerMessage, buffSize)
+	p.workerChBySource[id] = ch
+
+	return ch, true
+}
+
+func (p *Plugin) processSaramaMessage(sourceID pipeline.SourceID, ch chan *sarama.ConsumerMessage) {
+	for message := range ch {
+		_ = p.controller.In(sourceID, "kafka", message.Offset, message.Value, true)
+	}
 }
 
 func assembleSourceID(index int, partition int32) pipeline.SourceID {
