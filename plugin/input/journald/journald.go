@@ -15,7 +15,7 @@ import (
 )
 
 /*{ introduction
-Reads `journald` output.
+Reads `journalctl` output.
 }*/
 
 type Plugin struct {
@@ -29,7 +29,7 @@ type Plugin struct {
 	//  plugin metrics
 
 	offsetErrorsMetric      *prometheus.CounterVec
-	journaldStopErrorMetric *prometheus.CounterVec
+	journalDStopErrorMetric *prometheus.CounterVec
 	readerErrorsMetric      *prometheus.CounterVec
 }
 
@@ -44,10 +44,10 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
-	// > Additional args for `journald`.
+	// > Additional args for `journalctl`.
 	// > Plugin forces "-o json" and "-c *cursor*" or "-n all", otherwise
 	// > you can use any additional args.
-	// >> Have a look at https://man7.org/linux/man-pages/man1/journald.1.html
+	// >> Have a look at https://man7.org/linux/man-pages/man1/journalctl.1.html
 	JournalArgs []string `json:"journal_args" default:"-f -a"` // *
 
 	// for testing mostly
@@ -109,14 +109,14 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 
 func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 	p.offsetErrorsMetric = ctl.RegisterCounter("input_journald_offset_errors", "Number of errors occurred when saving/loading offset")
-	p.journaldStopErrorMetric = ctl.RegisterCounter("input_journald_stop_errors", "Total journald stop errors")
+	p.journalDStopErrorMetric = ctl.RegisterCounter("input_journald_stop_errors", "Total journald stop errors")
 	p.readerErrorsMetric = ctl.RegisterCounter("input_journald_reader_errors", "Total reader errors")
 }
 
 func (p *Plugin) Stop() {
 	err := p.reader.stop()
 	if err != nil {
-		p.journaldStopErrorMetric.WithLabelValues().Inc()
+		p.journalDStopErrorMetric.WithLabelValues().Inc()
 		p.logger.Error("can't stop journald cmd", zap.Error(err))
 	}
 

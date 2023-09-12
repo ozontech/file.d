@@ -102,7 +102,7 @@ curl "localhost:9200/_bulk" -H 'Content-Type: application/json' -d \
 
 [More details...](plugin/input/http/README.md)
 ## journald
-Reads `journald` output.
+Reads `journalctl` output.
 
 [More details...](plugin/input/journald/README.md)
 ## k8s
