@@ -164,7 +164,7 @@ Plugins registered automatically after importing by init() function:
 
 Moving plugin in sub dir in plugin dir will quit registration quietly.
 To prevent this let's check that DefaultPluginRegistry contains all plugins.
-Plugins "dmesg", "journalctl" linux based, they contain tag: //go:build linux.
+Plugins "dmesg", "journald" linux based, they contain tag: //go:build linux.
 We don't check them.
 */
 func TestThatPluginsAreImported(t *testing.T) {
