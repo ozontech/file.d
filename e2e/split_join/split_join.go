@@ -92,7 +92,6 @@ func (c *Config) Validate(t *testing.T) {
 
 	go func() {
 		r.NoError(c.consumer.Consume(ctx, []string{c.topic}, handlerFunc(func(msg *sarama.ConsumerMessage) {
-			fmt.Println("consumed message", string(msg.Value), msg.Offset, msg.Partition)
 			strBuilder.Write(msg.Value)
 			strBuilder.WriteString("\n")
 			gotEvents++
