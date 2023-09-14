@@ -1,29 +1,44 @@
 package split_join
 
 import (
+	"context"
+	"fmt"
 	"os"
 	"path"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/Shopify/sarama"
 	"github.com/ozontech/file.d/cfg"
-	"github.com/ozontech/file.d/test"
 	"github.com/stretchr/testify/require"
 )
 
+const (
+	brokerHost = "localhost:9092"
+	group      = "file_d_test_split_join_client"
+
+	arrayLen = 4
+	sample   = `{ "data": [ { "first": "1" }, { "message": "start " }, { "message": "continue" }, { "second": "2" }, { "third": "3" } ] }`
+
+	messages = 10
+)
+
 type Config struct {
-	inputDir  string
-	outputDir string
-	count     int
+	inputDir string
+	consumer sarama.ConsumerGroup
+	topic    string
 }
 
 func (c *Config) Configure(t *testing.T, conf *cfg.Config, pipelineName string) {
-	c.count = 100
+	r := require.New(t)
+
 	c.inputDir = t.TempDir()
-	c.outputDir = t.TempDir()
 	offsetsDir := t.TempDir()
+	c.topic = fmt.Sprintf("file_d_test_split_join_%d", time.Now().UnixNano())
+	t.Logf("generated topic: %s", c.topic)
 
 	input := conf.Pipelines[pipelineName].Raw.Get("input")
 	input.Set("watching_dir", c.inputDir)
@@ -31,7 +46,22 @@ func (c *Config) Configure(t *testing.T, conf *cfg.Config, pipelineName string) 
 	input.Set("offsets_file", filepath.Join(offsetsDir, "offsets.yaml"))
 
 	output := conf.Pipelines[pipelineName].Raw.Get("output")
-	output.Set("target_file", path.Join(c.outputDir, "output.log"))
+	output.Set("brokers", []string{brokerHost})
+	output.Set("default_topic", c.topic)
+
+	addrs := []string{brokerHost}
+	config := sarama.NewConfig()
+	config.Consumer.Offsets.Initial = sarama.OffsetOldest
+
+	admin, err := sarama.NewClusterAdmin(addrs, config)
+	r.NoError(err)
+	r.NoError(admin.CreateTopic(c.topic, &sarama.TopicDetail{
+		NumPartitions:     1,
+		ReplicationFactor: 1,
+	}, false))
+
+	c.consumer, err = sarama.NewConsumerGroup(addrs, group, config)
+	r.NoError(err)
 }
 
 func (c *Config) Send(t *testing.T) {
@@ -41,31 +71,56 @@ func (c *Config) Send(t *testing.T) {
 		_ = file.Close()
 	}(file)
 
-	for i := 0; i < c.count; i++ {
-		_, err = file.WriteString(`{ "data": [ { "hello": "world" }, { "message": "start " }, { "message": "continue" }, { "file": ".d" }, { "open": "source" } ] }` + "\n")
+	for i := 0; i < messages; i++ {
+		_, err = file.WriteString(sample + "\n")
 		require.NoError(t, err)
 	}
 }
 
 func (c *Config) Validate(t *testing.T) {
-	logFilePattern := path.Join(c.outputDir, "*")
+	r := require.New(t)
 
-	expectedEvents := c.count * 4
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
 
-	test.WaitProcessEvents(t, expectedEvents, 50*time.Millisecond, 50*time.Second, logFilePattern)
-	got := test.CountLines(t, logFilePattern)
+	expectedEventsCount := messages * arrayLen
 
-	files := test.GetMatches(t, logFilePattern)
+	strBuilder := strings.Builder{}
+	gotEvents := 0
+	wg := sync.WaitGroup{}
+	wg.Add(expectedEventsCount)
 
-	require.Equal(t, 1, len(files))
-	outputFile := files[0]
-	outputFileContent, err := os.ReadFile(outputFile)
-	require.NoError(t, err)
-	require.Equal(t, strings.Repeat(`{"hello":"world","k8s_pod_label_app":"splitter"}`+"\n"+
-		`{"message":"start continue","k8s_pod_label_app":"splitter"}`+"\n"+
-		`{"file":".d","k8s_pod_label_app":"splitter"}`+"\n"+
-		`{"open":"source","k8s_pod_label_app":"splitter"}`+"\n",
-		c.count), string(outputFileContent))
+	go func() {
+		r.NoError(c.consumer.Consume(ctx, []string{c.topic}, handlerFunc(func(msg *sarama.ConsumerMessage) {
+			fmt.Println("consumed message", string(msg.Value), msg.Offset, msg.Partition)
+			strBuilder.Write(msg.Value)
+			strBuilder.WriteString("\n")
+			gotEvents++
+			wg.Done()
+		})))
+	}()
 
-	require.Equal(t, expectedEvents, got)
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-ctx.Done():
+		r.Failf("test timed out", "got: %v, expected: %v", gotEvents, expectedEventsCount)
+	}
+
+	got := strBuilder.String()
+
+	expected := strings.Repeat(`{"first":"1"}
+{"message":"start continue"}
+{"second":"2"}
+{"third":"3"}
+`,
+		messages)
+
+	r.Equal(expected, got)
+	r.Equal(expectedEventsCount, gotEvents)
 }

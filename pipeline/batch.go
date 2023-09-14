@@ -77,7 +77,7 @@ func (b *Batch) reset() {
 }
 
 func (b *Batch) append(e *Event) {
-	if b.hasIterableEvents || !e.IsChildParentKind() { // we check hasIterableEvents to optimize atomic read
+	if e.IsChildParentKind() {
 		b.hasIterableEvents = true
 	}
 

@@ -169,7 +169,7 @@ func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 	if *workerData == nil {
 		*workerData = &data{
-			messages: make([]*sarama.ProducerMessage, 0, p.config.BatchSize_),
+			messages: make([]*sarama.ProducerMessage, p.config.BatchSize_),
 			outBuf:   make([]byte, 0, p.config.BatchSize_*p.avgEventSize),
 		}
 	}
