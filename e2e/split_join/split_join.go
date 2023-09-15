@@ -7,7 +7,6 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -87,28 +86,23 @@ func (c *Config) Validate(t *testing.T) {
 
 	strBuilder := strings.Builder{}
 	gotEvents := 0
-	wg := sync.WaitGroup{}
-	wg.Add(expectedEventsCount)
+	done := make(chan struct{})
 
 	go func() {
 		r.NoError(c.consumer.Consume(ctx, []string{c.topic}, handlerFunc(func(msg *sarama.ConsumerMessage) {
 			strBuilder.Write(msg.Value)
 			strBuilder.WriteString("\n")
 			gotEvents++
-			wg.Done()
+			if gotEvents == expectedEventsCount {
+				close(done)
+			}
 		})))
-	}()
-
-	done := make(chan struct{})
-	go func() {
-		wg.Wait()
-		close(done)
 	}()
 
 	select {
 	case <-done:
 	case <-ctx.Done():
-		r.Failf("test timed out", "got: %v, expected: %v", gotEvents, expectedEventsCount)
+		r.Failf("test timed out", "got: %v, expected: %v, consumed: %s", gotEvents, expectedEventsCount, strBuilder.String())
 	}
 
 	got := strBuilder.String()

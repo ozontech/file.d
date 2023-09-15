@@ -77,7 +77,7 @@ func (b *Batch) reset() {
 }
 
 func (b *Batch) append(e *Event) {
-	if e.IsChildParentKind() {
+	if !e.IsChildKind() {
 		b.hasIterableEvents = true
 	}
 
@@ -91,10 +91,7 @@ func (b *Batch) updateStatus() BatchStatus {
 		// batch is empty
 		return BatchStatusNotReady
 	}
-	if !b.hasIterableEvents {
-		// batch contains only parents
-		return BatchStatusNotReady
-	}
+
 	switch {
 	case (b.maxSizeCount != 0 && l >= b.maxSizeCount) || (b.maxSizeBytes != 0 && b.maxSizeBytes <= b.eventsSize):
 		b.status = BatchStatusMaxSizeExceeded
