@@ -8,228 +8,94 @@ import (
 )
 
 type Holder struct {
-	registry     *prometheus.Registry
-	holdDuration time.Duration
-	metrics      metrics
-
-	regChan             chan prometheus.Collector
-	onceStart, onceStop sync.Once
+	holdDuration   time.Duration
+	metricWrappers metricWrappers
 }
 
-func NewHolder(registry *prometheus.Registry, holdDuration time.Duration) *Holder {
+func NewHolder(holdDuration time.Duration) *Holder {
 	return &Holder{
-		registry:     registry,
-		holdDuration: holdDuration,
-		metrics:      newMetrics(),
+		holdDuration:   holdDuration,
+		metricWrappers: newMetricWrappers(),
 	}
-}
-
-func (h *Holder) Start() {
-	h.onceStart.Do(func() {
-		h.regChan = make(chan prometheus.Collector)
-		go h.registerMetrics()
-	})
-}
-
-func (h *Holder) Stop() {
-	h.onceStop.Do(func() {
-		close(h.regChan)
-	})
 }
 
 func (h *Holder) Maintenance() {
 	h.updateMetrics()
 }
 
-func (h *Holder) AddCounter(counter prometheus.Counter) *CounterWrapper {
-	h.metrics.mu.RLock()
-	cw, ok := h.metrics.counters[counter]
-	h.metrics.mu.RUnlock()
-	if ok {
-		return cw
-	}
-
-	h.metrics.mu.Lock()
-	defer h.metrics.mu.Unlock()
-	cw, ok = h.metrics.counters[counter]
-	if !ok {
-		cw = newCounterWrapper(counter, h.regChan)
-		h.metrics.counters[counter] = cw
-	}
-
-	return cw
-}
-
 func (h *Holder) AddCounterVec(counterVec *prometheus.CounterVec) *CounterVecWrapper {
-	h.metrics.mu.RLock()
-	cvw, ok := h.metrics.counterVecs[counterVec]
-	h.metrics.mu.RUnlock()
-	if ok {
-		return cvw
-	}
-
-	h.metrics.mu.Lock()
-	defer h.metrics.mu.Unlock()
-	cvw, ok = h.metrics.counterVecs[counterVec]
-	if !ok {
-		cvw = newCounterVecWrapper(counterVec, h.regChan)
-		h.metrics.counterVecs[counterVec] = cvw
-	}
-
-	return cvw
-}
-
-func (h *Holder) AddGauge(gauge prometheus.Gauge) *GaugeWrapper {
-	h.metrics.mu.RLock()
-	gw, ok := h.metrics.gauges[gauge]
-	h.metrics.mu.RUnlock()
-	if ok {
-		return gw
-	}
-
-	h.metrics.mu.Lock()
-	defer h.metrics.mu.Unlock()
-	gw, ok = h.metrics.gauges[gauge]
-	if !ok {
-		gw = newGaugeWrapper(gauge, h.regChan)
-		h.metrics.gauges[gauge] = gw
-	}
-
-	return gw
+	return h.metricWrappers.addCounterVec(counterVec)
 }
 
 func (h *Holder) AddGaugeVec(gaugeVec *prometheus.GaugeVec) *GaugeVecWrapper {
-	h.metrics.mu.RLock()
-	gvw, ok := h.metrics.gaugeVecs[gaugeVec]
-	h.metrics.mu.RUnlock()
-	if ok {
-		return gvw
-	}
-
-	h.metrics.mu.Lock()
-	defer h.metrics.mu.Unlock()
-	gvw, ok = h.metrics.gaugeVecs[gaugeVec]
-	if !ok {
-		gvw = newGaugeVecWrapper(gaugeVec, h.regChan)
-		h.metrics.gaugeVecs[gaugeVec] = gvw
-	}
-
-	return gvw
-}
-
-func (h *Holder) AddHistogram(histogram prometheus.Histogram) *HistogramWrapper {
-	h.metrics.mu.RLock()
-	hw, ok := h.metrics.histograms[histogram]
-	h.metrics.mu.RUnlock()
-	if ok {
-		return hw
-	}
-
-	h.metrics.mu.Lock()
-	defer h.metrics.mu.Unlock()
-	hw, ok = h.metrics.histograms[histogram]
-	if !ok {
-		hw = newHistogramWrapper(histogram, h.regChan)
-		h.metrics.histograms[histogram] = hw
-	}
-
-	return hw
+	return h.metricWrappers.addGaugeVec(gaugeVec)
 }
 
 func (h *Holder) AddHistogramVec(histogramVec *prometheus.HistogramVec) *HistogramVecWrapper {
-	h.metrics.mu.RLock()
-	hvw, ok := h.metrics.histogramVecs[histogramVec]
-	h.metrics.mu.RUnlock()
-	if ok {
-		return hvw
-	}
-
-	h.metrics.mu.Lock()
-	defer h.metrics.mu.Unlock()
-	hvw, ok = h.metrics.histogramVecs[histogramVec]
-	if !ok {
-		hvw = newHistogramVecWrapper(histogramVec, h.regChan)
-		h.metrics.histogramVecs[histogramVec] = hvw
-	}
-
-	return hvw
-}
-
-type metrics struct {
-	counters    map[prometheus.Counter]*CounterWrapper
-	counterVecs map[*prometheus.CounterVec]*CounterVecWrapper
-
-	gauges    map[prometheus.Gauge]*GaugeWrapper
-	gaugeVecs map[*prometheus.GaugeVec]*GaugeVecWrapper
-
-	histograms    map[prometheus.Histogram]*HistogramWrapper
-	histogramVecs map[*prometheus.HistogramVec]*HistogramVecWrapper
-
-	mu *sync.RWMutex
-}
-
-func newMetrics() metrics {
-	return metrics{
-		counters:      make(map[prometheus.Counter]*CounterWrapper),
-		counterVecs:   make(map[*prometheus.CounterVec]*CounterVecWrapper),
-		gauges:        make(map[prometheus.Gauge]*GaugeWrapper),
-		gaugeVecs:     make(map[*prometheus.GaugeVec]*GaugeVecWrapper),
-		histograms:    make(map[prometheus.Histogram]*HistogramWrapper),
-		histogramVecs: make(map[*prometheus.HistogramVec]*HistogramVecWrapper),
-		mu:            new(sync.RWMutex),
-	}
-}
-
-func (h *Holder) updateMetric(col prometheus.Collector, wr *wrapper) {
-	if wr.isObsolete(h.holdDuration) {
-		h.registry.Unregister(col)
-		wr.active = false
-	}
-}
-
-func updateMetricVec[T wrapperType](h *Holder, metricVec *prometheus.MetricVec, wrVec *wrapperVec[T], metric prometheus.Metric, wr *wrapper) {
-	if wr.isObsolete(h.holdDuration) {
-		metricVec.DeleteLabelValues(wr.labels...)
-		wrVec.deleteElem(metric)
-		wr.active = false
-	}
+	return h.metricWrappers.addHistogramVec(histogramVec)
 }
 
 // updateMetrics delete old metrics, that aren't in use since last update.
 func (h *Holder) updateMetrics() {
-	for _, cw := range h.metrics.counters {
-		h.updateMetric(cw.counter, &cw.wrapper)
-	}
+	h.metricWrappers.update(h.holdDuration)
+}
 
-	for _, gw := range h.metrics.gauges {
-		h.updateMetric(gw.gauge, &gw.wrapper)
-	}
+type metricWrappers struct {
+	counterWrappers   []*CounterVecWrapper
+	gaugeWrappers     []*GaugeVecWrapper
+	histogramWrappers []*HistogramVecWrapper
+	mu                *sync.Mutex
+}
 
-	for _, hw := range h.metrics.histograms {
-		h.updateMetric(hw.histogram, &hw.wrapper)
-	}
-
-	for _, cvw := range h.metrics.counterVecs {
-		for _, cw := range cvw.elems {
-			updateMetricVec(h, cvw.vec.MetricVec, &cvw.wrapperVec, cw.counter, &cw.wrapper)
-		}
-	}
-
-	for _, gvw := range h.metrics.gaugeVecs {
-		for _, gw := range gvw.elems {
-			updateMetricVec(h, gvw.vec.MetricVec, &gvw.wrapperVec, gw.gauge, &gw.wrapper)
-		}
-	}
-
-	for _, hvw := range h.metrics.histogramVecs {
-		for _, hw := range hvw.elems {
-			updateMetricVec(h, hvw.vec.MetricVec, &hvw.wrapperVec, hw.histogram, &hw.wrapper)
-		}
+func newMetricWrappers() metricWrappers {
+	return metricWrappers{
+		counterWrappers:   make([]*CounterVecWrapper, 0),
+		gaugeWrappers:     make([]*GaugeVecWrapper, 0),
+		histogramWrappers: make([]*HistogramVecWrapper, 0),
+		mu:                new(sync.Mutex),
 	}
 }
 
-func (h *Holder) registerMetrics() {
-	for col := range h.regChan {
-		h.registry.MustRegister(col)
+func (mw *metricWrappers) addCounterVec(counterVec *prometheus.CounterVec) *CounterVecWrapper {
+	mw.mu.Lock()
+	defer mw.mu.Unlock()
+
+	cvw := newCounterVecWrapper(counterVec)
+	mw.counterWrappers = append(mw.counterWrappers, cvw)
+
+	return cvw
+}
+
+func (mw *metricWrappers) addGaugeVec(gaugeVec *prometheus.GaugeVec) *GaugeVecWrapper {
+	mw.mu.Lock()
+	defer mw.mu.Unlock()
+
+	gvw := newGaugeVecWrapper(gaugeVec)
+	mw.gaugeWrappers = append(mw.gaugeWrappers, gvw)
+
+	return gvw
+}
+
+func (mw *metricWrappers) addHistogramVec(histogramVec *prometheus.HistogramVec) *HistogramVecWrapper {
+	mw.mu.Lock()
+	defer mw.mu.Unlock()
+
+	hvw := newHistogramVecWrapper(histogramVec)
+	mw.histogramWrappers = append(mw.histogramWrappers, hvw)
+
+	return hvw
+}
+
+func (mw *metricWrappers) update(holdDuration time.Duration) {
+	for _, cvw := range mw.counterWrappers {
+		cvw.updateState(holdDuration)
+	}
+
+	for _, gvw := range mw.gaugeWrappers {
+		gvw.updateState(holdDuration)
+	}
+
+	for _, hvw := range mw.histogramWrappers {
+		hvw.updateState(holdDuration)
 	}
 }

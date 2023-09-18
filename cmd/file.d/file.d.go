@@ -51,7 +51,6 @@ import (
 	_ "github.com/ozontech/file.d/plugin/output/s3"
 	_ "github.com/ozontech/file.d/plugin/output/splunk"
 	_ "github.com/ozontech/file.d/plugin/output/stdout"
-	"github.com/ozontech/file.d/xtime"
 	insaneJSON "github.com/vitkovskii/insane-json"
 	"go.uber.org/automaxprocs/maxprocs"
 )
@@ -81,7 +80,6 @@ func main() {
 
 	_, _ = maxprocs.Set(maxprocs.Logger(logger.Debugf))
 
-	go xtime.Start()
 	go listenSignals()
 	go start()
 

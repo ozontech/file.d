@@ -1,231 +1,243 @@
 package metric
 
 import (
+	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
-	"github.com/prometheus/client_golang/prometheus"
-
 	"github.com/ozontech/file.d/xtime"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
-type (
-	wrapper struct {
-		changeTime time.Time
-		active     bool
-		labels     []string
-		registrar  chan<- prometheus.Collector
-	}
+const labelsSeparator = ";"
 
-	CounterWrapper struct {
-		wrapper
-		counter prometheus.Counter
-	}
-
-	GaugeWrapper struct {
-		wrapper
-		gauge prometheus.Gauge
-	}
-
-	HistogramWrapper struct {
-		wrapper
-		histogram prometheus.Histogram
-	}
-
-	wrapperType interface {
-		CounterWrapper | GaugeWrapper | HistogramWrapper
-	}
-
-	wrapperVec[T wrapperType] struct {
-		elems     map[prometheus.Metric]*T
-		mu        *sync.RWMutex
-		registrar chan<- prometheus.Collector
-	}
-
-	CounterVecWrapper struct {
-		wrapperVec[CounterWrapper]
-		vec *prometheus.CounterVec
-	}
-
-	GaugeVecWrapper struct {
-		wrapperVec[GaugeWrapper]
-		vec *prometheus.GaugeVec
-	}
-
-	HistogramVecWrapper struct {
-		wrapperVec[HistogramWrapper]
-		vec *prometheus.HistogramVec
-	}
-)
-
-func (c *CounterWrapper) Inc() {
-	c.counter.Inc()
-	c.update(c.counter)
+type wrapper struct {
+	changeTime atomic.Int64
 }
 
-func (c *CounterWrapper) Add(v float64) {
-	c.counter.Add(v)
-	c.update(c.counter)
-}
-
-func (g *GaugeWrapper) Set(v float64) {
-	g.gauge.Set(v)
-	g.update(g.gauge)
-}
-
-func (g *GaugeWrapper) Inc() {
-	g.gauge.Inc()
-	g.update(g.gauge)
-}
-
-func (g *GaugeWrapper) Dec() {
-	g.gauge.Dec()
-	g.update(g.gauge)
-}
-
-func (g *GaugeWrapper) Add(v float64) {
-	g.gauge.Add(v)
-	g.update(g.gauge)
-}
-
-func (g *GaugeWrapper) Sub(v float64) {
-	g.gauge.Sub(v)
-	g.update(g.gauge)
-}
-
-func (h *HistogramWrapper) Observe(v float64) {
-	h.histogram.Observe(v)
-	h.update(h.histogram)
-}
-
-func (cv *CounterVecWrapper) WithLabelValues(lvs ...string) *CounterWrapper {
-	c := cv.vec.WithLabelValues(lvs...)
-	if cw := cv.getElem(c); cw != nil {
-		return cw
-	}
-
-	cw := newCounterWrapper(c, cv.registrar, lvs...)
-	cv.setElem(c, cw)
-	return cw
-}
-
-func (gv *GaugeVecWrapper) WithLabelValues(lvs ...string) *GaugeWrapper {
-	g := gv.vec.WithLabelValues(lvs...)
-	if gw := gv.getElem(g); gw != nil {
-		return gw
-	}
-
-	gw := newGaugeWrapper(g, gv.registrar, lvs...)
-	gv.setElem(g, gw)
-	return gw
-}
-
-func (hv *HistogramVecWrapper) WithLabelValues(lvs ...string) *HistogramWrapper {
-	h := hv.vec.WithLabelValues(lvs...).(prometheus.Histogram)
-	if hw := hv.getElem(h); hw != nil {
-		return hw
-	}
-
-	hw := newHistogramWrapper(h, hv.registrar, lvs...)
-	hv.setElem(h, hw)
-	return hw
-}
-
-func newWrapper(r chan<- prometheus.Collector, labels ...string) wrapper {
-	w := wrapper{
-		active:    true,
-		registrar: r,
-	}
-
-	if labels != nil {
-		w.labels = make([]string, len(labels))
-		copy(w.labels, labels)
-	}
+func newWrapper() *wrapper {
+	w := &wrapper{}
+	w.changeTime.Store(xtime.GetInaccurateUnixNano())
 
 	return w
 }
 
-func (w *wrapper) update(col prometheus.Collector) {
-	w.changeTime = xtime.GetInaccurateTime()
-	if !w.active {
-		// Need re-register only metrics without labels.
-		// MetricVecs have a shared metric-descriptor,
-		// need to delete only metric with specified labels.
-		if w.labels == nil {
-			w.registrar <- col
-		}
-		w.active = true
-	}
+func (w *wrapper) update() {
+	w.changeTime.Store(xtime.GetInaccurateUnixNano())
 }
 
 func (w *wrapper) isObsolete(holdDuration time.Duration) bool {
-	return w.active && xtime.GetInaccurateTime().Sub(w.changeTime) > holdDuration
+	return xtime.GetInaccurateUnixNano()-w.changeTime.Load() > holdDuration.Nanoseconds()
 }
 
-func newCounterWrapper(c prometheus.Counter, r chan<- prometheus.Collector, labels ...string) *CounterWrapper {
+type CounterWrapper struct {
+	*wrapper
+	counter prometheus.Counter
+}
+
+func newCounterWrapper(counter prometheus.Counter) *CounterWrapper {
 	return &CounterWrapper{
-		counter: c,
-		wrapper: newWrapper(r, labels...),
+		counter: counter,
+		wrapper: newWrapper(),
 	}
 }
 
-func newGaugeWrapper(g prometheus.Gauge, r chan<- prometheus.Collector, labels ...string) *GaugeWrapper {
+func (cw *CounterWrapper) Inc() {
+	cw.counter.Inc()
+	cw.update()
+}
+
+func (cw *CounterWrapper) Add(v float64) {
+	cw.counter.Add(v)
+	cw.update()
+}
+
+type GaugeWrapper struct {
+	*wrapper
+	gauge prometheus.Gauge
+}
+
+func newGaugeWrapper(gauge prometheus.Gauge) *GaugeWrapper {
 	return &GaugeWrapper{
-		gauge:   g,
-		wrapper: newWrapper(r, labels...),
+		gauge:   gauge,
+		wrapper: newWrapper(),
 	}
 }
 
-func newHistogramWrapper(h prometheus.Histogram, r chan<- prometheus.Collector, labels ...string) *HistogramWrapper {
+func (gw *GaugeWrapper) Set(v float64) {
+	gw.gauge.Set(v)
+	gw.update()
+}
+
+func (gw *GaugeWrapper) Inc() {
+	gw.gauge.Inc()
+	gw.update()
+}
+
+func (gw *GaugeWrapper) Dec() {
+	gw.gauge.Dec()
+	gw.update()
+}
+
+func (gw *GaugeWrapper) Add(v float64) {
+	gw.gauge.Add(v)
+	gw.update()
+}
+
+func (gw *GaugeWrapper) Sub(v float64) {
+	gw.gauge.Sub(v)
+	gw.update()
+}
+
+type HistogramWrapper struct {
+	*wrapper
+	histogram prometheus.Histogram
+}
+
+func newHistogramWrapper(histogram prometheus.Histogram) *HistogramWrapper {
 	return &HistogramWrapper{
-		histogram: h,
-		wrapper:   newWrapper(r, labels...),
+		histogram: histogram,
+		wrapper:   newWrapper(),
 	}
 }
 
-func newWrapperVec[T wrapperType](r chan<- prometheus.Collector) wrapperVec[T] {
-	return wrapperVec[T]{
-		elems:     make(map[prometheus.Metric]*T),
-		mu:        new(sync.RWMutex),
-		registrar: r,
-	}
+func (hw *HistogramWrapper) Observe(v float64) {
+	hw.histogram.Observe(v)
+	hw.update()
 }
 
-func (wv *wrapperVec[T]) getElem(m prometheus.Metric) *T {
-	wv.mu.RLock()
-	defer wv.mu.RUnlock()
-	return wv.elems[m]
+type CounterVecWrapper struct {
+	wrapperByLabels map[string]*CounterWrapper
+	mu              *sync.Mutex
+
+	vec *prometheus.CounterVec
 }
 
-func (wv *wrapperVec[T]) setElem(m prometheus.Metric, elem *T) {
-	wv.mu.Lock()
-	wv.elems[m] = elem
-	wv.mu.Unlock()
-}
-
-func (wv *wrapperVec[T]) deleteElem(m prometheus.Metric) {
-	wv.mu.Lock()
-	delete(wv.elems, m)
-	wv.mu.Unlock()
-}
-
-func newCounterVecWrapper(cv *prometheus.CounterVec, r chan<- prometheus.Collector) *CounterVecWrapper {
+func newCounterVecWrapper(cv *prometheus.CounterVec) *CounterVecWrapper {
 	return &CounterVecWrapper{
-		vec:        cv,
-		wrapperVec: newWrapperVec[CounterWrapper](r),
+		vec: cv,
+
+		wrapperByLabels: make(map[string]*CounterWrapper),
+		mu:              new(sync.Mutex),
 	}
 }
 
-func newGaugeVecWrapper(gv *prometheus.GaugeVec, r chan<- prometheus.Collector) *GaugeVecWrapper {
+func (cvw *CounterVecWrapper) WithLabelValues(lvs ...string) *CounterWrapper {
+	labels := strings.Join(lvs, labelsSeparator)
+
+	cvw.mu.Lock()
+	defer cvw.mu.Unlock()
+
+	if hw, ok := cvw.wrapperByLabels[labels]; ok {
+		return hw
+	}
+
+	c := cvw.vec.WithLabelValues(lvs...)
+	cw := newCounterWrapper(c)
+	cvw.wrapperByLabels[labels] = cw
+
+	return cw
+}
+
+func (cvw *CounterVecWrapper) updateState(holdDuration time.Duration) {
+	cvw.mu.Lock()
+	defer cvw.mu.Unlock()
+
+	for lvs, cw := range cvw.wrapperByLabels {
+		if cw.isObsolete(holdDuration) {
+			cvw.vec.DeleteLabelValues(strings.Split(lvs, labelsSeparator)...)
+			delete(cvw.wrapperByLabels, lvs)
+		}
+	}
+}
+
+type GaugeVecWrapper struct {
+	wrapperByLabels map[string]*GaugeWrapper
+	mu              *sync.Mutex
+
+	vec *prometheus.GaugeVec
+}
+
+func newGaugeVecWrapper(gv *prometheus.GaugeVec) *GaugeVecWrapper {
 	return &GaugeVecWrapper{
-		vec:        gv,
-		wrapperVec: newWrapperVec[GaugeWrapper](r),
+		vec: gv,
+
+		wrapperByLabels: make(map[string]*GaugeWrapper),
+		mu:              new(sync.Mutex),
 	}
 }
 
-func newHistogramVecWrapper(hv *prometheus.HistogramVec, r chan<- prometheus.Collector) *HistogramVecWrapper {
+func (gvw *GaugeVecWrapper) WithLabelValues(lvs ...string) *GaugeWrapper {
+	labels := strings.Join(lvs, labelsSeparator)
+
+	gvw.mu.Lock()
+	defer gvw.mu.Unlock()
+
+	if hw, ok := gvw.wrapperByLabels[labels]; ok {
+		return hw
+	}
+
+	g := gvw.vec.WithLabelValues(lvs...)
+	gw := newGaugeWrapper(g)
+	gvw.wrapperByLabels[labels] = gw
+
+	return gw
+}
+
+func (gvw *GaugeVecWrapper) updateState(holdDuration time.Duration) {
+	gvw.mu.Lock()
+	defer gvw.mu.Unlock()
+
+	for lvs, gw := range gvw.wrapperByLabels {
+		if gw.isObsolete(holdDuration) {
+			gvw.vec.DeleteLabelValues(strings.Split(lvs, labelsSeparator)...)
+			delete(gvw.wrapperByLabels, lvs)
+		}
+	}
+}
+
+type HistogramVecWrapper struct {
+	wrapperByLabels map[string]*HistogramWrapper
+	mu              *sync.Mutex
+
+	vec *prometheus.HistogramVec
+}
+
+func newHistogramVecWrapper(hv *prometheus.HistogramVec) *HistogramVecWrapper {
 	return &HistogramVecWrapper{
-		vec:        hv,
-		wrapperVec: newWrapperVec[HistogramWrapper](r),
+		vec: hv,
+
+		wrapperByLabels: make(map[string]*HistogramWrapper),
+		mu:              new(sync.Mutex),
+	}
+}
+
+func (hvw *HistogramVecWrapper) WithLabelValues(lvs ...string) *HistogramWrapper {
+	labels := strings.Join(lvs, labelsSeparator)
+
+	hvw.mu.Lock()
+	defer hvw.mu.Unlock()
+
+	if hw, ok := hvw.wrapperByLabels[labels]; ok {
+		return hw
+	}
+
+	h := hvw.vec.WithLabelValues(lvs...).(prometheus.Histogram)
+	hw := newHistogramWrapper(h)
+	hvw.wrapperByLabels[labels] = hw
+
+	return hw
+}
+
+func (hvw *HistogramVecWrapper) updateState(holdDuration time.Duration) {
+	hvw.mu.Lock()
+	defer hvw.mu.Unlock()
+
+	for lvs, hw := range hvw.wrapperByLabels {
+		if hw.isObsolete(holdDuration) {
+			hvw.vec.DeleteLabelValues(strings.Split(lvs, labelsSeparator)...)
+			delete(hvw.wrapperByLabels, lvs)
+		}
 	}
 }

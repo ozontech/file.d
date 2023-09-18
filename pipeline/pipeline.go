@@ -157,7 +157,7 @@ func New(name string, settings *Settings, registry *prometheus.Registry) *Pipeli
 			m:  make(map[string]*actionMetric),
 			mu: new(sync.RWMutex),
 		},
-		metricHolder: metric.NewHolder(registry, metricHoldDuration),
+		metricHolder: metric.NewHolder(metricHoldDuration),
 		streamer:     newStreamer(settings.EventTimeout),
 		eventPool:    newEventPool(settings.Capacity, settings.AvgEventSize),
 		antispamer: antispam.NewAntispammer(antispam.Options{
@@ -266,7 +266,6 @@ func (p *Pipeline) Start() {
 	}
 
 	p.initProcs()
-	p.metricHolder.Start()
 
 	outputParams := &OutputPluginParams{
 		PluginDefaultParams: p.actionParams,
@@ -308,7 +307,6 @@ func (p *Pipeline) Stop() {
 		processor.stop()
 	}
 
-	p.metricHolder.Stop()
 	p.streamer.stop()
 
 	p.logger.Info("stopping input")
