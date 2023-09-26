@@ -22,7 +22,8 @@ const (
 	// check out Commit()/Propagate() functions in InputPluginController.
 	// plugin may receive event with EventKindTimeout if it takes to long to read next event from same stream.
 	ActionHold
-	ActionSpawned = 4
+	// ActionBreak abort the event processing and pass it to an output.
+	ActionBreak
 )
 
 type eventStatus string
@@ -34,6 +35,7 @@ const (
 	eventStatusDiscarded  eventStatus = "discarded"
 	eventStatusCollapse   eventStatus = "collapsed"
 	eventStatusHold       eventStatus = "held"
+	eventStatusBroke      eventStatus = "broke"
 )
 
 func allEventStatuses() []eventStatus {
@@ -191,14 +193,15 @@ func (p *processor) doActions(event *Event) (isPassed bool, lastAction int) {
 
 		result := action.Do(event)
 		switch result {
-		case ActionPass, ActionSpawned:
+		case ActionPass:
 			p.countEvent(event, index, eventStatusPassed)
 			p.tryResetBusy(index)
 			p.actionWatcher.setEventAfter(index, event, eventStatusPassed)
-
-			if result == ActionSpawned {
-				return true, index
-			}
+		case ActionBreak:
+			p.countEvent(event, index, eventStatusBroke)
+			p.tryResetBusy(index)
+			p.actionWatcher.setEventAfter(index, event, eventStatusBroke)
+			return true, index
 		case ActionDiscard:
 			p.countEvent(event, index, eventStatusDiscarded)
 			p.tryResetBusy(index)

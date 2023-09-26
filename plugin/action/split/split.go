@@ -80,7 +80,7 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	}
 
 	if !data.IsArray() {
-		p.logger.Warn("skip an event because is not an array", zap.String("type", data.TypeStr()))
+		p.logger.Warn("skip an event because field is not an array", zap.String("type", data.TypeStr()))
 		return pipeline.ActionPass
 	}
 
@@ -101,5 +101,5 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 
 	p.pluginController.Spawn(event, children)
 
-	return pipeline.ActionSpawned
+	return pipeline.ActionBreak
 }
