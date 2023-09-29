@@ -42,6 +42,10 @@ func (l *inMemoryLimiter) isAllowed(event *pipeline.Event, ts time.Time) bool {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
+	if l.limit.value < 0 {
+		return true
+	}
+
 	id := l.rebuildBuckets(ts)
 	index := id - l.minID
 	switch l.limit.kind {
