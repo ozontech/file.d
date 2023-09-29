@@ -2,6 +2,7 @@ package throttle
 
 import (
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/ozontech/file.d/logger"
@@ -39,12 +40,13 @@ func (l *inMemoryLimiter) sync() {
 }
 
 func (l *inMemoryLimiter) isAllowed(event *pipeline.Event, ts time.Time) bool {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-
-	if l.limit.value < 0 {
+	// limit value fast check without races
+	if atomic.LoadInt64(&l.limit.value) < 0 {
 		return true
 	}
+
+	l.mu.Lock()
+	defer l.mu.Unlock()
 
 	id := l.rebuildBuckets(ts)
 	index := id - l.minID
