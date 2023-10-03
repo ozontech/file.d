@@ -31,7 +31,7 @@ func TestPipeline_streamEvent(t *testing.T) {
 	p.UseSpread()
 	p.streamEvent(event)
 
-	expectedStreamID := StreamID(event.SeqID % uint64(procs))
+	expectedStreamID := StreamID(uint64(event.SourceID) % uint64(procs))
 
 	assert.Equal(t, event, p.streamer.getStream(expectedStreamID, DefaultStreamName).first)
 }

@@ -471,7 +471,7 @@ func (p *Pipeline) streamEvent(event *Event) uint64 {
 
 	// spread events across all processors
 	if p.useSpread {
-		streamID = StreamID(event.SeqID % uint64(p.procCount.Load()))
+		streamID = StreamID(uint64(event.SourceID) % uint64(p.procCount.Load()))
 	}
 
 	if !p.disableStreams {

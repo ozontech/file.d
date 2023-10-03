@@ -1,11 +1,14 @@
 package pipeline_test
 
 import (
+	"math/rand"
 	"reflect"
+	"sync"
 	"testing"
 
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/plugin/input/fake"
+	"github.com/ozontech/file.d/test"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/require"
 )
@@ -120,4 +123,39 @@ func TestInInvalidMessages(t *testing.T) {
 			require.Equal(t, pipeline.EventSeqIDError, seqID)
 		})
 	}
+}
+
+func TestPipelineSequenceWhenUseSpread(t *testing.T) {
+	t.Parallel()
+
+	p, input, output := test.NewPipelineMock(nil, "passive", "parallel")
+	p.UseSpread()
+	p.Start()
+
+	const iters = 1000
+
+	wg := &sync.WaitGroup{}
+	wg.Add(iters)
+
+	outEvents := make([]string, 0)
+	mu := sync.Mutex{}
+	offsetSequence := int64(1)
+	output.SetOutFn(func(event *pipeline.Event) {
+		outEvents = append(outEvents, event.Root.EncodeToString())
+		mu.Lock()
+		defer mu.Unlock()
+
+		require.Equal(t, offsetSequence, event.Offset)
+		offsetSequence++
+
+		wg.Done()
+	})
+
+	sourceID := pipeline.SourceID(rand.Int())
+	for offset := int64(1); offset <= iters; offset++ {
+		input.In(sourceID, "", offset, []byte(`{}`))
+	}
+
+	wg.Wait()
+	p.Stop()
 }
