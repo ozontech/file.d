@@ -536,7 +536,7 @@ func (p *Pipeline) AddAction(info *ActionPluginStaticInfo) {
 
 func (p *Pipeline) initProcs() {
 	// default proc count is CPU cores * 2
-	procCount := runtime.GOMAXPROCS(0)
+	procCount := runtime.GOMAXPROCS(0) * 2
 	if p.singleProc {
 		procCount = 1
 	}
