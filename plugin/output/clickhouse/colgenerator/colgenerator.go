@@ -46,7 +46,7 @@ func main() {
 	}
 	result, err := format.Source(buf.Bytes())
 	if err != nil {
-		fmt.Println(buf.String())
+		_, _ = fmt.Fprintf(os.Stderr, buf.String())
 		logger.Panic(err)
 	}
 

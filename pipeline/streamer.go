@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/ozontech/file.d/logger"
-	"github.com/ozontech/file.d/longpanic"
 	"go.uber.org/atomic"
 )
 
@@ -45,7 +44,7 @@ func newStreamer(eventTimeout time.Duration) *streamer {
 }
 
 func (s *streamer) start() {
-	longpanic.Go(s.heartbeat)
+	go s.heartbeat()
 }
 
 func (s *streamer) stop() {

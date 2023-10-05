@@ -77,7 +77,7 @@ If you need more types, please, create an issue.
 
 <br>
 
-**`strict_types`** *`bool`* *`default=true`* 
+**`strict_types`** *`bool`* *`default=false`* 
 
 If true, file.d fails when types are mismatched.
 

@@ -19,9 +19,8 @@ import (
 const trueValue = "true"
 
 type Config struct {
-	Vault        VaultConfig
-	PanicTimeout time.Duration
-	Pipelines    map[string]*PipelineConfig
+	Vault     VaultConfig
+	Pipelines map[string]*PipelineConfig
 }
 
 type (
@@ -179,19 +178,6 @@ func parseConfig(object *simplejson.Json) *Config {
 		}
 		raw := pipelinesJson.Get(name)
 		config.Pipelines[name] = &PipelineConfig{Raw: raw}
-	}
-
-	config.PanicTimeout = time.Minute
-	panicTimeoutRaw := object.Get("panic_timeout")
-	if panicTimeoutRaw.Interface() != nil {
-		panicTimeoutStr, err := panicTimeoutRaw.String()
-		if err != nil {
-			logger.Panicf("can't get panic_timeout: %s", err.Error())
-		}
-		config.PanicTimeout, err = time.ParseDuration(panicTimeoutStr)
-		if err != nil {
-			logger.Panicf("can't parse panic_timeout: %s", err.Error())
-		}
 	}
 
 	return config
@@ -376,16 +362,30 @@ func ParseField(v reflect.Value, vField reflect.Value, tField *reflect.StructFie
 			return fmt.Errorf("options deals with strings only, but field %s has %s type", tField.Name, tField.Type.Name())
 		}
 
+		idx := -1
 		found := false
-		for _, part := range parts {
+		for i, part := range parts {
 			if vField.String() == part {
 				found = true
+				idx = i
 				break
 			}
 		}
 
 		if !found {
 			return fmt.Errorf("field %s should be one of %s, got=%s", tField.Name, tag, vField.String())
+		}
+
+		finalField := v.FieldByName(tField.Name + "_")
+		if finalField != (reflect.Value{}) {
+			switch finalField.Kind() {
+			case reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64, reflect.Int:
+				finalField.SetInt(int64(idx))
+			case reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uint:
+				finalField.SetUint(uint64(idx))
+			default:
+				return fmt.Errorf("final field must be an integer")
+			}
 		}
 	}
 
@@ -408,9 +408,15 @@ func ParseField(v reflect.Value, vField reflect.Value, tField *reflect.StructFie
 			fields := ParseFieldSelector(vField.String())
 			finalField.Set(reflect.ValueOf(fields))
 		case "duration":
-			result, err := time.ParseDuration(vField.String())
-			if err != nil {
-				return fmt.Errorf("field %s has wrong duration format: %s", tField.Name, err.Error())
+			var result time.Duration
+
+			fieldValue := vField.String()
+			if fieldValue != "" {
+				var err error
+				result, err = time.ParseDuration(fieldValue)
+				if err != nil {
+					return fmt.Errorf("field %s has wrong duration format: %s", tField.Name, err.Error())
+				}
 			}
 
 			finalField.SetInt(int64(result))

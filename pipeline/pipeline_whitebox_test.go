@@ -42,7 +42,7 @@ type TestInputPlugin struct{}
 
 func (p *TestInputPlugin) Start(_ AnyConfig, _ *InputPluginParams) {}
 func (p *TestInputPlugin) Stop()                                   {}
-func (p *TestInputPlugin) Commit(*Event)                           {}
+func (p *TestInputPlugin) Commit(_ *Event)                         {}
 func (p *TestInputPlugin) PassEvent(_ *Event) bool {
 	return true
 }

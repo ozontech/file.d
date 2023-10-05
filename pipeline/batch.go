@@ -6,14 +6,21 @@ import (
 	"time"
 
 	"github.com/ozontech/file.d/logger"
-	"github.com/ozontech/file.d/longpanic"
 	"github.com/ozontech/file.d/metric"
 	"github.com/prometheus/client_golang/prometheus"
-	"go.uber.org/atomic"
+)
+
+type BatchStatus byte
+
+const (
+	BatchStatusNotReady BatchStatus = iota
+	BatchStatusMaxSizeExceeded
+	BatchStatusTimeoutExceeded
 )
 
 type Batch struct {
 	Events []*Event
+
 	// eventsSize contains total size of the Events in bytes
 	eventsSize int
 	seq        int64
@@ -24,9 +31,10 @@ type Batch struct {
 	maxSizeCount int
 	// maxSizeBytes max size of events per batch in bytes
 	maxSizeBytes int
+	status       BatchStatus
 }
 
-func newBatch(maxSizeCount int, maxSizeBytes int, timeout time.Duration) *Batch {
+func newBatch(maxSizeCount, maxSizeBytes int, timeout time.Duration) *Batch {
 	if maxSizeCount < 0 {
 		logger.Fatalf("why batch max count less than 0?")
 	}
@@ -48,6 +56,7 @@ func newBatch(maxSizeCount int, maxSizeBytes int, timeout time.Duration) *Batch 
 func (b *Batch) reset() {
 	b.Events = b.Events[:0]
 	b.eventsSize = 0
+	b.status = BatchStatusNotReady
 	b.startTime = time.Now()
 }
 
@@ -56,32 +65,42 @@ func (b *Batch) append(e *Event) {
 	b.eventsSize += e.Size
 }
 
-func (b *Batch) isReady() bool {
+func (b *Batch) updateStatus() BatchStatus {
 	l := len(b.Events)
-	isFull := (b.maxSizeCount != 0 && l == b.maxSizeCount) || (b.maxSizeBytes != 0 && b.maxSizeBytes <= b.eventsSize)
-	isTimeout := l > 0 && time.Since(b.startTime) > b.timeout
-	return isFull || isTimeout
+	switch {
+	case (b.maxSizeCount != 0 && l == b.maxSizeCount) || (b.maxSizeBytes != 0 && b.maxSizeBytes <= b.eventsSize):
+		b.status = BatchStatusMaxSizeExceeded
+	case l > 0 && time.Since(b.startTime) > b.timeout:
+		b.status = BatchStatusTimeoutExceeded
+	default:
+		b.status = BatchStatusNotReady
+	}
+	return b.status
 }
 
 type Batcher struct {
 	opts BatcherOptions
 
-	shouldStop atomic.Bool
-	batch      *Batch
+	batch *Batch
 
 	// cycle of batches: freeBatches => fullBatches, fullBatches => freeBatches
-	// TODO get rid of freeBatches, fullBatches system, which prevents from graceful degradation.
 	freeBatches chan *Batch
 	fullBatches chan *Batch
-	mu          *sync.Mutex
-	seqMu       *sync.Mutex
-	cond        *sync.Cond
+	workersWg   sync.WaitGroup
 
+	mu         sync.Mutex
+	shouldStop bool
+
+	seqMu     *sync.Mutex
+	cond      *sync.Cond
 	outSeq    int64
 	commitSeq int64
 
-	batchOutFnSeconds    *prometheus.HistogramVec
-	commitWaitingSeconds *prometheus.HistogramVec
+	batchOutFnSeconds    prometheus.Observer
+	commitWaitingSeconds prometheus.Observer
+	workersInProgress    prometheus.Gauge
+	batchesDoneByMaxSize prometheus.Counter
+	batchesDoneByTimeout prometheus.Counter
 }
 
 type (
@@ -104,87 +123,116 @@ type (
 )
 
 func NewBatcher(opts BatcherOptions) *Batcher { // nolint: gocritic // hugeParam is ok here
-	return &Batcher{opts: opts}
-}
+	ctl := opts.MetricCtl
+	jobsDone := ctl.RegisterCounter("batcher_jobs_done_total", "", "status")
 
-// todo graceful shutdown with context.
-func (b *Batcher) Start(_ context.Context) {
-	b.mu = &sync.Mutex{}
-	b.seqMu = &sync.Mutex{}
-	b.cond = sync.NewCond(b.seqMu)
-	b.batchOutFnSeconds = b.opts.MetricCtl.
-		RegisterHistogram("batcher_out_fn_seconds", "", metric.SecondsBucketsLong)
-	b.commitWaitingSeconds = b.opts.MetricCtl.
-		RegisterHistogram("batcher_commit_waiting_seconds", "", metric.SecondsBucketsDetailed)
-
-	b.freeBatches = make(chan *Batch, b.opts.Workers)
-	b.fullBatches = make(chan *Batch, b.opts.Workers)
-	for i := 0; i < b.opts.Workers; i++ {
-		b.freeBatches <- newBatch(b.opts.BatchSizeCount, b.opts.BatchSizeBytes, b.opts.FlushTimeout)
-		longpanic.Go(func() {
-			b.work()
-		})
+	freeBatches := make(chan *Batch, opts.Workers)
+	fullBatches := make(chan *Batch, opts.Workers)
+	for i := 0; i < opts.Workers; i++ {
+		freeBatches <- newBatch(opts.BatchSizeCount, opts.BatchSizeBytes, opts.FlushTimeout)
 	}
 
-	longpanic.Go(b.heartbeat)
+	seqMu := &sync.Mutex{}
+	return &Batcher{
+		seqMu:                seqMu,
+		cond:                 sync.NewCond(seqMu),
+		freeBatches:          freeBatches,
+		fullBatches:          fullBatches,
+		opts:                 opts,
+		batchOutFnSeconds:    ctl.RegisterHistogram("batcher_out_fn_seconds", "", metric.SecondsBucketsLong).WithLabelValues(),
+		commitWaitingSeconds: ctl.RegisterHistogram("batcher_commit_waiting_seconds", "", metric.SecondsBucketsDetailed).WithLabelValues(),
+		workersInProgress:    ctl.RegisterGauge("batcher_workers_in_progress", "").WithLabelValues(),
+		batchesDoneByMaxSize: jobsDone.WithLabelValues("max_size_exceeded"),
+		batchesDoneByTimeout: jobsDone.WithLabelValues("timeout_exceeded"),
+	}
+}
+
+func (b *Batcher) Start(ctx context.Context) {
+	go func() {
+		<-ctx.Done()
+		b.Stop()
+	}()
+
+	b.workersWg.Add(b.opts.Workers)
+	for i := 0; i < b.opts.Workers; i++ {
+		go b.work()
+	}
+
+	go b.heartbeat()
 }
 
 type WorkerData any
 
 func (b *Batcher) work() {
+	defer b.workersWg.Done()
+
 	t := time.Now()
-	events := make([]*Event, 0)
 	data := WorkerData(nil)
 	for batch := range b.fullBatches {
+		b.workersInProgress.Inc()
+
 		now := time.Now()
 		b.opts.OutFn(&data, batch)
-		b.batchOutFnSeconds.WithLabelValues().Observe(time.Since(now).Seconds())
+		b.batchOutFnSeconds.Observe(time.Since(now).Seconds())
 
-		events = b.commitBatch(events, batch)
+		status := b.commitBatch(batch)
 
 		shouldRunMaintenance := b.opts.MaintenanceFn != nil && b.opts.MaintenanceInterval != 0 && time.Since(t) > b.opts.MaintenanceInterval
 		if shouldRunMaintenance {
 			t = time.Now()
 			b.opts.MaintenanceFn(&data)
 		}
+
+		b.workersInProgress.Dec()
+		switch status {
+		case BatchStatusMaxSizeExceeded:
+			b.batchesDoneByMaxSize.Inc()
+		case BatchStatusTimeoutExceeded:
+			b.batchesDoneByTimeout.Inc()
+		default:
+			logger.Panic("unreachable")
+		}
 	}
 }
 
-func (b *Batcher) commitBatch(events []*Event, batch *Batch) []*Event {
-	// we need to release batch first and then commit events
-	// so lets swap local slice with batch slice to avoid data copying
-	events, batch.Events = batch.Events, events
-
+func (b *Batcher) commitBatch(batch *Batch) BatchStatus {
 	batchSeq := batch.seq
 
+	// When we sent the batch, we don’t need buffers and insaneJSON.Root.
+	// We can copy the information we need and release the events to reuse them.
+	// But at the moment it's hard to maintain -- plugins
+	// can reuse specific Event fields in the Commit func,
+	// like .Root, .streamName, .Buf
+
 	now := time.Now()
-	// lets restore the sequence of batches to make sure input will commit offsets incrementally
+	// let's restore the sequence of batches to make sure input will commit offsets incrementally
 	b.seqMu.Lock()
 	for b.commitSeq != batchSeq {
 		b.cond.Wait()
 	}
 	b.commitSeq++
-	b.commitWaitingSeconds.WithLabelValues().Observe(time.Since(now).Seconds())
+	b.commitWaitingSeconds.Observe(time.Since(now).Seconds())
 
-	for _, e := range events {
-		b.opts.Controller.Commit(e)
+	for i := range batch.Events {
+		b.opts.Controller.Commit(batch.Events[i])
 	}
 
+	status := batch.status
+	b.freeBatches <- batch
 	b.cond.Broadcast()
 	b.seqMu.Unlock()
 
-	b.freeBatches <- batch
-
-	return events
+	return status
 }
 
 func (b *Batcher) heartbeat() {
 	for {
-		if b.shouldStop.Load() {
+		b.mu.Lock()
+		if b.shouldStop {
+			b.mu.Unlock()
 			return
 		}
 
-		b.mu.Lock()
 		batch := b.getBatch()
 		b.trySendBatchAndUnlock(batch)
 
@@ -195,15 +243,20 @@ func (b *Batcher) heartbeat() {
 func (b *Batcher) Add(event *Event) {
 	b.mu.Lock()
 
+	if b.shouldStop {
+		b.mu.Unlock()
+		return
+	}
+
 	batch := b.getBatch()
 	batch.append(event)
 
 	b.trySendBatchAndUnlock(batch)
 }
 
-// trySendBatch mu should be locked and it'll be unlocked after execution of this function
+// trySendBatch mu should be locked, and it'll be unlocked after execution of this function
 func (b *Batcher) trySendBatchAndUnlock(batch *Batch) {
-	if !batch.isReady() {
+	if batch.updateStatus() == BatchStatusNotReady {
 		b.mu.Unlock()
 		return
 	}
@@ -225,9 +278,12 @@ func (b *Batcher) getBatch() *Batch {
 }
 
 func (b *Batcher) Stop() {
-	b.shouldStop.Store(true)
+	b.mu.Lock()
+	if !b.shouldStop {
+		b.shouldStop = true
+		close(b.fullBatches)
+	}
+	b.mu.Unlock()
 
-	// todo add scenario without races.
-	close(b.freeBatches)
-	close(b.fullBatches)
+	b.workersWg.Wait()
 }

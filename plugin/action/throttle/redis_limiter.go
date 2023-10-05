@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/ozontech/file.d/logger"
@@ -244,8 +245,9 @@ func (l *redisLimiter) updateKeyLimit() error {
 			return fmt.Errorf("failed to convert redis value to int64: %w", err)
 		}
 	}
-	l.totalLimiter.limit.value = limitVal
-	l.incrementLimiter.limit.value = limitVal
+	// atomic store to prevent races with limit value fast check
+	atomic.StoreInt64(&l.totalLimiter.limit.value, limitVal)
+	atomic.StoreInt64(&l.incrementLimiter.limit.value, limitVal)
 	return nil
 }
 

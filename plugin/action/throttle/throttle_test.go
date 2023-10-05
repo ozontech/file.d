@@ -43,9 +43,14 @@ func (c *testConfig) runPipeline() {
 
 	limMap := limiters[p.Name]
 
-	outEvents := make([]*pipeline.Event, 0)
+	inEventsCnt := 0
+	input.SetInFn(func() {
+		inEventsCnt++
+	})
+
+	outEventsCnt := 0
 	output.SetOutFn(func(e *pipeline.Event) {
-		outEvents = append(outEvents, e)
+		outEventsCnt++
 	})
 
 	sourceNames := []string{
@@ -55,12 +60,15 @@ func (c *testConfig) runPipeline() {
 	}
 
 	// generating much more events per iteration than we need so that all buckets are filled
-	genEventsCnt := 10 * c.eventsTotal
+	genEventsCnt := 10
+	if c.eventsTotal >= 0 {
+		genEventsCnt = 10 * c.eventsTotal
+	}
 
 	bucketIntervalNS := c.config.BucketInterval_.Nanoseconds()
 	startTime := time.Now()
 	if startTime.UnixNano()%bucketIntervalNS > bucketIntervalNS/2 {
-		startTime.Add(c.config.BucketInterval_ / 2)
+		startTime = startTime.Add(c.config.BucketInterval_ / 2)
 	}
 	for i := 0; i < c.iterations; i++ {
 		curTime := startTime.Add(time.Duration(i) * c.config.BucketInterval_)
@@ -81,7 +89,11 @@ func (c *testConfig) runPipeline() {
 	p.Stop()
 
 	// check that we passed expected amount of events
-	assert.Equal(c.t, c.eventsTotal, len(outEvents), "wrong out events count")
+	if c.eventsTotal >= 0 {
+		assert.Equal(c.t, c.eventsTotal, outEventsCnt, "wrong out events count")
+	} else {
+		assert.Equal(c.t, inEventsCnt, outEventsCnt, "wrong out events count")
+	}
 }
 
 func TestThrottle(t *testing.T) {
@@ -94,6 +106,39 @@ func TestThrottle(t *testing.T) {
 
 	defaultLimitDelta := iterations * defaultLimit
 	eventsTotal := iterations*(limitA+limitB) + defaultLimitDelta
+
+	config := &Config{
+		Rules: []RuleConfig{
+			{Limit: int64(limitA), Conditions: map[string]string{"k8s_ns": "ns_1"}},
+			{Limit: int64(limitB), Conditions: map[string]string{"k8s_ns": "ns_2"}},
+		},
+		BucketsCount:   buckets,
+		BucketInterval: "100ms",
+		ThrottleField:  "k8s_pod",
+		TimeField:      "",
+		DefaultLimit:   int64(defaultLimit),
+	}
+	err := cfg.Parse(config, nil)
+	if err != nil {
+		logger.Panic(err.Error())
+	}
+
+	tconf := testConfig{t, config, eventsTotal, iterations}
+	tconf.runPipeline()
+	t.Cleanup(func() {
+		throttleMapsCleanup()
+	})
+}
+
+func TestThrottleNoLimit(t *testing.T) {
+	buckets := 2
+	limitA := -2
+	limitB := -3
+	defaultLimit := -20
+
+	iterations := 5
+
+	eventsTotal := -1
 
 	config := &Config{
 		Rules: []RuleConfig{
@@ -340,6 +385,10 @@ func TestRedisThrottleMultiPipes(t *testing.T) {
 		// timeout required due shifting time call to redis
 		time.Sleep(100 * time.Millisecond)
 	}
+
+	muSecPipe.Lock()
+	defer muSecPipe.Unlock()
+
 	// limit is 10 while events count 4, all passed
 	assert.Equal(t, len(secondPipeEvents), len(outEventsSec), "wrong in events count")
 	t.Cleanup(func() {

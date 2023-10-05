@@ -1,4 +1,9 @@
 linters-settings:
+  forbidigo:
+    forbid:
+      - ^print.*$
+      - p: ^fmt\.Print.*$
+        msg: Do not commit print statements.
   govet:
     enable:
       - composites
@@ -34,6 +39,7 @@ linters-settings:
 linters:
   disable-all: true
   enable:
+    - forbidigo
     - dogsled
     - dupl
     - errcheck

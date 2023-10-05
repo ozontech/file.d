@@ -14,11 +14,10 @@ import (
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
-	"github.com/ozontech/file.d/tls"
+	"github.com/ozontech/file.d/xtls"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
 )
 
 /*{ introduction
@@ -39,8 +38,7 @@ type Clickhouse interface {
 }
 
 type Plugin struct {
-	logger        *zap.Logger
-	samplerLogger *zap.Logger
+	logger *zap.Logger
 
 	config     *Config
 	batcher    *pipeline.Batcher
@@ -172,7 +170,7 @@ type Config struct {
 	// > In the non-strict mode, for String and Array(String) columns the value will be encoded to JSON.
 	// >
 	// > If the strict mode is enabled file.d fails (exit with code 1) in above examples.
-	StrictTypes bool `json:"strict_types" default:"true"` // *
+	StrictTypes bool `json:"strict_types" default:"false"` // *
 
 	// > @3@4@5@6
 	// >
@@ -283,10 +281,6 @@ func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginParams) {
 	p.logger = params.Logger.Desugar()
 
-	p.samplerLogger = p.logger.WithOptions(zap.WrapCore(func(core zapcore.Core) zapcore.Core {
-		return zapcore.NewSamplerWithOptions(p.logger.Core(), time.Second, 5, 0)
-	}))
-
 	p.config = config.(*Config)
 	p.registerMetrics(params.MetricCtl)
 	p.ctx, p.cancelFunc = context.WithCancel(context.Background())
@@ -329,9 +323,9 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		compression = ch.CompressionNone
 	}
 
-	var b tls.ConfigBuilder
+	var b xtls.ConfigBuilder
 	if p.config.CACert != "" {
-		b := tls.NewConfigBuilder()
+		b := xtls.NewConfigBuilder()
 		err := b.AppendCARoot(p.config.CACert)
 		if err != nil {
 			p.logger.Fatal("can't append CA root", zap.Error(err))
@@ -418,11 +412,6 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 	data := (*workerData).(data)
 	data.reset()
 
-	lvl := zapcore.ErrorLevel
-	if p.config.StrictTypes {
-		lvl = zapcore.FatalLevel
-	}
-
 	for _, event := range batch.Events {
 		for _, col := range data.cols {
 			node := event.Root.Dig(col.Name)
@@ -435,14 +424,8 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 			}
 
 			if err := col.ColInput.Append(insaneNode); err != nil {
-				if ce := p.samplerLogger.Check(lvl, "can't append value in the batch"); ce != nil {
-					ce.Write(
-						zap.Error(err),
-						zap.String("column", col.Name),
-						zap.Any("event", json.RawMessage(event.Root.EncodeToByte())),
-					)
-				}
-
+				// we can't append the value to the column because of the node has wrong format,
+				// so append zero value
 				err := col.ColInput.Append(ZeroValueNode{})
 				if err != nil {
 					p.logger.Fatal("why err isn't nil?",

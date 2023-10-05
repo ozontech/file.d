@@ -13,7 +13,6 @@ import (
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/logger"
-	"github.com/ozontech/file.d/longpanic"
 	"github.com/ozontech/file.d/pipeline"
 	_ "github.com/ozontech/file.d/plugin/action/add_file_name"
 	_ "github.com/ozontech/file.d/plugin/action/add_host"
@@ -73,7 +72,7 @@ func main() {
 	kingpin.Version(buildinfo.Version)
 	kingpin.Parse()
 
-	logger.Infof("Hi! I'm file.d version=%s %s", buildinfo.Version, buildinfo.BuildTime)
+	logger.Infof("Hi! I'm file.d version=%s %s", buildinfo.Version)
 
 	setRuntimeSettings()
 	insaneJSON.DisableBeautifulErrors = true
@@ -82,7 +81,7 @@ func main() {
 	_, _ = maxprocs.Set(maxprocs.Logger(logger.Debugf))
 
 	go listenSignals()
-	longpanic.Go(start)
+	go start()
 
 	<-exit
 	logger.Infof("see you soon...")
@@ -90,7 +89,6 @@ func main() {
 
 func start() {
 	appCfg := cfg.NewConfigFromFile(*config)
-	longpanic.SetTimeout(appCfg.PanicTimeout)
 
 	fileD = fd.New(appCfg, *http)
 	fileD.Start()

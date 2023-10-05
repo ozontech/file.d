@@ -2,8 +2,6 @@ package http
 
 import (
 	"net/http"
-
-	"github.com/ozontech/file.d/logger"
 )
 
 var info = []byte(`{
@@ -89,6 +87,15 @@ var xpack = []byte(`{
   "tagline": "You know, for nothing"
 }`)
 
+var license = []byte(`{
+  "license": {
+    "mode": "basic",
+    "status": "active",
+    "type": "basic",
+    "uid": "e76d6ce9-f78c-44ff-8fd5-b5877357d649"
+  }
+}`)
+
 var result = []byte(`{
    "took": 30,
    "errors": false,
@@ -97,35 +104,18 @@ var result = []byte(`{
 
 var empty = []byte(`{}`)
 
-func (p *Plugin) elasticsearch(mux *http.ServeMux) {
-	mux.HandleFunc("/", p.serveElasticsearchInfo)
-	mux.HandleFunc("/_xpack", p.serveElasticsearchXPack)
-	mux.HandleFunc("/_bulk", p.serve)
-	mux.HandleFunc("/_template/", p.serveElasticsearchTemplate)
-}
-
 func (p *Plugin) serveElasticsearchXPack(w http.ResponseWriter, _ *http.Request) {
-	_, err := w.Write(xpack)
-	if err != nil {
-		logger.Errorf("can't write response: %s", err.Error())
-	}
-}
-
-func (p *Plugin) serveElasticsearchTemplate(w http.ResponseWriter, _ *http.Request) {
-	_, err := w.Write(empty)
-	if err != nil {
-		logger.Errorf("can't write response: %s", err.Error())
-	}
+	_, _ = w.Write(xpack)
 }
 
 func (p *Plugin) serveElasticsearchInfo(w http.ResponseWriter, r *http.Request) {
-	if r.Method == http.MethodGet && r.RequestURI == "/" {
-		_, err := w.Write(info)
-		if err != nil {
-			logger.Errorf("can't write response: %s", err.Error())
-		}
+	if r.Method == http.MethodGet {
+		_, _ = w.Write(info)
 		return
 	}
+	// otherwise return an empty response
+}
 
-	logger.Errorf("unknown request uri=%s, method=%s", r.RequestURI, r.Method)
+func (p *Plugin) serveElasticsearchLicense(w http.ResponseWriter, _ *http.Request) {
+	_, _ = w.Write(license)
 }

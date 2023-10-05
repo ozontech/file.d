@@ -35,13 +35,16 @@ type strDefault struct {
 	T string `default:"sync"`
 }
 
-type strDuration struct {
-	T  Duration `default:"5s" parse:"duration"`
-	T_ time.Duration
-}
+type PersistenceMode byte
+
+const (
+	PersistenceModeAsync PersistenceMode = iota
+	PersistenceModeSync
+)
 
 type strOptions struct {
-	T string `default:"async" options:"async|sync"`
+	T  string `default:"async" options:"async|sync"`
+	T_ PersistenceMode
 }
 
 type strExpression struct {
@@ -100,18 +103,42 @@ func TestParseDefault(t *testing.T) {
 }
 
 func TestParseDuration(t *testing.T) {
-	s := &strDuration{}
-	err := Parse(s, nil)
+	t.Parallel()
+	r := require.New(t)
 
-	assert.NoError(t, err, "shouldn't be an error")
-	assert.Equal(t, time.Second*5, s.T_, "wrong value")
+	t.Run("with_default", func(t *testing.T) {
+		t.Parallel()
+
+		s := &struct {
+			T  Duration `default:"5s" parse:"duration"`
+			T_ time.Duration
+		}{}
+		r.NoError(Parse(s, nil))
+		r.Equal(time.Second*5, s.T_)
+	})
+
+	t.Run("without_default", func(t *testing.T) {
+		t.Parallel()
+
+		s := &struct {
+			T  Duration `parse:"duration"`
+			T_ time.Duration
+		}{}
+		r.NoError(Parse(s, nil))
+		r.Equal(time.Duration(0), s.T_)
+	})
 }
 
 func TestParseOptionsOk(t *testing.T) {
-	s := &strOptions{T: "async"}
-	err := Parse(s, nil)
+	a := assert.New(t)
 
-	assert.NoError(t, err, "shouldn't be an error")
+	s := &strOptions{T: "async"}
+	a.NoError(Parse(s, nil))
+	a.Equal(s.T_, PersistenceModeAsync)
+
+	s.T = "sync"
+	a.NoError(Parse(s, nil))
+	a.Equal(s.T_, PersistenceModeSync)
 }
 
 func TestParseOptionsErr(t *testing.T) {
@@ -119,6 +146,7 @@ func TestParseOptionsErr(t *testing.T) {
 	err := Parse(s, nil)
 
 	assert.NotNil(t, err, "should be an error")
+	assert.Equal(t, PersistenceMode(0), s.T_)
 }
 
 func TestParseExpressionMul(t *testing.T) {

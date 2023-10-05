@@ -49,7 +49,7 @@ Important note: labels metrics are not currently being cleared.
 
 <br>
 
-**`match_rules`** *`[]matchrule.RuleSet`* 
+**`match_rules`** *`matchrule.RuleSets`* 
 
 List of matching rules to filter out events before checking regular expression for masking.
 
