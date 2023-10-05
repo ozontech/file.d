@@ -61,11 +61,12 @@ func app(ctx context.Context) error {
 
 	doActionsHandler := playground.NewDoActionsHandler(fd.DefaultPluginRegistry, lg)
 
-	mux := http.NewServeMux()
-	mux.Handle("/api/v1/do-actions", doActionsHandler)
+	mux := router(doActionsHandler)
 
 	registry := prometheus.NewRegistry()
 	srvr := defaultServer(ctx, *flagAddr, promhttp.InstrumentMetricHandler(registry, mux))
+
+	lg.Warn("starting to listen", zap.String("addr", *flagAddr), zap.String("debug_addr", *flagDebugAddr))
 
 	go func() {
 		<-ctx.Done()
@@ -99,4 +100,16 @@ func defaultServer(ctx context.Context, addr string, mux http.Handler) *http.Ser
 			return ctx
 		},
 	}
+}
+
+func router(doActions *playground.DoActionsHandler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/v1/do-actions":
+			doActions.ServeHTTP(w, r)
+			return
+		default:
+			http.Error(w, "", http.StatusNotFound)
+		}
+	})
 }

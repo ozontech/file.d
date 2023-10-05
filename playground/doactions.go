@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"runtime"
 	"strings"
 	"time"
 
@@ -27,8 +28,7 @@ import (
 var jsoniterConfig = jsoniter.ConfigCompatibleWithStandardLibrary
 
 const (
-	pipelineCapacity   = 1
-	pipelineProcessors = 1
+	pipelineCapacity = 1
 )
 
 type DoActionsRequest struct {
@@ -93,6 +93,7 @@ func (h *DoActionsHandler) doActions(ctx context.Context, req DoActionsRequest) 
 		newActions := make([]json.RawMessage, 0, len(req.Actions)*2)
 
 		for _, action := range req.Actions {
+			// trying to get the name of the next action
 			var actionWithType = struct {
 				Type string `json:"type"`
 			}{}
@@ -101,6 +102,7 @@ func (h *DoActionsHandler) doActions(ctx context.Context, req DoActionsRequest) 
 			}
 			actionType := jsonEscape(actionWithType.Type)
 
+			// wrap plugin with the debug actions
 			debugActionBefore := json.RawMessage(fmt.Sprintf(`{"type": "debug", "message": "before %s"}`, actionType))
 			debugActionAfter := json.RawMessage(fmt.Sprintf(`{"type": "debug", "message": "after %s"}`, actionType))
 			newActions = append(newActions, debugActionBefore, action, debugActionAfter)
@@ -109,7 +111,7 @@ func (h *DoActionsHandler) doActions(ctx context.Context, req DoActionsRequest) 
 		req.Actions = newActions
 	}
 
-	// stdout buffer
+	// pipeline stdout buffer
 	stdoutBuf := new(bytes.Buffer)
 	stdoutBuf.Grow(1 << 10)
 	stdout := preparePipelineLogger(stdoutBuf)
@@ -125,6 +127,7 @@ func (h *DoActionsHandler) doActions(ctx context.Context, req DoActionsRequest) 
 		IsStrict:            false,
 	}, metricsRegistry, stdout)
 
+	// callback to collect output events
 	events := make(chan json.RawMessage, len(req.Events))
 	outputCb := func(event *pipeline.Event) {
 		events <- event.Root.EncodeToByte()
@@ -135,9 +138,10 @@ func (h *DoActionsHandler) doActions(ctx context.Context, req DoActionsRequest) 
 	}
 
 	p.Start()
-	// push events
+
+	// push events to the pipeline
 	for i, event := range req.Events {
-		p.In(pipeline.SourceID(h.requests.Inc()), "fake", int64(i), event, true)
+		p.In(pipeline.SourceID(h.requests.Inc()), "fake", int64(i+1), event, true)
 	}
 
 	// collect result
@@ -186,7 +190,7 @@ func (h *DoActionsHandler) setupPipeline(p *pipeline.Pipeline, req DoActionsRequ
 	}
 	values := map[string]int{
 		"capacity":   pipelineCapacity,
-		"gomaxprocs": pipelineProcessors,
+		"gomaxprocs": runtime.GOMAXPROCS(0),
 	}
 	if err := fd.SetupActions(p, h.plugins, actionsRaw, values); err != nil {
 		return err
