@@ -93,7 +93,7 @@ func (f *FileD) addPipeline(name string, config *cfg.PipelineConfig) {
 
 	logger.Infof("creating pipeline %q: capacity=%d, stream field=%s, decoder=%s", name, settings.Capacity, settings.StreamField, settings.Decoder)
 
-	p := pipeline.New(name, settings, f.registry, logger.Instance.Named(name))
+	p := pipeline.New(name, settings, f.registry, logger.Instance.Named(name).Desugar())
 	err := f.setupInput(p, config, values)
 	if err != nil {
 		logger.Fatalf("can't create pipeline %q: %s", name, err.Error())

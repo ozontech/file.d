@@ -52,7 +52,6 @@ type InputPluginController interface {
 
 type ActionPluginController interface {
 	Propagate(event *Event) // throw held event back to pipeline
-	ActionTypeByIndex(idx int) (string, bool)
 }
 
 type OutputPluginController interface {

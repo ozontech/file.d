@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"net"
 	"net/http"
@@ -79,7 +80,7 @@ func app(ctx context.Context) error {
 
 	err := srvr.ListenAndServe()
 	lg.Info("shutting down", zap.Error(err))
-	if err == http.ErrServerClosed {
+	if errors.Is(err, http.ErrServerClosed) {
 		return nil
 	}
 	return err

@@ -344,10 +344,3 @@ func (p *processor) Propagate(event *Event) {
 func (p *processor) RecoverFromPanic() {
 	p.recoverFromPanic()
 }
-
-func (p *processor) ActionTypeByIndex(idx int) (string, bool) {
-	if idx <= 0 || idx >= len(p.actionInfos) {
-		return "", false
-	}
-	return p.actionInfos[idx].Type, true
-}
