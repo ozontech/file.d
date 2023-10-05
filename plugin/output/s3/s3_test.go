@@ -405,7 +405,7 @@ func newPipeline(t *testing.T, configOutput *Config, objStoreF objStoreFactory) 
 		Decoder:           "json",
 	}
 
-	p := pipeline.New("test_pipeline", settings, prometheus.NewRegistry(), zap.NewNop().Sugar())
+	p := pipeline.New("test_pipeline", settings, prometheus.NewRegistry(), zap.NewNop())
 	p.DisableParallelism()
 	p.EnableEventLog()
 

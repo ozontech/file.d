@@ -129,7 +129,7 @@ func NewPipeline(actions []*pipeline.ActionPluginStaticInfo, pipelineOpts ...str
 		pName += strconv.Itoa(rand.Int())
 	}
 
-	p := pipeline.New(pName, settings, prometheus.NewRegistry(), zap.NewNop().Sugar())
+	p := pipeline.New(pName, settings, prometheus.NewRegistry(), zap.NewNop())
 	if !parallel {
 		p.DisableParallelism()
 	}

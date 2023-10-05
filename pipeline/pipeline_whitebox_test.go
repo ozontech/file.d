@@ -14,7 +14,7 @@ func TestPipeline_streamEvent(t *testing.T) {
 		Capacity: 5,
 		Decoder:  "json",
 	}
-	p := New("test", settings, prometheus.NewRegistry(), zap.NewNop().Sugar())
+	p := New("test", settings, prometheus.NewRegistry(), zap.NewNop())
 
 	streamID := StreamID(123123)
 	procs := int32(7)

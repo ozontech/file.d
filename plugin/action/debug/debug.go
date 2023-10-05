@@ -119,4 +119,5 @@ func (p *Plugin) setupLogger(pipelineName string, parentLogger *zap.Logger, conf
 		}))
 	}
 	loggerByPipeline[pipelineName] = lg
+	p.logger = lg
 }
