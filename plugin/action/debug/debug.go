@@ -103,20 +103,20 @@ var (
 
 // return shared logger between concurrent running processors
 func (p *Plugin) setupLogger(pipelineName string, parentLogger *zap.Logger, config *Config) {
+	if config.Interval_ == 0 {
+		p.logger = parentLogger
+	}
+
 	loggerByPipelineMu.Lock()
 	defer loggerByPipelineMu.Unlock()
 
+	// TODO: the playground can break this logic
 	lg, ok := loggerByPipeline[pipelineName]
 	if !ok {
-		if config.Interval_ != 0 {
-			// enable sampler
-			lg = parentLogger.WithOptions(zap.WrapCore(func(core zapcore.Core) zapcore.Core {
-				return zapcore.NewSamplerWithOptions(parentLogger.Core(), config.Interval_, config.First, config.Thereafter)
-			}))
-		} else {
-			lg = parentLogger
-		}
-		loggerByPipeline[pipelineName] = lg
+		// enable sampler
+		lg = parentLogger.WithOptions(zap.WrapCore(func(core zapcore.Core) zapcore.Core {
+			return zapcore.NewSamplerWithOptions(parentLogger.Core(), config.Interval_, config.First, config.Thereafter)
+		}))
 	}
-	p.logger = lg
+	loggerByPipeline[pipelineName] = lg
 }
