@@ -183,8 +183,9 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	}
 
 	p.client = &fasthttp.Client{
-		ReadTimeout:  p.config.ConnectionTimeout_ * 2,
-		WriteTimeout: p.config.ConnectionTimeout_ * 2,
+		ReadTimeout:     p.config.ConnectionTimeout_ * 2,
+		WriteTimeout:    p.config.ConnectionTimeout_ * 2,
+		MaxConnDuration: time.Minute * 5,
 	}
 
 	if p.config.CACert != "" {
