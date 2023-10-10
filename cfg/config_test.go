@@ -35,6 +35,10 @@ type strDefault struct {
 	T string `default:"sync"`
 }
 
+type boolDefault struct {
+	T bool `default:"true"`
+}
+
 type PersistenceMode byte
 
 const (
@@ -96,6 +100,7 @@ func TestParseRequiredErr(t *testing.T) {
 
 func TestParseDefault(t *testing.T) {
 	s := &strDefault{}
+	SetDefaultValues(s)
 	err := Parse(s, nil)
 
 	assert.NoError(t, err, "shouldn't be an error")
@@ -113,6 +118,7 @@ func TestParseDuration(t *testing.T) {
 			T  Duration `default:"5s" parse:"duration"`
 			T_ time.Duration
 		}{}
+		SetDefaultValues(s)
 		r.NoError(Parse(s, nil))
 		r.Equal(time.Second*5, s.T_)
 	})
@@ -124,6 +130,7 @@ func TestParseDuration(t *testing.T) {
 			T  Duration `parse:"duration"`
 			T_ time.Duration
 		}{}
+		SetDefaultValues(s)
 		r.NoError(Parse(s, nil))
 		r.Equal(time.Duration(0), s.T_)
 	})
@@ -561,10 +568,28 @@ func TestParseDefaultInt(t *testing.T) {
 		{s: &intDefault{T: 17}, expected: 17},
 	}
 	for i, tc := range testCases {
+		SetDefaultValues(tc.s)
 		err := Parse(tc.s, nil)
 
 		assert.NoError(t, err, "shouldn't be an error tc: %d", i)
 		assert.Equal(t, tc.expected, tc.s.T, "wrong value tc: %d", i)
+	}
+}
+
+func TestParseDefaultBool(t *testing.T) {
+	testCases := []struct {
+		s        *boolDefault
+		expected bool
+	}{
+		// {s: &boolDefault{}, expected: true},
+		{s: &boolDefault{T: false}, expected: false},
+	}
+	for i, tc := range testCases {
+		SetDefaultValues(tc.s)
+		err := Parse(tc.s, nil)
+
+		assert.NoError(t, err, "shouldn't be an error tc: %w", i)
+		assert.Equal(t, tc.expected, tc.s.T, "wrong value tc: %w", i)
 	}
 }
 
