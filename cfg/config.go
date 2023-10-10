@@ -325,37 +325,7 @@ func ParseSlice(v reflect.Value, values map[string]int) error {
 }
 
 func ParseField(v reflect.Value, vField reflect.Value, tField *reflect.StructField, values map[string]int) error {
-	tag := tField.Tag.Get("required")
-	required := tag == trueValue
-
-	tag = tField.Tag.Get("default")
-	if tag != "" {
-		// need to check current value of field and then set default in case of empty value
-		switch vField.Kind() {
-		case reflect.String:
-			if vField.String() == "" {
-				vField.SetString(tag)
-			}
-		case reflect.Int:
-			if vField.Int() == 0 { // like in vField.IsZero
-				val, err := strconv.Atoi(tag)
-				if err != nil {
-					return fmt.Errorf("default value for field %s should be int, got=%s: %w", tField.Name, tag, err)
-				}
-				vField.SetInt(int64(val))
-			}
-		case reflect.Slice:
-			if vField.Len() == 0 {
-				val := strings.Fields(tag)
-				vField.Set(reflect.MakeSlice(vField.Type(), len(val), len(val)))
-				for i, v := range val {
-					vField.Index(i).SetString(v)
-				}
-			}
-		}
-	}
-
-	tag = tField.Tag.Get("options")
+	tag := tField.Tag.Get("options")
 	if tag != "" {
 		parts := strings.Split(tag, "|")
 		if vField.Kind() != reflect.String {
@@ -520,6 +490,9 @@ func ParseField(v reflect.Value, vField reflect.Value, tField *reflect.StructFie
 		}
 	}
 
+	tag = tField.Tag.Get("required")
+	required := tag == trueValue
+
 	if required && vField.IsZero() {
 		return fmt.Errorf("field %s should set as non-zero value", tField.Name)
 	}
@@ -559,6 +532,53 @@ func ParseFieldSelector(selector string) []string {
 	}
 
 	return result
+}
+
+func SetDefaultValues(data interface{}) error {
+	t := reflect.TypeOf(data).Elem()
+	v := reflect.ValueOf(data).Elem()
+
+	for i := 0; i < t.NumField(); i++ {
+		tField := t.Field(i)
+		vField := v.Field(i)
+
+		defaultValue := tField.Tag.Get("default")
+		if defaultValue != "" {
+			switch vField.Kind() {
+			case reflect.Bool:
+				// vField.
+				if defaultValue == "true" {
+					vField.SetBool(true)
+				} else if defaultValue == "false" {
+					vField.SetBool(false)
+				}
+			case reflect.Struct:
+				SetDefaultValues(vField)
+			case reflect.String:
+				if vField.String() == "" {
+					vField.SetString(defaultValue)
+				}
+			case reflect.Int:
+				if vField.Int() == 0 { // like in vField.IsZero
+					val, err := strconv.Atoi(defaultValue)
+					if err != nil {
+						return fmt.Errorf("default value for field %s should be int, got=%s: %w", tField.Name, defaultValue, err)
+					}
+					vField.SetInt(int64(val))
+				}
+			case reflect.Slice:
+				if vField.Len() == 0 {
+					val := strings.Fields(defaultValue)
+					vField.Set(reflect.MakeSlice(vField.Type(), len(val), len(val)))
+					for i, v := range val {
+						vField.Index(i).SetString(v)
+					}
+				}
+			}
+		}
+	}
+
+	return nil
 }
 
 func ListToMap(a []string) map[string]bool {

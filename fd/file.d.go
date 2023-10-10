@@ -256,6 +256,11 @@ func (f *FileD) getStaticInfo(pipelineConfig *cfg.PipelineConfig, pluginKind pip
 }
 
 func DecodeConfig(config pipeline.AnyConfig, configJson []byte) error {
+	err := cfg.SetDefaultValues(config)
+	if err != nil {
+		return err
+	}
+
 	dec := json.NewDecoder(bytes.NewReader(configJson))
 	dec.DisallowUnknownFields()
 	return dec.Decode(config)
