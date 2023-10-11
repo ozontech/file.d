@@ -72,7 +72,7 @@ func main() {
 	kingpin.Version(buildinfo.Version)
 	kingpin.Parse()
 
-	logger.Infof("Hi! I'm file.d version=%s %s", buildinfo.Version)
+	logger.Infof("Hi! I'm file.d version=%s", buildinfo.Version)
 
 	setRuntimeSettings()
 	insaneJSON.DisableBeautifulErrors = true
