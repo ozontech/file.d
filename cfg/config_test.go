@@ -341,9 +341,9 @@ func TestHierarchy(t *testing.T) {
 
 func TestSlice(t *testing.T) {
 	in := &sliceStruct{
-		// Value: "parent_value",
+		Value: "parent_value",
 		Childs: []sliceChild{
-			// {"child_1"},
+			{"child_1"},
 			{},
 		}}
 	jsonData, _ := json.Marshal(in)
