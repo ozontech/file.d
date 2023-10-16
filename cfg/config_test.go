@@ -376,6 +376,7 @@ func TestDefaultSlice(t *testing.T) {
 
 func TestBase8Default(t *testing.T) {
 	s := &strBase8{}
+	setDefaultValues(s)
 	err := Parse(s, nil)
 	assert.Nil(t, err, "shouldn't be an error")
 	assert.Equal(t, int64(438), s.T_)
@@ -592,21 +593,61 @@ func TestParseDefaultInt(t *testing.T) {
 	}
 }
 
-func TestParseDefaultBool(t *testing.T) {
-	testCases := []struct {
-		s        *boolDefault
-		expected bool
-	}{
-		// {s: &boolDefault{}, expected: true},
-		{s: &boolDefault{T: false}, expected: false},
+func TestBoolDefaultTrue(t *testing.T) {
+	jsonData := []byte(`{}`)
+	pluginInfo := &pipeline.PluginStaticInfo{
+		Type: "boolDefault",
+		Factory: func() (pipeline.AnyPlugin, pipeline.AnyConfig) {
+			return &boolDefault{}, &boolDefault{}
+		},
+		Config: &boolDefault{},
 	}
-	for i, tc := range testCases {
-		setDefaultValues(tc.s)
-		err := Parse(tc.s, nil)
 
-		assert.NoError(t, err, "shouldn't be an error tc: %w", i)
-		assert.Equal(t, tc.expected, tc.s.T, "wrong value tc: %w", i)
+	config, err := GetPipelineConfig(pluginInfo, jsonData, map[string]int{})
+	s := config.(*boolDefault)
+
+	assert.Nil(t, err, "shouldn't be an error")
+	assert.Equal(t, true, s.T, "wrong value")
+}
+
+func TestBoolSetFalse(t *testing.T) {
+	in := &boolDefault{
+		T: false,
 	}
+	jsonData, _ := json.Marshal(in)
+	pluginInfo := &pipeline.PluginStaticInfo{
+		Type: "boolDefault",
+		Factory: func() (pipeline.AnyPlugin, pipeline.AnyConfig) {
+			return &boolDefault{}, &boolDefault{}
+		},
+		Config: &boolDefault{},
+	}
+
+	config, err := GetPipelineConfig(pluginInfo, jsonData, map[string]int{})
+	s := config.(*boolDefault)
+
+	assert.Nil(t, err, "shouldn't be an error")
+	assert.Equal(t, false, s.T, "wrong value")
+}
+
+func TestBoolSetTrue(t *testing.T) {
+	in := &boolDefault{
+		T: true,
+	}
+	jsonData, _ := json.Marshal(in)
+	pluginInfo := &pipeline.PluginStaticInfo{
+		Type: "boolDefault",
+		Factory: func() (pipeline.AnyPlugin, pipeline.AnyConfig) {
+			return &boolDefault{}, &boolDefault{}
+		},
+		Config: &boolDefault{},
+	}
+
+	config, err := GetPipelineConfig(pluginInfo, jsonData, map[string]int{})
+	s := config.(*boolDefault)
+
+	assert.Nil(t, err, "shouldn't be an error")
+	assert.Equal(t, true, s.T, "wrong value")
 }
 
 func TestPipelineValidatorValid(t *testing.T) {
