@@ -1,7 +1,6 @@
 package fd
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -173,15 +172,9 @@ func (f *FileD) setupAction(p *pipeline.Pipeline, index int, t string, actionJSO
 	}
 	metricName, metricLabels, skipStatus := extractMetrics(actionJSON)
 	configJSON := makeActionJSON(actionJSON)
-
-	_, config := info.Factory()
-	if err := DecodeConfig(config, configJSON); err != nil {
-		logger.Fatalf("can't unmarshal config for %s action in pipeline %q: %s", info.Type, p.Name, err.Error())
-	}
-
-	err = cfg.Parse(config, values)
+	config, err := cfg.GetPipelineConfig(info, configJSON, values)
 	if err != nil {
-		logger.Fatalf("wrong config for %q action in pipeline %q: %s", info.Type, p.Name, err.Error())
+		logger.Fatalf("wrong config for action %d/%s in pipeline %q: %s", index, t, p.Name, err.Error())
 	}
 
 	infoCopy := *info
@@ -239,31 +232,15 @@ func (f *FileD) getStaticInfo(pipelineConfig *cfg.PipelineConfig, pluginKind pip
 	if err != nil {
 		logger.Panicf("can't create config json for %s", t)
 	}
-	_, config := info.Factory()
-	if err := DecodeConfig(config, configJson); err != nil {
-		return nil, fmt.Errorf("can't unmarshal config for %s: %s", pluginKind, err.Error())
-	}
-
-	err = cfg.Parse(config, values)
+	config, err := cfg.GetPipelineConfig(info, configJson, values)
 	if err != nil {
-		logger.Fatalf("wrong config for %q plugin %q: %s", pluginKind, t, err.Error())
+		logger.Fatalf("error on creating %s with type %q: %s", t, pluginKind, err.Error())
 	}
 
 	infoCopy := *info
 	infoCopy.Config = config
 
 	return &infoCopy, nil
-}
-
-func DecodeConfig(config pipeline.AnyConfig, configJson []byte) error {
-	err := cfg.SetDefaultValues(config)
-	if err != nil {
-		return err
-	}
-
-	dec := json.NewDecoder(bytes.NewReader(configJson))
-	dec.DisallowUnknownFields()
-	return dec.Decode(config)
 }
 
 func (f *FileD) Stop(ctx context.Context) error {

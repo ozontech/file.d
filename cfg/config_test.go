@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/bitly/go-simplejson"
+	"github.com/ozontech/file.d/pipeline"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -100,7 +101,7 @@ func TestParseRequiredErr(t *testing.T) {
 
 func TestParseDefault(t *testing.T) {
 	s := &strDefault{}
-	SetDefaultValues(s)
+	setDefaultValues(s)
 	err := Parse(s, nil)
 
 	assert.NoError(t, err, "shouldn't be an error")
@@ -118,7 +119,7 @@ func TestParseDuration(t *testing.T) {
 			T  Duration `default:"5s" parse:"duration"`
 			T_ time.Duration
 		}{}
-		SetDefaultValues(s)
+		setDefaultValues(s)
 		r.NoError(Parse(s, nil))
 		r.Equal(time.Second*5, s.T_)
 	})
@@ -130,7 +131,7 @@ func TestParseDuration(t *testing.T) {
 			T  Duration `parse:"duration"`
 			T_ time.Duration
 		}{}
-		SetDefaultValues(s)
+		setDefaultValues(s)
 		r.NoError(Parse(s, nil))
 		r.Equal(time.Duration(0), s.T_)
 	})
@@ -339,8 +340,23 @@ func TestHierarchy(t *testing.T) {
 }
 
 func TestSlice(t *testing.T) {
-	s := &sliceStruct{Value: "parent_value", Childs: []sliceChild{{"child_1"}, {}}}
-	err := Parse(s, map[string]int{})
+	in := &sliceStruct{
+		// Value: "parent_value",
+		Childs: []sliceChild{
+			// {"child_1"},
+			{},
+		}}
+	jsonData, _ := json.Marshal(in)
+	pluginInfo := &pipeline.PluginStaticInfo{
+		Type: "sliceStruct",
+		Factory: func() (pipeline.AnyPlugin, pipeline.AnyConfig) {
+			return &sliceStruct{}, &sliceStruct{}
+		},
+		Config: &sliceStruct{},
+	}
+
+	config, err := GetPipelineConfig(pluginInfo, jsonData, map[string]int{})
+	s := config.(*sliceStruct)
 
 	assert.Nil(t, err, "shouldn't be an error")
 	assert.Equal(t, "parent_value", s.Value, "wrong value")
@@ -568,7 +584,7 @@ func TestParseDefaultInt(t *testing.T) {
 		{s: &intDefault{T: 17}, expected: 17},
 	}
 	for i, tc := range testCases {
-		SetDefaultValues(tc.s)
+		setDefaultValues(tc.s)
 		err := Parse(tc.s, nil)
 
 		assert.NoError(t, err, "shouldn't be an error tc: %d", i)
@@ -585,7 +601,7 @@ func TestParseDefaultBool(t *testing.T) {
 		{s: &boolDefault{T: false}, expected: false},
 	}
 	for i, tc := range testCases {
-		SetDefaultValues(tc.s)
+		setDefaultValues(tc.s)
 		err := Parse(tc.s, nil)
 
 		assert.NoError(t, err, "shouldn't be an error tc: %w", i)

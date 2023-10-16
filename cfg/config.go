@@ -13,6 +13,7 @@ import (
 
 	"github.com/bitly/go-simplejson"
 	"github.com/ozontech/file.d/logger"
+	"github.com/ozontech/file.d/pipeline"
 	"sigs.k8s.io/yaml"
 )
 
@@ -237,6 +238,31 @@ func tryApplyFunc(app funcApplier, field *simplejson.Json) (string, bool) {
 	}
 
 	return "", false
+}
+
+func GetPipelineConfig(info *pipeline.PluginStaticInfo, configJson []byte, values map[string]int) (pipeline.AnyConfig, error) {
+	_, config := info.Factory()
+	if err := decodeConfig(config, configJson); err != nil {
+		return nil, err
+	}
+
+	err := Parse(config, values)
+	if err != nil {
+		return nil, err
+	}
+
+	return config, nil
+}
+
+func decodeConfig(config any, configJson []byte) error {
+	err := setDefaultValues(config)
+	if err != nil {
+		return err
+	}
+
+	dec := json.NewDecoder(bytes.NewReader(configJson))
+	dec.DisallowUnknownFields()
+	return dec.Decode(config)
 }
 
 // Parse holy shit! who write this function?
@@ -534,7 +560,7 @@ func ParseFieldSelector(selector string) []string {
 	return result
 }
 
-func SetDefaultValues(data interface{}) error {
+func setDefaultValues(data interface{}) error {
 	t := reflect.TypeOf(data).Elem()
 	v := reflect.ValueOf(data).Elem()
 
@@ -553,7 +579,7 @@ func SetDefaultValues(data interface{}) error {
 					vField.SetBool(false)
 				}
 			case reflect.Struct:
-				SetDefaultValues(vField)
+				setDefaultValues(vField)
 			case reflect.String:
 				if vField.String() == "" {
 					vField.SetString(defaultValue)
