@@ -255,7 +255,7 @@ func GetPipelineConfig(info *pipeline.PluginStaticInfo, configJson []byte, value
 }
 
 func decodeConfig(config any, configJson []byte) error {
-	err := setDefaultValues(config)
+	err := SetDefaultValues(config)
 	if err != nil {
 		return err
 	}
@@ -560,7 +560,7 @@ func ParseFieldSelector(selector string) []string {
 	return result
 }
 
-func setDefaultValues(data interface{}) error {
+func SetDefaultValues(data interface{}) error {
 	t := reflect.TypeOf(data).Elem()
 	v := reflect.ValueOf(data).Elem()
 
@@ -579,7 +579,7 @@ func setDefaultValues(data interface{}) error {
 					vField.SetBool(false)
 				}
 			case reflect.Struct:
-				setDefaultValues(vField)
+				SetDefaultValues(vField)
 			case reflect.String:
 				if vField.String() == "" {
 					vField.SetString(defaultValue)
