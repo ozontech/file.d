@@ -533,8 +533,8 @@ func (p *Pipeline) finalize(event *Event, notifyInput bool, backEvent bool) {
 }
 
 type actionMetric struct {
-	count *metric.CounterVecWrapper
-	size  *metric.CounterVecWrapper
+	count *metric.HeldCounterVec
+	size  *metric.HeldCounterVec
 	// totalCounter is a map of eventStatus to counter for `/info` endpoint.
 	totalCounter map[string]*atomic.Uint64
 }
@@ -580,14 +580,14 @@ func (p *Pipeline) AddAction(info *ActionPluginStaticInfo) {
 		fmt.Sprintf("how many events processed by pipeline %q and #%d action", p.Name, len(p.actionInfos)-1),
 		labels...,
 	)
-	countWrapper := p.metricHolder.AddCounterVec(count)
+	heldCount := p.metricHolder.AddCounterVec(count)
 
 	size := mCtl.RegisterCounterVec(
 		info.MetricName+"_events_size_total",
 		fmt.Sprintf("total size of events processed by pipeline %q and #%d action", p.Name, len(p.actionInfos)-1),
 		labels...,
 	)
-	sizeWrapper := p.metricHolder.AddCounterVec(size)
+	heldSize := p.metricHolder.AddCounterVec(size)
 
 	totalCounter := make(map[string]*atomic.Uint64)
 	for _, st := range allEventStatuses() {
@@ -595,8 +595,8 @@ func (p *Pipeline) AddAction(info *ActionPluginStaticInfo) {
 	}
 
 	p.actionMetrics.set(info.MetricName, &actionMetric{
-		count:        countWrapper,
-		size:         sizeWrapper,
+		count:        heldCount,
+		size:         heldSize,
 		totalCounter: totalCounter,
 	})
 }
@@ -834,7 +834,7 @@ func (p *Pipeline) serveActionInfo(info *ActionPluginStaticInfo) func(http.Respo
 			return
 		}
 
-		actionMetric := p.actionMetrics.get(info.MetricName)
+		am := p.actionMetrics.get(info.MetricName)
 
 		var events []Event
 		for _, status := range []eventStatus{
@@ -842,7 +842,7 @@ func (p *Pipeline) serveActionInfo(info *ActionPluginStaticInfo) func(http.Respo
 			eventStatusDiscarded,
 			eventStatusPassed,
 		} {
-			c := actionMetric.totalCounter[string(status)]
+			c := am.totalCounter[string(status)]
 			if c == nil {
 				c = atomic.NewUint64(0)
 			}
