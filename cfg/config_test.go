@@ -75,9 +75,52 @@ type sliceChild struct {
 	Value string `default:"child"`
 }
 
+func (s *sliceChild) UnmarshalJSON(raw []byte) error {
+	setDefaultValues(s)
+	var childPtr struct {
+		Value *string
+	}
+
+	if err := json.Unmarshal(raw, &childPtr); err != nil {
+		return err
+	}
+
+	if childPtr.Value != nil {
+		s.Value = *childPtr.Value
+	}
+
+	return nil
+}
+
 type sliceStruct struct {
 	Value  string       `default:"parent"`
 	Childs []sliceChild `default:"" slice:"true"`
+}
+
+type sliceStructBool struct {
+	Value  string           `default:"parent"`
+	Childs []sliceChildBool `default:"" slice:"true"`
+}
+
+type sliceChildBool struct {
+	Value bool `default:"true"`
+}
+
+func (s *sliceChildBool) UnmarshalJSON(raw []byte) error {
+	setDefaultValues(s)
+	var childBoolPtr struct {
+		Value *bool
+	}
+
+	if err := json.Unmarshal(raw, &childBoolPtr); err != nil {
+		return err
+	}
+
+	if childBoolPtr.Value != nil {
+		s.Value = *childBoolPtr.Value
+	}
+
+	return nil
 }
 
 type strBase8 struct {
@@ -340,13 +383,7 @@ func TestHierarchy(t *testing.T) {
 }
 
 func TestSlice(t *testing.T) {
-	in := &sliceStruct{
-		Value: "parent_value",
-		Childs: []sliceChild{
-			{"child_1"},
-			{},
-		}}
-	jsonData, _ := json.Marshal(in)
+	jsonData := []byte(`{"Value":"parent_value","Childs":[{"Value":"child_1"},{"Value":""},{}]}`)
 	pluginInfo := &pipeline.PluginStaticInfo{
 		Type: "sliceStruct",
 		Factory: func() (pipeline.AnyPlugin, pipeline.AnyConfig) {
@@ -361,7 +398,28 @@ func TestSlice(t *testing.T) {
 	assert.Nil(t, err, "shouldn't be an error")
 	assert.Equal(t, "parent_value", s.Value, "wrong value")
 	assert.Equal(t, "child_1", s.Childs[0].Value, "wrong value")
-	assert.Equal(t, "child", s.Childs[1].Value, "wrong value") // default value
+	assert.Equal(t, "", s.Childs[1].Value, "wrong value")      // default value
+	assert.Equal(t, "child", s.Childs[2].Value, "wrong value") // default value
+}
+
+func TestSliceBool(t *testing.T) {
+	jsonData := []byte(`{"Value":"parent_value","Childs":[{"Value":false},{"Value":true},{}]}`)
+	pluginInfo := &pipeline.PluginStaticInfo{
+		Type: "sliceStructBool",
+		Factory: func() (pipeline.AnyPlugin, pipeline.AnyConfig) {
+			return &sliceStructBool{}, &sliceStructBool{}
+		},
+		Config: &sliceStructBool{},
+	}
+
+	config, err := GetPipelineConfig(pluginInfo, jsonData, map[string]int{})
+	s := config.(*sliceStructBool)
+
+	assert.Nil(t, err, "shouldn't be an error")
+	assert.Equal(t, "parent_value", s.Value, "wrong value")
+	assert.Equal(t, false, s.Childs[0].Value, "wrong value")
+	assert.Equal(t, true, s.Childs[1].Value, "wrong value") // default value
+	assert.Equal(t, true, s.Childs[2].Value, "wrong value") // default value
 }
 
 func TestDefaultSlice(t *testing.T) {
