@@ -568,9 +568,23 @@ func SetDefaultValues(data interface{}) error {
 		tField := t.Field(i)
 		vField := v.Field(i)
 
+		vFieldKind := vField.Kind()
+
+		switch vFieldKind {
+		case reflect.Struct:
+			SetDefaultValues(vField.Addr().Interface())
+		case reflect.Slice:
+			for i := 0; i < vField.Len(); i++ {
+				item := vField.Index(i)
+				if item.Kind() == reflect.Struct {
+					SetDefaultValues(item.Addr().Interface())
+				}
+			}
+		}
+
 		defaultValue := tField.Tag.Get("default")
 		if defaultValue != "" {
-			switch vField.Kind() {
+			switch vFieldKind {
 			case reflect.Bool:
 				// vField.
 				if defaultValue == "true" {
@@ -578,8 +592,6 @@ func SetDefaultValues(data interface{}) error {
 				} else if defaultValue == "false" {
 					vField.SetBool(false)
 				}
-			case reflect.Struct:
-				SetDefaultValues(vField)
 			case reflect.String:
 				if vField.String() == "" {
 					vField.SetString(defaultValue)
