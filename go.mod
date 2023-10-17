@@ -26,6 +26,7 @@ require (
 	github.com/prometheus/client_golang v1.16.0
 	github.com/rjeczalik/notify v0.9.3
 	github.com/satori/go.uuid v1.2.0
+	github.com/segmentio/fasthash v1.0.3
 	github.com/stretchr/testify v1.8.4
 	github.com/valyala/fasthttp v1.48.0
 	github.com/vitkovskii/insane-json v0.1.7
@@ -122,7 +123,6 @@ require (
 	github.com/rcrowley/go-metrics v0.0.0-20201227073835-cf1acfcdf475 // indirect
 	github.com/ryanuber/go-glob v1.0.0 // indirect
 	github.com/segmentio/asm v1.2.0 // indirect
-	github.com/segmentio/fasthash v1.0.3 // indirect
 	github.com/sirupsen/logrus v1.8.1 // indirect
 	github.com/smartystreets/goconvey v1.6.4 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
