@@ -118,6 +118,7 @@ func TestThrottle(t *testing.T) {
 		TimeField:      "",
 		DefaultLimit:   int64(defaultLimit),
 	}
+	cfg.SetDefaultValues(config)
 	err := cfg.Parse(config, nil)
 	if err != nil {
 		logger.Panic(err.Error())

@@ -76,7 +76,7 @@ type sliceChild struct {
 }
 
 func (s *sliceChild) UnmarshalJSON(raw []byte) error {
-	setDefaultValues(s)
+	SetDefaultValues(s)
 	var childPtr struct {
 		Value *string
 	}
@@ -107,7 +107,7 @@ type sliceChildBool struct {
 }
 
 func (s *sliceChildBool) UnmarshalJSON(raw []byte) error {
-	setDefaultValues(s)
+	SetDefaultValues(s)
 	var childBoolPtr struct {
 		Value *bool
 	}
@@ -144,7 +144,7 @@ func TestParseRequiredErr(t *testing.T) {
 
 func TestParseDefault(t *testing.T) {
 	s := &strDefault{}
-	setDefaultValues(s)
+	SetDefaultValues(s)
 	err := Parse(s, nil)
 
 	assert.NoError(t, err, "shouldn't be an error")
@@ -162,7 +162,7 @@ func TestParseDuration(t *testing.T) {
 			T  Duration `default:"5s" parse:"duration"`
 			T_ time.Duration
 		}{}
-		setDefaultValues(s)
+		SetDefaultValues(s)
 		r.NoError(Parse(s, nil))
 		r.Equal(time.Second*5, s.T_)
 	})
@@ -174,7 +174,7 @@ func TestParseDuration(t *testing.T) {
 			T  Duration `parse:"duration"`
 			T_ time.Duration
 		}{}
-		setDefaultValues(s)
+		SetDefaultValues(s)
 		r.NoError(Parse(s, nil))
 		r.Equal(time.Duration(0), s.T_)
 	})
@@ -434,7 +434,7 @@ func TestDefaultSlice(t *testing.T) {
 
 func TestBase8Default(t *testing.T) {
 	s := &strBase8{}
-	setDefaultValues(s)
+	SetDefaultValues(s)
 	err := Parse(s, nil)
 	assert.Nil(t, err, "shouldn't be an error")
 	assert.Equal(t, int64(438), s.T_)
@@ -643,7 +643,7 @@ func TestParseDefaultInt(t *testing.T) {
 		{s: &intDefault{T: 17}, expected: 17},
 	}
 	for i, tc := range testCases {
-		setDefaultValues(tc.s)
+		SetDefaultValues(tc.s)
 		err := Parse(tc.s, nil)
 
 		assert.NoError(t, err, "shouldn't be an error tc: %d", i)
