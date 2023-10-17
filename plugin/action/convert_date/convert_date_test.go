@@ -4,13 +4,22 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/ozontech/file.d/cfg"
+	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/test"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestConvert(t *testing.T) {
-	config := test.NewConfig(&Config{SourceFormats: []string{"rfc3339nano", "rfc3339", "ansic", pipeline.UnixTime, "nginx_errorlog"}}, nil)
+	config := &Config{SourceFormats: []string{"rfc3339nano", "rfc3339", "ansic", pipeline.UnixTime, "nginx_errorlog"}}
+
+	cfg.SetDefaultValues(config)
+	err := cfg.Parse(config, nil)
+	if err != nil {
+		logger.Panicf("wrong config")
+	}
+
 	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, config, pipeline.MatchModeAnd, nil, false))
 	wg := &sync.WaitGroup{}
 	wg.Add(3)
@@ -35,7 +44,18 @@ func TestConvert(t *testing.T) {
 }
 
 func TestConvertFail(t *testing.T) {
-	config := test.NewConfig(&Config{SourceFormats: []string{"rfc3339nano", "rfc3339", "ansic"}, RemoveOnFail: true}, nil)
+	jsonData := []byte(`{"source_formats":["rfc3339nano","rfc3339","ansic"],"remove_on_fail":true}`)
+
+	pluginInfo := &pipeline.PluginStaticInfo{
+		Type:    "Config",
+		Factory: factory,
+		Config:  &Config{},
+	}
+	config, err := cfg.GetPipelineConfig(pluginInfo, jsonData, map[string]int{})
+	if err != nil {
+		logger.Panicf("wrong config")
+	}
+
 	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, config, pipeline.MatchModeAnd, nil, false))
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
