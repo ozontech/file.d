@@ -97,6 +97,23 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
+	// > Retries of insertion. If File.d cannot insert for this number of attempts,
+	// > File.d will fall with non-zero exit code.
+	Retry int `json:"retry" default:"10"` // *
+
+	// > @3@4@5@6
+	// >
+	// > Retention milliseconds for retry.
+	Retention  cfg.Duration `json:"retention" default:"50ms" parse:"duration"` // *
+	Retention_ time.Duration
+
+	// > @3@4@5@6
+	// >
+	// > Exponentially increase retention beetween retries
+	IncreaseRetentionExponentially bool `json:"increase_retention_exponentially" default:"false"` // *
+
+	// > @3@4@5@6
+	// >
 	// > If set, the plugin will use SASL authentications mechanism.
 	SaslEnabled bool `json:"is_sasl_enabled" default:"false"` // *
 
@@ -148,6 +165,10 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.avgEventSize = params.PipelineSettings.AvgEventSize
 	p.controller = params.Controller
 	p.registerMetrics(params.MetricCtl)
+
+	if p.config.Retention_ < 1 {
+		p.logger.Fatal("'retention' can't be <1")
+	}
 
 	p.logger.Infof("workers count=%d, batch size=%d", p.config.WorkersCount_, p.config.BatchSize_)
 
@@ -213,14 +234,35 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 
 	data.outBuf = outBuf
 
-	err := p.producer.SendMessages(data.messages[:i])
-	if err != nil {
+	var err error
+	for try := 0; try < p.config.Retry; try++ {
+		err := p.producer.SendMessages(data.messages[:i])
+		if err == nil {
+			break
+		}
+
 		errs := err.(sarama.ProducerErrors)
 		for _, e := range errs {
 			p.logger.Errorf("can't write batch: %s", e.Err.Error())
 		}
 		p.sendErrorMetric.Add(float64(len(errs)))
-		p.controller.Error("some events from batch were not written")
+		p.logger.Error(
+			"an attempt to insert a batch failed",
+			zap.Int("retry", (try+1)),
+			zap.Error(err),
+		)
+
+		retrySleep := p.config.Retention_
+		if p.config.IncreaseRetentionExponentially {
+			retrySleep = cfg.GetExponentDuration(p.config.Retention_, try)
+		}
+
+		time.Sleep(retrySleep)
+	}
+
+	if err != nil {
+		p.logger.Fatal("can't write batch", zap.Error(err),
+			zap.Int("retries", p.config.Retry))
 	}
 }
 

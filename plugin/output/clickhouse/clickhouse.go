@@ -497,6 +497,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 			break
 		}
 		p.insertErrorsMetric.Inc()
+		p.logger.Error("an attempt to insert a batch failed", zap.Error(err))
 
 		retrySleep := p.config.Retention_
 		if p.config.IncreaseRetentionExponentially {
@@ -504,7 +505,6 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 		}
 
 		time.Sleep(retrySleep)
-		p.logger.Error("an attempt to insert a batch failed", zap.Error(err))
 	}
 	if err != nil {
 		p.logger.Fatal("can't insert to the table", zap.Error(err),

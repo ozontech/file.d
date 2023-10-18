@@ -57,6 +57,25 @@ After this timeout the batch will be sent even if batch isn't full.
 
 <br>
 
+**`retry`** *`int`* *`default=10`* 
+
+Retries of insertion. If File.d cannot insert for this number of attempts,
+File.d will fall with non-zero exit code.
+
+<br>
+
+**`retention`** *`cfg.Duration`* *`default=50ms`* 
+
+Retention milliseconds for retry.
+
+<br>
+
+**`increase_retention_exponentially`** *`bool`* *`default=false`* 
+
+Exponentially increase retention beetween retries
+
+<br>
+
 **`is_sasl_enabled`** *`bool`* *`default=false`* 
 
 If set, the plugin will use SASL authentications mechanism.
