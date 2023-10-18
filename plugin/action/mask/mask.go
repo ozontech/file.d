@@ -5,6 +5,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/cfg/matchrule"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/metric"
@@ -189,7 +190,7 @@ func compileMask(m *Mask, logger *zap.Logger) {
 			logger.Fatal("error on compiling regexp", zap.String("re", m.Re))
 		}
 		m.Re_ = re
-		m.Groups = verifyGroupNumbers(m.Groups, re.NumSubexp(), logger)
+		m.Groups = cfg.VerifyGroupNumbers(m.Groups, re.NumSubexp(), logger)
 	}
 	for i, matchRule := range m.MatchRules {
 		if len(matchRule.Rules) == 0 {
@@ -202,37 +203,6 @@ func compileMask(m *Mask, logger *zap.Logger) {
 		}
 		m.MatchRules[i].Prepare()
 	}
-}
-
-func isGroupsUnique(groups []int) bool {
-	uniqueGrp := make(map[int]struct{}, len(groups))
-	var exists struct{}
-	for _, g := range groups {
-		if _, isContains := uniqueGrp[g]; isContains {
-			return false
-		}
-		uniqueGrp[g] = exists
-	}
-	return true
-}
-
-func verifyGroupNumbers(groups []int, totalGroups int, logger *zap.Logger) []int {
-	if !isGroupsUnique(groups) {
-		logger.Fatal("groups numbers must be unique", zap.Ints("groups_numbers", groups))
-	}
-
-	if len(groups) > totalGroups {
-		logger.Fatal("there are many groups", zap.Int("groups", len(groups)), zap.Int("total_groups", totalGroups))
-	}
-
-	for _, g := range groups {
-		if g > totalGroups || g < 0 {
-			logger.Fatal("wrong group number", zap.Int("number", g))
-		} else if g == 0 {
-			return []int{0}
-		}
-	}
-	return groups
 }
 
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginParams) {
