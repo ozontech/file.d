@@ -38,7 +38,7 @@ The resulting event could look like:
 
 type Plugin struct {
 	config *Config
-	logger *zap.SugaredLogger
+	logger *zap.Logger
 	ops    map[string][]cfg.SubstitutionOp
 	buf    []byte
 }
@@ -59,12 +59,12 @@ func factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginParams) {
 	p.config = config.(*Config)
 	p.ops = make(map[string][]cfg.SubstitutionOp)
-	p.logger = params.Logger
+	p.logger = params.Logger.Desugar()
 
 	for key, value := range *p.config {
-		ops, err := cfg.ParseSubstitution(value)
+		ops, err := cfg.ParseSubstitution(value, p.logger)
 		if err != nil {
-			p.logger.Fatalf("can't parse substitution: %s", err.Error())
+			p.logger.Fatal("can't parse substitution", zap.Error(err))
 		}
 
 		if len(ops) == 0 {
@@ -86,9 +86,13 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 			case cfg.SubstitutionOpKindRaw:
 				p.buf = append(p.buf, op.Data[0]...)
 			case cfg.SubstitutionOpKindField:
-				p.buf = append(p.buf, event.Root.Dig(op.Data...).AsBytes()...)
+				fieldData := event.Root.Dig(op.Data...).AsBytes()
+				for i := 0; i < len(op.Filters); i++ {
+					fieldData = op.Filters[i].Apply(fieldData)
+				}
+				p.buf = append(p.buf, fieldData...)
 			default:
-				p.logger.Panicf("unknown substitution kind %d", op.Kind)
+				p.logger.Panic("unknown substitution kind", zap.Int("substitution_kind", int(op.Kind)))
 			}
 		}
 
