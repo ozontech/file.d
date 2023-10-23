@@ -497,7 +497,11 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 			break
 		}
 		p.insertErrorsMetric.Inc()
-		p.logger.Error("an attempt to insert a batch failed", zap.Error(err))
+		p.logger.Error(
+			"an attempt to insert a batch failed",
+			zap.Error(err),
+			zap.Int("try", try),
+		)
 
 		retrySleep := p.config.Retention_
 		if p.config.IncreaseRetentionExponentially {

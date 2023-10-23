@@ -23,6 +23,40 @@ import (
 It sends the event batches to postgres db using pgx.
 }*/
 
+/*{ example
+**Example**
+Postgres output example:
+```yaml
+pipelines:
+  example_pipeline:
+    input:
+      type: file
+      persistence_mode: async
+      watching_dir: ./
+      filename_pattern: input_example.json
+      offsets_file: ./offsets.yaml
+      offsets_op: reset
+	output:
+      type: postgres
+      conn_string: "user=postgres host=localhost port=5432 dbname=postgres sslmode=disable pool_max_conns=10"
+      table: events
+      columns:
+        - name: id
+          type: int
+        - name: name
+          type: string
+      retry: 10
+      retention: 1s
+      increase_retention_exponentially: true
+```
+
+input_example.json
+```json
+{"id":1,"name":"name1"}
+{"id":2,"name":"name2"}
+```
+}*/
+
 var (
 	ErrEventDoesntHaveField             = errors.New("event doesn't have field")
 	ErrEventFieldHasWrongType           = errors.New("event field has wrong type")
@@ -71,9 +105,11 @@ type Plugin struct {
 	pool         PgxIface
 
 	// plugin metrics
+
 	discardedEventMetric  prometheus.Counter
 	duplicatedEventMetric prometheus.Counter
 	writtenEventMetric    prometheus.Counter
+	insertErrorsMetric    prometheus.Counter
 }
 
 type ConfigColumn struct {
@@ -130,6 +166,11 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
+	// > Exponentially increase retention beetween retries
+	IncreaseRetentionExponentially bool `json:"increase_retention_exponentially" default:"false"` // *
+
+	// > @3@4@5@6
+	// >
 	// > Timeout for DB requests in milliseconds.
 	DBRequestTimeout  cfg.Duration `json:"db_request_timeout" default:"3000ms" parse:"duration"` // *
 	DBRequestTimeout_ time.Duration
@@ -182,6 +223,7 @@ func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 	p.discardedEventMetric = ctl.RegisterCounter("output_postgres_event_discarded", "Total pgsql discarded messages")
 	p.duplicatedEventMetric = ctl.RegisterCounter("output_postgres_event_duplicated", "Total pgsql duplicated messages")
 	p.writtenEventMetric = ctl.RegisterCounter("output_postgres_event_written", "Total events written to pgsql")
+	p.insertErrorsMetric = ctl.RegisterCounter("output_postgres_insert_errors", "Total pgsql insert errors")
 }
 
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginParams) {
@@ -192,7 +234,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.registerMetrics(params.MetricCtl)
 
 	if len(p.config.Columns) == 0 {
-		p.logger.Fatal("can't start plugin, no fields in config")
+		p.logger.Fatal("can't start plugin, no columns in config")
 	}
 
 	if p.config.Retry < 1 {
@@ -315,11 +357,18 @@ func (p *Plugin) out(_ *pipeline.WorkerData, batch *pipeline.Batch) {
 	}
 
 	// Insert into pg with retry.
-	for i := p.config.Retry; i > 0; i-- {
+	for try := 0; try < p.config.Retry; try++ {
 		err = p.try(query, argsSliceInterface)
 		if err != nil {
-			p.logger.Errorf("can't exec query: %s", err.Error())
-			time.Sleep(p.config.Retention_)
+			p.insertErrorsMetric.Inc()
+			p.logger.Errorf("can't exec query: %s (try %d)", err.Error(), try)
+
+			retrySleep := p.config.Retention_
+			if p.config.IncreaseRetentionExponentially {
+				retrySleep = cfg.GetExponentDuration(p.config.Retention_, try)
+			}
+
+			time.Sleep(retrySleep)
 			continue
 		}
 		p.writtenEventMetric.Add(float64(len(uniqueEventsMap)))

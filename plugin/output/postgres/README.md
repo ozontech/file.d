@@ -50,6 +50,12 @@ Retention milliseconds for retry to DB.
 
 <br>
 
+**`increase_retention_exponentially`** *`bool`* *`default=false`* 
+
+Exponentially increase retention beetween retries
+
+<br>
+
 **`db_request_timeout`** *`cfg.Duration`* *`default=3000ms`* 
 
 Timeout for DB requests in milliseconds.
@@ -90,5 +96,38 @@ After this timeout batch will be sent even if batch isn't completed.
 
 <br>
 
+
+### Example
+**Example**
+Postgres output example:
+```yaml
+pipelines:
+  example_pipeline:
+    input:
+      type: file
+      persistence_mode: async
+      watching_dir: ./
+      filename_pattern: input_example.json
+      offsets_file: ./offsets.yaml
+      offsets_op: reset
+	output:
+      type: postgres
+      conn_string: "user=postgres host=localhost port=5432 dbname=postgres sslmode=disable pool_max_conns=10"
+      table: events
+      columns:
+        - name: id
+          type: int
+        - name: name
+          type: string
+      retry: 10
+      retention: 1s
+      increase_retention_exponentially: true
+```
+
+input_example.json
+```json
+{"id":1,"name":"name1"}
+{"id":2,"name":"name2"}
+```
 
 <br>*Generated using [__insane-doc__](https://github.com/vitkovskii/insane-doc)*
