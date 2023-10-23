@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Shopify/sarama"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -33,27 +34,34 @@ func init() {
 
 	Level = zap.NewAtomicLevelAt(level)
 
-	Instance = zap.New(
-		zapcore.NewCore(
-			zapcore.NewJSONEncoder(zapcore.EncoderConfig{
-				TimeKey:       "ts",
-				LevelKey:      "level",
-				NameKey:       "logger",
-				CallerKey:     "caller",
-				MessageKey:    "message",
-				StacktraceKey: "stacktrace",
-				LineEnding:    zapcore.DefaultLineEnding,
-				EncodeLevel:   zapcore.LowercaseLevelEncoder,
-				EncodeTime: func(time time.Time, encoder zapcore.PrimitiveArrayEncoder) {
-					zapcore.RFC3339NanoTimeEncoder(time.UTC(), encoder)
-				},
-				EncodeDuration: zapcore.StringDurationEncoder,
-				EncodeCaller:   zapcore.ShortCallerEncoder,
-			}),
-			zapcore.AddSync(os.Stderr),
-			Level,
-		),
-	).Sugar().Named("fd")
+	config := zapcore.EncoderConfig{
+		TimeKey:       "ts",
+		LevelKey:      "level",
+		NameKey:       "logger",
+		CallerKey:     "caller",
+		MessageKey:    "message",
+		StacktraceKey: "stacktrace",
+		LineEnding:    zapcore.DefaultLineEnding,
+		EncodeLevel:   zapcore.LowercaseLevelEncoder,
+		EncodeTime: func(time time.Time, encoder zapcore.PrimitiveArrayEncoder) {
+			zapcore.RFC3339NanoTimeEncoder(time.UTC(), encoder)
+		},
+		EncodeDuration: zapcore.StringDurationEncoder,
+		EncodeCaller:   zapcore.ShortCallerEncoder,
+	}
+
+	core := zapcore.NewCore(zapcore.NewJSONEncoder(config), zapcore.AddSync(os.Stderr), Level)
+	Instance = zap.New(core).
+		Sugar().
+		Named("fd")
+
+	saramaConfig := config
+	// omit level key for sarama logger
+	saramaConfig.LevelKey = zapcore.OmitKey
+	saramaCore := zapcore.NewCore(zapcore.NewJSONEncoder(saramaConfig), zapcore.AddSync(os.Stderr), Level)
+	saramaLogger := zap.New(saramaCore).Named("sarama")
+	sarama.Logger, _ = zap.NewStdLogAt(saramaLogger, zapcore.InfoLevel)
+	sarama.DebugLogger, _ = zap.NewStdLogAt(saramaLogger, zapcore.DebugLevel)
 
 	Instance.Infof("Logger initialized with level: %s", level)
 }
