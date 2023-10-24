@@ -590,11 +590,13 @@ func SetDefaultValues(data interface{}) error {
 		if defaultValue != "" {
 			switch vFieldKind {
 			case reflect.Bool:
-				// vField.
-				if defaultValue == "true" {
-					vField.SetBool(true)
-				} else if defaultValue == "false" {
-					vField.SetBool(false)
+				currentValue := vField.Bool()
+				if currentValue != true {
+					if defaultValue == "true" {
+						vField.SetBool(true)
+					} else if defaultValue == "false" {
+						vField.SetBool(false)
+					}
 				}
 			case reflect.String:
 				if vField.String() == "" {

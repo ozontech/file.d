@@ -19,7 +19,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/atomic"
 
-	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/test"
@@ -587,7 +586,7 @@ func TestReadBufferOverflow(t *testing.T) {
 	linesPerIterations := 2
 
 	config := &Config{}
-	_ = cfg.Parse(config, nil)
+	test.NewConfig(config, nil)
 	firstLine := `"`
 	for i := 0; i < config.ReadBufferSize+overhead; i++ {
 		firstLine += "a"
@@ -750,7 +749,7 @@ func TestReadManyCharsParallelRace(t *testing.T) {
 		t.Skip("skip test in short mode")
 	}
 	config := &Config{}
-	_ = cfg.Parse(config, nil)
+	test.NewConfig(config, nil)
 
 	overhead := 100
 	s := ""
