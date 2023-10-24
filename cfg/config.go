@@ -564,6 +564,10 @@ func SetDefaultValues(data interface{}) error {
 	t := reflect.TypeOf(data).Elem()
 	v := reflect.ValueOf(data).Elem()
 
+	if t.Kind() != reflect.Struct {
+		return nil
+	}
+
 	for i := 0; i < t.NumField(); i++ {
 		tField := t.Field(i)
 		vField := v.Field(i)
