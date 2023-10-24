@@ -13,12 +13,7 @@ import (
 
 func TestConvert(t *testing.T) {
 	config := &Config{SourceFormats: []string{"rfc3339nano", "rfc3339", "ansic", pipeline.UnixTime, "nginx_errorlog"}}
-
-	cfg.SetDefaultValues(config)
-	err := cfg.Parse(config, nil)
-	if err != nil {
-		logger.Panicf("wrong config")
-	}
+	test.NewConfig(config, nil)
 
 	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, config, pipeline.MatchModeAnd, nil, false))
 	wg := &sync.WaitGroup{}

@@ -87,8 +87,7 @@ func pluginConfig(opts ...string) *Config {
 		OffsetsOp:           op,
 		MaintenanceInterval: "5s",
 	}
-
-	_ = cfg.Parse(config, map[string]int{"gomaxprocs": runtime.GOMAXPROCS(0)})
+	test.NewConfig(config, map[string]int{"gomaxprocs": runtime.GOMAXPROCS(0)})
 
 	return config
 }

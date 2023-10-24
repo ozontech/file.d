@@ -232,6 +232,7 @@ func newDefaultParams() pipeline.PluginDefaultParams {
 }
 
 func NewConfig(config any, params map[string]int) any {
+	cfg.SetDefaultValues(config)
 	err := cfg.Parse(config, params)
 	if err != nil {
 		logger.Panicf("wrong config: %s", err.Error())

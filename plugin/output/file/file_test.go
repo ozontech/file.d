@@ -10,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/test"
 	"github.com/stretchr/testify/assert"
@@ -222,9 +221,7 @@ func TestStart(t *testing.T) {
 	generalPattern := fmt.Sprintf("%s/*%s", dir, extension)
 	logFilePattern := fmt.Sprintf("%s/*%s", path.Dir(targetFile), path.Base(targetFile))
 	currentLogFileSubstr := fmt.Sprintf("_%s", path.Base(targetFile))
-
-	err := cfg.Parse(config, map[string]int{"gomaxprocs": 1, "capacity": 64})
-	assert.NoError(t, err)
+	test.NewConfig(config, map[string]int{"gomaxprocs": 1, "capacity": 64})
 	totalSent := int64(0)
 	p := newPipeline(t, config)
 	assert.NotNil(t, p, "could not create new pipeline")
