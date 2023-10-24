@@ -118,11 +118,7 @@ func TestThrottle(t *testing.T) {
 		TimeField:      "",
 		DefaultLimit:   int64(defaultLimit),
 	}
-	cfg.SetDefaultValues(config)
-	err := cfg.Parse(config, nil)
-	if err != nil {
-		logger.Panic(err.Error())
-	}
+	test.NewConfig(config, nil)
 
 	tconf := testConfig{t, config, eventsTotal, iterations}
 	tconf.runPipeline()
@@ -190,11 +186,7 @@ func TestSizeThrottle(t *testing.T) {
 		DefaultLimit:   int64(defaultLimit),
 		LimitKind:      "size",
 	}
-	cfg.SetDefaultValues(config)
-	err := cfg.Parse(config, nil)
-	if err != nil {
-		logger.Panic(err.Error())
-	}
+	test.NewConfig(config, nil)
 
 	tconf := testConfig{t, config, eventsTotal, iterations}
 	tconf.runPipeline()
@@ -227,11 +219,7 @@ func TestMixedThrottle(t *testing.T) {
 		TimeField:      "",
 		DefaultLimit:   int64(defaultLimit),
 	}
-	cfg.SetDefaultValues(config)
-	err := cfg.Parse(config, nil)
-	if err != nil {
-		logger.Panic(err.Error())
-	}
+	test.NewConfig(config, nil)
 
 	tconf := testConfig{t, config, eventsTotal, iterations}
 	tconf.runPipeline()
@@ -268,12 +256,7 @@ func TestRedisThrottle(t *testing.T) {
 		TimeField:      "",
 		DefaultLimit:   int64(defaultLimit),
 	}
-
-	cfg.SetDefaultValues(config)
-	err = cfg.Parse(config, nil)
-	if err != nil {
-		logger.Panic(err.Error())
-	}
+	test.NewConfig(config, nil)
 
 	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, config, pipeline.MatchModeAnd, nil, false))
 	outEvents := 0
@@ -333,9 +316,7 @@ func TestRedisThrottleMultiPipes(t *testing.T) {
 		TimeField:      "",
 		DefaultLimit:   int64(defaultLimit),
 	}
-	cfg.SetDefaultValues(config)
-	err = cfg.Parse(config, nil)
-	require.NoError(t, err)
+	test.NewConfig(config, nil)
 
 	muFirstPipe := sync.Mutex{}
 	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, config, pipeline.MatchModeAnd, nil, false), "name")
@@ -433,11 +414,7 @@ func TestRedisThrottleWithCustomLimitData(t *testing.T) {
 		TimeField:      "",
 		DefaultLimit:   int64(defaultLimit),
 	}
-	cfg.SetDefaultValues(config)
-	err = cfg.Parse(config, nil)
-	if err != nil {
-		logger.Panic(err.Error())
-	}
+	test.NewConfig(config, nil)
 
 	p, input, output := test.NewPipelineMock(
 		test.NewActionPluginStaticInfo(factory, config, pipeline.MatchModeAnd, nil, false),
@@ -491,11 +468,7 @@ func TestThrottleLimiterExpiration(t *testing.T) {
 		DefaultLimit:      int64(defaultLimit),
 		LimiterExpiration: "300ms",
 	}
-	cfg.SetDefaultValues(config)
-	err := cfg.Parse(config, nil)
-	if err != nil {
-		logger.Panic(err.Error())
-	}
+	test.NewConfig(config, nil)
 
 	p, input, _ := test.NewPipelineMock(
 		test.NewActionPluginStaticInfo(factory, config, pipeline.MatchModeAnd, nil, false),
@@ -573,11 +546,7 @@ func TestThrottleRedisFallbackToInMemory(t *testing.T) {
 		DefaultLimit:   int64(defaultLimit),
 		LimiterBackend: "redis",
 	}
-	cfg.SetDefaultValues(config)
-	err := cfg.Parse(config, nil)
-	if err != nil {
-		logger.Panic(err.Error())
-	}
+	test.NewConfig(config, nil)
 
 	tconf := testConfig{t, config, eventsTotal, iterations}
 	tconf.runPipeline()
