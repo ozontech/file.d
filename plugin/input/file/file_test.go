@@ -585,8 +585,11 @@ func TestReadBufferOverflow(t *testing.T) {
 	iterations := 5
 	linesPerIterations := 2
 
-	config := &Config{}
-	test.NewConfig(config, nil)
+	config := &Config{
+		WatchingDir: "./",
+		OffsetsFile: "offset.yaml",
+	}
+	test.NewConfig(config, map[string]int{"gomaxprocs": 1, "capacity": 64})
 	firstLine := `"`
 	for i := 0; i < config.ReadBufferSize+overhead; i++ {
 		firstLine += "a"
@@ -748,8 +751,11 @@ func TestReadManyCharsParallelRace(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skip test in short mode")
 	}
-	config := &Config{}
-	test.NewConfig(config, nil)
+	config := &Config{
+		WatchingDir: "./",
+		OffsetsFile: "offsets.yaml",
+	}
+	test.NewConfig(config, map[string]int{"gomaxprocs": 1, "capacity": 64})
 
 	overhead := 100
 	s := ""
