@@ -4,8 +4,6 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/ozontech/file.d/cfg"
-	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/test"
 	"github.com/stretchr/testify/assert"
@@ -39,17 +37,11 @@ func TestConvert(t *testing.T) {
 }
 
 func TestConvertFail(t *testing.T) {
-	jsonData := []byte(`{"source_formats":["rfc3339nano","rfc3339","ansic"],"remove_on_fail":true}`)
-
-	pluginInfo := &pipeline.PluginStaticInfo{
-		Type:    "Config",
-		Factory: factory,
-		Config:  &Config{},
+	config := &Config{
+		SourceFormats: []string{"rfc3339nano", "rfc3339", "ansic"},
+		RemoveOnFail:  true,
 	}
-	config, err := cfg.GetPipelineConfig(pluginInfo, jsonData, map[string]int{})
-	if err != nil {
-		logger.Panicf("wrong config")
-	}
+	test.NewConfig(config, nil)
 
 	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, config, pipeline.MatchModeAnd, nil, false))
 	wg := &sync.WaitGroup{}
