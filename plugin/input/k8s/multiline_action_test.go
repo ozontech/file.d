@@ -42,17 +42,18 @@ func TestMultilineAction_Do(t *testing.T) {
 	}{
 		{
 			Name: "ok",
-			// these parts are longer than max_event_size (5+2+7=15 vs 10), but they will be passed
+			// these parts are longer than max_event_size (5+11+6=22 vs 20), but they will be passed
 			// because the buffer size check happens before adding to it
-			EventParts:    []string{`{"log": "hello"}`, `{"log": "  "}`, `{"log": "world\n"}`},
+			EventParts:    []string{`{"log": "hello"}`, `{"log": " beautiful "}`, `{"log": "world\n"}`},
 			ActionResults: []pipeline.ActionResult{pipeline.ActionCollapse, pipeline.ActionCollapse, pipeline.ActionPass},
-			ExpectedRoot:  wrapK8sInfo(`hello  world\n`, item),
+			ExpectedRoot:  wrapK8sInfo(`hello beautiful world\n`, item),
 		},
 		{
-			Name:          "continue process events",
-			EventParts:    []string{`{"log": "some "}`, `{"log": "other "}`, `{"log": "logs\n"}`},
+			Name: "continue process events",
+			// escaped log size greater than MaxEventSize, but unescaped one is not
+			EventParts:    []string{`{"log": "some "}`, `{"log": "\"otheeeeeeer\" "}`, `{"log": "logs\n"}`},
 			ActionResults: []pipeline.ActionResult{pipeline.ActionCollapse, pipeline.ActionCollapse, pipeline.ActionPass},
-			ExpectedRoot:  wrapK8sInfo(`some other logs\n`, item),
+			ExpectedRoot:  wrapK8sInfo(`some \"otheeeeeeer\" logs\n`, item),
 		},
 		{
 			Name:          "must discard long event",
@@ -63,7 +64,6 @@ func TestMultilineAction_Do(t *testing.T) {
 			Name:          "continue process events 2",
 			EventParts:    []string{`{"log": "some "}`, `{"log": "other long long long long "}`, `{"log": "event\n"}`},
 			ActionResults: []pipeline.ActionResult{pipeline.ActionCollapse, pipeline.ActionCollapse, pipeline.ActionDiscard},
-			ExpectedRoot:  wrapK8sInfo(`event\n`, item),
 		},
 	}
 	root := insaneJSON.Spawn()

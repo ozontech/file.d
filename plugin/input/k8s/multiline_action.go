@@ -1,6 +1,9 @@
 package k8s
 
 import (
+	"bytes"
+	"unicode/utf8"
+
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/pipeline"
 	"go.uber.org/zap"
@@ -31,8 +34,6 @@ func (p *MultilineAction) Start(config pipeline.AnyConfig, params *pipeline.Acti
 
 	p.allowedPodLabels = cfg.ListToMap(p.config.AllowedPodLabels)
 	p.allowedNodeLabels = cfg.ListToMap(p.config.AllowedNodeLabels)
-
-	p.eventBuf = append(p.eventBuf, '"')
 }
 
 func (p *MultilineAction) Stop() {
@@ -51,7 +52,7 @@ func (p *MultilineAction) Do(event *pipeline.Event) pipeline.ActionResult {
 		return pipeline.ActionPass
 	}
 	// don't need to unescape/escape log fields cause concatenation of escaped strings is escaped string
-	logFragment := event.Root.Dig("log").AsEscapedString()
+	logFragment := event.Root.Dig("log").AsString()
 	if logFragment == "" {
 		p.logger.Fatalf("wrong event format, it doesn't contain log field: %s", event.Root.EncodeToString())
 		panic("_")
@@ -64,12 +65,12 @@ func (p *MultilineAction) Do(event *pipeline.Event) pipeline.ActionResult {
 	predictedLen := p.eventSize + predictionLookahead
 	shouldSplit := predictedLen > p.config.SplitEventSize
 	logFragmentLen := len(logFragment)
-	isEnd := logFragment[logFragmentLen-3:logFragmentLen-1] == `\n`
+	isEnd := logFragment[logFragmentLen-1] == '\n'
 	if !isEnd && !shouldSplit {
-		sizeAfterAppend := len(p.eventBuf) + len(logFragment)
+		sizeAfterAppend := len(p.eventBuf) + logFragmentLen
 		// check buffer size before append
 		if p.maxEventSize == 0 || sizeAfterAppend < p.maxEventSize {
-			p.eventBuf = append(p.eventBuf, logFragment[1:logFragmentLen-1]...)
+			p.eventBuf = append(p.eventBuf, logFragment...)
 		} else if !p.skipNextEvent {
 			// skip event if max_event_size is exceeded
 			p.skipNextEvent = true
@@ -138,13 +139,10 @@ func (p *MultilineAction) Do(event *pipeline.Event) pipeline.ActionResult {
 		}
 	}
 
-	if len(p.eventBuf) > 1 {
-		p.eventBuf = append(p.eventBuf, logFragment[1:logFragmentLen-1]...)
-		p.eventBuf = append(p.eventBuf, '"')
-
-		l := len(event.Buf)
-		event.Buf = append(event.Buf, p.eventBuf...)
-		event.Root.AddFieldNoAlloc(event.Root, "log").MutateToEscapedString(pipeline.ByteToStringUnsafe(event.Buf[l:]))
+	if len(p.eventBuf) > 0 {
+		p.eventBuf = append(p.eventBuf, logFragment...)
+		event.Root.AddFieldNoAlloc(event.Root, "log").MutateToEscapedString(
+			pipeline.ByteToStringUnsafe(escapeBytes(p.eventBuf)))
 	}
 	p.resetLogBuf()
 
@@ -152,6 +150,94 @@ func (p *MultilineAction) Do(event *pipeline.Event) pipeline.ActionResult {
 }
 
 func (p *MultilineAction) resetLogBuf() {
-	p.eventBuf = p.eventBuf[:1]
+	p.eventBuf = p.eventBuf[:0]
 	p.eventSize = 0
+}
+
+const hex = "0123456789abcdef"
+
+// escapeBytes is based on escapeString from insaneJSON package.
+func escapeBytes(bs []byte) []byte {
+	out := make([]byte, 0, len(bs))
+
+	if !shouldEscape(bs) {
+		out = append(out, '"')
+		out = append(out, bs...)
+		out = append(out, '"')
+		return out
+	}
+
+	out = append(out, '"')
+	start := 0
+	for i := 0; i < len(bs); {
+		if b := bs[i]; b < utf8.RuneSelf {
+			if 0x20 <= b && b != '\\' && b != '"' && b != '<' && b != '>' && b != '&' {
+				i++
+				continue
+			}
+			if start < i {
+				out = append(out, bs[start:i]...)
+			}
+			switch b {
+			case '\\', '"':
+				out = append(out, '\\', b)
+			case '\n':
+				out = append(out, "\\n"...)
+			case '\r':
+				out = append(out, "\\r"...)
+			case '\t':
+				out = append(out, "\\t"...)
+			default:
+				out = append(out, "\\u00"...)
+				out = append(out, hex[b>>4], hex[b&0xf])
+			}
+			i++
+			start = i
+			continue
+		}
+
+		c, size := utf8.DecodeRune(bs[i:])
+		if c == utf8.RuneError && size == 1 {
+			if start < i {
+				out = append(out, bs[start:i]...)
+			}
+			out = append(out, "\\ufffd"...)
+			i += size
+			start = i
+			continue
+		}
+
+		if c == '\u2028' || c == '\u2029' {
+			if start < i {
+				out = append(out, bs[start:i]...)
+			}
+			out = append(out, "\\u202"...)
+			out = append(out, hex[c&0xF])
+			i += size
+			start = i
+			continue
+		}
+		i += size
+	}
+	if start < len(bs) {
+		out = append(out, bs[start:]...)
+	}
+	out = append(out, '"')
+
+	return out
+}
+
+func shouldEscape(b []byte) bool {
+	if bytes.IndexByte(b, '"') >= 0 || bytes.IndexByte(b, '\\') >= 0 {
+		return true
+	}
+
+	l := len(b)
+	for i := 0; i < l; i++ {
+		if b[i] < 0x20 {
+			return true
+		}
+	}
+
+	return false
 }
