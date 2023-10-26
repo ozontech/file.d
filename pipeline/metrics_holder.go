@@ -107,9 +107,10 @@ func (m *metricsHolder) nextMetricsGen() {
 		for _, st := range allEventStatuses() {
 			cnt.totalCounter[string(st)] = atomic.NewUint64(0)
 		}
+		subsys := formatPipelineMetricSubsys(m.pipelineName)
 		opts := prometheus.CounterOpts{
 			Namespace:   PromNamespace,
-			Subsystem:   "pipeline_" + m.pipelineName,
+			Subsystem:   subsys,
 			Name:        metrics.name + "_events_count_total",
 			Help:        fmt.Sprintf("how many events processed by pipeline %q and #%d action", m.pipelineName, index),
 			ConstLabels: map[string]string{"gen": metricsGen, "version": buildinfo.Version},
@@ -117,7 +118,7 @@ func (m *metricsHolder) nextMetricsGen() {
 		cnt.count = prometheus.NewCounterVec(opts, labels)
 		opts = prometheus.CounterOpts{
 			Namespace:   PromNamespace,
-			Subsystem:   "pipeline_" + m.pipelineName,
+			Subsystem:   subsys,
 			Name:        metrics.name + "_events_size_total",
 			Help:        fmt.Sprintf("total size of events processed by pipeline %q and #%d action", m.pipelineName, index),
 			ConstLabels: map[string]string{"gen": metricsGen, "version": buildinfo.Version},
