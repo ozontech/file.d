@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cenkalti/backoff/v3"
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/metric"
@@ -43,6 +44,7 @@ type Plugin struct {
 	avgEventSize int
 	batcher      *pipeline.Batcher
 	controller   pipeline.OutputPluginController
+	backoff      backoff.BackOff
 
 	// plugin metrics
 	sendErrorMetric prometheus.Counter
@@ -144,6 +146,23 @@ type Config struct {
 	BatchFlushTimeout  cfg.Duration `json:"batch_flush_timeout" default:"200ms" parse:"duration"` // *
 	BatchFlushTimeout_ time.Duration
 
+	// > @3@4@5@6
+	// >
+	// > Retries of insertion. If File.d cannot insert for this number of attempts,
+	// > File.d will fall with non-zero exit code.
+	Retry uint64 `json:"retry" default:"0"` // *
+
+	// > @3@4@5@6
+	// >
+	// > Retention milliseconds for retry to DB.
+	Retention  cfg.Duration `json:"retention" default:"1s" parse:"duration"` // *
+	Retention_ time.Duration
+
+	// > @3@4@5@6
+	// >
+	// > Multiplier for exponentially increase retention beetween retries
+	RetentionExponentMultiplier float64 `json:"retention_exponentially_multiplier" default:"1"` // *
+
 	// fields converted to extra fields GELF format
 	hostField                string
 	shortMessageField        string
@@ -177,6 +196,12 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.avgEventSize = params.PipelineSettings.AvgEventSize
 	p.config = config.(*Config)
 	p.registerMetrics(params.MetricCtl)
+
+	p.backoff = cfg.GetBackoff(
+		p.config.Retention_,
+		p.config.RetentionExponentMultiplier,
+		p.config.Retry,
+	)
 
 	p.config.hostField = pipeline.ByteToStringUnsafe(p.formatExtraField(nil, p.config.HostField))
 	p.config.shortMessageField = pipeline.ByteToStringUnsafe(p.formatExtraField(nil, p.config.ShortMessageField))
@@ -245,7 +270,8 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 	data.outBuf = outBuf
 	data.encodeBuf = encodeBuf
 
-	for {
+	p.backoff.Reset()
+	err := backoff.Retry(func() error {
 		if data.gelf == nil {
 			p.logger.Infof("connecting to gelf address=%s", p.config.Endpoint)
 
@@ -254,7 +280,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 				p.sendErrorMetric.Inc()
 				p.logger.Errorf("can't connect to gelf endpoint address=%s: %s", p.config.Endpoint, err.Error())
 				time.Sleep(time.Second)
-				continue
+				return err
 			}
 			data.gelf = gelf
 		}
@@ -266,10 +292,16 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 			_ = data.gelf.close()
 			data.gelf = nil
 			time.Sleep(time.Second)
-			continue
+			return err
 		}
 
-		break
+		return nil
+	}, p.backoff)
+
+	if err != nil {
+		p.logger.Fatal("can't send to gelf", zap.Error(err),
+			zap.Uint64("retries", p.config.Retry),
+		)
 	}
 }
 
