@@ -38,7 +38,7 @@ and nullable options.
 
 <br>
 
-**`retry`** *`int`* *`default=3`* 
+**`retry`** *`uint64`* *`default=3`* 
 
 Retries of insertion.
 
@@ -50,13 +50,10 @@ Retention milliseconds for retry to DB.
 
 <br>
 
-**`increase_retention_exponentially`** *`bool`* *`default=false`* 
-
-Exponentially increase retention beetween retries
-
-<br>
-
 **`db_request_timeout`** *`cfg.Duration`* *`default=3000ms`* 
+
+Multiplier for exponentially increase retention beetween retries
+*`cfg.Duration`* *`default=3000ms`* 
 
 Timeout for DB requests in milliseconds.
 
@@ -121,7 +118,7 @@ pipelines:
           type: string
       retry: 10
       retention: 1s
-      increase_retention_exponentially: true
+      retention_exponentially_multiplier: 1.5
 ```
 
 input_example.json

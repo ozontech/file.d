@@ -94,5 +94,24 @@ Operation type to be used in batch requests. It can be `index` or `create`. Defa
 
 <br>
 
+**`retry`** *`uint64`* *`default=0`* 
+
+Retries of insertion. If File.d cannot insert for this number of attempts,
+File.d will fall with non-zero exit code.
+
+<br>
+
+**`retention`** *`cfg.Duration`* *`default=1s`* 
+
+Retention milliseconds for retry to DB.
+
+<br>
+
+**`retention_exponentially_multiplier`** *`float64`* *`default=1`* 
+
+Multiplier for exponentially increase retention beetween retries
+
+<br>
+
 
 <br>*Generated using [__insane-doc__](https://github.com/vitkovskii/insane-doc)*

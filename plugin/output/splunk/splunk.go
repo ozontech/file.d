@@ -186,7 +186,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 	p.logger.Debugf("trying to send: %s", outBuf)
 
 	p.backoff.Reset()
-	backoff.Retry(func() error {
+	err := backoff.Retry(func() error {
 		err := p.send(outBuf)
 		if err != nil {
 			p.sendErrorMetric.Inc()
@@ -194,6 +194,12 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 		}
 		return err
 	}, p.backoff)
+
+	if err != nil {
+		p.logger.Fatal("can't send data to splunk", zap.Error(err),
+			zap.Uint64("retries", p.config.Retry),
+		)
+	}
 
 	p.logger.Debugf("successfully sent: %s", outBuf)
 }

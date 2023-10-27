@@ -280,7 +280,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 	})
 
 	p.backoff.Reset()
-	backoff.Retry(func() error {
+	err := backoff.Retry(func() error {
 		var err error
 		if err := p.send(data.outBuf); err != nil {
 			p.sendErrorMetric.Inc()
@@ -288,6 +288,12 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 		}
 		return err
 	}, p.backoff)
+
+	if err != nil {
+		p.logger.Fatal("can't send to the elastic", zap.Error(err),
+			zap.Uint64("retries", p.config.Retry),
+		)
+	}
 }
 
 func (p *Plugin) send(body []byte) error {

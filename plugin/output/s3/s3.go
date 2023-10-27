@@ -238,7 +238,7 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
-	// > Retries of insertion. If File.d cannot insert for this number of attempts,
+	// > Retries of upload. If File.d cannot upload for this number of attempts,
 	// > File.d will fall with non-zero exit code.
 	Retry uint64 `json:"retry" default:"0"` // *
 
@@ -532,7 +532,7 @@ func (p *Plugin) addFileJobWithBucket(bucketName string) func(filename string) {
 func (p *Plugin) uploadWork() {
 	for compressed := range p.uploadCh {
 		p.backoff.Reset()
-		backoff.Retry(func() error {
+		err := backoff.Retry(func() error {
 			p.logger.Infof("starting upload s3 object. fileName=%s, bucketName=%s", compressed.fileName, compressed.bucketName)
 			err := p.uploadToS3(compressed)
 			if err == nil {
@@ -548,6 +548,12 @@ func (p *Plugin) uploadWork() {
 			p.logger.Errorf("could not upload object: %s, error: %s", compressed, err.Error())
 			return err
 		}, p.backoff)
+
+		if err != nil {
+			p.logger.Fatal("could not upload s3 object", zap.Error(err),
+				zap.Uint64("retries", p.config.Retry),
+			)
+		}
 	}
 }
 

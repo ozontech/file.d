@@ -108,7 +108,7 @@ If the strict mode is enabled file.d fails (exit with code 1) in above examples.
 
 <br>
 
-**`retry`** *`int`* *`default=10`* 
+**`retry`** *`uint64`* *`default=10`* 
 
 Retries of insertion. If File.d cannot insert for this number of attempts,
 File.d will fall with non-zero exit code.
@@ -128,9 +128,9 @@ Retention milliseconds for retry to DB.
 
 <br>
 
-**`increase_retention_exponentially`** *`bool`* *`default=false`* 
+**`retention_exponentially_multiplier`** *`float64`* *`default=1`* 
 
-Exponentially increase retention beetween retries
+Multiplier for exponentially increase retention beetween retries
 
 <br>
 

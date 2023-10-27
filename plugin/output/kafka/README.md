@@ -57,7 +57,7 @@ After this timeout the batch will be sent even if batch isn't full.
 
 <br>
 
-**`retry`** *`int`* *`default=10`* 
+**`retry`** *`uint64`* *`default=10`* 
 
 Retries of insertion. If File.d cannot insert for this number of attempts,
 File.d will fall with non-zero exit code.
@@ -70,9 +70,9 @@ Retention milliseconds for retry.
 
 <br>
 
-**`increase_retention_exponentially`** *`bool`* *`default=false`* 
+**`retention_exponentially_multiplier`** *`float64`* *`default=1`* 
 
-Exponentially increase retention beetween retries
+Multiplier for exponentially increase retention beetween retries
 
 <br>
 

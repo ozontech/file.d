@@ -144,4 +144,23 @@ Sets upload timeout.
 
 <br>
 
+**`retry`** *`uint64`* *`default=0`* 
+
+Retries of upload. If File.d cannot upload for this number of attempts,
+File.d will fall with non-zero exit code.
+
+<br>
+
+**`retention`** *`cfg.Duration`* *`default=1s`* 
+
+Retention milliseconds for retry to upload.
+
+<br>
+
+**`retention_exponentially_multiplier`** *`float64`* *`default=1.5`* 
+
+Multiplier for exponentially increase retention beetween retries
+
+<br>
+
 <br>*Generated using [__insane-doc__](https://github.com/vitkovskii/insane-doc)*
