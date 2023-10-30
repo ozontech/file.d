@@ -38,8 +38,7 @@ type Plugin struct {
 	batcher  *pipeline.Batcher
 
 	// plugin metrics
-
-	sendErrorMetric *prometheus.CounterVec
+	sendErrorMetric prometheus.Counter
 }
 
 // ! config-params
@@ -94,6 +93,11 @@ type Config struct {
 	// >
 	// > If set, the plugin will use SASL authentications mechanism.
 	SaslEnabled bool `json:"is_sasl_enabled" default:"false"` // *
+
+	// > @3@4@5@6
+	// >
+	// > SASL mechanism to use.
+	SaslMechanism string `json:"sasl_mechanism" default:"SCRAM-SHA-512" options:"PLAIN,SCRAM-SHA-256,SCRAM-SHA-512"` // *
 
 	// > @3@4@5@6
 	// >
@@ -208,7 +212,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 		for _, e := range errs {
 			p.logger.Errorf("can't write batch: %s", e.Err.Error())
 		}
-		p.sendErrorMetric.WithLabelValues().Add(float64(len(errs)))
+		p.sendErrorMetric.Add(float64(len(errs)))
 		p.controller.Error("some events from batch were not written")
 	}
 }
@@ -230,7 +234,7 @@ func (p *Plugin) newProducer() sarama.SyncProducer {
 		config.Net.SASL.User = p.config.SaslUsername
 		config.Net.SASL.Password = p.config.SaslPassword
 		config.Net.SASL.SCRAMClientGeneratorFunc = func() sarama.SCRAMClient { return &XDGSCRAMClient{HashGeneratorFcn: SHA512} }
-		config.Net.SASL.Mechanism = sarama.SASLMechanism(sarama.SASLTypeSCRAMSHA512)
+		config.Net.SASL.Mechanism = sarama.SASLMechanism(p.config.SaslMechanism)
 	}
 
 	// kafka connect via SSL with PEM
