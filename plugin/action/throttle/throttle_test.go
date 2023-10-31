@@ -11,8 +11,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/ozontech/file.d/cfg"
-	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/test"
 )
@@ -148,11 +146,7 @@ func TestThrottleNoLimit(t *testing.T) {
 		TimeField:      "",
 		DefaultLimit:   int64(defaultLimit),
 	}
-	cfg.SetDefaultValues(config)
-	err := cfg.Parse(config, nil)
-	if err != nil {
-		logger.Panic(err.Error())
-	}
+	test.NewConfig(config, nil)
 
 	tconf := testConfig{t, config, eventsTotal, iterations}
 	tconf.runPipeline()
