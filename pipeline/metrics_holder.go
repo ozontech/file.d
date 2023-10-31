@@ -11,7 +11,10 @@ import (
 	"go.uber.org/atomic"
 )
 
-const PromNamespace = "file_d"
+const (
+	namespace       = "file_d"
+	subsystemPrefix = "pipeline_"
+)
 
 // metricHolder has nextMetricsGen method that creates new prometheus.CounterOpts,
 // differs form previous only by prometheus.CounterOpts.ConstLabels: {"gen": incValue}.
@@ -108,16 +111,16 @@ func (m *metricsHolder) nextMetricsGen() {
 			cnt.totalCounter[string(st)] = atomic.NewUint64(0)
 		}
 		opts := prometheus.CounterOpts{
-			Namespace:   PromNamespace,
-			Subsystem:   "pipeline_" + m.pipelineName,
+			Namespace:   namespace,
+			Subsystem:   subsystemPrefix + m.pipelineName,
 			Name:        metrics.name + "_events_count_total",
 			Help:        fmt.Sprintf("how many events processed by pipeline %q and #%d action", m.pipelineName, index),
 			ConstLabels: map[string]string{"gen": metricsGen, "version": buildinfo.Version},
 		}
 		cnt.count = prometheus.NewCounterVec(opts, labels)
 		opts = prometheus.CounterOpts{
-			Namespace:   PromNamespace,
-			Subsystem:   "pipeline_" + m.pipelineName,
+			Namespace:   namespace,
+			Subsystem:   subsystemPrefix + m.pipelineName,
 			Name:        metrics.name + "_events_size_total",
 			Help:        fmt.Sprintf("total size of events processed by pipeline %q and #%d action", m.pipelineName, index),
 			ConstLabels: map[string]string{"gen": metricsGen, "version": buildinfo.Version},
