@@ -147,6 +147,26 @@ func TestMove(t *testing.T) {
 			in:   `{"field1":"value1","field2":true,"field3":3}`,
 			want: `{"field1":"value1","field2":true,"field3":3}`,
 		},
+		{
+			name: "allow_target_in_fields",
+			config: &Config{
+				Fields: []cfg.FieldSelector{"field2", "field3"},
+				Mode:   modeAllow,
+				Target: "field3",
+			},
+			in:   `{"field1":"value1","field2":true,"field3":{"field3_1":3}}`,
+			want: `{"field1":"value1","field3":{"field3_1":3,"field2":true}}`,
+		},
+		{
+			name: "block_target_in_fields",
+			config: &Config{
+				Fields: []cfg.FieldSelector{"field1", "field3"},
+				Mode:   modeBlock,
+				Target: "field3",
+			},
+			in:   `{"field1":"value1","field2":true,"field3":{"field3_1":3}}`,
+			want: `{"field1":"value1","field3":{"field3_1":3,"field2":true}}`,
+		},
 	}
 	for _, tt := range cases {
 		tt := tt
