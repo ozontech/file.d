@@ -574,14 +574,21 @@ func SetDefaultValues(data interface{}) error {
 
 		vFieldKind := vField.Kind()
 
+		var err error
 		switch vFieldKind {
 		case reflect.Struct:
-			SetDefaultValues(vField.Addr().Interface())
+			err = SetDefaultValues(vField.Addr().Interface())
+			if err != nil {
+				return err
+			}
 		case reflect.Slice:
 			for i := 0; i < vField.Len(); i++ {
 				item := vField.Index(i)
 				if item.Kind() == reflect.Struct {
-					SetDefaultValues(item.Addr().Interface())
+					err = SetDefaultValues(item.Addr().Interface())
+					if err != nil {
+						return err
+					}
 				}
 			}
 		}
@@ -591,7 +598,7 @@ func SetDefaultValues(data interface{}) error {
 			switch vFieldKind {
 			case reflect.Bool:
 				currentValue := vField.Bool()
-				if currentValue != true {
+				if !currentValue {
 					if defaultValue == "true" {
 						vField.SetBool(true)
 					} else if defaultValue == "false" {
