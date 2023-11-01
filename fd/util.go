@@ -25,6 +25,7 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 	decoder := "auto"
 	isStrict := false
 	eventTimeout := pipeline.DefaultEventTimeout
+	useExpFeatures := false
 
 	if settings != nil {
 		val := settings.Get("capacity").MustInt()
@@ -85,6 +86,8 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 		antispamExceptions.Prepare()
 
 		isStrict = settings.Get("is_strict").MustBool()
+
+		useExpFeatures = settings.Get("use_exp_features").MustBool()
 	}
 
 	return &pipeline.Settings{
@@ -98,6 +101,7 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 		EventTimeout:        eventTimeout,
 		StreamField:         streamField,
 		IsStrict:            isStrict,
+		UseExpFeatures:      useExpFeatures,
 	}
 }
 

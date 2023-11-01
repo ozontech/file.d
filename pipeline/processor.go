@@ -63,6 +63,8 @@ type processor struct {
 	recoverFromPanic func()
 
 	metricsValues []string
+
+	useExpFeatures bool
 }
 
 func newProcessor(
@@ -72,6 +74,7 @@ func newProcessor(
 	output OutputPlugin,
 	streamer *streamer,
 	finalizeFn finalizeFn,
+	useExpFeatures bool,
 ) *processor {
 	processor := &processor{
 		id:            id,
@@ -84,6 +87,8 @@ func newProcessor(
 		actionWatcher: newActionWatcher(id),
 
 		metricsValues: make([]string, 0),
+
+		useExpFeatures: useExpFeatures,
 	}
 
 	return processor
@@ -253,6 +258,11 @@ func (p *processor) countEvent(event *Event, actionIndex int, status eventStatus
 
 func (p *processor) isMatch(index int, event *Event) bool {
 	info := p.actionInfos[index]
+
+	if p.useExpFeatures && info.DoIfChecker != nil {
+		return info.DoIfChecker.Check(event.Root, p.id)
+	}
+
 	conds := info.MatchConditions
 	mode := info.MatchMode
 	match := false

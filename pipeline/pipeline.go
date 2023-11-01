@@ -132,6 +132,7 @@ type Settings struct {
 	MaxEventSize        int
 	StreamField         string
 	IsStrict            bool
+	UseExpFeatures      bool
 }
 
 // New creates new pipeline. Consider using `SetupHTTPHandlers` next.
@@ -559,6 +560,7 @@ func (p *Pipeline) newProc(id int) *processor {
 		p.output,
 		p.streamer,
 		p.finalize,
+		p.settings.UseExpFeatures,
 	)
 	for j, info := range p.actionInfos {
 		plugin, _ := info.Factory()
