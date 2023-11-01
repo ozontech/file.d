@@ -21,6 +21,7 @@ type MultilineAction struct {
 
 const (
 	predictionLookahead = 128 * 1024
+	newLine             = `\n`
 )
 
 func (p *MultilineAction) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginParams) {
@@ -65,7 +66,7 @@ func (p *MultilineAction) Do(event *pipeline.Event) pipeline.ActionResult {
 	predictedLen := p.eventSize + predictionLookahead
 	shouldSplit := predictedLen > p.config.SplitEventSize
 	logFragmentLen := len(logFragment)
-	isEnd := logFragment[logFragmentLen-3:logFragmentLen-1] == `\n`
+	isEnd := logFragment[logFragmentLen-3:logFragmentLen-1] == newLine
 	if !isEnd && !shouldSplit {
 		sizeAfterAppend := len(p.eventBuf) + len(logFragment)
 		// check buffer size before append
