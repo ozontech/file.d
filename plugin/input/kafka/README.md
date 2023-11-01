@@ -57,5 +57,11 @@ The newest and oldest values is used when a consumer starts but there is no comm
 
 <br>
 
+**`consumer_max_processing_time`** *`cfg.Duration`* *`default=200ms`* 
+
+The maximum amount of time the consumer expects a message takes to process for the user.
+
+<br>
+
 
 <br>*Generated using [__insane-doc__](https://github.com/vitkovskii/insane-doc)*
