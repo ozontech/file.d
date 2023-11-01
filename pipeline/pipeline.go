@@ -51,7 +51,8 @@ type InputPluginController interface {
 }
 
 type ActionPluginController interface {
-	Propagate(event *Event) // throw held event back to pipeline
+	Propagate(event *Event)   // throw held event back to pipeline
+	IncMaxEventSizeExceeded() // inc max event size exceeded counter
 }
 
 type OutputPluginController interface {
@@ -559,6 +560,7 @@ func (p *Pipeline) newProc(id int) *processor {
 		p.output,
 		p.streamer,
 		p.finalize,
+		p.IncMaxEventSizeExceeded,
 	)
 	for j, info := range p.actionInfos {
 		plugin, _ := info.Factory()

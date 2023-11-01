@@ -63,6 +63,8 @@ type processor struct {
 	recoverFromPanic func()
 
 	metricsValues []string
+
+	incMaxEventSizeExceeded func()
 }
 
 func newProcessor(
@@ -72,6 +74,7 @@ func newProcessor(
 	output OutputPlugin,
 	streamer *streamer,
 	finalizeFn finalizeFn,
+	incMaxEventSizeExceededFn func(),
 ) *processor {
 	processor := &processor{
 		id:            id,
@@ -84,6 +87,8 @@ func newProcessor(
 		actionWatcher: newActionWatcher(id),
 
 		metricsValues: make([]string, 0),
+
+		incMaxEventSizeExceeded: incMaxEventSizeExceededFn,
 	}
 
 	return processor
@@ -339,6 +344,10 @@ func (p *processor) Propagate(event *Event) {
 	nextActionIdx := event.action
 	p.tryResetBusy(nextActionIdx - 1)
 	p.processSequence(event)
+}
+
+func (p *processor) IncMaxEventSizeExceeded() {
+	p.incMaxEventSizeExceeded()
 }
 
 func (p *processor) RecoverFromPanic() {
