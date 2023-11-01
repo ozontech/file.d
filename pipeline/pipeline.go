@@ -136,7 +136,7 @@ type Settings struct {
 
 // New creates new pipeline. Consider using `SetupHTTPHandlers` next.
 func New(name string, settings *Settings, registry *prometheus.Registry) *Pipeline {
-	metricCtl := metric.New(formatPipelineMetricSubsys(name), registry)
+	metricCtl := metric.New("pipeline_"+name, registry)
 
 	lg := logger.Instance.Named(name).Desugar()
 
@@ -830,10 +830,6 @@ func (p *Pipeline) serveActionSample(actionIndex int) func(http.ResponseWriter, 
 			writeErr(w, "Timeout while try to display an event before and after the action processing.")
 		}
 	}
-}
-
-func formatPipelineMetricSubsys(pipelineName string) string {
-	return fmt.Sprintf("pipeline_%s", pipelineName)
 }
 
 func writeErr(w io.Writer, err string) {
