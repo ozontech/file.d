@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/ozontech/file.d/cfg/matchrule"
 	"github.com/ozontech/file.d/metric"
 	"go.uber.org/zap"
 )
@@ -96,6 +97,8 @@ type ActionPluginStaticInfo struct {
 	MatchConditions  MatchConditions
 	MatchMode        MatchMode
 	MatchInvert      bool
+
+	DoIfChecker *matchrule.DoIfChecker
 }
 
 type ActionPluginInfo struct {

@@ -3,6 +3,7 @@ package fd
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -180,6 +181,72 @@ func extractMetrics(actionJSON *simplejson.Json) (string, []string, bool) {
 	return metricName, metricLabels, skipStatus
 }
 
+func extractDoIfNode(jsonNode *simplejson.Json) (matchrule.DoIfNode, error) {
+	var result, operand matchrule.DoIfNode
+	var err error
+	logicalOpNode, has := jsonNode.CheckGet("logical_op")
+	if has {
+		// logical op node
+		logicalOp := logicalOpNode.MustString()
+		operands := jsonNode.Get("operands")
+		operandsList := make([]matchrule.DoIfNode, 0)
+		for i := range operands.MustArray() {
+			opNode := operands.GetIndex(i)
+			operand, err = extractDoIfNode(opNode)
+			if err != nil {
+				return nil, fmt.Errorf("failed to extract operand node for logical op %q", logicalOp)
+			}
+			operandsList = append(operandsList, operand)
+		}
+		result, err = matchrule.NewLogicalNode([]byte(logicalOp), operandsList)
+		if err != nil {
+			return nil, fmt.Errorf("failed to init logical node: %w", err)
+		}
+		return result, nil
+	}
+	// field op node
+	fieldOpNode, has := jsonNode.CheckGet("field_op")
+	if !has {
+		return nil, errors.New("unknown type of node")
+	}
+	fieldOp := fieldOpNode.MustString()
+	fieldPath := jsonNode.Get("field").MustString()
+	caseSensitiveNode, has := jsonNode.CheckGet("case_sensitive")
+	caseSensitive := true
+	if has {
+		caseSensitive = caseSensitiveNode.MustBool()
+	}
+	values := jsonNode.Get("values")
+	vals := make([][]byte, 0)
+	for i := range values.MustArray() {
+		curValue := values.GetIndex(i).Interface()
+		if curValue == nil {
+			vals = append(vals, nil)
+		} else {
+			vals = append(vals, []byte(curValue.(string)))
+		}
+	}
+	result, err = matchrule.NewFieldOpNode(fieldOp, fieldPath, caseSensitive, vals)
+	if err != nil {
+		return nil, fmt.Errorf("failed to init field op: %w", err)
+	}
+
+	return result, nil
+}
+
+func extractDoIfChecker(actionJSON *simplejson.Json) (*matchrule.DoIfChecker, error) {
+	if actionJSON.MustMap() == nil {
+		return nil, nil
+	}
+
+	root, err := extractDoIfNode(actionJSON)
+	if err != nil {
+		return nil, fmt.Errorf("failed to extract nodes: %w", err)
+	}
+	result := matchrule.NewDoIfChecker(root)
+	return result, nil
+}
+
 func makeActionJSON(actionJSON *simplejson.Json) []byte {
 	actionJSON.Del("type")
 	actionJSON.Del("match_fields")
@@ -188,6 +255,7 @@ func makeActionJSON(actionJSON *simplejson.Json) []byte {
 	actionJSON.Del("metric_labels")
 	actionJSON.Del("metric_skip_status")
 	actionJSON.Del("match_invert")
+	actionJSON.Del("do_if")
 	configJson, err := actionJSON.Encode()
 	if err != nil {
 		logger.Panicf("can't create action json")
