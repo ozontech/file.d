@@ -3,8 +3,10 @@ package kafka
 import (
 	"context"
 	"strings"
+	"time"
 
 	"github.com/Shopify/sarama"
+	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
@@ -83,6 +85,12 @@ type Config struct {
 	// > * *`newest`* - set offset to the newest message
 	// > * *`oldest`* - set offset to the oldest message
 	Offset string `json:"offset" default:"newest" options:"oldest|newest"` // *
+
+	// > @3@4@5@6
+	// >
+	// > The maximum amount of time the consumer expects a message takes to process for the user.
+	ConsumerMaxProcessingTime  cfg.Duration `json:"consumer_max_processing_time" default:"200ms" parse:"duration"` // *
+	ConsumerMaxProcessingTime_ time.Duration
 }
 
 func init() {
@@ -155,6 +163,7 @@ func (p *Plugin) newConsumerGroup() sarama.ConsumerGroup {
 	config.Consumer.Group.Rebalance.Strategy = sarama.BalanceStrategyRoundRobin
 	config.Version = sarama.V0_10_2_0
 	config.ChannelBufferSize = p.config.ChannelBufferSize
+	config.Consumer.MaxProcessingTime = p.config.ConsumerMaxProcessingTime_
 
 	switch p.config.Offset {
 	case "oldest":
