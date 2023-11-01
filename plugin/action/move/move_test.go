@@ -1,6 +1,7 @@
 package move
 
 import (
+	"errors"
 	"sync"
 	"testing"
 
@@ -9,6 +10,54 @@ import (
 	"github.com/ozontech/file.d/test"
 	"github.com/stretchr/testify/assert"
 )
+
+func TestConfigValidate(t *testing.T) {
+	cases := []struct {
+		name    string
+		config  *Config
+		wantErr error
+	}{
+		{
+			name: "valid_allow",
+			config: &Config{
+				Mode:   modeAllow,
+				Target: "target1.target2.target3",
+			},
+		},
+		{
+			name: "valid_block",
+			config: &Config{
+				Mode:   modeBlock,
+				Target: "target",
+			},
+		},
+		{
+			name: "invalid_mode",
+			config: &Config{
+				Mode:   "unknown",
+				Target: "target",
+			},
+			wantErr: errors.New(`invalid mode "unknown"`),
+		},
+		{
+			name: "invalid_block_target",
+			config: &Config{
+				Mode:   modeBlock,
+				Target: "target1.target2.target3",
+			},
+			wantErr: errors.New(`in "block" mode, the maximum "target" depth is 1`),
+		},
+	}
+	for _, tt := range cases {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			config := test.NewConfig(tt.config, nil).(*Config)
+			assert.Equal(t, tt.wantErr, config.validate())
+		})
+	}
+}
 
 func TestMove(t *testing.T) {
 	cases := []struct {
@@ -97,7 +146,7 @@ func TestMove(t *testing.T) {
 			want: `{"target_field":{"field1":"value1","field2":true,"field3":3}}`,
 		},
 		{
-			name: "deep_target",
+			name: "allow_deep_target",
 			config: &Config{
 				Fields: []cfg.FieldSelector{"field1", "field3"},
 				Mode:   modeAllow,
@@ -105,27 +154,6 @@ func TestMove(t *testing.T) {
 			},
 			in:   `{"field1":"value1","field2":true,"field3":3}`,
 			want: `{"target1":{"target2":{"target3":{"field1":"value1","field3":3}}},"field2":true}`,
-		},
-		{
-			name: "invalid_mode",
-			config: &Config{
-				Fields: []cfg.FieldSelector{"test"},
-				Mode:   "unknown",
-				Target: "target_field",
-			},
-			in:   `{"test":"test"}`,
-			want: `{"test":"test"}`,
-		},
-		{
-			// in block mode max target depth is 1, so deep target will be ignored
-			name: "block_deep_target",
-			config: &Config{
-				Fields: []cfg.FieldSelector{"test"},
-				Mode:   modeBlock,
-				Target: "target1.target2",
-			},
-			in:   `{"test":"test"}`,
-			want: `{"test":"test"}`,
 		},
 		{
 			name: "existing_target",
@@ -145,7 +173,7 @@ func TestMove(t *testing.T) {
 				Target: "field3",
 			},
 			in:   `{"field1":"value1","field2":true,"field3":3}`,
-			want: `{"field1":"value1","field2":true,"field3":3}`,
+			want: `{"field1":"value1","field3":{"field2":true}}`,
 		},
 		{
 			name: "allow_target_in_fields",

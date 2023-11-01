@@ -107,6 +107,8 @@ The mode of the moving. Available modes are one of: `allow|block`.
 **`target`** *`cfg.FieldSelector`* *`required`* 
 
 The target field of the moving.
+> If the `target` field is existing non-object field, it will be overwritten as object field.
+
 > In `block` mode, the maximum `target` depth is 1.
 
 <br>

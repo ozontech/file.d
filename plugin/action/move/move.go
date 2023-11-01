@@ -1,7 +1,8 @@
 package move
 
 import (
-	"slices"
+	"errors"
+	"fmt"
 
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
@@ -104,9 +105,7 @@ The resulting event:
 
 type Plugin struct {
 	config *Config
-	fields [][]string
-
-	invalidConfig bool
+	fields map[string][]string
 }
 
 const (
@@ -131,19 +130,21 @@ type Config struct {
 	// > @3@4@5@6
 	// >
 	// > The target field of the moving.
+	// >> If the `target` field is existing non-object field, it will be overwritten as object field.
+	// >
 	// >> In `block` mode, the maximum `target` depth is 1.
 	Target  cfg.FieldSelector `json:"target" parse:"selector" required:"true"` // *
 	Target_ []string
 }
 
-func (c *Config) isValid() bool {
+func (c *Config) validate() error {
 	if !(c.Mode == modeAllow || c.Mode == modeBlock) {
-		return false
+		return fmt.Errorf("invalid mode %q", c.Mode)
 	}
 	if c.Mode == modeBlock && len(c.Target_) > 1 {
-		return false
+		return errors.New(`in "block" mode, the maximum "target" depth is 1`)
 	}
-	return true
+	return nil
 }
 
 func init() {
@@ -157,20 +158,18 @@ func factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 	return &Plugin{}, &Config{}
 }
 
-func (p *Plugin) Start(config pipeline.AnyConfig, _ *pipeline.ActionPluginParams) {
+func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginParams) {
 	p.config = config.(*Config)
-
-	p.invalidConfig = !p.config.isValid()
-	if p.invalidConfig {
-		return
+	if err := p.config.validate(); err != nil {
+		params.Logger.Fatalf("invalid config: %s", err.Error())
 	}
 
+	p.fields = make(map[string][]string)
 	isBlockMode := p.config.Mode == modeBlock
-	p.fields = make([][]string, 0, len(p.config.Fields))
 	for _, fs := range p.config.Fields {
 		// in `block` mode, max field depth is 1
 		if f := cfg.ParseFieldSelector(string(fs)); len(f) > 0 && (!isBlockMode || len(f) == 1) {
-			p.fields = append(p.fields, f)
+			p.fields[f[len(f)-1]] = f
 		}
 	}
 }
@@ -178,10 +177,6 @@ func (p *Plugin) Start(config pipeline.AnyConfig, _ *pipeline.ActionPluginParams
 func (p *Plugin) Stop() {}
 
 func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
-	if p.invalidConfig {
-		return pipeline.ActionPass
-	}
-
 	targetNode := event.Root.Node
 	continueDig := true
 	for _, tField := range p.config.Target_ {
@@ -195,7 +190,7 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 			node = targetNode.AddFieldNoAlloc(event.Root, tField).MutateToObject()
 			continueDig = false
 		} else if !node.IsObject() {
-			return pipeline.ActionPass
+			node.MutateToObject()
 		}
 		targetNode = node
 	}
@@ -206,9 +201,9 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	}
 
 	if p.config.Mode == modeAllow {
-		for _, field := range p.fields {
+		for name, field := range p.fields {
 			if node := event.Root.Dig(field...); node != nil && node != targetNode {
-				moveNode(field[len(field)-1], node)
+				moveNode(name, node)
 			}
 		}
 	} else {
@@ -219,7 +214,7 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 			}
 
 			name := node.AsString()
-			if slices.IndexFunc(p.fields, func(f []string) bool { return f[0] == name }) == -1 {
+			if _, ok := p.fields[name]; !ok {
 				moveNode(name, value)
 			}
 		}
