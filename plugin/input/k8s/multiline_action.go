@@ -73,7 +73,9 @@ func (p *MultilineAction) Do(event *pipeline.Event) pipeline.ActionResult {
 		if p.maxEventSize == 0 || sizeAfterAppend < p.maxEventSize {
 			p.eventBuf = append(p.eventBuf, logFragment[1:logFragmentLen-1]...)
 		} else {
-			p.controller.IncMaxEventSizeExceeded()
+			if p.controller != nil {
+				p.controller.IncMaxEventSizeExceeded()
+			}
 
 			if !p.skipNextEvent {
 				// skip event if max_event_size is exceeded
