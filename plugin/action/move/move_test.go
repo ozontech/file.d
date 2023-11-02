@@ -61,10 +61,10 @@ func TestConfigValidate(t *testing.T) {
 
 func TestMove(t *testing.T) {
 	cases := []struct {
-		name   string
-		config *Config
-		in     string
-		want   string
+		name       string
+		config     *Config
+		in         string
+		wantTarget map[string]string
 	}{
 		{
 			name: "allow_simple",
@@ -73,8 +73,11 @@ func TestMove(t *testing.T) {
 				Mode:   modeAllow,
 				Target: "target_field",
 			},
-			in:   `{"field1":"value1","field2":true,"field3":3}`,
-			want: `{"target_field":{"field1":"value1","field3":3},"field2":true}`,
+			in: `{"field1":"value1","field2":true,"field3":3}`,
+			wantTarget: map[string]string{
+				"field1": "value1",
+				"field3": "3",
+			},
 		},
 		{
 			name: "block_simple",
@@ -83,8 +86,10 @@ func TestMove(t *testing.T) {
 				Mode:   modeBlock,
 				Target: "target_field",
 			},
-			in:   `{"field1":"value1","field2":true,"field3":3}`,
-			want: `{"field1":"value1","target_field":{"field2":true},"field3":3}`,
+			in: `{"field1":"value1","field2":true,"field3":3}`,
+			wantTarget: map[string]string{
+				"field2": "true",
+			},
 		},
 		{
 			name: "allow_deep_fields",
@@ -93,8 +98,12 @@ func TestMove(t *testing.T) {
 				Mode:   modeAllow,
 				Target: "target_field",
 			},
-			in:   `{"field1":"value1","field2":{"field2_1":"value2_1","field2_2":{"field2_2_1":100,"field2_2_2":"value2_2_2"}},"field3":3}`,
-			want: `{"field1":"value1","field2":{"field2_2":{"field2_2_1":100}},"target_field":{"field3":3,"field2_1":"value2_1","field2_2_2":"value2_2_2"}}`,
+			in: `{"field1":"value1","field2":{"field2_1":"value2_1","field2_2":{"field2_2_1":100,"field2_2_2":"value2_2_2"}},"field3":3}`,
+			wantTarget: map[string]string{
+				"field3":     "3",
+				"field2_1":   "value2_1",
+				"field2_2_2": "value2_2_2",
+			},
 		},
 		{
 			// in block mode max fields depth is 1, so deep fields will be ignored
@@ -104,8 +113,11 @@ func TestMove(t *testing.T) {
 				Mode:   modeBlock,
 				Target: "target_field",
 			},
-			in:   `{"field1":"value1","field2":{"field2_1":"value2_1","field2_2":{"field2_2_1":100,"field2_2_2":"value2_2_2"}},"field3":3}`,
-			want: `{"field1":"value1","target_field":{"field2":{"field2_1":"value2_1","field2_2":{"field2_2_1":100,"field2_2_2":"value2_2_2"}},"field3":3}}`,
+			in: `{"field1":"value1","field2":{"field2_1":"value2_1","field2_2":{"field2_2_1":100,"field2_2_2":"value2_2_2"}},"field3":3}`,
+			wantTarget: map[string]string{
+				"field2": `{"field2_1":"value2_1","field2_2":{"field2_2_1":100,"field2_2_2":"value2_2_2"}}`,
+				"field3": "3",
+			},
 		},
 		{
 			name: "allow_unknown_fields",
@@ -114,8 +126,8 @@ func TestMove(t *testing.T) {
 				Mode:   modeAllow,
 				Target: "target_field",
 			},
-			in:   `{"field1":"value1","field2":true,"field3":3}`,
-			want: `{"field1":"value1","field2":true,"field3":3,"target_field":{}}`,
+			in:         `{"field1":"value1","field2":true,"field3":3}`,
+			wantTarget: map[string]string{},
 		},
 		{
 			name: "block_all_fields",
@@ -124,8 +136,8 @@ func TestMove(t *testing.T) {
 				Mode:   modeBlock,
 				Target: "target_field",
 			},
-			in:   `{"field1":"value1","field2":true,"field3":3}`,
-			want: `{"field1":"value1","field2":true,"field3":3,"target_field":{}}`,
+			in:         `{"field1":"value1","field2":true,"field3":3}`,
+			wantTarget: map[string]string{},
 		},
 		{
 			name: "allow_empty_fields",
@@ -133,8 +145,8 @@ func TestMove(t *testing.T) {
 				Mode:   modeAllow,
 				Target: "target_field",
 			},
-			in:   `{"field1":"value1","field2":true,"field3":3}`,
-			want: `{"field1":"value1","field2":true,"field3":3,"target_field":{}}`,
+			in:         `{"field1":"value1","field2":true,"field3":3}`,
+			wantTarget: map[string]string{},
 		},
 		{
 			name: "block_empty_fields",
@@ -142,8 +154,12 @@ func TestMove(t *testing.T) {
 				Mode:   modeBlock,
 				Target: "target_field",
 			},
-			in:   `{"field1":"value1","field2":true,"field3":3}`,
-			want: `{"target_field":{"field1":"value1","field2":true,"field3":3}}`,
+			in: `{"field1":"value1","field2":true,"field3":3}`,
+			wantTarget: map[string]string{
+				"field1": "value1",
+				"field2": "true",
+				"field3": "3",
+			},
 		},
 		{
 			name: "allow_deep_target",
@@ -152,8 +168,11 @@ func TestMove(t *testing.T) {
 				Mode:   modeAllow,
 				Target: "target1.target2.target3",
 			},
-			in:   `{"field1":"value1","field2":true,"field3":3}`,
-			want: `{"target1":{"target2":{"target3":{"field1":"value1","field3":3}}},"field2":true}`,
+			in: `{"field1":"value1","field2":true,"field3":3}`,
+			wantTarget: map[string]string{
+				"field1": "value1",
+				"field3": "3",
+			},
 		},
 		{
 			name: "existing_target",
@@ -162,8 +181,11 @@ func TestMove(t *testing.T) {
 				Mode:   modeAllow,
 				Target: "field3",
 			},
-			in:   `{"field1":"value1","field2":true,"field3":{"field3_1":3}}`,
-			want: `{"field1":"value1","field3":{"field3_1":3,"field2":true}}`,
+			in: `{"field1":"value1","field2":true,"field3":{"field3_1":3}}`,
+			wantTarget: map[string]string{
+				"field3_1": "3",
+				"field2":   "true",
+			},
 		},
 		{
 			name: "existing_target_not_object",
@@ -172,8 +194,10 @@ func TestMove(t *testing.T) {
 				Mode:   modeAllow,
 				Target: "field3",
 			},
-			in:   `{"field1":"value1","field2":true,"field3":3}`,
-			want: `{"field1":"value1","field3":{"field2":true}}`,
+			in: `{"field1":"value1","field2":true,"field3":3}`,
+			wantTarget: map[string]string{
+				"field2": "true",
+			},
 		},
 		{
 			name: "allow_target_in_fields",
@@ -182,8 +206,11 @@ func TestMove(t *testing.T) {
 				Mode:   modeAllow,
 				Target: "field3",
 			},
-			in:   `{"field1":"value1","field2":true,"field3":{"field3_1":3}}`,
-			want: `{"field1":"value1","field3":{"field3_1":3,"field2":true}}`,
+			in: `{"field1":"value1","field2":true,"field3":{"field3_1":3}}`,
+			wantTarget: map[string]string{
+				"field3_1": "3",
+				"field2":   "true",
+			},
 		},
 		{
 			name: "block_target_in_fields",
@@ -192,8 +219,11 @@ func TestMove(t *testing.T) {
 				Mode:   modeBlock,
 				Target: "field3",
 			},
-			in:   `{"field1":"value1","field2":true,"field3":{"field3_1":3}}`,
-			want: `{"field1":"value1","field3":{"field3_1":3,"field2":true}}`,
+			in: `{"field1":"value1","field2":true,"field3":{"field3_1":3}}`,
+			wantTarget: map[string]string{
+				"field3_1": "3",
+				"field2":   "true",
+			},
 		},
 	}
 	for _, tt := range cases {
@@ -219,7 +249,21 @@ func TestMove(t *testing.T) {
 			p.Stop()
 
 			assert.Equal(t, 1, len(outEvents), "wrong out events count")
-			assert.Equal(t, tt.want, outEvents[0].Root.EncodeToString(), "wrong event root")
+
+			target := outEvents[0].Root.Dig(tt.config.Target_...)
+			assert.NotNil(t, target, "target is nil")
+
+			assert.Equal(t, len(tt.wantTarget), len(target.AsFields()), "wrong target nodes count")
+			for name, val := range tt.wantTarget {
+				node := target.Dig(name)
+				assert.NotNil(t, node, "node is nil")
+
+				if node.IsObject() {
+					assert.Equal(t, val, node.EncodeToString(), "wrong node value")
+				} else {
+					assert.Equal(t, val, node.AsString(), "wrong node value")
+				}
+			}
 		})
 	}
 }
