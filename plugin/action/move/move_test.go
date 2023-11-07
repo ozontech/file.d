@@ -237,9 +237,22 @@ func TestMove(t *testing.T) {
 			wg := &sync.WaitGroup{}
 			wg.Add(1)
 
-			outEvents := make([]*pipeline.Event, 0)
 			output.SetOutFn(func(e *pipeline.Event) {
-				outEvents = append(outEvents, e)
+				target := e.Root.Dig(tt.config.Target_...)
+				assert.NotNil(t, target, "target is nil")
+
+				assert.Equal(t, len(tt.wantTarget), len(target.AsFields()), "wrong target nodes count")
+				for name, val := range tt.wantTarget {
+					node := target.Dig(name)
+					assert.NotNil(t, node, "node is nil")
+
+					if node.IsObject() {
+						assert.Equal(t, val, node.EncodeToString(), "wrong node value")
+					} else {
+						assert.Equal(t, val, node.AsString(), "wrong node value")
+					}
+				}
+
 				wg.Done()
 			})
 
@@ -247,23 +260,6 @@ func TestMove(t *testing.T) {
 
 			wg.Wait()
 			p.Stop()
-
-			assert.Equal(t, 1, len(outEvents), "wrong out events count")
-
-			target := outEvents[0].Root.Dig(tt.config.Target_...)
-			assert.NotNil(t, target, "target is nil")
-
-			assert.Equal(t, len(tt.wantTarget), len(target.AsFields()), "wrong target nodes count")
-			for name, val := range tt.wantTarget {
-				node := target.Dig(name)
-				assert.NotNil(t, node, "node is nil")
-
-				if node.IsObject() {
-					assert.Equal(t, val, node.EncodeToString(), "wrong node value")
-				} else {
-					assert.Equal(t, val, node.AsString(), "wrong node value")
-				}
-			}
 		})
 	}
 }
