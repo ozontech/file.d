@@ -48,6 +48,9 @@ type Plugin struct {
 	// (data before masked entry, its replacement and data after masked entry)
 	maskBuf []byte
 
+	// common match regex
+	matchRe *regexp.Regexp
+
 	valueNodes []*insaneJSON.Node
 	logger     *zap.Logger
 
@@ -171,11 +174,21 @@ func (p *Plugin) makeMetric(ctl *metric.Ctl, name, help string, labels ...string
 	return ctl.RegisterCounter(name, help, labelNames...)
 }
 
-func compileMasks(masks []Mask, logger *zap.Logger) []Mask {
+func compileMasks(masks []Mask, logger *zap.Logger) ([]Mask, *regexp.Regexp) {
+	patterns := make([]string, 0, len(masks))
 	for i := range masks {
 		compileMask(&masks[i], logger)
+		patterns = append(patterns, masks[i].Re)
 	}
-	return masks
+
+	combinedPattern := strings.Join(patterns, "|")
+	logger.Info("compiling match regexp", zap.String("re", combinedPattern))
+	matchRegex, err := regexp.Compile(combinedPattern)
+	if err != nil {
+		logger.Fatal("error on compiling match regexp", zap.Error(err))
+	}
+
+	return masks, matchRegex
 }
 
 func compileMask(m *Mask, logger *zap.Logger) {
@@ -249,7 +262,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 	p.sourceBuf = make([]byte, 0, params.PipelineSettings.AvgEventSize)
 	p.valueNodes = make([]*insaneJSON.Node, 0)
 	p.logger = params.Logger.Desugar()
-	p.config.Masks = compileMasks(p.config.Masks, p.logger)
+	p.config.Masks, p.matchRe = compileMasks(p.config.Masks, p.logger)
 	p.registerMetrics(params.MetricCtl)
 }
 
@@ -403,6 +416,10 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	p.valueNodes = getValueNodeList(root, p.valueNodes)
 	for _, v := range p.valueNodes {
 		value := v.AsBytes()
+		if !p.matchRe.Match(value) {
+			continue
+		}
+
 		p.sourceBuf = append(p.sourceBuf[:0], value...)
 		p.maskBuf = append(p.maskBuf[:0], p.sourceBuf...)
 		for i := range p.config.Masks {
