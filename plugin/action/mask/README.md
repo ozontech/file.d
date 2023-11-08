@@ -36,6 +36,12 @@ If any mask has been applied then `mask_applied_field` will be set to `mask_appl
 
 <br>
 
+**`ignore_fields`** *`[]string`* 
+
+List of the ignored event fields.
+
+<br>
+
 **`applied_metric_name`** *`string`* *`default=mask_applied_total`* 
 
 The metric name of the regular expressions applied.

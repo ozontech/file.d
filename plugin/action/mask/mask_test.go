@@ -315,10 +315,11 @@ func TestGroupNumbers(t *testing.T) {
 //nolint:funlen
 func TestGetValueNodeList(t *testing.T) {
 	suits := []struct {
-		name     string
-		input    string
-		expected []string
-		comment  string
+		name          string
+		input         string
+		ignoredFields map[string]interface{}
+		expected      []string
+		comment       string
 	}{
 		{
 			name:     "simple test",
@@ -331,6 +332,29 @@ func TestGetValueNodeList(t *testing.T) {
 			input:    `{"name1":1}`,
 			expected: []string{"1"},
 			comment:  "integer also included into result",
+		},
+		{
+			name:  "test with ignored field",
+			input: `{"name1":"value1", "ignored_field":"value2"}`,
+			ignoredFields: map[string]interface{}{
+				"ignored_field": nil,
+			},
+			expected: []string{"value1"},
+			comment:  "skip ignored_field",
+		},
+		{
+			name: "test with ignored nested field",
+			input: `{
+				"name1":"value1",
+				"nested": {
+					"ignored_field":"value2"
+				}
+			}`,
+			ignoredFields: map[string]interface{}{
+				"ignored_field": nil,
+			},
+			expected: []string{"value1"},
+			comment:  "skip nested ignored_field",
 		},
 		{
 			name: "big json with ints and nulls",
@@ -391,7 +415,7 @@ func TestGetValueNodeList(t *testing.T) {
 			defer insaneJSON.Release(root)
 
 			nodes := make([]*insaneJSON.Node, 0)
-			nodes = getValueNodeList(root.Node, nodes)
+			nodes = getValueNodeList(root.Node, nodes, s.ignoredFields)
 			assert.Equal(t, len(nodes), len(s.expected), s.comment)
 			for i := range nodes {
 				assert.Equal(t, s.expected[i], nodes[i].AsString(), s.comment)

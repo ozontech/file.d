@@ -78,6 +78,12 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
+	// > List of the ignored event fields.
+	IgnoreFields   []string `json:"ignore_fields"` // *
+	IgnoredFields_ map[string]interface{}
+
+	// > @3@4@5@6
+	// >
 	// > The metric name of the regular expressions applied.
 	AppliedMetricName string `json:"applied_metric_name" default:"mask_applied_total"` // *
 
@@ -263,6 +269,14 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 	p.valueNodes = make([]*insaneJSON.Node, 0)
 	p.logger = params.Logger.Desugar()
 	p.config.Masks, p.matchRe = compileMasks(p.config.Masks, p.logger)
+
+	if len(p.config.IgnoreFields) > 0 {
+		p.config.IgnoredFields_ = make(map[string]interface{}, len(p.config.IgnoreFields))
+		for _, field := range p.config.IgnoreFields {
+			p.config.IgnoredFields_[field] = nil
+		}
+	}
+
 	p.registerMetrics(params.MetricCtl)
 }
 
@@ -387,17 +401,19 @@ func (p *Plugin) maskValue(mask *Mask, value, buf []byte) ([]byte, bool) {
 	return value, true
 }
 
-func getValueNodeList(currentNode *insaneJSON.Node, valueNodes []*insaneJSON.Node) []*insaneJSON.Node {
+func getValueNodeList(currentNode *insaneJSON.Node, valueNodes []*insaneJSON.Node, ignoredFields map[string]interface{}) []*insaneJSON.Node {
 	switch {
 	case currentNode.IsField():
-		valueNodes = getValueNodeList(currentNode.AsFieldValue(), valueNodes)
+		if _, ignored := ignoredFields[currentNode.AsString()]; !ignored {
+			valueNodes = getValueNodeList(currentNode.AsFieldValue(), valueNodes, ignoredFields)
+		}
 	case currentNode.IsArray():
 		for _, n := range currentNode.AsArray() {
-			valueNodes = getValueNodeList(n, valueNodes)
+			valueNodes = getValueNodeList(n, valueNodes, ignoredFields)
 		}
 	case currentNode.IsObject():
 		for _, n := range currentNode.AsFields() {
-			valueNodes = getValueNodeList(n, valueNodes)
+			valueNodes = getValueNodeList(n, valueNodes, ignoredFields)
 		}
 	default:
 		valueNodes = append(valueNodes, currentNode)
@@ -413,7 +429,7 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	locApplied := false
 
 	p.valueNodes = p.valueNodes[:0]
-	p.valueNodes = getValueNodeList(root, p.valueNodes)
+	p.valueNodes = getValueNodeList(root, p.valueNodes, p.config.IgnoredFields_)
 	for _, v := range p.valueNodes {
 		value := v.AsBytes()
 		if !p.matchRe.Match(value) {
