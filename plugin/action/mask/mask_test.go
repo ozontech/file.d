@@ -176,6 +176,7 @@ func TestMaskAddExtraField(t *testing.T) {
 	config := test.NewConfig(&Config{
 		MaskAppliedField: key,
 		MaskAppliedValue: val,
+		SkipMismatched:   true,
 		Masks: []Mask{
 			{Re: kDefaultCardRegExp, Groups: []int{1, 2, 3, 4}},
 		},
@@ -481,6 +482,7 @@ func TestPlugin(t *testing.T) {
 	}
 
 	config := test.NewConfig(&Config{
+		SkipMismatched: true,
 		Masks: []Mask{
 			{
 				Re:     `a(x*)b`,
@@ -685,6 +687,7 @@ func TestPluginWithComplexMasks(t *testing.T) {
 	for _, s := range suits {
 		t.Run(s.name, func(t *testing.T) {
 			config := test.NewConfig(&Config{
+				SkipMismatched:      true,
 				Masks:               s.masks,
 				AppliedMetricName:   s.metricName,
 				AppliedMetricLabels: s.metricLabels,

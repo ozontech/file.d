@@ -69,6 +69,11 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
+	// > **Experimental feature** for best perfomance. Skips events with mismatched masks.
+	SkipMismatched bool `json:"skip_mismatched" default:"false"` // *
+
+	// > @3@4@5@6
+	// >
 	// > If any mask has been applied then `mask_applied_field` will be set to `mask_applied_value` in the event.
 	MaskAppliedField string `json:"mask_applied_field"` // *
 
@@ -191,7 +196,7 @@ func compileMasks(masks []Mask, logger *zap.Logger) ([]Mask, *regexp.Regexp) {
 	logger.Info("compiling match regexp", zap.String("re", combinedPattern))
 	matchRegex, err := regexp.Compile(combinedPattern)
 	if err != nil {
-		logger.Fatal("error on compiling match regexp", zap.Error(err))
+		logger.Warn("error on compiling match regexp", zap.Error(err))
 	}
 
 	return masks, matchRegex
@@ -432,7 +437,7 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	p.valueNodes = getValueNodeList(root, p.valueNodes, p.config.IgnoredFields_)
 	for _, v := range p.valueNodes {
 		value := v.AsBytes()
-		if !p.matchRe.Match(value) {
+		if p.config.SkipMismatched && !p.matchRe.Match(value) {
 			continue
 		}
 
