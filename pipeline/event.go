@@ -113,7 +113,6 @@ func (e *Event) reset(avgEventSize int) {
 	}
 
 	e.Buf = e.Buf[:0]
-	e.stage = eventStageInput
 	e.next = nil
 	e.action = 0
 	e.stream = nil
@@ -257,7 +256,7 @@ func (p *eventPool) get() *Event {
 	p.events[x] = nil
 	p.free2[x].Store(false)
 	p.inUseEvents.Inc()
-	event.reset(p.avgEventSize)
+	event.stage = eventStageInput
 	return event
 }
 
@@ -286,6 +285,7 @@ func (p *eventPool) back(event *Event) {
 			tries = 0
 		}
 	}
+	event.reset(p.avgEventSize)
 	p.events[x] = event
 	p.free1[x].Store(true)
 	p.inUseEvents.Dec()
