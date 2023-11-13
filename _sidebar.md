@@ -36,6 +36,7 @@
     - [keep_fields](plugin/action/keep_fields/README.md)
     - [mask](plugin/action/mask/README.md)
     - [modify](plugin/action/modify/README.md)
+    - [move](plugin/action/move/README.md)
     - [parse_es](plugin/action/parse_es/README.md)
     - [parse_re2](plugin/action/parse_re2/README.md)
     - [remove_fields](plugin/action/remove_fields/README.md)
