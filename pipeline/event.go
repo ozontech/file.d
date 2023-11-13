@@ -71,12 +71,12 @@ func newEvent() *Event {
 
 func newTimeoutEvent(stream *stream) *Event {
 	event := &Event{
-		Root:       nil,
-		stream:     stream,
-		SeqID:      stream.commitSeq.Load(),
-		SourceID:   SourceID(stream.streamID),
+		Root:   nil,
+		stream: stream,
+		//SeqID:      stream.commitSeq.Load(),
+		//SourceID:   SourceID(stream.streamID),
 		SourceName: "timeout",
-		streamName: stream.name,
+		//streamName: stream.name,
 	}
 
 	event.SetTimeoutKind()
@@ -86,12 +86,12 @@ func newTimeoutEvent(stream *stream) *Event {
 
 func unlockEvent(stream *stream) *Event {
 	event := &Event{
-		Root:       nil,
-		stream:     stream,
-		SeqID:      stream.commitSeq.Load(),
-		SourceID:   SourceID(stream.streamID),
+		Root:   nil,
+		stream: stream,
+		//SeqID:      stream.commitSeq.Load(),
+		//SourceID:   SourceID(stream.streamID),
 		SourceName: "unlock",
-		streamName: stream.name,
+		//streamName: stream.name,
 	}
 
 	event.SetUnlockKind()

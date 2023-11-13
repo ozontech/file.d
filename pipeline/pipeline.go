@@ -513,9 +513,6 @@ func (p *Pipeline) finalize(event *Event, notifyInput bool, backEvent bool) {
 		p.outputSize.Add(int64(event.Size))
 	}
 
-	// todo: avoid event.stream.commit(event)
-	event.stream.commit(event)
-
 	if !backEvent {
 		return
 	}
@@ -536,6 +533,7 @@ func (p *Pipeline) AddAction(info *ActionPluginStaticInfo) {
 
 func (p *Pipeline) initProcs() {
 	// default proc count is CPU cores * 2
+	//procCount := 1 // runtime.GOMAXPROCS(0) * 2
 	procCount := runtime.GOMAXPROCS(0) * 2
 	if p.singleProc {
 		procCount = 1

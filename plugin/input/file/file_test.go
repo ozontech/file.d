@@ -1106,7 +1106,7 @@ func TestTruncationSeq(t *testing.T) {
 // }
 
 func BenchmarkLightJsonReadPar(b *testing.B) {
-	lines := 128 * 64
+	lines := 128 * 64 * 10
 	files := 256
 
 	if fs, err := os.ReadDir(filesDir); err != nil || len(fs) == 0 {

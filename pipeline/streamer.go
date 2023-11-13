@@ -1,7 +1,6 @@
 package pipeline
 
 import (
-	"fmt"
 	"sync"
 	"time"
 
@@ -87,7 +86,7 @@ func (s *streamer) getStream(streamID StreamID, streamName StreamName) *stream {
 
 	// copy streamName because it's unsafe []byte instead of regular string
 	streamNameCopy := StreamName([]byte(streamName))
-	st = newStream(streamNameCopy, streamID, s)
+	st = newStream(s.makeCharged, s.eventTimeout)
 	s.streams[streamID][streamNameCopy] = st
 
 	return st
@@ -119,12 +118,12 @@ func (s *streamer) joinStream() *stream {
 	return stream
 }
 
-func (s *streamer) makeBlocked(stream *stream) {
-	s.blockedMu.Lock()
-	stream.blockIndex = len(s.blocked)
-	s.blocked = append(s.blocked, stream)
-	s.blockedMu.Unlock()
-}
+//func (s *streamer) makeBlocked(stream *stream) {
+//	s.blockedMu.Lock()
+//	stream.blockIndex = len(s.blocked)
+//	s.blocked = append(s.blocked, stream)
+//	s.blockedMu.Unlock()
+//}
 
 func (s *streamer) resetBlocked(stream *stream) {
 	s.blockedMu.Lock()
@@ -146,68 +145,68 @@ func (s *streamer) resetBlocked(stream *stream) {
 }
 
 func (s *streamer) heartbeat() {
-	streams := make([]*stream, 0)
-	for {
-		time.Sleep(time.Millisecond * 200)
-		if s.shouldStop.Load() {
-			return
-		}
-
-		streams = streams[:0]
-
-		s.blockedMu.Lock()
-		streams = append(streams, s.blocked...)
-		s.blockedMu.Unlock()
-
-		for _, stream := range streams {
-			stream.tryUnblock()
-		}
-	}
+	//streams := make([]*stream, 0)
+	//for {
+	//	time.Sleep(time.Millisecond * 200)
+	//	if s.shouldStop.Load() {
+	//		return
+	//	}
+	//
+	//	streams = streams[:0]
+	//
+	//	s.blockedMu.Lock()
+	//	streams = append(streams, s.blocked...)
+	//	s.blockedMu.Unlock()
+	//
+	//	for _, stream := range streams {
+	//		stream.unblockEvent()
+	//	}
+	//}
 }
 
 func (s *streamer) dump() string {
 	s.mu.Lock()
 
-	out := logger.Cond(len(s.streams) == 0, logger.Header("no streams"), func() string {
-		o := logger.Header("streams")
-		for _, s := range s.streams {
-			for _, stream := range s {
-				state := "| UNATTACHED |"
-				if stream.isAttached {
-					state = "|  ATTACHED  |"
-				}
-				if stream.isDetaching {
-					state = "| DETACHING  |"
-				}
+	//out := logger.Cond(len(s.streams) == 0, logger.Header("no streams"), func() string {
+	//	o := logger.Header("streams")
+	//	for _, s := range s.streams {
+	//		for _, stream := range s {
+	//			state := "| UNATTACHED |"
+	//			if stream.isAttached {
+	//				state = "|  ATTACHED  |"
+	//			}
+	//			if stream.isDetaching.Load() {
+	//				state = "| DETACHING  |"
+	//			}
+	//
+	//			o += fmt.Sprintf("%d(%s) state=%s, away event id=%d, commit event id=%d\n", stream.streamID, stream.name, state, stream.awaySeq, stream.commitSeq.Load())
+	//		}
+	//	}
+	//
+	//	return o
+	//})
 
-				o += fmt.Sprintf("%d(%s) state=%s, away event id=%d, commit event id=%d, len=%d\n", stream.streamID, stream.name, state, stream.awaySeq, stream.commitSeq.Load(), stream.len)
-			}
-		}
-
-		return o
-	})
-
-	out += logger.Cond(len(s.charged) == 0, logger.Header("charged streams empty"), func() string {
-		o := logger.Header("charged streams")
-		for _, s := range s.charged {
-			o += fmt.Sprintf("%d(%s)\n", s.streamID, s.name)
-		}
-
-		return o
-	})
-
-	out += logger.Cond(len(s.blocked) == 0, logger.Header("blocked streams empty"), func() string {
-		o := logger.Header("blocked streams")
-		for _, s := range s.blocked {
-			o += fmt.Sprintf("%d(%s)\n", s.streamID, s.name)
-		}
-
-		return o
-	})
+	//out += logger.Cond(len(s.charged) == 0, logger.Header("charged streams empty"), func() string {
+	//	o := logger.Header("charged streams")
+	//	for _, s := range s.charged {
+	//		o += fmt.Sprintf("%d(%s)\n", s.streamID, s.name)
+	//	}
+	//
+	//	return o
+	//})
+	//
+	//out += logger.Cond(len(s.blocked) == 0, logger.Header("blocked streams empty"), func() string {
+	//	o := logger.Header("blocked streams")
+	//	for _, s := range s.blocked {
+	//		o += fmt.Sprintf("%d(%s)\n", s.streamID, s.name)
+	//	}
+	//
+	//	return o
+	//})
 
 	s.mu.Unlock()
 
-	return out
+	return "out"
 }
 
 func (s *streamer) unblockProcessor() {
