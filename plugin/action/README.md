@@ -192,6 +192,99 @@ The resulting event could look like:
 ```
 
 [More details...](plugin/action/modify/README.md)
+## move
+It moves fields to the target field in a certain mode.
+> In `allow` mode, the specified `fields` will be moved;
+> in `block` mode, the unspecified `fields` will be moved.
+
+### Examples
+```yaml
+pipelines:
+  example_pipeline:
+    ...
+    actions:
+    - type: move
+      mode: allow
+      target: other
+      fields:
+        - log.stream
+        - zone
+    ...
+```
+The original event:
+```json
+{
+  "service": "test",
+  "log": {
+    "level": "error",
+    "message": "error occurred",
+    "ts": "2023-10-30T13:35:33.638720813Z",
+    "stream": "stderr"
+  },
+  "zone": "z501"
+}
+```
+The resulting event:
+```json
+{
+  "service": "test",
+  "log": {
+    "level": "error",
+    "message": "error occurred",
+    "ts": "2023-10-30T13:35:33.638720813Z"
+  },
+  "other": {
+    "stream": "stderr",
+    "zone": "z501"
+  }
+}
+```
+---
+```yaml
+pipelines:
+  example_pipeline:
+    ...
+    actions:
+    - type: move
+      mode: block
+      target: other
+      fields:
+        - log
+    ...
+```
+The original event:
+```json
+{
+  "service": "test",
+  "log": {
+    "level": "error",
+    "message": "error occurred",
+    "ts": "2023-10-30T13:35:33.638720813Z",
+    "stream": "stderr"
+  },
+  "zone": "z501",
+  "other": {
+    "user": "ivanivanov"
+  }
+}
+```
+The resulting event:
+```json
+{
+  "log": {
+    "level": "error",
+    "message": "error occurred",
+    "ts": "2023-10-30T13:35:33.638720813Z"
+  },
+  "other": {
+    "user": "ivanivanov",
+    "service": "test",
+    "zone": "z501"
+  }
+}
+```
+
+[More details...](plugin/action/move/README.md)
 ## parse_es
 It parses HTTP input using Elasticsearch `/_bulk` API format. It converts sources defining create/index actions to the events. Update/delete actions are ignored.
 > Check out the details in [Elastic Bulk API](https://www.elastic.co/guide/en/elasticsearch/reference/current/docs-bulk.html).
