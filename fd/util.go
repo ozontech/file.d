@@ -185,15 +185,15 @@ func extractMetrics(actionJSON *simplejson.Json) (string, []string, bool) {
 	return metricName, metricLabels, skipStatus
 }
 
-func extractDoIfNode(jsonNode *simplejson.Json) (matchrule.DoIfNode, error) {
-	var result, operand matchrule.DoIfNode
+func extractDoIfNode(jsonNode *simplejson.Json) (pipeline.DoIfNode, error) {
+	var result, operand pipeline.DoIfNode
 	var err error
 	logicalOpNode, has := jsonNode.CheckGet("logical_op")
 	if has {
 		// logical op node
 		logicalOp := logicalOpNode.MustString()
 		operands := jsonNode.Get("operands")
-		operandsList := make([]matchrule.DoIfNode, 0)
+		operandsList := make([]pipeline.DoIfNode, 0)
 		for i := range operands.MustArray() {
 			opNode := operands.GetIndex(i)
 			operand, err = extractDoIfNode(opNode)
@@ -202,7 +202,7 @@ func extractDoIfNode(jsonNode *simplejson.Json) (matchrule.DoIfNode, error) {
 			}
 			operandsList = append(operandsList, operand)
 		}
-		result, err = matchrule.NewLogicalNode([]byte(logicalOp), operandsList)
+		result, err = pipeline.NewLogicalNode([]byte(logicalOp), operandsList)
 		if err != nil {
 			return nil, fmt.Errorf("failed to init logical node: %w", err)
 		}
@@ -230,7 +230,7 @@ func extractDoIfNode(jsonNode *simplejson.Json) (matchrule.DoIfNode, error) {
 			vals = append(vals, []byte(curValue.(string)))
 		}
 	}
-	result, err = matchrule.NewFieldOpNode(fieldOp, fieldPath, caseSensitive, vals)
+	result, err = pipeline.NewFieldOpNode(fieldOp, fieldPath, caseSensitive, vals)
 	if err != nil {
 		return nil, fmt.Errorf("failed to init field op: %w", err)
 	}
@@ -238,7 +238,7 @@ func extractDoIfNode(jsonNode *simplejson.Json) (matchrule.DoIfNode, error) {
 	return result, nil
 }
 
-func extractDoIfChecker(actionJSON *simplejson.Json) (*matchrule.DoIfChecker, error) {
+func extractDoIfChecker(actionJSON *simplejson.Json) (*pipeline.DoIfChecker, error) {
 	if actionJSON.MustMap() == nil {
 		return nil, nil
 	}
@@ -247,7 +247,7 @@ func extractDoIfChecker(actionJSON *simplejson.Json) (*matchrule.DoIfChecker, er
 	if err != nil {
 		return nil, fmt.Errorf("failed to extract nodes: %w", err)
 	}
-	result := matchrule.NewDoIfChecker(root)
+	result := pipeline.NewDoIfChecker(root)
 	return result, nil
 }
 
