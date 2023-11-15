@@ -57,7 +57,7 @@ If set, the plugin will use SASL authentications mechanism.
 
 <br>
 
-**`sasl_mechanism`** *`string`* *`default=SCRAM-SHA-512`* *`options=PLAIN,SCRAM-SHA-256,SCRAM-SHA-512`* 
+**`sasl_mechanism`** *`string`* *`default=SCRAM-SHA-512`* *`options=PLAIN|SCRAM-SHA-256|SCRAM-SHA-512`* 
 
 SASL mechanism to use.
 

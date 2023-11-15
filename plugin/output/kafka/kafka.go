@@ -98,7 +98,7 @@ type Config struct {
 	// > @3@4@5@6
 	// >
 	// > SASL mechanism to use.
-	SaslMechanism string `json:"sasl_mechanism" default:"SCRAM-SHA-512" options:"PLAIN,SCRAM-SHA-256,SCRAM-SHA-512"` // *
+	SaslMechanism string `json:"sasl_mechanism" default:"SCRAM-SHA-512" options:"PLAIN|SCRAM-SHA-256|SCRAM-SHA-512"` // *
 
 	// > @3@4@5@6
 	// >

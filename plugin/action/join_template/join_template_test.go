@@ -10,7 +10,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/atomic"
 
-	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/test"
 )
@@ -417,13 +416,10 @@ func TestSimpleJoin(t *testing.T) {
 				lines = append(lines, fmt.Sprintf(format, line))
 			}
 
-			config := &Config{
+			config := test.NewConfig(&Config{
 				Field:    "log",
 				Template: "go_panic",
-			}
-
-			err := cfg.Parse(config, nil)
-			require.NoError(t, err)
+			}, nil)
 
 			p, input, output := test.NewPipelineMock(
 				test.NewActionPluginStaticInfo(
@@ -507,13 +503,10 @@ func TestJoinAfterNilNode(t *testing.T) {
 				lines = append(lines, fmt.Sprintf(formatNode, line))
 			}
 
-			config := &Config{
+			config := test.NewConfig(&Config{
 				Field:    "log",
 				Template: "go_panic",
-			}
-
-			err := cfg.Parse(config, nil)
-			require.NoError(t, err)
+			}, nil)
 
 			p, input, output := test.NewPipelineMock(
 				test.NewActionPluginStaticInfo(
