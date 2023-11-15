@@ -564,6 +564,7 @@ type DoIfChecker struct {
 	root            DoIfNode
 	uniqueFieldsLen int
 	procsFieldsVals map[int]map[string][]byte
+	fieldsValsPool  chan map[string][]byte
 	mu              sync.RWMutex
 }
 
@@ -573,6 +574,7 @@ func NewDoIfChecker(root DoIfNode) *DoIfChecker {
 		root:            root,
 		uniqueFieldsLen: len(uniqueFields),
 		procsFieldsVals: make(map[int]map[string][]byte),
+		fieldsValsPool:  make(chan map[string][]byte),
 	}
 }
 
@@ -586,6 +588,10 @@ func (c *DoIfChecker) getProcFieldsVals(procID int) map[string][]byte {
 	c.mu.RUnlock()
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	data, ok = c.procsFieldsVals[procID]
+	if ok {
+		return data
+	}
 	data = make(map[string][]byte, c.uniqueFieldsLen)
 	c.procsFieldsVals[procID] = data
 	return data
