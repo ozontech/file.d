@@ -252,9 +252,9 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 	}
 
 	data.outBuf = data.outBuf[:0]
-	for batch.Next() {
-		data.outBuf = p.appendEvent(data.outBuf, batch.Value())
-	}
+	batch.ForEach(func(event *pipeline.Event) {
+		data.outBuf = p.appendEvent(data.outBuf, event)
+	})
 
 	for {
 		if err := p.send(data.outBuf); err != nil {

@@ -77,9 +77,7 @@ func (b *Batch) reset() {
 }
 
 func (b *Batch) append(e *Event) {
-	if !e.IsChildKind() {
-		b.hasIterableEvents = true
-	}
+	b.hasIterableEvents = b.hasIterableEvents || !e.IsChildParentKind()
 
 	b.events = append(b.events, e)
 	b.eventsSize += e.Size
@@ -103,22 +101,13 @@ func (b *Batch) updateStatus() BatchStatus {
 	return b.status
 }
 
-// Next prepares the next event for reading with the Value method.
-func (b *Batch) Next() bool {
-	b.iteratorIndex++
-	for ; b.iteratorIndex < len(b.events); b.iteratorIndex++ {
-		next := b.events[b.iteratorIndex]
-		if next.IsChildParentKind() {
+func (b *Batch) ForEach(cb func(event *Event)) {
+	for _, event := range b.events {
+		if event.IsChildParentKind() {
 			continue
 		}
-		break
+		cb(event)
 	}
-
-	return b.iteratorIndex < len(b.events)
-}
-
-func (b *Batch) Value() *Event {
-	return b.events[b.iteratorIndex]
 }
 
 type Batcher struct {

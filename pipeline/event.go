@@ -60,6 +60,8 @@ func (k Kind) String() string {
 		return "TIMEOUT"
 	case eventKindChildParent:
 		return "PARENT"
+	case eventKindChild:
+		return "CHILD"
 	case EventKindUnlock:
 		return "UNLOCK"
 	}

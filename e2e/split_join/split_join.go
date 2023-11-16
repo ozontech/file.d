@@ -114,6 +114,7 @@ func (c *Config) Validate(t *testing.T) {
 `,
 		messages)
 
+	r.Equal(len(expected), len(got))
 	r.Equal(expected, got)
 	r.Equal(expectedEventsCount, gotEvents)
 }

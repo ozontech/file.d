@@ -188,8 +188,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 	outBuf := data.outBuf[:0]
 	start := 0
 	i := 0
-	for ; batch.Next(); i++ {
-		event := batch.Value()
+	batch.ForEach(func(event *pipeline.Event) {
 		outBuf, start = event.Encode(outBuf)
 
 		topic := p.config.DefaultTopic
@@ -205,7 +204,8 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 		}
 		data.messages[i].Value = outBuf[start:]
 		data.messages[i].Topic = topic
-	}
+		i++
+	})
 
 	data.outBuf = outBuf
 
