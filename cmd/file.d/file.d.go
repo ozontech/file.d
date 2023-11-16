@@ -28,6 +28,7 @@ import (
 	_ "github.com/ozontech/file.d/plugin/action/keep_fields"
 	_ "github.com/ozontech/file.d/plugin/action/mask"
 	_ "github.com/ozontech/file.d/plugin/action/modify"
+	_ "github.com/ozontech/file.d/plugin/action/move"
 	_ "github.com/ozontech/file.d/plugin/action/parse_es"
 	_ "github.com/ozontech/file.d/plugin/action/parse_re2"
 	_ "github.com/ozontech/file.d/plugin/action/remove_fields"
