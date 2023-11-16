@@ -20,9 +20,7 @@ const (
 
 type Batch struct {
 	events []*Event
-	// iteratorIndex is a next event index in the events slice to implement iterator pattern
-	iteratorIndex int
-	// hasIterableEvents is the truth if the Batch contains events that can be return by the iterator
+	// hasIterableEvents is the truth if the Batch contains iterable events
 	hasIterableEvents bool
 
 	// eventsSize contains total size of the Events in bytes
@@ -69,7 +67,6 @@ func newBatch(maxSizeCount, maxSizeBytes int, timeout time.Duration) *Batch {
 
 func (b *Batch) reset() {
 	b.events = b.events[:0]
-	b.iteratorIndex = -1
 	b.eventsSize = 0
 	b.status = BatchStatusNotReady
 	b.hasIterableEvents = false
