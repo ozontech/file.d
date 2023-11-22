@@ -27,7 +27,7 @@ List of masks.
 
 **`skip_mismatched`** *`bool`* *`default=false`* 
 
-**Experimental feature** for best perfomance. Skips events with mismatched masks.
+**Experimental feature** for best performance. Skips events with mismatched masks.
 
 <br>
 
@@ -44,7 +44,7 @@ If any mask has been applied then `mask_applied_field` will be set to `mask_appl
 
 **`ignore_fields`** *`[]string`* 
 
-List of the ignored event fields.
+List of the ignored event fields (including nested fields).
 
 <br>
 

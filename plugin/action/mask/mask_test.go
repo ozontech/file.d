@@ -318,7 +318,7 @@ func TestGetValueNodeList(t *testing.T) {
 	suits := []struct {
 		name          string
 		input         string
-		ignoredFields map[string]interface{}
+		ignoredFields map[string]struct{}
 		expected      []string
 		comment       string
 	}{
@@ -337,8 +337,8 @@ func TestGetValueNodeList(t *testing.T) {
 		{
 			name:  "test with ignored field",
 			input: `{"name1":"value1", "ignored_field":"value2"}`,
-			ignoredFields: map[string]interface{}{
-				"ignored_field": nil,
+			ignoredFields: map[string]struct{}{
+				"ignored_field": {},
 			},
 			expected: []string{"value1"},
 			comment:  "skip ignored_field",
@@ -351,8 +351,8 @@ func TestGetValueNodeList(t *testing.T) {
 					"ignored_field":"value2"
 				}
 			}`,
-			ignoredFields: map[string]interface{}{
-				"ignored_field": nil,
+			ignoredFields: map[string]struct{}{
+				"ignored_field": {},
 			},
 			expected: []string{"value1"},
 			comment:  "skip nested ignored_field",

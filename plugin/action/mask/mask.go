@@ -49,7 +49,8 @@ type Plugin struct {
 	maskBuf []byte
 
 	// common match regex
-	matchRe *regexp.Regexp
+	matchRe       *regexp.Regexp
+	ignoredFields map[string]struct{}
 
 	valueNodes []*insaneJSON.Node
 	logger     *zap.Logger
@@ -69,7 +70,7 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
-	// > **Experimental feature** for best perfomance. Skips events with mismatched masks.
+	// > **Experimental feature** for best performance. Skips events with mismatched masks.
 	SkipMismatched bool `json:"skip_mismatched" default:"false"` // *
 
 	// > @3@4@5@6
@@ -83,9 +84,8 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
-	// > List of the ignored event fields.
-	IgnoreFields   []string `json:"ignore_fields"` // *
-	IgnoredFields_ map[string]interface{}
+	// > List of the ignored event fields (including nested fields).
+	IgnoreFields []string `json:"ignore_fields"` // *
 
 	// > @3@4@5@6
 	// >
@@ -276,9 +276,9 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 	p.config.Masks, p.matchRe = compileMasks(p.config.Masks, p.logger)
 
 	if len(p.config.IgnoreFields) > 0 {
-		p.config.IgnoredFields_ = make(map[string]interface{}, len(p.config.IgnoreFields))
+		p.ignoredFields = make(map[string]struct{}, len(p.config.IgnoreFields))
 		for _, field := range p.config.IgnoreFields {
-			p.config.IgnoredFields_[field] = nil
+			p.ignoredFields[field] = struct{}{}
 		}
 	}
 
@@ -406,10 +406,13 @@ func (p *Plugin) maskValue(mask *Mask, value, buf []byte) ([]byte, bool) {
 	return value, true
 }
 
-func getValueNodeList(currentNode *insaneJSON.Node, valueNodes []*insaneJSON.Node, ignoredFields map[string]interface{}) []*insaneJSON.Node {
+func getValueNodeList(currentNode *insaneJSON.Node, valueNodes []*insaneJSON.Node, ignoredFields map[string]struct{}) []*insaneJSON.Node {
 	switch {
 	case currentNode.IsField():
-		if _, ignored := ignoredFields[currentNode.AsString()]; !ignored {
+		fieldName := currentNode.AsString()
+		// check field name in list of ignored fields
+		_, fieldIsIgnored := ignoredFields[fieldName]
+		if !fieldIsIgnored {
 			valueNodes = getValueNodeList(currentNode.AsFieldValue(), valueNodes, ignoredFields)
 		}
 	case currentNode.IsArray():
@@ -434,7 +437,7 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	locApplied := false
 
 	p.valueNodes = p.valueNodes[:0]
-	p.valueNodes = getValueNodeList(root, p.valueNodes, p.config.IgnoredFields_)
+	p.valueNodes = getValueNodeList(root, p.valueNodes, p.ignoredFields)
 	for _, v := range p.valueNodes {
 		value := v.AsBytes()
 		if p.config.SkipMismatched && !p.matchRe.Match(value) {
