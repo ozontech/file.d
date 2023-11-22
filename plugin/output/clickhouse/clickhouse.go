@@ -229,8 +229,14 @@ type Config struct {
 	// > @3@4@5@6
 	// >
 	// > Retries of insertion. If File.d cannot insert for this number of attempts,
-	// > File.d will fall with non-zero exit code.
+	// > File.d will fall with non-zero exit code or skip message (see skip_failed_insert).
 	Retry uint64 `json:"retry" default:"10"` // *
+
+	// > @3@4@5@6
+	// >
+	// > After an insert error, fall with a non-zero exit code or skip the message
+	// > **Experimental feature**
+	SkipFailedInsert bool `json:"skip_failed_insert" default:"false"` // *
 
 	// > @3@4@5@6
 	// >
@@ -515,7 +521,14 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 	}, p.backoff)
 
 	if err != nil {
-		p.logger.Fatal("can't insert to the table", zap.Error(err),
+		var errLogFunc func(msg string, fields ...zap.Field)
+		if p.config.SkipFailedInsert {
+			errLogFunc = p.logger.Error
+		} else {
+			errLogFunc = p.logger.Fatal
+		}
+
+		errLogFunc("can't insert to the table", zap.Error(err),
 			zap.Uint64("retries", p.config.Retry),
 			zap.String("table", p.config.Table))
 	}

@@ -111,7 +111,14 @@ If the strict mode is enabled file.d fails (exit with code 1) in above examples.
 **`retry`** *`uint64`* *`default=10`* 
 
 Retries of insertion. If File.d cannot insert for this number of attempts,
-File.d will fall with non-zero exit code.
+File.d will fall with non-zero exit code or skip message (see skip_failed_insert).
+
+<br>
+
+**`skip_failed_insert`** *`bool`* *`default=false`* 
+
+After an insert error, fall with a non-zero exit code or skip the message
+**Experimental feature**
 
 <br>
 

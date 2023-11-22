@@ -144,8 +144,14 @@ type Config struct {
 	// > @3@4@5@6
 	// >
 	// > Retries of insertion. If File.d cannot insert for this number of attempts,
-	// > File.d will fall with non-zero exit code.
+	// > File.d will fall with non-zero exit code or skip message (see skip_failed_insert).
 	Retry uint64 `json:"retry" default:"0"` // *
+
+	// > @3@4@5@6
+	// >
+	// > After an insert error, fall with a non-zero exit code or skip the message
+	// > **Experimental feature**
+	SkipFailedInsert bool `json:"skip_failed_insert" default:"false"` // *
 
 	// > @3@4@5@6
 	// >
@@ -281,8 +287,8 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 
 	p.backoff.Reset()
 	err := backoff.Retry(func() error {
-		var err error
-		if err := p.send(data.outBuf); err != nil {
+		err := p.send(data.outBuf)
+		if err != nil {
 			p.sendErrorMetric.Inc()
 			p.logger.Error("can't send to the elastic, will try other endpoint", zap.Error(err))
 		}
@@ -290,7 +296,14 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 	}, p.backoff)
 
 	if err != nil {
-		p.logger.Fatal("can't send to the elastic", zap.Error(err),
+		var errLogFunc func(args ...interface{})
+		if p.config.SkipFailedInsert {
+			errLogFunc = p.logger.Sugar().Error
+		} else {
+			errLogFunc = p.logger.Sugar().Fatal
+		}
+
+		errLogFunc("can't send to the elastic", zap.Error(err),
 			zap.Uint64("retries", p.config.Retry),
 		)
 	}
