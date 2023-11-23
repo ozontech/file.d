@@ -529,6 +529,78 @@ func TestPlugin(t *testing.T) {
 	}
 }
 
+func TestWithEmptyRegex(t *testing.T) {
+	suits := []struct {
+		name     string
+		input    []string
+		expected []string
+		comment  string
+	}{
+		{
+			name:     "ID&card",
+			input:    []string{`{"field1":"Индивидуальный предприниматель Иванов Иван Иванович"}`},
+			expected: []string{`{"field1":"Индивидуальный предприниматель Иванов Иван Иванович","access_token_leaked":"personal_data_leak"}`},
+			comment:  "Add field access_token_leaked",
+		},
+	}
+
+	config := test.NewConfig(&Config{
+		SkipMismatched: true,
+		Masks: []Mask{
+			{
+				MatchRules: []matchrule.RuleSet{
+					{
+						Rules: []matchrule.Rule{
+							{
+								Values:          []string{"Индивидуальный предприниматель"},
+								Mode:            matchrule.ModeContains,
+								CaseInsensitive: false,
+							},
+						},
+					},
+				},
+				AppliedField: "access_token_leaked",
+				AppliedValue: "personal_data_leak",
+				MetricName:   "sec_dataleak_predprinimatel",
+				MetricLabels: []string{"service"},
+			},
+			{
+				Re:     kDefaultCardRegExp,
+				Groups: []int{1, 2, 3, 4},
+			},
+		},
+	}, nil)
+
+	for _, s := range suits {
+		t.Run(s.name, func(t *testing.T) {
+			sut, input, output := test.NewPipelineMock(
+				test.NewActionPluginStaticInfo(factory, config,
+					pipeline.MatchModeAnd,
+					nil,
+					false))
+			wg := sync.WaitGroup{}
+			wg.Add(len(s.input))
+
+			outEvents := make([]string, 0, len(s.expected))
+			output.SetOutFn(func(e *pipeline.Event) {
+				outEvents = append(outEvents, e.Root.EncodeToString())
+				wg.Done()
+			})
+
+			for _, in := range s.input {
+				input.In(0, "test.log", 0, []byte(in))
+			}
+
+			wg.Wait()
+			sut.Stop()
+
+			for i := range s.expected {
+				assert.Equal(t, s.expected[i], outEvents[i], s.comment)
+			}
+		})
+	}
+}
+
 //nolint:funlen
 func TestPluginWithComplexMasks(t *testing.T) {
 	suits := []struct {

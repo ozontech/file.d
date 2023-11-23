@@ -26,6 +26,8 @@ pipelines:
     actions:
     - type: mask
       metric_subsystem_name: "some_name"
+      ignore_fields:
+      - trace_id
       masks:
       - mask:
         re: "\b(\d{1,4})\D?(\d{1,4})\D?(\d{1,4})\D?(\d{1,4})\b"
@@ -189,7 +191,9 @@ func compileMasks(masks []Mask, logger *zap.Logger) ([]Mask, *regexp.Regexp) {
 	patterns := make([]string, 0, len(masks))
 	for i := range masks {
 		compileMask(&masks[i], logger)
-		patterns = append(patterns, masks[i].Re)
+		if masks[i].Re != "" {
+			patterns = append(patterns, masks[i].Re)
+		}
 	}
 
 	combinedPattern := strings.Join(patterns, "|")
@@ -440,14 +444,17 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	p.valueNodes = getValueNodeList(root, p.valueNodes, p.ignoredFields)
 	for _, v := range p.valueNodes {
 		value := v.AsBytes()
-		if p.config.SkipMismatched && !p.matchRe.Match(value) {
-			continue
-		}
+		valueIsCommonMatched := p.matchRe.Match(value)
 
 		p.sourceBuf = append(p.sourceBuf[:0], value...)
 		p.maskBuf = append(p.maskBuf[:0], p.sourceBuf...)
 		for i := range p.config.Masks {
 			mask := &p.config.Masks[i]
+			if mask.Re != "" && p.config.SkipMismatched && !valueIsCommonMatched {
+				// skips messages not matched common regex
+				continue
+			}
+
 			p.maskBuf, locApplied = p.maskValue(mask, p.sourceBuf, p.maskBuf)
 			p.sourceBuf = append(p.sourceBuf[:0], p.maskBuf...)
 			if !locApplied {

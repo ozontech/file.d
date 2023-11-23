@@ -319,6 +319,8 @@ pipelines:
     actions:
     - type: mask
       metric_subsystem_name: "some_name"
+      ignore_fields:
+      - trace_id
       masks:
       - mask:
         re: "\b(\d{1,4})\D?(\d{1,4})\D?(\d{1,4})\D?(\d{1,4})\b"
