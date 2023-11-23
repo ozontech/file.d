@@ -94,16 +94,16 @@ Operation type to be used in batch requests. It can be `index` or `create`. Defa
 
 <br>
 
-**`retry`** *`uint64`* *`default=0`* 
+**`retry`** *`int`* *`default=10`* 
 
 Retries of insertion. If File.d cannot insert for this number of attempts,
-File.d will fall with non-zero exit code or skip message (see skip_failed_insert).
+File.d will fall with non-zero exit code or skip message (see fatal_on_failed_insert).
 
 <br>
 
-**`skip_failed_insert`** *`bool`* *`default=false`* 
+**`fatal_on_failed_insert`** *`bool`* *`default=false`* 
 
-After an insert error, fall with a non-zero exit code or skip the message
+After an insert error, fall with a non-zero exit code or not
 **Experimental feature**
 
 <br>
@@ -114,7 +114,7 @@ Retention milliseconds for retry to DB.
 
 <br>
 
-**`retention_exponentially_multiplier`** *`float64`* *`default=1`* 
+**`retention_exponentially_multiplier`** *`int`* *`default=2`* 
 
 Multiplier for exponentially increase retention beetween retries
 

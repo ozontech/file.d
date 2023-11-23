@@ -5,7 +5,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
+	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/stretchr/testify/assert"
 	insaneJSON "github.com/vitkovskii/insane-json"
@@ -48,7 +50,8 @@ func TestSplunk(t *testing.T) {
 				config: &Config{
 					Endpoint: testServer.URL,
 				},
-				logger: zap.NewExample().Sugar(),
+				backoff: cfg.GetBackoff(1*time.Second, 1, 2),
+				logger:  zap.NewExample().Sugar(),
 			}
 
 			batch := pipeline.NewPreparedBatch([]*pipeline.Event{

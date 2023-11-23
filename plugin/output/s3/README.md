@@ -22,9 +22,9 @@ pipelines:
       type: http
       emulate_mode: "no"
       address: ":9200"
-      actions:
-        - type: json_decode
-          field: message
+	actions:
+	- type: json_decode
+		field: message
     output:
       type: s3
       file_config:
@@ -144,10 +144,17 @@ Sets upload timeout.
 
 <br>
 
-**`retry`** *`uint64`* *`default=0`* 
+**`retry`** *`int`* *`default=10`* 
 
 Retries of upload. If File.d cannot upload for this number of attempts,
-File.d will fall with non-zero exit code.
+File.d will fall with non-zero exit code or skip message (see fatal_on_failed_insert).
+
+<br>
+
+**`fatal_on_failed_insert`** *`bool`* *`default=false`* 
+
+After an insert error, fall with a non-zero exit code or not
+**Experimental feature**
 
 <br>
 
@@ -157,7 +164,7 @@ Retention milliseconds for retry to upload.
 
 <br>
 
-**`retention_exponentially_multiplier`** *`float64`* *`default=1.5`* 
+**`retention_exponentially_multiplier`** *`int`* *`default=2`* 
 
 Multiplier for exponentially increase retention beetween retries
 

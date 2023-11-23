@@ -229,14 +229,14 @@ type Config struct {
 	// > @3@4@5@6
 	// >
 	// > Retries of insertion. If File.d cannot insert for this number of attempts,
-	// > File.d will fall with non-zero exit code or skip message (see skip_failed_insert).
-	Retry uint64 `json:"retry" default:"10"` // *
+	// > File.d will fall with non-zero exit code or skip message (see fatal_on_failed_insert).
+	Retry int `json:"retry" default:"10"` // *
 
 	// > @3@4@5@6
 	// >
-	// > After an insert error, fall with a non-zero exit code or skip the message
+	// > After an insert error, fall with a non-zero exit code or not
 	// > **Experimental feature**
-	SkipFailedInsert bool `json:"skip_failed_insert" default:"false"` // *
+	FatalOnFailedInsert bool `json:"fatal_on_failed_insert" default:"false"` // *
 
 	// > @3@4@5@6
 	// >
@@ -253,7 +253,7 @@ type Config struct {
 	// > @3@4@5@6
 	// >
 	// > Multiplier for exponentially increase retention beetween retries
-	RetentionExponentMultiplier float64 `json:"retention_exponentially_multiplier" default:"1"` // *
+	RetentionExponentMultiplier int `json:"retention_exponentially_multiplier" default:"2"` // *
 
 	// > @3@4@5@6
 	// >
@@ -341,9 +341,6 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.registerMetrics(params.MetricCtl)
 	p.ctx, p.cancelFunc = context.WithCancel(context.Background())
 
-	if p.config.Retry < 1 {
-		p.logger.Fatal("'retry' can't be <1")
-	}
 	if p.config.Retention_ < 1 {
 		p.logger.Fatal("'retention' can't be <1")
 	}
@@ -420,8 +417,8 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 
 	p.backoff = cfg.GetBackoff(
 		p.config.Retention_,
-		p.config.RetentionExponentMultiplier,
-		p.config.Retry,
+		float64(p.config.RetentionExponentMultiplier),
+		uint64(p.config.Retry),
 	)
 
 	p.batcher = pipeline.NewBatcher(pipeline.BatcherOptions{
@@ -522,14 +519,14 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 
 	if err != nil {
 		var errLogFunc func(msg string, fields ...zap.Field)
-		if p.config.SkipFailedInsert {
-			errLogFunc = p.logger.Error
-		} else {
+		if p.config.FatalOnFailedInsert {
 			errLogFunc = p.logger.Fatal
+		} else {
+			errLogFunc = p.logger.Error
 		}
 
 		errLogFunc("can't insert to the table", zap.Error(err),
-			zap.Uint64("retries", p.config.Retry),
+			zap.Int("retries", p.config.Retry),
 			zap.String("table", p.config.Table))
 	}
 }

@@ -38,9 +38,17 @@ and nullable options.
 
 <br>
 
-**`retry`** *`uint64`* *`default=3`* 
+**`retry`** *`int`* *`default=10`* 
 
-Retries of insertion.
+Retries of insertion. If File.d cannot insert for this number of attempts,
+File.d will fall with non-zero exit code or skip message (see fatal_on_failed_insert).
+
+<br>
+
+**`fatal_on_failed_insert`** *`bool`* *`default=false`* 
+
+After an insert error, fall with a non-zero exit code or not
+**Experimental feature**
 
 <br>
 

@@ -10,6 +10,7 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/jackc/pgconn"
 	"github.com/jackc/pgproto3/v2"
+	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
@@ -87,6 +88,7 @@ func TestPrivateOut(t *testing.T) {
 		queryBuilder: builder,
 		pool:         pool,
 		logger:       testLogger,
+		backoff:      cfg.GetBackoff(1*time.Second, 1, 2),
 		ctx:          ctx,
 	}
 
@@ -162,6 +164,7 @@ func TestPrivateOutWithRetry(t *testing.T) {
 		queryBuilder: builder,
 		pool:         pool,
 		logger:       testLogger,
+		backoff:      cfg.GetBackoff(1*time.Second, 1, 2),
 		ctx:          ctx,
 	}
 
@@ -216,6 +219,7 @@ func TestPrivateOutNoGoodEvents(t *testing.T) {
 		config:       &config,
 		queryBuilder: builder,
 		logger:       testLogger,
+		backoff:      cfg.GetBackoff(1*time.Second, 1, 2),
 	}
 
 	p.registerMetrics(metric.NewCtl("test", prometheus.NewRegistry()))
@@ -295,6 +299,7 @@ func TestPrivateOutDeduplicatedEvents(t *testing.T) {
 		queryBuilder: builder,
 		pool:         pool,
 		logger:       testLogger,
+		backoff:      cfg.GetBackoff(1*time.Second, 1, 2),
 		ctx:          ctx,
 	}
 
@@ -362,6 +367,7 @@ func TestPrivateOutWrongTypeInField(t *testing.T) {
 		config:       &config,
 		queryBuilder: builder,
 		logger:       testLogger,
+		backoff:      cfg.GetBackoff(1*time.Second, 1, 2),
 	}
 
 	p.registerMetrics(metric.NewCtl("test", prometheus.NewRegistry()))
@@ -466,6 +472,7 @@ func TestPrivateOutFewUniqueEventsYetWithDeduplicationEventsAnpooladEvents(t *te
 		queryBuilder: builder,
 		pool:         pool,
 		logger:       testLogger,
+		backoff:      cfg.GetBackoff(1*time.Second, 1, 2),
 		ctx:          ctx,
 	}
 

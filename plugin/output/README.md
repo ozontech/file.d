@@ -72,9 +72,9 @@ pipelines:
       type: http
       emulate_mode: "no"
       address: ":9200"
-      actions:
-        - type: json_decode
-          field: message
+	actions:
+	- type: json_decode
+		field: message
     output:
       type: s3
       file_config:

@@ -48,9 +48,9 @@ pipelines:
       type: http
       emulate_mode: "no"
       address: ":9200"
-      actions:
-        - type: json_decode
-          field: message
+	actions:
+	- type: json_decode
+		field: message
     output:
       type: s3
       file_config:
@@ -239,8 +239,14 @@ type Config struct {
 	// > @3@4@5@6
 	// >
 	// > Retries of upload. If File.d cannot upload for this number of attempts,
-	// > File.d will fall with non-zero exit code.
-	Retry uint64 `json:"retry" default:"0"` // *
+	// > File.d will fall with non-zero exit code or skip message (see fatal_on_failed_insert).
+	Retry int `json:"retry" default:"10"` // *
+
+	// > @3@4@5@6
+	// >
+	// > After an insert error, fall with a non-zero exit code or not
+	// > **Experimental feature**
+	FatalOnFailedInsert bool `json:"fatal_on_failed_insert" default:"false"` // *
 
 	// > @3@4@5@6
 	// >
@@ -251,7 +257,7 @@ type Config struct {
 	// > @3@4@5@6
 	// >
 	// > Multiplier for exponentially increase retention beetween retries
-	RetentionExponentMultiplier float64 `json:"retention_exponentially_multiplier" default:"1.5"` // *
+	RetentionExponentMultiplier int `json:"retention_exponentially_multiplier" default:"2"` // *
 }
 
 func (c *Config) IsMultiBucketExists(bucketName string) bool {
@@ -299,8 +305,8 @@ func (p *Plugin) StartWithMinio(config pipeline.AnyConfig, params *pipeline.Outp
 
 	p.backoff = cfg.GetBackoff(
 		p.config.Retention_,
-		p.config.RetentionExponentMultiplier,
-		p.config.Retry,
+		float64(p.config.RetentionExponentMultiplier),
+		uint64(p.config.Retry),
 	)
 
 	// outPlugCount is defaultBucket + multi_buckets count, use to set maps size.
@@ -550,8 +556,15 @@ func (p *Plugin) uploadWork() {
 		}, p.backoff)
 
 		if err != nil {
-			p.logger.Fatal("could not upload s3 object", zap.Error(err),
-				zap.Uint64("retries", p.config.Retry),
+			var errLogFunc func(args ...interface{})
+			if p.config.FatalOnFailedInsert {
+				errLogFunc = p.logger.Fatal
+			} else {
+				errLogFunc = p.logger.Error
+			}
+
+			errLogFunc("could not upload s3 object", zap.Error(err),
+				zap.Int("retries", p.config.Retry),
 			)
 		}
 	}

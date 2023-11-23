@@ -149,8 +149,14 @@ type Config struct {
 	// > @3@4@5@6
 	// >
 	// > Retries of insertion. If File.d cannot insert for this number of attempts,
-	// > File.d will fall with non-zero exit code.
-	Retry uint64 `json:"retry" default:"0"` // *
+	// > File.d will fall with non-zero exit code or skip message (see fatal_on_failed_insert).
+	Retry int `json:"retry" default:"0"` // *
+
+	// > @3@4@5@6
+	// >
+	// > After an insert error, fall with a non-zero exit code or not
+	// > **Experimental feature**
+	FatalOnFailedInsert bool `json:"fatal_on_failed_insert" default:"false"` // *
 
 	// > @3@4@5@6
 	// >
@@ -161,7 +167,7 @@ type Config struct {
 	// > @3@4@5@6
 	// >
 	// > Multiplier for exponentially increase retention beetween retries
-	RetentionExponentMultiplier float64 `json:"retention_exponentially_multiplier" default:"1"` // *
+	RetentionExponentMultiplier int `json:"retention_exponentially_multiplier" default:"2"` // *
 
 	// fields converted to extra fields GELF format
 	hostField                string
@@ -199,8 +205,8 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 
 	p.backoff = cfg.GetBackoff(
 		p.config.Retention_,
-		p.config.RetentionExponentMultiplier,
-		p.config.Retry,
+		float64(p.config.RetentionExponentMultiplier),
+		uint64(p.config.Retry),
 	)
 
 	p.config.hostField = pipeline.ByteToStringUnsafe(p.formatExtraField(nil, p.config.HostField))
@@ -299,8 +305,15 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 	}, p.backoff)
 
 	if err != nil {
-		p.logger.Fatal("can't send to gelf", zap.Error(err),
-			zap.Uint64("retries", p.config.Retry),
+		var errLogFunc func(args ...interface{})
+		if p.config.FatalOnFailedInsert {
+			errLogFunc = p.logger.Fatal
+		} else {
+			errLogFunc = p.logger.Error
+		}
+
+		errLogFunc("can't send to gelf", zap.Error(err),
+			zap.Int("retries", p.config.Retry),
 		)
 	}
 }
