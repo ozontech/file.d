@@ -132,7 +132,6 @@ type Settings struct {
 	MaxEventSize        int
 	StreamField         string
 	IsStrict            bool
-	UseExpFeatures      bool
 }
 
 // New creates new pipeline. Consider using `SetupHTTPHandlers` next.
@@ -560,7 +559,6 @@ func (p *Pipeline) newProc(id int) *processor {
 		p.output,
 		p.streamer,
 		p.finalize,
-		p.settings.UseExpFeatures,
 	)
 	for j, info := range p.actionInfos {
 		plugin, _ := info.Factory()
@@ -607,8 +605,10 @@ func (p *Pipeline) expandProcs() {
 		p.logger.Warn("too many processors", zap.Int32("new", to))
 	}
 
-	for x := 0; x < int(to-from); x++ {
-		proc := p.newProc(p.Procs[from-1].id + x + 1)
+	// proc IDs are added starting from the next after the last one
+	// so all procs have unique IDs
+	for x := 1; x <= int(to-from); x++ {
+		proc := p.newProc(p.Procs[from-1].id + x)
 		p.Procs = append(p.Procs, proc)
 		proc.start(p.actionParams, p.logger.Sugar())
 	}
