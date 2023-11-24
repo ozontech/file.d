@@ -2,6 +2,7 @@ package pipeline
 
 import (
 	"github.com/ozontech/file.d/logger"
+	insaneJSON "github.com/vitkovskii/insane-json"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
 )
@@ -10,17 +11,19 @@ type ActionResult int
 
 const (
 	// ActionPass pass event to the next action in a pipeline
-	ActionPass ActionResult = 0
+	ActionPass ActionResult = iota
 	// ActionCollapse skip further processing of event and request next event from the same stream and source as current
 	// plugin may receive event with EventKindTimeout if it takes to long to read next event from same stream
-	ActionCollapse ActionResult = 2
+	ActionCollapse
 	// ActionDiscard skip further processing of event and request next event from any stream and source
-	ActionDiscard ActionResult = 1
+	ActionDiscard
 	// ActionHold hold event in a plugin and request next event from the same stream and source as current.
 	// same as ActionCollapse but held event should be manually committed or returned into pipeline.
 	// check out Commit()/Propagate() functions in InputPluginController.
 	// plugin may receive event with EventKindTimeout if it takes to long to read next event from same stream.
-	ActionHold ActionResult = 3
+	ActionHold
+	// ActionBreak abort the event processing and pass it to an output.
+	ActionBreak
 )
 
 type eventStatus string
@@ -32,6 +35,7 @@ const (
 	eventStatusDiscarded  eventStatus = "discarded"
 	eventStatusCollapse   eventStatus = "collapsed"
 	eventStatusHold       eventStatus = "held"
+	eventStatusBroke      eventStatus = "broke"
 )
 
 func allEventStatuses() []eventStatus {
@@ -187,11 +191,17 @@ func (p *processor) doActions(event *Event) (isPassed bool, lastAction int) {
 
 		p.actionWatcher.setEventBefore(index, event)
 
-		switch action.Do(event) {
+		result := action.Do(event)
+		switch result {
 		case ActionPass:
 			p.countEvent(event, index, eventStatusPassed)
 			p.tryResetBusy(index)
 			p.actionWatcher.setEventAfter(index, event, eventStatusPassed)
+		case ActionBreak:
+			p.countEvent(event, index, eventStatusBroke)
+			p.tryResetBusy(index)
+			p.actionWatcher.setEventAfter(index, event, eventStatusBroke)
+			return true, index
 		case ActionDiscard:
 			p.countEvent(event, index, eventStatusDiscarded)
 			p.tryResetBusy(index)
@@ -339,6 +349,43 @@ func (p *processor) Propagate(event *Event) {
 	nextActionIdx := event.action
 	p.tryResetBusy(nextActionIdx - 1)
 	p.processSequence(event)
+}
+
+// Spawn the children of the parent and process in the actions.
+// Any attempts to ActionHold or ActionCollapse the event will be suppressed by timeout events.
+func (p *processor) Spawn(parent *Event, nodes []*insaneJSON.Node) {
+	parent.SetChildParentKind()
+	nextActionIdx := parent.action + 1
+
+	for _, node := range nodes {
+		// we can't reuse parent event (using insaneJSON.Root{Node: child}
+		// because of nil decoder
+		child := &Event{Root: insaneJSON.Spawn()}
+		parent.children = append(parent.children, child)
+		child.Root.MutateToNode(node)
+		child.SetChildKind()
+		child.action = nextActionIdx
+
+		ok, _ := p.doActions(child)
+		if ok {
+			child.stage = eventStageOutput
+			p.output.Out(child)
+		}
+	}
+
+	if p.busyActionsTotal == 0 {
+		return
+	}
+
+	for i, busy := range p.busyActions {
+		if !busy {
+			continue
+		}
+
+		timeout := newTimeoutEvent(parent.stream)
+		timeout.action = i
+		p.doActions(timeout)
+	}
 }
 
 func (p *processor) RecoverFromPanic() {

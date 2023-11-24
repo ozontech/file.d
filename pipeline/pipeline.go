@@ -17,6 +17,7 @@ import (
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline/antispam"
 	"github.com/prometheus/client_golang/prometheus"
+	insaneJSON "github.com/vitkovskii/insane-json"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -52,6 +53,7 @@ type InputPluginController interface {
 
 type ActionPluginController interface {
 	Propagate(event *Event) // throw held event back to pipeline
+	Spawn(parent *Event, nodes []*insaneJSON.Node)
 }
 
 type OutputPluginController interface {
@@ -503,7 +505,7 @@ func (p *Pipeline) Error(err string) {
 }
 
 func (p *Pipeline) finalize(event *Event, notifyInput bool, backEvent bool) {
-	if event.IsTimeoutKind() {
+	if event.IsTimeoutKind() || event.IsChildKind() {
 		return
 	}
 
@@ -526,6 +528,9 @@ func (p *Pipeline) finalize(event *Event, notifyInput bool, backEvent bool) {
 		p.eventLogMu.Unlock()
 	}
 
+	for _, e := range event.children {
+		insaneJSON.Release(e.Root)
+	}
 	p.eventPool.back(event)
 }
 

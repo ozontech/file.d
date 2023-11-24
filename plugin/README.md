@@ -495,6 +495,31 @@ The resulting event could look like:
 It adds time field to the event.
 
 [More details...](plugin/action/set_time/README.md)
+## split
+It splits array of objects into different events.
+
+For example:
+```json
+{
+	"data": [
+		{ "message": "go" },
+		{ "message": "rust" },
+		{ "message": "c++" }
+	]
+}
+```
+
+Split produces:
+```json
+{ "message": "go" },
+{ "message": "rust" },
+{ "message": "c++" }
+```
+
+Parent event will be discarded.
+If the value of the JSON field is not an array of objects, then the event will be pass unchanged.
+
+[More details...](plugin/action/split/README.md)
 ## throttle
 It discards the events if pipeline throughput gets higher than a configured threshold.
 

@@ -1,0 +1,22 @@
+pipelines:
+  split_join:
+    settings:
+      event_timeout: 1h
+      capacity: 128
+    input:
+      type: file
+      offsets_op: reset
+      maintenance_interval: 1m
+    actions:
+      - type: debug
+        message: input event sample
+      - type: split
+        field: data
+      - type: join
+        field: message
+        start: '/^start/'
+        continue: '/^continue/'
+      - type: debug
+        message: output event sample
+    output:
+      type: kafka
