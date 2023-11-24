@@ -25,7 +25,6 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 	decoder := "auto"
 	isStrict := false
 	eventTimeout := pipeline.DefaultEventTimeout
-	useExpFeatures := false
 
 	if settings != nil {
 		val := settings.Get("capacity").MustInt()
@@ -86,8 +85,6 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 		antispamExceptions.Prepare()
 
 		isStrict = settings.Get("is_strict").MustBool()
-
-		useExpFeatures = settings.Get("use_exp_features").MustBool()
 	}
 
 	return &pipeline.Settings{
@@ -101,7 +98,6 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 		EventTimeout:        eventTimeout,
 		StreamField:         streamField,
 		IsStrict:            isStrict,
-		UseExpFeatures:      useExpFeatures,
 	}
 }
 
@@ -185,35 +181,24 @@ func extractMetrics(actionJSON *simplejson.Json) (string, []string, bool) {
 	return metricName, metricLabels, skipStatus
 }
 
-func extractDoIfNode(jsonNode *simplejson.Json) (pipeline.DoIfNode, error) {
-	var result, operand pipeline.DoIfNode
+var (
+	doIfLogicalOpNodes = map[string]struct{}{
+		"and": struct{}{},
+		"not": struct{}{},
+		"or":  struct{}{},
+	}
+	doIfFieldOpNodes = map[string]struct{}{
+		"equal":    struct{}{},
+		"contains": struct{}{},
+		"prefix":   struct{}{},
+		"suffix":   struct{}{},
+		"regex":    struct{}{},
+	}
+)
+
+func extractFieldOpNode(opName string, jsonNode *simplejson.Json) (pipeline.DoIfNode, error) {
+	var result pipeline.DoIfNode
 	var err error
-	logicalOpNode, has := jsonNode.CheckGet("logical_op")
-	if has {
-		// logical op node
-		logicalOp := logicalOpNode.MustString()
-		operands := jsonNode.Get("operands")
-		operandsList := make([]pipeline.DoIfNode, 0)
-		for i := range operands.MustArray() {
-			opNode := operands.GetIndex(i)
-			operand, err = extractDoIfNode(opNode)
-			if err != nil {
-				return nil, fmt.Errorf("failed to extract operand node for logical op %q", logicalOp)
-			}
-			operandsList = append(operandsList, operand)
-		}
-		result, err = pipeline.NewLogicalNode([]byte(logicalOp), operandsList)
-		if err != nil {
-			return nil, fmt.Errorf("failed to init logical node: %w", err)
-		}
-		return result, nil
-	}
-	// field op node
-	fieldOpNode, has := jsonNode.CheckGet("field_op")
-	if !has {
-		return nil, errors.New("unknown type of node")
-	}
-	fieldOp := fieldOpNode.MustString()
 	fieldPath := jsonNode.Get("field").MustString()
 	caseSensitiveNode, has := jsonNode.CheckGet("case_sensitive")
 	caseSensitive := true
@@ -230,12 +215,46 @@ func extractDoIfNode(jsonNode *simplejson.Json) (pipeline.DoIfNode, error) {
 			vals = append(vals, []byte(curValue.(string)))
 		}
 	}
-	result, err = pipeline.NewFieldOpNode(fieldOp, fieldPath, caseSensitive, vals)
+	result, err = pipeline.NewFieldOpNode(opName, fieldPath, caseSensitive, vals)
 	if err != nil {
 		return nil, fmt.Errorf("failed to init field op: %w", err)
 	}
 
 	return result, nil
+}
+
+func extractLogicalOpNode(opName string, jsonNode *simplejson.Json) (pipeline.DoIfNode, error) {
+	var result, operand pipeline.DoIfNode
+	var err error
+	operands := jsonNode.Get("operands")
+	operandsList := make([]pipeline.DoIfNode, 0)
+	for i := range operands.MustArray() {
+		opNode := operands.GetIndex(i)
+		operand, err = extractDoIfNode(opNode)
+		if err != nil {
+			return nil, fmt.Errorf("failed to extract operand node for logical op %q", opName)
+		}
+		operandsList = append(operandsList, operand)
+	}
+	result, err = pipeline.NewLogicalNode(opName, operandsList)
+	if err != nil {
+		return nil, fmt.Errorf("failed to init logical node: %w", err)
+	}
+	return result, nil
+}
+
+func extractDoIfNode(jsonNode *simplejson.Json) (pipeline.DoIfNode, error) {
+	opNameNode, has := jsonNode.CheckGet("op")
+	if !has {
+		return nil, errors.New(`"op" field not found`)
+	}
+	opName := opNameNode.MustString()
+	if _, has := doIfLogicalOpNodes[opName]; has {
+		return extractLogicalOpNode(opName, jsonNode)
+	} else if _, has := doIfFieldOpNodes[opName]; has {
+		return extractFieldOpNode(opName, jsonNode)
+	}
+	return nil, fmt.Errorf("unknown op %q", opName)
 }
 
 func extractDoIfChecker(actionJSON *simplejson.Json) (*pipeline.DoIfChecker, error) {
