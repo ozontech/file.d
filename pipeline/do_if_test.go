@@ -40,7 +40,7 @@ func buildTree(node treeNode) (DoIfNode, error) {
 			operands = append(operands, operand)
 		}
 		return NewLogicalNode(
-			[]byte(node.logicalOp),
+			node.logicalOp,
 			operands,
 		)
 	}
@@ -546,6 +546,21 @@ func TestCheck(t *testing.T) {
 				{`{"pod":"my-TEST-2"}`, true},
 			},
 		},
+		{
+			name: "ok_equal_nil_or_empty_string",
+			tree: treeNode{
+				fieldOp:       "equal",
+				fieldName:     "test-field",
+				caseSensitive: false,
+				values:        [][]byte{nil, []byte("")},
+			},
+			data: []argsResp{
+				{`{"pod":"my-teST-1"}`, true},
+				{`{"pod":"my-test-2","test-field":null}`, true},
+				{`{"pod":"my-test-3","test-field":""}`, true},
+				{`{"pod":"my-TEST-2","test-field":"non-empty"}`, false},
+			},
+		},
 	}
 	for _, tt := range tests {
 		tt := tt
@@ -568,8 +583,432 @@ func TestCheck(t *testing.T) {
 					eventRoot, err = insaneJSON.DecodeString(d.eventStr)
 					require.NoError(t, err)
 				}
-				got := checker.Check(eventRoot, 0)
+				got := checker.Check(eventRoot)
 				assert.Equal(t, d.want, got, "invalid result for event %q", d.eventStr)
+			}
+		})
+	}
+}
+
+func TestDoIfNodeIsEqual(t *testing.T) {
+	singleNode := treeNode{
+		fieldOp:       "equal",
+		fieldName:     "service",
+		caseSensitive: true,
+		values:        [][]byte{[]byte("test-1"), []byte("test-2")},
+	}
+	twoNodes := treeNode{
+		logicalOp: "not",
+		operands: []treeNode{
+			{
+				fieldOp:       "equal",
+				fieldName:     "service",
+				caseSensitive: true,
+				values:        [][]byte{[]byte("test-1"), []byte("test-2")},
+			},
+		},
+	}
+	multiNodes := treeNode{
+		logicalOp: "not",
+		operands: []treeNode{
+			{
+				logicalOp: "or",
+				operands: []treeNode{
+					{
+						fieldOp:       "equal",
+						fieldName:     "service",
+						caseSensitive: true,
+						values:        [][]byte{nil, []byte(""), []byte("null")},
+					},
+					{
+						fieldOp:       "contains",
+						fieldName:     "pod",
+						caseSensitive: false,
+						values:        [][]byte{[]byte("pod-1"), []byte("pod-2")},
+					},
+					{
+						logicalOp: "and",
+						operands: []treeNode{
+							{
+								fieldOp:       "prefix",
+								fieldName:     "message",
+								caseSensitive: true,
+								values:        [][]byte{[]byte("test-msg-1"), []byte("test-msg-2")},
+							},
+							{
+								fieldOp:       "suffix",
+								fieldName:     "message",
+								caseSensitive: true,
+								values:        [][]byte{[]byte("test-msg-3"), []byte("test-msg-4")},
+							},
+							{
+								fieldOp:       "regex",
+								fieldName:     "msg",
+								caseSensitive: true,
+								values:        [][]byte{[]byte("test-\\d+"), []byte("test-000-\\d+")},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	tests := []struct {
+		name    string
+		t1      treeNode
+		t2      treeNode
+		wantErr bool
+	}{
+		{
+			name:    "equal_single_node",
+			t1:      singleNode,
+			t2:      singleNode,
+			wantErr: false,
+		},
+		{
+			name:    "equal_two_nodes",
+			t1:      twoNodes,
+			t2:      twoNodes,
+			wantErr: false,
+		},
+		{
+			name:    "equal_multiple_nodes",
+			t1:      multiNodes,
+			t2:      multiNodes,
+			wantErr: false,
+		},
+		{
+			name: "not_equal_type_mismatch",
+			t1: treeNode{
+				fieldOp:       "equal",
+				fieldName:     "service",
+				caseSensitive: false,
+				values:        [][]byte{nil},
+			},
+			t2: treeNode{
+				logicalOp: "not",
+				operands: []treeNode{
+					{
+						fieldOp:       "equal",
+						fieldName:     "service",
+						caseSensitive: false,
+						values:        [][]byte{nil},
+					},
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "not_equal_field_op_mismatch",
+			t1: treeNode{
+				fieldOp:       "equal",
+				fieldName:     "service",
+				caseSensitive: false,
+				values:        [][]byte{[]byte("test-1")},
+			},
+			t2: treeNode{
+				fieldOp:       "contains",
+				fieldName:     "service",
+				caseSensitive: false,
+				values:        [][]byte{[]byte("test-1")},
+			},
+			wantErr: true,
+		},
+		{
+			name: "not_equal_field_op_mismatch_2",
+			t1: treeNode{
+				fieldOp:       "prefix",
+				fieldName:     "service",
+				caseSensitive: false,
+				values:        [][]byte{[]byte("test-1")},
+			},
+			t2: treeNode{
+				fieldOp:       "suffix",
+				fieldName:     "service",
+				caseSensitive: false,
+				values:        [][]byte{[]byte("test-1")},
+			},
+			wantErr: true,
+		},
+		{
+			name: "not_equal_field_op_mismatch_3",
+			t1: treeNode{
+				fieldOp:       "regex",
+				fieldName:     "service",
+				caseSensitive: false,
+				values:        [][]byte{[]byte("test-1")},
+			},
+			t2: treeNode{
+				fieldOp:       "contains",
+				fieldName:     "service",
+				caseSensitive: false,
+				values:        [][]byte{[]byte("test-1")},
+			},
+			wantErr: true,
+		},
+		{
+			name: "not_equal_field_case_sensitive_mismatch",
+			t1: treeNode{
+				fieldOp:       "equal",
+				fieldName:     "service",
+				caseSensitive: false,
+				values:        [][]byte{[]byte("test-1")},
+			},
+			t2: treeNode{
+				fieldOp:       "equal",
+				fieldName:     "service",
+				caseSensitive: true,
+				values:        [][]byte{[]byte("test-1")},
+			},
+			wantErr: true,
+		},
+		{
+			name: "not_equal_field_field_path_mismatch",
+			t1: treeNode{
+				fieldOp:       "equal",
+				fieldName:     "log.msg",
+				caseSensitive: true,
+				values:        [][]byte{[]byte("test-1")},
+			},
+			t2: treeNode{
+				fieldOp:       "equal",
+				fieldName:     "log.svc",
+				caseSensitive: true,
+				values:        [][]byte{[]byte("test-1")},
+			},
+			wantErr: true,
+		},
+		{
+			name: "not_equal_field_values_slice_len_mismatch",
+			t1: treeNode{
+				fieldOp:       "contains",
+				fieldName:     "service",
+				caseSensitive: true,
+				values:        [][]byte{[]byte("test-1"), []byte("test-2")},
+			},
+			t2: treeNode{
+				fieldOp:       "contains",
+				fieldName:     "service",
+				caseSensitive: true,
+				values:        [][]byte{[]byte("test-1")},
+			},
+			wantErr: true,
+		},
+		{
+			name: "not_equal_field_values_slice_vals_mismatch",
+			t1: treeNode{
+				fieldOp:       "contains",
+				fieldName:     "service",
+				caseSensitive: true,
+				values:        [][]byte{[]byte("test-2")},
+			},
+			t2: treeNode{
+				fieldOp:       "contains",
+				fieldName:     "service",
+				caseSensitive: true,
+				values:        [][]byte{[]byte("test-1")},
+			},
+			wantErr: true,
+		},
+		{
+			name: "not_equal_field_values_by_size_len_mismatch",
+			t1: treeNode{
+				fieldOp:       "equal",
+				fieldName:     "service",
+				caseSensitive: true,
+				values:        [][]byte{[]byte("test-1"), []byte("test-22")},
+			},
+			t2: treeNode{
+				fieldOp:       "equal",
+				fieldName:     "service",
+				caseSensitive: true,
+				values:        [][]byte{[]byte("test-1")},
+			},
+			wantErr: true,
+		},
+		{
+			name: "not_equal_field_values_by_size_vals_key_mismatch",
+			t1: treeNode{
+				fieldOp:       "equal",
+				fieldName:     "service",
+				caseSensitive: true,
+				values:        [][]byte{[]byte("test-11")},
+			},
+			t2: treeNode{
+				fieldOp:       "equal",
+				fieldName:     "service",
+				caseSensitive: true,
+				values:        [][]byte{[]byte("test-1")},
+			},
+			wantErr: true,
+		},
+		{
+			name: "not_equal_field_values_by_size_vals_len_mismatch",
+			t1: treeNode{
+				fieldOp:       "equal",
+				fieldName:     "service",
+				caseSensitive: true,
+				values:        [][]byte{[]byte("test-1"), []byte("test-2")},
+			},
+			t2: treeNode{
+				fieldOp:       "equal",
+				fieldName:     "service",
+				caseSensitive: true,
+				values:        [][]byte{[]byte("test-1")},
+			},
+			wantErr: true,
+		},
+		{
+			name: "not_equal_field_values_by_size_vals_mismatch",
+			t1: treeNode{
+				fieldOp:       "equal",
+				fieldName:     "service",
+				caseSensitive: true,
+				values:        [][]byte{[]byte("test-2")},
+			},
+			t2: treeNode{
+				fieldOp:       "equal",
+				fieldName:     "service",
+				caseSensitive: true,
+				values:        [][]byte{[]byte("test-1")},
+			},
+			wantErr: true,
+		},
+		{
+			name: "not_equal_field_reValues_len_mismatch",
+			t1: treeNode{
+				fieldOp:       "regex",
+				fieldName:     "service",
+				caseSensitive: true,
+				values:        [][]byte{[]byte("test-1"), []byte("test-2")},
+			},
+			t2: treeNode{
+				fieldOp:       "regex",
+				fieldName:     "service",
+				caseSensitive: true,
+				values:        [][]byte{[]byte("test-1")},
+			},
+			wantErr: true,
+		},
+		{
+			name: "not_equal_field_reValues_vals_mismatch",
+			t1: treeNode{
+				fieldOp:       "regex",
+				fieldName:     "service",
+				caseSensitive: true,
+				values:        [][]byte{[]byte("test-2")},
+			},
+			t2: treeNode{
+				fieldOp:       "regex",
+				fieldName:     "service",
+				caseSensitive: true,
+				values:        [][]byte{[]byte("test-1")},
+			},
+			wantErr: true,
+		},
+		{
+			name: "not_equal_logical_op_mismatch",
+			t1: treeNode{
+				logicalOp: "not",
+				operands: []treeNode{
+					{
+						fieldOp:       "equal",
+						fieldName:     "service",
+						caseSensitive: false,
+						values:        [][]byte{nil},
+					},
+				},
+			},
+			t2: treeNode{
+				logicalOp: "and",
+				operands: []treeNode{
+					{
+						fieldOp:       "equal",
+						fieldName:     "service",
+						caseSensitive: false,
+						values:        [][]byte{nil},
+					},
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "not_equal_logical_operands_len_mismatch",
+			t1: treeNode{
+				logicalOp: "or",
+				operands: []treeNode{
+					{
+						fieldOp:       "equal",
+						fieldName:     "service",
+						caseSensitive: false,
+						values:        [][]byte{nil},
+					},
+				},
+			},
+			t2: treeNode{
+				logicalOp: "or",
+				operands: []treeNode{
+					{
+						fieldOp:       "equal",
+						fieldName:     "service",
+						caseSensitive: false,
+						values:        [][]byte{nil},
+					},
+					{
+						fieldOp:       "equal",
+						fieldName:     "service",
+						caseSensitive: false,
+						values:        [][]byte{nil},
+					},
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "not_equal_logical_operands_mismatch_field_name",
+			t1: treeNode{
+				logicalOp: "or",
+				operands: []treeNode{
+					{
+						fieldOp:       "equal",
+						fieldName:     "service",
+						caseSensitive: false,
+						values:        [][]byte{nil},
+					},
+				},
+			},
+			t2: treeNode{
+				logicalOp: "or",
+				operands: []treeNode{
+					{
+						fieldOp:       "equal",
+						fieldName:     "pod",
+						caseSensitive: false,
+						values:        [][]byte{nil},
+					},
+				},
+			},
+			wantErr: true,
+		},
+	}
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			root1, err := buildTree(tt.t1)
+			require.NoError(t, err)
+			root2, err := buildTree(tt.t2)
+			require.NoError(t, err)
+			c1 := NewDoIfChecker(root1)
+			c2 := NewDoIfChecker(root2)
+			err1 := c1.IsEqualTo(c2)
+			err2 := c2.IsEqualTo(c1)
+			if tt.wantErr {
+				assert.Error(t, err1, "tree1 expected to be not equal to tree2")
+				assert.Error(t, err2, "tree2 expected to be not equal to tree1")
+			} else {
+				assert.NoError(t, err1, "tree1 expected to be equal to tree2")
+				assert.NoError(t, err2, "tree2 expected to be equal to tree1")
 			}
 		})
 	}

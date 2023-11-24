@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
-	"sync"
+	"slices"
 
 	"github.com/ozontech/file.d/cfg"
 	insaneJSON "github.com/vitkovskii/insane-json"
@@ -28,9 +28,8 @@ const (
 
 type DoIfNode interface {
 	Type() DoIfNodeType
-	Check(*insaneJSON.Root, map[string][]byte) bool
-
-	getUniqueFields() map[string]struct{}
+	Check(*insaneJSON.Root) bool
+	isEqualTo(DoIfNode, int) error
 }
 
 // ! do-if-field-op
@@ -46,6 +45,22 @@ const (
 	doIfFieldSuffixOp
 	doIfFieldRegexOp
 )
+
+func (t doIfFieldOpType) String() string {
+	switch t {
+	case doIfFieldEqualOp:
+		return "equal"
+	case doIfFieldContainsOp:
+		return "contains"
+	case doIfFieldPrefixOp:
+		return "prefix"
+	case doIfFieldSuffixOp:
+		return "suffix"
+	case doIfFieldRegexOp:
+		return "regex"
+	}
+	return "unknown"
+}
 
 var (
 	// > checks whether the field value is equal to one of the elements in the values list.
@@ -259,7 +274,7 @@ func NewFieldOpNode(op string, field string, caseSensitive bool, values [][]byte
 				curVal = make([]byte, len(values[i]))
 				copy(curVal, values[i])
 			}
-			if !caseSensitive {
+			if !caseSensitive && curVal != nil {
 				curVal = bytes.ToLower(curVal)
 			}
 			if len(values[i]) < minValLen {
@@ -293,12 +308,11 @@ func (n *doIfFieldOpNode) Type() DoIfNodeType {
 	return DoIfNodeFieldOp
 }
 
-func (n *doIfFieldOpNode) Check(eventRoot *insaneJSON.Root, fieldsVals map[string][]byte) bool {
-	data, ok := fieldsVals[n.fieldPathStr]
-	if !ok {
-		node := eventRoot.Dig(n.fieldPath...)
+func (n *doIfFieldOpNode) Check(eventRoot *insaneJSON.Root) bool {
+	var data []byte
+	node := eventRoot.Dig(n.fieldPath...)
+	if !node.IsNull() {
 		data = node.AsBytes()
-		fieldsVals[n.fieldPathStr] = data
 	}
 	// fast check for data
 	if n.op != doIfFieldRegexOp && len(data) < n.minValLen {
@@ -310,10 +324,15 @@ func (n *doIfFieldOpNode) Check(eventRoot *insaneJSON.Root, fieldsVals map[strin
 		if !ok {
 			return false
 		}
-		if !n.caseSensitive {
+		if !n.caseSensitive && data != nil {
 			data = bytes.ToLower(data)
 		}
 		for _, val := range vals {
+			// null and empty strings are considered as different values
+			// null can also come if field value is absent
+			if (data == nil && val != nil) || (data != nil && val == nil) {
+				continue
+			}
 			if bytes.Equal(data, val) {
 				return true
 			}
@@ -363,10 +382,61 @@ func (n *doIfFieldOpNode) Check(eventRoot *insaneJSON.Root, fieldsVals map[strin
 	return false
 }
 
-func (n *doIfFieldOpNode) getUniqueFields() map[string]struct{} {
-	return map[string]struct{}{
-		n.fieldPathStr: {},
+func (n *doIfFieldOpNode) isEqualTo(n2 DoIfNode, _ int) error {
+	n2f, ok := n2.(*doIfFieldOpNode)
+	if !ok {
+		return errors.New("nodes have different types expected: fieldOpNode")
 	}
+	if n.op != n2f.op {
+		return fmt.Errorf("nodes have different op expected: %q", n.op)
+	}
+	if n.caseSensitive != n2f.caseSensitive {
+		return fmt.Errorf("nodes have different caseSensitive expected: %v", n.caseSensitive)
+	}
+	if n.fieldPathStr != n2f.fieldPathStr || slices.Compare[[]string](n.fieldPath, n2f.fieldPath) != 0 {
+		return fmt.Errorf("nodes have different fieldPathStr expected: fieldPathStr=%q fieldPath=%v",
+			n.fieldPathStr, n.fieldPath,
+		)
+	}
+	if len(n.values) != len(n2f.values) {
+		return fmt.Errorf("nodes have different values slices len expected: %d", len(n.values))
+	}
+	for i := 0; i < len(n.values); i++ {
+		if !bytes.Equal(n.values[i], n2f.values[i]) {
+			return fmt.Errorf("nodes have different data in values expected: %v on position", n.values)
+		}
+	}
+	if len(n.valuesBySize) != len(n2f.valuesBySize) {
+		return fmt.Errorf("nodes have different valuesBySize len expected: %d", len(n.valuesBySize))
+	}
+	for k, v := range n.valuesBySize {
+		if v2, has := n2f.valuesBySize[k]; !has {
+			return fmt.Errorf("nodes have different valuesBySize keys expected key: %d", k)
+		} else if len(v) != len(v2) {
+			return fmt.Errorf("nodes have different valuesBySize values len under key %d expected: %d", k, len(v))
+		} else {
+			for i := 0; i < len(v); i++ {
+				if !bytes.Equal(v[i], v2[i]) {
+					return fmt.Errorf("nodes have different valuesBySize data under key %d: %v", k, v)
+				}
+			}
+		}
+	}
+	if len(n.reValues) != len(n2f.reValues) {
+		return fmt.Errorf("nodes have different reValues len expected: %d", len(n.reValues))
+	}
+	for i := 0; i < len(n.reValues); i++ {
+		if n.reValues[i].String() != n2f.reValues[i].String() {
+			return fmt.Errorf("nodes have different reValues data expected: %v", n.reValues)
+		}
+	}
+	if n.minValLen != n2f.minValLen {
+		return fmt.Errorf("nodes have different minValLem expected: %d", n.minValLen)
+	}
+	if n.maxValLen != n2f.maxValLen {
+		return fmt.Errorf("nodes have different maxValLem expected: %d", n.maxValLen)
+	}
+	return nil
 }
 
 // ! do-if-logical-op
@@ -380,6 +450,18 @@ const (
 	doIfLogicalAnd
 	doIfLogicalNot
 )
+
+func (t doIfLogicalOpType) String() string {
+	switch t {
+	case doIfLogicalOr:
+		return "or"
+	case doIfLogicalAnd:
+		return "and"
+	case doIfLogicalNot:
+		return "not"
+	}
+	return "unknown"
+}
 
 var (
 	// > accepts at least one operand and returns true on the first returned true from its operands.
@@ -500,17 +582,18 @@ type doIfLogicalNode struct {
 	operands []DoIfNode
 }
 
-func NewLogicalNode(op []byte, operands []DoIfNode) (DoIfNode, error) {
+func NewLogicalNode(op string, operands []DoIfNode) (DoIfNode, error) {
 	if len(operands) == 0 {
 		return nil, errors.New("logical op must have at least one operand")
 	}
 	var lop doIfLogicalOpType
+	opBytes := []byte(op)
 	switch {
-	case bytes.Equal(op, doIfLogicalOrBytes):
+	case bytes.Equal(opBytes, doIfLogicalOrBytes):
 		lop = doIfLogicalOr
-	case bytes.Equal(op, doIfLogicalAndBytes):
+	case bytes.Equal(opBytes, doIfLogicalAndBytes):
 		lop = doIfLogicalAnd
-	case bytes.Equal(op, doIfLogicalNotBytes):
+	case bytes.Equal(opBytes, doIfLogicalNotBytes):
 		lop = doIfLogicalNot
 		if len(operands) > 1 {
 			return nil, fmt.Errorf("logical not must have exactly one operand, got %d", len(operands))
@@ -528,83 +611,68 @@ func (n *doIfLogicalNode) Type() DoIfNodeType {
 	return DoIfNodeLogicalOp
 }
 
-func (n *doIfLogicalNode) Check(eventRoot *insaneJSON.Root, fieldsVals map[string][]byte) bool {
+func (n *doIfLogicalNode) Check(eventRoot *insaneJSON.Root) bool {
 	switch n.op {
 	case doIfLogicalOr:
 		for _, op := range n.operands {
-			if op.Check(eventRoot, fieldsVals) {
+			if op.Check(eventRoot) {
 				return true
 			}
 		}
 		return false
 	case doIfLogicalAnd:
 		for _, op := range n.operands {
-			if !op.Check(eventRoot, fieldsVals) {
+			if !op.Check(eventRoot) {
 				return false
 			}
 		}
 		return true
 	case doIfLogicalNot:
-		return !n.operands[0].Check(eventRoot, fieldsVals)
+		return !n.operands[0].Check(eventRoot)
 	}
 	return false
 }
 
-func (n *doIfLogicalNode) getUniqueFields() map[string]struct{} {
-	result := make(map[string]struct{})
-	for _, op := range n.operands {
-		for k := range op.getUniqueFields() {
-			result[k] = struct{}{}
+func (n *doIfLogicalNode) isEqualTo(n2 DoIfNode, level int) error {
+	n2l, ok := n2.(*doIfLogicalNode)
+	if !ok {
+		return errors.New("nodes have different types expected: logicalNode")
+	}
+	if n.op != n2l.op {
+		return fmt.Errorf("nodes have different op expected: %q", n.op)
+	}
+	if len(n.operands) != len(n2l.operands) {
+		return fmt.Errorf("nodes have different operands len expected: %d", len(n.operands))
+	}
+	for i := 0; i < len(n.operands); i++ {
+		if err := n.operands[i].isEqualTo(n2l.operands[i], level+1); err != nil {
+			tabs := make([]byte, 0, level)
+			for j := 0; j < level; j++ {
+				tabs = append(tabs, '\t')
+			}
+			return fmt.Errorf("nodes with op %q have different operand nodes on position %d:\n%s%w", n.op, i, tabs, err)
 		}
 	}
-	return result
+	return nil
 }
 
 type DoIfChecker struct {
-	root            DoIfNode
-	uniqueFieldsLen int
-	procsFieldsVals map[int]map[string][]byte
-	fieldsValsPool  chan map[string][]byte
-	mu              sync.RWMutex
+	root DoIfNode
 }
 
 func NewDoIfChecker(root DoIfNode) *DoIfChecker {
-	uniqueFields := root.getUniqueFields()
 	return &DoIfChecker{
-		root:            root,
-		uniqueFieldsLen: len(uniqueFields),
-		procsFieldsVals: make(map[int]map[string][]byte),
-		fieldsValsPool:  make(chan map[string][]byte),
+		root: root,
 	}
 }
 
-func (c *DoIfChecker) getProcFieldsVals(procID int) map[string][]byte {
-	c.mu.RLock()
-	data, ok := c.procsFieldsVals[procID]
-	if ok {
-		c.mu.RUnlock()
-		return data
-	}
-	c.mu.RUnlock()
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	data, ok = c.procsFieldsVals[procID]
-	if ok {
-		return data
-	}
-	data = make(map[string][]byte, c.uniqueFieldsLen)
-	c.procsFieldsVals[procID] = data
-	return data
+func (c *DoIfChecker) IsEqualTo(c2 *DoIfChecker) error {
+	return c.root.isEqualTo(c2.root, 1)
 }
 
-func (c *DoIfChecker) Check(eventRoot *insaneJSON.Root, procID int) bool {
+func (c *DoIfChecker) Check(eventRoot *insaneJSON.Root) bool {
 	if eventRoot == nil {
 		return false
 	}
-	fieldsVals := c.getProcFieldsVals(procID)
-	result := c.root.Check(eventRoot, fieldsVals)
-	for k := range fieldsVals {
-		delete(fieldsVals, k)
-	}
-	return result
+	return c.root.Check(eventRoot)
 }
