@@ -263,6 +263,11 @@ func (p *processor) countEvent(event *Event, actionIndex int, status eventStatus
 
 func (p *processor) isMatch(index int, event *Event) bool {
 	info := p.actionInfos[index]
+
+	if info.DoIfChecker != nil {
+		return info.DoIfChecker.Check(event.Root)
+	}
+
 	conds := info.MatchConditions
 	mode := info.MatchMode
 	match := false

@@ -610,7 +610,9 @@ func (p *Pipeline) expandProcs() {
 		p.logger.Warn("too many processors", zap.Int32("new", to))
 	}
 
-	for x := 0; x < int(to-from); x++ {
+	// proc IDs are added starting from the next after the last one
+	// so all procs have unique IDs
+	for x := 1; x <= int(to-from); x++ {
 		proc := p.newProc(p.Procs[from-1].id + x)
 		p.Procs = append(p.Procs, proc)
 		proc.start(p.actionParams, p.logger.Sugar())

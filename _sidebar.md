@@ -58,6 +58,10 @@
     - [stdout](plugin/output/stdout/README.md)
 
 
+- **Pipeline**
+  - [Match modes](pipeline/README.md#match-modes)
+  - [Experimental: Do If rules](pipeline/README.md#experimental-do-if-rules)
+
 - **Other**
   - [Contributing](/docs/contributing.md)
   - [License](/docs/license.md)
