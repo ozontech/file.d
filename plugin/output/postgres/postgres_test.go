@@ -92,7 +92,7 @@ func TestPrivateOut(t *testing.T) {
 
 	p.registerMetrics(metric.New("test", prometheus.NewRegistry()))
 
-	batch := &pipeline.Batch{Events: []*pipeline.Event{{Root: root}}}
+	batch := pipeline.NewPreparedBatch([]*pipeline.Event{{Root: root}})
 	p.out(nil, batch)
 }
 
@@ -167,7 +167,7 @@ func TestPrivateOutWithRetry(t *testing.T) {
 
 	p.registerMetrics(metric.New("test", prometheus.NewRegistry()))
 
-	batch := &pipeline.Batch{Events: []*pipeline.Event{{Root: root}}}
+	batch := pipeline.NewPreparedBatch([]*pipeline.Event{{Root: root}})
 	p.out(nil, batch)
 }
 
@@ -220,7 +220,7 @@ func TestPrivateOutNoGoodEvents(t *testing.T) {
 
 	p.registerMetrics(metric.New("test", prometheus.NewRegistry()))
 
-	batch := &pipeline.Batch{Events: []*pipeline.Event{{Root: root}}}
+	batch := pipeline.NewPreparedBatch([]*pipeline.Event{{Root: root}})
 	p.out(nil, batch)
 }
 
@@ -300,11 +300,11 @@ func TestPrivateOutDeduplicatedEvents(t *testing.T) {
 
 	p.registerMetrics(metric.New("test", prometheus.NewRegistry()))
 
-	batch := &pipeline.Batch{Events: []*pipeline.Event{
+	batch := pipeline.NewPreparedBatch([]*pipeline.Event{
 		{Root: root},
 		{Root: rootDuplication},
 		{Root: rootDuplicationMore},
-	}}
+	})
 	p.out(nil, batch)
 }
 
@@ -366,7 +366,7 @@ func TestPrivateOutWrongTypeInField(t *testing.T) {
 
 	p.registerMetrics(metric.New("test", prometheus.NewRegistry()))
 
-	batch := &pipeline.Batch{Events: []*pipeline.Event{{Root: root}}}
+	batch := pipeline.NewPreparedBatch([]*pipeline.Event{{Root: root}})
 	p.out(nil, batch)
 }
 
@@ -471,13 +471,13 @@ func TestPrivateOutFewUniqueEventsYetWithDeduplicationEventsAnpooladEvents(t *te
 
 	p.registerMetrics(metric.New("test", prometheus.NewRegistry()))
 
-	batch := &pipeline.Batch{Events: []*pipeline.Event{
+	batch := pipeline.NewPreparedBatch([]*pipeline.Event{
 		{Root: root},
 		{Root: rootDuplication},
 		{Root: rootDuplicationMore},
 		{Root: secondUniqueRoot},
 		{Root: badRoot},
-	}}
+	})
 	p.out(nil, batch)
 }
 

@@ -15,6 +15,7 @@ import (
 	"github.com/ozontech/file.d/e2e/http_file"
 	"github.com/ozontech/file.d/e2e/join_throttle"
 	"github.com/ozontech/file.d/e2e/kafka_file"
+	"github.com/ozontech/file.d/e2e/split_join"
 	"github.com/ozontech/file.d/fd"
 	_ "github.com/ozontech/file.d/plugin/action/add_host"
 	_ "github.com/ozontech/file.d/plugin/action/convert_date"
@@ -34,6 +35,7 @@ import (
 	_ "github.com/ozontech/file.d/plugin/action/remove_fields"
 	_ "github.com/ozontech/file.d/plugin/action/rename"
 	_ "github.com/ozontech/file.d/plugin/action/set_time"
+	_ "github.com/ozontech/file.d/plugin/action/split"
 	_ "github.com/ozontech/file.d/plugin/action/throttle"
 	_ "github.com/ozontech/file.d/plugin/input/dmesg"
 	_ "github.com/ozontech/file.d/plugin/input/fake"
@@ -108,6 +110,11 @@ func TestE2EStabilityWorkCase(t *testing.T) {
 				Count: 1000,
 			},
 			cfgPath: "./join_throttle/config.yml",
+		},
+		{
+			name:    "split_join",
+			e2eTest: &split_join.Config{},
+			cfgPath: "./split_join/config.yml",
 		},
 		{
 			name:    "file_clickhouse",

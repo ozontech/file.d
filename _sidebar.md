@@ -42,6 +42,7 @@
     - [remove_fields](plugin/action/remove_fields/README.md)
     - [rename](plugin/action/rename/README.md)
     - [set_time](plugin/action/set_time/README.md)
+    - [split](plugin/action/split/README.md)
     - [throttle](plugin/action/throttle/README.md)
 
   - Output
