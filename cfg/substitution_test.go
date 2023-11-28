@@ -10,49 +10,6 @@ import (
 
 var lg = logger.Instance.Desugar()
 
-func TestParseVale(t *testing.T) {
-	result, err := ParseSubstitution("just value", lg)
-
-	assert.NoError(t, err, "error occurs")
-	assert.Equal(t, 1, len(result), "wrong result")
-	assert.Equal(t, "just value", result[0].Data[0], "wrong result")
-}
-
-func TestParseField(t *testing.T) {
-	result, err := ParseSubstitution("days till world end ${prediction.days}. so what?", lg)
-
-	assert.NoError(t, err, "error occurs")
-	assert.Equal(t, 3, len(result), "wrong result")
-	assert.Equal(t, "days till world end ", result[0].Data[0], "wrong result")
-	assert.Equal(t, "prediction", result[1].Data[0], "wrong result")
-	assert.Equal(t, "days", result[1].Data[1], "wrong result")
-	assert.Equal(t, ". so what?", result[2].Data[0], "wrong result")
-}
-
-func TestParseEnding(t *testing.T) {
-	result, err := ParseSubstitution("days till world end ${prediction.days}", lg)
-
-	assert.NoError(t, err, "error occurs")
-	assert.Equal(t, 2, len(result), "wrong result")
-	assert.Equal(t, "days till world end ", result[0].Data[0], "wrong result")
-	assert.Equal(t, "prediction", result[1].Data[0], "wrong result")
-	assert.Equal(t, "days", result[1].Data[1], "wrong result")
-}
-
-func TestParseEscape(t *testing.T) {
-	result, err := ParseSubstitution("days till world end $$100", lg)
-
-	assert.NoError(t, err, "error occurs")
-	assert.Equal(t, 1, len(result), "wrong result")
-	assert.Equal(t, "days till world end $100", result[0].Data[0], "wrong result")
-}
-
-func TestParseErr(t *testing.T) {
-	_, err := ParseSubstitution("days till world end ${prediction.days. so what?", lg)
-
-	assert.NotNil(t, err, "no error")
-}
-
 func TestParseFieldWithFilter(t *testing.T) {
 	tests := []struct {
 		name         string
@@ -61,6 +18,79 @@ func TestParseFieldWithFilter(t *testing.T) {
 		filters      [][][]any
 		wantErr      bool
 	}{
+		{
+			name:         "no_filter_no_field",
+			substitution: `just value`,
+			data: [][]string{
+				{"just value"},
+			},
+			wantErr: false,
+		},
+		{
+			name:         "no_filter_only_field",
+			substitution: `${prediction.days}`,
+			data: [][]string{
+				{"prediction", "days"},
+			},
+			wantErr: false,
+		},
+		{
+			name:         "no_filter_field",
+			substitution: `days till world end ${prediction.days}. so what?`,
+			data: [][]string{
+				{"days till world end "},
+				{"prediction", "days"},
+				{". so what?"},
+			},
+			wantErr: false,
+		},
+		{
+			name:         "no_filter_field_no_ending",
+			substitution: `days till world end ${prediction.days}`,
+			data: [][]string{
+				{"days till world end "},
+				{"prediction", "days"},
+			},
+			wantErr: false,
+		},
+		{
+			name:         "no_filter_no_field_parse_escape",
+			substitution: `days till world end $$100`,
+			data: [][]string{
+				{"days till world end $100"},
+			},
+			wantErr: false,
+		},
+		{
+			name:         "no_filter_no_field_parse_no_escape",
+			substitution: `days till world end $100`,
+			data: [][]string{
+				{"days till world end $100"},
+			},
+			wantErr: false,
+		},
+		{
+			name:         "no_filter_no_field_parse_no_escape_2",
+			substitution: `days till world end $100$`,
+			data: [][]string{
+				{"days till world end $100$"},
+			},
+			wantErr: false,
+		},
+		{
+			name:         "no_filter_no_field_parse_dollar",
+			substitution: `$`,
+			data: [][]string{
+				{"$"},
+			},
+			wantErr: false,
+		},
+		{
+			name:         "empty_string",
+			substitution: ``,
+			data:         [][]string{},
+			wantErr:      false,
+		},
 		{
 			name:         "with_one_filter",
 			substitution: `days till world end ${prediction.days|re("(\\d),(test.+)",[1,2]," , ")}. so what?`,
@@ -138,6 +168,11 @@ func TestParseFieldWithFilter(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			name:         "err_invalid_field",
+			substitution: `days till world end ${prediction.days. so what?`,
+			wantErr:      true,
+		},
+		{
 			name:         "err_invalid_filter",
 			substitution: `test ${field|abcd()} test2`,
 			wantErr:      true,
@@ -193,15 +228,18 @@ func TestParseFieldWithFilter(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			result, err := ParseSubstitution(tt.substitution, lg)
+			result, err := ParseSubstitution(tt.substitution, nil, lg)
 			require.Equal(t, tt.wantErr, err != nil, "no error was expected")
+			if tt.wantErr {
+				return
+			}
 			assert.Equal(t, len(tt.data), len(result), "invalid substitution ops len")
 			for j := range tt.data {
 				assert.Equal(t, len(tt.data[j]), len(result[j].Data), "invalid data len")
 				for k := range tt.data[j] {
 					assert.Equal(t, tt.data[j][k], result[j].Data[k], "wrong data for")
 				}
-				if tt.filters[j] == nil {
+				if len(tt.filters) == 0 || len(tt.filters[j]) == 0 {
 					assert.Nil(t, result[j].Filters)
 				} else {
 					assert.Equal(t, len(tt.filters[j]), len(result[j].Filters), "invalid filters len")
@@ -215,8 +253,37 @@ func TestParseFieldWithFilter(t *testing.T) {
 }
 
 func TestRegexFilterApply(t *testing.T) {
-	result, err := ParseSubstitution(`test ${field|re("(re\\d)",[1],"|")}`, lg)
-	require.NoError(t, err)
-	res := result[1].Filters[0].Apply([]byte(`this is some text re1 end`))
-	assert.Equal(t, "re1", string(res))
+	tests := []struct {
+		name         string
+		substitution string
+		data         string
+		want         string
+	}{
+		{
+			name:         "ok_single_filter",
+			substitution: `${field|re("(re\\d)",[1],"|")}`,
+			data:         `this is some text re1 end`,
+			want:         "re1",
+		},
+		{
+			name:         "ok_two_filters",
+			substitution: `${field|re("(.*)",[1],"|")|re("(\\d\\.)",[1],"|")}`,
+			data:         `1.2.3.4.5.`,
+			want:         "1.|2.|3.|4.|5.",
+		},
+	}
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			subOps, err := ParseSubstitution(tt.substitution, nil, lg)
+			require.NoError(t, err)
+			data := make([]byte, 0, len(tt.data))
+			data = append(data, []byte(tt.data)...)
+			for i := range subOps[0].Filters {
+				data = subOps[0].Filters[i].Apply(data, data)
+			}
+			assert.Equal(t, tt.want, string(data))
+		})
+	}
 }
