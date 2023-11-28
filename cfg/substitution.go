@@ -32,7 +32,9 @@ const (
 var errInvalidFilter = errors.New("invalid filter")
 
 type FieldFilter interface {
-	Apply([]byte) []byte
+	// Apply accepts src and dst slices of bytes and returns result stored in modified src slice.
+	// src slice is needed to avoid unnecessary allocations.
+	Apply(src []byte, dst []byte) []byte
 
 	setBuffer([]byte)
 	compareArgs([]any) error
@@ -46,13 +48,13 @@ type RegexFilter struct {
 	buf []byte
 }
 
-func (r *RegexFilter) Apply(data []byte) []byte {
+func (r *RegexFilter) Apply(src []byte, dst []byte) []byte {
 	if len(r.groups) == 0 {
-		return data
+		return dst
 	}
-	indexes := r.re.FindAllSubmatchIndex(data, -1)
+	indexes := r.re.FindAllSubmatchIndex(src, -1)
 	if len(indexes) == 0 {
-		return data
+		return dst
 	}
 	r.buf = r.buf[:0]
 	for _, index := range indexes {
@@ -62,10 +64,16 @@ func (r *RegexFilter) Apply(data []byte) []byte {
 			if len(r.separator) > 0 && len(r.buf) != 0 {
 				r.buf = append(r.buf, r.separator...)
 			}
-			r.buf = append(r.buf, data[start:end]...)
+			r.buf = append(r.buf, src[start:end]...)
 		}
 	}
-	return r.buf
+	if cap(dst) < len(r.buf) {
+		dst = make([]byte, len(r.buf))
+	} else {
+		dst = dst[:len(r.buf)]
+	}
+	copy(dst, r.buf)
+	return dst
 }
 
 func (r *RegexFilter) setBuffer(buf []byte) {
@@ -145,12 +153,38 @@ type SubstitutionOp struct {
 	Filters []FieldFilter
 }
 
-func ParseSubstitution(substitution string, logger *zap.Logger) ([]SubstitutionOp, error) {
+// parseFilterOps parses a chain of field filters from substitution string
+// `${field|filter1|filter2|...|filterN}` -> `<filter1>,<filter2>,...,<filterN>`.
+func parseFilterOps(substitution string, pipePos, endPos int, filterBuf []byte, logger *zap.Logger) ([]FieldFilter, error) {
+	var filterOps []FieldFilter
+	offset := 0
+	for pipePos != -1 {
+		pipePos += offset
+		filterOp, filterEndPos, err := parseFilter(substitution[pipePos+1:endPos], logger)
+		if err != nil {
+			return nil, err
+		}
+		// single buffer for all filters because there is only one event for a substitution op simultaneously
+		// and filters in substitution op are applied sequentially one by one
+		if filterBuf == nil {
+			filterBuf = make([]byte, 0, bufInitSize)
+		}
+		filterOp.setBuffer(filterBuf)
+		filterOps = append(filterOps, filterOp)
+		offset = pipePos + 1 + filterEndPos
+		pipePos = indexRuneInExpr(substitution[offset:endPos], '|', true, false)
+	}
+	return filterOps, nil
+}
+
+func ParseSubstitution(substitution string, filtersBuf []byte, logger *zap.Logger) ([]SubstitutionOp, error) {
+	var err error
 	result := make([]SubstitutionOp, 0)
 	tail := ""
 	for {
 		pos := strings.IndexByte(substitution, '$')
-		if pos == -1 {
+		// `len(substitution) == pos + 1` is a corner case of a single symbol '$' at the end
+		if pos == -1 || len(substitution) == pos+1 {
 			break
 		}
 
@@ -164,11 +198,14 @@ func ParseSubstitution(substitution string, logger *zap.Logger) ([]SubstitutionO
 			tail = substitution[:pos+1]
 			substitution = substitution[pos+2:]
 		case '{':
-			result = append(result, SubstitutionOp{
-				Kind: SubstitutionOpKindRaw,
-				Data: []string{tail + substitution[:pos]},
-			})
-			tail = ""
+			// append SubstitutionOpKindRaw only if there is non-empty content
+			if len(tail)+len(substitution[:pos]) > 0 {
+				result = append(result, SubstitutionOp{
+					Kind: SubstitutionOpKindRaw,
+					Data: []string{tail + substitution[:pos]},
+				})
+				tail = ""
+			}
 
 			end := indexRuneInExpr(substitution, '}', true, false)
 			if end == -1 {
@@ -179,21 +216,10 @@ func ParseSubstitution(substitution string, logger *zap.Logger) ([]SubstitutionO
 			selectorEnd := end
 			pipe := indexRuneInExpr(substitution, '|', true, false)
 			if pipe != -1 {
-				filterBuf := make([]byte, 0, bufInitSize)
 				selectorEnd = pipe
-				offset := 0
-				for pipe != -1 {
-					pipe += offset
-					filterOp, filterEndPos, err := parseFilter(substitution[pipe+1:end], logger)
-					if err != nil {
-						return nil, err
-					}
-					// single buffer for all filters because there is only one event for a substitution op simultaneously
-					// and filters in substitution op are applied sequentially one by one
-					filterOp.setBuffer(filterBuf)
-					filterOps = append(filterOps, filterOp)
-					offset = pipe + 1 + filterEndPos
-					pipe = indexRuneInExpr(substitution[offset:end], '|', true, false)
+				filterOps, err = parseFilterOps(substitution, pipe, end, filtersBuf, logger)
+				if err != nil {
+					return nil, err
 				}
 			}
 
@@ -222,43 +248,47 @@ func ParseSubstitution(substitution string, logger *zap.Logger) ([]SubstitutionO
 	return result, nil
 }
 
+func parseRegexFilter(data string, offset int, logger *zap.Logger) (FieldFilter, int, error) {
+	filterEndPos := -1
+	args, argsEndPos, err := parseFilterArgs(data[len(regexFilterPrefix):])
+	if err != nil {
+		return nil, filterEndPos, fmt.Errorf("failed to parse filter args: %w", err)
+	}
+	filterEndPos = argsEndPos + len(regexFilterPrefix) + offset
+	if len(args) != 3 {
+		return nil, filterEndPos, fmt.Errorf("invalid args for regexp filter, exptected 3, got %d", len(args))
+	}
+	var reStr string
+	var groups []int
+	var separator string
+	if err := json.Unmarshal([]byte(args[0]), &reStr); err != nil {
+		return nil, filterEndPos, fmt.Errorf("failed to parse regexp filter regexp string: %w", err)
+	}
+	re := regexp.MustCompile(reStr)
+	if err := json.Unmarshal([]byte(args[1]), &groups); err != nil {
+		return nil, filterEndPos, fmt.Errorf("failed to parse regexp filter groups: %w", err)
+	}
+	VerifyGroupNumbers(groups, re.NumSubexp(), logger)
+	if err := json.Unmarshal([]byte(args[2]), &separator); err != nil {
+		return nil, filterEndPos, fmt.Errorf("failed to parse regexp filter separator: %w", err)
+	}
+	filter := &RegexFilter{
+		re:        re,
+		groups:    groups,
+		separator: []byte(separator),
+	}
+	return filter, filterEndPos, nil
+}
+
 // parseFilter parses filter data from string with filter args if present in format "<filter-name>(<arg1>, <arg2>, ...)".
 func parseFilter(data string, logger *zap.Logger) (FieldFilter, int, error) {
-	filterEndPos := -1
 	origDataLen := len(data)
 	data = strings.TrimLeft(data, " ")
 	offset := origDataLen - len(data)
 	if strings.HasPrefix(data, regexFilterPrefix) {
-		args, argsEndPos, err := parseFilterArgs(data[len(regexFilterPrefix):])
-		if err != nil {
-			return nil, filterEndPos, fmt.Errorf("failed to parse filter args: %w", err)
-		}
-		filterEndPos = argsEndPos + len(regexFilterPrefix) + offset
-		if len(args) != 3 {
-			return nil, filterEndPos, fmt.Errorf("invalid args for regexp filter, exptected 3, got %d", len(args))
-		}
-		var reStr string
-		var groups []int
-		var separator string
-		if err := json.Unmarshal([]byte(args[0]), &reStr); err != nil {
-			return nil, filterEndPos, fmt.Errorf("failed to parse regexp filter regexp string: %w", err)
-		}
-		re := regexp.MustCompile(reStr)
-		if err := json.Unmarshal([]byte(args[1]), &groups); err != nil {
-			return nil, filterEndPos, fmt.Errorf("failed to parse regexp filter groups: %w", err)
-		}
-		VerifyGroupNumbers(groups, re.NumSubexp(), logger)
-		if err := json.Unmarshal([]byte(args[2]), &separator); err != nil {
-			return nil, filterEndPos, fmt.Errorf("failed to parse regexp filter separator: %w", err)
-		}
-		filter := &RegexFilter{
-			re:        re,
-			groups:    groups,
-			separator: []byte(separator),
-		}
-		return filter, filterEndPos, nil
+		return parseRegexFilter(data, offset, logger)
 	}
-	return nil, filterEndPos, errInvalidFilter
+	return nil, -1, errInvalidFilter
 }
 
 // parseFilterArgs parses args from string in format of "<arg1>, <arg2>, ...)" --
