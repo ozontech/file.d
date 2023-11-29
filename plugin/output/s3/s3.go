@@ -148,8 +148,6 @@ type Plugin struct {
 
 	compressor compressor
 
-	backoff backoff.BackOff
-
 	// plugin metrics
 	sendErrorMetric  prometheus.Counter
 	uploadFileMetric *prometheus.CounterVec
@@ -303,12 +301,6 @@ func (p *Plugin) StartWithMinio(config pipeline.AnyConfig, params *pipeline.Outp
 	p.config = config.(*Config)
 	p.params = params
 
-	p.backoff = cfg.GetBackoff(
-		p.config.Retention_,
-		float64(p.config.RetentionExponentMultiplier),
-		uint64(p.config.Retry),
-	)
-
 	// outPlugCount is defaultBucket + multi_buckets count, use to set maps size.
 	outPlugCount := len(p.config.MultiBuckets) + 1
 	p.limiter = NewObjectStoreClientLimiter(p.config.DynamicBucketsLimit + outPlugCount)
@@ -343,7 +335,11 @@ func (p *Plugin) StartWithMinio(config pipeline.AnyConfig, params *pipeline.Outp
 	p.compressCh = make(chan fileDTO, p.config.FileConfig.WorkersCount_)
 
 	for i := 0; i < p.config.FileConfig.WorkersCount_; i++ {
-		go p.uploadWork()
+		go p.uploadWork(cfg.GetBackoff(
+			p.config.Retention_,
+			float64(p.config.RetentionExponentMultiplier),
+			uint64(p.config.Retry),
+		))
 		go p.compressWork()
 	}
 	err = p.startPlugins(params, outPlugCount, targetDirs, fileNames)
@@ -535,9 +531,9 @@ func (p *Plugin) addFileJobWithBucket(bucketName string) func(filename string) {
 	}
 }
 
-func (p *Plugin) uploadWork() {
+func (p *Plugin) uploadWork(workerBackoff backoff.BackOff) {
 	for compressed := range p.uploadCh {
-		p.backoff.Reset()
+		workerBackoff.Reset()
 		err := backoff.Retry(func() error {
 			p.logger.Infof("starting upload s3 object. fileName=%s, bucketName=%s", compressed.fileName, compressed.bucketName)
 			err := p.uploadToS3(compressed)
@@ -553,7 +549,7 @@ func (p *Plugin) uploadWork() {
 			}
 			p.logger.Errorf("could not upload object: %s, error: %s", compressed, err.Error())
 			return err
-		}, p.backoff)
+		}, workerBackoff)
 
 		if err != nil {
 			var errLogFunc func(args ...interface{})
