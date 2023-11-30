@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"regexp"
 	"slices"
-	"strings"
 
+	"github.com/ozontech/file.d/cfg"
 	insaneJSON "github.com/vitkovskii/insane-json"
 )
 
@@ -234,7 +234,7 @@ func NewFieldOpNode(op string, field string, caseSensitive bool, values [][]byte
 	var minValLen, maxValLen int
 	var fop doIfFieldOpType
 
-	fieldPath := parseFieldSelector(field)
+	fieldPath := cfg.ParseFieldSelector(field)
 
 	opBytes := []byte(op)
 	switch {
@@ -675,38 +675,4 @@ func (c *DoIfChecker) Check(eventRoot *insaneJSON.Root) bool {
 		return false
 	}
 	return c.root.Check(eventRoot)
-}
-
-func parseFieldSelector(selector string) []string {
-	result := make([]string, 0)
-	tail := ""
-	for {
-		pos := strings.IndexByte(selector, '.')
-		if pos == -1 {
-			break
-		}
-		if pos > 0 && selector[pos-1] == '\\' {
-			tail = tail + selector[:pos-1] + "."
-			selector = selector[pos+1:]
-			continue
-		}
-
-		if len(selector) > pos+1 {
-			if selector[pos+1] == '.' {
-				tail = selector[:pos+1]
-				selector = selector[pos+2:]
-				continue
-			}
-		}
-
-		result = append(result, tail+selector[:pos])
-		selector = selector[pos+1:]
-		tail = ""
-	}
-
-	if len(selector)+len(tail) != 0 {
-		result = append(result, tail+selector)
-	}
-
-	return result
 }
