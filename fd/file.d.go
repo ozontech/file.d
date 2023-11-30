@@ -172,7 +172,7 @@ func (f *FileD) setupAction(p *pipeline.Pipeline, index int, t string, actionJSO
 	}
 	metricName, metricLabels, skipStatus := extractMetrics(actionJSON)
 	configJSON := makeActionJSON(actionJSON)
-	config, err := pipeline.GetConfig(info, configJSON, values)
+	config, err := cfg.GetPipelineConfig(info, configJSON, values)
 	if err != nil {
 		logger.Fatalf("wrong config for action %d/%s in pipeline %q: %s", index, t, p.Name, err.Error())
 	}
@@ -232,7 +232,7 @@ func (f *FileD) getStaticInfo(pipelineConfig *cfg.PipelineConfig, pluginKind pip
 	if err != nil {
 		logger.Panicf("can't create config json for %s", t)
 	}
-	config, err := pipeline.GetConfig(info, configJson, values)
+	config, err := cfg.GetPipelineConfig(info, configJson, values)
 	if err != nil {
 		logger.Fatalf("error on creating %s with type %q: %s", t, pluginKind, err.Error())
 	}
