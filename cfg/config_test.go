@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/bitly/go-simplejson"
-	"github.com/ozontech/file.d/pipeline"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -95,32 +94,6 @@ func (s *sliceChild) UnmarshalJSON(raw []byte) error {
 type sliceStruct struct {
 	Value  string       `default:"parent"`
 	Childs []sliceChild `default:"" slice:"true"`
-}
-
-type sliceStructBool struct {
-	Value  string           `default:"parent"`
-	Childs []sliceChildBool `default:"" slice:"true"`
-}
-
-type sliceChildBool struct {
-	Value bool `default:"true"`
-}
-
-func (s *sliceChildBool) UnmarshalJSON(raw []byte) error {
-	SetDefaultValues(s)
-	var childBoolPtr struct {
-		Value *bool
-	}
-
-	if err := json.Unmarshal(raw, &childBoolPtr); err != nil {
-		return err
-	}
-
-	if childBoolPtr.Value != nil {
-		s.Value = *childBoolPtr.Value
-	}
-
-	return nil
 }
 
 type strBase8 struct {
@@ -383,47 +356,19 @@ func TestHierarchy(t *testing.T) {
 }
 
 func TestSlice(t *testing.T) {
-	jsonData := []byte(`{"Value":"parent_value","Childs":[{"Value":"child_1"},{"Value":""},{}]}`)
-	pluginInfo := &pipeline.PluginStaticInfo{
-		Type: "sliceStruct",
-		Factory: func() (pipeline.AnyPlugin, pipeline.AnyConfig) {
-			return &sliceStruct{}, &sliceStruct{}
-		},
-		Config: &sliceStruct{},
-	}
-
-	config, err := GetPipelineConfig(pluginInfo, jsonData, map[string]int{})
-	s := config.(*sliceStruct)
+	s := &sliceStruct{Value: "parent_value", Childs: []sliceChild{{"child_1"}, {}}}
+	SetDefaultValues(s)
+	err := Parse(s, map[string]int{})
 
 	assert.Nil(t, err, "shouldn't be an error")
 	assert.Equal(t, "parent_value", s.Value, "wrong value")
 	assert.Equal(t, "child_1", s.Childs[0].Value, "wrong value")
-	assert.Equal(t, "", s.Childs[1].Value, "wrong value")      // default value
-	assert.Equal(t, "child", s.Childs[2].Value, "wrong value") // default value
-}
-
-func TestSliceBool(t *testing.T) {
-	jsonData := []byte(`{"Value":"parent_value","Childs":[{"Value":false},{"Value":true},{}]}`)
-	pluginInfo := &pipeline.PluginStaticInfo{
-		Type: "sliceStructBool",
-		Factory: func() (pipeline.AnyPlugin, pipeline.AnyConfig) {
-			return &sliceStructBool{}, &sliceStructBool{}
-		},
-		Config: &sliceStructBool{},
-	}
-
-	config, err := GetPipelineConfig(pluginInfo, jsonData, map[string]int{})
-	s := config.(*sliceStructBool)
-
-	assert.Nil(t, err, "shouldn't be an error")
-	assert.Equal(t, "parent_value", s.Value, "wrong value")
-	assert.Equal(t, false, s.Childs[0].Value, "wrong value")
-	assert.Equal(t, true, s.Childs[1].Value, "wrong value") // default value
-	assert.Equal(t, true, s.Childs[2].Value, "wrong value") // default value
+	assert.Equal(t, "child", s.Childs[1].Value, "wrong value") // default value
 }
 
 func TestDefaultSlice(t *testing.T) {
 	s := &sliceStruct{Value: "parent_value"}
+	SetDefaultValues(s)
 	err := Parse(s, map[string]int{})
 
 	assert.Nil(t, err, "shouldn't be an error")
@@ -651,61 +596,20 @@ func TestParseDefaultInt(t *testing.T) {
 	}
 }
 
-func TestBoolDefaultTrue(t *testing.T) {
-	jsonData := []byte(`{}`)
-	pluginInfo := &pipeline.PluginStaticInfo{
-		Type: "boolDefault",
-		Factory: func() (pipeline.AnyPlugin, pipeline.AnyConfig) {
-			return &boolDefault{}, &boolDefault{}
-		},
-		Config: &boolDefault{},
+func TestParseDefaultBool(t *testing.T) {
+	testCases := []struct {
+		s        *boolDefault
+		expected bool
+	}{
+		{s: &boolDefault{}, expected: true},
 	}
+	for i, tc := range testCases {
+		SetDefaultValues(tc.s)
+		err := Parse(tc.s, nil)
 
-	config, err := GetPipelineConfig(pluginInfo, jsonData, map[string]int{})
-	s := config.(*boolDefault)
-
-	assert.Nil(t, err, "shouldn't be an error")
-	assert.Equal(t, true, s.T, "wrong value")
-}
-
-func TestBoolSetFalse(t *testing.T) {
-	in := &boolDefault{
-		T: false,
+		assert.NoError(t, err, "shouldn't be an error tc: %d", i)
+		assert.Equal(t, tc.expected, tc.s.T, "wrong value tc: %d", i)
 	}
-	jsonData, _ := json.Marshal(in)
-	pluginInfo := &pipeline.PluginStaticInfo{
-		Type: "boolDefault",
-		Factory: func() (pipeline.AnyPlugin, pipeline.AnyConfig) {
-			return &boolDefault{}, &boolDefault{}
-		},
-		Config: &boolDefault{},
-	}
-
-	config, err := GetPipelineConfig(pluginInfo, jsonData, map[string]int{})
-	s := config.(*boolDefault)
-
-	assert.Nil(t, err, "shouldn't be an error")
-	assert.Equal(t, false, s.T, "wrong value")
-}
-
-func TestBoolSetTrue(t *testing.T) {
-	in := &boolDefault{
-		T: true,
-	}
-	jsonData, _ := json.Marshal(in)
-	pluginInfo := &pipeline.PluginStaticInfo{
-		Type: "boolDefault",
-		Factory: func() (pipeline.AnyPlugin, pipeline.AnyConfig) {
-			return &boolDefault{}, &boolDefault{}
-		},
-		Config: &boolDefault{},
-	}
-
-	config, err := GetPipelineConfig(pluginInfo, jsonData, map[string]int{})
-	s := config.(*boolDefault)
-
-	assert.Nil(t, err, "shouldn't be an error")
-	assert.Equal(t, true, s.T, "wrong value")
 }
 
 func TestPipelineValidatorValid(t *testing.T) {

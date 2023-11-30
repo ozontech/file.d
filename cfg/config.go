@@ -13,7 +13,6 @@ import (
 
 	"github.com/bitly/go-simplejson"
 	"github.com/ozontech/file.d/logger"
-	"github.com/ozontech/file.d/pipeline"
 	"sigs.k8s.io/yaml"
 )
 
@@ -240,21 +239,7 @@ func tryApplyFunc(app funcApplier, field *simplejson.Json) (string, bool) {
 	return "", false
 }
 
-func GetPipelineConfig(info *pipeline.PluginStaticInfo, configJson []byte, values map[string]int) (pipeline.AnyConfig, error) {
-	_, config := info.Factory()
-	if err := decodeConfig(config, configJson); err != nil {
-		return nil, err
-	}
-
-	err := Parse(config, values)
-	if err != nil {
-		return nil, err
-	}
-
-	return config, nil
-}
-
-func decodeConfig(config any, configJson []byte) error {
+func DecodeConfig(config any, configJson []byte) error {
 	err := SetDefaultValues(config)
 	if err != nil {
 		return err
