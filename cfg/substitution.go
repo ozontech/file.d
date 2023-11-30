@@ -3,6 +3,8 @@ package cfg
 import (
 	"fmt"
 	"strings"
+
+	"github.com/ozontech/file.d/cfg/parse"
 )
 
 type SubstitutionOpKind int
@@ -48,7 +50,7 @@ func ParseSubstitution(substitution string) ([]SubstitutionOp, error) {
 			}
 
 			selector := substitution[pos+2 : end]
-			path := ParseFieldSelector(selector)
+			path := parse.ParseFieldSelector(selector)
 			result = append(result, SubstitutionOp{
 				Kind: SubstitutionOpKindField,
 				Data: path,

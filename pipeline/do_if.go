@@ -7,7 +7,7 @@ import (
 	"regexp"
 	"slices"
 
-	"github.com/ozontech/file.d/cfg"
+	cfg_parse "github.com/ozontech/file.d/cfg/parse"
 	insaneJSON "github.com/vitkovskii/insane-json"
 )
 
@@ -234,7 +234,7 @@ func NewFieldOpNode(op string, field string, caseSensitive bool, values [][]byte
 	var minValLen, maxValLen int
 	var fop doIfFieldOpType
 
-	fieldPath := cfg.ParseFieldSelector(field)
+	fieldPath := cfg_parse.ParseFieldSelector(field)
 
 	opBytes := []byte(op)
 	switch {

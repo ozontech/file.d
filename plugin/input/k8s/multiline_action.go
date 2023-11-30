@@ -1,7 +1,7 @@
 package k8s
 
 import (
-	"github.com/ozontech/file.d/cfg"
+	cfg_parse "github.com/ozontech/file.d/cfg/parse"
 	"github.com/ozontech/file.d/pipeline"
 	"go.uber.org/zap"
 )
@@ -30,8 +30,8 @@ func (p *MultilineAction) Start(config pipeline.AnyConfig, params *pipeline.Acti
 	p.maxEventSize = params.PipelineSettings.MaxEventSize
 	p.config = config.(*Config)
 
-	p.allowedPodLabels = cfg.ListToMap(p.config.AllowedPodLabels)
-	p.allowedNodeLabels = cfg.ListToMap(p.config.AllowedNodeLabels)
+	p.allowedPodLabels = cfg_parse.ListToMap(p.config.AllowedPodLabels)
+	p.allowedNodeLabels = cfg_parse.ListToMap(p.config.AllowedNodeLabels)
 
 	p.eventBuf = append(p.eventBuf, '"')
 }

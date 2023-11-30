@@ -5,6 +5,8 @@ import (
 	"fmt"
 
 	"github.com/ozontech/file.d/cfg"
+	cfg_parse "github.com/ozontech/file.d/cfg/parse"
+
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/pipeline"
 	insaneJSON "github.com/vitkovskii/insane-json"
@@ -168,7 +170,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 	isBlockMode := p.config.Mode == modeBlock
 	for _, fs := range p.config.Fields {
 		// in `block` mode, max field depth is 1
-		if f := cfg.ParseFieldSelector(string(fs)); len(f) > 0 && (!isBlockMode || len(f) == 1) {
+		if f := cfg_parse.ParseFieldSelector(string(fs)); len(f) > 0 && (!isBlockMode || len(f) == 1) {
 			p.fields[f[len(f)-1]] = f
 		}
 	}

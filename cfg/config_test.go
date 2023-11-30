@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/bitly/go-simplejson"
+	"github.com/ozontech/file.d/cfg/parse"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -76,7 +77,7 @@ type sliceChild struct {
 }
 
 func (s *sliceChild) UnmarshalJSON(raw []byte) error {
-	SetDefaultValues(s)
+	parse.SetDefaultValues(s)
 	var childPtr struct {
 		Value *string
 	}
@@ -107,7 +108,7 @@ type sliceChildBool struct {
 }
 
 func (s *sliceChildBool) UnmarshalJSON(raw []byte) error {
-	SetDefaultValues(s)
+	parse.SetDefaultValues(s)
 	var childBoolPtr struct {
 		Value *bool
 	}
@@ -130,22 +131,22 @@ type strBase8 struct {
 
 func TestParseRequiredOk(t *testing.T) {
 	s := &strRequired{T: "some_value"}
-	err := Parse(s, nil)
+	err := parse.Parse(s, nil)
 
 	assert.NoError(t, err, "shouldn't be an error")
 }
 
 func TestParseRequiredErr(t *testing.T) {
 	s := &strRequired{}
-	err := Parse(s, nil)
+	err := parse.Parse(s, nil)
 
 	assert.NotNil(t, err, "should be an error")
 }
 
 func TestParseDefault(t *testing.T) {
 	s := &strDefault{}
-	SetDefaultValues(s)
-	err := Parse(s, nil)
+	parse.SetDefaultValues(s)
+	err := parse.Parse(s, nil)
 
 	assert.NoError(t, err, "shouldn't be an error")
 	assert.Equal(t, "sync", s.T, "wrong value")
@@ -162,8 +163,8 @@ func TestParseDuration(t *testing.T) {
 			T  Duration `default:"5s" parse:"duration"`
 			T_ time.Duration
 		}{}
-		SetDefaultValues(s)
-		r.NoError(Parse(s, nil))
+		parse.SetDefaultValues(s)
+		r.NoError(parse.Parse(s, nil))
 		r.Equal(time.Second*5, s.T_)
 	})
 
@@ -174,8 +175,8 @@ func TestParseDuration(t *testing.T) {
 			T  Duration `parse:"duration"`
 			T_ time.Duration
 		}{}
-		SetDefaultValues(s)
-		r.NoError(Parse(s, nil))
+		parse.SetDefaultValues(s)
+		r.NoError(parse.Parse(s, nil))
 		r.Equal(time.Duration(0), s.T_)
 	})
 }
@@ -184,17 +185,17 @@ func TestParseOptionsOk(t *testing.T) {
 	a := assert.New(t)
 
 	s := &strOptions{T: "async"}
-	a.NoError(Parse(s, nil))
+	a.NoError(parse.Parse(s, nil))
 	a.Equal(s.T_, PersistenceModeAsync)
 
 	s.T = "sync"
-	a.NoError(Parse(s, nil))
+	a.NoError(parse.Parse(s, nil))
 	a.Equal(s.T_, PersistenceModeSync)
 }
 
 func TestParseOptionsErr(t *testing.T) {
 	s := &strOptions{T: "sequential"}
-	err := Parse(s, nil)
+	err := parse.Parse(s, nil)
 
 	assert.NotNil(t, err, "should be an error")
 	assert.Equal(t, PersistenceMode(0), s.T_)
@@ -202,7 +203,7 @@ func TestParseOptionsErr(t *testing.T) {
 
 func TestParseExpressionMul(t *testing.T) {
 	s := &strExpression{T: "val*2"}
-	err := Parse(s, map[string]int{"val": 3})
+	err := parse.Parse(s, map[string]int{"val": 3})
 
 	assert.Nil(t, err, "shouldn't be an error")
 	assert.Equal(t, 6, s.T_, "wrong value")
@@ -210,7 +211,7 @@ func TestParseExpressionMul(t *testing.T) {
 
 func TestParseExpressionAdd(t *testing.T) {
 	s := &strExpression{T: "10+val"}
-	err := Parse(s, map[string]int{"val": 3})
+	err := parse.Parse(s, map[string]int{"val": 3})
 
 	assert.Nil(t, err, "shouldn't be an error")
 	assert.Equal(t, 13, s.T_, "wrong value")
@@ -218,7 +219,7 @@ func TestParseExpressionAdd(t *testing.T) {
 
 func TestParseExpressionConst(t *testing.T) {
 	s := &strExpression{T: "10"}
-	err := Parse(s, map[string]int{"val": 12})
+	err := parse.Parse(s, map[string]int{"val": 12})
 
 	assert.Nil(t, err, "shouldn't be an error")
 	assert.Equal(t, 10, s.T_, "wrong value")
@@ -308,7 +309,7 @@ func TestParseDataUnitInvalid(t *testing.T) {
 		// },
 	}
 	for i := range TestList {
-		err := Parse(TestList[i].strDataUnit, nil)
+		err := parse.Parse(TestList[i].strDataUnit, nil)
 		assert.Equal(t, TestList[i].ExpectedError, err, "wrong error")
 		assert.Equal(t, uint(0), TestList[i].strDataUnit.T_, "wrong value")
 	}
@@ -341,14 +342,14 @@ func TestParseDataUnitValid(t *testing.T) {
 		},
 	}
 	for i := range TestList {
-		err := Parse(TestList[i].strDataUnit, nil)
+		err := parse.Parse(TestList[i].strDataUnit, nil)
 		assert.Nil(t, err, "shouldn't be an error")
 		assert.Equal(t, TestList[i].ExpectedValue, TestList[i].strDataUnit.T_, "wrong value")
 	}
 }
 
 func TestParseFieldSelectorSimple(t *testing.T) {
-	path := ParseFieldSelector("a.b.c")
+	path := parse.ParseFieldSelector("a.b.c")
 
 	assert.Equal(t, 3, len(path), "wrong length")
 	assert.Equal(t, "a", path[0], "wrong field")
@@ -357,7 +358,7 @@ func TestParseFieldSelectorSimple(t *testing.T) {
 }
 
 func TestParseFieldSelectorEscape(t *testing.T) {
-	path := ParseFieldSelector("a.b..c")
+	path := parse.ParseFieldSelector("a.b..c")
 
 	assert.Equal(t, 2, len(path), "wrong length")
 	assert.Equal(t, "a", path[0], "wrong field")
@@ -365,7 +366,7 @@ func TestParseFieldSelectorEscape(t *testing.T) {
 }
 
 func TestParseFieldSelectorEnding(t *testing.T) {
-	path := ParseFieldSelector("a.b.c..")
+	path := parse.ParseFieldSelector("a.b.c..")
 
 	assert.Equal(t, 3, len(path), "wrong length")
 	assert.Equal(t, "a", path[0], "wrong field")
@@ -375,7 +376,7 @@ func TestParseFieldSelectorEnding(t *testing.T) {
 
 func TestHierarchy(t *testing.T) {
 	s := &hierarchy{T: "10"}
-	err := Parse(s, map[string]int{})
+	err := parse.Parse(s, map[string]int{})
 
 	assert.Nil(t, err, "shouldn't be an error")
 	assert.Equal(t, "10", s.T, "wrong value")
@@ -392,7 +393,7 @@ func TestSlice(t *testing.T) {
 		Config: &sliceStruct{},
 	}
 
-	config, err := GetPipelineConfig(pluginInfo, jsonData, map[string]int{})
+	config, err := pipeline.GetConfig(pluginInfo, jsonData, map[string]int{})
 	s := config.(*sliceStruct)
 
 	assert.Nil(t, err, "shouldn't be an error")
@@ -412,7 +413,7 @@ func TestSliceBool(t *testing.T) {
 		Config: &sliceStructBool{},
 	}
 
-	config, err := GetPipelineConfig(pluginInfo, jsonData, map[string]int{})
+	config, err := pipeline.GetConfig(pluginInfo, jsonData, map[string]int{})
 	s := config.(*sliceStructBool)
 
 	assert.Nil(t, err, "shouldn't be an error")
@@ -424,7 +425,7 @@ func TestSliceBool(t *testing.T) {
 
 func TestDefaultSlice(t *testing.T) {
 	s := &sliceStruct{Value: "parent_value"}
-	err := Parse(s, map[string]int{})
+	err := parse.Parse(s, map[string]int{})
 
 	assert.Nil(t, err, "shouldn't be an error")
 	assert.Equal(t, "parent_value", s.Value, "wrong value")
@@ -434,15 +435,15 @@ func TestDefaultSlice(t *testing.T) {
 
 func TestBase8Default(t *testing.T) {
 	s := &strBase8{}
-	SetDefaultValues(s)
-	err := Parse(s, nil)
+	parse.SetDefaultValues(s)
+	err := parse.Parse(s, nil)
 	assert.Nil(t, err, "shouldn't be an error")
 	assert.Equal(t, int64(438), s.T_)
 }
 
 func TestBase8(t *testing.T) {
 	s := &strBase8{T: "0777"}
-	err := Parse(s, nil)
+	err := parse.Parse(s, nil)
 	assert.Nil(t, err, "shouldn't be an error")
 	assert.Equal(t, int64(511), s.T_)
 }
@@ -643,8 +644,8 @@ func TestParseDefaultInt(t *testing.T) {
 		{s: &intDefault{T: 17}, expected: 17},
 	}
 	for i, tc := range testCases {
-		SetDefaultValues(tc.s)
-		err := Parse(tc.s, nil)
+		parse.SetDefaultValues(tc.s)
+		err := parse.Parse(tc.s, nil)
 
 		assert.NoError(t, err, "shouldn't be an error tc: %d", i)
 		assert.Equal(t, tc.expected, tc.s.T, "wrong value tc: %d", i)
@@ -661,7 +662,7 @@ func TestBoolDefaultTrue(t *testing.T) {
 		Config: &boolDefault{},
 	}
 
-	config, err := GetPipelineConfig(pluginInfo, jsonData, map[string]int{})
+	config, err := pipeline.GetConfig(pluginInfo, jsonData, map[string]int{})
 	s := config.(*boolDefault)
 
 	assert.Nil(t, err, "shouldn't be an error")
@@ -681,7 +682,7 @@ func TestBoolSetFalse(t *testing.T) {
 		Config: &boolDefault{},
 	}
 
-	config, err := GetPipelineConfig(pluginInfo, jsonData, map[string]int{})
+	config, err := pipeline.GetConfig(pluginInfo, jsonData, map[string]int{})
 	s := config.(*boolDefault)
 
 	assert.Nil(t, err, "shouldn't be an error")
@@ -701,7 +702,7 @@ func TestBoolSetTrue(t *testing.T) {
 		Config: &boolDefault{},
 	}
 
-	config, err := GetPipelineConfig(pluginInfo, jsonData, map[string]int{})
+	config, err := pipeline.GetConfig(pluginInfo, jsonData, map[string]int{})
 	s := config.(*boolDefault)
 
 	assert.Nil(t, err, "shouldn't be an error")

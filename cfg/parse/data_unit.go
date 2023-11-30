@@ -1,4 +1,4 @@
-package cfg
+package parse
 
 const (
 	B = 1

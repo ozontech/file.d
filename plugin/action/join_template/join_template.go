@@ -2,6 +2,7 @@ package join_template
 
 import (
 	"github.com/ozontech/file.d/cfg"
+	cfg_parse "github.com/ozontech/file.d/cfg/parse"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/pipeline"
@@ -87,11 +88,11 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 		logger.Fatalf("join template \"%s\" not found", templateName)
 	}
 
-	startRe, err := cfg.CompileRegex(template.startRePat)
+	startRe, err := cfg_parse.CompileRegex(template.startRePat)
 	if err != nil {
 		logger.Fatalf("failed to compile regex for template \"%s\": %s", templateName, err.Error())
 	}
-	continueRe, err := cfg.CompileRegex(template.continueRePat)
+	continueRe, err := cfg_parse.CompileRegex(template.continueRePat)
 	if err != nil {
 		logger.Fatalf("failed to compile regex for template \"%s\": %s", templateName, err.Error())
 	}

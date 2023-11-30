@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ozontech/file.d/cfg"
+	cfg_parse "github.com/ozontech/file.d/cfg/parse"
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
@@ -232,12 +232,12 @@ func newDefaultParams() pipeline.PluginDefaultParams {
 }
 
 func NewConfig(config any, params map[string]int) any {
-	err := cfg.SetDefaultValues(config)
+	err := cfg_parse.SetDefaultValues(config)
 	if err != nil {
 		logger.Panicf("cannot set defaults for config: %s", err.Error())
 	}
 
-	err = cfg.Parse(config, params)
+	err = cfg_parse.Parse(config, params)
 	if err != nil {
 		logger.Panicf("wrong config: %s", err.Error())
 	}

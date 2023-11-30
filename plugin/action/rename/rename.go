@@ -1,7 +1,7 @@
 package rename
 
 import (
-	"github.com/ozontech/file.d/cfg"
+	cfg_parse "github.com/ozontech/file.d/cfg/parse"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/pipeline"
 )
@@ -67,7 +67,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, _ *pipeline.ActionPluginParams
 	conf = unescapeMap(conf)
 
 	conf.ForEach(func(path string, name string) {
-		selector := cfg.ParseFieldSelector(path)
+		selector := cfg_parse.ParseFieldSelector(path)
 		p.paths = append(p.paths, selector)
 		p.names = append(p.names, name)
 	})

@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/bitly/go-simplejson"
-	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/cfg/matchrule"
+	parse_cfg "github.com/ozontech/file.d/cfg/parse"
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/pipeline"
 )
@@ -134,12 +134,12 @@ func extractConditions(condJSON *simplejson.Json) (pipeline.MatchConditions, err
 		obj := condJSON.Get(field).Interface()
 
 		condition := pipeline.MatchCondition{
-			Field: cfg.ParseFieldSelector(field),
+			Field: parse_cfg.ParseFieldSelector(field),
 		}
 
 		if value, ok := obj.(string); ok {
 			if len(value) > 0 && value[0] == '/' {
-				r, err := cfg.CompileRegex(value)
+				r, err := parse_cfg.CompileRegex(value)
 				if err != nil {
 					return nil, fmt.Errorf("can't compile regexp %s: %w", value, err)
 				}
