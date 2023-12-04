@@ -16,9 +16,9 @@ func TestModify(t *testing.T) {
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
 
-	outEvents := make([]*pipeline.Event, 0)
+	host, _ := os.Hostname()
 	output.SetOutFn(func(e *pipeline.Event) {
-		outEvents = append(outEvents, e)
+		assert.Equal(t, host, e.Root.Dig("hostname").AsString(), "wrong field value")
 		wg.Done()
 	})
 
@@ -26,9 +26,4 @@ func TestModify(t *testing.T) {
 
 	wg.Wait()
 	p.Stop()
-
-	host, _ := os.Hostname()
-
-	assert.Equal(t, 1, len(outEvents), "wrong out events count")
-	assert.Equal(t, host, outEvents[0].Root.Dig("hostname").AsString(), "wrong field value")
 }

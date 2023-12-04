@@ -196,10 +196,10 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 
 	outBuf := data.outBuf[:0]
 
-	for _, event := range batch.Events {
+	batch.ForEach(func(event *pipeline.Event) {
 		outBuf, _ = event.Encode(outBuf)
 		outBuf = append(outBuf, byte('\n'))
-	}
+	})
 	data.outBuf = outBuf
 
 	p.write(outBuf)

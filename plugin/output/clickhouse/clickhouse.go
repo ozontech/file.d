@@ -412,7 +412,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 	data := (*workerData).(data)
 	data.reset()
 
-	for _, event := range batch.Events {
+	batch.ForEach(func(event *pipeline.Event) {
 		for _, col := range data.cols {
 			node := event.Root.Dig(col.Name)
 
@@ -436,7 +436,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 				}
 			}
 		}
-	}
+	})
 
 	var err error
 	for try := 0; try < p.config.Retry; try++ {

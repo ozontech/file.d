@@ -173,14 +173,14 @@ func TestMaskAddExtraField(t *testing.T) {
 
 	var plugin Plugin
 
-	config := Config{
+	config := test.NewConfig(&Config{
 		MaskAppliedField: key,
 		MaskAppliedValue: val,
 		Masks: []Mask{
 			{Re: kDefaultCardRegExp, Groups: []int{1, 2, 3, 4}},
 		},
-	}
-	plugin.Start(&config, test.NewEmptyActionPluginParams())
+	}, nil)
+	plugin.Start(config, test.NewEmptyActionPluginParams())
 	plugin.config.Masks[0].Re_ = regexp.MustCompile(plugin.config.Masks[0].Re)
 
 	result := plugin.Do(event)
@@ -387,7 +387,9 @@ func TestGetValueNodeList(t *testing.T) {
 	for _, s := range suits {
 		t.Run(s.name, func(t *testing.T) {
 			root, err := insaneJSON.DecodeString(s.input)
-			assert.NoError(t, err, "error on parsing test json")
+			require.NoError(t, err)
+			defer insaneJSON.Release(root)
+
 			nodes := make([]*insaneJSON.Node, 0)
 			nodes = getValueNodeList(root.Node, nodes)
 			assert.Equal(t, len(nodes), len(s.expected), s.comment)
@@ -454,40 +456,7 @@ func TestPlugin(t *testing.T) {
 		},
 	}
 
-	config := createConfig()
-
-	for _, s := range suits {
-		t.Run(s.name, func(t *testing.T) {
-			sut, input, output := test.NewPipelineMock(
-				test.NewActionPluginStaticInfo(factory, &config,
-					pipeline.MatchModeAnd,
-					nil,
-					false))
-			wg := sync.WaitGroup{}
-			wg.Add(len(s.input))
-
-			outEvents := make([]*pipeline.Event, 0)
-			output.SetOutFn(func(e *pipeline.Event) {
-				outEvents = append(outEvents, e)
-				wg.Done()
-			})
-
-			for _, in := range s.input {
-				input.In(0, "test.log", 0, []byte(in))
-			}
-
-			wg.Wait()
-			sut.Stop()
-
-			for i := range s.expected {
-				assert.Equal(t, s.expected[i], outEvents[i].Root.EncodeToString(), s.comment)
-			}
-		})
-	}
-}
-
-func createConfig() Config {
-	config := Config{
+	config := test.NewConfig(&Config{
 		Masks: []Mask{
 			{
 				Re:     `a(x*)b`,
@@ -502,8 +471,36 @@ func createConfig() Config {
 				Groups: []int{0},
 			},
 		},
+	}, nil)
+
+	for _, s := range suits {
+		t.Run(s.name, func(t *testing.T) {
+			sut, input, output := test.NewPipelineMock(
+				test.NewActionPluginStaticInfo(factory, config,
+					pipeline.MatchModeAnd,
+					nil,
+					false))
+			wg := sync.WaitGroup{}
+			wg.Add(len(s.input))
+
+			outEvents := make([]string, 0, len(s.expected))
+			output.SetOutFn(func(e *pipeline.Event) {
+				outEvents = append(outEvents, e.Root.EncodeToString())
+				wg.Done()
+			})
+
+			for _, in := range s.input {
+				input.In(0, "test.log", 0, []byte(in))
+			}
+
+			wg.Wait()
+			sut.Stop()
+
+			for i := range s.expected {
+				assert.Equal(t, s.expected[i], outEvents[i], s.comment)
+			}
+		})
 	}
-	return config
 }
 
 //nolint:funlen
@@ -663,22 +660,22 @@ func TestPluginWithComplexMasks(t *testing.T) {
 
 	for _, s := range suits {
 		t.Run(s.name, func(t *testing.T) {
-			config := Config{
+			config := test.NewConfig(&Config{
 				Masks:               s.masks,
 				AppliedMetricName:   s.metricName,
 				AppliedMetricLabels: s.metricLabels,
-			}
+			}, nil)
 			sut, input, output := test.NewPipelineMock(
-				test.NewActionPluginStaticInfo(factory, &config,
+				test.NewActionPluginStaticInfo(factory, config,
 					pipeline.MatchModeAnd,
 					nil,
 					false))
 			wg := sync.WaitGroup{}
 			wg.Add(len(s.input))
 
-			outEvents := make([]*pipeline.Event, 0)
+			outEvents := make([]string, 0, len(s.expected))
 			output.SetOutFn(func(e *pipeline.Event) {
-				outEvents = append(outEvents, e)
+				outEvents = append(outEvents, e.Root.EncodeToString())
 				wg.Done()
 			})
 
@@ -690,7 +687,7 @@ func TestPluginWithComplexMasks(t *testing.T) {
 			sut.Stop()
 
 			for i := range s.expected {
-				assert.Equal(t, s.expected[i], outEvents[i].Root.EncodeToString(), s.comment)
+				assert.Equal(t, s.expected[i], outEvents[i], s.comment)
 			}
 		})
 	}

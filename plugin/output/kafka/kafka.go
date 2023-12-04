@@ -187,7 +187,8 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 
 	outBuf := data.outBuf[:0]
 	start := 0
-	for i, event := range batch.Events {
+	i := 0
+	batch.ForEach(func(event *pipeline.Event) {
 		outBuf, start = event.Encode(outBuf)
 
 		topic := p.config.DefaultTopic
@@ -203,11 +204,12 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 		}
 		data.messages[i].Value = outBuf[start:]
 		data.messages[i].Topic = topic
-	}
+		i++
+	})
 
 	data.outBuf = outBuf
 
-	err := p.producer.SendMessages(data.messages[:len(batch.Events)])
+	err := p.producer.SendMessages(data.messages[:i])
 	if err != nil {
 		errs := err.(sarama.ProducerErrors)
 		for _, e := range errs {

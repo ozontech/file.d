@@ -51,18 +51,13 @@ func TestSplunk(t *testing.T) {
 				logger: zap.NewExample().Sugar(),
 			}
 
-			batch := pipeline.Batch{
-				Events: []*pipeline.Event{
-					{
-						Root: input,
-					},
-					{
-						Root: input,
-					}},
-			}
+			batch := pipeline.NewPreparedBatch([]*pipeline.Event{
+				{Root: input},
+				{Root: input},
+			})
 
 			data := pipeline.WorkerData(nil)
-			plugin.out(&data, &batch)
+			plugin.out(&data, batch)
 
 			assert.Equal(t, testCase.expected+testCase.expected, string(response))
 		})
