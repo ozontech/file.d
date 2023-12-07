@@ -100,6 +100,14 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
+	// > Weights of addresses to be used for weighted round robin. If no weights provided, usual round robin is used.
+	// > If provided non-empty weights list, it must be of the same size as addresses list.
+	// > Weighted round robin is implemented as classical WRR -- each address a_i has weight w_i,
+	// > requests are sent w_i times to a_i and then sent to the next address.
+	AddressesWeights []int `json:"addresses_weights"` // *
+
+	// > @3@4@5@6
+	// >
 	// > If more than one addresses are set, File.d will insert batches depends on the strategy:
 	// > round_robin - File.d will send requests in the round-robin order.
 	// > in_order - File.d will send requests starting from the first address, ending with the number of retries.
@@ -294,6 +302,9 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	if p.config.InsertTimeout_ < 1 {
 		p.logger.Fatal("'db_request_timeout' can't be <1")
 	}
+	if len(p.config.AddressesWeights) > 0 && len(p.config.AddressesWeights) != len(p.config.Addresses) {
+		p.logger.Fatal("'addresses_weights' must be of the same size as 'addresses' or empty")
+	}
 
 	schema, err := inferInsaneColInputs(p.config.Columns)
 	if err != nil {
@@ -332,7 +343,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		}
 	}
 
-	for _, addr := range p.config.Addresses {
+	for i, addr := range p.config.Addresses {
 		addr = addrWithDefaultPort(addr, "9000")
 		pool, err := chpool.New(p.ctx, chpool.Options{
 			ClientOptions: ch.Options{
@@ -357,7 +368,13 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		if err != nil {
 			p.logger.Fatal("create clickhouse connection pool", zap.Error(err), zap.String("addr", addr))
 		}
-		p.instances = append(p.instances, pool)
+		if len(p.config.AddressesWeights) > 0 {
+			for j := 0; j < p.config.AddressesWeights[i]; j++ {
+				p.instances = append(p.instances, pool)
+			}
+		} else {
+			p.instances = append(p.instances, pool)
+		}
 	}
 
 	p.batcher = pipeline.NewBatcher(pipeline.BatcherOptions{
