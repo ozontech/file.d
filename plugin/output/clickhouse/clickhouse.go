@@ -89,6 +89,11 @@ const (
 	StrategyInOrder
 )
 
+type Address struct {
+	Addr   string `json:"addr" required:"true"`
+	Weight int    `json:"weight" default:"1"`
+}
+
 // ! config-params
 // ^ config-params
 type Config struct {
@@ -96,15 +101,20 @@ type Config struct {
 	// >
 	// > TCP Clickhouse addresses, e.g.: 127.0.0.1:9000.
 	// > Check the insert_strategy to find out how File.d will behave with a list of addresses.
-	Addresses []string `json:"addresses" required:"true"` // *
-
-	// > @3@4@5@6
 	// >
-	// > Weights of addresses to be used for weighted round robin. If no weights provided, usual round robin is used.
-	// > If provided non-empty weights list, it must be of the same size as addresses list.
-	// > Weighted round robin is implemented as classical WRR -- each address a_i has weight w_i,
-	// > requests are sent w_i times to a_i and then sent to the next address.
-	AddressesWeights []int `json:"addresses_weights"` // *
+	// > Also supports another format with weights:
+	// >
+	// > addresses:
+	// >   - addr: 127.0.0.1:9000
+	// >     weight: 2
+	// >   - addr: 127.0.0.1:9001
+	// >     weight: 1
+	// >
+	// > `addr` is string, `weight` is int defaults to 1.
+	// >
+	// > In that case addr will be added to the list <weight> times and for round robin strategy
+	// > it will work as weighted round robin.
+	Addresses []json.RawMessage `json:"addresses" required:"true"` // *
 
 	// > @3@4@5@6
 	// >
@@ -302,9 +312,6 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	if p.config.InsertTimeout_ < 1 {
 		p.logger.Fatal("'db_request_timeout' can't be <1")
 	}
-	if len(p.config.AddressesWeights) > 0 && len(p.config.AddressesWeights) != len(p.config.Addresses) {
-		p.logger.Fatal("'addresses_weights' must be of the same size as 'addresses' or empty")
-	}
 
 	schema, err := inferInsaneColInputs(p.config.Columns)
 	if err != nil {
@@ -343,12 +350,28 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		}
 	}
 
-	for i, addr := range p.config.Addresses {
-		addr = addrWithDefaultPort(addr, "9000")
+	var addrStruct Address
+	var addrStr string
+	var weight int
+	for _, addr := range p.config.Addresses {
+		addrStr = ""
+		weight = 1
+		addrStruct = Address{}
+		if err := fd.DecodeConfig(&addrStruct, addr); err == nil {
+			if err := cfg.Parse(&addrStruct, nil); err == nil {
+				addrStr = addrStruct.Addr
+				weight = addrStruct.Weight
+			} else {
+				p.logger.Fatal("wrong config for addresses", zap.Error(err))
+			}
+		} else {
+			_ = json.Unmarshal(addr, &addrStr)
+		}
+		addrStr = addrWithDefaultPort(addrStr, "9000")
 		pool, err := chpool.New(p.ctx, chpool.Options{
 			ClientOptions: ch.Options{
 				Logger:           p.logger.Named("driver"),
-				Address:          addr,
+				Address:          addrStr,
 				Database:         p.config.Database,
 				User:             p.config.User,
 				Password:         p.config.Password,
@@ -366,13 +389,9 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 			HealthCheckPeriod: p.config.HealthCheckPeriod_,
 		})
 		if err != nil {
-			p.logger.Fatal("create clickhouse connection pool", zap.Error(err), zap.String("addr", addr))
+			p.logger.Fatal("create clickhouse connection pool", zap.Error(err), zap.String("addr", addrStr))
 		}
-		if len(p.config.AddressesWeights) > 0 {
-			for j := 0; j < p.config.AddressesWeights[i]; j++ {
-				p.instances = append(p.instances, pool)
-			}
-		} else {
+		for j := 0; j < weight; j++ {
 			p.instances = append(p.instances, pool)
 		}
 	}
