@@ -90,8 +90,13 @@ const (
 )
 
 type Address struct {
-	Addr   string `json:"addr" required:"true"`
-	Weight int    `json:"weight" default:"1"`
+	Addr   string `json:"addr"`
+	Weight int    `json:"weight"`
+}
+
+func (a *Address) fromMap(m map[string]any) error {
+	jsonData, _ := json.Marshal(m)
+	return json.Unmarshal(jsonData, a)
 }
 
 // ! config-params
@@ -113,8 +118,8 @@ type Config struct {
 	// > `addr` is string, `weight` is int defaults to 1.
 	// >
 	// > In that case addr will be added to the list <weight> times and for round robin strategy
-	// > it will work as weighted round robin.
-	Addresses []json.RawMessage `json:"addresses" required:"true"` // *
+	// > it will work as weighted round robin. In case if only host is provided, weight will be set to 1.
+	Addresses []any `json:"addresses" required:"true"` // *
 
 	// > @3@4@5@6
 	// >
@@ -350,28 +355,25 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		}
 	}
 
-	var addrStruct Address
-	var addrStr string
-	var weight int
+	addrStruct := Address{}
 	for _, addr := range p.config.Addresses {
-		addrStr = ""
-		weight = 1
-		addrStruct = Address{}
-		if err := fd.DecodeConfig(&addrStruct, addr); err == nil {
-			if err := cfg.Parse(&addrStruct, nil); err == nil {
-				addrStr = addrStruct.Addr
-				weight = addrStruct.Weight
-			} else {
-				p.logger.Fatal("wrong config for addresses", zap.Error(err))
+		addrStruct.Addr = ""
+		addrStruct.Weight = 1
+		switch t := addr.(type) {
+		case map[string]any:
+			if err := addrStruct.fromMap(t); err != nil {
+				p.logger.Fatal("wrong format of Address", zap.Error(err))
 			}
-		} else {
-			_ = json.Unmarshal(addr, &addrStr)
+		case string:
+			addrStruct.Addr = t
+		default:
+			p.logger.Fatal("invalid type for address, required string or Address")
 		}
-		addrStr = addrWithDefaultPort(addrStr, "9000")
+		addrStruct.Addr = addrWithDefaultPort(addrStruct.Addr, "9000")
 		pool, err := chpool.New(p.ctx, chpool.Options{
 			ClientOptions: ch.Options{
 				Logger:           p.logger.Named("driver"),
-				Address:          addrStr,
+				Address:          addrStruct.Addr,
 				Database:         p.config.Database,
 				User:             p.config.User,
 				Password:         p.config.Password,
@@ -389,9 +391,9 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 			HealthCheckPeriod: p.config.HealthCheckPeriod_,
 		})
 		if err != nil {
-			p.logger.Fatal("create clickhouse connection pool", zap.Error(err), zap.String("addr", addrStr))
+			p.logger.Fatal("create clickhouse connection pool", zap.Error(err), zap.String("addr", addrStruct.Addr))
 		}
-		for j := 0; j < weight; j++ {
+		for j := 0; j < addrStruct.Weight; j++ {
 			p.instances = append(p.instances, pool)
 		}
 	}
