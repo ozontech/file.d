@@ -5,6 +5,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cenkalti/backoff/v3"
+	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/metric"
 	"github.com/prometheus/client_golang/prometheus"
@@ -133,21 +135,24 @@ type Batcher struct {
 }
 
 type (
-	BatcherOutFn         func(*WorkerData, *Batch)
+	BatcherOutFn         func(*WorkerData, *Batch, *backoff.BackOff)
 	BatcherMaintenanceFn func(*WorkerData)
 
 	BatcherOptions struct {
-		PipelineName        string
-		OutputType          string
-		OutFn               BatcherOutFn
-		MaintenanceFn       BatcherMaintenanceFn
-		Controller          OutputPluginController
-		Workers             int
-		BatchSizeCount      int
-		BatchSizeBytes      int
-		FlushTimeout        time.Duration
-		MaintenanceInterval time.Duration
-		MetricCtl           *metric.Ctl
+		PipelineName                     string
+		OutputType                       string
+		OutFn                            BatcherOutFn
+		MaintenanceFn                    BatcherMaintenanceFn
+		Controller                       OutputPluginController
+		Workers                          int
+		BatchSizeCount                   int
+		BatchSizeBytes                   int
+		FlushTimeout                     time.Duration
+		MaintenanceInterval              time.Duration
+		MetricCtl                        *metric.Ctl
+		Retry                            int
+		RetryRetention                   time.Duration
+		RetryRetentionExponentMultiplier int
 	}
 )
 
@@ -197,12 +202,19 @@ func (b *Batcher) work() {
 
 	t := time.Now()
 	data := WorkerData(nil)
+	workerBackoff := cfg.GetBackoff(
+		b.opts.RetryRetention,
+		float64(b.opts.RetryRetentionExponentMultiplier),
+		uint64(b.opts.Retry),
+	)
+
 	for batch := range b.fullBatches {
 		b.workersInProgress.Inc()
 
 		if batch.hasIterableEvents {
 			now := time.Now()
-			b.opts.OutFn(&data, batch)
+			workerBackoff.Reset()
+			b.opts.OutFn(&data, batch, &workerBackoff)
 			b.batchOutFnSeconds.Observe(time.Since(now).Seconds())
 		}
 

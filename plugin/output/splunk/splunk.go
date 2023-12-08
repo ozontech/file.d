@@ -35,7 +35,6 @@ type Plugin struct {
 	avgEventSize int
 	batcher      *pipeline.Batcher
 	controller   pipeline.OutputPluginController
-	backoff      backoff.BackOff
 
 	// plugin metrics
 	sendErrorMetric prometheus.Counter
@@ -131,23 +130,21 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.config = config.(*Config)
 	p.registerMetrics(params.MetricCtl)
 	p.client = p.newClient(p.config.RequestTimeout_)
-	p.backoff = cfg.GetBackoff(
-		p.config.Retention_,
-		float64(p.config.RetentionExponentMultiplier),
-		uint64(p.config.Retry),
-	)
 
 	p.batcher = pipeline.NewBatcher(pipeline.BatcherOptions{
-		PipelineName:   params.PipelineName,
-		OutputType:     outPluginType,
-		OutFn:          p.out,
-		MaintenanceFn:  p.maintenance,
-		Controller:     p.controller,
-		Workers:        p.config.WorkersCount_,
-		BatchSizeCount: p.config.BatchSize_,
-		BatchSizeBytes: p.config.BatchSizeBytes_,
-		FlushTimeout:   p.config.BatchFlushTimeout_,
-		MetricCtl:      params.MetricCtl,
+		PipelineName:                     params.PipelineName,
+		OutputType:                       outPluginType,
+		OutFn:                            p.out,
+		MaintenanceFn:                    p.maintenance,
+		Controller:                       p.controller,
+		Workers:                          p.config.WorkersCount_,
+		BatchSizeCount:                   p.config.BatchSize_,
+		BatchSizeBytes:                   p.config.BatchSizeBytes_,
+		FlushTimeout:                     p.config.BatchFlushTimeout_,
+		MetricCtl:                        params.MetricCtl,
+		Retry:                            p.config.Retry,
+		RetryRetention:                   p.config.Retention_,
+		RetryRetentionExponentMultiplier: p.config.RetentionExponentMultiplier,
 	})
 
 	p.batcher.Start(context.TODO())
@@ -165,7 +162,7 @@ func (p *Plugin) Out(event *pipeline.Event) {
 	p.batcher.Add(event)
 }
 
-func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
+func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch, workerBackoff *backoff.BackOff) {
 	if *workerData == nil {
 		*workerData = &data{
 			outBuf: make([]byte, 0, p.config.BatchSize_*p.avgEventSize),
@@ -191,7 +188,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 
 	p.logger.Debugf("trying to send: %s", outBuf)
 
-	p.backoff.Reset()
+	(*workerBackoff).Reset()
 	err := backoff.Retry(func() error {
 		err := p.send(outBuf)
 		if err != nil {
@@ -199,7 +196,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 			p.logger.Errorf("can't send data to splunk address=%s: %s", p.config.Endpoint, err.Error())
 		}
 		return err
-	}, p.backoff)
+	}, *workerBackoff)
 
 	if err != nil {
 		var errLogFunc func(args ...interface{})

@@ -44,7 +44,6 @@ type Plugin struct {
 	avgEventSize int
 	batcher      *pipeline.Batcher
 	controller   pipeline.OutputPluginController
-	backoff      backoff.BackOff
 
 	// plugin metrics
 	sendErrorMetric prometheus.Counter
@@ -203,12 +202,6 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.config = config.(*Config)
 	p.registerMetrics(params.MetricCtl)
 
-	p.backoff = cfg.GetBackoff(
-		p.config.Retention_,
-		float64(p.config.RetentionExponentMultiplier),
-		uint64(p.config.Retry),
-	)
-
 	p.config.hostField = pipeline.ByteToStringUnsafe(p.formatExtraField(nil, p.config.HostField))
 	p.config.shortMessageField = pipeline.ByteToStringUnsafe(p.formatExtraField(nil, p.config.ShortMessageField))
 	p.config.defaultShortMessageValue = strings.TrimSpace(p.config.DefaultShortMessageValue)
@@ -222,17 +215,20 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.config.levelField = pipeline.ByteToStringUnsafe(p.formatExtraField(nil, p.config.LevelField))
 
 	p.batcher = pipeline.NewBatcher(pipeline.BatcherOptions{
-		PipelineName:        params.PipelineName,
-		OutputType:          outPluginType,
-		OutFn:               p.out,
-		MaintenanceFn:       p.maintenance,
-		Controller:          p.controller,
-		Workers:             p.config.WorkersCount_,
-		BatchSizeCount:      p.config.BatchSize_,
-		BatchSizeBytes:      p.config.BatchSizeBytes_,
-		FlushTimeout:        p.config.BatchFlushTimeout_,
-		MaintenanceInterval: p.config.ReconnectInterval_,
-		MetricCtl:           params.MetricCtl,
+		PipelineName:                     params.PipelineName,
+		OutputType:                       outPluginType,
+		OutFn:                            p.out,
+		MaintenanceFn:                    p.maintenance,
+		Controller:                       p.controller,
+		Workers:                          p.config.WorkersCount_,
+		BatchSizeCount:                   p.config.BatchSize_,
+		BatchSizeBytes:                   p.config.BatchSizeBytes_,
+		FlushTimeout:                     p.config.BatchFlushTimeout_,
+		MaintenanceInterval:              p.config.ReconnectInterval_,
+		MetricCtl:                        params.MetricCtl,
+		Retry:                            p.config.Retry,
+		RetryRetention:                   p.config.Retention_,
+		RetryRetentionExponentMultiplier: p.config.RetentionExponentMultiplier,
 	})
 
 	p.batcher.Start(context.TODO())
@@ -250,7 +246,7 @@ func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 	p.sendErrorMetric = ctl.RegisterCounter("output_gelf_send_error", "Total GELF send errors")
 }
 
-func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
+func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch, workerBackoff *backoff.BackOff) {
 	if *workerData == nil {
 		*workerData = &data{
 			outBuf:    make([]byte, 0, p.config.BatchSize_*p.avgEventSize),
@@ -276,7 +272,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 	data.outBuf = outBuf
 	data.encodeBuf = encodeBuf
 
-	p.backoff.Reset()
+	(*workerBackoff).Reset()
 	err := backoff.Retry(func() error {
 		if data.gelf == nil {
 			p.logger.Infof("connecting to gelf address=%s", p.config.Endpoint)
@@ -302,7 +298,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 		}
 
 		return nil
-	}, p.backoff)
+	}, *workerBackoff)
 
 	if err != nil {
 		var errLogFunc func(args ...interface{})

@@ -49,7 +49,6 @@ type Plugin struct {
 	batcher      *pipeline.Batcher
 	controller   pipeline.OutputPluginController
 	mu           *sync.Mutex
-	backoff      backoff.BackOff
 
 	// plugin metrics
 	sendErrorMetric      prometheus.Counter
@@ -228,27 +227,24 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 
 	p.logger.Info("starting batcher", zap.Duration("timeout", p.config.BatchFlushTimeout_))
 	p.batcher = pipeline.NewBatcher(pipeline.BatcherOptions{
-		PipelineName:        params.PipelineName,
-		OutputType:          outPluginType,
-		OutFn:               p.out,
-		MaintenanceFn:       p.maintenance,
-		Controller:          p.controller,
-		Workers:             p.config.WorkersCount_,
-		BatchSizeCount:      p.config.BatchSize_,
-		BatchSizeBytes:      p.config.BatchSizeBytes_,
-		FlushTimeout:        p.config.BatchFlushTimeout_,
-		MaintenanceInterval: time.Minute,
-		MetricCtl:           params.MetricCtl,
+		PipelineName:                     params.PipelineName,
+		OutputType:                       outPluginType,
+		OutFn:                            p.out,
+		MaintenanceFn:                    p.maintenance,
+		Controller:                       p.controller,
+		Workers:                          p.config.WorkersCount_,
+		BatchSizeCount:                   p.config.BatchSize_,
+		BatchSizeBytes:                   p.config.BatchSizeBytes_,
+		FlushTimeout:                     p.config.BatchFlushTimeout_,
+		MaintenanceInterval:              time.Minute,
+		MetricCtl:                        params.MetricCtl,
+		Retry:                            p.config.Retry,
+		RetryRetention:                   p.config.Retention_,
+		RetryRetentionExponentMultiplier: p.config.RetentionExponentMultiplier,
 	})
 
 	ctx, cancel := context.WithCancel(context.Background())
 	p.cancel = cancel
-
-	p.backoff = cfg.GetBackoff(
-		p.config.Retention_,
-		float64(p.config.RetentionExponentMultiplier),
-		uint64(p.config.Retry),
-	)
 
 	p.batcher.Start(ctx)
 }
@@ -267,7 +263,7 @@ func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 	p.indexingErrorsMetric = ctl.RegisterCounter("output_elasticsearch_index_error", "Number of elasticsearch indexing errors")
 }
 
-func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
+func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch, workerBackoff *backoff.BackOff) {
 	if *workerData == nil {
 		*workerData = &data{
 			outBuf: make([]byte, 0, p.config.BatchSize_*p.avgEventSize),
@@ -285,7 +281,6 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 		data.outBuf = p.appendEvent(data.outBuf, event)
 	})
 
-	p.backoff.Reset()
 	err := backoff.Retry(func() error {
 		err := p.send(data.outBuf)
 		if err != nil {
@@ -293,7 +288,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 			p.logger.Error("can't send to the elastic, will try other endpoint", zap.Error(err))
 		}
 		return err
-	}, p.backoff)
+	}, *workerBackoff)
 
 	if err != nil {
 		var errLogFunc func(args ...interface{})

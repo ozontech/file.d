@@ -88,14 +88,14 @@ func TestPrivateOut(t *testing.T) {
 		queryBuilder: builder,
 		pool:         pool,
 		logger:       testLogger,
-		backoff:      cfg.GetBackoff(1*time.Second, 1, 2),
 		ctx:          ctx,
 	}
 
 	p.registerMetrics(metric.NewCtl("test", prometheus.NewRegistry()))
 
 	batch := pipeline.NewPreparedBatch([]*pipeline.Event{{Root: root}})
-	p.out(nil, batch)
+	backoff := cfg.GetBackoff(1*time.Second, 1, 2)
+	p.out(nil, batch, &backoff)
 }
 
 func TestPrivateOutWithRetry(t *testing.T) {
@@ -164,14 +164,14 @@ func TestPrivateOutWithRetry(t *testing.T) {
 		queryBuilder: builder,
 		pool:         pool,
 		logger:       testLogger,
-		backoff:      cfg.GetBackoff(1*time.Second, 1, 2),
 		ctx:          ctx,
 	}
 
 	p.registerMetrics(metric.NewCtl("test", prometheus.NewRegistry()))
 
 	batch := pipeline.NewPreparedBatch([]*pipeline.Event{{Root: root}})
-	p.out(nil, batch)
+	backoff := cfg.GetBackoff(1*time.Second, 1, 2)
+	p.out(nil, batch, &backoff)
 }
 
 func TestPrivateOutNoGoodEvents(t *testing.T) {
@@ -219,13 +219,13 @@ func TestPrivateOutNoGoodEvents(t *testing.T) {
 		config:       &config,
 		queryBuilder: builder,
 		logger:       testLogger,
-		backoff:      cfg.GetBackoff(1*time.Second, 1, 2),
 	}
 
 	p.registerMetrics(metric.NewCtl("test", prometheus.NewRegistry()))
 
 	batch := pipeline.NewPreparedBatch([]*pipeline.Event{{Root: root}})
-	p.out(nil, batch)
+	backoff := cfg.GetBackoff(1*time.Second, 1, 2)
+	p.out(nil, batch, &backoff)
 }
 
 func TestPrivateOutDeduplicatedEvents(t *testing.T) {
@@ -299,7 +299,6 @@ func TestPrivateOutDeduplicatedEvents(t *testing.T) {
 		queryBuilder: builder,
 		pool:         pool,
 		logger:       testLogger,
-		backoff:      cfg.GetBackoff(1*time.Second, 1, 2),
 		ctx:          ctx,
 	}
 
@@ -310,7 +309,8 @@ func TestPrivateOutDeduplicatedEvents(t *testing.T) {
 		{Root: rootDuplication},
 		{Root: rootDuplicationMore},
 	})
-	p.out(nil, batch)
+	backoff := cfg.GetBackoff(1*time.Second, 1, 2)
+	p.out(nil, batch, &backoff)
 }
 
 func TestPrivateOutWrongTypeInField(t *testing.T) {
@@ -367,13 +367,13 @@ func TestPrivateOutWrongTypeInField(t *testing.T) {
 		config:       &config,
 		queryBuilder: builder,
 		logger:       testLogger,
-		backoff:      cfg.GetBackoff(1*time.Second, 1, 2),
 	}
 
 	p.registerMetrics(metric.NewCtl("test", prometheus.NewRegistry()))
 
 	batch := pipeline.NewPreparedBatch([]*pipeline.Event{{Root: root}})
-	p.out(nil, batch)
+	backoff := cfg.GetBackoff(1*time.Second, 1, 2)
+	p.out(nil, batch, &backoff)
 }
 
 func TestPrivateOutFewUniqueEventsYetWithDeduplicationEventsAnpooladEvents(t *testing.T) {
@@ -472,7 +472,6 @@ func TestPrivateOutFewUniqueEventsYetWithDeduplicationEventsAnpooladEvents(t *te
 		queryBuilder: builder,
 		pool:         pool,
 		logger:       testLogger,
-		backoff:      cfg.GetBackoff(1*time.Second, 1, 2),
 		ctx:          ctx,
 	}
 
@@ -485,7 +484,8 @@ func TestPrivateOutFewUniqueEventsYetWithDeduplicationEventsAnpooladEvents(t *te
 		{Root: secondUniqueRoot},
 		{Root: badRoot},
 	})
-	p.out(nil, batch)
+	backoff := cfg.GetBackoff(1*time.Second, 1, 2)
+	p.out(nil, batch, &backoff)
 }
 
 // TODO replace with gomock

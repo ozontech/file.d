@@ -38,7 +38,6 @@ type Plugin struct {
 
 	producer sarama.SyncProducer
 	batcher  *pipeline.Batcher
-	backoff  backoff.BackOff
 
 	// plugin metrics
 	sendErrorMetric prometheus.Counter
@@ -177,25 +176,23 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	if p.config.Retention_ < 1 {
 		p.logger.Fatal("'retention' can't be <1")
 	}
-	p.backoff = cfg.GetBackoff(
-		p.config.Retention_,
-		float64(p.config.RetentionExponentMultiplier),
-		uint64(p.config.Retry),
-	)
 
 	p.logger.Infof("workers count=%d, batch size=%d", p.config.WorkersCount_, p.config.BatchSize_)
 
 	p.producer = NewProducer(p.config, p.logger)
 	p.batcher = pipeline.NewBatcher(pipeline.BatcherOptions{
-		PipelineName:   params.PipelineName,
-		OutputType:     outPluginType,
-		OutFn:          p.out,
-		Controller:     p.controller,
-		Workers:        p.config.WorkersCount_,
-		BatchSizeCount: p.config.BatchSize_,
-		BatchSizeBytes: p.config.BatchSizeBytes_,
-		FlushTimeout:   p.config.BatchFlushTimeout_,
-		MetricCtl:      params.MetricCtl,
+		PipelineName:                     params.PipelineName,
+		OutputType:                       outPluginType,
+		OutFn:                            p.out,
+		Controller:                       p.controller,
+		Workers:                          p.config.WorkersCount_,
+		BatchSizeCount:                   p.config.BatchSize_,
+		BatchSizeBytes:                   p.config.BatchSizeBytes_,
+		FlushTimeout:                     p.config.BatchFlushTimeout_,
+		MetricCtl:                        params.MetricCtl,
+		Retry:                            p.config.Retry,
+		RetryRetention:                   p.config.Retention_,
+		RetryRetentionExponentMultiplier: p.config.RetentionExponentMultiplier,
 	})
 
 	p.batcher.Start(context.TODO())
@@ -209,7 +206,7 @@ func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 	p.sendErrorMetric = ctl.RegisterCounter("output_kafka_send_errors", "Total Kafka send errors")
 }
 
-func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
+func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch, workerBackoff *backoff.BackOff) {
 	if *workerData == nil {
 		*workerData = &data{
 			messages: make([]*sarama.ProducerMessage, p.config.BatchSize_),
@@ -247,7 +244,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 
 	data.outBuf = outBuf
 
-	p.backoff.Reset()
+	(*workerBackoff).Reset()
 	err := backoff.Retry(func() error {
 		err := p.producer.SendMessages(data.messages[:i])
 		if err == nil {
@@ -265,7 +262,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 		)
 
 		return err
-	}, p.backoff)
+	}, *workerBackoff)
 
 	if err != nil {
 		var errLogFunc func(args ...interface{})

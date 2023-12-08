@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cenkalti/backoff/v3"
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/metric"
 	"github.com/prometheus/client_golang/prometheus"
@@ -36,7 +37,7 @@ func TestBatcher(t *testing.T) {
 	wg.Add(eventCount)
 
 	batchCount := &atomic.Int32{}
-	batcherOut := func(workerData *WorkerData, batch *Batch) {
+	batcherOut := func(workerData *WorkerData, batch *Batch, workerBackoff *backoff.BackOff) {
 		if *workerData == nil {
 			*workerData = batchCount
 		}
@@ -107,7 +108,7 @@ func TestBatcherMaxSize(t *testing.T) {
 	wg.Add(eventCount)
 
 	batchCount := &atomic.Int32{}
-	batcherOut := func(workerData *WorkerData, batch *Batch) {
+	batcherOut := func(workerData *WorkerData, batch *Batch, workerBackoff *backoff.BackOff) {
 		if *workerData == nil {
 			*workerData = batchCount
 		}

@@ -50,8 +50,7 @@ func TestSplunk(t *testing.T) {
 				config: &Config{
 					Endpoint: testServer.URL,
 				},
-				backoff: cfg.GetBackoff(1*time.Second, 1, 2),
-				logger:  zap.NewExample().Sugar(),
+				logger: zap.NewExample().Sugar(),
 			}
 
 			batch := pipeline.NewPreparedBatch([]*pipeline.Event{
@@ -59,8 +58,10 @@ func TestSplunk(t *testing.T) {
 				{Root: input},
 			})
 
+			backoff := cfg.GetBackoff(1*time.Second, 1, 2)
+
 			data := pipeline.WorkerData(nil)
-			plugin.out(&data, batch)
+			plugin.out(&data, batch, &backoff)
 
 			assert.Equal(t, testCase.expected+testCase.expected, string(response))
 		})
