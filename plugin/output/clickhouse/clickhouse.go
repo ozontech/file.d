@@ -1,8 +1,10 @@
 package clickhouse
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net"
 	"strings"
 	"time"
@@ -94,10 +96,29 @@ type Address struct {
 	Weight int    `json:"weight"`
 }
 
-func (a *Address) fromMap(m map[string]any) error {
-	jsonData, _ := json.Marshal(m)
-	return json.Unmarshal(jsonData, a)
+func (a *Address) UnmarshalJSON(b []byte) error {
+	if len(b) == 0 {
+		return nil
+	}
+
+	switch b[0] {
+	case '"':
+		a.Weight = 1
+		return json.Unmarshal(b, &a.Addr)
+	case '{':
+		type tmpAddress Address
+		tmp := tmpAddress{}
+		dec := json.NewDecoder(bytes.NewReader(b))
+		dec.DisallowUnknownFields()
+		err := dec.Decode(&tmp)
+		*a = Address(tmp)
+		return err
+	default:
+		return errors.New("failed to unmarshal to Address, the value must be string or object")
+	}
 }
+
+var _ json.Unmarshaler = (*Address)(nil)
 
 // ! config-params
 // ^ config-params
@@ -107,19 +128,19 @@ type Config struct {
 	// > TCP Clickhouse addresses, e.g.: 127.0.0.1:9000.
 	// > Check the insert_strategy to find out how File.d will behave with a list of addresses.
 	// >
-	// > Also supports another format with weights:
-	// >
+	// > Accepts strings or objects, e.g.:
+	// > ```yaml
 	// > addresses:
-	// >   - addr: 127.0.0.1:9000
-	// >     weight: 2
+	// >   - 127.0.0.1:9000 # the same as {addr:'127.0.0.1:9000',weight:1}
 	// >   - addr: 127.0.0.1:9001
-	// >     weight: 1
+	// >     weight: 2
+	// > ```
 	// >
-	// > `addr` is string, `weight` is int defaults to 1.
-	// >
-	// > In that case addr will be added to the list <weight> times and for round robin strategy
-	// > it will work as weighted round robin. In case if only host is provided, weight will be set to 1.
-	Addresses []any `json:"addresses" required:"true"` // *
+	// > When some addresses get weight greater than 1 and round_robin insert strategy is used,
+	// > it works as classical weighted round robin. Given {(a_1,w_1),(a_1,w_1),...,{a_n,w_n}},
+	// > where a_i is the ith address and w_i is the ith address' weight, requests are sent in order:
+	// > w_1 times to a_1, w_2 times to a_2, ..., w_n times to a_n, w_1 times to a_1 and so on.
+	Addresses []Address `json:"addresses" required:"true" slice:"true"` // *
 
 	// > @3@4@5@6
 	// >
@@ -355,25 +376,12 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		}
 	}
 
-	addrStruct := Address{}
 	for _, addr := range p.config.Addresses {
-		addrStruct.Addr = ""
-		addrStruct.Weight = 1
-		switch t := addr.(type) {
-		case map[string]any:
-			if err := addrStruct.fromMap(t); err != nil {
-				p.logger.Fatal("wrong format of Address", zap.Error(err))
-			}
-		case string:
-			addrStruct.Addr = t
-		default:
-			p.logger.Fatal("invalid type for address, required string or Address")
-		}
-		addrStruct.Addr = addrWithDefaultPort(addrStruct.Addr, "9000")
+		addr.Addr = addrWithDefaultPort(addr.Addr, "9000")
 		pool, err := chpool.New(p.ctx, chpool.Options{
 			ClientOptions: ch.Options{
 				Logger:           p.logger.Named("driver"),
-				Address:          addrStruct.Addr,
+				Address:          addr.Addr,
 				Database:         p.config.Database,
 				User:             p.config.User,
 				Password:         p.config.Password,
@@ -391,9 +399,9 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 			HealthCheckPeriod: p.config.HealthCheckPeriod_,
 		})
 		if err != nil {
-			p.logger.Fatal("create clickhouse connection pool", zap.Error(err), zap.String("addr", addrStruct.Addr))
+			p.logger.Fatal("create clickhouse connection pool", zap.Error(err), zap.String("addr", addr.Addr))
 		}
-		for j := 0; j < addrStruct.Weight; j++ {
+		for j := 0; j < addr.Weight; j++ {
 			p.instances = append(p.instances, pool)
 		}
 	}
