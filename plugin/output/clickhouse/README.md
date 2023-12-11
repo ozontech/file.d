@@ -6,23 +6,23 @@ It sends the event batches to Clickhouse database using
 File.d uses low level Go client - [ch-go](https://github.com/ClickHouse/ch-go) to provide these features.
 
 ### Config params
-**`addresses`** *`[]any`* *`required`* 
+**`addresses`** *`[]Address`* *`required`* 
 
 TCP Clickhouse addresses, e.g.: 127.0.0.1:9000.
 Check the insert_strategy to find out how File.d will behave with a list of addresses.
 
-Also supports another format with weights:
-
+Accepts strings or objects, e.g.:
+```yaml
 addresses:
-  - addr: 127.0.0.1:9000
-    weight: 2
+  - 127.0.0.1:9000 # the same as {addr:'127.0.0.1:9000',weight:1}
   - addr: 127.0.0.1:9001
-    weight: 1
+    weight: 2
+```
 
-`addr` is string, `weight` is int defaults to 1.
-
-In that case addr will be added to the list <weight> times and for round robin strategy
-it will work as weighted round robin. In case if only host is provided, weight will be set to 1.
+When some addresses get weight greater than 1 and round_robin insert strategy is used,
+it works as classical weighted round robin. Given {(a_1,w_1),(a_1,w_1),...,{a_n,w_n}},
+where a_i is the ith address and w_i is the ith address' weight, requests are sent in order:
+w_1 times to a_1, w_2 times to a_2, ..., w_n times to a_n, w_1 times to a_1 and so on.
 
 <br>
 
