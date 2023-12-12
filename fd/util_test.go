@@ -188,6 +188,43 @@ func Test_extractDoIfChecker(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			name: "ok_single_val",
+			args: args{
+				cfgStr: `{
+					"op":"or",
+					"operands":[
+						{"op":"equal","field":"service","values":null},
+						{"op":"equal","field":"service","values":""},
+						{"op":"equal","field":"service","values":"test"}
+					]
+				}`,
+			},
+			want: &doIfTreeNode{
+				logicalOp: "or",
+				operands: []*doIfTreeNode{
+					{
+						fieldOp:       "equal",
+						fieldName:     "service",
+						values:        [][]byte{nil},
+						caseSensitive: true,
+					},
+					{
+						fieldOp:       "equal",
+						fieldName:     "service",
+						values:        [][]byte{[]byte("")},
+						caseSensitive: true,
+					},
+					{
+						fieldOp:       "equal",
+						fieldName:     "service",
+						values:        [][]byte{[]byte("test")},
+						caseSensitive: true,
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
 			name: "error_no_op_field",
 			args: args{
 				cfgStr: `{"field": "val"}`,

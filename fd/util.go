@@ -196,6 +196,29 @@ var (
 	}
 )
 
+func extractFieldOpVals(jsonNode *simplejson.Json) [][]byte {
+	values := jsonNode.Get("values")
+	vals := make([][]byte, 0)
+	iFaceVal := values.Interface()
+	if iFaceVal == nil {
+		vals = append(vals, nil)
+		return vals
+	}
+	if strVal, ok := iFaceVal.(string); ok {
+		vals = append(vals, []byte(strVal))
+		return vals
+	}
+	for i := range values.MustArray() {
+		curValue := values.GetIndex(i).Interface()
+		if curValue == nil {
+			vals = append(vals, nil)
+		} else {
+			vals = append(vals, []byte(curValue.(string)))
+		}
+	}
+	return vals
+}
+
 func extractFieldOpNode(opName string, jsonNode *simplejson.Json) (pipeline.DoIfNode, error) {
 	var result pipeline.DoIfNode
 	var err error
@@ -205,16 +228,7 @@ func extractFieldOpNode(opName string, jsonNode *simplejson.Json) (pipeline.DoIf
 	if has {
 		caseSensitive = caseSensitiveNode.MustBool()
 	}
-	values := jsonNode.Get("values")
-	vals := make([][]byte, 0)
-	for i := range values.MustArray() {
-		curValue := values.GetIndex(i).Interface()
-		if curValue == nil {
-			vals = append(vals, nil)
-		} else {
-			vals = append(vals, []byte(curValue.(string)))
-		}
-	}
+	vals := extractFieldOpVals(jsonNode)
 	result, err = pipeline.NewFieldOpNode(opName, fieldPath, caseSensitive, vals)
 	if err != nil {
 		return nil, fmt.Errorf("failed to init field op: %w", err)
