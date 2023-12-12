@@ -133,3 +133,72 @@ func Test_addrWithDefaultPort(t *testing.T) {
 		assert.Equal(t, tt.want, addrWithDefaultPort(tt.addr, defaultPort))
 	}
 }
+
+func TestAddress_UnmarshalJSON(t *testing.T) {
+	t.Parallel()
+	type fields struct {
+		Addr   string
+		Weight int
+	}
+	type args struct {
+		b []byte
+	}
+	tests := []struct {
+		name    string
+		args    args
+		want    fields
+		wantErr bool
+	}{
+		{
+			name: "ok_object",
+			args: args{
+				b: []byte(`{"addr":"127.0.0.1:9001","weight":2}`),
+			},
+			want: fields{
+				Addr:   "127.0.0.1:9001",
+				Weight: 2,
+			},
+		},
+		{
+			name: "ok_string",
+			args: args{
+				b: []byte(`"127.0.0.1:9001"`),
+			},
+			want: fields{
+				Addr:   "127.0.0.1:9001",
+				Weight: 1,
+			},
+		},
+		{
+			name: "invalid_type",
+			args: args{
+				b: []byte(`[{"field":"val"}]`),
+			},
+			wantErr: true,
+		},
+		{
+			name: "invalid_object",
+			args: args{
+				b: []byte(`{"field":"val"}`),
+			},
+			wantErr: true,
+		},
+		{
+			name: "empty",
+		},
+	}
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			a := &Address{}
+			if err := a.UnmarshalJSON(tt.args.b); (err != nil) != tt.wantErr {
+				t.Errorf("Address.UnmarshalJSON() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if !tt.wantErr {
+				assert.Equal(t, tt.want.Addr, a.Addr)
+				assert.Equal(t, tt.want.Weight, a.Weight)
+			}
+		})
+	}
+}
