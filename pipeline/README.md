@@ -128,7 +128,7 @@ It contains operation to be checked on the field value, the field name to extrac
 the values to check against.
 
 Params:
-  - `field_op` - value from field operations list. Required.
+  - `op` - value from field operations list. Required.
   - `field` - name of the field to apply operation. Required.
   - `values` - list of values to check field. Required non-empty.
   - `case_sensitive` - flag indicating whether checks are performed in case sensitive way. Default `true`.
@@ -141,10 +141,10 @@ pipelines:
     actions:
       - type: discard
         do_if:
-          - field_op: suffix
-            field: pod
-            values: [pod-1, pod-2]
-            case_sensitive: true
+          op: suffix
+          field: pod
+          values: [pod-1, pod-2]
+          case_sensitive: true
 ```
 
 
@@ -158,9 +158,9 @@ pipelines:
     actions:
       - type: discard
         do_if:
-          - field_op: equal
-            field: pod
-            values: [test-pod-1, test-pod-2]
+          op: equal
+          field: pod
+          values: [test-pod-1, test-pod-2]
 ```
 
 result:
@@ -182,9 +182,9 @@ pipelines:
     actions:
       - type: discard
         do_if:
-          - field_op: contains
-            field: pod
-            values: [my-pod, my-test]
+          op: contains
+          field: pod
+          values: [my-pod, my-test]
 ```
 
 result:
@@ -206,9 +206,9 @@ pipelines:
     actions:
       - type: discard
         do_if:
-          - field_op: prefix
-            field: pod
-            values: [test-1, test-2]
+          op: prefix
+          field: pod
+          values: [test-1, test-2]
 ```
 
 result:
@@ -230,9 +230,9 @@ pipelines:
     actions:
       - type: discard
         do_if:
-          - field_op: suffix
-            field: pod
-            values: [pod-1, pod-2]
+          op: suffix
+          field: pod
+          values: [pod-1, pod-2]
 ```
 
 result:
@@ -254,9 +254,9 @@ pipelines:
     actions:
       - type: discard
         do_if:
-          - field_op: regex
-            field: pod
-            values: [pod-\d, my-test.*]
+          op: regex
+          field: pod
+          values: [pod-\d, my-test.*]
 ```
 
 result:
@@ -278,7 +278,7 @@ It always has at least one operand which are other nodes and calls their checks
 to apply logical operation on their results.
 
 Params:
-  - `logical_op` - value from logical operations list. Required.
+  - `op` - value from logical operations list. Required.
   - `operands` - list of another do-if nodes. Required non-empty.
 
 Example:
@@ -288,16 +288,16 @@ pipelines:
     actions:
       - type: discard
         do_if:
-          - logical_op: and
-            operands:
-              - field_op: equal
-                field: pod
-                values: [test-pod-1, test-pod-2]
-                case_sensitive: true
-              - field_op: equal
-                field: service
-                values: [test-service]
-                case_sensitive: true
+          op: and
+          operands:
+            - op: equal
+              field: pod
+              values: [test-pod-1, test-pod-2]
+              case_sensitive: true
+            - op: equal
+              field: service
+              values: [test-service]
+              case_sensitive: true
 ```
 
 
@@ -311,14 +311,14 @@ pipelines:
     actions:
       - type: discard
         do_if:
-          - logical_op: or
-            operands:
-              - field_op: equal
-                field: pod
-                values: [test-pod-1, test-pod-2]
-              - field_op: equal
-                field: service
-                values: [test-service]
+          op: or
+          operands:
+            - op: equal
+              field: pod
+              values: [test-pod-1, test-pod-2]
+            - op: equal
+              field: service
+              values: [test-service]
 ```
 
 result:
@@ -341,14 +341,14 @@ pipelines:
     actions:
       - type: discard
         do_if:
-          - logical_op: and
-            operands:
-              - field_op: equal
-                field: pod
-                values: [test-pod-1, test-pod-2]
-              - field_op: equal
-                field: service
-                values: [test-service]
+          op: and
+          operands:
+            - op: equal
+              field: pod
+              values: [test-pod-1, test-pod-2]
+            - op: equal
+              field: service
+              values: [test-service]
 ```
 
 result:
@@ -370,11 +370,11 @@ pipelines:
     actions:
       - type: discard
         do_if:
-          - logical_op: not
-            operands:
-              - field_op: equal
-                field: service
-                values: [test-service]
+          op: not
+          operands:
+            - op: equal
+              field: service
+              values: [test-service]
 ```
 
 result:
