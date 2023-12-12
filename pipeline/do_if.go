@@ -72,9 +72,9 @@ var (
 	// >     actions:
 	// >       - type: discard
 	// >         do_if:
-	// >           - op: equal
-	// >             field: pod
-	// >             values: [test-pod-1, test-pod-2]
+	// >           op: equal
+	// >           field: pod
+	// >           values: [test-pod-1, test-pod-2]
 	// > ```
 	// >
 	// > result:
@@ -95,9 +95,9 @@ var (
 	// >     actions:
 	// >       - type: discard
 	// >         do_if:
-	// >           - op: contains
-	// >             field: pod
-	// >             values: [my-pod, my-test]
+	// >           op: contains
+	// >           field: pod
+	// >           values: [my-pod, my-test]
 	// > ```
 	// >
 	// > result:
@@ -118,9 +118,9 @@ var (
 	// >     actions:
 	// >       - type: discard
 	// >         do_if:
-	// >           - op: prefix
-	// >             field: pod
-	// >             values: [test-1, test-2]
+	// >           op: prefix
+	// >           field: pod
+	// >           values: [test-1, test-2]
 	// > ```
 	// >
 	// > result:
@@ -141,9 +141,9 @@ var (
 	// >     actions:
 	// >       - type: discard
 	// >         do_if:
-	// >           - op: suffix
-	// >             field: pod
-	// >             values: [pod-1, pod-2]
+	// >           op: suffix
+	// >           field: pod
+	// >           values: [pod-1, pod-2]
 	// > ```
 	// >
 	// > result:
@@ -164,9 +164,9 @@ var (
 	// >     actions:
 	// >       - type: discard
 	// >         do_if:
-	// >           - op: regex
-	// >             field: pod
-	// >             values: [pod-\d, my-test.*]
+	// >           op: regex
+	// >           field: pod
+	// >           values: [pod-\d, my-test.*]
 	// > ```
 	// >
 	// > result:
@@ -200,10 +200,10 @@ pipelines:
     actions:
       - type: discard
         do_if:
-          - op: suffix
-            field: pod
-            values: [pod-1, pod-2]
-            case_sensitive: true
+          op: suffix
+          field: pod
+          values: [pod-1, pod-2]
+          case_sensitive: true
 ```
 
 }*/
@@ -473,14 +473,14 @@ var (
 	// >     actions:
 	// >       - type: discard
 	// >         do_if:
-	// >           - op: or
-	// >             operands:
-	// >               - op: equal
-	// >                 field: pod
-	// >                 values: [test-pod-1, test-pod-2]
-	// >               - op: equal
-	// >                 field: service
-	// >                 values: [test-service]
+	// >           op: or
+	// >           operands:
+	// >             - op: equal
+	// >               field: pod
+	// >               values: [test-pod-1, test-pod-2]
+	// >             - op: equal
+	// >               field: service
+	// >               values: [test-service]
 	// > ```
 	// >
 	// > result:
@@ -502,14 +502,14 @@ var (
 	// >     actions:
 	// >       - type: discard
 	// >         do_if:
-	// >           - op: and
-	// >             operands:
-	// >               - op: equal
-	// >                 field: pod
-	// >                 values: [test-pod-1, test-pod-2]
-	// >               - op: equal
-	// >                 field: service
-	// >                 values: [test-service]
+	// >           op: and
+	// >           operands:
+	// >             - op: equal
+	// >               field: pod
+	// >               values: [test-pod-1, test-pod-2]
+	// >             - op: equal
+	// >               field: service
+	// >               values: [test-service]
 	// > ```
 	// >
 	// > result:
@@ -530,11 +530,11 @@ var (
 	// >     actions:
 	// >       - type: discard
 	// >         do_if:
-	// >           - op: not
-	// >             operands:
-	// >               - op: equal
-	// >                 field: service
-	// >                 values: [test-service]
+	// >           op: not
+	// >           operands:
+	// >             - op: equal
+	// >               field: service
+	// >               values: [test-service]
 	// > ```
 	// >
 	// > result:
@@ -563,16 +563,16 @@ pipelines:
     actions:
       - type: discard
         do_if:
-          - op: and
-            operands:
-              - op: equal
-                field: pod
-                values: [test-pod-1, test-pod-2]
-                case_sensitive: true
-              - op: equal
-                field: service
-                values: [test-service]
-                case_sensitive: true
+          op: and
+          operands:
+            - op: equal
+              field: pod
+              values: [test-pod-1, test-pod-2]
+              case_sensitive: true
+            - op: equal
+              field: service
+              values: [test-service]
+              case_sensitive: true
 ```
 
 }*/
