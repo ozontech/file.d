@@ -72,7 +72,7 @@ var (
 	// >     actions:
 	// >       - type: discard
 	// >         do_if:
-	// >           - field_op: equal
+	// >           - op: equal
 	// >             field: pod
 	// >             values: [test-pod-1, test-pod-2]
 	// > ```
@@ -95,7 +95,7 @@ var (
 	// >     actions:
 	// >       - type: discard
 	// >         do_if:
-	// >           - field_op: contains
+	// >           - op: contains
 	// >             field: pod
 	// >             values: [my-pod, my-test]
 	// > ```
@@ -118,7 +118,7 @@ var (
 	// >     actions:
 	// >       - type: discard
 	// >         do_if:
-	// >           - field_op: prefix
+	// >           - op: prefix
 	// >             field: pod
 	// >             values: [test-1, test-2]
 	// > ```
@@ -141,7 +141,7 @@ var (
 	// >     actions:
 	// >       - type: discard
 	// >         do_if:
-	// >           - field_op: suffix
+	// >           - op: suffix
 	// >             field: pod
 	// >             values: [pod-1, pod-2]
 	// > ```
@@ -164,7 +164,7 @@ var (
 	// >     actions:
 	// >       - type: discard
 	// >         do_if:
-	// >           - field_op: regex
+	// >           - op: regex
 	// >             field: pod
 	// >             values: [pod-\d, my-test.*]
 	// > ```
@@ -187,7 +187,7 @@ It contains operation to be checked on the field value, the field name to extrac
 the values to check against.
 
 Params:
-  - `field_op` - value from field operations list. Required.
+  - `op` - value from field operations list. Required.
   - `field` - name of the field to apply operation. Required.
   - `values` - list of values to check field. Required non-empty.
   - `case_sensitive` - flag indicating whether checks are performed in case sensitive way. Default `true`.
@@ -200,7 +200,7 @@ pipelines:
     actions:
       - type: discard
         do_if:
-          - field_op: suffix
+          - op: suffix
             field: pod
             values: [pod-1, pod-2]
             case_sensitive: true
@@ -473,12 +473,12 @@ var (
 	// >     actions:
 	// >       - type: discard
 	// >         do_if:
-	// >           - logical_op: or
+	// >           - op: or
 	// >             operands:
-	// >               - field_op: equal
+	// >               - op: equal
 	// >                 field: pod
 	// >                 values: [test-pod-1, test-pod-2]
-	// >               - field_op: equal
+	// >               - op: equal
 	// >                 field: service
 	// >                 values: [test-service]
 	// > ```
@@ -502,12 +502,12 @@ var (
 	// >     actions:
 	// >       - type: discard
 	// >         do_if:
-	// >           - logical_op: and
+	// >           - op: and
 	// >             operands:
-	// >               - field_op: equal
+	// >               - op: equal
 	// >                 field: pod
 	// >                 values: [test-pod-1, test-pod-2]
-	// >               - field_op: equal
+	// >               - op: equal
 	// >                 field: service
 	// >                 values: [test-service]
 	// > ```
@@ -530,9 +530,9 @@ var (
 	// >     actions:
 	// >       - type: discard
 	// >         do_if:
-	// >           - logical_op: not
+	// >           - op: not
 	// >             operands:
-	// >               - field_op: equal
+	// >               - op: equal
 	// >                 field: service
 	// >                 values: [test-service]
 	// > ```
@@ -553,7 +553,7 @@ It always has at least one operand which are other nodes and calls their checks
 to apply logical operation on their results.
 
 Params:
-  - `logical_op` - value from logical operations list. Required.
+  - `op` - value from logical operations list. Required.
   - `operands` - list of another do-if nodes. Required non-empty.
 
 Example:
@@ -563,13 +563,13 @@ pipelines:
     actions:
       - type: discard
         do_if:
-          - logical_op: and
+          - op: and
             operands:
-              - field_op: equal
+              - op: equal
                 field: pod
                 values: [test-pod-1, test-pod-2]
                 case_sensitive: true
-              - field_op: equal
+              - op: equal
                 field: service
                 values: [test-service]
                 case_sensitive: true
