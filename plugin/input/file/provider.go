@@ -55,6 +55,7 @@ type jobProvider struct {
 
 	// provider metrics
 	possibleOffsetCorruptionMetric prometheus.Counter
+	errorOpenFileMetric            prometheus.Counter
 }
 
 type Job struct {
@@ -98,7 +99,7 @@ type symlinkInfo struct {
 	inode    inodeID
 }
 
-func NewJobProvider(config *Config, possibleOffsetCorruptionMetric prometheus.Counter, sugLogger *zap.SugaredLogger) *jobProvider {
+func NewJobProvider(config *Config, possibleOffsetCorruptionMetric, errorOpenFileMetric prometheus.Counter, sugLogger *zap.SugaredLogger) *jobProvider {
 	jp := &jobProvider{
 		config:   config,
 		offsetDB: newOffsetDB(config.OffsetsFile, config.OffsetsFileTmp),
@@ -120,6 +121,7 @@ func NewJobProvider(config *Config, possibleOffsetCorruptionMetric prometheus.Co
 
 		logger:                         sugLogger,
 		possibleOffsetCorruptionMetric: possibleOffsetCorruptionMetric,
+		errorOpenFileMetric:            errorOpenFileMetric,
 	}
 
 	jp.watcher = NewWatcher(
@@ -182,7 +184,7 @@ func (jp *jobProvider) commit(event *pipeline.Event) {
 
 	job.mu.Lock()
 	// commit offsets only not ignored AND regular events
-	if !event.IsRegularKind() || event.SeqID <= job.ignoreEventsLE {
+	if (!event.IsRegularKind() && !event.IsChildParentKind()) || event.SeqID <= job.ignoreEventsLE {
 		job.mu.Unlock()
 		return
 	}
@@ -281,6 +283,7 @@ func (jp *jobProvider) refreshFile(stat os.FileInfo, filename string, symlink st
 	file, err := os.Open(filename)
 	if err != nil {
 		jp.logger.Warnf("file was already moved from creation place %s: %s", filename, err.Error())
+		jp.errorOpenFileMetric.Inc()
 		return
 	}
 

@@ -157,6 +157,11 @@ func (f *FileD) setupAction(p *pipeline.Pipeline, index int, t string, actionJSO
 	logger.Infof("creating action with type %q for pipeline %q", t, p.Name)
 	info := f.plugins.GetActionByType(t)
 
+	doIfChecker, err := extractDoIfChecker(actionJSON.Get("do_if"))
+	if err != nil {
+		logger.Fatalf(`failed to extract "do_if" conditions for action %d/%s in pipeline %q: %s`, index, t, p.Name, err.Error())
+	}
+
 	matchMode := extractMatchMode(actionJSON)
 	if matchMode == pipeline.MatchModeUnknown {
 		logger.Fatalf("unknown match_mode value for action %d/%s in pipeline %q", index, t, p.Name)
@@ -191,6 +196,7 @@ func (f *FileD) setupAction(p *pipeline.Pipeline, index int, t string, actionJSO
 		MetricLabels:     metricLabels,
 		MetricSkipStatus: skipStatus,
 		MatchInvert:      matchInvert,
+		DoIfChecker:      doIfChecker,
 	})
 }
 

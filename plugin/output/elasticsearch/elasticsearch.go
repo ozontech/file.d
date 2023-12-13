@@ -37,7 +37,7 @@ var (
 )
 
 type Plugin struct {
-	logger       *zap.SugaredLogger
+	logger       *zap.Logger
 	client       *fasthttp.Client
 	endpoints    []*fasthttp.URI
 	cancel       context.CancelFunc
@@ -158,7 +158,7 @@ func Factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginParams) {
 	p.controller = params.Controller
-	p.logger = params.Logger
+	p.logger = params.Logger.Desugar()
 	p.avgEventSize = params.PipelineSettings.AvgEventSize
 	p.config = config.(*Config)
 	p.registerMetrics(params.MetricCtl)
@@ -192,7 +192,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		b := xtls.NewConfigBuilder()
 		err := b.AppendCARoot(p.config.CACert)
 		if err != nil {
-			p.logger.Fatalf("can't append CA root: %s", err.Error())
+			p.logger.Fatal("can't append CA root", zap.Error(err))
 		}
 
 		p.client.TLSConfig = b.Build()
@@ -202,7 +202,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 
 	p.maintenance(nil)
 
-	p.logger.Infof("starting batcher: timeout=%d", p.config.BatchFlushTimeout_)
+	p.logger.Info("starting batcher", zap.Duration("timeout", p.config.BatchFlushTimeout_))
 	p.batcher = pipeline.NewBatcher(pipeline.BatcherOptions{
 		PipelineName:        params.PipelineName,
 		OutputType:          outPluginType,
@@ -251,14 +251,14 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 	}
 
 	data.outBuf = data.outBuf[:0]
-	for _, event := range batch.Events {
+	batch.ForEach(func(event *pipeline.Event) {
 		data.outBuf = p.appendEvent(data.outBuf, event)
-	}
+	})
 
 	for {
 		if err := p.send(data.outBuf); err != nil {
 			p.sendErrorMetric.Inc()
-			p.logger.Errorf("can't send to the elastic, will try other endpoint: %s", err.Error())
+			p.logger.Error("can't send to the elastic, will try other endpoint", zap.Error(err))
 		} else {
 			break
 		}
@@ -296,22 +296,7 @@ func (p *Plugin) send(body []byte) error {
 	}
 	defer insaneJSON.Release(root)
 
-	if root.Dig("errors").AsBool() {
-		errors := 0
-		for _, node := range root.Dig("items").AsArray() {
-			errNode := node.Dig("index", "error")
-			if errNode != nil {
-				errors += 1
-				p.logger.Errorf("indexing error: %s", errNode.EncodeToString())
-			}
-		}
-
-		if errors != 0 {
-			p.indexingErrorsMetric.Add(float64(errors))
-		}
-
-		p.controller.Error("some events from batch aren't written")
-	}
+	p.reportESErrors(root)
 
 	return nil
 }
@@ -338,7 +323,7 @@ func (p *Plugin) appendIndexName(outBuf []byte, event *pipeline.Event) []byte {
 		}
 
 		if replacements >= len(p.config.IndexValues) {
-			p.logger.Fatalf("count of placeholders and values isn't match, check index_format/index_values config params")
+			p.logger.Fatal("count of placeholders and values isn't match, check index_format/index_values config params")
 		}
 		value := p.config.IndexValues[replacements]
 		replacements++
@@ -380,4 +365,89 @@ func (p *Plugin) setAuthHeader(req *fasthttp.Request) {
 	if p.authHeader != nil {
 		req.Header.SetBytesKV(strAuthorization, p.authHeader)
 	}
+}
+
+// example of an ElasticSearch response that returned an indexing error for the first log:
+//
+//	{
+//	 "took": 5,
+//	 "errors": true,
+//	 "items": [
+//	   {
+//	     "index": {
+//	       "_index": "logs",
+//	       "_type": "_doc",
+//	       "_id": "x8YzWowBaqwP8avfpXh8",
+//	       "status": 400,
+//	       "error": {
+//	         "type": "mapper_parsing_exception",
+//	         "reason": "failed to parse field [hello] of type [text] in document with id 'x8YzWowBaqwP8avfpXh8'. Preview of field's value: '{test=test}'",
+//	         "caused_by": {
+//	           "type": "illegal_state_exception",
+//	           "reason": "Can't get text on a START_OBJECT at 1:11"
+//	         }
+//	       }
+//	     }
+//	   },
+//	   {
+//	     "index": {
+//	       "_index": "logs",
+//	       "_type": "_doc",
+//	       "_id": "yMYzWowBaqwP8avfpXh8",
+//	       "_version": 1,
+//	       "result": "created",
+//	       "_shards": {
+//	         "total": 2,
+//	         "successful": 1,
+//	         "failed": 0
+//	       },
+//	       "_seq_no": 4,
+//	       "_primary_term": 1,
+//	       "status": 201
+//	     }
+//	   }
+//	 ]
+//	}
+func (p *Plugin) reportESErrors(root *insaneJSON.Root) {
+	if !root.Dig("errors").AsBool() {
+		return
+	}
+
+	items := root.Dig("items").AsArray()
+	if len(items) == 0 {
+		p.logger.Error("unknown elasticsearch error, 'items' field in the response is empty",
+			zap.String("response", root.EncodeToString()),
+		)
+		return
+	}
+
+	indexingErrors := 0
+	for _, node := range items {
+		indexNode := node.Dig("index")
+		if indexNode == nil {
+			p.logger.Error("unknown elasticsearch response, 'index' field in the response is empty",
+				zap.String("response", node.EncodeToString()),
+			)
+			continue
+		}
+
+		if errNode := indexNode.Dig("error"); errNode != nil {
+			indexingErrors++
+			p.logger.Error("elasticsearch indexing error",
+				zap.String("response", errNode.EncodeToString()))
+			continue
+		}
+
+		if statusCode := indexNode.Dig("status"); statusCode.AsInt() < http.StatusBadRequest {
+			continue
+		}
+
+		p.logger.Error("unknown elasticsearch error", zap.String("response", node.EncodeToString()))
+	}
+
+	if indexingErrors != 0 {
+		p.indexingErrorsMetric.Add(float64(indexingErrors))
+	}
+
+	p.logger.Error("some events from batch aren't written, check previous logs for more information")
 }

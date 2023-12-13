@@ -5,7 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/test"
 	"github.com/stretchr/testify/require"
@@ -116,17 +115,14 @@ func TestPlugin_Do(t *testing.T) {
 		t.Run(tc.Name, func(t *testing.T) {
 			require.NoError(t, root.DecodeString(tc.Root))
 
-			err := cfg.Parse(tc.Config, nil)
-			require.NoError(t, err)
+			config := test.NewConfig(tc.Config, nil)
 
-			plugin := &Plugin{
-				config: tc.Config,
-			}
+			plugin := &Plugin{}
 			event := &pipeline.Event{
 				Root: root,
 			}
 
-			plugin.Start(tc.Config, nil)
+			plugin.Start(config, nil)
 			result := plugin.do(event, now)
 
 			require.Equal(t, tc.ExpResult, result)
@@ -136,17 +132,12 @@ func TestPlugin_Do(t *testing.T) {
 }
 
 func TestE2E_Plugin(t *testing.T) {
-	config := &Config{Format: pipeline.UnixTime, Field: "timestamp"}
-
-	err := cfg.Parse(config, nil)
-	require.NoError(t, err)
-
+	config := test.NewConfig(&Config{Format: pipeline.UnixTime, Field: "timestamp"}, nil)
 	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, config, pipeline.MatchModeAnd, nil, false))
 
-	outEvents := make([]*pipeline.Event, 0)
 	counter := atomic.Int32{}
 	output.SetOutFn(func(e *pipeline.Event) {
-		outEvents = append(outEvents, e)
+		require.NotEqual(t, "", e.Root.Dig("timestamp").AsString(), "wrong out event")
 		counter.Dec()
 	})
 
@@ -157,9 +148,4 @@ func TestE2E_Plugin(t *testing.T) {
 		time.Sleep(time.Millisecond * 10)
 	}
 	p.Stop()
-
-	require.Equal(t, 1, len(outEvents), "wrong out events count")
-	timestamp := outEvents[0].Root.Dig("timestamp")
-	require.NotNil(t, timestamp)
-	require.NotEqual(t, "", timestamp.EncodeToString(), "wrong out event")
 }

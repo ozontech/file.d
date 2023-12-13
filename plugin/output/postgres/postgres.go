@@ -262,10 +262,10 @@ func (p *Plugin) out(_ *pipeline.WorkerData, batch *pipeline.Batch) {
 	uniqFields := p.queryBuilder.GetUniqueFields()
 
 	// Deduplicate events, pg can't do upsert with duplication.
-	uniqueEventsMap := make(map[string]struct{}, len(batch.Events))
+	uniqueEventsMap := make(map[string]struct{}, p.config.BatchSize_)
 	var anyValidValue bool
 
-	for _, event := range batch.Events {
+	batch.ForEach(func(event *pipeline.Event) {
 		fieldValues, uniqueID, err := p.processEvent(event, pgFields, uniqFields)
 		if err != nil {
 			switch {
@@ -280,7 +280,7 @@ func (p *Plugin) out(_ *pipeline.WorkerData, batch *pipeline.Batch) {
 				p.logger.Fatalf("undefined error: %w", err)
 			}
 
-			continue
+			return
 		}
 
 		// passes here only if event valid.
@@ -294,8 +294,7 @@ func (p *Plugin) out(_ *pipeline.WorkerData, batch *pipeline.Batch) {
 			builder = builder.Values(fieldValues...)
 			anyValidValue = true
 		}
-	}
-
+	})
 	builder = builder.Suffix(p.queryBuilder.GetPostfix()).PlaceholderFormat(sq.Dollar)
 
 	// no valid events passed.

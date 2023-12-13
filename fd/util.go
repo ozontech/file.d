@@ -3,6 +3,7 @@ package fd
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -180,6 +181,109 @@ func extractMetrics(actionJSON *simplejson.Json) (string, []string, bool) {
 	return metricName, metricLabels, skipStatus
 }
 
+var (
+	doIfLogicalOpNodes = map[string]struct{}{
+		"and": struct{}{},
+		"not": struct{}{},
+		"or":  struct{}{},
+	}
+	doIfFieldOpNodes = map[string]struct{}{
+		"equal":    struct{}{},
+		"contains": struct{}{},
+		"prefix":   struct{}{},
+		"suffix":   struct{}{},
+		"regex":    struct{}{},
+	}
+)
+
+func extractFieldOpVals(jsonNode *simplejson.Json) [][]byte {
+	values := jsonNode.Get("values")
+	vals := make([][]byte, 0)
+	iFaceVal := values.Interface()
+	if iFaceVal == nil {
+		vals = append(vals, nil)
+		return vals
+	}
+	if strVal, ok := iFaceVal.(string); ok {
+		vals = append(vals, []byte(strVal))
+		return vals
+	}
+	for i := range values.MustArray() {
+		curValue := values.GetIndex(i).Interface()
+		if curValue == nil {
+			vals = append(vals, nil)
+		} else {
+			vals = append(vals, []byte(curValue.(string)))
+		}
+	}
+	return vals
+}
+
+func extractFieldOpNode(opName string, jsonNode *simplejson.Json) (pipeline.DoIfNode, error) {
+	var result pipeline.DoIfNode
+	var err error
+	fieldPath := jsonNode.Get("field").MustString()
+	caseSensitiveNode, has := jsonNode.CheckGet("case_sensitive")
+	caseSensitive := true
+	if has {
+		caseSensitive = caseSensitiveNode.MustBool()
+	}
+	vals := extractFieldOpVals(jsonNode)
+	result, err = pipeline.NewFieldOpNode(opName, fieldPath, caseSensitive, vals)
+	if err != nil {
+		return nil, fmt.Errorf("failed to init field op: %w", err)
+	}
+
+	return result, nil
+}
+
+func extractLogicalOpNode(opName string, jsonNode *simplejson.Json) (pipeline.DoIfNode, error) {
+	var result, operand pipeline.DoIfNode
+	var err error
+	operands := jsonNode.Get("operands")
+	operandsList := make([]pipeline.DoIfNode, 0)
+	for i := range operands.MustArray() {
+		opNode := operands.GetIndex(i)
+		operand, err = extractDoIfNode(opNode)
+		if err != nil {
+			return nil, fmt.Errorf("failed to extract operand node for logical op %q", opName)
+		}
+		operandsList = append(operandsList, operand)
+	}
+	result, err = pipeline.NewLogicalNode(opName, operandsList)
+	if err != nil {
+		return nil, fmt.Errorf("failed to init logical node: %w", err)
+	}
+	return result, nil
+}
+
+func extractDoIfNode(jsonNode *simplejson.Json) (pipeline.DoIfNode, error) {
+	opNameNode, has := jsonNode.CheckGet("op")
+	if !has {
+		return nil, errors.New(`"op" field not found`)
+	}
+	opName := opNameNode.MustString()
+	if _, has := doIfLogicalOpNodes[opName]; has {
+		return extractLogicalOpNode(opName, jsonNode)
+	} else if _, has := doIfFieldOpNodes[opName]; has {
+		return extractFieldOpNode(opName, jsonNode)
+	}
+	return nil, fmt.Errorf("unknown op %q", opName)
+}
+
+func extractDoIfChecker(actionJSON *simplejson.Json) (*pipeline.DoIfChecker, error) {
+	if actionJSON.MustMap() == nil {
+		return nil, nil
+	}
+
+	root, err := extractDoIfNode(actionJSON)
+	if err != nil {
+		return nil, fmt.Errorf("failed to extract nodes: %w", err)
+	}
+	result := pipeline.NewDoIfChecker(root)
+	return result, nil
+}
+
 func makeActionJSON(actionJSON *simplejson.Json) []byte {
 	actionJSON.Del("type")
 	actionJSON.Del("match_fields")
@@ -188,6 +292,7 @@ func makeActionJSON(actionJSON *simplejson.Json) []byte {
 	actionJSON.Del("metric_labels")
 	actionJSON.Del("metric_skip_status")
 	actionJSON.Del("match_invert")
+	actionJSON.Del("do_if")
 	configJson, err := actionJSON.Encode()
 	if err != nil {
 		logger.Panicf("can't create action json")

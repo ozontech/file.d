@@ -96,6 +96,8 @@ type ActionPluginStaticInfo struct {
 	MatchConditions  MatchConditions
 	MatchMode        MatchMode
 	MatchInvert      bool
+
+	DoIfChecker *DoIfChecker
 }
 
 type ActionPluginInfo struct {
