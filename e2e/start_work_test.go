@@ -41,7 +41,7 @@ import (
 	_ "github.com/ozontech/file.d/plugin/input/fake"
 	_ "github.com/ozontech/file.d/plugin/input/file"
 	_ "github.com/ozontech/file.d/plugin/input/http"
-	_ "github.com/ozontech/file.d/plugin/input/journalctl"
+	_ "github.com/ozontech/file.d/plugin/input/journald"
 	_ "github.com/ozontech/file.d/plugin/input/k8s"
 	_ "github.com/ozontech/file.d/plugin/input/kafka"
 	_ "github.com/ozontech/file.d/plugin/output/clickhouse"

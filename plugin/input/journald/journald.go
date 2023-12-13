@@ -1,6 +1,6 @@
 //go:build linux
 
-package journalctl
+package journald
 
 import (
 	"strings"
@@ -28,9 +28,9 @@ type Plugin struct {
 
 	//  plugin metrics
 
-	offsetErrorsMetric        *prometheus.CounterVec
-	journalCtlStopErrorMetric *prometheus.CounterVec
-	readerErrorsMetric        *prometheus.CounterVec
+	offsetErrorsMetric      *prometheus.CounterVec
+	journalDStopErrorMetric *prometheus.CounterVec
+	readerErrorsMetric      *prometheus.CounterVec
 }
 
 type Config struct {
@@ -65,14 +65,14 @@ func (o *offsetInfo) set(cursor string) {
 }
 
 func (p *Plugin) Write(bytes []byte) (int, error) {
-	p.params.Controller.In(0, "journalctl", p.currentOffset, bytes, false)
+	p.params.Controller.In(0, "journald", p.currentOffset, bytes, false)
 	p.currentOffset++
 	return len(bytes), nil
 }
 
 func init() {
 	fd.DefaultPluginRegistry.RegisterInput(&pipeline.PluginStaticInfo{
-		Type:    "journalctl",
+		Type:    "journald",
 		Factory: Factory,
 	})
 }
@@ -108,16 +108,16 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 }
 
 func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
-	p.offsetErrorsMetric = ctl.RegisterCounter("input_journalctl_offset_errors", "Number of errors occurred when saving/loading offset")
-	p.journalCtlStopErrorMetric = ctl.RegisterCounter("input_journalctl_stop_errors", "Total journalctl stop errors")
-	p.readerErrorsMetric = ctl.RegisterCounter("input_journalctl_reader_errors", "Total reader errors")
+	p.offsetErrorsMetric = ctl.RegisterCounter("input_journald_offset_errors", "Number of errors occurred when saving/loading offset")
+	p.journalDStopErrorMetric = ctl.RegisterCounter("input_journald_stop_errors", "Total journald stop errors")
+	p.readerErrorsMetric = ctl.RegisterCounter("input_journald_reader_errors", "Total reader errors")
 }
 
 func (p *Plugin) Stop() {
 	err := p.reader.stop()
 	if err != nil {
-		p.journalCtlStopErrorMetric.WithLabelValues().Inc()
-		p.logger.Error("can't stop journalctl cmd", zap.Error(err))
+		p.journalDStopErrorMetric.WithLabelValues().Inc()
+		p.logger.Error("can't stop journald cmd", zap.Error(err))
 	}
 
 	offsets := *p.offInfo.Load()
