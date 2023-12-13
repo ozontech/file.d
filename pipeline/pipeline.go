@@ -138,10 +138,8 @@ type Settings struct {
 }
 
 // New creates new pipeline. Consider using `SetupHTTPHandlers` next.
-func New(name string, settings *Settings, registry *prometheus.Registry) *Pipeline {
+func New(name string, settings *Settings, registry *prometheus.Registry, lg *zap.Logger) *Pipeline {
 	metricCtl := metric.New("pipeline_"+name, registry)
-
-	lg := logger.Instance.Named(name).Desugar()
 
 	pipeline := &Pipeline{
 		Name:           name,
