@@ -444,13 +444,20 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	p.valueNodes = getValueNodeList(root, p.valueNodes, p.ignoredFields)
 	for _, v := range p.valueNodes {
 		value := v.AsBytes()
-		valueIsCommonMatched := p.matchRe.Match(value)
+		var valueIsCommonMatched bool
+		if p.config.SkipMismatched {
+			// to always try to apply a mask
+			valueIsCommonMatched = true
+		} else {
+			// is matched by common mask
+			valueIsCommonMatched = p.matchRe.Match(value)
+		}
 
 		p.sourceBuf = append(p.sourceBuf[:0], value...)
 		p.maskBuf = append(p.maskBuf[:0], p.sourceBuf...)
 		for i := range p.config.Masks {
 			mask := &p.config.Masks[i]
-			if mask.Re != "" && p.config.SkipMismatched && !valueIsCommonMatched {
+			if mask.Re != "" && !valueIsCommonMatched {
 				// skips messages not matched common regex
 				continue
 			}
