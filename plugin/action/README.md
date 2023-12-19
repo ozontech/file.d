@@ -200,7 +200,7 @@ For example, in expression `${field|re("(test-pod-\w+)",-1,[1],",")|re("test-pod
 then the data extracted using first regular expression and formed into a new string, then the second regular expression is applied
 and its result is formed into a value to be put in modified field.
 
-Currenlty available filters are:
+Currently available filters are:
 + `regex filter` - `re(regex string, limit int, groups []int, separator string)`, filters data using `regex`, extracts `limit` occurrences,
 takes regex groups listed in `groups` list, and if there are more than one extracted element concatenates result using `separator`.
 Negative value of `limit` means all occurrences are extracted, `limit` 0 means no occurrences are extracted, `limit` greater than 0 means
