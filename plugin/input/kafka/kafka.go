@@ -155,13 +155,14 @@ func (p *Plugin) Stop() {
 }
 
 func (p *Plugin) Commit(event *pipeline.Event) {
-	if p.session == nil {
+	session := p.session
+	if session == nil {
 		p.commitErrorsMetric.WithLabelValues().Inc()
 		p.logger.Errorf("no kafka consumer session for event commit")
 		return
 	}
 	index, partition := disassembleSourceID(event.SourceID)
-	p.session.MarkOffset(p.config.Topics[index], partition, event.Offset+1, "")
+	session.MarkOffset(p.config.Topics[index], partition, event.Offset+1, "")
 }
 
 func (p *Plugin) newConsumerGroup() sarama.ConsumerGroup {
