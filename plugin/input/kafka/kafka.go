@@ -91,6 +91,12 @@ type Config struct {
 	// > The maximum amount of time the consumer expects a message takes to process for the user.
 	ConsumerMaxProcessingTime  cfg.Duration `json:"consumer_max_processing_time" default:"200ms" parse:"duration"` // *
 	ConsumerMaxProcessingTime_ time.Duration
+
+	// > @3@4@5@6
+	// >
+	// > The maximum amount of time the broker will wait for Consumer.Fetch.Min bytes to become available before it returns fewer than that anyways.
+	ConsumerMaxWaitTime  cfg.Duration `json:"consumer_max_wait_time" default:"250ms" parse:"duration"` // *
+	ConsumerMaxWaitTime_ time.Duration
 }
 
 func init() {
@@ -164,6 +170,7 @@ func (p *Plugin) newConsumerGroup() sarama.ConsumerGroup {
 	config.Version = sarama.V0_10_2_0
 	config.ChannelBufferSize = p.config.ChannelBufferSize
 	config.Consumer.MaxProcessingTime = p.config.ConsumerMaxProcessingTime_
+	config.Consumer.MaxWaitTime = p.config.ConsumerMaxWaitTime_
 
 	switch p.config.Offset {
 	case "oldest":
