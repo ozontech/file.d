@@ -77,7 +77,9 @@ func TestModifyRegex(t *testing.T) {
 	for i := 0; i < len(testEvents); i++ {
 		fvs := testEvents[i].fieldsValues
 		for field := range fvs {
-			assert.Equal(t, fvs[field], outEvents[i].Root.Dig(field).AsString(), "wrong field value")
+			wantVal := fvs[field]
+			gotVal := outEvents[i].Root.Dig(field).AsString()
+			assert.Equal(t, wantVal, gotVal, "wrong field value")
 		}
 	}
 }
