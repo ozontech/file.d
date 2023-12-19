@@ -54,7 +54,7 @@ func TestModifyRegex(t *testing.T) {
 
 	config := test.NewConfig(&Config{
 		"new_field":          "new_value",
-		"substitution_field": "${existing_field|re(\"(existing).*(value)\", [1,2], \" | \")}",
+		"substitution_field": "${existing_field|re(\"(existing).*(value)\", -1, [1,2], \" | \")}",
 	}, nil)
 	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, config, pipeline.MatchModeAnd, nil, false))
 	wg := &sync.WaitGroup{}
