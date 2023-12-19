@@ -42,6 +42,7 @@ type FieldFilter interface {
 
 type RegexFilter struct {
 	re        *regexp.Regexp
+	limit     int
 	groups    []int
 	separator []byte
 
@@ -52,7 +53,7 @@ func (r *RegexFilter) Apply(src []byte, dst []byte) []byte {
 	if len(r.groups) == 0 {
 		return dst
 	}
-	indexes := r.re.FindAllSubmatchIndex(src, -1)
+	indexes := r.re.FindAllSubmatchIndex(src, r.limit)
 	if len(indexes) == 0 {
 		return dst
 	}
@@ -82,15 +83,21 @@ func (r *RegexFilter) setBuffer(buf []byte) {
 
 // compareArgs is used for testing. Checks filter args values.
 func (r *RegexFilter) compareArgs(args []any) error {
-	if len(args) != 3 {
-		return fmt.Errorf("wrong regex filter amount of args, want=%d got=%d", 3, len(args))
+	wantArgsCnt := 4
+	if len(args) != wantArgsCnt {
+		return fmt.Errorf("wrong regex filter amount of args, want=%d got=%d", wantArgsCnt, len(args))
 	}
 	wantRe := args[0].(string)
 	gotRe := r.re.String()
 	if wantRe != gotRe {
 		return fmt.Errorf("wrong regex filter regex expr, want=%q got=%q", wantRe, gotRe)
 	}
-	wantGroups := args[1].([]int)
+	wantLimit := args[1].(int)
+	gotLimit := r.limit
+	if wantLimit != gotLimit {
+		return fmt.Errorf("wrong regex filter limit, want=%v got=%v", wantLimit, gotLimit)
+	}
+	wantGroups := args[2].([]int)
 	gotGroups := r.groups
 	if len(wantGroups) != len(gotGroups) {
 		return fmt.Errorf("wrong regex filter groups, want=%v got=%v", wantGroups, gotGroups)
@@ -100,7 +107,7 @@ func (r *RegexFilter) compareArgs(args []any) error {
 			return fmt.Errorf("wrong regex filter groups, want=%v got=%v", wantGroups, gotGroups)
 		}
 	}
-	wantSeparator := args[2].(string)
+	wantSeparator := args[3].(string)
 	gotSeparator := string(r.separator)
 	if wantSeparator != gotSeparator {
 		return fmt.Errorf("wrong regex filter separator, want=%q got=%q", wantSeparator, gotSeparator)
@@ -249,31 +256,37 @@ func ParseSubstitution(substitution string, filtersBuf []byte, logger *zap.Logge
 }
 
 func parseRegexFilter(data string, offset int, logger *zap.Logger) (FieldFilter, int, error) {
+	expArgsCnt := 4
 	filterEndPos := -1
 	args, argsEndPos, err := parseFilterArgs(data[len(regexFilterPrefix):])
 	if err != nil {
 		return nil, filterEndPos, fmt.Errorf("failed to parse filter args: %w", err)
 	}
 	filterEndPos = argsEndPos + len(regexFilterPrefix) + offset
-	if len(args) != 3 {
-		return nil, filterEndPos, fmt.Errorf("invalid args for regexp filter, exptected 3, got %d", len(args))
+	if len(args) != expArgsCnt {
+		return nil, filterEndPos, fmt.Errorf("invalid args for regexp filter, exptected %d, got %d", expArgsCnt, len(args))
 	}
 	var reStr string
+	var limit int
 	var groups []int
 	var separator string
 	if err := json.Unmarshal([]byte(args[0]), &reStr); err != nil {
 		return nil, filterEndPos, fmt.Errorf("failed to parse regexp filter regexp string: %w", err)
 	}
 	re := regexp.MustCompile(reStr)
-	if err := json.Unmarshal([]byte(args[1]), &groups); err != nil {
+	if err := json.Unmarshal([]byte(args[1]), &limit); err != nil {
+		return nil, filterEndPos, fmt.Errorf("failed to parse regexp filter limit: %w", err)
+	}
+	if err := json.Unmarshal([]byte(args[2]), &groups); err != nil {
 		return nil, filterEndPos, fmt.Errorf("failed to parse regexp filter groups: %w", err)
 	}
 	VerifyGroupNumbers(groups, re.NumSubexp(), logger)
-	if err := json.Unmarshal([]byte(args[2]), &separator); err != nil {
+	if err := json.Unmarshal([]byte(args[3]), &separator); err != nil {
 		return nil, filterEndPos, fmt.Errorf("failed to parse regexp filter separator: %w", err)
 	}
 	filter := &RegexFilter{
 		re:        re,
+		limit:     limit,
 		groups:    groups,
 		separator: []byte(separator),
 	}

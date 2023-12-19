@@ -93,7 +93,7 @@ func TestParseFieldWithFilter(t *testing.T) {
 		},
 		{
 			name:         "with_one_filter",
-			substitution: `days till world end ${prediction.days|re("(\\d),(test.+)",[1,2]," , ")}. so what?`,
+			substitution: `days till world end ${prediction.days|re("(\\d),(test.+)",-1,[1,2]," , ")}. so what?`,
 			data: [][]string{
 				{"days till world end "},
 				{"prediction", "days"},
@@ -104,6 +104,7 @@ func TestParseFieldWithFilter(t *testing.T) {
 				{
 					{
 						"(\\d),(test.+)",
+						-1,
 						[]int{1, 2},
 						" , ",
 					},
@@ -114,7 +115,7 @@ func TestParseFieldWithFilter(t *testing.T) {
 		},
 		{
 			name:         "with_two_filters",
-			substitution: `days till world end ${prediction.days|re("(\\d),(test.+)",[1,2]," , ") | re("(test2\\.subtest)", [1], "-||-")}. so what?`,
+			substitution: `days till world end ${prediction.days|re("(\\d),(test.+)",-1,[1,2]," , ") | re("(test2\\.subtest)",-1, [1], "-||-")}. so what?`,
 			data: [][]string{
 				{"days till world end "},
 				{"prediction", "days"},
@@ -125,11 +126,13 @@ func TestParseFieldWithFilter(t *testing.T) {
 				{
 					{
 						"(\\d),(test.+)",
+						-1,
 						[]int{1, 2},
 						" , ",
 					},
 					{
 						"(test2\\.subtest)",
+						-1,
 						[]int{1},
 						"-||-",
 					},
@@ -140,7 +143,7 @@ func TestParseFieldWithFilter(t *testing.T) {
 		},
 		{
 			name:         "with_two_substitutions_one_filter",
-			substitution: `days till world end ${prediction.days|re("(\\d),(test.+)",[1,2]," , ")}. Hello, ${name|re("(\\w+)",[1],",")}`,
+			substitution: `days till world end ${prediction.days|re("(\\d),(test.+)",-1,[1,2]," , ")}. Hello, ${name|re("(\\w+)",1,[1],",")}`,
 			data: [][]string{
 				{"days till world end "},
 				{"prediction", "days"},
@@ -152,6 +155,7 @@ func TestParseFieldWithFilter(t *testing.T) {
 				{
 					{
 						"(\\d),(test.+)",
+						-1,
 						[]int{1, 2},
 						" , ",
 					},
@@ -160,6 +164,7 @@ func TestParseFieldWithFilter(t *testing.T) {
 				{
 					{
 						"(\\w+)",
+						1,
 						[]int{1},
 						",",
 					},
@@ -184,17 +189,22 @@ func TestParseFieldWithFilter(t *testing.T) {
 		},
 		{
 			name:         "err_invalid_args_invalid_first_arg",
-			substitution: `test ${field|re('(invalid)',[1,],"|")} test2`,
+			substitution: `test ${field|re('(invalid)',-1,[1,],"|")} test2`,
 			wantErr:      true,
 		},
 		{
 			name:         "err_invalid_args_invalid_second_arg",
-			substitution: `test ${field|re("invalid",[invalid],"|")} test2`,
+			substitution: `test ${field|re('(invalid)',"abcd",[1,],"|")} test2`,
 			wantErr:      true,
 		},
 		{
 			name:         "err_invalid_args_invalid_third_arg",
-			substitution: `test ${field|re("(invalid)",[1],'invalid')} test2`,
+			substitution: `test ${field|re("invalid",-1,[invalid],"|")} test2`,
+			wantErr:      true,
+		},
+		{
+			name:         "err_invalid_args_invalid_fourth_arg",
+			substitution: `test ${field|re("(invalid)",-1,[1],'invalid')} test2`,
 			wantErr:      true,
 		},
 		{
@@ -204,22 +214,22 @@ func TestParseFieldWithFilter(t *testing.T) {
 		},
 		{
 			name:         "err_invalid_args_bracket_not_closed",
-			substitution: `test ${field|re('invalid', [(1,2, "|")} test2`,
+			substitution: `test ${field|re('invalid', -1, [(1,2, "|")} test2`,
 			wantErr:      true,
 		},
 		{
 			name:         "err_invalid_args_invalid_bracket_sequence",
-			substitution: `test ${field|re('invalid', [1,2, "|")} test2`,
+			substitution: `test ${field|re('invalid', -1, [1,2, "|")} test2`,
 			wantErr:      true,
 		},
 		{
 			name:         "err_invalid_args_invalid_bracket_sequence2",
-			substitution: `test ${field|re('invalid', [(1,2], "|")} test2`,
+			substitution: `test ${field|re('invalid', -1, [(1,2], "|")} test2`,
 			wantErr:      true,
 		},
 		{
 			name:         "err_invalid_args_no_closing_quotes",
-			substitution: `test ${field|re("invalid", [1,2], "|)} test2`,
+			substitution: `test ${field|re("invalid", -1, [1,2], "|)} test2`,
 			wantErr:      true,
 		},
 	}
@@ -261,15 +271,21 @@ func TestRegexFilterApply(t *testing.T) {
 	}{
 		{
 			name:         "ok_single_filter",
-			substitution: `${field|re("(re\\d)",[1],"|")}`,
+			substitution: `${field|re("(re\\d)",-1,[1],"|")}`,
 			data:         `this is some text re1 end`,
 			want:         "re1",
 		},
 		{
 			name:         "ok_two_filters",
-			substitution: `${field|re("(.*)",[1],"|")|re("(\\d\\.)",[1],"|")}`,
+			substitution: `${field|re("(.*)",-1,[1],"|")|re("(\\d\\.)",-1,[1],"|")}`,
 			data:         `1.2.3.4.5.`,
 			want:         "1.|2.|3.|4.|5.",
+		},
+		{
+			name:         "ok_single_filter",
+			substitution: `${field|re("(re\\d)",2,[1],"|")}`,
+			data:         `this is some text re1 re2 re3 re4 end`,
+			want:         "re1|re2",
 		},
 	}
 	for _, tt := range tests {
