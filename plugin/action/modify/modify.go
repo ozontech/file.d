@@ -36,11 +36,16 @@ The resulting event could look like:
 ```
 }*/
 
+type fieldOp struct {
+	field []string
+	ops   []cfg.SubstitutionOp
+}
+
 type Plugin struct {
-	config *Config
-	logger *zap.SugaredLogger
-	ops    map[string][]cfg.SubstitutionOp
-	buf    []byte
+	config   *Config
+	logger   *zap.SugaredLogger
+	fieldOps map[string]fieldOp
+	buf      []byte
 }
 
 type Config map[string]string
@@ -58,8 +63,8 @@ func factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginParams) {
 	p.config = config.(*Config)
-	p.ops = make(map[string][]cfg.SubstitutionOp)
 	p.logger = params.Logger
+	p.fieldOps = make(map[string]fieldOp)
 
 	for key, value := range *p.config {
 		ops, err := cfg.ParseSubstitution(value)
@@ -71,7 +76,10 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 			continue
 		}
 
-		p.ops[key] = ops
+		p.fieldOps[key] = fieldOp{
+			field: cfg.ParseFieldSelector(key),
+			ops:   ops,
+		}
 	}
 }
 
@@ -79,9 +87,9 @@ func (p *Plugin) Stop() {
 }
 
 func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
-	for field, list := range p.ops {
+	for field, fo := range p.fieldOps {
 		p.buf = p.buf[:0]
-		for _, op := range list {
+		for _, op := range fo.ops {
 			switch op.Kind {
 			case cfg.SubstitutionOpKindRaw:
 				p.buf = append(p.buf, op.Data[0]...)
@@ -92,7 +100,12 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 			}
 		}
 
-		event.Root.AddFieldNoAlloc(event.Root, field).MutateToBytesCopy(event.Root, p.buf)
+		node := event.Root.Dig(fo.field...)
+		if node == nil {
+			node = event.Root.AddFieldNoAlloc(event.Root, field)
+		}
+
+		node.MutateToBytesCopy(event.Root, p.buf)
 	}
 
 	return pipeline.ActionPass
