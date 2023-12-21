@@ -176,6 +176,7 @@ func TestMaskAddExtraField(t *testing.T) {
 	config := test.NewConfig(&Config{
 		MaskAppliedField: key,
 		MaskAppliedValue: val,
+		SkipMismatched:   true,
 		Masks: []Mask{
 			{Re: kDefaultCardRegExp, Groups: []int{1, 2, 3, 4}},
 		},
@@ -315,10 +316,11 @@ func TestGroupNumbers(t *testing.T) {
 //nolint:funlen
 func TestGetValueNodeList(t *testing.T) {
 	suits := []struct {
-		name     string
-		input    string
-		expected []string
-		comment  string
+		name          string
+		input         string
+		ignoredFields map[string]struct{}
+		expected      []string
+		comment       string
 	}{
 		{
 			name:     "simple test",
@@ -331,6 +333,29 @@ func TestGetValueNodeList(t *testing.T) {
 			input:    `{"name1":1}`,
 			expected: []string{"1"},
 			comment:  "integer also included into result",
+		},
+		{
+			name:  "test with ignored field",
+			input: `{"name1":"value1", "ignored_field":"value2"}`,
+			ignoredFields: map[string]struct{}{
+				"ignored_field": {},
+			},
+			expected: []string{"value1"},
+			comment:  "skip ignored_field",
+		},
+		{
+			name: "test with ignored nested field",
+			input: `{
+				"name1":"value1",
+				"nested": {
+					"ignored_field":"value2"
+				}
+			}`,
+			ignoredFields: map[string]struct{}{
+				"ignored_field": {},
+			},
+			expected: []string{"value1"},
+			comment:  "skip nested ignored_field",
 		},
 		{
 			name: "big json with ints and nulls",
@@ -391,7 +416,7 @@ func TestGetValueNodeList(t *testing.T) {
 			defer insaneJSON.Release(root)
 
 			nodes := make([]*insaneJSON.Node, 0)
-			nodes = getValueNodeList(root.Node, nodes)
+			nodes = getValueNodeList(root.Node, nodes, s.ignoredFields)
 			assert.Equal(t, len(nodes), len(s.expected), s.comment)
 			for i := range nodes {
 				assert.Equal(t, s.expected[i], nodes[i].AsString(), s.comment)
@@ -457,6 +482,7 @@ func TestPlugin(t *testing.T) {
 	}
 
 	config := test.NewConfig(&Config{
+		SkipMismatched: true,
 		Masks: []Mask{
 			{
 				Re:     `a(x*)b`,
@@ -469,6 +495,78 @@ func TestPlugin(t *testing.T) {
 			{
 				Re:     kDefaultIDRegExp,
 				Groups: []int{0},
+			},
+		},
+	}, nil)
+
+	for _, s := range suits {
+		t.Run(s.name, func(t *testing.T) {
+			sut, input, output := test.NewPipelineMock(
+				test.NewActionPluginStaticInfo(factory, config,
+					pipeline.MatchModeAnd,
+					nil,
+					false))
+			wg := sync.WaitGroup{}
+			wg.Add(len(s.input))
+
+			outEvents := make([]string, 0, len(s.expected))
+			output.SetOutFn(func(e *pipeline.Event) {
+				outEvents = append(outEvents, e.Root.EncodeToString())
+				wg.Done()
+			})
+
+			for _, in := range s.input {
+				input.In(0, "test.log", 0, []byte(in))
+			}
+
+			wg.Wait()
+			sut.Stop()
+
+			for i := range s.expected {
+				assert.Equal(t, s.expected[i], outEvents[i], s.comment)
+			}
+		})
+	}
+}
+
+func TestWithEmptyRegex(t *testing.T) {
+	suits := []struct {
+		name     string
+		input    []string
+		expected []string
+		comment  string
+	}{
+		{
+			name:     "ID&card",
+			input:    []string{`{"field1":"Индивидуальный предприниматель Иванов Иван Иванович"}`},
+			expected: []string{`{"field1":"Индивидуальный предприниматель Иванов Иван Иванович","access_token_leaked":"personal_data_leak"}`},
+			comment:  "Add field access_token_leaked",
+		},
+	}
+
+	config := test.NewConfig(&Config{
+		SkipMismatched: true,
+		Masks: []Mask{
+			{
+				MatchRules: []matchrule.RuleSet{
+					{
+						Rules: []matchrule.Rule{
+							{
+								Values:          []string{"Индивидуальный предприниматель"},
+								Mode:            matchrule.ModeContains,
+								CaseInsensitive: false,
+							},
+						},
+					},
+				},
+				AppliedField: "access_token_leaked",
+				AppliedValue: "personal_data_leak",
+				MetricName:   "sec_dataleak_predprinimatel",
+				MetricLabels: []string{"service"},
+			},
+			{
+				Re:     kDefaultCardRegExp,
+				Groups: []int{1, 2, 3, 4},
 			},
 		},
 	}, nil)
@@ -661,6 +759,7 @@ func TestPluginWithComplexMasks(t *testing.T) {
 	for _, s := range suits {
 		t.Run(s.name, func(t *testing.T) {
 			config := test.NewConfig(&Config{
+				SkipMismatched:      true,
 				Masks:               s.masks,
 				AppliedMetricName:   s.metricName,
 				AppliedMetricLabels: s.metricLabels,
