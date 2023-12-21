@@ -15,7 +15,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/test"
 	"github.com/stretchr/testify/assert"
@@ -23,7 +22,7 @@ import (
 )
 
 func getInputInfo(config *Config) *pipeline.InputPluginInfo {
-	_ = cfg.Parse(config, map[string]int{"gomaxprocs": runtime.GOMAXPROCS(0)})
+	test.NewConfig(config, map[string]int{"gomaxprocs": runtime.GOMAXPROCS(0)})
 	input, _ := Factory()
 	return &pipeline.InputPluginInfo{
 		PluginStaticInfo: &pipeline.PluginStaticInfo{

@@ -10,7 +10,9 @@ import (
 )
 
 func TestConvert(t *testing.T) {
-	config := test.NewConfig(&Config{SourceFormats: []string{"rfc3339nano", "rfc3339", "ansic", pipeline.UnixTime, "nginx_errorlog"}}, nil)
+	config := &Config{SourceFormats: []string{"rfc3339nano", "rfc3339", "ansic", pipeline.UnixTime, "nginx_errorlog"}}
+	test.NewConfig(config, nil)
+
 	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, config, pipeline.MatchModeAnd, nil, false))
 	wg := &sync.WaitGroup{}
 	wg.Add(3)
@@ -35,7 +37,12 @@ func TestConvert(t *testing.T) {
 }
 
 func TestConvertFail(t *testing.T) {
-	config := test.NewConfig(&Config{SourceFormats: []string{"rfc3339nano", "rfc3339", "ansic"}, RemoveOnFail: true}, nil)
+	config := &Config{
+		SourceFormats: []string{"rfc3339nano", "rfc3339", "ansic"},
+		RemoveOnFail:  true,
+	}
+	test.NewConfig(config, nil)
+
 	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, config, pipeline.MatchModeAnd, nil, false))
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
