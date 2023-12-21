@@ -12,6 +12,7 @@ import (
 	"github.com/ClickHouse/ch-go"
 	"github.com/ClickHouse/ch-go/chpool"
 	"github.com/ClickHouse/ch-go/proto"
+	"github.com/cenkalti/backoff/v3"
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/metric"
@@ -46,6 +47,7 @@ type Plugin struct {
 	batcher    *pipeline.Batcher
 	ctx        context.Context
 	cancelFunc context.CancelFunc
+	backoff    backoff.BackOff
 
 	query string
 
@@ -228,7 +230,7 @@ type Config struct {
 	// >
 	// > Retries of insertion. If File.d cannot insert for this number of attempts,
 	// > File.d will fall with non-zero exit code.
-	Retry int `json:"retry" default:"10"` // *
+	Retry uint64 `json:"retry" default:"10"` // *
 
 	// > @3@4@5@6
 	// >
@@ -244,8 +246,8 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
-	// > Exponentially increase retention beetween retries
-	IncreaseRetentionExponentially bool `json:"increase_retention_exponentially" default:"false"` // *
+	// > Multiplier for exponentially increase retention beetween retries
+	RetentionExponentMultiplier float64 `json:"retention_exponentially_multiplier" default:"1"` // *
 
 	// > @3@4@5@6
 	// >
@@ -410,6 +412,12 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		}
 	}
 
+	p.backoff = cfg.GetBackoff(
+		p.config.Retention_,
+		p.config.RetentionExponentMultiplier,
+		p.config.Retry,
+	)
+
 	p.batcher = pipeline.NewBatcher(pipeline.BatcherOptions{
 		PipelineName:   params.PipelineName,
 		OutputType:     outPluginType,
@@ -488,31 +496,27 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 		}
 	})
 
-	var err error
-	for try := 0; try < p.config.Retry; try++ {
+	p.backoff.Reset()
+	try := 0
+	err := backoff.Retry(func() error {
 		requestID := p.requestID.Inc()
 		clickhouse := p.getInstance(requestID, try)
-		err = p.do(clickhouse, data.input)
-		if err == nil {
-			break
+		err := p.do(clickhouse, data.input)
+		if err != nil {
+			try++
+			p.insertErrorsMetric.Inc()
+			p.logger.Error(
+				"an attempt to insert a batch failed",
+				zap.Int("try", try),
+				zap.Error(err),
+			)
 		}
-		p.insertErrorsMetric.Inc()
-		p.logger.Error(
-			"an attempt to insert a batch failed",
-			zap.Error(err),
-			zap.Int("try", try),
-		)
+		return err
+	}, p.backoff)
 
-		retrySleep := p.config.Retention_
-		if p.config.IncreaseRetentionExponentially {
-			retrySleep = cfg.GetExponentDuration(p.config.Retention_, try)
-		}
-
-		time.Sleep(retrySleep)
-	}
 	if err != nil {
 		p.logger.Fatal("can't insert to the table", zap.Error(err),
-			zap.Int("retries", p.config.Retry),
+			zap.Uint64("retries", p.config.Retry),
 			zap.String("table", p.config.Table))
 	}
 }

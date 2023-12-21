@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cenkalti/backoff/v3"
 	"github.com/minio/minio-go"
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
@@ -102,16 +103,14 @@ pipelines:
 }*/
 
 const (
-	fileNameSeparator  = "_"
-	attemptIntervalMin = 1 * time.Second
-	dirSep             = "/"
-	StaticBucketDir    = "static_buckets"
-	DynamicBucketDir   = "dynamic_buckets"
+	fileNameSeparator = "_"
+	dirSep            = "/"
+	StaticBucketDir   = "static_buckets"
+	DynamicBucketDir  = "dynamic_buckets"
 )
 
 var (
-	attemptInterval = attemptIntervalMin
-	compressors     = map[string]func(*zap.SugaredLogger) compressor{
+	compressors = map[string]func(*zap.SugaredLogger) compressor{
 		zipName: newZipCompressor,
 	}
 )
@@ -148,6 +147,8 @@ type Plugin struct {
 	uploadCh   chan fileDTO
 
 	compressor compressor
+
+	backoff backoff.BackOff
 
 	// plugin metrics
 	sendErrorMetric  prometheus.Counter
@@ -234,6 +235,23 @@ type Config struct {
 	// > Sets upload timeout.
 	UploadTimeout  cfg.Duration `json:"upload_timeout" default:"1m" parse:"duration"` // *
 	UploadTimeout_ time.Duration
+
+	// > @3@4@5@6
+	// >
+	// > Retries of insertion. If File.d cannot insert for this number of attempts,
+	// > File.d will fall with non-zero exit code.
+	Retry uint64 `json:"retry" default:"0"` // *
+
+	// > @3@4@5@6
+	// >
+	// > Retention milliseconds for retry to upload.
+	Retention  cfg.Duration `json:"retention" default:"1s" parse:"duration"` // *
+	Retention_ time.Duration
+
+	// > @3@4@5@6
+	// >
+	// > Multiplier for exponentially increase retention beetween retries
+	RetentionExponentMultiplier float64 `json:"retention_exponentially_multiplier" default:"1.5"` // *
 }
 
 func (c *Config) IsMultiBucketExists(bucketName string) bool {
@@ -278,6 +296,12 @@ func (p *Plugin) StartWithMinio(config pipeline.AnyConfig, params *pipeline.Outp
 	p.logger = params.Logger
 	p.config = config.(*Config)
 	p.params = params
+
+	p.backoff = cfg.GetBackoff(
+		p.config.Retention_,
+		p.config.RetentionExponentMultiplier,
+		p.config.Retry,
+	)
 
 	// outPlugCount is defaultBucket + multi_buckets count, use to set maps size.
 	outPlugCount := len(p.config.MultiBuckets) + 1
@@ -507,8 +531,8 @@ func (p *Plugin) addFileJobWithBucket(bucketName string) func(filename string) {
 
 func (p *Plugin) uploadWork() {
 	for compressed := range p.uploadCh {
-		sleepTime := attemptInterval
-		for {
+		p.backoff.Reset()
+		backoff.Retry(func() error {
 			p.logger.Infof("starting upload s3 object. fileName=%s, bucketName=%s", compressed.fileName, compressed.bucketName)
 			err := p.uploadToS3(compressed)
 			if err == nil {
@@ -519,12 +543,11 @@ func (p *Plugin) uploadWork() {
 				if err != nil && !os.IsNotExist(err) {
 					p.logger.Panicf("could not delete file: %s, err: %s", compressed, err.Error())
 				}
-				break
+				return nil
 			}
-			sleepTime += sleepTime
-			p.logger.Errorf("could not upload object: %s, next attempt in %s, error: %s", compressed, sleepTime.String(), err.Error())
-			time.Sleep(sleepTime)
-		}
+			p.logger.Errorf("could not upload object: %s, error: %s", compressed, err.Error())
+			return err
+		}, p.backoff)
 	}
 }
 

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	sq "github.com/Masterminds/squirrel"
+	"github.com/cenkalti/backoff/v3"
 	"github.com/jackc/pgx/v4"
 	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/ozontech/file.d/cfg"
@@ -47,7 +48,7 @@ pipelines:
           type: string
       retry: 10
       retention: 1s
-      increase_retention_exponentially: true
+      retention_exponentially_multiplier: 1.5
 ```
 
 input_example.json
@@ -104,6 +105,8 @@ type Plugin struct {
 	queryBuilder PgQueryBuilder
 	pool         PgxIface
 
+	backoff backoff.BackOff
+
 	// plugin metrics
 
 	discardedEventMetric  prometheus.Counter
@@ -156,7 +159,7 @@ type Config struct {
 	// > @3@4@5@6
 	// >
 	// > Retries of insertion.
-	Retry int `json:"retry" default:"3"` // *
+	Retry uint64 `json:"retry" default:"3"` // *
 
 	// > @3@4@5@6
 	// >
@@ -166,8 +169,8 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
-	// > Exponentially increase retention beetween retries
-	IncreaseRetentionExponentially bool `json:"increase_retention_exponentially" default:"false"` // *
+	// > Multiplier for exponentially increase retention beetween retries
+	RetentionExponentMultiplier float64 `json:"retention_exponentially_multiplier" default:"1"`
 
 	// > @3@4@5@6
 	// >
@@ -279,6 +282,12 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		MetricCtl:      params.MetricCtl,
 	})
 
+	p.backoff = cfg.GetBackoff(
+		p.config.Retention_,
+		p.config.RetentionExponentMultiplier,
+		p.config.Retry,
+	)
+
 	ctx, cancel := context.WithCancel(context.Background())
 	p.ctx = ctx
 	p.cancelFunc = cancel
@@ -356,24 +365,17 @@ func (p *Plugin) out(_ *pipeline.WorkerData, batch *pipeline.Batch) {
 		argsSliceInterface[i] = args[i-1]
 	}
 
-	// Insert into pg with retry.
-	for try := 0; try < p.config.Retry; try++ {
+	p.backoff.Reset()
+	err = backoff.Retry(func() error {
 		err = p.try(query, argsSliceInterface)
 		if err != nil {
 			p.insertErrorsMetric.Inc()
-			p.logger.Errorf("can't exec query: %s (try %d)", err.Error(), try)
-
-			retrySleep := p.config.Retention_
-			if p.config.IncreaseRetentionExponentially {
-				retrySleep = cfg.GetExponentDuration(p.config.Retention_, try)
-			}
-
-			time.Sleep(retrySleep)
-			continue
+			p.logger.Errorf("can't exec query: %s", err.Error())
+			return err
 		}
 		p.writtenEventMetric.Add(float64(len(uniqueEventsMap)))
-		break
-	}
+		return nil
+	}, p.backoff)
 
 	if err != nil {
 		p.pool.Close()

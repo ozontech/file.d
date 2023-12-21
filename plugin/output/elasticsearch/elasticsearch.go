@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cenkalti/backoff/v3"
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/logger"
@@ -29,7 +30,6 @@ If a network error occurs, the batch will infinitely try to be delivered to the 
 const (
 	outPluginType     = "elasticsearch"
 	NDJSONContentType = "application/x-ndjson"
-	retryDelay        = time.Second
 )
 
 var (
@@ -49,6 +49,7 @@ type Plugin struct {
 	batcher      *pipeline.Batcher
 	controller   pipeline.OutputPluginController
 	mu           *sync.Mutex
+	backoff      backoff.BackOff
 
 	// plugin metrics
 	sendErrorMetric      prometheus.Counter
@@ -139,6 +140,23 @@ type Config struct {
 	// > Operation type to be used in batch requests. It can be `index` or `create`. Default is `index`.
 	// > > Check out [_bulk API doc](https://www.elastic.co/guide/en/elasticsearch/reference/current/docs-bulk.html) for details.
 	BatchOpType string `json:"batch_op_type" default:"index" options:"index|create"` // *
+
+	// > @3@4@5@6
+	// >
+	// > Retries of insertion. If File.d cannot insert for this number of attempts,
+	// > File.d will fall with non-zero exit code.
+	Retry uint64 `json:"retry" default:"0"` // *
+
+	// > @3@4@5@6
+	// >
+	// > Retention milliseconds for retry to DB.
+	Retention  cfg.Duration `json:"retention" default:"1s" parse:"duration"` // *
+	Retention_ time.Duration
+
+	// > @3@4@5@6
+	// >
+	// > Multiplier for exponentially increase retention beetween retries
+	RetentionExponentMultiplier float64 `json:"retention_exponentially_multiplier" default:"1"` // *
 }
 
 type data struct {
@@ -220,6 +238,12 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	ctx, cancel := context.WithCancel(context.Background())
 	p.cancel = cancel
 
+	p.backoff = cfg.GetBackoff(
+		p.config.Retention_,
+		p.config.RetentionExponentMultiplier,
+		p.config.Retry,
+	)
+
 	p.batcher.Start(ctx)
 }
 
@@ -255,14 +279,15 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 		data.outBuf = p.appendEvent(data.outBuf, event)
 	})
 
-	for {
+	p.backoff.Reset()
+	backoff.Retry(func() error {
+		var err error
 		if err := p.send(data.outBuf); err != nil {
 			p.sendErrorMetric.Inc()
 			p.logger.Error("can't send to the elastic, will try other endpoint", zap.Error(err))
-		} else {
-			break
 		}
-	}
+		return err
+	}, p.backoff)
 }
 
 func (p *Plugin) send(body []byte) error {
@@ -279,14 +304,12 @@ func (p *Plugin) send(body []byte) error {
 	p.setAuthHeader(req)
 
 	if err := p.client.DoTimeout(req, resp, p.config.ConnectionTimeout_); err != nil {
-		time.Sleep(retryDelay)
 		return fmt.Errorf("can't send batch to %s: %s", endpoint.String(), err.Error())
 	}
 
 	respContent := resp.Body()
 
 	if statusCode := resp.Header.StatusCode(); statusCode < http.StatusOK || statusCode > http.StatusAccepted {
-		time.Sleep(retryDelay)
 		return fmt.Errorf("response status from %s isn't OK: status=%d, body=%s", endpoint.String(), statusCode, string(respContent))
 	}
 

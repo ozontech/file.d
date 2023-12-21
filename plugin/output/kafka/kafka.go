@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/Shopify/sarama"
+	"github.com/cenkalti/backoff/v3"
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/metric"
@@ -37,6 +38,7 @@ type Plugin struct {
 
 	producer sarama.SyncProducer
 	batcher  *pipeline.Batcher
+	backoff  backoff.BackOff
 
 	// plugin metrics
 	sendErrorMetric prometheus.Counter
@@ -99,7 +101,7 @@ type Config struct {
 	// >
 	// > Retries of insertion. If File.d cannot insert for this number of attempts,
 	// > File.d will fall with non-zero exit code.
-	Retry int `json:"retry" default:"10"` // *
+	Retry uint64 `json:"retry" default:"10"` // *
 
 	// > @3@4@5@6
 	// >
@@ -109,8 +111,8 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
-	// > Exponentially increase retention beetween retries
-	IncreaseRetentionExponentially bool `json:"increase_retention_exponentially" default:"false"` // *
+	// > Multiplier for exponentially increase retention beetween retries
+	RetentionExponentMultiplier float64 `json:"retention_exponentially_multiplier" default:"1"` // *
 
 	// > @3@4@5@6
 	// >
@@ -169,6 +171,11 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	if p.config.Retention_ < 1 {
 		p.logger.Fatal("'retention' can't be <1")
 	}
+	p.backoff = cfg.GetBackoff(
+		p.config.Retention_,
+		p.config.RetentionExponentMultiplier,
+		p.config.Retry,
+	)
 
 	p.logger.Infof("workers count=%d, batch size=%d", p.config.WorkersCount_, p.config.BatchSize_)
 
@@ -234,11 +241,11 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 
 	data.outBuf = outBuf
 
-	var err error
-	for try := 0; try < p.config.Retry; try++ {
+	p.backoff.Reset()
+	err := backoff.Retry(func() error {
 		err := p.producer.SendMessages(data.messages[:i])
 		if err == nil {
-			break
+			return nil
 		}
 
 		errs := err.(sarama.ProducerErrors)
@@ -248,21 +255,15 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 		p.sendErrorMetric.Add(float64(len(errs)))
 		p.logger.Error(
 			"an attempt to insert a batch failed",
-			zap.Int("retry", (try+1)),
 			zap.Error(err),
 		)
 
-		retrySleep := p.config.Retention_
-		if p.config.IncreaseRetentionExponentially {
-			retrySleep = cfg.GetExponentDuration(p.config.Retention_, try)
-		}
-
-		time.Sleep(retrySleep)
-	}
+		return err
+	}, p.backoff)
 
 	if err != nil {
-		p.logger.Fatal("can't write batch", zap.Error(err),
-			zap.Int("retries", p.config.Retry))
+		p.logger.Error("can't write batch", zap.Error(err),
+			zap.Uint64("retries", p.config.Retry))
 	}
 }
 

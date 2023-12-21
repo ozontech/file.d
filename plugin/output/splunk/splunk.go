@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/cenkalti/backoff/v3"
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/metric"
@@ -34,6 +35,7 @@ type Plugin struct {
 	avgEventSize int
 	batcher      *pipeline.Batcher
 	controller   pipeline.OutputPluginController
+	backoff      backoff.BackOff
 
 	// plugin metrics
 	sendErrorMetric prometheus.Counter
@@ -82,6 +84,23 @@ type Config struct {
 	// > After this timeout the batch will be sent even if batch isn't completed.
 	BatchFlushTimeout  cfg.Duration `json:"batch_flush_timeout" default:"200ms" parse:"duration"` // *
 	BatchFlushTimeout_ time.Duration
+
+	// > @3@4@5@6
+	// >
+	// > Retries of insertion. If File.d cannot insert for this number of attempts,
+	// > File.d will fall with non-zero exit code.
+	Retry uint64 `json:"retry" default:"0"` // *
+
+	// > @3@4@5@6
+	// >
+	// > Retention milliseconds for retry to DB.
+	Retention  cfg.Duration `json:"retention" default:"1s" parse:"duration"` // *
+	Retention_ time.Duration
+
+	// > @3@4@5@6
+	// >
+	// > Multiplier for exponentially increase retention beetween retries
+	RetentionExponentMultiplier float64 `json:"retention_exponentially_multiplier" default:"1"` // *
 }
 
 type data struct {
@@ -106,6 +125,11 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.config = config.(*Config)
 	p.registerMetrics(params.MetricCtl)
 	p.client = p.newClient(p.config.RequestTimeout_)
+	p.backoff = cfg.GetBackoff(
+		p.config.Retention_,
+		p.config.RetentionExponentMultiplier,
+		p.config.Retry,
+	)
 
 	p.batcher = pipeline.NewBatcher(pipeline.BatcherOptions{
 		PipelineName:   params.PipelineName,
@@ -161,18 +185,16 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 
 	p.logger.Debugf("trying to send: %s", outBuf)
 
-	for {
+	p.backoff.Reset()
+	backoff.Retry(func() error {
 		err := p.send(outBuf)
 		if err != nil {
 			p.sendErrorMetric.Inc()
 			p.logger.Errorf("can't send data to splunk address=%s: %s", p.config.Endpoint, err.Error())
-			time.Sleep(time.Second)
-
-			continue
 		}
+		return err
+	}, p.backoff)
 
-		break
-	}
 	p.logger.Debugf("successfully sent: %s", outBuf)
 }
 
