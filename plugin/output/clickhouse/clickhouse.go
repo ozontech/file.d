@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"math"
 	"net"
 	"strings"
 	"time"
@@ -241,6 +242,11 @@ type Config struct {
 	// > Retention milliseconds for retry to DB.
 	Retention  cfg.Duration `json:"retention" default:"50ms" parse:"duration"` // *
 	Retention_ time.Duration
+
+	// > @3@4@5@6
+	// >
+	// > Exponentially increase retention beetween retries
+	IncreaseRetentionExponentially bool `json:"increase_retention_exponentially" default:"false"` // *
 
 	// > @3@4@5@6
 	// >
@@ -492,7 +498,13 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 			break
 		}
 		p.insertErrorsMetric.Inc()
-		time.Sleep(p.config.Retention_)
+
+		retrySleep := p.config.Retention_
+		if p.config.IncreaseRetentionExponentially {
+			retrySleep = exponentDuration(p.config.Retention_, try)
+		}
+
+		time.Sleep(retrySleep)
 		p.logger.Error("an attempt to insert a batch failed", zap.Error(err))
 	}
 	if err != nil {
@@ -500,6 +512,11 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 			zap.Int("retries", p.config.Retry),
 			zap.String("table", p.config.Table))
 	}
+}
+
+func exponentDuration(minRetention time.Duration, attemptNum int) time.Duration {
+	sleep := time.Duration(math.Pow(2, float64(attemptNum))) * minRetention
+	return sleep
 }
 
 func (p *Plugin) do(clickhouse Clickhouse, queryInput proto.Input) error {
