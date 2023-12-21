@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"math"
 	"net"
 	"strings"
 	"time"
@@ -501,7 +500,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 
 		retrySleep := p.config.Retention_
 		if p.config.IncreaseRetentionExponentially {
-			retrySleep = exponentDuration(p.config.Retention_, try)
+			retrySleep = cfg.GetExponentDuration(p.config.Retention_, try)
 		}
 
 		time.Sleep(retrySleep)
@@ -512,11 +511,6 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 			zap.Int("retries", p.config.Retry),
 			zap.String("table", p.config.Table))
 	}
-}
-
-func exponentDuration(minRetention time.Duration, attemptNum int) time.Duration {
-	sleep := time.Duration(math.Pow(2, float64(attemptNum))) * minRetention
-	return sleep
 }
 
 func (p *Plugin) do(clickhouse Clickhouse, queryInput proto.Input) error {

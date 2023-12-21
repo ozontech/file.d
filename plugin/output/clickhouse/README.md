@@ -128,6 +128,12 @@ Retention milliseconds for retry to DB.
 
 <br>
 
+**`increase_retention_exponentially`** *`bool`* *`default=false`* 
+
+Exponentially increase retention beetween retries
+
+<br>
+
 **`insert_timeout`** *`cfg.Duration`* *`default=10s`* 
 
 Timeout for each insert request.
