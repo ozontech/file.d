@@ -10,6 +10,8 @@ pipelines:
     actions:
     - type: mask
       metric_subsystem_name: "some_name"
+      ignore_fields:
+      - trace_id
       masks:
       - mask:
         re: "\b(\d{1,4})\D?(\d{1,4})\D?(\d{1,4})\D?(\d{1,4})\b"
@@ -25,6 +27,12 @@ List of masks.
 
 <br>
 
+**`skip_mismatched`** *`bool`* *`default=false`* 
+
+**Experimental feature** for best performance. Skips events with mismatched masks.
+
+<br>
+
 **`mask_applied_field`** *`string`* 
 
 If any mask has been applied then `mask_applied_field` will be set to `mask_applied_value` in the event.
@@ -33,6 +41,12 @@ If any mask has been applied then `mask_applied_field` will be set to `mask_appl
 
 **`mask_applied_value`** *`string`* 
 
+
+<br>
+
+**`ignore_fields`** *`[]string`* 
+
+List of the ignored event fields (including nested fields).
 
 <br>
 
