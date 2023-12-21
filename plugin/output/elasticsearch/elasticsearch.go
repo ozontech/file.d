@@ -291,7 +291,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch, wor
 	}, *workerBackoff)
 
 	if err != nil {
-		var errLogFunc func(args ...interface{})
+		var errLogFunc func(msg string, fields ...zap.Field)
 		if p.config.FatalOnFailedInsert {
 			errLogFunc = p.logger.Sugar().Fatal
 		} else {
