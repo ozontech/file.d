@@ -4,15 +4,15 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/bmatcuk/doublestar/v4"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/rjeczalik/notify"
 	"go.uber.org/zap"
 )
 
 type watcher struct {
-	path                      string   // dir in which watch for files
-	filenamePattern           string   // files which match this pattern will be watched
-	dirPattern                string   // dirs which match this pattern will be watched
+	dir                       string // dir in which watch for files
+	paths                     Paths
 	notifyFn                  notifyFn // function to receive notifications
 	watcherCh                 chan notify.EventInfo
 	shouldWatchWrites         bool
@@ -25,18 +25,16 @@ type notifyFn func(e notify.Event, filename string, stat os.FileInfo)
 // NewWatcher creates a watcher that see file creations in the path
 // and if they match filePattern and dirPattern, pass them to notifyFn.
 func NewWatcher(
-	path string,
-	filenamePattern string,
-	dirPattern string,
+	dir string,
+	paths Paths,
 	notifyFn notifyFn,
 	shouldWatchWrites bool,
 	notifyChannelLengthMetric prometheus.Gauge,
 	logger *zap.SugaredLogger,
 ) *watcher {
 	return &watcher{
-		path:                      path,
-		filenamePattern:           filenamePattern,
-		dirPattern:                dirPattern,
+		dir:                       dir,
+		paths:                     paths,
 		notifyFn:                  notifyFn,
 		shouldWatchWrites:         shouldWatchWrites,
 		notifyChannelLengthMetric: notifyChannelLengthMetric,
@@ -45,15 +43,10 @@ func NewWatcher(
 }
 
 func (w *watcher) start() {
-	w.logger.Infof("starting watcher path=%s, pattern=%s", w.path, w.filenamePattern)
-
-	if _, err := filepath.Match(w.filenamePattern, "_"); err != nil {
-		w.logger.Fatalf("wrong file name pattern %q: %s", w.filenamePattern, err.Error())
-	}
-
-	if _, err := filepath.Match(w.dirPattern, "_"); err != nil {
-		w.logger.Fatalf("wrong dir name pattern %q: %s", w.dirPattern, err.Error())
-	}
+	w.logger.Infof(
+		"starting watcher path=%s, pattern_included=%q, pattern_excluded=%q",
+		w.dir, w.paths.Include, w.paths.Exclude,
+	)
 
 	eventsCh := make(chan notify.EventInfo, 256)
 	w.watcherCh = eventsCh
@@ -64,7 +57,7 @@ func (w *watcher) start() {
 	}
 
 	// watch recursively.
-	err := notify.Watch(filepath.Join(w.path, "..."), eventsCh, events...)
+	err := notify.Watch(filepath.Join(w.dir, "..."), eventsCh, events...)
 	if err != nil {
 		w.logger.Warnf("can't create fs watcher: %s", err.Error())
 		return
@@ -73,7 +66,7 @@ func (w *watcher) start() {
 
 	go w.watch()
 
-	w.tryAddPath(w.path)
+	w.tryAddPath(w.dir)
 }
 
 func (w *watcher) stop() {
@@ -112,19 +105,42 @@ func (w *watcher) notify(e notify.Event, path string) {
 		return
 	}
 
+	dirRel, _ := filepath.Abs(w.dir)
+	rel, _ := filepath.Rel(dirRel, filename)
+
+	w.logger.Infof("%s %s", e, path)
+
+	for _, pattern := range w.paths.Exclude {
+		match, err := doublestar.PathMatch(pattern, rel)
+		if err != nil {
+			w.logger.Fatalf("wrong paths exclude pattern %q: %s", pattern, err.Error())
+			return
+		}
+		if match {
+			return
+		}
+	}
+
 	stat, err := os.Lstat(filename)
 	if err != nil {
 		return
 	}
 
-	match, _ := filepath.Match(w.filenamePattern, filepath.Base(filename))
-	if match {
-		w.notifyFn(e, filename, stat)
+	if stat.IsDir() {
+		w.tryAddPath(filename)
+		return
 	}
 
-	match, _ = filepath.Match(w.dirPattern, filepath.Base(filename))
-	if stat.IsDir() && match {
-		w.tryAddPath(filename)
+	for _, pattern := range w.paths.Include {
+		match, err := doublestar.PathMatch(pattern, rel)
+		if err != nil {
+			w.logger.Fatalf("wrong paths include pattern %q: %s", pattern, err.Error())
+			return
+		}
+
+		if match {
+			w.notifyFn(e, filename, stat)
+		}
 	}
 }
 
