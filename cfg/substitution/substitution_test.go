@@ -1,4 +1,4 @@
-package cfg
+package substitution
 
 import (
 	"testing"

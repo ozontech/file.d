@@ -1,7 +1,7 @@
 package modify
 
 import (
-	"github.com/ozontech/file.d/cfg"
+	"github.com/ozontech/file.d/cfg/substitution"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/pipeline"
 	"go.uber.org/zap"
@@ -83,7 +83,7 @@ Result: `{"message:"service=service-test-1 exec took 200ms","took":"200ms"}`
 type Plugin struct {
 	config   *Config
 	logger   *zap.Logger
-	ops      map[string][]cfg.SubstitutionOp
+	ops      map[string][]substitution.SubstitutionOp
 	buf      []byte
 	fieldBuf []byte
 }
@@ -103,14 +103,14 @@ func factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginParams) {
 	p.config = config.(*Config)
-	p.ops = make(map[string][]cfg.SubstitutionOp)
+	p.ops = make(map[string][]substitution.SubstitutionOp)
 	p.logger = params.Logger.Desugar()
 
 	filtersBuf := make([]byte, 0, filterBufInitSize)
 	for key, value := range *p.config {
 		// if there are field filters in substitutions, they will have single buffer for all
 		// substitution ops in this plugin
-		ops, err := cfg.ParseSubstitution(value, filtersBuf, p.logger)
+		ops, err := substitution.ParseSubstitution(value, filtersBuf, p.logger)
 		if err != nil {
 			p.logger.Fatal("can't parse substitution", zap.Error(err))
 		}
@@ -131,9 +131,9 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 		p.buf = p.buf[:0]
 		for _, op := range list {
 			switch op.Kind {
-			case cfg.SubstitutionOpKindRaw:
+			case substitution.SubstitutionOpKindRaw:
 				p.buf = append(p.buf, op.Data[0]...)
-			case cfg.SubstitutionOpKindField:
+			case substitution.SubstitutionOpKindField:
 				p.fieldBuf = p.fieldBuf[:0]
 				fieldData := event.Root.Dig(op.Data...).AsBytes()
 				p.fieldBuf = append(p.fieldBuf, fieldData...)

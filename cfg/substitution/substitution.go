@@ -1,4 +1,4 @@
-package cfg
+package substitution
 
 import (
 	"encoding/json"
@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/ozontech/file.d/cfg"
 	"go.uber.org/zap"
 )
 
@@ -60,6 +61,11 @@ func (r *RegexFilter) Apply(src []byte, dst []byte) []byte {
 	r.buf = r.buf[:0]
 	for _, index := range indexes {
 		for _, grp := range r.groups {
+			// (*regexp.Regexp).FindAllSubmatchIndex(...) returns a slice of indexes in format:
+			// [<start of whole regexp match>, <end of whole regexp match>, <start of group 1>, <end of group 1>, ...].
+			// So if there are more than one group in regexp the first two indexes must be skipped.
+			// Start of group 1 is index[2], end of group 1 is index[3], start of group 2 is index[4], end of group 2 is index[5],
+			// and so on. Hence, the start of group i is index[2*i], the end of group i is index[2*i+1].
 			start := index[grp*2]
 			end := index[grp*2+1]
 			if len(r.separator) > 0 && len(r.buf) != 0 {
@@ -231,7 +237,7 @@ func ParseSubstitution(substitution string, filtersBuf []byte, logger *zap.Logge
 			}
 
 			selector := substitution[pos+2 : selectorEnd]
-			path := ParseFieldSelector(selector)
+			path := cfg.ParseFieldSelector(selector)
 			result = append(result, SubstitutionOp{
 				Kind:    SubstitutionOpKindField,
 				Data:    path,
@@ -280,7 +286,7 @@ func parseRegexFilter(data string, offset int, logger *zap.Logger) (FieldFilter,
 	if err := json.Unmarshal([]byte(args[2]), &groups); err != nil {
 		return nil, filterEndPos, fmt.Errorf("failed to parse regexp filter groups: %w", err)
 	}
-	VerifyGroupNumbers(groups, re.NumSubexp(), logger)
+	cfg.VerifyGroupNumbers(groups, re.NumSubexp(), logger)
 	if err := json.Unmarshal([]byte(args[3]), &separator); err != nil {
 		return nil, filterEndPos, fmt.Errorf("failed to parse regexp filter separator: %w", err)
 	}
