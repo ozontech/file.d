@@ -5,7 +5,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/test"
@@ -107,10 +106,7 @@ func TestFormatEvent(t *testing.T) {
 			logger.Panicf(err.Error())
 		}
 
-		err = cfg.Parse(config, map[string]int{"gomaxprocs": 1, "capacity": 64})
-		if err != nil {
-			logger.Panicf(err.Error())
-		}
+		test.NewConfig(config, map[string]int{"gomaxprocs": 1, "capacity": 64})
 
 		plugin.Start(config, test.NewEmptyOutputPluginParams())
 		plugin.formatEvent([]byte{}, event)

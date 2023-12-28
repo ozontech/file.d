@@ -27,6 +27,8 @@ pipelines:
     actions:
     - type: mask
       metric_subsystem_name: "some_name"
+      ignore_fields:
+      - trace_id
       masks:
       - mask:
         re: "\b(\d{1,4})\D?(\d{1,4})\D?(\d{1,4})\D?(\d{1,4})\b"
@@ -49,6 +51,10 @@ type Plugin struct {
 	// (data before masked entry, its replacement and data after masked entry)
 	maskBuf []byte
 
+	// common match regex
+	matchRe       *regexp.Regexp
+	ignoredFields map[string]struct{}
+
 	valueNodes []*insaneJSON.Node
 	logger     *zap.Logger
 
@@ -67,12 +73,22 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
+	// > **Experimental feature** for best performance. Skips events with mismatched masks.
+	SkipMismatched bool `json:"skip_mismatched" default:"false"` // *
+
+	// > @3@4@5@6
+	// >
 	// > If any mask has been applied then `mask_applied_field` will be set to `mask_applied_value` in the event.
 	MaskAppliedField string `json:"mask_applied_field"` // *
 
 	// > @3@4@5@6
 	// >
 	MaskAppliedValue string `json:"mask_applied_value"` // *
+
+	// > @3@4@5@6
+	// >
+	// > List of the ignored event fields (including nested fields).
+	IgnoreFields []string `json:"ignore_fields"` // *
 
 	// > @3@4@5@6
 	// >
@@ -172,11 +188,23 @@ func (p *Plugin) makeMetric(ctl *metric.Ctl, name, help string, labels ...string
 	return ctl.RegisterCounter(name, help, labelNames...)
 }
 
-func compileMasks(masks []Mask, logger *zap.Logger) []Mask {
+func compileMasks(masks []Mask, logger *zap.Logger) ([]Mask, *regexp.Regexp) {
+	patterns := make([]string, 0, len(masks))
 	for i := range masks {
 		compileMask(&masks[i], logger)
+		if masks[i].Re != "" {
+			patterns = append(patterns, masks[i].Re)
+		}
 	}
-	return masks
+
+	combinedPattern := strings.Join(patterns, "|")
+	logger.Info("compiling match regexp", zap.String("re", combinedPattern))
+	matchRegex, err := regexp.Compile(combinedPattern)
+	if err != nil {
+		logger.Warn("error on compiling match regexp", zap.Error(err))
+	}
+
+	return masks, matchRegex
 }
 
 func compileMask(m *Mask, logger *zap.Logger) {
@@ -219,7 +247,15 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 	p.sourceBuf = make([]byte, 0, params.PipelineSettings.AvgEventSize)
 	p.valueNodes = make([]*insaneJSON.Node, 0)
 	p.logger = params.Logger.Desugar()
-	p.config.Masks = compileMasks(p.config.Masks, p.logger)
+	p.config.Masks, p.matchRe = compileMasks(p.config.Masks, p.logger)
+
+	if len(p.config.IgnoreFields) > 0 {
+		p.ignoredFields = make(map[string]struct{}, len(p.config.IgnoreFields))
+		for _, field := range p.config.IgnoreFields {
+			p.ignoredFields[field] = struct{}{}
+		}
+	}
+
 	p.registerMetrics(params.MetricCtl)
 }
 
@@ -344,17 +380,22 @@ func (p *Plugin) maskValue(mask *Mask, value, buf []byte) ([]byte, bool) {
 	return value, true
 }
 
-func getValueNodeList(currentNode *insaneJSON.Node, valueNodes []*insaneJSON.Node) []*insaneJSON.Node {
+func getValueNodeList(currentNode *insaneJSON.Node, valueNodes []*insaneJSON.Node, ignoredFields map[string]struct{}) []*insaneJSON.Node {
 	switch {
 	case currentNode.IsField():
-		valueNodes = getValueNodeList(currentNode.AsFieldValue(), valueNodes)
+		fieldName := currentNode.AsString()
+		// check field name in list of ignored fields
+		_, fieldIsIgnored := ignoredFields[fieldName]
+		if !fieldIsIgnored {
+			valueNodes = getValueNodeList(currentNode.AsFieldValue(), valueNodes, ignoredFields)
+		}
 	case currentNode.IsArray():
 		for _, n := range currentNode.AsArray() {
-			valueNodes = getValueNodeList(n, valueNodes)
+			valueNodes = getValueNodeList(n, valueNodes, ignoredFields)
 		}
 	case currentNode.IsObject():
 		for _, n := range currentNode.AsFields() {
-			valueNodes = getValueNodeList(n, valueNodes)
+			valueNodes = getValueNodeList(n, valueNodes, ignoredFields)
 		}
 	default:
 		valueNodes = append(valueNodes, currentNode)
@@ -370,13 +411,27 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	locApplied := false
 
 	p.valueNodes = p.valueNodes[:0]
-	p.valueNodes = getValueNodeList(root, p.valueNodes)
+	p.valueNodes = getValueNodeList(root, p.valueNodes, p.ignoredFields)
 	for _, v := range p.valueNodes {
 		value := v.AsBytes()
+		var valueIsCommonMatched bool
+		if p.config.SkipMismatched {
+			// to always try to apply a mask
+			valueIsCommonMatched = true
+		} else {
+			// is matched by common mask
+			valueIsCommonMatched = p.matchRe.Match(value)
+		}
+
 		p.sourceBuf = append(p.sourceBuf[:0], value...)
 		p.maskBuf = append(p.maskBuf[:0], p.sourceBuf...)
 		for i := range p.config.Masks {
 			mask := &p.config.Masks[i]
+			if mask.Re != "" && !valueIsCommonMatched {
+				// skips messages not matched common regex
+				continue
+			}
+
 			p.maskBuf, locApplied = p.maskValue(mask, p.sourceBuf, p.maskBuf)
 			p.sourceBuf = append(p.sourceBuf[:0], p.maskBuf...)
 			if !locApplied {

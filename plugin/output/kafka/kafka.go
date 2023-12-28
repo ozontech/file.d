@@ -97,6 +97,11 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
+	// > SASL mechanism to use.
+	SaslMechanism string `json:"sasl_mechanism" default:"SCRAM-SHA-512" options:"PLAIN|SCRAM-SHA-256|SCRAM-SHA-512"` // *
+
+	// > @3@4@5@6
+	// >
 	// > If set, the plugin will use SASL authentications mechanism.
 	SaslUsername string `json:"sasl_username" default:"user"` // *
 
@@ -182,7 +187,8 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 
 	outBuf := data.outBuf[:0]
 	start := 0
-	for i, event := range batch.Events {
+	i := 0
+	batch.ForEach(func(event *pipeline.Event) {
 		outBuf, start = event.Encode(outBuf)
 
 		topic := p.config.DefaultTopic
@@ -198,11 +204,12 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 		}
 		data.messages[i].Value = outBuf[start:]
 		data.messages[i].Topic = topic
-	}
+		i++
+	})
 
 	data.outBuf = outBuf
 
-	err := p.producer.SendMessages(data.messages[:len(batch.Events)])
+	err := p.producer.SendMessages(data.messages[:i])
 	if err != nil {
 		errs := err.(sarama.ProducerErrors)
 		for _, e := range errs {
@@ -230,7 +237,7 @@ func (p *Plugin) newProducer() sarama.SyncProducer {
 		config.Net.SASL.User = p.config.SaslUsername
 		config.Net.SASL.Password = p.config.SaslPassword
 		config.Net.SASL.SCRAMClientGeneratorFunc = func() sarama.SCRAMClient { return &XDGSCRAMClient{HashGeneratorFcn: SHA512} }
-		config.Net.SASL.Mechanism = sarama.SASLMechanism(sarama.SASLTypeSCRAMSHA512)
+		config.Net.SASL.Mechanism = sarama.SASLMechanism(p.config.SaslMechanism)
 	}
 
 	// kafka connect via SSL with PEM

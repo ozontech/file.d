@@ -1,8 +1,10 @@
 package clickhouse
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net"
 	"strings"
 	"time"
@@ -89,6 +91,35 @@ const (
 	StrategyInOrder
 )
 
+type Address struct {
+	Addr   string `json:"addr"`
+	Weight int    `json:"weight"`
+}
+
+func (a *Address) UnmarshalJSON(b []byte) error {
+	if len(b) == 0 {
+		return nil
+	}
+
+	switch b[0] {
+	case '"':
+		a.Weight = 1
+		return json.Unmarshal(b, &a.Addr)
+	case '{':
+		type tmpAddress Address
+		tmp := tmpAddress{}
+		dec := json.NewDecoder(bytes.NewReader(b))
+		dec.DisallowUnknownFields()
+		err := dec.Decode(&tmp)
+		*a = Address(tmp)
+		return err
+	default:
+		return errors.New("failed to unmarshal to Address, the value must be string or object")
+	}
+}
+
+var _ json.Unmarshaler = (*Address)(nil)
+
 // ! config-params
 // ^ config-params
 type Config struct {
@@ -96,7 +127,20 @@ type Config struct {
 	// >
 	// > TCP Clickhouse addresses, e.g.: 127.0.0.1:9000.
 	// > Check the insert_strategy to find out how File.d will behave with a list of addresses.
-	Addresses []string `json:"addresses" required:"true"` // *
+	// >
+	// > Accepts strings or objects, e.g.:
+	// > ```yaml
+	// > addresses:
+	// >   - 127.0.0.1:9000 # the same as {addr:'127.0.0.1:9000',weight:1}
+	// >   - addr: 127.0.0.1:9001
+	// >     weight: 2
+	// > ```
+	// >
+	// > When some addresses get weight greater than 1 and round_robin insert strategy is used,
+	// > it works as classical weighted round robin. Given {(a_1,w_1),(a_1,w_1),...,{a_n,w_n}},
+	// > where a_i is the ith address and w_i is the ith address' weight, requests are sent in order:
+	// > w_1 times to a_1, w_2 times to a_2, ..., w_n times to a_n, w_1 times to a_1 and so on.
+	Addresses []Address `json:"addresses" required:"true" slice:"true"` // *
 
 	// > @3@4@5@6
 	// >
@@ -333,11 +377,11 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	}
 
 	for _, addr := range p.config.Addresses {
-		addr = addrWithDefaultPort(addr, "9000")
+		addr.Addr = addrWithDefaultPort(addr.Addr, "9000")
 		pool, err := chpool.New(p.ctx, chpool.Options{
 			ClientOptions: ch.Options{
 				Logger:           p.logger.Named("driver"),
-				Address:          addr,
+				Address:          addr.Addr,
 				Database:         p.config.Database,
 				User:             p.config.User,
 				Password:         p.config.Password,
@@ -355,9 +399,11 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 			HealthCheckPeriod: p.config.HealthCheckPeriod_,
 		})
 		if err != nil {
-			p.logger.Fatal("create clickhouse connection pool", zap.Error(err), zap.String("addr", addr))
+			p.logger.Fatal("create clickhouse connection pool", zap.Error(err), zap.String("addr", addr.Addr))
 		}
-		p.instances = append(p.instances, pool)
+		for j := 0; j < addr.Weight; j++ {
+			p.instances = append(p.instances, pool)
+		}
 	}
 
 	p.batcher = pipeline.NewBatcher(pipeline.BatcherOptions{
@@ -412,7 +458,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 	data := (*workerData).(data)
 	data.reset()
 
-	for _, event := range batch.Events {
+	batch.ForEach(func(event *pipeline.Event) {
 		for _, col := range data.cols {
 			node := event.Root.Dig(col.Name)
 
@@ -436,7 +482,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 				}
 			}
 		}
-	}
+	})
 
 	var err error
 	for try := 0; try < p.config.Retry; try++ {

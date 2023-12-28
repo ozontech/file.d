@@ -36,11 +36,13 @@
     - [keep_fields](plugin/action/keep_fields/README.md)
     - [mask](plugin/action/mask/README.md)
     - [modify](plugin/action/modify/README.md)
+    - [move](plugin/action/move/README.md)
     - [parse_es](plugin/action/parse_es/README.md)
     - [parse_re2](plugin/action/parse_re2/README.md)
     - [remove_fields](plugin/action/remove_fields/README.md)
     - [rename](plugin/action/rename/README.md)
     - [set_time](plugin/action/set_time/README.md)
+    - [split](plugin/action/split/README.md)
     - [throttle](plugin/action/throttle/README.md)
 
   - Output
@@ -55,6 +57,10 @@
     - [splunk](plugin/output/splunk/README.md)
     - [stdout](plugin/output/stdout/README.md)
 
+
+- **Pipeline**
+  - [Match modes](pipeline/README.md#match-modes)
+  - [Experimental: Do If rules](pipeline/README.md#experimental-do-if-rules)
 
 - **Other**
   - [Contributing](/docs/contributing.md)

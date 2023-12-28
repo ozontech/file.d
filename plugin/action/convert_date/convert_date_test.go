@@ -4,8 +4,6 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/ozontech/file.d/cfg"
-	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/test"
 	"github.com/stretchr/testify/assert"
@@ -13,24 +11,15 @@ import (
 
 func TestConvert(t *testing.T) {
 	config := &Config{SourceFormats: []string{"rfc3339nano", "rfc3339", "ansic", pipeline.UnixTime, "nginx_errorlog"}}
-
-	err := cfg.Parse(config, nil)
-	if err != nil {
-		logger.Panicf("wrong config")
-	}
+	test.NewConfig(config, nil)
 
 	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, config, pipeline.MatchModeAnd, nil, false))
 	wg := &sync.WaitGroup{}
 	wg.Add(3)
 
-	inEvents := 0
-	input.SetInFn(func() {
-		inEvents++
-	})
-
-	outEvents := make([]*pipeline.Event, 0)
+	outEvents := make([]string, 0, 3)
 	output.SetOutFn(func(e *pipeline.Event) {
-		outEvents = append(outEvents, e)
+		outEvents = append(outEvents, e.Root.EncodeToString())
 		wg.Done()
 	})
 
@@ -41,34 +30,25 @@ func TestConvert(t *testing.T) {
 	wg.Wait()
 	p.Stop()
 
-	assert.Equal(t, 3, inEvents, "wrong in events count")
 	assert.Equal(t, 3, len(outEvents), "wrong out events count")
-
-	assert.Equal(t, `{"time":998578502}`, outEvents[0].Root.EncodeToString(), "wrong out event")
-	assert.Equal(t, `{"time":998578999}`, outEvents[1].Root.EncodeToString(), "wrong out event")
-	assert.Equal(t, `{"time":1644239174}`, outEvents[2].Root.EncodeToString(), "wrong out event")
+	assert.Equal(t, `{"time":998578502}`, outEvents[0], "wrong out event")
+	assert.Equal(t, `{"time":998578999}`, outEvents[1], "wrong out event")
+	assert.Equal(t, `{"time":1644239174}`, outEvents[2], "wrong out event")
 }
 
 func TestConvertFail(t *testing.T) {
-	config := &Config{SourceFormats: []string{"rfc3339nano", "rfc3339", "ansic"}, RemoveOnFail: true}
-
-	err := cfg.Parse(config, nil)
-	if err != nil {
-		logger.Panicf("wrong config")
+	config := &Config{
+		SourceFormats: []string{"rfc3339nano", "rfc3339", "ansic"},
+		RemoveOnFail:  true,
 	}
+	test.NewConfig(config, nil)
 
 	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, config, pipeline.MatchModeAnd, nil, false))
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
 
-	inEvents := 0
-	input.SetInFn(func() {
-		inEvents++
-	})
-
-	outEvents := make([]*pipeline.Event, 0)
 	output.SetOutFn(func(e *pipeline.Event) {
-		outEvents = append(outEvents, e)
+		assert.Equal(t, `{}`, e.Root.EncodeToString(), "wrong out event")
 		wg.Done()
 	})
 
@@ -76,8 +56,4 @@ func TestConvertFail(t *testing.T) {
 
 	wg.Wait()
 	p.Stop()
-
-	assert.Equal(t, 1, inEvents, "wrong in events count")
-	assert.Equal(t, 1, len(outEvents), "wrong out events count")
-	assert.Equal(t, `{}`, outEvents[0].Root.EncodeToString(), "wrong out event")
 }
