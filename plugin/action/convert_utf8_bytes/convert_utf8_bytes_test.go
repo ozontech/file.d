@@ -1,4 +1,4 @@
-package validate_utf8
+package convert_utf8_bytes
 
 import (
 	"sync"
@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestValidateUTF8(t *testing.T) {
+func TestConvertUTF8Bytes(t *testing.T) {
 	cases := []struct {
 		name      string
 		config    *Config
@@ -21,8 +21,8 @@ func TestValidateUTF8(t *testing.T) {
 			config: &Config{
 				Field: "obj.field",
 			},
-			in:        `{"obj":{"field":"test\\\xD0\xA1\xD0\x98\xD0\xA1\xD0\xA2\xD0\x95\xD0\x9C\xD0\x90.xml"}}`,
-			wantField: `test\СИСТЕМА.xml`,
+			in:        `{"obj":{"field":"\xD0\xA1\xD0\x98\xD0\xA1\xD0\xA2\xD0\x95\xD0\x9C\xD0\x90.xml"}}`,
+			wantField: `СИСТЕМА.xml`,
 		},
 		{
 			name: "valid_octal",
@@ -63,6 +63,14 @@ func TestValidateUTF8(t *testing.T) {
 			},
 			in:        `{"obj":{"field":"{\"Test\":\"test\\u003F\\ud801\\udc01\",\"User\":\"NT AUTHORITY\\\\\\xD0\\xA1\\xD0\\x98\\xD0\\xA1\\xD0\\xA2\\xD0\\x95\\xD0\\x9C\\xD0\\x90\"}"}}`,
 			wantField: `{"Test":"test?𐐁","User":"NT AUTHORITY\\СИСТЕМА"}`,
+		},
+		{
+			name: "valid_escaped_winpath",
+			config: &Config{
+				Field: "obj.field",
+			},
+			in:        `{"obj":{"field":"{\"Dir\":\"C:\\\\Users\\\\username\\\\.prog\\\\120.67.0\\\\x86_64\\\\x64\",\"File\":\"H$Storage_2e3d6dbe-3b0a-4fa9-a6b7-bf1e91e8b3de$\\xD0\\x9F\\xD1\\x80\\xD0\\xB8\\xD0\\xB7\\xD0\\xBD\\xD0\\xB0\\xD0\\xBA.20.tbl.xml\"}"}}`,
+			wantField: `{"Dir":"C:\\Users\\username\\.prog\\120.67.0\\x86_64\\x64","File":"H$Storage_2e3d6dbe-3b0a-4fa9-a6b7-bf1e91e8b3de$Признак.20.tbl.xml"}`,
 		},
 		{
 			name: "field_not_string",
