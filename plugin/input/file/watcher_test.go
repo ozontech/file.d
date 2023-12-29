@@ -10,6 +10,7 @@ import (
 	"github.com/ozontech/file.d/metric"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/rjeczalik/notify"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
@@ -19,7 +20,6 @@ func TestWatcher(t *testing.T) {
 	tests := []struct {
 		name            string
 		filenamePattern string
-		dirPattern      string
 	}{
 		{
 			name:            "should_ok_and_count_only_creation",
@@ -39,9 +39,8 @@ func TestWatcher(t *testing.T) {
 				dir,
 				Paths{
 					Include: []string{
-						tt.dirPattern,
 						filepath.Join(
-							tt.dirPattern,
+							dir,
 							tt.filenamePattern,
 						),
 					},
@@ -100,14 +99,14 @@ func TestWatcherPaths(t *testing.T) {
 		dir,
 		Paths{
 			Include: []string{
-				"nginx-ingress-*/error.log",
-				"log/**/*",
-				"access.log",
-				"**/sub_access.log",
+				filepath.Join(dir, "nginx-ingress-*/error.log"),
+				filepath.Join(dir, "log/**/*"),
+				filepath.Join(dir, "access.log"),
+				filepath.Join(dir, "**/sub_access.log"),
 			},
 			Exclude: []string{
-				"log/payments/**",
-				"nginx-ingress-payments/error.log",
+				filepath.Join(dir, "log/payments/**"),
+				filepath.Join(dir, "nginx-ingress-payments/error.log"),
 			},
 		},
 		notifyFn,
@@ -124,54 +123,55 @@ func TestWatcherPaths(t *testing.T) {
 		shouldNotify bool
 	}{
 		{
-			filename:     "nginx-ingress-0/error.log",
+			filename:     filepath.Join(dir, "nginx-ingress-0/error.log"),
 			shouldNotify: true,
 		},
 		{
-			filename:     "log/errors.log",
+			filename:     filepath.Join(dir, "log/errors.log"),
 			shouldNotify: true,
 		},
 		{
-			filename:     "log/0/errors.log",
+			filename:     filepath.Join(dir, "log/0/errors.log"),
 			shouldNotify: true,
 		},
 		{
-			filename:     "log/0/0/errors.log",
+			filename:     filepath.Join(dir, "log/0/0/errors.log"),
 			shouldNotify: true,
 		},
 		{
-			filename:     "access.log",
+			filename:     filepath.Join(dir, "access.log"),
 			shouldNotify: true,
 		},
 		{
-			filename:     "sub_access.log",
+			filename:     filepath.Join(dir, "sub_access.log"),
 			shouldNotify: true,
 		},
 		{
-			filename:     "access1.log",
+			filename:     filepath.Join(dir, "access1.log"),
 			shouldNotify: false,
 		},
 		{
-			filename:     "nginx/errors.log",
+			filename:     filepath.Join(dir, "nginx/errors.log"),
 			shouldNotify: false,
 		},
 		{
-			filename:     "log/payments/errors.log",
+			filename:     filepath.Join(dir, "log/payments/errors.log"),
 			shouldNotify: false,
 		},
 		{
-			filename:     "log/payments/nginx-ingress-0/errors.log",
+			filename:     filepath.Join(dir, "log/payments/nginx-ingress-0/errors.log"),
 			shouldNotify: false,
 		},
 		{
-			filename:     "nginx-ingress-payments/error.log",
+			filename:     filepath.Join(dir, "nginx-ingress-payments/error.log"),
 			shouldNotify: false,
 		},
 	}
 	for _, tt := range tests {
 		tt := tt
-		t.Run(tt.filename, func(t *testing.T) {
-			filename := filepath.Join(dir, tt.filename)
+		relFilename, _ := filepath.Rel(dir, tt.filename)
+		t.Run(relFilename, func(t *testing.T) {
+			filename := tt.filename
 
 			err := os.MkdirAll(filepath.Dir(filename), 0o700)
 			require.NoError(t, err)
@@ -181,6 +181,7 @@ func TestWatcherPaths(t *testing.T) {
 			err = f1.Close()
 			require.NoError(t, err)
 
+			time.Sleep(10 * time.Millisecond)
 			before := shouldCreate.Load()
 			w.notify(notify.Create, filename)
 			after := shouldCreate.Load()
@@ -189,4 +190,16 @@ func TestWatcherPaths(t *testing.T) {
 			require.Equal(t, tt.shouldNotify, isNotified)
 		})
 	}
+}
+
+func TestCommonPathPrefix(t *testing.T) {
+	a := assert.New(t)
+
+	paths := []string{
+		"/var/log/",
+		"/var/lib/docker/",
+	}
+
+	result := commonPathPrefix(paths)
+	a.Equal("/var", result)
 }
