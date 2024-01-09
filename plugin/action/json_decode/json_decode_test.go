@@ -14,7 +14,6 @@ func TestDecode(t *testing.T) {
 	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, config, pipeline.MatchModeAnd, nil, false))
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
-
 	output.SetOutFn(func(e *pipeline.Event) {
 		assert.Equal(t, `{"prefix.field2":"value2","prefix.field3":"value3"}`, e.Root.EncodeToString(), "wrong out event")
 		wg.Done()

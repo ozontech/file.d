@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/test"
 	"github.com/stretchr/testify/require"
@@ -114,15 +115,14 @@ func TestPlugin_Do(t *testing.T) {
 	for _, tc := range tcs {
 		t.Run(tc.Name, func(t *testing.T) {
 			require.NoError(t, root.DecodeString(tc.Root))
-
-			config := test.NewConfig(tc.Config, nil)
+			cfg.Parse(tc.Config, nil)
 
 			plugin := &Plugin{}
 			event := &pipeline.Event{
 				Root: root,
 			}
 
-			plugin.Start(config, nil)
+			plugin.Start(tc.Config, nil)
 			result := plugin.do(event, now)
 
 			require.Equal(t, tc.ExpResult, result)

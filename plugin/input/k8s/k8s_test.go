@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/test"
@@ -55,11 +54,7 @@ func getPodInfo(item *metaItem, isWhite bool) *corev1.Pod {
 
 func config() *Config {
 	config := &Config{AllowedPodLabels: []string{"allowed_label"}, OffsetsFile: "offsets.yaml"}
-	err := cfg.Parse(config, map[string]int{"gomaxprocs": 1})
-	logger.Infof("", err)
-	if err != nil {
-		localLogger.Panic(err.Error())
-	}
+	test.NewConfig(config, map[string]int{"gomaxprocs": 1})
 	return config
 }
 
