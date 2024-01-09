@@ -35,6 +35,6 @@ func (h HeldHistogramVec) WithLabelValues(lvs ...string) HeldHistogram {
 	}
 }
 
-func (h HeldHistogramVec) ReleaseOldMetrics(holdDuration time.Duration) {
-	h.store.ReleaseOldMetrics(holdDuration, h.vec)
+func (h HeldHistogramVec) DeleteOldMetrics(holdDuration time.Duration) {
+	h.store.DeleteOldMetrics(holdDuration, h.vec)
 }

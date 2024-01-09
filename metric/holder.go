@@ -7,7 +7,7 @@ import (
 )
 
 type heldMetricVec interface {
-	ReleaseOldMetrics(holdDuration time.Duration)
+	DeleteOldMetrics(holdDuration time.Duration)
 }
 
 type Holder struct {
@@ -51,6 +51,6 @@ func (h *Holder) AddHistogramVec(histogramVec *prometheus.HistogramVec) HeldHist
 // releaseOldMetrics delete old metric labels, that aren't in use since last update.
 func (h *Holder) releaseOldMetrics() {
 	for i := range h.heldMetrics {
-		h.heldMetrics[i].ReleaseOldMetrics(h.holdDuration)
+		h.heldMetrics[i].DeleteOldMetrics(h.holdDuration)
 	}
 }

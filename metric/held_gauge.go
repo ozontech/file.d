@@ -53,6 +53,6 @@ func (h HeldGaugeVec) WithLabelValues(lvs ...string) HeldGauge {
 	}
 }
 
-func (h HeldGaugeVec) ReleaseOldMetrics(holdDuration time.Duration) {
-	h.store.ReleaseOldMetrics(holdDuration, h.vec)
+func (h HeldGaugeVec) DeleteOldMetrics(holdDuration time.Duration) {
+	h.store.DeleteOldMetrics(holdDuration, h.vec)
 }

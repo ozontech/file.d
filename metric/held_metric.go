@@ -86,11 +86,11 @@ func (h *heldMetricsStore[T]) getHeldLabelsByHash(lvs []string, hash uint64) (*h
 	return nil, false
 }
 
-type metricReleaser interface {
+type metricDeleter interface {
 	DeleteLabelValues(...string) bool
 }
 
-func (h *heldMetricsStore[T]) ReleaseOldMetrics(holdDuration time.Duration, releaser metricReleaser) {
+func (h *heldMetricsStore[T]) DeleteOldMetrics(holdDuration time.Duration, deleter metricDeleter) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
@@ -98,7 +98,7 @@ func (h *heldMetricsStore[T]) ReleaseOldMetrics(holdDuration time.Duration, rele
 		releasedMetrics := slices.DeleteFunc(hashedLabels, func(held *heldMetric[T]) bool {
 			isObsolete := h.unixNanoFunc()-held.lastUsage.Load() > holdDuration.Nanoseconds()
 			if isObsolete {
-				releaser.DeleteLabelValues(held.labels...)
+				deleter.DeleteLabelValues(held.labels...)
 				*held = heldMetric[T]{} // release objects in the structure
 				return true
 			}

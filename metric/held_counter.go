@@ -38,6 +38,6 @@ func (h HeldCounterVec) WithLabelValues(lvs ...string) HeldCounter {
 	}
 }
 
-func (h HeldCounterVec) ReleaseOldMetrics(holdDuration time.Duration) {
-	h.store.ReleaseOldMetrics(holdDuration, h.vec)
+func (h HeldCounterVec) DeleteOldMetrics(holdDuration time.Duration) {
+	h.store.DeleteOldMetrics(holdDuration, h.vec)
 }
