@@ -49,13 +49,11 @@ func BenchmarkMetricHolder(b *testing.B) {
 		name := strings.Join(benchCase.Labels, "_")
 
 		b.Run(name, func(b *testing.B) {
-			b.RunParallel(func(pb *testing.PB) {
-				for pb.Next() {
-					for _, labels := range benchCase.LabelValues {
-						counter.WithLabelValues(labels...).Inc()
-					}
+			for i := 0; i < b.N; i++ {
+				for _, labels := range benchCase.LabelValues {
+					counter.WithLabelValues(labels...).Inc()
 				}
-			})
+			}
 		})
 	}
 }
@@ -67,13 +65,11 @@ func BenchmarkPromVec(b *testing.B) {
 		name := strings.Join(benchCase.Labels, "_")
 
 		b.Run(name, func(b *testing.B) {
-			b.RunParallel(func(pb *testing.PB) {
-				for pb.Next() {
-					for _, labels := range benchCase.LabelValues {
-						counter.WithLabelValues(labels...).Inc()
-					}
+			for i := 0; i < b.N; i++ {
+				for _, labels := range benchCase.LabelValues {
+					counter.WithLabelValues(labels...).Inc()
 				}
-			})
+			}
 		})
 	}
 }
