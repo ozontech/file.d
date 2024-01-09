@@ -4,9 +4,26 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unsafe"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/stretchr/testify/require"
 )
+
+func TestUnsafeStringInMetric(t *testing.T) {
+	r := require.New(t)
+
+	bytes := []byte("hello world")
+	unsafeString := unsafe.String(unsafe.SliceData(bytes), len(bytes))
+
+	labels := []string{unsafeString}
+	m := newHeldMetric[prometheus.Counter]([]string{unsafeString}, prometheus.NewCounter(prometheus.CounterOpts{}))
+
+	bytes[0] = '1'
+	labels[0] = "new"
+
+	r.Equal([]string{"hello world"}, m.labels)
+}
 
 var holderBenchCases = []struct {
 	Labels      []string

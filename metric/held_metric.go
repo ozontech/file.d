@@ -2,6 +2,7 @@ package metric
 
 import (
 	"slices"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -17,12 +18,16 @@ type heldMetric[T prometheus.Metric] struct {
 	metric    T
 }
 
-func newHeldMetric[T prometheus.Metric](lvs []string, metric T) *heldMetric[T] {
-	labels := make([]string, len(lvs))
-	// copy labels because they are unsafe strings
-	copy(labels, lvs)
+func newHeldMetric[T prometheus.Metric](labels []string, metric T) *heldMetric[T] {
+	// copy labels because they are unsafe converted bytes
+	// TODO: replace with [][]byte to make it explicit
+	labelsCopy := make([]string, len(labels))
+	for i := range labels {
+		labelsCopy[i] = strings.Clone(labels[i])
+	}
+
 	hl := &heldMetric[T]{
-		labels:    labels,
+		labels:    labelsCopy,
 		lastUsage: atomic.Int64{},
 		metric:    metric,
 	}
