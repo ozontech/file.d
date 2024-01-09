@@ -1,6 +1,7 @@
 package modify
 
 import (
+	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/cfg/substitution"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/pipeline"
@@ -10,8 +11,10 @@ import (
 const filterBufInitSize = 1024
 
 /*{ introduction
-It modifies the content for a field. It works only with strings.
+It modifies the content for a field or add new field. It works only with strings.
 You can provide an unlimited number of config parameters. Each parameter handled as `cfg.FieldSelector`:`cfg.Substitution`.
+
+> Note: When used to add new nested fields, each child field is added step by step, which can cause performance issues.
 
 **Example:**
 ```yaml
@@ -80,10 +83,15 @@ Result: `{"message:"service=service-test-1 exec took 200ms","took":"200ms"}`
 
 }*/
 
+type fieldOp struct {
+	field []string
+	ops   []substitution.SubstitutionOp
+}
+
 type Plugin struct {
 	config   *Config
 	logger   *zap.Logger
-	ops      map[string][]substitution.SubstitutionOp
+	fieldOps []fieldOp
 	buf      []byte
 	fieldBuf []byte
 }
@@ -103,7 +111,7 @@ func factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginParams) {
 	p.config = config.(*Config)
-	p.ops = make(map[string][]substitution.SubstitutionOp)
+	p.fieldOps = make([]fieldOp, 0, len(*p.config))
 	p.logger = params.Logger.Desugar()
 
 	filtersBuf := make([]byte, 0, filterBufInitSize)
@@ -119,7 +127,10 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 			continue
 		}
 
-		p.ops[key] = ops
+		p.fieldOps = append(p.fieldOps, fieldOp{
+			field: cfg.ParseFieldSelector(key),
+			ops:   ops,
+		})
 	}
 }
 
@@ -127,9 +138,9 @@ func (p *Plugin) Stop() {
 }
 
 func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
-	for field, list := range p.ops {
+	for _, fo := range p.fieldOps {
 		p.buf = p.buf[:0]
-		for _, op := range list {
+		for _, op := range fo.ops {
 			switch op.Kind {
 			case substitution.SubstitutionOpKindRaw:
 				p.buf = append(p.buf, op.Data[0]...)
@@ -146,7 +157,7 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 			}
 		}
 
-		event.Root.AddFieldNoAlloc(event.Root, field).MutateToBytesCopy(event.Root, p.buf)
+		pipeline.CreateNestedField(event.Root, fo.field).MutateToBytesCopy(event.Root, p.buf)
 	}
 
 	return pipeline.ActionPass

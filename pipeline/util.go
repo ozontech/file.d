@@ -202,7 +202,10 @@ func ParseLevelAsString(level string) string {
 func CreateNestedField(root *insaneJSON.Root, path []string) *insaneJSON.Node {
 	curr := root.Node
 	for _, p := range path {
-		curr = curr.AddFieldNoAlloc(root, p).MutateToObject()
+		curr = curr.AddFieldNoAlloc(root, p)
+		if !curr.IsObject() {
+			curr.MutateToObject()
+		}
 	}
 	return curr
 }
