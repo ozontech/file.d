@@ -1,6 +1,7 @@
 package mask
 
 import (
+	"encoding/json"
 	"regexp"
 	"strings"
 	"sync"
@@ -20,6 +21,7 @@ const (
 	kDefaultIDRegExp                         = `[А-Я][а-я]{1,64}(\-[А-Я][а-я]{1,64})?\s+[А-Я][а-я]{1,64}(\.)?\s+[А-Я][а-я]{1,64}`
 	kDefaultCardRegExp                       = `\b(\d{1,4})\D?(\d{1,4})\D?(\d{1,4})\D?(\d{1,4})\b`
 	kCardWithStarOrSpaceOrNoDelimitersRegExp = `\b(\d{4})\s?\-?(\d{4})\s?\-?(\d{4})\s?\-?(\d{4})\b`
+	kEMailRegExp                             = `([a-z0-9]+@[a-z0-9]+\.[a-z]+)`
 )
 
 //nolint:funlen
@@ -142,6 +144,22 @@ func TestMaskFunctions(t *testing.T) {
 			expected:     []byte("Individual entrepreneur Ivanov Ivan Ivanovich"),
 			comment:      "do not replace matched value",
 			masks:        Mask{Re: "Individual entrepreneur"},
+			mustBeMasked: true,
+		},
+		{
+			name:         "email",
+			input:        []byte("email login@domain.ru"),
+			expected:     []byte("email SECMASKED"),
+			comment:      "do not replace email",
+			masks:        Mask{Re: kEMailRegExp, ReplaceWord: "SECMASKED", Groups: []int{0}, MaxCount: 10},
+			mustBeMasked: true,
+		},
+		{
+			name:         "email with special characters",
+			input:        []byte("email\nnlogin@domain.ru"),
+			expected:     []byte("email\nSECMASKED"),
+			comment:      "do not replace email",
+			masks:        Mask{Re: kEMailRegExp, ReplaceWord: "SECMASKED", Groups: []int{0}, MaxCount: 10},
 			mustBeMasked: true,
 		},
 	}
@@ -446,6 +464,12 @@ func TestPlugin(t *testing.T) {
 			comment:  "ID masked",
 		},
 		{
+			name:     "email",
+			input:    []string{`{"field1":"email login@domain.ru"}`},
+			expected: []string{`{"field1":"email SECMASKED"}`},
+			comment:  "email masked",
+		},
+		{
 			name:     "card number with text",
 			input:    []string{`{"field1":"authorization of card number 5679-0643-9766-5536 failed"}`},
 			expected: []string{`{"field1":"authorization of card number ****-****-****-**** failed"}`},
@@ -479,6 +503,20 @@ func TestPlugin(t *testing.T) {
 			},
 			comment: "only ID & card number masked",
 		},
+		{
+			name: "special chars",
+			input: []string{
+				`{"field1":"email\\nlogin@domain.ru"}`,
+				`{"field1":"email\nlogin@domain.ru"}`,
+				`{"field1":"email\login@domain.ru"}`,
+			},
+			expected: []string{
+				`{"field1":"email\\SECMASKED"}`,
+				`{"field1":"email\nSECMASKED"}`,
+				`{"field1":"email\\SECMASKED"}`,
+			},
+			comment: "mask values with special chars",
+		},
 	}
 
 	config := test.NewConfig(&Config{
@@ -495,6 +533,11 @@ func TestPlugin(t *testing.T) {
 			{
 				Re:     kDefaultIDRegExp,
 				Groups: []int{0},
+			},
+			{
+				Re:          kEMailRegExp,
+				Groups:      []int{0},
+				ReplaceWord: "SECMASKED",
 			},
 		},
 	}, nil)
@@ -524,6 +567,7 @@ func TestPlugin(t *testing.T) {
 
 			for i := range s.expected {
 				assert.Equal(t, s.expected[i], outEvents[i], s.comment)
+				assert.True(t, json.Valid([]byte(outEvents[i])))
 			}
 		})
 	}
