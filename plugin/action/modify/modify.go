@@ -11,8 +11,10 @@ import (
 const filterBufInitSize = 1024
 
 /*{ introduction
-It modifies the content for a field. It works only with strings.
+It modifies the content for a field or add new field. It works only with strings.
 You can provide an unlimited number of config parameters. Each parameter handled as `cfg.FieldSelector`:`cfg.Substitution`.
+
+> Note: When used to add new nested fields, each child field is added step by step, which can cause performance issues.
 
 **Example:**
 ```yaml
