@@ -9,6 +9,7 @@ import (
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/pipeline"
+	insaneJSON "github.com/vitkovskii/insane-json"
 )
 
 /*{ introduction
@@ -22,7 +23,8 @@ pipelines:
     ...
     actions:
     - type: convert_utf8_bytes
-      field: obj.field
+      fields:
+        - obj.field
     ...
 ```
 
@@ -97,6 +99,7 @@ The resulting event:
 
 type Plugin struct {
 	config *Config
+	fields [][]string
 	buf    []byte
 }
 
@@ -105,10 +108,9 @@ type Plugin struct {
 type Config struct {
 	// > @3@4@5@6
 	// >
-	// > The name of the event field to convert.
-	// >> The field value must be a string.
-	Field  cfg.FieldSelector `json:"field" parse:"selector" required:"true"` // *
-	Field_ []string
+	// > The list of the event fields to convert.
+	// >> Field value must be a string.
+	Fields []cfg.FieldSelector `json:"fields" slice:"true" required:"true"` // *
 }
 
 func init() {
@@ -124,23 +126,35 @@ func factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 
 func (p *Plugin) Start(config pipeline.AnyConfig, _ *pipeline.ActionPluginParams) {
 	p.config = config.(*Config)
+
+	p.fields = make([][]string, 0, len(p.config.Fields))
+	for _, fs := range p.config.Fields {
+		p.fields = append(p.fields, cfg.ParseFieldSelector(string(fs)))
+	}
 }
 
 func (p *Plugin) Stop() {}
 
 func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
-	p.buf = p.buf[:0]
-
-	node := event.Root.Dig(p.config.Field_...)
-	if node == nil || !node.IsString() {
-		return pipeline.ActionPass
+	for _, field := range p.fields {
+		node := event.Root.Dig(field...)
+		if node == nil || !node.IsString() {
+			continue
+		}
+		p.convert(node)
 	}
+
+	return pipeline.ActionPass
+}
+
+func (p *Plugin) convert(node *insaneJSON.Node) {
+	p.buf = p.buf[:0]
 
 	nodeStr := node.AsString()
 
 	idx := strings.IndexByte(nodeStr, '\\')
 	if idx < 0 {
-		return pipeline.ActionPass
+		return
 	}
 	p.buf = append(p.buf, nodeStr[:idx]...)
 	nodeStr = nodeStr[idx+1:]
@@ -260,6 +274,4 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	}
 
 	node.MutateToString(pipeline.ByteToStringUnsafe(p.buf))
-
-	return pipeline.ActionPass
 }

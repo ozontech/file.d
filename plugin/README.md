@@ -193,7 +193,8 @@ pipelines:
     ...
     actions:
     - type: convert_utf8_bytes
-      field: obj.field
+      fields:
+        - obj.field
     ...
 ```
 

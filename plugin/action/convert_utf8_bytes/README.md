@@ -9,7 +9,8 @@ pipelines:
     ...
     actions:
     - type: convert_utf8_bytes
-      field: obj.field
+      fields:
+        - obj.field
     ...
 ```
 
@@ -82,10 +83,10 @@ The resulting event:
 ```
 
 ### Config params
-**`field`** *`cfg.FieldSelector`* *`required`* 
+**`fields`** *`[]cfg.FieldSelector`* *`required`* 
 
-The name of the event field to convert.
-> The field value must be a string.
+The list of the event fields to convert.
+> Field value must be a string.
 
 <br>
 
