@@ -6,219 +6,125 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/cespare/xxhash/v2"
 	"github.com/ozontech/file.d/xtime"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/segmentio/fasthash/fnv1a"
 )
 
-type heldLabels struct {
+type heldMetric[T prometheus.Metric] struct {
 	labels    []string
-	lastUsage *atomic.Int64 // unix timestamp
-
-	// can be replaced for testing
-	isObsoleteFunc func(int64, time.Duration) bool
+	lastUsage atomic.Int64 // unixnano timestamp
+	metric    T
 }
 
-func newHeldLabels(lvs []string) heldLabels {
+func newHeldMetric[T prometheus.Metric](lvs []string, metric T) *heldMetric[T] {
 	labels := make([]string, len(lvs))
+	// copy labels because they are unsafe strings
 	copy(labels, lvs)
-	hl := heldLabels{
-		labels:         labels,
-		lastUsage:      new(atomic.Int64),
-		isObsoleteFunc: isObsolete,
+	hl := &heldMetric[T]{
+		labels:    labels,
+		lastUsage: atomic.Int64{},
+		metric:    metric,
 	}
 	hl.updateUsage()
 	return hl
 }
 
-func (h *heldLabels) updateUsage() {
-	h.lastUsage.Store(xtime.GetInaccurateUnixNano())
-}
+var updateThreshold = (time.Second * 10).Nanoseconds()
 
-func (h *heldLabels) isObsolete(holdDuration time.Duration) bool {
-	if h.lastUsage != nil {
-		return h.isObsoleteFunc(h.lastUsage.Load(), holdDuration)
-	}
-	return true
-}
+func (h *heldMetric[T]) updateUsage() {
+	now := xtime.GetInaccurateUnixNano()
 
-type HeldCounter struct {
-	heldLabels
-	counter prometheus.Counter
-}
-
-func (h *HeldCounter) Inc() {
-	h.counter.Inc()
-	h.updateUsage()
-}
-
-func (h *HeldCounter) Add(v float64) {
-	h.counter.Add(v)
-	h.updateUsage()
-}
-
-type HeldGauge struct {
-	heldLabels
-	gauge prometheus.Gauge
-}
-
-func (h *HeldGauge) Set(v float64) {
-	h.gauge.Set(v)
-	h.updateUsage()
-}
-
-func (h *HeldGauge) Inc() {
-	h.gauge.Inc()
-	h.updateUsage()
-}
-
-func (h *HeldGauge) Dec() {
-	h.gauge.Dec()
-	h.updateUsage()
-}
-
-func (h *HeldGauge) Add(v float64) {
-	h.gauge.Add(v)
-	h.updateUsage()
-}
-
-func (h *HeldGauge) Sub(v float64) {
-	h.gauge.Sub(v)
-	h.updateUsage()
-}
-
-type HeldHistogram struct {
-	heldLabels
-	histogram prometheus.Histogram
-}
-
-func (h *HeldHistogram) Observe(v float64) {
-	h.histogram.Observe(v)
-	h.updateUsage()
-}
-
-type heldLabelsVec struct {
-	heldLabelsByHash map[uint64][]heldLabels
-	mu               sync.RWMutex
-}
-
-func newHeldLabelsVec() heldLabelsVec {
-	return heldLabelsVec{
-		heldLabelsByHash: make(map[uint64][]heldLabels),
+	// optimize atomic writes,
+	// because it is not important for us to have the newest state
+	if lastUsage := h.lastUsage.Load(); now-lastUsage > updateThreshold {
+		h.lastUsage.Store(now)
 	}
 }
 
-func (h *heldLabelsVec) getOrCreateHeldLabels(lvs []string) heldLabels {
-	lvsHash := hashLabels(lvs)
+type heldMetricsStore[T prometheus.Metric] struct {
+	mu            sync.RWMutex
+	metricsByHash map[uint64][]*heldMetric[T]
 
+	// used in tests
+	unixNanoFunc func() int64
+}
+
+func newHeldLabelsStore[T prometheus.Metric]() *heldMetricsStore[T] {
+	return &heldMetricsStore[T]{
+		mu:            sync.RWMutex{},
+		metricsByHash: make(map[uint64][]*heldMetric[T]),
+		unixNanoFunc:  xtime.GetInaccurateUnixNano,
+	}
+}
+
+func (h *heldMetricsStore[T]) GetOrCreate(labels []string, createMetric func(...string) T) *heldMetric[T] {
+	hash := computeStringsHash(labels)
+	// fast path - metric exists
 	h.mu.RLock()
-	hl, ok := h.getHeldLabelsByHash(lvsHash, lvs)
+	held, ok := h.getHeldLabelsByHash(labels, hash)
 	h.mu.RUnlock()
 	if ok {
-		return hl
+		return held
+	}
+	// slow path - create new metric
+	return h.tryCreate(labels, hash, createMetric)
+}
+
+func (h *heldMetricsStore[T]) getHeldLabelsByHash(lvs []string, hash uint64) (*heldMetric[T], bool) {
+	hls, ok := h.metricsByHash[hash]
+	if !ok {
+		return nil, false
+	}
+	if len(hls) == 1 {
+		return hls[0], true
 	}
 
+	if i := findHeldLabelsIndex(hls, lvs); i != -1 {
+		return hls[i], true
+	}
+	return nil, false
+}
+
+type metricReleaser interface {
+	DeleteLabelValues(...string) bool
+}
+
+func (h *heldMetricsStore[T]) ReleaseOldMetrics(holdDuration time.Duration, releaser metricReleaser) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	hl, ok = h.getHeldLabelsByHash(lvsHash, lvs)
-	if !ok {
-		hl = newHeldLabels(lvs)
-		h.heldLabelsByHash[lvsHash] = append(h.heldLabelsByHash[lvsHash], hl)
-	}
-	return hl
-}
 
-func (h *heldLabelsVec) getHeldLabelsByHash(hash uint64, lvs []string) (heldLabels, bool) {
-	if hls, ok := h.heldLabelsByHash[hash]; ok {
-		if i := findHeldLabelsIndex(hls, lvs); i != -1 {
-			return hls[i], true
+	for hash, hashedLabels := range h.metricsByHash {
+		releasedMetrics := slices.DeleteFunc(hashedLabels, func(held *heldMetric[T]) bool {
+			isObsolete := h.unixNanoFunc()-held.lastUsage.Load() > holdDuration.Nanoseconds()
+			if isObsolete {
+				releaser.DeleteLabelValues(held.labels...)
+				*held = heldMetric[T]{} // release objects in the structure
+				return true
+			}
+			return false
+		})
+
+		if len(releasedMetrics) == 0 {
+			delete(h.metricsByHash, hash)
 		}
 	}
-	return heldLabels{}, false
 }
 
-type HeldCounterVec struct {
-	heldLabelsVec
-	vec *prometheus.CounterVec
-}
-
-func newHeldCounterVec(cv *prometheus.CounterVec) *HeldCounterVec {
-	return &HeldCounterVec{
-		vec:           cv,
-		heldLabelsVec: newHeldLabelsVec(),
+func (h *heldMetricsStore[T]) tryCreate(labels []string, hash uint64, createMetric func(...string) T) *heldMetric[T] {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	held, ok := h.getHeldLabelsByHash(labels, hash)
+	if ok {
+		return held
 	}
+
+	held = newHeldMetric[T](labels, createMetric(labels...))
+	h.metricsByHash[hash] = append(h.metricsByHash[hash], held)
+	return held
 }
 
-func (h *HeldCounterVec) WithLabelValues(lvs ...string) *HeldCounter {
-	return &HeldCounter{
-		counter:    h.vec.WithLabelValues(lvs...),
-		heldLabels: h.getOrCreateHeldLabels(lvs),
-	}
-}
-
-func (h *HeldCounterVec) update(holdDuration time.Duration) {
-	deleteObsoleteMetrics(holdDuration, &h.heldLabelsVec, h.vec.MetricVec)
-}
-
-type HeldGaugeVec struct {
-	heldLabelsVec
-	vec *prometheus.GaugeVec
-}
-
-func newHeldGaugeVec(gv *prometheus.GaugeVec) *HeldGaugeVec {
-	return &HeldGaugeVec{
-		vec:           gv,
-		heldLabelsVec: newHeldLabelsVec(),
-	}
-}
-
-func (h *HeldGaugeVec) WithLabelValues(lvs ...string) *HeldGauge {
-	return &HeldGauge{
-		gauge:      h.vec.WithLabelValues(lvs...),
-		heldLabels: h.getOrCreateHeldLabels(lvs),
-	}
-}
-
-func (h *HeldGaugeVec) update(holdDuration time.Duration) {
-	deleteObsoleteMetrics(holdDuration, &h.heldLabelsVec, h.vec.MetricVec)
-}
-
-type HeldHistogramVec struct {
-	heldLabelsVec
-	vec *prometheus.HistogramVec
-}
-
-func newHeldHistogramVec(hv *prometheus.HistogramVec) *HeldHistogramVec {
-	return &HeldHistogramVec{
-		vec:           hv,
-		heldLabelsVec: newHeldLabelsVec(),
-	}
-}
-
-func (h *HeldHistogramVec) WithLabelValues(lvs ...string) *HeldHistogram {
-	return &HeldHistogram{
-		histogram:  h.vec.WithLabelValues(lvs...).(prometheus.Histogram),
-		heldLabels: h.getOrCreateHeldLabels(lvs),
-	}
-}
-
-func (h *HeldHistogramVec) update(holdDuration time.Duration) {
-	deleteObsoleteMetrics(holdDuration, &h.heldLabelsVec, h.vec.MetricVec)
-}
-
-func isObsolete(lastUsage int64, holdDuration time.Duration) bool {
-	return xtime.GetInaccurateUnixNano()-lastUsage > holdDuration.Nanoseconds()
-}
-
-func hashLabels(lvs []string) uint64 {
-	h := fnv1a.Init64
-	for i := range lvs {
-		h = fnv1a.AddString64(h, lvs[i])
-	}
-	return h
-}
-
-func findHeldLabelsIndex(hLabels []heldLabels, lvs []string) int {
+func findHeldLabelsIndex[T prometheus.Metric](hLabels []*heldMetric[T], lvs []string) int {
 	idx := -1
 	for i := range hLabels {
 		if slices.Equal(hLabels[i].labels, lvs) {
@@ -229,23 +135,16 @@ func findHeldLabelsIndex(hLabels []heldLabels, lvs []string) int {
 	return idx
 }
 
-func deleteObsoleteMetrics(holdDuration time.Duration, hlVec *heldLabelsVec, mVec *prometheus.MetricVec) {
-	hlVec.mu.Lock()
-	defer hlVec.mu.Unlock()
-
-	for hash, hls := range hlVec.heldLabelsByHash {
-		i := 0
-		for _, hl := range hls {
-			if hl.isObsolete(holdDuration) {
-				mVec.DeleteLabelValues(hl.labels...)
-			} else {
-				hls[i] = hl
-				i++
-			}
+func computeStringsHash(s []string) uint64 {
+	var hash uint64
+	if len(s) == 1 {
+		hash = xxhash.Sum64String(s[0])
+	} else {
+		digest := xxhash.New()
+		for i := range s {
+			_, _ = digest.WriteString(s[i])
 		}
-		hlVec.heldLabelsByHash[hash] = hls[:i]
-		if len(hlVec.heldLabelsByHash[hash]) == 0 {
-			delete(hlVec.heldLabelsByHash, hash)
-		}
+		hash = digest.Sum64()
 	}
+	return hash
 }

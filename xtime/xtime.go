@@ -1,25 +1,11 @@
 package xtime
 
 import (
-	"sync"
 	"sync/atomic"
 	"time"
 )
 
-const updateTimeInterval = time.Second
-
-var nowTime atomic.Int64
-
-func GetInaccurateUnixNano() int64 {
-	startOnce()
-	return nowTime.Load()
-}
-
-func GetInaccurateTime() time.Time {
-	return time.Unix(0, GetInaccurateUnixNano())
-}
-
-var startOnce = sync.OnceFunc(func() {
+func init() {
 	setNowTime(time.Now())
 	ticker := time.NewTicker(updateTimeInterval)
 	go func() {
@@ -27,7 +13,19 @@ var startOnce = sync.OnceFunc(func() {
 			setNowTime(t)
 		}
 	}()
-})
+}
+
+const updateTimeInterval = time.Second
+
+var nowTime atomic.Int64
+
+func GetInaccurateUnixNano() int64 {
+	return nowTime.Load()
+}
+
+func GetInaccurateTime() time.Time {
+	return time.Unix(0, GetInaccurateUnixNano())
+}
 
 func setNowTime(t time.Time) {
 	nowTime.Store(t.UnixNano())
