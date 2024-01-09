@@ -6,9 +6,47 @@ import (
 	"time"
 	"unsafe"
 
+	"github.com/ozontech/file.d/xtime"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/require"
 )
+
+func TestLabelExpiration(t *testing.T) {
+	r := require.New(t)
+
+	ctl := NewCtl("test", prometheus.NewRegistry())
+	promCounter := ctl.RegisterCounterVec("errors", "", "level")
+
+	c := NewHeldCounterVec(promCounter)
+
+	now := time.Now().UnixNano()
+	xtime.SetNowTime(now)
+
+	// 1 error
+	c.WithLabelValues("error").Inc()
+	// 2 warns
+	c.WithLabelValues("warn").Inc()
+	// 2 infos
+	c.WithLabelValues("info").Inc()
+
+	// update usage of the metric with "info" label
+	{
+		newNow := now + (time.Second * 30).Nanoseconds()
+		xtime.SetNowTime(newNow)
+		c.WithLabelValues("info").Inc()
+	}
+
+	// set new time to expire "warn" and "error" metrics
+	xtime.SetNowTime(now + time.Minute.Nanoseconds() + time.Nanosecond.Nanoseconds())
+
+	c.DeleteOldMetrics(time.Minute)
+
+	hash := computeStringsHash([]string{"info"})
+	r.Equal(1, len(c.store.metricsByHash))
+
+	infoMetric := c.store.metricsByHash[hash][0]
+	r.Equal([]string{"info"}, infoMetric.labels)
+}
 
 func TestUnsafeStringInMetric(t *testing.T) {
 	r := require.New(t)

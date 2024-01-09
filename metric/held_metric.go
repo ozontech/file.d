@@ -50,16 +50,12 @@ func (h *heldMetric[T]) updateUsage() {
 type heldMetricsStore[T prometheus.Metric] struct {
 	mu            sync.RWMutex
 	metricsByHash map[uint64][]*heldMetric[T]
-
-	// used in tests
-	unixNanoFunc func() int64
 }
 
 func newHeldLabelsStore[T prometheus.Metric]() *heldMetricsStore[T] {
 	return &heldMetricsStore[T]{
 		mu:            sync.RWMutex{},
 		metricsByHash: make(map[uint64][]*heldMetric[T]),
-		unixNanoFunc:  xtime.GetInaccurateUnixNano,
 	}
 }
 
@@ -70,6 +66,7 @@ func (h *heldMetricsStore[T]) GetOrCreate(labels []string, createMetric func(...
 	held, ok := h.getHeldLabelsByHash(labels, hash)
 	h.mu.RUnlock()
 	if ok {
+		held.lastUsage.Store(xtime.GetInaccurateUnixNano())
 		return held
 	}
 	// slow path - create new metric
@@ -96,12 +93,16 @@ type metricDeleter interface {
 }
 
 func (h *heldMetricsStore[T]) DeleteOldMetrics(holdDuration time.Duration, deleter metricDeleter) {
+	now := xtime.GetInaccurateUnixNano()
+
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
 	for hash, hashedLabels := range h.metricsByHash {
 		releasedMetrics := slices.DeleteFunc(hashedLabels, func(held *heldMetric[T]) bool {
-			isObsolete := h.unixNanoFunc()-held.lastUsage.Load() > holdDuration.Nanoseconds()
+			lastUsage := held.lastUsage.Load()
+			diff := now - lastUsage
+			isObsolete := diff > holdDuration.Nanoseconds()
 			if isObsolete {
 				deleter.DeleteLabelValues(held.labels...)
 				*held = heldMetric[T]{} // release objects in the structure

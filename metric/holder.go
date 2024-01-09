@@ -27,7 +27,7 @@ func NewHolder(holdDuration time.Duration) *Holder {
 }
 
 func (h *Holder) Maintenance() {
-	h.releaseOldMetrics()
+	h.DeleteOldMetrics()
 }
 
 func (h *Holder) AddCounterVec(counterVec *prometheus.CounterVec) HeldCounterVec {
@@ -48,8 +48,8 @@ func (h *Holder) AddHistogramVec(histogramVec *prometheus.HistogramVec) HeldHist
 	return hhv
 }
 
-// releaseOldMetrics delete old metric labels, that aren't in use since last update.
-func (h *Holder) releaseOldMetrics() {
+// DeleteOldMetrics delete old metric labels, that aren't in use since last update.
+func (h *Holder) DeleteOldMetrics() {
 	for i := range h.heldMetrics {
 		h.heldMetrics[i].DeleteOldMetrics(h.holdDuration)
 	}
