@@ -1,10 +1,10 @@
 package convert_utf8_bytes
 
 import (
-	"github.com/ozontech/file.d/cfg"
 	"sync"
 	"testing"
 
+	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/test"
 	"github.com/stretchr/testify/assert"
