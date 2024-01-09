@@ -11,8 +11,9 @@ import (
 
 func TestModify(t *testing.T) {
 	config := test.NewConfig(&Config{
-		"new_field":                "new_value",
-		"my_object.field.subfield": "${existing_field}",
+		"new_field":                        "new_value",
+		"my_object.field.subfield":         "${existing_field}",
+		"my_object.new_field.new_subfield": "new_subfield_value",
 	}, nil)
 	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, config, pipeline.MatchModeAnd, nil, false))
 	wg := &sync.WaitGroup{}
@@ -21,6 +22,7 @@ func TestModify(t *testing.T) {
 	output.SetOutFn(func(e *pipeline.Event) {
 		assert.Equal(t, "new_value", e.Root.Dig("new_field").AsString(), "wrong event field")
 		assert.Equal(t, "existing_value", e.Root.Dig("my_object", "field", "subfield").AsString(), "wrong event field")
+		assert.Equal(t, "new_subfield_value", e.Root.Dig("my_object", "new_field", "new_subfield").AsString(), "wrong event field")
 		wg.Done()
 	})
 

@@ -44,7 +44,7 @@ type fieldOp struct {
 type Plugin struct {
 	config   *Config
 	logger   *zap.SugaredLogger
-	fieldOps map[string]fieldOp
+	fieldOps []fieldOp
 	buf      []byte
 }
 
@@ -64,7 +64,7 @@ func factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginParams) {
 	p.config = config.(*Config)
 	p.logger = params.Logger
-	p.fieldOps = make(map[string]fieldOp)
+	p.fieldOps = make([]fieldOp, 0, len(*p.config))
 
 	for key, value := range *p.config {
 		ops, err := cfg.ParseSubstitution(value)
@@ -76,10 +76,10 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 			continue
 		}
 
-		p.fieldOps[key] = fieldOp{
+		p.fieldOps = append(p.fieldOps, fieldOp{
 			field: cfg.ParseFieldSelector(key),
 			ops:   ops,
-		}
+		})
 	}
 }
 
@@ -87,7 +87,7 @@ func (p *Plugin) Stop() {
 }
 
 func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
-	for field, fo := range p.fieldOps {
+	for _, fo := range p.fieldOps {
 		p.buf = p.buf[:0]
 		for _, op := range fo.ops {
 			switch op.Kind {
@@ -100,12 +100,7 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 			}
 		}
 
-		node := event.Root.Dig(fo.field...)
-		if node == nil {
-			node = event.Root.AddFieldNoAlloc(event.Root, field)
-		}
-
-		node.MutateToBytesCopy(event.Root, p.buf)
+		pipeline.CreateNestedField(event.Root, fo.field).MutateToBytesCopy(event.Root, p.buf)
 	}
 
 	return pipeline.ActionPass
