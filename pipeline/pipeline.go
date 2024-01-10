@@ -539,8 +539,8 @@ func (p *Pipeline) finalize(event *Event, notifyInput bool, backEvent bool) {
 }
 
 type actionMetric struct {
-	count *metric.HeldCounterVec
-	size  *metric.HeldCounterVec
+	count metric.HeldCounterVec
+	size  metric.HeldCounterVec
 	// totalCounter is a map of eventStatus to counter for `/info` endpoint.
 	totalCounter map[string]*atomic.Uint64
 }

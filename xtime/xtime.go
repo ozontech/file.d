@@ -27,7 +27,7 @@ func GetInaccurateTime() time.Time {
 	return time.Unix(0, GetInaccurateUnixNano())
 }
 
-// SetNowTime tests the current time.
+// SetNowTime sets the current time.
 // Function should be used only in tests.
 //
 // An alternative to this approach is to store and redefine
