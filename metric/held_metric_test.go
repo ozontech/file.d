@@ -22,12 +22,13 @@ func TestLabelExpiration(t *testing.T) {
 	now := time.Now().UnixNano()
 	xtime.SetNowTime(now)
 
-	// 1 error
 	c.WithLabelValues("error").Inc()
-	// 2 warns
 	c.WithLabelValues("warn").Inc()
-	// 2 infos
 	c.WithLabelValues("info").Inc()
+
+	r.Equal(3, len(c.store.metricsByHash))
+	c.DeleteOldMetrics(time.Minute)
+	r.Equal(3, len(c.store.metricsByHash))
 
 	// update usage of the metric with "info" label
 	{
