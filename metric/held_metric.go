@@ -61,7 +61,7 @@ func newHeldMetricsStore[T prometheus.Metric]() *heldMetricsStore[T] {
 
 func (h *heldMetricsStore[T]) GetOrCreate(labels []string, createMetricFn func(...string) T) *heldMetric[T] {
 	hash := computeStringsHash(labels)
-	// fast path - get exists metric
+	// fast path - metric exists
 	h.mu.RLock()
 	hMetric, ok := h.getHeldMetricByHash(labels, hash)
 	h.mu.RUnlock()
