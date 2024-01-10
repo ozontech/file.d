@@ -43,7 +43,7 @@ type HeldGaugeVec struct {
 func NewHeldGaugeVec(gv *prometheus.GaugeVec) HeldGaugeVec {
 	return HeldGaugeVec{
 		vec:   gv,
-		store: newHeldLabelsStore[prometheus.Gauge](),
+		store: newHeldMetricsStore[prometheus.Gauge](),
 	}
 }
 

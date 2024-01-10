@@ -23,7 +23,7 @@ type HeldHistogramVec struct {
 func NewHeldHistogramVec(hv *prometheus.HistogramVec) HeldHistogramVec {
 	return HeldHistogramVec{
 		vec:   hv,
-		store: newHeldLabelsStore[prometheus.Histogram](),
+		store: newHeldMetricsStore[prometheus.Histogram](),
 	}
 }
 

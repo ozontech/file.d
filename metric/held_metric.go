@@ -52,40 +52,53 @@ type heldMetricsStore[T prometheus.Metric] struct {
 	metricsByHash map[uint64][]*heldMetric[T]
 }
 
-func newHeldLabelsStore[T prometheus.Metric]() *heldMetricsStore[T] {
+func newHeldMetricsStore[T prometheus.Metric]() *heldMetricsStore[T] {
 	return &heldMetricsStore[T]{
 		mu:            sync.RWMutex{},
 		metricsByHash: make(map[uint64][]*heldMetric[T]),
 	}
 }
 
-func (h *heldMetricsStore[T]) GetOrCreate(labels []string, createMetric func(...string) T) *heldMetric[T] {
+func (h *heldMetricsStore[T]) GetOrCreate(labels []string, createMetricFn func(...string) T) *heldMetric[T] {
 	hash := computeStringsHash(labels)
 	// fast path - metric exists
 	h.mu.RLock()
-	held, ok := h.getHeldLabelsByHash(labels, hash)
+	hMetric, ok := h.getHeldMetricByHash(labels, hash)
 	h.mu.RUnlock()
 	if ok {
-		held.lastUsage.Store(xtime.GetInaccurateUnixNano())
-		return held
+		return hMetric
 	}
 	// slow path - create new metric
-	return h.tryCreate(labels, hash, createMetric)
+	return h.tryCreate(labels, hash, createMetricFn)
 }
 
-func (h *heldMetricsStore[T]) getHeldLabelsByHash(lvs []string, hash uint64) (*heldMetric[T], bool) {
-	hls, ok := h.metricsByHash[hash]
+func (h *heldMetricsStore[T]) getHeldMetricByHash(labels []string, hash uint64) (*heldMetric[T], bool) {
+	hMetrics, ok := h.metricsByHash[hash]
 	if !ok {
 		return nil, false
 	}
-	if len(hls) == 1 {
-		return hls[0], true
+	if len(hMetrics) == 1 {
+		return hMetrics[0], true
 	}
 
-	if i := findHeldLabelsIndex(hls, lvs); i != -1 {
-		return hls[i], true
+	if i := findHeldMetricIndex(hMetrics, labels); i != -1 {
+		return hMetrics[i], true
 	}
 	return nil, false
+}
+
+func (h *heldMetricsStore[T]) tryCreate(labels []string, hash uint64, createMetricFn func(...string) T) *heldMetric[T] {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	hMetric, ok := h.getHeldMetricByHash(labels, hash)
+	if ok {
+		return hMetric
+	}
+
+	hMetric = newHeldMetric[T](labels, createMetricFn(labels...))
+	h.metricsByHash[hash] = append(h.metricsByHash[hash], hMetric)
+	return hMetric
 }
 
 type metricDeleter interface {
@@ -98,17 +111,16 @@ func (h *heldMetricsStore[T]) DeleteOldMetrics(holdDuration time.Duration, delet
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	for hash, hashedLabels := range h.metricsByHash {
-		releasedMetrics := slices.DeleteFunc(hashedLabels, func(held *heldMetric[T]) bool {
-			lastUsage := held.lastUsage.Load()
+	for hash, hMetrics := range h.metricsByHash {
+		releasedMetrics := slices.DeleteFunc(hMetrics, func(hMetric *heldMetric[T]) bool {
+			lastUsage := hMetric.lastUsage.Load()
 			diff := now - lastUsage
 			isObsolete := diff > holdDuration.Nanoseconds()
 			if isObsolete {
-				deleter.DeleteLabelValues(held.labels...)
-				*held = heldMetric[T]{} // release objects in the structure
-				return true
+				deleter.DeleteLabelValues(hMetric.labels...)
+				*hMetric = heldMetric[T]{} // release objects in the structure
 			}
-			return false
+			return isObsolete
 		})
 
 		if len(releasedMetrics) == 0 {
@@ -117,23 +129,10 @@ func (h *heldMetricsStore[T]) DeleteOldMetrics(holdDuration time.Duration, delet
 	}
 }
 
-func (h *heldMetricsStore[T]) tryCreate(labels []string, hash uint64, createMetric func(...string) T) *heldMetric[T] {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	held, ok := h.getHeldLabelsByHash(labels, hash)
-	if ok {
-		return held
-	}
-
-	held = newHeldMetric[T](labels, createMetric(labels...))
-	h.metricsByHash[hash] = append(h.metricsByHash[hash], held)
-	return held
-}
-
-func findHeldLabelsIndex[T prometheus.Metric](hLabels []*heldMetric[T], lvs []string) int {
+func findHeldMetricIndex[T prometheus.Metric](hMetrics []*heldMetric[T], labels []string) int {
 	idx := -1
-	for i := range hLabels {
-		if slices.Equal(hLabels[i].labels, lvs) {
+	for i := range hMetrics {
+		if slices.Equal(hMetrics[i].labels, labels) {
 			idx = i
 			break
 		}

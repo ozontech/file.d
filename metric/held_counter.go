@@ -28,7 +28,7 @@ type HeldCounterVec struct {
 func NewHeldCounterVec(cv *prometheus.CounterVec) HeldCounterVec {
 	return HeldCounterVec{
 		vec:   cv,
-		store: newHeldLabelsStore[prometheus.Counter](),
+		store: newHeldMetricsStore[prometheus.Counter](),
 	}
 }
 
