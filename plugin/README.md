@@ -186,6 +186,10 @@ It converts the log level field according RFC-5424.
 It converts multiple UTF-8-encoded bytes to corresponding characters.
 Supports unicode (`\u...` and `\U...`), hex (`\x...`) and octal (`\{0-3}{0-7}{0-7}`) encoded bytes.
 
+> Note: Escaped and unescaped backslashes are treated the same.
+For example, the following 2 values will be converted to the same result:
+`\x68\x65\x6C\x6C\x6F` and `\\x68\\x65\\x6C\\x6C\\x6F` => `hello`
+
 ### Examples
 ```yaml
 pipelines:
