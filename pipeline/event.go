@@ -14,6 +14,8 @@ import (
 type Event struct {
 	kind Kind
 
+	children []*Event
+
 	Root *insaneJSON.Root
 	Buf  []byte
 
@@ -33,17 +35,19 @@ type Event struct {
 }
 
 const (
-	eventStagePool      = 0
-	eventStageInput     = 1
-	eventStageStream    = 2
-	eventStageProcessor = 3
-	eventStageOutput    = 4
+	eventStagePool = iota
+	eventStageInput
+	eventStageStream
+	eventStageProcessor
+	eventStageOutput
 )
 
 type Kind byte
 
 const (
 	EventKindRegular Kind = iota
+	eventKindChild
+	eventKindChildParent
 	EventKindTimeout
 	EventKindUnlock
 )
@@ -54,6 +58,10 @@ func (k Kind) String() string {
 		return "REGULAR"
 	case EventKindTimeout:
 		return "TIMEOUT"
+	case eventKindChildParent:
+		return "PARENT"
+	case eventKindChild:
+		return "CHILD"
 	case EventKindUnlock:
 		return "UNLOCK"
 	}
@@ -116,6 +124,7 @@ func (e *Event) reset(avgEventSize int) {
 	e.next = nil
 	e.action = 0
 	e.stream = nil
+	e.children = e.children[:0]
 	e.kind = EventKindRegular
 }
 
@@ -145,6 +154,22 @@ func (e *Event) SetTimeoutKind() {
 
 func (e *Event) IsTimeoutKind() bool {
 	return e.kind == EventKindTimeout
+}
+
+func (e *Event) SetChildKind() {
+	e.kind = eventKindChild
+}
+
+func (e *Event) IsChildKind() bool {
+	return e.kind == eventKindChild
+}
+
+func (e *Event) SetChildParentKind() {
+	e.kind = eventKindChildParent
+}
+
+func (e *Event) IsChildParentKind() bool {
+	return e.kind == eventKindChildParent
 }
 
 func (e *Event) parseJSON(json []byte) error {

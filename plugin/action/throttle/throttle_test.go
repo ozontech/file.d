@@ -11,8 +11,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/ozontech/file.d/cfg"
-	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/test"
 )
@@ -118,10 +116,7 @@ func TestThrottle(t *testing.T) {
 		TimeField:      "",
 		DefaultLimit:   int64(defaultLimit),
 	}
-	err := cfg.Parse(config, nil)
-	if err != nil {
-		logger.Panic(err.Error())
-	}
+	test.NewConfig(config, nil)
 
 	tconf := testConfig{t, config, eventsTotal, iterations}
 	tconf.runPipeline()
@@ -151,10 +146,7 @@ func TestThrottleNoLimit(t *testing.T) {
 		TimeField:      "",
 		DefaultLimit:   int64(defaultLimit),
 	}
-	err := cfg.Parse(config, nil)
-	if err != nil {
-		logger.Panic(err.Error())
-	}
+	test.NewConfig(config, nil)
 
 	tconf := testConfig{t, config, eventsTotal, iterations}
 	tconf.runPipeline()
@@ -188,10 +180,7 @@ func TestSizeThrottle(t *testing.T) {
 		DefaultLimit:   int64(defaultLimit),
 		LimitKind:      "size",
 	}
-	err := cfg.Parse(config, nil)
-	if err != nil {
-		logger.Panic(err.Error())
-	}
+	test.NewConfig(config, nil)
 
 	tconf := testConfig{t, config, eventsTotal, iterations}
 	tconf.runPipeline()
@@ -224,10 +213,7 @@ func TestMixedThrottle(t *testing.T) {
 		TimeField:      "",
 		DefaultLimit:   int64(defaultLimit),
 	}
-	err := cfg.Parse(config, nil)
-	if err != nil {
-		logger.Panic(err.Error())
-	}
+	test.NewConfig(config, nil)
 
 	tconf := testConfig{t, config, eventsTotal, iterations}
 	tconf.runPipeline()
@@ -264,15 +250,12 @@ func TestRedisThrottle(t *testing.T) {
 		TimeField:      "",
 		DefaultLimit:   int64(defaultLimit),
 	}
-	err = cfg.Parse(config, nil)
-	if err != nil {
-		logger.Panic(err.Error())
-	}
+	test.NewConfig(config, nil)
 
 	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, config, pipeline.MatchModeAnd, nil, false))
-	outEvents := make([]*pipeline.Event, 0)
+	outEvents := 0
 	output.SetOutFn(func(e *pipeline.Event) {
-		outEvents = append(outEvents, e)
+		outEvents++
 	})
 
 	sourceNames := []string{
@@ -297,7 +280,7 @@ func TestRedisThrottle(t *testing.T) {
 
 	p.Stop()
 
-	assert.Greater(t, eventsTotal, len(outEvents), "wrong in events count")
+	assert.Greater(t, eventsTotal, outEvents, "wrong in events count")
 	t.Cleanup(func() {
 		throttleMapsCleanup()
 	})
@@ -310,7 +293,7 @@ func TestRedisThrottleMultiPipes(t *testing.T) {
 
 	defaultLimit := 20
 
-	config := Config{
+	config := &Config{
 		Rules: []RuleConfig{
 			{Limit: int64(defaultLimit), LimitKind: "count"},
 		},
@@ -327,25 +310,24 @@ func TestRedisThrottleMultiPipes(t *testing.T) {
 		TimeField:      "",
 		DefaultLimit:   int64(defaultLimit),
 	}
-	err = cfg.Parse(&config, nil)
-	require.NoError(t, err)
+	test.NewConfig(config, nil)
 
 	muFirstPipe := sync.Mutex{}
-	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, &config, pipeline.MatchModeAnd, nil, false), "name")
-	outEvents := make([]*pipeline.Event, 0)
+	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, config, pipeline.MatchModeAnd, nil, false), "name")
+	outEvents := 0
 	output.SetOutFn(func(e *pipeline.Event) {
 		muFirstPipe.Lock()
 		defer muFirstPipe.Unlock()
-		outEvents = append(outEvents, e)
+		outEvents++
 	})
 
 	muSecPipe := sync.Mutex{}
-	pSec, inputSec, outputSec := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, &config, pipeline.MatchModeAnd, nil, false), "name")
-	outEventsSec := make([]*pipeline.Event, 0)
+	pSec, inputSec, outputSec := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, config, pipeline.MatchModeAnd, nil, false), "name")
+	outEventsSec := 0
 	outputSec.SetOutFn(func(e *pipeline.Event) {
 		muSecPipe.Lock()
 		defer muSecPipe.Unlock()
-		outEventsSec = append(outEventsSec, e)
+		outEventsSec++
 	})
 
 	// set distributed redis limit
@@ -377,7 +359,7 @@ func TestRedisThrottleMultiPipes(t *testing.T) {
 		time.Sleep(100 * time.Millisecond)
 	}
 	// limit is 1 while events count is 3
-	assert.Greater(t, len(firstPipeEvents), len(outEvents), "wrong in events count")
+	assert.Greater(t, len(firstPipeEvents), outEvents, "wrong in events count")
 
 	for i := 0; i < len(secondPipeEvents); i++ {
 		json := fmt.Sprintf(secondPipeEvents[i], time.Now().Format(time.RFC3339Nano))
@@ -390,7 +372,7 @@ func TestRedisThrottleMultiPipes(t *testing.T) {
 	defer muSecPipe.Unlock()
 
 	// limit is 10 while events count 4, all passed
-	assert.Equal(t, len(secondPipeEvents), len(outEventsSec), "wrong in events count")
+	assert.Equal(t, len(secondPipeEvents), outEventsSec, "wrong in events count")
 	t.Cleanup(func() {
 		throttleMapsCleanup()
 	})
@@ -426,18 +408,15 @@ func TestRedisThrottleWithCustomLimitData(t *testing.T) {
 		TimeField:      "",
 		DefaultLimit:   int64(defaultLimit),
 	}
-	err = cfg.Parse(config, nil)
-	if err != nil {
-		logger.Panic(err.Error())
-	}
+	test.NewConfig(config, nil)
 
 	p, input, output := test.NewPipelineMock(
 		test.NewActionPluginStaticInfo(factory, config, pipeline.MatchModeAnd, nil, false),
 		"name",
 	)
-	outEvents := make([]*pipeline.Event, 0)
+	outEvents := 0
 	output.SetOutFn(func(e *pipeline.Event) {
-		outEvents = append(outEvents, e)
+		outEvents++
 	})
 
 	sourceNames := []string{
@@ -463,7 +442,7 @@ func TestRedisThrottleWithCustomLimitData(t *testing.T) {
 
 	p.Stop()
 
-	assert.Greater(t, eventsTotal, len(outEvents), "wrong in events count")
+	assert.Greater(t, eventsTotal, outEvents, "wrong in events count")
 	t.Cleanup(func() {
 		throttleMapsCleanup()
 	})
@@ -483,19 +462,12 @@ func TestThrottleLimiterExpiration(t *testing.T) {
 		DefaultLimit:      int64(defaultLimit),
 		LimiterExpiration: "300ms",
 	}
-	err := cfg.Parse(config, nil)
-	if err != nil {
-		logger.Panic(err.Error())
-	}
+	test.NewConfig(config, nil)
 
-	p, input, output := test.NewPipelineMock(
+	p, input, _ := test.NewPipelineMock(
 		test.NewActionPluginStaticInfo(factory, config, pipeline.MatchModeAnd, nil, false),
 		"name",
 	)
-	outEvents := make([]*pipeline.Event, 0)
-	output.SetOutFn(func(e *pipeline.Event) {
-		outEvents = append(outEvents, e)
-	})
 
 	sourceNames := []string{
 		`source_1`,
@@ -568,10 +540,7 @@ func TestThrottleRedisFallbackToInMemory(t *testing.T) {
 		DefaultLimit:   int64(defaultLimit),
 		LimiterBackend: "redis",
 	}
-	err := cfg.Parse(config, nil)
-	if err != nil {
-		logger.Panic(err.Error())
-	}
+	test.NewConfig(config, nil)
 
 	tconf := testConfig{t, config, eventsTotal, iterations}
 	tconf.runPipeline()

@@ -51,7 +51,7 @@ func (w *watcher) start() {
 		w.logger.Fatalf("wrong dir name pattern %q: %s", w.dirPattern, err.Error())
 	}
 
-	eventsCh := make(chan notify.EventInfo, 128)
+	eventsCh := make(chan notify.EventInfo, 256)
 	w.watcherCh = eventsCh
 
 	events := []notify.Event{notify.Create, notify.Rename, notify.Remove}

@@ -6,8 +6,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/ozontech/file.d/cfg"
-	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/test"
 )
@@ -92,13 +90,8 @@ func TestPipeline(t *testing.T) {
 	for _, tCase := range cases {
 		tCase := tCase
 		t.Run(tCase.name, func(t *testing.T) {
-			config := &Config{}
+			config := test.NewConfig(&Config{}, nil)
 			p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, config, pipeline.MatchModeOr, nil, false))
-
-			err := cfg.Parse(config, nil)
-			if err != nil {
-				logger.Panicf("wrong config")
-			}
 
 			wg := &sync.WaitGroup{}
 			wg.Add(tCase.eventsInCount)
@@ -106,14 +99,14 @@ func TestPipeline(t *testing.T) {
 
 			eventsIn := 0
 			input.SetInFn(func() {
-				wg.Done()
 				eventsIn++
+				wg.Done()
 			})
 
-			outEvents := make([]*pipeline.Event, 0)
+			outEvents := 0
 			output.SetOutFn(func(e *pipeline.Event) {
+				outEvents++
 				wg.Done()
-				outEvents = append(outEvents, e)
 			})
 
 			for _, event := range tCase.eventsIn {
@@ -123,8 +116,8 @@ func TestPipeline(t *testing.T) {
 			wg.Wait()
 			p.Stop()
 
-			assert.Equal(t, 2, eventsIn, "wrong eventsIn events count")
-			assert.Equal(t, tCase.eventsOutCount, len(outEvents), "wrong out events count")
+			assert.Equal(t, tCase.eventsInCount, eventsIn, "wrong eventsIn events count")
+			assert.Equal(t, tCase.eventsOutCount, outEvents, "wrong out events count")
 		})
 	}
 }

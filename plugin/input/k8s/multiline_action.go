@@ -12,7 +12,7 @@ type MultilineAction struct {
 	allowedNodeLabels map[string]bool
 
 	logger        *zap.SugaredLogger
-	params        *pipeline.ActionPluginParams
+	controller    pipeline.ActionPluginController
 	maxEventSize  int
 	eventBuf      []byte
 	eventSize     int
@@ -26,7 +26,7 @@ const (
 
 func (p *MultilineAction) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginParams) {
 	p.logger = params.Logger
-	p.params = params
+	p.controller = params.Controller
 	p.maxEventSize = params.PipelineSettings.MaxEventSize
 	p.config = config.(*Config)
 
@@ -51,7 +51,8 @@ func (p *MultilineAction) Do(event *pipeline.Event) pipeline.ActionResult {
 	if p.config.OnlyNode {
 		return pipeline.ActionPass
 	}
-	// don't need to unescape/escape log fields cause concatenation of escaped strings is escaped string
+	// don't need to unescape/escape log fields cause concatenation of escaped strings is escaped string.
+	// get escaped string because of CRI format.
 	logFragment := event.Root.Dig("log").AsEscapedString()
 	if logFragment == "" {
 		p.logger.Fatalf("wrong event format, it doesn't contain log field: %s", event.Root.EncodeToString())
@@ -71,11 +72,17 @@ func (p *MultilineAction) Do(event *pipeline.Event) pipeline.ActionResult {
 		// check buffer size before append
 		if p.maxEventSize == 0 || sizeAfterAppend < p.maxEventSize {
 			p.eventBuf = append(p.eventBuf, logFragment[1:logFragmentLen-1]...)
-		} else if !p.skipNextEvent {
-			// skip event if max_event_size is exceeded
-			p.skipNextEvent = true
-			ns, pod, _, _, _ := getMeta(event.SourceName)
-			p.logger.Errorf("event chunk will be discarded due to max_event_size, source_name=%s, namespace=%s, pod=%s", event.SourceName, ns, pod)
+		} else {
+			if p.controller != nil {
+				p.controller.IncMaxEventSizeExceeded()
+			}
+
+			if !p.skipNextEvent {
+				// skip event if max_event_size is exceeded
+				p.skipNextEvent = true
+				ns, pod, _, _, _ := getMeta(event.SourceName)
+				p.logger.Errorf("event chunk will be discarded due to max_event_size, source_name=%s, namespace=%s, pod=%s", event.SourceName, ns, pod)
+			}
 		}
 		return pipeline.ActionCollapse
 	}
