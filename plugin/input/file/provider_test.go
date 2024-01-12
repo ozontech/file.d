@@ -129,9 +129,9 @@ func TestProvierWatcherPaths(t *testing.T) {
 			config := tt.config
 			test.NewConfig(config, map[string]int{"gomaxprocs": runtime.GOMAXPROCS(0)})
 			metrics := newMetricCollection(
-				ctl.RegisterCounter("worker", "help_test"),
-				ctl.RegisterCounter("worker", "help_test"),
-				ctl.RegisterGauge("worker", "help_test"),
+				ctl.RegisterCounter("worker1", "help_test"),
+				ctl.RegisterCounter("worker2", "help_test"),
+				ctl.RegisterGauge("worker3", "help_test"),
 			)
 			jp := NewJobProvider(config, metrics, &zap.SugaredLogger{})
 

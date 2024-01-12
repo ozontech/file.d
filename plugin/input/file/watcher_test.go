@@ -88,6 +88,7 @@ func TestWatcher(t *testing.T) {
 	}
 }
 
+// nolint:gocritic
 func TestWatcherPaths(t *testing.T) {
 	dir := t.TempDir()
 	shouldCreate := atomic.Int64{}
