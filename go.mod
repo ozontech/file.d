@@ -13,6 +13,7 @@ require (
 	github.com/alecthomas/units v0.0.0-20211218093645-b94a6e3cc137
 	github.com/alicebob/miniredis/v2 v2.30.5
 	github.com/bitly/go-simplejson v0.5.1
+	github.com/cespare/xxhash/v2 v2.2.0
 	github.com/euank/go-kmsg-parser v2.0.0+incompatible
 	github.com/go-redis/redis v6.15.9+incompatible
 	github.com/golang/mock v1.6.0
@@ -26,7 +27,6 @@ require (
 	github.com/prometheus/client_golang v1.16.0
 	github.com/rjeczalik/notify v0.9.3
 	github.com/satori/go.uuid v1.2.0
-	github.com/segmentio/fasthash v1.0.3
 	github.com/stretchr/testify v1.8.4
 	github.com/valyala/fasthttp v1.48.0
 	github.com/vitkovskii/insane-json v0.1.7
@@ -49,7 +49,6 @@ require (
 	github.com/benbjohnson/clock v1.3.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cenkalti/backoff/v3 v3.0.0 // indirect
-	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/cilium/ebpf v0.9.1 // indirect
 	github.com/containerd/cgroups/v3 v3.0.1 // indirect
 	github.com/coreos/go-systemd/v22 v22.3.2 // indirect
