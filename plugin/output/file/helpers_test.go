@@ -54,6 +54,7 @@ func newPipeline(t *testing.T, configOutput *Config) *pipeline.Pipeline {
 		AvgEventSize:        2048,
 		StreamField:         "stream",
 		Decoder:             "json",
+		MetricHoldDuration:  pipeline.DefaultMetricHoldDuration,
 	}
 
 	p := pipeline.New("test_pipeline", settings, prometheus.NewRegistry())

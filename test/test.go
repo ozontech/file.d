@@ -122,6 +122,7 @@ func NewPipeline(actions []*pipeline.ActionPluginStaticInfo, pipelineOpts ...str
 		AvgEventSize:        2048,
 		StreamField:         "stream",
 		Decoder:             "json",
+		MetricHoldDuration:  pipeline.DefaultMetricHoldDuration,
 	}
 
 	pName := "test_pipeline"

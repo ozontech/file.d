@@ -10,8 +10,9 @@ import (
 
 func TestPipeline_streamEvent(t *testing.T) {
 	settings := &Settings{
-		Capacity: 5,
-		Decoder:  "json",
+		Capacity:           5,
+		Decoder:            "json",
+		MetricHoldDuration: DefaultMetricHoldDuration,
 	}
 	p := New("test", settings, prometheus.NewRegistry())
 
