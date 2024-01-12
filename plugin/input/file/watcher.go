@@ -4,18 +4,20 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/rjeczalik/notify"
 	"go.uber.org/zap"
 )
 
 type watcher struct {
-	path              string   // dir in which watch for files
-	filenamePattern   string   // files which match this pattern will be watched
-	dirPattern        string   // dirs which match this pattern will be watched
-	notifyFn          notifyFn // function to receive notifications
-	watcherCh         chan notify.EventInfo
-	shouldWatchWrites bool
-	logger            *zap.SugaredLogger
+	path                      string   // dir in which watch for files
+	filenamePattern           string   // files which match this pattern will be watched
+	dirPattern                string   // dirs which match this pattern will be watched
+	notifyFn                  notifyFn // function to receive notifications
+	watcherCh                 chan notify.EventInfo
+	shouldWatchWrites         bool
+	notifyChannelLengthMetric prometheus.Gauge
+	logger                    *zap.SugaredLogger
 }
 
 type notifyFn func(e notify.Event, filename string, stat os.FileInfo)
@@ -28,15 +30,17 @@ func NewWatcher(
 	dirPattern string,
 	notifyFn notifyFn,
 	shouldWatchWrites bool,
+	notifyChannelLengthMetric *prometheus.GaugeVec,
 	logger *zap.SugaredLogger,
 ) *watcher {
 	return &watcher{
-		path:              path,
-		filenamePattern:   filenamePattern,
-		dirPattern:        dirPattern,
-		notifyFn:          notifyFn,
-		shouldWatchWrites: shouldWatchWrites,
-		logger:            logger,
+		path:                      path,
+		filenamePattern:           filenamePattern,
+		dirPattern:                dirPattern,
+		notifyFn:                  notifyFn,
+		shouldWatchWrites:         shouldWatchWrites,
+		notifyChannelLengthMetric: notifyChannelLengthMetric.WithLabelValues(),
+		logger:                    logger,
 	}
 }
 
@@ -65,6 +69,7 @@ func (w *watcher) start() {
 		w.logger.Warnf("can't create fs watcher: %s", err.Error())
 		return
 	}
+	w.notifyChannelLengthMetric.Set(float64(len(w.watcherCh)))
 
 	go w.watch()
 
@@ -124,10 +129,16 @@ func (w *watcher) notify(e notify.Event, path string) {
 }
 
 func (w *watcher) watch() {
+	var prevLen int
 	for {
 		event, ok := <-w.watcherCh
 		if !ok {
 			return
+		}
+		newLen := len(w.watcherCh)
+		if prevLen != newLen {
+			prevLen = newLen
+			w.notifyChannelLengthMetric.Set(float64(newLen))
 		}
 		w.notify(event.Event(), event.Path())
 	}

@@ -100,7 +100,25 @@ type symlinkInfo struct {
 	inode    inodeID
 }
 
-func NewJobProvider(config *Config, possibleOffsetCorruptionMetric, errorOpenFileMetric *prometheus.CounterVec, sugLogger *zap.SugaredLogger) *jobProvider {
+type metricCollection struct {
+	possibleOffsetCorruptionMetric *prometheus.CounterVec
+	errorOpenFileMetric            *prometheus.CounterVec
+	notifyChannelLengthMetric      *prometheus.GaugeVec
+}
+
+func newMetricCollection(
+	possibleOffsetCorruptionMetric *prometheus.CounterVec,
+	errorOpenFileMetric *prometheus.CounterVec,
+	notifyChannelLengthMetric *prometheus.GaugeVec,
+) *metricCollection {
+	return &metricCollection{
+		possibleOffsetCorruptionMetric: possibleOffsetCorruptionMetric,
+		errorOpenFileMetric:            errorOpenFileMetric,
+		notifyChannelLengthMetric:      notifyChannelLengthMetric,
+	}
+}
+
+func NewJobProvider(config *Config, metrics *metricCollection, sugLogger *zap.SugaredLogger) *jobProvider {
 	jp := &jobProvider{
 		config:   config,
 		offsetDB: newOffsetDB(config.OffsetsFile, config.OffsetsFileTmp),
@@ -121,8 +139,8 @@ func NewJobProvider(config *Config, possibleOffsetCorruptionMetric, errorOpenFil
 		stopMaintenanceCh: make(chan bool, 1), // non-zero channel cause we don't wanna wait goroutine to stop
 
 		logger:                         sugLogger,
-		possibleOffsetCorruptionMetric: possibleOffsetCorruptionMetric,
-		errorOpenFileMetric:            errorOpenFileMetric,
+		possibleOffsetCorruptionMetric: metrics.possibleOffsetCorruptionMetric,
+		errorOpenFileMetric:            metrics.errorOpenFileMetric,
 	}
 
 	jp.watcher = NewWatcher(
@@ -131,6 +149,7 @@ func NewJobProvider(config *Config, possibleOffsetCorruptionMetric, errorOpenFil
 		config.DirPattern,
 		jp.processNotification,
 		config.ShouldWatchChanges,
+		metrics.notifyChannelLengthMetric,
 		sugLogger,
 	)
 
