@@ -33,12 +33,11 @@ const (
 	DefaultEventTimeout        = time.Second * 30
 	DefaultFieldValue          = "not_set"
 	DefaultStreamName          = StreamName("not_set")
+	DefaultMetricHoldDuration  = time.Minute * 30
 
 	EventSeqIDError = uint64(0)
 
 	antispamUnbanIterations = 4
-
-	metricHoldDuration = time.Minute * 30
 )
 
 type finalizeFn = func(event *Event, notifyInput bool, backEvent bool)
@@ -137,6 +136,7 @@ type Settings struct {
 	MaxEventSize        int
 	StreamField         string
 	IsStrict            bool
+	MetricHoldDuration  time.Duration
 }
 
 // New creates new pipeline. Consider using `SetupHTTPHandlers` next.
@@ -160,7 +160,7 @@ func New(name string, settings *Settings, registry *prometheus.Registry) *Pipeli
 			m:  make(map[string]*actionMetric),
 			mu: new(sync.RWMutex),
 		},
-		metricHolder: metric.NewHolder(metricHoldDuration),
+		metricHolder: metric.NewHolder(settings.MetricHoldDuration),
 		streamer:     newStreamer(settings.EventTimeout),
 		eventPool:    newEventPool(settings.Capacity, settings.AvgEventSize),
 		antispamer: antispam.NewAntispammer(antispam.Options{
