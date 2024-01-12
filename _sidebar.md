@@ -26,6 +26,7 @@
     - [add_host](plugin/action/add_host/README.md)
     - [convert_date](plugin/action/convert_date/README.md)
     - [convert_log_level](plugin/action/convert_log_level/README.md)
+    - [convert_utf8_bytes](plugin/action/convert_utf8_bytes/README.md)
     - [debug](plugin/action/debug/README.md)
     - [discard](plugin/action/discard/README.md)
     - [flatten](plugin/action/flatten/README.md)
