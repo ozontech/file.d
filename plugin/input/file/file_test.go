@@ -19,7 +19,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/atomic"
 
-	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/test"
@@ -87,8 +86,7 @@ func pluginConfig(opts ...string) *Config {
 		OffsetsOp:           op,
 		MaintenanceInterval: "5s",
 	}
-
-	_ = cfg.Parse(config, map[string]int{"gomaxprocs": runtime.GOMAXPROCS(0)})
+	test.NewConfig(config, map[string]int{"gomaxprocs": runtime.GOMAXPROCS(0)})
 
 	return config
 }
@@ -587,8 +585,11 @@ func TestReadBufferOverflow(t *testing.T) {
 	iterations := 5
 	linesPerIterations := 2
 
-	config := &Config{}
-	_ = cfg.Parse(config, nil)
+	config := &Config{
+		WatchingDir: "./",
+		OffsetsFile: "offset.yaml",
+	}
+	test.NewConfig(config, map[string]int{"gomaxprocs": 1, "capacity": 64})
 	firstLine := `"`
 	for i := 0; i < config.ReadBufferSize+overhead; i++ {
 		firstLine += "a"
@@ -750,8 +751,11 @@ func TestReadManyCharsParallelRace(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skip test in short mode")
 	}
-	config := &Config{}
-	_ = cfg.Parse(config, nil)
+	config := &Config{
+		WatchingDir: "./",
+		OffsetsFile: "offsets.yaml",
+	}
+	test.NewConfig(config, map[string]int{"gomaxprocs": 1, "capacity": 64})
 
 	overhead := 100
 	s := ""

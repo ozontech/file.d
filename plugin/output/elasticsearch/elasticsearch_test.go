@@ -8,8 +8,6 @@ import (
 	"github.com/stretchr/testify/require"
 	insaneJSON "github.com/vitkovskii/insane-json"
 
-	"github.com/ozontech/file.d/cfg"
-	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/test"
 )
@@ -22,11 +20,7 @@ func TestAppendEvent(t *testing.T) {
 		IndexValues: []string{"@time", "field_a", "field_b"},
 		BatchSize:   "1",
 	}
-
-	err := cfg.Parse(config, map[string]int{"gomaxprocs": 1})
-	if err != nil {
-		logger.Panic(err.Error())
-	}
+	test.NewConfig(config, map[string]int{"gomaxprocs": 1})
 
 	p.Start(config, test.NewEmptyOutputPluginParams())
 
@@ -49,11 +43,7 @@ func TestAppendEventWithIndexOpType(t *testing.T) {
 		BatchSize:   "1",
 		BatchOpType: "index",
 	}
-
-	err := cfg.Parse(config, map[string]int{"gomaxprocs": 1})
-	if err != nil {
-		logger.Panic(err.Error())
-	}
+	test.NewConfig(config, map[string]int{"gomaxprocs": 1})
 
 	p.Start(config, test.NewEmptyOutputPluginParams())
 
@@ -76,11 +66,7 @@ func TestAppendEventWithCreateOpType(t *testing.T) {
 		BatchSize:   "1",
 		BatchOpType: "create",
 	}
-
-	err := cfg.Parse(config, map[string]int{"gomaxprocs": 1})
-	if err != nil {
-		logger.Panic(err.Error())
-	}
+	test.NewConfig(config, map[string]int{"gomaxprocs": 1})
 
 	p.Start(config, test.NewEmptyOutputPluginParams())
 
@@ -106,11 +92,7 @@ func TestConfig(t *testing.T) {
 		},
 		BatchSize: "1",
 	}
-
-	err := cfg.Parse(config, map[string]int{"gomaxprocs": 1})
-	if err != nil {
-		logger.Panic(err.Error())
-	}
+	test.NewConfig(config, map[string]int{"gomaxprocs": 1})
 
 	p.Start(config, test.NewEmptyOutputPluginParams())
 

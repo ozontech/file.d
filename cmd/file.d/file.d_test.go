@@ -21,13 +21,9 @@ import (
 	_ "github.com/ozontech/file.d/plugin/action/rename"
 	_ "github.com/ozontech/file.d/plugin/action/throttle"
 	_ "github.com/ozontech/file.d/plugin/input/fake"
-	"github.com/ozontech/file.d/plugin/input/file"
-	http2 "github.com/ozontech/file.d/plugin/input/http"
 	k8s2 "github.com/ozontech/file.d/plugin/input/k8s"
 	_ "github.com/ozontech/file.d/plugin/output/devnull"
-	"github.com/ozontech/file.d/plugin/output/gelf"
 	_ "github.com/ozontech/file.d/plugin/output/kafka"
-	"github.com/ozontech/file.d/plugin/output/splunk"
 	uuid "github.com/satori/go.uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -218,7 +214,7 @@ func TestThatPluginsAreImported(t *testing.T) {
 
 type testConfig struct {
 	name       string
-	factory    func() (pipeline.AnyPlugin, pipeline.AnyConfig)
+	kind       pipeline.PluginKind
 	configJSON string
 }
 
@@ -226,27 +222,27 @@ func TestConfigParseValid(t *testing.T) {
 	testList := []testConfig{
 		{
 			name:       "file",
-			factory:    file.Factory,
-			configJSON: `{"offsets_op":"tail","persistence_mode":"sync","watching_dir":"/var/"}`,
+			kind:       pipeline.PluginKindInput,
+			configJSON: `{"offsets_op":"tail","persistence_mode":"sync","watching_dir":"/var/", "offsets_file": "./offset.yaml"}`,
 		},
 		{
 			name:       "http",
-			factory:    http2.Factory,
-			configJSON: `{"address": ":9001","emulate_mode":"yes"}`,
+			kind:       pipeline.PluginKindInput,
+			configJSON: `{"address": ":9001","emulate_mode":"elasticsearch"}`,
 		},
 		{
 			name:       "k8s",
-			factory:    k8s2.Factory,
+			kind:       pipeline.PluginKindInput,
 			configJSON: `{"split_event_size":1000,"watching_dir":"/var/log/containers/","offsets_file":"/data/k8s-offsets.yaml"}`,
 		},
 		{
 			name:       "gelf",
-			factory:    gelf.Factory,
+			kind:       pipeline.PluginKindOutput,
 			configJSON: `{"endpoint":"graylog.svc.cluster.local:12201","reconnect_interval":"1m","default_short_message_value":"message isn't provided"}`,
 		},
 		{
 			name:       "splunk",
-			factory:    splunk.Factory,
+			kind:       pipeline.PluginKindOutput,
 			configJSON: `{"endpoint":"splunk_endpoint","token":"value_token"}`,
 		},
 	}
@@ -254,8 +250,8 @@ func TestConfigParseValid(t *testing.T) {
 		tl := tl
 		t.Run(tl.name, func(t *testing.T) {
 			t.Parallel()
-			_, config := tl.factory()
-			err := fd.DecodeConfig(config, []byte(tl.configJSON))
+			pluginInfo := fd.DefaultPluginRegistry.Get(tl.kind, tl.name)
+			_, err := pipeline.GetConfig(pluginInfo, []byte(tl.configJSON), map[string]int{"gomaxprocs": 1, "capacity": 64})
 			assert.NoError(t, err, "shouldn't be an error")
 		})
 	}
@@ -265,26 +261,36 @@ func TestConfigParseInvalid(t *testing.T) {
 	testList := []testConfig{
 		{
 			name:       "http",
-			factory:    http2.Factory,
+			kind:       pipeline.PluginKindInput,
 			configJSON: `{"address": ":9001","emulate_mode":"yes","un_exist_field":"bla-bla"}`,
 		},
 		{
 			name:       "k8s",
-			factory:    k8s2.Factory,
+			kind:       pipeline.PluginKindInput,
 			configJSON: `{"split_event_size":pp,"watching_dir":"/var/log/containers/","offsets_file":"/data/k8s-offsets.yaml"}`,
 		},
 		{
 			name:       "gelf",
-			factory:    gelf.Factory,
+			kind:       pipeline.PluginKindOutput,
 			configJSON: `{"reconnect_interval_1":"1m","default_short_message_value":"message isn't provided"}`,
+		},
+		{
+			name:       "http",
+			kind:       pipeline.PluginKindInput,
+			configJSON: `{"address": ":9001","emulate_mode":"yes"}`,
+		},
+		{
+			name:       "file",
+			kind:       pipeline.PluginKindInput,
+			configJSON: `{"offsets_op":"tail","persistence_mode":"sync","watching_dir":"/var/"}`,
 		},
 	}
 	for _, tl := range testList {
 		tl := tl
 		t.Run(tl.name, func(t *testing.T) {
 			t.Parallel()
-			_, config := tl.factory()
-			err := fd.DecodeConfig(config, []byte(tl.configJSON))
+			pluginInfo := fd.DefaultPluginRegistry.Get(tl.kind, tl.name)
+			_, err := pipeline.GetConfig(pluginInfo, []byte(tl.configJSON), map[string]int{"gomaxprocs": 1, "capacity": 64})
 			assert.Error(t, err, "should be an error")
 		})
 	}

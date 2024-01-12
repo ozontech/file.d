@@ -177,23 +177,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 func (p *Plugin) Stop() {}
 
 func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
-	targetNode := event.Root.Node
-	continueDig := true
-	for _, tField := range p.config.Target_ {
-		if !continueDig {
-			targetNode = targetNode.AddFieldNoAlloc(event.Root, tField).MutateToObject()
-			continue
-		}
-
-		node := targetNode.Dig(tField)
-		if node == nil {
-			node = targetNode.AddFieldNoAlloc(event.Root, tField).MutateToObject()
-			continueDig = false
-		} else if !node.IsObject() {
-			node.MutateToObject()
-		}
-		targetNode = node
-	}
+	targetNode := pipeline.CreateNestedField(event.Root, p.config.Target_)
 
 	moveNode := func(name string, node *insaneJSON.Node) {
 		node.Suicide()

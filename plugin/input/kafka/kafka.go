@@ -3,8 +3,10 @@ package kafka
 import (
 	"context"
 	"strings"
+	"time"
 
 	"github.com/Shopify/sarama"
+	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
@@ -82,6 +84,18 @@ type Config struct {
 	// > * *`newest`* - set offset to the newest message
 	// > * *`oldest`* - set offset to the oldest message
 	Offset string `json:"offset" default:"newest" options:"oldest|newest"` // *
+
+	// > @3@4@5@6
+	// >
+	// > The maximum amount of time the consumer expects a message takes to process for the user.
+	ConsumerMaxProcessingTime  cfg.Duration `json:"consumer_max_processing_time" default:"200ms" parse:"duration"` // *
+	ConsumerMaxProcessingTime_ time.Duration
+
+	// > @3@4@5@6
+	// >
+	// > The maximum amount of time the broker will wait for Consumer.Fetch.Min bytes to become available before it returns fewer than that anyways.
+	ConsumerMaxWaitTime  cfg.Duration `json:"consumer_max_wait_time" default:"250ms" parse:"duration"` // *
+	ConsumerMaxWaitTime_ time.Duration
 }
 
 func init() {
@@ -140,13 +154,14 @@ func (p *Plugin) Stop() {
 }
 
 func (p *Plugin) Commit(event *pipeline.Event) {
-	if p.session == nil {
+	session := p.session
+	if session == nil {
 		p.commitErrorsMetric.Inc()
 		p.logger.Errorf("no kafka consumer session for event commit")
 		return
 	}
 	index, partition := disassembleSourceID(event.SourceID)
-	p.session.MarkOffset(p.config.Topics[index], partition, event.Offset+1, "")
+	session.MarkOffset(p.config.Topics[index], partition, event.Offset+1, "")
 }
 
 func (p *Plugin) newConsumerGroup() sarama.ConsumerGroup {
@@ -154,6 +169,8 @@ func (p *Plugin) newConsumerGroup() sarama.ConsumerGroup {
 	config.Consumer.Group.Rebalance.Strategy = sarama.BalanceStrategyRoundRobin
 	config.Version = sarama.V0_10_2_0
 	config.ChannelBufferSize = p.config.ChannelBufferSize
+	config.Consumer.MaxProcessingTime = p.config.ConsumerMaxProcessingTime_
+	config.Consumer.MaxWaitTime = p.config.ConsumerMaxWaitTime_
 
 	switch p.config.Offset {
 	case "oldest":

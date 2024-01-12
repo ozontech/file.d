@@ -35,6 +35,10 @@ type strDefault struct {
 	T string `default:"sync"`
 }
 
+type boolDefault struct {
+	T bool `default:"true"`
+}
+
 type PersistenceMode byte
 
 const (
@@ -70,6 +74,23 @@ type sliceChild struct {
 	Value string `default:"child"`
 }
 
+func (s *sliceChild) UnmarshalJSON(raw []byte) error {
+	SetDefaultValues(s)
+	var childPtr struct {
+		Value *string
+	}
+
+	if err := json.Unmarshal(raw, &childPtr); err != nil {
+		return err
+	}
+
+	if childPtr.Value != nil {
+		s.Value = *childPtr.Value
+	}
+
+	return nil
+}
+
 type sliceStruct struct {
 	Value  string       `default:"parent"`
 	Childs []sliceChild `default:"" slice:"true"`
@@ -96,6 +117,7 @@ func TestParseRequiredErr(t *testing.T) {
 
 func TestParseDefault(t *testing.T) {
 	s := &strDefault{}
+	SetDefaultValues(s)
 	err := Parse(s, nil)
 
 	assert.NoError(t, err, "shouldn't be an error")
@@ -113,6 +135,7 @@ func TestParseDuration(t *testing.T) {
 			T  Duration `default:"5s" parse:"duration"`
 			T_ time.Duration
 		}{}
+		SetDefaultValues(s)
 		r.NoError(Parse(s, nil))
 		r.Equal(time.Second*5, s.T_)
 	})
@@ -124,6 +147,7 @@ func TestParseDuration(t *testing.T) {
 			T  Duration `parse:"duration"`
 			T_ time.Duration
 		}{}
+		SetDefaultValues(s)
 		r.NoError(Parse(s, nil))
 		r.Equal(time.Duration(0), s.T_)
 	})
@@ -333,6 +357,7 @@ func TestHierarchy(t *testing.T) {
 
 func TestSlice(t *testing.T) {
 	s := &sliceStruct{Value: "parent_value", Childs: []sliceChild{{"child_1"}, {}}}
+	SetDefaultValues(s)
 	err := Parse(s, map[string]int{})
 
 	assert.Nil(t, err, "shouldn't be an error")
@@ -343,6 +368,7 @@ func TestSlice(t *testing.T) {
 
 func TestDefaultSlice(t *testing.T) {
 	s := &sliceStruct{Value: "parent_value"}
+	SetDefaultValues(s)
 	err := Parse(s, map[string]int{})
 
 	assert.Nil(t, err, "shouldn't be an error")
@@ -353,6 +379,7 @@ func TestDefaultSlice(t *testing.T) {
 
 func TestBase8Default(t *testing.T) {
 	s := &strBase8{}
+	SetDefaultValues(s)
 	err := Parse(s, nil)
 	assert.Nil(t, err, "shouldn't be an error")
 	assert.Equal(t, int64(438), s.T_)
@@ -561,6 +588,23 @@ func TestParseDefaultInt(t *testing.T) {
 		{s: &intDefault{T: 17}, expected: 17},
 	}
 	for i, tc := range testCases {
+		SetDefaultValues(tc.s)
+		err := Parse(tc.s, nil)
+
+		assert.NoError(t, err, "shouldn't be an error tc: %d", i)
+		assert.Equal(t, tc.expected, tc.s.T, "wrong value tc: %d", i)
+	}
+}
+
+func TestParseDefaultBool(t *testing.T) {
+	testCases := []struct {
+		s        *boolDefault
+		expected bool
+	}{
+		{s: &boolDefault{}, expected: true},
+	}
+	for i, tc := range testCases {
+		SetDefaultValues(tc.s)
 		err := Parse(tc.s, nil)
 
 		assert.NoError(t, err, "shouldn't be an error tc: %d", i)

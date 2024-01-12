@@ -8,7 +8,6 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/plugin/output/devnull"
 	"github.com/ozontech/file.d/test"
@@ -46,8 +45,7 @@ func TestPipeline(t *testing.T) {
 	p := test.NewPipeline(nil, "passive")
 	const lines = 10
 	config := &Config{OffsetsFile: filepath.Join(t.TempDir(), "offset.yaml"), MaxLines: lines}
-	err := cfg.Parse(config, nil)
-	assert.NoError(t, err)
+	test.NewConfig(config, nil)
 	assert.Equal(t, []string{"-f", "-a"}, config.JournalArgs)
 
 	setInput(p, config)
@@ -77,8 +75,7 @@ func TestOffsets(t *testing.T) {
 	const lines = 5
 
 	config := &Config{OffsetsFile: offsetPath, MaxLines: lines}
-	err := cfg.Parse(config, nil)
-	assert.NoError(t, err)
+	test.NewConfig(config, nil)
 
 	cursors := map[string]int{}
 
