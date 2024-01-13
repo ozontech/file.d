@@ -125,10 +125,23 @@ func NewJobProvider(config *Config, possibleOffsetCorruptionMetric, errorOpenFil
 		errorOpenFileMetric:            errorOpenFileMetric,
 	}
 
+	if len(config.Paths.Include) == 0 {
+		if config.DirPattern == "*" {
+			config.Paths.Include = append(
+				config.Paths.Include,
+				filepath.Join("**", config.FilenamePattern),
+			)
+		} else {
+			config.Paths.Include = append(
+				config.Paths.Include,
+				filepath.Join(config.DirPattern, config.FilenamePattern),
+			)
+		}
+	}
+
 	jp.watcher = NewWatcher(
 		config.WatchingDir,
-		config.FilenamePattern,
-		config.DirPattern,
+		config.Paths,
 		jp.processNotification,
 		config.ShouldWatchChanges,
 		sugLogger,

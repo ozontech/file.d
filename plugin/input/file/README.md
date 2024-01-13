@@ -26,18 +26,35 @@ pipelines:
     input:
         type: file
         watching_dir: /var/lib/docker/containers
+        paths:
+          include:
+            - '**\/*-json.log' # remove \
+          exclude:
+            - ef933707fe551f512d0b240558fdd01771f7897cccab75eb4fab0e575393ab79
         offsets_file: /data/offsets.yaml
-        filename_pattern: "*-json.log"
         persistence_mode: async
 ```
 
 ### Config params
 **`watching_dir`** *`string`* *`required`* 
 
+List of included pathes
+*`string`* *`required`* 
+
+List of excluded pathes
+*`string`* *`required`* 
+
 The source directory to watch for files to process. All subdirectories also will be watched. E.g. if files have
 `/var/my-logs/$YEAR/$MONTH/$DAY/$HOST/$FACILITY-$PROGRAM.log` structure, `watching_dir` should be `/var/my-logs`.
 Also the `filename_pattern`/`dir_pattern` is useful to filter needless files/subdirectories. In the case of using two or more
 different directories, it's recommended to setup separate pipelines for each.
+
+<br>
+
+**`paths`** *`Paths`* 
+
+Paths.
+> Check out [func Glob docs](https://golang.org/pkg/path/filepath/#Glob) for details.
 
 <br>
 
