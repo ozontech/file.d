@@ -79,7 +79,7 @@ Retention milliseconds for retry.
 
 **`retention_exponentially_multiplier`** *`int`* *`default=2`* 
 
-Multiplier for exponentially increase retention beetween retries
+Multiplier for exponential increase of retention between retries
 
 <br>
 

@@ -104,7 +104,7 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
-	// > Multiplier for exponentially increase retention beetween retries
+	// > Multiplier for exponential increase of retention between retries
 	RetentionExponentMultiplier int `json:"retention_exponentially_multiplier" default:"2"` // *
 }
 

@@ -60,7 +60,7 @@ Retention milliseconds for retry to DB.
 
 **`db_request_timeout`** *`cfg.Duration`* *`default=3000ms`* 
 
-Multiplier for exponentially increase retention beetween retries
+Multiplier for exponential increase of retention between retries
 *`cfg.Duration`* *`default=3000ms`* 
 
 Timeout for DB requests in milliseconds.
