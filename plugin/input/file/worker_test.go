@@ -93,9 +93,12 @@ func TestWorkerWork(t *testing.T) {
 				mu:             &sync.Mutex{},
 			}
 			ctl := metric.New("test", prometheus.NewRegistry())
-			possibleOffsetCorruptionMetric := ctl.RegisterCounter("worker", "help_test")
-			errorOpenFileMetric := ctl.RegisterCounter("worker", "help_test")
-			jp := NewJobProvider(&Config{}, possibleOffsetCorruptionMetric, errorOpenFileMetric, &zap.SugaredLogger{})
+			metrics := newMetricCollection(
+				ctl.RegisterCounter("worker", "help_test"),
+				ctl.RegisterCounter("worker", "help_test"),
+				ctl.RegisterGauge("worker", "help_test"),
+			)
+			jp := NewJobProvider(&Config{}, metrics, &zap.SugaredLogger{})
 			jp.jobsChan = make(chan *Job, 2)
 			jp.jobs = map[pipeline.SourceID]*Job{
 				1: job,
@@ -223,9 +226,12 @@ func TestWorkerWorkMultiData(t *testing.T) {
 			}
 
 			ctl := metric.New("test", prometheus.NewRegistry())
-			possibleOffsetCorruptionMetric := ctl.RegisterCounter("worker", "help_test")
-			errorOpenFileMetric := ctl.RegisterCounter("worker", "help_test")
-			jp := NewJobProvider(&Config{}, possibleOffsetCorruptionMetric, errorOpenFileMetric, &zap.SugaredLogger{})
+			metrics := newMetricCollection(
+				ctl.RegisterCounter("worker", "help_test"),
+				ctl.RegisterCounter("worker", "help_test"),
+				ctl.RegisterGauge("worker", "help_test"),
+			)
+			jp := NewJobProvider(&Config{}, metrics, &zap.SugaredLogger{})
 			jp.jobsChan = make(chan *Job, 2)
 			jp.jobs = map[pipeline.SourceID]*Job{
 				1: job,
