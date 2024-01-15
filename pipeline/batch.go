@@ -5,8 +5,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cenkalti/backoff/v3"
-	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/metric"
 	"github.com/prometheus/client_golang/prometheus"
@@ -135,7 +133,7 @@ type Batcher struct {
 }
 
 type (
-	BatcherOutFn         func(*WorkerData, *Batch, *backoff.BackOff)
+	BatcherOutFn         func(*WorkerData, *Batch) error
 	BatcherMaintenanceFn func(*WorkerData)
 
 	BatcherOptions struct {
@@ -153,6 +151,7 @@ type (
 		Retry                            int
 		RetryRetention                   time.Duration
 		RetryRetentionExponentMultiplier int
+		OnRetryError                     func(err error)
 	}
 )
 
@@ -202,10 +201,15 @@ func (b *Batcher) work() {
 
 	t := time.Now()
 	data := WorkerData(nil)
-	workerBackoff := cfg.GetBackoff(
-		b.opts.RetryRetention,
-		float64(b.opts.RetryRetentionExponentMultiplier),
-		uint64(b.opts.Retry),
+
+	workerBatcherBackoff := NewBatcherBackoff(
+		b.opts.OutFn,
+		BackoffOpts{
+			MinRetention: b.opts.RetryRetention,
+			Multiplier:   float64(b.opts.RetryRetentionExponentMultiplier),
+			AttemptNum:   uint64(b.opts.Retry),
+		},
+		b.opts.OnRetryError,
 	)
 
 	for batch := range b.fullBatches {
@@ -213,8 +217,7 @@ func (b *Batcher) work() {
 
 		if batch.hasIterableEvents {
 			now := time.Now()
-			workerBackoff.Reset()
-			b.opts.OutFn(&data, batch, &workerBackoff)
+			workerBatcherBackoff.Out(&data, batch)
 			b.batchOutFnSeconds.Observe(time.Since(now).Seconds())
 		}
 

@@ -12,7 +12,6 @@ import (
 	"github.com/ClickHouse/ch-go"
 	"github.com/ClickHouse/ch-go/chpool"
 	"github.com/ClickHouse/ch-go/proto"
-	"github.com/cenkalti/backoff/v3"
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/metric"
@@ -21,6 +20,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
 /*{ introduction
@@ -427,6 +427,18 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		Retry:                            p.config.Retry,
 		RetryRetention:                   p.config.Retention_,
 		RetryRetentionExponentMultiplier: p.config.RetentionExponentMultiplier,
+		OnRetryError: func(err error) {
+			var level zapcore.Level
+			if p.config.FatalOnFailedInsert {
+				level = zapcore.FatalLevel
+			} else {
+				level = zapcore.ErrorLevel
+			}
+
+			p.logger.Log(level, "can't insert to the table", zap.Error(err),
+				zap.Int("retries", p.config.Retry),
+				zap.String("table", p.config.Table))
+		},
 	})
 
 	p.batcher.Start(p.ctx)
@@ -455,7 +467,7 @@ func (d data) reset() {
 	}
 }
 
-func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch, workerBackoff *backoff.BackOff) {
+func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) error {
 	if *workerData == nil {
 		// we don't check the error, schema already validated in the Start
 		columns, _ := inferInsaneColInputs(p.config.Columns)
@@ -495,36 +507,24 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch, wor
 		}
 	})
 
-	try := 0
-	(*workerBackoff).Reset()
-	err := backoff.Retry(func() error {
+	var err error
+	for i := range p.instances {
 		requestID := p.requestID.Inc()
-		clickhouse := p.getInstance(requestID, try)
+		clickhouse := p.getInstance(requestID, i)
 		err := p.do(clickhouse, data.input)
-		if err != nil {
-			try++
-			p.insertErrorsMetric.Inc()
-			p.logger.Error(
-				"an attempt to insert a batch failed",
-				zap.Int("try", try),
-				zap.Error(err),
-			)
+		if err == nil {
+			return nil
 		}
-		return err
-	}, *workerBackoff)
-
-	if err != nil {
-		var errLogFunc func(msg string, fields ...zap.Field)
-		if p.config.FatalOnFailedInsert {
-			errLogFunc = p.logger.Fatal
-		} else {
-			errLogFunc = p.logger.Error
-		}
-
-		errLogFunc("can't insert to the table", zap.Error(err),
-			zap.Int("retries", p.config.Retry),
-			zap.String("table", p.config.Table))
 	}
+	if err != nil {
+		p.insertErrorsMetric.Inc()
+		p.logger.Error(
+			"an attempt to insert a batch failed",
+			zap.Error(err),
+		)
+	}
+
+	return err
 }
 
 func (p *Plugin) do(clickhouse Clickhouse, queryInput proto.Input) error {

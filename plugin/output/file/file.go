@@ -9,7 +9,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cenkalti/backoff/v3"
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/logger"
@@ -182,7 +181,7 @@ func (p *Plugin) Out(event *pipeline.Event) {
 	p.batcher.Add(event)
 }
 
-func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch, workerBackoff *backoff.BackOff) {
+func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) error {
 	if *workerData == nil {
 		*workerData = &data{
 			outBuf: make([]byte, 0, p.config.BatchSize_*p.avgEventSize),
@@ -204,6 +203,8 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch, wor
 	data.outBuf = outBuf
 
 	p.write(outBuf)
+
+	return nil
 }
 
 func (p *Plugin) fileSealUpTicker(ctx context.Context) {

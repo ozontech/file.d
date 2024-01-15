@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/Shopify/sarama"
-	"github.com/cenkalti/backoff/v3"
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/metric"
@@ -15,6 +14,7 @@ import (
 	"github.com/ozontech/file.d/xtls"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
 /*{ introduction
@@ -193,6 +193,18 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		Retry:                            p.config.Retry,
 		RetryRetention:                   p.config.Retention_,
 		RetryRetentionExponentMultiplier: p.config.RetentionExponentMultiplier,
+		OnRetryError: func(err error) {
+			var level zapcore.Level
+			if p.config.FatalOnFailedInsert {
+				level = zapcore.FatalLevel
+			} else {
+				level = zapcore.ErrorLevel
+			}
+
+			p.logger.Desugar().Log(level, "can't write batch",
+				zap.Int("retries", p.config.Retry),
+			)
+		},
 	})
 
 	p.batcher.Start(context.TODO())
@@ -206,7 +218,7 @@ func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 	p.sendErrorMetric = ctl.RegisterCounter("output_kafka_send_errors", "Total Kafka send errors")
 }
 
-func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch, workerBackoff *backoff.BackOff) {
+func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) error {
 	if *workerData == nil {
 		*workerData = &data{
 			messages: make([]*sarama.ProducerMessage, p.config.BatchSize_),
@@ -242,15 +254,8 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch, wor
 		i++
 	})
 
-	data.outBuf = outBuf
-
-	(*workerBackoff).Reset()
-	err := backoff.Retry(func() error {
-		err := p.producer.SendMessages(data.messages[:i])
-		if err == nil {
-			return nil
-		}
-
+	err := p.producer.SendMessages(data.messages[:i])
+	if err != nil {
 		errs := err.(sarama.ProducerErrors)
 		for _, e := range errs {
 			p.logger.Errorf("can't write batch: %s", e.Err.Error())
@@ -260,21 +265,9 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch, wor
 			"an attempt to insert a batch failed",
 			zap.Error(err),
 		)
-
-		return err
-	}, *workerBackoff)
-
-	if err != nil {
-		var errLogFunc func(args ...interface{})
-		if p.config.FatalOnFailedInsert {
-			errLogFunc = p.logger.Fatal
-		} else {
-			errLogFunc = p.logger.Error
-		}
-
-		errLogFunc("can't write batch", zap.Error(err),
-			zap.Int("retries", p.config.Retry))
 	}
+
+	return err
 }
 
 func (p *Plugin) Stop() {

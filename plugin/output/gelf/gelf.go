@@ -5,7 +5,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cenkalti/backoff/v3"
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/metric"
@@ -13,6 +12,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	insaneJSON "github.com/vitkovskii/insane-json"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
 /*{ introduction
@@ -229,6 +229,18 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		Retry:                            p.config.Retry,
 		RetryRetention:                   p.config.Retention_,
 		RetryRetentionExponentMultiplier: p.config.RetentionExponentMultiplier,
+		OnRetryError: func(err error) {
+			var level zapcore.Level
+			if p.config.FatalOnFailedInsert {
+				level = zapcore.FatalLevel
+			} else {
+				level = zapcore.ErrorLevel
+			}
+
+			p.logger.Desugar().Log(level, "can't send to gelf", zap.Error(err),
+				zap.Int("retries", p.config.Retry),
+			)
+		},
 	})
 
 	p.batcher.Start(context.TODO())
@@ -246,7 +258,7 @@ func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 	p.sendErrorMetric = ctl.RegisterCounter("output_gelf_send_error", "Total GELF send errors")
 }
 
-func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch, workerBackoff *backoff.BackOff) {
+func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) error {
 	if *workerData == nil {
 		*workerData = &data{
 			outBuf:    make([]byte, 0, p.config.BatchSize_*p.avgEventSize),
@@ -272,46 +284,30 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch, wor
 	data.outBuf = outBuf
 	data.encodeBuf = encodeBuf
 
-	(*workerBackoff).Reset()
-	err := backoff.Retry(func() error {
-		if data.gelf == nil {
-			p.logger.Infof("connecting to gelf address=%s", p.config.Endpoint)
+	if data.gelf == nil {
+		p.logger.Infof("connecting to gelf address=%s", p.config.Endpoint)
 
-			gelf, err := newClient(p.config.Endpoint, p.config.ConnectionTimeout_, p.config.WriteTimeout_, false, nil)
-			if err != nil {
-				p.sendErrorMetric.Inc()
-				p.logger.Errorf("can't connect to gelf endpoint address=%s: %s", p.config.Endpoint, err.Error())
-				time.Sleep(time.Second)
-				return err
-			}
-			data.gelf = gelf
-		}
-
-		_, err := data.gelf.send(outBuf)
+		gelf, err := newClient(p.config.Endpoint, p.config.ConnectionTimeout_, p.config.WriteTimeout_, false, nil)
 		if err != nil {
 			p.sendErrorMetric.Inc()
-			p.logger.Errorf("can't send data to gelf address=%s, err: %s", p.config.Endpoint, err.Error())
-			_ = data.gelf.close()
-			data.gelf = nil
+			p.logger.Errorf("can't connect to gelf endpoint address=%s: %s", p.config.Endpoint, err.Error())
 			time.Sleep(time.Second)
 			return err
 		}
-
-		return nil
-	}, *workerBackoff)
-
-	if err != nil {
-		var errLogFunc func(args ...interface{})
-		if p.config.FatalOnFailedInsert {
-			errLogFunc = p.logger.Fatal
-		} else {
-			errLogFunc = p.logger.Error
-		}
-
-		errLogFunc("can't send to gelf", zap.Error(err),
-			zap.Int("retries", p.config.Retry),
-		)
+		data.gelf = gelf
 	}
+
+	_, err := data.gelf.send(outBuf)
+	if err != nil {
+		p.sendErrorMetric.Inc()
+		p.logger.Errorf("can't send data to gelf address=%s, err: %s", p.config.Endpoint, err.Error())
+		_ = data.gelf.close()
+		data.gelf = nil
+		time.Sleep(time.Second)
+		return err
+	}
+
+	return nil
 }
 
 func (p *Plugin) maintenance(workerData *pipeline.WorkerData) {

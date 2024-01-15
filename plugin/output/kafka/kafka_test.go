@@ -6,10 +6,8 @@ package kafka
 import (
 	"fmt"
 	"testing"
-	"time"
 
 	"github.com/Shopify/sarama"
-	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/stretchr/testify/require"
 	insaneJSON "github.com/vitkovskii/insane-json"
@@ -118,7 +116,6 @@ func FuzzKafka(f *testing.F) {
 		producer:     nil,
 		batcher:      nil,
 	}
-	backoff := cfg.GetBackoff(1*time.Second, 1, 2)
 
 	f.Fuzz(func(t *testing.T, topicField, topicVal, key, val string) {
 		p.producer = &mockProducer{
@@ -128,6 +125,6 @@ func FuzzKafka(f *testing.F) {
 		data := pipeline.NewPreparedBatch([]*pipeline.Event{
 			newEvent(t, topicField, topicVal, key, val),
 		})
-		p.out(&worker, data, &backoff)
+		p.out(&worker, data)
 	})
 }

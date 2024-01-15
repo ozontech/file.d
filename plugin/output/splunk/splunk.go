@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/cenkalti/backoff/v3"
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/metric"
@@ -18,6 +17,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	insaneJSON "github.com/vitkovskii/insane-json"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
 /*{ introduction
@@ -145,6 +145,17 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		Retry:                            p.config.Retry,
 		RetryRetention:                   p.config.Retention_,
 		RetryRetentionExponentMultiplier: p.config.RetentionExponentMultiplier,
+		OnRetryError: func(err error) {
+			var level zapcore.Level
+			if p.config.FatalOnFailedInsert {
+				level = zapcore.FatalLevel
+			} else {
+				level = zapcore.ErrorLevel
+			}
+
+			p.logger.Desugar().Log(level, "can't send data to splunk", zap.Error(err),
+				zap.Int("retries", p.config.Retry))
+		},
 	})
 
 	p.batcher.Start(context.TODO())
@@ -162,7 +173,7 @@ func (p *Plugin) Out(event *pipeline.Event) {
 	p.batcher.Add(event)
 }
 
-func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch, workerBackoff *backoff.BackOff) {
+func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) error {
 	if *workerData == nil {
 		*workerData = &data{
 			outBuf: make([]byte, 0, p.config.BatchSize_*p.avgEventSize),
@@ -188,30 +199,15 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch, wor
 
 	p.logger.Debugf("trying to send: %s", outBuf)
 
-	(*workerBackoff).Reset()
-	err := backoff.Retry(func() error {
-		err := p.send(outBuf)
-		if err != nil {
-			p.sendErrorMetric.Inc()
-			p.logger.Errorf("can't send data to splunk address=%s: %s", p.config.Endpoint, err.Error())
-		}
-		return err
-	}, *workerBackoff)
-
+	err := p.send(outBuf)
 	if err != nil {
-		var errLogFunc func(args ...interface{})
-		if p.config.FatalOnFailedInsert {
-			errLogFunc = p.logger.Fatal
-		} else {
-			errLogFunc = p.logger.Error
-		}
-
-		errLogFunc("can't send data to splunk", zap.Error(err),
-			zap.Int("retries", p.config.Retry),
-		)
+		p.sendErrorMetric.Inc()
+		p.logger.Errorf("can't send data to splunk address=%s: %s", p.config.Endpoint, err.Error())
+	} else {
+		p.logger.Debugf("successfully sent: %s", outBuf)
 	}
 
-	p.logger.Debugf("successfully sent: %s", outBuf)
+	return err
 }
 
 func (p *Plugin) maintenance(_ *pipeline.WorkerData) {}

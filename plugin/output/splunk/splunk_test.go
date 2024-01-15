@@ -5,9 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	"time"
 
-	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/stretchr/testify/assert"
 	insaneJSON "github.com/vitkovskii/insane-json"
@@ -58,10 +56,8 @@ func TestSplunk(t *testing.T) {
 				{Root: input},
 			})
 
-			backoff := cfg.GetBackoff(1*time.Second, 1, 2)
-
 			data := pipeline.WorkerData(nil)
-			plugin.out(&data, batch, &backoff)
+			plugin.out(&data, batch)
 
 			assert.Equal(t, testCase.expected+testCase.expected, string(response))
 		})

@@ -9,7 +9,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cenkalti/backoff/v3"
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/logger"
@@ -20,6 +19,7 @@ import (
 	"github.com/valyala/fasthttp"
 	insaneJSON "github.com/vitkovskii/insane-json"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
 /*{ introduction
@@ -241,6 +241,18 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		Retry:                            p.config.Retry,
 		RetryRetention:                   p.config.Retention_,
 		RetryRetentionExponentMultiplier: p.config.RetentionExponentMultiplier,
+		OnRetryError: func(err error) {
+			var level zapcore.Level
+			if p.config.FatalOnFailedInsert {
+				level = zapcore.FatalLevel
+			} else {
+				level = zapcore.ErrorLevel
+			}
+
+			p.logger.Log(level, "can't send to the elastic", zap.Error(err),
+				zap.Int("retries", p.config.Retry),
+			)
+		},
 	})
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -263,7 +275,7 @@ func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 	p.indexingErrorsMetric = ctl.RegisterCounter("output_elasticsearch_index_error", "Number of elasticsearch indexing errors")
 }
 
-func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch, workerBackoff *backoff.BackOff) {
+func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) error {
 	if *workerData == nil {
 		*workerData = &data{
 			outBuf: make([]byte, 0, p.config.BatchSize_*p.avgEventSize),
@@ -281,27 +293,12 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch, wor
 		data.outBuf = p.appendEvent(data.outBuf, event)
 	})
 
-	err := backoff.Retry(func() error {
-		err := p.send(data.outBuf)
-		if err != nil {
-			p.sendErrorMetric.Inc()
-			p.logger.Error("can't send to the elastic, will try other endpoint", zap.Error(err))
-		}
-		return err
-	}, *workerBackoff)
-
+	err := p.send(data.outBuf)
 	if err != nil {
-		var errLogFunc func(msg string, fields ...zap.Field)
-		if p.config.FatalOnFailedInsert {
-			errLogFunc = p.logger.Sugar().Fatal
-		} else {
-			errLogFunc = p.logger.Sugar().Error
-		}
-
-		errLogFunc("can't send to the elastic", zap.Error(err),
-			zap.Int("retries", p.config.Retry),
-		)
+		p.sendErrorMetric.Inc()
+		p.logger.Error("can't send to the elastic, will try other endpoint", zap.Error(err))
 	}
+	return err
 }
 
 func (p *Plugin) send(body []byte) error {

@@ -22,6 +22,7 @@ import (
 	"github.com/ozontech/file.d/plugin/output/file"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
 /*{ introduction
@@ -552,14 +553,14 @@ func (p *Plugin) uploadWork(workerBackoff backoff.BackOff) {
 		}, workerBackoff)
 
 		if err != nil {
-			var errLogFunc func(args ...interface{})
+			var level zapcore.Level
 			if p.config.FatalOnFailedInsert {
-				errLogFunc = p.logger.Fatal
+				level = zapcore.FatalLevel
 			} else {
-				errLogFunc = p.logger.Error
+				level = zapcore.ErrorLevel
 			}
 
-			errLogFunc("could not upload s3 object", zap.Error(err),
+			p.logger.Desugar().Log(level, "could not upload s3 object", zap.Error(err),
 				zap.Int("retries", p.config.Retry),
 			)
 		}

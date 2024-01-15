@@ -10,7 +10,6 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/jackc/pgconn"
 	"github.com/jackc/pgproto3/v2"
-	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
@@ -94,8 +93,7 @@ func TestPrivateOut(t *testing.T) {
 	p.registerMetrics(metric.NewCtl("test", prometheus.NewRegistry()))
 
 	batch := pipeline.NewPreparedBatch([]*pipeline.Event{{Root: root}})
-	backoff := cfg.GetBackoff(1*time.Second, 1, 2)
-	p.out(nil, batch, &backoff)
+	p.out(nil, batch)
 }
 
 func TestPrivateOutWithRetry(t *testing.T) {
@@ -149,12 +147,7 @@ func TestPrivateOutWithRetry(t *testing.T) {
 		gomock.AssignableToTypeOf(ctxMock),
 		"INSERT INTO table1 (str_uni_1,int_1,timestamp_1) VALUES ($1,$2,$3) ON CONFLICT(str_uni_1) DO UPDATE SET int_1=EXCLUDED.int_1,timestamp_1=EXCLUDED.timestamp_1",
 		[]any{preferSimpleProtocol, strUniValue, intValue, time.Unix(int64(timestampValue), 0).Format(time.RFC3339)},
-	).Return(&rowsForTest{}, errors.New("someError")).Times(2)
-	mockpool.EXPECT().Query(
-		gomock.AssignableToTypeOf(ctxMock),
-		"INSERT INTO table1 (str_uni_1,int_1,timestamp_1) VALUES ($1,$2,$3) ON CONFLICT(str_uni_1) DO UPDATE SET int_1=EXCLUDED.int_1,timestamp_1=EXCLUDED.timestamp_1",
-		[]any{preferSimpleProtocol, strUniValue, intValue, time.Unix(int64(timestampValue), 0).Format(time.RFC3339)},
-	).Return(&rowsForTest{}, nil).Times(1)
+	).Return(&rowsForTest{}, errors.New("someError")).Times(1)
 
 	builder, err := NewQueryBuilder(columns, table)
 	require.NoError(t, err)
@@ -170,8 +163,7 @@ func TestPrivateOutWithRetry(t *testing.T) {
 	p.registerMetrics(metric.NewCtl("test", prometheus.NewRegistry()))
 
 	batch := pipeline.NewPreparedBatch([]*pipeline.Event{{Root: root}})
-	backoff := cfg.GetBackoff(1*time.Second, 1, 2)
-	p.out(nil, batch, &backoff)
+	p.out(nil, batch)
 }
 
 func TestPrivateOutNoGoodEvents(t *testing.T) {
@@ -224,8 +216,7 @@ func TestPrivateOutNoGoodEvents(t *testing.T) {
 	p.registerMetrics(metric.NewCtl("test", prometheus.NewRegistry()))
 
 	batch := pipeline.NewPreparedBatch([]*pipeline.Event{{Root: root}})
-	backoff := cfg.GetBackoff(1*time.Second, 1, 2)
-	p.out(nil, batch, &backoff)
+	p.out(nil, batch)
 }
 
 func TestPrivateOutDeduplicatedEvents(t *testing.T) {
@@ -309,8 +300,7 @@ func TestPrivateOutDeduplicatedEvents(t *testing.T) {
 		{Root: rootDuplication},
 		{Root: rootDuplicationMore},
 	})
-	backoff := cfg.GetBackoff(1*time.Second, 1, 2)
-	p.out(nil, batch, &backoff)
+	p.out(nil, batch)
 }
 
 func TestPrivateOutWrongTypeInField(t *testing.T) {
@@ -372,8 +362,7 @@ func TestPrivateOutWrongTypeInField(t *testing.T) {
 	p.registerMetrics(metric.NewCtl("test", prometheus.NewRegistry()))
 
 	batch := pipeline.NewPreparedBatch([]*pipeline.Event{{Root: root}})
-	backoff := cfg.GetBackoff(1*time.Second, 1, 2)
-	p.out(nil, batch, &backoff)
+	p.out(nil, batch)
 }
 
 func TestPrivateOutFewUniqueEventsYetWithDeduplicationEventsAnpooladEvents(t *testing.T) {
@@ -484,8 +473,7 @@ func TestPrivateOutFewUniqueEventsYetWithDeduplicationEventsAnpooladEvents(t *te
 		{Root: secondUniqueRoot},
 		{Root: badRoot},
 	})
-	backoff := cfg.GetBackoff(1*time.Second, 1, 2)
-	p.out(nil, batch, &backoff)
+	p.out(nil, batch)
 }
 
 // TODO replace with gomock

@@ -8,7 +8,6 @@ import (
 	"time"
 
 	sq "github.com/Masterminds/squirrel"
-	"github.com/cenkalti/backoff/v3"
 	"github.com/jackc/pgx/v4"
 	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/ozontech/file.d/cfg"
@@ -18,6 +17,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	insaneJSON "github.com/vitkovskii/insane-json"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
 /*{ introduction
@@ -288,6 +288,18 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		Retry:                            p.config.Retry,
 		RetryRetention:                   p.config.Retention_,
 		RetryRetentionExponentMultiplier: p.config.RetentionExponentMultiplier,
+		OnRetryError: func(err error) {
+			var level zapcore.Level
+			if p.config.FatalOnFailedInsert {
+				level = zapcore.FatalLevel
+			} else {
+				level = zapcore.ErrorLevel
+			}
+
+			p.logger.Desugar().Log(level, "can't insert to the table", zap.Error(err),
+				zap.Int("retries", p.config.Retry),
+				zap.String("table", p.config.Table))
+		},
 	})
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -307,7 +319,7 @@ func (p *Plugin) Out(event *pipeline.Event) {
 	p.batcher.Add(event)
 }
 
-func (p *Plugin) out(_ *pipeline.WorkerData, batch *pipeline.Batch, workerBackoff *backoff.BackOff) {
+func (p *Plugin) out(_ *pipeline.WorkerData, batch *pipeline.Batch) error {
 	// _ *pipeline.WorkerData - doesn't required in this plugin, we can't parse
 	// events for uniques through bytes.
 	builder := p.queryBuilder.GetInsertBuilder()
@@ -352,7 +364,7 @@ func (p *Plugin) out(_ *pipeline.WorkerData, batch *pipeline.Batch, workerBackof
 
 	// no valid events passed.
 	if !anyValidValue {
-		return
+		return nil
 	}
 
 	query, args, err := builder.ToSql()
@@ -367,29 +379,14 @@ func (p *Plugin) out(_ *pipeline.WorkerData, batch *pipeline.Batch, workerBackof
 		argsSliceInterface[i] = args[i-1]
 	}
 
-	(*workerBackoff).Reset()
-	err = backoff.Retry(func() error {
-		err := p.try(query, argsSliceInterface)
-		if err != nil {
-			p.insertErrorsMetric.Inc()
-			p.logger.Errorf("can't exec query: %s", err.Error())
-			return err
-		}
-		p.writtenEventMetric.Add(float64(len(uniqueEventsMap)))
-		return nil
-	}, *workerBackoff)
-
+	err = p.try(query, argsSliceInterface)
 	if err != nil {
-		var errLogFunc func(args ...interface{})
-		if p.config.FatalOnFailedInsert {
-			errLogFunc = p.logger.Fatal
-			p.pool.Close()
-		} else {
-			errLogFunc = p.logger.Error
-		}
-
-		errLogFunc("failed insert into %s. query: %s, args: %v, err: %v", p.config.Table, query, args, err)
+		p.insertErrorsMetric.Inc()
+		p.logger.Errorf("can't exec query: %s", err.Error())
+		return err
 	}
+	p.writtenEventMetric.Add(float64(len(uniqueEventsMap)))
+	return nil
 }
 
 func (p *Plugin) try(query string, argsSliceInterface []any) error {
