@@ -145,7 +145,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 
 	p.logger.Infof("workers count=%d, batch size=%d", p.config.WorkersCount_, p.config.BatchSize_)
 
-	p.producer = p.newProducer()
+	p.producer = NewProducer(p.config, p.logger)
 	p.batcher = pipeline.NewBatcher(pipeline.BatcherOptions{
 		PipelineName:   params.PipelineName,
 		OutputType:     outPluginType,
@@ -225,17 +225,17 @@ func (p *Plugin) Stop() {
 	}
 }
 
-func (p *Plugin) newProducer() sarama.SyncProducer {
+func NewProducer(c *Config, l *zap.SugaredLogger) sarama.SyncProducer {
 	config := sarama.NewConfig()
 	config.ClientID = "sasl_scram_client"
 	// kafka auth sasl
-	if p.config.SaslEnabled {
+	if c.SaslEnabled {
 		config.Net.SASL.Enable = true
 
-		config.Net.SASL.User = p.config.SaslUsername
-		config.Net.SASL.Password = p.config.SaslPassword
+		config.Net.SASL.User = c.SaslUsername
+		config.Net.SASL.Password = c.SaslPassword
 
-		config.Net.SASL.Mechanism = sarama.SASLMechanism(p.config.SaslMechanism)
+		config.Net.SASL.Mechanism = sarama.SASLMechanism(c.SaslMechanism)
 		switch config.Net.SASL.Mechanism {
 		case sarama.SASLTypeSCRAMSHA256:
 			config.Net.SASL.SCRAMClientGeneratorFunc = func() sarama.SCRAMClient { return NewSCRAMClient(SHA256) }
@@ -245,30 +245,30 @@ func (p *Plugin) newProducer() sarama.SyncProducer {
 	}
 
 	// kafka connect via SSL with PEM
-	if p.config.SaslSslEnabled {
+	if c.SaslSslEnabled {
 		config.Net.TLS.Enable = true
 
 		tlsCfg := xtls.NewConfigBuilder()
-		if err := tlsCfg.AppendCARoot(p.config.SaslPem); err != nil {
-			p.logger.Fatalf("can't load cert: %s", err.Error())
+		if err := tlsCfg.AppendCARoot(c.SaslPem); err != nil {
+			l.Fatalf("can't load cert: %s", err.Error())
 		}
-		tlsCfg.SetSkipVerify(p.config.SaslSslSkipVerify)
+		tlsCfg.SetSkipVerify(c.SaslSslSkipVerify)
 
 		config.Net.TLS.Config = tlsCfg.Build()
 	}
 
 	config.Producer.Partitioner = sarama.NewRoundRobinPartitioner
-	config.Producer.Flush.Messages = p.config.BatchSize_
+	config.Producer.Flush.Messages = c.BatchSize_
 	// kafka plugin itself cares for flush frequency, but we are using batcher so disable it.
 	config.Producer.Flush.Frequency = time.Millisecond
 	config.Producer.Return.Errors = true
 	config.Producer.Return.Successes = true
 
-	producer, err := sarama.NewSyncProducer(p.config.Brokers, config)
+	producer, err := sarama.NewSyncProducer(c.Brokers, config)
 	if err != nil {
-		p.logger.Fatalf("can't create producer: %s", err.Error())
+		l.Fatalf("can't create producer: %s", err.Error())
 	}
 
-	p.logger.Infof("producer created with brokers %q", strings.Join(p.config.Brokers, ","))
+	l.Infof("producer created with brokers %q", strings.Join(c.Brokers, ","))
 	return producer
 }

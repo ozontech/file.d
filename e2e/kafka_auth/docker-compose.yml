@@ -1,0 +1,39 @@
+version: "2"
+
+services:
+  zookeeper:
+    image: docker.io/bitnami/zookeeper:3.9
+    ports:
+      - "2182:2181"
+    volumes:
+      - "zookeeper_data:/bitnami"
+    environment:
+      - ALLOW_ANONYMOUS_LOGIN=yes
+  kafka:
+    image: docker.io/bitnami/kafka:3.6
+    depends_on:
+      - zookeeper
+    ports:
+      - "9093:9092"
+    volumes:
+      - "kafka_data:/bitnami"
+    environment:
+      # Zookeeper
+      - KAFKA_CFG_ZOOKEEPER_CONNECT=zookeeper:2181
+      # Listeners
+      - KAFKA_CFG_LISTENERS=SASL_PLAINTEXT://:9092,PLAINTEXT://:9094
+      - KAFKA_CFG_ADVERTISED_LISTENERS=SASL_PLAINTEXT://localhost:9093,PLAINTEXT://:9094
+      - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=PLAINTEXT:PLAINTEXT,SASL_PLAINTEXT:SASL_PLAINTEXT
+      # Inter broker
+      - KAFKA_CFG_INTER_BROKER_LISTENER_NAME=PLAINTEXT
+      - KAFKA_CFG_SASL_MECHANISM_INTER_BROKER_PROTOCOL=PLAIN
+      # Security
+      - KAFKA_CFG_SASL_ENABLED_MECHANISMS=PLAIN,SCRAM-SHA-256,SCRAM-SHA-512
+      - KAFKA_CLIENT_USERS=user,admin
+      - KAFKA_CLIENT_PASSWORDS=pass,admin
+
+volumes:
+  zookeeper_data:
+    driver: local
+  kafka_data:
+    driver: local

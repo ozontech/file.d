@@ -14,6 +14,7 @@ import (
 	"github.com/ozontech/file.d/e2e/file_file"
 	"github.com/ozontech/file.d/e2e/http_file"
 	"github.com/ozontech/file.d/e2e/join_throttle"
+	"github.com/ozontech/file.d/e2e/kafka_auth"
 	"github.com/ozontech/file.d/e2e/kafka_file"
 	"github.com/ozontech/file.d/e2e/split_join"
 	"github.com/ozontech/file.d/fd"
@@ -120,6 +121,14 @@ func TestE2EStabilityWorkCase(t *testing.T) {
 			name:    "file_clickhouse",
 			e2eTest: &file_clickhouse.Config{},
 			cfgPath: "./file_clickhouse/config.yml",
+		},
+		{
+			name: "kafka_auth",
+			e2eTest: &kafka_auth.Config{
+				Brokers: []string{"localhost:9093"},
+				Topic:   "my-topic",
+			},
+			cfgPath: "./kafka_auth/config.yml",
 		},
 	}
 
