@@ -38,7 +38,6 @@ type Plugin struct {
 	batcher  *pipeline.Batcher
 
 	// plugin metrics
-
 	sendErrorMetric *prometheus.CounterVec
 }
 
@@ -124,7 +123,6 @@ type Config struct {
 	// >
 	// > If SaslSslEnabled, the plugin will use path to the PEM certificate.
 	SaslPem string `json:"pem_file" default:"/file.d/certs"` // *
-
 }
 
 func init() {
@@ -233,11 +231,17 @@ func (p *Plugin) newProducer() sarama.SyncProducer {
 	// kafka auth sasl
 	if p.config.SaslEnabled {
 		config.Net.SASL.Enable = true
-		config.Net.SASL.Handshake = true
+
 		config.Net.SASL.User = p.config.SaslUsername
 		config.Net.SASL.Password = p.config.SaslPassword
-		config.Net.SASL.SCRAMClientGeneratorFunc = func() sarama.SCRAMClient { return &XDGSCRAMClient{HashGeneratorFcn: SHA512} }
+
 		config.Net.SASL.Mechanism = sarama.SASLMechanism(p.config.SaslMechanism)
+		switch config.Net.SASL.Mechanism {
+		case sarama.SASLTypeSCRAMSHA256:
+			config.Net.SASL.SCRAMClientGeneratorFunc = func() sarama.SCRAMClient { return NewSCRAMClient(SHA256) }
+		case sarama.SASLTypeSCRAMSHA512:
+			config.Net.SASL.SCRAMClientGeneratorFunc = func() sarama.SCRAMClient { return NewSCRAMClient(SHA512) }
+		}
 	}
 
 	// kafka connect via SSL with PEM
@@ -248,6 +252,8 @@ func (p *Plugin) newProducer() sarama.SyncProducer {
 		if err := tlsCfg.AppendCARoot(p.config.SaslPem); err != nil {
 			p.logger.Fatalf("can't load cert: %s", err.Error())
 		}
+		tlsCfg.SetSkipVerify(p.config.SaslSslSkipVerify)
+
 		config.Net.TLS.Config = tlsCfg.Build()
 	}
 
