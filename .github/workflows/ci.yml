@@ -69,7 +69,7 @@ jobs:
           cache: true
 
       - name: Run docker containers
-        run: test-e2e-docker-up
+        run: make test-e2e-docker-up
 
       - name: E2E
         env:
