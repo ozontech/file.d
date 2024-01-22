@@ -56,6 +56,11 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
+	// > Kafka client ID.
+	ClientID string `json:"client_id" default:"file-d"` // *
+
+	// > @3@4@5@6
+	// >
 	// > If set, the plugin will use topic name from the event field.
 	UseTopicField bool `json:"use_topic_field" default:"false"` // *
 
@@ -277,7 +282,7 @@ func (p *Plugin) Stop() {
 
 func NewProducer(c *Config, l *zap.SugaredLogger) sarama.SyncProducer {
 	config := sarama.NewConfig()
-	config.ClientID = "sasl_scram_client"
+	config.ClientID = c.ClientID
 	// kafka auth sasl
 	if c.SASL.Enabled {
 		config.Net.SASL.Enable = true

@@ -14,6 +14,12 @@ The default topic name if nothing will be found in the event field or `should_us
 
 <br>
 
+**`client_id`** *`string`* *`default=file-d`* 
+
+Kafka client ID.
+
+<br>
+
 **`use_topic_field`** *`bool`* *`default=false`* 
 
 If set, the plugin will use topic name from the event field.
