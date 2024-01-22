@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"strconv"
 	"strings"
+	"unicode"
 	"unicode/utf16"
 
 	"github.com/ozontech/file.d/cfg"
@@ -115,6 +116,12 @@ type Config struct {
 	// > The list of the event fields to convert.
 	// >> Field value must be a string.
 	Fields []cfg.FieldSelector `json:"fields" slice:"true" required:"true"` // *
+
+	// > @3@4@5@6
+	// >
+	// > If set, the plugin will replace all non-graphic bytes to unicode replacement char (�).
+	// >> It works only with unicode (`\u...` and `\U...`) encoded bytes.
+	ReplaceNonGraphic bool `json:"replace_non_graphic" default:"false"` // *
 }
 
 func init() {
@@ -191,6 +198,10 @@ func (p *Plugin) convert(node *insaneJSON.Node) {
 			}
 
 			nodeStr = nodeStr[size:]
+
+			if !unicode.IsGraphic(rune(u)) && p.config.ReplaceNonGraphic {
+				u = unicode.ReplacementChar
+			}
 
 			// '\U...' or 1-byte '\u...'
 			if size == 8 || !utf16.IsSurrogate(rune(u)) {
