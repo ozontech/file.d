@@ -72,6 +72,7 @@ func (c *Config) Configure(t *testing.T, _ *cfg.Config, _ string) {
 				Brokers:      c.Brokers,
 				DefaultTopic: c.Topic,
 				BatchSize_:   10,
+				ClientID:     "test-auth",
 				SASL:         tt.sasl,
 			}
 
