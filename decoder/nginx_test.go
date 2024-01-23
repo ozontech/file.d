@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	insaneJSON "github.com/vitkovskii/insane-json"
+	insaneJSON "github.com/ozontech/insane-json"
 )
 
 const (

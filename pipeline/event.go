@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/ozontech/file.d/logger"
-	insaneJSON "github.com/vitkovskii/insane-json"
+	insaneJSON "github.com/ozontech/insane-json"
 	"go.uber.org/atomic"
 )
 
