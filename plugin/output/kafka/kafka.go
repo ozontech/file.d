@@ -37,7 +37,7 @@ type Plugin struct {
 	controller   pipeline.OutputPluginController
 
 	producer sarama.SyncProducer
-	batcher  *pipeline.Batcher
+	batcher  *pipeline.RetriableBatcher
 
 	// plugin metrics
 	sendErrorMetric prometheus.Counter
@@ -180,32 +180,43 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.logger.Infof("workers count=%d, batch size=%d", p.config.WorkersCount_, p.config.BatchSize_)
 
 	p.producer = NewProducer(p.config, p.logger)
-	p.batcher = pipeline.NewBatcher(pipeline.BatcherOptions{
-		PipelineName:                     params.PipelineName,
-		OutputType:                       outPluginType,
-		OutFn:                            p.out,
-		Controller:                       p.controller,
-		Workers:                          p.config.WorkersCount_,
-		BatchSizeCount:                   p.config.BatchSize_,
-		BatchSizeBytes:                   p.config.BatchSizeBytes_,
-		FlushTimeout:                     p.config.BatchFlushTimeout_,
-		MetricCtl:                        params.MetricCtl,
-		Retry:                            p.config.Retry,
-		RetryRetention:                   p.config.Retention_,
-		RetryRetentionExponentMultiplier: p.config.RetentionExponentMultiplier,
-		OnRetryError: func(err error) {
-			var level zapcore.Level
-			if p.config.FatalOnFailedInsert {
-				level = zapcore.FatalLevel
-			} else {
-				level = zapcore.ErrorLevel
-			}
 
-			p.logger.Desugar().Log(level, "can't write batch",
-				zap.Int("retries", p.config.Retry),
-			)
-		},
-	})
+	batcherOpts := pipeline.BatcherOptions{
+		PipelineName:   params.PipelineName,
+		OutputType:     outPluginType,
+		Controller:     p.controller,
+		Workers:        p.config.WorkersCount_,
+		BatchSizeCount: p.config.BatchSize_,
+		BatchSizeBytes: p.config.BatchSizeBytes_,
+		FlushTimeout:   p.config.BatchFlushTimeout_,
+		MetricCtl:      params.MetricCtl,
+	}
+
+	backoffOpts := pipeline.BackoffOpts{
+		MinRetention: p.config.Retention_,
+		Multiplier:   float64(p.config.RetentionExponentMultiplier),
+		AttemptNum:   uint64(p.config.Retry),
+	}
+
+	onError := func(err error) {
+		var level zapcore.Level
+		if p.config.FatalOnFailedInsert {
+			level = zapcore.FatalLevel
+		} else {
+			level = zapcore.ErrorLevel
+		}
+
+		p.logger.Desugar().Log(level, "can't write batch",
+			zap.Int("retries", p.config.Retry),
+		)
+	}
+
+	p.batcher = pipeline.NewRetriableBatcher(
+		&batcherOpts,
+		p.out,
+		backoffOpts,
+		onError,
+	)
 
 	p.batcher.Start(context.TODO())
 }

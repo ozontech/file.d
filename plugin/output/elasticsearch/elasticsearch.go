@@ -46,7 +46,7 @@ type Plugin struct {
 	avgEventSize int
 	time         string
 	headerPrefix string
-	batcher      *pipeline.Batcher
+	batcher      *pipeline.RetriableBatcher
 	controller   pipeline.OutputPluginController
 	mu           *sync.Mutex
 
@@ -226,34 +226,45 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.maintenance(nil)
 
 	p.logger.Info("starting batcher", zap.Duration("timeout", p.config.BatchFlushTimeout_))
-	p.batcher = pipeline.NewBatcher(pipeline.BatcherOptions{
-		PipelineName:                     params.PipelineName,
-		OutputType:                       outPluginType,
-		OutFn:                            p.out,
-		MaintenanceFn:                    p.maintenance,
-		Controller:                       p.controller,
-		Workers:                          p.config.WorkersCount_,
-		BatchSizeCount:                   p.config.BatchSize_,
-		BatchSizeBytes:                   p.config.BatchSizeBytes_,
-		FlushTimeout:                     p.config.BatchFlushTimeout_,
-		MaintenanceInterval:              time.Minute,
-		MetricCtl:                        params.MetricCtl,
-		Retry:                            p.config.Retry,
-		RetryRetention:                   p.config.Retention_,
-		RetryRetentionExponentMultiplier: p.config.RetentionExponentMultiplier,
-		OnRetryError: func(err error) {
-			var level zapcore.Level
-			if p.config.FatalOnFailedInsert {
-				level = zapcore.FatalLevel
-			} else {
-				level = zapcore.ErrorLevel
-			}
 
-			p.logger.Log(level, "can't send to the elastic", zap.Error(err),
-				zap.Int("retries", p.config.Retry),
-			)
-		},
-	})
+	batcherOpts := pipeline.BatcherOptions{
+		PipelineName:        params.PipelineName,
+		OutputType:          outPluginType,
+		MaintenanceFn:       p.maintenance,
+		Controller:          p.controller,
+		Workers:             p.config.WorkersCount_,
+		BatchSizeCount:      p.config.BatchSize_,
+		BatchSizeBytes:      p.config.BatchSizeBytes_,
+		FlushTimeout:        p.config.BatchFlushTimeout_,
+		MaintenanceInterval: time.Minute,
+		MetricCtl:           params.MetricCtl,
+	}
+
+	backoffOpts := pipeline.BackoffOpts{
+		MinRetention: p.config.Retention_,
+		Multiplier:   float64(p.config.RetentionExponentMultiplier),
+		AttemptNum:   uint64(p.config.Retry),
+	}
+
+	onError := func(err error) {
+		var level zapcore.Level
+		if p.config.FatalOnFailedInsert {
+			level = zapcore.FatalLevel
+		} else {
+			level = zapcore.ErrorLevel
+		}
+
+		p.logger.Log(level, "can't send to the elastic", zap.Error(err),
+			zap.Int("retries", p.config.Retry),
+		)
+	}
+
+	p.batcher = pipeline.NewRetriableBatcher(
+		&batcherOpts,
+		p.out,
+		backoffOpts,
+		onError,
+	)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	p.cancel = cancel

@@ -4,19 +4,29 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/ozontech/file.d/metric"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/atomic"
 )
 
 func TestBackoff(t *testing.T) {
 	errorCount := &atomic.Int32{}
-	prevValue := errorCount.Load()
+	errorCountBefore := errorCount.Load()
+
+	eventCount := &atomic.Int32{}
+	eventCountBefore := eventCount.Load()
+
 	errorFn := func(err error) {
 		errorCount.Inc()
 	}
 
-	batcherBackoff := NewBatcherBackoff(
+	batcherBackoff := NewRetriableBatcher(
+		&BatcherOptions{
+			MetricCtl: metric.New("", prometheus.NewRegistry()),
+		},
 		func(workerData *WorkerData, batch *Batch) error {
+			eventCount.Inc()
 			return nil
 		},
 		BackoffOpts{AttemptNum: 3},
@@ -24,7 +34,9 @@ func TestBackoff(t *testing.T) {
 	)
 
 	batcherBackoff.Out(nil, nil)
-	assert.Equal(t, prevValue, errorCount.Load(), "wrong error count")
+
+	assert.Equal(t, errorCountBefore, errorCount.Load(), "wrong error count")
+	assert.Equal(t, eventCountBefore+1, eventCount.Load(), "wrong event count")
 }
 
 func TestBackoffWithError(t *testing.T) {
@@ -34,7 +46,10 @@ func TestBackoffWithError(t *testing.T) {
 		errorCount.Inc()
 	}
 
-	batcherBackoff := NewBatcherBackoff(
+	batcherBackoff := NewRetriableBatcher(
+		&BatcherOptions{
+			MetricCtl: metric.New("", prometheus.NewRegistry()),
+		},
 		func(workerData *WorkerData, batch *Batch) error {
 			return errors.New("some error")
 		},

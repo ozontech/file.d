@@ -98,7 +98,7 @@ type Plugin struct {
 	controller pipeline.OutputPluginController
 	logger     *zap.SugaredLogger
 	config     *Config
-	batcher    *pipeline.Batcher
+	batcher    *pipeline.RetriableBatcher
 	ctx        context.Context
 	cancelFunc context.CancelFunc
 
@@ -275,32 +275,42 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	}
 	p.pool = pool
 
-	p.batcher = pipeline.NewBatcher(pipeline.BatcherOptions{
-		PipelineName:                     params.PipelineName,
-		OutputType:                       outPluginType,
-		OutFn:                            p.out,
-		Controller:                       p.controller,
-		Workers:                          p.config.WorkersCount_,
-		BatchSizeCount:                   p.config.BatchSize_,
-		BatchSizeBytes:                   p.config.BatchSizeBytes_,
-		FlushTimeout:                     p.config.BatchFlushTimeout_,
-		MetricCtl:                        params.MetricCtl,
-		Retry:                            p.config.Retry,
-		RetryRetention:                   p.config.Retention_,
-		RetryRetentionExponentMultiplier: p.config.RetentionExponentMultiplier,
-		OnRetryError: func(err error) {
-			var level zapcore.Level
-			if p.config.FatalOnFailedInsert {
-				level = zapcore.FatalLevel
-			} else {
-				level = zapcore.ErrorLevel
-			}
+	batcherOpts := pipeline.BatcherOptions{
+		PipelineName:   params.PipelineName,
+		OutputType:     outPluginType,
+		Controller:     p.controller,
+		Workers:        p.config.WorkersCount_,
+		BatchSizeCount: p.config.BatchSize_,
+		BatchSizeBytes: p.config.BatchSizeBytes_,
+		FlushTimeout:   p.config.BatchFlushTimeout_,
+		MetricCtl:      params.MetricCtl,
+	}
 
-			p.logger.Desugar().Log(level, "can't insert to the table", zap.Error(err),
-				zap.Int("retries", p.config.Retry),
-				zap.String("table", p.config.Table))
-		},
-	})
+	backoffOpts := pipeline.BackoffOpts{
+		MinRetention: p.config.Retention_,
+		Multiplier:   float64(p.config.RetentionExponentMultiplier),
+		AttemptNum:   uint64(p.config.Retry),
+	}
+
+	onError := func(err error) {
+		var level zapcore.Level
+		if p.config.FatalOnFailedInsert {
+			level = zapcore.FatalLevel
+		} else {
+			level = zapcore.ErrorLevel
+		}
+
+		p.logger.Desugar().Log(level, "can't insert to the table", zap.Error(err),
+			zap.Int("retries", p.config.Retry),
+			zap.String("table", p.config.Table))
+	}
+
+	p.batcher = pipeline.NewRetriableBatcher(
+		&batcherOpts,
+		p.out,
+		backoffOpts,
+		onError,
+	)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	p.ctx = ctx

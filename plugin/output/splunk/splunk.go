@@ -33,7 +33,7 @@ type Plugin struct {
 	client       http.Client
 	logger       *zap.SugaredLogger
 	avgEventSize int
-	batcher      *pipeline.Batcher
+	batcher      *pipeline.RetriableBatcher
 	controller   pipeline.OutputPluginController
 
 	// plugin metrics
@@ -131,32 +131,42 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.registerMetrics(params.MetricCtl)
 	p.client = p.newClient(p.config.RequestTimeout_)
 
-	p.batcher = pipeline.NewBatcher(pipeline.BatcherOptions{
-		PipelineName:                     params.PipelineName,
-		OutputType:                       outPluginType,
-		OutFn:                            p.out,
-		MaintenanceFn:                    p.maintenance,
-		Controller:                       p.controller,
-		Workers:                          p.config.WorkersCount_,
-		BatchSizeCount:                   p.config.BatchSize_,
-		BatchSizeBytes:                   p.config.BatchSizeBytes_,
-		FlushTimeout:                     p.config.BatchFlushTimeout_,
-		MetricCtl:                        params.MetricCtl,
-		Retry:                            p.config.Retry,
-		RetryRetention:                   p.config.Retention_,
-		RetryRetentionExponentMultiplier: p.config.RetentionExponentMultiplier,
-		OnRetryError: func(err error) {
-			var level zapcore.Level
-			if p.config.FatalOnFailedInsert {
-				level = zapcore.FatalLevel
-			} else {
-				level = zapcore.ErrorLevel
-			}
+	batcherOpts := pipeline.BatcherOptions{
+		PipelineName:   params.PipelineName,
+		OutputType:     outPluginType,
+		MaintenanceFn:  p.maintenance,
+		Controller:     p.controller,
+		Workers:        p.config.WorkersCount_,
+		BatchSizeCount: p.config.BatchSize_,
+		BatchSizeBytes: p.config.BatchSizeBytes_,
+		FlushTimeout:   p.config.BatchFlushTimeout_,
+		MetricCtl:      params.MetricCtl,
+	}
 
-			p.logger.Desugar().Log(level, "can't send data to splunk", zap.Error(err),
-				zap.Int("retries", p.config.Retry))
-		},
-	})
+	backoffOpts := pipeline.BackoffOpts{
+		MinRetention: p.config.Retention_,
+		Multiplier:   float64(p.config.RetentionExponentMultiplier),
+		AttemptNum:   uint64(p.config.Retry),
+	}
+
+	onError := func(err error) {
+		var level zapcore.Level
+		if p.config.FatalOnFailedInsert {
+			level = zapcore.FatalLevel
+		} else {
+			level = zapcore.ErrorLevel
+		}
+
+		p.logger.Desugar().Log(level, "can't send data to splunk", zap.Error(err),
+			zap.Int("retries", p.config.Retry))
+	}
+
+	p.batcher = pipeline.NewRetriableBatcher(
+		&batcherOpts,
+		p.out,
+		backoffOpts,
+		onError,
+	)
 
 	p.batcher.Start(context.TODO())
 }
