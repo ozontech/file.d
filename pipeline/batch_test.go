@@ -36,13 +36,12 @@ func TestBatcher(t *testing.T) {
 	wg.Add(eventCount)
 
 	batchCount := &atomic.Int32{}
-	batcherOut := func(workerData *WorkerData, batch *Batch) error {
+	batcherOut := func(workerData *WorkerData, batch *Batch) {
 		if *workerData == nil {
 			*workerData = batchCount
 		}
 		counter := (*workerData).(*atomic.Int32)
 		counter.Inc()
-		return nil
 	}
 
 	seqIDs := make(map[SourceID]uint64)
@@ -108,13 +107,12 @@ func TestBatcherMaxSize(t *testing.T) {
 	wg.Add(eventCount)
 
 	batchCount := &atomic.Int32{}
-	batcherOut := func(workerData *WorkerData, batch *Batch) error {
+	batcherOut := func(workerData *WorkerData, batch *Batch) {
 		if *workerData == nil {
 			*workerData = batchCount
 		}
 		counter := (*workerData).(*atomic.Int32)
 		counter.Inc()
-		return nil
 	}
 
 	seqIDs := make(map[SourceID]uint64)

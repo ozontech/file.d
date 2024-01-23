@@ -133,25 +133,21 @@ type Batcher struct {
 }
 
 type (
-	BatcherOutFn         func(*WorkerData, *Batch) error
+	BatcherOutFn         func(*WorkerData, *Batch)
 	BatcherMaintenanceFn func(*WorkerData)
 
 	BatcherOptions struct {
-		PipelineName                     string
-		OutputType                       string
-		OutFn                            BatcherOutFn
-		MaintenanceFn                    BatcherMaintenanceFn
-		Controller                       OutputPluginController
-		Workers                          int
-		BatchSizeCount                   int
-		BatchSizeBytes                   int
-		FlushTimeout                     time.Duration
-		MaintenanceInterval              time.Duration
-		MetricCtl                        *metric.Ctl
-		Retry                            int
-		RetryRetention                   time.Duration
-		RetryRetentionExponentMultiplier int
-		OnRetryError                     func(err error)
+		PipelineName        string
+		OutputType          string
+		OutFn               BatcherOutFn
+		MaintenanceFn       BatcherMaintenanceFn
+		Controller          OutputPluginController
+		Workers             int
+		BatchSizeCount      int
+		BatchSizeBytes      int
+		FlushTimeout        time.Duration
+		MaintenanceInterval time.Duration
+		MetricCtl           *metric.Ctl
 	}
 )
 
@@ -201,23 +197,12 @@ func (b *Batcher) work() {
 
 	t := time.Now()
 	data := WorkerData(nil)
-
-	workerBatcherBackoff := NewBatcherBackoff(
-		b.opts.OutFn,
-		BackoffOpts{
-			MinRetention: b.opts.RetryRetention,
-			Multiplier:   float64(b.opts.RetryRetentionExponentMultiplier),
-			AttemptNum:   uint64(b.opts.Retry),
-		},
-		b.opts.OnRetryError,
-	)
-
 	for batch := range b.fullBatches {
 		b.workersInProgress.Inc()
 
 		if batch.hasIterableEvents {
 			now := time.Now()
-			workerBatcherBackoff.Out(&data, batch)
+			b.opts.OutFn(&data, batch)
 			b.batchOutFnSeconds.Observe(time.Since(now).Seconds())
 		}
 
