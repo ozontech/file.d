@@ -97,71 +97,37 @@ type Config struct {
 	// > @3@4@5@6
 	// >
 	// > If set, the plugin will use SASL authentications mechanism.
-	// >> `deprecated` Use `sasl.enabled` instead.
 	SaslEnabled bool `json:"is_sasl_enabled" default:"false"` // *
 
 	// > @3@4@5@6
 	// >
 	// > SASL mechanism to use.
-	// >> `deprecated` Use `sasl.mechanism` instead.
 	SaslMechanism string `json:"sasl_mechanism" default:"SCRAM-SHA-512" options:"PLAIN|SCRAM-SHA-256|SCRAM-SHA-512"` // *
 
 	// > @3@4@5@6
 	// >
-	// > SASL username.
-	// >> `deprecated` Use `sasl.username` instead.
+	// > If set, the plugin will use SASL authentications mechanism.
 	SaslUsername string `json:"sasl_username" default:"user"` // *
 
 	// > @3@4@5@6
 	// >
-	// > SASL password.
-	// >> `deprecated` Use `sasl.password` instead.
+	// > If set, the plugin will use SASL authentications mechanism.
 	SaslPassword string `json:"sasl_password" default:"password"` // *
 
 	// > @3@4@5@6
 	// >
-	// > If set, the plugin will use SSL/TLS connections method.
-	// >> `deprecated` Use `tls.enabled` instead.
+	// > If set, the plugin will use SSL connections method.
 	SaslSslEnabled bool `json:"is_ssl_enabled" default:"false"` // *
 
 	// > @3@4@5@6
 	// >
-	// > If set, the plugin will use skip SSL/TLS verification.
-	// >> `deprecated` Use `tls.skip_verify` instead.
+	// > If set, the plugin will use skip SSL verification.
 	SaslSslSkipVerify bool `json:"ssl_skip_verify" default:"false"` // *
 
 	// > @3@4@5@6
 	// >
-	// > Path or content of a PEM-encoded CA file.
-	// >> `deprecated` Use `tls.ca_cert` instead.
+	// > If SaslSslEnabled, the plugin will use path to the PEM certificate.
 	SaslPem string `json:"pem_file" default:"/file.d/certs"` // *
-
-	// > @3@4@5@6
-	// >
-	// > SASL config.
-	// > Disabled by default.
-	// > See `SASLConfig` for details.
-	SASL SASLConfig `json:"sasl" child:"true"` // *
-
-	// > @3@4@5@6
-	// >
-	// > TLS config.
-	// > Disabled by default.
-	// > See `TLSConfig` for details.
-	TLS TLSConfig `json:"tls" child:"true"` // *
-}
-
-type SASLConfig struct {
-	Enabled   bool   `json:"enabled" default:"false"`
-	Mechanism string `json:"mechanism" default:"SCRAM-SHA-512" options:"PLAIN|SCRAM-SHA-256|SCRAM-SHA-512"`
-	Username  string `json:"username" default:"user"`
-	Password  string `json:"password" default:"password"`
-}
-
-type TLSConfig struct {
-	Enabled    bool   `json:"enabled" default:"false"`
-	SkipVerify bool   `json:"skip_verify" default:"false"`
-	CACert     string `json:"ca_cert" default:"/file.d/certs"`
 }
 
 func init() {
@@ -181,22 +147,6 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.avgEventSize = params.PipelineSettings.AvgEventSize
 	p.controller = params.Controller
 	p.registerMetrics(params.MetricCtl)
-
-	if !p.config.SASL.Enabled && p.config.SaslEnabled {
-		p.config.SASL = SASLConfig{
-			Enabled:   p.config.SaslEnabled,
-			Mechanism: p.config.SaslMechanism,
-			Username:  p.config.SaslUsername,
-			Password:  p.config.SaslPassword,
-		}
-	}
-	if !p.config.TLS.Enabled && p.config.SaslSslEnabled {
-		p.config.TLS = TLSConfig{
-			Enabled:    p.config.SaslSslEnabled,
-			SkipVerify: p.config.SaslSslSkipVerify,
-			CACert:     p.config.SaslPem,
-		}
-	}
 
 	p.logger.Infof("workers count=%d, batch size=%d", p.config.WorkersCount_, p.config.BatchSize_)
 
@@ -284,13 +234,13 @@ func NewProducer(c *Config, l *zap.SugaredLogger) sarama.SyncProducer {
 	config := sarama.NewConfig()
 	config.ClientID = c.ClientID
 	// kafka auth sasl
-	if c.SASL.Enabled {
+	if c.SaslEnabled {
 		config.Net.SASL.Enable = true
 
-		config.Net.SASL.User = c.SASL.Username
-		config.Net.SASL.Password = c.SASL.Password
+		config.Net.SASL.User = c.SaslUsername
+		config.Net.SASL.Password = c.SaslPassword
 
-		config.Net.SASL.Mechanism = sarama.SASLMechanism(c.SASL.Mechanism)
+		config.Net.SASL.Mechanism = sarama.SASLMechanism(c.SaslMechanism)
 		switch config.Net.SASL.Mechanism {
 		case sarama.SASLTypeSCRAMSHA256:
 			config.Net.SASL.SCRAMClientGeneratorFunc = func() sarama.SCRAMClient { return NewSCRAMClient(SHA256) }
@@ -300,14 +250,14 @@ func NewProducer(c *Config, l *zap.SugaredLogger) sarama.SyncProducer {
 	}
 
 	// kafka connect via SSL with PEM
-	if c.TLS.Enabled {
+	if c.SaslSslEnabled {
 		config.Net.TLS.Enable = true
 
 		tlsCfg := xtls.NewConfigBuilder()
-		if err := tlsCfg.AppendCARoot(c.TLS.CACert); err != nil {
+		if err := tlsCfg.AppendCARoot(c.SaslPem); err != nil {
 			l.Fatalf("can't load cert: %s", err.Error())
 		}
-		tlsCfg.SetSkipVerify(c.TLS.SkipVerify)
+		tlsCfg.SetSkipVerify(c.SaslSslSkipVerify)
 
 		config.Net.TLS.Config = tlsCfg.Build()
 	}
