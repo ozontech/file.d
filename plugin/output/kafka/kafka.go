@@ -106,28 +106,28 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
-	// > If set, the plugin will use SASL authentications mechanism.
+	// > SASL username.
 	SaslUsername string `json:"sasl_username" default:"user"` // *
 
 	// > @3@4@5@6
 	// >
-	// > If set, the plugin will use SASL authentications mechanism.
+	// > SASL password.
 	SaslPassword string `json:"sasl_password" default:"password"` // *
 
 	// > @3@4@5@6
 	// >
-	// > If set, the plugin will use SSL connections method.
-	SaslSslEnabled bool `json:"is_ssl_enabled" default:"false"` // *
+	// > If set, the plugin will use SSL/TLS connections method.
+	SslEnabled bool `json:"is_ssl_enabled" default:"false"` // *
 
 	// > @3@4@5@6
 	// >
-	// > If set, the plugin will use skip SSL verification.
-	SaslSslSkipVerify bool `json:"ssl_skip_verify" default:"false"` // *
+	// > If set, the plugin will skip SSL/TLS verification.
+	SslSkipVerify bool `json:"ssl_skip_verify" default:"false"` // *
 
 	// > @3@4@5@6
 	// >
-	// > If SaslSslEnabled, the plugin will use path to the PEM certificate.
-	SaslPem string `json:"pem_file" default:"/file.d/certs"` // *
+	// > Path or content of a PEM-encoded CA file.
+	SslPem string `json:"pem_file" default:"/file.d/certs"` // *
 }
 
 func init() {
@@ -250,14 +250,14 @@ func NewProducer(c *Config, l *zap.SugaredLogger) sarama.SyncProducer {
 	}
 
 	// kafka connect via SSL with PEM
-	if c.SaslSslEnabled {
+	if c.SslEnabled {
 		config.Net.TLS.Enable = true
 
 		tlsCfg := xtls.NewConfigBuilder()
-		if err := tlsCfg.AppendCARoot(c.SaslPem); err != nil {
+		if err := tlsCfg.AppendCARoot(c.SslPem); err != nil {
 			l.Fatalf("can't load cert: %s", err.Error())
 		}
-		tlsCfg.SetSkipVerify(c.SaslSslSkipVerify)
+		tlsCfg.SetSkipVerify(c.SslSkipVerify)
 
 		config.Net.TLS.Config = tlsCfg.Build()
 	}
