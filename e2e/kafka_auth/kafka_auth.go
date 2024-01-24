@@ -1,13 +1,13 @@
 package kafka_auth
 
 import (
+	"testing"
+
+	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/plugin/output/kafka"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
-	"testing"
-
-	"github.com/ozontech/file.d/cfg"
 )
 
 // Config for kafka_auth test
