@@ -17,14 +17,21 @@ type Config struct {
 }
 
 func (c *Config) Configure(t *testing.T, _ *cfg.Config, _ string) {
+	type saslData struct {
+		Enabled   bool
+		Mechanism string
+		Username  string
+		Password  string
+	}
+
 	type tCase struct {
-		sasl       kafka.SASLConfig
+		sasl       saslData
 		authorized bool
 	}
 
 	cases := []tCase{
 		{
-			sasl: kafka.SASLConfig{
+			sasl: saslData{
 				Enabled:   true,
 				Mechanism: "PLAIN",
 				Username:  "user",
@@ -33,7 +40,7 @@ func (c *Config) Configure(t *testing.T, _ *cfg.Config, _ string) {
 			authorized: true,
 		},
 		{
-			sasl: kafka.SASLConfig{
+			sasl: saslData{
 				Enabled:   true,
 				Mechanism: "SCRAM-SHA-256",
 				Username:  "user",
@@ -42,7 +49,7 @@ func (c *Config) Configure(t *testing.T, _ *cfg.Config, _ string) {
 			authorized: true,
 		},
 		{
-			sasl: kafka.SASLConfig{
+			sasl: saslData{
 				Enabled:   true,
 				Mechanism: "SCRAM-SHA-512",
 				Username:  "user",
@@ -51,13 +58,13 @@ func (c *Config) Configure(t *testing.T, _ *cfg.Config, _ string) {
 			authorized: true,
 		},
 		{
-			sasl: kafka.SASLConfig{
+			sasl: saslData{
 				Enabled: false,
 			},
 			authorized: false,
 		},
 		{
-			sasl: kafka.SASLConfig{
+			sasl: saslData{
 				Enabled:   true,
 				Mechanism: "PLAIN",
 				Username:  "user",
@@ -73,7 +80,13 @@ func (c *Config) Configure(t *testing.T, _ *cfg.Config, _ string) {
 				DefaultTopic: c.Topic,
 				BatchSize_:   10,
 				ClientID:     "test-auth",
-				SASL:         tt.sasl,
+			}
+
+			if tt.sasl.Enabled {
+				config.SaslEnabled = true
+				config.SaslMechanism = tt.sasl.Mechanism
+				config.SaslUsername = tt.sasl.Username
+				config.SaslPassword = tt.sasl.Password
 			}
 
 			panicTestFn := func() {
