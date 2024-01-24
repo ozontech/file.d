@@ -416,11 +416,11 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 		value := v.AsBytes()
 		var valueIsCommonMatched bool
 		if p.config.SkipMismatched {
-			// to always try to apply a mask
-			valueIsCommonMatched = true
-		} else {
 			// is matched by common mask
 			valueIsCommonMatched = p.matchRe.Match(value)
+		} else {
+			// to always try to apply a mask
+			valueIsCommonMatched = true
 		}
 
 		p.sourceBuf = append(p.sourceBuf[:0], value...)
