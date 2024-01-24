@@ -1,13 +1,13 @@
 package kafka_auth
 
 import (
-	"testing"
-
-	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/plugin/output/kafka"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+	"testing"
+
+	"github.com/ozontech/file.d/cfg"
 )
 
 // Config for kafka_auth test
@@ -73,35 +73,34 @@ func (c *Config) Configure(t *testing.T, _ *cfg.Config, _ string) {
 			authorized: false,
 		},
 	}
+
+	r := require.New(t)
+
 	for _, tt := range cases {
-		go func(tt tCase) {
-			r := require.New(t)
+		config := &kafka.Config{
+			Brokers:      c.Brokers,
+			DefaultTopic: c.Topic,
+			BatchSize_:   10,
+			ClientID:     "test-auth",
+		}
 
-			config := &kafka.Config{
-				Brokers:      c.Brokers,
-				DefaultTopic: c.Topic,
-				BatchSize_:   10,
-				ClientID:     "test-auth",
-			}
+		if tt.sasl.Enabled {
+			config.SaslEnabled = true
+			config.SaslMechanism = tt.sasl.Mechanism
+			config.SaslUsername = tt.sasl.Username
+			config.SaslPassword = tt.sasl.Password
+		}
 
-			if tt.sasl.Enabled {
-				config.SaslEnabled = true
-				config.SaslMechanism = tt.sasl.Mechanism
-				config.SaslUsername = tt.sasl.Username
-				config.SaslPassword = tt.sasl.Password
-			}
-
-			panicTestFn := func() {
-				kafka.NewProducer(config,
-					zap.NewNop().WithOptions(zap.WithFatalHook(zapcore.WriteThenPanic)).Sugar(),
-				)
-			}
-			if tt.authorized {
-				r.NotPanics(panicTestFn, "func shouldn't panic")
-			} else {
-				r.Panics(panicTestFn, "func should panic")
-			}
-		}(tt)
+		panicTestFn := func() {
+			kafka.NewProducer(config,
+				zap.NewNop().WithOptions(zap.WithFatalHook(zapcore.WriteThenPanic)).Sugar(),
+			)
+		}
+		if tt.authorized {
+			r.NotPanics(panicTestFn, "func shouldn't panic")
+		} else {
+			r.Panics(panicTestFn, "func should panic")
+		}
 	}
 }
 
