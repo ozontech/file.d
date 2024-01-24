@@ -75,6 +75,8 @@ func (c *Config) Configure(t *testing.T, _ *cfg.Config, _ string) {
 	}
 	for _, tt := range cases {
 		go func(tt tCase) {
+			r := require.New(t)
+
 			config := &kafka.Config{
 				Brokers:      c.Brokers,
 				DefaultTopic: c.Topic,
@@ -95,9 +97,9 @@ func (c *Config) Configure(t *testing.T, _ *cfg.Config, _ string) {
 				)
 			}
 			if tt.authorized {
-				require.NotPanics(t, panicTestFn, "func shouldn't panic")
+				r.NotPanics(panicTestFn, "func shouldn't panic")
 			} else {
-				require.Panics(t, panicTestFn, "func should panic")
+				r.Panics(panicTestFn, "func should panic")
 			}
 		}(tt)
 	}
