@@ -71,31 +71,31 @@ SASL mechanism to use.
 
 **`sasl_username`** *`string`* *`default=user`* 
 
-If set, the plugin will use SASL authentications mechanism.
+SASL username.
 
 <br>
 
 **`sasl_password`** *`string`* *`default=password`* 
 
-If set, the plugin will use SASL authentications mechanism.
+SASL password.
 
 <br>
 
 **`is_ssl_enabled`** *`bool`* *`default=false`* 
 
-If set, the plugin will use SSL connections method.
+If set, the plugin will use SSL/TLS connections method.
 
 <br>
 
 **`ssl_skip_verify`** *`bool`* *`default=false`* 
 
-If set, the plugin will use skip SSL verification.
+If set, the plugin will skip SSL/TLS verification.
 
 <br>
 
 **`pem_file`** *`string`* *`default=/file.d/certs`* 
 
-If SaslSslEnabled, the plugin will use path to the PEM certificate.
+Path or content of a PEM-encoded CA file.
 
 <br>
 
