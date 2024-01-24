@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff/v3"
-	"github.com/ozontech/file.d/cfg"
 )
 
 type RetriableBatcher struct {
@@ -24,7 +23,7 @@ type BackoffOpts struct {
 }
 
 func NewRetriableBatcher(batcherOpts *BatcherOptions, batcherOutFn RetriableBatcherOutFn, opts BackoffOpts, onError func(err error)) *RetriableBatcher {
-	boff := cfg.GetBackoff(
+	boff := GetBackoff(
 		opts.MinRetention,
 		opts.Multiplier,
 		opts.AttemptNum,
@@ -66,4 +65,12 @@ func (b *RetriableBatcher) Stop() {
 
 func (b *RetriableBatcher) Add(event *Event) {
 	b.batcher.Add(event)
+}
+
+func GetBackoff(minRetention time.Duration, multiplier float64, attemptNum uint64) backoff.BackOff {
+	expBackoff := backoff.NewExponentialBackOff()
+	expBackoff.InitialInterval = minRetention
+	expBackoff.Multiplier = multiplier
+	expBackoff.RandomizationFactor = 0.5
+	return backoff.WithMaxRetries(expBackoff, attemptNum)
 }

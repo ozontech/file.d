@@ -336,7 +336,7 @@ func (p *Plugin) StartWithMinio(config pipeline.AnyConfig, params *pipeline.Outp
 	p.compressCh = make(chan fileDTO, p.config.FileConfig.WorkersCount_)
 
 	for i := 0; i < p.config.FileConfig.WorkersCount_; i++ {
-		go p.uploadWork(cfg.GetBackoff(
+		go p.uploadWork(pipeline.GetBackoff(
 			p.config.Retention_,
 			float64(p.config.RetentionExponentMultiplier),
 			uint64(p.config.Retry),
