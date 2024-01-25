@@ -92,6 +92,13 @@ You can use 'warn' log level for logging authorizations.
 
 <br>
 
+**`cors`** *`CORSConfig`* 
+
+CORS config.
+See CORSConfig for details.
+
+<br>
+
 **`header`** *`string`* *`default=Authorization`* 
 
 Override default Authorization header
