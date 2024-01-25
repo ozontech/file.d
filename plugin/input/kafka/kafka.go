@@ -58,6 +58,13 @@ type Plugin struct {
 	consumeErrorsMetric *prometheus.CounterVec
 }
 
+type OffsetType byte
+
+const (
+	OffsetTypeNewest OffsetType = iota
+	OffsetTypeOldest
+)
+
 // ! config-params
 // ^ config-params
 type Config struct {
@@ -91,7 +98,8 @@ type Config struct {
 	// > The newest and oldest values is used when a consumer starts but there is no committed offset for the assigned partition.
 	// > * *`newest`* - set offset to the newest message
 	// > * *`oldest`* - set offset to the oldest message
-	Offset string `json:"offset" default:"newest" options:"oldest|newest"` // *
+	Offset  string `json:"offset" default:"newest" options:"newest|oldest"` // *
+	Offset_ OffsetType
 
 	// > @3@4@5@6
 	// >
@@ -246,10 +254,10 @@ func NewConsumerGroup(c *Config, l *zap.SugaredLogger) sarama.ConsumerGroup {
 	config.Consumer.MaxProcessingTime = c.ConsumerMaxProcessingTime_
 	config.Consumer.MaxWaitTime = c.ConsumerMaxWaitTime_
 
-	switch c.Offset {
-	case "oldest":
+	switch c.Offset_ {
+	case OffsetTypeOldest:
 		config.Consumer.Offsets.Initial = sarama.OffsetOldest
-	case "newest":
+	case OffsetTypeNewest:
 		config.Consumer.Offsets.Initial = sarama.OffsetNewest
 	default:
 		l.Fatalf("unexpected value of the offset field: %s", c.Offset)

@@ -109,7 +109,7 @@ func (c *Config) Configure(t *testing.T, _ *cfg.Config, _ string) {
 					ConsumerGroup:              "test-auth",
 					ClientID:                   "test-auth-in",
 					ChannelBufferSize:          256,
-					Offset:                     "newest",
+					Offset_:                    kafka_in.OffsetTypeNewest,
 					ConsumerMaxProcessingTime_: 200 * time.Millisecond,
 					ConsumerMaxWaitTime_:       250 * time.Millisecond,
 				}
