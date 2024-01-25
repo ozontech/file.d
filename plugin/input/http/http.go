@@ -159,6 +159,12 @@ type Config struct {
 	// >
 	// > Example: ```user_agent: '{{ index (index .request.Header "User-Agent") 0}}'```
 	Meta cfg.MetaTemplates `json:"meta"` // *
+
+	// > @3@4@5@6
+	// >
+	// > CORS config.
+	// > See CORSConfig for details.
+	CORS CORSConfig `json:"cors" child:"true"` // *
 }
 
 type AuthStrategy byte
@@ -189,6 +195,12 @@ type AuthConfig struct {
 	// > If the `strategy` is bearer, then the key is the name, the value is the Bearer token.
 	// > Key uses in the http_input_total metric.
 	Secrets map[string]string `json:"secrets"` // *
+}
+
+type CORSConfig struct {
+	AllowedOrigins []string `json:"allowed_origins"`
+	AllowedHeaders []string `json:"allowed_headers"`
+	ExposedHeaders []string `json:"exposed_headers"`
 }
 
 func init() {
@@ -376,6 +388,34 @@ func (p *Plugin) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *Plugin) serveBulk(w http.ResponseWriter, r *http.Request, meta metadata.MetaData) {
+	if len(p.config.CORS.AllowedOrigins) > 0 {
+		// TODO: current origin
+		w.Header().Set(
+			"Access-Control-Allow-Origins",
+			strings.Join(p.config.CORS.AllowedOrigins, ","),
+		)
+	}
+
+	if len(p.config.CORS.AllowedHeaders) > 0 {
+		w.Header().Set(
+			"Access-Control-Allow-Headers",
+			strings.Join(p.config.CORS.AllowedHeaders, ","),
+		)
+	}
+
+	if len(p.config.CORS.ExposedHeaders) > 0 {
+		w.Header().Set(
+			"Access-Control-Exposed-Headers",
+			strings.Join(p.config.CORS.ExposedHeaders, ","),
+		)
+	}
+
+	w.Header().Set("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
+
+	if r.Method == http.MethodOptions {
+		return
+	}
+
 	if r.Method != http.MethodPost {
 		http.Error(w, "", http.StatusMethodNotAllowed)
 		return

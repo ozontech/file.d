@@ -103,6 +103,13 @@ Example: ```user_agent: '{{ index (index .request.Header "User-Agent") 0}}'```
 
 <br>
 
+**`cors`** *`CORSConfig`* 
+
+CORS config.
+See CORSConfig for details.
+
+<br>
+
 **`header`** *`string`* *`default=Authorization`* 
 
 Override default Authorization header
