@@ -1,0 +1,6 @@
+pipelines:
+  kafka_auth:
+    input:
+      type: fake
+    output:
+      type: devnull

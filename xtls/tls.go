@@ -113,6 +113,10 @@ func (b ConfigBuilder) AppendCARoot(caCert string) error {
 	return nil
 }
 
+func (b ConfigBuilder) SetSkipVerify(val bool) {
+	b.cfg.InsecureSkipVerify = val
+}
+
 // Build returns built tls config.
 func (b ConfigBuilder) Build() *tls.Config {
 	return b.cfg
