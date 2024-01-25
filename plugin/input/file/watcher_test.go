@@ -34,7 +34,7 @@ func TestWatcher(t *testing.T) {
 			notifyFn := func(_ notify.Event, _ string, _ os.FileInfo) {
 				shouldCreate.Inc()
 			}
-			ctl := metric.New("test", prometheus.NewRegistry())
+			ctl := metric.NewCtl("test", prometheus.NewRegistry())
 			w := NewWatcher(
 				path,
 				tt.filenamePattern,
