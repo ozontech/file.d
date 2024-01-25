@@ -92,6 +92,12 @@ You can use 'warn' log level for logging authorizations.
 
 <br>
 
+**`header`** *`string`* *`default=Authorization`* 
+
+Override default Authorization header
+
+<br>
+
 **`strategy`** *`string`* *`default=disabled`* *`options=disabled|basic|bearer`* 
 
 AuthStrategy.Strategy describes strategy to use.
