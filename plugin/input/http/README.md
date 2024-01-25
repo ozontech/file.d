@@ -103,6 +103,12 @@ Example: ```user_agent: '{{ index (index .request.Header "User-Agent") 0}}'```
 
 <br>
 
+**`header`** *`string`* *`default=Authorization`* 
+
+Override default Authorization header
+
+<br>
+
 **`strategy`** *`string`* *`default=disabled`* *`options=disabled|basic|bearer`* 
 
 AuthStrategy.Strategy describes strategy to use.

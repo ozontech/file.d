@@ -174,6 +174,11 @@ const (
 type AuthConfig struct {
 	// > @3@4@5@6
 	// >
+	// > Override default Authorization header
+	Header string `json:"header" default:"Authorization"` // *
+
+	// > @3@4@5@6
+	// >
 	// > AuthStrategy.Strategy describes strategy to use.
 	Strategy  string `json:"strategy" default:"disabled" options:"disabled|basic|bearer"` // *
 	Strategy_ AuthStrategy
@@ -502,6 +507,9 @@ func (p *Plugin) auth(req *http.Request) (bool, string) {
 }
 
 func (p *Plugin) authBasic(req *http.Request) (string, bool) {
+	req.Header.Get(p.config.Auth.Header)
+	req.Header.Set("Authorization", req.Header.Get(p.config.Auth.Header))
+
 	username, password, ok := req.BasicAuth()
 	if !ok {
 		return username, false
@@ -510,7 +518,7 @@ func (p *Plugin) authBasic(req *http.Request) (string, bool) {
 }
 
 func (p *Plugin) authBearer(req *http.Request) (string, bool) {
-	authHeader := req.Header.Get("Authorization")
+	authHeader := req.Header.Get(p.config.Auth.Header)
 	const prefix = "Bearer "
 	if !strings.HasPrefix(authHeader, prefix) {
 		return "", false

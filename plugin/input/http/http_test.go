@@ -386,7 +386,7 @@ func TestPluginAuth(t *testing.T) {
 	newReq := func(authHeader string) *http.Request {
 		return &http.Request{
 			Header: map[string][]string{
-				"Authorization": {authHeader},
+				"Log-Authorization": {authHeader},
 			},
 		}
 	}
@@ -472,6 +472,7 @@ func TestPluginAuth(t *testing.T) {
 			conf := &Config{
 				Auth: AuthConfig{
 					Strategy: tc.Strategy,
+					Header:   "Log-Authorization",
 					Secrets:  tc.Secrets,
 				},
 				Address: "off",
