@@ -10,6 +10,8 @@ import (
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/xscram"
+	"github.com/ozontech/file.d/xtls"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
 )
@@ -76,6 +78,11 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
+	// > Kafka client ID.
+	ClientID string `json:"client_id" default:"file-d"` // *
+
+	// > @3@4@5@6
+	// >
 	// > The number of unprocessed messages in the buffer that are loaded in the background from kafka.
 	ChannelBufferSize int `json:"channel_buffer_size" default:"256"` // *
 
@@ -97,6 +104,41 @@ type Config struct {
 	// > The maximum amount of time the broker will wait for Consumer.Fetch.Min bytes to become available before it returns fewer than that anyways.
 	ConsumerMaxWaitTime  cfg.Duration `json:"consumer_max_wait_time" default:"250ms" parse:"duration"` // *
 	ConsumerMaxWaitTime_ time.Duration
+
+	// > @3@4@5@6
+	// >
+	// > If set, the plugin will use SASL authentications mechanism.
+	SaslEnabled bool `json:"is_sasl_enabled" default:"false"` // *
+
+	// > @3@4@5@6
+	// >
+	// > SASL mechanism to use.
+	SaslMechanism string `json:"sasl_mechanism" default:"SCRAM-SHA-512" options:"PLAIN|SCRAM-SHA-256|SCRAM-SHA-512"` // *
+
+	// > @3@4@5@6
+	// >
+	// > SASL username.
+	SaslUsername string `json:"sasl_username" default:"user"` // *
+
+	// > @3@4@5@6
+	// >
+	// > SASL password.
+	SaslPassword string `json:"sasl_password" default:"password"` // *
+
+	// > @3@4@5@6
+	// >
+	// > If set, the plugin will use SSL/TLS connections method.
+	SslEnabled bool `json:"is_ssl_enabled" default:"false"` // *
+
+	// > @3@4@5@6
+	// >
+	// > If set, the plugin will skip SSL/TLS verification.
+	SslSkipVerify bool `json:"ssl_skip_verify" default:"false"` // *
+
+	// > @3@4@5@6
+	// >
+	// > Path or content of a PEM-encoded CA file.
+	SslPem string `json:"pem_file" default:"/file.d/certs"` // *
 }
 
 func init() {
@@ -123,7 +165,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 
 	ctx, cancel := context.WithCancel(context.Background())
 	p.cancel = cancel
-	p.consumerGroup = p.newConsumerGroup()
+	p.consumerGroup = NewConsumerGroup(p.config, p.logger)
 	p.controller.UseSpread()
 	p.controller.DisableStreams()
 
@@ -165,26 +207,57 @@ func (p *Plugin) Commit(event *pipeline.Event) {
 	session.MarkOffset(p.config.Topics[index], partition, event.Offset+1, "")
 }
 
-func (p *Plugin) newConsumerGroup() sarama.ConsumerGroup {
+func NewConsumerGroup(c *Config, l *zap.SugaredLogger) sarama.ConsumerGroup {
 	config := sarama.NewConfig()
+	config.ClientID = c.ClientID
+
+	// kafka auth sasl
+	if c.SaslEnabled {
+		config.Net.SASL.Enable = true
+
+		config.Net.SASL.User = c.SaslUsername
+		config.Net.SASL.Password = c.SaslPassword
+
+		config.Net.SASL.Mechanism = sarama.SASLMechanism(c.SaslMechanism)
+		switch config.Net.SASL.Mechanism {
+		case sarama.SASLTypeSCRAMSHA256:
+			config.Net.SASL.SCRAMClientGeneratorFunc = func() sarama.SCRAMClient { return xscram.NewClient(xscram.SHA256) }
+		case sarama.SASLTypeSCRAMSHA512:
+			config.Net.SASL.SCRAMClientGeneratorFunc = func() sarama.SCRAMClient { return xscram.NewClient(xscram.SHA512) }
+		}
+	}
+
+	// kafka connect via SSL with PEM
+	if c.SslEnabled {
+		config.Net.TLS.Enable = true
+
+		tlsCfg := xtls.NewConfigBuilder()
+		if err := tlsCfg.AppendCARoot(c.SslPem); err != nil {
+			l.Fatalf("can't load cert: %s", err.Error())
+		}
+		tlsCfg.SetSkipVerify(c.SslSkipVerify)
+
+		config.Net.TLS.Config = tlsCfg.Build()
+	}
+
 	config.Consumer.Group.Rebalance.Strategy = sarama.BalanceStrategyRoundRobin
 	config.Version = sarama.V0_10_2_0
-	config.ChannelBufferSize = p.config.ChannelBufferSize
-	config.Consumer.MaxProcessingTime = p.config.ConsumerMaxProcessingTime_
-	config.Consumer.MaxWaitTime = p.config.ConsumerMaxWaitTime_
+	config.ChannelBufferSize = c.ChannelBufferSize
+	config.Consumer.MaxProcessingTime = c.ConsumerMaxProcessingTime_
+	config.Consumer.MaxWaitTime = c.ConsumerMaxWaitTime_
 
-	switch p.config.Offset {
+	switch c.Offset {
 	case "oldest":
 		config.Consumer.Offsets.Initial = sarama.OffsetOldest
 	case "newest":
 		config.Consumer.Offsets.Initial = sarama.OffsetNewest
 	default:
-		p.logger.Fatalf("unexpected value of the offset field: %s", p.config.Offset)
+		l.Fatalf("unexpected value of the offset field: %s", c.Offset)
 	}
 
-	consumerGroup, err := sarama.NewConsumerGroup(p.config.Brokers, p.config.ConsumerGroup, config)
+	consumerGroup, err := sarama.NewConsumerGroup(c.Brokers, c.ConsumerGroup, config)
 	if err != nil {
-		p.logger.Fatalf("can't create kafka consumer: %s", err.Error())
+		l.Fatalf("can't create kafka consumer: %s", err.Error())
 	}
 
 	return consumerGroup

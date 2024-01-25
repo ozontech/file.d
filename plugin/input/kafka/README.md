@@ -43,6 +43,12 @@ The name of consumer group to use.
 
 <br>
 
+**`client_id`** *`string`* *`default=file-d`* 
+
+Kafka client ID.
+
+<br>
+
 **`channel_buffer_size`** *`int`* *`default=256`* 
 
 The number of unprocessed messages in the buffer that are loaded in the background from kafka.
@@ -66,6 +72,48 @@ The maximum amount of time the consumer expects a message takes to process for t
 **`consumer_max_wait_time`** *`cfg.Duration`* *`default=250ms`* 
 
 The maximum amount of time the broker will wait for Consumer.Fetch.Min bytes to become available before it returns fewer than that anyways.
+
+<br>
+
+**`is_sasl_enabled`** *`bool`* *`default=false`* 
+
+If set, the plugin will use SASL authentications mechanism.
+
+<br>
+
+**`sasl_mechanism`** *`string`* *`default=SCRAM-SHA-512`* *`options=PLAIN|SCRAM-SHA-256|SCRAM-SHA-512`* 
+
+SASL mechanism to use.
+
+<br>
+
+**`sasl_username`** *`string`* *`default=user`* 
+
+SASL username.
+
+<br>
+
+**`sasl_password`** *`string`* *`default=password`* 
+
+SASL password.
+
+<br>
+
+**`is_ssl_enabled`** *`bool`* *`default=false`* 
+
+If set, the plugin will use SSL/TLS connections method.
+
+<br>
+
+**`ssl_skip_verify`** *`bool`* *`default=false`* 
+
+If set, the plugin will skip SSL/TLS verification.
+
+<br>
+
+**`pem_file`** *`string`* *`default=/file.d/certs`* 
+
+Path or content of a PEM-encoded CA file.
 
 <br>
 
