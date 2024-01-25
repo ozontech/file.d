@@ -77,6 +77,14 @@ type E2ETest struct {
 func TestE2EStabilityWorkCase(t *testing.T) {
 	testsList := []E2ETest{
 		{
+			name: "kafka_auth",
+			e2eTest: &kafka_auth.Config{
+				Brokers: []string{"localhost:9093"},
+				Topic:   "my-topic",
+			},
+			cfgPath: "./kafka_auth/config.yml",
+		},
+		{
 			name: "file_file",
 			e2eTest: &file_file.Config{
 				Count:   10,
@@ -121,14 +129,6 @@ func TestE2EStabilityWorkCase(t *testing.T) {
 			name:    "file_clickhouse",
 			e2eTest: &file_clickhouse.Config{},
 			cfgPath: "./file_clickhouse/config.yml",
-		},
-		{
-			name: "kafka_auth",
-			e2eTest: &kafka_auth.Config{
-				Brokers: []string{"localhost:9093"},
-				Topic:   "my-topic",
-			},
-			cfgPath: "./kafka_auth/config.yml",
 		},
 	}
 
