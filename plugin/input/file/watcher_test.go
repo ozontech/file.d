@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ozontech/file.d/metric"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/rjeczalik/notify"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/atomic"
@@ -32,7 +34,16 @@ func TestWatcher(t *testing.T) {
 			notifyFn := func(_ notify.Event, _ string, _ os.FileInfo) {
 				shouldCreate.Inc()
 			}
-			w := NewWatcher(path, tt.filenamePattern, tt.dirPattern, notifyFn, false, zap.L().Sugar())
+			ctl := metric.New("test", prometheus.NewRegistry())
+			w := NewWatcher(
+				path,
+				tt.filenamePattern,
+				tt.dirPattern,
+				notifyFn,
+				false,
+				ctl.RegisterGauge("worker", "help_test"),
+				zap.L().Sugar(),
+			)
 			w.start()
 			defer w.stop()
 

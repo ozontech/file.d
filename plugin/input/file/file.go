@@ -58,6 +58,7 @@ type Plugin struct {
 	possibleOffsetCorruptionMetric    prometheus.Counter
 	alreadyWrittenEventsSkippedMetric prometheus.Counter
 	errorOpenFileMetric               prometheus.Counter
+	notifyChannelLengthMetric         prometheus.Gauge
 }
 
 type persistenceMode int
@@ -194,7 +195,15 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 
 	p.config.OffsetsFileTmp = p.config.OffsetsFile + ".atomic"
 
-	p.jobProvider = NewJobProvider(p.config, p.possibleOffsetCorruptionMetric, p.errorOpenFileMetric, p.logger)
+	p.jobProvider = NewJobProvider(
+		p.config,
+		newMetricCollection(
+			p.possibleOffsetCorruptionMetric,
+			p.errorOpenFileMetric,
+			p.notifyChannelLengthMetric,
+		),
+		p.logger,
+	)
 
 	ResetterRegistryInstance.AddResetter(params.PipelineName, p)
 
@@ -206,6 +215,7 @@ func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 	p.possibleOffsetCorruptionMetric = ctl.RegisterCounter("input_file_possible_offset_corruptions_total", "Total number of possible offset corruptions")
 	p.alreadyWrittenEventsSkippedMetric = ctl.RegisterCounter("input_file_already_written_event_skipped_total", "Total number of skipped events that was already written")
 	p.errorOpenFileMetric = ctl.RegisterCounter("input_file_open_error_total", "Total number of file opening errors")
+	p.notifyChannelLengthMetric = ctl.RegisterGauge("input_file_watcher_channel_length", "Number of unprocessed notify events")
 }
 
 func (p *Plugin) startWorkers() {
