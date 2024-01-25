@@ -94,4 +94,11 @@ The list of the event fields to convert.
 
 <br>
 
+**`replace_non_graphic`** *`bool`* *`default=false`* 
+
+If set, the plugin will replace all non-graphic bytes to unicode replacement char (�).
+> It works only with unicode (`\u...` and `\U...`) encoded bytes.
+
+<br>
+
 <br>*Generated using [__insane-doc__](https://github.com/vitkovskii/insane-doc)*

@@ -119,6 +119,15 @@ func TestConvertUTF8Bytes(t *testing.T) {
 			in:         `{"obj":{"field":"$\U00000048\U00000065\U0000006C\U0000006C\U0000006F\U0000002C\U0000\U00000066\U00000069\U0000006C\U00000065\UFFFFFFF\U00000064!"}}`,
 			wantFields: []string{`$Hello,\U0000file\UFFFFFFFd!`},
 		},
+		{
+			name: "non_graphic_char",
+			config: &Config{
+				Fields:            []cfg.FieldSelector{"obj.field"},
+				ReplaceNonGraphic: true,
+			},
+			in:         `{"obj":{"field":"{\"version\":\"1.0.18.16 6\\t\\u0001ProductVersion\"}"}}`,
+			wantFields: []string{`{"version":"1.0.18.16 6\t�ProductVersion"}`},
+		},
 	}
 	for _, tt := range cases {
 		tt := tt
