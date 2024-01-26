@@ -52,3 +52,36 @@ func TestPlugin_Do(t *testing.T) {
 	require.Equal(t, children, len(splitted))
 	require.Equal(t, []string{"go", "rust", "c++", "python", "ruby", "js"}, splitted)
 }
+
+func TestPlugin_DoArray(t *testing.T) {
+	config := test.NewConfig(&Config{Field: ""}, nil)
+	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, config, pipeline.MatchModeAnd, nil, false))
+	wg := &sync.WaitGroup{}
+
+	const children = 3
+	const parents = 1
+	const total = children + parents
+	wg.Add(total)
+
+	splitted := make([]string, 0)
+	output.SetOutFn(func(e *pipeline.Event) {
+		defer wg.Done()
+		if e.IsChildParentKind() {
+			return
+		}
+
+		splitted = append(splitted, strings.Clone(e.Root.Dig("message").AsString()))
+	})
+
+	input.In(0, "test.log", 0, []byte(`[
+		{ "message": "go" }, 
+		{ "message": "rust" },
+		{ "message": "c++" }
+	]`))
+
+	wg.Wait()
+	p.Stop()
+
+	require.Equal(t, children, len(splitted))
+	require.Equal(t, []string{"go", "rust", "c++"}, splitted)
+}
