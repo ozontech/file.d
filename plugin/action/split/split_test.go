@@ -63,6 +63,8 @@ func TestPlugin_DoArray(t *testing.T) {
 	const total = children + parents
 	wg.Add(total)
 
+	sourceName := "test.log"
+
 	splitted := make([]string, 0)
 	output.SetOutFn(func(e *pipeline.Event) {
 		defer wg.Done()
@@ -70,10 +72,14 @@ func TestPlugin_DoArray(t *testing.T) {
 			return
 		}
 
+		if sourceName != e.SourceName {
+			return
+		}
+
 		splitted = append(splitted, strings.Clone(e.Root.Dig("message").AsString()))
 	})
 
-	input.In(0, "test.log", 0, []byte(`[
+	input.In(0, sourceName, 0, []byte(`[
 		{ "message": "go" }, 
 		{ "message": "rust" },
 		{ "message": "c++" }
