@@ -585,20 +585,26 @@ func (p *Plugin) putGzipReader(reader *gzip.Reader) {
 
 func getUserIP(r *http.Request) net.IP {
 	var userIP string
+
 	switch {
-	case r.Header.Get("CF-Connecting-IP") != "":
+	case len(r.Header.Get("CF-Connecting-IP")) > 1:
 		userIP = r.Header.Get("CF-Connecting-IP")
-	case r.Header.Get("X-Forwarded-For") != "":
+	case len(r.Header.Get("X-Forwarded-For")) > 1:
 		userIP = r.Header.Get("X-Forwarded-For")
-	case r.Header.Get("X-Real-IP") != "":
+	case len(r.Header.Get("X-Real-IP")) > 1:
 		userIP = r.Header.Get("X-Real-IP")
 	default:
 		userIP = r.RemoteAddr
-		if strings.Contains(userIP, ":") {
-			return net.ParseIP(strings.Split(userIP, ":")[0])
-		}
 	}
-	return net.ParseIP(userIP)
+
+	if userIP != "" {
+		if strings.Contains(userIP, ":") {
+			userIP = strings.Split(userIP, ":")[0]
+		}
+		return net.ParseIP(userIP)
+	} else {
+		return nil
+	}
 }
 
 type metaInformation struct {
