@@ -14,6 +14,7 @@ import (
 	"github.com/ozontech/file.d/e2e/file_file"
 	"github.com/ozontech/file.d/e2e/http_file"
 	"github.com/ozontech/file.d/e2e/join_throttle"
+	"github.com/ozontech/file.d/e2e/kafka_auth"
 	"github.com/ozontech/file.d/e2e/kafka_file"
 	"github.com/ozontech/file.d/e2e/split_join"
 	"github.com/ozontech/file.d/fd"
@@ -75,6 +76,14 @@ type E2ETest struct {
 
 func TestE2EStabilityWorkCase(t *testing.T) {
 	testsList := []E2ETest{
+		{
+			name: "kafka_auth",
+			e2eTest: &kafka_auth.Config{
+				Brokers: []string{"localhost:9093"},
+				Topic:   "my-topic",
+			},
+			cfgPath: "./kafka_auth/config.yml",
+		},
 		{
 			name: "file_file",
 			e2eTest: &file_file.Config{

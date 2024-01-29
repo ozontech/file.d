@@ -56,6 +56,11 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
+	// > Kafka client ID.
+	ClientID string `json:"client_id" default:"file-d"` // *
+
+	// > @3@4@5@6
+	// >
 	// > If set, the plugin will use topic name from the event field.
 	UseTopicField bool `json:"use_topic_field" default:"false"` // *
 
@@ -101,29 +106,28 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
-	// > If set, the plugin will use SASL authentications mechanism.
+	// > SASL username.
 	SaslUsername string `json:"sasl_username" default:"user"` // *
 
 	// > @3@4@5@6
 	// >
-	// > If set, the plugin will use SASL authentications mechanism.
+	// > SASL password.
 	SaslPassword string `json:"sasl_password" default:"password"` // *
 
 	// > @3@4@5@6
 	// >
-	// > If set, the plugin will use SSL connections method.
-	SaslSslEnabled bool `json:"is_ssl_enabled" default:"false"` // *
+	// > If set, the plugin will use SSL/TLS connections method.
+	SslEnabled bool `json:"is_ssl_enabled" default:"false"` // *
 
 	// > @3@4@5@6
 	// >
-	// > If set, the plugin will use skip SSL verification.
-	SaslSslSkipVerify bool `json:"ssl_skip_verify" default:"false"` // *
+	// > If set, the plugin will skip SSL/TLS verification.
+	SslSkipVerify bool `json:"ssl_skip_verify" default:"false"` // *
 
 	// > @3@4@5@6
 	// >
-	// > If SaslSslEnabled, the plugin will use path to the PEM certificate.
-	SaslPem string `json:"pem_file" default:"/file.d/certs"` // *
-
+	// > Path or content of a PEM-encoded CA file.
+	SslPem string `json:"pem_file" default:"/file.d/certs"` // *
 }
 
 func init() {
@@ -146,7 +150,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 
 	p.logger.Infof("workers count=%d, batch size=%d", p.config.WorkersCount_, p.config.BatchSize_)
 
-	p.producer = p.newProducer()
+	p.producer = NewProducer(p.config, p.logger)
 	p.batcher = pipeline.NewBatcher(pipeline.BatcherOptions{
 		PipelineName:   params.PipelineName,
 		OutputType:     outPluginType,
@@ -226,42 +230,50 @@ func (p *Plugin) Stop() {
 	}
 }
 
-func (p *Plugin) newProducer() sarama.SyncProducer {
+func NewProducer(c *Config, l *zap.SugaredLogger) sarama.SyncProducer {
 	config := sarama.NewConfig()
-	config.ClientID = "sasl_scram_client"
+	config.ClientID = c.ClientID
 	// kafka auth sasl
-	if p.config.SaslEnabled {
+	if c.SaslEnabled {
 		config.Net.SASL.Enable = true
-		config.Net.SASL.Handshake = true
-		config.Net.SASL.User = p.config.SaslUsername
-		config.Net.SASL.Password = p.config.SaslPassword
-		config.Net.SASL.SCRAMClientGeneratorFunc = func() sarama.SCRAMClient { return &XDGSCRAMClient{HashGeneratorFcn: SHA512} }
-		config.Net.SASL.Mechanism = sarama.SASLMechanism(p.config.SaslMechanism)
+
+		config.Net.SASL.User = c.SaslUsername
+		config.Net.SASL.Password = c.SaslPassword
+
+		config.Net.SASL.Mechanism = sarama.SASLMechanism(c.SaslMechanism)
+		switch config.Net.SASL.Mechanism {
+		case sarama.SASLTypeSCRAMSHA256:
+			config.Net.SASL.SCRAMClientGeneratorFunc = func() sarama.SCRAMClient { return NewSCRAMClient(SHA256) }
+		case sarama.SASLTypeSCRAMSHA512:
+			config.Net.SASL.SCRAMClientGeneratorFunc = func() sarama.SCRAMClient { return NewSCRAMClient(SHA512) }
+		}
 	}
 
 	// kafka connect via SSL with PEM
-	if p.config.SaslSslEnabled {
+	if c.SslEnabled {
 		config.Net.TLS.Enable = true
 
 		tlsCfg := xtls.NewConfigBuilder()
-		if err := tlsCfg.AppendCARoot(p.config.SaslPem); err != nil {
-			p.logger.Fatalf("can't load cert: %s", err.Error())
+		if err := tlsCfg.AppendCARoot(c.SslPem); err != nil {
+			l.Fatalf("can't load cert: %s", err.Error())
 		}
+		tlsCfg.SetSkipVerify(c.SslSkipVerify)
+
 		config.Net.TLS.Config = tlsCfg.Build()
 	}
 
 	config.Producer.Partitioner = sarama.NewRoundRobinPartitioner
-	config.Producer.Flush.Messages = p.config.BatchSize_
+	config.Producer.Flush.Messages = c.BatchSize_
 	// kafka plugin itself cares for flush frequency, but we are using batcher so disable it.
 	config.Producer.Flush.Frequency = time.Millisecond
 	config.Producer.Return.Errors = true
 	config.Producer.Return.Successes = true
 
-	producer, err := sarama.NewSyncProducer(p.config.Brokers, config)
+	producer, err := sarama.NewSyncProducer(c.Brokers, config)
 	if err != nil {
-		p.logger.Fatalf("can't create producer: %s", err.Error())
+		l.Fatalf("can't create producer: %s", err.Error())
 	}
 
-	p.logger.Infof("producer created with brokers %q", strings.Join(p.config.Brokers, ","))
+	l.Infof("producer created with brokers %q", strings.Join(c.Brokers, ","))
 	return producer
 }
