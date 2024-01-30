@@ -2,18 +2,24 @@ package kafka_auth
 
 import (
 	"testing"
+	"time"
 
 	"github.com/ozontech/file.d/cfg"
-	"github.com/ozontech/file.d/plugin/output/kafka"
+	kafka_in "github.com/ozontech/file.d/plugin/input/kafka"
+	kafka_out "github.com/ozontech/file.d/plugin/output/kafka"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
 
+const (
+	outTopic = "test_out_topic"
+	inTopic  = "test_in_topic"
+)
+
 // Config for kafka_auth test
 type Config struct {
 	Brokers []string
-	Topic   string
 }
 
 func (c *Config) Configure(t *testing.T, _ *cfg.Config, _ string) {
@@ -77,29 +83,55 @@ func (c *Config) Configure(t *testing.T, _ *cfg.Config, _ string) {
 	r := require.New(t)
 
 	for _, tt := range cases {
-		config := &kafka.Config{
-			Brokers:      c.Brokers,
-			DefaultTopic: c.Topic,
-			BatchSize_:   10,
-			ClientID:     "test-auth",
+		testFns := []func(){
+			func() {
+				config := &kafka_out.Config{
+					Brokers:      c.Brokers,
+					DefaultTopic: outTopic,
+					ClientID:     "test-auth-out",
+					BatchSize_:   10,
+				}
+				if tt.sasl.Enabled {
+					config.SaslEnabled = true
+					config.SaslMechanism = tt.sasl.Mechanism
+					config.SaslUsername = tt.sasl.Username
+					config.SaslPassword = tt.sasl.Password
+				}
+
+				kafka_out.NewProducer(config,
+					zap.NewNop().WithOptions(zap.WithFatalHook(zapcore.WriteThenPanic)).Sugar(),
+				)
+			},
+			func() {
+				config := &kafka_in.Config{
+					Brokers:                    c.Brokers,
+					Topics:                     []string{inTopic},
+					ConsumerGroup:              "test-auth",
+					ClientID:                   "test-auth-in",
+					ChannelBufferSize:          256,
+					Offset_:                    kafka_in.OffsetTypeNewest,
+					ConsumerMaxProcessingTime_: 200 * time.Millisecond,
+					ConsumerMaxWaitTime_:       250 * time.Millisecond,
+				}
+				if tt.sasl.Enabled {
+					config.SaslEnabled = true
+					config.SaslMechanism = tt.sasl.Mechanism
+					config.SaslUsername = tt.sasl.Username
+					config.SaslPassword = tt.sasl.Password
+				}
+
+				kafka_in.NewConsumerGroup(config,
+					zap.NewNop().WithOptions(zap.WithFatalHook(zapcore.WriteThenPanic)).Sugar(),
+				)
+			},
 		}
 
-		if tt.sasl.Enabled {
-			config.SaslEnabled = true
-			config.SaslMechanism = tt.sasl.Mechanism
-			config.SaslUsername = tt.sasl.Username
-			config.SaslPassword = tt.sasl.Password
-		}
-
-		panicTestFn := func() {
-			kafka.NewProducer(config,
-				zap.NewNop().WithOptions(zap.WithFatalHook(zapcore.WriteThenPanic)).Sugar(),
-			)
-		}
-		if tt.authorized {
-			r.NotPanics(panicTestFn, "func shouldn't panic")
-		} else {
-			r.Panics(panicTestFn, "func should panic")
+		for _, fn := range testFns {
+			if tt.authorized {
+				r.NotPanics(fn, "func shouldn't panic")
+			} else {
+				r.Panics(fn, "func should panic")
+			}
 		}
 	}
 }

@@ -10,6 +10,7 @@ import (
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/xscram"
 	"github.com/ozontech/file.d/xtls"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
@@ -233,6 +234,7 @@ func (p *Plugin) Stop() {
 func NewProducer(c *Config, l *zap.SugaredLogger) sarama.SyncProducer {
 	config := sarama.NewConfig()
 	config.ClientID = c.ClientID
+
 	// kafka auth sasl
 	if c.SaslEnabled {
 		config.Net.SASL.Enable = true
@@ -243,9 +245,9 @@ func NewProducer(c *Config, l *zap.SugaredLogger) sarama.SyncProducer {
 		config.Net.SASL.Mechanism = sarama.SASLMechanism(c.SaslMechanism)
 		switch config.Net.SASL.Mechanism {
 		case sarama.SASLTypeSCRAMSHA256:
-			config.Net.SASL.SCRAMClientGeneratorFunc = func() sarama.SCRAMClient { return NewSCRAMClient(SHA256) }
+			config.Net.SASL.SCRAMClientGeneratorFunc = func() sarama.SCRAMClient { return xscram.NewClient(xscram.SHA256) }
 		case sarama.SASLTypeSCRAMSHA512:
-			config.Net.SASL.SCRAMClientGeneratorFunc = func() sarama.SCRAMClient { return NewSCRAMClient(SHA512) }
+			config.Net.SASL.SCRAMClientGeneratorFunc = func() sarama.SCRAMClient { return xscram.NewClient(xscram.SHA512) }
 		}
 	}
 
