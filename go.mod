@@ -15,6 +15,7 @@ require (
 	github.com/bitly/go-simplejson v0.5.1
 	github.com/cespare/xxhash/v2 v2.2.0
 	github.com/cenkalti/backoff/v3 v3.0.0
+	github.com/cenkalti/backoff/v4 v4.2.1
 	github.com/euank/go-kmsg-parser v2.0.0+incompatible
 	github.com/go-redis/redis v6.15.9+incompatible
 	github.com/golang/mock v1.6.0

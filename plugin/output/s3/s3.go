@@ -13,7 +13,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cenkalti/backoff/v3"
+	"github.com/cenkalti/backoff/v4"
 	"github.com/minio/minio-go"
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
