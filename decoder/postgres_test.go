@@ -3,8 +3,8 @@ package decoder
 import (
 	"testing"
 
-	insaneJSON "github.com/ozontech/insane-json"
 	"github.com/stretchr/testify/assert"
+	insaneJSON "github.com/vitkovskii/insane-json"
 )
 
 func TestPostgres(t *testing.T) {

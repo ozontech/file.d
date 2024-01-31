@@ -9,8 +9,8 @@ import (
 
 	"github.com/Shopify/sarama"
 	"github.com/ozontech/file.d/pipeline"
-	insaneJSON "github.com/ozontech/insane-json"
 	"github.com/stretchr/testify/require"
+	insaneJSON "github.com/vitkovskii/insane-json"
 	"go.uber.org/zap/zaptest"
 )
 

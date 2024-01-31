@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	insaneJSON "github.com/ozontech/insane-json"
+	insaneJSON "github.com/vitkovskii/insane-json"
 )
 
 type Config []string

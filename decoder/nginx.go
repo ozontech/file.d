@@ -3,7 +3,7 @@ package decoder
 import (
 	"errors"
 
-	insaneJSON "github.com/ozontech/insane-json"
+	insaneJSON "github.com/vitkovskii/insane-json"
 )
 
 func spaceSplit(b []byte, limit int) []int {
