@@ -6,7 +6,9 @@ import (
 
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
+	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 /*{ introduction
@@ -15,7 +17,8 @@ It is only applicable for input plugins k8s and file.
 }*/
 
 type Plugin struct {
-	config *Config
+	config                *Config
+	eventsProcessedMetric *prometheus.CounterVec
 }
 
 // ! config-params
@@ -44,8 +47,13 @@ func factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 	return &Plugin{}, &Config{}
 }
 
-func (p *Plugin) Start(config pipeline.AnyConfig, _ *pipeline.ActionPluginParams) {
+func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginParams) {
 	p.config = config.(*Config)
+	p.registerMetrics(params.MetricCtl)
+}
+
+func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
+	p.eventsProcessedMetric = ctl.RegisterCounterVec("events_processed_total", "How many events processed", "login")
 }
 
 func (p *Plugin) Stop() {
@@ -63,9 +71,12 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 
 	infoStr, _ := base64.StdEncoding.DecodeString(sourceInfo[1])
 	info := strings.Split(string(infoStr), "_")
+	login := info[0]
 
-	pipeline.CreateNestedField(event.Root, []string{"login"}).MutateToString(info[0])
+	pipeline.CreateNestedField(event.Root, []string{"login"}).MutateToString(login)
 	pipeline.CreateNestedField(event.Root, []string{"remote_ip"}).MutateToString(info[1])
+
+	p.eventsProcessedMetric.With(prometheus.Labels{"login": login}).Inc()
 
 	return pipeline.ActionPass
 }
