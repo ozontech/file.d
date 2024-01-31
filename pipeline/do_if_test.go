@@ -6,9 +6,9 @@ import (
 	"slices"
 	"testing"
 
-	insaneJSON "github.com/ozontech/insane-json"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	insaneJSON "github.com/vitkovskii/insane-json"
 )
 
 type treeNode struct {

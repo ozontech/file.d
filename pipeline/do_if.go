@@ -8,7 +8,7 @@ import (
 	"slices"
 
 	"github.com/ozontech/file.d/cfg"
-	insaneJSON "github.com/ozontech/insane-json"
+	insaneJSON "github.com/vitkovskii/insane-json"
 )
 
 // ! do-if-node
