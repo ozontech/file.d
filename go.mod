@@ -24,12 +24,12 @@ require (
 	github.com/jackc/pgx/v4 v4.18.1
 	github.com/klauspost/compress v1.16.7
 	github.com/minio/minio-go v6.0.14+incompatible
+	github.com/ozontech/insane-json v0.1.8
 	github.com/prometheus/client_golang v1.16.0
 	github.com/rjeczalik/notify v0.9.3
 	github.com/satori/go.uuid v1.2.0
 	github.com/stretchr/testify v1.8.4
 	github.com/valyala/fasthttp v1.48.0
-	github.com/vitkovskii/insane-json v0.1.7
 	github.com/xdg-go/scram v1.1.2
 	go.uber.org/atomic v1.11.0
 	go.uber.org/automaxprocs v1.5.3
