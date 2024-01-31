@@ -30,7 +30,7 @@ func NewWatcher(
 	dirPattern string,
 	notifyFn notifyFn,
 	shouldWatchWrites bool,
-	notifyChannelLengthMetric *prometheus.GaugeVec,
+	notifyChannelLengthMetric prometheus.Gauge,
 	logger *zap.SugaredLogger,
 ) *watcher {
 	return &watcher{
@@ -39,7 +39,7 @@ func NewWatcher(
 		dirPattern:                dirPattern,
 		notifyFn:                  notifyFn,
 		shouldWatchWrites:         shouldWatchWrites,
-		notifyChannelLengthMetric: notifyChannelLengthMetric.WithLabelValues(),
+		notifyChannelLengthMetric: notifyChannelLengthMetric,
 		logger:                    logger,
 	}
 }

@@ -122,6 +122,7 @@ func NewPipeline(actions []*pipeline.ActionPluginStaticInfo, pipelineOpts ...str
 		AvgEventSize:        2048,
 		StreamField:         "stream",
 		Decoder:             "json",
+		MetricHoldDuration:  pipeline.DefaultMetricHoldDuration,
 	}
 
 	pName := "test_pipeline"
@@ -227,7 +228,7 @@ func newDefaultParams() pipeline.PluginDefaultParams {
 	return pipeline.PluginDefaultParams{
 		PipelineName:     "test_pipeline",
 		PipelineSettings: &pipeline.Settings{},
-		MetricCtl:        metric.New("test", prometheus.NewRegistry()),
+		MetricCtl:        metric.NewCtl("test", prometheus.NewRegistry()),
 	}
 }
 

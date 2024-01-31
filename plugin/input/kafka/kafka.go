@@ -53,9 +53,8 @@ type Plugin struct {
 	idByTopic     map[string]int
 
 	// plugin metrics
-
-	commitErrorsMetric  *prometheus.CounterVec
-	consumeErrorsMetric *prometheus.CounterVec
+	commitErrorsMetric  prometheus.Counter
+	consumeErrorsMetric prometheus.Counter
 }
 
 type OffsetType byte
@@ -190,7 +189,7 @@ func (p *Plugin) consume(ctx context.Context) {
 	for {
 		err := p.consumerGroup.Consume(ctx, p.config.Topics, p)
 		if err != nil {
-			p.consumeErrorsMetric.WithLabelValues().Inc()
+			p.consumeErrorsMetric.Inc()
 			p.logger.Errorf("can't consume from kafka: %s", err.Error())
 		}
 
@@ -207,7 +206,7 @@ func (p *Plugin) Stop() {
 func (p *Plugin) Commit(event *pipeline.Event) {
 	session := p.session
 	if session == nil {
-		p.commitErrorsMetric.WithLabelValues().Inc()
+		p.commitErrorsMetric.Inc()
 		p.logger.Errorf("no kafka consumer session for event commit")
 		return
 	}

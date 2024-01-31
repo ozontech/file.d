@@ -20,7 +20,7 @@ type Plugin struct {
 	re     *regexp.Regexp
 
 	// plugin metrics
-	eventNotMatchingPatternMetric *prometheus.CounterVec
+	eventNotMatchingPatternMetric prometheus.Counter
 }
 
 // ! config-params
@@ -73,7 +73,7 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	sm := p.re.FindSubmatch(jsonNode.AsBytes())
 
 	if len(sm) == 0 {
-		p.eventNotMatchingPatternMetric.WithLabelValues().Inc()
+		p.eventNotMatchingPatternMetric.Inc()
 		return pipeline.ActionPass
 	}
 

@@ -29,8 +29,9 @@ func TestInUnparsableMessages(t *testing.T) {
 	name := "invalid_json"
 	message := []byte("{wHo Is Json: YoU MeAn SoN oF JoHn???")
 	pipelineSettings := &pipeline.Settings{
-		Capacity: 5,
-		Decoder:  "json",
+		Capacity:           5,
+		Decoder:            "json",
+		MetricHoldDuration: pipeline.DefaultMetricHoldDuration,
 	}
 	offset := int64(666)
 	sourceID := pipeline.SourceID(3<<16 + int(10))
@@ -91,8 +92,9 @@ func TestInInvalidMessages(t *testing.T) {
 			name:    "empty_message",
 			message: []byte(""),
 			pipelineSettings: &pipeline.Settings{
-				Capacity: 5,
-				Decoder:  "json",
+				Capacity:           5,
+				Decoder:            "json",
+				MetricHoldDuration: pipeline.DefaultMetricHoldDuration,
 			},
 			offset:   int64(666),
 			sourceID: pipeline.SourceID(1<<16 + int(1)),
@@ -101,9 +103,10 @@ func TestInInvalidMessages(t *testing.T) {
 			name:    "too_long_message",
 			message: []byte("{\"value\":\"i'm longer than 1 byte\""),
 			pipelineSettings: &pipeline.Settings{
-				Capacity:     5,
-				Decoder:      "json",
-				MaxEventSize: 1,
+				Capacity:           5,
+				Decoder:            "json",
+				MaxEventSize:       1,
+				MetricHoldDuration: pipeline.DefaultMetricHoldDuration,
 			},
 			offset:   int64(666),
 			sourceID: pipeline.SourceID(2<<16 + int(3)),

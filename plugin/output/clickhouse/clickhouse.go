@@ -54,9 +54,8 @@ type Plugin struct {
 	requestID atomic.Int64
 
 	// plugin metrics
-
-	insertErrorsMetric *prometheus.CounterVec
-	queriesCountMetric *prometheus.CounterVec
+	insertErrorsMetric prometheus.Counter
+	queriesCountMetric prometheus.Counter
 }
 
 type Setting struct {
@@ -492,7 +491,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 		if err == nil {
 			break
 		}
-		p.insertErrorsMetric.WithLabelValues().Inc()
+		p.insertErrorsMetric.Inc()
 		time.Sleep(p.config.Retention_)
 		p.logger.Error("an attempt to insert a batch failed", zap.Error(err))
 	}
@@ -504,7 +503,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 }
 
 func (p *Plugin) do(clickhouse Clickhouse, queryInput proto.Input) error {
-	defer p.queriesCountMetric.WithLabelValues().Inc()
+	defer p.queriesCountMetric.Inc()
 
 	ctx, cancel := context.WithTimeout(p.ctx, p.config.InsertTimeout_)
 	defer cancel()

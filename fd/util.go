@@ -25,6 +25,7 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 	decoder := "auto"
 	isStrict := false
 	eventTimeout := pipeline.DefaultEventTimeout
+	metricHoldDuration := pipeline.DefaultMetricHoldDuration
 
 	if settings != nil {
 		val := settings.Get("capacity").MustInt()
@@ -85,6 +86,15 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 		antispamExceptions.Prepare()
 
 		isStrict = settings.Get("is_strict").MustBool()
+
+		str = settings.Get("metric_hold_duration").MustString()
+		if str != "" {
+			i, err := time.ParseDuration(str)
+			if err != nil {
+				logger.Fatalf("can't parse pipeline metric hold duration: %s", err.Error())
+			}
+			metricHoldDuration = i
+		}
 	}
 
 	return &pipeline.Settings{
@@ -98,6 +108,7 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 		EventTimeout:        eventTimeout,
 		StreamField:         streamField,
 		IsStrict:            isStrict,
+		MetricHoldDuration:  metricHoldDuration,
 	}
 }
 

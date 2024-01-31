@@ -51,8 +51,7 @@ type Plugin struct {
 	mu           *sync.Mutex
 
 	// plugin metrics
-
-	sendErrorMetric      *prometheus.CounterVec
+	sendErrorMetric      prometheus.Counter
 	indexingErrorsMetric prometheus.Counter
 }
 
@@ -235,7 +234,7 @@ func (p *Plugin) Out(event *pipeline.Event) {
 
 func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 	p.sendErrorMetric = ctl.RegisterCounter("output_elasticsearch_send_error", "Total elasticsearch send errors")
-	p.indexingErrorsMetric = ctl.RegisterCounter("output_elasticsearch_index_error", "Number of elasticsearch indexing errors").WithLabelValues()
+	p.indexingErrorsMetric = ctl.RegisterCounter("output_elasticsearch_index_error", "Number of elasticsearch indexing errors")
 }
 
 func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
@@ -258,7 +257,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 
 	for {
 		if err := p.send(data.outBuf); err != nil {
-			p.sendErrorMetric.WithLabelValues().Inc()
+			p.sendErrorMetric.Inc()
 			p.logger.Error("can't send to the elastic, will try other endpoint", zap.Error(err))
 		} else {
 			break

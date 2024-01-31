@@ -33,11 +33,11 @@ const (
 	DefaultEventTimeout        = time.Second * 30
 	DefaultFieldValue          = "not_set"
 	DefaultStreamName          = StreamName("not_set")
+	DefaultMetricHoldDuration  = time.Minute * 30
 
 	EventSeqIDError = uint64(0)
 
 	antispamUnbanIterations = 4
-	metricsGenInterval      = time.Hour
 )
 
 type finalizeFn = func(event *Event, notifyInput bool, backEvent bool)
@@ -87,16 +87,18 @@ type Pipeline struct {
 	inputInfo  *InputPluginInfo
 	antispamer *antispam.Antispammer
 
-	actionInfos  []*ActionPluginStaticInfo
-	Procs        []*processor
-	procCount    *atomic.Int32
-	activeProcs  *atomic.Int32
-	actionParams PluginDefaultParams
+	actionInfos   []*ActionPluginStaticInfo
+	actionMetrics actionMetrics
+	actionParams  PluginDefaultParams
+
+	Procs       []*processor
+	procCount   *atomic.Int32
+	activeProcs *atomic.Int32
 
 	output     OutputPlugin
 	outputInfo *OutputPluginInfo
 
-	metricsHolder *metricsHolder
+	metricHolder *metric.Holder
 
 	// some debugging stuff
 	logger          *zap.Logger
@@ -111,16 +113,15 @@ type Pipeline struct {
 	readOps      atomic.Int64
 
 	// all pipeline`s metrics
-
-	inUseEventsMetric          *prometheus.GaugeVec
-	eventPoolCapacityMetric    *prometheus.GaugeVec
-	inputEventsCountMetric     *prometheus.CounterVec
-	inputEventSizeMetric       *prometheus.CounterVec
-	outputEventsCountMetric    *prometheus.CounterVec
-	outputEventSizeMetric      *prometheus.CounterVec
-	readOpsEventsSizeMetric    *prometheus.CounterVec
-	wrongEventCRIFormatMetric  *prometheus.CounterVec
-	maxEventSizeExceededMetric *prometheus.CounterVec
+	inUseEventsMetric          prometheus.Gauge
+	eventPoolCapacityMetric    prometheus.Gauge
+	inputEventsCountMetric     prometheus.Counter
+	inputEventSizeMetric       prometheus.Counter
+	outputEventsCountMetric    prometheus.Counter
+	outputEventSizeMetric      prometheus.Counter
+	readOpsEventsSizeMetric    prometheus.Counter
+	wrongEventCRIFormatMetric  prometheus.Counter
+	maxEventSizeExceededMetric prometheus.Counter
 	eventPoolLatency           prometheus.Observer
 }
 
@@ -135,11 +136,12 @@ type Settings struct {
 	MaxEventSize        int
 	StreamField         string
 	IsStrict            bool
+	MetricHoldDuration  time.Duration
 }
 
 // New creates new pipeline. Consider using `SetupHTTPHandlers` next.
 func New(name string, settings *Settings, registry *prometheus.Registry) *Pipeline {
-	metricCtl := metric.New("pipeline_"+name, registry)
+	metricCtl := metric.NewCtl("pipeline_"+name, registry)
 
 	lg := logger.Instance.Named(name).Desugar()
 
@@ -154,10 +156,13 @@ func New(name string, settings *Settings, registry *prometheus.Registry) *Pipeli
 			PipelineSettings: settings,
 			MetricCtl:        metricCtl,
 		},
-
-		metricsHolder: newMetricsHolder(name, registry, metricsGenInterval),
-		streamer:      newStreamer(settings.EventTimeout),
-		eventPool:     newEventPool(settings.Capacity, settings.AvgEventSize),
+		actionMetrics: actionMetrics{
+			m:  make(map[string]*actionMetric),
+			mu: new(sync.RWMutex),
+		},
+		metricHolder: metric.NewHolder(settings.MetricHoldDuration),
+		streamer:     newStreamer(settings.EventTimeout),
+		eventPool:    newEventPool(settings.Capacity, settings.AvgEventSize),
 		antispamer: antispam.NewAntispammer(antispam.Options{
 			MaintenanceInterval: settings.MaintenanceInterval,
 			Threshold:           settings.AntispamThreshold,
@@ -199,7 +204,7 @@ func (p *Pipeline) IncReadOps() {
 }
 
 func (p *Pipeline) IncMaxEventSizeExceeded() {
-	p.maxEventSizeExceededMetric.WithLabelValues().Inc()
+	p.maxEventSizeExceededMetric.Inc()
 }
 
 func (p *Pipeline) registerMetrics() {
@@ -214,12 +219,11 @@ func (p *Pipeline) registerMetrics() {
 	p.wrongEventCRIFormatMetric = m.RegisterCounter("wrong_event_cri_format", "Wrong event CRI format counter")
 	p.maxEventSizeExceededMetric = m.RegisterCounter("max_event_size_exceeded", "Max event size exceeded counter")
 	p.eventPoolLatency = m.RegisterHistogram("event_pool_latency_seconds",
-		"How long we are wait an event from the pool", metric.SecondsBucketsDetailedNano).
-		WithLabelValues()
+		"How long we are wait an event from the pool", metric.SecondsBucketsDetailedNano)
 }
 
 func (p *Pipeline) setDefaultMetrics() {
-	p.eventPoolCapacityMetric.WithLabelValues().Set(float64(p.settings.Capacity))
+	p.eventPoolCapacityMetric.Set(float64(p.settings.Capacity))
 }
 
 // SetupHTTPHandlers creates handlers for plugin endpoints and pipeline info.
@@ -265,7 +269,6 @@ func (p *Pipeline) Start() {
 	}
 
 	p.initProcs()
-	p.metricsHolder.start()
 
 	outputParams := &OutputPluginParams{
 		PluginDefaultParams: p.actionParams,
@@ -367,7 +370,7 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 	} else if dec == decoder.CRI {
 		row, err = decoder.DecodeCRI(bytes)
 		if err != nil {
-			p.wrongEventCRIFormatMetric.WithLabelValues().Inc()
+			p.wrongEventCRIFormatMetric.Inc()
 			p.Error(fmt.Sprintf("wrong cri format offset=%d, length=%d, err=%s, source=%d:%s, cri=%s", offset, length, err.Error(), sourceID, sourceName, bytes))
 			return EventSeqIDError
 		}
@@ -535,9 +538,73 @@ func (p *Pipeline) finalize(event *Event, notifyInput bool, backEvent bool) {
 	p.eventPool.back(event)
 }
 
+type actionMetric struct {
+	count metric.HeldCounterVec
+	size  metric.HeldCounterVec
+	// totalCounter is a map of eventStatus to counter for `/info` endpoint.
+	totalCounter map[string]*atomic.Uint64
+}
+
+type actionMetrics struct {
+	m  map[string]*actionMetric
+	mu *sync.RWMutex
+}
+
+func (am *actionMetrics) set(name string, m *actionMetric) {
+	if name == "" {
+		return
+	}
+
+	am.mu.Lock()
+	am.m[name] = m
+	am.mu.Unlock()
+}
+
+func (am *actionMetrics) get(name string) *actionMetric {
+	if name == "" {
+		return nil
+	}
+
+	am.mu.RLock()
+	defer am.mu.RUnlock()
+	return am.m[name]
+}
+
 func (p *Pipeline) AddAction(info *ActionPluginStaticInfo) {
 	p.actionInfos = append(p.actionInfos, info)
-	p.metricsHolder.AddAction(info.MetricName, info.MetricLabels, info.MetricSkipStatus)
+
+	mCtl := p.actionParams.MetricCtl
+
+	labels := make([]string, 0, len(info.MetricLabels)+1)
+	if !info.MetricSkipStatus {
+		labels = append(labels, "status")
+	}
+	labels = append(labels, info.MetricLabels...)
+
+	count := mCtl.RegisterCounterVec(
+		info.MetricName+"_events_count_total",
+		fmt.Sprintf("how many events processed by pipeline %q and #%d action", p.Name, len(p.actionInfos)-1),
+		labels...,
+	)
+	heldCount := p.metricHolder.AddCounterVec(count)
+
+	size := mCtl.RegisterCounterVec(
+		info.MetricName+"_events_size_total",
+		fmt.Sprintf("total size of events processed by pipeline %q and #%d action", p.Name, len(p.actionInfos)-1),
+		labels...,
+	)
+	heldSize := p.metricHolder.AddCounterVec(size)
+
+	totalCounter := make(map[string]*atomic.Uint64)
+	for _, st := range allEventStatuses() {
+		totalCounter[string(st)] = atomic.NewUint64(0)
+	}
+
+	p.actionMetrics.set(info.MetricName, &actionMetric{
+		count:        heldCount,
+		size:         heldSize,
+		totalCounter: totalCounter,
+	})
 }
 
 func (p *Pipeline) initProcs() {
@@ -560,7 +627,7 @@ func (p *Pipeline) initProcs() {
 func (p *Pipeline) newProc(id int) *processor {
 	proc := newProcessor(
 		id,
-		p.metricsHolder,
+		&p.actionMetrics,
 		p.activeProcs,
 		p.output,
 		p.streamer,
@@ -669,17 +736,17 @@ func (p *Pipeline) incMetrics(inputEvents, inputSize, outputEvents, outputSize, 
 		deltaReads,
 	}
 
-	p.inputEventsCountMetric.WithLabelValues().Add(myDeltas.deltaInputEvents)
-	p.inputEventSizeMetric.WithLabelValues().Add(myDeltas.deltaInputSize)
-	p.outputEventsCountMetric.WithLabelValues().Add(myDeltas.deltaOutputEvents)
-	p.outputEventSizeMetric.WithLabelValues().Add(myDeltas.deltaOutputSize)
-	p.readOpsEventsSizeMetric.WithLabelValues().Add(myDeltas.deltaReads)
+	p.inputEventsCountMetric.Add(myDeltas.deltaInputEvents)
+	p.inputEventSizeMetric.Add(myDeltas.deltaInputSize)
+	p.outputEventsCountMetric.Add(myDeltas.deltaOutputEvents)
+	p.outputEventSizeMetric.Add(myDeltas.deltaOutputSize)
+	p.readOpsEventsSizeMetric.Add(myDeltas.deltaReads)
 
 	return myDeltas
 }
 
 func (p *Pipeline) setMetrics(inUseEvents int64) {
-	p.inUseEventsMetric.WithLabelValues().Set(float64(inUseEvents))
+	p.inUseEventsMetric.Set(float64(inUseEvents))
 }
 
 func (p *Pipeline) maintenance() {
@@ -696,7 +763,7 @@ func (p *Pipeline) maintenance() {
 		}
 
 		p.antispamer.Maintenance()
-		p.metricsHolder.maintenance()
+		p.metricHolder.Maintenance()
 
 		myDeltas := p.incMetrics(inputEvents, inputSize, outputEvents, outputSize, readOps)
 		p.setMetrics(p.eventPool.inUseEvents.Load())
@@ -776,14 +843,7 @@ func (p *Pipeline) serveActionInfo(info *ActionPluginStaticInfo) func(http.Respo
 			return
 		}
 
-		var actionMetric *metrics
-		for i := range p.metricsHolder.metrics {
-			m := &p.metricsHolder.metrics[i]
-			if m.name == info.MetricName {
-				actionMetric = m
-				break
-			}
-		}
+		am := p.actionMetrics.get(info.MetricName)
 
 		var events []Event
 		for _, status := range []eventStatus{
@@ -791,7 +851,7 @@ func (p *Pipeline) serveActionInfo(info *ActionPluginStaticInfo) func(http.Respo
 			eventStatusDiscarded,
 			eventStatusPassed,
 		} {
-			c := actionMetric.current.totalCounter[string(status)]
+			c := am.totalCounter[string(status)]
 			if c == nil {
 				c = atomic.NewUint64(0)
 			}

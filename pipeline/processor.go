@@ -51,16 +51,16 @@ func allEventStatuses() []eventStatus {
 
 // processor is a goroutine which doing pipeline actions
 type processor struct {
-	id            int
-	streamer      *streamer
-	metricsHolder *metricsHolder
-	output        OutputPlugin
-	finalize      finalizeFn
+	id       int
+	streamer *streamer
+	output   OutputPlugin
+	finalize finalizeFn
 
 	activeCounter *atomic.Int32
 
 	actions          []ActionPlugin
 	actionInfos      []*ActionPluginStaticInfo
+	actionMetrics    *actionMetrics
 	busyActions      []bool
 	busyActionsTotal int
 	actionWatcher    *actionWatcher
@@ -73,7 +73,7 @@ type processor struct {
 
 func newProcessor(
 	id int,
-	metricsHolder *metricsHolder,
+	actionMetrics *actionMetrics,
 	activeCounter *atomic.Int32,
 	output OutputPlugin,
 	streamer *streamer,
@@ -83,7 +83,7 @@ func newProcessor(
 	processor := &processor{
 		id:            id,
 		streamer:      streamer,
-		metricsHolder: metricsHolder,
+		actionMetrics: actionMetrics,
 		output:        output,
 		finalize:      finalizeFn,
 
@@ -263,7 +263,33 @@ func (p *processor) countEvent(event *Event, actionIndex int, status eventStatus
 	if event.IsTimeoutKind() {
 		return
 	}
-	p.metricsValues = p.metricsHolder.count(event, actionIndex, status, p.metricsValues)
+
+	actionInfo := p.actionInfos[actionIndex]
+	am := p.actionMetrics.get(actionInfo.MetricName)
+
+	if am == nil || (actionInfo.MetricSkipStatus && status == eventStatusReceived) {
+		return
+	}
+
+	p.metricsValues = p.metricsValues[:0]
+	if !actionInfo.MetricSkipStatus {
+		p.metricsValues = append(p.metricsValues, string(status))
+	}
+
+	for _, field := range actionInfo.MetricLabels {
+		val := DefaultFieldValue
+
+		node := event.Root.Dig(field)
+		if node != nil {
+			val = node.AsString()
+		}
+
+		p.metricsValues = append(p.metricsValues, val)
+	}
+
+	am.totalCounter[string(status)].Inc()
+	am.count.WithLabelValues(p.metricsValues...).Inc()
+	am.size.WithLabelValues(p.metricsValues...).Add(float64(event.Size))
 }
 
 func (p *processor) isMatch(index int, event *Event) bool {

@@ -71,10 +71,9 @@ type Plugin struct {
 	pool         PgxIface
 
 	// plugin metrics
-
-	discardedEventMetric  *prometheus.CounterVec
-	duplicatedEventMetric *prometheus.CounterVec
-	writtenEventMetric    *prometheus.CounterVec
+	discardedEventMetric  prometheus.Counter
+	duplicatedEventMetric prometheus.Counter
+	writtenEventMetric    prometheus.Counter
 }
 
 type ConfigColumn struct {
@@ -272,7 +271,7 @@ func (p *Plugin) out(_ *pipeline.WorkerData, batch *pipeline.Batch) {
 			switch {
 			case errors.Is(err, ErrEventDoesntHaveField), errors.Is(err, ErrEventFieldHasWrongType),
 				errors.Is(err, ErrTimestampFromDistantPastOrFuture):
-				p.discardedEventMetric.WithLabelValues().Inc()
+				p.discardedEventMetric.Inc()
 				if p.config.StrictFields || p.config.Strict {
 					p.logger.Fatal(err)
 				}
@@ -286,7 +285,7 @@ func (p *Plugin) out(_ *pipeline.WorkerData, batch *pipeline.Batch) {
 
 		// passes here only if event valid.
 		if _, ok := uniqueEventsMap[uniqueID]; ok {
-			p.duplicatedEventMetric.WithLabelValues().Inc()
+			p.duplicatedEventMetric.Inc()
 			p.logger.Infof("event duplicated. Fields: %v, values: %v", pgFields, fieldValues)
 		} else {
 			if uniqueID != "" {
@@ -323,7 +322,7 @@ func (p *Plugin) out(_ *pipeline.WorkerData, batch *pipeline.Batch) {
 			time.Sleep(p.config.Retention_)
 			continue
 		}
-		p.writtenEventMetric.WithLabelValues().Add(float64(len(uniqueEventsMap)))
+		p.writtenEventMetric.Add(float64(len(uniqueEventsMap)))
 		break
 	}
 

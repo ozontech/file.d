@@ -153,7 +153,7 @@ type (
 
 func NewBatcher(opts BatcherOptions) *Batcher { // nolint: gocritic // hugeParam is ok here
 	ctl := opts.MetricCtl
-	jobsDone := ctl.RegisterCounter("batcher_jobs_done_total", "", "status")
+	jobsDone := ctl.RegisterCounterVec("batcher_jobs_done_total", "", "status")
 
 	freeBatches := make(chan *Batch, opts.Workers)
 	fullBatches := make(chan *Batch, opts.Workers)
@@ -168,9 +168,9 @@ func NewBatcher(opts BatcherOptions) *Batcher { // nolint: gocritic // hugeParam
 		freeBatches:          freeBatches,
 		fullBatches:          fullBatches,
 		opts:                 opts,
-		batchOutFnSeconds:    ctl.RegisterHistogram("batcher_out_fn_seconds", "", metric.SecondsBucketsLong).WithLabelValues(),
-		commitWaitingSeconds: ctl.RegisterHistogram("batcher_commit_waiting_seconds", "", metric.SecondsBucketsDetailed).WithLabelValues(),
-		workersInProgress:    ctl.RegisterGauge("batcher_workers_in_progress", "").WithLabelValues(),
+		batchOutFnSeconds:    ctl.RegisterHistogram("batcher_out_fn_seconds", "", metric.SecondsBucketsLong),
+		commitWaitingSeconds: ctl.RegisterHistogram("batcher_commit_waiting_seconds", "", metric.SecondsBucketsDetailed),
+		workersInProgress:    ctl.RegisterGauge("batcher_workers_in_progress", ""),
 		batchesDoneByMaxSize: jobsDone.WithLabelValues("max_size_exceeded"),
 		batchesDoneByTimeout: jobsDone.WithLabelValues("timeout_exceeded"),
 	}

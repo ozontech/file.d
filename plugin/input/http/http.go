@@ -210,18 +210,18 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 }
 
 func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
-	p.bulkRequestsDoneTotal = ctl.RegisterCounter("bulk_requests_done_total", "").WithLabelValues()
-	p.requestsInProgress = ctl.RegisterGauge("requests_in_progress", "").WithLabelValues()
-	p.processBulkSeconds = ctl.RegisterHistogram("process_bulk_seconds", "", metric.SecondsBucketsDetailed).WithLabelValues()
-	p.errorsTotal = ctl.RegisterCounter("input_http_errors", "Total http errors").WithLabelValues()
+	p.bulkRequestsDoneTotal = ctl.RegisterCounter("bulk_requests_done_total", "")
+	p.requestsInProgress = ctl.RegisterGauge("requests_in_progress", "")
+	p.processBulkSeconds = ctl.RegisterHistogram("process_bulk_seconds", "", metric.SecondsBucketsDetailed)
+	p.errorsTotal = ctl.RegisterCounter("input_http_errors", "Total http errors")
 
 	if p.config.Auth.Strategy_ != StrategyDisabled {
-		httpAuthTotal := ctl.RegisterCounter("http_auth_success_total", "", "secret_name")
+		httpAuthTotal := ctl.RegisterCounterVec("http_auth_success_total", "", "secret_name")
 		p.successfulAuthTotal = make(map[string]prometheus.Counter, len(p.config.Auth.Secrets))
 		for key := range p.config.Auth.Secrets {
 			p.successfulAuthTotal[key] = httpAuthTotal.WithLabelValues(key)
 		}
-		p.failedAuthTotal = ctl.RegisterCounter("http_auth_fails_total", "").WithLabelValues()
+		p.failedAuthTotal = ctl.RegisterCounter("http_auth_fails_total", "")
 	}
 }
 

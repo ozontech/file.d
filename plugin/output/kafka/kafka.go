@@ -39,7 +39,7 @@ type Plugin struct {
 	batcher  *pipeline.Batcher
 
 	// plugin metrics
-	sendErrorMetric *prometheus.CounterVec
+	sendErrorMetric prometheus.Counter
 }
 
 // ! config-params
@@ -219,7 +219,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 		for _, e := range errs {
 			p.logger.Errorf("can't write batch: %s", e.Err.Error())
 		}
-		p.sendErrorMetric.WithLabelValues().Add(float64(len(errs)))
+		p.sendErrorMetric.Add(float64(len(errs)))
 		p.controller.Error("some events from batch were not written")
 	}
 }

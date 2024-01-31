@@ -27,8 +27,8 @@ type Antispammer struct {
 	logger *zap.Logger
 
 	// antispammer metrics
-	activeMetric    *prometheus.GaugeVec
-	banMetric       *prometheus.GaugeVec
+	activeMetric    prometheus.Gauge
+	banMetric       prometheus.Gauge
 	exceptionMetric *prometheus.CounterVec
 }
 
@@ -66,14 +66,14 @@ func NewAntispammer(o Options) *Antispammer {
 		banMetric: o.MetricsController.RegisterGauge("antispam_banned",
 			"How many times a source was banned",
 		),
-		exceptionMetric: o.MetricsController.RegisterCounter("antispam_exceptions",
+		exceptionMetric: o.MetricsController.RegisterCounterVec("antispam_exceptions",
 			"How many times an exception match with an event",
 			"name",
 		),
 	}
 
 	// not enabled by default
-	a.activeMetric.WithLabelValues().Set(0)
+	a.activeMetric.Set(0)
 
 	return a
 }
@@ -119,8 +119,8 @@ func (a *Antispammer) IsSpam(id uint64, name string, isNewSource bool, event []b
 	x := src.counter.Inc()
 	if x == int32(a.threshold) {
 		src.counter.Swap(int32(a.unbanIterations * a.threshold))
-		a.activeMetric.WithLabelValues().Set(1)
-		a.banMetric.WithLabelValues().Inc()
+		a.activeMetric.Set(1)
+		a.banMetric.Inc()
 		a.logger.Warn("source has been banned",
 			zap.Uint64("id", id), zap.String("name", name))
 	}
@@ -147,7 +147,7 @@ func (a *Antispammer) Maintenance() {
 		}
 
 		if isMore && x < a.threshold {
-			a.banMetric.WithLabelValues().Dec()
+			a.banMetric.Dec()
 			a.logger.Info("source has been unbanned", zap.Uint64("id", sourceID))
 		}
 
@@ -163,7 +163,7 @@ func (a *Antispammer) Maintenance() {
 	}
 
 	if allUnbanned {
-		a.activeMetric.WithLabelValues().Set(0)
+		a.activeMetric.Set(0)
 	} else {
 		a.logger.Info("there are banned sources")
 	}

@@ -54,9 +54,8 @@ type jobProvider struct {
 	logger           *zap.SugaredLogger
 
 	// provider metrics
-
-	possibleOffsetCorruptionMetric *prometheus.CounterVec
-	errorOpenFileMetric            *prometheus.CounterVec
+	possibleOffsetCorruptionMetric prometheus.Counter
+	errorOpenFileMetric            prometheus.Counter
 }
 
 type Job struct {
@@ -101,15 +100,14 @@ type symlinkInfo struct {
 }
 
 type metricCollection struct {
-	possibleOffsetCorruptionMetric *prometheus.CounterVec
-	errorOpenFileMetric            *prometheus.CounterVec
-	notifyChannelLengthMetric      *prometheus.GaugeVec
+	possibleOffsetCorruptionMetric prometheus.Counter
+	errorOpenFileMetric            prometheus.Counter
+	notifyChannelLengthMetric      prometheus.Gauge
 }
 
 func newMetricCollection(
-	possibleOffsetCorruptionMetric *prometheus.CounterVec,
-	errorOpenFileMetric *prometheus.CounterVec,
-	notifyChannelLengthMetric *prometheus.GaugeVec,
+	possibleOffsetCorruptionMetric, errorOpenFileMetric prometheus.Counter,
+	notifyChannelLengthMetric prometheus.Gauge,
 ) *metricCollection {
 	return &metricCollection{
 		possibleOffsetCorruptionMetric: possibleOffsetCorruptionMetric,
@@ -216,7 +214,7 @@ func (jp *jobProvider) commit(event *pipeline.Event) {
 	}
 
 	if value == 0 && event.Offset >= 16*1024*1024 {
-		jp.possibleOffsetCorruptionMetric.WithLabelValues().Inc()
+		jp.possibleOffsetCorruptionMetric.Inc()
 		jp.logger.Errorf("it maybe an offset corruption: committing=%d, current=%d, event id=%d, source=%d:%s", event.Offset, value, event.SeqID, event.SourceID, event.SourceName)
 	}
 
@@ -303,7 +301,7 @@ func (jp *jobProvider) refreshFile(stat os.FileInfo, filename string, symlink st
 	file, err := os.Open(filename)
 	if err != nil {
 		jp.logger.Warnf("file was already moved from creation place %s: %s", filename, err.Error())
-		jp.errorOpenFileMetric.WithLabelValues().Inc()
+		jp.errorOpenFileMetric.Inc()
 		return
 	}
 

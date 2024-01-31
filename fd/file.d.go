@@ -60,8 +60,8 @@ func (f *FileD) Start() {
 }
 
 func (f *FileD) initMetrics() {
-	f.metricCtl = metric.New("file_d", f.registry)
-	f.versionMetric = f.metricCtl.RegisterCounter("version", "", "version")
+	f.metricCtl = metric.NewCtl("file_d", f.registry)
+	f.versionMetric = f.metricCtl.RegisterCounterVec("version", "", "version")
 	f.versionMetric.WithLabelValues(buildinfo.Version).Inc()
 }
 
