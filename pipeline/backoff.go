@@ -9,8 +9,8 @@ import (
 
 type RetriableBatcher struct {
 	outFn        RetriableBatcherOutFn
-	backoff      backoff.BackOff
 	batcher      *Batcher
+	backoffOpts  BackoffOpts
 	onRetryError func(err error)
 }
 
@@ -23,15 +23,9 @@ type BackoffOpts struct {
 }
 
 func NewRetriableBatcher(batcherOpts *BatcherOptions, batcherOutFn RetriableBatcherOutFn, opts BackoffOpts, onError func(err error)) *RetriableBatcher {
-	boff := GetBackoff(
-		opts.MinRetention,
-		opts.Multiplier,
-		opts.AttemptNum,
-	)
-
 	batcherBackoff := &RetriableBatcher{
 		outFn:        batcherOutFn,
-		backoff:      boff,
+		backoffOpts:  opts,
 		onRetryError: onError,
 	}
 	batcherBackoff.setBatcher(batcherOpts)
@@ -44,14 +38,34 @@ func (b *RetriableBatcher) setBatcher(batcherOpts *BatcherOptions) {
 }
 
 func (b *RetriableBatcher) Out(data *WorkerData, batch *Batch) {
-	b.backoff.Reset()
+	boff := backoff.ExponentialBackOff{
+		InitialInterval:     b.backoffOpts.MinRetention,
+		Multiplier:          b.backoffOpts.Multiplier,
+		RandomizationFactor: 0.5,
+		MaxInterval:         backoff.DefaultMaxInterval,
+		MaxElapsedTime:      backoff.DefaultMaxElapsedTime,
+		Stop:                backoff.Stop,
+		Clock:               backoff.SystemClock,
+	}
+	boff.Reset()
 
-	err := backoff.Retry(func() error {
-		return b.outFn(data, batch)
-	}, b.backoff)
-
-	if err != nil {
-		b.onRetryError(err)
+	var timer *time.Timer
+	for {
+		err := b.outFn(data, batch)
+		if err == nil {
+			return
+		}
+		next := boff.NextBackOff()
+		if next == backoff.Stop {
+			b.onRetryError(err)
+			return
+		}
+		if timer == nil {
+			timer = time.NewTimer(next)
+		} else {
+			timer.Reset(next)
+		}
+		<-timer.C
 	}
 }
 
