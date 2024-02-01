@@ -22,9 +22,9 @@ pipelines:
       type: http
       emulate_mode: "no"
       address: ":9200"
-      actions:
-        - type: json_decode
-          field: message
+	actions:
+	- type: json_decode
+		field: message
     output:
       type: s3
       file_config:
@@ -48,12 +48,12 @@ pipelines:
       type: http
       emulate_mode: "no"
       address: ":9200"
-      actions:
-        - type: json_decode
-          field: message
+	actions:
+	- type: json_decode
+		field: message
     output:
       type: s3
-      file_plugin:
+      file_config:
         retention_interval: 10s
       # endpoint, access_key, secret_key, bucket are required.
       endpoint: "s3.fake_host.org:80"
@@ -141,6 +141,32 @@ Regulates number of buckets that can be created dynamically.
 **`upload_timeout`** *`cfg.Duration`* *`default=1m`* 
 
 Sets upload timeout.
+
+<br>
+
+**`retry`** *`int`* *`default=10`* 
+
+Retries of upload. If File.d cannot upload for this number of attempts,
+File.d will fall with non-zero exit code or skip message (see fatal_on_failed_insert).
+
+<br>
+
+**`fatal_on_failed_insert`** *`bool`* *`default=false`* 
+
+After an insert error, fall with a non-zero exit code or not
+**Experimental feature**
+
+<br>
+
+**`retention`** *`cfg.Duration`* *`default=1s`* 
+
+Retention milliseconds for retry to upload.
+
+<br>
+
+**`retention_exponentially_multiplier`** *`int`* *`default=2`* 
+
+Multiplier for exponential increase of retention between retries
 
 <br>
 

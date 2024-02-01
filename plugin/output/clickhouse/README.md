@@ -111,7 +111,14 @@ If the strict mode is enabled file.d fails (exit with code 1) in above examples.
 **`retry`** *`int`* *`default=10`* 
 
 Retries of insertion. If File.d cannot insert for this number of attempts,
-File.d will fall with non-zero exit code.
+File.d will fall with non-zero exit code or skip message (see fatal_on_failed_insert).
+
+<br>
+
+**`fatal_on_failed_insert`** *`bool`* *`default=false`* 
+
+After an insert error, fall with a non-zero exit code or not
+**Experimental feature**
 
 <br>
 
@@ -125,6 +132,12 @@ Settings list: https://clickhouse.com/docs/en/operations/settings/settings
 **`retention`** *`cfg.Duration`* *`default=50ms`* 
 
 Retention milliseconds for retry to DB.
+
+<br>
+
+**`retention_exponentially_multiplier`** *`int`* *`default=2`* 
+
+Multiplier for exponential increase of retention between retries
 
 <br>
 

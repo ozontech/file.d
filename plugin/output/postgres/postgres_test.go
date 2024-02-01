@@ -147,12 +147,7 @@ func TestPrivateOutWithRetry(t *testing.T) {
 		gomock.AssignableToTypeOf(ctxMock),
 		"INSERT INTO table1 (str_uni_1,int_1,timestamp_1) VALUES ($1,$2,$3) ON CONFLICT(str_uni_1) DO UPDATE SET int_1=EXCLUDED.int_1,timestamp_1=EXCLUDED.timestamp_1",
 		[]any{preferSimpleProtocol, strUniValue, intValue, time.Unix(int64(timestampValue), 0).Format(time.RFC3339)},
-	).Return(&rowsForTest{}, errors.New("someError")).Times(2)
-	mockpool.EXPECT().Query(
-		gomock.AssignableToTypeOf(ctxMock),
-		"INSERT INTO table1 (str_uni_1,int_1,timestamp_1) VALUES ($1,$2,$3) ON CONFLICT(str_uni_1) DO UPDATE SET int_1=EXCLUDED.int_1,timestamp_1=EXCLUDED.timestamp_1",
-		[]any{preferSimpleProtocol, strUniValue, intValue, time.Unix(int64(timestampValue), 0).Format(time.RFC3339)},
-	).Return(&rowsForTest{}, nil).Times(1)
+	).Return(&rowsForTest{}, errors.New("someError")).Times(1)
 
 	builder, err := NewQueryBuilder(columns, table)
 	require.NoError(t, err)
