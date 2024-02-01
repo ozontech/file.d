@@ -19,15 +19,8 @@ type heldMetric[T prometheus.Metric] struct {
 }
 
 func newHeldMetric[T prometheus.Metric](labels []string, metric T) *heldMetric[T] {
-	// copy labels because they are unsafe converted bytes
-	// TODO: replace with [][]byte to make it explicit
-	labelsCopy := make([]string, len(labels))
-	for i := range labels {
-		labelsCopy[i] = strings.Clone(labels[i])
-	}
-
 	hl := &heldMetric[T]{
-		labels:    labelsCopy,
+		labels:    labels,
 		lastUsage: atomic.Int64{},
 		metric:    metric,
 	}
@@ -59,7 +52,7 @@ func newHeldMetricsStore[T prometheus.Metric]() *heldMetricsStore[T] {
 	}
 }
 
-func (h *heldMetricsStore[T]) GetOrCreate(labels []string, createMetricFn func(...string) T) *heldMetric[T] {
+func (h *heldMetricsStore[T]) GetOrCreate(labels []string, newPromMetric func(...string) T) *heldMetric[T] {
 	hash := computeStringsHash(labels)
 	// fast path - metric exists
 	h.mu.RLock()
@@ -69,7 +62,7 @@ func (h *heldMetricsStore[T]) GetOrCreate(labels []string, createMetricFn func(.
 		return hMetric
 	}
 	// slow path - create new metric
-	return h.tryCreate(labels, hash, createMetricFn)
+	return h.tryCreate(labels, hash, newPromMetric)
 }
 
 func (h *heldMetricsStore[T]) getHeldMetricByHash(labels []string, hash uint64) (*heldMetric[T], bool) {
@@ -87,7 +80,17 @@ func (h *heldMetricsStore[T]) getHeldMetricByHash(labels []string, hash uint64) 
 	return nil, false
 }
 
-func (h *heldMetricsStore[T]) tryCreate(labels []string, hash uint64, createMetricFn func(...string) T) *heldMetric[T] {
+func (h *heldMetricsStore[T]) tryCreate(labels []string, hash uint64, newPromMetric func(...string) T) *heldMetric[T] {
+	// copy labels because they are unsafe converted bytes
+	// TODO: replace with [][]byte to make it explicit
+	labelsCopy := make([]string, len(labels))
+	for i := range labels {
+		labelsCopy[i] = strings.Clone(labels[i])
+	}
+	labels = labelsCopy
+
+	metric := newPromMetric(labelsCopy...)
+
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
@@ -96,7 +99,7 @@ func (h *heldMetricsStore[T]) tryCreate(labels []string, hash uint64, createMetr
 		return hMetric
 	}
 
-	hMetric = newHeldMetric[T](labels, createMetricFn(labels...))
+	hMetric = newHeldMetric[T](labels, metric)
 	h.metricsByHash[hash] = append(h.metricsByHash[hash], hMetric)
 	return hMetric
 }
