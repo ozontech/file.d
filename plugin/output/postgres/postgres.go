@@ -289,7 +289,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	backoffOpts := pipeline.BackoffOpts{
 		MinRetention: p.config.Retention_,
 		Multiplier:   float64(p.config.RetentionExponentMultiplier),
-		AttemptNum:   uint64(p.config.Retry),
+		AttemptNum:   p.config.Retry,
 	}
 
 	onError := func(err error) {

@@ -19,7 +19,7 @@ type RetriableBatcherOutFn func(*WorkerData, *Batch) error
 type BackoffOpts struct {
 	MinRetention time.Duration
 	Multiplier   float64
-	AttemptNum   uint64
+	AttemptNum   int
 }
 
 func NewRetriableBatcher(batcherOpts *BatcherOptions, batcherOutFn RetriableBatcherOutFn, opts BackoffOpts, onError func(err error)) *RetriableBatcher {
@@ -50,14 +50,14 @@ func (b *RetriableBatcher) Out(data *WorkerData, batch *Batch) {
 	exponentionalBackoff.Reset()
 
 	var timer *time.Timer
-	numTries := uint64(0)
+	numTries := 0
 	for {
 		err := b.outFn(data, batch)
 		if err == nil {
 			return
 		}
 		next := exponentionalBackoff.NextBackOff()
-		if next == backoff.Stop || numTries > b.backoffOpts.AttemptNum {
+		if next == backoff.Stop || (b.backoffOpts.AttemptNum >= 0 && numTries > b.backoffOpts.AttemptNum) {
 			b.onRetryError(err)
 			return
 		}
