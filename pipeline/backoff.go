@@ -38,7 +38,7 @@ func (b *RetriableBatcher) setBatcher(batcherOpts *BatcherOptions) {
 }
 
 func (b *RetriableBatcher) Out(data *WorkerData, batch *Batch) {
-	boff := backoff.ExponentialBackOff{
+	exponentionalBackoff := backoff.ExponentialBackOff{
 		InitialInterval:     b.backoffOpts.MinRetention,
 		Multiplier:          b.backoffOpts.Multiplier,
 		RandomizationFactor: 0.5,
@@ -47,7 +47,8 @@ func (b *RetriableBatcher) Out(data *WorkerData, batch *Batch) {
 		Stop:                backoff.Stop,
 		Clock:               backoff.SystemClock,
 	}
-	boff.Reset()
+	backoffWithMaxRetries := backoff.WithMaxRetries(&exponentionalBackoff, b.backoffOpts.AttemptNum)
+	backoffWithMaxRetries.Reset()
 
 	var timer *time.Timer
 	for {
@@ -55,7 +56,7 @@ func (b *RetriableBatcher) Out(data *WorkerData, batch *Batch) {
 		if err == nil {
 			return
 		}
-		next := boff.NextBackOff()
+		next := backoffWithMaxRetries.NextBackOff()
 		if next == backoff.Stop {
 			b.onRetryError(err)
 			return
