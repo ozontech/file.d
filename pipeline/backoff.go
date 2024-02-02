@@ -47,20 +47,21 @@ func (b *RetriableBatcher) Out(data *WorkerData, batch *Batch) {
 		Stop:                backoff.Stop,
 		Clock:               backoff.SystemClock,
 	}
-	backoffWithMaxRetries := backoff.WithMaxRetries(&exponentionalBackoff, b.backoffOpts.AttemptNum)
-	backoffWithMaxRetries.Reset()
+	exponentionalBackoff.Reset()
 
 	var timer *time.Timer
+	numTries := uint64(0)
 	for {
 		err := b.outFn(data, batch)
 		if err == nil {
 			return
 		}
-		next := backoffWithMaxRetries.NextBackOff()
-		if next == backoff.Stop {
+		next := exponentionalBackoff.NextBackOff()
+		if next == backoff.Stop || numTries > b.backoffOpts.AttemptNum {
 			b.onRetryError(err)
 			return
 		}
+		numTries++
 		if timer == nil {
 			timer = time.NewTimer(next)
 		} else {
