@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"math"
 	"os"
 	"os/signal"
 	"syscall"
@@ -67,8 +68,12 @@ var (
 	memLimitRatio = kingpin.Flag(
 		"mem-limit-ratio",
 		`Value to set GOMEMLIMIT (https://pkg.go.dev/runtime) with the value from the cgroup's memory limit and given ratio. `+
-			`If there is a need to reduce the load GC, it is recommended to set 0.9. Default is disabled.`,
+			`If there is a need to reduce the load GC, it is recommended to set 0.9. Default is disabled`,
 	).Default("0").Float64()
+	disableFieldsCaching = kingpin.Flag("disable-fields-caching", "Disable field caching when accessing fields. "+
+		"Disabling can reduce memory consumption and CPU, but can increase CPU consumption if you frequently access fields (for example, you have many actions)").
+		Default("false").
+		Bool()
 )
 
 func main() {
@@ -80,6 +85,11 @@ func main() {
 	setRuntimeSettings()
 	insaneJSON.DisableBeautifulErrors = true
 	insaneJSON.StartNodePoolSize = pipeline.DefaultJSONNodePoolSize
+	if *disableFieldsCaching {
+		// Disable iterating over map when .Dig().
+		// Check the MapUseThreshold usage for details.
+		insaneJSON.MapUseThreshold = math.MaxInt
+	}
 
 	_, _ = maxprocs.Set(maxprocs.Logger(logger.Debugf))
 
