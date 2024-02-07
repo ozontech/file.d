@@ -186,8 +186,18 @@ type AuthConfig struct {
 
 type CORSConfig struct {
 	AllowedOrigins []string `json:"allowed_origins"`
+	DefaultOrigin  string   `json:"default_origin"  default:"*"`
 	AllowedHeaders []string `json:"allowed_headers"`
 	ExposedHeaders []string `json:"exposed_headers"`
+}
+
+func (c *CORSConfig) getAllowedByOrigin(originHeader string) string {
+	for _, allowed := range c.AllowedOrigins {
+		if strings.HasSuffix(originHeader, allowed) || strings.HasPrefix(originHeader, allowed) {
+			return originHeader
+		}
+	}
+	return c.DefaultOrigin
 }
 
 func init() {
@@ -298,6 +308,32 @@ func (p *Plugin) putSourceID(x pipeline.SourceID) {
 }
 
 func (p *Plugin) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	allowOrigin := p.config.CORS.getAllowedByOrigin(r.Header.Get("Origin"))
+	w.Header().Set(
+		"Access-Control-Allow-Origin",
+		allowOrigin,
+	)
+
+	if len(p.config.CORS.AllowedHeaders) > 0 {
+		w.Header().Set(
+			"Access-Control-Allow-Headers",
+			strings.Join(p.config.CORS.AllowedHeaders, ","),
+		)
+	}
+
+	if len(p.config.CORS.ExposedHeaders) > 0 {
+		w.Header().Set(
+			"Access-Control-Exposed-Headers",
+			strings.Join(p.config.CORS.ExposedHeaders, ","),
+		)
+	}
+
+	w.Header().Set("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
+
+	if r.Method == http.MethodOptions {
+		return
+	}
+
 	ok, login := p.auth(r)
 	if !ok {
 		p.failedAuthTotal.Inc()
@@ -385,34 +421,6 @@ func getUserIP(r *http.Request) net.IP {
 }
 
 func (p *Plugin) serveBulk(w http.ResponseWriter, r *http.Request, login string) {
-	if len(p.config.CORS.AllowedOrigins) > 0 {
-		// TODO: current origin
-		w.Header().Set(
-			"Access-Control-Allow-Origins",
-			strings.Join(p.config.CORS.AllowedOrigins, ","),
-		)
-	}
-
-	if len(p.config.CORS.AllowedHeaders) > 0 {
-		w.Header().Set(
-			"Access-Control-Allow-Headers",
-			strings.Join(p.config.CORS.AllowedHeaders, ","),
-		)
-	}
-
-	if len(p.config.CORS.ExposedHeaders) > 0 {
-		w.Header().Set(
-			"Access-Control-Exposed-Headers",
-			strings.Join(p.config.CORS.ExposedHeaders, ","),
-		)
-	}
-
-	w.Header().Set("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
-
-	if r.Method == http.MethodOptions {
-		return
-	}
-
 	if r.Method != http.MethodPost {
 		http.Error(w, "", http.StatusMethodNotAllowed)
 		return
