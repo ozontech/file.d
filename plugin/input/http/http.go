@@ -426,7 +426,7 @@ func (p *Plugin) serveBulk(w http.ResponseWriter, r *http.Request, login string)
 		return
 	}
 
-	infoStr := login + "_" + getUserIP(r).String()
+	infoStr := login + "_" + getUserIP(r).String() + "_" + base64.StdEncoding.EncodeToString([]byte(r.URL.RawQuery))
 	encodedSourceName := base64.StdEncoding.EncodeToString([]byte(infoStr))
 
 	start := time.Now()
