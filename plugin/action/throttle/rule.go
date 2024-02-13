@@ -7,8 +7,9 @@ import (
 )
 
 type complexLimit struct {
-	value int64
-	kind  string
+	value         int64
+	kind          string
+	distributions limitDistributions
 }
 
 type rule struct {
@@ -18,8 +19,8 @@ type rule struct {
 	byteIdxPart []byte
 }
 
-// NewRule returns new Limit instance.
-func NewRule(conditions map[string]string, limit complexLimit, ruleNum int) *rule {
+// newRule returns new rule instance.
+func newRule(conditions map[string]string, limit complexLimit, ruleNum int) *rule { // nolint: gocritic // hugeParam is ok here
 	var (
 		keys   = make([]string, 0, len(conditions))
 		values = make([]string, len(conditions))
@@ -53,4 +54,44 @@ func (r *rule) isMatch(event *pipeline.Event) bool {
 	}
 
 	return true
+}
+
+// limitDistributions is not thread-safe
+type limitDistributions struct {
+	field           []string       // event field, based on the values of which limits are distributed
+	distributions   []float64      // each distribution is between [0.0;1.0]
+	idxByKey        map[string]int // relationship between the field value and index in a distributions
+	defDistribution float64        // default distribution if there is no field value in idxByKey map
+}
+
+func (lp limitDistributions) size() int {
+	return len(lp.distributions)
+}
+
+// get returns (index, distribution) by key or (-1, default distribution) otherwise
+func (lp limitDistributions) get(key string) (int, float64) {
+	if idx, ok := lp.idxByKey[key]; ok {
+		return idx, lp.distributions[idx]
+	}
+	return -1, lp.defDistribution
+}
+
+func (lp limitDistributions) copy() limitDistributions {
+	fieldCopy := make([]string, len(lp.field))
+	copy(fieldCopy, lp.field)
+
+	distributionsCopy := make([]float64, len(lp.distributions))
+	copy(distributionsCopy, lp.distributions)
+
+	idxByKeyCopy := make(map[string]int, len(lp.idxByKey))
+	for k, v := range lp.idxByKey {
+		idxByKeyCopy[k] = v
+	}
+
+	return limitDistributions{
+		field:           fieldCopy,
+		distributions:   distributionsCopy,
+		idxByKey:        idxByKeyCopy,
+		defDistribution: lp.defDistribution,
+	}
 }

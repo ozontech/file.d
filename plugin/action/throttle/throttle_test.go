@@ -3,6 +3,8 @@ package throttle
 import (
 	"fmt"
 	"math/rand"
+	"slices"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -544,6 +546,237 @@ func TestThrottleRedisFallbackToInMemory(t *testing.T) {
 
 	tconf := testConfig{t, config, eventsTotal, iterations}
 	tconf.runPipeline()
+	t.Cleanup(func() {
+		throttleMapsCleanup()
+	})
+}
+
+func TestLimitDistributionConfigParse(t *testing.T) {
+	field := []string{"level"}
+
+	tests := []struct {
+		name string
+		cfg  LimitDistributionConfig
+
+		want    limitDistributions
+		wantErr bool
+	}{
+		{
+			name: "empty_cfg",
+			cfg:  LimitDistributionConfig{},
+			want: limitDistributions{
+				distributions: []float64{},
+				idxByKey:      map[string]int{},
+			},
+		},
+		{
+			name: "valid_cfg",
+			cfg: LimitDistributionConfig{
+				Field_: field,
+				Ratios: []ComplexRatio{
+					{Ratio: 0.5, Values: []string{"error"}},
+					{Ratio: 0.35, Values: []string{"warn", "info"}},
+					{Ratio: 0.15, Values: []string{"debug"}},
+				},
+			},
+			want: limitDistributions{
+				distributions: []float64{0.5, 0.35, 0.15},
+				idxByKey: map[string]int{
+					"error": 0,
+					"warn":  1, "info": 1,
+					"debug": 2,
+				},
+			},
+		},
+		{
+			name: "valid_cfg_with_def",
+			cfg: LimitDistributionConfig{
+				Field_: field,
+				Ratios: []ComplexRatio{
+					{Ratio: 0.5, Values: []string{"error"}},
+					{Ratio: 0.3, Values: []string{"warn", "info"}},
+					{Ratio: 0.16, Values: []string{"debug"}},
+				},
+			},
+			want: limitDistributions{
+				distributions: []float64{0.5, 0.3, 0.16},
+				idxByKey: map[string]int{
+					"error": 0,
+					"warn":  1, "info": 1,
+					"debug": 2,
+				},
+				defDistribution: 0.04,
+			},
+		},
+		{
+			name: "err_empty_ratios",
+			cfg: LimitDistributionConfig{
+				Field_: field,
+			},
+			wantErr: true,
+		},
+		{
+			name: "err_invalid_ratio1",
+			cfg: LimitDistributionConfig{
+				Field_: field,
+				Ratios: []ComplexRatio{
+					{Ratio: -0.5},
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "err_invalid_ratio2",
+			cfg: LimitDistributionConfig{
+				Field_: field,
+				Ratios: []ComplexRatio{
+					{Ratio: 1.4},
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "err_empty_ratio_values",
+			cfg: LimitDistributionConfig{
+				Field_: field,
+				Ratios: []ComplexRatio{
+					{Ratio: 0.66},
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "err_duplicate_ratio_values",
+			cfg: LimitDistributionConfig{
+				Field_: field,
+				Ratios: []ComplexRatio{
+					{Ratio: 0.66, Values: []string{"error"}},
+					{Ratio: 0.1, Values: []string{"debug", "error"}},
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "err_invalid_ratio_sum",
+			cfg: LimitDistributionConfig{
+				Field_: field,
+				Ratios: []ComplexRatio{
+					{Ratio: 0.5, Values: []string{"error"}},
+					{Ratio: 0.51, Values: []string{"warn", "info"}},
+				},
+			},
+			wantErr: true,
+		},
+	}
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			lp, err := tt.cfg.parse()
+
+			require.Equal(t, tt.wantErr, err != nil, "wrong error")
+			if tt.wantErr {
+				return
+			}
+
+			require.Equal(t, tt.want.defDistribution, lp.defDistribution, "wrong defPriority")
+			require.Equal(t, true, slices.Equal(tt.want.distributions, lp.distributions), "wrong priorities")
+			require.Equal(t, len(tt.want.idxByKey), len(lp.idxByKey), "wrong idxByKey size")
+			for k, v := range lp.idxByKey {
+				require.Equal(t, tt.want.idxByKey[k], v, fmt.Sprintf("wrong value in idxByKey with key %q", k))
+			}
+		})
+	}
+}
+
+func TestThrottleWithPriorities(t *testing.T) {
+	defaultLimit := 12
+	config := &Config{
+		ThrottleField:  "k8s_pod",
+		DefaultLimit:   int64(defaultLimit),
+		BucketsCount:   1,
+		BucketInterval: "1s",
+		LimitDistribution: LimitDistributionConfig{
+			Field: "level",
+			Ratios: []ComplexRatio{
+				{Ratio: 0.5, Values: []string{"error"}},
+				{Ratio: 0.3, Values: []string{"warn", "info"}},
+			},
+		},
+	}
+	test.NewConfig(config, nil)
+
+	p, input, output := test.NewPipelineMock(
+		test.NewActionPluginStaticInfo(factory, config, pipeline.MatchModeAnd, nil, false),
+		"name",
+	)
+
+	wg := &sync.WaitGroup{}
+	wg.Add(defaultLimit)
+
+	outEvents := map[string]int{}
+	output.SetOutFn(func(e *pipeline.Event) {
+		level := strings.Clone(e.Root.Dig("level").AsString())
+		outEvents[level]++
+		wg.Done()
+	})
+	wantOutEvents := map[string]int{
+		"error": 6,
+		"info":  3,
+		"warn":  1,
+		"debug": 1,
+		"":      1,
+	}
+
+	events := []string{
+		`{"time":"%s","k8s_pod":"pod_1","level":"error"}`,
+		`{"time":"%s","k8s_pod":"pod_1","level":"info"}`,
+		`{"time":"%s","k8s_pod":"pod_1","level":"error"}`,
+		`{"time":"%s","k8s_pod":"pod_1","level":"warn"}`,
+		`{"time":"%s","k8s_pod":"pod_1","level":"error"}`,
+		`{"time":"%s","k8s_pod":"pod_1","level":"error"}`,
+		`{"time":"%s","k8s_pod":"pod_1","level":""}`,
+		`{"time":"%s","k8s_pod":"pod_1","level":"info"}`,
+		`{"time":"%s","k8s_pod":"pod_1","level":"error"}`,
+		`{"time":"%s","k8s_pod":"pod_1","level":"info"}`,
+		`{"time":"%s","k8s_pod":"pod_1","level":"debug"}`,
+		`{"time":"%s","k8s_pod":"pod_1","level":"warn"}`,
+		`{"time":"%s","k8s_pod":"pod_1","level":"error"}`,
+		`{"time":"%s","k8s_pod":"pod_1","level":"debug"}`,
+		`{"time":"%s","k8s_pod":"pod_1","level":"error"}`,
+	}
+
+	nowTs := time.Now().Format(time.RFC3339Nano)
+	for i := 0; i < len(events); i++ {
+		json := fmt.Sprintf(events[i], nowTs)
+		input.In(0, "test", 0, []byte(json))
+	}
+
+	wgWaitWithTimeout := func(wg *sync.WaitGroup, timeout time.Duration) bool {
+		c := make(chan struct{})
+		go func() {
+			defer close(c)
+			wg.Wait()
+		}()
+		select {
+		case <-c:
+			return false
+		case <-time.After(timeout):
+			return true
+		}
+	}
+
+	timeout := wgWaitWithTimeout(wg, 5*time.Second)
+	p.Stop()
+
+	require.False(t, timeout, "timeout expired")
+
+	require.Equal(t, len(wantOutEvents), len(outEvents), "wrong outEvents size")
+	for k, v := range outEvents {
+		require.Equal(t, wantOutEvents[k], v, fmt.Sprintf("wrong value in outEvents with key %q", k))
+	}
+
 	t.Cleanup(func() {
 		throttleMapsCleanup()
 	})

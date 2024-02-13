@@ -2,7 +2,6 @@ package throttle
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"fmt"
 	"strconv"
@@ -22,9 +21,8 @@ type redisLimiter struct {
 	redis redisClient
 
 	// <keyPrefix>_
-	// bucket counter prefix bucket id forms key in redis: <keyPrefix>_<bucketID>
+	// bucket counter prefix, forms key in redis: <keyPrefix>_<bucketID>_<shardIdx>
 	keyPrefix bytes.Buffer
-
 	// <keyPrefix>_<keySuffix>
 	// limit key in redis
 	keyLimit string
@@ -32,50 +30,47 @@ type redisLimiter struct {
 	// contains values which will be used for incrementing remote bucket counter
 	// buckets will be flushed after every sync to contain only increment value
 	incrementLimiter *inMemoryLimiter
-
 	// contains global values synced from redis
 	totalLimiter *inMemoryLimiter
 
 	// contains indexes of buckets in incrementLimiter for sync
 	keyIdxsForSync []int
-
 	// contains bucket IDs for keys in keyIdxsForSync
 	bucketIdsForSync []int
+	// contains shards indexes of sharded bucket for sync
+	shardIdxsForSync []int
+	// contains shards values of sharded bucket for sync
+	shardValuesForSync []int64
 
 	// json field with limit value
 	valField string
-
 	// limit default value to set if limit key does not exist in redis
 	defaultVal string
 }
 
-// NewRedisLimiter return instance of redis limiter.
-func NewRedisLimiter(
-	ctx context.Context,
-	redis redisClient,
-	pipelineName, throttleFieldName, throttleFieldValue string,
-	bucketInterval time.Duration,
-	bucketCount int,
-	limit complexLimit,
+// newRedisLimiter return instance of redis limiter.
+func newRedisLimiter(
+	cfg *limiterConfig,
+	throttleFieldValue string,
 	keyLimitOverride string,
-	valField string,
+	limit *complexLimit,
 	nowFn func() time.Time,
 ) *redisLimiter {
 	rl := &redisLimiter{
-		redis:            redis,
-		incrementLimiter: NewInMemoryLimiter(bucketInterval, bucketCount, limit, nowFn),
-		totalLimiter:     NewInMemoryLimiter(bucketInterval, bucketCount, limit, nowFn),
-		valField:         valField,
+		redis:            cfg.redisClient,
+		incrementLimiter: newInMemoryLimiter(cfg, limit, nowFn),
+		totalLimiter:     newInMemoryLimiter(cfg, limit, nowFn),
+		valField:         cfg.limiterValueField,
 	}
 
-	rl.keyIdxsForSync = make([]int, 0, bucketCount)
-	rl.bucketIdsForSync = make([]int, 0, bucketCount)
+	rl.keyIdxsForSync = make([]int, 0, cfg.bucketsCount)
+	rl.bucketIdsForSync = make([]int, 0, cfg.bucketsCount)
 	rl.keyPrefix = bytes.Buffer{}
 
-	// full name of keyPrefix will be pipelineName_throttleFieldName_throttleFieldValue_limit. `limit` added afterwards
-	rl.keyPrefix.WriteString(pipelineName)
+	// keyPrefix will be pipelineName_throttleFieldName_throttleFieldValue_
+	rl.keyPrefix.WriteString(cfg.pipeline)
 	rl.keyPrefix.WriteString("_")
-	rl.keyPrefix.WriteString(throttleFieldName)
+	rl.keyPrefix.WriteString(cfg.throttleField)
 	rl.keyPrefix.WriteString("_")
 	rl.keyPrefix.WriteString(throttleFieldValue)
 	rl.keyPrefix.WriteString("_")
@@ -84,11 +79,11 @@ func NewRedisLimiter(
 	} else {
 		rl.keyLimit = keyLimitOverride
 	}
-	if valField == "" {
+	if rl.valField == "" {
 		rl.defaultVal = strconv.FormatInt(limit.value, 10)
 	} else {
 		// no err check since valField is string
-		valKey, _ := json.Marshal(valField)
+		valKey, _ := json.Marshal(rl.valField)
 		rl.defaultVal = fmt.Sprintf("{%s:%v}", valKey, limit.value)
 	}
 
@@ -108,8 +103,8 @@ func (l *redisLimiter) isAllowed(event *pipeline.Event, ts time.Time) bool {
 
 func (l *redisLimiter) sync() {
 	// required to prevent concurrent update of buckets via throttle plugin
-	l.incrementLimiter.mu.Lock()
-	l.totalLimiter.mu.Lock()
+	l.incrementLimiter.lock()
+	l.totalLimiter.lock()
 
 	n := time.Now()
 
@@ -117,22 +112,22 @@ func (l *redisLimiter) sync() {
 	maxID := l.incrementLimiter.rebuildBuckets(n)
 	_ = l.totalLimiter.rebuildBuckets(n)
 
-	minID := l.totalLimiter.minID
-	count := l.incrementLimiter.bucketCount
+	minID := l.totalLimiter.bucketsMinID()
+	count := l.incrementLimiter.bucketsCount()
 
 	l.keyIdxsForSync = l.keyIdxsForSync[:0]
 	l.bucketIdsForSync = l.bucketIdsForSync[:0]
 	for i := 0; i < count; i++ {
 		// no new events passed
-		if l.incrementLimiter.buckets[i] == 0 {
+		if l.incrementLimiter.isBucketEmpty(i) {
 			continue
 		}
 		l.keyIdxsForSync = append(l.keyIdxsForSync, i)
 		l.bucketIdsForSync = append(l.bucketIdsForSync, minID+i)
 	}
 
-	l.totalLimiter.mu.Unlock()
-	l.incrementLimiter.mu.Unlock()
+	l.totalLimiter.unlock()
+	l.incrementLimiter.unlock()
 
 	if len(l.bucketIdsForSync) == 0 {
 		return
@@ -146,64 +141,64 @@ func (l *redisLimiter) sync() {
 
 func (l *redisLimiter) syncLocalGlobalLimiters(maxID int) {
 	prefix := l.keyPrefix.String()
-
 	builder := new(strings.Builder)
+	tlBucketsInterval := l.totalLimiter.bucketsInterval()
 
 	for i, ID := range l.bucketIdsForSync {
 		builder.Reset()
 		builder.WriteString(prefix)
+		builder.WriteString(strconv.Itoa(ID))
 
+		// <keyPrefix>_<bucketID>
+		key := builder.String()
 		bucketIdx := l.keyIdxsForSync[i]
 
-		stringID := strconv.Itoa(ID)
-		builder.WriteString(stringID)
-		key := builder.String()
+		bucketValues := l.incrementLimiter.getBucket(bucketIdx)
+		l.shardIdxsForSync = l.shardIdxsForSync[:0]
+		l.shardValuesForSync = l.shardValuesForSync[:0]
+		for j := 0; j < len(bucketValues); j++ {
+			builder.Reset()
+			builder.WriteString(key)
+			builder.WriteString("_")
+			builder.WriteString(strconv.Itoa(j))
 
-		intCmd := l.redis.IncrBy(key, l.incrementLimiter.buckets[bucketIdx])
-		val, err := intCmd.Result()
-		if err != nil {
-			logger.Errorf("can't watch global limit for %s: %s", key, err.Error())
-			continue
+			// <keyPrefix>_<bucketID>_<shardIdx>
+			subKey := builder.String()
+
+			intCmd := l.redis.IncrBy(subKey, bucketValues[j])
+			val, err := intCmd.Result()
+			if err != nil {
+				logger.Errorf("can't watch global limit for %s: %s", key, err.Error())
+				continue
+			}
+			l.shardIdxsForSync = append(l.shardIdxsForSync, j)
+			l.shardValuesForSync = append(l.shardValuesForSync, val)
+
+			// for oldest bucket set lifetime equal to 1 bucket duration, for newest equal to ((bucket count + 1) * bucket duration)
+			l.redis.Expire(subKey, tlBucketsInterval+tlBucketsInterval*time.Duration(bucketIdx))
 		}
 
-		l.updateLimiterValues(maxID, bucketIdx, val)
-
-		// for oldest bucket set lifetime equal to 1 bucket duration, for newest equal to ((bucket count + 1) * bucket duration)
-		l.redis.Expire(key, l.totalLimiter.interval+l.totalLimiter.interval*time.Duration(bucketIdx))
+		l.updateLimiterValues(maxID, bucketIdx)
 	}
 }
 
-// updateLimiterValues checks probable shift of buckets and updates buckets values.
-func (l *redisLimiter) updateLimiterValues(maxID, bucketIdx int, totalLimiterVal int64) {
-	l.incrementLimiter.mu.Lock()
-	if l.incrementLimiter.maxID == maxID {
-		l.incrementLimiter.buckets[bucketIdx] = 0
-	} else {
-		// buckets were rebuild during request to redis
-		shift := l.incrementLimiter.maxID - maxID
-		currBucketIdx := bucketIdx - shift
-
-		// currBucketIdx < 0 means it become too old and must be ignored
-		if currBucketIdx > 0 {
-			l.incrementLimiter.buckets[currBucketIdx] = 0
+// updateLimiterValues updates buckets values
+func (l *redisLimiter) updateLimiterValues(maxID, bucketIdx int) {
+	updateLim := func(lim *inMemoryLimiter, values []int64) {
+		lim.lock()
+		// isn't actual means it becomes too old and must be ignored
+		if actualBucketIdx, actual := lim.actualizeBucketIdx(maxID, bucketIdx); actual {
+			for i, idx := range l.shardIdxsForSync {
+				lim.updateBucket(actualBucketIdx, idx, values[i])
+			}
 		}
+		lim.unlock()
 	}
-	l.incrementLimiter.mu.Unlock()
 
-	l.totalLimiter.mu.Lock()
-	if l.totalLimiter.maxID == maxID {
-		l.totalLimiter.buckets[bucketIdx] = totalLimiterVal
-	} else {
-		// buckets were rebuild during request to redis
-		shift := l.totalLimiter.maxID - maxID
-		currBucketIdx := bucketIdx - shift
-
-		// currBucketIdx < 0 means it become too old and must be ignored
-		if currBucketIdx > 0 {
-			l.totalLimiter.buckets[currBucketIdx] = totalLimiterVal
-		}
-	}
-	l.totalLimiter.mu.Unlock()
+	// reset increment limiter
+	updateLim(l.incrementLimiter, make([]int64, len(l.shardValuesForSync)))
+	// update total limiter
+	updateLim(l.totalLimiter, l.shardValuesForSync)
 }
 
 func getLimitValFromJson(data []byte, valField string) (int64, error) {

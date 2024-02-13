@@ -218,25 +218,13 @@ func (l *limitersMap) maintenance(ctx context.Context) {
 	}
 }
 
-// getNewLimiter creates new limiter based on limiter configuration.
-func (l *limitersMap) getNewLimiter(throttleKey, keyLimitOverride string, rule *rule) limiter {
+// newLimiter creates new limiter based on limiter configuration.
+func (l *limitersMap) newLimiter(throttleKey, keyLimitOverride string, rule *rule) limiter {
 	switch l.limiterCfg.backend {
 	case redisBackend:
-		return NewRedisLimiter(
-			l.limiterCfg.ctx,
-			l.limiterCfg.redisClient,
-			l.limiterCfg.pipeline,
-			l.limiterCfg.throttleField,
-			throttleKey,
-			l.limiterCfg.bucketInterval,
-			l.limiterCfg.bucketsCount,
-			rule.limit,
-			keyLimitOverride,
-			l.limiterCfg.limiterValueField,
-			l.nowFn,
-		)
+		return newRedisLimiter(l.limiterCfg, throttleKey, keyLimitOverride, &rule.limit, l.nowFn)
 	case inMemoryBackend:
-		return NewInMemoryLimiter(l.limiterCfg.bucketInterval, l.limiterCfg.bucketsCount, rule.limit, l.nowFn)
+		return newInMemoryLimiter(l.limiterCfg, &rule.limit, l.nowFn)
 	default:
 		l.logger.Panicf("unknown limiter backend: %s", l.limiterCfg.backend)
 	}
@@ -264,16 +252,15 @@ func (l *limitersMap) getOrAdd(throttleKey, keyLimitOverride string, limiterBuf 
 	key := string(limiterBuf)
 	// we could already write it between `l.mu.RUnlock()` and `l.mu.Lock()`, so we need to check again
 	l.mu.Lock()
+	defer l.mu.Unlock()
 	lim, has = l.lims[key]
 	if has {
 		lim.gen.Store(l.curGen)
-		l.mu.Unlock()
 		return lim, limiterBuf
 	}
-	newLim := l.getNewLimiter(throttleKey, keyLimitOverride, rule)
+	newLim := l.newLimiter(throttleKey, keyLimitOverride, rule)
 	lim = newLimiterWithGen(newLim, l.curGen)
 	l.lims[key] = lim
-	l.mu.Unlock()
 	return lim, limiterBuf
 }
 

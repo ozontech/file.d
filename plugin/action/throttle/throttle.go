@@ -2,6 +2,9 @@ package throttle
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"math"
 	"strings"
 	"sync"
 	"time"
@@ -16,9 +19,9 @@ import (
 	"github.com/ozontech/file.d/pipeline"
 )
 
-var (
-	defaultThrottleKey = "default"
+const defaultThrottleKey = "default"
 
+var (
 	// limiters should be shared across pipeline, so let's have a map by namespace and limiter name
 	limiters   = map[string]*limitersMap{}
 	limitersMu = &sync.RWMutex{}
@@ -109,10 +112,11 @@ type Config struct {
 	// > @3@4@5@6
 	// >
 	// > Rules to override the `default_limit` for different group of event. It's a list of objects.
-	// > Each object has the `limit` and `conditions` fields.
+	// > Each object has the `limit`, `limit_kind` and `conditions` fields as well as an optional `limit_distribution` field.
 	// > * `limit` – the value which will override the `default_limit`, if `conditions` are met.
-	// > * `limit_kind` – the type of a limit: `count` - number of messages, `size` - total size from all messages
+	// > * `limit_kind` – the type of limit: `count` - number of messages, `size` - total size from all messages
 	// > * `conditions` – the map of `event field name => event field value`. The conditions are checked using `AND` operator.
+	// > * `limit_distribution` – see `LimitDistributionConfig` for details.
 	Rules []RuleConfig `json:"rules" default:"" slice:"true"` // *
 
 	// > @3@4@5@6
@@ -120,6 +124,39 @@ type Config struct {
 	// > Time interval after which unused limiters are removed.
 	LimiterExpiration  cfg.Duration `json:"limiter_expiration" parse:"duration" default:"30m"` // *
 	LimiterExpiration_ time.Duration
+
+	// > @3@4@5@6
+	// >
+	// > It allows to distribute the `default_limit` between events by condition.
+	// >
+	// > `LimitDistributionConfig` params:
+	// > * `field` - the event field on which the distribution will be based.
+	// > * `ratios` - the list of objects. Each object has:
+	// > 	* `ratio` - distribution ratio, value must be in range [0.0;1.0].
+	// > 	* `values` - the list of strings which contains all `field` values that fall into this distribution.
+	// >
+	// >> Notes:
+	// >> 1. Sum of ratios must be in range [0.0;1.0].
+	// >> 2. If sum of ratios less than 1, then adding **default distribution** with ratio **1-sum**,
+	// >> otherwise **default distribution** isn't used.
+	// >> All events for which the value in the `field` doesn't fall into any of the distributions:
+	// >>   * fall into default distribution, if it exists
+	// >>   * throttled, otherwise
+	// >
+	// > `LimitDistributionConfig` example:
+	// > ```yaml
+	// > field: log.level
+	// > ratios:
+	// >   - ratio: 0.5
+	// >     values: ['error']
+	// >   - ratio: 0.3
+	// >     values: ['warn', 'info']
+	// > ```
+	// > For this config and the `default_limit=100`:
+	// > * events with `log.level=error` will have a limit of 50
+	// > * events with `log.level=warn` or `log.level=info` will have a limit of 30
+	// > * all other events will have a limit of 20
+	LimitDistribution LimitDistributionConfig `json:"limit_distribution" child:"true"` // *
 }
 
 type RedisBackendConfig struct {
@@ -183,9 +220,66 @@ type RedisBackendConfig struct {
 }
 
 type RuleConfig struct {
-	Limit      int64             `json:"limit"`
-	LimitKind  string            `json:"limit_kind" default:"count" options:"count|size"`
-	Conditions map[string]string `json:"conditions"`
+	Limit             int64                   `json:"limit"`
+	LimitKind         string                  `json:"limit_kind" default:"count" options:"count|size"`
+	Conditions        map[string]string       `json:"conditions"`
+	LimitDistribution LimitDistributionConfig `json:"limit_distribution" child:"true"`
+}
+
+type ComplexRatio struct {
+	Ratio  float64  `json:"ratio" required:"true"`
+	Values []string `json:"values" required:"true"`
+}
+
+type LimitDistributionConfig struct {
+	Field  cfg.FieldSelector `json:"field" default:"" parse:"selector"`
+	Field_ []string
+
+	Ratios []ComplexRatio `json:"ratios" slice:"true"`
+}
+
+func (c LimitDistributionConfig) parse() (limitDistributions, error) {
+	ld := limitDistributions{
+		field:         c.Field_,
+		distributions: make([]float64, len(c.Ratios)),
+		idxByKey:      map[string]int{},
+	}
+
+	if len(c.Field_) == 0 {
+		return ld, nil
+	}
+	if len(c.Ratios) == 0 {
+		return ld, errors.New(`empty "ratios"`)
+	}
+
+	var ratioSum float64
+	for i, r := range c.Ratios {
+		if r.Ratio < 0 || r.Ratio > 1 {
+			return ld, errors.New(`"ratio" value must be in range [0.0;1.0]`)
+		}
+		if len(r.Values) == 0 {
+			return ld, fmt.Errorf(`empty "values" in ratio #%d`, i)
+		}
+
+		ratioSum += r.Ratio
+		for _, v := range r.Values {
+			if _, ok := ld.idxByKey[v]; ok {
+				return ld, fmt.Errorf(`value %q is duplicated in "ratios" list`, v)
+			}
+			ld.idxByKey[v] = i
+		}
+
+		ld.distributions[i] = r.Ratio
+	}
+
+	dif := 1 - ratioSum
+	if dif < 0 {
+		return ld, errors.New("sum of ratios must be less than or equal to 1")
+	}
+
+	ld.defDistribution = math.Round(dif*100) / 100
+
+	return ld, nil
 }
 
 func init() {
@@ -201,9 +295,15 @@ func factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginParams) {
 	p.config = config.(*Config)
+	p.logger = params.Logger
+
+	ld, err := p.config.LimitDistribution.parse()
+	if err != nil {
+		p.logger.Fatal("can't parse limit_distribution", zap.Error(err))
+	}
+
 	p.registerMetrics(params.MetricCtl)
 
-	p.logger = params.Logger
 	p.pipeline = params.PipelineName
 	ctx, cancel := context.WithCancel(context.Background())
 	p.ctx = ctx
@@ -265,10 +365,23 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 	limitersMu.Unlock()
 
 	for i, r := range p.config.Rules {
-		p.rules = append(p.rules, NewRule(r.Conditions, complexLimit{r.Limit, r.LimitKind}, i))
+		ldRule, err := r.LimitDistribution.parse()
+		if err != nil {
+			p.logger.Fatal("can't parse rule's limit_distribution", zap.Error(err), zap.Int("rule", i))
+		}
+
+		p.rules = append(p.rules, newRule(
+			r.Conditions,
+			complexLimit{r.Limit, r.LimitKind, ldRule},
+			i,
+		))
 	}
 
-	p.rules = append(p.rules, NewRule(map[string]string{}, complexLimit{p.config.DefaultLimit, p.config.LimitKind}, len(p.config.Rules)))
+	p.rules = append(p.rules, newRule(
+		map[string]string{},
+		complexLimit{p.config.DefaultLimit, p.config.LimitKind, ld},
+		len(p.config.Rules),
+	))
 }
 
 func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
@@ -318,12 +431,12 @@ func (p *Plugin) isAllowed(event *pipeline.Event) bool {
 		keyLimitOverride = strings.Clone(event.Root.Dig(p.config.RedisBackendCfg.LimiterKeyField_...).AsString())
 	}
 
-	for _, rule := range p.rules {
-		if !rule.isMatch(event) {
+	for _, r := range p.rules {
+		if !r.isMatch(event) {
 			continue
 		}
 		var lim limiter
-		lim, p.limiterBuf = p.limitersMap.getOrAdd(throttleKey, keyLimitOverride, p.limiterBuf, rule)
+		lim, p.limiterBuf = p.limitersMap.getOrAdd(throttleKey, keyLimitOverride, p.limiterBuf, r)
 		return lim.isAllowed(event, ts)
 	}
 
