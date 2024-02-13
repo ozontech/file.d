@@ -58,8 +58,8 @@ func (l *inMemoryLimiter) isAllowed(event *pipeline.Event, ts time.Time) bool {
 		key := event.Root.Dig(l.limit.distributions.field...).AsString()
 		shard, distribution = l.limit.distributions.get(key)
 
-		// The shard index in the bucket matches the priority value index in priorities,
-		// but is shifted by 1 because default priority has index 0.
+		// The shard index in the bucket matches the distribution value index in distributions,
+		// but is shifted by 1 because default distribution has index 0.
 		shard++
 	}
 
