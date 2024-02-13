@@ -690,7 +690,7 @@ func TestLimitDistributionConfigParse(t *testing.T) {
 	}
 }
 
-func TestThrottleWithPriorities(t *testing.T) {
+func TestThrottleWithDistribution(t *testing.T) {
 	defaultLimit := 12
 	config := &Config{
 		ThrottleField:  "k8s_pod",
