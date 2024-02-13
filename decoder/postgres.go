@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"fmt"
 
-	insaneJSON "github.com/ozontech/insane-json"
+	insaneJSON "github.com/vitkovskii/insane-json"
 )
 
 const (

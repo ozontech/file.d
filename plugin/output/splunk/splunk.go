@@ -14,9 +14,10 @@ import (
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
-	insaneJSON "github.com/ozontech/insane-json"
 	"github.com/prometheus/client_golang/prometheus"
+	insaneJSON "github.com/vitkovskii/insane-json"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
 /*{ introduction
@@ -32,7 +33,7 @@ type Plugin struct {
 	client       http.Client
 	logger       *zap.SugaredLogger
 	avgEventSize int
-	batcher      *pipeline.Batcher
+	batcher      *pipeline.RetriableBatcher
 	controller   pipeline.OutputPluginController
 
 	// plugin metrics
@@ -82,6 +83,29 @@ type Config struct {
 	// > After this timeout the batch will be sent even if batch isn't completed.
 	BatchFlushTimeout  cfg.Duration `json:"batch_flush_timeout" default:"200ms" parse:"duration"` // *
 	BatchFlushTimeout_ time.Duration
+
+	// > @3@4@5@6
+	// >
+	// > Retries of insertion. If File.d cannot insert for this number of attempts,
+	// > File.d will fall with non-zero exit code or skip message (see fatal_on_failed_insert).
+	Retry int `json:"retry" default:"10"` // *
+
+	// > @3@4@5@6
+	// >
+	// > After an insert error, fall with a non-zero exit code or not
+	// > **Experimental feature**
+	FatalOnFailedInsert bool `json:"fatal_on_failed_insert" default:"false"` // *
+
+	// > @3@4@5@6
+	// >
+	// > Retention milliseconds for retry to DB.
+	Retention  cfg.Duration `json:"retention" default:"1s" parse:"duration"` // *
+	Retention_ time.Duration
+
+	// > @3@4@5@6
+	// >
+	// > Multiplier for exponential increase of retention between retries
+	RetentionExponentMultiplier int `json:"retention_exponentially_multiplier" default:"2"` // *
 }
 
 type data struct {
@@ -107,10 +131,9 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.registerMetrics(params.MetricCtl)
 	p.client = p.newClient(p.config.RequestTimeout_)
 
-	p.batcher = pipeline.NewBatcher(pipeline.BatcherOptions{
+	batcherOpts := pipeline.BatcherOptions{
 		PipelineName:   params.PipelineName,
 		OutputType:     outPluginType,
-		OutFn:          p.out,
 		MaintenanceFn:  p.maintenance,
 		Controller:     p.controller,
 		Workers:        p.config.WorkersCount_,
@@ -118,7 +141,32 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		BatchSizeBytes: p.config.BatchSizeBytes_,
 		FlushTimeout:   p.config.BatchFlushTimeout_,
 		MetricCtl:      params.MetricCtl,
-	})
+	}
+
+	backoffOpts := pipeline.BackoffOpts{
+		MinRetention: p.config.Retention_,
+		Multiplier:   float64(p.config.RetentionExponentMultiplier),
+		AttemptNum:   p.config.Retry,
+	}
+
+	onError := func(err error) {
+		var level zapcore.Level
+		if p.config.FatalOnFailedInsert {
+			level = zapcore.FatalLevel
+		} else {
+			level = zapcore.ErrorLevel
+		}
+
+		p.logger.Desugar().Log(level, "can't send data to splunk", zap.Error(err),
+			zap.Int("retries", p.config.Retry))
+	}
+
+	p.batcher = pipeline.NewRetriableBatcher(
+		&batcherOpts,
+		p.out,
+		backoffOpts,
+		onError,
+	)
 
 	p.batcher.Start(context.TODO())
 }
@@ -135,7 +183,7 @@ func (p *Plugin) Out(event *pipeline.Event) {
 	p.batcher.Add(event)
 }
 
-func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
+func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) error {
 	if *workerData == nil {
 		*workerData = &data{
 			outBuf: make([]byte, 0, p.config.BatchSize_*p.avgEventSize),
@@ -161,19 +209,15 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 
 	p.logger.Debugf("trying to send: %s", outBuf)
 
-	for {
-		err := p.send(outBuf)
-		if err != nil {
-			p.sendErrorMetric.Inc()
-			p.logger.Errorf("can't send data to splunk address=%s: %s", p.config.Endpoint, err.Error())
-			time.Sleep(time.Second)
-
-			continue
-		}
-
-		break
+	err := p.send(outBuf)
+	if err != nil {
+		p.sendErrorMetric.Inc()
+		p.logger.Errorf("can't send data to splunk address=%s: %s", p.config.Endpoint, err.Error())
+	} else {
+		p.logger.Debugf("successfully sent: %s", outBuf)
 	}
-	p.logger.Debugf("successfully sent: %s", outBuf)
+
+	return err
 }
 
 func (p *Plugin) maintenance(_ *pipeline.WorkerData) {}

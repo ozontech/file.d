@@ -13,6 +13,7 @@ require (
 	github.com/alecthomas/units v0.0.0-20211218093645-b94a6e3cc137
 	github.com/alicebob/miniredis/v2 v2.30.5
 	github.com/bitly/go-simplejson v0.5.1
+	github.com/cenkalti/backoff/v4 v4.2.1
 	github.com/cespare/xxhash/v2 v2.2.0
 	github.com/euank/go-kmsg-parser v2.0.0+incompatible
 	github.com/go-redis/redis v6.15.9+incompatible
@@ -24,12 +25,12 @@ require (
 	github.com/jackc/pgx/v4 v4.18.1
 	github.com/klauspost/compress v1.16.7
 	github.com/minio/minio-go v6.0.14+incompatible
-	github.com/ozontech/insane-json v0.1.8
 	github.com/prometheus/client_golang v1.16.0
 	github.com/rjeczalik/notify v0.9.3
 	github.com/satori/go.uuid v1.2.0
 	github.com/stretchr/testify v1.8.4
 	github.com/valyala/fasthttp v1.48.0
+	github.com/vitkovskii/insane-json v0.1.7
 	github.com/xdg-go/scram v1.1.2
 	go.uber.org/atomic v1.11.0
 	go.uber.org/automaxprocs v1.5.3

@@ -14,6 +14,7 @@ import (
 	"github.com/ozontech/file.d/xtls"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
 /*{ introduction
@@ -36,7 +37,7 @@ type Plugin struct {
 	controller   pipeline.OutputPluginController
 
 	producer sarama.SyncProducer
-	batcher  *pipeline.Batcher
+	batcher  *pipeline.RetriableBatcher
 
 	// plugin metrics
 	sendErrorMetric prometheus.Counter
@@ -97,6 +98,29 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
+	// > Retries of insertion. If File.d cannot insert for this number of attempts,
+	// > File.d will fall with non-zero exit code or skip message (see fatal_on_failed_insert).
+	Retry int `json:"retry" default:"10"` // *
+
+	// > @3@4@5@6
+	// >
+	// > After an insert error, fall with a non-zero exit code or not
+	// > **Experimental feature**
+	FatalOnFailedInsert bool `json:"fatal_on_failed_insert" default:"false"` // *
+
+	// > @3@4@5@6
+	// >
+	// > Retention milliseconds for retry.
+	Retention  cfg.Duration `json:"retention" default:"50ms" parse:"duration"` // *
+	Retention_ time.Duration
+
+	// > @3@4@5@6
+	// >
+	// > Multiplier for exponential increase of retention between retries
+	RetentionExponentMultiplier int `json:"retention_exponentially_multiplier" default:"2"` // *
+
+	// > @3@4@5@6
+	// >
 	// > If set, the plugin will use SASL authentications mechanism.
 	SaslEnabled bool `json:"is_sasl_enabled" default:"false"` // *
 
@@ -149,20 +173,50 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.controller = params.Controller
 	p.registerMetrics(params.MetricCtl)
 
+	if p.config.Retention_ < 1 {
+		p.logger.Fatal("'retention' can't be <1")
+	}
+
 	p.logger.Infof("workers count=%d, batch size=%d", p.config.WorkersCount_, p.config.BatchSize_)
 
 	p.producer = NewProducer(p.config, p.logger)
-	p.batcher = pipeline.NewBatcher(pipeline.BatcherOptions{
+
+	batcherOpts := pipeline.BatcherOptions{
 		PipelineName:   params.PipelineName,
 		OutputType:     outPluginType,
-		OutFn:          p.out,
 		Controller:     p.controller,
 		Workers:        p.config.WorkersCount_,
 		BatchSizeCount: p.config.BatchSize_,
 		BatchSizeBytes: p.config.BatchSizeBytes_,
 		FlushTimeout:   p.config.BatchFlushTimeout_,
 		MetricCtl:      params.MetricCtl,
-	})
+	}
+
+	backoffOpts := pipeline.BackoffOpts{
+		MinRetention: p.config.Retention_,
+		Multiplier:   float64(p.config.RetentionExponentMultiplier),
+		AttemptNum:   p.config.Retry,
+	}
+
+	onError := func(err error) {
+		var level zapcore.Level
+		if p.config.FatalOnFailedInsert {
+			level = zapcore.FatalLevel
+		} else {
+			level = zapcore.ErrorLevel
+		}
+
+		p.logger.Desugar().Log(level, "can't write batch",
+			zap.Int("retries", p.config.Retry),
+		)
+	}
+
+	p.batcher = pipeline.NewRetriableBatcher(
+		&batcherOpts,
+		p.out,
+		backoffOpts,
+		onError,
+	)
 
 	p.batcher.Start(context.TODO())
 }
@@ -175,7 +229,7 @@ func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 	p.sendErrorMetric = ctl.RegisterCounter("output_kafka_send_errors", "Total Kafka send errors")
 }
 
-func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
+func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) error {
 	if *workerData == nil {
 		*workerData = &data{
 			messages: make([]*sarama.ProducerMessage, p.config.BatchSize_),
@@ -211,8 +265,6 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 		i++
 	})
 
-	data.outBuf = outBuf
-
 	err := p.producer.SendMessages(data.messages[:i])
 	if err != nil {
 		errs := err.(sarama.ProducerErrors)
@@ -220,8 +272,13 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 			p.logger.Errorf("can't write batch: %s", e.Err.Error())
 		}
 		p.sendErrorMetric.Add(float64(len(errs)))
-		p.controller.Error("some events from batch were not written")
+		p.logger.Error(
+			"an attempt to insert a batch failed",
+			zap.Error(err),
+		)
 	}
+
+	return err
 }
 
 func (p *Plugin) Stop() {

@@ -8,7 +8,7 @@ import (
 	"time"
 	"unsafe"
 
-	insaneJSON "github.com/ozontech/insane-json"
+	insaneJSON "github.com/vitkovskii/insane-json"
 )
 
 // Clone deeply copies string

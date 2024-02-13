@@ -15,10 +15,11 @@ import (
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/xtls"
-	insaneJSON "github.com/ozontech/insane-json"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/valyala/fasthttp"
+	insaneJSON "github.com/vitkovskii/insane-json"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
 /*{ introduction
@@ -29,7 +30,6 @@ If a network error occurs, the batch will infinitely try to be delivered to the 
 const (
 	outPluginType     = "elasticsearch"
 	NDJSONContentType = "application/x-ndjson"
-	retryDelay        = time.Second
 )
 
 var (
@@ -46,7 +46,7 @@ type Plugin struct {
 	avgEventSize int
 	time         string
 	headerPrefix string
-	batcher      *pipeline.Batcher
+	batcher      *pipeline.RetriableBatcher
 	controller   pipeline.OutputPluginController
 	mu           *sync.Mutex
 
@@ -139,6 +139,29 @@ type Config struct {
 	// > Operation type to be used in batch requests. It can be `index` or `create`. Default is `index`.
 	// > > Check out [_bulk API doc](https://www.elastic.co/guide/en/elasticsearch/reference/current/docs-bulk.html) for details.
 	BatchOpType string `json:"batch_op_type" default:"index" options:"index|create"` // *
+
+	// > @3@4@5@6
+	// >
+	// > Retries of insertion. If File.d cannot insert for this number of attempts,
+	// > File.d will fall with non-zero exit code or skip message (see fatal_on_failed_insert).
+	Retry int `json:"retry" default:"10"` // *
+
+	// > @3@4@5@6
+	// >
+	// > After an insert error, fall with a non-zero exit code or not
+	// > **Experimental feature**
+	FatalOnFailedInsert bool `json:"fatal_on_failed_insert" default:"false"` // *
+
+	// > @3@4@5@6
+	// >
+	// > Retention milliseconds for retry to DB.
+	Retention  cfg.Duration `json:"retention" default:"1s" parse:"duration"` // *
+	Retention_ time.Duration
+
+	// > @3@4@5@6
+	// >
+	// > Multiplier for exponential increase of retention between retries
+	RetentionExponentMultiplier int `json:"retention_exponentially_multiplier" default:"2"` // *
 }
 
 type data struct {
@@ -203,10 +226,10 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.maintenance(nil)
 
 	p.logger.Info("starting batcher", zap.Duration("timeout", p.config.BatchFlushTimeout_))
-	p.batcher = pipeline.NewBatcher(pipeline.BatcherOptions{
+
+	batcherOpts := pipeline.BatcherOptions{
 		PipelineName:        params.PipelineName,
 		OutputType:          outPluginType,
-		OutFn:               p.out,
 		MaintenanceFn:       p.maintenance,
 		Controller:          p.controller,
 		Workers:             p.config.WorkersCount_,
@@ -215,7 +238,33 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		FlushTimeout:        p.config.BatchFlushTimeout_,
 		MaintenanceInterval: time.Minute,
 		MetricCtl:           params.MetricCtl,
-	})
+	}
+
+	backoffOpts := pipeline.BackoffOpts{
+		MinRetention: p.config.Retention_,
+		Multiplier:   float64(p.config.RetentionExponentMultiplier),
+		AttemptNum:   p.config.Retry,
+	}
+
+	onError := func(err error) {
+		var level zapcore.Level
+		if p.config.FatalOnFailedInsert {
+			level = zapcore.FatalLevel
+		} else {
+			level = zapcore.ErrorLevel
+		}
+
+		p.logger.Log(level, "can't send to the elastic", zap.Error(err),
+			zap.Int("retries", p.config.Retry),
+		)
+	}
+
+	p.batcher = pipeline.NewRetriableBatcher(
+		&batcherOpts,
+		p.out,
+		backoffOpts,
+		onError,
+	)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	p.cancel = cancel
@@ -237,7 +286,7 @@ func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 	p.indexingErrorsMetric = ctl.RegisterCounter("output_elasticsearch_index_error", "Number of elasticsearch indexing errors")
 }
 
-func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
+func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) error {
 	if *workerData == nil {
 		*workerData = &data{
 			outBuf: make([]byte, 0, p.config.BatchSize_*p.avgEventSize),
@@ -255,14 +304,12 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 		data.outBuf = p.appendEvent(data.outBuf, event)
 	})
 
-	for {
-		if err := p.send(data.outBuf); err != nil {
-			p.sendErrorMetric.Inc()
-			p.logger.Error("can't send to the elastic, will try other endpoint", zap.Error(err))
-		} else {
-			break
-		}
+	err := p.send(data.outBuf)
+	if err != nil {
+		p.sendErrorMetric.Inc()
+		p.logger.Error("can't send to the elastic, will try other endpoint", zap.Error(err))
 	}
+	return err
 }
 
 func (p *Plugin) send(body []byte) error {
@@ -279,14 +326,12 @@ func (p *Plugin) send(body []byte) error {
 	p.setAuthHeader(req)
 
 	if err := p.client.DoTimeout(req, resp, p.config.ConnectionTimeout_); err != nil {
-		time.Sleep(retryDelay)
 		return fmt.Errorf("can't send batch to %s: %s", endpoint.String(), err.Error())
 	}
 
 	respContent := resp.Body()
 
 	if statusCode := resp.Header.StatusCode(); statusCode < http.StatusOK || statusCode > http.StatusAccepted {
-		time.Sleep(retryDelay)
 		return fmt.Errorf("response status from %s isn't OK: status=%d, body=%s", endpoint.String(), statusCode, string(respContent))
 	}
 

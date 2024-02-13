@@ -20,6 +20,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
 /*{ introduction
@@ -43,7 +44,7 @@ type Plugin struct {
 	logger *zap.Logger
 
 	config     *Config
-	batcher    *pipeline.Batcher
+	batcher    *pipeline.RetriableBatcher
 	ctx        context.Context
 	cancelFunc context.CancelFunc
 
@@ -227,8 +228,14 @@ type Config struct {
 	// > @3@4@5@6
 	// >
 	// > Retries of insertion. If File.d cannot insert for this number of attempts,
-	// > File.d will fall with non-zero exit code.
+	// > File.d will fall with non-zero exit code or skip message (see fatal_on_failed_insert).
 	Retry int `json:"retry" default:"10"` // *
+
+	// > @3@4@5@6
+	// >
+	// > After an insert error, fall with a non-zero exit code or not
+	// > **Experimental feature**
+	FatalOnFailedInsert bool `json:"fatal_on_failed_insert" default:"false"` // *
 
 	// > @3@4@5@6
 	// >
@@ -241,6 +248,11 @@ type Config struct {
 	// > Retention milliseconds for retry to DB.
 	Retention  cfg.Duration `json:"retention" default:"50ms" parse:"duration"` // *
 	Retention_ time.Duration
+
+	// > @3@4@5@6
+	// >
+	// > Multiplier for exponential increase of retention between retries
+	RetentionExponentMultiplier int `json:"retention_exponentially_multiplier" default:"2"` // *
 
 	// > @3@4@5@6
 	// >
@@ -328,9 +340,6 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.registerMetrics(params.MetricCtl)
 	p.ctx, p.cancelFunc = context.WithCancel(context.Background())
 
-	if p.config.Retry < 1 {
-		p.logger.Fatal("'retry' can't be <1")
-	}
 	if p.config.Retention_ < 1 {
 		p.logger.Fatal("'retention' can't be <1")
 	}
@@ -405,17 +414,42 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		}
 	}
 
-	p.batcher = pipeline.NewBatcher(pipeline.BatcherOptions{
+	batcherOpts := pipeline.BatcherOptions{
 		PipelineName:   params.PipelineName,
 		OutputType:     outPluginType,
-		OutFn:          p.out,
 		Controller:     params.Controller,
 		Workers:        p.config.WorkersCount_,
 		BatchSizeCount: p.config.BatchSize_,
 		BatchSizeBytes: p.config.BatchSizeBytes_,
 		FlushTimeout:   p.config.BatchFlushTimeout_,
 		MetricCtl:      params.MetricCtl,
-	})
+	}
+
+	backoffOpts := pipeline.BackoffOpts{
+		MinRetention: p.config.Retention_,
+		Multiplier:   float64(p.config.RetentionExponentMultiplier),
+		AttemptNum:   p.config.Retry,
+	}
+
+	onError := func(err error) {
+		var level zapcore.Level
+		if p.config.FatalOnFailedInsert {
+			level = zapcore.FatalLevel
+		} else {
+			level = zapcore.ErrorLevel
+		}
+
+		p.logger.Log(level, "can't insert to the table", zap.Error(err),
+			zap.Int("retries", p.config.Retry),
+			zap.String("table", p.config.Table))
+	}
+
+	p.batcher = pipeline.NewRetriableBatcher(
+		&batcherOpts,
+		p.out,
+		backoffOpts,
+		onError,
+	)
 
 	p.batcher.Start(p.ctx)
 }
@@ -443,7 +477,7 @@ func (d data) reset() {
 	}
 }
 
-func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
+func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) error {
 	if *workerData == nil {
 		// we don't check the error, schema already validated in the Start
 		columns, _ := inferInsaneColInputs(p.config.Columns)
@@ -484,22 +518,23 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 	})
 
 	var err error
-	for try := 0; try < p.config.Retry; try++ {
+	for i := range p.instances {
 		requestID := p.requestID.Inc()
-		clickhouse := p.getInstance(requestID, try)
-		err = p.do(clickhouse, data.input)
+		clickhouse := p.getInstance(requestID, i)
+		err := p.do(clickhouse, data.input)
 		if err == nil {
-			break
+			return nil
 		}
-		p.insertErrorsMetric.Inc()
-		time.Sleep(p.config.Retention_)
-		p.logger.Error("an attempt to insert a batch failed", zap.Error(err))
 	}
 	if err != nil {
-		p.logger.Fatal("can't insert to the table", zap.Error(err),
-			zap.Int("retries", p.config.Retry),
-			zap.String("table", p.config.Table))
+		p.insertErrorsMetric.Inc()
+		p.logger.Error(
+			"an attempt to insert a batch failed",
+			zap.Error(err),
+		)
 	}
+
+	return err
 }
 
 func (p *Plugin) do(clickhouse Clickhouse, queryInput proto.Input) error {

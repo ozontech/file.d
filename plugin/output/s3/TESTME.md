@@ -52,12 +52,12 @@ pipelines:
       type: http
       emulate_mode: "no"
       address: ":9200"
-      actions:
-        - type: json_decode
-          field: message
+    actions:
+    - type: json_decode
+      field: message
     output:
       type: s3
-      file_plugin:
+      file_config:
         retention_interval: 10s
       endpoint: "0.0.0.0:19001"
       access_key: "minio_access_key"
