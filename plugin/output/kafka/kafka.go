@@ -98,6 +98,13 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
+	// > The maximum permitted size of a message.
+	// >  Should be set equal to or smaller than the broker's `message.max.bytes`.
+	MaxMessageBytes  cfg.Expression `json:"max_message_bytes" default:"1000000" parse:"expression"` // *
+	MaxMessageBytes_ int
+
+	// > @3@4@5@6
+	// >
 	// > Retries of insertion. If File.d cannot insert for this number of attempts,
 	// > File.d will fall with non-zero exit code or skip message (see fatal_on_failed_insert).
 	Retry int `json:"retry" default:"10"` // *
@@ -321,6 +328,7 @@ func NewProducer(c *Config, l *zap.SugaredLogger) sarama.SyncProducer {
 		config.Net.TLS.Config = tlsCfg.Build()
 	}
 
+	config.Producer.MaxMessageBytes = c.MaxMessageBytes_
 	config.Producer.Partitioner = sarama.NewRoundRobinPartitioner
 	config.Producer.Flush.Messages = c.BatchSize_
 	// kafka plugin itself cares for flush frequency, but we are using batcher so disable it.

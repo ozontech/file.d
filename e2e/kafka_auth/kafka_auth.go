@@ -86,10 +86,11 @@ func (c *Config) Configure(t *testing.T, _ *cfg.Config, _ string) {
 		testFns := []func(){
 			func() {
 				config := &kafka_out.Config{
-					Brokers:      c.Brokers,
-					DefaultTopic: outTopic,
-					ClientID:     "test-auth-out",
-					BatchSize_:   10,
+					Brokers:          c.Brokers,
+					DefaultTopic:     outTopic,
+					ClientID:         "test-auth-out",
+					BatchSize_:       10,
+					MaxMessageBytes_: 1000000,
 				}
 				if tt.sasl.Enabled {
 					config.SaslEnabled = true
