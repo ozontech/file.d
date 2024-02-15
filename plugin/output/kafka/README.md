@@ -57,6 +57,13 @@ After this timeout the batch will be sent even if batch isn't full.
 
 <br>
 
+**`max_message_bytes`** *`cfg.Expression`* *`default=1000000`* 
+
+The maximum permitted size of a message.
+Should be set equal to or smaller than the broker's `message.max.bytes`.
+
+<br>
+
 **`retry`** *`int`* *`default=10`* 
 
 Retries of insertion. If File.d cannot insert for this number of attempts,

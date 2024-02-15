@@ -170,7 +170,7 @@ func (p *Plugin) convert(node *insaneJSON.Node) {
 	p.buf = append(p.buf, nodeStr[:idx]...)
 	nodeStr = nodeStr[idx+1:]
 
-	for len(nodeStr) > 0 {
+	for nodeStr != "" {
 		ch := nodeStr[0]
 		switch ch {
 		case '\\':

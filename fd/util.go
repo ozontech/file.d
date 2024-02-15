@@ -149,7 +149,7 @@ func extractConditions(condJSON *simplejson.Json) (pipeline.MatchConditions, err
 		}
 
 		if value, ok := obj.(string); ok {
-			if len(value) > 0 && value[0] == '/' {
+			if value != "" && value[0] == '/' {
 				r, err := cfg.CompileRegex(value)
 				if err != nil {
 					return nil, fmt.Errorf("can't compile regexp %s: %w", value, err)
