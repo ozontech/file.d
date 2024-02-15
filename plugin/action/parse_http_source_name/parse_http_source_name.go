@@ -21,6 +21,7 @@ It is only applicable for input plugins k8s and file.
 type Plugin struct {
 	logger                *zap.SugaredLogger
 	config                *Config
+	allowedParams         map[string]struct{}
 	eventsProcessedMetric *prometheus.CounterVec
 }
 
@@ -37,6 +38,11 @@ type Config struct {
 	// > output will be: `{ "info": {"level": <level>} }`
 	Field  cfg.FieldSelector `json:"field" parse:"selector" required:"false" default:"source_name"` // *
 	Field_ []string
+
+	// > @3@4@5@6
+	// >
+	// > List of the allowed GET params.
+	AllowedParams []string `json:"allowed_params"` // *
 }
 
 func init() {
@@ -53,6 +59,14 @@ func factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginParams) {
 	p.config = config.(*Config)
 	p.logger = params.Logger
+
+	if len(p.config.AllowedParams) > 0 {
+		p.allowedParams = make(map[string]struct{}, len(p.config.AllowedParams))
+		for _, field := range p.config.AllowedParams {
+			p.allowedParams[field] = struct{}{}
+		}
+	}
+
 	p.registerMetrics(params.MetricCtl)
 }
 
@@ -92,8 +106,10 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	p.eventsProcessedMetric.With(prometheus.Labels{"login": login}).Inc()
 
 	for k, v := range params {
-		// TODO: add whitelist of params
-		pipeline.CreateNestedField(event.Root, []string{k}).MutateToString(v[0])
+		_, paramIsAllowed := p.allowedParams[k]
+		if paramIsAllowed {
+			pipeline.CreateNestedField(event.Root, []string{k}).MutateToString(v[0])
+		}
 	}
 
 	return pipeline.ActionPass
