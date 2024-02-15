@@ -485,6 +485,13 @@ func TestPluginAuth(t *testing.T) {
 
 			ok, login := inputInfo.Plugin.(*Plugin).auth(tc.Request)
 
+			if len(tc.Secrets) > 0 && tc.ShouldPass {
+				_, exists := tc.Secrets[login]
+				r.Equal(true, exists)
+			} else {
+				r.Equal("", login)
+			}
+
 			r.Equal(tc.ShouldPass, ok)
 			r.Equal(tc.Login, login)
 		})
