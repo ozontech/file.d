@@ -99,7 +99,7 @@ type Config struct {
 	// > @3@4@5@6
 	// >
 	// > The maximum permitted size of a message.
-	// >  Should be set equal to or smaller than the broker's `message.max.bytes`.
+	// > Should be set equal to or smaller than the broker's `message.max.bytes`.
 	MaxMessageBytes  cfg.Expression `json:"max_message_bytes" default:"1000000" parse:"expression"` // *
 	MaxMessageBytes_ int
 

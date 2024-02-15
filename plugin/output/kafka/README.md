@@ -60,7 +60,7 @@ After this timeout the batch will be sent even if batch isn't full.
 **`max_message_bytes`** *`cfg.Expression`* *`default=1000000`* 
 
 The maximum permitted size of a message.
- Should be set equal to or smaller than the broker's `message.max.bytes`.
+Should be set equal to or smaller than the broker's `message.max.bytes`.
 
 <br>
 
