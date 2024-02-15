@@ -401,23 +401,20 @@ func (p *Plugin) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func getUserIP(r *http.Request) net.IP {
 	var userIP string
-	if len(r.Header.Get("CF-Connecting-IP")) > 1 {
+	switch {
+	case len(r.Header.Get("CF-Connecting-IP")) > 1:
 		userIP = r.Header.Get("CF-Connecting-IP")
-		return net.ParseIP(userIP)
-	} else if len(r.Header.Get("X-Forwarded-For")) > 1 {
+	case len(r.Header.Get("X-Forwarded-For")) > 1:
 		userIP = r.Header.Get("X-Forwarded-For")
-		return net.ParseIP(userIP)
-	} else if len(r.Header.Get("X-Real-IP")) > 1 {
+	case len(r.Header.Get("X-Real-IP")) > 1:
 		userIP = r.Header.Get("X-Real-IP")
-		return net.ParseIP(userIP)
-	} else {
+	default:
 		userIP = r.RemoteAddr
 		if strings.Contains(userIP, ":") {
 			return net.ParseIP(strings.Split(userIP, ":")[0])
-		} else {
-			return net.ParseIP(userIP)
 		}
 	}
+	return net.ParseIP(userIP)
 }
 
 func (p *Plugin) serveBulk(w http.ResponseWriter, r *http.Request, login string) {
