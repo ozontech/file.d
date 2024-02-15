@@ -57,7 +57,7 @@ func TestProcessChunksMany(t *testing.T) {
 {"a":"2"}
 {"a":"3"}`)
 	eventBuff := make([]byte, 0)
-	eventBuff = input.processChunk(0, chunk, eventBuff, true)
+	eventBuff = input.processChunk(0, "", chunk, eventBuff, true)
 
 	wg.Wait()
 	p.Stop()
@@ -89,7 +89,7 @@ func TestProcessChunksEventBuff(t *testing.T) {
 {"a":"2"}
 {"a":"3"}`)
 	eventBuff := make([]byte, 0)
-	eventBuff = input.processChunk(0, chunk, eventBuff, false)
+	eventBuff = input.processChunk(0, "", chunk, eventBuff, false)
 
 	wg.Wait()
 	p.Stop()
@@ -121,7 +121,7 @@ func TestProcessChunksContinue(t *testing.T) {
 {"a":"3"}
 `)
 	eventBuff := []byte(`{"a":`)
-	eventBuff = input.processChunk(0, chunk, eventBuff, false)
+	eventBuff = input.processChunk(0, "", chunk, eventBuff, false)
 
 	wg.Wait()
 	p.Stop()
@@ -151,10 +151,10 @@ func TestProcessChunksContinueMany(t *testing.T) {
 
 	eventBuff := []byte(``)
 
-	eventBuff = input.processChunk(0, []byte(`{`), eventBuff, false)
-	eventBuff = input.processChunk(0, []byte(`"a"`), eventBuff, false)
-	eventBuff = input.processChunk(0, []byte(`:`), eventBuff, false)
-	eventBuff = input.processChunk(0, []byte(`"1"}`), eventBuff, true)
+	eventBuff = input.processChunk(0, "", []byte(`{`), eventBuff, false)
+	eventBuff = input.processChunk(0, "", []byte(`"a"`), eventBuff, false)
+	eventBuff = input.processChunk(0, "", []byte(`:`), eventBuff, false)
+	eventBuff = input.processChunk(0, "", []byte(`"1"}`), eventBuff, true)
 
 	wg.Wait()
 	p.Stop()
@@ -420,7 +420,14 @@ func TestPluginAuth(t *testing.T) {
 			pipelineMock.Start()
 			pipelineMock.Stop()
 
-			ok := inputInfo.Plugin.(*Plugin).auth(tc.Request)
+			ok, login := inputInfo.Plugin.(*Plugin).auth(tc.Request)
+
+			if len(tc.Secrets) > 0 && tc.ShouldPass {
+				_, exists := tc.Secrets[login]
+				r.Equal(true, exists)
+			} else {
+				r.Equal("", login)
+			}
 
 			r.Equal(tc.ShouldPass, ok)
 		})
