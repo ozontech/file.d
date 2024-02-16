@@ -6,8 +6,9 @@ import (
 
 type buckets interface {
 	get(index, shard int) int64
-	getAll(index int) []int64
+	getAll(index int, buf []int64) []int64
 	set(index, shard int, value int64)
+	reset(index int)
 	add(index, shard int, value int64)
 	isEmpty(index int) bool
 	// rebuild will rebuild buckets and returns actual bucket id
@@ -85,12 +86,16 @@ func (b *simpleBuckets) get(index, _ int) int64 {
 	return b.b[index]
 }
 
-func (b *simpleBuckets) getAll(index int) []int64 {
-	return []int64{b.b[index]}
+func (b *simpleBuckets) getAll(index int, buf []int64) []int64 {
+	return append(buf, b.b[index])
 }
 
 func (b *simpleBuckets) set(index, _ int, value int64) {
 	b.b[index] = value
+}
+
+func (b *simpleBuckets) reset(index int) {
+	b.b[index] = 0
 }
 
 func (b *simpleBuckets) add(index, _ int, value int64) {
@@ -129,8 +134,8 @@ func (b *shardedBuckets) get(index, shard int) int64 {
 	return b.b[index][shard]
 }
 
-func (b *shardedBuckets) getAll(index int) []int64 {
-	return b.b[index].copy()
+func (b *shardedBuckets) getAll(index int, buf []int64) []int64 {
+	return b.b[index].copyTo(buf)
 }
 
 func (b *shardedBuckets) add(index, shard int, value int64) {
@@ -139,6 +144,12 @@ func (b *shardedBuckets) add(index, shard int, value int64) {
 
 func (b *shardedBuckets) set(index, shard int, value int64) {
 	b.b[index][shard] = value
+}
+
+func (b *shardedBuckets) reset(index int) {
+	for i := range b.b[index] {
+		b.b[index][i] = 0
+	}
 }
 
 func (b *shardedBuckets) isEmpty(index int) bool {
@@ -164,10 +175,11 @@ func newBucketShard(size int) bucketShard {
 	return make(bucketShard, size)
 }
 
-func (s bucketShard) copy() bucketShard {
-	cpy := make([]int64, len(s))
-	copy(cpy, s)
-	return cpy
+func (s bucketShard) copyTo(buf bucketShard) bucketShard {
+	for _, v := range s {
+		buf = append(buf, v)
+	}
+	return buf
 }
 
 func rebuildBuckets[T any](b []T, meta *bucketsMeta, newBucketFn func() T, currentTs, ts time.Time) (int, []T) {

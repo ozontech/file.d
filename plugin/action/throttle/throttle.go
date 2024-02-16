@@ -239,17 +239,17 @@ type LimitDistributionConfig struct {
 }
 
 func (c LimitDistributionConfig) parse() (limitDistributions, error) {
+	if len(c.Field_) == 0 {
+		return limitDistributions{}, nil
+	}
+	if len(c.Ratios) == 0 {
+		return limitDistributions{}, errors.New(`empty "ratios"`)
+	}
+
 	ld := limitDistributions{
 		field:         c.Field_,
 		distributions: make([]float64, len(c.Ratios)),
 		idxByKey:      map[string]int{},
-	}
-
-	if len(c.Field_) == 0 {
-		return ld, nil
-	}
-	if len(c.Ratios) == 0 {
-		return ld, errors.New(`empty "ratios"`)
 	}
 
 	var ratioSum float64

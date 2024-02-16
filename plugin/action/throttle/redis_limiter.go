@@ -37,10 +37,12 @@ type redisLimiter struct {
 	keyIdxsForSync []int
 	// contains bucket IDs for keys in keyIdxsForSync
 	bucketIdsForSync []int
-	// contains shards indexes of sharded bucket for sync
-	shardIdxsForSync []int
-	// contains shards values of sharded bucket for sync
-	shardValuesForSync []int64
+	// contains bucket values for keys in keyIdxsForSync
+	bucketValuesForSync [][]int64
+	// contains shard indexes of sharded bucket for updateLimiterValues
+	shardIdxsForUpdate []int
+	// contains shard values of sharded bucket for updateLimiterValues
+	shardValuesForUpdate []int64
 
 	// json field with limit value
 	valField string
@@ -65,6 +67,7 @@ func newRedisLimiter(
 
 	rl.keyIdxsForSync = make([]int, 0, cfg.bucketsCount)
 	rl.bucketIdsForSync = make([]int, 0, cfg.bucketsCount)
+	rl.bucketValuesForSync = make([][]int64, cfg.bucketsCount)
 	rl.keyPrefix = bytes.Buffer{}
 
 	// keyPrefix will be pipelineName_throttleFieldName_throttleFieldValue_
@@ -118,12 +121,15 @@ func (l *redisLimiter) sync() {
 	l.keyIdxsForSync = l.keyIdxsForSync[:0]
 	l.bucketIdsForSync = l.bucketIdsForSync[:0]
 	for i := 0; i < count; i++ {
+		l.bucketValuesForSync[i] = l.bucketValuesForSync[i][:0]
+
 		// no new events passed
 		if l.incrementLimiter.isBucketEmpty(i) {
 			continue
 		}
 		l.keyIdxsForSync = append(l.keyIdxsForSync, i)
 		l.bucketIdsForSync = append(l.bucketIdsForSync, minID+i)
+		l.bucketValuesForSync[i] = l.incrementLimiter.getBucket(i, l.bucketValuesForSync[i])
 	}
 
 	l.totalLimiter.unlock()
@@ -153,26 +159,25 @@ func (l *redisLimiter) syncLocalGlobalLimiters(maxID int) {
 		key := builder.String()
 		bucketIdx := l.keyIdxsForSync[i]
 
-		bucketValues := l.incrementLimiter.getBucket(bucketIdx)
-		l.shardIdxsForSync = l.shardIdxsForSync[:0]
-		l.shardValuesForSync = l.shardValuesForSync[:0]
-		for j := 0; j < len(bucketValues); j++ {
+		l.shardIdxsForUpdate = l.shardIdxsForUpdate[:0]
+		l.shardValuesForUpdate = l.shardValuesForUpdate[:0]
+		for shardIdx := 0; shardIdx < len(l.bucketValuesForSync[bucketIdx]); shardIdx++ {
 			builder.Reset()
 			builder.WriteString(key)
 			builder.WriteString("_")
-			builder.WriteString(strconv.Itoa(j))
+			builder.WriteString(strconv.Itoa(shardIdx))
 
 			// <keyPrefix>_<bucketID>_<shardIdx>
 			subKey := builder.String()
 
-			intCmd := l.redis.IncrBy(subKey, bucketValues[j])
+			intCmd := l.redis.IncrBy(subKey, l.bucketValuesForSync[bucketIdx][shardIdx])
 			val, err := intCmd.Result()
 			if err != nil {
 				logger.Errorf("can't watch global limit for %s: %s", key, err.Error())
 				continue
 			}
-			l.shardIdxsForSync = append(l.shardIdxsForSync, j)
-			l.shardValuesForSync = append(l.shardValuesForSync, val)
+			l.shardIdxsForUpdate = append(l.shardIdxsForUpdate, shardIdx)
+			l.shardValuesForUpdate = append(l.shardValuesForUpdate, val)
 
 			// for oldest bucket set lifetime equal to 1 bucket duration, for newest equal to ((bucket count + 1) * bucket duration)
 			l.redis.Expire(subKey, tlBucketsInterval+tlBucketsInterval*time.Duration(bucketIdx))
@@ -188,17 +193,21 @@ func (l *redisLimiter) updateLimiterValues(maxID, bucketIdx int) {
 		lim.lock()
 		// isn't actual means it becomes too old and must be ignored
 		if actualBucketIdx, actual := lim.actualizeBucketIdx(maxID, bucketIdx); actual {
-			for i, idx := range l.shardIdxsForSync {
-				lim.updateBucket(actualBucketIdx, idx, values[i])
+			if values == nil {
+				lim.resetBucket(actualBucketIdx)
+			} else {
+				for i, idx := range l.shardIdxsForUpdate {
+					lim.updateBucket(actualBucketIdx, idx, values[i])
+				}
 			}
 		}
 		lim.unlock()
 	}
 
 	// reset increment limiter
-	updateLim(l.incrementLimiter, make([]int64, len(l.shardValuesForSync)))
+	updateLim(l.incrementLimiter, nil)
 	// update total limiter
-	updateLim(l.totalLimiter, l.shardValuesForSync)
+	updateLim(l.totalLimiter, l.shardValuesForUpdate)
 }
 
 func getLimitValFromJson(data []byte, valField string) (int64, error) {

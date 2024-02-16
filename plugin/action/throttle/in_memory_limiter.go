@@ -21,23 +21,28 @@ type inMemoryLimiter struct {
 
 // newInMemoryLimiter returns limiter instance.
 func newInMemoryLimiter(cfg *limiterConfig, limit *complexLimit, nowFn func() time.Time) *inMemoryLimiter {
-	// need copy due to `limitDistributions` structure
-	limitCopy := complexLimit{
-		value:         limit.value,
-		kind:          limit.kind,
-		distributions: limit.distributions.copy(),
-	}
+	distSize := limit.distributions.size()
 
-	return &inMemoryLimiter{
-		limit: limitCopy,
+	l := &inMemoryLimiter{
+		limit: complexLimit{
+			value: limit.value,
+			kind:  limit.kind,
+		},
 		buckets: newBuckets(
 			cfg.bucketsCount,
-			limitCopy.distributions.size()+1, // +1 because of default distribution
+			distSize+1, // +1 because of default distribution
 			cfg.bucketInterval,
 		),
 
 		nowFn: nowFn,
 	}
+
+	// need a copy due to possible runtime changes (sync with redis)
+	if distSize > 0 {
+		l.limit.distributions = limit.distributions.copy()
+	}
+
+	return l
 }
 
 func (l *inMemoryLimiter) sync() {}
@@ -86,13 +91,18 @@ func (l *inMemoryLimiter) unlock() {
 	l.mu.Unlock()
 }
 
-func (l *inMemoryLimiter) getBucket(bucketIdx int) []int64 {
-	return l.buckets.getAll(bucketIdx)
+func (l *inMemoryLimiter) getBucket(bucketIdx int, buf []int64) []int64 {
+	return l.buckets.getAll(bucketIdx, buf)
 }
 
 // Not thread safe - use lock&unlock methods!
 func (l *inMemoryLimiter) updateBucket(bucketIdx, shardIdx int, value int64) {
 	l.buckets.set(bucketIdx, shardIdx, value)
+}
+
+// Not thread safe - use lock&unlock methods!
+func (l *inMemoryLimiter) resetBucket(bucketIdx int) {
+	l.buckets.reset(bucketIdx)
 }
 
 func (l *inMemoryLimiter) isBucketEmpty(bucketIdx int) bool {
