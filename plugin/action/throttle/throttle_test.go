@@ -564,10 +564,7 @@ func TestLimitDistributionConfigParse(t *testing.T) {
 		{
 			name: "empty_cfg",
 			cfg:  LimitDistributionConfig{},
-			want: limitDistributions{
-				distributions: []float64{},
-				idxByKey:      map[string]int{},
-			},
+			want: limitDistributions{},
 		},
 		{
 			name: "valid_cfg",
@@ -673,17 +670,17 @@ func TestLimitDistributionConfigParse(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			lp, err := tt.cfg.parse()
+			ld, err := tt.cfg.parse()
 
 			require.Equal(t, tt.wantErr, err != nil, "wrong error")
 			if tt.wantErr {
 				return
 			}
 
-			require.Equal(t, tt.want.defDistribution, lp.defDistribution, "wrong defPriority")
-			require.Equal(t, true, slices.Equal(tt.want.distributions, lp.distributions), "wrong priorities")
-			require.Equal(t, len(tt.want.idxByKey), len(lp.idxByKey), "wrong idxByKey size")
-			for k, v := range lp.idxByKey {
+			require.Equal(t, tt.want.defDistribution, ld.defDistribution, "wrong defPriority")
+			require.Equal(t, true, slices.Equal(tt.want.distributions, ld.distributions), "wrong priorities")
+			require.Equal(t, len(tt.want.idxByKey), len(ld.idxByKey), "wrong idxByKey size")
+			for k, v := range ld.idxByKey {
 				require.Equal(t, tt.want.idxByKey[k], v, fmt.Sprintf("wrong value in idxByKey with key %q", k))
 			}
 		})
