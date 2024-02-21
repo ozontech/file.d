@@ -27,6 +27,7 @@ import (
 	_ "github.com/ozontech/file.d/plugin/action/join_template"
 	_ "github.com/ozontech/file.d/plugin/action/json_decode"
 	_ "github.com/ozontech/file.d/plugin/action/json_encode"
+	_ "github.com/ozontech/file.d/plugin/action/json_extract"
 	_ "github.com/ozontech/file.d/plugin/action/keep_fields"
 	_ "github.com/ozontech/file.d/plugin/action/mask"
 	_ "github.com/ozontech/file.d/plugin/action/modify"
