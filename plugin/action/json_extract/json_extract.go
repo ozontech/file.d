@@ -56,10 +56,10 @@ Performance comparison of `json_extract` and  `json_decode` plugins. Each bench 
 
 |                                         |          |             |        |             |
 |-----------------------------------------|----------|-------------|--------|-------------|
-| BenchmarkExtractObj/json_length_129-8   | 24082884 | 50.99 ns/op | 0 B/op | 0 allocs/op |
-| BenchmarkExtractObj/json_length_329-8   | 4063610  | 303.0 ns/op | 0 B/op | 0 allocs/op |
-| BenchmarkExtractObj/json_length_2329-8  | 498919   | 2383 ns/op  | 0 B/op | 0 allocs/op |
-| BenchmarkExtractObj/json_length_11129-8 | 103920   | 11756 ns/op | 0 B/op | 0 allocs/op |
+| BenchmarkExtractObj/json_length_129-8   | 24161701 | 50.80 ns/op | 0 B/op | 0 allocs/op |
+| BenchmarkExtractObj/json_length_309-8   | 4276380  | 282.9 ns/op | 0 B/op | 0 allocs/op |
+| BenchmarkExtractObj/json_length_2109-8  | 522370   | 2313 ns/op  | 0 B/op | 0 allocs/op |
+| BenchmarkExtractObj/json_length_10909-8 | 104278   | 11589 ns/op | 0 B/op | 0 allocs/op |
 
 **json_decode**
 
@@ -67,10 +67,10 @@ Performance comparison of `json_extract` and  `json_decode` plugins. Each bench 
 
 |                                              |         |             |        |             |
 |----------------------------------------------|---------|-------------|--------|-------------|
-| BenchmarkInsaneDecodeDig/json_length_129-8   | 6968088 | 171.7 ns/op | 0 B/op | 0 allocs/op |
-| BenchmarkInsaneDecodeDig/json_length_329-8   | 2122134 | 576.8 ns/op | 0 B/op | 0 allocs/op |
-| BenchmarkInsaneDecodeDig/json_length_2329-8  | 250518  | 4808 ns/op  | 8 B/op | 1 allocs/op |
-| BenchmarkInsaneDecodeDig/json_length_11129-8 | 54476   | 25769 ns/op | 8 B/op | 1 allocs/op |
+| BenchmarkInsaneDecodeDig/json_length_129-8   | 6769700 | 173.2 ns/op | 0 B/op | 0 allocs/op |
+| BenchmarkInsaneDecodeDig/json_length_309-8   | 2282385 | 522.9 ns/op | 0 B/op | 0 allocs/op |
+| BenchmarkInsaneDecodeDig/json_length_2109-8  | 177818  | 6784 ns/op  | 8 B/op | 1 allocs/op |
+| BenchmarkInsaneDecodeDig/json_length_10909-8 | 38685   | 32629 ns/op | 8 B/op | 1 allocs/op |
 }*/
 
 type Plugin struct {

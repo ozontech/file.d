@@ -145,7 +145,7 @@ func TestJsonExtract(t *testing.T) {
 func genFields(count int) string {
 	var sb strings.Builder
 	for i := 0; i < count; i++ {
-		sb.WriteString(fmt.Sprintf(`"field_%d":"val_%d",`, count, count))
+		sb.WriteString(fmt.Sprintf(`"field_%d":"val_%d",`, i, i))
 	}
 	return sb.String()
 }
