@@ -1,16 +1,16 @@
 package json_extract
 
 import (
-	"bytes"
 	"fmt"
 	"strings"
 	"sync"
 	"testing"
 
+	"github.com/go-faster/jx"
+	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/test"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	insaneJSON "github.com/vitkovskii/insane-json"
 )
 
@@ -24,8 +24,8 @@ func TestJsonExtract(t *testing.T) {
 		{
 			name: "extract_string",
 			config: &Config{
-				Field:          "json_field",
-				ExtractedField: "extracted",
+				Field:         "json_field",
+				ExtractFields: []cfg.FieldSelector{"extracted"},
 			},
 			in:   `{"field1":"value1","json_field":"{\"test\":\"test_value\",\"extracted\":\"text\"}","field3":3}`,
 			want: `{"field1":"value1","json_field":"{\"test\":\"test_value\",\"extracted\":\"text\"}","field3":3,"extracted":"text"}`,
@@ -33,8 +33,8 @@ func TestJsonExtract(t *testing.T) {
 		{
 			name: "extract_int",
 			config: &Config{
-				Field:          "json_field",
-				ExtractedField: "extracted",
+				Field:         "json_field",
+				ExtractFields: []cfg.FieldSelector{"extracted"},
 			},
 			in:   `{"field1":"value1","json_field":"{\"extracted\":5,\"test\":\"test_value\"}","field3":3}`,
 			want: `{"field1":"value1","json_field":"{\"extracted\":5,\"test\":\"test_value\"}","field3":3,"extracted":5}`,
@@ -42,8 +42,8 @@ func TestJsonExtract(t *testing.T) {
 		{
 			name: "extract_float",
 			config: &Config{
-				Field:          "json_field",
-				ExtractedField: "extracted",
+				Field:         "json_field",
+				ExtractFields: []cfg.FieldSelector{"extracted"},
 			},
 			in:   `{"field1":"value1","json_field":"{\"test\":\"test_value\",\"extracted\":95.6}","field3":3}`,
 			want: `{"field1":"value1","json_field":"{\"test\":\"test_value\",\"extracted\":95.6}","field3":3,"extracted":95.6}`,
@@ -51,17 +51,26 @@ func TestJsonExtract(t *testing.T) {
 		{
 			name: "extract_bool",
 			config: &Config{
-				Field:          "json_field",
-				ExtractedField: "extracted",
+				Field:         "json_field",
+				ExtractFields: []cfg.FieldSelector{"extracted"},
 			},
 			in:   `{"field1":"value1","json_field":"{\"test\":\"test_value\",\"extracted\":true}","field3":3}`,
 			want: `{"field1":"value1","json_field":"{\"test\":\"test_value\",\"extracted\":true}","field3":3,"extracted":true}`,
 		},
 		{
+			name: "extract_null",
+			config: &Config{
+				Field:         "json_field",
+				ExtractFields: []cfg.FieldSelector{"extracted"},
+			},
+			in:   `{"field1":"value1","json_field":"{\"extracted\":null,\"test\":\"test_value\"}","field3":3}`,
+			want: `{"field1":"value1","json_field":"{\"extracted\":null,\"test\":\"test_value\"}","field3":3,"extracted":null}`,
+		},
+		{
 			name: "extract_object",
 			config: &Config{
-				Field:          "json_field",
-				ExtractedField: "extracted",
+				Field:         "json_field",
+				ExtractFields: []cfg.FieldSelector{"extracted"},
 			},
 			in:   `{"field1":"value1","json_field":"{\"test\":\"test_value\",\"extracted\":{\"ext1\":\"val1\",\"ext2\":25}}","field3":3}`,
 			want: `{"field1":"value1","json_field":"{\"test\":\"test_value\",\"extracted\":{\"ext1\":\"val1\",\"ext2\":25}}","field3":3,"extracted":{"ext1":"val1","ext2":25}}`,
@@ -69,17 +78,32 @@ func TestJsonExtract(t *testing.T) {
 		{
 			name: "nested_fields",
 			config: &Config{
-				Field:          "log.json_field",
-				ExtractedField: "extracted.extracted2",
+				Field:         "log.json_field",
+				ExtractFields: []cfg.FieldSelector{"extracted.extracted2"},
 			},
 			in:   `{"field1":"value1","log":{"json_field":"{\"test\":\"test_value\",\"extracted\":{\"extracted1\":\"text\",\"extracted2\":15}}","field3":3}}`,
 			want: `{"field1":"value1","log":{"json_field":"{\"test\":\"test_value\",\"extracted\":{\"extracted1\":\"text\",\"extracted2\":15}}","field3":3},"extracted2":15}`,
 		},
 		{
+			name: "different_depth_fields",
+			config: &Config{
+				Field: "log.json_field",
+				ExtractFields: []cfg.FieldSelector{
+					"extracted1.extracted1_1",
+					"extracted1.extracted1_2.extracted1_2_2",
+					"extracted1.extracted1_3",
+					"extracted2",
+					"extracted3",
+				},
+			},
+			in:   `{"field1":"value1","log":{"json_field":"{\"test1\":\"test_value1\",\"extracted1\":{\"extracted1_1\":\"text\",\"extracted1_2\":{\"extracted1_2_1\":false,\"extracted1_2_2\":666},\"extracted1_3\":true},\"extracted2\":99.33,\"extracted3\":null,\"test2\":\"test_value2\"}","field3":3}}`,
+			want: `{"field1":"value1","log":{"json_field":"{\"test1\":\"test_value1\",\"extracted1\":{\"extracted1_1\":\"text\",\"extracted1_2\":{\"extracted1_2_1\":false,\"extracted1_2_2\":666},\"extracted1_3\":true},\"extracted2\":99.33,\"extracted3\":null,\"test2\":\"test_value2\"}","field3":3},"extracted1_1":"text","extracted1_3":true,"extracted1_2_2":666,"extracted2":99.33,"extracted3":null}`,
+		},
+		{
 			name: "field_not_exists",
 			config: &Config{
-				Field:          "json_field",
-				ExtractedField: "extracted",
+				Field:         "json_field",
+				ExtractFields: []cfg.FieldSelector{"extracted"},
 			},
 			in:   `{"field1":"value1","field3":3}`,
 			want: `{"field1":"value1","field3":3}`,
@@ -87,8 +111,8 @@ func TestJsonExtract(t *testing.T) {
 		{
 			name: "extracted_field_not_exists",
 			config: &Config{
-				Field:          "json_field",
-				ExtractedField: "extracted",
+				Field:         "test1",
+				ExtractFields: []cfg.FieldSelector{"extracted"},
 			},
 			in:   `{"field1":"value1","json_field":"{\"test\":\"test_value\"}","field3":3}`,
 			want: `{"field1":"value1","json_field":"{\"test\":\"test_value\"}","field3":3}`,
@@ -114,116 +138,6 @@ func TestJsonExtract(t *testing.T) {
 
 			wg.Wait()
 			p.Stop()
-		})
-	}
-}
-
-func TestFindEndJsonObject(t *testing.T) {
-	cases := []struct {
-		name         string
-		jsonBrackets string
-		wantIdx      int
-	}{
-		{
-			name:         "valid",
-			jsonBrackets: "{ {}[] }",
-			wantIdx:      7,
-		},
-		{
-			name:         "valid_simple",
-			jsonBrackets: "{}",
-			wantIdx:      1,
-		},
-		{
-			name:         "valid_multi",
-			jsonBrackets: "{ [][]{ {} } } {[]}",
-			wantIdx:      13,
-		},
-		{
-			name:         "invalid_close",
-			jsonBrackets: "{ {} []",
-			wantIdx:      -1,
-		},
-		{
-			name:         "invalid_open",
-			jsonBrackets: "{ { [] }",
-			wantIdx:      -1,
-		},
-	}
-	for _, tt := range cases {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			idx := findEndJsonObject([]byte(tt.jsonBrackets))
-			require.Equal(t, tt.wantIdx, idx)
-		})
-	}
-}
-
-func TestParseJsonValue(t *testing.T) {
-	cases := []struct {
-		name      string
-		json      string
-		wantVal   any
-		wantIsObj bool
-	}{
-		{
-			name:      "object",
-			json:      `{"field1":"value1","field2":"value2"}`,
-			wantVal:   `{"field1":"value1","field2":"value2"}`,
-			wantIsObj: true,
-		},
-		{
-			name:    "string_valid",
-			json:    `"value"`,
-			wantVal: "value",
-		},
-		{
-			name:    "string_invalid_1",
-			json:    `"value`,
-			wantVal: nil,
-		},
-		{
-			name:    "string_invalid_2",
-			json:    `value"`,
-			wantVal: nil,
-		},
-		{
-			name:    "int",
-			json:    "123",
-			wantVal: 123,
-		},
-		{
-			name:    "float",
-			json:    "123.321",
-			wantVal: 123.321,
-		},
-		{
-			name:    "bool_1",
-			json:    "true",
-			wantVal: true,
-		},
-		{
-			name:    "bool_2",
-			json:    "false",
-			wantVal: false,
-		},
-		// not supports
-		{
-			name:    "array",
-			json:    "[1, 2, 3]",
-			wantVal: nil,
-		},
-	}
-	for _, tt := range cases {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			val, isObj := parseJsonValue([]byte(tt.json))
-			require.Equal(t, tt.wantVal, val)
-			require.Equal(t, tt.wantIsObj, isObj)
 		})
 	}
 }
@@ -257,36 +171,37 @@ var extractBenchCases = []struct {
 	},
 }
 
-func BenchmarkExtractParse(b *testing.B) {
+func BenchmarkExtractObj(b *testing.B) {
 	for _, benchCase := range extractBenchCases {
 		name := fmt.Sprintf("json_length_%d", len(benchCase.json))
 
-		var data []byte
-		fieldBuf := &bytes.Buffer{}
-
 		b.Run(name, func(b *testing.B) {
-			for i := 0; i < b.N; i++ {
-				data = data[:0]
-				data = append(data, benchCase.json...)
-				data = extract(data, extractedField, fieldBuf)
-				parseJsonValue(data)
+			node := insaneJSON.Spawn()
+			od := objDecoder{
+				d:      &jx.Decoder{},
+				fields: [][]byte{[]byte(extractedField[0])},
 			}
+			for i := 0; i < b.N; i++ {
+				od.d.ResetBytes(pipeline.StringToByteUnsafe(benchCase.json))
+				// remove allocs for adding new fields to root by passing `skipAddField` flag for correct benching
+				extractObj(node, od, 0, true)
+			}
+			insaneJSON.Release(node)
 		})
 	}
 }
 
-func BenchmarkExtractParseInsane(b *testing.B) {
-	root := insaneJSON.Spawn()
-	defer insaneJSON.Release(root)
-
+func BenchmarkInsaneDecodeDig(b *testing.B) {
 	for _, benchCase := range extractBenchCases {
 		name := fmt.Sprintf("json_length_%d", len(benchCase.json))
 
 		b.Run(name, func(b *testing.B) {
+			node := insaneJSON.Spawn()
 			for i := 0; i < b.N; i++ {
-				node, _ := root.DecodeStringAdditional(benchCase.json)
+				_ = node.DecodeString(benchCase.json)
 				node.Dig(extractedField...)
 			}
+			insaneJSON.Release(node)
 		})
 	}
 }
