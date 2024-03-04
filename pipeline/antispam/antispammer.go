@@ -33,7 +33,7 @@ type Antispammer struct {
 }
 
 type source struct {
-	counter atomic.Int32
+	counter *atomic.Int32
 	name    string
 }
 
@@ -103,7 +103,7 @@ func (a *Antispammer) IsSpam(id uint64, name string, isNewSource bool, event []b
 			src = newSrc
 		} else {
 			src = source{
-				counter: atomic.Int32{},
+				counter: &atomic.Int32{},
 				name:    name,
 			}
 			a.sources[id] = src
