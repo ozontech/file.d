@@ -1,4 +1,4 @@
-# File name adding plugin
+# Parse HTTP plugin
 It adds a field containing the source name to the event and extracts remote_ip and auth login.
 It is only applicable for input plugin http.
 You need add action add_file_name before it.
