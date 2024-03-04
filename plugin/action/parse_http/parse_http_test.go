@@ -1,4 +1,4 @@
-package add_file_name
+package parse_http
 
 import (
 	"encoding/base64"
