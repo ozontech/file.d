@@ -1,4 +1,4 @@
-# File name adding plugin
+# Parse HTTP plugin
 @introduction
 
 ### Config params
