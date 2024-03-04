@@ -555,8 +555,9 @@ func TestLimitDistributionConfigParse(t *testing.T) {
 	field := []string{"level"}
 
 	tests := []struct {
-		name string
-		cfg  LimitDistributionConfig
+		name       string
+		cfg        LimitDistributionConfig
+		totalLimit int64
 
 		want    limitDistributions
 		wantErr bool
@@ -576,8 +577,13 @@ func TestLimitDistributionConfigParse(t *testing.T) {
 					{Ratio: 0.15, Values: []string{"debug"}},
 				},
 			},
+			totalLimit: 100,
 			want: limitDistributions{
-				distributions: []float64{0.5, 0.35, 0.15},
+				distributions: []complexDistribution{
+					{ratio: 0.5, limit: 50},
+					{ratio: 0.35, limit: 35},
+					{ratio: 0.15, limit: 15},
+				},
 				idxByKey: map[string]int{
 					"error": 0,
 					"warn":  1, "info": 1,
@@ -595,14 +601,22 @@ func TestLimitDistributionConfigParse(t *testing.T) {
 					{Ratio: 0.16, Values: []string{"debug"}},
 				},
 			},
+			totalLimit: 100,
 			want: limitDistributions{
-				distributions: []float64{0.5, 0.3, 0.16},
+				distributions: []complexDistribution{
+					{ratio: 0.5, limit: 50},
+					{ratio: 0.3, limit: 30},
+					{ratio: 0.16, limit: 16},
+				},
 				idxByKey: map[string]int{
 					"error": 0,
 					"warn":  1, "info": 1,
 					"debug": 2,
 				},
-				defDistribution: 0.04,
+				defDistribution: complexDistribution{
+					ratio: 0.04,
+					limit: 4,
+				},
 			},
 		},
 		{
@@ -670,7 +684,7 @@ func TestLimitDistributionConfigParse(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			ld, err := tt.cfg.parse()
+			ld, err := tt.cfg.parse(tt.totalLimit)
 
 			require.Equal(t, tt.wantErr, err != nil, "wrong error")
 			if tt.wantErr {

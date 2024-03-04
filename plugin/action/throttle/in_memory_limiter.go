@@ -1,7 +1,6 @@
 package throttle
 
 import (
-	"math"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -58,10 +57,10 @@ func (l *inMemoryLimiter) isAllowed(event *pipeline.Event, ts time.Time) bool {
 
 	// If the limit is given distributions, then sharded buckets are used
 	shard := 0
-	distribution := 1.0
+	limit := l.limit.value
 	if l.limit.distributions.size() > 0 {
 		key := event.Root.Dig(l.limit.distributions.field...).AsString()
-		shard, distribution = l.limit.distributions.get(key)
+		shard, limit = l.limit.distributions.getLimit(key)
 
 		// The shard index in the bucket matches the distribution value index in distributions,
 		// but is shifted by 1 because default distribution has index 0.
@@ -79,7 +78,6 @@ func (l *inMemoryLimiter) isAllowed(event *pipeline.Event, ts time.Time) bool {
 		logger.Fatalf("unknown type of the inMemoryLimiter: %q", l.limit.kind)
 	}
 
-	limit := int64(math.Round(distribution * float64(l.limit.value)))
 	return l.buckets.get(index, shard) <= limit
 }
 

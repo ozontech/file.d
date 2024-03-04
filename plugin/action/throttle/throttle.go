@@ -238,7 +238,7 @@ type LimitDistributionConfig struct {
 	Ratios []ComplexRatio `json:"ratios" slice:"true"`
 }
 
-func (c LimitDistributionConfig) parse() (limitDistributions, error) {
+func (c LimitDistributionConfig) parse(totalLimit int64) (limitDistributions, error) {
 	if len(c.Field_) == 0 {
 		return limitDistributions{}, nil
 	}
@@ -248,7 +248,7 @@ func (c LimitDistributionConfig) parse() (limitDistributions, error) {
 
 	ld := limitDistributions{
 		field:         c.Field_,
-		distributions: make([]float64, len(c.Ratios)),
+		distributions: make([]complexDistribution, len(c.Ratios)),
 		idxByKey:      map[string]int{},
 	}
 
@@ -269,7 +269,10 @@ func (c LimitDistributionConfig) parse() (limitDistributions, error) {
 			ld.idxByKey[v] = i
 		}
 
-		ld.distributions[i] = r.Ratio
+		ld.distributions[i] = complexDistribution{
+			ratio: r.Ratio,
+			limit: int64(math.Round(r.Ratio * float64(totalLimit))),
+		}
 	}
 
 	dif := 1 - ratioSum
@@ -277,7 +280,11 @@ func (c LimitDistributionConfig) parse() (limitDistributions, error) {
 		return ld, errors.New("sum of ratios must be less than or equal to 1")
 	}
 
-	ld.defDistribution = math.Round(dif*100) / 100
+	defRatio := math.Round(dif*100) / 100
+	ld.defDistribution = complexDistribution{
+		ratio: defRatio,
+		limit: int64(math.Round(defRatio * float64(totalLimit))),
+	}
 
 	return ld, nil
 }
@@ -297,7 +304,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 	p.config = config.(*Config)
 	p.logger = params.Logger
 
-	ld, err := p.config.LimitDistribution.parse()
+	ld, err := p.config.LimitDistribution.parse(p.config.DefaultLimit)
 	if err != nil {
 		p.logger.Fatal("can't parse limit_distribution", zap.Error(err))
 	}
@@ -365,7 +372,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 	limitersMu.Unlock()
 
 	for i, r := range p.config.Rules {
-		ldRule, err := r.LimitDistribution.parse()
+		ldRule, err := r.LimitDistribution.parse(r.Limit)
 		if err != nil {
 			p.logger.Fatal("can't parse rule's limit_distribution", zap.Error(err), zap.Int("rule", i))
 		}

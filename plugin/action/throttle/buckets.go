@@ -176,10 +176,7 @@ func newBucketShard(size int) bucketShard {
 }
 
 func (s bucketShard) copyTo(buf bucketShard) bucketShard {
-	for _, v := range s {
-		buf = append(buf, v)
-	}
-	return buf
+	return append(buf, s...)
 }
 
 func rebuildBuckets[T any](b []T, meta *bucketsMeta, newBucketFn func() T, currentTs, ts time.Time) (int, []T) {
