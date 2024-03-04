@@ -85,7 +85,7 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 
 	if sourceInfo[0] != "http" {
 		p.logger.Error(
-			"Wrong format. Do you have http input plugin? You got: ",
+			"Wrong format. Do you have http input plugin or add_file_name action? Maybe wrong field? You got: ",
 			zap.String("sourceName", sourceName),
 		)
 	}
