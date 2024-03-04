@@ -40,6 +40,7 @@
     - [modify](plugin/action/modify/README.md)
     - [move](plugin/action/move/README.md)
     - [parse_es](plugin/action/parse_es/README.md)
+    - [parse_http](plugin/action/parse_http/README.md)
     - [parse_re2](plugin/action/parse_re2/README.md)
     - [remove_fields](plugin/action/remove_fields/README.md)
     - [rename](plugin/action/rename/README.md)
