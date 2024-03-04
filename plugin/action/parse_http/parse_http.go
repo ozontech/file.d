@@ -47,7 +47,7 @@ type Config struct {
 
 func init() {
 	fd.DefaultPluginRegistry.RegisterAction(&pipeline.PluginStaticInfo{
-		Type:    "parse_http_source_name",
+		Type:    "parse_http",
 		Factory: factory,
 	})
 }
@@ -85,7 +85,7 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 
 	if sourceInfo[0] != "http" {
 		p.logger.Error(
-			"wrong format got: ",
+			"Wrong format. Do you have http input plugin? You got: ",
 			zap.String("sourceName", sourceName),
 		)
 	}
