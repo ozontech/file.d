@@ -51,7 +51,7 @@ func (c *Config) Send(t *testing.T) {
 			cl := http.Client{}
 			for j := 0; j < c.Lines; j++ {
 				rd := bytes.NewReader(samples[j%len(samples)])
-				req, err := http.NewRequest(http.MethodPost, "http://localhost:9200/", rd)
+				req, err := http.NewRequest(http.MethodPost, "http://localhost:9200/?login=e2e-test", rd)
 				require.NoError(t, err)
 				_, err = cl.Do(req)
 				require.NoError(t, err)
