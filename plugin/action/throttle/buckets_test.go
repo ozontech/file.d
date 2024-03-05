@@ -84,15 +84,17 @@ func TestRebuildBuckets(t *testing.T) {
 		currentTs time.Time
 		ts        time.Time
 	}
+	type wantData struct {
+		id      int
+		buckets []int64
+		minID   int
+		maxID   int
+	}
 
 	tests := []struct {
 		name string
 		tc   testCase
-
-		wantID      int
-		wantBuckets []int64
-		wantMinID   int
-		wantMaxID   int
+		want wantData
 	}{
 		{
 			name: "zero_min_id",
@@ -105,10 +107,12 @@ func TestRebuildBuckets(t *testing.T) {
 				},
 				currentTs: ts,
 			},
-			wantID:      -1,
-			wantBuckets: []int64{1, 2, 3},
-			wantMinID:   timeToID(ts) - 2, // 2 = count-1
-			wantMaxID:   timeToID(ts),
+			want: wantData{
+				id:      -1,
+				buckets: []int64{1, 2, 3},
+				minID:   timeToID(ts) - 2, // 2 = count-1
+				maxID:   timeToID(ts),
+			},
 		},
 		{
 			name: "current_id_not_greater_max_id",
@@ -121,10 +125,12 @@ func TestRebuildBuckets(t *testing.T) {
 				},
 				currentTs: ts,
 			},
-			wantID:      -1,
-			wantBuckets: []int64{1, 2, 3},
-			wantMinID:   timeToID(ts),
-			wantMaxID:   -1,
+			want: wantData{
+				id:      -1,
+				buckets: []int64{1, 2, 3},
+				minID:   timeToID(ts),
+				maxID:   -1,
+			},
 		},
 		{
 			name: "current_id_greater_max_id",
@@ -137,10 +143,12 @@ func TestRebuildBuckets(t *testing.T) {
 				},
 				currentTs: ts.Add(4 * time.Second),
 			},
-			wantID:      -1,
-			wantBuckets: []int64{3, 0, 0},
-			wantMinID:   timeToID(ts.Add(2 * time.Second)),
-			wantMaxID:   timeToID(ts.Add(4 * time.Second)),
+			want: wantData{
+				id:      -1,
+				buckets: []int64{3, 0, 0},
+				minID:   timeToID(ts.Add(2 * time.Second)),
+				maxID:   timeToID(ts.Add(4 * time.Second)),
+			},
 		},
 		{
 			name: "ts_id_between_minmax",
@@ -152,9 +160,11 @@ func TestRebuildBuckets(t *testing.T) {
 				},
 				ts: ts.Add(time.Second),
 			},
-			wantID:    timeToID(ts.Add(time.Second)),
-			wantMinID: -1,
-			wantMaxID: -1,
+			want: wantData{
+				id:    timeToID(ts.Add(time.Second)),
+				minID: -1,
+				maxID: -1,
+			},
 		},
 		{
 			name: "ts_id_not_between_minmax",
@@ -166,9 +176,11 @@ func TestRebuildBuckets(t *testing.T) {
 				},
 				ts: ts.Add(5 * time.Second),
 			},
-			wantID:    timeToID(ts.Add(3 * time.Second)), // same as maxID
-			wantMinID: -1,
-			wantMaxID: -1,
+			want: wantData{
+				id:    timeToID(ts.Add(3 * time.Second)), // same as maxID
+				minID: -1,
+				maxID: -1,
+			},
 		},
 	}
 	for _, tt := range tests {
@@ -176,19 +188,25 @@ func TestRebuildBuckets(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			id, b := rebuildBuckets(tt.tc.b, tt.tc.meta, func() int64 { return 0 }, tt.tc.currentTs, tt.tc.ts)
+			resetFn := func(count int) {
+				tt.tc.b = append(tt.tc.b[count:], tt.tc.b[:count]...)
+				for i := 0; i < count; i++ {
+					tt.tc.b[len(tt.tc.b)-1-i] = 0
+				}
+			}
+			id := rebuildBuckets(tt.tc.meta, resetFn, tt.tc.currentTs, tt.tc.ts)
 
-			if tt.wantID != -1 {
-				require.Equal(t, tt.wantID, id, "wrong ID")
+			if tt.want.id != -1 {
+				require.Equal(t, tt.want.id, id, "wrong ID")
 			}
-			if len(tt.wantBuckets) > 0 {
-				require.Equal(t, true, slices.Equal(tt.wantBuckets, b), "wrong buckets")
+			if len(tt.want.buckets) > 0 {
+				require.Equal(t, true, slices.Equal(tt.want.buckets, tt.tc.b), "wrong buckets")
 			}
-			if tt.wantMinID != -1 {
-				require.Equal(t, tt.wantMinID, tt.tc.meta.minID, "wrong buckets min ID")
+			if tt.want.minID != -1 {
+				require.Equal(t, tt.want.minID, tt.tc.meta.minID, "wrong buckets min ID")
 			}
-			if tt.wantMaxID != -1 {
-				require.Equal(t, tt.wantMaxID, tt.tc.meta.maxID, "wrong buckets max ID")
+			if tt.want.maxID != -1 {
+				require.Equal(t, tt.want.maxID, tt.tc.meta.maxID, "wrong buckets max ID")
 			}
 		})
 	}

@@ -107,9 +107,14 @@ func (b *simpleBuckets) isEmpty(index int) bool {
 }
 
 func (b *simpleBuckets) rebuild(currentTs, ts time.Time) int {
-	var id int
-	id, b.b = rebuildBuckets(b.b, &b.bucketsMeta, func() int64 { return 0 }, currentTs, ts)
-	return id
+	resetFn := func(count int) {
+		b.b = append(b.b[count:], b.b[:count]...)
+		for i := 0; i < count; i++ {
+			b.reset(b.getCount() - 1 - i)
+		}
+	}
+
+	return rebuildBuckets(&b.bucketsMeta, resetFn, currentTs, ts)
 }
 
 type shardedBuckets struct {
@@ -162,11 +167,14 @@ func (b *shardedBuckets) isEmpty(index int) bool {
 }
 
 func (b *shardedBuckets) rebuild(currentTs, ts time.Time) int {
-	newBucketFn := func() bucketShard { return newBucketShard(b.shardsCount) }
+	resetFn := func(count int) {
+		b.b = append(b.b[count:], b.b[:count]...)
+		for i := 0; i < count; i++ {
+			b.reset(b.getCount() - 1 - i)
+		}
+	}
 
-	var id int
-	id, b.b = rebuildBuckets(b.b, &b.bucketsMeta, newBucketFn, currentTs, ts)
-	return id
+	return rebuildBuckets(&b.bucketsMeta, resetFn, currentTs, ts)
 }
 
 type bucketShard []int64
@@ -179,26 +187,23 @@ func (s bucketShard) copyTo(buf bucketShard) bucketShard {
 	return append(buf, s...)
 }
 
-func rebuildBuckets[T any](b []T, meta *bucketsMeta, newBucketFn func() T, currentTs, ts time.Time) (int, []T) {
+func rebuildBuckets(meta *bucketsMeta, resetFn func(int), currentTs, ts time.Time) int {
 	currentID := meta.timeToBucketID(currentTs)
 	if meta.minID == 0 {
 		// min id weren't set yet. It MUST be extracted from currentTs, because ts from event can be invalid (e.g. from 1970 or 2077 year)
 		meta.maxID = currentID
 		meta.minID = meta.maxID - meta.count + 1
 	}
-	maxID := meta.minID + len(b) - 1
+	maxID := meta.minID + meta.count - 1
 
-	// currentID exceed maxID. Create actual buckets
+	// currentID exceed maxID, actualize buckets
 	if currentID > maxID {
-		n := currentID - maxID
-		// add new buckets
-		for i := 0; i < n; i++ {
-			b = append(b, newBucketFn())
-		}
-		// remove old buckets
-		b = b[n:]
-		// update min buckets
-		meta.minID += n
+		dif := currentID - maxID
+		n := min(dif, meta.count)
+		// reset old buckets
+		resetFn(n)
+		// update ids
+		meta.minID += dif
 		meta.maxID = currentID
 	}
 
@@ -207,5 +212,5 @@ func rebuildBuckets[T any](b []T, meta *bucketsMeta, newBucketFn func() T, curre
 	if id < meta.minID || id > meta.maxID {
 		id = meta.maxID
 	}
-	return id, b
+	return id
 }
