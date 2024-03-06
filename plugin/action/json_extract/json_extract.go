@@ -11,8 +11,7 @@ import (
 )
 
 /*{ introduction
-It extracts a fields from JSON-encoded event field and adds extracted fields to the event root.
-Supports: `object`, `string`, `int`, `float`, `bool` and `null` values.
+It extracts a field from JSON-encoded event field and adds extracted field to the event root.
 > If extracted field already exists in the event root, it will be overridden.
 }*/
 
@@ -24,9 +23,7 @@ pipelines:
     actions:
     - type: json_extract
       field: log
-      extract_fields:
-        - error.code
-        - level
+      extract_field: error.code
     ...
 ```
 The original event:
@@ -41,46 +38,27 @@ The resulting event:
 {
   "log": "{\"level\":\"error\",\"message\":\"error occurred\",\"service\":\"my-service\",\"error\":{\"code\":2,\"args\":[]}}",
   "time": "2024-03-01T10:49:28.263317941Z",
-  "level": "error",
   "code": 2
 }
 ```
 }*/
 
 /*{ benchmarks
-Performance comparison of `json_extract` and  `json_decode` plugins. Each bench named by length of json-field.
+Performance comparison of `json_extract` and `json_decode` plugins.
+`json_extract` on average 3 times faster than `json_decode`.
 
-**json_extract**
-
-`$ go test -bench=BenchmarkExtract -benchmem ./plugin/action/json_extract/...`
-
-|                                         |          |             |        |             |
-|-----------------------------------------|----------|-------------|--------|-------------|
-| BenchmarkExtractObj/json_length_129-8   | 24161701 | 50.80 ns/op | 0 B/op | 0 allocs/op |
-| BenchmarkExtractObj/json_length_309-8   | 4276380  | 282.9 ns/op | 0 B/op | 0 allocs/op |
-| BenchmarkExtractObj/json_length_2109-8  | 522370   | 2313 ns/op  | 0 B/op | 0 allocs/op |
-| BenchmarkExtractObj/json_length_10909-8 | 104278   | 11589 ns/op | 0 B/op | 0 allocs/op |
-
-**json_decode**
-
-`$ go test -bench=BenchmarkInsane -benchmem ./plugin/action/json_extract/...`
-
-|                                              |         |             |        |             |
-|----------------------------------------------|---------|-------------|--------|-------------|
-| BenchmarkInsaneDecodeDig/json_length_129-8   | 6769700 | 173.2 ns/op | 0 B/op | 0 allocs/op |
-| BenchmarkInsaneDecodeDig/json_length_309-8   | 2282385 | 522.9 ns/op | 0 B/op | 0 allocs/op |
-| BenchmarkInsaneDecodeDig/json_length_2109-8  | 177818  | 6784 ns/op  | 8 B/op | 1 allocs/op |
-| BenchmarkInsaneDecodeDig/json_length_10909-8 | 38685   | 32629 ns/op | 8 B/op | 1 allocs/op |
+| json (length) | json_extract (time ns) | json_decode (time ns) |
+|---------------|------------------------|-----------------------|
+| 129           | 33                     | 176                   |
+| 309           | 264                    | 520                   |
+| 2109          | 2263                   | 6778                  |
+| 10909         | 11289                  | 32205                 |
+| 21909         | 23277                  | 62819                 |
 }*/
 
 type Plugin struct {
-	config    *Config
-	allFields [][]string // list of all fields (equals to config.ExtractFields)
-
-	rootDecoder objDecoder
-	objDecoders objDecoders
-
-	idxBuf []int
+	config  *Config
+	decoder *jx.Decoder
 }
 
 // ! config-params
@@ -94,8 +72,9 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
-	// > Fields to extract.
-	ExtractFields []cfg.FieldSelector `json:"extract_fields" slice:"true" required:"true"` // *
+	// > Field to extract.
+	ExtractField  cfg.FieldSelector `json:"extract_field" parse:"selector" required:"true"` // *
+	ExtractField_ []string
 }
 
 func init() {
@@ -111,178 +90,48 @@ func factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 
 func (p *Plugin) Start(config pipeline.AnyConfig, _ *pipeline.ActionPluginParams) {
 	p.config = config.(*Config)
-
-	p.rootDecoder = objDecoder{d: &jx.Decoder{}}
-
-	tmpSet := make(map[string]struct{})
-	tmpBuf := make([][]byte, 0)
-	for _, field := range p.config.ExtractFields {
-		if fs := cfg.ParseFieldSelector(string(field)); len(fs) > 0 {
-			p.allFields = append(p.allFields, fs)
-
-			// root fields without duplicates
-			if _, ok := tmpSet[fs[0]]; !ok {
-				p.rootDecoder.fields = append(p.rootDecoder.fields, pipeline.StringToByteUnsafe(fs[0]))
-				tmpSet[fs[0]] = struct{}{}
-			}
-
-			if len(fs) > 1 {
-				tmpBuf = tmpBuf[:0]
-				for i := 0; i < len(fs); i++ {
-					tmpBuf = append(tmpBuf, pipeline.StringToByteUnsafe(fs[i]))
-				}
-				// find decoder for this obj.
-				// for example, if fs=[log, error, level], we need decoder with path=[log, error]
-				p.idxBuf = p.objDecoders.findStartsWith(tmpBuf[:len(tmpBuf)-1], p.idxBuf)
-				if len(p.idxBuf) == 0 {
-					// create new decoder
-					od := objDecoder{d: &jx.Decoder{}}
-					for i := 0; i < len(tmpBuf)-1; i++ {
-						od.path = append(od.path, tmpBuf[i])
-					}
-					p.objDecoders = append(p.objDecoders, od)
-					p.idxBuf = append(p.idxBuf, len(p.objDecoders)-1)
-				}
-				// add field to exists decoder
-				p.objDecoders[p.idxBuf[0]].fields = append(p.objDecoders[p.idxBuf[0]].fields, tmpBuf[len(tmpBuf)-1])
-			}
-		}
-	}
+	p.decoder = &jx.Decoder{}
 }
 
 func (p *Plugin) Stop() {}
 
 func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
-	if len(p.rootDecoder.fields) == 0 {
-		return pipeline.ActionPass
-	}
-
 	jsonNode := event.Root.Dig(p.config.Field_...)
 	if jsonNode == nil {
 		return pipeline.ActionPass
 	}
 
-	p.rootDecoder.d.ResetBytes(jsonNode.AsBytes())
-
-	// fast way for only root fields or single obj decoder
-	if len(p.objDecoders) == 0 {
-		extractObj(event.Root, p.rootDecoder, 0, false)
-		return pipeline.ActionPass
-	} else if len(p.objDecoders) == 1 && len(p.rootDecoder.fields) == 1 && bytes.Equal(p.objDecoders[0].path[0], p.rootDecoder.fields[0]) {
-		p.objDecoders[0].d.ResetBytes(jsonNode.AsBytes())
-		extractObj(event.Root, p.objDecoders[0], 0, false)
-		return pipeline.ActionPass
-	}
-
-	objIter, err := p.rootDecoder.d.ObjIter()
-	if err != nil {
-		return pipeline.ActionPass
-	}
-
-	processedFields := make(map[int]struct{}, len(p.rootDecoder.fields))
-iterLoop:
-	for objIter.Next() {
-		if len(processedFields) == len(p.rootDecoder.fields) {
-			break
-		}
-
-		for i := range p.rootDecoder.fields {
-			if _, ok := processedFields[i]; ok {
-				continue
-			}
-			if bytes.Equal(objIter.Key(), p.rootDecoder.fields[i]) {
-				// find all decoders for this obj
-				p.idxBuf = p.objDecoders.findStartsWith([][]byte{p.rootDecoder.fields[i]}, p.idxBuf)
-
-				if len(p.idxBuf) == 0 {
-					addField(event.Root, string(p.rootDecoder.fields[i]), p.rootDecoder.d)
-				} else {
-					raw, err := p.rootDecoder.d.Raw()
-					if err != nil {
-						continue iterLoop
-					}
-					for _, idx := range p.idxBuf {
-						p.objDecoders[idx].d.ResetBytes(raw)
-						extractObj(event.Root, p.objDecoders[idx], 1, false)
-					}
-				}
-
-				processedFields[i] = struct{}{}
-				continue iterLoop
-			}
-		}
-
-		if err = p.rootDecoder.d.Skip(); err != nil {
-			break
-		}
-	}
-
+	p.decoder.ResetBytes(jsonNode.AsBytes())
+	extract(event.Root, p.decoder, p.config.ExtractField_, 0, false)
 	return pipeline.ActionPass
 }
 
-type objDecoder struct {
-	d      *jx.Decoder
-	path   [][]byte // path to obj
-	fields [][]byte // fields in obj
-}
-
-type objDecoders []objDecoder
-
-// findStartsWith finds all object decoders that starts with specified sub-path and returns their indexes.
-// It resets idxBuf before finding.
-func (d objDecoders) findStartsWith(subPath [][]byte, idxBuf []int) []int {
-	idxBuf = idxBuf[:0]
-	for i := range d {
-		if len(subPath) > len(d[i].path) {
-			continue
-		}
-		j := 0
-		for ; j < len(subPath) && bytes.Equal(d[i].path[j], subPath[j]); j++ {
-		}
-		if j == len(subPath) {
-			idxBuf = append(idxBuf, i)
-		}
-	}
-	return idxBuf
-}
-
-// extractObj extracts all fields from objDecoder and adds them to the root.
+// extract extracts field from decoder and adds it to the root.
 // `skipAddField` flag is required for proper benchmarking.
-func extractObj(root *insaneJSON.Root, od objDecoder, depth int, skipAddField bool) {
-	objIter, err := od.d.ObjIter()
+func extract(root *insaneJSON.Root, d *jx.Decoder, field []string, depth int, skipAddField bool) {
+	objIter, err := d.ObjIter()
 	if err != nil {
 		return
 	}
 
-	processedFields := 0
-iterLoop:
 	for objIter.Next() {
-		if depth == len(od.path) { // collect all fields
-			if processedFields == len(od.fields) {
-				break
-			}
-			for i := range od.fields {
-				if bytes.Equal(objIter.Key(), od.fields[i]) {
-					if skipAddField {
-						_ = od.d.Skip()
-					} else {
-						addField(root, string(od.fields[i]), od.d)
-					}
-					processedFields++
-					continue iterLoop
+		if bytes.Equal(objIter.Key(), pipeline.StringToByteUnsafe(field[depth])) {
+			if depth == len(field)-1 { // add field
+				if skipAddField {
+					_ = d.Skip()
+				} else {
+					addField(root, field[depth], d)
 				}
+			} else { // go deep
+				raw, err := d.Raw()
+				if err != nil {
+					break
+				}
+				d.ResetBytes(raw)
+				extract(root, d, field, depth+1, skipAddField)
 			}
-		} else if bytes.Equal(objIter.Key(), od.path[depth]) { // go deep
-			raw, err := od.d.Raw()
-			if err != nil {
-				break
-			}
-			od.d.ResetBytes(raw)
-			extractObj(root, od, depth+1, skipAddField)
 			break
-		}
-
-		if err = od.d.Skip(); err != nil {
+		} else if err = d.Skip(); err != nil {
 			break
 		}
 	}
@@ -309,7 +158,7 @@ func addField(root *insaneJSON.Root, field string, d *jx.Decoder) {
 	case jx.Bool:
 		b, _ := d.Bool()
 		root.AddFieldNoAlloc(root, field).MutateToBool(b)
-	case jx.Object:
+	case jx.Object, jx.Array:
 		raw, _ := d.Raw()
 		root.AddFieldNoAlloc(root, field).MutateToJSON(root, raw.String())
 	default:
