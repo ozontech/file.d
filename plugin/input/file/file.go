@@ -39,9 +39,12 @@ pipelines:
   example_docker_pipeline:
     input:
         type: file
-        watching_dir: /var/lib/docker/containers
+        paths:
+          include:
+            - '/var/lib/docker/containers/**\/*-json.log' # remove \
+          exclude:
+            - '/var/lib/docker/containers/19aa5027343f4*\/*-json.log' # remove \
         offsets_file: /data/offsets.yaml
-        filename_pattern: "*-json.log"
         persistence_mode: async
 ```
 }*/
@@ -78,6 +81,18 @@ const (
 	offsetsOpReset                     // * `reset` – resets an offset to the beginning of the file
 )
 
+type Paths struct {
+	// > @3@4@5@6
+	// >
+	// > List of included pathes
+	Include []string `json:"include"`
+
+	// > @3@4@5@6
+	// >
+	// > List of excluded pathes
+	Exclude []string `json:"exclude"`
+}
+
 type Config struct {
 	// ! config-params
 	// ^ config-params
@@ -89,6 +104,12 @@ type Config struct {
 	// > Also the `filename_pattern`/`dir_pattern` is useful to filter needless files/subdirectories. In the case of using two or more
 	// > different directories, it's recommended to setup separate pipelines for each.
 	WatchingDir string `json:"watching_dir" required:"true"` // *
+
+	// > @3@4@5@6
+	// >
+	// > Paths.
+	// > > Check out [func Glob docs](https://golang.org/pkg/path/filepath/#Glob) for details.
+	Paths Paths `json:"paths"` // *
 
 	// > @3@4@5@6
 	// >
@@ -179,6 +200,7 @@ func init() {
 		Factory: Factory,
 		Endpoints: map[string]func(http.ResponseWriter, *http.Request){
 			"reset": ResetterRegistryInstance.Reset,
+			"info":  InfoRegistryInstance.Info,
 		},
 	})
 }
@@ -206,6 +228,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	)
 
 	ResetterRegistryInstance.AddResetter(params.PipelineName, p)
+	InfoRegistryInstance.AddPlugin(p)
 
 	p.startWorkers()
 	p.jobProvider.start()

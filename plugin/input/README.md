@@ -35,9 +35,12 @@ pipelines:
   example_docker_pipeline:
     input:
         type: file
-        watching_dir: /var/lib/docker/containers
+        paths:
+          include:
+            - '/var/lib/docker/containers/**\/*-json.log' # remove \
+          exclude:
+            - '/var/lib/docker/containers/19aa5027343f4*\/*-json.log' # remove \
         offsets_file: /data/offsets.yaml
-        filename_pattern: "*-json.log"
         persistence_mode: async
 ```
 
