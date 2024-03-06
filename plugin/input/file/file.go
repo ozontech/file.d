@@ -179,6 +179,7 @@ func init() {
 		Factory: Factory,
 		Endpoints: map[string]func(http.ResponseWriter, *http.Request){
 			"reset": ResetterRegistryInstance.Reset,
+			"info":  InfoRegistryInstance.Info,
 		},
 	})
 }
@@ -206,6 +207,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	)
 
 	ResetterRegistryInstance.AddResetter(params.PipelineName, p)
+	InfoRegistryInstance.AddPlugin(p)
 
 	p.startWorkers()
 	p.jobProvider.start()
