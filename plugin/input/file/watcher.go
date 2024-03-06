@@ -111,20 +111,21 @@ func (w *watcher) stop() {
 }
 
 func (w *watcher) tryAddPath(path string) {
-	files, err := os.ReadDir(path)
-	if err != nil {
-		return
-	}
-
 	w.logger.Infof("starting path watch: %s ", path)
 
-	for _, file := range files {
-		if file.Name() == "" || file.Name() == "." || file.Name() == ".." {
-			continue
-		}
-
-		filename := filepath.Join(path, file.Name())
-		w.notify(notify.Create, filename)
+	err := filepath.Walk(path,
+		func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
+			if !info.IsDir() {
+				w.notify(notify.Create, path)
+			}
+			return nil
+		},
+	)
+	if err != nil {
+		return
 	}
 }
 
