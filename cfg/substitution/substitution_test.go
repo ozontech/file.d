@@ -270,22 +270,40 @@ func TestRegexFilterApply(t *testing.T) {
 		want         string
 	}{
 		{
-			name:         "ok_single_filter",
+			name:         "ok_single_re_filter",
 			substitution: `${field|re("(re\\d)",-1,[1],"|")}`,
 			data:         `this is some text re1 end`,
 			want:         "re1",
 		},
 		{
-			name:         "ok_two_filters",
+			name:         "ok_two_re_filters",
 			substitution: `${field|re("(.*)",-1,[1],"|")|re("(\\d\\.)",-1,[1],"|")}`,
 			data:         `1.2.3.4.5.`,
 			want:         "1.|2.|3.|4.|5.",
 		},
 		{
-			name:         "ok_single_filter",
+			name:         "ok_single_re_filter",
 			substitution: `${field|re("(re\\d)",2,[1],"|")}`,
 			data:         `this is some text re1 re2 re3 re4 end`,
 			want:         "re1|re2",
+		},
+		{
+			name:         "ok_single_trim_filter_trim_all",
+			substitution: `${field|trim("all","\\n")}`,
+			data:         `\n{"message":"test"}\n`,
+			want:         `{"message":"test"}`,
+		},
+		{
+			name:         "ok_single_trim_filter_trim_left",
+			substitution: `${field|trim("left","\\n")}`,
+			data:         `\n{"message":"test"}\n`,
+			want:         `{"message":"test"}\n`,
+		},
+		{
+			name:         "ok_single_trim_filter_trim_right",
+			substitution: `${field|trim("right","\\n")}`,
+			data:         `\n{"message":"test"}\n`,
+			want:         `\n{"message":"test"}`,
 		},
 	}
 	for _, tt := range tests {
