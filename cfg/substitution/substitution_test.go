@@ -188,22 +188,22 @@ func TestParseFieldWithFilter(t *testing.T) {
 			wantErr:      true,
 		},
 		{
-			name:         "err_invalid_args_invalid_first_arg",
+			name:         "err_re_filter_invalid_args_invalid_first_arg",
 			substitution: `test ${field|re('(invalid)',-1,[1,],"|")} test2`,
 			wantErr:      true,
 		},
 		{
-			name:         "err_invalid_args_invalid_second_arg",
-			substitution: `test ${field|re('(invalid)',"abcd",[1,],"|")} test2`,
+			name:         "err_re_filter_invalid_args_invalid_second_arg",
+			substitution: `test ${field|re("(invalid)","abcd",[1,],"|")} test2`,
 			wantErr:      true,
 		},
 		{
-			name:         "err_invalid_args_invalid_third_arg",
+			name:         "err_re_filter_invalid_args_invalid_third_arg",
 			substitution: `test ${field|re("invalid",-1,[invalid],"|")} test2`,
 			wantErr:      true,
 		},
 		{
-			name:         "err_invalid_args_invalid_fourth_arg",
+			name:         "err_re_filter_invalid_args_invalid_fourth_arg",
 			substitution: `test ${field|re("(invalid)",-1,[1],'invalid')} test2`,
 			wantErr:      true,
 		},
@@ -231,6 +231,51 @@ func TestParseFieldWithFilter(t *testing.T) {
 			name:         "err_invalid_args_no_closing_quotes",
 			substitution: `test ${field|re("invalid", -1, [1,2], "|)} test2`,
 			wantErr:      true,
+		},
+		{
+			name:         "err_invalid_args_empty",
+			substitution: `test ${field|trim()} test2`,
+			wantErr:      true,
+		},
+		{
+			name:         "err_trim_filter_invalid_args_invalid_args",
+			substitution: `test ${field|trim("all",(invalid)} test2`,
+			wantErr:      true,
+		},
+		{
+			name:         "err_trim_filter_invalid_args_invalid_first_arg",
+			substitution: `test ${field|trim("invalid","\\n")} test2`,
+			wantErr:      true,
+		},
+		{
+			name:         "err_trim_filter_invalid_args_invalid_first_arg_2",
+			substitution: `test ${field|trim('invalid',"\\n")} test2`,
+			wantErr:      true,
+		},
+		{
+			name:         "err_trim_filter_invalid_args_invalid_second_arg",
+			substitution: `test ${field|trim("all",'invalid')} test2`,
+			wantErr:      true,
+		},
+		{
+			name:         "err_trim_filter_ok",
+			substitution: `test ${field|trim("all","\\n")} test2`,
+			data: [][]string{
+				{"test "},
+				{"field"},
+				{" test2"},
+			},
+			filters: [][][]any{
+				nil,
+				{
+					{
+						trimModeAll,
+						"\\n",
+					},
+				},
+				nil,
+			},
+			wantErr: false,
 		},
 	}
 
