@@ -1,4 +1,4 @@
-# Host adding plugin
+# Split plugin
 It splits array of objects into different events.
 
 For example:

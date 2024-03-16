@@ -1,4 +1,4 @@
-# Split plugin
+# Parse HTTP plugin
 @introduction
 
 ### Config params

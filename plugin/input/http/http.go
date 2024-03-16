@@ -1,7 +1,9 @@
 package http
 
 import (
+	"encoding/base64"
 	"io"
+	"net"
 	"net/http"
 	"strings"
 	"sync"
@@ -144,6 +146,12 @@ type Config struct {
 	// > See AuthConfig for details.
 	// > You can use 'warn' log level for logging authorizations.
 	Auth AuthConfig `json:"auth" child:"true"` // *
+
+	// > @3@4@5@6
+	// >
+	// > CORS config.
+	// > See CORSConfig for details.
+	CORS CORSConfig `json:"cors" child:"true"` // *
 }
 
 type AuthStrategy byte
@@ -159,6 +167,11 @@ const (
 type AuthConfig struct {
 	// > @3@4@5@6
 	// >
+	// > Override default Authorization header
+	Header string `json:"header" default:"Authorization"` // *
+
+	// > @3@4@5@6
+	// >
 	// > AuthStrategy.Strategy describes strategy to use.
 	Strategy  string `json:"strategy" default:"disabled" options:"disabled|basic|bearer"` // *
 	Strategy_ AuthStrategy
@@ -169,6 +182,22 @@ type AuthConfig struct {
 	// > If the `strategy` is bearer, then the key is the name, the value is the Bearer token.
 	// > Key uses in the http_input_total metric.
 	Secrets map[string]string `json:"secrets"` // *
+}
+
+type CORSConfig struct {
+	AllowedOrigins []string `json:"allowed_origins"`
+	DefaultOrigin  string   `json:"default_origin"  default:"*"`
+	AllowedHeaders []string `json:"allowed_headers"`
+	ExposedHeaders []string `json:"exposed_headers"`
+}
+
+func (c *CORSConfig) getAllowedByOrigin(originHeader string) string {
+	for _, allowed := range c.AllowedOrigins {
+		if strings.HasSuffix(originHeader, allowed) || strings.HasPrefix(originHeader, allowed) {
+			return originHeader
+		}
+	}
+	return c.DefaultOrigin
 }
 
 func init() {
@@ -279,7 +308,33 @@ func (p *Plugin) putSourceID(x pipeline.SourceID) {
 }
 
 func (p *Plugin) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	ok := p.auth(r)
+	allowOrigin := p.config.CORS.getAllowedByOrigin(r.Header.Get("Origin"))
+	w.Header().Set(
+		"Access-Control-Allow-Origin",
+		allowOrigin,
+	)
+
+	if len(p.config.CORS.AllowedHeaders) > 0 {
+		w.Header().Set(
+			"Access-Control-Allow-Headers",
+			strings.Join(p.config.CORS.AllowedHeaders, ","),
+		)
+	}
+
+	if len(p.config.CORS.ExposedHeaders) > 0 {
+		w.Header().Set(
+			"Access-Control-Exposed-Headers",
+			strings.Join(p.config.CORS.ExposedHeaders, ","),
+		)
+	}
+
+	w.Header().Set("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
+
+	if r.Method == http.MethodOptions {
+		return
+	}
+
+	ok, login := p.auth(r)
 	if !ok {
 		p.failedAuthTotal.Inc()
 		p.errorsTotal.Inc()
@@ -300,7 +355,7 @@ func (p *Plugin) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 		switch path {
 		case "/_bulk":
-			p.serveBulk(w, r)
+			p.serveBulk(w, r, login)
 			return
 		case "/":
 			p.serveElasticsearchInfo(w, r)
@@ -337,18 +392,39 @@ func (p *Plugin) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		p.logger.Error("unknown elasticsearch request", zap.String("uri", r.RequestURI), zap.String("method", r.Method))
 		return
 	case EmulateModeNo:
-		p.serveBulk(w, r)
+		p.serveBulk(w, r, login)
 		return
 	default:
 		panic("unreachable")
 	}
 }
 
-func (p *Plugin) serveBulk(w http.ResponseWriter, r *http.Request) {
+func getUserIP(r *http.Request) net.IP {
+	var userIP string
+	switch {
+	case len(r.Header.Get("CF-Connecting-IP")) > 1:
+		userIP = r.Header.Get("CF-Connecting-IP")
+	case len(r.Header.Get("X-Forwarded-For")) > 1:
+		userIP = r.Header.Get("X-Forwarded-For")
+	case len(r.Header.Get("X-Real-IP")) > 1:
+		userIP = r.Header.Get("X-Real-IP")
+	default:
+		userIP = r.RemoteAddr
+		if strings.Contains(userIP, ":") {
+			return net.ParseIP(strings.Split(userIP, ":")[0])
+		}
+	}
+	return net.ParseIP(userIP)
+}
+
+func (p *Plugin) serveBulk(w http.ResponseWriter, r *http.Request, login string) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "", http.StatusMethodNotAllowed)
 		return
 	}
+
+	infoStr := login + "_" + getUserIP(r).String() + "_" + base64.StdEncoding.EncodeToString([]byte(r.URL.RawQuery))
+	encodedSourceName := base64.StdEncoding.EncodeToString([]byte(infoStr))
 
 	start := time.Now()
 	p.requestsInProgress.Inc()
@@ -366,7 +442,7 @@ func (p *Plugin) serveBulk(w http.ResponseWriter, r *http.Request) {
 		reader = zr
 	}
 
-	if err := p.processBulk(reader); err != nil {
+	if err := p.processBulk(reader, "http_"+encodedSourceName); err != nil {
 		p.errorsTotal.Inc()
 		p.logger.Error("http input read error", zap.Error(err))
 		http.Error(w, "http input read error", http.StatusBadRequest)
@@ -380,7 +456,7 @@ func (p *Plugin) serveBulk(w http.ResponseWriter, r *http.Request) {
 	p.processBulkSeconds.Observe(time.Since(start).Seconds())
 }
 
-func (p *Plugin) processBulk(r io.Reader) error {
+func (p *Plugin) processBulk(r io.Reader, sourceName string) error {
 	readBuff := p.newReadBuff()
 	eventBuff := p.newEventBuffs()
 	defer p.readBuffs.Put(&readBuff)
@@ -399,17 +475,17 @@ func (p *Plugin) processBulk(r io.Reader) error {
 			return err
 		}
 
-		eventBuff = p.processChunk(sourceID, readBuff[:n], eventBuff, false)
+		eventBuff = p.processChunk(sourceID, sourceName, readBuff[:n], eventBuff, false)
 	}
 
 	if len(eventBuff) > 0 {
-		eventBuff = p.processChunk(sourceID, readBuff[:0], eventBuff, true)
+		eventBuff = p.processChunk(sourceID, sourceName, readBuff[:0], eventBuff, true)
 	}
 
 	return nil
 }
 
-func (p *Plugin) processChunk(sourceID pipeline.SourceID, readBuff []byte, eventBuff []byte, isLastChunk bool) []byte {
+func (p *Plugin) processChunk(sourceID pipeline.SourceID, sourceName string, readBuff []byte, eventBuff []byte, isLastChunk bool) []byte {
 	pos := 0   // current position
 	nlPos := 0 // new line position
 	for pos < len(readBuff) {
@@ -420,10 +496,10 @@ func (p *Plugin) processChunk(sourceID pipeline.SourceID, readBuff []byte, event
 
 		if len(eventBuff) != 0 {
 			eventBuff = append(eventBuff, readBuff[nlPos:pos]...)
-			_ = p.controller.In(sourceID, "http", int64(pos), eventBuff, true)
+			_ = p.controller.In(sourceID, sourceName, int64(pos), eventBuff, true)
 			eventBuff = eventBuff[:0]
 		} else {
-			_ = p.controller.In(sourceID, "http", int64(pos), readBuff[nlPos:pos], true)
+			_ = p.controller.In(sourceID, sourceName, int64(pos), readBuff[nlPos:pos], true)
 		}
 
 		pos++
@@ -432,7 +508,7 @@ func (p *Plugin) processChunk(sourceID pipeline.SourceID, readBuff []byte, event
 
 	if isLastChunk {
 		// flush buffers if we can't find the newline character
-		_ = p.controller.In(sourceID, "http", int64(pos), append(eventBuff, readBuff[nlPos:]...), true)
+		_ = p.controller.In(sourceID, sourceName, int64(pos), append(eventBuff, readBuff[nlPos:]...), true)
 		eventBuff = eventBuff[:0]
 	} else {
 		eventBuff = append(eventBuff, readBuff[nlPos:]...)
@@ -453,9 +529,9 @@ func (p *Plugin) PassEvent(_ *pipeline.Event) bool {
 	return true
 }
 
-func (p *Plugin) auth(req *http.Request) bool {
+func (p *Plugin) auth(req *http.Request) (bool, string) {
 	if p.config.Auth.Strategy_ == StrategyDisabled {
-		return true
+		return true, ""
 	}
 
 	var secretName string
@@ -469,13 +545,16 @@ func (p *Plugin) auth(req *http.Request) bool {
 		panic("unreachable")
 	}
 	if !ok {
-		return false
+		return false, ""
 	}
 	p.successfulAuthTotal[secretName].Inc()
-	return true
+	return true, secretName
 }
 
 func (p *Plugin) authBasic(req *http.Request) (string, bool) {
+	req.Header.Get(p.config.Auth.Header)
+	req.Header.Set("Authorization", req.Header.Get(p.config.Auth.Header))
+
 	username, password, ok := req.BasicAuth()
 	if !ok {
 		return username, false
@@ -484,7 +563,7 @@ func (p *Plugin) authBasic(req *http.Request) (string, bool) {
 }
 
 func (p *Plugin) authBearer(req *http.Request) (string, bool) {
-	authHeader := req.Header.Get("Authorization")
+	authHeader := req.Header.Get(p.config.Auth.Header)
 	const prefix = "Bearer "
 	if !strings.HasPrefix(authHeader, prefix) {
 		return "", false

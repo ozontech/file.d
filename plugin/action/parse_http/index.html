@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Send Log Request</title>
+</head>
+<body>
+    <button id="sendLogRequest">Send Log Request</button>
+
+    <script>
+        document.getElementById("sendLogRequest").addEventListener("click", function() {
+            var requestData = JSON.stringify({
+                "message": "Test event",
+                "level": "info",
+            });
+
+            var xhr = new XMLHttpRequest();
+            xhr.open("POST", "http://localhost:9400/?env=site", true);
+            xhr.setRequestHeader("Content-Type", "application/json");
+            xhr.setRequestHeader("Authorization", "Basic ZnJvbnRlbmQ6Mzk4ZmM2NDUtZTY2MC00NWY0LTk2YmItNTNiN2EyYjEyMGU0");
+            
+            xhr.onreadystatechange = function() {
+                if (xhr.readyState === 4 && xhr.status === 200) {
+                    console.log("Log request sent successfully");
+                }
+            };
+
+            xhr.send(requestData);
+        });
+    </script>
+</body>
+</html>
