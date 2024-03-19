@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"regexp"
 	"slices"
+	"strconv"
 
 	"github.com/ozontech/file.d/cfg"
 	insaneJSON "github.com/vitkovskii/insane-json"
@@ -44,6 +45,13 @@ const (
 	doIfFieldPrefixOp
 	doIfFieldSuffixOp
 	doIfFieldRegexOp
+
+	doIfFieldLengthLessOp
+	doIfFieldLengthLessOrEqualOp
+	doIfFieldLengthGreaterOp
+	doIfFieldLengthGreaterOrEqualOp
+	doIfFieldLengthEqualOp
+	doIfFieldLengthNotEqualOp
 )
 
 func (t doIfFieldOpType) String() string {
@@ -179,6 +187,13 @@ var (
 	// > {"pod":"service123","service":"test-service-1"}       # not discarded
 	// > ```
 	doIfFieldRegexOpBytes = []byte(`regex`) // *
+
+	doIfFieldLengthLessOpBytes           = []byte(`len <`)
+	doIfFieldLengthLessOrEqualOpBytes    = []byte(`len <=`)
+	doIfFieldLengthGreaterOpBytes        = []byte(`len >`)
+	doIfFieldLengthGreaterOrEqualOpBytes = []byte(`len >=`)
+	doIfFieldLengthEqualOpBytes          = []byte(`len ==`)
+	doIfFieldLengthNotEqualOpBytes       = []byte(`len !=`)
 )
 
 /*{ do-if-field-op-node
@@ -219,6 +234,8 @@ type doIfFieldOpNode struct {
 
 	minValLen int
 	maxValLen int
+
+	valueForComparison int
 }
 
 func NewFieldOpNode(op string, field string, caseSensitive bool, values [][]byte) (DoIfNode, error) {
@@ -232,6 +249,7 @@ func NewFieldOpNode(op string, field string, caseSensitive bool, values [][]byte
 	var valsBySize map[int][][]byte
 	var reValues []*regexp.Regexp
 	var minValLen, maxValLen int
+	var valueForComparison int64
 	var fop doIfFieldOpType
 
 	fieldPath := cfg.ParseFieldSelector(field)
@@ -256,6 +274,18 @@ func NewFieldOpNode(op string, field string, caseSensitive bool, values [][]byte
 			}
 			reValues = append(reValues, re)
 		}
+	case bytes.Equal(opBytes, doIfFieldLengthLessOpBytes):
+		fop = doIfFieldLengthLessOp
+	case bytes.Equal(opBytes, doIfFieldLengthLessOrEqualOpBytes):
+		fop = doIfFieldLengthLessOrEqualOp
+	case bytes.Equal(opBytes, doIfFieldLengthGreaterOpBytes):
+		fop = doIfFieldLengthGreaterOp
+	case bytes.Equal(opBytes, doIfFieldLengthGreaterOrEqualOpBytes):
+		fop = doIfFieldLengthGreaterOrEqualOp
+	case bytes.Equal(opBytes, doIfFieldLengthEqualOpBytes):
+		fop = doIfFieldLengthEqualOp
+	case bytes.Equal(opBytes, doIfFieldLengthNotEqualOpBytes):
+		fop = doIfFieldLengthNotEqualOp
 	default:
 		return nil, fmt.Errorf("unknown field op %q", op)
 	}
@@ -291,16 +321,35 @@ func NewFieldOpNode(op string, field string, caseSensitive bool, values [][]byte
 		}
 	}
 
+	switch fop {
+	case
+		doIfFieldLengthLessOp,
+		doIfFieldLengthLessOrEqualOp,
+		doIfFieldLengthGreaterOp,
+		doIfFieldLengthGreaterOrEqualOp,
+		doIfFieldLengthEqualOp,
+		doIfFieldLengthNotEqualOp:
+		if len(values) != 1 {
+			return nil, errors.New("exactly one value for comparison needed")
+		}
+		var err error
+		valueForComparison, err = strconv.ParseInt(string(values[0]), 0, 64)
+		if err != nil {
+			return nil, fmt.Errorf("can't parse value for length comparison: %w", err)
+		}
+	}
+
 	return &doIfFieldOpNode{
-		op:            fop,
-		fieldPath:     fieldPath,
-		fieldPathStr:  field,
-		caseSensitive: caseSensitive,
-		values:        vals,
-		valuesBySize:  valsBySize,
-		reValues:      reValues,
-		minValLen:     minValLen,
-		maxValLen:     maxValLen,
+		op:                 fop,
+		fieldPath:          fieldPath,
+		fieldPathStr:       field,
+		caseSensitive:      caseSensitive,
+		values:             vals,
+		valuesBySize:       valsBySize,
+		reValues:           reValues,
+		minValLen:          minValLen,
+		maxValLen:          maxValLen,
+		valueForComparison: int(valueForComparison),
 	}, nil
 }
 
@@ -378,6 +427,18 @@ func (n *doIfFieldOpNode) Check(eventRoot *insaneJSON.Root) bool {
 				return true
 			}
 		}
+	case doIfFieldLengthLessOp:
+		return len(data) < n.valueForComparison
+	case doIfFieldLengthLessOrEqualOp:
+		return len(data) <= n.valueForComparison
+	case doIfFieldLengthGreaterOp:
+		return len(data) > n.valueForComparison
+	case doIfFieldLengthGreaterOrEqualOp:
+		return len(data) >= n.valueForComparison
+	case doIfFieldLengthEqualOp:
+		return len(data) == n.valueForComparison
+	case doIfFieldLengthNotEqualOp:
+		return len(data) != n.valueForComparison
 	}
 	return false
 }
