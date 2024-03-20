@@ -4,6 +4,7 @@ import (
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/pipeline"
+	"go.uber.org/zap"
 )
 
 /*{ introduction
@@ -13,7 +14,17 @@ If the decoded JSON isn't an object, the event will be skipped.
 
 type Plugin struct {
 	config *Config
+	logger *zap.Logger
 }
+
+type logJsonParseErrorMode int
+
+const (
+	// ! "jsonParseErrorMode" #1 /`([a-z]+)`/
+	logJsonParseErrorOff      logJsonParseErrorMode = iota // * `off` – do not log json parse errors
+	logJsonParseErrorErrOnly                               // * `erronly` – log only errors without any other data
+	logJsonParseErrorWithNode                              // * `withnode` – log errors with json node represented as string
+)
 
 // ! config-params
 // ^ config-params
@@ -28,6 +39,15 @@ type Config struct {
 	// >
 	// > A prefix to add to decoded object keys.
 	Prefix string `json:"prefix" default:""` // *
+
+	// > @3@4@5@6
+	// >
+	// > Defines how to handle logging of json parse error.
+	// > @jsonParseErrorMode|comment-list
+	// >
+	// > Defaults to `off`.
+	LogJSONParseErrorMode  string `json:"log_json_parse_error_mode" default:"off" options:"off|erronly|withnode"` // *
+	LogJSONParseErrorMode_ logJsonParseErrorMode
 }
 
 func init() {
@@ -41,8 +61,19 @@ func factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 	return &Plugin{}, &Config{}
 }
 
-func (p *Plugin) Start(config pipeline.AnyConfig, _ *pipeline.ActionPluginParams) {
+func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginParams) {
 	p.config = config.(*Config)
+	p.logger = params.Logger.Desugar()
+	switch p.config.LogJSONParseErrorMode {
+	case "off":
+		p.config.LogJSONParseErrorMode_ = logJsonParseErrorOff
+	case "erronly":
+		p.config.LogJSONParseErrorMode_ = logJsonParseErrorErrOnly
+	case "withnode":
+		p.config.LogJSONParseErrorMode_ = logJsonParseErrorWithNode
+	default:
+		p.config.LogJSONParseErrorMode_ = logJsonParseErrorOff
+	}
 }
 
 func (p *Plugin) Stop() {
@@ -56,6 +87,11 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 
 	node, err := event.SubparseJSON(jsonNode.AsBytes())
 	if err != nil {
+		if p.config.LogJSONParseErrorMode_ == logJsonParseErrorErrOnly {
+			p.logger.Error("failed to parse json", zap.Error(err))
+		} else if p.config.LogJSONParseErrorMode_ == logJsonParseErrorWithNode {
+			p.logger.Error("failed to parse json", zap.Error(err), zap.String("node", jsonNode.AsString()))
+		}
 		return pipeline.ActionPass
 	}
 
