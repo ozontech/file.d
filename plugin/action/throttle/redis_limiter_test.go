@@ -2,6 +2,7 @@ package throttle
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -22,6 +23,30 @@ func Test_updateKeyLimit(t *testing.T) {
 		value: 1,
 		kind:  "count",
 	}
+	defaultDistribution := limitDistributionCfg{
+		Field: "level",
+		Ratios: []limitDistributionRatio{
+			{
+				Ratio:  0.7,
+				Values: []string{"error"},
+			},
+			{
+				Ratio:  0.3,
+				Values: []string{"warn", "info"},
+			},
+		},
+		Enabled: true,
+	}
+	defaultDistributionJson := defaultDistribution.marshalJson()
+	ld, _ := parseLimitDistribution(defaultDistribution, 10)
+	defaultLimitWithDistribution := &complexLimit{
+		value:         10,
+		kind:          "count",
+		distributions: ld,
+	}
+	pod1LimitKey := strings.Join([]string{
+		pipelineName, throttleFieldName, throttleFieldValue1, keySuffix,
+	}, "_")
 	pod2LimitKey := strings.Join([]string{
 		pipelineName, throttleFieldName, throttleFieldValue2, keySuffix,
 	}, "_")
@@ -37,8 +62,10 @@ func Test_updateKeyLimit(t *testing.T) {
 	require.NoError(t, s.Set(pod3LimitKey, `{"custom_limit_field":103}`))
 	require.NoError(t, s.Set("custom_limit_key2", `{"custom_limit_field":104}`))
 	require.NoError(t, s.Set("custom_field_string_val", `{"custom_limit_field":"105"}`))
-	require.NoError(t, s.Set("custom_field_invalid_type", `{"custom_limit_field":{"invalid":"invalid"}}`))
-	require.NoError(t, s.Set("custom_field_error", `no_custom_field`))
+	require.NoError(t, s.Set("custom_limit_key3", `{"custom_limit_field":1000,"custom_distr_field":{"field":"new-field","ratios":[{"ratio":0.4,"values":["val1","val2"]},{"ratio":0.5,"values":["val3"]}],"enabled":false}}`))
+	require.NoError(t, s.Set("custom_limit_field_invalid_type", `{"custom_limit_field":{"invalid":"invalid"}}`))
+	require.NoError(t, s.Set("custom_distr_field_invalid_type", `{"custom_limit_field":107,"custom_distr_field":"test"}`))
+	require.NoError(t, s.Set("custom_limit_field_not_exists", `no_custom_field`))
 	require.NoError(t, s.Set("parse_int_error", `not_int`))
 
 	client := redis.NewClient(
@@ -53,7 +80,6 @@ func Test_updateKeyLimit(t *testing.T) {
 			MaxRetryBackoff: 0,
 		},
 	)
-
 	invalidClient := redis.NewClient(
 		&redis.Options{
 			Network:         "tcp",
@@ -69,124 +95,246 @@ func Test_updateKeyLimit(t *testing.T) {
 
 	type args struct {
 		client             redisClient
+		defaultLimit       *complexLimit
 		throttleFieldValue string
 		keyLimitOverride   string
 		valField           string
+		distrField         string
+	}
+	type limitersData struct {
+		limit         int64
+		distributions limitDistributions
+	}
+	type redisData struct {
+		key   string
+		value string
 	}
 	tests := []struct {
-		name      string
-		args      args
-		wantLimit int64
-		wantErr   bool
+		name string
+		args args
+
+		wantLimiters *limitersData
+		wantRedis    *redisData
+		wantErr      bool
 	}{
 		{
 			name: "set_default_limit",
 			args: args{
 				client:             client,
+				defaultLimit:       defaultLimit,
 				throttleFieldValue: throttleFieldValue1,
 				keyLimitOverride:   "",
 				valField:           "",
 			},
-			wantLimit: 1,
-			wantErr:   false,
+			wantRedis: &redisData{
+				key:   pod1LimitKey,
+				value: "1",
+			},
+		},
+		{
+			name: "set_default_limit_custom_field",
+			args: args{
+				client:             client,
+				defaultLimit:       defaultLimit,
+				throttleFieldValue: throttleFieldValue1,
+				keyLimitOverride:   "default_limit",
+				valField:           "custom_limit_field",
+			},
+			wantRedis: &redisData{
+				key:   "default_limit",
+				value: `{"custom_limit_field":1}`,
+			},
+		},
+		{
+			name: "set_default_distribution",
+			args: args{
+				client:             client,
+				defaultLimit:       defaultLimitWithDistribution,
+				throttleFieldValue: throttleFieldValue1,
+				keyLimitOverride:   "default_distr1",
+				valField:           "custom_limit_field",
+				distrField:         "custom_distr_field",
+			},
+			wantRedis: &redisData{
+				key:   "default_distr1",
+				value: fmt.Sprintf(`{"custom_limit_field":10,"custom_distr_field":%s}`, defaultDistributionJson),
+			},
+		},
+		{
+			name: "set_default_without_distributions",
+			args: args{
+				client:             client,
+				defaultLimit:       defaultLimit,
+				throttleFieldValue: throttleFieldValue1,
+				keyLimitOverride:   "default_distr2",
+				valField:           "custom_limit_field",
+				distrField:         "custom_distr_field",
+			},
+			wantRedis: &redisData{
+				key:   "default_distr2",
+				value: `{"custom_limit_field":1}`,
+			},
+		},
+		{
+			name: "set_default_without_distr_field",
+			args: args{
+				client:             client,
+				defaultLimit:       defaultLimitWithDistribution,
+				throttleFieldValue: throttleFieldValue1,
+				keyLimitOverride:   "default_distr3",
+				valField:           "custom_limit_field",
+				distrField:         "",
+			},
+			wantRedis: &redisData{
+				key:   "default_distr3",
+				value: `{"custom_limit_field":10}`,
+			},
 		},
 		{
 			name: "get_limit_from_default_key",
 			args: args{
 				client:             client,
+				defaultLimit:       defaultLimit,
 				throttleFieldValue: throttleFieldValue2,
 				keyLimitOverride:   "",
 				valField:           "",
 			},
-			wantLimit: 101,
-			wantErr:   false,
+			wantLimiters: &limitersData{
+				limit: 101,
+			},
 		},
 		{
 			name: "get_limit_from_custom_key",
 			args: args{
 				client:             client,
+				defaultLimit:       defaultLimit,
 				throttleFieldValue: throttleFieldValue1,
 				keyLimitOverride:   "custom_limit_key",
 				valField:           "",
 			},
-			wantLimit: 102,
-			wantErr:   false,
+			wantLimiters: &limitersData{
+				limit: 102,
+			},
 		},
 		{
 			name: "get_limit_from_default_key_custom_field",
 			args: args{
 				client:             client,
+				defaultLimit:       defaultLimit,
 				throttleFieldValue: throttleFieldValue3,
 				keyLimitOverride:   "",
 				valField:           "custom_limit_field",
 			},
-			wantLimit: 103,
-			wantErr:   false,
+			wantLimiters: &limitersData{
+				limit: 103,
+			},
 		},
 		{
 			name: "get_limit_from_custom_key_custom_field",
 			args: args{
 				client:             client,
+				defaultLimit:       defaultLimit,
 				throttleFieldValue: throttleFieldValue1,
 				keyLimitOverride:   "custom_limit_key2",
 				valField:           "custom_limit_field",
 			},
-			wantLimit: 104,
-			wantErr:   false,
+			wantLimiters: &limitersData{
+				limit: 104,
+			},
 		},
 		{
 			name: "get_limit_from_custom_key_custom_field_string_value",
 			args: args{
 				client:             client,
+				defaultLimit:       defaultLimit,
 				throttleFieldValue: throttleFieldValue1,
 				keyLimitOverride:   "custom_field_string_val",
 				valField:           "custom_limit_field",
 			},
-			wantLimit: 105,
-			wantErr:   false,
+			wantLimiters: &limitersData{
+				limit: 105,
+			},
 		},
 		{
-			name: "get_limit_from_custom_field_invalid_val_type",
+			name: "get_limit_and_distribution",
 			args: args{
 				client:             client,
+				defaultLimit:       defaultLimitWithDistribution,
 				throttleFieldValue: throttleFieldValue1,
-				keyLimitOverride:   "custom_field_invalid_type",
+				keyLimitOverride:   "custom_limit_key3",
 				valField:           "custom_limit_field",
+				distrField:         "custom_distr_field",
 			},
-			wantLimit: 0,
-			wantErr:   true,
+			wantLimiters: &limitersData{
+				limit: 1000,
+				distributions: limitDistributions{
+					field: []string{"new-field"},
+					idxByKey: map[string]int{
+						"val1": 0,
+						"val2": 0,
+						"val3": 1,
+					},
+					distributions: []complexDistribution{
+						{ratio: 0.4, limit: 400},
+						{ratio: 0.5, limit: 500},
+					},
+					defDistribution: complexDistribution{ratio: 0.1, limit: 100},
+				},
+			},
 		},
 		{
-			name: "get_limit_from_custom_field_error",
+			name: "get_limit_from_custom_limit_field_invalid_type",
 			args: args{
 				client:             client,
+				defaultLimit:       defaultLimit,
 				throttleFieldValue: throttleFieldValue1,
-				keyLimitOverride:   "custom_field_error",
+				keyLimitOverride:   "custom_limit_field_invalid_type",
 				valField:           "custom_limit_field",
 			},
-			wantLimit: 0,
-			wantErr:   true,
+			wantErr: true,
+		},
+		{
+			name: "get_distribution_from_custom_distr_field_invalid_type",
+			args: args{
+				client:             client,
+				defaultLimit:       defaultLimit,
+				throttleFieldValue: throttleFieldValue1,
+				keyLimitOverride:   "custom_distr_field_invalid_type",
+				valField:           "custom_distr_field",
+			},
+			wantErr: true,
+		},
+		{
+			name: "get_limit_from_custom_limit_field_not_exists",
+			args: args{
+				client:             client,
+				defaultLimit:       defaultLimit,
+				throttleFieldValue: throttleFieldValue1,
+				keyLimitOverride:   "custom_limit_field_not_exists",
+				valField:           "custom_limit_field",
+			},
+			wantErr: true,
 		},
 		{
 			name: "parse_int_error",
 			args: args{
 				client:             client,
+				defaultLimit:       defaultLimit,
 				throttleFieldValue: throttleFieldValue1,
 				keyLimitOverride:   "parse_int_error",
 			},
-			wantLimit: 0,
-			wantErr:   true,
+			wantErr: true,
 		},
 		{
 			name: "set_limit_error",
 			args: args{
 				client:             invalidClient,
+				defaultLimit:       defaultLimit,
 				throttleFieldValue: throttleFieldValue1,
 				keyLimitOverride:   "custom_field_error",
 				valField:           "custom_limit_field",
 			},
-			wantLimit: 0,
-			wantErr:   true,
+			wantErr: true,
 		},
 	}
 	for _, tt := range tests {
@@ -195,17 +343,19 @@ func Test_updateKeyLimit(t *testing.T) {
 			t.Parallel()
 			lim := newRedisLimiter(
 				&limiterConfig{
-					ctx:               ctx,
-					redisClient:       tt.args.client,
-					pipeline:          pipelineName,
-					throttleField:     throttleFieldName,
-					bucketInterval:    time.Second,
-					bucketsCount:      1,
-					limiterValueField: tt.args.valField,
+					ctx:                      ctx,
+					redisClient:              tt.args.client,
+					pipeline:                 pipelineName,
+					throttleField:            throttleFieldName,
+					bucketInterval:           time.Second,
+					bucketsCount:             1,
+					limiterValueField:        tt.args.valField,
+					limiterDistributionField: tt.args.distrField,
 				},
 				tt.args.throttleFieldValue,
 				tt.args.keyLimitOverride,
-				defaultLimit,
+				tt.args.defaultLimit,
+				defaultDistributionJson,
 				time.Now,
 			)
 			err := lim.updateKeyLimit()
@@ -213,12 +363,23 @@ func Test_updateKeyLimit(t *testing.T) {
 			if err != nil {
 				errMsg = err.Error()
 			}
+
 			require.Equal(t, tt.wantErr, err != nil, errMsg)
 			if tt.wantErr {
 				return
 			}
-			require.Equal(t, tt.wantLimit, lim.incrementLimiter.limit.value)
-			require.Equal(t, tt.wantLimit, lim.totalLimiter.limit.value)
+
+			if tt.wantLimiters != nil {
+				require.Equal(t, tt.wantLimiters.limit, lim.incrementLimiter.limit.value)
+				require.Equal(t, tt.wantLimiters.limit, lim.totalLimiter.limit.value)
+				require.Equal(t, tt.wantLimiters.distributions, lim.incrementLimiter.limit.distributions)
+				require.Equal(t, tt.wantLimiters.distributions, lim.totalLimiter.limit.distributions)
+			}
+			if tt.wantRedis != nil {
+				val, err := s.Get(tt.wantRedis.key)
+				require.NoError(t, err)
+				require.Equal(t, tt.wantRedis.value, val)
+			}
 		})
 	}
 	t.Cleanup(func() {
@@ -226,51 +387,85 @@ func Test_updateKeyLimit(t *testing.T) {
 	})
 }
 
-func Test_getLimitValFromJson(t *testing.T) {
+func Test_decodeKeyLimitValue(t *testing.T) {
 	type args struct {
-		data     []byte
-		valField string
+		data       []byte
+		valField   string
+		distrField string
 	}
 	tests := []struct {
-		name    string
-		args    args
-		want    int64
-		wantErr bool
+		name string
+		args args
+
+		wantLimit int64
+		wantDistr limitDistributionCfg
+		wantErr   bool
 	}{
 		{
-			name: "ok",
+			name: "ok_only_limit",
 			args: args{
 				data:     []byte(`{"limit_key":"3000"}`),
 				valField: "limit_key",
 			},
-			want:    3000,
-			wantErr: false,
+			wantLimit: 3000,
 		},
 		{
-			name: "unmarshal_error",
+			name: "ok_limit_and_distribution",
+			args: args{
+				data:       []byte(`{"limit_key":"3000","distr_key":{"field":"my-field","ratios":[{"ratio":0.4,"values":["val1","val2"]},{"ratio":0.6,"values":["val3"]}],"enabled":true}}`),
+				valField:   "limit_key",
+				distrField: "distr_key",
+			},
+			wantLimit: 3000,
+			wantDistr: limitDistributionCfg{
+				Field: "my-field",
+				Ratios: []limitDistributionRatio{
+					{Ratio: 0.4, Values: []string{"val1", "val2"}},
+					{Ratio: 0.6, Values: []string{"val3"}},
+				},
+				Enabled: true,
+			},
+		},
+		{
+			name: "decode_error",
 			args: args{
 				data:     []byte(`"3000"`),
 				valField: "limit_key",
 			},
-			want:    0,
 			wantErr: true,
 		},
 		{
-			name: "key_error",
+			name: "limit_key_not_exists",
 			args: args{
 				data:     []byte(`{"not_limit_key":"3000"}`),
 				valField: "limit_key",
 			},
-			want:    0,
 			wantErr: true,
 		},
 		{
-			name: "parse_int64_error",
+			name: "limit_format_error",
 			args: args{
 				data:     []byte(`{"limit_key":"not_int"}`),
 				valField: "limit_key",
 			},
-			want:    0,
+			wantErr: true,
+		},
+		{
+			name: "distribution_key_not_exists",
+			args: args{
+				data:       []byte(`{"limit_key":"3000","not_distr_key":"test"}`),
+				valField:   "limit_key",
+				distrField: "distr_key",
+			},
+			wantLimit: 3000,
+		},
+		{
+			name: "distribution_format_error",
+			args: args{
+				data:       []byte(`{"limit_key":"3000","distr_key":"test"}`),
+				valField:   "limit_key",
+				distrField: "distr_key",
+			},
 			wantErr: true,
 		},
 	}
@@ -278,9 +473,15 @@ func Test_getLimitValFromJson(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			got, err := getLimitValFromJson(tt.args.data, tt.args.valField)
+			gotLimit, gotDistr, err := decodeKeyLimitValue(tt.args.data, tt.args.valField, tt.args.distrField)
+
 			require.Equal(t, tt.wantErr, err != nil)
-			require.Equal(t, tt.want, got)
+			if tt.wantErr {
+				return
+			}
+
+			require.Equal(t, tt.wantLimit, gotLimit)
+			require.Equal(t, tt.wantDistr, gotDistr)
 		})
 	}
 }

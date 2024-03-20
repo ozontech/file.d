@@ -175,5 +175,30 @@ If not set limiter values are considered as non-json data.
 
 <br>
 
+**`limiter_distribution_field`** *`string`* 
+
+Defines field with limit distribution inside json object stored in value
+(e.g. if set to "distribution", value must be of kind `{"distribution":{<object>},...}`).
+Distribution object example:
+```json
+{
+  "field": "log.level",
+  "ratios": [
+    {
+      "ratio": 0.5,
+      "values": ["error"]
+    },
+    {
+      "ratio": 0.3,
+      "values": ["warn", "info"]
+    }
+  ],
+  "enabled": true
+}
+```
+> If `limiter_value_field` and `limiter_distribution_field` not set, distribution will not be stored.
+
+<br>
+
 
 <br>*Generated using [__insane-doc__](https://github.com/vitkovskii/insane-doc)*

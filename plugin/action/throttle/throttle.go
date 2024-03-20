@@ -2,9 +2,6 @@ package throttle
 
 import (
 	"context"
-	"errors"
-	"fmt"
-	"math"
 	"strings"
 	"sync"
 	"time"
@@ -217,6 +214,30 @@ type RedisBackendConfig struct {
 	// > (e.g. if set to "limit", values must be of kind `{"limit":"<int>",...}`).
 	// > If not set limiter values are considered as non-json data.
 	LimiterValueField string `json:"limiter_value_field" default:""` // *
+
+	// > @3@4@5@6
+	// >
+	// > Defines field with limit distribution inside json object stored in value
+	// > (e.g. if set to "distribution", value must be of kind `{"distribution":{<object>},...}`).
+	// > Distribution object example:
+	// > ```json
+	// > {
+	// >   "field": "log.level",
+	// >   "ratios": [
+	// >     {
+	// >       "ratio": 0.5,
+	// >       "values": ["error"]
+	// >     },
+	// >     {
+	// >       "ratio": 0.3,
+	// >       "values": ["warn", "info"]
+	// >     }
+	// >   ],
+	// >   "enabled": true
+	// > }
+	// > ```
+	// >> If `limiter_value_field` and `limiter_distribution_field` not set, distribution will not be stored.
+	LimiterDistributionField string `json:"limiter_distribution_field" default:""` // *
 }
 
 type RuleConfig struct {
@@ -232,61 +253,20 @@ type ComplexRatio struct {
 }
 
 type LimitDistributionConfig struct {
-	Field  cfg.FieldSelector `json:"field" default:"" parse:"selector"`
-	Field_ []string
-
-	Ratios []ComplexRatio `json:"ratios" slice:"true"`
+	Field  cfg.FieldSelector `json:"field" default:""`
+	Ratios []ComplexRatio    `json:"ratios" slice:"true"`
 }
 
-func (c LimitDistributionConfig) parse(totalLimit int64) (limitDistributions, error) {
-	if len(c.Field_) == 0 {
-		return limitDistributions{}, nil
+func (c LimitDistributionConfig) toInternal() limitDistributionCfg {
+	internal := limitDistributionCfg{
+		Field:   string(c.Field),
+		Ratios:  make([]limitDistributionRatio, 0, len(c.Ratios)),
+		Enabled: true,
 	}
-	if len(c.Ratios) == 0 {
-		return limitDistributions{}, errors.New(`empty "ratios"`)
+	for _, v := range c.Ratios {
+		internal.Ratios = append(internal.Ratios, limitDistributionRatio(v))
 	}
-
-	ld := limitDistributions{
-		field:         c.Field_,
-		distributions: make([]complexDistribution, len(c.Ratios)),
-		idxByKey:      map[string]int{},
-	}
-
-	var ratioSum float64
-	for i, r := range c.Ratios {
-		if r.Ratio < 0 || r.Ratio > 1 {
-			return ld, errors.New(`"ratio" value must be in range [0.0;1.0]`)
-		}
-		if len(r.Values) == 0 {
-			return ld, fmt.Errorf(`empty "values" in ratio #%d`, i)
-		}
-
-		ratioSum += r.Ratio
-		for _, v := range r.Values {
-			if _, ok := ld.idxByKey[v]; ok {
-				return ld, fmt.Errorf(`value %q is duplicated in "ratios" list`, v)
-			}
-			ld.idxByKey[v] = i
-		}
-
-		ld.distributions[i] = complexDistribution{
-			ratio: r.Ratio,
-			limit: int64(math.Round(r.Ratio * float64(totalLimit))),
-		}
-	}
-
-	dif := 1 - ratioSum
-	if dif < 0 {
-		return ld, errors.New("sum of ratios must be less than or equal to 1")
-	}
-
-	defRatio := math.Round(dif*100) / 100
-	ld.defDistribution = complexDistribution{
-		ratio: defRatio,
-		limit: int64(math.Round(defRatio * float64(totalLimit))),
-	}
-
-	return ld, nil
+	return internal
 }
 
 func init() {
@@ -304,7 +284,8 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 	p.config = config.(*Config)
 	p.logger = params.Logger
 
-	ld, err := p.config.LimitDistribution.parse(p.config.DefaultLimit)
+	distrCfg := p.config.LimitDistribution.toInternal()
+	ld, err := parseLimitDistribution(distrCfg, p.config.DefaultLimit)
 	if err != nil {
 		p.logger.Fatal("can't parse limit_distribution", zap.Error(err))
 	}
@@ -348,13 +329,14 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 			isStrict:           params.PipelineSettings.IsStrict,
 			logger:             p.logger,
 			limiterCfg: &limiterConfig{
-				ctx:               p.ctx,
-				backend:           p.config.LimiterBackend,
-				pipeline:          p.pipeline,
-				throttleField:     string(p.config.ThrottleField),
-				bucketInterval:    p.config.BucketInterval_,
-				bucketsCount:      p.config.BucketsCount,
-				limiterValueField: p.config.RedisBackendCfg.LimiterValueField,
+				ctx:                      p.ctx,
+				backend:                  p.config.LimiterBackend,
+				pipeline:                 p.pipeline,
+				throttleField:            string(p.config.ThrottleField),
+				bucketInterval:           p.config.BucketInterval_,
+				bucketsCount:             p.config.BucketsCount,
+				limiterValueField:        p.config.RedisBackendCfg.LimiterValueField,
+				limiterDistributionField: p.config.RedisBackendCfg.LimiterDistributionField,
 			},
 			mapSizeMetric: p.limitersMapSizeMetric,
 		}
@@ -372,7 +354,8 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 	limitersMu.Unlock()
 
 	for i, r := range p.config.Rules {
-		ldRule, err := r.LimitDistribution.parse(r.Limit)
+		ruleDistrCfg := r.LimitDistribution.toInternal()
+		ldRule, err := parseLimitDistribution(ruleDistrCfg, r.Limit)
 		if err != nil {
 			p.logger.Fatal("can't parse rule's limit_distribution", zap.Error(err), zap.Int("rule", i))
 		}
@@ -380,6 +363,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 		p.rules = append(p.rules, newRule(
 			r.Conditions,
 			complexLimit{r.Limit, r.LimitKind, ldRule},
+			ruleDistrCfg.marshalJson(),
 			i,
 		))
 	}
@@ -387,6 +371,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 	p.rules = append(p.rules, newRule(
 		map[string]string{},
 		complexLimit{p.config.DefaultLimit, p.config.LimitKind, ld},
+		distrCfg.marshalJson(),
 		len(p.config.Rules),
 	))
 }

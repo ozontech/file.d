@@ -52,14 +52,15 @@ func newLimiterWithGen(lim limiter, gen int64) *limiterWithGen {
 
 // limiterConfig configuration for creation of new limiters.
 type limiterConfig struct {
-	ctx               context.Context
-	backend           string
-	redisClient       redisClient
-	pipeline          string
-	throttleField     string
-	bucketInterval    time.Duration
-	bucketsCount      int
-	limiterValueField string
+	ctx                      context.Context
+	backend                  string
+	redisClient              redisClient
+	pipeline                 string
+	throttleField            string
+	bucketInterval           time.Duration
+	bucketsCount             int
+	limiterValueField        string
+	limiterDistributionField string
 }
 
 // limitersMapConfig configuration of limiters map.
@@ -222,7 +223,7 @@ func (l *limitersMap) maintenance(ctx context.Context) {
 func (l *limitersMap) newLimiter(throttleKey, keyLimitOverride string, rule *rule) limiter {
 	switch l.limiterCfg.backend {
 	case redisBackend:
-		return newRedisLimiter(l.limiterCfg, throttleKey, keyLimitOverride, &rule.limit, l.nowFn)
+		return newRedisLimiter(l.limiterCfg, throttleKey, keyLimitOverride, &rule.limit, rule.distributionCfg, l.nowFn)
 	case inMemoryBackend:
 		return newInMemoryLimiter(l.limiterCfg, &rule.limit, l.nowFn)
 	default:

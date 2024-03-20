@@ -52,13 +52,13 @@ func (l *inMemoryLimiter) isAllowed(event *pipeline.Event, ts time.Time) bool {
 		return true
 	}
 
-	l.mu.Lock()
-	defer l.mu.Unlock()
+	l.lock()
+	defer l.unlock()
 
 	// If the limit is given distributions, then sharded buckets are used
 	shard := 0
 	limit := l.limit.value
-	if l.limit.distributions.size() > 0 {
+	if l.limit.distributions.isEnabled() {
 		key := event.Root.Dig(l.limit.distributions.field...).AsString()
 		shard, limit = l.limit.distributions.getLimit(key)
 
@@ -87,6 +87,24 @@ func (l *inMemoryLimiter) lock() {
 
 func (l *inMemoryLimiter) unlock() {
 	l.mu.Unlock()
+}
+
+func (l *inMemoryLimiter) updateLimit(limit int64) {
+	atomic.StoreInt64(&l.limit.value, limit)
+}
+
+func (l *inMemoryLimiter) updateDistribution(distribution limitDistributionCfg) error {
+	if distribution.isEmpty() && l.limit.distributions.size() == 0 {
+		return nil
+	}
+	ld, err := parseLimitDistribution(distribution, atomic.LoadInt64(&l.limit.value))
+	if err != nil {
+		return err
+	}
+	l.lock()
+	l.limit.distributions = ld
+	l.unlock()
+	return nil
 }
 
 func (l *inMemoryLimiter) getBucket(bucketIdx int, buf []int64) []int64 {
@@ -131,7 +149,7 @@ func (l *inMemoryLimiter) bucketsMinID() int {
 }
 
 func (l *inMemoryLimiter) setNowFn(fn func() time.Time) {
-	l.mu.Lock()
+	l.lock()
 	l.nowFn = fn
-	l.mu.Unlock()
+	l.unlock()
 }

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"sync/atomic"
 	"time"
 
 	"github.com/ozontech/file.d/logger"
@@ -20,11 +19,9 @@ const (
 type redisLimiter struct {
 	redis redisClient
 
-	// <keyPrefix>_
 	// bucket counter prefix, forms key in redis: <keyPrefix>_<bucketID>_<shardIdx>
 	keyPrefix bytes.Buffer
-	// <keyPrefix>_<keySuffix>
-	// limit key in redis
+	// limit key in redis. If not overridden, has the format <keyPrefix>_<keySuffix>
 	keyLimit string
 
 	// contains values which will be used for incrementing remote bucket counter
@@ -46,6 +43,9 @@ type redisLimiter struct {
 
 	// json field with limit value
 	valField string
+	// json field with distribution value
+	distributionField string
+
 	// limit default value to set if limit key does not exist in redis
 	defaultVal string
 }
@@ -53,16 +53,17 @@ type redisLimiter struct {
 // newRedisLimiter return instance of redis limiter.
 func newRedisLimiter(
 	cfg *limiterConfig,
-	throttleFieldValue string,
-	keyLimitOverride string,
+	throttleFieldValue, keyLimitOverride string,
 	limit *complexLimit,
+	distributionCfg []byte,
 	nowFn func() time.Time,
 ) *redisLimiter {
 	rl := &redisLimiter{
-		redis:            cfg.redisClient,
-		incrementLimiter: newInMemoryLimiter(cfg, limit, nowFn),
-		totalLimiter:     newInMemoryLimiter(cfg, limit, nowFn),
-		valField:         cfg.limiterValueField,
+		redis:             cfg.redisClient,
+		incrementLimiter:  newInMemoryLimiter(cfg, limit, nowFn),
+		totalLimiter:      newInMemoryLimiter(cfg, limit, nowFn),
+		valField:          cfg.limiterValueField,
+		distributionField: cfg.limiterDistributionField,
 	}
 
 	rl.keyIdxsForSync = make([]int, 0, cfg.bucketsCount)
@@ -87,7 +88,15 @@ func newRedisLimiter(
 	} else {
 		// no err check since valField is string
 		valKey, _ := json.Marshal(rl.valField)
-		rl.defaultVal = fmt.Sprintf("{%s:%v}", valKey, limit.value)
+		if limit.distributions.size() > 0 && rl.distributionField != "" {
+			distrKey, _ := json.Marshal(rl.distributionField)
+			rl.defaultVal = fmt.Sprintf("{%s:%v,%s:%s}",
+				valKey, limit.value,
+				distrKey, distributionCfg,
+			)
+		} else {
+			rl.defaultVal = fmt.Sprintf("{%s:%v}", valKey, limit.value)
+		}
 	}
 
 	return rl
@@ -210,17 +219,35 @@ func (l *redisLimiter) updateLimiterValues(maxID, bucketIdx int) {
 	updateLim(l.totalLimiter, l.shardValuesForUpdate)
 }
 
-func getLimitValFromJson(data []byte, valField string) (int64, error) {
-	var m map[string]json.Number
+func decodeKeyLimitValue(data []byte, valField, distrField string) (int64, limitDistributionCfg, error) {
+	var limit int64
+	var distr limitDistributionCfg
+	var err error
+	var m map[string]json.RawMessage
 	reader := bytes.NewReader(data)
-	if err := json.NewDecoder(reader).Decode(&m); err != nil {
-		return 0, fmt.Errorf("failed to unmarshal map: %w", err)
+	if err = json.NewDecoder(reader).Decode(&m); err != nil {
+		return limit, distr, fmt.Errorf("failed to unmarshal map: %w", err)
 	}
+
 	limitVal, has := m[valField]
 	if !has {
-		return 0, fmt.Errorf("no %q key in map", valField)
+		return limit, distr, fmt.Errorf("no %q key in map", valField)
 	}
-	return limitVal.Int64()
+	if limit, err = json.Number(bytes.Trim(limitVal, `"`)).Int64(); err != nil {
+		return limit, distr, err
+	}
+
+	if distrField != "" {
+		distrVal, has := m[distrField]
+		if !has {
+			return limit, distr, nil
+		}
+		if err := json.Unmarshal(distrVal, &distr); err != nil {
+			return limit, distr, err
+		}
+	}
+
+	return limit, distr, nil
 }
 
 // updateKeyLimit reads key limit from redis and updates current limit.
@@ -228,6 +255,7 @@ func (l *redisLimiter) updateKeyLimit() error {
 	var b bool
 	var err error
 	var limitVal int64
+	var distrVal limitDistributionCfg
 	// try to set global limit to default
 	if b, err = l.redis.SetNX(l.keyLimit, l.defaultVal, 0).Result(); err != nil {
 		return fmt.Errorf("failed to set redis value by key %q: %w", l.keyLimit, err)
@@ -241,17 +269,23 @@ func (l *redisLimiter) updateKeyLimit() error {
 		if jsonData, err = v.Bytes(); err != nil {
 			return fmt.Errorf("failed to convert redis value to bytes: %w", err)
 		}
-		if limitVal, err = getLimitValFromJson(jsonData, l.valField); err != nil {
-			return fmt.Errorf("failed to get limit value from redis json: %w", err)
+		if limitVal, distrVal, err = decodeKeyLimitValue(jsonData, l.valField, l.distributionField); err != nil {
+			return fmt.Errorf("failed to decode redis json value: %w", err)
 		}
 	} else {
 		if limitVal, err = v.Int64(); err != nil {
 			return fmt.Errorf("failed to convert redis value to int64: %w", err)
 		}
 	}
-	// atomic store to prevent races with limit value fast check
-	atomic.StoreInt64(&l.totalLimiter.limit.value, limitVal)
-	atomic.StoreInt64(&l.incrementLimiter.limit.value, limitVal)
+	l.totalLimiter.updateLimit(limitVal)
+	l.incrementLimiter.updateLimit(limitVal)
+
+	if err = l.totalLimiter.updateDistribution(distrVal); err != nil {
+		return fmt.Errorf("failed to update limiter distribution: %w", err)
+	}
+	if err = l.incrementLimiter.updateDistribution(distrVal); err != nil {
+		return fmt.Errorf("failed to update limiter distribution: %w", err)
+	}
 	return nil
 }
 
