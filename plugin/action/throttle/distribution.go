@@ -20,12 +20,12 @@ type limitDistributionCfg struct {
 	Enabled bool                     `json:"enabled"`
 }
 
-func (c limitDistributionCfg) marshalJson() []byte {
+func (c *limitDistributionCfg) marshalJson() []byte {
 	v, _ := json.Marshal(c)
 	return v
 }
 
-func (c limitDistributionCfg) isEmpty() bool {
+func (c *limitDistributionCfg) isEmpty() bool {
 	return c.Field == "" || len(c.Ratios) == 0
 }
 
@@ -95,23 +95,23 @@ type limitDistributions struct {
 	enabled         bool
 }
 
-func (ld limitDistributions) isEnabled() bool {
+func (ld *limitDistributions) isEnabled() bool {
 	return ld.enabled
 }
 
-func (ld limitDistributions) size() int {
+func (ld *limitDistributions) size() int {
 	return len(ld.distributions)
 }
 
 // get returns (index, distribution limit) by key or (-1, default distribution limit) otherwise
-func (ld limitDistributions) getLimit(key string) (int, int64) {
+func (ld *limitDistributions) getLimit(key string) (int, int64) {
 	if idx, ok := ld.idxByKey[key]; ok {
 		return idx, ld.distributions[idx].limit
 	}
 	return -1, ld.defDistribution.limit
 }
 
-func (ld limitDistributions) copy() limitDistributions {
+func (ld *limitDistributions) copy() limitDistributions {
 	fieldCopy := make([]string, len(ld.field))
 	copy(fieldCopy, ld.field)
 
