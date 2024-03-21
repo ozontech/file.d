@@ -5,3 +5,5 @@ ozon*
 dist/
 tests-offsets
 testdata
+
+.idea/

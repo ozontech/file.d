@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"regexp"
 	"slices"
+	"strconv"
 
 	"github.com/ozontech/file.d/cfg"
 	insaneJSON "github.com/vitkovskii/insane-json"
@@ -44,6 +45,8 @@ const (
 	doIfFieldPrefixOp
 	doIfFieldSuffixOp
 	doIfFieldRegexOp
+
+	doIfFieldLengthCmpOp
 )
 
 func (t doIfFieldOpType) String() string {
@@ -58,11 +61,24 @@ func (t doIfFieldOpType) String() string {
 		return "suffix"
 	case doIfFieldRegexOp:
 		return "regex"
+	case doIfFieldLengthCmpOp:
+		return "field len cmp"
 	}
 	return "unknown"
 }
 
-var (
+type comparisonOperation string
+
+const (
+	cmpOpLess           comparisonOperation = "<"
+	cmpOpLessOrEqual    comparisonOperation = "<="
+	cmpOpGreater        comparisonOperation = ">"
+	cmpOpGreaterOrEqual comparisonOperation = ">="
+	cmpOpEqual          comparisonOperation = "=="
+	cmpOpNotEqual       comparisonOperation = "!="
+)
+
+const (
 	// > checks whether the field value is equal to one of the elements in the values list.
 	// >
 	// > Example:
@@ -84,7 +100,7 @@ var (
 	// > {"pod":"test-pod","service":"test-service"}     # not discarded
 	// > {"pod":"test-pod","service":"test-service-1"}   # not discarded
 	// > ```
-	doIfFieldEqualOpBytes = []byte(`equal`) // *
+	doIfFieldEqualOpSign = "equal" // *
 
 	// > checks whether the field value contains one of the elements the in values list.
 	// >
@@ -107,7 +123,7 @@ var (
 	// > {"pod":"my-test-pod","service":"test-service"}       # discarded
 	// > {"pod":"test-pod","service":"test-service-1"}        # not discarded
 	// > ```
-	doIfFieldContainsOpBytes = []byte(`contains`) // *
+	doIfFieldContainsOpSign = "contains" // *
 
 	// > checks whether the field value has prefix equal to one of the elements in the values list.
 	// >
@@ -130,7 +146,7 @@ var (
 	// > {"pod":"test-pod","service":"test-service"}       # not discarded
 	// > {"pod":"test-pod","service":"test-service-1"}     # not discarded
 	// > ```
-	doIfFieldPrefixOpBytes = []byte(`prefix`) // *
+	doIfFieldPrefixOpSign = "prefix" // *
 
 	// > checks whether the field value has suffix equal to one of the elements in the values list.
 	// >
@@ -153,7 +169,7 @@ var (
 	// > {"pod":"test-pod","service":"test-service"}       # not discarded
 	// > {"pod":"test-pod","service":"test-service-1"}     # not discarded
 	// > ```
-	doIfFieldSuffixOpBytes = []byte(`suffix`) // *
+	doIfFieldSuffixOpSign = "suffix" // *
 
 	// > checks whether the field matches any regex from the values list.
 	// >
@@ -178,7 +194,9 @@ var (
 	// > {"pod":"my-test-instance","service":"test-service-1"} # discarded
 	// > {"pod":"service123","service":"test-service-1"}       # not discarded
 	// > ```
-	doIfFieldRegexOpBytes = []byte(`regex`) // *
+	doIfFieldRegexOpSign = "regex" // *
+
+	doIfFieldLengthCmpOpSign = "field len"
 )
 
 /*{ do-if-field-op-node
@@ -219,9 +237,12 @@ type doIfFieldOpNode struct {
 
 	minValLen int
 	maxValLen int
+
+	cmpOp              comparisonOperation
+	valueForComparison int
 }
 
-func NewFieldOpNode(op string, field string, caseSensitive bool, values [][]byte) (DoIfNode, error) {
+func NewFieldOpNode(op string, field string, caseSensitive bool, cmpOp string, values [][]byte) (DoIfNode, error) {
 	if field == "" {
 		return nil, errors.New("field is not specified")
 	}
@@ -234,19 +255,21 @@ func NewFieldOpNode(op string, field string, caseSensitive bool, values [][]byte
 	var minValLen, maxValLen int
 	var fop doIfFieldOpType
 
+	resCmpOp := comparisonOperation(cmpOp)
+	var valueForComparison int64
+
 	fieldPath := cfg.ParseFieldSelector(field)
 
-	opBytes := []byte(op)
-	switch {
-	case bytes.Equal(opBytes, doIfFieldEqualOpBytes):
+	switch op {
+	case doIfFieldEqualOpSign:
 		fop = doIfFieldEqualOp
-	case bytes.Equal(opBytes, doIfFieldContainsOpBytes):
+	case doIfFieldContainsOpSign:
 		fop = doIfFieldContainsOp
-	case bytes.Equal(opBytes, doIfFieldPrefixOpBytes):
+	case doIfFieldPrefixOpSign:
 		fop = doIfFieldPrefixOp
-	case bytes.Equal(opBytes, doIfFieldSuffixOpBytes):
+	case doIfFieldSuffixOpSign:
 		fop = doIfFieldSuffixOp
-	case bytes.Equal(opBytes, doIfFieldRegexOpBytes):
+	case doIfFieldRegexOpSign:
 		fop = doIfFieldRegexOp
 		reValues = make([]*regexp.Regexp, 0, len(values))
 		for _, v := range values {
@@ -256,11 +279,29 @@ func NewFieldOpNode(op string, field string, caseSensitive bool, values [][]byte
 			}
 			reValues = append(reValues, re)
 		}
+	case doIfFieldLengthCmpOpSign:
+		fop = doIfFieldLengthCmpOp
 	default:
 		return nil, fmt.Errorf("unknown field op %q", op)
 	}
 
-	if fop != doIfFieldRegexOp {
+	if fop == doIfFieldLengthCmpOp {
+		if len(values) != 1 {
+			return nil, errors.New("exactly one value for comparison needed")
+		}
+
+		var err error
+		valueForComparison, err = strconv.ParseInt(string(values[0]), 0, 64)
+		if err != nil {
+			return nil, fmt.Errorf("can't parse value for length comparison: %w", err)
+		}
+
+		switch resCmpOp {
+		case cmpOpLess, cmpOpLessOrEqual, cmpOpGreater, cmpOpGreaterOrEqual, cmpOpEqual, cmpOpNotEqual:
+		default:
+			return nil, fmt.Errorf("unknown cmp op %q", cmpOp)
+		}
+	} else if fop != doIfFieldRegexOp {
 		minValLen = len(values[0])
 		maxValLen = len(values[0])
 		if fop == doIfFieldEqualOp {
@@ -292,15 +333,17 @@ func NewFieldOpNode(op string, field string, caseSensitive bool, values [][]byte
 	}
 
 	return &doIfFieldOpNode{
-		op:            fop,
-		fieldPath:     fieldPath,
-		fieldPathStr:  field,
-		caseSensitive: caseSensitive,
-		values:        vals,
-		valuesBySize:  valsBySize,
-		reValues:      reValues,
-		minValLen:     minValLen,
-		maxValLen:     maxValLen,
+		op:                 fop,
+		fieldPath:          fieldPath,
+		fieldPathStr:       field,
+		caseSensitive:      caseSensitive,
+		values:             vals,
+		valuesBySize:       valsBySize,
+		reValues:           reValues,
+		minValLen:          minValLen,
+		maxValLen:          maxValLen,
+		cmpOp:              resCmpOp,
+		valueForComparison: int(valueForComparison),
 	}, nil
 }
 
@@ -315,7 +358,7 @@ func (n *doIfFieldOpNode) Check(eventRoot *insaneJSON.Root) bool {
 		data = node.AsBytes()
 	}
 	// fast check for data
-	if n.op != doIfFieldRegexOp && len(data) < n.minValLen {
+	if n.op != doIfFieldRegexOp && n.op != doIfFieldLengthCmpOp && len(data) < n.minValLen {
 		return false
 	}
 	switch n.op {
@@ -377,6 +420,21 @@ func (n *doIfFieldOpNode) Check(eventRoot *insaneJSON.Root) bool {
 			if re.Match(data) {
 				return true
 			}
+		}
+	case doIfFieldLengthCmpOp:
+		switch n.cmpOp {
+		case cmpOpLess:
+			return len(data) < n.valueForComparison
+		case cmpOpLessOrEqual:
+			return len(data) <= n.valueForComparison
+		case cmpOpGreater:
+			return len(data) > n.valueForComparison
+		case cmpOpGreaterOrEqual:
+			return len(data) >= n.valueForComparison
+		case cmpOpEqual:
+			return len(data) == n.valueForComparison
+		case cmpOpNotEqual:
+			return len(data) != n.valueForComparison
 		}
 	}
 	return false

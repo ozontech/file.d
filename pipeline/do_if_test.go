@@ -15,6 +15,7 @@ type treeNode struct {
 	fieldOp       string
 	fieldName     string
 	caseSensitive bool
+	cmpOp         string
 	values        [][]byte
 
 	logicalOp string
@@ -28,6 +29,7 @@ func buildTree(node treeNode) (DoIfNode, error) {
 			node.fieldOp,
 			node.fieldName,
 			node.caseSensitive,
+			node.cmpOp,
 			node.values,
 		)
 	} else if node.logicalOp != "" {
@@ -405,6 +407,96 @@ func TestCheck(t *testing.T) {
 				{`{"pod":"my-test-pod"}`, false},
 				{`{"pod":"my-pod-3-pod"}`, false},
 				{`{"pod":"my-TEST-4-pod"}`, false},
+			},
+		},
+		{
+			name: "ok_len_less",
+			tree: treeNode{
+				fieldOp:   "field len",
+				fieldName: "pod_id",
+				cmpOp:     "<",
+				values:    [][]byte{[]byte("5")},
+			},
+			data: []argsResp{
+				{`{"pod_id":""}`, true},
+				{`{"pod_id":123}`, true},
+				{`{"pod_id":12345}`, false},
+				{`{"pod_id":123456}`, false},
+			},
+		},
+		{
+			name: "ok_len_less_or_equal",
+			tree: treeNode{
+				fieldOp:   "field len",
+				fieldName: "pod_id",
+				cmpOp:     "<=",
+				values:    [][]byte{[]byte("5")},
+			},
+			data: []argsResp{
+				{`{"pod_id":""}`, true},
+				{`{"pod_id":123}`, true},
+				{`{"pod_id":12345}`, true},
+				{`{"pod_id":123456}`, false},
+			},
+		},
+		{
+			name: "ok_len_greater",
+			tree: treeNode{
+				fieldOp:   "field len",
+				fieldName: "pod_id",
+				cmpOp:     ">",
+				values:    [][]byte{[]byte("5")},
+			},
+			data: []argsResp{
+				{`{"pod_id":""}`, false},
+				{`{"pod_id":123}`, false},
+				{`{"pod_id":12345}`, false},
+				{`{"pod_id":123456}`, true},
+			},
+		},
+		{
+			name: "ok_len_greater_or_equal",
+			tree: treeNode{
+				fieldOp:   "field len",
+				fieldName: "pod_id",
+				cmpOp:     ">=",
+				values:    [][]byte{[]byte("5")},
+			},
+			data: []argsResp{
+				{`{"pod_id":""}`, false},
+				{`{"pod_id":123}`, false},
+				{`{"pod_id":12345}`, true},
+				{`{"pod_id":123456}`, true},
+			},
+		},
+		{
+			name: "ok_len_equal",
+			tree: treeNode{
+				fieldOp:   "field len",
+				fieldName: "pod_id",
+				cmpOp:     "==",
+				values:    [][]byte{[]byte("5")},
+			},
+			data: []argsResp{
+				{`{"pod_id":""}`, false},
+				{`{"pod_id":123}`, false},
+				{`{"pod_id":12345}`, true},
+				{`{"pod_id":123456}`, false},
+			},
+		},
+		{
+			name: "ok_len_not_equal",
+			tree: treeNode{
+				fieldOp:   "field len",
+				fieldName: "pod_id",
+				cmpOp:     "!=",
+				values:    [][]byte{[]byte("5")},
+			},
+			data: []argsResp{
+				{`{"pod_id":""}`, true},
+				{`{"pod_id":123}`, true},
+				{`{"pod_id":12345}`, false},
+				{`{"pod_id":123456}`, true},
 			},
 		},
 		{
