@@ -196,7 +196,7 @@ const (
 	// > ```
 	doIfFieldRegexOpSign = "regex" // *
 
-	// > compares field length with certain value
+	// > compares field length in bytes with certain value
 	// >
 	// > Example:
 	// > ```yaml
@@ -205,19 +205,18 @@ const (
 	// >     actions:
 	// >       - type: discard
 	// >         do_if:
-	// >           op: regex
+	// >           op: field_len
 	// >           field: pod
-	// >           values: [pod-\d, my-test.*]
+	// >           cmp_op: <
+	// >           values: [5]
 	// > ```
 	// >
 	// > result:
 	// > ```
-	// > {"pod":"test-1-pod-1","service":"test-service"}       # discarded
-	// > {"pod":"test-2-pod-2","service":"test-service-2"}     # discarded
-	// > {"pod":"test-pod","service":"test-service"}           # not discarded
-	// > {"pod":"my-test-pod","service":"test-service-1"}      # discarded
-	// > {"pod":"my-test-instance","service":"test-service-1"} # discarded
-	// > {"pod":"service123","service":"test-service-1"}       # not discarded
+	// > {"pod_id":""}      # discarded
+	// > {"pod_id":123}     # discarded
+	// > {"pod_id":12345}   # not discarded
+	// > {"pod_id":123456}  # not discarded
 	// > ```
 	doIfFieldLengthCmpOpSign = "field_len"
 )
