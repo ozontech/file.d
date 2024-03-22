@@ -46,25 +46,26 @@ const (
 	doIfFieldSuffixOp
 	doIfFieldRegexOp
 
-	doIfFieldLengthCmpOp
+	doIfFieldBytesLengthCmpOp
 )
 
 func (t doIfFieldOpType) String() string {
 	switch t {
 	case doIfFieldEqualOp:
-		return "equal"
+		return doIfFieldEqualOpName
 	case doIfFieldContainsOp:
-		return "contains"
+		return doIfFieldContainsOpName
 	case doIfFieldPrefixOp:
-		return "prefix"
+		return doIfFieldPrefixOpName
 	case doIfFieldSuffixOp:
-		return "suffix"
+		return doIfFieldSuffixOpName
 	case doIfFieldRegexOp:
-		return "regex"
-	case doIfFieldLengthCmpOp:
-		return "field len cmp"
+		return doIfFieldRegexOpName
+	case doIfFieldBytesLengthCmpOp:
+		return doIfFieldBytesLengthCmpOpName
+	default:
+		return "unknown"
 	}
-	return "unknown"
 }
 
 type comparisonOperation string
@@ -100,7 +101,7 @@ const (
 	// > {"pod":"test-pod","service":"test-service"}     # not discarded
 	// > {"pod":"test-pod","service":"test-service-1"}   # not discarded
 	// > ```
-	doIfFieldEqualOpSign = "equal" // *
+	doIfFieldEqualOpName = "equal" // *
 
 	// > checks whether the field value contains one of the elements the in values list.
 	// >
@@ -123,7 +124,7 @@ const (
 	// > {"pod":"my-test-pod","service":"test-service"}       # discarded
 	// > {"pod":"test-pod","service":"test-service-1"}        # not discarded
 	// > ```
-	doIfFieldContainsOpSign = "contains" // *
+	doIfFieldContainsOpName = "contains" // *
 
 	// > checks whether the field value has prefix equal to one of the elements in the values list.
 	// >
@@ -146,7 +147,7 @@ const (
 	// > {"pod":"test-pod","service":"test-service"}       # not discarded
 	// > {"pod":"test-pod","service":"test-service-1"}     # not discarded
 	// > ```
-	doIfFieldPrefixOpSign = "prefix" // *
+	doIfFieldPrefixOpName = "prefix" // *
 
 	// > checks whether the field value has suffix equal to one of the elements in the values list.
 	// >
@@ -169,7 +170,7 @@ const (
 	// > {"pod":"test-pod","service":"test-service"}       # not discarded
 	// > {"pod":"test-pod","service":"test-service-1"}     # not discarded
 	// > ```
-	doIfFieldSuffixOpSign = "suffix" // *
+	doIfFieldSuffixOpName = "suffix" // *
 
 	// > checks whether the field matches any regex from the values list.
 	// >
@@ -194,7 +195,7 @@ const (
 	// > {"pod":"my-test-instance","service":"test-service-1"} # discarded
 	// > {"pod":"service123","service":"test-service-1"}       # not discarded
 	// > ```
-	doIfFieldRegexOpSign = "regex" // *
+	doIfFieldRegexOpName = "regex" // *
 
 	// > compares field length in bytes with certain value
 	// >
@@ -206,7 +207,7 @@ const (
 	// >       - type: discard
 	// >         do_if:
 	// >           op: field_len
-	// >           field: pod
+	// >           field: pod_id
 	// >           cmp_op: <
 	// >           values: [5]
 	// > ```
@@ -218,7 +219,7 @@ const (
 	// > {"pod_id":12345}   # not discarded
 	// > {"pod_id":123456}  # not discarded
 	// > ```
-	doIfFieldLengthCmpOpSign = "field_len"
+	doIfFieldBytesLengthCmpOpName = "bytes_len_cmp" // *
 )
 
 /*{ do-if-field-op-node
@@ -283,15 +284,15 @@ func NewFieldOpNode(op string, field string, caseSensitive bool, cmpOp string, v
 	fieldPath := cfg.ParseFieldSelector(field)
 
 	switch op {
-	case doIfFieldEqualOpSign:
+	case doIfFieldEqualOpName:
 		fop = doIfFieldEqualOp
-	case doIfFieldContainsOpSign:
+	case doIfFieldContainsOpName:
 		fop = doIfFieldContainsOp
-	case doIfFieldPrefixOpSign:
+	case doIfFieldPrefixOpName:
 		fop = doIfFieldPrefixOp
-	case doIfFieldSuffixOpSign:
+	case doIfFieldSuffixOpName:
 		fop = doIfFieldSuffixOp
-	case doIfFieldRegexOpSign:
+	case doIfFieldRegexOpName:
 		fop = doIfFieldRegexOp
 		reValues = make([]*regexp.Regexp, 0, len(values))
 		for _, v := range values {
@@ -301,13 +302,13 @@ func NewFieldOpNode(op string, field string, caseSensitive bool, cmpOp string, v
 			}
 			reValues = append(reValues, re)
 		}
-	case doIfFieldLengthCmpOpSign:
-		fop = doIfFieldLengthCmpOp
+	case doIfFieldBytesLengthCmpOpName:
+		fop = doIfFieldBytesLengthCmpOp
 	default:
 		return nil, fmt.Errorf("unknown field op %q", op)
 	}
 
-	if fop == doIfFieldLengthCmpOp {
+	if fop == doIfFieldBytesLengthCmpOp {
 		if len(values) != 1 {
 			return nil, errors.New("exactly one value for comparison needed")
 		}
@@ -380,7 +381,7 @@ func (n *doIfFieldOpNode) Check(eventRoot *insaneJSON.Root) bool {
 		data = node.AsBytes()
 	}
 	// fast check for data
-	if n.op != doIfFieldRegexOp && n.op != doIfFieldLengthCmpOp && len(data) < n.minValLen {
+	if n.op != doIfFieldRegexOp && n.op != doIfFieldBytesLengthCmpOp && len(data) < n.minValLen {
 		return false
 	}
 	switch n.op {
@@ -443,7 +444,7 @@ func (n *doIfFieldOpNode) Check(eventRoot *insaneJSON.Root) bool {
 				return true
 			}
 		}
-	case doIfFieldLengthCmpOp:
+	case doIfFieldBytesLengthCmpOp:
 		switch n.cmpOp {
 		case cmpOpLess:
 			return len(data) < n.valueForComparison
@@ -534,16 +535,17 @@ const (
 func (t doIfLogicalOpType) String() string {
 	switch t {
 	case doIfLogicalOr:
-		return "or"
+		return doIfLogicalOrName
 	case doIfLogicalAnd:
-		return "and"
+		return doIfLogicalAndName
 	case doIfLogicalNot:
-		return "not"
+		return doIfLogicalNotName
+	default:
+		return "unknown"
 	}
-	return "unknown"
 }
 
-var (
+const (
 	// > accepts at least one operand and returns true on the first returned true from its operands.
 	// >
 	// > Example:
@@ -570,7 +572,7 @@ var (
 	// > {"pod":"test-pod","service":"test-service"}     # discarded
 	// > {"pod":"test-pod","service":"test-service-1"}   # not discarded
 	// > ```
-	doIfLogicalOrBytes = []byte(`or`) // *
+	doIfLogicalOrName = "or" // *
 
 	// > accepts at least one operand and returns true if all operands return true
 	// > (in other words returns false on the first returned false from its operands).
@@ -599,7 +601,7 @@ var (
 	// > {"pod":"test-pod","service":"test-service"}     # not discarded
 	// > {"pod":"test-pod","service":"test-service-1"}   # not discarded
 	// > ```
-	doIfLogicalAndBytes = []byte(`and`) // *
+	doIfLogicalAndName = "and" // *
 
 	// > accepts exactly one operand and returns inverted result of its operand.
 	// >
@@ -624,7 +626,7 @@ var (
 	// > {"pod":"test-pod","service":"test-service"}     # not discarded
 	// > {"pod":"test-pod","service":"test-service-1"}   # discarded
 	// > ```
-	doIfLogicalNotBytes = []byte(`not`) // *
+	doIfLogicalNotName = "not" // *
 )
 
 /*{ do-if-logical-op-node
@@ -667,13 +669,12 @@ func NewLogicalNode(op string, operands []DoIfNode) (DoIfNode, error) {
 		return nil, errors.New("logical op must have at least one operand")
 	}
 	var lop doIfLogicalOpType
-	opBytes := []byte(op)
-	switch {
-	case bytes.Equal(opBytes, doIfLogicalOrBytes):
+	switch op {
+	case doIfLogicalOrName:
 		lop = doIfLogicalOr
-	case bytes.Equal(opBytes, doIfLogicalAndBytes):
+	case doIfLogicalAndName:
 		lop = doIfLogicalAnd
-	case bytes.Equal(opBytes, doIfLogicalNotBytes):
+	case doIfLogicalNotName:
 		lop = doIfLogicalNot
 		if len(operands) > 1 {
 			return nil, fmt.Errorf("logical not must have exactly one operand, got %d", len(operands))

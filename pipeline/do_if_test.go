@@ -410,9 +410,9 @@ func TestCheck(t *testing.T) {
 			},
 		},
 		{
-			name: "ok_len_less",
+			name: "ok_bytes_len_less",
 			tree: treeNode{
-				fieldOp:   "field_len",
+				fieldOp:   "bytes_len_cmp",
 				fieldName: "pod_id",
 				cmpOp:     "<",
 				values:    [][]byte{[]byte("5")},
@@ -425,9 +425,9 @@ func TestCheck(t *testing.T) {
 			},
 		},
 		{
-			name: "ok_len_less_or_equal",
+			name: "ok_bytes_len_less_or_equal",
 			tree: treeNode{
-				fieldOp:   "field_len",
+				fieldOp:   "bytes_len_cmp",
 				fieldName: "pod_id",
 				cmpOp:     "<=",
 				values:    [][]byte{[]byte("5")},
@@ -440,9 +440,9 @@ func TestCheck(t *testing.T) {
 			},
 		},
 		{
-			name: "ok_len_greater",
+			name: "ok_bytes_len_greater",
 			tree: treeNode{
-				fieldOp:   "field_len",
+				fieldOp:   "bytes_len_cmp",
 				fieldName: "pod_id",
 				cmpOp:     ">",
 				values:    [][]byte{[]byte("5")},
@@ -455,9 +455,9 @@ func TestCheck(t *testing.T) {
 			},
 		},
 		{
-			name: "ok_len_greater_or_equal",
+			name: "ok_bytes_len_greater_or_equal",
 			tree: treeNode{
-				fieldOp:   "field_len",
+				fieldOp:   "bytes_len_cmp",
 				fieldName: "pod_id",
 				cmpOp:     ">=",
 				values:    [][]byte{[]byte("5")},
@@ -470,9 +470,9 @@ func TestCheck(t *testing.T) {
 			},
 		},
 		{
-			name: "ok_len_equal",
+			name: "ok_bytes_len_equal",
 			tree: treeNode{
-				fieldOp:   "field_len",
+				fieldOp:   "bytes_len_cmp",
 				fieldName: "pod_id",
 				cmpOp:     "==",
 				values:    [][]byte{[]byte("5")},
@@ -485,9 +485,9 @@ func TestCheck(t *testing.T) {
 			},
 		},
 		{
-			name: "ok_len_not_equal",
+			name: "ok_bytes_len_not_equal",
 			tree: treeNode{
-				fieldOp:   "field_len",
+				fieldOp:   "bytes_len_cmp",
 				fieldName: "pod_id",
 				cmpOp:     "!=",
 				values:    [][]byte{[]byte("5")},
