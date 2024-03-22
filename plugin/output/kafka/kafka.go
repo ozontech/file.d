@@ -158,8 +158,18 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
+	// > Path or content of a PEM-encoded client certificate file.
+	ClientCertFile string `json:"client_cert_file"` // *
+
+	// > @3@4@5@6
+	// >
+	// > > Path or content of a PEM-encoded client key file.
+	ClientKeyFile string `json:"client_key_file"` // *
+
+	// > @3@4@5@6
+	// >
 	// > Path or content of a PEM-encoded CA file.
-	SslPem string `json:"pem_file" default:"/file.d/certs"` // *
+	CACertFile string `json:"ca_cert_file"` // *
 }
 
 func init() {
@@ -320,10 +330,18 @@ func NewProducer(c *Config, l *zap.SugaredLogger) sarama.SyncProducer {
 		config.Net.TLS.Enable = true
 
 		tlsCfg := xtls.NewConfigBuilder()
-		if err := tlsCfg.AppendCARoot(c.SslPem); err != nil {
-			l.Fatalf("can't load cert: %s", err.Error())
+		if c.CACertFile != "" {
+			if err := tlsCfg.AppendCARoot(c.CACertFile); err != nil {
+				l.Fatalf("can't load ca cert: %s", err.Error())
+			}
 		}
 		tlsCfg.SetSkipVerify(c.SslSkipVerify)
+
+		if c.ClientCertFile != "" || c.ClientKeyFile != "" {
+			if err := tlsCfg.AppendX509KeyPair(c.ClientCertFile, c.ClientKeyFile); err != nil {
+				l.Fatalf("can't load client certificate and key: %s", err.Error())
+			}
+		}
 
 		config.Net.TLS.Config = tlsCfg.Build()
 	}
