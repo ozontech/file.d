@@ -56,6 +56,7 @@ type jobProvider struct {
 	// provider metrics
 	possibleOffsetCorruptionMetric prometheus.Counter
 	errorOpenFileMetric            prometheus.Counter
+	numberOfCurrentJobsMetric      prometheus.Gauge
 }
 
 type Job struct {
@@ -103,16 +104,18 @@ type metricCollection struct {
 	possibleOffsetCorruptionMetric prometheus.Counter
 	errorOpenFileMetric            prometheus.Counter
 	notifyChannelLengthMetric      prometheus.Gauge
+	numberOfCurrentJobsMetric      prometheus.Gauge
 }
 
 func newMetricCollection(
 	possibleOffsetCorruptionMetric, errorOpenFileMetric prometheus.Counter,
-	notifyChannelLengthMetric prometheus.Gauge,
+	notifyChannelLengthMetric prometheus.Gauge, numberOfCurrentJobsMetric prometheus.Gauge,
 ) *metricCollection {
 	return &metricCollection{
 		possibleOffsetCorruptionMetric: possibleOffsetCorruptionMetric,
 		errorOpenFileMetric:            errorOpenFileMetric,
 		notifyChannelLengthMetric:      notifyChannelLengthMetric,
+		numberOfCurrentJobsMetric:      numberOfCurrentJobsMetric,
 	}
 }
 
@@ -139,6 +142,7 @@ func NewJobProvider(config *Config, metrics *metricCollection, sugLogger *zap.Su
 		logger:                         sugLogger,
 		possibleOffsetCorruptionMetric: metrics.possibleOffsetCorruptionMetric,
 		errorOpenFileMetric:            metrics.errorOpenFileMetric,
+		numberOfCurrentJobsMetric:      metrics.numberOfCurrentJobsMetric,
 	}
 
 	jp.watcher = NewWatcher(
@@ -358,7 +362,11 @@ func (jp *jobProvider) addJob(file *os.File, stat os.FileInfo, filename string, 
 		jp.initJobOffset(jp.config.OffsetsOp_, job)
 	}
 	jp.jobs[sourceID] = job
-	if len(jp.jobs) > jp.config.MaxFiles {
+
+	jobsLen := len(jp.jobs)
+	jp.numberOfCurrentJobsMetric.Set(float64(jobsLen))
+
+	if jobsLen > jp.config.MaxFiles {
 		jp.logger.Fatalf("max_files reached for input plugin, consider increase this parameter")
 	}
 	jp.jobsLog = append(jp.jobsLog, filename)
@@ -463,7 +471,11 @@ func (jp *jobProvider) doneJob(job *Job) {
 
 	jp.jobsMu.Lock()
 	v := int(jp.jobsDone.Inc())
-	if v > len(jp.jobs) {
+
+	jobsLen := len(jp.jobs)
+	jp.numberOfCurrentJobsMetric.Set(float64(jobsLen))
+
+	if v > jobsLen {
 		jp.logger.Panicf("done jobs counter is more than job count")
 	}
 	jp.jobsMu.Unlock()
