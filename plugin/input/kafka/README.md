@@ -111,19 +111,19 @@ If set, the plugin will skip SSL/TLS verification.
 
 <br>
 
-**`client_cert_file`** *`string`* 
+**`client_cert`** *`string`* 
 
 Path or content of a PEM-encoded client certificate file.
 
 <br>
 
-**`client_key_file`** *`string`* 
+**`client_key`** *`string`* 
 
 > Path or content of a PEM-encoded client key file.
 
 <br>
 
-**`ca_cert_file`** *`string`* 
+**`ca_cert`** *`string`* 
 
 Path or content of a PEM-encoded CA file.
 
