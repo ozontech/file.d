@@ -3,34 +3,43 @@ package file
 import (
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/ozontech/file.d/logger"
 )
 
-var InfoRegistryInstance = &InfoRegistry{}
+var InfoRegistryInstance = &InfoRegistry{
+	plugins: make(map[string]*Plugin),
+}
 
 type InfoRegistry struct {
-	plug *Plugin
+	plugins map[string]*Plugin
 }
 
-func (ir *InfoRegistry) AddPlugin(plug *Plugin) {
-	ir.plug = plug
+func (ir *InfoRegistry) AddPlugin(pipelineName string, plug *Plugin) {
+	ir.plugins[pipelineName] = plug
 }
 
-func (ir *InfoRegistry) Info(w http.ResponseWriter, _ *http.Request) {
+func (ir *InfoRegistry) Info(w http.ResponseWriter, r *http.Request) {
+	pipeline := strings.Split(r.URL.Path, "/")[2]
+	plugin, ok := ir.plugins[pipeline]
+	if !ok {
+		logger.Panicf("pipeline '%s' is not registered", pipeline)
+	}
+
 	_, _ = w.Write([]byte("<html><body><pre><p>"))
 
-	jobsInfo := logger.Cond(len(ir.plug.jobProvider.jobs) == 0, logger.Header("no jobs"), func() string {
+	jobsInfo := logger.Cond(len(plugin.jobProvider.jobs) == 0, logger.Header("no jobs"), func() string {
 		o := logger.Header("jobs")
-		ir.plug.jobProvider.jobsMu.RLock()
-		for s, source := range ir.plug.jobProvider.jobs {
+		plugin.jobProvider.jobsMu.RLock()
+		for s, source := range plugin.jobProvider.jobs {
 			o += fmt.Sprintf(
 				"source_id: %d, filename: %s, inode: %d, offset: %d\n",
 				s, source.filename,
 				source.inode, source.curOffset,
 			)
 		}
-		ir.plug.jobProvider.jobsMu.RUnlock()
+		plugin.jobProvider.jobsMu.RUnlock()
 		return o
 	})
 
@@ -39,7 +48,7 @@ func (ir *InfoRegistry) Info(w http.ResponseWriter, _ *http.Request) {
 	watcherInfo := logger.Header("watch_dirs")
 	watcherInfo += fmt.Sprintf(
 		"%s\n",
-		ir.plug.jobProvider.watcher.path,
+		plugin.jobProvider.watcher.path,
 	)
 	_, _ = w.Write([]byte(watcherInfo))
 

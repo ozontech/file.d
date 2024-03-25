@@ -209,7 +209,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	)
 
 	ResetterRegistryInstance.AddResetter(params.PipelineName, p)
-	InfoRegistryInstance.AddPlugin(p)
+	InfoRegistryInstance.AddPlugin(params.PipelineName, p)
 
 	p.startWorkers()
 	p.jobProvider.start()
