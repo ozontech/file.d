@@ -392,6 +392,90 @@ func TestCheck(t *testing.T) {
 			},
 		},
 		{
+			name: "ok_len_less",
+			tree: treeNode{
+				fieldOp:   "len <",
+				fieldName: "pod_id",
+				values:    [][]byte{[]byte("5")},
+			},
+			data: []argsResp{
+				{`{"pod_id":""}`, true},
+				{`{"pod_id":123}`, true},
+				{`{"pod_id":12345}`, false},
+				{`{"pod_id":123456}`, false},
+			},
+		},
+		{
+			name: "ok_len_less_or_equal",
+			tree: treeNode{
+				fieldOp:   "len <=",
+				fieldName: "pod_id",
+				values:    [][]byte{[]byte("5")},
+			},
+			data: []argsResp{
+				{`{"pod_id":""}`, true},
+				{`{"pod_id":123}`, true},
+				{`{"pod_id":12345}`, true},
+				{`{"pod_id":123456}`, false},
+			},
+		},
+		{
+			name: "ok_len_greater",
+			tree: treeNode{
+				fieldOp:   "len >",
+				fieldName: "pod_id",
+				values:    [][]byte{[]byte("5")},
+			},
+			data: []argsResp{
+				{`{"pod_id":""}`, false},
+				{`{"pod_id":123}`, false},
+				{`{"pod_id":12345}`, false},
+				{`{"pod_id":123456}`, true},
+			},
+		},
+		{
+			name: "ok_len_greater_or_equal",
+			tree: treeNode{
+				fieldOp:   "len >=",
+				fieldName: "pod_id",
+				values:    [][]byte{[]byte("5")},
+			},
+			data: []argsResp{
+				{`{"pod_id":""}`, false},
+				{`{"pod_id":123}`, false},
+				{`{"pod_id":12345}`, true},
+				{`{"pod_id":123456}`, true},
+			},
+		},
+		{
+			name: "ok_len_equal",
+			tree: treeNode{
+				fieldOp:   "len ==",
+				fieldName: "pod_id",
+				values:    [][]byte{[]byte("5")},
+			},
+			data: []argsResp{
+				{`{"pod_id":""}`, false},
+				{`{"pod_id":123}`, false},
+				{`{"pod_id":12345}`, true},
+				{`{"pod_id":123456}`, false},
+			},
+		},
+		{
+			name: "ok_len_not_equal",
+			tree: treeNode{
+				fieldOp:   "len !=",
+				fieldName: "pod_id",
+				values:    [][]byte{[]byte("5")},
+			},
+			data: []argsResp{
+				{`{"pod_id":""}`, true},
+				{`{"pod_id":123}`, true},
+				{`{"pod_id":12345}`, false},
+				{`{"pod_id":123456}`, true},
+			},
+		},
+		{
 			name: "ok_regex",
 			tree: treeNode{
 				fieldOp:   "regex",
