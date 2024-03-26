@@ -41,7 +41,7 @@ func TestInUnparsableMessages(t *testing.T) {
 
 		pipe.SetInput(getFakeInputInfo())
 
-		seqID := pipe.In(sourceID, "kafka", offset, message, false)
+		seqID := pipe.In(sourceID, "kafka", offset, message, false, nil)
 		require.Equal(t, pipeline.EventSeqIDError, seqID)
 
 		refPipe := reflect.ValueOf(pipe)
@@ -119,7 +119,7 @@ func TestInInvalidMessages(t *testing.T) {
 
 			pipe.SetInput(getFakeInputInfo())
 
-			seqID := pipe.In(tCase.sourceID, "kafka", tCase.offset, tCase.message, false)
+			seqID := pipe.In(tCase.sourceID, "kafka", tCase.offset, tCase.message, false, nil)
 			require.Equal(t, pipeline.EventSeqIDError, seqID)
 		})
 	}
