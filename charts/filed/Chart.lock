@@ -1,0 +1,6 @@
+dependencies:
+- name: elasticsearch
+  repository: oci://registry-1.docker.io/bitnamicharts
+  version: 19.18.0
+digest: sha256:759bc43df1848f8586a2f99f2c36c57bf685ef6f0f42c4679e288f7f8b913edc
+generated: "2024-03-19T19:55:51.969713998+07:00"

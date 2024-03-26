@@ -20,3 +20,4 @@
 ## What's next?
 1. Check out [more complex examples](/docs/examples.md) 
 2. [Configure](/docs/configuring.md) your own pipeline 
+3. [Helm-chart](/charts/filed/README.md) and examples for Minikube
