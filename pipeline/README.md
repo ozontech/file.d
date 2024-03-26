@@ -271,6 +271,31 @@ result:
 
 <br>
 
+**`BytesLengthCmp`** compares field length in bytes with certain value
+
+Example:
+```yaml
+pipelines:
+  test:
+    actions:
+      - type: discard
+        do_if:
+          op: field_len
+          field: pod_id
+          cmp_op: <
+          values: [5]
+```
+
+result:
+```
+{"pod_id":""}      # discarded
+{"pod_id":123}     # discarded
+{"pod_id":12345}   # not discarded
+{"pod_id":123456}  # not discarded
+```
+
+<br>
+
 
 ### Logical op node
 DoIf logical op node is a node considered to be the root or an edge between nodes.

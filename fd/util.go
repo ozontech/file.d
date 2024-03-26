@@ -234,13 +234,21 @@ func extractFieldOpNode(opName string, jsonNode *simplejson.Json) (pipeline.DoIf
 	var result pipeline.DoIfNode
 	var err error
 	fieldPath := jsonNode.Get("field").MustString()
+
 	caseSensitiveNode, has := jsonNode.CheckGet("case_sensitive")
 	caseSensitive := true
 	if has {
 		caseSensitive = caseSensitiveNode.MustBool()
 	}
+
+	cmpOpNode, has := jsonNode.CheckGet("cmp_op")
+	cmpOp := ""
+	if has {
+		cmpOp = cmpOpNode.MustString()
+	}
+
 	vals := extractFieldOpVals(jsonNode)
-	result, err = pipeline.NewFieldOpNode(opName, fieldPath, caseSensitive, vals)
+	result, err = pipeline.NewFieldOpNode(opName, fieldPath, caseSensitive, cmpOp, vals)
 	if err != nil {
 		return nil, fmt.Errorf("failed to init field op: %w", err)
 	}

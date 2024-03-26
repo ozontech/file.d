@@ -42,6 +42,7 @@ type doIfTreeNode struct {
 	fieldOp       string
 	fieldName     string
 	caseSensitive bool
+	cmpOp         string
 	values        [][]byte
 
 	logicalOp string
@@ -55,6 +56,7 @@ func buildDoIfTree(node *doIfTreeNode) (pipeline.DoIfNode, error) {
 			node.fieldOp,
 			node.fieldName,
 			node.caseSensitive,
+			node.cmpOp,
 			node.values,
 		)
 	} else if node.logicalOp != "" {
