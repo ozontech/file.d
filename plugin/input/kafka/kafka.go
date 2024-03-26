@@ -30,6 +30,10 @@ pipelines:
       brokers: [kafka:9092, kafka:9091]
       topics: [topic1, topic2]
       offset: newest
+      meta:
+        partition: '{{ .partition }}'
+        topic: '{{ .topic }}'
+        offset: '{{ .offset }}'
     # output plugin is not important in this case, let's emulate s3 output.
     output:
       type: s3
@@ -55,6 +59,8 @@ type Plugin struct {
 	// plugin metrics
 	commitErrorsMetric  prometheus.Counter
 	consumeErrorsMetric prometheus.Counter
+
+	metaRegistry *pipeline.MetaTemplater
 }
 
 type OffsetType byte
@@ -156,6 +162,15 @@ type Config struct {
 	// >
 	// > Path or content of a PEM-encoded CA file.
 	CACert string `json:"ca_cert"` // *
+
+	// > @3@4@5@6
+	// >
+	// > Meta params
+	// >
+	// > Add meta information to an event (look at Meta params)
+	// >
+	// > Example: ```topic: '{{ .topic }}'```
+	Meta cfg.MetaTemplates `json:"meta"` // *
 }
 
 func init() {
@@ -174,6 +189,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	p.logger = params.Logger
 	p.config = config.(*Config)
 	p.registerMetrics(params.MetricCtl)
+	p.metaRegistry = pipeline.NewMetaTemplater(p.config.Meta)
 
 	p.idByTopic = make(map[string]int, len(p.config.Topics))
 	for i, topic := range p.config.Topics {
@@ -303,7 +319,17 @@ func (p *Plugin) Cleanup(sarama.ConsumerGroupSession) error {
 func (p *Plugin) ConsumeClaim(_ sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
 	for message := range claim.Messages() {
 		sourceID := assembleSourceID(p.idByTopic[message.Topic], message.Partition)
-		_ = p.controller.In(sourceID, "kafka", message.Offset, message.Value, true)
+
+		var metadataInfo pipeline.MetaData
+		var err error
+		if len(p.config.Meta) > 0 {
+			metadataInfo, err = p.metaRegistry.Render(newMetaInformation(message))
+			if err != nil {
+				return err
+			}
+		}
+
+		_ = p.controller.In(sourceID, "kafka", message.Offset, message.Value, true, metadataInfo)
 	}
 
 	return nil
@@ -323,4 +349,26 @@ func disassembleSourceID(sourceID pipeline.SourceID) (index int, partition int32
 // PassEvent decides pass or discard event.
 func (p *Plugin) PassEvent(_ *pipeline.Event) bool {
 	return true
+}
+
+type MetaInformation struct {
+	Topic     string
+	Partition int32
+	Offset    int64
+}
+
+func newMetaInformation(message *sarama.ConsumerMessage) MetaInformation {
+	return MetaInformation{
+		Topic:     message.Topic,
+		Partition: message.Partition,
+		Offset:    message.Offset,
+	}
+}
+
+func (m MetaInformation) GetData() map[string]interface{} {
+	return map[string]interface{}{
+		"topic":     m.Topic,
+		"partition": m.Partition,
+		"offset":    m.Offset,
+	}
 }

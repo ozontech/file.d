@@ -2,12 +2,14 @@ package http
 
 import (
 	"io"
+	"net"
 	"net/http"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/klauspost/compress/gzip"
+	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
@@ -105,6 +107,8 @@ type Plugin struct {
 	bulkRequestsDoneTotal prometheus.Counter
 	requestsInProgress    prometheus.Gauge
 	processBulkSeconds    prometheus.Observer
+
+	metaRegistry *pipeline.MetaTemplater
 }
 
 type EmulateMode byte
@@ -144,6 +148,15 @@ type Config struct {
 	// > See AuthConfig for details.
 	// > You can use 'warn' log level for logging authorizations.
 	Auth AuthConfig `json:"auth" child:"true"` // *
+
+	// > @3@4@5@6
+	// >
+	// > Meta params
+	// >
+	// > Add meta information to an event (look at Meta params)
+	// >
+	// > Example: ```user_agent: '{{ index (index .request.Header "User-Agent") 0}}'```
+	Meta cfg.MetaTemplates `json:"meta"` // *
 }
 
 type AuthStrategy byte
@@ -187,6 +200,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	p.params = params
 	p.logger = params.Logger.Desugar()
 	p.registerMetrics(params.MetricCtl)
+	p.metaRegistry = pipeline.NewMetaTemplater(p.config.Meta)
 
 	if p.config.Auth.Strategy_ == StrategyBearer {
 		p.nameByBearerToken = make(map[string]string, len(p.config.Auth.Secrets))
@@ -279,7 +293,8 @@ func (p *Plugin) putSourceID(x pipeline.SourceID) {
 }
 
 func (p *Plugin) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	ok := p.auth(r)
+	ok, login := p.auth(r)
+
 	if !ok {
 		p.failedAuthTotal.Inc()
 		p.errorsTotal.Inc()
@@ -292,6 +307,16 @@ func (p *Plugin) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var metadataInfo pipeline.MetaData
+	var err error
+	if len(p.config.Meta) > 0 {
+		metadataInfo, err = p.metaRegistry.Render(newMetaInformation(login, getUserIP(r), r))
+		if err != nil {
+			p.logger.Error("cannot parse meta info", zap.Error(err))
+			return
+		}
+	}
+
 	path := r.URL.Path
 	switch p.config.EmulateMode_ {
 	case EmulateModeElasticSearch:
@@ -300,7 +325,7 @@ func (p *Plugin) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 		switch path {
 		case "/_bulk":
-			p.serveBulk(w, r)
+			p.serveBulk(w, r, metadataInfo)
 			return
 		case "/":
 			p.serveElasticsearchInfo(w, r)
@@ -337,14 +362,14 @@ func (p *Plugin) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		p.logger.Error("unknown elasticsearch request", zap.String("uri", r.RequestURI), zap.String("method", r.Method))
 		return
 	case EmulateModeNo:
-		p.serveBulk(w, r)
+		p.serveBulk(w, r, metadataInfo)
 		return
 	default:
 		panic("unreachable")
 	}
 }
 
-func (p *Plugin) serveBulk(w http.ResponseWriter, r *http.Request) {
+func (p *Plugin) serveBulk(w http.ResponseWriter, r *http.Request, meta pipeline.MetaData) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "", http.StatusMethodNotAllowed)
 		return
@@ -366,7 +391,7 @@ func (p *Plugin) serveBulk(w http.ResponseWriter, r *http.Request) {
 		reader = zr
 	}
 
-	if err := p.processBulk(reader); err != nil {
+	if err := p.processBulk(reader, meta); err != nil {
 		p.errorsTotal.Inc()
 		p.logger.Error("http input read error", zap.Error(err))
 		http.Error(w, "http input read error", http.StatusBadRequest)
@@ -380,7 +405,7 @@ func (p *Plugin) serveBulk(w http.ResponseWriter, r *http.Request) {
 	p.processBulkSeconds.Observe(time.Since(start).Seconds())
 }
 
-func (p *Plugin) processBulk(r io.Reader) error {
+func (p *Plugin) processBulk(r io.Reader, meta pipeline.MetaData) error {
 	readBuff := p.newReadBuff()
 	eventBuff := p.newEventBuffs()
 	defer p.readBuffs.Put(&readBuff)
@@ -399,17 +424,17 @@ func (p *Plugin) processBulk(r io.Reader) error {
 			return err
 		}
 
-		eventBuff = p.processChunk(sourceID, readBuff[:n], eventBuff, false)
+		eventBuff = p.processChunk(sourceID, readBuff[:n], eventBuff, false, meta)
 	}
 
 	if len(eventBuff) > 0 {
-		eventBuff = p.processChunk(sourceID, readBuff[:0], eventBuff, true)
+		eventBuff = p.processChunk(sourceID, readBuff[:0], eventBuff, true, meta)
 	}
 
 	return nil
 }
 
-func (p *Plugin) processChunk(sourceID pipeline.SourceID, readBuff []byte, eventBuff []byte, isLastChunk bool) []byte {
+func (p *Plugin) processChunk(sourceID pipeline.SourceID, readBuff []byte, eventBuff []byte, isLastChunk bool, meta pipeline.MetaData) []byte {
 	pos := 0   // current position
 	nlPos := 0 // new line position
 	for pos < len(readBuff) {
@@ -420,10 +445,10 @@ func (p *Plugin) processChunk(sourceID pipeline.SourceID, readBuff []byte, event
 
 		if len(eventBuff) != 0 {
 			eventBuff = append(eventBuff, readBuff[nlPos:pos]...)
-			_ = p.controller.In(sourceID, "http", int64(pos), eventBuff, true)
+			_ = p.controller.In(sourceID, "http", int64(pos), eventBuff, true, meta)
 			eventBuff = eventBuff[:0]
 		} else {
-			_ = p.controller.In(sourceID, "http", int64(pos), readBuff[nlPos:pos], true)
+			_ = p.controller.In(sourceID, "http", int64(pos), readBuff[nlPos:pos], true, meta)
 		}
 
 		pos++
@@ -432,7 +457,7 @@ func (p *Plugin) processChunk(sourceID pipeline.SourceID, readBuff []byte, event
 
 	if isLastChunk {
 		// flush buffers if we can't find the newline character
-		_ = p.controller.In(sourceID, "http", int64(pos), append(eventBuff, readBuff[nlPos:]...), true)
+		_ = p.controller.In(sourceID, "http", int64(pos), append(eventBuff, readBuff[nlPos:]...), true, meta)
 		eventBuff = eventBuff[:0]
 	} else {
 		eventBuff = append(eventBuff, readBuff[nlPos:]...)
@@ -453,9 +478,9 @@ func (p *Plugin) PassEvent(_ *pipeline.Event) bool {
 	return true
 }
 
-func (p *Plugin) auth(req *http.Request) bool {
+func (p *Plugin) auth(req *http.Request) (bool, string) {
 	if p.config.Auth.Strategy_ == StrategyDisabled {
-		return true
+		return true, ""
 	}
 
 	var secretName string
@@ -469,10 +494,10 @@ func (p *Plugin) auth(req *http.Request) bool {
 		panic("unreachable")
 	}
 	if !ok {
-		return false
+		return false, ""
 	}
 	p.successfulAuthTotal[secretName].Inc()
-	return true
+	return true, secretName
 }
 
 func (p *Plugin) authBasic(req *http.Request) (string, bool) {
@@ -507,4 +532,55 @@ func (p *Plugin) acquireGzipReader(r io.Reader) (*gzip.Reader, error) {
 func (p *Plugin) putGzipReader(reader *gzip.Reader) {
 	_ = reader.Close()
 	p.gzipReaderPool.Put(reader)
+}
+
+func getUserIP(r *http.Request) net.IP {
+	var userIP string
+	switch {
+	case len(r.Header.Get("CF-Connecting-IP")) > 1:
+		userIP = r.Header.Get("CF-Connecting-IP")
+	case len(r.Header.Get("X-Forwarded-For")) > 1:
+		userIP = r.Header.Get("X-Forwarded-For")
+	case len(r.Header.Get("X-Real-IP")) > 1:
+		userIP = r.Header.Get("X-Real-IP")
+	default:
+		userIP = r.RemoteAddr
+		if strings.Contains(userIP, ":") {
+			return net.ParseIP(strings.Split(userIP, ":")[0])
+		}
+	}
+	return net.ParseIP(userIP)
+}
+
+type MetaInformation struct {
+	// > @3@4@5@6
+	// >
+	// > Login
+	Login string `json:"login"`
+
+	// > @3@4@5@6
+	// >
+	// > Ip address
+	RemoteAddr net.IP `json:"remote_addr"`
+
+	// > @3@4@5@6
+	// >
+	// > Request
+	Request *http.Request `json:"request"`
+}
+
+func newMetaInformation(login string, ip net.IP, r *http.Request) MetaInformation {
+	return MetaInformation{
+		Login:      login,
+		RemoteAddr: ip,
+		Request:    r,
+	}
+}
+
+func (m MetaInformation) GetData() map[string]interface{} {
+	return map[string]interface{}{
+		"login":       m.Login,
+		"remote_addr": m.RemoteAddr,
+		"request":     m.Request,
+	}
 }

@@ -26,7 +26,7 @@ func (i *inputerMock) IncReadOps() {}
 
 func (i *inputerMock) IncMaxEventSizeExceeded() {}
 
-func (i *inputerMock) In(_ pipeline.SourceID, _ string, _ int64, data []byte, _ bool) uint64 {
+func (i *inputerMock) In(_ pipeline.SourceID, _ string, _ int64, data []byte, _ bool, _ pipeline.MetaData) uint64 {
 	i.gotData = append(i.gotData, string(data))
 	return 0
 }
