@@ -43,7 +43,7 @@ const (
 type finalizeFn = func(event *Event, notifyInput bool, backEvent bool)
 
 type InputPluginController interface {
-	In(sourceID SourceID, sourceName string, offset int64, data []byte, isNewSource bool) uint64
+	In(sourceID SourceID, sourceName string, offset int64, data []byte, isNewSource bool, meta MetaData) uint64
 	UseSpread()                           // don't use stream field and spread all events across all processors
 	DisableStreams()                      // don't use stream field
 	SuggestDecoder(t decoder.DecoderType) // set decoder if pipeline uses "auto" value for decoder
@@ -340,7 +340,7 @@ func (p *Pipeline) GetOutput() OutputPlugin {
 }
 
 // In decodes message and passes it to event stream.
-func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes []byte, isNewSource bool) (seqID uint64) {
+func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes []byte, isNewSource bool, meta MetaData) (seqID uint64) {
 	length := len(bytes)
 
 	// don't process mud.
@@ -461,6 +461,23 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 		}
 	default:
 		p.logger.Panic("unknown decoder", zap.Int("decoder", int(dec)))
+	}
+
+	if len(meta) > 0 {
+		if event.Root.IsArray() {
+			nodeArray := event.Root.AsArray()
+			for _, elem := range nodeArray {
+				if elem.IsObject() {
+					for k, v := range meta {
+						elem.AddField(k).MutateToString(v)
+					}
+				}
+			}
+		} else {
+			for k, v := range meta {
+				CreateNestedField(event.Root, []string{k}).MutateToString(v)
+			}
+		}
 	}
 
 	event.Offset = offset

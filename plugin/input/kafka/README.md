@@ -12,6 +12,10 @@ pipelines:
       brokers: [kafka:9092, kafka:9091]
       topics: [topic1, topic2]
       offset: newest
+      meta:
+        partition: '{{ .partition }}'
+        topic: '{{ .topic }}'
+        offset: '{{ .offset }}'
     # output plugin is not important in this case, let's emulate s3 output.
     output:
       type: s3
@@ -129,5 +133,22 @@ Path or content of a PEM-encoded CA file.
 
 <br>
 
+**`meta`** *`cfg.MetaTemplates`* 
+
+Meta params
+
+Add meta information to an event (look at Meta params)
+
+Example: ```topic: '{{ .topic }}'```
+
+<br>
+
+
+### Meta params
+**`topic`** 
+
+**`partition`** 
+
+**`offset`** 
 
 <br>*Generated using [__insane-doc__](https://github.com/vitkovskii/insane-doc)*
