@@ -10,34 +10,41 @@ import (
 )
 
 type inMemoryLimiter struct {
-	limit       complexLimit // threshold and type of an inMemoryLimiter
-	bucketCount int
-	buckets     []int64
-	interval    time.Duration // bucket interval
-	minID       int           // minimum bucket id
-	maxID       int           // max bucket id
-	mu          sync.Mutex
+	limit   complexLimit
+	buckets buckets
+	mu      sync.Mutex
 
 	// nowFn is passed to create limiters and required for test purposes
 	nowFn func() time.Time
 }
 
-// NewInMemoryLimiter returns limiter instance.
-func NewInMemoryLimiter(interval time.Duration, bucketCount int, limit complexLimit, nowFn func() time.Time) *inMemoryLimiter {
-	return &inMemoryLimiter{
-		interval:    interval,
-		bucketCount: bucketCount,
-		limit:       limit,
+// newInMemoryLimiter returns limiter instance.
+func newInMemoryLimiter(cfg *limiterConfig, limit *complexLimit, nowFn func() time.Time) *inMemoryLimiter {
+	distSize := limit.distributions.size()
 
-		buckets: make([]int64, bucketCount),
+	l := &inMemoryLimiter{
+		limit: complexLimit{
+			value: limit.value,
+			kind:  limit.kind,
+		},
+		buckets: newBuckets(
+			cfg.bucketsCount,
+			distSize+1, // +1 because of default distribution
+			cfg.bucketInterval,
+		),
 
 		nowFn: nowFn,
 	}
+
+	// need a copy due to possible runtime changes (sync with redis)
+	if distSize > 0 {
+		l.limit.distributions = limit.distributions.copy()
+	}
+
+	return l
 }
 
-func (l *inMemoryLimiter) sync() {
-
-}
+func (l *inMemoryLimiter) sync() {}
 
 func (l *inMemoryLimiter) isAllowed(event *pipeline.Event, ts time.Time) bool {
 	// limit value fast check without races
@@ -45,64 +52,104 @@ func (l *inMemoryLimiter) isAllowed(event *pipeline.Event, ts time.Time) bool {
 		return true
 	}
 
-	l.mu.Lock()
-	defer l.mu.Unlock()
+	l.lock()
+	defer l.unlock()
 
-	id := l.rebuildBuckets(ts)
-	index := id - l.minID
-	switch l.limit.kind {
-	default:
-		logger.Fatalf("unknown type of the inMemoryLimiter: %q", l.limit.kind)
-	case "", "count":
-		l.buckets[index]++
-	case "size":
-		l.buckets[index] += int64(event.Size)
+	// If the limit is given with distribution, then distributed buckets are used
+	distrIdx := 0
+	limit := l.limit.value
+	if l.limit.distributions.isEnabled() {
+		key := event.Root.Dig(l.limit.distributions.field...).AsString()
+		distrIdx, limit = l.limit.distributions.getLimit(key)
+
+		// The distribution index in the bucket matches the distribution value index in distributions,
+		// but is shifted by 1 because default distribution has index 0.
+		distrIdx++
 	}
 
-	return l.buckets[index] <= l.limit.value
+	id := l.rebuildBuckets(ts)
+	index := id - l.buckets.getMinID()
+	switch l.limit.kind {
+	case "", "count":
+		l.buckets.add(index, distrIdx, 1)
+	case "size":
+		l.buckets.add(index, distrIdx, int64(event.Size))
+	default:
+		logger.Fatalf("unknown type of the inMemoryLimiter: %q", l.limit.kind)
+	}
+
+	return l.buckets.get(index, distrIdx) <= limit
+}
+
+func (l *inMemoryLimiter) lock() {
+	l.mu.Lock()
+}
+
+func (l *inMemoryLimiter) unlock() {
+	l.mu.Unlock()
+}
+
+func (l *inMemoryLimiter) updateLimit(limit int64) {
+	atomic.StoreInt64(&l.limit.value, limit)
+}
+
+func (l *inMemoryLimiter) updateDistribution(distribution limitDistributionCfg) error {
+	if distribution.isEmpty() && l.limit.distributions.size() == 0 {
+		return nil
+	}
+	ld, err := parseLimitDistribution(distribution, atomic.LoadInt64(&l.limit.value))
+	if err != nil {
+		return err
+	}
+	l.lock()
+	l.limit.distributions = ld
+	l.unlock()
+	return nil
+}
+
+func (l *inMemoryLimiter) getBucket(bucketIdx int, buf []int64) []int64 {
+	return l.buckets.getAll(bucketIdx, buf)
+}
+
+// Not thread safe - use lock&unlock methods!
+func (l *inMemoryLimiter) updateBucket(bucketIdx, distrIdx int, value int64) {
+	l.buckets.set(bucketIdx, distrIdx, value)
+}
+
+// Not thread safe - use lock&unlock methods!
+func (l *inMemoryLimiter) resetBucket(bucketIdx int) {
+	l.buckets.reset(bucketIdx)
+}
+
+func (l *inMemoryLimiter) isBucketEmpty(bucketIdx int) bool {
+	return l.buckets.isEmpty(bucketIdx)
 }
 
 // rebuildBuckets will rebuild buckets for given ts and returns actual bucket id
-// Not thread safe - use external lock!
+// Not thread safe - use lock&unlock methods!
 func (l *inMemoryLimiter) rebuildBuckets(ts time.Time) int {
-	currentTs := l.nowFn()
-	currentID := l.timeToBucketID(currentTs)
-	if l.minID == 0 {
-		// min id weren't set yet. It MUST be extracted from currentTs, because ts from event can be invalid (e.g. from 1970 or 2077 year)
-		l.maxID = l.timeToBucketID(currentTs)
-		l.minID = l.maxID - l.bucketCount + 1
-	}
-	maxID := l.minID + len(l.buckets) - 1
-
-	// currentBucket exceed maxID. Create actual buckets
-	if currentID > maxID {
-		n := currentID - maxID
-		// add new buckets
-		for i := 0; i < n; i++ {
-			l.buckets = append(l.buckets, 0)
-		}
-		// remove old buckets
-		l.buckets = l.buckets[n:]
-		// update min buckets
-		l.minID += n
-		l.maxID = currentID
-	}
-	id := l.timeToBucketID(ts)
-
-	// events from past or future goes to the latest bucket
-	if id < l.minID || id > l.maxID {
-		id = l.maxID
-	}
-	return id
+	return l.buckets.rebuild(l.nowFn(), ts)
 }
 
-// timeToBucketID converts time to bucketID.
-func (l *inMemoryLimiter) timeToBucketID(t time.Time) int {
-	return int(t.UnixNano() / l.interval.Nanoseconds())
+// actualizeBucketIdx checks probable shift of buckets and returns actual bucket index and actuality
+func (l *inMemoryLimiter) actualizeBucketIdx(maxID, bucketIdx int) (int, bool) {
+	return l.buckets.actualizeIndex(maxID, bucketIdx)
+}
+
+func (l *inMemoryLimiter) bucketsCount() int {
+	return l.buckets.getCount()
+}
+
+func (l *inMemoryLimiter) bucketsInterval() time.Duration {
+	return l.buckets.getInterval()
+}
+
+func (l *inMemoryLimiter) bucketsMinID() int {
+	return l.buckets.getMinID()
 }
 
 func (l *inMemoryLimiter) setNowFn(fn func() time.Time) {
-	l.mu.Lock()
+	l.lock()
 	l.nowFn = fn
-	l.mu.Unlock()
+	l.unlock()
 }
