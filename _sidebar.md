@@ -34,6 +34,7 @@
     - [join_template](plugin/action/join_template/README.md)
     - [json_decode](plugin/action/json_decode/README.md)
     - [json_encode](plugin/action/json_encode/README.md)
+    - [json_extract](plugin/action/json_extract/README.md)
     - [keep_fields](plugin/action/keep_fields/README.md)
     - [mask](plugin/action/mask/README.md)
     - [modify](plugin/action/modify/README.md)
