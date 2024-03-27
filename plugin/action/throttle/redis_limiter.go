@@ -144,11 +144,10 @@ func (l *redisLimiter) sync() {
 	l.totalLimiter.unlock()
 	l.incrementLimiter.unlock()
 
-	if len(l.bucketIdsForSync) == 0 {
-		return
+	if len(l.bucketIdsForSync) > 0 {
+		l.syncLocalGlobalLimiters(maxID)
 	}
 
-	l.syncLocalGlobalLimiters(maxID)
 	if err := l.updateKeyLimit(); err != nil {
 		logger.Errorf("failed to update key limit: %v", err)
 	}
