@@ -84,3 +84,56 @@ func TestModifyRegex(t *testing.T) {
 		}
 	}
 }
+
+func TestModifyTrim(t *testing.T) {
+	testEvents := []struct {
+		in           []byte
+		fieldsValues map[string]string
+	}{
+		{
+			[]byte(`{"existing_field":"existing_value"}`),
+			map[string]string{
+				"new_field":          "new_value",
+				"substitution_field": "value",
+			},
+		},
+		{
+			[]byte(`{"other_field":"other_value"}`),
+			map[string]string{
+				"new_field":          "new_value",
+				"substitution_field": "",
+			},
+		},
+	}
+
+	config := test.NewConfig(&Config{
+		"new_field":          "new_value",
+		"substitution_field": "${existing_field|trim(\"left\",\"existing_\")}",
+	}, nil)
+	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, config, pipeline.MatchModeAnd, nil, false))
+	wg := &sync.WaitGroup{}
+
+	outEvents := make([]*pipeline.Event, 0)
+	output.SetOutFn(func(e *pipeline.Event) {
+		outEvents = append(outEvents, e)
+		wg.Done()
+	})
+	wg.Add(len(testEvents))
+
+	for _, te := range testEvents {
+		input.In(0, "test.log", 0, te.in)
+	}
+
+	wg.Wait()
+	p.Stop()
+
+	assert.Equal(t, len(testEvents), len(outEvents), "wrong out events count")
+	for i := 0; i < len(testEvents); i++ {
+		fvs := testEvents[i].fieldsValues
+		for field := range fvs {
+			wantVal := fvs[field]
+			gotVal := outEvents[i].Root.Dig(field).AsString()
+			assert.Equal(t, wantVal, gotVal, "wrong field value")
+		}
+	}
+}

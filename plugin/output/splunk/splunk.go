@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/ozontech/file.d/cfg"
@@ -37,7 +38,7 @@ type Plugin struct {
 	controller   pipeline.OutputPluginController
 
 	// plugin metrics
-	sendErrorMetric prometheus.Counter
+	sendErrorMetric *prometheus.CounterVec
 }
 
 // ! config-params
@@ -172,7 +173,11 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 }
 
 func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
-	p.sendErrorMetric = ctl.RegisterCounter("output_splunk_send_error", "Total splunk send errors")
+	p.sendErrorMetric = ctl.RegisterCounterVec(
+		"output_splunk_send_error",
+		"Total splunk send errors",
+		"status_code",
+	)
 }
 
 func (p *Plugin) Stop() {
@@ -209,10 +214,15 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 
 	p.logger.Debugf("trying to send: %s", outBuf)
 
-	err := p.send(outBuf)
+	code, err := p.send(outBuf)
 	if err != nil {
-		p.sendErrorMetric.Inc()
+		p.sendErrorMetric.WithLabelValues(strconv.Itoa(code)).Inc()
 		p.logger.Errorf("can't send data to splunk address=%s: %s", p.config.Endpoint, err.Error())
+
+		// skip retries for bad request
+		if code == http.StatusBadRequest {
+			return nil
+		}
 	} else {
 		p.logger.Debugf("successfully sent: %s", outBuf)
 	}
@@ -234,46 +244,46 @@ func (p *Plugin) newClient(timeout time.Duration) http.Client {
 	}
 }
 
-func (p *Plugin) send(data []byte) error {
+func (p *Plugin) send(data []byte) (int, error) {
 	r := bytes.NewReader(data)
 	// todo pass context from parent.
 	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, p.config.Endpoint, r)
 	if err != nil {
-		return fmt.Errorf("can't create request: %w", err)
+		return 0, fmt.Errorf("can't create request: %w", err)
 	}
 
 	req.Header.Set("Authorization", "Splunk "+p.config.Token)
 	resp, err := p.client.Do(req)
 	if err != nil {
-		return fmt.Errorf("can't send request: %w", err)
+		return 0, fmt.Errorf("can't send request: %w", err)
 	}
 	defer func(Body io.ReadCloser) {
 		_ = Body.Close()
 	}(resp.Body)
 
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("can't send request: %s", resp.Status)
-	}
-
 	b, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return fmt.Errorf("can't read response: %w", err)
+		return resp.StatusCode, fmt.Errorf("can't read response: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return resp.StatusCode, fmt.Errorf("bad response: code=%s, body=%s", resp.Status, b)
 	}
 
 	root, err := insaneJSON.DecodeBytes(b)
 	defer insaneJSON.Release(root)
 	if err != nil {
-		return fmt.Errorf("can't decode response: %w", err)
+		return resp.StatusCode, fmt.Errorf("can't decode response: %w", err)
 	}
 
 	code := root.Dig("code")
 	if code == nil {
-		return fmt.Errorf("invalid response format, expecting json with 'code' field, got: %s", string(b))
+		return resp.StatusCode, fmt.Errorf("invalid response format, expecting json with 'code' field, got: %s", string(b))
 	}
 
 	if code.AsInt() > 0 {
-		return fmt.Errorf("error while sending to splunk: %s", string(b))
+		return resp.StatusCode, fmt.Errorf("error while sending to splunk: %s", string(b))
 	}
 
-	return nil
+	return resp.StatusCode, nil
 }

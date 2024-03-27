@@ -1,0 +1,10 @@
+1. Watch all containers come up.
+  $ kubectl get pods --namespace={{ .Release.Namespace }} -l "app.kubernetes.io/name={{ include "filed.name" . }},app.kubernetes.io/instance={{ .Release.Name }}" -w
+{{ if .Values.ingress.enabled }}
+2. Get the application URL by running these commands:
+{{- range $host := .Values.ingress.hosts }}
+  {{- range .paths }}
+  http{{ if $.Values.ingress.tls }}s{{ end }}://{{ $host.host }}{{ .path }}
+  {{- end }}
+{{- end }}
+{{- end }}

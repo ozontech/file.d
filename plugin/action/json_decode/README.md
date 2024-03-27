@@ -15,5 +15,16 @@ A prefix to add to decoded object keys.
 
 <br>
 
+**`log_json_parse_error_mode`** *`string`* *`default=off`* *`options=off|erronly|withnode`* 
+
+Defines how to handle logging of json parse error.
+*  `off` – do not log json parse errors
+*  `erronly` – log only errors without any other data
+*  `withnode` – log errors with json node represented as string
+
+Defaults to `off`.
+
+<br>
+
 
 <br>*Generated using [__insane-doc__](https://github.com/vitkovskii/insane-doc)*

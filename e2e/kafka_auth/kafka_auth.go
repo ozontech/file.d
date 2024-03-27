@@ -24,10 +24,11 @@ type Config struct {
 
 func (c *Config) Configure(t *testing.T, _ *cfg.Config, _ string) {
 	type saslData struct {
-		Enabled   bool
-		Mechanism string
-		Username  string
-		Password  string
+		Enabled          bool
+		Mechanism        string
+		Username         string
+		Password         string
+		AuthByClientCert bool
 	}
 
 	type tCase struct {
@@ -38,28 +39,31 @@ func (c *Config) Configure(t *testing.T, _ *cfg.Config, _ string) {
 	cases := []tCase{
 		{
 			sasl: saslData{
-				Enabled:   true,
-				Mechanism: "PLAIN",
-				Username:  "user",
-				Password:  "pass",
+				Enabled:          true,
+				Mechanism:        "PLAIN",
+				Username:         "user",
+				Password:         "pass",
+				AuthByClientCert: true,
 			},
 			authorized: true,
 		},
 		{
 			sasl: saslData{
-				Enabled:   true,
-				Mechanism: "SCRAM-SHA-256",
-				Username:  "user",
-				Password:  "pass",
+				Enabled:          true,
+				Mechanism:        "SCRAM-SHA-256",
+				Username:         "user",
+				Password:         "pass",
+				AuthByClientCert: true,
 			},
 			authorized: true,
 		},
 		{
 			sasl: saslData{
-				Enabled:   true,
-				Mechanism: "SCRAM-SHA-512",
-				Username:  "user",
-				Password:  "pass",
+				Enabled:          true,
+				Mechanism:        "SCRAM-SHA-512",
+				Username:         "user",
+				Password:         "pass",
+				AuthByClientCert: true,
 			},
 			authorized: true,
 		},
@@ -71,10 +75,11 @@ func (c *Config) Configure(t *testing.T, _ *cfg.Config, _ string) {
 		},
 		{
 			sasl: saslData{
-				Enabled:   true,
-				Mechanism: "PLAIN",
-				Username:  "user",
-				Password:  "pass123",
+				Enabled:          true,
+				Mechanism:        "PLAIN",
+				Username:         "user",
+				Password:         "pass123",
+				AuthByClientCert: false,
 			},
 			authorized: false,
 		},
@@ -91,12 +96,19 @@ func (c *Config) Configure(t *testing.T, _ *cfg.Config, _ string) {
 					ClientID:         "test-auth-out",
 					BatchSize_:       10,
 					MaxMessageBytes_: 1000000,
+					SslEnabled:       true,
+					SslSkipVerify:    true,
 				}
 				if tt.sasl.Enabled {
 					config.SaslEnabled = true
 					config.SaslMechanism = tt.sasl.Mechanism
 					config.SaslUsername = tt.sasl.Username
 					config.SaslPassword = tt.sasl.Password
+				}
+
+				if tt.sasl.AuthByClientCert {
+					config.ClientKey = "./kafka_auth/certs/client_key.pem"
+					config.ClientCert = "./kafka_auth/certs/client_cert.pem"
 				}
 
 				kafka_out.NewProducer(config,
@@ -113,12 +125,19 @@ func (c *Config) Configure(t *testing.T, _ *cfg.Config, _ string) {
 					Offset_:                    kafka_in.OffsetTypeNewest,
 					ConsumerMaxProcessingTime_: 200 * time.Millisecond,
 					ConsumerMaxWaitTime_:       250 * time.Millisecond,
+					SslEnabled:                 true,
+					SslSkipVerify:              true,
 				}
 				if tt.sasl.Enabled {
 					config.SaslEnabled = true
 					config.SaslMechanism = tt.sasl.Mechanism
 					config.SaslUsername = tt.sasl.Username
 					config.SaslPassword = tt.sasl.Password
+				}
+
+				if tt.sasl.AuthByClientCert {
+					config.ClientKey = "./kafka_auth/certs/client_key.pem"
+					config.ClientCert = "./kafka_auth/certs/client_cert.pem"
 				}
 
 				kafka_in.NewConsumerGroup(config,
