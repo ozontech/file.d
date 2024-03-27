@@ -55,30 +55,30 @@ func (l *inMemoryLimiter) isAllowed(event *pipeline.Event, ts time.Time) bool {
 	l.lock()
 	defer l.unlock()
 
-	// If the limit is given distributions, then sharded buckets are used
-	shard := 0
+	// If the limit is given with distribution, then distributed buckets are used
+	distrIdx := 0
 	limit := l.limit.value
 	if l.limit.distributions.isEnabled() {
 		key := event.Root.Dig(l.limit.distributions.field...).AsString()
-		shard, limit = l.limit.distributions.getLimit(key)
+		distrIdx, limit = l.limit.distributions.getLimit(key)
 
-		// The shard index in the bucket matches the distribution value index in distributions,
+		// The distribution index in the bucket matches the distribution value index in distributions,
 		// but is shifted by 1 because default distribution has index 0.
-		shard++
+		distrIdx++
 	}
 
 	id := l.rebuildBuckets(ts)
 	index := id - l.buckets.getMinID()
 	switch l.limit.kind {
 	case "", "count":
-		l.buckets.add(index, shard, 1)
+		l.buckets.add(index, distrIdx, 1)
 	case "size":
-		l.buckets.add(index, shard, int64(event.Size))
+		l.buckets.add(index, distrIdx, int64(event.Size))
 	default:
 		logger.Fatalf("unknown type of the inMemoryLimiter: %q", l.limit.kind)
 	}
 
-	return l.buckets.get(index, shard) <= limit
+	return l.buckets.get(index, distrIdx) <= limit
 }
 
 func (l *inMemoryLimiter) lock() {
@@ -112,8 +112,8 @@ func (l *inMemoryLimiter) getBucket(bucketIdx int, buf []int64) []int64 {
 }
 
 // Not thread safe - use lock&unlock methods!
-func (l *inMemoryLimiter) updateBucket(bucketIdx, shardIdx int, value int64) {
-	l.buckets.set(bucketIdx, shardIdx, value)
+func (l *inMemoryLimiter) updateBucket(bucketIdx, distrIdx int, value int64) {
+	l.buckets.set(bucketIdx, distrIdx, value)
 }
 
 // Not thread safe - use lock&unlock methods!

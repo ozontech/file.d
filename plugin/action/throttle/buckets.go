@@ -5,11 +5,11 @@ import (
 )
 
 type buckets interface {
-	get(index, shard int) int64
+	get(index, distrIndex int) int64
 	getAll(index int, buf []int64) []int64
-	set(index, shard int, value int64)
+	set(index, distrIndex int, value int64)
 	reset(index int)
-	add(index, shard int, value int64)
+	add(index, distrIndex int, value int64)
 	isEmpty(index int) bool
 	// rebuild will rebuild buckets and returns actual bucket id
 	rebuild(currentTs, ts time.Time) int
@@ -21,11 +21,11 @@ type buckets interface {
 	getMinID() int
 }
 
-func newBuckets(count, shards int, interval time.Duration) buckets {
-	if shards == 1 {
+func newBuckets(count, distributionSize int, interval time.Duration) buckets {
+	if distributionSize == 1 {
 		return newSimpleBuckets(count, interval)
 	}
-	return newShardedBuckets(count, shards, interval)
+	return newDistributedBuckets(count, distributionSize, interval)
 }
 
 type bucketsMeta struct {
@@ -117,47 +117,45 @@ func (b *simpleBuckets) rebuild(currentTs, ts time.Time) int {
 	return rebuildBuckets(&b.bucketsMeta, resetFn, currentTs, ts)
 }
 
-type shardedBuckets struct {
+type distributedBuckets struct {
 	bucketsMeta
-	b           []bucketShard
-	shardsCount int
+	b []distributedBucket
 }
 
-func newShardedBuckets(count, shards int, interval time.Duration) *shardedBuckets {
-	sb := &shardedBuckets{
+func newDistributedBuckets(count, distributionSize int, interval time.Duration) *distributedBuckets {
+	db := &distributedBuckets{
 		bucketsMeta: newBucketsMeta(count, interval),
-		b:           make([]bucketShard, count),
-		shardsCount: shards,
+		b:           make([]distributedBucket, count),
 	}
 	for i := 0; i < count; i++ {
-		sb.b[i] = newBucketShard(shards)
+		db.b[i] = newDistributedBucket(distributionSize)
 	}
-	return sb
+	return db
 }
 
-func (b *shardedBuckets) get(index, shard int) int64 {
-	return b.b[index][shard]
+func (b *distributedBuckets) get(index, distrIndex int) int64 {
+	return b.b[index][distrIndex]
 }
 
-func (b *shardedBuckets) getAll(index int, buf []int64) []int64 {
+func (b *distributedBuckets) getAll(index int, buf []int64) []int64 {
 	return b.b[index].copyTo(buf)
 }
 
-func (b *shardedBuckets) add(index, shard int, value int64) {
-	b.b[index][shard] += value
+func (b *distributedBuckets) set(index, distrIndex int, value int64) {
+	b.b[index][distrIndex] = value
 }
 
-func (b *shardedBuckets) set(index, shard int, value int64) {
-	b.b[index][shard] = value
-}
-
-func (b *shardedBuckets) reset(index int) {
+func (b *distributedBuckets) reset(index int) {
 	for i := range b.b[index] {
 		b.b[index][i] = 0
 	}
 }
 
-func (b *shardedBuckets) isEmpty(index int) bool {
+func (b *distributedBuckets) add(index, distrIndex int, value int64) {
+	b.b[index][distrIndex] += value
+}
+
+func (b *distributedBuckets) isEmpty(index int) bool {
 	for _, v := range b.b[index] {
 		if v > 0 {
 			return false
@@ -166,7 +164,7 @@ func (b *shardedBuckets) isEmpty(index int) bool {
 	return true
 }
 
-func (b *shardedBuckets) rebuild(currentTs, ts time.Time) int {
+func (b *distributedBuckets) rebuild(currentTs, ts time.Time) int {
 	resetFn := func(count int) {
 		b.b = append(b.b[count:], b.b[:count]...)
 		for i := 0; i < count; i++ {
@@ -177,13 +175,13 @@ func (b *shardedBuckets) rebuild(currentTs, ts time.Time) int {
 	return rebuildBuckets(&b.bucketsMeta, resetFn, currentTs, ts)
 }
 
-type bucketShard []int64
+type distributedBucket []int64
 
-func newBucketShard(size int) bucketShard {
-	return make(bucketShard, size)
+func newDistributedBucket(size int) distributedBucket {
+	return make(distributedBucket, size)
 }
 
-func (s bucketShard) copyTo(buf bucketShard) bucketShard {
+func (s distributedBucket) copyTo(buf distributedBucket) distributedBucket {
 	return append(buf, s...)
 }
 

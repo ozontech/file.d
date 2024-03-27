@@ -19,7 +19,7 @@ const (
 type redisLimiter struct {
 	redis redisClient
 
-	// bucket counter prefix, forms key in redis: <keyPrefix>_<bucketID>_<shardIdx>
+	// bucket counter prefix, forms key in redis: <keyPrefix>_<bucketID>_<distributionIdx>
 	keyPrefix bytes.Buffer
 	// limit key in redis. If not overridden, has the format <keyPrefix>_<keySuffix>
 	keyLimit string
@@ -36,10 +36,10 @@ type redisLimiter struct {
 	bucketIdsForSync []int
 	// contains bucket values for keys in keyIdxsForSync
 	bucketValuesForSync [][]int64
-	// contains shard indexes of sharded bucket for updateLimiterValues
-	shardIdxsForUpdate []int
-	// contains shard values of sharded bucket for updateLimiterValues
-	shardValuesForUpdate []int64
+	// contains distribution indexes of distributed bucket for updateLimiterValues
+	distributionIdxsForUpdate []int
+	// contains distribution values of distributed bucket for updateLimiterValues
+	distributionValuesForUpdate []int64
 
 	// json field with limit value
 	valField string
@@ -167,25 +167,25 @@ func (l *redisLimiter) syncLocalGlobalLimiters(maxID int) {
 		key := builder.String()
 		bucketIdx := l.keyIdxsForSync[i]
 
-		l.shardIdxsForUpdate = l.shardIdxsForUpdate[:0]
-		l.shardValuesForUpdate = l.shardValuesForUpdate[:0]
-		for shardIdx := 0; shardIdx < len(l.bucketValuesForSync[bucketIdx]); shardIdx++ {
+		l.distributionIdxsForUpdate = l.distributionIdxsForUpdate[:0]
+		l.distributionValuesForUpdate = l.distributionValuesForUpdate[:0]
+		for distrIdx := 0; distrIdx < len(l.bucketValuesForSync[bucketIdx]); distrIdx++ {
 			builder.Reset()
 			builder.WriteString(key)
 			builder.WriteString("_")
-			builder.WriteString(strconv.Itoa(shardIdx))
+			builder.WriteString(strconv.Itoa(distrIdx))
 
-			// <keyPrefix>_<bucketID>_<shardIdx>
+			// <keyPrefix>_<bucketID>_<distributionIdx>
 			subKey := builder.String()
 
-			intCmd := l.redis.IncrBy(subKey, l.bucketValuesForSync[bucketIdx][shardIdx])
+			intCmd := l.redis.IncrBy(subKey, l.bucketValuesForSync[bucketIdx][distrIdx])
 			val, err := intCmd.Result()
 			if err != nil {
 				logger.Errorf("can't watch global limit for %s: %s", key, err.Error())
 				continue
 			}
-			l.shardIdxsForUpdate = append(l.shardIdxsForUpdate, shardIdx)
-			l.shardValuesForUpdate = append(l.shardValuesForUpdate, val)
+			l.distributionIdxsForUpdate = append(l.distributionIdxsForUpdate, distrIdx)
+			l.distributionValuesForUpdate = append(l.distributionValuesForUpdate, val)
 
 			// for oldest bucket set lifetime equal to 1 bucket duration, for newest equal to ((bucket count + 1) * bucket duration)
 			l.redis.Expire(subKey, tlBucketsInterval+tlBucketsInterval*time.Duration(bucketIdx))
@@ -204,8 +204,8 @@ func (l *redisLimiter) updateLimiterValues(maxID, bucketIdx int) {
 			if values == nil {
 				lim.resetBucket(actualBucketIdx)
 			} else {
-				for i, idx := range l.shardIdxsForUpdate {
-					lim.updateBucket(actualBucketIdx, idx, values[i])
+				for i, distrIdx := range l.distributionIdxsForUpdate {
+					lim.updateBucket(actualBucketIdx, distrIdx, values[i])
 				}
 			}
 		}
@@ -215,7 +215,7 @@ func (l *redisLimiter) updateLimiterValues(maxID, bucketIdx int) {
 	// reset increment limiter
 	updateLim(l.incrementLimiter, nil)
 	// update total limiter
-	updateLim(l.totalLimiter, l.shardValuesForUpdate)
+	updateLim(l.totalLimiter, l.distributionValuesForUpdate)
 }
 
 func decodeKeyLimitValue(data []byte, valField, distrField string) (int64, limitDistributionCfg, error) {
