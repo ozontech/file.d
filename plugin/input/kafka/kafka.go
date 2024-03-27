@@ -144,8 +144,18 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
+	// > Path or content of a PEM-encoded client certificate file.
+	ClientCert string `json:"client_cert"` // *
+
+	// > @3@4@5@6
+	// >
+	// > > Path or content of a PEM-encoded client key file.
+	ClientKey string `json:"client_key"` // *
+
+	// > @3@4@5@6
+	// >
 	// > Path or content of a PEM-encoded CA file.
-	SslPem string `json:"pem_file" default:"/file.d/certs"` // *
+	CACert string `json:"ca_cert"` // *
 }
 
 func init() {
@@ -239,10 +249,19 @@ func NewConsumerGroup(c *Config, l *zap.SugaredLogger) sarama.ConsumerGroup {
 		config.Net.TLS.Enable = true
 
 		tlsCfg := xtls.NewConfigBuilder()
-		if err := tlsCfg.AppendCARoot(c.SslPem); err != nil {
-			l.Fatalf("can't load cert: %s", err.Error())
+
+		if c.CACert != "" {
+			if err := tlsCfg.AppendCARoot(c.CACert); err != nil {
+				l.Fatalf("can't load ca cert: %s", err.Error())
+			}
 		}
 		tlsCfg.SetSkipVerify(c.SslSkipVerify)
+
+		if c.ClientCert != "" || c.ClientKey != "" {
+			if err := tlsCfg.AppendX509KeyPair(c.ClientCert, c.ClientKey); err != nil {
+				l.Fatalf("can't load client certificate and key: %s", err.Error())
+			}
+		}
 
 		config.Net.TLS.Config = tlsCfg.Build()
 	}
