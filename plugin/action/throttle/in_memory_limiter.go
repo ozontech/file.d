@@ -47,8 +47,10 @@ func newInMemoryLimiter(cfg *limiterConfig, limit *complexLimit, nowFn func() ti
 func (l *inMemoryLimiter) sync() {}
 
 func (l *inMemoryLimiter) isAllowed(event *pipeline.Event, ts time.Time) bool {
+	limit := atomic.LoadInt64(&l.limit.value)
+
 	// limit value fast check without races
-	if atomic.LoadInt64(&l.limit.value) < 0 {
+	if limit < 0 {
 		return true
 	}
 
@@ -57,7 +59,6 @@ func (l *inMemoryLimiter) isAllowed(event *pipeline.Event, ts time.Time) bool {
 
 	// If the limit is given with distribution, then distributed buckets are used
 	distrIdx := 0
-	limit := l.limit.value
 	if l.limit.distributions.isEnabled() {
 		key := event.Root.Dig(l.limit.distributions.field...).AsString()
 		distrIdx, limit = l.limit.distributions.getLimit(key)
