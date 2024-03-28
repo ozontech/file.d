@@ -101,9 +101,20 @@ func (l *inMemoryLimiter) updateDistribution(distribution limitDistributionCfg) 
 	if err != nil {
 		return err
 	}
+
 	l.lock()
+	defer l.unlock()
+
+	// recreate buckets
+	if l.limit.distributions.size() == 0 && ld.size() > 0 || l.limit.distributions.size() > 0 && ld.size() == 0 {
+		l.buckets = newBuckets(
+			l.buckets.getCount(),
+			ld.size()+1, // +1 because of default distribution
+			l.buckets.getInterval(),
+		)
+	}
+
 	l.limit.distributions = ld
-	l.unlock()
 	return nil
 }
 

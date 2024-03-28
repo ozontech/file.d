@@ -102,8 +102,9 @@ func Test_updateKeyLimit(t *testing.T) {
 		distrField         string
 	}
 	type limitersData struct {
-		limit         int64
-		distributions limitDistributions
+		limit             int64
+		distributions     limitDistributions
+		wantSimpleBuckets bool
 	}
 	type redisData struct {
 		key   string
@@ -200,7 +201,8 @@ func Test_updateKeyLimit(t *testing.T) {
 				valField:           "",
 			},
 			wantLimiters: &limitersData{
-				limit: 101,
+				limit:             101,
+				wantSimpleBuckets: true,
 			},
 		},
 		{
@@ -213,7 +215,8 @@ func Test_updateKeyLimit(t *testing.T) {
 				valField:           "",
 			},
 			wantLimiters: &limitersData{
-				limit: 102,
+				limit:             102,
+				wantSimpleBuckets: true,
 			},
 		},
 		{
@@ -226,7 +229,8 @@ func Test_updateKeyLimit(t *testing.T) {
 				valField:           "custom_limit_field",
 			},
 			wantLimiters: &limitersData{
-				limit: 103,
+				limit:             103,
+				wantSimpleBuckets: true,
 			},
 		},
 		{
@@ -239,7 +243,8 @@ func Test_updateKeyLimit(t *testing.T) {
 				valField:           "custom_limit_field",
 			},
 			wantLimiters: &limitersData{
-				limit: 104,
+				limit:             104,
+				wantSimpleBuckets: true,
 			},
 		},
 		{
@@ -252,7 +257,8 @@ func Test_updateKeyLimit(t *testing.T) {
 				valField:           "custom_limit_field",
 			},
 			wantLimiters: &limitersData{
-				limit: 105,
+				limit:             105,
+				wantSimpleBuckets: true,
 			},
 		},
 		{
@@ -279,7 +285,53 @@ func Test_updateKeyLimit(t *testing.T) {
 						{ratio: 0.5, limit: 500},
 					},
 					defDistribution: complexDistribution{ratio: 0.1, limit: 100},
+					enabled:         false,
 				},
+				wantSimpleBuckets: false,
+			},
+		},
+		{
+			name: "recreate_buckets_simple_to_distributed",
+			args: args{
+				client:             client,
+				defaultLimit:       defaultLimit,
+				throttleFieldValue: throttleFieldValue1,
+				keyLimitOverride:   "custom_limit_key3",
+				valField:           "custom_limit_field",
+				distrField:         "custom_distr_field",
+			},
+			wantLimiters: &limitersData{
+				limit: 1000,
+				distributions: limitDistributions{
+					field: []string{"new-field"},
+					idxByKey: map[string]int{
+						"val1": 0,
+						"val2": 0,
+						"val3": 1,
+					},
+					distributions: []complexDistribution{
+						{ratio: 0.4, limit: 400},
+						{ratio: 0.5, limit: 500},
+					},
+					defDistribution: complexDistribution{ratio: 0.1, limit: 100},
+					enabled:         false,
+				},
+				wantSimpleBuckets: false,
+			},
+		},
+		{
+			name: "recreate_buckets_distributed_to_simple",
+			args: args{
+				client:             client,
+				defaultLimit:       defaultLimitWithDistribution,
+				throttleFieldValue: throttleFieldValue1,
+				keyLimitOverride:   "custom_limit_key2",
+				valField:           "custom_limit_field",
+				distrField:         "custom_distr_field",
+			},
+			wantLimiters: &limitersData{
+				limit:             104,
+				wantSimpleBuckets: true,
 			},
 		},
 		{
@@ -372,8 +424,12 @@ func Test_updateKeyLimit(t *testing.T) {
 			if tt.wantLimiters != nil {
 				require.Equal(t, tt.wantLimiters.limit, lim.incrementLimiter.limit.value)
 				require.Equal(t, tt.wantLimiters.limit, lim.totalLimiter.limit.value)
+
 				require.Equal(t, tt.wantLimiters.distributions, lim.incrementLimiter.limit.distributions)
 				require.Equal(t, tt.wantLimiters.distributions, lim.totalLimiter.limit.distributions)
+
+				require.Equal(t, tt.wantLimiters.wantSimpleBuckets, lim.incrementLimiter.buckets.isSimple())
+				require.Equal(t, tt.wantLimiters.wantSimpleBuckets, lim.totalLimiter.buckets.isSimple())
 			}
 			if tt.wantRedis != nil {
 				val, err := s.Get(tt.wantRedis.key)

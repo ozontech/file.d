@@ -19,6 +19,9 @@ type buckets interface {
 	getCount() int
 	getInterval() time.Duration
 	getMinID() int
+
+	// for testing only
+	isSimple() bool
 }
 
 func newBuckets(count, distributionSize int, interval time.Duration) buckets {
@@ -117,6 +120,10 @@ func (b *simpleBuckets) rebuild(currentTs, ts time.Time) int {
 	return rebuildBuckets(&b.bucketsMeta, resetFn, currentTs, ts)
 }
 
+func (b *simpleBuckets) isSimple() bool {
+	return true
+}
+
 type distributedBuckets struct {
 	bucketsMeta
 	b []distributedBucket
@@ -173,6 +180,10 @@ func (b *distributedBuckets) rebuild(currentTs, ts time.Time) int {
 	}
 
 	return rebuildBuckets(&b.bucketsMeta, resetFn, currentTs, ts)
+}
+
+func (b *distributedBuckets) isSimple() bool {
+	return false
 }
 
 type distributedBucket []int64
