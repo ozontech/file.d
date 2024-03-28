@@ -104,6 +104,7 @@ func init() {
 
 		Endpoints: map[string]func(http.ResponseWriter, *http.Request){
 			"reset": file.ResetterRegistryInstance.Reset,
+			"info":  file.InfoRegistryInstance.Info,
 		},
 	})
 	fd.DefaultPluginRegistry.RegisterAction(&pipeline.PluginStaticInfo{
