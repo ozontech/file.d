@@ -35,13 +35,13 @@ pipelines:
 ```
 
 ### Config params
-**`watching_dir`** *`string`* *`required`* 
+**`watching_dir`** *`string`* 
 
 List of included pathes
-*`string`* *`required`* 
+*`string`* 
 
 List of excluded pathes
-*`string`* *`required`* 
+*`string`* 
 
 The source directory to watch for files to process. All subdirectories also will be watched. E.g. if files have
 `/var/my-logs/$YEAR/$MONTH/$DAY/$HOST/$FACILITY-$PROGRAM.log` structure, `watching_dir` should be `/var/my-logs`.

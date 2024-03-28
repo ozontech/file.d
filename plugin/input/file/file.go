@@ -106,7 +106,7 @@ type Config struct {
 	// > `/var/my-logs/$YEAR/$MONTH/$DAY/$HOST/$FACILITY-$PROGRAM.log` structure, `watching_dir` should be `/var/my-logs`.
 	// > Also the `filename_pattern`/`dir_pattern` is useful to filter needless files/subdirectories. In the case of using two or more
 	// > different directories, it's recommended to setup separate pipelines for each.
-	WatchingDir string `json:"watching_dir" required:"true"` // *
+	WatchingDir string `json:"watching_dir"` // *
 
 	// > @3@4@5@6
 	// >
