@@ -97,6 +97,7 @@ func TestWorkerWork(t *testing.T) {
 				ctl.RegisterCounter("worker1", "help_test"),
 				ctl.RegisterCounter("worker2", "help_test"),
 				ctl.RegisterGauge("worker3", "help_test"),
+				ctl.RegisterGauge("worker4", "help_test"),
 			)
 			jp := NewJobProvider(&Config{}, metrics, &zap.SugaredLogger{})
 			jp.jobsChan = make(chan *Job, 2)
@@ -230,6 +231,7 @@ func TestWorkerWorkMultiData(t *testing.T) {
 				ctl.RegisterCounter("worker1", "help_test"),
 				ctl.RegisterCounter("worker2", "help_test"),
 				ctl.RegisterGauge("worker3", "help_test"),
+				ctl.RegisterGauge("worker4", "help_test"),
 			)
 			jp := NewJobProvider(&Config{}, metrics, &zap.SugaredLogger{})
 			jp.jobsChan = make(chan *Job, 2)

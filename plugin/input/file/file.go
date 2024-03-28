@@ -59,6 +59,7 @@ type Plugin struct {
 	alreadyWrittenEventsSkippedMetric prometheus.Counter
 	errorOpenFileMetric               prometheus.Counter
 	notifyChannelLengthMetric         prometheus.Gauge
+	numberOfCurrentJobsMetric         prometheus.Gauge
 }
 
 type persistenceMode int
@@ -179,6 +180,7 @@ func init() {
 		Factory: Factory,
 		Endpoints: map[string]func(http.ResponseWriter, *http.Request){
 			"reset": ResetterRegistryInstance.Reset,
+			"info":  InfoRegistryInstance.Info,
 		},
 	})
 }
@@ -201,11 +203,13 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 			p.possibleOffsetCorruptionMetric,
 			p.errorOpenFileMetric,
 			p.notifyChannelLengthMetric,
+			p.numberOfCurrentJobsMetric,
 		),
 		p.logger,
 	)
 
 	ResetterRegistryInstance.AddResetter(params.PipelineName, p)
+	InfoRegistryInstance.AddPlugin(params.PipelineName, p)
 
 	p.startWorkers()
 	p.jobProvider.start()
@@ -216,6 +220,7 @@ func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 	p.alreadyWrittenEventsSkippedMetric = ctl.RegisterCounter("input_file_already_written_event_skipped_total", "Total number of skipped events that was already written")
 	p.errorOpenFileMetric = ctl.RegisterCounter("input_file_open_error_total", "Total number of file opening errors")
 	p.notifyChannelLengthMetric = ctl.RegisterGauge("input_file_watcher_channel_length", "Number of unprocessed notify events")
+	p.numberOfCurrentJobsMetric = ctl.RegisterGauge("input_file_provider_jobs_length", "Number of current jobs")
 }
 
 func (p *Plugin) startWorkers() {

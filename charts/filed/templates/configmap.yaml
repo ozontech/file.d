@@ -1,0 +1,29 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ template "filed.fullname" . }}-config
+  labels:
+    app: "{{ template "filed.fullname" . }}"
+    chart: "{{ .Chart.Name }}-{{ .Chart.Version }}"
+    heritage: {{ .Release.Service | quote }}
+    release: {{ .Release.Name | quote }}
+data:
+  file.d.yaml: |
+    pipelines:
+      {{ .Release.Name | replace "-" "_" }}:
+        input:
+        {{- toYaml .Values.input | nindent 10 }}
+        actions:
+        {{- if .Values.actions }}
+        {{- toYaml .Values.actions | nindent 8 }}
+        {{- end }}
+        output:
+          {{- if .Values.elasticsearch.enabled }}
+          type: elasticsearch
+          index_format: {{ template "filed.fullname" . }}
+          endpoints:
+            - http://{{ .Release.Name }}-elasticsearch.{{ .Release.Namespace }}.svc.cluster.local.:9200
+          {{- end }}
+          {{- if .Values.output }}
+          {{- toYaml .Values.output | nindent 10 }}
+          {{- end }}
