@@ -280,7 +280,7 @@ pipelines:
     actions:
       - type: discard
         do_if:
-          op: field_len
+          op: bytes_len_cmp
           field: pod_id
           cmp_op: <
           values: [5]
@@ -293,6 +293,8 @@ result:
 {"pod_id":12345}   # not discarded
 {"pod_id":123456}  # not discarded
 ```
+
+Possible comparison operations (values of field 'cmp_op'): `<`, `<=`, `>`, `>=`, `==`, `!=`.
 
 <br>
 

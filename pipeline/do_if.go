@@ -206,7 +206,7 @@ const (
 	// >     actions:
 	// >       - type: discard
 	// >         do_if:
-	// >           op: field_len
+	// >           op: bytes_len_cmp
 	// >           field: pod_id
 	// >           cmp_op: <
 	// >           values: [5]
@@ -219,6 +219,8 @@ const (
 	// > {"pod_id":12345}   # not discarded
 	// > {"pod_id":123456}  # not discarded
 	// > ```
+	// >
+	// > Possible comparison operations (values of field 'cmp_op'): `<`, `<=`, `>`, `>=`, `==`, `!=`.
 	doIfFieldBytesLengthCmpOpName = "bytes_len_cmp" // *
 )
 
