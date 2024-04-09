@@ -68,6 +68,15 @@ func (t doIfFieldOpType) String() string {
 	}
 }
 
+func isSimpleStringOp(op doIfFieldOpType) bool {
+	switch op {
+	case doIfFieldEqualOp, doIfFieldContainsOp, doIfFieldPrefixOp, doIfFieldSuffixOp:
+		return true
+	default:
+		return false
+	}
+}
+
 type comparisonOperation string
 
 const (
@@ -263,8 +272,8 @@ type doIfFieldOpNode struct {
 	minValLen int
 	maxValLen int
 
-	cmpOp              comparisonOperation
-	valueForComparison int
+	cmpOp    comparisonOperation
+	cmpValue int
 }
 
 func NewFieldOpNode(op string, field string, caseSensitive bool, cmpOp string, values [][]byte) (DoIfNode, error) {
@@ -306,11 +315,6 @@ func NewFieldOpNode(op string, field string, caseSensitive bool, cmpOp string, v
 		}
 	case doIfFieldBytesLengthCmpOpName:
 		fop = doIfFieldBytesLengthCmpOp
-	default:
-		return nil, fmt.Errorf("unknown field op %q", op)
-	}
-
-	if fop == doIfFieldBytesLengthCmpOp {
 		if len(values) != 1 {
 			return nil, errors.New("exactly one value for comparison needed")
 		}
@@ -326,7 +330,11 @@ func NewFieldOpNode(op string, field string, caseSensitive bool, cmpOp string, v
 		default:
 			return nil, fmt.Errorf("unknown cmp op %q", cmpOp)
 		}
-	} else if fop != doIfFieldRegexOp {
+	default:
+		return nil, fmt.Errorf("unknown field op %q", op)
+	}
+
+	if isSimpleStringOp(fop) {
 		minValLen = len(values[0])
 		maxValLen = len(values[0])
 		if fop == doIfFieldEqualOp {
@@ -358,17 +366,17 @@ func NewFieldOpNode(op string, field string, caseSensitive bool, cmpOp string, v
 	}
 
 	return &doIfFieldOpNode{
-		op:                 fop,
-		fieldPath:          fieldPath,
-		fieldPathStr:       field,
-		caseSensitive:      caseSensitive,
-		values:             vals,
-		valuesBySize:       valsBySize,
-		reValues:           reValues,
-		minValLen:          minValLen,
-		maxValLen:          maxValLen,
-		cmpOp:              resCmpOp,
-		valueForComparison: int(valueForComparison),
+		op:            fop,
+		fieldPath:     fieldPath,
+		fieldPathStr:  field,
+		caseSensitive: caseSensitive,
+		values:        vals,
+		valuesBySize:  valsBySize,
+		reValues:      reValues,
+		minValLen:     minValLen,
+		maxValLen:     maxValLen,
+		cmpOp:         resCmpOp,
+		cmpValue:      int(valueForComparison),
 	}, nil
 }
 
@@ -449,17 +457,17 @@ func (n *doIfFieldOpNode) Check(eventRoot *insaneJSON.Root) bool {
 	case doIfFieldBytesLengthCmpOp:
 		switch n.cmpOp {
 		case cmpOpLess:
-			return len(data) < n.valueForComparison
+			return len(data) < n.cmpValue
 		case cmpOpLessOrEqual:
-			return len(data) <= n.valueForComparison
+			return len(data) <= n.cmpValue
 		case cmpOpGreater:
-			return len(data) > n.valueForComparison
+			return len(data) > n.cmpValue
 		case cmpOpGreaterOrEqual:
-			return len(data) >= n.valueForComparison
+			return len(data) >= n.cmpValue
 		case cmpOpEqual:
-			return len(data) == n.valueForComparison
+			return len(data) == n.cmpValue
 		case cmpOpNotEqual:
-			return len(data) != n.valueForComparison
+			return len(data) != n.cmpValue
 		}
 	}
 	return false
