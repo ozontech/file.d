@@ -325,7 +325,7 @@ func (p *Plugin) ConsumeClaim(_ sarama.ConsumerGroupSession, claim sarama.Consum
 		if len(p.config.Meta) > 0 {
 			metadataInfo, err = p.metaRegistry.Render(newMetaInformation(message))
 			if err != nil {
-				return err
+				p.logger.Errorf("can't render meta data: %s", err.Error())
 			}
 		}
 

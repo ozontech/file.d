@@ -313,7 +313,6 @@ func (p *Plugin) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		metadataInfo, err = p.metaRegistry.Render(newMetaInformation(login, getUserIP(r), r))
 		if err != nil {
 			p.logger.Error("cannot parse meta info", zap.Error(err))
-			return
 		}
 	}
 
