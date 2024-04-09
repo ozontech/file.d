@@ -71,12 +71,12 @@ func (t doIfFieldOpType) String() string {
 type comparisonOperation string
 
 const (
-	cmpOpLess           comparisonOperation = "<"
-	cmpOpLessOrEqual    comparisonOperation = "<="
-	cmpOpGreater        comparisonOperation = ">"
-	cmpOpGreaterOrEqual comparisonOperation = ">="
-	cmpOpEqual          comparisonOperation = "=="
-	cmpOpNotEqual       comparisonOperation = "!="
+	cmpOpLess           comparisonOperation = "lt"
+	cmpOpLessOrEqual    comparisonOperation = "le"
+	cmpOpGreater        comparisonOperation = "gt"
+	cmpOpGreaterOrEqual comparisonOperation = "ge"
+	cmpOpEqual          comparisonOperation = "eq"
+	cmpOpNotEqual       comparisonOperation = "ne"
 )
 
 const (
@@ -220,7 +220,7 @@ const (
 	// > {"pod_id":123456}  # not discarded
 	// > ```
 	// >
-	// > Possible comparison operations (values of field 'cmp_op'): `<`, `<=`, `>`, `>=`, `==`, `!=`.
+	// > Possible comparison operations (values of field 'cmp_op'): `lt`, `le`, `gt`, `ge`, `eq`, `ne`.
 	doIfFieldBytesLengthCmpOpName = "bytes_len_cmp" // *
 )
 

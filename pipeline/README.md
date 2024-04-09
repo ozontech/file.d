@@ -294,7 +294,7 @@ result:
 {"pod_id":123456}  # not discarded
 ```
 
-Possible comparison operations (values of field 'cmp_op'): `<`, `<=`, `>`, `>=`, `==`, `!=`.
+Possible comparison operations (values of field 'cmp_op'): `lt`, `le`, `gt`, `ge`, `eq`, `ne`.
 
 <br>
 
