@@ -60,12 +60,12 @@ func (m bucketsMeta) getMinID() int {
 func (m bucketsMeta) actualizeIndex(maxID, index int) (int, bool) {
 	if m.maxID == maxID {
 		return index, true
-	} else {
-		// buckets were rebuild during some operations, calc actual index
-		shift := m.maxID - maxID
-		actualIndex := index - shift
-		return actualIndex, actualIndex > 0
 	}
+
+	// buckets were rebuild during some operations, calc actual index
+	shift := m.maxID - maxID
+	actualIndex := index - shift
+	return actualIndex, actualIndex > 0
 }
 
 // timeToBucketID converts time to bucketID
