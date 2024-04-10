@@ -391,7 +391,7 @@ func (n *doIfFieldOpNode) Check(eventRoot *insaneJSON.Root) bool {
 		data = node.AsBytes()
 	}
 	// fast check for data
-	if n.op != doIfFieldRegexOp && n.op != doIfFieldBytesLengthCmpOp && len(data) < n.minValLen {
+	if isSimpleStringOp(n.op) && len(data) < n.minValLen {
 		return false
 	}
 	switch n.op {
