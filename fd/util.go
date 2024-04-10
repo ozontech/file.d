@@ -199,11 +199,12 @@ var (
 		"or":  struct{}{},
 	}
 	doIfFieldOpNodes = map[string]struct{}{
-		"equal":    struct{}{},
-		"contains": struct{}{},
-		"prefix":   struct{}{},
-		"suffix":   struct{}{},
-		"regex":    struct{}{},
+		"equal":         struct{}{},
+		"contains":      struct{}{},
+		"prefix":        struct{}{},
+		"suffix":        struct{}{},
+		"regex":         struct{}{},
+		"bytes_len_cmp": struct{}{},
 	}
 )
 

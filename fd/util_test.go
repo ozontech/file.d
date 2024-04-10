@@ -127,6 +127,12 @@ func Test_extractDoIfChecker(t *testing.T) {
 									"op": "regex",
 									"field": "message",
 									"values": ["test-\\d+", "test-msg-\\d+"]
+								},
+								{
+									"op": "bytes_len_cmp",
+									"field": "message",
+									"cmp_op": "lt",
+									"values": ["100"]
 								}
 							]
 						}
@@ -173,6 +179,13 @@ func Test_extractDoIfChecker(t *testing.T) {
 										fieldOp:       "regex",
 										fieldName:     "message",
 										values:        [][]byte{[]byte(`test-\d+`), []byte(`test-msg-\d+`)},
+										caseSensitive: true,
+									},
+									{
+										fieldOp:       "bytes_len_cmp",
+										fieldName:     "message",
+										cmpOp:         "lt",
+										values:        [][]byte{[]byte("100")},
 										caseSensitive: true,
 									},
 								},
@@ -258,6 +271,27 @@ func Test_extractDoIfChecker(t *testing.T) {
 			name: "error_invalid_logical_op_operand",
 			args: args{
 				cfgStr: `{"op": "or", "operands": [{"op": "equal"}]}`,
+			},
+			wantErr: true,
+		},
+		{
+			name: "error_no_cmp_value",
+			args: args{
+				cfgStr: `{"op": "bytes_len_cmp", "field": "message", "values": []}`,
+			},
+			wantErr: true,
+		},
+		{
+			name: "error_too_many_cmp_values",
+			args: args{
+				cfgStr: `{"op": "bytes_len_cmp", "field": "message", "values": ["1", "2", "3"]}`,
+			},
+			wantErr: true,
+		},
+		{
+			name: "error_invalid_cmp_value",
+			args: args{
+				cfgStr: `{"op": "bytes_len_cmp", "field": "message", "values": ["can't parse it"]}`,
 			},
 			wantErr: true,
 		},

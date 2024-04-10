@@ -282,7 +282,7 @@ pipelines:
         do_if:
           op: bytes_len_cmp
           field: pod_id
-          cmp_op: <
+          cmp_op: lt
           values: [5]
 ```
 
