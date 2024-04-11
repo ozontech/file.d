@@ -362,6 +362,9 @@ func TestWatch(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skip test in short mode")
 	}
+	setupDirs()
+	defer cleanUp()
+
 	iterations := 4
 	eventsPerIteration := 2
 	finalEvent := 1
@@ -400,6 +403,9 @@ func TestWatch(t *testing.T) {
 
 // TestReadSimple tests if file reading works right in the simple case
 func TestReadSimple(t *testing.T) {
+	setupDirs()
+	defer cleanUp()
+
 	eventCount := 5
 	events := make([]string, 0)
 
@@ -426,6 +432,9 @@ func TestReadSimple(t *testing.T) {
 
 // TestReadContinue tests if file reading works right after restart of the pipeline
 func TestReadContinue(t *testing.T) {
+	setupDirs()
+	defer cleanUp()
+
 	blockSize := 2000
 	stopAfter := 100
 	processed := 0
@@ -454,6 +463,9 @@ func TestReadContinue(t *testing.T) {
 		},
 	}, stopAfter)
 
+	// restart
+	offsetFiles = make(map[string]string)
+
 	run(&test.Case{
 		Prepare: func() {
 		},
@@ -481,6 +493,9 @@ func TestReadContinue(t *testing.T) {
 
 // TestOffsetsSaveSimple tests if offsets saving works right in the simple case
 func TestOffsetsSaveSimple(t *testing.T) {
+	setupDirs()
+	defer cleanUp()
+
 	eventCount := 5
 	events := make([]string, 0)
 	file := ""
@@ -510,6 +525,9 @@ func TestOffsetsSaveSimple(t *testing.T) {
 
 // TestOffsetsSaveContinue tests if plugin skips partial data in the case pipeline starts in the middle of the line
 func TestOffsetsSaveContinue(t *testing.T) {
+	setupDirs()
+	defer cleanUp()
+
 	leftPart := `["left_part",`
 	rightPart := `"right_part"]`
 	secondLine := `"line_2"`
@@ -534,6 +552,9 @@ func TestOffsetsSaveContinue(t *testing.T) {
 
 // TestOffsetsLoad tests if plugin skips lines which is located before loaded offsets
 func TestOffsetsLoad(t *testing.T) {
+	setupDirs()
+	defer cleanUp()
+
 	line1 := `{"some key1":"some data"}`
 	line2 := `{"some key2":"some data"}`
 
@@ -557,6 +578,9 @@ func TestOffsetsLoad(t *testing.T) {
 
 // TestReadLineSequential tests if plugin read works right in the case of sequential data appending to the single line
 func TestReadLineSequential(t *testing.T) {
+	setupDirs()
+	defer cleanUp()
+
 	file := ""
 	parts := []string{`["some",`, `"sequential",`, `"data"]`}
 	size := len(strings.Join(parts, "")) + newLine
@@ -580,6 +604,9 @@ func TestReadLineSequential(t *testing.T) {
 
 // TestReadBufferOverflow tests if plugin read works right in the case line is bigger than read buffer
 func TestReadBufferOverflow(t *testing.T) {
+	setupDirs()
+	defer cleanUp()
+
 	file := ""
 	overhead := 128
 	iterations := 5
@@ -618,6 +645,9 @@ func TestReadBufferOverflow(t *testing.T) {
 
 // TestReadManyCharsRace tests if plugin doesn't have race conditions in the case of sequential processing of chars of single line
 func TestReadManyCharsRace(t *testing.T) {
+	setupDirs()
+	defer cleanUp()
+
 	file := ""
 	charCount := 1024
 	strQuotes := 2
@@ -642,6 +672,9 @@ func TestReadManyCharsRace(t *testing.T) {
 
 // TestReadManyLinesRace tests if plugin doesn't have race conditions in the case of sequential processing of lines
 func TestReadManyLinesRace(t *testing.T) {
+	setupDirs()
+	defer cleanUp()
+
 	eventCount := 1024
 	size := 0
 	file := ""
@@ -661,6 +694,9 @@ func TestReadManyLinesRace(t *testing.T) {
 
 // TestReadManyFilesRace tests if plugin doesn't have race conditions in the case of sequential processing of files
 func TestReadManyFilesRace(t *testing.T) {
+	setupDirs()
+	defer cleanUp()
+
 	fileCount := 64
 	eventCountPerFile := 128
 	eventCount := fileCount * eventCountPerFile
@@ -685,6 +721,9 @@ func TestReadManyFilesRace(t *testing.T) {
 
 // TestReadLongJSON tests if plugin read works right if it's super long json
 func TestReadLongJSON(t *testing.T) {
+	setupDirs()
+	defer cleanUp()
+
 	eventCount := 10
 	file := ""
 	json := getContentBytes("../../../testdata/json/heavy.json")
@@ -707,6 +746,9 @@ func TestReadLongJSON(t *testing.T) {
 
 // TestReadManyFilesParallelRace tests if plugin doesn't have race conditions in the case of parallel processing of files
 func TestReadManyFilesParallelRace(t *testing.T) {
+	setupDirs()
+	defer cleanUp()
+
 	if testing.Short() {
 		t.Skip("skip test in short mode")
 	}
@@ -748,6 +790,9 @@ func TestReadManyFilesParallelRace(t *testing.T) {
 
 // TestReadManyCharsParallelRace tests if plugin doesn't have race conditions in the case of parallel processing of chars
 func TestReadManyCharsParallelRace(t *testing.T) {
+	setupDirs()
+	defer cleanUp()
+
 	if testing.Short() {
 		t.Skip("skip test in short mode")
 	}
@@ -802,6 +847,9 @@ func TestReadManyCharsParallelRace(t *testing.T) {
 
 // TestReadManyPreparedFilesRace tests if plugin doesn't have race conditions in the case of parallel processing of prepared files
 func TestReadManyPreparedFilesRace(t *testing.T) {
+	setupDirs()
+	defer cleanUp()
+
 	if testing.Short() {
 		t.Skip("skip long tests in short mode")
 	}
@@ -837,6 +885,9 @@ func TestReadManyPreparedFilesRace(t *testing.T) {
 
 // TestReadStreamRace tests if plugin doesn't have race conditions in the case of parallel processing of prepared files with streams
 func TestReadStreamRace(t *testing.T) {
+	setupDirs()
+	defer cleanUp()
+
 	linesCount := 2
 	blocksCount := 128
 	filesCount := 16
@@ -867,6 +918,9 @@ func TestReadStreamRace(t *testing.T) {
 }
 
 func TestRotationRenameSimple(t *testing.T) {
+	setupDirs()
+	defer cleanUp()
+
 	if testing.Short() {
 		t.Skip("skip test in short mode")
 	}
@@ -912,6 +966,9 @@ func TestRotationRenameSimple(t *testing.T) {
 }
 
 func TestRotationRenameWhileNotWorking(t *testing.T) {
+	setupDirs()
+	defer cleanUp()
+
 	file := ""
 	before := 0
 	run(&test.Case{
@@ -928,6 +985,8 @@ func TestRotationRenameWhileNotWorking(t *testing.T) {
 		},
 	}, 2)
 
+	// restart
+	offsetFiles = make(map[string]string)
 	newFile := rotateFile(file)
 
 	run(&test.Case{
@@ -964,6 +1023,9 @@ func TestRotationRenameWhileNotWorking(t *testing.T) {
 }
 
 func TestTruncation(t *testing.T) {
+	setupDirs()
+	defer cleanUp()
+
 	file := ""
 	x := atomic.NewInt32(3)
 	run(&test.Case{
@@ -992,6 +1054,9 @@ func TestTruncation(t *testing.T) {
 }
 
 func TestTruncationSeq(t *testing.T) {
+	setupDirs()
+	defer cleanUp()
+
 	if testing.Short() {
 		t.Skip("skip long tests in short mode")
 	}

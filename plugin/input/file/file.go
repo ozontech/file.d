@@ -2,6 +2,7 @@ package file
 
 import (
 	"net/http"
+	"path/filepath"
 	"time"
 
 	"github.com/ozontech/file.d/cfg"
@@ -174,6 +175,8 @@ type Config struct {
 	ShouldWatchChanges bool `json:"should_watch_file_changes" default:"false"` // *
 }
 
+var offsetFiles = make(map[string]string)
+
 func init() {
 	fd.DefaultPluginRegistry.RegisterInput(&pipeline.PluginStaticInfo{
 		Type:    "file",
@@ -196,6 +199,17 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	p.registerMetrics(params.MetricCtl)
 
 	p.config.OffsetsFileTmp = p.config.OffsetsFile + ".atomic"
+
+	offsetFilePath := filepath.Clean(p.config.OffsetsFile)
+	if pipelineName, alreadyUsed := offsetFiles[offsetFilePath]; alreadyUsed {
+		p.logger.Fatalf(
+			"offset file %s is already used in pipeline %s",
+			offsetFilePath,
+			pipelineName,
+		)
+	} else {
+		offsetFiles[offsetFilePath] = params.PipelineName
+	}
 
 	p.jobProvider = NewJobProvider(
 		p.config,
