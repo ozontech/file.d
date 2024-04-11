@@ -229,7 +229,17 @@ const (
 	// > {"pod_id":123456}  # not discarded
 	// > ```
 	// >
-	// > Possible comparison operations (values of field 'cmp_op'): `lt`, `le`, `gt`, `ge`, `eq`, `ne`.
+	// > Possible values of field 'cmp_op': `lt`, `le`, `gt`, `ge`, `eq`, `ne`.
+	// > They denote corresponding comparison operations.
+	// >
+	// > | Name | Op |
+	// > |------|----|
+	// > | `lt` | `<` |
+	// > | `le` | `<=` |
+	// > | `gt` | `>` |
+	// > | `ge` | `>=` |
+	// > | `eq` | `==` |
+	// > | `ne` | `!=` |
 	doIfFieldBytesLengthCmpOpName = "bytes_len_cmp" // *
 )
 
