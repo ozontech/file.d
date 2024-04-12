@@ -60,9 +60,16 @@ func TestModifyRegex(t *testing.T) {
 	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, config, pipeline.MatchModeAnd, nil, false))
 	wg := &sync.WaitGroup{}
 
-	outEvents := make([]*pipeline.Event, 0)
+	outEvents := struct {
+		mu     sync.Mutex
+		events []*pipeline.Event
+	}{
+		events: make([]*pipeline.Event, 0),
+	}
 	output.SetOutFn(func(e *pipeline.Event) {
-		outEvents = append(outEvents, e)
+		outEvents.mu.Lock()
+		outEvents.events = append(outEvents.events, e)
+		outEvents.mu.Unlock()
 		wg.Done()
 	})
 	wg.Add(len(testEvents))
@@ -74,12 +81,14 @@ func TestModifyRegex(t *testing.T) {
 	wg.Wait()
 	p.Stop()
 
-	assert.Equal(t, len(testEvents), len(outEvents), "wrong out events count")
+	assert.Equal(t, len(testEvents), len(outEvents.events), "wrong out events count")
 	for i := 0; i < len(testEvents); i++ {
 		fvs := testEvents[i].fieldsValues
 		for field := range fvs {
 			wantVal := fvs[field]
-			gotVal := outEvents[i].Root.Dig(field).AsString()
+			outEvents.mu.Lock()
+			gotVal := outEvents.events[i].Root.Dig(field).AsString()
+			outEvents.mu.Unlock()
 			assert.Equal(t, wantVal, gotVal, "wrong field value")
 		}
 	}
@@ -113,9 +122,17 @@ func TestModifyTrim(t *testing.T) {
 	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, config, pipeline.MatchModeAnd, nil, false))
 	wg := &sync.WaitGroup{}
 
-	outEvents := make([]*pipeline.Event, 0)
+	outEvents := struct {
+		mu     sync.Mutex
+		events []*pipeline.Event
+	}{
+		events: make([]*pipeline.Event, 0),
+	}
+
 	output.SetOutFn(func(e *pipeline.Event) {
-		outEvents = append(outEvents, e)
+		outEvents.mu.Lock()
+		outEvents.events = append(outEvents.events, e)
+		outEvents.mu.Unlock()
 		wg.Done()
 	})
 	wg.Add(len(testEvents))
@@ -127,12 +144,14 @@ func TestModifyTrim(t *testing.T) {
 	wg.Wait()
 	p.Stop()
 
-	assert.Equal(t, len(testEvents), len(outEvents), "wrong out events count")
+	assert.Equal(t, len(testEvents), len(outEvents.events), "wrong out events count")
 	for i := 0; i < len(testEvents); i++ {
 		fvs := testEvents[i].fieldsValues
 		for field := range fvs {
 			wantVal := fvs[field]
-			gotVal := outEvents[i].Root.Dig(field).AsString()
+			outEvents.mu.Lock()
+			gotVal := outEvents.events[i].Root.Dig(field).AsString()
+			outEvents.mu.Unlock()
 			assert.Equal(t, wantVal, gotVal, "wrong field value")
 		}
 	}
