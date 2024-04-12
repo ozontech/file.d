@@ -160,6 +160,8 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 			"Wrong format. Do you have http input plugin or add_file_name action? Maybe wrong field? You got: ",
 			zap.String("sourceName", sourceName),
 		)
+
+		return pipeline.ActionPass
 	}
 
 	infoStr, _ := base64.StdEncoding.DecodeString(sourceInfo[1])
