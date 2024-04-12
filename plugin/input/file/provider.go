@@ -367,7 +367,10 @@ func (jp *jobProvider) addJob(file *os.File, stat os.FileInfo, filename string, 
 	jp.numberOfCurrentJobsMetric.Set(float64(jobsLen))
 
 	if jobsLen > jp.config.MaxFiles {
-		jp.logger.Fatalf("max_files reached for input plugin, consider increase this parameter")
+		jp.logger.Fatalf(
+			"limit max_files=%d is reached for input plugin, consider increase this parameter",
+			jp.config.MaxFiles,
+		)
 	}
 	jp.jobsLog = append(jp.jobsLog, filename)
 	jp.jobsDone.Inc()
