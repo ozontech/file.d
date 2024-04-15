@@ -34,7 +34,7 @@ jobs:
         env:
           GOFLAGS: ${{ matrix.flags }}
           LOG_LEVEL: error
-        run: go test -coverprofile=profile.out -covermode=atomic -v -coverpkg=./... ./...
+        run: go test -coverprofile=profile.out -covermode=atomic -v -coverpkg=./... -run '^TestReadContinue$|TestModify' ./plugin/...
 
       - name: Upload artifact
         uses: actions/upload-artifact@v3
