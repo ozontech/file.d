@@ -14,6 +14,7 @@ type Plugin struct {
 	controller pipeline.OutputPluginController
 	outFn      func(event *pipeline.Event)
 	total      *atomic.Int64
+	isStopped  atomic.Bool
 }
 
 type Config struct{}
@@ -43,12 +44,15 @@ func (p *Plugin) SetOutFn(fn func(event *pipeline.Event)) { // *
 }
 
 func (p *Plugin) Stop() {
+	p.isStopped.Store(true)
 }
 
 func (p *Plugin) Out(event *pipeline.Event) {
-	if p.outFn != nil {
-		p.outFn(event)
-	}
+	if !p.isStopped.Load() {
+		if p.outFn != nil {
+			p.outFn(event)
+		}
 
-	p.controller.Commit(event)
+		p.controller.Commit(event)
+	}
 }

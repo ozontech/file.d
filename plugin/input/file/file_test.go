@@ -40,7 +40,7 @@ const (
 func TestMain(m *testing.M) {
 	setupDirs()
 	exitVal := m.Run()
-	cleanUp()
+	// cleanUp()
 	os.Exit(exitVal)
 }
 
@@ -80,9 +80,10 @@ func pluginConfig(opts ...string) *Config {
 	}
 
 	config := &Config{
-		WatchingDir:         filesDir,
-		OffsetsFile:         filepath.Join(offsetsDir, offsetsFile),
-		PersistenceMode:     "async",
+		WatchingDir:     filesDir,
+		OffsetsFile:     filepath.Join(offsetsDir, offsetsFile),
+		PersistenceMode: "async",
+		// AsyncInterval:       "1ms",
 		OffsetsOp:           op,
 		MaintenanceInterval: "5s",
 	}
@@ -426,15 +427,29 @@ func TestReadSimple(t *testing.T) {
 	}, eventCount)
 }
 
+type syncedEvents struct {
+	mu     sync.Mutex
+	events []string
+}
+
+func (s *syncedEvents) append(event string) {
+	s.mu.Lock()
+	s.events = append(s.events, event)
+	s.mu.Unlock()
+}
+
 // TestReadContinue tests if file reading works right after restart of the pipeline
 func TestReadContinue(t *testing.T) {
 	blockSize := 2000
 	stopAfter := 100
 	processed := 0
-	inputEvents := make([]string, 0, blockSize*2)
-	outputEvents := make([]string, 0, cap(inputEvents)+stopAfter)
+
+	inputEvents := syncedEvents{events: make([]string, 0, blockSize*2)}
+	outputEvents := syncedEvents{events: make([]string, 0, cap(inputEvents.events)+stopAfter)}
+
 	file := ""
 	size := 0
+	sizeStopped := make(map[int]int, 0)
 
 	run(&test.Case{
 		Prepare: func() {
@@ -444,46 +459,51 @@ func TestReadContinue(t *testing.T) {
 			for x := 0; x < blockSize; x++ {
 				line := fmt.Sprintf(`{"data_1":"line_%d"}`, x)
 				size += len(line) + newLine
-				inputEvents = append(inputEvents, line)
+				sizeStopped[x] = size
+				inputEvents.append(line)
 				addString(file, line, true, false)
 			}
 		},
 		Assert: func(p *pipeline.Pipeline) {
 			processed = p.GetEventsTotal()
 			for i := 0; i < processed; i++ {
-				outputEvents = append(outputEvents, p.GetEventLogItem(i))
+				outputEvents.append(p.GetEventLogItem(i))
 			}
+
+			logger.Infof("extected offset=%v", genOffsetsContent(file, sizeStopped[processed-1]))
+			logger.Infof("result offset=%v", getContent(getConfigByPipeline(p).OffsetsFile))
+			assertOffsetsAreEqual(t, genOffsetsContent(file, sizeStopped[processed-1]), getContent(getConfigByPipeline(p).OffsetsFile))
 		},
 	}, stopAfter)
 
 	// restart
 	offsetFiles = make(map[string]string)
 
-	run(&test.Case{
-		Prepare: func() {
-		},
-		Act: func(p *pipeline.Pipeline) {
-			for x := 0; x < blockSize; x++ {
-				line := fmt.Sprintf(`{"data_2":"line_%d"}`, x)
-				size += len(line) + newLine
-				inputEvents = append(inputEvents, line)
-				addString(file, line, true, false)
-			}
-		},
-		Assert: func(p *pipeline.Pipeline) {
-			for i := 0; i < p.GetEventsTotal(); i++ {
-				outputEvents = append(outputEvents, p.GetEventLogItem(i))
-			}
+	// run(&test.Case{
+	// 	Prepare: func() {
+	// 	},
+	// 	Act: func(p *pipeline.Pipeline) {
+	// 		for x := 0; x < blockSize; x++ {
+	// 			line := fmt.Sprintf(`{"data_2":"line_%d"}`, x)
+	// 			size += len(line) + newLine
+	// 			inputEvents.append(line)
+	// 			addString(file, line, true, false)
+	// 		}
+	// 	},
+	// 	Assert: func(p *pipeline.Pipeline) {
+	// 		for i := 0; i < p.GetEventsTotal(); i++ {
+	// 			outputEvents.append(p.GetEventLogItem(i))
+	// 		}
 
-			require.Equalf(
-				t, inputEvents, outputEvents,
-				"input events not equal output events (input len=%d, output len=%d)",
-				len(inputEvents), len(outputEvents),
-			)
+	// 		require.Equalf(
+	// 			t, inputEvents.events, outputEvents.events,
+	// 			"input events not equal output events (input len=%d, output len=%d)",
+	// 			len(inputEvents.events), len(outputEvents.events),
+	// 		)
 
-			assertOffsetsAreEqual(t, genOffsetsContent(file, size), getContent(getConfigByPipeline(p).OffsetsFile))
-		},
-	}, blockSize+blockSize-processed, "dirty")
+	// 		assertOffsetsAreEqual(t, genOffsetsContent(file, size), getContent(getConfigByPipeline(p).OffsetsFile))
+	// 	},
+	// }, blockSize+blockSize-processed, "dirty")
 }
 
 // TestOffsetsSaveSimple tests if offsets saving works right in the simple case

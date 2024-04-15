@@ -190,6 +190,8 @@ func (o *offsetDB) parseLine(content string, start string) (string, string, erro
 }
 
 func (o *offsetDB) save(jobs map[pipeline.SourceID]*Job, mu *sync.RWMutex) {
+	logger.Infof("save offsets")
+
 	o.savesTotal.Inc()
 
 	o.mu.Lock()

@@ -31,6 +31,7 @@ type jobProvider struct {
 	offsetDB *offsetDB
 
 	isStarted atomic.Bool
+	isStopped atomic.Bool
 
 	jobs     map[pipeline.SourceID]*Job
 	jobsMu   *sync.RWMutex
@@ -185,6 +186,7 @@ func (jp *jobProvider) stop() {
 	jp.stopMaintenanceCh <- true
 	if jp.config.PersistenceMode_ == persistenceModeAsync {
 		jp.stopSaveOffsetsCh <- true
+		jp.config.PersistenceMode_ = persistenceModeSync
 	}
 
 	jp.watcher.stop()
@@ -194,6 +196,7 @@ func (jp *jobProvider) stop() {
 }
 
 func (jp *jobProvider) commit(event *pipeline.Event) {
+	jp.logger.Infof("commit")
 	streamName := pipeline.StreamName(pipeline.ByteToStringUnsafe(event.StreamNameBytes()))
 
 	jp.jobsMu.RLock()

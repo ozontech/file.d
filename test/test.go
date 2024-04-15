@@ -60,9 +60,12 @@ func startCasePipeline(act func(pipeline *pipeline.Pipeline), out func(event *pi
 
 	outputPlugin.SetOutFn(func(event *pipeline.Event) {
 		x.Dec()
+		logger.Info("out")
 		if out != nil {
 			out(event)
 		}
+		// if x.Load() > 0 {
+		// }
 	})
 	p.Start()
 
