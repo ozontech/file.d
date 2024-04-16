@@ -20,6 +20,9 @@ builds:
     mod_timestamp: '{{ .CommitTimestamp }}'
     flags:
       - -trimpath
+      - -pgo=default.pgo
+    ldflags:
+      - -X github.com/ozontech/file.d/buildinfo.Version={{.Version}}
 nfpms:
   - 
     maintainer: Vitkovskiy Vladimir <vvitkovskiy@ozon.ru>
