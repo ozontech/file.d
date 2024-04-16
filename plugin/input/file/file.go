@@ -204,7 +204,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	if pipelineName, alreadyUsed := offsetFiles[offsetFilePath]; alreadyUsed {
 		p.logger.Fatalf(
 			"offset file %s is already used in pipeline %s",
-			offsetFilePath,
+			p.config.OffsetsFile,
 			pipelineName,
 		)
 	} else {
