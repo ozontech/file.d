@@ -129,6 +129,7 @@ func rotateFile(file string) string {
 func run(testCase *test.Case, eventCount int, opts ...string) {
 	if !test.Opts(opts).Has("dirty") {
 		cleanUp()
+		setupDirs()
 	}
 
 	test.RunCase(testCase, getInputInfo(opts...), eventCount, opts...)
@@ -362,6 +363,7 @@ func TestWatch(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skip test in short mode")
 	}
+
 	iterations := 4
 	eventsPerIteration := 2
 	finalEvent := 1
@@ -429,8 +431,8 @@ func TestReadContinue(t *testing.T) {
 	blockSize := 2000
 	stopAfter := 100
 	processed := 0
-	inputEvents := make([]string, 0)
-	outputEvents := make([]string, 0)
+	inputEvents := make([]string, 0, blockSize*2)
+	outputEvents := make([]string, 0, cap(inputEvents)+stopAfter)
 	file := ""
 	size := 0
 
@@ -454,6 +456,9 @@ func TestReadContinue(t *testing.T) {
 		},
 	}, stopAfter)
 
+	// restart
+	offsetFiles = make(map[string]string)
+
 	run(&test.Case{
 		Prepare: func() {
 		},
@@ -470,9 +475,11 @@ func TestReadContinue(t *testing.T) {
 				outputEvents = append(outputEvents, p.GetEventLogItem(i))
 			}
 
-			for i := range inputEvents {
-				require.Equalf(t, inputEvents[i], outputEvents[i], "wrong event, all events: %v", inputEvents)
-			}
+			require.Equalf(
+				t, inputEvents, outputEvents,
+				"input events not equal output events (input len=%d, output len=%d)",
+				len(inputEvents), len(outputEvents),
+			)
 
 			assertOffsetsAreEqual(t, genOffsetsContent(file, size), getContent(getConfigByPipeline(p).OffsetsFile))
 		},
@@ -928,6 +935,8 @@ func TestRotationRenameWhileNotWorking(t *testing.T) {
 		},
 	}, 2)
 
+	// restart
+	offsetFiles = make(map[string]string)
 	newFile := rotateFile(file)
 
 	run(&test.Case{
@@ -995,6 +1004,8 @@ func TestTruncationSeq(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skip long tests in short mode")
 	}
+	setupDirs()
+	defer cleanUp()
 	p, _, _ := test.NewPipelineMock(nil, "passive")
 	p.SetInput(getInputInfo())
 	p.Start()
