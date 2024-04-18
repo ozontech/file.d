@@ -218,7 +218,7 @@ const (
 	// >           op: bytes_len_cmp
 	// >           field: pod_id
 	// >           cmp_op: lt
-	// >           values: [5]
+	// >           values: ["5"]
 	// > ```
 	// >
 	// > result:
