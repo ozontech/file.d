@@ -2,6 +2,8 @@ package pipeline
 
 import (
 	"bytes"
+	"fmt"
+	"regexp"
 	"text/template"
 
 	"github.com/ozontech/file.d/cfg"
@@ -10,31 +12,41 @@ import (
 type MetaData map[string]string
 
 type MetaTemplater struct {
-	templates map[string]*template.Template
+	templates    map[string]*template.Template
+	singleValues map[string]string
 }
 
 func NewMetaTemplater(templates cfg.MetaTemplates) *MetaTemplater {
-	compiledTemplates := make(map[string]*template.Template, len(templates))
+	compiledTemplates := make(map[string]*template.Template)
+	singleValues := make(map[string]string)
+	singleValueRegex := regexp.MustCompile(`\{\{\ +\.(\w+)\ +\}\}$`)
+
 	for k, v := range templates {
-		compiledTemplates[k] = template.Must(template.New("").Parse(v))
+		vals := singleValueRegex.FindStringSubmatch(v)
+		if len(vals) > 0 {
+			singleValues[k] = vals[1]
+		} else {
+			compiledTemplates[k] = template.Must(template.New("").Parse(v))
+		}
 	}
 
 	meta := MetaTemplater{
-		templates: compiledTemplates,
+		templates:    compiledTemplates,
+		singleValues: singleValues,
 	}
 
 	return &meta
 }
 
 type Data interface {
-	GetData() map[string]interface{}
+	GetData() map[string]any
 }
 
 func (m *MetaTemplater) Render(data Data) (MetaData, error) {
 	values := data.GetData()
 	meta := MetaData{}
+	var tplOutput bytes.Buffer
 	for k, tmpl := range m.templates {
-		var tplOutput bytes.Buffer
 		err := tmpl.Execute(&tplOutput, values)
 		if err != nil {
 			return meta, err
@@ -42,5 +54,12 @@ func (m *MetaTemplater) Render(data Data) (MetaData, error) {
 			meta[k] = tplOutput.String()
 		}
 	}
+
+	for k, tmpl := range m.singleValues {
+		if val, ok := values[tmpl]; ok {
+			meta[k] = fmt.Sprintf("%v", val)
+		}
+	}
+
 	return meta, nil
 }

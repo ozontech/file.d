@@ -138,6 +138,7 @@ Path or content of a PEM-encoded CA file.
 Meta params
 
 Add meta information to an event (look at Meta params)
+Use [go-template](https://pkg.go.dev/text/template) syntax
 
 Example: ```topic: '{{ .topic }}'```
 

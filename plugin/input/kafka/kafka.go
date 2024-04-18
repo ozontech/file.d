@@ -168,6 +168,7 @@ type Config struct {
 	// > Meta params
 	// >
 	// > Add meta information to an event (look at Meta params)
+	// > Use [go-template](https://pkg.go.dev/text/template) syntax
 	// >
 	// > Example: ```topic: '{{ .topic }}'```
 	Meta cfg.MetaTemplates `json:"meta"` // *
