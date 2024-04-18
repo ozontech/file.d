@@ -97,6 +97,7 @@ You can use 'warn' log level for logging authorizations.
 Meta params
 
 Add meta information to an event (look at Meta params)
+Use [go-template](https://pkg.go.dev/text/template) syntax
 
 Example: ```user_agent: '{{ index (index .request.Header "User-Agent") 0}}'```
 
