@@ -29,21 +29,6 @@ But update events don't work with symlinks, so watcher also periodically manuall
 
 > ⚠ Use add_file_name plugin if you want to add filename to events.
 
-**Reading docker container log files:**
-```yaml
-pipelines:
-  example_docker_pipeline:
-    input:
-        type: file
-        paths:
-          include:
-            - '/var/lib/docker/containers/**\/*-json.log' # remove \
-          exclude:
-            - '/var/lib/docker/containers/19aa5027343f4*\/*-json.log' # remove \
-        offsets_file: /data/offsets.yaml
-        persistence_mode: async
-```
-
 [More details...](plugin/input/file/README.md)
 ## http
 Reads events from HTTP requests with the body delimited by a new line.

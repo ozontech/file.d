@@ -27,33 +27,20 @@ pipelines:
         type: file
         paths:
           include:
-            - '/var/lib/docker/containers/**\/*-json.log' # remove \
+            - '/var/lib/docker/containers/**/*-json.log'
           exclude:
-            - '/var/lib/docker/containers/19aa5027343f4*\/*-json.log' # remove \
+            - '/var/lib/docker/containers/19aa5027343f4*/*-json.log'
         offsets_file: /data/offsets.yaml
         persistence_mode: async
 ```
 
 ### Config params
-**`watching_dir`** *`string`* 
-
-List of included pathes
-*`string`* 
-
-List of excluded pathes
-*`string`* 
-
-The source directory to watch for files to process. All subdirectories also will be watched. E.g. if files have
-`/var/my-logs/$YEAR/$MONTH/$DAY/$HOST/$FACILITY-$PROGRAM.log` structure, `watching_dir` should be `/var/my-logs`.
-Also the `filename_pattern`/`dir_pattern` is useful to filter needless files/subdirectories. In the case of using two or more
-different directories, it's recommended to setup separate pipelines for each.
-
-<br>
-
 **`paths`** *`Paths`* 
 
-Paths.
-> Check out [func Glob docs](https://golang.org/pkg/path/filepath/#Glob) for details.
+Set paths in glob format
+
+* `include` *`[]string`*
+* `exclude` *`[]string`*
 
 <br>
 
@@ -61,20 +48,6 @@ Paths.
 
 The filename to store offsets of processed files. Offsets are loaded only on initialization.
 > It's a `yaml` file. You can modify it manually.
-
-<br>
-
-**`filename_pattern`** *`string`* *`default=*`* 
-
-Files that don't meet this pattern will be ignored.
-> Check out [func Glob docs](https://golang.org/pkg/path/filepath/#Glob) for details.
-
-<br>
-
-**`dir_pattern`** *`string`* *`default=*`* 
-
-Dirs that don't meet this pattern will be ignored.
-> Check out [func Glob docs](https://golang.org/pkg/path/filepath/#Glob) for details.
 
 <br>
 
@@ -160,6 +133,29 @@ Add meta information to an event (look at Meta params)
 Use [go-template](https://pkg.go.dev/text/template) syntax
 
 Example: ```filename: '{{ .filename }}'```
+
+<br>
+
+**`watching_dir`** **Deprecated format**
+
+The source directory to watch for files to process. All subdirectories also will be watched. E.g. if files have
+`/var/my-logs/$YEAR/$MONTH/$DAY/$HOST/$FACILITY-$PROGRAM.log` structure, `watching_dir` should be `/var/my-logs`.
+Also the `filename_pattern`/`dir_pattern` is useful to filter needless files/subdirectories. In the case of using two or more
+different directories, it's recommended to setup separate pipelines for each.
+
+<br>
+
+**`filename_pattern`** *`string`* *`default=*`* 
+
+Files that don't meet this pattern will be ignored.
+> Check out [func Glob docs](https://golang.org/pkg/path/filepath/#Glob) for details.
+
+<br>
+
+**`dir_pattern`** *`string`* *`default=*`* 
+
+Dirs that don't meet this pattern will be ignored.
+> Check out [func Glob docs](https://golang.org/pkg/path/filepath/#Glob) for details.
 
 <br>
 
