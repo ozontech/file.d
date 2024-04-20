@@ -66,7 +66,7 @@ func DecodePostgres(event *insaneJSON.Root, data []byte) error {
 
 	// client
 	openPos := bytes.IndexByte(data, credentialValueDelimiter)
-	if pos < 0 {
+	if openPos < 0 {
 		return fmt.Errorf("client start is not found")
 	}
 
@@ -80,7 +80,7 @@ func DecodePostgres(event *insaneJSON.Root, data []byte) error {
 
 	// db
 	openPos = bytes.IndexByte(data, credentialValueDelimiter)
-	if pos < 0 {
+	if openPos < 0 {
 		return fmt.Errorf("db start is not found")
 	}
 
@@ -94,7 +94,7 @@ func DecodePostgres(event *insaneJSON.Root, data []byte) error {
 
 	// user
 	openPos = bytes.IndexByte(data, credentialValueDelimiter)
-	if pos < 0 {
+	if openPos < 0 {
 		return fmt.Errorf("user start is not found")
 	}
 
