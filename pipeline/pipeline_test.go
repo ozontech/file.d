@@ -7,6 +7,7 @@ import (
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/plugin/input/fake"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -26,7 +27,6 @@ func getFakeInputInfo() *pipeline.InputPluginInfo {
 }
 
 func TestInUnparsableMessages(t *testing.T) {
-	t.Skip()
 	message := []byte("{wHo Is Json: YoU MeAn SoN oF JoHn???")
 	pipelineSettings := &pipeline.Settings{
 		Capacity:           5,
@@ -44,39 +44,8 @@ func TestInUnparsableMessages(t *testing.T) {
 		seqID := pipe.In(sourceID, "kafka", offset, message, false)
 		require.Equal(t, pipeline.EventSeqIDError, seqID)
 
-		refPipe := reflect.ValueOf(pipe)
-		eventPool := reflect.Indirect(refPipe).FieldByName("eventPool")
-
-		free1slice := reflect.
-			Indirect(
-				reflect.
-					Indirect(eventPool).
-					FieldByName("free1")).
-			Slice(0, pipelineSettings.Capacity)
-		free2slice := reflect.
-			Indirect(
-				reflect.
-					Indirect(eventPool).
-					FieldByName("free2")).
-			Slice(0, pipelineSettings.Capacity)
-
-		for i := 0; i < pipelineSettings.Capacity; i++ {
-			// free1, free2 are []atomic.Bool which underlying v is really uint32
-			// so if v val == uint32(1) event was released.
-			free1idxUint := reflect.
-				Indirect(free1slice.Index(i)).
-				FieldByName("v").
-				FieldByName("v").
-				Uint()
-			require.EqualValues(t, uint32(1), free1idxUint)
-
-			free2idxUint := reflect.
-				Indirect(free2slice.Index(i)).
-				FieldByName("v").
-				FieldByName("v").
-				Uint()
-			require.EqualValues(t, uint32(1), free2idxUint)
-		}
+		eventPool := reflect.ValueOf(pipe).Elem().FieldByName("eventPool").Elem().FieldByName("freeptr")
+		assert.Equal(t, int64(pipelineSettings.Capacity), eventPool.Int()+1)
 	})
 }
 
