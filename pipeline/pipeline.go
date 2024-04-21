@@ -702,7 +702,7 @@ func (p *Pipeline) logChanges(myDeltas *deltas) {
 	if ce := p.logger.Check(zapcore.InfoLevel, "pipeline stats"); ce != nil {
 		inputSize := p.inputSize.Load()
 		inputEvents := p.inputEvents.Load()
-		inUseEvents := p.eventPool.inUseEvents.Load()
+		inUseEvents := p.eventPool.size()
 
 		interval := p.settings.MaintenanceInterval
 		rate := int(myDeltas.deltaInputEvents * float64(time.Second) / float64(interval))
@@ -766,7 +766,7 @@ func (p *Pipeline) maintenance() {
 		p.metricHolder.Maintenance()
 
 		myDeltas := p.incMetrics(inputEvents, inputSize, outputEvents, outputSize, readOps)
-		p.setMetrics(p.eventPool.inUseEvents.Load())
+		p.setMetrics(int64(p.eventPool.size()))
 		p.logChanges(myDeltas)
 	}
 }
