@@ -708,7 +708,7 @@ func NewBytesLengthCmpNode(field string, cmpOp string, cmpValue int) (DoIfNode, 
 	switch typedCmpOp {
 	case cmpOpLess, cmpOpLessOrEqual, cmpOpGreater, cmpOpGreaterOrEqual, cmpOpEqual, cmpOpNotEqual:
 	default:
-		return nil, fmt.Errorf("unknown comparision operation: %s", typedCmpOp)
+		return nil, fmt.Errorf("unknown comparison operation: %s", typedCmpOp)
 	}
 
 	if cmpValue < 0 {
