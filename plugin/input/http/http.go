@@ -537,11 +537,11 @@ func (p *Plugin) putGzipReader(reader *gzip.Reader) {
 func getUserIP(r *http.Request) net.IP {
 	var userIP string
 	switch {
-	case len(r.Header.Get("CF-Connecting-IP")) > 1:
+	case r.Header.Get("CF-Connecting-IP") != "":
 		userIP = r.Header.Get("CF-Connecting-IP")
-	case len(r.Header.Get("X-Forwarded-For")) > 1:
+	case r.Header.Get("X-Forwarded-For") != "":
 		userIP = r.Header.Get("X-Forwarded-For")
-	case len(r.Header.Get("X-Real-IP")) > 1:
+	case r.Header.Get("X-Real-IP") != "":
 		userIP = r.Header.Get("X-Real-IP")
 	default:
 		userIP = r.RemoteAddr
@@ -552,35 +552,24 @@ func getUserIP(r *http.Request) net.IP {
 	return net.ParseIP(userIP)
 }
 
-type MetaInformation struct {
-	// > @3@4@5@6
-	// >
-	// > Login
-	Login string `json:"login"`
-
-	// > @3@4@5@6
-	// >
-	// > Ip address
-	RemoteAddr net.IP `json:"remote_addr"`
-
-	// > @3@4@5@6
-	// >
-	// > Request
-	Request *http.Request `json:"request"`
+type metaInformation struct {
+	login      string
+	remoteAddr net.IP
+	request    *http.Request
 }
 
-func newMetaInformation(login string, ip net.IP, r *http.Request) MetaInformation {
-	return MetaInformation{
-		Login:      login,
-		RemoteAddr: ip,
-		Request:    r,
+func newMetaInformation(login string, ip net.IP, r *http.Request) metaInformation {
+	return metaInformation{
+		login:      login,
+		remoteAddr: ip,
+		request:    r,
 	}
 }
 
-func (m MetaInformation) GetData() map[string]interface{} {
-	return map[string]interface{}{
-		"login":       m.Login,
-		"remote_addr": m.RemoteAddr,
-		"request":     m.Request,
+func (m metaInformation) GetData() map[string]any {
+	return map[string]any{
+		"login":       m.login,
+		"remote_addr": m.remoteAddr,
+		"request":     m.request,
 	}
 }

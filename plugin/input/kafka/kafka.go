@@ -352,24 +352,24 @@ func (p *Plugin) PassEvent(_ *pipeline.Event) bool {
 	return true
 }
 
-type MetaInformation struct {
-	Topic     string
-	Partition int32
-	Offset    int64
+type metaInformation struct {
+	topic     string
+	partition int32
+	offset    int64
 }
 
-func newMetaInformation(message *sarama.ConsumerMessage) MetaInformation {
-	return MetaInformation{
-		Topic:     message.Topic,
-		Partition: message.Partition,
-		Offset:    message.Offset,
+func newMetaInformation(message *sarama.ConsumerMessage) metaInformation {
+	return metaInformation{
+		topic:     message.Topic,
+		partition: message.Partition,
+		offset:    message.Offset,
 	}
 }
 
-func (m MetaInformation) GetData() map[string]interface{} {
-	return map[string]interface{}{
-		"topic":     m.Topic,
-		"partition": m.Partition,
-		"offset":    m.Offset,
+func (m metaInformation) GetData() map[string]any {
+	return map[string]any{
+		"topic":     m.topic,
+		"partition": m.partition,
+		"offset":    m.offset,
 	}
 }
