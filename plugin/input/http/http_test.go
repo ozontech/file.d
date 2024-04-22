@@ -5,6 +5,7 @@ import (
 	"compress/gzip"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -300,13 +301,6 @@ func TestServePartialRequest(t *testing.T) {
 	wg.Wait()
 	p.Stop()
 
-	result := make([]map[string]string, 0, len(outEvents))
-	for i := range outEvents {
-		var value map[string]string
-		json.Unmarshal([]byte(outEvents[i]), &value)
-		result = append(result, value)
-	}
-
 	expectedResult, result := convertToResultMaps(
 		map[string]string{
 			"hello": "world",
@@ -355,7 +349,7 @@ func TestServeChunksContinue(t *testing.T) {
 	require.Equal(t, expectedResult, result)
 }
 
-func convertToResultMaps(expectedValues map[string]string, outEvents []string) ([]map[string]string, []map[string]string) {
+func convertToResultMaps(expectedValues map[string]string, outEvents []string) (string, string) {
 	result := make([]map[string]string, 0, len(outEvents))
 	for i := range outEvents {
 		var value map[string]string
@@ -373,7 +367,7 @@ func convertToResultMaps(expectedValues map[string]string, outEvents []string) (
 		})
 	}
 
-	return expectedResult, result
+	return fmt.Sprint(expectedResult), fmt.Sprint(result)
 }
 
 func TestPluginAuth(t *testing.T) {
