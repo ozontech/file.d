@@ -14,7 +14,6 @@ type MetaData map[string]string
 type MetaTemplater struct {
 	templates    map[string]*template.Template
 	singleValues map[string]string
-	tplOutput    bytes.Buffer
 }
 
 func NewMetaTemplater(templates cfg.MetaTemplates) *MetaTemplater {
@@ -46,14 +45,15 @@ type Data interface {
 func (m *MetaTemplater) Render(data Data) (MetaData, error) {
 	values := data.GetData()
 	meta := MetaData{}
+	var tplOutput bytes.Buffer
 
 	for k, tmpl := range m.templates {
-		m.tplOutput.Reset()
-		err := tmpl.Execute(&m.tplOutput, values)
+		tplOutput.Reset()
+		err := tmpl.Execute(&tplOutput, values)
 		if err != nil {
 			return meta, err
 		} else {
-			meta[k] = m.tplOutput.String()
+			meta[k] = tplOutput.String()
 		}
 	}
 
