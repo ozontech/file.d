@@ -13,6 +13,7 @@ import (
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/pipeline/metadata"
 	"github.com/ozontech/file.d/xtls"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
@@ -108,7 +109,7 @@ type Plugin struct {
 	requestsInProgress    prometheus.Gauge
 	processBulkSeconds    prometheus.Observer
 
-	metaRegistry *pipeline.MetaTemplater
+	metaTemplater *metadata.MetaTemplater
 }
 
 type EmulateMode byte
@@ -201,7 +202,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	p.params = params
 	p.logger = params.Logger.Desugar()
 	p.registerMetrics(params.MetricCtl)
-	p.metaRegistry = pipeline.NewMetaTemplater(p.config.Meta)
+	p.metaTemplater = metadata.NewMetaTemplater(p.config.Meta)
 
 	if p.config.Auth.Strategy_ == StrategyBearer {
 		p.nameByBearerToken = make(map[string]string, len(p.config.Auth.Secrets))
@@ -308,10 +309,10 @@ func (p *Plugin) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var metadataInfo pipeline.MetaData
+	var metadataInfo metadata.MetaData
 	var err error
 	if len(p.config.Meta) > 0 {
-		metadataInfo, err = p.metaRegistry.Render(newMetaInformation(login, getUserIP(r), r))
+		metadataInfo, err = p.metaTemplater.Render(newMetaInformation(login, getUserIP(r), r))
 		if err != nil {
 			p.logger.Error("cannot parse meta info", zap.Error(err))
 		}
@@ -369,7 +370,7 @@ func (p *Plugin) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (p *Plugin) serveBulk(w http.ResponseWriter, r *http.Request, meta pipeline.MetaData) {
+func (p *Plugin) serveBulk(w http.ResponseWriter, r *http.Request, meta metadata.MetaData) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "", http.StatusMethodNotAllowed)
 		return
@@ -405,7 +406,7 @@ func (p *Plugin) serveBulk(w http.ResponseWriter, r *http.Request, meta pipeline
 	p.processBulkSeconds.Observe(time.Since(start).Seconds())
 }
 
-func (p *Plugin) processBulk(r io.Reader, meta pipeline.MetaData) error {
+func (p *Plugin) processBulk(r io.Reader, meta metadata.MetaData) error {
 	readBuff := p.newReadBuff()
 	eventBuff := p.newEventBuffs()
 	defer p.readBuffs.Put(&readBuff)
@@ -434,7 +435,7 @@ func (p *Plugin) processBulk(r io.Reader, meta pipeline.MetaData) error {
 	return nil
 }
 
-func (p *Plugin) processChunk(sourceID pipeline.SourceID, readBuff []byte, eventBuff []byte, isLastChunk bool, meta pipeline.MetaData) []byte {
+func (p *Plugin) processChunk(sourceID pipeline.SourceID, readBuff []byte, eventBuff []byte, isLastChunk bool, meta metadata.MetaData) []byte {
 	pos := 0   // current position
 	nlPos := 0 // new line position
 	for pos < len(readBuff) {

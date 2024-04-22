@@ -10,6 +10,7 @@ import (
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/pipeline/metadata"
 	"github.com/ozontech/file.d/xscram"
 	"github.com/ozontech/file.d/xtls"
 	"github.com/prometheus/client_golang/prometheus"
@@ -60,7 +61,7 @@ type Plugin struct {
 	commitErrorsMetric  prometheus.Counter
 	consumeErrorsMetric prometheus.Counter
 
-	metaRegistry *pipeline.MetaTemplater
+	metaTemplater *metadata.MetaTemplater
 }
 
 type OffsetType byte
@@ -190,7 +191,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	p.logger = params.Logger
 	p.config = config.(*Config)
 	p.registerMetrics(params.MetricCtl)
-	p.metaRegistry = pipeline.NewMetaTemplater(p.config.Meta)
+	p.metaTemplater = metadata.NewMetaTemplater(p.config.Meta)
 
 	p.idByTopic = make(map[string]int, len(p.config.Topics))
 	for i, topic := range p.config.Topics {
@@ -321,10 +322,10 @@ func (p *Plugin) ConsumeClaim(_ sarama.ConsumerGroupSession, claim sarama.Consum
 	for message := range claim.Messages() {
 		sourceID := assembleSourceID(p.idByTopic[message.Topic], message.Partition)
 
-		var metadataInfo pipeline.MetaData
+		var metadataInfo metadata.MetaData
 		var err error
 		if len(p.config.Meta) > 0 {
-			metadataInfo, err = p.metaRegistry.Render(newMetaInformation(message))
+			metadataInfo, err = p.metaTemplater.Render(newMetaInformation(message))
 			if err != nil {
 				p.logger.Errorf("can't render meta data: %s", err.Error())
 			}
