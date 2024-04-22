@@ -50,6 +50,7 @@ type Data interface {
 func (m *MetaTemplater) Render(data Data) (MetaData, error) {
 	values := data.GetData()
 	meta := MetaData{}
+	var tplOutput bytes.Buffer
 
 	if len(m.templates) > 0 {
 		tplOutput := m.poolBuffer.Get().(*bytes.Buffer)
