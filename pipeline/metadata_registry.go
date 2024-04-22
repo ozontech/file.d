@@ -14,16 +14,17 @@ type MetaData map[string]string
 type MetaTemplater struct {
 	templates    map[string]*template.Template
 	singleValues map[string]string
+	tplOutput    bytes.Buffer
 }
 
 func NewMetaTemplater(templates cfg.MetaTemplates) *MetaTemplater {
 	compiledTemplates := make(map[string]*template.Template)
 	singleValues := make(map[string]string)
-	singleValueRegex := regexp.MustCompile(`\{\{\ +\.(\w+)\ +\}\}$`)
+	singleValueRegex := regexp.MustCompile(`^\{\{\ +\.(\w+)\ +\}\}$`)
 
 	for k, v := range templates {
 		vals := singleValueRegex.FindStringSubmatch(v)
-		if len(vals) > 0 {
+		if len(vals) > 1 {
 			singleValues[k] = vals[1]
 		} else {
 			compiledTemplates[k] = template.Must(template.New("").Parse(v))
@@ -45,13 +46,14 @@ type Data interface {
 func (m *MetaTemplater) Render(data Data) (MetaData, error) {
 	values := data.GetData()
 	meta := MetaData{}
-	var tplOutput bytes.Buffer
+
 	for k, tmpl := range m.templates {
-		err := tmpl.Execute(&tplOutput, values)
+		m.tplOutput.Reset()
+		err := tmpl.Execute(&m.tplOutput, values)
 		if err != nil {
 			return meta, err
 		} else {
-			meta[k] = tplOutput.String()
+			meta[k] = m.tplOutput.String()
 		}
 	}
 
