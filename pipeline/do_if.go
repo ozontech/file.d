@@ -22,6 +22,8 @@ const (
 	// > Type of node where matching rules for fields are stored.
 	DoIfNodeFieldOp // *
 
+	DoIfBytesLengthCmpOp
+
 	// > Type of node where logical rules for applying other rules are stored.
 	DoIfNodeLogicalOp // *
 )
@@ -675,4 +677,96 @@ func (c *DoIfChecker) Check(eventRoot *insaneJSON.Root) bool {
 		return false
 	}
 	return c.root.Check(eventRoot)
+}
+
+type comparisonOperation string
+
+const (
+	cmpOpLess           comparisonOperation = "lt"
+	cmpOpLessOrEqual    comparisonOperation = "le"
+	cmpOpGreater        comparisonOperation = "gt"
+	cmpOpGreaterOrEqual comparisonOperation = "ge"
+	cmpOpEqual          comparisonOperation = "eq"
+	cmpOpNotEqual       comparisonOperation = "ne"
+)
+
+type doIfBytesLengthCmpNode struct {
+	fieldPath    []string
+	fieldPathStr string
+
+	cmpOp    comparisonOperation
+	cmpValue int
+}
+
+func NewBytesLengthCmpNode(field string, cmpOp string, cmpValue int) (DoIfNode, error) {
+	if field == "" {
+		return nil, errors.New("field is not specified")
+	}
+	fieldPath := cfg.ParseFieldSelector(field)
+
+	typedCmpOp := comparisonOperation(cmpOp)
+	switch typedCmpOp {
+	case cmpOpLess, cmpOpLessOrEqual, cmpOpGreater, cmpOpGreaterOrEqual, cmpOpEqual, cmpOpNotEqual:
+	default:
+		return nil, fmt.Errorf("unknown comparision operation: %s", typedCmpOp)
+	}
+
+	if cmpValue < 0 {
+		return nil, fmt.Errorf("compare length with negative value: %d", cmpValue)
+	}
+
+	return &doIfBytesLengthCmpNode{
+		fieldPath:    fieldPath,
+		fieldPathStr: field,
+		cmpOp:        typedCmpOp,
+		cmpValue:     cmpValue,
+	}, nil
+}
+
+func (n *doIfBytesLengthCmpNode) Type() DoIfNodeType {
+	return DoIfBytesLengthCmpOp
+}
+
+func (n *doIfBytesLengthCmpNode) Check(eventRoot *insaneJSON.Root) bool {
+	var data []byte
+	node := eventRoot.Dig(n.fieldPath...)
+	if !node.IsNull() {
+		data = node.AsBytes()
+	}
+
+	switch n.cmpOp {
+	case cmpOpLess:
+		return len(data) < n.cmpValue
+	case cmpOpLessOrEqual:
+		return len(data) <= n.cmpValue
+	case cmpOpGreater:
+		return len(data) > n.cmpValue
+	case cmpOpGreaterOrEqual:
+		return len(data) >= n.cmpValue
+	case cmpOpEqual:
+		return len(data) == n.cmpValue
+	case cmpOpNotEqual:
+		return len(data) != n.cmpValue
+	default:
+		panic("invalid cmp op")
+	}
+}
+
+func (n *doIfBytesLengthCmpNode) isEqualTo(n2 DoIfNode, _ int) error {
+	n2Explicit, ok := n2.(*doIfBytesLengthCmpNode)
+	if !ok {
+		return errors.New("nodes have different types expected: bytesLengthCmpNode")
+	}
+
+	if n.cmpOp != n2Explicit.cmpOp {
+		return fmt.Errorf("nodes have different op expected: %q", n.cmpOp)
+	}
+
+	if n.fieldPathStr != n2Explicit.fieldPathStr || slices.Compare(n.fieldPath, n2Explicit.fieldPath) != 0 {
+		return fmt.Errorf("nodes have different fieldPathStr expected: fieldPathStr=%q fieldPath=%v",
+			n.fieldPathStr, n.fieldPath,
+		)
+	}
+
+	return nil
 }
