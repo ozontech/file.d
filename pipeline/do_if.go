@@ -735,7 +735,7 @@ They denote corresponding comparison operations.
 | `ne` | `!=` |
 }*/
 
-type doIfBytesLengthCmpNode struct {
+type doIfByteLengthCmpNode struct {
 	fieldPath    []string
 	fieldPathStr string
 
@@ -743,7 +743,7 @@ type doIfBytesLengthCmpNode struct {
 	cmpValue int
 }
 
-func NewBytesLengthCmpNode(field string, cmpOp string, cmpValue int) (DoIfNode, error) {
+func NewByteLengthCmpNode(field string, cmpOp string, cmpValue int) (DoIfNode, error) {
 	if field == "" {
 		return nil, errors.New("field is not specified")
 	}
@@ -760,7 +760,7 @@ func NewBytesLengthCmpNode(field string, cmpOp string, cmpValue int) (DoIfNode, 
 		return nil, fmt.Errorf("compare length with negative value: %d", cmpValue)
 	}
 
-	return &doIfBytesLengthCmpNode{
+	return &doIfByteLengthCmpNode{
 		fieldPath:    fieldPath,
 		fieldPathStr: field,
 		cmpOp:        typedCmpOp,
@@ -768,11 +768,11 @@ func NewBytesLengthCmpNode(field string, cmpOp string, cmpValue int) (DoIfNode, 
 	}, nil
 }
 
-func (n *doIfBytesLengthCmpNode) Type() DoIfNodeType {
+func (n *doIfByteLengthCmpNode) Type() DoIfNodeType {
 	return DoIfNodeByteLenCmpOp
 }
 
-func (n *doIfBytesLengthCmpNode) Check(eventRoot *insaneJSON.Root) bool {
+func (n *doIfByteLengthCmpNode) Check(eventRoot *insaneJSON.Root) bool {
 	var data []byte
 	node := eventRoot.Dig(n.fieldPath...)
 	if !node.IsNull() {
@@ -797,8 +797,8 @@ func (n *doIfBytesLengthCmpNode) Check(eventRoot *insaneJSON.Root) bool {
 	}
 }
 
-func (n *doIfBytesLengthCmpNode) isEqualTo(n2 DoIfNode, _ int) error {
-	n2Explicit, ok := n2.(*doIfBytesLengthCmpNode)
+func (n *doIfByteLengthCmpNode) isEqualTo(n2 DoIfNode, _ int) error {
+	n2Explicit, ok := n2.(*doIfByteLengthCmpNode)
 	if !ok {
 		return errors.New("nodes have different types expected: bytesLengthCmpNode")
 	}

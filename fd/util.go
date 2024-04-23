@@ -261,7 +261,7 @@ const (
 	fieldNameCmpValue = "value"
 )
 
-func extractBytesLengthCmpOpNode(_ string, jsonNode *simplejson.Json) (pipeline.DoIfNode, error) {
+func extractByteLengthCmpOpNode(_ string, jsonNode *simplejson.Json) (pipeline.DoIfNode, error) {
 	fieldPathNode, has := jsonNode.CheckGet(fieldNameField)
 	if !has {
 		return nil, noRequiredFieldError(fieldNameField)
@@ -289,7 +289,7 @@ func extractBytesLengthCmpOpNode(_ string, jsonNode *simplejson.Json) (pipeline.
 		return nil, err
 	}
 
-	result, err := pipeline.NewBytesLengthCmpNode(fieldPath, cmpOp, cmpValue)
+	result, err := pipeline.NewByteLengthCmpNode(fieldPath, cmpOp, cmpValue)
 	if err != nil {
 		return nil, fmt.Errorf("failed to init bytes length cmp op: %w", err)
 	}
@@ -328,7 +328,7 @@ func extractDoIfNode(jsonNode *simplejson.Json) (pipeline.DoIfNode, error) {
 	} else if _, has := doIfFieldOpNodes[opName]; has {
 		return extractFieldOpNode(opName, jsonNode)
 	} else if _, has := doIfBytesLengthCmpNodes[opName]; has {
-		return extractBytesLengthCmpOpNode(opName, jsonNode)
+		return extractByteLengthCmpOpNode(opName, jsonNode)
 	}
 	return nil, fmt.Errorf("unknown op %q", opName)
 }
