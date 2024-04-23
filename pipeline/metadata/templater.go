@@ -50,16 +50,19 @@ type Data interface {
 func (m *MetaTemplater) Render(data Data) (MetaData, error) {
 	values := data.GetData()
 	meta := MetaData{}
-	tplOutput := m.poolBuffer.Get().(*bytes.Buffer)
-	defer m.poolBuffer.Put(tplOutput)
 
-	for k, tmpl := range m.templates {
-		tplOutput.Reset()
-		err := tmpl.Execute(tplOutput, values)
-		if err != nil {
-			return meta, err
-		} else {
-			meta[k] = tplOutput.String()
+	if len(m.templates) > 0 {
+		tplOutput := m.poolBuffer.Get().(*bytes.Buffer)
+		defer m.poolBuffer.Put(tplOutput)
+
+		for k, tmpl := range m.templates {
+			tplOutput.Reset()
+			err := tmpl.Execute(tplOutput, values)
+			if err != nil {
+				return meta, err
+			} else {
+				meta[k] = tplOutput.String()
+			}
 		}
 	}
 
