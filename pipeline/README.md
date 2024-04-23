@@ -117,6 +117,10 @@ the chain of Match func calls are performed across the whole tree.
 
 <br>
 
+**`ByteLenCmpOp`** Type of node where matching rules for byte lengths of fields are stored.
+
+<br>
+
 **`LogicalOp`** Type of node where logical rules for applying other rules are stored.
 
 <br>
@@ -387,5 +391,48 @@ result:
 
 <br>
 
+
+### Byte length comparison op node
+DoIf byte length comparison op node is considered to always be a leaf in the DoIf tree like DoIf field op node.
+It contains operation that compares field length in bytes with certain value.
+
+Params:
+  - `op` - must be `byte_len_cmp`. Required.
+  - `field` - name of the field to apply operation. Required.
+  - `cmp_op` - comparison operation name (see below). Required.
+  - `value` - integer value to compare length with. Required non-negative.
+
+Example:
+```yaml
+pipelines:
+  test:
+    actions:
+      - type: discard
+        do_if:
+          op: byte_len_cmp
+          field: pod_id
+          cmp_op: lt
+          value: 5
+```
+
+result:
+```
+{"pod_id":""}      # discarded
+{"pod_id":123}     # discarded
+{"pod_id":12345}   # not discarded
+{"pod_id":123456}  # not discarded
+```
+
+Possible values of field 'cmp_op': `lt`, `le`, `gt`, `ge`, `eq`, `ne`.
+They denote corresponding comparison operations.
+
+| Name | Op |
+|------|----|
+| `lt` | `<` |
+| `le` | `<=` |
+| `gt` | `>` |
+| `ge` | `>=` |
+| `eq` | `==` |
+| `ne` | `!=` |
 
 <br>*Generated using [__insane-doc__](https://github.com/vitkovskii/insane-doc)*

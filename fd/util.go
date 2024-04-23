@@ -206,7 +206,7 @@ var (
 		"regex":    struct{}{},
 	}
 	doIfBytesLengthCmpNodes = map[string]struct{}{
-		"bytes_len_cmp": struct{}{},
+		"byte_len_cmp": struct{}{},
 	}
 )
 

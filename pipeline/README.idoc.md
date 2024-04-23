@@ -22,3 +22,6 @@ the chain of Match func calls are performed across the whole tree.
 
 ### Logical operations
 @do-if-logical-op|description
+
+### Byte length comparison op node
+@do-if-byte-len-cmp-op-node
