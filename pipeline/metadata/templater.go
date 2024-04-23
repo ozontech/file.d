@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"regexp"
+	"sync"
 	"text/template"
 
 	"github.com/ozontech/file.d/cfg"
@@ -14,7 +15,7 @@ type MetaData map[string]string
 type MetaTemplater struct {
 	templates    map[string]*template.Template
 	singleValues map[string]string
-	tplOutput    bytes.Buffer
+	poolBuffer   sync.Pool
 }
 
 func NewMetaTemplater(templates cfg.MetaTemplates) *MetaTemplater {
@@ -34,6 +35,9 @@ func NewMetaTemplater(templates cfg.MetaTemplates) *MetaTemplater {
 	meta := MetaTemplater{
 		templates:    compiledTemplates,
 		singleValues: singleValues,
+		poolBuffer: sync.Pool{
+			New: func() interface{} { return new(bytes.Buffer) },
+		},
 	}
 
 	return &meta
@@ -46,14 +50,16 @@ type Data interface {
 func (m *MetaTemplater) Render(data Data) (MetaData, error) {
 	values := data.GetData()
 	meta := MetaData{}
+	tplOutput := m.poolBuffer.Get().(*bytes.Buffer)
+	defer m.poolBuffer.Put(tplOutput)
 
 	for k, tmpl := range m.templates {
-		m.tplOutput.Reset()
-		err := tmpl.Execute(&m.tplOutput, values)
+		tplOutput.Reset()
+		err := tmpl.Execute(tplOutput, values)
 		if err != nil {
 			return meta, err
 		} else {
-			meta[k] = m.tplOutput.String()
+			meta[k] = tplOutput.String()
 		}
 	}
 
