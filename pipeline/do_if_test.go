@@ -99,6 +99,15 @@ func checkDoIfNode(t *testing.T, want, got DoIfNode) {
 		for i := 0; i < len(wantNode.operands); i++ {
 			checkDoIfNode(t, wantNode.operands[i], gotNode.operands[i])
 		}
+	case DoIfNodeByteLenCmpOp:
+		wantNode := want.(*doIfByteLengthCmpNode)
+		gotNode := got.(*doIfByteLengthCmpNode)
+		assert.Equal(t, wantNode.cmpOp, gotNode.cmpOp)
+		assert.Equal(t, wantNode.cmpValue, gotNode.cmpValue)
+		assert.Equal(t, 0, slices.Compare[[]string](wantNode.fieldPath, gotNode.fieldPath))
+		assert.Equal(t, wantNode.fieldPathStr, gotNode.fieldPathStr)
+	default:
+		t.Error("unknown node type")
 	}
 }
 
@@ -228,7 +237,7 @@ func TestBuildDoIfNodes(t *testing.T) {
 			},
 		},
 		{
-			name: "ok_bytes_len_cmp_op_node",
+			name: "ok_byte_len_cmp_op_node",
 			tree: treeNode{
 				byteLenCmpOp: "lt",
 				fieldName:    "pod",
@@ -238,7 +247,7 @@ func TestBuildDoIfNodes(t *testing.T) {
 				fieldPath:    []string{"pod"},
 				fieldPathStr: "pod",
 				cmpOp:        "lt",
-				cmpValue:     0,
+				cmpValue:     100,
 			},
 		},
 		{
@@ -698,11 +707,16 @@ func TestCheck(t *testing.T) {
 }
 
 func TestDoIfNodeIsEqual(t *testing.T) {
-	singleNode := treeNode{
+	singleNode1 := treeNode{
 		fieldOp:       "equal",
 		fieldName:     "service",
 		caseSensitive: true,
 		values:        [][]byte{[]byte("test-1"), []byte("test-2")},
+	}
+	singleNode2 := treeNode{
+		byteLenCmpOp: "lt",
+		fieldName:    "msg",
+		cmpValue:     100,
 	}
 	twoNodes := treeNode{
 		logicalOp: "not",
@@ -732,6 +746,11 @@ func TestDoIfNodeIsEqual(t *testing.T) {
 						fieldName:     "pod",
 						caseSensitive: false,
 						values:        [][]byte{[]byte("pod-1"), []byte("pod-2")},
+					},
+					{
+						byteLenCmpOp: "lt",
+						fieldName:    "msg",
+						cmpValue:     100,
 					},
 					{
 						logicalOp: "and",
@@ -768,8 +787,14 @@ func TestDoIfNodeIsEqual(t *testing.T) {
 	}{
 		{
 			name:    "equal_single_node",
-			t1:      singleNode,
-			t2:      singleNode,
+			t1:      singleNode1,
+			t2:      singleNode1,
+			wantErr: false,
+		},
+		{
+			name:    "equal_byte_len_cmp_node",
+			t1:      singleNode2,
+			t2:      singleNode2,
 			wantErr: false,
 		},
 		{
@@ -785,24 +810,21 @@ func TestDoIfNodeIsEqual(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "not_equal_type_mismatch",
-			t1: treeNode{
-				fieldOp:       "equal",
-				fieldName:     "service",
-				caseSensitive: false,
-				values:        [][]byte{nil},
-			},
-			t2: treeNode{
-				logicalOp: "not",
-				operands: []treeNode{
-					{
-						fieldOp:       "equal",
-						fieldName:     "service",
-						caseSensitive: false,
-						values:        [][]byte{nil},
-					},
-				},
-			},
+			name:    "not_equal_type_mismatch_1",
+			t1:      singleNode1,
+			t2:      singleNode2,
+			wantErr: true,
+		},
+		{
+			name:    "not_equal_type_mismatch_2",
+			t1:      singleNode1,
+			t2:      multiNodes,
+			wantErr: true,
+		},
+		{
+			name:    "not_equal_type_mismatch_3",
+			t1:      singleNode2,
+			t2:      multiNodes,
 			wantErr: true,
 		},
 		{
@@ -1010,6 +1032,48 @@ func TestDoIfNodeIsEqual(t *testing.T) {
 				fieldName:     "service",
 				caseSensitive: true,
 				values:        [][]byte{[]byte("test-1")},
+			},
+			wantErr: true,
+		},
+		{
+			name: "not_equal_byte_len_cmp_op_mismatch",
+			t1: treeNode{
+				byteLenCmpOp: "lt",
+				fieldName:    "msg",
+				cmpValue:     100,
+			},
+			t2: treeNode{
+				byteLenCmpOp: "gt",
+				fieldName:    "msg",
+				cmpValue:     100,
+			},
+			wantErr: true,
+		},
+		{
+			name: "not_equal_byte_len_cmp_op_field_mismatch",
+			t1: treeNode{
+				byteLenCmpOp: "lt",
+				fieldName:    "msg",
+				cmpValue:     100,
+			},
+			t2: treeNode{
+				byteLenCmpOp: "lt",
+				fieldName:    "pod",
+				cmpValue:     100,
+			},
+			wantErr: true,
+		},
+		{
+			name: "not_equal_byte_len_cmp_op_value_mismatch",
+			t1: treeNode{
+				byteLenCmpOp: "lt",
+				fieldName:    "msg",
+				cmpValue:     100,
+			},
+			t2: treeNode{
+				byteLenCmpOp: "lt",
+				fieldName:    "msg",
+				cmpValue:     200,
 			},
 			wantErr: true,
 		},

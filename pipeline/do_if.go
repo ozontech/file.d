@@ -807,6 +807,10 @@ func (n *doIfByteLengthCmpNode) isEqualTo(n2 DoIfNode, _ int) error {
 		return fmt.Errorf("nodes have different op expected: %q", n.cmpOp)
 	}
 
+	if n.cmpValue != n2Explicit.cmpValue {
+		return fmt.Errorf("nodes have different cmp values: %d", n.cmpValue)
+	}
+
 	if n.fieldPathStr != n2Explicit.fieldPathStr || slices.Compare(n.fieldPath, n2Explicit.fieldPath) != 0 {
 		return fmt.Errorf("nodes have different fieldPathStr expected: fieldPathStr=%q fieldPath=%v",
 			n.fieldPathStr, n.fieldPath,
