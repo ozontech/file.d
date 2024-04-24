@@ -228,12 +228,34 @@ func TestBuildDoIfNodes(t *testing.T) {
 			},
 		},
 		{
+			name: "ok_bytes_len_cmp_op_node",
+			tree: treeNode{
+				byteLenCmpOp: "lt",
+				fieldName:    "pod",
+				cmpValue:     100,
+			},
+			want: &doIfByteLengthCmpNode{
+				fieldPath:    []string{"pod"},
+				fieldPathStr: "pod",
+				cmpOp:        "lt",
+				cmpValue:     0,
+			},
+		},
+		{
 			name: "err_field_op_node_empty_field",
 			tree: treeNode{
 				fieldOp: "equal",
 			},
 			wantErr: true,
 		},
+		{
+			name: "err_byte_len_cmp_op_node_empty_field",
+			tree: treeNode{
+				byteLenCmpOp: "lt",
+			},
+			wantErr: true,
+		},
+
 		{
 			name: "err_field_op_node_empty_values",
 			tree: treeNode{
@@ -257,6 +279,24 @@ func TestBuildDoIfNodes(t *testing.T) {
 				fieldOp:   "noop",
 				fieldName: "pod",
 				values:    [][]byte{[]byte(`test`)},
+			},
+			wantErr: true,
+		},
+		{
+			name: "err_byte_len_op_node_invalid_op_type",
+			tree: treeNode{
+				byteLenCmpOp: "no-op",
+				fieldName:    "pod",
+				cmpValue:     100,
+			},
+			wantErr: true,
+		},
+		{
+			name: "err_byte_len_op_node_negative_cmp_value",
+			tree: treeNode{
+				byteLenCmpOp: "lt",
+				fieldName:    "pod",
+				cmpValue:     -1,
 			},
 			wantErr: true,
 		},
