@@ -19,18 +19,22 @@ type treeNode struct {
 
 	logicalOp string
 	operands  []treeNode
+
+	byteLenCmpOp string
+	cmpValue     int
 }
 
 // nolint:gocritic
 func buildTree(node treeNode) (DoIfNode, error) {
-	if node.fieldOp != "" {
+	switch {
+	case node.fieldOp != "":
 		return NewFieldOpNode(
 			node.fieldOp,
 			node.fieldName,
 			node.caseSensitive,
 			node.values,
 		)
-	} else if node.logicalOp != "" {
+	case node.logicalOp != "":
 		operands := make([]DoIfNode, 0)
 		for _, operandNode := range node.operands {
 			operand, err := buildTree(operandNode)
@@ -43,8 +47,11 @@ func buildTree(node treeNode) (DoIfNode, error) {
 			node.logicalOp,
 			operands,
 		)
+	case node.byteLenCmpOp != "":
+		return NewByteLengthCmpNode(node.fieldName, node.byteLenCmpOp, node.cmpValue)
+	default:
+		return nil, errors.New("unknown type of node")
 	}
-	return nil, errors.New("unknown type of node")
 }
 
 func checkDoIfNode(t *testing.T, want, got DoIfNode) {
@@ -559,6 +566,66 @@ func TestCheck(t *testing.T) {
 				{`{"pod":"my-test-2","test-field":null}`, true},
 				{`{"pod":"my-test-3","test-field":""}`, true},
 				{`{"pod":"my-TEST-2","test-field":"non-empty"}`, false},
+			},
+		},
+		{
+			name: "ok_byte_len_cmp_lt",
+			tree: treeNode{
+				byteLenCmpOp: "lt",
+				fieldName:    "msg",
+				cmpValue:     4,
+			},
+			data: []argsResp{
+				{`{"msg":""}`, true},
+				{`{"msg":1}`, true},
+				{`{"msg":12}`, true},
+				{`{"msg":123}`, true},
+				{`{"msg":1234}`, false},
+				{`{"msg":12345}`, false},
+				{`{"msg":123456}`, false},
+			},
+		},
+		{
+			name: "ok_byte_len_cmp_ge",
+			tree: treeNode{
+				byteLenCmpOp: "ge",
+				fieldName:    "msg",
+				cmpValue:     4,
+			},
+			data: []argsResp{
+				{`{"msg":""}`, false},
+				{`{"msg":1}`, false},
+				{`{"msg":12}`, false},
+				{`{"msg":123}`, false},
+				{`{"msg":1234}`, true},
+				{`{"msg":12345}`, true},
+				{`{"msg":123456}`, true},
+			},
+		},
+		{
+			name: "ok_byte_len_cmp_eq",
+			tree: treeNode{
+				byteLenCmpOp: "eq",
+				fieldName:    "msg",
+				cmpValue:     2,
+			},
+			data: []argsResp{
+				{`{"msg":1}`, false},
+				{`{"msg":12}`, true},
+				{`{"msg":123}`, false},
+			},
+		},
+		{
+			name: "ok_byte_len_cmp_ne",
+			tree: treeNode{
+				byteLenCmpOp: "ne",
+				fieldName:    "msg",
+				cmpValue:     2,
+			},
+			data: []argsResp{
+				{`{"msg":1}`, true},
+				{`{"msg":12}`, false},
+				{`{"msg":123}`, true},
 			},
 		},
 	}
