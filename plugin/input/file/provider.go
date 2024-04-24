@@ -262,13 +262,19 @@ func (jp *jobProvider) addSymlink(inode inodeID, filename string) {
 }
 
 func (jp *jobProvider) refreshSymlink(symlink string, inode inodeID, isWrite bool) {
-	filename, err := filepath.EvalSymlinks(symlink)
-	if err != nil {
-		jp.logger.Warnf("symlink have been removed %s", symlink)
+	if _, err := os.Lstat(symlink); err != nil {
+		jp.logger.Warnf("symlink has been removed %s: %s", symlink, err.Error())
 
 		jp.symlinksMu.Lock()
 		delete(jp.symlinks, inode)
 		jp.symlinksMu.Unlock()
+		return
+	}
+
+	filename, err := os.Readlink(symlink)
+	if err != nil {
+		jp.logger.Warnf("symlink %s is broken: %s", symlink, err.Error())
+		// for example, in the case of rotating the k8s pod logs symlink will be fixed soon
 		return
 	}
 
