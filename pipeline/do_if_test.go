@@ -105,7 +105,6 @@ func checkDoIfNode(t *testing.T, want, got DoIfNode) {
 		assert.Equal(t, wantNode.cmpOp, gotNode.cmpOp)
 		assert.Equal(t, wantNode.cmpValue, gotNode.cmpValue)
 		assert.Equal(t, 0, slices.Compare[[]string](wantNode.fieldPath, gotNode.fieldPath))
-		assert.Equal(t, wantNode.fieldPathStr, gotNode.fieldPathStr)
 	default:
 		t.Error("unknown node type")
 	}
@@ -244,10 +243,9 @@ func TestBuildDoIfNodes(t *testing.T) {
 				cmpValue:     100,
 			},
 			want: &doIfByteLengthCmpNode{
-				fieldPath:    []string{"pod"},
-				fieldPathStr: "pod",
-				cmpOp:        "lt",
-				cmpValue:     100,
+				fieldPath: []string{"pod"},
+				cmpOp:     "lt",
+				cmpValue:  100,
 			},
 		},
 		{

@@ -736,11 +736,9 @@ They denote corresponding comparison operations.
 }*/
 
 type doIfByteLengthCmpNode struct {
-	fieldPath    []string
-	fieldPathStr string
-
-	cmpOp    comparisonOperation
-	cmpValue int
+	fieldPath []string
+	cmpOp     comparisonOperation
+	cmpValue  int
 }
 
 func NewByteLengthCmpNode(field string, cmpOp string, cmpValue int) (DoIfNode, error) {
@@ -757,14 +755,13 @@ func NewByteLengthCmpNode(field string, cmpOp string, cmpValue int) (DoIfNode, e
 	}
 
 	if cmpValue < 0 {
-		return nil, fmt.Errorf("compare length with negative value: %d", cmpValue)
+		return nil, fmt.Errorf("compare length must be non-negative value: %d", cmpValue)
 	}
 
 	return &doIfByteLengthCmpNode{
-		fieldPath:    fieldPath,
-		fieldPathStr: field,
-		cmpOp:        typedCmpOp,
-		cmpValue:     cmpValue,
+		fieldPath: fieldPath,
+		cmpOp:     typedCmpOp,
+		cmpValue:  cmpValue,
 	}, nil
 }
 
@@ -773,11 +770,7 @@ func (n *doIfByteLengthCmpNode) Type() DoIfNodeType {
 }
 
 func (n *doIfByteLengthCmpNode) Check(eventRoot *insaneJSON.Root) bool {
-	var data []byte
-	node := eventRoot.Dig(n.fieldPath...)
-	if !node.IsNull() {
-		data = node.AsBytes()
-	}
+	data := eventRoot.Dig(n.fieldPath...).AsString()
 
 	switch n.cmpOp {
 	case cmpOpLess:
@@ -811,10 +804,8 @@ func (n *doIfByteLengthCmpNode) isEqualTo(n2 DoIfNode, _ int) error {
 		return fmt.Errorf("nodes have different cmp values: %d", n.cmpValue)
 	}
 
-	if n.fieldPathStr != n2Explicit.fieldPathStr || slices.Compare(n.fieldPath, n2Explicit.fieldPath) != 0 {
-		return fmt.Errorf("nodes have different fieldPathStr expected: fieldPathStr=%q fieldPath=%v",
-			n.fieldPathStr, n.fieldPath,
-		)
+	if slices.Compare(n.fieldPath, n2Explicit.fieldPath) != 0 {
+		return fmt.Errorf("nodes have different fieldPathStr expected: fieldPath=%v", n.fieldPath)
 	}
 
 	return nil
