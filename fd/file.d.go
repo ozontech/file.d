@@ -69,6 +69,7 @@ func (f *FileD) createRegistry() {
 	f.registry = prometheus.NewRegistry()
 	f.registry.MustRegister(prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}))
 	f.registry.MustRegister(prometheus.NewGoCollector())
+	f.registry.MustRegister(newFdsCollector())
 }
 
 func (f *FileD) startPipelines() {

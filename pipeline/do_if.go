@@ -22,6 +22,9 @@ const (
 	// > Type of node where matching rules for fields are stored.
 	DoIfNodeFieldOp // *
 
+	// > Type of node where matching rules for byte lengths of fields are stored.
+	DoIfNodeByteLenCmpOp // *
+
 	// > Type of node where logical rules for applying other rules are stored.
 	DoIfNodeLogicalOp // *
 )
@@ -675,4 +678,132 @@ func (c *DoIfChecker) Check(eventRoot *insaneJSON.Root) bool {
 		return false
 	}
 	return c.root.Check(eventRoot)
+}
+
+type comparisonOperation string
+
+const (
+	cmpOpLess           comparisonOperation = "lt"
+	cmpOpLessOrEqual    comparisonOperation = "le"
+	cmpOpGreater        comparisonOperation = "gt"
+	cmpOpGreaterOrEqual comparisonOperation = "ge"
+	cmpOpEqual          comparisonOperation = "eq"
+	cmpOpNotEqual       comparisonOperation = "ne"
+)
+
+/*{ do-if-byte-len-cmp-op-node
+DoIf byte length comparison op node is considered to always be a leaf in the DoIf tree like DoIf field op node.
+It contains operation that compares field length in bytes with certain value.
+
+Params:
+  - `op` - must be `byte_len_cmp`. Required.
+  - `field` - name of the field to apply operation. Required.
+  - `cmp_op` - comparison operation name (see below). Required.
+  - `value` - integer value to compare length with. Required non-negative.
+
+Example:
+```yaml
+pipelines:
+  test:
+    actions:
+      - type: discard
+        do_if:
+          op: byte_len_cmp
+          field: pod_id
+          cmp_op: lt
+          value: 5
+```
+
+result:
+```
+{"pod_id":""}      # discarded
+{"pod_id":123}     # discarded
+{"pod_id":12345}   # not discarded
+{"pod_id":123456}  # not discarded
+```
+
+Possible values of field 'cmp_op': `lt`, `le`, `gt`, `ge`, `eq`, `ne`.
+They denote corresponding comparison operations.
+
+| Name | Op |
+|------|----|
+| `lt` | `<` |
+| `le` | `<=` |
+| `gt` | `>` |
+| `ge` | `>=` |
+| `eq` | `==` |
+| `ne` | `!=` |
+}*/
+
+type doIfByteLengthCmpNode struct {
+	fieldPath []string
+	cmpOp     comparisonOperation
+	cmpValue  int
+}
+
+func NewByteLengthCmpNode(field string, cmpOp string, cmpValue int) (DoIfNode, error) {
+	fieldPath := cfg.ParseFieldSelector(field)
+
+	typedCmpOp := comparisonOperation(cmpOp)
+	switch typedCmpOp {
+	case cmpOpLess, cmpOpLessOrEqual, cmpOpGreater, cmpOpGreaterOrEqual, cmpOpEqual, cmpOpNotEqual:
+	default:
+		return nil, fmt.Errorf("unknown comparison operation: %s", typedCmpOp)
+	}
+
+	if cmpValue < 0 {
+		return nil, fmt.Errorf("compare length must be non-negative value: %d", cmpValue)
+	}
+
+	return &doIfByteLengthCmpNode{
+		fieldPath: fieldPath,
+		cmpOp:     typedCmpOp,
+		cmpValue:  cmpValue,
+	}, nil
+}
+
+func (n *doIfByteLengthCmpNode) Type() DoIfNodeType {
+	return DoIfNodeByteLenCmpOp
+}
+
+func (n *doIfByteLengthCmpNode) Check(eventRoot *insaneJSON.Root) bool {
+	data := eventRoot.Dig(n.fieldPath...).AsString()
+
+	switch n.cmpOp {
+	case cmpOpLess:
+		return len(data) < n.cmpValue
+	case cmpOpLessOrEqual:
+		return len(data) <= n.cmpValue
+	case cmpOpGreater:
+		return len(data) > n.cmpValue
+	case cmpOpGreaterOrEqual:
+		return len(data) >= n.cmpValue
+	case cmpOpEqual:
+		return len(data) == n.cmpValue
+	case cmpOpNotEqual:
+		return len(data) != n.cmpValue
+	default:
+		panic("invalid cmp op")
+	}
+}
+
+func (n *doIfByteLengthCmpNode) isEqualTo(n2 DoIfNode, _ int) error {
+	n2Explicit, ok := n2.(*doIfByteLengthCmpNode)
+	if !ok {
+		return errors.New("nodes have different types expected: bytesLengthCmpNode")
+	}
+
+	if n.cmpOp != n2Explicit.cmpOp {
+		return fmt.Errorf("nodes have different op expected: %q", n.cmpOp)
+	}
+
+	if n.cmpValue != n2Explicit.cmpValue {
+		return fmt.Errorf("nodes have different cmp values: %d", n.cmpValue)
+	}
+
+	if slices.Compare(n.fieldPath, n2Explicit.fieldPath) != 0 {
+		return fmt.Errorf("nodes have different fieldPathStr expected: fieldPath=%v", n.fieldPath)
+	}
+
+	return nil
 }
