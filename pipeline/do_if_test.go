@@ -249,20 +249,25 @@ func TestBuildDoIfNodes(t *testing.T) {
 			},
 		},
 		{
+			name: "ok_byte_len_cmp_op_node_empty_selector",
+			tree: treeNode{
+				byteLenCmpOp: "lt",
+				fieldName:    "",
+				cmpValue:     100,
+			},
+			want: &doIfByteLengthCmpNode{
+				fieldPath: []string{},
+				cmpOp:     "lt",
+				cmpValue:  100,
+			},
+		},
+		{
 			name: "err_field_op_node_empty_field",
 			tree: treeNode{
 				fieldOp: "equal",
 			},
 			wantErr: true,
 		},
-		{
-			name: "err_byte_len_cmp_op_node_empty_field",
-			tree: treeNode{
-				byteLenCmpOp: "lt",
-			},
-			wantErr: true,
-		},
-
 		{
 			name: "err_field_op_node_empty_values",
 			tree: treeNode{
@@ -647,6 +652,23 @@ func TestCheck(t *testing.T) {
 				{`{"msg":1234}`, true},
 				{`{"msg":12345}`, true},
 				{`{"msg":123456}`, true},
+			},
+		},
+		{
+			name: "ok_byte_len_cmp_lt_empty_selector",
+			tree: treeNode{
+				byteLenCmpOp: "lt",
+				fieldName:    "",
+				cmpValue:     4,
+			},
+			data: []argsResp{
+				{`""`, true},
+				{`1`, true},
+				{`12`, true},
+				{`123`, true},
+				{`1234`, false},
+				{`12345`, false},
+				{`123456`, false},
 			},
 		},
 		{

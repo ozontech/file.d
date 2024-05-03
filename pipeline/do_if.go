@@ -742,9 +742,6 @@ type doIfByteLengthCmpNode struct {
 }
 
 func NewByteLengthCmpNode(field string, cmpOp string, cmpValue int) (DoIfNode, error) {
-	if field == "" {
-		return nil, errors.New("field is not specified")
-	}
 	fieldPath := cfg.ParseFieldSelector(field)
 
 	typedCmpOp := comparisonOperation(cmpOp)
