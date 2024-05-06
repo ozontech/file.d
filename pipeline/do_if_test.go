@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -723,6 +724,68 @@ func TestCheck(t *testing.T) {
 				assert.Equal(t, d.want, got, "invalid result for event %q", d.eventStr)
 			}
 		})
+	}
+}
+
+const userInfoRawJSON = `
+{
+	"name": "jack",
+	"age": 120,
+	"hobbies": ["football", "diving"]
+}`
+
+func dryJSON(rawJSON string) string {
+	s := rawJSON
+
+	s = strings.ReplaceAll(s, " ", "")
+	s = strings.ReplaceAll(s, "\n", "")
+	s = strings.ReplaceAll(s, "\t", "")
+
+	return s
+}
+
+var userInfoDryJSON = dryJSON(userInfoRawJSON)
+
+func TestCheckLenCmpLtObject(t *testing.T) {
+	type TestCase struct {
+		cmpValue int
+		result   bool
+	}
+
+	tests := []TestCase{
+		{
+			cmpValue: len(userInfoDryJSON) - 1,
+			result:   false,
+		},
+		{
+			cmpValue: len(userInfoDryJSON),
+			result:   false,
+		},
+		{
+			cmpValue: len(userInfoDryJSON) + 1,
+			result:   true,
+		},
+		{
+			cmpValue: len(userInfoDryJSON) + 2,
+			result:   true,
+		},
+	}
+
+	rowJSON := fmt.Sprintf(`{"user_info": %s}`, userInfoRawJSON)
+	eventRoot, err := insaneJSON.DecodeString(rowJSON)
+	require.NoError(t, err)
+
+	for index, test := range tests {
+		root, err := buildTree(treeNode{
+			fieldName:    "user_info",
+			byteLenCmpOp: "lt",
+			cmpValue:     test.cmpValue,
+		})
+		require.NoError(t, err)
+
+		checker := NewDoIfChecker(root)
+		result := checker.Check(eventRoot)
+		require.Equal(t, test.result, result, "invalid result; test id: %d", index)
 	}
 }
 

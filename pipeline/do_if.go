@@ -767,7 +767,12 @@ func (n *doIfByteLengthCmpNode) Type() DoIfNodeType {
 }
 
 func (n *doIfByteLengthCmpNode) Check(eventRoot *insaneJSON.Root) bool {
-	data := eventRoot.Dig(n.fieldPath...).AsString()
+	node := eventRoot.Dig(n.fieldPath...)
+	if node == nil {
+		return false
+	}
+
+	data := node.EncodeToByte()
 
 	switch n.cmpOp {
 	case cmpOpLess:
