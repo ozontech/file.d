@@ -736,29 +736,20 @@ They denote corresponding comparison operations.
 }*/
 
 type doIfByteLengthCmpNode struct {
-	fieldPath []string
-	cmpOp     comparisonOperation
-	cmpValue  int
+	fieldPath  []string
+	comparator comparator
 }
 
 func NewByteLengthCmpNode(field string, cmpOp string, cmpValue int) (DoIfNode, error) {
 	fieldPath := cfg.ParseFieldSelector(field)
-
-	typedCmpOp := comparisonOperation(cmpOp)
-	switch typedCmpOp {
-	case cmpOpLess, cmpOpLessOrEqual, cmpOpGreater, cmpOpGreaterOrEqual, cmpOpEqual, cmpOpNotEqual:
-	default:
-		return nil, fmt.Errorf("unknown comparison operation: %s", typedCmpOp)
-	}
-
-	if cmpValue < 0 {
-		return nil, fmt.Errorf("compare length must be non-negative value: %d", cmpValue)
+	cmp, err := newComparator(cmpOp, cmpValue)
+	if err != nil {
+		return nil, err
 	}
 
 	return &doIfByteLengthCmpNode{
-		fieldPath: fieldPath,
-		cmpOp:     typedCmpOp,
-		cmpValue:  cmpValue,
+		fieldPath:  fieldPath,
+		comparator: cmp,
 	}, nil
 }
 
@@ -773,23 +764,7 @@ func (n *doIfByteLengthCmpNode) Check(eventRoot *insaneJSON.Root) bool {
 	}
 
 	data := node.EncodeToByte()
-
-	switch n.cmpOp {
-	case cmpOpLess:
-		return len(data) < n.cmpValue
-	case cmpOpLessOrEqual:
-		return len(data) <= n.cmpValue
-	case cmpOpGreater:
-		return len(data) > n.cmpValue
-	case cmpOpGreaterOrEqual:
-		return len(data) >= n.cmpValue
-	case cmpOpEqual:
-		return len(data) == n.cmpValue
-	case cmpOpNotEqual:
-		return len(data) != n.cmpValue
-	default:
-		panic("invalid cmp op")
-	}
+	return n.comparator.compare(len(data))
 }
 
 func (n *doIfByteLengthCmpNode) isEqualTo(n2 DoIfNode, _ int) error {
@@ -798,16 +773,66 @@ func (n *doIfByteLengthCmpNode) isEqualTo(n2 DoIfNode, _ int) error {
 		return errors.New("nodes have different types expected: bytesLengthCmpNode")
 	}
 
-	if n.cmpOp != n2Explicit.cmpOp {
-		return fmt.Errorf("nodes have different op expected: %q", n.cmpOp)
-	}
-
-	if n.cmpValue != n2Explicit.cmpValue {
-		return fmt.Errorf("nodes have different cmp values: %d", n.cmpValue)
+	if err := n.comparator.isEqualTo(n2Explicit.comparator); err != nil {
+		return err
 	}
 
 	if slices.Compare(n.fieldPath, n2Explicit.fieldPath) != 0 {
 		return fmt.Errorf("nodes have different fieldPathStr expected: fieldPath=%v", n.fieldPath)
+	}
+
+	return nil
+}
+
+type comparator struct {
+	cmpOp    comparisonOperation
+	cmpValue int
+}
+
+func newComparator(cmpOp string, cmpValue int) (comparator, error) {
+	typedCmpOp := comparisonOperation(cmpOp)
+	switch typedCmpOp {
+	case cmpOpLess, cmpOpLessOrEqual, cmpOpGreater, cmpOpGreaterOrEqual, cmpOpEqual, cmpOpNotEqual:
+	default:
+		return comparator{}, fmt.Errorf("unknown comparison operation: %s", typedCmpOp)
+	}
+
+	if cmpValue < 0 {
+		return comparator{}, fmt.Errorf("negative cmp value: %d", cmpValue)
+	}
+
+	return comparator{
+		cmpOp:    typedCmpOp,
+		cmpValue: cmpValue,
+	}, nil
+}
+
+func (c comparator) compare(value int) bool {
+	switch c.cmpOp {
+	case cmpOpLess:
+		return value < c.cmpValue
+	case cmpOpLessOrEqual:
+		return value <= c.cmpValue
+	case cmpOpGreater:
+		return value > c.cmpValue
+	case cmpOpGreaterOrEqual:
+		return value >= c.cmpValue
+	case cmpOpEqual:
+		return value == c.cmpValue
+	case cmpOpNotEqual:
+		return value != c.cmpValue
+	default:
+		panic("invalid cmp op")
+	}
+}
+
+func (c comparator) isEqualTo(other comparator) error {
+	if c.cmpOp != other.cmpOp {
+		return fmt.Errorf("unequal cmp operations: %s != %s", c.cmpOp, other.cmpOp)
+	}
+
+	if c.cmpValue != other.cmpValue {
+		return fmt.Errorf("unequal cmp values: %d != %d", c.cmpValue, other.cmpValue)
 	}
 
 	return nil

@@ -103,8 +103,7 @@ func checkDoIfNode(t *testing.T, want, got DoIfNode) {
 	case DoIfNodeByteLenCmpOp:
 		wantNode := want.(*doIfByteLengthCmpNode)
 		gotNode := got.(*doIfByteLengthCmpNode)
-		assert.Equal(t, wantNode.cmpOp, gotNode.cmpOp)
-		assert.Equal(t, wantNode.cmpValue, gotNode.cmpValue)
+		assert.NoError(t, wantNode.comparator.isEqualTo(gotNode.comparator))
 		assert.Equal(t, 0, slices.Compare[[]string](wantNode.fieldPath, gotNode.fieldPath))
 	default:
 		t.Error("unknown node type")
@@ -245,8 +244,10 @@ func TestBuildDoIfNodes(t *testing.T) {
 			},
 			want: &doIfByteLengthCmpNode{
 				fieldPath: []string{"pod"},
-				cmpOp:     "lt",
-				cmpValue:  100,
+				comparator: comparator{
+					cmpOp:    cmpOpLess,
+					cmpValue: 100,
+				},
 			},
 		},
 		{
@@ -258,8 +259,10 @@ func TestBuildDoIfNodes(t *testing.T) {
 			},
 			want: &doIfByteLengthCmpNode{
 				fieldPath: []string{},
-				cmpOp:     "lt",
-				cmpValue:  100,
+				comparator: comparator{
+					cmpOp:    cmpOpLess,
+					cmpValue: 100,
+				},
 			},
 		},
 		{
@@ -771,8 +774,8 @@ func TestCheckLenCmpLtObject(t *testing.T) {
 		},
 	}
 
-	rowJSON := fmt.Sprintf(`{"user_info": %s}`, userInfoRawJSON)
-	eventRoot, err := insaneJSON.DecodeString(rowJSON)
+	rawJSON := fmt.Sprintf(`{"user_info": %s}`, userInfoRawJSON)
+	eventRoot, err := insaneJSON.DecodeString(rawJSON)
 	require.NoError(t, err)
 
 	for index, test := range tests {
@@ -787,6 +790,23 @@ func TestCheckLenCmpLtObject(t *testing.T) {
 		result := checker.Check(eventRoot)
 		require.Equal(t, test.result, result, "invalid result; test id: %d", index)
 	}
+
+	eventRoot, err = insaneJSON.DecodeString(userInfoRawJSON)
+	require.NoError(t, err)
+
+	for index, test := range tests {
+		root, err := buildTree(treeNode{
+			fieldName:    "",
+			byteLenCmpOp: "lt",
+			cmpValue:     test.cmpValue,
+		})
+		require.NoError(t, err)
+
+		checker := NewDoIfChecker(root)
+		result := checker.Check(eventRoot)
+		require.Equal(t, test.result, result, "invalid result (empty selector); test id: %d", index)
+	}
+
 }
 
 func TestDoIfNodeIsEqual(t *testing.T) {
