@@ -192,6 +192,11 @@ func extractMetrics(actionJSON *simplejson.Json) (string, []string, bool) {
 	return metricName, metricLabels, skipStatus
 }
 
+const (
+	byteLenCmpTag  = "byte_len_cmp"
+	arrayLenCmpTag = "array_len_cmp"
+)
+
 var (
 	doIfLogicalOpNodes = map[string]struct{}{
 		"and": struct{}{},
@@ -205,8 +210,9 @@ var (
 		"suffix":   struct{}{},
 		"regex":    struct{}{},
 	}
-	doIfBytesLengthCmpNodes = map[string]struct{}{
-		"byte_len_cmp": struct{}{},
+	doIfLengthCmpOpNodes = map[string]struct{}{
+		byteLenCmpTag:  {},
+		arrayLenCmpTag: {},
 	}
 )
 
@@ -261,7 +267,7 @@ const (
 	fieldNameCmpValue = "value"
 )
 
-func extractByteLengthCmpOpNode(_ string, jsonNode *simplejson.Json) (pipeline.DoIfNode, error) {
+func extractLengthCmpOpNode(opName string, jsonNode *simplejson.Json) (pipeline.DoIfNode, error) {
 	fieldPathNode, has := jsonNode.CheckGet(fieldNameField)
 	if !has {
 		return nil, noRequiredFieldError(fieldNameField)
@@ -289,12 +295,14 @@ func extractByteLengthCmpOpNode(_ string, jsonNode *simplejson.Json) (pipeline.D
 		return nil, err
 	}
 
-	result, err := pipeline.NewByteLengthCmpNode(fieldPath, cmpOp, cmpValue)
-	if err != nil {
-		return nil, fmt.Errorf("failed to init bytes length cmp op: %w", err)
+	switch opName {
+	case byteLenCmpTag:
+		return pipeline.NewByteLengthCmpNode(fieldPath, cmpOp, cmpValue)
+	case arrayLenCmpTag:
+		return pipeline.NewArrayLengthCmpNode(fieldPath, cmpOp, cmpValue)
+	default:
+		return nil, fmt.Errorf("unknown len cmp op name: %s", opName)
 	}
-
-	return result, nil
 }
 
 func extractLogicalOpNode(opName string, jsonNode *simplejson.Json) (pipeline.DoIfNode, error) {
@@ -327,10 +335,11 @@ func extractDoIfNode(jsonNode *simplejson.Json) (pipeline.DoIfNode, error) {
 		return extractLogicalOpNode(opName, jsonNode)
 	} else if _, has := doIfFieldOpNodes[opName]; has {
 		return extractFieldOpNode(opName, jsonNode)
-	} else if _, has := doIfBytesLengthCmpNodes[opName]; has {
-		return extractByteLengthCmpOpNode(opName, jsonNode)
+	} else if _, has := doIfLengthCmpOpNodes[opName]; has {
+		return extractLengthCmpOpNode(opName, jsonNode)
+	} else {
+		return nil, fmt.Errorf("unknown op %q", opName)
 	}
-	return nil, fmt.Errorf("unknown op %q", opName)
 }
 
 func extractDoIfChecker(actionJSON *simplejson.Json) (*pipeline.DoIfChecker, error) {

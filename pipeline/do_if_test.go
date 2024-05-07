@@ -21,8 +21,9 @@ type treeNode struct {
 	logicalOp string
 	operands  []treeNode
 
-	byteLenCmpOp string
-	cmpValue     int
+	byteLenCmpOp  string
+	arrayLenCmpOp string
+	cmpValue      int
 }
 
 // nolint:gocritic
@@ -50,6 +51,8 @@ func buildTree(node treeNode) (DoIfNode, error) {
 		)
 	case node.byteLenCmpOp != "":
 		return NewByteLengthCmpNode(node.fieldName, node.byteLenCmpOp, node.cmpValue)
+	case node.arrayLenCmpOp != "":
+		return NewArrayLengthCmpNode(node.fieldName, node.arrayLenCmpOp, node.cmpValue)
 	default:
 		return nil, errors.New("unknown type of node")
 	}
@@ -103,6 +106,11 @@ func checkDoIfNode(t *testing.T, want, got DoIfNode) {
 	case DoIfNodeByteLenCmpOp:
 		wantNode := want.(*doIfByteLengthCmpNode)
 		gotNode := got.(*doIfByteLengthCmpNode)
+		assert.NoError(t, wantNode.comparator.isEqualTo(gotNode.comparator))
+		assert.Equal(t, 0, slices.Compare[[]string](wantNode.fieldPath, gotNode.fieldPath))
+	case DoIfNodeArrayLenCmpOp:
+		wantNode := want.(*doIfArrayLengthCmpNode)
+		gotNode := got.(*doIfArrayLengthCmpNode)
 		assert.NoError(t, wantNode.comparator.isEqualTo(gotNode.comparator))
 		assert.Equal(t, 0, slices.Compare[[]string](wantNode.fieldPath, gotNode.fieldPath))
 	default:
@@ -266,6 +274,36 @@ func TestBuildDoIfNodes(t *testing.T) {
 			},
 		},
 		{
+			name: "ok_array_len_cmp_op_node",
+			tree: treeNode{
+				arrayLenCmpOp: "lt",
+				fieldName:     "items",
+				cmpValue:      100,
+			},
+			want: &doIfArrayLengthCmpNode{
+				fieldPath: []string{"items"},
+				comparator: comparator{
+					cmpOp:    cmpOpLess,
+					cmpValue: 100,
+				},
+			},
+		},
+		{
+			name: "ok_array_len_cmp_op_node_empty_selector",
+			tree: treeNode{
+				arrayLenCmpOp: "lt",
+				fieldName:     "",
+				cmpValue:      100,
+			},
+			want: &doIfArrayLengthCmpNode{
+				fieldPath: []string{},
+				comparator: comparator{
+					cmpOp:    cmpOpLess,
+					cmpValue: 100,
+				},
+			},
+		},
+		{
 			name: "err_field_op_node_empty_field",
 			tree: treeNode{
 				fieldOp: "equal",
@@ -313,6 +351,24 @@ func TestBuildDoIfNodes(t *testing.T) {
 				byteLenCmpOp: "lt",
 				fieldName:    "pod",
 				cmpValue:     -1,
+			},
+			wantErr: true,
+		},
+		{
+			name: "err_array_len_op_node_invalid_op_type",
+			tree: treeNode{
+				arrayLenCmpOp: "no-op",
+				fieldName:     "items",
+				cmpValue:      100,
+			},
+			wantErr: true,
+		},
+		{
+			name: "err_array_len_op_node_negative_cmp_value",
+			tree: treeNode{
+				arrayLenCmpOp: "lt",
+				fieldName:     "items",
+				cmpValue:      -1,
 			},
 			wantErr: true,
 		},
@@ -383,13 +439,12 @@ func TestCheck(t *testing.T) {
 	}
 
 	tests := []struct {
-		name           string
-		tree           treeNode
-		data           []argsResp
-		wantNewNodeErr bool
+		name string
+		tree treeNode
+		data []argsResp
 	}{
 		{
-			name: "ok_equal",
+			name: "equal",
 			tree: treeNode{
 				fieldOp:       "equal",
 				fieldName:     "pod",
@@ -410,7 +465,7 @@ func TestCheck(t *testing.T) {
 			},
 		},
 		{
-			name: "ok_contains",
+			name: "contains",
 			tree: treeNode{
 				fieldOp:       "contains",
 				fieldName:     "pod",
@@ -425,7 +480,7 @@ func TestCheck(t *testing.T) {
 			},
 		},
 		{
-			name: "ok_prefix",
+			name: "prefix",
 			tree: treeNode{
 				fieldOp:       "prefix",
 				fieldName:     "pod",
@@ -440,7 +495,7 @@ func TestCheck(t *testing.T) {
 			},
 		},
 		{
-			name: "ok_suffix",
+			name: "suffix",
 			tree: treeNode{
 				fieldOp:       "suffix",
 				fieldName:     "pod",
@@ -455,7 +510,7 @@ func TestCheck(t *testing.T) {
 			},
 		},
 		{
-			name: "ok_regex",
+			name: "regex",
 			tree: treeNode{
 				fieldOp:   "regex",
 				fieldName: "pod",
@@ -471,7 +526,7 @@ func TestCheck(t *testing.T) {
 			},
 		},
 		{
-			name: "ok_or",
+			name: "or",
 			tree: treeNode{
 				logicalOp: "or",
 				operands: []treeNode{
@@ -500,7 +555,7 @@ func TestCheck(t *testing.T) {
 			},
 		},
 		{
-			name: "ok_and",
+			name: "and",
 			tree: treeNode{
 				logicalOp: "and",
 				operands: []treeNode{
@@ -529,7 +584,7 @@ func TestCheck(t *testing.T) {
 			},
 		},
 		{
-			name: "ok_not",
+			name: "not",
 			tree: treeNode{
 				logicalOp: "not",
 				operands: []treeNode{
@@ -550,7 +605,7 @@ func TestCheck(t *testing.T) {
 			},
 		},
 		{
-			name: "ok_equal_case_insensitive",
+			name: "equal_case_insensitive",
 			tree: treeNode{
 				fieldOp:       "equal",
 				fieldName:     "pod",
@@ -565,7 +620,7 @@ func TestCheck(t *testing.T) {
 			},
 		},
 		{
-			name: "ok_contains_case_insensitive",
+			name: "contains_case_insensitive",
 			tree: treeNode{
 				fieldOp:       "contains",
 				fieldName:     "pod",
@@ -580,7 +635,7 @@ func TestCheck(t *testing.T) {
 			},
 		},
 		{
-			name: "ok_prefix_case_insensitive",
+			name: "prefix_case_insensitive",
 			tree: treeNode{
 				fieldOp:       "prefix",
 				fieldName:     "pod",
@@ -595,7 +650,7 @@ func TestCheck(t *testing.T) {
 			},
 		},
 		{
-			name: "ok_suffix_case_insensitive",
+			name: "suffix_case_insensitive",
 			tree: treeNode{
 				fieldOp:       "suffix",
 				fieldName:     "pod",
@@ -610,7 +665,7 @@ func TestCheck(t *testing.T) {
 			},
 		},
 		{
-			name: "ok_equal_nil_or_empty_string",
+			name: "equal_nil_or_empty_string",
 			tree: treeNode{
 				fieldOp:       "equal",
 				fieldName:     "test-field",
@@ -625,7 +680,7 @@ func TestCheck(t *testing.T) {
 			},
 		},
 		{
-			name: "ok_byte_len_cmp_lt",
+			name: "byte_len_cmp_lt",
 			tree: treeNode{
 				byteLenCmpOp: "lt",
 				fieldName:    "msg",
@@ -642,7 +697,7 @@ func TestCheck(t *testing.T) {
 			},
 		},
 		{
-			name: "ok_byte_len_cmp_ge",
+			name: "byte_len_cmp_ge",
 			tree: treeNode{
 				byteLenCmpOp: "ge",
 				fieldName:    "msg",
@@ -659,7 +714,7 @@ func TestCheck(t *testing.T) {
 			},
 		},
 		{
-			name: "ok_byte_len_cmp_lt_empty_selector",
+			name: "byte_len_cmp_lt_empty_selector",
 			tree: treeNode{
 				byteLenCmpOp: "lt",
 				fieldName:    "",
@@ -676,7 +731,7 @@ func TestCheck(t *testing.T) {
 			},
 		},
 		{
-			name: "ok_byte_len_cmp_eq",
+			name: "byte_len_cmp_eq",
 			tree: treeNode{
 				byteLenCmpOp: "eq",
 				fieldName:    "msg",
@@ -689,7 +744,7 @@ func TestCheck(t *testing.T) {
 			},
 		},
 		{
-			name: "ok_byte_len_cmp_ne",
+			name: "byte_len_cmp_ne",
 			tree: treeNode{
 				byteLenCmpOp: "ne",
 				fieldName:    "msg",
@@ -701,6 +756,101 @@ func TestCheck(t *testing.T) {
 				{`{"msg":123}`, true},
 			},
 		},
+		{
+			name: "array_len_cmp_lt",
+			tree: treeNode{
+				arrayLenCmpOp: "lt",
+				fieldName:     "numbers",
+				cmpValue:      2,
+			},
+			data: []argsResp{
+				{`{"numbers":[]}`, true},
+				{`{"numbers":[1]}`, true},
+				{`{"numbers":[1, 2]}`, false},
+				{`{"numbers":[1, 2, 3]}`, false},
+			},
+		},
+		{
+			name: "array_len_cmp_ge",
+			tree: treeNode{
+				arrayLenCmpOp: "ge",
+				fieldName:     "numbers",
+				cmpValue:      2,
+			},
+			data: []argsResp{
+				{`{"numbers":[]}`, false},
+				{`{"numbers":[1]}`, false},
+				{`{"numbers":[1, 2]}`, true},
+				{`{"numbers":[1, 2, 3]}`, true},
+			},
+		},
+		{
+			name: "array_len_cmp_lt_empty_selector",
+			tree: treeNode{
+				arrayLenCmpOp: "lt",
+				fieldName:     "",
+				cmpValue:      2,
+			},
+			data: []argsResp{
+				{`[]`, true},
+				{`[1]`, true},
+				{`[1, 2]`, false},
+				{`[1, 2, 3]`, false},
+			},
+		},
+		{
+			name: "array_len_cmp_eq",
+			tree: treeNode{
+				arrayLenCmpOp: "eq",
+				fieldName:     "numbers",
+				cmpValue:      2,
+			},
+			data: []argsResp{
+				{`{"numbers":[1]}`, false},
+				{`{"numbers":[1, 2]}`, true},
+				{`{"numbers":[1, 2, 3]}`, false},
+			},
+		},
+		{
+			name: "array_len_cmp_ne",
+			tree: treeNode{
+				arrayLenCmpOp: "ne",
+				fieldName:     "numbers",
+				cmpValue:      2,
+			},
+			data: []argsResp{
+				{`{"numbers":[1]}`, true},
+				{`{"numbers":[1, 2]}`, false},
+				{`{"numbers":[1, 2, 3]}`, true},
+			},
+		},
+		{
+			name: "array_len_cmp_field_not_found",
+			tree: treeNode{
+				arrayLenCmpOp: "lt",
+				fieldName:     "some",
+				cmpValue:      100,
+			},
+			data: []argsResp{
+				{`{"msg":"qwerty"}`, false},
+				{`[1, 2, 3]`, false},
+			},
+		},
+		{
+			name: "array_len_cmp_field_is_not_array",
+			tree: treeNode{
+				arrayLenCmpOp: "lt",
+				fieldName:     "items",
+				cmpValue:      100,
+			},
+			data: []argsResp{
+				{`{"items":123}`, false},
+				{`{"items":"abc"}`, false},
+				{`{"items":null}`, false},
+				{`{"items":{}}`, false},
+				{`{"items":[]}`, true},
+			},
+		},
 	}
 	for _, tt := range tests {
 		tt := tt
@@ -710,10 +860,6 @@ func TestCheck(t *testing.T) {
 			var err error
 			t.Parallel()
 			root, err = buildTree(tt.tree)
-			if tt.wantNewNodeErr {
-				require.Error(t, err)
-				return
-			}
 			require.NoError(t, err)
 			checker := NewDoIfChecker(root)
 			for _, d := range tt.data {
@@ -806,20 +952,24 @@ func TestCheckLenCmpLtObject(t *testing.T) {
 		result := checker.Check(eventRoot)
 		require.Equal(t, test.result, result, "invalid result (empty selector); test id: %d", index)
 	}
-
 }
 
 func TestDoIfNodeIsEqual(t *testing.T) {
-	singleNode1 := treeNode{
+	fieldNode := treeNode{
 		fieldOp:       "equal",
 		fieldName:     "service",
 		caseSensitive: true,
 		values:        [][]byte{[]byte("test-1"), []byte("test-2")},
 	}
-	singleNode2 := treeNode{
+	byteLenCmpOpNode := treeNode{
 		byteLenCmpOp: "lt",
 		fieldName:    "msg",
 		cmpValue:     100,
+	}
+	arrayLenCmpOpNode := treeNode{
+		arrayLenCmpOp: "lt",
+		fieldName:     "items",
+		cmpValue:      100,
 	}
 	twoNodes := treeNode{
 		logicalOp: "not",
@@ -889,15 +1039,21 @@ func TestDoIfNodeIsEqual(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name:    "equal_single_node",
-			t1:      singleNode1,
-			t2:      singleNode1,
+			name:    "equal_field_node",
+			t1:      fieldNode,
+			t2:      fieldNode,
 			wantErr: false,
 		},
 		{
 			name:    "equal_byte_len_cmp_node",
-			t1:      singleNode2,
-			t2:      singleNode2,
+			t1:      byteLenCmpOpNode,
+			t2:      byteLenCmpOpNode,
+			wantErr: false,
+		},
+		{
+			name:    "equal_array_len_cmp_node",
+			t1:      arrayLenCmpOpNode,
+			t2:      arrayLenCmpOpNode,
 			wantErr: false,
 		},
 		{
@@ -914,20 +1070,20 @@ func TestDoIfNodeIsEqual(t *testing.T) {
 		},
 		{
 			name:    "not_equal_type_mismatch_1",
-			t1:      singleNode1,
-			t2:      singleNode2,
+			t1:      fieldNode,
+			t2:      byteLenCmpOpNode,
 			wantErr: true,
 		},
 		{
 			name:    "not_equal_type_mismatch_2",
-			t1:      singleNode1,
-			t2:      multiNodes,
+			t1:      byteLenCmpOpNode,
+			t2:      arrayLenCmpOpNode,
 			wantErr: true,
 		},
 		{
 			name:    "not_equal_type_mismatch_3",
-			t1:      singleNode2,
-			t2:      multiNodes,
+			t1:      arrayLenCmpOpNode,
+			t2:      twoNodes,
 			wantErr: true,
 		},
 		{
@@ -1177,6 +1333,48 @@ func TestDoIfNodeIsEqual(t *testing.T) {
 				byteLenCmpOp: "lt",
 				fieldName:    "msg",
 				cmpValue:     200,
+			},
+			wantErr: true,
+		},
+		{
+			name: "not_equal_array_len_cmp_op_mismatch",
+			t1: treeNode{
+				arrayLenCmpOp: "lt",
+				fieldName:     "items",
+				cmpValue:      100,
+			},
+			t2: treeNode{
+				arrayLenCmpOp: "gt",
+				fieldName:     "items",
+				cmpValue:      100,
+			},
+			wantErr: true,
+		},
+		{
+			name: "not_equal_array_len_cmp_op_field_mismatch",
+			t1: treeNode{
+				arrayLenCmpOp: "lt",
+				fieldName:     "items",
+				cmpValue:      100,
+			},
+			t2: treeNode{
+				arrayLenCmpOp: "lt",
+				fieldName:     "numbers",
+				cmpValue:      100,
+			},
+			wantErr: true,
+		},
+		{
+			name: "not_equal_array_len_cmp_op_value_mismatch",
+			t1: treeNode{
+				arrayLenCmpOp: "lt",
+				fieldName:     "items",
+				cmpValue:      100,
+			},
+			t2: treeNode{
+				arrayLenCmpOp: "lt",
+				fieldName:     "items",
+				cmpValue:      200,
 			},
 			wantErr: true,
 		},

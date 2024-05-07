@@ -47,8 +47,9 @@ type doIfTreeNode struct {
 	logicalOp string
 	operands  []*doIfTreeNode
 
-	byteLenCmpOp string
-	cmpValue     int
+	byteLenCmpOp  string
+	arrayLenCmpOp string
+	cmpValue      int
 }
 
 // nolint:gocritic
@@ -76,6 +77,8 @@ func buildDoIfTree(node *doIfTreeNode) (pipeline.DoIfNode, error) {
 		)
 	case node.byteLenCmpOp != "":
 		return pipeline.NewByteLengthCmpNode(node.fieldName, node.byteLenCmpOp, node.cmpValue)
+	case node.arrayLenCmpOp != "":
+		return pipeline.NewArrayLengthCmpNode(node.fieldName, node.arrayLenCmpOp, node.cmpValue)
 	default:
 		return nil, errors.New("unknown type of node")
 	}
@@ -118,6 +121,12 @@ func Test_extractDoIfChecker(t *testing.T) {
 							"op": "byte_len_cmp",
 							"field": "msg",
 							"cmp_op": "gt",
+							"value": 100
+						},
+						{
+							"op": "array_len_cmp",
+							"field": "items",
+							"cmp_op": "lt",
 							"value": 100
 						},
 						{
@@ -171,6 +180,11 @@ func Test_extractDoIfChecker(t *testing.T) {
 								cmpValue:     100,
 							},
 							{
+								arrayLenCmpOp: "lt",
+								fieldName:     "items",
+								cmpValue:      100,
+							},
+							{
 								logicalOp: "or",
 								operands: []*doIfTreeNode{
 									{
@@ -214,6 +228,17 @@ func Test_extractDoIfChecker(t *testing.T) {
 				byteLenCmpOp: "lt",
 				fieldName:    "data",
 				cmpValue:     10,
+			},
+		},
+		{
+			name: "ok_array_len_cmp_op",
+			args: args{
+				cfgStr: `{"op":"array_len_cmp","field":"items","cmp_op":"lt","value":10}`,
+			},
+			want: &doIfTreeNode{
+				arrayLenCmpOp: "lt",
+				fieldName:     "items",
+				cmpValue:      10,
 			},
 		},
 		{
@@ -292,6 +317,13 @@ func Test_extractDoIfChecker(t *testing.T) {
 			name: "error_byte_len_cmp_op_no_field",
 			args: args{
 				cfgStr: `{"op":"byte_len_cmp","cmp_op":"lt","value":10}`,
+			},
+			wantErr: true,
+		},
+		{
+			name: "error_array_len_cmp_op_no_field",
+			args: args{
+				cfgStr: `{"op":"array_len_cmp","cmp_op":"lt","value":10}`,
 			},
 			wantErr: true,
 		},
