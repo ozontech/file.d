@@ -81,8 +81,14 @@ func (n *byteLengthCmpNode) Check(eventRoot *insaneJSON.Root) bool {
 		return false
 	}
 
-	data := node.EncodeToByte()
-	return n.comparator.compare(len(data))
+	byteLen := 0
+	if node.IsObject() || node.IsArray() {
+		byteLen = len(node.EncodeToByte())
+	} else {
+		byteLen = len(node.AsString())
+	}
+
+	return n.comparator.compare(byteLen)
 }
 
 func (n *byteLengthCmpNode) isEqualTo(n2 Node, _ int) error {
