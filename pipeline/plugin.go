@@ -98,7 +98,7 @@ type ActionPluginStaticInfo struct {
 	MatchMode        MatchMode
 	MatchInvert      bool
 
-	DoIfChecker *doif.DoIfChecker
+	DoIfChecker *doif.Checker
 }
 
 type ActionPluginInfo struct {

@@ -50,7 +50,7 @@ type doIfArrayLengthCmpNode struct {
 	comparator comparator
 }
 
-func NewArrayLengthCmpNode(field string, cmpOp string, cmpValue int) (DoIfNode, error) {
+func NewArrayLengthCmpNode(field string, cmpOp string, cmpValue int) (Node, error) {
 	fieldPath := cfg.ParseFieldSelector(field)
 	cmp, err := newComparator(cmpOp, cmpValue)
 	if err != nil {
@@ -63,8 +63,8 @@ func NewArrayLengthCmpNode(field string, cmpOp string, cmpValue int) (DoIfNode, 
 	}, nil
 }
 
-func (n *doIfArrayLengthCmpNode) Type() DoIfNodeType {
-	return DoIfNodeArrayLenCmpOp
+func (n *doIfArrayLengthCmpNode) Type() NodeType {
+	return NodeArrayLenCmpOp
 }
 
 func (n *doIfArrayLengthCmpNode) Check(eventRoot *insaneJSON.Root) bool {
@@ -76,7 +76,7 @@ func (n *doIfArrayLengthCmpNode) Check(eventRoot *insaneJSON.Root) bool {
 	return n.comparator.compare(len(node.AsArray()))
 }
 
-func (n *doIfArrayLengthCmpNode) isEqualTo(n2 DoIfNode, _ int) error {
+func (n *doIfArrayLengthCmpNode) isEqualTo(n2 Node, _ int) error {
 	n2Explicit, ok := n2.(*doIfArrayLengthCmpNode)
 	if !ok {
 		return errors.New("nodes have different types expected: arrayLengthCmpNode")

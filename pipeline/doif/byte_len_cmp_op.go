@@ -58,7 +58,7 @@ type doIfByteLengthCmpNode struct {
 	comparator comparator
 }
 
-func NewByteLengthCmpNode(field string, cmpOp string, cmpValue int) (DoIfNode, error) {
+func NewByteLengthCmpNode(field string, cmpOp string, cmpValue int) (Node, error) {
 	fieldPath := cfg.ParseFieldSelector(field)
 	cmp, err := newComparator(cmpOp, cmpValue)
 	if err != nil {
@@ -71,8 +71,8 @@ func NewByteLengthCmpNode(field string, cmpOp string, cmpValue int) (DoIfNode, e
 	}, nil
 }
 
-func (n *doIfByteLengthCmpNode) Type() DoIfNodeType {
-	return DoIfNodeByteLenCmpOp
+func (n *doIfByteLengthCmpNode) Type() NodeType {
+	return NodeByteLenCmpOp
 }
 
 func (n *doIfByteLengthCmpNode) Check(eventRoot *insaneJSON.Root) bool {
@@ -85,7 +85,7 @@ func (n *doIfByteLengthCmpNode) Check(eventRoot *insaneJSON.Root) bool {
 	return n.comparator.compare(len(data))
 }
 
-func (n *doIfByteLengthCmpNode) isEqualTo(n2 DoIfNode, _ int) error {
+func (n *doIfByteLengthCmpNode) isEqualTo(n2 Node, _ int) error {
 	n2Explicit, ok := n2.(*doIfByteLengthCmpNode)
 	if !ok {
 		return errors.New("nodes have different types expected: byteLengthCmpNode")

@@ -7,45 +7,45 @@ import (
 // ! do-if-node
 // ^ do-if-node
 
-type DoIfNodeType int
+type NodeType int
 
 const (
-	DoIfNodeEmpty DoIfNodeType = iota
+	NodeEmpty NodeType = iota
 
 	// > Type of node where matching rules for fields are stored.
-	DoIfNodeFieldOp // *
+	NodeFieldOp // *
 
 	// > Type of node where matching rules for byte lengths of fields are stored.
-	DoIfNodeByteLenCmpOp // *
+	NodeByteLenCmpOp // *
 
 	// > Type of node where matching rules for array lengths are stored.
-	DoIfNodeArrayLenCmpOp // *
+	NodeArrayLenCmpOp // *
 
 	// > Type of node where logical rules for applying other rules are stored.
-	DoIfNodeLogicalOp // *
+	NodeLogicalOp // *
 )
 
-type DoIfNode interface {
-	Type() DoIfNodeType
+type Node interface {
+	Type() NodeType
 	Check(*insaneJSON.Root) bool
-	isEqualTo(DoIfNode, int) error
+	isEqualTo(Node, int) error
 }
 
-type DoIfChecker struct {
-	root DoIfNode
+type Checker struct {
+	root Node
 }
 
-func NewDoIfChecker(root DoIfNode) *DoIfChecker {
-	return &DoIfChecker{
+func NewDoIfChecker(root Node) *Checker {
+	return &Checker{
 		root: root,
 	}
 }
 
-func (c *DoIfChecker) IsEqualTo(c2 *DoIfChecker) error {
+func (c *Checker) IsEqualTo(c2 *Checker) error {
 	return c.root.isEqualTo(c2.root, 1)
 }
 
-func (c *DoIfChecker) Check(eventRoot *insaneJSON.Root) bool {
+func (c *Checker) Check(eventRoot *insaneJSON.Root) bool {
 	if eventRoot == nil {
 		return false
 	}

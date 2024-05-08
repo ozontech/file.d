@@ -2,7 +2,7 @@ extractors:
   config-params: '"config-params" /json:\"([a-z_]+)\"/ #2 /default:\"([^"]+)\"/ /(required):\"true\"/  /options:\"([^"]+)\"/'
   fn-list: '"fn-list" #4 /Plugin\)\s(.+)\s{/'
   match-modes: '"match-modes" /MatchMode(.*),/ /\"(.*)\"/'
-  do-if-node: '"do-if-node" /DoIfNode(\w+)\s/'
+  do-if-node: '"do-if-node" /Node(\w+)\s/'
   do-if-field-op: '"do-if-field-op" /doIfField(\w+)OpBytes\s/'
   do-if-logical-op: '"do-if-logical-op" /doIfLogical(\w+)Bytes\s/'
 decorators:

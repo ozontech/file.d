@@ -240,8 +240,8 @@ func extractFieldOpVals(jsonNode *simplejson.Json) [][]byte {
 	return vals
 }
 
-func extractFieldOpNode(opName string, jsonNode *simplejson.Json) (doif.DoIfNode, error) {
-	var result doif.DoIfNode
+func extractFieldOpNode(opName string, jsonNode *simplejson.Json) (doif.Node, error) {
+	var result doif.Node
 	var err error
 	fieldPath := jsonNode.Get("field").MustString()
 	caseSensitiveNode, has := jsonNode.CheckGet("case_sensitive")
@@ -268,7 +268,7 @@ const (
 	fieldNameCmpValue = "value"
 )
 
-func extractLengthCmpOpNode(opName string, jsonNode *simplejson.Json) (doif.DoIfNode, error) {
+func extractLengthCmpOpNode(opName string, jsonNode *simplejson.Json) (doif.Node, error) {
 	fieldPathNode, has := jsonNode.CheckGet(fieldNameField)
 	if !has {
 		return nil, noRequiredFieldError(fieldNameField)
@@ -306,11 +306,11 @@ func extractLengthCmpOpNode(opName string, jsonNode *simplejson.Json) (doif.DoIf
 	}
 }
 
-func extractLogicalOpNode(opName string, jsonNode *simplejson.Json) (doif.DoIfNode, error) {
-	var result, operand doif.DoIfNode
+func extractLogicalOpNode(opName string, jsonNode *simplejson.Json) (doif.Node, error) {
+	var result, operand doif.Node
 	var err error
 	operands := jsonNode.Get("operands")
-	operandsList := make([]doif.DoIfNode, 0)
+	operandsList := make([]doif.Node, 0)
 	for i := range operands.MustArray() {
 		opNode := operands.GetIndex(i)
 		operand, err = extractDoIfNode(opNode)
@@ -326,7 +326,7 @@ func extractLogicalOpNode(opName string, jsonNode *simplejson.Json) (doif.DoIfNo
 	return result, nil
 }
 
-func extractDoIfNode(jsonNode *simplejson.Json) (doif.DoIfNode, error) {
+func extractDoIfNode(jsonNode *simplejson.Json) (doif.Node, error) {
 	opNameNode, has := jsonNode.CheckGet("op")
 	if !has {
 		return nil, errors.New(`"op" field not found`)
@@ -343,7 +343,7 @@ func extractDoIfNode(jsonNode *simplejson.Json) (doif.DoIfNode, error) {
 	}
 }
 
-func extractDoIfChecker(actionJSON *simplejson.Json) (*doif.DoIfChecker, error) {
+func extractDoIfChecker(actionJSON *simplejson.Json) (*doif.Checker, error) {
 	if actionJSON.MustMap() == nil {
 		return nil, nil
 	}

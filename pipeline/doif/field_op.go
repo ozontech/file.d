@@ -200,7 +200,7 @@ type doIfFieldOpNode struct {
 	maxValLen int
 }
 
-func NewFieldOpNode(op string, field string, caseSensitive bool, values [][]byte) (DoIfNode, error) {
+func NewFieldOpNode(op string, field string, caseSensitive bool, values [][]byte) (Node, error) {
 	if field == "" {
 		return nil, errors.New("field is not specified")
 	}
@@ -283,8 +283,8 @@ func NewFieldOpNode(op string, field string, caseSensitive bool, values [][]byte
 	}, nil
 }
 
-func (n *doIfFieldOpNode) Type() DoIfNodeType {
-	return DoIfNodeFieldOp
+func (n *doIfFieldOpNode) Type() NodeType {
+	return NodeFieldOp
 }
 
 func (n *doIfFieldOpNode) Check(eventRoot *insaneJSON.Root) bool {
@@ -361,7 +361,7 @@ func (n *doIfFieldOpNode) Check(eventRoot *insaneJSON.Root) bool {
 	return false
 }
 
-func (n *doIfFieldOpNode) isEqualTo(n2 DoIfNode, _ int) error {
+func (n *doIfFieldOpNode) isEqualTo(n2 Node, _ int) error {
 	n2f, ok := n2.(*doIfFieldOpNode)
 	if !ok {
 		return errors.New("nodes have different types expected: fieldOpNode")

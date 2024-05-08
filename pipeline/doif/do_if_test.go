@@ -27,7 +27,7 @@ type treeNode struct {
 }
 
 // nolint:gocritic
-func buildTree(node treeNode) (DoIfNode, error) {
+func buildTree(node treeNode) (Node, error) {
 	switch {
 	case node.fieldOp != "":
 		return NewFieldOpNode(
@@ -37,7 +37,7 @@ func buildTree(node treeNode) (DoIfNode, error) {
 			node.values,
 		)
 	case node.logicalOp != "":
-		operands := make([]DoIfNode, 0)
+		operands := make([]Node, 0)
 		for _, operandNode := range node.operands {
 			operand, err := buildTree(operandNode)
 			if err != nil {
@@ -58,10 +58,10 @@ func buildTree(node treeNode) (DoIfNode, error) {
 	}
 }
 
-func checkDoIfNode(t *testing.T, want, got DoIfNode) {
+func checkDoIfNode(t *testing.T, want, got Node) {
 	require.Equal(t, want.Type(), got.Type())
 	switch want.Type() {
-	case DoIfNodeFieldOp:
+	case NodeFieldOp:
 		wantNode := want.(*doIfFieldOpNode)
 		gotNode := got.(*doIfFieldOpNode)
 		assert.Equal(t, wantNode.op, gotNode.op)
@@ -95,7 +95,7 @@ func checkDoIfNode(t *testing.T, want, got DoIfNode) {
 		}
 		assert.Equal(t, wantNode.minValLen, gotNode.minValLen)
 		assert.Equal(t, wantNode.maxValLen, gotNode.maxValLen)
-	case DoIfNodeLogicalOp:
+	case NodeLogicalOp:
 		wantNode := want.(*doIfLogicalNode)
 		gotNode := got.(*doIfLogicalNode)
 		assert.Equal(t, wantNode.op, gotNode.op)
@@ -103,12 +103,12 @@ func checkDoIfNode(t *testing.T, want, got DoIfNode) {
 		for i := 0; i < len(wantNode.operands); i++ {
 			checkDoIfNode(t, wantNode.operands[i], gotNode.operands[i])
 		}
-	case DoIfNodeByteLenCmpOp:
+	case NodeByteLenCmpOp:
 		wantNode := want.(*doIfByteLengthCmpNode)
 		gotNode := got.(*doIfByteLengthCmpNode)
 		assert.NoError(t, wantNode.comparator.isEqualTo(gotNode.comparator))
 		assert.Equal(t, 0, slices.Compare[[]string](wantNode.fieldPath, gotNode.fieldPath))
-	case DoIfNodeArrayLenCmpOp:
+	case NodeArrayLenCmpOp:
 		wantNode := want.(*doIfArrayLengthCmpNode)
 		gotNode := got.(*doIfArrayLengthCmpNode)
 		assert.NoError(t, wantNode.comparator.isEqualTo(gotNode.comparator))
@@ -122,7 +122,7 @@ func TestBuildDoIfNodes(t *testing.T) {
 	tests := []struct {
 		name    string
 		tree    treeNode
-		want    DoIfNode
+		want    Node
 		wantErr bool
 	}{
 		{
@@ -206,7 +206,7 @@ func TestBuildDoIfNodes(t *testing.T) {
 			},
 			want: &doIfLogicalNode{
 				op: doIfLogicalOr,
-				operands: []DoIfNode{
+				operands: []Node{
 					&doIfFieldOpNode{
 						op:            doIfFieldEqualOp,
 						fieldPath:     []string{"log", "pod"},
@@ -855,7 +855,7 @@ func TestCheck(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			var root DoIfNode
+			var root Node
 			var eventRoot *insaneJSON.Root
 			var err error
 			t.Parallel()

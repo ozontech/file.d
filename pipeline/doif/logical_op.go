@@ -148,10 +148,10 @@ pipelines:
 
 type doIfLogicalNode struct {
 	op       doIfLogicalOpType
-	operands []DoIfNode
+	operands []Node
 }
 
-func NewLogicalNode(op string, operands []DoIfNode) (DoIfNode, error) {
+func NewLogicalNode(op string, operands []Node) (Node, error) {
 	if len(operands) == 0 {
 		return nil, errors.New("logical op must have at least one operand")
 	}
@@ -176,8 +176,8 @@ func NewLogicalNode(op string, operands []DoIfNode) (DoIfNode, error) {
 	}, nil
 }
 
-func (n *doIfLogicalNode) Type() DoIfNodeType {
-	return DoIfNodeLogicalOp
+func (n *doIfLogicalNode) Type() NodeType {
+	return NodeLogicalOp
 }
 
 func (n *doIfLogicalNode) Check(eventRoot *insaneJSON.Root) bool {
@@ -202,7 +202,7 @@ func (n *doIfLogicalNode) Check(eventRoot *insaneJSON.Root) bool {
 	return false
 }
 
-func (n *doIfLogicalNode) isEqualTo(n2 DoIfNode, level int) error {
+func (n *doIfLogicalNode) isEqualTo(n2 Node, level int) error {
 	n2l, ok := n2.(*doIfLogicalNode)
 	if !ok {
 		return errors.New("nodes have different types expected: logicalNode")

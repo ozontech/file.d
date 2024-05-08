@@ -54,7 +54,7 @@ type doIfTreeNode struct {
 }
 
 // nolint:gocritic
-func buildDoIfTree(node *doIfTreeNode) (doif.DoIfNode, error) {
+func buildDoIfTree(node *doIfTreeNode) (doif.Node, error) {
 	switch {
 	case node.fieldOp != "":
 		return doif.NewFieldOpNode(
@@ -64,7 +64,7 @@ func buildDoIfTree(node *doIfTreeNode) (doif.DoIfNode, error) {
 			node.values,
 		)
 	case node.logicalOp != "":
-		operands := make([]doif.DoIfNode, 0)
+		operands := make([]doif.Node, 0)
 		for _, operandNode := range node.operands {
 			operand, err := buildDoIfTree(operandNode)
 			if err != nil {
