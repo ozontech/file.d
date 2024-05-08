@@ -205,6 +205,9 @@ var (
 		"suffix":   struct{}{},
 		"regex":    struct{}{},
 	}
+	doIfBytesLengthCmpNodes = map[string]struct{}{
+		"byte_len_cmp": struct{}{},
+	}
 )
 
 func extractFieldOpVals(jsonNode *simplejson.Json) [][]byte {
@@ -248,6 +251,52 @@ func extractFieldOpNode(opName string, jsonNode *simplejson.Json) (pipeline.DoIf
 	return result, nil
 }
 
+func noRequiredFieldError(field string) error {
+	return fmt.Errorf("no required field: %s", field)
+}
+
+const (
+	fieldNameField    = "field"
+	fieldNameCmpOp    = "cmp_op"
+	fieldNameCmpValue = "value"
+)
+
+func extractByteLengthCmpOpNode(_ string, jsonNode *simplejson.Json) (pipeline.DoIfNode, error) {
+	fieldPathNode, has := jsonNode.CheckGet(fieldNameField)
+	if !has {
+		return nil, noRequiredFieldError(fieldNameField)
+	}
+	fieldPath, err := fieldPathNode.String()
+	if err != nil {
+		return nil, err
+	}
+
+	cmpOpNode, has := jsonNode.CheckGet(fieldNameCmpOp)
+	if !has {
+		return nil, noRequiredFieldError(fieldNameCmpOp)
+	}
+	cmpOp, err := cmpOpNode.String()
+	if err != nil {
+		return nil, err
+	}
+
+	cmpValueNode, has := jsonNode.CheckGet(fieldNameCmpValue)
+	if !has {
+		return nil, noRequiredFieldError(fieldNameCmpValue)
+	}
+	cmpValue, err := cmpValueNode.Int()
+	if err != nil {
+		return nil, err
+	}
+
+	result, err := pipeline.NewByteLengthCmpNode(fieldPath, cmpOp, cmpValue)
+	if err != nil {
+		return nil, fmt.Errorf("failed to init bytes length cmp op: %w", err)
+	}
+
+	return result, nil
+}
+
 func extractLogicalOpNode(opName string, jsonNode *simplejson.Json) (pipeline.DoIfNode, error) {
 	var result, operand pipeline.DoIfNode
 	var err error
@@ -278,6 +327,8 @@ func extractDoIfNode(jsonNode *simplejson.Json) (pipeline.DoIfNode, error) {
 		return extractLogicalOpNode(opName, jsonNode)
 	} else if _, has := doIfFieldOpNodes[opName]; has {
 		return extractFieldOpNode(opName, jsonNode)
+	} else if _, has := doIfBytesLengthCmpNodes[opName]; has {
+		return extractByteLengthCmpOpNode(opName, jsonNode)
 	}
 	return nil, fmt.Errorf("unknown op %q", opName)
 }

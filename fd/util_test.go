@@ -46,18 +46,22 @@ type doIfTreeNode struct {
 
 	logicalOp string
 	operands  []*doIfTreeNode
+
+	byteLenCmpOp string
+	cmpValue     int
 }
 
 // nolint:gocritic
 func buildDoIfTree(node *doIfTreeNode) (pipeline.DoIfNode, error) {
-	if node.fieldOp != "" {
+	switch {
+	case node.fieldOp != "":
 		return pipeline.NewFieldOpNode(
 			node.fieldOp,
 			node.fieldName,
 			node.caseSensitive,
 			node.values,
 		)
-	} else if node.logicalOp != "" {
+	case node.logicalOp != "":
 		operands := make([]pipeline.DoIfNode, 0)
 		for _, operandNode := range node.operands {
 			operand, err := buildDoIfTree(operandNode)
@@ -70,8 +74,11 @@ func buildDoIfTree(node *doIfTreeNode) (pipeline.DoIfNode, error) {
 			node.logicalOp,
 			operands,
 		)
+	case node.byteLenCmpOp != "":
+		return pipeline.NewByteLengthCmpNode(node.fieldName, node.byteLenCmpOp, node.cmpValue)
+	default:
+		return nil, errors.New("unknown type of node")
 	}
-	return nil, errors.New("unknown type of node")
 }
 
 func Test_extractDoIfChecker(t *testing.T) {
@@ -106,6 +113,12 @@ func Test_extractDoIfChecker(t *testing.T) {
 							"field": "log.msg",
 							"values": ["test-1", "test-2"],
 							"case_sensitive": false
+						},
+						{
+							"op": "byte_len_cmp",
+							"field": "msg",
+							"cmp_op": "gt",
+							"value": 100
 						},
 						{
 							"op": "or",
@@ -153,6 +166,11 @@ func Test_extractDoIfChecker(t *testing.T) {
 								caseSensitive: false,
 							},
 							{
+								byteLenCmpOp: "gt",
+								fieldName:    "msg",
+								cmpValue:     100,
+							},
+							{
 								logicalOp: "or",
 								operands: []*doIfTreeNode{
 									{
@@ -186,6 +204,17 @@ func Test_extractDoIfChecker(t *testing.T) {
 				cfgStr: `[{"field":"val"}]`,
 			},
 			wantErr: false,
+		},
+		{
+			name: "ok_byte_len_cmp_op",
+			args: args{
+				cfgStr: `{"op":"byte_len_cmp","field":"data","cmp_op":"lt","value":10}`,
+			},
+			want: &doIfTreeNode{
+				byteLenCmpOp: "lt",
+				fieldName:    "data",
+				cmpValue:     10,
+			},
 		},
 		{
 			name: "ok_single_val",
@@ -257,6 +286,58 @@ func Test_extractDoIfChecker(t *testing.T) {
 			args: args{
 				cfgStr: `{"op": "or", "operands": [{"op": "equal"}]}`,
 			},
+			wantErr: true,
+		},
+		{
+			name: "error_byte_len_cmp_op_no_field",
+			args: args{
+				cfgStr: `{"op":"byte_len_cmp","cmp_op":"lt","value":10}`,
+			},
+			wantErr: true,
+		},
+		{
+			name: "error_byte_len_cmp_op_field_is_not_string",
+			args: args{
+				cfgStr: `{"op":"byte_len_cmp","field":123,"cmp_op":"lt","value":10}`,
+			},
+			wantErr: true,
+		},
+		{
+			name: "error_byte_len_cmp_op_no_cmp_op",
+			args: args{
+				cfgStr: `{"op":"byte_len_cmp","field":"data","value":10}`,
+			},
+			wantErr: true,
+		},
+		{
+			name: "error_byte_len_cmp_op_cmp_op_is_not_string",
+			args: args{
+				cfgStr: `{"op":"byte_len_cmp","field":"data","cmp_op":123,"value":10}`,
+			},
+			wantErr: true,
+		},
+		{
+			name: "error_byte_len_cmp_op_no_cmp_value",
+			args: args{
+				cfgStr: `{"op":"byte_len_cmp","field":"data","cmp_op":"lt"}`,
+			},
+			wantErr: true,
+		},
+		{
+			name: "error_byte_len_cmp_op_cmp_value_is_not_integer",
+			args: args{
+				cfgStr: `{"op":"byte_len_cmp","field":"data","cmp_op":"lt","value":"abc"}`,
+			},
+			wantErr: true,
+		},
+		{
+			name:    "error_byte_len_cmp_op_invalid_cmp_op",
+			args:    args{cfgStr: `{"op":"byte_len_cmp","field":"data","cmp_op":"ABC","value":10}`},
+			wantErr: true,
+		},
+		{
+			name:    "error_byte_len_cmp_op_negative_cmp_value",
+			args:    args{cfgStr: `{"op":"byte_len_cmp","field":"data","cmp_op":"lt","value":-1}`},
 			wantErr: true,
 		},
 	}
