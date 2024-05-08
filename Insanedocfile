@@ -17,6 +17,8 @@ templates:
     files: ["../pipeline/*.go"]
   - template: pipeline/*.idoc.md
     files: ["*.go"]
+  - template: pipeline/doif/*.idoc.md
+    files: ["*.go"]
   - template: plugin/*/*/README.idoc.md
     files: ["*.go"]
   - template: plugin/*/README.idoc.md

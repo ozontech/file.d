@@ -1,6 +1,3 @@
-## Match modes
-@match-modes|header-description
-
 ## Experimental: Do If rules
 
 This is experimental feature and represents an advanced version of `match_fields`.
