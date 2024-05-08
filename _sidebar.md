@@ -61,8 +61,8 @@
 
 
 - **Pipeline**
-  - [Match modes](pipeline/README.md#match-modes)
-  - [Experimental: Do If rules](pipeline/README.md#experimental-do-if-rules)
+  - [Match modes](pipeline/doif/README.md#match-modes)
+  - [Experimental: Do If rules](pipeline/doif/README.md#experimental-do-if-rules)
 
 - **Other**
   - [Contributing](/docs/contributing.md)

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"github.com/ozontech/file.d/pipeline/doif"
 	"testing"
 
 	"github.com/bitly/go-simplejson"
@@ -53,17 +54,17 @@ type doIfTreeNode struct {
 }
 
 // nolint:gocritic
-func buildDoIfTree(node *doIfTreeNode) (pipeline.DoIfNode, error) {
+func buildDoIfTree(node *doIfTreeNode) (doif.DoIfNode, error) {
 	switch {
 	case node.fieldOp != "":
-		return pipeline.NewFieldOpNode(
+		return doif.NewFieldOpNode(
 			node.fieldOp,
 			node.fieldName,
 			node.caseSensitive,
 			node.values,
 		)
 	case node.logicalOp != "":
-		operands := make([]pipeline.DoIfNode, 0)
+		operands := make([]doif.DoIfNode, 0)
 		for _, operandNode := range node.operands {
 			operand, err := buildDoIfTree(operandNode)
 			if err != nil {
@@ -71,14 +72,14 @@ func buildDoIfTree(node *doIfTreeNode) (pipeline.DoIfNode, error) {
 			}
 			operands = append(operands, operand)
 		}
-		return pipeline.NewLogicalNode(
+		return doif.NewLogicalNode(
 			node.logicalOp,
 			operands,
 		)
 	case node.byteLenCmpOp != "":
-		return pipeline.NewByteLengthCmpNode(node.fieldName, node.byteLenCmpOp, node.cmpValue)
+		return doif.NewByteLengthCmpNode(node.fieldName, node.byteLenCmpOp, node.cmpValue)
 	case node.arrayLenCmpOp != "":
-		return pipeline.NewArrayLengthCmpNode(node.fieldName, node.arrayLenCmpOp, node.cmpValue)
+		return doif.NewArrayLengthCmpNode(node.fieldName, node.arrayLenCmpOp, node.cmpValue)
 	default:
 		return nil, errors.New("unknown type of node")
 	}
@@ -394,7 +395,7 @@ func Test_extractDoIfChecker(t *testing.T) {
 			}
 			wantTree, err := buildDoIfTree(tt.want)
 			require.NoError(t, err)
-			wantDoIfChecker := pipeline.NewDoIfChecker(wantTree)
+			wantDoIfChecker := doif.NewDoIfChecker(wantTree)
 			assert.NoError(t, wantDoIfChecker.IsEqualTo(got))
 		})
 	}

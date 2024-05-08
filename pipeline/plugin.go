@@ -1,6 +1,7 @@
 package pipeline
 
 import (
+	"github.com/ozontech/file.d/pipeline/doif"
 	"net/http"
 	"regexp"
 	"strings"
@@ -97,7 +98,7 @@ type ActionPluginStaticInfo struct {
 	MatchMode        MatchMode
 	MatchInvert      bool
 
-	DoIfChecker *DoIfChecker
+	DoIfChecker *doif.DoIfChecker
 }
 
 type ActionPluginInfo struct {
