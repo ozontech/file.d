@@ -37,11 +37,12 @@ func (t fieldOpType) String() string {
 		return "suffix"
 	case fieldRegexOp:
 		return "regex"
+	default:
+		return "unknown"
 	}
-	return "unknown"
 }
 
-var (
+const (
 	// > checks whether the field value is equal to one of the elements in the values list.
 	// >
 	// > Example:
@@ -63,7 +64,7 @@ var (
 	// > {"pod":"test-pod","service":"test-service"}     # not discarded
 	// > {"pod":"test-pod","service":"test-service-1"}   # not discarded
 	// > ```
-	fieldEqualOpBytes = []byte(`equal`) // *
+	fieldEqualOpTag = "equal" // *
 
 	// > checks whether the field value contains one of the elements the in values list.
 	// >
@@ -86,7 +87,7 @@ var (
 	// > {"pod":"my-test-pod","service":"test-service"}       # discarded
 	// > {"pod":"test-pod","service":"test-service-1"}        # not discarded
 	// > ```
-	fieldContainsOpBytes = []byte(`contains`) // *
+	fieldContainsOpTag = "contains" // *
 
 	// > checks whether the field value has prefix equal to one of the elements in the values list.
 	// >
@@ -109,7 +110,7 @@ var (
 	// > {"pod":"test-pod","service":"test-service"}       # not discarded
 	// > {"pod":"test-pod","service":"test-service-1"}     # not discarded
 	// > ```
-	fieldPrefixOpBytes = []byte(`prefix`) // *
+	fieldPrefixOpTag = "prefix" // *
 
 	// > checks whether the field value has suffix equal to one of the elements in the values list.
 	// >
@@ -132,7 +133,7 @@ var (
 	// > {"pod":"test-pod","service":"test-service"}       # not discarded
 	// > {"pod":"test-pod","service":"test-service-1"}     # not discarded
 	// > ```
-	fieldSuffixOpBytes = []byte(`suffix`) // *
+	fieldSuffixOpTag = "suffix" // *
 
 	// > checks whether the field matches any regex from the values list.
 	// >
@@ -157,7 +158,7 @@ var (
 	// > {"pod":"my-test-instance","service":"test-service-1"} # discarded
 	// > {"pod":"service123","service":"test-service-1"}       # not discarded
 	// > ```
-	fieldRegexOpBytes = []byte(`regex`) // *
+	fieldRegexOpTag = "regex" // *
 )
 
 /*{ do-if-field-op-node
@@ -215,17 +216,16 @@ func NewFieldOpNode(op string, field string, caseSensitive bool, values [][]byte
 
 	fieldPath := cfg.ParseFieldSelector(field)
 
-	opBytes := []byte(op)
-	switch {
-	case bytes.Equal(opBytes, fieldEqualOpBytes):
+	switch op {
+	case fieldEqualOpTag:
 		fop = fieldEqualOp
-	case bytes.Equal(opBytes, fieldContainsOpBytes):
+	case fieldContainsOpTag:
 		fop = fieldContainsOp
-	case bytes.Equal(opBytes, fieldPrefixOpBytes):
+	case fieldPrefixOpTag:
 		fop = fieldPrefixOp
-	case bytes.Equal(opBytes, fieldSuffixOpBytes):
+	case fieldSuffixOpTag:
 		fop = fieldSuffixOp
-	case bytes.Equal(opBytes, fieldRegexOpBytes):
+	case fieldRegexOpTag:
 		fop = fieldRegexOp
 		reValues = make([]*regexp.Regexp, 0, len(values))
 		for _, v := range values {

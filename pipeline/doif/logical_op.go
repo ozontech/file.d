@@ -1,7 +1,6 @@
 package doif
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 
@@ -28,11 +27,12 @@ func (t logicalOpType) String() string {
 		return "and"
 	case logicalNot:
 		return "not"
+	default:
+		return "unknown"
 	}
-	return "unknown"
 }
 
-var (
+const (
 	// > accepts at least one operand and returns true on the first returned true from its operands.
 	// >
 	// > Example:
@@ -59,7 +59,7 @@ var (
 	// > {"pod":"test-pod","service":"test-service"}     # discarded
 	// > {"pod":"test-pod","service":"test-service-1"}   # not discarded
 	// > ```
-	logicalOrBytes = []byte(`or`) // *
+	logicalOrTag = "or" // *
 
 	// > accepts at least one operand and returns true if all operands return true
 	// > (in other words returns false on the first returned false from its operands).
@@ -88,7 +88,7 @@ var (
 	// > {"pod":"test-pod","service":"test-service"}     # not discarded
 	// > {"pod":"test-pod","service":"test-service-1"}   # not discarded
 	// > ```
-	logicalAndBytes = []byte(`and`) // *
+	logicalAndTag = "and" // *
 
 	// > accepts exactly one operand and returns inverted result of its operand.
 	// >
@@ -113,7 +113,7 @@ var (
 	// > {"pod":"test-pod","service":"test-service"}     # not discarded
 	// > {"pod":"test-pod","service":"test-service-1"}   # discarded
 	// > ```
-	logicalNotBytes = []byte(`not`) // *
+	logicalNotTag = "not" // *
 )
 
 /*{ do-if-logical-op-node
@@ -156,13 +156,12 @@ func NewLogicalNode(op string, operands []Node) (Node, error) {
 		return nil, errors.New("logical op must have at least one operand")
 	}
 	var lop logicalOpType
-	opBytes := []byte(op)
-	switch {
-	case bytes.Equal(opBytes, logicalOrBytes):
+	switch op {
+	case logicalOrTag:
 		lop = logicalOr
-	case bytes.Equal(opBytes, logicalAndBytes):
+	case logicalAndTag:
 		lop = logicalAnd
-	case bytes.Equal(opBytes, logicalNotBytes):
+	case logicalNotTag:
 		lop = logicalNot
 		if len(operands) > 1 {
 			return nil, fmt.Errorf("logical not must have exactly one operand, got %d", len(operands))
