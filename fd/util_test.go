@@ -4,11 +4,11 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"github.com/ozontech/file.d/pipeline/doif"
 	"testing"
 
 	"github.com/bitly/go-simplejson"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/pipeline/doif"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

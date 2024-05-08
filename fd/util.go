@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/ozontech/file.d/pipeline/doif"
 	"time"
 
 	"github.com/bitly/go-simplejson"
@@ -13,6 +12,7 @@ import (
 	"github.com/ozontech/file.d/cfg/matchrule"
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/pipeline/doif"
 )
 
 func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {

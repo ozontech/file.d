@@ -1,12 +1,12 @@
 package pipeline
 
 import (
-	"github.com/ozontech/file.d/pipeline/doif"
 	"net/http"
 	"regexp"
 	"strings"
 
 	"github.com/ozontech/file.d/metric"
+	"github.com/ozontech/file.d/pipeline/doif"
 	"go.uber.org/zap"
 )
 
