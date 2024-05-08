@@ -395,7 +395,7 @@ func Test_extractDoIfChecker(t *testing.T) {
 			}
 			wantTree, err := buildDoIfTree(tt.want)
 			require.NoError(t, err)
-			wantDoIfChecker := doif.NewDoIfChecker(wantTree)
+			wantDoIfChecker := doif.NewChecker(wantTree)
 			assert.NoError(t, wantDoIfChecker.IsEqualTo(got))
 		})
 	}

@@ -45,7 +45,7 @@ result:
 Possible values of field `cmp_op` are the same as for byte length comparison op nodes
 }*/
 
-type doIfArrayLengthCmpNode struct {
+type arrayLengthCmpNode struct {
 	fieldPath  []string
 	comparator comparator
 }
@@ -57,17 +57,17 @@ func NewArrayLengthCmpNode(field string, cmpOp string, cmpValue int) (Node, erro
 		return nil, fmt.Errorf("init array len cmp op node: %w", err)
 	}
 
-	return &doIfArrayLengthCmpNode{
+	return &arrayLengthCmpNode{
 		fieldPath:  fieldPath,
 		comparator: cmp,
 	}, nil
 }
 
-func (n *doIfArrayLengthCmpNode) Type() NodeType {
+func (n *arrayLengthCmpNode) Type() NodeType {
 	return NodeArrayLenCmpOp
 }
 
-func (n *doIfArrayLengthCmpNode) Check(eventRoot *insaneJSON.Root) bool {
+func (n *arrayLengthCmpNode) Check(eventRoot *insaneJSON.Root) bool {
 	node := eventRoot.Dig(n.fieldPath...)
 	if !node.IsArray() {
 		return false
@@ -76,8 +76,8 @@ func (n *doIfArrayLengthCmpNode) Check(eventRoot *insaneJSON.Root) bool {
 	return n.comparator.compare(len(node.AsArray()))
 }
 
-func (n *doIfArrayLengthCmpNode) isEqualTo(n2 Node, _ int) error {
-	n2Explicit, ok := n2.(*doIfArrayLengthCmpNode)
+func (n *arrayLengthCmpNode) isEqualTo(n2 Node, _ int) error {
+	n2Explicit, ok := n2.(*arrayLengthCmpNode)
 	if !ok {
 		return errors.New("nodes have different types expected: arrayLengthCmpNode")
 	}

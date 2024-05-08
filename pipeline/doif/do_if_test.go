@@ -58,12 +58,12 @@ func buildTree(node treeNode) (Node, error) {
 	}
 }
 
-func checkDoIfNode(t *testing.T, want, got Node) {
+func checkNode(t *testing.T, want, got Node) {
 	require.Equal(t, want.Type(), got.Type())
 	switch want.Type() {
 	case NodeFieldOp:
-		wantNode := want.(*doIfFieldOpNode)
-		gotNode := got.(*doIfFieldOpNode)
+		wantNode := want.(*fieldOpNode)
+		gotNode := got.(*fieldOpNode)
 		assert.Equal(t, wantNode.op, gotNode.op)
 		assert.Equal(t, 0, slices.Compare[[]string](wantNode.fieldPath, gotNode.fieldPath))
 		assert.Equal(t, wantNode.fieldPathStr, gotNode.fieldPathStr)
@@ -96,21 +96,21 @@ func checkDoIfNode(t *testing.T, want, got Node) {
 		assert.Equal(t, wantNode.minValLen, gotNode.minValLen)
 		assert.Equal(t, wantNode.maxValLen, gotNode.maxValLen)
 	case NodeLogicalOp:
-		wantNode := want.(*doIfLogicalNode)
-		gotNode := got.(*doIfLogicalNode)
+		wantNode := want.(*logicalNode)
+		gotNode := got.(*logicalNode)
 		assert.Equal(t, wantNode.op, gotNode.op)
 		require.Equal(t, len(wantNode.operands), len(gotNode.operands))
 		for i := 0; i < len(wantNode.operands); i++ {
-			checkDoIfNode(t, wantNode.operands[i], gotNode.operands[i])
+			checkNode(t, wantNode.operands[i], gotNode.operands[i])
 		}
 	case NodeByteLenCmpOp:
-		wantNode := want.(*doIfByteLengthCmpNode)
-		gotNode := got.(*doIfByteLengthCmpNode)
+		wantNode := want.(*byteLengthCmpNode)
+		gotNode := got.(*byteLengthCmpNode)
 		assert.NoError(t, wantNode.comparator.isEqualTo(gotNode.comparator))
 		assert.Equal(t, 0, slices.Compare[[]string](wantNode.fieldPath, gotNode.fieldPath))
 	case NodeArrayLenCmpOp:
-		wantNode := want.(*doIfArrayLengthCmpNode)
-		gotNode := got.(*doIfArrayLengthCmpNode)
+		wantNode := want.(*arrayLengthCmpNode)
+		gotNode := got.(*arrayLengthCmpNode)
 		assert.NoError(t, wantNode.comparator.isEqualTo(gotNode.comparator))
 		assert.Equal(t, 0, slices.Compare[[]string](wantNode.fieldPath, gotNode.fieldPath))
 	default:
@@ -118,7 +118,7 @@ func checkDoIfNode(t *testing.T, want, got Node) {
 	}
 }
 
-func TestBuildDoIfNodes(t *testing.T) {
+func TestBuildNodes(t *testing.T) {
 	tests := []struct {
 		name    string
 		tree    treeNode
@@ -133,8 +133,8 @@ func TestBuildDoIfNodes(t *testing.T) {
 				caseSensitive: true,
 				values:        [][]byte{[]byte(`test-111`), []byte(`test-2`), []byte(`test-3`), []byte(`test-12345`)},
 			},
-			want: &doIfFieldOpNode{
-				op:            doIfFieldEqualOp,
+			want: &fieldOpNode{
+				op:            fieldEqualOp,
 				fieldPath:     []string{"log", "pod"},
 				fieldPathStr:  "log.pod",
 				caseSensitive: true,
@@ -163,8 +163,8 @@ func TestBuildDoIfNodes(t *testing.T) {
 				caseSensitive: false,
 				values:        [][]byte{[]byte(`TEST-111`), []byte(`Test-2`), []byte(`tesT-3`), []byte(`TeSt-12345`)},
 			},
-			want: &doIfFieldOpNode{
-				op:            doIfFieldEqualOp,
+			want: &fieldOpNode{
+				op:            fieldEqualOp,
 				fieldPath:     []string{"log", "pod"},
 				fieldPathStr:  "log.pod",
 				caseSensitive: false,
@@ -204,11 +204,11 @@ func TestBuildDoIfNodes(t *testing.T) {
 					},
 				},
 			},
-			want: &doIfLogicalNode{
-				op: doIfLogicalOr,
+			want: &logicalNode{
+				op: logicalOr,
 				operands: []Node{
-					&doIfFieldOpNode{
-						op:            doIfFieldEqualOp,
+					&fieldOpNode{
+						op:            fieldEqualOp,
 						fieldPath:     []string{"log", "pod"},
 						fieldPathStr:  "log.pod",
 						caseSensitive: true,
@@ -228,8 +228,8 @@ func TestBuildDoIfNodes(t *testing.T) {
 						minValLen: 6,
 						maxValLen: 10,
 					},
-					&doIfFieldOpNode{
-						op:            doIfFieldContainsOp,
+					&fieldOpNode{
+						op:            fieldContainsOp,
 						fieldPath:     []string{"service", "msg"},
 						fieldPathStr:  "service.msg",
 						caseSensitive: true,
@@ -250,7 +250,7 @@ func TestBuildDoIfNodes(t *testing.T) {
 				fieldName:    "pod",
 				cmpValue:     100,
 			},
-			want: &doIfByteLengthCmpNode{
+			want: &byteLengthCmpNode{
 				fieldPath: []string{"pod"},
 				comparator: comparator{
 					cmpOp:    cmpOpLess,
@@ -265,7 +265,7 @@ func TestBuildDoIfNodes(t *testing.T) {
 				fieldName:    "",
 				cmpValue:     100,
 			},
-			want: &doIfByteLengthCmpNode{
+			want: &byteLengthCmpNode{
 				fieldPath: []string{},
 				comparator: comparator{
 					cmpOp:    cmpOpLess,
@@ -280,7 +280,7 @@ func TestBuildDoIfNodes(t *testing.T) {
 				fieldName:     "items",
 				cmpValue:      100,
 			},
-			want: &doIfArrayLengthCmpNode{
+			want: &arrayLengthCmpNode{
 				fieldPath: []string{"items"},
 				comparator: comparator{
 					cmpOp:    cmpOpLess,
@@ -295,7 +295,7 @@ func TestBuildDoIfNodes(t *testing.T) {
 				fieldName:     "",
 				cmpValue:      100,
 			},
-			want: &doIfArrayLengthCmpNode{
+			want: &arrayLengthCmpNode{
 				fieldPath: []string{},
 				comparator: comparator{
 					cmpOp:    cmpOpLess,
@@ -427,7 +427,7 @@ func TestBuildDoIfNodes(t *testing.T) {
 				return
 			}
 			require.NoError(t, err)
-			checkDoIfNode(t, tt.want, got)
+			checkNode(t, tt.want, got)
 		})
 	}
 }
@@ -861,7 +861,7 @@ func TestCheck(t *testing.T) {
 			t.Parallel()
 			root, err = buildTree(tt.tree)
 			require.NoError(t, err)
-			checker := NewDoIfChecker(root)
+			checker := NewChecker(root)
 			for _, d := range tt.data {
 				if d.eventStr == "" {
 					eventRoot = nil
@@ -932,7 +932,7 @@ func TestCheckLenCmpLtObject(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		checker := NewDoIfChecker(root)
+		checker := NewChecker(root)
 		result := checker.Check(eventRoot)
 		require.Equal(t, test.result, result, "invalid result; test id: %d", index)
 	}
@@ -948,13 +948,13 @@ func TestCheckLenCmpLtObject(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		checker := NewDoIfChecker(root)
+		checker := NewChecker(root)
 		result := checker.Check(eventRoot)
 		require.Equal(t, test.result, result, "invalid result (empty selector); test id: %d", index)
 	}
 }
 
-func TestDoIfNodeIsEqual(t *testing.T) {
+func TestNodeIsEqual(t *testing.T) {
 	fieldNode := treeNode{
 		fieldOp:       "equal",
 		fieldName:     "service",
@@ -1471,8 +1471,8 @@ func TestDoIfNodeIsEqual(t *testing.T) {
 			require.NoError(t, err)
 			root2, err := buildTree(tt.t2)
 			require.NoError(t, err)
-			c1 := NewDoIfChecker(root1)
-			c2 := NewDoIfChecker(root2)
+			c1 := NewChecker(root1)
+			c2 := NewChecker(root2)
 			err1 := c1.IsEqualTo(c2)
 			err2 := c2.IsEqualTo(c1)
 			if tt.wantErr {

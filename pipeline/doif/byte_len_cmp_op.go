@@ -53,7 +53,7 @@ They denote corresponding comparison operations.
 | `ne` | `!=` |
 }*/
 
-type doIfByteLengthCmpNode struct {
+type byteLengthCmpNode struct {
 	fieldPath  []string
 	comparator comparator
 }
@@ -65,17 +65,17 @@ func NewByteLengthCmpNode(field string, cmpOp string, cmpValue int) (Node, error
 		return nil, fmt.Errorf("init byte len cmp op node: %w", err)
 	}
 
-	return &doIfByteLengthCmpNode{
+	return &byteLengthCmpNode{
 		fieldPath:  fieldPath,
 		comparator: cmp,
 	}, nil
 }
 
-func (n *doIfByteLengthCmpNode) Type() NodeType {
+func (n *byteLengthCmpNode) Type() NodeType {
 	return NodeByteLenCmpOp
 }
 
-func (n *doIfByteLengthCmpNode) Check(eventRoot *insaneJSON.Root) bool {
+func (n *byteLengthCmpNode) Check(eventRoot *insaneJSON.Root) bool {
 	node := eventRoot.Dig(n.fieldPath...)
 	if node == nil {
 		return false
@@ -85,8 +85,8 @@ func (n *doIfByteLengthCmpNode) Check(eventRoot *insaneJSON.Root) bool {
 	return n.comparator.compare(len(data))
 }
 
-func (n *doIfByteLengthCmpNode) isEqualTo(n2 Node, _ int) error {
-	n2Explicit, ok := n2.(*doIfByteLengthCmpNode)
+func (n *byteLengthCmpNode) isEqualTo(n2 Node, _ int) error {
+	n2Explicit, ok := n2.(*byteLengthCmpNode)
 	if !ok {
 		return errors.New("nodes have different types expected: byteLengthCmpNode")
 	}

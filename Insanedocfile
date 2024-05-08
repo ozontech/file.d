@@ -3,8 +3,8 @@ extractors:
   fn-list: '"fn-list" #4 /Plugin\)\s(.+)\s{/'
   match-modes: '"match-modes" /MatchMode(.*),/ /\"(.*)\"/'
   do-if-node: '"do-if-node" /Node(\w+)\s/'
-  do-if-field-op: '"do-if-field-op" /doIfField(\w+)OpBytes\s/'
-  do-if-logical-op: '"do-if-logical-op" /doIfLogical(\w+)Bytes\s/'
+  do-if-field-op: '"do-if-field-op" /field(\w+)OpBytes\s/'
+  do-if-logical-op: '"do-if-logical-op" /logical(\w+)Bytes\s/'
 decorators:
   config-params: '_ _ /*`%s`* / /*`default=%s`* / /*`%s`* / /*`options=%s`* /'
   fn-list: '_ _ /`%s`/'

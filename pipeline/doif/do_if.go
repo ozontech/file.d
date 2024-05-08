@@ -35,7 +35,7 @@ type Checker struct {
 	root Node
 }
 
-func NewDoIfChecker(root Node) *Checker {
+func NewChecker(root Node) *Checker {
 	return &Checker{
 		root: root,
 	}

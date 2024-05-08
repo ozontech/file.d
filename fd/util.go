@@ -352,7 +352,7 @@ func extractDoIfChecker(actionJSON *simplejson.Json) (*doif.Checker, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to extract nodes: %w", err)
 	}
-	result := doif.NewDoIfChecker(root)
+	result := doif.NewChecker(root)
 	return result, nil
 }
 

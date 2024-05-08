@@ -14,28 +14,28 @@ import (
 // ! do-if-field-op
 // ^ do-if-field-op
 
-type doIfFieldOpType int
+type fieldOpType int
 
 const (
-	doIfFieldUnknownOp doIfFieldOpType = iota
-	doIfFieldEqualOp
-	doIfFieldContainsOp
-	doIfFieldPrefixOp
-	doIfFieldSuffixOp
-	doIfFieldRegexOp
+	fieldUnknownOp fieldOpType = iota
+	fieldEqualOp
+	fieldContainsOp
+	fieldPrefixOp
+	fieldSuffixOp
+	fieldRegexOp
 )
 
-func (t doIfFieldOpType) String() string {
+func (t fieldOpType) String() string {
 	switch t {
-	case doIfFieldEqualOp:
+	case fieldEqualOp:
 		return "equal"
-	case doIfFieldContainsOp:
+	case fieldContainsOp:
 		return "contains"
-	case doIfFieldPrefixOp:
+	case fieldPrefixOp:
 		return "prefix"
-	case doIfFieldSuffixOp:
+	case fieldSuffixOp:
 		return "suffix"
-	case doIfFieldRegexOp:
+	case fieldRegexOp:
 		return "regex"
 	}
 	return "unknown"
@@ -63,7 +63,7 @@ var (
 	// > {"pod":"test-pod","service":"test-service"}     # not discarded
 	// > {"pod":"test-pod","service":"test-service-1"}   # not discarded
 	// > ```
-	doIfFieldEqualOpBytes = []byte(`equal`) // *
+	fieldEqualOpBytes = []byte(`equal`) // *
 
 	// > checks whether the field value contains one of the elements the in values list.
 	// >
@@ -86,7 +86,7 @@ var (
 	// > {"pod":"my-test-pod","service":"test-service"}       # discarded
 	// > {"pod":"test-pod","service":"test-service-1"}        # not discarded
 	// > ```
-	doIfFieldContainsOpBytes = []byte(`contains`) // *
+	fieldContainsOpBytes = []byte(`contains`) // *
 
 	// > checks whether the field value has prefix equal to one of the elements in the values list.
 	// >
@@ -109,7 +109,7 @@ var (
 	// > {"pod":"test-pod","service":"test-service"}       # not discarded
 	// > {"pod":"test-pod","service":"test-service-1"}     # not discarded
 	// > ```
-	doIfFieldPrefixOpBytes = []byte(`prefix`) // *
+	fieldPrefixOpBytes = []byte(`prefix`) // *
 
 	// > checks whether the field value has suffix equal to one of the elements in the values list.
 	// >
@@ -132,7 +132,7 @@ var (
 	// > {"pod":"test-pod","service":"test-service"}       # not discarded
 	// > {"pod":"test-pod","service":"test-service-1"}     # not discarded
 	// > ```
-	doIfFieldSuffixOpBytes = []byte(`suffix`) // *
+	fieldSuffixOpBytes = []byte(`suffix`) // *
 
 	// > checks whether the field matches any regex from the values list.
 	// >
@@ -157,7 +157,7 @@ var (
 	// > {"pod":"my-test-instance","service":"test-service-1"} # discarded
 	// > {"pod":"service123","service":"test-service-1"}       # not discarded
 	// > ```
-	doIfFieldRegexOpBytes = []byte(`regex`) // *
+	fieldRegexOpBytes = []byte(`regex`) // *
 )
 
 /*{ do-if-field-op-node
@@ -187,8 +187,8 @@ pipelines:
 
 }*/
 
-type doIfFieldOpNode struct {
-	op            doIfFieldOpType
+type fieldOpNode struct {
+	op            fieldOpType
 	fieldPath     []string
 	fieldPathStr  string
 	caseSensitive bool
@@ -211,22 +211,22 @@ func NewFieldOpNode(op string, field string, caseSensitive bool, values [][]byte
 	var valsBySize map[int][][]byte
 	var reValues []*regexp.Regexp
 	var minValLen, maxValLen int
-	var fop doIfFieldOpType
+	var fop fieldOpType
 
 	fieldPath := cfg.ParseFieldSelector(field)
 
 	opBytes := []byte(op)
 	switch {
-	case bytes.Equal(opBytes, doIfFieldEqualOpBytes):
-		fop = doIfFieldEqualOp
-	case bytes.Equal(opBytes, doIfFieldContainsOpBytes):
-		fop = doIfFieldContainsOp
-	case bytes.Equal(opBytes, doIfFieldPrefixOpBytes):
-		fop = doIfFieldPrefixOp
-	case bytes.Equal(opBytes, doIfFieldSuffixOpBytes):
-		fop = doIfFieldSuffixOp
-	case bytes.Equal(opBytes, doIfFieldRegexOpBytes):
-		fop = doIfFieldRegexOp
+	case bytes.Equal(opBytes, fieldEqualOpBytes):
+		fop = fieldEqualOp
+	case bytes.Equal(opBytes, fieldContainsOpBytes):
+		fop = fieldContainsOp
+	case bytes.Equal(opBytes, fieldPrefixOpBytes):
+		fop = fieldPrefixOp
+	case bytes.Equal(opBytes, fieldSuffixOpBytes):
+		fop = fieldSuffixOp
+	case bytes.Equal(opBytes, fieldRegexOpBytes):
+		fop = fieldRegexOp
 		reValues = make([]*regexp.Regexp, 0, len(values))
 		for _, v := range values {
 			re, err := regexp.Compile(string(v))
@@ -239,10 +239,10 @@ func NewFieldOpNode(op string, field string, caseSensitive bool, values [][]byte
 		return nil, fmt.Errorf("unknown field op %q", op)
 	}
 
-	if fop != doIfFieldRegexOp {
+	if fop != fieldRegexOp {
 		minValLen = len(values[0])
 		maxValLen = len(values[0])
-		if fop == doIfFieldEqualOp {
+		if fop == fieldEqualOp {
 			valsBySize = make(map[int][][]byte)
 		} else {
 			vals = make([][]byte, len(values))
@@ -262,7 +262,7 @@ func NewFieldOpNode(op string, field string, caseSensitive bool, values [][]byte
 			if len(values[i]) > maxValLen {
 				maxValLen = len(values[i])
 			}
-			if fop == doIfFieldEqualOp {
+			if fop == fieldEqualOp {
 				valsBySize[len(curVal)] = append(valsBySize[len(curVal)], curVal)
 			} else {
 				vals[i] = curVal
@@ -270,7 +270,7 @@ func NewFieldOpNode(op string, field string, caseSensitive bool, values [][]byte
 		}
 	}
 
-	return &doIfFieldOpNode{
+	return &fieldOpNode{
 		op:            fop,
 		fieldPath:     fieldPath,
 		fieldPathStr:  field,
@@ -283,22 +283,22 @@ func NewFieldOpNode(op string, field string, caseSensitive bool, values [][]byte
 	}, nil
 }
 
-func (n *doIfFieldOpNode) Type() NodeType {
+func (n *fieldOpNode) Type() NodeType {
 	return NodeFieldOp
 }
 
-func (n *doIfFieldOpNode) Check(eventRoot *insaneJSON.Root) bool {
+func (n *fieldOpNode) Check(eventRoot *insaneJSON.Root) bool {
 	var data []byte
 	node := eventRoot.Dig(n.fieldPath...)
 	if !node.IsNull() {
 		data = node.AsBytes()
 	}
 	// fast check for data
-	if n.op != doIfFieldRegexOp && len(data) < n.minValLen {
+	if n.op != fieldRegexOp && len(data) < n.minValLen {
 		return false
 	}
 	switch n.op {
-	case doIfFieldEqualOp:
+	case fieldEqualOp:
 		vals, ok := n.valuesBySize[len(data)]
 		if !ok {
 			return false
@@ -316,7 +316,7 @@ func (n *doIfFieldOpNode) Check(eventRoot *insaneJSON.Root) bool {
 				return true
 			}
 		}
-	case doIfFieldContainsOp:
+	case fieldContainsOp:
 		if !n.caseSensitive {
 			data = bytes.ToLower(data)
 		}
@@ -325,7 +325,7 @@ func (n *doIfFieldOpNode) Check(eventRoot *insaneJSON.Root) bool {
 				return true
 			}
 		}
-	case doIfFieldPrefixOp:
+	case fieldPrefixOp:
 		// check only necessary amount of bytes
 		if len(data) > n.maxValLen {
 			data = data[:n.maxValLen]
@@ -338,7 +338,7 @@ func (n *doIfFieldOpNode) Check(eventRoot *insaneJSON.Root) bool {
 				return true
 			}
 		}
-	case doIfFieldSuffixOp:
+	case fieldSuffixOp:
 		// check only necessary amount of bytes
 		if len(data) > n.maxValLen {
 			data = data[len(data)-n.maxValLen:]
@@ -351,7 +351,7 @@ func (n *doIfFieldOpNode) Check(eventRoot *insaneJSON.Root) bool {
 				return true
 			}
 		}
-	case doIfFieldRegexOp:
+	case fieldRegexOp:
 		for _, re := range n.reValues {
 			if re.Match(data) {
 				return true
@@ -361,8 +361,8 @@ func (n *doIfFieldOpNode) Check(eventRoot *insaneJSON.Root) bool {
 	return false
 }
 
-func (n *doIfFieldOpNode) isEqualTo(n2 Node, _ int) error {
-	n2f, ok := n2.(*doIfFieldOpNode)
+func (n *fieldOpNode) isEqualTo(n2 Node, _ int) error {
+	n2f, ok := n2.(*fieldOpNode)
 	if !ok {
 		return errors.New("nodes have different types expected: fieldOpNode")
 	}

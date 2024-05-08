@@ -11,22 +11,22 @@ import (
 // ! do-if-logical-op
 // ^ do-if-logical-op
 
-type doIfLogicalOpType int
+type logicalOpType int
 
 const (
-	doIfLogicalOpUnknown doIfLogicalOpType = iota
-	doIfLogicalOr
-	doIfLogicalAnd
-	doIfLogicalNot
+	logicalOpUnknown logicalOpType = iota
+	logicalOr
+	logicalAnd
+	logicalNot
 )
 
-func (t doIfLogicalOpType) String() string {
+func (t logicalOpType) String() string {
 	switch t {
-	case doIfLogicalOr:
+	case logicalOr:
 		return "or"
-	case doIfLogicalAnd:
+	case logicalAnd:
 		return "and"
-	case doIfLogicalNot:
+	case logicalNot:
 		return "not"
 	}
 	return "unknown"
@@ -59,7 +59,7 @@ var (
 	// > {"pod":"test-pod","service":"test-service"}     # discarded
 	// > {"pod":"test-pod","service":"test-service-1"}   # not discarded
 	// > ```
-	doIfLogicalOrBytes = []byte(`or`) // *
+	logicalOrBytes = []byte(`or`) // *
 
 	// > accepts at least one operand and returns true if all operands return true
 	// > (in other words returns false on the first returned false from its operands).
@@ -88,7 +88,7 @@ var (
 	// > {"pod":"test-pod","service":"test-service"}     # not discarded
 	// > {"pod":"test-pod","service":"test-service-1"}   # not discarded
 	// > ```
-	doIfLogicalAndBytes = []byte(`and`) // *
+	logicalAndBytes = []byte(`and`) // *
 
 	// > accepts exactly one operand and returns inverted result of its operand.
 	// >
@@ -113,7 +113,7 @@ var (
 	// > {"pod":"test-pod","service":"test-service"}     # not discarded
 	// > {"pod":"test-pod","service":"test-service-1"}   # discarded
 	// > ```
-	doIfLogicalNotBytes = []byte(`not`) // *
+	logicalNotBytes = []byte(`not`) // *
 )
 
 /*{ do-if-logical-op-node
@@ -146,8 +146,8 @@ pipelines:
 
 }*/
 
-type doIfLogicalNode struct {
-	op       doIfLogicalOpType
+type logicalNode struct {
+	op       logicalOpType
 	operands []Node
 }
 
@@ -155,55 +155,55 @@ func NewLogicalNode(op string, operands []Node) (Node, error) {
 	if len(operands) == 0 {
 		return nil, errors.New("logical op must have at least one operand")
 	}
-	var lop doIfLogicalOpType
+	var lop logicalOpType
 	opBytes := []byte(op)
 	switch {
-	case bytes.Equal(opBytes, doIfLogicalOrBytes):
-		lop = doIfLogicalOr
-	case bytes.Equal(opBytes, doIfLogicalAndBytes):
-		lop = doIfLogicalAnd
-	case bytes.Equal(opBytes, doIfLogicalNotBytes):
-		lop = doIfLogicalNot
+	case bytes.Equal(opBytes, logicalOrBytes):
+		lop = logicalOr
+	case bytes.Equal(opBytes, logicalAndBytes):
+		lop = logicalAnd
+	case bytes.Equal(opBytes, logicalNotBytes):
+		lop = logicalNot
 		if len(operands) > 1 {
 			return nil, fmt.Errorf("logical not must have exactly one operand, got %d", len(operands))
 		}
 	default:
 		return nil, fmt.Errorf("unknown logical op %q", op)
 	}
-	return &doIfLogicalNode{
+	return &logicalNode{
 		op:       lop,
 		operands: operands,
 	}, nil
 }
 
-func (n *doIfLogicalNode) Type() NodeType {
+func (n *logicalNode) Type() NodeType {
 	return NodeLogicalOp
 }
 
-func (n *doIfLogicalNode) Check(eventRoot *insaneJSON.Root) bool {
+func (n *logicalNode) Check(eventRoot *insaneJSON.Root) bool {
 	switch n.op {
-	case doIfLogicalOr:
+	case logicalOr:
 		for _, op := range n.operands {
 			if op.Check(eventRoot) {
 				return true
 			}
 		}
 		return false
-	case doIfLogicalAnd:
+	case logicalAnd:
 		for _, op := range n.operands {
 			if !op.Check(eventRoot) {
 				return false
 			}
 		}
 		return true
-	case doIfLogicalNot:
+	case logicalNot:
 		return !n.operands[0].Check(eventRoot)
 	}
 	return false
 }
 
-func (n *doIfLogicalNode) isEqualTo(n2 Node, level int) error {
-	n2l, ok := n2.(*doIfLogicalNode)
+func (n *logicalNode) isEqualTo(n2 Node, level int) error {
+	n2l, ok := n2.(*logicalNode)
 	if !ok {
 		return errors.New("nodes have different types expected: logicalNode")
 	}
