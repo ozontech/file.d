@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+
 	insaneJSON "github.com/vitkovskii/insane-json"
 )
 

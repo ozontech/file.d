@@ -4,10 +4,11 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"github.com/ozontech/file.d/cfg"
-	insaneJSON "github.com/vitkovskii/insane-json"
 	"regexp"
 	"slices"
+
+	"github.com/ozontech/file.d/cfg"
+	insaneJSON "github.com/vitkovskii/insane-json"
 )
 
 // ! do-if-field-op

@@ -3,9 +3,10 @@ package doif
 import (
 	"errors"
 	"fmt"
+	"slices"
+
 	"github.com/ozontech/file.d/cfg"
 	insaneJSON "github.com/vitkovskii/insane-json"
-	"slices"
 )
 
 /*{ do-if-array-len-cmp-op-node
