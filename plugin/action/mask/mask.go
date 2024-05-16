@@ -96,7 +96,7 @@ type Config struct {
 	// > List of the processed event fields (including nested fields).
 	// > If ignored fields list is empty and processed fields list is empty
 	// > we consider this as empty ignored fields list (all fields will be processed).
-	// > It is wrong to set non-empty ignored fields list and non-empty at the same time.
+	// > It is wrong to set non-empty ignored fields list and non-empty processed fields list at the same time.
 	ProcessFields []string `json:"process_fields"` // *
 
 	// > @3@4@5@6
