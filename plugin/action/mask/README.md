@@ -50,6 +50,15 @@ List of the ignored event fields (including nested fields).
 
 <br>
 
+**`process_fields`** *`[]string`* 
+
+List of the processed event fields (including nested fields).
+If ignored fields list is empty and processed fields list is empty
+we consider this as empty ignored fields list (all fields will be processed).
+It is wrong to set non-empty ignored fields list and non-empty at the same time.
+
+<br>
+
 **`applied_metric_name`** *`string`* *`default=mask_applied_total`* 
 
 The metric name of the regular expressions applied.

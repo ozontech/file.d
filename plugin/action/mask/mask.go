@@ -52,8 +52,10 @@ type Plugin struct {
 	maskBuf []byte
 
 	// common match regex
-	matchRe       *regexp.Regexp
-	ignoredFields map[string]struct{}
+	matchRe *regexp.Regexp
+
+	fieldsList  map[string]struct{}
+	isWhitelist bool
 
 	valueNodes []*insaneJSON.Node
 	logger     *zap.Logger
@@ -88,6 +90,14 @@ type Config struct {
 	// >
 	// > List of the ignored event fields (including nested fields).
 	IgnoreFields []string `json:"ignore_fields"` // *
+
+	// > @3@4@5@6
+	// >
+	// > List of the processed event fields (including nested fields).
+	// > If ignored fields list is empty and processed fields list is empty
+	// > we consider this as empty ignored fields list (all fields will be processed).
+	// > It is wrong to set non-empty ignored fields list and non-empty at the same time.
+	ProcessFields []string `json:"process_fields"` // *
 
 	// > @3@4@5@6
 	// >
@@ -248,10 +258,26 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 	p.logger = params.Logger.Desugar()
 	p.config.Masks, p.matchRe = compileMasks(p.config.Masks, p.logger)
 
-	if len(p.config.IgnoreFields) > 0 {
-		p.ignoredFields = make(map[string]struct{}, len(p.config.IgnoreFields))
-		for _, field := range p.config.IgnoreFields {
-			p.ignoredFields[field] = struct{}{}
+	isBlacklist := len(p.config.IgnoreFields) > 0
+	isWhitelist := len(p.config.ProcessFields) > 0
+	if isBlacklist && isWhitelist {
+		p.logger.Fatal("ignored fields list and processed fields list are both non-empty")
+	}
+
+	p.isWhitelist = isWhitelist
+
+	var fieldList []string
+	switch {
+	case isBlacklist:
+		fieldList = p.config.IgnoreFields
+	case isWhitelist:
+		fieldList = p.config.ProcessFields
+	}
+
+	if len(fieldList) > 0 {
+		p.fieldsList = make(map[string]struct{}, len(fieldList))
+		for _, field := range fieldList {
+			p.fieldsList[field] = struct{}{}
 		}
 	}
 
@@ -379,22 +405,26 @@ func (p *Plugin) maskValue(mask *Mask, value, buf []byte) ([]byte, bool) {
 	return value, true
 }
 
-func getValueNodeList(currentNode *insaneJSON.Node, valueNodes []*insaneJSON.Node, ignoredFields map[string]struct{}) []*insaneJSON.Node {
+func getValueNodeList(
+	currentNode *insaneJSON.Node,
+	valueNodes []*insaneJSON.Node,
+	fieldsList map[string]struct{},
+	isWhitelist bool,
+) []*insaneJSON.Node {
 	switch {
 	case currentNode.IsField():
 		fieldName := currentNode.AsString()
-		// check field name in list of ignored fields
-		_, fieldIsIgnored := ignoredFields[fieldName]
-		if !fieldIsIgnored {
-			valueNodes = getValueNodeList(currentNode.AsFieldValue(), valueNodes, ignoredFields)
+		_, listed := fieldsList[fieldName]
+		if isWhitelist == listed {
+			valueNodes = getValueNodeList(currentNode.AsFieldValue(), valueNodes, fieldsList, isWhitelist)
 		}
 	case currentNode.IsArray():
 		for _, n := range currentNode.AsArray() {
-			valueNodes = getValueNodeList(n, valueNodes, ignoredFields)
+			valueNodes = getValueNodeList(n, valueNodes, fieldsList, isWhitelist)
 		}
 	case currentNode.IsObject():
 		for _, n := range currentNode.AsFields() {
-			valueNodes = getValueNodeList(n, valueNodes, ignoredFields)
+			valueNodes = getValueNodeList(n, valueNodes, fieldsList, isWhitelist)
 		}
 	default:
 		valueNodes = append(valueNodes, currentNode)
@@ -410,7 +440,7 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	locApplied := false
 
 	p.valueNodes = p.valueNodes[:0]
-	p.valueNodes = getValueNodeList(root, p.valueNodes, p.ignoredFields)
+	p.valueNodes = getValueNodeList(root, p.valueNodes, p.fieldsList, p.isWhitelist)
 	for _, v := range p.valueNodes {
 		value := v.AsBytes()
 		var valueIsCommonMatched bool
