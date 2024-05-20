@@ -76,10 +76,6 @@ func buildDoIfTree(node *doIfTreeNode) (doif.Node, error) {
 			node.logicalOp,
 			operands,
 		)
-	// case node.byteLenCmpOp != "":
-	//     return NewByteLengthCmpNode(node.fieldName, node.byteLenCmpOp, node.cmpValue)
-	// case node.arrayLenCmpOp != "":
-	// 	   return NewArrayLengthCmpNode(node.fieldName, node.arrayLenCmpOp, node.cmpValue)
 	case node.lenCmpOp != "":
 		return doif.NewLenCmpOpNode(node.lenCmpOp, node.fieldName, node.cmpOp, node.cmpValue)
 	default:
