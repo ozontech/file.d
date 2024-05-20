@@ -21,9 +21,6 @@ type treeNode struct {
 	logicalOp string
 	operands  []treeNode
 
-	// byteLenCmpOp  string
-	// arrayLenCmpOp string
-
 	lenCmpOp string
 	cmpOp    string
 	cmpValue int
@@ -52,10 +49,6 @@ func buildTree(node treeNode) (Node, error) {
 			node.logicalOp,
 			operands,
 		)
-	// case node.byteLenCmpOp != "":
-	//     return NewByteLengthCmpNode(node.fieldName, node.byteLenCmpOp, node.cmpValue)
-	// case node.arrayLenCmpOp != "":
-	// 	   return NewArrayLengthCmpNode(node.fieldName, node.arrayLenCmpOp, node.cmpValue)
 	case node.lenCmpOp != "":
 		return NewLenCmpOpNode(node.lenCmpOp, node.fieldName, node.cmpOp, node.cmpValue)
 	default:
@@ -108,19 +101,7 @@ func checkNode(t *testing.T, want, got Node) {
 		for i := 0; i < len(wantNode.operands); i++ {
 			checkNode(t, wantNode.operands[i], gotNode.operands[i])
 		}
-		/*
-			case NodeByteLenCmpOp:
-				wantNode := want.(*byteLengthCmpNode)
-				gotNode := got.(*byteLengthCmpNode)
-				assert.NoError(t, wantNode.comparator.isEqualTo(gotNode.comparator))
-				assert.Equal(t, 0, slices.Compare[[]string](wantNode.fieldPath, gotNode.fieldPath))
-			case NodeArrayLenCmpOp:
-				wantNode := want.(*arrayLengthCmpNode)
-				gotNode := got.(*arrayLengthCmpNode)
-				assert.NoError(t, wantNode.comparator.isEqualTo(gotNode.comparator))
-				assert.Equal(t, 0, slices.Compare[[]string](wantNode.fieldPath, gotNode.fieldPath))
-		*/
-	case NodeLenCmpOp:
+	case NodeLengthCmpOp:
 		wantNode := want.(*lenCmpOpNode)
 		gotNode := got.(*lenCmpOpNode)
 		assert.Equal(t, wantNode.lenCmpOp, gotNode.lenCmpOp)

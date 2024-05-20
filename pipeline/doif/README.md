@@ -10,11 +10,7 @@ the chain of Match func calls are performed across the whole tree.
 
 <br>
 
-**`ByteLenCmpOp`** Type of node where matching rules for byte lengths of fields are stored.
-
-<br>
-
-**`ArrayLenCmpOp`** Type of node where matching rules for array lengths are stored.
+**`LengthCmpOp`** Type of node where matching rules for byte length and array length are stored
 
 <br>
 
@@ -289,17 +285,17 @@ result:
 <br>
 
 
-### Byte length comparison op node
-DoIf byte length comparison op node is considered to always be a leaf in the DoIf tree like DoIf field op node.
-It contains operation that compares field length in bytes with certain value.
+### Length comparison op node
+DoIf length comparison op node is considered to always be a leaf in the DoIf tree like DoIf field op node.
+It contains operation that compares field length in bytes or array length (for array fields) with certain value.
 
 Params:
-  - `op` - must be `byte_len_cmp`. Required.
+  - `op` - must be `byte_len_cmp` or `array_len_cmp`. Required.
   - `field` - name of the field to apply operation. Required.
   - `cmp_op` - comparison operation name (see below). Required.
   - `value` - integer value to compare length with. Required non-negative.
 
-Example:
+Example 1 (byte length comparison):
 ```yaml
 pipelines:
   test:
@@ -312,12 +308,36 @@ pipelines:
           value: 5
 ```
 
-result:
+Result:
 ```
 {"pod_id":""}      # discarded
 {"pod_id":123}     # discarded
 {"pod_id":12345}   # not discarded
 {"pod_id":123456}  # not discarded
+```
+
+Example 2 (array length comparison):
+
+```yaml
+pipelines:
+  test:
+    actions:
+      - type: discard
+        do_if:
+          op: array_len_cmp
+          field: items
+          cmp_op: lt
+          value: 2
+```
+
+Result:
+```
+{"items":[]}         # discarded
+{"items":[1]}        # discarded
+{"items":[1, 2]}     # not discarded
+{"items":[1, 2, 3]}  # not discarded
+{"items":"1"}        # not discarded ('items' is not an array)
+{"numbers":[1]}      # not discarded ('items' not found)
 ```
 
 Possible values of field `cmp_op`: `lt`, `le`, `gt`, `ge`, `eq`, `ne`.
@@ -331,40 +351,5 @@ They denote corresponding comparison operations.
 | `ge` | `>=` |
 | `eq` | `==` |
 | `ne` | `!=` |
-
-### Array length comparison op node
-DoIf array length comparison op node is also leaf in the DoIf tree like DoIf field op node and DoIf byte length cmp op node.
-It contains operation that compares array length with certain value.
-
-Params:
-  - `op` - must be `array_len_cmp`. Required.
-  - `field` - name of the field to apply operation. Required.
-  - `cmp_op` - comparison operation name (see below). Required.
-  - `value` - integer value to compare length with. Required non-negative.
-
-Example:
-```yaml
-pipelines:
-  test:
-    actions:
-      - type: discard
-        do_if:
-          op: array_len_cmp
-          field: items
-          cmp_op: lt
-          value: 2
-```
-
-result:
-```
-{"items":[]}         # discarded
-{"items":[1]}        # discarded
-{"items":[1, 2]}     # not discarded
-{"items":[1, 2, 3]}  # not discarded
-{"items":"1"}        # not discarded ('items' is not an array)
-{"numbers":[1]}      # not discarded ('items' not found)
-```
-
-Possible values of field `cmp_op` are the same as for byte length comparison op nodes
 
 <br>*Generated using [__insane-doc__](https://github.com/vitkovskii/insane-doc)*

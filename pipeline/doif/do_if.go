@@ -15,13 +15,8 @@ const (
 	// > Type of node where matching rules for fields are stored.
 	NodeFieldOp // *
 
-	// > Type of node where matching rules for byte lengths of fields are stored.
-	NodeByteLenCmpOp // *
-
-	// > Type of node where matching rules for array lengths are stored.
-	NodeArrayLenCmpOp // *
-
-	NodeLenCmpOp
+	// > Type of node where matching rules for byte length and array length are stored
+	NodeLengthCmpOp // *
 
 	// > Type of node where logical rules for applying other rules are stored.
 	NodeLogicalOp // *
