@@ -4,6 +4,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -641,6 +642,7 @@ type metaInformation struct {
 	login      string
 	remoteAddr net.IP
 	request    *http.Request
+	params     url.Values
 }
 
 func newMetaInformation(login string, ip net.IP, r *http.Request) metaInformation {
@@ -648,6 +650,7 @@ func newMetaInformation(login string, ip net.IP, r *http.Request) metaInformatio
 		login:      login,
 		remoteAddr: ip,
 		request:    r,
+		params:     r.URL.Query(),
 	}
 }
 
@@ -656,5 +659,6 @@ func (m metaInformation) GetData() map[string]any {
 		"login":       m.login,
 		"remote_addr": m.remoteAddr,
 		"request":     m.request,
+		"params":      m.params,
 	}
 }

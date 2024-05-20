@@ -10,3 +10,5 @@
 **`remote_addr`**  *`net.IP`*
 
 **`request`**  *`http.Request`*
+
+**`params`**  *`url.Values`*
