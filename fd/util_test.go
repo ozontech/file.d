@@ -48,9 +48,9 @@ type doIfTreeNode struct {
 	logicalOp string
 	operands  []*doIfTreeNode
 
-	byteLenCmpOp  string
-	arrayLenCmpOp string
-	cmpValue      int
+	lenCmpOp string
+	cmpOp    string
+	cmpValue int
 }
 
 // nolint:gocritic
@@ -76,10 +76,12 @@ func buildDoIfTree(node *doIfTreeNode) (doif.Node, error) {
 			node.logicalOp,
 			operands,
 		)
-	case node.byteLenCmpOp != "":
-		return doif.NewByteLengthCmpNode(node.fieldName, node.byteLenCmpOp, node.cmpValue)
-	case node.arrayLenCmpOp != "":
-		return doif.NewArrayLengthCmpNode(node.fieldName, node.arrayLenCmpOp, node.cmpValue)
+	// case node.byteLenCmpOp != "":
+	//     return NewByteLengthCmpNode(node.fieldName, node.byteLenCmpOp, node.cmpValue)
+	// case node.arrayLenCmpOp != "":
+	// 	   return NewArrayLengthCmpNode(node.fieldName, node.arrayLenCmpOp, node.cmpValue)
+	case node.lenCmpOp != "":
+		return doif.NewLenCmpOpNode(node.lenCmpOp, node.fieldName, node.cmpOp, node.cmpValue)
 	default:
 		return nil, errors.New("unknown type of node")
 	}
@@ -176,14 +178,16 @@ func Test_extractDoIfChecker(t *testing.T) {
 								caseSensitive: false,
 							},
 							{
-								byteLenCmpOp: "gt",
-								fieldName:    "msg",
-								cmpValue:     100,
+								lenCmpOp:  "byte_len_cmp",
+								cmpOp:     "gt",
+								fieldName: "msg",
+								cmpValue:  100,
 							},
 							{
-								arrayLenCmpOp: "lt",
-								fieldName:     "items",
-								cmpValue:      100,
+								lenCmpOp:  "array_len_cmp",
+								cmpOp:     "lt",
+								fieldName: "items",
+								cmpValue:  100,
 							},
 							{
 								logicalOp: "or",
@@ -226,9 +230,10 @@ func Test_extractDoIfChecker(t *testing.T) {
 				cfgStr: `{"op":"byte_len_cmp","field":"data","cmp_op":"lt","value":10}`,
 			},
 			want: &doIfTreeNode{
-				byteLenCmpOp: "lt",
-				fieldName:    "data",
-				cmpValue:     10,
+				lenCmpOp:  byteLenCmpTag,
+				cmpOp:     "lt",
+				fieldName: "data",
+				cmpValue:  10,
 			},
 		},
 		{
@@ -237,9 +242,10 @@ func Test_extractDoIfChecker(t *testing.T) {
 				cfgStr: `{"op":"array_len_cmp","field":"items","cmp_op":"lt","value":10}`,
 			},
 			want: &doIfTreeNode{
-				arrayLenCmpOp: "lt",
-				fieldName:     "items",
-				cmpValue:      10,
+				lenCmpOp:  arrayLenCmpTag,
+				cmpOp:     "lt",
+				fieldName: "items",
+				cmpValue:  10,
 			},
 		},
 		{

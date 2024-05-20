@@ -200,20 +200,20 @@ const (
 
 var (
 	doIfLogicalOpNodes = map[string]struct{}{
-		"and": struct{}{},
-		"not": struct{}{},
-		"or":  struct{}{},
+		"and": {},
+		"not": {},
+		"or":  {},
 	}
 	doIfFieldOpNodes = map[string]struct{}{
-		"equal":    struct{}{},
-		"contains": struct{}{},
-		"prefix":   struct{}{},
-		"suffix":   struct{}{},
-		"regex":    struct{}{},
+		"equal":    {},
+		"contains": {},
+		"prefix":   {},
+		"suffix":   {},
+		"regex":    {},
 	}
 	doIfLengthCmpOpNodes = map[string]struct{}{
-		byteLenCmpTag:  {},
-		arrayLenCmpTag: {},
+		"byte_len_cmp":  {},
+		"array_len_cmp": {},
 	}
 )
 
@@ -296,14 +296,17 @@ func extractLengthCmpOpNode(opName string, jsonNode *simplejson.Json) (doif.Node
 		return nil, err
 	}
 
-	switch opName {
-	case byteLenCmpTag:
-		return doif.NewByteLengthCmpNode(fieldPath, cmpOp, cmpValue)
-	case arrayLenCmpTag:
-		return doif.NewArrayLengthCmpNode(fieldPath, cmpOp, cmpValue)
-	default:
-		return nil, fmt.Errorf("unknown len cmp op name: %s", opName)
-	}
+	return doif.NewLenCmpOpNode(opName, fieldPath, cmpOp, cmpValue)
+	/*
+		switch opName {
+		case byteLenCmpTag:
+			return doif.NewByteLengthCmpNode(fieldPath, cmpOp, cmpValue)
+		case arrayLenCmpTag:
+			return doif.NewArrayLengthCmpNode(fieldPath, cmpOp, cmpValue)
+		default:
+			return nil, fmt.Errorf("unknown len cmp op name: %s", opName)
+		}
+	*/
 }
 
 func extractLogicalOpNode(opName string, jsonNode *simplejson.Json) (doif.Node, error) {

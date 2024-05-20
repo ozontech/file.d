@@ -21,6 +21,8 @@ const (
 	// > Type of node where matching rules for array lengths are stored.
 	NodeArrayLenCmpOp // *
 
+	NodeLenCmpOp
+
 	// > Type of node where logical rules for applying other rules are stored.
 	NodeLogicalOp // *
 )

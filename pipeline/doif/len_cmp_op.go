@@ -53,6 +53,7 @@ They denote corresponding comparison operations.
 | `ne` | `!=` |
 }*/
 
+/*
 type byteLengthCmpNode struct {
 	fieldPath  []string
 	comparator comparator
@@ -107,6 +108,7 @@ func (n *byteLengthCmpNode) isEqualTo(n2 Node, _ int) error {
 
 	return nil
 }
+*/
 
 /*{ do-if-array-len-cmp-op-node
 DoIf array length comparison op node is also leaf in the DoIf tree like DoIf field op node and DoIf byte length cmp op node.
@@ -144,6 +146,7 @@ result:
 Possible values of field `cmp_op` are the same as for byte length comparison op nodes
 }*/
 
+/*
 type arrayLengthCmpNode struct {
 	fieldPath  []string
 	comparator comparator
@@ -187,6 +190,102 @@ func (n *arrayLengthCmpNode) isEqualTo(n2 Node, _ int) error {
 
 	if slices.Compare(n.fieldPath, n2Explicit.fieldPath) != 0 {
 		return fmt.Errorf("nodes have different fieldPathStr expected: fieldPath=%v", n.fieldPath)
+	}
+
+	return nil
+}
+*/
+
+type lenCmpOpType int
+
+const (
+	byteLenCmpOp lenCmpOpType = iota
+	arrayLenCmpOp
+)
+
+const (
+	byteLenCmpOpTag  = "byte_len_cmp"
+	arrayLenCmpOpTag = "array_len_cmp"
+)
+
+type lenCmpOpNode struct {
+	lenCmpOp   lenCmpOpType
+	fieldPath  []string
+	comparator comparator
+}
+
+func NewLenCmpOpNode(op string, field string, cmpOp string, cmpValue int) (Node, error) {
+	var lenCmpOp lenCmpOpType
+	switch op {
+	case byteLenCmpOpTag:
+		lenCmpOp = byteLenCmpOp
+	case arrayLenCmpOpTag:
+		lenCmpOp = arrayLenCmpOp
+	default:
+		return nil, fmt.Errorf("bad len cmp op: %s", op)
+	}
+
+	fieldPath := cfg.ParseFieldSelector(field)
+	cmp, err := newComparator(cmpOp, cmpValue)
+	if err != nil {
+		return nil, fmt.Errorf("init byte len cmp op node: %w", err)
+	}
+
+	return &lenCmpOpNode{
+		lenCmpOp:   lenCmpOp,
+		fieldPath:  fieldPath,
+		comparator: cmp,
+	}, nil
+}
+
+func (n *lenCmpOpNode) Type() NodeType {
+	return NodeLenCmpOp
+}
+
+func (n *lenCmpOpNode) Check(eventRoot *insaneJSON.Root) bool {
+	switch n.lenCmpOp {
+	case byteLenCmpOp:
+		node := eventRoot.Dig(n.fieldPath...)
+		if node == nil {
+			return false
+		}
+
+		byteLen := 0
+		if node.IsObject() || node.IsArray() {
+			byteLen = len(node.EncodeToByte())
+		} else {
+			byteLen = len(node.AsString())
+		}
+
+		return n.comparator.compare(byteLen)
+	case arrayLenCmpOp:
+		node := eventRoot.Dig(n.fieldPath...)
+		if !node.IsArray() {
+			return false
+		}
+
+		return n.comparator.compare(len(node.AsArray()))
+	default:
+		panic("impossible: bad len cmp op")
+	}
+}
+
+func (n *lenCmpOpNode) isEqualTo(n2 Node, _ int) error {
+	n2Explicit, ok := n2.(*lenCmpOpNode)
+	if !ok {
+		return errors.New("nodes have different types; expected: lenCmpOpNode")
+	}
+
+	if n.lenCmpOp != n2Explicit.lenCmpOp {
+		return fmt.Errorf("nodes have different len cmp operations: %d != %d", n.lenCmpOp, n2Explicit.lenCmpOp)
+	}
+
+	if err := n.comparator.isEqualTo(n2Explicit.comparator); err != nil {
+		return err
+	}
+
+	if slices.Compare(n.fieldPath, n2Explicit.fieldPath) != 0 {
+		return fmt.Errorf("nodes have different fieldPathStr; expected: fieldPath=%v", n.fieldPath)
 	}
 
 	return nil
