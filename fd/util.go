@@ -193,11 +193,6 @@ func extractMetrics(actionJSON *simplejson.Json) (string, []string, bool) {
 	return metricName, metricLabels, skipStatus
 }
 
-const (
-	byteLenCmpTag  = "byte_len_cmp"
-	arrayLenCmpTag = "array_len_cmp"
-)
-
 var (
 	doIfLogicalOpNodes = map[string]struct{}{
 		"and": {},
@@ -297,16 +292,6 @@ func extractLengthCmpOpNode(opName string, jsonNode *simplejson.Json) (doif.Node
 	}
 
 	return doif.NewLenCmpOpNode(opName, fieldPath, cmpOp, cmpValue)
-	/*
-		switch opName {
-		case byteLenCmpTag:
-			return doif.NewByteLengthCmpNode(fieldPath, cmpOp, cmpValue)
-		case arrayLenCmpTag:
-			return doif.NewArrayLengthCmpNode(fieldPath, cmpOp, cmpValue)
-		default:
-			return nil, fmt.Errorf("unknown len cmp op name: %s", opName)
-		}
-	*/
 }
 
 func extractLogicalOpNode(opName string, jsonNode *simplejson.Json) (doif.Node, error) {

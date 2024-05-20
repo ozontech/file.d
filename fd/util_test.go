@@ -230,7 +230,7 @@ func Test_extractDoIfChecker(t *testing.T) {
 				cfgStr: `{"op":"byte_len_cmp","field":"data","cmp_op":"lt","value":10}`,
 			},
 			want: &doIfTreeNode{
-				lenCmpOp:  byteLenCmpTag,
+				lenCmpOp:  "byte_len_cmp",
 				cmpOp:     "lt",
 				fieldName: "data",
 				cmpValue:  10,
@@ -242,7 +242,7 @@ func Test_extractDoIfChecker(t *testing.T) {
 				cfgStr: `{"op":"array_len_cmp","field":"items","cmp_op":"lt","value":10}`,
 			},
 			want: &doIfTreeNode{
-				lenCmpOp:  arrayLenCmpTag,
+				lenCmpOp:  "array_len_cmp",
 				cmpOp:     "lt",
 				fieldName: "items",
 				cmpValue:  10,
