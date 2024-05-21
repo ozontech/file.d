@@ -425,34 +425,6 @@ func (p *Plugin) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *Plugin) serveBulk(w http.ResponseWriter, r *http.Request, meta metadata.MetaData) {
-	if len(p.config.CORS.AllowedOrigins) > 0 {
-		// TODO: current origin
-		w.Header().Set(
-			"Access-Control-Allow-Origins",
-			strings.Join(p.config.CORS.AllowedOrigins, ","),
-		)
-	}
-
-	if len(p.config.CORS.AllowedHeaders) > 0 {
-		w.Header().Set(
-			"Access-Control-Allow-Headers",
-			strings.Join(p.config.CORS.AllowedHeaders, ","),
-		)
-	}
-
-	if len(p.config.CORS.ExposedHeaders) > 0 {
-		w.Header().Set(
-			"Access-Control-Exposed-Headers",
-			strings.Join(p.config.CORS.ExposedHeaders, ","),
-		)
-	}
-
-	w.Header().Set("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
-
-	if r.Method == http.MethodOptions {
-		return
-	}
-
 	if r.Method != http.MethodPost {
 		http.Error(w, "", http.StatusMethodNotAllowed)
 		return
