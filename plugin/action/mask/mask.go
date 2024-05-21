@@ -88,12 +88,16 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
-	// > List of the ignored event fields (including nested fields).
+	// > List of the ignored event fields (field depth doesn't matter).
+	// > If name of some field contained in this list
+	// > then all nested fields will be ignored (even if they are not listed)
 	IgnoreFields []string `json:"ignore_fields"` // *
 
 	// > @3@4@5@6
 	// >
-	// > List of the processed event fields (including nested fields).
+	// > List of the processed event fields.
+	// > If name of some field contained in this list
+	// > then all nested fields will be processed (even if they are not listed).
 	// > If ignored fields list is empty and processed fields list is empty
 	// > we consider this as empty ignored fields list (all fields will be processed).
 	// > It is wrong to set non-empty ignored fields list and non-empty processed fields list at the same time.
@@ -405,31 +409,77 @@ func (p *Plugin) maskValue(mask *Mask, value, buf []byte) ([]byte, bool) {
 	return value, true
 }
 
-func getValueNodeList(
-	currentNode *insaneJSON.Node,
-	valueNodes []*insaneJSON.Node,
-	fieldsList map[string]struct{},
-	isWhitelist bool,
-) []*insaneJSON.Node {
+func getValueNodesByBlacklist(currentNode *insaneJSON.Node, valueNodes []*insaneJSON.Node, ignoredFields map[string]struct{}) []*insaneJSON.Node {
 	switch {
 	case currentNode.IsField():
 		fieldName := currentNode.AsString()
-		_, listed := fieldsList[fieldName]
-		if isWhitelist == listed {
-			valueNodes = getValueNodeList(currentNode.AsFieldValue(), valueNodes, fieldsList, isWhitelist)
+		_, ignored := ignoredFields[fieldName]
+		if !ignored {
+			valueNodes = getValueNodesByBlacklist(currentNode.AsFieldValue(), valueNodes, ignoredFields)
 		}
 	case currentNode.IsArray():
 		for _, n := range currentNode.AsArray() {
-			valueNodes = getValueNodeList(n, valueNodes, fieldsList, isWhitelist)
+			valueNodes = getValueNodesByBlacklist(n, valueNodes, ignoredFields)
 		}
 	case currentNode.IsObject():
 		for _, n := range currentNode.AsFields() {
-			valueNodes = getValueNodeList(n, valueNodes, fieldsList, isWhitelist)
+			valueNodes = getValueNodesByBlacklist(n, valueNodes, ignoredFields)
 		}
 	default:
 		valueNodes = append(valueNodes, currentNode)
 	}
+
 	return valueNodes
+}
+
+func getAllValueNodes(currentNode *insaneJSON.Node, valueNodes []*insaneJSON.Node) []*insaneJSON.Node {
+	switch {
+	case currentNode.IsField():
+		valueNodes = getAllValueNodes(currentNode.AsFieldValue(), valueNodes)
+	case currentNode.IsArray():
+		for _, n := range currentNode.AsArray() {
+			valueNodes = getAllValueNodes(n, valueNodes)
+		}
+	case currentNode.IsObject():
+		for _, n := range currentNode.AsFields() {
+			valueNodes = getAllValueNodes(n, valueNodes)
+		}
+	default:
+		valueNodes = append(valueNodes, currentNode)
+	}
+
+	return valueNodes
+}
+
+func getValueNodesByWhitelist(currentNode *insaneJSON.Node, valueNodes []*insaneJSON.Node, processedFields map[string]struct{}) []*insaneJSON.Node {
+	switch {
+	case currentNode.IsField():
+		fieldName := currentNode.AsString()
+		_, processed := processedFields[fieldName]
+		if processed {
+			valueNodes = getAllValueNodes(currentNode.AsFieldValue(), valueNodes)
+		} else {
+			valueNodes = getValueNodesByWhitelist(currentNode.AsFieldValue(), valueNodes, processedFields)
+		}
+	case currentNode.IsArray():
+		for _, n := range currentNode.AsArray() {
+			valueNodes = getValueNodesByWhitelist(n, valueNodes, processedFields)
+		}
+	case currentNode.IsObject():
+		for _, n := range currentNode.AsFields() {
+			valueNodes = getValueNodesByWhitelist(n, valueNodes, processedFields)
+		}
+	}
+
+	return valueNodes
+}
+
+func getValueNodes(currentNode *insaneJSON.Node, valueNodes []*insaneJSON.Node, fieldsList map[string]struct{}, isWhitelist bool) []*insaneJSON.Node {
+	if isWhitelist {
+		return getValueNodesByWhitelist(currentNode, valueNodes, fieldsList)
+	} else {
+		return getValueNodesByBlacklist(currentNode, valueNodes, fieldsList)
+	}
 }
 
 func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
@@ -440,7 +490,7 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	locApplied := false
 
 	p.valueNodes = p.valueNodes[:0]
-	p.valueNodes = getValueNodeList(root, p.valueNodes, p.fieldsList, p.isWhitelist)
+	p.valueNodes = getValueNodes(root, p.valueNodes, p.fieldsList, p.isWhitelist)
 	for _, v := range p.valueNodes {
 		value := v.AsBytes()
 		var valueIsCommonMatched bool

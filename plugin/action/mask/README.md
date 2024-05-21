@@ -46,13 +46,17 @@ If any mask has been applied then `mask_applied_field` will be set to `mask_appl
 
 **`ignore_fields`** *`[]string`* 
 
-List of the ignored event fields (including nested fields).
+List of the ignored event fields (field depth doesn't matter).
+If name of some field contained in this list
+then all nested fields will be ignored (even if they are not listed)
 
 <br>
 
 **`process_fields`** *`[]string`* 
 
-List of the processed event fields (including nested fields).
+List of the processed event fields.
+If name of some field contained in this list
+then all nested fields will be processed (even if they are not listed).
 If ignored fields list is empty and processed fields list is empty
 we consider this as empty ignored fields list (all fields will be processed).
 It is wrong to set non-empty ignored fields list and non-empty processed fields list at the same time.

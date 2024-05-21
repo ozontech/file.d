@@ -355,28 +355,55 @@ func TestGetValueNodeList(t *testing.T) {
 		},
 		{
 			name:  "test with ignored field",
-			input: `{"name1":"value1", "ignored_field":"value2"}`,
+			input: `{"name1":"value1", "name2":"value2", "ignored_field":"some"}`,
 			fieldsList: map[string]struct{}{
 				"ignored_field": {},
 			},
 			isWhitelist: false,
-			expected:    []string{"value1"},
+			expected:    []string{"value1", "value2"},
 			comment:     "skip ignored_field",
+		},
+		{
+			name:  "test with processed field",
+			input: `{"name1":"value1", "name2":"value2", "processed_field":"some"}`,
+			fieldsList: map[string]struct{}{
+				"processed_field": {},
+			},
+			isWhitelist: true,
+			expected:    []string{"some"},
+			comment:     "skip all fields except processed_field",
 		},
 		{
 			name: "test with ignored nested field",
 			input: `{
 				"name1":"value1",
+				"name2":"value2",
 				"nested": {
-					"ignored_field":"value2"
+					"ignored_field":"some"
 				}
 			}`,
 			fieldsList: map[string]struct{}{
 				"ignored_field": {},
 			},
 			isWhitelist: false,
-			expected:    []string{"value1"},
+			expected:    []string{"value1", "value2"},
 			comment:     "skip nested ignored_field",
+		},
+		{
+			name: "test with processed nested field",
+			input: `{
+				"name1":"value1",
+				"name2":"value2",
+				"nested": {
+					"processed_field":"some"
+				}
+			}`,
+			fieldsList: map[string]struct{}{
+				"processed_field": {},
+			},
+			isWhitelist: true,
+			expected:    []string{"some"},
+			comment:     "skip all fields except nested processed_field",
 		},
 		{
 			name: "big json with ints and nulls",
@@ -437,8 +464,8 @@ func TestGetValueNodeList(t *testing.T) {
 			defer insaneJSON.Release(root)
 
 			nodes := make([]*insaneJSON.Node, 0)
-			nodes = getValueNodeList(root.Node, nodes, s.fieldsList, s.isWhitelist)
-			assert.Equal(t, len(nodes), len(s.expected), s.comment)
+			nodes = getValueNodes(root.Node, nodes, s.fieldsList, s.isWhitelist)
+			require.Equal(t, len(nodes), len(s.expected), s.comment)
 			for i := range nodes {
 				assert.Equal(t, s.expected[i], nodes[i].AsString(), s.comment)
 			}
