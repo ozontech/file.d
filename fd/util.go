@@ -23,6 +23,7 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 	streamField := pipeline.DefaultStreamField
 	maintenanceInterval := pipeline.DefaultMaintenanceInterval
 	decoder := "auto"
+	decoderParams := make(map[string]any)
 	isStrict := false
 	eventTimeout := pipeline.DefaultEventTimeout
 	metricHoldDuration := pipeline.DefaultMetricHoldDuration
@@ -47,6 +48,8 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 		if str != "" {
 			decoder = str
 		}
+
+		decoderParams = settings.Get("decoder_params").MustMap()
 
 		str = settings.Get("stream_field").MustString()
 		if str != "" {
@@ -99,6 +102,7 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 
 	return &pipeline.Settings{
 		Decoder:             decoder,
+		DecoderParams:       decoderParams,
 		Capacity:            capacity,
 		AvgEventSize:        avgInputEventSize,
 		MaxEventSize:        maxInputEventSize,

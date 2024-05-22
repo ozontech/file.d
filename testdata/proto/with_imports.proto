@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+import "imported.proto";
+
+package test;
+option go_package = "test.v1";
+
+message Data {
+  string stringData = 1 [json_name="string_data"];
+  int32 intData = 2 [json_name="int_data"];
+}
+
+message MyMessage {
+  message InternalData {
+    repeated string myStrings = 1 [json_name="my_strings"];
+    bool isValid = 2 [json_name="is_valid"];
+  }
+
+  Data data = 1;
+  InternalData internalData = 2 [json_name="internal_data"];
+  uint64 version = 3;
+}

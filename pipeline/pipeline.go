@@ -44,11 +44,11 @@ type finalizeFn = func(event *Event, notifyInput bool, backEvent bool)
 
 type InputPluginController interface {
 	In(sourceID SourceID, sourceName string, offset int64, data []byte, isNewSource bool) uint64
-	UseSpread()                           // don't use stream field and spread all events across all processors
-	DisableStreams()                      // don't use stream field
-	SuggestDecoder(t decoder.DecoderType) // set decoder if pipeline uses "auto" value for decoder
-	IncReadOps()                          // inc read ops for metric
-	IncMaxEventSizeExceeded()             // inc max event size exceeded counter
+	UseSpread()                    // don't use stream field and spread all events across all processors
+	DisableStreams()               // don't use stream field
+	SuggestDecoder(t decoder.Type) // set decoder if pipeline uses "auto" value for decoder
+	IncReadOps()                   // inc read ops for metric
+	IncMaxEventSizeExceeded()      // inc max event size exceeded counter
 }
 
 type ActionPluginController interface {
@@ -72,8 +72,9 @@ type Pipeline struct {
 	started  bool
 	settings *Settings
 
-	decoder          decoder.DecoderType // decoder set in the config
-	suggestedDecoder decoder.DecoderType // decoder suggested by input plugin, it is used when config decoder is set to "auto"
+	decoder          decoder.Type // decoder set in the config
+	suggestedDecoder decoder.Type // decoder suggested by input plugin, it is used when config decoder is set to "auto"
+	protobufDecoder  *decoder.ProtobufDecoder
 
 	eventPool *eventPool
 	streamer  *streamer
@@ -127,6 +128,7 @@ type Pipeline struct {
 
 type Settings struct {
 	Decoder             string
+	DecoderParams       map[string]any
 	Capacity            int
 	MaintenanceInterval time.Duration
 	EventTimeout        time.Duration
@@ -190,6 +192,14 @@ func New(name string, settings *Settings, registry *prometheus.Registry) *Pipeli
 		pipeline.decoder = decoder.POSTGRES
 	case "nginx_error":
 		pipeline.decoder = decoder.NGINX_ERROR
+	case "protobuf":
+		pipeline.decoder = decoder.PROTOBUF
+
+		dec, err := decoder.NewProtobufDecoder(pipeline.settings.DecoderParams)
+		if err != nil {
+			pipeline.logger.Fatal("can't create protobuf decoder", zap.Error(err))
+		}
+		pipeline.protobufDecoder = dec
 	case "auto":
 		pipeline.decoder = decoder.AUTO
 	default:
@@ -356,7 +366,7 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 	}
 
 	var (
-		dec decoder.DecoderType
+		dec decoder.Type
 		row decoder.CRIRow
 		err error
 	)
@@ -457,6 +467,20 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 				zap.ByteString("log", bytes))
 
 			p.eventPool.back(event)
+			return EventSeqIDError
+		}
+	case decoder.PROTOBUF:
+		_ = event.Root.DecodeString("{}")
+		err = p.protobufDecoder.Decode(event.Root, bytes)
+		if err != nil {
+			p.logger.Fatal("wrong protobuf format", zap.Error(err),
+				zap.Int64("offset", offset),
+				zap.Int("length", length),
+				zap.Uint64("source", uint64(sourceID)),
+				zap.String("source_name", sourceName),
+				zap.ByteString("log", bytes))
+
+			// Dead route, never passed here.
 			return EventSeqIDError
 		}
 	default:
@@ -782,7 +806,7 @@ func (p *Pipeline) DisableStreams() {
 	p.disableStreams = true
 }
 
-func (p *Pipeline) SuggestDecoder(t decoder.DecoderType) {
+func (p *Pipeline) SuggestDecoder(t decoder.Type) {
 	p.suggestedDecoder = t
 }
 
