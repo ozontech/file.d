@@ -66,7 +66,7 @@ func TestProtobufDecoder(t *testing.T) {
 			params: map[string]any{
 				protoFileParam:    "with_imports.proto",
 				protoMessageParam: protoMessage,
-				protoImportPathsParam: []string{
+				protoImportPathsParam: []any{
 					"../testdata/proto",
 				},
 			},
