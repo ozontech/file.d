@@ -10,6 +10,7 @@ import (
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/xoauth"
 	"github.com/ozontech/file.d/xscram"
 	"github.com/ozontech/file.d/xtls"
 	"github.com/prometheus/client_golang/prometheus"
@@ -120,7 +121,7 @@ type Config struct {
 	// > @3@4@5@6
 	// >
 	// > SASL mechanism to use.
-	SaslMechanism string `json:"sasl_mechanism" default:"SCRAM-SHA-512" options:"PLAIN|SCRAM-SHA-256|SCRAM-SHA-512"` // *
+	SaslMechanism string `json:"sasl_mechanism" default:"SCRAM-SHA-512" options:"PLAIN|SCRAM-SHA-256|SCRAM-SHA-512|OAUTHBEARER"` // *
 
 	// > @3@4@5@6
 	// >
@@ -131,6 +132,14 @@ type Config struct {
 	// >
 	// > SASL password.
 	SaslPassword string `json:"sasl_password" default:"password"` // *
+
+	// > @3@4@5@6
+	// >
+	// > SASL OAuth config.
+	// > * `client_id` - client ID
+	// > * `client_secret` - client secret
+	// > * `token_url` - token url
+	SaslOauth xoauth.Config `json:"sasl_oauth" child:"true"` // *
 
 	// > @3@4@5@6
 	// >
@@ -241,6 +250,12 @@ func NewConsumerGroup(c *Config, l *zap.SugaredLogger) sarama.ConsumerGroup {
 			config.Net.SASL.SCRAMClientGeneratorFunc = func() sarama.SCRAMClient { return xscram.NewClient(xscram.SHA256) }
 		case sarama.SASLTypeSCRAMSHA512:
 			config.Net.SASL.SCRAMClientGeneratorFunc = func() sarama.SCRAMClient { return xscram.NewClient(xscram.SHA512) }
+		case sarama.SASLTypeOAuth:
+			provider, err := xoauth.NewSaramaTokenProvider(c.SaslOauth)
+			if err != nil {
+				l.Fatalf("can't create OAuth token provider: %s", err.Error())
+			}
+			config.Net.SASL.TokenProvider = provider
 		}
 	}
 

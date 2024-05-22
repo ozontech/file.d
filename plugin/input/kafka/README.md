@@ -81,7 +81,7 @@ If set, the plugin will use SASL authentications mechanism.
 
 <br>
 
-**`sasl_mechanism`** *`string`* *`default=SCRAM-SHA-512`* *`options=PLAIN|SCRAM-SHA-256|SCRAM-SHA-512`* 
+**`sasl_mechanism`** *`string`* *`default=SCRAM-SHA-512`* *`options=PLAIN|SCRAM-SHA-256|SCRAM-SHA-512|OAUTHBEARER`* 
 
 SASL mechanism to use.
 
@@ -96,6 +96,15 @@ SASL username.
 **`sasl_password`** *`string`* *`default=password`* 
 
 SASL password.
+
+<br>
+
+**`sasl_oauth`** *`xoauth.Config`* 
+
+SASL OAuth config.
+* `client_id` - client ID
+* `client_secret` - client secret
+* `token_url` - token url
 
 <br>
 

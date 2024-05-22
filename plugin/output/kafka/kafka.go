@@ -10,6 +10,7 @@ import (
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/xoauth"
 	"github.com/ozontech/file.d/xscram"
 	"github.com/ozontech/file.d/xtls"
 	"github.com/prometheus/client_golang/prometheus"
@@ -145,6 +146,14 @@ type Config struct {
 	// >
 	// > SASL password.
 	SaslPassword string `json:"sasl_password" default:"password"` // *
+
+	// > @3@4@5@6
+	// >
+	// > SASL OAuth config.
+	// > * `client_id` - client ID
+	// > * `client_secret` - client secret
+	// > * `token_url` - token url
+	SaslOauth xoauth.Config `json:"sasl_oauth" child:"true"` // *
 
 	// > @3@4@5@6
 	// >
@@ -322,6 +331,12 @@ func NewProducer(c *Config, l *zap.SugaredLogger) sarama.SyncProducer {
 			config.Net.SASL.SCRAMClientGeneratorFunc = func() sarama.SCRAMClient { return xscram.NewClient(xscram.SHA256) }
 		case sarama.SASLTypeSCRAMSHA512:
 			config.Net.SASL.SCRAMClientGeneratorFunc = func() sarama.SCRAMClient { return xscram.NewClient(xscram.SHA512) }
+		case sarama.SASLTypeOAuth:
+			provider, err := xoauth.NewSaramaTokenProvider(c.SaslOauth)
+			if err != nil {
+				l.Fatalf("can't create OAuth token provider: %s", err.Error())
+			}
+			config.Net.SASL.TokenProvider = provider
 		}
 	}
 
