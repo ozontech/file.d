@@ -332,7 +332,7 @@ func TestGroupNumbers(t *testing.T) {
 }
 
 //nolint:funlen
-func TestGetValueNodeList(t *testing.T) {
+func TestGetValueNodes(t *testing.T) {
 	suits := []struct {
 		name        string
 		input       string
@@ -463,11 +463,79 @@ func TestGetValueNodeList(t *testing.T) {
 			require.NoError(t, err)
 			defer insaneJSON.Release(root)
 
-			nodes := make([]*insaneJSON.Node, 0)
-			nodes = getValueNodes(root.Node, nodes, s.fieldsList, s.isWhitelist)
+			nodes := getValueNodes(root.Node, nil, s.fieldsList, s.isWhitelist)
 			require.Equal(t, len(nodes), len(s.expected), s.comment)
 			for i := range nodes {
 				assert.Equal(t, s.expected[i], nodes[i].AsString(), s.comment)
+			}
+		})
+	}
+}
+
+//nolint:funlen
+func TestGetAllValueNodes(t *testing.T) {
+	suits := []struct {
+		name     string
+		input    string
+		expected []string
+	}{
+		{
+			name:     "one string",
+			input:    `"abc"`,
+			expected: []string{"abc"},
+		},
+		{
+			name:     "one number",
+			input:    `123`,
+			expected: []string{"123"},
+		},
+		{
+			name:     "one boolean",
+			input:    `true`,
+			expected: []string{"true"},
+		},
+		{
+			name:     "one null",
+			input:    `null`,
+			expected: []string{"null"},
+		},
+		{
+			name:     "simple array",
+			input:    `["abc", 123, true, null]`,
+			expected: []string{"abc", "123", "true", "null"},
+		},
+		{
+			name:     "nested arrays",
+			input:    `[[], ["abc", 123, [true]], [[[], [null]]]]`,
+			expected: []string{"abc", "123", "true", "null"},
+		},
+		{
+			name:     "simple object",
+			input:    `{"name1":"abc", "name2":123, "name3":true, "name4":null}`,
+			expected: []string{"abc", "123", "true", "null"},
+		},
+		{
+			name:     "nested objects",
+			input:    `{"f1": {"some":"abc", "f2": {"n":123, "flag":true, "f3": {"name":null}}}}`,
+			expected: []string{"abc", "123", "true", "null"},
+		},
+		{
+			name:     "array and object",
+			input:    `{"f1": ["abc", {"name2":123, "name3":true}], "name": {"name":null}}`,
+			expected: []string{"abc", "123", "true", "null"},
+		},
+	}
+
+	for _, s := range suits {
+		t.Run(s.name, func(t *testing.T) {
+			root, err := insaneJSON.DecodeString(s.input)
+			require.NoError(t, err)
+			defer insaneJSON.Release(root)
+
+			nodes := getAllValueNodes(root.Node, nil)
+			require.Equal(t, len(nodes), len(s.expected))
+			for i := range nodes {
+				assert.Equal(t, s.expected[i], nodes[i].AsString())
 			}
 		})
 	}
