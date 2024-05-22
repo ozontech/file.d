@@ -1,8 +1,10 @@
 package decoder
 
 import (
+	"encoding/json"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	insaneJSON "github.com/vitkovskii/insane-json"
 )
@@ -32,37 +34,68 @@ message MyMessage {
 func TestProtobufDecoder(t *testing.T) {
 	const protoMessage = "MyMessage"
 
+	type (
+		testData struct {
+			StringData string `json:"string_data"`
+			IntData    int    `json:"int_data"`
+		}
+
+		testInternalData struct {
+			MyStrings []string `json:"my_strings"`
+			IsValid   bool     `json:"is_valid"`
+		}
+
+		testMyMessage struct {
+			Data         testData         `json:"data"`
+			InternalData testInternalData `json:"internal_data"`
+			Version      string           `json:"version"`
+		}
+	)
+
+	inputData := []byte{10, 13, 10, 9, 109, 121, 95, 115, 116, 114, 105, 110, 103, 16, 123, 18, 14, 10, 4, 115, 116, 114, 49, 10, 4, 115, 116, 114, 50, 16, 1, 24, 10}
+	myMessage := testMyMessage{
+		Data: testData{
+			StringData: "my_string",
+			IntData:    123,
+		},
+		InternalData: testInternalData{
+			MyStrings: []string{"str1", "str2"},
+			IsValid:   true,
+		},
+		Version: "10",
+	}
+
 	tests := []struct {
 		name string
 
 		data   []byte
 		params map[string]any
 
-		want          string
+		want          testMyMessage
 		wantCreateErr bool
 		wantDecodeErr bool
 	}{
 		{
 			name: "proto_file_path",
-			data: []byte{10, 13, 10, 9, 109, 121, 95, 115, 116, 114, 105, 110, 103, 16, 123, 18, 14, 10, 4, 115, 116, 114, 49, 10, 4, 115, 116, 114, 50, 16, 1, 24, 10},
+			data: inputData,
 			params: map[string]any{
 				protoFileParam:    "../testdata/proto/valid.proto",
 				protoMessageParam: protoMessage,
 			},
-			want: `{"data":{"string_data":"my_string", "int_data":123}, "internal_data":{"my_strings":["str1", "str2"], "is_valid":true}, "version":"10"}`,
+			want: myMessage,
 		},
 		{
 			name: "proto_file_content",
-			data: []byte{10, 13, 10, 9, 109, 121, 95, 115, 116, 114, 105, 110, 103, 16, 123, 18, 14, 10, 4, 115, 116, 114, 49, 10, 4, 115, 116, 114, 50, 16, 1, 24, 10},
+			data: inputData,
 			params: map[string]any{
 				protoFileParam:    protoContent,
 				protoMessageParam: protoMessage,
 			},
-			want: `{"data":{"string_data":"my_string", "int_data":123}, "internal_data":{"my_strings":["str1", "str2"], "is_valid":true}, "version":"10"}`,
+			want: myMessage,
 		},
 		{
 			name: "proto_file_with_imports",
-			data: []byte{10, 13, 10, 9, 109, 121, 95, 115, 116, 114, 105, 110, 103, 16, 123, 18, 14, 10, 4, 115, 116, 114, 49, 10, 4, 115, 116, 114, 50, 16, 1, 24, 10},
+			data: inputData,
 			params: map[string]any{
 				protoFileParam:    "with_imports.proto",
 				protoMessageParam: protoMessage,
@@ -70,7 +103,7 @@ func TestProtobufDecoder(t *testing.T) {
 					"../testdata/proto",
 				},
 			},
-			want: `{"data":{"string_data":"my_string", "int_data":123}, "internal_data":{"my_strings":["str1", "str2"], "is_valid":true}, "version":"10"}`,
+			want: myMessage,
 		},
 		{
 			name: "proto_file_param_not_exists",
@@ -148,7 +181,10 @@ func TestProtobufDecoder(t *testing.T) {
 				return
 			}
 
-			require.Equal(t, tt.want, root.AsString())
+			// for correct comparison
+			var gotMsg testMyMessage
+			assert.NoError(t, json.Unmarshal(root.AsBytes(), &gotMsg))
+			require.Equal(t, tt.want, gotMsg)
 		})
 	}
 }
