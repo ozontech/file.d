@@ -114,6 +114,15 @@ SASL password.
 
 <br>
 
+**`sasl_oauth`** *`xoauth.Config`* 
+
+SASL OAuth config.
+* `client_id` - client ID
+* `client_secret` - client secret
+* `token_url` - token url
+
+<br>
+
 **`is_ssl_enabled`** *`bool`* *`default=false`* 
 
 If set, the plugin will use SSL/TLS connections method.
