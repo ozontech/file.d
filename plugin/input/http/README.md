@@ -139,4 +139,6 @@ Key uses in the http_input_total metric.
 
 **`request`**  *`http.Request`*
 
+**`params`**  *`url.Values`*
+
 <br>*Generated using [__insane-doc__](https://github.com/vitkovskii/insane-doc)*

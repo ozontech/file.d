@@ -30,6 +30,23 @@ elasticsearch:
 input:
   type: http
   address: ":80"
+  meta:
+    remote_addr: "{{ .remote_addr }}"
+    user_agent: '{{ index (index .request.Header "User-Agent") 0}}'
+    env: '{{ index (index .params "env") 0}}'
+  cors:
+      allowed_headers:
+        - DNT
+        - X-CustomHeader
+        - Keep-Alive
+        - User-Agent
+        - X-Requested-With
+        - If-Modified-Since
+        - Cache-Control
+        - Content-Type
+        - Authorization
+      allowed_origins:
+        - http://localhost:8090
 actions:
   - type: set_time
   - type: convert_log_level
@@ -37,6 +54,12 @@ actions:
     style: number
     default_level: info
     remove_on_fail: true
+  - type: mask
+    metric_name: errors_total
+    metric_skip_status: true
+    metric_labels:
+      - env
+      - level
 
 resourceType: Deployment
 replicas: 1

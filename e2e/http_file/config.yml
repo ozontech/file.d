@@ -10,10 +10,6 @@ pipelines:
         match_fields:
           should_drop: ok
         match_mode: or
-      - type: add_file_name
-        field: source_name
-      - type: parse_http
-        field: source_name
       - type: join
         field: log
         start: '/^(panic:)|(http: panic serving)/'

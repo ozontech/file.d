@@ -595,11 +595,11 @@ func (p *Plugin) putGzipReader(reader *gzip.Reader) {
 func getUserIP(r *http.Request) net.IP {
 	var userIP string
 	switch {
-	case len(r.Header.Get("CF-Connecting-IP")) > 1:
+	case r.Header.Get("CF-Connecting-IP") != "":
 		userIP = r.Header.Get("CF-Connecting-IP")
-	case len(r.Header.Get("X-Forwarded-For")) > 1:
+	case r.Header.Get("X-Forwarded-For") != "":
 		userIP = r.Header.Get("X-Forwarded-For")
-	case len(r.Header.Get("X-Real-IP")) > 1:
+	case r.Header.Get("X-Real-IP") != "":
 		userIP = r.Header.Get("X-Real-IP")
 	default:
 		userIP = r.RemoteAddr
