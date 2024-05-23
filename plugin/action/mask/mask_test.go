@@ -336,7 +336,7 @@ func TestGetValueNodes(t *testing.T) {
 	suits := []struct {
 		name        string
 		input       string
-		fieldsList  map[string]struct{}
+		fieldPaths  [][]string
 		isWhitelist bool
 		expected    []string
 		comment     string
@@ -356,8 +356,8 @@ func TestGetValueNodes(t *testing.T) {
 		{
 			name:  "test with ignored field",
 			input: `{"name1":"value1", "name2":"value2", "ignored_field":"some"}`,
-			fieldsList: map[string]struct{}{
-				"ignored_field": {},
+			fieldPaths: [][]string{
+				{"ignored_field"},
 			},
 			isWhitelist: false,
 			expected:    []string{"value1", "value2"},
@@ -366,43 +366,79 @@ func TestGetValueNodes(t *testing.T) {
 		{
 			name:  "test with processed field",
 			input: `{"name1":"value1", "name2":"value2", "processed_field":"some"}`,
-			fieldsList: map[string]struct{}{
-				"processed_field": {},
+			fieldPaths: [][]string{
+				{"processed_field"},
 			},
 			isWhitelist: true,
 			expected:    []string{"some"},
 			comment:     "skip all fields except processed_field",
 		},
 		{
-			name: "test with ignored nested field",
+			name: "test with ignored nested field 1",
 			input: `{
 				"name1":"value1",
 				"name2":"value2",
 				"nested": {
-					"ignored_field":"some"
+					"ignored_field":"some",
+					"name3":"value3"
 				}
 			}`,
-			fieldsList: map[string]struct{}{
-				"ignored_field": {},
+			fieldPaths: [][]string{
+				{"nested", "ignored_field"},
+			},
+			isWhitelist: false,
+			expected:    []string{"value1", "value2", "value3"},
+			comment:     "skip nested ignored_field",
+		},
+		{
+			name: "test with ignored nested field 2",
+			input: `{
+				"name1":"value1",
+				"name2":"value2",
+				"nested": {
+					"ignored1":"some1",
+					"ignored2":"some2"
+				}
+			}`,
+			fieldPaths: [][]string{
+				{"nested"},
 			},
 			isWhitelist: false,
 			expected:    []string{"value1", "value2"},
 			comment:     "skip nested ignored_field",
 		},
 		{
-			name: "test with processed nested field",
+			name: "test with processed nested field 1",
 			input: `{
 				"name1":"value1",
 				"name2":"value2",
 				"nested": {
-					"processed_field":"some"
+					"processed_field":"some",
+					"name3": "value3"
 				}
 			}`,
-			fieldsList: map[string]struct{}{
-				"processed_field": {},
+			fieldPaths: [][]string{
+				{"nested", "processed_field"},
 			},
 			isWhitelist: true,
 			expected:    []string{"some"},
+			comment:     "skip all fields except nested processed_field",
+		},
+		{
+			name: "test with processed nested field 1",
+			input: `{
+				"name1":"value1",
+				"name2":"value2",
+				"nested": {
+					"processed1":"some1",
+					"processed2":"some2"
+				}
+			}`,
+			fieldPaths: [][]string{
+				{"nested"},
+			},
+			isWhitelist: true,
+			expected:    []string{"some1", "some2"},
 			comment:     "skip all fields except nested processed_field",
 		},
 		{
@@ -463,7 +499,7 @@ func TestGetValueNodes(t *testing.T) {
 			require.NoError(t, err)
 			defer insaneJSON.Release(root)
 
-			nodes := getValueNodes(root.Node, nil, s.fieldsList, s.isWhitelist)
+			nodes := getValueNodes(root.Node, nil, s.fieldPaths, s.isWhitelist)
 			require.Equal(t, len(nodes), len(s.expected), s.comment)
 			for i := range nodes {
 				assert.Equal(t, s.expected[i], nodes[i].AsString(), s.comment)

@@ -54,7 +54,7 @@ type Plugin struct {
 	// common match regex
 	matchRe *regexp.Regexp
 
-	fieldsList  map[string]struct{}
+	fieldPaths  [][]string
 	isWhitelist bool
 
 	valueNodes []*insaneJSON.Node
@@ -270,18 +270,19 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 
 	p.isWhitelist = isWhitelist
 
-	var fieldList []string
+	var fullFieldNames []string
 	switch {
 	case isBlacklist:
-		fieldList = p.config.IgnoreFields
+		fullFieldNames = p.config.IgnoreFields
 	case isWhitelist:
-		fieldList = p.config.ProcessFields
+		fullFieldNames = p.config.ProcessFields
 	}
 
-	if len(fieldList) > 0 {
-		p.fieldsList = make(map[string]struct{}, len(fieldList))
-		for _, field := range fieldList {
-			p.fieldsList[field] = struct{}{}
+	if len(fullFieldNames) > 0 {
+		p.fieldPaths = make([][]string, 0, len(fullFieldNames))
+		for _, fullFieldName := range fullFieldNames {
+			fieldPath := strings.Split(fullFieldName, ".")
+			p.fieldPaths = append(p.fieldPaths, fieldPath)
 		}
 	}
 
@@ -409,30 +410,47 @@ func (p *Plugin) maskValue(mask *Mask, value, buf []byte) ([]byte, bool) {
 	return value, true
 }
 
-func getValueNodesByBlacklist(currentNode *insaneJSON.Node, valueNodes []*insaneJSON.Node, ignoredFields map[string]struct{}) []*insaneJSON.Node {
+func arrayToSet(a []*insaneJSON.Node) map[*insaneJSON.Node]struct{} {
+	s := make(map[*insaneJSON.Node]struct{}, len(a))
+	for _, elem := range a {
+		s[elem] = struct{}{}
+	}
+
+	return s
+}
+
+func getAllValueNodesExcept(node *insaneJSON.Node, valueNodes []*insaneJSON.Node, ignoredNodes map[*insaneJSON.Node]struct{}) []*insaneJSON.Node {
 	switch {
-	case currentNode.IsField():
-		fieldName := currentNode.AsString()
-		_, ignored := ignoredFields[fieldName]
-		if !ignored {
-			valueNodes = getValueNodesByBlacklist(currentNode.AsFieldValue(), valueNodes, ignoredFields)
+	case node.IsField():
+		valueNodes = getAllValueNodesExcept(node.AsFieldValue(), valueNodes, ignoredNodes)
+	case node.IsArray():
+		for _, n := range node.AsArray() {
+			valueNodes = getAllValueNodesExcept(n, valueNodes, ignoredNodes)
 		}
-	case currentNode.IsArray():
-		for _, n := range currentNode.AsArray() {
-			valueNodes = getValueNodesByBlacklist(n, valueNodes, ignoredFields)
-		}
-	case currentNode.IsObject():
-		for _, n := range currentNode.AsFields() {
-			valueNodes = getValueNodesByBlacklist(n, valueNodes, ignoredFields)
+	case node.IsObject():
+		for _, n := range node.AsFields() {
+			valueNodes = getAllValueNodesExcept(n, valueNodes, ignoredNodes)
 		}
 	default:
-		valueNodes = append(valueNodes, currentNode)
+		_, ignored := ignoredNodes[node]
+		if !ignored {
+			valueNodes = append(valueNodes, node)
+		}
 	}
 
 	return valueNodes
 }
 
+func getValueNodesByBlacklist(currentNode *insaneJSON.Node, valueNodes []*insaneJSON.Node, fieldPaths [][]string) []*insaneJSON.Node {
+	ignoredNodes := arrayToSet(getValueNodesByWhitelist(currentNode, nil, fieldPaths))
+	return getAllValueNodesExcept(currentNode, valueNodes, ignoredNodes)
+}
+
 func getAllValueNodes(currentNode *insaneJSON.Node, valueNodes []*insaneJSON.Node) []*insaneJSON.Node {
+	if currentNode == nil {
+		return valueNodes
+	}
+
 	switch {
 	case currentNode.IsField():
 		valueNodes = getAllValueNodes(currentNode.AsFieldValue(), valueNodes)
@@ -451,34 +469,20 @@ func getAllValueNodes(currentNode *insaneJSON.Node, valueNodes []*insaneJSON.Nod
 	return valueNodes
 }
 
-func getValueNodesByWhitelist(currentNode *insaneJSON.Node, valueNodes []*insaneJSON.Node, processedFields map[string]struct{}) []*insaneJSON.Node {
-	switch {
-	case currentNode.IsField():
-		fieldName := currentNode.AsString()
-		_, processed := processedFields[fieldName]
-		if processed {
-			valueNodes = getAllValueNodes(currentNode.AsFieldValue(), valueNodes)
-		} else {
-			valueNodes = getValueNodesByWhitelist(currentNode.AsFieldValue(), valueNodes, processedFields)
-		}
-	case currentNode.IsArray():
-		for _, n := range currentNode.AsArray() {
-			valueNodes = getValueNodesByWhitelist(n, valueNodes, processedFields)
-		}
-	case currentNode.IsObject():
-		for _, n := range currentNode.AsFields() {
-			valueNodes = getValueNodesByWhitelist(n, valueNodes, processedFields)
-		}
+func getValueNodesByWhitelist(root *insaneJSON.Node, valueNodes []*insaneJSON.Node, fieldPaths [][]string) []*insaneJSON.Node {
+	for _, fieldPath := range fieldPaths {
+		node := root.Dig(fieldPath...)
+		valueNodes = getAllValueNodes(node, valueNodes)
 	}
 
 	return valueNodes
 }
 
-func getValueNodes(currentNode *insaneJSON.Node, valueNodes []*insaneJSON.Node, fieldsList map[string]struct{}, isWhitelist bool) []*insaneJSON.Node {
+func getValueNodes(root *insaneJSON.Node, valueNodes []*insaneJSON.Node, fieldPaths [][]string, isWhitelist bool) []*insaneJSON.Node {
 	if isWhitelist {
-		return getValueNodesByWhitelist(currentNode, valueNodes, fieldsList)
+		return getValueNodesByWhitelist(root, valueNodes, fieldPaths)
 	} else {
-		return getValueNodesByBlacklist(currentNode, valueNodes, fieldsList)
+		return getValueNodesByBlacklist(root, valueNodes, fieldPaths)
 	}
 }
 
@@ -490,7 +494,7 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	locApplied := false
 
 	p.valueNodes = p.valueNodes[:0]
-	p.valueNodes = getValueNodes(root, p.valueNodes, p.fieldsList, p.isWhitelist)
+	p.valueNodes = getValueNodes(root, p.valueNodes, p.fieldPaths, p.isWhitelist)
 	for _, v := range p.valueNodes {
 		value := v.AsBytes()
 		var valueIsCommonMatched bool
