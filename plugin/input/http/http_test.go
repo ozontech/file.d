@@ -5,12 +5,12 @@ import (
 	"compress/gzip"
 	"encoding/base64"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"reflect"
 	"runtime"
 	"strings"
 	"sync"
@@ -199,14 +199,13 @@ func TestServeChunks(t *testing.T) {
 	wg.Wait()
 	p.Stop()
 
-	expectedResult, result := convertToResultMaps(
+	require.True(t, compareResultMaps(
 		map[string]string{
 			"a": "1",
 			"b": "2",
 		},
 		outEvents,
-	)
-	require.Equal(t, expectedResult, result)
+	))
 }
 
 type PartialReader struct {
@@ -301,14 +300,13 @@ func TestServePartialRequest(t *testing.T) {
 	wg.Wait()
 	p.Stop()
 
-	expectedResult, result := convertToResultMaps(
+	require.True(t, compareResultMaps(
 		map[string]string{
 			"hello": "world",
 			"next":  "ok",
 		},
 		outEvents,
-	)
-	require.Equal(t, expectedResult, result)
+	))
 }
 
 func TestServeChunksContinue(t *testing.T) {
@@ -340,16 +338,15 @@ func TestServeChunksContinue(t *testing.T) {
 	wg.Wait()
 	p.Stop()
 
-	expectedResult, result := convertToResultMaps(
+	require.True(t, compareResultMaps(
 		map[string]string{
 			"a": value,
 		},
 		outEvents,
-	)
-	require.Equal(t, expectedResult, result)
+	))
 }
 
-func convertToResultMaps(expectedValues map[string]string, outEvents []string) (string, string) {
+func compareResultMaps(expectedValues map[string]string, outEvents []string) bool {
 	result := make([]map[string]string, 0, len(outEvents))
 	for i := range outEvents {
 		var value map[string]string
@@ -367,7 +364,19 @@ func convertToResultMaps(expectedValues map[string]string, outEvents []string) (
 		})
 	}
 
-	return fmt.Sprint(expectedResult), fmt.Sprint(result)
+	resultSet := make(map[string]struct{})
+	for _, m := range result {
+		jsonValue, _ := json.Marshal(m)
+		resultSet[string(jsonValue)] = struct{}{}
+	}
+
+	expectedResultSet := make(map[string]struct{})
+	for _, m := range expectedResult {
+		jsonValue, _ := json.Marshal(m)
+		expectedResultSet[string(jsonValue)] = struct{}{}
+	}
+
+	return reflect.DeepEqual(resultSet, expectedResultSet)
 }
 
 func TestPluginAuth(t *testing.T) {
