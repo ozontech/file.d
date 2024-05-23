@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/pipeline/metadata"
 	"go.uber.org/zap"
 )
 
@@ -15,7 +16,7 @@ type worker struct {
 
 type inputer interface {
 	// In processes event and returns it seq number.
-	In(sourceID pipeline.SourceID, sourceName string, offset int64, data []byte, isNewSource bool) uint64
+	In(sourceID pipeline.SourceID, sourceName string, offset int64, data []byte, isNewSource bool, meta metadata.MetaData) uint64
 	IncReadOps()
 	IncMaxEventSizeExceeded()
 }
@@ -109,7 +110,7 @@ func (w *worker) work(controller inputer, jobProvider *jobProvider, readBufferSi
 						inBuf = accumBuf
 					}
 
-					job.lastEventSeq = controller.In(sourceID, sourceName, lastOffset+scanned, inBuf, isVirgin)
+					job.lastEventSeq = controller.In(sourceID, sourceName, lastOffset+scanned, inBuf, isVirgin, nil)
 				}
 				// restore the line buffer
 				accumBuf = accumBuf[:0]
