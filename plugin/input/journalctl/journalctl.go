@@ -64,7 +64,7 @@ func (o *offsetInfo) set(cursor string) {
 }
 
 func (p *Plugin) Write(bytes []byte) (int, error) {
-	p.params.Controller.In(0, "journalctl", p.currentOffset, bytes, false)
+	p.params.Controller.In(0, "journalctl", p.currentOffset, bytes, false, nil)
 	p.currentOffset++
 	return len(bytes), nil
 }

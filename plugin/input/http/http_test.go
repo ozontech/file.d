@@ -4,17 +4,20 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/base64"
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"reflect"
 	"runtime"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/test"
 	"github.com/stretchr/testify/assert"
@@ -23,6 +26,11 @@ import (
 
 func getInputInfo(config *Config) *pipeline.InputPluginInfo {
 	test.NewConfig(config, map[string]int{"gomaxprocs": runtime.GOMAXPROCS(0)})
+	config.Meta = cfg.MetaTemplates{
+		"remote_addr": "{{ .remote_addr }}",
+		"method":      `{{ .request.Method }}`,
+		"login":       "{{ .login }}",
+	}
 	input, _ := Factory()
 	return &pipeline.InputPluginInfo{
 		PluginStaticInfo: &pipeline.PluginStaticInfo{
@@ -57,7 +65,7 @@ func TestProcessChunksMany(t *testing.T) {
 {"a":"2"}
 {"a":"3"}`)
 	eventBuff := make([]byte, 0)
-	eventBuff = input.processChunk(0, chunk, eventBuff, true)
+	eventBuff = input.processChunk(0, chunk, eventBuff, true, nil)
 
 	wg.Wait()
 	p.Stop()
@@ -89,7 +97,7 @@ func TestProcessChunksEventBuff(t *testing.T) {
 {"a":"2"}
 {"a":"3"}`)
 	eventBuff := make([]byte, 0)
-	eventBuff = input.processChunk(0, chunk, eventBuff, false)
+	eventBuff = input.processChunk(0, chunk, eventBuff, false, nil)
 
 	wg.Wait()
 	p.Stop()
@@ -121,7 +129,7 @@ func TestProcessChunksContinue(t *testing.T) {
 {"a":"3"}
 `)
 	eventBuff := []byte(`{"a":`)
-	eventBuff = input.processChunk(0, chunk, eventBuff, false)
+	eventBuff = input.processChunk(0, chunk, eventBuff, false, nil)
 
 	wg.Wait()
 	p.Stop()
@@ -151,10 +159,10 @@ func TestProcessChunksContinueMany(t *testing.T) {
 
 	eventBuff := []byte(``)
 
-	eventBuff = input.processChunk(0, []byte(`{`), eventBuff, false)
-	eventBuff = input.processChunk(0, []byte(`"a"`), eventBuff, false)
-	eventBuff = input.processChunk(0, []byte(`:`), eventBuff, false)
-	eventBuff = input.processChunk(0, []byte(`"1"}`), eventBuff, true)
+	eventBuff = input.processChunk(0, []byte(`{`), eventBuff, false, nil)
+	eventBuff = input.processChunk(0, []byte(`"a"`), eventBuff, false, nil)
+	eventBuff = input.processChunk(0, []byte(`:`), eventBuff, false, nil)
+	eventBuff = input.processChunk(0, []byte(`"1"}`), eventBuff, true, nil)
 
 	wg.Wait()
 	p.Stop()
@@ -191,7 +199,13 @@ func TestServeChunks(t *testing.T) {
 	wg.Wait()
 	p.Stop()
 
-	require.Equal(t, []string{`{"a":"1"}`, `{"b":"2"}`}, outEvents)
+	require.True(t, compareResultMaps(
+		map[string]string{
+			"a": "1",
+			"b": "2",
+		},
+		outEvents,
+	))
 }
 
 type PartialReader struct {
@@ -286,7 +300,13 @@ func TestServePartialRequest(t *testing.T) {
 	wg.Wait()
 	p.Stop()
 
-	require.Equal(t, []string{`{"hello":"world"}`, `{"next":"ok"}`}, outEvents)
+	require.True(t, compareResultMaps(
+		map[string]string{
+			"hello": "world",
+			"next":  "ok",
+		},
+		outEvents,
+	))
 }
 
 func TestServeChunksContinue(t *testing.T) {
@@ -306,8 +326,9 @@ func TestServeChunksContinue(t *testing.T) {
 	})
 
 	body := make([]byte, 0, readBufDefaultLen*2)
+	value := strings.Repeat("a", cap(body))
 	body = append(body, `{"a":"`...)
-	body = append(body, strings.Repeat("a", cap(body))...)
+	body = append(body, value...)
 	body = append(body, `"}`...)
 
 	resp := httptest.NewRecorder()
@@ -317,7 +338,45 @@ func TestServeChunksContinue(t *testing.T) {
 	wg.Wait()
 	p.Stop()
 
-	require.Equal(t, []string{string(body)}, outEvents)
+	require.True(t, compareResultMaps(
+		map[string]string{
+			"a": value,
+		},
+		outEvents,
+	))
+}
+
+func compareResultMaps(expectedValues map[string]string, outEvents []string) bool {
+	result := make([]map[string]string, 0, len(outEvents))
+	for i := range outEvents {
+		var value map[string]string
+		json.Unmarshal([]byte(outEvents[i]), &value)
+		result = append(result, value)
+	}
+
+	expectedResult := make([]map[string]string, 0, len(expectedValues))
+	for field, value := range expectedValues {
+		expectedResult = append(expectedResult, map[string]string{
+			field:         value,
+			"method":      "POST",
+			"remote_addr": "192.0.2.1",
+			"login":       "",
+		})
+	}
+
+	resultSet := make(map[string]struct{})
+	for _, m := range result {
+		jsonValue, _ := json.Marshal(m)
+		resultSet[string(jsonValue)] = struct{}{}
+	}
+
+	expectedResultSet := make(map[string]struct{})
+	for _, m := range expectedResult {
+		jsonValue, _ := json.Marshal(m)
+		expectedResultSet[string(jsonValue)] = struct{}{}
+	}
+
+	return reflect.DeepEqual(resultSet, expectedResultSet)
 }
 
 func TestPluginAuth(t *testing.T) {
@@ -341,6 +400,7 @@ func TestPluginAuth(t *testing.T) {
 		Request    *http.Request
 		Secrets    map[string]string
 		ShouldPass bool
+		Login      string
 	}{
 		{
 			Name:       "disabled ok",
@@ -357,6 +417,7 @@ func TestPluginAuth(t *testing.T) {
 			},
 			Request:    newReq("Basic " + encBasic("ozon:zonzon")),
 			ShouldPass: true,
+			Login:      "ozon",
 		},
 		{
 			Name:     "basic reject",
@@ -383,6 +444,7 @@ func TestPluginAuth(t *testing.T) {
 			},
 			Request:    newReq("Bearer ozon"),
 			ShouldPass: true,
+			Login:      "ozon",
 		},
 		{
 			Name:     "bearer pass one char",
@@ -392,6 +454,7 @@ func TestPluginAuth(t *testing.T) {
 			},
 			Request:    newReq("Bearer 1"),
 			ShouldPass: true,
+			Login:      "1",
 		},
 		{
 			Name:       "empty bearer",
@@ -419,9 +482,10 @@ func TestPluginAuth(t *testing.T) {
 			pipelineMock.Start()
 			pipelineMock.Stop()
 
-			ok := inputInfo.Plugin.(*Plugin).auth(tc.Request)
+			ok, login := inputInfo.Plugin.(*Plugin).auth(tc.Request)
 
 			r.Equal(tc.ShouldPass, ok)
+			r.Equal(tc.Login, login)
 		})
 	}
 }
@@ -430,7 +494,7 @@ func BenchmarkHttpInputJson(b *testing.B) {
 	const NumWorkers = 128
 	const DocumentCount = 128 * 128 * 8
 
-	json, err := os.ReadFile("../../../testdata/json/light.json")
+	inputJson, err := os.ReadFile("../../../testdata/json/light.json")
 	if err != nil {
 		panic(err)
 	}
@@ -441,7 +505,7 @@ func BenchmarkHttpInputJson(b *testing.B) {
 
 	var worker = func(jobs <-chan struct{}) {
 		for range jobs {
-			body := bytes.NewReader(json)
+			body := bytes.NewReader(inputJson)
 			req, err := http.NewRequest(http.MethodPost, "http://localhost:9200", body)
 			if err != nil {
 				panic(err)

@@ -92,6 +92,17 @@ You can use 'warn' log level for logging authorizations.
 
 <br>
 
+**`meta`** *`cfg.MetaTemplates`* 
+
+Meta params
+
+Add meta information to an event (look at Meta params)
+Use [go-template](https://pkg.go.dev/text/template) syntax
+
+Example: ```user_agent: '{{ index (index .request.Header "User-Agent") 0}}'```
+
+<br>
+
 **`strategy`** *`string`* *`default=disabled`* *`options=disabled|basic|bearer`* 
 
 AuthStrategy.Strategy describes strategy to use.
@@ -107,5 +118,12 @@ Key uses in the http_input_total metric.
 
 <br>
 
+
+### Meta params
+**`login`** 
+
+**`remote_addr`**  *`net.IP`*
+
+**`request`**  *`http.Request`*
 
 <br>*Generated using [__insane-doc__](https://github.com/vitkovskii/insane-doc)*
