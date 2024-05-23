@@ -16,10 +16,19 @@ type inMemoryLimiter struct {
 
 	// nowFn is passed to create limiters and required for test purposes
 	nowFn func() time.Time
+
+	// metrics
+	metricLabelsBuf   []string
+	limitDistrMetrics *limitDistributionMetrics
 }
 
 // newInMemoryLimiter returns limiter instance.
-func newInMemoryLimiter(cfg *limiterConfig, limit *complexLimit, nowFn func() time.Time) *inMemoryLimiter {
+func newInMemoryLimiter(
+	cfg *limiterConfig,
+	limit *complexLimit,
+	limitDistrMetrics *limitDistributionMetrics,
+	nowFn func() time.Time,
+) *inMemoryLimiter {
 	distSize := limit.distributions.size()
 
 	l := &inMemoryLimiter{
@@ -34,6 +43,9 @@ func newInMemoryLimiter(cfg *limiterConfig, limit *complexLimit, nowFn func() ti
 		),
 
 		nowFn: nowFn,
+
+		metricLabelsBuf:   make([]string, 0, len(limitDistrMetrics.CustomLabels)+1),
+		limitDistrMetrics: limitDistrMetrics,
 	}
 
 	// need a copy due to possible runtime changes (sync with redis)
@@ -59,9 +71,10 @@ func (l *inMemoryLimiter) isAllowed(event *pipeline.Event, ts time.Time) bool {
 
 	// If the limit is given with distribution, then distributed buckets are used
 	distrIdx := 0
+	distrFieldVal := ""
 	if l.limit.distributions.isEnabled() {
-		key := event.Root.Dig(l.limit.distributions.field...).AsString()
-		distrIdx, limit = l.limit.distributions.getLimit(key)
+		distrFieldVal = event.Root.Dig(l.limit.distributions.field...).AsString()
+		distrIdx, limit = l.limit.distributions.getLimit(distrFieldVal)
 
 		// The distribution index in the bucket matches the distribution value index in distributions,
 		// but is shifted by 1 because default distribution has index 0.
@@ -71,15 +84,37 @@ func (l *inMemoryLimiter) isAllowed(event *pipeline.Event, ts time.Time) bool {
 	id := l.rebuildBuckets(ts)
 	index := id - l.buckets.getMinID()
 	switch l.limit.kind {
-	case "", "count":
+	case "", limitKindCount:
 		l.buckets.add(index, distrIdx, 1)
-	case "size":
+	case limitKindSize:
 		l.buckets.add(index, distrIdx, int64(event.Size))
 	default:
 		logger.Fatalf("unknown type of the inMemoryLimiter: %q", l.limit.kind)
 	}
 
-	return l.buckets.get(index, distrIdx) <= limit
+	isAllowed := l.buckets.get(index, distrIdx) <= limit
+	if !isAllowed && l.limit.distributions.isEnabled() {
+		l.metricLabelsBuf = l.metricLabelsBuf[:0]
+
+		l.metricLabelsBuf = append(l.metricLabelsBuf, distrFieldVal)
+		for _, lbl := range l.limitDistrMetrics.CustomLabels {
+			val := "not_set"
+			node := event.Root.Dig(lbl)
+			if node != nil {
+				val = node.AsString()
+			}
+			l.metricLabelsBuf = append(l.metricLabelsBuf, val)
+		}
+
+		switch l.limit.kind {
+		case "", limitKindCount:
+			l.limitDistrMetrics.EventsCount.WithLabelValues(l.metricLabelsBuf...).Inc()
+		case limitKindSize:
+			l.limitDistrMetrics.EventsCount.WithLabelValues(l.metricLabelsBuf...).Add(float64(event.Size))
+		}
+	}
+
+	return isAllowed
 }
 
 func (l *inMemoryLimiter) lock() {

@@ -56,12 +56,13 @@ func newRedisLimiter(
 	throttleFieldValue, keyLimitOverride string,
 	limit *complexLimit,
 	distributionCfg []byte,
+	limitDistrMetrics *limitDistributionMetrics,
 	nowFn func() time.Time,
 ) *redisLimiter {
 	rl := &redisLimiter{
 		redis:             cfg.redisClient,
-		incrementLimiter:  newInMemoryLimiter(cfg, limit, nowFn),
-		totalLimiter:      newInMemoryLimiter(cfg, limit, nowFn),
+		incrementLimiter:  newInMemoryLimiter(cfg, limit, limitDistrMetrics, nowFn),
+		totalLimiter:      newInMemoryLimiter(cfg, limit, limitDistrMetrics, nowFn),
 		valField:          cfg.limiterValueField,
 		distributionField: cfg.limiterDistributionField,
 	}

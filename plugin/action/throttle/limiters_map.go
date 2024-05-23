@@ -72,7 +72,9 @@ type limitersMapConfig struct {
 
 	limiterCfg *limiterConfig
 
-	mapSizeMetric prometheus.Gauge
+	// metrics
+	mapSizeMetric     prometheus.Gauge
+	limitDistrMetrics *limitDistributionMetrics
 }
 
 // limitersMap is auxiliary type for storing the map of strings to limiters with additional info for cleanup
@@ -92,7 +94,9 @@ type limitersMap struct {
 
 	limiterCfg *limiterConfig
 
-	mapSizeMetric prometheus.Gauge
+	// metrics
+	mapSizeMetric     prometheus.Gauge
+	limitDistrMetrics *limitDistributionMetrics
 }
 
 func newLimitersMap(lmCfg limitersMapConfig, redisOpts *redis.Options) *limitersMap {
@@ -109,7 +113,8 @@ func newLimitersMap(lmCfg limitersMapConfig, redisOpts *redis.Options) *limiters
 
 		limiterCfg: lmCfg.limiterCfg,
 
-		mapSizeMetric: lmCfg.mapSizeMetric,
+		mapSizeMetric:     lmCfg.mapSizeMetric,
+		limitDistrMetrics: lmCfg.limitDistrMetrics,
 	}
 	if redisOpts != nil {
 		lm.limiterCfg.redisClient = redis.NewClient(redisOpts)
@@ -223,9 +228,16 @@ func (l *limitersMap) maintenance(ctx context.Context) {
 func (l *limitersMap) newLimiter(throttleKey, keyLimitOverride string, rule *rule) limiter {
 	switch l.limiterCfg.backend {
 	case redisBackend:
-		return newRedisLimiter(l.limiterCfg, throttleKey, keyLimitOverride, &rule.limit, rule.distributionCfg, l.nowFn)
+		return newRedisLimiter(
+			l.limiterCfg,
+			throttleKey, keyLimitOverride,
+			&rule.limit,
+			rule.distributionCfg,
+			l.limitDistrMetrics,
+			l.nowFn,
+		)
 	case inMemoryBackend:
-		return newInMemoryLimiter(l.limiterCfg, &rule.limit, l.nowFn)
+		return newInMemoryLimiter(l.limiterCfg, &rule.limit, l.limitDistrMetrics, l.nowFn)
 	default:
 		l.logger.Panicf("unknown limiter backend: %s", l.limiterCfg.backend)
 	}

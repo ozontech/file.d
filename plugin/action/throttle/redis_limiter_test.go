@@ -9,6 +9,8 @@ import (
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/go-redis/redis"
+	"github.com/ozontech/file.d/metric"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/require"
 )
 
@@ -21,7 +23,7 @@ func Test_updateKeyLimit(t *testing.T) {
 	throttleFieldValue3 := "pod3"
 	defaultLimit := &complexLimit{
 		value: 1,
-		kind:  "count",
+		kind:  limitKindCount,
 	}
 	defaultDistribution := limitDistributionCfg{
 		Field: "level",
@@ -41,7 +43,7 @@ func Test_updateKeyLimit(t *testing.T) {
 	ld, _ := parseLimitDistribution(defaultDistribution, 10)
 	defaultLimitWithDistribution := &complexLimit{
 		value:         10,
-		kind:          "count",
+		kind:          limitKindCount,
 		distributions: ld,
 	}
 	pod1LimitKey := strings.Join([]string{
@@ -393,6 +395,7 @@ func Test_updateKeyLimit(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+			ctl := metric.NewCtl("test", prometheus.NewRegistry())
 			lim := newRedisLimiter(
 				&limiterConfig{
 					ctx:                      ctx,
@@ -408,6 +411,10 @@ func Test_updateKeyLimit(t *testing.T) {
 				tt.args.keyLimitOverride,
 				tt.args.defaultLimit,
 				defaultDistributionJson,
+				&limitDistributionMetrics{
+					EventsCount: metric.NewHeldCounterVec(ctl.RegisterCounterVec("test_count", "")),
+					EventsSize:  metric.NewHeldCounterVec(ctl.RegisterCounterVec("test_size", "")),
+				},
 				time.Now,
 			)
 			err := lim.updateKeyLimit()

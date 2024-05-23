@@ -25,6 +25,9 @@ var (
 )
 
 const (
+	limitKindCount = "count"
+	limitKindSize  = "size"
+
 	redisBackend    = "redis"
 	inMemoryBackend = "memory"
 )
@@ -47,6 +50,7 @@ type Plugin struct {
 
 	// plugin metrics
 	limitersMapSizeMetric prometheus.Gauge
+	limitDistrMetrics     *limitDistributionMetrics
 }
 
 // ! config-params
@@ -131,6 +135,7 @@ type Config struct {
 	// > * `ratios` - the list of objects. Each object has:
 	// > 	* `ratio` - distribution ratio, value must be in range [0.0;1.0].
 	// > 	* `values` - the list of strings which contains all `field` values that fall into this distribution.
+	// > * `metric_labels` - list of metric labels.
 	// >
 	// >> Notes:
 	// >> 1. Sum of ratios must be in range [0.0;1.0].
@@ -253,8 +258,9 @@ type ComplexRatio struct {
 }
 
 type LimitDistributionConfig struct {
-	Field  cfg.FieldSelector `json:"field" default:""`
-	Ratios []ComplexRatio    `json:"ratios" slice:"true"`
+	Field        cfg.FieldSelector `json:"field" default:""`
+	Ratios       []ComplexRatio    `json:"ratios" slice:"true"`
+	MetricLabels []string          `json:"metric_labels" slice:"true"`
 }
 
 func (c LimitDistributionConfig) toInternal() limitDistributionCfg {
@@ -290,7 +296,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 		p.logger.Fatal("can't parse limit_distribution", zap.Error(err))
 	}
 
-	p.registerMetrics(params.MetricCtl)
+	p.registerMetrics(params.MetricCtl, p.config.LimitDistribution.MetricLabels)
 
 	p.pipeline = params.PipelineName
 	ctx, cancel := context.WithCancel(context.Background())
@@ -338,7 +344,8 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 				limiterValueField:        p.config.RedisBackendCfg.LimiterValueField,
 				limiterDistributionField: p.config.RedisBackendCfg.LimiterDistributionField,
 			},
-			mapSizeMetric: p.limitersMapSizeMetric,
+			mapSizeMetric:     p.limitersMapSizeMetric,
+			limitDistrMetrics: p.limitDistrMetrics,
 		}
 		limiters[p.pipeline] = newLimitersMap(lmCfg, redisOpts)
 		if p.config.LimiterBackend == redisBackend {
@@ -376,11 +383,27 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 	))
 }
 
-func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
+func (p *Plugin) registerMetrics(ctl *metric.Ctl, limitDistrMetricsLabels []string) {
 	p.limitersMapSizeMetric = ctl.RegisterGauge(
 		"throttle_limiter_map_size",
 		"Size of internal map of throttle limiters",
 	)
+
+	labels := []string{"distribution_value"}
+	labels = append(labels, limitDistrMetricsLabels...)
+	p.limitDistrMetrics = &limitDistributionMetrics{
+		CustomLabels: limitDistrMetricsLabels,
+		EventsCount: metric.NewHeldCounterVec(ctl.RegisterCounterVec(
+			"throttle_distributed_events_count_total",
+			"total count of events that have been throttled using limit distribution",
+			labels...,
+		)),
+		EventsSize: metric.NewHeldCounterVec(ctl.RegisterCounterVec(
+			"throttle_distributed_events_size_total",
+			"total size of events that have been throttled using limit distribution",
+			labels...,
+		)),
+	}
 }
 
 // Stop ends plugin activity.

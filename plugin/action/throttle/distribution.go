@@ -7,7 +7,14 @@ import (
 	"math"
 
 	"github.com/ozontech/file.d/cfg"
+	"github.com/ozontech/file.d/metric"
 )
+
+type limitDistributionMetrics struct {
+	CustomLabels []string
+	EventsCount  metric.HeldCounterVec
+	EventsSize   metric.HeldCounterVec
+}
 
 type limitDistributionRatio struct {
 	Ratio  float64  `json:"ratio"`

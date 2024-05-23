@@ -171,15 +171,15 @@ func TestSizeThrottle(t *testing.T) {
 
 	config := &Config{
 		Rules: []RuleConfig{
-			{Limit: int64(limitA), LimitKind: "size", Conditions: map[string]string{"k8s_ns": "ns_1"}},
-			{Limit: int64(limitB), LimitKind: "size", Conditions: map[string]string{"k8s_ns": "ns_2"}},
+			{Limit: int64(limitA), LimitKind: limitKindSize, Conditions: map[string]string{"k8s_ns": "ns_1"}},
+			{Limit: int64(limitB), LimitKind: limitKindSize, Conditions: map[string]string{"k8s_ns": "ns_2"}},
 		},
 		BucketsCount:   buckets,
 		BucketInterval: "100ms",
 		ThrottleField:  "k8s_pod",
 		TimeField:      "",
 		DefaultLimit:   int64(defaultLimit),
-		LimitKind:      "size",
+		LimitKind:      limitKindSize,
 	}
 	test.NewConfig(config, nil)
 
@@ -206,7 +206,7 @@ func TestMixedThrottle(t *testing.T) {
 	config := &Config{
 		Rules: []RuleConfig{
 			{Limit: int64(limitA), Conditions: map[string]string{"k8s_ns": "ns_1"}},
-			{Limit: int64(limitB), LimitKind: "size", Conditions: map[string]string{"k8s_ns": "ns_2"}},
+			{Limit: int64(limitB), LimitKind: limitKindSize, Conditions: map[string]string{"k8s_ns": "ns_2"}},
 		},
 		BucketsCount:   buckets,
 		BucketInterval: "100ms",
@@ -236,7 +236,7 @@ func TestRedisThrottle(t *testing.T) {
 
 	config := &Config{
 		Rules: []RuleConfig{
-			{Limit: int64(defaultLimit), LimitKind: "count"},
+			{Limit: int64(defaultLimit), LimitKind: limitKindCount},
 		},
 		BucketsCount:   1,
 		BucketInterval: "2s",
@@ -296,7 +296,7 @@ func TestRedisThrottleMultiPipes(t *testing.T) {
 
 	config := &Config{
 		Rules: []RuleConfig{
-			{Limit: int64(defaultLimit), LimitKind: "count"},
+			{Limit: int64(defaultLimit), LimitKind: limitKindCount},
 		},
 		BucketsCount:   1,
 		BucketInterval: "2m",
@@ -391,7 +391,7 @@ func TestRedisThrottleWithCustomLimitData(t *testing.T) {
 	eventsTotal := 3
 	config := &Config{
 		Rules: []RuleConfig{
-			{Limit: int64(defaultLimit), LimitKind: "count"},
+			{Limit: int64(defaultLimit), LimitKind: limitKindCount},
 		},
 		BucketsCount:   1,
 		BucketInterval: "2s",
@@ -454,7 +454,7 @@ func TestThrottleLimiterExpiration(t *testing.T) {
 	eventsTotal := 3
 	config := &Config{
 		Rules: []RuleConfig{
-			{Limit: int64(defaultLimit), LimitKind: "count"},
+			{Limit: int64(defaultLimit), LimitKind: limitKindCount},
 		},
 		BucketsCount:      1,
 		BucketInterval:    "100ms",
