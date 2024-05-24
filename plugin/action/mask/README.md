@@ -44,15 +44,15 @@ If any mask has been applied then `mask_applied_field` will be set to `mask_appl
 
 <br>
 
-**`ignore_fields`** *`[]string`* 
+**`ignore_fields`** *`[]cfg.FieldSelector`* 
 
-List of the ignored event fields (field depth doesn't matter).
+List of the ignored event fields.
 If name of some field contained in this list
-then all nested fields will be ignored (even if they are not listed)
+then all nested fields will be ignored (even if they are not listed).
 
 <br>
 
-**`process_fields`** *`[]string`* 
+**`process_fields`** *`[]cfg.FieldSelector`* 
 
 List of the processed event fields.
 If name of some field contained in this list

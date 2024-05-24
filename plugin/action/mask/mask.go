@@ -39,7 +39,8 @@ pipelines:
 }*/
 
 const (
-	substitution = byte('*')
+	substitution             = byte('*')
+	defaultPathStackCapacity = 50
 )
 
 type Plugin struct {
@@ -56,6 +57,7 @@ type Plugin struct {
 
 	fieldPaths  [][]string
 	isWhitelist bool
+	pathStack   []string
 
 	valueNodes []*insaneJSON.Node
 	logger     *zap.Logger
@@ -88,10 +90,10 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
-	// > List of the ignored event fields (field depth doesn't matter).
+	// > List of the ignored event fields.
 	// > If name of some field contained in this list
-	// > then all nested fields will be ignored (even if they are not listed)
-	IgnoreFields []string `json:"ignore_fields"` // *
+	// > then all nested fields will be ignored (even if they are not listed).
+	IgnoreFields []cfg.FieldSelector `json:"ignore_fields" slice:"true"` // *
 
 	// > @3@4@5@6
 	// >
@@ -101,7 +103,7 @@ type Config struct {
 	// > If ignored fields list is empty and processed fields list is empty
 	// > we consider this as empty ignored fields list (all fields will be processed).
 	// > It is wrong to set non-empty ignored fields list and non-empty processed fields list at the same time.
-	ProcessFields []string `json:"process_fields"` // *
+	ProcessFields []cfg.FieldSelector `json:"process_fields" slice:"true"` // *
 
 	// > @3@4@5@6
 	// >
@@ -270,21 +272,21 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 
 	p.isWhitelist = isWhitelist
 
-	var fullFieldNames []string
-	switch {
-	case isBlacklist:
-		fullFieldNames = p.config.IgnoreFields
-	case isWhitelist:
-		fullFieldNames = p.config.ProcessFields
+	var fieldPaths []cfg.FieldSelector
+	if isBlacklist {
+		fieldPaths = p.config.IgnoreFields
+	} else if isWhitelist {
+		fieldPaths = p.config.ProcessFields
 	}
 
-	if len(fullFieldNames) > 0 {
-		p.fieldPaths = make([][]string, 0, len(fullFieldNames))
-		for _, fullFieldName := range fullFieldNames {
-			fieldPath := strings.Split(fullFieldName, ".")
-			p.fieldPaths = append(p.fieldPaths, fieldPath)
+	if len(fieldPaths) > 0 {
+		p.fieldPaths = make([][]string, 0, len(fieldPaths))
+		for _, fieldPath := range fieldPaths {
+			p.fieldPaths = append(p.fieldPaths, cfg.ParseFieldSelector(string(fieldPath)))
 		}
 	}
+
+	p.pathStack = make([]string, 0, defaultPathStackCapacity)
 
 	p.registerMetrics(params.MetricCtl)
 }
@@ -410,40 +412,53 @@ func (p *Plugin) maskValue(mask *Mask, value, buf []byte) ([]byte, bool) {
 	return value, true
 }
 
-func arrayToSet(a []*insaneJSON.Node) map[*insaneJSON.Node]struct{} {
-	s := make(map[*insaneJSON.Node]struct{}, len(a))
-	for _, elem := range a {
-		s[elem] = struct{}{}
+func pathIgnoredByAny(pathStack []string, ignoredPaths [][]string) bool {
+	for _, ignoredPath := range ignoredPaths {
+		if pathIgnoredByOne(pathStack, ignoredPath) {
+			return true
+		}
 	}
 
-	return s
+	return false
 }
 
-func getAllValueNodesExcept(node *insaneJSON.Node, valueNodes []*insaneJSON.Node, ignoredNodes map[*insaneJSON.Node]struct{}) []*insaneJSON.Node {
-	switch {
-	case node.IsField():
-		valueNodes = getAllValueNodesExcept(node.AsFieldValue(), valueNodes, ignoredNodes)
-	case node.IsArray():
-		for _, n := range node.AsArray() {
-			valueNodes = getAllValueNodesExcept(n, valueNodes, ignoredNodes)
+func pathIgnoredByOne(pathStack []string, ignoredPath []string) bool {
+	if len(pathStack) < len(ignoredPath) {
+		return false
+	}
+
+	n := len(ignoredPath)
+	for i := 0; i < n; i++ {
+		if pathStack[i] != ignoredPath[i] {
+			return false
 		}
-	case node.IsObject():
-		for _, n := range node.AsFields() {
-			valueNodes = getAllValueNodesExcept(n, valueNodes, ignoredNodes)
+	}
+
+	return true
+}
+
+func (p *Plugin) getValueNodesByBlacklist(currentNode *insaneJSON.Node, valueNodes []*insaneJSON.Node) []*insaneJSON.Node {
+	switch {
+	case currentNode.IsField():
+		fieldName := currentNode.AsString()
+		p.pathStack = append(p.pathStack, fieldName)
+		valueNodes = p.getValueNodesByBlacklist(currentNode.AsFieldValue(), valueNodes)
+		p.pathStack = p.pathStack[:len(p.pathStack)-1]
+	case currentNode.IsArray():
+		for _, n := range currentNode.AsArray() {
+			valueNodes = p.getValueNodesByBlacklist(n, valueNodes)
+		}
+	case currentNode.IsObject():
+		for _, n := range currentNode.AsFields() {
+			valueNodes = p.getValueNodesByBlacklist(n, valueNodes)
 		}
 	default:
-		_, ignored := ignoredNodes[node]
-		if !ignored {
-			valueNodes = append(valueNodes, node)
+		if !pathIgnoredByAny(p.pathStack, p.fieldPaths) {
+			valueNodes = append(valueNodes, currentNode)
 		}
 	}
 
 	return valueNodes
-}
-
-func getValueNodesByBlacklist(currentNode *insaneJSON.Node, valueNodes []*insaneJSON.Node, fieldPaths [][]string) []*insaneJSON.Node {
-	ignoredNodes := arrayToSet(getValueNodesByWhitelist(currentNode, nil, fieldPaths))
-	return getAllValueNodesExcept(currentNode, valueNodes, ignoredNodes)
 }
 
 func getAllValueNodes(currentNode *insaneJSON.Node, valueNodes []*insaneJSON.Node) []*insaneJSON.Node {
@@ -478,11 +493,11 @@ func getValueNodesByWhitelist(root *insaneJSON.Node, valueNodes []*insaneJSON.No
 	return valueNodes
 }
 
-func getValueNodes(root *insaneJSON.Node, valueNodes []*insaneJSON.Node, fieldPaths [][]string, isWhitelist bool) []*insaneJSON.Node {
-	if isWhitelist {
-		return getValueNodesByWhitelist(root, valueNodes, fieldPaths)
+func (p *Plugin) getValueNodes(root *insaneJSON.Node, valueNodes []*insaneJSON.Node) []*insaneJSON.Node {
+	if p.isWhitelist {
+		return getValueNodesByWhitelist(root, valueNodes, p.fieldPaths)
 	} else {
-		return getValueNodesByBlacklist(root, valueNodes, fieldPaths)
+		return p.getValueNodesByBlacklist(root, valueNodes)
 	}
 }
 
@@ -494,7 +509,7 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	locApplied := false
 
 	p.valueNodes = p.valueNodes[:0]
-	p.valueNodes = getValueNodes(root, p.valueNodes, p.fieldPaths, p.isWhitelist)
+	p.valueNodes = p.getValueNodes(root, p.valueNodes)
 	for _, v := range p.valueNodes {
 		value := v.AsBytes()
 		var valueIsCommonMatched bool

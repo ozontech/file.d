@@ -388,7 +388,7 @@ func TestGetValueNodes(t *testing.T) {
 			},
 			isWhitelist: false,
 			expected:    []string{"value1", "value2", "value3"},
-			comment:     "skip nested ignored_field",
+			comment:     "skip one nested ignored_field",
 		},
 		{
 			name: "test with ignored nested field 2",
@@ -405,7 +405,23 @@ func TestGetValueNodes(t *testing.T) {
 			},
 			isWhitelist: false,
 			expected:    []string{"value1", "value2"},
-			comment:     "skip nested ignored_field",
+			comment:     "skip two nested ignored_fields",
+		},
+		{
+			name: "test with several ignored paths",
+			input: `{
+				"name1":"value1",
+				"name2":"value2",
+				"nested": {"ignored1":"some1"},
+				"ignored2":"some2"
+			}`,
+			fieldPaths: [][]string{
+				{"nested", "ignored1"},
+				{"ignored2"},
+			},
+			isWhitelist: false,
+			expected:    []string{"value1", "value2"},
+			comment:     "skip two ignored_fields",
 		},
 		{
 			name: "test with processed nested field 1",
@@ -422,10 +438,10 @@ func TestGetValueNodes(t *testing.T) {
 			},
 			isWhitelist: true,
 			expected:    []string{"some"},
-			comment:     "skip all fields except nested processed_field",
+			comment:     "skip all fields except one nested processed_field",
 		},
 		{
-			name: "test with processed nested field 1",
+			name: "test with processed nested field 2",
 			input: `{
 				"name1":"value1",
 				"name2":"value2",
@@ -439,7 +455,23 @@ func TestGetValueNodes(t *testing.T) {
 			},
 			isWhitelist: true,
 			expected:    []string{"some1", "some2"},
-			comment:     "skip all fields except nested processed_field",
+			comment:     "skip all fields except two nested processed_fields",
+		},
+		{
+			name: "test with several processed paths",
+			input: `{
+				"name1":"value1",
+				"name2":"value2",
+				"nested": {"processed1":"some1"},
+				"processed2":"some2"
+			}`,
+			fieldPaths: [][]string{
+				{"nested", "processed1"},
+				{"processed2"},
+			},
+			isWhitelist: true,
+			expected:    []string{"some1", "some2"},
+			comment:     "skip all fields except two processed_fields",
 		},
 		{
 			name: "big json with ints and nulls",
@@ -499,7 +531,8 @@ func TestGetValueNodes(t *testing.T) {
 			require.NoError(t, err)
 			defer insaneJSON.Release(root)
 
-			nodes := getValueNodes(root.Node, nil, s.fieldPaths, s.isWhitelist)
+			p := Plugin{fieldPaths: s.fieldPaths, isWhitelist: s.isWhitelist}
+			nodes := p.getValueNodes(root.Node, nil)
 			require.Equal(t, len(nodes), len(s.expected), s.comment)
 			for i := range nodes {
 				assert.Equal(t, s.expected[i], nodes[i].AsString(), s.comment)
