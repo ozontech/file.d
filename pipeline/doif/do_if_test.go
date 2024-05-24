@@ -1,9 +1,10 @@
-package pipeline
+package doif
 
 import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -20,12 +21,13 @@ type treeNode struct {
 	logicalOp string
 	operands  []treeNode
 
-	byteLenCmpOp string
-	cmpValue     int
+	lenCmpOp string
+	cmpOp    string
+	cmpValue int
 }
 
 // nolint:gocritic
-func buildTree(node treeNode) (DoIfNode, error) {
+func buildTree(node treeNode) (Node, error) {
 	switch {
 	case node.fieldOp != "":
 		return NewFieldOpNode(
@@ -35,7 +37,7 @@ func buildTree(node treeNode) (DoIfNode, error) {
 			node.values,
 		)
 	case node.logicalOp != "":
-		operands := make([]DoIfNode, 0)
+		operands := make([]Node, 0)
 		for _, operandNode := range node.operands {
 			operand, err := buildTree(operandNode)
 			if err != nil {
@@ -47,19 +49,19 @@ func buildTree(node treeNode) (DoIfNode, error) {
 			node.logicalOp,
 			operands,
 		)
-	case node.byteLenCmpOp != "":
-		return NewByteLengthCmpNode(node.fieldName, node.byteLenCmpOp, node.cmpValue)
+	case node.lenCmpOp != "":
+		return NewLenCmpOpNode(node.lenCmpOp, node.fieldName, node.cmpOp, node.cmpValue)
 	default:
 		return nil, errors.New("unknown type of node")
 	}
 }
 
-func checkDoIfNode(t *testing.T, want, got DoIfNode) {
+func checkNode(t *testing.T, want, got Node) {
 	require.Equal(t, want.Type(), got.Type())
 	switch want.Type() {
-	case DoIfNodeFieldOp:
-		wantNode := want.(*doIfFieldOpNode)
-		gotNode := got.(*doIfFieldOpNode)
+	case NodeFieldOp:
+		wantNode := want.(*fieldOpNode)
+		gotNode := got.(*fieldOpNode)
 		assert.Equal(t, wantNode.op, gotNode.op)
 		assert.Equal(t, 0, slices.Compare[[]string](wantNode.fieldPath, gotNode.fieldPath))
 		assert.Equal(t, wantNode.fieldPathStr, gotNode.fieldPathStr)
@@ -91,30 +93,30 @@ func checkDoIfNode(t *testing.T, want, got DoIfNode) {
 		}
 		assert.Equal(t, wantNode.minValLen, gotNode.minValLen)
 		assert.Equal(t, wantNode.maxValLen, gotNode.maxValLen)
-	case DoIfNodeLogicalOp:
-		wantNode := want.(*doIfLogicalNode)
-		gotNode := got.(*doIfLogicalNode)
+	case NodeLogicalOp:
+		wantNode := want.(*logicalNode)
+		gotNode := got.(*logicalNode)
 		assert.Equal(t, wantNode.op, gotNode.op)
 		require.Equal(t, len(wantNode.operands), len(gotNode.operands))
 		for i := 0; i < len(wantNode.operands); i++ {
-			checkDoIfNode(t, wantNode.operands[i], gotNode.operands[i])
+			checkNode(t, wantNode.operands[i], gotNode.operands[i])
 		}
-	case DoIfNodeByteLenCmpOp:
-		wantNode := want.(*doIfByteLengthCmpNode)
-		gotNode := got.(*doIfByteLengthCmpNode)
-		assert.Equal(t, wantNode.cmpOp, gotNode.cmpOp)
-		assert.Equal(t, wantNode.cmpValue, gotNode.cmpValue)
+	case NodeLengthCmpOp:
+		wantNode := want.(*lenCmpOpNode)
+		gotNode := got.(*lenCmpOpNode)
+		assert.Equal(t, wantNode.lenCmpOp, gotNode.lenCmpOp)
+		assert.NoError(t, wantNode.comparator.isEqualTo(gotNode.comparator))
 		assert.Equal(t, 0, slices.Compare[[]string](wantNode.fieldPath, gotNode.fieldPath))
 	default:
 		t.Error("unknown node type")
 	}
 }
 
-func TestBuildDoIfNodes(t *testing.T) {
+func TestBuildNodes(t *testing.T) {
 	tests := []struct {
 		name    string
 		tree    treeNode
-		want    DoIfNode
+		want    Node
 		wantErr bool
 	}{
 		{
@@ -125,8 +127,8 @@ func TestBuildDoIfNodes(t *testing.T) {
 				caseSensitive: true,
 				values:        [][]byte{[]byte(`test-111`), []byte(`test-2`), []byte(`test-3`), []byte(`test-12345`)},
 			},
-			want: &doIfFieldOpNode{
-				op:            doIfFieldEqualOp,
+			want: &fieldOpNode{
+				op:            fieldEqualOp,
 				fieldPath:     []string{"log", "pod"},
 				fieldPathStr:  "log.pod",
 				caseSensitive: true,
@@ -155,8 +157,8 @@ func TestBuildDoIfNodes(t *testing.T) {
 				caseSensitive: false,
 				values:        [][]byte{[]byte(`TEST-111`), []byte(`Test-2`), []byte(`tesT-3`), []byte(`TeSt-12345`)},
 			},
-			want: &doIfFieldOpNode{
-				op:            doIfFieldEqualOp,
+			want: &fieldOpNode{
+				op:            fieldEqualOp,
 				fieldPath:     []string{"log", "pod"},
 				fieldPathStr:  "log.pod",
 				caseSensitive: false,
@@ -196,11 +198,11 @@ func TestBuildDoIfNodes(t *testing.T) {
 					},
 				},
 			},
-			want: &doIfLogicalNode{
-				op: doIfLogicalOr,
-				operands: []DoIfNode{
-					&doIfFieldOpNode{
-						op:            doIfFieldEqualOp,
+			want: &logicalNode{
+				op: logicalOr,
+				operands: []Node{
+					&fieldOpNode{
+						op:            fieldEqualOp,
 						fieldPath:     []string{"log", "pod"},
 						fieldPathStr:  "log.pod",
 						caseSensitive: true,
@@ -220,8 +222,8 @@ func TestBuildDoIfNodes(t *testing.T) {
 						minValLen: 6,
 						maxValLen: 10,
 					},
-					&doIfFieldOpNode{
-						op:            doIfFieldContainsOp,
+					&fieldOpNode{
+						op:            fieldContainsOp,
 						fieldPath:     []string{"service", "msg"},
 						fieldPathStr:  "service.msg",
 						caseSensitive: true,
@@ -238,27 +240,69 @@ func TestBuildDoIfNodes(t *testing.T) {
 		{
 			name: "ok_byte_len_cmp_op_node",
 			tree: treeNode{
-				byteLenCmpOp: "lt",
-				fieldName:    "pod",
-				cmpValue:     100,
-			},
-			want: &doIfByteLengthCmpNode{
-				fieldPath: []string{"pod"},
+				lenCmpOp:  byteLenCmpOpTag,
 				cmpOp:     "lt",
+				fieldName: "pod",
 				cmpValue:  100,
+			},
+			want: &lenCmpOpNode{
+				lenCmpOp:  byteLenCmpOp,
+				fieldPath: []string{"pod"},
+				comparator: comparator{
+					cmpOp:    cmpOpLess,
+					cmpValue: 100,
+				},
 			},
 		},
 		{
 			name: "ok_byte_len_cmp_op_node_empty_selector",
 			tree: treeNode{
-				byteLenCmpOp: "lt",
-				fieldName:    "",
-				cmpValue:     100,
-			},
-			want: &doIfByteLengthCmpNode{
-				fieldPath: []string{},
+				lenCmpOp:  byteLenCmpOpTag,
 				cmpOp:     "lt",
+				fieldName: "",
 				cmpValue:  100,
+			},
+			want: &lenCmpOpNode{
+				lenCmpOp:  byteLenCmpOp,
+				fieldPath: []string{},
+				comparator: comparator{
+					cmpOp:    cmpOpLess,
+					cmpValue: 100,
+				},
+			},
+		},
+		{
+			name: "ok_array_len_cmp_op_node",
+			tree: treeNode{
+				lenCmpOp:  arrayLenCmpOpTag,
+				cmpOp:     "lt",
+				fieldName: "items",
+				cmpValue:  100,
+			},
+			want: &lenCmpOpNode{
+				lenCmpOp:  arrayLenCmpOp,
+				fieldPath: []string{"items"},
+				comparator: comparator{
+					cmpOp:    cmpOpLess,
+					cmpValue: 100,
+				},
+			},
+		},
+		{
+			name: "ok_array_len_cmp_op_node_empty_selector",
+			tree: treeNode{
+				lenCmpOp:  arrayLenCmpOpTag,
+				cmpOp:     "lt",
+				fieldName: "",
+				cmpValue:  100,
+			},
+			want: &lenCmpOpNode{
+				lenCmpOp:  arrayLenCmpOp,
+				fieldPath: []string{},
+				comparator: comparator{
+					cmpOp:    cmpOpLess,
+					cmpValue: 100,
+				},
 			},
 		},
 		{
@@ -297,18 +341,40 @@ func TestBuildDoIfNodes(t *testing.T) {
 		{
 			name: "err_byte_len_op_node_invalid_op_type",
 			tree: treeNode{
-				byteLenCmpOp: "no-op",
-				fieldName:    "pod",
-				cmpValue:     100,
+				lenCmpOp:  byteLenCmpOpTag,
+				cmpOp:     "no-op",
+				fieldName: "pod",
+				cmpValue:  100,
 			},
 			wantErr: true,
 		},
 		{
 			name: "err_byte_len_op_node_negative_cmp_value",
 			tree: treeNode{
-				byteLenCmpOp: "lt",
-				fieldName:    "pod",
-				cmpValue:     -1,
+				lenCmpOp:  byteLenCmpOpTag,
+				cmpOp:     "lt",
+				fieldName: "pod",
+				cmpValue:  -1,
+			},
+			wantErr: true,
+		},
+		{
+			name: "err_array_len_op_node_invalid_op_type",
+			tree: treeNode{
+				lenCmpOp:  arrayLenCmpOpTag,
+				cmpOp:     "no-op",
+				fieldName: "items",
+				cmpValue:  100,
+			},
+			wantErr: true,
+		},
+		{
+			name: "err_array_len_op_node_negative_cmp_value",
+			tree: treeNode{
+				lenCmpOp:  arrayLenCmpOpTag,
+				cmpOp:     "lt",
+				fieldName: "items",
+				cmpValue:  -1,
 			},
 			wantErr: true,
 		},
@@ -367,7 +433,7 @@ func TestBuildDoIfNodes(t *testing.T) {
 				return
 			}
 			require.NoError(t, err)
-			checkDoIfNode(t, tt.want, got)
+			checkNode(t, tt.want, got)
 		})
 	}
 }
@@ -379,13 +445,12 @@ func TestCheck(t *testing.T) {
 	}
 
 	tests := []struct {
-		name           string
-		tree           treeNode
-		data           []argsResp
-		wantNewNodeErr bool
+		name string
+		tree treeNode
+		data []argsResp
 	}{
 		{
-			name: "ok_equal",
+			name: "equal",
 			tree: treeNode{
 				fieldOp:       "equal",
 				fieldName:     "pod",
@@ -406,7 +471,7 @@ func TestCheck(t *testing.T) {
 			},
 		},
 		{
-			name: "ok_contains",
+			name: "contains",
 			tree: treeNode{
 				fieldOp:       "contains",
 				fieldName:     "pod",
@@ -421,7 +486,7 @@ func TestCheck(t *testing.T) {
 			},
 		},
 		{
-			name: "ok_prefix",
+			name: "prefix",
 			tree: treeNode{
 				fieldOp:       "prefix",
 				fieldName:     "pod",
@@ -436,7 +501,7 @@ func TestCheck(t *testing.T) {
 			},
 		},
 		{
-			name: "ok_suffix",
+			name: "suffix",
 			tree: treeNode{
 				fieldOp:       "suffix",
 				fieldName:     "pod",
@@ -451,7 +516,7 @@ func TestCheck(t *testing.T) {
 			},
 		},
 		{
-			name: "ok_regex",
+			name: "regex",
 			tree: treeNode{
 				fieldOp:   "regex",
 				fieldName: "pod",
@@ -467,7 +532,7 @@ func TestCheck(t *testing.T) {
 			},
 		},
 		{
-			name: "ok_or",
+			name: "or",
 			tree: treeNode{
 				logicalOp: "or",
 				operands: []treeNode{
@@ -496,7 +561,7 @@ func TestCheck(t *testing.T) {
 			},
 		},
 		{
-			name: "ok_and",
+			name: "and",
 			tree: treeNode{
 				logicalOp: "and",
 				operands: []treeNode{
@@ -525,7 +590,7 @@ func TestCheck(t *testing.T) {
 			},
 		},
 		{
-			name: "ok_not",
+			name: "not",
 			tree: treeNode{
 				logicalOp: "not",
 				operands: []treeNode{
@@ -546,7 +611,7 @@ func TestCheck(t *testing.T) {
 			},
 		},
 		{
-			name: "ok_equal_case_insensitive",
+			name: "equal_case_insensitive",
 			tree: treeNode{
 				fieldOp:       "equal",
 				fieldName:     "pod",
@@ -561,7 +626,7 @@ func TestCheck(t *testing.T) {
 			},
 		},
 		{
-			name: "ok_contains_case_insensitive",
+			name: "contains_case_insensitive",
 			tree: treeNode{
 				fieldOp:       "contains",
 				fieldName:     "pod",
@@ -576,7 +641,7 @@ func TestCheck(t *testing.T) {
 			},
 		},
 		{
-			name: "ok_prefix_case_insensitive",
+			name: "prefix_case_insensitive",
 			tree: treeNode{
 				fieldOp:       "prefix",
 				fieldName:     "pod",
@@ -591,7 +656,7 @@ func TestCheck(t *testing.T) {
 			},
 		},
 		{
-			name: "ok_suffix_case_insensitive",
+			name: "suffix_case_insensitive",
 			tree: treeNode{
 				fieldOp:       "suffix",
 				fieldName:     "pod",
@@ -606,7 +671,7 @@ func TestCheck(t *testing.T) {
 			},
 		},
 		{
-			name: "ok_equal_nil_or_empty_string",
+			name: "equal_nil_or_empty_string",
 			tree: treeNode{
 				fieldOp:       "equal",
 				fieldName:     "test-field",
@@ -621,11 +686,12 @@ func TestCheck(t *testing.T) {
 			},
 		},
 		{
-			name: "ok_byte_len_cmp_lt",
+			name: "byte_len_cmp_lt",
 			tree: treeNode{
-				byteLenCmpOp: "lt",
-				fieldName:    "msg",
-				cmpValue:     4,
+				lenCmpOp:  byteLenCmpOpTag,
+				cmpOp:     "lt",
+				fieldName: "msg",
+				cmpValue:  4,
 			},
 			data: []argsResp{
 				{`{"msg":""}`, true},
@@ -638,11 +704,12 @@ func TestCheck(t *testing.T) {
 			},
 		},
 		{
-			name: "ok_byte_len_cmp_ge",
+			name: "byte_len_cmp_ge",
 			tree: treeNode{
-				byteLenCmpOp: "ge",
-				fieldName:    "msg",
-				cmpValue:     4,
+				lenCmpOp:  byteLenCmpOpTag,
+				cmpOp:     "ge",
+				fieldName: "msg",
+				cmpValue:  4,
 			},
 			data: []argsResp{
 				{`{"msg":""}`, false},
@@ -655,11 +722,12 @@ func TestCheck(t *testing.T) {
 			},
 		},
 		{
-			name: "ok_byte_len_cmp_lt_empty_selector",
+			name: "byte_len_cmp_lt_empty_selector",
 			tree: treeNode{
-				byteLenCmpOp: "lt",
-				fieldName:    "",
-				cmpValue:     4,
+				lenCmpOp:  byteLenCmpOpTag,
+				cmpOp:     "lt",
+				fieldName: "",
+				cmpValue:  4,
 			},
 			data: []argsResp{
 				{`""`, true},
@@ -672,11 +740,12 @@ func TestCheck(t *testing.T) {
 			},
 		},
 		{
-			name: "ok_byte_len_cmp_eq",
+			name: "byte_len_cmp_eq",
 			tree: treeNode{
-				byteLenCmpOp: "eq",
-				fieldName:    "msg",
-				cmpValue:     2,
+				lenCmpOp:  byteLenCmpOpTag,
+				cmpOp:     "eq",
+				fieldName: "msg",
+				cmpValue:  2,
 			},
 			data: []argsResp{
 				{`{"msg":1}`, false},
@@ -685,11 +754,12 @@ func TestCheck(t *testing.T) {
 			},
 		},
 		{
-			name: "ok_byte_len_cmp_ne",
+			name: "byte_len_cmp_ne",
 			tree: treeNode{
-				byteLenCmpOp: "ne",
-				fieldName:    "msg",
-				cmpValue:     2,
+				lenCmpOp:  byteLenCmpOpTag,
+				cmpOp:     "ne",
+				fieldName: "msg",
+				cmpValue:  2,
 			},
 			data: []argsResp{
 				{`{"msg":1}`, true},
@@ -697,21 +767,119 @@ func TestCheck(t *testing.T) {
 				{`{"msg":123}`, true},
 			},
 		},
+		{
+			name: "array_len_cmp_lt",
+			tree: treeNode{
+				lenCmpOp:  arrayLenCmpOpTag,
+				cmpOp:     "lt",
+				fieldName: "numbers",
+				cmpValue:  2,
+			},
+			data: []argsResp{
+				{`{"numbers":[]}`, true},
+				{`{"numbers":[1]}`, true},
+				{`{"numbers":[1, 2]}`, false},
+				{`{"numbers":[1, 2, 3]}`, false},
+			},
+		},
+		{
+			name: "array_len_cmp_ge",
+			tree: treeNode{
+				lenCmpOp:  arrayLenCmpOpTag,
+				cmpOp:     "ge",
+				fieldName: "numbers",
+				cmpValue:  2,
+			},
+			data: []argsResp{
+				{`{"numbers":[]}`, false},
+				{`{"numbers":[1]}`, false},
+				{`{"numbers":[1, 2]}`, true},
+				{`{"numbers":[1, 2, 3]}`, true},
+			},
+		},
+		{
+			name: "array_len_cmp_lt_empty_selector",
+			tree: treeNode{
+				lenCmpOp:  arrayLenCmpOpTag,
+				cmpOp:     "lt",
+				fieldName: "",
+				cmpValue:  2,
+			},
+			data: []argsResp{
+				{`[]`, true},
+				{`[1]`, true},
+				{`[1, 2]`, false},
+				{`[1, 2, 3]`, false},
+			},
+		},
+		{
+			name: "array_len_cmp_eq",
+			tree: treeNode{
+				lenCmpOp:  arrayLenCmpOpTag,
+				cmpOp:     "eq",
+				fieldName: "numbers",
+				cmpValue:  2,
+			},
+			data: []argsResp{
+				{`{"numbers":[1]}`, false},
+				{`{"numbers":[1, 2]}`, true},
+				{`{"numbers":[1, 2, 3]}`, false},
+			},
+		},
+		{
+			name: "array_len_cmp_ne",
+			tree: treeNode{
+				lenCmpOp:  arrayLenCmpOpTag,
+				cmpOp:     "ne",
+				fieldName: "numbers",
+				cmpValue:  2,
+			},
+			data: []argsResp{
+				{`{"numbers":[1]}`, true},
+				{`{"numbers":[1, 2]}`, false},
+				{`{"numbers":[1, 2, 3]}`, true},
+			},
+		},
+		{
+			name: "array_len_cmp_field_not_found",
+			tree: treeNode{
+				lenCmpOp:  arrayLenCmpOpTag,
+				cmpOp:     "lt",
+				fieldName: "some",
+				cmpValue:  100,
+			},
+			data: []argsResp{
+				{`{"msg":"qwerty"}`, false},
+				{`[1, 2, 3]`, false},
+			},
+		},
+		{
+			name: "array_len_cmp_field_is_not_array",
+			tree: treeNode{
+				lenCmpOp:  arrayLenCmpOpTag,
+				cmpOp:     "lt",
+				fieldName: "items",
+				cmpValue:  100,
+			},
+			data: []argsResp{
+				{`{"items":123}`, false},
+				{`{"items":"abc"}`, false},
+				{`{"items":null}`, false},
+				{`{"items":{}}`, false},
+				{`{"items":[]}`, true},
+			},
+		},
 	}
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			var root DoIfNode
+			var root Node
 			var eventRoot *insaneJSON.Root
 			var err error
 			t.Parallel()
 			root, err = buildTree(tt.tree)
-			if tt.wantNewNodeErr {
-				require.Error(t, err)
-				return
-			}
 			require.NoError(t, err)
-			checker := NewDoIfChecker(root)
+			checker := NewChecker(root)
 			for _, d := range tt.data {
 				if d.eventStr == "" {
 					eventRoot = nil
@@ -726,17 +894,104 @@ func TestCheck(t *testing.T) {
 	}
 }
 
-func TestDoIfNodeIsEqual(t *testing.T) {
-	singleNode1 := treeNode{
+const userInfoRawJSON = `
+{
+	"name": "jack",
+	"age": 120,
+	"hobbies": ["football", "diving"]
+}`
+
+func dryJSON(rawJSON string) string {
+	s := rawJSON
+
+	s = strings.ReplaceAll(s, " ", "")
+	s = strings.ReplaceAll(s, "\n", "")
+	s = strings.ReplaceAll(s, "\t", "")
+
+	return s
+}
+
+var userInfoDryJSON = dryJSON(userInfoRawJSON)
+
+func TestCheckLenCmpLtObject(t *testing.T) {
+	type TestCase struct {
+		cmpValue int
+		result   bool
+	}
+
+	tests := []TestCase{
+		{
+			cmpValue: len(userInfoDryJSON) - 1,
+			result:   false,
+		},
+		{
+			cmpValue: len(userInfoDryJSON),
+			result:   false,
+		},
+		{
+			cmpValue: len(userInfoDryJSON) + 1,
+			result:   true,
+		},
+		{
+			cmpValue: len(userInfoDryJSON) + 2,
+			result:   true,
+		},
+	}
+
+	rawJSON := fmt.Sprintf(`{"user_info": %s}`, userInfoRawJSON)
+	eventRoot, err := insaneJSON.DecodeString(rawJSON)
+	require.NoError(t, err)
+
+	for index, test := range tests {
+		root, err := buildTree(treeNode{
+			fieldName: "user_info",
+			lenCmpOp:  byteLenCmpOpTag,
+			cmpOp:     "lt",
+			cmpValue:  test.cmpValue,
+		})
+		require.NoError(t, err)
+
+		checker := NewChecker(root)
+		result := checker.Check(eventRoot)
+		require.Equal(t, test.result, result, "invalid result; test id: %d", index)
+	}
+
+	eventRoot, err = insaneJSON.DecodeString(userInfoRawJSON)
+	require.NoError(t, err)
+
+	for index, test := range tests {
+		root, err := buildTree(treeNode{
+			fieldName: "",
+			lenCmpOp:  byteLenCmpOpTag,
+			cmpOp:     "lt",
+			cmpValue:  test.cmpValue,
+		})
+		require.NoError(t, err)
+
+		checker := NewChecker(root)
+		result := checker.Check(eventRoot)
+		require.Equal(t, test.result, result, "invalid result (empty selector); test id: %d", index)
+	}
+}
+
+func TestNodeIsEqual(t *testing.T) {
+	fieldNode := treeNode{
 		fieldOp:       "equal",
 		fieldName:     "service",
 		caseSensitive: true,
 		values:        [][]byte{[]byte("test-1"), []byte("test-2")},
 	}
-	singleNode2 := treeNode{
-		byteLenCmpOp: "lt",
-		fieldName:    "msg",
-		cmpValue:     100,
+	byteLenCmpOpNode := treeNode{
+		lenCmpOp:  byteLenCmpOpTag,
+		cmpOp:     "lt",
+		fieldName: "msg",
+		cmpValue:  100,
+	}
+	arrayLenCmpOpNode := treeNode{
+		lenCmpOp:  arrayLenCmpOpTag,
+		cmpOp:     "lt",
+		fieldName: "items",
+		cmpValue:  100,
 	}
 	twoNodes := treeNode{
 		logicalOp: "not",
@@ -768,9 +1023,10 @@ func TestDoIfNodeIsEqual(t *testing.T) {
 						values:        [][]byte{[]byte("pod-1"), []byte("pod-2")},
 					},
 					{
-						byteLenCmpOp: "lt",
-						fieldName:    "msg",
-						cmpValue:     100,
+						lenCmpOp:  byteLenCmpOpTag,
+						cmpOp:     "lt",
+						fieldName: "msg",
+						cmpValue:  100,
 					},
 					{
 						logicalOp: "and",
@@ -806,15 +1062,21 @@ func TestDoIfNodeIsEqual(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name:    "equal_single_node",
-			t1:      singleNode1,
-			t2:      singleNode1,
+			name:    "equal_field_node",
+			t1:      fieldNode,
+			t2:      fieldNode,
 			wantErr: false,
 		},
 		{
 			name:    "equal_byte_len_cmp_node",
-			t1:      singleNode2,
-			t2:      singleNode2,
+			t1:      byteLenCmpOpNode,
+			t2:      byteLenCmpOpNode,
+			wantErr: false,
+		},
+		{
+			name:    "equal_array_len_cmp_node",
+			t1:      arrayLenCmpOpNode,
+			t2:      arrayLenCmpOpNode,
 			wantErr: false,
 		},
 		{
@@ -831,20 +1093,20 @@ func TestDoIfNodeIsEqual(t *testing.T) {
 		},
 		{
 			name:    "not_equal_type_mismatch_1",
-			t1:      singleNode1,
-			t2:      singleNode2,
+			t1:      fieldNode,
+			t2:      byteLenCmpOpNode,
 			wantErr: true,
 		},
 		{
 			name:    "not_equal_type_mismatch_2",
-			t1:      singleNode1,
-			t2:      multiNodes,
+			t1:      arrayLenCmpOpNode,
+			t2:      twoNodes,
 			wantErr: true,
 		},
 		{
-			name:    "not_equal_type_mismatch_3",
-			t1:      singleNode2,
-			t2:      multiNodes,
+			name:    "not_equal_len_cmp_op_mismatch",
+			t1:      byteLenCmpOpNode,
+			t2:      arrayLenCmpOpNode,
 			wantErr: true,
 		},
 		{
@@ -1058,42 +1320,96 @@ func TestDoIfNodeIsEqual(t *testing.T) {
 		{
 			name: "not_equal_byte_len_cmp_op_mismatch",
 			t1: treeNode{
-				byteLenCmpOp: "lt",
-				fieldName:    "msg",
-				cmpValue:     100,
+				lenCmpOp:  byteLenCmpOpTag,
+				cmpOp:     "lt",
+				fieldName: "msg",
+				cmpValue:  100,
 			},
 			t2: treeNode{
-				byteLenCmpOp: "gt",
-				fieldName:    "msg",
-				cmpValue:     100,
+				lenCmpOp:  byteLenCmpOpTag,
+				cmpOp:     "gt",
+				fieldName: "msg",
+				cmpValue:  100,
 			},
 			wantErr: true,
 		},
 		{
 			name: "not_equal_byte_len_cmp_op_field_mismatch",
 			t1: treeNode{
-				byteLenCmpOp: "lt",
-				fieldName:    "msg",
-				cmpValue:     100,
+				lenCmpOp:  byteLenCmpOpTag,
+				cmpOp:     "lt",
+				fieldName: "msg",
+				cmpValue:  100,
 			},
 			t2: treeNode{
-				byteLenCmpOp: "lt",
-				fieldName:    "pod",
-				cmpValue:     100,
+				lenCmpOp:  byteLenCmpOpTag,
+				cmpOp:     "lt",
+				fieldName: "pod",
+				cmpValue:  100,
 			},
 			wantErr: true,
 		},
 		{
 			name: "not_equal_byte_len_cmp_op_value_mismatch",
 			t1: treeNode{
-				byteLenCmpOp: "lt",
-				fieldName:    "msg",
-				cmpValue:     100,
+				lenCmpOp:  byteLenCmpOpTag,
+				cmpOp:     "lt",
+				fieldName: "msg",
+				cmpValue:  100,
 			},
 			t2: treeNode{
-				byteLenCmpOp: "lt",
-				fieldName:    "msg",
-				cmpValue:     200,
+				lenCmpOp:  byteLenCmpOpTag,
+				cmpOp:     "lt",
+				fieldName: "msg",
+				cmpValue:  200,
+			},
+			wantErr: true,
+		},
+		{
+			name: "not_equal_array_len_cmp_op_mismatch",
+			t1: treeNode{
+				lenCmpOp:  arrayLenCmpOpTag,
+				cmpOp:     "lt",
+				fieldName: "items",
+				cmpValue:  100,
+			},
+			t2: treeNode{
+				lenCmpOp:  arrayLenCmpOpTag,
+				cmpOp:     "gt",
+				fieldName: "items",
+				cmpValue:  100,
+			},
+			wantErr: true,
+		},
+		{
+			name: "not_equal_array_len_cmp_op_field_mismatch",
+			t1: treeNode{
+				lenCmpOp:  arrayLenCmpOpTag,
+				cmpOp:     "lt",
+				fieldName: "items",
+				cmpValue:  100,
+			},
+			t2: treeNode{
+				lenCmpOp:  arrayLenCmpOpTag,
+				cmpOp:     "lt",
+				fieldName: "numbers",
+				cmpValue:  100,
+			},
+			wantErr: true,
+		},
+		{
+			name: "not_equal_array_len_cmp_op_value_mismatch",
+			t1: treeNode{
+				lenCmpOp:  arrayLenCmpOpTag,
+				cmpOp:     "lt",
+				fieldName: "items",
+				cmpValue:  100,
+			},
+			t2: treeNode{
+				lenCmpOp:  arrayLenCmpOpTag,
+				cmpOp:     "lt",
+				fieldName: "items",
+				cmpValue:  200,
 			},
 			wantErr: true,
 		},
@@ -1190,8 +1506,8 @@ func TestDoIfNodeIsEqual(t *testing.T) {
 			require.NoError(t, err)
 			root2, err := buildTree(tt.t2)
 			require.NoError(t, err)
-			c1 := NewDoIfChecker(root1)
-			c2 := NewDoIfChecker(root2)
+			c1 := NewChecker(root1)
+			c2 := NewChecker(root2)
 			err1 := c1.IsEqualTo(c2)
 			err2 := c2.IsEqualTo(c1)
 			if tt.wantErr {
