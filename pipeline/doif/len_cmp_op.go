@@ -124,6 +124,8 @@ func (n *lenCmpOpNode) Type() NodeType {
 }
 
 func (n *lenCmpOpNode) Check(eventRoot *insaneJSON.Root) bool {
+	value := 0
+
 	switch n.lenCmpOp {
 	case byteLenCmpOp:
 		node := eventRoot.Dig(n.fieldPath...)
@@ -131,24 +133,23 @@ func (n *lenCmpOpNode) Check(eventRoot *insaneJSON.Root) bool {
 			return false
 		}
 
-		byteLen := 0
 		if node.IsObject() || node.IsArray() {
-			byteLen = len(node.EncodeToByte())
+			value = len(node.EncodeToByte())
 		} else {
-			byteLen = len(node.AsString())
+			value = len(node.AsString())
 		}
-
-		return n.comparator.compare(byteLen)
 	case arrayLenCmpOp:
 		node := eventRoot.Dig(n.fieldPath...)
 		if !node.IsArray() {
 			return false
 		}
 
-		return n.comparator.compare(len(node.AsArray()))
+		value = len(node.AsArray())
 	default:
 		panic("impossible: bad len cmp op")
 	}
+
+	return n.comparator.compare(value)
 }
 
 func (n *lenCmpOpNode) isEqualTo(n2 Node, _ int) error {

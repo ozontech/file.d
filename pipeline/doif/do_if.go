@@ -10,7 +10,7 @@ import (
 type NodeType int
 
 const (
-	NodeEmpty NodeType = iota
+	NodeUnknownType NodeType = iota
 
 	// > Type of node where matching rules for fields are stored.
 	NodeFieldOp // *
