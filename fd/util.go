@@ -12,6 +12,7 @@ import (
 	"github.com/ozontech/file.d/cfg/matchrule"
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/pipeline/doif"
 )
 
 func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
@@ -194,19 +195,20 @@ func extractMetrics(actionJSON *simplejson.Json) (string, []string, bool) {
 
 var (
 	doIfLogicalOpNodes = map[string]struct{}{
-		"and": struct{}{},
-		"not": struct{}{},
-		"or":  struct{}{},
+		"and": {},
+		"not": {},
+		"or":  {},
 	}
 	doIfFieldOpNodes = map[string]struct{}{
-		"equal":    struct{}{},
-		"contains": struct{}{},
-		"prefix":   struct{}{},
-		"suffix":   struct{}{},
-		"regex":    struct{}{},
+		"equal":    {},
+		"contains": {},
+		"prefix":   {},
+		"suffix":   {},
+		"regex":    {},
 	}
-	doIfBytesLengthCmpNodes = map[string]struct{}{
-		"byte_len_cmp": struct{}{},
+	doIfLengthCmpOpNodes = map[string]struct{}{
+		"byte_len_cmp":  {},
+		"array_len_cmp": {},
 	}
 )
 
@@ -233,8 +235,8 @@ func extractFieldOpVals(jsonNode *simplejson.Json) [][]byte {
 	return vals
 }
 
-func extractFieldOpNode(opName string, jsonNode *simplejson.Json) (pipeline.DoIfNode, error) {
-	var result pipeline.DoIfNode
+func extractFieldOpNode(opName string, jsonNode *simplejson.Json) (doif.Node, error) {
+	var result doif.Node
 	var err error
 	fieldPath := jsonNode.Get("field").MustString()
 	caseSensitiveNode, has := jsonNode.CheckGet("case_sensitive")
@@ -243,7 +245,7 @@ func extractFieldOpNode(opName string, jsonNode *simplejson.Json) (pipeline.DoIf
 		caseSensitive = caseSensitiveNode.MustBool()
 	}
 	vals := extractFieldOpVals(jsonNode)
-	result, err = pipeline.NewFieldOpNode(opName, fieldPath, caseSensitive, vals)
+	result, err = doif.NewFieldOpNode(opName, fieldPath, caseSensitive, vals)
 	if err != nil {
 		return nil, fmt.Errorf("failed to init field op: %w", err)
 	}
@@ -261,7 +263,7 @@ const (
 	fieldNameCmpValue = "value"
 )
 
-func extractByteLengthCmpOpNode(_ string, jsonNode *simplejson.Json) (pipeline.DoIfNode, error) {
+func extractLengthCmpOpNode(opName string, jsonNode *simplejson.Json) (doif.Node, error) {
 	fieldPathNode, has := jsonNode.CheckGet(fieldNameField)
 	if !has {
 		return nil, noRequiredFieldError(fieldNameField)
@@ -289,19 +291,14 @@ func extractByteLengthCmpOpNode(_ string, jsonNode *simplejson.Json) (pipeline.D
 		return nil, err
 	}
 
-	result, err := pipeline.NewByteLengthCmpNode(fieldPath, cmpOp, cmpValue)
-	if err != nil {
-		return nil, fmt.Errorf("failed to init bytes length cmp op: %w", err)
-	}
-
-	return result, nil
+	return doif.NewLenCmpOpNode(opName, fieldPath, cmpOp, cmpValue)
 }
 
-func extractLogicalOpNode(opName string, jsonNode *simplejson.Json) (pipeline.DoIfNode, error) {
-	var result, operand pipeline.DoIfNode
+func extractLogicalOpNode(opName string, jsonNode *simplejson.Json) (doif.Node, error) {
+	var result, operand doif.Node
 	var err error
 	operands := jsonNode.Get("operands")
-	operandsList := make([]pipeline.DoIfNode, 0)
+	operandsList := make([]doif.Node, 0)
 	for i := range operands.MustArray() {
 		opNode := operands.GetIndex(i)
 		operand, err = extractDoIfNode(opNode)
@@ -310,14 +307,14 @@ func extractLogicalOpNode(opName string, jsonNode *simplejson.Json) (pipeline.Do
 		}
 		operandsList = append(operandsList, operand)
 	}
-	result, err = pipeline.NewLogicalNode(opName, operandsList)
+	result, err = doif.NewLogicalNode(opName, operandsList)
 	if err != nil {
 		return nil, fmt.Errorf("failed to init logical node: %w", err)
 	}
 	return result, nil
 }
 
-func extractDoIfNode(jsonNode *simplejson.Json) (pipeline.DoIfNode, error) {
+func extractDoIfNode(jsonNode *simplejson.Json) (doif.Node, error) {
 	opNameNode, has := jsonNode.CheckGet("op")
 	if !has {
 		return nil, errors.New(`"op" field not found`)
@@ -327,13 +324,14 @@ func extractDoIfNode(jsonNode *simplejson.Json) (pipeline.DoIfNode, error) {
 		return extractLogicalOpNode(opName, jsonNode)
 	} else if _, has := doIfFieldOpNodes[opName]; has {
 		return extractFieldOpNode(opName, jsonNode)
-	} else if _, has := doIfBytesLengthCmpNodes[opName]; has {
-		return extractByteLengthCmpOpNode(opName, jsonNode)
+	} else if _, has := doIfLengthCmpOpNodes[opName]; has {
+		return extractLengthCmpOpNode(opName, jsonNode)
+	} else {
+		return nil, fmt.Errorf("unknown op %q", opName)
 	}
-	return nil, fmt.Errorf("unknown op %q", opName)
 }
 
-func extractDoIfChecker(actionJSON *simplejson.Json) (*pipeline.DoIfChecker, error) {
+func extractDoIfChecker(actionJSON *simplejson.Json) (*doif.Checker, error) {
 	if actionJSON.MustMap() == nil {
 		return nil, nil
 	}
@@ -342,7 +340,7 @@ func extractDoIfChecker(actionJSON *simplejson.Json) (*pipeline.DoIfChecker, err
 	if err != nil {
 		return nil, fmt.Errorf("failed to extract nodes: %w", err)
 	}
-	result := pipeline.NewDoIfChecker(root)
+	result := doif.NewChecker(root)
 	return result, nil
 }
 
