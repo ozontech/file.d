@@ -110,7 +110,7 @@ func (l *inMemoryLimiter) isAllowed(event *pipeline.Event, ts time.Time) bool {
 		case "", limitKindCount:
 			l.limitDistrMetrics.EventsCount.WithLabelValues(l.metricLabelsBuf...).Inc()
 		case limitKindSize:
-			l.limitDistrMetrics.EventsCount.WithLabelValues(l.metricLabelsBuf...).Add(float64(event.Size))
+			l.limitDistrMetrics.EventsSize.WithLabelValues(l.metricLabelsBuf...).Add(float64(event.Size))
 		}
 	}
 

@@ -88,6 +88,7 @@ It allows to distribute the `default_limit` between events by condition.
 * `ratios` - the list of objects. Each object has:
 	* `ratio` - distribution ratio, value must be in range [0.0;1.0].
 	* `values` - the list of strings which contains all `field` values that fall into this distribution.
+* `metric_labels` - list of metric labels.
 
 > Notes:
 > 1. Sum of ratios must be in range [0.0;1.0].
