@@ -409,31 +409,6 @@ func (p *Plugin) maskValue(mask *Mask, value, buf []byte) ([]byte, bool) {
 	return value, true
 }
 
-func pathIgnoredByAny(pathStack []string, ignoredPaths [][]string) bool {
-	for _, ignoredPath := range ignoredPaths {
-		if pathIgnoredByOne(pathStack, ignoredPath) {
-			return true
-		}
-	}
-
-	return false
-}
-
-func pathIgnoredByOne(pathStack []string, ignoredPath []string) bool {
-	if len(pathStack) < len(ignoredPath) {
-		return false
-	}
-
-	n := len(ignoredPath)
-	for i := 0; i < n; i++ {
-		if pathStack[i] != ignoredPath[i] {
-			return false
-		}
-	}
-
-	return true
-}
-
 func getNestedValueNodes(currentNode *insaneJSON.Node, ignoredNodes []*insaneJSON.Node, valueNodes []*insaneJSON.Node) []*insaneJSON.Node {
 	if currentNode == nil {
 		return valueNodes
