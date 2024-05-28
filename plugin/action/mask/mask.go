@@ -2,6 +2,7 @@ package mask
 
 import (
 	"regexp"
+	"slices"
 	"strings"
 	"unicode/utf8"
 
@@ -38,8 +39,7 @@ pipelines:
 }*/
 
 const (
-	substitution             = byte('*')
-	defaultPathStackCapacity = 50
+	substitution = byte('*')
 )
 
 type Plugin struct {
@@ -54,9 +54,9 @@ type Plugin struct {
 	// common match regex
 	matchRe *regexp.Regexp
 
-	fieldPaths  [][]string
-	isWhitelist bool
-	pathStack   []string
+	fieldPaths   [][]string
+	isWhitelist  bool
+	ignoredNodes []*insaneJSON.Node
 
 	valueNodes []*insaneJSON.Node
 	logger     *zap.Logger
@@ -285,8 +285,6 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 		}
 	}
 
-	p.pathStack = make([]string, 0, defaultPathStackCapacity)
-
 	p.registerMetrics(params.MetricCtl)
 }
 
@@ -436,23 +434,28 @@ func pathIgnoredByOne(pathStack []string, ignoredPath []string) bool {
 	return true
 }
 
-func (p *Plugin) getValueNodesByBlacklist(currentNode *insaneJSON.Node, valueNodes []*insaneJSON.Node) []*insaneJSON.Node {
+func getNestedValueNodes(currentNode *insaneJSON.Node, ignoredNodes []*insaneJSON.Node, valueNodes []*insaneJSON.Node) []*insaneJSON.Node {
+	if currentNode == nil {
+		return valueNodes
+	}
+
 	switch {
 	case currentNode.IsField():
-		fieldName := currentNode.AsString()
-		p.pathStack = append(p.pathStack, fieldName)
-		valueNodes = p.getValueNodesByBlacklist(currentNode.AsFieldValue(), valueNodes)
-		p.pathStack = p.pathStack[:len(p.pathStack)-1]
+		valueNodes = getNestedValueNodes(currentNode.AsFieldValue(), ignoredNodes, valueNodes)
 	case currentNode.IsArray():
-		for _, n := range currentNode.AsArray() {
-			valueNodes = p.getValueNodesByBlacklist(n, valueNodes)
+		if !slices.Contains(ignoredNodes, currentNode) {
+			for _, n := range currentNode.AsArray() {
+				valueNodes = getNestedValueNodes(n, ignoredNodes, valueNodes)
+			}
 		}
 	case currentNode.IsObject():
-		for _, n := range currentNode.AsFields() {
-			valueNodes = p.getValueNodesByBlacklist(n, valueNodes)
+		if !slices.Contains(ignoredNodes, currentNode) {
+			for _, n := range currentNode.AsFields() {
+				valueNodes = getNestedValueNodes(n, ignoredNodes, valueNodes)
+			}
 		}
 	default:
-		if !pathIgnoredByAny(p.pathStack, p.fieldPaths) {
+		if !slices.Contains(ignoredNodes, currentNode) {
 			valueNodes = append(valueNodes, currentNode)
 		}
 	}
@@ -460,44 +463,20 @@ func (p *Plugin) getValueNodesByBlacklist(currentNode *insaneJSON.Node, valueNod
 	return valueNodes
 }
 
-func getAllValueNodes(currentNode *insaneJSON.Node, valueNodes []*insaneJSON.Node) []*insaneJSON.Node {
-	if currentNode == nil {
-		return valueNodes
-	}
-
-	switch {
-	case currentNode.IsField():
-		valueNodes = getAllValueNodes(currentNode.AsFieldValue(), valueNodes)
-	case currentNode.IsArray():
-		for _, n := range currentNode.AsArray() {
-			valueNodes = getAllValueNodes(n, valueNodes)
-		}
-	case currentNode.IsObject():
-		for _, n := range currentNode.AsFields() {
-			valueNodes = getAllValueNodes(n, valueNodes)
-		}
-	default:
-		valueNodes = append(valueNodes, currentNode)
-	}
-
-	return valueNodes
-}
-
-func getValueNodesByWhitelist(root *insaneJSON.Node, valueNodes []*insaneJSON.Node, fieldPaths [][]string) []*insaneJSON.Node {
-	for _, fieldPath := range fieldPaths {
-		node := root.Dig(fieldPath...)
-		valueNodes = getAllValueNodes(node, valueNodes)
-	}
-
-	return valueNodes
-}
-
 func (p *Plugin) getValueNodes(root *insaneJSON.Node, valueNodes []*insaneJSON.Node) []*insaneJSON.Node {
 	if p.isWhitelist {
-		return getValueNodesByWhitelist(root, valueNodes, p.fieldPaths)
+		for _, fieldPath := range p.fieldPaths {
+			valueNodes = getNestedValueNodes(root.Dig(fieldPath...), nil, valueNodes)
+		}
 	} else {
-		return p.getValueNodesByBlacklist(root, valueNodes)
+		p.ignoredNodes = p.ignoredNodes[:0]
+		for _, fieldPath := range p.fieldPaths {
+			p.ignoredNodes = append(p.ignoredNodes, root.Dig(fieldPath...))
+		}
+		valueNodes = getNestedValueNodes(root, p.ignoredNodes, valueNodes)
 	}
+
+	return valueNodes
 }
 
 func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {

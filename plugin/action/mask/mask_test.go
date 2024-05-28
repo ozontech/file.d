@@ -2,6 +2,7 @@ package mask
 
 import (
 	"encoding/json"
+	"fmt"
 	"regexp"
 	"strings"
 	"sync"
@@ -601,7 +602,7 @@ func TestGetAllValueNodes(t *testing.T) {
 			require.NoError(t, err)
 			defer insaneJSON.Release(root)
 
-			nodes := getAllValueNodes(root.Node, nil)
+			nodes := getNestedValueNodes(root.Node, nil, nil)
 			require.Equal(t, len(nodes), len(s.expected))
 			for i := range nodes {
 				assert.Equal(t, s.expected[i], nodes[i].AsString())
@@ -1032,5 +1033,50 @@ func BenchmarkMaskValue(b *testing.B) {
 	buf := make([]byte, 0, 2048)
 	for i := 0; i < b.N; i++ {
 		buf, _ = plugin.maskValue(&mask, input, buf)
+	}
+}
+
+func genFields(count int) string {
+	var sb strings.Builder
+	for i := 0; i < count; i++ {
+		sb.WriteString(fmt.Sprintf(`"field_%d":"val_%d",`, i, i))
+	}
+	return sb.String()
+}
+
+func BenchmarkGetValueNodesCommon(b *testing.B) {
+	s := fmt.Sprintf(`{%s"level":"info"}`, genFields(1000))
+	pl := Plugin{
+		isWhitelist: false,
+		fieldPaths:  [][]string{{"field_1"}, {"field_2"}, {"field_200"}, {"field_300"}},
+		valueNodes:  make([]*insaneJSON.Node, 0, 1000),
+	}
+
+	root, err := insaneJSON.DecodeString(s)
+	require.NoError(b, err)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		pl.getValueNodes(root.Node, pl.valueNodes)
+	}
+}
+
+func BenchmarkSkipManyValuesAtOnce(b *testing.B) {
+	s := fmt.Sprintf(
+		`{"name1":{"name2":[%s]}}`,
+		strings.TrimRight(strings.Repeat(`"abc",`, 1000), ","),
+	)
+	pl := Plugin{
+		isWhitelist: false,
+		fieldPaths:  [][]string{{"name1"}},
+		valueNodes:  make([]*insaneJSON.Node, 0, 1000),
+	}
+
+	root, err := insaneJSON.DecodeString(s)
+	require.NoError(b, err)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		pl.getValueNodes(root.Node, pl.valueNodes)
 	}
 }
