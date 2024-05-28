@@ -18,6 +18,7 @@ import (
 func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 	capacity := pipeline.DefaultCapacity
 	antispamThreshold := 0
+	antispamField := ""
 	var antispamExceptions matchrule.RuleSets
 	avgInputEventSize := pipeline.DefaultAvgInputEventSize
 	maxInputEventSize := pipeline.DefaultMaxInputEventSize
@@ -82,6 +83,8 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 			antispamThreshold = 0
 		}
 
+		antispamField = settings.Get("antispam_field").MustString()
+
 		var err error
 		antispamExceptions, err = extractExceptions(settings)
 		if err != nil {
@@ -108,6 +111,7 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 		AvgEventSize:        avgInputEventSize,
 		MaxEventSize:        maxInputEventSize,
 		AntispamThreshold:   antispamThreshold,
+		AntispamField:       antispamField,
 		AntispamExceptions:  antispamExceptions,
 		MaintenanceInterval: maintenanceInterval,
 		EventTimeout:        eventTimeout,
