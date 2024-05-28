@@ -251,8 +251,7 @@ pipelines:
       ignore_fields:
       - trace_id
       masks:
-      - mask:
-        re: "\b(\d{1,4})\D?(\d{1,4})\D?(\d{1,4})\D?(\d{1,4})\b"
+      - re: "\b(\d{1,4})\D?(\d{1,4})\D?(\d{1,4})\D?(\d{1,4})\b"
         groups: [1,2,3]
     ...
 ```
