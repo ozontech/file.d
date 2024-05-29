@@ -48,7 +48,7 @@ type Options struct {
 	MetricsController *metric.Ctl
 }
 
-func NewAntispammer(o Options) *Antispammer {
+func NewAntispammer(o *Options) *Antispammer {
 	if o.Threshold > 0 {
 		o.Logger.Info("antispam enabled",
 			zap.Int("threshold", o.Threshold),
