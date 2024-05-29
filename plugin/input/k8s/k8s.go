@@ -3,6 +3,7 @@ package k8s
 import (
 	"net/http"
 
+	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/decoder"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/pipeline"
@@ -92,6 +93,14 @@ type Config struct {
 	// >
 	// > Under the hood this plugin uses [file plugin](/plugin/input/file/README.md) to collect logs from files. So you can change any [file plugin](/plugin/input/file/README.md) config parameter using `file_config` section. Check out an example.
 	FileConfig file.Config `json:"file_config" child:"true"` // *
+
+	// > @3@4@5@6
+	// >
+	// > Meta params
+	// >
+	// > Add meta information to an event (look at Meta params)
+	// > Use [go-template](https://pkg.go.dev/text/template) syntax
+	Meta cfg.MetaTemplates `json:"meta"` // *
 }
 
 var startCounter atomic.Int32
@@ -144,6 +153,19 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 
 // Commit event.
 func (p *Plugin) Commit(event *pipeline.Event) {
+	// if len(p.config.Meta) > 0 {
+	// 	metadataInfo, err := p.metaTemplater.Render(newMetaInformation(*podMeta))
+	// 	if err != nil {
+	// 		p.logger.Error("cannot parse meta info", zap.Error(err))
+	// 	}
+
+	// 	if len(metadataInfo) > 0 {
+	// 		for k, v := range metadataInfo {
+	// 			event.Root.AddFieldNoAlloc(event.Root, k).MutateToString(v)
+	// 		}
+	// 	}
+	// }
+
 	p.fp.Commit(event)
 }
 
@@ -155,4 +177,26 @@ func (p *Plugin) Stop() {
 // PassEvent decides pass or discard event.
 func (p *Plugin) PassEvent(event *pipeline.Event) bool {
 	return p.fp.PassEvent(event)
+}
+
+type metaInformation struct {
+	namespace     string
+	podName       string
+	containerName string
+	containerID   string
+}
+
+func newMetaInformation(namespace, podName, containerName, containerID string) metaInformation {
+	return metaInformation{
+		namespace, podName, containerName, containerID,
+	}
+}
+
+func (m metaInformation) GetData() map[string]any {
+	return map[string]any{
+		"pod":          m.podName,
+		"namespace":    m.namespace,
+		"container":    m.containerName,
+		"container_id": m.containerID,
+	}
 }
