@@ -167,7 +167,7 @@ func New(name string, settings *Settings, registry *prometheus.Registry) *Pipeli
 		metricHolder: metric.NewHolder(settings.MetricHoldDuration),
 		streamer:     newStreamer(settings.EventTimeout),
 		eventPool:    newEventPool(settings.Capacity, settings.AvgEventSize),
-		antispamer: antispam.NewAntispammer(antispam.Options{
+		antispamer: antispam.NewAntispammer(&antispam.Options{
 			MaintenanceInterval: settings.MaintenanceInterval,
 			Threshold:           settings.AntispamThreshold,
 			Field:               settings.AntispamField,
@@ -400,7 +400,7 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 	if !row.IsPartial && p.settings.AntispamThreshold > 0 {
 		var checkSourceID any
 		var checkSourceName string
-		if len(p.settings.AntispamField) == 0 {
+		if p.settings.AntispamField == "" {
 			checkSourceID = uint64(sourceID)
 			checkSourceName = sourceName
 		} else {

@@ -15,7 +15,7 @@ func TestAntispam(t *testing.T) {
 
 	threshold := 5
 	unbanIterations := 2
-	antispamer := NewAntispammer(Options{
+	antispamer := NewAntispammer(&Options{
 		MaintenanceInterval: time.Second * 1,
 		Threshold:           threshold,
 		UnbanIterations:     unbanIterations,
