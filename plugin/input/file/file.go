@@ -9,6 +9,7 @@ import (
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/pipeline/metadata"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
 )
@@ -173,6 +174,16 @@ type Config struct {
 	// >
 	// > It turns on watching for file modifications. Turning it on cause more CPU work, but it is more probable to catch file truncation
 	ShouldWatchChanges bool `json:"should_watch_file_changes" default:"false"` // *
+
+	// > @3@4@5@6
+	// >
+	// > Meta params
+	// >
+	// > Add meta information to an event (look at Meta params)
+	// > Use [go-template](https://pkg.go.dev/text/template) syntax
+	// >
+	// > Example: ```filename: '{{ .filename }}'```
+	Meta cfg.MetaTemplates `json:"meta"` // *
 }
 
 var offsetFiles = make(map[string]string)
@@ -242,6 +253,9 @@ func (p *Plugin) startWorkers() {
 	for i := range p.workers {
 		p.workers[i] = &worker{
 			maxEventSize: p.params.PipelineSettings.MaxEventSize,
+		}
+		if len(p.config.Meta) > 0 {
+			p.workers[i].metaTemplater = metadata.NewMetaTemplater(p.config.Meta)
 		}
 		p.workers[i].start(p.params.Controller, p.jobProvider, p.config.ReadBufferSize, p.logger)
 	}
