@@ -34,7 +34,13 @@ func DecodeCRI(data []byte) (row CRIRow, _ error) {
 		return row, fmt.Errorf("stream type is not found")
 	}
 
-	row.Stream = data[:pos]
+	stream := data[:pos]
+	// stderr or stdout
+	if len(stream) != 6 {
+		return row, fmt.Errorf("stream is unknown")
+	}
+	row.Stream = stream
+
 	data = data[pos+1:]
 
 	// tags

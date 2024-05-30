@@ -31,3 +31,9 @@ func TestCRIError(t *testing.T) {
 
 	assert.Error(t, err, "there must be an error")
 }
+
+func TestCRIErrorSplittedLines(t *testing.T) {
+	_, err := DecodeCRI([]byte("2024-05-22T09:51:04.025764351Z s2024-05-22T10:15:04.129321194Z stderr F 2024/05/22 10:15:04 start prepraring file\n"))
+
+	assert.Error(t, err, "there must be an error")
+}
