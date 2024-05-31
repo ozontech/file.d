@@ -54,9 +54,10 @@ type Plugin struct {
 	// common match regex
 	matchRe *regexp.Regexp
 
-	fieldPaths   [][]string
-	isWhitelist  bool
-	ignoredNodes []*insaneJSON.Node
+	fieldPaths      [][]string
+	isWhitelist     bool
+	ignoredNodes    []*insaneJSON.Node
+	ignoredNodesSet map[*insaneJSON.Node]struct{}
 
 	valueNodes []*insaneJSON.Node
 	logger     *zap.Logger
@@ -438,6 +439,35 @@ func getNestedValueNodes(currentNode *insaneJSON.Node, ignoredNodes []*insaneJSO
 	return valueNodes
 }
 
+func getNestedValueNodes2(currentNode *insaneJSON.Node, ignoredNodesSet map[*insaneJSON.Node]struct{}, valueNodes []*insaneJSON.Node) []*insaneJSON.Node {
+	if currentNode == nil {
+		return valueNodes
+	}
+
+	if currentNode.IsField() {
+		return getNestedValueNodes2(currentNode.AsFieldValue(), ignoredNodesSet, valueNodes)
+	}
+
+	if _, ok := ignoredNodesSet[currentNode]; ok {
+		return valueNodes
+	}
+
+	switch {
+	case currentNode.IsArray():
+		for _, n := range currentNode.AsArray() {
+			valueNodes = getNestedValueNodes2(n, ignoredNodesSet, valueNodes)
+		}
+	case currentNode.IsObject():
+		for _, n := range currentNode.AsFields() {
+			valueNodes = getNestedValueNodes2(n, ignoredNodesSet, valueNodes)
+		}
+	default:
+		valueNodes = append(valueNodes, currentNode)
+	}
+
+	return valueNodes
+}
+
 func (p *Plugin) getValueNodes(root *insaneJSON.Node, valueNodes []*insaneJSON.Node) []*insaneJSON.Node {
 	if p.isWhitelist {
 		for _, fieldPath := range p.fieldPaths {
@@ -449,6 +479,23 @@ func (p *Plugin) getValueNodes(root *insaneJSON.Node, valueNodes []*insaneJSON.N
 			p.ignoredNodes = append(p.ignoredNodes, root.Dig(fieldPath...))
 		}
 		valueNodes = getNestedValueNodes(root, p.ignoredNodes, valueNodes)
+	}
+
+	return valueNodes
+}
+
+func (p *Plugin) getValueNodes2(root *insaneJSON.Node, valueNodes []*insaneJSON.Node) []*insaneJSON.Node {
+	if p.isWhitelist {
+		for _, fieldPath := range p.fieldPaths {
+			valueNodes = getNestedValueNodes2(root.Dig(fieldPath...), nil, valueNodes)
+		}
+	} else {
+		for _, fieldPath := range p.fieldPaths {
+			p.ignoredNodesSet[root.Dig(fieldPath...)] = struct{}{}
+
+		}
+		valueNodes = getNestedValueNodes2(root, p.ignoredNodesSet, valueNodes)
+		clear(p.ignoredNodesSet)
 	}
 
 	return valueNodes
