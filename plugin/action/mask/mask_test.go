@@ -1054,6 +1054,7 @@ func BenchmarkGetValueNodesCommon(b *testing.B) {
 
 	root, err := insaneJSON.DecodeString(s)
 	require.NoError(b, err)
+	defer insaneJSON.Release(root)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -1074,6 +1075,7 @@ func BenchmarkSkipManyValuesAtOnce(b *testing.B) {
 
 	root, err := insaneJSON.DecodeString(s)
 	require.NoError(b, err)
+	defer insaneJSON.Release(root)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

@@ -414,25 +414,25 @@ func getNestedValueNodes(currentNode *insaneJSON.Node, ignoredNodes []*insaneJSO
 		return valueNodes
 	}
 
+	if currentNode.IsField() {
+		return getNestedValueNodes(currentNode.AsFieldValue(), ignoredNodes, valueNodes)
+	}
+
+	if slices.Contains(ignoredNodes, currentNode) {
+		return valueNodes
+	}
+
 	switch {
-	case currentNode.IsField():
-		valueNodes = getNestedValueNodes(currentNode.AsFieldValue(), ignoredNodes, valueNodes)
 	case currentNode.IsArray():
-		if !slices.Contains(ignoredNodes, currentNode) {
-			for _, n := range currentNode.AsArray() {
-				valueNodes = getNestedValueNodes(n, ignoredNodes, valueNodes)
-			}
+		for _, n := range currentNode.AsArray() {
+			valueNodes = getNestedValueNodes(n, ignoredNodes, valueNodes)
 		}
 	case currentNode.IsObject():
-		if !slices.Contains(ignoredNodes, currentNode) {
-			for _, n := range currentNode.AsFields() {
-				valueNodes = getNestedValueNodes(n, ignoredNodes, valueNodes)
-			}
+		for _, n := range currentNode.AsFields() {
+			valueNodes = getNestedValueNodes(n, ignoredNodes, valueNodes)
 		}
 	default:
-		if !slices.Contains(ignoredNodes, currentNode) {
-			valueNodes = append(valueNodes, currentNode)
-		}
+		valueNodes = append(valueNodes, currentNode)
 	}
 
 	return valueNodes
