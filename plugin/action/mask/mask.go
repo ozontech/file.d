@@ -54,10 +54,9 @@ type Plugin struct {
 	// common match regex
 	matchRe *regexp.Regexp
 
-	fieldPaths      [][]string
-	isWhitelist     bool
-	ignoredNodes    []*insaneJSON.Node
-	ignoredNodesSet map[*insaneJSON.Node]struct{}
+	fieldPaths   [][]string
+	isWhitelist  bool
+	ignoredNodes []*insaneJSON.Node
 
 	valueNodes []*insaneJSON.Node
 	logger     *zap.Logger
