@@ -1066,28 +1066,6 @@ func BenchmarkGetValueNodesCommon(b *testing.B) {
 	}
 }
 
-func BenchmarkGetValueNodesCommon2(b *testing.B) {
-	s := fmt.Sprintf(`{%s"level":"info"}`, genFields(1000))
-	pl := Plugin{
-		isWhitelist: false,
-		fieldPaths: [][]string{
-			{"field_1"}, {"field_2"}, {"field_200"}, {"field_300"}, {"field_400"}, {"field_500"},
-			{"field_600"}, {"field_700"}, {"field_750"}, {"field_800"}, {"field_850"}, {"field_900"},
-		},
-		ignoredNodesSet: make(map[*insaneJSON.Node]struct{}, 100),
-		valueNodes:      make([]*insaneJSON.Node, 0, 1000),
-	}
-
-	root, err := insaneJSON.DecodeString(s)
-	require.NoError(b, err)
-	defer insaneJSON.Release(root)
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		pl.getValueNodes2(root.Node, pl.valueNodes)
-	}
-}
-
 func BenchmarkSkipManyValuesAtOnce(b *testing.B) {
 	s := fmt.Sprintf(
 		`{"name1":{"name2":[%s]}}`,
