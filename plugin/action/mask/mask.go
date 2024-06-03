@@ -411,19 +411,13 @@ func (p *Plugin) maskValue(mask *Mask, value, buf []byte) ([]byte, bool) {
 }
 
 func getNestedValueNodes(currentNode *insaneJSON.Node, ignoredNodes []*insaneJSON.Node, valueNodes []*insaneJSON.Node) []*insaneJSON.Node {
-	if currentNode == nil {
-		return valueNodes
-	}
-
-	if currentNode.IsField() {
-		return getNestedValueNodes(currentNode.AsFieldValue(), ignoredNodes, valueNodes)
-	}
-
-	if slices.Contains(ignoredNodes, currentNode) {
-		return valueNodes
-	}
-
 	switch {
+	case currentNode == nil:
+		break
+	case currentNode.IsField():
+		valueNodes = getNestedValueNodes(currentNode.AsFieldValue(), ignoredNodes, valueNodes)
+	case slices.Contains(ignoredNodes, currentNode):
+		break
 	case currentNode.IsArray():
 		for _, n := range currentNode.AsArray() {
 			valueNodes = getNestedValueNodes(n, ignoredNodes, valueNodes)
