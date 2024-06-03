@@ -28,14 +28,18 @@ func DecodeCRI(data []byte) (row CRIRow, _ error) {
 	row.Time = data[:pos]
 	data = data[pos+1:]
 
-	// stream type
-	pos = bytes.IndexByte(data, criDelimiter)
-	if pos < 0 {
-		return row, fmt.Errorf("stream type is not found")
+	var stream []byte
+	// stderr or stdout
+	for len(stream) != 6 {
+		// stream type
+		pos = bytes.IndexByte(data, criDelimiter)
+		if pos < 0 {
+			return row, fmt.Errorf("stream type is not found")
+		}
+		stream = data[:pos]
+		data = data[pos+1:]
 	}
-
-	row.Stream = data[:pos]
-	data = data[pos+1:]
+	row.Stream = stream
 
 	// tags
 	pos = bytes.IndexByte(data, criDelimiter)
