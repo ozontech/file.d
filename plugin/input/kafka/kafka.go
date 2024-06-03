@@ -10,6 +10,7 @@ import (
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/pipeline/metadata"
 	"github.com/ozontech/file.d/xscram"
 	"github.com/ozontech/file.d/xtls"
 	"github.com/prometheus/client_golang/prometheus"
@@ -30,6 +31,10 @@ pipelines:
       brokers: [kafka:9092, kafka:9091]
       topics: [topic1, topic2]
       offset: newest
+      meta:
+        partition: '{{ .partition }}'
+        topic: '{{ .topic }}'
+        offset: '{{ .offset }}'
     # output plugin is not important in this case, let's emulate s3 output.
     output:
       type: s3
@@ -55,6 +60,8 @@ type Plugin struct {
 	// plugin metrics
 	commitErrorsMetric  prometheus.Counter
 	consumeErrorsMetric prometheus.Counter
+
+	metaTemplater *metadata.MetaTemplater
 }
 
 type OffsetType byte
@@ -156,6 +163,16 @@ type Config struct {
 	// >
 	// > Path or content of a PEM-encoded CA file.
 	CACert string `json:"ca_cert"` // *
+
+	// > @3@4@5@6
+	// >
+	// > Meta params
+	// >
+	// > Add meta information to an event (look at Meta params)
+	// > Use [go-template](https://pkg.go.dev/text/template) syntax
+	// >
+	// > Example: ```topic: '{{ .topic }}'```
+	Meta cfg.MetaTemplates `json:"meta"` // *
 }
 
 func init() {
@@ -174,6 +191,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	p.logger = params.Logger
 	p.config = config.(*Config)
 	p.registerMetrics(params.MetricCtl)
+	p.metaTemplater = metadata.NewMetaTemplater(p.config.Meta)
 
 	p.idByTopic = make(map[string]int, len(p.config.Topics))
 	for i, topic := range p.config.Topics {
@@ -303,7 +321,17 @@ func (p *Plugin) Cleanup(sarama.ConsumerGroupSession) error {
 func (p *Plugin) ConsumeClaim(_ sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
 	for message := range claim.Messages() {
 		sourceID := assembleSourceID(p.idByTopic[message.Topic], message.Partition)
-		_ = p.controller.In(sourceID, "kafka", message.Offset, message.Value, true)
+
+		var metadataInfo metadata.MetaData
+		var err error
+		if len(p.config.Meta) > 0 {
+			metadataInfo, err = p.metaTemplater.Render(newMetaInformation(message))
+			if err != nil {
+				p.logger.Errorf("can't render meta data: %s", err.Error())
+			}
+		}
+
+		_ = p.controller.In(sourceID, "kafka", message.Offset, message.Value, true, metadataInfo)
 	}
 
 	return nil
@@ -323,4 +351,26 @@ func disassembleSourceID(sourceID pipeline.SourceID) (index int, partition int32
 // PassEvent decides pass or discard event.
 func (p *Plugin) PassEvent(_ *pipeline.Event) bool {
 	return true
+}
+
+type metaInformation struct {
+	topic     string
+	partition int32
+	offset    int64
+}
+
+func newMetaInformation(message *sarama.ConsumerMessage) metaInformation {
+	return metaInformation{
+		topic:     message.Topic,
+		partition: message.Partition,
+		offset:    message.Offset,
+	}
+}
+
+func (m metaInformation) GetData() map[string]any {
+	return map[string]any{
+		"topic":     m.topic,
+		"partition": m.partition,
+		"offset":    m.offset,
+	}
 }

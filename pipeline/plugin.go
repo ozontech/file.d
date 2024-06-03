@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/ozontech/file.d/metric"
+	"github.com/ozontech/file.d/pipeline/doif"
 	"go.uber.org/zap"
 )
 
@@ -97,7 +98,7 @@ type ActionPluginStaticInfo struct {
 	MatchMode        MatchMode
 	MatchInvert      bool
 
-	DoIfChecker *DoIfChecker
+	DoIfChecker *doif.Checker
 }
 
 type ActionPluginInfo struct {

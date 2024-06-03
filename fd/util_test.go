@@ -8,6 +8,7 @@ import (
 
 	"github.com/bitly/go-simplejson"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/pipeline/doif"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -47,22 +48,23 @@ type doIfTreeNode struct {
 	logicalOp string
 	operands  []*doIfTreeNode
 
-	byteLenCmpOp string
-	cmpValue     int
+	lenCmpOp string
+	cmpOp    string
+	cmpValue int
 }
 
 // nolint:gocritic
-func buildDoIfTree(node *doIfTreeNode) (pipeline.DoIfNode, error) {
+func buildDoIfTree(node *doIfTreeNode) (doif.Node, error) {
 	switch {
 	case node.fieldOp != "":
-		return pipeline.NewFieldOpNode(
+		return doif.NewFieldOpNode(
 			node.fieldOp,
 			node.fieldName,
 			node.caseSensitive,
 			node.values,
 		)
 	case node.logicalOp != "":
-		operands := make([]pipeline.DoIfNode, 0)
+		operands := make([]doif.Node, 0)
 		for _, operandNode := range node.operands {
 			operand, err := buildDoIfTree(operandNode)
 			if err != nil {
@@ -70,12 +72,12 @@ func buildDoIfTree(node *doIfTreeNode) (pipeline.DoIfNode, error) {
 			}
 			operands = append(operands, operand)
 		}
-		return pipeline.NewLogicalNode(
+		return doif.NewLogicalNode(
 			node.logicalOp,
 			operands,
 		)
-	case node.byteLenCmpOp != "":
-		return pipeline.NewByteLengthCmpNode(node.fieldName, node.byteLenCmpOp, node.cmpValue)
+	case node.lenCmpOp != "":
+		return doif.NewLenCmpOpNode(node.lenCmpOp, node.fieldName, node.cmpOp, node.cmpValue)
 	default:
 		return nil, errors.New("unknown type of node")
 	}
@@ -118,6 +120,12 @@ func Test_extractDoIfChecker(t *testing.T) {
 							"op": "byte_len_cmp",
 							"field": "msg",
 							"cmp_op": "gt",
+							"value": 100
+						},
+						{
+							"op": "array_len_cmp",
+							"field": "items",
+							"cmp_op": "lt",
 							"value": 100
 						},
 						{
@@ -166,9 +174,16 @@ func Test_extractDoIfChecker(t *testing.T) {
 								caseSensitive: false,
 							},
 							{
-								byteLenCmpOp: "gt",
-								fieldName:    "msg",
-								cmpValue:     100,
+								lenCmpOp:  "byte_len_cmp",
+								cmpOp:     "gt",
+								fieldName: "msg",
+								cmpValue:  100,
+							},
+							{
+								lenCmpOp:  "array_len_cmp",
+								cmpOp:     "lt",
+								fieldName: "items",
+								cmpValue:  100,
 							},
 							{
 								logicalOp: "or",
@@ -211,9 +226,22 @@ func Test_extractDoIfChecker(t *testing.T) {
 				cfgStr: `{"op":"byte_len_cmp","field":"data","cmp_op":"lt","value":10}`,
 			},
 			want: &doIfTreeNode{
-				byteLenCmpOp: "lt",
-				fieldName:    "data",
-				cmpValue:     10,
+				lenCmpOp:  "byte_len_cmp",
+				cmpOp:     "lt",
+				fieldName: "data",
+				cmpValue:  10,
+			},
+		},
+		{
+			name: "ok_array_len_cmp_op",
+			args: args{
+				cfgStr: `{"op":"array_len_cmp","field":"items","cmp_op":"lt","value":10}`,
+			},
+			want: &doIfTreeNode{
+				lenCmpOp:  "array_len_cmp",
+				cmpOp:     "lt",
+				fieldName: "items",
+				cmpValue:  10,
 			},
 		},
 		{
@@ -296,6 +324,13 @@ func Test_extractDoIfChecker(t *testing.T) {
 			wantErr: true,
 		},
 		{
+			name: "error_array_len_cmp_op_no_field",
+			args: args{
+				cfgStr: `{"op":"array_len_cmp","cmp_op":"lt","value":10}`,
+			},
+			wantErr: true,
+		},
+		{
 			name: "error_byte_len_cmp_op_field_is_not_string",
 			args: args{
 				cfgStr: `{"op":"byte_len_cmp","field":123,"cmp_op":"lt","value":10}`,
@@ -362,7 +397,7 @@ func Test_extractDoIfChecker(t *testing.T) {
 			}
 			wantTree, err := buildDoIfTree(tt.want)
 			require.NoError(t, err)
-			wantDoIfChecker := pipeline.NewDoIfChecker(wantTree)
+			wantDoIfChecker := doif.NewChecker(wantTree)
 			assert.NoError(t, wantDoIfChecker.IsEqualTo(got))
 		})
 	}
