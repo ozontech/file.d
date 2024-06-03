@@ -75,6 +75,10 @@ func NewProtobufDecoder(params map[string]any) (*ProtobufDecoder, error) {
 	}, nil
 }
 
+func (d *ProtobufDecoder) Type() Type {
+	return PROTOBUF
+}
+
 func (d *ProtobufDecoder) Decode(root *insaneJSON.Root, data []byte) error {
 	msg := dynamicpb.NewMessage(d.msgDesc)
 	if err := proto.Unmarshal(data, msg); err != nil {
