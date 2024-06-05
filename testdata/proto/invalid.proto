@@ -1,0 +1,6 @@
+package test;
+option go_package = "test.v1";
+
+message Data {
+  string data = 1;
+}
