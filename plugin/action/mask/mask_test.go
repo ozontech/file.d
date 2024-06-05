@@ -2,6 +2,7 @@ package mask
 
 import (
 	"encoding/json"
+	"fmt"
 	"regexp"
 	"strings"
 	"sync"
@@ -332,13 +333,14 @@ func TestGroupNumbers(t *testing.T) {
 }
 
 //nolint:funlen
-func TestGetValueNodeList(t *testing.T) {
+func TestGetValueNodes(t *testing.T) {
 	suits := []struct {
-		name          string
-		input         string
-		ignoredFields map[string]struct{}
-		expected      []string
-		comment       string
+		name        string
+		input       string
+		fieldPaths  [][]string
+		isWhitelist bool
+		expected    []string
+		comment     string
 	}{
 		{
 			name:     "simple test",
@@ -354,26 +356,123 @@ func TestGetValueNodeList(t *testing.T) {
 		},
 		{
 			name:  "test with ignored field",
-			input: `{"name1":"value1", "ignored_field":"value2"}`,
-			ignoredFields: map[string]struct{}{
-				"ignored_field": {},
+			input: `{"name1":"value1", "name2":"value2", "ignored_field":"some"}`,
+			fieldPaths: [][]string{
+				{"ignored_field"},
 			},
-			expected: []string{"value1"},
-			comment:  "skip ignored_field",
+			isWhitelist: false,
+			expected:    []string{"value1", "value2"},
+			comment:     "skip ignored_field",
 		},
 		{
-			name: "test with ignored nested field",
+			name:  "test with processed field",
+			input: `{"name1":"value1", "name2":"value2", "processed_field":"some"}`,
+			fieldPaths: [][]string{
+				{"processed_field"},
+			},
+			isWhitelist: true,
+			expected:    []string{"some"},
+			comment:     "skip all fields except processed_field",
+		},
+		{
+			name: "test with ignored nested field 1",
 			input: `{
 				"name1":"value1",
+				"name2":"value2",
 				"nested": {
-					"ignored_field":"value2"
+					"ignored_field":"some",
+					"name3":"value3"
 				}
 			}`,
-			ignoredFields: map[string]struct{}{
-				"ignored_field": {},
+			fieldPaths: [][]string{
+				{"nested", "ignored_field"},
 			},
-			expected: []string{"value1"},
-			comment:  "skip nested ignored_field",
+			isWhitelist: false,
+			expected:    []string{"value1", "value2", "value3"},
+			comment:     "skip one nested ignored_field",
+		},
+		{
+			name: "test with ignored nested field 2",
+			input: `{
+				"name1":"value1",
+				"name2":"value2",
+				"nested": {
+					"ignored1":"some1",
+					"ignored2":"some2"
+				}
+			}`,
+			fieldPaths: [][]string{
+				{"nested"},
+			},
+			isWhitelist: false,
+			expected:    []string{"value1", "value2"},
+			comment:     "skip two nested ignored_fields",
+		},
+		{
+			name: "test with several ignored paths",
+			input: `{
+				"name1":"value1",
+				"name2":"value2",
+				"nested": {"ignored1":"some1"},
+				"ignored2":"some2"
+			}`,
+			fieldPaths: [][]string{
+				{"nested", "ignored1"},
+				{"ignored2"},
+			},
+			isWhitelist: false,
+			expected:    []string{"value1", "value2"},
+			comment:     "skip two ignored_fields",
+		},
+		{
+			name: "test with processed nested field 1",
+			input: `{
+				"name1":"value1",
+				"name2":"value2",
+				"nested": {
+					"processed_field":"some",
+					"name3": "value3"
+				}
+			}`,
+			fieldPaths: [][]string{
+				{"nested", "processed_field"},
+			},
+			isWhitelist: true,
+			expected:    []string{"some"},
+			comment:     "skip all fields except one nested processed_field",
+		},
+		{
+			name: "test with processed nested field 2",
+			input: `{
+				"name1":"value1",
+				"name2":"value2",
+				"nested": {
+					"processed1":"some1",
+					"processed2":"some2"
+				}
+			}`,
+			fieldPaths: [][]string{
+				{"nested"},
+			},
+			isWhitelist: true,
+			expected:    []string{"some1", "some2"},
+			comment:     "skip all fields except two nested processed_fields",
+		},
+		{
+			name: "test with several processed paths",
+			input: `{
+				"name1":"value1",
+				"name2":"value2",
+				"nested": {"processed1":"some1"},
+				"processed2":"some2"
+			}`,
+			fieldPaths: [][]string{
+				{"nested", "processed1"},
+				{"processed2"},
+			},
+			isWhitelist: true,
+			expected:    []string{"some1", "some2"},
+			comment:     "skip all fields except two processed_fields",
 		},
 		{
 			name: "big json with ints and nulls",
@@ -433,11 +532,80 @@ func TestGetValueNodeList(t *testing.T) {
 			require.NoError(t, err)
 			defer insaneJSON.Release(root)
 
-			nodes := make([]*insaneJSON.Node, 0)
-			nodes = getValueNodeList(root.Node, nodes, s.ignoredFields)
-			assert.Equal(t, len(nodes), len(s.expected), s.comment)
+			p := Plugin{fieldPaths: s.fieldPaths, isWhitelist: s.isWhitelist}
+			nodes := p.getValueNodes(root.Node, nil)
+			require.Equal(t, len(nodes), len(s.expected), s.comment)
 			for i := range nodes {
 				assert.Equal(t, s.expected[i], nodes[i].AsString(), s.comment)
+			}
+		})
+	}
+}
+
+//nolint:funlen
+func TestGetAllValueNodes(t *testing.T) {
+	suits := []struct {
+		name     string
+		input    string
+		expected []string
+	}{
+		{
+			name:     "one string",
+			input:    `"abc"`,
+			expected: []string{"abc"},
+		},
+		{
+			name:     "one number",
+			input:    `123`,
+			expected: []string{"123"},
+		},
+		{
+			name:     "one boolean",
+			input:    `true`,
+			expected: []string{"true"},
+		},
+		{
+			name:     "one null",
+			input:    `null`,
+			expected: []string{"null"},
+		},
+		{
+			name:     "simple array",
+			input:    `["abc", 123, true, null]`,
+			expected: []string{"abc", "123", "true", "null"},
+		},
+		{
+			name:     "nested arrays",
+			input:    `[[], ["abc", 123, [true]], [[[], [null]]]]`,
+			expected: []string{"abc", "123", "true", "null"},
+		},
+		{
+			name:     "simple object",
+			input:    `{"name1":"abc", "name2":123, "name3":true, "name4":null}`,
+			expected: []string{"abc", "123", "true", "null"},
+		},
+		{
+			name:     "nested objects",
+			input:    `{"f1": {"some":"abc", "f2": {"n":123, "flag":true, "f3": {"name":null}}}}`,
+			expected: []string{"abc", "123", "true", "null"},
+		},
+		{
+			name:     "array and object",
+			input:    `{"f1": ["abc", {"name2":123, "name3":true}], "name": {"name":null}}`,
+			expected: []string{"abc", "123", "true", "null"},
+		},
+	}
+
+	for _, s := range suits {
+		t.Run(s.name, func(t *testing.T) {
+			root, err := insaneJSON.DecodeString(s.input)
+			require.NoError(t, err)
+			defer insaneJSON.Release(root)
+
+			nodes := getNestedValueNodes(root.Node, nil, nil)
+			require.Equal(t, len(nodes), len(s.expected))
+			for i := range nodes {
+				assert.Equal(t, s.expected[i], nodes[i].AsString())
 			}
 		})
 	}
@@ -865,5 +1033,56 @@ func BenchmarkMaskValue(b *testing.B) {
 	buf := make([]byte, 0, 2048)
 	for i := 0; i < b.N; i++ {
 		buf, _ = plugin.maskValue(&mask, input, buf)
+	}
+}
+
+func genFields(count int) string {
+	var sb strings.Builder
+	for i := 0; i < count; i++ {
+		sb.WriteString(fmt.Sprintf(`"field_%d":"val_%d",`, i, i))
+	}
+	return sb.String()
+}
+
+func BenchmarkGetValueNodesCommon(b *testing.B) {
+	s := fmt.Sprintf(`{%s"level":"info"}`, genFields(1000))
+	pl := Plugin{
+		isWhitelist: false,
+		fieldPaths: [][]string{
+			{"field_1"}, {"field_2"}, {"field_200"}, {"field_300"}, {"field_400"}, {"field_500"},
+			{"field_600"}, {"field_700"}, {"field_750"}, {"field_800"}, {"field_850"}, {"field_900"},
+		},
+		ignoredNodes: make([]*insaneJSON.Node, 100),
+		valueNodes:   make([]*insaneJSON.Node, 0, 1000),
+	}
+
+	root, err := insaneJSON.DecodeString(s)
+	require.NoError(b, err)
+	defer insaneJSON.Release(root)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		pl.getValueNodes(root.Node, pl.valueNodes)
+	}
+}
+
+func BenchmarkSkipManyValuesAtOnce(b *testing.B) {
+	s := fmt.Sprintf(
+		`{"name1":{"name2":[%s]}}`,
+		strings.TrimRight(strings.Repeat(`"abc",`, 1000), ","),
+	)
+	pl := Plugin{
+		isWhitelist: false,
+		fieldPaths:  [][]string{{"name1"}},
+		valueNodes:  make([]*insaneJSON.Node, 0, 1000),
+	}
+
+	root, err := insaneJSON.DecodeString(s)
+	require.NoError(b, err)
+	defer insaneJSON.Release(root)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		pl.getValueNodes(root.Node, pl.valueNodes)
 	}
 }
