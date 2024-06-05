@@ -1,13 +1,14 @@
 package decoder
 
 const (
-	NO DecoderType = iota
+	NO Type = iota
 	AUTO
 	JSON
 	RAW
 	CRI
 	POSTGRES
 	NGINX_ERROR
+	PROTOBUF
 )
 
-type DecoderType int
+type Type int

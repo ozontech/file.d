@@ -45,11 +45,11 @@ type finalizeFn = func(event *Event, notifyInput bool, backEvent bool)
 
 type InputPluginController interface {
 	In(sourceID SourceID, sourceName string, offset int64, data []byte, isNewSource bool, meta metadata.MetaData) uint64
-	UseSpread()                           // don't use stream field and spread all events across all processors
-	DisableStreams()                      // don't use stream field
-	SuggestDecoder(t decoder.DecoderType) // set decoder if pipeline uses "auto" value for decoder
-	IncReadOps()                          // inc read ops for metric
-	IncMaxEventSizeExceeded()             // inc max event size exceeded counter
+	UseSpread()                    // don't use stream field and spread all events across all processors
+	DisableStreams()               // don't use stream field
+	SuggestDecoder(t decoder.Type) // set decoder type if pipeline uses "auto" value for decoder
+	IncReadOps()                   // inc read ops for metric
+	IncMaxEventSizeExceeded()      // inc max event size exceeded counter
 }
 
 type ActionPluginController interface {
@@ -73,8 +73,9 @@ type Pipeline struct {
 	started  bool
 	settings *Settings
 
-	decoder          decoder.DecoderType // decoder set in the config
-	suggestedDecoder decoder.DecoderType // decoder suggested by input plugin, it is used when config decoder is set to "auto"
+	decoderType          decoder.Type // decoder type set in the config
+	suggestedDecoderType decoder.Type // decoder type suggested by input plugin, it is used when config decoder is set to "auto"
+	decoder              decoder.Decoder
 
 	eventPool *eventPool
 	streamer  *streamer
@@ -128,6 +129,7 @@ type Pipeline struct {
 
 type Settings struct {
 	Decoder             string
+	DecoderParams       map[string]any
 	Capacity            int
 	MaintenanceInterval time.Duration
 	EventTimeout        time.Duration
@@ -182,17 +184,25 @@ func New(name string, settings *Settings, registry *prometheus.Registry) *Pipeli
 
 	switch settings.Decoder {
 	case "json":
-		pipeline.decoder = decoder.JSON
+		pipeline.decoderType = decoder.JSON
 	case "raw":
-		pipeline.decoder = decoder.RAW
+		pipeline.decoderType = decoder.RAW
 	case "cri":
-		pipeline.decoder = decoder.CRI
+		pipeline.decoderType = decoder.CRI
 	case "postgres":
-		pipeline.decoder = decoder.POSTGRES
+		pipeline.decoderType = decoder.POSTGRES
 	case "nginx_error":
-		pipeline.decoder = decoder.NGINX_ERROR
+		pipeline.decoderType = decoder.NGINX_ERROR
+	case "protobuf":
+		pipeline.decoderType = decoder.PROTOBUF
+
+		dec, err := decoder.NewProtobufDecoder(pipeline.settings.DecoderParams)
+		if err != nil {
+			pipeline.logger.Fatal("can't create protobuf decoder", zap.Error(err))
+		}
+		pipeline.decoder = dec
 	case "auto":
-		pipeline.decoder = decoder.AUTO
+		pipeline.decoderType = decoder.AUTO
 	default:
 		pipeline.logger.Fatal("unknown decoder", zap.String("decoder", settings.Decoder))
 	}
@@ -357,14 +367,14 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 	}
 
 	var (
-		dec decoder.DecoderType
+		dec decoder.Type
 		row decoder.CRIRow
 		err error
 	)
-	if p.decoder == decoder.AUTO {
-		dec = p.suggestedDecoder
+	if p.decoderType == decoder.AUTO {
+		dec = p.suggestedDecoderType
 	} else {
-		dec = p.decoder
+		dec = p.decoderType
 	}
 	if dec == decoder.NO {
 		dec = decoder.JSON
@@ -458,6 +468,20 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 				zap.ByteString("log", bytes))
 
 			p.eventPool.back(event)
+			return EventSeqIDError
+		}
+	case decoder.PROTOBUF:
+		_ = event.Root.DecodeString("{}")
+		err = p.decoder.Decode(event.Root, bytes)
+		if err != nil {
+			p.logger.Fatal("wrong protobuf format", zap.Error(err),
+				zap.Int64("offset", offset),
+				zap.Int("length", length),
+				zap.Uint64("source", uint64(sourceID)),
+				zap.String("source_name", sourceName),
+				zap.ByteString("log", bytes))
+
+			// Dead route, never passed here.
 			return EventSeqIDError
 		}
 	default:
@@ -800,8 +824,8 @@ func (p *Pipeline) DisableStreams() {
 	p.disableStreams = true
 }
 
-func (p *Pipeline) SuggestDecoder(t decoder.DecoderType) {
-	p.suggestedDecoder = t
+func (p *Pipeline) SuggestDecoder(t decoder.Type) {
+	p.suggestedDecoderType = t
 }
 
 func (p *Pipeline) DisableParallelism() {
