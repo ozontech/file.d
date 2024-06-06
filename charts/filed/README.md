@@ -35,7 +35,7 @@ curl -X GET "http://localhost:9200/k8s-logs/_search/?size=10" -H 'Content-Type: 
 ```shell
 helm upgrade --install web-logs . -f values.minikube.web-logs.yaml
 
-curl --resolve "web-logs.local:80:$( minikube ip )" -H 'Content-Type: application/json' http://web-logs.local -d \
+curl --resolve "web-logs.local:80:$( minikube ip )" -H 'Content-Type: application/json' 'http://web-logs.local/?env=cli' -d \
 '{"message": "Test event", "level": "info"}'
 
 kubectl port-forward svc/web-logs-elasticsearch 9201:9200

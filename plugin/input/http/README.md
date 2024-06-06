@@ -103,6 +103,19 @@ Example: ```user_agent: '{{ index (index .request.Header "User-Agent") 0}}'```
 
 <br>
 
+**`cors`** *`CORSConfig`* 
+
+CORS config.
+See CORSConfig for details.
+
+<br>
+
+**`header`** *`string`* *`default=Authorization`* 
+
+Override default Authorization header
+
+<br>
+
 **`strategy`** *`string`* *`default=disabled`* *`options=disabled|basic|bearer`* 
 
 AuthStrategy.Strategy describes strategy to use.
@@ -125,5 +138,7 @@ Key uses in the http_input_total metric.
 **`remote_addr`**  *`net.IP`*
 
 **`request`**  *`http.Request`*
+
+**`params`**  *`url.Values`*
 
 <br>*Generated using [__insane-doc__](https://github.com/vitkovskii/insane-doc)*

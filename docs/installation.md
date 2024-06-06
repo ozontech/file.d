@@ -17,6 +17,10 @@ Mount config from /my-config.yaml and start `file.d` with this config: <br>
 
 Do not forget to set [the actual tag](https://github.com/ozontech/file.d/pkgs/container/file.d) of the image.
 
+## Helm-chart
+
+[Helm-chart](/charts/filed/README.md) and examples for Minikube
+
 ## Precompiled binaries
 
 Precompiled binaries for released versions are available in the
