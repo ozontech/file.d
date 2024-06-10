@@ -5,6 +5,7 @@ FROM --platform=$BUILDPLATFORM golang:1.21-alpine AS build
 
 ARG VERSION
 ARG BUILD_TIME
+ARG TARGETARCH
 
 WORKDIR /file.d
 
@@ -16,7 +17,7 @@ COPY . .
 
 ENV CGO_ENABLED 0
 ENV GOOS linux
-ENV GOARCH amd64
+ENV GOARCH ${TARGETARCH:-amd64}
 
 RUN go build -trimpath \
     -pgo default.pgo \
