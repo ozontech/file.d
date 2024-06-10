@@ -2,6 +2,7 @@ package k8s
 
 import (
 	"fmt"
+	"github.com/ozontech/file.d/plugin/input/file"
 	"os"
 	"strings"
 	"sync"
@@ -53,7 +54,13 @@ func getPodInfo(item *metaItem, isWhite bool) *corev1.Pod {
 }
 
 func config() *Config {
-	config := &Config{AllowedPodLabels: []string{"allowed_label"}, OffsetsFile: "offsets.yaml"}
+	config := &Config{
+		AllowedPodLabels: []string{"allowed_label"}, OffsetsFile: "offsets.yaml",
+		FileConfig: file.Config{
+			WatchingDir: "/var/log/containers",
+			OffsetsFile: "offsets.yaml",
+		},
+	}
 	test.NewConfig(config, map[string]int{"gomaxprocs": 1})
 	return config
 }

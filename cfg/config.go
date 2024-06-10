@@ -252,6 +252,7 @@ func DecodeConfig(config any, configJson []byte) error {
 
 // Parse holy shit! who write this function?
 func Parse(ptr any, values map[string]int) error {
+	fmt.Println("start parsing...")
 	v := reflect.ValueOf(ptr).Elem()
 	t := v.Type()
 
@@ -312,7 +313,8 @@ func ParseChild(parent reflect.Value, v reflect.Value, values map[string]int) er
 			name := v.Type().Field(i).Name
 			val := parent.FieldByName(name)
 			if val.CanAddr() {
-				v.Field(i).Set(val)
+				fmt.Println("lol", name)
+				// v.Field(i).Set(val)
 			}
 		}
 
