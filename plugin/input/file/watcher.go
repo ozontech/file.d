@@ -135,6 +135,8 @@ func (w *watcher) notify(e notify.Event, path string) {
 		return
 	}
 
+	w.logger.Infof("notify %s %s", e, path)
+
 	for _, pattern := range w.paths.Exclude {
 		match, err := doublestar.PathMatch(pattern, path)
 		if err != nil {
@@ -142,6 +144,7 @@ func (w *watcher) notify(e notify.Event, path string) {
 			return
 		}
 		if match {
+			w.logger.Infof("excluded %s by pattern %s", path, pattern)
 			return
 		}
 	}
@@ -183,8 +186,6 @@ check_file:
 		dirFilename = filepath.Dir(dirFilename)
 	}
 
-	w.logger.Infof("%s %s", e, path)
-
 	for _, pattern := range w.paths.Include {
 		match, err := doublestar.PathMatch(pattern, path)
 		if err != nil {
@@ -193,6 +194,7 @@ check_file:
 		}
 
 		if match {
+			w.logger.Infof("path %s matched by pattern %s", filename, pattern)
 			w.notifyFn(e, filename, stat)
 		}
 	}
