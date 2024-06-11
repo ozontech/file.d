@@ -1,7 +1,8 @@
 package test
 
 import (
-	"fmt"
+	"testing"
+
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/plugin/action/throttle"
 	filein "github.com/ozontech/file.d/plugin/input/file"
@@ -10,12 +11,11 @@ import (
 	fileout "github.com/ozontech/file.d/plugin/output/file"
 	"github.com/ozontech/file.d/plugin/output/s3"
 	"github.com/stretchr/testify/require"
-	"testing"
 )
 
 func TestHierarchicalConfigs(t *testing.T) {
 	{
-		fmt.Println("throttle")
+		t.Log("throttle")
 		s := &throttle.Config{
 			TimeFieldFormat: "unixdate",
 			LimitKind:       "size",
@@ -26,7 +26,7 @@ func TestHierarchicalConfigs(t *testing.T) {
 	}
 
 	{
-		fmt.Println("http")
+		t.Log("http")
 		s := &http.Config{
 			EmulateMode: "no",
 			Auth: http.AuthConfig{
@@ -38,7 +38,7 @@ func TestHierarchicalConfigs(t *testing.T) {
 	}
 
 	{
-		fmt.Println("k8s")
+		t.Log("k8s")
 		s := &k8s.Config{
 			OffsetsFile: "qwe",
 			WatchingDir: "qwe",
@@ -55,7 +55,7 @@ func TestHierarchicalConfigs(t *testing.T) {
 	}
 
 	{
-		fmt.Println("s3")
+		t.Log("s3")
 		s := &s3.Config{
 			FileConfig: fileout.Config{
 				TargetFile:         "qwe",

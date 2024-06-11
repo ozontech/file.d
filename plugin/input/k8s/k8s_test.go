@@ -2,7 +2,6 @@ package k8s
 
 import (
 	"fmt"
-	"github.com/ozontech/file.d/plugin/input/file"
 	"os"
 	"strings"
 	"sync"
@@ -11,6 +10,7 @@ import (
 
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/plugin/input/file"
 	"github.com/ozontech/file.d/test"
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
