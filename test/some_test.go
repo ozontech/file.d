@@ -14,8 +14,6 @@ import (
 )
 
 func TestHierarchicalConfigs(t *testing.T) {
-	t.Skip()
-
 	{
 		fmt.Println("throttle")
 		s := &throttle.Config{
@@ -45,6 +43,8 @@ func TestHierarchicalConfigs(t *testing.T) {
 			OffsetsFile: "qwe",
 			WatchingDir: "qwe",
 			FileConfig: filein.Config{
+				OffsetsFile:     "qwe",
+				WatchingDir:     "qwe",
 				PersistenceMode: "async",
 				OffsetsOp:       "continue",
 				WorkersCount:    "1",
