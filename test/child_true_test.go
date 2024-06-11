@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestHierarchicalConfigs(t *testing.T) {
+func TestChildTrueConfigs(t *testing.T) {
 	{
 		t.Log("throttle")
 		s := &throttle.Config{
