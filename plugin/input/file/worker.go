@@ -11,7 +11,8 @@ import (
 )
 
 type worker struct {
-	maxEventSize int
+	maxEventSize  int
+	metaTemplater *metadata.MetaTemplater
 }
 
 type inputer interface {
@@ -110,7 +111,21 @@ func (w *worker) work(controller inputer, jobProvider *jobProvider, readBufferSi
 						inBuf = accumBuf
 					}
 
-					job.lastEventSeq = controller.In(sourceID, sourceName, lastOffset+scanned, inBuf, isVirgin, nil)
+					var metadataInfo metadata.MetaData
+					var err error
+					if w.metaTemplater != nil {
+						metadataInfo, err = w.metaTemplater.Render(newMetaInformation(
+							job.filename,
+							job.symlink,
+							job.inode,
+							lastOffset+scanned,
+						))
+						if err != nil {
+							logger.Error("cannot parse meta info", zap.Error(err))
+						}
+					}
+
+					job.lastEventSeq = controller.In(sourceID, sourceName, lastOffset+scanned, inBuf, isVirgin, metadataInfo)
 				}
 				// restore the line buffer
 				accumBuf = accumBuf[:0]
@@ -157,4 +172,29 @@ func (w *worker) processEOF(file *os.File, job *Job, jobProvider *jobProvider, t
 	jobProvider.doneJob(job)
 
 	return nil
+}
+
+type metaInformation struct {
+	filename string
+	symlink  string
+	inode    uint64
+	offset   int64
+}
+
+func newMetaInformation(filename, symlink string, inode inodeID, offset int64) metaInformation {
+	return metaInformation{
+		filename: filename,
+		symlink:  symlink,
+		inode:    uint64(inode),
+		offset:   offset,
+	}
+}
+
+func (m metaInformation) GetData() map[string]any {
+	return map[string]any{
+		"filename": m.filename,
+		"symlink":  m.symlink,
+		"inode":    m.inode,
+		"offset":   m.offset,
+	}
 }
