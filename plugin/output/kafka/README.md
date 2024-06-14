@@ -64,6 +64,12 @@ Should be set equal to or smaller than the broker's `message.max.bytes`.
 
 <br>
 
+**`compression`** *`string`* *`default=none`* *`options=none|gzip|snappy|lz4|zstd`* 
+
+Compression
+
+<br>
+
 **`retry`** *`int`* *`default=10`* 
 
 Retries of insertion. If File.d cannot insert for this number of attempts,

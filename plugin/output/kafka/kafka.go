@@ -105,6 +105,11 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
+	// > Compression
+	Compression string `json:"compression" default:"none" options:"none|gzip|snappy|lz4|zstd"` // *
+
+	// > @3@4@5@6
+	// >
 	// > Retries of insertion. If File.d cannot insert for this number of attempts,
 	// > File.d will fall with non-zero exit code or skip message (see fatal_on_failed_insert).
 	Retry int `json:"retry" default:"10"` // *

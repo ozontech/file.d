@@ -139,10 +139,6 @@ func (c *Config) Configure(t *testing.T, _ *cfg.Config, _ string) {
 					config.ClientKey = "./kafka_auth/certs/client_key.pem"
 					config.ClientCert = "./kafka_auth/certs/client_cert.pem"
 				}
-
-				kafka_in.NewConsumerGroup(config,
-					zap.NewNop().WithOptions(zap.WithFatalHook(zapcore.WriteThenPanic)).Sugar(),
-				)
 			},
 		}
 
