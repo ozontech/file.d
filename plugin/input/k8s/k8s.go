@@ -127,6 +127,10 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	p.params = params
 	p.config = config.(*Config)
 
+	// instead of `child:true` logic
+	p.config.FileConfig.OffsetsFile = p.config.OffsetsFile
+	p.config.FileConfig.WatchingDir = p.config.WatchingDir_
+
 	startCounter := startCounter.Inc()
 
 	if startCounter == 1 {

@@ -346,17 +346,6 @@ func TestParseFieldSelectorEnding(t *testing.T) {
 	assert.Equal(t, "c.", path[2], "wrong field")
 }
 
-func TestHierarchy(t *testing.T) {
-	t.Skip()
-
-	s := &hierarchy{T: "10"}
-	err := Parse(s, map[string]int{})
-
-	assert.Nil(t, err, "shouldn't be an error")
-	assert.Equal(t, "10", s.T, "wrong value")
-	assert.Equal(t, "10", s.Child.T, "wrong value")
-}
-
 func TestSlice(t *testing.T) {
 	s := &sliceStruct{Value: "parent_value", Childs: []sliceChild{{"child_1"}, {}}}
 	SetDefaultValues(s)
