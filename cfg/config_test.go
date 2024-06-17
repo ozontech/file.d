@@ -61,15 +61,6 @@ type strDataUnit struct {
 	T_ uint
 }
 
-type hierarchyChild struct {
-	T string `required:"true"`
-}
-
-type hierarchy struct {
-	T     string         `default:"sync"`
-	Child hierarchyChild `child:"true"`
-}
-
 type sliceChild struct {
 	Value string `default:"child"`
 }
