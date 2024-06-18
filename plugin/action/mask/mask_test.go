@@ -156,6 +156,14 @@ func TestMaskFunctions(t *testing.T) {
 			mustBeMasked: true,
 		},
 		{
+			name:         "cut email",
+			input:        []byte("email login@domain.ru"),
+			expected:     []byte("email "),
+			comment:      "do not replace email",
+			masks:        Mask{Re: kEMailRegExp, CutMode: true, Groups: []int{0}, MaxCount: 10},
+			mustBeMasked: true,
+		},
+		{
 			name:         "email with special characters",
 			input:        []byte("email\nnlogin@domain.ru"),
 			expected:     []byte("email\nSECMASKED"),

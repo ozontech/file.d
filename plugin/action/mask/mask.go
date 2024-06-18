@@ -145,6 +145,11 @@ type Mask struct {
 
 	// > @3@4@5@6
 	// >
+	// > CutMode, if set, masking parts will be cut instead of being replaced with ReplaceWord or asterisks.
+	CutMode bool `json:"cut_mode"` // *
+
+	// > @3@4@5@6
+	// >
 	// > If the mask has been applied then `applied_field` will be set to `applied_value` in the event.
 	AppliedField string `json:"applied_field"` // *
 
@@ -224,6 +229,9 @@ func compileMasks(masks []Mask, logger *zap.Logger) ([]Mask, *regexp.Regexp) {
 func compileMask(m *Mask, logger *zap.Logger) {
 	if m.Re == "" && len(m.MatchRules) == 0 {
 		logger.Fatal("mask must have either nonempty regex or ruleset, or both")
+	}
+	if m.ReplaceWord != "" && m.CutMode {
+		logger.Fatal("cut mode and replace word mode are incompatible")
 	}
 	if m.Re != "" {
 		logger.Info("compiling", zap.String("re", m.Re), zap.Ints("groups", m.Groups))
@@ -316,6 +324,10 @@ func (p *Plugin) Stop() {
 
 func (p *Plugin) appendMask(mask *Mask, dst, src []byte, begin, end int) ([]byte, int) {
 	runeCounter := utf8.RuneCount(src[begin:end])
+	if mask.CutMode {
+		return dst, len(src[begin:end])
+	}
+
 	if mask.ReplaceWord != "" {
 		dst = append(dst, []byte(mask.ReplaceWord)...)
 		return dst, len(src[begin:end]) - len(mask.ReplaceWord)
