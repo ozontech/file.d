@@ -252,7 +252,6 @@ func DecodeConfig(config any, configJson []byte) error {
 
 // Parse holy shit! who write this function?
 func Parse(ptr any, values map[string]int) error {
-	_, _ = fmt.Fprintln(os.Stdout, "start parsing...")
 	v := reflect.ValueOf(ptr).Elem()
 	t := v.Type()
 
@@ -286,42 +285,11 @@ func Parse(ptr any, values map[string]int) error {
 	}
 
 	for _, child := range children {
-		if err := ParseChild(v, child, values); err != nil {
+		if err := Parse(child.Addr().Interface(), values); err != nil {
 			return err
 		}
 	}
 
-	return nil
-}
-
-// it isn't just a recursion
-// it also captures values with the same name from parent
-// i.e. take this config:
-//
-//	{
-//		"T": 10,
-//		"Child": { // has `child:true` in a tag
-//			"T": null
-//		}
-//	}
-//
-// this function will set `config.Child.T = config.T`
-// see file.d/cfg/config_test.go:TestHierarchy for an example
-func ParseChild(parent reflect.Value, v reflect.Value, values map[string]int) error {
-	if v.CanAddr() {
-		for i := 0; i < v.NumField(); i++ {
-			name := v.Type().Field(i).Name
-			val := parent.FieldByName(name)
-			if val.CanAddr() {
-				_, _ = fmt.Fprintln(os.Stdout, "lol", name)
-			}
-		}
-
-		err := Parse(v.Addr().Interface(), values)
-		if err != nil {
-			return err
-		}
-	}
 	return nil
 }
 

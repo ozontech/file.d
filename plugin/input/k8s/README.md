@@ -55,11 +55,15 @@ Skips retrieving Kubernetes meta information using Kubernetes API and adds only 
 
 **`watching_dir`** *`string`* *`default=/var/log/containers`* 
 
+DEPRECATED: you must fill `file_config.watching_dir` instead!
+
 Kubernetes dir with container logs. It's like `watching_dir` parameter from [file plugin](/plugin/input/file/README.md) config.
 
 <br>
 
 **`offsets_file`** *`string`* *`required`* 
+
+DEPRECATED: you must fill `file_config.offsets_file` instead!
 
 The filename to store offsets of processed files. It's like `offsets_file` parameter from [file plugin](/plugin/input/file/README.md) config.
 

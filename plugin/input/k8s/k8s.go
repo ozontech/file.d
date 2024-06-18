@@ -79,11 +79,15 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
+	// > DEPRECATED: you must fill `file_config.watching_dir` instead!
+	// >
 	// > Kubernetes dir with container logs. It's like `watching_dir` parameter from [file plugin](/plugin/input/file/README.md) config.
 	WatchingDir  string `json:"watching_dir" default:"/var/log/containers"` // *
 	WatchingDir_ string
 
 	// > @3@4@5@6
+	// >
+	// > DEPRECATED: you must fill `file_config.offsets_file` instead!
 	// >
 	// > The filename to store offsets of processed files. It's like `offsets_file` parameter from [file plugin](/plugin/input/file/README.md) config.
 	OffsetsFile string `json:"offsets_file" required:"true"` // *
