@@ -293,7 +293,7 @@ func Parse(ptr any, values map[string]int) error {
 }
 
 // ParseSlice recursively parses elements of an slice
-// calls Parse, not ParseChild (!)
+// calls Parse
 func ParseSlice(v reflect.Value, values map[string]int) error {
 	for i := 0; i < v.Len(); i++ {
 		if err := Parse(v.Index(i).Addr().Interface(), values); err != nil {

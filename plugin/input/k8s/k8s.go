@@ -95,7 +95,7 @@ type Config struct {
 	// > @3@4@5@6
 	// >
 	// > Under the hood this plugin uses [file plugin](/plugin/input/file/README.md) to collect logs from files. So you can change any [file plugin](/plugin/input/file/README.md) config parameter using `file_config` section. Check out an example.
-	FileConfig file.Config `json:"file_config" child:"true"` // *
+	FileConfig file.Config `json:"file_config"` // *
 }
 
 var startCounter atomic.Int32
@@ -131,7 +131,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	p.params = params
 	p.config = config.(*Config)
 
-	// instead of `child:true` logic
+	// for backward compatibility; will be removed
 	p.config.FileConfig.OffsetsFile = p.config.OffsetsFile
 	p.config.FileConfig.WatchingDir = p.config.WatchingDir_
 
