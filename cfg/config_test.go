@@ -625,3 +625,23 @@ func TestExpression_UnmarshalJSON(t *testing.T) {
 	require.Equal(t, Expression("2"), val.E2)
 	require.Equal(t, Expression("2+2"), val.E3)
 }
+
+type parentCfg struct {
+	Field childCfg
+}
+
+type childCfg struct {
+	T  Duration `default:"5s" parse:"duration"`
+	T_ time.Duration
+}
+
+func TestParseNested(t *testing.T) {
+	s := &parentCfg{Field: childCfg{T: "20s"}}
+	err := SetDefaultValues(s)
+	require.NoError(t, err)
+
+	err = Parse(s, nil)
+	require.NoError(t, err, "error not expected")
+
+	require.Equal(t, 20*time.Second, s.Field.T_, "wrong value")
+}

@@ -259,14 +259,13 @@ func Parse(ptr any, values map[string]int) error {
 		return nil
 	}
 
-	children := make([]reflect.Value, 0)
+	nestedConfigs := make([]reflect.Value, 0)
 	for i := 0; i < t.NumField(); i++ {
 		vField := v.Field(i)
 		tField := t.Field(i)
 
-		childTag := tField.Tag.Get("child")
-		if childTag == trueValue {
-			children = append(children, vField)
+		if vField.Kind() == reflect.Struct {
+			nestedConfigs = append(nestedConfigs, vField)
 			continue
 		}
 
@@ -284,8 +283,8 @@ func Parse(ptr any, values map[string]int) error {
 		}
 	}
 
-	for _, child := range children {
-		if err := Parse(child.Addr().Interface(), values); err != nil {
+	for _, nestedConfig := range nestedConfigs {
+		if err := Parse(nestedConfig.Addr().Interface(), values); err != nil {
 			return err
 		}
 	}
