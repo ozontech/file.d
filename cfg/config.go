@@ -259,14 +259,13 @@ func Parse(ptr any, values map[string]int) error {
 		return nil
 	}
 
-	childs := make([]reflect.Value, 0)
+	nestedConfigs := make([]reflect.Value, 0)
 	for i := 0; i < t.NumField(); i++ {
 		vField := v.Field(i)
 		tField := t.Field(i)
 
-		childTag := tField.Tag.Get("child")
-		if childTag == trueValue {
-			childs = append(childs, vField)
+		if vField.Kind() == reflect.Struct {
+			nestedConfigs = append(nestedConfigs, vField)
 			continue
 		}
 
@@ -284,48 +283,17 @@ func Parse(ptr any, values map[string]int) error {
 		}
 	}
 
-	for _, child := range childs {
-		if err := ParseChild(v, child, values); err != nil {
+	for _, nestedConfig := range nestedConfigs {
+		if err := Parse(nestedConfig.Addr().Interface(), values); err != nil {
 			return err
 		}
 	}
 
-	return nil
-}
-
-// it isn't just a recursion
-// it also captures values with the same name from parent
-// i.e. take this config:
-//
-//	{
-//		"T": 10,
-//		"Child": { // has `child:true` in a tag
-//			"T": null
-//		}
-//	}
-//
-// this function will set `config.Child.T = config.T`
-// see file.d/cfg/config_test.go:TestHierarchy for an example
-func ParseChild(parent reflect.Value, v reflect.Value, values map[string]int) error {
-	if v.CanAddr() {
-		for i := 0; i < v.NumField(); i++ {
-			name := v.Type().Field(i).Name
-			val := parent.FieldByName(name)
-			if val.CanAddr() {
-				v.Field(i).Set(val)
-			}
-		}
-
-		err := Parse(v.Addr().Interface(), values)
-		if err != nil {
-			return err
-		}
-	}
 	return nil
 }
 
 // ParseSlice recursively parses elements of an slice
-// calls Parse, not ParseChild (!)
+// calls Parse
 func ParseSlice(v reflect.Value, values map[string]int) error {
 	for i := 0; i < v.Len(); i++ {
 		if err := Parse(v.Index(i).Addr().Interface(), values); err != nil {

@@ -92,7 +92,7 @@ type Config struct {
 	// > @3@4@5@6
 	// >
 	// > It contains redis settings
-	RedisBackendCfg RedisBackendConfig `json:"redis_backend_config" child:"true"` // *
+	RedisBackendCfg RedisBackendConfig `json:"redis_backend_config"` // *
 
 	// > @3@4@5@6
 	// >

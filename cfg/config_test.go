@@ -61,15 +61,6 @@ type strDataUnit struct {
 	T_ uint
 }
 
-type hierarchyChild struct {
-	T string `required:"true"`
-}
-
-type hierarchy struct {
-	T     string         `default:"sync"`
-	Child hierarchyChild `child:"true"`
-}
-
 type sliceChild struct {
 	Value string `default:"child"`
 }
@@ -344,15 +335,6 @@ func TestParseFieldSelectorEnding(t *testing.T) {
 	assert.Equal(t, "a", path[0], "wrong field")
 	assert.Equal(t, "b", path[1], "wrong field")
 	assert.Equal(t, "c.", path[2], "wrong field")
-}
-
-func TestHierarchy(t *testing.T) {
-	s := &hierarchy{T: "10"}
-	err := Parse(s, map[string]int{})
-
-	assert.Nil(t, err, "shouldn't be an error")
-	assert.Equal(t, "10", s.T, "wrong value")
-	assert.Equal(t, "10", s.Child.T, "wrong value")
 }
 
 func TestSlice(t *testing.T) {
@@ -642,4 +624,24 @@ func TestExpression_UnmarshalJSON(t *testing.T) {
 	require.Equal(t, Expression("1"), val.E1)
 	require.Equal(t, Expression("2"), val.E2)
 	require.Equal(t, Expression("2+2"), val.E3)
+}
+
+type parentCfg struct {
+	Field childCfg
+}
+
+type childCfg struct {
+	T  Duration `default:"5s" parse:"duration"`
+	T_ time.Duration
+}
+
+func TestParseNested(t *testing.T) {
+	s := &parentCfg{Field: childCfg{T: "20s"}}
+	err := SetDefaultValues(s)
+	require.NoError(t, err)
+
+	err = Parse(s, nil)
+	require.NoError(t, err, "error not expected")
+
+	require.Equal(t, 20*time.Second, s.Field.T_, "wrong value")
 }

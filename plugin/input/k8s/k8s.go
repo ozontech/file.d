@@ -35,10 +35,11 @@ pipelines:
   example_k8s_pipeline:
     input:
       type: k8s
-      offsets_file: /data/offsets.yaml
-      file_config:                        // customize file plugin
+      file_config:                         # customize file plugin
         persistence_mode: sync
         read_buffer_size: 2048
+        offsets_file: /data/offsets.yaml
+        watching_dir: /var/log/containers
 ```
 }*/
 
@@ -79,11 +80,15 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
+	// > DEPRECATED: you must fill `file_config.watching_dir` instead!
+	// >
 	// > Kubernetes dir with container logs. It's like `watching_dir` parameter from [file plugin](/plugin/input/file/README.md) config.
 	WatchingDir  string `json:"watching_dir" default:"/var/log/containers"` // *
 	WatchingDir_ string
 
 	// > @3@4@5@6
+	// >
+	// > DEPRECATED: you must fill `file_config.offsets_file` instead!
 	// >
 	// > The filename to store offsets of processed files. It's like `offsets_file` parameter from [file plugin](/plugin/input/file/README.md) config.
 	OffsetsFile string `json:"offsets_file" required:"true"` // *
@@ -91,7 +96,7 @@ type Config struct {
 	// > @3@4@5@6
 	// >
 	// > Under the hood this plugin uses [file plugin](/plugin/input/file/README.md) to collect logs from files. So you can change any [file plugin](/plugin/input/file/README.md) config parameter using `file_config` section. Check out an example.
-	FileConfig file.Config `json:"file_config" child:"true"` // *
+	FileConfig file.Config `json:"file_config"` // *
 }
 
 var startCounter atomic.Int32
@@ -126,6 +131,17 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	p.logger = params.Logger
 	p.params = params
 	p.config = config.(*Config)
+
+	if p.config.OffsetsFile != "" {
+		p.logger.Error("Field 'offsets_file' DEPRECATED and will be deleted soon! You must fill 'file_config.offsets_file' instead")
+	}
+	if p.config.WatchingDir_ != "" {
+		p.logger.Error("Field 'watching_dir' DEPRECATED and will be deleted soon! You must fill 'file_config.watching_dir' instead")
+	}
+
+	// for backward compatibility; will be removed
+	p.config.FileConfig.OffsetsFile = p.config.OffsetsFile
+	p.config.FileConfig.WatchingDir = p.config.WatchingDir_
 
 	startCounter := startCounter.Inc()
 

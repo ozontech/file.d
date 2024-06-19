@@ -179,7 +179,7 @@ type Config struct {
 	// > @3@4@5@6
 	// >
 	// > Under the hood this plugin uses /plugin/output/file/ to collect logs.
-	FileConfig file.Config `json:"file_config" child:"true"` // *
+	FileConfig file.Config `json:"file_config"` // *
 
 	// > @3@4@5@6
 	// >
