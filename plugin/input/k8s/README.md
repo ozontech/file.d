@@ -21,10 +21,11 @@ pipelines:
   example_k8s_pipeline:
     input:
       type: k8s
-      offsets_file: /data/offsets.yaml
-      file_config:                        // customize file plugin
+      file_config:                         # customize file plugin
         persistence_mode: sync
         read_buffer_size: 2048
+        offsets_file: /data/offsets.yaml
+        watching_dir: /var/log/containers
 ```
 
 ### Config params
