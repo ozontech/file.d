@@ -131,6 +131,13 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	p.params = params
 	p.config = config.(*Config)
 
+	if p.config.OffsetsFile != "" {
+		p.logger.Error("Field 'offsets_file' DEPRECATED and will be deleted soon! You must fill 'file_config.offsets_file' instead")
+	}
+	if p.config.WatchingDir_ != "" {
+		p.logger.Error("Field 'watching_dir' DEPRECATED and will be deleted soon! You must fill 'file_config.watching_dir' instead")
+	}
+
 	// for backward compatibility; will be removed
 	p.config.FileConfig.OffsetsFile = p.config.OffsetsFile
 	p.config.FileConfig.WatchingDir = p.config.WatchingDir_
