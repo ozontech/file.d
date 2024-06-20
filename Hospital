@@ -1,0 +1,234 @@
+لتحويل هذا التصميم إلى تطبيق جاهز للاستعمال، يمكننا إعداد ملفات HTML وCSS وJavaScript ووضعها في هيكلية مشروع بسيطة. تأكد من أن لديك بيئة تطوير محلية لاختبار التطبيق.
+
+### الهيكلية الأساسية للمشروع
+```
+hospital-info-system/
+│
+├── index.html
+├── styles.css
+└── scripts.js
+```
+
+### 1. ملف HTML (index.html)
+
+```html
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>نظام معلومات المستشفيات</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <header>
+        <h1>نظام معلومات المستشفيات (HIS)</h1>
+    </header>
+    <main>
+        <section id="schedule">
+            <h2>الجداول الزمنية للأطباء</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>الطبيب</th>
+                        <th>التخصص</th>
+                        <th>الجدول الزمني</th>
+                    </tr>
+                </thead>
+                <tbody id="doctor-schedule">
+                    <!-- بيانات الجدول ستضاف هنا ديناميكيا -->
+                </tbody>
+            </table>
+        </section>
+        
+        <section id="medications">
+            <h2>تخزين الأدوية</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>اسم الدواء</th>
+                        <th>الكمية المتاحة</th>
+                        <th>الاحتياجات العلاجية</th>
+                    </tr>
+                </thead>
+                <tbody id="medications-stock">
+                    <!-- بيانات الأدوية ستضاف هنا ديناميكيا -->
+                </tbody>
+            </table>
+        </section>
+        
+        <section id="emergency">
+            <h2>قسم الطوارئ</h2>
+            <form id="emergency-form">
+                <label for="patient-id">الرقم التسلسلي:</label>
+                <input type="text" id="patient-id" name="patient-id">
+                
+                <label for="entry-time">وقت الدخول:</label>
+                <input type="datetime-local" id="entry-time" name="entry-time">
+                
+                <label for="exit-time">وقت الخروج:</label>
+                <input type="datetime-local" id="exit-time" name="exit-time">
+                
+                <label for="diagnosis">التشخيص:</label>
+                <input type="text" id="diagnosis" name="diagnosis">
+                
+                <label for="treating-doctor">الطبيب المعالج:</label>
+                <input type="text" id="treating-doctor" name="treating-doctor">
+                
+                <label for="treatments">العلاجات والإجراءات المتخذة:</label>
+                <textarea id="treatments" name="treatments"></textarea>
+                
+                <button type="submit">إرسال</button>
+            </form>
+        </section>
+    </main>
+    <script src="scripts.js"></script>
+</body>
+</html>
+```
+
+### 2. ملف CSS (styles.css)
+
+```css
+/* styles.css */
+body {
+    font-family: Arial, sans-serif;
+    direction: rtl;
+    background-color: #f4f4f4;
+    margin: 0;
+    padding: 0;
+}
+
+header {
+    background-color: #007bff;
+    color: white;
+    text-align: center;
+    padding: 1em 0;
+}
+
+main {
+    margin: 20px;
+}
+
+section {
+    background-color: white;
+    padding: 20px;
+    margin-bottom: 20px;
+    border-radius: 8px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+}
+
+h2 {
+    color: #333;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 10px;
+}
+
+table, th, td {
+    border: 1px solid #ddd;
+}
+
+th, td {
+    padding: 8px;
+    text-align: center;
+}
+
+form {
+    display: grid;
+    gap: 10px;
+}
+
+label {
+    margin-top: 10px;
+}
+
+input, textarea, button {
+    padding: 8px;
+    font-size: 1em;
+}
+
+button {
+    background-color: #007bff;
+    color: white;
+    border: none;
+    cursor: pointer;
+    border-radius: 5px;
+}
+
+button:hover {
+    background-color: #0056b3;
+}
+```
+
+### 3. ملف JavaScript (scripts.js)
+
+```javascript
+// scripts.js
+
+document.addEventListener('DOMContentLoaded', function() {
+    // بيانات مثالية
+    const doctorSchedule = [
+        { name: 'د. أحمد', specialty: 'جراحة', schedule: '9:00 - 17:00' },
+        { name: 'د. ليلى', specialty: 'طب أطفال', schedule: '10:00 - 18:00' },
+    ];
+    
+    const medicationsStock = [
+        { name: 'باراسيتامول', quantity: 50, needs: '10 per week' },
+        { name: 'أموكسيسيلين', quantity: 30, needs: '5 per week' },
+    ];
+
+    // تعبئة جدول الجداول الزمنية للأطباء
+    const doctorScheduleTable = document.getElementById('doctor-schedule');
+    doctorSchedule.forEach(doctor => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td>${doctor.name}</td>
+            <td>${doctor.specialty}</td>
+            <td>${doctor.schedule}</td>
+        `;
+        doctorScheduleTable.appendChild(row);
+    });
+
+    // تعبئة جدول تخزين الأدوية
+    const medicationsStockTable = document.getElementById('medications-stock');
+    medicationsStock.forEach(med => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td>${med.name}</td>
+            <td>${med.quantity}</td>
+            <td>${med.needs}</td>
+        `;
+        medicationsStockTable.appendChild(row);
+    });
+
+    // معالجة إرسال نموذج الطوارئ
+    const emergencyForm = document.getElementById('emergency-form');
+    emergencyForm.addEventListener('submit', function(event) {
+        event.preventDefault();
+        
+        const patientId = document.getElementById('patient-id').value;
+        const entryTime = document.getElementById('entry-time').value;
+        const exitTime = document.getElementById('exit-time').value;
+        const diagnosis = document.getElementById('diagnosis').value;
+        const treatingDoctor = document.getElementById('treating-doctor').value;
+        const treatments = document.getElementById('treatments').value;
+
+        // معالجة بيانات النموذج (مثلاً، إرسالها إلى الخادم أو تحديث واجهة المستخدم)
+        console.log({
+            patientId,
+            entryTime,
+            exitTime,
+            diagnosis,
+            treatingDoctor,
+            treatments
+        });
+
+        alert('تم إرسال البيانات بنجاح');
+        emergencyForm.reset();
+    });
+});
+```
