@@ -105,9 +105,9 @@ ReplaceWord, if set, is used instead of asterisks for masking patterns that are 
 
 <br>
 
-**`cut_mode`** *`bool`* 
+**`cut_values`** *`bool`* 
 
-CutMode, if set, masking parts will be cut instead of being replaced with ReplaceWord or asterisks.
+CutValues, if set, masking parts will be cut instead of being replaced with ReplaceWord or asterisks.
 
 <br>
 
