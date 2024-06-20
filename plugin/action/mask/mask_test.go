@@ -288,7 +288,7 @@ func TestGroupNumbers(t *testing.T) {
 			input:   &Mask{Re: kDefaultCardRegExp, Groups: []int{0}},
 			expect:  &Mask{Re: kDefaultCardRegExp, Groups: []int{0}, mode: modeMask},
 			isFatal: false,
-			comment: "cut mode enabled",
+			comment: "mask mode enabled",
 		},
 		{
 			name:     "error in expression",
