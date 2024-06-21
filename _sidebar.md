@@ -37,6 +37,7 @@
     - [json_extract](plugin/action/json_extract/README.md)
     - [keep_fields](plugin/action/keep_fields/README.md)
     - [mask](plugin/action/mask/README.md)
+    - [metric](plugin/action/metric/README.md)
     - [modify](plugin/action/modify/README.md)
     - [move](plugin/action/move/README.md)
     - [parse_es](plugin/action/parse_es/README.md)

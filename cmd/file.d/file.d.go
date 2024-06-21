@@ -30,6 +30,7 @@ import (
 	_ "github.com/ozontech/file.d/plugin/action/json_extract"
 	_ "github.com/ozontech/file.d/plugin/action/keep_fields"
 	_ "github.com/ozontech/file.d/plugin/action/mask"
+	_ "github.com/ozontech/file.d/plugin/action/metric"
 	_ "github.com/ozontech/file.d/plugin/action/modify"
 	_ "github.com/ozontech/file.d/plugin/action/move"
 	_ "github.com/ozontech/file.d/plugin/action/parse_es"

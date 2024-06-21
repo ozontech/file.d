@@ -258,6 +258,25 @@ pipelines:
 
 
 [More details...](plugin/action/mask/README.md)
+## metric
+Metric plugin.
+
+**Example:**
+```yaml
+pipelines:
+  example_pipeline:
+    ...
+    actions:
+    - type: metric
+	  name: errors_total
+	  labels:
+	  	- level
+
+    ...
+```
+
+
+[More details...](plugin/action/metric/README.md)
 ## modify
 It modifies the content for a field or add new field. It works only with strings.
 You can provide an unlimited number of config parameters. Each parameter handled as `cfg.FieldSelector`:`cfg.Substitution`.
