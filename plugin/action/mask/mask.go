@@ -116,6 +116,14 @@ type Config struct {
 	AppliedMetricLabels []string `json:"applied_metric_labels"` // *
 }
 
+type mode int
+
+const (
+	modeMask mode = iota
+	modeReplace
+	modeCut
+)
+
 type Mask struct {
 	// > @3@4@5@6
 	// >
@@ -142,6 +150,13 @@ type Mask struct {
 	// >
 	// > ReplaceWord, if set, is used instead of asterisks for masking patterns that are of the same length or longer.
 	ReplaceWord string `json:"replace_word"` // *
+
+	// > @3@4@5@6
+	// >
+	// > CutValues, if set, masking parts will be cut instead of being replaced with ReplaceWord or asterisks.
+	CutValues bool `json:"cut_values"` // *
+
+	mode mode
 
 	// > @3@4@5@6
 	// >
@@ -225,6 +240,22 @@ func compileMask(m *Mask, logger *zap.Logger) {
 	if m.Re == "" && len(m.MatchRules) == 0 {
 		logger.Fatal("mask must have either nonempty regex or ruleset, or both")
 	}
+
+	setModeReplace := m.ReplaceWord != ""
+	setModeCut := m.CutValues
+	if setModeReplace && setModeCut {
+		logger.Fatal("replace mode and cut mode are incompatible")
+	}
+
+	switch {
+	case setModeReplace:
+		m.mode = modeReplace
+	case setModeCut:
+		m.mode = modeCut
+	default:
+		m.mode = modeMask
+	}
+
 	if m.Re != "" {
 		logger.Info("compiling", zap.String("re", m.Re), zap.Ints("groups", m.Groups))
 		re, err := regexp.Compile(m.Re)
@@ -316,17 +347,24 @@ func (p *Plugin) Stop() {
 
 func (p *Plugin) appendMask(mask *Mask, dst, src []byte, begin, end int) ([]byte, int) {
 	runeCounter := utf8.RuneCount(src[begin:end])
-	if mask.ReplaceWord != "" {
+
+	switch mask.mode {
+	case modeReplace:
 		dst = append(dst, []byte(mask.ReplaceWord)...)
 		return dst, len(src[begin:end]) - len(mask.ReplaceWord)
-	}
-	for j := 0; j < runeCounter; j++ {
-		if mask.MaxCount != 0 && j >= mask.MaxCount {
-			break
+	case modeCut:
+		return dst, len(src[begin:end])
+	case modeMask:
+		for j := 0; j < runeCounter; j++ {
+			if mask.MaxCount != 0 && j >= mask.MaxCount {
+				break
+			}
+			dst = append(dst, substitution)
 		}
-		dst = append(dst, substitution)
+		return dst, len(src[begin:end]) - runeCounter
+	default:
+		panic("invalid masking mode")
 	}
-	return dst, len(src[begin:end]) - runeCounter
 }
 
 func (p *Plugin) maskSection(mask *Mask, dst, src []byte, begin, end int) ([]byte, int) {

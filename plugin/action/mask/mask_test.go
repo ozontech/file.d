@@ -102,7 +102,7 @@ func TestMaskFunctions(t *testing.T) {
 		{
 			name:         "ID-replace_word",
 			input:        []byte("user details: Иванов Иван Иванович"),
-			masks:        Mask{Re: kDefaultIDRegExp, Groups: []int{0}, ReplaceWord: "***MASKED***"},
+			masks:        Mask{Re: kDefaultIDRegExp, Groups: []int{0}, mode: modeReplace, ReplaceWord: "***MASKED***"},
 			expected:     []byte("user details: ***MASKED***"),
 			comment:      "ID masked with replace word",
 			mustBeMasked: true,
@@ -152,7 +152,15 @@ func TestMaskFunctions(t *testing.T) {
 			input:        []byte("email login@domain.ru"),
 			expected:     []byte("email SECMASKED"),
 			comment:      "do not replace email",
-			masks:        Mask{Re: kEMailRegExp, ReplaceWord: "SECMASKED", Groups: []int{0}, MaxCount: 10},
+			masks:        Mask{Re: kEMailRegExp, mode: modeReplace, ReplaceWord: "SECMASKED", Groups: []int{0}, MaxCount: 10},
+			mustBeMasked: true,
+		},
+		{
+			name:         "cut email",
+			input:        []byte("email login@domain.ru"),
+			expected:     []byte("email "),
+			comment:      "do not cut email",
+			masks:        Mask{Re: kEMailRegExp, mode: modeCut, CutValues: true, Groups: []int{0}, MaxCount: 10},
 			mustBeMasked: true,
 		},
 		{
@@ -160,7 +168,7 @@ func TestMaskFunctions(t *testing.T) {
 			input:        []byte("email\nnlogin@domain.ru"),
 			expected:     []byte("email\nSECMASKED"),
 			comment:      "do not replace email",
-			masks:        Mask{Re: kEMailRegExp, ReplaceWord: "SECMASKED", Groups: []int{0}, MaxCount: 10},
+			masks:        Mask{Re: kEMailRegExp, mode: modeReplace, ReplaceWord: "SECMASKED", Groups: []int{0}, MaxCount: 10},
 			mustBeMasked: true,
 		},
 	}
@@ -255,6 +263,34 @@ func TestGroupNumbers(t *testing.T) {
 			comment: "compiling success",
 		},
 		{
+			name:     "replace mode and cut mode are both enabled",
+			input:    &Mask{Re: kDefaultCardRegExp, Groups: []int{0}, ReplaceWord: "SECRET", CutValues: true},
+			isFatal:  true,
+			fatalMsg: "replace mode and cut mode are incompatible",
+			comment:  "replace mode and cut mode are both enabled",
+		},
+		{
+			name:    "replace mode enabled",
+			input:   &Mask{Re: kDefaultCardRegExp, Groups: []int{0}, ReplaceWord: "SECRET"},
+			expect:  &Mask{Re: kDefaultCardRegExp, Groups: []int{0}, ReplaceWord: "SECRET", mode: modeReplace},
+			isFatal: false,
+			comment: "replace mode enabled",
+		},
+		{
+			name:    "cut mode enabled",
+			input:   &Mask{Re: kDefaultCardRegExp, Groups: []int{0}, CutValues: true},
+			expect:  &Mask{Re: kDefaultCardRegExp, Groups: []int{0}, CutValues: true, mode: modeCut},
+			isFatal: false,
+			comment: "cut mode enabled",
+		},
+		{
+			name:    "mask mode enabled",
+			input:   &Mask{Re: kDefaultCardRegExp, Groups: []int{0}},
+			expect:  &Mask{Re: kDefaultCardRegExp, Groups: []int{0}, mode: modeMask},
+			isFatal: false,
+			comment: "mask mode enabled",
+		},
+		{
 			name:     "error in expression",
 			input:    &Mask{Re: "(err", Groups: []int{1}},
 			expect:   &Mask{Re: kDefaultCardRegExp, Groups: []int{}},
@@ -322,11 +358,18 @@ func TestGroupNumbers(t *testing.T) {
 				res := &Mask{
 					Re:     s.input.Re,
 					Groups: s.input.Groups,
+
+					CutValues:   s.input.CutValues,
+					ReplaceWord: s.input.ReplaceWord,
 				}
 				compileMask(res, zap.NewNop())
 				assert.NotNil(t, res.Re_, s.comment)
 				assert.Equal(t, res.Re, s.expect.Re, s.comment)
 				assert.Equal(t, res.Groups, s.expect.Groups, s.comment)
+
+				assert.Equal(t, res.CutValues, s.expect.CutValues)
+				assert.Equal(t, res.ReplaceWord, s.expect.ReplaceWord)
+				assert.Equal(t, res.mode, s.expect.mode, s.comment)
 			}
 		})
 	}
