@@ -420,10 +420,11 @@ func (p *Plugin) maskValue(mask *Mask, value, buf []byte) ([]byte, bool) {
 	buf = buf[:0]
 
 	prevFinish := 0
-	for i, index := range indexes {
-		for j, grp := range mask.Groups {
-			curStart := index[grp*2]
-			curFinish := index[grp*2+1]
+	curStart, curFinish := 0, 0
+	for _, index := range indexes {
+		for _, grp := range mask.Groups {
+			curStart = index[grp*2]
+			curFinish = index[grp*2+1]
 
 			buf = append(buf, value[prevFinish:curStart]...)
 			prevFinish = curFinish
@@ -435,15 +436,10 @@ func (p *Plugin) maskValue(mask *Mask, value, buf []byte) ([]byte, bool) {
 				curStart,
 				curFinish,
 			)
-
-			lastPartFlag := i == len(indexes)-1 && j == len(mask.Groups)-1
-			if lastPartFlag {
-				buf = append(buf, value[curFinish:]...)
-			}
 		}
 	}
 
-	return buf, true
+	return append(buf, value[curFinish:]...), true
 }
 
 func getNestedValueNodes(currentNode *insaneJSON.Node, ignoredNodes []*insaneJSON.Node, valueNodes []*insaneJSON.Node) []*insaneJSON.Node {
