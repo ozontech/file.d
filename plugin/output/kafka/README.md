@@ -1,5 +1,5 @@
 # Kafka output
-It sends the event batches to kafka brokers using `sarama` lib.
+It sends the event batches to kafka brokers using `franz-go` lib.
 
 ### Config params
 **`brokers`** *`[]string`* *`required`* 
@@ -67,6 +67,12 @@ Should be set equal to or smaller than the broker's `message.max.bytes`.
 **`compression`** *`string`* *`default=none`* *`options=none|gzip|snappy|lz4|zstd`* 
 
 Compression
+
+<br>
+
+**`ack`** *`string`* *`default=all-isr`* *`options=no|leader|all-isr`* 
+
+Ack
 
 <br>
 

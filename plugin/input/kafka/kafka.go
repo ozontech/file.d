@@ -16,7 +16,7 @@ import (
 )
 
 /*{ introduction
-It reads events from multiple Kafka topics using `sarama` library.
+It reads events from multiple Kafka topics using `franz-go` library.
 > It guarantees at "at-least-once delivery" due to the commitment mechanism.
 
 **Example**
@@ -239,7 +239,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 
 	ctx, cancel := context.WithCancel(context.Background())
 	p.cancel = cancel
-	p.client = newClient(p.config, p.logger)
+	p.client = NewClient(p.config, p.logger)
 	p.controller.UseSpread()
 	p.controller.DisableStreams()
 
