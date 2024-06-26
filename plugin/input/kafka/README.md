@@ -1,5 +1,5 @@
 # Kafka plugin
-It reads events from multiple Kafka topics using `sarama` library.
+It reads events from multiple Kafka topics using `franz-go` library.
 > It guarantees at "at-least-once delivery" due to the commitment mechanism.
 
 **Example**

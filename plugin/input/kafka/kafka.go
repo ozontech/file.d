@@ -16,7 +16,7 @@ import (
 )
 
 /*{ introduction
-It reads events from multiple Kafka topics using `sarama` library.
+It reads events from multiple Kafka topics using `franz-go` library.
 > It guarantees at "at-least-once delivery" due to the commitment mechanism.
 
 **Example**
@@ -239,7 +239,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 
 	ctx, cancel := context.WithCancel(context.Background())
 	p.cancel = cancel
-	p.client = newClient(p.config, p.logger)
+	p.client = NewClient(p.config, p.logger)
 	p.controller.UseSpread()
 	p.controller.DisableStreams()
 
@@ -266,11 +266,7 @@ func (p *Plugin) consume(ctx context.Context) {
 			return
 		}
 
-		err := p.ConsumeClaim(fetches)
-		if err != nil {
-			p.consumeErrorsMetric.Inc()
-			p.logger.Errorf("can't consume claim: %s", err.Error())
-		}
+		p.ConsumeClaim(fetches)
 	}
 }
 
@@ -295,7 +291,7 @@ func (p *Plugin) Commit(event *pipeline.Event) {
 	p.client.MarkCommitOffsets(offsets)
 }
 
-func (p *Plugin) ConsumeClaim(fetches kgo.Fetches) error {
+func (p *Plugin) ConsumeClaim(fetches kgo.Fetches) {
 	fetches.EachRecord(func(message *kgo.Record) {
 		sourceID := assembleSourceID(
 			p.idByTopic[message.Topic],
@@ -314,7 +310,6 @@ func (p *Plugin) ConsumeClaim(fetches kgo.Fetches) error {
 
 		_ = p.controller.In(sourceID, "kafka", offset, message.Value, true, metadataInfo)
 	})
-	return nil
 }
 
 func assembleSourceID(index int, partition int32) pipeline.SourceID {

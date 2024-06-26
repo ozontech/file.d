@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"os"
+	"time"
 
 	"github.com/twmb/franz-go/pkg/kgo"
 	"github.com/twmb/franz-go/pkg/sasl/aws"
@@ -14,31 +15,21 @@ import (
 	"go.uber.org/zap"
 )
 
+type KafkaClient interface {
+	ProduceSync(ctx context.Context, rs ...*kgo.Record) kgo.ProduceResults
+	Close()
+}
+
 func NewClient(c *Config, l *zap.SugaredLogger) *kgo.Client {
 	opts := []kgo.Opt{
 		kgo.SeedBrokers(c.Brokers...),
-		kgo.ConsumerGroup(c.ConsumerGroup),
-		kgo.ConsumeTopics(c.Topics...),
 		kgo.ClientID(c.ClientID),
-		kgo.FetchMaxWait(c.ConsumerMaxWaitTime_),
-		kgo.AutoCommitMarks(),
+		kgo.DefaultProduceTopic(c.DefaultTopic),
 		kgo.WithLogger(kzap.New(l.Desugar())),
-		kgo.MaxConcurrentFetches(c.MaxConcurrentFetches),
-		kgo.FetchMaxBytes(c.FetchMaxBytes_),
-		kgo.FetchMinBytes(c.FetchMinBytes_),
-		kgo.AutoCommitInterval(c.AutoCommitInterval_),
-		kgo.SessionTimeout(c.SessionTimeout_),
-		kgo.HeartbeatInterval(c.HeartbeatInterval_),
+		kgo.MaxBufferedRecords(c.BatchSize_),
+		kgo.ProducerBatchMaxBytes(int32(c.MaxMessageBytes_)),
+		kgo.ProducerLinger(1 * time.Millisecond),
 	}
-
-	offset := kgo.NewOffset()
-	switch c.Offset_ {
-	case OffsetTypeOldest:
-		offset = offset.AtStart()
-	case OffsetTypeNewest:
-		offset = offset.AtEnd()
-	}
-	opts = append(opts, kgo.ConsumeResetOffset(offset))
 
 	if c.SaslEnabled {
 		switch c.SaslMechanism {
@@ -103,21 +94,34 @@ func NewClient(c *Config, l *zap.SugaredLogger) *kgo.Client {
 		opts = append(opts, kgo.DialTLSConfig(tc))
 	}
 
-	switch c.BalancerPlan {
-	case "round-robin":
-		opts = append(opts, kgo.Balancers(kgo.RoundRobinBalancer()))
-	case "range":
-		opts = append(opts, kgo.Balancers(kgo.RangeBalancer()))
-	case "sticky":
-		opts = append(opts, kgo.Balancers(kgo.StickyBalancer()))
-	case "cooperative-sticky":
-		opts = append(opts, kgo.Balancers(kgo.CooperativeStickyBalancer()))
+	switch c.Compression {
+	case "none":
+		opts = append(opts, kgo.ProducerBatchCompression(kgo.NoCompression()))
+	case "gzip":
+		opts = append(opts, kgo.ProducerBatchCompression(kgo.GzipCompression()))
+	case "snappy":
+		opts = append(opts, kgo.ProducerBatchCompression(kgo.SnappyCompression()))
+	case "lz4":
+		opts = append(opts, kgo.ProducerBatchCompression(kgo.Lz4Compression()))
+	case "zstd":
+		opts = append(opts, kgo.ProducerBatchCompression(kgo.ZstdCompression()))
+	}
+
+	switch c.Ack {
+	case "no":
+		opts = append(opts, kgo.RequiredAcks(kgo.NoAck()), kgo.DisableIdempotentWrite())
+	case "leader":
+		opts = append(opts, kgo.RequiredAcks(kgo.LeaderAck()), kgo.DisableIdempotentWrite())
+	case "all-isr":
+		opts = append(opts, kgo.RequiredAcks(kgo.AllISRAcks()))
 	}
 
 	client, err := kgo.NewClient(opts...)
+
 	if err != nil {
 		l.Fatalf("can't create kafka client: %s", err.Error())
 	}
+
 	err = client.Ping(context.TODO())
 	if err != nil {
 		l.Fatalf("can't connect to kafka: %s", err.Error())
