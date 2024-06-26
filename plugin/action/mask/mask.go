@@ -345,38 +345,26 @@ func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 func (p *Plugin) Stop() {
 }
 
-func (p *Plugin) appendMask(mask *Mask, dst, src []byte, begin, end int) ([]byte, int) {
-	runeCounter := utf8.RuneCount(src[begin:end])
-
+func (p *Plugin) maskSection(mask *Mask, dst, src []byte, begin, end int) []byte {
 	switch mask.mode {
 	case modeReplace:
-		dst = append(dst, []byte(mask.ReplaceWord)...)
-		return dst, len(src[begin:end]) - len(mask.ReplaceWord)
+		return append(dst, mask.ReplaceWord...)
 	case modeCut:
-		return dst, len(src[begin:end])
+		return dst
 	case modeMask:
-		for j := 0; j < runeCounter; j++ {
-			if mask.MaxCount != 0 && j >= mask.MaxCount {
-				break
-			}
+		n := utf8.RuneCount(src[begin:end])
+		if mask.MaxCount > 0 {
+			n = min(n, mask.MaxCount)
+		}
+
+		for i := 0; i < n; i++ {
 			dst = append(dst, substitution)
 		}
-		return dst, len(src[begin:end]) - runeCounter
+
+		return dst
 	default:
 		panic("invalid masking mode")
 	}
-}
-
-func (p *Plugin) maskSection(mask *Mask, dst, src []byte, begin, end int) ([]byte, int) {
-	dst = append(dst, src[:begin]...)
-
-	dst, offset := p.appendMask(mask, dst, src, begin, end)
-
-	if len(dst)+offset < len(src) {
-		dst = append(dst, src[end:]...)
-	}
-
-	return dst, offset
 }
 
 func (p *Plugin) applyMaskMetric(mask *Mask, event *pipeline.Event) {
@@ -431,20 +419,27 @@ func (p *Plugin) maskValue(mask *Mask, value, buf []byte) ([]byte, bool) {
 
 	buf = buf[:0]
 
-	offset := 0
+	prevFinish := 0
+	curStart, curFinish := 0, 0
 	for _, index := range indexes {
 		for _, grp := range mask.Groups {
-			value, offset = p.maskSection(
+			curStart = index[grp*2]
+			curFinish = index[grp*2+1]
+
+			buf = append(buf, value[prevFinish:curStart]...)
+			prevFinish = curFinish
+
+			buf = p.maskSection(
 				mask,
 				buf,
 				value,
-				index[grp*2]-offset,
-				index[grp*2+1]-offset,
+				curStart,
+				curFinish,
 			)
 		}
 	}
 
-	return value, true
+	return append(buf, value[curFinish:]...), true
 }
 
 func getNestedValueNodes(currentNode *insaneJSON.Node, ignoredNodes []*insaneJSON.Node, valueNodes []*insaneJSON.Node) []*insaneJSON.Node {
