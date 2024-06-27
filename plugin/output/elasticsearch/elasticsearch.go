@@ -39,17 +39,21 @@ var (
 )
 
 type Plugin struct {
-	logger       *zap.Logger
-	client       *fasthttp.Client
-	endpoints    []*fasthttp.URI
-	cancel       context.CancelFunc
-	config       *Config
-	authHeader   []byte
+	config *Config
+
+	client     *fasthttp.Client
+	endpoints  []*fasthttp.URI
+	authHeader []byte
+
+	logger     *zap.Logger
+	controller pipeline.OutputPluginController
+
+	batcher      *pipeline.RetriableBatcher
 	avgEventSize int
+
 	time         string
 	headerPrefix string
-	batcher      *pipeline.RetriableBatcher
-	controller   pipeline.OutputPluginController
+	cancel       context.CancelFunc
 	mu           *sync.Mutex
 
 	// plugin metrics
@@ -199,36 +203,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		p.config.IndexValues = append(p.config.IndexValues, "@time")
 	}
 
-	for _, endpoint := range p.config.Endpoints {
-		if endpoint[len(endpoint)-1] == '/' {
-			endpoint = endpoint[:len(endpoint)-1]
-		}
-
-		uri := &fasthttp.URI{}
-		if err := uri.Parse(nil, []byte(endpoint+"/_bulk?_source=false")); err != nil {
-			logger.Fatalf("can't parse ES endpoint %s: %s", endpoint, err.Error())
-		}
-
-		p.endpoints = append(p.endpoints, uri)
-	}
-
-	p.client = &fasthttp.Client{
-		ReadTimeout:     p.config.ConnectionTimeout_ * 2,
-		WriteTimeout:    p.config.ConnectionTimeout_ * 2,
-		MaxConnDuration: time.Minute * 5,
-	}
-
-	if p.config.CACert != "" {
-		b := xtls.NewConfigBuilder()
-		err := b.AppendCARoot(p.config.CACert)
-		if err != nil {
-			p.logger.Fatal("can't append CA root", zap.Error(err))
-		}
-
-		p.client.TLSConfig = b.Build()
-	}
-
-	p.authHeader = p.getAuthHeader()
+	p.prepareClient()
 
 	p.maintenance(nil)
 
@@ -291,6 +266,38 @@ func (p *Plugin) Out(event *pipeline.Event) {
 func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 	p.sendErrorMetric = ctl.RegisterCounter("output_elasticsearch_send_error", "Total elasticsearch send errors")
 	p.indexingErrorsMetric = ctl.RegisterCounter("output_elasticsearch_index_error", "Number of elasticsearch indexing errors")
+}
+
+func (p *Plugin) prepareClient() {
+	p.client = &fasthttp.Client{
+		ReadTimeout:     p.config.ConnectionTimeout_ * 2,
+		WriteTimeout:    p.config.ConnectionTimeout_ * 2,
+		MaxConnDuration: time.Minute * 5,
+	}
+	if p.config.CACert != "" {
+		b := xtls.NewConfigBuilder()
+		err := b.AppendCARoot(p.config.CACert)
+		if err != nil {
+			p.logger.Fatal("can't append CA root", zap.Error(err))
+		}
+
+		p.client.TLSConfig = b.Build()
+	}
+
+	for _, endpoint := range p.config.Endpoints {
+		if endpoint[len(endpoint)-1] == '/' {
+			endpoint = endpoint[:len(endpoint)-1]
+		}
+
+		uri := &fasthttp.URI{}
+		if err := uri.Parse(nil, []byte(endpoint+"/_bulk?_source=false")); err != nil {
+			logger.Fatalf("can't parse ES endpoint %s: %s", endpoint, err.Error())
+		}
+
+		p.endpoints = append(p.endpoints, uri)
+	}
+
+	p.authHeader = p.getAuthHeader()
 }
 
 func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) error {

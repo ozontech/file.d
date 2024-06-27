@@ -136,7 +136,7 @@ func TestPrepareRequest(t *testing.T) {
 			},
 			body: "test",
 			want: wantData{
-				uri:         "http://endpoint:9000/",
+				uri:         "http://endpoint:9000/_bulk?_source=false",
 				method:      []byte(fasthttp.MethodPost),
 				contentType: []byte(NDJSONContentType),
 				auth:        []byte("ApiKey test"),
@@ -151,7 +151,7 @@ func TestPrepareRequest(t *testing.T) {
 			},
 			body: "test",
 			want: wantData{
-				uri:             "http://endpoint:9000/",
+				uri:             "http://endpoint:9000/_bulk?_source=false",
 				method:          []byte(fasthttp.MethodPost),
 				contentType:     []byte(NDJSONContentType),
 				contentEncoding: []byte(gzipContentEncoding),
@@ -167,17 +167,12 @@ func TestPrepareRequest(t *testing.T) {
 			p := Plugin{
 				config: tt.config,
 			}
-			p.authHeader = p.getAuthHeader()
-
-			endpoint := &fasthttp.URI{}
-			if err := endpoint.Parse(nil, []byte(tt.config.Endpoints[0])); err != nil {
-				t.Fatal(err)
-			}
+			p.prepareClient()
 
 			req := fasthttp.AcquireRequest()
 			defer fasthttp.ReleaseRequest(req)
 
-			err := p.prepareRequest(req, endpoint, []byte(tt.body))
+			err := p.prepareRequest(req, p.endpoints[0], []byte(tt.body))
 			if tt.wantErr {
 				require.Error(t, err)
 				return
