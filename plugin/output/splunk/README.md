@@ -8,6 +8,12 @@ A full URI address of splunk HEC endpoint. Format: `http://127.0.0.1:8088/servic
 
 <br>
 
+**`use_gzip`** *`bool`* *`default=false`* 
+
+If set, the plugin will use gzip encoding.
+
+<br>
+
 **`token`** *`string`* *`required`* 
 
 Token for an authentication for a HEC endpoint.

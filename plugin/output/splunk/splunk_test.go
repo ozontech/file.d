@@ -8,6 +8,7 @@ import (
 
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/stretchr/testify/assert"
+	"github.com/valyala/fasthttp"
 	insaneJSON "github.com/vitkovskii/insane-json"
 	"go.uber.org/zap"
 )
@@ -19,15 +20,18 @@ func TestSplunk(t *testing.T) {
 		expected string
 	}{
 		{
-			`basic case`,
-			`{"msg":"AAAA","some_field":"BBBB"}`,
-			`{"event":{"msg":"AAAA","some_field":"BBBB"}}`,
+			name:     "basic",
+			input:    `{"msg":"AAAA","some_field":"BBBB"}`,
+			expected: `{"event":{"msg":"AAAA","some_field":"BBBB"}}`,
 		},
 	}
 
-	for _, testCase := range suites {
-		t.Run(testCase.name, func(t *testing.T) {
-			input, err := insaneJSON.DecodeBytes([]byte(testCase.input))
+	for _, tt := range suites {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			input, err := insaneJSON.DecodeBytes([]byte(tt.input))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -50,6 +54,7 @@ func TestSplunk(t *testing.T) {
 				},
 				logger: zap.NewExample().Sugar(),
 			}
+			plugin.prepareClient()
 
 			batch := pipeline.NewPreparedBatch([]*pipeline.Event{
 				{Root: input},
@@ -57,9 +62,129 @@ func TestSplunk(t *testing.T) {
 			})
 
 			data := pipeline.WorkerData(nil)
-			plugin.out(&data, batch)
+			_ = plugin.out(&data, batch)
 
-			assert.Equal(t, testCase.expected+testCase.expected, string(response))
+			assert.Equal(t, tt.expected+tt.expected, string(response))
+		})
+	}
+}
+
+func TestPrepareRequest(t *testing.T) {
+	type wantData struct {
+		uri             string
+		method          []byte
+		contentEncoding []byte
+		auth            []byte
+		body            []byte
+	}
+
+	cases := []struct {
+		name   string
+		config *Config
+
+		body    string
+		want    wantData
+		wantErr bool
+	}{
+		{
+			name: "raw",
+			config: &Config{
+				Endpoint: "http://endpoint:9000",
+				Token:    "test",
+			},
+			body: "test",
+			want: wantData{
+				uri:    "http://endpoint:9000/",
+				method: []byte(fasthttp.MethodPost),
+				auth:   []byte("Splunk test"),
+				body:   []byte("test"),
+			},
+		},
+		{
+			name: "gzip",
+			config: &Config{
+				Endpoint: "http://endpoint:9000",
+				Token:    "test",
+				UseGzip:  true,
+			},
+			body: "test",
+			want: wantData{
+				uri:             "http://endpoint:9000/",
+				method:          []byte(fasthttp.MethodPost),
+				contentEncoding: []byte(gzipContentEncoding),
+				auth:            []byte("Splunk test"),
+				body:            []byte("test"),
+			},
+		},
+	}
+	for _, tt := range cases {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			p := Plugin{
+				config: tt.config,
+			}
+			p.prepareClient()
+
+			req := fasthttp.AcquireRequest()
+			defer fasthttp.ReleaseRequest(req)
+
+			err := p.prepareRequest(req, []byte(tt.body))
+			if tt.wantErr {
+				assert.Error(t, err)
+				return
+			}
+
+			assert.Equal(t, tt.want.uri, req.URI().String(), "wrong uri")
+			assert.Equal(t, tt.want.method, req.Header.Method(), "wrong method")
+			assert.Equal(t, tt.want.contentEncoding, req.Header.ContentEncoding(), "wrong content encoding")
+			assert.Equal(t, tt.want.auth, req.Header.Peek(fasthttp.HeaderAuthorization), "wrong auth")
+
+			var body []byte
+			if tt.config.UseGzip {
+				body, _ = req.BodyUncompressed()
+			} else {
+				body = req.Body()
+			}
+			assert.Equal(t, tt.want.body, body, "wrong body")
+		})
+	}
+}
+
+func TestParseSplunkError(t *testing.T) {
+	cases := []struct {
+		name    string
+		data    string
+		wantErr bool
+	}{
+		{
+			name: "ok",
+			data: `{"code":0}`,
+		},
+		{
+			name:    "err_parse_json",
+			data:    "invalid json",
+			wantErr: true,
+		},
+		{
+			name:    "err_no_code",
+			data:    `{"not_code":10}`,
+			wantErr: true,
+		},
+		{
+			name:    "err_bad_code",
+			data:    `{"code":5}`,
+			wantErr: true,
+		},
+	}
+	for _, tt := range cases {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			err := parseSplunkError([]byte(tt.data))
+			assert.Equal(t, tt.wantErr, err != nil)
 		})
 	}
 }
