@@ -21,11 +21,10 @@ pipelines:
   example_k8s_pipeline:
     input:
       type: k8s
-      file_config:                         # customize file plugin
+      offsets_file: /data/offsets.yaml
+      file_config:                        // customize file plugin
         persistence_mode: sync
         read_buffer_size: 2048
-        offsets_file: /data/offsets.yaml
-        watching_dir: /var/log/containers
 ```
 
 ### Config params
@@ -56,15 +55,11 @@ Skips retrieving Kubernetes meta information using Kubernetes API and adds only 
 
 **`watching_dir`** *`string`* *`default=/var/log/containers`* 
 
-DEPRECATED: you must fill `file_config.watching_dir` instead!
-
 Kubernetes dir with container logs. It's like `watching_dir` parameter from [file plugin](/plugin/input/file/README.md) config.
 
 <br>
 
 **`offsets_file`** *`string`* *`required`* 
-
-DEPRECATED: you must fill `file_config.offsets_file` instead!
 
 The filename to store offsets of processed files. It's like `offsets_file` parameter from [file plugin](/plugin/input/file/README.md) config.
 
