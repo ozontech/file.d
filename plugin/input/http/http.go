@@ -149,7 +149,7 @@ type Config struct {
 	// > Disabled by default.
 	// > See AuthConfig for details.
 	// > You can use 'warn' log level for logging authorizations.
-	Auth AuthConfig `json:"auth"` // *
+	Auth AuthConfig `json:"auth" child:"true"` // *
 
 	// > @3@4@5@6
 	// >
@@ -165,7 +165,7 @@ type Config struct {
 	// >
 	// > CORS config.
 	// > See CORSConfig for details.
-	CORS CORSConfig `json:"cors"` // *
+	CORS CORSConfig `json:"cors" child:"true"` // *
 }
 
 type AuthStrategy byte
