@@ -9,6 +9,12 @@ The list of elasticsearch endpoints in the following format: `SCHEMA://HOST:PORT
 
 <br>
 
+**`use_gzip`** *`bool`* *`default=false`* 
+
+If set, the plugin will use gzip encoding.
+
+<br>
+
 **`username`** *`string`* 
 
 Username for HTTP Basic Authentication.

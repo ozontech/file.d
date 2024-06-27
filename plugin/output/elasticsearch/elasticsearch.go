@@ -28,8 +28,10 @@ If a network error occurs, the batch will infinitely try to be delivered to the 
 }*/
 
 const (
-	outPluginType     = "elasticsearch"
-	NDJSONContentType = "application/x-ndjson"
+	outPluginType = "elasticsearch"
+
+	NDJSONContentType   = "application/x-ndjson"
+	gzipContentEncoding = "gzip"
 )
 
 var (
@@ -62,6 +64,11 @@ type Config struct {
 	// >
 	// > The list of elasticsearch endpoints in the following format: `SCHEMA://HOST:PORT`
 	Endpoints []string `json:"endpoints"  required:"true"` // *
+
+	// > @3@4@5@6
+	// >
+	// > If set, the plugin will use gzip encoding.
+	UseGzip bool `json:"use_gzip" default:"false"` // *
 
 	// > @3@4@5@6
 	// >
@@ -319,11 +326,9 @@ func (p *Plugin) send(body []byte) error {
 	defer fasthttp.ReleaseResponse(resp)
 
 	endpoint := p.endpoints[rand.Int()%len(p.endpoints)]
-	req.SetURI(endpoint)
-	req.SetBodyRaw(body)
-	req.Header.SetMethod(fasthttp.MethodPost)
-	req.Header.SetContentType(NDJSONContentType)
-	p.setAuthHeader(req)
+	if err := p.prepareRequest(req, endpoint, body); err != nil {
+		return err
+	}
 
 	if err := p.client.DoTimeout(req, resp, p.config.ConnectionTimeout_); err != nil {
 		return fmt.Errorf("can't send batch to %s: %s", endpoint.String(), err.Error())
@@ -342,6 +347,28 @@ func (p *Plugin) send(body []byte) error {
 	defer insaneJSON.Release(root)
 
 	p.reportESErrors(root)
+
+	return nil
+}
+
+func (p *Plugin) prepareRequest(req *fasthttp.Request, endpoint *fasthttp.URI, body []byte) error {
+	req.SetURI(endpoint)
+
+	req.Header.SetMethod(fasthttp.MethodPost)
+	req.Header.SetContentType(NDJSONContentType)
+
+	if p.authHeader != nil {
+		req.Header.SetBytesKV(strAuthorization, p.authHeader)
+	}
+
+	if p.config.UseGzip {
+		req.Header.SetContentEncoding(gzipContentEncoding)
+		if _, err := fasthttp.WriteGzip(req.BodyWriter(), body); err != nil {
+			return fmt.Errorf("can't create gzipped request: %w", err)
+		}
+	} else {
+		req.SetBodyRaw(body)
+	}
 
 	return nil
 }
@@ -404,12 +431,6 @@ func (p *Plugin) getAuthHeader() []byte {
 		return append([]byte("Basic "), buf...)
 	}
 	return nil
-}
-
-func (p *Plugin) setAuthHeader(req *fasthttp.Request) {
-	if p.authHeader != nil {
-		req.Header.SetBytesKV(strAuthorization, p.authHeader)
-	}
 }
 
 // example of an ElasticSearch response that returned an indexing error for the first log:
