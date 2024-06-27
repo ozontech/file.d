@@ -1,6 +1,7 @@
 package remove_fields
 
 import (
+	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/pipeline"
@@ -11,8 +12,8 @@ It removes the list of the event fields and keeps others.
 }*/
 
 type Plugin struct {
-	config    *Config
-	fieldsBuf []string
+	config     *Config
+	fieldPaths [][]string
 }
 
 // ! config-params
@@ -20,8 +21,8 @@ type Plugin struct {
 type Config struct {
 	// > @3@4@5@6
 	// >
-	// > The list of the fields to remove.
-	Fields []string `json:"fields"` // *
+	// > The list of the fields to remove. Nested fields supported.
+	Fields []cfg.FieldSelector `json:"fields"` // *
 }
 
 func init() {
@@ -40,20 +41,23 @@ func (p *Plugin) Start(config pipeline.AnyConfig, _ *pipeline.ActionPluginParams
 	if p.config == nil {
 		logger.Panicf("config is nil for the remove fields plugin")
 	}
+
+	p.fieldPaths = make([][]string, 0, len(p.config.Fields))
+	for _, field := range p.config.Fields {
+		p.fieldPaths = append(p.fieldPaths, cfg.ParseFieldSelector(string(field)))
+	}
 }
 
 func (p *Plugin) Stop() {
 }
 
 func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
-	p.fieldsBuf = p.fieldsBuf[:0]
-
 	if !event.Root.IsObject() {
 		return pipeline.ActionPass
 	}
 
-	for _, field := range p.config.Fields {
-		event.Root.Dig(field).Suicide()
+	for _, fieldPath := range p.fieldPaths {
+		event.Root.Dig(fieldPath...).Suicide()
 	}
 
 	return pipeline.ActionPass

@@ -2,9 +2,9 @@
 It removes the list of the event fields and keeps others.
 
 ### Config params
-**`fields`** *`[]string`* 
+**`fields`** *`[]cfg.FieldSelector`* 
 
-The list of the fields to remove.
+The list of the fields to remove. Nested fields supported.
 
 <br>
 
