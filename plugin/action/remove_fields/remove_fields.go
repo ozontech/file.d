@@ -1,6 +1,8 @@
 package remove_fields
 
 import (
+	"strings"
+
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/logger"
@@ -42,10 +44,59 @@ func (p *Plugin) Start(config pipeline.AnyConfig, _ *pipeline.ActionPluginParams
 		logger.Panicf("config is nil for the remove fields plugin")
 	}
 
-	p.fieldPaths = make([][]string, 0, len(p.config.Fields))
+	fieldPaths := make([][]string, 0, len(p.config.Fields))
 	for _, field := range p.config.Fields {
-		p.fieldPaths = append(p.fieldPaths, cfg.ParseFieldSelector(string(field)))
+		fieldPath := cfg.ParseFieldSelector(string(field))
+
+		// Setting empty path leads to digging immortal root node
+		if len(fieldPath) == 0 {
+			logger.Fatalf("can't remove entire object; use discard plugin instead")
+		}
+
+		fieldPaths = append(fieldPaths, fieldPath)
 	}
+
+	ok := make([]bool, len(fieldPaths))
+	for i := range ok {
+		ok[i] = true
+	}
+
+	for i := range fieldPaths {
+		for j := range fieldPaths {
+			if i == j {
+				continue
+			}
+
+			if includes(fieldPaths[i], fieldPaths[j]) {
+				logger.Warnf(
+					"'%s' path includes '%s' path; remove nested path",
+					strings.Join(fieldPaths[i], "."),
+					strings.Join(fieldPaths[j], "."),
+				)
+				ok[j] = false
+			}
+		}
+	}
+
+	p.fieldPaths = make([][]string, 0, len(fieldPaths))
+	for i, fieldPath := range fieldPaths {
+		if ok[i] {
+			p.fieldPaths = append(p.fieldPaths, fieldPath)
+		}
+	}
+}
+
+func includes(a, b []string) bool {
+	if !(len(a) <= len(b)) {
+		return false
+	}
+
+	result := true
+	for i := 0; i < len(a); i++ {
+		result = result && a[i] == b[i]
+	}
+
+	return result
 }
 
 func (p *Plugin) Stop() {
