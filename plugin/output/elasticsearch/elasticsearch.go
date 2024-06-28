@@ -34,6 +34,31 @@ const (
 	gzipContentEncoding = "gzip"
 )
 
+type gzipCompressionLevel int
+
+const (
+	gzipCompressionLevelDefault gzipCompressionLevel = iota
+	gzipCompressionLevelNo
+	gzipCompressionLevelBestSpeed
+	gzipCompressionLevelBestCompression
+	gzipCompressionLevelHuffmanOnly
+)
+
+func (l gzipCompressionLevel) toFastHTTP() int {
+	switch l {
+	case gzipCompressionLevelNo:
+		return fasthttp.CompressNoCompression
+	case gzipCompressionLevelBestSpeed:
+		return fasthttp.CompressBestSpeed
+	case gzipCompressionLevelBestCompression:
+		return fasthttp.CompressBestCompression
+	case gzipCompressionLevelHuffmanOnly:
+		return fasthttp.CompressHuffmanOnly
+	default:
+		return fasthttp.CompressDefaultCompression
+	}
+}
+
 var (
 	strAuthorization = []byte(fasthttp.HeaderAuthorization)
 )
@@ -73,6 +98,12 @@ type Config struct {
 	// >
 	// > If set, the plugin will use gzip encoding.
 	UseGzip bool `json:"use_gzip" default:"false"` // *
+
+	// > @3@4@5@6
+	// >
+	// > Gzip compression level.
+	GzipCompressionLevel  string `json:"gzip_compression_level" default:"default" options:"default|no|best-speed|best-compression|huffman-only"` // *
+	GzipCompressionLevel_ gzipCompressionLevel
 
 	// > @3@4@5@6
 	// >
@@ -367,7 +398,7 @@ func (p *Plugin) prepareRequest(req *fasthttp.Request, endpoint *fasthttp.URI, b
 	}
 
 	if p.config.UseGzip {
-		if _, err := fasthttp.WriteGzip(req.BodyWriter(), body); err != nil {
+		if _, err := fasthttp.WriteGzipLevel(req.BodyWriter(), body, p.config.GzipCompressionLevel_.toFastHTTP()); err != nil {
 			req.SetBodyRaw(body)
 		} else {
 			req.Header.SetContentEncoding(gzipContentEncoding)

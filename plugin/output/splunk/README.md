@@ -14,6 +14,12 @@ If set, the plugin will use gzip encoding.
 
 <br>
 
+**`gzip_compression_level`** *`string`* *`default=default`* *`options=default|no|best-speed|best-compression|huffman-only`* 
+
+Gzip compression level.
+
+<br>
+
 **`token`** *`string`* *`required`* 
 
 Token for an authentication for a HEC endpoint.

@@ -145,8 +145,9 @@ func TestPrepareRequest(t *testing.T) {
 		{
 			name: "gzip",
 			config: &Config{
-				Endpoints: []string{"http://endpoint:9000"},
-				UseGzip:   true,
+				Endpoints:             []string{"http://endpoint:9000"},
+				UseGzip:               true,
+				GzipCompressionLevel_: gzipCompressionLevelBestSpeed,
 			},
 			body: "test",
 			want: wantData{
