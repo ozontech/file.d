@@ -1,6 +1,7 @@
 package remove_fields
 
 import (
+	"slices"
 	"strings"
 
 	"github.com/ozontech/file.d/cfg"
@@ -24,7 +25,7 @@ type Config struct {
 	// > @3@4@5@6
 	// >
 	// > The list of the fields to remove. Nested fields supported.
-	Fields []cfg.FieldSelector `json:"fields"` // *
+	Fields []string `json:"fields"` // *
 }
 
 func init() {
@@ -46,7 +47,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, _ *pipeline.ActionPluginParams
 
 	fieldPaths := make([][]string, 0, len(p.config.Fields))
 	for _, field := range p.config.Fields {
-		fieldPath := cfg.ParseFieldSelector(string(field))
+		fieldPath := cfg.ParseFieldSelector(field)
 
 		// Setting empty path leads to digging immortal root node
 		if len(fieldPath) == 0 {
@@ -64,6 +65,14 @@ func (p *Plugin) Start(config pipeline.AnyConfig, _ *pipeline.ActionPluginParams
 	for i := range fieldPaths {
 		for j := range fieldPaths {
 			if i == j {
+				continue
+			}
+
+			if slices.Equal(fieldPaths[i], fieldPaths[j]) {
+				logger.Warnf(
+					"duplicate path '%s' found; remove extra occurrence",
+					strings.Join(fieldPaths[i], "."),
+				)
 				continue
 			}
 
