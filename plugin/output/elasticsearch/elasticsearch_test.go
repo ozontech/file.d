@@ -124,9 +124,8 @@ func TestPrepareRequest(t *testing.T) {
 		name   string
 		config *Config
 
-		body    string
-		want    wantData
-		wantErr bool
+		body string
+		want wantData
 	}{
 		{
 			name: "raw",
@@ -172,11 +171,7 @@ func TestPrepareRequest(t *testing.T) {
 			req := fasthttp.AcquireRequest()
 			defer fasthttp.ReleaseRequest(req)
 
-			err := p.prepareRequest(req, p.endpoints[0], []byte(tt.body))
-			if tt.wantErr {
-				require.Error(t, err)
-				return
-			}
+			p.prepareRequest(req, p.endpoints[0], []byte(tt.body))
 
 			require.Equal(t, tt.want.uri, req.URI().String(), "wrong uri")
 			require.Equal(t, tt.want.method, req.Header.Method(), "wrong method")

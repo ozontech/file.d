@@ -333,9 +333,7 @@ func (p *Plugin) send(body []byte) error {
 	defer fasthttp.ReleaseResponse(resp)
 
 	endpoint := p.endpoints[rand.Int()%len(p.endpoints)]
-	if err := p.prepareRequest(req, endpoint, body); err != nil {
-		return err
-	}
+	p.prepareRequest(req, endpoint, body)
 
 	if err := p.client.DoTimeout(req, resp, p.config.ConnectionTimeout_); err != nil {
 		return fmt.Errorf("can't send batch to %s: %s", endpoint.String(), err.Error())
@@ -358,7 +356,7 @@ func (p *Plugin) send(body []byte) error {
 	return nil
 }
 
-func (p *Plugin) prepareRequest(req *fasthttp.Request, endpoint *fasthttp.URI, body []byte) error {
+func (p *Plugin) prepareRequest(req *fasthttp.Request, endpoint *fasthttp.URI, body []byte) {
 	req.SetURI(endpoint)
 
 	req.Header.SetMethod(fasthttp.MethodPost)
@@ -369,15 +367,14 @@ func (p *Plugin) prepareRequest(req *fasthttp.Request, endpoint *fasthttp.URI, b
 	}
 
 	if p.config.UseGzip {
-		req.Header.SetContentEncoding(gzipContentEncoding)
 		if _, err := fasthttp.WriteGzip(req.BodyWriter(), body); err != nil {
-			return fmt.Errorf("can't create gzipped request: %w", err)
+			req.SetBodyRaw(body)
+		} else {
+			req.Header.SetContentEncoding(gzipContentEncoding)
 		}
 	} else {
 		req.SetBodyRaw(body)
 	}
-
-	return nil
 }
 
 func (p *Plugin) appendEvent(outBuf []byte, event *pipeline.Event) []byte {

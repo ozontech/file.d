@@ -274,9 +274,7 @@ func (p *Plugin) send(data []byte) (int, error) {
 	resp := fasthttp.AcquireResponse()
 	defer fasthttp.ReleaseResponse(resp)
 
-	if err := p.prepareRequest(req, data); err != nil {
-		return 0, err
-	}
+	p.prepareRequest(req, data)
 
 	if err := p.client.DoTimeout(req, resp, p.config.RequestTimeout_); err != nil {
 		return 0, fmt.Errorf("can't send request: %w", err)
@@ -292,22 +290,21 @@ func (p *Plugin) send(data []byte) (int, error) {
 	return statusCode, parseSplunkError(respBody)
 }
 
-func (p *Plugin) prepareRequest(req *fasthttp.Request, body []byte) error {
+func (p *Plugin) prepareRequest(req *fasthttp.Request, body []byte) {
 	req.SetURI(p.endpoint)
 
 	req.Header.SetMethod(fasthttp.MethodPost)
 	req.Header.Set(fasthttp.HeaderAuthorization, p.authHeader)
 
 	if p.config.UseGzip {
-		req.Header.SetContentEncoding(gzipContentEncoding)
 		if _, err := fasthttp.WriteGzip(req.BodyWriter(), body); err != nil {
-			return fmt.Errorf("can't create gzipped request: %w", err)
+			req.SetBodyRaw(body)
+		} else {
+			req.Header.SetContentEncoding(gzipContentEncoding)
 		}
 	} else {
 		req.SetBodyRaw(body)
 	}
-
-	return nil
 }
 
 func parseSplunkError(data []byte) error {
