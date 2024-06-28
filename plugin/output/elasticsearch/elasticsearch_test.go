@@ -6,6 +6,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/valyala/fasthttp"
 	insaneJSON "github.com/vitkovskii/insane-json"
 
 	"github.com/ozontech/file.d/pipeline"
@@ -106,5 +107,86 @@ func TestConfig(t *testing.T) {
 	require.Len(t, p.endpoints, len(results))
 	for i := range results {
 		assert.Equal(t, results[i], p.endpoints[i].String())
+	}
+}
+
+func TestPrepareRequest(t *testing.T) {
+	type wantData struct {
+		uri             string
+		method          []byte
+		contentType     []byte
+		contentEncoding []byte
+		auth            []byte
+		body            []byte
+	}
+
+	cases := []struct {
+		name   string
+		config *Config
+
+		body string
+		want wantData
+	}{
+		{
+			name: "raw",
+			config: &Config{
+				Endpoints: []string{"http://endpoint:9000"},
+				APIKey:    "test",
+			},
+			body: "test",
+			want: wantData{
+				uri:         "http://endpoint:9000/_bulk?_source=false",
+				method:      []byte(fasthttp.MethodPost),
+				contentType: []byte(NDJSONContentType),
+				auth:        []byte("ApiKey test"),
+				body:        []byte("test"),
+			},
+		},
+		{
+			name: "gzip",
+			config: &Config{
+				Endpoints:             []string{"http://endpoint:9000"},
+				UseGzip:               true,
+				GzipCompressionLevel_: gzipCompressionLevelBestSpeed,
+			},
+			body: "test",
+			want: wantData{
+				uri:             "http://endpoint:9000/_bulk?_source=false",
+				method:          []byte(fasthttp.MethodPost),
+				contentType:     []byte(NDJSONContentType),
+				contentEncoding: []byte(gzipContentEncoding),
+				body:            []byte("test"),
+			},
+		},
+	}
+	for _, tt := range cases {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			p := Plugin{
+				config: tt.config,
+			}
+			p.prepareClient()
+
+			req := fasthttp.AcquireRequest()
+			defer fasthttp.ReleaseRequest(req)
+
+			p.prepareRequest(req, p.endpoints[0], []byte(tt.body))
+
+			require.Equal(t, tt.want.uri, req.URI().String(), "wrong uri")
+			require.Equal(t, tt.want.method, req.Header.Method(), "wrong method")
+			require.Equal(t, tt.want.contentType, req.Header.ContentType(), "wrong content type")
+			require.Equal(t, tt.want.contentEncoding, req.Header.ContentEncoding(), "wrong content encoding")
+			require.Equal(t, tt.want.auth, req.Header.PeekBytes(strAuthorization), "wrong auth")
+
+			var body []byte
+			if tt.config.UseGzip {
+				body, _ = req.BodyUncompressed()
+			} else {
+				body = req.Body()
+			}
+			require.Equal(t, tt.want.body, body, "wrong body")
+		})
 	}
 }
