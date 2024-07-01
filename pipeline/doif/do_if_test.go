@@ -989,6 +989,38 @@ func TestCheck(t *testing.T) {
 				{getTsLog(timestamp.Add(2 * time.Second)), true},
 			},
 		},
+		{
+			name: "ts_cmp_eq",
+			tree: treeNode{
+				tsCmpOp:    true,
+				cmpOp:      "eq",
+				fieldName:  "ts",
+				tsFormat:   time.RFC3339,
+				tsCmpMode:  "explicit",
+				tsCmpValue: timestamp,
+			},
+			data: []argsResp{
+				{getTsLog(timestamp.Add(-1 * time.Second)), false},
+				{getTsLog(timestamp), true},
+				{getTsLog(timestamp.Add(1 * time.Second)), false},
+			},
+		},
+		{
+			name: "ts_cmp_ne",
+			tree: treeNode{
+				tsCmpOp:    true,
+				cmpOp:      "ne",
+				fieldName:  "ts",
+				tsFormat:   time.RFC3339,
+				tsCmpMode:  "explicit",
+				tsCmpValue: timestamp,
+			},
+			data: []argsResp{
+				{getTsLog(timestamp.Add(-1 * time.Second)), true},
+				{getTsLog(timestamp), false},
+				{getTsLog(timestamp.Add(1 * time.Second)), true},
+			},
+		},
 	}
 	for _, tt := range tests {
 		tt := tt
