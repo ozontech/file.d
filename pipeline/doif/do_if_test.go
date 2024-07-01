@@ -1094,6 +1094,34 @@ func TestCheckLenCmpLtObject(t *testing.T) {
 	}
 }
 
+func TestCheckTsCmpModeNow(t *testing.T) {
+	const (
+		format = "2006-01-02T15:04:05.999Z07:00"
+		dt     = 20 * time.Millisecond
+	)
+
+	ts := time.Now().Add(dt)
+
+	root, err := buildTree(treeNode{
+		tsCmpOp:   true,
+		fieldName: "ts",
+		cmpOp:     "lt",
+		tsFormat:  format,
+		tsCmpMode: "now",
+	})
+	require.NoError(t, err)
+
+	checker := NewChecker(root)
+
+	eventRoot, err := insaneJSON.DecodeString(fmt.Sprintf(`{"ts":"%s"}`, ts.Format(format)))
+	require.NoError(t, err)
+	defer insaneJSON.Release(eventRoot)
+
+	require.False(t, checker.Check(eventRoot))
+	time.Sleep(2 * dt)
+	require.True(t, checker.Check(eventRoot))
+}
+
 func TestNodeIsEqual(t *testing.T) {
 	ts := time.Now()
 

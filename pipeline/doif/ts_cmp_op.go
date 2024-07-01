@@ -65,8 +65,6 @@ func NewTsCmpOpNode(field string, format string, cmpOp string, cmpMode string, c
 	}, nil
 }
 
-const notImpl = "not implemented"
-
 func (n *tsCmpOpNode) Type() NodeType {
 	return NodeTimestampCmpOp
 }
