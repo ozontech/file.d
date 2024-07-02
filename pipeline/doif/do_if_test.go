@@ -1664,6 +1664,24 @@ func TestNodeIsEqual(t *testing.T) {
 			wantErr: true,
 		},
 		{
+			name: "not_equal_ts_cmp_op_mismatch_value",
+			t1: treeNode{
+				tsCmpOp:    true,
+				tsFormat:   time.RFC3339,
+				cmpOp:      "lt",
+				tsCmpMode:  "explicit",
+				tsCmpValue: ts,
+			},
+			t2: treeNode{
+				tsCmpOp:    true,
+				tsFormat:   time.RFC3339,
+				cmpOp:      "lt",
+				tsCmpMode:  "explicit",
+				tsCmpValue: ts.Add(1 * time.Second),
+			},
+			wantErr: true,
+		},
+		{
 			name: "not_equal_ts_cmp_op_mismatch_field",
 			t1: treeNode{
 				tsCmpOp:    true,
