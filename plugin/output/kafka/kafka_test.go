@@ -4,12 +4,12 @@
 package kafka
 
 import (
+	"context"
 	"fmt"
 	"testing"
 
-	"github.com/Shopify/sarama"
 	"github.com/ozontech/file.d/pipeline"
-	"github.com/stretchr/testify/require"
+	"github.com/twmb/franz-go/pkg/kgo"
 	insaneJSON "github.com/vitkovskii/insane-json"
 	"go.uber.org/zap/zaptest"
 )
@@ -23,61 +23,12 @@ type mockProducer struct {
 	t *testing.T
 }
 
-func (m *mockProducer) TxnStatus() sarama.ProducerTxnStatusFlag {
-	return 0
-}
-
-func (m *mockProducer) IsTransactional() bool {
-	return false
-}
-
-func (m *mockProducer) BeginTxn() error {
+func (m *mockProducer) ProduceSync(ctx context.Context, rs ...*kgo.Record) kgo.ProduceResults {
 	return nil
 }
 
-func (m *mockProducer) CommitTxn() error {
-	return nil
-}
+func (m *mockProducer) Close() {
 
-func (m *mockProducer) AbortTxn() error {
-	return nil
-}
-
-func (m *mockProducer) AddOffsetsToTxn(offsets map[string][]*sarama.PartitionOffsetMetadata, groupId string) error {
-	return nil
-}
-
-func (m *mockProducer) AddMessageToTxn(msg *sarama.ConsumerMessage, groupId string, metadata *string) error {
-	return nil
-}
-
-func (m *mockProducer) ensureTopic(msg *sarama.ProducerMessage) {
-	val, err := msg.Value.Encode()
-	require.NoError(m.t, err)
-	j, err := insaneJSON.DecodeBytes(val)
-	if err != nil {
-		m.t.Fatalf("decoding json: %v", err)
-	}
-	topic := j.Dig(topicField).AsString()
-	if msg.Topic != topic && (topic == "" && msg.Topic != defaultTopic) {
-		m.t.Fatalf("wrong topic: %s, expecting: %s for message: %s", msg.Topic, topic, string(val))
-	}
-}
-
-func (m *mockProducer) SendMessage(msg *sarama.ProducerMessage) (partition int32, offset int64, err error) {
-	m.ensureTopic(msg)
-	return -1, -1, nil
-}
-
-func (m *mockProducer) SendMessages(msgs []*sarama.ProducerMessage) error {
-	for _, msg := range msgs {
-		m.ensureTopic(msg)
-	}
-	return nil
-}
-
-func (m *mockProducer) Close() error {
-	return nil
 }
 
 func newEvent(t *testing.T, topicField, topicVal, key, val string) *pipeline.Event {
@@ -113,12 +64,12 @@ func FuzzKafka(f *testing.F) {
 		config:       &config,
 		avgEventSize: 10,
 		controller:   nil,
-		producer:     nil,
+		client:       nil,
 		batcher:      nil,
 	}
 
 	f.Fuzz(func(t *testing.T, topicField, topicVal, key, val string) {
-		p.producer = &mockProducer{
+		p.client = &mockProducer{
 			t: t,
 		}
 

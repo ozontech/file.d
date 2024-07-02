@@ -136,7 +136,7 @@ pipelines:
 
 [More details...](plugin/input/k8s/README.md)
 ## kafka
-It reads events from multiple Kafka topics using `sarama` library.
+It reads events from multiple Kafka topics using `franz-go` library.
 > It guarantees at "at-least-once delivery" due to the commitment mechanism.
 
 **Example**
