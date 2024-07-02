@@ -24,7 +24,13 @@ type Plugin struct {
 type Config struct {
 	// > @3@4@5@6
 	// >
-	// > The list of the fields to remove. Nested fields supported.
+	// > The list of the fields to remove.
+	// > Nested fields supported: list subfield names separated with dot.
+	// > Example:
+	// > ```
+	// > fields: ["a.b.c"]
+	// > {"a":{"b":{"c": 100}}} -> {"a":{"b":{}}}
+	// > ```
 	Fields []string `json:"fields"` // *
 }
 
@@ -72,7 +78,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, _ *pipeline.ActionPluginParams
 			}
 
 			if strings.HasPrefix(f1, f2) {
-				logger.Warnf("path '%s' included in '%s' path; remove nested path", f1, f2)
+				logger.Warnf("path '%s' included in path '%s'; remove nested path", f1, f2)
 				ok = false
 				break
 			}
