@@ -46,51 +46,48 @@ func (p *Plugin) Start(config pipeline.AnyConfig, _ *pipeline.ActionPluginParams
 	}
 
 	fieldPaths := make([][]string, 0, len(p.config.Fields))
-	for _, field := range p.config.Fields {
-		fieldPath := cfg.ParseFieldSelector(field)
+	for i, field := range p.config.Fields {
+		if field == "" {
+			logger.Fatalf("empty field; pos = %d", i)
+		}
 
-		// Setting empty path leads to digging immortal root node
+		fieldPath := cfg.ParseFieldSelector(field)
 		if len(fieldPath) == 0 {
-			logger.Fatalf("can't remove entire object; use discard plugin instead")
+			logger.Fatalf("empty field selector parsed; field pos = %d", i)
 		}
 
 		fieldPaths = append(fieldPaths, fieldPath)
 	}
 
-	ok := make([]bool, len(fieldPaths))
-	for i := range ok {
-		ok[i] = true
-	}
+	p.fieldPaths = make([][]string, 0, len(fieldPaths))
 
-	for i := range fieldPaths {
-		for j := range fieldPaths {
+	for i, p1 := range fieldPaths {
+		ok := true
+		for j, p2 := range fieldPaths {
 			if i == j {
 				continue
 			}
 
-			if slices.Equal(fieldPaths[i], fieldPaths[j]) {
+			if slices.Equal(p1, p2) {
 				logger.Warnf(
 					"duplicate path '%s' found; remove extra occurrence",
-					strings.Join(fieldPaths[i], "."),
+					strings.Join(p1, "."),
 				)
 				continue
 			}
 
-			if includes(fieldPaths[i], fieldPaths[j]) {
+			if includes(p2, p1) {
 				logger.Warnf(
 					"'%s' path includes '%s' path; remove nested path",
-					strings.Join(fieldPaths[i], "."),
-					strings.Join(fieldPaths[j], "."),
+					strings.Join(p2, "."),
+					strings.Join(p1, "."),
 				)
-				ok[j] = false
+				ok = false
 			}
 		}
-	}
 
-	p.fieldPaths = make([][]string, 0, len(fieldPaths))
-	for i, fieldPath := range fieldPaths {
-		if ok[i] {
-			p.fieldPaths = append(p.fieldPaths, fieldPath)
+		if ok {
+			p.fieldPaths = append(p.fieldPaths, p1)
 		}
 	}
 }
