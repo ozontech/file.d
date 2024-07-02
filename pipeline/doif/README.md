@@ -10,7 +10,11 @@ the chain of Match func calls are performed across the whole tree.
 
 <br>
 
-**`LengthCmpOp`** Type of node where matching rules for byte length and array length are stored
+**`LengthCmpOp`** Type of node where matching rules for byte length and array length are stored.
+
+<br>
+
+**`TimestampCmpOp`** Type of node where mathing rules for timestamps are stored.
 
 <br>
 

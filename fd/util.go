@@ -214,6 +214,9 @@ var (
 		"byte_len_cmp":  {},
 		"array_len_cmp": {},
 	}
+	doIfTimestampCmpOpNodes = map[string]struct{}{
+		"ts_cmp": {},
+	}
 )
 
 func extractFieldOpVals(jsonNode *simplejson.Json) [][]byte {
@@ -298,6 +301,75 @@ func extractLengthCmpOpNode(opName string, jsonNode *simplejson.Json) (doif.Node
 	return doif.NewLenCmpOpNode(opName, fieldPath, cmpOp, cmpValue)
 }
 
+const (
+	fieldNameFormat = "format"
+)
+
+const (
+	tsCmpModeNowTag      = "now"
+	tsCmpModeExplicitTag = "explicit"
+
+	tsCmpValueNowTag   = "now"
+	tsCmpValueStartTag = "file_d_start"
+)
+
+func extractTsCmpOpNode(_ string, jsonNode *simplejson.Json) (doif.Node, error) {
+	fieldPathNode, has := jsonNode.CheckGet(fieldNameField)
+	if !has {
+		return nil, noRequiredFieldError(fieldNameField)
+	}
+	fieldPath, err := fieldPathNode.String()
+	if err != nil {
+		return nil, err
+	}
+
+	formatNode, has := jsonNode.CheckGet(fieldNameFormat)
+	if !has {
+		return nil, noRequiredFieldError(fieldNameFormat)
+	}
+	format, err := formatNode.String()
+	if err != nil {
+		return nil, err
+	}
+
+	cmpOpNode, has := jsonNode.CheckGet(fieldNameCmpOp)
+	if !has {
+		return nil, noRequiredFieldError(fieldNameCmpOp)
+	}
+	cmpOp, err := cmpOpNode.String()
+	if err != nil {
+		return nil, err
+	}
+
+	rawCmpValueNode, has := jsonNode.CheckGet(fieldNameCmpValue)
+	if !has {
+		return nil, noRequiredFieldError(fieldNameCmpValue)
+	}
+	rawCmpValue, err := rawCmpValueNode.String()
+	if err != nil {
+		return nil, err
+	}
+
+	var cmpMode string
+	var cmpValue time.Time
+
+	switch rawCmpValue {
+	case tsCmpValueNowTag:
+		cmpMode = tsCmpModeNowTag
+	case tsCmpValueStartTag:
+		cmpMode = tsCmpModeExplicitTag
+		cmpValue = time.Now()
+	default:
+		cmpMode = tsCmpModeExplicitTag
+		cmpValue, err = time.Parse(time.RFC3339Nano, rawCmpValue)
+		if err != nil {
+			return nil, fmt.Errorf("parse ts cmp value: %w", err)
+		}
+	}
+
+	return doif.NewTsCmpOpNode(fieldPath, format, cmpOp, cmpMode, cmpValue)
+}
+
 func extractLogicalOpNode(opName string, jsonNode *simplejson.Json) (doif.Node, error) {
 	var result, operand doif.Node
 	var err error
@@ -330,6 +402,8 @@ func extractDoIfNode(jsonNode *simplejson.Json) (doif.Node, error) {
 		return extractFieldOpNode(opName, jsonNode)
 	} else if _, has := doIfLengthCmpOpNodes[opName]; has {
 		return extractLengthCmpOpNode(opName, jsonNode)
+	} else if _, has := doIfTimestampCmpOpNodes[opName]; has {
+		return extractTsCmpOpNode(opName, jsonNode)
 	} else {
 		return nil, fmt.Errorf("unknown op %q", opName)
 	}
