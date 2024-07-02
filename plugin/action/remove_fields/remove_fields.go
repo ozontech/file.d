@@ -1,7 +1,7 @@
 package remove_fields
 
 import (
-	"slices"
+	"sort"
 	"strings"
 
 	"github.com/ozontech/file.d/cfg"
@@ -45,64 +45,43 @@ func (p *Plugin) Start(config pipeline.AnyConfig, _ *pipeline.ActionPluginParams
 		logger.Panicf("config is nil for the remove fields plugin")
 	}
 
-	fieldPaths := make([][]string, 0, len(p.config.Fields))
-	for i, field := range p.config.Fields {
-		if field == "" {
+	fields := p.config.Fields
+	sort.Slice(fields, func(i, j int) bool {
+		return len(fields[i]) < len(fields[j])
+	})
+
+	p.fieldPaths = make([][]string, 0, len(fields))
+
+	for i, f1 := range fields {
+		if f1 == "" {
 			logger.Fatalf("empty field; pos = %d", i)
 		}
 
-		fieldPath := cfg.ParseFieldSelector(field)
+		fieldPath := cfg.ParseFieldSelector(f1)
 		if len(fieldPath) == 0 {
 			logger.Fatalf("empty field selector parsed; field pos = %d", i)
 		}
 
-		fieldPaths = append(fieldPaths, fieldPath)
-	}
-
-	p.fieldPaths = make([][]string, 0, len(fieldPaths))
-
-	for i, p1 := range fieldPaths {
 		ok := true
-		for j, p2 := range fieldPaths {
-			if i == j {
+		for j := 0; j < i; j++ {
+			f2 := fields[j]
+
+			if f1 == f2 {
+				logger.Warnf("duplicate path '%s' found; remove extra occurrences", f1)
 				continue
 			}
 
-			if slices.Equal(p1, p2) {
-				logger.Warnf(
-					"duplicate path '%s' found; remove extra occurrence",
-					strings.Join(p1, "."),
-				)
-				continue
-			}
-
-			if includes(p2, p1) {
-				logger.Warnf(
-					"'%s' path includes '%s' path; remove nested path",
-					strings.Join(p2, "."),
-					strings.Join(p1, "."),
-				)
+			if strings.HasPrefix(f1, f2) {
+				logger.Warnf("path '%s' included in '%s' path; remove nested path", f1, f2)
 				ok = false
+				break
 			}
 		}
 
 		if ok {
-			p.fieldPaths = append(p.fieldPaths, p1)
+			p.fieldPaths = append(p.fieldPaths, fieldPath)
 		}
 	}
-}
-
-func includes(a, b []string) bool {
-	if !(len(a) <= len(b)) {
-		return false
-	}
-
-	result := true
-	for i := 0; i < len(a); i++ {
-		result = result && a[i] == b[i]
-	}
-
-	return result
 }
 
 func (p *Plugin) Stop() {
