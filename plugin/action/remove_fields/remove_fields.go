@@ -29,7 +29,43 @@ type Config struct {
 	// > Example:
 	// > ```
 	// > fields: ["a.b.c"]
-	// > {"a":{"b":{"c": 100}}} -> {"a":{"b":{}}}
+	// >
+	// > # event before processing
+	// > {
+	// >   "a": {
+	// >     "b": {
+	// >       "c": 100,
+	// >       "d": "some"
+	// >     }
+	// >   }
+	// > }
+	// >
+	// > # event after processing
+	// > {
+	// >   "a": {
+	// >     "b": {
+	// >       "d": "some" # "c" removed
+	// >     }
+	// >   }
+	// > }
+	// > ```
+	// >
+	// > If field name contains dots use backslash for escaping.
+	// > Example:
+	// > ```
+	// > fields:
+	// >   - exception\.type
+	// >
+	// > # event before processing
+	// > {
+	// >   "message": "Exception occurred",
+	// >   "exception.type": "SomeType"
+	// > }
+	// >
+	// > # event after processing
+	// > {
+	// >   "message": "Exception occurred" # "exception.type" removed
+	// > }
 	// > ```
 	Fields []string `json:"fields"` // *
 }
@@ -60,23 +96,11 @@ func (p *Plugin) Start(config pipeline.AnyConfig, _ *pipeline.ActionPluginParams
 
 	for i, f1 := range fields {
 		if f1 == "" {
-			logger.Fatalf("empty field; pos = %d", i)
-		}
-
-		fieldPath := cfg.ParseFieldSelector(f1)
-		if len(fieldPath) == 0 {
-			logger.Fatalf("empty field selector parsed; field pos = %d", i)
+			logger.Fatal("empty field found")
 		}
 
 		ok := true
-		for j := 0; j < i; j++ {
-			f2 := fields[j]
-
-			if f1 == f2 {
-				logger.Warnf("duplicate path '%s' found; remove extra occurrences", f1)
-				continue
-			}
-
+		for _, f2 := range fields[:i] {
 			if strings.HasPrefix(f1, f2) {
 				logger.Warnf("path '%s' included in path '%s'; remove nested path", f1, f2)
 				ok = false
@@ -85,7 +109,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, _ *pipeline.ActionPluginParams
 		}
 
 		if ok {
-			p.fieldPaths = append(p.fieldPaths, fieldPath)
+			p.fieldPaths = append(p.fieldPaths, cfg.ParseFieldSelector(f1))
 		}
 	}
 }
