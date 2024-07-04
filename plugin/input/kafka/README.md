@@ -95,7 +95,7 @@ BalancerPlan
 
 **`consumer_max_processing_time`** *`cfg.Duration`* *`default=200ms`* 
 
-The maximum amount of time the consumer expects a message takes to process for the user.
+The maximum amount of time the consumer expects a message takes to process for the user. (Not used anymore!)
 
 <br>
 

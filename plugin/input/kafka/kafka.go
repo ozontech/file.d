@@ -130,7 +130,7 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
-	// > The maximum amount of time the consumer expects a message takes to process for the user.
+	// > The maximum amount of time the consumer expects a message takes to process for the user. (Not used anymore!)
 	ConsumerMaxProcessingTime  cfg.Duration `json:"consumer_max_processing_time" default:"200ms" parse:"duration"` // *
 	ConsumerMaxProcessingTime_ time.Duration
 
@@ -212,6 +212,39 @@ type Config struct {
 	// >
 	// > Example: ```topic: '{{ .topic }}'```
 	Meta cfg.MetaTemplates `json:"meta"` // *
+}
+
+func (c *Config) GetBrokers() []string {
+	return c.Brokers
+}
+
+func (c *Config) GetClientID() string {
+	return c.ClientID
+}
+
+func (c *Config) IsSaslEnabled() bool {
+	return c.SaslEnabled
+}
+
+func (c *Config) GetSaslConfig() cfg.KafkaClientSaslConfig {
+	return cfg.KafkaClientSaslConfig{
+		SaslMechanism: c.SaslMechanism,
+		SaslUsername:  c.SaslUsername,
+		SaslPassword:  c.SaslPassword,
+	}
+}
+
+func (c *Config) IsSslEnabled() bool {
+	return c.SslEnabled
+}
+
+func (c *Config) GetSslConfig() cfg.KafkaClientSslConfig {
+	return cfg.KafkaClientSslConfig{
+		CACert:        c.CACert,
+		ClientCert:    c.ClientCert,
+		ClientKey:     c.ClientKey,
+		SslSkipVerify: c.SslSkipVerify,
+	}
 }
 
 func init() {

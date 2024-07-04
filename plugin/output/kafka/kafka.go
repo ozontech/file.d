@@ -179,6 +179,39 @@ type Config struct {
 	CACert string `json:"ca_cert"` // *
 }
 
+func (c *Config) GetBrokers() []string {
+	return c.Brokers
+}
+
+func (c *Config) GetClientID() string {
+	return c.ClientID
+}
+
+func (c *Config) IsSaslEnabled() bool {
+	return c.SaslEnabled
+}
+
+func (c *Config) GetSaslConfig() cfg.KafkaClientSaslConfig {
+	return cfg.KafkaClientSaslConfig{
+		SaslMechanism: c.SaslMechanism,
+		SaslUsername:  c.SaslUsername,
+		SaslPassword:  c.SaslPassword,
+	}
+}
+
+func (c *Config) IsSslEnabled() bool {
+	return c.SslEnabled
+}
+
+func (c *Config) GetSslConfig() cfg.KafkaClientSslConfig {
+	return cfg.KafkaClientSslConfig{
+		CACert:        c.CACert,
+		ClientCert:    c.ClientCert,
+		ClientKey:     c.ClientKey,
+		SslSkipVerify: c.SslSkipVerify,
+	}
+}
+
 func init() {
 	fd.DefaultPluginRegistry.RegisterOutput(&pipeline.PluginStaticInfo{
 		Type:    outPluginType,

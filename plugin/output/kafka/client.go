@@ -2,16 +2,10 @@ package kafka
 
 import (
 	"context"
-	"crypto/tls"
-	"os"
 	"time"
 
+	"github.com/ozontech/file.d/cfg"
 	"github.com/twmb/franz-go/pkg/kgo"
-	"github.com/twmb/franz-go/pkg/sasl/aws"
-	"github.com/twmb/franz-go/pkg/sasl/plain"
-	"github.com/twmb/franz-go/pkg/sasl/scram"
-	"github.com/twmb/franz-go/plugin/kzap"
-	"github.com/twmb/tlscfg"
 	"go.uber.org/zap"
 )
 
@@ -21,78 +15,13 @@ type KafkaClient interface {
 }
 
 func NewClient(c *Config, l *zap.SugaredLogger) *kgo.Client {
-	opts := []kgo.Opt{
-		kgo.SeedBrokers(c.Brokers...),
-		kgo.ClientID(c.ClientID),
+	opts := cfg.GetKafkaClientOptions(c, l)
+	opts = append(opts, []kgo.Opt{
 		kgo.DefaultProduceTopic(c.DefaultTopic),
-		kgo.WithLogger(kzap.New(l.Desugar())),
 		kgo.MaxBufferedRecords(c.BatchSize_),
 		kgo.ProducerBatchMaxBytes(int32(c.MaxMessageBytes_)),
 		kgo.ProducerLinger(1 * time.Millisecond),
-	}
-
-	if c.SaslEnabled {
-		switch c.SaslMechanism {
-		case "PLAIN":
-			opts = append(opts, kgo.SASL(plain.Auth{
-				User: c.SaslUsername,
-				Pass: c.SaslPassword,
-			}.AsMechanism()))
-		case "SCRAM-SHA-256":
-			opts = append(opts, kgo.SASL(scram.Auth{
-				User: c.SaslUsername,
-				Pass: c.SaslPassword,
-			}.AsSha256Mechanism()))
-		case "SCRAM-SHA-512":
-			opts = append(opts, kgo.SASL(scram.Auth{
-				User: c.SaslUsername,
-				Pass: c.SaslPassword,
-			}.AsSha512Mechanism()))
-		case "AWS_MSK_IAM":
-			opts = append(opts, kgo.SASL(aws.Auth{
-				AccessKey: c.SaslUsername,
-				SecretKey: c.SaslPassword,
-			}.AsManagedStreamingIAMMechanism()))
-		}
-		opts = append(opts, kgo.DialTLSConfig(new(tls.Config)))
-	}
-
-	if c.SslEnabled {
-		tlsOpts := []tlscfg.Opt{}
-		if c.CACert != "" || c.ClientCert != "" || c.ClientKey != "" {
-			if c.CACert != "" {
-				if _, err := os.Stat(c.CACert); err != nil {
-					tlsOpts = append(tlsOpts,
-						tlscfg.WithCA(
-							[]byte(c.CACert), tlscfg.ForClient,
-						),
-					)
-				} else {
-					tlsOpts = append(tlsOpts,
-						tlscfg.MaybeWithDiskCA(c.CACert, tlscfg.ForClient),
-					)
-				}
-			}
-
-			if _, err := os.Stat(c.ClientCert); err != nil {
-				tlsOpts = append(tlsOpts,
-					tlscfg.WithKeyPair(
-						[]byte(c.ClientCert), []byte(c.ClientKey),
-					),
-				)
-			} else {
-				tlsOpts = append(tlsOpts,
-					tlscfg.MaybeWithDiskKeyPair(c.ClientCert, c.ClientKey),
-				)
-			}
-		}
-		tc, err := tlscfg.New(tlsOpts...)
-		if err != nil {
-			l.Fatalf("unable to create tls config: %v", err)
-		}
-		tc.InsecureSkipVerify = c.SslSkipVerify
-		opts = append(opts, kgo.DialTLSConfig(tc))
-	}
+	}...)
 
 	switch c.Compression {
 	case "none":
