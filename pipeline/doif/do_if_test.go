@@ -26,10 +26,11 @@ type treeNode struct {
 	cmpOp    string
 	cmpValue int
 
-	tsCmpOp    bool
-	tsFormat   string
-	tsCmpMode  string
-	tsCmpValue time.Time
+	tsCmpOp          bool
+	tsFormat         string
+	tsCmpValChMode   string
+	tsCmpValue       time.Time
+	tsUpdateInterval time.Duration
 }
 
 // nolint:gocritic
@@ -58,7 +59,14 @@ func buildTree(node treeNode) (Node, error) {
 	case node.lenCmpOp != "":
 		return NewLenCmpOpNode(node.lenCmpOp, node.fieldName, node.cmpOp, node.cmpValue)
 	case node.tsCmpOp:
-		return NewTsCmpOpNode(node.fieldName, node.tsFormat, node.cmpOp, node.tsCmpMode, node.tsCmpValue)
+		return NewTsCmpOpNode(
+			node.fieldName,
+			node.tsFormat,
+			node.cmpOp,
+			node.tsCmpValChMode,
+			node.tsCmpValue,
+			node.tsUpdateInterval,
+		)
 	default:
 		return nil, errors.New("unknown type of node")
 	}
@@ -120,8 +128,9 @@ func checkNode(t *testing.T, want, got Node) {
 		gotNode := got.(*tsCmpOpNode)
 		assert.Equal(t, wantNode.format, gotNode.format)
 		assert.Equal(t, wantNode.cmpOp, gotNode.cmpOp)
-		assert.Equal(t, wantNode.cmpMode, gotNode.cmpMode)
-		assert.Equal(t, wantNode.cmpValue, gotNode.cmpValue)
+		assert.Equal(t, wantNode.cmpValChMode, gotNode.cmpValChMode)
+		assert.Equal(t, wantNode.constCmpValue, gotNode.constCmpValue)
+		assert.Equal(t, wantNode.updateInterval, gotNode.updateInterval)
 		assert.Equal(t, 0, slices.Compare[[]string](wantNode.fieldPath, gotNode.fieldPath))
 	default:
 		t.Error("unknown node type")
@@ -324,38 +333,41 @@ func TestBuildNodes(t *testing.T) {
 			},
 		},
 		{
-			name: "ok_ts_cmp_op_node_explicit",
+			name: "ok_ts_cmp_op_node_const",
 			tree: treeNode{
-				tsCmpOp:    true,
-				cmpOp:      "lt",
-				fieldName:  "items",
-				tsCmpMode:  "explicit",
-				tsFormat:   time.RFC3339,
-				tsCmpValue: timestamp,
+				tsCmpOp:        true,
+				cmpOp:          "lt",
+				fieldName:      "items",
+				tsCmpValChMode: "const",
+				tsFormat:       time.RFC3339,
+				tsCmpValue:     timestamp,
 			},
 			want: &tsCmpOpNode{
-				fieldPath: []string{"items"},
-				format:    time.RFC3339,
-				cmpOp:     cmpOpLess,
-				cmpMode:   cmpModeExplicit,
-				cmpValue:  timestamp,
+				fieldPath:     []string{"items"},
+				format:        time.RFC3339,
+				cmpOp:         cmpOpLess,
+				cmpValChMode:  cmpValChModeConst,
+				constCmpValue: timestamp,
 			},
 		},
 		{
 			name: "ok_ts_cmp_op_node_now",
 			tree: treeNode{
-				tsCmpOp:    true,
-				cmpOp:      "lt",
-				fieldName:  "items",
-				tsCmpMode:  "now",
-				tsFormat:   time.RFC3339,
-				tsCmpValue: timestamp, // ignored because of cmp mode
+				tsCmpOp:          true,
+				cmpOp:            "lt",
+				fieldName:        "items",
+				tsCmpValChMode:   "now",
+				tsFormat:         time.RFC3339,
+				tsCmpValue:       timestamp,
+				tsUpdateInterval: 5 * time.Minute,
 			},
 			want: &tsCmpOpNode{
-				fieldPath: []string{"items"},
-				format:    time.RFC3339,
-				cmpOp:     cmpOpLess,
-				cmpMode:   cmpModeNow,
+				fieldPath:      []string{"items"},
+				format:         time.RFC3339,
+				cmpOp:          cmpOpLess,
+				cmpValChMode:   cmpValChModeNow,
+				constCmpValue:  timestamp,
+				updateInterval: 5 * time.Minute,
 			},
 		},
 		{
@@ -434,24 +446,24 @@ func TestBuildNodes(t *testing.T) {
 		{
 			name: "err_ts_cmp_op_node_invalid_op_type",
 			tree: treeNode{
-				tsCmpOp:    true,
-				cmpOp:      "no-op",
-				fieldName:  "items",
-				tsCmpMode:  "explicit",
-				tsFormat:   time.RFC3339,
-				tsCmpValue: timestamp,
+				tsCmpOp:        true,
+				cmpOp:          "no-op",
+				fieldName:      "items",
+				tsCmpValChMode: "const",
+				tsFormat:       time.RFC3339,
+				tsCmpValue:     timestamp,
 			},
 			wantErr: true,
 		},
 		{
-			name: "err_ts_cmp_op_node_invalid_cmp_mode",
+			name: "err_ts_cmp_op_node_invalid_cmp_val_changing_mode",
 			tree: treeNode{
-				tsCmpOp:    true,
-				cmpOp:      "lt",
-				fieldName:  "items",
-				tsCmpMode:  "no-mode",
-				tsFormat:   time.RFC3339,
-				tsCmpValue: timestamp,
+				tsCmpOp:        true,
+				cmpOp:          "lt",
+				fieldName:      "items",
+				tsCmpValChMode: "no-mode",
+				tsFormat:       time.RFC3339,
+				tsCmpValue:     timestamp,
 			},
 			wantErr: true,
 		},
@@ -956,12 +968,12 @@ func TestCheck(t *testing.T) {
 		{
 			name: "ts_cmp_lt",
 			tree: treeNode{
-				tsCmpOp:    true,
-				cmpOp:      "lt",
-				fieldName:  "ts",
-				tsFormat:   time.RFC3339,
-				tsCmpMode:  "explicit",
-				tsCmpValue: timestamp,
+				tsCmpOp:        true,
+				cmpOp:          "lt",
+				fieldName:      "ts",
+				tsFormat:       time.RFC3339,
+				tsCmpValChMode: "const",
+				tsCmpValue:     timestamp,
 			},
 			data: []argsResp{
 				{getTsLog(timestamp.Add(-2 * time.Second)), true},
@@ -974,12 +986,12 @@ func TestCheck(t *testing.T) {
 		{
 			name: "ts_cmp_ge",
 			tree: treeNode{
-				tsCmpOp:    true,
-				cmpOp:      "ge",
-				fieldName:  "ts",
-				tsFormat:   time.RFC3339,
-				tsCmpMode:  "explicit",
-				tsCmpValue: timestamp,
+				tsCmpOp:        true,
+				cmpOp:          "ge",
+				fieldName:      "ts",
+				tsFormat:       time.RFC3339,
+				tsCmpValChMode: "const",
+				tsCmpValue:     timestamp,
 			},
 			data: []argsResp{
 				{getTsLog(timestamp.Add(-2 * time.Second)), false},
@@ -992,12 +1004,12 @@ func TestCheck(t *testing.T) {
 		{
 			name: "ts_cmp_eq",
 			tree: treeNode{
-				tsCmpOp:    true,
-				cmpOp:      "eq",
-				fieldName:  "ts",
-				tsFormat:   time.RFC3339,
-				tsCmpMode:  "explicit",
-				tsCmpValue: timestamp,
+				tsCmpOp:        true,
+				cmpOp:          "eq",
+				fieldName:      "ts",
+				tsFormat:       time.RFC3339,
+				tsCmpValChMode: "const",
+				tsCmpValue:     timestamp,
 			},
 			data: []argsResp{
 				{getTsLog(timestamp.Add(-1 * time.Second)), false},
@@ -1008,12 +1020,12 @@ func TestCheck(t *testing.T) {
 		{
 			name: "ts_cmp_ne",
 			tree: treeNode{
-				tsCmpOp:    true,
-				cmpOp:      "ne",
-				fieldName:  "ts",
-				tsFormat:   time.RFC3339,
-				tsCmpMode:  "explicit",
-				tsCmpValue: timestamp,
+				tsCmpOp:        true,
+				cmpOp:          "ne",
+				fieldName:      "ts",
+				tsFormat:       time.RFC3339,
+				tsCmpValChMode: "const",
+				tsCmpValue:     timestamp,
 			},
 			data: []argsResp{
 				{getTsLog(timestamp.Add(-1 * time.Second)), true},
@@ -1126,31 +1138,28 @@ func TestCheckLenCmpLtObject(t *testing.T) {
 	}
 }
 
-func TestCheckTsCmpModeNow(t *testing.T) {
-	const (
-		format = "2006-01-02T15:04:05.999Z07:00"
-		dt     = 20 * time.Millisecond
-	)
-
-	ts := time.Now().Add(dt)
+func TestCheckTsCmpValChModeNow(t *testing.T) {
+	const dt = 10 * time.Millisecond
+	ts := time.Now().Add(2 * dt)
 
 	root, err := buildTree(treeNode{
-		tsCmpOp:   true,
-		fieldName: "ts",
-		cmpOp:     "lt",
-		tsFormat:  format,
-		tsCmpMode: "now",
+		tsCmpOp:          true,
+		fieldName:        "ts",
+		cmpOp:            "lt",
+		tsFormat:         time.RFC3339Nano,
+		tsCmpValChMode:   "now",
+		tsUpdateInterval: 3 * dt,
 	})
 	require.NoError(t, err)
 
 	checker := NewChecker(root)
 
-	eventRoot, err := insaneJSON.DecodeString(fmt.Sprintf(`{"ts":"%s"}`, ts.Format(format)))
+	eventRoot, err := insaneJSON.DecodeString(fmt.Sprintf(`{"ts":"%s"}`, ts.Format(time.RFC3339Nano)))
 	require.NoError(t, err)
 	defer insaneJSON.Release(eventRoot)
 
 	require.False(t, checker.Check(eventRoot))
-	time.Sleep(2 * dt)
+	time.Sleep(4 * dt)
 	require.True(t, checker.Check(eventRoot))
 }
 
@@ -1176,12 +1185,12 @@ func TestNodeIsEqual(t *testing.T) {
 		cmpValue:  100,
 	}
 	timestampCmpOpNode := treeNode{
-		tsCmpOp:    true,
-		cmpOp:      "ge",
-		fieldName:  "ts",
-		tsFormat:   time.RFC3339,
-		tsCmpMode:  "explicit",
-		tsCmpValue: ts,
+		tsCmpOp:        true,
+		cmpOp:          "ge",
+		fieldName:      "ts",
+		tsFormat:       time.RFC3339,
+		tsCmpValChMode: "const",
+		tsCmpValue:     ts,
 	}
 	twoNodes := treeNode{
 		logicalOp: "not",
@@ -1618,86 +1627,114 @@ func TestNodeIsEqual(t *testing.T) {
 		{
 			name: "not_equal_ts_cmp_op_mismatch_format",
 			t1: treeNode{
-				tsCmpOp:   true,
-				tsFormat:  time.RFC3339,
-				cmpOp:     "lt",
-				tsCmpMode: "now",
+				tsCmpOp:          true,
+				tsFormat:         time.RFC3339,
+				cmpOp:            "lt",
+				tsCmpValChMode:   "now",
+				tsUpdateInterval: 5 * time.Minute,
 			},
 			t2: treeNode{
-				tsCmpOp:   true,
-				tsFormat:  time.RFC3339Nano,
-				cmpOp:     "lt",
-				tsCmpMode: "now",
+				tsCmpOp:          true,
+				tsFormat:         time.RFC3339Nano,
+				cmpOp:            "lt",
+				tsCmpValChMode:   "now",
+				tsUpdateInterval: 5 * time.Minute,
 			},
 			wantErr: true,
 		},
 		{
 			name: "not_equal_ts_cmp_op_mismatch_op",
 			t1: treeNode{
-				tsCmpOp:   true,
-				tsFormat:  time.RFC3339,
-				cmpOp:     "lt",
-				tsCmpMode: "now",
+				tsCmpOp:          true,
+				tsFormat:         time.RFC3339,
+				cmpOp:            "lt",
+				tsCmpValChMode:   "now",
+				tsUpdateInterval: 5 * time.Minute,
 			},
 			t2: treeNode{
-				tsCmpOp:   true,
-				tsFormat:  time.RFC3339,
-				cmpOp:     "gt",
-				tsCmpMode: "now",
+				tsCmpOp:          true,
+				tsFormat:         time.RFC3339,
+				cmpOp:            "gt",
+				tsCmpValChMode:   "now",
+				tsUpdateInterval: 5 * time.Minute,
 			},
 			wantErr: true,
 		},
 		{
 			name: "not_equal_ts_cmp_op_mismatch_mode",
 			t1: treeNode{
-				tsCmpOp:   true,
-				tsFormat:  time.RFC3339,
-				cmpOp:     "lt",
-				tsCmpMode: "now",
+				tsCmpOp:          true,
+				tsFormat:         time.RFC3339,
+				cmpOp:            "lt",
+				tsCmpValChMode:   "now",
+				tsUpdateInterval: 1 * time.Minute,
 			},
 			t2: treeNode{
-				tsCmpOp:   true,
-				tsFormat:  time.RFC3339,
-				cmpOp:     "lt",
-				tsCmpMode: "explicit",
+				tsCmpOp:          true,
+				tsFormat:         time.RFC3339,
+				cmpOp:            "lt",
+				tsCmpValChMode:   "const",
+				tsUpdateInterval: 1 * time.Minute,
 			},
 			wantErr: true,
 		},
 		{
 			name: "not_equal_ts_cmp_op_mismatch_value",
 			t1: treeNode{
-				tsCmpOp:    true,
-				tsFormat:   time.RFC3339,
-				cmpOp:      "lt",
-				tsCmpMode:  "explicit",
-				tsCmpValue: ts,
+				tsCmpOp:        true,
+				tsFormat:       time.RFC3339,
+				cmpOp:          "lt",
+				tsCmpValChMode: "const",
+				tsCmpValue:     ts,
 			},
 			t2: treeNode{
-				tsCmpOp:    true,
-				tsFormat:   time.RFC3339,
-				cmpOp:      "lt",
-				tsCmpMode:  "explicit",
-				tsCmpValue: ts.Add(1 * time.Second),
+				tsCmpOp:        true,
+				tsFormat:       time.RFC3339,
+				cmpOp:          "lt",
+				tsCmpValChMode: "const",
+				tsCmpValue:     ts.Add(1 * time.Second),
 			},
 			wantErr: true,
 		},
 		{
 			name: "not_equal_ts_cmp_op_mismatch_field",
 			t1: treeNode{
-				tsCmpOp:    true,
-				tsFormat:   time.RFC3339,
-				cmpOp:      "lt",
-				tsCmpMode:  "explicit",
-				tsCmpValue: ts,
-				fieldName:  "a.ts",
+				tsCmpOp:        true,
+				tsFormat:       time.RFC3339,
+				cmpOp:          "lt",
+				tsCmpValChMode: "const",
+				tsCmpValue:     ts,
+				fieldName:      "a.ts",
 			},
 			t2: treeNode{
-				tsCmpOp:    true,
-				tsFormat:   time.RFC3339,
-				cmpOp:      "lt",
-				tsCmpMode:  "explicit",
-				tsCmpValue: ts,
-				fieldName:  "ts",
+				tsCmpOp:        true,
+				tsFormat:       time.RFC3339,
+				cmpOp:          "lt",
+				tsCmpValChMode: "const",
+				tsCmpValue:     ts,
+				fieldName:      "ts",
+			},
+			wantErr: true,
+		},
+		{
+			name: "not_equal_ts_cmp_op_mismatch_update_interval",
+			t1: treeNode{
+				tsCmpOp:          true,
+				tsFormat:         time.RFC3339,
+				cmpOp:            "lt",
+				tsCmpValChMode:   "const",
+				tsCmpValue:       ts,
+				fieldName:        "ts",
+				tsUpdateInterval: 1 * time.Minute,
+			},
+			t2: treeNode{
+				tsCmpOp:          true,
+				tsFormat:         time.RFC3339,
+				cmpOp:            "lt",
+				tsCmpValChMode:   "const",
+				tsCmpValue:       ts,
+				fieldName:        "ts",
+				tsUpdateInterval: 2 * time.Minute,
 			},
 			wantErr: true,
 		},

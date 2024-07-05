@@ -4,36 +4,38 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"sync/atomic"
 	"time"
 
 	"github.com/ozontech/file.d/cfg"
 	insaneJSON "github.com/vitkovskii/insane-json"
 )
 
-type tsCmpMode int
+type cmpValueChangingMode int
 
 const (
-	// compare ts with current time
-	cmpModeNow tsCmpMode = iota
-	// compare ts with explicit value
-	cmpModeExplicit
+	cmpValChModeConst cmpValueChangingMode = iota
+	cmpValChModeNow
 )
 
 const (
-	cmpModeNowTag      = "now"
-	cmpModeExplicitTag = "explicit"
+	cmpValChModeConstTag = "const"
+	cmpValChModeNowTag   = "now"
 )
 
 type tsCmpOpNode struct {
 	fieldPath []string
 	format    string
 
-	cmpOp    comparisonOperation
-	cmpMode  tsCmpMode
-	cmpValue time.Time
+	cmpOp comparisonOperation
+
+	cmpValChMode   cmpValueChangingMode
+	constCmpValue  time.Time
+	varCmpValue    atomic.Int64
+	updateInterval time.Duration
 }
 
-func NewTsCmpOpNode(field string, format string, cmpOp string, cmpMode string, cmpValue time.Time) (Node, error) {
+func NewTsCmpOpNode(field string, format string, cmpOp string, cmpValChMode string, cmpValue time.Time, updateInterval time.Duration) (Node, error) {
 	resCmpOp := comparisonOperation(cmpOp)
 	switch resCmpOp {
 	case cmpOpLess, cmpOpLessOrEqual, cmpOpGreater, cmpOpGreaterOrEqual, cmpOpEqual, cmpOpNotEqual:
@@ -43,26 +45,39 @@ func NewTsCmpOpNode(field string, format string, cmpOp string, cmpMode string, c
 
 	fieldPath := cfg.ParseFieldSelector(field)
 
-	var resCmpMode tsCmpMode
-	var resCmpValue time.Time
-
-	switch cmpMode {
-	case cmpModeNowTag:
-		resCmpMode = cmpModeNow
-	case cmpModeExplicitTag:
-		resCmpMode = cmpModeExplicit
-		resCmpValue = cmpValue
+	var resCmpValChMode cmpValueChangingMode
+	switch cmpValChMode {
+	case cmpValChModeNowTag:
+		resCmpValChMode = cmpValChModeNow
+	case cmpValChModeConstTag:
+		resCmpValChMode = cmpValChModeConst
 	default:
-		return nil, fmt.Errorf("unknown ts cmp mode: %s", cmpMode)
+		return nil, fmt.Errorf("unknown ts cmp mode: %s", cmpValChMode)
 	}
 
-	return &tsCmpOpNode{
-		fieldPath: fieldPath,
-		format:    format,
-		cmpOp:     resCmpOp,
-		cmpMode:   resCmpMode,
-		cmpValue:  resCmpValue,
-	}, nil
+	result := &tsCmpOpNode{
+		fieldPath:      fieldPath,
+		format:         format,
+		cmpOp:          resCmpOp,
+		cmpValChMode:   resCmpValChMode,
+		constCmpValue:  cmpValue,
+		updateInterval: updateInterval,
+	}
+	result.startUpdater(updateInterval)
+
+	return result, nil
+}
+
+func (n *tsCmpOpNode) startUpdater(interval time.Duration) {
+	if n.cmpValChMode == cmpValChModeNow {
+		n.varCmpValue.Store(time.Now().UnixNano())
+		go func() {
+			for {
+				n.varCmpValue.Store(time.Now().UnixNano())
+				time.Sleep(interval)
+			}
+		}()
+	}
 }
 
 func (n *tsCmpOpNode) Type() NodeType {
@@ -85,13 +100,13 @@ func (n *tsCmpOpNode) Check(eventRoot *insaneJSON.Root) bool {
 	}
 
 	var rhs time.Time
-	switch n.cmpMode {
-	case cmpModeNow:
-		rhs = time.Now()
-	case cmpModeExplicit:
-		rhs = n.cmpValue
+	switch n.cmpValChMode {
+	case cmpValChModeNow:
+		rhs = time.Unix(0, n.varCmpValue.Load())
+	case cmpValChModeConst:
+		rhs = n.constCmpValue
 	default:
-		panic(fmt.Sprintf("impossible: invalid cmp mode: %d", n.cmpMode))
+		panic(fmt.Sprintf("impossible: invalid cmp value changing mode: %d", n.cmpValChMode))
 	}
 
 	switch n.cmpOp {
@@ -126,15 +141,22 @@ func (n *tsCmpOpNode) isEqualTo(n2 Node, _ int) error {
 		return fmt.Errorf("nodes have different cmp ops: %s != %s", n.cmpOp, n2Explicit.cmpOp)
 	}
 
-	if n.cmpMode != n2Explicit.cmpMode {
-		return fmt.Errorf("nodes have different cmp modes: %d != %d", n.cmpMode, n2Explicit.cmpMode)
+	if n.cmpValChMode != n2Explicit.cmpValChMode {
+		return fmt.Errorf("nodes have different cmp modes: %d != %d", n.cmpValChMode, n2Explicit.cmpValChMode)
 	}
 
-	if n.cmpValue != n2Explicit.cmpValue {
+	if n.constCmpValue != n2Explicit.constCmpValue {
 		return fmt.Errorf(
 			"nodes have different cmp values: %s != %s",
-			n.cmpValue.Format(time.RFC3339Nano),
-			n2Explicit.cmpValue.Format(time.RFC3339Nano),
+			n.constCmpValue.Format(time.RFC3339Nano),
+			n2Explicit.constCmpValue.Format(time.RFC3339Nano),
+		)
+	}
+
+	if n.updateInterval != n2Explicit.updateInterval {
+		return fmt.Errorf(
+			"nodes have different update intervals: %v != %v",
+			n.updateInterval, n2Explicit.updateInterval,
 		)
 	}
 
