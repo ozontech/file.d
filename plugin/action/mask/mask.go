@@ -45,11 +45,11 @@ const (
 type Plugin struct {
 	config Config
 
-	// sourceBuf buffer for storing node value initial and transformed
-	sourceBuf []byte
-	// maskBuf buffer for storing data in the process of masking
+	// srcBuf buffer for storing node value initial and transformed
+	srcBuf []byte
+	// dstBuf buffer for storing data in the process of masking
 	// (data before masked entry, its replacement and data after masked entry)
-	maskBuf []byte
+	dstBuf []byte
 
 	// common match regex
 	matchRe *regexp.Regexp
@@ -288,8 +288,8 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 			p.logger.Fatal("invalid mask configuration")
 		}
 	}
-	p.maskBuf = make([]byte, 0, params.PipelineSettings.AvgEventSize)
-	p.sourceBuf = make([]byte, 0, params.PipelineSettings.AvgEventSize)
+	p.dstBuf = make([]byte, 0, params.PipelineSettings.AvgEventSize)
+	p.srcBuf = make([]byte, 0, params.PipelineSettings.AvgEventSize)
 	p.valueNodes = make([]*insaneJSON.Node, 0)
 	p.logger = params.Logger.Desugar()
 	p.config.Masks, p.matchRe = compileMasks(p.config.Masks, p.logger)
@@ -501,7 +501,7 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 			valueIsCommonMatched = true
 		}
 
-		p.sourceBuf = append(p.sourceBuf[:0], value...)
+		p.srcBuf = append(p.srcBuf[:0], value...)
 		// valueMasked is not the same as maskApplied;
 		// it shows if current node is masked and really needs to be changed
 		valueMasked := false
@@ -512,8 +512,9 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 				continue
 			}
 
-			p.maskBuf, locApplied = p.maskValue(mask, p.sourceBuf, p.maskBuf)
-			p.sourceBuf = append(p.sourceBuf[:0], p.maskBuf...)
+			p.dstBuf, locApplied = p.maskValue(mask, p.srcBuf, p.dstBuf)
+			// p.srcBuf = append(p.srcBuf[:0], p.dstBuf...)
+			p.srcBuf, p.dstBuf = p.dstBuf, p.srcBuf
 			if !locApplied {
 				continue
 			}
@@ -530,7 +531,7 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 		}
 
 		if valueMasked {
-			v.MutateToString(string(p.maskBuf))
+			v.MutateToString(string(p.srcBuf))
 		}
 	}
 
