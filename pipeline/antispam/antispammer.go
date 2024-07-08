@@ -18,11 +18,12 @@ import (
 //
 // Anti-spammer supports exceptions for cases where you need to guarantee delivery of an important events.
 type Antispammer struct {
-	unbanIterations int
-	threshold       int
-	mu              sync.RWMutex
-	sources         map[any]source
-	exceptions      matchrule.RuleSets
+	unbanIterations     int
+	threshold           int
+	maintenanceInterval time.Duration
+	mu                  sync.RWMutex
+	sources             map[any]source
+	exceptions          matchrule.RuleSets
 
 	logger *zap.Logger
 
@@ -33,8 +34,9 @@ type Antispammer struct {
 }
 
 type source struct {
-	counter *atomic.Int32
-	name    string
+	counter   *atomic.Int32
+	timestamp *atomic.Int64
+	name      string
 }
 
 type Options struct {
@@ -56,11 +58,12 @@ func NewAntispammer(o *Options) *Antispammer {
 	}
 
 	a := &Antispammer{
-		unbanIterations: o.UnbanIterations,
-		threshold:       o.Threshold,
-		sources:         make(map[any]source),
-		exceptions:      o.Exceptions,
-		logger:          o.Logger,
+		unbanIterations:     o.UnbanIterations,
+		threshold:           o.Threshold,
+		maintenanceInterval: o.MaintenanceInterval,
+		sources:             make(map[any]source),
+		exceptions:          o.Exceptions,
+		logger:              o.Logger,
 		activeMetric: o.MetricsController.RegisterGauge("antispam_active",
 			"Gauge indicates whether the antispam is enabled",
 		),
@@ -80,7 +83,7 @@ func NewAntispammer(o *Options) *Antispammer {
 	return a
 }
 
-func (a *Antispammer) IsSpam(id any, name string, isNewSource bool, event []byte) bool {
+func (a *Antispammer) IsSpam(id any, name string, isNewSource bool, event []byte, timeEvent time.Time) bool {
 	if a.threshold <= 0 {
 		return false
 	}
@@ -99,15 +102,19 @@ func (a *Antispammer) IsSpam(id any, name string, isNewSource bool, event []byte
 	src, has := a.sources[id]
 	a.mu.RUnlock()
 
+	timeEventSeconds := timeEvent.UnixNano()
+
 	if !has {
 		a.mu.Lock()
 		if newSrc, has := a.sources[id]; has {
 			src = newSrc
 		} else {
 			src = source{
-				counter: &atomic.Int32{},
-				name:    name,
+				counter:   &atomic.Int32{},
+				name:      name,
+				timestamp: &atomic.Int64{},
 			}
+			src.timestamp.Add(timeEventSeconds)
 			a.sources[id] = src
 		}
 		a.mu.Unlock()
@@ -118,7 +125,11 @@ func (a *Antispammer) IsSpam(id any, name string, isNewSource bool, event []byte
 		return false
 	}
 
-	x := src.counter.Inc()
+	x := src.counter.Load()
+	diff := timeEventSeconds - src.timestamp.Swap(timeEventSeconds)
+	if diff < a.maintenanceInterval.Nanoseconds() {
+		x = src.counter.Inc()
+	}
 	if x == int32(a.threshold) {
 		src.counter.Swap(int32(a.unbanIterations * a.threshold))
 		a.activeMetric.Set(1)

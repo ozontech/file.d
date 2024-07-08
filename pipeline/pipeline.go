@@ -412,7 +412,15 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 				p.Error(fmt.Sprintf("antispam_field %s does not exists in meta", p.settings.AntispamField))
 			}
 		}
-		isSpam := p.antispamer.IsSpam(checkSourceID, checkSourceName, isNewSource, bytes)
+
+		var eventTime time.Time
+		if len(row.Time) > 0 {
+			eventTime, err = time.Parse("2006-01-02T15:04:05.999999999Z", string(row.Time))
+			if err != nil {
+				p.Error(fmt.Sprintf("cannot parse raw time %s: %v", row.Time, err))
+			}
+		}
+		isSpam := p.antispamer.IsSpam(checkSourceID, checkSourceName, isNewSource, bytes, eventTime)
 		if isSpam {
 			return EventSeqIDError
 		}
