@@ -502,6 +502,8 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 		}
 
 		p.sourceBuf = append(p.sourceBuf[:0], value...)
+		// valueMasked is not the same as maskApplied;
+		// it shows if current node is masked and really needs to be changed
 		valueMasked := false
 		for i := range p.config.Masks {
 			mask := &p.config.Masks[i]
