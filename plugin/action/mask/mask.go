@@ -513,7 +513,6 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 			}
 
 			p.dstBuf, locApplied = p.maskValue(mask, p.srcBuf, p.dstBuf)
-			// p.srcBuf = append(p.srcBuf[:0], p.dstBuf...)
 			p.srcBuf, p.dstBuf = p.dstBuf, p.srcBuf
 			if !locApplied {
 				continue
