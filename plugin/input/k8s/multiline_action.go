@@ -3,7 +3,6 @@ package k8s
 import (
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/pipeline"
-	"github.com/ozontech/file.d/pipeline/metadata"
 	"go.uber.org/zap"
 )
 
@@ -18,7 +17,6 @@ type MultilineAction struct {
 	eventBuf      []byte
 	eventSize     int
 	skipNextEvent bool
-	metaTemplater *metadata.MetaTemplater
 }
 
 const (
@@ -31,7 +29,6 @@ func (p *MultilineAction) Start(config pipeline.AnyConfig, params *pipeline.Acti
 	p.controller = params.Controller
 	p.maxEventSize = params.PipelineSettings.MaxEventSize
 	p.config = config.(*Config)
-	p.metaTemplater = metadata.NewMetaTemplater(p.config.Meta)
 
 	p.allowedPodLabels = cfg.ListToMap(p.config.AllowedPodLabels)
 	p.allowedNodeLabels = cfg.ListToMap(p.config.AllowedNodeLabels)
