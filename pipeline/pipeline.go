@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/decoder"
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/metric"
@@ -47,8 +48,9 @@ type InputPluginController interface {
 	UseSpread()                    // don't use stream field and spread all events across all processors
 	DisableStreams()               // don't use stream field
 	SuggestDecoder(t decoder.Type) // set decoder type if pipeline uses "auto" value for decoder
-	IncReadOps()                   // inc read ops for metric
-	IncMaxEventSizeExceeded()      // inc max event size exceeded counter
+	SetMetaTemplater(c cfg.MetaTemplates)
+	IncReadOps()              // inc read ops for metric
+	IncMaxEventSizeExceeded() // inc max event size exceeded counter
 }
 
 type ActionPluginController interface {
@@ -74,6 +76,7 @@ type Pipeline struct {
 
 	decoderType          decoder.Type // decoder type set in the config
 	suggestedDecoderType decoder.Type // decoder type suggested by input plugin, it is used when config decoder is set to "auto"
+	metaTemplater        *metadata.MetaTemplater
 	decoder              decoder.Decoder
 
 	eventPool *eventPool
@@ -395,6 +398,15 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 			p.wrongEventCRIFormatMetric.Inc()
 			p.Error(fmt.Sprintf("wrong cri format offset=%d, length=%d, err=%s, source=%d:%s, cri=%s", offset, length, err.Error(), sourceID, sourceName, bytes))
 			return EventSeqIDError
+		}
+		if p.metaTemplater != nil {
+			metadataInfo, err := p.metaTemplater.Render(decoder.NewCRIMetaInformation(sourceName))
+			if err != nil {
+				p.Error(fmt.Sprintf("can't render meta data: %s", err.Error()))
+			}
+			for k, i := range metadataInfo {
+				meta[k] = metadataInfo[i]
+			}
 		}
 	}
 
@@ -825,6 +837,10 @@ func (p *Pipeline) DisableStreams() {
 
 func (p *Pipeline) SuggestDecoder(t decoder.Type) {
 	p.suggestedDecoderType = t
+}
+
+func (p *Pipeline) SetMetaTemplater(c cfg.MetaTemplates) {
+	p.metaTemplater = metadata.NewMetaTemplater(c)
 }
 
 func (p *Pipeline) DisableParallelism() {
