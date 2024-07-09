@@ -147,25 +147,13 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	} else {
 		p.params.Controller.SuggestDecoder(decoder.CRI)
 	}
+	p.params.Controller.SetMetaTemplater(p.config.Meta)
 
 	p.fp.Start(&p.config.FileConfig, params)
 }
 
 // Commit event.
 func (p *Plugin) Commit(event *pipeline.Event) {
-	// if len(p.config.Meta) > 0 {
-	// 	metadataInfo, err := p.metaTemplater.Render(newMetaInformation(*podMeta))
-	// 	if err != nil {
-	// 		p.logger.Error("cannot parse meta info", zap.Error(err))
-	// 	}
-
-	// 	if len(metadataInfo) > 0 {
-	// 		for k, v := range metadataInfo {
-	// 			event.Root.AddFieldNoAlloc(event.Root, k).MutateToString(v)
-	// 		}
-	// 	}
-	// }
-
 	p.fp.Commit(event)
 }
 
@@ -177,26 +165,4 @@ func (p *Plugin) Stop() {
 // PassEvent decides pass or discard event.
 func (p *Plugin) PassEvent(event *pipeline.Event) bool {
 	return p.fp.PassEvent(event)
-}
-
-type metaInformation struct {
-	namespace     string
-	podName       string
-	containerName string
-	containerID   string
-}
-
-func newMetaInformation(namespace, podName, containerName, containerID string) metaInformation {
-	return metaInformation{
-		namespace, podName, containerName, containerID,
-	}
-}
-
-func (m metaInformation) GetData() map[string]any {
-	return map[string]any{
-		"pod":          m.podName,
-		"namespace":    m.namespace,
-		"container":    m.containerName,
-		"container_id": m.containerID,
-	}
 }

@@ -71,5 +71,23 @@ Under the hood this plugin uses [file plugin](/plugin/input/file/README.md) to c
 
 <br>
 
+**`meta`** *`cfg.MetaTemplates`* 
+
+Meta params
+
+Add meta information to an event (look at Meta params)
+Use [go-template](https://pkg.go.dev/text/template) syntax
+
+<br>
+
+
+### Meta params
+**`pod`** 
+
+**`namespace`** 
+
+**`container`** 
+
+**`container_id`** 
 
 <br>*Generated using [__insane-doc__](https://github.com/vitkovskii/insane-doc)*
