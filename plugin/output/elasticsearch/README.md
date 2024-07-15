@@ -17,7 +17,7 @@ If set, the plugin will use gzip encoding.
 
 **`gzip_compression_level`** *`string`* *`default=default`* *`options=default|no|best-speed|best-compression|huffman-only`* 
 
-Gzip compression level.
+Gzip compression level. Used if `use_gzip=true`.
 
 <br>
 

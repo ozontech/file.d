@@ -89,7 +89,7 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
-	// > Gzip compression level.
+	// > Gzip compression level. Used if `use_gzip=true`.
 	GzipCompressionLevel  string `json:"gzip_compression_level" default:"default" options:"default|no|best-speed|best-compression|huffman-only"` // *
 	GzipCompressionLevel_ gzipCompressionLevel
 
