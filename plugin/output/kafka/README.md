@@ -66,13 +66,13 @@ Should be set equal to or smaller than the broker's `message.max.bytes`.
 
 **`compression`** *`string`* *`default=none`* *`options=none|gzip|snappy|lz4|zstd`* 
 
-Compression
+Compression codec
 
 <br>
 
-**`ack`** *`string`* *`default=all-isr`* *`options=no|leader|all-isr`* 
+**`ack`** *`string`* *`default=leader`* *`options=no|leader|all-isr`* 
 
-Ack
+Required acks for produced records
 
 <br>
 

@@ -32,7 +32,7 @@ func NewClient(c *Config, l *zap.SugaredLogger) *kgo.Client {
 	}
 	opts = append(opts, kgo.ConsumeResetOffset(offset))
 
-	switch c.BalancerPlan {
+	switch c.Balancer {
 	case "round-robin":
 		opts = append(opts, kgo.Balancers(kgo.RoundRobinBalancer()))
 	case "range":

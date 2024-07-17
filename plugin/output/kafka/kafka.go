@@ -102,13 +102,13 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
-	// > Compression
+	// > Compression codec
 	Compression string `json:"compression" default:"none" options:"none|gzip|snappy|lz4|zstd"` // *
 
 	// > @3@4@5@6
 	// >
-	// > Ack
-	Ack string `json:"ack" default:"all-isr" options:"no|leader|all-isr"` // *
+	// > Required acks for produced records
+	Ack string `json:"ack" default:"leader" options:"no|leader|all-isr"` // *
 
 	// > @3@4@5@6
 	// >

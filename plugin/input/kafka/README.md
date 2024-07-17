@@ -87,9 +87,13 @@ The newest and oldest values is used when a consumer starts but there is no comm
 
 <br>
 
-**`balancer_plan`** *`string`* *`default=round-robin`* *`options=round-robin|range|sticky|cooperative-sticky`* 
+**`balancer`** *`string`* *`default=round-robin`* *`options=round-robin|range|sticky|cooperative-sticky`* 
 
-BalancerPlan
+Algorithm used by Kafka to assign partitions to consumers in a group.
+* *`round-robin`* - M0: [t0p0, t0p2, t1p1], M1: [t0p1, t1p0, t1p2]
+* *`range`* - M0: [t0p0, t0p1, t1p0, t1p1], M1: [t0p2, t1p2]
+* *`sticky`* - ensures minimal partition movement on group changes while also ensuring optimal balancing
+* *`cooperative-sticky`* - performs the sticky balancing strategy, but additionally opts the consumer group into "cooperative" rebalancing
 
 <br>
 

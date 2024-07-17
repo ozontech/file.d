@@ -125,8 +125,12 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
-	// > BalancerPlan
-	BalancerPlan string `json:"balancer_plan" default:"round-robin" options:"round-robin|range|sticky|cooperative-sticky"` // *
+	// > Algorithm used by Kafka to assign partitions to consumers in a group.
+	// > * *`round-robin`* - M0: [t0p0, t0p2, t1p1], M1: [t0p1, t1p0, t1p2]
+	// > * *`range`* - M0: [t0p0, t0p1, t1p0, t1p1], M1: [t0p2, t1p2]
+	// > * *`sticky`* - ensures minimal partition movement on group changes while also ensuring optimal balancing
+	// > * *`cooperative-sticky`* - performs the sticky balancing strategy, but additionally opts the consumer group into "cooperative" rebalancing
+	Balancer string `json:"balancer" default:"round-robin" options:"round-robin|range|sticky|cooperative-sticky"` // *
 
 	// > @3@4@5@6
 	// >
