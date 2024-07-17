@@ -2,6 +2,7 @@ package kafka
 
 import (
 	"context"
+	"time"
 
 	"github.com/ozontech/file.d/cfg"
 	"github.com/twmb/franz-go/pkg/kgo"
@@ -47,7 +48,11 @@ func NewClient(c *Config, l *zap.Logger) *kgo.Client {
 	if err != nil {
 		l.Fatal("can't create kafka client", zap.Error(err))
 	}
-	err = client.Ping(context.TODO())
+
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
+
+	err = client.Ping(ctx)
 	if err != nil {
 		l.Fatal("can't connect to kafka", zap.Error(err))
 	}

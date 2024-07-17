@@ -51,7 +51,10 @@ func NewClient(c *Config, l *zap.Logger) *kgo.Client {
 		l.Fatal("can't create kafka client", zap.Error(err))
 	}
 
-	err = client.Ping(context.TODO())
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
+
+	err = client.Ping(ctx)
 	if err != nil {
 		l.Fatal("can't connect to kafka", zap.Error(err))
 	}
