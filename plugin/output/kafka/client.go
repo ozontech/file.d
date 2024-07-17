@@ -14,7 +14,7 @@ type KafkaClient interface {
 	Close()
 }
 
-func NewClient(c *Config, l *zap.SugaredLogger) *kgo.Client {
+func NewClient(c *Config, l *zap.Logger) *kgo.Client {
 	opts := cfg.GetKafkaClientOptions(c, l)
 	opts = append(opts, []kgo.Opt{
 		kgo.DefaultProduceTopic(c.DefaultTopic),
@@ -48,12 +48,12 @@ func NewClient(c *Config, l *zap.SugaredLogger) *kgo.Client {
 	client, err := kgo.NewClient(opts...)
 
 	if err != nil {
-		l.Fatalf("can't create kafka client: %s", err.Error())
+		l.Fatal("can't create kafka client", zap.Error(err))
 	}
 
 	err = client.Ping(context.TODO())
 	if err != nil {
-		l.Fatalf("can't connect to kafka: %s", err.Error())
+		l.Fatal("can't connect to kafka", zap.Error(err))
 	}
 
 	return client

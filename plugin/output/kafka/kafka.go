@@ -236,7 +236,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 
 	p.logger.Infof("workers count=%d, batch size=%d", p.config.WorkersCount_, p.config.BatchSize_)
 
-	p.client = NewClient(p.config, p.logger)
+	p.client = NewClient(p.config, p.logger.Desugar())
 
 	batcherOpts := pipeline.BatcherOptions{
 		PipelineName:   params.PipelineName,

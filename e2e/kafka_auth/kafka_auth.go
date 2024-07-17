@@ -112,7 +112,7 @@ func (c *Config) Configure(t *testing.T, _ *cfg.Config, _ string) {
 				}
 
 				kafka_out.NewClient(config,
-					zap.NewNop().WithOptions(zap.WithFatalHook(zapcore.WriteThenPanic)).Sugar(),
+					zap.NewNop().WithOptions(zap.WithFatalHook(zapcore.WriteThenPanic)),
 				)
 			},
 			func() {
@@ -142,7 +142,7 @@ func (c *Config) Configure(t *testing.T, _ *cfg.Config, _ string) {
 				}
 
 				kafka_in.NewClient(config,
-					zap.NewNop().WithOptions(zap.WithFatalHook(zapcore.WriteThenPanic)).Sugar(),
+					zap.NewNop().WithOptions(zap.WithFatalHook(zapcore.WriteThenPanic)),
 				)
 			},
 		}

@@ -37,11 +37,11 @@ type KafkaClientSslConfig struct {
 	SslSkipVerify bool
 }
 
-func GetKafkaClientOptions(c KafkaClientConfig, l *zap.SugaredLogger) []kgo.Opt {
+func GetKafkaClientOptions(c KafkaClientConfig, l *zap.Logger) []kgo.Opt {
 	opts := []kgo.Opt{
 		kgo.SeedBrokers(c.GetBrokers()...),
 		kgo.ClientID(c.GetClientID()),
-		kgo.WithLogger(kzap.New(l.Desugar())),
+		kgo.WithLogger(kzap.New(l)),
 	}
 
 	if c.IsSaslEnabled() {
@@ -103,7 +103,7 @@ func GetKafkaClientOptions(c KafkaClientConfig, l *zap.SugaredLogger) []kgo.Opt 
 		}
 		tc, err := tlscfg.New(tlsOpts...)
 		if err != nil {
-			l.Fatalf("unable to create tls config: %v", err)
+			l.Fatal("unable to create tls config", zap.Error(err))
 		}
 		tc.InsecureSkipVerify = sslConfig.SslSkipVerify
 		opts = append(opts, kgo.DialTLSConfig(tc))

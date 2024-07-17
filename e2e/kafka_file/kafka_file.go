@@ -53,7 +53,7 @@ func (c *Config) Send(t *testing.T) {
 	}
 
 	client := kafka_out.NewClient(config,
-		zap.NewNop().WithOptions(zap.WithFatalHook(zapcore.WriteThenPanic)).Sugar(),
+		zap.NewNop().WithOptions(zap.WithFatalHook(zapcore.WriteThenPanic)),
 	)
 	adminClient := kadm.NewClient(client)
 	_, err := adminClient.CreateTopic(context.TODO(), 1, 1, nil, c.Topics[0])

@@ -64,7 +64,7 @@ func (c *Config) Configure(t *testing.T, conf *cfg.Config, pipelineName string) 
 	}
 
 	c.client = kafka_in.NewClient(config,
-		zap.NewNop().WithOptions(zap.WithFatalHook(zapcore.WriteThenPanic)).Sugar(),
+		zap.NewNop().WithOptions(zap.WithFatalHook(zapcore.WriteThenPanic)),
 	)
 
 	adminClient := kadm.NewClient(c.client)

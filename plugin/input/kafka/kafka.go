@@ -276,7 +276,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 
 	ctx, cancel := context.WithCancel(context.Background())
 	p.cancel = cancel
-	p.client = NewClient(p.config, p.logger)
+	p.client = NewClient(p.config, p.logger.Desugar())
 	p.controller.UseSpread()
 	p.controller.DisableStreams()
 
