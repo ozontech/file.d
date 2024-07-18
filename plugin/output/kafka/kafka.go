@@ -322,7 +322,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 		i++
 	})
 
-	if err := p.client.ProduceSync(context.TODO(), data.messages[:i]...).FirstErr(); err != nil {
+	if err := p.client.ProduceSync(context.Background(), data.messages[:i]...).FirstErr(); err != nil {
 		p.logger.Errorf("can't write batch: %v", err)
 		p.sendErrorMetric.Inc()
 		return err
