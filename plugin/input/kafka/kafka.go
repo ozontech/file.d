@@ -5,20 +5,18 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Shopify/sarama"
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/pipeline/metadata"
-	"github.com/ozontech/file.d/xscram"
-	"github.com/ozontech/file.d/xtls"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/twmb/franz-go/pkg/kgo"
 	"go.uber.org/zap"
 )
 
 /*{ introduction
-It reads events from multiple Kafka topics using `sarama` library.
+It reads events from multiple Kafka topics using `franz-go` library.
 > It guarantees at "at-least-once delivery" due to the commitment mechanism.
 
 **Example**
@@ -49,13 +47,12 @@ pipelines:
 }*/
 
 type Plugin struct {
-	config        *Config
-	logger        *zap.SugaredLogger
-	session       sarama.ConsumerGroupSession
-	consumerGroup sarama.ConsumerGroup
-	cancel        context.CancelFunc
-	controller    pipeline.InputPluginController
-	idByTopic     map[string]int
+	config     *Config
+	logger     *zap.SugaredLogger
+	client     *kgo.Client
+	cancel     context.CancelFunc
+	controller pipeline.InputPluginController
+	idByTopic  map[string]int
 
 	// plugin metrics
 	commitErrorsMetric  prometheus.Counter
@@ -96,8 +93,27 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
-	// > The number of unprocessed messages in the buffer that are loaded in the background from kafka.
+	// > The number of unprocessed messages in the buffer that are loaded in the background from kafka. (max.poll.records)
 	ChannelBufferSize int `json:"channel_buffer_size" default:"256"` // *
+
+	// > @3@4@5@6
+	// >
+	// > MaxConcurrentFetches sets the maximum number of fetch requests to allow in
+	// > flight or buffered at once, overriding the unbounded (i.e. number of
+	// > brokers) default.
+	MaxConcurrentFetches int `json:"max_concurrent_fetches" default:"0"` // *
+
+	// > @3@4@5@6
+	// >
+	// > FetchMaxBytes (fetch.max.bytes) sets the maximum amount of bytes a broker will try to send during a fetch
+	FetchMaxBytes  cfg.Expression `json:"fetch_max_bytes" default:"52428800" parse:"expression"` // *
+	FetchMaxBytes_ int32
+
+	// > @3@4@5@6
+	// >
+	// > FetchMinBytes (fetch.min.bytes) sets the minimum amount of bytes a broker will try to send during a fetch
+	FetchMinBytes  cfg.Expression `json:"fetch_min_bytes" default:"1" parse:"expression"` // *
+	FetchMinBytes_ int32
 
 	// > @3@4@5@6
 	// >
@@ -109,15 +125,42 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
-	// > The maximum amount of time the consumer expects a message takes to process for the user.
+	// > Algorithm used by Kafka to assign partitions to consumers in a group.
+	// > * *`round-robin`* - M0: [t0p0, t0p2, t1p1], M1: [t0p1, t1p0, t1p2]
+	// > * *`range`* - M0: [t0p0, t0p1, t1p0, t1p1], M1: [t0p2, t1p2]
+	// > * *`sticky`* - ensures minimal partition movement on group changes while also ensuring optimal balancing
+	// > * *`cooperative-sticky`* - performs the sticky balancing strategy, but additionally opts the consumer group into "cooperative" rebalancing
+	Balancer string `json:"balancer" default:"round-robin" options:"round-robin|range|sticky|cooperative-sticky"` // *
+
+	// > @3@4@5@6
+	// >
+	// > The maximum amount of time the consumer expects a message takes to process for the user. (Not used anymore!)
 	ConsumerMaxProcessingTime  cfg.Duration `json:"consumer_max_processing_time" default:"200ms" parse:"duration"` // *
 	ConsumerMaxProcessingTime_ time.Duration
 
 	// > @3@4@5@6
 	// >
-	// > The maximum amount of time the broker will wait for Consumer.Fetch.Min bytes to become available before it returns fewer than that anyways.
+	// > The maximum amount of time the broker will wait for Consumer.Fetch.Min bytes to become available before it returns fewer than that anyways. (fetch.max.wait.ms)
 	ConsumerMaxWaitTime  cfg.Duration `json:"consumer_max_wait_time" default:"250ms" parse:"duration"` // *
 	ConsumerMaxWaitTime_ time.Duration
+
+	// > @3@4@5@6
+	// >
+	// > AutoCommitInterval sets how long to go between autocommits
+	AutoCommitInterval  cfg.Duration `json:"auto_commit_interval" default:"1s" parse:"duration"` // *
+	AutoCommitInterval_ time.Duration
+
+	// > @3@4@5@6
+	// >
+	// > SessionTimeout sets how long a member in the group can go between heartbeats
+	SessionTimeout  cfg.Duration `json:"session_timeout" default:"10s" parse:"duration"` // *
+	SessionTimeout_ time.Duration
+
+	// > @3@4@5@6
+	// >
+	// > HeartbeatInterval sets how long a group member goes between heartbeats to Kafka
+	HeartbeatInterval  cfg.Duration `json:"heartbeat_interval" default:"3s" parse:"duration"` // *
+	HeartbeatInterval_ time.Duration
 
 	// > @3@4@5@6
 	// >
@@ -127,7 +170,7 @@ type Config struct {
 	// > @3@4@5@6
 	// >
 	// > SASL mechanism to use.
-	SaslMechanism string `json:"sasl_mechanism" default:"SCRAM-SHA-512" options:"PLAIN|SCRAM-SHA-256|SCRAM-SHA-512"` // *
+	SaslMechanism string `json:"sasl_mechanism" default:"SCRAM-SHA-512" options:"PLAIN|SCRAM-SHA-256|SCRAM-SHA-512|AWS_MSK_IAM"` // *
 
 	// > @3@4@5@6
 	// >
@@ -175,6 +218,39 @@ type Config struct {
 	Meta cfg.MetaTemplates `json:"meta"` // *
 }
 
+func (c *Config) GetBrokers() []string {
+	return c.Brokers
+}
+
+func (c *Config) GetClientID() string {
+	return c.ClientID
+}
+
+func (c *Config) IsSaslEnabled() bool {
+	return c.SaslEnabled
+}
+
+func (c *Config) GetSaslConfig() cfg.KafkaClientSaslConfig {
+	return cfg.KafkaClientSaslConfig{
+		SaslMechanism: c.SaslMechanism,
+		SaslUsername:  c.SaslUsername,
+		SaslPassword:  c.SaslPassword,
+	}
+}
+
+func (c *Config) IsSslEnabled() bool {
+	return c.SslEnabled
+}
+
+func (c *Config) GetSslConfig() cfg.KafkaClientSslConfig {
+	return cfg.KafkaClientSslConfig{
+		CACert:        c.CACert,
+		ClientCert:    c.ClientCert,
+		ClientKey:     c.ClientKey,
+		SslSkipVerify: c.SslSkipVerify,
+	}
+}
+
 func init() {
 	fd.DefaultPluginRegistry.RegisterInput(&pipeline.PluginStaticInfo{
 		Type:    "kafka",
@@ -200,7 +276,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 
 	ctx, cancel := context.WithCancel(context.Background())
 	p.cancel = cancel
-	p.consumerGroup = NewConsumerGroup(p.config, p.logger)
+	p.client = NewClient(p.config, p.logger.Desugar())
 	p.controller.UseSpread()
 	p.controller.DisableStreams()
 
@@ -215,113 +291,51 @@ func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 func (p *Plugin) consume(ctx context.Context) {
 	p.logger.Infof("kafka input reading from topics: %s", strings.Join(p.config.Topics, ","))
 	for {
-		err := p.consumerGroup.Consume(ctx, p.config.Topics, p)
-		if err != nil {
-			p.consumeErrorsMetric.Inc()
-			p.logger.Errorf("can't consume from kafka: %s", err.Error())
+		fetches := p.client.PollRecords(ctx, p.config.ChannelBufferSize)
+		if errs := fetches.Errors(); len(errs) > 0 {
+			for _, err := range errs {
+				p.consumeErrorsMetric.Inc()
+				p.logger.Errorf("can't consume from kafka: %s", err.Err.Error())
+			}
 		}
 
 		if ctx.Err() != nil {
 			return
 		}
+
+		p.ConsumeClaim(fetches)
 	}
 }
 
 func (p *Plugin) Stop() {
+	p.logger.Infof("Stopping")
+	err := p.client.CommitMarkedOffsets(context.Background())
+	if err != nil {
+		p.commitErrorsMetric.Inc()
+		p.logger.Errorf("can't commit marked offsets: %s", err.Error())
+	}
+	p.client.Close()
 	p.cancel()
 }
 
 func (p *Plugin) Commit(event *pipeline.Event) {
-	session := p.session
-	if session == nil {
-		p.commitErrorsMetric.Inc()
-		p.logger.Errorf("no kafka consumer session for event commit")
-		return
-	}
 	index, partition := disassembleSourceID(event.SourceID)
-	session.MarkOffset(p.config.Topics[index], partition, event.Offset+1, "")
+
+	offset := disassembleOffset(event.Offset)
+	offsets := map[string]map[int32]kgo.EpochOffset{
+		p.config.Topics[index]: {partition: offset},
+	}
+	p.client.MarkCommitOffsets(offsets)
 }
 
-func NewConsumerGroup(c *Config, l *zap.SugaredLogger) sarama.ConsumerGroup {
-	config := sarama.NewConfig()
-	config.ClientID = c.ClientID
+func (p *Plugin) ConsumeClaim(fetches kgo.Fetches) {
+	fetches.EachRecord(func(message *kgo.Record) {
+		sourceID := assembleSourceID(
+			p.idByTopic[message.Topic],
+			message.Partition,
+		)
 
-	// kafka auth sasl
-	if c.SaslEnabled {
-		config.Net.SASL.Enable = true
-
-		config.Net.SASL.User = c.SaslUsername
-		config.Net.SASL.Password = c.SaslPassword
-
-		config.Net.SASL.Mechanism = sarama.SASLMechanism(c.SaslMechanism)
-		switch config.Net.SASL.Mechanism {
-		case sarama.SASLTypeSCRAMSHA256:
-			config.Net.SASL.SCRAMClientGeneratorFunc = func() sarama.SCRAMClient { return xscram.NewClient(xscram.SHA256) }
-		case sarama.SASLTypeSCRAMSHA512:
-			config.Net.SASL.SCRAMClientGeneratorFunc = func() sarama.SCRAMClient { return xscram.NewClient(xscram.SHA512) }
-		}
-	}
-
-	// kafka connect via SSL with PEM
-	if c.SslEnabled {
-		config.Net.TLS.Enable = true
-
-		tlsCfg := xtls.NewConfigBuilder()
-
-		if c.CACert != "" {
-			if err := tlsCfg.AppendCARoot(c.CACert); err != nil {
-				l.Fatalf("can't load ca cert: %s", err.Error())
-			}
-		}
-		tlsCfg.SetSkipVerify(c.SslSkipVerify)
-
-		if c.ClientCert != "" || c.ClientKey != "" {
-			if err := tlsCfg.AppendX509KeyPair(c.ClientCert, c.ClientKey); err != nil {
-				l.Fatalf("can't load client certificate and key: %s", err.Error())
-			}
-		}
-
-		config.Net.TLS.Config = tlsCfg.Build()
-	}
-
-	config.Consumer.Group.Rebalance.Strategy = sarama.BalanceStrategyRoundRobin
-	config.Version = sarama.V0_10_2_0
-	config.ChannelBufferSize = c.ChannelBufferSize
-	config.Consumer.MaxProcessingTime = c.ConsumerMaxProcessingTime_
-	config.Consumer.MaxWaitTime = c.ConsumerMaxWaitTime_
-
-	switch c.Offset_ {
-	case OffsetTypeOldest:
-		config.Consumer.Offsets.Initial = sarama.OffsetOldest
-	case OffsetTypeNewest:
-		config.Consumer.Offsets.Initial = sarama.OffsetNewest
-	default:
-		l.Fatalf("unexpected value of the offset field: %s", c.Offset)
-	}
-
-	consumerGroup, err := sarama.NewConsumerGroup(c.Brokers, c.ConsumerGroup, config)
-	if err != nil {
-		l.Fatalf("can't create kafka consumer: %s", err.Error())
-	}
-
-	return consumerGroup
-}
-
-func (p *Plugin) Setup(session sarama.ConsumerGroupSession) error {
-	p.logger.Infof("kafka consumer created with brokers %q", strings.Join(p.config.Brokers, ","))
-	p.session = session
-	return nil
-}
-
-func (p *Plugin) Cleanup(sarama.ConsumerGroupSession) error {
-	p.session = nil
-	return nil
-}
-
-func (p *Plugin) ConsumeClaim(_ sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
-	for message := range claim.Messages() {
-		sourceID := assembleSourceID(p.idByTopic[message.Topic], message.Partition)
-
+		offset := assembleOffset(message)
 		var metadataInfo metadata.MetaData
 		var err error
 		if len(p.config.Meta) > 0 {
@@ -331,10 +345,8 @@ func (p *Plugin) ConsumeClaim(_ sarama.ConsumerGroupSession, claim sarama.Consum
 			}
 		}
 
-		_ = p.controller.In(sourceID, "kafka", message.Offset, message.Value, true, metadataInfo)
-	}
-
-	return nil
+		_ = p.controller.In(sourceID, "kafka", offset, message.Value, true, metadataInfo)
+	})
 }
 
 func assembleSourceID(index int, partition int32) pipeline.SourceID {
@@ -348,6 +360,20 @@ func disassembleSourceID(sourceID pipeline.SourceID) (index int, partition int32
 	return
 }
 
+func assembleOffset(message *kgo.Record) int64 {
+	return message.Offset<<16 + int64(message.LeaderEpoch)
+}
+
+func disassembleOffset(assembledOffset int64) kgo.EpochOffset {
+	offset := assembledOffset >> 16
+	epoch := int32(assembledOffset & 0xFFFF)
+
+	return kgo.EpochOffset{
+		Offset: offset + 1,
+		Epoch:  epoch,
+	}
+}
+
 // PassEvent decides pass or discard event.
 func (p *Plugin) PassEvent(_ *pipeline.Event) bool {
 	return true
@@ -359,7 +385,7 @@ type metaInformation struct {
 	offset    int64
 }
 
-func newMetaInformation(message *sarama.ConsumerMessage) metaInformation {
+func newMetaInformation(message *kgo.Record) metaInformation {
 	return metaInformation{
 		topic:     message.Topic,
 		partition: message.Partition,
