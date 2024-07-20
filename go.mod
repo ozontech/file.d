@@ -2,8 +2,6 @@ module github.com/ozontech/file.d
 
 go 1.22
 
-toolchain go1.22.0
-
 require (
 	github.com/ClickHouse/ch-go v0.58.2
 	github.com/KimMachineGun/automemlimit v0.2.6
