@@ -21,7 +21,7 @@ import (
 )
 
 /*{ introduction
-It sends the logs batches to Grafana Loki using HTTP API.
+It sends the logs batches to Loki using HTTP API.
 }*/
 
 const (
@@ -42,7 +42,7 @@ type Config struct {
 	// > Example host
 	// >
 	// > 127.0.0.1 or localhost
-	Host string `json:"host" required:"true"`
+	Host string `json:"host" required:"true"` // *
 
 	// > @3@4@5@6
 	// >
@@ -51,13 +51,12 @@ type Config struct {
 	// > Example port
 	// >
 	// > 3100
-	Port string `json:"port" required:"true"`
+	Port string `json:"port" required:"true"` // *
 
 	// > @3@4@5@6
 	// >
-	// > Authorization enabled, if set true set OrgID
-	// >
-	AuthEnabled bool `json:"auth_enabled"`
+	// > Authorization enabled, if true set OrgID
+	AuthEnabled bool `json:"auth_enabled" default:"false"` // *
 
 	// > @3@4@5@6
 	// >
@@ -66,7 +65,32 @@ type Config struct {
 	// > Example organization id
 	// >
 	// > example-org
-	OrgID string `json:"org_id"`
+	OrgID string `json:"org_id"` // *
+
+	// > @3@4@5@6
+	// >
+	// > If set true, the plugin will use SSL/TLS connections method.
+	TLSEnabled bool `json:"tls_enabled" default:"false"` // *
+
+	// > @3@4@5@6
+	// >
+	// > If set, the plugin will skip SSL/TLS verification.
+	TLSSkipVerify bool `json:"tls_skip_verify" default:"false"` // *
+
+	// > @3@4@5@6
+	// >
+	// > Path or content of a PEM-encoded client certificate file.
+	ClientCert string `json:"client_cert"` // *
+
+	// > @3@4@5@6
+	// >
+	// > > Path or content of a PEM-encoded client key file.
+	ClientKey string `json:"client_key"` // *
+
+	// > @3@4@5@6
+	// >
+	// > Path or content of a PEM-encoded CA file. This can be a path or the content of the certificate.
+	CACert string `json:"ca_cert"` // *
 
 	// > @3@4@5@6
 	// >
@@ -300,13 +324,18 @@ func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 }
 
 func (p *Plugin) newClient(timeout time.Duration) *http.Client {
-	return &http.Client{
-		Timeout: timeout,
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{
-				// TODO: make this configuration option and false by default
-				InsecureSkipVerify: true,
-			},
-		},
+	transport := http.DefaultTransport.(*http.Transport)
+
+	if p.config.TLSEnabled {
+		transport.TLSClientConfig = &tls.Config{
+			InsecureSkipVerify: p.config.TLSSkipVerify,
+		}
 	}
+
+	client := &http.Client{
+		Timeout:   timeout,
+		Transport: transport,
+	}
+
+	return client
 }

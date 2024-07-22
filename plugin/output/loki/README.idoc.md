@@ -1,4 +1,4 @@
-# Grafana Loki output
+# Loki output
 @introduction
 
 ### Config params

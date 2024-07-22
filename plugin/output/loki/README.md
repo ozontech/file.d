@@ -1,5 +1,5 @@
-# Grafana Loki output
-It sends the logs batches to Grafana Loki using HTTP API.
+# Loki output
+It sends the logs batches to Loki using HTTP API.
 
 ### Config params
 **`target_file`** *`string`* *`default=/var/log/file-d.log`* 
