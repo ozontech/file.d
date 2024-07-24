@@ -15,7 +15,6 @@ func NewClient(c *Config, l *zap.Logger) *kgo.Client {
 		kgo.ConsumerGroup(c.ConsumerGroup),
 		kgo.ConsumeTopics(c.Topics...),
 		kgo.FetchMaxWait(c.ConsumerMaxWaitTime_),
-		kgo.AutoCommitMarks(),
 		kgo.MaxConcurrentFetches(c.MaxConcurrentFetches),
 		kgo.FetchMaxBytes(c.FetchMaxBytes_),
 		kgo.FetchMinBytes(c.FetchMinBytes_),
