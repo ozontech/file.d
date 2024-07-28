@@ -2,23 +2,20 @@ package kafka
 
 import (
 	"context"
-	"strings"
 	"time"
 
-	"github.com/Shopify/sarama"
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
-	"github.com/ozontech/file.d/xscram"
-	"github.com/ozontech/file.d/xtls"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/twmb/franz-go/pkg/kgo"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
 
 /*{ introduction
-It sends the event batches to kafka brokers using `sarama` lib.
+It sends the event batches to kafka brokers using `franz-go` lib.
 }*/
 
 const (
@@ -26,8 +23,8 @@ const (
 )
 
 type data struct {
-	messages []*sarama.ProducerMessage
-	outBuf   sarama.ByteEncoder
+	messages []*kgo.Record
+	outBuf   []byte
 }
 
 type Plugin struct {
@@ -36,8 +33,8 @@ type Plugin struct {
 	avgEventSize int
 	controller   pipeline.OutputPluginController
 
-	producer sarama.SyncProducer
-	batcher  *pipeline.RetriableBatcher
+	client  KafkaClient
+	batcher *pipeline.RetriableBatcher
 
 	// plugin metrics
 	sendErrorMetric prometheus.Counter
@@ -102,6 +99,16 @@ type Config struct {
 	// > Should be set equal to or smaller than the broker's `message.max.bytes`.
 	MaxMessageBytes  cfg.Expression `json:"max_message_bytes" default:"1000000" parse:"expression"` // *
 	MaxMessageBytes_ int
+
+	// > @3@4@5@6
+	// >
+	// > Compression codec
+	Compression string `json:"compression" default:"none" options:"none|gzip|snappy|lz4|zstd"` // *
+
+	// > @3@4@5@6
+	// >
+	// > Required acks for produced records
+	Ack string `json:"ack" default:"leader" options:"no|leader|all-isr"` // *
 
 	// > @3@4@5@6
 	// >
@@ -172,6 +179,39 @@ type Config struct {
 	CACert string `json:"ca_cert"` // *
 }
 
+func (c *Config) GetBrokers() []string {
+	return c.Brokers
+}
+
+func (c *Config) GetClientID() string {
+	return c.ClientID
+}
+
+func (c *Config) IsSaslEnabled() bool {
+	return c.SaslEnabled
+}
+
+func (c *Config) GetSaslConfig() cfg.KafkaClientSaslConfig {
+	return cfg.KafkaClientSaslConfig{
+		SaslMechanism: c.SaslMechanism,
+		SaslUsername:  c.SaslUsername,
+		SaslPassword:  c.SaslPassword,
+	}
+}
+
+func (c *Config) IsSslEnabled() bool {
+	return c.SslEnabled
+}
+
+func (c *Config) GetSslConfig() cfg.KafkaClientSslConfig {
+	return cfg.KafkaClientSslConfig{
+		CACert:        c.CACert,
+		ClientCert:    c.ClientCert,
+		ClientKey:     c.ClientKey,
+		SslSkipVerify: c.SslSkipVerify,
+	}
+}
+
 func init() {
 	fd.DefaultPluginRegistry.RegisterOutput(&pipeline.PluginStaticInfo{
 		Type:    outPluginType,
@@ -196,7 +236,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 
 	p.logger.Infof("workers count=%d, batch size=%d", p.config.WorkersCount_, p.config.BatchSize_)
 
-	p.producer = NewProducer(p.config, p.logger)
+	p.client = NewClient(p.config, p.logger.Desugar())
 
 	batcherOpts := pipeline.BatcherOptions{
 		PipelineName:   params.PipelineName,
@@ -249,7 +289,7 @@ func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) error {
 	if *workerData == nil {
 		*workerData = &data{
-			messages: make([]*sarama.ProducerMessage, p.config.BatchSize_),
+			messages: make([]*kgo.Record, p.config.BatchSize_),
 			outBuf:   make([]byte, 0, p.config.BatchSize_*p.avgEventSize),
 		}
 	}
@@ -257,7 +297,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 	data := (*workerData).(*data)
 	// handle to much memory consumption
 	if cap(data.outBuf) > p.config.BatchSize_*p.avgEventSize {
-		data.outBuf = make(sarama.ByteEncoder, 0, p.config.BatchSize_*p.avgEventSize)
+		data.outBuf = make([]byte, 0, p.config.BatchSize_*p.avgEventSize)
 	}
 
 	outBuf := data.outBuf[:0]
@@ -275,90 +315,23 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 		}
 
 		if data.messages[i] == nil {
-			data.messages[i] = &sarama.ProducerMessage{}
+			data.messages[i] = &kgo.Record{}
 		}
 		data.messages[i].Value = outBuf[start:]
 		data.messages[i].Topic = topic
 		i++
 	})
 
-	err := p.producer.SendMessages(data.messages[:i])
-	if err != nil {
-		errs := err.(sarama.ProducerErrors)
-		for _, e := range errs {
-			p.logger.Errorf("can't write batch: %s", e.Err.Error())
-		}
-		p.sendErrorMetric.Add(float64(len(errs)))
-		p.logger.Error(
-			"an attempt to insert a batch failed",
-			zap.Error(err),
-		)
+	if err := p.client.ProduceSync(context.Background(), data.messages[:i]...).FirstErr(); err != nil {
+		p.logger.Errorf("can't write batch: %v", err)
+		p.sendErrorMetric.Inc()
+		return err
 	}
 
-	return err
+	return nil
 }
 
 func (p *Plugin) Stop() {
 	p.batcher.Stop()
-	if err := p.producer.Close(); err != nil {
-		p.logger.Error("can't stop kafka producer: %s", err)
-	}
-}
-
-func NewProducer(c *Config, l *zap.SugaredLogger) sarama.SyncProducer {
-	config := sarama.NewConfig()
-	config.ClientID = c.ClientID
-
-	// kafka auth sasl
-	if c.SaslEnabled {
-		config.Net.SASL.Enable = true
-
-		config.Net.SASL.User = c.SaslUsername
-		config.Net.SASL.Password = c.SaslPassword
-
-		config.Net.SASL.Mechanism = sarama.SASLMechanism(c.SaslMechanism)
-		switch config.Net.SASL.Mechanism {
-		case sarama.SASLTypeSCRAMSHA256:
-			config.Net.SASL.SCRAMClientGeneratorFunc = func() sarama.SCRAMClient { return xscram.NewClient(xscram.SHA256) }
-		case sarama.SASLTypeSCRAMSHA512:
-			config.Net.SASL.SCRAMClientGeneratorFunc = func() sarama.SCRAMClient { return xscram.NewClient(xscram.SHA512) }
-		}
-	}
-
-	// kafka connect via SSL with PEM
-	if c.SslEnabled {
-		config.Net.TLS.Enable = true
-
-		tlsCfg := xtls.NewConfigBuilder()
-		if c.CACert != "" {
-			if err := tlsCfg.AppendCARoot(c.CACert); err != nil {
-				l.Fatalf("can't load ca cert: %s", err.Error())
-			}
-		}
-		tlsCfg.SetSkipVerify(c.SslSkipVerify)
-
-		if c.ClientCert != "" || c.ClientKey != "" {
-			if err := tlsCfg.AppendX509KeyPair(c.ClientCert, c.ClientKey); err != nil {
-				l.Fatalf("can't load client certificate and key: %s", err.Error())
-			}
-		}
-
-		config.Net.TLS.Config = tlsCfg.Build()
-	}
-
-	config.Producer.MaxMessageBytes = c.MaxMessageBytes_
-	config.Producer.Partitioner = sarama.NewRoundRobinPartitioner
-	config.Producer.Flush.Messages = c.BatchSize_
-	// kafka plugin itself cares for flush frequency, but we are using batcher so disable it.
-	config.Producer.Flush.Frequency = time.Millisecond
-	config.Producer.Return.Errors = true
-	config.Producer.Return.Successes = true
-
-	producer, err := sarama.NewSyncProducer(c.Brokers, config)
-	if err != nil {
-		l.Fatalf("can't create producer: %s", err.Error())
-	}
-
-	l.Infof("producer created with brokers %q", strings.Join(c.Brokers, ","))
-	return producer
+	p.client.Close()
 }
