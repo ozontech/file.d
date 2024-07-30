@@ -137,7 +137,7 @@ pipelines:
 
 [More details...](plugin/input/k8s/README.md)
 ## kafka
-It reads events from multiple Kafka topics using `sarama` library.
+It reads events from multiple Kafka topics using `franz-go` library.
 > It guarantees at "at-least-once delivery" due to the commitment mechanism.
 
 **Example**
@@ -420,8 +420,7 @@ pipelines:
       ignore_fields:
       - trace_id
       masks:
-      - mask:
-        re: "\b(\d{1,4})\D?(\d{1,4})\D?(\d{1,4})\D?(\d{1,4})\b"
+      - re: "\b(\d{1,4})\D?(\d{1,4})\D?(\d{1,4})\D?(\d{1,4})\b"
         groups: [1,2,3]
     ...
 ```
@@ -723,7 +722,7 @@ Allowed characters in field names are letters, numbers, underscores, dashes, and
 
 [More details...](plugin/output/gelf/README.md)
 ## kafka
-It sends the event batches to kafka brokers using `sarama` lib.
+It sends the event batches to kafka brokers using `franz-go` lib.
 
 [More details...](plugin/output/kafka/README.md)
 ## postgres

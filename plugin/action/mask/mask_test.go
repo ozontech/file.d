@@ -2,6 +2,7 @@ package mask
 
 import (
 	"encoding/json"
+	"fmt"
 	"regexp"
 	"strings"
 	"sync"
@@ -101,7 +102,7 @@ func TestMaskFunctions(t *testing.T) {
 		{
 			name:         "ID-replace_word",
 			input:        []byte("user details: Иванов Иван Иванович"),
-			masks:        Mask{Re: kDefaultIDRegExp, Groups: []int{0}, ReplaceWord: "***MASKED***"},
+			masks:        Mask{Re: kDefaultIDRegExp, Groups: []int{0}, mode: modeReplace, ReplaceWord: "***MASKED***"},
 			expected:     []byte("user details: ***MASKED***"),
 			comment:      "ID masked with replace word",
 			mustBeMasked: true,
@@ -151,7 +152,15 @@ func TestMaskFunctions(t *testing.T) {
 			input:        []byte("email login@domain.ru"),
 			expected:     []byte("email SECMASKED"),
 			comment:      "do not replace email",
-			masks:        Mask{Re: kEMailRegExp, ReplaceWord: "SECMASKED", Groups: []int{0}, MaxCount: 10},
+			masks:        Mask{Re: kEMailRegExp, mode: modeReplace, ReplaceWord: "SECMASKED", Groups: []int{0}, MaxCount: 10},
+			mustBeMasked: true,
+		},
+		{
+			name:         "cut email",
+			input:        []byte("email login@domain.ru"),
+			expected:     []byte("email "),
+			comment:      "do not cut email",
+			masks:        Mask{Re: kEMailRegExp, mode: modeCut, CutValues: true, Groups: []int{0}, MaxCount: 10},
 			mustBeMasked: true,
 		},
 		{
@@ -159,7 +168,63 @@ func TestMaskFunctions(t *testing.T) {
 			input:        []byte("email\nnlogin@domain.ru"),
 			expected:     []byte("email\nSECMASKED"),
 			comment:      "do not replace email",
-			masks:        Mask{Re: kEMailRegExp, ReplaceWord: "SECMASKED", Groups: []int{0}, MaxCount: 10},
+			masks:        Mask{Re: kEMailRegExp, mode: modeReplace, ReplaceWord: "SECMASKED", Groups: []int{0}, MaxCount: 10},
+			mustBeMasked: true,
+		},
+		{
+			name:         "mask many values",
+			input:        []byte("test 1 mask 2 mask 3 mask 4 end"),
+			expected:     []byte("test 1 **** 2 **** 3 **** 4 end"),
+			comment:      "can't mask many values",
+			masks:        Mask{Re: "(mask)", mode: modeMask, Groups: []int{1}},
+			mustBeMasked: true,
+		},
+		{
+			name:         "mask many values with limit",
+			input:        []byte("test 1 mask 2 mask 3 mask 4 end"),
+			expected:     []byte("test 1 ** 2 ** 3 ** 4 end"),
+			comment:      "can't mask many values with limit",
+			masks:        Mask{Re: "(mask)", mode: modeMask, Groups: []int{1}, MaxCount: 2},
+			mustBeMasked: true,
+		},
+		{
+			name:         "mask many UTF-8 values",
+			input:        []byte("test 1 Петя 2 Петя 3 Петя 4 end"),
+			expected:     []byte("test 1 **** 2 **** 3 **** 4 end"),
+			comment:      "can't mask many UTF-8 values",
+			masks:        Mask{Re: "(Петя)", mode: modeMask, Groups: []int{1}},
+			mustBeMasked: true,
+		},
+		{
+			name:         "mask many UTF-8 values with limit",
+			input:        []byte("test 1 Вася 2 Вася 3 Вася 4 end"),
+			expected:     []byte("test 1 ** 2 ** 3 ** 4 end"),
+			comment:      "can't mask many UTF-8 values with limit",
+			masks:        Mask{Re: "(Вася)", mode: modeMask, Groups: []int{1}, MaxCount: 2},
+			mustBeMasked: true,
+		},
+		{
+			name:         "cut many values",
+			input:        []byte("test 1 mask 2 mask 3 mask 4 end"),
+			expected:     []byte("test 1  2  3  4 end"),
+			comment:      "can't cut many values",
+			masks:        Mask{Re: "(mask)", mode: modeCut, Groups: []int{1}},
+			mustBeMasked: true,
+		},
+		{
+			name:         "replace many values with short word",
+			input:        []byte("test 1 mask 2 mask 3 mask 4 end"),
+			expected:     []byte("test 1 ab 2 ab 3 ab 4 end"),
+			comment:      "can't replace many values with short word",
+			masks:        Mask{Re: "(mask)", mode: modeReplace, ReplaceWord: "ab", Groups: []int{1}},
+			mustBeMasked: true,
+		},
+		{
+			name:         "replace many values with long word",
+			input:        []byte("test 1 mask 2 mask 3 mask 4 end"),
+			expected:     []byte("test 1 qwerty 2 qwerty 3 qwerty 4 end"),
+			comment:      "can't replace many values with long word",
+			masks:        Mask{Re: "(mask)", mode: modeReplace, ReplaceWord: "qwerty", Groups: []int{1}},
 			mustBeMasked: true,
 		},
 	}
@@ -254,6 +319,34 @@ func TestGroupNumbers(t *testing.T) {
 			comment: "compiling success",
 		},
 		{
+			name:     "replace mode and cut mode are both enabled",
+			input:    &Mask{Re: kDefaultCardRegExp, Groups: []int{0}, ReplaceWord: "SECRET", CutValues: true},
+			isFatal:  true,
+			fatalMsg: "replace mode and cut mode are incompatible",
+			comment:  "replace mode and cut mode are both enabled",
+		},
+		{
+			name:    "replace mode enabled",
+			input:   &Mask{Re: kDefaultCardRegExp, Groups: []int{0}, ReplaceWord: "SECRET"},
+			expect:  &Mask{Re: kDefaultCardRegExp, Groups: []int{0}, ReplaceWord: "SECRET", mode: modeReplace},
+			isFatal: false,
+			comment: "replace mode enabled",
+		},
+		{
+			name:    "cut mode enabled",
+			input:   &Mask{Re: kDefaultCardRegExp, Groups: []int{0}, CutValues: true},
+			expect:  &Mask{Re: kDefaultCardRegExp, Groups: []int{0}, CutValues: true, mode: modeCut},
+			isFatal: false,
+			comment: "cut mode enabled",
+		},
+		{
+			name:    "mask mode enabled",
+			input:   &Mask{Re: kDefaultCardRegExp, Groups: []int{0}},
+			expect:  &Mask{Re: kDefaultCardRegExp, Groups: []int{0}, mode: modeMask},
+			isFatal: false,
+			comment: "mask mode enabled",
+		},
+		{
 			name:     "error in expression",
 			input:    &Mask{Re: "(err", Groups: []int{1}},
 			expect:   &Mask{Re: kDefaultCardRegExp, Groups: []int{}},
@@ -321,24 +414,32 @@ func TestGroupNumbers(t *testing.T) {
 				res := &Mask{
 					Re:     s.input.Re,
 					Groups: s.input.Groups,
+
+					CutValues:   s.input.CutValues,
+					ReplaceWord: s.input.ReplaceWord,
 				}
 				compileMask(res, zap.NewNop())
 				assert.NotNil(t, res.Re_, s.comment)
 				assert.Equal(t, res.Re, s.expect.Re, s.comment)
 				assert.Equal(t, res.Groups, s.expect.Groups, s.comment)
+
+				assert.Equal(t, res.CutValues, s.expect.CutValues)
+				assert.Equal(t, res.ReplaceWord, s.expect.ReplaceWord)
+				assert.Equal(t, res.mode, s.expect.mode, s.comment)
 			}
 		})
 	}
 }
 
 //nolint:funlen
-func TestGetValueNodeList(t *testing.T) {
+func TestGetValueNodes(t *testing.T) {
 	suits := []struct {
-		name          string
-		input         string
-		ignoredFields map[string]struct{}
-		expected      []string
-		comment       string
+		name        string
+		input       string
+		fieldPaths  [][]string
+		isWhitelist bool
+		expected    []string
+		comment     string
 	}{
 		{
 			name:     "simple test",
@@ -354,26 +455,123 @@ func TestGetValueNodeList(t *testing.T) {
 		},
 		{
 			name:  "test with ignored field",
-			input: `{"name1":"value1", "ignored_field":"value2"}`,
-			ignoredFields: map[string]struct{}{
-				"ignored_field": {},
+			input: `{"name1":"value1", "name2":"value2", "ignored_field":"some"}`,
+			fieldPaths: [][]string{
+				{"ignored_field"},
 			},
-			expected: []string{"value1"},
-			comment:  "skip ignored_field",
+			isWhitelist: false,
+			expected:    []string{"value1", "value2"},
+			comment:     "skip ignored_field",
 		},
 		{
-			name: "test with ignored nested field",
+			name:  "test with processed field",
+			input: `{"name1":"value1", "name2":"value2", "processed_field":"some"}`,
+			fieldPaths: [][]string{
+				{"processed_field"},
+			},
+			isWhitelist: true,
+			expected:    []string{"some"},
+			comment:     "skip all fields except processed_field",
+		},
+		{
+			name: "test with ignored nested field 1",
 			input: `{
 				"name1":"value1",
+				"name2":"value2",
 				"nested": {
-					"ignored_field":"value2"
+					"ignored_field":"some",
+					"name3":"value3"
 				}
 			}`,
-			ignoredFields: map[string]struct{}{
-				"ignored_field": {},
+			fieldPaths: [][]string{
+				{"nested", "ignored_field"},
 			},
-			expected: []string{"value1"},
-			comment:  "skip nested ignored_field",
+			isWhitelist: false,
+			expected:    []string{"value1", "value2", "value3"},
+			comment:     "skip one nested ignored_field",
+		},
+		{
+			name: "test with ignored nested field 2",
+			input: `{
+				"name1":"value1",
+				"name2":"value2",
+				"nested": {
+					"ignored1":"some1",
+					"ignored2":"some2"
+				}
+			}`,
+			fieldPaths: [][]string{
+				{"nested"},
+			},
+			isWhitelist: false,
+			expected:    []string{"value1", "value2"},
+			comment:     "skip two nested ignored_fields",
+		},
+		{
+			name: "test with several ignored paths",
+			input: `{
+				"name1":"value1",
+				"name2":"value2",
+				"nested": {"ignored1":"some1"},
+				"ignored2":"some2"
+			}`,
+			fieldPaths: [][]string{
+				{"nested", "ignored1"},
+				{"ignored2"},
+			},
+			isWhitelist: false,
+			expected:    []string{"value1", "value2"},
+			comment:     "skip two ignored_fields",
+		},
+		{
+			name: "test with processed nested field 1",
+			input: `{
+				"name1":"value1",
+				"name2":"value2",
+				"nested": {
+					"processed_field":"some",
+					"name3": "value3"
+				}
+			}`,
+			fieldPaths: [][]string{
+				{"nested", "processed_field"},
+			},
+			isWhitelist: true,
+			expected:    []string{"some"},
+			comment:     "skip all fields except one nested processed_field",
+		},
+		{
+			name: "test with processed nested field 2",
+			input: `{
+				"name1":"value1",
+				"name2":"value2",
+				"nested": {
+					"processed1":"some1",
+					"processed2":"some2"
+				}
+			}`,
+			fieldPaths: [][]string{
+				{"nested"},
+			},
+			isWhitelist: true,
+			expected:    []string{"some1", "some2"},
+			comment:     "skip all fields except two nested processed_fields",
+		},
+		{
+			name: "test with several processed paths",
+			input: `{
+				"name1":"value1",
+				"name2":"value2",
+				"nested": {"processed1":"some1"},
+				"processed2":"some2"
+			}`,
+			fieldPaths: [][]string{
+				{"nested", "processed1"},
+				{"processed2"},
+			},
+			isWhitelist: true,
+			expected:    []string{"some1", "some2"},
+			comment:     "skip all fields except two processed_fields",
 		},
 		{
 			name: "big json with ints and nulls",
@@ -433,11 +631,80 @@ func TestGetValueNodeList(t *testing.T) {
 			require.NoError(t, err)
 			defer insaneJSON.Release(root)
 
-			nodes := make([]*insaneJSON.Node, 0)
-			nodes = getValueNodeList(root.Node, nodes, s.ignoredFields)
-			assert.Equal(t, len(nodes), len(s.expected), s.comment)
+			p := Plugin{fieldPaths: s.fieldPaths, isWhitelist: s.isWhitelist}
+			nodes := p.getValueNodes(root.Node, nil)
+			require.Equal(t, len(nodes), len(s.expected), s.comment)
 			for i := range nodes {
 				assert.Equal(t, s.expected[i], nodes[i].AsString(), s.comment)
+			}
+		})
+	}
+}
+
+//nolint:funlen
+func TestGetAllValueNodes(t *testing.T) {
+	suits := []struct {
+		name     string
+		input    string
+		expected []string
+	}{
+		{
+			name:     "one string",
+			input:    `"abc"`,
+			expected: []string{"abc"},
+		},
+		{
+			name:     "one number",
+			input:    `123`,
+			expected: []string{"123"},
+		},
+		{
+			name:     "one boolean",
+			input:    `true`,
+			expected: []string{"true"},
+		},
+		{
+			name:     "one null",
+			input:    `null`,
+			expected: []string{"null"},
+		},
+		{
+			name:     "simple array",
+			input:    `["abc", 123, true, null]`,
+			expected: []string{"abc", "123", "true", "null"},
+		},
+		{
+			name:     "nested arrays",
+			input:    `[[], ["abc", 123, [true]], [[[], [null]]]]`,
+			expected: []string{"abc", "123", "true", "null"},
+		},
+		{
+			name:     "simple object",
+			input:    `{"name1":"abc", "name2":123, "name3":true, "name4":null}`,
+			expected: []string{"abc", "123", "true", "null"},
+		},
+		{
+			name:     "nested objects",
+			input:    `{"f1": {"some":"abc", "f2": {"n":123, "flag":true, "f3": {"name":null}}}}`,
+			expected: []string{"abc", "123", "true", "null"},
+		},
+		{
+			name:     "array and object",
+			input:    `{"f1": ["abc", {"name2":123, "name3":true}], "name": {"name":null}}`,
+			expected: []string{"abc", "123", "true", "null"},
+		},
+	}
+
+	for _, s := range suits {
+		t.Run(s.name, func(t *testing.T) {
+			root, err := insaneJSON.DecodeString(s.input)
+			require.NoError(t, err)
+			defer insaneJSON.Release(root)
+
+			nodes := getNestedValueNodes(root.Node, nil, nil)
+			require.Equal(t, len(nodes), len(s.expected))
+			for i := range nodes {
+				assert.Equal(t, s.expected[i], nodes[i].AsString())
 			}
 		})
 	}
@@ -865,5 +1132,56 @@ func BenchmarkMaskValue(b *testing.B) {
 	buf := make([]byte, 0, 2048)
 	for i := 0; i < b.N; i++ {
 		buf, _ = plugin.maskValue(&mask, input, buf)
+	}
+}
+
+func genFields(count int) string {
+	var sb strings.Builder
+	for i := 0; i < count; i++ {
+		sb.WriteString(fmt.Sprintf(`"field_%d":"val_%d",`, i, i))
+	}
+	return sb.String()
+}
+
+func BenchmarkGetValueNodesCommon(b *testing.B) {
+	s := fmt.Sprintf(`{%s"level":"info"}`, genFields(1000))
+	pl := Plugin{
+		isWhitelist: false,
+		fieldPaths: [][]string{
+			{"field_1"}, {"field_2"}, {"field_200"}, {"field_300"}, {"field_400"}, {"field_500"},
+			{"field_600"}, {"field_700"}, {"field_750"}, {"field_800"}, {"field_850"}, {"field_900"},
+		},
+		ignoredNodes: make([]*insaneJSON.Node, 100),
+		valueNodes:   make([]*insaneJSON.Node, 0, 1000),
+	}
+
+	root, err := insaneJSON.DecodeString(s)
+	require.NoError(b, err)
+	defer insaneJSON.Release(root)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		pl.getValueNodes(root.Node, pl.valueNodes)
+	}
+}
+
+func BenchmarkSkipManyValuesAtOnce(b *testing.B) {
+	s := fmt.Sprintf(
+		`{"name1":{"name2":[%s]}}`,
+		strings.TrimRight(strings.Repeat(`"abc",`, 1000), ","),
+	)
+	pl := Plugin{
+		isWhitelist: false,
+		fieldPaths:  [][]string{{"name1"}},
+		valueNodes:  make([]*insaneJSON.Node, 0, 1000),
+	}
+
+	root, err := insaneJSON.DecodeString(s)
+	require.NoError(b, err)
+	defer insaneJSON.Release(root)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		pl.getValueNodes(root.Node, pl.valueNodes)
 	}
 }

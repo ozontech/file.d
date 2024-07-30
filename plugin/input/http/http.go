@@ -4,6 +4,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -159,6 +160,12 @@ type Config struct {
 	// >
 	// > Example: ```user_agent: '{{ index (index .request.Header "User-Agent") 0}}'```
 	Meta cfg.MetaTemplates `json:"meta"` // *
+
+	// > @3@4@5@6
+	// >
+	// > CORS config.
+	// > See CORSConfig for details.
+	CORS CORSConfig `json:"cors" child:"true"` // *
 }
 
 type AuthStrategy byte
@@ -174,6 +181,11 @@ const (
 type AuthConfig struct {
 	// > @3@4@5@6
 	// >
+	// > Override default Authorization header
+	Header string `json:"header" default:"Authorization"` // *
+
+	// > @3@4@5@6
+	// >
 	// > AuthStrategy.Strategy describes strategy to use.
 	Strategy  string `json:"strategy" default:"disabled" options:"disabled|basic|bearer"` // *
 	Strategy_ AuthStrategy
@@ -184,6 +196,22 @@ type AuthConfig struct {
 	// > If the `strategy` is bearer, then the key is the name, the value is the Bearer token.
 	// > Key uses in the http_input_total metric.
 	Secrets map[string]string `json:"secrets"` // *
+}
+
+type CORSConfig struct {
+	AllowedOrigins []string `json:"allowed_origins"`
+	DefaultOrigin  string   `json:"default_origin"  default:"*"`
+	AllowedHeaders []string `json:"allowed_headers"`
+	ExposedHeaders []string `json:"exposed_headers"`
+}
+
+func (c *CORSConfig) getAllowedByOrigin(originHeader string) string {
+	for _, allowed := range c.AllowedOrigins {
+		if strings.HasSuffix(originHeader, allowed) || strings.HasPrefix(originHeader, allowed) {
+			return originHeader
+		}
+	}
+	return c.DefaultOrigin
 }
 
 func init() {
@@ -295,6 +323,32 @@ func (p *Plugin) putSourceID(x pipeline.SourceID) {
 }
 
 func (p *Plugin) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	allowOrigin := p.config.CORS.getAllowedByOrigin(r.Header.Get("Origin"))
+	w.Header().Set(
+		"Access-Control-Allow-Origin",
+		allowOrigin,
+	)
+
+	if len(p.config.CORS.AllowedHeaders) > 0 {
+		w.Header().Set(
+			"Access-Control-Allow-Headers",
+			strings.Join(p.config.CORS.AllowedHeaders, ","),
+		)
+	}
+
+	if len(p.config.CORS.ExposedHeaders) > 0 {
+		w.Header().Set(
+			"Access-Control-Exposed-Headers",
+			strings.Join(p.config.CORS.ExposedHeaders, ","),
+		)
+	}
+
+	w.Header().Set("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
+
+	if r.Method == http.MethodOptions {
+		return
+	}
+
 	ok, login := p.auth(r)
 
 	if !ok {
@@ -502,6 +556,9 @@ func (p *Plugin) auth(req *http.Request) (bool, string) {
 }
 
 func (p *Plugin) authBasic(req *http.Request) (string, bool) {
+	req.Header.Get(p.config.Auth.Header)
+	req.Header.Set("Authorization", req.Header.Get(p.config.Auth.Header))
+
 	username, password, ok := req.BasicAuth()
 	if !ok {
 		return username, false
@@ -510,7 +567,7 @@ func (p *Plugin) authBasic(req *http.Request) (string, bool) {
 }
 
 func (p *Plugin) authBearer(req *http.Request) (string, bool) {
-	authHeader := req.Header.Get("Authorization")
+	authHeader := req.Header.Get(p.config.Auth.Header)
 	const prefix = "Bearer "
 	if !strings.HasPrefix(authHeader, prefix) {
 		return "", false
@@ -557,6 +614,7 @@ type metaInformation struct {
 	login      string
 	remoteAddr net.IP
 	request    *http.Request
+	params     url.Values
 }
 
 func newMetaInformation(login string, ip net.IP, r *http.Request) metaInformation {
@@ -564,6 +622,7 @@ func newMetaInformation(login string, ip net.IP, r *http.Request) metaInformatio
 		login:      login,
 		remoteAddr: ip,
 		request:    r,
+		params:     r.URL.Query(),
 	}
 }
 
@@ -572,5 +631,6 @@ func (m metaInformation) GetData() map[string]any {
 		"login":       m.login,
 		"remote_addr": m.remoteAddr,
 		"request":     m.request,
+		"params":      m.params,
 	}
 }

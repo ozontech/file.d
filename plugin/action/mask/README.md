@@ -13,8 +13,7 @@ pipelines:
       ignore_fields:
       - trace_id
       masks:
-      - mask:
-        re: "\b(\d{1,4})\D?(\d{1,4})\D?(\d{1,4})\D?(\d{1,4})\b"
+      - re: "\b(\d{1,4})\D?(\d{1,4})\D?(\d{1,4})\D?(\d{1,4})\b"
         groups: [1,2,3]
     ...
 ```
@@ -44,9 +43,22 @@ If any mask has been applied then `mask_applied_field` will be set to `mask_appl
 
 <br>
 
-**`ignore_fields`** *`[]string`* 
+**`ignore_fields`** *`[]cfg.FieldSelector`* 
 
-List of the ignored event fields (including nested fields).
+List of the ignored event fields.
+If name of some field contained in this list
+then all nested fields will be ignored (even if they are not listed).
+
+<br>
+
+**`process_fields`** *`[]cfg.FieldSelector`* 
+
+List of the processed event fields.
+If name of some field contained in this list
+then all nested fields will be processed (even if they are not listed).
+If ignored fields list is empty and processed fields list is empty
+we consider this as empty ignored fields list (all fields will be processed).
+It is wrong to set non-empty ignored fields list and non-empty processed fields list at the same time.
 
 <br>
 
@@ -90,6 +102,12 @@ MaxCount limits the number of masked symbols in the masked output, if zero, no l
 **`replace_word`** *`string`* 
 
 ReplaceWord, if set, is used instead of asterisks for masking patterns that are of the same length or longer.
+
+<br>
+
+**`cut_values`** *`bool`* 
+
+CutValues, if set, masking parts will be cut instead of being replaced with ReplaceWord or asterisks.
 
 <br>
 

@@ -1,4 +1,4 @@
-# Host adding plugin
+# Split plugin
 @introduction
 
 ### Config params

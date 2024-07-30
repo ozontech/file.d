@@ -386,7 +386,7 @@ func TestPluginAuth(t *testing.T) {
 	newReq := func(authHeader string) *http.Request {
 		return &http.Request{
 			Header: map[string][]string{
-				"Authorization": {authHeader},
+				"Log-Authorization": {authHeader},
 			},
 		}
 	}
@@ -472,6 +472,7 @@ func TestPluginAuth(t *testing.T) {
 			conf := &Config{
 				Auth: AuthConfig{
 					Strategy: tc.Strategy,
+					Header:   "Log-Authorization",
 					Secrets:  tc.Secrets,
 				},
 				Address: "off",
@@ -483,6 +484,13 @@ func TestPluginAuth(t *testing.T) {
 			pipelineMock.Stop()
 
 			ok, login := inputInfo.Plugin.(*Plugin).auth(tc.Request)
+
+			if len(tc.Secrets) > 0 && tc.ShouldPass {
+				_, exists := tc.Secrets[login]
+				r.Equal(true, exists)
+			} else {
+				r.Equal("", login)
+			}
 
 			r.Equal(tc.ShouldPass, ok)
 			r.Equal(tc.Login, login)
