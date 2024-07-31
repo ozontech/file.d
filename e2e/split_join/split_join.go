@@ -6,17 +6,13 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"reflect"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/Shopify/sarama"
 	"github.com/ozontech/file.d/cfg"
-	kafka_in "github.com/ozontech/file.d/plugin/input/kafka"
 	"github.com/stretchr/testify/require"
-	"github.com/twmb/franz-go/pkg/kadm"
-	"github.com/twmb/franz-go/pkg/kgo"
-	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
 )
 
 const (
@@ -31,7 +27,7 @@ const (
 
 type Config struct {
 	inputDir string
-	client   *kgo.Client
+	consumer sarama.ConsumerGroup
 	topic    string
 }
 
@@ -52,23 +48,18 @@ func (c *Config) Configure(t *testing.T, conf *cfg.Config, pipelineName string) 
 	output.Set("brokers", []string{brokerHost})
 	output.Set("default_topic", c.topic)
 
-	config := &kafka_in.Config{
-		Brokers:              []string{brokerHost},
-		Topics:               []string{c.topic},
-		ConsumerGroup:        group,
-		Offset_:              kafka_in.OffsetTypeOldest,
-		SessionTimeout_:      10 * time.Second,
-		AutoCommitInterval_:  1 * time.Second,
-		ConsumerMaxWaitTime_: 1 * time.Second,
-		HeartbeatInterval_:   10 * time.Second,
-	}
+	addrs := []string{brokerHost}
+	config := sarama.NewConfig()
+	config.Consumer.Offsets.Initial = sarama.OffsetOldest
 
-	c.client = kafka_in.NewClient(config,
-		zap.NewNop().WithOptions(zap.WithFatalHook(zapcore.WriteThenPanic)),
-	)
+	admin, err := sarama.NewClusterAdmin(addrs, config)
+	r.NoError(err)
+	r.NoError(admin.CreateTopic(c.topic, &sarama.TopicDetail{
+		NumPartitions:     1,
+		ReplicationFactor: 1,
+	}, false))
 
-	adminClient := kadm.NewClient(c.client)
-	_, err := adminClient.CreateTopic(context.TODO(), 1, 1, nil, c.topic)
+	c.consumer, err = sarama.NewConsumerGroup(addrs, group, config)
 	r.NoError(err)
 }
 
@@ -92,37 +83,38 @@ func (c *Config) Validate(t *testing.T) {
 	defer cancel()
 
 	expectedEventsCount := messages * arrayLen
-	result := make(map[string]int, arrayLen)
+
+	strBuilder := strings.Builder{}
 	gotEvents := 0
 	done := make(chan struct{})
 
 	go func() {
-		for {
-			fetches := c.client.PollFetches(ctx)
-			fetches.EachError(func(topic string, p int32, err error) {})
-			fetches.EachRecord(func(r *kgo.Record) {
-				result[string(r.Value)]++
-				gotEvents++
-				if gotEvents == expectedEventsCount {
-					close(done)
-				}
-			})
-		}
+		r.NoError(c.consumer.Consume(ctx, []string{c.topic}, handlerFunc(func(msg *sarama.ConsumerMessage) {
+			strBuilder.Write(msg.Value)
+			strBuilder.WriteString("\n")
+			gotEvents++
+			if gotEvents == expectedEventsCount {
+				close(done)
+			}
+		})))
 	}()
 
 	select {
 	case <-done:
 	case <-ctx.Done():
-		r.Failf("test timed out", "got: %v, expected: %v", gotEvents, expectedEventsCount)
+		r.Failf("test timed out", "got: %v, expected: %v, consumed: %s", gotEvents, expectedEventsCount, strBuilder.String())
 	}
 
-	expected := map[string]int{
-		"{\"first\":\"1\"}":                messages,
-		"{\"message\":\"start continue\"}": messages,
-		"{\"second\":\"2\"}":               messages,
-		"{\"third\":\"3\"}":                messages,
-	}
+	got := strBuilder.String()
 
-	r.True(reflect.DeepEqual(expected, result))
+	expected := strings.Repeat(`{"first":"1"}
+{"message":"start continue"}
+{"second":"2"}
+{"third":"3"}
+`,
+		messages)
+
+	r.Equal(len(expected), len(got))
+	r.Equal(expected, got)
 	r.Equal(expectedEventsCount, gotEvents)
 }
