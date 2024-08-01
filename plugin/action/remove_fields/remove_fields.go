@@ -87,6 +87,12 @@ func (p *Plugin) Start(config pipeline.AnyConfig, _ *pipeline.ActionPluginParams
 		logger.Panicf("config is nil for the remove fields plugin")
 	}
 
+	// remove nested fields selection;
+	// for example:
+	// config `fields: ["a", "a.b"]` is equal to
+	// config `fields: ["a"]`
+	// see tests: TestDuplicatingFieldSelectors, TestNestedFieldSelectors
+
 	fields := p.config.Fields
 	sort.Slice(fields, func(i, j int) bool {
 		return len(fields[i]) < len(fields[j])

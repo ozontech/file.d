@@ -7,3 +7,4 @@ tests-offsets
 testdata
 
 .idea/
+.DS_Store
