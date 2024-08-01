@@ -181,6 +181,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.config = config.(*Config)
 	p.logger = params.Logger
 	p.avgEventSize = params.PipelineSettings.AvgEventSize
+	p.registerMetrics(params.MetricCtl)
 
 	batcherOpts := &pipeline.BatcherOptions{
 		PipelineName:   params.PipelineName,
