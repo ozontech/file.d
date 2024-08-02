@@ -410,6 +410,8 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 				isNewSource = false
 			} else {
 				p.Error(fmt.Sprintf("antispam_field %s does not exists in meta", p.settings.AntispamField))
+				checkSourceID = uint64(sourceID)
+				checkSourceName = sourceName
 			}
 		}
 
