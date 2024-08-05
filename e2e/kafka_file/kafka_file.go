@@ -1,21 +1,16 @@
 package kafka_file
 
 import (
-	"context"
 	"log"
 	"path"
 	"testing"
 	"time"
 
+	"github.com/Shopify/sarama"
 	"github.com/ozontech/file.d/cfg"
-	kafka_out "github.com/ozontech/file.d/plugin/output/kafka"
 	"github.com/ozontech/file.d/test"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/twmb/franz-go/pkg/kadm"
-	"github.com/twmb/franz-go/pkg/kgo"
-	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
 )
 
 // In this test, a message sender is created that generates one message for each partition. These messages are sent Count times.
@@ -46,33 +41,27 @@ func (c *Config) Configure(t *testing.T, conf *cfg.Config, pipelineName string) 
 
 // Send creates a Partition of messages (one for each partition) and sends them Count times to kafka
 func (c *Config) Send(t *testing.T) {
-	config := &kafka_out.Config{
-		Brokers:          c.Brokers,
-		MaxMessageBytes_: 512,
-		BatchSize_:       c.Count,
-	}
+	config := sarama.NewConfig()
+	config.Producer.Flush.Frequency = time.Millisecond
+	config.Producer.Return.Errors = true
+	config.Producer.Return.Successes = true
 
-	client := kafka_out.NewClient(config,
-		zap.NewNop().WithOptions(zap.WithFatalHook(zapcore.WriteThenPanic)),
-	)
-	adminClient := kadm.NewClient(client)
-	_, err := adminClient.CreateTopic(context.TODO(), 1, 1, nil, c.Topics[0])
+	producer, err := sarama.NewSyncProducer(c.Brokers, config)
 	if err != nil {
-		t.Logf("cannot create topic: %s %s", c.Topics[0], err.Error())
+		log.Fatalf("failed to create async producer: %s", err.Error())
 	}
+	msgs := make([]*sarama.ProducerMessage, c.Partition)
+	message := sarama.StringEncoder(`{"key":"value"}`)
 
-	msgs := make([]*kgo.Record, c.Partition)
 	for i := range msgs {
-		msgs[i] = &kgo.Record{}
-		msgs[i].Value = []byte(`{"key":"value"}`)
+		msgs[i] = &sarama.ProducerMessage{}
 		msgs[i].Topic = c.Topics[0]
+		msgs[i].Value = message
 		msgs[i].Partition = int32(i)
 	}
 
 	for i := 0; i < c.Count; i++ {
-		result := client.ProduceSync(context.TODO(), msgs...)
-		err := result.FirstErr()
-		if err != nil {
+		if err = producer.SendMessages(msgs); err != nil {
 			log.Fatalf("failed to send messages: %s", err.Error())
 		}
 	}

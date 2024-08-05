@@ -111,23 +111,22 @@ func (c *Config) Configure(t *testing.T, _ *cfg.Config, _ string) {
 					config.ClientCert = "./kafka_auth/certs/client_cert.pem"
 				}
 
-				kafka_out.NewClient(config,
-					zap.NewNop().WithOptions(zap.WithFatalHook(zapcore.WriteThenPanic)),
+				kafka_out.NewProducer(config,
+					zap.NewNop().WithOptions(zap.WithFatalHook(zapcore.WriteThenPanic)).Sugar(),
 				)
 			},
 			func() {
 				config := &kafka_in.Config{
-					Brokers:              c.Brokers,
-					Topics:               []string{inTopic},
-					ConsumerGroup:        "test-auth",
-					ClientID:             "test-auth-in",
-					ChannelBufferSize:    256,
-					Offset_:              kafka_in.OffsetTypeNewest,
-					ConsumerMaxWaitTime_: 250 * time.Millisecond,
-					SslEnabled:           true,
-					SslSkipVerify:        true,
-					SessionTimeout_:      10 * time.Second,
-					AutoCommitInterval_:  1 * time.Second,
+					Brokers:                    c.Brokers,
+					Topics:                     []string{inTopic},
+					ConsumerGroup:              "test-auth",
+					ClientID:                   "test-auth-in",
+					ChannelBufferSize:          256,
+					Offset_:                    kafka_in.OffsetTypeNewest,
+					ConsumerMaxProcessingTime_: 200 * time.Millisecond,
+					ConsumerMaxWaitTime_:       250 * time.Millisecond,
+					SslEnabled:                 true,
+					SslSkipVerify:              true,
 				}
 				if tt.sasl.Enabled {
 					config.SaslEnabled = true
@@ -141,8 +140,8 @@ func (c *Config) Configure(t *testing.T, _ *cfg.Config, _ string) {
 					config.ClientCert = "./kafka_auth/certs/client_cert.pem"
 				}
 
-				kafka_in.NewClient(config,
-					zap.NewNop().WithOptions(zap.WithFatalHook(zapcore.WriteThenPanic)),
+				kafka_in.NewConsumerGroup(config,
+					zap.NewNop().WithOptions(zap.WithFatalHook(zapcore.WriteThenPanic)).Sugar(),
 				)
 			},
 		}
