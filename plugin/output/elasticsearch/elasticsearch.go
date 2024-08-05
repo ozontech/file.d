@@ -28,26 +28,57 @@ If a network error occurs, the batch will infinitely try to be delivered to the 
 }*/
 
 const (
-	outPluginType     = "elasticsearch"
-	NDJSONContentType = "application/x-ndjson"
+	outPluginType = "elasticsearch"
+
+	NDJSONContentType   = "application/x-ndjson"
+	gzipContentEncoding = "gzip"
 )
+
+type gzipCompressionLevel int
+
+const (
+	gzipCompressionLevelDefault gzipCompressionLevel = iota
+	gzipCompressionLevelNo
+	gzipCompressionLevelBestSpeed
+	gzipCompressionLevelBestCompression
+	gzipCompressionLevelHuffmanOnly
+)
+
+func (l gzipCompressionLevel) toFastHTTP() int {
+	switch l {
+	case gzipCompressionLevelNo:
+		return fasthttp.CompressNoCompression
+	case gzipCompressionLevelBestSpeed:
+		return fasthttp.CompressBestSpeed
+	case gzipCompressionLevelBestCompression:
+		return fasthttp.CompressBestCompression
+	case gzipCompressionLevelHuffmanOnly:
+		return fasthttp.CompressHuffmanOnly
+	default:
+		return fasthttp.CompressDefaultCompression
+	}
+}
 
 var (
 	strAuthorization = []byte(fasthttp.HeaderAuthorization)
 )
 
 type Plugin struct {
-	logger       *zap.Logger
-	client       *fasthttp.Client
-	endpoints    []*fasthttp.URI
-	cancel       context.CancelFunc
-	config       *Config
-	authHeader   []byte
+	config *Config
+
+	client     *fasthttp.Client
+	endpoints  []*fasthttp.URI
+	authHeader []byte
+
+	logger     *zap.Logger
+	controller pipeline.OutputPluginController
+
+	batcher      *pipeline.RetriableBatcher
 	avgEventSize int
+
 	time         string
 	headerPrefix string
-	batcher      *pipeline.RetriableBatcher
-	controller   pipeline.OutputPluginController
+	cancel       context.CancelFunc
 	mu           *sync.Mutex
 
 	// plugin metrics
@@ -62,6 +93,17 @@ type Config struct {
 	// >
 	// > The list of elasticsearch endpoints in the following format: `SCHEMA://HOST:PORT`
 	Endpoints []string `json:"endpoints"  required:"true"` // *
+
+	// > @3@4@5@6
+	// >
+	// > If set, the plugin will use gzip encoding.
+	UseGzip bool `json:"use_gzip" default:"false"` // *
+
+	// > @3@4@5@6
+	// >
+	// > Gzip compression level. Used if `use_gzip=true`.
+	GzipCompressionLevel  string `json:"gzip_compression_level" default:"default" options:"default|no|best-speed|best-compression|huffman-only"` // *
+	GzipCompressionLevel_ gzipCompressionLevel
 
 	// > @3@4@5@6
 	// >
@@ -192,36 +234,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		p.config.IndexValues = append(p.config.IndexValues, "@time")
 	}
 
-	for _, endpoint := range p.config.Endpoints {
-		if endpoint[len(endpoint)-1] == '/' {
-			endpoint = endpoint[:len(endpoint)-1]
-		}
-
-		uri := &fasthttp.URI{}
-		if err := uri.Parse(nil, []byte(endpoint+"/_bulk?_source=false")); err != nil {
-			logger.Fatalf("can't parse ES endpoint %s: %s", endpoint, err.Error())
-		}
-
-		p.endpoints = append(p.endpoints, uri)
-	}
-
-	p.client = &fasthttp.Client{
-		ReadTimeout:     p.config.ConnectionTimeout_ * 2,
-		WriteTimeout:    p.config.ConnectionTimeout_ * 2,
-		MaxConnDuration: time.Minute * 5,
-	}
-
-	if p.config.CACert != "" {
-		b := xtls.NewConfigBuilder()
-		err := b.AppendCARoot(p.config.CACert)
-		if err != nil {
-			p.logger.Fatal("can't append CA root", zap.Error(err))
-		}
-
-		p.client.TLSConfig = b.Build()
-	}
-
-	p.authHeader = p.getAuthHeader()
+	p.prepareClient()
 
 	p.maintenance(nil)
 
@@ -286,6 +299,38 @@ func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 	p.indexingErrorsMetric = ctl.RegisterCounter("output_elasticsearch_index_error", "Number of elasticsearch indexing errors")
 }
 
+func (p *Plugin) prepareClient() {
+	p.client = &fasthttp.Client{
+		ReadTimeout:     p.config.ConnectionTimeout_ * 2,
+		WriteTimeout:    p.config.ConnectionTimeout_ * 2,
+		MaxConnDuration: time.Minute * 5,
+	}
+	if p.config.CACert != "" {
+		b := xtls.NewConfigBuilder()
+		err := b.AppendCARoot(p.config.CACert)
+		if err != nil {
+			p.logger.Fatal("can't append CA root", zap.Error(err))
+		}
+
+		p.client.TLSConfig = b.Build()
+	}
+
+	for _, endpoint := range p.config.Endpoints {
+		if endpoint[len(endpoint)-1] == '/' {
+			endpoint = endpoint[:len(endpoint)-1]
+		}
+
+		uri := &fasthttp.URI{}
+		if err := uri.Parse(nil, []byte(endpoint+"/_bulk?_source=false")); err != nil {
+			logger.Fatalf("can't parse ES endpoint %s: %s", endpoint, err.Error())
+		}
+
+		p.endpoints = append(p.endpoints, uri)
+	}
+
+	p.authHeader = p.getAuthHeader()
+}
+
 func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) error {
 	if *workerData == nil {
 		*workerData = &data{
@@ -319,11 +364,7 @@ func (p *Plugin) send(body []byte) error {
 	defer fasthttp.ReleaseResponse(resp)
 
 	endpoint := p.endpoints[rand.Int()%len(p.endpoints)]
-	req.SetURI(endpoint)
-	req.SetBodyRaw(body)
-	req.Header.SetMethod(fasthttp.MethodPost)
-	req.Header.SetContentType(NDJSONContentType)
-	p.setAuthHeader(req)
+	p.prepareRequest(req, endpoint, body)
 
 	if err := p.client.DoTimeout(req, resp, p.config.ConnectionTimeout_); err != nil {
 		return fmt.Errorf("can't send batch to %s: %s", endpoint.String(), err.Error())
@@ -344,6 +385,27 @@ func (p *Plugin) send(body []byte) error {
 	p.reportESErrors(root)
 
 	return nil
+}
+
+func (p *Plugin) prepareRequest(req *fasthttp.Request, endpoint *fasthttp.URI, body []byte) {
+	req.SetURI(endpoint)
+
+	req.Header.SetMethod(fasthttp.MethodPost)
+	req.Header.SetContentType(NDJSONContentType)
+
+	if p.authHeader != nil {
+		req.Header.SetBytesKV(strAuthorization, p.authHeader)
+	}
+
+	if p.config.UseGzip {
+		if _, err := fasthttp.WriteGzipLevel(req.BodyWriter(), body, p.config.GzipCompressionLevel_.toFastHTTP()); err != nil {
+			req.SetBodyRaw(body)
+		} else {
+			req.Header.SetContentEncoding(gzipContentEncoding)
+		}
+	} else {
+		req.SetBodyRaw(body)
+	}
 }
 
 func (p *Plugin) appendEvent(outBuf []byte, event *pipeline.Event) []byte {
@@ -404,12 +466,6 @@ func (p *Plugin) getAuthHeader() []byte {
 		return append([]byte("Basic "), buf...)
 	}
 	return nil
-}
-
-func (p *Plugin) setAuthHeader(req *fasthttp.Request) {
-	if p.authHeader != nil {
-		req.Header.SetBytesKV(strAuthorization, p.authHeader)
-	}
 }
 
 // example of an ElasticSearch response that returned an indexing error for the first log:
