@@ -41,7 +41,7 @@ Allowed characters in field names are letters, numbers, underscores, dashes, and
 
 [More details...](plugin/output/gelf/README.md)
 ## kafka
-It sends the event batches to kafka brokers using `sarama` lib.
+It sends the event batches to kafka brokers using `franz-go` lib.
 
 [More details...](plugin/output/kafka/README.md)
 ## postgres
