@@ -137,7 +137,7 @@ pipelines:
 
 [More details...](plugin/input/k8s/README.md)
 ## kafka
-It reads events from multiple Kafka topics using `sarama` library.
+It reads events from multiple Kafka topics using `franz-go` library.
 > It guarantees at "at-least-once delivery" due to the commitment mechanism.
 
 **Example**
@@ -764,7 +764,7 @@ Allowed characters in field names are letters, numbers, underscores, dashes, and
 
 [More details...](plugin/output/gelf/README.md)
 ## kafka
-It sends the event batches to kafka brokers using `sarama` lib.
+It sends the event batches to kafka brokers using `franz-go` lib.
 
 [More details...](plugin/output/kafka/README.md)
 ## postgres
