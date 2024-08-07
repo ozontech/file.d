@@ -2,7 +2,6 @@ package kafka
 
 import (
 	"context"
-	"strings"
 	"time"
 
 	"github.com/ozontech/file.d/cfg"
@@ -59,6 +58,8 @@ type Plugin struct {
 	consumeErrorsMetric prometheus.Counter
 
 	metaTemplater *metadata.MetaTemplater
+
+	s *splitConsume
 }
 
 type OffsetType byte
@@ -267,7 +268,10 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	p.logger = params.Logger
 	p.config = config.(*Config)
 	p.registerMetrics(params.MetricCtl)
-	p.metaTemplater = metadata.NewMetaTemplater(p.config.Meta)
+
+	if len(p.config.Meta) > 0 {
+		p.metaTemplater = metadata.NewMetaTemplater(p.config.Meta)
+	}
 
 	p.idByTopic = make(map[string]int, len(p.config.Topics))
 	for i, topic := range p.config.Topics {
@@ -276,35 +280,25 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 
 	ctx, cancel := context.WithCancel(context.Background())
 	p.cancel = cancel
-	p.client = NewClient(p.config, p.logger.Desugar())
+	p.s = &splitConsume{
+		consumers:           make(map[tp]*pconsumer),
+		bufferSize:          p.config.ChannelBufferSize,
+		idByTopic:           p.idByTopic,
+		controller:          p.controller,
+		logger:              p.logger.Desugar(),
+		metaTemplater:       p.metaTemplater,
+		consumeErrorsMetric: p.consumeErrorsMetric,
+	}
+	p.client = NewClient(p.config, p.logger.Desugar(), p.s)
 	p.controller.UseSpread()
 	p.controller.DisableStreams()
 
-	go p.consume(ctx)
+	go p.s.consume(ctx, p.client)
 }
 
 func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 	p.commitErrorsMetric = ctl.RegisterCounter("input_kafka_commit_errors", "Number of kafka commit errors")
 	p.consumeErrorsMetric = ctl.RegisterCounter("input_kafka_consume_errors", "Number of kafka consume errors")
-}
-
-func (p *Plugin) consume(ctx context.Context) {
-	p.logger.Infof("kafka input reading from topics: %s", strings.Join(p.config.Topics, ","))
-	for {
-		fetches := p.client.PollRecords(ctx, p.config.ChannelBufferSize)
-		if errs := fetches.Errors(); len(errs) > 0 {
-			for _, err := range errs {
-				p.consumeErrorsMetric.Inc()
-				p.logger.Errorf("can't consume from kafka: %s", err.Err.Error())
-			}
-		}
-
-		if ctx.Err() != nil {
-			return
-		}
-
-		p.ConsumeClaim(fetches)
-	}
 }
 
 func (p *Plugin) Stop() {
