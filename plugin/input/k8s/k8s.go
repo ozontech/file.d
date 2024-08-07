@@ -3,6 +3,7 @@ package k8s
 import (
 	"net/http"
 
+	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/decoder"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/pipeline"
@@ -92,6 +93,14 @@ type Config struct {
 	// >
 	// > Under the hood this plugin uses [file plugin](/plugin/input/file/README.md) to collect logs from files. So you can change any [file plugin](/plugin/input/file/README.md) config parameter using `file_config` section. Check out an example.
 	FileConfig file.Config `json:"file_config" child:"true"` // *
+
+	// > @3@4@5@6
+	// >
+	// > Meta params
+	// >
+	// > Add meta information to an event (look at Meta params)
+	// > Use [go-template](https://pkg.go.dev/text/template) syntax
+	Meta cfg.MetaTemplates `json:"meta"` // *
 }
 
 var startCounter atomic.Int32
@@ -138,6 +147,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	} else {
 		p.params.Controller.SuggestDecoder(decoder.CRI)
 	}
+	p.params.Controller.SetMetaTemplater(p.config.Meta)
 
 	p.fp.Start(&p.config.FileConfig, params)
 }
