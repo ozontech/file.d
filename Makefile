@@ -32,13 +32,13 @@ test-e2e:
 .PHONY: test-e2e-docker-up
 test-e2e-docker-up:
 	for dc in $(shell find e2e -name 'docker-compose.yml') ; do \
-		docker-compose -f $$dc up -d ; \
+		docker compose -f $$dc up -d ; \
 	done
 
 .PHONY: test-e2e-docker-down
 test-e2e-docker-down:
 	for dc in $(shell find e2e -name 'docker-compose.yml') ; do \
-		docker-compose -f $$dc down ; \
+		docker compose -f $$dc down ; \
 	done
 
 .PHONY: bench-file
