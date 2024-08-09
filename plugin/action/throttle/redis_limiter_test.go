@@ -368,6 +368,15 @@ func Test_getLimitValFromJson(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			name: "ok_with_object",
+			args: args{
+				data:     []byte(`{"limit_key":"3000","some_obj":{"field":"key"}}`),
+				valField: "limit_key",
+			},
+			want:    3000,
+			wantErr: false,
+		},
+		{
 			name: "unmarshal_error",
 			args: args{
 				data:     []byte(`"3000"`),
