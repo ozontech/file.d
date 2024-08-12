@@ -207,16 +207,14 @@ func (l *redisLimiter) updateLimiterValues(maxID, bucketIdx int, totalLimiterVal
 }
 
 func getLimitValFromJson(data []byte, valField string) (int64, error) {
-	var limit int64
-	var err error
 	var m map[string]json.RawMessage
 	reader := bytes.NewReader(data)
-	if err = json.NewDecoder(reader).Decode(&m); err != nil {
-		return limit, fmt.Errorf("failed to unmarshal map: %w", err)
+	if err := json.NewDecoder(reader).Decode(&m); err != nil {
+		return 0, fmt.Errorf("failed to unmarshal map: %w", err)
 	}
 	limitVal, has := m[valField]
 	if !has {
-		return limit, fmt.Errorf("no %q key in map", valField)
+		return 0, fmt.Errorf("no %q key in map", valField)
 	}
 	return json.Number(bytes.Trim(limitVal, `"`)).Int64()
 }
