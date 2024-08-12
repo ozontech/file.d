@@ -61,18 +61,18 @@ func NewTsCmpOpNode(field string, format string, cmpOp string, cmpValChMode stri
 		constCmpValue:  cmpValue.UnixNano(),
 		updateInterval: updateInterval,
 	}
-	result.startUpdater(updateInterval)
+	result.startUpdater()
 
 	return result, nil
 }
 
-func (n *tsCmpOpNode) startUpdater(interval time.Duration) {
+func (n *tsCmpOpNode) startUpdater() {
 	if n.cmpValChMode == cmpValChModeNow {
 		n.varCmpValue.Store(time.Now().UnixNano())
 		go func() {
 			for {
 				n.varCmpValue.Store(time.Now().UnixNano())
-				time.Sleep(interval)
+				time.Sleep(n.updateInterval)
 			}
 		}()
 	}

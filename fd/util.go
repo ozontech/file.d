@@ -310,12 +310,14 @@ const (
 )
 
 const (
-	tsCmpModeNowTag      = "now"
-	tsCmpModeExplicitTag = "const"
+	tsCmpModeNowTag   = "now"
+	tsCmpModeConstTag = "const"
 
 	tsCmpValueNowTag   = "now"
 	tsCmpValueStartTag = "file_d_start"
 )
+
+const defaultTSCmpValUpdateInterval = 5 * time.Minute
 
 func extractTsCmpOpNode(_ string, jsonNode *simplejson.Json) (doif.Node, error) {
 	fieldPathNode, has := jsonNode.CheckGet(fieldNameField)
@@ -361,17 +363,17 @@ func extractTsCmpOpNode(_ string, jsonNode *simplejson.Json) (doif.Node, error) 
 	case tsCmpValueNowTag:
 		cmpMode = tsCmpModeNowTag
 	case tsCmpValueStartTag:
-		cmpMode = tsCmpModeExplicitTag
+		cmpMode = tsCmpModeConstTag
 		cmpValue = time.Now()
 	default:
-		cmpMode = tsCmpModeExplicitTag
+		cmpMode = tsCmpModeConstTag
 		cmpValue, err = time.Parse(time.RFC3339Nano, rawCmpValue)
 		if err != nil {
 			return nil, fmt.Errorf("parse ts cmp value: %w", err)
 		}
 	}
 
-	return doif.NewTsCmpOpNode(fieldPath, format, cmpOp, cmpMode, cmpValue, 5*time.Minute)
+	return doif.NewTsCmpOpNode(fieldPath, format, cmpOp, cmpMode, cmpValue, defaultTSCmpValUpdateInterval)
 }
 
 func extractLogicalOpNode(opName string, jsonNode *simplejson.Json) (doif.Node, error) {
