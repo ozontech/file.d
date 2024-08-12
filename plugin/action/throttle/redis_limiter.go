@@ -207,7 +207,7 @@ func (l *redisLimiter) updateLimiterValues(maxID, bucketIdx int, totalLimiterVal
 }
 
 func getLimitValFromJson(data []byte, valField string) (int64, error) {
-	var m map[string]json.Number
+	var m map[string]json.RawMessage
 	reader := bytes.NewReader(data)
 	if err := json.NewDecoder(reader).Decode(&m); err != nil {
 		return 0, fmt.Errorf("failed to unmarshal map: %w", err)
@@ -216,7 +216,7 @@ func getLimitValFromJson(data []byte, valField string) (int64, error) {
 	if !has {
 		return 0, fmt.Errorf("no %q key in map", valField)
 	}
-	return limitVal.Int64()
+	return json.Number(bytes.Trim(limitVal, `"`)).Int64()
 }
 
 // updateKeyLimit reads key limit from redis and updates current limit.
