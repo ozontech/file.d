@@ -121,7 +121,8 @@ func checkNode(t *testing.T, want, got Node) {
 		wantNode := want.(*lenCmpOpNode)
 		gotNode := got.(*lenCmpOpNode)
 		assert.Equal(t, wantNode.lenCmpOp, gotNode.lenCmpOp)
-		assert.NoError(t, wantNode.comparator.isEqualTo(gotNode.comparator))
+		assert.Equal(t, wantNode.cmpValue, gotNode.cmpValue)
+		assert.Equal(t, wantNode.cmpOp, gotNode.cmpOp)
 		assert.Equal(t, 0, slices.Compare[[]string](wantNode.fieldPath, gotNode.fieldPath))
 	case NodeTimestampCmpOp:
 		wantNode := want.(*tsCmpOpNode)
@@ -275,10 +276,8 @@ func TestBuildNodes(t *testing.T) {
 			want: &lenCmpOpNode{
 				lenCmpOp:  byteLenCmpOp,
 				fieldPath: []string{"pod"},
-				comparator: comparator{
-					cmpOp:    cmpOpLess,
-					cmpValue: 100,
-				},
+				cmpOp:     cmpOpLess,
+				cmpValue:  100,
 			},
 		},
 		{
@@ -292,10 +291,8 @@ func TestBuildNodes(t *testing.T) {
 			want: &lenCmpOpNode{
 				lenCmpOp:  byteLenCmpOp,
 				fieldPath: []string{},
-				comparator: comparator{
-					cmpOp:    cmpOpLess,
-					cmpValue: 100,
-				},
+				cmpOp:     cmpOpLess,
+				cmpValue:  100,
 			},
 		},
 		{
@@ -309,10 +306,8 @@ func TestBuildNodes(t *testing.T) {
 			want: &lenCmpOpNode{
 				lenCmpOp:  arrayLenCmpOp,
 				fieldPath: []string{"items"},
-				comparator: comparator{
-					cmpOp:    cmpOpLess,
-					cmpValue: 100,
-				},
+				cmpOp:     cmpOpLess,
+				cmpValue:  100,
 			},
 		},
 		{
@@ -326,10 +321,8 @@ func TestBuildNodes(t *testing.T) {
 			want: &lenCmpOpNode{
 				lenCmpOp:  arrayLenCmpOp,
 				fieldPath: []string{},
-				comparator: comparator{
-					cmpOp:    cmpOpLess,
-					cmpValue: 100,
-				},
+				cmpOp:     cmpOpLess,
+				cmpValue:  100,
 			},
 		},
 		{
@@ -347,7 +340,7 @@ func TestBuildNodes(t *testing.T) {
 				format:        time.RFC3339,
 				cmpOp:         cmpOpLess,
 				cmpValChMode:  cmpValChModeConst,
-				constCmpValue: timestamp,
+				constCmpValue: timestamp.UnixNano(),
 			},
 		},
 		{
@@ -366,7 +359,7 @@ func TestBuildNodes(t *testing.T) {
 				format:         time.RFC3339,
 				cmpOp:          cmpOpLess,
 				cmpValChMode:   cmpValChModeNow,
-				constCmpValue:  timestamp,
+				constCmpValue:  timestamp.UnixNano(),
 				updateInterval: 5 * time.Minute,
 			},
 		},

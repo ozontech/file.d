@@ -27,20 +27,18 @@ type tsCmpOpNode struct {
 	fieldPath []string
 	format    string
 
-	cmpOp comparisonOperation
+	cmpOp cmpOperation
 
 	cmpValChMode   cmpValueChangingMode
-	constCmpValue  time.Time
+	constCmpValue  int64
 	varCmpValue    atomic.Int64
 	updateInterval time.Duration
 }
 
 func NewTsCmpOpNode(field string, format string, cmpOp string, cmpValChMode string, cmpValue time.Time, updateInterval time.Duration) (Node, error) {
-	resCmpOp := comparisonOperation(cmpOp)
-	switch resCmpOp {
-	case cmpOpLess, cmpOpLessOrEqual, cmpOpGreater, cmpOpGreaterOrEqual, cmpOpEqual, cmpOpNotEqual:
-	default:
-		return nil, fmt.Errorf("unknown comparison operation: %s", resCmpOp)
+	typedCmpOp, err := newCmpOp(cmpOp)
+	if err != nil {
+		return nil, err
 	}
 
 	fieldPath := cfg.ParseFieldSelector(field)
@@ -58,9 +56,9 @@ func NewTsCmpOpNode(field string, format string, cmpOp string, cmpValChMode stri
 	result := &tsCmpOpNode{
 		fieldPath:      fieldPath,
 		format:         format,
-		cmpOp:          resCmpOp,
+		cmpOp:          typedCmpOp,
 		cmpValChMode:   resCmpValChMode,
-		constCmpValue:  cmpValue,
+		constCmpValue:  cmpValue.UnixNano(),
 		updateInterval: updateInterval,
 	}
 	result.startUpdater(updateInterval)
@@ -94,37 +92,24 @@ func (n *tsCmpOpNode) Check(eventRoot *insaneJSON.Root) bool {
 		return false
 	}
 
-	lhs, err := time.Parse(n.format, node.AsString())
+	timeVal, err := time.Parse(n.format, node.AsString())
 	if err != nil {
 		return false
 	}
 
-	var rhs time.Time
+	lhs := int(timeVal.UnixNano())
+
+	rhs := 0
 	switch n.cmpValChMode {
 	case cmpValChModeNow:
-		rhs = time.Unix(0, n.varCmpValue.Load())
+		rhs = int(n.varCmpValue.Load())
 	case cmpValChModeConst:
-		rhs = n.constCmpValue
+		rhs = int(n.constCmpValue)
 	default:
 		panic(fmt.Sprintf("impossible: invalid cmp value changing mode: %d", n.cmpValChMode))
 	}
 
-	switch n.cmpOp {
-	case cmpOpLess:
-		return lhs.Before(rhs)
-	case cmpOpLessOrEqual:
-		return lhs.Before(rhs) || lhs.Equal(rhs)
-	case cmpOpGreater:
-		return lhs.After(rhs)
-	case cmpOpGreaterOrEqual:
-		return lhs.After(rhs) || lhs.Equal(rhs)
-	case cmpOpEqual:
-		return lhs.Equal(rhs)
-	case cmpOpNotEqual:
-		return !lhs.Equal(rhs)
-	default:
-		panic(fmt.Sprintf("impossible: invalid cmp op: %s", n.cmpOp))
-	}
+	return n.cmpOp.compare(lhs, rhs)
 }
 
 func (n *tsCmpOpNode) isEqualTo(n2 Node, _ int) error {
@@ -148,8 +133,8 @@ func (n *tsCmpOpNode) isEqualTo(n2 Node, _ int) error {
 	if n.constCmpValue != n2Explicit.constCmpValue {
 		return fmt.Errorf(
 			"nodes have different cmp values: %s != %s",
-			n.constCmpValue.Format(time.RFC3339Nano),
-			n2Explicit.constCmpValue.Format(time.RFC3339Nano),
+			time.Unix(0, n.constCmpValue).Format(time.RFC3339Nano),
+			time.Unix(0, n2Explicit.constCmpValue).Format(time.RFC3339Nano),
 		)
 	}
 

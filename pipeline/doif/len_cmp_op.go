@@ -90,9 +90,10 @@ const (
 )
 
 type lenCmpOpNode struct {
-	lenCmpOp   lenCmpOpType
-	fieldPath  []string
-	comparator comparator
+	lenCmpOp  lenCmpOpType
+	fieldPath []string
+	cmpOp     cmpOperation
+	cmpValue  int
 }
 
 func NewLenCmpOpNode(op string, field string, cmpOp string, cmpValue int) (Node, error) {
@@ -106,16 +107,21 @@ func NewLenCmpOpNode(op string, field string, cmpOp string, cmpValue int) (Node,
 		return nil, fmt.Errorf("bad len cmp op: %s", op)
 	}
 
+	if cmpValue < 0 {
+		return nil, fmt.Errorf("negative cmp value: %d", cmpValue)
+	}
+
 	fieldPath := cfg.ParseFieldSelector(field)
-	cmp, err := newComparator(cmpOp, cmpValue)
+	typedCmpOp, err := newCmpOp(cmpOp)
 	if err != nil {
 		return nil, fmt.Errorf("init byte len cmp op node: %w", err)
 	}
 
 	return &lenCmpOpNode{
-		lenCmpOp:   lenCmpOp,
-		fieldPath:  fieldPath,
-		comparator: cmp,
+		lenCmpOp:  lenCmpOp,
+		fieldPath: fieldPath,
+		cmpOp:     typedCmpOp,
+		cmpValue:  cmpValue,
 	}, nil
 }
 
@@ -149,7 +155,7 @@ func (n *lenCmpOpNode) Check(eventRoot *insaneJSON.Root) bool {
 		panic("impossible: bad len cmp op")
 	}
 
-	return n.comparator.compare(value)
+	return n.cmpOp.compare(value, n.cmpValue)
 }
 
 func (n *lenCmpOpNode) isEqualTo(n2 Node, _ int) error {
@@ -162,8 +168,12 @@ func (n *lenCmpOpNode) isEqualTo(n2 Node, _ int) error {
 		return fmt.Errorf("nodes have different len cmp operations: %d != %d", n.lenCmpOp, n2Explicit.lenCmpOp)
 	}
 
-	if err := n.comparator.isEqualTo(n2Explicit.comparator); err != nil {
-		return err
+	if n.cmpOp != n2Explicit.cmpOp {
+		return fmt.Errorf("nodes have different cmp operations")
+	}
+
+	if n.cmpValue != n2Explicit.cmpValue {
+		return fmt.Errorf("nodes have different cmp values: %d != %d", n.cmpValue, n2Explicit.cmpValue)
 	}
 
 	if slices.Compare(n.fieldPath, n2Explicit.fieldPath) != 0 {
