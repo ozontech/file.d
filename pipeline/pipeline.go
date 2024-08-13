@@ -148,6 +148,7 @@ func New(name string, settings *Settings, registry *prometheus.Registry) *Pipeli
 	metricCtl := metric.NewCtl("pipeline_"+name, registry)
 
 	lg := logger.Instance.Named(name).Desugar()
+	metricHolder := metric.NewHolder(settings.MetricHoldDuration)
 
 	pipeline := &Pipeline{
 		Name:           name,
@@ -164,7 +165,7 @@ func New(name string, settings *Settings, registry *prometheus.Registry) *Pipeli
 			m:  make(map[string]*actionMetric),
 			mu: new(sync.RWMutex),
 		},
-		metricHolder: metric.NewHolder(settings.MetricHoldDuration),
+		metricHolder: metricHolder,
 		streamer:     newStreamer(settings.EventTimeout),
 		eventPool:    newEventPool(settings.Capacity, settings.AvgEventSize),
 		antispamer: antispam.NewAntispammer(&antispam.Options{
@@ -174,6 +175,7 @@ func New(name string, settings *Settings, registry *prometheus.Registry) *Pipeli
 			UnbanIterations:     antispamUnbanIterations,
 			Logger:              lg.Named("antispam"),
 			MetricsController:   metricCtl,
+			MetricHolder:        metricHolder,
 			Exceptions:          settings.AntispamExceptions,
 		}),
 

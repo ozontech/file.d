@@ -29,7 +29,7 @@ type Antispammer struct {
 
 	// antispammer metrics
 	activeMetric    prometheus.Gauge
-	banMetric       *prometheus.GaugeVec
+	banMetric       metric.HeldGaugeVec
 	exceptionMetric *prometheus.CounterVec
 }
 
@@ -48,6 +48,7 @@ type Options struct {
 
 	Logger            *zap.Logger
 	MetricsController *metric.Ctl
+	MetricHolder      *metric.Holder
 }
 
 func NewAntispammer(o *Options) *Antispammer {
@@ -56,6 +57,8 @@ func NewAntispammer(o *Options) *Antispammer {
 			zap.Int("threshold", o.Threshold),
 			zap.Duration("maintenance", o.MaintenanceInterval))
 	}
+
+	banMetric := o.MetricsController.RegisterGaugeVec("antispam_banned", "Source is banned", "source_name")
 
 	a := &Antispammer{
 		unbanIterations:     o.UnbanIterations,
@@ -67,10 +70,7 @@ func NewAntispammer(o *Options) *Antispammer {
 		activeMetric: o.MetricsController.RegisterGauge("antispam_active",
 			"Gauge indicates whether the antispam is enabled",
 		),
-		banMetric: o.MetricsController.RegisterGaugeVec("antispam_banned",
-			"Source is banned",
-			"source_name",
-		),
+		banMetric: o.MetricHolder.AddGaugeVec(banMetric),
 		exceptionMetric: o.MetricsController.RegisterCounterVec("antispam_exceptions",
 			"How many times an exception match with an event",
 			"name",
