@@ -11,6 +11,46 @@ import (
 	insaneJSON "github.com/vitkovskii/insane-json"
 )
 
+/*{ do-if-ts-cmp-op-node
+DoIf timestamp comparison op node is considered to always be a leaf in the DoIf tree like DoIf field op node.
+It contains operation that compares timestamps with certain value.
+
+Params:
+  - `op` - must be `ts_cmp`. Required.
+  - `field` - name of the field to apply operation. Required. Field will be parsed with `time.Parse` function.
+  - `format` - format for timestamps representation. Required.
+  - `cmp_op` - comparison operation name (same as for length comparison operations). Required.
+  - `value` - timestamp value to compare field timestamps with. It must have `RFC3339Nano` format. Required.
+Also, it may be `now` or `file_d_start`. If it is `now` then value to compare timestamps with is periodically updated current time.
+If it is `file_d_start` then value to compare timestamps with will be program start moment.
+
+Example:
+```yaml
+pipelines:
+  test:
+    actions:
+      - type: discard
+        do_if:
+          op: ts_cmp
+          field: timestamp
+          cmp_op: lt
+          value: 2010-01-01T00:00:00Z
+          format: 2006-01-02T15:04:05.999999999Z07:00
+```
+
+Result:
+```
+{"timestamp":"2000-01-01T00:00:00Z"}         # discarded
+{"timestamp":"2008-01-01T00:00:00Z","id":1}  # discarded
+
+{"pod_id":"some"}    # not discarded (no field `timestamp`)
+{"timestamp":123}    # not discarded (field `timestamp` is not string)
+{"timestamp":"qwe"}  # not discarded (field `timestamp` is not parsable)
+
+{"timestamp":"2011-01-01T00:00:00Z"}  # not discarded (condition is not met)
+```
+}*/
+
 type cmpValueChangingMode int
 
 const (
