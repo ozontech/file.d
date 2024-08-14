@@ -16,12 +16,14 @@ func TestAntispam(t *testing.T) {
 	threshold := 5
 	unbanIterations := 2
 	maintenanceInterval := time.Second * 1
+	holder := metric.NewHolder(time.Minute)
 	antispamer := NewAntispammer(&Options{
 		MaintenanceInterval: maintenanceInterval,
 		Threshold:           threshold,
 		UnbanIterations:     unbanIterations,
 		Logger:              logger.Instance.Named("antispam").Desugar(),
 		MetricsController:   metric.NewCtl("test", prometheus.NewRegistry()),
+		MetricHolder:        holder,
 	})
 
 	startTime := time.Now()
@@ -51,12 +53,14 @@ func TestAntispamAfterRestart(t *testing.T) {
 	threshold := 5
 	unbanIterations := 2
 	maintenanceInterval := time.Second * 1
+	holder := metric.NewHolder(time.Minute)
 	antispamer := NewAntispammer(&Options{
 		MaintenanceInterval: maintenanceInterval,
 		Threshold:           threshold,
 		UnbanIterations:     unbanIterations,
 		Logger:              logger.Instance.Named("antispam").Desugar(),
 		MetricsController:   metric.NewCtl("test", prometheus.NewRegistry()),
+		MetricHolder:        holder,
 	})
 
 	startTime := time.Now()

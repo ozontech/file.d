@@ -135,7 +135,11 @@ func (a *Antispammer) IsSpam(id any, name string, isNewSource bool, event []byte
 		a.activeMetric.Set(1)
 		a.banMetric.WithLabelValues(name).Inc()
 		a.logger.Warn("source has been banned",
-			zap.Any("id", id), zap.String("name", name))
+			zap.Any("id", id), zap.String("name", name),
+			zap.Time("time_event", timeEvent), zap.Int64("diff_nsec", diff),
+			zap.Int64("maintenance_nsec", a.maintenanceInterval.Nanoseconds()),
+			zap.Int32("counter", src.counter.Load()),
+		)
 	}
 
 	return x >= int32(a.threshold)
@@ -191,7 +195,7 @@ func (a *Antispammer) Dump() string {
 		for s, source := range a.sources {
 			value := source.counter.Load()
 			if int(value) >= a.threshold {
-				o += fmt.Sprintf("source_id: %v, source_name: %s, events_counter: %d\n", s, source.name, value)
+				o += fmt.Sprintf("source_id: %v, source_name: %s, counter: %d\n", s, source.name, value)
 			}
 		}
 		a.mu.RUnlock()
