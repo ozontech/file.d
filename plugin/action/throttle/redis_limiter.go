@@ -233,6 +233,7 @@ func decodeKeyLimitValue(data []byte, valField, distrField string) (int64, limit
 	if !has {
 		return limit, distr, fmt.Errorf("no %q key in map", valField)
 	}
+
 	if limit, err = json.Number(bytes.Trim(limitVal, `"`)).Int64(); err != nil {
 		return limit, distr, err
 	}

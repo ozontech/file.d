@@ -473,6 +473,14 @@ func Test_decodeKeyLimitValue(t *testing.T) {
 			wantLimit: 3000,
 		},
 		{
+			name: "ok_with_object",
+			args: args{
+				data:     []byte(`{"limit_key":"3000","some_obj":{"field":"key"}}`),
+				valField: "limit_key",
+			},
+			wantLimit: 3000,
+		},
+		{
 			name: "ok_limit_and_distribution",
 			args: args{
 				data:       []byte(`{"limit_key":"3000","distr_key":{"field":"my-field","ratios":[{"ratio":0.4,"values":["val1","val2"]},{"ratio":0.6,"values":["val3"]}],"enabled":true}}`),
