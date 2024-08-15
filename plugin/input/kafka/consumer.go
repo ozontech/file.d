@@ -89,7 +89,11 @@ func (s *splitConsume) consume(ctx context.Context, cl *kgo.Client) {
 
 		fetches.EachPartition(func(p kgo.FetchTopicPartition) {
 			tp := tp{p.Topic, p.Partition}
-			s.consumers[tp].recs <- p.Records
+			if consumer, ok := s.consumers[tp]; ok {
+				consumer.recs <- p.Records
+			} else {
+				s.logger.Error("consumer not ready yet", zap.String("topic", p.Topic), zap.Int32("partiton", p.Partition))
+			}
 		})
 		cl.AllowRebalance()
 	}
