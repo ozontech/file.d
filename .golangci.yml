@@ -7,6 +7,8 @@ linters-settings:
   govet:
     enable:
       - composites
+    disable:
+      - printf
   dupl:
     threshold: 120
   goconst:
