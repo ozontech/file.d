@@ -143,7 +143,7 @@ func (n *tsCmpOpNode) Check(eventRoot *insaneJSON.Root) bool {
 	rhs := 0
 	switch n.cmpValChMode {
 	case cmpValChModeNow:
-		rhs = int(n.varCmpValue.Load())
+		rhs = int(n.varCmpValue.Load() + n.updateInterval.Nanoseconds())
 	case cmpValChModeConst:
 		rhs = int(n.constCmpValue)
 	default:

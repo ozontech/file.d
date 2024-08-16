@@ -1131,9 +1131,15 @@ func TestCheckLenCmpLtObject(t *testing.T) {
 	}
 }
 
+func timeToJSON(t time.Time) (*insaneJSON.Root, error) {
+	return insaneJSON.DecodeString(fmt.Sprintf(`{"ts":"%s"}`, t.Format(time.RFC3339Nano)))
+}
+
 func TestCheckTsCmpValChModeNow(t *testing.T) {
 	const dt = 10 * time.Millisecond
-	ts := time.Now().Add(2 * dt)
+	begin := time.Now()
+	ts1 := begin.Add(2 * dt)
+	ts2 := begin.Add(4 * dt)
 
 	root, err := buildTree(treeNode{
 		tsCmpOp:          true,
@@ -1147,13 +1153,21 @@ func TestCheckTsCmpValChModeNow(t *testing.T) {
 
 	checker := NewChecker(root)
 
-	eventRoot, err := insaneJSON.DecodeString(fmt.Sprintf(`{"ts":"%s"}`, ts.Format(time.RFC3339Nano)))
+	eventRoot1, err := timeToJSON(ts1)
 	require.NoError(t, err)
-	defer insaneJSON.Release(eventRoot)
+	defer insaneJSON.Release(eventRoot1)
 
-	require.False(t, checker.Check(eventRoot))
+	eventRoot2, err := timeToJSON(ts2)
+	require.NoError(t, err)
+	defer insaneJSON.Release(eventRoot1)
+
+	require.True(t, checker.Check(eventRoot1))
+	require.False(t, checker.Check(eventRoot2))
+
 	time.Sleep(4 * dt)
-	require.True(t, checker.Check(eventRoot))
+
+	require.True(t, checker.Check(eventRoot1))
+	require.True(t, checker.Check(eventRoot2))
 }
 
 func TestNodeIsEqual(t *testing.T) {
