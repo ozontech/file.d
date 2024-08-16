@@ -268,6 +268,34 @@ func noRequiredFieldError(field string) error {
 	return fmt.Errorf("no required field: %s", field)
 }
 
+func requiredString(jsonNode *simplejson.Json, fieldName string) (string, error) {
+	node, has := jsonNode.CheckGet(fieldName)
+	if !has {
+		return "", noRequiredFieldError(fieldName)
+	}
+
+	result, err := node.String()
+	if err != nil {
+		return "", err
+	}
+
+	return result, nil
+}
+
+func requiredInt(jsonNode *simplejson.Json, fieldName string) (int, error) {
+	node, has := jsonNode.CheckGet(fieldName)
+	if !has {
+		return 0, noRequiredFieldError(fieldName)
+	}
+
+	result, err := node.Int()
+	if err != nil {
+		return 0, err
+	}
+
+	return result, nil
+}
+
 const (
 	fieldNameField    = "field"
 	fieldNameCmpOp    = "cmp_op"
@@ -275,29 +303,17 @@ const (
 )
 
 func extractLengthCmpOpNode(opName string, jsonNode *simplejson.Json) (doif.Node, error) {
-	fieldPathNode, has := jsonNode.CheckGet(fieldNameField)
-	if !has {
-		return nil, noRequiredFieldError(fieldNameField)
-	}
-	fieldPath, err := fieldPathNode.String()
+	fieldPath, err := requiredString(jsonNode, fieldNameField)
 	if err != nil {
 		return nil, err
 	}
 
-	cmpOpNode, has := jsonNode.CheckGet(fieldNameCmpOp)
-	if !has {
-		return nil, noRequiredFieldError(fieldNameCmpOp)
-	}
-	cmpOp, err := cmpOpNode.String()
+	cmpOp, err := requiredString(jsonNode, fieldNameCmpOp)
 	if err != nil {
 		return nil, err
 	}
 
-	cmpValueNode, has := jsonNode.CheckGet(fieldNameCmpValue)
-	if !has {
-		return nil, noRequiredFieldError(fieldNameCmpValue)
-	}
-	cmpValue, err := cmpValueNode.Int()
+	cmpValue, err := requiredInt(jsonNode, fieldNameCmpValue)
 	if err != nil {
 		return nil, err
 	}
@@ -321,38 +337,22 @@ const (
 const defaultTSCmpValUpdateInterval = 10 * time.Second
 
 func extractTsCmpOpNode(_ string, jsonNode *simplejson.Json) (doif.Node, error) {
-	fieldPathNode, has := jsonNode.CheckGet(fieldNameField)
-	if !has {
-		return nil, noRequiredFieldError(fieldNameField)
-	}
-	fieldPath, err := fieldPathNode.String()
+	fieldPath, err := requiredString(jsonNode, fieldNameField)
 	if err != nil {
 		return nil, err
 	}
 
-	formatNode, has := jsonNode.CheckGet(fieldNameFormat)
-	if !has {
-		return nil, noRequiredFieldError(fieldNameFormat)
-	}
-	format, err := formatNode.String()
+	format, err := requiredString(jsonNode, fieldNameFormat)
 	if err != nil {
 		return nil, err
 	}
 
-	cmpOpNode, has := jsonNode.CheckGet(fieldNameCmpOp)
-	if !has {
-		return nil, noRequiredFieldError(fieldNameCmpOp)
-	}
-	cmpOp, err := cmpOpNode.String()
+	cmpOp, err := requiredString(jsonNode, fieldNameCmpOp)
 	if err != nil {
 		return nil, err
 	}
 
-	rawCmpValueNode, has := jsonNode.CheckGet(fieldNameCmpValue)
-	if !has {
-		return nil, noRequiredFieldError(fieldNameCmpValue)
-	}
-	rawCmpValue, err := rawCmpValueNode.String()
+	rawCmpValue, err := requiredString(jsonNode, fieldNameCmpValue)
 	if err != nil {
 		return nil, err
 	}

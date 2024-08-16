@@ -149,7 +149,8 @@ func Test_extractDoIfChecker(t *testing.T) {
 							"field": "timestamp",
 							"cmp_op": "lt",
 							"value": "2009-11-10T23:00:00Z",
-							"format": "2006-01-02T15:04:05.999999999Z07:00"
+							"format": "2006-01-02T15:04:05.999999999Z07:00",
+							"update_interval": "15s"
 						},
 						{
 							"op": "or",
@@ -215,7 +216,7 @@ func Test_extractDoIfChecker(t *testing.T) {
 								tsFormat:           time.RFC3339Nano,
 								tsCmpValue:         time.Date(2009, time.November, 10, 23, 0, 0, 0, time.UTC),
 								tsCmpValChangeMode: tsCmpModeConstTag,
-								tsUpdateInterval:   defaultTSCmpValUpdateInterval,
+								tsUpdateInterval:   15 * time.Second,
 							},
 							{
 								logicalOp: "or",
@@ -284,7 +285,8 @@ func Test_extractDoIfChecker(t *testing.T) {
 					"field": "timestamp",
 					"cmp_op": "lt",
 					"value": "2009-11-10T23:00:00Z",
-					"format": "2006-01-02T15:04:05.999999999Z07:00"}`,
+					"format": "2006-01-02T15:04:05.999999999Z07:00",
+					"update_interval": "15s"}`,
 			},
 			want: &doIfTreeNode{
 				tsCmpOp:            true,
@@ -293,7 +295,7 @@ func Test_extractDoIfChecker(t *testing.T) {
 				tsFormat:           time.RFC3339Nano,
 				tsCmpValue:         time.Date(2009, time.November, 10, 23, 0, 0, 0, time.UTC),
 				tsCmpValChangeMode: tsCmpModeConstTag,
-				tsUpdateInterval:   defaultTSCmpValUpdateInterval,
+				tsUpdateInterval:   15 * time.Second,
 			},
 		},
 		{
