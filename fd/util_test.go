@@ -497,6 +497,19 @@ func Test_extractDoIfChecker(t *testing.T) {
 			},
 			wantErr: true,
 		},
+		{
+			name: "error_ts_cmp_op_invalid_update_interval",
+			args: args{
+				cfgStr: `{
+					"op": "ts_cmp",
+					"field": "timestamp",
+					"cmp_op": "lt",
+					"value": "2009-11-10T23:00:00Z",
+					"format": "2006-01-02T15:04:05.999999999Z07:00",
+					"update_interval": "qwe"}`,
+			},
+			wantErr: true,
+		},
 	}
 	for _, tt := range tests {
 		tt := tt
