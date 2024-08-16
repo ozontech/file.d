@@ -55,13 +55,13 @@ Result:
 type cmpValueChangingMode int
 
 const (
-	cmpValChModeConst cmpValueChangingMode = iota
-	cmpValChModeNow
+	cmpValChangeModeConst cmpValueChangingMode = iota
+	cmpValChangeModeNow
 )
 
 const (
-	cmpValChModeConstTag = "const"
-	cmpValChModeNowTag   = "now"
+	cmpValChangeModeConstTag = "const"
+	cmpValChangeModeNowTag   = "now"
 )
 
 type tsCmpOpNode struct {
@@ -70,13 +70,13 @@ type tsCmpOpNode struct {
 
 	cmpOp cmpOperation
 
-	cmpValChMode   cmpValueChangingMode
-	constCmpValue  int64
-	varCmpValue    atomic.Int64
-	updateInterval time.Duration
+	cmpValChangeMode cmpValueChangingMode
+	constCmpValue    int64
+	varCmpValue      atomic.Int64
+	updateInterval   time.Duration
 }
 
-func NewTsCmpOpNode(field string, format string, cmpOp string, cmpValChMode string, cmpValue time.Time, updateInterval time.Duration) (Node, error) {
+func NewTsCmpOpNode(field string, format string, cmpOp string, cmpValChangeMode string, cmpValue time.Time, updateInterval time.Duration) (Node, error) {
 	typedCmpOp, err := newCmpOp(cmpOp)
 	if err != nil {
 		return nil, err
@@ -84,23 +84,23 @@ func NewTsCmpOpNode(field string, format string, cmpOp string, cmpValChMode stri
 
 	fieldPath := cfg.ParseFieldSelector(field)
 
-	var resCmpValChMode cmpValueChangingMode
-	switch cmpValChMode {
-	case cmpValChModeNowTag:
-		resCmpValChMode = cmpValChModeNow
-	case cmpValChModeConstTag:
-		resCmpValChMode = cmpValChModeConst
+	var resCmpValChangeMode cmpValueChangingMode
+	switch cmpValChangeMode {
+	case cmpValChangeModeNowTag:
+		resCmpValChangeMode = cmpValChangeModeNow
+	case cmpValChangeModeConstTag:
+		resCmpValChangeMode = cmpValChangeModeConst
 	default:
-		return nil, fmt.Errorf("unknown ts cmp mode: %s", cmpValChMode)
+		return nil, fmt.Errorf("unknown ts cmp mode: %s", cmpValChangeMode)
 	}
 
 	result := &tsCmpOpNode{
-		fieldPath:      fieldPath,
-		format:         format,
-		cmpOp:          typedCmpOp,
-		cmpValChMode:   resCmpValChMode,
-		constCmpValue:  cmpValue.UnixNano(),
-		updateInterval: updateInterval,
+		fieldPath:        fieldPath,
+		format:           format,
+		cmpOp:            typedCmpOp,
+		cmpValChangeMode: resCmpValChangeMode,
+		constCmpValue:    cmpValue.UnixNano(),
+		updateInterval:   updateInterval,
 	}
 	result.startUpdater()
 
@@ -108,7 +108,7 @@ func NewTsCmpOpNode(field string, format string, cmpOp string, cmpValChMode stri
 }
 
 func (n *tsCmpOpNode) startUpdater() {
-	if n.cmpValChMode == cmpValChModeNow {
+	if n.cmpValChangeMode == cmpValChangeModeNow {
 		n.varCmpValue.Store(time.Now().UnixNano())
 		go func() {
 			for {
@@ -141,13 +141,13 @@ func (n *tsCmpOpNode) Check(eventRoot *insaneJSON.Root) bool {
 	lhs := int(timeVal.UnixNano())
 
 	rhs := 0
-	switch n.cmpValChMode {
-	case cmpValChModeNow:
+	switch n.cmpValChangeMode {
+	case cmpValChangeModeNow:
 		rhs = int(n.varCmpValue.Load() + n.updateInterval.Nanoseconds())
-	case cmpValChModeConst:
+	case cmpValChangeModeConst:
 		rhs = int(n.constCmpValue)
 	default:
-		panic(fmt.Sprintf("impossible: invalid cmp value changing mode: %d", n.cmpValChMode))
+		panic(fmt.Sprintf("impossible: invalid cmp value changing mode: %d", n.cmpValChangeMode))
 	}
 
 	return n.cmpOp.compare(lhs, rhs)
@@ -167,8 +167,8 @@ func (n *tsCmpOpNode) isEqualTo(n2 Node, _ int) error {
 		return fmt.Errorf("nodes have different cmp ops: %s != %s", n.cmpOp, n2Explicit.cmpOp)
 	}
 
-	if n.cmpValChMode != n2Explicit.cmpValChMode {
-		return fmt.Errorf("nodes have different cmp modes: %d != %d", n.cmpValChMode, n2Explicit.cmpValChMode)
+	if n.cmpValChangeMode != n2Explicit.cmpValChangeMode {
+		return fmt.Errorf("nodes have different cmp modes: %d != %d", n.cmpValChangeMode, n2Explicit.cmpValChangeMode)
 	}
 
 	if n.constCmpValue != n2Explicit.constCmpValue {

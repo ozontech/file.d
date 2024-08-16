@@ -53,11 +53,11 @@ type doIfTreeNode struct {
 	cmpOp    string
 	cmpValue int
 
-	tsCmpOp          bool
-	tsFormat         string
-	tsCmpValChMode   string
-	tsCmpValue       time.Time
-	tsUpdateInterval time.Duration
+	tsCmpOp            bool
+	tsFormat           string
+	tsCmpValChangeMode string
+	tsCmpValue         time.Time
+	tsUpdateInterval   time.Duration
 }
 
 // nolint:gocritic
@@ -90,7 +90,7 @@ func buildDoIfTree(node *doIfTreeNode) (doif.Node, error) {
 			node.fieldName,
 			node.tsFormat,
 			node.cmpOp,
-			node.tsCmpValChMode,
+			node.tsCmpValChangeMode,
 			node.tsCmpValue,
 			node.tsUpdateInterval,
 		)
@@ -209,13 +209,13 @@ func Test_extractDoIfChecker(t *testing.T) {
 								cmpValue:  100,
 							},
 							{
-								tsCmpOp:          true,
-								cmpOp:            "lt",
-								fieldName:        "timestamp",
-								tsFormat:         time.RFC3339Nano,
-								tsCmpValue:       time.Date(2009, time.November, 10, 23, 0, 0, 0, time.UTC),
-								tsCmpValChMode:   tsCmpModeConstTag,
-								tsUpdateInterval: defaultTSCmpValUpdateInterval,
+								tsCmpOp:            true,
+								cmpOp:              "lt",
+								fieldName:          "timestamp",
+								tsFormat:           time.RFC3339Nano,
+								tsCmpValue:         time.Date(2009, time.November, 10, 23, 0, 0, 0, time.UTC),
+								tsCmpValChangeMode: tsCmpModeConstTag,
+								tsUpdateInterval:   defaultTSCmpValUpdateInterval,
 							},
 							{
 								logicalOp: "or",
@@ -287,13 +287,13 @@ func Test_extractDoIfChecker(t *testing.T) {
 					"format": "2006-01-02T15:04:05.999999999Z07:00"}`,
 			},
 			want: &doIfTreeNode{
-				tsCmpOp:          true,
-				cmpOp:            "lt",
-				fieldName:        "timestamp",
-				tsFormat:         time.RFC3339Nano,
-				tsCmpValue:       time.Date(2009, time.November, 10, 23, 0, 0, 0, time.UTC),
-				tsCmpValChMode:   tsCmpModeConstTag,
-				tsUpdateInterval: defaultTSCmpValUpdateInterval,
+				tsCmpOp:            true,
+				cmpOp:              "lt",
+				fieldName:          "timestamp",
+				tsFormat:           time.RFC3339Nano,
+				tsCmpValue:         time.Date(2009, time.November, 10, 23, 0, 0, 0, time.UTC),
+				tsCmpValChangeMode: tsCmpModeConstTag,
+				tsUpdateInterval:   defaultTSCmpValUpdateInterval,
 			},
 		},
 		{
