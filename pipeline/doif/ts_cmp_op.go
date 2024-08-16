@@ -24,6 +24,7 @@ Params:
 Also, it may be `now` or `file_d_start`. If it is `now` then value to compare timestamps with is periodically updated current time.
 If it is `file_d_start` then value to compare timestamps with will be program start moment.
   - `update_interval` - if `value` is `now` then you can set update interval for that value. Optional; default = 10s.
+Actual cmp value in that case is `now + update_interval`.
 
 Example:
 ```yaml
