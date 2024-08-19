@@ -481,6 +481,77 @@ func (p *Plugin) getValueNodes(root *insaneJSON.Node, valueNodes []*insaneJSON.N
 	return valueNodes
 }
 
+func (p *Plugin) DoLegacy(event *pipeline.Event) pipeline.ActionResult {
+	root := event.Root.Node
+
+	// apply vars need to check if mask was applied to event data and send metric
+	maskApplied := false
+	locApplied := false
+
+	p.valueNodes = p.valueNodes[:0]
+	p.valueNodes = p.getValueNodes(root, p.valueNodes)
+	for _, v := range p.valueNodes {
+		value := v.AsBytes()
+		var valueIsCommonMatched bool
+		if p.config.SkipMismatched {
+			// is matched by common mask
+			valueIsCommonMatched = p.matchRe.Match(value)
+		} else {
+			// to always try to apply a mask
+			valueIsCommonMatched = true
+		}
+
+		p.sourceBuf = append(p.sourceBuf[:0], value...)
+		p.maskBuf = append(p.maskBuf[:0], p.sourceBuf...)
+		for i := range p.config.Masks {
+			mask := &p.config.Masks[i]
+			if mask.Re != "" && !valueIsCommonMatched {
+				// skips messages not matched common regex
+				continue
+			}
+
+			p.maskBuf, locApplied = p.maskValue(mask, p.sourceBuf, p.maskBuf)
+			p.sourceBuf = append(p.sourceBuf[:0], p.maskBuf...)
+			if !locApplied {
+				continue
+			}
+			if mask.AppliedField != "" {
+				event.Root.AddFieldNoAlloc(event.Root, mask.AppliedField).MutateToString(mask.AppliedValue)
+			}
+			if mask.MetricName != "" {
+				p.applyMaskMetric(mask, event)
+			}
+
+			maskApplied = true
+		}
+		v.MutateToString(string(p.maskBuf))
+	}
+
+	if p.config.MaskAppliedField != "" && maskApplied {
+		event.Root.AddFieldNoAlloc(event.Root, p.config.MaskAppliedField).MutateToString(p.config.MaskAppliedValue)
+	}
+
+	if maskApplied && p.config.AppliedMetricName != "" {
+		labelValues := make([]string, 0, len(p.config.AppliedMetricLabels))
+		for _, labelValuePath := range p.config.AppliedMetricLabels {
+			value := "not_set"
+			if node := event.Root.Dig(labelValuePath); node != nil {
+				value = strings.Clone(node.AsString())
+			}
+
+			labelValues = append(labelValues, value)
+		}
+
+		p.maskAppliedMetric.WithLabelValues(labelValues...).Inc()
+
+		if ce := p.logger.Check(zap.DebugLevel, "mask appeared to event"); ce != nil {
+			ce.Write(zap.String("event", event.Root.EncodeToString()))
+		}
+	}
+
+	return pipeline.ActionPass
+}
+
 func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	root := event.Root.Node
 

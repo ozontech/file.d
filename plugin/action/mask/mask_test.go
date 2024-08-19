@@ -272,6 +272,64 @@ func TestMaskAddExtraField(t *testing.T) {
 	assert.Equal(t, expOutput, event.Root.EncodeToString())
 }
 
+func BenchmarkMaskDo(b *testing.B) {
+	input := `{"card1":"lala-lala-lala-lala","card2":"lala-lala-lala-lala","card3":"lala-lala-lala-lala"}`
+	expOutput := input
+
+	root, err := insaneJSON.DecodeString(input)
+	require.NoError(b, err)
+	defer insaneJSON.Release(root)
+
+	event := &pipeline.Event{Root: root}
+
+	var plugin Plugin
+
+	config := test.NewConfig(&Config{
+		SkipMismatched: true,
+		Masks: []Mask{
+			{Re: kDefaultCardRegExp, Groups: []int{0}},
+		},
+	}, nil)
+	plugin.Start(config, test.NewEmptyActionPluginParams())
+	plugin.config.Masks[0].Re_ = regexp.MustCompile(plugin.config.Masks[0].Re)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		result := plugin.Do(event)
+		assert.Equal(b, pipeline.ActionPass, result)
+		assert.Equal(b, expOutput, event.Root.EncodeToString())
+	}
+}
+
+func BenchmarkMaskDoLegacy(b *testing.B) {
+	input := `{"card1":"lala-lala-lala-lala","card2":"lala-lala-lala-lala","card3":"lala-lala-lala-lala"}`
+	expOutput := input
+
+	root, err := insaneJSON.DecodeString(input)
+	require.NoError(b, err)
+	defer insaneJSON.Release(root)
+
+	event := &pipeline.Event{Root: root}
+
+	var plugin Plugin
+
+	config := test.NewConfig(&Config{
+		SkipMismatched: true,
+		Masks: []Mask{
+			{Re: kDefaultCardRegExp, Groups: []int{0}},
+		},
+	}, nil)
+	plugin.Start(config, test.NewEmptyActionPluginParams())
+	plugin.config.Masks[0].Re_ = regexp.MustCompile(plugin.config.Masks[0].Re)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		result := plugin.DoLegacy(event)
+		assert.Equal(b, pipeline.ActionPass, result)
+		assert.Equal(b, expOutput, event.Root.EncodeToString())
+	}
+}
+
 func TestGroupNumbers(t *testing.T) {
 	suits := []struct {
 		name     string
