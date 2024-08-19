@@ -59,14 +59,6 @@ The number of unprocessed messages in the buffer that are loaded in the backgrou
 
 <br>
 
-**`max_concurrent_fetches`** *`int`* *`default=0`* 
-
-MaxConcurrentFetches sets the maximum number of fetch requests to allow in
-flight or buffered at once, overriding the unbounded (i.e. number of
-brokers) default.
-
-<br>
-
 **`fetch_max_bytes`** *`cfg.Expression`* *`default=52428800`* 
 
 FetchMaxBytes (fetch.max.bytes) sets the maximum amount of bytes a broker will try to send during a fetch

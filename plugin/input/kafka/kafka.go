@@ -99,13 +99,6 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
-	// > MaxConcurrentFetches sets the maximum number of fetch requests to allow in
-	// > flight or buffered at once, overriding the unbounded (i.e. number of
-	// > brokers) default.
-	MaxConcurrentFetches int `json:"max_concurrent_fetches" default:"0"` // *
-
-	// > @3@4@5@6
-	// >
 	// > FetchMaxBytes (fetch.max.bytes) sets the maximum amount of bytes a broker will try to send during a fetch
 	FetchMaxBytes  cfg.Expression `json:"fetch_max_bytes" default:"52428800" parse:"expression"` // *
 	FetchMaxBytes_ int32
