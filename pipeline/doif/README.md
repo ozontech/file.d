@@ -371,7 +371,7 @@ If it is `file_d_start` then value to compare timestamps with will be program st
   - `update_interval` - if `value` is `now` then you can set update interval for that value. Optional; default = 10s.
 Actual cmp value in that case is `now + update_interval`.
 
-Example:
+Example (discard all events with `timestamp` field value LESS than `2010-01-01T00:00:00Z`):
 ```yaml
 pipelines:
   test:
