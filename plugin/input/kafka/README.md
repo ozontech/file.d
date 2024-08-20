@@ -59,11 +59,11 @@ The number of unprocessed messages in the buffer that are loaded in the backgrou
 
 <br>
 
-**`max_concurrent_fetches`** *`cfg.Expression`* *`default=gomaxprocs*1`* 
+**`max_concurrent_fetches`** *`int`* *`default=0`* 
 
 MaxConcurrentFetches sets the maximum number of fetch requests to allow in
-flight or buffered at once
-(use 0 to make max_concurrent_fetches equal to the number of brokers)
+flight or buffered at once, overriding the unbounded (i.e. number of
+brokers) default.
 
 <br>
 

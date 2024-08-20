@@ -100,10 +100,9 @@ type Config struct {
 	// > @3@4@5@6
 	// >
 	// > MaxConcurrentFetches sets the maximum number of fetch requests to allow in
-	// > flight or buffered at once
-	// > (use 0 to make max_concurrent_fetches equal to the number of brokers)
-	MaxConcurrentFetches  cfg.Expression `json:"max_concurrent_fetches" default:"gomaxprocs*1" parse:"expression"` // *
-	MaxConcurrentFetches_ int
+	// > flight or buffered at once, overriding the unbounded (i.e. number of
+	// > brokers) default.
+	MaxConcurrentFetches int `json:"max_concurrent_fetches" default:"0"` // *
 
 	// > @3@4@5@6
 	// >
