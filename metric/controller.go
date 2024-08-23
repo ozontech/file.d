@@ -14,6 +14,7 @@ var (
 	SecondsBucketsDetailedNano = prometheus.ExponentialBuckets(0.000005, 2, 19) // covers range from 5ns to 1.3ms
 	SecondsBucketsDetailed     = prometheus.ExponentialBuckets(0.0005, 2, 16)   // covers range from 500us to 16.384s
 	SecondsBucketsLong         = prometheus.ExponentialBuckets(0.005, 2, 16)    // covers range from 5ms to 163.84s
+	RequestsSize               = prometheus.ExponentialBuckets(100, 10, 5)      // covers range from 100B to 1MB
 )
 
 type Ctl struct {
