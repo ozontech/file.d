@@ -404,8 +404,8 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 			if err != nil {
 				p.Error(fmt.Sprintf("can't render meta data: %s", err.Error()))
 			}
-			for k, i := range metadataInfo {
-				meta[k] = metadataInfo[i]
+			for k := range metadataInfo {
+				meta[k] = metadataInfo[k]
 			}
 		}
 	}

@@ -100,7 +100,7 @@ type Config struct {
 	// >
 	// > Add meta information to an event (look at Meta params)
 	// > Use [go-template](https://pkg.go.dev/text/template) syntax
-	Meta cfg.MetaTemplates `json:"meta"` // *
+	K8sMeta cfg.MetaTemplates `json:"meta"` // *
 }
 
 var startCounter atomic.Int32
@@ -147,7 +147,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	} else {
 		p.params.Controller.SuggestDecoder(decoder.CRI)
 	}
-	p.params.Controller.SetMetaTemplater(p.config.Meta)
+	p.params.Controller.SetMetaTemplater(p.config.K8sMeta)
 
 	p.fp.Start(&p.config.FileConfig, params)
 }
