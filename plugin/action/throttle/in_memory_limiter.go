@@ -69,6 +69,9 @@ func (l *inMemoryLimiter) isAllowed(event *pipeline.Event, ts time.Time) bool {
 	l.lock()
 	defer l.unlock()
 
+	id := l.rebuildBuckets(ts)
+	index := id - l.buckets.getMinID()
+
 	// If the limit is given with distribution, then distributed buckets are used
 	distrIdx := 0
 	distrFieldVal := ""
@@ -76,13 +79,35 @@ func (l *inMemoryLimiter) isAllowed(event *pipeline.Event, ts time.Time) bool {
 		distrFieldVal = event.Root.Dig(l.limit.distributions.field...).AsString()
 		distrIdx, limit = l.limit.distributions.getLimit(distrFieldVal)
 
+		// For default distribution сheck in advance that we are within the limit.
+		// If not, then try to steal reserve from the most free distribution.
+		if distrIdx == -1 {
+			val := int64(1)
+			if l.limit.kind == limitKindSize {
+				val = int64(event.Size)
+			}
+
+			if l.buckets.get(index, distrIdx+1)+val > limit {
+				// Looking for a distribution with the lowest percentage of filling.
+				// If found, updating the distrIdx and limit - use different bucket for check allowance.
+				minFullness := int64(100)
+				for i, d := range l.limit.distributions.distributions {
+					curVal := l.buckets.get(index, i+1)
+					fullness := (curVal * 100) / d.limit
+					if curVal+val <= d.limit && fullness < minFullness {
+						minFullness = fullness
+						distrIdx = i
+						limit = d.limit
+					}
+				}
+			}
+		}
+
 		// The distribution index in the bucket matches the distribution value index in distributions,
 		// but is shifted by 1 because default distribution has index 0.
 		distrIdx++
 	}
 
-	id := l.rebuildBuckets(ts)
-	index := id - l.buckets.getMinID()
 	switch l.limit.kind {
 	case "", limitKindCount:
 		l.buckets.add(index, distrIdx, 1)

@@ -144,6 +144,8 @@ type Config struct {
 	// >> All events for which the value in the `field` doesn't fall into any of the distributions:
 	// >>   * fall into default distribution, if it exists
 	// >>   * throttled, otherwise
+	// >> 3. **default distribution** can "steal" limit from other distributions after it has exhausted its.
+	// >> This is done in order to avoid reserving limits for explicitly defined distributions.
 	// >
 	// > `LimitDistributionConfig` example:
 	// > ```yaml
@@ -155,9 +157,10 @@ type Config struct {
 	// >     values: ['warn', 'info']
 	// > ```
 	// > For this config and the `default_limit=100`:
-	// > * events with `log.level=error` will have a limit of 50
-	// > * events with `log.level=warn` or `log.level=info` will have a limit of 30
-	// > * all other events will have a limit of 20
+	// > * events with `log.level=error` will be NO MORE than `50`
+	// > * events with `log.level=warn` or `log.level=info` will be NO MORE than `30`
+	// > * there will be AT LEAST `20` other events
+	// > (can be up to `100` if there are no events with `log.level=error/warn/info`)
 	LimitDistribution LimitDistributionConfig `json:"limit_distribution" child:"true"` // *
 }
 
