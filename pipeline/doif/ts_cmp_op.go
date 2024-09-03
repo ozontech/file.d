@@ -145,17 +145,19 @@ func (n *tsCmpOpNode) Check(eventRoot *insaneJSON.Root) bool {
 
 	lhs := int(timeVal.UnixNano())
 
-	rhs := 0
+	rhs := int64(0)
 	switch n.cmpValChangeMode {
 	case cmpValChangeModeNow:
-		rhs = int(n.varCmpValue.Load() + n.updateInterval.Nanoseconds() + n.cmpValueShift)
+		rhs = n.varCmpValue.Load() + n.updateInterval.Nanoseconds()
 	case cmpValChangeModeConst:
-		rhs = int(n.constCmpValue + n.cmpValueShift)
+		rhs = n.constCmpValue
 	default:
 		panic(fmt.Sprintf("impossible: invalid cmp value changing mode: %d", n.cmpValChangeMode))
 	}
 
-	return n.cmpOp.compare(lhs, rhs)
+	rhs += n.cmpValueShift
+
+	return n.cmpOp.compare(lhs, int(rhs))
 }
 
 func (n *tsCmpOpNode) isEqualTo(n2 Node, _ int) error {
