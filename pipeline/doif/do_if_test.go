@@ -30,6 +30,7 @@ type treeNode struct {
 	tsFormat           string
 	tsCmpValChangeMode string
 	tsCmpValue         time.Time
+	tsCmpValueShift    time.Duration
 	tsUpdateInterval   time.Duration
 }
 
@@ -65,6 +66,7 @@ func buildTree(node treeNode) (Node, error) {
 			node.cmpOp,
 			node.tsCmpValChangeMode,
 			node.tsCmpValue,
+			node.tsCmpValueShift,
 			node.tsUpdateInterval,
 		)
 	default:
@@ -131,6 +133,7 @@ func checkNode(t *testing.T, want, got Node) {
 		assert.Equal(t, wantNode.cmpOp, gotNode.cmpOp)
 		assert.Equal(t, wantNode.cmpValChangeMode, gotNode.cmpValChangeMode)
 		assert.Equal(t, wantNode.constCmpValue, gotNode.constCmpValue)
+		assert.Equal(t, wantNode.cmpValueShift, gotNode.cmpValueShift)
 		assert.Equal(t, wantNode.updateInterval, gotNode.updateInterval)
 		assert.Equal(t, 0, slices.Compare[[]string](wantNode.fieldPath, gotNode.fieldPath))
 	default:
@@ -352,6 +355,7 @@ func TestBuildNodes(t *testing.T) {
 				tsCmpValChangeMode: "now",
 				tsFormat:           time.RFC3339,
 				tsCmpValue:         timestamp,
+				tsCmpValueShift:    10 * time.Minute,
 				tsUpdateInterval:   5 * time.Minute,
 			},
 			want: &tsCmpOpNode{
@@ -360,6 +364,7 @@ func TestBuildNodes(t *testing.T) {
 				cmpOp:            cmpOpLess,
 				cmpValChangeMode: cmpValChangeModeNow,
 				constCmpValue:    timestamp.UnixNano(),
+				cmpValueShift:    int64(10 * time.Minute),
 				updateInterval:   5 * time.Minute,
 			},
 		},
@@ -972,6 +977,25 @@ func TestCheck(t *testing.T) {
 				{getTsLog(timestamp.Add(-2 * time.Second)), true},
 				{getTsLog(timestamp.Add(-1 * time.Second)), true},
 				{getTsLog(timestamp), false},
+				{getTsLog(timestamp.Add(1 * time.Second)), false},
+				{getTsLog(timestamp.Add(2 * time.Second)), false},
+			},
+		},
+		{
+			name: "ts_cmp_lt_value_shifted",
+			tree: treeNode{
+				tsCmpOp:            true,
+				cmpOp:              "lt",
+				fieldName:          "ts",
+				tsFormat:           time.RFC3339,
+				tsCmpValChangeMode: "const",
+				tsCmpValue:         timestamp,
+				tsCmpValueShift:    1 * time.Second,
+			},
+			data: []argsResp{
+				{getTsLog(timestamp.Add(-2 * time.Second)), true},
+				{getTsLog(timestamp.Add(-1 * time.Second)), true},
+				{getTsLog(timestamp), true},
 				{getTsLog(timestamp.Add(1 * time.Second)), false},
 				{getTsLog(timestamp.Add(2 * time.Second)), false},
 			},

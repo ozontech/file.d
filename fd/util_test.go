@@ -57,6 +57,7 @@ type doIfTreeNode struct {
 	tsFormat           string
 	tsCmpValChangeMode string
 	tsCmpValue         time.Time
+	tsCmpValueShift    time.Duration
 	tsUpdateInterval   time.Duration
 }
 
@@ -92,6 +93,7 @@ func buildDoIfTree(node *doIfTreeNode) (doif.Node, error) {
 			node.cmpOp,
 			node.tsCmpValChangeMode,
 			node.tsCmpValue,
+			node.tsCmpValueShift,
 			node.tsUpdateInterval,
 		)
 	default:
@@ -296,6 +298,47 @@ func Test_extractDoIfChecker(t *testing.T) {
 				tsCmpValue:         time.Date(2009, time.November, 10, 23, 0, 0, 0, time.UTC),
 				tsCmpValChangeMode: tsCmpModeConstTag,
 				tsUpdateInterval:   15 * time.Second,
+			},
+		},
+		{
+			name: "ok_ts_cmp_op_variable_cmp_value",
+			args: args{
+				cfgStr: `{
+					"op": "ts_cmp",
+					"field": "timestamp",
+					"cmp_op": "lt",
+					"value": "now",
+					"format": "2006-01-02T15:04:05.999999999Z07:00",
+					"update_interval": "15s"}`,
+			},
+			want: &doIfTreeNode{
+				tsCmpOp:            true,
+				cmpOp:              "lt",
+				fieldName:          "timestamp",
+				tsFormat:           time.RFC3339Nano,
+				tsCmpValChangeMode: tsCmpModeNowTag,
+				tsUpdateInterval:   15 * time.Second,
+			},
+		},
+		{
+			name: "ok_ts_cmp_op_value_shifted",
+			args: args{
+				cfgStr: `{
+					"op": "ts_cmp",
+					"field": "timestamp",
+					"cmp_op": "lt",
+					"value": "now",
+					"value_shift": "-24h",
+					"format": "2006-01-02T15:04:05.999999999Z07:00"}`,
+			},
+			want: &doIfTreeNode{
+				tsCmpOp:            true,
+				cmpOp:              "lt",
+				fieldName:          "timestamp",
+				tsFormat:           time.RFC3339Nano,
+				tsCmpValChangeMode: tsCmpModeNowTag,
+				tsCmpValueShift:    -24 * time.Hour,
+				tsUpdateInterval:   10 * time.Second,
 			},
 		},
 		{

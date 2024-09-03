@@ -368,8 +368,10 @@ Params:
   - `value` - timestamp value to compare field timestamps with. It must have `RFC3339Nano` format. Required.
 Also, it may be `now` or `file_d_start`. If it is `now` then value to compare timestamps with is periodically updated current time.
 If it is `file_d_start` then value to compare timestamps with will be program start moment.
+  - `value_shift` - duration that adds to `value` before comparison. It can be negative. Useful when `value` is `now`.
+Optional; default = 0.
   - `update_interval` - if `value` is `now` then you can set update interval for that value. Optional; default = 10s.
-Actual cmp value in that case is `now + update_interval`.
+Actual cmp value in that case is `now + value_shift + update_interval`.
 
 Example (discard all events with `timestamp` field value LESS than `2010-01-01T00:00:00Z`):
 ```yaml

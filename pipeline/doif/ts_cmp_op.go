@@ -23,8 +23,10 @@ Params:
   - `value` - timestamp value to compare field timestamps with. It must have `RFC3339Nano` format. Required.
 Also, it may be `now` or `file_d_start`. If it is `now` then value to compare timestamps with is periodically updated current time.
 If it is `file_d_start` then value to compare timestamps with will be program start moment.
+  - `value_shift` - duration that adds to `value` before comparison. It can be negative. Useful when `value` is `now`.
+Optional; default = 0.
   - `update_interval` - if `value` is `now` then you can set update interval for that value. Optional; default = 10s.
-Actual cmp value in that case is `now + update_interval`.
+Actual cmp value in that case is `now + value_shift + update_interval`.
 
 Example (discard all events with `timestamp` field value LESS than `2010-01-01T00:00:00Z`):
 ```yaml
@@ -74,10 +76,11 @@ type tsCmpOpNode struct {
 	cmpValChangeMode cmpValueChangingMode
 	constCmpValue    int64
 	varCmpValue      atomic.Int64
+	cmpValueShift    int64 // may be negative
 	updateInterval   time.Duration
 }
 
-func NewTsCmpOpNode(field string, format string, cmpOp string, cmpValChangeMode string, cmpValue time.Time, updateInterval time.Duration) (Node, error) {
+func NewTsCmpOpNode(field string, format string, cmpOp string, cmpValChangeMode string, cmpValue time.Time, cmpValueShift time.Duration, updateInterval time.Duration) (Node, error) {
 	typedCmpOp, err := newCmpOp(cmpOp)
 	if err != nil {
 		return nil, err
@@ -101,6 +104,7 @@ func NewTsCmpOpNode(field string, format string, cmpOp string, cmpValChangeMode 
 		cmpOp:            typedCmpOp,
 		cmpValChangeMode: resCmpValChangeMode,
 		constCmpValue:    cmpValue.UnixNano(),
+		cmpValueShift:    cmpValueShift.Nanoseconds(),
 		updateInterval:   updateInterval,
 	}
 	result.startUpdater()
@@ -144,9 +148,9 @@ func (n *tsCmpOpNode) Check(eventRoot *insaneJSON.Root) bool {
 	rhs := 0
 	switch n.cmpValChangeMode {
 	case cmpValChangeModeNow:
-		rhs = int(n.varCmpValue.Load() + n.updateInterval.Nanoseconds())
+		rhs = int(n.varCmpValue.Load() + n.updateInterval.Nanoseconds() + n.cmpValueShift)
 	case cmpValChangeModeConst:
-		rhs = int(n.constCmpValue)
+		rhs = int(n.constCmpValue + n.cmpValueShift)
 	default:
 		panic(fmt.Sprintf("impossible: invalid cmp value changing mode: %d", n.cmpValChangeMode))
 	}
@@ -177,6 +181,14 @@ func (n *tsCmpOpNode) isEqualTo(n2 Node, _ int) error {
 			"nodes have different cmp values: %s != %s",
 			time.Unix(0, n.constCmpValue).Format(time.RFC3339Nano),
 			time.Unix(0, n2Explicit.constCmpValue).Format(time.RFC3339Nano),
+		)
+	}
+
+	if n.cmpValueShift != n2Explicit.cmpValueShift {
+		return fmt.Errorf(
+			"nodes have different cmp value shifts: %s != %s",
+			time.Duration(n.cmpValueShift),
+			time.Duration(n2Explicit.cmpValueShift),
 		)
 	}
 
