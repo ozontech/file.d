@@ -18,7 +18,7 @@ It contains operation that compares timestamps with certain value.
 Params:
   - `op` - must be `ts_cmp`. Required.
   - `field` - name of the field to apply operation. Required. Field will be parsed with `time.Parse` function.
-  - `format` - format for timestamps representation. Required.
+  - `format` - format for timestamps representation. Optional; default = `time.RFC3339Nano`.
   - `cmp_op` - comparison operation name (same as for length comparison operations). Required.
   - `value` - timestamp value to compare field timestamps with. It must have `RFC3339Nano` format. Required.
 Also, it may be `now` or `file_d_start`. If it is `now` then value to compare timestamps with is periodically updated current time.

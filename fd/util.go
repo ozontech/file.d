@@ -335,15 +335,13 @@ const (
 	tsCmpValueStartTag = "file_d_start"
 )
 
-const defaultTSCmpValUpdateInterval = 10 * time.Second
+const (
+	defaultTsCmpValUpdateInterval = 10 * time.Second
+	defaultTsFormat               = time.RFC3339Nano
+)
 
 func extractTsCmpOpNode(_ string, jsonNode *simplejson.Json) (doif.Node, error) {
 	fieldPath, err := requiredString(jsonNode, fieldNameField)
-	if err != nil {
-		return nil, err
-	}
-
-	format, err := requiredString(jsonNode, fieldNameFormat)
 	if err != nil {
 		return nil, err
 	}
@@ -375,8 +373,14 @@ func extractTsCmpOpNode(_ string, jsonNode *simplejson.Json) (doif.Node, error) 
 		}
 	}
 
+	format := defaultTsFormat
+	str := jsonNode.Get(fieldNameFormat).MustString()
+	if str != "" {
+		format = str
+	}
+
 	cmpValueShift := time.Duration(0)
-	str := jsonNode.Get(fieldNameCmpValueShift).MustString()
+	str = jsonNode.Get(fieldNameCmpValueShift).MustString()
 	if str != "" {
 		cmpValueShift, err = time.ParseDuration(str)
 		if err != nil {
@@ -384,7 +388,7 @@ func extractTsCmpOpNode(_ string, jsonNode *simplejson.Json) (doif.Node, error) 
 		}
 	}
 
-	updateInterval := defaultTSCmpValUpdateInterval
+	updateInterval := defaultTsCmpValUpdateInterval
 	str = jsonNode.Get(fieldNameUpdateInterval).MustString()
 	if str != "" {
 		updateInterval, err = time.ParseDuration(str)
