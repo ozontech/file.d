@@ -134,6 +134,7 @@ type Settings struct {
 	MaintenanceInterval time.Duration
 	EventTimeout        time.Duration
 	AntispamThreshold   int
+	AntispamField       string
 	AntispamExceptions  matchrule.RuleSets
 	AvgEventSize        int
 	MaxEventSize        int
@@ -147,6 +148,7 @@ func New(name string, settings *Settings, registry *prometheus.Registry) *Pipeli
 	metricCtl := metric.NewCtl("pipeline_"+name, registry)
 
 	lg := logger.Instance.Named(name).Desugar()
+	metricHolder := metric.NewHolder(settings.MetricHoldDuration)
 
 	pipeline := &Pipeline{
 		Name:           name,
@@ -163,15 +165,17 @@ func New(name string, settings *Settings, registry *prometheus.Registry) *Pipeli
 			m:  make(map[string]*actionMetric),
 			mu: new(sync.RWMutex),
 		},
-		metricHolder: metric.NewHolder(settings.MetricHoldDuration),
+		metricHolder: metricHolder,
 		streamer:     newStreamer(settings.EventTimeout),
 		eventPool:    newEventPool(settings.Capacity, settings.AvgEventSize),
-		antispamer: antispam.NewAntispammer(antispam.Options{
+		antispamer: antispam.NewAntispammer(&antispam.Options{
 			MaintenanceInterval: settings.MaintenanceInterval,
 			Threshold:           settings.AntispamThreshold,
+			Field:               settings.AntispamField,
 			UnbanIterations:     antispamUnbanIterations,
 			Logger:              lg.Named("antispam"),
 			MetricsController:   metricCtl,
+			MetricHolder:        metricHolder,
 			Exceptions:          settings.AntispamExceptions,
 		}),
 
@@ -395,8 +399,32 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 	// The event is Partial if it is larger than the driver configuration.
 	// For example, for containerd this setting is called max_container_log_line_size
 	// https://github.com/containerd/containerd/blob/f7f2be732159a411eae46b78bfdb479b133a823b/pkg/cri/config/config.go#L263-L266
-	if !row.IsPartial {
-		isSpam := p.antispamer.IsSpam(uint64(sourceID), sourceName, isNewSource, bytes)
+	if !row.IsPartial && p.settings.AntispamThreshold > 0 {
+		var checkSourceID any
+		var checkSourceName string
+		if p.settings.AntispamField == "" {
+			checkSourceID = uint64(sourceID)
+			checkSourceName = sourceName
+		} else {
+			if val, ok := meta[p.settings.AntispamField]; ok {
+				checkSourceID = val
+				checkSourceName = val
+				isNewSource = false
+			} else {
+				p.Error(fmt.Sprintf("antispam_field %s does not exists in meta", p.settings.AntispamField))
+				checkSourceID = uint64(sourceID)
+				checkSourceName = sourceName
+			}
+		}
+
+		var eventTime time.Time
+		if len(row.Time) > 0 {
+			eventTime, err = time.Parse("2006-01-02T15:04:05.999999999Z", string(row.Time))
+			if err != nil {
+				p.Error(fmt.Sprintf("cannot parse raw time %s: %v", row.Time, err))
+			}
+		}
+		isSpam := p.antispamer.IsSpam(checkSourceID, checkSourceName, isNewSource, bytes, eventTime)
 		if isSpam {
 			return EventSeqIDError
 		}
