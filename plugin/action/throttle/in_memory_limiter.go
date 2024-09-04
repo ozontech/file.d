@@ -76,36 +76,7 @@ func (l *inMemoryLimiter) isAllowed(event *pipeline.Event, ts time.Time) bool {
 	distrIdx := 0
 	distrFieldVal := ""
 	if l.limit.distributions.isEnabled() {
-		distrFieldVal = event.Root.Dig(l.limit.distributions.field...).AsString()
-		distrIdx, limit = l.limit.distributions.getLimit(distrFieldVal)
-
-		// For default distribution сheck in advance that we are within the limit.
-		// If not, then try to steal reserve from the most free distribution.
-		if distrIdx == -1 {
-			val := int64(1)
-			if l.limit.kind == limitKindSize {
-				val = int64(event.Size)
-			}
-
-			if l.buckets.get(index, distrIdx+1)+val > limit {
-				// Looking for a distribution with the lowest percentage of filling.
-				// If found, updating the distrIdx and limit - use different bucket for check allowance.
-				minFullness := int64(100)
-				for i, d := range l.limit.distributions.distributions {
-					curVal := l.buckets.get(index, i+1)
-					fullness := (curVal * 100) / d.limit
-					if curVal+val <= d.limit && fullness < minFullness {
-						minFullness = fullness
-						distrIdx = i
-						limit = d.limit
-					}
-				}
-			}
-		}
-
-		// The distribution index in the bucket matches the distribution value index in distributions,
-		// but is shifted by 1 because default distribution has index 0.
-		distrIdx++
+		distrFieldVal, distrIdx, limit = l.getDistrData(index, event)
 	}
 
 	switch l.limit.kind {
@@ -118,28 +89,73 @@ func (l *inMemoryLimiter) isAllowed(event *pipeline.Event, ts time.Time) bool {
 	}
 
 	isAllowed := l.buckets.get(index, distrIdx) <= limit
+
 	if !isAllowed && l.limit.distributions.isEnabled() {
-		l.metricLabelsBuf = l.metricLabelsBuf[:0]
-
-		l.metricLabelsBuf = append(l.metricLabelsBuf, distrFieldVal)
-		for _, lbl := range l.limitDistrMetrics.CustomLabels {
-			val := "not_set"
-			node := event.Root.Dig(lbl)
-			if node != nil {
-				val = node.AsString()
-			}
-			l.metricLabelsBuf = append(l.metricLabelsBuf, val)
-		}
-
-		switch l.limit.kind {
-		case "", limitKindCount:
-			l.limitDistrMetrics.EventsCount.WithLabelValues(l.metricLabelsBuf...).Inc()
-		case limitKindSize:
-			l.limitDistrMetrics.EventsSize.WithLabelValues(l.metricLabelsBuf...).Add(float64(event.Size))
-		}
+		l.updateDistrMetrics(distrFieldVal, event)
 	}
 
 	return isAllowed
+}
+
+// getDistrData returns distribution field value, index and limit
+func (l *inMemoryLimiter) getDistrData(bucketIdx int, event *pipeline.Event) (string, int, int64) {
+	fieldVal := event.Root.Dig(l.limit.distributions.field...).AsString()
+	idx, limit := l.limit.distributions.getLimit(fieldVal)
+
+	// The distribution index in the bucket matches the distribution value index in distributions,
+	// but is shifted by 1 because default distribution has index 0.
+	idx++
+
+	if idx > 0 {
+		return fieldVal, idx, limit
+	}
+
+	// For default distribution сheck in advance that we are within the limit.
+	// If not, then try to steal reserve from the most free distribution.
+	val := int64(1)
+	if l.limit.kind == limitKindSize {
+		val = int64(event.Size)
+	}
+
+	// Within the limit
+	if l.buckets.get(bucketIdx, idx)+val <= limit {
+		return fieldVal, idx, limit
+	}
+
+	// Looking for a distribution with the most free space.
+	// If found, updating idx and limit - use different bucket for check allowance.
+	maxDiff := int64(-1)
+	for i, d := range l.limit.distributions.distributions {
+		curVal := l.buckets.get(bucketIdx, i+1)
+		if curDiff := d.limit - (curVal + val); curDiff > maxDiff {
+			maxDiff = curDiff
+			idx = i + 1
+			limit = d.limit
+		}
+	}
+
+	return fieldVal, idx, limit
+}
+
+func (l *inMemoryLimiter) updateDistrMetrics(fieldVal string, event *pipeline.Event) {
+	l.metricLabelsBuf = l.metricLabelsBuf[:0]
+
+	l.metricLabelsBuf = append(l.metricLabelsBuf, fieldVal)
+	for _, lbl := range l.limitDistrMetrics.CustomLabels {
+		val := "not_set"
+		node := event.Root.Dig(lbl)
+		if node != nil {
+			val = node.AsString()
+		}
+		l.metricLabelsBuf = append(l.metricLabelsBuf, val)
+	}
+
+	switch l.limit.kind {
+	case "", limitKindCount:
+		l.limitDistrMetrics.EventsCount.WithLabelValues(l.metricLabelsBuf...).Inc()
+	case limitKindSize:
+		l.limitDistrMetrics.EventsSize.WithLabelValues(l.metricLabelsBuf...).Add(float64(event.Size))
+	}
 }
 
 func (l *inMemoryLimiter) lock() {

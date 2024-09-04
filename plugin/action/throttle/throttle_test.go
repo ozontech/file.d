@@ -590,13 +590,13 @@ func TestThrottleWithDistribution(t *testing.T) {
 		`{"time":"%s","k8s_pod":"pod_1","level":"info"}`,  // 1/4
 		`{"time":"%s","k8s_pod":"pod_1","level":"error"}`, // 2/6
 		`{"time":"%s","k8s_pod":"pod_1","level":""}`,      // 1/2
-		`{"time":"%s","k8s_pod":"pod_1","level":"warn"}`,  // 2/4
 		`{"time":"%s","k8s_pod":"pod_1","level":"debug"}`, // 2/2
 		`{"time":"%s","k8s_pod":"pod_1","level":"error"}`, // 3/6
 		`{"time":"%s","k8s_pod":"pod_1","level":"error"}`, // 4/6
-		`{"time":"%s","k8s_pod":"pod_1","level":"debug"}`, // steal from "info, warn" - 3/4
-		`{"time":"%s","k8s_pod":"pod_1","level":"info"}`,  // 4/4
+		`{"time":"%s","k8s_pod":"pod_1","level":"debug"}`, // steal from "info, warn" - 2/4
+		`{"time":"%s","k8s_pod":"pod_1","level":"warn"}`,  // 3/4
 		`{"time":"%s","k8s_pod":"pod_1","level":"error"}`, // 5/6
+		`{"time":"%s","k8s_pod":"pod_1","level":"info"}`,  // 4/4
 		`{"time":"%s","k8s_pod":"pod_1","level":"debug"}`, // steal from "error" - 6/6
 		`{"time":"%s","k8s_pod":"pod_1","level":"info"}`,  // throttled
 		`{"time":"%s","k8s_pod":"pod_1","level":"warn"}`,  // throttled
