@@ -218,6 +218,9 @@ var (
 		"byte_len_cmp":  {},
 		"array_len_cmp": {},
 	}
+	doIfTimestampCmpOpNodes = map[string]struct{}{
+		"ts_cmp": {},
+	}
 )
 
 func extractFieldOpVals(jsonNode *simplejson.Json) [][]byte {
@@ -265,6 +268,34 @@ func noRequiredFieldError(field string) error {
 	return fmt.Errorf("no required field: %s", field)
 }
 
+func requiredString(jsonNode *simplejson.Json, fieldName string) (string, error) {
+	node, has := jsonNode.CheckGet(fieldName)
+	if !has {
+		return "", noRequiredFieldError(fieldName)
+	}
+
+	result, err := node.String()
+	if err != nil {
+		return "", err
+	}
+
+	return result, nil
+}
+
+func requiredInt(jsonNode *simplejson.Json, fieldName string) (int, error) {
+	node, has := jsonNode.CheckGet(fieldName)
+	if !has {
+		return 0, noRequiredFieldError(fieldName)
+	}
+
+	result, err := node.Int()
+	if err != nil {
+		return 0, err
+	}
+
+	return result, nil
+}
+
 const (
 	fieldNameField    = "field"
 	fieldNameCmpOp    = "cmp_op"
@@ -272,34 +303,101 @@ const (
 )
 
 func extractLengthCmpOpNode(opName string, jsonNode *simplejson.Json) (doif.Node, error) {
-	fieldPathNode, has := jsonNode.CheckGet(fieldNameField)
-	if !has {
-		return nil, noRequiredFieldError(fieldNameField)
-	}
-	fieldPath, err := fieldPathNode.String()
+	fieldPath, err := requiredString(jsonNode, fieldNameField)
 	if err != nil {
 		return nil, err
 	}
 
-	cmpOpNode, has := jsonNode.CheckGet(fieldNameCmpOp)
-	if !has {
-		return nil, noRequiredFieldError(fieldNameCmpOp)
-	}
-	cmpOp, err := cmpOpNode.String()
+	cmpOp, err := requiredString(jsonNode, fieldNameCmpOp)
 	if err != nil {
 		return nil, err
 	}
 
-	cmpValueNode, has := jsonNode.CheckGet(fieldNameCmpValue)
-	if !has {
-		return nil, noRequiredFieldError(fieldNameCmpValue)
-	}
-	cmpValue, err := cmpValueNode.Int()
+	cmpValue, err := requiredInt(jsonNode, fieldNameCmpValue)
 	if err != nil {
 		return nil, err
 	}
 
 	return doif.NewLenCmpOpNode(opName, fieldPath, cmpOp, cmpValue)
+}
+
+const (
+	fieldNameFormat         = "format"
+	fieldNameUpdateInterval = "update_interval"
+	fieldNameCmpValueShift  = "value_shift"
+)
+
+const (
+	tsCmpModeNowTag   = "now"
+	tsCmpModeConstTag = "const"
+
+	tsCmpValueNowTag   = "now"
+	tsCmpValueStartTag = "file_d_start"
+)
+
+const (
+	defaultTsCmpValUpdateInterval = 10 * time.Second
+	defaultTsFormat               = time.RFC3339Nano
+)
+
+func extractTsCmpOpNode(_ string, jsonNode *simplejson.Json) (doif.Node, error) {
+	fieldPath, err := requiredString(jsonNode, fieldNameField)
+	if err != nil {
+		return nil, err
+	}
+
+	cmpOp, err := requiredString(jsonNode, fieldNameCmpOp)
+	if err != nil {
+		return nil, err
+	}
+
+	rawCmpValue, err := requiredString(jsonNode, fieldNameCmpValue)
+	if err != nil {
+		return nil, err
+	}
+
+	var cmpMode string
+	var cmpValue time.Time
+
+	switch rawCmpValue {
+	case tsCmpValueNowTag:
+		cmpMode = tsCmpModeNowTag
+	case tsCmpValueStartTag:
+		cmpMode = tsCmpModeConstTag
+		cmpValue = time.Now()
+	default:
+		cmpMode = tsCmpModeConstTag
+		cmpValue, err = time.Parse(time.RFC3339Nano, rawCmpValue)
+		if err != nil {
+			return nil, fmt.Errorf("parse ts cmp value: %w", err)
+		}
+	}
+
+	format := defaultTsFormat
+	str := jsonNode.Get(fieldNameFormat).MustString()
+	if str != "" {
+		format = str
+	}
+
+	cmpValueShift := time.Duration(0)
+	str = jsonNode.Get(fieldNameCmpValueShift).MustString()
+	if str != "" {
+		cmpValueShift, err = time.ParseDuration(str)
+		if err != nil {
+			return nil, fmt.Errorf("parse cmp value shift: %w", err)
+		}
+	}
+
+	updateInterval := defaultTsCmpValUpdateInterval
+	str = jsonNode.Get(fieldNameUpdateInterval).MustString()
+	if str != "" {
+		updateInterval, err = time.ParseDuration(str)
+		if err != nil {
+			return nil, fmt.Errorf("parse update interval: %w", err)
+		}
+	}
+
+	return doif.NewTsCmpOpNode(fieldPath, format, cmpOp, cmpMode, cmpValue, cmpValueShift, updateInterval)
 }
 
 func extractLogicalOpNode(opName string, jsonNode *simplejson.Json) (doif.Node, error) {
@@ -334,6 +432,8 @@ func extractDoIfNode(jsonNode *simplejson.Json) (doif.Node, error) {
 		return extractFieldOpNode(opName, jsonNode)
 	} else if _, has := doIfLengthCmpOpNodes[opName]; has {
 		return extractLengthCmpOpNode(opName, jsonNode)
+	} else if _, has := doIfTimestampCmpOpNodes[opName]; has {
+		return extractTsCmpOpNode(opName, jsonNode)
 	} else {
 		return nil, fmt.Errorf("unknown op %q", opName)
 	}

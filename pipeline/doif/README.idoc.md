@@ -22,3 +22,6 @@ the chain of Match func calls are performed across the whole tree.
 
 ### Length comparison op node
 @do-if-len-cmp-op-node
+
+### Timestamp comparison op node
+@do-if-ts-cmp-op-node
