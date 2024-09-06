@@ -1079,7 +1079,10 @@ const userInfoRawJSON = `
 {
 	"name": "jack",
 	"age": 120,
-	"hobbies": ["football", "diving"]
+	"hobbies": ["football", "diving"],
+	"obj": {
+		"a": "b"
+	}
 }`
 
 func dryJSON(rawJSON string) string {
