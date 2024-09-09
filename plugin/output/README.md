@@ -129,6 +129,52 @@ pipelines:
 ## splunk
 It sends events to splunk.
 
+By default it only stores original event under the "event" key according to the Splunk output format.
+
+If other fields are required it is possible to copy fields values from the original event to the other
+fields relative to the output json. Copies are not allowed directly to the root of output event or
+"event" field and any of its subfields.
+
+For example, timestamps and service name can be copied to provide additional meta data to the Splunk:
+
+```yaml
+copy_fields:
+  - from: ts
+  	to: time
+  - from: service
+  	to: fields.service_name
+```
+
+Here the plugin will lookup for "ts" and "service" fields in the original event and if they are present
+they will be copied to the output json starting on the same level as the "event" key. If the field is not
+found in the original event plugin will not populate new field in output json.
+
+In:
+
+```json
+{
+  "ts":"1723651045",
+  "service":"some-service",
+  "message":"something happened"
+}
+```
+
+Out:
+
+```json
+{
+  "event": {
+    "ts":"1723651045",
+    "service":"some-service",
+    "message":"something happened"
+  },
+  "time": "1723651045",
+  "fields": {
+    "service_name": "some-service"
+  }
+}
+```
+
 [More details...](plugin/output/splunk/README.md)
 ## stdout
 It writes events to stdout(also known as console).
