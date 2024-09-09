@@ -26,6 +26,18 @@ Token for an authentication for a HEC endpoint.
 
 <br>
 
+**`keep_alive`** *`KeepAliveConfig`* 
+
+Keep-alive config.
+
+`KeepAliveConfig` params:
+* `max_idle_conn_duration` - idle keep-alive connections are closed after this duration.
+By default idle connections are closed after `10s`.
+* `max_conn_duration` - keep-alive connections are closed after this duration.
+By default connection duration is unlimited.
+
+<br>
+
 **`workers_count`** *`cfg.Expression`* *`default=gomaxprocs*4`* 
 
 How many workers will be instantiated to send batches.

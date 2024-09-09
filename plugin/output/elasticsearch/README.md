@@ -44,6 +44,18 @@ Path or content of a PEM-encoded CA file.
 
 <br>
 
+**`keep_alive`** *`KeepAliveConfig`* 
+
+Keep-alive config.
+
+`KeepAliveConfig` params:
+* `max_idle_conn_duration` - idle keep-alive connections are closed after this duration.
+By default idle connections are closed after `10s`.
+* `max_conn_duration` - keep-alive connections are closed after this duration.
+By default connection duration is `5m`.
+
+<br>
+
 **`index_format`** *`string`* *`default=file-d-%`* 
 
 It defines the pattern of elasticsearch index name. Use `%` character as a placeholder. Use `index_values` to define values for the replacement.
