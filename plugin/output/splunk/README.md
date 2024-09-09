@@ -34,6 +34,7 @@ Keep-alive config.
 * `max_idle_conn_duration` - idle keep-alive connections are closed after this duration.
 By default idle connections are closed after `10s`.
 * `max_conn_duration` - keep-alive connections are closed after this duration.
+If set to `0` - connection duration is unlimited.
 By default connection duration is unlimited.
 
 <br>
