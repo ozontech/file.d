@@ -136,5 +136,25 @@ It turns on watching for file modifications. Turning it on cause more CPU work, 
 
 <br>
 
+**`meta`** *`cfg.MetaTemplates`* 
+
+Meta params
+
+Add meta information to an event (look at Meta params)
+Use [go-template](https://pkg.go.dev/text/template) syntax
+
+Example: ```filename: '{{ .filename }}'```
+
+<br>
+
+
+### Meta params
+**`filename`** 
+
+**`symlink`** 
+
+**`inode`** 
+
+**`offset`** 
 
 <br>*Generated using [__insane-doc__](https://github.com/vitkovskii/insane-doc)*
