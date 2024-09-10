@@ -350,7 +350,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 
 	if err != nil {
 		p.sendErrorMetric.WithLabelValues(strconv.Itoa(code)).Inc()
-		p.logger.Errorf("can't send data to splunk address=%s: %w", p.config.Endpoint, err)
+		p.logger.Errorf("can't send data to splunk address=%s: %s", p.config.Endpoint, err.Error())
 
 		// skip retries for bad request
 		if code == http.StatusBadRequest {
