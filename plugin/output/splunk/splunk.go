@@ -3,7 +3,6 @@ package splunk
 
 import (
 	"context"
-	"crypto/tls"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -13,8 +12,8 @@ import (
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/xhttp"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/valyala/fasthttp"
 	insaneJSON "github.com/vitkovskii/insane-json"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -26,41 +25,12 @@ It sends events to splunk.
 
 const (
 	outPluginType = "splunk"
-
-	gzipContentEncoding = "gzip"
 )
-
-type gzipCompressionLevel int
-
-const (
-	gzipCompressionLevelDefault gzipCompressionLevel = iota
-	gzipCompressionLevelNo
-	gzipCompressionLevelBestSpeed
-	gzipCompressionLevelBestCompression
-	gzipCompressionLevelHuffmanOnly
-)
-
-func (l gzipCompressionLevel) toFastHTTP() int {
-	switch l {
-	case gzipCompressionLevelNo:
-		return fasthttp.CompressNoCompression
-	case gzipCompressionLevelBestSpeed:
-		return fasthttp.CompressBestSpeed
-	case gzipCompressionLevelBestCompression:
-		return fasthttp.CompressBestCompression
-	case gzipCompressionLevelHuffmanOnly:
-		return fasthttp.CompressHuffmanOnly
-	default:
-		return fasthttp.CompressDefaultCompression
-	}
-}
 
 type Plugin struct {
 	config *Config
 
-	client     *fasthttp.Client
-	endpoint   *fasthttp.URI
-	authHeader string
+	client *xhttp.Client
 
 	logger     *zap.SugaredLogger
 	controller pipeline.OutputPluginController
@@ -90,8 +60,7 @@ type Config struct {
 	// > @3@4@5@6
 	// >
 	// > Gzip compression level. Used if `use_gzip=true`.
-	GzipCompressionLevel  string `json:"gzip_compression_level" default:"default" options:"default|no|best-speed|best-compression|huffman-only"` // *
-	GzipCompressionLevel_ gzipCompressionLevel
+	GzipCompressionLevel string `json:"gzip_compression_level" default:"default" options:"default|no|best-speed|best-compression|huffman-only"` // *
 
 	// > @3@4@5@6
 	// >
@@ -219,6 +188,15 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.batcher.Start(ctx)
 }
 
+func (p *Plugin) Stop() {
+	p.batcher.Stop()
+	p.cancel()
+}
+
+func (p *Plugin) Out(event *pipeline.Event) {
+	p.batcher.Add(event)
+}
+
 func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 	p.sendErrorMetric = ctl.RegisterCounterVec(
 		"output_splunk_send_error",
@@ -228,31 +206,24 @@ func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 }
 
 func (p *Plugin) prepareClient() {
-	p.client = &fasthttp.Client{
-		ReadTimeout:  p.config.RequestTimeout_,
-		WriteTimeout: p.config.RequestTimeout_,
-
-		TLSConfig: &tls.Config{
+	config := &xhttp.ClientConfig{
+		Endpoints:         []string{p.config.Endpoint},
+		ConnectionTimeout: p.config.RequestTimeout_,
+		AuthHeader:        "Splunk " + p.config.Token,
+		TLS: &xhttp.ClientTLSConfig{
 			// TODO: make this configuration option and false by default
 			InsecureSkipVerify: true,
 		},
 	}
-
-	p.endpoint = &fasthttp.URI{}
-	if err := p.endpoint.Parse(nil, []byte(p.config.Endpoint)); err != nil {
-		p.logger.Fatalf("can't parse splunk endpoint %s: %s", p.config.Endpoint, err.Error())
+	if p.config.UseGzip {
+		config.GzipCompressionLevel = p.config.GzipCompressionLevel
 	}
 
-	p.authHeader = "Splunk " + p.config.Token
-}
-
-func (p *Plugin) Stop() {
-	p.batcher.Stop()
-	p.cancel()
-}
-
-func (p *Plugin) Out(event *pipeline.Event) {
-	p.batcher.Add(event)
+	var err error
+	p.client, err = xhttp.NewClient(config)
+	if err != nil {
+		p.logger.Fatal("can't create http client", zap.Error(err))
+	}
 }
 
 func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) error {
@@ -281,10 +252,12 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 
 	p.logger.Debugf("trying to send: %s", outBuf)
 
-	code, err := p.send(outBuf)
+	code, err := p.client.DoTimeout(http.MethodPost, "", outBuf,
+		p.config.RequestTimeout_, parseSplunkError)
+
 	if err != nil {
 		p.sendErrorMetric.WithLabelValues(strconv.Itoa(code)).Inc()
-		p.logger.Errorf("can't send data to splunk address=%s: %s", p.config.Endpoint, err.Error())
+		p.logger.Errorf("can't send data to splunk address=%s: %w", p.config.Endpoint, err)
 
 		// skip retries for bad request
 		if code == http.StatusBadRequest {
@@ -298,45 +271,6 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 }
 
 func (p *Plugin) maintenance(_ *pipeline.WorkerData) {}
-
-func (p *Plugin) send(data []byte) (int, error) {
-	req := fasthttp.AcquireRequest()
-	defer fasthttp.ReleaseRequest(req)
-	resp := fasthttp.AcquireResponse()
-	defer fasthttp.ReleaseResponse(resp)
-
-	p.prepareRequest(req, data)
-
-	if err := p.client.DoTimeout(req, resp, p.config.RequestTimeout_); err != nil {
-		return 0, fmt.Errorf("can't send request: %w", err)
-	}
-
-	respBody := resp.Body()
-
-	var statusCode int
-	if statusCode = resp.Header.StatusCode(); statusCode != http.StatusOK {
-		return statusCode, fmt.Errorf("bad response: code=%s, body=%s", resp.Header.StatusMessage(), respBody)
-	}
-
-	return statusCode, parseSplunkError(respBody)
-}
-
-func (p *Plugin) prepareRequest(req *fasthttp.Request, body []byte) {
-	req.SetURI(p.endpoint)
-
-	req.Header.SetMethod(fasthttp.MethodPost)
-	req.Header.Set(fasthttp.HeaderAuthorization, p.authHeader)
-
-	if p.config.UseGzip {
-		if _, err := fasthttp.WriteGzipLevel(req.BodyWriter(), body, p.config.GzipCompressionLevel_.toFastHTTP()); err != nil {
-			req.SetBodyRaw(body)
-		} else {
-			req.Header.SetContentEncoding(gzipContentEncoding)
-		}
-	} else {
-		req.SetBodyRaw(body)
-	}
-}
 
 func parseSplunkError(data []byte) error {
 	root, err := insaneJSON.DecodeBytes(data)

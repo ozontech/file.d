@@ -7,4 +7,5 @@ tests-offsets
 testdata
 
 .idea/
+.vscode
 .DS_Store
