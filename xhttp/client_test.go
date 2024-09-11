@@ -82,12 +82,14 @@ func TestPrepareRequest(t *testing.T) {
 			in: inputData{
 				endpoint:             "http://endpoint:4",
 				method:               fasthttp.MethodPost,
+				contentType:          "application/json",
 				body:                 "test gzip",
 				gzipCompressionLevel: 1,
 			},
 			want: wantData{
 				uri:             "http://endpoint:4/",
 				method:          []byte(fasthttp.MethodPost),
+				contentType:     []byte("application/json"),
 				contentEncoding: []byte(gzipContentEncoding),
 				body:            []byte("test gzip"),
 			},
