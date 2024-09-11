@@ -159,6 +159,18 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
+	// > Keep-alive config.
+	// >
+	// > `KeepAliveConfig` params:
+	// > * `max_idle_conn_duration` - idle keep-alive connections are closed after this duration.
+	// > By default idle connections are closed after `10s`.
+	// > * `max_conn_duration` - keep-alive connections are closed after this duration.
+	// > If set to `0` - connection duration is unlimited.
+	// > By default connection duration is unlimited.
+	KeepAlive KeepAliveConfig `json:"keep_alive" child:"true"` // *
+
+	// > @3@4@5@6
+	// >
 	// > How many workers will be instantiated to send batches.
 	WorkersCount  cfg.Expression `json:"workers_count" default:"gomaxprocs*4" parse:"expression"` // *
 	WorkersCount_ int
@@ -219,6 +231,16 @@ type Config struct {
 	// > Supports copying whole original event, but does not allow to copy directly to the output root
 	// > or the "event" key with any of its subkeys.
 	CopyFields []CopyField `json:"copy_fields" slice:"true"` // *
+}
+
+type KeepAliveConfig struct {
+	// Idle keep-alive connections are closed after this duration.
+	MaxIdleConnDuration  cfg.Duration `json:"max_idle_conn_duration" parse:"duration" default:"10s"`
+	MaxIdleConnDuration_ time.Duration
+
+	// Keep-alive connections are closed after this duration.
+	MaxConnDuration  cfg.Duration `json:"max_conn_duration" parse:"duration" default:"0"`
+	MaxConnDuration_ time.Duration
 }
 
 type data struct {
@@ -315,6 +337,9 @@ func (p *Plugin) prepareClient() {
 	p.client = &fasthttp.Client{
 		ReadTimeout:  p.config.RequestTimeout_,
 		WriteTimeout: p.config.RequestTimeout_,
+
+		MaxIdleConnDuration: p.config.KeepAlive.MaxIdleConnDuration_,
+		MaxConnDuration:     p.config.KeepAlive.MaxConnDuration_,
 
 		TLSConfig: &tls.Config{
 			// TODO: make this configuration option and false by default

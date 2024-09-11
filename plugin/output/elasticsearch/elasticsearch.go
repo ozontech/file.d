@@ -126,6 +126,18 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
+	// > Keep-alive config.
+	// >
+	// > `KeepAliveConfig` params:
+	// > * `max_idle_conn_duration` - idle keep-alive connections are closed after this duration.
+	// > By default idle connections are closed after `10s`.
+	// > * `max_conn_duration` - keep-alive connections are closed after this duration.
+	// > If set to `0` - connection duration is unlimited.
+	// > By default connection duration is `5m`.
+	KeepAlive KeepAliveConfig `json:"keep_alive" child:"true"` // *
+
+	// > @3@4@5@6
+	// >
 	// > It defines the pattern of elasticsearch index name. Use `%` character as a placeholder. Use `index_values` to define values for the replacement.
 	// > E.g. if `index_format="my-index-%-%"` and `index_values="service,@@time"` and event is `{"service"="my-service"}`
 	// > then index for that event will be `my-index-my-service-2020-01-05`. First `%` replaced with `service` field of the event and the second
@@ -204,6 +216,16 @@ type Config struct {
 	// >
 	// > Multiplier for exponential increase of retention between retries
 	RetentionExponentMultiplier int `json:"retention_exponentially_multiplier" default:"2"` // *
+}
+
+type KeepAliveConfig struct {
+	// Idle keep-alive connections are closed after this duration.
+	MaxIdleConnDuration  cfg.Duration `json:"max_idle_conn_duration" parse:"duration" default:"10s"`
+	MaxIdleConnDuration_ time.Duration
+
+	// Keep-alive connections are closed after this duration.
+	MaxConnDuration  cfg.Duration `json:"max_conn_duration" parse:"duration" default:"5m"`
+	MaxConnDuration_ time.Duration
 }
 
 type data struct {
@@ -301,9 +323,11 @@ func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 
 func (p *Plugin) prepareClient() {
 	p.client = &fasthttp.Client{
-		ReadTimeout:     p.config.ConnectionTimeout_ * 2,
-		WriteTimeout:    p.config.ConnectionTimeout_ * 2,
-		MaxConnDuration: time.Minute * 5,
+		ReadTimeout:  p.config.ConnectionTimeout_ * 2,
+		WriteTimeout: p.config.ConnectionTimeout_ * 2,
+
+		MaxIdleConnDuration: p.config.KeepAlive.MaxIdleConnDuration_,
+		MaxConnDuration:     p.config.KeepAlive.MaxConnDuration_,
 	}
 	if p.config.CACert != "" {
 		b := xtls.NewConfigBuilder()
