@@ -36,29 +36,15 @@ func TestPrepareRequest(t *testing.T) {
 			in: inputData{
 				endpoint:             "http://endpoint:1",
 				method:               fasthttp.MethodPost,
+				contentType:          "application/json",
 				body:                 "test simple",
 				gzipCompressionLevel: -1,
 			},
 			want: wantData{
-				uri:    "http://endpoint:1/",
-				method: []byte(fasthttp.MethodPost),
-				body:   []byte("test simple"),
-			},
-		},
-		{
-			name: "content_type",
-			in: inputData{
-				endpoint:             "http://endpoint:2",
-				method:               fasthttp.MethodPost,
-				contentType:          "application/x-ndjson",
-				body:                 "test content-type",
-				gzipCompressionLevel: -1,
-			},
-			want: wantData{
-				uri:         "http://endpoint:2/",
+				uri:         "http://endpoint:1/",
 				method:      []byte(fasthttp.MethodPost),
-				contentType: []byte("application/x-ndjson"),
-				body:        []byte("test content-type"),
+				contentType: []byte("application/json"),
+				body:        []byte("test simple"),
 			},
 		},
 		{
@@ -66,15 +52,17 @@ func TestPrepareRequest(t *testing.T) {
 			in: inputData{
 				endpoint:             "http://endpoint:3",
 				method:               fasthttp.MethodPost,
+				contentType:          "application/json",
 				body:                 "test auth",
 				authHeader:           "Auth Header",
 				gzipCompressionLevel: -1,
 			},
 			want: wantData{
-				uri:    "http://endpoint:3/",
-				method: []byte(fasthttp.MethodPost),
-				body:   []byte("test auth"),
-				auth:   []byte("Auth Header"),
+				uri:         "http://endpoint:3/",
+				method:      []byte(fasthttp.MethodPost),
+				contentType: []byte("application/json"),
+				body:        []byte("test auth"),
+				auth:        []byte("Auth Header"),
 			},
 		},
 		{
