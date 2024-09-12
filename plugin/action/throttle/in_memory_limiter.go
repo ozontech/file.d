@@ -69,20 +69,16 @@ func (l *inMemoryLimiter) isAllowed(event *pipeline.Event, ts time.Time) bool {
 	l.lock()
 	defer l.unlock()
 
+	id := l.rebuildBuckets(ts)
+	index := id - l.buckets.getMinID()
+
 	// If the limit is given with distribution, then distributed buckets are used
 	distrIdx := 0
 	distrFieldVal := ""
 	if l.limit.distributions.isEnabled() {
-		distrFieldVal = event.Root.Dig(l.limit.distributions.field...).AsString()
-		distrIdx, limit = l.limit.distributions.getLimit(distrFieldVal)
-
-		// The distribution index in the bucket matches the distribution value index in distributions,
-		// but is shifted by 1 because default distribution has index 0.
-		distrIdx++
+		distrFieldVal, distrIdx, limit = l.getDistrData(index, event)
 	}
 
-	id := l.rebuildBuckets(ts)
-	index := id - l.buckets.getMinID()
 	switch l.limit.kind {
 	case "", limitKindCount:
 		l.buckets.add(index, distrIdx, 1)
@@ -93,28 +89,73 @@ func (l *inMemoryLimiter) isAllowed(event *pipeline.Event, ts time.Time) bool {
 	}
 
 	isAllowed := l.buckets.get(index, distrIdx) <= limit
+
 	if !isAllowed && l.limit.distributions.isEnabled() {
-		l.metricLabelsBuf = l.metricLabelsBuf[:0]
-
-		l.metricLabelsBuf = append(l.metricLabelsBuf, distrFieldVal)
-		for _, lbl := range l.limitDistrMetrics.CustomLabels {
-			val := "not_set"
-			node := event.Root.Dig(lbl)
-			if node != nil {
-				val = node.AsString()
-			}
-			l.metricLabelsBuf = append(l.metricLabelsBuf, val)
-		}
-
-		switch l.limit.kind {
-		case "", limitKindCount:
-			l.limitDistrMetrics.EventsCount.WithLabelValues(l.metricLabelsBuf...).Inc()
-		case limitKindSize:
-			l.limitDistrMetrics.EventsSize.WithLabelValues(l.metricLabelsBuf...).Add(float64(event.Size))
-		}
+		l.updateDistrMetrics(distrFieldVal, event)
 	}
 
 	return isAllowed
+}
+
+// getDistrData returns distribution field value, index and limit
+func (l *inMemoryLimiter) getDistrData(bucketIdx int, event *pipeline.Event) (string, int, int64) {
+	fieldVal := event.Root.Dig(l.limit.distributions.field...).AsString()
+	idx, limit := l.limit.distributions.getLimit(fieldVal)
+
+	// The distribution index in the bucket matches the distribution value index in distributions,
+	// but is shifted by 1 because default distribution has index 0.
+	idx++
+
+	if idx > 0 {
+		return fieldVal, idx, limit
+	}
+
+	// For default distribution сheck in advance that we are within the limit.
+	// If not, then try to steal reserve from the most free distribution.
+	val := int64(1)
+	if l.limit.kind == limitKindSize {
+		val = int64(event.Size)
+	}
+
+	// Within the limit
+	if l.buckets.get(bucketIdx, idx)+val <= limit {
+		return fieldVal, idx, limit
+	}
+
+	// Looking for a distribution with the most free space.
+	// If found, updating idx and limit - use different bucket for check allowance.
+	maxDiff := int64(-1)
+	for i, d := range l.limit.distributions.distributions {
+		curVal := l.buckets.get(bucketIdx, i+1)
+		if curDiff := d.limit - (curVal + val); curDiff > maxDiff {
+			maxDiff = curDiff
+			idx = i + 1
+			limit = d.limit
+		}
+	}
+
+	return fieldVal, idx, limit
+}
+
+func (l *inMemoryLimiter) updateDistrMetrics(fieldVal string, event *pipeline.Event) {
+	l.metricLabelsBuf = l.metricLabelsBuf[:0]
+
+	l.metricLabelsBuf = append(l.metricLabelsBuf, fieldVal)
+	for _, lbl := range l.limitDistrMetrics.CustomLabels {
+		val := "not_set"
+		node := event.Root.Dig(lbl)
+		if node != nil {
+			val = node.AsString()
+		}
+		l.metricLabelsBuf = append(l.metricLabelsBuf, val)
+	}
+
+	switch l.limit.kind {
+	case "", limitKindCount:
+		l.limitDistrMetrics.EventsCount.WithLabelValues(l.metricLabelsBuf...).Inc()
+	case limitKindSize:
+		l.limitDistrMetrics.EventsSize.WithLabelValues(l.metricLabelsBuf...).Add(float64(event.Size))
+	}
 }
 
 func (l *inMemoryLimiter) lock() {

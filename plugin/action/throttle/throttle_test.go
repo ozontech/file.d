@@ -581,30 +581,36 @@ func TestThrottleWithDistribution(t *testing.T) {
 		outEvents[level]++
 		wg.Done()
 	})
-	wantOutEvents := map[string]int{
-		"error": 6,
-		"info":  3,
-		"warn":  1,
-		"debug": 1,
-		"":      1,
+
+	// error - limit 6
+	// info, warn - limit 4
+	// default - limit 2
+	events := []string{
+		`{"time":"%s","k8s_pod":"pod_1","level":"error"}`, // 1/6
+		`{"time":"%s","k8s_pod":"pod_1","level":"info"}`,  // 1/4
+		`{"time":"%s","k8s_pod":"pod_1","level":"error"}`, // 2/6
+		`{"time":"%s","k8s_pod":"pod_1","level":""}`,      // 1/2
+		`{"time":"%s","k8s_pod":"pod_1","level":"debug"}`, // 2/2
+		`{"time":"%s","k8s_pod":"pod_1","level":"error"}`, // 3/6
+		`{"time":"%s","k8s_pod":"pod_1","level":"error"}`, // 4/6
+		`{"time":"%s","k8s_pod":"pod_1","level":"debug"}`, // steal from "info, warn" - 2/4
+		`{"time":"%s","k8s_pod":"pod_1","level":"warn"}`,  // 3/4
+		`{"time":"%s","k8s_pod":"pod_1","level":"error"}`, // 5/6
+		`{"time":"%s","k8s_pod":"pod_1","level":"info"}`,  // 4/4
+		`{"time":"%s","k8s_pod":"pod_1","level":"debug"}`, // steal from "error" - 6/6
+		`{"time":"%s","k8s_pod":"pod_1","level":"info"}`,  // throttled
+		`{"time":"%s","k8s_pod":"pod_1","level":"warn"}`,  // throttled
+		`{"time":"%s","k8s_pod":"pod_1","level":""}`,      // throttled
+		`{"time":"%s","k8s_pod":"pod_1","level":"error"}`, // throttled
+		`{"time":"%s","k8s_pod":"pod_1","level":"debug"}`, // throttled
 	}
 
-	events := []string{
-		`{"time":"%s","k8s_pod":"pod_1","level":"error"}`,
-		`{"time":"%s","k8s_pod":"pod_1","level":"info"}`,
-		`{"time":"%s","k8s_pod":"pod_1","level":"error"}`,
-		`{"time":"%s","k8s_pod":"pod_1","level":"warn"}`,
-		`{"time":"%s","k8s_pod":"pod_1","level":"error"}`,
-		`{"time":"%s","k8s_pod":"pod_1","level":"error"}`,
-		`{"time":"%s","k8s_pod":"pod_1","level":""}`,
-		`{"time":"%s","k8s_pod":"pod_1","level":"info"}`,
-		`{"time":"%s","k8s_pod":"pod_1","level":"error"}`,
-		`{"time":"%s","k8s_pod":"pod_1","level":"info"}`,
-		`{"time":"%s","k8s_pod":"pod_1","level":"debug"}`,
-		`{"time":"%s","k8s_pod":"pod_1","level":"warn"}`,
-		`{"time":"%s","k8s_pod":"pod_1","level":"error"}`,
-		`{"time":"%s","k8s_pod":"pod_1","level":"debug"}`,
-		`{"time":"%s","k8s_pod":"pod_1","level":"error"}`,
+	wantOutEvents := map[string]int{
+		"error": 5,
+		"info":  2,
+		"warn":  1,
+		"debug": 3,
+		"":      1,
 	}
 
 	nowTs := time.Now().Format(time.RFC3339Nano)
