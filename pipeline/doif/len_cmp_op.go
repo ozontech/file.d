@@ -90,9 +90,10 @@ const (
 )
 
 type lenCmpOpNode struct {
-	lenCmpOp   lenCmpOpType
-	fieldPath  []string
-	comparator comparator
+	lenCmpOp  lenCmpOpType
+	fieldPath []string
+	cmpOp     cmpOperation
+	cmpValue  int
 }
 
 func NewLenCmpOpNode(op string, field string, cmpOp string, cmpValue int) (Node, error) {
@@ -106,21 +107,71 @@ func NewLenCmpOpNode(op string, field string, cmpOp string, cmpValue int) (Node,
 		return nil, fmt.Errorf("bad len cmp op: %s", op)
 	}
 
+	if cmpValue < 0 {
+		return nil, fmt.Errorf("negative cmp value: %d", cmpValue)
+	}
+
 	fieldPath := cfg.ParseFieldSelector(field)
-	cmp, err := newComparator(cmpOp, cmpValue)
+	typedCmpOp, err := newCmpOp(cmpOp)
 	if err != nil {
 		return nil, fmt.Errorf("init byte len cmp op node: %w", err)
 	}
 
 	return &lenCmpOpNode{
-		lenCmpOp:   lenCmpOp,
-		fieldPath:  fieldPath,
-		comparator: cmp,
+		lenCmpOp:  lenCmpOp,
+		fieldPath: fieldPath,
+		cmpOp:     typedCmpOp,
+		cmpValue:  cmpValue,
 	}, nil
 }
 
 func (n *lenCmpOpNode) Type() NodeType {
 	return NodeLengthCmpOp
+}
+
+func getNodeFieldsBytesSize(node *insaneJSON.Node) int {
+	size := 0
+	fields := node.AsFields()
+	for _, elemNode := range fields {
+		// field node is a field name and it is always a string enclosed with double quotes
+		// Note: there is one corner case for field names with escaping `\"`.
+		// In that case output bytes count will be less than actual because insaneJSON always escapes field names when using `AsFields`.
+		size += len(elemNode.AsString()) + 2 + 1 // quotes enclosing field name and colon between key and value
+
+		elemNodeVal := elemNode.AsFieldValue()
+		size += getNodeBytesSize(elemNodeVal)
+	}
+	size += len(fields) - 1 // commas between object fields
+	return size
+}
+
+func getNodeBytesSize(node *insaneJSON.Node) int {
+	if node == nil {
+		return 0
+	}
+	size := 0
+	switch {
+	case node.IsArray():
+		nodeArr := node.AsArray()
+		for _, elemNode := range nodeArr {
+			size += getNodeBytesSize(elemNode)
+		}
+		size += len(nodeArr) - 1 + 2 // commas between elements and square brackets enclosing array
+	case node.IsObject():
+		size += getNodeFieldsBytesSize(node) + 2 // curly brackets enclosing object
+	default:
+		if node.IsString() {
+			if node.TypeStr() == "hellBitString" {
+				// Note: in case of unescaped string computed bytes length can diverse from the actual
+				size += len(node.AsString()) + 2 // add quotes to unescaped string
+			} else {
+				size += len(node.AsEscapedString())
+			}
+		} else {
+			size += len(node.AsString())
+		}
+	}
+	return size
 }
 
 func (n *lenCmpOpNode) Check(eventRoot *insaneJSON.Root) bool {
@@ -134,7 +185,7 @@ func (n *lenCmpOpNode) Check(eventRoot *insaneJSON.Root) bool {
 		}
 
 		if node.IsObject() || node.IsArray() {
-			value = len(node.EncodeToByte())
+			value = getNodeBytesSize(node)
 		} else {
 			value = len(node.AsString())
 		}
@@ -149,7 +200,7 @@ func (n *lenCmpOpNode) Check(eventRoot *insaneJSON.Root) bool {
 		panic("impossible: bad len cmp op")
 	}
 
-	return n.comparator.compare(value)
+	return n.cmpOp.compare(value, n.cmpValue)
 }
 
 func (n *lenCmpOpNode) isEqualTo(n2 Node, _ int) error {
@@ -162,8 +213,12 @@ func (n *lenCmpOpNode) isEqualTo(n2 Node, _ int) error {
 		return fmt.Errorf("nodes have different len cmp operations: %d != %d", n.lenCmpOp, n2Explicit.lenCmpOp)
 	}
 
-	if err := n.comparator.isEqualTo(n2Explicit.comparator); err != nil {
-		return err
+	if n.cmpOp != n2Explicit.cmpOp {
+		return fmt.Errorf("nodes have different cmp operations")
+	}
+
+	if n.cmpValue != n2Explicit.cmpValue {
+		return fmt.Errorf("nodes have different cmp values: %d != %d", n.cmpValue, n2Explicit.cmpValue)
 	}
 
 	if slices.Compare(n.fieldPath, n2Explicit.fieldPath) != 0 {

@@ -2,67 +2,43 @@ package doif
 
 import "fmt"
 
-type comparisonOperation string
+type cmpOperation string
 
 const (
-	cmpOpLess           comparisonOperation = "lt"
-	cmpOpLessOrEqual    comparisonOperation = "le"
-	cmpOpGreater        comparisonOperation = "gt"
-	cmpOpGreaterOrEqual comparisonOperation = "ge"
-	cmpOpEqual          comparisonOperation = "eq"
-	cmpOpNotEqual       comparisonOperation = "ne"
+	cmpOpLess           cmpOperation = "lt"
+	cmpOpLessOrEqual    cmpOperation = "le"
+	cmpOpGreater        cmpOperation = "gt"
+	cmpOpGreaterOrEqual cmpOperation = "ge"
+	cmpOpEqual          cmpOperation = "eq"
+	cmpOpNotEqual       cmpOperation = "ne"
 )
 
-type comparator struct {
-	cmpOp    comparisonOperation
-	cmpValue int
-}
-
-func newComparator(cmpOp string, cmpValue int) (comparator, error) {
-	typedCmpOp := comparisonOperation(cmpOp)
+func newCmpOp(cmpOp string) (cmpOperation, error) {
+	typedCmpOp := cmpOperation(cmpOp)
 	switch typedCmpOp {
 	case cmpOpLess, cmpOpLessOrEqual, cmpOpGreater, cmpOpGreaterOrEqual, cmpOpEqual, cmpOpNotEqual:
 	default:
-		return comparator{}, fmt.Errorf("unknown comparison operation: %s", typedCmpOp)
+		return "", fmt.Errorf("unknown comparison operation: %s", typedCmpOp)
 	}
 
-	if cmpValue < 0 {
-		return comparator{}, fmt.Errorf("negative cmp value: %d", cmpValue)
-	}
-
-	return comparator{
-		cmpOp:    typedCmpOp,
-		cmpValue: cmpValue,
-	}, nil
+	return typedCmpOp, nil
 }
 
-func (c comparator) compare(value int) bool {
-	switch c.cmpOp {
+func (c cmpOperation) compare(lhs, rhs int) bool {
+	switch c {
 	case cmpOpLess:
-		return value < c.cmpValue
+		return lhs < rhs
 	case cmpOpLessOrEqual:
-		return value <= c.cmpValue
+		return lhs <= rhs
 	case cmpOpGreater:
-		return value > c.cmpValue
+		return lhs > rhs
 	case cmpOpGreaterOrEqual:
-		return value >= c.cmpValue
+		return lhs >= rhs
 	case cmpOpEqual:
-		return value == c.cmpValue
+		return lhs == rhs
 	case cmpOpNotEqual:
-		return value != c.cmpValue
+		return lhs != rhs
 	default:
 		panic("invalid cmp op")
 	}
-}
-
-func (c comparator) isEqualTo(other comparator) error {
-	if c.cmpOp != other.cmpOp {
-		return fmt.Errorf("unequal cmp operations: %s != %s", c.cmpOp, other.cmpOp)
-	}
-
-	if c.cmpValue != other.cmpValue {
-		return fmt.Errorf("unequal cmp values: %d != %d", c.cmpValue, other.cmpValue)
-	}
-
-	return nil
 }

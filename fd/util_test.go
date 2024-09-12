@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/bitly/go-simplejson"
 	"github.com/ozontech/file.d/pipeline"
@@ -51,6 +52,13 @@ type doIfTreeNode struct {
 	lenCmpOp string
 	cmpOp    string
 	cmpValue int
+
+	tsCmpOp            bool
+	tsFormat           string
+	tsCmpValChangeMode string
+	tsCmpValue         time.Time
+	tsCmpValueShift    time.Duration
+	tsUpdateInterval   time.Duration
 }
 
 // nolint:gocritic
@@ -78,6 +86,16 @@ func buildDoIfTree(node *doIfTreeNode) (doif.Node, error) {
 		)
 	case node.lenCmpOp != "":
 		return doif.NewLenCmpOpNode(node.lenCmpOp, node.fieldName, node.cmpOp, node.cmpValue)
+	case node.tsCmpOp:
+		return doif.NewTsCmpOpNode(
+			node.fieldName,
+			node.tsFormat,
+			node.cmpOp,
+			node.tsCmpValChangeMode,
+			node.tsCmpValue,
+			node.tsCmpValueShift,
+			node.tsUpdateInterval,
+		)
 	default:
 		return nil, errors.New("unknown type of node")
 	}
@@ -127,6 +145,14 @@ func Test_extractDoIfChecker(t *testing.T) {
 							"field": "items",
 							"cmp_op": "lt",
 							"value": 100
+						},
+						{
+							"op": "ts_cmp",
+							"field": "timestamp",
+							"cmp_op": "lt",
+							"value": "2009-11-10T23:00:00Z",
+							"format": "2006-01-02T15:04:05.999999999Z07:00",
+							"update_interval": "15s"
 						},
 						{
 							"op": "or",
@@ -186,6 +212,15 @@ func Test_extractDoIfChecker(t *testing.T) {
 								cmpValue:  100,
 							},
 							{
+								tsCmpOp:            true,
+								cmpOp:              "lt",
+								fieldName:          "timestamp",
+								tsFormat:           time.RFC3339Nano,
+								tsCmpValue:         time.Date(2009, time.November, 10, 23, 0, 0, 0, time.UTC),
+								tsCmpValChangeMode: tsCmpModeConstTag,
+								tsUpdateInterval:   15 * time.Second,
+							},
+							{
 								logicalOp: "or",
 								operands: []*doIfTreeNode{
 									{
@@ -242,6 +277,48 @@ func Test_extractDoIfChecker(t *testing.T) {
 				cmpOp:     "lt",
 				fieldName: "items",
 				cmpValue:  10,
+			},
+		},
+		{
+			name: "ok_ts_cmp_op",
+			args: args{
+				cfgStr: `{
+					"op": "ts_cmp",
+					"field": "timestamp",
+					"cmp_op": "lt",
+					"value": "2009-11-10T23:00:00Z",
+					"value_shift": "-24h",
+					"format": "2006-01-02T15:04:05Z07:00",
+					"update_interval": "15s"}`,
+			},
+			want: &doIfTreeNode{
+				tsCmpOp:            true,
+				cmpOp:              "lt",
+				fieldName:          "timestamp",
+				tsFormat:           time.RFC3339,
+				tsCmpValue:         time.Date(2009, time.November, 10, 23, 0, 0, 0, time.UTC),
+				tsCmpValueShift:    -24 * time.Hour,
+				tsCmpValChangeMode: tsCmpModeConstTag,
+				tsUpdateInterval:   15 * time.Second,
+			},
+		},
+		{
+			name: "ok_ts_cmp_op_default_settings",
+			args: args{
+				cfgStr: `{
+					"op": "ts_cmp",
+					"field": "timestamp",
+					"cmp_op": "lt",
+					"value": "now"}`,
+			},
+			want: &doIfTreeNode{
+				tsCmpOp:            true,
+				cmpOp:              "lt",
+				fieldName:          "timestamp",
+				tsCmpValChangeMode: tsCmpModeNowTag,
+				tsFormat:           defaultTsFormat,
+				tsCmpValueShift:    0,
+				tsUpdateInterval:   defaultTsCmpValUpdateInterval,
 			},
 		},
 		{
@@ -373,6 +450,89 @@ func Test_extractDoIfChecker(t *testing.T) {
 		{
 			name:    "error_byte_len_cmp_op_negative_cmp_value",
 			args:    args{cfgStr: `{"op":"byte_len_cmp","field":"data","cmp_op":"lt","value":-1}`},
+			wantErr: true,
+		},
+		{
+			name: "error_ts_cmp_op_no_field",
+			args: args{
+				cfgStr: `{"op": "ts_cmp","cmp_op": "lt"}`,
+			},
+			wantErr: true,
+		},
+		{
+			name: "error_ts_cmp_op_field_is_not_string",
+			args: args{
+				cfgStr: `{"op":"ts_cmp","field":123}`,
+			},
+			wantErr: true,
+		},
+		{
+			name: "error_ts_cmp_op_no_format",
+			args: args{
+				cfgStr: `{"op":"ts_cmp","field":"timestamp"}`,
+			},
+			wantErr: true,
+		},
+		{
+			name: "error_ts_cmp_op_format_is_not_string",
+			args: args{
+				cfgStr: `{"op":"ts_cmp","field":"timestamp","format":123}`,
+			},
+			wantErr: true,
+		},
+		{
+			name: "error_ts_cmp_op_no_cmp_op",
+			args: args{
+				cfgStr: `{"op":"ts_cmp","field":"timestamp","format":"2006-01-02T15:04:05.999999999Z07:00"}`,
+			},
+			wantErr: true,
+		},
+		{
+			name: "error_ts_cmp_op_cmp_op_is_not_string",
+			args: args{
+				cfgStr: `{"op":"ts_cmp","field":"timestamp","format":"2006-01-02T15:04:05.999999999Z07:00","cmp_op":123}`,
+			},
+			wantErr: true,
+		},
+		{
+			name: "error_ts_cmp_op_no_cmp_value",
+			args: args{
+				cfgStr: `{"op":"ts_cmp","field":"timestamp","format":"2006-01-02T15:04:05.999999999Z07:00","cmp_op":"lt"}`,
+			},
+			wantErr: true,
+		},
+		{
+			name: "error_ts_cmp_op_cmp_value_is_not_string",
+			args: args{
+				cfgStr: `{"op":"ts_cmp","field":"timestamp","format":"2006-01-02T15:04:05.999999999Z07:00","cmp_op":"lt","value":123}`,
+			},
+			wantErr: true,
+		},
+		{
+			name: "error_ts_cmp_op_invalid_cmp_value",
+			args: args{
+				cfgStr: `{"op":"ts_cmp","field":"timestamp","format":"2006-01-02T15:04:05.999999999Z07:00","cmp_op":"lt","value":"qwe"}`,
+			},
+			wantErr: true,
+		},
+		{
+			name: "error_ts_cmp_op_invalid_cmp_op",
+			args: args{
+				cfgStr: `{"op":"ts_cmp","field":"timestamp","format":"2006-01-02T15:04:05.999999999Z07:00","cmp_op":"qwe","value":"2009-11-10T23:00:00Z"}`,
+			},
+			wantErr: true,
+		},
+		{
+			name: "error_ts_cmp_op_invalid_update_interval",
+			args: args{
+				cfgStr: `{
+					"op": "ts_cmp",
+					"field": "timestamp",
+					"cmp_op": "lt",
+					"value": "2009-11-10T23:00:00Z",
+					"format": "2006-01-02T15:04:05.999999999Z07:00",
+					"update_interval": "qwe"}`,
+			},
 			wantErr: true,
 		},
 	}
