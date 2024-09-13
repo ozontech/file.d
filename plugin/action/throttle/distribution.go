@@ -110,7 +110,7 @@ func (ld *limitDistributions) size() int {
 	return len(ld.distributions)
 }
 
-// get returns (index, distribution limit) by key or (-1, default distribution limit) otherwise
+// getLimit returns (index, distribution limit) by key or (-1, default distribution limit) otherwise
 func (ld *limitDistributions) getLimit(key string) (int, int64) {
 	if idx, ok := ld.idxByKey[key]; ok {
 		return idx, ld.distributions[idx].limit
