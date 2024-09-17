@@ -1,6 +1,8 @@
 package pipeline
 
 import (
+	"sync"
+
 	"github.com/ozontech/file.d/logger"
 	insaneJSON "github.com/vitkovskii/insane-json"
 	"go.uber.org/atomic"
@@ -397,6 +399,9 @@ func (p *processor) Spawn(parent *Event, nodes []*insaneJSON.Node) {
 	parent.SetChildParentKind()
 	nextActionIdx := parent.action + 1
 
+	wg := &sync.WaitGroup{}
+	results := make(chan *Event)
+
 	for _, node := range nodes {
 		// we can't reuse parent event (using insaneJSON.Root{Node: child}
 		// because of nil decoder
@@ -409,12 +414,25 @@ func (p *processor) Spawn(parent *Event, nodes []*insaneJSON.Node) {
 		child.SetChildKind()
 		child.action = nextActionIdx
 
-		ok, _ := p.doActions(child)
-		if ok {
-			child.stage = eventStageOutput
-			p.output.Out(child)
-		}
-		child.Root.ReleaseBufMem()
+		wg.Add(1)
+		go func(child *Event) {
+			defer wg.Done()
+			ok, _ := p.doActions(child)
+			if ok {
+				results <- child
+			}
+		}(child)
+	}
+
+	go func() {
+		wg.Wait()
+		close(results)
+	}()
+
+	for child := range results {
+		child.stage = eventStageOutput
+		p.output.Out(child)
+		child.Root.ReleaseMem()
 	}
 
 	if p.busyActionsTotal == 0 {
