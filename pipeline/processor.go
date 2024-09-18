@@ -400,9 +400,13 @@ func (p *processor) Spawn(parent *Event, nodes []*insaneJSON.Node) {
 	nextActionIdx := parent.action + 1
 
 	wg := &sync.WaitGroup{}
-	results := make(chan *Event)
+	results := make([]*Event, len(nodes))
+	resultsChan := make(chan struct {
+		index int
+		child *Event
+	}, len(nodes))
 
-	for _, node := range nodes {
+	for i, node := range nodes {
 		// we can't reuse parent event (using insaneJSON.Root{Node: child}
 		// because of nil decoder
 		child := &Event{
@@ -415,24 +419,33 @@ func (p *processor) Spawn(parent *Event, nodes []*insaneJSON.Node) {
 		child.action = nextActionIdx
 
 		wg.Add(1)
-		go func(child *Event) {
+		go func(i int, child *Event) {
 			defer wg.Done()
 			ok, _ := p.doActions(child)
 			if ok {
-				results <- child
+				resultsChan <- struct {
+					index int
+					child *Event
+				}{index: i, child: child}
 			}
-		}(child)
+		}(i, child)
 	}
 
 	go func() {
 		wg.Wait()
-		close(results)
+		close(resultsChan)
 	}()
 
-	for child := range results {
-		child.stage = eventStageOutput
-		p.output.Out(child)
-		child.Root.ReleaseMem()
+	for result := range resultsChan {
+		results[result.index] = result.child
+	}
+
+	for _, child := range results {
+		if child != nil {
+			child.stage = eventStageOutput
+			p.output.Out(child)
+			child.Root.ReleaseMem()
+		}
 	}
 
 	if p.busyActionsTotal == 0 {
