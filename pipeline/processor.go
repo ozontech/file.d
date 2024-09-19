@@ -444,7 +444,7 @@ func (p *processor) Spawn(parent *Event, nodes []*insaneJSON.Node) {
 		if child != nil {
 			child.stage = eventStageOutput
 			p.output.Out(child)
-			child.Root.ReleaseMem()
+			child.Root.ReleasePoolMem()
 		}
 	}
 
