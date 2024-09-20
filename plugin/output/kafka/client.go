@@ -21,6 +21,7 @@ func NewClient(c *Config, l *zap.Logger) *kgo.Client {
 		kgo.MaxBufferedRecords(c.BatchSize_),
 		kgo.ProducerBatchMaxBytes(int32(c.MaxMessageBytes_)),
 		kgo.ProducerLinger(1 * time.Millisecond),
+		kgo.AllowAutoTopicCreation(),
 	}...)
 
 	switch c.Compression {
