@@ -414,6 +414,7 @@ func (p *processor) Spawn(parent *Event, nodes []*insaneJSON.Node) {
 			child.stage = eventStageOutput
 			p.output.Out(child)
 		}
+		child.Root.ReleasePoolMem()
 	}
 
 	if p.busyActionsTotal == 0 {
