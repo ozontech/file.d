@@ -115,6 +115,7 @@ type Pipeline struct {
 
 	// all pipeline`s metrics
 	inUseEventsMetric          prometheus.Gauge
+	decoderPoolSize            prometheus.Gauge
 	eventPoolCapacityMetric    prometheus.Gauge
 	inputEventsCountMetric     prometheus.Counter
 	inputEventSizeMetric       prometheus.Counter
@@ -230,6 +231,7 @@ func (p *Pipeline) IncMaxEventSizeExceeded() {
 func (p *Pipeline) registerMetrics() {
 	m := p.actionParams.MetricCtl
 	p.inUseEventsMetric = m.RegisterGauge("event_pool_in_use_events", "Count of pool events which is used for processing")
+	p.decoderPoolSize = m.RegisterGauge("decoder_pool_size", "Size of decoder pool")
 	p.eventPoolCapacityMetric = m.RegisterGauge("event_pool_capacity", "Pool capacity value")
 	p.inputEventsCountMetric = m.RegisterCounter("input_events_count", "Count of events on pipeline input")
 	p.inputEventSizeMetric = m.RegisterCounter("input_events_size", "Size of events on pipeline input")
@@ -807,6 +809,8 @@ func (p *Pipeline) maintenance() {
 		myDeltas := p.incMetrics(inputEvents, inputSize, outputEvents, outputSize, readOps)
 		p.setMetrics(p.eventPool.inUseEvents.Load())
 		p.logChanges(myDeltas)
+
+		p.decoderPoolSize.Set(float64(insaneJSON.LenghtDecoderPool()))
 	}
 }
 
