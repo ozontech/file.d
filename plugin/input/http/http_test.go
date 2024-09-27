@@ -660,3 +660,265 @@ func TestGzip(t *testing.T) {
 		})
 	}
 }
+
+func TestCORSPrepareAllowedOrigins(t *testing.T) {
+	t.Parallel()
+	r := require.New(t)
+
+	type allowedOriginsCfg struct {
+		allowedOriginsDomains []originDomain
+		allowedOriginsAll     bool
+	}
+
+	tests := []struct {
+		Name    string
+		Args    []string
+		Want    allowedOriginsCfg
+		WantErr bool
+	}{
+		{
+			Name: "ok_simple_host",
+			Args: []string{
+				"http://example.com",
+			},
+			Want: allowedOriginsCfg{
+				allowedOriginsDomains: []originDomain{
+					{
+						domain: "http://example.com",
+					},
+				},
+				allowedOriginsAll: false,
+			},
+		},
+		{
+			Name: "ok_suffix",
+			Args: []string{
+				"*.example.com",
+			},
+			Want: allowedOriginsCfg{
+				allowedOriginsDomains: []originDomain{
+					{
+						suffix: ".example.com",
+					},
+				},
+				allowedOriginsAll: false,
+			},
+		},
+		{
+			Name: "ok_prefix",
+			Args: []string{
+				"http://example.*",
+			},
+			Want: allowedOriginsCfg{
+				allowedOriginsDomains: []originDomain{
+					{
+						prefix: "http://example.",
+					},
+				},
+				allowedOriginsAll: false,
+			},
+		},
+		{
+			Name: "ok_prefix_and_suffix",
+			Args: []string{
+				"http://*.example.com",
+			},
+			Want: allowedOriginsCfg{
+				allowedOriginsDomains: []originDomain{
+					{
+						prefix: "http://",
+						suffix: ".example.com",
+					},
+				},
+				allowedOriginsAll: false,
+			},
+		},
+		{
+			Name: "ok_mixed",
+			Args: []string{
+				"*.example.com",
+				"http://otherexample.com",
+			},
+			Want: allowedOriginsCfg{
+				allowedOriginsDomains: []originDomain{
+					{
+						suffix: ".example.com",
+					},
+					{
+						domain: "http://otherexample.com",
+					},
+				},
+				allowedOriginsAll: false,
+			},
+		},
+		{
+			Name: "ok_wildcard",
+			Args: []string{
+				"*",
+			},
+			Want: allowedOriginsCfg{
+				allowedOriginsDomains: nil,
+				allowedOriginsAll:     true,
+			},
+		},
+		{
+			Name: "ok_wildcard_mixed",
+			Args: []string{
+				"example.com",
+				"*.example.com",
+				"*",
+			},
+			Want: allowedOriginsCfg{
+				allowedOriginsDomains: nil,
+				allowedOriginsAll:     true,
+			},
+		},
+		{
+			Name: "invalid_domain",
+			Args: []string{
+				"*.*example.com",
+			},
+			Want:    allowedOriginsCfg{},
+			WantErr: true,
+		},
+		{
+			Name: "ok_host_with_port",
+			Args: []string{
+				"http://localhost:8090",
+			},
+			Want: allowedOriginsCfg{
+				allowedOriginsDomains: []originDomain{
+					{
+						domain: "http://localhost:8090",
+					},
+				},
+				allowedOriginsAll: false,
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.Name, func(t *testing.T) {
+			t.Parallel()
+			corsCfg := CORSConfig{
+				AllowedOrigins: tc.Args,
+			}
+			err := corsCfg.prepareAllowedOrigins()
+			if tc.WantErr {
+				r.Error(err, "expected an error")
+				return
+			}
+			r.NoError(err, "expected no errors")
+			r.Equal(tc.Want.allowedOriginsAll, corsCfg.allowedOriginsAll, "allowedOriginsAll not equal")
+			r.Equal(len(tc.Want.allowedOriginsDomains), len(corsCfg.allowedOriginsDomains), "allowedOriginsDomains not equal")
+			for i := range tc.Want.allowedOriginsDomains {
+				wantDomain := tc.Want.allowedOriginsDomains[i]
+				gotDomain := corsCfg.allowedOriginsDomains[i]
+				r.Equal(wantDomain.domain, gotDomain.domain, "domains are not equal")
+				r.Equal(wantDomain.suffix, gotDomain.suffix, "domain suffixes are not equal")
+			}
+		})
+	}
+}
+
+func TestCORSGetAllowedByOrigin(t *testing.T) {
+	t.Parallel()
+	r := require.New(t)
+
+	tests := []struct {
+		Name           string
+		DefaultOrigin  string
+		AllowedOrigins []string
+		CheckOrigin    string
+		Want           string
+	}{
+		{
+			Name:          "ok_domain",
+			DefaultOrigin: "http://default.com",
+			AllowedOrigins: []string{
+				"http://example.com",
+			},
+			CheckOrigin: "http://example.com",
+			Want:        "http://example.com",
+		},
+		{
+			Name:          "ok_suffix",
+			DefaultOrigin: "http://default.com",
+			AllowedOrigins: []string{
+				"*.example.com",
+			},
+			CheckOrigin: "http://test.example.com",
+			Want:        "http://test.example.com",
+		},
+		{
+			Name:          "ok_prefix",
+			DefaultOrigin: "http://default.com",
+			AllowedOrigins: []string{
+				"http://example.*",
+			},
+			CheckOrigin: "http://example.example.org",
+			Want:        "http://example.example.org",
+		},
+		{
+			Name:          "ok_prefix_and_suffix",
+			DefaultOrigin: "http://default.com",
+			AllowedOrigins: []string{
+				"http://*.example.com:8090",
+			},
+			CheckOrigin: "http://subtest.test.example.com:8090",
+			Want:        "http://subtest.test.example.com:8090",
+		},
+		{
+			Name:          "ok_wildcard",
+			DefaultOrigin: "http://default.com",
+			AllowedOrigins: []string{
+				"*",
+			},
+			CheckOrigin: "http://example.com",
+			Want:        "http://example.com",
+		},
+		{
+			Name:          "default_origin",
+			DefaultOrigin: "http://default.com",
+			AllowedOrigins: []string{
+				"http://example.com",
+			},
+			CheckOrigin: "http://otherexample.com",
+			Want:        "http://default.com",
+		},
+		{
+			Name:          "ok_host_port",
+			DefaultOrigin: "http://default.com",
+			AllowedOrigins: []string{
+				"http://localhost:8090",
+			},
+			CheckOrigin: "http://localhost:8090",
+			Want:        "http://localhost:8090",
+		},
+		{
+			Name:          "ok_host_port_suffix",
+			DefaultOrigin: "http://default.com",
+			AllowedOrigins: []string{
+				"*.example.com:8090",
+			},
+			CheckOrigin: "http://test.example.com:8090",
+			Want:        "http://test.example.com:8090",
+		},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.Name, func(t *testing.T) {
+			t.Parallel()
+			corsCfg := CORSConfig{
+				AllowedOrigins: tc.AllowedOrigins,
+				DefaultOrigin:  tc.DefaultOrigin,
+			}
+			err := corsCfg.prepareAllowedOrigins()
+			r.NoError(err, "expected no errors")
+			gotOrigin := corsCfg.getAllowedByOrigin(tc.CheckOrigin)
+			r.Equal(tc.Want, gotOrigin, "origin not equal")
+		})
+	}
+}

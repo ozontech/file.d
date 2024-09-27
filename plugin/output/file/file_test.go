@@ -216,7 +216,7 @@ func TestStart(t *testing.T) {
 		FileMode_: 0o666,
 	}
 
-	writeFileSleep := 2 * 100 * time.Millisecond
+	writeFileSleep := 4 * 100 * time.Millisecond
 	sealUpFileSleep := 2 * time.Second
 	generalPattern := fmt.Sprintf("%s/*%s", dir, extension)
 	logFilePattern := fmt.Sprintf("%s/*%s", path.Dir(targetFile), path.Base(targetFile))
@@ -240,7 +240,7 @@ func TestStart(t *testing.T) {
 	logger.Errorf("send pack, t=%s", time.Now().Unix())
 	packSize := test.SendPack(t, p, tests.firstPack)
 	totalSent += packSize
-	time.Sleep(200 * time.Millisecond)
+	time.Sleep(writeFileSleep)
 	logger.Errorf("after sleep")
 
 	// check that plugin wrote into the file

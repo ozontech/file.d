@@ -106,6 +106,7 @@ Example: ```user_agent: '{{ index (index .request.Header "User-Agent") 0}}'```
 **`cors`** *`CORSConfig`* 
 
 CORS config.
+Allowed origins support only one wildcard symbol. `http://*.example.com` - valid, `http://*.example.*.com` - invalid.
 See CORSConfig for details.
 
 <br>
