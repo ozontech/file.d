@@ -5,7 +5,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Shopify/sarama"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -54,14 +53,6 @@ func init() {
 	Instance = zap.New(core).
 		Sugar().
 		Named("fd")
-
-	saramaConfig := config
-	// omit level key for sarama logger
-	saramaConfig.LevelKey = zapcore.OmitKey
-	saramaCore := zapcore.NewCore(zapcore.NewJSONEncoder(saramaConfig), zapcore.AddSync(os.Stderr), Level)
-	saramaLogger := zap.New(saramaCore).Named("sarama")
-	sarama.Logger, _ = zap.NewStdLogAt(saramaLogger, zapcore.InfoLevel)
-	sarama.DebugLogger, _ = zap.NewStdLogAt(saramaLogger, zapcore.DebugLevel)
 
 	Instance.Infof("Logger initialized with level: %s", level)
 }
