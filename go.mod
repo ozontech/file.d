@@ -51,8 +51,6 @@ require (
 	sigs.k8s.io/yaml v1.3.0
 )
 
-replace github.com/vitkovskii/insane-json => github.com/DmitryRomanov/insane-json v0.1.6-0.20240926122634-ddd151e16a6e
-
 require (
 	github.com/alecthomas/template v0.0.0-20190718012654-fb15b899a751 // indirect
 	github.com/alicebob/gopher-json v0.0.0-20200520072559-a9ecdc9d1d3a // indirect
