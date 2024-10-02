@@ -56,7 +56,7 @@ Currently available filters are:
 takes regex groups listed in `groups` list, and if there are more than one extracted element concatenates result using `separator`.
 Negative value of `limit` means all occurrences are extracted, `limit` 0 means no occurrences are extracted, `limit` greater than 0 means
 at most `limit` occurrences are extracted.
-Optional flag `emptyOnNotMatched` allows to reset data if no matches occurred for regex.
+Optional flag `emptyOnNotMatched` allows to returns empty string if no matches occurred for regex.
 
 + `trim filter` - `trim(mode string, cutset string)`, trims data by the `cutset` substring. Available modes are `all` - trim both sides,
 `left` - trim only left, `right` - trim only right.
@@ -187,9 +187,10 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 			}
 		}
 
-		if !(p.skipEmpty && len(p.buf) == 0) {
-			pipeline.CreateNestedField(event.Root, fo.field).MutateToBytesCopy(event.Root, p.buf)
+		if p.skipEmpty && len(p.buf) == 0 {
+			continue
 		}
+		pipeline.CreateNestedField(event.Root, fo.field).MutateToBytesCopy(event.Root, p.buf)
 	}
 
 	return pipeline.ActionPass
