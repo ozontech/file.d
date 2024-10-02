@@ -64,7 +64,7 @@ func (o *offsetInfo) set(cursor string) {
 }
 
 func (p *Plugin) Write(bytes []byte) (int, error) {
-	p.params.Controller.In(0, "journalctl", p.currentOffset, bytes, false, nil)
+	p.params.Controller.In(0, "journalctl", Offset(p.currentOffset), bytes, false, nil)
 	p.currentOffset++
 	return len(bytes), nil
 }
@@ -139,4 +139,14 @@ func (p *Plugin) Commit(event *pipeline.Event) {
 
 func (p *Plugin) PassEvent(event *pipeline.Event) bool {
 	return true
+}
+
+type Offset int64
+
+func (o Offset) Current() int64 {
+	return int64(o)
+}
+
+func (o Offset) ByStream(_ string) int64 {
+	panic("unimplemented")
 }
