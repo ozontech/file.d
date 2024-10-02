@@ -13,6 +13,7 @@ const filterBufInitSize = 1024
 /*{ introduction
 It modifies the content for a field or add new field. It works only with strings.
 You can provide an unlimited number of config parameters. Each parameter handled as `cfg.FieldSelector`:`cfg.Substitution`.
+When `_skip_empty` is set to `true`, the field won't be modified/added in the case of field value is empty.
 
 > Note: When used to add new nested fields, each child field is added step by step, which can cause performance issues.
 
@@ -51,10 +52,11 @@ and its result is formed into a value to be put in modified field.
 
 Currently available filters are:
 
-+ `regex filter` - `re(regex string, limit int, groups []int, separator string)`, filters data using `regex`, extracts `limit` occurrences,
++ `regex filter` - `re(regex string, limit int, groups []int, separator string[, emptyOnNotMatched bool])`, filters data using `regex`, extracts `limit` occurrences,
 takes regex groups listed in `groups` list, and if there are more than one extracted element concatenates result using `separator`.
 Negative value of `limit` means all occurrences are extracted, `limit` 0 means no occurrences are extracted, `limit` greater than 0 means
 at most `limit` occurrences are extracted.
+Optional flag `emptyOnNotMatched` allows to reset data if no matches occurred for regex.
 
 + `trim filter` - `trim(mode string, cutset string)`, trims data by the `cutset` substring. Available modes are `all` - trim both sides,
 `left` - trim only left, `right` - trim only right.
@@ -87,6 +89,14 @@ Result: `{"message:"service=service-test-1 exec took 200ms","took":"200ms"}`
 
 Example #4:
 
+Data: `{"message:"message without matching re"}`
+
+Substitution: `extracted: ${message|re("test",1,[1],",",true)}`
+
+Result: `{"message:"message without matching re","extracted":""}`
+
+Example #5:
+
 Data: `{"message:"{\"service\":\"service-test-1\",\"took\":\"200ms\"}\n"}`
 
 Substitution: `message: ${message|trim("right","\n")}`
@@ -95,17 +105,20 @@ Result: `{"message:"{\"service\":\"service-test-1\",\"took\":\"200ms\"}"}`
 
 }*/
 
+const skipEmptyKey = "_skip_empty"
+
 type fieldOp struct {
 	field []string
 	ops   []substitution.SubstitutionOp
 }
 
 type Plugin struct {
-	config   *Config
-	logger   *zap.Logger
-	fieldOps []fieldOp
-	buf      []byte
-	fieldBuf []byte
+	config    *Config
+	logger    *zap.Logger
+	fieldOps  []fieldOp
+	skipEmpty bool
+	buf       []byte
+	fieldBuf  []byte
 }
 
 type Config map[string]string
@@ -128,6 +141,11 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 
 	filtersBuf := make([]byte, 0, filterBufInitSize)
 	for key, value := range *p.config {
+		if key == skipEmptyKey {
+			p.skipEmpty = value == "true"
+			continue
+		}
+
 		// if there are field filters in substitutions, they will have single buffer for all
 		// substitution ops in this plugin
 		ops, err := substitution.ParseSubstitution(value, filtersBuf, p.logger)
@@ -169,7 +187,9 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 			}
 		}
 
-		pipeline.CreateNestedField(event.Root, fo.field).MutateToBytesCopy(event.Root, p.buf)
+		if !(p.skipEmpty && len(p.buf) == 0) {
+			pipeline.CreateNestedField(event.Root, fo.field).MutateToBytesCopy(event.Root, p.buf)
+		}
 	}
 
 	return pipeline.ActionPass
