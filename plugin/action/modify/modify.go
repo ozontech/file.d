@@ -8,8 +8,6 @@ import (
 	"go.uber.org/zap"
 )
 
-const filterBufInitSize = 1024
-
 /*{ introduction
 It modifies the content for a field or add new field. It works only with strings.
 You can provide an unlimited number of config parameters. Each parameter handled as `cfg.FieldSelector`:`cfg.Substitution`.
@@ -105,7 +103,11 @@ Result: `{"message:"{\"service\":\"service-test-1\",\"took\":\"200ms\"}"}`
 
 }*/
 
-const skipEmptyKey = "_skip_empty"
+const (
+	filterBufInitSize = 1024
+
+	skipEmptyKey = "_skip_empty"
+)
 
 type fieldOp struct {
 	field []string
