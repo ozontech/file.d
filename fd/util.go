@@ -9,9 +9,9 @@ import (
 
 	"github.com/bitly/go-simplejson"
 	"github.com/ozontech/file.d/cfg"
-	"github.com/ozontech/file.d/cfg/matchrule"
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/pipeline/antispam"
 	"github.com/ozontech/file.d/pipeline/doif"
 )
 
@@ -19,7 +19,7 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 	capacity := pipeline.DefaultCapacity
 	antispamThreshold := 0
 	antispamField := ""
-	var antispamExceptions matchrule.RuleSets
+	var antispamExceptions antispam.Exceptions
 	avgInputEventSize := pipeline.DefaultAvgInputEventSize
 	maxInputEventSize := pipeline.DefaultMaxInputEventSize
 	streamField := pipeline.DefaultStreamField
@@ -86,7 +86,7 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 		antispamField = settings.Get("antispam_field").MustString()
 
 		var err error
-		antispamExceptions, err = extractExceptions(settings)
+		antispamExceptions, err = extractAntispamExceptions(settings)
 		if err != nil {
 			logger.Fatalf("extract exceptions: %s", err)
 		}
@@ -121,7 +121,7 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 	}
 }
 
-func extractExceptions(settings *simplejson.Json) (matchrule.RuleSets, error) {
+func extractAntispamExceptions(settings *simplejson.Json) (antispam.Exceptions, error) {
 	raw, err := settings.Get("antispam_exceptions").MarshalJSON()
 	if err != nil {
 		return nil, err
@@ -130,7 +130,7 @@ func extractExceptions(settings *simplejson.Json) (matchrule.RuleSets, error) {
 	dec := json.NewDecoder(bytes.NewReader(raw))
 	dec.DisallowUnknownFields()
 
-	var exceptions matchrule.RuleSets
+	var exceptions antispam.Exceptions
 	if err := dec.Decode(&exceptions); err != nil {
 		return nil, err
 	}

@@ -11,7 +11,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ozontech/file.d/cfg/matchrule"
 	"github.com/ozontech/file.d/decoder"
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/metric"
@@ -135,7 +134,7 @@ type Settings struct {
 	EventTimeout        time.Duration
 	AntispamThreshold   int
 	AntispamField       string
-	AntispamExceptions  matchrule.RuleSets
+	AntispamExceptions  antispam.Exceptions
 	AvgEventSize        int
 	MaxEventSize        int
 	StreamField         string

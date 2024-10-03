@@ -23,7 +23,7 @@ type Antispammer struct {
 	maintenanceInterval time.Duration
 	mu                  sync.RWMutex
 	sources             map[any]source
-	exceptions          matchrule.RuleSets
+	exceptions          Exceptions
 
 	logger *zap.Logger
 
@@ -44,7 +44,7 @@ type Options struct {
 	Threshold           int
 	Field               string
 	UnbanIterations     int
-	Exceptions          matchrule.RuleSets
+	Exceptions          Exceptions
 
 	Logger            *zap.Logger
 	MetricsController *metric.Ctl
@@ -90,7 +90,11 @@ func (a *Antispammer) IsSpam(id any, name string, isNewSource bool, event []byte
 
 	for i := 0; i < len(a.exceptions); i++ {
 		e := &a.exceptions[i]
-		if e.Match(event) {
+		checkData := event
+		if e.CheckSourceName {
+			checkData = []byte(name)
+		}
+		if e.Match(checkData) {
 			if e.Name != "" {
 				a.exceptionMetric.WithLabelValues(e.Name).Inc()
 			}
@@ -203,4 +207,17 @@ func (a *Antispammer) Dump() string {
 	})
 
 	return out
+}
+
+type Exception struct {
+	matchrule.RuleSet
+	CheckSourceName bool `json:"check_source_name"`
+}
+
+type Exceptions []Exception
+
+func (e Exceptions) Prepare() {
+	for i := range e {
+		e[i].Prepare()
+	}
 }
