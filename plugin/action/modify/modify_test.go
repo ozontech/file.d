@@ -11,9 +11,11 @@ import (
 
 func TestModify(t *testing.T) {
 	config := test.NewConfig(&Config{
+		"_skip_empty":                      "true",
 		"new_field":                        "new_value",
 		"my_object.field.subfield":         "${existing_field}",
 		"my_object.new_field.new_subfield": "new_subfield_value",
+		"not_exists":                       "${not_existing_field}",
 	}, nil)
 	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, config, pipeline.MatchModeAnd, nil, false))
 	wg := &sync.WaitGroup{}
@@ -23,6 +25,7 @@ func TestModify(t *testing.T) {
 		assert.Equal(t, "new_value", e.Root.Dig("new_field").AsString(), "wrong event field")
 		assert.Equal(t, "existing_value", e.Root.Dig("my_object", "field", "subfield").AsString(), "wrong event field")
 		assert.Equal(t, "new_subfield_value", e.Root.Dig("my_object", "new_field", "new_subfield").AsString(), "wrong event field")
+		assert.Nil(t, e.Root.Dig("not_exists"), "wrong event field")
 		wg.Done()
 	})
 
@@ -51,11 +54,18 @@ func TestModifyRegex(t *testing.T) {
 				"substitution_field": "",
 			},
 		},
+		{
+			[]byte(`{"existing_field":"not_matched_re"}`),
+			map[string]string{
+				"new_field":          "new_value",
+				"substitution_field": "",
+			},
+		},
 	}
 
 	config := test.NewConfig(&Config{
 		"new_field":          "new_value",
-		"substitution_field": "${existing_field|re(\"(existing).*(value)\", -1, [1,2], \" | \")}",
+		"substitution_field": "${existing_field|re(\"(existing).*(value)\", -1, [1,2], \" | \", true)}",
 	}, nil)
 	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, config, pipeline.MatchModeAnd, nil, false))
 	wg := &sync.WaitGroup{}

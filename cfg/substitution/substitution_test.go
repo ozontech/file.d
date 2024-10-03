@@ -143,7 +143,7 @@ func TestParseFieldWithFilter(t *testing.T) {
 		},
 		{
 			name:         "with_two_substitutions_one_filter",
-			substitution: `days till world end ${prediction.days|re("(\\d),(test.+)",-1,[1,2]," , ")}. Hello, ${name|re("(\\w+)",1,[1],",")}`,
+			substitution: `days till world end ${prediction.days|re("(\\d),(test.+)",-1,[1,2]," , ")}. Hello, ${name|re("(\\w+)",1,[1],",",true)}`,
 			data: [][]string{
 				{"days till world end "},
 				{"prediction", "days"},
@@ -167,6 +167,7 @@ func TestParseFieldWithFilter(t *testing.T) {
 						1,
 						[]int{1},
 						",",
+						true,
 					},
 				},
 			},
@@ -188,6 +189,16 @@ func TestParseFieldWithFilter(t *testing.T) {
 			wantErr:      true,
 		},
 		{
+			name:         "err_invalid_args_count_min",
+			substitution: `test ${field|re("invalid", -1, [1,2])} test2`,
+			wantErr:      true,
+		},
+		{
+			name:         "err_invalid_args_count_max",
+			substitution: `test ${field|re("invalid", -1, [1,2], "|", 1, 2)} test2`,
+			wantErr:      true,
+		},
+		{
 			name:         "err_re_filter_invalid_args_invalid_first_arg",
 			substitution: `test ${field|re('(invalid)',-1,[1,],"|")} test2`,
 			wantErr:      true,
@@ -205,6 +216,11 @@ func TestParseFieldWithFilter(t *testing.T) {
 		{
 			name:         "err_re_filter_invalid_args_invalid_fourth_arg",
 			substitution: `test ${field|re("(invalid)",-1,[1],'invalid')} test2`,
+			wantErr:      true,
+		},
+		{
+			name:         "err_re_filter_invalid_args_invalid_fifth_arg",
+			substitution: `test ${field|re("(invalid)",-1,[1],"|",100)} test2`,
 			wantErr:      true,
 		},
 		{
@@ -331,6 +347,18 @@ func TestRegexFilterApply(t *testing.T) {
 			substitution: `${field|re("(re\\d)",2,[1],"|")}`,
 			data:         `this is some text re1 re2 re3 re4 end`,
 			want:         "re1|re2",
+		},
+		{
+			name:         "ok_re_filter_empty_on_not_matched_false",
+			substitution: `${field|re("(re\\d)",1,[1],"|")}`,
+			data:         `this is some text`,
+			want:         "this is some text",
+		},
+		{
+			name:         "ok_re_filter_empty_on_not_matched_true",
+			substitution: `${field|re("(re\\d)",1,[1],"|",true)}`,
+			data:         `this is some text`,
+			want:         "",
 		},
 		{
 			name:         "ok_single_trim_filter_trim_all",
