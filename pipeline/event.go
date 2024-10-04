@@ -2,13 +2,10 @@ package pipeline
 
 import (
 	"fmt"
-	"runtime"
 	"sync"
-	"time"
 
 	"github.com/ozontech/file.d/logger"
 	insaneJSON "github.com/vitkovskii/insane-json"
-	"go.uber.org/atomic"
 )
 
 type Event struct {
@@ -214,114 +211,80 @@ func (e *Event) String() string {
 
 // channels are slower than this implementation by ~20%
 type eventPool struct {
-	capacity int
-
 	avgEventSize int
-	inUseEvents  atomic.Int64
-	getCounter   atomic.Int64
-	backCounter  atomic.Int64
-	events       []*Event
-	free1        []atomic.Bool
-	free2        []atomic.Bool
-
-	getMu   *sync.Mutex
-	getCond *sync.Cond
+	capacity     int
+	ptr2idx      map[*Event]int
+	obj          []*Event
+	freeptr      int
+	cond         sync.Cond
 }
 
 func newEventPool(capacity, avgEventSize int) *eventPool {
-	eventPool := &eventPool{
+	pool := &eventPool{
 		avgEventSize: avgEventSize,
 		capacity:     capacity,
-		getMu:        &sync.Mutex{},
-		backCounter:  *atomic.NewInt64(int64(capacity)),
+		obj:          make([]*Event, capacity),
+		freeptr:      capacity - 1,
+		cond:         sync.Cond{L: &sync.Mutex{}},
+		ptr2idx:      make(map[*Event]int, capacity),
 	}
-
-	eventPool.getCond = sync.NewCond(eventPool.getMu)
 
 	for i := 0; i < capacity; i++ {
-		eventPool.free1 = append(eventPool.free1, *atomic.NewBool(true))
-		eventPool.free2 = append(eventPool.free2, *atomic.NewBool(true))
-		eventPool.events = append(eventPool.events, newEvent())
+		event := newEvent()
+		pool.obj[i] = event
+		pool.ptr2idx[event] = i
 	}
 
-	return eventPool
+	return pool
 }
 
-const maxTries = 3
-
 func (p *eventPool) get() *Event {
-	x := (p.getCounter.Inc() - 1) % int64(p.capacity)
-	var tries int
-	for {
-		if x < p.backCounter.Load() {
-			// fast path
-			if p.free1[x].CAS(true, false) {
-				break
-			}
-			if p.free1[x].CAS(true, false) {
-				break
-			}
-			if p.free1[x].CAS(true, false) {
-				break
-			}
-		}
-		tries++
-		if tries%maxTries != 0 {
-			// slow path
-			runtime.Gosched()
-		} else {
-			// slowest path
-			p.getMu.Lock()
-			p.getCond.Wait()
-			p.getMu.Unlock()
-			tries = 0
-		}
+	p.cond.L.Lock()
+	for p.freeptr < 0 {
+		p.cond.Wait()
 	}
-	event := p.events[x]
-	p.events[x] = nil
-	p.free2[x].Store(false)
-	p.inUseEvents.Inc()
+	event := p.obj[p.freeptr]
+	p.freeptr--
+	p.cond.L.Unlock()
+
 	event.stage = eventStageInput
+
 	return event
 }
 
-func (p *eventPool) back(event *Event) {
-	event.stage = eventStagePool
-	x := (p.backCounter.Inc() - 1) % int64(p.capacity)
-	var tries int
-	for {
-		// fast path
-		if p.free2[x].CAS(false, true) {
-			break
-		}
-		if p.free2[x].CAS(false, true) {
-			break
-		}
-		if p.free2[x].CAS(false, true) {
-			break
-		}
-		tries++
-		if tries%maxTries != 0 {
-			// slow path
-			runtime.Gosched()
-		} else {
-			// slowest path, sleep instead of cond.Wait because of potential deadlock.
-			time.Sleep(5 * time.Millisecond)
-			tries = 0
-		}
-	}
-	event.reset(p.avgEventSize)
-	p.events[x] = event
-	p.free1[x].Store(true)
-	p.inUseEvents.Dec()
-	p.getCond.Broadcast()
+func (p *eventPool) back(freeEvent *Event) {
+	freeEvent.stage = eventStagePool
+	freeEvent.reset(p.avgEventSize)
+
+	p.cond.L.Lock()
+	p.freeptr++
+
+	oldEvent := p.obj[p.freeptr]
+	freeEventIdx := p.ptr2idx[freeEvent]
+
+	// put free event
+	p.obj[p.freeptr] = freeEvent
+	p.ptr2idx[freeEvent] = p.freeptr
+
+	// put old event
+	p.obj[freeEventIdx] = oldEvent
+	p.ptr2idx[oldEvent] = freeEventIdx
+
+	p.cond.L.Unlock()
+	p.cond.Signal()
+}
+
+func (p *eventPool) size() int {
+	p.cond.L.Lock()
+	s := p.freeptr + 1
+	p.cond.L.Unlock()
+	return s
 }
 
 func (p *eventPool) dump() string {
-	out := logger.Cond(len(p.events) == 0, logger.Header("no events"), func() string {
+	out := logger.Cond(len(p.obj) == 0, logger.Header("no events"), func() string {
 		o := logger.Header("events")
-		for i := 0; i < p.capacity; i++ {
-			event := p.events[i]
+		for _, event := range p.obj {
 			eventStr := event.String()
 			if eventStr == "" {
 				eventStr = "nil"
