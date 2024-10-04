@@ -21,8 +21,8 @@ func TestModify(t *testing.T) {
 		wg.Done()
 	})
 
-	input.In(0, sourceName, 0, []byte(`{"error":"info about error"}`))
-	input.In(0, sourceName, 0, []byte(`{"file":"not_my_file"}`))
+	input.In(0, sourceName, test.Offset(0), []byte(`{"error":"info about error"}`))
+	input.In(0, sourceName, test.Offset(0), []byte(`{"file":"not_my_file"}`))
 
 	wg.Wait()
 	p.Stop()

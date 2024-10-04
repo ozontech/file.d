@@ -245,3 +245,13 @@ func NewConfig(config any, params map[string]int) any {
 
 	return config
 }
+
+type Offset int64
+
+func (o Offset) Current() int64 {
+	return int64(o)
+}
+
+func (o Offset) ByStream(_ string) int64 {
+	panic("unimplemented")
+}

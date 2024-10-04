@@ -550,10 +550,10 @@ func (p *Plugin) processChunk(sourceID pipeline.SourceID, readBuff []byte, event
 
 		if len(eventBuff) != 0 {
 			eventBuff = append(eventBuff, readBuff[nlPos:pos]...)
-			_ = p.controller.In(sourceID, "http", int64(pos), eventBuff, true, meta)
+			_ = p.controller.In(sourceID, "http", Offset(int64(pos)), eventBuff, true, meta)
 			eventBuff = eventBuff[:0]
 		} else {
-			_ = p.controller.In(sourceID, "http", int64(pos), readBuff[nlPos:pos], true, meta)
+			_ = p.controller.In(sourceID, "http", Offset(int64(pos)), readBuff[nlPos:pos], true, meta)
 		}
 
 		pos++
@@ -562,7 +562,7 @@ func (p *Plugin) processChunk(sourceID pipeline.SourceID, readBuff []byte, event
 
 	if isLastChunk {
 		// flush buffers if we can't find the newline character
-		_ = p.controller.In(sourceID, "http", int64(pos), append(eventBuff, readBuff[nlPos:]...), true, meta)
+		_ = p.controller.In(sourceID, "http", Offset(int64(pos)), append(eventBuff, readBuff[nlPos:]...), true, meta)
 		eventBuff = eventBuff[:0]
 	} else {
 		eventBuff = append(eventBuff, readBuff[nlPos:]...)
@@ -683,4 +683,14 @@ func (m metaInformation) GetData() map[string]any {
 		"request":     m.request,
 		"params":      m.params,
 	}
+}
+
+type Offset int64
+
+func (o Offset) Current() int64 {
+	return int64(o)
+}
+
+func (o Offset) ByStream(_ string) int64 {
+	panic("unimplemented")
 }
