@@ -462,6 +462,13 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset Offsets, byte
 	// For example, for containerd this setting is called max_container_log_line_size
 	// https://github.com/containerd/containerd/blob/f7f2be732159a411eae46b78bfdb479b133a823b/pkg/cri/config/config.go#L263-L266
 	if !row.IsPartial && p.settings.AntispamThreshold > 0 {
+		streamOffset := offset.ByStream(string(row.Stream))
+		currentOffset := offset.Current()
+
+		if currentOffset < streamOffset {
+			return EventSeqIDError
+		}
+
 		var checkSourceID any
 		var checkSourceName string
 		if p.settings.SourceNameMetaField == "" {
