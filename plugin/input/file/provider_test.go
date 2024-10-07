@@ -5,11 +5,17 @@ import (
 	"path/filepath"
 	"testing"
 
+	"runtime"
+
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/metric"
 	"github.com/prometheus/client_golang/prometheus"
 	uuid "github.com/satori/go.uuid"
 	"github.com/stretchr/testify/require"
+
+	"github.com/ozontech/file.d/test"
+	"github.com/stretchr/testify/assert"
+	"go.uber.org/zap"
 )
 
 func TestRefreshSymlinkOnBrokenLink(t *testing.T) {
@@ -47,15 +53,7 @@ func TestRefreshSymlinkOnBrokenLink(t *testing.T) {
 	os.Remove(linkName)
 	jp.maintenanceSymlinks()
 	require.Equal(t, 0, len(jp.symlinks))
-	"runtime"
-	"testing"
-
-	"github.com/ozontech/file.d/metric"
-	"github.com/ozontech/file.d/test"
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/stretchr/testify/assert"
-	"go.uber.org/zap"
-)
+}
 
 func TestProvierWatcherPaths(t *testing.T) {
 	tests := []struct {
