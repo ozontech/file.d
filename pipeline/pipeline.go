@@ -574,6 +574,12 @@ func (p *Pipeline) finalize(event *Event, notifyInput bool, backEvent bool) {
 	for _, e := range event.children {
 		insaneJSON.Release(e.Root)
 	}
+
+	if event.Root.PoolSize() > DefaultJSONNodePoolSize*4 && len(event.children) > 0 {
+		event.Root.ReleasePoolMem()
+		event.Root.ReleaseBufMem()
+	}
+
 	p.eventPool.back(event)
 }
 
