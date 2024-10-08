@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/bmatcuk/doublestar/v4"
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/metric"
@@ -221,6 +222,20 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 		)
 	} else {
 		offsetFiles[offsetFilePath] = params.PipelineName
+	}
+
+	for _, pattern := range p.config.Paths.Include {
+		_, err := doublestar.PathMatch(pattern, ".")
+		if err != nil {
+			p.logger.Fatalf("wrong paths include pattern %q: %s", pattern, err.Error())
+		}
+	}
+
+	for _, pattern := range p.config.Paths.Exclude {
+		_, err := doublestar.PathMatch(pattern, ".")
+		if err != nil {
+			p.logger.Fatalf("wrong paths exclude pattern %q: %s", pattern, err.Error())
+		}
 	}
 
 	p.jobProvider = NewJobProvider(

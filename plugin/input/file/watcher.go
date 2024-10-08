@@ -140,7 +140,7 @@ func (w *watcher) notify(e notify.Event, path string) {
 	for _, pattern := range w.paths.Exclude {
 		match, err := doublestar.PathMatch(pattern, path)
 		if err != nil {
-			w.logger.Fatalf("wrong paths exclude pattern %q: %s", pattern, err.Error())
+			w.logger.Errorf("wrong paths exclude pattern %q: %s", pattern, err.Error())
 			return
 		}
 		if match {
@@ -189,7 +189,7 @@ check_file:
 	for _, pattern := range w.paths.Include {
 		match, err := doublestar.PathMatch(pattern, path)
 		if err != nil {
-			w.logger.Fatalf("wrong paths include pattern %q: %s", pattern, err.Error())
+			w.logger.Errorf("wrong paths include pattern %q: %s", pattern, err.Error())
 			return
 		}
 
