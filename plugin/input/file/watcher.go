@@ -3,16 +3,18 @@ package file
 import (
 	"os"
 	"path/filepath"
+	"strings"
 
+	"github.com/bmatcuk/doublestar/v4"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/rjeczalik/notify"
 	"go.uber.org/zap"
 )
 
 type watcher struct {
-	path                      string   // dir in which watch for files
-	filenamePattern           string   // files which match this pattern will be watched
-	dirPattern                string   // dirs which match this pattern will be watched
+	commonPath                string
+	basePaths                 []string
+	paths                     Paths
 	notifyFn                  notifyFn // function to receive notifications
 	watcherCh                 chan notify.EventInfo
 	shouldWatchWrites         bool
@@ -25,18 +27,15 @@ type notifyFn func(e notify.Event, filename string, stat os.FileInfo)
 // NewWatcher creates a watcher that see file creations in the path
 // and if they match filePattern and dirPattern, pass them to notifyFn.
 func NewWatcher(
-	path string,
-	filenamePattern string,
-	dirPattern string,
+	dir string,
+	paths Paths,
 	notifyFn notifyFn,
 	shouldWatchWrites bool,
 	notifyChannelLengthMetric prometheus.Gauge,
 	logger *zap.SugaredLogger,
 ) *watcher {
 	return &watcher{
-		path:                      path,
-		filenamePattern:           filenamePattern,
-		dirPattern:                dirPattern,
+		paths:                     paths,
 		notifyFn:                  notifyFn,
 		shouldWatchWrites:         shouldWatchWrites,
 		notifyChannelLengthMetric: notifyChannelLengthMetric,
@@ -45,15 +44,17 @@ func NewWatcher(
 }
 
 func (w *watcher) start() {
-	w.logger.Infof("starting watcher path=%s, pattern=%s", w.path, w.filenamePattern)
-
-	if _, err := filepath.Match(w.filenamePattern, "_"); err != nil {
-		w.logger.Fatalf("wrong file name pattern %q: %s", w.filenamePattern, err.Error())
+	for _, pattern := range w.paths.Include {
+		// /var/lib/docker/containers/**/*-json.log -> /var/lib/docker/containers
+		basePattern, _ := doublestar.SplitPattern(pattern)
+		w.basePaths = append(w.basePaths, basePattern)
 	}
+	w.commonPath = commonPathPrefix(w.basePaths)
 
-	if _, err := filepath.Match(w.dirPattern, "_"); err != nil {
-		w.logger.Fatalf("wrong dir name pattern %q: %s", w.dirPattern, err.Error())
-	}
+	w.logger.Infof(
+		"starting watcher path=%s, pattern_included=%q, pattern_excluded=%q",
+		w.commonPath, w.paths.Include, w.paths.Exclude,
+	)
 
 	eventsCh := make(chan notify.EventInfo, 256)
 	w.watcherCh = eventsCh
@@ -64,7 +65,7 @@ func (w *watcher) start() {
 	}
 
 	// watch recursively.
-	err := notify.Watch(filepath.Join(w.path, "..."), eventsCh, events...)
+	err := notify.Watch(filepath.Join(w.commonPath, "..."), eventsCh, events...)
 	if err != nil {
 		w.logger.Warnf("can't create fs watcher: %s", err.Error())
 		return
@@ -73,7 +74,33 @@ func (w *watcher) start() {
 
 	go w.watch()
 
-	w.tryAddPath(w.path)
+	w.tryAddPath(w.commonPath)
+}
+
+func commonPathPrefix(paths []string) string {
+	results := make([][]string, 0, len(paths))
+	results = append(results, strings.Split(paths[0], string(os.PathSeparator)))
+	longest := results[0]
+
+	cmpWithLongest := func(a []string) {
+		if len(a) < len(longest) {
+			longest = longest[:len(a)]
+		}
+		for i := 0; i < len(longest); i++ {
+			if a[i] != longest[i] {
+				longest = longest[:i]
+				return
+			}
+		}
+	}
+
+	for i := 1; i < len(paths); i++ {
+		r := strings.Split(paths[i], string(os.PathSeparator))
+		results = append(results, r)
+		cmpWithLongest(r)
+	}
+
+	return filepath.Join(string(os.PathSeparator), filepath.Join(longest...))
 }
 
 func (w *watcher) stop() {
@@ -84,19 +111,21 @@ func (w *watcher) stop() {
 }
 
 func (w *watcher) tryAddPath(path string) {
-	files, err := os.ReadDir(path)
-	if err != nil {
-		return
-	}
-
 	w.logger.Infof("starting path watch: %s ", path)
 
-	for _, file := range files {
-		if file.Name() == "" || file.Name() == "." || file.Name() == ".." {
-			continue
-		}
-
-		w.notify(notify.Create, filepath.Join(path, file.Name()))
+	err := filepath.Walk(path,
+		func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
+			if !info.IsDir() {
+				w.notify(notify.Create, path)
+			}
+			return nil
+		},
+	)
+	if err != nil {
+		return
 	}
 }
 
@@ -106,10 +135,18 @@ func (w *watcher) notify(e notify.Event, path string) {
 		return
 	}
 
-	filename, err := filepath.Abs(filename)
-	if err != nil {
-		w.logger.Fatalf("can't get abs file name: %s", err.Error())
-		return
+	w.logger.Infof("notify %s %s", e, path)
+
+	for _, pattern := range w.paths.Exclude {
+		match, err := doublestar.PathMatch(pattern, path)
+		if err != nil {
+			w.logger.Errorf("wrong paths exclude pattern %q: %s", pattern, err.Error())
+			return
+		}
+		if match {
+			w.logger.Infof("excluded %s by pattern %s", path, pattern)
+			return
+		}
 	}
 
 	stat, err := os.Lstat(filename)
@@ -117,14 +154,49 @@ func (w *watcher) notify(e notify.Event, path string) {
 		return
 	}
 
-	match, _ := filepath.Match(w.filenamePattern, filepath.Base(filename))
-	if match {
-		w.notifyFn(e, filename, stat)
+	if stat.IsDir() {
+		dirFilename := filename
+	check_dir:
+		for {
+			for _, path := range w.basePaths {
+				if path == dirFilename {
+					w.tryAddPath(filename)
+					break check_dir
+				}
+			}
+			if dirFilename == w.commonPath {
+				break
+			}
+			dirFilename = filepath.Dir(dirFilename)
+		}
+		return
 	}
 
-	match, _ = filepath.Match(w.dirPattern, filepath.Base(filename))
-	if stat.IsDir() && match {
-		w.tryAddPath(filename)
+	dirFilename := filepath.Dir(filename)
+check_file:
+	for {
+		for _, path := range w.basePaths {
+			if path == dirFilename {
+				break check_file
+			}
+		}
+		if dirFilename == w.commonPath {
+			return
+		}
+		dirFilename = filepath.Dir(dirFilename)
+	}
+
+	for _, pattern := range w.paths.Include {
+		match, err := doublestar.PathMatch(pattern, path)
+		if err != nil {
+			w.logger.Errorf("wrong paths include pattern %q: %s", pattern, err.Error())
+			return
+		}
+
+		if match {
+			w.logger.Infof("path %s matched by pattern %s", filename, pattern)
+			w.notifyFn(e, filename, stat)
+		}
 	}
 }
 
