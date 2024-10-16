@@ -6,6 +6,7 @@ import (
 
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/plugin/input/fake"
+	"github.com/ozontech/file.d/test"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/require"
 )
@@ -41,7 +42,7 @@ func TestInUnparsableMessages(t *testing.T) {
 
 		pipe.SetInput(getFakeInputInfo())
 
-		seqID := pipe.In(sourceID, "kafka", offset, message, false, nil)
+		seqID := pipe.In(sourceID, "kafka", test.Offset(offset), message, false, nil)
 		require.Equal(t, pipeline.EventSeqIDError, seqID)
 
 		refPipe := reflect.ValueOf(pipe)
@@ -119,7 +120,7 @@ func TestInInvalidMessages(t *testing.T) {
 
 			pipe.SetInput(getFakeInputInfo())
 
-			seqID := pipe.In(tCase.sourceID, "kafka", tCase.offset, tCase.message, false, nil)
+			seqID := pipe.In(tCase.sourceID, "kafka", test.Offset(tCase.offset), tCase.message, false, nil)
 			require.Equal(t, pipeline.EventSeqIDError, seqID)
 		})
 	}

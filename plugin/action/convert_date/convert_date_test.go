@@ -23,9 +23,9 @@ func TestConvert(t *testing.T) {
 		wg.Done()
 	})
 
-	input.In(0, "test.log", 0, []byte(`{"time":998578502}`))
-	input.In(0, "test.log", 0, []byte(`{"time":998578999.1346}`))
-	input.In(0, "test.log", 0, []byte(`{"time":"2022/02/07 13:06:14"}`))
+	input.In(0, "test.log", test.Offset(0), []byte(`{"time":998578502}`))
+	input.In(0, "test.log", test.Offset(0), []byte(`{"time":998578999.1346}`))
+	input.In(0, "test.log", test.Offset(0), []byte(`{"time":"2022/02/07 13:06:14"}`))
 
 	wg.Wait()
 	p.Stop()
@@ -52,7 +52,7 @@ func TestConvertFail(t *testing.T) {
 		wg.Done()
 	})
 
-	input.In(0, "test.log", 0, []byte(`{"time":"XXX"}`))
+	input.In(0, "test.log", test.Offset(0), []byte(`{"time":"XXX"}`))
 
 	wg.Wait()
 	p.Stop()

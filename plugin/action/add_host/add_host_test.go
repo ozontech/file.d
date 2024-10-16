@@ -22,7 +22,7 @@ func TestModify(t *testing.T) {
 		wg.Done()
 	})
 
-	input.In(0, "test.log", 0, []byte(`{}`))
+	input.In(0, "test.log", test.Offset(0), []byte(`{}`))
 
 	wg.Wait()
 	p.Stop()

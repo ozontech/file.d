@@ -31,14 +31,14 @@ func TestPlugin_Do(t *testing.T) {
 		splitted = append(splitted, strings.Clone(e.Root.Dig("message").AsString()))
 	})
 
-	input.In(0, "test.log", 0, []byte(`{ 
+	input.In(0, "test.log", test.Offset(0), []byte(`{ 
 	"data": [
 		{ "message": "go" }, 
 		{ "message": "rust" },
 		{ "message": "c++" }
 	]
 }`))
-	input.In(0, "test.log", 0, []byte(`{ 
+	input.In(0, "test.log", test.Offset(0), []byte(`{ 
 	"data": [
 		{ "message": "python" }, 
 		{ "message": "ruby" },
@@ -79,7 +79,7 @@ func TestPlugin_DoArray(t *testing.T) {
 		splitted = append(splitted, strings.Clone(e.Root.Dig("message").AsString()))
 	})
 
-	input.In(0, sourceName, 0, []byte(`[
+	input.In(0, sourceName, test.Offset(0), []byte(`[
 		{ "message": "go" }, 
 		{ "message": "rust" },
 		{ "message": "c++" }
