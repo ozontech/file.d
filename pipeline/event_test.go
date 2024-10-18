@@ -67,3 +67,25 @@ func BenchmarkEventPoolSlowestPath(b *testing.B) {
 		wg.Wait()
 	}
 }
+
+func TestSlowPath(t *testing.T) {
+	t.Parallel()
+	const (
+		poolCapacity = 256
+		concurrency  = 5_000
+	)
+	pool := newEventPool(poolCapacity, DefaultAvgInputEventSize)
+	for i := 0; i < 1_000; i++ {
+		wg := new(sync.WaitGroup)
+		wg.Add(concurrency)
+		for i := 0; i < concurrency; i++ {
+			go func() {
+				defer wg.Done()
+				e := pool.get()
+				runtime.Gosched()
+				pool.back(e)
+			}()
+		}
+		wg.Wait()
+	}
+}
