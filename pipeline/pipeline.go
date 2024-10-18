@@ -333,6 +333,8 @@ func (p *Pipeline) Stop() {
 	p.output.Stop()
 
 	p.shouldStop.Store(true)
+
+	p.eventPool.stop()
 }
 
 func (p *Pipeline) SetInput(info *InputPluginInfo) {
