@@ -54,6 +54,7 @@ TBD: throughput on production servers.
 * [Configuring](/docs/configuring.md)
 * [Architecture](/docs/architecture.md)
 * [Testing](/docs/testing.md)
+* [Monitoring](/docs/monitoring.md)
 * [Contributing](/CONTRIBUTING.md)
 * [License](/docs/license.md)
 
