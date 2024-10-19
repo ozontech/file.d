@@ -29,7 +29,7 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 	isStrict := false
 	eventTimeout := pipeline.DefaultEventTimeout
 	metricHoldDuration := pipeline.DefaultMetricHoldDuration
-	pool := pipeline.PoolTypeStd
+	pool := pipeline.PoolTypeLowMem
 
 	if settings != nil {
 		val := settings.Get("capacity").MustInt()
