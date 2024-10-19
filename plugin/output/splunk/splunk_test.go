@@ -8,8 +8,8 @@ import (
 
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/pipeline"
+	insaneJSON "github.com/ozontech/insane-json"
 	"github.com/stretchr/testify/assert"
-	insaneJSON "github.com/vitkovskii/insane-json"
 	"go.uber.org/zap"
 )
 

@@ -16,8 +16,8 @@ import (
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline/antispam"
 	"github.com/ozontech/file.d/pipeline/metadata"
+	insaneJSON "github.com/ozontech/insane-json"
 	"github.com/prometheus/client_golang/prometheus"
-	insaneJSON "github.com/vitkovskii/insane-json"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -67,6 +67,15 @@ type (
 	StreamName string
 )
 
+type pool interface {
+	get() *Event
+	back(event *Event)
+	dump() string
+	inUse() int64
+	stop()
+	waiters() int64
+}
+
 type Pipeline struct {
 	Name     string
 	started  bool
@@ -76,7 +85,7 @@ type Pipeline struct {
 	suggestedDecoderType decoder.Type // decoder type suggested by input plugin, it is used when config decoder is set to "auto"
 	decoder              decoder.Decoder
 
-	eventPool *eventPool
+	eventPool pool
 	streamer  *streamer
 
 	useSpread      bool
@@ -140,7 +149,15 @@ type Settings struct {
 	StreamField         string
 	IsStrict            bool
 	MetricHoldDuration  time.Duration
+	Pool                PoolType
 }
+
+type PoolType string
+
+const (
+	PoolTypeStd    PoolType = "std"
+	PoolTypeLowMem PoolType = "low_memory"
+)
 
 // New creates new pipeline. Consider using `SetupHTTPHandlers` next.
 func New(name string, settings *Settings, registry *prometheus.Registry) *Pipeline {
@@ -148,6 +165,16 @@ func New(name string, settings *Settings, registry *prometheus.Registry) *Pipeli
 
 	lg := logger.Instance.Named(name).Desugar()
 	metricHolder := metric.NewHolder(settings.MetricHoldDuration)
+
+	var eventPool pool
+	switch settings.Pool {
+	case PoolTypeStd, "":
+		eventPool = newEventPool(settings.Capacity, settings.AvgEventSize)
+	case PoolTypeLowMem:
+		eventPool = newSyncPool(settings.Capacity)
+	default:
+		logger.Fatal("unknown pool type", zap.String("pool", string(settings.Pool)))
+	}
 
 	pipeline := &Pipeline{
 		Name:           name,
@@ -166,7 +193,7 @@ func New(name string, settings *Settings, registry *prometheus.Registry) *Pipeli
 		},
 		metricHolder: metricHolder,
 		streamer:     newStreamer(settings.EventTimeout),
-		eventPool:    newEventPool(settings.Capacity, settings.AvgEventSize),
+		eventPool:    eventPool,
 		antispamer: antispam.NewAntispammer(&antispam.Options{
 			MaintenanceInterval: settings.MaintenanceInterval,
 			Threshold:           settings.AntispamThreshold,
@@ -771,7 +798,7 @@ func (p *Pipeline) logChanges(myDeltas *deltas) {
 	if ce := p.logger.Check(zapcore.InfoLevel, "pipeline stats"); ce != nil {
 		inputSize := p.inputSize.Load()
 		inputEvents := p.inputEvents.Load()
-		inUseEvents := p.eventPool.inUseEvents.Load()
+		inUseEvents := p.eventPool.inUse()
 
 		interval := p.settings.MaintenanceInterval
 		rate := int(myDeltas.deltaInputEvents * float64(time.Second) / float64(interval))
@@ -835,7 +862,7 @@ func (p *Pipeline) maintenance() {
 		p.metricHolder.Maintenance()
 
 		myDeltas := p.incMetrics(inputEvents, inputSize, outputEvents, outputSize, readOps)
-		p.setMetrics(p.eventPool.inUseEvents.Load())
+		p.setMetrics(p.eventPool.inUse())
 		p.logChanges(myDeltas)
 	}
 }

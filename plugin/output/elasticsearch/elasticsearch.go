@@ -13,8 +13,8 @@ import (
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/xhttp"
+	insaneJSON "github.com/ozontech/insane-json"
 	"github.com/prometheus/client_golang/prometheus"
-	insaneJSON "github.com/vitkovskii/insane-json"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )

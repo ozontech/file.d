@@ -55,11 +55,29 @@ func BenchmarkEventPoolSlowestPath(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		wg := &sync.WaitGroup{}
-		for j := 0; j < 1000; j++ {
+		for j := 0; j < 100_000; j++ {
 			wg.Add(1)
 			go func() {
 				e := p.get()
-				runtime.Gosched()
+				p.back(e)
+				wg.Done()
+			}()
+		}
+		wg.Wait()
+	}
+}
+
+func BenchmarkEventSyncPoolSlowestPath(b *testing.B) {
+	const capacity = 32
+
+	p := newEventPool(capacity, DefaultAvgInputEventSize)
+
+	for i := 0; i < b.N; i++ {
+		wg := &sync.WaitGroup{}
+		for j := 0; j < 100_000; j++ {
+			wg.Add(1)
+			go func() {
+				e := p.get()
 				p.back(e)
 				wg.Done()
 			}()
