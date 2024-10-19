@@ -391,11 +391,13 @@ again:
 	})
 
 	// Wait until we fit in the capacity.
+	p.slowWaiters.Inc()
 	p.getCond.L.Lock()
-	if int(p.inUseEvents.Load()) > p.capacity {
+	if !p.eventsAvailable() {
 		p.getCond.Wait()
 	}
 	p.getCond.L.Unlock()
+	p.slowWaiters.Dec()
 	goto again
 }
 
@@ -430,10 +432,14 @@ func (p *eventSyncPool) wakeupWaiters() {
 
 		time.Sleep(5 * time.Second)
 		waiters := p.slowWaiters.Load()
-		eventsAvailable := p.inUseEvents.Load() <= int64(p.capacity)
-		if waiters > 0 && eventsAvailable {
+		eventsAvailable := p.eventsAvailable()
+		if waiters > 0 && !eventsAvailable {
 			// There are events in the pool, wake up waiting goroutines.
 			p.getCond.Broadcast()
 		}
 	}
+}
+
+func (p *eventSyncPool) eventsAvailable() bool {
+	return int(p.inUseEvents.Load()) < p.capacity
 }
