@@ -7,6 +7,7 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -1144,11 +1145,17 @@ func BenchmarkLightJsonReadPar(b *testing.B) {
 		b.SetBytes(bytes)
 	}
 
+	opts := []string{"passive", "perf"}
+	if useLowMem, _ := strconv.ParseBool(os.Getenv("POOL_LOW_MEMORY")); useLowMem {
+		b.Log("using low memory pool")
+		opts = append(opts, "use_pool_low_memory")
+	}
+
 	b.ReportAllocs()
 	b.StopTimer()
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
-		p, _, output := test.NewPipelineMock(nil, "passive", "perf")
+		p, _, output := test.NewPipelineMock(nil, opts...)
 
 		offsetsDir = b.TempDir()
 		p.SetInput(getInputInfo())
