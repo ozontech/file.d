@@ -68,7 +68,7 @@ type (
 )
 
 type pool interface {
-	get() *Event
+	get(size int) *Event
 	back(event *Event)
 	dump() string
 	inUse() int64
@@ -171,7 +171,8 @@ func New(name string, settings *Settings, registry *prometheus.Registry) *Pipeli
 	case PoolTypeStd, "":
 		eventPool = newEventPool(settings.Capacity, settings.AvgEventSize)
 	case PoolTypeLowMem:
-		eventPool = newSyncPool(settings.Capacity)
+		insaneJSON.StartNodePoolSize = 16
+		eventPool = newLowMemoryEventPool(settings.Capacity)
 	default:
 		logger.Fatal("unknown pool type", zap.String("pool", string(settings.Pool)))
 	}
@@ -460,7 +461,7 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 	p.inputSize.Add(int64(length))
 
 	now := time.Now()
-	event := p.eventPool.get()
+	event := p.eventPool.get(len(bytes))
 	p.eventPoolLatency.Observe(time.Since(now).Seconds())
 
 	switch dec {
@@ -563,7 +564,6 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 	event.SourceID = sourceID
 	event.SourceName = sourceName
 	event.streamName = DefaultStreamName
-	event.Size = len(bytes)
 
 	return p.streamEvent(event)
 }

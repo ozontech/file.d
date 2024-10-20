@@ -2,6 +2,7 @@ package pipeline
 
 import (
 	"fmt"
+	"math/bits"
 	"runtime"
 	"sync"
 	"time"
@@ -24,7 +25,8 @@ type Event struct {
 	SourceID   SourceID
 	SourceName string
 	streamName StreamName
-	Size       int // last known event size, it may not be actual
+	// Size in bytes of the raw event before any action plugin.
+	Size int
 
 	action int
 	next   *Event
@@ -170,8 +172,6 @@ func (e *Event) SubparseJSON(json []byte) (*insaneJSON.Node, error) {
 func (e *Event) Encode(outBuf []byte) ([]byte, int) {
 	l := len(outBuf)
 	outBuf = e.Root.Encode(outBuf)
-	e.Size = len(outBuf) - l
-
 	return outBuf, l
 }
 
@@ -240,7 +240,7 @@ func newEventPool(capacity, avgEventSize int) *eventPool {
 
 const maxTries = 3
 
-func (p *eventPool) get() *Event {
+func (p *eventPool) get(size int) *Event {
 	x := (p.getCounter.Inc() - 1) % int64(p.capacity)
 	var tries int
 	for {
@@ -273,6 +273,7 @@ func (p *eventPool) get() *Event {
 	p.free2[x].Store(false)
 	p.inUseEvents.Inc()
 	event.stage = eventStageInput
+	event.Size = size
 	return event
 }
 
@@ -346,10 +347,25 @@ func (p *eventPool) inUse() int64 {
 	return p.inUseEvents.Load()
 }
 
-type eventSyncPool struct {
+const syncPools = 33
+
+type lowMemoryEventPool struct {
 	capacity int
 
-	pool        *sync.Pool
+	// pools contains sync.Pool instances of various capacities.
+	//
+	//	pools[0] [0,  1)
+	//	pools[1] [1,  2)
+	//	pools[2] [2,  4)
+	//	pools[3] [4,  8)
+	//	pools[4] [8,  16)
+	//	pools[5] [16, 32)
+	//	pools[6] [32, 64)
+	//	...
+	//	pools[30] [512MiB, 1GiB)
+	//	pools[31] [1GiB,   2BiG)
+	//	pools[32] [2GiB,   4GiB)
+	pools       [syncPools]*sync.Pool
 	inUseEvents *atomic.Int64
 	getCond     *sync.Cond
 
@@ -358,14 +374,18 @@ type eventSyncPool struct {
 	slowWaiters      *atomic.Int64
 }
 
-func newSyncPool(capacity int) *eventSyncPool {
-	return &eventSyncPool{
-		capacity: capacity,
-		pool: &sync.Pool{
+func newLowMemoryEventPool(capacity int) *lowMemoryEventPool {
+	pools := [syncPools]*sync.Pool{}
+	for i := 0; i < syncPools; i++ {
+		pools[i] = &sync.Pool{
 			New: func() any {
 				return newEvent()
 			},
-		},
+		}
+	}
+	return &lowMemoryEventPool{
+		capacity:         capacity,
+		pools:            pools,
 		inUseEvents:      &atomic.Int64{},
 		getCond:          sync.NewCond(&sync.Mutex{}),
 		stopped:          &atomic.Bool{},
@@ -374,12 +394,21 @@ func newSyncPool(capacity int) *eventSyncPool {
 	}
 }
 
-func (p *eventSyncPool) get() *Event {
+func (p *lowMemoryEventPool) get(size int) *Event {
+	if size < 0 {
+		panic(fmt.Errorf("BUG: negative event size: %d", size))
+	}
+
+	index := poolIndex(size)
+	getPool := p.pools[index]
+
 again:
 	inUse := int(p.inUseEvents.Inc())
 	// Fast path: we're not over the capacity.
 	if inUse <= p.capacity {
-		return p.pool.Get().(*Event)
+		e := getPool.Get().(*Event)
+		e.Size = size
+		return e
 	}
 
 	// Slow path: wait until we fit in the capacity.
@@ -401,30 +430,37 @@ again:
 	goto again
 }
 
-func (p *eventSyncPool) back(event *Event) {
+func (p *lowMemoryEventPool) back(event *Event) {
+	index := poolIndex(event.Size)
+	backPool := p.pools[index]
+
 	event.reset()
-	p.pool.Put(event)
+	backPool.Put(event)
 	p.inUseEvents.Dec()
 	p.getCond.Broadcast()
 }
 
-func (p *eventSyncPool) dump() string {
+func poolIndex(size int) int {
+	return bits.Len(uint(size))
+}
+
+func (p *lowMemoryEventPool) dump() string {
 	return fmt.Sprintf("in use events: %d", p.inUseEvents.Load())
 }
 
-func (p *eventSyncPool) inUse() int64 {
+func (p *lowMemoryEventPool) inUse() int64 {
 	return p.inUseEvents.Load()
 }
 
-func (p *eventSyncPool) waiters() int64 {
+func (p *lowMemoryEventPool) waiters() int64 {
 	return p.slowWaiters.Load()
 }
 
-func (p *eventSyncPool) stop() {
+func (p *lowMemoryEventPool) stop() {
 	p.stopped.Store(true)
 }
 
-func (p *eventSyncPool) wakeupWaiters() {
+func (p *lowMemoryEventPool) wakeupWaiters() {
 	for {
 		if p.stopped.Load() {
 			return
@@ -440,6 +476,6 @@ func (p *eventSyncPool) wakeupWaiters() {
 	}
 }
 
-func (p *eventSyncPool) eventsAvailable() bool {
+func (p *lowMemoryEventPool) eventsAvailable() bool {
 	return int(p.inUseEvents.Load()) < p.capacity
 }

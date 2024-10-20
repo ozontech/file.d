@@ -1154,6 +1154,11 @@ func BenchmarkLightJsonReadPar(b *testing.B) {
 	b.ReportAllocs()
 	b.StopTimer()
 	b.ResetTimer()
+
+	runtime.GC()
+	memBefore := runtime.MemStats{}
+	runtime.ReadMemStats(&memBefore)
+
 	for n := 0; n < b.N; n++ {
 		p, _, output := test.NewPipelineMock(nil, opts...)
 
@@ -1175,4 +1180,9 @@ func BenchmarkLightJsonReadPar(b *testing.B) {
 
 		p.Stop()
 	}
+
+	memAfter := runtime.MemStats{}
+	runtime.ReadMemStats(&memAfter)
+
+	b.Logf("Memory used:\n%dMb\nTotal allocs: %d", (memAfter.Alloc-memBefore.Alloc)/1024/1024, memAfter.TotalAlloc-memBefore.TotalAlloc)
 }

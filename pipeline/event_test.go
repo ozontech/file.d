@@ -11,7 +11,7 @@ import (
 
 func TestEventPoolDump(t *testing.T) {
 	eventPool := newEventPool(2, DefaultAvgInputEventSize)
-	e := eventPool.get()
+	e := eventPool.get(1)
 	defer eventPool.back(e)
 
 	require.NotPanics(t, func() {
@@ -22,7 +22,7 @@ func TestEventPoolDump(t *testing.T) {
 func BenchmarkEventPoolOneGoroutine(b *testing.B) {
 	bench := func(b *testing.B, p pool) {
 		for i := 0; i < b.N; i++ {
-			p.back(p.get())
+			p.back(p.get(1))
 		}
 	}
 	const capacity = 32
@@ -30,8 +30,8 @@ func BenchmarkEventPoolOneGoroutine(b *testing.B) {
 		p := newEventPool(capacity, DefaultAvgInputEventSize)
 		bench(b, p)
 	})
-	b.Run("syncPool", func(b *testing.B) {
-		p := newSyncPool(capacity)
+	b.Run("lowMemory", func(b *testing.B) {
+		p := newLowMemoryEventPool(capacity)
 		bench(b, p)
 	})
 }
@@ -47,7 +47,7 @@ func BenchmarkEventPoolManyGoroutines(b *testing.B) {
 					defer wg.Done()
 
 					for k := 0; k < 1000; k++ {
-						p.back(p.get())
+						p.back(p.get(1))
 					}
 				}()
 			}
@@ -59,8 +59,8 @@ func BenchmarkEventPoolManyGoroutines(b *testing.B) {
 		p := newEventPool(capacity, DefaultAvgInputEventSize)
 		bench(b, p)
 	})
-	b.Run("syncPool", func(b *testing.B) {
-		p := newSyncPool(capacity)
+	b.Run("lowMemory", func(b *testing.B) {
+		p := newLowMemoryEventPool(capacity)
 		bench(b, p)
 	})
 }
@@ -74,7 +74,7 @@ func BenchmarkEventPoolSlowestPath(b *testing.B) {
 			for j := 0; j < concurrency; j++ {
 				go func() {
 					defer wg.Done()
-					e := p.get()
+					e := p.get(1)
 					p.back(e)
 				}()
 			}
@@ -87,8 +87,8 @@ func BenchmarkEventPoolSlowestPath(b *testing.B) {
 		p := newEventPool(capacity, DefaultAvgInputEventSize)
 		bench(b, p)
 	})
-	b.Run("syncPool", func(b *testing.B) {
-		p := newSyncPool(capacity)
+	b.Run("lowMemory", func(b *testing.B) {
+		p := newLowMemoryEventPool(capacity)
 		bench(b, p)
 	})
 }
@@ -97,11 +97,11 @@ func TestLowMemPool(t *testing.T) {
 	t.Parallel()
 	r := require.New(t)
 	test := func(capacity, batchSize int) {
-		p := newSyncPool(capacity)
+		p := newLowMemoryEventPool(capacity)
 		for i := 0; i < batchSize; i++ {
 			batch := make([]*Event, batchSize)
 			for j := 0; j < batchSize; j++ {
-				batch[j] = p.get()
+				batch[j] = p.get(1)
 			}
 			r.Equal(int64(batchSize), p.inUse())
 			r.Equal(int64(0), p.waiters())
@@ -124,7 +124,8 @@ func TestLowMemPoolSlowWait(t *testing.T) {
 	r := require.New(t)
 
 	test := func(p pool) {
-		event := p.get() // Empty the pool.
+		const eventSize = 1
+		event := p.get(eventSize) // Empty the pool.
 		r.Equal(int64(1), p.inUse())
 
 		eventReleased := false
@@ -136,7 +137,7 @@ func TestLowMemPoolSlowWait(t *testing.T) {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				e := p.get()
+				e := p.get(eventSize)
 				if !eventReleased {
 					r.FailNowf("pool have to be empty", "event: %v", e)
 				}
@@ -165,8 +166,8 @@ func TestLowMemPoolSlowWait(t *testing.T) {
 		r.Equal(int64(0), p.inUse())
 	}
 
-	t.Run("syncPool", func(t *testing.T) {
-		pool := newSyncPool(1)
+	t.Run("lowMemory", func(t *testing.T) {
+		pool := newLowMemoryEventPool(1)
 		test(pool)
 	})
 	// TODO: add test for eventPool after #685.

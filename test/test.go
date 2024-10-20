@@ -12,7 +12,6 @@ import (
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/plugin/input/fake"
 	"github.com/ozontech/file.d/plugin/output/devnull"
-	insaneJSON "github.com/ozontech/insane-json"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
@@ -129,7 +128,6 @@ func NewPipeline(actions []*pipeline.ActionPluginStaticInfo, pipelineOpts ...str
 
 	if lowMem {
 		settings.Pool = pipeline.PoolTypeLowMem
-		insaneJSON.StartNodePoolSize = 8
 	}
 
 	pName := "test_pipeline"
