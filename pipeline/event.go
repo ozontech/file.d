@@ -226,14 +226,21 @@ type eventPool struct {
 
 	getMu   *sync.Mutex
 	getCond *sync.Cond
+
+	stopped          *atomic.Bool
+	runHeartbeatOnce *sync.Once
+	slowWaiters      *atomic.Int64
 }
 
 func newEventPool(capacity, avgEventSize int) *eventPool {
 	eventPool := &eventPool{
-		avgEventSize: avgEventSize,
-		capacity:     capacity,
-		getMu:        &sync.Mutex{},
-		backCounter:  *atomic.NewInt64(int64(capacity)),
+		avgEventSize:     avgEventSize,
+		capacity:         capacity,
+		getMu:            &sync.Mutex{},
+		backCounter:      *atomic.NewInt64(int64(capacity)),
+		runHeartbeatOnce: &sync.Once{},
+		stopped:          atomic.NewBool(false),
+		slowWaiters:      atomic.NewInt64(0),
 	}
 
 	eventPool.getCond = sync.NewCond(eventPool.getMu)
@@ -270,10 +277,17 @@ func (p *eventPool) get() *Event {
 			// slow path
 			runtime.Gosched()
 		} else {
+			p.runHeartbeatOnce.Do(func() {
+				// Run heartbeat to periodically wake up goroutines that are waiting.
+				go p.wakeupWaiters()
+			})
+
 			// slowest path
+			p.slowWaiters.Inc()
 			p.getMu.Lock()
 			p.getCond.Wait()
 			p.getMu.Unlock()
+			p.slowWaiters.Dec()
 			tries = 0
 		}
 	}
@@ -315,6 +329,26 @@ func (p *eventPool) back(event *Event) {
 	p.free1[x].Store(true)
 	p.inUseEvents.Dec()
 	p.getCond.Broadcast()
+}
+
+func (p *eventPool) wakeupWaiters() {
+	for {
+		if p.stopped.Load() {
+			return
+		}
+
+		time.Sleep(5 * time.Second)
+		waiters := p.slowWaiters.Load()
+		eventsAvailable := p.inUseEvents.Load() < int64(p.capacity)
+		if waiters > 0 && eventsAvailable {
+			// There are events in the pool, wake up waiting goroutines.
+			p.getCond.Broadcast()
+		}
+	}
+}
+
+func (p *eventPool) stop() {
+	p.stopped.Store(true)
 }
 
 func (p *eventPool) dump() string {
