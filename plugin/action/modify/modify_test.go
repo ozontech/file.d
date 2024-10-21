@@ -70,17 +70,15 @@ func TestModifyRegex(t *testing.T) {
 	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, config, pipeline.MatchModeAnd, nil, false))
 	wg := &sync.WaitGroup{}
 
-	outEvents := struct {
-		mu     sync.Mutex
-		events []*pipeline.Event
-	}{
-		events: make([]*pipeline.Event, 0),
-	}
+	i := 0
 	output.SetOutFn(func(e *pipeline.Event) {
-		outEvents.mu.Lock()
-		outEvents.events = append(outEvents.events, e)
-		outEvents.mu.Unlock()
-		wg.Done()
+		defer wg.Done()
+
+		for field, wantVal := range testEvents[i].fieldsValues {
+			gotVal := e.Root.Dig(field).AsString()
+			assert.Equal(t, wantVal, gotVal, "wrong field value")
+		}
+		i++
 	})
 	wg.Add(len(testEvents))
 
@@ -90,18 +88,6 @@ func TestModifyRegex(t *testing.T) {
 
 	wg.Wait()
 	p.Stop()
-
-	assert.Equal(t, len(testEvents), len(outEvents.events), "wrong out events count")
-	for i := 0; i < len(testEvents); i++ {
-		fvs := testEvents[i].fieldsValues
-		for field := range fvs {
-			wantVal := fvs[field]
-			outEvents.mu.Lock()
-			gotVal := outEvents.events[i].Root.Dig(field).AsString()
-			outEvents.mu.Unlock()
-			assert.Equal(t, wantVal, gotVal, "wrong field value")
-		}
-	}
 }
 
 func TestModifyTrim(t *testing.T) {
