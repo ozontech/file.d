@@ -1,7 +1,7 @@
 package doif
 
 import (
-	insaneJSON "github.com/vitkovskii/insane-json"
+	insaneJSON "github.com/ozontech/insane-json"
 )
 
 // ! do-if-node

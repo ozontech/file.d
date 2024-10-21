@@ -7,6 +7,7 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -1144,11 +1145,22 @@ func BenchmarkLightJsonReadPar(b *testing.B) {
 		b.SetBytes(bytes)
 	}
 
+	opts := []string{"passive", "perf"}
+	if useLowMem, _ := strconv.ParseBool(os.Getenv("POOL_LOW_MEMORY")); useLowMem {
+		b.Log("using low memory pool")
+		opts = append(opts, "use_pool_low_memory")
+	}
+
 	b.ReportAllocs()
 	b.StopTimer()
 	b.ResetTimer()
+
+	runtime.GC()
+	memBefore := runtime.MemStats{}
+	runtime.ReadMemStats(&memBefore)
+
 	for n := 0; n < b.N; n++ {
-		p, _, output := test.NewPipelineMock(nil, "passive", "perf")
+		p, _, output := test.NewPipelineMock(nil, opts...)
 
 		offsetsDir = b.TempDir()
 		p.SetInput(getInputInfo())
@@ -1168,4 +1180,9 @@ func BenchmarkLightJsonReadPar(b *testing.B) {
 
 		p.Stop()
 	}
+
+	memAfter := runtime.MemStats{}
+	runtime.ReadMemStats(&memAfter)
+
+	b.Logf("Memory used: %dMiB", (memAfter.Alloc-memBefore.Alloc)/1024/1024)
 }

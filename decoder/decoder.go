@@ -1,6 +1,6 @@
 package decoder
 
-import insaneJSON "github.com/vitkovskii/insane-json"
+import insaneJSON "github.com/ozontech/insane-json"
 
 type Decoder interface {
 	Type() Type

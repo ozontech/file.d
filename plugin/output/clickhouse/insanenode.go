@@ -8,7 +8,7 @@ import (
 
 	"github.com/ClickHouse/ch-go/proto"
 	"github.com/google/uuid"
-	insaneJSON "github.com/vitkovskii/insane-json"
+	insaneJSON "github.com/ozontech/insane-json"
 )
 
 var (

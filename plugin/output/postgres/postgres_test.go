@@ -14,9 +14,9 @@ import (
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
 	mock_pg "github.com/ozontech/file.d/plugin/output/postgres/mock"
+	insaneJSON "github.com/ozontech/insane-json"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/require"
-	insaneJSON "github.com/vitkovskii/insane-json"
 )
 
 func TestPrivateOut(t *testing.T) {
