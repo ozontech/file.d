@@ -1184,5 +1184,5 @@ func BenchmarkLightJsonReadPar(b *testing.B) {
 	memAfter := runtime.MemStats{}
 	runtime.ReadMemStats(&memAfter)
 
-	b.Logf("Memory used:\n%dMb\nTotal allocs: %d", (memAfter.Alloc-memBefore.Alloc)/1024/1024, memAfter.TotalAlloc-memBefore.TotalAlloc)
+	b.Logf("Memory used: %dMiB", (memAfter.Alloc-memBefore.Alloc)/1024/1024)
 }
