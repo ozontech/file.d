@@ -102,14 +102,17 @@ func (c *Client) DoTimeout(
 	respContent := resp.Body()
 	statusCode := resp.Header.StatusCode()
 
-	if statusCode < http.StatusOK || statusCode > http.StatusAccepted {
+	switch statusCode {
+	case http.StatusOK, http.StatusCreated, http.StatusAccepted:
+		if processResponse != nil {
+			return statusCode, processResponse(respContent)
+		}
+		return statusCode, nil
+	case http.StatusBadRequest, http.StatusRequestEntityTooLarge:
+		return statusCode, nil
+	default:
 		return statusCode, fmt.Errorf("response status from %s isn't OK: status=%d, body=%s", endpoint.String(), statusCode, string(respContent))
 	}
-
-	if processResponse != nil {
-		return statusCode, processResponse(respContent)
-	}
-	return statusCode, nil
 }
 
 func (c *Client) prepareRequest(req *fasthttp.Request, endpoint *fasthttp.URI, method, contentType string, body []byte) {
