@@ -48,8 +48,7 @@ type Plugin struct {
 	mu           *sync.Mutex
 
 	// plugin metrics
-	sendErrorMetric      prometheus.Counter
-	sendSemiErrorMetric  *prometheus.CounterVec
+	sendErrorMetric      *prometheus.CounterVec
 	indexingErrorsMetric prometheus.Counter
 }
 
@@ -283,8 +282,7 @@ func (p *Plugin) Out(event *pipeline.Event) {
 }
 
 func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
-	p.sendErrorMetric = ctl.RegisterCounter("output_elasticsearch_send_error", "Total elasticsearch send errors")
-	p.sendSemiErrorMetric = ctl.RegisterCounterVec("output_elasticsearch_send_semi_error", "Total elasticsearch send semi errors", "status_code")
+	p.sendErrorMetric = ctl.RegisterCounterVec("output_elasticsearch_send_error", "Total elasticsearch send errors", "status_code")
 	p.indexingErrorsMetric = ctl.RegisterCounter("output_elasticsearch_index_error", "Number of elasticsearch indexing errors")
 }
 
@@ -353,13 +351,12 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 		p.config.ConnectionTimeout_, p.reportESErrors)
 
 	if err != nil {
+		p.sendErrorMetric.WithLabelValues(strconv.Itoa(statusCode)).Inc()
 		switch statusCode {
 		case http.StatusBadRequest, http.StatusRequestEntityTooLarge:
-			p.sendSemiErrorMetric.WithLabelValues(strconv.Itoa(statusCode)).Inc()
-			p.logger.Error("semi error occurred during sending to elastic", zap.Error(err))
+			p.logger.Error("can't send to the elastic, but no retries provided", zap.Error(err))
 			return nil
 		default:
-			p.sendErrorMetric.Inc()
 			p.logger.Error("can't send to the elastic, will try other endpoint", zap.Error(err))
 			return err
 		}
