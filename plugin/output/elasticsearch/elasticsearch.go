@@ -354,7 +354,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 		p.sendErrorMetric.WithLabelValues(strconv.Itoa(statusCode)).Inc()
 		switch statusCode {
 		case http.StatusBadRequest, http.StatusRequestEntityTooLarge:
-			p.logger.Error("can't send to the elastic, but no retries provided", zap.Error(err))
+			p.logger.Error("can't send to the elastic, non-retryable error occurred", zap.Int("status_code", statusCode), zap.Error(err))
 			return nil
 		default:
 			p.logger.Error("can't send to the elastic, will try other endpoint", zap.Error(err))
