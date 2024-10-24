@@ -14,10 +14,12 @@ type CRIRow struct {
 	IsPartial         bool
 }
 
-// DecodeCRI decodes CRI formatted event.
+// DecodeCRI decodes CRI formatted event to [CRIRow].
+//
 // Examples of format:
-// 2016-10-06T00:17:09.669794202Z stdout P log content 1
-// 2016-10-06T00:17:09.669794203Z stderr F log content
+//
+//	"2016-10-06T00:17:09.669794202Z stdout P log content 1"
+//	"2016-10-06T00:17:09.669794203Z stderr F log content"
 func DecodeCRI(data []byte) (row CRIRow, _ error) {
 	// time
 	pos := bytes.IndexByte(data, criDelimiter)
