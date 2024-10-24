@@ -92,7 +92,7 @@ func (d *ProtobufDecoder) Decode(root *insaneJSON.Root, data []byte) error {
 		return fmt.Errorf("failed to marshal proto to json: %w", err)
 	}
 
-	root.DecodeBytes(msgJson)
+	_ = root.DecodeBytes(msgJson)
 	return nil
 }
 

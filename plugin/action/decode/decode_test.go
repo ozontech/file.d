@@ -1,7 +1,6 @@
 package decode
 
 import (
-	"fmt"
 	"sync"
 	"testing"
 
@@ -240,7 +239,6 @@ func TestDecode(t *testing.T) {
 			wg.Add(1)
 
 			output.SetOutFn(func(e *pipeline.Event) {
-				fmt.Println(e.Root.EncodeToString())
 				for k, v := range tt.want {
 					node := e.Root.Dig(cfg.ParseFieldSelector(k)...)
 					val := ""

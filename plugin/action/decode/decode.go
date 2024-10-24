@@ -28,7 +28,7 @@ pipelines:
     actions:
     - type: decode
       field: log
-	  prefix: p_
+      prefix: p_
     ...
 ```
 The original event:
@@ -58,8 +58,8 @@ pipelines:
     actions:
     - type: decode
       field: log
-	  decoder: cri
-	  prefix: p_
+      decoder: cri
+      prefix: p_
     ...
 ```
 The original event:
@@ -89,7 +89,7 @@ pipelines:
     actions:
     - type: decode
       field: log
-	  decoder: postgres
+      decoder: postgres
     ...
 ```
 The original event:
@@ -123,7 +123,7 @@ pipelines:
     actions:
     - type: decode
       field: log
-	  decoder: nginx_error
+      decoder: nginx_error
     ...
 ```
 The original event:
@@ -156,9 +156,9 @@ pipelines:
     actions:
     - type: decode
       field: log
-	  decoder: protobuf
-	  params:
-	  	proto_file: 'path/to/proto/example.proto'
+      decoder: protobuf
+      params:
+        proto_file: 'path/to/proto/example.proto'
         proto_message: MyMessage
     ...
 ```
@@ -171,9 +171,9 @@ pipelines:
     actions:
     - type: decode
       field: log
-	  decoder: protobuf
-	  params:
-	  	proto_file: |
+      decoder: protobuf
+      params:
+        proto_file: |
           syntax = "proto3";
 
           package example;
@@ -206,9 +206,9 @@ pipelines:
     actions:
     - type: decode
       field: log
-	  decoder: protobuf
-	  params:
-	  	proto_file: 'example.proto'
+      decoder: protobuf
+      params:
+        proto_file: 'example.proto'
         proto_message: MyMessage
         proto_import_paths:
           - path/to/proto_dir1
@@ -249,9 +249,9 @@ pipelines:
     actions:
     - type: decode
       field: log
-	  decoder: json
-	  prefix: p_
-	  keep_origin: true
+      decoder: json
+      prefix: p_
+      keep_origin: true
     ...
 ```
 The original event:
