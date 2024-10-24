@@ -436,83 +436,45 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 	event := p.eventPool.get()
 	p.eventPoolLatency.Observe(time.Since(now).Seconds())
 
+	err = nil
+	if !(dec == decoder.JSON || dec == decoder.PROTOBUF) {
+		_ = event.Root.DecodeString("{}")
+	}
 	switch dec {
 	case decoder.JSON:
-		err := event.parseJSON(bytes)
-		if err != nil {
-			level := zapcore.ErrorLevel
-			if p.settings.IsStrict {
-				level = zapcore.FatalLevel
-			}
-
-			p.logger.Log(level, "wrong json format", zap.Error(err),
-				zap.Int64("offset", offset),
-				zap.Int("length", length),
-				zap.Uint64("source", uint64(sourceID)),
-				zap.String("source_name", sourceName),
-				zap.ByteString("json", bytes))
-
-			// Can't process event, return to pool.
-			p.eventPool.back(event)
-			return EventSeqIDError
-		}
+		err = decoder.DecodeJson(event.Root, bytes)
 	case decoder.RAW:
-		_ = event.Root.DecodeString("{}")
 		event.Root.AddFieldNoAlloc(event.Root, "message").MutateToBytesCopy(event.Root, bytes[:len(bytes)-1])
 	case decoder.CRI:
-		_ = event.Root.DecodeString("{}")
 		event.Root.AddFieldNoAlloc(event.Root, "log").MutateToBytesCopy(event.Root, row.Log)
 		event.Root.AddFieldNoAlloc(event.Root, "time").MutateToBytesCopy(event.Root, row.Time)
 		event.Root.AddFieldNoAlloc(event.Root, "stream").MutateToBytesCopy(event.Root, row.Stream)
 	case decoder.POSTGRES:
-		_ = event.Root.DecodeString("{}")
-		err := decoder.DecodePostgres(event.Root, bytes)
-		if err != nil {
-			p.logger.Fatal("wrong postgres format", zap.Error(err),
-				zap.Int64("offset", offset),
-				zap.Int("length", length),
-				zap.Uint64("source", uint64(sourceID)),
-				zap.String("source_name", sourceName),
-				zap.ByteString("log", bytes))
-
-			// Dead route, never passed here.
-			return EventSeqIDError
-		}
+		err = decoder.DecodePostgres(event.Root, bytes)
 	case decoder.NGINX_ERROR:
-		_ = event.Root.DecodeString("{}")
-		err := decoder.DecodeNginxError(event.Root, bytes)
-		if err != nil {
-			level := zapcore.ErrorLevel
-			if p.settings.IsStrict {
-				level = zapcore.FatalLevel
-			}
-
-			p.logger.Log(level, "wrong nginx error log format", zap.Error(err),
-				zap.Int64("offset", offset),
-				zap.Int("length", length),
-				zap.Uint64("source", uint64(sourceID)),
-				zap.String("source_name", sourceName),
-				zap.ByteString("log", bytes))
-
-			p.eventPool.back(event)
-			return EventSeqIDError
-		}
+		err = decoder.DecodeNginxError(event.Root, bytes)
 	case decoder.PROTOBUF:
-		_ = event.Root.DecodeString("{}")
 		err = p.decoder.Decode(event.Root, bytes)
-		if err != nil {
-			p.logger.Fatal("wrong protobuf format", zap.Error(err),
-				zap.Int64("offset", offset),
-				zap.Int("length", length),
-				zap.Uint64("source", uint64(sourceID)),
-				zap.String("source_name", sourceName),
-				zap.ByteString("log", bytes))
-
-			// Dead route, never passed here.
-			return EventSeqIDError
-		}
 	default:
 		p.logger.Panic("unknown decoder", zap.Int("decoder", int(dec)))
+	}
+
+	if err != nil {
+		level := zapcore.ErrorLevel
+		if p.settings.IsStrict {
+			level = zapcore.FatalLevel
+		}
+
+		p.logger.Log(level, "wrong log format", zap.Error(err),
+			zap.Int64("offset", offset),
+			zap.Int("length", length),
+			zap.Uint64("source", uint64(sourceID)),
+			zap.String("source_name", sourceName),
+			zap.ByteString("log", bytes))
+
+		// Can't process event, return to pool.
+		p.eventPool.back(event)
+		return EventSeqIDError
 	}
 
 	if len(meta) > 0 {

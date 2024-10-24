@@ -183,7 +183,7 @@ func TestProtobufDecoder(t *testing.T) {
 
 			// for correct comparison
 			var gotMsg testMyMessage
-			assert.NoError(t, json.Unmarshal(root.AsBytes(), &gotMsg))
+			assert.NoError(t, json.Unmarshal(root.EncodeToByte(), &gotMsg))
 			require.Equal(t, tt.want, gotMsg)
 		})
 	}

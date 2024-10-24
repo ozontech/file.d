@@ -46,10 +46,10 @@ pipelines:
 
 For correct decoding, the protocol scheme and message name are required.
 They must be specified in `decoder_params`:
-* `proto_file` - protocol scheme, can be specified as both the path to the file and the contents of the file
-* `proto_message` - message name in the specified `proto_file`
+* `proto_file` - protocol scheme, can be specified as both the path to the file and the contents of the file.
+* `proto_message` - message name in the specified `proto_file`.
 * `proto_import_paths` - optional list of paths within which the search will occur (including imports in `proto_file`).
-If present and not empty, then all file paths to find are assumed to be relative to one of these paths. Otherwise, all file paths to find are assumed to be relative to the current working directory
+If present and not empty, then all file paths to find are assumed to be relative to one of these paths. Otherwise, all file paths to find are assumed to be relative to the current working directory.
 
 > If `proto_file` contains only system imports, then there is no need to add these files to one of the directories specified in `proto_import_paths`.
 > Otherwise, all imports specified in the `proto_file` must be added to one of the directories specified in `proto_import_paths` respecting the file system tree.
@@ -122,5 +122,6 @@ pipelines:
         proto_file: 'example.proto'
         proto_message: 'MyMessage'
         proto_import_paths:
-          - path/to/proto
+          - path/to/proto_dir1
+          - path/to/proto_dir2
 ```

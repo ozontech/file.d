@@ -172,14 +172,6 @@ func (e *Event) IsChildParentKind() bool {
 	return e.kind == eventKindChildParent
 }
 
-func (e *Event) parseJSON(json []byte) error {
-	return e.Root.DecodeBytes(json)
-}
-
-func (e *Event) SubparseJSON(json []byte) (*insaneJSON.Node, error) {
-	return e.Root.DecodeBytesAdditional(json)
-}
-
 func (e *Event) Encode(outBuf []byte) ([]byte, int) {
 	l := len(outBuf)
 	outBuf = e.Root.Encode(outBuf)

@@ -127,6 +127,11 @@ Following that, it will allow through every 5th event in that interval.
 
 
 [More details...](plugin/action/debug/README.md)
+## decode
+It decodes a string from the event field and merges the result with the event root.
+> If one of the decoded keys already exists in the event root, it will be overridden.
+
+[More details...](plugin/action/decode/README.md)
 ## discard
 It drops an event. It is used in a combination with `match_fields`/`match_mode` parameters to filter out the events.
 
