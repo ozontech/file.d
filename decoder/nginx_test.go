@@ -40,8 +40,8 @@ func TestDecodeNginxPass(t *testing.T) {
 			continue
 		}
 		root := insaneJSON.Spawn()
-		defer insaneJSON.Release(root)
 		err := DecodeNginxErrorToJson(root, line)
+		insaneJSON.Release(root)
 		if err != nil {
 			t.Fatalf("error parsing line=%s, %s", line, err)
 		}
@@ -78,8 +78,8 @@ func TestDecodeNginxFail(t *testing.T) {
 	for scanner.Scan() {
 		line := scanner.Bytes()
 		root := insaneJSON.Spawn()
-		defer insaneJSON.Release(root)
 		err := DecodeNginxErrorToJson(root, line)
+		insaneJSON.Release(root)
 		if err == nil {
 			t.Fatalf("expecting error on line=%s", line)
 		}
