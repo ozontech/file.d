@@ -15,7 +15,7 @@ type NginxErrorRow struct {
 	Message []byte
 }
 
-// DecodeNginxError decodes nginx error formatted log and merges result with event.
+// DecodeNginxErrorToJson decodes nginx error formatted log and merges result with event.
 //
 // From:
 //
@@ -28,8 +28,8 @@ type NginxErrorRow struct {
 //		"level": "error",
 //		"message": "2725122#2725122: *792412315 lua udp socket read timed out, context: ngx.timer"
 //	}
-func DecodeNginxError(event *insaneJSON.Root, data []byte) error {
-	row, err := DecodeNginxErrorTo(data)
+func DecodeNginxErrorToJson(event *insaneJSON.Root, data []byte) error {
+	row, err := DecodeNginxError(data)
 	if err != nil {
 		return err
 	}
@@ -48,12 +48,12 @@ func DecodeNginxError(event *insaneJSON.Root, data []byte) error {
 	return nil
 }
 
-// DecodeNginxErrorTo decodes nginx error formated log to [NginxErrorRow].
+// DecodeNginxError decodes nginx error formated log to [NginxErrorRow].
 //
 // Example of format:
 //
 //	"2022/08/17 10:49:27 [error] 2725122#2725122: *792412315 lua udp socket read timed out, context: ngx.timer"
-func DecodeNginxErrorTo(data []byte) (NginxErrorRow, error) {
+func DecodeNginxError(data []byte) (NginxErrorRow, error) {
 	row := NginxErrorRow{}
 
 	split := spaceSplit(data, 5)

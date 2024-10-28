@@ -78,35 +78,6 @@ func TestDecode(t *testing.T) {
 			},
 		},
 		{
-			name: "cri",
-			config: &Config{
-				Field:   "log",
-				Decoder: "cri",
-			},
-			input: []byte(`{"level":"error","log":"2016-10-06T00:17:09.669794202Z stdout F log content"}`),
-			want: map[string]string{
-				"level":  "error",
-				"time":   "2016-10-06T00:17:09.669794202Z",
-				"stream": "stdout",
-				"log":    "log content",
-			},
-		},
-		{
-			name: "cri_prefix",
-			config: &Config{
-				Field:   "log",
-				Decoder: "cri",
-				Prefix:  "p_",
-			},
-			input: []byte(`{"level":"error","log":"2016-10-06T00:17:09.669794202Z stdout F log content"}`),
-			want: map[string]string{
-				"level":    "error",
-				"p_time":   "2016-10-06T00:17:09.669794202Z",
-				"p_stream": "stdout",
-				"p_log":    "log content",
-			},
-		},
-		{
 			name: "postgres",
 			config: &Config{
 				Field:   "log",

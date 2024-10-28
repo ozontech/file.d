@@ -86,7 +86,7 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 		return pipeline.ActionPass
 	}
 
-	node, err := decoder.DecodeJsonTo(event.Root, jsonNode.AsBytes())
+	node, err := decoder.DecodeJsonToNode(event.Root, jsonNode.AsBytes())
 	if err != nil {
 		if p.config.LogJSONParseErrorMode_ == logJsonParseErrorErrOnly {
 			p.logger.Error("failed to parse json", zap.Error(err))

@@ -450,9 +450,9 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 		event.Root.AddFieldNoAlloc(event.Root, "time").MutateToBytesCopy(event.Root, row.Time)
 		event.Root.AddFieldNoAlloc(event.Root, "stream").MutateToBytesCopy(event.Root, row.Stream)
 	case decoder.POSTGRES:
-		err = decoder.DecodePostgres(event.Root, bytes)
+		err = decoder.DecodePostgresToJson(event.Root, bytes)
 	case decoder.NGINX_ERROR:
-		err = decoder.DecodeNginxError(event.Root, bytes)
+		err = decoder.DecodeNginxErrorToJson(event.Root, bytes)
 	case decoder.PROTOBUF:
 		err = p.decoder.Decode(event.Root, bytes)
 	default:
