@@ -31,7 +31,7 @@ message MyMessage {
 }
 `
 
-func TestProtobufDecoder(t *testing.T) {
+func TestProtobuf(t *testing.T) {
 	const protoMessage = "MyMessage"
 
 	type (

@@ -9,6 +9,8 @@ import (
 
 func TestPostgres(t *testing.T) {
 	root := insaneJSON.Spawn()
+	defer insaneJSON.Release(root)
+
 	err := DecodePostgres(root, []byte("2021-06-22 16:24:27 GMT [7291] => [3-1] client=test_client,db=test_db,user=test_user LOG:  listening on Unix socket \"/var/run/postgresql/.s.PGSQL.5432\"\n"))
 
 	assert.NoError(t, err, "error while decoding postgres log")
