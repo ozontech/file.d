@@ -571,8 +571,9 @@ func (p *Pipeline) finalize(event *Event, notifyInput bool, backEvent bool) {
 		p.eventLogMu.Unlock()
 	}
 
-	for _, e := range event.children {
+	for i, e := range event.children {
 		insaneJSON.Release(e.Root)
+		event.children[i] = nil
 	}
 
 	p.eventPool.back(event)
