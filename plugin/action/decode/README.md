@@ -36,37 +36,6 @@ The resulting event:
 }
 ```
 
-### CRI decoder
-```yaml
-pipelines:
-  example_pipeline:
-    ...
-    actions:
-    - type: decode
-      field: log
-      decoder: cri
-      prefix: p_
-    ...
-```
-The original event:
-```json
-{
-  "level": "error",
-  "log": "2016-10-06T00:17:09.669794202Z stdout F log content",
-  "service": "test"
-}
-```
-The resulting event:
-```json
-{
-  "level": "error",
-  "service": "test",
-  "p_log": "log content",
-  "p_time": "2016-10-06T00:17:09.669794202Z",
-  "p_stream": "stdout"
-}
-```
-
 ### Postgres decoder
 ```yaml
 pipelines:
@@ -267,7 +236,7 @@ The event field to decode. Must be a string.
 
 <br>
 
-**`decoder`** *`string`* *`default=json`* *`options=json|cri|postgres|nginx_error|protobuf`* 
+**`decoder`** *`string`* *`default=json`* *`options=json|postgres|nginx_error|protobuf`* 
 
 Decoder type.
 

@@ -25,7 +25,7 @@ type PostgresRow struct {
 	Log              []byte
 }
 
-// DecodePostgres decodes postgres formatted log and merges result with event.
+// DecodePostgresToJson decodes postgres formatted log and merges result with event.
 //
 // From:
 //
@@ -42,8 +42,8 @@ type PostgresRow struct {
 //		"user": "test_user",
 //		"log": "listening on Unix socket \"/var/run/postgresql/.s.PGSQL.5432\""
 //	}
-func DecodePostgres(event *insaneJSON.Root, data []byte) error {
-	row, err := DecodePostgresTo(data)
+func DecodePostgresToJson(event *insaneJSON.Root, data []byte) error {
+	row, err := DecodePostgres(data)
 	if err != nil {
 		return err
 	}
@@ -59,12 +59,12 @@ func DecodePostgres(event *insaneJSON.Root, data []byte) error {
 	return nil
 }
 
-// DecodePostgresTo decodes postgres formated log to [PostgresRow].
+// DecodePostgres decodes postgres formated log to [PostgresRow].
 //
 // Example of format:
 //
 //	"2021-06-22 16:24:27 GMT [7291] => [3-1] client=test_client,db=test_db,user=test_user LOG:  listening on Unix socket \"/var/run/postgresql/.s.PGSQL.5432\""
-func DecodePostgresTo(data []byte) (PostgresRow, error) {
+func DecodePostgres(data []byte) (PostgresRow, error) {
 	row := PostgresRow{}
 
 	// time

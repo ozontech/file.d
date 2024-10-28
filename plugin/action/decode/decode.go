@@ -50,37 +50,6 @@ The resulting event:
 }
 ```
 
-### CRI decoder
-```yaml
-pipelines:
-  example_pipeline:
-    ...
-    actions:
-    - type: decode
-      field: log
-      decoder: cri
-      prefix: p_
-    ...
-```
-The original event:
-```json
-{
-  "level": "error",
-  "log": "2016-10-06T00:17:09.669794202Z stdout F log content",
-  "service": "test"
-}
-```
-The resulting event:
-```json
-{
-  "level": "error",
-  "service": "test",
-  "p_log": "log content",
-  "p_time": "2016-10-06T00:17:09.669794202Z",
-  "p_stream": "stdout"
-}
-```
-
 ### Postgres decoder
 ```yaml
 pipelines:
@@ -279,7 +248,6 @@ type decoderType int
 
 const (
 	decJson decoderType = iota
-	decCri
 	decPostgres
 	decNginxError
 	decProtobuf
@@ -312,7 +280,7 @@ type Config struct {
 	// > @3@4@5@6
 	// >
 	// > Decoder type.
-	Decoder  string `json:"decoder" default:"json" options:"json|cri|postgres|nginx_error|protobuf"` // *
+	Decoder  string `json:"decoder" default:"json" options:"json|postgres|nginx_error|protobuf"` // *
 	Decoder_ decoderType
 
 	// > @3@4@5@6
@@ -397,8 +365,6 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	switch p.config.Decoder_ {
 	case decJson:
 		p.decodeJson(event.Root, fieldNode, event.Buf)
-	case decCri:
-		p.decodeCri(event.Root, fieldNode)
 	case decPostgres:
 		p.decodePostgres(event.Root, fieldNode)
 	case decNginxError:
@@ -411,7 +377,7 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 }
 
 func (p *Plugin) decodeJson(root *insaneJSON.Root, node *insaneJSON.Node, buf []byte) {
-	jsonNode, err := decoder.DecodeJsonTo(root, node.AsBytes())
+	jsonNode, err := decoder.DecodeJsonToNode(root, node.AsBytes())
 	if p.checkError(err, node) {
 		return
 	}
@@ -436,23 +402,8 @@ func (p *Plugin) decodeJson(root *insaneJSON.Root, node *insaneJSON.Node, buf []
 	root.MergeWith(jsonNode)
 }
 
-func (p *Plugin) decodeCri(root *insaneJSON.Root, node *insaneJSON.Node) {
-	row, err := decoder.DecodeCRI(node.AsBytes())
-	if p.checkError(err, node) {
-		return
-	}
-
-	if !p.config.KeepOrigin {
-		node.Suicide()
-	}
-
-	p.addFieldPrefix(root, "log", row.Log)
-	p.addFieldPrefix(root, "time", row.Time)
-	p.addFieldPrefix(root, "stream", row.Stream)
-}
-
 func (p *Plugin) decodePostgres(root *insaneJSON.Root, node *insaneJSON.Node) {
-	row, err := decoder.DecodePostgresTo(node.AsBytes())
+	row, err := decoder.DecodePostgres(node.AsBytes())
 	if p.checkError(err, node) {
 		return
 	}
@@ -471,7 +422,7 @@ func (p *Plugin) decodePostgres(root *insaneJSON.Root, node *insaneJSON.Node) {
 }
 
 func (p *Plugin) decodeNginxError(root *insaneJSON.Root, node *insaneJSON.Node) {
-	row, err := decoder.DecodeNginxErrorTo(node.AsBytes())
+	row, err := decoder.DecodeNginxError(node.AsBytes())
 	if p.checkError(err, node) {
 		return
 	}
