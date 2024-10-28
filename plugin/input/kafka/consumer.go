@@ -39,9 +39,9 @@ func (s *splitConsume) Assigned(_ context.Context, _ *kgo.Client, assigned map[s
 				partition: partition,
 				topicID:   s.idByTopic[topic],
 
-				quit: make(chan struct{}),
-				done: make(chan struct{}),
-				recs: make(chan []*kgo.Record, s.bufferSize),
+				quit:    make(chan struct{}),
+				done:    make(chan struct{}),
+				fetches: make(chan kgo.FetchTopicPartition, 5),
 
 				controller:    s.controller,
 				logger:        s.logger,
@@ -65,7 +65,10 @@ func (s *splitConsume) Lost(_ context.Context, _ *kgo.Client, lost map[string][]
 			close(pc.quit)
 			pc.logger.Info("waiting for finish of consume", zap.String("topic", pc.topic), zap.Int32("partiton", pc.partition))
 			wg.Add(1)
-			go func() { <-pc.done; wg.Done() }()
+			go func(pc *pconsumer) {
+				defer wg.Done()
+				<-pc.done
+			}(pc)
 		}
 	}
 }
@@ -76,6 +79,11 @@ func (s *splitConsume) consume(ctx context.Context, cl *kgo.Client) {
 		if fetches.IsClientClosed() {
 			return
 		}
+
+		if ctx.Err() != nil {
+			return
+		}
+
 		if errs := fetches.Errors(); len(errs) > 0 {
 			for _, err := range errs {
 				s.consumeErrorsMetric.Inc()
@@ -83,14 +91,10 @@ func (s *splitConsume) consume(ctx context.Context, cl *kgo.Client) {
 			}
 		}
 
-		if ctx.Err() != nil {
-			return
-		}
-
 		fetches.EachPartition(func(p kgo.FetchTopicPartition) {
 			tp := tp{p.Topic, p.Partition}
 			if consumer, ok := s.consumers[tp]; ok {
-				consumer.recs <- p.Records
+				consumer.fetches <- p
 			} else {
 				s.logger.Error("consumer not ready yet", zap.String("topic", p.Topic), zap.Int32("partiton", p.Partition))
 			}
@@ -104,9 +108,9 @@ type pconsumer struct {
 	partition int32
 	topicID   int
 
-	quit chan struct{}
-	done chan struct{}
-	recs chan []*kgo.Record
+	quit    chan struct{}
+	done    chan struct{}
+	fetches chan kgo.FetchTopicPartition
 
 	controller    pipeline.InputPluginController
 	logger        *zap.Logger
@@ -121,9 +125,12 @@ func (pc *pconsumer) consume() {
 		select {
 		case <-pc.quit:
 			return
-		case recs := <-pc.recs:
-			for i := range recs {
-				message := recs[i]
+		case fetches, ok := <-pc.fetches:
+			if !ok {
+				return // Channel closed
+			}
+			for i := range fetches.Records {
+				message := fetches.Records[i]
 				sourceID := assembleSourceID(
 					pc.topicID,
 					message.Partition,
