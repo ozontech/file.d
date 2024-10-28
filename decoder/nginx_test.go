@@ -104,7 +104,7 @@ func TestNginxError(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			row, err := DecodeNginxErrorTo([]byte(tt.input))
+			row, err := DecodeNginxError([]byte(tt.input))
 			assert.Equal(t, tt.wantErr, err != nil)
 			if tt.wantErr {
 				return
