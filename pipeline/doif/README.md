@@ -18,6 +18,10 @@ the chain of Match func calls are performed across the whole tree.
 
 <br>
 
+**`CheckTypeOp`** Type of node where matching rules for check types are stored.
+
+<br>
+
 **`LogicalOp`** Type of node where logical rules for applying other rules are stored.
 
 <br>
@@ -397,6 +401,36 @@ Result:
 {"timestamp":"qwe"}  # not discarded (field `timestamp` is not parsable)
 
 {"timestamp":"2011-01-01T00:00:00Z"}  # not discarded (condition is not met)
+```
+
+### Check type op node
+DoIf check type op node checks whether the type of the field node is the one from the list.
+
+Params:
+  - `op` - for that node the value is `check_type`
+  - `field` - path to JSON node, can be empty string meaning root node, can be nested field `field.subfield` (if the field consists of `.` in the name, it must be shielded e.g. `exception\.type`)
+  - `values` - list of types to check against. Allowed values are `obj`, `arr`, `number` (both ints or floats), `string`, `null`, `nil` (for the abscent fields).
+
+Example:
+
+```yaml
+- type: discard
+  do_if:
+	op: not
+	operands:
+      - op: check_type
+	    field: log
+	    values: [obj, arr]
+```
+
+result:
+```
+{"log":{"message":"test"}}   # not discarded
+{"log":[{"message":"test"}]} # not discarded
+{"log":"test"}               # discarded
+{"log":123}                  # discarded
+{"log":null}                 # discarded
+{"not_log":{"test":"test"}}  # discarded
 ```
 
 <br>*Generated using [__insane-doc__](https://github.com/vitkovskii/insane-doc)*
