@@ -41,51 +41,21 @@ result:
 ```
 }*/
 
-type checkType int
-
-const (
-	checkTypeUnknown checkType = iota
-	checkTypeObj
-	checkTypeArr
-	checkTypeNumber
-	checkTypeString
-	checkTypeNull
-	checkTypeNil
-)
-
 var (
-	checkTypeUnknownTag = []byte("unknown")
-	checkTypeObjTag     = []byte("obj")
-	checkTypeArrTag     = []byte("arr")
-	checkTypeNumberTag  = []byte("number")
-	checkTypeStringTag  = []byte("string")
-	checkTypeNullTag    = []byte("null")
-	checkTypeNilTag     = []byte("nil")
+	checkTypeObjTag    = []byte("obj")
+	checkTypeArrTag    = []byte("arr")
+	checkTypeNumberTag = []byte("number")
+	checkTypeStringTag = []byte("string")
+	checkTypeNullTag   = []byte("null")
+	checkTypeNilTag    = []byte("nil")
 )
 
-func (t checkType) String() string {
-	switch t {
-	case checkTypeObj:
-		return string(checkTypeObjTag)
-	case checkTypeArr:
-		return string(checkTypeArrTag)
-	case checkTypeNumber:
-		return string(checkTypeNumberTag)
-	case checkTypeString:
-		return string(checkTypeStringTag)
-	case checkTypeNull:
-		return string(checkTypeNullTag)
-	case checkTypeNil:
-		return string(checkTypeNilTag)
-	default:
-		return string(checkTypeUnknownTag)
-	}
-}
+type checkTypeFn func(*insaneJSON.Node) bool
 
 type checkTypeOpNode struct {
 	fieldPath    []string
 	fieldPathStr string
-	checkTypes   []checkType
+	checkTypeFns []checkTypeFn
 }
 
 func NewCheckTypeOpNode(field string, values [][]byte) (Node, error) {
@@ -93,21 +63,33 @@ func NewCheckTypeOpNode(field string, values [][]byte) (Node, error) {
 		return nil, errors.New("values are not provided")
 	}
 	fieldPath := cfg.ParseFieldSelector(field)
-	checkTypes := make([]checkType, 0)
+	checkTypeFns := make([]checkTypeFn, 0)
 	for _, val := range values {
 		switch {
 		case bytes.Equal(val, checkTypeObjTag):
-			checkTypes = append(checkTypes, checkTypeObj)
+			checkTypeFns = append(checkTypeFns, func(n *insaneJSON.Node) bool {
+				return n.IsObject()
+			})
 		case bytes.Equal(val, checkTypeArrTag):
-			checkTypes = append(checkTypes, checkTypeArr)
+			checkTypeFns = append(checkTypeFns, func(n *insaneJSON.Node) bool {
+				return n.IsArray()
+			})
 		case bytes.Equal(val, checkTypeNumberTag):
-			checkTypes = append(checkTypes, checkTypeNumber)
+			checkTypeFns = append(checkTypeFns, func(n *insaneJSON.Node) bool {
+				return n.IsNumber()
+			})
 		case bytes.Equal(val, checkTypeStringTag):
-			checkTypes = append(checkTypes, checkTypeString)
+			checkTypeFns = append(checkTypeFns, func(n *insaneJSON.Node) bool {
+				return n.IsString()
+			})
 		case bytes.Equal(val, checkTypeNullTag):
-			checkTypes = append(checkTypes, checkTypeNull)
+			checkTypeFns = append(checkTypeFns, func(n *insaneJSON.Node) bool {
+				return n.IsNull()
+			})
 		case bytes.Equal(val, checkTypeNilTag):
-			checkTypes = append(checkTypes, checkTypeNil)
+			checkTypeFns = append(checkTypeFns, func(n *insaneJSON.Node) bool {
+				return n.IsNil()
+			})
 		default:
 			return nil, fmt.Errorf(
 				"invalid value for check_type: %q. Allowed values are: 'obj','arr','number','string','null','nil'",
@@ -118,7 +100,7 @@ func NewCheckTypeOpNode(field string, values [][]byte) (Node, error) {
 	return &checkTypeOpNode{
 		fieldPath:    fieldPath,
 		fieldPathStr: field,
-		checkTypes:   checkTypes,
+		checkTypeFns: checkTypeFns,
 	}, nil
 }
 
@@ -128,19 +110,8 @@ func (n *checkTypeOpNode) Type() NodeType {
 
 func (n *checkTypeOpNode) Check(eventRoot *insaneJSON.Root) bool {
 	node := eventRoot.Dig(n.fieldPath...)
-	for _, t := range n.checkTypes {
-		switch {
-		case t == checkTypeNull && node.IsNull():
-			return true
-		case t == checkTypeObj && node.IsObject():
-			return true
-		case t == checkTypeArr && node.IsArray():
-			return true
-		case t == checkTypeNumber && node.IsNumber():
-			return true
-		case t == checkTypeString && node.IsString():
-			return true
-		case t == checkTypeNil && node.IsNil():
+	for _, checkFn := range n.checkTypeFns {
+		if checkFn(node) {
 			return true
 		}
 	}
@@ -157,12 +128,29 @@ func (n *checkTypeOpNode) isEqualTo(n2 Node, _ int) error {
 			n.fieldPathStr, n.fieldPath,
 		)
 	}
-	if len(n.checkTypes) != len(n2f.checkTypes) {
-		return fmt.Errorf("nodes have different checkTypes slices len expected: %d", len(n.checkTypes))
+	if len(n.checkTypeFns) != len(n2f.checkTypeFns) {
+		return fmt.Errorf("nodes have different checkTypes slices len expected: %d", len(n.checkTypeFns))
 	}
-	for i := 0; i < len(n.checkTypes); i++ {
-		if n.checkTypes[i] != n2f.checkTypes[i] {
-			return fmt.Errorf("nodes have different data in checkTypes expected: %s on position", n.checkTypes)
+	data := []byte(`{"obj":{"subfield":"test"},"arr":["test","test"],"number":123,"string":"test","null":null}`)
+	root := insaneJSON.Spawn()
+	if err := root.DecodeBytes(data); err != nil {
+		panic(err)
+	}
+	nodes := map[string]*insaneJSON.Node{
+		"obj":    root.Dig("obj"),
+		"arr":    root.Dig("arr"),
+		"number": root.Dig("number"),
+		"string": root.Dig("string"),
+		"null":   root.Dig("null"),
+		"nil":    root.Dig("nil"),
+	}
+	for i := 0; i < len(n.checkTypeFns); i++ {
+		for key, node := range nodes {
+			res1 := n.checkTypeFns[i](node)
+			res2 := n2f.checkTypeFns[i](node)
+			if res1 != res2 {
+				return fmt.Errorf("nodes have different check functions, different results for %q for funcs on position %d", key, i)
+			}
 		}
 	}
 	return nil
