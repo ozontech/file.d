@@ -71,6 +71,9 @@ The resulting event:
 ```
 
 ### Nginx error decoder
+You can specify `nginx_with_custom_fields: true` in `params` to decode custom fields.
+
+Default decoder:
 ```yaml
 pipelines:
   example_pipeline:
@@ -84,8 +87,8 @@ pipelines:
 The original event:
 ```json
 {
-  "level": "error",
-  "log": "2022/08/17 10:49:27 [warn] 2725122#2725122: *792412315 lua udp socket read timed out, context: ngx.timer",
+  "level": "warn",
+  "log": "2022/08/17 10:49:27 [error] 2725122#2725122: *792412315 lua udp socket read timed out, context: ngx.timer",
   "service": "test"
 }
 ```
@@ -94,8 +97,50 @@ The resulting event:
 {
   "service": "test",
   "time": "2022/08/17 10:49:27",
+  "level": "error",
+  "pid": "2725122",
+  "tid": "2725122",
+  "cid": "792412315",
+  "message": "lua udp socket read timed out, context: ngx.timer"
+}
+```
+
+Decoder with `nginx_with_custom_fields` param:
+```yaml
+pipelines:
+  example_pipeline:
+    ...
+    actions:
+    - type: decode
+      field: log
+      decoder: nginx_error
+      params:
+        nginx_with_custom_fields: true
+    ...
+```
+The original event:
+```json
+{
   "level": "warn",
-  "message": "2725122#2725122: *792412315 lua udp socket read timed out, context: ngx.timer"
+  "log": "2022/08/18 09:29:37 [error] 844935#844935: *44934601 upstream timed out (110: Operation timed out), while connecting to upstream, client: 10.125.172.251, server: , request: \"POST /download HTTP/1.1\", upstream: \"http://10.117.246.15:84/download\", host: \"mpm-youtube-downloader-38.name.tldn:84\"",
+  "service": "test"
+}
+```
+The resulting event:
+```json
+{
+  "service": "test",
+  "time": "2022/08/18 09:29:37",
+  "level": "error",
+  "pid": "844935",
+  "tid": "844935",
+  "cid": "44934601",
+  "message": "upstream timed out (110: Operation timed out), while connecting to upstream",
+  "client": "10.125.172.251",
+  "server": "",
+  "request": "\"POST /download HTTP/1.1\"",
+  "upstream": "\"http://10.117.246.15:84/download\"",
+  "host": "\"mpm-youtube-downloader-38.name.tldn:84\""
 }
 ```
 
@@ -245,6 +290,9 @@ Decoder type.
 **`params`** *`map[string]any`* 
 
 Decoding params.
+
+**Nginx error decoder params**:
+* `nginx_with_custom_fields` - if set, custom fields will be extracted.
 
 **Protobuf decoder params**:
 * `proto_file` - protocol scheme, can be specified as both the path to the file and the contents of the file.

@@ -244,7 +244,7 @@ func TestDecode(t *testing.T) {
 				for k, v := range tt.want {
 					node := e.Root.Dig(cfg.ParseFieldSelector(k)...)
 					val := ""
-					if len(v) > 0 && v[0] == '[' {
+					if v != "" && v[0] == '[' {
 						val = node.EncodeToString()
 					} else {
 						val = node.AsString()
