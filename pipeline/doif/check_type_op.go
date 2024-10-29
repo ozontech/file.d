@@ -23,11 +23,11 @@ Example:
 ```yaml
 - type: discard
   do_if:
-	op: not
-	operands:
+    op: not
+    operands:
       - op: check_type
-	    field: log
-	    values: [obj, arr]
+        field: log
+        values: [obj, arr]
 ```
 
 result:
