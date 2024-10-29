@@ -221,7 +221,7 @@ var (
 	doIfTimestampCmpOpNodes = map[string]struct{}{
 		"ts_cmp": {},
 	}
-	checkTypeOpName = "check_type"
+	doIfСheckTypeOpNode = "check_type"
 )
 
 func extractFieldOpVals(jsonNode *simplejson.Json) [][]byte {
@@ -451,7 +451,7 @@ func extractDoIfNode(jsonNode *simplejson.Json) (doif.Node, error) {
 		return extractLengthCmpOpNode(opName, jsonNode)
 	} else if _, has := doIfTimestampCmpOpNodes[opName]; has {
 		return extractTsCmpOpNode(opName, jsonNode)
-	} else if opName == checkTypeOpName {
+	} else if opName == doIfСheckTypeOpNode {
 		return extractCheckTypeOpNode(opName, jsonNode)
 	} else {
 		return nil, fmt.Errorf("unknown op %q", opName)
