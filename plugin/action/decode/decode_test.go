@@ -120,11 +120,14 @@ func TestDecode(t *testing.T) {
 				Field:   "log",
 				Decoder: "nginx_error",
 			},
-			input: []byte(`{"level":"error","log":"2022/08/17 10:49:27 [warn] 2725122#2725122: *792412315 lua udp socket read timed out, context: ngx.timer"}`),
+			input: []byte(`{"level":"warn","log":"2022/08/17 10:49:27 [error] 2725122#2725122: *792412315 lua udp socket read timed out, context: ngx.timer"}`),
 			want: map[string]string{
-				"level":   "warn",
+				"level":   "error",
 				"time":    "2022/08/17 10:49:27",
-				"message": "2725122#2725122: *792412315 lua udp socket read timed out, context: ngx.timer",
+				"pid":     "2725122",
+				"tid":     "2725122",
+				"cid":     "792412315",
+				"message": "lua udp socket read timed out, context: ngx.timer",
 			},
 		},
 		{
@@ -134,11 +137,39 @@ func TestDecode(t *testing.T) {
 				Decoder: "nginx_error",
 				Prefix:  "p_",
 			},
-			input: []byte(`{"level":"error","log":"2022/08/17 10:49:27 [warn] 2725122#2725122: *792412315 lua udp socket read timed out, context: ngx.timer"}`),
+			input: []byte(`{"level":"warn","log":"2022/08/17 10:49:27 [error] 2725122#2725122: *792412315 lua udp socket read timed out, context: ngx.timer"}`),
 			want: map[string]string{
-				"p_level":   "warn",
+				"level":     "warn",
+				"p_level":   "error",
 				"p_time":    "2022/08/17 10:49:27",
-				"p_message": "2725122#2725122: *792412315 lua udp socket read timed out, context: ngx.timer",
+				"p_pid":     "2725122",
+				"p_tid":     "2725122",
+				"p_cid":     "792412315",
+				"p_message": "lua udp socket read timed out, context: ngx.timer",
+			},
+		},
+		{
+			name: "nginx_error_with_custom_fields",
+			config: &Config{
+				Field:   "log",
+				Decoder: "nginx_error",
+				Params: map[string]any{
+					"nginx_with_custom_fields": true,
+				},
+			},
+			input: []byte(`{"level":"warn","log":"2022/08/18 09:29:37 [error] 844935#844935: *44934601 upstream timed out (110: Operation timed out), while connecting to upstream, client: 10.125.172.251, server: , request: \"POST /download HTTP/1.1\", upstream: \"http://10.117.246.15:84/download\", host: \"mpm-youtube-downloader-38.name.tldn:84\""}`),
+			want: map[string]string{
+				"level":    "error",
+				"time":     "2022/08/18 09:29:37",
+				"pid":      "844935",
+				"tid":      "844935",
+				"cid":      "44934601",
+				"message":  "upstream timed out (110: Operation timed out), while connecting to upstream",
+				"client":   "10.125.172.251",
+				"server":   "",
+				"request":  "\"POST /download HTTP/1.1\"",
+				"upstream": "\"http://10.117.246.15:84/download\"",
+				"host":     "\"mpm-youtube-downloader-38.name.tldn:84\"",
 			},
 		},
 		{
@@ -213,7 +244,7 @@ func TestDecode(t *testing.T) {
 				for k, v := range tt.want {
 					node := e.Root.Dig(cfg.ParseFieldSelector(k)...)
 					val := ""
-					if v[0] == '[' {
+					if len(v) > 0 && v[0] == '[' {
 						val = node.EncodeToString()
 					} else {
 						val = node.AsString()

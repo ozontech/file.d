@@ -23,9 +23,9 @@ const (
 )
 
 type protobufParams struct {
-	File        string
-	Message     string
-	ImportPaths []string
+	File        string   // required
+	Message     string   // required
+	ImportPaths []string // optional
 }
 
 type ProtobufDecoder struct {
@@ -79,21 +79,29 @@ func (d *ProtobufDecoder) Type() Type {
 	return PROTOBUF
 }
 
-func (d *ProtobufDecoder) Decode(root *insaneJSON.Root, data []byte) error {
+func (d *ProtobufDecoder) DecodeToJson(root *insaneJSON.Root, data []byte) error {
+	msgJson, err := d.Decode(data)
+	if err != nil {
+		return err
+	}
+	_ = root.DecodeBytes(msgJson.([]byte))
+	return nil
+}
+
+func (d *ProtobufDecoder) Decode(data []byte) (any, error) {
 	msg := dynamicpb.NewMessage(d.msgDesc)
 	if err := proto.Unmarshal(data, msg); err != nil {
-		return fmt.Errorf("failed to unmarshal proto: %w", err)
+		return nil, fmt.Errorf("failed to unmarshal proto: %w", err)
 	}
 
 	msgJson, err := protojson.MarshalOptions{
 		EmitDefaultValues: true,
 	}.Marshal(msg)
 	if err != nil {
-		return fmt.Errorf("failed to marshal proto to json: %w", err)
+		return nil, fmt.Errorf("failed to marshal proto to json: %w", err)
 	}
 
-	_ = root.DecodeBytes(msgJson)
-	return nil
+	return msgJson, nil
 }
 
 func extractProtobufParams(params map[string]any) (protobufParams, error) {

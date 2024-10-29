@@ -196,6 +196,12 @@ func New(name string, settings *Settings, registry *prometheus.Registry) *Pipeli
 		pipeline.decoderType = decoder.POSTGRES
 	case "nginx_error":
 		pipeline.decoderType = decoder.NGINX_ERROR
+
+		dec, err := decoder.NewNginxErrorDecoder(pipeline.settings.DecoderParams)
+		if err != nil {
+			pipeline.logger.Fatal("can't create nginx_error decoder", zap.Error(err))
+		}
+		pipeline.decoder = dec
 	case "protobuf":
 		pipeline.decoderType = decoder.PROTOBUF
 
@@ -452,9 +458,9 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 	case decoder.POSTGRES:
 		err = decoder.DecodePostgresToJson(event.Root, bytes)
 	case decoder.NGINX_ERROR:
-		err = decoder.DecodeNginxErrorToJson(event.Root, bytes)
+		err = p.decoder.DecodeToJson(event.Root, bytes)
 	case decoder.PROTOBUF:
-		err = p.decoder.Decode(event.Root, bytes)
+		err = p.decoder.DecodeToJson(event.Root, bytes)
 	default:
 		p.logger.Panic("unknown decoder", zap.Int("decoder", int(dec)))
 	}
