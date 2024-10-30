@@ -337,7 +337,8 @@ func (p *eventPool) wakeupWaiters() {
 			return
 		}
 
-		time.Sleep(5 * time.Second)
+		const wakeupInterval = 5 * time.Second
+		time.Sleep(wakeupInterval)
 		waiters := p.slowWaiters.Load()
 		eventsAvailable := p.inUseEvents.Load() < int64(p.capacity)
 		if waiters > 0 && eventsAvailable {
