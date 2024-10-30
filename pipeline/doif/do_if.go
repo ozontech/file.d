@@ -21,6 +21,9 @@ const (
 	// > Type of node where matching rules for timestamps are stored.
 	NodeTimestampCmpOp // *
 
+	// > Type of node where matching rules for check types are stored.
+	NodeCheckTypeOp // *
+
 	// > Type of node where logical rules for applying other rules are stored.
 	NodeLogicalOp // *
 )
