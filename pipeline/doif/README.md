@@ -409,7 +409,7 @@ DoIf check type op node checks whether the type of the field node is the one fro
 Params:
   - `op` - for that node the value is `check_type`
   - `field` - path to JSON node, can be empty string meaning root node, can be nested field `field.subfield` (if the field consists of `.` in the name, it must be shielded e.g. `exception\.type`)
-  - `values` - list of types to check against. Allowed values are `obj`, `arr`, `number` (both ints or floats), `string`, `null`, `nil` (for the abscent fields).
+  - `values` - list of types to check against. Allowed values are `object` (or `obj`), `array` (or `arr`), `number` (or `num`, matches both ints or floats), `string` (or `str`), `null`, `nil` (for the abscent fields). Values are deduplicated with respect to aliases on initialization to prevent redundant checks.
 
 Example:
 
