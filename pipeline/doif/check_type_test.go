@@ -219,3 +219,156 @@ func TestCheckType(t *testing.T) {
 		})
 	}
 }
+
+func TestCheckTypeDuplicateValues(t *testing.T) {
+	t.Parallel()
+
+	logsMap := map[checkTypeVal]string{
+		checkTypeObj:    `{"log":{"sublog":"test"}}`,
+		checkTypeArr:    `{"log":[{"sublog":"test"}]}`,
+		checkTypeNumber: `{"log":123}`,
+		checkTypeString: `{"log":"test"}`,
+		checkTypeNull:   `{"log":null}`,
+		checkTypeNil:    `{"notlog":"test"}`,
+	}
+
+	type argsResp struct {
+		checkType checkTypeVal
+		want      bool
+	}
+
+	tests := []struct {
+		name         string
+		node         testCheckTypeNode
+		expectedVals int
+		data         []argsResp
+	}{
+		{
+			name: "ok_multi_same_dup",
+			node: testCheckTypeNode{
+				field: "log",
+				values: [][]byte{
+					[]byte("obj"), []byte("obj"), []byte("obj"), []byte("obj"), []byte("obj"), []byte("obj"),
+				},
+			},
+			expectedVals: 1,
+			data: []argsResp{
+				{checkType: checkTypeObj, want: true},
+				{checkType: checkTypeArr, want: false},
+				{checkType: checkTypeNumber, want: false},
+				{checkType: checkTypeString, want: false},
+				{checkType: checkTypeNull, want: false},
+				{checkType: checkTypeNil, want: false},
+			},
+		},
+		{
+			name: "ok_dup_obj_alias",
+			node: testCheckTypeNode{
+				field: "log",
+				values: [][]byte{
+					[]byte("object"), []byte("obj"),
+				},
+			},
+			expectedVals: 1,
+			data: []argsResp{
+				{checkType: checkTypeObj, want: true},
+				{checkType: checkTypeArr, want: false},
+				{checkType: checkTypeNumber, want: false},
+				{checkType: checkTypeString, want: false},
+				{checkType: checkTypeNull, want: false},
+				{checkType: checkTypeNil, want: false},
+			},
+		},
+		{
+			name: "ok_dup_arr_alias",
+			node: testCheckTypeNode{
+				field: "log",
+				values: [][]byte{
+					[]byte("array"), []byte("arr"),
+				},
+			},
+			expectedVals: 1,
+			data: []argsResp{
+				{checkType: checkTypeObj, want: false},
+				{checkType: checkTypeArr, want: true},
+				{checkType: checkTypeNumber, want: false},
+				{checkType: checkTypeString, want: false},
+				{checkType: checkTypeNull, want: false},
+				{checkType: checkTypeNil, want: false},
+			},
+		},
+		{
+			name: "ok_dup_number_alias",
+			node: testCheckTypeNode{
+				field: "log",
+				values: [][]byte{
+					[]byte("num"), []byte("number"),
+				},
+			},
+			expectedVals: 1,
+			data: []argsResp{
+				{checkType: checkTypeObj, want: false},
+				{checkType: checkTypeArr, want: false},
+				{checkType: checkTypeNumber, want: true},
+				{checkType: checkTypeString, want: false},
+				{checkType: checkTypeNull, want: false},
+				{checkType: checkTypeNil, want: false},
+			},
+		},
+		{
+			name: "ok_dup_str_alias",
+			node: testCheckTypeNode{
+				field: "log",
+				values: [][]byte{
+					[]byte("str"), []byte("string"),
+				},
+			},
+			expectedVals: 1,
+			data: []argsResp{
+				{checkType: checkTypeObj, want: false},
+				{checkType: checkTypeArr, want: false},
+				{checkType: checkTypeNumber, want: false},
+				{checkType: checkTypeString, want: true},
+				{checkType: checkTypeNull, want: false},
+				{checkType: checkTypeNil, want: false},
+			},
+		},
+		{
+			name: "ok_multi_dup_with_alias",
+			node: testCheckTypeNode{
+				field: "log",
+				values: [][]byte{
+					[]byte("null"), []byte("nil"), []byte("null"), []byte("nil"), []byte("obj"), []byte("object"),
+				},
+			},
+			expectedVals: 3,
+			data: []argsResp{
+				{checkType: checkTypeObj, want: true},
+				{checkType: checkTypeArr, want: false},
+				{checkType: checkTypeNumber, want: false},
+				{checkType: checkTypeString, want: false},
+				{checkType: checkTypeNull, want: true},
+				{checkType: checkTypeNil, want: true},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			node, err := NewCheckTypeOpNode(tt.node.field, tt.node.values)
+			require.NoError(t, err, "must be no error on NewCheckTypeOpNode")
+			ctnode, ok := node.(*checkTypeOpNode)
+			require.True(t, ok, "must be *checkTypeOpNode type")
+			assert.Equal(t, tt.expectedVals, len(ctnode.checkTypeFns))
+			for i, d := range tt.data {
+				eventStr := logsMap[d.checkType]
+				eventRoot, err := insaneJSON.DecodeString(eventStr)
+				require.NoError(t, err, "must be no error on decode checkEvent")
+				got := ctnode.Check(eventRoot)
+				assert.Equal(t, d.want, got, "invalid result for check %d of type %q", i, d.checkType)
+			}
+		})
+	}
+}

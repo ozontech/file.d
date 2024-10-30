@@ -1,7 +1,6 @@
 package doif
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"slices"
@@ -16,7 +15,7 @@ DoIf check type op node checks whether the type of the field node is the one fro
 Params:
   - `op` - for that node the value is `check_type`
   - `field` - path to JSON node, can be empty string meaning root node, can be nested field `field.subfield` (if the field consists of `.` in the name, it must be shielded e.g. `exception\.type`)
-  - `values` - list of types to check against. Allowed values are `obj`, `arr`, `number` (both ints or floats), `string`, `null`, `nil` (for the abscent fields).
+  - `values` - list of types to check against. Allowed values are `object` (or `obj`), `array` (or `arr`), `number` (or `num`, matches both ints or floats), `string` (or `str`), `null`, `nil` (for the abscent fields). Values are deduplicated with respect to aliases on initialization to prevent redundant checks.
 
 Example:
 
@@ -41,14 +40,36 @@ result:
 ```
 }*/
 
-var (
-	checkTypeObjTag    = []byte("obj")
-	checkTypeArrTag    = []byte("arr")
-	checkTypeNumberTag = []byte("number")
-	checkTypeStringTag = []byte("string")
-	checkTypeNullTag   = []byte("null")
-	checkTypeNilTag    = []byte("nil")
+type checkTypeVal int
+
+const (
+	checkTypeUnknown checkTypeVal = iota
+	checkTypeObj
+	checkTypeArr
+	checkTypeNumber
+	checkTypeString
+	checkTypeNull
+	checkTypeNil
 )
+
+func (t checkTypeVal) String() string {
+	switch t {
+	case checkTypeObj:
+		return "object"
+	case checkTypeArr:
+		return "array"
+	case checkTypeNumber:
+		return "number"
+	case checkTypeString:
+		return "string"
+	case checkTypeNull:
+		return "null"
+	case checkTypeNil:
+		return "nil"
+	default:
+		return "unknown" // nolint:goconst
+	}
+}
 
 type checkTypeFn func(*insaneJSON.Node) bool
 
@@ -63,30 +84,55 @@ func NewCheckTypeOpNode(field string, values [][]byte) (Node, error) {
 		return nil, errors.New("values are not provided")
 	}
 	fieldPath := cfg.ParseFieldSelector(field)
+	usedTypesMap := make(map[checkTypeVal]struct{})
 	checkTypeFns := make([]checkTypeFn, 0)
 	for _, val := range values {
-		switch {
-		case bytes.Equal(val, checkTypeObjTag):
+		switch string(val) {
+		case "obj", "object":
+			if _, ok := usedTypesMap[checkTypeObj]; ok {
+				break
+			}
+			usedTypesMap[checkTypeObj] = struct{}{}
 			checkTypeFns = append(checkTypeFns, func(n *insaneJSON.Node) bool {
 				return n.IsObject()
 			})
-		case bytes.Equal(val, checkTypeArrTag):
+		case "arr", "array":
+			if _, ok := usedTypesMap[checkTypeArr]; ok {
+				break
+			}
+			usedTypesMap[checkTypeArr] = struct{}{}
 			checkTypeFns = append(checkTypeFns, func(n *insaneJSON.Node) bool {
 				return n.IsArray()
 			})
-		case bytes.Equal(val, checkTypeNumberTag):
+		case "num", "number":
+			if _, ok := usedTypesMap[checkTypeNumber]; ok {
+				break
+			}
+			usedTypesMap[checkTypeNumber] = struct{}{}
 			checkTypeFns = append(checkTypeFns, func(n *insaneJSON.Node) bool {
 				return n.IsNumber()
 			})
-		case bytes.Equal(val, checkTypeStringTag):
+		case "str", "string":
+			if _, ok := usedTypesMap[checkTypeString]; ok {
+				break
+			}
+			usedTypesMap[checkTypeString] = struct{}{}
 			checkTypeFns = append(checkTypeFns, func(n *insaneJSON.Node) bool {
 				return n.IsString()
 			})
-		case bytes.Equal(val, checkTypeNullTag):
+		case "null":
+			if _, ok := usedTypesMap[checkTypeNull]; ok {
+				break
+			}
+			usedTypesMap[checkTypeNull] = struct{}{}
 			checkTypeFns = append(checkTypeFns, func(n *insaneJSON.Node) bool {
 				return n.IsNull()
 			})
-		case bytes.Equal(val, checkTypeNilTag):
+		case "nil":
+			if _, ok := usedTypesMap[checkTypeNil]; ok {
+				break
+			}
+			usedTypesMap[checkTypeNil] = struct{}{}
 			checkTypeFns = append(checkTypeFns, func(n *insaneJSON.Node) bool {
 				return n.IsNil()
 			})
