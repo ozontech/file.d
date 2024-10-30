@@ -11,8 +11,9 @@ import (
 )
 
 type worker struct {
-	maxEventSize  int
-	metaTemplater *metadata.MetaTemplater
+	maxEventSize       int
+	cutOffEventByLimit bool
+	metaTemplater      *metadata.MetaTemplater
 }
 
 type inputer interface {
@@ -93,10 +94,15 @@ func (w *worker) work(controller inputer, jobProvider *jobProvider, readBufferSi
 
 				scanned += pos + 1
 
+				cutOff := false
 				// check if the event fits into the max size, otherwise skip the event
 				if shouldCheckMax && len(accumBuf)+len(line) > w.maxEventSize {
 					controller.IncMaxEventSizeExceeded()
-					skipLine = true
+					if w.cutOffEventByLimit {
+						cutOff = true
+					} else {
+						skipLine = true
+					}
 				}
 
 				// skip first event because file may be opened while event isn't completely written.
@@ -109,6 +115,10 @@ func (w *worker) work(controller inputer, jobProvider *jobProvider, readBufferSi
 					if len(accumBuf) != 0 {
 						accumBuf = append(accumBuf, line...)
 						inBuf = accumBuf
+					}
+
+					if cutOff {
+						inBuf = inBuf[:w.maxEventSize]
 					}
 
 					var metadataInfo metadata.MetaData
@@ -133,7 +143,10 @@ func (w *worker) work(controller inputer, jobProvider *jobProvider, readBufferSi
 
 			// check the buffer size and limits to avoid OOM if event is long
 			if shouldCheckMax && len(accumBuf) > w.maxEventSize {
-				continue
+				if !w.cutOffEventByLimit {
+					continue
+				}
+				accumBuf = accumBuf[:w.maxEventSize]
 			}
 			accumBuf = append(accumBuf, buf...)
 		}

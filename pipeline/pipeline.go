@@ -24,10 +24,15 @@ import (
 )
 
 const (
+	DefaultAntispamThreshold   = 0
+	DefaultAntispamField       = ""
+	DefaultDecoder             = "auto"
+	DefaultIsStrict            = false
 	DefaultStreamField         = "stream"
 	DefaultCapacity            = 1024
 	DefaultAvgInputEventSize   = 4 * 1024
 	DefaultMaxInputEventSize   = 0
+	DefaultCutOffEventByLimit  = false
 	DefaultJSONNodePoolSize    = 1024
 	DefaultMaintenanceInterval = time.Second * 5
 	DefaultEventTimeout        = time.Second * 30
@@ -137,6 +142,7 @@ type Settings struct {
 	AntispamExceptions  antispam.Exceptions
 	AvgEventSize        int
 	MaxEventSize        int
+	CutOffEventByLimit  bool
 	StreamField         string
 	IsStrict            bool
 	MetricHoldDuration  time.Duration

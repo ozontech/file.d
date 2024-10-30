@@ -17,16 +17,17 @@ import (
 
 func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 	capacity := pipeline.DefaultCapacity
-	antispamThreshold := 0
-	antispamField := ""
+	antispamThreshold := pipeline.DefaultAntispamThreshold
+	antispamField := pipeline.DefaultAntispamField
 	var antispamExceptions antispam.Exceptions
 	avgInputEventSize := pipeline.DefaultAvgInputEventSize
 	maxInputEventSize := pipeline.DefaultMaxInputEventSize
+	cutOffEventByLimit := pipeline.DefaultCutOffEventByLimit
 	streamField := pipeline.DefaultStreamField
 	maintenanceInterval := pipeline.DefaultMaintenanceInterval
-	decoder := "auto"
+	decoder := pipeline.DefaultDecoder
 	decoderParams := make(map[string]any)
-	isStrict := false
+	isStrict := pipeline.DefaultIsStrict
 	eventTimeout := pipeline.DefaultEventTimeout
 	metricHoldDuration := pipeline.DefaultMetricHoldDuration
 
@@ -45,6 +46,8 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 		if val != 0 {
 			maxInputEventSize = val
 		}
+
+		cutOffEventByLimit = settings.Get("cut_off_event_by_limit").MustBool()
 
 		str := settings.Get("decoder").MustString()
 		if str != "" {
@@ -110,6 +113,7 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 		Capacity:            capacity,
 		AvgEventSize:        avgInputEventSize,
 		MaxEventSize:        maxInputEventSize,
+		CutOffEventByLimit:  cutOffEventByLimit,
 		AntispamThreshold:   antispamThreshold,
 		AntispamField:       antispamField,
 		AntispamExceptions:  antispamExceptions,
