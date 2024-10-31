@@ -22,13 +22,14 @@ type Consumer interface {
 }
 
 type splitConsume struct {
-	consumers           map[tp]*pconsumer
-	bufferSize          int
-	idByTopic           map[string]int
-	controller          pipeline.InputPluginController
-	logger              *zap.Logger
-	metaTemplater       *metadata.MetaTemplater
-	consumeErrorsMetric prometheus.Counter
+	consumers              map[tp]*pconsumer
+	bufferSize             int
+	maxConcurrentConsumers int
+	idByTopic              map[string]int
+	controller             pipeline.InputPluginController
+	logger                 *zap.Logger
+	metaTemplater          *metadata.MetaTemplater
+	consumeErrorsMetric    prometheus.Counter
 }
 
 func (s *splitConsume) Assigned(_ context.Context, _ *kgo.Client, assigned map[string][]int32) {
@@ -41,7 +42,7 @@ func (s *splitConsume) Assigned(_ context.Context, _ *kgo.Client, assigned map[s
 
 				quit:    make(chan struct{}),
 				done:    make(chan struct{}),
-				fetches: make(chan kgo.FetchTopicPartition, 5),
+				fetches: make(chan kgo.FetchTopicPartition, s.maxConcurrentConsumers),
 
 				controller:    s.controller,
 				logger:        s.logger,
