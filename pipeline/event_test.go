@@ -166,11 +166,14 @@ func TestLowMemPoolSlowWait(t *testing.T) {
 		r.Equal(int64(0), p.inUse())
 	}
 
+	t.Run("eventPool", func(t *testing.T) {
+		pool := newEventPool(1, DefaultAvgInputEventSize)
+		test(pool)
+	})
 	t.Run("lowMemory", func(t *testing.T) {
 		pool := newLowMemoryEventPool(1)
 		test(pool)
 	})
-	// TODO: add test for eventPool after #685.
 }
 
 func TestSlowPath(t *testing.T) {
@@ -186,7 +189,7 @@ func TestSlowPath(t *testing.T) {
 		for i := 0; i < concurrency; i++ {
 			go func() {
 				defer wg.Done()
-				e := pool.get()
+				e := pool.get(1)
 				runtime.Gosched()
 				pool.back(e)
 			}()

@@ -211,9 +211,13 @@ type eventPool struct {
 	slowWaiters      *atomic.Int64
 }
 
-func (p *eventPool) stop() {}
+func (p *eventPool) stop() {
+	p.stopped.Store(true)
+}
 
-func (p *eventPool) waiters() int64 { return 0 }
+func (p *eventPool) waiters() int64 {
+	return p.slowWaiters.Load()
+}
 
 func newEventPool(capacity, avgEventSize int) *eventPool {
 	eventPool := &eventPool{
@@ -330,10 +334,6 @@ func (p *eventPool) wakeupWaiters() {
 			p.getCond.Broadcast()
 		}
 	}
-}
-
-func (p *eventPool) stop() {
-	p.stopped.Store(true)
 }
 
 func (p *eventPool) dump() string {
