@@ -98,6 +98,12 @@ type Config struct {
 	ChannelBufferSize int `json:"channel_buffer_size" default:"256"` // *
 
 	// > @3@4@5@6
+	// > MaxConcurrentConsumers sets the maximum number of consumers
+	// > Optimal value: number of topics * number of partitions of topic
+	// >
+	MaxConcurrentConsumers int `json:"max_concurrent_consumers" default:"5"` // *
+
+	// > @3@4@5@6
 	// >
 	// > MaxConcurrentFetches sets the maximum number of fetch requests to allow in
 	// > flight or buffered at once, overriding the unbounded (i.e. number of
@@ -281,13 +287,14 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	ctx, cancel := context.WithCancel(context.Background())
 	p.cancel = cancel
 	p.s = &splitConsume{
-		consumers:           make(map[tp]*pconsumer),
-		bufferSize:          p.config.ChannelBufferSize,
-		idByTopic:           p.idByTopic,
-		controller:          p.controller,
-		logger:              p.logger.Desugar(),
-		metaTemplater:       p.metaTemplater,
-		consumeErrorsMetric: p.consumeErrorsMetric,
+		consumers:              make(map[tp]*pconsumer),
+		bufferSize:             p.config.ChannelBufferSize,
+		maxConcurrentConsumers: p.config.MaxConcurrentConsumers,
+		idByTopic:              p.idByTopic,
+		controller:             p.controller,
+		logger:                 p.logger.Desugar(),
+		metaTemplater:          p.metaTemplater,
+		consumeErrorsMetric:    p.consumeErrorsMetric,
 	}
 	p.client = NewClient(p.config, p.logger.Desugar(), p.s)
 	p.controller.UseSpread()

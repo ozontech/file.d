@@ -59,6 +59,13 @@ The number of unprocessed messages in the buffer that are loaded in the backgrou
 
 <br>
 
+**`max_concurrent_consumers`** *`int`* *`default=5`* 
+MaxConcurrentConsumers sets the maximum number of consumers
+Optimal value: number of topics * number of partitions of topic
+
+
+<br>
+
 **`max_concurrent_fetches`** *`int`* *`default=0`* 
 
 MaxConcurrentFetches sets the maximum number of fetch requests to allow in

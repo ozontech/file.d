@@ -59,6 +59,8 @@ type doIfTreeNode struct {
 	tsCmpValue         time.Time
 	tsCmpValueShift    time.Duration
 	tsUpdateInterval   time.Duration
+
+	checkTypeOp bool
 }
 
 // nolint:gocritic
@@ -95,6 +97,11 @@ func buildDoIfTree(node *doIfTreeNode) (doif.Node, error) {
 			node.tsCmpValue,
 			node.tsCmpValueShift,
 			node.tsUpdateInterval,
+		)
+	case node.checkTypeOp:
+		return doif.NewCheckTypeOpNode(
+			node.fieldName,
+			node.values,
 		)
 	default:
 		return nil, errors.New("unknown type of node")
@@ -322,6 +329,24 @@ func Test_extractDoIfChecker(t *testing.T) {
 			},
 		},
 		{
+			name: "ok_check_type",
+			args: args{
+				cfgStr: `{
+					"op": "check_type",
+					"field": "log",
+					"values": ["obj","arr"]
+				}`,
+			},
+			want: &doIfTreeNode{
+				checkTypeOp: true,
+				fieldName:   "log",
+				values: [][]byte{
+					[]byte("obj"),
+					[]byte("arr"),
+				},
+			},
+		},
+		{
 			name: "ok_single_val",
 			args: args{
 				cfgStr: `{
@@ -532,6 +557,38 @@ func Test_extractDoIfChecker(t *testing.T) {
 					"value": "2009-11-10T23:00:00Z",
 					"format": "2006-01-02T15:04:05.999999999Z07:00",
 					"update_interval": "qwe"}`,
+			},
+			wantErr: true,
+		},
+		{
+			name: "error_check_type_op_empty_values",
+			args: args{
+				cfgStr: `{
+					"op": "check_type",
+					"field": "log",
+					"values": []
+				}`,
+			},
+			wantErr: true,
+		},
+		{
+			name: "error_check_type_op_invalid_value",
+			args: args{
+				cfgStr: `{
+					"op": "check_type",
+					"field": "log",
+					"values": ["uknown_type"]
+				}`,
+			},
+			wantErr: true,
+		},
+		{
+			name: "error_check_type_op_no_field",
+			args: args{
+				cfgStr: `{
+					"op": "check_type",
+					"values": ["obj"]
+				}`,
 			},
 			wantErr: true,
 		},
