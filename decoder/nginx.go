@@ -127,15 +127,17 @@ func (d *NginxErrorDecoder) Decode(data []byte) (any, error) {
 		return row, errors.New("incorrect log pid#tid format")
 	}
 
-	if len(data) > split[3]+1 {
-		if len(split) > 4 && data[split[3]+1] == '*' {
-			row.CID = data[split[3]+2 : split[4]]
-			if len(data) > split[4]+1 {
-				row.Message, row.CustomFields = d.extractCustomFields(data[split[4]+1:])
-			}
-		} else {
-			row.Message, row.CustomFields = d.extractCustomFields(data[split[3]+1:])
+	if len(data) <= split[3]+1 {
+		return row, nil
+	}
+
+	if len(split) > 4 && data[split[3]+1] == '*' {
+		row.CID = data[split[3]+2 : split[4]]
+		if len(data) > split[4]+1 {
+			row.Message, row.CustomFields = d.extractCustomFields(data[split[4]+1:])
 		}
+	} else {
+		row.Message, row.CustomFields = d.extractCustomFields(data[split[3]+1:])
 	}
 
 	return row, nil
