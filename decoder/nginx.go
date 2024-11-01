@@ -155,9 +155,9 @@ func (d *NginxErrorDecoder) Decode(data []byte) (any, error) {
 //	fields:
 //		"client": "10.125.172.251"
 //		"server": ""
-//		"request": "\"POST /download HTTP/1.1\""
-//		"upstream": "\"http://10.117.246.15:84/download\""
-//		"host": "\"mpm-youtube-downloader-38.name.tldn:84\""
+//		"request": "POST /download HTTP/1.1"
+//		"upstream": "http://10.117.246.15:84/download"
+//		"host": "mpm-youtube-downloader-38.name.tldn:84"
 func (d *NginxErrorDecoder) extractCustomFields(data []byte) ([]byte, map[string][]byte) {
 	if !d.params.WithCustomFields {
 		return data, nil
@@ -184,7 +184,11 @@ func (d *NginxErrorDecoder) extractCustomFields(data []byte) ([]byte, map[string
 			break
 		}
 
-		fields[string(key)] = field[idx+2:]
+		value := field[idx+2:]
+		if len(value) > 0 {
+			value = bytes.Trim(value, `"`)
+		}
+		fields[string(key)] = value
 		data = data[:sepIdx]
 	}
 

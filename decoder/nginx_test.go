@@ -77,9 +77,9 @@ func TestNginxError(t *testing.T) {
 				CustomFields: map[string][]byte{
 					"client":   []byte("10.125.172.251"),
 					"server":   []byte(""),
-					"request":  []byte(`"POST /download HTTP/1.1"`),
-					"upstream": []byte(`"http://10.117.246.15:84/download"`),
-					"host":     []byte(`"mpm-youtube-downloader-38.name.tldn:84"`),
+					"request":  []byte("POST /download HTTP/1.1"),
+					"upstream": []byte("http://10.117.246.15:84/download"),
+					"host":     []byte("mpm-youtube-downloader-38.name.tldn:84"),
 				},
 			},
 		},
