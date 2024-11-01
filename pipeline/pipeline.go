@@ -339,6 +339,8 @@ func (p *Pipeline) Stop() {
 	p.output.Stop()
 
 	p.shouldStop.Store(true)
+
+	p.eventPool.stop()
 }
 
 func (p *Pipeline) SetInput(info *InputPluginInfo) {
@@ -449,6 +451,7 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 	switch dec {
 	case decoder.JSON:
 		err = decoder.DecodeJson(event.Root, bytes)
+		err = decoder.DecodeJson(event.Root, bytes)
 	case decoder.RAW:
 		event.Root.AddFieldNoAlloc(event.Root, "message").MutateToBytesCopy(event.Root, bytes[:len(bytes)-1])
 	case decoder.CRI:
@@ -456,6 +459,7 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 		event.Root.AddFieldNoAlloc(event.Root, "time").MutateToBytesCopy(event.Root, row.Time)
 		event.Root.AddFieldNoAlloc(event.Root, "stream").MutateToBytesCopy(event.Root, row.Stream)
 	case decoder.POSTGRES:
+		err = decoder.DecodePostgresToJson(event.Root, bytes)
 		err = decoder.DecodePostgresToJson(event.Root, bytes)
 	case decoder.NGINX_ERROR:
 		err = p.decoder.DecodeToJson(event.Root, bytes)
@@ -477,7 +481,16 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 			zap.Uint64("source", uint64(sourceID)),
 			zap.String("source_name", sourceName),
 			zap.ByteString("log", bytes))
+		p.logger.Log(level, "wrong log format", zap.Error(err),
+			zap.Int64("offset", offset),
+			zap.Int("length", length),
+			zap.Uint64("source", uint64(sourceID)),
+			zap.String("source_name", sourceName),
+			zap.ByteString("log", bytes))
 
+		// Can't process event, return to pool.
+		p.eventPool.back(event)
+		return EventSeqIDError
 		// Can't process event, return to pool.
 		p.eventPool.back(event)
 		return EventSeqIDError
