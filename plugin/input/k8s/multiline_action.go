@@ -103,10 +103,6 @@ func (p *MultilineAction) Do(event *pipeline.Event) pipeline.ActionResult {
 		p.logger.Warnf("too long k8s event found, it'll be split, ns=%s pod=%s container=%s consider increase split_event_size, split_event_size=%d, predicted event size=%d", ns, pod, container, p.config.SplitEventSize, predictedLen)
 	}
 
-	event.Root.AddFieldNoAlloc(event.Root, "k8s_namespace").MutateToString(string(ns))
-	event.Root.AddFieldNoAlloc(event.Root, "k8s_pod").MutateToString(string(pod))
-	event.Root.AddFieldNoAlloc(event.Root, "k8s_container").MutateToString(string(container))
-
 	if success {
 		if ns != namespace(podMeta.Namespace) {
 			p.logger.Panicf("k8s plugin inconsistency: source=%s, file namespace=%s, meta namespace=%s, event=%s", event.SourceName, ns, podMeta.Namespace, event.Root.EncodeToString())

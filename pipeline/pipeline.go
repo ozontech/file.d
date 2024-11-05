@@ -399,14 +399,18 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 			p.Error(fmt.Sprintf("wrong cri format offset=%d, length=%d, err=%s, source=%d:%s, cri=%s", offset, length, err.Error(), sourceID, sourceName, bytes))
 			return EventSeqIDError
 		}
-		if p.metaTemplater != nil {
-			metadataInfo, err := p.metaTemplater.Render(decoder.NewCRIMetaInformation(sourceName))
-			if err != nil {
-				p.Error(fmt.Sprintf("can't render meta data: %s", err.Error()))
-			}
-			for k := range metadataInfo {
-				meta[k] = metadataInfo[k]
-			}
+	}
+
+	if p.metaTemplater != nil {
+		metadataInfo, err := p.metaTemplater.Render(decoder.NewCRIMetaInformation(sourceName))
+		if err != nil {
+			p.Error(fmt.Sprintf("can't render meta data: %s", err.Error()))
+		}
+		if meta == nil {
+			meta = metadata.MetaData{}
+		}
+		for k := range metadataInfo {
+			meta[k] = metadataInfo[k]
 		}
 	}
 

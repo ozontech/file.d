@@ -10,10 +10,40 @@ import (
 
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/plugin/output/devnull"
 	"github.com/ozontech/file.d/test"
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 )
+
+func setInput(p *pipeline.Pipeline, config *Config) {
+	plugin, _ := Factory()
+
+	p.SetInput(&pipeline.InputPluginInfo{
+		PluginStaticInfo: &pipeline.PluginStaticInfo{
+			Config: config,
+		},
+		PluginRuntimeInfo: &pipeline.PluginRuntimeInfo{
+			Plugin: plugin,
+		},
+	})
+}
+
+func setOutput(p *pipeline.Pipeline, out func(event *pipeline.Event)) {
+	plugin, config := devnull.Factory()
+	outputPlugin := plugin.(*devnull.Plugin)
+
+	p.SetOutput(&pipeline.OutputPluginInfo{
+		PluginStaticInfo: &pipeline.PluginStaticInfo{
+			Config: config,
+		},
+		PluginRuntimeInfo: &pipeline.PluginRuntimeInfo{
+			Plugin: outputPlugin,
+		},
+	})
+
+	outputPlugin.SetOutFn(out)
+}
 
 func TestMain(m *testing.M) {
 	// we are going to do work fucking fast
@@ -53,54 +83,12 @@ func getPodInfo(item *metaItem, isWhite bool) *corev1.Pod {
 }
 
 func config() *Config {
-	config := &Config{AllowedPodLabels: []string{"allowed_label"}, OffsetsFile: "offsets.yaml"}
+	config := &Config{
+		AllowedPodLabels: []string{"allowed_label"},
+		OffsetsFile:      "offsets.yaml",
+	}
 	test.NewConfig(config, map[string]int{"gomaxprocs": 1})
 	return config
-}
-
-func TestEnrichment(t *testing.T) {
-	nodeLabels = map[string]string{"zone": "z34"}
-	p, input, _ := test.NewPipelineMock(test.NewActionPluginStaticInfo(MultilineActionFactory, config(), pipeline.MatchModeAnd, nil, false))
-	wg := &sync.WaitGroup{}
-	wg.Add(1)
-
-	item := &metaItem{
-		namespace:     "sre",
-		podName:       "advanced-logs-checker-1566485760-trtrq",
-		containerName: "duty-bot",
-		containerID:   "4e0301b633eaa2bfdcafdeba59ba0c72a3815911a6a820bf273534b0f32d98e0",
-	}
-	podInfo := getPodInfo(item, true)
-	putMeta(podInfo)
-	selfNodeName = "node_1"
-
-	var (
-		k8sPod           string
-		k8sNamespace     string
-		k8sContainer     string
-		k8sNode          string
-		k8sNodeLabelZone string
-	)
-	input.SetCommitFn(func(e *pipeline.Event) {
-		k8sPod = strings.Clone(e.Root.Dig("k8s_pod").AsString())
-		k8sNamespace = strings.Clone(e.Root.Dig("k8s_namespace").AsString())
-		k8sContainer = strings.Clone(e.Root.Dig("k8s_container").AsString())
-		k8sNode = strings.Clone(e.Root.Dig("k8s_node").AsString())
-		k8sNodeLabelZone = strings.Clone(e.Root.Dig("k8s_node_label_zone").AsString())
-		wg.Done()
-	})
-
-	filename := getLogFilename("/k8s-logs", item)
-	input.In(0, filename, 0, []byte(`{"time":"time","log":"log\n"}`))
-
-	wg.Wait()
-	p.Stop()
-
-	assert.Equal(t, "advanced-logs-checker-1566485760-trtrq", k8sPod, "wrong event field")
-	assert.Equal(t, "sre", k8sNamespace, "wrong event field")
-	assert.Equal(t, "duty-bot", k8sContainer, "wrong event field")
-	assert.Equal(t, "node_1", k8sNode, "wrong event field")
-	assert.Equal(t, "z34", k8sNodeLabelZone, "wrong event field")
 }
 
 func TestAllowedLabels(t *testing.T) {

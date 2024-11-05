@@ -257,6 +257,6 @@ func wrapLogContent(s string) string {
 
 func wrapK8sInfo(s string, item *metaItem) string {
 	return fmt.Sprintf(
-		`{"log":"%s","k8s_node":"%s","k8s_namespace":"%s","k8s_pod":"%s","k8s_container":"%s","k8s_pod_label_allowed_label":"allowed_value","k8s_node_label_zone":"z34"}`,
-		s, item.nodeName, item.namespace, item.podName, item.containerName)
+		`{"log":"%s","k8s_node":"%s","k8s_pod_label_allowed_label":"allowed_value","k8s_node_label_zone":"z34"}`,
+		s, item.nodeName)
 }
