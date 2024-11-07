@@ -72,7 +72,7 @@ func parseTrimFilter(data string, offset int) (FieldFilter, int, error) {
 	if err != nil {
 		return nil, filterEndPos, fmt.Errorf("failed to parse filter args: %w", err)
 	}
-	filterEndPos = argsEndPos + len(regexFilterPrefix) + offset
+	filterEndPos = argsEndPos + len(trimFilterPrefix) + offset
 	if len(args) != expArgsCnt {
 		return nil, filterEndPos, fmt.Errorf("invalid args for trim filter, exptected %d, got %d", expArgsCnt, len(args))
 	}
@@ -84,7 +84,7 @@ func parseTrimFilter(data string, offset int) (FieldFilter, int, error) {
 	}
 	mode, err = trimModeFromString(modeStr)
 	if err != nil {
-		return nil, filterEndPos, fmt.Errorf("invalid trim mode provided %q, allowed modes are \"all\", \"left\", \"right\"", args[0])
+		return nil, filterEndPos, err
 	}
 	if err := json.Unmarshal([]byte(args[1]), &cutset); err != nil {
 		return nil, filterEndPos, fmt.Errorf("failed to parse trim filter cutset: %w", err)
