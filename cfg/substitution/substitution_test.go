@@ -430,15 +430,9 @@ func TestFilterApply(t *testing.T) {
 			want:         `"quoted"`,
 		},
 		{
-			name:         "ok_single_trim_to_filter_trim_left",
-			substitution: `${field|trim_to("left","{")}`,
-			data:         `some data {"message":"test"}`,
-			want:         `{"message":"test"}`,
-		},
-		{
-			name:         "ok_single_trim_to_filter_trim_right",
-			substitution: `${field|trim_to("right","}")}`,
-			data:         `{"message":"test"} some data`,
+			name:         "ok_two_trim_to_filters",
+			substitution: `${field|trim_to("left","{")|trim_to("right","}")}`,
+			data:         `some data {"message":"test"} some data`,
 			want:         `{"message":"test"}`,
 		},
 	}
