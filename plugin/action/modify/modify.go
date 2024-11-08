@@ -38,9 +38,9 @@ The resulting event could look like:
     "value": 666
   }
 ```
+}*/
 
-**Filters**
-
+/*{ filters
 Sometimes it is required to extract certain data from fields and for that purpose filter chains were added.
 Filters are added one after another using pipe '|' symbol and they are applied to the last value in the chain.
 
@@ -59,47 +59,58 @@ Optional flag `emptyOnNotMatched` allows to returns empty string if no matches o
 + `trim filter` - `trim(mode string, cutset string)`, trims data by the `cutset` substring. Available modes are `all` - trim both sides,
 `left` - trim only left, `right` - trim only right.
 
-Examples:
++ `trim-to filter` - `trim_to(mode string, cutset string)`, trims data to `cutset` substring. Available modes are `all` - trim both sides,
+`left` - trim only left, `right` - trim only right.
 
-Example #1:
+### Examples
 
-Data: `{"message:"info: something happened"}`
+**Example re #1**
+
+Data: `{"message":"info: something happened"}`
 
 Substitution: `level: ${message|re("(\w+):.*",-1,[1],",")}`
 
-Result: `{"message:"info: something happened","level":"info"}`
+Result: `{"message":"info: something happened","level":"info"}`
 
-Example #2:
+**Example re #2**
 
-Data: `{"message:"re1 re2 re3 re4"}`
+Data: `{"message":"re1 re2 re3 re4"}`
 
 Substitution: `extracted: ${message|re("(re\d+)",2,[1],",")}`
 
-Result: `{"message:"re1 re2 re3 re4","extracted":"re1,re2"}`
+Result: `{"message":"re1 re2 re3 re4","extracted":"re1,re2"}`
 
-Example #3:
+**Example re #3**
 
-Data: `{"message:"service=service-test-1 exec took 200ms"}`
+Data: `{"message":"service=service-test-1 exec took 200ms"}`
 
 Substitution: `took: ${message|re("service=([A-Za-z0-9_\-]+) exec took (\d+\.?\d*(?:ms|s|m|h))",-1,[2],",")}`
 
-Result: `{"message:"service=service-test-1 exec took 200ms","took":"200ms"}`
+Result: `{"message":"service=service-test-1 exec took 200ms","took":"200ms"}`
 
-Example #4:
+**Example re #4**
 
-Data: `{"message:"message without matching re"}`
+Data: `{"message":"message without matching re"}`
 
 Substitution: `extracted: ${message|re("test",1,[1],",",true)}`
 
-Result: `{"message:"message without matching re","extracted":""}`
+Result: `{"message":"message without matching re","extracted":""}`
 
-Example #5:
+**Example trim**
 
-Data: `{"message:"{\"service\":\"service-test-1\",\"took\":\"200ms\"}\n"}`
+Data: `{"message":"{\"service\":\"service-test-1\",\"took\":\"200ms\"}\n"}`
 
 Substitution: `message: ${message|trim("right","\n")}`
 
-Result: `{"message:"{\"service\":\"service-test-1\",\"took\":\"200ms\"}"}`
+Result: `{"message":"{\"service\":\"service-test-1\",\"took\":\"200ms\"}"}`
+
+**Example trim-to**
+
+Data: `{"message":"some data {\"service\":\"service-test-1\",\"took\":\"200ms\"} some data"}`
+
+Substitution: `message: ${message|trim_to("left","{")|trim_to("right","}")}`
+
+Result: `{"message":"{\"service\":\"service-test-1\",\"took\":\"200ms\"}"}`
 
 }*/
 
