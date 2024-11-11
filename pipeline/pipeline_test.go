@@ -159,7 +159,7 @@ func BenchmarkMetaTemplater(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		rest := i % 100
 		pipe.In(
-			pipeline.SourceID(1<<16+int(rest)),
+			pipeline.SourceID(1<<16+rest),
 			fmt.Sprintf(
 				"/k8s-logs/advanced-logs-checker-1566485760-trtrq-%d_sre-%d_duty-bot-4e0301b633eaa2bfdcafdeba59ba0c72a3815911a6a820bf273534b0f32d98e0%d.log",
 				rest, rest, rest,

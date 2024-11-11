@@ -48,6 +48,21 @@ func (p *MultilineAction) Do(event *pipeline.Event) pipeline.ActionResult {
 	}
 
 	event.Root.AddFieldNoAlloc(event.Root, "k8s_node").MutateToString(selfNodeName)
+
+	ns := namespace(event.Root.Dig("k8s_namespace").AsString())
+	pod := podName(event.Root.Dig("k8s_pod").AsString())
+	container := containerID(event.Root.Dig("k8s_container_id").AsString())
+
+	if ns == "" {
+		p.logger.Fatalf("k8s namespace is empty: source=%s", event.SourceName)
+	}
+	if pod == "" {
+		p.logger.Fatalf("k8s pod is empty: source=%s", event.SourceName)
+	}
+	if container == "" {
+		p.logger.Fatalf("k8s container is empty: source=%s", event.SourceName)
+	}
+
 	if p.config.OnlyNode {
 		return pipeline.ActionPass
 	}
@@ -80,7 +95,6 @@ func (p *MultilineAction) Do(event *pipeline.Event) pipeline.ActionResult {
 			if !p.skipNextEvent {
 				// skip event if max_event_size is exceeded
 				p.skipNextEvent = true
-				ns, pod, _, _, _ := getMeta(event.SourceName)
 				p.logger.Errorf("event chunk will be discarded due to max_event_size, source_name=%s, namespace=%s, pod=%s", event.SourceName, ns, pod)
 			}
 		}
@@ -97,20 +111,13 @@ func (p *MultilineAction) Do(event *pipeline.Event) pipeline.ActionResult {
 		return pipeline.ActionDiscard
 	}
 
-	ns, pod, container, success, podMeta := getMeta(event.SourceName)
+	success, podMeta := getPodMeta(ns, pod, container)
 
 	if shouldSplit {
 		p.logger.Warnf("too long k8s event found, it'll be split, ns=%s pod=%s container=%s consider increase split_event_size, split_event_size=%d, predicted event size=%d", ns, pod, container, p.config.SplitEventSize, predictedLen)
 	}
 
 	if success {
-		if ns != namespace(podMeta.Namespace) {
-			p.logger.Panicf("k8s plugin inconsistency: source=%s, file namespace=%s, meta namespace=%s, event=%s", event.SourceName, ns, podMeta.Namespace, event.Root.EncodeToString())
-		}
-		if pod != podName(podMeta.Name) {
-			p.logger.Panicf("k8s plugin inconsistency: source=%s, file pod=%s, meta pod=%s, x=%s, event=%s", event.SourceName, pod, podMeta.Name, event.Root.EncodeToString())
-		}
-
 		for labelName, labelValue := range podMeta.Labels {
 			if len(p.allowedPodLabels) != 0 {
 				_, has := p.allowedPodLabels[labelName]
