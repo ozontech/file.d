@@ -154,13 +154,17 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	} else {
 		meta = cfg.MetaTemplates{}
 	}
-	meta["k8s_pod"] = "{{ .pod }}"
-	meta["k8s_namespace"] = "{{ .namespace }}"
-	meta["k8s_container"] = "{{ .container }}"
-
+	setBuiltInMeta(meta)
 	p.params.Controller.SetMetaTemplater(meta)
 
 	p.fp.Start(&p.config.FileConfig, params)
+}
+
+func setBuiltInMeta(meta cfg.MetaTemplates) {
+	meta["k8s_pod"] = "{{ .pod }}"
+	meta["k8s_namespace"] = "{{ .namespace }}"
+	meta["k8s_container"] = "{{ .container }}"
+	meta["k8s_container_id"] = "{{ .container_id }}"
 }
 
 // Commit event.

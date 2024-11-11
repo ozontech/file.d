@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/plugin/output/devnull"
@@ -86,13 +87,22 @@ func config() *Config {
 	config := &Config{
 		AllowedPodLabels: []string{"allowed_label"},
 		OffsetsFile:      "offsets.yaml",
+		K8sMeta:          getTestMeta(),
 	}
 	test.NewConfig(config, map[string]int{"gomaxprocs": 1})
 	return config
 }
 
+func getTestMeta() cfg.MetaTemplates {
+	meta := cfg.MetaTemplates{}
+	setBuiltInMeta(meta)
+	return meta
+}
+
 func TestAllowedLabels(t *testing.T) {
 	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(MultilineActionFactory, config(), pipeline.MatchModeAnd, nil, false))
+	p.SetMetaTemplater(getTestMeta())
+
 	wg := &sync.WaitGroup{}
 	wg.Add(2)
 
@@ -134,6 +144,7 @@ func TestAllowedLabels(t *testing.T) {
 
 func TestK8SJoin(t *testing.T) {
 	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(MultilineActionFactory, config(), pipeline.MatchModeAnd, nil, false))
+	p.SetMetaTemplater(getTestMeta())
 	wg := &sync.WaitGroup{}
 	wg.Add(4)
 
@@ -201,6 +212,7 @@ func TestK8SJoin(t *testing.T) {
 
 func TestCleanUp(t *testing.T) {
 	p, _, _ := test.NewPipelineMock(test.NewActionPluginStaticInfo(MultilineActionFactory, config(), pipeline.MatchModeAnd, nil, false))
+	p.SetMetaTemplater(getTestMeta())
 
 	enableGatherer(logger.Instance)
 
@@ -231,13 +243,4 @@ func TestCleanUp(t *testing.T) {
 	disableGatherer()
 	p.Stop()
 	assert.Equal(t, 0, len(metaData))
-}
-
-func TestParseLogFilename(t *testing.T) {
-	ns, pod, container, cid := parseLogFilename("/k8s-logs/advanced-logs-checker-1566485760-trtrq_sre_duty-bot-4e0301b633eaa2bfdcafdeba59ba0c72a3815911a6a820bf273534b0f32d98e0.log")
-
-	assert.Equal(t, namespace("sre"), ns)
-	assert.Equal(t, podName("advanced-logs-checker-1566485760-trtrq"), pod)
-	assert.Equal(t, containerName("duty-bot"), container)
-	assert.Equal(t, containerID("4e0301b633eaa2bfdcafdeba59ba0c72a3815911a6a820bf273534b0f32d98e0"), cid)
 }

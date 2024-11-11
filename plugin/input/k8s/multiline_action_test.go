@@ -75,6 +75,11 @@ func TestMultilineAction_Do(t *testing.T) {
 				require.NoError(t, root.DecodeString(part))
 				event := &pipeline.Event{Root: root, SourceName: meta, Size: len(part)}
 
+				pipeline.CreateNestedField(event.Root, []string{"k8s_pod"}).MutateToString(string(item.podName))
+				pipeline.CreateNestedField(event.Root, []string{"k8s_namespace"}).MutateToString(string(item.namespace))
+				pipeline.CreateNestedField(event.Root, []string{"k8s_container"}).MutateToString(string(item.containerName))
+				pipeline.CreateNestedField(event.Root, []string{"k8s_container_id"}).MutateToString(string(item.containerID))
+
 				result := plugin.Do(event)
 
 				assert.Equalf(t, tc.ActionResults[i], result, "wrong action result for iteration=%v, part=%s", i, part)
@@ -240,6 +245,10 @@ func TestMultilineAction_Do_shouldSplit(t *testing.T) {
 			plugin.maxEventSize = tc.MaxEventSize
 			require.NoError(t, root.DecodeString(tc.Message))
 			event := &pipeline.Event{Root: root, SourceName: meta, Size: len(tc.Message)}
+			pipeline.CreateNestedField(event.Root, []string{"k8s_pod"}).MutateToString(string(item.podName))
+			pipeline.CreateNestedField(event.Root, []string{"k8s_namespace"}).MutateToString(string(item.namespace))
+			pipeline.CreateNestedField(event.Root, []string{"k8s_container"}).MutateToString(string(item.containerName))
+			pipeline.CreateNestedField(event.Root, []string{"k8s_container_id"}).MutateToString(string(item.containerID))
 
 			result := plugin.Do(event)
 			resultRoot := root.Dig("log").EncodeToString()
@@ -257,6 +266,6 @@ func wrapLogContent(s string) string {
 
 func wrapK8sInfo(s string, item *metaItem) string {
 	return fmt.Sprintf(
-		`{"log":"%s","k8s_node":"%s","k8s_pod_label_allowed_label":"allowed_value","k8s_node_label_zone":"z34"}`,
-		s, item.nodeName)
+		`{"log":"%s","k8s_pod":"%s","k8s_namespace":"%s","k8s_container":"%s","k8s_container_id":"%s","k8s_node":"%s","k8s_pod_label_allowed_label":"allowed_value","k8s_node_label_zone":"z34"}`,
+		s, item.podName, item.namespace, item.containerName, item.containerID, item.nodeName)
 }
