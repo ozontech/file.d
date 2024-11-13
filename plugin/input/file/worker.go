@@ -11,9 +11,10 @@ import (
 )
 
 type worker struct {
-	maxEventSize       int
-	cutOffEventByLimit bool
-	metaTemplater      *metadata.MetaTemplater
+	maxEventSize          int
+	cutOffEventByLimit    bool
+	cutOffEventByLimitMsg string
+	metaTemplater         *metadata.MetaTemplater
 }
 
 type inputer interface {
@@ -94,8 +95,10 @@ func (w *worker) work(controller inputer, jobProvider *jobProvider, readBufferSi
 
 				scanned += pos + 1
 
+				// it's used to cut off a long event if itts length exceeds the limit to prevent out of memory
 				cutOff := false
-				// check if the event fits into the max size, otherwise skip the event
+
+				// check if the event fits into the max size, otherwise skip/cutoff the event
 				if shouldCheckMax && len(accumBuf)+len(line) > w.maxEventSize {
 					controller.IncMaxEventSizeExceeded()
 					if w.cutOffEventByLimit {
@@ -118,7 +121,7 @@ func (w *worker) work(controller inputer, jobProvider *jobProvider, readBufferSi
 					}
 
 					if cutOff {
-						inBuf = inBuf[:w.maxEventSize]
+						inBuf = append(inBuf[:w.maxEventSize-len(w.cutOffEventByLimitMsg)], w.cutOffEventByLimitMsg...)
 					}
 
 					var metadataInfo metadata.MetaData

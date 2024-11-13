@@ -24,21 +24,22 @@ import (
 )
 
 const (
-	DefaultAntispamThreshold   = 0
-	DefaultAntispamField       = ""
-	DefaultDecoder             = "auto"
-	DefaultIsStrict            = false
-	DefaultStreamField         = "stream"
-	DefaultCapacity            = 1024
-	DefaultAvgInputEventSize   = 4 * 1024
-	DefaultMaxInputEventSize   = 0
-	DefaultCutOffEventByLimit  = false
-	DefaultJSONNodePoolSize    = 1024
-	DefaultMaintenanceInterval = time.Second * 5
-	DefaultEventTimeout        = time.Second * 30
-	DefaultFieldValue          = "not_set"
-	DefaultStreamName          = StreamName("not_set")
-	DefaultMetricHoldDuration  = time.Minute * 30
+	DefaultAntispamThreshold     = 0
+	DefaultAntispamField         = ""
+	DefaultDecoder               = "auto"
+	DefaultIsStrict              = false
+	DefaultStreamField           = "stream"
+	DefaultCapacity              = 1024
+	DefaultAvgInputEventSize     = 4 * 1024
+	DefaultMaxInputEventSize     = 0
+	DefaultCutOffEventByLimit    = false
+	DefaultCutOffEventByLimitMsg = ""
+	DefaultJSONNodePoolSize      = 1024
+	DefaultMaintenanceInterval   = time.Second * 5
+	DefaultEventTimeout          = time.Second * 30
+	DefaultFieldValue            = "not_set"
+	DefaultStreamName            = StreamName("not_set")
+	DefaultMetricHoldDuration    = time.Minute * 30
 
 	EventSeqIDError = uint64(0)
 
@@ -132,20 +133,21 @@ type Pipeline struct {
 }
 
 type Settings struct {
-	Decoder             string
-	DecoderParams       map[string]any
-	Capacity            int
-	MaintenanceInterval time.Duration
-	EventTimeout        time.Duration
-	AntispamThreshold   int
-	AntispamField       string
-	AntispamExceptions  antispam.Exceptions
-	AvgEventSize        int
-	MaxEventSize        int
-	CutOffEventByLimit  bool
-	StreamField         string
-	IsStrict            bool
-	MetricHoldDuration  time.Duration
+	Decoder               string
+	DecoderParams         map[string]any
+	Capacity              int
+	MaintenanceInterval   time.Duration
+	EventTimeout          time.Duration
+	AntispamThreshold     int
+	AntispamField         string
+	AntispamExceptions    antispam.Exceptions
+	AvgEventSize          int
+	MaxEventSize          int
+	CutOffEventByLimit    bool
+	CutOffEventByLimitMsg string
+	StreamField           string
+	IsStrict              bool
+	MetricHoldDuration    time.Duration
 }
 
 // New creates new pipeline. Consider using `SetupHTTPHandlers` next.
