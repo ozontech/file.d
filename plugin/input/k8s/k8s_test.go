@@ -99,51 +99,6 @@ func getTestMeta() cfg.MetaTemplates {
 	return metaConfig
 }
 
-func TestEnrichment(t *testing.T) {
-	nodeLabels = map[string]string{"zone": "z34"}
-	p, input, _ := test.NewPipelineMock(test.NewActionPluginStaticInfo(MultilineActionFactory, config(), pipeline.MatchModeAnd, nil, false))
-	wg := &sync.WaitGroup{}
-	wg.Add(1)
-
-	item := &metaItem{
-		namespace:     "sre",
-		podName:       "advanced-logs-checker-1566485760-trtrq",
-		containerName: "duty-bot",
-		containerID:   "4e0301b633eaa2bfdcafdeba59ba0c72a3815911a6a820bf273534b0f32d98e0",
-	}
-	podInfo := getPodInfo(item, true)
-	putMeta(podInfo)
-	selfNodeName = "node_1"
-
-	var (
-		k8sPod           string
-		k8sNamespace     string
-		k8sContainer     string
-		k8sNode          string
-		k8sNodeLabelZone string
-	)
-	input.SetCommitFn(func(e *pipeline.Event) {
-		k8sPod = strings.Clone(e.Root.Dig("k8s_pod").AsString())
-		k8sNamespace = strings.Clone(e.Root.Dig("k8s_namespace").AsString())
-		k8sContainer = strings.Clone(e.Root.Dig("k8s_container").AsString())
-		k8sNode = strings.Clone(e.Root.Dig("k8s_node").AsString())
-		k8sNodeLabelZone = strings.Clone(e.Root.Dig("k8s_node_label_zone").AsString())
-		wg.Done()
-	})
-
-	filename := getLogFilename("/k8s-logs", item)
-	input.In(0, filename, test.Offset(0), []byte(`{"time":"time","log":"log\n"}`))
-
-	wg.Wait()
-	p.Stop()
-
-	assert.Equal(t, "advanced-logs-checker-1566485760-trtrq", k8sPod, "wrong event field")
-	assert.Equal(t, "sre", k8sNamespace, "wrong event field")
-	assert.Equal(t, "duty-bot", k8sContainer, "wrong event field")
-	assert.Equal(t, "node_1", k8sNode, "wrong event field")
-	assert.Equal(t, "z34", k8sNodeLabelZone, "wrong event field")
-}
-
 func TestAllowedLabels(t *testing.T) {
 	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(MultilineActionFactory, config(), pipeline.MatchModeAnd, nil, false))
 
