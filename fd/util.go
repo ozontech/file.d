@@ -225,10 +225,14 @@ var (
 	doIfTimestampCmpOpNodes = map[string]struct{}{
 		"ts_cmp": {},
 	}
+	doIfСheckTypeOpNode = "check_type"
 )
 
 func extractFieldOpVals(jsonNode *simplejson.Json) [][]byte {
-	values := jsonNode.Get("values")
+	values, has := jsonNode.CheckGet("values")
+	if !has {
+		return nil
+	}
 	vals := make([][]byte, 0)
 	iFaceVal := values.Interface()
 	if iFaceVal == nil {
@@ -404,6 +408,19 @@ func extractTsCmpOpNode(_ string, jsonNode *simplejson.Json) (doif.Node, error) 
 	return doif.NewTsCmpOpNode(fieldPath, format, cmpOp, cmpMode, cmpValue, cmpValueShift, updateInterval)
 }
 
+func extractCheckTypeOpNode(_ string, jsonNode *simplejson.Json) (doif.Node, error) {
+	fieldPath, err := requiredString(jsonNode, "field")
+	if err != nil {
+		return nil, err
+	}
+	vals := extractFieldOpVals(jsonNode)
+	result, err := doif.NewCheckTypeOpNode(fieldPath, vals)
+	if err != nil {
+		return nil, fmt.Errorf("failed to init check_type op: %w", err)
+	}
+	return result, nil
+}
+
 func extractLogicalOpNode(opName string, jsonNode *simplejson.Json) (doif.Node, error) {
 	var result, operand doif.Node
 	var err error
@@ -438,6 +455,8 @@ func extractDoIfNode(jsonNode *simplejson.Json) (doif.Node, error) {
 		return extractLengthCmpOpNode(opName, jsonNode)
 	} else if _, has := doIfTimestampCmpOpNodes[opName]; has {
 		return extractTsCmpOpNode(opName, jsonNode)
+	} else if opName == doIfСheckTypeOpNode {
+		return extractCheckTypeOpNode(opName, jsonNode)
 	} else {
 		return nil, fmt.Errorf("unknown op %q", opName)
 	}

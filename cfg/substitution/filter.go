@@ -8,8 +8,9 @@ import (
 )
 
 const (
-	regexFilterPrefix = "re("
-	trimFilterPrefix  = "trim("
+	regexFilterPrefix  = "re("
+	trimFilterPrefix   = "trim("
+	trimToFilterPrefix = "trim_to("
 
 	bufInitSize = 1024
 )
@@ -52,10 +53,13 @@ func parseFilter(data string, logger *zap.Logger) (FieldFilter, int, error) {
 	origDataLen := len(data)
 	data = strings.TrimLeft(data, " ")
 	offset := origDataLen - len(data)
-	if strings.HasPrefix(data, regexFilterPrefix) {
+	switch {
+	case strings.HasPrefix(data, regexFilterPrefix):
 		return parseRegexFilter(data, offset, logger)
-	} else if strings.HasPrefix(data, trimFilterPrefix) {
+	case strings.HasPrefix(data, trimFilterPrefix):
 		return parseTrimFilter(data, offset)
+	case strings.HasPrefix(data, trimToFilterPrefix):
+		return parseTrimToFilter(data, offset)
 	}
 	return nil, -1, errInvalidFilter
 }
