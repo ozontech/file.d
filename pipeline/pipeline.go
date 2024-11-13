@@ -385,9 +385,7 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 		if !p.settings.CutOffEventByLimit {
 			return EventSeqIDError
 		}
-		bytes = append(bytes[:p.settings.MaxEventSize-len(p.settings.CutOffEventByLimitMsg)],
-			p.settings.CutOffEventByLimitMsg...,
-		)
+		bytes = append(bytes[:p.settings.MaxEventSize], p.settings.CutOffEventByLimitMsg...)
 	}
 
 	var (

@@ -41,11 +41,10 @@ func (i *inputerMock) lastData() string {
 
 func TestWorkerWork(t *testing.T) {
 	tests := []struct {
-		name                  string
-		maxEventSize          int
-		readBufferSize        int
-		cutOffEventByLimit    bool
-		cutOffEventByLimitMsg string
+		name               string
+		maxEventSize       int
+		readBufferSize     int
+		cutOffEventByLimit bool
 
 		inFile  string
 		expData string
@@ -77,16 +76,7 @@ func TestWorkerWork(t *testing.T) {
 			cutOffEventByLimit: true,
 			inFile:             "abc\n",
 			readBufferSize:     1024,
-			expData:            "ab",
-		},
-		{
-			name:                  "should_ok_and_cutoff_long_line_with_msg",
-			maxEventSize:          10,
-			cutOffEventByLimit:    true,
-			cutOffEventByLimitMsg: "<cut>",
-			inFile:                "my very long line\n",
-			readBufferSize:        1024,
-			expData:               "my ve<cut>",
+			expData:            "abc\n",
 		},
 	}
 	for _, tt := range tests {
@@ -129,9 +119,8 @@ func TestWorkerWork(t *testing.T) {
 			jp.jobsChan <- nil
 
 			w := &worker{
-				maxEventSize:          tt.maxEventSize,
-				cutOffEventByLimit:    tt.cutOffEventByLimit,
-				cutOffEventByLimitMsg: tt.cutOffEventByLimitMsg,
+				maxEventSize:       tt.maxEventSize,
+				cutOffEventByLimit: tt.cutOffEventByLimit,
 			}
 			inputer := inputerMock{}
 
@@ -144,11 +133,10 @@ func TestWorkerWork(t *testing.T) {
 
 func TestWorkerWorkMultiData(t *testing.T) {
 	tests := []struct {
-		name                  string
-		maxEventSize          int
-		readBufferSize        int
-		cutOffEventByLimit    bool
-		cutOffEventByLimitMsg string
+		name               string
+		maxEventSize       int
+		readBufferSize     int
+		cutOffEventByLimit bool
 
 		inData  string
 		outData []string
@@ -218,30 +206,9 @@ func TestWorkerWorkMultiData(t *testing.T) {
 `, strings.Repeat("a", 50), strings.Repeat("a", 50)),
 			outData: []string{
 				`{"a":"a"}` + "\n",
-				fmt.Sprintf(`{"key":"%s`, strings.Repeat("a", 42)),
+				fmt.Sprintf(`{"key":"%s"}`, strings.Repeat("a", 50)) + "\n",
 				`{"a":"a"}` + "\n",
-				fmt.Sprintf(`{"key":"%s`, strings.Repeat("a", 42)),
-				`{"a":"a"}` + "\n",
-			},
-		},
-		{
-			name:                  "long_event_cutoff_msg",
-			maxEventSize:          50,
-			readBufferSize:        1024,
-			cutOffEventByLimit:    true,
-			cutOffEventByLimitMsg: "<cut>",
-
-			inData: fmt.Sprintf(`{"a":"a"}
-{"key":"%s"}
-{"a":"a"}
-{"key":"%s"}
-{"a":"a"}
-`, strings.Repeat("a", 50), strings.Repeat("a", 50)),
-			outData: []string{
-				`{"a":"a"}` + "\n",
-				fmt.Sprintf(`{"key":"%s<cut>`, strings.Repeat("a", 37)),
-				`{"a":"a"}` + "\n",
-				fmt.Sprintf(`{"key":"%s<cut>`, strings.Repeat("a", 37)),
+				fmt.Sprintf(`{"key":"%s"}`, strings.Repeat("a", 50)) + "\n",
 				`{"a":"a"}` + "\n",
 			},
 		},
@@ -277,30 +244,9 @@ func TestWorkerWorkMultiData(t *testing.T) {
 			outData: []string{
 				`{"a":"a"}` + "\n",
 				`{"a":"a"}` + "\n",
-				fmt.Sprintf(`{"key":"%s`, strings.Repeat("a", 42)),
+				fmt.Sprintf(`{"key":"%s"}`, strings.Repeat("a", 45)) + "\n",
 				`{"a":"a"}` + "\n",
-				fmt.Sprintf(`{"key":"%s`, strings.Repeat("a", 42)),
-			},
-		},
-		{
-			name:                  "small_buffer_cutoff_msg",
-			maxEventSize:          50,
-			readBufferSize:        5,
-			cutOffEventByLimit:    true,
-			cutOffEventByLimitMsg: "<cut>",
-
-			inData: fmt.Sprintf(`{"a":"a"}
-{"a":"a"}
-{"key":"%s"}
-{"a":"a"}
-{"key":"%s"}
-`, strings.Repeat("a", 50), strings.Repeat("a", 50)),
-			outData: []string{
-				`{"a":"a"}` + "\n",
-				`{"a":"a"}` + "\n",
-				fmt.Sprintf(`{"key":"%s<cut>`, strings.Repeat("a", 37)),
-				`{"a":"a"}` + "\n",
-				fmt.Sprintf(`{"key":"%s<cut>`, strings.Repeat("a", 37)),
+				fmt.Sprintf(`{"key":"%s"}`, strings.Repeat("a", 46)) + "\n",
 			},
 		},
 		{
@@ -316,9 +262,8 @@ func TestWorkerWorkMultiData(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			w := &worker{
-				maxEventSize:          tt.maxEventSize,
-				cutOffEventByLimit:    tt.cutOffEventByLimit,
-				cutOffEventByLimitMsg: tt.cutOffEventByLimitMsg,
+				maxEventSize:       tt.maxEventSize,
+				cutOffEventByLimit: tt.cutOffEventByLimit,
 			}
 
 			f, err := os.CreateTemp("/tmp", "worker_test")
