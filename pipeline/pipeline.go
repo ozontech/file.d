@@ -382,7 +382,12 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 	isLong := p.settings.MaxEventSize != 0 && length > p.settings.MaxEventSize
 	if isLong {
 		p.IncMaxEventSizeExceeded()
-		return EventSeqIDError
+		if !p.settings.CutOffEventByLimit {
+			return EventSeqIDError
+		}
+		bytes = append(bytes[:p.settings.MaxEventSize-len(p.settings.CutOffEventByLimitMsg)],
+			p.settings.CutOffEventByLimitMsg...,
+		)
 	}
 
 	var (
