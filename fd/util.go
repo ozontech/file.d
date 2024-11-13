@@ -51,7 +51,7 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 		cutOffEventByLimit = settings.Get("cut_off_event_by_limit").MustBool()
 
 		cutOffEventByLimitMsg = settings.Get("cut_off_event_by_limit_message").MustString()
-		if len(cutOffEventByLimitMsg) >= maxInputEventSize {
+		if maxInputEventSize > 0 && len(cutOffEventByLimitMsg) >= maxInputEventSize {
 			logger.Fatal("length of cut_off_event_by_limit_message must be less than max_event_size")
 		}
 
