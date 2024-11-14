@@ -181,6 +181,11 @@ type Config struct {
 	// >
 	// > Multiplier for exponential increase of retention between retries
 	RetentionExponentMultiplier int `json:"retention_exponentially_multiplier" default:"2"` // *
+
+	// > @3@4@5@6
+	// >
+	// > After a non-retryable write error, fall with a non-zero exit code or not
+	Strict bool `json:"strict" default:"false"` // *
 }
 
 type KeepAliveConfig struct {
@@ -354,7 +359,12 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 		p.sendErrorMetric.WithLabelValues(strconv.Itoa(statusCode)).Inc()
 		switch statusCode {
 		case http.StatusBadRequest, http.StatusRequestEntityTooLarge:
-			p.logger.Error("can't send to the elastic, non-retryable error occurred", zap.Int("status_code", statusCode), zap.Error(err))
+			const errMsg = "can't send to the elastic, non-retryable error occurred"
+			fields := []zap.Field{zap.Int("status_code", statusCode), zap.Error(err)}
+			if p.config.Strict {
+				p.logger.Fatal(errMsg, fields...)
+			}
+			p.logger.Error(errMsg, fields...)
 			return nil
 		default:
 			p.logger.Error("can't send to the elastic, will try other endpoint", zap.Error(err))
