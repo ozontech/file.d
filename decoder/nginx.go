@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"unicode"
 
-	insaneJSON "github.com/vitkovskii/insane-json"
+	insaneJSON "github.com/ozontech/insane-json"
 )
 
 const (

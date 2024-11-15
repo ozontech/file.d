@@ -6,8 +6,8 @@ import (
 
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/test"
+	insaneJSON "github.com/ozontech/insane-json"
 	"github.com/stretchr/testify/assert"
-	insaneJSON "github.com/vitkovskii/insane-json"
 )
 
 func TestModify(t *testing.T) {

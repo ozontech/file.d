@@ -6,7 +6,7 @@ import (
 	"slices"
 
 	"github.com/ozontech/file.d/cfg"
-	insaneJSON "github.com/vitkovskii/insane-json"
+	insaneJSON "github.com/ozontech/insane-json"
 )
 
 /*{ do-if-len-cmp-op-node
