@@ -5,8 +5,8 @@ import (
 	"testing"
 
 	"github.com/ozontech/file.d/decoder"
+	insaneJSON "github.com/ozontech/insane-json"
 	"github.com/stretchr/testify/require"
-	insaneJSON "github.com/vitkovskii/insane-json"
 )
 
 func Test_processor_isMatch(t *testing.T) {

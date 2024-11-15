@@ -134,10 +134,10 @@ created by example.com/sre/filed/plugin/input/file.(*worker).start
 panic: runtime error: slice bounds out of range
 
 goroutine 227 [running]:
-github.com/vitkovskii/insane-json.(*Node).unescapeField(0xc0005892c0)
-	/Users/root/go/pkg/mod/github.com/vitkovskii/insane-json@v0.0.15/insane.go:1313 +0xf5
-github.com/vitkovskii/insane-json.(*Node).Dig(0xc000589130, 0xc009895e70, 0x1, 0x1, 0xc0000497dd)
-	/Users/root/go/pkg/mod/github.com/vitkovskii/insane-json@v0.0.15/insane.go:773 +0x1ba
+github.com/ozontech/insane-json.(*Node).unescapeField(0xc0005892c0)
+	/Users/root/go/pkg/mod/github.com/ozontech/insane-json@v0.0.15/insane.go:1313 +0xf5
+github.com/ozontech/insane-json.(*Node).Dig(0xc000589130, 0xc009895e70, 0x1, 0x1, 0xc0000497dd)
+	/Users/root/go/pkg/mod/github.com/ozontech/insane-json@v0.0.15/insane.go:773 +0x1ba
 example.com/sre/filed/pipeline.(*Pipeline).countEvent(0xc0002afa40, 0xc0002e99e0, 0x2, 0x150d768, 0x8, 0xc00987a580, 0x1, 0x4, 0xc00987a580, 0x4, ...)
 	/Users/root/go/src/example.com/sre/filed/pipeline/pipeline.go:351 +0x154
 example.com/sre/filed/pipeline.(*processor).countEvent(...)
@@ -342,10 +342,10 @@ created by example.com/sre/filed/plugin/input/file.(*worker).start
 panic: runtime error: slice bounds out of range
 
 goroutine 227 [running]:
-github.com/vitkovskii/insane-json.(*Node).unescapeField(0xc0005892c0)
-	/Users/root/go/pkg/mod/github.com/vitkovskii/insane-json@v0.0.15/insane.go:1313 +0xf5
-github.com/vitkovskii/insane-json.(*Node).Dig(0xc000589130, 0xc009895e70, 0x1, 0x1, 0xc0000497dd)
-	/Users/root/go/pkg/mod/github.com/vitkovskii/insane-json@v0.0.15/insane.go:773 +0x1ba
+github.com/ozontech/insane-json.(*Node).unescapeField(0xc0005892c0)
+	/Users/root/go/pkg/mod/github.com/ozontech/insane-json@v0.0.15/insane.go:1313 +0xf5
+github.com/ozontech/insane-json.(*Node).Dig(0xc000589130, 0xc009895e70, 0x1, 0x1, 0xc0000497dd)
+	/Users/root/go/pkg/mod/github.com/ozontech/insane-json@v0.0.15/insane.go:773 +0x1ba
 example.com/sre/filed/pipeline.(*Pipeline).countEvent(0xc0002afa40, 0xc0002e99e0, 0x2, 0x150d768, 0x8, 0xc00987a580, 0x1, 0x4, 0xc00987a580, 0x4, ...)
 	/Users/root/go/src/example.com/sre/filed/pipeline/pipeline.go:351 +0x154
 example.com/sre/filed/pipeline.(*processor).countEvent(...)
