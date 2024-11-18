@@ -403,7 +403,11 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 	}
 
 	if p.metaTemplater != nil {
-		metadataInfo, err := p.metaTemplater.Render(k8s_meta.NewK8sMetaInformation(sourceName))
+		metaData, err := k8s_meta.NewK8sMetaInformation(sourceName)
+		if err != nil {
+			p.Error(fmt.Sprintf("can't parse meta data from source name %s: %s", sourceName, err.Error()))
+		}
+		metadataInfo, err := p.metaTemplater.Render(metaData)
 		if err != nil {
 			p.Error(fmt.Sprintf("can't render meta data: %s", err.Error()))
 		}
