@@ -102,7 +102,7 @@ func (c *Client) DoTimeout(
 	respContent := resp.Body()
 	statusCode := resp.Header.StatusCode()
 
-	if statusCode < http.StatusOK || statusCode > http.StatusAccepted {
+	if !(http.StatusOK <= statusCode && statusCode <= http.StatusAccepted) {
 		return statusCode, fmt.Errorf("response status from %s isn't OK: status=%d, body=%s", endpoint.String(), statusCode, string(respContent))
 	}
 

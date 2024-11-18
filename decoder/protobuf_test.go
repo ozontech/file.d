@@ -31,7 +31,7 @@ message MyMessage {
 }
 `
 
-func TestProtobufDecoder(t *testing.T) {
+func TestProtobuf(t *testing.T) {
 	const protoMessage = "MyMessage"
 
 	type (
@@ -175,7 +175,7 @@ func TestProtobufDecoder(t *testing.T) {
 			root := insaneJSON.Spawn()
 			defer insaneJSON.Release(root)
 
-			err = dec.Decode(root, tt.data)
+			err = dec.DecodeToJson(root, tt.data)
 			require.Equal(t, tt.wantDecodeErr, err != nil, err)
 			if tt.wantDecodeErr {
 				return

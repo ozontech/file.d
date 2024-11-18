@@ -1182,11 +1182,9 @@ func TestCheckTsCmpValChangeModeNow(t *testing.T) {
 
 	eventRoot1, err := timeToJSON(ts1)
 	require.NoError(t, err)
-	defer insaneJSON.Release(eventRoot1)
 
 	eventRoot2, err := timeToJSON(ts2)
 	require.NoError(t, err)
-	defer insaneJSON.Release(eventRoot1)
 
 	require.True(t, checker.Check(eventRoot1))
 	require.False(t, checker.Check(eventRoot2))

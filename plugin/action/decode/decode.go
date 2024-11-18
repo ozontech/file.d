@@ -85,6 +85,9 @@ The resulting event:
 ```
 
 ### Nginx error decoder
+You can specify `nginx_with_custom_fields: true` in `params` to decode custom fields.
+
+Default decoder:
 ```yaml
 pipelines:
   example_pipeline:
@@ -98,8 +101,8 @@ pipelines:
 The original event:
 ```json
 {
-  "level": "error",
-  "log": "2022/08/17 10:49:27 [warn] 2725122#2725122: *792412315 lua udp socket read timed out, context: ngx.timer",
+  "level": "warn",
+  "log": "2022/08/17 10:49:27 [error] 2725122#2725122: *792412315 lua udp socket read timed out, context: ngx.timer",
   "service": "test"
 }
 ```
@@ -108,8 +111,50 @@ The resulting event:
 {
   "service": "test",
   "time": "2022/08/17 10:49:27",
+  "level": "error",
+  "pid": "2725122",
+  "tid": "2725122",
+  "cid": "792412315",
+  "message": "lua udp socket read timed out, context: ngx.timer"
+}
+```
+
+Decoder with `nginx_with_custom_fields` param:
+```yaml
+pipelines:
+  example_pipeline:
+    ...
+    actions:
+    - type: decode
+      field: log
+      decoder: nginx_error
+      params:
+        nginx_with_custom_fields: true
+    ...
+```
+The original event:
+```json
+{
   "level": "warn",
-  "message": "2725122#2725122: *792412315 lua udp socket read timed out, context: ngx.timer"
+  "log": "2022/08/18 09:29:37 [error] 844935#844935: *44934601 upstream timed out (110: Operation timed out), while connecting to upstream, client: 10.125.172.251, server: , request: \"POST /download HTTP/1.1\", upstream: \"http://10.117.246.15:84/download\", host: \"mpm-youtube-downloader-38.name.tldn:84\"",
+  "service": "test"
+}
+```
+The resulting event:
+```json
+{
+  "service": "test",
+  "time": "2022/08/18 09:29:37",
+  "level": "error",
+  "pid": "844935",
+  "tid": "844935",
+  "cid": "44934601",
+  "message": "upstream timed out (110: Operation timed out), while connecting to upstream",
+  "client": "10.125.172.251",
+  "server": "",
+  "request": "\"POST /download HTTP/1.1\"",
+  "upstream": "\"http://10.117.246.15:84/download\"",
+  "host": "\"mpm-youtube-downloader-38.name.tldn:84\""
 }
 ```
 
@@ -287,6 +332,9 @@ type Config struct {
 	// >
 	// > Decoding params.
 	// >
+	// > **Nginx error decoder params**:
+	// > * `nginx_with_custom_fields` - if set, custom fields will be extracted.
+	// >
 	// > **Protobuf decoder params**:
 	// > * `proto_file` - protocol scheme, can be specified as both the path to the file and the contents of the file.
 	// > * `proto_message` - message name in the specified `proto_file`.
@@ -345,12 +393,15 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 	p.config = config.(*Config)
 	p.logger = params.Logger.Desugar()
 
-	if p.config.Decoder_ == decProtobuf {
-		var err error
+	var err error
+	switch p.config.Decoder_ {
+	case decNginxError:
+		p.decoder, err = decoder.NewNginxErrorDecoder(p.config.Params)
+	case decProtobuf:
 		p.decoder, err = decoder.NewProtobufDecoder(p.config.Params)
-		if err != nil {
-			p.logger.Fatal("can't create protobuf decoder", zap.Error(err))
-		}
+	}
+	if err != nil {
+		p.logger.Fatal(fmt.Sprintf("can't create %s decoder", p.config.Decoder), zap.Error(err))
 	}
 }
 
@@ -422,10 +473,11 @@ func (p *Plugin) decodePostgres(root *insaneJSON.Root, node *insaneJSON.Node) {
 }
 
 func (p *Plugin) decodeNginxError(root *insaneJSON.Root, node *insaneJSON.Node) {
-	row, err := decoder.DecodeNginxError(node.AsBytes())
+	rowRaw, err := p.decoder.Decode(node.AsBytes())
 	if p.checkError(err, node) {
 		return
 	}
+	row := rowRaw.(decoder.NginxErrorRow)
 
 	if !p.config.KeepOrigin {
 		node.Suicide()
@@ -433,8 +485,16 @@ func (p *Plugin) decodeNginxError(root *insaneJSON.Root, node *insaneJSON.Node) 
 
 	p.addFieldPrefix(root, "time", row.Time)
 	p.addFieldPrefix(root, "level", row.Level)
+	p.addFieldPrefix(root, "pid", row.PID)
+	p.addFieldPrefix(root, "tid", row.TID)
+	if len(row.CID) > 0 {
+		p.addFieldPrefix(root, "cid", row.CID)
+	}
 	if len(row.Message) > 0 {
 		p.addFieldPrefix(root, "message", row.Message)
+	}
+	for k, v := range row.CustomFields {
+		p.addFieldPrefix(root, k, v)
 	}
 }
 
@@ -442,7 +502,7 @@ func (p *Plugin) decodeProtobuf(root *insaneJSON.Root, node *insaneJSON.Node, bu
 	t := insaneJSON.Spawn()
 	defer insaneJSON.Release(t)
 
-	err := p.decoder.Decode(t, node.AsBytes())
+	err := p.decoder.DecodeToJson(t, node.AsBytes())
 	if p.checkError(err, node) {
 		return
 	}
