@@ -472,7 +472,7 @@ func poolIndex(size int) int {
 }
 
 func (p *lowMemoryEventPool) dump() string {
-	return fmt.Sprintf("in use events: %d", p.inUseEvents.Load())
+	return fmt.Sprintf("in use events: %d of %d; waiters: %d", p.inUseEvents.Load(), p.capacity, p.slowWaiters.Load())
 }
 
 func (p *lowMemoryEventPool) inUse() int64 {
