@@ -148,11 +148,9 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 		p.params.Controller.SuggestDecoder(decoder.CRI)
 	}
 
-	var meta cfg.MetaTemplates
+	meta := cfg.MetaTemplates{}
 	if p.config.K8sMeta != nil {
 		meta = p.config.K8sMeta
-	} else {
-		meta = cfg.MetaTemplates{}
 	}
 	setBuiltInMeta(meta)
 	p.params.Controller.SetMetaTemplater(meta)
