@@ -17,6 +17,7 @@ import (
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline/antispam"
 	"github.com/ozontech/file.d/pipeline/metadata"
+	k8s_meta "github.com/ozontech/file.d/plugin/input/k8s/meta"
 	insaneJSON "github.com/ozontech/insane-json"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/atomic"
@@ -402,7 +403,7 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 	}
 
 	if p.metaTemplater != nil {
-		metadataInfo, err := p.metaTemplater.Render(decoder.NewCRIMetaInformation(sourceName))
+		metadataInfo, err := p.metaTemplater.Render(k8s_meta.NewK8sMetaInformation(sourceName))
 		if err != nil {
 			p.Error(fmt.Sprintf("can't render meta data: %s", err.Error()))
 		}
