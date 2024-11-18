@@ -6,8 +6,8 @@ import (
 	"testing"
 
 	"github.com/ozontech/file.d/cfg"
+	insaneJSON "github.com/ozontech/insane-json"
 	"github.com/stretchr/testify/assert"
-	insaneJSON "github.com/vitkovskii/insane-json"
 )
 
 func TestJson(t *testing.T) {
