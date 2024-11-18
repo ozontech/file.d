@@ -67,6 +67,27 @@ func TestDecode(t *testing.T) {
 			},
 		},
 		{
+			name: "json_max_fields_size",
+			config: &Config{
+				Field:   "log",
+				Decoder: "json",
+				Params: map[string]any{
+					"json_max_fields_size": map[string]any{
+						"field1": 5,
+						"field2": 10,
+						"field3": 1,
+					},
+				},
+			},
+			input: []byte(`{"level":"error","log":"{\"field1\":\"value long long long\",\"field2\":\"value2\",\"field3\":true}"}`),
+			want: map[string]string{
+				"level":  "error",
+				"field1": "value",
+				"field2": "value2",
+				"field3": "true",
+			},
+		},
+		{
 			name: "json_not_obj",
 			config: &Config{
 				Field: "log",

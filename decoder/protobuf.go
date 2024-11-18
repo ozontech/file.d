@@ -88,7 +88,7 @@ func (d *ProtobufDecoder) DecodeToJson(root *insaneJSON.Root, data []byte) error
 	return nil
 }
 
-func (d *ProtobufDecoder) Decode(data []byte) (any, error) {
+func (d *ProtobufDecoder) Decode(data []byte, _ ...any) (any, error) {
 	msg := dynamicpb.NewMessage(d.msgDesc)
 	if err := proto.Unmarshal(data, msg); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal proto: %w", err)

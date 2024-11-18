@@ -188,6 +188,12 @@ func New(name string, settings *Settings, registry *prometheus.Registry) *Pipeli
 	switch settings.Decoder {
 	case "json":
 		pipeline.decoderType = decoder.JSON
+
+		dec, err := decoder.NewJsonDecoder(pipeline.settings.DecoderParams)
+		if err != nil {
+			pipeline.logger.Fatal("can't create json decoder", zap.Error(err))
+		}
+		pipeline.decoder = dec
 	case "raw":
 		pipeline.decoderType = decoder.RAW
 	case "cri":
@@ -450,7 +456,7 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 	}
 	switch dec {
 	case decoder.JSON:
-		err = decoder.DecodeJson(event.Root, bytes)
+		err = p.decoder.DecodeToJson(event.Root, bytes)
 	case decoder.RAW:
 		event.Root.AddFieldNoAlloc(event.Root, "message").MutateToBytesCopy(event.Root, bytes[:len(bytes)-1])
 	case decoder.CRI:

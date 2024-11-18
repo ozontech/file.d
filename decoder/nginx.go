@@ -46,7 +46,7 @@ func (d *NginxErrorDecoder) Type() Type {
 	return NGINX_ERROR
 }
 
-// DecodeToJson decodes nginx error formatted log and merges result with event.
+// DecodeToJson decodes nginx error formatted log and merges result with root.
 //
 // From:
 //
@@ -91,7 +91,7 @@ func (d *NginxErrorDecoder) DecodeToJson(root *insaneJSON.Root, data []byte) err
 // Example of format:
 //
 //	"2022/08/17 10:49:27 [error] 2725122#2725122: *792412315 lua udp socket read timed out, context: ngx.timer"
-func (d *NginxErrorDecoder) Decode(data []byte) (any, error) {
+func (d *NginxErrorDecoder) Decode(data []byte, _ ...any) (any, error) {
 	row := NginxErrorRow{}
 
 	split := spaceSplit(data, 5)
