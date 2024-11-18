@@ -16,8 +16,8 @@ import (
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline/antispam"
 	"github.com/ozontech/file.d/pipeline/metadata"
+	insaneJSON "github.com/ozontech/insane-json"
 	"github.com/prometheus/client_golang/prometheus"
-	insaneJSON "github.com/vitkovskii/insane-json"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -577,9 +577,11 @@ func (p *Pipeline) finalize(event *Event, notifyInput bool, backEvent bool) {
 		p.eventLogMu.Unlock()
 	}
 
-	for _, e := range event.children {
+	for i, e := range event.children {
 		insaneJSON.Release(e.Root)
+		event.children[i] = nil
 	}
+
 	p.eventPool.back(event)
 }
 

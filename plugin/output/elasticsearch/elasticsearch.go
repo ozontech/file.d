@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"net/http"
+	"strconv"
 	"sync"
 	"time"
 
@@ -13,8 +14,8 @@ import (
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/xhttp"
+	insaneJSON "github.com/ozontech/insane-json"
 	"github.com/prometheus/client_golang/prometheus"
-	insaneJSON "github.com/vitkovskii/insane-json"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -47,7 +48,7 @@ type Plugin struct {
 	mu           *sync.Mutex
 
 	// plugin metrics
-	sendErrorMetric      prometheus.Counter
+	sendErrorMetric      *prometheus.CounterVec
 	indexingErrorsMetric prometheus.Counter
 }
 
@@ -180,6 +181,11 @@ type Config struct {
 	// >
 	// > Multiplier for exponential increase of retention between retries
 	RetentionExponentMultiplier int `json:"retention_exponentially_multiplier" default:"2"` // *
+
+	// > @3@4@5@6
+	// >
+	// > After a non-retryable write error, fall with a non-zero exit code or not
+	Strict bool `json:"strict" default:"false"` // *
 }
 
 type KeepAliveConfig struct {
@@ -281,7 +287,7 @@ func (p *Plugin) Out(event *pipeline.Event) {
 }
 
 func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
-	p.sendErrorMetric = ctl.RegisterCounter("output_elasticsearch_send_error", "Total elasticsearch send errors")
+	p.sendErrorMetric = ctl.RegisterCounterVec("output_elasticsearch_send_error", "Total elasticsearch send errors", "status_code")
 	p.indexingErrorsMetric = ctl.RegisterCounter("output_elasticsearch_index_error", "Number of elasticsearch indexing errors")
 }
 
@@ -346,15 +352,27 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 		data.outBuf = p.appendEvent(data.outBuf, event)
 	})
 
-	_, err := p.client.DoTimeout(http.MethodPost, NDJSONContentType, data.outBuf,
+	statusCode, err := p.client.DoTimeout(http.MethodPost, NDJSONContentType, data.outBuf,
 		p.config.ConnectionTimeout_, p.reportESErrors)
 
 	if err != nil {
-		p.sendErrorMetric.Inc()
-		p.logger.Error("can't send to the elastic, will try other endpoint", zap.Error(err))
+		p.sendErrorMetric.WithLabelValues(strconv.Itoa(statusCode)).Inc()
+		switch statusCode {
+		case http.StatusBadRequest, http.StatusRequestEntityTooLarge:
+			const errMsg = "can't send to the elastic, non-retryable error occurred"
+			fields := []zap.Field{zap.Int("status_code", statusCode), zap.Error(err)}
+			if p.config.Strict {
+				p.logger.Fatal(errMsg, fields...)
+			}
+			p.logger.Error(errMsg, fields...)
+			return nil
+		default:
+			p.logger.Error("can't send to the elastic, will try other endpoint", zap.Error(err))
+			return err
+		}
 	}
 
-	return err
+	return nil
 }
 
 func (p *Plugin) appendEvent(outBuf []byte, event *pipeline.Event) []byte {

@@ -145,5 +145,11 @@ Multiplier for exponential increase of retention between retries
 
 <br>
 
+**`strict`** *`bool`* *`default=false`* 
+
+After a non-retryable write error, fall with a non-zero exit code or not
+
+<br>
+
 
 <br>*Generated using [__insane-doc__](https://github.com/vitkovskii/insane-doc)*

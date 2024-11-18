@@ -55,7 +55,9 @@ func TestRefreshSymlinkOnBrokenLink(t *testing.T) {
 	require.Equal(t, 0, len(jp.symlinks))
 }
 
-func TestProvierWatcherPaths(t *testing.T) {
+// nolint:gocritic
+func TestProviderWatcherPaths(t *testing.T) {
+	currentDir, _ := os.Getwd()
 	tests := []struct {
 		name           string
 		config         *Config
@@ -118,6 +120,47 @@ func TestProvierWatcherPaths(t *testing.T) {
 			},
 			expectedPathes: Paths{
 				Include: []string{"/var/log/access.log"},
+			},
+		},
+		{
+			name: "relative paths",
+			config: &Config{
+				WatchingDir: "./var/log/",
+				OffsetsFile: "offset.json",
+			},
+			expectedPathes: Paths{
+				Include: []string{filepath.Join(currentDir, "var/log/**/*")},
+			},
+		},
+		{
+			name: "relative paths 2",
+			config: &Config{
+				WatchingDir: "var/log/",
+				OffsetsFile: "offset.json",
+			},
+			expectedPathes: Paths{
+				Include: []string{filepath.Join(currentDir, "var/log/**/*")},
+			},
+		},
+		{
+			name: "wildcard dir",
+			config: &Config{
+				WatchingDir: "*",
+				OffsetsFile: "offset.json",
+			},
+			expectedPathes: Paths{
+				Include: []string{filepath.Join(currentDir, "**/*")},
+			},
+		},
+		{
+			name: "dir pattern 2",
+			config: &Config{
+				WatchingDir: "*",
+				DirPattern:  "host*",
+				OffsetsFile: "offset.json",
+			},
+			expectedPathes: Paths{
+				Include: []string{filepath.Join(currentDir, "/host*/*")},
 			},
 		},
 	}

@@ -3,8 +3,8 @@ package pipeline
 import (
 	"testing"
 
+	insaneJSON "github.com/ozontech/insane-json"
 	"github.com/stretchr/testify/require"
-	insaneJSON "github.com/vitkovskii/insane-json"
 )
 
 func TestCreateNestedFieldPositive(t *testing.T) {

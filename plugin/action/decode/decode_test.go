@@ -141,7 +141,7 @@ func TestDecode(t *testing.T) {
 				Field:   "log",
 				Decoder: "nginx_error",
 			},
-			input: []byte(`{"level":"warn","log":"2022/08/17 10:49:27 [error] 2725122#2725122: *792412315 lua udp socket read timed out, context: ngx.timer"}`),
+			input: []byte(`{"level":"warn","log":"2022/08/17 10:49:27 [error] 2725122#2725122: *792412315 lua udp socket read timed out, context: ngx.timer\n"}`),
 			want: map[string]string{
 				"level":   "error",
 				"time":    "2022/08/17 10:49:27",
@@ -178,7 +178,7 @@ func TestDecode(t *testing.T) {
 					"nginx_with_custom_fields": true,
 				},
 			},
-			input: []byte(`{"level":"warn","log":"2022/08/18 09:29:37 [error] 844935#844935: *44934601 upstream timed out (110: Operation timed out), while connecting to upstream, client: 10.125.172.251, server: , request: \"POST /download HTTP/1.1\", upstream: \"http://10.117.246.15:84/download\", host: \"mpm-youtube-downloader-38.name.tldn:84\""}`),
+			input: []byte(`{"level":"warn","log":"2022/08/18 09:29:37 [error] 844935#844935: *44934601 upstream timed out (110: Operation timed out), while connecting to upstream, client: 10.125.172.251, server: , request: \"POST /download HTTP/1.1\", upstream: \"http://10.117.246.15:84/download\", host: \"mpm-youtube-downloader-38.name.tldn:84\"\n"}`),
 			want: map[string]string{
 				"level":    "error",
 				"time":     "2022/08/18 09:29:37",

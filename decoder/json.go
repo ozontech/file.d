@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"slices"
 
+	insaneJSON "github.com/ozontech/insane-json"
 	"github.com/tidwall/gjson"
-	insaneJSON "github.com/vitkovskii/insane-json"
 )
 
 const (
