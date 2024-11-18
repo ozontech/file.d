@@ -20,7 +20,6 @@ import (
 )
 
 type (
-	nodeName      string
 	podName       string
 	namespace     string
 	containerName string
@@ -32,7 +31,6 @@ type (
 	}
 
 	metaItem struct {
-		nodeName      nodeName
 		namespace     namespace
 		podName       podName
 		containerName containerName

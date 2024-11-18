@@ -74,7 +74,6 @@ func getPodInfo(item *metaItem, isWhite bool) *corev1.Pod {
 	podInfo.Status.ContainerStatuses = make([]corev1.ContainerStatus, 1)
 	podInfo.Status.ContainerStatuses[0].Name = string(item.containerName)
 	podInfo.Status.ContainerStatuses[0].ContainerID = "containerd://" + string(item.containerID)
-	podInfo.Spec.NodeName = string(item.nodeName)
 	if isWhite {
 		podInfo.Labels = map[string]string{"allowed_label": "allowed_value"}
 	} else {
@@ -107,7 +106,6 @@ func TestAllowedLabels(t *testing.T) {
 	wg.Add(2)
 
 	item := &metaItem{
-		nodeName:      "node_1",
 		namespace:     "sre",
 		podName:       "advanced-logs-checker-1111111111-trtrq",
 		containerName: "duty-bot",
@@ -117,7 +115,6 @@ func TestAllowedLabels(t *testing.T) {
 	filename1 := getLogFilename("/k8s-logs", item)
 
 	item = &metaItem{
-		nodeName:      "node_1",
 		namespace:     "sre",
 		podName:       "advanced-logs-checker-2222222222-trtrq",
 		containerName: "duty-bot",
@@ -149,7 +146,6 @@ func TestK8SJoin(t *testing.T) {
 	wg.Add(4)
 
 	item := &metaItem{
-		nodeName:      "node_1",
 		namespace:     "sre",
 		podName:       "advanced-logs-checker-1566485760-trtrq",
 		containerName: "duty-bot",
@@ -217,21 +213,18 @@ func TestCleanUp(t *testing.T) {
 	enableGatherer(logger.Instance)
 
 	putMeta(getPodInfo(&metaItem{
-		nodeName:      "node_1",
 		namespace:     "sre",
 		podName:       "advanced-logs-checker-1566485760-1",
 		containerName: "duty-bot",
 		containerID:   "1111111111111111111111111111111111111111111111111111111111111111",
 	}, true))
 	putMeta(getPodInfo(&metaItem{
-		nodeName:      "node_1",
 		namespace:     "sre",
 		podName:       "advanced-logs-checker-1566485760-2",
 		containerName: "duty-bot",
 		containerID:   "2222222222222222222222222222222222222222222222222222222222222222",
 	}, true))
 	putMeta(getPodInfo(&metaItem{
-		nodeName:      "node_1",
 		namespace:     "infra",
 		podName:       "advanced-logs-checker-1566485760-3",
 		containerName: "duty-bot",
