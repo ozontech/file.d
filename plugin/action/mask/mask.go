@@ -11,8 +11,8 @@ import (
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
+	insaneJSON "github.com/ozontech/insane-json"
 	"github.com/prometheus/client_golang/prometheus"
-	insaneJSON "github.com/vitkovskii/insane-json"
 	"go.uber.org/zap"
 )
 
@@ -502,7 +502,9 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 		}
 
 		p.sourceBuf = append(p.sourceBuf[:0], value...)
-		p.maskBuf = append(p.maskBuf[:0], p.sourceBuf...)
+		// valueMasked is not the same as maskApplied;
+		// it shows if current node is masked and really needs to be changed
+		valueMasked := false
 		for i := range p.config.Masks {
 			mask := &p.config.Masks[i]
 			if mask.Re != "" && !valueIsCommonMatched {
@@ -515,6 +517,8 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 			if !locApplied {
 				continue
 			}
+			valueMasked = true
+
 			if mask.AppliedField != "" {
 				event.Root.AddFieldNoAlloc(event.Root, mask.AppliedField).MutateToString(mask.AppliedValue)
 			}
@@ -524,7 +528,10 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 
 			maskApplied = true
 		}
-		v.MutateToString(string(p.maskBuf))
+
+		if valueMasked {
+			v.MutateToString(string(p.maskBuf))
+		}
 	}
 
 	if p.config.MaskAppliedField != "" && maskApplied {

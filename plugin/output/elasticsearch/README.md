@@ -9,6 +9,18 @@ The list of elasticsearch endpoints in the following format: `SCHEMA://HOST:PORT
 
 <br>
 
+**`use_gzip`** *`bool`* *`default=false`* 
+
+If set, the plugin will use gzip encoding.
+
+<br>
+
+**`gzip_compression_level`** *`string`* *`default=default`* *`options=default|no|best-speed|best-compression|huffman-only`* 
+
+Gzip compression level. Used if `use_gzip=true`.
+
+<br>
+
 **`username`** *`string`* 
 
 Username for HTTP Basic Authentication.
@@ -29,6 +41,19 @@ Base64-encoded token for authorization; if set, overrides username/password.
 
 **`ca_cert`** *`string`* 
 Path or content of a PEM-encoded CA file.
+
+<br>
+
+**`keep_alive`** *`KeepAliveConfig`* 
+
+Keep-alive config.
+
+`KeepAliveConfig` params:
+* `max_idle_conn_duration` - idle keep-alive connections are closed after this duration.
+By default idle connections are closed after `10s`.
+* `max_conn_duration` - keep-alive connections are closed after this duration.
+If set to `0` - connection duration is unlimited.
+By default connection duration is `5m`.
 
 <br>
 
@@ -117,6 +142,12 @@ Retention milliseconds for retry to DB.
 **`retention_exponentially_multiplier`** *`int`* *`default=2`* 
 
 Multiplier for exponential increase of retention between retries
+
+<br>
+
+**`strict`** *`bool`* *`default=false`* 
+
+After a non-retryable write error, fall with a non-zero exit code or not
 
 <br>
 

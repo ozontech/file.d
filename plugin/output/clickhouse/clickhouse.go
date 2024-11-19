@@ -521,7 +521,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 	for i := range p.instances {
 		requestID := p.requestID.Inc()
 		clickhouse := p.getInstance(requestID, i)
-		err := p.do(clickhouse, data.input)
+		err = p.do(clickhouse, data.input)
 		if err == nil {
 			return nil
 		}

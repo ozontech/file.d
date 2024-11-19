@@ -145,10 +145,38 @@ func NewJobProvider(config *Config, metrics *metricCollection, sugLogger *zap.Su
 		numberOfCurrentJobsMetric:      metrics.numberOfCurrentJobsMetric,
 	}
 
+	if len(config.Paths.Include) == 0 {
+		currentDir, err := os.Getwd()
+		if err != nil {
+			jp.logger.Errorf("cannot get current dir: %s", err.Error())
+			return nil
+		}
+
+		watchDir := config.WatchingDir
+		if !filepath.IsAbs(watchDir) {
+			if watchDir == "*" {
+				watchDir = filepath.Join(currentDir, "")
+			} else {
+				watchDir = filepath.Join(currentDir, watchDir)
+			}
+		}
+
+		if config.DirPattern == "*" {
+			config.Paths.Include = append(
+				config.Paths.Include,
+				filepath.Join(watchDir, "**", config.FilenamePattern),
+			)
+		} else {
+			config.Paths.Include = append(
+				config.Paths.Include,
+				filepath.Join(watchDir, config.DirPattern, config.FilenamePattern),
+			)
+		}
+	}
+
 	jp.watcher = NewWatcher(
 		config.WatchingDir,
-		config.FilenamePattern,
-		config.DirPattern,
+		config.Paths,
 		jp.processNotification,
 		config.ShouldWatchChanges,
 		metrics.notifyChannelLengthMetric,

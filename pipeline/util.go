@@ -8,7 +8,7 @@ import (
 	"time"
 	"unsafe"
 
-	insaneJSON "github.com/vitkovskii/insane-json"
+	insaneJSON "github.com/ozontech/insane-json"
 )
 
 // Clone deeply copies string
@@ -151,7 +151,7 @@ const (
 // ParseLevelAsNumber converts log level to the int representation according to the RFC-5424.
 func ParseLevelAsNumber(level string) LogLevel {
 	switch strings.ToLower(strings.TrimSpace(level)) {
-	case "0", "emergency", "fatal", "panic", "dpanic":
+	case "0", "emergency", "emerg", "fatal", "panic", "dpanic":
 		return LevelEmergency
 	case "1", "alert":
 		return LevelAlert

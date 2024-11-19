@@ -10,10 +10,11 @@ import (
 )
 
 type RegexFilter struct {
-	re        *regexp.Regexp
-	limit     int
-	groups    []int
-	separator []byte
+	re                *regexp.Regexp
+	limit             int
+	groups            []int
+	separator         []byte
+	emptyOnNotMatched bool
 
 	buf []byte
 }
@@ -24,6 +25,9 @@ func (r *RegexFilter) Apply(src []byte, dst []byte) []byte {
 	}
 	indexes := r.re.FindAllSubmatchIndex(src, r.limit)
 	if len(indexes) == 0 {
+		if r.emptyOnNotMatched {
+			return []byte("")
+		}
 		return dst
 	}
 	r.buf = r.buf[:0]
@@ -57,9 +61,10 @@ func (r *RegexFilter) setBuffer(buf []byte) {
 
 // compareArgs is used for testing. Checks filter args values.
 func (r *RegexFilter) compareArgs(args []any) error {
-	wantArgsCnt := 4
-	if len(args) != wantArgsCnt {
-		return fmt.Errorf("wrong regex filter amount of args, want=%d got=%d", wantArgsCnt, len(args))
+	wantArgsCntMin := 4
+	wantArgsCntMax := 5
+	if len(args) < wantArgsCntMin || len(args) > wantArgsCntMax {
+		return fmt.Errorf("wrong regex filter amount of args, want=[%d:%d] got=%d", wantArgsCntMin, wantArgsCntMax, len(args))
 	}
 	wantRe := args[0].(string)
 	gotRe := r.re.String()
@@ -86,24 +91,33 @@ func (r *RegexFilter) compareArgs(args []any) error {
 	if wantSeparator != gotSeparator {
 		return fmt.Errorf("wrong regex filter separator, want=%q got=%q", wantSeparator, gotSeparator)
 	}
+	if len(args) > wantArgsCntMin {
+		wantEmptyOnNotMatched := args[4].(bool)
+		gotEmptyOnNotMatched := r.emptyOnNotMatched
+		if wantEmptyOnNotMatched != gotEmptyOnNotMatched {
+			return fmt.Errorf("wrong regex filter flag 'emptyOnNotMatched', want=%v got=%v", wantEmptyOnNotMatched, gotEmptyOnNotMatched)
+		}
+	}
 	return nil
 }
 
 func parseRegexFilter(data string, offset int, logger *zap.Logger) (FieldFilter, int, error) {
-	expArgsCnt := 4
+	expArgsCntMin := 4
+	expArgsCntMax := 5
 	filterEndPos := -1
 	args, argsEndPos, err := parseFilterArgs(data[len(regexFilterPrefix):])
 	if err != nil {
 		return nil, filterEndPos, fmt.Errorf("failed to parse filter args: %w", err)
 	}
 	filterEndPos = argsEndPos + len(regexFilterPrefix) + offset
-	if len(args) != expArgsCnt {
-		return nil, filterEndPos, fmt.Errorf("invalid args for regexp filter, exptected %d, got %d", expArgsCnt, len(args))
+	if len(args) < expArgsCntMin || len(args) > expArgsCntMax {
+		return nil, filterEndPos, fmt.Errorf("invalid args for regexp filter, exptected from %d to %d, got %d", expArgsCntMin, expArgsCntMax, len(args))
 	}
 	var reStr string
 	var limit int
 	var groups []int
 	var separator string
+	var emptyOnNotMatched bool
 	if err := json.Unmarshal([]byte(args[0]), &reStr); err != nil {
 		return nil, filterEndPos, fmt.Errorf("failed to parse regexp filter regexp string: %w", err)
 	}
@@ -118,11 +132,17 @@ func parseRegexFilter(data string, offset int, logger *zap.Logger) (FieldFilter,
 	if err := json.Unmarshal([]byte(args[3]), &separator); err != nil {
 		return nil, filterEndPos, fmt.Errorf("failed to parse regexp filter separator: %w", err)
 	}
+	if len(args) > expArgsCntMin {
+		if err := json.Unmarshal([]byte(args[4]), &emptyOnNotMatched); err != nil {
+			return nil, filterEndPos, fmt.Errorf("failed to parse regexp filter flag 'emptyOnNotMatched': %w", err)
+		}
+	}
 	filter := &RegexFilter{
-		re:        re,
-		limit:     limit,
-		groups:    groups,
-		separator: []byte(separator),
+		re:                re,
+		limit:             limit,
+		groups:            groups,
+		separator:         []byte(separator),
+		emptyOnNotMatched: emptyOnNotMatched,
 	}
 	return filter, filterEndPos, nil
 }

@@ -4,20 +4,18 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
-	"math/rand"
 	"net/http"
+	"strconv"
 	"sync"
 	"time"
 
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
-	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
-	"github.com/ozontech/file.d/xtls"
+	"github.com/ozontech/file.d/xhttp"
+	insaneJSON "github.com/ozontech/insane-json"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/valyala/fasthttp"
-	insaneJSON "github.com/vitkovskii/insane-json"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -28,30 +26,29 @@ If a network error occurs, the batch will infinitely try to be delivered to the 
 }*/
 
 const (
-	outPluginType     = "elasticsearch"
+	outPluginType = "elasticsearch"
+
 	NDJSONContentType = "application/x-ndjson"
 )
 
-var (
-	strAuthorization = []byte(fasthttp.HeaderAuthorization)
-)
-
 type Plugin struct {
-	logger       *zap.Logger
-	client       *fasthttp.Client
-	endpoints    []*fasthttp.URI
-	cancel       context.CancelFunc
-	config       *Config
-	authHeader   []byte
+	config *Config
+
+	client *xhttp.Client
+
+	logger     *zap.Logger
+	controller pipeline.OutputPluginController
+
+	batcher      *pipeline.RetriableBatcher
 	avgEventSize int
+
 	time         string
 	headerPrefix string
-	batcher      *pipeline.RetriableBatcher
-	controller   pipeline.OutputPluginController
+	cancel       context.CancelFunc
 	mu           *sync.Mutex
 
 	// plugin metrics
-	sendErrorMetric      prometheus.Counter
+	sendErrorMetric      *prometheus.CounterVec
 	indexingErrorsMetric prometheus.Counter
 }
 
@@ -62,6 +59,16 @@ type Config struct {
 	// >
 	// > The list of elasticsearch endpoints in the following format: `SCHEMA://HOST:PORT`
 	Endpoints []string `json:"endpoints"  required:"true"` // *
+
+	// > @3@4@5@6
+	// >
+	// > If set, the plugin will use gzip encoding.
+	UseGzip bool `json:"use_gzip" default:"false"` // *
+
+	// > @3@4@5@6
+	// >
+	// > Gzip compression level. Used if `use_gzip=true`.
+	GzipCompressionLevel string `json:"gzip_compression_level" default:"default" options:"default|no|best-speed|best-compression|huffman-only"` // *
 
 	// > @3@4@5@6
 	// >
@@ -81,6 +88,18 @@ type Config struct {
 	// > @3@4@5@6
 	// > Path or content of a PEM-encoded CA file.
 	CACert string `json:"ca_cert"` // *
+
+	// > @3@4@5@6
+	// >
+	// > Keep-alive config.
+	// >
+	// > `KeepAliveConfig` params:
+	// > * `max_idle_conn_duration` - idle keep-alive connections are closed after this duration.
+	// > By default idle connections are closed after `10s`.
+	// > * `max_conn_duration` - keep-alive connections are closed after this duration.
+	// > If set to `0` - connection duration is unlimited.
+	// > By default connection duration is `5m`.
+	KeepAlive KeepAliveConfig `json:"keep_alive" child:"true"` // *
 
 	// > @3@4@5@6
 	// >
@@ -162,6 +181,21 @@ type Config struct {
 	// >
 	// > Multiplier for exponential increase of retention between retries
 	RetentionExponentMultiplier int `json:"retention_exponentially_multiplier" default:"2"` // *
+
+	// > @3@4@5@6
+	// >
+	// > After a non-retryable write error, fall with a non-zero exit code or not
+	Strict bool `json:"strict" default:"false"` // *
+}
+
+type KeepAliveConfig struct {
+	// Idle keep-alive connections are closed after this duration.
+	MaxIdleConnDuration  cfg.Duration `json:"max_idle_conn_duration" parse:"duration" default:"10s"`
+	MaxIdleConnDuration_ time.Duration
+
+	// Keep-alive connections are closed after this duration.
+	MaxConnDuration  cfg.Duration `json:"max_conn_duration" parse:"duration" default:"5m"`
+	MaxConnDuration_ time.Duration
 }
 
 type data struct {
@@ -192,36 +226,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		p.config.IndexValues = append(p.config.IndexValues, "@time")
 	}
 
-	for _, endpoint := range p.config.Endpoints {
-		if endpoint[len(endpoint)-1] == '/' {
-			endpoint = endpoint[:len(endpoint)-1]
-		}
-
-		uri := &fasthttp.URI{}
-		if err := uri.Parse(nil, []byte(endpoint+"/_bulk?_source=false")); err != nil {
-			logger.Fatalf("can't parse ES endpoint %s: %s", endpoint, err.Error())
-		}
-
-		p.endpoints = append(p.endpoints, uri)
-	}
-
-	p.client = &fasthttp.Client{
-		ReadTimeout:     p.config.ConnectionTimeout_ * 2,
-		WriteTimeout:    p.config.ConnectionTimeout_ * 2,
-		MaxConnDuration: time.Minute * 5,
-	}
-
-	if p.config.CACert != "" {
-		b := xtls.NewConfigBuilder()
-		err := b.AppendCARoot(p.config.CACert)
-		if err != nil {
-			p.logger.Fatal("can't append CA root", zap.Error(err))
-		}
-
-		p.client.TLSConfig = b.Build()
-	}
-
-	p.authHeader = p.getAuthHeader()
+	p.prepareClient()
 
 	p.maintenance(nil)
 
@@ -282,8 +287,51 @@ func (p *Plugin) Out(event *pipeline.Event) {
 }
 
 func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
-	p.sendErrorMetric = ctl.RegisterCounter("output_elasticsearch_send_error", "Total elasticsearch send errors")
+	p.sendErrorMetric = ctl.RegisterCounterVec("output_elasticsearch_send_error", "Total elasticsearch send errors", "status_code")
 	p.indexingErrorsMetric = ctl.RegisterCounter("output_elasticsearch_index_error", "Number of elasticsearch indexing errors")
+}
+
+func (p *Plugin) prepareClient() {
+	config := &xhttp.ClientConfig{
+		Endpoints:         prepareEndpoints(p.config.Endpoints),
+		ConnectionTimeout: p.config.ConnectionTimeout_ * 2,
+		AuthHeader:        p.getAuthHeader(),
+		KeepAlive: &xhttp.ClientKeepAliveConfig{
+			MaxConnDuration:     p.config.KeepAlive.MaxConnDuration_,
+			MaxIdleConnDuration: p.config.KeepAlive.MaxIdleConnDuration_,
+		},
+	}
+	if p.config.CACert != "" {
+		config.TLS = &xhttp.ClientTLSConfig{
+			CACert: p.config.CACert,
+		}
+	}
+	if p.config.UseGzip {
+		config.GzipCompressionLevel = p.config.GzipCompressionLevel
+	}
+
+	var err error
+	p.client, err = xhttp.NewClient(config)
+	if err != nil {
+		p.logger.Fatal("can't create http client", zap.Error(err))
+	}
+}
+
+func prepareEndpoints(endpoints []string) []string {
+	res := make([]string, 0, len(endpoints))
+	for _, e := range endpoints {
+		if e[len(e)-1] == '/' {
+			e = e[:len(e)-1]
+		}
+		res = append(res, e+"/_bulk?_source=false")
+	}
+	return res
+}
+
+func (p *Plugin) maintenance(_ *pipeline.WorkerData) {
+	p.mu.Lock()
+	p.time = time.Now().Format(p.config.TimeFormat)
+	p.mu.Unlock()
 }
 
 func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) error {
@@ -304,44 +352,25 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 		data.outBuf = p.appendEvent(data.outBuf, event)
 	})
 
-	err := p.send(data.outBuf)
+	statusCode, err := p.client.DoTimeout(http.MethodPost, NDJSONContentType, data.outBuf,
+		p.config.ConnectionTimeout_, p.reportESErrors)
+
 	if err != nil {
-		p.sendErrorMetric.Inc()
-		p.logger.Error("can't send to the elastic, will try other endpoint", zap.Error(err))
+		p.sendErrorMetric.WithLabelValues(strconv.Itoa(statusCode)).Inc()
+		switch statusCode {
+		case http.StatusBadRequest, http.StatusRequestEntityTooLarge:
+			const errMsg = "can't send to the elastic, non-retryable error occurred"
+			fields := []zap.Field{zap.Int("status_code", statusCode), zap.Error(err)}
+			if p.config.Strict {
+				p.logger.Fatal(errMsg, fields...)
+			}
+			p.logger.Error(errMsg, fields...)
+			return nil
+		default:
+			p.logger.Error("can't send to the elastic, will try other endpoint", zap.Error(err))
+			return err
+		}
 	}
-	return err
-}
-
-func (p *Plugin) send(body []byte) error {
-	req := fasthttp.AcquireRequest()
-	defer fasthttp.ReleaseRequest(req)
-	resp := fasthttp.AcquireResponse()
-	defer fasthttp.ReleaseResponse(resp)
-
-	endpoint := p.endpoints[rand.Int()%len(p.endpoints)]
-	req.SetURI(endpoint)
-	req.SetBodyRaw(body)
-	req.Header.SetMethod(fasthttp.MethodPost)
-	req.Header.SetContentType(NDJSONContentType)
-	p.setAuthHeader(req)
-
-	if err := p.client.DoTimeout(req, resp, p.config.ConnectionTimeout_); err != nil {
-		return fmt.Errorf("can't send batch to %s: %s", endpoint.String(), err.Error())
-	}
-
-	respContent := resp.Body()
-
-	if statusCode := resp.Header.StatusCode(); statusCode < http.StatusOK || statusCode > http.StatusAccepted {
-		return fmt.Errorf("response status from %s isn't OK: status=%d, body=%s", endpoint.String(), statusCode, string(respContent))
-	}
-
-	root, err := insaneJSON.DecodeBytes(respContent)
-	if err != nil {
-		return fmt.Errorf("wrong response from %s: %s", endpoint.String(), err.Error())
-	}
-	defer insaneJSON.Release(root)
-
-	p.reportESErrors(root)
 
 	return nil
 }
@@ -387,29 +416,15 @@ func (p *Plugin) appendIndexName(outBuf []byte, event *pipeline.Event) []byte {
 	return outBuf
 }
 
-func (p *Plugin) maintenance(_ *pipeline.WorkerData) {
-	p.mu.Lock()
-	p.time = time.Now().Format(p.config.TimeFormat)
-	p.mu.Unlock()
-}
-
-func (p *Plugin) getAuthHeader() []byte {
+func (p *Plugin) getAuthHeader() string {
 	if p.config.APIKey != "" {
-		return []byte("ApiKey " + p.config.APIKey)
+		return "ApiKey " + p.config.APIKey
 	}
 	if p.config.Username != "" && p.config.Password != "" {
 		credentials := []byte(p.config.Username + ":" + p.config.Password)
-		buf := make([]byte, base64.StdEncoding.EncodedLen(len(credentials)))
-		base64.StdEncoding.Encode(buf, credentials)
-		return append([]byte("Basic "), buf...)
+		return "Basic " + base64.StdEncoding.EncodeToString(credentials)
 	}
-	return nil
-}
-
-func (p *Plugin) setAuthHeader(req *fasthttp.Request) {
-	if p.authHeader != nil {
-		req.Header.SetBytesKV(strAuthorization, p.authHeader)
-	}
+	return ""
 }
 
 // example of an ElasticSearch response that returned an indexing error for the first log:
@@ -453,9 +468,15 @@ func (p *Plugin) setAuthHeader(req *fasthttp.Request) {
 //	   }
 //	 ]
 //	}
-func (p *Plugin) reportESErrors(root *insaneJSON.Root) {
+func (p *Plugin) reportESErrors(data []byte) error {
+	root, err := insaneJSON.DecodeBytes(data)
+	defer insaneJSON.Release(root)
+	if err != nil {
+		return fmt.Errorf("can't decode response: %w", err)
+	}
+
 	if !root.Dig("errors").AsBool() {
-		return
+		return nil
 	}
 
 	items := root.Dig("items").AsArray()
@@ -463,7 +484,7 @@ func (p *Plugin) reportESErrors(root *insaneJSON.Root) {
 		p.logger.Error("unknown elasticsearch error, 'items' field in the response is empty",
 			zap.String("response", root.EncodeToString()),
 		)
-		return
+		return nil
 	}
 
 	indexingErrors := 0
@@ -495,4 +516,5 @@ func (p *Plugin) reportESErrors(root *insaneJSON.Root) {
 	}
 
 	p.logger.Error("some events from batch aren't written, check previous logs for more information")
+	return nil
 }

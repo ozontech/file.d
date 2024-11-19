@@ -8,7 +8,7 @@ import (
 	"slices"
 
 	"github.com/ozontech/file.d/cfg"
-	insaneJSON "github.com/vitkovskii/insane-json"
+	insaneJSON "github.com/ozontech/insane-json"
 )
 
 // ! do-if-field-op
@@ -202,9 +202,6 @@ type fieldOpNode struct {
 }
 
 func NewFieldOpNode(op string, field string, caseSensitive bool, values [][]byte) (Node, error) {
-	if field == "" {
-		return nil, errors.New("field is not specified")
-	}
 	if len(values) == 0 {
 		return nil, errors.New("values are not provided")
 	}

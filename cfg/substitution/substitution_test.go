@@ -3,14 +3,14 @@ package substitution
 import (
 	"testing"
 
-	"github.com/ozontech/file.d/logger"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
 )
 
-var lg = logger.Instance.Desugar()
+var lg = zap.NewExample()
 
-func TestParseFieldWithFilter(t *testing.T) {
+func TestParseSubstitution(t *testing.T) {
 	tests := []struct {
 		name         string
 		substitution string
@@ -143,7 +143,7 @@ func TestParseFieldWithFilter(t *testing.T) {
 		},
 		{
 			name:         "with_two_substitutions_one_filter",
-			substitution: `days till world end ${prediction.days|re("(\\d),(test.+)",-1,[1,2]," , ")}. Hello, ${name|re("(\\w+)",1,[1],",")}`,
+			substitution: `days till world end ${prediction.days|re("(\\d),(test.+)",-1,[1,2]," , ")}. Hello, ${name|re("(\\w+)",1,[1],",",true)}`,
 			data: [][]string{
 				{"days till world end "},
 				{"prediction", "days"},
@@ -167,6 +167,7 @@ func TestParseFieldWithFilter(t *testing.T) {
 						1,
 						[]int{1},
 						",",
+						true,
 					},
 				},
 			},
@@ -183,8 +184,18 @@ func TestParseFieldWithFilter(t *testing.T) {
 			wantErr:      true,
 		},
 		{
-			name:         "err_invalid_args_empty",
+			name:         "err_re_filter_args_empty",
 			substitution: `test ${field|re()} test2`,
+			wantErr:      true,
+		},
+		{
+			name:         "err_re_filter_invalid_args_count_min",
+			substitution: `test ${field|re("invalid", -1, [1,2])} test2`,
+			wantErr:      true,
+		},
+		{
+			name:         "err_re_filter_invalid_args_count_max",
+			substitution: `test ${field|re("invalid", -1, [1,2], "|", 1, 2)} test2`,
 			wantErr:      true,
 		},
 		{
@@ -205,6 +216,11 @@ func TestParseFieldWithFilter(t *testing.T) {
 		{
 			name:         "err_re_filter_invalid_args_invalid_fourth_arg",
 			substitution: `test ${field|re("(invalid)",-1,[1],'invalid')} test2`,
+			wantErr:      true,
+		},
+		{
+			name:         "err_re_filter_invalid_args_invalid_fifth_arg",
+			substitution: `test ${field|re("(invalid)",-1,[1],"|",100)} test2`,
 			wantErr:      true,
 		},
 		{
@@ -233,13 +249,33 @@ func TestParseFieldWithFilter(t *testing.T) {
 			wantErr:      true,
 		},
 		{
-			name:         "err_invalid_args_empty",
+			name:         "trim_filter_ok",
+			substitution: `test ${field|trim("all","\\n")} test2`,
+			data: [][]string{
+				{"test "},
+				{"field"},
+				{" test2"},
+			},
+			filters: [][][]any{
+				nil,
+				{
+					{
+						trimModeAll,
+						"\\n",
+					},
+				},
+				nil,
+			},
+			wantErr: false,
+		},
+		{
+			name:         "err_trim_filter_args_empty",
 			substitution: `test ${field|trim()} test2`,
 			wantErr:      true,
 		},
 		{
-			name:         "err_trim_filter_invalid_args_invalid_args",
-			substitution: `test ${field|trim("all",(invalid)} test2`,
+			name:         "err_trim_filter_invalid_args_count",
+			substitution: `test ${field|trim("all")} test2`,
 			wantErr:      true,
 		},
 		{
@@ -258,8 +294,8 @@ func TestParseFieldWithFilter(t *testing.T) {
 			wantErr:      true,
 		},
 		{
-			name:         "err_trim_filter_ok",
-			substitution: `test ${field|trim("all","\\n")} test2`,
+			name:         "trim_to_filter_ok",
+			substitution: `test ${field|trim_to("left","{")} test2`,
 			data: [][]string{
 				{"test "},
 				{"field"},
@@ -269,13 +305,38 @@ func TestParseFieldWithFilter(t *testing.T) {
 				nil,
 				{
 					{
-						trimModeAll,
-						"\\n",
+						trimModeLeft,
+						"{",
 					},
 				},
 				nil,
 			},
 			wantErr: false,
+		},
+		{
+			name:         "err_trim_to_filter_args_empty",
+			substitution: `test ${field|trim_to()} test2`,
+			wantErr:      true,
+		},
+		{
+			name:         "err_trim_to_filter_invalid_args_count",
+			substitution: `test ${field|trim_to("all")} test2`,
+			wantErr:      true,
+		},
+		{
+			name:         "err_trim_to_filter_invalid_args_invalid_first_arg",
+			substitution: `test ${field|trim_to("invalid","}")} test2`,
+			wantErr:      true,
+		},
+		{
+			name:         "err_trim_to_filter_invalid_args_invalid_first_arg_2",
+			substitution: `test ${field|trim_to('invalid',"}")} test2`,
+			wantErr:      true,
+		},
+		{
+			name:         "err_trim_to_filter_invalid_args_invalid_second_arg",
+			substitution: `test ${field|trim_to("all",'invalid')} test2`,
+			wantErr:      true,
 		},
 	}
 
@@ -307,7 +368,7 @@ func TestParseFieldWithFilter(t *testing.T) {
 	}
 }
 
-func TestRegexFilterApply(t *testing.T) {
+func TestFilterApply(t *testing.T) {
 	tests := []struct {
 		name         string
 		substitution string
@@ -327,10 +388,22 @@ func TestRegexFilterApply(t *testing.T) {
 			want:         "1.|2.|3.|4.|5.",
 		},
 		{
-			name:         "ok_single_re_filter",
+			name:         "ok_single_re_filter_2",
 			substitution: `${field|re("(re\\d)",2,[1],"|")}`,
 			data:         `this is some text re1 re2 re3 re4 end`,
 			want:         "re1|re2",
+		},
+		{
+			name:         "ok_re_filter_empty_on_not_matched_false",
+			substitution: `${field|re("(re\\d)",1,[1],"|")}`,
+			data:         `this is some text`,
+			want:         "this is some text",
+		},
+		{
+			name:         "ok_re_filter_empty_on_not_matched_true",
+			substitution: `${field|re("(re\\d)",1,[1],"|",true)}`,
+			data:         `this is some text`,
+			want:         "",
 		},
 		{
 			name:         "ok_single_trim_filter_trim_all",
@@ -349,6 +422,18 @@ func TestRegexFilterApply(t *testing.T) {
 			substitution: `${field|trim("right","\\n")}`,
 			data:         `\n{"message":"test"}\n`,
 			want:         `\n{"message":"test"}`,
+		},
+		{
+			name:         "ok_single_trim_to_filter_trim_all",
+			substitution: `${field|trim_to("all","\"")}`,
+			data:         `some data "quoted" some another data`,
+			want:         `"quoted"`,
+		},
+		{
+			name:         "ok_two_trim_to_filters",
+			substitution: `${field|trim_to("left","{")|trim_to("right","}")}`,
+			data:         `some data {"message":"test"} some data`,
+			want:         `{"message":"test"}`,
 		},
 	}
 	for _, tt := range tests {

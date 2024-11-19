@@ -18,54 +18,59 @@ import (
 //
 // Anti-spammer supports exceptions for cases where you need to guarantee delivery of an important events.
 type Antispammer struct {
-	unbanIterations int
-	threshold       int
-	mu              sync.RWMutex
-	sources         map[uint64]source
-	exceptions      matchrule.RuleSets
+	unbanIterations     int
+	threshold           int
+	maintenanceInterval time.Duration
+	mu                  sync.RWMutex
+	sources             map[any]source
+	exceptions          Exceptions
 
 	logger *zap.Logger
 
 	// antispammer metrics
 	activeMetric    prometheus.Gauge
-	banMetric       prometheus.Gauge
+	banMetric       metric.HeldGaugeVec
 	exceptionMetric *prometheus.CounterVec
 }
 
 type source struct {
-	counter *atomic.Int32
-	name    string
+	counter   *atomic.Int32
+	timestamp *atomic.Int64
+	name      string
 }
 
 type Options struct {
 	MaintenanceInterval time.Duration
 	Threshold           int
+	Field               string
 	UnbanIterations     int
-	Exceptions          matchrule.RuleSets
+	Exceptions          Exceptions
 
 	Logger            *zap.Logger
 	MetricsController *metric.Ctl
+	MetricHolder      *metric.Holder
 }
 
-func NewAntispammer(o Options) *Antispammer {
+func NewAntispammer(o *Options) *Antispammer {
 	if o.Threshold > 0 {
 		o.Logger.Info("antispam enabled",
 			zap.Int("threshold", o.Threshold),
 			zap.Duration("maintenance", o.MaintenanceInterval))
 	}
 
+	banMetric := o.MetricsController.RegisterGaugeVec("antispam_banned", "Source is banned", "source_name")
+
 	a := &Antispammer{
-		unbanIterations: o.UnbanIterations,
-		threshold:       o.Threshold,
-		sources:         make(map[uint64]source),
-		exceptions:      o.Exceptions,
-		logger:          o.Logger,
+		unbanIterations:     o.UnbanIterations,
+		threshold:           o.Threshold,
+		maintenanceInterval: o.MaintenanceInterval,
+		sources:             make(map[any]source),
+		exceptions:          o.Exceptions,
+		logger:              o.Logger,
 		activeMetric: o.MetricsController.RegisterGauge("antispam_active",
 			"Gauge indicates whether the antispam is enabled",
 		),
-		banMetric: o.MetricsController.RegisterGauge("antispam_banned",
-			"How many times a source was banned",
-		),
+		banMetric: o.MetricHolder.AddGaugeVec(banMetric),
 		exceptionMetric: o.MetricsController.RegisterCounterVec("antispam_exceptions",
 			"How many times an exception match with an event",
 			"name",
@@ -78,14 +83,18 @@ func NewAntispammer(o Options) *Antispammer {
 	return a
 }
 
-func (a *Antispammer) IsSpam(id uint64, name string, isNewSource bool, event []byte) bool {
+func (a *Antispammer) IsSpam(id any, name string, isNewSource bool, event []byte, timeEvent time.Time) bool {
 	if a.threshold <= 0 {
 		return false
 	}
 
 	for i := 0; i < len(a.exceptions); i++ {
 		e := &a.exceptions[i]
-		if e.Match(event) {
+		checkData := event
+		if e.CheckSourceName {
+			checkData = []byte(name)
+		}
+		if e.Match(checkData) {
 			if e.Name != "" {
 				a.exceptionMetric.WithLabelValues(e.Name).Inc()
 			}
@@ -97,15 +106,19 @@ func (a *Antispammer) IsSpam(id uint64, name string, isNewSource bool, event []b
 	src, has := a.sources[id]
 	a.mu.RUnlock()
 
+	timeEventSeconds := timeEvent.UnixNano()
+
 	if !has {
 		a.mu.Lock()
 		if newSrc, has := a.sources[id]; has {
 			src = newSrc
 		} else {
 			src = source{
-				counter: &atomic.Int32{},
-				name:    name,
+				counter:   &atomic.Int32{},
+				name:      name,
+				timestamp: &atomic.Int64{},
 			}
+			src.timestamp.Add(timeEventSeconds)
 			a.sources[id] = src
 		}
 		a.mu.Unlock()
@@ -116,13 +129,21 @@ func (a *Antispammer) IsSpam(id uint64, name string, isNewSource bool, event []b
 		return false
 	}
 
-	x := src.counter.Inc()
+	x := src.counter.Load()
+	diff := timeEventSeconds - src.timestamp.Swap(timeEventSeconds)
+	if diff < a.maintenanceInterval.Nanoseconds() {
+		x = src.counter.Inc()
+	}
 	if x == int32(a.threshold) {
 		src.counter.Swap(int32(a.unbanIterations * a.threshold))
 		a.activeMetric.Set(1)
-		a.banMetric.Inc()
+		a.banMetric.WithLabelValues(name).Inc()
 		a.logger.Warn("source has been banned",
-			zap.Uint64("id", id), zap.String("name", name))
+			zap.Any("id", id), zap.String("name", name),
+			zap.Time("time_event", timeEvent), zap.Int64("diff_nsec", diff),
+			zap.Int64("maintenance_nsec", a.maintenanceInterval.Nanoseconds()),
+			zap.Int32("counter", src.counter.Load()),
+		)
 	}
 
 	return x >= int32(a.threshold)
@@ -147,8 +168,8 @@ func (a *Antispammer) Maintenance() {
 		}
 
 		if isMore && x < a.threshold {
-			a.banMetric.Dec()
-			a.logger.Info("source has been unbanned", zap.Uint64("id", sourceID))
+			a.banMetric.WithLabelValues(source.name).Dec()
+			a.logger.Info("source has been unbanned", zap.Any("id", sourceID))
 		}
 
 		if x >= a.threshold {
@@ -178,7 +199,7 @@ func (a *Antispammer) Dump() string {
 		for s, source := range a.sources {
 			value := source.counter.Load()
 			if int(value) >= a.threshold {
-				o += fmt.Sprintf("source_id: %d, source_name: %s, events_counter: %d\n", s, source.name, value)
+				o += fmt.Sprintf("source_id: %v, source_name: %s, counter: %d\n", s, source.name, value)
 			}
 		}
 		a.mu.RUnlock()
@@ -186,4 +207,17 @@ func (a *Antispammer) Dump() string {
 	})
 
 	return out
+}
+
+type Exception struct {
+	matchrule.RuleSet
+	CheckSourceName bool `json:"check_source_name"`
+}
+
+type Exceptions []Exception
+
+func (e Exceptions) Prepare() {
+	for i := range e {
+		e[i].Prepare()
+	}
 }

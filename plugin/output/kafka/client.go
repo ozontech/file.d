@@ -21,6 +21,7 @@ func NewClient(c *Config, l *zap.Logger) *kgo.Client {
 		kgo.MaxBufferedRecords(c.BatchSize_),
 		kgo.ProducerBatchMaxBytes(int32(c.MaxMessageBytes_)),
 		kgo.ProducerLinger(1 * time.Millisecond),
+		kgo.AllowAutoTopicCreation(),
 	}...)
 
 	switch c.Compression {
@@ -51,7 +52,7 @@ func NewClient(c *Config, l *zap.Logger) *kgo.Client {
 		l.Fatal("can't create kafka client", zap.Error(err))
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	err = client.Ping(ctx)

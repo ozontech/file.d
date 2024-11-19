@@ -317,6 +317,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 		if data.messages[i] == nil {
 			data.messages[i] = &kgo.Record{}
 		}
+		data.messages[i].Timestamp = time.Now()
 		data.messages[i].Value = outBuf[start:]
 		data.messages[i].Topic = topic
 		i++

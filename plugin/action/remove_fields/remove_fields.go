@@ -1,6 +1,10 @@
 package remove_fields
 
 import (
+	"sort"
+	"strings"
+
+	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/pipeline"
@@ -8,11 +12,53 @@ import (
 
 /*{ introduction
 It removes the list of the event fields and keeps others.
+Nested fields supported: list subfield names separated with dot.
+Example:
+```
+fields: ["a.b.c"]
+
+# event before processing
+{
+  "a": {
+    "b": {
+      "c": 100,
+      "d": "some"
+    }
+  }
+}
+
+# event after processing
+{
+  "a": {
+    "b": {
+      "d": "some" # "c" removed
+    }
+  }
+}
+```
+
+If field name contains dots use backslash for escaping.
+Example:
+```
+fields:
+  - exception\.type
+
+# event before processing
+{
+  "message": "Exception occurred",
+  "exception.type": "SomeType"
+}
+
+# event after processing
+{
+  "message": "Exception occurred" # "exception.type" removed
+}
+```
 }*/
 
 type Plugin struct {
-	config    *Config
-	fieldsBuf []string
+	config     *Config
+	fieldPaths [][]string
 }
 
 // ! config-params
@@ -40,20 +86,55 @@ func (p *Plugin) Start(config pipeline.AnyConfig, _ *pipeline.ActionPluginParams
 	if p.config == nil {
 		logger.Panicf("config is nil for the remove fields plugin")
 	}
+
+	// remove nested fields selection;
+	// for example:
+	// config `fields: ["a", "a.b"]` is equal to
+	// config `fields: ["a"]`
+	// see tests: TestDuplicatingFieldSelectors, TestNestedFieldSelectors
+
+	fields := p.config.Fields
+	sort.Slice(fields, func(i, j int) bool {
+		return len(fields[i]) < len(fields[j])
+	})
+
+	p.fieldPaths = make([][]string, 0, len(fields))
+
+	for i, f1 := range fields {
+		if f1 == "" {
+			logger.Warn("empty field found")
+			continue
+		}
+
+		ok := true
+		for _, f2 := range fields[:i] {
+			if strings.HasPrefix(f1, f2) {
+				logger.Warnf("path '%s' included in path '%s'; remove nested path", f1, f2)
+				ok = false
+				break
+			}
+		}
+
+		if ok {
+			p.fieldPaths = append(p.fieldPaths, cfg.ParseFieldSelector(f1))
+		}
+	}
+
+	if len(p.fieldPaths) == 0 {
+		logger.Warn("no fields will be removed")
+	}
 }
 
 func (p *Plugin) Stop() {
 }
 
 func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
-	p.fieldsBuf = p.fieldsBuf[:0]
-
 	if !event.Root.IsObject() {
 		return pipeline.ActionPass
 	}
 
-	for _, field := range p.config.Fields {
-		event.Root.Dig(field).Suicide()
+	for _, fieldPath := range p.fieldPaths {
+		event.Root.Dig(fieldPath...).Suicide()
 	}
 
 	return pipeline.ActionPass

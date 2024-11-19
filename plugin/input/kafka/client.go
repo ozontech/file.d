@@ -9,7 +9,7 @@ import (
 	"go.uber.org/zap"
 )
 
-func NewClient(c *Config, l *zap.Logger) *kgo.Client {
+func NewClient(c *Config, l *zap.Logger, s Consumer) *kgo.Client {
 	opts := cfg.GetKafkaClientOptions(c, l)
 	opts = append(opts, []kgo.Opt{
 		kgo.ConsumerGroup(c.ConsumerGroup),
@@ -22,6 +22,10 @@ func NewClient(c *Config, l *zap.Logger) *kgo.Client {
 		kgo.AutoCommitInterval(c.AutoCommitInterval_),
 		kgo.SessionTimeout(c.SessionTimeout_),
 		kgo.HeartbeatInterval(c.HeartbeatInterval_),
+		kgo.OnPartitionsAssigned(s.Assigned),
+		kgo.OnPartitionsRevoked(s.Lost),
+		kgo.OnPartitionsLost(s.Lost),
+		kgo.BlockRebalanceOnPoll(),
 	}...)
 
 	offset := kgo.NewOffset()
@@ -49,7 +53,7 @@ func NewClient(c *Config, l *zap.Logger) *kgo.Client {
 		l.Fatal("can't create kafka client", zap.Error(err))
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	err = client.Ping(ctx)

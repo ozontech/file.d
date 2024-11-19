@@ -30,18 +30,6 @@ But update events don't work with symlinks, so watcher also periodically manuall
 
 > ⚠ Use add_file_name plugin if you want to add filename to events.
 
-**Reading docker container log files:**
-```yaml
-pipelines:
-  example_docker_pipeline:
-    input:
-        type: file
-        watching_dir: /var/lib/docker/containers
-        offsets_file: /data/offsets.yaml
-        filename_pattern: "*-json.log"
-        persistence_mode: async
-```
-
 [More details...](plugin/input/file/README.md)
 ## http
 Reads events from HTTP requests with the body delimited by a new line.
@@ -296,6 +284,11 @@ Following that, it will allow through every 5th event in that interval.
 
 
 [More details...](plugin/action/debug/README.md)
+## decode
+It decodes a string from the event field and merges the result with the event root.
+> If one of the decoded keys already exists in the event root, it will be overridden.
+
+[More details...](plugin/action/decode/README.md)
 ## discard
 It drops an event. It is used in a combination with `match_fields`/`match_mode` parameters to filter out the events.
 
@@ -430,6 +423,7 @@ pipelines:
 ## modify
 It modifies the content for a field or add new field. It works only with strings.
 You can provide an unlimited number of config parameters. Each parameter handled as `cfg.FieldSelector`:`cfg.Substitution`.
+When `_skip_empty` is set to `true`, the field won't be modified/added in the case of field value is empty.
 
 > Note: When used to add new nested fields, each child field is added step by step, which can cause performance issues.
 
@@ -456,60 +450,6 @@ The resulting event could look like:
     "value": 666
   }
 ```
-
-**Filters**
-
-Sometimes it is required to extract certain data from fields and for that purpose filter chains were added.
-Filters are added one after another using pipe '|' symbol and they are applied to the last value in the chain.
-
-For example, in expression `${field|re("(test-pod-\w+)",-1,[1],",")|re("test-pod-(\w+)",-1,[1],",")}` first the value of 'field' is retrieved,
-then the data extracted using first regular expression and formed into a new string, then the second regular expression is applied
-and its result is formed into a value to be put in modified field.
-
-Currently available filters are:
-
-+ `regex filter` - `re(regex string, limit int, groups []int, separator string)`, filters data using `regex`, extracts `limit` occurrences,
-takes regex groups listed in `groups` list, and if there are more than one extracted element concatenates result using `separator`.
-Negative value of `limit` means all occurrences are extracted, `limit` 0 means no occurrences are extracted, `limit` greater than 0 means
-at most `limit` occurrences are extracted.
-
-+ `trim filter` - `trim(mode string, cutset string)`, trims data by the `cutset` substring. Available modes are `all` - trim both sides,
-`left` - trim only left, `right` - trim only right.
-
-Examples:
-
-Example #1:
-
-Data: `{"message:"info: something happened"}`
-
-Substitution: `level: ${message|re("(\w+):.*",-1,[1],",")}`
-
-Result: `{"message:"info: something happened","level":"info"}`
-
-Example #2:
-
-Data: `{"message:"re1 re2 re3 re4"}`
-
-Substitution: `extracted: ${message|re("(re\d+)",2,[1],",")}`
-
-Result: `{"message:"re1 re2 re3 re4","extracted":"re1,re2"}`
-
-Example #3:
-
-Data: `{"message:"service=service-test-1 exec took 200ms"}`
-
-Substitution: `took: ${message|re("service=([A-Za-z0-9_\-]+) exec took (\d+\.?\d*(?:ms|s|m|h))",-1,[2],",")}`
-
-Result: `{"message:"service=service-test-1 exec took 200ms","took":"200ms"}`
-
-Example #4:
-
-Data: `{"message:"{\"service\":\"service-test-1\",\"took\":\"200ms\"}\n"}`
-
-Substitution: `message: ${message|trim("right","\n")}`
-
-Result: `{"message:"{\"service\":\"service-test-1\",\"took\":\"200ms\"}"}`
-
 
 [More details...](plugin/action/modify/README.md)
 ## move
@@ -616,6 +556,48 @@ It parses string from the event field using re2 expression with named subgroups 
 [More details...](plugin/action/parse_re2/README.md)
 ## remove_fields
 It removes the list of the event fields and keeps others.
+Nested fields supported: list subfield names separated with dot.
+Example:
+```
+fields: ["a.b.c"]
+
+# event before processing
+{
+  "a": {
+    "b": {
+      "c": 100,
+      "d": "some"
+    }
+  }
+}
+
+# event after processing
+{
+  "a": {
+    "b": {
+      "d": "some" # "c" removed
+    }
+  }
+}
+```
+
+If field name contains dots use backslash for escaping.
+Example:
+```
+fields:
+  - exception\.type
+
+# event before processing
+{
+  "message": "Exception occurred",
+  "exception.type": "SomeType"
+}
+
+# event after processing
+{
+  "message": "Exception occurred" # "exception.type" removed
+}
+```
 
 [More details...](plugin/action/remove_fields/README.md)
 ## rename
@@ -809,6 +791,52 @@ pipelines:
 [More details...](plugin/output/s3/README.md)
 ## splunk
 It sends events to splunk.
+
+By default it only stores original event under the "event" key according to the Splunk output format.
+
+If other fields are required it is possible to copy fields values from the original event to the other
+fields relative to the output json. Copies are not allowed directly to the root of output event or
+"event" field and any of its subfields.
+
+For example, timestamps and service name can be copied to provide additional meta data to the Splunk:
+
+```yaml
+copy_fields:
+  - from: ts
+  	to: time
+  - from: service
+  	to: fields.service_name
+```
+
+Here the plugin will lookup for "ts" and "service" fields in the original event and if they are present
+they will be copied to the output json starting on the same level as the "event" key. If the field is not
+found in the original event plugin will not populate new field in output json.
+
+In:
+
+```json
+{
+  "ts":"1723651045",
+  "service":"some-service",
+  "message":"something happened"
+}
+```
+
+Out:
+
+```json
+{
+  "event": {
+    "ts":"1723651045",
+    "service":"some-service",
+    "message":"something happened"
+  },
+  "time": "1723651045",
+  "fields": {
+    "service_name": "some-service"
+  }
+}
+```
 
 [More details...](plugin/output/splunk/README.md)
 ## stdout

@@ -4,9 +4,9 @@ import (
 	"encoding/json"
 	"testing"
 
+	insaneJSON "github.com/ozontech/insane-json"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	insaneJSON "github.com/vitkovskii/insane-json"
 )
 
 const protoContent = `syntax = "proto3";
@@ -31,7 +31,7 @@ message MyMessage {
 }
 `
 
-func TestProtobufDecoder(t *testing.T) {
+func TestProtobuf(t *testing.T) {
 	const protoMessage = "MyMessage"
 
 	type (
@@ -175,7 +175,7 @@ func TestProtobufDecoder(t *testing.T) {
 			root := insaneJSON.Spawn()
 			defer insaneJSON.Release(root)
 
-			err = dec.Decode(root, tt.data)
+			err = dec.DecodeToJson(root, tt.data)
 			require.Equal(t, tt.wantDecodeErr, err != nil, err)
 			if tt.wantDecodeErr {
 				return
@@ -183,7 +183,7 @@ func TestProtobufDecoder(t *testing.T) {
 
 			// for correct comparison
 			var gotMsg testMyMessage
-			assert.NoError(t, json.Unmarshal(root.AsBytes(), &gotMsg))
+			assert.NoError(t, json.Unmarshal(root.EncodeToByte(), &gotMsg))
 			require.Equal(t, tt.want, gotMsg)
 		})
 	}

@@ -21,6 +21,7 @@ import (
 	_ "github.com/ozontech/file.d/plugin/action/convert_log_level"
 	_ "github.com/ozontech/file.d/plugin/action/convert_utf8_bytes"
 	_ "github.com/ozontech/file.d/plugin/action/debug"
+	_ "github.com/ozontech/file.d/plugin/action/decode"
 	_ "github.com/ozontech/file.d/plugin/action/discard"
 	_ "github.com/ozontech/file.d/plugin/action/flatten"
 	_ "github.com/ozontech/file.d/plugin/action/join"
@@ -56,7 +57,7 @@ import (
 	_ "github.com/ozontech/file.d/plugin/output/s3"
 	_ "github.com/ozontech/file.d/plugin/output/splunk"
 	_ "github.com/ozontech/file.d/plugin/output/stdout"
-	insaneJSON "github.com/vitkovskii/insane-json"
+	insaneJSON "github.com/ozontech/insane-json"
 	"go.uber.org/automaxprocs/maxprocs"
 )
 

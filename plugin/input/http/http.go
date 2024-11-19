@@ -2,6 +2,7 @@ package http
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -166,6 +167,7 @@ type Config struct {
 	// > @3@4@5@6
 	// >
 	// > CORS config.
+	// > Allowed origins support only one wildcard symbol. `http://*.example.com` - valid, `http://*.example.*.com` - invalid.
 	// > See CORSConfig for details.
 	CORS CORSConfig `json:"cors" child:"true"` // *
 }
@@ -200,20 +202,64 @@ type AuthConfig struct {
 	Secrets map[string]string `json:"secrets"` // *
 }
 
+type originDomain struct {
+	domain string
+	prefix string
+	suffix string
+}
+
 type CORSConfig struct {
 	AllowedOrigins []string `json:"allowed_origins"`
 	DefaultOrigin  string   `json:"default_origin"  default:"*"`
 	AllowedHeaders []string `json:"allowed_headers"`
 	ExposedHeaders []string `json:"exposed_headers"`
+
+	allowedOriginsDomains []originDomain
+	allowedOriginsAll     bool
 }
 
-func (c *CORSConfig) getAllowedByOrigin(originHeader string) string {
-	for _, allowed := range c.AllowedOrigins {
-		if strings.HasSuffix(originHeader, allowed) || strings.HasPrefix(originHeader, allowed) {
-			return originHeader
+func (c *CORSConfig) getAllowedByOrigin(origin string) string {
+	if c.allowedOriginsAll {
+		return origin
+	}
+
+	for _, ao := range c.allowedOriginsDomains {
+		if ao.domain != "" && origin == ao.domain {
+			return origin
+		}
+
+		pslen := len(ao.prefix) + len(ao.suffix)
+		if pslen > 0 && len(origin) > pslen && strings.HasPrefix(origin, ao.prefix) && strings.HasSuffix(origin, ao.suffix) {
+			return origin
 		}
 	}
+
 	return c.DefaultOrigin
+}
+
+func (c *CORSConfig) prepareAllowedOrigins() error {
+	for _, ao := range c.AllowedOrigins {
+		ao = strings.ToLower(ao)
+		if ao == "*" {
+			c.allowedOriginsAll = true
+			c.allowedOriginsDomains = nil
+			break
+		}
+		if wildcard := strings.IndexByte(ao, '*'); wildcard != -1 {
+			if strings.Contains(ao[wildcard+1:], "*") {
+				return fmt.Errorf("invalid origin %q, only one wildcard per origin is allowed", ao)
+			}
+			c.allowedOriginsDomains = append(c.allowedOriginsDomains, originDomain{
+				prefix: ao[:wildcard],
+				suffix: ao[wildcard+1:],
+			})
+			continue
+		}
+		c.allowedOriginsDomains = append(c.allowedOriginsDomains, originDomain{
+			domain: ao,
+		})
+	}
+	return nil
 }
 
 func init() {
@@ -239,6 +285,10 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 		for name, token := range p.config.Auth.Secrets {
 			p.nameByBearerToken[token] = name
 		}
+	}
+
+	if err := p.config.CORS.prepareAllowedOrigins(); err != nil {
+		p.logger.Fatal("failed to prepare allowed origins", zap.Error(err))
 	}
 
 	p.controller = params.Controller
