@@ -161,8 +161,8 @@ func TestK8SJoin(t *testing.T) {
 	})
 
 	k8sMeta := fmt.Sprintf(
-		`,"k8s_pod":"%s","k8s_namespace":"%s","k8s_container_id":"%s"`,
-		item.podName, item.namespace, item.containerID,
+		`,"k8s_pod":"%s","k8s_namespace":"%s","k8s_container_id":"%s","k8s_container":"%s"`,
+		item.podName, item.namespace, item.containerID, item.containerName,
 	)
 
 	filename := getLogFilename("/k8s-logs", item)

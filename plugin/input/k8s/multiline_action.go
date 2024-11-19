@@ -51,7 +51,8 @@ func (p *MultilineAction) Do(event *pipeline.Event) pipeline.ActionResult {
 
 	ns := namespace(event.Root.Dig("k8s_namespace").AsString())
 	pod := podName(event.Root.Dig("k8s_pod").AsString())
-	container := containerID(event.Root.Dig("k8s_container_id").AsString())
+	containerID := containerID(event.Root.Dig("k8s_container_id").AsString())
+	containerName := containerName(event.Root.Dig("k8s_container").AsString())
 
 	if ns == "" {
 		p.logger.Fatalf("k8s namespace is empty: source=%s", event.SourceName)
@@ -59,8 +60,11 @@ func (p *MultilineAction) Do(event *pipeline.Event) pipeline.ActionResult {
 	if pod == "" {
 		p.logger.Fatalf("k8s pod is empty: source=%s", event.SourceName)
 	}
-	if container == "" {
-		p.logger.Fatalf("k8s container is empty: source=%s", event.SourceName)
+	if containerID == "" {
+		p.logger.Fatalf("k8s container id is empty: source=%s", event.SourceName)
+	}
+	if containerName == "" {
+		p.logger.Fatalf("k8s container name is empty: source=%s", event.SourceName)
 	}
 
 	if p.config.OnlyNode {
@@ -111,10 +115,10 @@ func (p *MultilineAction) Do(event *pipeline.Event) pipeline.ActionResult {
 		return pipeline.ActionDiscard
 	}
 
-	success, podMeta := getPodMeta(ns, pod, container)
+	success, podMeta := getPodMeta(ns, pod, containerID)
 
 	if shouldSplit {
-		p.logger.Warnf("too long k8s event found, it'll be split, ns=%s pod=%s container=%s consider increase split_event_size, split_event_size=%d, predicted event size=%d", ns, pod, container, p.config.SplitEventSize, predictedLen)
+		p.logger.Warnf("too long k8s event found, it'll be split, ns=%s pod=%s container=%s consider increase split_event_size, split_event_size=%d, predicted event size=%d", ns, pod, containerName, p.config.SplitEventSize, predictedLen)
 	}
 
 	if success {
