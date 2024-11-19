@@ -6,10 +6,10 @@ import (
 )
 
 type K8sMetaInformation struct {
-	namespace     string
-	podName       string
-	containerName string
-	containerID   string
+	Namespace     string
+	PodName       string
+	ContainerName string
+	ContainerID   string
 }
 
 func NewK8sMetaInformation(fullFilename string) (K8sMetaInformation, error) {
@@ -53,18 +53,18 @@ func NewK8sMetaInformation(fullFilename string) (K8sMetaInformation, error) {
 	cid := filename[len(filename)-64:]
 
 	return K8sMetaInformation{
-		namespace:     ns,
-		podName:       pod,
-		containerName: container,
-		containerID:   cid,
+		Namespace:     ns,
+		PodName:       pod,
+		ContainerName: container,
+		ContainerID:   cid,
 	}, nil
 }
 
 func (m K8sMetaInformation) GetData() map[string]any {
 	return map[string]any{
-		"pod":          m.podName,
-		"namespace":    m.namespace,
-		"container":    m.containerName,
-		"container_id": m.containerID,
+		"pod":          m.PodName,
+		"namespace":    m.Namespace,
+		"container":    m.ContainerName,
+		"container_id": m.ContainerID,
 	}
 }

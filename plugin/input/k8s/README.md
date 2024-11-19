@@ -73,7 +73,7 @@ Under the hood this plugin uses [file plugin](/plugin/input/file/README.md) to c
 
 **`meta`** *`cfg.MetaTemplates`* 
 
-Meta params
+K8sMeta params
 
 Add meta information to an event (look at Meta params)
 Use [go-template](https://pkg.go.dev/text/template) syntax

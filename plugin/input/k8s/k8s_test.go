@@ -100,7 +100,6 @@ func getTestMeta() cfg.MetaTemplates {
 
 func TestAllowedLabels(t *testing.T) {
 	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(MultilineActionFactory, config(), pipeline.MatchModeAnd, nil, false))
-	p.SetMetaTemplater(getTestMeta())
 
 	wg := &sync.WaitGroup{}
 	wg.Add(2)
@@ -114,14 +113,14 @@ func TestAllowedLabels(t *testing.T) {
 	putMeta(getPodInfo(item, true))
 	filename1 := getLogFilename("/k8s-logs", item)
 
-	item = &metaItem{
+	item2 := &metaItem{
 		namespace:     "sre",
 		podName:       "advanced-logs-checker-2222222222-trtrq",
 		containerName: "duty-bot",
 		containerID:   "4e0301b633eaa2bfdcafdeba59ba0c72a3815911a6a820bf273534b0f32d98e0",
 	}
-	putMeta(getPodInfo(item, false))
-	filename2 := getLogFilename("/k8s-logs", item)
+	putMeta(getPodInfo(item2, false))
+	filename2 := getLogFilename("/k8s-logs", item2)
 
 	outEvents := make([]*pipeline.Event, 0)
 	output.SetOutFn(func(e *pipeline.Event) {
@@ -129,8 +128,8 @@ func TestAllowedLabels(t *testing.T) {
 		wg.Done()
 	})
 
-	input.In(0, filename1, 0, []byte(`{"time":"time","log":"log\n"}`))
-	input.In(0, filename2, 0, []byte(`{"time":"time","log":"log\n"}`))
+	input.In(0, filename1, 0, []byte(wrapK8sInfo(`log\n`, item, "node1")))
+	input.In(0, filename2, 0, []byte(wrapK8sInfo(`log\n`, item2, "node1")))
 
 	wg.Wait()
 	p.Stop()
@@ -141,7 +140,6 @@ func TestAllowedLabels(t *testing.T) {
 
 func TestK8SJoin(t *testing.T) {
 	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(MultilineActionFactory, config(), pipeline.MatchModeAnd, nil, false))
-	p.SetMetaTemplater(getTestMeta())
 	wg := &sync.WaitGroup{}
 	wg.Add(4)
 
@@ -162,15 +160,20 @@ func TestK8SJoin(t *testing.T) {
 		wg.Done()
 	})
 
+	k8sMeta := fmt.Sprintf(
+		`,"k8s_pod":"%s","k8s_namespace":"%s","k8s_container_id":"%s"`,
+		item.podName, item.namespace, item.containerID,
+	)
+
 	filename := getLogFilename("/k8s-logs", item)
-	input.In(0, filename, 10, []byte(`{"ts":"time","stream":"stdout","log":"one line log 1\n"}`))
-	input.In(0, filename, 20, []byte(`{"ts":"time","stream":"stderr","log":"error "}`))
-	input.In(0, filename, 30, []byte(`{"ts":"time","stream":"stdout","log":"this "}`))
-	input.In(0, filename, 40, []byte(`{"ts":"time","stream":"stdout","log":"is "}`))
-	input.In(0, filename, 50, []byte(`{"ts":"time","stream":"stdout","log":"joined "}`))
-	input.In(0, filename, 60, []byte(`{"ts":"time","stream":"stdout","log":"log 2\n"}`))
-	input.In(0, filename, 70, []byte(`{"ts":"time","stream":"stderr","log":"joined\n"}`))
-	input.In(0, filename, 80, []byte(`{"ts":"time","stream":"stdout","log":"one line log 3\n"}`))
+	input.In(0, filename, 10, []byte(`{"ts":"time","stream":"stdout","log":"one line log 1\n"`+k8sMeta+`}`))
+	input.In(0, filename, 20, []byte(`{"ts":"time","stream":"stderr","log":"error "`+k8sMeta+`}`))
+	input.In(0, filename, 30, []byte(`{"ts":"time","stream":"stdout","log":"this "`+k8sMeta+`}`))
+	input.In(0, filename, 40, []byte(`{"ts":"time","stream":"stdout","log":"is "`+k8sMeta+`}`))
+	input.In(0, filename, 50, []byte(`{"ts":"time","stream":"stdout","log":"joined "`+k8sMeta+`}`))
+	input.In(0, filename, 60, []byte(`{"ts":"time","stream":"stdout","log":"log 2\n"`+k8sMeta+`}`))
+	input.In(0, filename, 70, []byte(`{"ts":"time","stream":"stderr","log":"joined\n"`+k8sMeta+`}`))
+	input.In(0, filename, 80, []byte(`{"ts":"time","stream":"stdout","log":"one line log 3\n"`+k8sMeta+`}`))
 
 	wg.Wait()
 	p.Stop()
@@ -208,7 +211,6 @@ func TestK8SJoin(t *testing.T) {
 
 func TestCleanUp(t *testing.T) {
 	p, _, _ := test.NewPipelineMock(test.NewActionPluginStaticInfo(MultilineActionFactory, config(), pipeline.MatchModeAnd, nil, false))
-	p.SetMetaTemplater(getTestMeta())
 
 	enableGatherer(logger.Instance)
 

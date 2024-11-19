@@ -96,7 +96,7 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
-	// > Meta params
+	// > K8sMeta params
 	// >
 	// > Add meta information to an event (look at Meta params)
 	// > Use [go-template](https://pkg.go.dev/text/template) syntax
@@ -152,8 +152,16 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	if p.config.K8sMeta != nil {
 		meta = p.config.K8sMeta
 	}
-	setBuiltInMeta(meta)
-	p.params.Controller.SetMetaTemplater(meta)
+
+	fileMeta := cfg.MetaTemplates{}
+	if p.config.FileConfig.Meta != nil {
+		fileMeta = p.config.FileConfig.Meta
+	}
+	setBuiltInMeta(fileMeta)
+	for k, v := range meta {
+		fileMeta[k] = v
+	}
+	p.config.FileConfig.Meta = fileMeta
 
 	p.fp.Start(&p.config.FileConfig, params)
 }

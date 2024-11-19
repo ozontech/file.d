@@ -10,10 +10,10 @@ func TestParseLogFilename(t *testing.T) {
 	metaInfo, err := NewK8sMetaInformation("/k8s-logs/advanced-logs-checker-1566485760-trtrq_sre_duty-bot-4e0301b633eaa2bfdcafdeba59ba0c72a3815911a6a820bf273534b0f32d98e0.log")
 
 	assert.Nil(t, err)
-	assert.Equal(t, "sre", metaInfo.namespace)
-	assert.Equal(t, "advanced-logs-checker-1566485760-trtrq", metaInfo.podName)
-	assert.Equal(t, "duty-bot", metaInfo.containerName)
-	assert.Equal(t, "4e0301b633eaa2bfdcafdeba59ba0c72a3815911a6a820bf273534b0f32d98e0", metaInfo.containerID)
+	assert.Equal(t, "sre", metaInfo.Namespace)
+	assert.Equal(t, "advanced-logs-checker-1566485760-trtrq", metaInfo.PodName)
+	assert.Equal(t, "duty-bot", metaInfo.ContainerName)
+	assert.Equal(t, "4e0301b633eaa2bfdcafdeba59ba0c72a3815911a6a820bf273534b0f32d98e0", metaInfo.ContainerID)
 }
 
 func TestParseLogFilenameError(t *testing.T) {

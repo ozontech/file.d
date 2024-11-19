@@ -5,7 +5,6 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/pipeline/metadata"
 	"github.com/ozontech/file.d/plugin/input/fake"
@@ -148,12 +147,6 @@ func BenchmarkMetaTemplater(b *testing.B) {
 		PluginRuntimeInfo: &pipeline.PluginRuntimeInfo{
 			Plugin: outputPlugin,
 		},
-	})
-	pipe.SetMetaTemplater(cfg.MetaTemplates{
-		"pod_name":        "{{ .pod }}",
-		"namespace_value": "{{ .namespace }}",
-		"container_name":  "{{ .container }}",
-		"container_id":    "{{ .container_id }}",
 	})
 
 	for i := 0; i < b.N; i++ {

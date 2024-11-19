@@ -12,6 +12,7 @@ import (
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/pipeline/metadata"
+	k8s_meta "github.com/ozontech/file.d/plugin/input/k8s/meta"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -246,6 +247,151 @@ func TestWorkerWorkMultiData(t *testing.T) {
 			w.work(&inputer, jp, tt.readBufferSize, zap.L().Sugar().With("fd"))
 
 			assert.Equal(t, tt.outData, inputer.gotData)
+		})
+	}
+}
+
+func TestNewMetaInformation(t *testing.T) {
+	tests := []struct {
+		name            string
+		filename        string
+		symlink         string
+		inode           inodeID
+		offset          int64
+		parseK8sMeta    bool
+		expectError     bool
+		expectedK8sMeta *k8s_meta.K8sMetaInformation
+	}{
+		{
+			name:         "Valid filename with K8s metadata",
+			filename:     "/k8s-logs/advanced-logs-checker-2222222222-trtrq_sre_duty-bot-4e0301b633eaa2bfdcafdeba59ba0c72a3815911a6a820bf273534b0f32d98e0.log",
+			symlink:      "",
+			inode:        12345,
+			offset:       0,
+			parseK8sMeta: true,
+			expectError:  false,
+			expectedK8sMeta: &k8s_meta.K8sMetaInformation{
+				PodName:       "advanced-logs-checker-2222222222-trtrq",
+				Namespace:     "sre",
+				ContainerName: "duty-bot",
+				ContainerID:   "4e0301b633eaa2bfdcafdeba59ba0c72a3815911a6a820bf273534b0f32d98e0",
+			},
+		},
+		{
+			name:         "Valid symlink with K8s metadata",
+			filename:     "/4e0301b633eaa2bfdcafdeba59ba0c72a3815911a6a820bf273534b0f32d98e0.log",
+			symlink:      "/k8s-logs/advanced-logs-checker-2222222222-trtrq_sre_duty-bot-4e0301b633eaa2bfdcafdeba59ba0c72a3815911a6a820bf273534b0f32d98e0.log",
+			inode:        12345,
+			offset:       0,
+			parseK8sMeta: true,
+			expectError:  false,
+			expectedK8sMeta: &k8s_meta.K8sMetaInformation{
+				PodName:       "advanced-logs-checker-2222222222-trtrq",
+				Namespace:     "sre",
+				ContainerName: "duty-bot",
+				ContainerID:   "4e0301b633eaa2bfdcafdeba59ba0c72a3815911a6a820bf273534b0f32d98e0",
+			},
+		},
+		{
+			name:            "Filename without k8s parse",
+			filename:        "/4e0301b633eaa2bfdcafdeba59ba0c72a3815911a6a820bf273534b0f32d98e0.log",
+			symlink:         "/k8s-logs/advanced-logs-checker-2222222222-trtrq_sre_duty-bot-4e0301b633eaa2bfdcafdeba59ba0c72a3815911a6a820bf273534b0f32d98e0.log",
+			inode:           12345,
+			offset:          0,
+			parseK8sMeta:    false,
+			expectError:     false,
+			expectedK8sMeta: &k8s_meta.K8sMetaInformation{},
+		},
+		{
+			name:            "Invalid inputs without K8s metadata",
+			filename:        "",
+			symlink:         "",
+			inode:           0,
+			offset:          0,
+			parseK8sMeta:    false,
+			expectError:     false,
+			expectedK8sMeta: &k8s_meta.K8sMetaInformation{}, // No K8s metadata expected
+		},
+		{
+			name:            "Invalid K8s metadata parsing",
+			filename:        "invalidfile.txt",
+			symlink:         "invalidsymlink",
+			inode:           0,
+			offset:          0,
+			parseK8sMeta:    true,
+			expectError:     true,
+			expectedK8sMeta: &k8s_meta.K8sMetaInformation{}, // No K8s metadata expected
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			metaInfo, err := newMetaInformation(tt.filename, tt.symlink, tt.inode, tt.offset, tt.parseK8sMeta)
+
+			if (err != nil) != tt.expectError {
+				t.Errorf("expected error: %v, got: %v", tt.expectError, err)
+			}
+
+			if !tt.expectError {
+				assert.Equal(t, tt.filename, metaInfo.filename)
+				assert.Equal(t, tt.symlink, metaInfo.symlink)
+				assert.Equal(t, uint64(tt.inode), metaInfo.inode)
+				assert.Equal(t, tt.offset, metaInfo.offset)
+
+				if tt.parseK8sMeta {
+					assert.Equal(t, tt.expectedK8sMeta.PodName, metaInfo.k8sMetadata.PodName)
+					assert.Equal(t, tt.expectedK8sMeta.ContainerID, metaInfo.k8sMetadata.ContainerID)
+					assert.Equal(t, tt.expectedK8sMeta.ContainerName, metaInfo.k8sMetadata.ContainerName)
+					assert.Equal(t, tt.expectedK8sMeta.Namespace, metaInfo.k8sMetadata.Namespace)
+				} else {
+					assert.Equal(t, tt.expectedK8sMeta, metaInfo.k8sMetadata)
+				}
+			}
+		})
+	}
+}
+
+func TestGetData(t *testing.T) {
+	tests := []struct {
+		name     string
+		metaInfo metaInformation
+		expected map[string]any
+	}{
+		{
+			name: "Valid data",
+			metaInfo: metaInformation{
+				filename: "/4e0301b633eaa2bfdcafdeba59ba0c72a3815911a6a820bf273534b0f32d98e0.log",
+				symlink:  "/k8s-logs/advanced-logs-checker-2222222222-trtrq_sre_duty-bot-4e0301b633eaa2bfdcafdeba59ba0c72a3815911a6a820bf273534b0f32d98e0.log",
+				inode:    12345,
+				offset:   0,
+				k8sMetadata: &k8s_meta.K8sMetaInformation{
+					PodName:       "advanced-logs-checker-2222222222-trtrq",
+					Namespace:     "sre",
+					ContainerName: "duty-bot",
+					ContainerID:   "4e0301b633eaa2bfdcafdeba59ba0c72a3815911a6a820bf273534b0f32d98e0",
+				},
+			},
+			expected: map[string]any{
+				"filename":     "/4e0301b633eaa2bfdcafdeba59ba0c72a3815911a6a820bf273534b0f32d98e0.log",
+				"symlink":      "/k8s-logs/advanced-logs-checker-2222222222-trtrq_sre_duty-bot-4e0301b633eaa2bfdcafdeba59ba0c72a3815911a6a820bf273534b0f32d98e0.log",
+				"inode":        uint64(12345),
+				"offset":       int64(0),
+				"pod":          "advanced-logs-checker-2222222222-trtrq",
+				"namespace":    "sre",
+				"container":    "duty-bot",
+				"container_id": "4e0301b633eaa2bfdcafdeba59ba0c72a3815911a6a820bf273534b0f32d98e0",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			data := tt.metaInfo.GetData()
+			for key, expectedValue := range tt.expected {
+				if data[key] != expectedValue {
+					t.Errorf("expected %s: %v, got: %v", key, expectedValue, data[key])
+				}
+			}
 		})
 	}
 }
