@@ -230,3 +230,13 @@ func (m metaInformation) GetData() map[string]any {
 		"container_id": m.k8sMetadata.ContainerID,
 	}
 }
+
+/*{ meta-params
+**`filename`**
+
+**`symlink`**
+
+**`inode`**
+
+**`offset`**
+}*/

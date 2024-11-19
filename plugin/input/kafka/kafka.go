@@ -380,3 +380,11 @@ func (m metaInformation) GetData() map[string]any {
 		"offset":    m.offset,
 	}
 }
+
+/*{ meta-params
+**`topic`**
+
+**`partition`**
+
+**`offset`**
+}*/

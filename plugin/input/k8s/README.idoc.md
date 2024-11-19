@@ -5,10 +5,4 @@
 @config-params|description
 
 ### Meta params
-**`pod`** 
-
-**`namespace`** 
-
-**`container`** 
-
-**`container_id`** 
+@meta-params

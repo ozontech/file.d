@@ -173,6 +173,16 @@ func setBuiltInMeta(meta cfg.MetaTemplates) {
 	meta["k8s_container_id"] = "{{ .container_id }}"
 }
 
+/*{ meta-params
+**`pod`**
+
+**`namespace`**
+
+**`container`**
+
+**`container_id`**
+}*/
+
 // Commit event.
 func (p *Plugin) Commit(event *pipeline.Event) {
 	p.fp.Commit(event)

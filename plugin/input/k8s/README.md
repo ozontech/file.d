@@ -82,12 +82,11 @@ Use [go-template](https://pkg.go.dev/text/template) syntax
 
 
 ### Meta params
-**`pod`** 
+**`pod`**
 
-**`namespace`** 
+**`namespace`**
 
-**`container`** 
+**`container`**
 
-**`container_id`** 
-
+**`container_id`**
 <br>*Generated using [__insane-doc__](https://github.com/vitkovskii/insane-doc)*
