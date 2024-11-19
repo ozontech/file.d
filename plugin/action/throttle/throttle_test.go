@@ -3,6 +3,7 @@ package throttle
 import (
 	"fmt"
 	"math/rand"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -170,15 +171,15 @@ func TestSizeThrottle(t *testing.T) {
 
 	config := &Config{
 		Rules: []RuleConfig{
-			{Limit: int64(limitA), LimitKind: "size", Conditions: map[string]string{"k8s_ns": "ns_1"}},
-			{Limit: int64(limitB), LimitKind: "size", Conditions: map[string]string{"k8s_ns": "ns_2"}},
+			{Limit: int64(limitA), LimitKind: limitKindSize, Conditions: map[string]string{"k8s_ns": "ns_1"}},
+			{Limit: int64(limitB), LimitKind: limitKindSize, Conditions: map[string]string{"k8s_ns": "ns_2"}},
 		},
 		BucketsCount:   buckets,
 		BucketInterval: "100ms",
 		ThrottleField:  "k8s_pod",
 		TimeField:      "",
 		DefaultLimit:   int64(defaultLimit),
-		LimitKind:      "size",
+		LimitKind:      limitKindSize,
 	}
 	test.NewConfig(config, nil)
 
@@ -205,7 +206,7 @@ func TestMixedThrottle(t *testing.T) {
 	config := &Config{
 		Rules: []RuleConfig{
 			{Limit: int64(limitA), Conditions: map[string]string{"k8s_ns": "ns_1"}},
-			{Limit: int64(limitB), LimitKind: "size", Conditions: map[string]string{"k8s_ns": "ns_2"}},
+			{Limit: int64(limitB), LimitKind: limitKindSize, Conditions: map[string]string{"k8s_ns": "ns_2"}},
 		},
 		BucketsCount:   buckets,
 		BucketInterval: "100ms",
@@ -235,7 +236,7 @@ func TestRedisThrottle(t *testing.T) {
 
 	config := &Config{
 		Rules: []RuleConfig{
-			{Limit: int64(defaultLimit), LimitKind: "count"},
+			{Limit: int64(defaultLimit), LimitKind: limitKindCount},
 		},
 		BucketsCount:   1,
 		BucketInterval: "2s",
@@ -295,7 +296,7 @@ func TestRedisThrottleMultiPipes(t *testing.T) {
 
 	config := &Config{
 		Rules: []RuleConfig{
-			{Limit: int64(defaultLimit), LimitKind: "count"},
+			{Limit: int64(defaultLimit), LimitKind: limitKindCount},
 		},
 		BucketsCount:   1,
 		BucketInterval: "2m",
@@ -390,7 +391,7 @@ func TestRedisThrottleWithCustomLimitData(t *testing.T) {
 	eventsTotal := 3
 	config := &Config{
 		Rules: []RuleConfig{
-			{Limit: int64(defaultLimit), LimitKind: "count"},
+			{Limit: int64(defaultLimit), LimitKind: limitKindCount},
 		},
 		BucketsCount:   1,
 		BucketInterval: "2s",
@@ -453,7 +454,7 @@ func TestThrottleLimiterExpiration(t *testing.T) {
 	eventsTotal := 3
 	config := &Config{
 		Rules: []RuleConfig{
-			{Limit: int64(defaultLimit), LimitKind: "count"},
+			{Limit: int64(defaultLimit), LimitKind: limitKindCount},
 		},
 		BucketsCount:      1,
 		BucketInterval:    "100ms",
@@ -544,6 +545,104 @@ func TestThrottleRedisFallbackToInMemory(t *testing.T) {
 
 	tconf := testConfig{t, config, eventsTotal, iterations}
 	tconf.runPipeline()
+	t.Cleanup(func() {
+		throttleMapsCleanup()
+	})
+}
+
+func TestThrottleWithDistribution(t *testing.T) {
+	defaultLimit := 12
+	config := &Config{
+		ThrottleField:  "k8s_pod",
+		DefaultLimit:   int64(defaultLimit),
+		BucketsCount:   1,
+		BucketInterval: "1s",
+		LimitDistribution: LimitDistributionConfig{
+			Field: "level",
+			Ratios: []ComplexRatio{
+				{Ratio: 0.5, Values: []string{"error"}},
+				{Ratio: 0.3, Values: []string{"warn", "info"}},
+			},
+		},
+	}
+	test.NewConfig(config, nil)
+
+	p, input, output := test.NewPipelineMock(
+		test.NewActionPluginStaticInfo(factory, config, pipeline.MatchModeAnd, nil, false),
+		"name",
+	)
+
+	wg := &sync.WaitGroup{}
+	wg.Add(defaultLimit)
+
+	outEvents := map[string]int{}
+	output.SetOutFn(func(e *pipeline.Event) {
+		level := strings.Clone(e.Root.Dig("level").AsString())
+		outEvents[level]++
+		wg.Done()
+	})
+
+	// error - limit 6
+	// info, warn - limit 4
+	// default - limit 2
+	events := []string{
+		`{"time":"%s","k8s_pod":"pod_1","level":"error"}`, // 1/6
+		`{"time":"%s","k8s_pod":"pod_1","level":"info"}`,  // 1/4
+		`{"time":"%s","k8s_pod":"pod_1","level":"error"}`, // 2/6
+		`{"time":"%s","k8s_pod":"pod_1","level":""}`,      // 1/2
+		`{"time":"%s","k8s_pod":"pod_1","level":"debug"}`, // 2/2
+		`{"time":"%s","k8s_pod":"pod_1","level":"error"}`, // 3/6
+		`{"time":"%s","k8s_pod":"pod_1","level":"error"}`, // 4/6
+		`{"time":"%s","k8s_pod":"pod_1","level":"debug"}`, // steal from "info, warn" - 2/4
+		`{"time":"%s","k8s_pod":"pod_1","level":"warn"}`,  // 3/4
+		`{"time":"%s","k8s_pod":"pod_1","level":"error"}`, // 5/6
+		`{"time":"%s","k8s_pod":"pod_1","level":"info"}`,  // 4/4
+		`{"time":"%s","k8s_pod":"pod_1","level":"debug"}`, // steal from "error" - 6/6
+		`{"time":"%s","k8s_pod":"pod_1","level":"info"}`,  // throttled
+		`{"time":"%s","k8s_pod":"pod_1","level":"warn"}`,  // throttled
+		`{"time":"%s","k8s_pod":"pod_1","level":""}`,      // throttled
+		`{"time":"%s","k8s_pod":"pod_1","level":"error"}`, // throttled
+		`{"time":"%s","k8s_pod":"pod_1","level":"debug"}`, // throttled
+	}
+
+	wantOutEvents := map[string]int{
+		"error": 5,
+		"info":  2,
+		"warn":  1,
+		"debug": 3,
+		"":      1,
+	}
+
+	nowTs := time.Now().Format(time.RFC3339Nano)
+	for i := 0; i < len(events); i++ {
+		json := fmt.Sprintf(events[i], nowTs)
+		input.In(0, "test", 0, []byte(json))
+	}
+
+	wgWaitWithTimeout := func(wg *sync.WaitGroup, timeout time.Duration) bool {
+		c := make(chan struct{})
+		go func() {
+			defer close(c)
+			wg.Wait()
+		}()
+		select {
+		case <-c:
+			return false
+		case <-time.After(timeout):
+			return true
+		}
+	}
+
+	timeout := wgWaitWithTimeout(wg, 5*time.Second)
+	p.Stop()
+
+	require.False(t, timeout, "timeout expired")
+
+	require.Equal(t, len(wantOutEvents), len(outEvents), "wrong outEvents size")
+	for k, v := range outEvents {
+		require.Equal(t, wantOutEvents[k], v, fmt.Sprintf("wrong value in outEvents with key %q", k))
+	}
+
 	t.Cleanup(func() {
 		throttleMapsCleanup()
 	})

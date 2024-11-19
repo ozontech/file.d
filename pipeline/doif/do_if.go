@@ -1,7 +1,7 @@
 package doif
 
 import (
-	insaneJSON "github.com/vitkovskii/insane-json"
+	insaneJSON "github.com/ozontech/insane-json"
 )
 
 // ! do-if-node
@@ -15,8 +15,14 @@ const (
 	// > Type of node where matching rules for fields are stored.
 	NodeFieldOp // *
 
-	// > Type of node where matching rules for byte length and array length are stored
+	// > Type of node where matching rules for byte length and array length are stored.
 	NodeLengthCmpOp // *
+
+	// > Type of node where matching rules for timestamps are stored.
+	NodeTimestampCmpOp // *
+
+	// > Type of node where matching rules for check types are stored.
+	NodeCheckTypeOp // *
 
 	// > Type of node where logical rules for applying other rules are stored.
 	NodeLogicalOp // *

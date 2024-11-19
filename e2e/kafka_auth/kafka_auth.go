@@ -1,6 +1,7 @@
 package kafka_auth
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -8,6 +9,7 @@ import (
 	kafka_in "github.com/ozontech/file.d/plugin/input/kafka"
 	kafka_out "github.com/ozontech/file.d/plugin/output/kafka"
 	"github.com/stretchr/testify/require"
+	"github.com/twmb/franz-go/pkg/kgo"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -143,6 +145,7 @@ func (c *Config) Configure(t *testing.T, _ *cfg.Config, _ string) {
 
 				kafka_in.NewClient(config,
 					zap.NewNop().WithOptions(zap.WithFatalHook(zapcore.WriteThenPanic)),
+					Consumer{},
 				)
 			},
 		}
@@ -160,3 +163,9 @@ func (c *Config) Configure(t *testing.T, _ *cfg.Config, _ string) {
 func (c *Config) Send(_ *testing.T) {}
 
 func (c *Config) Validate(_ *testing.T) {}
+
+type Consumer struct{}
+
+func (c Consumer) Assigned(_ context.Context, _ *kgo.Client, assigned map[string][]int32) {}
+
+func (c Consumer) Lost(_ context.Context, _ *kgo.Client, lost map[string][]int32) {}

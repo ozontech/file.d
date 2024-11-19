@@ -11,14 +11,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ozontech/file.d/cfg/matchrule"
 	"github.com/ozontech/file.d/decoder"
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline/antispam"
 	"github.com/ozontech/file.d/pipeline/metadata"
+	insaneJSON "github.com/ozontech/insane-json"
 	"github.com/prometheus/client_golang/prometheus"
-	insaneJSON "github.com/vitkovskii/insane-json"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -134,7 +133,8 @@ type Settings struct {
 	MaintenanceInterval time.Duration
 	EventTimeout        time.Duration
 	AntispamThreshold   int
-	AntispamExceptions  matchrule.RuleSets
+	AntispamField       string
+	AntispamExceptions  antispam.Exceptions
 	AvgEventSize        int
 	MaxEventSize        int
 	StreamField         string
@@ -147,6 +147,7 @@ func New(name string, settings *Settings, registry *prometheus.Registry) *Pipeli
 	metricCtl := metric.NewCtl("pipeline_"+name, registry)
 
 	lg := logger.Instance.Named(name).Desugar()
+	metricHolder := metric.NewHolder(settings.MetricHoldDuration)
 
 	pipeline := &Pipeline{
 		Name:           name,
@@ -163,15 +164,17 @@ func New(name string, settings *Settings, registry *prometheus.Registry) *Pipeli
 			m:  make(map[string]*actionMetric),
 			mu: new(sync.RWMutex),
 		},
-		metricHolder: metric.NewHolder(settings.MetricHoldDuration),
+		metricHolder: metricHolder,
 		streamer:     newStreamer(settings.EventTimeout),
 		eventPool:    newEventPool(settings.Capacity, settings.AvgEventSize),
-		antispamer: antispam.NewAntispammer(antispam.Options{
+		antispamer: antispam.NewAntispammer(&antispam.Options{
 			MaintenanceInterval: settings.MaintenanceInterval,
 			Threshold:           settings.AntispamThreshold,
+			Field:               settings.AntispamField,
 			UnbanIterations:     antispamUnbanIterations,
 			Logger:              lg.Named("antispam"),
 			MetricsController:   metricCtl,
+			MetricHolder:        metricHolder,
 			Exceptions:          settings.AntispamExceptions,
 		}),
 
@@ -193,6 +196,12 @@ func New(name string, settings *Settings, registry *prometheus.Registry) *Pipeli
 		pipeline.decoderType = decoder.POSTGRES
 	case "nginx_error":
 		pipeline.decoderType = decoder.NGINX_ERROR
+
+		dec, err := decoder.NewNginxErrorDecoder(pipeline.settings.DecoderParams)
+		if err != nil {
+			pipeline.logger.Fatal("can't create nginx_error decoder", zap.Error(err))
+		}
+		pipeline.decoder = dec
 	case "protobuf":
 		pipeline.decoderType = decoder.PROTOBUF
 
@@ -330,6 +339,8 @@ func (p *Pipeline) Stop() {
 	p.output.Stop()
 
 	p.shouldStop.Store(true)
+
+	p.eventPool.stop()
 }
 
 func (p *Pipeline) SetInput(info *InputPluginInfo) {
@@ -395,8 +406,32 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 	// The event is Partial if it is larger than the driver configuration.
 	// For example, for containerd this setting is called max_container_log_line_size
 	// https://github.com/containerd/containerd/blob/f7f2be732159a411eae46b78bfdb479b133a823b/pkg/cri/config/config.go#L263-L266
-	if !row.IsPartial {
-		isSpam := p.antispamer.IsSpam(uint64(sourceID), sourceName, isNewSource, bytes)
+	if !row.IsPartial && p.settings.AntispamThreshold > 0 {
+		var checkSourceID any
+		var checkSourceName string
+		if p.settings.AntispamField == "" {
+			checkSourceID = uint64(sourceID)
+			checkSourceName = sourceName
+		} else {
+			if val, ok := meta[p.settings.AntispamField]; ok {
+				checkSourceID = val
+				checkSourceName = val
+				isNewSource = false
+			} else {
+				p.Error(fmt.Sprintf("antispam_field %s does not exists in meta", p.settings.AntispamField))
+				checkSourceID = uint64(sourceID)
+				checkSourceName = sourceName
+			}
+		}
+
+		var eventTime time.Time
+		if len(row.Time) > 0 {
+			eventTime, err = time.Parse("2006-01-02T15:04:05.999999999Z", string(row.Time))
+			if err != nil {
+				p.Error(fmt.Sprintf("cannot parse raw time %s: %v", row.Time, err))
+			}
+		}
+		isSpam := p.antispamer.IsSpam(checkSourceID, checkSourceName, isNewSource, bytes, eventTime)
 		if isSpam {
 			return EventSeqIDError
 		}
@@ -409,83 +444,45 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 	event := p.eventPool.get()
 	p.eventPoolLatency.Observe(time.Since(now).Seconds())
 
+	err = nil
+	if !(dec == decoder.JSON || dec == decoder.PROTOBUF) {
+		_ = event.Root.DecodeString("{}")
+	}
 	switch dec {
 	case decoder.JSON:
-		err := event.parseJSON(bytes)
-		if err != nil {
-			level := zapcore.ErrorLevel
-			if p.settings.IsStrict {
-				level = zapcore.FatalLevel
-			}
-
-			p.logger.Log(level, "wrong json format", zap.Error(err),
-				zap.Int64("offset", offset),
-				zap.Int("length", length),
-				zap.Uint64("source", uint64(sourceID)),
-				zap.String("source_name", sourceName),
-				zap.ByteString("json", bytes))
-
-			// Can't process event, return to pool.
-			p.eventPool.back(event)
-			return EventSeqIDError
-		}
+		err = decoder.DecodeJson(event.Root, bytes)
 	case decoder.RAW:
-		_ = event.Root.DecodeString("{}")
 		event.Root.AddFieldNoAlloc(event.Root, "message").MutateToBytesCopy(event.Root, bytes[:len(bytes)-1])
 	case decoder.CRI:
-		_ = event.Root.DecodeString("{}")
 		event.Root.AddFieldNoAlloc(event.Root, "log").MutateToBytesCopy(event.Root, row.Log)
 		event.Root.AddFieldNoAlloc(event.Root, "time").MutateToBytesCopy(event.Root, row.Time)
 		event.Root.AddFieldNoAlloc(event.Root, "stream").MutateToBytesCopy(event.Root, row.Stream)
 	case decoder.POSTGRES:
-		_ = event.Root.DecodeString("{}")
-		err := decoder.DecodePostgres(event.Root, bytes)
-		if err != nil {
-			p.logger.Fatal("wrong postgres format", zap.Error(err),
-				zap.Int64("offset", offset),
-				zap.Int("length", length),
-				zap.Uint64("source", uint64(sourceID)),
-				zap.String("source_name", sourceName),
-				zap.ByteString("log", bytes))
-
-			// Dead route, never passed here.
-			return EventSeqIDError
-		}
+		err = decoder.DecodePostgresToJson(event.Root, bytes)
 	case decoder.NGINX_ERROR:
-		_ = event.Root.DecodeString("{}")
-		err := decoder.DecodeNginxError(event.Root, bytes)
-		if err != nil {
-			level := zapcore.ErrorLevel
-			if p.settings.IsStrict {
-				level = zapcore.FatalLevel
-			}
-
-			p.logger.Log(level, "wrong nginx error log format", zap.Error(err),
-				zap.Int64("offset", offset),
-				zap.Int("length", length),
-				zap.Uint64("source", uint64(sourceID)),
-				zap.String("source_name", sourceName),
-				zap.ByteString("log", bytes))
-
-			p.eventPool.back(event)
-			return EventSeqIDError
-		}
+		err = p.decoder.DecodeToJson(event.Root, bytes)
 	case decoder.PROTOBUF:
-		_ = event.Root.DecodeString("{}")
-		err = p.decoder.Decode(event.Root, bytes)
-		if err != nil {
-			p.logger.Fatal("wrong protobuf format", zap.Error(err),
-				zap.Int64("offset", offset),
-				zap.Int("length", length),
-				zap.Uint64("source", uint64(sourceID)),
-				zap.String("source_name", sourceName),
-				zap.ByteString("log", bytes))
-
-			// Dead route, never passed here.
-			return EventSeqIDError
-		}
+		err = p.decoder.DecodeToJson(event.Root, bytes)
 	default:
 		p.logger.Panic("unknown decoder", zap.Int("decoder", int(dec)))
+	}
+
+	if err != nil {
+		level := zapcore.ErrorLevel
+		if p.settings.IsStrict {
+			level = zapcore.FatalLevel
+		}
+
+		p.logger.Log(level, "wrong log format", zap.Error(err),
+			zap.Int64("offset", offset),
+			zap.Int("length", length),
+			zap.Uint64("source", uint64(sourceID)),
+			zap.String("source_name", sourceName),
+			zap.ByteString("log", bytes))
+
+		// Can't process event, return to pool.
+		p.eventPool.back(event)
+		return EventSeqIDError
 	}
 
 	if len(meta) > 0 {
@@ -574,9 +571,11 @@ func (p *Pipeline) finalize(event *Event, notifyInput bool, backEvent bool) {
 		p.eventLogMu.Unlock()
 	}
 
-	for _, e := range event.children {
+	for i, e := range event.children {
 		insaneJSON.Release(e.Root)
+		event.children[i] = nil
 	}
+
 	p.eventPool.back(event)
 }
 

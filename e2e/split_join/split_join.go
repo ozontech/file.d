@@ -65,6 +65,7 @@ func (c *Config) Configure(t *testing.T, conf *cfg.Config, pipelineName string) 
 
 	c.client = kafka_in.NewClient(config,
 		zap.NewNop().WithOptions(zap.WithFatalHook(zapcore.WriteThenPanic)),
+		Consumer{},
 	)
 
 	adminClient := kadm.NewClient(c.client)
@@ -126,3 +127,9 @@ func (c *Config) Validate(t *testing.T) {
 	r.True(reflect.DeepEqual(expected, result))
 	r.Equal(expectedEventsCount, gotEvents)
 }
+
+type Consumer struct{}
+
+func (c Consumer) Assigned(_ context.Context, _ *kgo.Client, assigned map[string][]int32) {}
+
+func (c Consumer) Lost(_ context.Context, _ *kgo.Client, lost map[string][]int32) {}

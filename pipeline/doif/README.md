@@ -10,7 +10,15 @@ the chain of Match func calls are performed across the whole tree.
 
 <br>
 
-**`LengthCmpOp`** Type of node where matching rules for byte length and array length are stored
+**`LengthCmpOp`** Type of node where matching rules for byte length and array length are stored.
+
+<br>
+
+**`TimestampCmpOp`** Type of node where matching rules for timestamps are stored.
+
+<br>
+
+**`CheckTypeOp`** Type of node where matching rules for check types are stored.
 
 <br>
 
@@ -351,5 +359,78 @@ They denote corresponding comparison operations.
 | `ge` | `>=` |
 | `eq` | `==` |
 | `ne` | `!=` |
+
+### Timestamp comparison op node
+DoIf timestamp comparison op node is considered to always be a leaf in the DoIf tree like DoIf field op node.
+It contains operation that compares timestamps with certain value.
+
+Params:
+  - `op` - must be `ts_cmp`. Required.
+  - `field` - name of the field to apply operation. Required. Field will be parsed with `time.Parse` function.
+  - `format` - format for timestamps representation. Optional; default = `time.RFC3339Nano`.
+  - `cmp_op` - comparison operation name (same as for length comparison operations). Required.
+  - `value` - timestamp value to compare field timestamps with. It must have `RFC3339Nano` format. Required.
+Also, it may be `now` or `file_d_start`. If it is `now` then value to compare timestamps with is periodically updated current time.
+If it is `file_d_start` then value to compare timestamps with will be program start moment.
+  - `value_shift` - duration that adds to `value` before comparison. It can be negative. Useful when `value` is `now`.
+Optional; default = 0.
+  - `update_interval` - if `value` is `now` then you can set update interval for that value. Optional; default = 10s.
+Actual cmp value in that case is `now + value_shift + update_interval`.
+
+Example (discard all events with `timestamp` field value LESS than `2010-01-01T00:00:00Z`):
+```yaml
+pipelines:
+  test:
+    actions:
+      - type: discard
+        do_if:
+          op: ts_cmp
+          field: timestamp
+          cmp_op: lt
+          value: 2010-01-01T00:00:00Z
+          format: 2006-01-02T15:04:05.999999999Z07:00
+```
+
+Result:
+```
+{"timestamp":"2000-01-01T00:00:00Z"}         # discarded
+{"timestamp":"2008-01-01T00:00:00Z","id":1}  # discarded
+
+{"pod_id":"some"}    # not discarded (no field `timestamp`)
+{"timestamp":123}    # not discarded (field `timestamp` is not string)
+{"timestamp":"qwe"}  # not discarded (field `timestamp` is not parsable)
+
+{"timestamp":"2011-01-01T00:00:00Z"}  # not discarded (condition is not met)
+```
+
+### Check type op node
+DoIf check type op node checks whether the type of the field node is the one from the list.
+
+Params:
+  - `op` - for that node the value is `check_type`
+  - `field` - path to JSON node, can be empty string meaning root node, can be nested field `field.subfield` (if the field consists of `.` in the name, it must be shielded e.g. `exception\.type`)
+  - `values` - list of types to check against. Allowed values are `object` (or `obj`), `array` (or `arr`), `number` (or `num`, matches both ints or floats), `string` (or `str`), `null`, `nil` (for the abscent fields). Values are deduplicated with respect to aliases on initialization to prevent redundant checks.
+
+Example:
+
+```yaml
+- type: discard
+  do_if:
+    op: not
+    operands:
+      - op: check_type
+        field: log
+        values: [obj, arr]
+```
+
+result:
+```
+{"log":{"message":"test"}}   # not discarded
+{"log":[{"message":"test"}]} # not discarded
+{"log":"test"}               # discarded
+{"log":123}                  # discarded
+{"log":null}                 # discarded
+{"not_log":{"test":"test"}}  # discarded
+```
 
 <br>*Generated using [__insane-doc__](https://github.com/vitkovskii/insane-doc)*

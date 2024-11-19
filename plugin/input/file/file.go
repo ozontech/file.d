@@ -5,10 +5,12 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/bmatcuk/doublestar/v4"
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/pipeline/metadata"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
 )
@@ -33,18 +35,6 @@ But update events don't work with symlinks, so watcher also periodically manuall
 > By default the plugin is notified only on file creations. Note that following for changes is more CPU intensive.
 
 > ⚠ Use add_file_name plugin if you want to add filename to events.
-
-**Reading docker container log files:**
-```yaml
-pipelines:
-  example_docker_pipeline:
-    input:
-        type: file
-        watching_dir: /var/lib/docker/containers
-        offsets_file: /data/offsets.yaml
-        filename_pattern: "*-json.log"
-        persistence_mode: async
-```
 }*/
 
 type Plugin struct {
@@ -80,17 +70,22 @@ const (
 	offsetsOpReset                     // * `reset` – resets an offset to the beginning of the file
 )
 
+type Paths struct {
+	Include []string `json:"include"`
+	Exclude []string `json:"exclude"`
+}
+
 type Config struct {
 	// ! config-params
 	// ^ config-params
 
 	// > @3@4@5@6
 	// >
-	// > The source directory to watch for files to process. All subdirectories also will be watched. E.g. if files have
-	// > `/var/my-logs/$YEAR/$MONTH/$DAY/$HOST/$FACILITY-$PROGRAM.log` structure, `watching_dir` should be `/var/my-logs`.
-	// > Also the `filename_pattern`/`dir_pattern` is useful to filter needless files/subdirectories. In the case of using two or more
-	// > different directories, it's recommended to setup separate pipelines for each.
-	WatchingDir string `json:"watching_dir" required:"true"` // *
+	// > Set paths in glob format
+	// >
+	// > * `include` *`[]string`*
+	// > * `exclude` *`[]string`*
+	Paths Paths `json:"paths"` // *
 
 	// > @3@4@5@6
 	// >
@@ -98,18 +93,6 @@ type Config struct {
 	// > > It's a `yaml` file. You can modify it manually.
 	OffsetsFile    string `json:"offsets_file" required:"true"` // *
 	OffsetsFileTmp string
-
-	// > @3@4@5@6
-	// >
-	// > Files that don't meet this pattern will be ignored.
-	// > > Check out [func Glob docs](https://golang.org/pkg/path/filepath/#Glob) for details.
-	FilenamePattern string `json:"filename_pattern" default:"*"` // *
-
-	// > @3@4@5@6
-	// >
-	// > Dirs that don't meet this pattern will be ignored.
-	// > > Check out [func Glob docs](https://golang.org/pkg/path/filepath/#Glob) for details.
-	DirPattern string `json:"dir_pattern" default:"*"` // *
 
 	// > @3@4@5@6
 	// >
@@ -173,6 +156,36 @@ type Config struct {
 	// >
 	// > It turns on watching for file modifications. Turning it on cause more CPU work, but it is more probable to catch file truncation
 	ShouldWatchChanges bool `json:"should_watch_file_changes" default:"false"` // *
+
+	// > @3@4@5@6
+	// >
+	// > Meta params
+	// >
+	// > Add meta information to an event (look at Meta params)
+	// > Use [go-template](https://pkg.go.dev/text/template) syntax
+	// >
+	// > Example: ```filename: '{{ .filename }}'```
+	Meta cfg.MetaTemplates `json:"meta"` // *
+
+	// > **Deprecated format**
+	// >
+	// > The source directory to watch for files to process. All subdirectories also will be watched. E.g. if files have
+	// > `/var/my-logs/$YEAR/$MONTH/$DAY/$HOST/$FACILITY-$PROGRAM.log` structure, `watching_dir` should be `/var/my-logs`.
+	// > Also the `filename_pattern`/`dir_pattern` is useful to filter needless files/subdirectories. In the case of using two or more
+	// > different directories, it's recommended to setup separate pipelines for each.
+	WatchingDir string `json:"watching_dir"` // *
+
+	// > @3@4@5@6
+	// >
+	// > Files that don't meet this pattern will be ignored.
+	// > > Check out [func Glob docs](https://golang.org/pkg/path/filepath/#Glob) for details.
+	FilenamePattern string `json:"filename_pattern" default:"*"` // *
+
+	// > @3@4@5@6
+	// >
+	// > Dirs that don't meet this pattern will be ignored.
+	// > > Check out [func Glob docs](https://golang.org/pkg/path/filepath/#Glob) for details.
+	DirPattern string `json:"dir_pattern" default:"*"` // *
 }
 
 var offsetFiles = make(map[string]string)
@@ -211,6 +224,20 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 		offsetFiles[offsetFilePath] = params.PipelineName
 	}
 
+	for _, pattern := range p.config.Paths.Include {
+		_, err := doublestar.PathMatch(pattern, ".")
+		if err != nil {
+			p.logger.Fatalf("wrong paths include pattern %q: %s", pattern, err.Error())
+		}
+	}
+
+	for _, pattern := range p.config.Paths.Exclude {
+		_, err := doublestar.PathMatch(pattern, ".")
+		if err != nil {
+			p.logger.Fatalf("wrong paths exclude pattern %q: %s", pattern, err.Error())
+		}
+	}
+
 	p.jobProvider = NewJobProvider(
 		p.config,
 		newMetricCollection(
@@ -242,6 +269,9 @@ func (p *Plugin) startWorkers() {
 	for i := range p.workers {
 		p.workers[i] = &worker{
 			maxEventSize: p.params.PipelineSettings.MaxEventSize,
+		}
+		if len(p.config.Meta) > 0 {
+			p.workers[i].metaTemplater = metadata.NewMetaTemplater(p.config.Meta)
 		}
 		p.workers[i].start(p.params.Controller, p.jobProvider, p.config.ReadBufferSize, p.logger)
 	}

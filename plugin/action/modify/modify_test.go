@@ -6,14 +6,17 @@ import (
 
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/test"
+	insaneJSON "github.com/ozontech/insane-json"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestModify(t *testing.T) {
 	config := test.NewConfig(&Config{
+		"_skip_empty":                      "true",
 		"new_field":                        "new_value",
 		"my_object.field.subfield":         "${existing_field}",
 		"my_object.new_field.new_subfield": "new_subfield_value",
+		"not_exists":                       "${not_existing_field}",
 	}, nil)
 	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, config, pipeline.MatchModeAnd, nil, false))
 	wg := &sync.WaitGroup{}
@@ -23,6 +26,7 @@ func TestModify(t *testing.T) {
 		assert.Equal(t, "new_value", e.Root.Dig("new_field").AsString(), "wrong event field")
 		assert.Equal(t, "existing_value", e.Root.Dig("my_object", "field", "subfield").AsString(), "wrong event field")
 		assert.Equal(t, "new_subfield_value", e.Root.Dig("my_object", "new_field", "new_subfield").AsString(), "wrong event field")
+		assert.Nil(t, e.Root.Dig("not_exists"), "wrong event field")
 		wg.Done()
 	})
 
@@ -38,15 +42,22 @@ func TestModifyRegex(t *testing.T) {
 		fieldsValues map[string]string
 	}{
 		{
-			[]byte(`{"existing_field":"existing_value"}`),
-			map[string]string{
+			in: []byte(`{"existing_field":"existing_value"}`),
+			fieldsValues: map[string]string{
 				"new_field":          "new_value",
 				"substitution_field": "existing | value",
 			},
 		},
 		{
-			[]byte(`{"other_field":"other_value"}`),
-			map[string]string{
+			in: []byte(`{"other_field":"other_value"}`),
+			fieldsValues: map[string]string{
+				"new_field":          "new_value",
+				"substitution_field": "",
+			},
+		},
+		{
+			in: []byte(`{"existing_field":"not_matched_re"}`),
+			fieldsValues: map[string]string{
 				"new_field":          "new_value",
 				"substitution_field": "",
 			},
@@ -55,21 +66,14 @@ func TestModifyRegex(t *testing.T) {
 
 	config := test.NewConfig(&Config{
 		"new_field":          "new_value",
-		"substitution_field": "${existing_field|re(\"(existing).*(value)\", -1, [1,2], \" | \")}",
+		"substitution_field": "${existing_field|re(\"(existing).*(value)\", -1, [1,2], \" | \", true)}",
 	}, nil)
 	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, config, pipeline.MatchModeAnd, nil, false))
 	wg := &sync.WaitGroup{}
 
-	outEvents := struct {
-		mu     sync.Mutex
-		events []*pipeline.Event
-	}{
-		events: make([]*pipeline.Event, 0),
-	}
+	outEvents := make([]string, 0, len(testEvents))
 	output.SetOutFn(func(e *pipeline.Event) {
-		outEvents.mu.Lock()
-		outEvents.events = append(outEvents.events, e)
-		outEvents.mu.Unlock()
+		outEvents = append(outEvents, e.Root.EncodeToString())
 		wg.Done()
 	})
 	wg.Add(len(testEvents))
@@ -81,14 +85,16 @@ func TestModifyRegex(t *testing.T) {
 	wg.Wait()
 	p.Stop()
 
-	assert.Equal(t, len(testEvents), len(outEvents.events), "wrong out events count")
+	assert.Equal(t, len(testEvents), len(outEvents), "wrong out events count")
+
+	root := insaneJSON.Spawn()
+	defer insaneJSON.Release(root)
 	for i := 0; i < len(testEvents); i++ {
 		fvs := testEvents[i].fieldsValues
+		_ = root.DecodeString(outEvents[i])
 		for field := range fvs {
 			wantVal := fvs[field]
-			outEvents.mu.Lock()
-			gotVal := outEvents.events[i].Root.Dig(field).AsString()
-			outEvents.mu.Unlock()
+			gotVal := root.Dig(field).AsString()
 			assert.Equal(t, wantVal, gotVal, "wrong field value")
 		}
 	}
@@ -100,15 +106,15 @@ func TestModifyTrim(t *testing.T) {
 		fieldsValues map[string]string
 	}{
 		{
-			[]byte(`{"existing_field":"existing_value"}`),
-			map[string]string{
+			in: []byte(`{"existing_field":"existing_value"}`),
+			fieldsValues: map[string]string{
 				"new_field":          "new_value",
 				"substitution_field": "value",
 			},
 		},
 		{
-			[]byte(`{"other_field":"other_value"}`),
-			map[string]string{
+			in: []byte(`{"other_field":"other_value"}`),
+			fieldsValues: map[string]string{
 				"new_field":          "new_value",
 				"substitution_field": "",
 			},
@@ -122,17 +128,9 @@ func TestModifyTrim(t *testing.T) {
 	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, config, pipeline.MatchModeAnd, nil, false))
 	wg := &sync.WaitGroup{}
 
-	outEvents := struct {
-		mu     sync.Mutex
-		events []*pipeline.Event
-	}{
-		events: make([]*pipeline.Event, 0),
-	}
-
+	outEvents := make([]string, 0, len(testEvents))
 	output.SetOutFn(func(e *pipeline.Event) {
-		outEvents.mu.Lock()
-		outEvents.events = append(outEvents.events, e)
-		outEvents.mu.Unlock()
+		outEvents = append(outEvents, e.Root.EncodeToString())
 		wg.Done()
 	})
 	wg.Add(len(testEvents))
@@ -144,14 +142,16 @@ func TestModifyTrim(t *testing.T) {
 	wg.Wait()
 	p.Stop()
 
-	assert.Equal(t, len(testEvents), len(outEvents.events), "wrong out events count")
+	assert.Equal(t, len(testEvents), len(outEvents), "wrong out events count")
+
+	root := insaneJSON.Spawn()
+	defer insaneJSON.Release(root)
 	for i := 0; i < len(testEvents); i++ {
 		fvs := testEvents[i].fieldsValues
+		_ = root.DecodeString(outEvents[i])
 		for field := range fvs {
 			wantVal := fvs[field]
-			outEvents.mu.Lock()
-			gotVal := outEvents.events[i].Root.Dig(field).AsString()
-			outEvents.mu.Unlock()
+			gotVal := root.Dig(field).AsString()
 			assert.Equal(t, wantVal, gotVal, "wrong field value")
 		}
 	}
