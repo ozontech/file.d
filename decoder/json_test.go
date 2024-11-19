@@ -3,6 +3,7 @@ package decoder
 import (
 	"fmt"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/ozontech/file.d/cfg"
@@ -122,8 +123,8 @@ func genBenchFields(count int) string {
 	return sb.String()
 }
 
-func genBenchParams(count, maxLen int) map[string]any {
-	m := map[string]any{}
+func genBenchParams(count, maxLen int) map[string]int {
+	m := map[string]int{}
 	for i := 0; i < count; i++ {
 		m[fmt.Sprintf("field_%d", i)] = maxLen
 	}
@@ -134,11 +135,11 @@ const benchJsonFormat = `{%s"level":"info","ts":"2024-02-21T08:31:24.621Z","mess
 
 var benchCases = []struct {
 	json   []byte
-	params map[string]any
+	params map[string]int
 }{
 	{
 		json: []byte(fmt.Sprintf(benchJsonFormat, genBenchFields(0))),
-		params: map[string]any{
+		params: map[string]int{
 			"message": 7,
 		},
 	},
@@ -165,9 +166,13 @@ func BenchmarkCheckFieldsSize(b *testing.B) {
 		name := fmt.Sprintf("json_length_%d", len(benchCase.json))
 
 		b.Run(name, func(b *testing.B) {
-			d, _ := NewJsonDecoder(map[string]any{
-				jsonMaxFieldsSizeParam: benchCase.params,
-			})
+			d := jsonDecoder{
+				params: jsonParams{
+					MaxFieldsSize: benchCase.params,
+				},
+				cutPositions: make([]jsonCutPos, 0, len(benchCase.params)),
+				mu:           &sync.Mutex{},
+			}
 			for i := 0; i < b.N; i++ {
 				_ = d.checkFieldsSize(benchCase.json)
 			}

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"sync"
 
 	insaneJSON "github.com/ozontech/insane-json"
 	"github.com/tidwall/gjson"
@@ -22,29 +23,33 @@ type jsonCutPos struct {
 	end   int
 }
 
-type JsonDecoder struct {
-	params       jsonParams
+type jsonDecoder struct {
+	params jsonParams
+
 	cutPositions []jsonCutPos
+	mu           *sync.Mutex
 }
 
-func NewJsonDecoder(params map[string]any) (*JsonDecoder, error) {
+func NewJsonDecoder(params map[string]any) (Decoder, error) {
 	p, err := extractJsonParams(params)
 	if err != nil {
 		return nil, fmt.Errorf("can't extract params: %w", err)
 	}
 
-	return &JsonDecoder{
-		params:       p,
+	return &jsonDecoder{
+		params: p,
+
 		cutPositions: make([]jsonCutPos, 0, len(p.MaxFieldsSize)),
+		mu:           &sync.Mutex{},
 	}, nil
 }
 
-func (d *JsonDecoder) Type() Type {
+func (d *jsonDecoder) Type() Type {
 	return JSON
 }
 
 // DecodeToJson decodes json-formatted string and merges result with root.
-func (d *JsonDecoder) DecodeToJson(root *insaneJSON.Root, data []byte) error {
+func (d *jsonDecoder) DecodeToJson(root *insaneJSON.Root, data []byte) error {
 	data = d.checkFieldsSize(data)
 	return root.DecodeBytes(data)
 }
@@ -53,7 +58,7 @@ func (d *JsonDecoder) DecodeToJson(root *insaneJSON.Root, data []byte) error {
 //
 // Args:
 //   - root [*insaneJSON.Root] - required
-func (d *JsonDecoder) Decode(data []byte, args ...any) (any, error) {
+func (d *jsonDecoder) Decode(data []byte, args ...any) (any, error) {
 	if len(args) == 0 {
 		return nil, errors.New("empty args")
 	}
@@ -65,12 +70,15 @@ func (d *JsonDecoder) Decode(data []byte, args ...any) (any, error) {
 	return root.DecodeBytesAdditional(data)
 }
 
-func (d *JsonDecoder) checkFieldsSize(data []byte) []byte {
-	d.cutPositions = d.cutPositions[:0]
-	if !gjson.ValidBytes(data) {
+func (d *jsonDecoder) checkFieldsSize(data []byte) []byte {
+	if len(d.params.MaxFieldsSize) == 0 || !gjson.ValidBytes(data) {
 		return data
 	}
 
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	d.cutPositions = d.cutPositions[:0]
 	for path, limit := range d.params.MaxFieldsSize {
 		if path == "" {
 			continue

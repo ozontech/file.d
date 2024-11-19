@@ -28,11 +28,11 @@ type protobufParams struct {
 	ImportPaths []string // optional
 }
 
-type ProtobufDecoder struct {
+type protobufDecoder struct {
 	msgDesc protoreflect.MessageDescriptor
 }
 
-func NewProtobufDecoder(params map[string]any) (*ProtobufDecoder, error) {
+func NewProtobufDecoder(params map[string]any) (Decoder, error) {
 	p, err := extractProtobufParams(params)
 	if err != nil {
 		return nil, fmt.Errorf("can't extract params: %w", err)
@@ -70,16 +70,16 @@ func NewProtobufDecoder(params map[string]any) (*ProtobufDecoder, error) {
 		return nil, fmt.Errorf("can't find message %q in proto-file %q", p.Message, fileName)
 	}
 
-	return &ProtobufDecoder{
+	return &protobufDecoder{
 		msgDesc: msgDesc,
 	}, nil
 }
 
-func (d *ProtobufDecoder) Type() Type {
+func (d *protobufDecoder) Type() Type {
 	return PROTOBUF
 }
 
-func (d *ProtobufDecoder) DecodeToJson(root *insaneJSON.Root, data []byte) error {
+func (d *protobufDecoder) DecodeToJson(root *insaneJSON.Root, data []byte) error {
 	msgJson, err := d.Decode(data)
 	if err != nil {
 		return err
@@ -88,7 +88,7 @@ func (d *ProtobufDecoder) DecodeToJson(root *insaneJSON.Root, data []byte) error
 	return nil
 }
 
-func (d *ProtobufDecoder) Decode(data []byte, _ ...any) (any, error) {
+func (d *protobufDecoder) Decode(data []byte, _ ...any) (any, error) {
 	msg := dynamicpb.NewMessage(d.msgDesc)
 	if err := proto.Unmarshal(data, msg); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal proto: %w", err)

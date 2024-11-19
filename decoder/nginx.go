@@ -27,22 +27,22 @@ type nginxErrorParams struct {
 	WithCustomFields bool // optional
 }
 
-type NginxErrorDecoder struct {
+type nginxErrorDecoder struct {
 	params nginxErrorParams
 }
 
-func NewNginxErrorDecoder(params map[string]any) (*NginxErrorDecoder, error) {
+func NewNginxErrorDecoder(params map[string]any) (Decoder, error) {
 	p, err := extractNginxErrorParams(params)
 	if err != nil {
 		return nil, fmt.Errorf("can't extract params: %w", err)
 	}
 
-	return &NginxErrorDecoder{
+	return &nginxErrorDecoder{
 		params: p,
 	}, nil
 }
 
-func (d *NginxErrorDecoder) Type() Type {
+func (d *nginxErrorDecoder) Type() Type {
 	return NGINX_ERROR
 }
 
@@ -62,7 +62,7 @@ func (d *NginxErrorDecoder) Type() Type {
 //		"cid": "792412315",
 //		"message": "lua udp socket read timed out, context: ngx.timer"
 //	}
-func (d *NginxErrorDecoder) DecodeToJson(root *insaneJSON.Root, data []byte) error {
+func (d *nginxErrorDecoder) DecodeToJson(root *insaneJSON.Root, data []byte) error {
 	rowRaw, err := d.Decode(data)
 	if err != nil {
 		return err
@@ -91,7 +91,7 @@ func (d *NginxErrorDecoder) DecodeToJson(root *insaneJSON.Root, data []byte) err
 // Example of format:
 //
 //	"2022/08/17 10:49:27 [error] 2725122#2725122: *792412315 lua udp socket read timed out, context: ngx.timer"
-func (d *NginxErrorDecoder) Decode(data []byte, _ ...any) (any, error) {
+func (d *nginxErrorDecoder) Decode(data []byte, _ ...any) (any, error) {
 	row := NginxErrorRow{}
 
 	data = bytes.TrimSuffix(data, []byte("\n"))
@@ -160,7 +160,7 @@ func (d *NginxErrorDecoder) Decode(data []byte, _ ...any) (any, error) {
 //		"request": "POST /download HTTP/1.1"
 //		"upstream": "http://10.117.246.15:84/download"
 //		"host": "mpm-youtube-downloader-38.name.tldn:84"
-func (d *NginxErrorDecoder) extractCustomFields(data []byte) ([]byte, map[string][]byte) {
+func (d *nginxErrorDecoder) extractCustomFields(data []byte) ([]byte, map[string][]byte) {
 	if !d.params.WithCustomFields {
 		return data, nil
 	}
