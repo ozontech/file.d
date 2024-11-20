@@ -384,8 +384,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 					return err
 				}
 
-				errRight := f(middle, right)
-				return errRight
+				return f(middle, right)
 			default:
 				return err
 			}
