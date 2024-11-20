@@ -78,6 +78,16 @@ K8sMeta params
 Add meta information to an event (look at Meta params)
 Use [go-template](https://pkg.go.dev/text/template) syntax
 
+Built-in meta params
+
+`k8s_pod`: `{{ .pod }}`
+
+`k8s_namespace`: `{{ .namespace }}`
+
+`k8s_container`: `{{ .container }}`
+
+`k8s_container_id`: `{{ .container_id }}`
+
 <br>
 
 
