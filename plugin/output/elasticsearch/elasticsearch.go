@@ -347,10 +347,52 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 		data.outBuf = make([]byte, 0, p.config.BatchSize_*p.avgEventSize)
 	}
 
+	eventsCount := 0
+	begin := make([]int, 0, p.config.BatchSize_+1)
 	data.outBuf = data.outBuf[:0]
 	batch.ForEach(func(event *pipeline.Event) {
+		eventsCount++
+		begin = append(begin, len(data.outBuf))
 		data.outBuf = p.appendEvent(data.outBuf, event)
 	})
+	begin = append(begin, len(data.outBuf))
+
+	var f func(left, right int) error
+	f = func(left, right int) error {
+		if left == right {
+			return nil
+		}
+
+		statusCode, err := p.client.DoTimeout(
+			http.MethodPost,
+			NDJSONContentType,
+			data.outBuf[begin[left]:begin[right]],
+			p.config.ConnectionTimeout_, p.reportESErrors)
+
+		if err != nil {
+			p.sendErrorMetric.WithLabelValues(strconv.Itoa(statusCode)).Inc()
+			switch statusCode {
+			case http.StatusRequestEntityTooLarge:
+				// can't send even one log
+				if right-left == 1 {
+					return err
+				}
+
+				middle := (left + right) / 2
+				err = f(left, middle)
+				if err != nil {
+					return err
+				}
+
+				errRight := f(middle, right)
+				return errRight
+			default:
+				return err
+			}
+		}
+
+		return nil
+	}
 
 	statusCode, err := p.client.DoTimeout(http.MethodPost, NDJSONContentType, data.outBuf,
 		p.config.ConnectionTimeout_, p.reportESErrors)
@@ -358,13 +400,23 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 	if err != nil {
 		p.sendErrorMetric.WithLabelValues(strconv.Itoa(statusCode)).Inc()
 		switch statusCode {
-		case http.StatusBadRequest, http.StatusRequestEntityTooLarge:
-			const errMsg = "can't send to the elastic, non-retryable error occurred"
+		case http.StatusBadRequest:
+			const errMsg = "can't send to the elastic, non-retryable error occurred (bad request)"
 			fields := []zap.Field{zap.Int("status_code", statusCode), zap.Error(err)}
 			if p.config.Strict {
 				p.logger.Fatal(errMsg, fields...)
 			}
 			p.logger.Error(errMsg, fields...)
+			return nil
+		case http.StatusRequestEntityTooLarge:
+			if err := f(0, eventsCount); err != nil {
+				const errMsg = "can't send to the elastic, non-retryable error occurred (entity too large)"
+				fields := []zap.Field{zap.Int("status_code", statusCode), zap.Error(err)}
+				if p.config.Strict {
+					p.logger.Fatal(errMsg, fields...)
+				}
+				p.logger.Error(errMsg, fields...)
+			}
 			return nil
 		default:
 			p.logger.Error("can't send to the elastic, will try other endpoint", zap.Error(err))
