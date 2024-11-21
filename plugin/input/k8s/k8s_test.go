@@ -11,6 +11,7 @@ import (
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/plugin/input/k8s/meta"
 	"github.com/ozontech/file.d/plugin/output/devnull"
 	"github.com/ozontech/file.d/test"
 	"github.com/stretchr/testify/assert"
@@ -48,32 +49,32 @@ func setOutput(p *pipeline.Pipeline, out func(event *pipeline.Event)) {
 
 func TestMain(m *testing.M) {
 	// we are going to do work fucking fast
-	MaintenanceInterval = time.Millisecond * 100
-	metaExpireDuration = time.Millisecond * 500
-	DisableMetaUpdates = true
+	meta.MaintenanceInterval = time.Millisecond * 100
+	meta.MetaExpireDuration = time.Millisecond * 500
+	meta.DisableMetaUpdates = true
 
 	code := m.Run()
 	os.Exit(code)
 }
 
-func getLogFilename(prefix string, item *metaItem) string {
+func getLogFilename(prefix string, item *meta.MetaItem) string {
 	return fmt.Sprintf(
 		"%s/%s_%s_%s-%s.log",
 		prefix,
-		item.podName,
-		item.namespace,
-		item.containerName,
-		item.containerID,
+		item.PodName,
+		item.Namespace,
+		item.ContainerName,
+		item.ContainerID,
 	)
 }
 
-func getPodInfo(item *metaItem, isWhite bool) *corev1.Pod {
+func getPodInfo(item *meta.MetaItem, isWhite bool) *corev1.Pod {
 	podInfo := &corev1.Pod{}
-	podInfo.Namespace = string(item.namespace)
-	podInfo.Name = string(item.podName)
+	podInfo.Namespace = string(item.Namespace)
+	podInfo.Name = string(item.PodName)
 	podInfo.Status.ContainerStatuses = make([]corev1.ContainerStatus, 1)
-	podInfo.Status.ContainerStatuses[0].Name = string(item.containerName)
-	podInfo.Status.ContainerStatuses[0].ContainerID = "containerd://" + string(item.containerID)
+	podInfo.Status.ContainerStatuses[0].Name = string(item.ContainerName)
+	podInfo.Status.ContainerStatuses[0].ContainerID = "containerd://" + string(item.ContainerID)
 	if isWhite {
 		podInfo.Labels = map[string]string{"allowed_label": "allowed_value"}
 	} else {
@@ -104,22 +105,22 @@ func TestAllowedLabels(t *testing.T) {
 	wg := &sync.WaitGroup{}
 	wg.Add(2)
 
-	item := &metaItem{
-		namespace:     "sre",
-		podName:       "advanced-logs-checker-1111111111-trtrq",
-		containerName: "duty-bot",
-		containerID:   "4e0301b633eaa2bfdcafdeba59ba0c72a3815911a6a820bf273534b0f32d98e0",
+	item := &meta.MetaItem{
+		Namespace:     "sre",
+		PodName:       "advanced-logs-checker-1111111111-trtrq",
+		ContainerName: "duty-bot",
+		ContainerID:   "4e0301b633eaa2bfdcafdeba59ba0c72a3815911a6a820bf273534b0f32d98e0",
 	}
-	putMeta(getPodInfo(item, true))
+	meta.PutMeta(getPodInfo(item, true))
 	filename1 := getLogFilename("/k8s-logs", item)
 
-	item2 := &metaItem{
-		namespace:     "sre",
-		podName:       "advanced-logs-checker-2222222222-trtrq",
-		containerName: "duty-bot",
-		containerID:   "4e0301b633eaa2bfdcafdeba59ba0c72a3815911a6a820bf273534b0f32d98e0",
+	item2 := &meta.MetaItem{
+		Namespace:     "sre",
+		PodName:       "advanced-logs-checker-2222222222-trtrq",
+		ContainerName: "duty-bot",
+		ContainerID:   "4e0301b633eaa2bfdcafdeba59ba0c72a3815911a6a820bf273534b0f32d98e0",
 	}
-	putMeta(getPodInfo(item2, false))
+	meta.PutMeta(getPodInfo(item2, false))
 	filename2 := getLogFilename("/k8s-logs", item2)
 
 	outEvents := make([]*pipeline.Event, 0)
@@ -143,14 +144,14 @@ func TestK8SJoin(t *testing.T) {
 	wg := &sync.WaitGroup{}
 	wg.Add(4)
 
-	item := &metaItem{
-		namespace:     "sre",
-		podName:       "advanced-logs-checker-1566485760-trtrq",
-		containerName: "duty-bot",
-		containerID:   "4e0301b633eaa2bfdcafdeba59ba0c72a3815911a6a820bf273534b0f32d98e0",
+	item := &meta.MetaItem{
+		Namespace:     "sre",
+		PodName:       "advanced-logs-checker-1566485760-trtrq",
+		ContainerName: "duty-bot",
+		ContainerID:   "4e0301b633eaa2bfdcafdeba59ba0c72a3815911a6a820bf273534b0f32d98e0",
 	}
 	podInfo := getPodInfo(item, true)
-	putMeta(podInfo)
+	meta.PutMeta(podInfo)
 
 	outLogs := make([]string, 0)
 	outOffsets := make([]int64, 0)
@@ -162,7 +163,7 @@ func TestK8SJoin(t *testing.T) {
 
 	k8sMeta := fmt.Sprintf(
 		`,"k8s_pod":"%s","k8s_namespace":"%s","k8s_container_id":"%s","k8s_container":"%s"`,
-		item.podName, item.namespace, item.containerID, item.containerName,
+		item.PodName, item.Namespace, item.ContainerID, item.ContainerName,
 	)
 
 	filename := getLogFilename("/k8s-logs", item)
@@ -212,30 +213,30 @@ func TestK8SJoin(t *testing.T) {
 func TestCleanUp(t *testing.T) {
 	p, _, _ := test.NewPipelineMock(test.NewActionPluginStaticInfo(MultilineActionFactory, config(), pipeline.MatchModeAnd, nil, false))
 
-	enableGatherer(logger.Instance)
+	meta.EnableGatherer(logger.Instance)
 
-	putMeta(getPodInfo(&metaItem{
-		namespace:     "sre",
-		podName:       "advanced-logs-checker-1566485760-1",
-		containerName: "duty-bot",
-		containerID:   "1111111111111111111111111111111111111111111111111111111111111111",
+	meta.PutMeta(getPodInfo(&meta.MetaItem{
+		Namespace:     "sre",
+		PodName:       "advanced-logs-checker-1566485760-1",
+		ContainerName: "duty-bot",
+		ContainerID:   "1111111111111111111111111111111111111111111111111111111111111111",
 	}, true))
-	putMeta(getPodInfo(&metaItem{
-		namespace:     "sre",
-		podName:       "advanced-logs-checker-1566485760-2",
-		containerName: "duty-bot",
-		containerID:   "2222222222222222222222222222222222222222222222222222222222222222",
+	meta.PutMeta(getPodInfo(&meta.MetaItem{
+		Namespace:     "sre",
+		PodName:       "advanced-logs-checker-1566485760-2",
+		ContainerName: "duty-bot",
+		ContainerID:   "2222222222222222222222222222222222222222222222222222222222222222",
 	}, true))
-	putMeta(getPodInfo(&metaItem{
-		namespace:     "infra",
-		podName:       "advanced-logs-checker-1566485760-3",
-		containerName: "duty-bot",
-		containerID:   "3333333333333333333333333333333333333333333333333333333333333333",
+	meta.PutMeta(getPodInfo(&meta.MetaItem{
+		Namespace:     "infra",
+		PodName:       "advanced-logs-checker-1566485760-3",
+		ContainerName: "duty-bot",
+		ContainerID:   "3333333333333333333333333333333333333333333333333333333333333333",
 	}, true))
 
-	time.Sleep(metaExpireDuration + MaintenanceInterval)
+	time.Sleep(meta.MetaExpireDuration + meta.MaintenanceInterval)
 
-	disableGatherer()
+	meta.DisableGatherer()
 	p.Stop()
-	assert.Equal(t, 0, len(metaData))
+	assert.Equal(t, 0, len(meta.MetaData))
 }

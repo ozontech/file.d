@@ -8,6 +8,7 @@ import (
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/plugin/input/file"
+	"github.com/ozontech/file.d/plugin/input/k8s/meta"
 
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
@@ -149,10 +150,10 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	startCounter := startCounter.Inc()
 
 	if startCounter == 1 {
-		enableGatherer(p.logger)
+		meta.EnableGatherer(p.logger)
 	}
 
-	if criType == "docker" {
+	if meta.CriType == "docker" {
 		p.params.Controller.SuggestDecoder(decoder.JSON)
 	} else {
 		p.params.Controller.SuggestDecoder(decoder.CRI)
