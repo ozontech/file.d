@@ -4,15 +4,19 @@ import (
 	"bytes"
 	"io"
 	"os"
+	"strings"
 
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/pipeline/metadata"
+	k8s_meta "github.com/ozontech/file.d/plugin/input/k8s/meta"
+
 	"go.uber.org/zap"
 )
 
 type worker struct {
 	maxEventSize  int
 	metaTemplater *metadata.MetaTemplater
+	needK8sMeta   bool
 }
 
 type inputer interface {
@@ -23,6 +27,12 @@ type inputer interface {
 }
 
 func (w *worker) start(inputController inputer, jobProvider *jobProvider, readBufferSize int, logger *zap.SugaredLogger) {
+	for metaParam := range jobProvider.config.Meta {
+		if strings.Contains(metaParam, "k8s") {
+			w.needK8sMeta = true
+			break
+		}
+	}
 	go w.work(inputController, jobProvider, readBufferSize, logger)
 }
 
@@ -30,7 +40,6 @@ func (w *worker) work(controller inputer, jobProvider *jobProvider, readBufferSi
 	accumBuf := make([]byte, 0, readBufferSize)
 	readBuf := make([]byte, readBufferSize)
 	shouldCheckMax := w.maxEventSize != 0
-
 	for {
 		job := <-jobProvider.jobsChan
 		if job == nil {
@@ -112,16 +121,20 @@ func (w *worker) work(controller inputer, jobProvider *jobProvider, readBufferSi
 					}
 
 					var metadataInfo metadata.MetaData
-					var err error
 					if w.metaTemplater != nil {
-						metadataInfo, err = w.metaTemplater.Render(newMetaInformation(
+						metaData, err := newMetaInformation(
 							job.filename,
 							job.symlink,
 							job.inode,
 							lastOffset+scanned,
-						))
+							w.needK8sMeta,
+						)
 						if err != nil {
 							logger.Error("cannot parse meta info", zap.Error(err))
+						}
+						metadataInfo, err = w.metaTemplater.Render(metaData)
+						if err != nil {
+							logger.Error("cannot render meta info", zap.Error(err))
 						}
 					}
 
@@ -179,22 +192,51 @@ type metaInformation struct {
 	symlink  string
 	inode    uint64
 	offset   int64
+
+	k8sMetadata *k8s_meta.K8sMetaInformation
 }
 
-func newMetaInformation(filename, symlink string, inode inodeID, offset int64) metaInformation {
-	return metaInformation{
-		filename: filename,
-		symlink:  symlink,
-		inode:    uint64(inode),
-		offset:   offset,
+func newMetaInformation(filename, symlink string, inode inodeID, offset int64, parseK8sMeta bool) (metaInformation, error) {
+	var metaData k8s_meta.K8sMetaInformation
+	var err error
+	if parseK8sMeta {
+		metaData, err = k8s_meta.NewK8sMetaInformation(symlink)
+		if err != nil {
+			metaData, err = k8s_meta.NewK8sMetaInformation(filename)
+			if err != nil {
+				return metaInformation{}, err
+			}
+		}
 	}
+
+	return metaInformation{
+		filename:    filename,
+		symlink:     symlink,
+		inode:       uint64(inode),
+		offset:      offset,
+		k8sMetadata: &metaData,
+	}, nil
 }
 
 func (m metaInformation) GetData() map[string]any {
 	return map[string]any{
-		"filename": m.filename,
-		"symlink":  m.symlink,
-		"inode":    m.inode,
-		"offset":   m.offset,
+		"filename":     m.filename,
+		"symlink":      m.symlink,
+		"inode":        m.inode,
+		"offset":       m.offset,
+		"pod":          m.k8sMetadata.PodName,
+		"namespace":    m.k8sMetadata.Namespace,
+		"container":    m.k8sMetadata.ContainerName,
+		"container_id": m.k8sMetadata.ContainerID,
 	}
 }
+
+/*{ meta-params
+**`filename`**
+
+**`symlink`**
+
+**`inode`**
+
+**`offset`**
+}*/
