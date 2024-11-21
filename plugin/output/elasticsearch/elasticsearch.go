@@ -357,8 +357,8 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 	})
 	begin = append(begin, len(data.outBuf))
 
-	var f func(left, right int) error
-	f = func(left, right int) error {
+	var saveOrSplit func(left, right int) error
+	saveOrSplit = func(left, right int) error {
 		if left == right {
 			return nil
 		}
@@ -373,18 +373,18 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 			p.sendErrorMetric.WithLabelValues(strconv.Itoa(statusCode)).Inc()
 			switch statusCode {
 			case http.StatusRequestEntityTooLarge:
-				// can't send even one log
+				// can't save even one log
 				if right-left == 1 {
 					return err
 				}
 
 				middle := (left + right) / 2
-				err = f(left, middle)
+				err = saveOrSplit(left, middle)
 				if err != nil {
 					return err
 				}
 
-				return f(middle, right)
+				return saveOrSplit(middle, right)
 			default:
 				return err
 			}
@@ -408,7 +408,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 			p.logger.Error(errMsg, fields...)
 			return nil
 		case http.StatusRequestEntityTooLarge:
-			if err := f(0, eventsCount); err != nil {
+			if err := saveOrSplit(0, eventsCount); err != nil {
 				const errMsg = "can't send to the elastic, non-retryable error occurred (entity too large)"
 				fields := []zap.Field{zap.Int("status_code", statusCode), zap.Error(err)}
 				if p.config.Strict {
