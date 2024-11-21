@@ -104,9 +104,9 @@ type Config struct {
 	// >
 	// > Built-in meta params
 	// >
-	// > `k8s_pod`: `{{ .pod }}`
+	// > `k8s_pod`: `{{ .pod_name }}`
 	// >
-	// > `k8s_namespace`: `{{ .namespace }}`
+	// > `k8s_namespace`: `{{ .namespace_name }}`
 	// >
 	// > `k8s_container`: `{{ .container }}`
 	// >
@@ -178,20 +178,22 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 }
 
 func setBuiltInMeta(meta cfg.MetaTemplates) {
-	meta["k8s_pod"] = "{{ .pod }}"
+	meta["k8s_pod"] = "{{ .pod_name }}"
 	meta["k8s_namespace"] = "{{ .namespace }}"
-	meta["k8s_container"] = "{{ .container }}"
+	meta["k8s_container"] = "{{ .container_name }}"
 	meta["k8s_container_id"] = "{{ .container_id }}"
 }
 
 /*{ meta-params
-**`pod`**
+**`pod_name`** - string
 
-**`namespace`**
+**`namespace`** - string
 
-**`container`**
+**`container_name`** - string
 
-**`container_id`**
+**`container_id`** - string
+
+**`pod`** - k8s.io/api/core/v1.Pod
 }*/
 
 // Commit event.

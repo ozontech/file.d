@@ -48,6 +48,7 @@ func TestPipeline(t *testing.T) {
 		ContainerName: "duty-bot",
 		ContainerID:   "4e0301b633eaa2bfdcafdeba59ba0c72a3815911a6a820bf273534b0f32d98e0",
 	}
+	meta.PutMeta(getPodInfo(item, true))
 	filename := getLogFilename(dir, item)
 
 	p.Start()

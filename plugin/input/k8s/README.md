@@ -80,9 +80,9 @@ Use [go-template](https://pkg.go.dev/text/template) syntax
 
 Built-in meta params
 
-`k8s_pod`: `{{ .pod }}`
+`k8s_pod`: `{{ .pod_name }}`
 
-`k8s_namespace`: `{{ .namespace }}`
+`k8s_namespace`: `{{ .namespace_name }}`
 
 `k8s_container`: `{{ .container }}`
 
@@ -92,11 +92,13 @@ Built-in meta params
 
 
 ### Meta params
-**`pod`**
+**`pod_name`** - string
 
-**`namespace`**
+**`namespace`** - string
 
-**`container`**
+**`container_name`** - string
 
-**`container_id`**
+**`container_id`** - string
+
+**`pod`** - k8s.io/api/core/v1.Pod
 <br>*Generated using [__insane-doc__](https://github.com/vitkovskii/insane-doc)*
