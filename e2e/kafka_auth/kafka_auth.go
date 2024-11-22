@@ -52,6 +52,16 @@ func (c *Config) Configure(t *testing.T, _ *cfg.Config, _ string) {
 		{
 			sasl: saslData{
 				Enabled:          true,
+				Mechanism:        "PLAIN",
+				Username:         "user",
+				Password:         "pass",
+				AuthByClientCert: false,
+			},
+			authorized: true,
+		},
+		{
+			sasl: saslData{
+				Enabled:          true,
 				Mechanism:        "SCRAM-SHA-256",
 				Username:         "user",
 				Password:         "pass",
