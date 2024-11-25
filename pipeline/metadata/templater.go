@@ -51,6 +51,13 @@ func (m *MetaTemplater) Render(data Data) (MetaData, error) {
 	values := data.GetData()
 	meta := MetaData{}
 
+	for k, tmpl := range m.singleValues {
+		if val, ok := values[tmpl]; ok {
+			meta[k] = fmt.Sprintf("%v", val)
+			values[k] = meta[k]
+		}
+	}
+
 	if len(m.templates) > 0 {
 		tplOutput := m.poolBuffer.Get().(*bytes.Buffer)
 		defer m.poolBuffer.Put(tplOutput)
@@ -62,13 +69,8 @@ func (m *MetaTemplater) Render(data Data) (MetaData, error) {
 				return meta, err
 			} else {
 				meta[k] = tplOutput.String()
+				values[k] = meta[k]
 			}
-		}
-	}
-
-	for k, tmpl := range m.singleValues {
-		if val, ok := values[tmpl]; ok {
-			meta[k] = fmt.Sprintf("%v", val)
 		}
 	}
 

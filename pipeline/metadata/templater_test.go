@@ -11,8 +11,8 @@ import (
 func TestTemplaterRender(t *testing.T) {
 	templater := NewMetaTemplater(
 		cfg.MetaTemplates{
-			"partition":          "partition_{{ .partition }}",
-			"partition_describe": "{{ .partition }} partition",
+			"partition_name":     "partition_{{ .partition }}",
+			"partition_fullname": "partition {{ .partition_name }}",
 			"topic":              "{{ .topic }}",
 			"broker":             "{{ .broker }}",
 		},
@@ -25,8 +25,8 @@ func TestTemplaterRender(t *testing.T) {
 		t,
 		fmt.Sprint(map[string]any{
 			"topic":              "topic",
-			"partition":          "partition_1",
-			"partition_describe": "1 partition",
+			"partition_name":     "partition_1",
+			"partition_fullname": "partition partition_1",
 		}),
 		fmt.Sprint(result),
 	)
