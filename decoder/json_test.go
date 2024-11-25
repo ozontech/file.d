@@ -161,7 +161,7 @@ var benchCases = []struct {
 	},
 }
 
-func BenchmarkCheckFieldsSize(b *testing.B) {
+func BenchmarkCutFieldsBySize(b *testing.B) {
 	for _, benchCase := range benchCases {
 		name := fmt.Sprintf("json_length_%d", len(benchCase.json))
 
@@ -174,7 +174,7 @@ func BenchmarkCheckFieldsSize(b *testing.B) {
 				mu:           &sync.Mutex{},
 			}
 			for i := 0; i < b.N; i++ {
-				_ = d.checkFieldsSize(benchCase.json)
+				_ = d.cutFieldsBySize(benchCase.json)
 			}
 		})
 	}

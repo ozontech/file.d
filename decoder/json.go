@@ -50,7 +50,7 @@ func (d *jsonDecoder) Type() Type {
 
 // DecodeToJson decodes json-formatted string and merges result with root.
 func (d *jsonDecoder) DecodeToJson(root *insaneJSON.Root, data []byte) error {
-	data = d.checkFieldsSize(data)
+	data = d.cutFieldsBySize(data)
 	return root.DecodeBytes(data)
 }
 
@@ -66,11 +66,11 @@ func (d *jsonDecoder) Decode(data []byte, args ...any) (any, error) {
 	if !ok {
 		return nil, errors.New("invalid args")
 	}
-	data = d.checkFieldsSize(data)
+	data = d.cutFieldsBySize(data)
 	return root.DecodeBytesAdditional(data)
 }
 
-func (d *jsonDecoder) checkFieldsSize(data []byte) []byte {
+func (d *jsonDecoder) cutFieldsBySize(data []byte) []byte {
 	if len(d.params.MaxFieldsSize) == 0 || !gjson.ValidBytes(data) {
 		return data
 	}
@@ -98,12 +98,7 @@ func (d *jsonDecoder) checkFieldsSize(data []byte) []byte {
 
 	// sort by desc
 	slices.SortFunc(d.cutPositions, func(p1, p2 jsonCutPos) int {
-		if p1.start > p2.start {
-			return -1
-		} else if p1.start < p2.start {
-			return 1
-		}
-		return 0
+		return p2.start - p1.start
 	})
 	for _, p := range d.cutPositions {
 		data = append(data[:p.start], data[p.end+1:]...)
