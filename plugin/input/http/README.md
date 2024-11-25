@@ -134,12 +134,11 @@ Key uses in the http_input_total metric.
 
 
 ### Meta params
-**`login`** 
+**`login`**
 
 **`remote_addr`**  *`net.IP`*
 
 **`request`**  *`http.Request`*
 
 **`params`**  *`url.Values`*
-
 <br>*Generated using [__insane-doc__](https://github.com/vitkovskii/insane-doc)*

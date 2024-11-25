@@ -20,10 +20,4 @@ pipelines:
 @config-params|description
 
 ### Meta params
-**`filename`** 
-
-**`symlink`** 
-
-**`inode`** 
-
-**`offset`** 
+@meta-params

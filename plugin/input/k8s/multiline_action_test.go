@@ -22,7 +22,6 @@ func TestMultilineAction_Do(t *testing.T) {
 	plugin.Start(config, params)
 
 	item := &metaItem{
-		nodeName:      "node_1",
 		namespace:     "sre",
 		podName:       "advanced-logs-checker-1111111111-trtrq",
 		containerName: "duty-bot",
@@ -46,13 +45,13 @@ func TestMultilineAction_Do(t *testing.T) {
 			// because the buffer size check happens before adding to it
 			EventParts:    []string{`{"log": "hello"}`, `{"log": "  "}`, `{"log": "world\n"}`},
 			ActionResults: []pipeline.ActionResult{pipeline.ActionCollapse, pipeline.ActionCollapse, pipeline.ActionPass},
-			ExpectedRoot:  wrapK8sInfo(`hello  world\n`, item),
+			ExpectedRoot:  wrapK8sInfo(`hello  world\n`, item, selfNodeName),
 		},
 		{
 			Name:          "continue process events",
 			EventParts:    []string{`{"log": "some "}`, `{"log": "other "}`, `{"log": "logs\n"}`},
 			ActionResults: []pipeline.ActionResult{pipeline.ActionCollapse, pipeline.ActionCollapse, pipeline.ActionPass},
-			ExpectedRoot:  wrapK8sInfo(`some other logs\n`, item),
+			ExpectedRoot:  wrapK8sInfo(`some other logs\n`, item, selfNodeName),
 		},
 		{
 			Name:          "must discard long event",
@@ -63,7 +62,7 @@ func TestMultilineAction_Do(t *testing.T) {
 			Name:          "continue process events 2",
 			EventParts:    []string{`{"log": "some "}`, `{"log": "other long long long long "}`, `{"log": "event\n"}`},
 			ActionResults: []pipeline.ActionResult{pipeline.ActionCollapse, pipeline.ActionCollapse, pipeline.ActionDiscard},
-			ExpectedRoot:  wrapK8sInfo(`event\n`, item),
+			ExpectedRoot:  wrapK8sInfo(`event\n`, item, selfNodeName),
 		},
 	}
 	root := insaneJSON.Spawn()
@@ -74,6 +73,11 @@ func TestMultilineAction_Do(t *testing.T) {
 			for i, part := range tc.EventParts {
 				require.NoError(t, root.DecodeString(part))
 				event := &pipeline.Event{Root: root, SourceName: meta, Size: len(part)}
+
+				pipeline.CreateNestedField(event.Root, []string{"k8s_pod"}).MutateToString(string(item.podName))
+				pipeline.CreateNestedField(event.Root, []string{"k8s_namespace"}).MutateToString(string(item.namespace))
+				pipeline.CreateNestedField(event.Root, []string{"k8s_container"}).MutateToString(string(item.containerName))
+				pipeline.CreateNestedField(event.Root, []string{"k8s_container_id"}).MutateToString(string(item.containerID))
 
 				result := plugin.Do(event)
 
@@ -94,7 +98,6 @@ func TestMultilineAction_Do_shouldSplit(t *testing.T) {
 	plugin.Start(config, test.NewEmptyActionPluginParams())
 
 	item := &metaItem{
-		nodeName:      "node_1",
 		namespace:     "sre",
 		podName:       "advanced-logs-checker-1111111111-trtrq",
 		containerName: "duty-bot",
@@ -240,6 +243,10 @@ func TestMultilineAction_Do_shouldSplit(t *testing.T) {
 			plugin.maxEventSize = tc.MaxEventSize
 			require.NoError(t, root.DecodeString(tc.Message))
 			event := &pipeline.Event{Root: root, SourceName: meta, Size: len(tc.Message)}
+			pipeline.CreateNestedField(event.Root, []string{"k8s_pod"}).MutateToString(string(item.podName))
+			pipeline.CreateNestedField(event.Root, []string{"k8s_namespace"}).MutateToString(string(item.namespace))
+			pipeline.CreateNestedField(event.Root, []string{"k8s_container"}).MutateToString(string(item.containerName))
+			pipeline.CreateNestedField(event.Root, []string{"k8s_container_id"}).MutateToString(string(item.containerID))
 
 			result := plugin.Do(event)
 			resultRoot := root.Dig("log").EncodeToString()
@@ -255,8 +262,8 @@ func wrapLogContent(s string) string {
 	return fmt.Sprintf(`{"log": "%s"}`, s)
 }
 
-func wrapK8sInfo(s string, item *metaItem) string {
+func wrapK8sInfo(s string, item *metaItem, nodeName string) string {
 	return fmt.Sprintf(
-		`{"log":"%s","k8s_node":"%s","k8s_namespace":"%s","k8s_pod":"%s","k8s_container":"%s","k8s_pod_label_allowed_label":"allowed_value","k8s_node_label_zone":"z34"}`,
-		s, item.nodeName, item.namespace, item.podName, item.containerName)
+		`{"log":"%s","k8s_pod":"%s","k8s_namespace":"%s","k8s_container":"%s","k8s_container_id":"%s","k8s_node":"%s","k8s_pod_label_allowed_label":"allowed_value","k8s_node_label_zone":"z34"}`,
+		s, item.podName, item.namespace, item.containerName, item.containerID, nodeName)
 }
