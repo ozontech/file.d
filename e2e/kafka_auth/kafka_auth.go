@@ -21,7 +21,8 @@ const (
 
 // Config for kafka_auth test
 type Config struct {
-	Brokers []string
+	Brokers    []string
+	SslEnabled bool
 }
 
 func (c *Config) Configure(t *testing.T, _ *cfg.Config, _ string) {
@@ -46,6 +47,16 @@ func (c *Config) Configure(t *testing.T, _ *cfg.Config, _ string) {
 				Username:         "user",
 				Password:         "pass",
 				AuthByClientCert: true,
+			},
+			authorized: true,
+		},
+		{
+			sasl: saslData{
+				Enabled:          true,
+				Mechanism:        "PLAIN",
+				Username:         "user",
+				Password:         "pass",
+				AuthByClientCert: false,
 			},
 			authorized: true,
 		},
@@ -98,7 +109,7 @@ func (c *Config) Configure(t *testing.T, _ *cfg.Config, _ string) {
 					ClientID:         "test-auth-out",
 					BatchSize_:       10,
 					MaxMessageBytes_: 1000000,
-					SslEnabled:       true,
+					SslEnabled:       c.SslEnabled,
 					SslSkipVerify:    true,
 				}
 				if tt.sasl.Enabled {
@@ -126,7 +137,7 @@ func (c *Config) Configure(t *testing.T, _ *cfg.Config, _ string) {
 					ChannelBufferSize:    256,
 					Offset_:              kafka_in.OffsetTypeNewest,
 					ConsumerMaxWaitTime_: 250 * time.Millisecond,
-					SslEnabled:           true,
+					SslEnabled:           c.SslEnabled,
 					SslSkipVerify:        true,
 					SessionTimeout_:      10 * time.Second,
 					AutoCommitInterval_:  1 * time.Second,
