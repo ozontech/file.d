@@ -10,7 +10,7 @@ import (
 )
 
 func TestEventPoolDump(t *testing.T) {
-	eventPool := newEventPool(2, DefaultAvgInputEventSize)
+	eventPool := newTestEventPool(2)
 	e := eventPool.get(1)
 	defer eventPool.back(e)
 
@@ -27,11 +27,11 @@ func BenchmarkEventPoolOneGoroutine(b *testing.B) {
 	}
 	const capacity = 32
 	b.Run("eventPool", func(b *testing.B) {
-		p := newEventPool(capacity, DefaultAvgInputEventSize)
+		p := newTestEventPool(capacity)
 		bench(b, p)
 	})
 	b.Run("lowMemory", func(b *testing.B) {
-		p := newLowMemoryEventPool(capacity)
+		p := newTestLowMemoryEventPool(capacity)
 		bench(b, p)
 	})
 }
@@ -56,11 +56,11 @@ func BenchmarkEventPoolManyGoroutines(b *testing.B) {
 	}
 	const capacity = 32
 	b.Run("eventPool", func(b *testing.B) {
-		p := newEventPool(capacity, DefaultAvgInputEventSize)
+		p := newTestEventPool(capacity)
 		bench(b, p)
 	})
 	b.Run("lowMemory", func(b *testing.B) {
-		p := newLowMemoryEventPool(capacity)
+		p := newTestLowMemoryEventPool(capacity)
 		bench(b, p)
 	})
 }
@@ -84,11 +84,11 @@ func BenchmarkEventPoolSlowestPath(b *testing.B) {
 
 	const capacity = 32
 	b.Run("eventPool", func(b *testing.B) {
-		p := newEventPool(capacity, DefaultAvgInputEventSize)
+		p := newTestEventPool(capacity)
 		bench(b, p)
 	})
 	b.Run("lowMemory", func(b *testing.B) {
-		p := newLowMemoryEventPool(capacity)
+		p := newTestLowMemoryEventPool(capacity)
 		bench(b, p)
 	})
 }
@@ -97,7 +97,7 @@ func TestLowMemPool(t *testing.T) {
 	t.Parallel()
 	r := require.New(t)
 	test := func(capacity, batchSize int) {
-		p := newLowMemoryEventPool(capacity)
+		p := newTestLowMemoryEventPool(capacity)
 		for i := 0; i < batchSize; i++ {
 			batch := make([]*Event, batchSize)
 			for j := 0; j < batchSize; j++ {
@@ -119,7 +119,7 @@ func TestLowMemPool(t *testing.T) {
 	test(1024, 128)
 }
 
-func TestLowMemPoolSlowWait(t *testing.T) {
+func TestEventPoolSlowWait(t *testing.T) {
 	t.Parallel()
 	r := require.New(t)
 
@@ -167,22 +167,22 @@ func TestLowMemPoolSlowWait(t *testing.T) {
 	}
 
 	t.Run("eventPool", func(t *testing.T) {
-		pool := newEventPool(1, DefaultAvgInputEventSize)
+		pool := newTestEventPool(1)
 		test(pool)
 	})
 	t.Run("lowMemory", func(t *testing.T) {
-		pool := newLowMemoryEventPool(1)
+		pool := newTestLowMemoryEventPool(1)
 		test(pool)
 	})
 }
 
-func TestSlowPath(t *testing.T) {
+func TestWakeupWaiters(t *testing.T) {
 	t.Parallel()
 	const (
 		poolCapacity = 256
 		concurrency  = 5_000
 	)
-	pool := newEventPool(poolCapacity, DefaultAvgInputEventSize)
+	pool := newTestEventPool(poolCapacity)
 	for i := 0; i < 1_000; i++ {
 		wg := new(sync.WaitGroup)
 		wg.Add(concurrency)
@@ -196,4 +196,19 @@ func TestSlowPath(t *testing.T) {
 		}
 		wg.Wait()
 	}
+}
+
+// testWakeupInterval is used to speed up the test a bit.
+const testWakeupInterval = time.Second * 1
+
+func newTestEventPool(capacity int) *eventPool {
+	p := newEventPool(capacity, DefaultAvgInputEventSize)
+	p.wakeupInterval = testWakeupInterval
+	return p
+}
+
+func newTestLowMemoryEventPool(capacity int) *lowMemoryEventPool {
+	p := newLowMemoryEventPool(capacity)
+	p.wakeupInterval = testWakeupInterval
+	return p
 }

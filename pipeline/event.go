@@ -209,6 +209,7 @@ type eventPool struct {
 	stopped          *atomic.Bool
 	runHeartbeatOnce *sync.Once
 	slowWaiters      *atomic.Int64
+	wakeupInterval   time.Duration
 }
 
 func (p *eventPool) stop() {
@@ -228,6 +229,7 @@ func newEventPool(capacity, avgEventSize int) *eventPool {
 		runHeartbeatOnce: &sync.Once{},
 		stopped:          atomic.NewBool(false),
 		slowWaiters:      atomic.NewInt64(0),
+		wakeupInterval:   time.Second * 5,
 	}
 
 	eventPool.getCond = sync.NewCond(eventPool.getMu)
@@ -325,8 +327,7 @@ func (p *eventPool) wakeupWaiters() {
 			return
 		}
 
-		const wakeupInterval = 5 * time.Second
-		time.Sleep(wakeupInterval)
+		time.Sleep(p.wakeupInterval)
 		waiters := p.slowWaiters.Load()
 		eventsAvailable := p.inUseEvents.Load() < int64(p.capacity)
 		if waiters > 0 && eventsAvailable {
@@ -399,6 +400,7 @@ type lowMemoryEventPool struct {
 	stopped          *atomic.Bool
 	runHeartbeatOnce *sync.Once
 	slowWaiters      *atomic.Int64
+	wakeupInterval   time.Duration
 }
 
 func newLowMemoryEventPool(capacity int) *lowMemoryEventPool {
@@ -418,6 +420,7 @@ func newLowMemoryEventPool(capacity int) *lowMemoryEventPool {
 		stopped:          &atomic.Bool{},
 		runHeartbeatOnce: &sync.Once{},
 		slowWaiters:      &atomic.Int64{},
+		wakeupInterval:   time.Second * 5,
 	}
 }
 
@@ -476,7 +479,11 @@ func (p *lowMemoryEventPool) dump() string {
 }
 
 func (p *lowMemoryEventPool) inUse() int64 {
-	return p.inUseEvents.Load()
+	inUse := p.inUseEvents.Load()
+	// Make sure we don't overflow the capacity.
+	// It's possible in case when we call inUseEvents.Inc() when the pool is full.
+	inUse = min(inUse, int64(p.capacity))
+	return inUse
 }
 
 func (p *lowMemoryEventPool) waiters() int64 {
@@ -493,7 +500,7 @@ func (p *lowMemoryEventPool) wakeupWaiters() {
 			return
 		}
 
-		time.Sleep(5 * time.Second)
+		time.Sleep(p.wakeupInterval)
 		waiters := p.slowWaiters.Load()
 		eventsAvailable := p.eventsAvailable()
 		if waiters > 0 && !eventsAvailable {
