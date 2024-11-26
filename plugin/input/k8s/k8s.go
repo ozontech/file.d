@@ -3,6 +3,7 @@ package k8s
 import (
 	"net/http"
 
+	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/decoder"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/pipeline"
@@ -92,6 +93,24 @@ type Config struct {
 	// >
 	// > Under the hood this plugin uses [file plugin](/plugin/input/file/README.md) to collect logs from files. So you can change any [file plugin](/plugin/input/file/README.md) config parameter using `file_config` section. Check out an example.
 	FileConfig file.Config `json:"file_config" child:"true"` // *
+
+	// > @3@4@5@6
+	// >
+	// > K8sMeta params
+	// >
+	// > Add meta information to an event (look at Meta params)
+	// > Use [go-template](https://pkg.go.dev/text/template) syntax
+	// >
+	// > Built-in meta params
+	// >
+	// > `k8s_pod`: `{{ .pod }}`
+	// >
+	// > `k8s_namespace`: `{{ .namespace }}`
+	// >
+	// > `k8s_container`: `{{ .container }}`
+	// >
+	// > `k8s_container_id`: `{{ .container_id }}`
+	K8sMeta cfg.MetaTemplates `json:"meta"` // *
 }
 
 var startCounter atomic.Int32
@@ -139,8 +158,40 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 		p.params.Controller.SuggestDecoder(decoder.CRI)
 	}
 
+	meta := cfg.MetaTemplates{}
+	if p.config.K8sMeta != nil {
+		meta = p.config.K8sMeta
+	}
+
+	fileMeta := cfg.MetaTemplates{}
+	if p.config.FileConfig.Meta != nil {
+		fileMeta = p.config.FileConfig.Meta
+	}
+	setBuiltInMeta(fileMeta)
+	for k, v := range meta {
+		fileMeta[k] = v
+	}
+	p.config.FileConfig.Meta = fileMeta
+
 	p.fp.Start(&p.config.FileConfig, params)
 }
+
+func setBuiltInMeta(meta cfg.MetaTemplates) {
+	meta["k8s_pod"] = "{{ .pod }}"
+	meta["k8s_namespace"] = "{{ .namespace }}"
+	meta["k8s_container"] = "{{ .container }}"
+	meta["k8s_container_id"] = "{{ .container_id }}"
+}
+
+/*{ meta-params
+**`pod`**
+
+**`namespace`**
+
+**`container`**
+
+**`container_id`**
+}*/
 
 // Commit event.
 func (p *Plugin) Commit(event *pipeline.Event) {

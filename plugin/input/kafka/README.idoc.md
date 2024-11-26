@@ -5,8 +5,4 @@
 @config-params|description
 
 ### Meta params
-**`topic`** 
-
-**`partition`** 
-
-**`offset`** 
+@meta-params

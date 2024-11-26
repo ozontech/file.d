@@ -1,10 +1,13 @@
 package pipeline_test
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/pipeline/metadata"
 	"github.com/ozontech/file.d/plugin/input/fake"
+	"github.com/ozontech/file.d/plugin/output/devnull"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/require"
 )
@@ -66,5 +69,42 @@ func TestInInvalidMessages(t *testing.T) {
 			seqID := pipe.In(tCase.sourceID, "kafka", tCase.offset, tCase.message, false, nil)
 			require.Equal(t, pipeline.EventSeqIDError, seqID)
 		})
+	}
+}
+
+func BenchmarkMetaTemplater(b *testing.B) {
+	pipelineSettings := &pipeline.Settings{
+		Capacity:           b.N,
+		Decoder:            "cri",
+		MetricHoldDuration: pipeline.DefaultMetricHoldDuration,
+	}
+
+	pipe := pipeline.New("test_pipeline", pipelineSettings, prometheus.NewRegistry())
+	pipe.SetInput(getFakeInputInfo())
+	plugin, config := devnull.Factory()
+	outputPlugin := plugin.(*devnull.Plugin)
+
+	pipe.SetOutput(&pipeline.OutputPluginInfo{
+		PluginStaticInfo: &pipeline.PluginStaticInfo{
+			Config: config,
+		},
+		PluginRuntimeInfo: &pipeline.PluginRuntimeInfo{
+			Plugin: outputPlugin,
+		},
+	})
+
+	for i := 0; i < b.N; i++ {
+		rest := i % 100
+		pipe.In(
+			pipeline.SourceID(1<<16+rest),
+			fmt.Sprintf(
+				"/k8s-logs/advanced-logs-checker-1566485760-trtrq-%d_sre-%d_duty-bot-4e0301b633eaa2bfdcafdeba59ba0c72a3815911a6a820bf273534b0f32d98e0%d.log",
+				rest, rest, rest,
+			),
+			int64(i),
+			[]byte("2016-10-06T00:17:09.669794202Z stdout P partial content 1\n"),
+			false,
+			metadata.MetaData{},
+		)
 	}
 }
