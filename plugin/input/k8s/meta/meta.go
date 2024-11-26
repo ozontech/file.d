@@ -53,7 +53,10 @@ func NewK8sMetaInformation(fullFilename string) (K8sMetaInformation, error) {
 
 	cid := filename[len(filename)-64:]
 
-	_, podMeta := GetPodMeta(Namespace(ns), PodName(pod), ContainerID(cid))
+	var podMeta *podMeta
+	if !DisableMetaUpdates {
+		_, podMeta = GetPodMeta(Namespace(ns), PodName(pod), ContainerID(cid))
+	}
 
 	return K8sMetaInformation{
 		Namespace:     ns,

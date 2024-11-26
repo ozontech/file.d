@@ -7,28 +7,65 @@ import (
 	"sync"
 	"text/template"
 
+	"github.com/elliotchance/orderedmap/v2"
 	"github.com/ozontech/file.d/cfg"
 )
 
 type MetaData map[string]string
 
 type MetaTemplater struct {
-	templates    map[string]*template.Template
-	singleValues map[string]string
+	templates    *orderedmap.OrderedMap[string, *template.Template]
+	singleValues *orderedmap.OrderedMap[string, string]
 	poolBuffer   sync.Pool
 }
 
+type node struct {
+	name      string
+	dependsOn []string
+}
+
 func NewMetaTemplater(templates cfg.MetaTemplates) *MetaTemplater {
-	compiledTemplates := make(map[string]*template.Template)
-	singleValues := make(map[string]string)
+	keyOrder := orderedmap.NewOrderedMap[string, struct{}]()
+
+	// Regular expression to find keys in the template strings
+	re := regexp.MustCompile(`{{\s*\.(\w+)\s*}}`)
+
+	graph := make([]node, 0, len(templates))
+
+	// Iterate over the MetaTemplates to find keys
+	for name, template := range templates {
+		matches := re.FindAllStringSubmatch(template, -1)
+		nodeValue := node{name: name}
+
+		for _, match := range matches {
+			if len(match) > 1 {
+				key := match[1]
+				if _, exists := templates[key]; exists {
+					nodeValue.dependsOn = append(nodeValue.dependsOn, key)
+				}
+				// Add the key to the OrderedMap if it doesn't already exist
+				if _, exists := keyOrder.Get(key); !exists {
+					keyOrder.Set(key, struct{}{})
+				}
+			}
+		}
+		graph = append(graph, nodeValue)
+	}
+
+	result := buildPath(graph)
+
+	compiledTemplates := orderedmap.NewOrderedMap[string, *template.Template]()
+	singleValues := orderedmap.NewOrderedMap[string, string]()
 	singleValueRegex := regexp.MustCompile(`^\{\{\ +\.(\w+)\ +\}\}$`)
 
-	for k, v := range templates {
+	for i := 0; i <= len(result)-1; i++ {
+		k := result[i]
+		v := templates[k]
 		vals := singleValueRegex.FindStringSubmatch(v)
 		if len(vals) > 1 {
-			singleValues[k] = vals[1]
+			singleValues.Set(k, vals[1])
 		} else {
-			compiledTemplates[k] = template.Must(template.New("").Parse(v))
+			compiledTemplates.Set(k, template.Must(template.New("").Parse(v)))
 		}
 	}
 
@@ -43,26 +80,67 @@ func NewMetaTemplater(templates cfg.MetaTemplates) *MetaTemplater {
 	return &meta
 }
 
+func buildPath(graph []node) []string {
+	visited := make(map[string]bool)
+	var path []string
+
+	var dfs func(node node)
+	dfs = func(node node) {
+		visited[node.name] = true
+
+		// Visit dependencies first
+		for _, dep := range node.dependsOn {
+			if !visited[dep] {
+				// Find the node corresponding to the dependency
+				for _, n := range graph {
+					if n.name == dep {
+						dfs(n)
+						break
+					}
+				}
+			}
+		}
+
+		// Add the current node after visiting its dependencies
+		path = append(path, node.name)
+	}
+
+	// Start DFS from each node
+	for _, node := range graph {
+		if !visited[node.name] {
+			dfs(node)
+		}
+	}
+
+	return path
+}
+
 type Data interface {
 	GetData() map[string]any
 }
 
 func (m *MetaTemplater) Render(data Data) (MetaData, error) {
-	values := data.GetData()
+	initValues := data.GetData()
 	meta := MetaData{}
+	values := make(map[string]any, len(initValues)+m.singleValues.Len())
+	for key, value := range initValues {
+		values[key] = value
+	}
 
-	for k, tmpl := range m.singleValues {
+	for _, k := range m.singleValues.Keys() {
+		tmpl, _ := m.singleValues.Get(k)
 		if val, ok := values[tmpl]; ok {
 			meta[k] = fmt.Sprintf("%v", val)
 			values[k] = meta[k]
 		}
 	}
 
-	if len(m.templates) > 0 {
+	if m.templates.Len() > 0 {
 		tplOutput := m.poolBuffer.Get().(*bytes.Buffer)
 		defer m.poolBuffer.Put(tplOutput)
 
-		for k, tmpl := range m.templates {
+		for _, k := range m.templates.Keys() {
+			tmpl, _ := m.templates.Get(k)
 			tplOutput.Reset()
 			err := tmpl.Execute(tplOutput, values)
 			if err != nil {

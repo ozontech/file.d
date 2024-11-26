@@ -159,9 +159,9 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 		p.params.Controller.SuggestDecoder(decoder.CRI)
 	}
 
-	meta := cfg.MetaTemplates{}
+	metaConfig := cfg.MetaTemplates{}
 	if p.config.K8sMeta != nil {
-		meta = p.config.K8sMeta
+		metaConfig = p.config.K8sMeta
 	}
 
 	fileMeta := cfg.MetaTemplates{}
@@ -169,7 +169,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 		fileMeta = p.config.FileConfig.Meta
 	}
 	setBuiltInMeta(fileMeta)
-	for k, v := range meta {
+	for k, v := range metaConfig {
 		fileMeta[k] = v
 	}
 	p.config.FileConfig.Meta = fileMeta
@@ -177,11 +177,11 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	p.fp.Start(&p.config.FileConfig, params)
 }
 
-func setBuiltInMeta(meta cfg.MetaTemplates) {
-	meta["k8s_pod"] = "{{ .pod_name }}"
-	meta["k8s_namespace"] = "{{ .namespace }}"
-	meta["k8s_container"] = "{{ .container_name }}"
-	meta["k8s_container_id"] = "{{ .container_id }}"
+func setBuiltInMeta(metaConfig cfg.MetaTemplates) {
+	metaConfig["k8s_pod"] = "{{ .pod_name }}"
+	metaConfig["k8s_namespace"] = "{{ .namespace }}"
+	metaConfig["k8s_container"] = "{{ .container_name }}"
+	metaConfig["k8s_container_id"] = "{{ .container_id }}"
 }
 
 /*{ meta-params

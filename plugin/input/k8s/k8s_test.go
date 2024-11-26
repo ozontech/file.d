@@ -94,9 +94,9 @@ func config() *Config {
 }
 
 func getTestMeta() cfg.MetaTemplates {
-	meta := cfg.MetaTemplates{}
-	setBuiltInMeta(meta)
-	return meta
+	metaConfig := cfg.MetaTemplates{}
+	setBuiltInMeta(metaConfig)
+	return metaConfig
 }
 
 func TestAllowedLabels(t *testing.T) {

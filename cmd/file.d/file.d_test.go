@@ -21,7 +21,7 @@ import (
 	_ "github.com/ozontech/file.d/plugin/action/rename"
 	_ "github.com/ozontech/file.d/plugin/action/throttle"
 	_ "github.com/ozontech/file.d/plugin/input/fake"
-	k8s2 "github.com/ozontech/file.d/plugin/input/k8s"
+	"github.com/ozontech/file.d/plugin/input/k8s/meta"
 	_ "github.com/ozontech/file.d/plugin/output/devnull"
 	_ "github.com/ozontech/file.d/plugin/output/kafka"
 	uuid "github.com/satori/go.uuid"
@@ -78,9 +78,9 @@ func TestEndToEnd(t *testing.T) {
 	rand.Seed(0)
 
 	// disable k8s environment
-	k8s2.DisableMetaUpdates = true
-	k8s2.MetaWaitTimeout = time.Millisecond
-	k8s2.MaintenanceInterval = time.Millisecond * 100
+	meta.DisableMetaUpdates = true
+	meta.MetaWaitTimeout = time.Millisecond
+	meta.MaintenanceInterval = time.Millisecond * 100
 
 	filesDir := t.TempDir()
 	offsetsDir := t.TempDir()
