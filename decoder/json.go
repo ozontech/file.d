@@ -1,6 +1,6 @@
 package decoder
 
-import insaneJSON "github.com/vitkovskii/insane-json"
+import insaneJSON "github.com/ozontech/insane-json"
 
 func DecodeJson(root *insaneJSON.Root, data []byte) error {
 	return root.DecodeBytes(data)

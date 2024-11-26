@@ -684,3 +684,13 @@ func (m metaInformation) GetData() map[string]any {
 		"params":      m.params,
 	}
 }
+
+/*{ meta-params
+**`login`**
+
+**`remote_addr`**  *`net.IP`*
+
+**`request`**  *`http.Request`*
+
+**`params`**  *`url.Values`*
+}*/

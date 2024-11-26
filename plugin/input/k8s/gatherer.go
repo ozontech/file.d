@@ -19,12 +19,7 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 )
 
-const (
-	formatInfo = "make sure source file has name format: [pod-name]_[namespace]_[container-name]-[container id].log"
-)
-
 type (
-	nodeName      string
 	podName       string
 	namespace     string
 	containerName string
@@ -36,7 +31,6 @@ type (
 	}
 
 	metaItem struct {
-		nodeName      nodeName
 		namespace     namespace
 		podName       podName
 		containerName containerName
@@ -260,11 +254,9 @@ func cleanUpItems(items []*metaItem) {
 	}
 }
 
-func getMeta(fullFilename string) (namespace, podName, containerName, bool, *podMeta) {
+func getPodMeta(ns namespace, pod podName, cid containerID) (bool, *podMeta) {
 	var podMeta *podMeta
 	var success bool
-	var cid containerID
-	ns, pod, container, cid := parseLogFilename(fullFilename)
 
 	i := time.Nanosecond
 	for {
@@ -280,12 +272,12 @@ func getMeta(fullFilename string) (namespace, podName, containerName, bool, *pod
 
 			success = true
 			podMeta = pm
-			return ns, pod, container, success, podMeta
+			return success, podMeta
 		}
 
 		// fast skip blacklisted pods
 		if isInBlackList {
-			return ns, pod, container, success, podMeta
+			return success, podMeta
 		}
 
 		time.Sleep(metaRecheckInterval)
@@ -298,9 +290,9 @@ func getMeta(fullFilename string) (namespace, podName, containerName, bool, *pod
 			}
 			podBlackList[pod] = true
 			metaDataMu.Unlock()
-			localLogger.Errorf("pod %q have blacklisted, cause k8s meta retrieve timeout ns=%s container=%s cid=%s", string(pod), string(ns), string(container), string(cid))
+			localLogger.Errorf("pod %q have blacklisted, cause k8s meta retrieve timeout ns=%s", string(pod), string(ns))
 
-			return ns, pod, container, success, podMeta
+			return success, podMeta
 		}
 	}
 }
@@ -380,50 +372,6 @@ func putContainerMeta(ns namespace, pod podName, fullContainerID string, podInfo
 	metaDataMu.Lock()
 	metaData[ns][pod][containerID] = meta
 	metaDataMu.Unlock()
-}
-
-func parseLogFilename(fullFilename string) (namespace, podName, containerName, containerID) {
-	if fullFilename[len(fullFilename)-4:] != ".log" {
-		localLogger.Infof(formatInfo)
-		localLogger.Fatalf("wrong log file name, no .log at ending %s", fullFilename)
-	}
-	lastSlash := strings.LastIndexByte(fullFilename, '/')
-	if lastSlash < 0 {
-		localLogger.Infof(formatInfo)
-		localLogger.Fatalf("wrong log file name %s, no slashes", fullFilename)
-	}
-	filename := fullFilename[lastSlash+1 : len(fullFilename)-4]
-	if filename == "" {
-		localLogger.Infof(formatInfo)
-		localLogger.Fatalf("wrong log file name, empty", filename)
-	}
-
-	underscore := strings.IndexByte(filename, '_')
-	if underscore < 0 {
-		localLogger.Infof(formatInfo)
-		localLogger.Fatalf("wrong log file name, no underscore for pod: %s", filename)
-	}
-
-	pod := filename[:underscore]
-	filename = filename[underscore+1:]
-
-	underscore = strings.IndexByte(filename, '_')
-	if underscore < 0 {
-		localLogger.Infof(formatInfo)
-		localLogger.Fatalf("wrong log file name, no underscore for ns: %s", filename)
-	}
-	ns := filename[:underscore]
-	filename = filename[underscore+1:]
-
-	if len(filename) < 65 {
-		localLogger.Infof(formatInfo)
-		localLogger.Fatalf("wrong log file name, not enough chars: %s", filename)
-	}
-
-	container := filename[:len(filename)-65]
-	cid := filename[len(filename)-64:]
-
-	return namespace(ns), podName(pod), containerName(container), containerID(cid)
 }
 
 func getNamespace() string {
