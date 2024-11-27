@@ -357,42 +357,6 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 	})
 	begin = append(begin, len(data.outBuf))
 
-	var saveOrSplit func(left, right int) error
-	saveOrSplit = func(left, right int) error {
-		if left == right {
-			return nil
-		}
-
-		statusCode, err := p.client.DoTimeout(
-			http.MethodPost,
-			NDJSONContentType,
-			data.outBuf[begin[left]:begin[right]],
-			p.config.ConnectionTimeout_, p.reportESErrors)
-
-		if err != nil {
-			p.sendErrorMetric.WithLabelValues(strconv.Itoa(statusCode)).Inc()
-			switch statusCode {
-			case http.StatusRequestEntityTooLarge:
-				// can't save even one log
-				if right-left == 1 {
-					return err
-				}
-
-				middle := (left + right) / 2
-				err = saveOrSplit(left, middle)
-				if err != nil {
-					return err
-				}
-
-				return saveOrSplit(middle, right)
-			default:
-				return err
-			}
-		}
-
-		return nil
-	}
-
 	statusCode, err := p.client.DoTimeout(http.MethodPost, NDJSONContentType, data.outBuf,
 		p.config.ConnectionTimeout_, p.reportESErrors)
 
@@ -408,7 +372,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 			p.logger.Error(errMsg, fields...)
 			return nil
 		case http.StatusRequestEntityTooLarge:
-			if err := saveOrSplit(0, eventsCount); err != nil {
+			if err := p.saveOrSplit(0, eventsCount, begin, data.outBuf); err != nil {
 				const errMsg = "can't send to the elastic, non-retryable error occurred (entity too large)"
 				fields := []zap.Field{zap.Int("status_code", statusCode), zap.Error(err)}
 				if p.config.Strict {
@@ -419,6 +383,41 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 			return nil
 		default:
 			p.logger.Error("can't send to the elastic, will try other endpoint", zap.Error(err))
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (p *Plugin) saveOrSplit(left int, right int, begin []int, data []byte) error {
+	if left == right {
+		return nil
+	}
+
+	statusCode, err := p.client.DoTimeout(
+		http.MethodPost,
+		NDJSONContentType,
+		data[begin[left]:begin[right]],
+		p.config.ConnectionTimeout_, p.reportESErrors)
+
+	if err != nil {
+		p.sendErrorMetric.WithLabelValues(strconv.Itoa(statusCode)).Inc()
+		switch statusCode {
+		case http.StatusRequestEntityTooLarge:
+			// can't save even one log
+			if right-left == 1 {
+				return err
+			}
+
+			middle := (left + right) / 2
+			err = p.saveOrSplit(left, middle, begin, data)
+			if err != nil {
+				return err
+			}
+
+			return p.saveOrSplit(middle, right, begin, data)
+		default:
 			return err
 		}
 	}
