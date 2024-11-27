@@ -14,7 +14,9 @@ import (
 )
 
 type worker struct {
-	maxEventSize  int
+	maxEventSize       int
+	cutOffEventByLimit bool
+
 	metaTemplater *metadata.MetaTemplater
 	needK8sMeta   bool
 }
@@ -103,7 +105,7 @@ func (w *worker) work(controller inputer, jobProvider *jobProvider, readBufferSi
 				scanned += pos + 1
 
 				// check if the event fits into the max size, otherwise skip the event
-				if shouldCheckMax && len(accumBuf)+len(line) > w.maxEventSize {
+				if shouldCheckMax && !w.cutOffEventByLimit && len(accumBuf)+len(line) > w.maxEventSize {
 					controller.IncMaxEventSizeExceeded()
 					skipLine = true
 				}
@@ -146,7 +148,10 @@ func (w *worker) work(controller inputer, jobProvider *jobProvider, readBufferSi
 
 			// check the buffer size and limits to avoid OOM if event is long
 			if shouldCheckMax && len(accumBuf) > w.maxEventSize {
-				continue
+				if !w.cutOffEventByLimit {
+					continue
+				}
+				accumBuf = accumBuf[:w.maxEventSize]
 			}
 			accumBuf = append(accumBuf, buf...)
 		}

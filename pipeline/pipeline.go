@@ -24,16 +24,22 @@ import (
 )
 
 const (
-	DefaultStreamField         = "stream"
-	DefaultCapacity            = 1024
-	DefaultAvgInputEventSize   = 4 * 1024
-	DefaultMaxInputEventSize   = 0
-	DefaultJSONNodePoolSize    = 1024
-	DefaultMaintenanceInterval = time.Second * 5
-	DefaultEventTimeout        = time.Second * 30
-	DefaultFieldValue          = "not_set"
-	DefaultStreamName          = StreamName("not_set")
-	DefaultMetricHoldDuration  = time.Minute * 30
+	DefaultAntispamThreshold     = 0
+	DefaultAntispamField         = ""
+	DefaultDecoder               = "auto"
+	DefaultIsStrict              = false
+	DefaultStreamField           = "stream"
+	DefaultCapacity              = 1024
+	DefaultAvgInputEventSize     = 4 * 1024
+	DefaultMaxInputEventSize     = 0
+	DefaultCutOffEventByLimit    = false
+	DefaultCutOffEventByLimitMsg = ""
+	DefaultJSONNodePoolSize      = 1024
+	DefaultMaintenanceInterval   = time.Second * 5
+	DefaultEventTimeout          = time.Second * 30
+	DefaultFieldValue            = "not_set"
+	DefaultStreamName            = StreamName("not_set")
+	DefaultMetricHoldDuration    = time.Minute * 30
 
 	EventSeqIDError = uint64(0)
 
@@ -128,19 +134,21 @@ type Pipeline struct {
 }
 
 type Settings struct {
-	Decoder             string
-	DecoderParams       map[string]any
-	Capacity            int
-	MaintenanceInterval time.Duration
-	EventTimeout        time.Duration
-	AntispamThreshold   int
-	AntispamField       string
-	AntispamExceptions  antispam.Exceptions
-	AvgEventSize        int
-	MaxEventSize        int
-	StreamField         string
-	IsStrict            bool
-	MetricHoldDuration  time.Duration
+	Decoder               string
+	DecoderParams         map[string]any
+	Capacity              int
+	MaintenanceInterval   time.Duration
+	EventTimeout          time.Duration
+	AntispamThreshold     int
+	AntispamField         string
+	AntispamExceptions    antispam.Exceptions
+	AvgEventSize          int
+	MaxEventSize          int
+	CutOffEventByLimit    bool
+	CutOffEventByLimitMsg string
+	StreamField           string
+	IsStrict              bool
+	MetricHoldDuration    time.Duration
 }
 
 // New creates new pipeline. Consider using `SetupHTTPHandlers` next.
@@ -370,19 +378,13 @@ func (p *Pipeline) GetOutput() OutputPlugin {
 
 // In decodes message and passes it to event stream.
 func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes []byte, isNewSource bool, meta metadata.MetaData) (seqID uint64) {
-	length := len(bytes)
-
 	// don't process mud.
-	isEmpty := length == 0 || (bytes[0] == '\n' && length == 1)
-	if isEmpty {
+	var ok bool
+	bytes, ok = p.checkInputBytes(bytes)
+	if !ok {
 		return EventSeqIDError
 	}
-
-	isLong := p.settings.MaxEventSize != 0 && length > p.settings.MaxEventSize
-	if isLong {
-		p.IncMaxEventSizeExceeded()
-		return EventSeqIDError
-	}
+	length := len(bytes)
 
 	var (
 		dec decoder.Type
@@ -521,6 +523,29 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 	event.Size = len(bytes)
 
 	return p.streamEvent(event)
+}
+
+func (p *Pipeline) checkInputBytes(bytes []byte) ([]byte, bool) {
+	length := len(bytes)
+
+	if length == 0 || (bytes[0] == '\n' && length == 1) {
+		return bytes, false
+	}
+
+	if p.settings.MaxEventSize != 0 && length > p.settings.MaxEventSize {
+		p.IncMaxEventSizeExceeded()
+		if !p.settings.CutOffEventByLimit {
+			return bytes, false
+		}
+
+		wasNewLine := bytes[len(bytes)-1] == '\n'
+		bytes = append(bytes[:p.settings.MaxEventSize], p.settings.CutOffEventByLimitMsg...)
+		if wasNewLine {
+			bytes = append(bytes, '\n')
+		}
+	}
+
+	return bytes, true
 }
 
 func (p *Pipeline) streamEvent(event *Event) uint64 {

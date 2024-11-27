@@ -84,7 +84,16 @@ func TestE2EStabilityWorkCase(t *testing.T) {
 		{
 			name: "kafka_auth",
 			e2eTest: &kafka_auth.Config{
-				Brokers: []string{"localhost:9093"},
+				Brokers:    []string{"localhost:9093"},
+				SslEnabled: true,
+			},
+			cfgPath: "./kafka_auth/config.yml",
+		},
+		{
+			name: "kafka_auth",
+			e2eTest: &kafka_auth.Config{
+				Brokers:    []string{"localhost:9095"},
+				SslEnabled: false,
 			},
 			cfgPath: "./kafka_auth/config.yml",
 		},

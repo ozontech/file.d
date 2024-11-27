@@ -1,7 +1,6 @@
 package cfg
 
 import (
-	"crypto/tls"
 	"os"
 
 	"github.com/twmb/franz-go/pkg/kgo"
@@ -68,7 +67,6 @@ func GetKafkaClientOptions(c KafkaClientConfig, l *zap.Logger) []kgo.Opt {
 				SecretKey: saslConfig.SaslPassword,
 			}.AsManagedStreamingIAMMechanism()))
 		}
-		opts = append(opts, kgo.DialTLSConfig(new(tls.Config)))
 	}
 
 	if c.IsSslEnabled() {
