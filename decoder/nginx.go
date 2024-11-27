@@ -24,7 +24,7 @@ type NginxErrorRow struct {
 }
 
 type nginxErrorParams struct {
-	WithCustomFields bool // optional
+	withCustomFields bool // optional
 }
 
 type nginxErrorDecoder struct {
@@ -161,7 +161,7 @@ func (d *nginxErrorDecoder) Decode(data []byte, _ ...any) (any, error) {
 //		"upstream": "http://10.117.246.15:84/download"
 //		"host": "mpm-youtube-downloader-38.name.tldn:84"
 func (d *nginxErrorDecoder) extractCustomFields(data []byte) ([]byte, map[string][]byte) {
-	if !d.params.WithCustomFields {
+	if !d.params.withCustomFields {
 		return data, nil
 	}
 
@@ -207,7 +207,7 @@ func extractNginxErrorParams(params map[string]any) (nginxErrorParams, error) {
 	}
 
 	return nginxErrorParams{
-		WithCustomFields: withCustomFields,
+		withCustomFields: withCustomFields,
 	}, nil
 }
 

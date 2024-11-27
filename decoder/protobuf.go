@@ -23,9 +23,9 @@ const (
 )
 
 type protobufParams struct {
-	File        string   // required
-	Message     string   // required
-	ImportPaths []string // optional
+	file        string   // required
+	message     string   // required
+	importPaths []string // optional
 }
 
 type protobufDecoder struct {
@@ -39,14 +39,14 @@ func NewProtobufDecoder(params map[string]any) (Decoder, error) {
 	}
 
 	resolver := &protocompile.SourceResolver{}
-	if p.ImportPaths != nil {
-		resolver.ImportPaths = p.ImportPaths
+	if p.importPaths != nil {
+		resolver.ImportPaths = p.importPaths
 	}
 
-	fileName := p.File
-	if !strings.HasSuffix(p.File, protoFileSuffix) {
+	fileName := p.file
+	if !strings.HasSuffix(p.file, protoFileSuffix) {
 		resolver.Accessor = protocompile.SourceAccessorFromMap(map[string]string{
-			protoInmemoryFile: p.File,
+			protoInmemoryFile: p.file,
 		})
 		fileName = protoInmemoryFile
 	}
@@ -65,9 +65,9 @@ func NewProtobufDecoder(params map[string]any) (Decoder, error) {
 		return nil, fmt.Errorf("can't find proto-file %q after compilation", fileName)
 	}
 
-	msgDesc := f.Messages().ByName(protoreflect.Name(p.Message))
+	msgDesc := f.Messages().ByName(protoreflect.Name(p.message))
 	if msgDesc == nil {
-		return nil, fmt.Errorf("can't find message %q in proto-file %q", p.Message, fileName)
+		return nil, fmt.Errorf("can't find message %q in proto-file %q", p.message, fileName)
 	}
 
 	return &protobufDecoder{
@@ -140,8 +140,8 @@ func extractProtobufParams(params map[string]any) (protobufParams, error) {
 	}
 
 	return protobufParams{
-		File:        file,
-		Message:     msg,
-		ImportPaths: importPaths,
+		file:        file,
+		message:     msg,
+		importPaths: importPaths,
 	}, nil
 }

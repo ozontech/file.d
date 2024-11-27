@@ -58,6 +58,23 @@ func TestJson(t *testing.T) {
 			},
 		},
 		{
+			name:  "valid_max_fields_size_single",
+			input: inputJson,
+			params: map[string]any{
+				jsonMaxFieldsSizeParam: map[string]any{
+					"f2.f2_2.f2_2_2": 4,
+				},
+			},
+			want: map[string]string{
+				"f1":             "v12345",
+				"f2.f2_1":        "100",
+				"f2.f2_2.f2_2_1": "true",
+				"f2.f2_2.f2_2_2": "v123",
+				"f2.f2_3":        "[1,2,3]",
+				"f3":             "null",
+			},
+		},
+		{
 			name: "invalid_create_1",
 			params: map[string]any{
 				jsonMaxFieldsSizeParam: "not_map",
@@ -131,44 +148,44 @@ func genBenchParams(count, maxLen int) map[string]int {
 	return m
 }
 
-const benchJsonFormat = `{%s"level":"info","ts":"2024-02-21T08:31:24.621Z","message":"some message"}`
-
-var benchCases = []struct {
-	json   []byte
-	params map[string]int
-}{
-	{
-		json: []byte(fmt.Sprintf(benchJsonFormat, genBenchFields(0))),
-		params: map[string]int{
-			"message": 7,
-		},
-	},
-	{
-		json:   []byte(fmt.Sprintf(benchJsonFormat, genBenchFields(10))),
-		params: genBenchParams(9, 3),
-	},
-	{
-		json:   []byte(fmt.Sprintf(benchJsonFormat, genBenchFields(100))),
-		params: genBenchParams(98, 5),
-	},
-	{
-		json:   []byte(fmt.Sprintf(benchJsonFormat, genBenchFields(1000))),
-		params: genBenchParams(997, 7),
-	},
-	{
-		json:   []byte(fmt.Sprintf(benchJsonFormat, genBenchFields(10000))),
-		params: genBenchParams(9996, 9),
-	},
-}
-
 func BenchmarkCutFieldsBySize(b *testing.B) {
+	const benchJsonFormat = `{%s"level":"info","ts":"2024-02-21T08:31:24.621Z","message":"some message"}`
+
+	var benchCases = []struct {
+		json   []byte
+		params map[string]int
+	}{
+		{
+			json: []byte(fmt.Sprintf(benchJsonFormat, genBenchFields(0))),
+			params: map[string]int{
+				"message": 7,
+			},
+		},
+		{
+			json:   []byte(fmt.Sprintf(benchJsonFormat, genBenchFields(10))),
+			params: genBenchParams(9, 3),
+		},
+		{
+			json:   []byte(fmt.Sprintf(benchJsonFormat, genBenchFields(100))),
+			params: genBenchParams(98, 5),
+		},
+		{
+			json:   []byte(fmt.Sprintf(benchJsonFormat, genBenchFields(1000))),
+			params: genBenchParams(997, 7),
+		},
+		{
+			json:   []byte(fmt.Sprintf(benchJsonFormat, genBenchFields(10000))),
+			params: genBenchParams(9996, 9),
+		},
+	}
+
 	for _, benchCase := range benchCases {
 		name := fmt.Sprintf("json_length_%d", len(benchCase.json))
 
 		b.Run(name, func(b *testing.B) {
 			d := jsonDecoder{
 				params: jsonParams{
-					MaxFieldsSize: benchCase.params,
+					maxFieldsSize: benchCase.params,
 				},
 				cutPositions: make([]jsonCutPos, 0, len(benchCase.params)),
 				mu:           &sync.Mutex{},

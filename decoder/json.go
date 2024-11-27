@@ -15,7 +15,7 @@ const (
 )
 
 type jsonParams struct {
-	MaxFieldsSize map[string]int // optional
+	maxFieldsSize map[string]int // optional
 }
 
 type jsonCutPos struct {
@@ -36,10 +36,14 @@ func NewJsonDecoder(params map[string]any) (Decoder, error) {
 		return nil, fmt.Errorf("can't extract params: %w", err)
 	}
 
+	if len(p.maxFieldsSize) < 2 {
+		return &jsonDecoder{params: p}, nil
+	}
+
 	return &jsonDecoder{
 		params: p,
 
-		cutPositions: make([]jsonCutPos, 0, len(p.MaxFieldsSize)),
+		cutPositions: make([]jsonCutPos, 0, len(p.maxFieldsSize)),
 		mu:           &sync.Mutex{},
 	}, nil
 }
@@ -71,29 +75,50 @@ func (d *jsonDecoder) Decode(data []byte, args ...any) (any, error) {
 }
 
 func (d *jsonDecoder) cutFieldsBySize(data []byte) []byte {
-	if len(d.params.MaxFieldsSize) == 0 || !gjson.ValidBytes(data) {
+	if len(d.params.maxFieldsSize) == 0 || !gjson.ValidBytes(data) {
 		return data
+	}
+
+	findPos := func(path string, limit int) (jsonCutPos, bool) {
+		if path == "" {
+			return jsonCutPos{}, false
+		}
+
+		v := gjson.GetBytes(data, path)
+		if !v.Exists() || v.Type != gjson.String || len(v.Str) <= limit {
+			return jsonCutPos{}, false
+		}
+
+		// [v.Index] is value start position including quote (")
+		return jsonCutPos{
+			start: v.Index + limit + 1,
+			end:   v.Index + len(v.Str),
+		}, true
+	}
+
+	// fast way
+	if len(d.params.maxFieldsSize) == 1 {
+		var (
+			pos jsonCutPos
+			ok  bool
+		)
+		for path, limit := range d.params.maxFieldsSize {
+			pos, ok = findPos(path, limit)
+		}
+		if !ok {
+			return data
+		}
+		return append(data[:pos.start], data[pos.end+1:]...)
 	}
 
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
 	d.cutPositions = d.cutPositions[:0]
-	for path, limit := range d.params.MaxFieldsSize {
-		if path == "" {
-			continue
+	for path, limit := range d.params.maxFieldsSize {
+		if pos, ok := findPos(path, limit); ok {
+			d.cutPositions = append(d.cutPositions, pos)
 		}
-
-		v := gjson.GetBytes(data, path)
-		if !v.Exists() || v.Type != gjson.String || len(v.Str) <= limit {
-			continue
-		}
-
-		// [v.Index] is value start position including quote (")
-		d.cutPositions = append(d.cutPositions, jsonCutPos{
-			start: v.Index + limit + 1,
-			end:   v.Index + len(v.Str),
-		})
 	}
 
 	// sort by desc
@@ -124,6 +149,6 @@ func extractJsonParams(params map[string]any) (jsonParams, error) {
 	}
 
 	return jsonParams{
-		MaxFieldsSize: maxFieldsSize,
+		maxFieldsSize: maxFieldsSize,
 	}, nil
 }
