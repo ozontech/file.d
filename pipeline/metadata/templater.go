@@ -14,9 +14,17 @@ import (
 
 type MetaData map[string]string
 
+type ValueType string
+
+const (
+	SingleValueType   ValueType = "single"
+	TemplateValueType ValueType = "template"
+)
+
 type MetaTemplater struct {
-	templates    *orderedmap.OrderedMap[string, *template.Template]
-	singleValues *orderedmap.OrderedMap[string, string]
+	templates    map[string]*template.Template
+	singleValues map[string]string
+	valueTypes   *orderedmap.OrderedMap[string, ValueType]
 	poolBuffer   sync.Pool
 }
 
@@ -46,24 +54,27 @@ func NewMetaTemplater(templates cfg.MetaTemplates) *MetaTemplater {
 	}
 	orderedParams, _ := graph.TopologicalSort(g)
 
-	compiledTemplates := orderedmap.NewOrderedMap[string, *template.Template]()
-	singleValues := orderedmap.NewOrderedMap[string, string]()
+	compiledTemplates := make(map[string]*template.Template)
+	singleValues := make(map[string]string)
 	singleValueRegex := regexp.MustCompile(`^\{\{\ +\.(\w+)\ +\}\}$`)
-
+	valueTypes := orderedmap.NewOrderedMap[string, ValueType]()
 	for i := 0; i <= len(orderedParams)-1; i++ {
 		k := orderedParams[i]
 		v := templates[k]
 		vals := singleValueRegex.FindStringSubmatch(v)
 		if len(vals) > 1 {
-			singleValues.Set(k, vals[1])
+			singleValues[k] = vals[1]
+			valueTypes.Set(k, SingleValueType)
 		} else {
-			compiledTemplates.Set(k, template.Must(template.New("").Parse(v)))
+			compiledTemplates[k] = template.Must(template.New("").Parse(v))
+			valueTypes.Set(k, TemplateValueType)
 		}
 	}
 
 	meta := MetaTemplater{
 		templates:    compiledTemplates,
 		singleValues: singleValues,
+		valueTypes:   valueTypes,
 		poolBuffer: sync.Pool{
 			New: func() interface{} { return new(bytes.Buffer) },
 		},
@@ -79,25 +90,27 @@ type Data interface {
 func (m *MetaTemplater) Render(data Data) (MetaData, error) {
 	initValues := data.GetData()
 	meta := MetaData{}
-	values := make(map[string]any, len(initValues)+m.singleValues.Len())
+	values := make(map[string]any, len(initValues)+m.valueTypes.Len())
 	for key, value := range initValues {
 		values[key] = value
 	}
 
-	for _, k := range m.singleValues.Keys() {
-		tmpl, _ := m.singleValues.Get(k)
-		if val, ok := values[tmpl]; ok {
-			meta[k] = fmt.Sprintf("%v", val)
-			values[k] = meta[k]
-		}
+	var tplOutput *bytes.Buffer
+	if len(m.templates) > 0 {
+		tplOutput = m.poolBuffer.Get().(*bytes.Buffer)
+		defer m.poolBuffer.Put(tplOutput)
 	}
 
-	if m.templates.Len() > 0 {
-		tplOutput := m.poolBuffer.Get().(*bytes.Buffer)
-		defer m.poolBuffer.Put(tplOutput)
-
-		for _, k := range m.templates.Keys() {
-			tmpl, _ := m.templates.Get(k)
+	for _, k := range m.valueTypes.Keys() {
+		v, _ := m.valueTypes.Get(k)
+		if v == SingleValueType {
+			tmpl := m.singleValues[k]
+			if val, ok := values[tmpl]; ok {
+				meta[k] = fmt.Sprintf("%v", val)
+				values[k] = meta[k]
+			}
+		} else if v == TemplateValueType {
+			tmpl := m.templates[k]
 			tplOutput.Reset()
 			err := tmpl.Execute(tplOutput, values)
 			if err != nil {

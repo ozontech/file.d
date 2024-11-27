@@ -11,11 +11,12 @@ import (
 func TestTemplaterRender(t *testing.T) {
 	templater := NewMetaTemplater(
 		cfg.MetaTemplates{
-			"broker_name2":       "{{ .broker_name }}",
-			"broker_name":        "{{ .broker }}",
-			"partition_name":     "partition_{{ .partition }}",
-			"partition_fullname": "partition {{ .partition_name }}, topic: {{ .topic }}",
-			"topic":              "{{ .topic }}",
+			"broker_name2":        "{{ .broker_name }}",
+			"broker_name":         "{{ .broker }}",
+			"partition_fullname2": "{{ .partition_fullname }}",
+			"partition_name":      "partition_{{ .partition }}",
+			"partition_fullname":  "partition {{ .partition_name }}, topic: {{ .topic }}",
+			"topic":               "{{ .topic }}",
 		},
 	)
 
@@ -25,11 +26,12 @@ func TestTemplaterRender(t *testing.T) {
 	assert.Equal(
 		t,
 		fmt.Sprint(map[string]any{
-			"broker_name":        "kafka1:9093",
-			"broker_name2":       "kafka1:9093",
-			"topic":              "topic",
-			"partition_name":     "partition_1",
-			"partition_fullname": "partition partition_1, topic: topic",
+			"broker_name":         "kafka1:9093",
+			"broker_name2":        "kafka1:9093",
+			"topic":               "topic",
+			"partition_name":      "partition_1",
+			"partition_fullname":  "partition partition_1, topic: topic",
+			"partition_fullname2": "partition partition_1, topic: topic",
 		}),
 		fmt.Sprint(result),
 	)
