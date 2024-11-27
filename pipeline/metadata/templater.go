@@ -30,16 +30,18 @@ func NewMetaTemplater(templates cfg.MetaTemplates) *MetaTemplater {
 		matches := re.FindAllStringSubmatch(template, -1)
 		_ = g.AddVertex(name)
 		for _, match := range matches {
-			if len(match) > 1 {
-				key := match[1]
-				if _, exists := templates[key]; exists {
-					if _, err := g.Vertex(key); err != nil {
-						// The key vertex has not been added before
-						_ = g.AddVertex(key)
-					}
-					_ = g.AddEdge(key, name)
-				}
+			if len(match) <= 1 {
+				continue
 			}
+			key := match[1]
+			if _, exists := templates[key]; !exists {
+				continue
+			}
+			if _, err := g.Vertex(key); err != nil {
+				// The key vertex has not been added before
+				_ = g.AddVertex(key)
+			}
+			_ = g.AddEdge(key, name)
 		}
 	}
 	orderedParams, _ := graph.TopologicalSort(g)
