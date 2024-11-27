@@ -7,6 +7,7 @@ import (
 	"sync"
 	"text/template"
 
+	"github.com/dominikbraun/graph"
 	"github.com/elliotchance/orderedmap/v2"
 	"github.com/ozontech/file.d/cfg"
 )
@@ -19,47 +20,36 @@ type MetaTemplater struct {
 	poolBuffer   sync.Pool
 }
 
-type node struct {
-	name      string
-	dependsOn []string
-}
-
 func NewMetaTemplater(templates cfg.MetaTemplates) *MetaTemplater {
-	keyOrder := orderedmap.NewOrderedMap[string, struct{}]()
-
 	// Regular expression to find keys in the template strings
 	re := regexp.MustCompile(`{{\s*\.(\w+)\s*}}`)
+	g := graph.New(graph.StringHash, graph.Directed(), graph.PreventCycles())
 
-	graph := make([]node, 0, len(templates))
-
-	// Iterate over the MetaTemplates to find keys
+	// Build a dependency graph
 	for name, template := range templates {
 		matches := re.FindAllStringSubmatch(template, -1)
-		nodeValue := node{name: name}
-
+		_ = g.AddVertex(name)
 		for _, match := range matches {
 			if len(match) > 1 {
 				key := match[1]
 				if _, exists := templates[key]; exists {
-					nodeValue.dependsOn = append(nodeValue.dependsOn, key)
-				}
-				// Add the key to the OrderedMap if it doesn't already exist
-				if _, exists := keyOrder.Get(key); !exists {
-					keyOrder.Set(key, struct{}{})
+					if _, err := g.Vertex(key); err != nil {
+						// The key vertex has not been added before
+						_ = g.AddVertex(key)
+					}
+					_ = g.AddEdge(key, name)
 				}
 			}
 		}
-		graph = append(graph, nodeValue)
 	}
-
-	result := buildPath(graph)
+	orderedParams, _ := graph.TopologicalSort(g)
 
 	compiledTemplates := orderedmap.NewOrderedMap[string, *template.Template]()
 	singleValues := orderedmap.NewOrderedMap[string, string]()
 	singleValueRegex := regexp.MustCompile(`^\{\{\ +\.(\w+)\ +\}\}$`)
 
-	for i := 0; i <= len(result)-1; i++ {
-		k := result[i]
+	for i := 0; i <= len(orderedParams)-1; i++ {
+		k := orderedParams[i]
 		v := templates[k]
 		vals := singleValueRegex.FindStringSubmatch(v)
 		if len(vals) > 1 {
@@ -78,41 +68,6 @@ func NewMetaTemplater(templates cfg.MetaTemplates) *MetaTemplater {
 	}
 
 	return &meta
-}
-
-func buildPath(graph []node) []string {
-	visited := make(map[string]bool)
-	var path []string
-
-	var dfs func(node node)
-	dfs = func(node node) {
-		visited[node.name] = true
-
-		// Visit dependencies first
-		for _, dep := range node.dependsOn {
-			if !visited[dep] {
-				// Find the node corresponding to the dependency
-				for _, n := range graph {
-					if n.name == dep {
-						dfs(n)
-						break
-					}
-				}
-			}
-		}
-
-		// Add the current node after visiting its dependencies
-		path = append(path, node.name)
-	}
-
-	// Start DFS from each node
-	for _, node := range graph {
-		if !visited[node.name] {
-			dfs(node)
-		}
-	}
-
-	return path
 }
 
 type Data interface {
