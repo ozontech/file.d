@@ -112,7 +112,7 @@ type Config struct {
 	// >
 	// > `k8s_container_id`: `{{ .container_id }}`
 	// >
-	// > Example: ```component: '{{ index .pod.Labels "component" }}'```
+	// > Example: ```component: '{{ index .pod.Labels "component" | default .k8s_container }}'```
 	K8sMeta cfg.MetaTemplates `json:"meta"` // *
 }
 

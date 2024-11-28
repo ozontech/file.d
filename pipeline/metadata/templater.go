@@ -33,7 +33,7 @@ type MetaTemplater struct {
 
 func NewMetaTemplater(templates cfg.MetaTemplates) *MetaTemplater {
 	// Regular expression to find ALL keys in the template strings (e.g., {{ .key }})
-	re := regexp.MustCompile(`{{\s*\.(\w+)\s*}}`)
+	re := regexp.MustCompile(`\.\s*(\w+)`)
 
 	// Graph to manage dependencies between templates
 	g := graph.New(graph.StringHash, graph.Directed(), graph.PreventCycles())
@@ -82,7 +82,14 @@ func NewMetaTemplater(templates cfg.MetaTemplates) *MetaTemplater {
 			valueTypes.Set(k, SingleValueType)
 		} else {
 			// "value_{{ .key }}" - more complex template
-			compiledTemplates[k] = template.Must(template.New("").Parse(v))
+			compiledTemplates[k] = template.Must(template.New("").Funcs(template.FuncMap{
+				"default": func(value interface{}, defaultValue string) interface{} {
+					if value == nil || value == "" {
+						return defaultValue
+					}
+					return value
+				},
+			}).Parse(v))
 			valueTypes.Set(k, TemplateValueType)
 		}
 	}
