@@ -17,6 +17,8 @@ func TestTemplaterRender(t *testing.T) {
 			"partition_name":      "partition_{{ .partition }}",
 			"partition_fullname":  "partition {{ .partition_name }}, topic: {{ .topic }}",
 			"topic":               "{{ .topic }}",
+			"header":              "{{ index .headers 0}}",
+			"header2":             "{{ .header }}",
 		},
 	)
 
@@ -32,6 +34,7 @@ func TestTemplaterRender(t *testing.T) {
 			"partition_name":      "partition_1",
 			"partition_fullname":  "partition partition_1, topic: topic",
 			"partition_fullname2": "partition partition_1, topic: topic",
+			"header":              "template: :1:3: executing \"\" at <index .headers 0>: error calling index: index of untyped nil",
 		}),
 		fmt.Sprint(result),
 	)

@@ -132,7 +132,7 @@ func (m *MetaTemplater) Render(data Data) (MetaData, error) {
 			tplOutput.Reset()
 			err := tmpl.Execute(tplOutput, values)
 			if err != nil {
-				return meta, err
+				meta[k] = err.Error()
 			} else {
 				meta[k] = tplOutput.String()
 				values[k] = meta[k]
