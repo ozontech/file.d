@@ -1,6 +1,7 @@
 package decoder
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"
@@ -40,12 +41,12 @@ func TestJson(t *testing.T) {
 			input: inputJson,
 			params: map[string]any{
 				jsonMaxFieldsSizeParam: map[string]any{
-					"":               1,
-					"not_exists":     100,
-					"f2.f2_1":        1,
-					"f2.f2_2.f2_2_1": 3,
-					"f1":             5,
-					"f2.f2_2.f2_2_2": 7,
+					"":               json.Number("1"),
+					"not_exists":     json.Number("100"),
+					"f2.f2_1":        json.Number("1"),
+					"f2.f2_2.f2_2_1": json.Number("3"),
+					"f1":             json.Number("5"),
+					"f2.f2_2.f2_2_2": json.Number("7"),
 				},
 			},
 			want: map[string]string{
@@ -62,7 +63,7 @@ func TestJson(t *testing.T) {
 			input: inputJson,
 			params: map[string]any{
 				jsonMaxFieldsSizeParam: map[string]any{
-					"f2.f2_2.f2_2_2": 4,
+					"f2.f2_2.f2_2_2": json.Number("4"),
 				},
 			},
 			want: map[string]string{
@@ -85,8 +86,16 @@ func TestJson(t *testing.T) {
 			name: "invalid_create_2",
 			params: map[string]any{
 				jsonMaxFieldsSizeParam: map[string]any{
-					"test":  1,
-					"test2": 1.2,
+					"test": json.Number("not_num"),
+				},
+			},
+			wantCreateErr: true,
+		},
+		{
+			name: "invalid_create_3",
+			params: map[string]any{
+				jsonMaxFieldsSizeParam: map[string]any{
+					"test": json.Number("1.2"),
 				},
 			},
 			wantCreateErr: true,

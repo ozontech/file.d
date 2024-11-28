@@ -1,6 +1,7 @@
 package decoder
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"slices"
@@ -140,10 +141,23 @@ func extractJsonParams(params map[string]any) (jsonParams, error) {
 			return jsonParams{}, fmt.Errorf("%q must be map", jsonMaxFieldsSizeParam)
 		}
 		for k, v := range maxFieldsSizeMap {
-			vInt, ok := v.(int)
-			if !ok {
+			var vInt int
+
+			switch vNum := v.(type) {
+			case int:
+				vInt = vNum
+			case float64:
+				vInt = int(vNum)
+			case json.Number:
+				vInt64, err := vNum.Int64()
+				if err != nil {
+					return jsonParams{}, fmt.Errorf("each value in %q must be int", jsonMaxFieldsSizeParam)
+				}
+				vInt = int(vInt64)
+			default:
 				return jsonParams{}, fmt.Errorf("each value in %q must be int", jsonMaxFieldsSizeParam)
 			}
+
 			maxFieldsSize[k] = vInt
 		}
 	}
