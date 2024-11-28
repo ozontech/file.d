@@ -58,7 +58,7 @@ var (
 
 	metaRecheckInterval = 250 * time.Millisecond
 	metaWaitWarn        = 5 * time.Second
-	MetaWaitTimeout     = 60 * time.Second
+	MetaWaitTimeout     = 120 * time.Second
 
 	stopWg = &sync.WaitGroup{}
 
