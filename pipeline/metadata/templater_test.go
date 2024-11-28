@@ -17,6 +17,7 @@ func TestTemplaterRender(t *testing.T) {
 			"partition_name":      "partition_{{ .partition }}",
 			"partition_fullname":  "partition {{ .partition_name }}, topic: {{ .topic }}",
 			"topic":               "{{ .topic }}",
+			"topic2":              `{{ .topic | default "default_topic" }}`,
 			"header":              `{{ index .headers 0 }}`,
 			"header_fallback":     `{{ index .headers "key" | default "default_value" }}`,
 			"header2":             "{{ .header }}",
@@ -39,6 +40,7 @@ func TestTemplaterRender(t *testing.T) {
 			"header_fallback":     "default_value",
 			"header3":             "kafka1:9093",
 			"topic":               "topic",
+			"topic2":              "topic",
 		}),
 		fmt.Sprint(result),
 	)

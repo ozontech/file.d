@@ -83,7 +83,7 @@ func NewMetaTemplater(templates cfg.MetaTemplates) *MetaTemplater {
 		} else {
 			// "value_{{ .key }}" - more complex template
 			compiledTemplates[k] = template.Must(template.New("").Funcs(template.FuncMap{
-				"default": func(value interface{}, defaultValue string) interface{} {
+				"default": func(defaultValue string, value interface{}) interface{} {
 					if value == nil || value == "" {
 						return defaultValue
 					}
