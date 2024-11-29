@@ -258,6 +258,9 @@ func (o Offset) Current() int64 {
 }
 
 func (o Offset) ByStream(stream string) int64 {
-	offset, _ := o.offsets.get(pipeline.StreamName(stream))
+	offset, found := o.offsets.get(pipeline.StreamName(stream))
+	if !found {
+		return -1
+	}
 	return offset
 }

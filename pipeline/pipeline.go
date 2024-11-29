@@ -465,7 +465,7 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset Offsets, byte
 		streamOffset := offset.ByStream(string(row.Stream))
 		currentOffset := offset.Current()
 
-		if currentOffset < streamOffset {
+		if streamOffset > 0 && currentOffset < streamOffset {
 			return EventSeqIDError
 		}
 
