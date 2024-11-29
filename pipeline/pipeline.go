@@ -81,6 +81,7 @@ type Pipeline struct {
 	decoderType          decoder.Type // decoder type set in the config
 	suggestedDecoderType decoder.Type // decoder type suggested by input plugin, it is used when config decoder is set to "auto"
 	decoder              decoder.Decoder
+	initDecoderOnce      *sync.Once
 
 	eventPool *eventPool
 	streamer  *streamer
@@ -188,14 +189,22 @@ func New(name string, settings *Settings, registry *prometheus.Registry) *Pipeli
 
 		eventLog:   make([]string, 0, 128),
 		eventLogMu: &sync.Mutex{},
+
+		initDecoderOnce: &sync.Once{},
 	}
 
 	pipeline.registerMetrics()
 	pipeline.setDefaultMetrics()
 
+	var err error
 	switch settings.Decoder {
 	case "json":
 		pipeline.decoderType = decoder.JSON
+
+		pipeline.decoder, err = decoder.NewJsonDecoder(pipeline.settings.DecoderParams)
+		if err != nil {
+			pipeline.logger.Fatal("can't create json decoder", zap.Error(err))
+		}
 	case "raw":
 		pipeline.decoderType = decoder.RAW
 	case "cri":
@@ -205,19 +214,17 @@ func New(name string, settings *Settings, registry *prometheus.Registry) *Pipeli
 	case "nginx_error":
 		pipeline.decoderType = decoder.NGINX_ERROR
 
-		dec, err := decoder.NewNginxErrorDecoder(pipeline.settings.DecoderParams)
+		pipeline.decoder, err = decoder.NewNginxErrorDecoder(pipeline.settings.DecoderParams)
 		if err != nil {
 			pipeline.logger.Fatal("can't create nginx_error decoder", zap.Error(err))
 		}
-		pipeline.decoder = dec
 	case "protobuf":
 		pipeline.decoderType = decoder.PROTOBUF
 
-		dec, err := decoder.NewProtobufDecoder(pipeline.settings.DecoderParams)
+		pipeline.decoder, err = decoder.NewProtobufDecoder(pipeline.settings.DecoderParams)
 		if err != nil {
 			pipeline.logger.Fatal("can't create protobuf decoder", zap.Error(err))
 		}
-		pipeline.decoder = dec
 	case "auto":
 		pipeline.decoderType = decoder.AUTO
 	default:
@@ -391,6 +398,11 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 	}
 	if dec == decoder.NO {
 		dec = decoder.JSON
+		// When config decoder is set to "auto", then we didn't create a decoder during pipeline initialization.
+		// It's necessary to initialize the decoder once.
+		p.initDecoderOnce.Do(func() {
+			p.decoder, _ = decoder.NewJsonDecoder(nil)
+		})
 	} else if dec == decoder.CRI {
 		row, err = decoder.DecodeCRI(bytes)
 		if err != nil {
@@ -452,7 +464,7 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 	}
 	switch dec {
 	case decoder.JSON:
-		err = decoder.DecodeJson(event.Root, bytes)
+		err = p.decoder.DecodeToJson(event.Root, bytes)
 	case decoder.RAW:
 		event.Root.AddFieldNoAlloc(event.Root, "message").MutateToBytesCopy(event.Root, bytes[:len(bytes)-1])
 	case decoder.CRI:

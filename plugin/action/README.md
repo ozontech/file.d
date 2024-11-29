@@ -214,6 +214,8 @@ pipelines:
 It decodes a JSON string from the event field and merges the result with the event root.
 If the decoded JSON isn't an object, the event will be skipped.
 
+> ⚠ DEPRECATED. Use `decode` plugin with `decoder: json` instead.
+
 [More details...](plugin/action/json_decode/README.md)
 ## json_encode
 It replaces field with its JSON string representation.
