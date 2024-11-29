@@ -6,6 +6,7 @@ import (
 
 	"github.com/ozontech/file.d/cfg"
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/zap"
 )
 
 func TestTemplaterRender(t *testing.T) {
@@ -138,7 +139,10 @@ func TestTemplaterRender(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			templater := NewMetaTemplater(tt.templates)
+			templater := NewMetaTemplater(
+				tt.templates,
+				zap.NewExample(),
+			)
 			result, err := templater.Render(testMetadata{data: tt.data})
 			assert.Nil(t, err)
 			assert.Equal(t, fmt.Sprint(tt.expected), fmt.Sprint(result))

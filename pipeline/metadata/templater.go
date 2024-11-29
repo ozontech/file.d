@@ -11,6 +11,7 @@ import (
 	"github.com/dominikbraun/graph"
 	"github.com/elliotchance/orderedmap/v2"
 	"github.com/ozontech/file.d/cfg"
+	"go.uber.org/zap"
 )
 
 type MetaData map[string]string
@@ -25,14 +26,34 @@ const (
 	TemplateValueType ValueType = "template"
 )
 
+// MetaTemplate holds the template and its original string
+type MetaTemplate struct {
+	Template *template.Template
+	Source   string
+}
+
+// NewMetaTemplate creates a new TemplateWrapper with default function
+func NewMetaTemplate(source string) *MetaTemplate {
+	tmpl := template.Must(template.New("").Funcs(template.FuncMap{
+		"default": func(defaultValue string, value interface{}) interface{} {
+			if value == nil || value == "" {
+				return defaultValue
+			}
+			return value
+		},
+	}).Parse(source))
+	return &MetaTemplate{Template: tmpl, Source: source}
+}
+
 type MetaTemplater struct {
-	templates    map[string]*template.Template
+	templates    map[string]*MetaTemplate
 	singleValues map[string]string
 	valueTypes   *orderedmap.OrderedMap[string, ValueType]
 	poolBuffer   sync.Pool
+	logger       *zap.Logger
 }
 
-func NewMetaTemplater(templates cfg.MetaTemplates) *MetaTemplater {
+func NewMetaTemplater(templates cfg.MetaTemplates, logger *zap.Logger) *MetaTemplater {
 	// Regular expression to find ALL keys in the template strings (e.g., {{ .key }})
 	re := regexp.MustCompile(`{{\s*([^}]+)\s*}}`)
 
@@ -53,25 +74,27 @@ func NewMetaTemplater(templates cfg.MetaTemplates) *MetaTemplater {
 			components := strings.Fields(expression)
 			for _, component := range components {
 				// catch all variables
-				if strings.HasPrefix(component, ".") {
-					parts := strings.Split(component, ".")
-					if len(parts) == 0 {
-						continue
-					}
-
-					// extract top-nested variable (e.g., .headers.sub_header.sub_sub_header => .headers)
-					topNestedVariable := parts[1]
-					if _, exists := templates[topNestedVariable]; !exists {
-						continue
-					}
-
-					if _, err := g.Vertex(topNestedVariable); err != nil {
-						// The key vertex has not been added before
-						_ = g.AddVertex(topNestedVariable)
-					}
-					// for variable name we need get topNestedVariable
-					_ = g.AddEdge(topNestedVariable, name)
+				if !strings.HasPrefix(component, ".") {
+					continue
 				}
+
+				parts := strings.Split(component, ".")
+				if len(parts) == 0 {
+					continue
+				}
+
+				// extract top-nested variable (e.g., .headers.sub_header.sub_sub_header => .headers)
+				topNestedVariable := parts[1]
+				if _, exists := templates[topNestedVariable]; !exists {
+					continue
+				}
+
+				if _, err := g.Vertex(topNestedVariable); err != nil {
+					// The key vertex has not been added before
+					_ = g.AddVertex(topNestedVariable)
+				}
+				// for variable name we need get topNestedVariable
+				_ = g.AddEdge(topNestedVariable, name)
 			}
 		}
 	}
@@ -79,7 +102,7 @@ func NewMetaTemplater(templates cfg.MetaTemplates) *MetaTemplater {
 	// Topological sort on the graph to determine the order of template processing
 	orderedParams, _ := graph.TopologicalSort(g)
 
-	compiledTemplates := make(map[string]*template.Template)
+	compiledTemplates := make(map[string]*MetaTemplate)
 	singleValues := make(map[string]string)
 
 	// Regular expression to match single value templates (e.g., {{ .key }})
@@ -98,14 +121,7 @@ func NewMetaTemplater(templates cfg.MetaTemplates) *MetaTemplater {
 			valueTypes.Set(k, SingleValueType)
 		} else {
 			// "value_{{ .key }}" - more complex template
-			compiledTemplates[k] = template.Must(template.New("").Funcs(template.FuncMap{
-				"default": func(defaultValue string, value interface{}) interface{} {
-					if value == nil || value == "" {
-						return defaultValue
-					}
-					return value
-				},
-			}).Parse(v))
+			compiledTemplates[k] = NewMetaTemplate(v)
 			valueTypes.Set(k, TemplateValueType)
 		}
 	}
@@ -114,6 +130,7 @@ func NewMetaTemplater(templates cfg.MetaTemplates) *MetaTemplater {
 		templates:    compiledTemplates,
 		singleValues: singleValues,
 		valueTypes:   valueTypes,
+		logger:       logger,
 		poolBuffer: sync.Pool{
 			New: func() interface{} { return new(bytes.Buffer) },
 		},
@@ -149,12 +166,21 @@ func (m *MetaTemplater) Render(data Data) (MetaData, error) {
 			if val, ok := values[tmpl]; ok {
 				meta[k] = fmt.Sprintf("%v", val)
 				values[k] = meta[k]
+			} else {
+				m.logger.Error(
+					fmt.Sprintf("cannot render meta field %s: no value {{ .%s }}", k, tmpl),
+				)
 			}
 		} else if v == TemplateValueType {
 			tmpl := m.templates[k]
 			tplOutput.Reset()
-			err := tmpl.Execute(tplOutput, values)
+			err := tmpl.Template.Execute(tplOutput, values)
 			if err != nil {
+				m.logger.Error(
+					fmt.Sprintf("cannot render meta field %s", k),
+					zap.String("template", tmpl.Source),
+					zap.Error(err),
+				)
 				meta[k] = err.Error()
 			} else {
 				meta[k] = tplOutput.String()

@@ -88,7 +88,7 @@ Built-in meta params
 
 `k8s_container_id`: `{{ .container_id }}`
 
-Example: ```component: '{{ index .pod.Labels "component" }}'```
+Example: ```component: '{{ index .pod.Labels "component" | default .k8s_container }}'```
 
 <br>
 
