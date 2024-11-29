@@ -116,6 +116,24 @@ func TestTemplaterRender(t *testing.T) {
 				"broker_header":         "kafka1:9093", // ho value from header, we get from another holded field
 			},
 		},
+		{
+			name: "Nested fields",
+			templates: cfg.MetaTemplates{
+				"broker_header": `{{ index .headers.broker 0 }}`,
+				"broker":        "{{ .broker_header }}",
+			},
+			data: map[string]any{
+				"headers": map[string]any{
+					"broker": []string{
+						"kafka1:9093",
+					},
+				},
+			},
+			expected: map[string]any{
+				"broker_header": "kafka1:9093",
+				"broker":        "kafka1:9093",
+			},
+		},
 	}
 
 	for _, tt := range tests {

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"regexp"
+	"strings"
 	"sync"
 	"text/template"
 
@@ -33,7 +34,7 @@ type MetaTemplater struct {
 
 func NewMetaTemplater(templates cfg.MetaTemplates) *MetaTemplater {
 	// Regular expression to find ALL keys in the template strings (e.g., {{ .key }})
-	re := regexp.MustCompile(`\.\s*(\w+)`)
+	re := regexp.MustCompile(`{{\s*([^}]+)\s*}}`)
 
 	// Graph to manage dependencies between templates
 	g := graph.New(graph.StringHash, graph.Directed(), graph.PreventCycles())
@@ -48,15 +49,30 @@ func NewMetaTemplater(templates cfg.MetaTemplates) *MetaTemplater {
 			if len(match) <= 1 {
 				continue
 			}
-			key := match[1]
-			if _, exists := templates[key]; !exists {
-				continue
+			expression := strings.TrimSpace(match[1])
+			components := strings.Fields(expression)
+			for _, component := range components {
+				// catch all variables
+				if strings.HasPrefix(component, ".") {
+					parts := strings.Split(component, ".")
+					if len(parts) == 0 {
+						continue
+					}
+
+					// extract top-nested variable (e.g., .headers.sub_header.sub_sub_header => .headers)
+					topNestedVariable := parts[1]
+					if _, exists := templates[topNestedVariable]; !exists {
+						continue
+					}
+
+					if _, err := g.Vertex(topNestedVariable); err != nil {
+						// The key vertex has not been added before
+						_ = g.AddVertex(topNestedVariable)
+					}
+					// for variable name we need get topNestedVariable
+					_ = g.AddEdge(topNestedVariable, name)
+				}
 			}
-			if _, err := g.Vertex(key); err != nil {
-				// The key vertex has not been added before
-				_ = g.AddVertex(key)
-			}
-			_ = g.AddEdge(key, name)
 		}
 	}
 
