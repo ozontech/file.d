@@ -88,12 +88,15 @@ func TestTemplaterRender(t *testing.T) {
 			templates: cfg.MetaTemplates{
 				"header":  `{{ index .headers 0 }}`,
 				"header2": "{{ .header }}", // cause we have no {{ .header }}
+				"user":    "{{ .auth.user }}",
 			},
 			data: map[string]any{
 				"headers": make(map[string]string),
+				"auth":    nil,
 			},
 			expected: map[string]any{
 				"header": "template: :1:3: executing \"\" at <index .headers 0>: error calling index: value has type int; should be string",
+				"user":   "template: :1:8: executing \"\" at <.auth.user>: nil pointer evaluating interface {}.user",
 			},
 		},
 		{
@@ -105,16 +108,20 @@ func TestTemplaterRender(t *testing.T) {
 				"broker_fullname": "{{ .broker_name }}",
 
 				"broker_header": `{{ index .headers "key" | default .broker_fullname }}`,
+
+				"user": "{{ if .auth }}{{ .auth.user | default \"anonymous\" }}{{ else }}{{ \"anonymous\" }}{{ end }}",
 			},
 			data: map[string]any{
 				"headers": make(map[string]string),
 				"broker":  "kafka1:9093",
+				"auth":    nil,
 			},
 			expected: map[string]any{
 				"broker_header_default": "localhost:9093", // ho value from header, we get default
 				"broker_name":           "kafka1:9093",
 				"broker_fullname":       "kafka1:9093",
 				"broker_header":         "kafka1:9093", // ho value from header, we get from another holded field
+				"user":                  "anonymous",
 			},
 		},
 		{
