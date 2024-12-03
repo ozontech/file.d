@@ -55,7 +55,7 @@ type MetaTemplater struct {
 	cache        *lru.Cache[string, MetaData]
 }
 
-func NewMetaTemplater(templates cfg.MetaTemplates, logger *zap.Logger) *MetaTemplater {
+func NewMetaTemplater(templates cfg.MetaTemplates, logger *zap.Logger, cacheSize int) *MetaTemplater {
 	// Regular expression to find ALL keys in the template strings (e.g., {{ .key }})
 	re := regexp.MustCompile(`{{\s*([^}]+)\s*}}`)
 
@@ -128,7 +128,10 @@ func NewMetaTemplater(templates cfg.MetaTemplates, logger *zap.Logger) *MetaTemp
 		}
 	}
 
-	cache, _ := lru.New[string, MetaData](1024)
+	cache, err := lru.New[string, MetaData](cacheSize)
+	if err != nil {
+		panic(err)
+	}
 
 	meta := MetaTemplater{
 		templates:    compiledTemplates,

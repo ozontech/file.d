@@ -40,6 +40,7 @@ const (
 	DefaultFieldValue            = "not_set"
 	DefaultStreamName            = StreamName("not_set")
 	DefaultMetricHoldDuration    = time.Minute * 30
+	DefaultMetaCacheSize         = 1024
 
 	EventSeqIDError = uint64(0)
 
@@ -137,6 +138,7 @@ type Settings struct {
 	Decoder               string
 	DecoderParams         map[string]any
 	Capacity              int
+	MetaCacheSize         int
 	MaintenanceInterval   time.Duration
 	EventTimeout          time.Duration
 	AntispamThreshold     int

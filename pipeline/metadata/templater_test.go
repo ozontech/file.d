@@ -149,6 +149,7 @@ func TestTemplaterRender(t *testing.T) {
 			templater := NewMetaTemplater(
 				tt.templates,
 				zap.NewExample(),
+				32,
 			)
 			result, err := templater.Render(testMetadata{data: tt.data})
 			assert.Nil(t, err)
@@ -177,6 +178,7 @@ func BenchmarkMetaTemplater_Render(b *testing.B) {
 
 			"user": "{{ if .auth }}{{ .auth.user | default \"anonymous\" }}{{ else }}{{ \"anonymous\" }}{{ end }}",
 		}, zap.NewExample(),
+		32,
 	)
 
 	mockData := map[string]any{

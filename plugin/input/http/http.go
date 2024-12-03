@@ -276,7 +276,11 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	p.params = params
 	p.logger = params.Logger.Desugar()
 	p.registerMetrics(params.MetricCtl)
-	p.metaTemplater = metadata.NewMetaTemplater(p.config.Meta, p.logger)
+	p.metaTemplater = metadata.NewMetaTemplater(
+		p.config.Meta,
+		p.logger,
+		params.PipelineSettings.MetaCacheSize,
+	)
 
 	if p.config.Auth.Strategy_ == StrategyBearer {
 		p.nameByBearerToken = make(map[string]string, len(p.config.Auth.Secrets))
