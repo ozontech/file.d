@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"text/template"
@@ -216,11 +217,21 @@ func generateCacheKey(data map[string]any) string {
 	builder.Grow(len(data) * 16) // Preallocate memory for the builder (estimate)
 
 	for k, v := range data {
-		// Write the key and value to the builder
-		builder.WriteString(k)
-		builder.WriteString(":")
-		builder.WriteString(fmt.Sprintf("%v", v)) // You can replace this with a more efficient method if you know the types
-		builder.WriteString("|")
+		switch v := v.(type) {
+		case string:
+			// Write the key and string value to the builder
+			builder.WriteString(k)
+			builder.WriteString(":")
+			builder.WriteString(v)
+			builder.WriteString("|")
+		case int:
+			// Write the key and integer value to the builder
+			builder.WriteString(k)
+			builder.WriteString(":")
+			builder.WriteString(strconv.Itoa(v))
+			builder.WriteString("|")
+		}
+		// If the value is not a string or int, skip it
 	}
 
 	// Convert the builder to a string
