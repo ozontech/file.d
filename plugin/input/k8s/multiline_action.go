@@ -3,6 +3,7 @@ package k8s
 import (
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/plugin/input/k8s/meta"
 	"go.uber.org/zap"
 )
 
@@ -47,12 +48,12 @@ func (p *MultilineAction) Do(event *pipeline.Event) pipeline.ActionResult {
 		return pipeline.ActionDiscard
 	}
 
-	event.Root.AddFieldNoAlloc(event.Root, "k8s_node").MutateToString(selfNodeName)
+	event.Root.AddFieldNoAlloc(event.Root, "k8s_node").MutateToString(meta.SelfNodeName)
 
-	ns := namespace(event.Root.Dig("k8s_namespace").AsString())
-	pod := podName(event.Root.Dig("k8s_pod").AsString())
-	containerID := containerID(event.Root.Dig("k8s_container_id").AsString())
-	containerName := containerName(event.Root.Dig("k8s_container").AsString())
+	ns := meta.Namespace(event.Root.Dig("k8s_namespace").AsString())
+	pod := meta.PodName(event.Root.Dig("k8s_pod").AsString())
+	containerID := meta.ContainerID(event.Root.Dig("k8s_container_id").AsString())
+	containerName := meta.ContainerName(event.Root.Dig("k8s_container").AsString())
 
 	if ns == "" {
 		p.logger.Fatalf("k8s namespace is empty: source=%s", event.SourceName)
@@ -115,7 +116,7 @@ func (p *MultilineAction) Do(event *pipeline.Event) pipeline.ActionResult {
 		return pipeline.ActionDiscard
 	}
 
-	success, podMeta := getPodMeta(ns, pod, containerID)
+	success, podMeta := meta.GetPodMeta(ns, pod, containerID)
 
 	if shouldSplit {
 		p.logger.Warnf("too long k8s event found, it'll be split, ns=%s pod=%s container=%s consider increase split_event_size, split_event_size=%d, predicted event size=%d", ns, pod, containerName, p.config.SplitEventSize, predictedLen)
@@ -137,7 +138,7 @@ func (p *MultilineAction) Do(event *pipeline.Event) pipeline.ActionResult {
 			event.Root.AddFieldNoAlloc(event.Root, pipeline.ByteToStringUnsafe(event.Buf[l:])).MutateToString(labelValue)
 		}
 
-		for labelName, labelValue := range nodeLabels {
+		for labelName, labelValue := range meta.NodeLabels {
 			if len(p.allowedNodeLabels) != 0 {
 				_, has := p.allowedNodeLabels[labelName]
 

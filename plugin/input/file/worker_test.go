@@ -309,6 +309,7 @@ func TestWorkerWorkMultiData(t *testing.T) {
 }
 
 func TestNewMetaInformation(t *testing.T) {
+	k8s_meta.DisableMetaUpdates = true
 	tests := []struct {
 		name            string
 		filename        string
@@ -429,14 +430,14 @@ func TestGetData(t *testing.T) {
 				},
 			},
 			expected: map[string]any{
-				"filename":     "/4e0301b633eaa2bfdcafdeba59ba0c72a3815911a6a820bf273534b0f32d98e0.log",
-				"symlink":      "/k8s-logs/advanced-logs-checker-2222222222-trtrq_sre_duty-bot-4e0301b633eaa2bfdcafdeba59ba0c72a3815911a6a820bf273534b0f32d98e0.log",
-				"inode":        uint64(12345),
-				"offset":       int64(0),
-				"pod":          "advanced-logs-checker-2222222222-trtrq",
-				"namespace":    "sre",
-				"container":    "duty-bot",
-				"container_id": "4e0301b633eaa2bfdcafdeba59ba0c72a3815911a6a820bf273534b0f32d98e0",
+				"filename":       "/4e0301b633eaa2bfdcafdeba59ba0c72a3815911a6a820bf273534b0f32d98e0.log",
+				"symlink":        "/k8s-logs/advanced-logs-checker-2222222222-trtrq_sre_duty-bot-4e0301b633eaa2bfdcafdeba59ba0c72a3815911a6a820bf273534b0f32d98e0.log",
+				"inode":          uint64(12345),
+				"offset":         int64(0),
+				"pod_name":       "advanced-logs-checker-2222222222-trtrq",
+				"namespace":      "sre",
+				"container_name": "duty-bot",
+				"container_id":   "4e0301b633eaa2bfdcafdeba59ba0c72a3815911a6a820bf273534b0f32d98e0",
 			},
 		},
 	}

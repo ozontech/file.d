@@ -276,7 +276,11 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	p.registerMetrics(params.MetricCtl)
 
 	if len(p.config.Meta) > 0 {
-		p.metaTemplater = metadata.NewMetaTemplater(p.config.Meta)
+		p.metaTemplater = metadata.NewMetaTemplater(
+			p.config.Meta,
+			p.logger.Desugar(),
+			params.PipelineSettings.MetaCacheSize,
+		)
 	}
 
 	p.idByTopic = make(map[string]int, len(p.config.Topics))

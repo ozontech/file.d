@@ -1,4 +1,4 @@
-package k8s
+package meta
 
 import (
 	"context"
@@ -20,45 +20,45 @@ import (
 )
 
 type (
-	podName       string
-	namespace     string
-	containerName string
-	containerID   string
+	PodName       string
+	Namespace     string
+	ContainerName string
+	ContainerID   string
 
 	podMeta struct {
 		*corev1.Pod
 		updateTime time.Time
 	}
 
-	metaItem struct {
-		namespace     namespace
-		podName       podName
-		containerName containerName
-		containerID   containerID
+	MetaItem struct {
+		Namespace     Namespace
+		PodName       PodName
+		ContainerName ContainerName
+		ContainerID   ContainerID
 	}
 
-	meta map[namespace]map[podName]map[containerID]*podMeta
+	meta map[Namespace]map[PodName]map[ContainerID]*podMeta
 )
 
 var (
 	client       *kubernetes.Clientset
-	metaData     = make(meta)
+	MetaData     = make(meta)
 	metaDataMu   = &sync.RWMutex{}
-	podBlackList = make(map[podName]bool) // to mark pods for which we are miss k8s meta and don't wanna wait for timeout for each event
+	podBlackList = make(map[PodName]bool) // to mark pods for which we are miss k8s meta and don't wanna wait for timeout for each event
 	controller   cache.Controller
 
-	expiredItems = make([]*metaItem, 0, 16) // temporary list of expired items
+	expiredItems = make([]*MetaItem, 0, 16) // temporary list of expired items
 
 	informerStop    = make(chan struct{}, 1)
 	maintenanceStop = make(chan struct{}, 1)
 	stopped         = make(chan struct{}, 1)
 
 	MaintenanceInterval = 15 * time.Second
-	metaExpireDuration  = 5 * time.Minute
+	MetaExpireDuration  = 5 * time.Minute
 
 	metaRecheckInterval = 250 * time.Millisecond
 	metaWaitWarn        = 5 * time.Second
-	MetaWaitTimeout     = 60 * time.Second
+	MetaWaitTimeout     = 120 * time.Second
 
 	stopWg = &sync.WaitGroup{}
 
@@ -67,15 +67,15 @@ var (
 	metaAddedCounter    atomic.Int64
 	expiredItemsCounter atomic.Int64
 
-	criType    = "docker"
-	nodeLabels = make(map[string]string)
+	CriType    = "docker"
+	NodeLabels = make(map[string]string)
 
-	selfNodeName string
+	SelfNodeName string
 
 	localLogger *zap.SugaredLogger
 )
 
-func enableGatherer(l *zap.SugaredLogger) {
+func EnableGatherer(l *zap.SugaredLogger) {
 	localLogger = l
 	localLogger.Info("enabling k8s meta gatherer")
 
@@ -88,7 +88,7 @@ func enableGatherer(l *zap.SugaredLogger) {
 	go maintenance()
 }
 
-func disableGatherer() {
+func DisableGatherer() {
 	localLogger.Info("disabling k8s meta gatherer")
 	if !DisableMetaUpdates {
 		informerStop <- struct{}{}
@@ -133,21 +133,21 @@ func initNodeInfo(ctx context.Context) {
 		localLogger.Fatalf("can't detect node name for k8s plugin using pod %q: %s", podName, err.Error())
 		panic("")
 	}
-	selfNodeName = pod.Spec.NodeName
+	SelfNodeName = pod.Spec.NodeName
 }
 
 func initInformer() {
-	selector, err := fields.ParseSelector("spec.nodeName=" + selfNodeName)
+	selector, err := fields.ParseSelector("spec.nodeName=" + SelfNodeName)
 	if err != nil {
 		localLogger.Fatalf("can't create k8s field selector: %s", err.Error())
 	}
 	podListWatcher := cache.NewListWatchFromClient(client.CoreV1().RESTClient(), "pods", "", selector)
-	_, c := cache.NewIndexerInformer(podListWatcher, &corev1.Pod{}, metaExpireDuration/4, cache.ResourceEventHandlerFuncs{
+	_, c := cache.NewIndexerInformer(podListWatcher, &corev1.Pod{}, MetaExpireDuration/4, cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj any) {
-			putMeta(obj.(*corev1.Pod))
+			PutMeta(obj.(*corev1.Pod))
 		},
 		UpdateFunc: func(old any, obj any) {
-			putMeta(obj.(*corev1.Pod))
+			PutMeta(obj.(*corev1.Pod))
 		},
 		DeleteFunc: func(obj any) {
 		},
@@ -156,7 +156,7 @@ func initInformer() {
 }
 
 func initRuntime(ctx context.Context) {
-	node, err := client.CoreV1().Nodes().Get(ctx, selfNodeName, metav1.GetOptions{})
+	node, err := client.CoreV1().Nodes().Get(ctx, SelfNodeName, metav1.GetOptions{})
 	if err != nil || node == nil {
 		localLogger.Fatalf("can't detect CRI runtime for node %s, api call is unsuccessful: %s", node, err.Error())
 		panic("_")
@@ -167,8 +167,8 @@ func initRuntime(ctx context.Context) {
 		localLogger.Fatalf("can't detect CRI runtime for node %s, wrong runtime version: %s", node, runtimeVer)
 	}
 
-	nodeLabels = node.Labels
-	criType = runtimeVer[:pos]
+	NodeLabels = node.Labels
+	CriType = runtimeVer[:pos]
 }
 
 func removeExpired() {
@@ -203,7 +203,7 @@ func getTotalItems() int {
 	defer metaDataMu.RUnlock()
 
 	totalItems := 0
-	for _, podNames := range metaData {
+	for _, podNames := range MetaData {
 		for _, containerIDs := range podNames {
 			totalItems += len(containerIDs)
 		}
@@ -211,7 +211,7 @@ func getTotalItems() int {
 	return totalItems
 }
 
-func getExpiredItems(out []*metaItem) []*metaItem {
+func getExpiredItems(out []*MetaItem) []*MetaItem {
 	out = out[:0]
 	now := time.Now()
 
@@ -219,14 +219,14 @@ func getExpiredItems(out []*metaItem) []*metaItem {
 	defer metaDataMu.RUnlock()
 
 	// find pods which aren't in k8s pod list for some time and add them to the expiration list
-	for ns, podNames := range metaData {
+	for ns, podNames := range MetaData {
 		for pod, containerIDs := range podNames {
 			for cid, podData := range containerIDs {
-				if now.Sub(podData.updateTime) > metaExpireDuration {
-					out = append(out, &metaItem{
-						namespace:   ns,
-						podName:     pod,
-						containerID: cid,
+				if now.Sub(podData.updateTime) > MetaExpireDuration {
+					out = append(out, &MetaItem{
+						Namespace:   ns,
+						PodName:     pod,
+						ContainerID: cid,
 					})
 				}
 			}
@@ -236,32 +236,32 @@ func getExpiredItems(out []*metaItem) []*metaItem {
 	return out
 }
 
-func cleanUpItems(items []*metaItem) {
+func cleanUpItems(items []*MetaItem) {
 	metaDataMu.Lock()
 	defer metaDataMu.Unlock()
 
 	for _, item := range items {
 		expiredItemsCounter.Inc()
-		delete(metaData[item.namespace][item.podName], item.containerID)
+		delete(MetaData[item.Namespace][item.PodName], item.ContainerID)
 
-		if len(metaData[item.namespace][item.podName]) == 0 {
-			delete(metaData[item.namespace], item.podName)
+		if len(MetaData[item.Namespace][item.PodName]) == 0 {
+			delete(MetaData[item.Namespace], item.PodName)
 		}
 
-		if len(metaData[item.namespace]) == 0 {
-			delete(metaData, item.namespace)
+		if len(MetaData[item.Namespace]) == 0 {
+			delete(MetaData, item.Namespace)
 		}
 	}
 }
 
-func getPodMeta(ns namespace, pod podName, cid containerID) (bool, *podMeta) {
+func GetPodMeta(ns Namespace, pod PodName, cid ContainerID) (bool, *podMeta) {
 	var podMeta *podMeta
 	var success bool
 
 	i := time.Nanosecond
 	for {
 		metaDataMu.RLock()
-		pm, has := metaData[ns][pod][cid]
+		pm, has := MetaData[ns][pod][cid]
 		isInBlackList := podBlackList[pod]
 		metaDataMu.RUnlock()
 
@@ -286,7 +286,7 @@ func getPodMeta(ns namespace, pod podName, cid containerID) (bool, *podMeta) {
 		if i-MetaWaitTimeout >= 0 {
 			metaDataMu.Lock()
 			if len(podBlackList) > 32 {
-				podBlackList = make(map[podName]bool)
+				podBlackList = make(map[PodName]bool)
 			}
 			podBlackList[pod] = true
 			metaDataMu.Unlock()
@@ -297,22 +297,22 @@ func getPodMeta(ns namespace, pod podName, cid containerID) (bool, *podMeta) {
 	}
 }
 
-func putMeta(podData *corev1.Pod) {
+func PutMeta(podData *corev1.Pod) {
 	if len(podData.Status.ContainerStatuses) == 0 {
 		return
 	}
 
 	podCopy := podData
 
-	pod := podName(podCopy.Name)
-	ns := namespace(podCopy.Namespace)
+	pod := PodName(podCopy.Name)
+	ns := Namespace(podCopy.Namespace)
 
 	metaDataMu.Lock()
-	if metaData[ns] == nil {
-		metaData[ns] = make(map[podName]map[containerID]*podMeta)
+	if MetaData[ns] == nil {
+		MetaData[ns] = make(map[PodName]map[ContainerID]*podMeta)
 	}
-	if metaData[ns][pod] == nil {
-		metaData[ns][pod] = make(map[containerID]*podMeta)
+	if MetaData[ns][pod] == nil {
+		MetaData[ns][pod] = make(map[ContainerID]*podMeta)
 	}
 	metaDataMu.Unlock()
 
@@ -340,7 +340,7 @@ func putMeta(podData *corev1.Pod) {
 }
 
 // putContainerMeta fullContainerID must be in format XXX://ID, eg docker://4e0301b633eaa2bfdcafdeba59ba0c72a3815911a6a820bf273534b0f32d98e0
-func putContainerMeta(ns namespace, pod podName, fullContainerID string, podInfo *corev1.Pod) {
+func putContainerMeta(ns Namespace, pod PodName, fullContainerID string, podInfo *corev1.Pod) {
 	l := len(fullContainerID)
 	if l == 0 {
 		return
@@ -359,7 +359,7 @@ func putContainerMeta(ns namespace, pod podName, fullContainerID string, podInfo
 		localLogger.Fatalf("container id should have format XXXX://ID: %s", fullContainerID)
 	}
 
-	containerID := containerID(fullContainerID[pos+3:])
+	containerID := ContainerID(fullContainerID[pos+3:])
 	if len(containerID) != 64 {
 		localLogger.Fatalf("wrong container id: %s", fullContainerID)
 	}
@@ -370,7 +370,7 @@ func putContainerMeta(ns namespace, pod podName, fullContainerID string, podInfo
 	}
 
 	metaDataMu.Lock()
-	metaData[ns][pod][containerID] = meta
+	MetaData[ns][pod][containerID] = meta
 	metaDataMu.Unlock()
 }
 

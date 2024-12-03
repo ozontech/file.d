@@ -1,6 +1,7 @@
 package http
 
 import (
+	"crypto/sha1"
 	"fmt"
 	"io"
 	"net"
@@ -10,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/klauspost/compress/gzip"
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
@@ -276,7 +278,11 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	p.params = params
 	p.logger = params.Logger.Desugar()
 	p.registerMetrics(params.MetricCtl)
-	p.metaTemplater = metadata.NewMetaTemplater(p.config.Meta)
+	p.metaTemplater = metadata.NewMetaTemplater(
+		p.config.Meta,
+		p.logger,
+		params.PipelineSettings.MetaCacheSize,
+	)
 
 	if p.config.Auth.Strategy_ == StrategyBearer {
 		p.nameByBearerToken = make(map[string]string, len(p.config.Auth.Secrets))
@@ -677,12 +683,34 @@ func newMetaInformation(login string, ip net.IP, r *http.Request) metaInformatio
 }
 
 func (m metaInformation) GetData() map[string]any {
+	contentLength := fmt.Sprintf("%d", m.request.ContentLength)
+	encodedParams := m.params.Encode()
+	remoteAddress := m.remoteAddr
+	result := fmt.Sprintf("%s|%s|%s", contentLength, encodedParams, remoteAddress)
+	requestUuid, _ := stringToUUID(result)
+
 	return map[string]any{
-		"login":       m.login,
-		"remote_addr": m.remoteAddr,
-		"request":     m.request,
-		"params":      m.params,
+		"login":        m.login,
+		"remote_addr":  m.remoteAddr,
+		"request":      m.request,
+		"params":       m.params,
+		"request_uuid": requestUuid.String(),
 	}
+}
+
+func stringToUUID(input string) (uuid.UUID, error) {
+	hash := sha1.New()
+	_, err := hash.Write([]byte(input))
+	if err != nil {
+		return uuid.UUID{}, err
+	}
+
+	hashBytes := hash.Sum(nil)
+
+	var u uuid.UUID
+	copy(u[:], hashBytes[:16])
+
+	return u, nil
 }
 
 /*{ meta-params
@@ -693,4 +721,6 @@ func (m metaInformation) GetData() map[string]any {
 **`request`**  *`http.Request`*
 
 **`params`**  *`url.Values`*
+
+**`request_uuid`**  *`string`*
 }*/

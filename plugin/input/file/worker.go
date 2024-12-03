@@ -225,14 +225,15 @@ func newMetaInformation(filename, symlink string, inode inodeID, offset int64, p
 
 func (m metaInformation) GetData() map[string]any {
 	return map[string]any{
-		"filename":     m.filename,
-		"symlink":      m.symlink,
-		"inode":        m.inode,
-		"offset":       m.offset,
-		"pod":          m.k8sMetadata.PodName,
-		"namespace":    m.k8sMetadata.Namespace,
-		"container":    m.k8sMetadata.ContainerName,
-		"container_id": m.k8sMetadata.ContainerID,
+		"filename":       m.filename,
+		"symlink":        m.symlink,
+		"inode":          m.inode,
+		"offset":         m.offset,
+		"pod_name":       m.k8sMetadata.PodName,
+		"namespace":      m.k8sMetadata.Namespace,
+		"container_name": m.k8sMetadata.ContainerName,
+		"container_id":   m.k8sMetadata.ContainerID,
+		"pod":            m.k8sMetadata.Pod,
 	}
 }
 

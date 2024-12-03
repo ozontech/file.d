@@ -31,11 +31,17 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 	isStrict := pipeline.DefaultIsStrict
 	eventTimeout := pipeline.DefaultEventTimeout
 	metricHoldDuration := pipeline.DefaultMetricHoldDuration
+	metaCacheSize := pipeline.DefaultMetaCacheSize
 
 	if settings != nil {
 		val := settings.Get("capacity").MustInt()
 		if val != 0 {
 			capacity = val
+		}
+
+		val = settings.Get("meta_cache_size").MustInt()
+		if val != 0 {
+			metaCacheSize = val
 		}
 
 		val = settings.Get("avg_log_size").MustInt()
@@ -117,6 +123,7 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 		Decoder:               decoder,
 		DecoderParams:         decoderParams,
 		Capacity:              capacity,
+		MetaCacheSize:         metaCacheSize,
 		AvgEventSize:          avgInputEventSize,
 		MaxEventSize:          maxInputEventSize,
 		CutOffEventByLimit:    cutOffEventByLimit,
