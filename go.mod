@@ -23,6 +23,7 @@ require (
 	github.com/go-redis/redis v6.15.9+incompatible
 	github.com/golang/mock v1.6.0
 	github.com/google/uuid v1.3.0
+	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/hashicorp/vault/api v1.9.2
 	github.com/jackc/pgconn v1.14.1
 	github.com/jackc/pgproto3/v2 v2.3.2

@@ -10,6 +10,7 @@ import (
 
 	"github.com/dominikbraun/graph"
 	"github.com/elliotchance/orderedmap/v2"
+	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/ozontech/file.d/cfg"
 	"go.uber.org/zap"
 )
@@ -51,6 +52,7 @@ type MetaTemplater struct {
 	valueTypes   *orderedmap.OrderedMap[string, ValueType]
 	poolBuffer   sync.Pool
 	logger       *zap.Logger
+	cache        *lru.Cache[string, MetaData]
 }
 
 func NewMetaTemplater(templates cfg.MetaTemplates, logger *zap.Logger) *MetaTemplater {
@@ -126,6 +128,8 @@ func NewMetaTemplater(templates cfg.MetaTemplates, logger *zap.Logger) *MetaTemp
 		}
 	}
 
+	cache, _ := lru.New[string, MetaData](1024)
+
 	meta := MetaTemplater{
 		templates:    compiledTemplates,
 		singleValues: singleValues,
@@ -134,6 +138,7 @@ func NewMetaTemplater(templates cfg.MetaTemplates, logger *zap.Logger) *MetaTemp
 		poolBuffer: sync.Pool{
 			New: func() interface{} { return new(bytes.Buffer) },
 		},
+		cache: cache,
 	}
 
 	return &meta
@@ -146,6 +151,15 @@ type Data interface {
 func (m *MetaTemplater) Render(data Data) (MetaData, error) {
 	initValues := data.GetData()
 	meta := MetaData{}
+
+	// Create a unique cache key based on the input data
+	cacheKey := generateCacheKey(initValues)
+
+	// Check if the result is already cached
+	if cachedMeta, found := m.cache.Get(cacheKey); found {
+		return cachedMeta, nil
+	}
+
 	// for hold values
 	values := make(map[string]any, len(initValues)+m.valueTypes.Len())
 	for key, value := range initValues {
@@ -189,5 +203,30 @@ func (m *MetaTemplater) Render(data Data) (MetaData, error) {
 		}
 	}
 
+	m.cache.Add(cacheKey, meta)
+
 	return meta, nil
+}
+
+func generateCacheKey(data map[string]any) string {
+	var builder strings.Builder
+	builder.Grow(len(data) * 16) // Preallocate memory for the builder (estimate)
+
+	for k, v := range data {
+		// Write the key and value to the builder
+		builder.WriteString(k)
+		builder.WriteString(":")
+		builder.WriteString(fmt.Sprintf("%v", v)) // You can replace this with a more efficient method if you know the types
+		builder.WriteString("|")
+	}
+
+	// Convert the builder to a string
+	key := builder.String()
+
+	// Remove the last "|" character if needed
+	if key != "" {
+		key = key[:len(key)-1] // Slice to remove the last character
+	}
+
+	return key
 }

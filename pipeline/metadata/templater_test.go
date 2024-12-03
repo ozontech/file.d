@@ -164,3 +164,31 @@ type testMetadata struct {
 func (f testMetadata) GetData() map[string]any {
 	return f.data
 }
+
+func BenchmarkMetaTemplater_Render(b *testing.B) {
+	templater := NewMetaTemplater(
+		cfg.MetaTemplates{
+			"broker_header_default": `{{ index .headers "key" | default "localhost:9093" }}`,
+
+			"broker_name":     "{{ .broker }}",
+			"broker_fullname": "{{ .broker_name }}",
+
+			"broker_header": `{{ index .headers "key" | default .broker_fullname }}`,
+
+			"user": "{{ if .auth }}{{ .auth.user | default \"anonymous\" }}{{ else }}{{ \"anonymous\" }}{{ end }}",
+		}, zap.NewExample(),
+	)
+
+	mockData := map[string]any{
+		"headers": make(map[string]string),
+		"broker":  "kafka1:9093",
+		"auth":    nil,
+	}
+
+	for i := 0; i < b.N; i++ {
+		_, err := templater.Render(testMetadata{data: mockData})
+		if err != nil {
+			b.Fatalf("Render failed: %v", err)
+		}
+	}
+}
