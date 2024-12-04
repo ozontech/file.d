@@ -9,6 +9,7 @@ import (
 	"github.com/ozontech/file.d/pipeline/metadata"
 	"github.com/ozontech/file.d/plugin/input/fake"
 	"github.com/ozontech/file.d/plugin/output/devnull"
+	"github.com/ozontech/file.d/test"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/require"
 )
@@ -44,7 +45,7 @@ func TestInUnparsableMessages(t *testing.T) {
 
 		pipe.SetInput(getFakeInputInfo())
 
-		seqID := pipe.In(sourceID, "kafka", offset, message, false, nil)
+		seqID := pipe.In(sourceID, "kafka", test.Offset(offset), message, false, nil)
 		require.Equal(t, pipeline.EventSeqIDError, seqID)
 
 		refPipe := reflect.ValueOf(pipe)
@@ -112,7 +113,7 @@ func BenchmarkMetaTemplater(b *testing.B) {
 				"/k8s-logs/advanced-logs-checker-1566485760-trtrq-%d_sre-%d_duty-bot-4e0301b633eaa2bfdcafdeba59ba0c72a3815911a6a820bf273534b0f32d98e0%d.log",
 				rest, rest, rest,
 			),
-			int64(i),
+			test.Offset(i),
 			[]byte("2016-10-06T00:17:09.669794202Z stdout P partial content 1\n"),
 			false,
 			metadata.MetaData{},

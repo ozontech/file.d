@@ -110,7 +110,7 @@ func TestPipeline(t *testing.T) {
 			})
 
 			for _, event := range tCase.eventsIn {
-				input.In(event.sourceID, event.sourceName, event.offset, event.bytes)
+				input.In(event.sourceID, event.sourceName, test.Offset(event.offset), event.bytes)
 			}
 
 			wg.Wait()

@@ -79,7 +79,7 @@ func (c *testConfig) runPipeline() {
 			index := j % len(formats)
 			// Format like RFC3339Nano, but nanoseconds are zero-padded, thus all times have equal length.
 			json := fmt.Sprintf(formats[index], curTimeStr)
-			input.In(10, sourceNames[rand.Int()%len(sourceNames)], 0, []byte(json))
+			input.In(10, sourceNames[rand.Int()%len(sourceNames)], test.Offset(0), []byte(json))
 		}
 		// just to make sure that events from the current iteration are processed in the plugin
 		time.Sleep(10 * time.Millisecond)
@@ -274,7 +274,7 @@ func TestRedisThrottle(t *testing.T) {
 	for i := 0; i < eventsTotal; i++ {
 		json := fmt.Sprintf(events[i], time.Now().Format(time.RFC3339Nano))
 
-		input.In(10, sourceNames[rand.Int()%len(sourceNames)], 0, []byte(json))
+		input.In(10, sourceNames[rand.Int()%len(sourceNames)], test.Offset(0), []byte(json))
 
 		time.Sleep(300 * time.Millisecond)
 	}
@@ -355,7 +355,7 @@ func TestRedisThrottleMultiPipes(t *testing.T) {
 	}
 	for i := 0; i < len(firstPipeEvents); i++ {
 		json := fmt.Sprintf(firstPipeEvents[i], time.Now().Format(time.RFC3339Nano))
-		input.In(10, sourceNames[rand.Int()%len(sourceNames)], 0, []byte(json))
+		input.In(10, sourceNames[rand.Int()%len(sourceNames)], test.Offset(0), []byte(json))
 		// timeout required due shifting time call to redis
 		time.Sleep(100 * time.Millisecond)
 	}
@@ -364,7 +364,7 @@ func TestRedisThrottleMultiPipes(t *testing.T) {
 
 	for i := 0; i < len(secondPipeEvents); i++ {
 		json := fmt.Sprintf(secondPipeEvents[i], time.Now().Format(time.RFC3339Nano))
-		inputSec.In(10, sourceNames[rand.Int()%len(sourceNames)], 0, []byte(json))
+		inputSec.In(10, sourceNames[rand.Int()%len(sourceNames)], test.Offset(0), []byte(json))
 		// timeout required due shifting time call to redis
 		time.Sleep(100 * time.Millisecond)
 	}
@@ -436,7 +436,7 @@ func TestRedisThrottleWithCustomLimitData(t *testing.T) {
 	for i := 0; i < eventsTotal; i++ {
 		json := fmt.Sprintf(events[i], nowTs)
 
-		input.In(10, sourceNames[rand.Int()%len(sourceNames)], 0, []byte(json))
+		input.In(10, sourceNames[rand.Int()%len(sourceNames)], test.Offset(0), []byte(json))
 
 		time.Sleep(300 * time.Millisecond)
 	}
@@ -486,7 +486,7 @@ func TestThrottleLimiterExpiration(t *testing.T) {
 	for i := 0; i < eventsTotal; i++ {
 		json := fmt.Sprintf(events[i], nowTs)
 
-		input.In(10, sourceNames[rand.Int()%len(sourceNames)], 0, []byte(json))
+		input.In(10, sourceNames[rand.Int()%len(sourceNames)], test.Offset(0), []byte(json))
 
 		time.Sleep(10 * time.Millisecond)
 	}
@@ -616,7 +616,7 @@ func TestThrottleWithDistribution(t *testing.T) {
 	nowTs := time.Now().Format(time.RFC3339Nano)
 	for i := 0; i < len(events); i++ {
 		json := fmt.Sprintf(events[i], nowTs)
-		input.In(0, "test", 0, []byte(json))
+		input.In(0, "test", test.Offset(0), []byte(json))
 	}
 
 	wgWaitWithTimeout := func(wg *sync.WaitGroup, timeout time.Duration) bool {

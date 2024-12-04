@@ -142,7 +142,7 @@ func TestE2E_Plugin(t *testing.T) {
 	})
 
 	counter.Add(1)
-	input.In(0, "test.log", 0, []byte(`{"message":123}`))
+	input.In(0, "test.log", test.Offset(0), []byte(`{"message":123}`))
 
 	for counter.Load() != 0 {
 		time.Sleep(time.Millisecond * 10)

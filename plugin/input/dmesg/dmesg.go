@@ -111,7 +111,7 @@ func (p *Plugin) read() {
 
 		out = root.Encode(out[:0])
 
-		p.controller.In(0, "dmesg", ts, out, false, nil)
+		p.controller.In(0, "dmesg", Offset(ts), out, false, nil)
 	}
 }
 
@@ -133,4 +133,14 @@ func (p *Plugin) Commit(event *pipeline.Event) {
 // PassEvent decides pass or discard event.
 func (p *Plugin) PassEvent(event *pipeline.Event) bool {
 	return true
+}
+
+type Offset int64
+
+func (o Offset) Current() int64 {
+	return int64(o)
+}
+
+func (o Offset) ByStream(_ string) int64 {
+	panic("unimplemented")
 }

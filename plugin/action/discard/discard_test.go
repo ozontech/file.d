@@ -139,10 +139,10 @@ func TestDiscard(t *testing.T) {
 			})
 
 			for _, e := range tt.passEvents {
-				input.In(0, "test", 0, []byte(e))
+				input.In(0, "test", test.Offset(0), []byte(e))
 			}
 			for _, e := range tt.discardEvents {
-				input.In(0, "test", 0, []byte(e))
+				input.In(0, "test", test.Offset(0), []byte(e))
 			}
 
 			wg.Wait()

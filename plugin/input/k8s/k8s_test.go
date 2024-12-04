@@ -129,8 +129,8 @@ func TestAllowedLabels(t *testing.T) {
 		wg.Done()
 	})
 
-	input.In(0, filename1, 0, []byte(wrapK8sInfo(`log\n`, item, "node1")))
-	input.In(0, filename2, 0, []byte(wrapK8sInfo(`log\n`, item2, "node1")))
+	input.In(0, filename1, test.Offset(0), []byte(wrapK8sInfo(`log\n`, item, "node1")))
+	input.In(0, filename2, test.Offset(0), []byte(wrapK8sInfo(`log\n`, item2, "node1")))
 
 	wg.Wait()
 	p.Stop()
@@ -167,14 +167,14 @@ func TestK8SJoin(t *testing.T) {
 	)
 
 	filename := getLogFilename("/k8s-logs", item)
-	input.In(0, filename, 10, []byte(`{"ts":"time","stream":"stdout","log":"one line log 1\n"`+k8sMeta+`}`))
-	input.In(0, filename, 20, []byte(`{"ts":"time","stream":"stderr","log":"error "`+k8sMeta+`}`))
-	input.In(0, filename, 30, []byte(`{"ts":"time","stream":"stdout","log":"this "`+k8sMeta+`}`))
-	input.In(0, filename, 40, []byte(`{"ts":"time","stream":"stdout","log":"is "`+k8sMeta+`}`))
-	input.In(0, filename, 50, []byte(`{"ts":"time","stream":"stdout","log":"joined "`+k8sMeta+`}`))
-	input.In(0, filename, 60, []byte(`{"ts":"time","stream":"stdout","log":"log 2\n"`+k8sMeta+`}`))
-	input.In(0, filename, 70, []byte(`{"ts":"time","stream":"stderr","log":"joined\n"`+k8sMeta+`}`))
-	input.In(0, filename, 80, []byte(`{"ts":"time","stream":"stdout","log":"one line log 3\n"`+k8sMeta+`}`))
+	input.In(0, filename, test.Offset(10), []byte(`{"ts":"time","stream":"stdout","log":"one line log 1\n"`+k8sMeta+`}`))
+	input.In(0, filename, test.Offset(20), []byte(`{"ts":"time","stream":"stderr","log":"error "`+k8sMeta+`}`))
+	input.In(0, filename, test.Offset(30), []byte(`{"ts":"time","stream":"stdout","log":"this "`+k8sMeta+`}`))
+	input.In(0, filename, test.Offset(40), []byte(`{"ts":"time","stream":"stdout","log":"is "`+k8sMeta+`}`))
+	input.In(0, filename, test.Offset(50), []byte(`{"ts":"time","stream":"stdout","log":"joined "`+k8sMeta+`}`))
+	input.In(0, filename, test.Offset(60), []byte(`{"ts":"time","stream":"stdout","log":"log 2\n"`+k8sMeta+`}`))
+	input.In(0, filename, test.Offset(70), []byte(`{"ts":"time","stream":"stderr","log":"joined\n"`+k8sMeta+`}`))
+	input.In(0, filename, test.Offset(80), []byte(`{"ts":"time","stream":"stdout","log":"one line log 3\n"`+k8sMeta+`}`))
 
 	wg.Wait()
 	p.Stop()
