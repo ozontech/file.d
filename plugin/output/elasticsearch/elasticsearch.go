@@ -31,10 +31,19 @@ const (
 	NDJSONContentType = "application/x-ndjson"
 )
 
+type esClient interface {
+	DoTimeout(
+		method string,
+		contentType string,
+		body []byte,
+		timeout time.Duration,
+		processResponse func([]byte) error) (int, error)
+}
+
 type Plugin struct {
 	config *Config
 
-	client *xhttp.Client
+	client esClient
 
 	logger     *zap.Logger
 	controller pipeline.OutputPluginController
@@ -360,12 +369,12 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 	})
 	p.begin = append(p.begin, len(data.outBuf))
 
-	code, err := p.saveOrSplit(0, eventsCount, p.begin, data.outBuf)
+	statusCode, err := p.saveOrSplit(0, eventsCount, p.begin, data.outBuf)
 	if err != nil {
-		switch code {
+		switch statusCode {
 		case http.StatusBadRequest, http.StatusRequestEntityTooLarge:
 			const errMsg = "can't send to the elastic, non-retryable error occurred"
-			fields := []zap.Field{zap.Int("status_code", code), zap.Error(err)}
+			fields := []zap.Field{zap.Int("status_code", statusCode), zap.Error(err)}
 			if p.config.Strict {
 				p.logger.Fatal(errMsg, fields...)
 			}
