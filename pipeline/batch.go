@@ -246,6 +246,7 @@ func (b *Batcher) commitBatch(batch *Batch) BatchStatus {
 
 	for i := range batch.events {
 		b.opts.Controller.Commit(batch.events[i])
+		batch.events[i] = nil
 	}
 
 	status := batch.status
