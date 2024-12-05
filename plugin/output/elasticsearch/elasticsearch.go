@@ -360,29 +360,16 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 	})
 	p.begin = append(p.begin, len(data.outBuf))
 
-	statusCode, err := p.client.DoTimeout(http.MethodPost, NDJSONContentType, data.outBuf,
-		p.config.ConnectionTimeout_, p.reportESErrors)
-
+	code, err := p.saveOrSplit(0, eventsCount, p.begin, data.outBuf)
 	if err != nil {
-		p.sendErrorMetric.WithLabelValues(strconv.Itoa(statusCode)).Inc()
-		switch statusCode {
-		case http.StatusBadRequest:
-			const errMsg = "can't send to the elastic, non-retryable error occurred (bad request)"
-			fields := []zap.Field{zap.Int("status_code", statusCode), zap.Error(err)}
+		switch code {
+		case http.StatusBadRequest, http.StatusRequestEntityTooLarge:
+			const errMsg = "can't send to the elastic, non-retryable error occurred"
+			fields := []zap.Field{zap.Int("status_code", code), zap.Error(err)}
 			if p.config.Strict {
 				p.logger.Fatal(errMsg, fields...)
 			}
 			p.logger.Error(errMsg, fields...)
-			return nil
-		case http.StatusRequestEntityTooLarge:
-			if err := p.saveOrSplit(0, eventsCount, p.begin, data.outBuf); err != nil {
-				const errMsg = "can't send to the elastic, non-retryable error occurred (entity too large)"
-				fields := []zap.Field{zap.Int("status_code", statusCode), zap.Error(err)}
-				if p.config.Strict {
-					p.logger.Fatal(errMsg, fields...)
-				}
-				p.logger.Error(errMsg, fields...)
-			}
 			return nil
 		default:
 			p.logger.Error("can't send to the elastic, will try other endpoint", zap.Error(err))
@@ -393,9 +380,9 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 	return nil
 }
 
-func (p *Plugin) saveOrSplit(left int, right int, begin []int, data []byte) error {
+func (p *Plugin) saveOrSplit(left int, right int, begin []int, data []byte) (int, error) {
 	if left == right {
-		return nil
+		return http.StatusOK, nil
 	}
 
 	statusCode, err := p.client.DoTimeout(
@@ -410,22 +397,22 @@ func (p *Plugin) saveOrSplit(left int, right int, begin []int, data []byte) erro
 		case http.StatusRequestEntityTooLarge:
 			// can't save even one log
 			if right-left == 1 {
-				return err
+				return statusCode, err
 			}
 
 			middle := (left + right) / 2
-			err = p.saveOrSplit(left, middle, begin, data)
+			statusCode, err = p.saveOrSplit(left, middle, begin, data)
 			if err != nil {
-				return err
+				return statusCode, err
 			}
 
 			return p.saveOrSplit(middle, right, begin, data)
 		default:
-			return err
+			return statusCode, err
 		}
 	}
 
-	return nil
+	return http.StatusOK, nil
 }
 
 func (p *Plugin) appendEvent(outBuf []byte, event *pipeline.Event) []byte {
