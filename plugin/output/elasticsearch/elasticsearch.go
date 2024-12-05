@@ -42,6 +42,8 @@ type Plugin struct {
 	batcher      *pipeline.RetriableBatcher
 	avgEventSize int
 
+	begin []int
+
 	time         string
 	headerPrefix string
 	cancel       context.CancelFunc
@@ -221,6 +223,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.registerMetrics(params.MetricCtl)
 	p.mu = &sync.Mutex{}
 	p.headerPrefix = `{"` + p.config.BatchOpType + `":{"_index":"`
+	p.begin = make([]int, 0, p.config.BatchSize_+1)
 
 	if len(p.config.IndexValues) == 0 {
 		p.config.IndexValues = append(p.config.IndexValues, "@time")
@@ -348,14 +351,14 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 	}
 
 	eventsCount := 0
-	begin := make([]int, 0, p.config.BatchSize_+1)
+	p.begin = p.begin[:0]
 	data.outBuf = data.outBuf[:0]
 	batch.ForEach(func(event *pipeline.Event) {
 		eventsCount++
-		begin = append(begin, len(data.outBuf))
+		p.begin = append(p.begin, len(data.outBuf))
 		data.outBuf = p.appendEvent(data.outBuf, event)
 	})
-	begin = append(begin, len(data.outBuf))
+	p.begin = append(p.begin, len(data.outBuf))
 
 	statusCode, err := p.client.DoTimeout(http.MethodPost, NDJSONContentType, data.outBuf,
 		p.config.ConnectionTimeout_, p.reportESErrors)
@@ -372,7 +375,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 			p.logger.Error(errMsg, fields...)
 			return nil
 		case http.StatusRequestEntityTooLarge:
-			if err := p.saveOrSplit(0, eventsCount, begin, data.outBuf); err != nil {
+			if err := p.saveOrSplit(0, eventsCount, p.begin, data.outBuf); err != nil {
 				const errMsg = "can't send to the elastic, non-retryable error occurred (entity too large)"
 				fields := []zap.Field{zap.Int("status_code", statusCode), zap.Error(err)}
 				if p.config.Strict {
