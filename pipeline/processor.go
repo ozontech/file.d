@@ -68,7 +68,7 @@ type processor struct {
 
 	metricsValues []string
 
-	incMaxEventSizeExceeded func()
+	incMaxEventSizeExceeded func(lvs ...string)
 }
 
 func newProcessor(
@@ -78,7 +78,7 @@ func newProcessor(
 	output OutputPlugin,
 	streamer *streamer,
 	finalizeFn finalizeFn,
-	incMaxEventSizeExceededFn func(),
+	incMaxEventSizeExceededFn func(lvs ...string),
 ) *processor {
 	processor := &processor{
 		id:            id,
@@ -387,8 +387,8 @@ func (p *processor) Propagate(event *Event) {
 	p.processSequence(event)
 }
 
-func (p *processor) IncMaxEventSizeExceeded() {
-	p.incMaxEventSizeExceeded()
+func (p *processor) IncMaxEventSizeExceeded(lvs ...string) {
+	p.incMaxEventSizeExceeded(lvs...)
 }
 
 // Spawn the children of the parent and process in the actions.

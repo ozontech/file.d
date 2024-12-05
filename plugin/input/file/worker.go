@@ -25,7 +25,7 @@ type inputer interface {
 	// In processes event and returns it seq number.
 	In(sourceID pipeline.SourceID, sourceName string, offset int64, data []byte, isNewSource bool, meta metadata.MetaData) uint64
 	IncReadOps()
-	IncMaxEventSizeExceeded()
+	IncMaxEventSizeExceeded(lvs ...string)
 }
 
 func (w *worker) start(inputController inputer, jobProvider *jobProvider, readBufferSize int, logger *zap.SugaredLogger) {
@@ -106,7 +106,7 @@ func (w *worker) work(controller inputer, jobProvider *jobProvider, readBufferSi
 
 				// check if the event fits into the max size, otherwise skip the event
 				if shouldCheckMax && !w.cutOffEventByLimit && len(accumBuf)+len(line) > w.maxEventSize {
-					controller.IncMaxEventSizeExceeded()
+					controller.IncMaxEventSizeExceeded(sourceName)
 					skipLine = true
 				}
 

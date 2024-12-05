@@ -3,8 +3,11 @@ package pipeline
 import (
 	"testing"
 
+	"github.com/ozontech/file.d/pipeline/metadata"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/atomic"
 )
 
@@ -145,13 +148,89 @@ func TestCheckInputBytes(t *testing.T) {
 		t.Run(tCase.name, func(t *testing.T) {
 			pipe := New("test_pipeline", tCase.pipelineSettings, prometheus.NewRegistry())
 
-			data, ok := pipe.checkInputBytes(tCase.input)
+			data, ok := pipe.checkInputBytes(tCase.input, "test", nil)
 
 			assert.Equal(t, tCase.wantOk, ok)
 			if !tCase.wantOk {
 				return
 			}
 			assert.Equal(t, tCase.want, data)
+		})
+	}
+}
+
+func TestCheckInputBytesMetric(t *testing.T) {
+	cases := []struct {
+		name             string
+		pipelineSettings *Settings
+		sourceName       string
+		meta             metadata.MetaData
+		want             map[string]float64
+	}{
+		{
+			name: "from_source1",
+			pipelineSettings: &Settings{
+				Capacity:           5,
+				Decoder:            "raw",
+				MetricHoldDuration: DefaultMetricHoldDuration,
+				MaxEventSize:       1,
+			},
+			sourceName: "test-source",
+			meta: metadata.MetaData{
+				"some-key": "some-value",
+			},
+			want: map[string]float64{
+				"test-source": 1,
+				"some-value":  0,
+			},
+		},
+		{
+			name: "from_source2",
+			pipelineSettings: &Settings{
+				Capacity:           5,
+				Decoder:            "raw",
+				MetricHoldDuration: DefaultMetricHoldDuration,
+				MaxEventSize:       1,
+				MaxEventSizeField:  "test",
+			},
+			sourceName: "test-source",
+			meta: metadata.MetaData{
+				"some-key": "some-value",
+			},
+			want: map[string]float64{
+				"test-source": 1,
+				"some-value":  0,
+			},
+		},
+		{
+			name: "from_meta",
+			pipelineSettings: &Settings{
+				Capacity:           5,
+				Decoder:            "raw",
+				MetricHoldDuration: DefaultMetricHoldDuration,
+				MaxEventSize:       1,
+				MaxEventSizeField:  "test",
+			},
+			sourceName: "test-source",
+			meta: metadata.MetaData{
+				"test": "some-value",
+			},
+			want: map[string]float64{
+				"test-source": 0,
+				"some-value":  1,
+			},
+		},
+	}
+
+	for _, tCase := range cases {
+		t.Run(tCase.name, func(t *testing.T) {
+			pipe := New("test_pipeline", tCase.pipelineSettings, prometheus.NewRegistry())
+
+			pipe.checkInputBytes([]byte("some log"), tCase.sourceName, tCase.meta)
+
+			for k, v := range tCase.want {
+				require.Equal(t, v, testutil.ToFloat64(pipe.maxEventSizeExceededMetric.WithLabelValues(k)))
+			}
 		})
 	}
 }

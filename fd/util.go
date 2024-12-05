@@ -22,6 +22,7 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 	var antispamExceptions antispam.Exceptions
 	avgInputEventSize := pipeline.DefaultAvgInputEventSize
 	maxInputEventSize := pipeline.DefaultMaxInputEventSize
+	maxInputEventSizeField := pipeline.DefaultMaxInputEventSizeField
 	cutOffEventByLimit := pipeline.DefaultCutOffEventByLimit
 	cutOffEventByLimitMsg := pipeline.DefaultCutOffEventByLimitMsg
 	streamField := pipeline.DefaultStreamField
@@ -53,6 +54,8 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 		if val != 0 {
 			maxInputEventSize = val
 		}
+
+		maxInputEventSizeField = settings.Get("max_event_size_field").MustString()
 
 		cutOffEventByLimit = settings.Get("cut_off_event_by_limit").MustBool()
 
@@ -126,6 +129,7 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 		MetaCacheSize:         metaCacheSize,
 		AvgEventSize:          avgInputEventSize,
 		MaxEventSize:          maxInputEventSize,
+		MaxEventSizeField:     maxInputEventSizeField,
 		CutOffEventByLimit:    cutOffEventByLimit,
 		CutOffEventByLimitMsg: cutOffEventByLimitMsg,
 		AntispamThreshold:     antispamThreshold,
