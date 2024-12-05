@@ -8,6 +8,7 @@ import (
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/plugin/input/file"
+	"github.com/ozontech/file.d/plugin/input/k8s/meta"
 
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
@@ -103,13 +104,15 @@ type Config struct {
 	// >
 	// > Built-in meta params
 	// >
-	// > `k8s_pod`: `{{ .pod }}`
+	// > `k8s_pod`: `{{ .pod_name }}`
 	// >
-	// > `k8s_namespace`: `{{ .namespace }}`
+	// > `k8s_namespace`: `{{ .namespace_name }}`
 	// >
 	// > `k8s_container`: `{{ .container }}`
 	// >
 	// > `k8s_container_id`: `{{ .container_id }}`
+	// >
+	// > Example: ```component: '{{ index .pod.Labels "component" | default .k8s_container }}'```
 	K8sMeta cfg.MetaTemplates `json:"meta"` // *
 }
 
@@ -149,18 +152,18 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	startCounter := startCounter.Inc()
 
 	if startCounter == 1 {
-		enableGatherer(p.logger)
+		meta.EnableGatherer(p.logger)
 	}
 
-	if criType == "docker" {
+	if meta.CriType == "docker" {
 		p.params.Controller.SuggestDecoder(decoder.JSON)
 	} else {
 		p.params.Controller.SuggestDecoder(decoder.CRI)
 	}
 
-	meta := cfg.MetaTemplates{}
+	metaConfig := cfg.MetaTemplates{}
 	if p.config.K8sMeta != nil {
-		meta = p.config.K8sMeta
+		metaConfig = p.config.K8sMeta
 	}
 
 	fileMeta := cfg.MetaTemplates{}
@@ -168,7 +171,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 		fileMeta = p.config.FileConfig.Meta
 	}
 	setBuiltInMeta(fileMeta)
-	for k, v := range meta {
+	for k, v := range metaConfig {
 		fileMeta[k] = v
 	}
 	p.config.FileConfig.Meta = fileMeta
@@ -176,21 +179,23 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	p.fp.Start(&p.config.FileConfig, params)
 }
 
-func setBuiltInMeta(meta cfg.MetaTemplates) {
-	meta["k8s_pod"] = "{{ .pod }}"
-	meta["k8s_namespace"] = "{{ .namespace }}"
-	meta["k8s_container"] = "{{ .container }}"
-	meta["k8s_container_id"] = "{{ .container_id }}"
+func setBuiltInMeta(metaConfig cfg.MetaTemplates) {
+	metaConfig["k8s_pod"] = "{{ .pod_name }}"
+	metaConfig["k8s_namespace"] = "{{ .namespace }}"
+	metaConfig["k8s_container"] = "{{ .container_name }}"
+	metaConfig["k8s_container_id"] = "{{ .container_id }}"
 }
 
 /*{ meta-params
-**`pod`**
+**`pod_name`** - string
 
-**`namespace`**
+**`namespace`** - string
 
-**`container`**
+**`container_name`** - string
 
-**`container_id`**
+**`container_id`** - string
+
+**`pod`** - k8s.io/api/core/v1.Pod
 }*/
 
 // Commit event.

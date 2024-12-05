@@ -121,6 +121,7 @@ func NewPipeline(actions []*pipeline.ActionPluginStaticInfo, pipelineOpts ...str
 		EventTimeout:        eventTimeout,
 		AntispamThreshold:   0,
 		AvgEventSize:        2048,
+		MetaCacheSize:       32,
 		StreamField:         "stream",
 		Decoder:             "json",
 		MetricHoldDuration:  pipeline.DefaultMetricHoldDuration,

@@ -23,30 +23,30 @@ const (
 )
 
 type protobufParams struct {
-	File        string   // required
-	Message     string   // required
-	ImportPaths []string // optional
+	file        string   // required
+	message     string   // required
+	importPaths []string // optional
 }
 
-type ProtobufDecoder struct {
+type protobufDecoder struct {
 	msgDesc protoreflect.MessageDescriptor
 }
 
-func NewProtobufDecoder(params map[string]any) (*ProtobufDecoder, error) {
+func NewProtobufDecoder(params map[string]any) (Decoder, error) {
 	p, err := extractProtobufParams(params)
 	if err != nil {
 		return nil, fmt.Errorf("can't extract params: %w", err)
 	}
 
 	resolver := &protocompile.SourceResolver{}
-	if p.ImportPaths != nil {
-		resolver.ImportPaths = p.ImportPaths
+	if p.importPaths != nil {
+		resolver.ImportPaths = p.importPaths
 	}
 
-	fileName := p.File
-	if !strings.HasSuffix(p.File, protoFileSuffix) {
+	fileName := p.file
+	if !strings.HasSuffix(p.file, protoFileSuffix) {
 		resolver.Accessor = protocompile.SourceAccessorFromMap(map[string]string{
-			protoInmemoryFile: p.File,
+			protoInmemoryFile: p.file,
 		})
 		fileName = protoInmemoryFile
 	}
@@ -65,21 +65,21 @@ func NewProtobufDecoder(params map[string]any) (*ProtobufDecoder, error) {
 		return nil, fmt.Errorf("can't find proto-file %q after compilation", fileName)
 	}
 
-	msgDesc := f.Messages().ByName(protoreflect.Name(p.Message))
+	msgDesc := f.Messages().ByName(protoreflect.Name(p.message))
 	if msgDesc == nil {
-		return nil, fmt.Errorf("can't find message %q in proto-file %q", p.Message, fileName)
+		return nil, fmt.Errorf("can't find message %q in proto-file %q", p.message, fileName)
 	}
 
-	return &ProtobufDecoder{
+	return &protobufDecoder{
 		msgDesc: msgDesc,
 	}, nil
 }
 
-func (d *ProtobufDecoder) Type() Type {
+func (d *protobufDecoder) Type() Type {
 	return PROTOBUF
 }
 
-func (d *ProtobufDecoder) DecodeToJson(root *insaneJSON.Root, data []byte) error {
+func (d *protobufDecoder) DecodeToJson(root *insaneJSON.Root, data []byte) error {
 	msgJson, err := d.Decode(data)
 	if err != nil {
 		return err
@@ -88,7 +88,7 @@ func (d *ProtobufDecoder) DecodeToJson(root *insaneJSON.Root, data []byte) error
 	return nil
 }
 
-func (d *ProtobufDecoder) Decode(data []byte) (any, error) {
+func (d *protobufDecoder) Decode(data []byte, _ ...any) (any, error) {
 	msg := dynamicpb.NewMessage(d.msgDesc)
 	if err := proto.Unmarshal(data, msg); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal proto: %w", err)
@@ -140,8 +140,8 @@ func extractProtobufParams(params map[string]any) (protobufParams, error) {
 	}
 
 	return protobufParams{
-		File:        file,
-		Message:     msg,
-		ImportPaths: importPaths,
+		file:        file,
+		message:     msg,
+		importPaths: importPaths,
 	}, nil
 }

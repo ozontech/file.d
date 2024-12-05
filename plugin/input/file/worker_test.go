@@ -42,11 +42,13 @@ func (i *inputerMock) lastData() string {
 
 func TestWorkerWork(t *testing.T) {
 	tests := []struct {
-		name           string
-		maxEventSize   int
-		inFile         string
-		readBufferSize int
-		expData        string
+		name               string
+		maxEventSize       int
+		readBufferSize     int
+		cutOffEventByLimit bool
+
+		inFile  string
+		expData string
 	}{
 		{
 			name:           "should_ok_when_read_1_line",
@@ -68,6 +70,14 @@ func TestWorkerWork(t *testing.T) {
 			inFile:         "abc\n",
 			readBufferSize: 1024,
 			expData:        "",
+		},
+		{
+			name:               "should_ok_and_cutoff_long_line",
+			maxEventSize:       2,
+			cutOffEventByLimit: true,
+			inFile:             "abc\n",
+			readBufferSize:     1024,
+			expData:            "abc\n",
 		},
 	}
 	for _, tt := range tests {
@@ -109,7 +119,10 @@ func TestWorkerWork(t *testing.T) {
 			jp.jobsChan <- job
 			jp.jobsChan <- nil
 
-			w := &worker{maxEventSize: tt.maxEventSize}
+			w := &worker{
+				maxEventSize:       tt.maxEventSize,
+				cutOffEventByLimit: tt.cutOffEventByLimit,
+			}
 			inputer := inputerMock{}
 
 			w.work(&inputer, jp, tt.readBufferSize, zap.L().Sugar().With("fd"))
@@ -121,15 +134,16 @@ func TestWorkerWork(t *testing.T) {
 
 func TestWorkerWorkMultiData(t *testing.T) {
 	tests := []struct {
-		name           string
-		maxEventSize   int
-		readBufferSize int
+		name               string
+		maxEventSize       int
+		readBufferSize     int
+		cutOffEventByLimit bool
 
 		inData  string
 		outData []string
 	}{
 		{
-			name:           "long event",
+			name:           "long_event",
 			maxEventSize:   50,
 			readBufferSize: 1024,
 
@@ -146,7 +160,7 @@ func TestWorkerWorkMultiData(t *testing.T) {
 			},
 		},
 		{
-			name:           "long event at the beginning of the file",
+			name:           "long_event_begin_file",
 			maxEventSize:   50,
 			readBufferSize: 1024,
 
@@ -163,7 +177,7 @@ func TestWorkerWorkMultiData(t *testing.T) {
 			},
 		},
 		{
-			name:           "long event at the end of the file",
+			name:           "long_event_end_file",
 			maxEventSize:   50,
 			readBufferSize: 1024,
 
@@ -180,7 +194,27 @@ func TestWorkerWorkMultiData(t *testing.T) {
 			},
 		},
 		{
-			name:           "small buffer",
+			name:               "long_event_cutoff",
+			maxEventSize:       50,
+			readBufferSize:     1024,
+			cutOffEventByLimit: true,
+
+			inData: fmt.Sprintf(`{"a":"a"}
+{"key":"%s"}
+{"a":"a"}
+{"key":"%s"}
+{"a":"a"}
+`, strings.Repeat("a", 50), strings.Repeat("a", 50)),
+			outData: []string{
+				`{"a":"a"}` + "\n",
+				fmt.Sprintf(`{"key":"%s"}`, strings.Repeat("a", 50)) + "\n",
+				`{"a":"a"}` + "\n",
+				fmt.Sprintf(`{"key":"%s"}`, strings.Repeat("a", 50)) + "\n",
+				`{"a":"a"}` + "\n",
+			},
+		},
+		{
+			name:           "small_buffer",
 			maxEventSize:   50,
 			readBufferSize: 5,
 
@@ -197,7 +231,27 @@ func TestWorkerWorkMultiData(t *testing.T) {
 			},
 		},
 		{
-			name:           "no new line",
+			name:               "small_buffer_cutoff",
+			maxEventSize:       50,
+			readBufferSize:     5,
+			cutOffEventByLimit: true,
+
+			inData: fmt.Sprintf(`{"a":"a"}
+{"a":"a"}
+{"key":"%s"}
+{"a":"a"}
+{"key":"%s"}
+`, strings.Repeat("a", 50), strings.Repeat("a", 50)),
+			outData: []string{
+				`{"a":"a"}` + "\n",
+				`{"a":"a"}` + "\n",
+				fmt.Sprintf(`{"key":"%s"}`, strings.Repeat("a", 45)) + "\n",
+				`{"a":"a"}` + "\n",
+				fmt.Sprintf(`{"key":"%s"}`, strings.Repeat("a", 46)) + "\n",
+			},
+		},
+		{
+			name:           "no_new_line",
 			maxEventSize:   50,
 			readBufferSize: 1024,
 
@@ -208,7 +262,10 @@ func TestWorkerWorkMultiData(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			w := &worker{maxEventSize: tt.maxEventSize}
+			w := &worker{
+				maxEventSize:       tt.maxEventSize,
+				cutOffEventByLimit: tt.cutOffEventByLimit,
+			}
 
 			f, err := os.CreateTemp("/tmp", "worker_test")
 			require.NoError(t, err)
@@ -252,6 +309,7 @@ func TestWorkerWorkMultiData(t *testing.T) {
 }
 
 func TestNewMetaInformation(t *testing.T) {
+	k8s_meta.DisableMetaUpdates = true
 	tests := []struct {
 		name            string
 		filename        string
@@ -372,14 +430,14 @@ func TestGetData(t *testing.T) {
 				},
 			},
 			expected: map[string]any{
-				"filename":     "/4e0301b633eaa2bfdcafdeba59ba0c72a3815911a6a820bf273534b0f32d98e0.log",
-				"symlink":      "/k8s-logs/advanced-logs-checker-2222222222-trtrq_sre_duty-bot-4e0301b633eaa2bfdcafdeba59ba0c72a3815911a6a820bf273534b0f32d98e0.log",
-				"inode":        uint64(12345),
-				"offset":       int64(0),
-				"pod":          "advanced-logs-checker-2222222222-trtrq",
-				"namespace":    "sre",
-				"container":    "duty-bot",
-				"container_id": "4e0301b633eaa2bfdcafdeba59ba0c72a3815911a6a820bf273534b0f32d98e0",
+				"filename":       "/4e0301b633eaa2bfdcafdeba59ba0c72a3815911a6a820bf273534b0f32d98e0.log",
+				"symlink":        "/k8s-logs/advanced-logs-checker-2222222222-trtrq_sre_duty-bot-4e0301b633eaa2bfdcafdeba59ba0c72a3815911a6a820bf273534b0f32d98e0.log",
+				"inode":          uint64(12345),
+				"offset":         int64(0),
+				"pod_name":       "advanced-logs-checker-2222222222-trtrq",
+				"namespace":      "sre",
+				"container_name": "duty-bot",
+				"container_id":   "4e0301b633eaa2bfdcafdeba59ba0c72a3815911a6a820bf273534b0f32d98e0",
 			},
 		},
 	}

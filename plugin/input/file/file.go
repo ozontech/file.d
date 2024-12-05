@@ -268,10 +268,15 @@ func (p *Plugin) startWorkers() {
 	p.workers = make([]*worker, p.config.WorkersCount_)
 	for i := range p.workers {
 		p.workers[i] = &worker{
-			maxEventSize: p.params.PipelineSettings.MaxEventSize,
+			maxEventSize:       p.params.PipelineSettings.MaxEventSize,
+			cutOffEventByLimit: p.params.PipelineSettings.CutOffEventByLimit,
 		}
 		if len(p.config.Meta) > 0 {
-			p.workers[i].metaTemplater = metadata.NewMetaTemplater(p.config.Meta)
+			p.workers[i].metaTemplater = metadata.NewMetaTemplater(
+				p.config.Meta,
+				p.logger.Desugar(),
+				p.params.PipelineSettings.MetaCacheSize,
+			)
 		}
 		p.workers[i].start(p.params.Controller, p.jobProvider, p.config.ReadBufferSize, p.logger)
 	}
