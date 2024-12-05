@@ -17,23 +17,31 @@ import (
 
 func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 	capacity := pipeline.DefaultCapacity
-	antispamThreshold := 0
-	antispamField := ""
+	antispamThreshold := pipeline.DefaultAntispamThreshold
+	antispamField := pipeline.DefaultAntispamField
 	var antispamExceptions antispam.Exceptions
 	avgInputEventSize := pipeline.DefaultAvgInputEventSize
 	maxInputEventSize := pipeline.DefaultMaxInputEventSize
+	cutOffEventByLimit := pipeline.DefaultCutOffEventByLimit
+	cutOffEventByLimitMsg := pipeline.DefaultCutOffEventByLimitMsg
 	streamField := pipeline.DefaultStreamField
 	maintenanceInterval := pipeline.DefaultMaintenanceInterval
-	decoder := "auto"
+	decoder := pipeline.DefaultDecoder
 	decoderParams := make(map[string]any)
-	isStrict := false
+	isStrict := pipeline.DefaultIsStrict
 	eventTimeout := pipeline.DefaultEventTimeout
 	metricHoldDuration := pipeline.DefaultMetricHoldDuration
+	metaCacheSize := pipeline.DefaultMetaCacheSize
 
 	if settings != nil {
 		val := settings.Get("capacity").MustInt()
 		if val != 0 {
 			capacity = val
+		}
+
+		val = settings.Get("meta_cache_size").MustInt()
+		if val != 0 {
+			metaCacheSize = val
 		}
 
 		val = settings.Get("avg_log_size").MustInt()
@@ -44,6 +52,13 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 		val = settings.Get("max_event_size").MustInt()
 		if val != 0 {
 			maxInputEventSize = val
+		}
+
+		cutOffEventByLimit = settings.Get("cut_off_event_by_limit").MustBool()
+
+		cutOffEventByLimitMsg = settings.Get("cut_off_event_by_limit_message").MustString()
+		if maxInputEventSize > 0 && len(cutOffEventByLimitMsg) >= maxInputEventSize {
+			logger.Fatal("length of cut_off_event_by_limit_message must be less than max_event_size")
 		}
 
 		str := settings.Get("decoder").MustString()
@@ -105,19 +120,22 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 	}
 
 	return &pipeline.Settings{
-		Decoder:             decoder,
-		DecoderParams:       decoderParams,
-		Capacity:            capacity,
-		AvgEventSize:        avgInputEventSize,
-		MaxEventSize:        maxInputEventSize,
-		AntispamThreshold:   antispamThreshold,
-		AntispamField:       antispamField,
-		AntispamExceptions:  antispamExceptions,
-		MaintenanceInterval: maintenanceInterval,
-		EventTimeout:        eventTimeout,
-		StreamField:         streamField,
-		IsStrict:            isStrict,
-		MetricHoldDuration:  metricHoldDuration,
+		Decoder:               decoder,
+		DecoderParams:         decoderParams,
+		Capacity:              capacity,
+		MetaCacheSize:         metaCacheSize,
+		AvgEventSize:          avgInputEventSize,
+		MaxEventSize:          maxInputEventSize,
+		CutOffEventByLimit:    cutOffEventByLimit,
+		CutOffEventByLimitMsg: cutOffEventByLimitMsg,
+		AntispamThreshold:     antispamThreshold,
+		AntispamField:         antispamField,
+		AntispamExceptions:    antispamExceptions,
+		MaintenanceInterval:   maintenanceInterval,
+		EventTimeout:          eventTimeout,
+		StreamField:           streamField,
+		IsStrict:              isStrict,
+		MetricHoldDuration:    metricHoldDuration,
 	}
 }
 

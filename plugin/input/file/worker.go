@@ -14,7 +14,9 @@ import (
 )
 
 type worker struct {
-	maxEventSize  int
+	maxEventSize       int
+	cutOffEventByLimit bool
+
 	metaTemplater *metadata.MetaTemplater
 	needK8sMeta   bool
 }
@@ -103,7 +105,7 @@ func (w *worker) work(controller inputer, jobProvider *jobProvider, readBufferSi
 				scanned += pos + 1
 
 				// check if the event fits into the max size, otherwise skip the event
-				if shouldCheckMax && len(accumBuf)+len(line) > w.maxEventSize {
+				if shouldCheckMax && !w.cutOffEventByLimit && len(accumBuf)+len(line) > w.maxEventSize {
 					controller.IncMaxEventSizeExceeded()
 					skipLine = true
 				}
@@ -146,7 +148,10 @@ func (w *worker) work(controller inputer, jobProvider *jobProvider, readBufferSi
 
 			// check the buffer size and limits to avoid OOM if event is long
 			if shouldCheckMax && len(accumBuf) > w.maxEventSize {
-				continue
+				if !w.cutOffEventByLimit {
+					continue
+				}
+				accumBuf = accumBuf[:w.maxEventSize]
 			}
 			accumBuf = append(accumBuf, buf...)
 		}
@@ -220,14 +225,15 @@ func newMetaInformation(filename, symlink string, inode inodeID, offset int64, p
 
 func (m metaInformation) GetData() map[string]any {
 	return map[string]any{
-		"filename":     m.filename,
-		"symlink":      m.symlink,
-		"inode":        m.inode,
-		"offset":       m.offset,
-		"pod":          m.k8sMetadata.PodName,
-		"namespace":    m.k8sMetadata.Namespace,
-		"container":    m.k8sMetadata.ContainerName,
-		"container_id": m.k8sMetadata.ContainerID,
+		"filename":       m.filename,
+		"symlink":        m.symlink,
+		"inode":          m.inode,
+		"offset":         m.offset,
+		"pod_name":       m.k8sMetadata.PodName,
+		"namespace":      m.k8sMetadata.Namespace,
+		"container_name": m.k8sMetadata.ContainerName,
+		"container_id":   m.k8sMetadata.ContainerID,
+		"pod":            m.k8sMetadata.Pod,
 	}
 }
 

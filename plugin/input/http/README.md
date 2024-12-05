@@ -141,4 +141,6 @@ Key uses in the http_input_total metric.
 **`request`**  *`http.Request`*
 
 **`params`**  *`url.Values`*
+
+**`request_uuid`**  *`string`*
 <br>*Generated using [__insane-doc__](https://github.com/vitkovskii/insane-doc)*

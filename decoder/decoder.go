@@ -18,5 +18,5 @@ const (
 type Decoder interface {
 	Type() Type
 	DecodeToJson(root *insaneJSON.Root, data []byte) error
-	Decode(data []byte) (any, error)
+	Decode(data []byte, args ...any) (any, error)
 }

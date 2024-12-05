@@ -5,8 +5,10 @@ It decodes a string from the event field and merges the result with the event ro
 ## Examples
 ### JSON decoder
 JSON decoder is used by default, so there is no need to specify it explicitly.
+You can specify `json_max_fields_size` in `params` to limit the length of string fields.
 > If the decoded JSON isn't an object, the event will be skipped.
 
+Default decoder:
 ```yaml
 pipelines:
   example_pipeline:
@@ -33,6 +35,40 @@ The resulting event:
   "p_message": "error occurred",
   "p_ts": "2023-10-30T13:35:33.638720813Z",
   "p_stream": "stderr"
+}
+```
+---
+Decoder with `json_max_fields_size` param:
+```yaml
+pipelines:
+  example_pipeline:
+    ...
+    actions:
+    - type: decode
+      field: log
+      decoder: json
+      params:
+        json_max_fields_size:
+          message: 5
+          ts: 10
+    ...
+```
+The original event:
+```json
+{
+  "level": "error",
+  "log": "{\"message\":\"error occurred\",\"ts\":\"2023-10-30T13:35:33.638720813Z\",\"stream\":\"stderr\"}",
+  "service": "test"
+}
+```
+The resulting event:
+```json
+{
+  "level": "error",
+  "service": "test",
+  "message": "error",
+  "ts": "2023-10-30",
+  "stream": "stderr"
 }
 ```
 
@@ -70,7 +106,7 @@ The resulting event:
 }
 ```
 
-### Nginx error decoder
+### NginxError decoder
 You can specify `nginx_with_custom_fields: true` in `params` to decode custom fields.
 
 Default decoder:
@@ -104,7 +140,7 @@ The resulting event:
   "message": "lua udp socket read timed out, context: ngx.timer"
 }
 ```
-
+---
 Decoder with `nginx_with_custom_fields` param:
 ```yaml
 pipelines:
@@ -138,9 +174,9 @@ The resulting event:
   "message": "upstream timed out (110: Operation timed out), while connecting to upstream",
   "client": "10.125.172.251",
   "server": "",
-  "request": "\"POST /download HTTP/1.1\"",
-  "upstream": "\"http://10.117.246.15:84/download\"",
-  "host": "\"mpm-youtube-downloader-38.name.tldn:84\""
+  "request": "POST /download HTTP/1.1",
+  "upstream": "http://10.117.246.15:84/download",
+  "host": "mpm-youtube-downloader-38.name.tldn:84"
 }
 ```
 
@@ -291,7 +327,12 @@ Decoder type.
 
 Decoding params.
 
-**Nginx error decoder params**:
+**Json decoder params**:
+* `json_max_fields_size` - map `{path}: {limit}` where **{path}** is path to field (`cfg.FieldSelector`) and **{limit}** is integer limit of the field length.
+If set, the fields will be cut to the specified limit.
+	> It works only with string values. If the field doesn't exist or isn't a string, it will be skipped.
+
+**NginxError decoder params**:
 * `nginx_with_custom_fields` - if set, custom fields will be extracted.
 
 **Protobuf decoder params**:
