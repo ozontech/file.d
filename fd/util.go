@@ -32,6 +32,7 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 	eventTimeout := pipeline.DefaultEventTimeout
 	metricHoldDuration := pipeline.DefaultMetricHoldDuration
 	metaCacheSize := pipeline.DefaultMetaCacheSize
+	pool := ""
 
 	if settings != nil {
 		val := settings.Get("capacity").MustInt()
@@ -117,6 +118,10 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 			}
 			metricHoldDuration = i
 		}
+
+		if str := settings.Get("pool").MustString(); str != "" {
+			pool = str
+		}
 	}
 
 	return &pipeline.Settings{
@@ -136,6 +141,7 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 		StreamField:           streamField,
 		IsStrict:              isStrict,
 		MetricHoldDuration:    metricHoldDuration,
+		Pool:                  pipeline.PoolType(pool),
 	}
 }
 
