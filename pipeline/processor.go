@@ -1,6 +1,8 @@
 package pipeline
 
 import (
+	"errors"
+
 	"github.com/ozontech/file.d/logger"
 	insaneJSON "github.com/ozontech/insane-json"
 	"go.uber.org/atomic"
@@ -68,7 +70,8 @@ type processor struct {
 
 	metricsValues []string
 
-	incMaxEventSizeExceeded func()
+	incMaxEventSizeExceeded      func()
+	incCountEventPanicsRecovered func()
 }
 
 func newProcessor(
@@ -79,6 +82,7 @@ func newProcessor(
 	streamer *streamer,
 	finalizeFn finalizeFn,
 	incMaxEventSizeExceededFn func(),
+	incCountEventPanicsRecoveredFn func(),
 ) *processor {
 	processor := &processor{
 		id:            id,
@@ -92,7 +96,8 @@ func newProcessor(
 
 		metricsValues: make([]string, 0),
 
-		incMaxEventSizeExceeded: incMaxEventSizeExceededFn,
+		incMaxEventSizeExceeded:      incMaxEventSizeExceededFn,
+		incCountEventPanicsRecovered: incCountEventPanicsRecoveredFn,
 	}
 
 	return processor
@@ -260,6 +265,35 @@ func (p *processor) tryResetBusy(index int) {
 }
 
 func (p *processor) countEvent(event *Event, actionIndex int, status eventStatus) {
+	defer func() {
+		if r := recover(); r != nil {
+			p.incCountEventPanicsRecovered()
+			var recErr error
+			switch x := r.(type) {
+			case string:
+				recErr = errors.New(x)
+			case error:
+				recErr = x
+			default:
+				recErr = errors.New("unknown panic")
+			}
+			msg := "recovered from panic in processor.countEvent event might have not been accounted in the metric action=%d status=%q labelValues=%v. Recovered error: %s."
+			args := []any{
+				actionIndex, string(status), p.metricsValues, recErr.Error(),
+			}
+			eventBytes := make([]byte, 0)
+			err := event.Root.DecodeBytes(eventBytes)
+			if err != nil {
+				msg += " Couldn't get event bytes: %s"
+				args = append(args, err.Error())
+			} else {
+				msg += " Event: %s"
+				args = append(args, string(eventBytes))
+			}
+			logger.Errorf(msg, args)
+		}
+	}()
+
 	if event.IsTimeoutKind() {
 		return
 	}
