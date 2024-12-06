@@ -10,6 +10,7 @@ type K8sMetaInformation struct {
 	PodName       string
 	ContainerName string
 	ContainerID   string
+	Pod           *podMeta
 }
 
 func NewK8sMetaInformation(fullFilename string) (K8sMetaInformation, error) {
@@ -52,19 +53,26 @@ func NewK8sMetaInformation(fullFilename string) (K8sMetaInformation, error) {
 
 	cid := filename[len(filename)-64:]
 
+	var podMeta *podMeta
+	if !DisableMetaUpdates {
+		_, podMeta = GetPodMeta(Namespace(ns), PodName(pod), ContainerID(cid))
+	}
+
 	return K8sMetaInformation{
 		Namespace:     ns,
 		PodName:       pod,
 		ContainerName: container,
 		ContainerID:   cid,
+		Pod:           podMeta,
 	}, nil
 }
 
 func (m K8sMetaInformation) GetData() map[string]any {
 	return map[string]any{
-		"pod":          m.PodName,
-		"namespace":    m.Namespace,
-		"container":    m.ContainerName,
-		"container_id": m.ContainerID,
+		"pod_name":       m.PodName,
+		"namespace":      m.Namespace,
+		"container_name": m.ContainerName,
+		"container_id":   m.ContainerID,
+		"pod":            m.Pod,
 	}
 }
