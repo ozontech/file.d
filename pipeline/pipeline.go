@@ -132,6 +132,8 @@ type Pipeline struct {
 	wrongEventCRIFormatMetric  prometheus.Counter
 	maxEventSizeExceededMetric *prometheus.CounterVec
 	eventPoolLatency           prometheus.Observer
+
+	countEventPanicsRecoveredMetric prometheus.Counter
 }
 
 type Settings struct {
@@ -243,6 +245,10 @@ func (p *Pipeline) IncMaxEventSizeExceeded(lvs ...string) {
 	p.maxEventSizeExceededMetric.WithLabelValues(lvs...).Inc()
 }
 
+func (p *Pipeline) IncCountEventPanicsRecovered() {
+	p.countEventPanicsRecoveredMetric.Inc()
+}
+
 func (p *Pipeline) registerMetrics() {
 	m := p.actionParams.MetricCtl
 	p.inUseEventsMetric = m.RegisterGauge("event_pool_in_use_events", "Count of pool events which is used for processing")
@@ -254,6 +260,7 @@ func (p *Pipeline) registerMetrics() {
 	p.readOpsEventsSizeMetric = m.RegisterCounter("read_ops_count", "Read OPS count")
 	p.wrongEventCRIFormatMetric = m.RegisterCounter("wrong_event_cri_format", "Wrong event CRI format counter")
 	p.maxEventSizeExceededMetric = m.RegisterCounterVec("max_event_size_exceeded", "Max event size exceeded counter", "source_name")
+	p.countEventPanicsRecoveredMetric = m.RegisterCounter("count_event_panics_recovered", "Count of processor.countEvent panics recovered")
 	p.eventPoolLatency = m.RegisterHistogram("event_pool_latency_seconds",
 		"How long we are wait an event from the pool", metric.SecondsBucketsDetailedNano)
 }
@@ -717,6 +724,7 @@ func (p *Pipeline) newProc(id int) *processor {
 		p.streamer,
 		p.finalize,
 		p.IncMaxEventSizeExceeded,
+		p.IncCountEventPanicsRecovered,
 	)
 	for j, info := range p.actionInfos {
 		plugin, _ := info.Factory()

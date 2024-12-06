@@ -562,6 +562,8 @@ func TestCheck(t *testing.T) {
 				{eventStr: `{"service":"test-1"}`, want: false},
 				{eventStr: `{"pod":"test-123456789"}`, want: false},
 				{eventStr: ``, want: false},
+				{eventStr: `{"pod":{"key":"test-1"}}`, want: false},
+				{eventStr: `{"pod":[{"key":"test-1"}]}`, want: false},
 			},
 		},
 		{
@@ -777,6 +779,8 @@ func TestCheck(t *testing.T) {
 				{`{"pod":"my-test-2","test-field":null}`, true},
 				{`{"pod":"my-test-3","test-field":""}`, true},
 				{`{"pod":"my-TEST-2","test-field":"non-empty"}`, false},
+				{`{"pod":"my-TEST-2","test-field":{"key":"non-empty"}}`, false},
+				{`{"pod":"my-TEST-2","test-field":[{"key":"non-empty"}]}`, false},
 			},
 		},
 		{
