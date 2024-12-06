@@ -42,7 +42,6 @@ type source struct {
 type Options struct {
 	MaintenanceInterval time.Duration
 	Threshold           int
-	Field               string
 	UnbanIterations     int
 	Exceptions          Exceptions
 

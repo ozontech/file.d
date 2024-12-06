@@ -12,9 +12,11 @@ type MultilineAction struct {
 	allowedPodLabels  map[string]bool
 	allowedNodeLabels map[string]bool
 
-	logger        *zap.SugaredLogger
-	controller    pipeline.ActionPluginController
-	maxEventSize  int
+	logger              *zap.SugaredLogger
+	controller          pipeline.ActionPluginController
+	maxEventSize        int
+	sourceNameMetaField string
+
 	eventBuf      []byte
 	eventSize     int
 	skipNextEvent bool
@@ -29,6 +31,7 @@ func (p *MultilineAction) Start(config pipeline.AnyConfig, params *pipeline.Acti
 	p.logger = params.Logger
 	p.controller = params.Controller
 	p.maxEventSize = params.PipelineSettings.MaxEventSize
+	p.sourceNameMetaField = params.PipelineSettings.SourceNameMetaField
 	p.config = config.(*Config)
 
 	p.allowedPodLabels = cfg.ListToMap(p.config.AllowedPodLabels)
@@ -92,16 +95,22 @@ func (p *MultilineAction) Do(event *pipeline.Event) pipeline.ActionResult {
 		// check buffer size before append
 		if p.maxEventSize == 0 || sizeAfterAppend < p.maxEventSize {
 			p.eventBuf = append(p.eventBuf, logFragment[1:logFragmentLen-1]...)
-		} else {
+		} else if !p.skipNextEvent {
 			if p.controller != nil {
-				p.controller.IncMaxEventSizeExceeded()
+				source := event.SourceName
+				if p.sourceNameMetaField != "" {
+					// at the moment, all metadata fields have been added to log
+					if val := event.Root.Dig(p.sourceNameMetaField).AsString(); val != "" {
+						source = val
+					}
+				}
+
+				p.controller.IncMaxEventSizeExceeded(source)
 			}
 
-			if !p.skipNextEvent {
-				// skip event if max_event_size is exceeded
-				p.skipNextEvent = true
-				p.logger.Errorf("event chunk will be discarded due to max_event_size, source_name=%s, namespace=%s, pod=%s", event.SourceName, ns, pod)
-			}
+			// skip event if max_event_size is exceeded
+			p.skipNextEvent = true
+			p.logger.Errorf("event chunk will be discarded due to max_event_size, source_name=%s, namespace=%s, pod=%s", event.SourceName, ns, pod)
 		}
 		return pipeline.ActionCollapse
 	}
