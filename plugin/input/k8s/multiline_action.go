@@ -98,9 +98,11 @@ func (p *MultilineAction) Do(event *pipeline.Event) pipeline.ActionResult {
 		} else if !p.skipNextEvent {
 			if p.controller != nil {
 				source := event.SourceName
-				// at the moment, all metadata fields have been added to log
-				if val := event.Root.Dig(p.sourceNameMetaField).AsString(); val != "" {
-					source = val
+				if p.sourceNameMetaField != "" {
+					// at the moment, all metadata fields have been added to log
+					if val := event.Root.Dig(p.sourceNameMetaField).AsString(); val != "" {
+						source = val
+					}
 				}
 
 				p.controller.IncMaxEventSizeExceeded(source)
