@@ -1,11 +1,11 @@
 # JSON extract plugin
 @introduction
 
-### Examples
+## Examples
 @examples
 
-### Benchmarks
+## Benchmarks
 @benchmarks
 
-### Config params
+## Config params
 @config-params|description
