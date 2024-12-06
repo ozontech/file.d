@@ -22,8 +22,8 @@ pipelines:
     - type: json_extract
       field: log
       extract_fields:
-	    - error.code
-		- level
+        - error.code
+        - level
     ...
 ```
 The original event:
