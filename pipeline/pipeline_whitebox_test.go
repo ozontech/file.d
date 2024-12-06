@@ -187,11 +187,11 @@ func TestCheckInputBytesMetric(t *testing.T) {
 		{
 			name: "from_source2",
 			pipelineSettings: &Settings{
-				Capacity:           5,
-				Decoder:            "raw",
-				MetricHoldDuration: DefaultMetricHoldDuration,
-				MaxEventSize:       1,
-				MaxEventSizeField:  "test",
+				Capacity:            5,
+				Decoder:             "raw",
+				MetricHoldDuration:  DefaultMetricHoldDuration,
+				MaxEventSize:        1,
+				SourceNameMetaField: "test",
 			},
 			sourceName: "test-source",
 			meta: metadata.MetaData{
@@ -205,11 +205,11 @@ func TestCheckInputBytesMetric(t *testing.T) {
 		{
 			name: "from_meta",
 			pipelineSettings: &Settings{
-				Capacity:           5,
-				Decoder:            "raw",
-				MetricHoldDuration: DefaultMetricHoldDuration,
-				MaxEventSize:       1,
-				MaxEventSizeField:  "test",
+				Capacity:            5,
+				Decoder:             "raw",
+				MetricHoldDuration:  DefaultMetricHoldDuration,
+				MaxEventSize:        1,
+				SourceNameMetaField: "test",
 			},
 			sourceName: "test-source",
 			meta: metadata.MetaData{

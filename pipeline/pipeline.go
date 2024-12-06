@@ -24,24 +24,23 @@ import (
 )
 
 const (
-	DefaultAntispamThreshold      = 0
-	DefaultAntispamField          = ""
-	DefaultDecoder                = "auto"
-	DefaultIsStrict               = false
-	DefaultStreamField            = "stream"
-	DefaultCapacity               = 1024
-	DefaultAvgInputEventSize      = 4 * 1024
-	DefaultMaxInputEventSize      = 0
-	DefaultMaxInputEventSizeField = ""
-	DefaultCutOffEventByLimit     = false
-	DefaultCutOffEventByLimitMsg  = ""
-	DefaultJSONNodePoolSize       = 1024
-	DefaultMaintenanceInterval    = time.Second * 5
-	DefaultEventTimeout           = time.Second * 30
-	DefaultFieldValue             = "not_set"
-	DefaultStreamName             = StreamName("not_set")
-	DefaultMetricHoldDuration     = time.Minute * 30
-	DefaultMetaCacheSize          = 1024
+	DefaultAntispamThreshold     = 0
+	DefaultSourceNameMetaField   = ""
+	DefaultDecoder               = "auto"
+	DefaultIsStrict              = false
+	DefaultStreamField           = "stream"
+	DefaultCapacity              = 1024
+	DefaultAvgInputEventSize     = 4 * 1024
+	DefaultMaxInputEventSize     = 0
+	DefaultCutOffEventByLimit    = false
+	DefaultCutOffEventByLimitMsg = ""
+	DefaultJSONNodePoolSize      = 1024
+	DefaultMaintenanceInterval   = time.Second * 5
+	DefaultEventTimeout          = time.Second * 30
+	DefaultFieldValue            = "not_set"
+	DefaultStreamName            = StreamName("not_set")
+	DefaultMetricHoldDuration    = time.Minute * 30
+	DefaultMetaCacheSize         = 1024
 
 	EventSeqIDError = uint64(0)
 
@@ -143,11 +142,10 @@ type Settings struct {
 	MaintenanceInterval   time.Duration
 	EventTimeout          time.Duration
 	AntispamThreshold     int
-	AntispamField         string
 	AntispamExceptions    antispam.Exceptions
+	SourceNameMetaField   string
 	AvgEventSize          int
 	MaxEventSize          int
-	MaxEventSizeField     string
 	CutOffEventByLimit    bool
 	CutOffEventByLimitMsg string
 	StreamField           string
@@ -183,7 +181,6 @@ func New(name string, settings *Settings, registry *prometheus.Registry) *Pipeli
 		antispamer: antispam.NewAntispammer(&antispam.Options{
 			MaintenanceInterval: settings.MaintenanceInterval,
 			Threshold:           settings.AntispamThreshold,
-			Field:               settings.AntispamField,
 			UnbanIterations:     antispamUnbanIterations,
 			Logger:              lg.Named("antispam"),
 			MetricsController:   metricCtl,
@@ -427,16 +424,16 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 	if !row.IsPartial && p.settings.AntispamThreshold > 0 {
 		var checkSourceID any
 		var checkSourceName string
-		if p.settings.AntispamField == "" {
+		if p.settings.SourceNameMetaField == "" {
 			checkSourceID = uint64(sourceID)
 			checkSourceName = sourceName
 		} else {
-			if val, ok := meta[p.settings.AntispamField]; ok {
+			if val, ok := meta[p.settings.SourceNameMetaField]; ok {
 				checkSourceID = val
 				checkSourceName = val
 				isNewSource = false
 			} else {
-				p.Error(fmt.Sprintf("antispam_field %s does not exists in meta", p.settings.AntispamField))
+				p.Error(fmt.Sprintf("source_name_meta_field %q does not exists in meta", p.settings.SourceNameMetaField))
 				checkSourceID = uint64(sourceID)
 				checkSourceName = sourceName
 			}
@@ -538,7 +535,7 @@ func (p *Pipeline) checkInputBytes(bytes []byte, sourceName string, meta metadat
 
 	if p.settings.MaxEventSize != 0 && length > p.settings.MaxEventSize {
 		source := sourceName
-		if val, ok := meta[p.settings.MaxEventSizeField]; ok {
+		if val, ok := meta[p.settings.SourceNameMetaField]; ok {
 			source = val
 		}
 		p.IncMaxEventSizeExceeded(source)

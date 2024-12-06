@@ -18,11 +18,10 @@ import (
 func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 	capacity := pipeline.DefaultCapacity
 	antispamThreshold := pipeline.DefaultAntispamThreshold
-	antispamField := pipeline.DefaultAntispamField
 	var antispamExceptions antispam.Exceptions
+	sourceNameMetaField := pipeline.DefaultSourceNameMetaField
 	avgInputEventSize := pipeline.DefaultAvgInputEventSize
 	maxInputEventSize := pipeline.DefaultMaxInputEventSize
-	maxInputEventSizeField := pipeline.DefaultMaxInputEventSizeField
 	cutOffEventByLimit := pipeline.DefaultCutOffEventByLimit
 	cutOffEventByLimitMsg := pipeline.DefaultCutOffEventByLimitMsg
 	streamField := pipeline.DefaultStreamField
@@ -54,8 +53,6 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 		if val != 0 {
 			maxInputEventSize = val
 		}
-
-		maxInputEventSizeField = settings.Get("max_event_size_field").MustString()
 
 		cutOffEventByLimit = settings.Get("cut_off_event_by_limit").MustBool()
 
@@ -101,8 +98,6 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 			antispamThreshold = 0
 		}
 
-		antispamField = settings.Get("antispam_field").MustString()
-
 		var err error
 		antispamExceptions, err = extractAntispamExceptions(settings)
 		if err != nil {
@@ -110,6 +105,7 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 		}
 		antispamExceptions.Prepare()
 
+		sourceNameMetaField = settings.Get("source_name_meta_field").MustString()
 		isStrict = settings.Get("is_strict").MustBool()
 
 		str = settings.Get("metric_hold_duration").MustString()
@@ -129,12 +125,11 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 		MetaCacheSize:         metaCacheSize,
 		AvgEventSize:          avgInputEventSize,
 		MaxEventSize:          maxInputEventSize,
-		MaxEventSizeField:     maxInputEventSizeField,
 		CutOffEventByLimit:    cutOffEventByLimit,
 		CutOffEventByLimitMsg: cutOffEventByLimitMsg,
 		AntispamThreshold:     antispamThreshold,
-		AntispamField:         antispamField,
 		AntispamExceptions:    antispamExceptions,
+		SourceNameMetaField:   sourceNameMetaField,
 		MaintenanceInterval:   maintenanceInterval,
 		EventTimeout:          eventTimeout,
 		StreamField:           streamField,

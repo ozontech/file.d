@@ -12,13 +12,14 @@ type MultilineAction struct {
 	allowedPodLabels  map[string]bool
 	allowedNodeLabels map[string]bool
 
-	logger            *zap.SugaredLogger
-	controller        pipeline.ActionPluginController
-	maxEventSize      int
-	maxEventSizeField string
-	eventBuf          []byte
-	eventSize         int
-	skipNextEvent     bool
+	logger              *zap.SugaredLogger
+	controller          pipeline.ActionPluginController
+	maxEventSize        int
+	sourceNameMetaField string
+
+	eventBuf      []byte
+	eventSize     int
+	skipNextEvent bool
 }
 
 const (
@@ -30,7 +31,7 @@ func (p *MultilineAction) Start(config pipeline.AnyConfig, params *pipeline.Acti
 	p.logger = params.Logger
 	p.controller = params.Controller
 	p.maxEventSize = params.PipelineSettings.MaxEventSize
-	p.maxEventSizeField = params.PipelineSettings.MaxEventSizeField
+	p.sourceNameMetaField = params.PipelineSettings.SourceNameMetaField
 	p.config = config.(*Config)
 
 	p.allowedPodLabels = cfg.ListToMap(p.config.AllowedPodLabels)
@@ -97,7 +98,8 @@ func (p *MultilineAction) Do(event *pipeline.Event) pipeline.ActionResult {
 		} else if !p.skipNextEvent {
 			if p.controller != nil {
 				source := event.SourceName
-				if val := event.Root.Dig(p.maxEventSizeField).AsString(); val != "" {
+				// at the moment, all metadata fields have been added to log
+				if val := event.Root.Dig(p.sourceNameMetaField).AsString(); val != "" {
 					source = val
 				}
 
