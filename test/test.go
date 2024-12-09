@@ -102,6 +102,7 @@ func NewPipeline(actions []*pipeline.ActionPluginStaticInfo, pipelineOpts ...str
 	mock := Opts(pipelineOpts).Has("mock")
 	passive := Opts(pipelineOpts).Has("passive")
 	name := Opts(pipelineOpts).Has("name")
+	lowMem := Opts(pipelineOpts).Has("use_pool_low_memory")
 
 	eventTimeout := pipeline.DefaultEventTimeout
 	if Opts(pipelineOpts).Has("short_event_timeout") {
@@ -124,6 +125,10 @@ func NewPipeline(actions []*pipeline.ActionPluginStaticInfo, pipelineOpts ...str
 		StreamField:         "stream",
 		Decoder:             "json",
 		MetricHoldDuration:  pipeline.DefaultMetricHoldDuration,
+	}
+
+	if lowMem {
+		settings.Pool = pipeline.PoolTypeLowMem
 	}
 
 	pName := "test_pipeline"
