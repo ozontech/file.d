@@ -31,19 +31,10 @@ const (
 	NDJSONContentType = "application/x-ndjson"
 )
 
-type esClient interface {
-	DoTimeout(
-		method string,
-		contentType string,
-		body []byte,
-		timeout time.Duration,
-		processResponse func([]byte) error) (int, error)
-}
-
 type Plugin struct {
 	config *Config
 
-	client esClient
+	client *xhttp.Client
 
 	logger     *zap.Logger
 	controller pipeline.OutputPluginController
