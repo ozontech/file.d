@@ -26,7 +26,7 @@ services:
       test:
         [
           "CMD-SHELL",
-          "curl -s https://localhost:9200 | grep -q 'missing authentication credentials'",
+          "curl -s http://localhost:9200 | grep -q 'missing authentication credentials'",
         ]
       interval: 10s
       timeout: 10s
