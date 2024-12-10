@@ -11,6 +11,7 @@ import (
 
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/e2e/file_clickhouse"
+	"github.com/ozontech/file.d/e2e/file_es"
 	"github.com/ozontech/file.d/e2e/file_file"
 	"github.com/ozontech/file.d/e2e/http_file"
 	"github.com/ozontech/file.d/e2e/join_throttle"
@@ -142,6 +143,11 @@ func TestE2EStabilityWorkCase(t *testing.T) {
 			name:    "file_clickhouse",
 			e2eTest: &file_clickhouse.Config{},
 			cfgPath: "./file_clickhouse/config.yml",
+		},
+		{
+			name:    "file_es",
+			e2eTest: &file_es.Config{},
+			cfgPath: "./file_es/config.yml",
 		},
 	}
 
