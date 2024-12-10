@@ -26,7 +26,7 @@ type inputerMock struct {
 
 func (i *inputerMock) IncReadOps() {}
 
-func (i *inputerMock) IncMaxEventSizeExceeded() {}
+func (i *inputerMock) IncMaxEventSizeExceeded(lvs ...string) {}
 
 func (i *inputerMock) In(_ pipeline.SourceID, _ string, _ int64, data []byte, _ bool, _ metadata.MetaData) uint64 {
 	i.gotData = append(i.gotData, string(data))

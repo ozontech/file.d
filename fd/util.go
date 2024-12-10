@@ -18,8 +18,8 @@ import (
 func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 	capacity := pipeline.DefaultCapacity
 	antispamThreshold := pipeline.DefaultAntispamThreshold
-	antispamField := pipeline.DefaultAntispamField
 	var antispamExceptions antispam.Exceptions
+	sourceNameMetaField := pipeline.DefaultSourceNameMetaField
 	avgInputEventSize := pipeline.DefaultAvgInputEventSize
 	maxInputEventSize := pipeline.DefaultMaxInputEventSize
 	cutOffEventByLimit := pipeline.DefaultCutOffEventByLimit
@@ -99,8 +99,6 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 			antispamThreshold = 0
 		}
 
-		antispamField = settings.Get("antispam_field").MustString()
-
 		var err error
 		antispamExceptions, err = extractAntispamExceptions(settings)
 		if err != nil {
@@ -108,6 +106,7 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 		}
 		antispamExceptions.Prepare()
 
+		sourceNameMetaField = settings.Get("source_name_meta_field").MustString()
 		isStrict = settings.Get("is_strict").MustBool()
 
 		str = settings.Get("metric_hold_duration").MustString()
@@ -134,8 +133,8 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 		CutOffEventByLimit:    cutOffEventByLimit,
 		CutOffEventByLimitMsg: cutOffEventByLimitMsg,
 		AntispamThreshold:     antispamThreshold,
-		AntispamField:         antispamField,
 		AntispamExceptions:    antispamExceptions,
+		SourceNameMetaField:   sourceNameMetaField,
 		MaintenanceInterval:   maintenanceInterval,
 		EventTimeout:          eventTimeout,
 		StreamField:           streamField,

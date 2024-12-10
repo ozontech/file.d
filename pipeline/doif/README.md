@@ -28,13 +28,13 @@ the chain of Match func calls are performed across the whole tree.
 
 
 ### Field op node
-DoIf field op node is considered to always be a leaf in the DoIf tree.
-It contains operation to be checked on the field value, the field name to extract data and
-the values to check against.
+DoIf field op node is considered to always be a leaf in the DoIf tree. It checks byte representation of the value by the given field path.
+Array and object values are considered as not matched since encoding them to bytes leads towards large CPU and memory consumption.
 
 Params:
   - `op` - value from field operations list. Required.
-  - `field` - name of the field to apply operation. Required.
+  - `field` - path to field in JSON tree. If empty, root value is checked. Path to nested fields is delimited by dots `"."`, e.g. `"field.subfield"` for `{"field": {"subfield": "val"}}`.
+  If the field name contains dots in it they should be shielded with `"\"`, e.g. `"exception\.type"` for `{"exception.type": "example"}`. Default empty.
   - `values` - list of values to check field. Required non-empty.
   - `case_sensitive` - flag indicating whether checks are performed in case sensitive way. Default `true`.
     Note: case insensitive checks can cause CPU and memory overhead since every field value will be converted to lower letters.
