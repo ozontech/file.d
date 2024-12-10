@@ -2,6 +2,7 @@ pipelines:
   http_file:
     input:
       type: http
+      address: ":9201"
       meta:
         remote_addr: "{{ .remote_addr }}"
         user_agent: '{{ index (index .request.Header "User-Agent") 0}}'

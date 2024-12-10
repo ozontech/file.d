@@ -107,6 +107,15 @@ func TestE2EStabilityWorkCase(t *testing.T) {
 			cfgPath: "./file_file/config.yml",
 		},
 		{
+			name: "http_file",
+			e2eTest: &http_file.Config{
+				Count:   10,
+				Lines:   500,
+				RetTime: "1s",
+			},
+			cfgPath: "./http_file/config.yml",
+		},
+		{
 			name: "kafka_file",
 			e2eTest: &kafka_file.Config{
 				Topics:    []string{"quickstart"},
