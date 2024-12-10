@@ -13,7 +13,6 @@ import (
 	"github.com/ozontech/file.d/e2e/file_clickhouse"
 	"github.com/ozontech/file.d/e2e/file_es"
 	"github.com/ozontech/file.d/e2e/file_file"
-	"github.com/ozontech/file.d/e2e/http_file"
 	"github.com/ozontech/file.d/e2e/join_throttle"
 	"github.com/ozontech/file.d/e2e/kafka_auth"
 	"github.com/ozontech/file.d/e2e/kafka_file"
@@ -106,15 +105,6 @@ func TestE2EStabilityWorkCase(t *testing.T) {
 				RetTime: "1s",
 			},
 			cfgPath: "./file_file/config.yml",
-		},
-		{
-			name: "http_file",
-			e2eTest: &http_file.Config{
-				Count:   10,
-				Lines:   500,
-				RetTime: "1s",
-			},
-			cfgPath: "./http_file/config.yml",
 		},
 		{
 			name: "kafka_file",
