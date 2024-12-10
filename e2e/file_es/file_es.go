@@ -102,12 +102,11 @@ func (c *Config) deleteAll() error {
 		return fmt.Errorf("read all: %w", err)
 	}
 
-	switch resp.StatusCode {
-	case http.StatusOK, http.StatusNotFound:
+	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("wrong status code; status = %d; body = %s", resp.StatusCode, respBody)
-	default:
-		return nil
 	}
+
+	return nil
 }
 
 type searchResp struct {
