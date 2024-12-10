@@ -1,5 +1,5 @@
 pipelines:
-  test_do_if:
+  file_es:
     input:
       type: file
     output:
