@@ -81,7 +81,7 @@ func (c *Config) Validate(t *testing.T) {
 func (c *Config) deleteAll() error {
 	client := &http.Client{Timeout: 3 * time.Second}
 
-	req, err := http.NewRequest(http.MethodDelete, "http://127.0.0.1:9300/seq-db", http.NoBody)
+	req, err := http.NewRequest(http.MethodDelete, "http://127.0.0.1:9200/seq-db", http.NoBody)
 	if err != nil {
 		return fmt.Errorf("create request: %w", err)
 	}
@@ -120,7 +120,7 @@ type searchResp struct {
 func (c *Config) getEventsCount() (int, error) {
 	client := &http.Client{Timeout: 3 * time.Second}
 
-	req, err := http.NewRequest(http.MethodGet, "http://127.0.0.1:9300/_search", http.NoBody)
+	req, err := http.NewRequest(http.MethodGet, "http://127.0.0.1:9200/_search", http.NoBody)
 	if err != nil {
 		return 0, fmt.Errorf("create request: %w", err)
 	}
