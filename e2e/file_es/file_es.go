@@ -26,9 +26,6 @@ type Config struct {
 func (c *Config) Configure(t *testing.T, conf *cfg.Config, pipelineName string) {
 	c.ctx, c.cancel = context.WithTimeout(context.Background(), time.Minute*2)
 
-	err := c.deleteAll()
-	require.NoError(t, err)
-
 	c.inputDir = t.TempDir()
 	offsetsDir := t.TempDir()
 
@@ -76,6 +73,9 @@ func (c *Config) Validate(t *testing.T) {
 	count, err := c.getEventsCount()
 	require.NoError(t, err)
 	require.Equal(t, n, count)
+
+	err = c.deleteAll()
+	require.NoError(t, err)
 }
 
 func (c *Config) deleteAll() error {
