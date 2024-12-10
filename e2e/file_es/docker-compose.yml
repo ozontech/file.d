@@ -6,7 +6,7 @@ services:
     volumes:
       - esdata01:/usr/share/elasticsearch/data
     ports:
-      - ${ES_PORT}:9200
+      - ${ES_PORT}:9300
     environment:
       - node.name=es01
       - cluster.name=${CLUSTER_NAME}
@@ -26,7 +26,7 @@ services:
       test:
         [
           "CMD-SHELL",
-          "curl -s https://localhost:9200 | grep -q 'missing authentication credentials'",
+          "curl -s https://localhost:9300 | grep -q 'missing authentication credentials'",
         ]
       interval: 10s
       timeout: 10s
