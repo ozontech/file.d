@@ -37,6 +37,9 @@ func TestMultilineAction_Do(t *testing.T) {
 		Name       string
 		EventParts []string
 
+		CutOffEventByLimit    bool
+		CutOffEventByLimitMsg string
+
 		ActionResults []pipeline.ActionResult
 		ExpectedRoot  string
 	}{
@@ -65,6 +68,21 @@ func TestMultilineAction_Do(t *testing.T) {
 			ActionResults: []pipeline.ActionResult{pipeline.ActionCollapse, pipeline.ActionCollapse, pipeline.ActionDiscard},
 			ExpectedRoot:  wrapK8sInfo(`event\n`, item, meta.SelfNodeName),
 		},
+		{
+			Name:               "must cutoff long event",
+			EventParts:         []string{`{"log": "some "}`, `{"log": "other long "}`, `{"log":"long long"}`, `{"log": "event\n"}`},
+			CutOffEventByLimit: true,
+			ActionResults:      []pipeline.ActionResult{pipeline.ActionCollapse, pipeline.ActionCollapse, pipeline.ActionCollapse, pipeline.ActionPass},
+			ExpectedRoot:       wrapK8sInfo(`some other long l\n`, item, meta.SelfNodeName),
+		},
+		{
+			Name:                  "must cutoff long event with msg",
+			EventParts:            []string{`{"log": "some "}`, `{"log": "other long "}`, `{"log":"long long"}`, `{"log": "event\n"}`},
+			CutOffEventByLimit:    true,
+			CutOffEventByLimitMsg: "<cutoff>",
+			ActionResults:         []pipeline.ActionResult{pipeline.ActionCollapse, pipeline.ActionCollapse, pipeline.ActionCollapse, pipeline.ActionPass},
+			ExpectedRoot:          wrapK8sInfo(`some other long l<cutoff>\n`, item, meta.SelfNodeName),
+		},
 	}
 	root := insaneJSON.Spawn()
 	defer insaneJSON.Release(root)
@@ -72,6 +90,9 @@ func TestMultilineAction_Do(t *testing.T) {
 	for _, tc := range tcs {
 		t.Run(tc.Name, func(t *testing.T) {
 			for i, part := range tc.EventParts {
+				plugin.cutOffEventByLimit = tc.CutOffEventByLimit
+				plugin.cutOffEventByLimitMsg = tc.CutOffEventByLimitMsg
+
 				require.NoError(t, root.DecodeString(part))
 				event := &pipeline.Event{Root: root, SourceName: filename, Size: len(part)}
 
