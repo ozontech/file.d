@@ -70,7 +70,7 @@ func addEvent(f *os.File, s string) error {
 }
 
 func (c *Config) Validate(t *testing.T) {
-	time.Sleep(1 * time.Second)
+	time.Sleep(5 * time.Second)
 
 	count, err := c.getEventsCount()
 	require.NoError(t, err)
