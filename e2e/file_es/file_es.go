@@ -83,7 +83,7 @@ func (c *Config) Validate(t *testing.T) {
 func (c *Config) deleteAll() error {
 	client := &http.Client{Timeout: 3 * time.Second}
 
-	req, err := http.NewRequest(http.MethodDelete, "http://127.0.0.1:9200/seq-db", http.NoBody)
+	req, err := http.NewRequest(http.MethodDelete, "http://127.0.0.1:9200/index_name", http.NoBody)
 	if err != nil {
 		return fmt.Errorf("create request: %w", err)
 	}

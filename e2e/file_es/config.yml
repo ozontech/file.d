@@ -11,7 +11,7 @@ pipelines:
         - http://localhost:9200
       fatal_on_failed_insert: true
       strict: false
-      index_format: seq-db
+      index_format: index_name
       retry: 1
       retention: 1s
       workers_count: 1
