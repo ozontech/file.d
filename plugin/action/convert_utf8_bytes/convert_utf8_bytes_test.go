@@ -149,7 +149,7 @@ func TestConvertUTF8Bytes(t *testing.T) {
 				wg.Done()
 			})
 
-			input.In(0, "test.log", 0, []byte(tt.in))
+			input.In(0, "test.log", test.Offset(0), []byte(tt.in))
 
 			wg.Wait()
 			p.Stop()

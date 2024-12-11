@@ -23,7 +23,7 @@ type worker struct {
 
 type inputer interface {
 	// In processes event and returns it seq number.
-	In(sourceID pipeline.SourceID, sourceName string, offset int64, data []byte, isNewSource bool, meta metadata.MetaData) uint64
+	In(sourceID pipeline.SourceID, sourceName string, offset pipeline.Offsets, data []byte, isNewSource bool, meta metadata.MetaData) uint64
 	IncReadOps()
 	IncMaxEventSizeExceeded(lvs ...string)
 }
@@ -55,6 +55,7 @@ func (w *worker) work(controller inputer, jobProvider *jobProvider, readBufferSi
 		sourceName := job.filename
 		skipLine := job.shouldSkip.Load()
 		lastOffset := job.curOffset
+		offsets := job.offsets
 		if job.symlink != "" {
 			sourceName = job.symlink
 		}
@@ -140,7 +141,7 @@ func (w *worker) work(controller inputer, jobProvider *jobProvider, readBufferSi
 						}
 					}
 
-					job.lastEventSeq = controller.In(sourceID, sourceName, lastOffset+scanned, inBuf, isVirgin, metadataInfo)
+					job.lastEventSeq = controller.In(sourceID, sourceName, Offset{lastOffset + scanned, offsets}, inBuf, isVirgin, metadataInfo)
 				}
 				// restore the line buffer
 				accumBuf = accumBuf[:0]
@@ -246,3 +247,20 @@ func (m metaInformation) GetData() map[string]any {
 
 **`offset`**
 }*/
+
+type Offset struct {
+	current int64
+	offsets sliceMap
+}
+
+func (o Offset) Current() int64 {
+	return o.current
+}
+
+func (o Offset) ByStream(stream string) int64 {
+	offset, found := o.offsets.get(pipeline.StreamName(stream))
+	if !found {
+		return -1
+	}
+	return offset
+}

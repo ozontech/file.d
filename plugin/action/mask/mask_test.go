@@ -826,7 +826,7 @@ func TestPlugin(t *testing.T) {
 			})
 
 			for _, in := range s.input {
-				input.In(0, "test.log", 0, []byte(in))
+				input.In(0, "test.log", test.Offset(0), []byte(in))
 			}
 
 			wg.Wait()
@@ -899,7 +899,7 @@ func TestWithEmptyRegex(t *testing.T) {
 			})
 
 			for _, in := range s.input {
-				input.In(0, "test.log", 0, []byte(in))
+				input.In(0, "test.log", test.Offset(0), []byte(in))
 			}
 
 			wg.Wait()
@@ -1090,7 +1090,7 @@ func TestPluginWithComplexMasks(t *testing.T) {
 			})
 
 			for _, in := range s.input {
-				input.In(0, "test.log", 0, []byte(in))
+				input.In(0, "test.log", test.Offset(0), []byte(in))
 			}
 
 			wg.Wait()

@@ -50,7 +50,7 @@ const (
 type finalizeFn = func(event *Event, notifyInput bool, backEvent bool)
 
 type InputPluginController interface {
-	In(sourceID SourceID, sourceName string, offset int64, data []byte, isNewSource bool, meta metadata.MetaData) uint64
+	In(sourceID SourceID, sourceName string, offset Offsets, data []byte, isNewSource bool, meta metadata.MetaData) uint64
 	UseSpread()                            // don't use stream field and spread all events across all processors
 	DisableStreams()                       // don't use stream field
 	SuggestDecoder(t decoder.Type)         // set decoder type if pipeline uses "auto" value for decoder
@@ -412,8 +412,13 @@ func (p *Pipeline) GetOutput() OutputPlugin {
 	return p.output
 }
 
+type Offsets interface {
+	Current() int64
+	ByStream(stream string) int64
+}
+
 // In decodes message and passes it to event stream.
-func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes []byte, isNewSource bool, meta metadata.MetaData) (seqID uint64) {
+func (p *Pipeline) In(sourceID SourceID, sourceName string, offset Offsets, bytes []byte, isNewSource bool, meta metadata.MetaData) (seqID uint64) {
 	// don't process mud.
 	var ok bool
 	bytes, ok = p.checkInputBytes(bytes, sourceName, meta)
@@ -443,7 +448,7 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 		row, err = decoder.DecodeCRI(bytes)
 		if err != nil {
 			p.wrongEventCRIFormatMetric.Inc()
-			p.Error(fmt.Sprintf("wrong cri format offset=%d, length=%d, err=%s, source=%d:%s, cri=%s", offset, length, err.Error(), sourceID, sourceName, bytes))
+			p.Error(fmt.Sprintf("wrong cri format offset=%d, length=%d, err=%s, source=%d:%s, cri=%s", offset.Current(), length, err.Error(), sourceID, sourceName, bytes))
 			return EventSeqIDError
 		}
 	}
@@ -457,6 +462,13 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 	// For example, for containerd this setting is called max_container_log_line_size
 	// https://github.com/containerd/containerd/blob/f7f2be732159a411eae46b78bfdb479b133a823b/pkg/cri/config/config.go#L263-L266
 	if !row.IsPartial && p.settings.AntispamThreshold > 0 {
+		streamOffset := offset.ByStream(string(row.Stream))
+		currentOffset := offset.Current()
+
+		if streamOffset > 0 && currentOffset < streamOffset {
+			return EventSeqIDError
+		}
+
 		var checkSourceID any
 		var checkSourceName string
 		if p.settings.SourceNameMetaField == "" {
@@ -524,7 +536,7 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 		}
 
 		p.logger.Log(level, "wrong log format", zap.Error(err),
-			zap.Int64("offset", offset),
+			zap.Int64("offset", offset.Current()),
 			zap.Int("length", length),
 			zap.Uint64("source", uint64(sourceID)),
 			zap.String("source_name", sourceName),
@@ -552,7 +564,7 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 		}
 	}
 
-	event.Offset = offset
+	event.Offset = offset.Current()
 	event.SourceID = sourceID
 	event.SourceName = sourceName
 	event.streamName = DefaultStreamName
