@@ -543,10 +543,11 @@ func (p *Plugin) decodeNginxError(root *insaneJSON.Root, node *insaneJSON.Node) 
 }
 
 func (p *Plugin) decodeProtobuf(root *insaneJSON.Root, node *insaneJSON.Node, buf []byte) {
-	t := insaneJSON.Spawn()
-	defer insaneJSON.Release(t)
-
-	err := p.decoder.DecodeToJson(t, node.AsBytes())
+	jsonRaw, err := p.decoder.Decode(node.AsBytes())
+	if p.checkError(err, node) {
+		return
+	}
+	t, err := root.DecodeBytesAdditional(jsonRaw.([]byte))
 	if p.checkError(err, node) {
 		return
 	}
@@ -565,7 +566,7 @@ func (p *Plugin) decodeProtobuf(root *insaneJSON.Root, node *insaneJSON.Node, bu
 		node.Suicide()
 	}
 
-	root.MergeWith(t.Node)
+	root.MergeWith(t)
 }
 
 func (p *Plugin) addFieldPrefix(root *insaneJSON.Root, key string, val []byte) {
