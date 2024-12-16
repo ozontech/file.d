@@ -30,7 +30,7 @@ func TestModify(t *testing.T) {
 		wg.Done()
 	})
 
-	input.In(0, "test.log", 0, []byte(`{"existing_field":"existing_value","my_object":{"field":{"subfield":"subfield_value"}}}`))
+	input.In(0, "test.log", test.Offset(0), []byte(`{"existing_field":"existing_value","my_object":{"field":{"subfield":"subfield_value"}}}`))
 
 	wg.Wait()
 	p.Stop()
@@ -79,7 +79,7 @@ func TestModifyRegex(t *testing.T) {
 	wg.Add(len(testEvents))
 
 	for _, te := range testEvents {
-		input.In(0, "test.log", 0, te.in)
+		input.In(0, "test.log", test.Offset(0), te.in)
 	}
 
 	wg.Wait()
@@ -136,7 +136,7 @@ func TestModifyTrim(t *testing.T) {
 	wg.Add(len(testEvents))
 
 	for _, te := range testEvents {
-		input.In(0, "test.log", 0, te.in)
+		input.In(0, "test.log", test.Offset(0), te.in)
 	}
 
 	wg.Wait()

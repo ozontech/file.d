@@ -21,7 +21,7 @@ func SendPack(t *testing.T, p *pipeline.Pipeline, msgs []Msg) int64 {
 	t.Helper()
 	var sent int64 = 0
 	for _, m := range msgs {
-		_ = p.In(0, "test", 0, m, false, nil)
+		_ = p.In(0, "test", Offset(0), m, false, nil)
 		// count \n
 		sent += int64(len(m)) + 1
 	}

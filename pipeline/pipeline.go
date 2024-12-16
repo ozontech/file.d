@@ -50,7 +50,7 @@ const (
 type finalizeFn = func(event *Event, notifyInput bool, backEvent bool)
 
 type InputPluginController interface {
-	In(sourceID SourceID, sourceName string, offset int64, data []byte, isNewSource bool, meta metadata.MetaData) uint64
+	In(sourceID SourceID, sourceName string, offset Offsets, data []byte, isNewSource bool, meta metadata.MetaData) uint64
 	UseSpread()                            // don't use stream field and spread all events across all processors
 	DisableStreams()                       // don't use stream field
 	SuggestDecoder(t decoder.Type)         // set decoder type if pipeline uses "auto" value for decoder
@@ -74,6 +74,15 @@ type (
 	StreamName string
 )
 
+type pool interface {
+	get(size int) *Event
+	back(event *Event)
+	dump() string
+	inUse() int64
+	stop()
+	waiters() int64
+}
+
 type Pipeline struct {
 	Name     string
 	started  bool
@@ -84,7 +93,7 @@ type Pipeline struct {
 	decoder              decoder.Decoder
 	initDecoderOnce      *sync.Once
 
-	eventPool *eventPool
+	eventPool pool
 	streamer  *streamer
 
 	useSpread      bool
@@ -153,7 +162,15 @@ type Settings struct {
 	StreamField           string
 	IsStrict              bool
 	MetricHoldDuration    time.Duration
+	Pool                  PoolType
 }
+
+type PoolType string
+
+const (
+	PoolTypeStd    PoolType = "std"
+	PoolTypeLowMem PoolType = "low_memory"
+)
 
 // New creates new pipeline. Consider using `SetupHTTPHandlers` next.
 func New(name string, settings *Settings, registry *prometheus.Registry) *Pipeline {
@@ -161,6 +178,17 @@ func New(name string, settings *Settings, registry *prometheus.Registry) *Pipeli
 
 	lg := logger.Instance.Named(name).Desugar()
 	metricHolder := metric.NewHolder(settings.MetricHoldDuration)
+
+	var eventPool pool
+	switch settings.Pool {
+	case PoolTypeStd, "":
+		eventPool = newEventPool(settings.Capacity, settings.AvgEventSize)
+	case PoolTypeLowMem:
+		insaneJSON.StartNodePoolSize = 16
+		eventPool = newLowMemoryEventPool(settings.Capacity)
+	default:
+		logger.Fatal("unknown pool type", zap.String("pool", string(settings.Pool)))
+	}
 
 	pipeline := &Pipeline{
 		Name:           name,
@@ -179,7 +207,7 @@ func New(name string, settings *Settings, registry *prometheus.Registry) *Pipeli
 		},
 		metricHolder: metricHolder,
 		streamer:     newStreamer(settings.EventTimeout),
-		eventPool:    newEventPool(settings.Capacity, settings.AvgEventSize),
+		eventPool:    eventPool,
 		antispamer: antispam.NewAntispammer(&antispam.Options{
 			MaintenanceInterval: settings.MaintenanceInterval,
 			Threshold:           settings.AntispamThreshold,
@@ -384,8 +412,13 @@ func (p *Pipeline) GetOutput() OutputPlugin {
 	return p.output
 }
 
+type Offsets interface {
+	Current() int64
+	ByStream(stream string) int64
+}
+
 // In decodes message and passes it to event stream.
-func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes []byte, isNewSource bool, meta metadata.MetaData) (seqID uint64) {
+func (p *Pipeline) In(sourceID SourceID, sourceName string, offset Offsets, bytes []byte, isNewSource bool, meta metadata.MetaData) (seqID uint64) {
 	// don't process mud.
 	var ok bool
 	bytes, ok = p.checkInputBytes(bytes, sourceName, meta)
@@ -415,7 +448,7 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 		row, err = decoder.DecodeCRI(bytes)
 		if err != nil {
 			p.wrongEventCRIFormatMetric.Inc()
-			p.Error(fmt.Sprintf("wrong cri format offset=%d, length=%d, err=%s, source=%d:%s, cri=%s", offset, length, err.Error(), sourceID, sourceName, bytes))
+			p.Error(fmt.Sprintf("wrong cri format offset=%d, length=%d, err=%s, source=%d:%s, cri=%s", offset.Current(), length, err.Error(), sourceID, sourceName, bytes))
 			return EventSeqIDError
 		}
 	}
@@ -429,6 +462,13 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 	// For example, for containerd this setting is called max_container_log_line_size
 	// https://github.com/containerd/containerd/blob/f7f2be732159a411eae46b78bfdb479b133a823b/pkg/cri/config/config.go#L263-L266
 	if !row.IsPartial && p.settings.AntispamThreshold > 0 {
+		streamOffset := offset.ByStream(string(row.Stream))
+		currentOffset := offset.Current()
+
+		if streamOffset > 0 && currentOffset < streamOffset {
+			return EventSeqIDError
+		}
+
 		var checkSourceID any
 		var checkSourceName string
 		if p.settings.SourceNameMetaField == "" {
@@ -463,7 +503,7 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 	p.inputSize.Add(int64(length))
 
 	now := time.Now()
-	event := p.eventPool.get()
+	event := p.eventPool.get(len(bytes))
 	p.eventPoolLatency.Observe(time.Since(now).Seconds())
 
 	err = nil
@@ -496,7 +536,7 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 		}
 
 		p.logger.Log(level, "wrong log format", zap.Error(err),
-			zap.Int64("offset", offset),
+			zap.Int64("offset", offset.Current()),
 			zap.Int("length", length),
 			zap.Uint64("source", uint64(sourceID)),
 			zap.String("source_name", sourceName),
@@ -524,11 +564,10 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 		}
 	}
 
-	event.Offset = offset
+	event.Offset = offset.Current()
 	event.SourceID = sourceID
 	event.SourceName = sourceName
 	event.streamName = DefaultStreamName
-	event.Size = len(bytes)
 
 	return p.streamEvent(event)
 }
@@ -794,7 +833,7 @@ func (p *Pipeline) logChanges(myDeltas *deltas) {
 	if ce := p.logger.Check(zapcore.InfoLevel, "pipeline stats"); ce != nil {
 		inputSize := p.inputSize.Load()
 		inputEvents := p.inputEvents.Load()
-		inUseEvents := p.eventPool.inUseEvents.Load()
+		inUseEvents := p.eventPool.inUse()
 
 		interval := p.settings.MaintenanceInterval
 		rate := int(myDeltas.deltaInputEvents * float64(time.Second) / float64(interval))
@@ -858,7 +897,7 @@ func (p *Pipeline) maintenance() {
 		p.metricHolder.Maintenance()
 
 		myDeltas := p.incMetrics(inputEvents, inputSize, outputEvents, outputSize, readOps)
-		p.setMetrics(p.eventPool.inUseEvents.Load())
+		p.setMetrics(p.eventPool.inUse())
 		p.logChanges(myDeltas)
 	}
 }

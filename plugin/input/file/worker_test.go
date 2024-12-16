@@ -28,7 +28,7 @@ func (i *inputerMock) IncReadOps() {}
 
 func (i *inputerMock) IncMaxEventSizeExceeded(lvs ...string) {}
 
-func (i *inputerMock) In(_ pipeline.SourceID, _ string, _ int64, data []byte, _ bool, _ metadata.MetaData) uint64 {
+func (i *inputerMock) In(_ pipeline.SourceID, _ string, _ pipeline.Offsets, data []byte, _ bool, _ metadata.MetaData) uint64 {
 	i.gotData = append(i.gotData, string(data))
 	return 0
 }
@@ -451,5 +451,32 @@ func TestGetData(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestOffset(t *testing.T) {
+	offsets := sliceFromMap(map[pipeline.StreamName]int64{
+		"stream1": 100,
+		"stream2": 200,
+	})
+
+	offset := Offset{
+		current: 42,
+		offsets: offsets,
+	}
+
+	// Test Current method
+	if got := offset.Current(); got != 42 {
+		t.Errorf("Current() = %v; want 42", got)
+	}
+
+	// Test ByStream method for existing stream
+	if got := offset.ByStream("stream1"); got != 100 {
+		t.Errorf("ByStream('stream1') = %v; want 100", got)
+	}
+
+	// Test ByStream method for non-existing stream
+	if got := offset.ByStream("stream3"); got != -1 {
+		t.Errorf("ByStream('stream3') = %v; want -1", got)
 	}
 }

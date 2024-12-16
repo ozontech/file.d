@@ -146,8 +146,18 @@ func (pc *pconsumer) consume() {
 						pc.logger.Error("can't render meta data", zap.Error(err))
 					}
 				}
-				_ = pc.controller.In(sourceID, "kafka", offset, message.Value, true, metadataInfo)
+				_ = pc.controller.In(sourceID, "kafka", Offset(offset), message.Value, true, metadataInfo)
 			}
 		}
 	}
+}
+
+type Offset int64
+
+func (o Offset) Current() int64 {
+	return int64(o)
+}
+
+func (o Offset) ByStream(_ string) int64 {
+	panic("unimplemented")
 }

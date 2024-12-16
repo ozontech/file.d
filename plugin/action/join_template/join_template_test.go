@@ -447,7 +447,7 @@ func TestSimpleJoin(t *testing.T) {
 
 			for i := 0; i < tt.iterations; i++ {
 				for m, line := range lines {
-					input.In(0, "test.log", int64(i*10000+m), []byte(line))
+					input.In(0, "test.log", test.Offset(int64(i*10000+m)), []byte(line))
 				}
 			}
 
@@ -534,7 +534,7 @@ func TestJoinAfterNilNode(t *testing.T) {
 
 			for i := 0; i < tt.iterations; i++ {
 				for m, line := range lines {
-					input.In(0, "test.log", int64(i*10000+m), []byte(line))
+					input.In(0, "test.log", test.Offset(int64(i*10000+m)), []byte(line))
 				}
 			}
 
