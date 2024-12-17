@@ -440,6 +440,25 @@ func TestGetData(t *testing.T) {
 				"container_id":   "4e0301b633eaa2bfdcafdeba59ba0c72a3815911a6a820bf273534b0f32d98e0",
 			},
 		},
+		{
+			name: "No k8s data",
+			metaInfo: metaInformation{
+				filename: "/container.log",
+				symlink:  "/k8s-logs/container.log",
+				inode:    12345,
+				offset:   0,
+			},
+			expected: map[string]any{
+				"filename":       "/container.log",
+				"symlink":        "/k8s-logs/container.log",
+				"inode":          uint64(12345),
+				"offset":         int64(0),
+				"pod_name":       nil,
+				"namespace":      nil,
+				"container_name": nil,
+				"container_id":   nil,
+			},
+		},
 	}
 
 	for _, tt := range tests {

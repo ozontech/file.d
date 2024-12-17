@@ -225,17 +225,28 @@ func newMetaInformation(filename, symlink string, inode inodeID, offset int64, p
 }
 
 func (m metaInformation) GetData() map[string]any {
-	return map[string]any{
-		"filename":       m.filename,
-		"symlink":        m.symlink,
-		"inode":          m.inode,
-		"offset":         m.offset,
-		"pod_name":       m.k8sMetadata.PodName,
-		"namespace":      m.k8sMetadata.Namespace,
-		"container_name": m.k8sMetadata.ContainerName,
-		"container_id":   m.k8sMetadata.ContainerID,
-		"pod":            m.k8sMetadata.Pod,
+	data := map[string]any{
+		"filename": m.filename,
+		"symlink":  m.symlink,
+		"inode":    m.inode,
+		"offset":   m.offset,
 	}
+
+	if m.k8sMetadata != nil {
+		data["pod_name"] = m.k8sMetadata.PodName
+		data["namespace"] = m.k8sMetadata.Namespace
+		data["container_name"] = m.k8sMetadata.ContainerName
+		data["container_id"] = m.k8sMetadata.ContainerID
+		data["pod"] = m.k8sMetadata.Pod
+	} else {
+		data["pod_name"] = nil
+		data["namespace"] = nil
+		data["container_name"] = nil
+		data["container_id"] = nil
+		data["pod"] = nil
+	}
+
+	return data
 }
 
 /*{ meta-params
