@@ -56,6 +56,7 @@ func TestCheckInputBytes(t *testing.T) {
 		pipelineSettings *Settings
 		input            []byte
 		want             []byte
+		wantCutoff       bool
 		wantOk           bool
 	}{
 		{
@@ -111,9 +112,10 @@ func TestCheckInputBytes(t *testing.T) {
 				MaxEventSize:       10,
 				CutOffEventByLimit: true,
 			},
-			input:  []byte("some loooooooog"),
-			want:   []byte("some loooo"),
-			wantOk: true,
+			input:      []byte("some loooooooog"),
+			want:       []byte("some loooo"),
+			wantCutoff: true,
+			wantOk:     true,
 		},
 		{
 			name: "cutoff_newline",
@@ -124,23 +126,10 @@ func TestCheckInputBytes(t *testing.T) {
 				MaxEventSize:       10,
 				CutOffEventByLimit: true,
 			},
-			input:  []byte("some loooooooog\n"),
-			want:   []byte("some loooo\n"),
-			wantOk: true,
-		},
-		{
-			name: "cutoff_with_msg",
-			pipelineSettings: &Settings{
-				Capacity:              5,
-				Decoder:               "raw",
-				MetricHoldDuration:    DefaultMetricHoldDuration,
-				MaxEventSize:          10,
-				CutOffEventByLimit:    true,
-				CutOffEventByLimitMsg: "<cutoff>",
-			},
-			input:  []byte("some loooooooog\n"),
-			want:   []byte("some loooo<cutoff>\n"),
-			wantOk: true,
+			input:      []byte("some loooooooog\n"),
+			want:       []byte("some loooo\n"),
+			wantCutoff: true,
+			wantOk:     true,
 		},
 	}
 
@@ -148,8 +137,9 @@ func TestCheckInputBytes(t *testing.T) {
 		t.Run(tCase.name, func(t *testing.T) {
 			pipe := New("test_pipeline", tCase.pipelineSettings, prometheus.NewRegistry())
 
-			data, ok := pipe.checkInputBytes(tCase.input, "test", nil)
+			data, cutoff, ok := pipe.checkInputBytes(tCase.input, "test", nil)
 
+			assert.Equal(t, tCase.wantCutoff, cutoff)
 			assert.Equal(t, tCase.wantOk, ok)
 			if !tCase.wantOk {
 				return

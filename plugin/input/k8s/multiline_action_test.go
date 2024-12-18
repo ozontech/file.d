@@ -37,6 +37,9 @@ func TestMultilineAction_Do(t *testing.T) {
 		Name       string
 		EventParts []string
 
+		CutOffEventByLimit      bool
+		CutOffEventByLimitField string
+
 		ActionResults []pipeline.ActionResult
 		ExpectedRoot  string
 	}{
@@ -65,6 +68,24 @@ func TestMultilineAction_Do(t *testing.T) {
 			ActionResults: []pipeline.ActionResult{pipeline.ActionCollapse, pipeline.ActionCollapse, pipeline.ActionDiscard},
 			ExpectedRoot:  wrapK8sInfo(`event\n`, item, meta.SelfNodeName),
 		},
+		{
+			Name:               "must cutoff long event",
+			EventParts:         []string{`{"log": "some "}`, `{"log": "other long "}`, `{"log":"long long"}`, `{"log": "event\n"}`},
+			CutOffEventByLimit: true,
+			ActionResults:      []pipeline.ActionResult{pipeline.ActionCollapse, pipeline.ActionCollapse, pipeline.ActionCollapse, pipeline.ActionPass},
+			ExpectedRoot:       wrapK8sInfo(`some other long l\n`, item, meta.SelfNodeName),
+		},
+		{
+			Name:                    "must cutoff long event with field",
+			EventParts:              []string{`{"log": "some "}`, `{"log": "other long "}`, `{"log":"long long"}`, `{"log": "event\n"}`},
+			CutOffEventByLimit:      true,
+			CutOffEventByLimitField: "cutoff",
+			ActionResults:           []pipeline.ActionResult{pipeline.ActionCollapse, pipeline.ActionCollapse, pipeline.ActionCollapse, pipeline.ActionPass},
+			ExpectedRoot: fmt.Sprintf(
+				`{"log":"%s","k8s_pod":"%s","k8s_namespace":"%s","k8s_container":"%s","k8s_container_id":"%s","k8s_node":"%s","k8s_pod_label_allowed_label":"allowed_value","k8s_node_label_zone":"z34","cutoff":true}`,
+				`some other long l\n`, item.PodName, item.Namespace, item.ContainerName, item.ContainerID, meta.SelfNodeName,
+			),
+		},
 	}
 	root := insaneJSON.Spawn()
 	defer insaneJSON.Release(root)
@@ -72,6 +93,9 @@ func TestMultilineAction_Do(t *testing.T) {
 	for _, tc := range tcs {
 		t.Run(tc.Name, func(t *testing.T) {
 			for i, part := range tc.EventParts {
+				plugin.cutOffEventByLimit = tc.CutOffEventByLimit
+				plugin.cutOffEventByLimitField = tc.CutOffEventByLimitField
+
 				require.NoError(t, root.DecodeString(part))
 				event := &pipeline.Event{Root: root, SourceName: filename, Size: len(part)}
 

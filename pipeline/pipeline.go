@@ -24,23 +24,23 @@ import (
 )
 
 const (
-	DefaultAntispamThreshold     = 0
-	DefaultSourceNameMetaField   = ""
-	DefaultDecoder               = "auto"
-	DefaultIsStrict              = false
-	DefaultStreamField           = "stream"
-	DefaultCapacity              = 1024
-	DefaultAvgInputEventSize     = 4 * 1024
-	DefaultMaxInputEventSize     = 0
-	DefaultCutOffEventByLimit    = false
-	DefaultCutOffEventByLimitMsg = ""
-	DefaultJSONNodePoolSize      = 1024
-	DefaultMaintenanceInterval   = time.Second * 5
-	DefaultEventTimeout          = time.Second * 30
-	DefaultFieldValue            = "not_set"
-	DefaultStreamName            = StreamName("not_set")
-	DefaultMetricHoldDuration    = time.Minute * 30
-	DefaultMetaCacheSize         = 1024
+	DefaultAntispamThreshold       = 0
+	DefaultSourceNameMetaField     = ""
+	DefaultDecoder                 = "auto"
+	DefaultIsStrict                = false
+	DefaultStreamField             = "stream"
+	DefaultCapacity                = 1024
+	DefaultAvgInputEventSize       = 4 * 1024
+	DefaultMaxInputEventSize       = 0
+	DefaultCutOffEventByLimit      = false
+	DefaultCutOffEventByLimitField = ""
+	DefaultJSONNodePoolSize        = 1024
+	DefaultMaintenanceInterval     = time.Second * 5
+	DefaultEventTimeout            = time.Second * 30
+	DefaultFieldValue              = "not_set"
+	DefaultStreamName              = StreamName("not_set")
+	DefaultMetricHoldDuration      = time.Minute * 30
+	DefaultMetaCacheSize           = 1024
 
 	EventSeqIDError = uint64(0)
 
@@ -146,23 +146,23 @@ type Pipeline struct {
 }
 
 type Settings struct {
-	Decoder               string
-	DecoderParams         map[string]any
-	Capacity              int
-	MetaCacheSize         int
-	MaintenanceInterval   time.Duration
-	EventTimeout          time.Duration
-	AntispamThreshold     int
-	AntispamExceptions    antispam.Exceptions
-	SourceNameMetaField   string
-	AvgEventSize          int
-	MaxEventSize          int
-	CutOffEventByLimit    bool
-	CutOffEventByLimitMsg string
-	StreamField           string
-	IsStrict              bool
-	MetricHoldDuration    time.Duration
-	Pool                  PoolType
+	Decoder                 string
+	DecoderParams           map[string]any
+	Capacity                int
+	MetaCacheSize           int
+	MaintenanceInterval     time.Duration
+	EventTimeout            time.Duration
+	AntispamThreshold       int
+	AntispamExceptions      antispam.Exceptions
+	SourceNameMetaField     string
+	AvgEventSize            int
+	MaxEventSize            int
+	CutOffEventByLimit      bool
+	CutOffEventByLimitField string
+	StreamField             string
+	IsStrict                bool
+	MetricHoldDuration      time.Duration
+	Pool                    PoolType
 }
 
 type PoolType string
@@ -419,9 +419,12 @@ type Offsets interface {
 
 // In decodes message and passes it to event stream.
 func (p *Pipeline) In(sourceID SourceID, sourceName string, offset Offsets, bytes []byte, isNewSource bool, meta metadata.MetaData) (seqID uint64) {
+	var (
+		ok     bool
+		cutoff bool
+	)
 	// don't process mud.
-	var ok bool
-	bytes, ok = p.checkInputBytes(bytes, sourceName, meta)
+	bytes, cutoff, ok = p.checkInputBytes(bytes, sourceName, meta)
 	if !ok {
 		return EventSeqIDError
 	}
@@ -563,6 +566,9 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset Offsets, byte
 			}
 		}
 	}
+	if cutoff && p.settings.CutOffEventByLimitField != "" {
+		event.Root.AddFieldNoAlloc(event.Root, p.settings.CutOffEventByLimitField).MutateToBool(true)
+	}
 
 	event.Offset = offset.Current()
 	event.SourceID = sourceID
@@ -572,11 +578,11 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset Offsets, byte
 	return p.streamEvent(event)
 }
 
-func (p *Pipeline) checkInputBytes(bytes []byte, sourceName string, meta metadata.MetaData) ([]byte, bool) {
+func (p *Pipeline) checkInputBytes(bytes []byte, sourceName string, meta metadata.MetaData) ([]byte, bool, bool) {
 	length := len(bytes)
 
 	if length == 0 || (bytes[0] == '\n' && length == 1) {
-		return bytes, false
+		return bytes, false, false
 	}
 
 	if p.settings.MaxEventSize != 0 && length > p.settings.MaxEventSize {
@@ -587,17 +593,18 @@ func (p *Pipeline) checkInputBytes(bytes []byte, sourceName string, meta metadat
 		p.IncMaxEventSizeExceeded(source)
 
 		if !p.settings.CutOffEventByLimit {
-			return bytes, false
+			return bytes, false, false
 		}
 
 		wasNewLine := bytes[len(bytes)-1] == '\n'
-		bytes = append(bytes[:p.settings.MaxEventSize], p.settings.CutOffEventByLimitMsg...)
+		bytes = bytes[:p.settings.MaxEventSize]
 		if wasNewLine {
 			bytes = append(bytes, '\n')
 		}
+		return bytes, true, true
 	}
 
-	return bytes, true
+	return bytes, false, true
 }
 
 func (p *Pipeline) streamEvent(event *Event) uint64 {
