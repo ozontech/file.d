@@ -31,6 +31,7 @@
     - [decode](plugin/action/decode/README.md)
     - [discard](plugin/action/discard/README.md)
     - [flatten](plugin/action/flatten/README.md)
+    - [hash](plugin/action/hash/README.md)
     - [join](plugin/action/join/README.md)
     - [join_template](plugin/action/join_template/README.md)
     - [json_decode](plugin/action/json_decode/README.md)

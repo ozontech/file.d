@@ -165,6 +165,10 @@ pipelines:
 It transforms `{"animal":{"type":"cat","paws":4}}` into `{"pet_type":"b","pet_paws":"4"}`.
 
 [More details...](plugin/action/flatten/README.md)
+## hash
+...
+
+[More details...](plugin/action/hash/README.md)
 ## join
 It makes one big event from the sequence of the events.
 It is useful for assembling back together "exceptions" or "panics" if they were written line by line.
