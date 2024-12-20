@@ -23,7 +23,7 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 	avgInputEventSize := pipeline.DefaultAvgInputEventSize
 	maxInputEventSize := pipeline.DefaultMaxInputEventSize
 	cutOffEventByLimit := pipeline.DefaultCutOffEventByLimit
-	cutOffEventByLimitMsg := pipeline.DefaultCutOffEventByLimitMsg
+	cutOffEventByLimitField := pipeline.DefaultCutOffEventByLimitField
 	streamField := pipeline.DefaultStreamField
 	maintenanceInterval := pipeline.DefaultMaintenanceInterval
 	decoder := pipeline.DefaultDecoder
@@ -56,11 +56,7 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 		}
 
 		cutOffEventByLimit = settings.Get("cut_off_event_by_limit").MustBool()
-
-		cutOffEventByLimitMsg = settings.Get("cut_off_event_by_limit_message").MustString()
-		if maxInputEventSize > 0 && len(cutOffEventByLimitMsg) >= maxInputEventSize {
-			logger.Fatal("length of cut_off_event_by_limit_message must be less than max_event_size")
-		}
+		cutOffEventByLimitField = settings.Get("cut_off_event_by_limit_field").MustString()
 
 		str := settings.Get("decoder").MustString()
 		if str != "" {
@@ -124,23 +120,23 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 	}
 
 	return &pipeline.Settings{
-		Decoder:               decoder,
-		DecoderParams:         decoderParams,
-		Capacity:              capacity,
-		MetaCacheSize:         metaCacheSize,
-		AvgEventSize:          avgInputEventSize,
-		MaxEventSize:          maxInputEventSize,
-		CutOffEventByLimit:    cutOffEventByLimit,
-		CutOffEventByLimitMsg: cutOffEventByLimitMsg,
-		AntispamThreshold:     antispamThreshold,
-		AntispamExceptions:    antispamExceptions,
-		SourceNameMetaField:   sourceNameMetaField,
-		MaintenanceInterval:   maintenanceInterval,
-		EventTimeout:          eventTimeout,
-		StreamField:           streamField,
-		IsStrict:              isStrict,
-		MetricHoldDuration:    metricHoldDuration,
-		Pool:                  pipeline.PoolType(pool),
+		Decoder:                 decoder,
+		DecoderParams:           decoderParams,
+		Capacity:                capacity,
+		MetaCacheSize:           metaCacheSize,
+		AvgEventSize:            avgInputEventSize,
+		MaxEventSize:            maxInputEventSize,
+		CutOffEventByLimit:      cutOffEventByLimit,
+		CutOffEventByLimitField: cutOffEventByLimitField,
+		AntispamThreshold:       antispamThreshold,
+		AntispamExceptions:      antispamExceptions,
+		SourceNameMetaField:     sourceNameMetaField,
+		MaintenanceInterval:     maintenanceInterval,
+		EventTimeout:            eventTimeout,
+		StreamField:             streamField,
+		IsStrict:                isStrict,
+		MetricHoldDuration:      metricHoldDuration,
+		Pool:                    pipeline.PoolType(pool),
 	}
 }
 

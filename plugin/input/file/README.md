@@ -166,6 +166,4 @@ Dirs that don't meet this pattern will be ignored.
 **`symlink`**
 
 **`inode`**
-
-**`offset`**
 <br>*Generated using [__insane-doc__](https://github.com/vitkovskii/insane-doc)*
