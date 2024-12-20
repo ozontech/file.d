@@ -12,7 +12,7 @@ import (
 )
 
 func NewTestConfig(name string) *Config {
-	return NewConfigFromFile("../testdata/config/" + name)
+	return NewConfigFromFile([]string{"../testdata/config/" + name})
 }
 
 func TestSimple(t *testing.T) {
