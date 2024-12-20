@@ -69,6 +69,23 @@ func (w *worker) work(controller inputer, jobProvider *jobProvider, readBufferSi
 		readTotal := int64(0)
 		scanned := int64(0)
 
+		var metadataInfo metadata.MetaData
+		if w.metaTemplater != nil {
+			metaData, err := newMetaInformation(
+				job.filename,
+				job.symlink,
+				job.inode,
+				w.needK8sMeta,
+			)
+			if err != nil {
+				logger.Error("cannot parse meta info", zap.Error(err))
+			}
+			metadataInfo, err = w.metaTemplater.Render(metaData)
+			if err != nil {
+				logger.Error("cannot render meta info", zap.Error(err))
+			}
+		}
+
 		// append the data of the old work, this happens when the event was not completely written to the file
 		// for example: {"level": "info", "message": "some...
 		// the end of the message can be added later and will be read in this iteration
@@ -121,24 +138,6 @@ func (w *worker) work(controller inputer, jobProvider *jobProvider, readBufferSi
 					if len(accumBuf) != 0 {
 						accumBuf = append(accumBuf, line...)
 						inBuf = accumBuf
-					}
-
-					var metadataInfo metadata.MetaData
-					if w.metaTemplater != nil {
-						metaData, err := newMetaInformation(
-							job.filename,
-							job.symlink,
-							job.inode,
-							lastOffset+scanned,
-							w.needK8sMeta,
-						)
-						if err != nil {
-							logger.Error("cannot parse meta info", zap.Error(err))
-						}
-						metadataInfo, err = w.metaTemplater.Render(metaData)
-						if err != nil {
-							logger.Error("cannot render meta info", zap.Error(err))
-						}
 					}
 
 					job.lastEventSeq = controller.In(sourceID, sourceName, Offset{lastOffset + scanned, offsets}, inBuf, isVirgin, metadataInfo)
@@ -197,12 +196,11 @@ type metaInformation struct {
 	filename string
 	symlink  string
 	inode    uint64
-	offset   int64
 
 	k8sMetadata *k8s_meta.K8sMetaInformation
 }
 
-func newMetaInformation(filename, symlink string, inode inodeID, offset int64, parseK8sMeta bool) (metaInformation, error) {
+func newMetaInformation(filename, symlink string, inode inodeID, parseK8sMeta bool) (metaInformation, error) {
 	var metaData k8s_meta.K8sMetaInformation
 	var err error
 	if parseK8sMeta {
@@ -219,7 +217,6 @@ func newMetaInformation(filename, symlink string, inode inodeID, offset int64, p
 		filename:    filename,
 		symlink:     symlink,
 		inode:       uint64(inode),
-		offset:      offset,
 		k8sMetadata: &metaData,
 	}, nil
 }
@@ -229,7 +226,6 @@ func (m metaInformation) GetData() map[string]any {
 		"filename": m.filename,
 		"symlink":  m.symlink,
 		"inode":    m.inode,
-		"offset":   m.offset,
 	}
 
 	if m.k8sMetadata != nil {
@@ -255,8 +251,6 @@ func (m metaInformation) GetData() map[string]any {
 **`symlink`**
 
 **`inode`**
-
-**`offset`**
 }*/
 
 type Offset struct {
