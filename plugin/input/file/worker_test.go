@@ -281,7 +281,7 @@ func TestWorkerWorkMultiData(t *testing.T) {
 			job := &Job{
 				file:       f,
 				shouldSkip: *atomic.NewBool(false),
-				offsets:    sliceMap{},
+				offsets:    pipeline.SliceMap{},
 				mu:         &sync.Mutex{},
 			}
 
@@ -459,32 +459,5 @@ func TestGetData(t *testing.T) {
 				}
 			}
 		})
-	}
-}
-
-func TestOffset(t *testing.T) {
-	offsets := sliceFromMap(map[pipeline.StreamName]int64{
-		"stream1": 100,
-		"stream2": 200,
-	})
-
-	offset := Offset{
-		current: 42,
-		offsets: offsets,
-	}
-
-	// Test Current method
-	if got := offset.Current(); got != 42 {
-		t.Errorf("Current() = %v; want 42", got)
-	}
-
-	// Test ByStream method for existing stream
-	if got := offset.ByStream("stream1"); got != 100 {
-		t.Errorf("ByStream('stream1') = %v; want 100", got)
-	}
-
-	// Test ByStream method for non-existing stream
-	if got := offset.ByStream("stream3"); got != -1 {
-		t.Errorf("ByStream('stream3') = %v; want -1", got)
 	}
 }
