@@ -22,7 +22,7 @@ type Antispammer struct {
 	threshold           int
 	maintenanceInterval time.Duration
 	mu                  sync.RWMutex
-	sources             map[any]source
+	sources             map[string]source
 	exceptions          Exceptions
 
 	logger *zap.Logger
@@ -63,7 +63,7 @@ func NewAntispammer(o *Options) *Antispammer {
 		unbanIterations:     o.UnbanIterations,
 		threshold:           o.Threshold,
 		maintenanceInterval: o.MaintenanceInterval,
-		sources:             make(map[any]source),
+		sources:             make(map[string]source),
 		exceptions:          o.Exceptions,
 		logger:              o.Logger,
 		activeMetric: o.MetricsController.RegisterGauge("antispam_active",
@@ -82,7 +82,7 @@ func NewAntispammer(o *Options) *Antispammer {
 	return a
 }
 
-func (a *Antispammer) IsSpam(id any, name string, isNewSource bool, event []byte, timeEvent time.Time) bool {
+func (a *Antispammer) IsSpam(id string, name string, isNewSource bool, event []byte, timeEvent time.Time) bool {
 	if a.threshold <= 0 {
 		return false
 	}

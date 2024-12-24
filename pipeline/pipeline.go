@@ -467,10 +467,10 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offsets Offsets, byt
 			return EventSeqIDError
 		}
 
-		var checkSourceID any
+		var checkSourceID string
 		var checkSourceName string
 		if p.settings.SourceNameMetaField == "" {
-			checkSourceID = uint64(sourceID)
+			checkSourceID = strconv.FormatUint(uint64(sourceID), 10)
 			checkSourceName = sourceName
 		} else {
 			if val, ok := meta[p.settings.SourceNameMetaField]; ok {
@@ -479,7 +479,7 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offsets Offsets, byt
 				isNewSource = false
 			} else {
 				p.Error(fmt.Sprintf("source_name_meta_field %q does not exists in meta", p.settings.SourceNameMetaField))
-				checkSourceID = uint64(sourceID)
+				checkSourceID = strconv.FormatUint(uint64(sourceID), 10)
 				checkSourceName = sourceName
 			}
 		}
