@@ -170,7 +170,9 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	if p.config.FileConfig.Meta != nil {
 		fileMeta = p.config.FileConfig.Meta
 	}
-	setBuiltInMeta(fileMeta)
+	if !p.config.OnlyNode {
+		setBuiltInMeta(fileMeta)
+	}
 	for k, v := range metaConfig {
 		fileMeta[k] = v
 	}
