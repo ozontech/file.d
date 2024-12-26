@@ -31,6 +31,7 @@ require (
 	github.com/klauspost/compress v1.17.8
 	github.com/minio/minio-go v6.0.14+incompatible
 	github.com/ozontech/insane-json v0.1.9
+	github.com/pierrec/lz4/v4 v4.1.21
 	github.com/prometheus/client_golang v1.16.0
 	github.com/prometheus/procfs v0.10.1
 	github.com/rjeczalik/notify v0.9.3
@@ -118,7 +119,6 @@ require (
 	github.com/onsi/ginkgo v1.16.5 // indirect
 	github.com/opencontainers/runtime-spec v1.0.2 // indirect
 	github.com/pascaldekloe/name v1.0.1 // indirect
-	github.com/pierrec/lz4/v4 v4.1.21 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/prometheus/client_model v0.3.0 // indirect
 	github.com/prometheus/common v0.42.0 // indirect

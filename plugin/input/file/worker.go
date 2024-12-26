@@ -3,12 +3,15 @@ package file
 import (
 	"bytes"
 	"io"
+	"mime"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/pipeline/metadata"
 	k8s_meta "github.com/ozontech/file.d/plugin/input/k8s/meta"
+	"github.com/pierrec/lz4/v4"
 
 	"go.uber.org/zap"
 )
@@ -86,12 +89,22 @@ func (w *worker) work(controller inputer, jobProvider *jobProvider, readBufferSi
 			}
 		}
 
+		mimeType := getMimeType(file.Name())
+		var reader io.Reader
+
+		if mimeType == "application/x-lz4" {
+			lz4Reader := lz4.NewReader(file)
+			reader = lz4Reader
+		} else {
+			reader = file
+		}
+
 		// append the data of the old work, this happens when the event was not completely written to the file
 		// for example: {"level": "info", "message": "some...
 		// the end of the message can be added later and will be read in this iteration
 		accumBuf = append(accumBuf[:0], job.tail...)
 		for {
-			n, err := file.Read(readBuf)
+			n, err := reader.Read(readBuf)
 			controller.IncReadOps()
 			// if we read to end of file it's time to check truncation etc and process next job
 			if err == io.EOF || n == 0 {
@@ -171,6 +184,16 @@ func (w *worker) work(controller inputer, jobProvider *jobProvider, readBufferSi
 			jobProvider.continueJob(job)
 		}
 	}
+}
+
+func getMimeType(filename string) string {
+	ext := filepath.Ext(filename)
+	mimeType := mime.TypeByExtension(ext)
+	if mimeType == "" {
+		mimeType = "application/octet-stream"
+	}
+
+	return mimeType
 }
 
 func (w *worker) processEOF(file *os.File, job *Job, jobProvider *jobProvider, totalOffset int64) error {
