@@ -1,4 +1,4 @@
-package hash
+package normalize
 
 import (
 	"fmt"
@@ -7,16 +7,12 @@ import (
 	"strings"
 )
 
-type normalizer interface {
-	normalize(out, data []byte) []byte
-}
-
 type reNormalizer struct {
 	re       *regexp.Regexp
 	matchBuf []reMatch
 }
 
-func newReNormalizer() normalizer {
+func NewReNormalizer() Normalizer {
 	var sb strings.Builder
 	for _, r := range defaultRegexps {
 		sb.WriteString(fmt.Sprintf("(?P<%s>%s)|", r.name, r.re))
@@ -30,7 +26,7 @@ func newReNormalizer() normalizer {
 	}
 }
 
-func (n *reNormalizer) normalize(out, data []byte) []byte {
+func (n *reNormalizer) Normalize(out, data []byte) []byte {
 	out = out[:0]
 	n.matchBuf = n.matchBuf[:0]
 
@@ -68,10 +64,6 @@ func (n *reNormalizer) normalize(out, data []byte) []byte {
 	out = append(out, data[prevEnd:]...)
 
 	return out
-}
-
-func formatPlaceholder(v string) []byte {
-	return []byte(fmt.Sprintf("<%s>", v))
 }
 
 type reMatch struct {
@@ -160,7 +152,7 @@ var defaultRegexps = []namedRe{
 	},
 	{
 		name: "float",
-		re:   `-?\d+[\.,]\d+\b`,
+		re:   `-?\d+\.\d+\b`,
 	},
 	{
 		name: "int",

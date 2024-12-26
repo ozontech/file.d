@@ -166,7 +166,8 @@ It transforms `{"animal":{"type":"cat","paws":4}}` into `{"pet_type":"b","pet_pa
 
 [More details...](plugin/action/flatten/README.md)
 ## hash
-...
+It calculates the hash for one of the specified event fields and adds a new field with result in the event root.
+> Fields can be of any type except for an object and an array.
 
 [More details...](plugin/action/hash/README.md)
 ## join

@@ -1,4 +1,4 @@
-package hash
+package normalize
 
 import (
 	"testing"
@@ -6,7 +6,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestRegexpNormalizer(t *testing.T) {
+func TestReNormalizer(t *testing.T) {
 	tests := []struct {
 		name string
 
@@ -127,7 +127,7 @@ func TestRegexpNormalizer(t *testing.T) {
 			name: "float",
 			inputs: []string{
 				"some 1.23 here",
-				"some -4,56 here",
+				"some -4.56 here",
 			},
 			want: "some <float> here",
 		},
@@ -191,14 +191,14 @@ func TestRegexpNormalizer(t *testing.T) {
 		},
 	}
 
-	n := newReNormalizer()
+	n := NewReNormalizer()
 	out := make([]byte, 0)
 
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			for _, i := range tt.inputs {
-				out = n.normalize(out, []byte(i))
+				out = n.Normalize(out, []byte(i))
 				assert.Equal(t, []byte(tt.want), out, "wrong out with input=%q", i)
 			}
 		})
