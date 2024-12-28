@@ -2,6 +2,7 @@ package join_template
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -561,5 +562,26 @@ func TestJoinAfterNilNode(t *testing.T) {
 
 			assert.Equal(t, tt.expEvents, outEvents.Load(), "wrong out events count")
 		})
+	}
+}
+
+func BenchmarkOld(b *testing.B) {
+	template, ok := templates["go_panic"]
+	if !ok {
+		require.True(b, ok)
+	}
+
+	regExp := regexp.MustCompile(template.startRePat)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		regExp.MatchString(contentPanics)
+	}
+}
+
+func BenchmarkNew(b *testing.B) {
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		goPanicStartCheck(contentPanics)
 	}
 }
