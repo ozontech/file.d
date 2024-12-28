@@ -110,7 +110,7 @@ func (l *inMemoryLimiter) getDistrData(bucketIdx int, event *pipeline.Event) (st
 		return fieldVal, idx, limit
 	}
 
-	// For default distribution сheck in advance that we are within the limit.
+	// For default distribution check in advance that we are within the limit.
 	// If not, then try to steal reserve from the most free distribution.
 	val := int64(1)
 	if l.limit.kind == limitKindSize {
