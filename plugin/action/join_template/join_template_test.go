@@ -2,10 +2,12 @@ package join_template
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/ozontech/file.d/cfg"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/atomic"
@@ -561,5 +563,58 @@ func TestJoinAfterNilNode(t *testing.T) {
 
 			assert.Equal(t, tt.expEvents, outEvents.Load(), "wrong out events count")
 		})
+	}
+}
+
+func BenchmarkOld(b *testing.B) {
+	template, ok := templates["go_panic"]
+	if !ok {
+		require.True(b, ok)
+	}
+
+	regExp := regexp.MustCompile(template.startRePat)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		regExp.MatchString(contentPanics)
+	}
+}
+
+func BenchmarkNew(b *testing.B) {
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		goPanicStartCheck(contentPanics)
+	}
+}
+
+func TestSome(t *testing.T) {
+	template, ok := templates["go_panic"]
+	require.True(t, ok)
+
+	startRe, err := cfg.CompileRegex(template.startRePat)
+	require.NoError(t, err)
+
+	continueRe, err := cfg.CompileRegex(template.continueRePat)
+	require.NoError(t, err)
+
+	content := strings.ReplaceAll(contentPanics, "# ===next===\n", "")
+	lines := make([]string, 0)
+	for _, line := range strings.Split(content, "\n") {
+		if line == "" {
+			continue
+		}
+		lines = append(lines, line)
+	}
+
+	for _, line := range lines {
+		switch {
+		case startRe.MatchString(line):
+			require.True(t, goPanicStartCheck(line), line)
+		case continueRe.MatchString(line):
+			require.True(t, goPanicContinueCheck(line), line)
+		default:
+			require.False(t, goPanicStartCheck(line))
+			require.False(t, goPanicContinueCheck(line))
+		}
 	}
 }

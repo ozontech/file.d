@@ -84,17 +84,23 @@ type Config struct {
 	Field  cfg.FieldSelector `json:"field" required:"true" parse:"selector"` // *
 	Field_ []string
 
+	FastCheck bool
+
 	// > @3@4@5@6
 	// >
 	// > A regexp which will start the join sequence.
 	Start  cfg.Regexp `json:"start" required:"true" parse:"regexp"` // *
 	Start_ *regexp.Regexp
 
+	StartCheckFunc_ func(s string) bool
+
 	// > @3@4@5@6
 	// >
 	// > A regexp which will continue the join sequence.
 	Continue  cfg.Regexp `json:"continue" required:"true" parse:"regexp"` // *
 	Continue_ *regexp.Regexp
+
+	ContinueCheckFunc_ func(s string) bool
 
 	// > @3@4@5@6
 	// >
@@ -166,7 +172,11 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 
 	firstOK := false
 	if node.IsString() {
-		firstOK = p.config.Start_.MatchString(value)
+		if p.config.FastCheck {
+			firstOK = p.config.StartCheckFunc_(value)
+		} else {
+			firstOK = p.config.Start_.MatchString(value)
+		}
 	}
 
 	if firstOK {
@@ -181,7 +191,13 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	}
 
 	if p.isJoining {
-		nextOK := p.config.Continue_.MatchString(value)
+		nextOK := false
+		if p.config.FastCheck {
+			nextOK = p.config.ContinueCheckFunc_(value)
+		} else {
+			nextOK = p.config.Continue_.MatchString(value)
+		}
+
 		if p.negate {
 			nextOK = !nextOK
 		}
