@@ -105,7 +105,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 		Start_:       startRe,
 		Continue_:    continueRe,
 
-		FastCheck:          false,
+		FastCheck:          true,
 		StartCheckFunc_:    goPanicStartCheck,
 		ContinueCheckFunc_: goPanicContinueCheck,
 	}
@@ -181,8 +181,9 @@ func goPanicContinueCheck(s string) bool {
 		checkLineNumberAndFile(s) ||
 		checkCreatedBy(s) ||
 		strings.HasPrefix(s, "[signal") ||
-		strings.HasPrefix(s, "panic(0x") ||
-		strings.Contains(s, "panic:")
+		checkPanicAddress(s) ||
+		strings.Contains(s, "panic:") ||
+		checkMethodCall(s)
 }
 
 const lineSuffix = ".go:"
@@ -190,7 +191,7 @@ const lineSuffix = ".go:"
 // may be error: not only first occurrence counts
 func checkLineNumberAndFile(s string) bool {
 	i := strings.Index(s, lineSuffix)
-	if i != -1 {
+	if i == -1 {
 		return false
 	}
 
@@ -207,7 +208,7 @@ const checkCreatedBySubstr = "created by "
 
 func checkCreatedBy(s string) bool {
 	i := strings.Index(s, checkCreatedBySubstr)
-	if i != -1 {
+	if i == -1 {
 		return false
 	}
 
@@ -216,11 +217,17 @@ func checkCreatedBy(s string) bool {
 	return strings.IndexByte(s, '.') != -1
 }
 
-func isIdChar(c byte) bool {
+func isIDChar(c byte) bool {
 	isLowerCase := 'a' <= c && c <= 'z'
 	isUpperCase := 'A' <= c && c <= 'Z'
 	isDigit := '0' <= c && c <= '9'
 	return isLowerCase || isUpperCase || isDigit || c == '_'
+}
+
+func isIDCharNoDigit(c byte) bool {
+	isLowerCase := 'a' <= c && c <= 'z'
+	isUpperCase := 'A' <= c && c <= 'Z'
+	return isLowerCase || isUpperCase || c == '_'
 }
 
 func checkMethodCallIndex(s string, pos int) bool {
@@ -234,10 +241,45 @@ func checkMethodCallIndex(s string, pos int) bool {
 	}
 
 	right := i - 1
-	_ = right
+	left := right
+	for ; left >= 0 && isIDChar(s[left]); left-- {
+	}
 
-	panic("not ready")
+	if left == right {
+		return false
+	}
 
+	if left == -1 {
+		return false
+	}
+
+	if s[left] != '.' {
+		return false
+	}
+
+	left--
+	if left >= 0 && s[left] == ')' {
+		left--
+	}
+
+	return checkEndsWithClassName(s[:left])
+}
+
+func checkEndsWithClassName(s string) bool {
+	i := len(s) - 1
+	for ; i >= 0; i-- {
+		c := s[i]
+		if isIDCharNoDigit(c) {
+			break
+		}
+
+		isDigit := '0' <= c && c <= '9'
+		if !isDigit {
+			return false
+		}
+	}
+
+	return i >= 0
 }
 
 func checkMethodCall(s string) bool {
@@ -249,4 +291,37 @@ func checkMethodCall(s string) bool {
 	}
 
 	return false
+}
+
+const (
+	checkPanicPrefix1 = "panic"
+	checkPanicPrefix2 = "0x"
+)
+
+func checkPanicAddress(s string) bool {
+	i := strings.Index(s, checkPanicPrefix1)
+	if i == -1 {
+		return false
+	}
+
+	s = s[i+len(checkPanicPrefix1):]
+
+	i = strings.Index(s, checkPanicPrefix2)
+	if i == -1 {
+		return false
+	}
+
+	// no chars between parts
+	if i == 0 {
+		return false
+	}
+
+	s = s[i+len(checkPanicPrefix2):]
+
+	if s == "" {
+		return false
+	}
+
+	c := s[0]
+	return '0' <= c && c <= '9' || 'a' <= c && c <= 'f'
 }
