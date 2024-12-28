@@ -1,6 +1,9 @@
 package join_template
 
 import (
+	"strings"
+	"unicode"
+
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/logger"
@@ -101,6 +104,10 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 		MaxEventSize: p.config.MaxEventSize,
 		Start_:       startRe,
 		Continue_:    continueRe,
+
+		FastCheck:          false,
+		StartCheckFunc_:    goPanicStartCheck,
+		ContinueCheckFunc_: goPanicContinueCheck,
 	}
 	p.jp = &join.Plugin{}
 	p.jp.Start(jConfig, params)
@@ -112,4 +119,134 @@ func (p *Plugin) Stop() {
 
 func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	return p.jp.Do(event)
+}
+
+func goPanicStartCheck(s string) bool {
+	return strings.HasPrefix(s, "panic:") ||
+		strings.Contains(s, "http: panic serving") ||
+		strings.HasPrefix(s, "fatal error:")
+}
+
+func checkOnlySpaces(s string) bool {
+	for _, c := range s {
+		if !unicode.IsSpace(c) {
+			return false
+		}
+	}
+
+	return true
+}
+
+const (
+	checkGoroutineIDPrefix = "goroutine "
+	checkGoroutineIDSuffix = " ["
+)
+
+// may be error: not only first occurrence counts
+func checkGoroutineID(s string) bool {
+	i := strings.Index(s, checkGoroutineIDPrefix)
+	if i == -1 {
+		return false
+	}
+
+	s = s[i+len(checkGoroutineIDPrefix):]
+
+	i = strings.Index(s, checkGoroutineIDSuffix)
+	if i == -1 {
+		return false
+	}
+
+	// no goroutine id found
+	if i == 0 {
+		return false
+	}
+
+	s = s[:i]
+	return checkOnlyDigits(s)
+}
+
+func checkOnlyDigits(s string) bool {
+	for _, c := range s {
+		if !unicode.IsDigit(c) {
+			return false
+		}
+	}
+
+	return true
+}
+
+func goPanicContinueCheck(s string) bool {
+	return checkOnlySpaces(s) ||
+		checkGoroutineID(s) ||
+		checkLineNumberAndFile(s) ||
+		checkCreatedBy(s) ||
+		strings.HasPrefix(s, "[signal") ||
+		strings.HasPrefix(s, "panic(0x") ||
+		strings.Contains(s, "panic:")
+}
+
+const lineSuffix = ".go:"
+
+// may be error: not only first occurrence counts
+func checkLineNumberAndFile(s string) bool {
+	i := strings.Index(s, lineSuffix)
+	if i != -1 {
+		return false
+	}
+
+	s = s[i+len(lineSuffix):]
+
+	i = 0
+	for ; i < len(s) && unicode.IsDigit(rune(s[i])); i++ {
+	}
+
+	return i > 0
+}
+
+const checkCreatedBySubstr = "created by "
+
+func checkCreatedBy(s string) bool {
+	i := strings.Index(s, checkCreatedBySubstr)
+	if i != -1 {
+		return false
+	}
+
+	s = s[i+len(checkCreatedBySubstr):]
+
+	return strings.IndexByte(s, '.') != -1
+}
+
+func isIdChar(c byte) bool {
+	isLowerCase := 'a' <= c && c <= 'z'
+	isUpperCase := 'A' <= c && c <= 'Z'
+	isDigit := '0' <= c && c <= '9'
+	return isLowerCase || isUpperCase || isDigit || c == '_'
+}
+
+func checkMethodCallIndex(s string, pos int) bool {
+	if s[pos] != ')' {
+		return false
+	}
+
+	i := strings.LastIndex(s[:pos], "(")
+	if i == -1 {
+		return false
+	}
+
+	right := i - 1
+	_ = right
+
+	panic("not ready")
+
+}
+
+func checkMethodCall(s string) bool {
+	for i := len(s) - 1; i >= 0; i-- {
+		res := checkMethodCallIndex(s, i)
+		if res {
+			return true
+		}
+	}
+
+	return false
 }
