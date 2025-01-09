@@ -407,7 +407,9 @@ func TestSimpleJoin(t *testing.T) {
 
 	for _, tt := range cases {
 		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
+
+		var fastCheck bool
+		testFunc := func(t *testing.T) {
 			format := `{"log":"%s\n"}`
 			content := strings.ReplaceAll(tt.content, "# ===next===\n", "")
 			lines := make([]string, 0)
@@ -421,6 +423,8 @@ func TestSimpleJoin(t *testing.T) {
 			config := test.NewConfig(&Config{
 				Field:    "log",
 				Template: "go_panic",
+
+				FastCheck: fastCheck,
 			}, nil)
 
 			p, input, output := test.NewPipelineMock(
@@ -470,7 +474,12 @@ func TestSimpleJoin(t *testing.T) {
 
 			require.True(t, iters > i, "test timed out")
 			assert.Equal(t, tt.expEvents, outEvents.Load(), "wrong out events count")
-		})
+		}
+
+		fastCheck = false
+		t.Run(tt.name, testFunc)
+		fastCheck = true
+		t.Run(tt.name+"_fast", testFunc)
 	}
 }
 
@@ -488,8 +497,10 @@ func TestJoinAfterNilNode(t *testing.T) {
 			expEvents:  23 * 100,
 		},
 	}
+
 	for _, tt := range cases {
-		t.Run(tt.name, func(t *testing.T) {
+		var fastCheck bool
+		testFunc := func(t *testing.T) {
 			formatNode := `{"log":"%s\n"}`
 			formatNilNode := `{"notlog":"%s\n"}`
 			content := strings.ReplaceAll(tt.content, "# ===next===\n", "")
@@ -508,6 +519,8 @@ func TestJoinAfterNilNode(t *testing.T) {
 			config := test.NewConfig(&Config{
 				Field:    "log",
 				Template: "go_panic",
+
+				FastCheck: fastCheck,
 			}, nil)
 
 			p, input, output := test.NewPipelineMock(
@@ -562,7 +575,12 @@ func TestJoinAfterNilNode(t *testing.T) {
 			p.Stop()
 
 			assert.Equal(t, tt.expEvents, outEvents.Load(), "wrong out events count")
-		})
+		}
+
+		fastCheck = false
+		t.Run(tt.name, testFunc)
+		fastCheck = true
+		t.Run(tt.name+"_fast", testFunc)
 	}
 }
 
