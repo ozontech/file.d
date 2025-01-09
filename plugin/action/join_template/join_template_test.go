@@ -584,28 +584,63 @@ func TestJoinAfterNilNode(t *testing.T) {
 	}
 }
 
-func BenchmarkOld(b *testing.B) {
+func BenchmarkStartRegex(b *testing.B) {
 	template, ok := templates["go_panic"]
 	if !ok {
 		require.True(b, ok)
 	}
 
 	regExp := regexp.MustCompile(template.startRePat)
+	lines := prepareLines()
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		regExp.MatchString(contentPanics)
+		for _, line := range lines {
+			regExp.MatchString(line)
+		}
 	}
 }
 
-func BenchmarkNew(b *testing.B) {
+func BenchmarkContinueRegex(b *testing.B) {
+	template, ok := templates["go_panic"]
+	if !ok {
+		require.True(b, ok)
+	}
+
+	regExp := regexp.MustCompile(template.continueRePat)
+	lines := prepareLines()
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		goPanicStartCheck(contentPanics)
+		for _, line := range lines {
+			regExp.MatchString(line)
+		}
 	}
 }
 
-func TestSome(t *testing.T) {
+func BenchmarkStartCheckFunc(b *testing.B) {
+	lines := prepareLines()
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		for _, line := range lines {
+			goPanicStartCheck(line)
+		}
+	}
+}
+
+func BenchmarkContinueCheckFunc(b *testing.B) {
+	lines := prepareLines()
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		for _, line := range lines {
+			goPanicContinueCheck(line)
+		}
+	}
+}
+
+func TestSameResults(t *testing.T) {
 	template, ok := templates["go_panic"]
 	require.True(t, ok)
 
@@ -615,6 +650,15 @@ func TestSome(t *testing.T) {
 	continueRe, err := cfg.CompileRegex(template.continueRePat)
 	require.NoError(t, err)
 
+	lines := prepareLines()
+
+	for _, line := range lines {
+		require.Equal(t, startRe.MatchString(line), goPanicStartCheck(line))
+		require.Equal(t, continueRe.MatchString(line), goPanicContinueCheck(line))
+	}
+}
+
+func prepareLines() []string {
 	content := strings.ReplaceAll(contentPanics, "# ===next===\n", "")
 	lines := make([]string, 0)
 	for _, line := range strings.Split(content, "\n") {
@@ -624,15 +668,5 @@ func TestSome(t *testing.T) {
 		lines = append(lines, line)
 	}
 
-	for _, line := range lines {
-		switch {
-		case startRe.MatchString(line):
-			require.True(t, goPanicStartCheck(line), line)
-		case continueRe.MatchString(line):
-			require.True(t, goPanicContinueCheck(line), line)
-		default:
-			require.False(t, goPanicStartCheck(line))
-			require.False(t, goPanicContinueCheck(line))
-		}
-	}
+	return lines
 }
