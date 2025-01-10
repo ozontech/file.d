@@ -110,10 +110,24 @@ func isIDChar(c byte) bool {
 	return isLowerCase || isUpperCase || isDigit || c == '_'
 }
 
-func isIDCharNoDigit(c byte) bool {
-	isLowerCase := 'a' <= c && c <= 'z'
-	isUpperCase := 'A' <= c && c <= 'Z'
-	return isLowerCase || isUpperCase || c == '_'
+func isLowerCaseLetter(c byte) bool {
+	return 'a' <= c && c <= 'z'
+}
+
+func isUpperCaseLetter(c byte) bool {
+	return 'A' <= c && c <= 'Z'
+}
+
+func isLetter(c byte) bool {
+	return isLowerCaseLetter(c) || isUpperCaseLetter(c)
+}
+
+func isDigit(c byte) bool {
+	return '0' <= c && c <= '9'
+}
+
+func isLetterOrUnderscore(c byte) bool {
+	return isLetter(c) || c == '_'
 }
 
 func checkMethodCallIndex(s string, pos int) bool {
@@ -148,24 +162,27 @@ func checkMethodCallIndex(s string, pos int) bool {
 		left--
 	}
 
-	return checkEndsWithClassName(s[:left])
+	return endsWithIdentifier(s[:left])
 }
 
-func checkEndsWithClassName(s string) bool {
-	i := len(s) - 1
-	for ; i >= 0; i-- {
+// Two regexps:
+// - [A-Za-z_]+[A-Za-z0-9_]*$
+// - [A-Za-z_][0-9]*$
+// are equal in sense of matching.
+// So check the second one.
+func endsWithIdentifier(s string) bool {
+	for i := len(s) - 1; i >= 0; i-- {
 		c := s[i]
-		if isIDCharNoDigit(c) {
-			break
-		}
-
-		isDigit := '0' <= c && c <= '9'
-		if !isDigit {
+		switch {
+		case isLetterOrUnderscore(c):
+			return true
+		case isDigit(c):
+		default:
 			return false
 		}
 	}
 
-	return i >= 0
+	return false
 }
 
 func checkMethodCall(s string) bool {
