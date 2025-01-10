@@ -859,10 +859,10 @@ func TestEndsWithClassname(t *testing.T) {
 	}
 
 	for _, s := range positive {
-		require.True(t, checkEndsWithClassName(s))
+		require.True(t, endsWithIdentifier(s))
 	}
 
 	for _, s := range negative {
-		require.False(t, checkEndsWithClassName(s))
+		require.False(t, endsWithIdentifier(s))
 	}
 }
