@@ -833,3 +833,36 @@ func prepareLines() []string {
 func prepareRandLines() []string {
 	return strings.Split(randomLines, "\n")
 }
+
+func TestEndsWithClassname(t *testing.T) {
+	positive := []string{
+		"_",
+		"a1",
+		"A1",
+		"abc",
+		"ABC",
+		"aB",
+		"1a",
+		"123 _",
+		"    a",
+		"    a1",
+		"    1a",
+	}
+
+	negative := []string{
+		"",
+		"1234",
+		"a-123",
+		"     ",
+		"    1",
+		"  a 1",
+	}
+
+	for _, s := range positive {
+		require.True(t, checkEndsWithClassName(s))
+	}
+
+	for _, s := range negative {
+		require.False(t, checkEndsWithClassName(s))
+	}
+}
