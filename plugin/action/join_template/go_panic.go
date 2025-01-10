@@ -23,8 +23,10 @@ func goPanicContinueCheck(s string) bool {
 }
 
 func checkOnlySpaces(s string) bool {
-	for _, c := range s {
-		if !unicode.IsSpace(c) {
+	for _, c := range []byte(s) {
+		switch c {
+		case ' ', '\n', '\t':
+		default:
 			return false
 		}
 	}
