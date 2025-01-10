@@ -13,7 +13,7 @@ func goPanicStartCheck(s string) bool {
 
 func goPanicContinueCheck(s string) bool {
 	return strings.HasPrefix(s, "[signal") ||
-		checkOnlySpaces(s) ||
+		containsOnlySpaces(s) ||
 		checkGoroutineID(s) ||
 		checkLineNumberAndFile(s) ||
 		checkCreatedBy(s) ||
@@ -22,7 +22,7 @@ func goPanicContinueCheck(s string) bool {
 		checkMethodCall(s)
 }
 
-func checkOnlySpaces(s string) bool {
+func containsOnlySpaces(s string) bool {
 	for _, c := range []byte(s) {
 		switch c {
 		case ' ', '\n', '\t':
@@ -103,11 +103,8 @@ func checkCreatedBy(s string) bool {
 	return strings.IndexByte(s, '.') != -1
 }
 
-func isIDChar(c byte) bool {
-	isLowerCase := 'a' <= c && c <= 'z'
-	isUpperCase := 'A' <= c && c <= 'Z'
-	isDigit := '0' <= c && c <= '9'
-	return isLowerCase || isUpperCase || isDigit || c == '_'
+func isLetterOrUnderscoreOrDigit(c byte) bool {
+	return isLetterOrUnderscore(c) || isDigit(c)
 }
 
 func isLowerCaseLetter(c byte) bool {
@@ -142,7 +139,7 @@ func checkMethodCallIndex(s string, pos int) bool {
 
 	right := i - 1
 	left := right
-	for ; left >= 0 && isIDChar(s[left]); left-- {
+	for ; left >= 0 && isLetterOrUnderscoreOrDigit(s[left]); left-- {
 	}
 
 	if left == right {
@@ -187,8 +184,7 @@ func endsWithIdentifier(s string) bool {
 
 func checkMethodCall(s string) bool {
 	for i := len(s) - 1; i >= 0; i-- {
-		res := checkMethodCallIndex(s, i)
-		if res {
+		if checkMethodCallIndex(s, i) {
 			return true
 		}
 	}
