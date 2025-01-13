@@ -29,6 +29,7 @@ func goPanicContinueCheck(s string) bool {
 		containsLineNumber(s) ||
 		checkCreatedBy(s) ||
 		containsPanicAddress(s) ||
+		// checkStub(s) ||
 		strings.Contains(s, "panic:") ||
 		checkMethodCall(s)
 }
