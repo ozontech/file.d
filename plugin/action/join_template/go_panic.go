@@ -9,6 +9,9 @@ const (
 	goroutineIDSuffix = " ["
 
 	lineNumberPart = ".go:"
+
+	panicAddrPart1 = "panic"
+	panicAddrPart2 = "0x"
 )
 
 func goPanicStartCheck(s string) bool {
@@ -23,7 +26,7 @@ func goPanicContinueCheck(s string) bool {
 		containsGoroutineID(s) ||
 		containsLineNumber(s) ||
 		checkCreatedBy(s) ||
-		checkPanicAddress(s) ||
+		containsPanicAddress(s) ||
 		strings.Contains(s, "panic:") ||
 		checkMethodCall(s)
 }
@@ -120,6 +123,10 @@ func isDigit(c byte) bool {
 	return '0' <= c && c <= '9'
 }
 
+func isHexDigit(c byte) bool {
+	return isDigit(c) || ('a' <= c && c <= 'f')
+}
+
 func isLetterOrUnderscore(c byte) bool {
 	return isLetter(c) || c == '_'
 }
@@ -189,20 +196,21 @@ func checkMethodCall(s string) bool {
 	return false
 }
 
-const (
-	checkPanicPrefix1 = "panic"
-	checkPanicPrefix2 = "0x"
-)
-
-func checkPanicAddress(s string) bool {
-	i := strings.Index(s, checkPanicPrefix1)
+// regexp
+// (panic.+[0-9]x[0-9,a-f]+)
+// can be replaced with
+// (panic.+0x[0-9,a-f]+)
+// so check the second one
+// POSSIBLE ERROR: only first occurrence counts
+func containsPanicAddress(s string) bool {
+	i := strings.Index(s, panicAddrPart1)
 	if i == -1 {
 		return false
 	}
 
-	s = s[i+len(checkPanicPrefix1):]
+	s = s[i+len(panicAddrPart1):]
 
-	i = strings.Index(s, checkPanicPrefix2)
+	i = strings.Index(s, panicAddrPart2)
 	if i == -1 {
 		return false
 	}
@@ -212,12 +220,11 @@ func checkPanicAddress(s string) bool {
 		return false
 	}
 
-	s = s[i+len(checkPanicPrefix2):]
+	s = s[i+len(panicAddrPart2):]
 
 	if s == "" {
 		return false
 	}
 
-	c := s[0]
-	return '0' <= c && c <= '9' || 'a' <= c && c <= 'f'
+	return isHexDigit(s[0])
 }
