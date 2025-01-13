@@ -36,8 +36,9 @@ Following that, it will allow through every 5th event in that interval.
 }*/
 
 type Plugin struct {
-	logger *zap.Logger
-	config *Config
+	logger       *zap.Logger
+	config       *Config
+	pipelineName string
 }
 
 // ! config-params
@@ -73,12 +74,10 @@ func factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 
 func (p *Plugin) Start(anyConfig pipeline.AnyConfig, params *pipeline.ActionPluginParams) {
 	p.config = anyConfig.(*Config)
+	p.pipelineName = params.PipelineName
 
 	lg := params.Logger.Desugar()
-	p.setupLogger(params.PipelineName, lg, p.config)
-}
-
-func (p *Plugin) Stop() {
+	p.setupLogger(lg, p.config)
 }
 
 func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
@@ -96,8 +95,14 @@ var (
 	loggerByPipelineMu sync.Mutex
 )
 
+func (p *Plugin) Stop() {
+	loggerByPipelineMu.Lock()
+	defer loggerByPipelineMu.Unlock()
+	delete(loggerByPipeline, p.pipelineName)
+}
+
 // return shared logger between concurrent running processors
-func (p *Plugin) setupLogger(pipelineName string, parentLogger *zap.Logger, config *Config) {
+func (p *Plugin) setupLogger(parentLogger *zap.Logger, config *Config) {
 	if config.Interval_ == 0 {
 		p.logger = parentLogger
 	}
@@ -105,14 +110,13 @@ func (p *Plugin) setupLogger(pipelineName string, parentLogger *zap.Logger, conf
 	loggerByPipelineMu.Lock()
 	defer loggerByPipelineMu.Unlock()
 
-	// TODO: the playground can break this logic
-	lg, ok := loggerByPipeline[pipelineName]
+	lg, ok := loggerByPipeline[p.pipelineName]
 	if !ok {
 		// enable sampler
 		lg = parentLogger.WithOptions(zap.WrapCore(func(core zapcore.Core) zapcore.Core {
 			return zapcore.NewSamplerWithOptions(parentLogger.Core(), config.Interval_, config.First, config.Thereafter)
 		}))
+		loggerByPipeline[p.pipelineName] = lg
 	}
-	loggerByPipeline[pipelineName] = lg
 	p.logger = lg
 }

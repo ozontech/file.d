@@ -116,7 +116,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	select {
 	case h.concurrencyLimiter <- struct{}{}:
-		defer func() { _ = <-h.concurrencyLimiter }()
+		defer func() { <-h.concurrencyLimiter }()
 	default:
 		concurrencyReached.Inc()
 
@@ -129,7 +129,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			concurrencyTimeouts.Inc()
 			http.Error(w, "concurrency limiter timeout", http.StatusRequestTimeout)
 		case h.concurrencyLimiter <- struct{}{}:
-			defer func() { _ = <-h.concurrencyLimiter }()
+			defer func() { <-h.concurrencyLimiter }()
 		}
 	}
 
