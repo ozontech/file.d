@@ -2,12 +2,13 @@ package join_template
 
 import (
 	"strings"
-	"unicode"
 )
 
 const (
 	goroutineIDPrefix = "goroutine "
 	goroutineIDSuffix = " ["
+
+	lineNumberPart = ".go:"
 )
 
 func goPanicStartCheck(s string) bool {
@@ -20,7 +21,7 @@ func goPanicContinueCheck(s string) bool {
 	return strings.HasPrefix(s, "[signal") ||
 		containsOnlySpaces(s) ||
 		containsGoroutineID(s) ||
-		checkLineNumberAndFile(s) ||
+		containsLineNumber(s) ||
 		checkCreatedBy(s) ||
 		checkPanicAddress(s) ||
 		strings.Contains(s, "panic:") ||
@@ -73,22 +74,17 @@ func containsOnlyDigits(s string) bool {
 	return true
 }
 
-const lineSuffix = ".go:"
-
-// POSSIBLE ERROR: not only first occurrence counts
-func checkLineNumberAndFile(s string) bool {
-	i := strings.Index(s, lineSuffix)
+// replaces regexp (\.go:[0-9]+)
+// POSSIBLE ERROR: only first occurrence counts
+func containsLineNumber(s string) bool {
+	i := strings.Index(s, lineNumberPart)
 	if i == -1 {
 		return false
 	}
 
-	s = s[i+len(lineSuffix):]
+	i += len(lineNumberPart)
 
-	i = 0
-	for ; i < len(s) && unicode.IsDigit(rune(s[i])); i++ {
-	}
-
-	return i > 0
+	return i < len(s) && isDigit(s[i])
 }
 
 const checkCreatedBySubstr = "created by "
