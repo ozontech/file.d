@@ -3,6 +3,7 @@ package playground
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -11,8 +12,6 @@ import (
 	"time"
 
 	"github.com/bitly/go-simplejson"
-	"github.com/go-jose/go-jose/v3/json"
-	jsoniter "github.com/json-iterator/go"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/plugin/output/devnull"
@@ -25,10 +24,8 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
-var jsoniterConfig = jsoniter.ConfigCompatibleWithStandardLibrary
-
 const (
-	pipelineCapacity = 1
+	pipelineCapacity = 2
 )
 
 type DoActionsRequest struct {
@@ -47,25 +44,27 @@ type DoActionsResponse struct {
 	Metrics string          `json:"metrics"`
 }
 
-type DoActionsHandler struct {
+type Handler struct {
 	plugins  *fd.PluginRegistry
 	logger   *zap.Logger
 	requests atomic.Int64
 }
 
-var _ http.Handler = (*DoActionsHandler)(nil)
+var _ http.Handler = (*Handler)(nil)
 
-func NewDoActionsHandler(plugins *fd.PluginRegistry, logger *zap.Logger) *DoActionsHandler {
-	return &DoActionsHandler{plugins: plugins, logger: logger}
+func NewHandler(plugins *fd.PluginRegistry, logger *zap.Logger) *Handler {
+	return &Handler{plugins: plugins, logger: logger}
 }
 
-func (h *DoActionsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "", http.StatusMethodNotAllowed)
 		return
 	}
 
-	req, err := h.unmarshalRequest(r)
+	limitedBody := io.LimitReader(r.Body, 1<<20)
+	isYAML := strings.HasSuffix(r.Header.Get("Content-Type"), "yaml")
+	req, err := h.unmarshalRequest(limitedBody, isYAML)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -87,7 +86,7 @@ func (h *DoActionsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(resp)
 }
 
-func (h *DoActionsHandler) doActions(ctx context.Context, req DoActionsRequest) (resp DoActionsResponse, code int, err error) {
+func (h *Handler) doActions(ctx context.Context, req DoActionsRequest) (resp DoActionsResponse, code int, err error) {
 	if req.Debug {
 		// wrap all plugins with the debug plugin
 		newActions := make([]json.RawMessage, 0, len(req.Actions)*2)
@@ -97,10 +96,10 @@ func (h *DoActionsHandler) doActions(ctx context.Context, req DoActionsRequest) 
 			var actionWithType = struct {
 				Type string `json:"type"`
 			}{}
-			if err := jsoniterConfig.Unmarshal(action, &actionWithType); err != nil {
-				panic(err)
+			if err := json.Unmarshal(action, &actionWithType); err != nil {
+				return resp, http.StatusBadRequest, err
 			}
-			actionType := jsonEscape(actionWithType.Type)
+			actionType := escapeJSON(actionWithType.Type)
 
 			// wrap plugin with the debug actions
 			debugActionBefore := json.RawMessage(fmt.Sprintf(`{"type": "debug", "message": "before %s"}`, actionType))
@@ -125,6 +124,7 @@ func (h *DoActionsHandler) doActions(ctx context.Context, req DoActionsRequest) 
 		EventTimeout:        time.Millisecond * 100,
 		AntispamThreshold:   0,
 		IsStrict:            false,
+		Pool:                pipeline.PoolTypeLowMem,
 	}, metricsRegistry, stdout)
 
 	// callback to collect output events
@@ -178,12 +178,12 @@ loop:
 	}, http.StatusOK, nil
 }
 
-func (h *DoActionsHandler) setupPipeline(p *pipeline.Pipeline, req DoActionsRequest, cb func(event *pipeline.Event)) error {
+func (h *Handler) setupPipeline(p *pipeline.Pipeline, req DoActionsRequest, cb func(event *pipeline.Event)) error {
 	if req.Actions == nil {
 		req.Actions = []json.RawMessage{[]byte(`[]`)}
 	}
 
-	actionsArray, _ := jsoniterConfig.Marshal(req.Actions)
+	actionsArray, _ := json.Marshal(req.Actions)
 	actionsRaw, err := simplejson.NewJson(actionsArray)
 	if err != nil {
 		return fmt.Errorf("read actions: %w", err)
@@ -232,17 +232,13 @@ func (h *DoActionsHandler) setupPipeline(p *pipeline.Pipeline, req DoActionsRequ
 	return nil
 }
 
-func (h *DoActionsHandler) unmarshalRequest(r *http.Request) (DoActionsRequest, error) {
-	defer func(body io.ReadCloser) {
-		_ = body.Close()
-	}(r.Body)
-
-	bodyRaw, err := io.ReadAll(r.Body)
+func (h *Handler) unmarshalRequest(r io.Reader, isYAML bool) (DoActionsRequest, error) {
+	bodyRaw, err := io.ReadAll(r)
 	if err != nil {
 		return DoActionsRequest{}, fmt.Errorf("reading body: %s", err)
 	}
 
-	if strings.HasSuffix(r.Header.Get("Content-Type"), "yaml") {
+	if isYAML {
 		bodyRaw, err = yaml.YAMLToJSON(bodyRaw)
 		if err != nil {
 			return DoActionsRequest{}, fmt.Errorf("converting YAML to JSON: %s", err)
@@ -250,7 +246,7 @@ func (h *DoActionsHandler) unmarshalRequest(r *http.Request) (DoActionsRequest, 
 	}
 
 	var req DoActionsRequest
-	if err := jsoniterConfig.Unmarshal(bodyRaw, &req); err != nil {
+	if err := json.Unmarshal(bodyRaw, &req); err != nil {
 		return DoActionsRequest{}, fmt.Errorf("unmarshalling json: %s", err)
 	}
 	return req, nil
@@ -282,11 +278,32 @@ func formatMetricFamily(families []*dto.MetricFamily) string {
 	return b.String()
 }
 
-func jsonEscape(s string) string {
-	b, err := jsoniterConfig.Marshal(s)
+func escapeJSON(s string) string {
+	b, err := json.Marshal(s)
 	if err != nil {
 		panic(err)
 	}
 	// Trim the beginning and trailing " character
 	return string(b[1 : len(b)-1])
+}
+
+// ZeroClock reports time since "start".
+// Used to print relative time rather than absolute.
+type ZeroClock struct {
+	start time.Time
+}
+
+var _ zapcore.Clock = ZeroClock{}
+
+func NewZeroClock(start time.Time) *ZeroClock {
+	return &ZeroClock{start: start}
+}
+
+func (z ZeroClock) Now() time.Time {
+	diff := time.Since(z.start)
+	return time.Time{}.Add(diff)
+}
+
+func (z ZeroClock) NewTicker(_ time.Duration) *time.Ticker {
+	return new(time.Ticker)
 }

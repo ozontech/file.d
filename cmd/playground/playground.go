@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 	"flag"
-	"net"
 	"net/http"
+	"net/http/pprof"
 	"os/signal"
 	"syscall"
 	"time"
@@ -14,7 +14,9 @@ import (
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/playground"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"go.uber.org/automaxprocs/maxprocs"
 	"go.uber.org/zap"
 
 	_ "github.com/ozontech/file.d/plugin/action/add_file_name"
@@ -42,72 +44,70 @@ import (
 )
 
 var (
-	flagAddr      = flag.String("addr", ":5950", "")
-	flagDebugAddr = flag.String("debug-addr", ":5951", "")
+	addr      = flag.String("addr", ":5950", "")
+	debugAddr = flag.String("debug-addr", ":5951", "")
 )
 
 func main() {
 	flag.Parse()
+
+	_, _ = maxprocs.Set(maxprocs.Logger(logger.Warnf))
+
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
-
-	if err := app(ctx); err != nil {
-		panic(err)
-	}
+	run()
+	// Wait interrupt.
+	<-ctx.Done()
 }
 
-func app(ctx context.Context) error {
+func run() {
 	lg := logger.Instance.Desugar().Named("playground")
 
-	doActionsHandler := playground.NewDoActionsHandler(fd.DefaultPluginRegistry, lg)
+	metricsRegistry := prometheus.NewRegistry()
+	metricsRegistry.MustRegister(collectors.NewGoCollector())
 
-	mux := router(doActionsHandler)
+	// Start playground API server.
+	play := playground.NewHandler(fd.DefaultPluginRegistry, lg)
+	api := apiHandler(play)
+	apiWithMetrics := promhttp.InstrumentMetricHandler(metricsRegistry, api)
+	startServer(*addr, apiWithMetrics)
 
-	registry := prometheus.NewRegistry()
-	srvr := defaultServer(ctx, *flagAddr, promhttp.InstrumentMetricHandler(registry, mux))
-
-	lg.Warn("starting to listen", zap.String("addr", *flagAddr), zap.String("debug_addr", *flagDebugAddr))
-
-	go func() {
-		<-ctx.Done()
-		_ = srvr.Close()
-	}()
-	go func() {
-		debugMux := http.NewServeMux()
-		debugMux.Handle("/metrics", promhttp.HandlerFor(registry, promhttp.HandlerOpts{}))
-		debugSrvr := defaultServer(ctx, *flagDebugAddr, debugMux)
-		panic(debugSrvr.ListenAndServe())
-	}()
-
-	err := srvr.ListenAndServe()
-	lg.Info("shutting down", zap.Error(err))
-	if errors.Is(err, http.ErrServerClosed) {
-		return nil
-	}
-	return err
+	// Start debug server.
+	debugMux := http.NewServeMux()
+	debugMux.Handle("/metrics", promhttp.HandlerFor(metricsRegistry, promhttp.HandlerOpts{}))
+	debugMux.HandleFunc("/debug/pprof/", pprof.Index)
+	debugMux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
+	debugMux.HandleFunc("/debug/pprof/profile", pprof.Profile)
+	debugMux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
+	debugMux.HandleFunc("/debug/pprof/trace", pprof.Trace)
+	startServer(*debugAddr, debugMux)
 }
 
-func defaultServer(ctx context.Context, addr string, mux http.Handler) *http.Server {
-	return &http.Server{
+func startServer(addr string, handler http.Handler) {
+	server := &http.Server{
 		Addr:              addr,
-		Handler:           mux,
-		ReadTimeout:       time.Minute,
-		ReadHeaderTimeout: time.Minute,
-		WriteTimeout:      time.Minute,
+		Handler:           handler,
+		ReadTimeout:       time.Second * 30,
+		ReadHeaderTimeout: time.Second * 5,
+		WriteTimeout:      time.Second * 30,
 		IdleTimeout:       time.Minute,
 		MaxHeaderBytes:    http.DefaultMaxHeaderBytes,
-		BaseContext: func(_ net.Listener) context.Context {
-			return ctx
-		},
 	}
+
+	go func() {
+		logger.Info("starting HTTP server...", zap.String("addr", addr))
+		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			logger.Fatal("can't serve", zap.Error(err))
+		}
+		logger.Info("server stopped")
+	}()
 }
 
-func router(doActions *playground.DoActionsHandler) http.Handler {
+func apiHandler(play *playground.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
-		case "/api/v1/do-actions":
-			doActions.ServeHTTP(w, r)
-			return
+		case "/api/play":
+			play.ServeHTTP(w, r)
 		default:
 			http.Error(w, "", http.StatusNotFound)
 		}
