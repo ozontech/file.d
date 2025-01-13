@@ -929,3 +929,37 @@ func TestContainsLineNumber(t *testing.T) {
 		require.False(t, containsLineNumber(s))
 	}
 }
+
+func TestContainsPanicAddress(t *testing.T) {
+	positive := []string{
+		"panic(0xb6afc0, 0xd7c240)",
+		"panic({0x102feb9c0, 0x102ffc8d0})",
+		"panic(0xb6afc0",
+		"panic(0xb",
+		"panic(0x123",
+		"panic (  0xb",
+
+		// false positive
+		"/usr/local/go/src/runtime/panic.go:513 +0x1b9",
+	}
+
+	for _, s := range positive {
+		require.True(t, containsPanicAddress(s))
+	}
+
+	negative := []string{
+		"qwe",       // no first part
+		"panic 123", // no second part after first
+
+		"panic0x",   // no chars between parts
+		"panic 0x",  // no chars after second part
+		"panic 0xM", // 'M' is not hex digit
+
+		"panic 0xQWE 0x123", // only first occurrence counts
+		"panic 0xQWE panic 0x123",
+	}
+
+	for _, s := range negative {
+		require.False(t, containsPanicAddress(s))
+	}
+}
