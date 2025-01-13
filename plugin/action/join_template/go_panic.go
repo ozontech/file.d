@@ -12,6 +12,8 @@ const (
 
 	panicAddrPart1 = "panic"
 	panicAddrPart2 = "0x"
+
+	createdByPart = "created by "
 )
 
 func goPanicStartCheck(s string) bool {
@@ -90,15 +92,18 @@ func containsLineNumber(s string) bool {
 	return i < len(s) && isDigit(s[i])
 }
 
-const checkCreatedBySubstr = "created by "
-
+// Two regexps:
+// - created by .*\/?.*\.
+// - created by .*\.
+// are equal in sense of matching.
+// So check the second one.
 func checkCreatedBy(s string) bool {
-	i := strings.Index(s, checkCreatedBySubstr)
+	i := strings.Index(s, createdByPart)
 	if i == -1 {
 		return false
 	}
 
-	s = s[i+len(checkCreatedBySubstr):]
+	s = s[i+len(createdByPart):]
 
 	return strings.IndexByte(s, '.') != -1
 }
