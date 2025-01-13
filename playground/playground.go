@@ -14,7 +14,33 @@ import (
 	"github.com/bitly/go-simplejson"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/pipeline"
+	_ "github.com/ozontech/file.d/plugin/action/add_file_name"
+	_ "github.com/ozontech/file.d/plugin/action/add_host"
+	_ "github.com/ozontech/file.d/plugin/action/convert_date"
+	_ "github.com/ozontech/file.d/plugin/action/convert_log_level"
+	_ "github.com/ozontech/file.d/plugin/action/convert_utf8_bytes"
+	_ "github.com/ozontech/file.d/plugin/action/debug"
+	_ "github.com/ozontech/file.d/plugin/action/decode"
+	_ "github.com/ozontech/file.d/plugin/action/discard"
+	_ "github.com/ozontech/file.d/plugin/action/flatten"
+	_ "github.com/ozontech/file.d/plugin/action/join"
+	_ "github.com/ozontech/file.d/plugin/action/join_template"
+	_ "github.com/ozontech/file.d/plugin/action/json_decode"
+	_ "github.com/ozontech/file.d/plugin/action/json_encode"
+	_ "github.com/ozontech/file.d/plugin/action/json_extract"
+	_ "github.com/ozontech/file.d/plugin/action/keep_fields"
+	_ "github.com/ozontech/file.d/plugin/action/mask"
+	_ "github.com/ozontech/file.d/plugin/action/modify"
+	_ "github.com/ozontech/file.d/plugin/action/move"
+	_ "github.com/ozontech/file.d/plugin/action/parse_es"
+	_ "github.com/ozontech/file.d/plugin/action/parse_re2"
+	_ "github.com/ozontech/file.d/plugin/action/remove_fields"
+	_ "github.com/ozontech/file.d/plugin/action/rename"
+	_ "github.com/ozontech/file.d/plugin/action/set_time"
+
+	_ "github.com/ozontech/file.d/plugin/input/fake"
 	"github.com/ozontech/file.d/plugin/output/devnull"
+
 	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"
 	"github.com/prometheus/common/expfmt"
@@ -118,13 +144,23 @@ func (h *Handler) doActions(ctx context.Context, req DoActionsRequest) (resp DoA
 	metricsRegistry := prometheus.NewRegistry()
 
 	p := pipeline.New("test", &pipeline.Settings{
-		Decoder:             "json",
-		Capacity:            pipelineCapacity,
-		MaintenanceInterval: time.Millisecond * 100,
-		EventTimeout:        time.Millisecond * 100,
-		AntispamThreshold:   0,
-		IsStrict:            false,
-		Pool:                pipeline.PoolTypeLowMem,
+		Decoder:                 "json",
+		DecoderParams:           nil,
+		Capacity:                pipelineCapacity,
+		MetaCacheSize:           0,
+		MaintenanceInterval:     time.Millisecond * 100,
+		EventTimeout:            time.Millisecond * 100,
+		AntispamThreshold:       0,
+		AntispamExceptions:      nil,
+		SourceNameMetaField:     "",
+		AvgEventSize:            0,
+		MaxEventSize:            0,
+		CutOffEventByLimit:      false,
+		CutOffEventByLimitField: "",
+		StreamField:             "",
+		IsStrict:                false,
+		MetricHoldDuration:      time.Minute,
+		Pool:                    pipeline.PoolTypeLowMem,
 	}, metricsRegistry, stdout)
 
 	// callback to collect output events

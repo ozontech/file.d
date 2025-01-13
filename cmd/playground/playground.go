@@ -18,29 +18,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.uber.org/automaxprocs/maxprocs"
 	"go.uber.org/zap"
-
-	_ "github.com/ozontech/file.d/plugin/action/add_file_name"
-	_ "github.com/ozontech/file.d/plugin/action/add_host"
-	_ "github.com/ozontech/file.d/plugin/action/convert_date"
-	_ "github.com/ozontech/file.d/plugin/action/convert_log_level"
-	_ "github.com/ozontech/file.d/plugin/action/debug"
-	_ "github.com/ozontech/file.d/plugin/action/discard"
-	_ "github.com/ozontech/file.d/plugin/action/flatten"
-	_ "github.com/ozontech/file.d/plugin/action/join"
-	_ "github.com/ozontech/file.d/plugin/action/join_template"
-	_ "github.com/ozontech/file.d/plugin/action/json_decode"
-	_ "github.com/ozontech/file.d/plugin/action/json_encode"
-	_ "github.com/ozontech/file.d/plugin/action/keep_fields"
-	_ "github.com/ozontech/file.d/plugin/action/mask"
-	_ "github.com/ozontech/file.d/plugin/action/modify"
-	_ "github.com/ozontech/file.d/plugin/action/parse_es"
-	_ "github.com/ozontech/file.d/plugin/action/parse_re2"
-	_ "github.com/ozontech/file.d/plugin/action/remove_fields"
-	_ "github.com/ozontech/file.d/plugin/action/rename"
-	_ "github.com/ozontech/file.d/plugin/action/set_time"
-
-	_ "github.com/ozontech/file.d/plugin/input/fake"
-	_ "github.com/ozontech/file.d/plugin/output/devnull"
 )
 
 var (
@@ -70,7 +47,7 @@ func run() {
 	play := playground.NewHandler(fd.DefaultPluginRegistry, lg)
 	api := apiHandler(play)
 	apiWithMetrics := promhttp.InstrumentMetricHandler(metricsRegistry, api)
-	startServer(*addr, apiWithMetrics)
+	startServer(*addr, apiWithMetrics, lg.Named("play-api"))
 
 	// Start debug server.
 	debugMux := http.NewServeMux()
@@ -80,10 +57,10 @@ func run() {
 	debugMux.HandleFunc("/debug/pprof/profile", pprof.Profile)
 	debugMux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
 	debugMux.HandleFunc("/debug/pprof/trace", pprof.Trace)
-	startServer(*debugAddr, debugMux)
+	startServer(*debugAddr, debugMux, lg.Named("debug-api"))
 }
 
-func startServer(addr string, handler http.Handler) {
+func startServer(addr string, handler http.Handler, lg *zap.Logger) {
 	server := &http.Server{
 		Addr:              addr,
 		Handler:           handler,
@@ -95,11 +72,11 @@ func startServer(addr string, handler http.Handler) {
 	}
 
 	go func() {
-		logger.Info("starting HTTP server...", zap.String("addr", addr))
+		lg.Info("starting HTTP server...", zap.String("addr", addr))
 		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			logger.Fatal("can't serve", zap.Error(err))
+			lg.Fatal("can't serve", zap.Error(err))
 		}
-		logger.Info("server stopped")
+		lg.Info("server stopped")
 	}()
 }
 
