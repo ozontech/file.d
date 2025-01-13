@@ -140,7 +140,7 @@ func (w *worker) work(controller inputer, jobProvider *jobProvider, readBufferSi
 						inBuf = accumBuf
 					}
 
-					job.lastEventSeq = controller.In(sourceID, sourceName, Offset{lastOffset + scanned, offsets}, inBuf, isVirgin, metadataInfo)
+					job.lastEventSeq = controller.In(sourceID, sourceName, pipeline.NewOffsets(lastOffset+scanned, offsets), inBuf, isVirgin, metadataInfo)
 				}
 				// restore the line buffer
 				accumBuf = accumBuf[:0]
@@ -252,20 +252,3 @@ func (m metaInformation) GetData() map[string]any {
 
 **`inode`**
 }*/
-
-type Offset struct {
-	current int64
-	offsets sliceMap
-}
-
-func (o Offset) Current() int64 {
-	return o.current
-}
-
-func (o Offset) ByStream(stream string) int64 {
-	offset, found := o.offsets.get(pipeline.StreamName(stream))
-	if !found {
-		return -1
-	}
-	return offset
-}

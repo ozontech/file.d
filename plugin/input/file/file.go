@@ -305,7 +305,7 @@ func (p *Plugin) PassEvent(event *pipeline.Event) bool {
 	p.jobProvider.jobsMu.RUnlock()
 
 	job.mu.Lock()
-	savedOffset, exist := job.offsets.get(pipeline.StreamName(event.StreamNameBytes()))
+	savedOffset, exist := job.offsets.Get(pipeline.StreamName(event.StreamNameBytes()))
 	job.mu.Unlock()
 
 	if !exist {

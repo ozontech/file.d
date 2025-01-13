@@ -67,7 +67,7 @@ func TestInInvalidMessages(t *testing.T) {
 
 			pipe.SetInput(getFakeInputInfo())
 
-			seqID := pipe.In(tCase.sourceID, "kafka", test.Offset(tCase.offset), tCase.message, false, nil)
+			seqID := pipe.In(tCase.sourceID, "kafka", test.NewOffset(tCase.offset), tCase.message, false, nil)
 			require.Equal(t, pipeline.EventSeqIDError, seqID)
 		})
 	}
@@ -102,7 +102,7 @@ func BenchmarkMetaTemplater(b *testing.B) {
 				"/k8s-logs/advanced-logs-checker-1566485760-trtrq-%d_sre-%d_duty-bot-4e0301b633eaa2bfdcafdeba59ba0c72a3815911a6a820bf273534b0f32d98e0%d.log",
 				rest, rest, rest,
 			),
-			test.Offset(i),
+			test.NewOffset(int64(i)),
 			[]byte("2016-10-06T00:17:09.669794202Z stdout P partial content 1\n"),
 			false,
 			metadata.MetaData{},
