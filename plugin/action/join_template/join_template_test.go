@@ -849,6 +849,10 @@ func TestEndsWithClassname(t *testing.T) {
 		"    1a",
 	}
 
+	for _, s := range positive {
+		require.True(t, endsWithIdentifier(s))
+	}
+
 	negative := []string{
 		"",
 		"1234",
@@ -858,11 +862,39 @@ func TestEndsWithClassname(t *testing.T) {
 		"  a 1",
 	}
 
+	for _, s := range negative {
+		require.False(t, endsWithIdentifier(s))
+	}
+}
+
+func TestContainsGoroutineID(t *testing.T) {
+	positive := []string{
+		"goroutine 1 [running]:",
+		"    goroutine 123 [running]:",
+		"goroutine 100 [",
+		"goroutine 1 [qwe",
+	}
+
 	for _, s := range positive {
-		require.True(t, endsWithIdentifier(s))
+		require.True(t, containsGoroutineID(s))
+	}
+
+	negative := []string{
+		"qwe abc", // no goroutine id prefix
+		"goroutine",
+
+		"goroutine qwe", // no goroutine id suffix after prefix
+		"goroutine [",
+
+		"goroutine  [", // no chars between suffix and prefix
+
+		"goroutine ABC [", // only digits allowed between suffix and prefix
+		"goroutine 1a [",
+
+		"goroutine QWE goroutine 1 [running]:", // only first occurrence counts
 	}
 
 	for _, s := range negative {
-		require.False(t, endsWithIdentifier(s))
+		require.False(t, containsGoroutineID(s))
 	}
 }
