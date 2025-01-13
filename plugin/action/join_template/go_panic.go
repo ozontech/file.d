@@ -5,6 +5,11 @@ import (
 	"unicode"
 )
 
+const (
+	goroutineIDPrefix = "goroutine "
+	goroutineIDSuffix = " ["
+)
+
 func goPanicStartCheck(s string) bool {
 	return strings.HasPrefix(s, "panic:") ||
 		strings.HasPrefix(s, "fatal error:") ||
@@ -14,7 +19,7 @@ func goPanicStartCheck(s string) bool {
 func goPanicContinueCheck(s string) bool {
 	return strings.HasPrefix(s, "[signal") ||
 		containsOnlySpaces(s) ||
-		checkGoroutineID(s) ||
+		containsGoroutineID(s) ||
 		checkLineNumberAndFile(s) ||
 		checkCreatedBy(s) ||
 		checkPanicAddress(s) ||
@@ -22,6 +27,7 @@ func goPanicContinueCheck(s string) bool {
 		checkMethodCall(s)
 }
 
+// replaces regexp (^\s*$)
 func containsOnlySpaces(s string) bool {
 	for _, c := range []byte(s) {
 		switch c {
@@ -34,37 +40,32 @@ func containsOnlySpaces(s string) bool {
 	return true
 }
 
-const (
-	checkGoroutineIDPrefix = "goroutine "
-	checkGoroutineIDSuffix = " ["
-)
-
-// may be error: not only first occurrence counts
-func checkGoroutineID(s string) bool {
-	i := strings.Index(s, checkGoroutineIDPrefix)
+// replaces regexp (goroutine [0-9]+ \[)
+// POSSIBLE ERROR: only first occurrence counts
+func containsGoroutineID(s string) bool {
+	i := strings.Index(s, goroutineIDPrefix)
 	if i == -1 {
 		return false
 	}
 
-	s = s[i+len(checkGoroutineIDPrefix):]
+	s = s[i+len(goroutineIDPrefix):]
 
-	i = strings.Index(s, checkGoroutineIDSuffix)
+	i = strings.Index(s, goroutineIDSuffix)
 	if i == -1 {
 		return false
 	}
 
-	// no goroutine id found
+	// no digits
 	if i == 0 {
 		return false
 	}
 
-	s = s[:i]
-	return checkOnlyDigits(s)
+	return containsOnlyDigits(s[:i])
 }
 
-func checkOnlyDigits(s string) bool {
-	for _, c := range s {
-		if !unicode.IsDigit(c) {
+func containsOnlyDigits(s string) bool {
+	for _, c := range []byte(s) {
+		if !isDigit(c) {
 			return false
 		}
 	}
@@ -74,7 +75,7 @@ func checkOnlyDigits(s string) bool {
 
 const lineSuffix = ".go:"
 
-// may be error: not only first occurrence counts
+// POSSIBLE ERROR: not only first occurrence counts
 func checkLineNumberAndFile(s string) bool {
 	i := strings.Index(s, lineSuffix)
 	if i == -1 {
