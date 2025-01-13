@@ -2,17 +2,20 @@ package pipeline
 
 import (
 	"fmt"
+	"math/bits"
 	"runtime"
 	"sync"
 	"time"
 
 	"github.com/ozontech/file.d/logger"
-	insaneJSON "github.com/vitkovskii/insane-json"
+	insaneJSON "github.com/ozontech/insane-json"
 	"go.uber.org/atomic"
 )
 
 type Event struct {
 	kind Kind
+
+	children []*Event
 
 	Root *insaneJSON.Root
 	Buf  []byte
@@ -22,7 +25,8 @@ type Event struct {
 	SourceID   SourceID
 	SourceName string
 	streamName StreamName
-	Size       int // last known event size, it may not be actual
+	// Size in bytes of the raw event before any action plugin.
+	Size int
 
 	action int
 	next   *Event
@@ -33,17 +37,19 @@ type Event struct {
 }
 
 const (
-	eventStagePool      = 0
-	eventStageInput     = 1
-	eventStageStream    = 2
-	eventStageProcessor = 3
-	eventStageOutput    = 4
+	eventStagePool = iota
+	eventStageInput
+	eventStageStream
+	eventStageProcessor
+	eventStageOutput
 )
 
 type Kind byte
 
 const (
 	EventKindRegular Kind = iota
+	eventKindChild
+	eventKindChildParent
 	EventKindTimeout
 	EventKindUnlock
 )
@@ -54,6 +60,10 @@ func (k Kind) String() string {
 		return "REGULAR"
 	case EventKindTimeout:
 		return "TIMEOUT"
+	case eventKindChildParent:
+		return "PARENT"
+	case eventKindChild:
+		return "CHILD"
 	case EventKindUnlock:
 		return "UNLOCK"
 	}
@@ -65,7 +75,6 @@ type eventStage int
 func newEvent() *Event {
 	return &Event{
 		Root: insaneJSON.Spawn(),
-		Buf:  make([]byte, 0, 1024),
 	}
 }
 
@@ -99,24 +108,12 @@ func unlockEvent(stream *stream) *Event {
 	return event
 }
 
-func (e *Event) reset(avgEventSize int) {
-	if e.Size > avgEventSize {
-		e.Root.ReleaseBufMem()
-	}
-
-	if cap(e.Buf) > 4096 {
-		e.Buf = make([]byte, 0, 1024)
-	}
-
-	if e.Root.PoolSize() > DefaultJSONNodePoolSize*4 {
-		e.Root.ReleasePoolMem()
-	}
-
+func (e *Event) reset() {
 	e.Buf = e.Buf[:0]
-	e.stage = eventStageInput
 	e.next = nil
 	e.action = 0
 	e.stream = nil
+	e.children = e.children[:0]
 	e.kind = EventKindRegular
 }
 
@@ -148,19 +145,25 @@ func (e *Event) IsTimeoutKind() bool {
 	return e.kind == EventKindTimeout
 }
 
-func (e *Event) parseJSON(json []byte) error {
-	return e.Root.DecodeBytes(json)
+func (e *Event) SetChildKind() {
+	e.kind = eventKindChild
 }
 
-func (e *Event) SubparseJSON(json []byte) (*insaneJSON.Node, error) {
-	return e.Root.DecodeBytesAdditional(json)
+func (e *Event) IsChildKind() bool {
+	return e.kind == eventKindChild
+}
+
+func (e *Event) SetChildParentKind() {
+	e.kind = eventKindChildParent
+}
+
+func (e *Event) IsChildParentKind() bool {
+	return e.kind == eventKindChildParent
 }
 
 func (e *Event) Encode(outBuf []byte) ([]byte, int) {
 	l := len(outBuf)
 	outBuf = e.Root.Encode(outBuf)
-	e.Size = len(outBuf) - l
-
 	return outBuf, l
 }
 
@@ -202,14 +205,31 @@ type eventPool struct {
 
 	getMu   *sync.Mutex
 	getCond *sync.Cond
+
+	stopped          *atomic.Bool
+	runHeartbeatOnce *sync.Once
+	slowWaiters      *atomic.Int64
+	wakeupInterval   time.Duration
+}
+
+func (p *eventPool) stop() {
+	p.stopped.Store(true)
+}
+
+func (p *eventPool) waiters() int64 {
+	return p.slowWaiters.Load()
 }
 
 func newEventPool(capacity, avgEventSize int) *eventPool {
 	eventPool := &eventPool{
-		avgEventSize: avgEventSize,
-		capacity:     capacity,
-		getMu:        &sync.Mutex{},
-		backCounter:  *atomic.NewInt64(int64(capacity)),
+		avgEventSize:     avgEventSize,
+		capacity:         capacity,
+		getMu:            &sync.Mutex{},
+		backCounter:      *atomic.NewInt64(int64(capacity)),
+		runHeartbeatOnce: &sync.Once{},
+		stopped:          atomic.NewBool(false),
+		slowWaiters:      atomic.NewInt64(0),
+		wakeupInterval:   time.Second * 5,
 	}
 
 	eventPool.getCond = sync.NewCond(eventPool.getMu)
@@ -225,7 +245,7 @@ func newEventPool(capacity, avgEventSize int) *eventPool {
 
 const maxTries = 3
 
-func (p *eventPool) get() *Event {
+func (p *eventPool) get(size int) *Event {
 	x := (p.getCounter.Inc() - 1) % int64(p.capacity)
 	var tries int
 	for {
@@ -246,10 +266,17 @@ func (p *eventPool) get() *Event {
 			// slow path
 			runtime.Gosched()
 		} else {
+			p.runHeartbeatOnce.Do(func() {
+				// Run heartbeat to periodically wake up goroutines that are waiting.
+				go p.wakeupWaiters()
+			})
+
 			// slowest path
+			p.slowWaiters.Inc()
 			p.getMu.Lock()
 			p.getCond.Wait()
 			p.getMu.Unlock()
+			p.slowWaiters.Dec()
 			tries = 0
 		}
 	}
@@ -257,7 +284,8 @@ func (p *eventPool) get() *Event {
 	p.events[x] = nil
 	p.free2[x].Store(false)
 	p.inUseEvents.Inc()
-	event.reset(p.avgEventSize)
+	event.stage = eventStageInput
+	event.Size = size
 	return event
 }
 
@@ -286,10 +314,27 @@ func (p *eventPool) back(event *Event) {
 			tries = 0
 		}
 	}
+	p.resetEvent(event)
 	p.events[x] = event
 	p.free1[x].Store(true)
 	p.inUseEvents.Dec()
 	p.getCond.Broadcast()
+}
+
+func (p *eventPool) wakeupWaiters() {
+	for {
+		if p.stopped.Load() {
+			return
+		}
+
+		time.Sleep(p.wakeupInterval)
+		waiters := p.slowWaiters.Load()
+		eventsAvailable := p.inUseEvents.Load() < int64(p.capacity)
+		if waiters > 0 && eventsAvailable {
+			// There are events in the pool, wake up waiting goroutines.
+			p.getCond.Broadcast()
+		}
+	}
 }
 
 func (p *eventPool) dump() string {
@@ -308,4 +353,163 @@ func (p *eventPool) dump() string {
 	})
 
 	return out
+}
+
+func (p *eventPool) resetEvent(e *Event) {
+	if e.Size > p.avgEventSize {
+		e.Root.ReleaseBufMem()
+	}
+
+	if cap(e.Buf) > 4096 {
+		e.Buf = make([]byte, 0, 1024)
+	}
+
+	if e.Root.PoolSize() > DefaultJSONNodePoolSize*4 {
+		e.Root.ReleasePoolMem()
+	}
+
+	e.reset()
+}
+
+func (p *eventPool) inUse() int64 {
+	return p.inUseEvents.Load()
+}
+
+const syncPools = 33
+
+type lowMemoryEventPool struct {
+	capacity int
+
+	// pools contains sync.Pool instances of various capacities.
+	//
+	//	pools[0] [0,  1)
+	//	pools[1] [1,  2)
+	//	pools[2] [2,  4)
+	//	pools[3] [4,  8)
+	//	pools[4] [8,  16)
+	//	pools[5] [16, 32)
+	//	pools[6] [32, 64)
+	//	...
+	//	pools[30] [512MiB, 1GiB)
+	//	pools[31] [1GiB,   2BiG)
+	//	pools[32] [2GiB,   4GiB)
+	pools       [syncPools]*sync.Pool
+	inUseEvents *atomic.Int64
+	getCond     *sync.Cond
+
+	stopped          *atomic.Bool
+	runHeartbeatOnce *sync.Once
+	slowWaiters      *atomic.Int64
+	wakeupInterval   time.Duration
+}
+
+func newLowMemoryEventPool(capacity int) *lowMemoryEventPool {
+	pools := [syncPools]*sync.Pool{}
+	for i := 0; i < syncPools; i++ {
+		pools[i] = &sync.Pool{
+			New: func() any {
+				return newEvent()
+			},
+		}
+	}
+	return &lowMemoryEventPool{
+		capacity:         capacity,
+		pools:            pools,
+		inUseEvents:      &atomic.Int64{},
+		getCond:          sync.NewCond(&sync.Mutex{}),
+		stopped:          &atomic.Bool{},
+		runHeartbeatOnce: &sync.Once{},
+		slowWaiters:      &atomic.Int64{},
+		wakeupInterval:   time.Second * 5,
+	}
+}
+
+func (p *lowMemoryEventPool) get(size int) *Event {
+	if size < 0 {
+		panic(fmt.Errorf("BUG: negative event size: %d", size))
+	}
+
+	index := poolIndex(size)
+	getPool := p.pools[index]
+
+again:
+	inUse := int(p.inUseEvents.Inc())
+	// Fast path: we're not over the capacity.
+	if inUse <= p.capacity {
+		e := getPool.Get().(*Event)
+		e.Size = size
+		return e
+	}
+
+	// Slow path: wait until we fit in the capacity.
+	p.inUseEvents.Dec()
+
+	// Run heartbeat to periodically wake up goroutines that are waiting.
+	p.runHeartbeatOnce.Do(func() {
+		go p.wakeupWaiters()
+	})
+
+	// Wait until we fit in the capacity.
+	p.slowWaiters.Inc()
+	p.getCond.L.Lock()
+	if !p.eventsAvailable() {
+		p.getCond.Wait()
+	}
+	p.getCond.L.Unlock()
+	p.slowWaiters.Dec()
+	goto again
+}
+
+func (p *lowMemoryEventPool) back(event *Event) {
+	index := poolIndex(event.Size)
+	backPool := p.pools[index]
+
+	event.reset()
+	backPool.Put(event)
+	p.inUseEvents.Dec()
+	p.getCond.Broadcast()
+}
+
+func poolIndex(size int) int {
+	return bits.Len(uint(size))
+}
+
+func (p *lowMemoryEventPool) dump() string {
+	return fmt.Sprintf("in use events: %d of %d; waiters: %d", p.inUseEvents.Load(), p.capacity, p.slowWaiters.Load())
+}
+
+func (p *lowMemoryEventPool) inUse() int64 {
+	inUse := p.inUseEvents.Load()
+	// Make sure we don't overflow the capacity.
+	// It's possible in case when we call inUseEvents.Inc() when the pool is full.
+	inUse = min(inUse, int64(p.capacity))
+	return inUse
+}
+
+func (p *lowMemoryEventPool) waiters() int64 {
+	return p.slowWaiters.Load()
+}
+
+func (p *lowMemoryEventPool) stop() {
+	p.stopped.Store(true)
+}
+
+func (p *lowMemoryEventPool) wakeupWaiters() {
+	for {
+		if p.stopped.Load() {
+			return
+		}
+
+		time.Sleep(p.wakeupInterval)
+		waiters := p.slowWaiters.Load()
+		eventsAvailable := p.eventsAvailable()
+		if waiters > 0 && !eventsAvailable {
+			// There are events in the pool, wake up waiting goroutines.
+			p.getCond.Broadcast()
+		}
+	}
+}
+
+func (p *lowMemoryEventPool) eventsAvailable() bool {
+	return int(p.inUseEvents.Load()) < p.capacity
 }

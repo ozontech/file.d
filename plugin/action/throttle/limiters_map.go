@@ -52,14 +52,15 @@ func newLimiterWithGen(lim limiter, gen int64) *limiterWithGen {
 
 // limiterConfig configuration for creation of new limiters.
 type limiterConfig struct {
-	ctx               context.Context
-	backend           string
-	redisClient       redisClient
-	pipeline          string
-	throttleField     string
-	bucketInterval    time.Duration
-	bucketsCount      int
-	limiterValueField string
+	ctx                      context.Context
+	backend                  string
+	redisClient              redisClient
+	pipeline                 string
+	throttleField            string
+	bucketInterval           time.Duration
+	bucketsCount             int
+	limiterValueField        string
+	limiterDistributionField string
 }
 
 // limitersMapConfig configuration of limiters map.
@@ -71,7 +72,9 @@ type limitersMapConfig struct {
 
 	limiterCfg *limiterConfig
 
-	mapSizeMetric *prometheus.GaugeVec
+	// metrics
+	mapSizeMetric     prometheus.Gauge
+	limitDistrMetrics *limitDistributionMetrics
 }
 
 // limitersMap is auxiliary type for storing the map of strings to limiters with additional info for cleanup
@@ -91,7 +94,9 @@ type limitersMap struct {
 
 	limiterCfg *limiterConfig
 
-	mapSizeMetric *prometheus.GaugeVec
+	// metrics
+	mapSizeMetric     prometheus.Gauge
+	limitDistrMetrics *limitDistributionMetrics
 }
 
 func newLimitersMap(lmCfg limitersMapConfig, redisOpts *redis.Options) *limitersMap {
@@ -108,7 +113,8 @@ func newLimitersMap(lmCfg limitersMapConfig, redisOpts *redis.Options) *limiters
 
 		limiterCfg: lmCfg.limiterCfg,
 
-		mapSizeMetric: lmCfg.mapSizeMetric,
+		mapSizeMetric:     lmCfg.mapSizeMetric,
+		limitDistrMetrics: lmCfg.limitDistrMetrics,
 	}
 	if redisOpts != nil {
 		lm.limiterCfg.redisClient = redis.NewClient(redisOpts)
@@ -212,31 +218,26 @@ func (l *limitersMap) maintenance(ctx context.Context) {
 				delete(l.lims, key)
 			}
 			mapSize := float64(len(l.lims))
-			l.mapSizeMetric.WithLabelValues().Set(mapSize)
+			l.mapSizeMetric.Set(mapSize)
 			l.mu.Unlock()
 		}
 	}
 }
 
-// getNewLimiter creates new limiter based on limiter configuration.
-func (l *limitersMap) getNewLimiter(throttleKey, keyLimitOverride string, rule *rule) limiter {
+// newLimiter creates new limiter based on limiter configuration.
+func (l *limitersMap) newLimiter(throttleKey, keyLimitOverride string, rule *rule) limiter {
 	switch l.limiterCfg.backend {
 	case redisBackend:
-		return NewRedisLimiter(
-			l.limiterCfg.ctx,
-			l.limiterCfg.redisClient,
-			l.limiterCfg.pipeline,
-			l.limiterCfg.throttleField,
-			throttleKey,
-			l.limiterCfg.bucketInterval,
-			l.limiterCfg.bucketsCount,
-			rule.limit,
-			keyLimitOverride,
-			l.limiterCfg.limiterValueField,
+		return newRedisLimiter(
+			l.limiterCfg,
+			throttleKey, keyLimitOverride,
+			&rule.limit,
+			rule.distributionCfg,
+			l.limitDistrMetrics,
 			l.nowFn,
 		)
 	case inMemoryBackend:
-		return NewInMemoryLimiter(l.limiterCfg.bucketInterval, l.limiterCfg.bucketsCount, rule.limit, l.nowFn)
+		return newInMemoryLimiter(l.limiterCfg, &rule.limit, l.limitDistrMetrics, l.nowFn)
 	default:
 		l.logger.Panicf("unknown limiter backend: %s", l.limiterCfg.backend)
 	}
@@ -264,16 +265,15 @@ func (l *limitersMap) getOrAdd(throttleKey, keyLimitOverride string, limiterBuf 
 	key := string(limiterBuf)
 	// we could already write it between `l.mu.RUnlock()` and `l.mu.Lock()`, so we need to check again
 	l.mu.Lock()
+	defer l.mu.Unlock()
 	lim, has = l.lims[key]
 	if has {
 		lim.gen.Store(l.curGen)
-		l.mu.Unlock()
 		return lim, limiterBuf
 	}
-	newLim := l.getNewLimiter(throttleKey, keyLimitOverride, rule)
+	newLim := l.newLimiter(throttleKey, keyLimitOverride, rule)
 	lim = newLimiterWithGen(newLim, l.curGen)
 	l.lims[key] = lim
-	l.mu.Unlock()
 	return lim, limiterBuf
 }
 

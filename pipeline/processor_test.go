@@ -4,8 +4,8 @@ import (
 	"strconv"
 	"testing"
 
+	insaneJSON "github.com/ozontech/insane-json"
 	"github.com/stretchr/testify/require"
-	insaneJSON "github.com/vitkovskii/insane-json"
 )
 
 func Test_processor_isMatch(t *testing.T) {
@@ -102,7 +102,7 @@ func Test_processor_isMatch(t *testing.T) {
 			}
 
 			event := newEvent()
-			require.NoError(t, event.parseJSON([]byte(tc.Log)))
+			require.NoError(t, event.Root.DecodeString(tc.Log))
 
 			ok := proc.isMatch(0, event)
 			insaneJSON.Release(event.Root)

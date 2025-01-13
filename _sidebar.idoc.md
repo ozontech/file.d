@@ -19,6 +19,10 @@
   - Output
 @global-contents-table-plugin-output|links-list
 
+- **Pipeline**
+  - [Match modes](pipeline/README.md#match-modes)
+  - [Experimental: Do If rules](pipeline/doif/README.md#experimental-do-if-rules)
+
 - **Other**
   - [Contributing](/docs/contributing.md)
   - [License](/docs/license.md)

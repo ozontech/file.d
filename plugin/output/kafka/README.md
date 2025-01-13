@@ -1,5 +1,5 @@
 # Kafka output
-It sends the event batches to kafka brokers using `sarama` lib.
+It sends the event batches to kafka brokers using `franz-go` lib.
 
 ### Config params
 **`brokers`** *`[]string`* *`required`* 
@@ -11,6 +11,12 @@ List of kafka brokers to write to.
 **`default_topic`** *`string`* *`required`* 
 
 The default topic name if nothing will be found in the event field or `should_use_topic_field` isn't set.
+
+<br>
+
+**`client_id`** *`string`* *`default=file-d`* 
+
+Kafka client ID.
 
 <br>
 
@@ -51,39 +57,102 @@ After this timeout the batch will be sent even if batch isn't full.
 
 <br>
 
+**`max_message_bytes`** *`cfg.Expression`* *`default=1000000`* 
+
+The maximum permitted size of a message.
+Should be set equal to or smaller than the broker's `message.max.bytes`.
+
+<br>
+
+**`compression`** *`string`* *`default=none`* *`options=none|gzip|snappy|lz4|zstd`* 
+
+Compression codec
+
+<br>
+
+**`ack`** *`string`* *`default=leader`* *`options=no|leader|all-isr`* 
+
+Required acks for produced records
+
+<br>
+
+**`retry`** *`int`* *`default=10`* 
+
+Retries of insertion. If File.d cannot insert for this number of attempts,
+File.d will fall with non-zero exit code or skip message (see fatal_on_failed_insert).
+
+<br>
+
+**`fatal_on_failed_insert`** *`bool`* *`default=false`* 
+
+After an insert error, fall with a non-zero exit code or not
+**Experimental feature**
+
+<br>
+
+**`retention`** *`cfg.Duration`* *`default=50ms`* 
+
+Retention milliseconds for retry.
+
+<br>
+
+**`retention_exponentially_multiplier`** *`int`* *`default=2`* 
+
+Multiplier for exponential increase of retention between retries
+
+<br>
+
 **`is_sasl_enabled`** *`bool`* *`default=false`* 
 
 If set, the plugin will use SASL authentications mechanism.
 
 <br>
 
+**`sasl_mechanism`** *`string`* *`default=SCRAM-SHA-512`* *`options=PLAIN|SCRAM-SHA-256|SCRAM-SHA-512`* 
+
+SASL mechanism to use.
+
+<br>
+
 **`sasl_username`** *`string`* *`default=user`* 
 
-If set, the plugin will use SASL authentications mechanism.
+SASL username.
 
 <br>
 
 **`sasl_password`** *`string`* *`default=password`* 
 
-If set, the plugin will use SASL authentications mechanism.
+SASL password.
 
 <br>
 
 **`is_ssl_enabled`** *`bool`* *`default=false`* 
 
-If set, the plugin will use SSL connections method.
+If set, the plugin will use SSL/TLS connections method.
 
 <br>
 
 **`ssl_skip_verify`** *`bool`* *`default=false`* 
 
-If set, the plugin will use skip SSL verification.
+If set, the plugin will skip SSL/TLS verification.
 
 <br>
 
-**`pem_file`** *`string`* *`default=/file.d/certs`* 
+**`client_cert`** *`string`* 
 
-If SaslSslEnabled, the plugin will use path to the PEM certificate.
+Path or content of a PEM-encoded client certificate file.
+
+<br>
+
+**`client_key`** *`string`* 
+
+> Path or content of a PEM-encoded client key file.
+
+<br>
+
+**`ca_cert`** *`string`* 
+
+Path or content of a PEM-encoded CA file.
 
 <br>
 

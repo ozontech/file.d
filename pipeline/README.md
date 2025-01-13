@@ -1,4 +1,4 @@
-### Match modes
+## Match modes
 #### And
 `match_mode: and` — matches fields with AND operator
 

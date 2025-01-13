@@ -1,2 +1,2 @@
-### Match modes
+## Match modes
 @match-modes|header-description

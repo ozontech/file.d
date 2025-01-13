@@ -7,6 +7,7 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -19,7 +20,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/atomic"
 
-	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/test"
@@ -87,8 +87,7 @@ func pluginConfig(opts ...string) *Config {
 		OffsetsOp:           op,
 		MaintenanceInterval: "5s",
 	}
-
-	_ = cfg.Parse(config, map[string]int{"gomaxprocs": runtime.GOMAXPROCS(0)})
+	test.NewConfig(config, map[string]int{"gomaxprocs": runtime.GOMAXPROCS(0)})
 
 	return config
 }
@@ -131,6 +130,7 @@ func rotateFile(file string) string {
 func run(testCase *test.Case, eventCount int, opts ...string) {
 	if !test.Opts(opts).Has("dirty") {
 		cleanUp()
+		setupDirs()
 	}
 
 	test.RunCase(testCase, getInputInfo(opts...), eventCount, opts...)
@@ -364,6 +364,7 @@ func TestWatch(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skip test in short mode")
 	}
+
 	iterations := 4
 	eventsPerIteration := 2
 	finalEvent := 1
@@ -431,8 +432,8 @@ func TestReadContinue(t *testing.T) {
 	blockSize := 2000
 	stopAfter := 100
 	processed := 0
-	inputEvents := make([]string, 0)
-	outputEvents := make([]string, 0)
+	inputEvents := make(map[string]bool, blockSize*2)
+	outputEvents := make(map[string]bool, blockSize*2+stopAfter)
 	file := ""
 	size := 0
 
@@ -444,17 +445,20 @@ func TestReadContinue(t *testing.T) {
 			for x := 0; x < blockSize; x++ {
 				line := fmt.Sprintf(`{"data_1":"line_%d"}`, x)
 				size += len(line) + newLine
-				inputEvents = append(inputEvents, line)
+				inputEvents[line] = true
 				addString(file, line, true, false)
 			}
 		},
 		Assert: func(p *pipeline.Pipeline) {
 			processed = p.GetEventsTotal()
 			for i := 0; i < processed; i++ {
-				outputEvents = append(outputEvents, p.GetEventLogItem(i))
+				outputEvents[p.GetEventLogItem(i)] = true
 			}
 		},
 	}, stopAfter)
+
+	// restart
+	offsetFiles = make(map[string]string)
 
 	run(&test.Case{
 		Prepare: func() {
@@ -463,18 +467,21 @@ func TestReadContinue(t *testing.T) {
 			for x := 0; x < blockSize; x++ {
 				line := fmt.Sprintf(`{"data_2":"line_%d"}`, x)
 				size += len(line) + newLine
-				inputEvents = append(inputEvents, line)
+				inputEvents[line] = true
 				addString(file, line, true, false)
 			}
 		},
 		Assert: func(p *pipeline.Pipeline) {
 			for i := 0; i < p.GetEventsTotal(); i++ {
-				outputEvents = append(outputEvents, p.GetEventLogItem(i))
+				outputEvents[p.GetEventLogItem(i)] = true
 			}
 
-			for i := range inputEvents {
-				require.Equalf(t, inputEvents[i], outputEvents[i], "wrong event, all events: %v", inputEvents)
-			}
+			// we compare maps because we can tolerate  dublicates
+			require.Equalf(
+				t, inputEvents, outputEvents,
+				"input events not equal output events (input len=%d, output len=%d)",
+				len(inputEvents), len(outputEvents),
+			)
 
 			assertOffsetsAreEqual(t, genOffsetsContent(file, size), getContent(getConfigByPipeline(p).OffsetsFile))
 		},
@@ -587,8 +594,11 @@ func TestReadBufferOverflow(t *testing.T) {
 	iterations := 5
 	linesPerIterations := 2
 
-	config := &Config{}
-	_ = cfg.Parse(config, nil)
+	config := &Config{
+		WatchingDir: "./",
+		OffsetsFile: "offset.yaml",
+	}
+	test.NewConfig(config, map[string]int{"gomaxprocs": 1, "capacity": 64})
 	firstLine := `"`
 	for i := 0; i < config.ReadBufferSize+overhead; i++ {
 		firstLine += "a"
@@ -750,8 +760,11 @@ func TestReadManyCharsParallelRace(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skip test in short mode")
 	}
-	config := &Config{}
-	_ = cfg.Parse(config, nil)
+	config := &Config{
+		WatchingDir: "./",
+		OffsetsFile: "offsets.yaml",
+	}
+	test.NewConfig(config, map[string]int{"gomaxprocs": 1, "capacity": 64})
 
 	overhead := 100
 	s := ""
@@ -924,6 +937,8 @@ func TestRotationRenameWhileNotWorking(t *testing.T) {
 		},
 	}, 2)
 
+	// restart
+	offsetFiles = make(map[string]string)
 	newFile := rotateFile(file)
 
 	run(&test.Case{
@@ -991,6 +1006,8 @@ func TestTruncationSeq(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skip long tests in short mode")
 	}
+	setupDirs()
+	defer cleanUp()
 	p, _, _ := test.NewPipelineMock(nil, "passive")
 	p.SetInput(getInputInfo())
 	p.Start()
@@ -1128,11 +1145,18 @@ func BenchmarkLightJsonReadPar(b *testing.B) {
 		b.SetBytes(bytes)
 	}
 
+	opts := []string{"passive", "perf"}
+	if useLowMem, _ := strconv.ParseBool(os.Getenv("POOL_LOW_MEMORY")); useLowMem {
+		b.Log("using low memory pool")
+		opts = append(opts, "use_pool_low_memory")
+	}
+
 	b.ReportAllocs()
 	b.StopTimer()
 	b.ResetTimer()
+
 	for n := 0; n < b.N; n++ {
-		p, _, output := test.NewPipelineMock(nil, "passive", "perf")
+		p, _, output := test.NewPipelineMock(nil, opts...)
 
 		offsetsDir = b.TempDir()
 		p.SetInput(getInputInfo())

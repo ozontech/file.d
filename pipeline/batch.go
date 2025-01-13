@@ -19,7 +19,9 @@ const (
 )
 
 type Batch struct {
-	Events []*Event
+	events []*Event
+	// hasIterableEvents is the truth if the Batch contains iterable events
+	hasIterableEvents bool
 
 	// eventsSize contains total size of the Events in bytes
 	eventsSize int
@@ -34,6 +36,13 @@ type Batch struct {
 	status       BatchStatus
 }
 
+func NewPreparedBatch(events []*Event) *Batch {
+	b := &Batch{}
+	b.reset()
+	b.events = events
+	return b
+}
+
 func newBatch(maxSizeCount, maxSizeBytes int, timeout time.Duration) *Batch {
 	if maxSizeCount < 0 {
 		logger.Fatalf("why batch max count less than 0?")
@@ -45,30 +54,41 @@ func newBatch(maxSizeCount, maxSizeBytes int, timeout time.Duration) *Batch {
 		logger.Fatalf("batch limits are not set")
 	}
 
-	return &Batch{
+	b := &Batch{
 		maxSizeCount: maxSizeCount,
 		maxSizeBytes: maxSizeBytes,
 		timeout:      timeout,
-		Events:       make([]*Event, 0, maxSizeCount),
+		events:       make([]*Event, 0, maxSizeCount),
 	}
+	b.reset()
+
+	return b
 }
 
 func (b *Batch) reset() {
-	b.Events = b.Events[:0]
+	b.events = b.events[:0]
 	b.eventsSize = 0
 	b.status = BatchStatusNotReady
+	b.hasIterableEvents = false
 	b.startTime = time.Now()
 }
 
 func (b *Batch) append(e *Event) {
-	b.Events = append(b.Events, e)
+	b.hasIterableEvents = b.hasIterableEvents || !e.IsChildParentKind()
+
+	b.events = append(b.events, e)
 	b.eventsSize += e.Size
 }
 
 func (b *Batch) updateStatus() BatchStatus {
-	l := len(b.Events)
+	l := len(b.events)
+	if len(b.events) == 0 {
+		// batch is empty
+		return BatchStatusNotReady
+	}
+
 	switch {
-	case (b.maxSizeCount != 0 && l == b.maxSizeCount) || (b.maxSizeBytes != 0 && b.maxSizeBytes <= b.eventsSize):
+	case (b.maxSizeCount != 0 && l >= b.maxSizeCount) || (b.maxSizeBytes != 0 && b.maxSizeBytes <= b.eventsSize):
 		b.status = BatchStatusMaxSizeExceeded
 	case l > 0 && time.Since(b.startTime) > b.timeout:
 		b.status = BatchStatusTimeoutExceeded
@@ -76,6 +96,15 @@ func (b *Batch) updateStatus() BatchStatus {
 		b.status = BatchStatusNotReady
 	}
 	return b.status
+}
+
+func (b *Batch) ForEach(cb func(event *Event)) {
+	for _, event := range b.events {
+		if event.IsChildParentKind() {
+			continue
+		}
+		cb(event)
+	}
 }
 
 type Batcher struct {
@@ -124,7 +153,7 @@ type (
 
 func NewBatcher(opts BatcherOptions) *Batcher { // nolint: gocritic // hugeParam is ok here
 	ctl := opts.MetricCtl
-	jobsDone := ctl.RegisterCounter("batcher_jobs_done_total", "", "status")
+	jobsDone := ctl.RegisterCounterVec("batcher_jobs_done_total", "", "status")
 
 	freeBatches := make(chan *Batch, opts.Workers)
 	fullBatches := make(chan *Batch, opts.Workers)
@@ -139,9 +168,9 @@ func NewBatcher(opts BatcherOptions) *Batcher { // nolint: gocritic // hugeParam
 		freeBatches:          freeBatches,
 		fullBatches:          fullBatches,
 		opts:                 opts,
-		batchOutFnSeconds:    ctl.RegisterHistogram("batcher_out_fn_seconds", "", metric.SecondsBucketsLong).WithLabelValues(),
-		commitWaitingSeconds: ctl.RegisterHistogram("batcher_commit_waiting_seconds", "", metric.SecondsBucketsDetailed).WithLabelValues(),
-		workersInProgress:    ctl.RegisterGauge("batcher_workers_in_progress", "").WithLabelValues(),
+		batchOutFnSeconds:    ctl.RegisterHistogram("batcher_out_fn_seconds", "", metric.SecondsBucketsLong),
+		commitWaitingSeconds: ctl.RegisterHistogram("batcher_commit_waiting_seconds", "", metric.SecondsBucketsDetailed),
+		workersInProgress:    ctl.RegisterGauge("batcher_workers_in_progress", ""),
 		batchesDoneByMaxSize: jobsDone.WithLabelValues("max_size_exceeded"),
 		batchesDoneByTimeout: jobsDone.WithLabelValues("timeout_exceeded"),
 	}
@@ -171,9 +200,11 @@ func (b *Batcher) work() {
 	for batch := range b.fullBatches {
 		b.workersInProgress.Inc()
 
-		now := time.Now()
-		b.opts.OutFn(&data, batch)
-		b.batchOutFnSeconds.Observe(time.Since(now).Seconds())
+		if batch.hasIterableEvents {
+			now := time.Now()
+			b.opts.OutFn(&data, batch)
+			b.batchOutFnSeconds.Observe(time.Since(now).Seconds())
+		}
 
 		status := b.commitBatch(batch)
 
@@ -213,8 +244,9 @@ func (b *Batcher) commitBatch(batch *Batch) BatchStatus {
 	b.commitSeq++
 	b.commitWaitingSeconds.Observe(time.Since(now).Seconds())
 
-	for i := range batch.Events {
-		b.opts.Controller.Commit(batch.Events[i])
+	for i := range batch.events {
+		b.opts.Controller.Commit(batch.events[i])
+		batch.events[i] = nil
 	}
 
 	status := batch.status

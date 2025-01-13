@@ -141,7 +141,7 @@ func (h *DoActionsHandler) doActions(ctx context.Context, req DoActionsRequest) 
 
 	// push events to the pipeline
 	for i, event := range req.Events {
-		p.In(pipeline.SourceID(h.requests.Inc()), "fake", int64(i+1), event, true)
+		p.In(pipeline.SourceID(h.requests.Inc()), "fake", pipeline.NewOffsets(int64(i+1), nil), event, true, nil)
 	}
 
 	// collect result

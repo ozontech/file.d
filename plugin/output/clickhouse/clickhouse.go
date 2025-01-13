@@ -1,8 +1,10 @@
 package clickhouse
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net"
 	"strings"
 	"time"
@@ -18,6 +20,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
 /*{ introduction
@@ -41,7 +44,7 @@ type Plugin struct {
 	logger *zap.Logger
 
 	config     *Config
-	batcher    *pipeline.Batcher
+	batcher    *pipeline.RetriableBatcher
 	ctx        context.Context
 	cancelFunc context.CancelFunc
 
@@ -52,9 +55,8 @@ type Plugin struct {
 	requestID atomic.Int64
 
 	// plugin metrics
-
-	insertErrorsMetric *prometheus.CounterVec
-	queriesCountMetric *prometheus.CounterVec
+	insertErrorsMetric prometheus.Counter
+	queriesCountMetric prometheus.Counter
 }
 
 type Setting struct {
@@ -89,6 +91,35 @@ const (
 	StrategyInOrder
 )
 
+type Address struct {
+	Addr   string `json:"addr"`
+	Weight int    `json:"weight"`
+}
+
+func (a *Address) UnmarshalJSON(b []byte) error {
+	if len(b) == 0 {
+		return nil
+	}
+
+	switch b[0] {
+	case '"':
+		a.Weight = 1
+		return json.Unmarshal(b, &a.Addr)
+	case '{':
+		type tmpAddress Address
+		tmp := tmpAddress{}
+		dec := json.NewDecoder(bytes.NewReader(b))
+		dec.DisallowUnknownFields()
+		err := dec.Decode(&tmp)
+		*a = Address(tmp)
+		return err
+	default:
+		return errors.New("failed to unmarshal to Address, the value must be string or object")
+	}
+}
+
+var _ json.Unmarshaler = (*Address)(nil)
+
 // ! config-params
 // ^ config-params
 type Config struct {
@@ -96,7 +127,20 @@ type Config struct {
 	// >
 	// > TCP Clickhouse addresses, e.g.: 127.0.0.1:9000.
 	// > Check the insert_strategy to find out how File.d will behave with a list of addresses.
-	Addresses []string `json:"addresses" required:"true"` // *
+	// >
+	// > Accepts strings or objects, e.g.:
+	// > ```yaml
+	// > addresses:
+	// >   - 127.0.0.1:9000 # the same as {addr:'127.0.0.1:9000',weight:1}
+	// >   - addr: 127.0.0.1:9001
+	// >     weight: 2
+	// > ```
+	// >
+	// > When some addresses get weight greater than 1 and round_robin insert strategy is used,
+	// > it works as classical weighted round robin. Given {(a_1,w_1),(a_1,w_1),...,{a_n,w_n}},
+	// > where a_i is the ith address and w_i is the ith address' weight, requests are sent in order:
+	// > w_1 times to a_1, w_2 times to a_2, ..., w_n times to a_n, w_1 times to a_1 and so on.
+	Addresses []Address `json:"addresses" required:"true" slice:"true"` // *
 
 	// > @3@4@5@6
 	// >
@@ -184,8 +228,14 @@ type Config struct {
 	// > @3@4@5@6
 	// >
 	// > Retries of insertion. If File.d cannot insert for this number of attempts,
-	// > File.d will fall with non-zero exit code.
+	// > File.d will fall with non-zero exit code or skip message (see fatal_on_failed_insert).
 	Retry int `json:"retry" default:"10"` // *
+
+	// > @3@4@5@6
+	// >
+	// > After an insert error, fall with a non-zero exit code or not
+	// > **Experimental feature**
+	FatalOnFailedInsert bool `json:"fatal_on_failed_insert" default:"false"` // *
 
 	// > @3@4@5@6
 	// >
@@ -198,6 +248,11 @@ type Config struct {
 	// > Retention milliseconds for retry to DB.
 	Retention  cfg.Duration `json:"retention" default:"50ms" parse:"duration"` // *
 	Retention_ time.Duration
+
+	// > @3@4@5@6
+	// >
+	// > Multiplier for exponential increase of retention between retries
+	RetentionExponentMultiplier int `json:"retention_exponentially_multiplier" default:"2"` // *
 
 	// > @3@4@5@6
 	// >
@@ -285,9 +340,6 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.registerMetrics(params.MetricCtl)
 	p.ctx, p.cancelFunc = context.WithCancel(context.Background())
 
-	if p.config.Retry < 1 {
-		p.logger.Fatal("'retry' can't be <1")
-	}
 	if p.config.Retention_ < 1 {
 		p.logger.Fatal("'retention' can't be <1")
 	}
@@ -333,11 +385,11 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	}
 
 	for _, addr := range p.config.Addresses {
-		addr = addrWithDefaultPort(addr, "9000")
+		addr.Addr = addrWithDefaultPort(addr.Addr, "9000")
 		pool, err := chpool.New(p.ctx, chpool.Options{
 			ClientOptions: ch.Options{
 				Logger:           p.logger.Named("driver"),
-				Address:          addr,
+				Address:          addr.Addr,
 				Database:         p.config.Database,
 				User:             p.config.User,
 				Password:         p.config.Password,
@@ -355,22 +407,49 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 			HealthCheckPeriod: p.config.HealthCheckPeriod_,
 		})
 		if err != nil {
-			p.logger.Fatal("create clickhouse connection pool", zap.Error(err), zap.String("addr", addr))
+			p.logger.Fatal("create clickhouse connection pool", zap.Error(err), zap.String("addr", addr.Addr))
 		}
-		p.instances = append(p.instances, pool)
+		for j := 0; j < addr.Weight; j++ {
+			p.instances = append(p.instances, pool)
+		}
 	}
 
-	p.batcher = pipeline.NewBatcher(pipeline.BatcherOptions{
+	batcherOpts := pipeline.BatcherOptions{
 		PipelineName:   params.PipelineName,
 		OutputType:     outPluginType,
-		OutFn:          p.out,
 		Controller:     params.Controller,
 		Workers:        p.config.WorkersCount_,
 		BatchSizeCount: p.config.BatchSize_,
 		BatchSizeBytes: p.config.BatchSizeBytes_,
 		FlushTimeout:   p.config.BatchFlushTimeout_,
 		MetricCtl:      params.MetricCtl,
-	})
+	}
+
+	backoffOpts := pipeline.BackoffOpts{
+		MinRetention: p.config.Retention_,
+		Multiplier:   float64(p.config.RetentionExponentMultiplier),
+		AttemptNum:   p.config.Retry,
+	}
+
+	onError := func(err error) {
+		var level zapcore.Level
+		if p.config.FatalOnFailedInsert {
+			level = zapcore.FatalLevel
+		} else {
+			level = zapcore.ErrorLevel
+		}
+
+		p.logger.Log(level, "can't insert to the table", zap.Error(err),
+			zap.Int("retries", p.config.Retry),
+			zap.String("table", p.config.Table))
+	}
+
+	p.batcher = pipeline.NewRetriableBatcher(
+		&batcherOpts,
+		p.out,
+		backoffOpts,
+		onError,
+	)
 
 	p.batcher.Start(p.ctx)
 }
@@ -398,7 +477,7 @@ func (d data) reset() {
 	}
 }
 
-func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
+func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) error {
 	if *workerData == nil {
 		// we don't check the error, schema already validated in the Start
 		columns, _ := inferInsaneColInputs(p.config.Columns)
@@ -412,7 +491,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 	data := (*workerData).(data)
 	data.reset()
 
-	for _, event := range batch.Events {
+	batch.ForEach(func(event *pipeline.Event) {
 		for _, col := range data.cols {
 			node := event.Root.Dig(col.Name)
 
@@ -436,29 +515,30 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 				}
 			}
 		}
-	}
+	})
 
 	var err error
-	for try := 0; try < p.config.Retry; try++ {
+	for i := range p.instances {
 		requestID := p.requestID.Inc()
-		clickhouse := p.getInstance(requestID, try)
+		clickhouse := p.getInstance(requestID, i)
 		err = p.do(clickhouse, data.input)
 		if err == nil {
-			break
+			return nil
 		}
-		p.insertErrorsMetric.WithLabelValues().Inc()
-		time.Sleep(p.config.Retention_)
-		p.logger.Error("an attempt to insert a batch failed", zap.Error(err))
 	}
 	if err != nil {
-		p.logger.Fatal("can't insert to the table", zap.Error(err),
-			zap.Int("retries", p.config.Retry),
-			zap.String("table", p.config.Table))
+		p.insertErrorsMetric.Inc()
+		p.logger.Error(
+			"an attempt to insert a batch failed",
+			zap.Error(err),
+		)
 	}
+
+	return err
 }
 
 func (p *Plugin) do(clickhouse Clickhouse, queryInput proto.Input) error {
-	defer p.queriesCountMetric.WithLabelValues().Inc()
+	defer p.queriesCountMetric.Inc()
 
 	ctx, cancel := context.WithTimeout(p.ctx, p.config.InsertTimeout_)
 	defer cancel()

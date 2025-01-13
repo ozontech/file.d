@@ -11,11 +11,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ozontech/file.d/cfg/matchrule"
 	"github.com/ozontech/file.d/decoder"
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline/antispam"
+	"github.com/ozontech/file.d/pipeline/metadata"
+	insaneJSON "github.com/ozontech/insane-json"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
@@ -23,35 +24,44 @@ import (
 )
 
 const (
-	DefaultStreamField         = "stream"
-	DefaultCapacity            = 1024
-	DefaultAvgInputEventSize   = 4 * 1024
-	DefaultMaxInputEventSize   = 0
-	DefaultJSONNodePoolSize    = 1024
-	DefaultMaintenanceInterval = time.Second * 5
-	DefaultEventTimeout        = time.Second * 30
-	DefaultFieldValue          = "not_set"
-	DefaultStreamName          = StreamName("not_set")
+	DefaultAntispamThreshold       = 0
+	DefaultSourceNameMetaField     = ""
+	DefaultDecoder                 = "auto"
+	DefaultIsStrict                = false
+	DefaultStreamField             = "stream"
+	DefaultCapacity                = 1024
+	DefaultAvgInputEventSize       = 4 * 1024
+	DefaultMaxInputEventSize       = 0
+	DefaultCutOffEventByLimit      = false
+	DefaultCutOffEventByLimitField = ""
+	DefaultJSONNodePoolSize        = 1024
+	DefaultMaintenanceInterval     = time.Second * 5
+	DefaultEventTimeout            = time.Second * 30
+	DefaultFieldValue              = "not_set"
+	DefaultStreamName              = StreamName("not_set")
+	DefaultMetricHoldDuration      = time.Minute * 30
+	DefaultMetaCacheSize           = 1024
 
 	EventSeqIDError = uint64(0)
 
 	antispamUnbanIterations = 4
-	metricsGenInterval      = time.Hour
 )
 
 type finalizeFn = func(event *Event, notifyInput bool, backEvent bool)
 
 type InputPluginController interface {
-	In(sourceID SourceID, sourceName string, offset int64, data []byte, isNewSource bool) uint64
-	UseSpread()                           // don't use stream field and spread all events across all processors
-	DisableStreams()                      // don't use stream field
-	SuggestDecoder(t decoder.DecoderType) // set decoder if pipeline uses "auto" value for decoder
-	IncReadOps()                          // inc read ops for metric
-	IncMaxEventSizeExceeded()             // inc max event size exceeded counter
+	In(sourceID SourceID, sourceName string, offsets Offsets, data []byte, isNewSource bool, meta metadata.MetaData) uint64
+	UseSpread()                            // don't use stream field and spread all events across all processors
+	DisableStreams()                       // don't use stream field
+	SuggestDecoder(t decoder.Type)         // set decoder type if pipeline uses "auto" value for decoder
+	IncReadOps()                           // inc read ops for metric
+	IncMaxEventSizeExceeded(lvs ...string) // inc max event size exceeded counter
 }
 
 type ActionPluginController interface {
 	Propagate(event *Event) // throw held event back to pipeline
+	Spawn(parent *Event, nodes []*insaneJSON.Node)
+	IncMaxEventSizeExceeded(lvs ...string) // inc max event size exceeded counter
 }
 
 type OutputPluginController interface {
@@ -64,15 +74,26 @@ type (
 	StreamName string
 )
 
+type pool interface {
+	get(size int) *Event
+	back(event *Event)
+	dump() string
+	inUse() int64
+	stop()
+	waiters() int64
+}
+
 type Pipeline struct {
 	Name     string
 	started  bool
 	settings *Settings
 
-	decoder          decoder.DecoderType // decoder set in the config
-	suggestedDecoder decoder.DecoderType // decoder suggested by input plugin, it is used when config decoder is set to "auto"
+	decoderType          decoder.Type // decoder type set in the config
+	suggestedDecoderType decoder.Type // decoder type suggested by input plugin, it is used when config decoder is set to "auto"
+	decoder              decoder.Decoder
+	initDecoderOnce      *sync.Once
 
-	eventPool *eventPool
+	eventPool pool
 	streamer  *streamer
 
 	useSpread      bool
@@ -84,16 +105,18 @@ type Pipeline struct {
 	inputInfo  *InputPluginInfo
 	antispamer *antispam.Antispammer
 
-	actionInfos  []*ActionPluginStaticInfo
-	Procs        []*processor
-	procCount    *atomic.Int32
-	activeProcs  *atomic.Int32
-	actionParams PluginDefaultParams
+	actionInfos   []*ActionPluginStaticInfo
+	actionMetrics actionMetrics
+	actionParams  PluginDefaultParams
+
+	Procs       []*processor
+	procCount   *atomic.Int32
+	activeProcs *atomic.Int32
 
 	output     OutputPlugin
 	outputInfo *OutputPluginInfo
 
-	metricsHolder *metricsHolder
+	metricHolder *metric.Holder
 
 	// some debugging stuff
 	logger          *zap.Logger
@@ -108,35 +131,63 @@ type Pipeline struct {
 	readOps      atomic.Int64
 
 	// all pipeline`s metrics
-
-	inUseEventsMetric          *prometheus.GaugeVec
-	eventPoolCapacityMetric    *prometheus.GaugeVec
-	inputEventsCountMetric     *prometheus.CounterVec
-	inputEventSizeMetric       *prometheus.CounterVec
-	outputEventsCountMetric    *prometheus.CounterVec
-	outputEventSizeMetric      *prometheus.CounterVec
-	readOpsEventsSizeMetric    *prometheus.CounterVec
-	wrongEventCRIFormatMetric  *prometheus.CounterVec
+	inUseEventsMetric          prometheus.Gauge
+	eventPoolCapacityMetric    prometheus.Gauge
+	inputEventsCountMetric     prometheus.Counter
+	inputEventSizeMetric       prometheus.Counter
+	outputEventsCountMetric    prometheus.Counter
+	outputEventSizeMetric      prometheus.Counter
+	readOpsEventsSizeMetric    prometheus.Counter
+	wrongEventCRIFormatMetric  prometheus.Counter
 	maxEventSizeExceededMetric *prometheus.CounterVec
 	eventPoolLatency           prometheus.Observer
+
+	countEventPanicsRecoveredMetric prometheus.Counter
 }
 
 type Settings struct {
-	Decoder             string
-	Capacity            int
-	MaintenanceInterval time.Duration
-	EventTimeout        time.Duration
-	AntispamThreshold   int
-	AntispamExceptions  matchrule.RuleSets
-	AvgEventSize        int
-	MaxEventSize        int
-	StreamField         string
-	IsStrict            bool
+	Decoder                 string
+	DecoderParams           map[string]any
+	Capacity                int
+	MetaCacheSize           int
+	MaintenanceInterval     time.Duration
+	EventTimeout            time.Duration
+	AntispamThreshold       int
+	AntispamExceptions      antispam.Exceptions
+	SourceNameMetaField     string
+	AvgEventSize            int
+	MaxEventSize            int
+	CutOffEventByLimit      bool
+	CutOffEventByLimitField string
+	StreamField             string
+	IsStrict                bool
+	MetricHoldDuration      time.Duration
+	Pool                    PoolType
 }
+
+type PoolType string
+
+const (
+	PoolTypeStd    PoolType = "std"
+	PoolTypeLowMem PoolType = "low_memory"
+)
 
 // New creates new pipeline. Consider using `SetupHTTPHandlers` next.
 func New(name string, settings *Settings, registry *prometheus.Registry, lg *zap.Logger) *Pipeline {
-	metricCtl := metric.New("pipeline_"+name, registry)
+	metricCtl := metric.NewCtl("pipeline_"+name, registry)
+
+	metricHolder := metric.NewHolder(settings.MetricHoldDuration)
+
+	var eventPool pool
+	switch settings.Pool {
+	case PoolTypeStd, "":
+		eventPool = newEventPool(settings.Capacity, settings.AvgEventSize)
+	case PoolTypeLowMem:
+		insaneJSON.StartNodePoolSize = 16
+		eventPool = newLowMemoryEventPool(settings.Capacity)
+	default:
+		logger.Fatal("unknown pool type", zap.String("pool", string(settings.Pool)))
+	}
 
 	pipeline := &Pipeline{
 		Name:           name,
@@ -149,39 +200,63 @@ func New(name string, settings *Settings, registry *prometheus.Registry, lg *zap
 			PipelineSettings: settings,
 			MetricCtl:        metricCtl,
 		},
-
-		metricsHolder: newMetricsHolder(name, registry, metricsGenInterval),
-		streamer:      newStreamer(settings.EventTimeout),
-		eventPool:     newEventPool(settings.Capacity, settings.AvgEventSize),
-		antispamer: antispam.NewAntispammer(antispam.Options{
+		actionMetrics: actionMetrics{
+			m:  make(map[string]*actionMetric),
+			mu: new(sync.RWMutex),
+		},
+		metricHolder: metricHolder,
+		streamer:     newStreamer(settings.EventTimeout),
+		eventPool:    eventPool,
+		antispamer: antispam.NewAntispammer(&antispam.Options{
 			MaintenanceInterval: settings.MaintenanceInterval,
 			Threshold:           settings.AntispamThreshold,
 			UnbanIterations:     antispamUnbanIterations,
 			Logger:              lg.Named("antispam"),
 			MetricsController:   metricCtl,
+			MetricHolder:        metricHolder,
 			Exceptions:          settings.AntispamExceptions,
 		}),
 
 		eventLog:   make([]string, 0, 128),
 		eventLogMu: &sync.Mutex{},
+
+		initDecoderOnce: &sync.Once{},
 	}
 
 	pipeline.registerMetrics()
 	pipeline.setDefaultMetrics()
 
+	var err error
 	switch settings.Decoder {
 	case "json":
-		pipeline.decoder = decoder.JSON
+		pipeline.decoderType = decoder.JSON
+
+		pipeline.decoder, err = decoder.NewJsonDecoder(pipeline.settings.DecoderParams)
+		if err != nil {
+			pipeline.logger.Fatal("can't create json decoder", zap.Error(err))
+		}
 	case "raw":
-		pipeline.decoder = decoder.RAW
+		pipeline.decoderType = decoder.RAW
 	case "cri":
-		pipeline.decoder = decoder.CRI
+		pipeline.decoderType = decoder.CRI
 	case "postgres":
-		pipeline.decoder = decoder.POSTGRES
+		pipeline.decoderType = decoder.POSTGRES
 	case "nginx_error":
-		pipeline.decoder = decoder.NGINX_ERROR
+		pipeline.decoderType = decoder.NGINX_ERROR
+
+		pipeline.decoder, err = decoder.NewNginxErrorDecoder(pipeline.settings.DecoderParams)
+		if err != nil {
+			pipeline.logger.Fatal("can't create nginx_error decoder", zap.Error(err))
+		}
+	case "protobuf":
+		pipeline.decoderType = decoder.PROTOBUF
+
+		pipeline.decoder, err = decoder.NewProtobufDecoder(pipeline.settings.DecoderParams)
+		if err != nil {
+			pipeline.logger.Fatal("can't create protobuf decoder", zap.Error(err))
+		}
 	case "auto":
-		pipeline.decoder = decoder.AUTO
+		pipeline.decoderType = decoder.AUTO
 	default:
 		pipeline.logger.Fatal("unknown decoder", zap.String("decoder", settings.Decoder))
 	}
@@ -193,8 +268,12 @@ func (p *Pipeline) IncReadOps() {
 	p.readOps.Inc()
 }
 
-func (p *Pipeline) IncMaxEventSizeExceeded() {
-	p.maxEventSizeExceededMetric.WithLabelValues().Inc()
+func (p *Pipeline) IncMaxEventSizeExceeded(lvs ...string) {
+	p.maxEventSizeExceededMetric.WithLabelValues(lvs...).Inc()
+}
+
+func (p *Pipeline) IncCountEventPanicsRecovered() {
+	p.countEventPanicsRecoveredMetric.Inc()
 }
 
 func (p *Pipeline) registerMetrics() {
@@ -207,14 +286,14 @@ func (p *Pipeline) registerMetrics() {
 	p.outputEventSizeMetric = m.RegisterCounter("output_events_size", "Size of events on pipeline output")
 	p.readOpsEventsSizeMetric = m.RegisterCounter("read_ops_count", "Read OPS count")
 	p.wrongEventCRIFormatMetric = m.RegisterCounter("wrong_event_cri_format", "Wrong event CRI format counter")
-	p.maxEventSizeExceededMetric = m.RegisterCounter("max_event_size_exceeded", "Max event size exceeded counter")
+	p.maxEventSizeExceededMetric = m.RegisterCounterVec("max_event_size_exceeded", "Max event size exceeded counter", "source_name")
+	p.countEventPanicsRecoveredMetric = m.RegisterCounter("count_event_panics_recovered", "Count of processor.countEvent panics recovered")
 	p.eventPoolLatency = m.RegisterHistogram("event_pool_latency_seconds",
-		"How long we are wait an event from the pool", metric.SecondsBucketsDetailedNano).
-		WithLabelValues()
+		"How long we are wait an event from the pool", metric.SecondsBucketsDetailedNano)
 }
 
 func (p *Pipeline) setDefaultMetrics() {
-	p.eventPoolCapacityMetric.WithLabelValues().Set(float64(p.settings.Capacity))
+	p.eventPoolCapacityMetric.Set(float64(p.settings.Capacity))
 }
 
 // SetupHTTPHandlers creates handlers for plugin endpoints and pipeline info.
@@ -260,7 +339,6 @@ func (p *Pipeline) Start() {
 	}
 
 	p.initProcs()
-	p.metricsHolder.start()
 
 	outputParams := &OutputPluginParams{
 		PluginDefaultParams: p.actionParams,
@@ -311,6 +389,8 @@ func (p *Pipeline) Stop() {
 	p.output.Stop()
 
 	p.shouldStop.Store(true)
+
+	p.eventPool.stop()
 }
 
 func (p *Pipeline) SetInput(info *InputPluginInfo) {
@@ -332,38 +412,40 @@ func (p *Pipeline) GetOutput() OutputPlugin {
 }
 
 // In decodes message and passes it to event stream.
-func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes []byte, isNewSource bool) (seqID uint64) {
+func (p *Pipeline) In(sourceID SourceID, sourceName string, offsets Offsets, bytes []byte, isNewSource bool, meta metadata.MetaData) (seqID uint64) {
+	var (
+		ok     bool
+		cutoff bool
+	)
+	// don't process mud.
+	bytes, cutoff, ok = p.checkInputBytes(bytes, sourceName, meta)
+	if !ok {
+		return EventSeqIDError
+	}
 	length := len(bytes)
 
-	// don't process mud.
-	isEmpty := length == 0 || (bytes[0] == '\n' && length == 1)
-	if isEmpty {
-		return EventSeqIDError
-	}
-
-	isLong := p.settings.MaxEventSize != 0 && length > p.settings.MaxEventSize
-	if isLong {
-		p.IncMaxEventSizeExceeded()
-		return EventSeqIDError
-	}
-
 	var (
-		dec decoder.DecoderType
+		dec decoder.Type
 		row decoder.CRIRow
 		err error
 	)
-	if p.decoder == decoder.AUTO {
-		dec = p.suggestedDecoder
+	if p.decoderType == decoder.AUTO {
+		dec = p.suggestedDecoderType
 	} else {
-		dec = p.decoder
+		dec = p.decoderType
 	}
 	if dec == decoder.NO {
 		dec = decoder.JSON
+		// When config decoder is set to "auto", then we didn't create a decoder during pipeline initialization.
+		// It's necessary to initialize the decoder once.
+		p.initDecoderOnce.Do(func() {
+			p.decoder, _ = decoder.NewJsonDecoder(nil)
+		})
 	} else if dec == decoder.CRI {
 		row, err = decoder.DecodeCRI(bytes)
 		if err != nil {
-			p.wrongEventCRIFormatMetric.WithLabelValues().Inc()
-			p.Error(fmt.Sprintf("wrong cri format offset=%d, length=%d, err=%s, source=%d:%s, cri=%s", offset, length, err.Error(), sourceID, sourceName, bytes))
+			p.wrongEventCRIFormatMetric.Inc()
+			p.Error(fmt.Sprintf("wrong cri format offset=%d, length=%d, err=%s, source=%d:%s, cri=%s", offsets.current, length, err.Error(), sourceID, sourceName, bytes))
 			return EventSeqIDError
 		}
 	}
@@ -376,8 +458,39 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 	// The event is Partial if it is larger than the driver configuration.
 	// For example, for containerd this setting is called max_container_log_line_size
 	// https://github.com/containerd/containerd/blob/f7f2be732159a411eae46b78bfdb479b133a823b/pkg/cri/config/config.go#L263-L266
-	if !row.IsPartial {
-		isSpam := p.antispamer.IsSpam(uint64(sourceID), sourceName, isNewSource, bytes)
+	if !row.IsPartial && p.settings.AntispamThreshold > 0 {
+		streamOffset := offsets.byStream(string(row.Stream))
+		currentOffset := offsets.current
+
+		if streamOffset > 0 && currentOffset < streamOffset {
+			return EventSeqIDError
+		}
+
+		var checkSourceID string
+		var checkSourceName string
+		if p.settings.SourceNameMetaField == "" {
+			checkSourceID = strconv.FormatUint(uint64(sourceID), 10)
+			checkSourceName = sourceName
+		} else {
+			if val, ok := meta[p.settings.SourceNameMetaField]; ok {
+				checkSourceID = val
+				checkSourceName = val
+				isNewSource = false
+			} else {
+				p.Error(fmt.Sprintf("source_name_meta_field %q does not exists in meta", p.settings.SourceNameMetaField))
+				checkSourceID = strconv.FormatUint(uint64(sourceID), 10)
+				checkSourceName = sourceName
+			}
+		}
+
+		var eventTime time.Time
+		if len(row.Time) > 0 {
+			eventTime, err = time.Parse("2006-01-02T15:04:05.999999999Z", string(row.Time))
+			if err != nil {
+				p.Error(fmt.Sprintf("cannot parse raw time %s: %v", row.Time, err))
+			}
+		}
+		isSpam := p.antispamer.IsSpam(checkSourceID, checkSourceName, isNewSource, bytes, eventTime)
 		if isSpam {
 			return EventSeqIDError
 		}
@@ -387,81 +500,105 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offset int64, bytes 
 	p.inputSize.Add(int64(length))
 
 	now := time.Now()
-	event := p.eventPool.get()
+	event := p.eventPool.get(len(bytes))
 	p.eventPoolLatency.Observe(time.Since(now).Seconds())
 
+	err = nil
+	if !(dec == decoder.JSON || dec == decoder.PROTOBUF) {
+		_ = event.Root.DecodeString("{}")
+	}
 	switch dec {
 	case decoder.JSON:
-		err := event.parseJSON(bytes)
-		if err != nil {
-			level := zapcore.ErrorLevel
-			if p.settings.IsStrict {
-				level = zapcore.FatalLevel
-			}
-
-			p.logger.Log(level, "wrong json format", zap.Error(err),
-				zap.Int64("offset", offset),
-				zap.Int("length", length),
-				zap.Uint64("source", uint64(sourceID)),
-				zap.String("source_name", sourceName),
-				zap.ByteString("json", bytes))
-
-			// Can't process event, return to pool.
-			p.eventPool.back(event)
-			return EventSeqIDError
-		}
+		err = p.decoder.DecodeToJson(event.Root, bytes)
 	case decoder.RAW:
-		_ = event.Root.DecodeString("{}")
 		event.Root.AddFieldNoAlloc(event.Root, "message").MutateToBytesCopy(event.Root, bytes[:len(bytes)-1])
 	case decoder.CRI:
-		_ = event.Root.DecodeString("{}")
 		event.Root.AddFieldNoAlloc(event.Root, "log").MutateToBytesCopy(event.Root, row.Log)
 		event.Root.AddFieldNoAlloc(event.Root, "time").MutateToBytesCopy(event.Root, row.Time)
 		event.Root.AddFieldNoAlloc(event.Root, "stream").MutateToBytesCopy(event.Root, row.Stream)
 	case decoder.POSTGRES:
-		_ = event.Root.DecodeString("{}")
-		err := decoder.DecodePostgres(event.Root, bytes)
-		if err != nil {
-			p.logger.Fatal("wrong postgres format", zap.Error(err),
-				zap.Int64("offset", offset),
-				zap.Int("length", length),
-				zap.Uint64("source", uint64(sourceID)),
-				zap.String("source_name", sourceName),
-				zap.ByteString("log", bytes))
-
-			// Dead route, never passed here.
-			return EventSeqIDError
-		}
+		err = decoder.DecodePostgresToJson(event.Root, bytes)
 	case decoder.NGINX_ERROR:
-		_ = event.Root.DecodeString("{}")
-		err := decoder.DecodeNginxError(event.Root, bytes)
-		if err != nil {
-			level := zapcore.ErrorLevel
-			if p.settings.IsStrict {
-				level = zapcore.FatalLevel
-			}
-
-			p.logger.Log(level, "wrong nginx error log format", zap.Error(err),
-				zap.Int64("offset", offset),
-				zap.Int("length", length),
-				zap.Uint64("source", uint64(sourceID)),
-				zap.String("source_name", sourceName),
-				zap.ByteString("log", bytes))
-
-			p.eventPool.back(event)
-			return EventSeqIDError
-		}
+		err = p.decoder.DecodeToJson(event.Root, bytes)
+	case decoder.PROTOBUF:
+		err = p.decoder.DecodeToJson(event.Root, bytes)
 	default:
 		p.logger.Panic("unknown decoder", zap.Int("decoder", int(dec)))
 	}
 
-	event.Offset = offset
+	if err != nil {
+		level := zapcore.ErrorLevel
+		if p.settings.IsStrict {
+			level = zapcore.FatalLevel
+		}
+
+		p.logger.Log(level, "wrong log format", zap.Error(err),
+			zap.Int64("offset", offsets.current),
+			zap.Int("length", length),
+			zap.Uint64("source", uint64(sourceID)),
+			zap.String("source_name", sourceName),
+			zap.ByteString("log", bytes))
+
+		// Can't process event, return to pool.
+		p.eventPool.back(event)
+		return EventSeqIDError
+	}
+
+	if len(meta) > 0 {
+		if event.Root.IsArray() {
+			nodeArray := event.Root.AsArray()
+			for _, elem := range nodeArray {
+				if elem.IsObject() {
+					for k, v := range meta {
+						elem.AddField(k).MutateToString(v)
+					}
+				}
+			}
+		} else {
+			for k, v := range meta {
+				CreateNestedField(event.Root, []string{k}).MutateToString(v)
+			}
+		}
+	}
+	if cutoff && p.settings.CutOffEventByLimitField != "" {
+		event.Root.AddFieldNoAlloc(event.Root, p.settings.CutOffEventByLimitField).MutateToBool(true)
+	}
+
+	event.Offset = offsets.current
 	event.SourceID = sourceID
 	event.SourceName = sourceName
 	event.streamName = DefaultStreamName
-	event.Size = len(bytes)
 
 	return p.streamEvent(event)
+}
+
+func (p *Pipeline) checkInputBytes(bytes []byte, sourceName string, meta metadata.MetaData) ([]byte, bool, bool) {
+	length := len(bytes)
+
+	if length == 0 || (bytes[0] == '\n' && length == 1) {
+		return bytes, false, false
+	}
+
+	if p.settings.MaxEventSize != 0 && length > p.settings.MaxEventSize {
+		source := sourceName
+		if val, ok := meta[p.settings.SourceNameMetaField]; ok {
+			source = val
+		}
+		p.IncMaxEventSizeExceeded(source)
+
+		if !p.settings.CutOffEventByLimit {
+			return bytes, false, false
+		}
+
+		wasNewLine := bytes[len(bytes)-1] == '\n'
+		bytes = bytes[:p.settings.MaxEventSize]
+		if wasNewLine {
+			bytes = append(bytes, '\n')
+		}
+		return bytes, true, true
+	}
+
+	return bytes, false, true
 }
 
 func (p *Pipeline) streamEvent(event *Event) uint64 {
@@ -501,7 +638,7 @@ func (p *Pipeline) Error(err string) {
 }
 
 func (p *Pipeline) finalize(event *Event, notifyInput bool, backEvent bool) {
-	if event.IsTimeoutKind() {
+	if event.IsTimeoutKind() || event.IsChildKind() {
 		return
 	}
 
@@ -524,12 +661,81 @@ func (p *Pipeline) finalize(event *Event, notifyInput bool, backEvent bool) {
 		p.eventLogMu.Unlock()
 	}
 
+	for i, e := range event.children {
+		insaneJSON.Release(e.Root)
+		event.children[i] = nil
+	}
+
 	p.eventPool.back(event)
+}
+
+type actionMetric struct {
+	count metric.HeldCounterVec
+	size  metric.HeldCounterVec
+	// totalCounter is a map of eventStatus to counter for `/info` endpoint.
+	totalCounter map[string]*atomic.Uint64
+}
+
+type actionMetrics struct {
+	m  map[string]*actionMetric
+	mu *sync.RWMutex
+}
+
+func (am *actionMetrics) set(name string, m *actionMetric) {
+	if name == "" {
+		return
+	}
+
+	am.mu.Lock()
+	am.m[name] = m
+	am.mu.Unlock()
+}
+
+func (am *actionMetrics) get(name string) *actionMetric {
+	if name == "" {
+		return nil
+	}
+
+	am.mu.RLock()
+	defer am.mu.RUnlock()
+	return am.m[name]
 }
 
 func (p *Pipeline) AddAction(info *ActionPluginStaticInfo) {
 	p.actionInfos = append(p.actionInfos, info)
-	p.metricsHolder.AddAction(info.MetricName, info.MetricLabels, info.MetricSkipStatus)
+
+	mCtl := p.actionParams.MetricCtl
+
+	labels := make([]string, 0, len(info.MetricLabels)+1)
+	if !info.MetricSkipStatus {
+		labels = append(labels, "status")
+	}
+	labels = append(labels, info.MetricLabels...)
+
+	count := mCtl.RegisterCounterVec(
+		info.MetricName+"_events_count_total",
+		fmt.Sprintf("how many events processed by pipeline %q and #%d action", p.Name, len(p.actionInfos)-1),
+		labels...,
+	)
+	heldCount := p.metricHolder.AddCounterVec(count)
+
+	size := mCtl.RegisterCounterVec(
+		info.MetricName+"_events_size_total",
+		fmt.Sprintf("total size of events processed by pipeline %q and #%d action", p.Name, len(p.actionInfos)-1),
+		labels...,
+	)
+	heldSize := p.metricHolder.AddCounterVec(size)
+
+	totalCounter := make(map[string]*atomic.Uint64)
+	for _, st := range allEventStatuses() {
+		totalCounter[string(st)] = atomic.NewUint64(0)
+	}
+
+	p.actionMetrics.set(info.MetricName, &actionMetric{
+		count:        heldCount,
+		size:         heldSize,
+		totalCounter: totalCounter,
+	})
 }
 
 func (p *Pipeline) initProcs() {
@@ -552,11 +758,13 @@ func (p *Pipeline) initProcs() {
 func (p *Pipeline) newProc(id int) *processor {
 	proc := newProcessor(
 		id,
-		p.metricsHolder,
+		&p.actionMetrics,
 		p.activeProcs,
 		p.output,
 		p.streamer,
 		p.finalize,
+		p.IncMaxEventSizeExceeded,
+		p.IncCountEventPanicsRecovered,
 	)
 	for j, info := range p.actionInfos {
 		plugin, _ := info.Factory()
@@ -603,7 +811,9 @@ func (p *Pipeline) expandProcs() {
 		p.logger.Warn("too many processors", zap.Int32("new", to))
 	}
 
-	for x := 0; x < int(to-from); x++ {
+	// proc IDs are added starting from the next after the last one
+	// so all procs have unique IDs
+	for x := 1; x <= int(to-from); x++ {
 		proc := p.newProc(p.Procs[from-1].id + x)
 		p.Procs = append(p.Procs, proc)
 		proc.start(p.actionParams, p.logger.Sugar())
@@ -624,7 +834,7 @@ func (p *Pipeline) logChanges(myDeltas *deltas) {
 	if ce := p.logger.Check(zapcore.InfoLevel, "pipeline stats"); ce != nil {
 		inputSize := p.inputSize.Load()
 		inputEvents := p.inputEvents.Load()
-		inUseEvents := p.eventPool.inUseEvents.Load()
+		inUseEvents := p.eventPool.inUse()
 
 		interval := p.settings.MaintenanceInterval
 		rate := int(myDeltas.deltaInputEvents * float64(time.Second) / float64(interval))
@@ -658,17 +868,17 @@ func (p *Pipeline) incMetrics(inputEvents, inputSize, outputEvents, outputSize, 
 		deltaReads,
 	}
 
-	p.inputEventsCountMetric.WithLabelValues().Add(myDeltas.deltaInputEvents)
-	p.inputEventSizeMetric.WithLabelValues().Add(myDeltas.deltaInputSize)
-	p.outputEventsCountMetric.WithLabelValues().Add(myDeltas.deltaOutputEvents)
-	p.outputEventSizeMetric.WithLabelValues().Add(myDeltas.deltaOutputSize)
-	p.readOpsEventsSizeMetric.WithLabelValues().Add(myDeltas.deltaReads)
+	p.inputEventsCountMetric.Add(myDeltas.deltaInputEvents)
+	p.inputEventSizeMetric.Add(myDeltas.deltaInputSize)
+	p.outputEventsCountMetric.Add(myDeltas.deltaOutputEvents)
+	p.outputEventSizeMetric.Add(myDeltas.deltaOutputSize)
+	p.readOpsEventsSizeMetric.Add(myDeltas.deltaReads)
 
 	return myDeltas
 }
 
 func (p *Pipeline) setMetrics(inUseEvents int64) {
-	p.inUseEventsMetric.WithLabelValues().Set(float64(inUseEvents))
+	p.inUseEventsMetric.Set(float64(inUseEvents))
 }
 
 func (p *Pipeline) maintenance() {
@@ -685,10 +895,10 @@ func (p *Pipeline) maintenance() {
 		}
 
 		p.antispamer.Maintenance()
-		p.metricsHolder.maintenance()
+		p.metricHolder.Maintenance()
 
 		myDeltas := p.incMetrics(inputEvents, inputSize, outputEvents, outputSize, readOps)
-		p.setMetrics(p.eventPool.inUseEvents.Load())
+		p.setMetrics(p.eventPool.inUse())
 		p.logChanges(myDeltas)
 	}
 }
@@ -704,8 +914,8 @@ func (p *Pipeline) DisableStreams() {
 	p.disableStreams = true
 }
 
-func (p *Pipeline) SuggestDecoder(t decoder.DecoderType) {
-	p.suggestedDecoder = t
+func (p *Pipeline) SuggestDecoder(t decoder.Type) {
+	p.suggestedDecoderType = t
 }
 
 func (p *Pipeline) DisableParallelism() {
@@ -765,14 +975,7 @@ func (p *Pipeline) serveActionInfo(info *ActionPluginStaticInfo) func(http.Respo
 			return
 		}
 
-		var actionMetric *metrics
-		for i := range p.metricsHolder.metrics {
-			m := &p.metricsHolder.metrics[i]
-			if m.name == info.MetricName {
-				actionMetric = m
-				break
-			}
-		}
+		am := p.actionMetrics.get(info.MetricName)
 
 		var events []Event
 		for _, status := range []eventStatus{
@@ -780,7 +983,7 @@ func (p *Pipeline) serveActionInfo(info *ActionPluginStaticInfo) func(http.Respo
 			eventStatusDiscarded,
 			eventStatusPassed,
 		} {
-			c := actionMetric.current.totalCounter[string(status)]
+			c := am.totalCounter[string(status)]
 			if c == nil {
 				c = atomic.NewUint64(0)
 			}

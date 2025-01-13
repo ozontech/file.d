@@ -1,7 +1,6 @@
 package fd
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -61,8 +60,8 @@ func (f *FileD) Start() {
 }
 
 func (f *FileD) initMetrics() {
-	f.metricCtl = metric.New("file_d", f.registry)
-	f.versionMetric = f.metricCtl.RegisterCounter("version", "", "version")
+	f.metricCtl = metric.NewCtl("file_d", f.registry)
+	f.versionMetric = f.metricCtl.RegisterCounterVec("version", "", "version")
 	f.versionMetric.WithLabelValues(buildinfo.Version).Inc()
 }
 
@@ -70,6 +69,7 @@ func (f *FileD) createRegistry() {
 	f.registry = prometheus.NewRegistry()
 	f.registry.MustRegister(prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}))
 	f.registry.MustRegister(prometheus.NewGoCollector())
+	f.registry.MustRegister(newFdsCollector())
 }
 
 func (f *FileD) startPipelines() {
@@ -167,6 +167,11 @@ func setupAction(p *pipeline.Pipeline, plugins *PluginRegistry, index int, t str
 		return err
 	}
 
+	doIfChecker, err := extractDoIfChecker(actionJSON.Get("do_if"))
+	if err != nil {
+		logger.Fatalf(`failed to extract "do_if" conditions for action %d/%s in pipeline %q: %s`, index, t, p.Name, err.Error())
+	}
+
 	matchMode := extractMatchMode(actionJSON)
 	if matchMode == pipeline.MatchModeUnknown {
 		return fmt.Errorf("unknown match_mode value for action %d/%s", index, t)
@@ -178,15 +183,9 @@ func setupAction(p *pipeline.Pipeline, plugins *PluginRegistry, index int, t str
 	}
 	metricName, metricLabels, skipStatus := extractMetrics(actionJSON)
 	configJSON := makeActionJSON(actionJSON)
-
-	_, config := info.Factory()
-	if err := DecodeConfig(config, configJSON); err != nil {
-		return fmt.Errorf("can't unmarshal config for %s action: %s", info.Type, err.Error())
-	}
-
-	err = cfg.Parse(config, values)
+	config, err := pipeline.GetConfig(info, configJSON, values)
 	if err != nil {
-		return fmt.Errorf("wrong config for %q action: %s", info.Type, err.Error())
+		return fmt.Errorf("wrong config for action %d/%s in pipeline %q: %s", index, t, p.Name, err.Error())
 	}
 
 	infoCopy := *info
@@ -201,6 +200,7 @@ func setupAction(p *pipeline.Pipeline, plugins *PluginRegistry, index int, t str
 		MetricLabels:     metricLabels,
 		MetricSkipStatus: skipStatus,
 		MatchInvert:      matchInvert,
+		DoIfChecker:      doIfChecker,
 	})
 	return nil
 }
@@ -247,26 +247,15 @@ func (f *FileD) getStaticInfo(pipelineConfig *cfg.PipelineConfig, pluginKind pip
 	if err != nil {
 		logger.Panicf("can't create config json for %s", t)
 	}
-	_, config := info.Factory()
-	if err := DecodeConfig(config, configJson); err != nil {
-		return nil, fmt.Errorf("can't unmarshal config for %s: %s", pluginKind, err.Error())
-	}
-
-	err = cfg.Parse(config, values)
+	config, err := pipeline.GetConfig(info, configJson, values)
 	if err != nil {
-		logger.Fatalf("wrong config for %q plugin %q: %s", pluginKind, t, err.Error())
+		logger.Fatalf("error on creating %s with type %q: %s", t, pluginKind, err.Error())
 	}
 
 	infoCopy := *info
 	infoCopy.Config = config
 
 	return &infoCopy, nil
-}
-
-func DecodeConfig(config pipeline.AnyConfig, configJson []byte) error {
-	dec := json.NewDecoder(bytes.NewReader(configJson))
-	dec.DisallowUnknownFields()
-	return dec.Decode(config)
 }
 
 func (f *FileD) Stop(ctx context.Context) error {

@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cenkalti/backoff/v4"
 	"github.com/minio/minio-go"
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
@@ -21,6 +22,7 @@ import (
 	"github.com/ozontech/file.d/plugin/output/file"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
 /*{ introduction
@@ -47,9 +49,9 @@ pipelines:
       type: http
       emulate_mode: "no"
       address: ":9200"
-      actions:
-        - type: json_decode
-          field: message
+	actions:
+	- type: json_decode
+		field: message
     output:
       type: s3
       file_config:
@@ -73,12 +75,12 @@ pipelines:
       type: http
       emulate_mode: "no"
       address: ":9200"
-      actions:
-        - type: json_decode
-          field: message
+	actions:
+	- type: json_decode
+		field: message
     output:
       type: s3
-      file_plugin:
+      file_config:
         retention_interval: 10s
       # endpoint, access_key, secret_key, bucket are required.
       endpoint: "s3.fake_host.org:80"
@@ -102,16 +104,14 @@ pipelines:
 }*/
 
 const (
-	fileNameSeparator  = "_"
-	attemptIntervalMin = 1 * time.Second
-	dirSep             = "/"
-	StaticBucketDir    = "static_buckets"
-	DynamicBucketDir   = "dynamic_buckets"
+	fileNameSeparator = "_"
+	dirSep            = "/"
+	StaticBucketDir   = "static_buckets"
+	DynamicBucketDir  = "dynamic_buckets"
 )
 
 var (
-	attemptInterval = attemptIntervalMin
-	compressors     = map[string]func(*zap.SugaredLogger) compressor{
+	compressors = map[string]func(*zap.SugaredLogger) compressor{
 		zipName: newZipCompressor,
 	}
 )
@@ -150,8 +150,7 @@ type Plugin struct {
 	compressor compressor
 
 	// plugin metrics
-
-	sendErrorMetric  *prometheus.CounterVec
+	sendErrorMetric  prometheus.Counter
 	uploadFileMetric *prometheus.CounterVec
 
 	rnd   rand.Rand
@@ -235,6 +234,29 @@ type Config struct {
 	// > Sets upload timeout.
 	UploadTimeout  cfg.Duration `json:"upload_timeout" default:"1m" parse:"duration"` // *
 	UploadTimeout_ time.Duration
+
+	// > @3@4@5@6
+	// >
+	// > Retries of upload. If File.d cannot upload for this number of attempts,
+	// > File.d will fall with non-zero exit code or skip message (see fatal_on_failed_insert).
+	Retry int `json:"retry" default:"10"` // *
+
+	// > @3@4@5@6
+	// >
+	// > After an insert error, fall with a non-zero exit code or not
+	// > **Experimental feature**
+	FatalOnFailedInsert bool `json:"fatal_on_failed_insert" default:"false"` // *
+
+	// > @3@4@5@6
+	// >
+	// > Retention milliseconds for retry to upload.
+	Retention  cfg.Duration `json:"retention" default:"1s" parse:"duration"` // *
+	Retention_ time.Duration
+
+	// > @3@4@5@6
+	// >
+	// > Multiplier for exponential increase of retention between retries
+	RetentionExponentMultiplier int `json:"retention_exponentially_multiplier" default:"2"` // *
 }
 
 func (c *Config) IsMultiBucketExists(bucketName string) bool {
@@ -271,7 +293,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 
 func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 	p.sendErrorMetric = ctl.RegisterCounter("output_s3_send_error", "Total s3 send errors")
-	p.uploadFileMetric = ctl.RegisterCounter("output_s3_upload_file", "Total files upload", "bucket_name")
+	p.uploadFileMetric = ctl.RegisterCounterVec("output_s3_upload_file", "Total files upload", "bucket_name")
 }
 
 func (p *Plugin) StartWithMinio(config pipeline.AnyConfig, params *pipeline.OutputPluginParams, factory objStoreFactory) {
@@ -314,7 +336,11 @@ func (p *Plugin) StartWithMinio(config pipeline.AnyConfig, params *pipeline.Outp
 	p.compressCh = make(chan fileDTO, p.config.FileConfig.WorkersCount_)
 
 	for i := 0; i < p.config.FileConfig.WorkersCount_; i++ {
-		go p.uploadWork()
+		go p.uploadWork(pipeline.GetBackoff(
+			p.config.Retention_,
+			float64(p.config.RetentionExponentMultiplier),
+			uint64(p.config.Retry),
+		))
 		go p.compressWork()
 	}
 	err = p.startPlugins(params, outPlugCount, targetDirs, fileNames)
@@ -506,10 +532,10 @@ func (p *Plugin) addFileJobWithBucket(bucketName string) func(filename string) {
 	}
 }
 
-func (p *Plugin) uploadWork() {
+func (p *Plugin) uploadWork(workerBackoff backoff.BackOff) {
 	for compressed := range p.uploadCh {
-		sleepTime := attemptInterval
-		for {
+		workerBackoff.Reset()
+		err := backoff.Retry(func() error {
 			p.logger.Infof("starting upload s3 object. fileName=%s, bucketName=%s", compressed.fileName, compressed.bucketName)
 			err := p.uploadToS3(compressed)
 			if err == nil {
@@ -520,11 +546,23 @@ func (p *Plugin) uploadWork() {
 				if err != nil && !os.IsNotExist(err) {
 					p.logger.Panicf("could not delete file: %s, err: %s", compressed, err.Error())
 				}
-				break
+				return nil
 			}
-			sleepTime += sleepTime
-			p.logger.Errorf("could not upload object: %s, next attempt in %s, error: %s", compressed, sleepTime.String(), err.Error())
-			time.Sleep(sleepTime)
+			p.logger.Errorf("could not upload object: %s, error: %s", compressed, err.Error())
+			return err
+		}, workerBackoff)
+
+		if err != nil {
+			var level zapcore.Level
+			if p.config.FatalOnFailedInsert {
+				level = zapcore.FatalLevel
+			} else {
+				level = zapcore.ErrorLevel
+			}
+
+			p.logger.Desugar().Log(level, "could not upload s3 object", zap.Error(err),
+				zap.Int("retries", p.config.Retry),
+			)
 		}
 	}
 }
@@ -564,7 +602,7 @@ func (p *Plugin) uploadToS3(compressedDTO fileDTO) error {
 	)
 
 	if err != nil {
-		p.sendErrorMetric.WithLabelValues().Inc()
+		p.sendErrorMetric.Inc()
 		return fmt.Errorf("could not upload file: %s into bucket: %s, error: %s", compressedDTO.fileName, compressedDTO.bucketName, err.Error())
 	}
 	return nil

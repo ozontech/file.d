@@ -30,18 +30,6 @@ But update events don't work with symlinks, so watcher also periodically manuall
 
 > ⚠ Use add_file_name plugin if you want to add filename to events.
 
-**Reading docker container log files:**
-```yaml
-pipelines:
-  example_docker_pipeline:
-    input:
-        type: file
-        watching_dir: /var/lib/docker/containers
-        offsets_file: /data/offsets.yaml
-        filename_pattern: "*-json.log"
-        persistence_mode: async
-```
-
 [More details...](plugin/input/file/README.md)
 ## http
 Reads events from HTTP requests with the body delimited by a new line.
@@ -137,7 +125,7 @@ pipelines:
 
 [More details...](plugin/input/k8s/README.md)
 ## kafka
-It reads events from multiple Kafka topics using `sarama` library.
+It reads events from multiple Kafka topics using `franz-go` library.
 > It guarantees at "at-least-once delivery" due to the commitment mechanism.
 
 **Example**
@@ -150,6 +138,10 @@ pipelines:
       brokers: [kafka:9092, kafka:9091]
       topics: [topic1, topic2]
       offset: newest
+      meta:
+        partition: '{{ .partition }}'
+        topic: '{{ .topic }}'
+        offset: '{{ .offset }}'
     # output plugin is not important in this case, let's emulate s3 output.
     output:
       type: s3
@@ -182,6 +174,95 @@ It converts field date/time data to different format.
 It converts the log level field according RFC-5424.
 
 [More details...](plugin/action/convert_log_level/README.md)
+## convert_utf8_bytes
+It converts multiple UTF-8-encoded bytes to corresponding characters.
+Supports unicode (`\u...` and `\U...`), hex (`\x...`) and octal (`\{0-3}{0-7}{0-7}`) encoded bytes.
+
+> Note: Escaped and unescaped backslashes are treated the same.
+For example, the following 2 values will be converted to the same result:
+`\x68\x65\x6C\x6C\x6F` and `\\x68\\x65\\x6C\\x6C\\x6F` => `hello`
+
+### Examples
+```yaml
+pipelines:
+  example_pipeline:
+    ...
+    actions:
+    - type: convert_utf8_bytes
+      fields:
+        - obj.field
+    ...
+```
+
+The original event:
+```json
+{
+  "obj": {
+    "field": "\\xD0\\xA1\\xD0\\x98\\xD0\\xA1\\xD0\\xA2\\xD0\\x95\\xD0\\x9C\\xD0\\x90.xml"
+  }
+}
+```
+The resulting event:
+```json
+{
+  "obj": {
+    "field": "СИСТЕМА.xml"
+  }
+}
+```
+---
+The original event:
+```json
+{
+  "obj": {
+    "field": "$\\110\\145\\154\\154\\157\\054\\040\\146\\151\\154\\145\\056\\144!"
+  }
+}
+```
+The resulting event:
+```json
+{
+  "obj": {
+    "field": "$Hello, file.d!"
+  }
+}
+```
+---
+The original event:
+```json
+{
+  "obj": {
+    "field": "$\\u0048\\u0065\\u006C\\u006C\\u006F\\u002C\\u0020\\ud801\\udc01!"
+  }
+}
+```
+The resulting event:
+```json
+{
+  "obj": {
+    "field": "$Hello, 𐐁!"
+  }
+}
+```
+---
+The original event:
+```json
+{
+  "obj": {
+    "field": "{\"Dir\":\"C:\\\\Users\\\\username\\\\.prog\\\\120.67.0\\\\x86_64\\\\x64\",\"File\":\"$Storage$\\xD0\\x9F\\xD1\\x80\\xD0\\xB8\\xD0\\xB7\\xD0\\xBD\\xD0\\xB0\\xD0\\xBA.20.tbl.xml\"}"
+  }
+}
+```
+The resulting event:
+```json
+{
+  "obj": {
+    "field": "{\"Dir\":\"C:\\\\Users\\\\username\\\\.prog\\\\120.67.0\\\\x86_64\\\\x64\",\"File\":\"$Storage$Признак.20.tbl.xml\"}"
+  }
+}
+```
+
+[More details...](plugin/action/convert_utf8_bytes/README.md)
 ## debug
 It logs event to stderr. Useful for debugging.
 
@@ -203,6 +284,11 @@ Following that, it will allow through every 5th event in that interval.
 
 
 [More details...](plugin/action/debug/README.md)
+## decode
+It decodes a string from the event field and merges the result with the event root.
+> If one of the decoded keys already exists in the event root, it will be overridden.
+
+[More details...](plugin/action/decode/README.md)
 ## discard
 It drops an event. It is used in a combination with `match_fields`/`match_mode` parameters to filter out the events.
 
@@ -285,6 +371,8 @@ pipelines:
 It decodes a JSON string from the event field and merges the result with the event root.
 If the decoded JSON isn't an object, the event will be skipped.
 
+> ⚠ DEPRECATED. Use `decode` plugin with `decoder: json` instead.
+
 [More details...](plugin/action/json_decode/README.md)
 ## json_encode
 It replaces field with its JSON string representation.
@@ -303,6 +391,11 @@ It transforms `{"server":{"os":"linux","arch":"amd64"}}` into `{"server":"{\"os\
 
 
 [More details...](plugin/action/json_encode/README.md)
+## json_extract
+It extracts a field from JSON-encoded event field and adds extracted field to the event root.
+> If extracted field already exists in the event root, it will be overridden.
+
+[More details...](plugin/action/json_extract/README.md)
 ## keep_fields
 It keeps the list of the event fields and removes others.
 
@@ -319,9 +412,10 @@ pipelines:
     actions:
     - type: mask
       metric_subsystem_name: "some_name"
+      ignore_fields:
+      - trace_id
       masks:
-      - mask:
-        re: "\b(\d{1,4})\D?(\d{1,4})\D?(\d{1,4})\D?(\d{1,4})\b"
+      - re: "\b(\d{1,4})\D?(\d{1,4})\D?(\d{1,4})\D?(\d{1,4})\b"
         groups: [1,2,3]
     ...
 ```
@@ -329,8 +423,11 @@ pipelines:
 
 [More details...](plugin/action/mask/README.md)
 ## modify
-It modifies the content for a field. It works only with strings.
+It modifies the content for a field or add new field. It works only with strings.
 You can provide an unlimited number of config parameters. Each parameter handled as `cfg.FieldSelector`:`cfg.Substitution`.
+When `_skip_empty` is set to `true`, the field won't be modified/added in the case of field value is empty.
+
+> Note: When used to add new nested fields, each child field is added step by step, which can cause performance issues.
 
 **Example:**
 ```yaml
@@ -357,6 +454,99 @@ The resulting event could look like:
 ```
 
 [More details...](plugin/action/modify/README.md)
+## move
+It moves fields to the target field in a certain mode.
+> In `allow` mode, the specified `fields` will be moved;
+> in `block` mode, the unspecified `fields` will be moved.
+
+### Examples
+```yaml
+pipelines:
+  example_pipeline:
+    ...
+    actions:
+    - type: move
+      mode: allow
+      target: other
+      fields:
+        - log.stream
+        - zone
+    ...
+```
+The original event:
+```json
+{
+  "service": "test",
+  "log": {
+    "level": "error",
+    "message": "error occurred",
+    "ts": "2023-10-30T13:35:33.638720813Z",
+    "stream": "stderr"
+  },
+  "zone": "z501"
+}
+```
+The resulting event:
+```json
+{
+  "service": "test",
+  "log": {
+    "level": "error",
+    "message": "error occurred",
+    "ts": "2023-10-30T13:35:33.638720813Z"
+  },
+  "other": {
+    "stream": "stderr",
+    "zone": "z501"
+  }
+}
+```
+---
+```yaml
+pipelines:
+  example_pipeline:
+    ...
+    actions:
+    - type: move
+      mode: block
+      target: other
+      fields:
+        - log
+    ...
+```
+The original event:
+```json
+{
+  "service": "test",
+  "log": {
+    "level": "error",
+    "message": "error occurred",
+    "ts": "2023-10-30T13:35:33.638720813Z",
+    "stream": "stderr"
+  },
+  "zone": "z501",
+  "other": {
+    "user": "ivanivanov"
+  }
+}
+```
+The resulting event:
+```json
+{
+  "log": {
+    "level": "error",
+    "message": "error occurred",
+    "ts": "2023-10-30T13:35:33.638720813Z"
+  },
+  "other": {
+    "user": "ivanivanov",
+    "service": "test",
+    "zone": "z501"
+  }
+}
+```
+
+[More details...](plugin/action/move/README.md)
 ## parse_es
 It parses HTTP input using Elasticsearch `/_bulk` API format. It converts sources defining create/index actions to the events. Update/delete actions are ignored.
 > Check out the details in [Elastic Bulk API](https://www.elastic.co/guide/en/elasticsearch/reference/current/docs-bulk.html).
@@ -368,6 +558,48 @@ It parses string from the event field using re2 expression with named subgroups 
 [More details...](plugin/action/parse_re2/README.md)
 ## remove_fields
 It removes the list of the event fields and keeps others.
+Nested fields supported: list subfield names separated with dot.
+Example:
+```
+fields: ["a.b.c"]
+
+# event before processing
+{
+  "a": {
+    "b": {
+      "c": 100,
+      "d": "some"
+    }
+  }
+}
+
+# event after processing
+{
+  "a": {
+    "b": {
+      "d": "some" # "c" removed
+    }
+  }
+}
+```
+
+If field name contains dots use backslash for escaping.
+Example:
+```
+fields:
+  - exception\.type
+
+# event before processing
+{
+  "message": "Exception occurred",
+  "exception.type": "SomeType"
+}
+
+# event after processing
+{
+  "message": "Exception occurred" # "exception.type" removed
+}
+```
 
 [More details...](plugin/action/remove_fields/README.md)
 ## rename
@@ -402,6 +634,31 @@ The resulting event could look like:
 It adds time field to the event.
 
 [More details...](plugin/action/set_time/README.md)
+## split
+It splits array of objects into different events.
+
+For example:
+```json
+{
+	"data": [
+		{ "message": "go" },
+		{ "message": "rust" },
+		{ "message": "c++" }
+	]
+}
+```
+
+Split produces:
+```json
+{ "message": "go" },
+{ "message": "rust" },
+{ "message": "c++" }
+```
+
+Parent event will be discarded.
+If the value of the JSON field is not an array of objects, then the event will be pass unchanged.
+
+[More details...](plugin/action/split/README.md)
 ## throttle
 It discards the events if pipeline throughput gets higher than a configured threshold.
 
@@ -449,7 +706,7 @@ Allowed characters in field names are letters, numbers, underscores, dashes, and
 
 [More details...](plugin/output/gelf/README.md)
 ## kafka
-It sends the event batches to kafka brokers using `sarama` lib.
+It sends the event batches to kafka brokers using `franz-go` lib.
 
 [More details...](plugin/output/kafka/README.md)
 ## postgres
@@ -480,9 +737,9 @@ pipelines:
       type: http
       emulate_mode: "no"
       address: ":9200"
-      actions:
-        - type: json_decode
-          field: message
+	actions:
+	- type: json_decode
+		field: message
     output:
       type: s3
       file_config:
@@ -506,12 +763,12 @@ pipelines:
       type: http
       emulate_mode: "no"
       address: ":9200"
-      actions:
-        - type: json_decode
-          field: message
+	actions:
+	- type: json_decode
+		field: message
     output:
       type: s3
-      file_plugin:
+      file_config:
         retention_interval: 10s
       # endpoint, access_key, secret_key, bucket are required.
       endpoint: "s3.fake_host.org:80"
@@ -536,6 +793,52 @@ pipelines:
 [More details...](plugin/output/s3/README.md)
 ## splunk
 It sends events to splunk.
+
+By default it only stores original event under the "event" key according to the Splunk output format.
+
+If other fields are required it is possible to copy fields values from the original event to the other
+fields relative to the output json. Copies are not allowed directly to the root of output event or
+"event" field and any of its subfields.
+
+For example, timestamps and service name can be copied to provide additional meta data to the Splunk:
+
+```yaml
+copy_fields:
+  - from: ts
+  	to: time
+  - from: service
+  	to: fields.service_name
+```
+
+Here the plugin will lookup for "ts" and "service" fields in the original event and if they are present
+they will be copied to the output json starting on the same level as the "event" key. If the field is not
+found in the original event plugin will not populate new field in output json.
+
+In:
+
+```json
+{
+  "ts":"1723651045",
+  "service":"some-service",
+  "message":"something happened"
+}
+```
+
+Out:
+
+```json
+{
+  "event": {
+    "ts":"1723651045",
+    "service":"some-service",
+    "message":"something happened"
+  },
+  "time": "1723651045",
+  "fields": {
+    "service_name": "some-service"
+  }
+}
+```
 
 [More details...](plugin/output/splunk/README.md)
 ## stdout

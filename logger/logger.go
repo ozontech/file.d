@@ -33,27 +33,26 @@ func init() {
 
 	Level = zap.NewAtomicLevelAt(level)
 
-	Instance = zap.New(
-		zapcore.NewCore(
-			zapcore.NewJSONEncoder(zapcore.EncoderConfig{
-				TimeKey:       "ts",
-				LevelKey:      "level",
-				NameKey:       "logger",
-				CallerKey:     "caller",
-				MessageKey:    "message",
-				StacktraceKey: "stacktrace",
-				LineEnding:    zapcore.DefaultLineEnding,
-				EncodeLevel:   zapcore.LowercaseLevelEncoder,
-				EncodeTime: func(time time.Time, encoder zapcore.PrimitiveArrayEncoder) {
-					zapcore.RFC3339NanoTimeEncoder(time.UTC(), encoder)
-				},
-				EncodeDuration: zapcore.StringDurationEncoder,
-				EncodeCaller:   zapcore.ShortCallerEncoder,
-			}),
-			zapcore.AddSync(os.Stderr),
-			Level,
-		),
-	).Sugar().Named("fd")
+	config := zapcore.EncoderConfig{
+		TimeKey:       "ts",
+		LevelKey:      "level",
+		NameKey:       "logger",
+		CallerKey:     "caller",
+		MessageKey:    "message",
+		StacktraceKey: "stacktrace",
+		LineEnding:    zapcore.DefaultLineEnding,
+		EncodeLevel:   zapcore.LowercaseLevelEncoder,
+		EncodeTime: func(time time.Time, encoder zapcore.PrimitiveArrayEncoder) {
+			zapcore.RFC3339NanoTimeEncoder(time.UTC(), encoder)
+		},
+		EncodeDuration: zapcore.StringDurationEncoder,
+		EncodeCaller:   zapcore.ShortCallerEncoder,
+	}
+
+	core := zapcore.NewCore(zapcore.NewJSONEncoder(config), zapcore.AddSync(os.Stderr), Level)
+	Instance = zap.New(core).
+		Sugar().
+		Named("fd")
 
 	Instance.Infof("Logger initialized with level: %s", level)
 }

@@ -54,8 +54,9 @@ type jobProvider struct {
 	logger           *zap.SugaredLogger
 
 	// provider metrics
-
-	possibleOffsetCorruptionMetric *prometheus.CounterVec
+	possibleOffsetCorruptionMetric prometheus.Counter
+	errorOpenFileMetric            prometheus.Counter
+	numberOfCurrentJobsMetric      prometheus.Gauge
 }
 
 type Job struct {
@@ -77,7 +78,7 @@ type Job struct {
 	// offsets is a sliceMap of streamName to offset.
 	// Unlike map[string]int, sliceMap can work with mutable strings when using unsafe conversion from []byte.
 	// Also it is likely not slower than map implementation for 1-2 streams case.
-	offsets sliceMap
+	offsets pipeline.SliceMap
 
 	mu *sync.Mutex
 }
@@ -99,7 +100,26 @@ type symlinkInfo struct {
 	inode    inodeID
 }
 
-func NewJobProvider(config *Config, possibleOffsetCorruptionMetric *prometheus.CounterVec, sugLogger *zap.SugaredLogger) *jobProvider {
+type metricCollection struct {
+	possibleOffsetCorruptionMetric prometheus.Counter
+	errorOpenFileMetric            prometheus.Counter
+	notifyChannelLengthMetric      prometheus.Gauge
+	numberOfCurrentJobsMetric      prometheus.Gauge
+}
+
+func newMetricCollection(
+	possibleOffsetCorruptionMetric, errorOpenFileMetric prometheus.Counter,
+	notifyChannelLengthMetric prometheus.Gauge, numberOfCurrentJobsMetric prometheus.Gauge,
+) *metricCollection {
+	return &metricCollection{
+		possibleOffsetCorruptionMetric: possibleOffsetCorruptionMetric,
+		errorOpenFileMetric:            errorOpenFileMetric,
+		notifyChannelLengthMetric:      notifyChannelLengthMetric,
+		numberOfCurrentJobsMetric:      numberOfCurrentJobsMetric,
+	}
+}
+
+func NewJobProvider(config *Config, metrics *metricCollection, sugLogger *zap.SugaredLogger) *jobProvider {
 	jp := &jobProvider{
 		config:   config,
 		offsetDB: newOffsetDB(config.OffsetsFile, config.OffsetsFileTmp),
@@ -120,15 +140,46 @@ func NewJobProvider(config *Config, possibleOffsetCorruptionMetric *prometheus.C
 		stopMaintenanceCh: make(chan bool, 1), // non-zero channel cause we don't wanna wait goroutine to stop
 
 		logger:                         sugLogger,
-		possibleOffsetCorruptionMetric: possibleOffsetCorruptionMetric,
+		possibleOffsetCorruptionMetric: metrics.possibleOffsetCorruptionMetric,
+		errorOpenFileMetric:            metrics.errorOpenFileMetric,
+		numberOfCurrentJobsMetric:      metrics.numberOfCurrentJobsMetric,
+	}
+
+	if len(config.Paths.Include) == 0 {
+		currentDir, err := os.Getwd()
+		if err != nil {
+			jp.logger.Errorf("cannot get current dir: %s", err.Error())
+			return nil
+		}
+
+		watchDir := config.WatchingDir
+		if !filepath.IsAbs(watchDir) {
+			if watchDir == "*" {
+				watchDir = filepath.Join(currentDir, "")
+			} else {
+				watchDir = filepath.Join(currentDir, watchDir)
+			}
+		}
+
+		if config.DirPattern == "*" {
+			config.Paths.Include = append(
+				config.Paths.Include,
+				filepath.Join(watchDir, "**", config.FilenamePattern),
+			)
+		} else {
+			config.Paths.Include = append(
+				config.Paths.Include,
+				filepath.Join(watchDir, config.DirPattern, config.FilenamePattern),
+			)
+		}
 	}
 
 	jp.watcher = NewWatcher(
 		config.WatchingDir,
-		config.FilenamePattern,
-		config.DirPattern,
+		config.Paths,
 		jp.processNotification,
 		config.ShouldWatchChanges,
+		metrics.notifyChannelLengthMetric,
 		sugLogger,
 	)
 
@@ -183,28 +234,28 @@ func (jp *jobProvider) commit(event *pipeline.Event) {
 
 	job.mu.Lock()
 	// commit offsets only not ignored AND regular events
-	if !event.IsRegularKind() || event.SeqID <= job.ignoreEventsLE {
+	if (!event.IsRegularKind() && !event.IsChildParentKind()) || event.SeqID <= job.ignoreEventsLE {
 		job.mu.Unlock()
 		return
 	}
 
-	value, has := job.offsets.get(streamName)
+	value, has := job.offsets.Get(streamName)
 	if value >= event.Offset {
 		defer job.mu.Unlock()
 		jp.logger.Panicf("offset corruption: committing=%d, current=%d, event id=%d, source=%d:%s", event.Offset, value, event.SeqID, event.SourceID, event.SourceName)
 	}
 
 	if value == 0 && event.Offset >= 16*1024*1024 {
-		jp.possibleOffsetCorruptionMetric.WithLabelValues().Inc()
+		jp.possibleOffsetCorruptionMetric.Inc()
 		jp.logger.Errorf("it maybe an offset corruption: committing=%d, current=%d, event id=%d, source=%d:%s", event.Offset, value, event.SeqID, event.SourceID, event.SourceName)
 	}
 
 	// streamName isn't actually a string, but unsafe []byte, so copy it when adding to the sliceMap
 	if has {
-		job.offsets.set(streamName, event.Offset)
+		job.offsets.Set(streamName, event.Offset)
 	} else {
 		streamNameCopy := pipeline.StreamName(event.StreamNameBytes())
-		job.offsets.set(streamNameCopy, event.Offset)
+		job.offsets.Set(streamNameCopy, event.Offset)
 	}
 
 	job.mu.Unlock()
@@ -239,13 +290,19 @@ func (jp *jobProvider) addSymlink(inode inodeID, filename string) {
 }
 
 func (jp *jobProvider) refreshSymlink(symlink string, inode inodeID, isWrite bool) {
-	filename, err := filepath.EvalSymlinks(symlink)
-	if err != nil {
-		jp.logger.Warnf("symlink have been removed %s", symlink)
+	if _, err := os.Lstat(symlink); err != nil {
+		jp.logger.Warnf("symlink has been removed %s: %s", symlink, err.Error())
 
 		jp.symlinksMu.Lock()
 		delete(jp.symlinks, inode)
 		jp.symlinksMu.Unlock()
+		return
+	}
+
+	filename, err := os.Readlink(symlink)
+	if err != nil {
+		jp.logger.Warnf("symlink %s is broken: %s", symlink, err.Error())
+		// for example, in the case of rotating the k8s pod logs symlink will be fixed soon
 		return
 	}
 
@@ -282,6 +339,7 @@ func (jp *jobProvider) refreshFile(stat os.FileInfo, filename string, symlink st
 	file, err := os.Open(filename)
 	if err != nil {
 		jp.logger.Warnf("file was already moved from creation place %s: %s", filename, err.Error())
+		jp.errorOpenFileMetric.Inc()
 		return
 	}
 
@@ -338,8 +396,15 @@ func (jp *jobProvider) addJob(file *os.File, stat os.FileInfo, filename string, 
 		jp.initJobOffset(jp.config.OffsetsOp_, job)
 	}
 	jp.jobs[sourceID] = job
-	if len(jp.jobs) > jp.config.MaxFiles {
-		jp.logger.Fatalf("max_files reached for input plugin, consider increase this parameter")
+
+	jobsLen := len(jp.jobs)
+	jp.numberOfCurrentJobsMetric.Set(float64(jobsLen))
+
+	if jobsLen > jp.config.MaxFiles {
+		jp.logger.Fatalf(
+			"limit max_files=%d is reached for input plugin, consider increase this parameter",
+			jp.config.MaxFiles,
+		)
 	}
 	jp.jobsLog = append(jp.jobsLog, filename)
 	jp.jobsDone.Inc()
@@ -395,7 +460,7 @@ func (jp *jobProvider) initJobOffset(operation offsetsOp, job *Job) {
 			return
 		}
 
-		job.offsets = sliceFromMap(offsets.streams)
+		job.offsets = pipeline.SliceFromMap(offsets.streams)
 		// find min Offset to start read from it
 		minOffset := int64(math.MaxInt64)
 		for _, offset := range offsets.streams {
@@ -443,7 +508,11 @@ func (jp *jobProvider) doneJob(job *Job) {
 
 	jp.jobsMu.Lock()
 	v := int(jp.jobsDone.Inc())
-	if v > len(jp.jobs) {
+
+	jobsLen := len(jp.jobs)
+	jp.numberOfCurrentJobsMetric.Set(float64(jobsLen))
+
+	if v > jobsLen {
 		jp.logger.Panicf("done jobs counter is more than job count")
 	}
 	jp.jobsMu.Unlock()
@@ -460,7 +529,7 @@ func (jp *jobProvider) truncateJob(job *Job) {
 	job.seek(0, io.SeekStart, "truncation")
 
 	for _, strOff := range job.offsets {
-		job.offsets.set(strOff.stream, 0)
+		job.offsets.Set(strOff.Stream, 0)
 	}
 
 	jp.logger.Infof("job %d:%s was truncated, reading will start over, events with id less than %d will be ignored", job.sourceID, job.filename, job.ignoreEventsLE)

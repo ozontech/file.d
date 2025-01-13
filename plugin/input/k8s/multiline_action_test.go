@@ -6,10 +6,11 @@ import (
 	"testing"
 
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/plugin/input/k8s/meta"
 	"github.com/ozontech/file.d/test"
+	insaneJSON "github.com/ozontech/insane-json"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	insaneJSON "github.com/vitkovskii/insane-json"
 )
 
 func TestMultilineAction_Do(t *testing.T) {
@@ -21,21 +22,23 @@ func TestMultilineAction_Do(t *testing.T) {
 	params.PipelineSettings = &pipeline.Settings{MaxEventSize: 20}
 	plugin.Start(config, params)
 
-	item := &metaItem{
-		nodeName:      "node_1",
-		namespace:     "sre",
-		podName:       "advanced-logs-checker-1111111111-trtrq",
-		containerName: "duty-bot",
-		containerID:   "4e0301b633eaa2bfdcafdeba59ba0c72a3815911a6a820bf273534b0f32d98e0",
+	item := &meta.MetaItem{
+		Namespace:     "sre",
+		PodName:       "advanced-logs-checker-1111111111-trtrq",
+		ContainerName: "duty-bot",
+		ContainerID:   "4e0301b633eaa2bfdcafdeba59ba0c72a3815911a6a820bf273534b0f32d98e0",
 	}
-	meta := getLogFilename("k8s", item)
-	putMeta(getPodInfo(item, true))
-	selfNodeName = "node_1"
-	nodeLabels = map[string]string{"zone": "z34"}
+	filename := getLogFilename("k8s", item)
+	meta.PutMeta(getPodInfo(item, true))
+	meta.SelfNodeName = "node_1"
+	meta.NodeLabels = map[string]string{"zone": "z34"}
 
 	tcs := []struct {
 		Name       string
 		EventParts []string
+
+		CutOffEventByLimit      bool
+		CutOffEventByLimitField string
 
 		ActionResults []pipeline.ActionResult
 		ExpectedRoot  string
@@ -46,13 +49,13 @@ func TestMultilineAction_Do(t *testing.T) {
 			// because the buffer size check happens before adding to it
 			EventParts:    []string{`{"log": "hello"}`, `{"log": "  "}`, `{"log": "world\n"}`},
 			ActionResults: []pipeline.ActionResult{pipeline.ActionCollapse, pipeline.ActionCollapse, pipeline.ActionPass},
-			ExpectedRoot:  wrapK8sInfo(`hello  world\n`, item),
+			ExpectedRoot:  wrapK8sInfo(`hello  world\n`, item, meta.SelfNodeName),
 		},
 		{
 			Name:          "continue process events",
 			EventParts:    []string{`{"log": "some "}`, `{"log": "other "}`, `{"log": "logs\n"}`},
 			ActionResults: []pipeline.ActionResult{pipeline.ActionCollapse, pipeline.ActionCollapse, pipeline.ActionPass},
-			ExpectedRoot:  wrapK8sInfo(`some other logs\n`, item),
+			ExpectedRoot:  wrapK8sInfo(`some other logs\n`, item, meta.SelfNodeName),
 		},
 		{
 			Name:          "must discard long event",
@@ -63,7 +66,25 @@ func TestMultilineAction_Do(t *testing.T) {
 			Name:          "continue process events 2",
 			EventParts:    []string{`{"log": "some "}`, `{"log": "other long long long long "}`, `{"log": "event\n"}`},
 			ActionResults: []pipeline.ActionResult{pipeline.ActionCollapse, pipeline.ActionCollapse, pipeline.ActionDiscard},
-			ExpectedRoot:  wrapK8sInfo(`event\n`, item),
+			ExpectedRoot:  wrapK8sInfo(`event\n`, item, meta.SelfNodeName),
+		},
+		{
+			Name:               "must cutoff long event",
+			EventParts:         []string{`{"log": "some "}`, `{"log": "other long "}`, `{"log":"long long"}`, `{"log": "event\n"}`},
+			CutOffEventByLimit: true,
+			ActionResults:      []pipeline.ActionResult{pipeline.ActionCollapse, pipeline.ActionCollapse, pipeline.ActionCollapse, pipeline.ActionPass},
+			ExpectedRoot:       wrapK8sInfo(`some other long l\n`, item, meta.SelfNodeName),
+		},
+		{
+			Name:                    "must cutoff long event with field",
+			EventParts:              []string{`{"log": "some "}`, `{"log": "other long "}`, `{"log":"long long"}`, `{"log": "event\n"}`},
+			CutOffEventByLimit:      true,
+			CutOffEventByLimitField: "cutoff",
+			ActionResults:           []pipeline.ActionResult{pipeline.ActionCollapse, pipeline.ActionCollapse, pipeline.ActionCollapse, pipeline.ActionPass},
+			ExpectedRoot: fmt.Sprintf(
+				`{"log":"%s","k8s_pod":"%s","k8s_namespace":"%s","k8s_container":"%s","k8s_container_id":"%s","k8s_node":"%s","k8s_pod_label_allowed_label":"allowed_value","k8s_node_label_zone":"z34","cutoff":true}`,
+				`some other long l\n`, item.PodName, item.Namespace, item.ContainerName, item.ContainerID, meta.SelfNodeName,
+			),
 		},
 	}
 	root := insaneJSON.Spawn()
@@ -72,8 +93,16 @@ func TestMultilineAction_Do(t *testing.T) {
 	for _, tc := range tcs {
 		t.Run(tc.Name, func(t *testing.T) {
 			for i, part := range tc.EventParts {
+				plugin.cutOffEventByLimit = tc.CutOffEventByLimit
+				plugin.cutOffEventByLimitField = tc.CutOffEventByLimitField
+
 				require.NoError(t, root.DecodeString(part))
-				event := &pipeline.Event{Root: root, SourceName: meta, Size: len(part)}
+				event := &pipeline.Event{Root: root, SourceName: filename, Size: len(part)}
+
+				pipeline.CreateNestedField(event.Root, []string{"k8s_pod"}).MutateToString(string(item.PodName))
+				pipeline.CreateNestedField(event.Root, []string{"k8s_namespace"}).MutateToString(string(item.Namespace))
+				pipeline.CreateNestedField(event.Root, []string{"k8s_container"}).MutateToString(string(item.ContainerName))
+				pipeline.CreateNestedField(event.Root, []string{"k8s_container_id"}).MutateToString(string(item.ContainerID))
 
 				result := plugin.Do(event)
 
@@ -93,15 +122,14 @@ func TestMultilineAction_Do_shouldSplit(t *testing.T) {
 	}
 	plugin.Start(config, test.NewEmptyActionPluginParams())
 
-	item := &metaItem{
-		nodeName:      "node_1",
-		namespace:     "sre",
-		podName:       "advanced-logs-checker-1111111111-trtrq",
-		containerName: "duty-bot",
-		containerID:   "4e0301b633eaa2bfdcafdeba59ba0c72a3815911a6a820bf273534b0f32d98e0",
+	item := &meta.MetaItem{
+		Namespace:     "sre",
+		PodName:       "advanced-logs-checker-1111111111-trtrq",
+		ContainerName: "duty-bot",
+		ContainerID:   "4e0301b633eaa2bfdcafdeba59ba0c72a3815911a6a820bf273534b0f32d98e0",
 	}
-	meta := getLogFilename("k8s", item)
-	putMeta(getPodInfo(item, true))
+	filename := getLogFilename("k8s", item)
+	meta.PutMeta(getPodInfo(item, true))
 
 	var (
 		splitEventSize = predictionLookahead * 2
@@ -239,7 +267,11 @@ func TestMultilineAction_Do_shouldSplit(t *testing.T) {
 		t.Run(tc.Name, func(t *testing.T) {
 			plugin.maxEventSize = tc.MaxEventSize
 			require.NoError(t, root.DecodeString(tc.Message))
-			event := &pipeline.Event{Root: root, SourceName: meta, Size: len(tc.Message)}
+			event := &pipeline.Event{Root: root, SourceName: filename, Size: len(tc.Message)}
+			pipeline.CreateNestedField(event.Root, []string{"k8s_pod"}).MutateToString(string(item.PodName))
+			pipeline.CreateNestedField(event.Root, []string{"k8s_namespace"}).MutateToString(string(item.Namespace))
+			pipeline.CreateNestedField(event.Root, []string{"k8s_container"}).MutateToString(string(item.ContainerName))
+			pipeline.CreateNestedField(event.Root, []string{"k8s_container_id"}).MutateToString(string(item.ContainerID))
 
 			result := plugin.Do(event)
 			resultRoot := root.Dig("log").EncodeToString()
@@ -255,8 +287,8 @@ func wrapLogContent(s string) string {
 	return fmt.Sprintf(`{"log": "%s"}`, s)
 }
 
-func wrapK8sInfo(s string, item *metaItem) string {
+func wrapK8sInfo(s string, item *meta.MetaItem, nodeName string) string {
 	return fmt.Sprintf(
-		`{"log":"%s","k8s_node":"%s","k8s_namespace":"%s","k8s_pod":"%s","k8s_container":"%s","k8s_pod_label_allowed_label":"allowed_value","k8s_node_label_zone":"z34"}`,
-		s, item.nodeName, item.namespace, item.podName, item.containerName)
+		`{"log":"%s","k8s_pod":"%s","k8s_namespace":"%s","k8s_container":"%s","k8s_container_id":"%s","k8s_node":"%s","k8s_pod_label_allowed_label":"allowed_value","k8s_node_label_zone":"z34"}`,
+		s, item.PodName, item.Namespace, item.ContainerName, item.ContainerID, nodeName)
 }

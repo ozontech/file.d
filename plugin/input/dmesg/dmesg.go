@@ -11,8 +11,8 @@ import (
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/offset"
 	"github.com/ozontech/file.d/pipeline"
+	insaneJSON "github.com/ozontech/insane-json"
 	"github.com/prometheus/client_golang/prometheus"
-	insaneJSON "github.com/vitkovskii/insane-json"
 	"go.uber.org/zap"
 )
 
@@ -28,8 +28,7 @@ type Plugin struct {
 	logger     *zap.SugaredLogger
 
 	// plugin metrics
-
-	offsetErrorsMetric *prometheus.CounterVec
+	offsetErrorsMetric prometheus.Counter
 }
 
 // ! config-params
@@ -65,7 +64,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 
 	p.state = &state{}
 	if err := offset.LoadYAML(p.config.OffsetsFile, p.state); err != nil {
-		p.offsetErrorsMetric.WithLabelValues().Inc()
+		p.offsetErrorsMetric.Inc()
 		p.logger.Error("can't load offset file: %s", err.Error())
 	}
 
@@ -112,7 +111,7 @@ func (p *Plugin) read() {
 
 		out = root.Encode(out[:0])
 
-		p.controller.In(0, "dmesg", ts, out, false)
+		p.controller.In(0, "dmesg", pipeline.NewOffsets(ts, nil), out, false, nil)
 	}
 }
 
@@ -126,7 +125,7 @@ func (p *Plugin) Commit(event *pipeline.Event) {
 	p.state.TS = event.Offset
 
 	if err := offset.SaveYAML(p.config.OffsetsFile, p.state); err != nil {
-		p.offsetErrorsMetric.WithLabelValues().Inc()
+		p.offsetErrorsMetric.Inc()
 		p.logger.Errorf("can't save offset file: %s", err.Error())
 	}
 }

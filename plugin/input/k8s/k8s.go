@@ -3,10 +3,12 @@ package k8s
 import (
 	"net/http"
 
+	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/decoder"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/plugin/input/file"
+	"github.com/ozontech/file.d/plugin/input/k8s/meta"
 
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
@@ -92,6 +94,26 @@ type Config struct {
 	// >
 	// > Under the hood this plugin uses [file plugin](/plugin/input/file/README.md) to collect logs from files. So you can change any [file plugin](/plugin/input/file/README.md) config parameter using `file_config` section. Check out an example.
 	FileConfig file.Config `json:"file_config" child:"true"` // *
+
+	// > @3@4@5@6
+	// >
+	// > K8sMeta params
+	// >
+	// > Add meta information to an event (look at Meta params)
+	// > Use [go-template](https://pkg.go.dev/text/template) syntax
+	// >
+	// > Built-in meta params
+	// >
+	// > `k8s_pod`: `{{ .pod_name }}`
+	// >
+	// > `k8s_namespace`: `{{ .namespace_name }}`
+	// >
+	// > `k8s_container`: `{{ .container }}`
+	// >
+	// > `k8s_container_id`: `{{ .container_id }}`
+	// >
+	// > Example: ```component: '{{ index .pod.Labels "component" | default .k8s_container }}'```
+	K8sMeta cfg.MetaTemplates `json:"meta"` // *
 }
 
 var startCounter atomic.Int32
@@ -104,6 +126,7 @@ func init() {
 
 		Endpoints: map[string]func(http.ResponseWriter, *http.Request){
 			"reset": file.ResetterRegistryInstance.Reset,
+			"info":  file.InfoRegistryInstance.Info,
 		},
 	})
 	fd.DefaultPluginRegistry.RegisterAction(&pipeline.PluginStaticInfo{
@@ -129,17 +152,51 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	startCounter := startCounter.Inc()
 
 	if startCounter == 1 {
-		enableGatherer(p.logger)
+		meta.EnableGatherer(p.logger)
 	}
 
-	if criType == "docker" {
+	if meta.CriType == "docker" {
 		p.params.Controller.SuggestDecoder(decoder.JSON)
 	} else {
 		p.params.Controller.SuggestDecoder(decoder.CRI)
 	}
 
+	metaConfig := cfg.MetaTemplates{}
+	if p.config.K8sMeta != nil {
+		metaConfig = p.config.K8sMeta
+	}
+
+	fileMeta := cfg.MetaTemplates{}
+	if p.config.FileConfig.Meta != nil {
+		fileMeta = p.config.FileConfig.Meta
+	}
+	setBuiltInMeta(fileMeta)
+	for k, v := range metaConfig {
+		fileMeta[k] = v
+	}
+	p.config.FileConfig.Meta = fileMeta
+
 	p.fp.Start(&p.config.FileConfig, params)
 }
+
+func setBuiltInMeta(metaConfig cfg.MetaTemplates) {
+	metaConfig["k8s_pod"] = "{{ .pod_name }}"
+	metaConfig["k8s_namespace"] = "{{ .namespace }}"
+	metaConfig["k8s_container"] = "{{ .container_name }}"
+	metaConfig["k8s_container_id"] = "{{ .container_id }}"
+}
+
+/*{ meta-params
+**`pod_name`** - string
+
+**`namespace`** - string
+
+**`container_name`** - string
+
+**`container_id`** - string
+
+**`pod`** - k8s.io/api/core/v1.Pod
+}*/
 
 // Commit event.
 func (p *Plugin) Commit(event *pipeline.Event) {

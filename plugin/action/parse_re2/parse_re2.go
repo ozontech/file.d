@@ -7,8 +7,8 @@ import (
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
+	insaneJSON "github.com/ozontech/insane-json"
 	"github.com/prometheus/client_golang/prometheus"
-	insaneJSON "github.com/vitkovskii/insane-json"
 )
 
 /*{ introduction
@@ -20,7 +20,7 @@ type Plugin struct {
 	re     *regexp.Regexp
 
 	// plugin metrics
-	eventNotMatchingPatternMetric *prometheus.CounterVec
+	eventNotMatchingPatternMetric prometheus.Counter
 }
 
 // ! config-params
@@ -73,7 +73,7 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	sm := p.re.FindSubmatch(jsonNode.AsBytes())
 
 	if len(sm) == 0 {
-		p.eventNotMatchingPatternMetric.WithLabelValues().Inc()
+		p.eventNotMatchingPatternMetric.Inc()
 		return pipeline.ActionPass
 	}
 

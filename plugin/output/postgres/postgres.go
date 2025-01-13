@@ -14,13 +14,48 @@ import (
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
+	insaneJSON "github.com/ozontech/insane-json"
 	"github.com/prometheus/client_golang/prometheus"
-	insaneJSON "github.com/vitkovskii/insane-json"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
 /*{ introduction
 It sends the event batches to postgres db using pgx.
+}*/
+
+/*{ example
+**Example**
+Postgres output example:
+```yaml
+pipelines:
+  example_pipeline:
+    input:
+      type: file
+      persistence_mode: async
+      watching_dir: ./
+      filename_pattern: input_example.json
+      offsets_file: ./offsets.yaml
+      offsets_op: reset
+	output:
+      type: postgres
+      conn_string: "user=postgres host=localhost port=5432 dbname=postgres sslmode=disable pool_max_conns=10"
+      table: events
+      columns:
+        - name: id
+          type: int
+        - name: name
+          type: string
+      retry: 10
+      retention: 1s
+      retention_exponentially_multiplier: 1.5
+```
+
+input_example.json
+```json
+{"id":1,"name":"name1"}
+{"id":2,"name":"name2"}
+```
 }*/
 
 var (
@@ -63,7 +98,7 @@ type Plugin struct {
 	controller pipeline.OutputPluginController
 	logger     *zap.SugaredLogger
 	config     *Config
-	batcher    *pipeline.Batcher
+	batcher    *pipeline.RetriableBatcher
 	ctx        context.Context
 	cancelFunc context.CancelFunc
 
@@ -72,9 +107,10 @@ type Plugin struct {
 
 	// plugin metrics
 
-	discardedEventMetric  *prometheus.CounterVec
-	duplicatedEventMetric *prometheus.CounterVec
-	writtenEventMetric    *prometheus.CounterVec
+	discardedEventMetric  prometheus.Counter
+	duplicatedEventMetric prometheus.Counter
+	writtenEventMetric    prometheus.Counter
+	insertErrorsMetric    prometheus.Counter
 }
 
 type ConfigColumn struct {
@@ -120,14 +156,26 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
-	// > Retries of insertion.
-	Retry int `json:"retry" default:"3"` // *
+	// > Retries of insertion. If File.d cannot insert for this number of attempts,
+	// > File.d will fall with non-zero exit code or skip message (see fatal_on_failed_insert).
+	Retry int `json:"retry" default:"10"` // *
+
+	// > @3@4@5@6
+	// >
+	// > After an insert error, fall with a non-zero exit code or not
+	// > **Experimental feature**
+	FatalOnFailedInsert bool `json:"fatal_on_failed_insert" default:"false"` // *
 
 	// > @3@4@5@6
 	// >
 	// > Retention milliseconds for retry to DB.
 	Retention  cfg.Duration `json:"retention" default:"50ms" parse:"duration"` // *
 	Retention_ time.Duration
+
+	// > @3@4@5@6
+	// >
+	// > Multiplier for exponential increase of retention between retries
+	RetentionExponentMultiplier int `json:"retention_exponentially_multiplier" default:"2"`
 
 	// > @3@4@5@6
 	// >
@@ -183,6 +231,7 @@ func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 	p.discardedEventMetric = ctl.RegisterCounter("output_postgres_event_discarded", "Total pgsql discarded messages")
 	p.duplicatedEventMetric = ctl.RegisterCounter("output_postgres_event_duplicated", "Total pgsql duplicated messages")
 	p.writtenEventMetric = ctl.RegisterCounter("output_postgres_event_written", "Total events written to pgsql")
+	p.insertErrorsMetric = ctl.RegisterCounter("output_postgres_insert_errors", "Total pgsql insert errors")
 }
 
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginParams) {
@@ -193,7 +242,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.registerMetrics(params.MetricCtl)
 
 	if len(p.config.Columns) == 0 {
-		p.logger.Fatal("can't start plugin, no fields in config")
+		p.logger.Fatal("can't start plugin, no columns in config")
 	}
 
 	if p.config.Retry < 1 {
@@ -226,17 +275,42 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	}
 	p.pool = pool
 
-	p.batcher = pipeline.NewBatcher(pipeline.BatcherOptions{
+	batcherOpts := pipeline.BatcherOptions{
 		PipelineName:   params.PipelineName,
 		OutputType:     outPluginType,
-		OutFn:          p.out,
 		Controller:     p.controller,
 		Workers:        p.config.WorkersCount_,
 		BatchSizeCount: p.config.BatchSize_,
 		BatchSizeBytes: p.config.BatchSizeBytes_,
 		FlushTimeout:   p.config.BatchFlushTimeout_,
 		MetricCtl:      params.MetricCtl,
-	})
+	}
+
+	backoffOpts := pipeline.BackoffOpts{
+		MinRetention: p.config.Retention_,
+		Multiplier:   float64(p.config.RetentionExponentMultiplier),
+		AttemptNum:   p.config.Retry,
+	}
+
+	onError := func(err error) {
+		var level zapcore.Level
+		if p.config.FatalOnFailedInsert {
+			level = zapcore.FatalLevel
+		} else {
+			level = zapcore.ErrorLevel
+		}
+
+		p.logger.Desugar().Log(level, "can't insert to the table", zap.Error(err),
+			zap.Int("retries", p.config.Retry),
+			zap.String("table", p.config.Table))
+	}
+
+	p.batcher = pipeline.NewRetriableBatcher(
+		&batcherOpts,
+		p.out,
+		backoffOpts,
+		onError,
+	)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	p.ctx = ctx
@@ -255,7 +329,7 @@ func (p *Plugin) Out(event *pipeline.Event) {
 	p.batcher.Add(event)
 }
 
-func (p *Plugin) out(_ *pipeline.WorkerData, batch *pipeline.Batch) {
+func (p *Plugin) out(_ *pipeline.WorkerData, batch *pipeline.Batch) error {
 	// _ *pipeline.WorkerData - doesn't required in this plugin, we can't parse
 	// events for uniques through bytes.
 	builder := p.queryBuilder.GetInsertBuilder()
@@ -263,16 +337,16 @@ func (p *Plugin) out(_ *pipeline.WorkerData, batch *pipeline.Batch) {
 	uniqFields := p.queryBuilder.GetUniqueFields()
 
 	// Deduplicate events, pg can't do upsert with duplication.
-	uniqueEventsMap := make(map[string]struct{}, len(batch.Events))
+	uniqueEventsMap := make(map[string]struct{}, p.config.BatchSize_)
 	var anyValidValue bool
 
-	for _, event := range batch.Events {
+	batch.ForEach(func(event *pipeline.Event) {
 		fieldValues, uniqueID, err := p.processEvent(event, pgFields, uniqFields)
 		if err != nil {
 			switch {
 			case errors.Is(err, ErrEventDoesntHaveField), errors.Is(err, ErrEventFieldHasWrongType),
 				errors.Is(err, ErrTimestampFromDistantPastOrFuture):
-				p.discardedEventMetric.WithLabelValues().Inc()
+				p.discardedEventMetric.Inc()
 				if p.config.StrictFields || p.config.Strict {
 					p.logger.Fatal(err)
 				}
@@ -281,12 +355,12 @@ func (p *Plugin) out(_ *pipeline.WorkerData, batch *pipeline.Batch) {
 				p.logger.Fatalf("undefined error: %w", err)
 			}
 
-			continue
+			return
 		}
 
 		// passes here only if event valid.
 		if _, ok := uniqueEventsMap[uniqueID]; ok {
-			p.duplicatedEventMetric.WithLabelValues().Inc()
+			p.duplicatedEventMetric.Inc()
 			p.logger.Infof("event duplicated. Fields: %v, values: %v", pgFields, fieldValues)
 		} else {
 			if uniqueID != "" {
@@ -295,13 +369,12 @@ func (p *Plugin) out(_ *pipeline.WorkerData, batch *pipeline.Batch) {
 			builder = builder.Values(fieldValues...)
 			anyValidValue = true
 		}
-	}
-
+	})
 	builder = builder.Suffix(p.queryBuilder.GetPostfix()).PlaceholderFormat(sq.Dollar)
 
 	// no valid events passed.
 	if !anyValidValue {
-		return
+		return nil
 	}
 
 	query, args, err := builder.ToSql()
@@ -316,22 +389,14 @@ func (p *Plugin) out(_ *pipeline.WorkerData, batch *pipeline.Batch) {
 		argsSliceInterface[i] = args[i-1]
 	}
 
-	// Insert into pg with retry.
-	for i := p.config.Retry; i > 0; i-- {
-		err = p.try(query, argsSliceInterface)
-		if err != nil {
-			p.logger.Errorf("can't exec query: %s", err.Error())
-			time.Sleep(p.config.Retention_)
-			continue
-		}
-		p.writtenEventMetric.WithLabelValues().Add(float64(len(uniqueEventsMap)))
-		break
-	}
-
+	err = p.try(query, argsSliceInterface)
 	if err != nil {
-		p.pool.Close()
-		p.logger.Fatalf("failed insert into %s. query: %s, args: %v, err: %v", p.config.Table, query, args, err)
+		p.insertErrorsMetric.Inc()
+		p.logger.Errorf("can't exec query: %s", err.Error())
+		return err
 	}
+	p.writtenEventMetric.Add(float64(len(uniqueEventsMap)))
+	return nil
 }
 
 func (p *Plugin) try(query string, argsSliceInterface []any) error {

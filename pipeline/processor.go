@@ -1,7 +1,10 @@
 package pipeline
 
 import (
+	"errors"
+
 	"github.com/ozontech/file.d/logger"
+	insaneJSON "github.com/ozontech/insane-json"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
 )
@@ -10,17 +13,19 @@ type ActionResult int
 
 const (
 	// ActionPass pass event to the next action in a pipeline
-	ActionPass ActionResult = 0
+	ActionPass ActionResult = iota
 	// ActionCollapse skip further processing of event and request next event from the same stream and source as current
 	// plugin may receive event with EventKindTimeout if it takes to long to read next event from same stream
-	ActionCollapse ActionResult = 2
+	ActionCollapse
 	// ActionDiscard skip further processing of event and request next event from any stream and source
-	ActionDiscard ActionResult = 1
+	ActionDiscard
 	// ActionHold hold event in a plugin and request next event from the same stream and source as current.
 	// same as ActionCollapse but held event should be manually committed or returned into pipeline.
 	// check out Commit()/Propagate() functions in InputPluginController.
 	// plugin may receive event with EventKindTimeout if it takes to long to read next event from same stream.
-	ActionHold ActionResult = 3
+	ActionHold
+	// ActionBreak abort the event processing and pass it to an output.
+	ActionBreak
 )
 
 type eventStatus string
@@ -32,6 +37,7 @@ const (
 	eventStatusDiscarded  eventStatus = "discarded"
 	eventStatusCollapse   eventStatus = "collapsed"
 	eventStatusHold       eventStatus = "held"
+	eventStatusBroke      eventStatus = "broke"
 )
 
 func allEventStatuses() []eventStatus {
@@ -47,36 +53,41 @@ func allEventStatuses() []eventStatus {
 
 // processor is a goroutine which doing pipeline actions
 type processor struct {
-	id            int
-	streamer      *streamer
-	metricsHolder *metricsHolder
-	output        OutputPlugin
-	finalize      finalizeFn
+	id       int
+	streamer *streamer
+	output   OutputPlugin
+	finalize finalizeFn
 
 	activeCounter *atomic.Int32
 
 	actions          []ActionPlugin
 	actionInfos      []*ActionPluginStaticInfo
+	actionMetrics    *actionMetrics
 	busyActions      []bool
 	busyActionsTotal int
 	actionWatcher    *actionWatcher
 	recoverFromPanic func()
 
 	metricsValues []string
+
+	incMaxEventSizeExceeded      func(lvs ...string)
+	incCountEventPanicsRecovered func()
 }
 
 func newProcessor(
 	id int,
-	metricsHolder *metricsHolder,
+	actionMetrics *actionMetrics,
 	activeCounter *atomic.Int32,
 	output OutputPlugin,
 	streamer *streamer,
 	finalizeFn finalizeFn,
+	incMaxEventSizeExceededFn func(lvs ...string),
+	incCountEventPanicsRecoveredFn func(),
 ) *processor {
 	processor := &processor{
 		id:            id,
 		streamer:      streamer,
-		metricsHolder: metricsHolder,
+		actionMetrics: actionMetrics,
 		output:        output,
 		finalize:      finalizeFn,
 
@@ -84,6 +95,9 @@ func newProcessor(
 		actionWatcher: newActionWatcher(id),
 
 		metricsValues: make([]string, 0),
+
+		incMaxEventSizeExceeded:      incMaxEventSizeExceededFn,
+		incCountEventPanicsRecovered: incCountEventPanicsRecoveredFn,
 	}
 
 	return processor
@@ -187,11 +201,17 @@ func (p *processor) doActions(event *Event) (isPassed bool, lastAction int) {
 
 		p.actionWatcher.setEventBefore(index, event)
 
-		switch action.Do(event) {
+		result := action.Do(event)
+		switch result {
 		case ActionPass:
 			p.countEvent(event, index, eventStatusPassed)
 			p.tryResetBusy(index)
 			p.actionWatcher.setEventAfter(index, event, eventStatusPassed)
+		case ActionBreak:
+			p.countEvent(event, index, eventStatusBroke)
+			p.tryResetBusy(index)
+			p.actionWatcher.setEventAfter(index, event, eventStatusBroke)
+			return true, index
 		case ActionDiscard:
 			p.countEvent(event, index, eventStatusDiscarded)
 			p.tryResetBusy(index)
@@ -245,14 +265,74 @@ func (p *processor) tryResetBusy(index int) {
 }
 
 func (p *processor) countEvent(event *Event, actionIndex int, status eventStatus) {
+	defer func() {
+		if r := recover(); r != nil {
+			p.incCountEventPanicsRecovered()
+			var recErr error
+			switch x := r.(type) {
+			case string:
+				recErr = errors.New(x)
+			case error:
+				recErr = x
+			default:
+				recErr = errors.New("unknown panic")
+			}
+			msg := "recovered from panic in processor.countEvent event might have not been accounted in the metric action=%d status=%q labelValues=%v. Recovered error: %s."
+			args := []any{
+				actionIndex, string(status), p.metricsValues, recErr.Error(),
+			}
+			eventBytes := make([]byte, 0)
+			err := event.Root.DecodeBytes(eventBytes)
+			if err != nil {
+				msg += " Couldn't get event bytes: %s"
+				args = append(args, err.Error())
+			} else {
+				msg += " Event: %s"
+				args = append(args, string(eventBytes))
+			}
+			logger.Errorf(msg, args)
+		}
+	}()
+
 	if event.IsTimeoutKind() {
 		return
 	}
-	p.metricsValues = p.metricsHolder.count(event, actionIndex, status, p.metricsValues)
+
+	actionInfo := p.actionInfos[actionIndex]
+	am := p.actionMetrics.get(actionInfo.MetricName)
+
+	if am == nil || (actionInfo.MetricSkipStatus && status == eventStatusReceived) {
+		return
+	}
+
+	p.metricsValues = p.metricsValues[:0]
+	if !actionInfo.MetricSkipStatus {
+		p.metricsValues = append(p.metricsValues, string(status))
+	}
+
+	for _, field := range actionInfo.MetricLabels {
+		val := DefaultFieldValue
+
+		node := event.Root.Dig(field)
+		if node != nil {
+			val = node.AsString()
+		}
+
+		p.metricsValues = append(p.metricsValues, val)
+	}
+
+	am.totalCounter[string(status)].Inc()
+	am.count.WithLabelValues(p.metricsValues...).Inc()
+	am.size.WithLabelValues(p.metricsValues...).Add(float64(event.Size))
 }
 
 func (p *processor) isMatch(index int, event *Event) bool {
 	info := p.actionInfos[index]
+
+	if info.DoIfChecker != nil {
+		return info.DoIfChecker.Check(event.Root)
+	}
+
 	conds := info.MatchConditions
 	mode := info.MatchMode
 	match := false
@@ -339,6 +419,50 @@ func (p *processor) Propagate(event *Event) {
 	nextActionIdx := event.action
 	p.tryResetBusy(nextActionIdx - 1)
 	p.processSequence(event)
+}
+
+func (p *processor) IncMaxEventSizeExceeded(lvs ...string) {
+	p.incMaxEventSizeExceeded(lvs...)
+}
+
+// Spawn the children of the parent and process in the actions.
+// Any attempts to ActionHold or ActionCollapse the event will be suppressed by timeout events.
+func (p *processor) Spawn(parent *Event, nodes []*insaneJSON.Node) {
+	parent.SetChildParentKind()
+	nextActionIdx := parent.action + 1
+
+	for _, node := range nodes {
+		// we can't reuse parent event (using insaneJSON.Root{Node: child}
+		// because of nil decoder
+		child := &Event{
+			Root:       insaneJSON.Spawn(),
+			SourceName: parent.SourceName,
+		}
+		parent.children = append(parent.children, child)
+		child.Root.MutateToNode(node)
+		child.SetChildKind()
+		child.action = nextActionIdx
+
+		ok, _ := p.doActions(child)
+		if ok {
+			child.stage = eventStageOutput
+			p.output.Out(child)
+		}
+	}
+
+	if p.busyActionsTotal == 0 {
+		return
+	}
+
+	for i, busy := range p.busyActions {
+		if !busy {
+			continue
+		}
+
+		timeout := newTimeoutEvent(parent.stream)
+		timeout.action = i
+		p.doActions(timeout)
+	}
 }
 
 func (p *processor) RecoverFromPanic() {

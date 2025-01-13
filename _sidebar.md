@@ -26,21 +26,26 @@
     - [add_host](plugin/action/add_host/README.md)
     - [convert_date](plugin/action/convert_date/README.md)
     - [convert_log_level](plugin/action/convert_log_level/README.md)
+    - [convert_utf8_bytes](plugin/action/convert_utf8_bytes/README.md)
     - [debug](plugin/action/debug/README.md)
+    - [decode](plugin/action/decode/README.md)
     - [discard](plugin/action/discard/README.md)
     - [flatten](plugin/action/flatten/README.md)
     - [join](plugin/action/join/README.md)
     - [join_template](plugin/action/join_template/README.md)
     - [json_decode](plugin/action/json_decode/README.md)
     - [json_encode](plugin/action/json_encode/README.md)
+    - [json_extract](plugin/action/json_extract/README.md)
     - [keep_fields](plugin/action/keep_fields/README.md)
     - [mask](plugin/action/mask/README.md)
     - [modify](plugin/action/modify/README.md)
+    - [move](plugin/action/move/README.md)
     - [parse_es](plugin/action/parse_es/README.md)
     - [parse_re2](plugin/action/parse_re2/README.md)
     - [remove_fields](plugin/action/remove_fields/README.md)
     - [rename](plugin/action/rename/README.md)
     - [set_time](plugin/action/set_time/README.md)
+    - [split](plugin/action/split/README.md)
     - [throttle](plugin/action/throttle/README.md)
 
   - Output
@@ -55,6 +60,10 @@
     - [splunk](plugin/output/splunk/README.md)
     - [stdout](plugin/output/stdout/README.md)
 
+
+- **Pipeline**
+  - [Match modes](pipeline/README.md#match-modes)
+  - [Experimental: Do If rules](pipeline/doif/README.md#experimental-do-if-rules)
 
 - **Other**
   - [Contributing](/docs/contributing.md)

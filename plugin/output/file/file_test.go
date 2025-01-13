@@ -10,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/test"
 	"github.com/stretchr/testify/assert"
@@ -217,14 +216,12 @@ func TestStart(t *testing.T) {
 		FileMode_: 0o666,
 	}
 
-	writeFileSleep := 2 * 100 * time.Millisecond
+	writeFileSleep := 4 * 100 * time.Millisecond
 	sealUpFileSleep := 2 * time.Second
 	generalPattern := fmt.Sprintf("%s/*%s", dir, extension)
 	logFilePattern := fmt.Sprintf("%s/*%s", path.Dir(targetFile), path.Base(targetFile))
 	currentLogFileSubstr := fmt.Sprintf("_%s", path.Base(targetFile))
-
-	err := cfg.Parse(config, map[string]int{"gomaxprocs": 1, "capacity": 64})
-	assert.NoError(t, err)
+	test.NewConfig(config, map[string]int{"gomaxprocs": 1, "capacity": 64})
 	totalSent := int64(0)
 	p := newPipeline(t, config)
 	assert.NotNil(t, p, "could not create new pipeline")
@@ -243,7 +240,7 @@ func TestStart(t *testing.T) {
 	logger.Errorf("send pack, t=%s", time.Now().Unix())
 	packSize := test.SendPack(t, p, tests.firstPack)
 	totalSent += packSize
-	time.Sleep(200 * time.Millisecond)
+	time.Sleep(writeFileSleep)
 	logger.Errorf("after sleep")
 
 	// check that plugin wrote into the file

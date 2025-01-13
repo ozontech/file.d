@@ -6,10 +6,23 @@ It sends the event batches to Clickhouse database using
 File.d uses low level Go client - [ch-go](https://github.com/ClickHouse/ch-go) to provide these features.
 
 ### Config params
-**`addresses`** *`[]string`* *`required`* 
+**`addresses`** *`[]Address`* *`required`* 
 
 TCP Clickhouse addresses, e.g.: 127.0.0.1:9000.
 Check the insert_strategy to find out how File.d will behave with a list of addresses.
+
+Accepts strings or objects, e.g.:
+```yaml
+addresses:
+  - 127.0.0.1:9000 # the same as {addr:'127.0.0.1:9000',weight:1}
+  - addr: 127.0.0.1:9001
+    weight: 2
+```
+
+When some addresses get weight greater than 1 and round_robin insert strategy is used,
+it works as classical weighted round robin. Given {(a_1,w_1),(a_1,w_1),...,{a_n,w_n}},
+where a_i is the ith address and w_i is the ith address' weight, requests are sent in order:
+w_1 times to a_1, w_2 times to a_2, ..., w_n times to a_n, w_1 times to a_1 and so on.
 
 <br>
 
@@ -98,7 +111,14 @@ If the strict mode is enabled file.d fails (exit with code 1) in above examples.
 **`retry`** *`int`* *`default=10`* 
 
 Retries of insertion. If File.d cannot insert for this number of attempts,
-File.d will fall with non-zero exit code.
+File.d will fall with non-zero exit code or skip message (see fatal_on_failed_insert).
+
+<br>
+
+**`fatal_on_failed_insert`** *`bool`* *`default=false`* 
+
+After an insert error, fall with a non-zero exit code or not
+**Experimental feature**
 
 <br>
 
@@ -112,6 +132,12 @@ Settings list: https://clickhouse.com/docs/en/operations/settings/settings
 **`retention`** *`cfg.Duration`* *`default=50ms`* 
 
 Retention milliseconds for retry to DB.
+
+<br>
+
+**`retention_exponentially_multiplier`** *`int`* *`default=2`* 
+
+Multiplier for exponential increase of retention between retries
 
 <br>
 

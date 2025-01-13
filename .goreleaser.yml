@@ -20,11 +20,17 @@ builds:
     mod_timestamp: '{{ .CommitTimestamp }}'
     flags:
       - -trimpath
+      - -pgo=default.pgo
+    ldflags:
+      - -X github.com/ozontech/file.d/buildinfo.Version={{.Version}}
 nfpms:
   - 
     maintainer: Vitkovskiy Vladimir <vvitkovskiy@ozon.ru>
     formats:
       - deb
+      - rpm
+    recommends:
+      - systemd
     description: |- 
       file.d is a tool for building data pipelines: 
       read, process and output events.

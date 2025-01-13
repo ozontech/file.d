@@ -4,7 +4,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/test"
 	"github.com/stretchr/testify/require"
@@ -224,9 +223,8 @@ func TestDo(t *testing.T) {
 
 	for _, tc := range tcs {
 		t.Run(tc.Name, func(t *testing.T) {
-			p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, &tc.Config, pipeline.MatchModeAnd, nil, false))
-			err := cfg.Parse(&tc.Config, nil)
-			require.NoError(t, err)
+			config := test.NewConfig(&tc.Config, nil)
+			p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, config, pipeline.MatchModeAnd, nil, false))
 
 			outCounter := atomic.NewInt32(int32(len(tc.In)))
 
@@ -237,7 +235,7 @@ func TestDo(t *testing.T) {
 			})
 
 			for _, log := range tc.In {
-				input.In(0, "test.log", 0, []byte(log))
+				input.In(0, "test.log", test.NewOffset(0), []byte(log))
 			}
 
 			now := time.Now()

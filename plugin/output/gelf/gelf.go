@@ -9,9 +9,10 @@ import (
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
+	insaneJSON "github.com/ozontech/insane-json"
 	"github.com/prometheus/client_golang/prometheus"
-	insaneJSON "github.com/vitkovskii/insane-json"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
 /*{ introduction
@@ -41,12 +42,11 @@ type Plugin struct {
 	config       *Config
 	logger       *zap.SugaredLogger
 	avgEventSize int
-	batcher      *pipeline.Batcher
+	batcher      *pipeline.RetriableBatcher
 	controller   pipeline.OutputPluginController
 
 	// plugin metrics
-
-	sendErrorMetric *prometheus.CounterVec
+	sendErrorMetric prometheus.Counter
 }
 
 // ! config-params
@@ -145,6 +145,29 @@ type Config struct {
 	BatchFlushTimeout  cfg.Duration `json:"batch_flush_timeout" default:"200ms" parse:"duration"` // *
 	BatchFlushTimeout_ time.Duration
 
+	// > @3@4@5@6
+	// >
+	// > Retries of insertion. If File.d cannot insert for this number of attempts,
+	// > File.d will fall with non-zero exit code or skip message (see fatal_on_failed_insert).
+	Retry int `json:"retry" default:"0"` // *
+
+	// > @3@4@5@6
+	// >
+	// > After an insert error, fall with a non-zero exit code or not
+	// > **Experimental feature**
+	FatalOnFailedInsert bool `json:"fatal_on_failed_insert" default:"false"` // *
+
+	// > @3@4@5@6
+	// >
+	// > Retention milliseconds for retry to DB.
+	Retention  cfg.Duration `json:"retention" default:"1s" parse:"duration"` // *
+	Retention_ time.Duration
+
+	// > @3@4@5@6
+	// >
+	// > Multiplier for exponential increase of retention between retries
+	RetentionExponentMultiplier int `json:"retention_exponentially_multiplier" default:"2"` // *
+
 	// fields converted to extra fields GELF format
 	hostField                string
 	shortMessageField        string
@@ -191,10 +214,9 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.config.timestampFieldFormat = format
 	p.config.levelField = pipeline.ByteToStringUnsafe(p.formatExtraField(nil, p.config.LevelField))
 
-	p.batcher = pipeline.NewBatcher(pipeline.BatcherOptions{
+	batcherOpts := pipeline.BatcherOptions{
 		PipelineName:        params.PipelineName,
 		OutputType:          outPluginType,
-		OutFn:               p.out,
 		MaintenanceFn:       p.maintenance,
 		Controller:          p.controller,
 		Workers:             p.config.WorkersCount_,
@@ -203,7 +225,33 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		FlushTimeout:        p.config.BatchFlushTimeout_,
 		MaintenanceInterval: p.config.ReconnectInterval_,
 		MetricCtl:           params.MetricCtl,
-	})
+	}
+
+	backoffOpts := pipeline.BackoffOpts{
+		MinRetention: p.config.Retention_,
+		Multiplier:   float64(p.config.RetentionExponentMultiplier),
+		AttemptNum:   p.config.Retry,
+	}
+
+	onError := func(err error) {
+		var level zapcore.Level
+		if p.config.FatalOnFailedInsert {
+			level = zapcore.FatalLevel
+		} else {
+			level = zapcore.ErrorLevel
+		}
+
+		p.logger.Desugar().Log(level, "can't send to gelf", zap.Error(err),
+			zap.Int("retries", p.config.Retry),
+		)
+	}
+
+	p.batcher = pipeline.NewRetriableBatcher(
+		&batcherOpts,
+		p.out,
+		backoffOpts,
+		onError,
+	)
 
 	p.batcher.Start(context.TODO())
 }
@@ -220,7 +268,7 @@ func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 	p.sendErrorMetric = ctl.RegisterCounter("output_gelf_send_error", "Total GELF send errors")
 }
 
-func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
+func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) error {
 	if *workerData == nil {
 		*workerData = &data{
 			outBuf:    make([]byte, 0, p.config.BatchSize_*p.avgEventSize),
@@ -236,40 +284,40 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 
 	outBuf := data.outBuf[:0]
 	encodeBuf := data.encodeBuf[:0]
-	for _, event := range batch.Events {
+
+	batch.ForEach(func(event *pipeline.Event) {
 		encodeBuf = p.formatEvent(encodeBuf, event)
 		outBuf, _ = event.Encode(outBuf)
 		outBuf = append(outBuf, byte(0))
-	}
+	})
+
 	data.outBuf = outBuf
 	data.encodeBuf = encodeBuf
 
-	for {
-		if data.gelf == nil {
-			p.logger.Infof("connecting to gelf address=%s", p.config.Endpoint)
+	if data.gelf == nil {
+		p.logger.Infof("connecting to gelf address=%s", p.config.Endpoint)
 
-			gelf, err := newClient(p.config.Endpoint, p.config.ConnectionTimeout_, p.config.WriteTimeout_, false, nil)
-			if err != nil {
-				p.sendErrorMetric.WithLabelValues().Inc()
-				p.logger.Errorf("can't connect to gelf endpoint address=%s: %s", p.config.Endpoint, err.Error())
-				time.Sleep(time.Second)
-				continue
-			}
-			data.gelf = gelf
-		}
-
-		_, err := data.gelf.send(outBuf)
+		gelf, err := newClient(p.config.Endpoint, p.config.ConnectionTimeout_, p.config.WriteTimeout_, false, nil)
 		if err != nil {
-			p.sendErrorMetric.WithLabelValues().Inc()
-			p.logger.Errorf("can't send data to gelf address=%s, err: %s", p.config.Endpoint, err.Error())
-			_ = data.gelf.close()
-			data.gelf = nil
+			p.sendErrorMetric.Inc()
+			p.logger.Errorf("can't connect to gelf endpoint address=%s: %s", p.config.Endpoint, err.Error())
 			time.Sleep(time.Second)
-			continue
+			return err
 		}
-
-		break
+		data.gelf = gelf
 	}
+
+	_, err := data.gelf.send(outBuf)
+	if err != nil {
+		p.sendErrorMetric.Inc()
+		p.logger.Errorf("can't send data to gelf address=%s, err: %s", p.config.Endpoint, err.Error())
+		_ = data.gelf.close()
+		data.gelf = nil
+		time.Sleep(time.Second)
+		return err
+	}
+
+	return nil
 }
 
 func (p *Plugin) maintenance(workerData *pipeline.WorkerData) {

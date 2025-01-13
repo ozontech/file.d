@@ -2,14 +2,22 @@ extractors:
   config-params: '"config-params" /json:\"([a-z_]+)\"/ #2 /default:\"([^"]+)\"/ /(required):\"true\"/  /options:\"([^"]+)\"/'
   fn-list: '"fn-list" #4 /Plugin\)\s(.+)\s{/'
   match-modes: '"match-modes" /MatchMode(.*),/ /\"(.*)\"/'
+  do-if-node: '"do-if-node" /Node(\w+)\s/'
+  do-if-field-op: '"do-if-field-op" /field(\w+)OpTag\s/'
+  do-if-logical-op: '"do-if-logical-op" /logical(\w+)Tag\s/'
 decorators:
   config-params: '_ _ /*`%s`* / /*`default=%s`* / /*`%s`* / /*`options=%s`* /'
   fn-list: '_ _ /`%s`/'
   match-modes: '_ /%s/ /`match_mode: %s`/'
+  do-if-node: '_ /%s/'
+  do-if-field-op: '_ /%s/'
+  do-if-logical-op: '_ /%s/'
 templates:
   - template: docs/*.idoc.md
     files: ["../pipeline/*.go"]
   - template: pipeline/*.idoc.md
+    files: ["*.go"]
+  - template: pipeline/doif/*.idoc.md
     files: ["*.go"]
   - template: plugin/*/*/README.idoc.md
     files: ["*.go"]

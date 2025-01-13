@@ -71,5 +71,36 @@ Under the hood this plugin uses [file plugin](/plugin/input/file/README.md) to c
 
 <br>
 
+**`meta`** *`cfg.MetaTemplates`* 
 
+K8sMeta params
+
+Add meta information to an event (look at Meta params)
+Use [go-template](https://pkg.go.dev/text/template) syntax
+
+Built-in meta params
+
+`k8s_pod`: `{{ .pod_name }}`
+
+`k8s_namespace`: `{{ .namespace_name }}`
+
+`k8s_container`: `{{ .container }}`
+
+`k8s_container_id`: `{{ .container_id }}`
+
+Example: ```component: '{{ index .pod.Labels "component" | default .k8s_container }}'```
+
+<br>
+
+
+### Meta params
+**`pod_name`** - string
+
+**`namespace`** - string
+
+**`container_name`** - string
+
+**`container_id`** - string
+
+**`pod`** - k8s.io/api/core/v1.Pod
 <br>*Generated using [__insane-doc__](https://github.com/vitkovskii/insane-doc)*

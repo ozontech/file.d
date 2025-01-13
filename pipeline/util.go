@@ -8,7 +8,7 @@ import (
 	"time"
 	"unsafe"
 
-	insaneJSON "github.com/vitkovskii/insane-json"
+	insaneJSON "github.com/ozontech/insane-json"
 )
 
 // Clone deeply copies string
@@ -151,7 +151,7 @@ const (
 // ParseLevelAsNumber converts log level to the int representation according to the RFC-5424.
 func ParseLevelAsNumber(level string) LogLevel {
 	switch strings.ToLower(strings.TrimSpace(level)) {
-	case "0", "emergency", "fatal", "panic", "dpanic":
+	case "0", "emergency", "emerg", "fatal", "panic", "dpanic":
 		return LevelEmergency
 	case "1", "alert":
 		return LevelAlert
@@ -202,7 +202,10 @@ func ParseLevelAsString(level string) string {
 func CreateNestedField(root *insaneJSON.Root, path []string) *insaneJSON.Node {
 	curr := root.Node
 	for _, p := range path {
-		curr = curr.AddFieldNoAlloc(root, p).MutateToObject()
+		curr = curr.AddFieldNoAlloc(root, p)
+		if !curr.IsObject() {
+			curr.MutateToObject()
+		}
 	}
 	return curr
 }

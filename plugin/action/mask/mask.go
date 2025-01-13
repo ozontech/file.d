@@ -2,15 +2,17 @@ package mask
 
 import (
 	"regexp"
+	"slices"
 	"strings"
 	"unicode/utf8"
 
+	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/cfg/matchrule"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
+	insaneJSON "github.com/ozontech/insane-json"
 	"github.com/prometheus/client_golang/prometheus"
-	insaneJSON "github.com/vitkovskii/insane-json"
 	"go.uber.org/zap"
 )
 
@@ -26,9 +28,10 @@ pipelines:
     actions:
     - type: mask
       metric_subsystem_name: "some_name"
+      ignore_fields:
+      - trace_id
       masks:
-      - mask:
-        re: "\b(\d{1,4})\D?(\d{1,4})\D?(\d{1,4})\D?(\d{1,4})\b"
+      - re: "\b(\d{1,4})\D?(\d{1,4})\D?(\d{1,4})\D?(\d{1,4})\b"
         groups: [1,2,3]
     ...
 ```
@@ -48,11 +51,17 @@ type Plugin struct {
 	// (data before masked entry, its replacement and data after masked entry)
 	maskBuf []byte
 
+	// common match regex
+	matchRe *regexp.Regexp
+
+	fieldPaths   [][]string
+	isWhitelist  bool
+	ignoredNodes []*insaneJSON.Node
+
 	valueNodes []*insaneJSON.Node
 	logger     *zap.Logger
 
 	//  plugin metrics
-
 	maskAppliedMetric *prometheus.CounterVec
 }
 
@@ -66,12 +75,34 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
+	// > **Experimental feature** for best performance. Skips events with mismatched masks.
+	SkipMismatched bool `json:"skip_mismatched" default:"false"` // *
+
+	// > @3@4@5@6
+	// >
 	// > If any mask has been applied then `mask_applied_field` will be set to `mask_applied_value` in the event.
 	MaskAppliedField string `json:"mask_applied_field"` // *
 
 	// > @3@4@5@6
 	// >
 	MaskAppliedValue string `json:"mask_applied_value"` // *
+
+	// > @3@4@5@6
+	// >
+	// > List of the ignored event fields.
+	// > If name of some field contained in this list
+	// > then all nested fields will be ignored (even if they are not listed).
+	IgnoreFields []cfg.FieldSelector `json:"ignore_fields" slice:"true"` // *
+
+	// > @3@4@5@6
+	// >
+	// > List of the processed event fields.
+	// > If name of some field contained in this list
+	// > then all nested fields will be processed (even if they are not listed).
+	// > If ignored fields list is empty and processed fields list is empty
+	// > we consider this as empty ignored fields list (all fields will be processed).
+	// > It is wrong to set non-empty ignored fields list and non-empty processed fields list at the same time.
+	ProcessFields []cfg.FieldSelector `json:"process_fields" slice:"true"` // *
 
 	// > @3@4@5@6
 	// >
@@ -84,6 +115,14 @@ type Config struct {
 	// > Important note: labels metrics are not currently being cleared.
 	AppliedMetricLabels []string `json:"applied_metric_labels"` // *
 }
+
+type mode int
+
+const (
+	modeMask mode = iota
+	modeReplace
+	modeCut
+)
 
 type Mask struct {
 	// > @3@4@5@6
@@ -111,6 +150,13 @@ type Mask struct {
 	// >
 	// > ReplaceWord, if set, is used instead of asterisks for masking patterns that are of the same length or longer.
 	ReplaceWord string `json:"replace_word"` // *
+
+	// > @3@4@5@6
+	// >
+	// > CutValues, if set, masking parts will be cut instead of being replaced with ReplaceWord or asterisks.
+	CutValues bool `json:"cut_values"` // *
+
+	mode mode
 
 	// > @3@4@5@6
 	// >
@@ -168,20 +214,48 @@ func (p *Plugin) makeMetric(ctl *metric.Ctl, name, help string, labels ...string
 		labelNames = append(labelNames, label)
 	}
 
-	return ctl.RegisterCounter(name, help, labelNames...)
+	return ctl.RegisterCounterVec(name, help, labelNames...)
 }
 
-func compileMasks(masks []Mask, logger *zap.Logger) []Mask {
+func compileMasks(masks []Mask, logger *zap.Logger) ([]Mask, *regexp.Regexp) {
+	patterns := make([]string, 0, len(masks))
 	for i := range masks {
 		compileMask(&masks[i], logger)
+		if masks[i].Re != "" {
+			patterns = append(patterns, masks[i].Re)
+		}
 	}
-	return masks
+
+	combinedPattern := strings.Join(patterns, "|")
+	logger.Info("compiling match regexp", zap.String("re", combinedPattern))
+	matchRegex, err := regexp.Compile(combinedPattern)
+	if err != nil {
+		logger.Warn("error on compiling match regexp", zap.Error(err))
+	}
+
+	return masks, matchRegex
 }
 
 func compileMask(m *Mask, logger *zap.Logger) {
 	if m.Re == "" && len(m.MatchRules) == 0 {
 		logger.Fatal("mask must have either nonempty regex or ruleset, or both")
 	}
+
+	setModeReplace := m.ReplaceWord != ""
+	setModeCut := m.CutValues
+	if setModeReplace && setModeCut {
+		logger.Fatal("replace mode and cut mode are incompatible")
+	}
+
+	switch {
+	case setModeReplace:
+		m.mode = modeReplace
+	case setModeCut:
+		m.mode = modeCut
+	default:
+		m.mode = modeMask
+	}
+
 	if m.Re != "" {
 		logger.Info("compiling", zap.String("re", m.Re), zap.Ints("groups", m.Groups))
 		re, err := regexp.Compile(m.Re)
@@ -189,7 +263,7 @@ func compileMask(m *Mask, logger *zap.Logger) {
 			logger.Fatal("error on compiling regexp", zap.String("re", m.Re))
 		}
 		m.Re_ = re
-		m.Groups = verifyGroupNumbers(m.Groups, re.NumSubexp(), logger)
+		m.Groups = cfg.VerifyGroupNumbers(m.Groups, re.NumSubexp(), logger)
 	}
 	for i, matchRule := range m.MatchRules {
 		if len(matchRule.Rules) == 0 {
@@ -202,37 +276,6 @@ func compileMask(m *Mask, logger *zap.Logger) {
 		}
 		m.MatchRules[i].Prepare()
 	}
-}
-
-func isGroupsUnique(groups []int) bool {
-	uniqueGrp := make(map[int]struct{}, len(groups))
-	var exists struct{}
-	for _, g := range groups {
-		if _, isContains := uniqueGrp[g]; isContains {
-			return false
-		}
-		uniqueGrp[g] = exists
-	}
-	return true
-}
-
-func verifyGroupNumbers(groups []int, totalGroups int, logger *zap.Logger) []int {
-	if !isGroupsUnique(groups) {
-		logger.Fatal("groups numbers must be unique", zap.Ints("groups_numbers", groups))
-	}
-
-	if len(groups) > totalGroups {
-		logger.Fatal("there are many groups", zap.Int("groups", len(groups)), zap.Int("total_groups", totalGroups))
-	}
-
-	for _, g := range groups {
-		if g > totalGroups || g < 0 {
-			logger.Fatal("wrong group number", zap.Int("number", g))
-		} else if g == 0 {
-			return []int{0}
-		}
-	}
-	return groups
 }
 
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginParams) {
@@ -249,7 +292,30 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 	p.sourceBuf = make([]byte, 0, params.PipelineSettings.AvgEventSize)
 	p.valueNodes = make([]*insaneJSON.Node, 0)
 	p.logger = params.Logger.Desugar()
-	p.config.Masks = compileMasks(p.config.Masks, p.logger)
+	p.config.Masks, p.matchRe = compileMasks(p.config.Masks, p.logger)
+
+	isBlacklist := len(p.config.IgnoreFields) > 0
+	isWhitelist := len(p.config.ProcessFields) > 0
+	if isBlacklist && isWhitelist {
+		p.logger.Fatal("ignored fields list and processed fields list are both non-empty")
+	}
+
+	p.isWhitelist = isWhitelist
+
+	var fieldPaths []cfg.FieldSelector
+	if isBlacklist {
+		fieldPaths = p.config.IgnoreFields
+	} else if isWhitelist {
+		fieldPaths = p.config.ProcessFields
+	}
+
+	if len(fieldPaths) > 0 {
+		p.fieldPaths = make([][]string, 0, len(fieldPaths))
+		for _, fieldPath := range fieldPaths {
+			p.fieldPaths = append(p.fieldPaths, cfg.ParseFieldSelector(string(fieldPath)))
+		}
+	}
+
 	p.registerMetrics(params.MetricCtl)
 }
 
@@ -279,31 +345,26 @@ func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 func (p *Plugin) Stop() {
 }
 
-func (p *Plugin) appendMask(mask *Mask, dst, src []byte, begin, end int) ([]byte, int) {
-	runeCounter := utf8.RuneCount(src[begin:end])
-	if mask.ReplaceWord != "" {
-		dst = append(dst, []byte(mask.ReplaceWord)...)
-		return dst, len(src[begin:end]) - len(mask.ReplaceWord)
-	}
-	for j := 0; j < runeCounter; j++ {
-		if mask.MaxCount != 0 && j >= mask.MaxCount {
-			break
+func (p *Plugin) maskSection(mask *Mask, dst, src []byte, begin, end int) []byte {
+	switch mask.mode {
+	case modeReplace:
+		return append(dst, mask.ReplaceWord...)
+	case modeCut:
+		return dst
+	case modeMask:
+		n := utf8.RuneCount(src[begin:end])
+		if mask.MaxCount > 0 {
+			n = min(n, mask.MaxCount)
 		}
-		dst = append(dst, substitution)
+
+		for i := 0; i < n; i++ {
+			dst = append(dst, substitution)
+		}
+
+		return dst
+	default:
+		panic("invalid masking mode")
 	}
-	return dst, len(src[begin:end]) - runeCounter
-}
-
-func (p *Plugin) maskSection(mask *Mask, dst, src []byte, begin, end int) ([]byte, int) {
-	dst = append(dst, src[:begin]...)
-
-	dst, offset := p.appendMask(mask, dst, src, begin, end)
-
-	if len(dst)+offset < len(src) {
-		dst = append(dst, src[end:]...)
-	}
-
-	return dst, offset
 }
 
 func (p *Plugin) applyMaskMetric(mask *Mask, event *pipeline.Event) {
@@ -358,37 +419,65 @@ func (p *Plugin) maskValue(mask *Mask, value, buf []byte) ([]byte, bool) {
 
 	buf = buf[:0]
 
-	offset := 0
+	prevFinish := 0
+	curStart, curFinish := 0, 0
 	for _, index := range indexes {
 		for _, grp := range mask.Groups {
-			value, offset = p.maskSection(
+			curStart = index[grp*2]
+			curFinish = index[grp*2+1]
+
+			buf = append(buf, value[prevFinish:curStart]...)
+			prevFinish = curFinish
+
+			buf = p.maskSection(
 				mask,
 				buf,
 				value,
-				index[grp*2]-offset,
-				index[grp*2+1]-offset,
+				curStart,
+				curFinish,
 			)
 		}
 	}
 
-	return value, true
+	return append(buf, value[curFinish:]...), true
 }
 
-func getValueNodeList(currentNode *insaneJSON.Node, valueNodes []*insaneJSON.Node) []*insaneJSON.Node {
+func getNestedValueNodes(currentNode *insaneJSON.Node, ignoredNodes []*insaneJSON.Node, valueNodes []*insaneJSON.Node) []*insaneJSON.Node {
 	switch {
+	case currentNode == nil:
+		break
 	case currentNode.IsField():
-		valueNodes = getValueNodeList(currentNode.AsFieldValue(), valueNodes)
+		valueNodes = getNestedValueNodes(currentNode.AsFieldValue(), ignoredNodes, valueNodes)
+	case slices.Contains(ignoredNodes, currentNode):
+		break
 	case currentNode.IsArray():
 		for _, n := range currentNode.AsArray() {
-			valueNodes = getValueNodeList(n, valueNodes)
+			valueNodes = getNestedValueNodes(n, ignoredNodes, valueNodes)
 		}
 	case currentNode.IsObject():
 		for _, n := range currentNode.AsFields() {
-			valueNodes = getValueNodeList(n, valueNodes)
+			valueNodes = getNestedValueNodes(n, ignoredNodes, valueNodes)
 		}
 	default:
 		valueNodes = append(valueNodes, currentNode)
 	}
+
+	return valueNodes
+}
+
+func (p *Plugin) getValueNodes(root *insaneJSON.Node, valueNodes []*insaneJSON.Node) []*insaneJSON.Node {
+	if p.isWhitelist {
+		for _, fieldPath := range p.fieldPaths {
+			valueNodes = getNestedValueNodes(root.Dig(fieldPath...), nil, valueNodes)
+		}
+	} else {
+		p.ignoredNodes = p.ignoredNodes[:0]
+		for _, fieldPath := range p.fieldPaths {
+			p.ignoredNodes = append(p.ignoredNodes, root.Dig(fieldPath...))
+		}
+		valueNodes = getNestedValueNodes(root, p.ignoredNodes, valueNodes)
+	}
+
 	return valueNodes
 }
 
@@ -400,18 +489,36 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	locApplied := false
 
 	p.valueNodes = p.valueNodes[:0]
-	p.valueNodes = getValueNodeList(root, p.valueNodes)
+	p.valueNodes = p.getValueNodes(root, p.valueNodes)
 	for _, v := range p.valueNodes {
 		value := v.AsBytes()
+		var valueIsCommonMatched bool
+		if p.config.SkipMismatched {
+			// is matched by common mask
+			valueIsCommonMatched = p.matchRe.Match(value)
+		} else {
+			// to always try to apply a mask
+			valueIsCommonMatched = true
+		}
+
 		p.sourceBuf = append(p.sourceBuf[:0], value...)
-		p.maskBuf = append(p.maskBuf[:0], p.sourceBuf...)
+		// valueMasked is not the same as maskApplied;
+		// it shows if current node is masked and really needs to be changed
+		valueMasked := false
 		for i := range p.config.Masks {
 			mask := &p.config.Masks[i]
+			if mask.Re != "" && !valueIsCommonMatched {
+				// skips messages not matched common regex
+				continue
+			}
+
 			p.maskBuf, locApplied = p.maskValue(mask, p.sourceBuf, p.maskBuf)
 			p.sourceBuf = append(p.sourceBuf[:0], p.maskBuf...)
 			if !locApplied {
 				continue
 			}
+			valueMasked = true
+
 			if mask.AppliedField != "" {
 				event.Root.AddFieldNoAlloc(event.Root, mask.AppliedField).MutateToString(mask.AppliedValue)
 			}
@@ -421,7 +528,10 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 
 			maskApplied = true
 		}
-		v.MutateToString(string(p.maskBuf))
+
+		if valueMasked {
+			v.MutateToString(string(p.maskBuf))
+		}
 	}
 
 	if p.config.MaskAppliedField != "" && maskApplied {

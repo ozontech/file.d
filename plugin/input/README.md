@@ -29,18 +29,6 @@ But update events don't work with symlinks, so watcher also periodically manuall
 
 > ⚠ Use add_file_name plugin if you want to add filename to events.
 
-**Reading docker container log files:**
-```yaml
-pipelines:
-  example_docker_pipeline:
-    input:
-        type: file
-        watching_dir: /var/lib/docker/containers
-        offsets_file: /data/offsets.yaml
-        filename_pattern: "*-json.log"
-        persistence_mode: async
-```
-
 [More details...](plugin/input/file/README.md)
 ## http
 Reads events from HTTP requests with the body delimited by a new line.
@@ -136,7 +124,7 @@ pipelines:
 
 [More details...](plugin/input/k8s/README.md)
 ## kafka
-It reads events from multiple Kafka topics using `sarama` library.
+It reads events from multiple Kafka topics using `franz-go` library.
 > It guarantees at "at-least-once delivery" due to the commitment mechanism.
 
 **Example**
@@ -149,6 +137,10 @@ pipelines:
       brokers: [kafka:9092, kafka:9091]
       topics: [topic1, topic2]
       offset: newest
+      meta:
+        partition: '{{ .partition }}'
+        topic: '{{ .topic }}'
+        offset: '{{ .offset }}'
     # output plugin is not important in this case, let's emulate s3 output.
     output:
       type: s3

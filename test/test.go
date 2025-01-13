@@ -102,6 +102,7 @@ func NewPipeline(actions []*pipeline.ActionPluginStaticInfo, pipelineOpts ...str
 	mock := Opts(pipelineOpts).Has("mock")
 	passive := Opts(pipelineOpts).Has("passive")
 	name := Opts(pipelineOpts).Has("name")
+	lowMem := Opts(pipelineOpts).Has("use_pool_low_memory")
 
 	eventTimeout := pipeline.DefaultEventTimeout
 	if Opts(pipelineOpts).Has("short_event_timeout") {
@@ -120,8 +121,14 @@ func NewPipeline(actions []*pipeline.ActionPluginStaticInfo, pipelineOpts ...str
 		EventTimeout:        eventTimeout,
 		AntispamThreshold:   0,
 		AvgEventSize:        2048,
+		MetaCacheSize:       32,
 		StreamField:         "stream",
 		Decoder:             "json",
+		MetricHoldDuration:  pipeline.DefaultMetricHoldDuration,
+	}
+
+	if lowMem {
+		settings.Pool = pipeline.PoolTypeLowMem
 	}
 
 	pName := "test_pipeline"
@@ -227,15 +234,24 @@ func newDefaultParams() pipeline.PluginDefaultParams {
 	return pipeline.PluginDefaultParams{
 		PipelineName:     "test_pipeline",
 		PipelineSettings: &pipeline.Settings{},
-		MetricCtl:        metric.New("test", prometheus.NewRegistry()),
+		MetricCtl:        metric.NewCtl("test", prometheus.NewRegistry()),
 	}
 }
 
 func NewConfig(config any, params map[string]int) any {
-	err := cfg.Parse(config, params)
+	err := cfg.SetDefaultValues(config)
+	if err != nil {
+		logger.Panicf("cannot set defaults for config: %s", err.Error())
+	}
+
+	err = cfg.Parse(config, params)
 	if err != nil {
 		logger.Panicf("wrong config: %s", err.Error())
 	}
 
 	return config
+}
+
+func NewOffset(current int64) pipeline.Offsets {
+	return pipeline.NewOffsets(current, nil)
 }

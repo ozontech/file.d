@@ -14,9 +14,9 @@ import (
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
 	mock_pg "github.com/ozontech/file.d/plugin/output/postgres/mock"
+	insaneJSON "github.com/ozontech/insane-json"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/require"
-	insaneJSON "github.com/vitkovskii/insane-json"
 )
 
 func TestPrivateOut(t *testing.T) {
@@ -90,9 +90,9 @@ func TestPrivateOut(t *testing.T) {
 		ctx:          ctx,
 	}
 
-	p.registerMetrics(metric.New("test", prometheus.NewRegistry()))
+	p.registerMetrics(metric.NewCtl("test", prometheus.NewRegistry()))
 
-	batch := &pipeline.Batch{Events: []*pipeline.Event{{Root: root}}}
+	batch := pipeline.NewPreparedBatch([]*pipeline.Event{{Root: root}})
 	p.out(nil, batch)
 }
 
@@ -147,12 +147,7 @@ func TestPrivateOutWithRetry(t *testing.T) {
 		gomock.AssignableToTypeOf(ctxMock),
 		"INSERT INTO table1 (str_uni_1,int_1,timestamp_1) VALUES ($1,$2,$3) ON CONFLICT(str_uni_1) DO UPDATE SET int_1=EXCLUDED.int_1,timestamp_1=EXCLUDED.timestamp_1",
 		[]any{preferSimpleProtocol, strUniValue, intValue, time.Unix(int64(timestampValue), 0).Format(time.RFC3339)},
-	).Return(&rowsForTest{}, errors.New("someError")).Times(2)
-	mockpool.EXPECT().Query(
-		gomock.AssignableToTypeOf(ctxMock),
-		"INSERT INTO table1 (str_uni_1,int_1,timestamp_1) VALUES ($1,$2,$3) ON CONFLICT(str_uni_1) DO UPDATE SET int_1=EXCLUDED.int_1,timestamp_1=EXCLUDED.timestamp_1",
-		[]any{preferSimpleProtocol, strUniValue, intValue, time.Unix(int64(timestampValue), 0).Format(time.RFC3339)},
-	).Return(&rowsForTest{}, nil).Times(1)
+	).Return(&rowsForTest{}, errors.New("someError")).Times(1)
 
 	builder, err := NewQueryBuilder(columns, table)
 	require.NoError(t, err)
@@ -165,9 +160,9 @@ func TestPrivateOutWithRetry(t *testing.T) {
 		ctx:          ctx,
 	}
 
-	p.registerMetrics(metric.New("test", prometheus.NewRegistry()))
+	p.registerMetrics(metric.NewCtl("test", prometheus.NewRegistry()))
 
-	batch := &pipeline.Batch{Events: []*pipeline.Event{{Root: root}}}
+	batch := pipeline.NewPreparedBatch([]*pipeline.Event{{Root: root}})
 	p.out(nil, batch)
 }
 
@@ -218,9 +213,9 @@ func TestPrivateOutNoGoodEvents(t *testing.T) {
 		logger:       testLogger,
 	}
 
-	p.registerMetrics(metric.New("test", prometheus.NewRegistry()))
+	p.registerMetrics(metric.NewCtl("test", prometheus.NewRegistry()))
 
-	batch := &pipeline.Batch{Events: []*pipeline.Event{{Root: root}}}
+	batch := pipeline.NewPreparedBatch([]*pipeline.Event{{Root: root}})
 	p.out(nil, batch)
 }
 
@@ -298,13 +293,13 @@ func TestPrivateOutDeduplicatedEvents(t *testing.T) {
 		ctx:          ctx,
 	}
 
-	p.registerMetrics(metric.New("test", prometheus.NewRegistry()))
+	p.registerMetrics(metric.NewCtl("test", prometheus.NewRegistry()))
 
-	batch := &pipeline.Batch{Events: []*pipeline.Event{
+	batch := pipeline.NewPreparedBatch([]*pipeline.Event{
 		{Root: root},
 		{Root: rootDuplication},
 		{Root: rootDuplicationMore},
-	}}
+	})
 	p.out(nil, batch)
 }
 
@@ -364,9 +359,9 @@ func TestPrivateOutWrongTypeInField(t *testing.T) {
 		logger:       testLogger,
 	}
 
-	p.registerMetrics(metric.New("test", prometheus.NewRegistry()))
+	p.registerMetrics(metric.NewCtl("test", prometheus.NewRegistry()))
 
-	batch := &pipeline.Batch{Events: []*pipeline.Event{{Root: root}}}
+	batch := pipeline.NewPreparedBatch([]*pipeline.Event{{Root: root}})
 	p.out(nil, batch)
 }
 
@@ -469,15 +464,15 @@ func TestPrivateOutFewUniqueEventsYetWithDeduplicationEventsAnpooladEvents(t *te
 		ctx:          ctx,
 	}
 
-	p.registerMetrics(metric.New("test", prometheus.NewRegistry()))
+	p.registerMetrics(metric.NewCtl("test", prometheus.NewRegistry()))
 
-	batch := &pipeline.Batch{Events: []*pipeline.Event{
+	batch := pipeline.NewPreparedBatch([]*pipeline.Event{
 		{Root: root},
 		{Root: rootDuplication},
 		{Root: rootDuplicationMore},
 		{Root: secondUniqueRoot},
 		{Root: badRoot},
-	}}
+	})
 	p.out(nil, batch)
 }
 

@@ -11,7 +11,6 @@ import (
 	"go.uber.org/atomic"
 
 	"github.com/ozontech/file.d/cfg"
-	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/test"
 )
@@ -138,17 +137,12 @@ func TestSimpleJoin(t *testing.T) {
 				lines = append(lines, fmt.Sprintf(format, line))
 			}
 
-			config := &Config{
+			config := test.NewConfig(&Config{
 				Field:    "log",
 				Start:    cfg.Regexp(tt.startPat),
 				Continue: cfg.Regexp(tt.continuePat),
 				Negate:   tt.negate,
-			}
-
-			err := cfg.Parse(config, nil)
-			if err != nil {
-				logger.Panic(err.Error())
-			}
+			}, nil)
 
 			p, input, output := test.NewPipelineMock(
 				test.NewActionPluginStaticInfo(
@@ -178,7 +172,7 @@ func TestSimpleJoin(t *testing.T) {
 
 			for i := 0; i < tt.iterations; i++ {
 				for m, line := range lines {
-					input.In(0, "test.log", int64(i*10000+m), []byte(line))
+					input.In(0, "test.log", test.NewOffset(int64(i*10000+m)), []byte(line))
 				}
 			}
 
@@ -243,16 +237,11 @@ func TestJoinAfterNilNode(t *testing.T) {
 				lines = append(lines, fmt.Sprintf(formatNode, line))
 			}
 
-			config := &Config{
+			config := test.NewConfig(&Config{
 				Field:    "log",
 				Start:    cfg.Regexp(tt.startPat),
 				Continue: cfg.Regexp(tt.continuePat),
-			}
-
-			err := cfg.Parse(config, nil)
-			if err != nil {
-				logger.Panic(err.Error())
-			}
+			}, nil)
 
 			p, input, output := test.NewPipelineMock(
 				test.NewActionPluginStaticInfo(
@@ -282,7 +271,7 @@ func TestJoinAfterNilNode(t *testing.T) {
 
 			for i := 0; i < tt.iterations; i++ {
 				for m, line := range lines {
-					input.In(0, "test.log", int64(i*10000+m), []byte(line))
+					input.In(0, "test.log", test.NewOffset(int64(i*10000+m)), []byte(line))
 				}
 			}
 

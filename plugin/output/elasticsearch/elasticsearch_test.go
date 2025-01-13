@@ -4,12 +4,10 @@ import (
 	"fmt"
 	"testing"
 
+	insaneJSON "github.com/ozontech/insane-json"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	insaneJSON "github.com/vitkovskii/insane-json"
 
-	"github.com/ozontech/file.d/cfg"
-	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/test"
 )
@@ -22,11 +20,7 @@ func TestAppendEvent(t *testing.T) {
 		IndexValues: []string{"@time", "field_a", "field_b"},
 		BatchSize:   "1",
 	}
-
-	err := cfg.Parse(config, map[string]int{"gomaxprocs": 1})
-	if err != nil {
-		logger.Panic(err.Error())
-	}
+	test.NewConfig(config, map[string]int{"gomaxprocs": 1})
 
 	p.Start(config, test.NewEmptyOutputPluginParams())
 
@@ -49,11 +43,7 @@ func TestAppendEventWithIndexOpType(t *testing.T) {
 		BatchSize:   "1",
 		BatchOpType: "index",
 	}
-
-	err := cfg.Parse(config, map[string]int{"gomaxprocs": 1})
-	if err != nil {
-		logger.Panic(err.Error())
-	}
+	test.NewConfig(config, map[string]int{"gomaxprocs": 1})
 
 	p.Start(config, test.NewEmptyOutputPluginParams())
 
@@ -76,11 +66,7 @@ func TestAppendEventWithCreateOpType(t *testing.T) {
 		BatchSize:   "1",
 		BatchOpType: "create",
 	}
-
-	err := cfg.Parse(config, map[string]int{"gomaxprocs": 1})
-	if err != nil {
-		logger.Panic(err.Error())
-	}
+	test.NewConfig(config, map[string]int{"gomaxprocs": 1})
 
 	p.Start(config, test.NewEmptyOutputPluginParams())
 
@@ -94,35 +80,24 @@ func TestAppendEventWithCreateOpType(t *testing.T) {
 	assert.Equal(t, expected, string(result), "wrong request content")
 }
 
-func TestConfig(t *testing.T) {
-	p := &Plugin{}
-	config := &Config{
-		IndexFormat: "test-%",
-		Endpoints: []string{
-			"http://endpoint_1:9000",
-			"http://endpoint_2:9000/",
-			"https://endpoint_3:9000",
-			"https://endpoint_4:9000/",
-		},
-		BatchSize: "1",
+func TestPrepareEndpoints(t *testing.T) {
+	in := []string{
+		"http://endpoint_1:9000",
+		"http://endpoint_2:9000/",
+		"https://endpoint_3:9000",
+		"https://endpoint_4:9000/",
 	}
-
-	err := cfg.Parse(config, map[string]int{"gomaxprocs": 1})
-	if err != nil {
-		logger.Panic(err.Error())
-	}
-
-	p.Start(config, test.NewEmptyOutputPluginParams())
-
-	results := []string{
+	want := []string{
 		"http://endpoint_1:9000/_bulk?_source=false",
 		"http://endpoint_2:9000/_bulk?_source=false",
 		"https://endpoint_3:9000/_bulk?_source=false",
 		"https://endpoint_4:9000/_bulk?_source=false",
 	}
 
-	require.Len(t, p.endpoints, len(results))
-	for i := range results {
-		assert.Equal(t, results[i], p.endpoints[i].String())
+	got := prepareEndpoints(in)
+
+	require.Len(t, got, len(want))
+	for i := range got {
+		assert.Equal(t, want[i], got[i])
 	}
 }

@@ -2,12 +2,15 @@ package file
 
 import (
 	"net/http"
+	"path/filepath"
 	"time"
 
+	"github.com/bmatcuk/doublestar/v4"
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/pipeline/metadata"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
 )
@@ -32,18 +35,6 @@ But update events don't work with symlinks, so watcher also periodically manuall
 > By default the plugin is notified only on file creations. Note that following for changes is more CPU intensive.
 
 > ⚠ Use add_file_name plugin if you want to add filename to events.
-
-**Reading docker container log files:**
-```yaml
-pipelines:
-  example_docker_pipeline:
-    input:
-        type: file
-        watching_dir: /var/lib/docker/containers
-        offsets_file: /data/offsets.yaml
-        filename_pattern: "*-json.log"
-        persistence_mode: async
-```
 }*/
 
 type Plugin struct {
@@ -55,9 +46,11 @@ type Plugin struct {
 	jobProvider *jobProvider
 
 	// plugin metrics
-
-	possibleOffsetCorruptionMetric    *prometheus.CounterVec
-	alreadyWrittenEventsSkippedMetric *prometheus.CounterVec
+	possibleOffsetCorruptionMetric    prometheus.Counter
+	alreadyWrittenEventsSkippedMetric prometheus.Counter
+	errorOpenFileMetric               prometheus.Counter
+	notifyChannelLengthMetric         prometheus.Gauge
+	numberOfCurrentJobsMetric         prometheus.Gauge
 }
 
 type persistenceMode int
@@ -77,17 +70,22 @@ const (
 	offsetsOpReset                     // * `reset` – resets an offset to the beginning of the file
 )
 
+type Paths struct {
+	Include []string `json:"include"`
+	Exclude []string `json:"exclude"`
+}
+
 type Config struct {
 	// ! config-params
 	// ^ config-params
 
 	// > @3@4@5@6
 	// >
-	// > The source directory to watch for files to process. All subdirectories also will be watched. E.g. if files have
-	// > `/var/my-logs/$YEAR/$MONTH/$DAY/$HOST/$FACILITY-$PROGRAM.log` structure, `watching_dir` should be `/var/my-logs`.
-	// > Also the `filename_pattern`/`dir_pattern` is useful to filter needless files/subdirectories. In the case of using two or more
-	// > different directories, it's recommended to setup separate pipelines for each.
-	WatchingDir string `json:"watching_dir" required:"true"` // *
+	// > Set paths in glob format
+	// >
+	// > * `include` *`[]string`*
+	// > * `exclude` *`[]string`*
+	Paths Paths `json:"paths"` // *
 
 	// > @3@4@5@6
 	// >
@@ -95,18 +93,6 @@ type Config struct {
 	// > > It's a `yaml` file. You can modify it manually.
 	OffsetsFile    string `json:"offsets_file" required:"true"` // *
 	OffsetsFileTmp string
-
-	// > @3@4@5@6
-	// >
-	// > Files that don't meet this pattern will be ignored.
-	// > > Check out [func Glob docs](https://golang.org/pkg/path/filepath/#Glob) for details.
-	FilenamePattern string `json:"filename_pattern" default:"*"` // *
-
-	// > @3@4@5@6
-	// >
-	// > Dirs that don't meet this pattern will be ignored.
-	// > > Check out [func Glob docs](https://golang.org/pkg/path/filepath/#Glob) for details.
-	DirPattern string `json:"dir_pattern" default:"*"` // *
 
 	// > @3@4@5@6
 	// >
@@ -170,7 +156,39 @@ type Config struct {
 	// >
 	// > It turns on watching for file modifications. Turning it on cause more CPU work, but it is more probable to catch file truncation
 	ShouldWatchChanges bool `json:"should_watch_file_changes" default:"false"` // *
+
+	// > @3@4@5@6
+	// >
+	// > Meta params
+	// >
+	// > Add meta information to an event (look at Meta params)
+	// > Use [go-template](https://pkg.go.dev/text/template) syntax
+	// >
+	// > Example: ```filename: '{{ .filename }}'```
+	Meta cfg.MetaTemplates `json:"meta"` // *
+
+	// > **Deprecated format**
+	// >
+	// > The source directory to watch for files to process. All subdirectories also will be watched. E.g. if files have
+	// > `/var/my-logs/$YEAR/$MONTH/$DAY/$HOST/$FACILITY-$PROGRAM.log` structure, `watching_dir` should be `/var/my-logs`.
+	// > Also the `filename_pattern`/`dir_pattern` is useful to filter needless files/subdirectories. In the case of using two or more
+	// > different directories, it's recommended to setup separate pipelines for each.
+	WatchingDir string `json:"watching_dir"` // *
+
+	// > @3@4@5@6
+	// >
+	// > Files that don't meet this pattern will be ignored.
+	// > > Check out [func Glob docs](https://golang.org/pkg/path/filepath/#Glob) for details.
+	FilenamePattern string `json:"filename_pattern" default:"*"` // *
+
+	// > @3@4@5@6
+	// >
+	// > Dirs that don't meet this pattern will be ignored.
+	// > > Check out [func Glob docs](https://golang.org/pkg/path/filepath/#Glob) for details.
+	DirPattern string `json:"dir_pattern" default:"*"` // *
 }
+
+var offsetFiles = make(map[string]string)
 
 func init() {
 	fd.DefaultPluginRegistry.RegisterInput(&pipeline.PluginStaticInfo{
@@ -178,6 +196,7 @@ func init() {
 		Factory: Factory,
 		Endpoints: map[string]func(http.ResponseWriter, *http.Request){
 			"reset": ResetterRegistryInstance.Reset,
+			"info":  InfoRegistryInstance.Info,
 		},
 	})
 }
@@ -194,9 +213,44 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 
 	p.config.OffsetsFileTmp = p.config.OffsetsFile + ".atomic"
 
-	p.jobProvider = NewJobProvider(p.config, p.possibleOffsetCorruptionMetric, p.logger)
+	offsetFilePath := filepath.Clean(p.config.OffsetsFile)
+	if pipelineName, alreadyUsed := offsetFiles[offsetFilePath]; alreadyUsed {
+		p.logger.Fatalf(
+			"offset file %s is already used in pipeline %s",
+			p.config.OffsetsFile,
+			pipelineName,
+		)
+	} else {
+		offsetFiles[offsetFilePath] = params.PipelineName
+	}
+
+	for _, pattern := range p.config.Paths.Include {
+		_, err := doublestar.PathMatch(pattern, ".")
+		if err != nil {
+			p.logger.Fatalf("wrong paths include pattern %q: %s", pattern, err.Error())
+		}
+	}
+
+	for _, pattern := range p.config.Paths.Exclude {
+		_, err := doublestar.PathMatch(pattern, ".")
+		if err != nil {
+			p.logger.Fatalf("wrong paths exclude pattern %q: %s", pattern, err.Error())
+		}
+	}
+
+	p.jobProvider = NewJobProvider(
+		p.config,
+		newMetricCollection(
+			p.possibleOffsetCorruptionMetric,
+			p.errorOpenFileMetric,
+			p.notifyChannelLengthMetric,
+			p.numberOfCurrentJobsMetric,
+		),
+		p.logger,
+	)
 
 	ResetterRegistryInstance.AddResetter(params.PipelineName, p)
+	InfoRegistryInstance.AddPlugin(params.PipelineName, p)
 
 	p.startWorkers()
 	p.jobProvider.start()
@@ -205,13 +259,24 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 	p.possibleOffsetCorruptionMetric = ctl.RegisterCounter("input_file_possible_offset_corruptions_total", "Total number of possible offset corruptions")
 	p.alreadyWrittenEventsSkippedMetric = ctl.RegisterCounter("input_file_already_written_event_skipped_total", "Total number of skipped events that was already written")
+	p.errorOpenFileMetric = ctl.RegisterCounter("input_file_open_error_total", "Total number of file opening errors")
+	p.notifyChannelLengthMetric = ctl.RegisterGauge("input_file_watcher_channel_length", "Number of unprocessed notify events")
+	p.numberOfCurrentJobsMetric = ctl.RegisterGauge("input_file_provider_jobs_length", "Number of current jobs")
 }
 
 func (p *Plugin) startWorkers() {
 	p.workers = make([]*worker, p.config.WorkersCount_)
 	for i := range p.workers {
 		p.workers[i] = &worker{
-			maxEventSize: p.params.PipelineSettings.MaxEventSize,
+			maxEventSize:       p.params.PipelineSettings.MaxEventSize,
+			cutOffEventByLimit: p.params.PipelineSettings.CutOffEventByLimit,
+		}
+		if len(p.config.Meta) > 0 {
+			p.workers[i].metaTemplater = metadata.NewMetaTemplater(
+				p.config.Meta,
+				p.logger.Desugar(),
+				p.params.PipelineSettings.MetaCacheSize,
+			)
 		}
 		p.workers[i].start(p.params.Controller, p.jobProvider, p.config.ReadBufferSize, p.logger)
 	}
@@ -240,7 +305,7 @@ func (p *Plugin) PassEvent(event *pipeline.Event) bool {
 	p.jobProvider.jobsMu.RUnlock()
 
 	job.mu.Lock()
-	savedOffset, exist := job.offsets.get(pipeline.StreamName(event.StreamNameBytes()))
+	savedOffset, exist := job.offsets.Get(pipeline.StreamName(event.StreamNameBytes()))
 	job.mu.Unlock()
 
 	if !exist {
@@ -251,7 +316,7 @@ func (p *Plugin) PassEvent(event *pipeline.Event) bool {
 	// and file-d went down after commit
 	pass := event.Offset > savedOffset
 	if !pass {
-		p.alreadyWrittenEventsSkippedMetric.WithLabelValues().Inc()
+		p.alreadyWrittenEventsSkippedMetric.Inc()
 		return false
 	}
 

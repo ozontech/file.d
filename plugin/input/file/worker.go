@@ -4,23 +4,37 @@ import (
 	"bytes"
 	"io"
 	"os"
+	"strings"
 
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/pipeline/metadata"
+	k8s_meta "github.com/ozontech/file.d/plugin/input/k8s/meta"
+
 	"go.uber.org/zap"
 )
 
 type worker struct {
-	maxEventSize int
+	maxEventSize       int
+	cutOffEventByLimit bool
+
+	metaTemplater *metadata.MetaTemplater
+	needK8sMeta   bool
 }
 
 type inputer interface {
 	// In processes event and returns it seq number.
-	In(sourceID pipeline.SourceID, sourceName string, offset int64, data []byte, isNewSource bool) uint64
+	In(sourceID pipeline.SourceID, sourceName string, offset pipeline.Offsets, data []byte, isNewSource bool, meta metadata.MetaData) uint64
 	IncReadOps()
-	IncMaxEventSizeExceeded()
+	IncMaxEventSizeExceeded(lvs ...string)
 }
 
 func (w *worker) start(inputController inputer, jobProvider *jobProvider, readBufferSize int, logger *zap.SugaredLogger) {
+	for metaParam := range jobProvider.config.Meta {
+		if strings.Contains(metaParam, "k8s") {
+			w.needK8sMeta = true
+			break
+		}
+	}
 	go w.work(inputController, jobProvider, readBufferSize, logger)
 }
 
@@ -28,7 +42,6 @@ func (w *worker) work(controller inputer, jobProvider *jobProvider, readBufferSi
 	accumBuf := make([]byte, 0, readBufferSize)
 	readBuf := make([]byte, readBufferSize)
 	shouldCheckMax := w.maxEventSize != 0
-
 	for {
 		job := <-jobProvider.jobsChan
 		if job == nil {
@@ -42,6 +55,7 @@ func (w *worker) work(controller inputer, jobProvider *jobProvider, readBufferSi
 		sourceName := job.filename
 		skipLine := job.shouldSkip.Load()
 		lastOffset := job.curOffset
+		offsets := job.offsets
 		if job.symlink != "" {
 			sourceName = job.symlink
 		}
@@ -54,6 +68,23 @@ func (w *worker) work(controller inputer, jobProvider *jobProvider, readBufferSi
 		isEOFReached := false
 		readTotal := int64(0)
 		scanned := int64(0)
+
+		var metadataInfo metadata.MetaData
+		if w.metaTemplater != nil {
+			metaData, err := newMetaInformation(
+				job.filename,
+				job.symlink,
+				job.inode,
+				w.needK8sMeta,
+			)
+			if err != nil {
+				logger.Error("cannot parse meta info", zap.Error(err))
+			}
+			metadataInfo, err = w.metaTemplater.Render(metaData)
+			if err != nil {
+				logger.Error("cannot render meta info", zap.Error(err))
+			}
+		}
 
 		// append the data of the old work, this happens when the event was not completely written to the file
 		// for example: {"level": "info", "message": "some...
@@ -92,8 +123,8 @@ func (w *worker) work(controller inputer, jobProvider *jobProvider, readBufferSi
 				scanned += pos + 1
 
 				// check if the event fits into the max size, otherwise skip the event
-				if shouldCheckMax && len(accumBuf)+len(line) > w.maxEventSize {
-					controller.IncMaxEventSizeExceeded()
+				if shouldCheckMax && !w.cutOffEventByLimit && len(accumBuf)+len(line) > w.maxEventSize {
+					controller.IncMaxEventSizeExceeded(sourceName)
 					skipLine = true
 				}
 
@@ -109,7 +140,7 @@ func (w *worker) work(controller inputer, jobProvider *jobProvider, readBufferSi
 						inBuf = accumBuf
 					}
 
-					job.lastEventSeq = controller.In(sourceID, sourceName, lastOffset+scanned, inBuf, isVirgin)
+					job.lastEventSeq = controller.In(sourceID, sourceName, pipeline.NewOffsets(lastOffset+scanned, offsets), inBuf, isVirgin, metadataInfo)
 				}
 				// restore the line buffer
 				accumBuf = accumBuf[:0]
@@ -117,7 +148,10 @@ func (w *worker) work(controller inputer, jobProvider *jobProvider, readBufferSi
 
 			// check the buffer size and limits to avoid OOM if event is long
 			if shouldCheckMax && len(accumBuf) > w.maxEventSize {
-				continue
+				if !w.cutOffEventByLimit {
+					continue
+				}
+				accumBuf = accumBuf[:w.maxEventSize]
 			}
 			accumBuf = append(accumBuf, buf...)
 		}
@@ -157,3 +191,64 @@ func (w *worker) processEOF(file *os.File, job *Job, jobProvider *jobProvider, t
 
 	return nil
 }
+
+type metaInformation struct {
+	filename string
+	symlink  string
+	inode    uint64
+
+	k8sMetadata *k8s_meta.K8sMetaInformation
+}
+
+func newMetaInformation(filename, symlink string, inode inodeID, parseK8sMeta bool) (metaInformation, error) {
+	var metaData k8s_meta.K8sMetaInformation
+	var err error
+	if parseK8sMeta {
+		metaData, err = k8s_meta.NewK8sMetaInformation(symlink)
+		if err != nil {
+			metaData, err = k8s_meta.NewK8sMetaInformation(filename)
+			if err != nil {
+				return metaInformation{}, err
+			}
+		}
+	}
+
+	return metaInformation{
+		filename:    filename,
+		symlink:     symlink,
+		inode:       uint64(inode),
+		k8sMetadata: &metaData,
+	}, nil
+}
+
+func (m metaInformation) GetData() map[string]any {
+	data := map[string]any{
+		"filename": m.filename,
+		"symlink":  m.symlink,
+		"inode":    m.inode,
+	}
+
+	if m.k8sMetadata != nil {
+		data["pod_name"] = m.k8sMetadata.PodName
+		data["namespace"] = m.k8sMetadata.Namespace
+		data["container_name"] = m.k8sMetadata.ContainerName
+		data["container_id"] = m.k8sMetadata.ContainerID
+		data["pod"] = m.k8sMetadata.Pod
+	} else {
+		data["pod_name"] = nil
+		data["namespace"] = nil
+		data["container_name"] = nil
+		data["container_id"] = nil
+		data["pod"] = nil
+	}
+
+	return data
+}
+
+/*{ meta-params
+**`filename`**
+
+**`symlink`**
+
+**`inode`**
+}*/

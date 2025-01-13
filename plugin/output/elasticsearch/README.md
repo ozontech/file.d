@@ -9,6 +9,18 @@ The list of elasticsearch endpoints in the following format: `SCHEMA://HOST:PORT
 
 <br>
 
+**`use_gzip`** *`bool`* *`default=false`* 
+
+If set, the plugin will use gzip encoding.
+
+<br>
+
+**`gzip_compression_level`** *`string`* *`default=default`* *`options=default|no|best-speed|best-compression|huffman-only`* 
+
+Gzip compression level. Used if `use_gzip=true`.
+
+<br>
+
 **`username`** *`string`* 
 
 Username for HTTP Basic Authentication.
@@ -29,6 +41,19 @@ Base64-encoded token for authorization; if set, overrides username/password.
 
 **`ca_cert`** *`string`* 
 Path or content of a PEM-encoded CA file.
+
+<br>
+
+**`keep_alive`** *`KeepAliveConfig`* 
+
+Keep-alive config.
+
+`KeepAliveConfig` params:
+* `max_idle_conn_duration` - idle keep-alive connections are closed after this duration.
+By default idle connections are closed after `10s`.
+* `max_conn_duration` - keep-alive connections are closed after this duration.
+If set to `0` - connection duration is unlimited.
+By default connection duration is `5m`.
 
 <br>
 
@@ -91,6 +116,38 @@ After this timeout batch will be sent even if batch isn't full.
 
 Operation type to be used in batch requests. It can be `index` or `create`. Default is `index`.
 > Check out [_bulk API doc](https://www.elastic.co/guide/en/elasticsearch/reference/current/docs-bulk.html) for details.
+
+<br>
+
+**`retry`** *`int`* *`default=10`* 
+
+Retries of insertion. If File.d cannot insert for this number of attempts,
+File.d will fall with non-zero exit code or skip message (see fatal_on_failed_insert).
+
+<br>
+
+**`fatal_on_failed_insert`** *`bool`* *`default=false`* 
+
+After an insert error, fall with a non-zero exit code or not
+**Experimental feature**
+
+<br>
+
+**`retention`** *`cfg.Duration`* *`default=1s`* 
+
+Retention milliseconds for retry to DB.
+
+<br>
+
+**`retention_exponentially_multiplier`** *`int`* *`default=2`* 
+
+Multiplier for exponential increase of retention between retries
+
+<br>
+
+**`strict`** *`bool`* *`default=false`* 
+
+After a non-retryable write error, fall with a non-zero exit code or not
 
 <br>
 
