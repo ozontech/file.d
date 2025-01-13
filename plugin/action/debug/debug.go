@@ -2,7 +2,6 @@ package debug
 
 import (
 	"encoding/json"
-	"fmt"
 	"sync"
 	"time"
 
@@ -76,10 +75,6 @@ func (p *Plugin) Start(anyConfig pipeline.AnyConfig, params *pipeline.ActionPlug
 	p.config = anyConfig.(*Config)
 
 	lg := params.Logger.Desugar()
-	if p.config.Message == eventField {
-		lg.Fatal(fmt.Sprintf("the %s is reserved", eventField))
-	}
-
 	p.setupLogger(params.PipelineName, lg, p.config)
 }
 

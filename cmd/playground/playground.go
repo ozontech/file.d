@@ -10,11 +10,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/playground"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.uber.org/automaxprocs/maxprocs"
 	"go.uber.org/zap"
@@ -33,25 +31,22 @@ func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 	run()
-	// Wait interrupt.
+	// Wait for interrupt.
 	<-ctx.Done()
 }
 
 func run() {
 	lg := logger.Instance.Desugar().Named("playground")
 
-	metricsRegistry := prometheus.NewRegistry()
-	metricsRegistry.MustRegister(collectors.NewGoCollector())
-
 	// Start playground API server.
-	play := playground.NewHandler(fd.DefaultPluginRegistry, lg)
+	play := playground.NewHandler(lg)
 	api := apiHandler(play)
-	apiWithMetrics := promhttp.InstrumentMetricHandler(metricsRegistry, api)
+	apiWithMetrics := promhttp.InstrumentMetricHandler(prometheus.DefaultRegisterer, api)
 	startServer(*addr, apiWithMetrics, lg.Named("play-api"))
 
 	// Start debug server.
 	debugMux := http.NewServeMux()
-	debugMux.Handle("/metrics", promhttp.HandlerFor(metricsRegistry, promhttp.HandlerOpts{}))
+	debugMux.Handle("/metrics", promhttp.HandlerFor(prometheus.DefaultGatherer, promhttp.HandlerOpts{}))
 	debugMux.HandleFunc("/debug/pprof/", pprof.Index)
 	debugMux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
 	debugMux.HandleFunc("/debug/pprof/profile", pprof.Profile)

@@ -37,6 +37,7 @@ import (
 	_ "github.com/ozontech/file.d/plugin/action/remove_fields"
 	_ "github.com/ozontech/file.d/plugin/action/rename"
 	_ "github.com/ozontech/file.d/plugin/action/set_time"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 
 	_ "github.com/ozontech/file.d/plugin/input/fake"
 	"github.com/ozontech/file.d/plugin/output/devnull"
@@ -65,27 +66,71 @@ type ProcessResult struct {
 }
 
 type DoActionsResponse struct {
-	Result  []ProcessResult `json:"result"`
-	Stdout  string          `json:"stdout"`
-	Metrics string          `json:"metrics"`
+	// Result is slice of events after all action plugins.
+	Result []ProcessResult `json:"result"`
+	// Stdout is pipeline stdout during actions execution.
+	Stdout string `json:"stdout"`
+	// Metrics is prometheus metrics in openmetrics format.
+	Metrics string `json:"metrics"`
 }
 
 type Handler struct {
-	plugins  *fd.PluginRegistry
 	logger   *zap.Logger
-	requests atomic.Int64
+	requests *atomic.Int64
+
+	concurrencyLimiter chan struct{}
 }
 
 var _ http.Handler = (*Handler)(nil)
 
-func NewHandler(plugins *fd.PluginRegistry, logger *zap.Logger) *Handler {
-	return &Handler{plugins: plugins, logger: logger}
+func NewHandler(logger *zap.Logger) *Handler {
+	return &Handler{
+		logger:             logger,
+		requests:           new(atomic.Int64),
+		concurrencyLimiter: make(chan struct{}, runtime.GOMAXPROCS(0)),
+	}
 }
+
+var (
+	concurrencyReached = promauto.NewCounter(prometheus.CounterOpts{
+		Namespace:   "file_d_playground",
+		Subsystem:   "api",
+		Name:        "concurrency_reached_total",
+		Help:        "Total number of requests that were locked on the concurrency limiter",
+		ConstLabels: nil,
+	})
+	concurrencyTimeouts = promauto.NewCounter(prometheus.CounterOpts{
+		Namespace:   "file_d_playground",
+		Subsystem:   "api",
+		Name:        "concurrency_timeouts_total",
+		Help:        "Total number of requests that where rejected due to concurrency limiter",
+		ConstLabels: nil,
+	})
+)
 
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "", http.StatusMethodNotAllowed)
 		return
+	}
+
+	select {
+	case h.concurrencyLimiter <- struct{}{}:
+		defer func() { _ = <-h.concurrencyLimiter }()
+	default:
+		concurrencyReached.Inc()
+
+		const maxWaitDuration = time.Second * 30
+		ctx, cancel := context.WithTimeout(r.Context(), maxWaitDuration)
+		defer cancel()
+
+		select {
+		case <-ctx.Done():
+			concurrencyTimeouts.Inc()
+			http.Error(w, "concurrency limiter timeout", http.StatusRequestTimeout)
+		case h.concurrencyLimiter <- struct{}{}:
+			defer func() { _ = <-h.concurrencyLimiter }()
+		}
 	}
 
 	limitedBody := io.LimitReader(r.Body, 1<<20)
@@ -97,7 +142,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if len(req.Events) > 32 || len(req.Events) == 0 || len(req.Actions) > 64 {
-		http.Error(w, "validate error: events count must be in range [0, 32] and actions count [0, 64]", http.StatusBadRequest)
+		http.Error(w, "validate error: events count must be in range [1, 32] and actions count [0, 64]", http.StatusBadRequest)
 		return
 	}
 
@@ -112,75 +157,69 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(resp)
 }
 
+var (
+	nextPipelineID = atomic.Int64{}
+)
+
 func (h *Handler) doActions(ctx context.Context, req DoActionsRequest) (resp DoActionsResponse, code int, err error) {
 	if req.Debug {
-		// wrap all plugins with the debug plugin
-		newActions := make([]json.RawMessage, 0, len(req.Actions)*2)
-
-		for _, action := range req.Actions {
-			// trying to get the name of the next action
-			var actionWithType = struct {
-				Type string `json:"type"`
-			}{}
-			if err := json.Unmarshal(action, &actionWithType); err != nil {
-				return resp, http.StatusBadRequest, err
-			}
-			actionType := escapeJSON(actionWithType.Type)
-
-			// wrap plugin with the debug actions
-			debugActionBefore := json.RawMessage(fmt.Sprintf(`{"type": "debug", "message": "before %s"}`, actionType))
-			debugActionAfter := json.RawMessage(fmt.Sprintf(`{"type": "debug", "message": "after %s"}`, actionType))
-			newActions = append(newActions, debugActionBefore, action, debugActionAfter)
+		req.Actions, err = debugActions(req.Actions)
+		if err != nil {
+			return resp, http.StatusBadRequest, err
 		}
-
-		req.Actions = newActions
 	}
 
-	// pipeline stdout buffer
+	// Setup pipeline buffer.
 	stdoutBuf := new(bytes.Buffer)
 	stdoutBuf.Grow(1 << 10)
-	stdout := preparePipelineLogger(stdoutBuf)
+	var fatalErr error
+	stdout := preparePipelineLogger(stdoutBuf, zapHookFunc(func(entry *zapcore.CheckedEntry, fields []zapcore.Field) {
+		fatalPayload := formatZapFields(fields)
+		fatalErr = fmt.Errorf("fatal: %s: %s", entry.Message, fatalPayload.String())
+	}))
 
+	pipelineName := fmt.Sprintf("playground_%d", nextPipelineID.Inc())
+	settings := &pipeline.Settings{
+		Decoder:             "json",
+		DecoderParams:       nil,
+		Capacity:            pipelineCapacity,
+		MaintenanceInterval: time.Millisecond * 100,
+		EventTimeout:        time.Millisecond * 100,
+		IsStrict:            false,
+		MetricHoldDuration:  time.Minute,
+		Pool:                pipeline.PoolTypeLowMem,
+	}
 	metricsRegistry := prometheus.NewRegistry()
+	p := pipeline.New(pipelineName, settings, metricsRegistry, stdout)
+	// Check logger.Fatal() calls.
+	if fatalErr != nil {
+		return DoActionsResponse{}, http.StatusBadRequest, fatalErr
+	}
 
-	p := pipeline.New("test", &pipeline.Settings{
-		Decoder:                 "json",
-		DecoderParams:           nil,
-		Capacity:                pipelineCapacity,
-		MetaCacheSize:           0,
-		MaintenanceInterval:     time.Millisecond * 100,
-		EventTimeout:            time.Millisecond * 100,
-		AntispamThreshold:       0,
-		AntispamExceptions:      nil,
-		SourceNameMetaField:     "",
-		AvgEventSize:            0,
-		MaxEventSize:            0,
-		CutOffEventByLimit:      false,
-		CutOffEventByLimitField: "",
-		StreamField:             "",
-		IsStrict:                false,
-		MetricHoldDuration:      time.Minute,
-		Pool:                    pipeline.PoolTypeLowMem,
-	}, metricsRegistry, stdout)
-
-	// callback to collect output events
+	// Callback to collect output events.
 	events := make(chan json.RawMessage, len(req.Events))
 	outputCb := func(event *pipeline.Event) {
 		events <- event.Root.EncodeToByte()
 	}
 
-	if err := h.setupPipeline(p, req, outputCb); err != nil {
+	if err := setupPipeline(p, req, outputCb); err != nil {
 		return resp, http.StatusBadRequest, err
+	}
+	if fatalErr != nil {
+		return DoActionsResponse{}, http.StatusBadRequest, fatalErr
 	}
 
 	p.Start()
+	if fatalErr != nil {
+		return DoActionsResponse{}, http.StatusBadRequest, fatalErr
+	}
 
-	// push events to the pipeline
+	// Push events to the pipeline.
 	for i, event := range req.Events {
 		p.In(pipeline.SourceID(h.requests.Inc()), "fake", pipeline.NewOffsets(int64(i+1), nil), event, true, nil)
 	}
 
-	// collect result
+	// Collect result.
 	var result []ProcessResult
 loop:
 	for {
@@ -198,8 +237,11 @@ loop:
 		}
 	}
 	p.Stop()
+	if fatalErr != nil {
+		return DoActionsResponse{}, http.StatusBadRequest, fatalErr
+	}
 
-	// collect metrics
+	// Collect metrics.
 	metricsInfo, err := metricsRegistry.Gather()
 	if err != nil {
 		h.logger.Error("can't gather metrics", zap.Error(err))
@@ -214,7 +256,48 @@ loop:
 	}, http.StatusOK, nil
 }
 
-func (h *Handler) setupPipeline(p *pipeline.Pipeline, req DoActionsRequest, cb func(event *pipeline.Event)) error {
+func formatZapFields(fields []zapcore.Field) strings.Builder {
+	enc := zapcore.NewMapObjectEncoder()
+	for _, field := range fields {
+		field.AddTo(enc)
+	}
+	fatalPayload := strings.Builder{}
+	for key, value := range enc.Fields {
+		if fatalPayload.Len() > 0 {
+			fatalPayload.WriteString("; ")
+		}
+		fatalPayload.WriteString(fmt.Sprintf("%q=%q", key, value))
+	}
+	return fatalPayload
+}
+
+// debugActions wraps all req.Action with 'debug' action.
+func debugActions(actions []json.RawMessage) ([]json.RawMessage, error) {
+	newActions := make([]json.RawMessage, 0, len(actions)*2)
+	for _, action := range actions {
+		// Parse name of the next action.
+		var actionWithType = struct {
+			Type string `json:"type"`
+		}{}
+		if err := json.Unmarshal(action, &actionWithType); err != nil {
+			return nil, err
+		}
+		if actionWithType.Type == "" {
+			return nil, fmt.Errorf("action type is empty")
+		}
+		actionType := escapeJSON(actionWithType.Type)
+
+		debugActionBefore := json.RawMessage(fmt.Sprintf(`{"type": "debug", "message": "before %s"}`, actionType))
+		debugActionAfter := json.RawMessage(fmt.Sprintf(`{"type": "debug", "message": "after %s"}`, actionType))
+		// Wrap current action plugin with debug actions.
+		newActions = append(newActions, debugActionBefore, action, debugActionAfter)
+	}
+	return newActions, nil
+}
+
+var pluginRegistry = fd.DefaultPluginRegistry
+
+func setupPipeline(p *pipeline.Pipeline, req DoActionsRequest, cb func(event *pipeline.Event)) error {
 	if req.Actions == nil {
 		req.Actions = []json.RawMessage{[]byte(`[]`)}
 	}
@@ -228,12 +311,12 @@ func (h *Handler) setupPipeline(p *pipeline.Pipeline, req DoActionsRequest, cb f
 		"capacity":   pipelineCapacity,
 		"gomaxprocs": runtime.GOMAXPROCS(0),
 	}
-	if err := fd.SetupActions(p, h.plugins, actionsRaw, values); err != nil {
+	if err := fd.SetupActions(p, pluginRegistry, actionsRaw, values); err != nil {
 		return err
 	}
 
-	// setup input
-	inputStaticInfo, err := h.plugins.Get(pipeline.PluginKindInput, "fake")
+	// Setup input fake plugin.
+	inputStaticInfo, err := pluginRegistry.Get(pipeline.PluginKindInput, "fake")
 	if err != nil {
 		return err
 	}
@@ -248,8 +331,8 @@ func (h *Handler) setupPipeline(p *pipeline.Pipeline, req DoActionsRequest, cb f
 		},
 	})
 
-	// setup output
-	outputStaticInfo, err := h.plugins.Get(pipeline.PluginKindOutput, "devnull")
+	// Setup output fake plugin.
+	outputStaticInfo, err := pluginRegistry.Get(pipeline.PluginKindOutput, "devnull")
 	if err != nil {
 		return err
 	}
@@ -288,7 +371,7 @@ func (h *Handler) unmarshalRequest(r io.Reader, isYAML bool) (DoActionsRequest, 
 	return req, nil
 }
 
-func preparePipelineLogger(buf *bytes.Buffer) *zap.Logger {
+func preparePipelineLogger(buf *bytes.Buffer, onFatal zapcore.CheckWriteHook) *zap.Logger {
 	encoderConfig := zap.NewProductionEncoderConfig()
 	encoderConfig.EncodeTime = zapcore.TimeEncoderOfLayout("05.000000")
 
@@ -298,7 +381,7 @@ func preparePipelineLogger(buf *bytes.Buffer) *zap.Logger {
 			zapcore.AddSync(buf),
 			zapcore.DebugLevel,
 		),
-		zap.WithFatalHook(zapcore.WriteThenGoexit),
+		zap.WithFatalHook(onFatal),
 		zap.WithCaller(false),
 		zap.WithClock(NewZeroClock(time.Now())),
 	)
@@ -342,4 +425,10 @@ func (z ZeroClock) Now() time.Time {
 
 func (z ZeroClock) NewTicker(_ time.Duration) *time.Ticker {
 	return new(time.Ticker)
+}
+
+type zapHookFunc func(*zapcore.CheckedEntry, []zapcore.Field)
+
+func (f zapHookFunc) OnWrite(entry *zapcore.CheckedEntry, fields []zapcore.Field) {
+	f(entry, fields)
 }
