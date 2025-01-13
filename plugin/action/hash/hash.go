@@ -35,8 +35,7 @@ The original event:
   "error": {
     "code": "unauthenticated",
     "message": "bad token format"
-  },
-  "message": "2023-10-30T13:35:33.638720813Z error occurred, client: 10.125.172.251, upstream: \"http://10.117.246.15:84/download\", host: \"mpm-youtube-downloader-38.name.com:84\""
+  }
 }
 ```
 The resulting event:
@@ -47,7 +46,6 @@ The resulting event:
     "code": "unauthenticated",
     "message": "bad token format"
   },
-  "message": "2023-10-30T13:35:33.638720813Z error occurred, client: 10.125.172.251, upstream: \"http://10.117.246.15:84/download\", host: \"mpm-youtube-downloader-38.name.com:84\"",
   "hash": 6584967863753642363,
 }
 ```
@@ -73,6 +71,8 @@ The original event:
   "message": "2023-10-30T13:35:33.638720813Z error occurred, client: 10.125.172.251, upstream: \"http://10.117.246.15:84/download\", host: \"mpm-youtube-downloader-38.name.com:84\""
 }
 ```
+Normalized 'message':
+`<datetime> error occurred, client: <ip>, upstream: "<url>", host: "<host>:<int>"`
 The resulting event:
 ```json
 {
