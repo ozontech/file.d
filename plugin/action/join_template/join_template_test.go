@@ -898,3 +898,34 @@ func TestContainsGoroutineID(t *testing.T) {
 		require.False(t, containsGoroutineID(s))
 	}
 }
+
+func TestContainsLineNumber(t *testing.T) {
+	positive := []string{
+		"/some/path/proc.go:123",
+		"    /some/path/proc.go:123",
+		"qwe.go:100",
+
+		// strange but true
+		"/some/path/util.go:0", // zero line number
+		".go:123",              // no filename
+	}
+
+	for _, s := range positive {
+		require.True(t, containsLineNumber(s))
+	}
+
+	negative := []string{
+		"qwe", // no line number part
+
+		"proc.go:", // no chars after line number part
+
+		"proc.go:qwe", // no digit right after colon
+		"proc.go: 1",
+
+		"proc.go:qwe proc.go:100", // only first occurrence counts
+	}
+
+	for _, s := range negative {
+		require.False(t, containsLineNumber(s))
+	}
+}
