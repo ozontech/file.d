@@ -197,6 +197,7 @@ func endsWithIdentifier(s string) bool {
 // it recognizes:
 // - calls of functions in packages
 // - calls of methods of structs
+// POSSIBLE ERROR: only last occurrence counts
 func containsCall(s string) bool {
 	i := strings.LastIndex(s, ")")
 	if i == -1 {
