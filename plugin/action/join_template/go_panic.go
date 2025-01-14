@@ -29,9 +29,8 @@ func goPanicContinueCheck(s string) bool {
 		containsLineNumber(s) ||
 		checkCreatedBy(s) ||
 		containsPanicAddress(s) ||
-		// checkStub(s) ||
 		strings.Contains(s, "panic:") ||
-		checkMethodCall(s)
+		containsCall(s)
 }
 
 // replaces regexp (^\s*$)
@@ -137,7 +136,7 @@ func isLetterOrUnderscore(c byte) bool {
 	return isLetter(c) || c == '_'
 }
 
-func checkMethodCallIndex(s string, pos int) bool {
+func containsCallIndex(s string, pos int) bool {
 	if s[pos] != ')' {
 		return false
 	}
@@ -165,6 +164,8 @@ func checkMethodCallIndex(s string, pos int) bool {
 	}
 
 	left--
+
+	// skip bracket if it occurred
 	if left >= 0 && s[left] == ')' {
 		left--
 	}
@@ -192,14 +193,14 @@ func endsWithIdentifier(s string) bool {
 	return false
 }
 
-func checkMethodCall(s string) bool {
-	for i := len(s) - 1; i >= 0; i-- {
-		if checkMethodCallIndex(s, i) {
-			return true
-		}
+// replaces regexp ([A-Za-z_]+[A-Za-z0-9_]*\)?\.[A-Za-z0-9_]+\(.*\))
+func containsCall(s string) bool {
+	i := strings.LastIndex(s, ")")
+	if i == -1 {
+		return false
 	}
 
-	return false
+	return containsCallIndex(s, i)
 }
 
 // regexp

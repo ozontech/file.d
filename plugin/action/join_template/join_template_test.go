@@ -880,3 +880,22 @@ func TestContainsPanicAddress(t *testing.T) {
 		require.False(t, containsPanicAddress(s))
 	}
 }
+
+func TestContainsCall(t *testing.T) {
+	positive := []string{
+		"main.main()",
+		"a*.main()", // false positive
+	}
+
+	for _, s := range positive {
+		require.True(t, containsCall(s))
+	}
+
+	negative := []string{
+		"a.main()", // false negative
+	}
+
+	for _, s := range negative {
+		require.False(t, containsCall(s))
+	}
+}
