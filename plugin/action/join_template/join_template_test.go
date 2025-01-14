@@ -884,7 +884,11 @@ func TestContainsPanicAddress(t *testing.T) {
 func TestContainsCall(t *testing.T) {
 	positive := []string{
 		"main.main()",
-		"a*.main()", // false positive
+		"(some).main()",
+
+		// false positive
+		"a*.main()",
+		"(some*).main()",
 	}
 
 	for _, s := range positive {
@@ -892,7 +896,11 @@ func TestContainsCall(t *testing.T) {
 	}
 
 	negative := []string{
-		"a.main()", // false negative
+		"abc.main*()",
+
+		// false negative
+		"a.main()",
+		"(a).main()",
 	}
 
 	for _, s := range negative {
