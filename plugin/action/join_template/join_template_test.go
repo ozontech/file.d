@@ -915,6 +915,8 @@ func TestContainsCall(t *testing.T) {
 
 		"[some].F()", // wrong bracket before point
 
+		"some.F() ... 123.F()", // only last occurrence counts
+
 		// no package identifier (for function calls) or
 		// no class identifier (for method calls) before point
 		".F()",
