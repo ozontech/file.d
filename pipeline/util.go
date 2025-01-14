@@ -115,9 +115,22 @@ func parseUnixTime(value string) (time.Time, error) {
 	var err error
 	switch len(numbers) {
 	case 1:
-		sec, err = strconv.ParseInt(numbers[0], 10, 64)
-		if err != nil {
-			return time.Time{}, err
+		switch len(numbers[0]) {
+		case 13: // Milliseconds
+			millis, err := strconv.ParseInt(value, 10, 64)
+			if err != nil {
+				return time.Time{}, err
+			}
+			sec = millis / 1000
+			nsec = (millis % 1000) * 1_000_000 // Convert remaining milliseconds to nanoseconds
+		case 10: // Seconds
+			sec, err = strconv.ParseInt(value, 10, 64)
+			if err != nil {
+				return time.Time{}, err
+			}
+			nsec = 0 // No nanoseconds
+		default:
+			return time.Time{}, fmt.Errorf("unexpected time format")
 		}
 	case 2:
 		sec, err = strconv.ParseInt(numbers[0], 10, 64)
