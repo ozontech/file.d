@@ -170,7 +170,7 @@ func containsCallIndex(s string, pos int) bool {
 		left--
 	}
 
-	return endsWithIdentifier(s[:left])
+	return endsWithIdentifier(s[:left+1])
 }
 
 // Two regexps:
@@ -194,6 +194,9 @@ func endsWithIdentifier(s string) bool {
 }
 
 // replaces regexp ([A-Za-z_]+[A-Za-z0-9_]*\)?\.[A-Za-z0-9_]+\(.*\))
+// it recognizes:
+// - calls of functions in packages
+// - calls of methods of structs
 func containsCall(s string) bool {
 	i := strings.LastIndex(s, ")")
 	if i == -1 {
