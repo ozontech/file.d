@@ -36,14 +36,21 @@ func goPanicContinueCheck(s string) bool {
 // replaces regexp (^\s*$)
 func containsOnlySpaces(s string) bool {
 	for _, c := range []byte(s) {
-		switch c {
-		case ' ', '\n', '\t':
-		default:
+		if !isSpace(c) {
 			return false
 		}
 	}
 
 	return true
+}
+
+func isSpace(c byte) bool {
+	switch c {
+	case ' ', '\n', '\t':
+		return true
+	default:
+		return false
+	}
 }
 
 // replaces regexp (goroutine [0-9]+ \[)
