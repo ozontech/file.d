@@ -88,7 +88,7 @@ func TestHandlerBadRequest(t *testing.T) {
 		`do actions: can't find action plugin with type "clickhouse"`+"\n")
 
 	test(DoActionsRequest{Events: emptyEvents, Actions: []json.RawMessage{[]byte(`{"type": "convert_date", "some field value that does not exist": "123"}`)}},
-		`do actions: wrong config for action 0/convert_date in pipeline "playground_5": json: unknown field "some field value that does not exist"`+"\n")
+		`do actions: wrong config for action 0/convert_date in pipeline "playground_4": json: unknown field "some field value that does not exist"`+"\n")
 
 	test(DoActionsRequest{Events: []json.RawMessage{[]byte(`{ "field":{} }`)}, Actions: []json.RawMessage{[]byte(`{"type": "decode", "decoder": "nginx_error", "field": "field", "params": {"nginx_with_custom_fields":"decoder must call logger.Fatal()"}}`)}},
 		`do actions: fatal: can't create nginx_error decoder: "error"="can't extract params: \"nginx_with_custom_fields\" must be bool"`+"\n")

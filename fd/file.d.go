@@ -16,6 +16,7 @@ import (
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
+	insaneJSON "github.com/ozontech/insane-json"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.uber.org/atomic"
@@ -93,6 +94,9 @@ func (f *FileD) addPipeline(name string, config *cfg.PipelineConfig) {
 
 	logger.Infof("creating pipeline %q: capacity=%d, stream field=%s, decoder=%s", name, settings.Capacity, settings.StreamField, settings.Decoder)
 
+	if settings.Pool == pipeline.PoolTypeLowMem {
+		insaneJSON.StartNodePoolSize = 16
+	}
 	p := pipeline.New(name, settings, f.registry, logger.Instance.Named(name).Desugar())
 	err := f.setupInput(p, config, values)
 	if err != nil {

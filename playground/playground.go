@@ -75,10 +75,11 @@ type DoActionsResponse struct {
 }
 
 type Handler struct {
-	logger   *zap.Logger
-	requests *atomic.Int64
+	logger *zap.Logger
 
 	concurrencyLimiter chan struct{}
+
+	nextPipelineID *atomic.Int64
 }
 
 var _ http.Handler = (*Handler)(nil)
@@ -86,8 +87,8 @@ var _ http.Handler = (*Handler)(nil)
 func NewHandler(logger *zap.Logger) *Handler {
 	return &Handler{
 		logger:             logger,
-		requests:           new(atomic.Int64),
 		concurrencyLimiter: make(chan struct{}, runtime.GOMAXPROCS(0)),
+		nextPipelineID:     new(atomic.Int64),
 	}
 }
 
@@ -157,10 +158,6 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(resp)
 }
 
-var (
-	nextPipelineID = atomic.Int64{}
-)
-
 func (h *Handler) doActions(ctx context.Context, req DoActionsRequest) (resp DoActionsResponse, code int, err error) {
 	if req.Debug {
 		req.Actions, err = debugActions(req.Actions)
@@ -178,7 +175,7 @@ func (h *Handler) doActions(ctx context.Context, req DoActionsRequest) (resp DoA
 		fatalErr = fmt.Errorf("fatal: %s: %s", entry.Message, fatalPayload.String())
 	}))
 
-	pipelineName := fmt.Sprintf("playground_%d", nextPipelineID.Inc())
+	pipelineName := fmt.Sprintf("playground_%d", h.nextPipelineID.Inc())
 	settings := &pipeline.Settings{
 		Decoder:             "json",
 		DecoderParams:       nil,
@@ -216,7 +213,7 @@ func (h *Handler) doActions(ctx context.Context, req DoActionsRequest) (resp DoA
 
 	// Push events to the pipeline.
 	for i, event := range req.Events {
-		p.In(pipeline.SourceID(h.requests.Inc()), "fake", pipeline.NewOffsets(int64(i+1), nil), event, true, nil)
+		p.In(pipeline.SourceID(i+1), "fake", pipeline.NewOffsets(int64(i+1), nil), event, true, nil)
 	}
 
 	// Collect result.
@@ -316,26 +313,28 @@ func setupPipeline(p *pipeline.Pipeline, req DoActionsRequest, cb func(event *pi
 	}
 
 	// Setup input fake plugin.
-	inputStaticInfo, err := pluginRegistry.Get(pipeline.PluginKindInput, "fake")
+	sharedInputStaticInfo, err := pluginRegistry.Get(pipeline.PluginKindInput, "fake")
 	if err != nil {
 		return err
 	}
+	inputStaticInfo := *sharedInputStaticInfo
 
 	inputPlugin, config := inputStaticInfo.Factory()
 	inputStaticInfo.Config = config
 
 	p.SetInput(&pipeline.InputPluginInfo{
-		PluginStaticInfo: inputStaticInfo,
+		PluginStaticInfo: &inputStaticInfo,
 		PluginRuntimeInfo: &pipeline.PluginRuntimeInfo{
 			Plugin: inputPlugin,
 		},
 	})
 
 	// Setup output fake plugin.
-	outputStaticInfo, err := pluginRegistry.Get(pipeline.PluginKindOutput, "devnull")
+	sharedOutputStaticInfo, err := pluginRegistry.Get(pipeline.PluginKindOutput, "devnull")
 	if err != nil {
 		return err
 	}
+	outputStaticInfo := *sharedOutputStaticInfo
 
 	outputPlugin, config := outputStaticInfo.Factory()
 	outputStaticInfo.Config = config
@@ -343,7 +342,7 @@ func setupPipeline(p *pipeline.Pipeline, req DoActionsRequest, cb func(event *pi
 	outputPlugin.(*devnull.Plugin).SetOutFn(cb)
 
 	p.SetOutput(&pipeline.OutputPluginInfo{
-		PluginStaticInfo: outputStaticInfo,
+		PluginStaticInfo: &outputStaticInfo,
 		PluginRuntimeInfo: &pipeline.PluginRuntimeInfo{
 			Plugin: outputPlugin,
 		},

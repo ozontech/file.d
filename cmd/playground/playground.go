@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"flag"
+	"math"
 	"net/http"
 	"net/http/pprof"
 	"os/signal"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/playground"
+	insaneJSON "github.com/ozontech/insane-json"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.uber.org/automaxprocs/maxprocs"
@@ -25,6 +27,10 @@ var (
 
 func main() {
 	flag.Parse()
+
+	insaneJSON.DisableBeautifulErrors = true
+	insaneJSON.MapUseThreshold = math.MaxInt
+	insaneJSON.StartNodePoolSize = 16
 
 	_, _ = maxprocs.Set(maxprocs.Logger(logger.Warnf))
 

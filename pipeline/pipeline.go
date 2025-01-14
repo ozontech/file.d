@@ -183,7 +183,6 @@ func New(name string, settings *Settings, registry *prometheus.Registry, lg *zap
 	case PoolTypeStd, "":
 		eventPool = newEventPool(settings.Capacity, settings.AvgEventSize)
 	case PoolTypeLowMem:
-		insaneJSON.StartNodePoolSize = 16
 		eventPool = newLowMemoryEventPool(settings.Capacity)
 	default:
 		logger.Fatal("unknown pool type", zap.String("pool", string(settings.Pool)))
