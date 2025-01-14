@@ -885,25 +885,46 @@ func TestContainsCall(t *testing.T) {
 	positive := []string{
 		"main.main()",
 		"(some).main()",
+		"net/http.(*conn).serve.func1(0xc000a54dc0)",
 
-		// false positive
+		"nlopes/slack.(*RTM).receiveIncomingEvent(0xc000119040)",
+		"sync.(*WaitGroup).state(...)",
+
+		// short identifier
+		"a.main()",
+		"(a).main()",
+		"abc.A()",
+	}
+
+	for _, s := range positive {
+		require.True(t, containsCall(s), s)
+	}
+
+	negative := []string{
+		"qwe",   // no closing bracket
+		"qwe )", // no opening bracket before closing bracket
+
+		// no func/method right before opening bracket
+		"()",
+		"a.F ()",
+		"abc.main*()",
+
+		// no point right before func/method name
+		"F()",
+		"some. F()",
+
+		"[some].F()", // wrong bracket before point
+
+		// no package identifier (for function calls) or
+		// no class identifier (for method calls) before point
+		".F()",
+		"some .F()",
+		"123.F()",
 		"a*.main()",
 		"(some*).main()",
 	}
 
-	for _, s := range positive {
-		require.True(t, containsCall(s))
-	}
-
-	negative := []string{
-		"abc.main*()",
-
-		// false negative
-		"a.main()",
-		"(a).main()",
-	}
-
 	for _, s := range negative {
-		require.False(t, containsCall(s))
+		require.False(t, containsCall(s), s)
 	}
 }
