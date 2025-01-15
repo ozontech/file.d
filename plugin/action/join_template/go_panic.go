@@ -54,7 +54,7 @@ func isSpace(c byte) bool {
 }
 
 // replaces regexp (goroutine [0-9]+ \[)
-// POSSIBLE ERROR: only first occurrence counts
+// NOTE: only first occurrence counts
 func containsGoroutineID(s string) bool {
 	i := strings.Index(s, goroutineIDPrefix)
 	if i == -1 {
@@ -87,7 +87,7 @@ func containsOnlyDigits(s string) bool {
 }
 
 // replaces regexp (\.go:[0-9]+)
-// POSSIBLE ERROR: only first occurrence counts
+// NOTE: only first occurrence counts
 func containsLineNumber(s string) bool {
 	i := strings.Index(s, lineNumberPart)
 	if i == -1 {
@@ -204,7 +204,7 @@ func endsWithIdentifier(s string) bool {
 // it recognizes:
 // - calls of functions in packages
 // - calls of methods of structs
-// POSSIBLE ERROR: only last occurrence counts
+// NOTE: only last occurrence counts
 func containsCall(s string) bool {
 	i := strings.LastIndex(s, ")")
 	if i == -1 {
@@ -219,7 +219,7 @@ func containsCall(s string) bool {
 // can be replaced with
 // (panic.+0x[0-9,a-f]+)
 // so check the second one
-// POSSIBLE ERROR: only first occurrence counts
+// NOTE: only first occurrence counts
 func containsPanicAddress(s string) bool {
 	i := strings.Index(s, panicAddrPart1)
 	if i == -1 {
