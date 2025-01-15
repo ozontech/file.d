@@ -6,24 +6,46 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestSharpStart(t *testing.T) {
-	type TestCase struct {
-		s       string
-		verdict bool
-	}
+type testCase struct {
+	s   string
+	res bool
+}
 
-	tests := []TestCase{
+func TestSharpStart(t *testing.T) {
+	tests := []testCase{
 		// positive
-		{s: "\t\tUNHANDLED EXCEPTION     ", verdict: true},
-		{s: "Unhandled exception    ", verdict: true},
-		{s: "  Unhandled exception  ", verdict: true},
-		{s: "    Unhandled exception", verdict: true},
+		{s: "\t  UNHANDLED EXCEPTION     ", res: true},
+		{s: "Unhandled exception    ", res: true},
+		{s: "  Unhandled exception  ", res: true},
+		{s: "    Unhandled exception", res: true},
 
 		// negative
 		{s: "Unhandled" + string([]byte{0}) + "exception"},
+		{s: "unhandled_exception"},
 	}
 
 	for i, test := range tests {
-		require.Equal(t, test.verdict, sharpStartCheck(test.s), i)
+		require.Equal(t, test.res, sharpStartCheck(test.s), i)
+	}
+}
+
+func TestContainsOnlySpaces(t *testing.T) {
+	tests := []testCase{
+		{s: "    ", res: true},
+		{s: "\t\t", res: true},
+		{s: "\n\n", res: true},
+		{s: " \n\t ", res: true},
+		{s: "", res: true},
+
+		// negative
+		{s: "qwe"},
+		{s: "a   "},
+		{s: "   a"},
+		{s: "\n\t a"},
+		{s: "a\n\t "},
+	}
+
+	for i, test := range tests {
+		require.Equal(t, test.res, containsOnlySpaces(test.s), i)
 	}
 }
