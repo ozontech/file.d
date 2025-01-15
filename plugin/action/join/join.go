@@ -84,6 +84,8 @@ type Config struct {
 	Field  cfg.FieldSelector `json:"field" required:"true" parse:"selector"` // *
 	Field_ []string
 
+	// Backdoor for join_template plugin;
+	// it allows to check strings without regexp
 	FastCheck bool
 
 	// > @3@4@5@6
@@ -92,6 +94,8 @@ type Config struct {
 	Start  cfg.Regexp `json:"start" required:"true" parse:"regexp"` // *
 	Start_ *regexp.Regexp
 
+	// Must be set by join_template plugin
+	// if it sets fast check flag
 	StartCheckFunc_ func(s string) bool
 
 	// > @3@4@5@6
@@ -100,6 +104,8 @@ type Config struct {
 	Continue  cfg.Regexp `json:"continue" required:"true" parse:"regexp"` // *
 	Continue_ *regexp.Regexp
 
+	// Must be set by join_template plugin
+	// if it sets fast check flag
 	ContinueCheckFunc_ func(s string) bool
 
 	// > @3@4@5@6
