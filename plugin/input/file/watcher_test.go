@@ -90,7 +90,15 @@ func TestWatcher(t *testing.T) {
 
 // nolint:gocritic
 func TestWatcherPaths(t *testing.T) {
-	dir := t.TempDir()
+	originalDir := t.TempDir()
+
+	dirWithLink := t.TempDir()
+	dir := filepath.Join(dirWithLink, "symlink")
+	err := os.Symlink(originalDir, dir)
+	if err != nil {
+		t.Fatalf("Failed to create symlink: %v", err)
+	}
+
 	shouldCreate := atomic.Int64{}
 	notifyFn := func(_ notify.Event, _ string, _ os.FileInfo) {
 		shouldCreate.Inc()
@@ -124,47 +132,47 @@ func TestWatcherPaths(t *testing.T) {
 		shouldNotify bool
 	}{
 		{
-			filename:     filepath.Join(dir, "nginx-ingress-0/error.log"),
+			filename:     filepath.Join(originalDir, "nginx-ingress-0/error.log"),
 			shouldNotify: true,
 		},
 		{
-			filename:     filepath.Join(dir, "log/errors.log"),
+			filename:     filepath.Join(originalDir, "log/errors.log"),
 			shouldNotify: true,
 		},
 		{
-			filename:     filepath.Join(dir, "log/0/errors.log"),
+			filename:     filepath.Join(originalDir, "log/0/errors.log"),
 			shouldNotify: true,
 		},
 		{
-			filename:     filepath.Join(dir, "log/0/0/errors.log"),
+			filename:     filepath.Join(originalDir, "log/0/0/errors.log"),
 			shouldNotify: true,
 		},
 		{
-			filename:     filepath.Join(dir, "access.log"),
+			filename:     filepath.Join(originalDir, "access.log"),
 			shouldNotify: true,
 		},
 		{
-			filename:     filepath.Join(dir, "sub_access.log"),
+			filename:     filepath.Join(originalDir, "sub_access.log"),
 			shouldNotify: true,
 		},
 		{
-			filename:     filepath.Join(dir, "access1.log"),
+			filename:     filepath.Join(originalDir, "access1.log"),
 			shouldNotify: false,
 		},
 		{
-			filename:     filepath.Join(dir, "nginx/errors.log"),
+			filename:     filepath.Join(originalDir, "nginx/errors.log"),
 			shouldNotify: false,
 		},
 		{
-			filename:     filepath.Join(dir, "log/payments/errors.log"),
+			filename:     filepath.Join(originalDir, "log/payments/errors.log"),
 			shouldNotify: false,
 		},
 		{
-			filename:     filepath.Join(dir, "log/payments/nginx-ingress-0/errors.log"),
+			filename:     filepath.Join(originalDir, "log/payments/nginx-ingress-0/errors.log"),
 			shouldNotify: false,
 		},
 		{
-			filename:     filepath.Join(dir, "nginx-ingress-payments/error.log"),
+			filename:     filepath.Join(originalDir, "nginx-ingress-payments/error.log"),
 			shouldNotify: false,
 		},
 	}

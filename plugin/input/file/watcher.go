@@ -44,10 +44,25 @@ func NewWatcher(
 }
 
 func (w *watcher) start() {
-	for _, pattern := range w.paths.Include {
+	for i, pattern := range w.paths.Include {
 		// /var/lib/docker/containers/**/*-json.log -> /var/lib/docker/containers
 		basePattern, _ := doublestar.SplitPattern(pattern)
-		w.basePaths = append(w.basePaths, basePattern)
+		allLinksResolvedPath, err := resolvePathLinks(basePattern)
+		if err != nil {
+			panic(err)
+		}
+		w.paths.Include[i] = strings.Replace(w.paths.Include[i], basePattern, allLinksResolvedPath, 1)
+		w.basePaths = append(w.basePaths, allLinksResolvedPath)
+	}
+
+	for i, pattern := range w.paths.Exclude {
+		// /var/lib/docker/containers/**/*-json.log -> /var/lib/docker/containers
+		basePattern, _ := doublestar.SplitPattern(pattern)
+		allLinksResolvedPath, err := resolvePathLinks(basePattern)
+		if err != nil {
+			panic(err)
+		}
+		w.paths.Exclude[i] = strings.Replace(w.paths.Exclude[i], basePattern, allLinksResolvedPath, 1)
 	}
 	w.commonPath = commonPathPrefix(w.basePaths)
 
@@ -214,4 +229,43 @@ func (w *watcher) watch() {
 		}
 		w.notify(event.Event(), event.Path())
 	}
+}
+
+func resolvePathLinks(basePath string) (string, error) {
+	resolvedPath := basePath
+	components := filepath.SplitList(resolvedPath)
+
+	var finalPath string
+	for _, component := range components {
+		if component == "" {
+			continue
+		}
+
+		finalPath = filepath.Join(finalPath, component)
+
+		info, err := os.Lstat(finalPath)
+		if err != nil {
+			upDir := filepath.Dir(basePath)
+			resolvedPath, err := resolvePathLinks(upDir)
+			return filepath.Join(
+				resolvedPath,
+				filepath.Base(basePath),
+			), err
+		}
+
+		if info.Mode()&os.ModeSymlink != 0 {
+			target, err := os.Readlink(finalPath)
+			if err != nil {
+				return "", err
+			}
+
+			if !filepath.IsAbs(target) {
+				finalPath = filepath.Join(filepath.Dir(finalPath), target)
+			} else {
+				finalPath = target
+			}
+		}
+	}
+
+	return finalPath, nil
 }
