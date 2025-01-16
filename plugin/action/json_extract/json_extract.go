@@ -24,22 +24,29 @@ pipelines:
       extract_fields:
         - error.code
         - level
+		- meta
+		- flags
     ...
 ```
 The original event:
 ```json
 {
-  "log": "{\"level\":\"error\",\"message\":\"error occurred\",\"service\":\"my-service\",\"error\":{\"code\":2,\"args\":[]}}",
+  "log": "{\"level\":\"error\",\"message\":\"error occurred\",\"error\":{\"code\":2,\"args\":[]},\"meta\":{\"service\":\"my-service\",\"pod\":\"my-service-5c4dfcdcd4-4v5zw\"},\"flags\":[\"flag1\",\"flag2\"]}",
   "time": "2024-03-01T10:49:28.263317941Z"
 }
 ```
 The resulting event:
 ```json
 {
-  "log": "{\"level\":\"error\",\"message\":\"error occurred\",\"service\":\"my-service\",\"error\":{\"code\":2,\"args\":[]}}",
+  "log": "{\"level\":\"error\",\"message\":\"error occurred\",\"error\":{\"code\":2,\"args\":[]},\"meta\":{\"service\":\"my-service\",\"pod\":\"my-service-5c4dfcdcd4-4v5zw\"},\"flags\":[\"flag1\",\"flag2\"]}",
   "time": "2024-03-01T10:49:28.263317941Z",
   "code": 2,
-  "level": "error"
+  "level": "error",
+  "meta": {
+    "service": "my-service",
+	"pod": "my-service-5c4dfcdcd4-4v5zw"
+  },
+  "flags": ["flag1", "flag2"]
 }
 ```
 }*/
@@ -86,8 +93,15 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
+	// > Field to extract.
+	// >> ⚠ DEPRECATED. Use `extract_fields` instead.
+	ExtractField  cfg.FieldSelector `json:"extract_field" parse:"selector"` // *
+	ExtractField_ []string
+
+	// > @3@4@5@6
+	// >
 	// > Fields to extract.
-	ExtractFields []cfg.FieldSelector `json:"extract_fields" slice:"true" required:"true"` // *
+	ExtractFields []cfg.FieldSelector `json:"extract_fields" slice:"true"` // *
 }
 
 func init() {
@@ -101,13 +115,24 @@ func factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 	return &Plugin{}, &Config{}
 }
 
-func (p *Plugin) Start(config pipeline.AnyConfig, _ *pipeline.ActionPluginParams) {
+func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginParams) {
 	p.config = config.(*Config)
 	p.decoder = &jx.Decoder{}
 
 	p.extractFields = newPathTree()
+	dupl := false
 	for _, f := range p.config.ExtractFields {
+		if f == p.config.ExtractField {
+			dupl = true
+		}
 		p.extractFields.add(cfg.ParseFieldSelector(string(f)))
+	}
+	if !dupl {
+		p.extractFields.add(p.config.ExtractField_)
+	}
+
+	if len(p.extractFields.root.children) == 0 {
+		params.Logger.Fatal("extract fields are empty")
 	}
 }
 
@@ -135,6 +160,7 @@ func extract(root *insaneJSON.Root, d *jx.Decoder, fields pathNodes, skipAddFiel
 
 	processed := len(fields)
 	for objIter.Next() {
+		// find the field at the current depth
 		n := fields.find(string(objIter.Key()))
 		if n == nil {
 			if err = d.Skip(); err != nil {
@@ -143,18 +169,21 @@ func extract(root *insaneJSON.Root, d *jx.Decoder, fields pathNodes, skipAddFiel
 			continue
 		}
 
-		// last field in path, add to root
-		if len(n.children) == 0 {
+		if len(n.children) == 0 { // last field in path, add to root
 			if skipAddField {
 				_ = d.Skip()
 			} else {
 				addField(root, n.data, d)
 			}
 		} else { // go deep
+			// Capture calls f and then rolls back to state before call
 			_ = d.Capture(func(d *jx.Decoder) error {
+				// recursively extract child fields
 				extract(root, d, n.children, skipAddField)
 				return nil
 			})
+			// skip the current field because we have processed it
+			// and rolled back the state of the decoder
 			if err = d.Skip(); err != nil {
 				break
 			}

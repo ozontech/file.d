@@ -22,7 +22,18 @@ func TestJsonExtract(t *testing.T) {
 		want   map[string]string
 	}{
 		{
-			name: "extract_single",
+			name: "extract_single_old",
+			config: &Config{
+				Field:        "json_field",
+				ExtractField: "extracted",
+			},
+			in: `{"field1":"value1","json_field":"{\"test\":\"test_value\",\"extracted\":\"text\"}","field3":3}`,
+			want: map[string]string{
+				"extracted": "text",
+			},
+		},
+		{
+			name: "extract_single_new",
 			config: &Config{
 				Field: "json_field",
 				ExtractFields: []cfg.FieldSelector{
@@ -115,6 +126,20 @@ func TestJsonExtract(t *testing.T) {
 			in: `{"field1":"value1","json_field":"{\"test\":\"test_value\"}","field3":3}`,
 			want: map[string]string{
 				"extracted": "",
+			},
+		},
+		{
+			name: "extracted_field_duple",
+			config: &Config{
+				Field:        "json_field",
+				ExtractField: "extracted",
+				ExtractFields: []cfg.FieldSelector{
+					"extracted",
+				},
+			},
+			in: `{"field1":"value1","json_field":"{\"test\":\"test_value\",\"extracted\":\"text\"}","field3":3}`,
+			want: map[string]string{
+				"extracted": "text",
 			},
 		},
 	}

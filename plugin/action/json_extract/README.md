@@ -13,22 +13,29 @@ pipelines:
       extract_fields:
         - error.code
         - level
+		- meta
+		- flags
     ...
 ```
 The original event:
 ```json
 {
-  "log": "{\"level\":\"error\",\"message\":\"error occurred\",\"service\":\"my-service\",\"error\":{\"code\":2,\"args\":[]}}",
+  "log": "{\"level\":\"error\",\"message\":\"error occurred\",\"error\":{\"code\":2,\"args\":[]},\"meta\":{\"service\":\"my-service\",\"pod\":\"my-service-5c4dfcdcd4-4v5zw\"},\"flags\":[\"flag1\",\"flag2\"]}",
   "time": "2024-03-01T10:49:28.263317941Z"
 }
 ```
 The resulting event:
 ```json
 {
-  "log": "{\"level\":\"error\",\"message\":\"error occurred\",\"service\":\"my-service\",\"error\":{\"code\":2,\"args\":[]}}",
+  "log": "{\"level\":\"error\",\"message\":\"error occurred\",\"error\":{\"code\":2,\"args\":[]},\"meta\":{\"service\":\"my-service\",\"pod\":\"my-service-5c4dfcdcd4-4v5zw\"},\"flags\":[\"flag1\",\"flag2\"]}",
   "time": "2024-03-01T10:49:28.263317941Z",
   "code": 2,
-  "level": "error"
+  "level": "error",
+  "meta": {
+    "service": "my-service",
+	"pod": "my-service-5c4dfcdcd4-4v5zw"
+  },
+  "flags": ["flag1", "flag2"]
 }
 ```
 
@@ -62,7 +69,14 @@ The event field from which to extract. Must be a string.
 
 <br>
 
-**`extract_fields`** *`[]cfg.FieldSelector`* *`required`* 
+**`extract_field`** *`cfg.FieldSelector`* 
+
+Field to extract.
+> ⚠ DEPRECATED. Use `extract_fields` instead.
+
+<br>
+
+**`extract_fields`** *`[]cfg.FieldSelector`* 
 
 Fields to extract.
 
