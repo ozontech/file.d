@@ -146,7 +146,7 @@ func (pc *pconsumer) consume() {
 						pc.logger.Error("can't render meta data", zap.Error(err))
 					}
 				}
-				_ = pc.controller.In(sourceID, "kafka", offset, message.Value, true, metadataInfo)
+				_ = pc.controller.In(sourceID, "kafka", pipeline.NewOffsets(offset, nil), message.Value, true, metadataInfo)
 			}
 		}
 	}

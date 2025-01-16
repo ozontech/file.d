@@ -23,9 +23,9 @@ type worker struct {
 
 type inputer interface {
 	// In processes event and returns it seq number.
-	In(sourceID pipeline.SourceID, sourceName string, offset int64, data []byte, isNewSource bool, meta metadata.MetaData) uint64
+	In(sourceID pipeline.SourceID, sourceName string, offset pipeline.Offsets, data []byte, isNewSource bool, meta metadata.MetaData) uint64
 	IncReadOps()
-	IncMaxEventSizeExceeded()
+	IncMaxEventSizeExceeded(lvs ...string)
 }
 
 func (w *worker) start(inputController inputer, jobProvider *jobProvider, readBufferSize int, logger *zap.SugaredLogger) {
@@ -55,6 +55,7 @@ func (w *worker) work(controller inputer, jobProvider *jobProvider, readBufferSi
 		sourceName := job.filename
 		skipLine := job.shouldSkip.Load()
 		lastOffset := job.curOffset
+		offsets := job.offsets
 		if job.symlink != "" {
 			sourceName = job.symlink
 		}
@@ -67,6 +68,23 @@ func (w *worker) work(controller inputer, jobProvider *jobProvider, readBufferSi
 		isEOFReached := false
 		readTotal := int64(0)
 		scanned := int64(0)
+
+		var metadataInfo metadata.MetaData
+		if w.metaTemplater != nil {
+			metaData, err := newMetaInformation(
+				job.filename,
+				job.symlink,
+				job.inode,
+				w.needK8sMeta,
+			)
+			if err != nil {
+				logger.Error("cannot parse meta info", zap.Error(err))
+			}
+			metadataInfo, err = w.metaTemplater.Render(metaData)
+			if err != nil {
+				logger.Error("cannot render meta info", zap.Error(err))
+			}
+		}
 
 		// append the data of the old work, this happens when the event was not completely written to the file
 		// for example: {"level": "info", "message": "some...
@@ -106,7 +124,7 @@ func (w *worker) work(controller inputer, jobProvider *jobProvider, readBufferSi
 
 				// check if the event fits into the max size, otherwise skip the event
 				if shouldCheckMax && !w.cutOffEventByLimit && len(accumBuf)+len(line) > w.maxEventSize {
-					controller.IncMaxEventSizeExceeded()
+					controller.IncMaxEventSizeExceeded(sourceName)
 					skipLine = true
 				}
 
@@ -122,25 +140,7 @@ func (w *worker) work(controller inputer, jobProvider *jobProvider, readBufferSi
 						inBuf = accumBuf
 					}
 
-					var metadataInfo metadata.MetaData
-					if w.metaTemplater != nil {
-						metaData, err := newMetaInformation(
-							job.filename,
-							job.symlink,
-							job.inode,
-							lastOffset+scanned,
-							w.needK8sMeta,
-						)
-						if err != nil {
-							logger.Error("cannot parse meta info", zap.Error(err))
-						}
-						metadataInfo, err = w.metaTemplater.Render(metaData)
-						if err != nil {
-							logger.Error("cannot render meta info", zap.Error(err))
-						}
-					}
-
-					job.lastEventSeq = controller.In(sourceID, sourceName, lastOffset+scanned, inBuf, isVirgin, metadataInfo)
+					job.lastEventSeq = controller.In(sourceID, sourceName, pipeline.NewOffsets(lastOffset+scanned, offsets), inBuf, isVirgin, metadataInfo)
 				}
 				// restore the line buffer
 				accumBuf = accumBuf[:0]
@@ -196,12 +196,11 @@ type metaInformation struct {
 	filename string
 	symlink  string
 	inode    uint64
-	offset   int64
 
 	k8sMetadata *k8s_meta.K8sMetaInformation
 }
 
-func newMetaInformation(filename, symlink string, inode inodeID, offset int64, parseK8sMeta bool) (metaInformation, error) {
+func newMetaInformation(filename, symlink string, inode inodeID, parseK8sMeta bool) (metaInformation, error) {
 	var metaData k8s_meta.K8sMetaInformation
 	var err error
 	if parseK8sMeta {
@@ -218,23 +217,32 @@ func newMetaInformation(filename, symlink string, inode inodeID, offset int64, p
 		filename:    filename,
 		symlink:     symlink,
 		inode:       uint64(inode),
-		offset:      offset,
 		k8sMetadata: &metaData,
 	}, nil
 }
 
 func (m metaInformation) GetData() map[string]any {
-	return map[string]any{
-		"filename":       m.filename,
-		"symlink":        m.symlink,
-		"inode":          m.inode,
-		"offset":         m.offset,
-		"pod_name":       m.k8sMetadata.PodName,
-		"namespace":      m.k8sMetadata.Namespace,
-		"container_name": m.k8sMetadata.ContainerName,
-		"container_id":   m.k8sMetadata.ContainerID,
-		"pod":            m.k8sMetadata.Pod,
+	data := map[string]any{
+		"filename": m.filename,
+		"symlink":  m.symlink,
+		"inode":    m.inode,
 	}
+
+	if m.k8sMetadata != nil {
+		data["pod_name"] = m.k8sMetadata.PodName
+		data["namespace"] = m.k8sMetadata.Namespace
+		data["container_name"] = m.k8sMetadata.ContainerName
+		data["container_id"] = m.k8sMetadata.ContainerID
+		data["pod"] = m.k8sMetadata.Pod
+	} else {
+		data["pod_name"] = nil
+		data["namespace"] = nil
+		data["container_name"] = nil
+		data["container_id"] = nil
+		data["pod"] = nil
+	}
+
+	return data
 }
 
 /*{ meta-params
@@ -243,6 +251,4 @@ func (m metaInformation) GetData() map[string]any {
 **`symlink`**
 
 **`inode`**
-
-**`offset`**
 }*/

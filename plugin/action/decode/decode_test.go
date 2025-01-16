@@ -275,7 +275,7 @@ func TestDecode(t *testing.T) {
 				wg.Done()
 			})
 
-			input.In(0, "test.log", 0, tt.input)
+			input.In(0, "test.log", test.NewOffset(0), tt.input)
 
 			wg.Wait()
 			p.Stop()

@@ -12,12 +12,18 @@ type MultilineAction struct {
 	allowedPodLabels  map[string]bool
 	allowedNodeLabels map[string]bool
 
-	logger        *zap.SugaredLogger
-	controller    pipeline.ActionPluginController
-	maxEventSize  int
+	logger     *zap.SugaredLogger
+	controller pipeline.ActionPluginController
+
+	maxEventSize            int
+	sourceNameMetaField     string
+	cutOffEventByLimit      bool
+	cutOffEventByLimitField string
+
 	eventBuf      []byte
 	eventSize     int
 	skipNextEvent bool
+	cutOffEvent   bool
 }
 
 const (
@@ -29,6 +35,10 @@ func (p *MultilineAction) Start(config pipeline.AnyConfig, params *pipeline.Acti
 	p.logger = params.Logger
 	p.controller = params.Controller
 	p.maxEventSize = params.PipelineSettings.MaxEventSize
+	p.sourceNameMetaField = params.PipelineSettings.SourceNameMetaField
+	p.cutOffEventByLimit = params.PipelineSettings.CutOffEventByLimit
+	p.cutOffEventByLimitField = params.PipelineSettings.CutOffEventByLimitField
+
 	p.config = config.(*Config)
 
 	p.allowedPodLabels = cfg.ListToMap(p.config.AllowedPodLabels)
@@ -92,14 +102,29 @@ func (p *MultilineAction) Do(event *pipeline.Event) pipeline.ActionResult {
 		// check buffer size before append
 		if p.maxEventSize == 0 || sizeAfterAppend < p.maxEventSize {
 			p.eventBuf = append(p.eventBuf, logFragment[1:logFragmentLen-1]...)
-		} else {
+		} else if !p.skipNextEvent {
 			if p.controller != nil {
-				p.controller.IncMaxEventSizeExceeded()
+				source := event.SourceName
+				if p.sourceNameMetaField != "" {
+					// at the moment, all metadata fields have been added to log
+					if val := event.Root.Dig(p.sourceNameMetaField).AsString(); val != "" {
+						source = val
+					}
+				}
+
+				p.controller.IncMaxEventSizeExceeded(source)
 			}
 
-			if !p.skipNextEvent {
-				// skip event if max_event_size is exceeded
-				p.skipNextEvent = true
+			// skip event if max_event_size is exceeded
+			p.skipNextEvent = true
+
+			if p.cutOffEventByLimit {
+				offset := sizeAfterAppend - p.maxEventSize
+				p.eventBuf = append(p.eventBuf, logFragment[1:logFragmentLen-1-offset]...)
+				p.cutOffEvent = true
+
+				p.logger.Errorf("event chunk will be cut off due to max_event_size, source_name=%s, namespace=%s, pod=%s", event.SourceName, ns, pod)
+			} else {
 				p.logger.Errorf("event chunk will be discarded due to max_event_size, source_name=%s, namespace=%s, pod=%s", event.SourceName, ns, pod)
 			}
 		}
@@ -112,8 +137,11 @@ func (p *MultilineAction) Do(event *pipeline.Event) pipeline.ActionResult {
 			return pipeline.ActionCollapse
 		}
 		p.skipNextEvent = false
-		p.resetLogBuf()
-		return pipeline.ActionDiscard
+
+		if !p.cutOffEvent {
+			p.resetLogBuf()
+			return pipeline.ActionDiscard
+		}
 	}
 
 	success, podMeta := meta.GetPodMeta(ns, pod, containerID)
@@ -155,7 +183,17 @@ func (p *MultilineAction) Do(event *pipeline.Event) pipeline.ActionResult {
 	}
 
 	if len(p.eventBuf) > 1 {
-		p.eventBuf = append(p.eventBuf, logFragment[1:logFragmentLen-1]...)
+		if !p.cutOffEvent {
+			p.eventBuf = append(p.eventBuf, logFragment[1:logFragmentLen-1]...)
+		} else {
+			if isEnd {
+				p.eventBuf = append(p.eventBuf, newLine...)
+			}
+
+			if p.cutOffEventByLimitField != "" {
+				event.Root.AddFieldNoAlloc(event.Root, p.cutOffEventByLimitField).MutateToBool(true)
+			}
+		}
 		p.eventBuf = append(p.eventBuf, '"')
 
 		l := len(event.Buf)
@@ -170,4 +208,5 @@ func (p *MultilineAction) Do(event *pipeline.Event) pipeline.ActionResult {
 func (p *MultilineAction) resetLogBuf() {
 	p.eventBuf = p.eventBuf[:1]
 	p.eventSize = 0
+	p.cutOffEvent = false
 }

@@ -18,12 +18,12 @@ import (
 func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 	capacity := pipeline.DefaultCapacity
 	antispamThreshold := pipeline.DefaultAntispamThreshold
-	antispamField := pipeline.DefaultAntispamField
 	var antispamExceptions antispam.Exceptions
+	sourceNameMetaField := pipeline.DefaultSourceNameMetaField
 	avgInputEventSize := pipeline.DefaultAvgInputEventSize
 	maxInputEventSize := pipeline.DefaultMaxInputEventSize
 	cutOffEventByLimit := pipeline.DefaultCutOffEventByLimit
-	cutOffEventByLimitMsg := pipeline.DefaultCutOffEventByLimitMsg
+	cutOffEventByLimitField := pipeline.DefaultCutOffEventByLimitField
 	streamField := pipeline.DefaultStreamField
 	maintenanceInterval := pipeline.DefaultMaintenanceInterval
 	decoder := pipeline.DefaultDecoder
@@ -32,6 +32,7 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 	eventTimeout := pipeline.DefaultEventTimeout
 	metricHoldDuration := pipeline.DefaultMetricHoldDuration
 	metaCacheSize := pipeline.DefaultMetaCacheSize
+	pool := ""
 
 	if settings != nil {
 		val := settings.Get("capacity").MustInt()
@@ -55,11 +56,7 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 		}
 
 		cutOffEventByLimit = settings.Get("cut_off_event_by_limit").MustBool()
-
-		cutOffEventByLimitMsg = settings.Get("cut_off_event_by_limit_message").MustString()
-		if maxInputEventSize > 0 && len(cutOffEventByLimitMsg) >= maxInputEventSize {
-			logger.Fatal("length of cut_off_event_by_limit_message must be less than max_event_size")
-		}
+		cutOffEventByLimitField = settings.Get("cut_off_event_by_limit_field").MustString()
 
 		str := settings.Get("decoder").MustString()
 		if str != "" {
@@ -98,8 +95,6 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 			antispamThreshold = 0
 		}
 
-		antispamField = settings.Get("antispam_field").MustString()
-
 		var err error
 		antispamExceptions, err = extractAntispamExceptions(settings)
 		if err != nil {
@@ -107,6 +102,7 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 		}
 		antispamExceptions.Prepare()
 
+		sourceNameMetaField = settings.Get("source_name_meta_field").MustString()
 		isStrict = settings.Get("is_strict").MustBool()
 
 		str = settings.Get("metric_hold_duration").MustString()
@@ -117,25 +113,30 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 			}
 			metricHoldDuration = i
 		}
+
+		if str := settings.Get("pool").MustString(); str != "" {
+			pool = str
+		}
 	}
 
 	return &pipeline.Settings{
-		Decoder:               decoder,
-		DecoderParams:         decoderParams,
-		Capacity:              capacity,
-		MetaCacheSize:         metaCacheSize,
-		AvgEventSize:          avgInputEventSize,
-		MaxEventSize:          maxInputEventSize,
-		CutOffEventByLimit:    cutOffEventByLimit,
-		CutOffEventByLimitMsg: cutOffEventByLimitMsg,
-		AntispamThreshold:     antispamThreshold,
-		AntispamField:         antispamField,
-		AntispamExceptions:    antispamExceptions,
-		MaintenanceInterval:   maintenanceInterval,
-		EventTimeout:          eventTimeout,
-		StreamField:           streamField,
-		IsStrict:              isStrict,
-		MetricHoldDuration:    metricHoldDuration,
+		Decoder:                 decoder,
+		DecoderParams:           decoderParams,
+		Capacity:                capacity,
+		MetaCacheSize:           metaCacheSize,
+		AvgEventSize:            avgInputEventSize,
+		MaxEventSize:            maxInputEventSize,
+		CutOffEventByLimit:      cutOffEventByLimit,
+		CutOffEventByLimitField: cutOffEventByLimitField,
+		AntispamThreshold:       antispamThreshold,
+		AntispamExceptions:      antispamExceptions,
+		SourceNameMetaField:     sourceNameMetaField,
+		MaintenanceInterval:     maintenanceInterval,
+		EventTimeout:            eventTimeout,
+		StreamField:             streamField,
+		IsStrict:                isStrict,
+		MetricHoldDuration:      metricHoldDuration,
+		Pool:                    pipeline.PoolType(pool),
 	}
 }
 
