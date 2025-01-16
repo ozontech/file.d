@@ -13,8 +13,8 @@ pipelines:
       extract_fields:
         - error.code
         - level
-		- meta
-		- flags
+        - meta
+        - flags
     ...
 ```
 The original event:
@@ -33,7 +33,7 @@ The resulting event:
   "level": "error",
   "meta": {
     "service": "my-service",
-	"pod": "my-service-5c4dfcdcd4-4v5zw"
+    "pod": "my-service-5c4dfcdcd4-4v5zw"
   },
   "flags": ["flag1", "flag2"]
 }
