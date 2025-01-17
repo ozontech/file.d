@@ -84,7 +84,7 @@ type Config struct {
 	Field  cfg.FieldSelector `json:"field" required:"true" parse:"selector"` // *
 	Field_ []string
 
-	// Backdoor for join_template plugin;
+	// Special flag for join_template plugin;
 	// it allows to check strings without regexp
 	FastCheck bool
 
