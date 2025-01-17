@@ -9,12 +9,11 @@ import (
 	"time"
 
 	"github.com/ozontech/file.d/cfg"
+	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/test"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/atomic"
-
-	"github.com/ozontech/file.d/pipeline"
-	"github.com/ozontech/file.d/test"
 )
 
 const contentPanics = `# ===next===
@@ -751,7 +750,26 @@ func getRandLine() string {
 	return b.String()
 }
 
-func TestEndsWithClassname(t *testing.T) {
+type testCase struct {
+	s   string
+	res bool
+}
+
+func getCases(positive, negative []string) []testCase {
+	result := make([]testCase, 0, len(positive)+len(negative))
+
+	for _, s := range positive {
+		result = append(result, testCase{s: s, res: true})
+	}
+
+	for _, s := range negative {
+		result = append(result, testCase{s: s})
+	}
+
+	return result
+}
+
+func TestEndsWithIdentifier(t *testing.T) {
 	positive := []string{
 		"_",
 		"a1",
@@ -766,10 +784,6 @@ func TestEndsWithClassname(t *testing.T) {
 		"    1a",
 	}
 
-	for _, s := range positive {
-		require.True(t, endsWithIdentifier(s))
-	}
-
 	negative := []string{
 		"",
 		"1234",
@@ -779,8 +793,8 @@ func TestEndsWithClassname(t *testing.T) {
 		"  a 1",
 	}
 
-	for _, s := range negative {
-		require.False(t, endsWithIdentifier(s))
+	for _, tt := range getCases(positive, negative) {
+		require.Equal(t, tt.res, endsWithIdentifier(tt.s), tt.s)
 	}
 }
 
@@ -790,10 +804,6 @@ func TestContainsGoroutineID(t *testing.T) {
 		"    goroutine 123 [running]:",
 		"goroutine 100 [",
 		"goroutine 1 [qwe",
-	}
-
-	for _, s := range positive {
-		require.True(t, containsGoroutineID(s))
 	}
 
 	negative := []string{
@@ -811,8 +821,8 @@ func TestContainsGoroutineID(t *testing.T) {
 		"goroutine QWE goroutine 1 [running]:", // only first occurrence counts
 	}
 
-	for _, s := range negative {
-		require.False(t, containsGoroutineID(s))
+	for _, tt := range getCases(positive, negative) {
+		require.Equal(t, tt.res, containsGoroutineID(tt.s), tt.s)
 	}
 }
 
@@ -822,13 +832,9 @@ func TestContainsLineNumber(t *testing.T) {
 		"    /some/path/proc.go:123",
 		"qwe.go:100",
 
-		// strange but true
+		// it's strange but it's true
 		"/some/path/util.go:0", // zero line number
 		".go:123",              // no filename
-	}
-
-	for _, s := range positive {
-		require.True(t, containsLineNumber(s))
 	}
 
 	negative := []string{
@@ -842,8 +848,8 @@ func TestContainsLineNumber(t *testing.T) {
 		"proc.go:qwe proc.go:100", // only first occurrence counts
 	}
 
-	for _, s := range negative {
-		require.False(t, containsLineNumber(s))
+	for _, tt := range getCases(positive, negative) {
+		require.Equal(t, tt.res, containsLineNumber(tt.s), tt.s)
 	}
 }
 
@@ -860,10 +866,6 @@ func TestContainsPanicAddress(t *testing.T) {
 		"/usr/local/go/src/runtime/panic.go:513 +0x1b9",
 	}
 
-	for _, s := range positive {
-		require.True(t, containsPanicAddress(s))
-	}
-
 	negative := []string{
 		"qwe",       // no first part
 		"panic 123", // no second part after first
@@ -876,8 +878,8 @@ func TestContainsPanicAddress(t *testing.T) {
 		"panic 0xQWE panic 0x123",
 	}
 
-	for _, s := range negative {
-		require.False(t, containsPanicAddress(s))
+	for _, tt := range getCases(positive, negative) {
+		require.Equal(t, tt.res, containsPanicAddress(tt.s), tt.s)
 	}
 }
 
@@ -894,10 +896,6 @@ func TestContainsCall(t *testing.T) {
 		"a.main()",
 		"(a).main()",
 		"abc.A()",
-	}
-
-	for _, s := range positive {
-		require.True(t, containsCall(s), s)
 	}
 
 	negative := []string{
@@ -926,7 +924,7 @@ func TestContainsCall(t *testing.T) {
 		"(some*).main()",
 	}
 
-	for _, s := range negative {
-		require.False(t, containsCall(s), s)
+	for _, tt := range getCases(positive, negative) {
+		require.Equal(t, tt.res, containsCall(tt.s), tt.s)
 	}
 }
