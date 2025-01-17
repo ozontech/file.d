@@ -267,5 +267,23 @@ func resolvePathLinks(basePath string) (string, error) {
 		}
 	}
 
-	return finalPath, nil
+	getParentDir := func(path string) string {
+		normalizedPath := strings.TrimSuffix(path, string(os.PathSeparator))
+		parentDir := filepath.Dir(normalizedPath)
+		if parentDir == "" || parentDir == string(os.PathSeparator) {
+			return string(os.PathSeparator)
+		}
+		return parentDir
+	}
+
+	upDir := getParentDir(finalPath)
+	if upDir == string(os.PathSeparator) || upDir == filepath.VolumeName(finalPath)+string(os.PathSeparator) {
+		return finalPath, nil
+	} else {
+		resolvedPath, err := resolvePathLinks(upDir)
+		return filepath.Join(
+			resolvedPath,
+			filepath.Base(finalPath),
+		), err
+	}
 }

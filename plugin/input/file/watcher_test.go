@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -211,4 +212,26 @@ func TestCommonPathPrefix(t *testing.T) {
 
 	result := commonPathPrefix(paths)
 	a.Equal("/var", result)
+}
+
+func TestResolvePathLinks(t *testing.T) {
+	a := assert.New(t)
+	originalDir := t.TempDir()
+
+	dirWithLink := t.TempDir()
+	dirLink := filepath.Join(dirWithLink, "symlink")
+	err := os.Symlink(originalDir, dirLink)
+	if err != nil {
+		t.Fatalf("Failed to create symlink: %v", err)
+	}
+	linkSubDir := filepath.Join(dirLink, "dir")
+	os.Mkdir(linkSubDir, os.FileMode(0o755))
+
+	resultDir := filepath.Join(linkSubDir, "dir")
+	result, err := resolvePathLinks(resultDir)
+	a.Equal(
+		strings.Replace(resultDir, dirLink, originalDir, 1),
+		result,
+	)
+	a.Equal(nil, err)
 }
