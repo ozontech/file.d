@@ -105,7 +105,9 @@ The resulting event:
 
 type Plugin struct {
 	config *Config
-	fields map[string][]string
+
+	allowFields [][]string
+	blockFields map[string]struct{}
 }
 
 const (
@@ -164,12 +166,20 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 		params.Logger.Fatalf("invalid config: %s", err.Error())
 	}
 
-	p.fields = make(map[string][]string)
-	isBlockMode := p.config.Mode == modeBlock
-	for _, fs := range p.config.Fields {
-		// in `block` mode, max field depth is 1
-		if f := cfg.ParseFieldSelector(string(fs)); len(f) > 0 && (!isBlockMode || len(f) == 1) {
-			p.fields[f[len(f)-1]] = f
+	if p.config.Mode == modeAllow {
+		p.allowFields = make([][]string, 0, len(p.config.Fields))
+		for _, fs := range p.config.Fields {
+			if fs != "" {
+				p.allowFields = append(p.allowFields, cfg.ParseFieldSelector(string(fs)))
+			}
+		}
+	} else {
+		p.blockFields = make(map[string]struct{})
+		for _, fs := range p.config.Fields {
+			// in `block` mode, max field depth is 1
+			if f := cfg.ParseFieldSelector(string(fs)); len(f) == 1 {
+				p.blockFields[f[0]] = struct{}{}
+			}
 		}
 	}
 }
@@ -185,9 +195,9 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	}
 
 	if p.config.Mode == modeAllow {
-		for name, field := range p.fields {
+		for _, field := range p.allowFields {
 			if node := event.Root.Dig(field...); node != nil && node != targetNode {
-				moveNode(name, node)
+				moveNode(field[len(field)-1], node)
 			}
 		}
 	} else {
@@ -198,7 +208,7 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 			}
 
 			name := node.AsString()
-			if _, ok := p.fields[name]; !ok {
+			if _, ok := p.blockFields[name]; !ok {
 				moveNode(name, value)
 			}
 		}
