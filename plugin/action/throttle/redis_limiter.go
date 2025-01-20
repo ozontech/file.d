@@ -3,11 +3,13 @@ package throttle
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/go-redis/redis"
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/pipeline"
 )
@@ -253,18 +255,16 @@ func decodeKeyLimitValue(data []byte, valField, distrField string) (int64, limit
 
 // updateKeyLimit reads key limit from redis and updates current limit.
 func (l *redisLimiter) updateKeyLimit() error {
-	var b bool
 	var err error
 	var limitVal int64
 	var distrVal limitDistributionCfg
-	// try to set global limit to default
-	if b, err = l.redis.SetNX(l.keyLimit, l.defaultVal, 0).Result(); err != nil {
-		return fmt.Errorf("failed to set redis value by key %q: %w", l.keyLimit, err)
-	} else if b {
-		return nil
-	}
+
 	// global limit already exists - overwrite local limit
 	v := l.redis.Get(l.keyLimit)
+	if errors.Is(v.Err(), redis.Nil) {
+		return fmt.Errorf("key limit (%s) not found", l.keyLimit)
+	}
+
 	if l.valField != "" {
 		var jsonData []byte
 		if jsonData, err = v.Bytes(); err != nil {

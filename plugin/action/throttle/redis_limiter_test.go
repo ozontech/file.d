@@ -133,6 +133,7 @@ func Test_updateKeyLimit(t *testing.T) {
 				key:   pod1LimitKey,
 				value: "1",
 			},
+			wantErr: true,
 		},
 		{
 			name: "set_default_limit_custom_field",
@@ -147,6 +148,7 @@ func Test_updateKeyLimit(t *testing.T) {
 				key:   "default_limit",
 				value: `{"custom_limit_field":1}`,
 			},
+			wantErr: true,
 		},
 		{
 			name: "set_default_distribution",
@@ -162,6 +164,7 @@ func Test_updateKeyLimit(t *testing.T) {
 				key:   "default_distr1",
 				value: fmt.Sprintf(`{"custom_limit_field":10,"custom_distr_field":%s}`, defaultDistributionJson),
 			},
+			wantErr: true,
 		},
 		{
 			name: "set_default_without_distributions",
@@ -177,6 +180,7 @@ func Test_updateKeyLimit(t *testing.T) {
 				key:   "default_distr2",
 				value: `{"custom_limit_field":1}`,
 			},
+			wantErr: true,
 		},
 		{
 			name: "set_default_without_distr_field",
@@ -192,6 +196,7 @@ func Test_updateKeyLimit(t *testing.T) {
 				key:   "default_distr3",
 				value: `{"custom_limit_field":10}`,
 			},
+			wantErr: true,
 		},
 		{
 			name: "get_limit_from_default_key",
