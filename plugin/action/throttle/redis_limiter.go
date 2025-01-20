@@ -259,7 +259,6 @@ func (l *redisLimiter) updateKeyLimit() error {
 	var limitVal int64
 	var distrVal limitDistributionCfg
 
-	// global limit already exists - overwrite local limit
 	v := l.redis.Get(l.keyLimit)
 	if errors.Is(v.Err(), redis.Nil) {
 		return fmt.Errorf("key limit (%s) not found", l.keyLimit)
