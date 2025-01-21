@@ -3,13 +3,11 @@ package throttle
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/go-redis/redis"
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/pipeline"
 )
@@ -258,22 +256,19 @@ func (l *redisLimiter) updateKeyLimit() error {
 	var err error
 	var limitVal int64
 	var distrVal limitDistributionCfg
+	var data []byte
 
-	v := l.redis.Get(l.keyLimit)
-	if errors.Is(v.Err(), redis.Nil) {
-		return fmt.Errorf("key limit (%s) not found", l.keyLimit)
+	data, err = l.redis.Get(l.keyLimit).Bytes()
+	if err != nil {
+		return err
 	}
 
 	if l.valField != "" {
-		var jsonData []byte
-		if jsonData, err = v.Bytes(); err != nil {
-			return fmt.Errorf("failed to convert redis value to bytes: %w", err)
-		}
-		if limitVal, distrVal, err = decodeKeyLimitValue(jsonData, l.valField, l.distributionField); err != nil {
+		if limitVal, distrVal, err = decodeKeyLimitValue(data, l.valField, l.distributionField); err != nil {
 			return fmt.Errorf("failed to decode redis json value: %w", err)
 		}
 	} else {
-		if limitVal, err = v.Int64(); err != nil {
+		if limitVal, err = strconv.ParseInt(string(data), 10, 64); err != nil {
 			return fmt.Errorf("failed to convert redis value to int64: %w", err)
 		}
 	}
