@@ -12,10 +12,11 @@ import (
 
 /*{ introduction
 It moves fields to the target field in a certain mode.
-> In `allow` mode, the specified `fields` will be moved;
-> in `block` mode, the unspecified `fields` will be moved.
+* In `allow` mode, the specified `fields` will be moved
+* In `block` mode, the unspecified `fields` will be moved
+}*/
 
-### Examples
+/*{ examples
 ```yaml
 pipelines:
   example_pipeline:
@@ -101,6 +102,52 @@ The resulting event:
   }
 }
 ```
+---
+```yaml
+pipelines:
+  example_pipeline:
+    ...
+    actions:
+    - type: move
+      mode: allow
+      target: other
+      fields:
+        - log.message
+        - error.message
+		- zone
+    ...
+```
+The original event:
+```json
+{
+  "service": "test",
+  "log": {
+    "message": "some log",
+    "ts": "2023-10-30T13:35:33.638720813Z"
+  },
+  "error": {
+    "code": 1,
+    "message": "error occured"
+  },
+  "zone": "z501"
+}
+```
+The resulting event:
+```json
+{
+  "service": "test",
+  "log": {
+    "ts": "2023-10-30T13:35:33.638720813Z"
+  },
+  "error": {
+    "code": 1,
+  },
+  "other": {
+    "message": "error occured",
+    "zone": "z501"
+  }
+}
+```
 }*/
 
 type Plugin struct {
@@ -121,7 +168,9 @@ type Config struct {
 	// > @3@4@5@6
 	// >
 	// > The list of the fields to move.
-	// >> In `block` mode, the maximum `fields` depth is 1.
+	// >> 1. In `block` mode, the maximum `fields` depth is 1.
+	// >> 2. If several fields have the same end of the path,
+	// >> the last specified field will overwrite the previous ones.
 	Fields []cfg.FieldSelector `json:"fields" slice:"true" required:"true"` // *
 
 	// > @3@4@5@6
@@ -132,9 +181,9 @@ type Config struct {
 	// > @3@4@5@6
 	// >
 	// > The target field of the moving.
-	// >> If the `target` field is existing non-object field, it will be overwritten as object field.
-	// >
-	// >> In `block` mode, the maximum `target` depth is 1.
+	// >> 1. In `block` mode, the maximum `target` depth is 1.
+	// >> 2. If the `target` field is existing non-object field,
+	// >> it will be overwritten as object field.
 	Target  cfg.FieldSelector `json:"target" parse:"selector" required:"true"` // *
 	Target_ []string
 }
