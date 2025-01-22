@@ -127,7 +127,7 @@ The original event:
   },
   "error": {
     "code": 1,
-    "message": "error occured"
+    "message": "error occurred"
   },
   "zone": "z501"
 }
@@ -143,7 +143,7 @@ The resulting event:
     "code": 1,
   },
   "other": {
-    "message": "error occured",
+    "message": "error occurred",
     "zone": "z501"
   }
 }
