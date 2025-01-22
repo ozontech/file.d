@@ -17,7 +17,6 @@ services:
       - xpack.license.self_generated.type=${LICENSE}
       - xpack.ml.use_auto_machine_memory_percent=true
       - http.max_content_length=128b
-    mem_limit: ${MEM_LIMIT}
     ulimits:
       memlock:
         soft: -1
