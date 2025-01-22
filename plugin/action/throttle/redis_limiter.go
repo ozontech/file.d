@@ -3,11 +3,13 @@ package throttle
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/go-redis/redis"
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/pipeline"
 )
@@ -259,6 +261,10 @@ func (l *redisLimiter) updateKeyLimit() error {
 	var data []byte
 
 	data, err = l.redis.Get(l.keyLimit).Bytes()
+	if errors.Is(err, redis.Nil) {
+		return nil
+	}
+
 	if err != nil {
 		return err
 	}
