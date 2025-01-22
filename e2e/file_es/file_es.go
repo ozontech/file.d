@@ -9,6 +9,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -35,10 +36,12 @@ func (c *Config) Configure(t *testing.T, conf *cfg.Config, pipelineName string) 
 	input.Set("offsets_file", filepath.Join(offsetsDir, "offsets.yaml"))
 }
 
-const (
-	n            = 10
-	successEvent = `{"field_a":"AAAA","field_b":"BBBB"}`
-	failEvent    = `{"field_a":"AAAA","field_b":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}`
+const n = 10
+
+var (
+	successEvent = `{"field_a":"AAA","field_b":"BBB"}`
+	// see ES config: http.max_content_length=128b
+	failEvent = fmt.Sprintf(`{"s":"%s"}`, strings.Repeat("#", 128))
 )
 
 func (c *Config) Send(t *testing.T) {
@@ -56,7 +59,7 @@ func (c *Config) Send(t *testing.T) {
 	err = addEvent(file, failEvent)
 	require.NoError(t, err)
 
-	for i := 0; i < 2*n-1; i++ {
+	for i := 0; i < 2*n; i++ {
 		err = addEvent(file, successEvent)
 		require.NoError(t, err)
 	}
