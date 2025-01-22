@@ -1,5 +1,8 @@
 # Move plugin
 @introduction
 
-### Config params
+## Examples
+@examples
+
+## Config params
 @config-params|description
