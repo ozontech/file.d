@@ -114,7 +114,7 @@ pipelines:
       fields:
         - log.message
         - error.message
-		- zone
+        - zone
     ...
 ```
 The original event:
