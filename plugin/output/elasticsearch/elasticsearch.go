@@ -186,6 +186,11 @@ type Config struct {
 	// >
 	// > After a non-retryable write error, fall with a non-zero exit code or not
 	Strict bool `json:"strict" default:"false"` // *
+
+	// > @3@4@5@6
+	// >
+	// > The name of the ingest pipeline to write events to.
+	Pipeline string `json:"pipeline"` // *
 }
 
 type KeepAliveConfig struct {
@@ -293,7 +298,7 @@ func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 
 func (p *Plugin) prepareClient() {
 	config := &xhttp.ClientConfig{
-		Endpoints:         prepareEndpoints(p.config.Endpoints),
+		Endpoints:         prepareEndpoints(p.config.Endpoints, p.config.Pipeline),
 		ConnectionTimeout: p.config.ConnectionTimeout_ * 2,
 		AuthHeader:        p.getAuthHeader(),
 		KeepAlive: &xhttp.ClientKeepAliveConfig{
@@ -317,13 +322,17 @@ func (p *Plugin) prepareClient() {
 	}
 }
 
-func prepareEndpoints(endpoints []string) []string {
+func prepareEndpoints(endpoints []string, ingestPipeline string) []string {
 	res := make([]string, 0, len(endpoints))
 	for _, e := range endpoints {
 		if e[len(e)-1] == '/' {
 			e = e[:len(e)-1]
 		}
-		res = append(res, e+"/_bulk?_source=false")
+		e += "/_bulk?_source=false"
+		if ingestPipeline != "" {
+			e += "&pipeline=" + ingestPipeline
+		}
+		res = append(res, e)
 	}
 	return res
 }

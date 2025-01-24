@@ -151,5 +151,11 @@ After a non-retryable write error, fall with a non-zero exit code or not
 
 <br>
 
+**`pipeline`** *`string`* 
+
+The name of the ingest pipeline to write events to.
+
+<br>
+
 
 <br>*Generated using [__insane-doc__](https://github.com/vitkovskii/insane-doc)*
