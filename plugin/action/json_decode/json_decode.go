@@ -15,8 +15,9 @@ If the decoded JSON isn't an object, the event will be skipped.
 }*/
 
 type Plugin struct {
-	config *Config
-	logger *zap.Logger
+	config    *Config
+	logger    *zap.Logger
+	parseMode logJsonParseErrorMode
 }
 
 type logJsonParseErrorMode int
@@ -48,8 +49,7 @@ type Config struct {
 	// > @jsonParseErrorMode|comment-list
 	// >
 	// > Defaults to `off`.
-	LogJSONParseErrorMode  string `json:"log_json_parse_error_mode" default:"off" options:"off|erronly|withnode"` // *
-	LogJSONParseErrorMode_ logJsonParseErrorMode
+	LogJSONParseErrorMode string `json:"log_json_parse_error_mode" default:"off" options:"off|erronly|withnode"` // *
 }
 
 func init() {
@@ -68,13 +68,13 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 	p.logger = params.Logger.Desugar()
 	switch p.config.LogJSONParseErrorMode {
 	case "off":
-		p.config.LogJSONParseErrorMode_ = logJsonParseErrorOff
+		p.parseMode = logJsonParseErrorOff
 	case "erronly":
-		p.config.LogJSONParseErrorMode_ = logJsonParseErrorErrOnly
+		p.parseMode = logJsonParseErrorErrOnly
 	case "withnode":
-		p.config.LogJSONParseErrorMode_ = logJsonParseErrorWithNode
+		p.parseMode = logJsonParseErrorWithNode
 	default:
-		p.config.LogJSONParseErrorMode_ = logJsonParseErrorOff
+		p.parseMode = logJsonParseErrorOff
 	}
 }
 
@@ -89,9 +89,9 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 
 	node, err := event.Root.DecodeBytesAdditional(jsonNode.AsBytes())
 	if err != nil {
-		if p.config.LogJSONParseErrorMode_ == logJsonParseErrorErrOnly {
+		if p.parseMode == logJsonParseErrorErrOnly {
 			p.logger.Error("failed to parse json", zap.Error(err))
-		} else if p.config.LogJSONParseErrorMode_ == logJsonParseErrorWithNode {
+		} else if p.parseMode == logJsonParseErrorWithNode {
 			p.logger.Error("failed to parse json", zap.Error(err), zap.String("node", jsonNode.AsString()))
 		}
 		return pipeline.ActionPass
@@ -114,7 +114,12 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	}
 
 	// place decoded object under root
-	event.Root.MergeWith(node)
+	fields := node.AsFields()
+	for _, child := range fields {
+		childField := child.AsString()
+		x := event.Root.AddFieldNoAlloc(event.Root, childField)
+		x.MutateToNode(child.AsFieldValue())
+	}
 
 	return pipeline.ActionPass
 }
