@@ -59,6 +59,9 @@ func (p *MultilineAction) Do(event *pipeline.Event) pipeline.ActionResult {
 	}
 
 	event.Root.AddFieldNoAlloc(event.Root, "k8s_node").MutateToString(meta.SelfNodeName)
+	if p.config.OnlyNode {
+		return pipeline.ActionPass
+	}
 
 	ns := meta.Namespace(event.Root.Dig("k8s_namespace").AsString())
 	pod := meta.PodName(event.Root.Dig("k8s_pod").AsString())
@@ -78,9 +81,6 @@ func (p *MultilineAction) Do(event *pipeline.Event) pipeline.ActionResult {
 		p.logger.Fatalf("k8s container name is empty: source=%s", event.SourceName)
 	}
 
-	if p.config.OnlyNode {
-		return pipeline.ActionPass
-	}
 	// don't need to unescape/escape log fields cause concatenation of escaped strings is escaped string.
 	// get escaped string because of CRI format.
 	logFragment := event.Root.Dig("log").AsEscapedString()
