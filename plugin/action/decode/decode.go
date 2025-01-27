@@ -120,7 +120,15 @@ The resulting event:
 }
 ```
 
-### NginxError decoder
+### Nginx-error decoder
+The event root may contain any of the following fields:
+* `time` *string*
+* `level` *string*
+* `pid` *string*
+* `tid` *string*
+* `cid` *string*
+* `message` *string*
+
 You can specify `nginx_with_custom_fields: true` in `params` to decode custom fields.
 
 Default decoder:
@@ -291,6 +299,88 @@ The resulting event:
 }
 ```
 
+### Syslog-RFC3164 decoder
+The event root may contain any of the following fields:
+* `priority` *string*
+* `facility` *string*
+* `severity` *string*
+* `timestamp` *string* (`Stamp` format)
+* `hostname` *string*
+* `app_name` *string*
+* `pid` *string*
+* `message` *string*
+
+You can specify `syslog_facility_format` and `syslog_severity_format` in `params`
+for preferred `facility` and `severity` fields format.
+
+Default decoder:
+```yaml
+pipelines:
+  example_pipeline:
+    ...
+    actions:
+    - type: decode
+      field: log
+      decoder: syslog_rfc3164
+    ...
+```
+The original event:
+```json
+{
+  "log": "<34>Oct  5 22:14:15 mymachine.example.com myproc[10]: 'myproc' failed on /dev/pts/8",
+  "service": "test"
+}
+```
+The resulting event:
+```json
+{
+  "service": "test",
+  "priority": "34",
+  "facility": "4",
+  "severity": "2",
+  "timestamp": "Oct  5 22:14:15",
+  "hostname": "mymachine.example.com",
+  "app_name": "myproc",
+  "pid": "10",
+  "message": "'myproc' failed on /dev/pts/8"
+}
+```
+---
+Decoder with `syslog_*_format` params:
+```yaml
+pipelines:
+  example_pipeline:
+    ...
+    actions:
+    - type: decode
+      field: log
+      decoder: syslog_rfc3164
+      params:
+        syslog_facility_format: 'string'
+        syslog_severity_format: 'string'
+    ...
+```
+The original event:
+```json
+{
+  "log": "<34>Oct 11 22:14:15 mymachine.example.com myproc: 'myproc' failed on /dev/pts/8",
+  "service": "test"
+}
+```
+The resulting event:
+```json
+{
+  "service": "test",
+  "priority": "34",
+  "facility": "AUTH",
+  "severity": "CRIT",
+  "timestamp": "Oct 11 22:14:15",
+  "hostname": "mymachine.example.com",
+  "app_name": "myproc",
+  "message": "'myproc' failed on /dev/pts/8"
+}
+```
+
 ### Keep origin
 ```yaml
 pipelines:
@@ -332,6 +422,7 @@ const (
 	decPostgres
 	decNginxError
 	decProtobuf
+	decSyslogRFC3164
 )
 
 type logDecodeErrorMode int
@@ -361,7 +452,7 @@ type Config struct {
 	// > @3@4@5@6
 	// >
 	// > Decoder type.
-	Decoder  string `json:"decoder" default:"json" options:"json|postgres|nginx_error|protobuf"` // *
+	Decoder  string `json:"decoder" default:"json" options:"json|postgres|nginx_error|protobuf|syslog_rfc3164"` // *
 	Decoder_ decoderType
 
 	// > @3@4@5@6
@@ -373,7 +464,7 @@ type Config struct {
 	// > If set, the fields will be cut to the specified limit.
 	// >	> It works only with string values. If the field doesn't exist or isn't a string, it will be skipped.
 	// >
-	// > **NginxError decoder params**:
+	// > **Nginx-error decoder params**:
 	// > * `nginx_with_custom_fields` - if set, custom fields will be extracted.
 	// >
 	// > **Protobuf decoder params**:
@@ -397,6 +488,10 @@ type Config struct {
 	// >> * google/protobuf/timestamp.proto
 	// >> * google/protobuf/type.proto
 	// >> * google/protobuf/wrappers.proto
+	// >
+	// > **Syslog-RFC3164 decoder params**:
+	// > * `syslog_facility_format` - facility format, must be one of `number|string` (`number` by default).
+	// > * `syslog_severity_format` - severity format, must be one of `number|string` (`number` by default).
 	Params map[string]any `json:"params"` // *
 
 	// > @3@4@5@6
@@ -442,6 +537,8 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 		p.decoder, err = decoder.NewNginxErrorDecoder(p.config.Params)
 	case decProtobuf:
 		p.decoder, err = decoder.NewProtobufDecoder(p.config.Params)
+	case decSyslogRFC3164:
+		p.decoder, err = decoder.NewSyslogRFC3164Decoder(p.config.Params)
 	}
 	if err != nil {
 		p.logger.Fatal(fmt.Sprintf("can't create %s decoder", p.config.Decoder), zap.Error(err))
@@ -465,6 +562,8 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 		p.decodeNginxError(event.Root, fieldNode)
 	case decProtobuf:
 		p.decodeProtobuf(event.Root, fieldNode, event.Buf)
+	case decSyslogRFC3164:
+		p.decodeSyslogRFC3164(event.Root, fieldNode)
 	}
 
 	return pipeline.ActionPass
@@ -569,11 +668,44 @@ func (p *Plugin) decodeProtobuf(root *insaneJSON.Root, node *insaneJSON.Node, bu
 	root.MergeWith(t)
 }
 
-func (p *Plugin) addFieldPrefix(root *insaneJSON.Root, key string, val []byte) {
+func (p *Plugin) decodeSyslogRFC3164(root *insaneJSON.Root, node *insaneJSON.Node) {
+	rowRaw, err := p.decoder.Decode(node.AsBytes())
+	if p.checkError(err, node) {
+		return
+	}
+	row := rowRaw.(decoder.SyslogRFC3164Row)
+
+	if !p.config.KeepOrigin {
+		node.Suicide()
+	}
+
+	p.addFieldPrefix(root, "priority", row.Priority)
+	p.addFieldPrefix(root, "facility", row.Facility)
+	p.addFieldPrefix(root, "severity", row.Severity)
+	p.addFieldPrefix(root, "timestamp", row.Timestamp)
+	p.addFieldPrefix(root, "hostname", row.Hostname)
+	p.addFieldPrefix(root, "app_name", row.AppName)
+	if len(row.PID) > 0 {
+		p.addFieldPrefix(root, "pid", row.PID)
+	}
+	if len(row.Message) > 0 {
+		p.addFieldPrefix(root, "message", row.Message)
+	}
+}
+
+func (p *Plugin) addFieldPrefix(root *insaneJSON.Root, key string, val any) {
 	if p.config.Prefix != "" {
 		key = fmt.Sprintf("%s%s", p.config.Prefix, key)
 	}
-	root.AddFieldNoAlloc(root, key).MutateToBytesCopy(root, val)
+	f := root.AddFieldNoAlloc(root, key)
+	switch v := val.(type) {
+	case []byte:
+		f.MutateToBytesCopy(root, v)
+	case string:
+		f.MutateToString(v)
+	default:
+		panic("")
+	}
 }
 
 func (p *Plugin) checkError(err error, node *insaneJSON.Node) bool {

@@ -106,7 +106,15 @@ The resulting event:
 }
 ```
 
-### NginxError decoder
+### Nginx-error decoder
+The event root may contain any of the following fields:
+* `time` *string*
+* `level` *string*
+* `pid` *string*
+* `tid` *string*
+* `cid` *string*
+* `message` *string*
+
 You can specify `nginx_with_custom_fields: true` in `params` to decode custom fields.
 
 Default decoder:
@@ -277,6 +285,88 @@ The resulting event:
 }
 ```
 
+### Syslog-RFC3164 decoder
+The event root may contain any of the following fields:
+* `priority` *string*
+* `facility` *string*
+* `severity` *string*
+* `timestamp` *string* (`Stamp` format)
+* `hostname` *string*
+* `app_name` *string*
+* `pid` *string*
+* `message` *string*
+
+You can specify `syslog_facility_format` and `syslog_severity_format` in `params`
+for preferred `facility` and `severity` fields format.
+
+Default decoder:
+```yaml
+pipelines:
+  example_pipeline:
+    ...
+    actions:
+    - type: decode
+      field: log
+      decoder: syslog_rfc3164
+    ...
+```
+The original event:
+```json
+{
+  "log": "<34>Oct  5 22:14:15 mymachine.example.com myproc[10]: 'myproc' failed on /dev/pts/8",
+  "service": "test"
+}
+```
+The resulting event:
+```json
+{
+  "service": "test",
+  "priority": "34",
+  "facility": "4",
+  "severity": "2",
+  "timestamp": "Oct  5 22:14:15",
+  "hostname": "mymachine.example.com",
+  "app_name": "myproc",
+  "pid": "10",
+  "message": "'myproc' failed on /dev/pts/8"
+}
+```
+---
+Decoder with `syslog_*_format` params:
+```yaml
+pipelines:
+  example_pipeline:
+    ...
+    actions:
+    - type: decode
+      field: log
+      decoder: syslog_rfc3164
+      params:
+        syslog_facility_format: 'string'
+        syslog_severity_format: 'string'
+    ...
+```
+The original event:
+```json
+{
+  "log": "<34>Oct 11 22:14:15 mymachine.example.com myproc: 'myproc' failed on /dev/pts/8",
+  "service": "test"
+}
+```
+The resulting event:
+```json
+{
+  "service": "test",
+  "priority": "34",
+  "facility": "AUTH",
+  "severity": "CRIT",
+  "timestamp": "Oct 11 22:14:15",
+  "hostname": "mymachine.example.com",
+  "app_name": "myproc",
+  "message": "'myproc' failed on /dev/pts/8"
+}
+```
+
 ### Keep origin
 ```yaml
 pipelines:
@@ -317,7 +407,7 @@ The event field to decode. Must be a string.
 
 <br>
 
-**`decoder`** *`string`* *`default=json`* *`options=json|postgres|nginx_error|protobuf`* 
+**`decoder`** *`string`* *`default=json`* *`options=json|postgres|nginx_error|protobuf|syslog_rfc3164`* 
 
 Decoder type.
 
@@ -332,7 +422,7 @@ Decoding params.
 If set, the fields will be cut to the specified limit.
 	> It works only with string values. If the field doesn't exist or isn't a string, it will be skipped.
 
-**NginxError decoder params**:
+**Nginx-error decoder params**:
 * `nginx_with_custom_fields` - if set, custom fields will be extracted.
 
 **Protobuf decoder params**:
@@ -356,6 +446,10 @@ If present and not empty, then all file paths to find are assumed to be relative
 > * google/protobuf/timestamp.proto
 > * google/protobuf/type.proto
 > * google/protobuf/wrappers.proto
+
+**Syslog-RFC3164 decoder params**:
+* `syslog_facility_format` - facility format, must be one of `number|string` (`number` by default).
+* `syslog_severity_format` - severity format, must be one of `number|string` (`number` by default).
 
 <br>
 

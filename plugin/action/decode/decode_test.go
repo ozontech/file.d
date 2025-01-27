@@ -235,6 +235,68 @@ func TestDecode(t *testing.T) {
 			},
 		},
 		{
+			name: "syslog_rfc3164",
+			config: &Config{
+				Field:   "log",
+				Decoder: "syslog_rfc3164",
+			},
+			input: []byte(`{"service":"test","log":"<34>Oct  5 22:14:15 mymachine.example.com myproc[10]: 'myproc' failed on /dev/pts/8"}`),
+			want: map[string]string{
+				"service":   "test",
+				"priority":  "34",
+				"facility":  "4",
+				"severity":  "2",
+				"timestamp": "Oct  5 22:14:15",
+				"hostname":  "mymachine.example.com",
+				"app_name":  "myproc",
+				"pid":       "10",
+				"message":   "'myproc' failed on /dev/pts/8",
+			},
+		},
+		{
+			name: "syslog_rfc3164_prefix",
+			config: &Config{
+				Field:   "log",
+				Decoder: "syslog_rfc3164",
+				Prefix:  "p_",
+			},
+			input: []byte(`{"service":"test","log":"<34>Oct  5 22:14:15 mymachine.example.com myproc[10]: 'myproc' failed on /dev/pts/8"}`),
+			want: map[string]string{
+				"service":     "test",
+				"p_priority":  "34",
+				"p_facility":  "4",
+				"p_severity":  "2",
+				"p_timestamp": "Oct  5 22:14:15",
+				"p_hostname":  "mymachine.example.com",
+				"p_app_name":  "myproc",
+				"p_pid":       "10",
+				"p_message":   "'myproc' failed on /dev/pts/8",
+			},
+		},
+		{
+			name: "syslog_rfc3164_priority_format",
+			config: &Config{
+				Field:   "log",
+				Decoder: "syslog_rfc3164",
+				Params: map[string]any{
+					"syslog_facility_format": "string",
+					"syslog_severity_format": "string",
+				},
+			},
+			input: []byte(`{"service":"test","log":"<34>Oct  5 22:14:15 mymachine.example.com myproc[10]: 'myproc' failed on /dev/pts/8"}`),
+			want: map[string]string{
+				"service":   "test",
+				"priority":  "34",
+				"facility":  "AUTH",
+				"severity":  "CRIT",
+				"timestamp": "Oct  5 22:14:15",
+				"hostname":  "mymachine.example.com",
+				"app_name":  "myproc",
+				"pid":       "10",
+				"message":   "'myproc' failed on /dev/pts/8",
+			},
+		},
+		{
 			name: "keep_origin",
 			config: &Config{
 				Field:      "log",

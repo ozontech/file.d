@@ -13,6 +13,7 @@ const (
 	POSTGRES
 	NGINX_ERROR
 	PROTOBUF
+	SYSLOG_RFC3164
 )
 
 type Decoder interface {
