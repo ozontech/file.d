@@ -3,8 +3,6 @@ services:
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:8.17.0
     container_name: es-local-test
-    volumes:
-      - dev-elasticsearch:/usr/share/elasticsearch/data
     ports:
       - "19200:9200"
     environment:
@@ -12,13 +10,6 @@ services:
       - ELASTIC_PASSWORD=elastic
       - xpack.security.enabled=true
       - xpack.security.http.ssl.enabled=false
-      - xpack.license.self_generated.type=trial
-      - xpack.ml.use_auto_machine_memory_percent=true
-      - "_JAVA_OPTIONS=-XX:UseSVE=0"
-    ulimits:
-      memlock:
-        soft: -1
-        hard: -1
     healthcheck:
       test:
         [
@@ -28,6 +19,3 @@ services:
       interval: 10s
       timeout: 10s
       retries: 10
-
-volumes:
-  dev-elasticsearch:
