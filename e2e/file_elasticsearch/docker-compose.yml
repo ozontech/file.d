@@ -6,7 +6,7 @@ services:
     volumes:
       - dev-elasticsearch:/usr/share/elasticsearch/data
     ports:
-      - "127.0.0.1:19200:9200"
+      - "19200:9200"
     environment:
       - discovery.type=single-node
       - ELASTIC_PASSWORD=elastic
