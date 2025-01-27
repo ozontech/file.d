@@ -25,8 +25,8 @@ services:
           "CMD-SHELL",
           "curl --output /dev/null --silent --head --fail -u elastic:elastic http://elasticsearch:19200",
         ]
-      interval: 5s
-      timeout: 5s
+      interval: 10s
+      timeout: 10s
       retries: 10
 
 volumes:
