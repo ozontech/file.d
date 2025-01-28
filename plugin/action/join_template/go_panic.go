@@ -143,12 +143,20 @@ func isLetterOrUnderscore(c byte) bool {
 	return isLetter(c) || c == '_'
 }
 
-func containsCallIndex(s string, pos int) bool {
-	if s[pos] != ')' {
+// replaces regexp ([A-Za-z_]+[A-Za-z0-9_]*\)?\.[A-Za-z0-9_]+\(.*\))
+// it recognizes:
+// - calls of functions in packages
+// - calls of methods of structs
+// NOTE: only last occurrence counts
+func containsCall(s string) bool {
+	i := strings.LastIndex(s, ")")
+	if i == -1 {
 		return false
 	}
 
-	i := strings.LastIndex(s[:pos], "(")
+	s = s[:i]
+
+	i = strings.LastIndex(s, "(")
 	if i == -1 {
 		return false
 	}
@@ -198,20 +206,6 @@ func endsWithIdentifier(s string) bool {
 	}
 
 	return false
-}
-
-// replaces regexp ([A-Za-z_]+[A-Za-z0-9_]*\)?\.[A-Za-z0-9_]+\(.*\))
-// it recognizes:
-// - calls of functions in packages
-// - calls of methods of structs
-// NOTE: only last occurrence counts
-func containsCall(s string) bool {
-	i := strings.LastIndex(s, ")")
-	if i == -1 {
-		return false
-	}
-
-	return containsCallIndex(s, i)
 }
 
 // regexp
