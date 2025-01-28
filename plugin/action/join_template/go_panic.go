@@ -27,7 +27,7 @@ func goPanicContinueCheck(s string) bool {
 		containsOnlySpaces(s) ||
 		containsGoroutineID(s) ||
 		containsLineNumber(s) ||
-		checkCreatedBy(s) ||
+		containsCreatedBy(s) ||
 		containsPanicAddress(s) ||
 		strings.Contains(s, "panic:") ||
 		containsCall(s)
@@ -104,7 +104,7 @@ func containsLineNumber(s string) bool {
 // - created by .*\.
 // are equal in sense of matching.
 // So check the second one.
-func checkCreatedBy(s string) bool {
+func containsCreatedBy(s string) bool {
 	i := strings.Index(s, createdByPart)
 	if i == -1 {
 		return false

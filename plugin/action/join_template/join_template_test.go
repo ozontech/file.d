@@ -769,6 +769,54 @@ func getCases(positive, negative []string) []testCase {
 	return result
 }
 
+func TestContainsOnlySpaces(t *testing.T) {
+	positive := []string{
+		"    ",
+		"\t\t",
+		"\n\n",
+		" \n\t ",
+		"",
+	}
+
+	negative := []string{
+		"qwe",
+		"a   ",
+		"   a",
+		"\n\t a",
+		"a\n\t ",
+	}
+
+	for _, tt := range getCases(positive, negative) {
+		require.Equal(t, tt.res, containsOnlySpaces(tt.s), tt.s)
+	}
+}
+
+func TestContainsCreatedBy(t *testing.T) {
+	positive := []string{
+		"created by net/http.(*Server).Serve",
+		"created by .",
+		"created by some.qwe123",
+		"    created by some.qwe123",
+	}
+
+	negative := []string{
+		// no 'created by ' part
+		"created net/http.(*Server).Serve",
+		"created by{net/http.(*Server).Serve}",
+		"by net/http.(*Server).Serve",
+		"",
+
+		// no period after 'created by ' part
+		"created by ",
+		"created by     ",
+		"    created by someQwe123",
+	}
+
+	for _, tt := range getCases(positive, negative) {
+		require.Equal(t, tt.res, containsCreatedBy(tt.s), tt.s)
+	}
+}
+
 func TestEndsWithIdentifier(t *testing.T) {
 	positive := []string{
 		"_",
