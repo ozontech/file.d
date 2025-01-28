@@ -190,7 +190,7 @@ type Config struct {
 	// > @3@4@5@6
 	// >
 	// > The name of the ingest pipeline to write events to.
-	Pipeline string `json:"pipeline"` // *
+	IngestPipeline string `json:"ingest_pipeline"` // *
 }
 
 type KeepAliveConfig struct {
@@ -298,7 +298,7 @@ func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 
 func (p *Plugin) prepareClient() {
 	config := &xhttp.ClientConfig{
-		Endpoints:         prepareEndpoints(p.config.Endpoints, p.config.Pipeline),
+		Endpoints:         prepareEndpoints(p.config.Endpoints, p.config.IngestPipeline),
 		ConnectionTimeout: p.config.ConnectionTimeout_ * 2,
 		AuthHeader:        p.getAuthHeader(),
 		KeepAlive: &xhttp.ClientKeepAliveConfig{

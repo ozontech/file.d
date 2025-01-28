@@ -151,7 +151,7 @@ After a non-retryable write error, fall with a non-zero exit code or not
 
 <br>
 
-**`pipeline`** *`string`* 
+**`ingest_pipeline`** *`string`* 
 
 The name of the ingest pipeline to write events to.
 
