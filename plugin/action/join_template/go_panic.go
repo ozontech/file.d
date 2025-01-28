@@ -149,14 +149,14 @@ func isLetterOrUnderscore(c byte) bool {
 // - calls of methods of structs
 // NOTE: only last occurrence counts
 func containsCall(s string) bool {
-	i := strings.LastIndex(s, ")")
+	i := strings.LastIndexByte(s, ')')
 	if i == -1 {
 		return false
 	}
 
 	s = s[:i]
 
-	i = strings.LastIndex(s, "(")
+	i = strings.LastIndexByte(s, '(')
 	if i == -1 {
 		return false
 	}
