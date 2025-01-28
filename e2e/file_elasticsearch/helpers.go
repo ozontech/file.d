@@ -130,7 +130,7 @@ func waitUntilIndexReady(elasticURL, indexName, username, password string, minDo
 
 			body, err := io.ReadAll(resp.Body)
 			if err != nil {
-				return false, fmt.Errorf("failed to reade response: %w", err)
+				return false, fmt.Errorf("failed to read response: %w", err)
 			}
 
 			var result map[string]interface{}
