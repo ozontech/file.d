@@ -4,19 +4,20 @@ package e2e_test
 
 import (
 	"context"
-	"log"
-	"strconv"
-	"testing"
-	"time"
-
-	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/e2e/file_clickhouse"
+	"github.com/ozontech/file.d/e2e/file_elasticsearch"
 	"github.com/ozontech/file.d/e2e/file_file"
 	"github.com/ozontech/file.d/e2e/http_file"
 	"github.com/ozontech/file.d/e2e/join_throttle"
 	"github.com/ozontech/file.d/e2e/kafka_auth"
 	"github.com/ozontech/file.d/e2e/kafka_file"
 	"github.com/ozontech/file.d/e2e/split_join"
+	"log"
+	"strconv"
+	"testing"
+	"time"
+
+	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
 	_ "github.com/ozontech/file.d/plugin/action/add_file_name"
 	_ "github.com/ozontech/file.d/plugin/action/add_host"
@@ -142,6 +143,17 @@ func TestE2EStabilityWorkCase(t *testing.T) {
 			name:    "file_clickhouse",
 			e2eTest: &file_clickhouse.Config{},
 			cfgPath: "./file_clickhouse/config.yml",
+		},
+		{
+			name: "file_elasticsearch",
+			e2eTest: &file_elasticsearch.Config{
+				Count:    10,
+				Pipeline: "test-ingest-pipeline",
+				Endpoint: "http://localhost:19200",
+				Username: "elastic",
+				Password: "elastic",
+			},
+			cfgPath: "./file_elasticsearch/config.yml",
 		},
 	}
 
