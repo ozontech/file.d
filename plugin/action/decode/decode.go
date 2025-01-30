@@ -393,7 +393,9 @@ The event root may contain any of the following fields:
 * `process_id` *string*
 * `message_id` *string*
 * `message` *string*
-* Multiple `SD` *object*
+* `SD_1` *object*
+* ...
+* `SD_N` *object*
 
 You can specify `syslog_facility_format` and `syslog_severity_format` in `params`
 for preferred `facility` and `severity` fields format.
