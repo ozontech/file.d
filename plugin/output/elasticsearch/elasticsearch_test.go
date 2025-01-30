@@ -81,23 +81,47 @@ func TestAppendEventWithCreateOpType(t *testing.T) {
 }
 
 func TestPrepareEndpoints(t *testing.T) {
-	in := []string{
-		"http://endpoint_1:9000",
-		"http://endpoint_2:9000/",
-		"https://endpoint_3:9000",
-		"https://endpoint_4:9000/",
-	}
-	want := []string{
-		"http://endpoint_1:9000/_bulk?_source=false",
-		"http://endpoint_2:9000/_bulk?_source=false",
-		"https://endpoint_3:9000/_bulk?_source=false",
-		"https://endpoint_4:9000/_bulk?_source=false",
+	testCases := []struct {
+		in       []string
+		want     []string
+		pipeline string
+	}{
+		{
+			in: []string{
+				"http://endpoint_1:9000",
+				"http://endpoint_2:9000/",
+				"https://endpoint_3:9000",
+				"https://endpoint_4:9000/",
+			},
+			want: []string{
+				"http://endpoint_1:9000/_bulk?_source=false",
+				"http://endpoint_2:9000/_bulk?_source=false",
+				"https://endpoint_3:9000/_bulk?_source=false",
+				"https://endpoint_4:9000/_bulk?_source=false",
+			},
+		},
+		{
+			in: []string{
+				"http://endpoint_1:9000",
+				"http://endpoint_2:9000/",
+				"https://endpoint_3:9000",
+				"https://endpoint_4:9000/",
+			},
+			want: []string{
+				"http://endpoint_1:9000/_bulk?_source=false&pipeline=my_pipeline_1",
+				"http://endpoint_2:9000/_bulk?_source=false&pipeline=my_pipeline_1",
+				"https://endpoint_3:9000/_bulk?_source=false&pipeline=my_pipeline_1",
+				"https://endpoint_4:9000/_bulk?_source=false&pipeline=my_pipeline_1",
+			},
+			pipeline: "my_pipeline_1",
+		},
 	}
 
-	got := prepareEndpoints(in)
-
-	require.Len(t, got, len(want))
-	for i := range got {
-		assert.Equal(t, want[i], got[i])
+	for _, tc := range testCases {
+		got := prepareEndpoints(tc.in, tc.pipeline)
+		require.Len(t, got, len(tc.want))
+		for i := range got {
+			assert.Equal(t, tc.want[i], got[i])
+		}
 	}
 }

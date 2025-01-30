@@ -240,7 +240,7 @@ It transforms `{"server":{"os":"linux","arch":"amd64"}}` into `{"server":"{\"os\
 
 [More details...](plugin/action/json_encode/README.md)
 ## json_extract
-It extracts a field from JSON-encoded event field and adds extracted field to the event root.
+It extracts fields from JSON-encoded event field and adds extracted fields to the event root.
 > If extracted field already exists in the event root, it will be overridden.
 
 [More details...](plugin/action/json_extract/README.md)
@@ -304,95 +304,8 @@ The resulting event could look like:
 [More details...](plugin/action/modify/README.md)
 ## move
 It moves fields to the target field in a certain mode.
-> In `allow` mode, the specified `fields` will be moved;
-> in `block` mode, the unspecified `fields` will be moved.
-
-### Examples
-```yaml
-pipelines:
-  example_pipeline:
-    ...
-    actions:
-    - type: move
-      mode: allow
-      target: other
-      fields:
-        - log.stream
-        - zone
-    ...
-```
-The original event:
-```json
-{
-  "service": "test",
-  "log": {
-    "level": "error",
-    "message": "error occurred",
-    "ts": "2023-10-30T13:35:33.638720813Z",
-    "stream": "stderr"
-  },
-  "zone": "z501"
-}
-```
-The resulting event:
-```json
-{
-  "service": "test",
-  "log": {
-    "level": "error",
-    "message": "error occurred",
-    "ts": "2023-10-30T13:35:33.638720813Z"
-  },
-  "other": {
-    "stream": "stderr",
-    "zone": "z501"
-  }
-}
-```
----
-```yaml
-pipelines:
-  example_pipeline:
-    ...
-    actions:
-    - type: move
-      mode: block
-      target: other
-      fields:
-        - log
-    ...
-```
-The original event:
-```json
-{
-  "service": "test",
-  "log": {
-    "level": "error",
-    "message": "error occurred",
-    "ts": "2023-10-30T13:35:33.638720813Z",
-    "stream": "stderr"
-  },
-  "zone": "z501",
-  "other": {
-    "user": "ivanivanov"
-  }
-}
-```
-The resulting event:
-```json
-{
-  "log": {
-    "level": "error",
-    "message": "error occurred",
-    "ts": "2023-10-30T13:35:33.638720813Z"
-  },
-  "other": {
-    "user": "ivanivanov",
-    "service": "test",
-    "zone": "z501"
-  }
-}
-```
+* In `allow` mode, the specified `fields` will be moved
+* In `block` mode, the unspecified `fields` will be moved
 
 [More details...](plugin/action/move/README.md)
 ## parse_es

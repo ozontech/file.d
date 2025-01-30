@@ -42,8 +42,6 @@ type Plugin struct {
 	batcher      *pipeline.RetriableBatcher
 	avgEventSize int
 
-	begin []int
-
 	time         string
 	headerPrefix string
 	cancel       context.CancelFunc
@@ -188,6 +186,11 @@ type Config struct {
 	// >
 	// > After a non-retryable write error, fall with a non-zero exit code or not
 	Strict bool `json:"strict" default:"false"` // *
+
+	// > @3@4@5@6
+	// >
+	// > The name of the ingest pipeline to write events to.
+	IngestPipeline string `json:"ingest_pipeline"` // *
 }
 
 type KeepAliveConfig struct {
@@ -223,7 +226,6 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.registerMetrics(params.MetricCtl)
 	p.mu = &sync.Mutex{}
 	p.headerPrefix = `{"` + p.config.BatchOpType + `":{"_index":"`
-	p.begin = make([]int, 0, p.config.BatchSize_+1)
 
 	if len(p.config.IndexValues) == 0 {
 		p.config.IndexValues = append(p.config.IndexValues, "@time")
@@ -296,7 +298,7 @@ func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 
 func (p *Plugin) prepareClient() {
 	config := &xhttp.ClientConfig{
-		Endpoints:         prepareEndpoints(p.config.Endpoints),
+		Endpoints:         prepareEndpoints(p.config.Endpoints, p.config.IngestPipeline),
 		ConnectionTimeout: p.config.ConnectionTimeout_ * 2,
 		AuthHeader:        p.getAuthHeader(),
 		KeepAlive: &xhttp.ClientKeepAliveConfig{
@@ -320,13 +322,17 @@ func (p *Plugin) prepareClient() {
 	}
 }
 
-func prepareEndpoints(endpoints []string) []string {
+func prepareEndpoints(endpoints []string, ingestPipeline string) []string {
 	res := make([]string, 0, len(endpoints))
 	for _, e := range endpoints {
 		if e[len(e)-1] == '/' {
 			e = e[:len(e)-1]
 		}
-		res = append(res, e+"/_bulk?_source=false")
+		e += "/_bulk?_source=false"
+		if ingestPipeline != "" {
+			e += "&pipeline=" + ingestPipeline
+		}
+		res = append(res, e)
 	}
 	return res
 }
@@ -350,18 +356,16 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 		data.outBuf = make([]byte, 0, p.config.BatchSize_*p.avgEventSize)
 	}
 
-	eventsCount := 0
-	p.begin = p.begin[:0]
 	data.outBuf = data.outBuf[:0]
 	batch.ForEach(func(event *pipeline.Event) {
-		eventsCount++
-		p.begin = append(p.begin, len(data.outBuf))
 		data.outBuf = p.appendEvent(data.outBuf, event)
 	})
-	p.begin = append(p.begin, len(data.outBuf))
 
-	statusCode, err := p.saveOrSplit(0, eventsCount, p.begin, data.outBuf)
+	statusCode, err := p.client.DoTimeout(http.MethodPost, NDJSONContentType, data.outBuf,
+		p.config.ConnectionTimeout_, p.reportESErrors)
+
 	if err != nil {
+		p.sendErrorMetric.WithLabelValues(strconv.Itoa(statusCode)).Inc()
 		switch statusCode {
 		case http.StatusBadRequest, http.StatusRequestEntityTooLarge:
 			const errMsg = "can't send to the elastic, non-retryable error occurred"
@@ -378,41 +382,6 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 	}
 
 	return nil
-}
-
-func (p *Plugin) saveOrSplit(left int, right int, begin []int, data []byte) (int, error) {
-	if left == right {
-		return http.StatusOK, nil
-	}
-
-	statusCode, err := p.client.DoTimeout(
-		http.MethodPost,
-		NDJSONContentType,
-		data[begin[left]:begin[right]],
-		p.config.ConnectionTimeout_, p.reportESErrors)
-
-	if err != nil {
-		p.sendErrorMetric.WithLabelValues(strconv.Itoa(statusCode)).Inc()
-		switch statusCode {
-		case http.StatusRequestEntityTooLarge:
-			// can't save even one log
-			if right-left == 1 {
-				return statusCode, err
-			}
-
-			middle := (left + right) / 2
-			statusCode, err = p.saveOrSplit(left, middle, begin, data)
-			if err != nil {
-				return statusCode, err
-			}
-
-			return p.saveOrSplit(middle, right, begin, data)
-		default:
-			return statusCode, err
-		}
-	}
-
-	return http.StatusOK, nil
 }
 
 func (p *Plugin) appendEvent(outBuf []byte, event *pipeline.Event) []byte {
