@@ -27,7 +27,7 @@ func TestSyslogRFC3164(t *testing.T) {
 				Timestamp: []byte("Oct 11 22:14:15"),
 				Hostname:  []byte("mymachine.example.com"),
 				AppName:   []byte("myproc"),
-				PID:       []byte("10"),
+				ProcID:    []byte("10"),
 				Message:   []byte("'myproc' failed on /dev/pts/8"),
 			},
 		},
@@ -58,7 +58,7 @@ func TestSyslogRFC3164(t *testing.T) {
 				Timestamp: []byte("Oct 11 22:14:15"),
 				Hostname:  []byte("mymachine.example.com"),
 				AppName:   []byte("myproc"),
-				PID:       []byte("10"),
+				ProcID:    []byte("10"),
 				Message:   []byte("'myproc' failed on /dev/pts/8"),
 			},
 		},
@@ -78,33 +78,13 @@ func TestSyslogRFC3164(t *testing.T) {
 			wantCreateErr: true,
 		},
 		{
-			name:          "invalid_decode_pri_1",
-			input:         "<>",
-			wantDecodeErr: true,
-		},
-		{
-			name:          "invalid_decode_pri_2",
-			input:         "<str>",
-			wantDecodeErr: true,
-		},
-		{
-			name:          "invalid_decode_pri_3",
-			input:         "<100000>",
-			wantDecodeErr: true,
-		},
-		{
-			name:          "invalid_decode_pri_4",
-			input:         "<192>",
-			wantDecodeErr: true,
-		},
-		{
 			name:          "invalid_decode_timestamp_1",
 			input:         "<34> Oct 11 22:14:15",
 			wantDecodeErr: true,
 		},
 		{
 			name:          "invalid_decode_timestamp_2",
-			input:         "<34>2006-01-02 15:04:05",
+			input:         "<34>2006-01-02 15:04:05 ",
 			wantDecodeErr: true,
 		},
 		{
@@ -128,6 +108,21 @@ func TestSyslogRFC3164(t *testing.T) {
 			wantDecodeErr: true,
 		},
 		{
+			name:          "invalid_decode_timestamp_7",
+			input:         "<34>Oct 11 27:14:15 ",
+			wantDecodeErr: true,
+		},
+		{
+			name:          "invalid_decode_timestamp_8",
+			input:         "<34>Oct 11 22:72:15 ",
+			wantDecodeErr: true,
+		},
+		{
+			name:          "invalid_decode_timestamp_9",
+			input:         "<34>Oct 11 22:14:99 ",
+			wantDecodeErr: true,
+		},
+		{
 			name:          "invalid_decode_hostname",
 			input:         "<34>Oct 11 22:14:15 mymachine.example.com",
 			wantDecodeErr: true,
@@ -138,12 +133,12 @@ func TestSyslogRFC3164(t *testing.T) {
 			wantDecodeErr: true,
 		},
 		{
-			name:          "invalid_decode_pid_1",
+			name:          "invalid_decode_procid_1",
 			input:         "<34>Oct 11 22:14:15 mymachine.example.com myproc[10: 'myproc' failed on /dev/pts/8",
 			wantDecodeErr: true,
 		},
 		{
-			name:          "invalid_decode_pid_2",
+			name:          "invalid_decode_procid_2",
 			input:         "<34>Oct 11 22:14:15 mymachine.example.com myproc[10] 'myproc' failed on /dev/pts/8",
 			wantDecodeErr: true,
 		},

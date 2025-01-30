@@ -293,7 +293,7 @@ The event root may contain any of the following fields:
 * `timestamp` *string* (`Stamp` format)
 * `hostname` *string*
 * `app_name` *string*
-* `pid` *string*
+* `process_id` *string*
 * `message` *string*
 
 You can specify `syslog_facility_format` and `syslog_severity_format` in `params`
@@ -327,7 +327,7 @@ The resulting event:
   "timestamp": "Oct  5 22:14:15",
   "hostname": "mymachine.example.com",
   "app_name": "myproc",
-  "pid": "10",
+  "process_id": "10",
   "message": "'myproc' failed on /dev/pts/8"
 }
 ```
@@ -364,6 +364,104 @@ The resulting event:
   "hostname": "mymachine.example.com",
   "app_name": "myproc",
   "message": "'myproc' failed on /dev/pts/8"
+}
+```
+
+### Syslog-RFC5424 decoder
+The event root may contain any of the following fields:
+* `priority` *string*
+* `facility` *string*
+* `severity` *string*
+* `proto_version` *string*
+* `timestamp` *string* (`RFC3339`/`RFC3339Nano` format)
+* `hostname` *string*
+* `app_name` *string*
+* `process_id` *string*
+* `message_id` *string*
+* `message` *string*
+* Multiple `SD` *object*
+
+You can specify `syslog_facility_format` and `syslog_severity_format` in `params`
+for preferred `facility` and `severity` fields format.
+
+Default decoder:
+```yaml
+pipelines:
+  example_pipeline:
+    ...
+    actions:
+    - type: decode
+      field: log
+      decoder: syslog_rfc5424
+    ...
+```
+The original event:
+```json
+{
+  "log": "<165>1 2003-10-11T22:14:15.003Z mymachine.example.com myproc 10 ID47 [exampleSDID iut=\"3\" eventSource=\"Application\" eventID=\"1011\"] An application event log",
+  "service": "test"
+}
+```
+The resulting event:
+```json
+{
+  "service": "test",
+  "priority": "165",
+  "facility": "20",
+  "severity": "5",
+  "proto_version": "1",
+  "timestamp": "2003-10-11T22:14:15.003Z",
+  "hostname": "mymachine.example.com",
+  "app_name": "myproc",
+  "process_id": "10",
+  "message_id": "ID47",
+  "message": "An application event log",
+  "exampleSDID": {
+    "iut": "3",
+    "eventSource": "Application",
+    "eventID": "1011"
+  }
+}
+```
+---
+Decoder with `syslog_*_format` params:
+```yaml
+pipelines:
+  example_pipeline:
+    ...
+    actions:
+    - type: decode
+      field: log
+      decoder: syslog_rfc5424
+      params:
+        syslog_facility_format: 'string'
+        syslog_severity_format: 'string'
+    ...
+```
+The original event:
+```json
+{
+  "log": "<165>1 2003-10-11T22:14:15.003Z mymachine.example.com myproc - ID47 [exampleSDID iut=\"3\" eventSource=\"Application\" eventID=\"1011\"]",
+  "service": "test"
+}
+```
+The resulting event:
+```json
+{
+  "service": "test",
+  "priority": "165",
+  "facility": "LOCAL4",
+  "severity": "NOTICE",
+  "proto_version": "1",
+  "timestamp": "2003-10-11T22:14:15.003Z",
+  "hostname": "mymachine.example.com",
+  "app_name": "myproc",
+  "message_id": "ID47",
+  "exampleSDID": {
+    "iut": "3",
+    "eventSource": "Application",
+    "eventID": "1011"
+  }
 }
 ```
 
@@ -407,7 +505,7 @@ The event field to decode. Must be a string.
 
 <br>
 
-**`decoder`** *`string`* *`default=json`* *`options=json|postgres|nginx_error|protobuf|syslog_rfc3164`* 
+**`decoder`** *`string`* *`default=json`* *`options=json|postgres|nginx_error|protobuf|syslog_rfc3164|syslog_rfc5424`* 
 
 Decoder type.
 
@@ -447,7 +545,7 @@ If present and not empty, then all file paths to find are assumed to be relative
 > * google/protobuf/type.proto
 > * google/protobuf/wrappers.proto
 
-**Syslog-RFC3164 decoder params**:
+**Syslog-RFC3164 & Syslog-RFC5424 decoder params**:
 * `syslog_facility_format` - facility format, must be one of `number|string` (`number` by default).
 * `syslog_severity_format` - severity format, must be one of `number|string` (`number` by default).
 

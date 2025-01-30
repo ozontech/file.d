@@ -5,18 +5,29 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+
+	insaneJSON "github.com/ozontech/insane-json"
 )
 
 var (
 	errSyslogInvalidFormat    = errors.New("log doesn't conform the format")
 	errSyslogInvalidPriority  = errors.New("PRI header not a valid priority")
 	errSyslogInvalidTimestamp = errors.New("timestamp doesn't conform the format")
+	errSyslogInvalidVersion   = errors.New("version doesn't conform the format")
+	errSyslogInvalidSD        = errors.New("structured data doesn't conform the format")
 )
 
 const (
 	syslogFacilityFormatParam = "syslog_facility_format"
 	syslogSeverityFormatParam = "syslog_severity_format"
+
+	// priority = facility * 8 + severity.
+	// max facility = 23, max severity = 7.
+	// 23 * 8 + 7 = 191.
+	syslogMaxPriority = 191
 )
+
+var bom = []byte{0xEF, 0xBB, 0xBF}
 
 type syslogParams struct {
 	facilityFormat string // optional
@@ -66,17 +77,19 @@ func syslogPriorityFormatValidate(param, format string) error {
 	}
 }
 
-func syslogParsePriority(data []byte) ([]byte, int, error) {
-	offset := 0
-	if data[offset] != '<' {
-		return nil, offset, errSyslogInvalidFormat
+func syslogParsePriority(data []byte) (int, int, error) {
+	if len(data) < 3 || data[0] != '<' {
+		return 0, 0, errSyslogInvalidFormat
 	}
-	offset = bytes.IndexByte(data, '>')
+	offset := bytes.IndexByte(data, '>')
 	if offset < 2 || 4 < offset {
-		return nil, offset, errSyslogInvalidFormat
+		return 0, 0, errSyslogInvalidFormat
 	}
-
-	return data[1:offset], offset + 1, nil
+	p, ok := atoi(data[1:offset])
+	if !ok || p > syslogMaxPriority {
+		return 0, 0, errSyslogInvalidPriority
+	}
+	return p, offset, nil
 }
 
 func syslogFacilityFromPriority(p int, format string) string {
@@ -170,5 +183,45 @@ func syslogSeverityString(s int) string {
 		return "DEBUG"
 	default:
 		return "UNKNOWN"
+	}
+}
+
+type SyslogSDParams map[string][]byte
+type SyslogSD map[string]SyslogSDParams
+
+func syslogDecodeToJson(root *insaneJSON.Root, row SyslogRFC5424Row) { // nolint: gocritic // hugeParam is ok
+	root.AddFieldNoAlloc(root, "priority").MutateToBytesCopy(root, row.Priority)
+	root.AddFieldNoAlloc(root, "facility").MutateToString(row.Facility)
+	root.AddFieldNoAlloc(root, "severity").MutateToString(row.Severity)
+	if len(row.ProtoVersion) > 0 {
+		root.AddFieldNoAlloc(root, "proto_version").MutateToBytesCopy(root, row.ProtoVersion)
+	}
+	if len(row.Timestamp) > 0 {
+		root.AddFieldNoAlloc(root, "timestamp").MutateToBytesCopy(root, row.Timestamp)
+	}
+	if len(row.Hostname) > 0 {
+		root.AddFieldNoAlloc(root, "hostname").MutateToBytesCopy(root, row.Hostname)
+	}
+	if len(row.AppName) > 0 {
+		root.AddFieldNoAlloc(root, "app_name").MutateToBytesCopy(root, row.AppName)
+	}
+	if len(row.ProcID) > 0 {
+		root.AddFieldNoAlloc(root, "process_id").MutateToBytesCopy(root, row.ProcID)
+	}
+	if len(row.MsgID) > 0 {
+		root.AddFieldNoAlloc(root, "message_id").MutateToBytesCopy(root, row.MsgID)
+	}
+	if len(row.Message) > 0 {
+		root.AddFieldNoAlloc(root, "message").MutateToBytesCopy(root, row.Message)
+	}
+
+	for id, params := range row.StructuredData {
+		if len(params) == 0 {
+			continue
+		}
+		obj := root.AddFieldNoAlloc(root, id).MutateToObject()
+		for k, v := range params {
+			obj.AddFieldNoAlloc(root, k).MutateToBytesCopy(root, v)
+		}
 	}
 }

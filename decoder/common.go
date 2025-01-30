@@ -3,7 +3,6 @@ package decoder
 import (
 	"encoding/json"
 	"errors"
-	"math"
 )
 
 func anyToInt(v any) (int, error) {
@@ -24,16 +23,25 @@ func anyToInt(v any) (int, error) {
 }
 
 // atoi is allocation free ASCII number to integer conversion
-func atoi(b []byte) (int, error) {
-	res := 0
-	pos := 0
-	for i := len(b) - 1; i >= 0; i-- {
-		c := int(b[i]) - '0'
-		if c > 10 {
-			return 0, errors.New("not a number")
-		}
-		res += c * int(math.Pow10(pos))
-		pos++
+func atoi(b []byte) (int, bool) {
+	if len(b) == 0 {
+		return 0, false
 	}
-	return res, nil
+	x := 0
+	for _, c := range b {
+		if c < '0' || '9' < c {
+			return 0, false
+		}
+		x = x*10 + int(c) - '0'
+	}
+	return x, true
+}
+
+func isDigit(c byte) bool {
+	return c >= '0' && c <= '9'
+}
+
+func checkNumber(num []byte, minimum, maximum int) bool {
+	x, ok := atoi(num)
+	return ok && x >= minimum && x <= maximum
 }

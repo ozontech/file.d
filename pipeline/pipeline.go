@@ -247,6 +247,9 @@ func New(name string, settings *Settings, registry *prometheus.Registry) *Pipeli
 	case "syslog_rfc3164":
 		pipeline.decoderType = decoder.SYSLOG_RFC3164
 		pipeline.decoder, err = decoder.NewSyslogRFC3164Decoder(pipeline.settings.DecoderParams)
+	case "syslog_rfc5424":
+		pipeline.decoderType = decoder.SYSLOG_RFC5424
+		pipeline.decoder, err = decoder.NewSyslogRFC5424Decoder(pipeline.settings.DecoderParams)
 	case "auto":
 		pipeline.decoderType = decoder.AUTO
 	default:
@@ -503,7 +506,8 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offsets Offsets, byt
 		_ = event.Root.DecodeString("{}")
 	}
 	switch dec {
-	case decoder.JSON, decoder.NGINX_ERROR, decoder.PROTOBUF, decoder.SYSLOG_RFC3164:
+	case decoder.JSON, decoder.NGINX_ERROR, decoder.PROTOBUF,
+		decoder.SYSLOG_RFC3164, decoder.SYSLOG_RFC5424:
 		err = p.decoder.DecodeToJson(event.Root, bytes)
 	case decoder.RAW:
 		event.Root.AddFieldNoAlloc(event.Root, "message").MutateToBytesCopy(event.Root, bytes[:len(bytes)-1])
