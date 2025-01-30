@@ -303,7 +303,9 @@ The resulting event may contain any of the following fields:
 * `process_id` *string*
 * `message_id` *string*
 * `message` *string*
-* Multiple `SD` *object*
+* `SD_1` *object*
+* ...
+* `SD_N` *object*
 
 ### Params
 * `syslog_facility_format` - facility format, must be one of `number|string` (`number` by default).
