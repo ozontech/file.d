@@ -21,12 +21,12 @@ func Test_parseLimitDistribution(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name: "empty_cfg",
+			name: "empty",
 			cfg:  limitDistributionCfg{},
 			want: limitDistributions{},
 		},
 		{
-			name: "valid_cfg",
+			name: "valid_enabled",
 			cfg: limitDistributionCfg{
 				Field: field,
 				Ratios: []limitDistributionRatio{
@@ -34,6 +34,7 @@ func Test_parseLimitDistribution(t *testing.T) {
 					{Ratio: 0.35, Values: []string{"warn", "info"}},
 					{Ratio: 0.15, Values: []string{"debug"}},
 				},
+				Enabled: true,
 			},
 			totalLimit: 100,
 			want: limitDistributions{
@@ -48,10 +49,38 @@ func Test_parseLimitDistribution(t *testing.T) {
 					"warn":  1, "info": 1,
 					"debug": 2,
 				},
+				enabled: true,
 			},
 		},
 		{
-			name: "valid_cfg_with_def",
+			name: "valid_disabled",
+			cfg: limitDistributionCfg{
+				Field: field,
+				Ratios: []limitDistributionRatio{
+					{Ratio: 0.5, Values: []string{"error"}},
+					{Ratio: 0.35, Values: []string{"warn", "info"}},
+					{Ratio: 0.15, Values: []string{"debug"}},
+				},
+				Enabled: false,
+			},
+			totalLimit: 100,
+			want: limitDistributions{
+				field: fieldSlice,
+				distributions: []complexDistribution{
+					{ratio: 0.5, limit: 50},
+					{ratio: 0.35, limit: 35},
+					{ratio: 0.15, limit: 15},
+				},
+				idxByKey: map[string]int{
+					"error": 0,
+					"warn":  1, "info": 1,
+					"debug": 2,
+				},
+				enabled: false,
+			},
+		},
+		{
+			name: "valid_with_def",
 			cfg: limitDistributionCfg{
 				Field: field,
 				Ratios: []limitDistributionRatio{
@@ -80,11 +109,16 @@ func Test_parseLimitDistribution(t *testing.T) {
 			},
 		},
 		{
-			name: "err_empty_ratios",
+			name: "valid_empty_ratios",
 			cfg: limitDistributionCfg{
-				Field: field,
+				Field:   field,
+				Enabled: true,
 			},
-			wantErr: true,
+			totalLimit: 100,
+			want: limitDistributions{
+				field:   fieldSlice,
+				enabled: true,
+			},
 		},
 		{
 			name: "err_invalid_ratio1",
@@ -152,8 +186,9 @@ func Test_parseLimitDistribution(t *testing.T) {
 			}
 
 			require.Equal(t, tt.want.field, ld.field, "wrong field")
-			require.Equal(t, tt.want.defDistribution, ld.defDistribution, "wrong defPriority")
-			require.Equal(t, true, slices.Equal(tt.want.distributions, ld.distributions), "wrong priorities")
+			require.Equal(t, tt.want.defDistribution, ld.defDistribution, "wrong defDistribution")
+			require.Equal(t, tt.want.enabled, ld.enabled, "wrong enabled")
+			require.Equal(t, true, slices.Equal(tt.want.distributions, ld.distributions), "wrong distributions size")
 			require.Equal(t, len(tt.want.idxByKey), len(ld.idxByKey), "wrong idxByKey size")
 			for k, v := range ld.idxByKey {
 				require.Equal(t, tt.want.idxByKey[k], v, fmt.Sprintf("wrong value in idxByKey with key %q", k))
