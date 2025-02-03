@@ -47,9 +47,6 @@ type redisLimiter struct {
 	valField string
 	// json field with distribution value
 	distributionField string
-
-	// limit default value to set if limit key does not exist in redis
-	defaultVal string
 }
 
 // newRedisLimiter return instance of redis limiter.
@@ -85,21 +82,6 @@ func newRedisLimiter(
 		rl.keyLimit = rl.keyPrefix.String() + keySuffix
 	} else {
 		rl.keyLimit = keyLimitOverride
-	}
-	if rl.valField == "" {
-		rl.defaultVal = strconv.FormatInt(limit.value, 10)
-	} else {
-		// no err check since valField is string
-		valKey, _ := json.Marshal(rl.valField)
-		if limit.distributions.size() > 0 && rl.distributionField != "" {
-			distrKey, _ := json.Marshal(rl.distributionField)
-			rl.defaultVal = fmt.Sprintf("{%s:%v,%s:%s}",
-				valKey, limit.value,
-				distrKey, distributionCfg,
-			)
-		} else {
-			rl.defaultVal = fmt.Sprintf("{%s:%v}", valKey, limit.value)
-		}
 	}
 
 	return rl
