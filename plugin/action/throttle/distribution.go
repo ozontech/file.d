@@ -40,8 +40,12 @@ func parseLimitDistribution(c limitDistributionCfg, totalLimit int64) (limitDist
 	if c.Field == "" {
 		return limitDistributions{}, nil
 	}
+
 	if len(c.Ratios) == 0 {
-		return limitDistributions{}, errors.New("empty 'ratios'")
+		return limitDistributions{
+			field:   cfg.ParseFieldSelector(c.Field),
+			enabled: c.Enabled,
+		}, nil
 	}
 
 	ld := limitDistributions{
@@ -103,7 +107,7 @@ type limitDistributions struct {
 }
 
 func (ld *limitDistributions) isEnabled() bool {
-	return ld.enabled
+	return ld.enabled && ld.size() > 0
 }
 
 func (ld *limitDistributions) size() int {
