@@ -39,7 +39,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: coverage
+          name: coverage-test-${{ matrix.flags || 'default' }}
           path: |
             profile.out
             profile_race.out
@@ -80,7 +80,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: coverage
+          name: coverage-e2e-${{ matrix.flags || 'default' }}
           path: |
             profile_e2e.out
             profile_e2e_race.out
@@ -99,12 +99,18 @@ jobs:
       - name: Download artifact
         uses: actions/download-artifact@v3
         with:
-          name: coverage
+          path: artifacts
+          pattern: coverage-*
+          merge-multiple: true
 
       - name: Send coverage
         uses: codecov/codecov-action@v3
         with:
-          files: profile.out, profile_race.out, profile_e2e.out, profile_e2e_race.out,
+          files: |
+            artifacts/profile.out
+            artifacts/profile_race.out
+            artifacts/profile_e2e.out
+            artifacts/profile_e2e_race.out
 
   lint:
     runs-on: ubuntu-latest
