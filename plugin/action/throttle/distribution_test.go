@@ -188,7 +188,7 @@ func Test_parseLimitDistribution(t *testing.T) {
 			require.Equal(t, tt.want.field, ld.field, "wrong field")
 			require.Equal(t, tt.want.defDistribution, ld.defDistribution, "wrong defDistribution")
 			require.Equal(t, tt.want.enabled, ld.enabled, "wrong enabled")
-			require.Equal(t, true, slices.Equal(tt.want.distributions, ld.distributions), "wrong distributions size")
+			require.True(t, slices.Equal(tt.want.distributions, ld.distributions), "wrong distributions size")
 			require.Equal(t, len(tt.want.idxByKey), len(ld.idxByKey), "wrong idxByKey size")
 			for k, v := range ld.idxByKey {
 				require.Equal(t, tt.want.idxByKey[k], v, fmt.Sprintf("wrong value in idxByKey with key %q", k))
