@@ -38,7 +38,6 @@ func Test_updateKeyLimit(t *testing.T) {
 		},
 		Enabled: true,
 	}
-	defaultDistributionJson := defaultDistribution.marshalJson()
 	ld, _ := parseLimitDistribution(defaultDistribution, 10)
 	defaultLimitWithDistribution := &complexLimit{
 		value:         10,
@@ -333,7 +332,6 @@ func Test_updateKeyLimit(t *testing.T) {
 				tt.args.throttleFieldValue,
 				tt.args.keyLimitOverride,
 				tt.args.defaultLimit,
-				defaultDistributionJson,
 				&limitDistributionMetrics{
 					EventsCount: metric.NewHeldCounterVec(ctl.RegisterCounterVec("test_count", "")),
 					EventsSize:  metric.NewHeldCounterVec(ctl.RegisterCounterVec("test_size", "")),

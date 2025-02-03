@@ -54,7 +54,6 @@ func newRedisLimiter(
 	cfg *limiterConfig,
 	throttleFieldValue, keyLimitOverride string,
 	limit *complexLimit,
-	distributionCfg []byte,
 	limitDistrMetrics *limitDistributionMetrics,
 	nowFn func() time.Time,
 ) *redisLimiter {
