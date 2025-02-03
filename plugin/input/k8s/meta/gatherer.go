@@ -99,6 +99,14 @@ func DisableGatherer() {
 	stopWg.Wait()
 }
 
+func init() {
+	var err error
+	podBlacklistCache, err = lru.New[PodName, bool](1024)
+	if err != nil {
+		localLogger.Fatalf("can't create blacklist cache: %s", err.Error())
+	}
+}
+
 func initGatherer() {
 	apiConfig, err := rest.InClusterConfig()
 	if err != nil {
@@ -117,11 +125,6 @@ func initGatherer() {
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
-
-	podBlacklistCache, err = lru.New[PodName, bool](1024)
-	if err != nil {
-		localLogger.Fatalf("can't create blacklist cache: %s", err.Error())
-	}
 
 	initNodeInfo(ctx)
 	initInformer()
