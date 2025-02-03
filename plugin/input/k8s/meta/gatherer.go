@@ -42,11 +42,11 @@ type (
 )
 
 var (
-	client            *kubernetes.Clientset
-	MetaData          = make(meta)
-	metaDataMu        = &sync.RWMutex{}
-	podBlacklistCache *lru.Cache[PodName, bool] // to mark deleted pods or for which we are miss k8s meta and don't wanna wait for timeout for each event
-	controller        cache.Controller
+	client           *kubernetes.Clientset
+	MetaData         = make(meta)
+	metaDataMu       = &sync.RWMutex{}
+	deletedPodsCache *lru.Cache[PodName, bool] // to mark deleted pods or for which we are miss k8s meta and don't wanna wait for timeout for each event
+	controller       cache.Controller
 
 	expiredItems = make([]*MetaItem, 0, 16) // temporary list of expired items
 
@@ -101,9 +101,9 @@ func DisableGatherer() {
 
 func init() {
 	var err error
-	podBlacklistCache, err = lru.New[PodName, bool](1024)
+	deletedPodsCache, err = lru.New[PodName, bool](1024)
 	if err != nil {
-		localLogger.Fatalf("can't create blacklist cache: %s", err.Error())
+		localLogger.Fatalf("can't create deleted pods cache: %s", err.Error())
 	}
 }
 
@@ -161,7 +161,7 @@ func initInformer() {
 		DeleteFunc: func(obj any) {
 			pod := obj.(*corev1.Pod)
 			PutMeta(pod)
-			podBlacklistCache.Add(PodName(pod.Name), true)
+			deletedPodsCache.Add(PodName(pod.Name), true)
 		},
 	}, cache.Indexers{})
 	controller = c
@@ -274,7 +274,7 @@ func GetPodMeta(ns Namespace, pod PodName, cid ContainerID) (bool, *podMeta) {
 	for {
 		metaDataMu.RLock()
 		pm, has := MetaData[ns][pod][cid]
-		isInBlackList := podBlacklistCache.Contains(pod)
+		isDeleted := deletedPodsCache.Contains(pod)
 		metaDataMu.RUnlock()
 
 		if has {
@@ -287,8 +287,8 @@ func GetPodMeta(ns Namespace, pod PodName, cid ContainerID) (bool, *podMeta) {
 			return success, podMeta
 		}
 
-		// fast skip blacklisted pods
-		if isInBlackList {
+		// fast skip deleted pods
+		if isDeleted {
 			return success, podMeta
 		}
 
@@ -296,8 +296,8 @@ func GetPodMeta(ns Namespace, pod PodName, cid ContainerID) (bool, *podMeta) {
 		i += metaRecheckInterval
 
 		if i-MetaWaitTimeout >= 0 {
-			podBlacklistCache.Add(pod, true)
-			localLogger.Errorf("pod %q have blacklisted, cause k8s meta retrieve timeout ns=%s", string(pod), string(ns))
+			deletedPodsCache.Add(pod, true)
+			localLogger.Errorf("maybe pod %q have deleted, cause k8s meta retrieve timeout ns=%s", string(pod), string(ns))
 
 			return success, podMeta
 		}
