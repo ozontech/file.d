@@ -1,6 +1,8 @@
 package keep_fields
 
 import (
+	"slices"
+
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/pipeline"
 )
@@ -50,14 +52,7 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 
 	for _, node := range event.Root.AsFields() {
 		eventField := node.AsString()
-		isInList := false
-		for _, pluginField := range p.config.Fields {
-			if pluginField == eventField {
-				isInList = true
-				break
-			}
-		}
-		if !isInList {
+		if slices.Index(p.config.Fields, eventField) == -1 {
 			p.fieldsBuf = append(p.fieldsBuf, eventField)
 		}
 	}
