@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"errors"
-	"flag"
 	"math"
 	"net/http"
 	"net/http/pprof"
@@ -11,6 +10,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/alecthomas/kingpin"
+	"github.com/ozontech/file.d/buildinfo"
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/playground"
 	insaneJSON "github.com/ozontech/insane-json"
@@ -21,12 +22,15 @@ import (
 )
 
 var (
-	addr      = flag.String("addr", ":5950", "")
-	debugAddr = flag.String("debug-addr", ":5951", "")
+	addr      = kingpin.Flag("addr", "HTTP API server addr").Default(":5950").String()
+	debugAddr = kingpin.Flag("debug-addr", "The server address that serves metrics and profiling, set 'false' value to disable listening").Default(":5951").String()
 )
 
 func main() {
-	flag.Parse()
+	kingpin.Version(buildinfo.Version)
+	kingpin.Parse()
+
+	logger.Infof("Hi! I'm file.d playground version=%s", buildinfo.Version)
 
 	insaneJSON.DisableBeautifulErrors = true
 	insaneJSON.MapUseThreshold = math.MaxInt
@@ -46,19 +50,21 @@ func run() {
 
 	// Start playground API server.
 	play := playground.NewHandler(lg)
-	api := apiHandler(play)
-	apiWithMetrics := promhttp.InstrumentMetricHandler(prometheus.DefaultRegisterer, api)
-	startServer(*addr, apiWithMetrics, lg.Named("play-api"))
+	appAPI := appAPIHandler(play)
+	appAPIWithMetrics := promhttp.InstrumentMetricHandler(prometheus.DefaultRegisterer, appAPI)
+	startServer(*addr, appAPIWithMetrics, lg.Named("api"))
 
-	// Start debug server.
-	debugMux := http.NewServeMux()
-	debugMux.Handle("/metrics", promhttp.HandlerFor(prometheus.DefaultGatherer, promhttp.HandlerOpts{}))
-	debugMux.HandleFunc("/debug/pprof/", pprof.Index)
-	debugMux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
-	debugMux.HandleFunc("/debug/pprof/profile", pprof.Profile)
-	debugMux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
-	debugMux.HandleFunc("/debug/pprof/trace", pprof.Trace)
-	startServer(*debugAddr, debugMux, lg.Named("debug-api"))
+	if *debugAddr != "off" {
+		// Start debug server.
+		debugMux := http.NewServeMux()
+		debugMux.Handle("/metrics", promhttp.HandlerFor(prometheus.DefaultGatherer, promhttp.HandlerOpts{}))
+		debugMux.HandleFunc("/debug/pprof/", pprof.Index)
+		debugMux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
+		debugMux.HandleFunc("/debug/pprof/profile", pprof.Profile)
+		debugMux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
+		debugMux.HandleFunc("/debug/pprof/trace", pprof.Trace)
+		startServer(*debugAddr, debugMux, lg.Named("debug-api"))
+	}
 }
 
 func startServer(addr string, handler http.Handler, lg *zap.Logger) {
@@ -81,10 +87,10 @@ func startServer(addr string, handler http.Handler, lg *zap.Logger) {
 	}()
 }
 
-func apiHandler(play *playground.Handler) http.Handler {
+func appAPIHandler(play *playground.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
-		case "/api/play":
+		case "/api/v1/play":
 			play.ServeHTTP(w, r)
 		default:
 			http.Error(w, "", http.StatusNotFound)
