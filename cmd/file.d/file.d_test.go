@@ -70,6 +70,7 @@ const testTime = 10 * time.Minute
 // E.g. keep this test running while you are sleeping :)
 func TestEndToEnd(t *testing.T) {
 	configFilename := "./../testdata/config/e2e.yaml"
+	configOverrideFilename := "./../testdata/config/e2e.override.yaml"
 	iterationInterval := time.Second * 10
 	writerCount := 8
 	fileCount := 8
@@ -85,7 +86,7 @@ func TestEndToEnd(t *testing.T) {
 	filesDir := t.TempDir()
 	offsetsDir := t.TempDir()
 
-	config := cfg.NewConfigFromFile(configFilename)
+	config := cfg.NewConfigFromFile([]string{configFilename, configOverrideFilename})
 	input := config.Pipelines["test"].Raw.Get("input")
 	input.Set("watching_dir", filesDir)
 	input.Set("offsets_file", filepath.Join(offsetsDir, "offsets.yaml"))
