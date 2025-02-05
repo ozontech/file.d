@@ -1,7 +1,6 @@
 package throttle
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -25,11 +24,6 @@ type limitDistributionCfg struct {
 	Field   string                   `json:"field"`
 	Ratios  []limitDistributionRatio `json:"ratios"`
 	Enabled bool                     `json:"enabled"`
-}
-
-func (c *limitDistributionCfg) marshalJson() []byte {
-	v, _ := json.Marshal(c)
-	return v
 }
 
 func (c *limitDistributionCfg) isEmpty() bool {

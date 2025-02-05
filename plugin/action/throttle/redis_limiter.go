@@ -3,11 +3,13 @@ package throttle
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/go-redis/redis"
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/pipeline"
 )
@@ -45,9 +47,6 @@ type redisLimiter struct {
 	valField string
 	// json field with distribution value
 	distributionField string
-
-	// limit default value to set if limit key does not exist in redis
-	defaultVal string
 }
 
 // newRedisLimiter return instance of redis limiter.
@@ -55,7 +54,6 @@ func newRedisLimiter(
 	cfg *limiterConfig,
 	throttleFieldValue, keyLimitOverride string,
 	limit *complexLimit,
-	distributionCfg []byte,
 	limitDistrMetrics *limitDistributionMetrics,
 	nowFn func() time.Time,
 ) *redisLimiter {
@@ -83,21 +81,6 @@ func newRedisLimiter(
 		rl.keyLimit = rl.keyPrefix.String() + keySuffix
 	} else {
 		rl.keyLimit = keyLimitOverride
-	}
-	if rl.valField == "" {
-		rl.defaultVal = strconv.FormatInt(limit.value, 10)
-	} else {
-		// no err check since valField is string
-		valKey, _ := json.Marshal(rl.valField)
-		if limit.distributions.size() > 0 && rl.distributionField != "" {
-			distrKey, _ := json.Marshal(rl.distributionField)
-			rl.defaultVal = fmt.Sprintf("{%s:%v,%s:%s}",
-				valKey, limit.value,
-				distrKey, distributionCfg,
-			)
-		} else {
-			rl.defaultVal = fmt.Sprintf("{%s:%v}", valKey, limit.value)
-		}
 	}
 
 	return rl
@@ -253,28 +236,26 @@ func decodeKeyLimitValue(data []byte, valField, distrField string) (int64, limit
 
 // updateKeyLimit reads key limit from redis and updates current limit.
 func (l *redisLimiter) updateKeyLimit() error {
-	var b bool
 	var err error
 	var limitVal int64
 	var distrVal limitDistributionCfg
-	// try to set global limit to default
-	if b, err = l.redis.SetNX(l.keyLimit, l.defaultVal, 0).Result(); err != nil {
-		return fmt.Errorf("failed to set redis value by key %q: %w", l.keyLimit, err)
-	} else if b {
+	var data []byte
+
+	data, err = l.redis.Get(l.keyLimit).Bytes()
+	if errors.Is(err, redis.Nil) {
 		return nil
 	}
-	// global limit already exists - overwrite local limit
-	v := l.redis.Get(l.keyLimit)
+
+	if err != nil {
+		return err
+	}
+
 	if l.valField != "" {
-		var jsonData []byte
-		if jsonData, err = v.Bytes(); err != nil {
-			return fmt.Errorf("failed to convert redis value to bytes: %w", err)
-		}
-		if limitVal, distrVal, err = decodeKeyLimitValue(jsonData, l.valField, l.distributionField); err != nil {
+		if limitVal, distrVal, err = decodeKeyLimitValue(data, l.valField, l.distributionField); err != nil {
 			return fmt.Errorf("failed to decode redis json value: %w", err)
 		}
 	} else {
-		if limitVal, err = v.Int64(); err != nil {
+		if limitVal, err = strconv.ParseInt(string(data), 10, 64); err != nil {
 			return fmt.Errorf("failed to convert redis value to int64: %w", err)
 		}
 	}
