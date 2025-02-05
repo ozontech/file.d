@@ -2,7 +2,6 @@ package throttle
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -39,16 +38,12 @@ func Test_updateKeyLimit(t *testing.T) {
 		},
 		Enabled: true,
 	}
-	defaultDistributionJson := defaultDistribution.marshalJson()
 	ld, _ := parseLimitDistribution(defaultDistribution, 10)
 	defaultLimitWithDistribution := &complexLimit{
 		value:         10,
 		kind:          limitKindCount,
 		distributions: ld,
 	}
-	pod1LimitKey := strings.Join([]string{
-		pipelineName, throttleFieldName, throttleFieldValue1, keySuffix,
-	}, "_")
 	pod2LimitKey := strings.Join([]string{
 		pipelineName, throttleFieldName, throttleFieldValue2, keySuffix,
 	}, "_")
@@ -120,79 +115,6 @@ func Test_updateKeyLimit(t *testing.T) {
 		wantRedis    *redisData
 		wantErr      bool
 	}{
-		{
-			name: "set_default_limit",
-			args: args{
-				client:             client,
-				defaultLimit:       defaultLimit,
-				throttleFieldValue: throttleFieldValue1,
-				keyLimitOverride:   "",
-				valField:           "",
-			},
-			wantRedis: &redisData{
-				key:   pod1LimitKey,
-				value: "1",
-			},
-		},
-		{
-			name: "set_default_limit_custom_field",
-			args: args{
-				client:             client,
-				defaultLimit:       defaultLimit,
-				throttleFieldValue: throttleFieldValue1,
-				keyLimitOverride:   "default_limit",
-				valField:           "custom_limit_field",
-			},
-			wantRedis: &redisData{
-				key:   "default_limit",
-				value: `{"custom_limit_field":1}`,
-			},
-		},
-		{
-			name: "set_default_distribution",
-			args: args{
-				client:             client,
-				defaultLimit:       defaultLimitWithDistribution,
-				throttleFieldValue: throttleFieldValue1,
-				keyLimitOverride:   "default_distr1",
-				valField:           "custom_limit_field",
-				distrField:         "custom_distr_field",
-			},
-			wantRedis: &redisData{
-				key:   "default_distr1",
-				value: fmt.Sprintf(`{"custom_limit_field":10,"custom_distr_field":%s}`, defaultDistributionJson),
-			},
-		},
-		{
-			name: "set_default_without_distributions",
-			args: args{
-				client:             client,
-				defaultLimit:       defaultLimit,
-				throttleFieldValue: throttleFieldValue1,
-				keyLimitOverride:   "default_distr2",
-				valField:           "custom_limit_field",
-				distrField:         "custom_distr_field",
-			},
-			wantRedis: &redisData{
-				key:   "default_distr2",
-				value: `{"custom_limit_field":1}`,
-			},
-		},
-		{
-			name: "set_default_without_distr_field",
-			args: args{
-				client:             client,
-				defaultLimit:       defaultLimitWithDistribution,
-				throttleFieldValue: throttleFieldValue1,
-				keyLimitOverride:   "default_distr3",
-				valField:           "custom_limit_field",
-				distrField:         "",
-			},
-			wantRedis: &redisData{
-				key:   "default_distr3",
-				value: `{"custom_limit_field":10}`,
-			},
-		},
 		{
 			name: "get_limit_from_default_key",
 			args: args{
@@ -410,7 +332,6 @@ func Test_updateKeyLimit(t *testing.T) {
 				tt.args.throttleFieldValue,
 				tt.args.keyLimitOverride,
 				tt.args.defaultLimit,
-				defaultDistributionJson,
 				&limitDistributionMetrics{
 					EventsCount: metric.NewHeldCounterVec(ctl.RegisterCounterVec("test_count", "")),
 					EventsSize:  metric.NewHeldCounterVec(ctl.RegisterCounterVec("test_size", "")),
