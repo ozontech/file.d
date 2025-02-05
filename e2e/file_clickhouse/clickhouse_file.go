@@ -208,7 +208,6 @@ func (c *Config) Validate(t *testing.T) {
 	ts64.WithPrecision(proto.PrecisionMilli)
 	ts64Auto.WithPrecision(proto.PrecisionNano)
 
-	i := 0
 	r.NoError(c.conn.Do(c.ctx, ch.Query{
 		Body: `select c1, c2, c3, c4, c5, level, ipv4, ipv6, ts, ts_with_tz, ts64, ts64_auto, ts_rfc3339nano, f32, f64, lc_str, str_arr, uuid, uuid_nullable
 			from test_table_insert
@@ -235,46 +234,47 @@ func (c *Config) Validate(t *testing.T) {
 			proto.ResultColumn{Name: "uuid_nullable", Data: uidNullable},
 		},
 		OnResult: func(_ context.Context, _ proto.Block) error {
-			for ; i < c1.Rows(); i++ {
-				sample := c.samples[i]
-
-				c1Expected, _ := json.Marshal(sample.C1)
-				a.Equal(string(trim(c1Expected)), c1.Row(i))
-
-				a.Equal(sample.C2, c2.Row(i))
-				a.Equal(sample.C3, c3.Row(i))
-				a.Equal(sample.C4, c4.Row(i))
-				a.Equal(sample.C5, c5.Row(i))
-				a.Equal(sample.IPv4, ipv4.Row(i))
-				a.Equal(sample.IPv6, ipv6.Row(i))
-				a.Equal(sample.TS.Unix(), ts.Row(i).Unix())
-				a.False(ts3339nano.Row(i).IsZero())
-				a.Greater(ts3339nano.Row(0), time.Now().Add(-time.Second*20))
-				a.Equal(sample.F32, f32.Row(i))
-				a.Equal(sample.F64, f64.Row(i))
-				a.Equal(sample.LcStr, lcStr.Row(i))
-				a.Equal(sample.UUID, uid.Row(i))
-				a.Equal(sample.UUIDNullable.UUID, uidNullable.Row(i).Value)
-
-				if sample.StrArr == nil || len(*sample.StrArr) == 0 {
-					a.Equal([]string(nil), strArr.Row(i))
-				} else {
-					a.Equal(*sample.StrArr, strArr.Row(i))
-				}
-
-				a.Equal(sample.TSWithTZ.Unix(), tsWithTz.Row(i).Unix())
-				a.Equal("Europe/Moscow", tsWithTz.Row(i).Location().String())
-
-				a.Equal(sample.TS64.UnixMilli()*1e6, ts64.Row(i).UnixNano())
-				a.Equal("Local", ts64.Row(i).Location().String())
-
-				a.True(ts64Auto.Row(i).After(sample.TS64), "%s before %s", ts64Auto.Row(i).String(), sample.TS64.String()) // we are use set_time plugin and override this value
-				a.Equal("UTC", ts64Auto.Row(i).Location().String())
-			}
-
 			return nil
 		},
 	}))
+
+	a.Equal(len(c.samples), c1.Rows())
+	for i := 0; i < c1.Rows(); i++ {
+		sample := c.samples[i]
+
+		c1Expected, _ := json.Marshal(sample.C1)
+		a.Equal(string(trim(c1Expected)), c1.Row(i))
+
+		a.Equal(sample.C2, c2.Row(i))
+		a.Equal(sample.C3, c3.Row(i))
+		a.Equal(sample.C4, c4.Row(i))
+		a.Equal(sample.C5, c5.Row(i))
+		a.Equal(sample.IPv4, ipv4.Row(i))
+		a.Equal(sample.IPv6, ipv6.Row(i))
+		a.Equal(sample.TS.Unix(), ts.Row(i).Unix())
+		a.False(ts3339nano.Row(i).IsZero())
+		a.Greater(ts3339nano.Row(0), time.Now().Add(-time.Second*20))
+		a.Equal(sample.F32, f32.Row(i))
+		a.Equal(sample.F64, f64.Row(i))
+		a.Equal(sample.LcStr, lcStr.Row(i))
+		a.Equal(sample.UUID, uid.Row(i))
+		a.Equal(sample.UUIDNullable.UUID, uidNullable.Row(i).Value)
+
+		if sample.StrArr == nil || len(*sample.StrArr) == 0 {
+			a.Equal([]string(nil), strArr.Row(i))
+		} else {
+			a.Equal(*sample.StrArr, strArr.Row(i))
+		}
+
+		a.Equal(sample.TSWithTZ.Unix(), tsWithTz.Row(i).Unix())
+		a.Equal("Europe/Moscow", tsWithTz.Row(i).Location().String())
+
+		a.Equal(sample.TS64.UnixMilli()*1e6, ts64.Row(i).UnixNano())
+		a.Equal("Local", ts64.Row(i).Location().String())
+
+		a.True(ts64Auto.Row(i).After(sample.TS64), "%s before %s", ts64Auto.Row(i).String(), sample.TS64.String()) // we are use set_time plugin and override this value
+		a.Equal("UTC", ts64Auto.Row(i).Location().String())
+	}
 }
 
 func trim(val []byte) []byte {
