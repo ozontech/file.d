@@ -44,12 +44,8 @@ func containsGoroutineID(s string) bool {
 	s = s[i+len(goroutineIDPrefix):]
 
 	i = strings.Index(s, goroutineIDSuffix)
-	if i == -1 {
-		return false
-	}
-
-	// no digits
-	if i == 0 {
+	// not found or found at start
+	if i < 1 {
 		return false
 	}
 
