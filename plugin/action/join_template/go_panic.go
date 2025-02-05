@@ -24,33 +24,13 @@ func goPanicStartCheck(s string) bool {
 
 func goPanicContinueCheck(s string) bool {
 	return strings.HasPrefix(s, "[signal") ||
-		containsOnlySpaces(s) ||
+		containsOnlySpaces(s) || // replaces regexp (^\s*$)
 		containsGoroutineID(s) ||
 		containsLineNumber(s) ||
 		containsCreatedBy(s) ||
 		containsPanicAddress(s) ||
 		strings.Contains(s, "panic:") ||
 		containsCall(s)
-}
-
-// replaces regexp (^\s*$)
-func containsOnlySpaces(s string) bool {
-	for _, c := range []byte(s) {
-		if !isSpace(c) {
-			return false
-		}
-	}
-
-	return true
-}
-
-func isSpace(c byte) bool {
-	switch c {
-	case ' ', '\n', '\t':
-		return true
-	default:
-		return false
-	}
 }
 
 // replaces regexp (goroutine [0-9]+ \[)
@@ -74,16 +54,6 @@ func containsGoroutineID(s string) bool {
 	}
 
 	return containsOnlyDigits(s[:i])
-}
-
-func containsOnlyDigits(s string) bool {
-	for _, c := range []byte(s) {
-		if !isDigit(c) {
-			return false
-		}
-	}
-
-	return true
 }
 
 // replaces regexp (\.go:[0-9]+)
@@ -113,34 +83,6 @@ func containsCreatedBy(s string) bool {
 	s = s[i+len(createdByPart):]
 
 	return strings.IndexByte(s, '.') != -1
-}
-
-func isLetterOrUnderscoreOrDigit(c byte) bool {
-	return isLetterOrUnderscore(c) || isDigit(c)
-}
-
-func isLowerCaseLetter(c byte) bool {
-	return 'a' <= c && c <= 'z'
-}
-
-func isUpperCaseLetter(c byte) bool {
-	return 'A' <= c && c <= 'Z'
-}
-
-func isLetter(c byte) bool {
-	return isLowerCaseLetter(c) || isUpperCaseLetter(c)
-}
-
-func isDigit(c byte) bool {
-	return '0' <= c && c <= '9'
-}
-
-func isHexDigit(c byte) bool {
-	return isDigit(c) || ('a' <= c && c <= 'f')
-}
-
-func isLetterOrUnderscore(c byte) bool {
-	return isLetter(c) || c == '_'
 }
 
 // replaces regexp ([A-Za-z_]+[A-Za-z0-9_]*\)?\.[A-Za-z0-9_]+\(.*\))
