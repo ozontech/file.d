@@ -26,4 +26,4 @@ pipelines:
     #      metric_name: throttle
     #      metric_labels: [service, k8s_pod, k8s_container]
     output:
-      type: devnull
+      type: stdout

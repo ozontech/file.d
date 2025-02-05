@@ -44,6 +44,48 @@ If `-http=':9090'` debug endpoints will be:
 
 `http://127.0.0.1:9090/pipelines/http_file/2/sample` - for the join plugin
 
+### Overriding configurations
+
+You can use multiple configuration files. This allows you to define a base configuration (e.g., common.yaml) and override or extend it with additional configurations (e.g., local.yaml).
+
+```
+./file.d
+--config=common.yaml
+--config=local.yaml
+```
+
+```yaml
+# common.yaml
+pipelines:
+  test1:
+    input:
+        ...
+    actions:
+      - type: discard
+    output:
+        type: kafka
+ 
+# local.yaml
+pipelines:
+  test1:
+    actions:
+      - type: modify
+    output:
+        type: file
+ 
+# result
+pipelines:
+  test1:
+    input:
+        ...
+    actions:
+      - type: modify
+    output:
+        type: file
+```
+
+Arrays (or lists) are usually replaced entirely when merging configurations (e.g., actions). Dictionaries (or maps), on the other hand, are typically merged (e.g., output.type).
+
 ### Overriding by environment variables
 
 `file.d` can override config fields if you specify environment variables with `FILED_` prefix.  
