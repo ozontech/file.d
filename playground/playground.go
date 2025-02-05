@@ -55,19 +55,9 @@ const (
 	pipelineCapacity = 2
 )
 
-type DoActionsRequest struct {
-	Actions []json.RawMessage `json:"actions"`
-	Events  []json.RawMessage `json:"events"`
-	Debug   bool              `json:"debug"`
-}
-
-type ProcessResult struct {
-	Event json.RawMessage `json:"event"`
-}
-
 type DoActionsResponse struct {
 	// Result is slice of events after all action plugins.
-	Result []ProcessResult `json:"result"`
+	Result []json.RawMessage `json:"result"`
 	// Stdout is pipeline stdout during actions execution.
 	Stdout string `json:"stdout"`
 	// Metrics is prometheus metrics in openmetrics format.
@@ -135,8 +125,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	limitedBody := io.LimitReader(r.Body, 1<<20)
-	isYAML := strings.HasSuffix(r.Header.Get("Content-Type"), "yaml")
-	req, err := h.unmarshalRequest(limitedBody, isYAML)
+	req, err := unmarshalRequest(limitedBody)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -217,7 +206,7 @@ func (h *Handler) doActions(ctx context.Context, req DoActionsRequest) (resp DoA
 	}
 
 	// Collect result.
-	var result []ProcessResult
+	var result []json.RawMessage
 loop:
 	for {
 		select {
@@ -225,9 +214,7 @@ loop:
 			h.logger.Warn("request timed out") // e.g. some events were discarded
 			break loop
 		case event := <-events:
-			result = append(result, ProcessResult{
-				Event: event,
-			})
+			result = append(result, event)
 			if len(result) >= len(req.Events) {
 				break loop
 			}
@@ -350,24 +337,44 @@ func setupPipeline(p *pipeline.Pipeline, req DoActionsRequest, cb func(event *pi
 	return nil
 }
 
-func (h *Handler) unmarshalRequest(r io.Reader, isYAML bool) (DoActionsRequest, error) {
+type DoActionsRequest struct {
+	Actions []json.RawMessage `json:"actions"`
+	Events  []json.RawMessage `json:"events"`
+	Debug   bool              `json:"debug"`
+}
+
+func unmarshalRequest(r io.Reader) (DoActionsRequest, error) {
 	bodyRaw, err := io.ReadAll(r)
 	if err != nil {
 		return DoActionsRequest{}, fmt.Errorf("reading body: %s", err)
 	}
 
-	if isYAML {
-		bodyRaw, err = yaml.YAMLToJSON(bodyRaw)
-		if err != nil {
-			return DoActionsRequest{}, fmt.Errorf("converting YAML to JSON: %s", err)
-		}
+	type request struct {
+		DoActionsRequest
+		Actions     json.RawMessage `json:"actions"`
+		ActionsType string          `json:"actions_type"`
 	}
-
-	var req DoActionsRequest
+	var req request
 	if err := json.Unmarshal(bodyRaw, &req); err != nil {
 		return DoActionsRequest{}, fmt.Errorf("unmarshalling json: %s", err)
 	}
-	return req, nil
+
+	switch req.ActionsType {
+	case "json", "":
+		if err := json.Unmarshal(req.Actions, &req.DoActionsRequest.Actions); err != nil {
+			return DoActionsRequest{}, err
+		}
+	case "yaml":
+		var actions string
+		if err := json.Unmarshal(req.Actions, &actions); err != nil {
+			return DoActionsRequest{}, err
+		}
+		if err := yaml.Unmarshal([]byte(actions), &req.DoActionsRequest.Actions); err != nil {
+			return DoActionsRequest{}, err
+		}
+	}
+
+	return req.DoActionsRequest, nil
 }
 
 func preparePipelineLogger(buf *bytes.Buffer, onFatal zapcore.CheckWriteHook) *zap.Logger {

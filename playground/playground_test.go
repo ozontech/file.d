@@ -44,7 +44,7 @@ func TestHandler(t *testing.T) {
 }`
 
 	w := httptest.NewRecorder()
-	h.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/api/play", strings.NewReader(fdConfig)))
+	h.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/api/v1/play", strings.NewReader(fdConfig)))
 	assert.Equal(t, http.StatusOK, w.Code)
 	resp := DoActionsResponse{}
 	_ = json.Unmarshal(w.Body.Bytes(), &resp)
@@ -56,9 +56,32 @@ func TestHandler(t *testing.T) {
 		From string `json:"to"`
 		To   string `json:"from"`
 	}{}
-	_ = json.Unmarshal(resp.Result[0].Event, &result)
+	_ = json.Unmarshal(resp.Result[0], &result)
 	require.Equal(t, result.From, "2023-08-22T10:01:09Z")
 	require.Equal(t, result.To, "2023-08-21T10:01:09Z")
+}
+
+func TestHandlerUnmarshalYAML(t *testing.T) {
+	t.Parallel()
+	r := require.New(t)
+
+	test := func(reqRaw string, expected DoActionsRequest) {
+		t.Helper()
+		req, err := unmarshalRequest(strings.NewReader(reqRaw))
+		r.NoError(err)
+		r.Equal(expected, req)
+	}
+
+	test(`{"events": [], "actions_type": "json", "actions": [{"type": "modify", "k": "v"}]}`, DoActionsRequest{
+		Actions: []json.RawMessage{json.RawMessage(`{"type": "modify", "k": "v"}`)},
+		Events:  []json.RawMessage{},
+	})
+	test(`{"actions": [{"type": "modify", "k": "v"}]}`, DoActionsRequest{
+		Actions: []json.RawMessage{json.RawMessage(`{"type": "modify", "k": "v"}`)},
+	})
+	test(`{"actions_type": "yaml", "actions": "- type: rename\n  k: v\n- type: modify\n  k: v"}`, DoActionsRequest{
+		Actions: []json.RawMessage{json.RawMessage(`{"k":"v","type":"rename"}`), json.RawMessage(`{"k":"v","type":"modify"}`)},
+	})
 }
 
 func TestHandlerBadRequest(t *testing.T) {
