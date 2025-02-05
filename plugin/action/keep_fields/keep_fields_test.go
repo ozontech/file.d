@@ -3,13 +3,13 @@ package keep_fields
 import (
 	"math/rand"
 	"slices"
+	"strings"
 	"sync"
 	"testing"
 
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/test"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func TestKeepFields(t *testing.T) {
@@ -38,39 +38,49 @@ func TestKeepFields(t *testing.T) {
 }
 
 func BenchmarkGenerics(b *testing.B) {
-	a := make([]int, 10_000)
-	for i := range a {
-		a[i] = rand.Int()
-	}
-
-	for i := 0; i < len(a)-1; i++ {
-		if a[i] == a[len(a)-1] {
-			a[i]++
-		}
-	}
+	a := getRandLines()
 
 	b.ResetTimer()
 
 	b.Run("generic", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
-			res := slices.Index(a, a[len(a)-1])
-			require.True(b, res != -1)
+			_ = slices.Index(a, a[len(a)-1])
 		}
 	})
 	b.Run("explicit", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
-			res := find(a, a[len(a)-1])
-			require.True(b, res != -1)
+			_ = find(a, a[len(a)-1])
 		}
 	})
 }
 
-func find(a []int, x int) int {
-	for i, elem := range a {
-		if elem == x {
-			return i
-		}
+func getRandLines() []string {
+	const count = 1000
+
+	lines := make([]string, 0, count)
+	for i := 0; i < count; i++ {
+		lines = append(lines, getRandLine())
 	}
 
-	return -1
+	return lines
+}
+
+func getRandLine() string {
+	const (
+		maxLength = 1000
+
+		from = ' '
+		to   = '~'
+	)
+
+	sz := rand.Intn(maxLength) + 1
+
+	var b strings.Builder
+	b.Grow(sz)
+
+	for i := 0; i < sz; i++ {
+		b.WriteByte(from + byte(rand.Intn(to-from)))
+	}
+
+	return b.String()
 }
