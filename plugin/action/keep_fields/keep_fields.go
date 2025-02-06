@@ -1,8 +1,14 @@
 package keep_fields
 
 import (
+	"sort"
+	"strings"
+
+	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
+	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/pipeline"
+	insaneJSON "github.com/ozontech/insane-json"
 )
 
 /*{ introduction
@@ -12,6 +18,10 @@ It keeps the list of the event fields and removes others.
 type Plugin struct {
 	config    *Config
 	fieldsBuf []string
+
+	fieldPaths  [][]string
+	nodePresent []bool
+	path        []string
 }
 
 // ! config-params
@@ -34,14 +44,14 @@ func factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 	return &Plugin{}, &Config{}
 }
 
-func (p *Plugin) Start(config pipeline.AnyConfig, _ *pipeline.ActionPluginParams) {
+func (p *Plugin) StartLegacy(config pipeline.AnyConfig, _ *pipeline.ActionPluginParams) {
 	p.config = config.(*Config)
 }
 
 func (p *Plugin) Stop() {
 }
 
-func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
+func (p *Plugin) DoLegacy(event *pipeline.Event) pipeline.ActionResult {
 	p.fieldsBuf = p.fieldsBuf[:0]
 
 	if !event.Root.IsObject() {
@@ -70,4 +80,84 @@ func find(a []string, s string) int {
 	}
 
 	return -1
+}
+
+func (p *Plugin) Start(config pipeline.AnyConfig, _ *pipeline.ActionPluginParams) {
+	p.config = config.(*Config)
+	if p.config == nil {
+		logger.Panicf("config is nil for the keep fields plugin")
+	}
+
+	fields := p.config.Fields
+	sort.Slice(fields, func(i, j int) bool {
+		return len(fields[i]) < len(fields[j])
+	})
+
+	p.fieldPaths = make([][]string, 0, len(fields))
+
+	for i, f1 := range fields {
+		if f1 == "" {
+			logger.Warn("empty field found")
+			continue
+		}
+
+		ok := true
+		for _, f2 := range fields[:i] {
+			if strings.HasPrefix(f1, f2) {
+				logger.Warnf("path '%s' included in path '%s'; remove nested path", f1, f2)
+				ok = false
+				break
+			}
+		}
+
+		if ok {
+			p.fieldPaths = append(p.fieldPaths, cfg.ParseFieldSelector(f1))
+		}
+	}
+
+	if len(p.fieldPaths) == 0 {
+		logger.Warn("no fields will be removed")
+	}
+
+	p.nodePresent = make([]bool, len(p.fieldPaths))
+	p.path = make([]string, 0, 20)
+}
+
+func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
+	if !event.Root.IsObject() {
+		return pipeline.ActionPass
+	}
+
+	for i := range p.nodePresent {
+		p.nodePresent[i] = event.Root.Dig(p.fieldPaths[i]...) != nil
+	}
+
+	p.fieldsBuf = p.fieldsBuf[:0]
+	p.collectBadNodes(event.Root.Node)
+
+	for _, field := range p.fieldsBuf {
+		event.Root.Dig(field).Suicide()
+	}
+
+	return pipeline.ActionPass
+}
+
+func (p *Plugin) collectBadNodes(node *insaneJSON.Node) {
+	// if node explicitly saved then return
+	// if node is not parent of some saved collect it and return
+	//
+}
+
+func equal(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+
+	for i, s := range a {
+		if s != b[i] {
+			return false
+		}
+	}
+
+	return true
 }
