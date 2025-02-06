@@ -1,4 +1,4 @@
-package file_es
+package file_es_split
 
 import (
 	"context"

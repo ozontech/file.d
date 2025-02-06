@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/ozontech/file.d/e2e/file_clickhouse"
-	"github.com/ozontech/file.d/e2e/file_es"
+	"github.com/ozontech/file.d/e2e/file_es_split"
 	"github.com/ozontech/file.d/e2e/file_file"
 	"github.com/ozontech/file.d/e2e/http_file"
 	"github.com/ozontech/file.d/e2e/join_throttle"
@@ -160,8 +160,8 @@ func TestE2EStabilityWorkCase(t *testing.T) {
 		*/
 		{
 			name:    "file_es",
-			e2eTest: &file_es.Config{},
-			cfgPath: "./file_es/config.yml",
+			e2eTest: &file_es_split.Config{},
+			cfgPath: "./file_es_split/config.yml",
 		},
 	}
 
