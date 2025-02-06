@@ -39,17 +39,18 @@ func TestKeepFields(t *testing.T) {
 
 func BenchmarkGenerics(b *testing.B) {
 	a := getRandLines()
+	s := a[len(a)-1]
 
 	b.ResetTimer()
 
 	b.Run("generic", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
-			_ = slices.Index(a, a[len(a)-1])
+			_ = slices.Index(a, s)
 		}
 	})
 	b.Run("explicit", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
-			_ = find(a, a[len(a)-1])
+			_ = find(a, s)
 		}
 	})
 }
