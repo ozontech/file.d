@@ -1,7 +1,7 @@
 # https://github.com/elastic/start-local/tree/main
 services:
   elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:8.17.0
+    image: elasticsearch:8.17.0
     container_name: es-local-test
     ports:
       - "19200:9200"
