@@ -19,6 +19,7 @@ type Plugin struct {
 	config    *Config
 	fieldsBuf []string
 
+	badNodesBuf []*insaneJSON.Node
 	fieldPaths  [][]string
 	nodePresent []bool
 	path        []string
@@ -44,14 +45,23 @@ func factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 	return &Plugin{}, &Config{}
 }
 
-func (p *Plugin) StartLegacy(config pipeline.AnyConfig, _ *pipeline.ActionPluginParams) {
+func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginParams) {
+	p.StartOld(config, params)
+}
+
+func (p *Plugin) StartOld(config pipeline.AnyConfig, _ *pipeline.ActionPluginParams) {
 	p.config = config.(*Config)
 }
 
 func (p *Plugin) Stop() {
 }
 
-func (p *Plugin) DoLegacy(event *pipeline.Event) pipeline.ActionResult {
+func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
+	res := p.DoOld(event)
+	return res
+}
+
+func (p *Plugin) DoOld(event *pipeline.Event) pipeline.ActionResult {
 	p.fieldsBuf = p.fieldsBuf[:0]
 
 	if !event.Root.IsObject() {
@@ -82,7 +92,7 @@ func find(a []string, s string) int {
 	return -1
 }
 
-func (p *Plugin) Start(config pipeline.AnyConfig, _ *pipeline.ActionPluginParams) {
+func (p *Plugin) StartNew(config pipeline.AnyConfig, _ *pipeline.ActionPluginParams) {
 	p.config = config.(*Config)
 	if p.config == nil {
 		logger.Panicf("config is nil for the keep fields plugin")
@@ -123,7 +133,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, _ *pipeline.ActionPluginParams
 	p.path = make([]string, 0, 20)
 }
 
-func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
+func (p *Plugin) DoNew(event *pipeline.Event) pipeline.ActionResult {
 	if !event.Root.IsObject() {
 		return pipeline.ActionPass
 	}
@@ -135,8 +145,8 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	p.fieldsBuf = p.fieldsBuf[:0]
 	p.collectBadNodes(event.Root.Node)
 
-	for _, field := range p.fieldsBuf {
-		event.Root.Dig(field).Suicide()
+	for _, node := range p.badNodesBuf {
+		node.Suicide()
 	}
 
 	return pipeline.ActionPass
@@ -145,7 +155,46 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 func (p *Plugin) collectBadNodes(node *insaneJSON.Node) {
 	// if node explicitly saved then return
 	// if node is not parent of some saved collect it and return
-	//
+	// check all children
+
+	for i, curPath := range p.fieldPaths {
+		if p.nodePresent[i] && equal(p.path, curPath) {
+			return
+		}
+	}
+
+	if !p.isParentOfSaved() {
+		p.badNodesBuf = append(p.badNodesBuf, node)
+		return
+	}
+
+	if node.IsArray() {
+		panic("impossible")
+	}
+
+	for _, child := range node.AsFields() {
+		p.path = append(p.path, child.AsString())
+		p.collectBadNodes(child)
+		p.path = p.path[:len(p.path)-1]
+	}
+}
+
+func (p *Plugin) isParentOfSaved() bool {
+	for i, fieldPath := range p.fieldPaths {
+		if !p.nodePresent[i] {
+			continue
+		}
+
+		if !(len(p.path) < len(fieldPath)) {
+			continue
+		}
+
+		if equal(p.path, fieldPath[:len(p.path)]) {
+			return true
+		}
+	}
+
+	return false
 }
 
 func equal(a, b []string) bool {
