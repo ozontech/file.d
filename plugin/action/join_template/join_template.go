@@ -32,12 +32,18 @@ pipelines:
 type joinTemplates map[string]struct {
 	startRePat    string
 	continueRePat string
+
+	startCheckFunc    func(string) bool
+	continueCheckFunc func(string) bool
 }
 
 var templates = joinTemplates{
 	"go_panic": {
 		startRePat:    "/^(panic:)|(http: panic serving)|^(fatal error:)/",
 		continueRePat: "/(^\\s*$)|(goroutine [0-9]+ \\[)|(\\.go:[0-9]+)|(created by .*\\/?.*\\.)|(^\\[signal)|(panic.+[0-9]x[0-9,a-f]+)|(panic:)|([A-Za-z_]+[A-Za-z0-9_]*\\)?\\.[A-Za-z0-9_]+\\(.*\\))/",
+
+		startCheckFunc:    goPanicStartCheck,
+		continueCheckFunc: goPanicContinueCheck,
 	},
 }
 
@@ -65,6 +71,11 @@ type Config struct {
 	// >
 	// > The name of the template. Available templates: `go_panic`.
 	Template string `json:"template" required:"true"` // *
+
+	// > @3@4@5@6
+	// >
+	// > Enable check without regular expressions.
+	FastCheck bool `json:"fast_check"` // *
 }
 
 func init() {
@@ -101,6 +112,11 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 		MaxEventSize: p.config.MaxEventSize,
 		Start_:       startRe,
 		Continue_:    continueRe,
+
+		FastCheck: p.config.FastCheck,
+
+		StartCheckFunc_:    template.startCheckFunc,
+		ContinueCheckFunc_: template.continueCheckFunc,
 	}
 	p.jp = &join.Plugin{}
 	p.jp.Start(jConfig, params)
