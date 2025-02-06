@@ -45,6 +45,13 @@ var templates = joinTemplates{
 		startCheckFunc:    goPanicStartCheck,
 		continueCheckFunc: goPanicContinueCheck,
 	},
+	"sharp_exception": {
+		startRePat:    `^\s*(?i)Unhandled exception`,
+		continueRePat: `(^\s*at\s.*)|(\s*--->)|(^(?i)\s*--- End of)|(\.?\w+\.?Exception:)`,
+
+		startCheckFunc:    sharpStartCheck,
+		continueCheckFunc: sharpContinueCheck,
+	},
 }
 
 type Plugin struct {
