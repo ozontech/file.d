@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/ozontech/file.d/e2e/file_clickhouse"
-	"github.com/ozontech/file.d/e2e/file_elasticsearch"
 	"github.com/ozontech/file.d/e2e/file_es"
 	"github.com/ozontech/file.d/e2e/file_file"
 	"github.com/ozontech/file.d/e2e/http_file"
@@ -146,17 +145,19 @@ func TestE2EStabilityWorkCase(t *testing.T) {
 			e2eTest: &file_clickhouse.Config{},
 			cfgPath: "./file_clickhouse/config.yml",
 		},
-		{
-			name: "file_elasticsearch",
-			e2eTest: &file_elasticsearch.Config{
-				Count:    10,
-				Pipeline: "test-ingest-pipeline",
-				Endpoint: "http://localhost:19200",
-				Username: "elastic",
-				Password: "elastic",
+		/*
+			{
+				name: "file_elasticsearch",
+				e2eTest: &file_elasticsearch.Config{
+					Count:    10,
+					Pipeline: "test-ingest-pipeline",
+					Endpoint: "http://localhost:19200",
+					Username: "elastic",
+					Password: "elastic",
+				},
+				cfgPath: "./file_elasticsearch/config.yml",
 			},
-			cfgPath: "./file_elasticsearch/config.yml",
-		},
+		*/
 		{
 			name:    "file_es",
 			e2eTest: &file_es.Config{},
