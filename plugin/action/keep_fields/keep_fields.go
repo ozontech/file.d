@@ -134,7 +134,7 @@ func (p *Plugin) StartNew(config pipeline.AnyConfig, _ *pipeline.ActionPluginPar
 }
 
 func (p *Plugin) DoNew(event *pipeline.Event) pipeline.ActionResult {
-	if !event.Root.IsObject() {
+	if len(p.fieldPaths) == 0 || !event.Root.IsObject() {
 		return pipeline.ActionPass
 	}
 
@@ -142,7 +142,8 @@ func (p *Plugin) DoNew(event *pipeline.Event) pipeline.ActionResult {
 		p.nodePresent[i] = event.Root.Dig(p.fieldPaths[i]...) != nil
 	}
 
-	p.fieldsBuf = p.fieldsBuf[:0]
+	p.badNodesBuf = p.badNodesBuf[:0]
+	// пройтись сразу по полям верхнего уровня а не стартовать из корня
 	p.collectBadNodes(event.Root.Node)
 
 	for _, node := range p.badNodesBuf {
@@ -168,8 +169,8 @@ func (p *Plugin) collectBadNodes(node *insaneJSON.Node) {
 		return
 	}
 
-	if node.IsArray() {
-		panic("impossible")
+	if !node.IsObject() {
+		panic("node is parent of saved so it must be an object")
 	}
 
 	for _, child := range node.AsFields() {
@@ -179,6 +180,11 @@ func (p *Plugin) collectBadNodes(node *insaneJSON.Node) {
 	}
 }
 
+/*
+Является ли текукщая нода предком одной сохраненных (по конфигу)
+*/
+
+// мб префиксное дерево будет быстрее для поиска чтобы не делать лишних equal
 func (p *Plugin) isParentOfSaved() bool {
 	for i, fieldPath := range p.fieldPaths {
 		if !p.nodePresent[i] {
