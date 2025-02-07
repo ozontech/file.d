@@ -1,0 +1,32 @@
+ARG APP_IMAGE=alpine:latest
+
+# Build
+FROM --platform=$BUILDPLATFORM golang:1.21-alpine AS build
+
+ARG VERSION
+ARG TARGETARCH
+
+WORKDIR /file-d-playground
+
+COPY go.mod go.sum ./
+
+RUN go mod download
+
+COPY . .
+
+ENV CGO_ENABLED=0
+ENV GOOS=linux
+ENV GOARCH=${TARGETARCH:-amd64}
+
+RUN go build -trimpath \
+    -ldflags "-X github.com/ozontech/file.d/buildinfo.Version=${VERSION}" \
+    -o file-d-playground ./cmd/playground
+
+# Deploy
+FROM $APP_IMAGE
+
+WORKDIR /file-d-playground
+
+COPY --from=build /file-d-playground/file-d-playground .
+
+CMD [ "./file-d-playground" ]

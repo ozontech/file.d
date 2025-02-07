@@ -173,10 +173,9 @@ const (
 )
 
 // New creates new pipeline. Consider using `SetupHTTPHandlers` next.
-func New(name string, settings *Settings, registry *prometheus.Registry) *Pipeline {
+func New(name string, settings *Settings, registry *prometheus.Registry, lg *zap.Logger) *Pipeline {
 	metricCtl := metric.NewCtl("pipeline_"+name, registry)
 
-	lg := logger.Instance.Named(name).Desugar()
 	metricHolder := metric.NewHolder(settings.MetricHoldDuration)
 
 	var eventPool pool
@@ -184,7 +183,6 @@ func New(name string, settings *Settings, registry *prometheus.Registry) *Pipeli
 	case PoolTypeStd, "":
 		eventPool = newEventPool(settings.Capacity, settings.AvgEventSize)
 	case PoolTypeLowMem:
-		insaneJSON.StartNodePoolSize = 16
 		eventPool = newLowMemoryEventPool(settings.Capacity)
 	default:
 		logger.Fatal("unknown pool type", zap.String("pool", string(settings.Pool)))
