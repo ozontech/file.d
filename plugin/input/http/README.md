@@ -134,7 +134,7 @@ Key uses in the http_input_total metric.
 
 
 ### Meta params
-**`login`** 
+**`login`**
 
 **`remote_addr`**  *`net.IP`*
 
@@ -142,4 +142,5 @@ Key uses in the http_input_total metric.
 
 **`params`**  *`url.Values`*
 
+**`request_uuid`**  *`string`*
 <br>*Generated using [__insane-doc__](https://github.com/vitkovskii/insane-doc)*

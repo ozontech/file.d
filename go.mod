@@ -16,11 +16,14 @@ require (
 	github.com/bufbuild/protocompile v0.13.0
 	github.com/cenkalti/backoff/v4 v4.2.1
 	github.com/cespare/xxhash/v2 v2.2.0
+	github.com/dominikbraun/graph v0.23.0
+	github.com/elliotchance/orderedmap/v2 v2.4.0
 	github.com/euank/go-kmsg-parser v2.0.0+incompatible
 	github.com/go-faster/jx v1.1.0
 	github.com/go-redis/redis v6.15.9+incompatible
 	github.com/golang/mock v1.6.0
 	github.com/google/uuid v1.3.0
+	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/hashicorp/vault/api v1.9.2
 	github.com/jackc/pgconn v1.14.1
 	github.com/jackc/pgproto3/v2 v2.3.2
@@ -33,6 +36,7 @@ require (
 	github.com/rjeczalik/notify v0.9.3
 	github.com/satori/go.uuid v1.2.0
 	github.com/stretchr/testify v1.9.0
+	github.com/tidwall/gjson v1.18.0
 	github.com/twmb/franz-go v1.17.0
 	github.com/twmb/franz-go/pkg/kadm v1.12.0
 	github.com/twmb/franz-go/plugin/kzap v1.1.2
@@ -44,6 +48,7 @@ require (
 	go.uber.org/zap v1.25.0
 	golang.org/x/net v0.21.0
 	google.golang.org/protobuf v1.33.1-0.20240408130810-98873a205002
+	gopkg.in/yaml.v2 v2.4.0
 	gopkg.in/yaml.v3 v3.0.1
 	k8s.io/api v0.27.4
 	k8s.io/apimachinery v0.27.4
@@ -122,6 +127,8 @@ require (
 	github.com/sirupsen/logrus v1.8.1 // indirect
 	github.com/smartystreets/goconvey v1.6.4 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
+	github.com/tidwall/match v1.1.1 // indirect
+	github.com/tidwall/pretty v1.2.1 // indirect
 	github.com/twmb/franz-go/pkg/kmsg v1.8.0 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	github.com/xdg-go/pbkdf2 v1.0.0 // indirect
@@ -143,7 +150,6 @@ require (
 	google.golang.org/appengine v1.6.7 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/ini.v1 v1.62.0 // indirect
-	gopkg.in/yaml.v2 v2.4.0 // indirect
 	k8s.io/klog/v2 v2.90.1 // indirect
 	k8s.io/kube-openapi v0.0.0-20230501164219-8b0f38b5fd1f // indirect
 	k8s.io/utils v0.0.0-20230209194617-a36077c30491 // indirect

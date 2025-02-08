@@ -4,7 +4,7 @@ It provides an API to test pipelines and other plugins.
 > No config params
 
 ### API description
-``In(sourceID pipeline.SourceID, sourceName string, offset int64, bytes []byte)``
+``In(sourceID pipeline.SourceID, sourceName string, offset pipeline.Offsets, bytes []byte)``
 
 It sends a test event into the pipeline.
 

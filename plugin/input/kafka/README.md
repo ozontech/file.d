@@ -201,10 +201,9 @@ Example: ```topic: '{{ .topic }}'```
 
 
 ### Meta params
-**`topic`** 
+**`topic`**
 
-**`partition`** 
+**`partition`**
 
-**`offset`** 
-
+**`offset`**
 <br>*Generated using [__insane-doc__](https://github.com/vitkovskii/insane-doc)*

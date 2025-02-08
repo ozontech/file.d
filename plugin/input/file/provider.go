@@ -78,7 +78,7 @@ type Job struct {
 	// offsets is a sliceMap of streamName to offset.
 	// Unlike map[string]int, sliceMap can work with mutable strings when using unsafe conversion from []byte.
 	// Also it is likely not slower than map implementation for 1-2 streams case.
-	offsets sliceMap
+	offsets pipeline.SliceMap
 
 	mu *sync.Mutex
 }
@@ -239,7 +239,7 @@ func (jp *jobProvider) commit(event *pipeline.Event) {
 		return
 	}
 
-	value, has := job.offsets.get(streamName)
+	value, has := job.offsets.Get(streamName)
 	if value >= event.Offset {
 		defer job.mu.Unlock()
 		jp.logger.Panicf("offset corruption: committing=%d, current=%d, event id=%d, source=%d:%s", event.Offset, value, event.SeqID, event.SourceID, event.SourceName)
@@ -252,10 +252,10 @@ func (jp *jobProvider) commit(event *pipeline.Event) {
 
 	// streamName isn't actually a string, but unsafe []byte, so copy it when adding to the sliceMap
 	if has {
-		job.offsets.set(streamName, event.Offset)
+		job.offsets.Set(streamName, event.Offset)
 	} else {
 		streamNameCopy := pipeline.StreamName(event.StreamNameBytes())
-		job.offsets.set(streamNameCopy, event.Offset)
+		job.offsets.Set(streamNameCopy, event.Offset)
 	}
 
 	job.mu.Unlock()
@@ -460,7 +460,7 @@ func (jp *jobProvider) initJobOffset(operation offsetsOp, job *Job) {
 			return
 		}
 
-		job.offsets = sliceFromMap(offsets.streams)
+		job.offsets = pipeline.SliceFromMap(offsets.streams)
 		// find min Offset to start read from it
 		minOffset := int64(math.MaxInt64)
 		for _, offset := range offsets.streams {
@@ -529,7 +529,7 @@ func (jp *jobProvider) truncateJob(job *Job) {
 	job.seek(0, io.SeekStart, "truncation")
 
 	for _, strOff := range job.offsets {
-		job.offsets.set(strOff.stream, 0)
+		job.offsets.Set(strOff.Stream, 0)
 	}
 
 	jp.logger.Infof("job %d:%s was truncated, reading will start over, events with id less than %d will be ignored", job.sourceID, job.filename, job.ignoreEventsLE)

@@ -1,0 +1,4 @@
+pipelines:
+  test:
+    output:
+      type: devnull

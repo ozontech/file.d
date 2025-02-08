@@ -22,14 +22,14 @@ type Antispammer struct {
 	threshold           int
 	maintenanceInterval time.Duration
 	mu                  sync.RWMutex
-	sources             map[any]source
+	sources             map[string]source
 	exceptions          Exceptions
 
 	logger *zap.Logger
 
 	// antispammer metrics
 	activeMetric    prometheus.Gauge
-	banMetric       metric.HeldGaugeVec
+	banMetric       *prometheus.GaugeVec
 	exceptionMetric *prometheus.CounterVec
 }
 
@@ -42,7 +42,6 @@ type source struct {
 type Options struct {
 	MaintenanceInterval time.Duration
 	Threshold           int
-	Field               string
 	UnbanIterations     int
 	Exceptions          Exceptions
 
@@ -58,19 +57,20 @@ func NewAntispammer(o *Options) *Antispammer {
 			zap.Duration("maintenance", o.MaintenanceInterval))
 	}
 
-	banMetric := o.MetricsController.RegisterGaugeVec("antispam_banned", "Source is banned", "source_name")
-
 	a := &Antispammer{
 		unbanIterations:     o.UnbanIterations,
 		threshold:           o.Threshold,
 		maintenanceInterval: o.MaintenanceInterval,
-		sources:             make(map[any]source),
+		sources:             make(map[string]source),
 		exceptions:          o.Exceptions,
 		logger:              o.Logger,
 		activeMetric: o.MetricsController.RegisterGauge("antispam_active",
 			"Gauge indicates whether the antispam is enabled",
 		),
-		banMetric: o.MetricHolder.AddGaugeVec(banMetric),
+		banMetric: o.MetricsController.RegisterGaugeVec("antispam_banned",
+			"Source is banned",
+			"source_name",
+		),
 		exceptionMetric: o.MetricsController.RegisterCounterVec("antispam_exceptions",
 			"How many times an exception match with an event",
 			"name",
@@ -83,7 +83,7 @@ func NewAntispammer(o *Options) *Antispammer {
 	return a
 }
 
-func (a *Antispammer) IsSpam(id any, name string, isNewSource bool, event []byte, timeEvent time.Time) bool {
+func (a *Antispammer) IsSpam(id string, name string, isNewSource bool, event []byte, timeEvent time.Time) bool {
 	if a.threshold <= 0 {
 		return false
 	}
@@ -158,6 +158,7 @@ func (a *Antispammer) Maintenance() {
 
 		if x == 0 {
 			delete(a.sources, sourceID)
+			a.banMetric.DeleteLabelValues(source.name)
 			continue
 		}
 

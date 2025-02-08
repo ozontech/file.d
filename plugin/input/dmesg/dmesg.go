@@ -111,7 +111,7 @@ func (p *Plugin) read() {
 
 		out = root.Encode(out[:0])
 
-		p.controller.In(0, "dmesg", ts, out, false, nil)
+		p.controller.In(0, "dmesg", pipeline.NewOffsets(ts, nil), out, false, nil)
 	}
 }
 

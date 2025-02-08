@@ -225,6 +225,21 @@ func TestMove(t *testing.T) {
 				"field2":   "true",
 			},
 		},
+		{
+			name: "fields_same_end",
+			config: &Config{
+				Fields: []cfg.FieldSelector{
+					"field2.field1",
+					"field3.field1",
+				},
+				Mode:   modeAllow,
+				Target: "target_field",
+			},
+			in: `{"field1":"value1","field2":{"field1":"value2_1","field2":"value2_2"},"field3":{"field1":"value3_1","field2":"value3_2"}}`,
+			wantTarget: map[string]string{
+				"field1": "value3_1",
+			},
+		},
 	}
 	for _, tt := range cases {
 		tt := tt
@@ -244,7 +259,7 @@ func TestMove(t *testing.T) {
 				assert.Equal(t, len(tt.wantTarget), len(target.AsFields()), "wrong target nodes count")
 				for name, val := range tt.wantTarget {
 					node := target.Dig(name)
-					assert.NotNil(t, node, "node is nil")
+					assert.NotNil(t, node, "target node is nil")
 
 					if node.IsObject() {
 						assert.Equal(t, val, node.EncodeToString(), "wrong node value")
@@ -253,10 +268,23 @@ func TestMove(t *testing.T) {
 					}
 				}
 
+				for _, f := range tt.config.Fields {
+					fs := cfg.ParseFieldSelector(string(f))
+					if f == tt.config.Target || tt.config.Mode == modeBlock && len(fs) > 1 {
+						continue
+					}
+					fieldNode := e.Root.Dig(fs...)
+					if tt.config.Mode == modeAllow {
+						assert.Nil(t, fieldNode, "field node in allow mode isn't nil")
+					} else {
+						assert.NotNil(t, fieldNode, "field node in block mode is nil")
+					}
+				}
+
 				wg.Done()
 			})
 
-			input.In(0, "test.log", 0, []byte(tt.in))
+			input.In(0, "test.log", test.NewOffset(0), []byte(tt.in))
 
 			wg.Wait()
 			p.Stop()

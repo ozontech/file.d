@@ -37,4 +37,10 @@ The name of the template. Available templates: `go_panic`.
 
 <br>
 
+**`fast_check`** *`bool`* 
+
+Enable check without regular expressions.
+
+<br>
+
 <br>*Generated using [__insane-doc__](https://github.com/vitkovskii/insane-doc)*
