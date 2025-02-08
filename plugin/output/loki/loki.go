@@ -15,8 +15,8 @@ import (
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
 
+	insaneJSON "github.com/ozontech/insane-json"
 	"github.com/prometheus/client_golang/prometheus"
-	insaneJSON "github.com/vitkovskii/insane-json"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -31,6 +31,11 @@ const (
 
 type data struct {
 	outBuf []byte
+}
+
+type Lable struct {
+	Label string `json:"label" required:"true"`
+	Value string `json:"value" required:"true"`
 }
 
 // ! config-params
@@ -52,10 +57,7 @@ type Config struct {
 	// > Example labels
 	// >
 	// > label=value
-	Labels []struct {
-		Label string `json:"label" required:"true"`
-		Value string `json:"value" required:"true"`
-	} `json:"labels" required:"true"`
+	Labels []Lable `json:"labels" required:"true"`
 
 	// > @3@4@5@6
 	// >
