@@ -1,0 +1,21 @@
+# https://github.com/elastic/start-local/tree/main
+services:
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.17.0
+    container_name: es-local-test
+    ports:
+      - "19200:9200"
+    environment:
+      - discovery.type=single-node
+      - ELASTIC_PASSWORD=elastic
+      - xpack.security.enabled=true
+      - xpack.security.http.ssl.enabled=false
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl --output /dev/null --silent --head --fail -u elastic:elastic http://elasticsearch:19200",
+        ]
+      interval: 10s
+      timeout: 10s
+      retries: 10

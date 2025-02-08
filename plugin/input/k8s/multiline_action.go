@@ -3,6 +3,7 @@ package k8s
 import (
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/plugin/input/k8s/meta"
 	"go.uber.org/zap"
 )
 
@@ -11,12 +12,18 @@ type MultilineAction struct {
 	allowedPodLabels  map[string]bool
 	allowedNodeLabels map[string]bool
 
-	logger        *zap.SugaredLogger
-	controller    pipeline.ActionPluginController
-	maxEventSize  int
+	logger     *zap.SugaredLogger
+	controller pipeline.ActionPluginController
+
+	maxEventSize            int
+	sourceNameMetaField     string
+	cutOffEventByLimit      bool
+	cutOffEventByLimitField string
+
 	eventBuf      []byte
 	eventSize     int
 	skipNextEvent bool
+	cutOffEvent   bool
 }
 
 const (
@@ -28,6 +35,10 @@ func (p *MultilineAction) Start(config pipeline.AnyConfig, params *pipeline.Acti
 	p.logger = params.Logger
 	p.controller = params.Controller
 	p.maxEventSize = params.PipelineSettings.MaxEventSize
+	p.sourceNameMetaField = params.PipelineSettings.SourceNameMetaField
+	p.cutOffEventByLimit = params.PipelineSettings.CutOffEventByLimit
+	p.cutOffEventByLimitField = params.PipelineSettings.CutOffEventByLimitField
+
 	p.config = config.(*Config)
 
 	p.allowedPodLabels = cfg.ListToMap(p.config.AllowedPodLabels)
@@ -47,7 +58,26 @@ func (p *MultilineAction) Do(event *pipeline.Event) pipeline.ActionResult {
 		return pipeline.ActionDiscard
 	}
 
-	event.Root.AddFieldNoAlloc(event.Root, "k8s_node").MutateToString(selfNodeName)
+	event.Root.AddFieldNoAlloc(event.Root, "k8s_node").MutateToString(meta.SelfNodeName)
+
+	ns := meta.Namespace(event.Root.Dig("k8s_namespace").AsString())
+	pod := meta.PodName(event.Root.Dig("k8s_pod").AsString())
+	containerID := meta.ContainerID(event.Root.Dig("k8s_container_id").AsString())
+	containerName := meta.ContainerName(event.Root.Dig("k8s_container").AsString())
+
+	if ns == "" {
+		p.logger.Fatalf("k8s namespace is empty: source=%s", event.SourceName)
+	}
+	if pod == "" {
+		p.logger.Fatalf("k8s pod is empty: source=%s", event.SourceName)
+	}
+	if containerID == "" {
+		p.logger.Fatalf("k8s container id is empty: source=%s", event.SourceName)
+	}
+	if containerName == "" {
+		p.logger.Fatalf("k8s container name is empty: source=%s", event.SourceName)
+	}
+
 	if p.config.OnlyNode {
 		return pipeline.ActionPass
 	}
@@ -72,15 +102,29 @@ func (p *MultilineAction) Do(event *pipeline.Event) pipeline.ActionResult {
 		// check buffer size before append
 		if p.maxEventSize == 0 || sizeAfterAppend < p.maxEventSize {
 			p.eventBuf = append(p.eventBuf, logFragment[1:logFragmentLen-1]...)
-		} else {
+		} else if !p.skipNextEvent {
 			if p.controller != nil {
-				p.controller.IncMaxEventSizeExceeded()
+				source := event.SourceName
+				if p.sourceNameMetaField != "" {
+					// at the moment, all metadata fields have been added to log
+					if val := event.Root.Dig(p.sourceNameMetaField).AsString(); val != "" {
+						source = val
+					}
+				}
+
+				p.controller.IncMaxEventSizeExceeded(source)
 			}
 
-			if !p.skipNextEvent {
-				// skip event if max_event_size is exceeded
-				p.skipNextEvent = true
-				ns, pod, _, _, _ := getMeta(event.SourceName)
+			// skip event if max_event_size is exceeded
+			p.skipNextEvent = true
+
+			if p.cutOffEventByLimit {
+				offset := sizeAfterAppend - p.maxEventSize
+				p.eventBuf = append(p.eventBuf, logFragment[1:logFragmentLen-1-offset]...)
+				p.cutOffEvent = true
+
+				p.logger.Errorf("event chunk will be cut off due to max_event_size, source_name=%s, namespace=%s, pod=%s", event.SourceName, ns, pod)
+			} else {
 				p.logger.Errorf("event chunk will be discarded due to max_event_size, source_name=%s, namespace=%s, pod=%s", event.SourceName, ns, pod)
 			}
 		}
@@ -93,28 +137,20 @@ func (p *MultilineAction) Do(event *pipeline.Event) pipeline.ActionResult {
 			return pipeline.ActionCollapse
 		}
 		p.skipNextEvent = false
-		p.resetLogBuf()
-		return pipeline.ActionDiscard
+
+		if !p.cutOffEvent {
+			p.resetLogBuf()
+			return pipeline.ActionDiscard
+		}
 	}
 
-	ns, pod, container, success, podMeta := getMeta(event.SourceName)
+	success, podMeta := meta.GetPodMeta(ns, pod, containerID)
 
 	if shouldSplit {
-		p.logger.Warnf("too long k8s event found, it'll be split, ns=%s pod=%s container=%s consider increase split_event_size, split_event_size=%d, predicted event size=%d", ns, pod, container, p.config.SplitEventSize, predictedLen)
+		p.logger.Warnf("too long k8s event found, it'll be split, ns=%s pod=%s container=%s consider increase split_event_size, split_event_size=%d, predicted event size=%d", ns, pod, containerName, p.config.SplitEventSize, predictedLen)
 	}
 
-	event.Root.AddFieldNoAlloc(event.Root, "k8s_namespace").MutateToString(string(ns))
-	event.Root.AddFieldNoAlloc(event.Root, "k8s_pod").MutateToString(string(pod))
-	event.Root.AddFieldNoAlloc(event.Root, "k8s_container").MutateToString(string(container))
-
 	if success {
-		if ns != namespace(podMeta.Namespace) {
-			p.logger.Panicf("k8s plugin inconsistency: source=%s, file namespace=%s, meta namespace=%s, event=%s", event.SourceName, ns, podMeta.Namespace, event.Root.EncodeToString())
-		}
-		if pod != podName(podMeta.Name) {
-			p.logger.Panicf("k8s plugin inconsistency: source=%s, file pod=%s, meta pod=%s, x=%s, event=%s", event.SourceName, pod, podMeta.Name, event.Root.EncodeToString())
-		}
-
 		for labelName, labelValue := range podMeta.Labels {
 			if len(p.allowedPodLabels) != 0 {
 				_, has := p.allowedPodLabels[labelName]
@@ -130,7 +166,7 @@ func (p *MultilineAction) Do(event *pipeline.Event) pipeline.ActionResult {
 			event.Root.AddFieldNoAlloc(event.Root, pipeline.ByteToStringUnsafe(event.Buf[l:])).MutateToString(labelValue)
 		}
 
-		for labelName, labelValue := range nodeLabels {
+		for labelName, labelValue := range meta.NodeLabels {
 			if len(p.allowedNodeLabels) != 0 {
 				_, has := p.allowedNodeLabels[labelName]
 
@@ -147,7 +183,17 @@ func (p *MultilineAction) Do(event *pipeline.Event) pipeline.ActionResult {
 	}
 
 	if len(p.eventBuf) > 1 {
-		p.eventBuf = append(p.eventBuf, logFragment[1:logFragmentLen-1]...)
+		if !p.cutOffEvent {
+			p.eventBuf = append(p.eventBuf, logFragment[1:logFragmentLen-1]...)
+		} else {
+			if isEnd {
+				p.eventBuf = append(p.eventBuf, newLine...)
+			}
+
+			if p.cutOffEventByLimitField != "" {
+				event.Root.AddFieldNoAlloc(event.Root, p.cutOffEventByLimitField).MutateToBool(true)
+			}
+		}
 		p.eventBuf = append(p.eventBuf, '"')
 
 		l := len(event.Buf)
@@ -162,4 +208,5 @@ func (p *MultilineAction) Do(event *pipeline.Event) pipeline.ActionResult {
 func (p *MultilineAction) resetLogBuf() {
 	p.eventBuf = p.eventBuf[:1]
 	p.eventSize = 0
+	p.cutOffEvent = false
 }

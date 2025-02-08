@@ -17,23 +17,32 @@ import (
 
 func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 	capacity := pipeline.DefaultCapacity
-	antispamThreshold := 0
-	antispamField := ""
+	antispamThreshold := pipeline.DefaultAntispamThreshold
 	var antispamExceptions antispam.Exceptions
+	sourceNameMetaField := pipeline.DefaultSourceNameMetaField
 	avgInputEventSize := pipeline.DefaultAvgInputEventSize
 	maxInputEventSize := pipeline.DefaultMaxInputEventSize
+	cutOffEventByLimit := pipeline.DefaultCutOffEventByLimit
+	cutOffEventByLimitField := pipeline.DefaultCutOffEventByLimitField
 	streamField := pipeline.DefaultStreamField
 	maintenanceInterval := pipeline.DefaultMaintenanceInterval
-	decoder := "auto"
+	decoder := pipeline.DefaultDecoder
 	decoderParams := make(map[string]any)
-	isStrict := false
+	isStrict := pipeline.DefaultIsStrict
 	eventTimeout := pipeline.DefaultEventTimeout
 	metricHoldDuration := pipeline.DefaultMetricHoldDuration
+	metaCacheSize := pipeline.DefaultMetaCacheSize
+	pool := ""
 
 	if settings != nil {
 		val := settings.Get("capacity").MustInt()
 		if val != 0 {
 			capacity = val
+		}
+
+		val = settings.Get("meta_cache_size").MustInt()
+		if val != 0 {
+			metaCacheSize = val
 		}
 
 		val = settings.Get("avg_log_size").MustInt()
@@ -45,6 +54,9 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 		if val != 0 {
 			maxInputEventSize = val
 		}
+
+		cutOffEventByLimit = settings.Get("cut_off_event_by_limit").MustBool()
+		cutOffEventByLimitField = settings.Get("cut_off_event_by_limit_field").MustString()
 
 		str := settings.Get("decoder").MustString()
 		if str != "" {
@@ -83,8 +95,6 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 			antispamThreshold = 0
 		}
 
-		antispamField = settings.Get("antispam_field").MustString()
-
 		var err error
 		antispamExceptions, err = extractAntispamExceptions(settings)
 		if err != nil {
@@ -92,6 +102,7 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 		}
 		antispamExceptions.Prepare()
 
+		sourceNameMetaField = settings.Get("source_name_meta_field").MustString()
 		isStrict = settings.Get("is_strict").MustBool()
 
 		str = settings.Get("metric_hold_duration").MustString()
@@ -102,22 +113,30 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 			}
 			metricHoldDuration = i
 		}
+
+		if str := settings.Get("pool").MustString(); str != "" {
+			pool = str
+		}
 	}
 
 	return &pipeline.Settings{
-		Decoder:             decoder,
-		DecoderParams:       decoderParams,
-		Capacity:            capacity,
-		AvgEventSize:        avgInputEventSize,
-		MaxEventSize:        maxInputEventSize,
-		AntispamThreshold:   antispamThreshold,
-		AntispamField:       antispamField,
-		AntispamExceptions:  antispamExceptions,
-		MaintenanceInterval: maintenanceInterval,
-		EventTimeout:        eventTimeout,
-		StreamField:         streamField,
-		IsStrict:            isStrict,
-		MetricHoldDuration:  metricHoldDuration,
+		Decoder:                 decoder,
+		DecoderParams:           decoderParams,
+		Capacity:                capacity,
+		MetaCacheSize:           metaCacheSize,
+		AvgEventSize:            avgInputEventSize,
+		MaxEventSize:            maxInputEventSize,
+		CutOffEventByLimit:      cutOffEventByLimit,
+		CutOffEventByLimitField: cutOffEventByLimitField,
+		AntispamThreshold:       antispamThreshold,
+		AntispamExceptions:      antispamExceptions,
+		SourceNameMetaField:     sourceNameMetaField,
+		MaintenanceInterval:     maintenanceInterval,
+		EventTimeout:            eventTimeout,
+		StreamField:             streamField,
+		IsStrict:                isStrict,
+		MetricHoldDuration:      metricHoldDuration,
+		Pool:                    pipeline.PoolType(pool),
 	}
 }
 
@@ -221,7 +240,7 @@ var (
 	doIfTimestampCmpOpNodes = map[string]struct{}{
 		"ts_cmp": {},
 	}
-	doIfСheckTypeOpNode = "check_type"
+	doIfCheckTypeOpNode = "check_type"
 )
 
 func extractFieldOpVals(jsonNode *simplejson.Json) [][]byte {
@@ -451,7 +470,7 @@ func extractDoIfNode(jsonNode *simplejson.Json) (doif.Node, error) {
 		return extractLengthCmpOpNode(opName, jsonNode)
 	} else if _, has := doIfTimestampCmpOpNodes[opName]; has {
 		return extractTsCmpOpNode(opName, jsonNode)
-	} else if opName == doIfСheckTypeOpNode {
+	} else if opName == doIfCheckTypeOpNode {
 		return extractCheckTypeOpNode(opName, jsonNode)
 	} else {
 		return nil, fmt.Errorf("unknown op %q", opName)

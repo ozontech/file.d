@@ -2,7 +2,6 @@ package json_decode
 
 import (
 	"github.com/ozontech/file.d/cfg"
-	"github.com/ozontech/file.d/decoder"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/pipeline"
 	"go.uber.org/zap"
@@ -11,6 +10,8 @@ import (
 /*{ introduction
 It decodes a JSON string from the event field and merges the result with the event root.
 If the decoded JSON isn't an object, the event will be skipped.
+
+> ⚠ DEPRECATED. Use `decode` plugin with `decoder: json` instead.
 }*/
 
 type Plugin struct {
@@ -86,7 +87,7 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 		return pipeline.ActionPass
 	}
 
-	node, err := decoder.DecodeJsonToNode(event.Root, jsonNode.AsBytes())
+	node, err := event.Root.DecodeBytesAdditional(jsonNode.AsBytes())
 	if err != nil {
 		if p.config.LogJSONParseErrorMode_ == logJsonParseErrorErrOnly {
 			p.logger.Error("failed to parse json", zap.Error(err))

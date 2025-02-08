@@ -1,7 +1,6 @@
 package throttle
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -27,11 +26,6 @@ type limitDistributionCfg struct {
 	Enabled bool                     `json:"enabled"`
 }
 
-func (c *limitDistributionCfg) marshalJson() []byte {
-	v, _ := json.Marshal(c)
-	return v
-}
-
 func (c *limitDistributionCfg) isEmpty() bool {
 	return c.Field == "" || len(c.Ratios) == 0
 }
@@ -40,8 +34,12 @@ func parseLimitDistribution(c limitDistributionCfg, totalLimit int64) (limitDist
 	if c.Field == "" {
 		return limitDistributions{}, nil
 	}
+
 	if len(c.Ratios) == 0 {
-		return limitDistributions{}, errors.New("empty 'ratios'")
+		return limitDistributions{
+			field:   cfg.ParseFieldSelector(c.Field),
+			enabled: c.Enabled,
+		}, nil
 	}
 
 	ld := limitDistributions{
@@ -103,7 +101,7 @@ type limitDistributions struct {
 }
 
 func (ld *limitDistributions) isEnabled() bool {
-	return ld.enabled
+	return ld.enabled && ld.size() > 0
 }
 
 func (ld *limitDistributions) size() int {

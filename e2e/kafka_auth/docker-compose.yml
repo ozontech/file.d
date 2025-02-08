@@ -27,6 +27,7 @@ services:
         condition: service_completed_successfully
     ports:
       - "9093:9093"
+      - "9095:9095"
     volumes:
       - "kafka_data:/bitnami"
       - ./certs/kafka.truststore.jks:/bitnami/kafka/config/certs/kafka.truststore.jks
