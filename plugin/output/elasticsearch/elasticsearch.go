@@ -377,9 +377,9 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 	var err error
 
 	if p.config.SplitEnabled {
-		statusCode, err = p.saveOrSplit(0, eventsCount, data.begin, data.outBuf)
+		statusCode, err = p.sendSplit(0, eventsCount, data.begin, data.outBuf)
 	} else {
-		statusCode, err = p.save(data.outBuf)
+		statusCode, err = p.send(data.outBuf)
 	}
 
 	if err != nil {
@@ -402,7 +402,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 	return nil
 }
 
-func (p *Plugin) save(data []byte) (int, error) {
+func (p *Plugin) send(data []byte) (int, error) {
 	return p.client.DoTimeout(
 		http.MethodPost,
 		NDJSONContentType,
@@ -412,7 +412,7 @@ func (p *Plugin) save(data []byte) (int, error) {
 	)
 }
 
-func (p *Plugin) saveOrSplit(left int, right int, begin []int, data []byte) (int, error) {
+func (p *Plugin) sendSplit(left int, right int, begin []int, data []byte) (int, error) {
 	if left == right {
 		return http.StatusOK, nil
 	}
@@ -433,12 +433,12 @@ func (p *Plugin) saveOrSplit(left int, right int, begin []int, data []byte) (int
 			}
 
 			middle := (left + right) / 2
-			statusCode, err = p.saveOrSplit(left, middle, begin, data)
+			statusCode, err = p.sendSplit(left, middle, begin, data)
 			if err != nil {
 				return statusCode, err
 			}
 
-			return p.saveOrSplit(middle, right, begin, data)
+			return p.sendSplit(middle, right, begin, data)
 		default:
 			return statusCode, err
 		}
