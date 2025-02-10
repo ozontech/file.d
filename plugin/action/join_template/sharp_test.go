@@ -7,19 +7,20 @@ import (
 )
 
 func TestSharpStart(t *testing.T) {
-	tests := []testCase{
-		// positive
-		{s: "\t  UNHANDLED EXCEPTION     ", res: true},
-		{s: "Unhandled exception    ", res: true},
-		{s: "  Unhandled exception  ", res: true},
-		{s: "    Unhandled exception", res: true},
-
-		// negative
-		{s: "Unhandled" + string([]byte{0}) + "exception"},
-		{s: "unhandled_exception"},
+	positive := []string{
+		"\t UNHANDLED EXCEPTION    ",
+		"Unhandled exception    ",
+		"  Unhandled exception  ",
+		"    Unhandled exception",
 	}
 
-	for i, test := range tests {
+	negative := []string{
+		"Unhandled\x00exception",
+		"\t unhandled_exception",
+		"\t UNHANDLED\nexception",
+	}
+
+	for i, test := range getCases(positive, negative) {
 		require.Equal(t, test.res, sharpStartCheck(test.s), i)
 	}
 }
