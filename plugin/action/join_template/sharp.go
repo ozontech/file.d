@@ -31,16 +31,6 @@ func sharpStartCheck(s string) bool {
 	return equalCaseInsensitive(s, startSubstr)
 }
 
-func firstNonSpaceIndex(s string) int {
-	for i, c := range []byte(s) {
-		if !isSpace(c) {
-			return i
-		}
-	}
-
-	return -1
-}
-
 func sharpContinueCheck(s string) bool {
 	return containsAt(s) ||
 		containsArrow(s) ||
@@ -97,14 +87,6 @@ func containsEndOf(s string) bool {
 	s = s[:len(endOfSubstr)]
 
 	return equalCaseInsensitive(s, endOfSubstr)
-}
-
-func toLower(c byte) byte {
-	if isUpperCaseLetter(c) {
-		return c + 'a' - 'A'
-	}
-
-	return c
 }
 
 func equalCaseInsensitive(a, b string) bool {

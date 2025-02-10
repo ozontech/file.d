@@ -2,6 +2,7 @@ package join_template
 
 import (
 	"testing"
+	"unicode"
 
 	"github.com/stretchr/testify/require"
 )
@@ -43,5 +44,35 @@ func TestContainsOnlyDigits(t *testing.T) {
 
 	for _, tt := range getCases(positive, negative) {
 		require.Equal(t, tt.res, containsOnlyDigits(tt.s), tt.s)
+	}
+}
+
+func TestFirstNonSpaceIndex(t *testing.T) {
+	type TestCase struct {
+		s   string
+		res int
+	}
+
+	for _, tt := range []TestCase{
+		{"", -1},
+		{"\t\n\n  \t \n \t", -1},
+
+		{"qwe", 0},
+		{"qwe   ", 0},
+		{"QWE   ", 0},
+		{"   123", 3},
+		{"\n\n \t\tqwe", 5},
+	} {
+		require.Equal(t, tt.res, firstNonSpaceIndex(tt.s), tt.s)
+	}
+}
+
+func TestToLower(t *testing.T) {
+	for c := 0; c < 1<<7; c++ {
+		require.Equal(t,
+			int(toLower(byte(c))),
+			int(unicode.ToLower(rune(c))),
+			c,
+		)
 	}
 }
