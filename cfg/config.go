@@ -13,7 +13,8 @@ import (
 
 	"github.com/bitly/go-simplejson"
 	"github.com/ozontech/file.d/logger"
-	"sigs.k8s.io/yaml"
+	"gopkg.in/yaml.v2"
+	k8s_yaml "sigs.k8s.io/yaml"
 )
 
 const trueValue = "true"
@@ -77,22 +78,37 @@ func NewConfig() *Config {
 	}
 }
 
-func NewConfigFromFile(path string) *Config {
-	logger.Infof("reading config %q", path)
-	yamlContents, err := os.ReadFile(path)
-	if err != nil {
-		logger.Fatalf("can't read config file %q: %s", path, err)
+func NewConfigFromFile(paths []string) *Config {
+	mergedConfig := make(map[interface{}]interface{})
+
+	for _, path := range paths {
+		logger.Infof("reading config %q", path)
+		yamlContents, err := os.ReadFile(path)
+		if err != nil {
+			logger.Fatalf("can't read config file %q: %s", path, err)
+		}
+		var currentConfig map[interface{}]interface{}
+		if err := yaml.Unmarshal(yamlContents, &currentConfig); err != nil {
+			logger.Fatalf("can't parse config file yaml %q: %s", path, err)
+		}
+
+		mergedConfig = mergeYAMLs(mergedConfig, currentConfig)
 	}
 
-	jsonContents, err := yaml.YAMLToJSON(yamlContents)
+	mergedYAML, err := yaml.Marshal(mergedConfig)
 	if err != nil {
-		logger.Infof("config content:\n%s", logger.Numerate(string(yamlContents)))
-		logger.Fatalf("can't parse config file yaml %q: %s", path, err.Error())
+		logger.Fatalf("can't marshal merged config to YAML: %s", err)
+	}
+
+	jsonContents, err := k8s_yaml.YAMLToJSON(mergedYAML)
+	if err != nil {
+		logger.Infof("config content:\n%s", logger.Numerate(string(mergedYAML)))
+		logger.Fatalf("can't parse config file yaml %q: %s", paths, err.Error())
 	}
 
 	object, err := simplejson.NewJson(jsonContents)
 	if err != nil {
-		logger.Fatalf("can't convert config to json %q: %s", path, err.Error())
+		logger.Fatalf("can't convert config to json %q: %s", paths, err.Error())
 	}
 
 	err = applyEnvs(object)
@@ -636,4 +652,23 @@ func CompileRegex(s string) (*regexp.Regexp, error) {
 	}
 
 	return regexp.Compile(s[1 : len(s)-1])
+}
+
+func mergeYAMLs(a, b map[interface{}]interface{}) map[interface{}]interface{} {
+	merged := make(map[interface{}]interface{})
+	for k, v := range a {
+		merged[k] = v
+	}
+	for k, v := range b {
+		if existingValue, exists := merged[k]; exists {
+			if existingMap, ok := existingValue.(map[interface{}]interface{}); ok {
+				if newMap, ok := v.(map[interface{}]interface{}); ok {
+					merged[k] = mergeYAMLs(existingMap, newMap)
+					continue
+				}
+			}
+		}
+		merged[k] = v
+	}
+	return merged
 }
