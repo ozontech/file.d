@@ -8,20 +8,52 @@ import (
 
 func TestSharpStart(t *testing.T) {
 	positive := []string{
-		"\t UNHANDLED EXCEPTION    ",
+		"\t\n UNHANDLED EXCEPTION    ",
 		"Unhandled exception    ",
 		"  Unhandled exception  ",
 		"    Unhandled exception",
+		"Unhandled exception. Tail.",
 	}
 
 	negative := []string{
+		"\t\n ", // all characters are spaces
+
+		"Unhandled except", // non-space part is not long enough
+
 		"Unhandled\x00exception",
 		"\t unhandled_exception",
 		"\t UNHANDLED\nexception",
+		"Unhandled expression",
 	}
 
 	for i, test := range getCases(positive, negative) {
 		require.Equal(t, test.res, sharpStartCheck(test.s), i)
+	}
+}
+
+func TestContainsAt(t *testing.T) {
+	positive := []string{
+		"at ",
+		"\t\n at ",
+		"at\t",
+		"at\n",
+		"at ",
+		"   at Some.Path.F()",
+	}
+
+	negative := []string{
+		"\t\n ", // all characters are spaces
+		"a",     // non-space part is not long enough
+		"  at",  // no characters after 'at'
+
+		// char after 'at' is not space
+		"  at1",
+		"  at_",
+		"  atX",
+	}
+
+	for i, test := range getCases(positive, negative) {
+		require.Equal(t, test.res, containsAt(test.s), i)
 	}
 }
 
