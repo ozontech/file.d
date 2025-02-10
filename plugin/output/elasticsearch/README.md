@@ -133,7 +133,7 @@ After an insert error, fall with a non-zero exit code or not
 
 <br>
 
-**`split_enabled`** *`bool`* *`default=false`* 
+**`split_batches`** *`bool`* *`default=false`* 
 
 Enable split big batches
 
