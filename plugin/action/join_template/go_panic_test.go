@@ -2,7 +2,6 @@ package join_template
 
 import (
 	"regexp"
-	"strings"
 	"testing"
 
 	"github.com/ozontech/file.d/cfg"
@@ -16,7 +15,7 @@ func BenchmarkStartMixedRes(b *testing.B) {
 	}
 
 	re := regexp.MustCompile(template.startRePat)
-	lines := getLines()
+	lines := getLines(contentPanics)
 
 	b.ResetTimer()
 	b.Run("explicit", func(b *testing.B) {
@@ -42,7 +41,7 @@ func BenchmarkContinueMixedRes(b *testing.B) {
 	}
 
 	re := regexp.MustCompile(template.continueRePat)
-	lines := getLines()
+	lines := getLines(contentPanics)
 
 	b.ResetTimer()
 	b.Run("explicit", func(b *testing.B) {
@@ -123,25 +122,12 @@ func TestSameResults(t *testing.T) {
 	continueRe, err := cfg.CompileRegex(template.continueRePat)
 	require.NoError(t, err)
 
-	lines := getLines()
+	lines := getLines(contentPanics)
 
 	for _, line := range lines {
 		require.Equal(t, startRe.MatchString(line), goPanicStartCheck(line))
 		require.Equal(t, continueRe.MatchString(line), goPanicContinueCheck(line))
 	}
-}
-
-func getLines() []string {
-	content := strings.ReplaceAll(contentPanics, "# ===next===\n", "")
-	lines := make([]string, 0)
-	for _, line := range strings.Split(content, "\n") {
-		if line == "" {
-			continue
-		}
-		lines = append(lines, line)
-	}
-
-	return lines
 }
 
 func TestContainsOnlySpaces(t *testing.T) {
