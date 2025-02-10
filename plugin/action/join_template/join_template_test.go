@@ -580,25 +580,3 @@ func TestJoinAfterNilNode(t *testing.T) {
 		t.Run(tt.name+"_fast", testFunc)
 	}
 }
-
-func TestContainsOnlySpaces(t *testing.T) {
-	positive := []string{
-		"    ",
-		"\t\t",
-		"\n\n",
-		" \n\t ",
-		"",
-	}
-
-	negative := []string{
-		"qwe",
-		"a   ",
-		"   a",
-		"\n\t a",
-		"a\n\t ",
-	}
-
-	for _, tt := range getCases(positive, negative) {
-		require.Equal(t, tt.res, containsOnlySpaces(tt.s), tt.s)
-	}
-}
