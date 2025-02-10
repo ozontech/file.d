@@ -7,6 +7,7 @@ import (
 	"io"
 	"os/exec"
 	"strings"
+	"syscall"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
@@ -94,10 +95,15 @@ func (r *journalReader) start() error {
 	}
 
 	go r.readLines(out, r.config)
+	go func() {
+		if err := r.cmd.Wait(); err != nil {
+			r.config.logger.Fatal("journalctl command exited with error", zap.Error(err))
+		}
+	}()
 
 	return nil
 }
 
 func (r *journalReader) stop() error {
-	return r.cmd.Process.Kill()
+	return r.cmd.Process.Signal(syscall.SIGTERM)
 }
