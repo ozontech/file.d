@@ -1,12 +1,26 @@
 package normalize
 
 import (
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-func TestReNormalizer(t *testing.T) {
+func TestNewNormalizer(t *testing.T) {
+	for _, newFn := range []func() Normalizer{
+		NewReNormalizer,
+		NewLMNormalizer,
+	} {
+		require.NotPanics(t, func() {
+			_ = newFn()
+		})
+	}
+}
+
+func TestNormalize(t *testing.T) {
 	tests := []struct {
 		name string
 
@@ -182,15 +196,82 @@ func TestReNormalizer(t *testing.T) {
 		},
 	}
 
-	n := NewReNormalizer()
+	testNormalizers := []struct {
+		name string
+		n    Normalizer
+	}{
+		{name: "re", n: NewReNormalizer()},
+		{name: "lm", n: NewLMNormalizer()},
+	}
+
 	out := make([]byte, 0)
 
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			for _, i := range tt.inputs {
-				out = n.Normalize(out, []byte(i))
-				assert.Equal(t, []byte(tt.want), out, "wrong out with input=%q", i)
+			for _, tn := range testNormalizers {
+				for _, i := range tt.inputs {
+					out = tn.n.Normalize(out, []byte(i))
+					assert.Equal(t, []byte(tt.want), out, "wrong out with normalizer=%q; input=%q", tn.name, i)
+				}
+			}
+		})
+	}
+}
+
+func genBenchInput(count int) []byte {
+	var examples = []string{
+		"s1mple falsehood",                         // no match
+		"test@host1.host2.com",                     // email
+		"http://some.host.com/page1?a=1",           // url
+		"hello-world-123.COM",                      // host
+		"7c1811ed-e98f-4c9c-a9f9-58c757ff494f",     // uuid
+		"a94a8fe5ccb19ba61c4c0873d391e987982fbbd3", // sha1
+		"098f6bcd4621d373cade4e832627b4f6",         // md5
+		"2025-01-13T10:20:40Z",                     // datetime
+		"1.2.3.4",                                  // ip
+		"-1.2m5s",                                  // duration
+		"0x13eb85e69dfbc0758b12acdaae36287d",       // hex
+		"-4.56",                                    // float
+		"123",                                      // int
+		"truE faLse",
+	}
+
+	var sb strings.Builder
+	for i := 0; i < count; i++ {
+		for _, e := range examples {
+			sb.WriteString(fmt.Sprintf(" %s ", e))
+		}
+	}
+	return []byte(sb.String())
+}
+
+var benchCases = []struct {
+	input []byte
+}{
+	{input: genBenchInput(1)},
+	{input: genBenchInput(10)},
+	{input: genBenchInput(100)},
+}
+
+func BenchmarkReNormalizer(b *testing.B) {
+	n := NewReNormalizer()
+	doBenchmark(b, "re", n)
+}
+
+func BenchmarkLMNormalizer(b *testing.B) {
+	n := NewLMNormalizer()
+	doBenchmark(b, "lm", n)
+}
+
+func doBenchmark(b *testing.B, name string, n Normalizer) {
+	out := make([]byte, 0)
+
+	for _, benchCase := range benchCases {
+		name := fmt.Sprintf("%s_input_len_%d", name, len(benchCase.input))
+		b.Run(name, func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				out = n.Normalize(out, benchCase.input)
 			}
 		})
 	}

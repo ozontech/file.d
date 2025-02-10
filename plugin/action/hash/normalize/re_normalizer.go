@@ -33,14 +33,14 @@ func (n *reNormalizer) Normalize(out, data []byte) []byte {
 	indexes := n.re.FindAllSubmatchIndex(data, -1)
 	for _, index := range indexes {
 		for i := 1; i < len(n.re.SubexpNames()); i++ {
-			start := index[i*2]
+			begin := index[i*2]
 			end := index[i*2+1]
-			if start == -1 {
+			if begin == -1 {
 				continue
 			}
 			n.matchBuf = append(n.matchBuf, reMatch{
 				groupIdx: i,
-				start:    start,
+				begin:    begin,
 				end:      end,
 			})
 		}
@@ -52,13 +52,13 @@ func (n *reNormalizer) Normalize(out, data []byte) []byte {
 
 	// sort by asc
 	slices.SortFunc(n.matchBuf, func(m1, m2 reMatch) int {
-		return m1.start - m2.start
+		return m1.begin - m2.begin
 	})
 
 	prevEnd := 0
 	for _, m := range n.matchBuf {
-		out = append(out, data[prevEnd:m.start]...)
-		out = append(out, formatPlaceholder(n.re.SubexpNames()[m.groupIdx])...)
+		out = append(out, data[prevEnd:m.begin]...)
+		out = formatPlaceholder(out, n.re.SubexpNames()[m.groupIdx])
 		prevEnd = m.end
 	}
 	out = append(out, data[prevEnd:]...)
@@ -68,7 +68,7 @@ func (n *reNormalizer) Normalize(out, data []byte) []byte {
 
 type reMatch struct {
 	groupIdx int
-	start    int
+	begin    int
 	end      int
 }
 

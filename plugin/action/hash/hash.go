@@ -114,6 +114,8 @@ type Config struct {
 	// > The event field to which put the hash.
 	HashField  cfg.FieldSelector `json:"hash_field" parse:"selector" required:"true"` // *
 	HashField_ []string
+
+	Normalizer string `json:"normalizer" default:"re" options:"re|lm"`
 }
 
 type fieldFormat byte
@@ -145,7 +147,11 @@ func factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginParams) {
 	p.config = config.(*Config)
 
-	p.normalizer = normalize.NewReNormalizer()
+	if p.config.Normalizer == "re" {
+		p.normalizer = normalize.NewReNormalizer()
+	} else {
+		p.normalizer = normalize.NewLMNormalizer()
+	}
 	p.buf = make([]byte, 0)
 }
 
