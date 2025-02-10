@@ -57,6 +57,37 @@ func TestContainsAt(t *testing.T) {
 	}
 }
 
+func TestContainsArrow(t *testing.T) {
+	positive := []string{
+		"--->",
+		"--->  ",
+		" ---> ",
+		"  --->",
+		"\t\t--->QWE",
+		" ---> System.Net.Name (10): Resource temporarily unavailable",
+	}
+
+	negative := []string{
+		"\t\n ", // all characters are spaces
+
+		// non-space part is not long enough
+		"qwe", "12",
+		"   >",
+		"  ->",
+		" -->",
+
+		// wrong prefix of non-space part
+		"abcd",
+		"  ---->  ",
+		"--> Some.Do",
+		"--> --->",
+	}
+
+	for i, test := range getCases(positive, negative) {
+		require.Equal(t, test.res, containsArrow(test.s), i)
+	}
+}
+
 func TestEqualCaseInsensitive(t *testing.T) {
 	type TestCase struct {
 		a, b string
