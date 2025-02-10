@@ -5,6 +5,19 @@ import (
 	"strings"
 )
 
+func getLines(joinedContent string) []string {
+	content := strings.ReplaceAll(joinedContent, "# ===next===\n", "")
+	lines := make([]string, 0)
+	for _, line := range strings.Split(content, "\n") {
+		if line == "" {
+			continue
+		}
+		lines = append(lines, line)
+	}
+
+	return lines
+}
+
 func getRandLines() []string {
 	const count = 100
 
