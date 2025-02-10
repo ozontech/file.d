@@ -10,6 +10,16 @@ func containsOnlySpaces(s string) bool {
 	return true
 }
 
+func firstNonSpaceIndex(s string) int {
+	for i, c := range []byte(s) {
+		if !isSpace(c) {
+			return i
+		}
+	}
+
+	return -1
+}
+
 func isSpace(c byte) bool {
 	switch c {
 	case ' ', '\n', '\t':
@@ -51,6 +61,14 @@ func isLetter(c byte) bool {
 
 func isLowerCaseLetter(c byte) bool {
 	return 'a' <= c && c <= 'z'
+}
+
+func toLower(c byte) byte {
+	if isUpperCaseLetter(c) {
+		return c + 'a' - 'A'
+	}
+
+	return c
 }
 
 func isUpperCaseLetter(c byte) bool {
