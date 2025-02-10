@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func BenchmarkStartMixedRes(b *testing.B) {
+func BenchmarkPanicStartMixedRes(b *testing.B) {
 	template, ok := templates["go_panic"]
 	if !ok {
 		require.True(b, ok)
@@ -34,7 +34,7 @@ func BenchmarkStartMixedRes(b *testing.B) {
 	})
 }
 
-func BenchmarkContinueMixedRes(b *testing.B) {
+func BenchmarkPanicContinueMixedRes(b *testing.B) {
 	template, ok := templates["go_panic"]
 	if !ok {
 		require.True(b, ok)
@@ -60,7 +60,7 @@ func BenchmarkContinueMixedRes(b *testing.B) {
 	})
 }
 
-func BenchmarkStartNegativeRes(b *testing.B) {
+func BenchmarkPanicStartNegativeRes(b *testing.B) {
 	template, ok := templates["go_panic"]
 	if !ok {
 		require.True(b, ok)
@@ -86,7 +86,7 @@ func BenchmarkStartNegativeRes(b *testing.B) {
 	})
 }
 
-func BenchmarkContinueNegativeRes(b *testing.B) {
+func BenchmarkPanicContinueNegativeRes(b *testing.B) {
 	template, ok := templates["go_panic"]
 	if !ok {
 		require.True(b, ok)
@@ -112,7 +112,7 @@ func BenchmarkContinueNegativeRes(b *testing.B) {
 	})
 }
 
-func TestSameResults(t *testing.T) {
+func TestPanicSameResults(t *testing.T) {
 	template, ok := templates["go_panic"]
 	require.True(t, ok)
 
@@ -127,28 +127,6 @@ func TestSameResults(t *testing.T) {
 	for _, line := range lines {
 		require.Equal(t, startRe.MatchString(line), goPanicStartCheck(line))
 		require.Equal(t, continueRe.MatchString(line), goPanicContinueCheck(line))
-	}
-}
-
-func TestContainsOnlySpaces(t *testing.T) {
-	positive := []string{
-		"    ",
-		"\t\t",
-		"\n\n",
-		" \n\t ",
-		"",
-	}
-
-	negative := []string{
-		"qwe",
-		"a   ",
-		"   a",
-		"\n\t a",
-		"a\n\t ",
-	}
-
-	for _, tt := range getCases(positive, negative) {
-		require.Equal(t, tt.res, containsOnlySpaces(tt.s), tt.s)
 	}
 }
 
