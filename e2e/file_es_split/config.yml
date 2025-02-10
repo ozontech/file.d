@@ -10,7 +10,7 @@ pipelines:
       endpoints:
         - http://localhost:9200
       fatal_on_failed_insert: true
-      split_enabled: true
+      split_batch: true
       strict: false
       index_format: index_name
       retry: 1

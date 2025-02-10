@@ -174,7 +174,7 @@ type Config struct {
 	// > @3@4@5@6
 	// >
 	// > Enable split big batches
-	SplitBatches bool `json:"split_batches" default:"false"` // *
+	SplitBatch bool `json:"split_batch" default:"false"` // *
 
 	// > @3@4@5@6
 	// >
@@ -376,7 +376,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 	var statusCode int
 	var err error
 
-	if p.config.SplitBatches {
+	if p.config.SplitBatch {
 		statusCode, err = p.sendSplit(0, eventsCount, data.begin, data.outBuf)
 	} else {
 		statusCode, err = p.send(data.outBuf)
