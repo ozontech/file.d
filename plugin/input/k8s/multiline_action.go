@@ -1,6 +1,9 @@
 package k8s
 
 import (
+	"slices"
+	"sync"
+
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/plugin/input/k8s/meta"
@@ -50,6 +53,16 @@ func (p *MultilineAction) Start(config pipeline.AnyConfig, params *pipeline.Acti
 func (p *MultilineAction) Stop() {
 }
 
+type bytesBuf struct {
+	B []byte
+}
+
+var escapedStringBufPool = sync.Pool{
+	New: func() any {
+		return new(bytesBuf)
+	},
+}
+
 func (p *MultilineAction) Do(event *pipeline.Event) pipeline.ActionResult {
 	// todo: do same logic as in join plugin here to send not full logs
 	if event.IsTimeoutKind() {
@@ -81,9 +94,15 @@ func (p *MultilineAction) Do(event *pipeline.Event) pipeline.ActionResult {
 	if p.config.OnlyNode {
 		return pipeline.ActionPass
 	}
+
+	buf := escapedStringBufPool.Get().(*bytesBuf)
+	defer escapedStringBufPool.Put(buf)
+	buf.B = slices.Grow(buf.B[:0], event.Size)
+
 	// don't need to unescape/escape log fields cause concatenation of escaped strings is escaped string.
 	// get escaped string because of CRI format.
-	logFragment := event.Root.Dig("log").AsEscapedString()
+	buf.B = event.Root.Dig("log").AppendEscapedString(buf.B)
+	logFragment := pipeline.ByteToStringUnsafe(buf.B)
 	if logFragment == "" {
 		p.logger.Fatalf("wrong event format, it doesn't contain log field: %s", event.Root.EncodeToString())
 		panic("_")
