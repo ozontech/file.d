@@ -105,14 +105,11 @@ func equalCaseInsensitive(a, b string) bool {
 }
 
 // replaces regexp (\.?\w+\.?Exception:)
-// POSSIBLE ERROR: only first occurrence counts
+// NOTE: only first occurrence counts
 func containsException(s string) bool {
 	i := strings.Index(s, exceptionSubstr)
-	if i == -1 {
-		return false
-	}
-
-	if i == 0 {
+	// not found or found at start
+	if i < 1 {
 		return false
 	}
 

@@ -120,6 +120,49 @@ func TestContainsEndOf(t *testing.T) {
 	}
 }
 
+func TestContainsException(t *testing.T) {
+	positive := []string{
+		"A.Exception:",
+		"1.Exception:",
+		"_.Exception:",
+
+		"AException:",
+		"1Exception:",
+		"_Exception:",
+
+		"AB.Exception:",
+		"\t \t AB.Exception:",
+	}
+
+	negative := []string{
+		// no 'Exception:' substr found
+		"", "QWE", "123",
+		"   Exc",
+		"Except",
+		"Exception",
+
+		// 'Exception:' found at start
+		"Exception:",
+
+		// not found characters before dot
+		".Exception:",
+
+		// wrong character before dot
+		"@.Exception:",
+		" .Exception:",
+
+		// no dot and wrong character
+		"@Exception:",
+		" Exception:",
+
+		"@.Exception: ... A.Exception:", // only first occurrence counts
+	}
+
+	for i, test := range getCases(positive, negative) {
+		require.Equal(t, test.res, containsException(test.s), i)
+	}
+}
+
 func TestEqualCaseInsensitive(t *testing.T) {
 	type TestCase struct {
 		a, b string
