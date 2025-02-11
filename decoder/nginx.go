@@ -46,7 +46,7 @@ func (d *nginxErrorDecoder) Type() Type {
 	return NGINX_ERROR
 }
 
-// DecodeToJson decodes nginx error formatted log and merges result with root.
+// DecodeToJson decodes nginx-error formatted log and merges result with root.
 //
 // From:
 //
@@ -86,7 +86,7 @@ func (d *nginxErrorDecoder) DecodeToJson(root *insaneJSON.Root, data []byte) err
 	return nil
 }
 
-// Decode decodes nginx error formated log to [NginxErrorRow].
+// Decode decodes nginx-error formatted log to [NginxErrorRow].
 //
 // Example of format:
 //
