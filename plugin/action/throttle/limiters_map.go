@@ -232,7 +232,6 @@ func (l *limitersMap) newLimiter(throttleKey, keyLimitOverride string, rule *rul
 			l.limiterCfg,
 			throttleKey, keyLimitOverride,
 			&rule.limit,
-			rule.distributionCfg,
 			l.limitDistrMetrics,
 			l.nowFn,
 		)

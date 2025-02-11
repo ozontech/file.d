@@ -17,11 +17,12 @@ var (
 
 type InsaneNode interface {
 	AsInt() (int, error)
+	AsInt64() (int64, error)
+	AsUint64() (uint64, error)
 	AsFloat32() (float32, error)
 	AsFloat64() (float64, error)
 	AsString() (string, error)
 	AsBool() (bool, error)
-	AsInt64() (int64, error)
 	AsStringArray() ([]string, error)
 	AsUUID() (uuid.UUID, error)
 	AsIPv4() (proto.IPv4, error)
@@ -139,6 +140,14 @@ func (n NonStrictNode) AsInt() (int, error) {
 	return n.Node.AsInt(), nil
 }
 
+func (n NonStrictNode) AsInt64() (int64, error) {
+	return n.Node.AsInt64(), nil
+}
+
+func (n NonStrictNode) AsUint64() (uint64, error) {
+	return n.Node.AsUint64(), nil
+}
+
 func (n NonStrictNode) AsFloat32() (float32, error) {
 	return float32(n.AsFloat()), nil
 }
@@ -156,10 +165,6 @@ func (n NonStrictNode) AsString() (string, error) {
 
 func (n NonStrictNode) AsBool() (bool, error) {
 	return n.Node.AsBool(), nil
-}
-
-func (n NonStrictNode) AsInt64() (int64, error) {
-	return n.Node.AsInt64(), nil
 }
 
 func (n NonStrictNode) AsUUID() (uuid.UUID, error) {
@@ -219,6 +224,14 @@ func (z ZeroValueNode) AsInt() (int, error) {
 	return 0, nil
 }
 
+func (z ZeroValueNode) AsInt64() (int64, error) {
+	return 0, nil
+}
+
+func (z ZeroValueNode) AsUint64() (uint64, error) {
+	return 0, nil
+}
+
 func (z ZeroValueNode) AsFloat32() (float32, error) {
 	return 0, nil
 }
@@ -233,10 +246,6 @@ func (z ZeroValueNode) AsString() (string, error) {
 
 func (z ZeroValueNode) AsBool() (bool, error) {
 	return false, nil
-}
-
-func (z ZeroValueNode) AsInt64() (int64, error) {
-	return 0, nil
 }
 
 func (z ZeroValueNode) AsStringArray() ([]string, error) {

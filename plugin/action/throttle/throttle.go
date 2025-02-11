@@ -373,7 +373,6 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 		p.rules = append(p.rules, newRule(
 			r.Conditions,
 			complexLimit{r.Limit, r.LimitKind, ldRule},
-			ruleDistrCfg.marshalJson(),
 			i,
 		))
 	}
@@ -381,7 +380,6 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 	p.rules = append(p.rules, newRule(
 		map[string]string{},
 		complexLimit{p.config.DefaultLimit, p.config.LimitKind, ld},
-		distrCfg.marshalJson(),
 		len(p.config.Rules),
 	))
 }

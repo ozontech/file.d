@@ -664,12 +664,10 @@ func (t *ColInt64) Append(node InsaneNode) error {
 		return nil
 	}
 
-	v, err := node.AsInt()
+	val, err := node.AsInt64()
 	if err != nil {
 		return err
 	}
-
-	val := int64(v)
 
 	if t.nullable {
 		t.nullCol.Append(proto.NewNullable(val))
@@ -739,12 +737,10 @@ func (t *ColUInt64) Append(node InsaneNode) error {
 		return nil
 	}
 
-	v, err := node.AsInt()
+	val, err := node.AsUint64()
 	if err != nil {
 		return err
 	}
-
-	val := uint64(v)
 
 	if t.nullable {
 		t.nullCol.Append(proto.NewNullable(val))
