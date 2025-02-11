@@ -91,8 +91,9 @@ func (d *syslogRFC5424Decoder) Decode(data []byte, _ ...any) (any, error) {
 	// priority
 	pri, offset, err := syslogParsePriority(data)
 	if err != nil {
-		return row, err
+		return row, fmt.Errorf("failed to parse priority: %w", err)
 	}
+	// offset points to '>'
 	row.Priority = data[1:offset]
 	data = data[offset+1:]
 
@@ -103,25 +104,25 @@ func (d *syslogRFC5424Decoder) Decode(data []byte, _ ...any) (any, error) {
 	// proto version
 	offset = bytes.IndexByte(data, ' ')
 	if offset <= 0 {
-		return row, errSyslogInvalidFormat
+		return row, fmt.Errorf("failed to parse version: %w", errSyslogInvalidFormat)
 	}
 	row.ProtoVersion = data[:offset]
 	if _, ok = atoi(row.ProtoVersion); !ok {
-		return row, errSyslogInvalidVersion
+		return row, fmt.Errorf("failed to parse version: %w", errSyslogInvalidVersion)
 	}
 	data = data[offset+1:]
 
 	// timestamp
 	offset, ok = d.readUntilSpaceOrNilValue(data)
 	if !ok {
-		return row, errSyslogInvalidFormat
+		return row, fmt.Errorf("failed to parse timestamp: %w", errSyslogInvalidVersion)
 	}
 	if offset == 0 {
 		data = data[2:]
 	} else {
 		row.Timestamp = data[:offset]
 		if !d.validateTimestamp(row.Timestamp) {
-			return row, errSyslogInvalidTimestamp
+			return row, fmt.Errorf("failed to parse timestamp: %w", errSyslogInvalidTimestamp)
 		}
 		data = data[offset+1:]
 	}
@@ -129,7 +130,7 @@ func (d *syslogRFC5424Decoder) Decode(data []byte, _ ...any) (any, error) {
 	// hostname
 	offset, ok = d.readUntilSpaceOrNilValue(data)
 	if !ok {
-		return row, errSyslogInvalidFormat
+		return row, fmt.Errorf("failed to parse hostname: %w", errSyslogInvalidFormat)
 	}
 	if offset == 0 {
 		data = data[2:]
@@ -141,7 +142,7 @@ func (d *syslogRFC5424Decoder) Decode(data []byte, _ ...any) (any, error) {
 	// appname
 	offset, ok = d.readUntilSpaceOrNilValue(data)
 	if !ok {
-		return row, errSyslogInvalidFormat
+		return row, fmt.Errorf("failed to parse appname: %w", errSyslogInvalidFormat)
 	}
 	if offset == 0 {
 		data = data[2:]
@@ -153,7 +154,7 @@ func (d *syslogRFC5424Decoder) Decode(data []byte, _ ...any) (any, error) {
 	// procid
 	offset, ok = d.readUntilSpaceOrNilValue(data)
 	if !ok {
-		return row, errSyslogInvalidFormat
+		return row, fmt.Errorf("failed to parse ProcID: %w", errSyslogInvalidFormat)
 	}
 	if offset == 0 {
 		data = data[2:]
@@ -165,7 +166,7 @@ func (d *syslogRFC5424Decoder) Decode(data []byte, _ ...any) (any, error) {
 	// msgid
 	offset, ok = d.readUntilSpaceOrNilValue(data)
 	if !ok {
-		return row, errSyslogInvalidFormat
+		return row, fmt.Errorf("failed to parse MsgID: %w", errSyslogInvalidFormat)
 	}
 	if offset == 0 {
 		data = data[2:]
@@ -177,7 +178,7 @@ func (d *syslogRFC5424Decoder) Decode(data []byte, _ ...any) (any, error) {
 	// structured data
 	row.StructuredData, offset, ok = d.parseStructuredData(data)
 	if !ok {
-		return row, errSyslogInvalidSD
+		return row, fmt.Errorf("failed to parse structured data: %w", errSyslogInvalidSD)
 	}
 
 	// no message

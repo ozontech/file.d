@@ -83,8 +83,9 @@ func (d *syslogRFC3164Decoder) Decode(data []byte, _ ...any) (any, error) {
 	// priority
 	pri, offset, err := syslogParsePriority(data)
 	if err != nil {
-		return row, err
+		return row, fmt.Errorf("failed to parse priority: %w", err)
 	}
+	// offset points to '>'
 	row.Priority = data[1:offset]
 	data = data[offset+1:]
 
@@ -94,7 +95,7 @@ func (d *syslogRFC3164Decoder) Decode(data []byte, _ ...any) (any, error) {
 
 	// timestamp
 	if !d.validateTimestamp(data) {
-		return row, errSyslogInvalidTimestamp
+		return row, fmt.Errorf("failed to parse timestamp: %w", errSyslogInvalidTimestamp)
 	}
 	row.Timestamp = data[:len(time.Stamp)]
 	data = data[len(time.Stamp)+1:]
@@ -102,7 +103,7 @@ func (d *syslogRFC3164Decoder) Decode(data []byte, _ ...any) (any, error) {
 	// hostname
 	offset = bytes.IndexByte(data, ' ')
 	if offset < 0 {
-		return row, errSyslogInvalidFormat
+		return row, fmt.Errorf("failed to parse hostname: %w", errSyslogInvalidFormat)
 	}
 	row.Hostname = data[:offset]
 	data = data[offset+1:]
@@ -110,7 +111,7 @@ func (d *syslogRFC3164Decoder) Decode(data []byte, _ ...any) (any, error) {
 	// appname
 	offset = bytes.IndexAny(data, "[: ")
 	if offset < 0 {
-		return row, errSyslogInvalidFormat
+		return row, fmt.Errorf("failed to parse appname: %w", errSyslogInvalidFormat)
 	}
 	row.AppName = data[:offset]
 	data = data[offset:]
@@ -119,7 +120,7 @@ func (d *syslogRFC3164Decoder) Decode(data []byte, _ ...any) (any, error) {
 	if data[0] == '[' {
 		offset = bytes.IndexByte(data, ']')
 		if offset < 0 || data[offset+1] != ':' {
-			return row, errSyslogInvalidFormat
+			return row, fmt.Errorf("failed to parse ProcID: %w", errSyslogInvalidFormat)
 		}
 		row.ProcID = data[1:offset]
 		data = data[offset+2:]

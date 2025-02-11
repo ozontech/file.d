@@ -18,7 +18,7 @@ func anyToInt(v any) (int, error) {
 		}
 		return int(vInt64), nil
 	default:
-		return 0, errors.New("not int")
+		return 0, errors.New("value is not convertable to int")
 	}
 }
 
