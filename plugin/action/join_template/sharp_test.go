@@ -1,11 +1,116 @@
 package join_template
 
 import (
+	"regexp"
 	"testing"
 
 	"github.com/ozontech/file.d/cfg"
 	"github.com/stretchr/testify/require"
 )
+
+func BenchmarkSharpStartMixedRes(b *testing.B) {
+	template, ok := templates["sharp_exception"]
+	if !ok {
+		require.True(b, ok)
+	}
+
+	re := regexp.MustCompile(template.startRePat)
+	lines := getLines(contentSharpException)
+
+	b.ResetTimer()
+	b.Run("explicit", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			for _, line := range lines {
+				sharpStartCheck(line)
+			}
+		}
+	})
+	b.Run("regexp", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			for _, line := range lines {
+				re.MatchString(line)
+			}
+		}
+	})
+}
+
+func BenchmarkSharpContinueMixedRes(b *testing.B) {
+	template, ok := templates["sharp_exception"]
+	if !ok {
+		require.True(b, ok)
+	}
+
+	re := regexp.MustCompile(template.continueRePat)
+	lines := getLines(contentSharpException)
+
+	b.ResetTimer()
+	b.Run("explicit", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			for _, line := range lines {
+				sharpContinueCheck(line)
+			}
+		}
+	})
+	b.Run("regexp", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			for _, line := range lines {
+				re.MatchString(line)
+			}
+		}
+	})
+}
+
+func BenchmarkSharpStartNegativeRes(b *testing.B) {
+	template, ok := templates["sharp_exception"]
+	if !ok {
+		require.True(b, ok)
+	}
+
+	re := regexp.MustCompile(template.startRePat)
+	lines := getRandLines()
+
+	b.ResetTimer()
+	b.Run("explicit", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			for _, line := range lines {
+				sharpStartCheck(line)
+			}
+		}
+	})
+	b.Run("regexp", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			for _, line := range lines {
+				re.MatchString(line)
+			}
+		}
+	})
+}
+
+func BenchmarkSharpContinueNegativeRes(b *testing.B) {
+	template, ok := templates["sharp_exception"]
+	if !ok {
+		require.True(b, ok)
+	}
+
+	re := regexp.MustCompile(template.continueRePat)
+	lines := getRandLines()
+
+	b.ResetTimer()
+	b.Run("explicit", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			for _, line := range lines {
+				sharpContinueCheck(line)
+			}
+		}
+	})
+	b.Run("regexp", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			for _, line := range lines {
+				re.MatchString(line)
+			}
+		}
+	})
+}
 
 func TestSharpSameResults(t *testing.T) {
 	template, ok := templates["sharp_exception"]
