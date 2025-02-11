@@ -72,6 +72,7 @@ func containsArrow(s string) bool {
 	return strings.HasPrefix(s, arrowSubstr)
 }
 
+// replaces regexp (^(?i)\s*--- End of)
 func containsEndOf(s string) bool {
 	i := firstNonSpaceIndex(s)
 	if i == -1 {

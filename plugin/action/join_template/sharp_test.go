@@ -88,6 +88,38 @@ func TestContainsArrow(t *testing.T) {
 	}
 }
 
+func TestContainsEndOf(t *testing.T) {
+	positive := []string{
+		"--- End of",
+		"--- END OF",
+		"--- end of",
+
+		"--- end of    ",
+		"  --- end of  ",
+		"\t\t--- end of",
+
+		"   --- End of inner exception stack trace ---",
+	}
+
+	negative := []string{
+		"\t\n ", // all characters are spaces
+
+		// non-space part is not long enough
+		"qwe", "1234",
+		"--- End   ",
+		"  --- End ",
+
+		// wrong prefix of non-space part
+		"0123456789",
+		"--- End ab",
+		"--- End ab" + endOfSubstr,
+	}
+
+	for i, test := range getCases(positive, negative) {
+		require.Equal(t, test.res, containsEndOf(test.s), i)
+	}
+}
+
 func TestEqualCaseInsensitive(t *testing.T) {
 	type TestCase struct {
 		a, b string
