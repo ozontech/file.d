@@ -35,6 +35,12 @@ Docker splits long logs by 16kb chunks. The plugin joins them back, but if an ev
 
 <br>
 
+**`deleted_pods_cache_size`** *`int`* *`default=10000`* 
+
+How many entries for deleted pods should be stored in the cache
+
+<br>
+
 **`allowed_pod_labels`** *`[]string`* 
 
 If set, it defines which pod labels to add to the event, others will be ignored.

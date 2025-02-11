@@ -42,11 +42,14 @@ type (
 )
 
 var (
-	client           *kubernetes.Clientset
-	MetaData         = make(meta)
-	metaDataMu       = &sync.RWMutex{}
-	deletedPodsCache *lru.Cache[PodName, bool] // to mark deleted pods or for which we are miss k8s meta and don't wanna wait for timeout for each event
-	controller       cache.Controller
+	client     *kubernetes.Clientset
+	MetaData   = make(meta)
+	metaDataMu = &sync.RWMutex{}
+
+	DeletedPodsCacheSize = 1024
+	deletedPodsCache     *lru.Cache[PodName, bool] // to mark deleted pods or for which we are miss k8s meta and don't wanna wait for timeout for each event
+
+	controller cache.Controller
 
 	expiredItems = make([]*MetaItem, 0, 16) // temporary list of expired items
 
@@ -80,6 +83,12 @@ func EnableGatherer(l *zap.SugaredLogger) {
 	localLogger = l
 	localLogger.Info("enabling k8s meta gatherer")
 
+	var err error
+	deletedPodsCache, err = lru.New[PodName, bool](DeletedPodsCacheSize)
+	if err != nil {
+		localLogger.Fatalf("can't create deleted pods cache: %s", err.Error())
+	}
+
 	if !DisableMetaUpdates {
 		initGatherer()
 
@@ -97,14 +106,6 @@ func DisableGatherer() {
 	maintenanceStop <- struct{}{}
 	<-stopped
 	stopWg.Wait()
-}
-
-func init() {
-	var err error
-	deletedPodsCache, err = lru.New[PodName, bool](1024)
-	if err != nil {
-		localLogger.Fatalf("can't create deleted pods cache: %s", err.Error())
-	}
 }
 
 func initGatherer() {
@@ -233,6 +234,11 @@ func getExpiredItems(out []*MetaItem) []*MetaItem {
 	// find pods which aren't in k8s pod list for some time and add them to the expiration list
 	for ns, podNames := range MetaData {
 		for pod, containerIDs := range podNames {
+			isDeleted := deletedPodsCache.Contains(pod)
+			if isDeleted {
+				// information about deleted pods will never change again
+				continue
+			}
 			for cid, podData := range containerIDs {
 				if now.Sub(podData.updateTime) > MetaExpireDuration {
 					out = append(out, &MetaItem{
