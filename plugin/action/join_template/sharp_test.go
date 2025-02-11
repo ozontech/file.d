@@ -3,8 +3,27 @@ package join_template
 import (
 	"testing"
 
+	"github.com/ozontech/file.d/cfg"
 	"github.com/stretchr/testify/require"
 )
+
+func TestSharpSameResults(t *testing.T) {
+	template, ok := templates["sharp_exception"]
+	require.True(t, ok)
+
+	startRe, err := cfg.CompileRegex(template.startRePat)
+	require.NoError(t, err)
+
+	continueRe, err := cfg.CompileRegex(template.continueRePat)
+	require.NoError(t, err)
+
+	lines := getLines(contentSharpException)
+
+	for _, line := range lines {
+		require.Equal(t, startRe.MatchString(line), sharpStartCheck(line))
+		require.Equal(t, continueRe.MatchString(line), sharpContinueCheck(line))
+	}
+}
 
 func TestSharpStart(t *testing.T) {
 	positive := []string{
