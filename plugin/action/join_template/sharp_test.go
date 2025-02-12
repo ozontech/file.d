@@ -10,9 +10,7 @@ import (
 
 func BenchmarkSharpStartMixedRes(b *testing.B) {
 	template, ok := templates["sharp_exception"]
-	if !ok {
-		require.True(b, ok)
-	}
+	require.True(b, ok)
 
 	re := regexp.MustCompile(template.startRePat)
 	lines := getLines(contentSharpException)
@@ -36,9 +34,7 @@ func BenchmarkSharpStartMixedRes(b *testing.B) {
 
 func BenchmarkSharpContinueMixedRes(b *testing.B) {
 	template, ok := templates["sharp_exception"]
-	if !ok {
-		require.True(b, ok)
-	}
+	require.True(b, ok)
 
 	re := regexp.MustCompile(template.continueRePat)
 	lines := getLines(contentSharpException)
@@ -62,9 +58,7 @@ func BenchmarkSharpContinueMixedRes(b *testing.B) {
 
 func BenchmarkSharpStartNegativeRes(b *testing.B) {
 	template, ok := templates["sharp_exception"]
-	if !ok {
-		require.True(b, ok)
-	}
+	require.True(b, ok)
 
 	re := regexp.MustCompile(template.startRePat)
 	lines := getRandLines()
@@ -88,9 +82,7 @@ func BenchmarkSharpStartNegativeRes(b *testing.B) {
 
 func BenchmarkSharpContinueNegativeRes(b *testing.B) {
 	template, ok := templates["sharp_exception"]
-	if !ok {
-		require.True(b, ok)
-	}
+	require.True(b, ok)
 
 	re := regexp.MustCompile(template.continueRePat)
 	lines := getRandLines()
