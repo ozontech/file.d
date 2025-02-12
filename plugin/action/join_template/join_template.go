@@ -46,7 +46,7 @@ var templates = joinTemplates{
 		startCheckFunc:    goPanicStartCheck,
 		continueCheckFunc: goPanicContinueCheck,
 	},
-	"sharp_exception": {
+	"cs_exception": {
 		startRePat:    `/^\s*(?i)Unhandled exception/`,
 		continueRePat: `/(^\s*at\s.*)|(\s*--->)|(^(?i)\s*--- End of)|(\.?\w+\.?Exception:)/`,
 
@@ -77,7 +77,7 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
-	// > The name of the template. Available templates: `go_panic`, `sharp_exception`.
+	// > The name of the template. Available templates: `go_panic`, `cs_exception`.
 	Template string `json:"template" required:"true"` // *
 
 	// > @3@4@5@6
