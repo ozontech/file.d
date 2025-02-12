@@ -1,0 +1,56 @@
+Unhandled exception. System.Threading.Tasks.TaskCanceledException: A task was canceled.
+   at Microsoft.Extensions.Hosting.Internal.Host.<StartAsync>b__15_1(IHostedService service, CancellationToken token)
+   at Microsoft.Extensions.Hosting.Internal.Host.ForeachService[T](IEnumerable`1 services, CancellationToken token, Boolean concurrent, Boolean abortOnFirstException, List`1 exceptions, Func`3 operation)
+   at Microsoft.Extensions.Hosting.Internal.Host.StartAsync(CancellationToken cancellationToken)
+   at Microsoft.Extensions.Hosting.HostingAbstractionsHostExtensions.RunAsync(IHost host, CancellationToken token)
+   at Microsoft.Extensions.Hosting.HostingAbstractionsHostExtensions.RunAsync(IHost host, CancellationToken token)
+   at Microsoft.Extensions.Hosting.HostingAbstractionsHostExtensions.Run(IHost host)
+   at Some.Path.Bar.Program.Main(String[] args) in /builds/path/some-path-bar/src/Some.Path.Bar/Program.cs:line 123
+
+# ===next===
+Unhandled exception. System.OperationCanceledException: The operation was canceled.
+   at System.Threading.CancellationToken.ThrowOperationCanceledException()
+   at System.Threading.CancellationToken.ThrowIfCancellationRequested()
+   at Tmp.Format.Extensions.Tasks.TaskExtensions.AddCancellation(Task task, CancellationToken cancellationToken)
+   at Tmp.Format.ServiceDiscovery.EndpointPool.EndpointPoolSupervisor`1.StopWatchAsync(CancellationToken cancellationToken)
+   at Microsoft.Extensions.Hosting.Internal.Host.ForeachService[T](IEnumerable`1 services, CancellationToken token, Boolean concurrent, Boolean abortOnFirstException, List`1 exceptions, Func`3 operation)
+   at Microsoft.Extensions.Hosting.Internal.Host.StopAsync(CancellationToken cancellationToken)
+   at Microsoft.Extensions.Hosting.HostingAbstractionsHostExtensions.WaitForShutdownAsync(IHost host, CancellationToken token)
+   at Microsoft.Extensions.Hosting.HostingAbstractionsHostExtensions.RunAsync(IHost host, CancellationToken token)
+   at Microsoft.Extensions.Hosting.HostingAbstractionsHostExtensions.RunAsync(IHost host, CancellationToken token)
+   at Microsoft.Extensions.Hosting.HostingAbstractionsHostExtensions.Run(IHost host)
+   at Tmp.Abc.Service.Empty.Program.Main(String[] args) in /builds/abc/csharp/service/empty/src/Tmp.Abc.Service.Empty/Program.cs:line 10
+
+# ===next===
+Unhandled exception. System.Net.Http.HttpRequestException: Resource temporarily unavailable (masked.ru:8080)
+ ---> System.Net.Sockets.SocketException (11): Resource temporarily unavailable
+   at System.Net.Sockets.Socket.AwaitableSocketAsyncEventArgs.ThrowException(SocketError error, CancellationToken cancellationToken)
+   at System.Net.Sockets.Socket.AwaitableSocketAsyncEventArgs.System.Threading.Tasks.Sources.IValueTaskSource.GetResult(Int16 token)
+   at System.Net.Sockets.Socket.<ConnectAsync>g__WaitForConnectWithCancellation|285_0(AwaitableSocketAsyncEventArgs saea, ValueTask connectTask, CancellationToken cancellationToken)
+   at System.Net.Http.HttpConnectionPool.ConnectToTcpHostAsync(String host, Int32 port, HttpRequestMessage initialRequest, Boolean async, CancellationToken cancellationToken)
+   --- End of inner exception stack trace ---
+   at System.Net.Http.HttpConnectionPool.ConnectToTcpHostAsync(String host, Int32 port, HttpRequestMessage initialRequest, Boolean async, CancellationToken cancellationToken)
+   at System.Net.Http.HttpConnectionPool.ConnectAsync(HttpRequestMessage request, Boolean async, CancellationToken cancellationToken)
+   at System.Net.Http.HttpConnectionPool.CreateHttp11ConnectionAsync(HttpRequestMessage request, Boolean async, CancellationToken cancellationToken)
+   at System.Net.Http.HttpConnectionPool.AddHttp11ConnectionAsync(QueueItem queueItem)
+   at System.Threading.Tasks.TaskCompletionSourceWithCancellation`1.WaitWithCancellationAsync(CancellationToken cancellationToken)
+   at System.Net.Http.HttpConnectionPool.SendWithVersionDetectionAndRetryAsync(HttpRequestMessage request, Boolean async, Boolean doRequestAuth, CancellationToken cancellationToken)
+   at System.Net.Http.RedirectHandler.SendAsync(HttpRequestMessage request, Boolean async, CancellationToken cancellationToken)
+   at System.Net.Http.HttpClient.<SendAsync>g__Core|83_0(HttpRequestMessage request, HttpCompletionOption completionOption, CancellationTokenSource cts, Boolean disposeCts, CancellationTokenSource pendingRequestsCts, CancellationToken originalCancellationToken)
+   at SomeSharp.Core.Polymath.MakeRequestAsync[TResponse](String resourcePath, HttpMethod httpMethod, Object requestData, IDictionary`2 headers, Boolean rawResponse, Action`1 postResponseAction)
+   at SomeSharp.Core.Polymath.MakeSomeApiRequest[TResponse](String resourcePath, HttpMethod httpMethod, Object requestData, Boolean rawResponse, Action`1 postResponseAction, String wrapTimeToLive, Boolean unauthenticated)
+   at SomeSharp.V1.AuthMethods.Kubernetes.KubernetesAuthMethodLoginProvider.GetSomeTokenAsync()
+   at SomeSharp.Core.Polymath.MakeSomeApiRequest[TResponse](String resourcePath, HttpMethod httpMethod, Object requestData, Boolean rawResponse, Action`1 postResponseAction, String wrapTimeToLive, Boolean unauthenticated)
+   at SomeSharp.Core.Polymath.MakeSomeApiRequest[TResponse](String mountPoint, String path, HttpMethod httpMethod, Object requestData, Boolean rawResponse, Action`1 postResponseAction, String wrapTimeToLive, Boolean unauthenticated)
+   at SomeSharp.V1.SecretsEngines.KeyValue.V1.KeyValueSecretsEngineV1Provider.ReadSecretPathsAsync(String path, String mountPoint, String wrapTimeToLive)
+   at Hat.Place.Common.Retries.Polly.AsyncRetryEngine.ImplementationAsync[TResult](Func`3 action, Context context, CancellationToken cancellationToken, ExceptionPredicates shouldRetryExceptionPredicates, ResultPredicates`1 shouldRetryResultPredicates, Func`5 onRetryAsync, Int32 permittedRetryCount, IEnumerable`1 sleepDurationsEnumerable, Func`4 sleepDurationProvider, Boolean continueOnCapturedContext)
+   at Hat.Place.Data.Some.SomeConfigurationProvider.ListSecrets(String path)
+   at Hat.Place.Data.Some.SomeConfigurationProvider.ReadSecrets(String path)
+   at Hat.Place.Data.Some.SomeConfigurationProvider.LoadAsync()
+   at Hat.Place.Data.Some.SomeConfigurationProvider.Load()
+   at Microsoft.Extensions.Configuration.ConfigurationRoot..ctor(IList`1 providers)
+   at Microsoft.Extensions.Configuration.ConfigurationBuilder.Build()
+   at Microsoft.Extensions.Hosting.HostBuilder.InitializeAppConfiguration()
+   at Microsoft.Extensions.Hosting.HostBuilder.Build()
+   at Hat.Place.PlaceHostBuilder.Build()
+   at Hat.Easy.Code.Program.Main(String[] args) in /builds/easy/hat-easy-code/src/Hat.Easy.Code/Program.cs:line 111

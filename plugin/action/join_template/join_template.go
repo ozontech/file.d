@@ -12,7 +12,8 @@ import (
 Alias to "join" plugin with predefined `start` and `continue` parameters.
 
 > ⚠ Parsing the whole event flow could be very CPU intensive because the plugin uses regular expressions.
-> Consider `match_fields` parameter to process only particular events. Check out an example for details.
+> Enable explicit checks without regular expressions (use `fast_check` flag) or
+> consider `match_fields` parameter to process only particular events. Check out an example for details.
 
 **Example of joining Go panics**:
 ```yaml
@@ -45,6 +46,13 @@ var templates = joinTemplates{
 		startCheckFunc:    goPanicStartCheck,
 		continueCheckFunc: goPanicContinueCheck,
 	},
+	"cs_exception": {
+		startRePat:    `/^\s*(?i)Unhandled exception/`,
+		continueRePat: `/(^\s*at\s.*)|(\s*--->)|(^(?i)\s*--- End of)|(\.?\w+\.?Exception:)/`,
+
+		startCheckFunc:    sharpStartCheck,
+		continueCheckFunc: sharpContinueCheck,
+	},
 }
 
 type Plugin struct {
@@ -69,7 +77,7 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
-	// > The name of the template. Available templates: `go_panic`.
+	// > The name of the template. Available templates: `go_panic`, `cs_exception`.
 	Template string `json:"template" required:"true"` // *
 
 	// > @3@4@5@6
