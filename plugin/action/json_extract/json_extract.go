@@ -171,9 +171,13 @@ func extract(root *insaneJSON.Root, d *jx.Decoder, fields pathNodes, skipAddFiel
 
 		if len(n.children) == 0 { // last field in path, add to root
 			if skipAddField {
-				_ = d.Skip()
+				if err = d.Skip(); err != nil {
+					break
+				}
 			} else {
-				addField(root, n.data, d)
+				if err := addField(root, n.data, d); err != nil {
+					break
+				}
 			}
 		} else { // go deep
 			// Capture calls f and then rolls back to state before call
@@ -196,32 +200,55 @@ func extract(root *insaneJSON.Root, d *jx.Decoder, fields pathNodes, skipAddFiel
 	}
 }
 
-func addField(root *insaneJSON.Root, field string, d *jx.Decoder) {
+func addField(root *insaneJSON.Root, field string, d *jx.Decoder) error {
 	switch d.Next() {
 	case jx.Number:
-		num, _ := d.Num()
-		intVal, err := num.Int64()
+		num, err := d.Num()
+		if err != nil {
+			return err
+		}
+		var (
+			intVal   int64
+			floatVal float64
+		)
+		intVal, err = num.Int64()
 		if err == nil {
 			root.AddFieldNoAlloc(root, field).MutateToInt64(intVal)
 		} else {
-			floatVal, err := num.Float64()
+			floatVal, err = num.Float64()
 			if err == nil {
 				root.AddFieldNoAlloc(root, field).MutateToFloat(floatVal)
 			}
 		}
+		if err != nil {
+			return err
+		}
 	case jx.String:
-		s, _ := d.StrBytes()
+		s, err := d.StrBytes()
+		if err != nil {
+			return err
+		}
 		root.AddFieldNoAlloc(root, field).MutateToBytesCopy(root, s)
 	case jx.Null:
-		_ = d.Null()
+		err := d.Null()
+		if err != nil {
+			return err
+		}
 		root.AddFieldNoAlloc(root, field).MutateToNull()
 	case jx.Bool:
-		b, _ := d.Bool()
+		b, err := d.Bool()
+		if err != nil {
+			return err
+		}
 		root.AddFieldNoAlloc(root, field).MutateToBool(b)
 	case jx.Object, jx.Array:
-		raw, _ := d.Raw()
+		raw, err := d.Raw()
+		if err != nil {
+			return err
+		}
 		root.AddFieldNoAlloc(root, field).MutateToJSON(root, raw.String())
 	default:
-		_ = d.Skip()
+		return d.Skip()
 	}
+	return nil
 }

@@ -142,6 +142,21 @@ func TestJsonExtract(t *testing.T) {
 				"extracted": "text",
 			},
 		},
+		{
+			name: "partial_json",
+			config: &Config{
+				Field: "json_field",
+				ExtractFields: []cfg.FieldSelector{
+					"extracted1",
+					"extracted2",
+				},
+			},
+			in: `{"field1":"value1","json_field":"{\"test\":\"test_value\",\"extracted1\":\"text\",\"extracted2\":\"long text ..."}`,
+			want: map[string]string{
+				"extracted1": "text",
+				"extracted2": "",
+			},
+		},
 	}
 	for _, tt := range cases {
 		tt := tt
