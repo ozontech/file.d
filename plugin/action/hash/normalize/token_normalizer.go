@@ -97,7 +97,7 @@ var defaultTokenPatterns = []tokenPattern{
 	},
 	{
 		name: "url",
-		re:   []byte(`(wss?|https?|ftp)://[^\r\n ]+`),
+		re:   []byte(`(wss?|https?|ftp)://[0-9a-zA-Z_\.\-@:%\+~#=\?/]+`),
 	},
 	{
 		name: "host",
