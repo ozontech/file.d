@@ -8,23 +8,23 @@ import (
 	"github.com/timtadh/lexmachine/machines"
 )
 
-type lmNormalizer struct {
+type tokenNormalizer struct {
 	lexer *lexmachine.Lexer
 }
 
-func NewLMNormalizer() Normalizer {
+func NewTokenNormalizer() Normalizer {
 	l := lexmachine.NewLexer()
 	initTokens(l)
 	if err := l.Compile(); err != nil {
 		panic(err)
 	}
 
-	return &lmNormalizer{
+	return &tokenNormalizer{
 		lexer: l,
 	}
 }
 
-func (n *lmNormalizer) Normalize(out, data []byte) []byte {
+func (n *tokenNormalizer) Normalize(out, data []byte) []byte {
 	out = out[:0]
 
 	scanner, _ := n.lexer.Scanner(data)
@@ -41,7 +41,7 @@ func (n *lmNormalizer) Normalize(out, data []byte) []byte {
 		tok := tokRaw.(token)
 
 		out = append(out, data[prevEnd:tok.begin]...)
-		out = formatPlaceholder(out, tok.name)
+		out = addPlaceholder(out, tok.name)
 		prevEnd = tok.end
 	}
 	out = append(out, data[prevEnd:]...)
