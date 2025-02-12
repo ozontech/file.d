@@ -34,7 +34,7 @@ Max size of the resulted event. If it is set and the event exceeds the limit, th
 
 **`template`** *`string`* *`required`* 
 
-The name of the template. Available templates: `go_panic`, `sharp_exception`.
+The name of the template. Available templates: `go_panic`, `cs_exception`.
 
 <br>
 

@@ -9,7 +9,7 @@ import (
 )
 
 func BenchmarkSharpStartMixedRes(b *testing.B) {
-	template, ok := templates["sharp_exception"]
+	template, ok := templates["cs_exception"]
 	require.True(b, ok)
 
 	re := regexp.MustCompile(template.startRePat)
@@ -33,7 +33,7 @@ func BenchmarkSharpStartMixedRes(b *testing.B) {
 }
 
 func BenchmarkSharpContinueMixedRes(b *testing.B) {
-	template, ok := templates["sharp_exception"]
+	template, ok := templates["cs_exception"]
 	require.True(b, ok)
 
 	re := regexp.MustCompile(template.continueRePat)
@@ -57,7 +57,7 @@ func BenchmarkSharpContinueMixedRes(b *testing.B) {
 }
 
 func BenchmarkSharpStartNegativeRes(b *testing.B) {
-	template, ok := templates["sharp_exception"]
+	template, ok := templates["cs_exception"]
 	require.True(b, ok)
 
 	re := regexp.MustCompile(template.startRePat)
@@ -81,7 +81,7 @@ func BenchmarkSharpStartNegativeRes(b *testing.B) {
 }
 
 func BenchmarkSharpContinueNegativeRes(b *testing.B) {
-	template, ok := templates["sharp_exception"]
+	template, ok := templates["cs_exception"]
 	require.True(b, ok)
 
 	re := regexp.MustCompile(template.continueRePat)
@@ -105,7 +105,7 @@ func BenchmarkSharpContinueNegativeRes(b *testing.B) {
 }
 
 func TestSharpSameResults(t *testing.T) {
-	template, ok := templates["sharp_exception"]
+	template, ok := templates["cs_exception"]
 	require.True(t, ok)
 
 	startRe, err := cfg.CompileRegex(template.startRePat)

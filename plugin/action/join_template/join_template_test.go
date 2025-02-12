@@ -20,7 +20,7 @@ var contentPanics string
 //go:embed samples/go_panic_nil_nodes.txt
 var contentPanicsWithNilNodes string
 
-//go:embed samples/sharp_exception.txt
+//go:embed samples/cs_exception.txt
 var contentSharpException string
 
 func TestSimpleJoin(t *testing.T) {
@@ -39,8 +39,8 @@ func TestSimpleJoin(t *testing.T) {
 			expEvents:    17 * 100,
 		},
 		{
-			name:         "should_ok_for_sharp_exception",
-			templateName: "sharp_exception",
+			name:         "should_ok_for_cs_exception",
+			templateName: "cs_exception",
 			content:      contentSharpException,
 			iterations:   100,
 			expEvents:    1 * 100,
