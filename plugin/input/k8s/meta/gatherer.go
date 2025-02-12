@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	lru "github.com/hashicorp/golang-lru/v2"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"
@@ -41,11 +42,14 @@ type (
 )
 
 var (
-	client       *kubernetes.Clientset
-	MetaData     = make(meta)
-	metaDataMu   = &sync.RWMutex{}
-	podBlackList = make(map[PodName]bool) // to mark pods for which we are miss k8s meta and don't wanna wait for timeout for each event
-	controller   cache.Controller
+	client     *kubernetes.Clientset
+	MetaData   = make(meta)
+	metaDataMu = &sync.RWMutex{}
+
+	DeletedPodsCacheSize = 1024
+	deletedPodsCache     *lru.Cache[PodName, bool] // to mark deleted pods or for which we are miss k8s meta and don't wanna wait for timeout for each event
+
+	controller cache.Controller
 
 	expiredItems = make([]*MetaItem, 0, 16) // temporary list of expired items
 
@@ -78,6 +82,12 @@ var (
 func EnableGatherer(l *zap.SugaredLogger) {
 	localLogger = l
 	localLogger.Info("enabling k8s meta gatherer")
+
+	var err error
+	deletedPodsCache, err = lru.New[PodName, bool](DeletedPodsCacheSize)
+	if err != nil {
+		localLogger.Fatalf("can't create deleted pods cache: %s", err.Error())
+	}
 
 	if !DisableMetaUpdates {
 		initGatherer()
@@ -150,6 +160,9 @@ func initInformer() {
 			PutMeta(obj.(*corev1.Pod))
 		},
 		DeleteFunc: func(obj any) {
+			pod := obj.(*corev1.Pod)
+			PutMeta(pod)
+			deletedPodsCache.Add(PodName(pod.Name), true)
 		},
 	}, cache.Indexers{})
 	controller = c
@@ -221,6 +234,11 @@ func getExpiredItems(out []*MetaItem) []*MetaItem {
 	// find pods which aren't in k8s pod list for some time and add them to the expiration list
 	for ns, podNames := range MetaData {
 		for pod, containerIDs := range podNames {
+			isDeleted := deletedPodsCache.Contains(pod)
+			if isDeleted {
+				// information about deleted pods will never change again
+				continue
+			}
 			for cid, podData := range containerIDs {
 				if now.Sub(podData.updateTime) > MetaExpireDuration {
 					out = append(out, &MetaItem{
@@ -262,7 +280,7 @@ func GetPodMeta(ns Namespace, pod PodName, cid ContainerID) (bool, *podMeta) {
 	for {
 		metaDataMu.RLock()
 		pm, has := MetaData[ns][pod][cid]
-		isInBlackList := podBlackList[pod]
+		isDeleted := deletedPodsCache.Contains(pod)
 		metaDataMu.RUnlock()
 
 		if has {
@@ -275,8 +293,8 @@ func GetPodMeta(ns Namespace, pod PodName, cid ContainerID) (bool, *podMeta) {
 			return success, podMeta
 		}
 
-		// fast skip blacklisted pods
-		if isInBlackList {
+		// fast skip deleted pods
+		if isDeleted {
 			return success, podMeta
 		}
 
@@ -284,13 +302,8 @@ func GetPodMeta(ns Namespace, pod PodName, cid ContainerID) (bool, *podMeta) {
 		i += metaRecheckInterval
 
 		if i-MetaWaitTimeout >= 0 {
-			metaDataMu.Lock()
-			if len(podBlackList) > 32 {
-				podBlackList = make(map[PodName]bool)
-			}
-			podBlackList[pod] = true
-			metaDataMu.Unlock()
-			localLogger.Errorf("pod %q have blacklisted, cause k8s meta retrieve timeout ns=%s", string(pod), string(ns))
+			deletedPodsCache.Add(pod, true)
+			localLogger.Errorf("maybe pod %q have deleted, cause k8s meta retrieve timeout ns=%s", string(pod), string(ns))
 
 			return success, podMeta
 		}

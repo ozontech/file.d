@@ -64,6 +64,11 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
+	// > How many entries for deleted pods should be stored in the cache
+	DeletedPodsCacheSize int `json:"deleted_pods_cache_size" default:"10000"` // *
+
+	// > @3@4@5@6
+	// >
 	// > If set, it defines which pod labels to add to the event, others will be ignored.
 	AllowedPodLabels  []string `json:"allowed_pod_labels" slice:"true"` // *
 	AllowedPodLabels_ map[string]bool
@@ -152,6 +157,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	startCounter := startCounter.Inc()
 
 	if startCounter == 1 {
+		meta.DeletedPodsCacheSize = p.config.DeletedPodsCacheSize
 		meta.EnableGatherer(p.logger)
 	}
 
