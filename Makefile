@@ -2,6 +2,8 @@ VERSION ?= $(shell git describe --abbrev=4 --dirty --always --tags)
 TIME := $(shell date '+%Y-%m-%d_%H:%M:%S')
 UPSTREAM_BRANCH ?= origin/master
 
+GOLANGCI_LINT_VER=v1.63.4
+
 .PHONY: build
 build: 
 	echo "Building for amd64..."
@@ -51,7 +53,7 @@ gen-doc:
 
 .PHONY: lint
 lint:
-	go run github.com/golangci/golangci-lint/cmd/golangci-lint@latest run
+	go run github.com/golangci/golangci-lint/cmd/golangci-lint@${GOLANGCI_LINT_VER} run
 
 .PHONY: mock
 mock:
