@@ -43,7 +43,7 @@ func TestSimpleJoin(t *testing.T) {
 			templateName: "cs_exception",
 			content:      contentSharpException,
 			iterations:   100,
-			expEvents:    1 * 100,
+			expEvents:    2 * 100,
 		},
 	}
 
