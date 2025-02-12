@@ -10,9 +10,7 @@ import (
 
 func BenchmarkPanicStartMixedRes(b *testing.B) {
 	template, ok := templates["go_panic"]
-	if !ok {
-		require.True(b, ok)
-	}
+	require.True(b, ok)
 
 	re := regexp.MustCompile(template.startRePat)
 	lines := getLines(contentPanics)
@@ -36,9 +34,7 @@ func BenchmarkPanicStartMixedRes(b *testing.B) {
 
 func BenchmarkPanicContinueMixedRes(b *testing.B) {
 	template, ok := templates["go_panic"]
-	if !ok {
-		require.True(b, ok)
-	}
+	require.True(b, ok)
 
 	re := regexp.MustCompile(template.continueRePat)
 	lines := getLines(contentPanics)
@@ -62,9 +58,7 @@ func BenchmarkPanicContinueMixedRes(b *testing.B) {
 
 func BenchmarkPanicStartNegativeRes(b *testing.B) {
 	template, ok := templates["go_panic"]
-	if !ok {
-		require.True(b, ok)
-	}
+	require.True(b, ok)
 
 	re := regexp.MustCompile(template.startRePat)
 	lines := getRandLines()
@@ -88,9 +82,7 @@ func BenchmarkPanicStartNegativeRes(b *testing.B) {
 
 func BenchmarkPanicContinueNegativeRes(b *testing.B) {
 	template, ok := templates["go_panic"]
-	if !ok {
-		require.True(b, ok)
-	}
+	require.True(b, ok)
 
 	re := regexp.MustCompile(template.continueRePat)
 	lines := getRandLines()
