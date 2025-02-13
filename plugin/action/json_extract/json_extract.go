@@ -61,6 +61,7 @@ pipelines:
       extract_fields:
         - extract1
         - extract2
+      prefix: ext_
     ...
 ```
 The original event:
@@ -75,7 +76,7 @@ The resulting event:
 {
   "log": "{\"level\":\"error\",\"extract1\":\"data1\",\"extract2\":\"long message ...",
   "time": "2024-03-01T10:49:28.263317941Z",
-  "extract1": "data1"
+  "ext_extract1": "data1"
 }
 ```
 }*/
@@ -131,6 +132,11 @@ type Config struct {
 	// >
 	// > Fields to extract.
 	ExtractFields []cfg.FieldSelector `json:"extract_fields" slice:"true"` // *
+
+	// > @3@4@5@6
+	// >
+	// > A prefix to add to extracted field keys.
+	Prefix string `json:"prefix" default:""` // *
 }
 
 func init() {
@@ -174,14 +180,14 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	}
 
 	p.decoder.ResetBytes(jsonNode.AsBytes())
-	extract(event.Root, p.decoder, p.extractFields.root.children, false)
+	extract(event.Root, p.decoder, p.extractFields.root.children, p.config.Prefix, false)
 	return pipeline.ActionPass
 }
 
 // extract extracts fields from decoder and adds it to the root.
 //
 // [skipAddField] flag is required for proper benchmarking.
-func extract(root *insaneJSON.Root, d *jx.Decoder, fields pathNodes, skipAddField bool) {
+func extract(root *insaneJSON.Root, d *jx.Decoder, fields pathNodes, prefix string, skipAddField bool) {
 	objIter, err := d.ObjIter()
 	if err != nil {
 		return
@@ -204,7 +210,7 @@ func extract(root *insaneJSON.Root, d *jx.Decoder, fields pathNodes, skipAddFiel
 					break
 				}
 			} else {
-				if err := addField(root, n.data, d); err != nil {
+				if err = addField(root, prefix+n.data, d); err != nil {
 					break
 				}
 			}
@@ -212,7 +218,7 @@ func extract(root *insaneJSON.Root, d *jx.Decoder, fields pathNodes, skipAddFiel
 			// Capture calls f and then rolls back to state before call
 			_ = d.Capture(func(d *jx.Decoder) error {
 				// recursively extract child fields
-				extract(root, d, n.children, skipAddField)
+				extract(root, d, n.children, prefix, skipAddField)
 				return nil
 			})
 			// skip the current field because we have processed it
