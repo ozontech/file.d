@@ -393,6 +393,7 @@ It transforms `{"server":{"os":"linux","arch":"amd64"}}` into `{"server":"{\"os\
 [More details...](plugin/action/json_encode/README.md)
 ## json_extract
 It extracts fields from JSON-encoded event field and adds extracted fields to the event root.
+Extract fields could be partially extracted if the event field is an invalid JSON.
 > If extracted field already exists in the event root, it will be overridden.
 
 [More details...](plugin/action/json_extract/README.md)

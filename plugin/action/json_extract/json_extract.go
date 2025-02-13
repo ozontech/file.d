@@ -10,6 +10,7 @@ import (
 
 /*{ introduction
 It extracts fields from JSON-encoded event field and adds extracted fields to the event root.
+Extract fields could be partially extracted if the event field is an invalid JSON.
 > If extracted field already exists in the event root, it will be overridden.
 }*/
 
@@ -47,6 +48,34 @@ The resulting event:
     "pod": "my-service-5c4dfcdcd4-4v5zw"
   },
   "flags": ["flag1", "flag2"]
+}
+```
+---
+```yaml
+pipelines:
+  example_pipeline:
+    ...
+    actions:
+    - type: json_extract
+      field: log
+      extract_fields:
+        - extract1
+        - extract2
+    ...
+```
+The original event:
+```json
+{
+  "log": "{\"level\":\"error\",\"extract1\":\"data1\",\"extract2\":\"long message ...",
+  "time": "2024-03-01T10:49:28.263317941Z"
+}
+```
+The resulting event:
+```json
+{
+  "log": "{\"level\":\"error\",\"extract1\":\"data1\",\"extract2\":\"long message ...",
+  "time": "2024-03-01T10:49:28.263317941Z",
+  "extract1": "data1"
 }
 ```
 }*/
