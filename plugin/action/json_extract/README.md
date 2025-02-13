@@ -50,6 +50,7 @@ pipelines:
       extract_fields:
         - extract1
         - extract2
+      prefix: ext_
     ...
 ```
 The original event:
@@ -64,7 +65,7 @@ The resulting event:
 {
   "log": "{\"level\":\"error\",\"extract1\":\"data1\",\"extract2\":\"long message ...",
   "time": "2024-03-01T10:49:28.263317941Z",
-  "extract1": "data1"
+  "ext_extract1": "data1"
 }
 ```
 
@@ -108,6 +109,12 @@ Field to extract.
 **`extract_fields`** *`[]cfg.FieldSelector`* 
 
 Fields to extract.
+
+<br>
+
+**`prefix`** *`string`* 
+
+A prefix to add to extracted field keys.
 
 <br>
 
