@@ -45,20 +45,11 @@ func factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 	return &Plugin{}, &Config{}
 }
 
-func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginParams) {
-	p.StartOld(config, params)
-}
-
 func (p *Plugin) StartOld(config pipeline.AnyConfig, _ *pipeline.ActionPluginParams) {
 	p.config = config.(*Config)
 }
 
 func (p *Plugin) Stop() {
-}
-
-func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
-	res := p.DoOld(event)
-	return res
 }
 
 func (p *Plugin) DoOld(event *pipeline.Event) pipeline.ActionResult {
@@ -215,4 +206,13 @@ func equal(a, b []string) bool {
 	}
 
 	return true
+}
+
+func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginParams) {
+	p.StartOld(config, params)
+}
+
+func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
+	res := p.DoOld(event)
+	return res
 }
