@@ -9,7 +9,7 @@ import (
 
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/test"
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestKeepFields(t *testing.T) {
@@ -31,10 +31,10 @@ func TestKeepFields(t *testing.T) {
 	wg.Wait()
 	p.Stop()
 
-	assert.Equal(t, 3, len(outEvents), "wrong out events count")
-	assert.Equal(t, `{"field_1":"value_1"}`, outEvents[0], "wrong event")
-	assert.Equal(t, `{"field_2":"value_2"}`, outEvents[1], "wrong event")
-	assert.Equal(t, `{}`, outEvents[2], "wrong event")
+	require.Equal(t, 3, len(outEvents), "wrong out events count")
+	require.Equal(t, `{"field_1":"value_1"}`, outEvents[0], "wrong event")
+	require.Equal(t, `{"field_2":"value_2"}`, outEvents[1], "wrong event")
+	require.Equal(t, `{}`, outEvents[2], "wrong event")
 }
 
 func BenchmarkGenerics(b *testing.B) {
