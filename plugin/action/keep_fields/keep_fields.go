@@ -141,6 +141,9 @@ func (p *Plugin) DoNew(event *pipeline.Event) pipeline.ActionResult {
 		node.Suicide()
 	}
 
+	// necessary
+	p.badNodesBuf = p.badNodesBuf[:0]
+
 	return pipeline.ActionPass
 }
 
