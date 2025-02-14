@@ -48,6 +48,10 @@ func (t Type) InsaneConvertFunc() string {
 		return "AsFloat32"
 	case "float64":
 		return "AsFloat64"
+	case "int64":
+		return "AsInt64"
+	case "uint64":
+		return "AsUint64"
 	default:
 		return "AsInt"
 	}

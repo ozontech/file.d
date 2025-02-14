@@ -9,14 +9,17 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/e2e/file_clickhouse"
+	"github.com/ozontech/file.d/e2e/file_elasticsearch"
+	"github.com/ozontech/file.d/e2e/file_es_split"
 	"github.com/ozontech/file.d/e2e/file_file"
 	"github.com/ozontech/file.d/e2e/http_file"
 	"github.com/ozontech/file.d/e2e/join_throttle"
 	"github.com/ozontech/file.d/e2e/kafka_auth"
 	"github.com/ozontech/file.d/e2e/kafka_file"
 	"github.com/ozontech/file.d/e2e/split_join"
+
+	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
 	_ "github.com/ozontech/file.d/plugin/action/add_file_name"
 	_ "github.com/ozontech/file.d/plugin/action/add_host"
@@ -143,6 +146,22 @@ func TestE2EStabilityWorkCase(t *testing.T) {
 			e2eTest: &file_clickhouse.Config{},
 			cfgPath: "./file_clickhouse/config.yml",
 		},
+		{
+			name: "file_elasticsearch",
+			e2eTest: &file_elasticsearch.Config{
+				Count:    10,
+				Pipeline: "test-ingest-pipeline",
+				Endpoint: "http://localhost:19200",
+				Username: "elastic",
+				Password: "elastic",
+			},
+			cfgPath: "./file_elasticsearch/config.yml",
+		},
+		{
+			name:    "file_es",
+			e2eTest: &file_es_split.Config{},
+			cfgPath: "./file_es_split/config.yml",
+		},
 	}
 
 	for num, test := range testsList {
@@ -162,7 +181,7 @@ func TestE2EStabilityWorkCase(t *testing.T) {
 }
 
 func startForTest(t *testing.T, test E2ETest, num int) *fd.FileD {
-	conf := cfg.NewConfigFromFile(test.cfgPath)
+	conf := cfg.NewConfigFromFile([]string{test.cfgPath})
 	if _, ok := conf.Pipelines[test.name]; !ok {
 		log.Fatalf("pipeline name must be named the same as the name of the test")
 	}

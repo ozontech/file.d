@@ -103,7 +103,7 @@ func clickhouseTypes() []Type {
 			types = append(types, Type{
 				ChTypeName:  protoName,
 				GoName:      goName,
-				Convertable: true,
+				Convertable: bits != 64,
 				Nullable:    true,
 			})
 		}

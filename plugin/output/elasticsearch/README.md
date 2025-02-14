@@ -133,6 +133,12 @@ After an insert error, fall with a non-zero exit code or not
 
 <br>
 
+**`split_batch`** *`bool`* *`default=false`* 
+
+Enable split big batches
+
+<br>
+
 **`retention`** *`cfg.Duration`* *`default=1s`* 
 
 Retention milliseconds for retry to DB.
@@ -148,6 +154,12 @@ Multiplier for exponential increase of retention between retries
 **`strict`** *`bool`* *`default=false`* 
 
 After a non-retryable write error, fall with a non-zero exit code or not
+
+<br>
+
+**`ingest_pipeline`** *`string`* 
+
+The name of the ingest pipeline to write events to.
 
 <br>
 

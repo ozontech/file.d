@@ -42,6 +42,8 @@ func TestZeroValueNode(t *testing.T) {
 			NewColUInt16(nullable),
 			NewColInt32(nullable),
 			NewColUInt32(nullable),
+			NewColInt64(nullable),
+			NewColUInt64(nullable),
 			NewColInt128(nullable),
 			NewColUInt128(nullable),
 			NewColIPv4(nullable),

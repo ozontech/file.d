@@ -101,6 +101,7 @@ func getTestMeta() cfg.MetaTemplates {
 
 func TestAllowedLabels(t *testing.T) {
 	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(MultilineActionFactory, config(), pipeline.MatchModeAnd, nil, false))
+	meta.EnableGatherer(logger.Instance)
 
 	wg := &sync.WaitGroup{}
 	wg.Add(2)
@@ -133,6 +134,7 @@ func TestAllowedLabels(t *testing.T) {
 	input.In(0, filename2, test.NewOffset(0), []byte(wrapK8sInfo(`log\n`, item2, "node1")))
 
 	wg.Wait()
+	meta.DisableGatherer()
 	p.Stop()
 
 	assert.Equal(t, "allowed_value", outEvents[0].Root.Dig("k8s_pod_label_allowed_label").AsString(), "no label in event")
@@ -141,6 +143,7 @@ func TestAllowedLabels(t *testing.T) {
 
 func TestK8SJoin(t *testing.T) {
 	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(MultilineActionFactory, config(), pipeline.MatchModeAnd, nil, false))
+	meta.EnableGatherer(logger.Instance)
 	wg := &sync.WaitGroup{}
 	wg.Add(4)
 
@@ -177,6 +180,7 @@ func TestK8SJoin(t *testing.T) {
 	input.In(0, filename, test.NewOffset(80), []byte(`{"ts":"time","stream":"stdout","log":"one line log 3\n"`+k8sMeta+`}`))
 
 	wg.Wait()
+	meta.DisableGatherer()
 	p.Stop()
 
 	assert.Equal(t, 4, len(outLogs))
