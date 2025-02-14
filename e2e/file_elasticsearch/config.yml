@@ -1,0 +1,15 @@
+pipelines:
+  file_elasticsearch:
+    input:
+      type: file
+      persistence_mode: async
+      watching_dir: SOME_DIR
+      offsets_file: SOME_FILE
+      offsets_op: reset
+    output:
+      type: elasticsearch
+      endpoints:
+        - http://localhost:9200
+      username: SOME_USERNAME
+      password: SOME_PASSWORD
+      index_format: SOME_INDEX

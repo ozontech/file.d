@@ -3,6 +3,7 @@ package cfg
 import (
 	"encoding/json"
 	"errors"
+	"reflect"
 	"testing"
 	"time"
 
@@ -11,16 +12,24 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func NewTestConfig(name string) *Config {
-	return NewConfigFromFile("../testdata/config/" + name)
+func NewTestConfig(names []string) *Config {
+	configFiles := make([]string, 0, len(names))
+	for _, name := range names {
+		configFiles = append(configFiles, "../testdata/config/"+name)
+	}
+	return NewConfigFromFile(configFiles)
 }
 
 func TestSimple(t *testing.T) {
-	c := NewTestConfig("e2e.yaml")
+	c := NewTestConfig([]string{"e2e.yaml", "e2e.override.yaml"})
 
 	assert.NotNil(t, c, "config loading should't return nil")
-
 	assert.Equal(t, 1, len(c.Pipelines), "pipelines count isn't match")
+
+	// check override config
+	outputType, err := c.Pipelines["test"].Raw.Get("output").Get("type").String()
+	assert.Nil(t, err, "cannot get output type")
+	assert.Equal(t, "devnull", outputType, "output type is not overrided")
 }
 
 type intDefault struct {
@@ -642,4 +651,136 @@ func TestExpression_UnmarshalJSON(t *testing.T) {
 	require.Equal(t, Expression("1"), val.E1)
 	require.Equal(t, Expression("2"), val.E2)
 	require.Equal(t, Expression("2+2"), val.E3)
+}
+
+func TestMergeYAMLs(t *testing.T) {
+	tests := []struct {
+		name     string
+		a        map[interface{}]interface{}
+		b        map[interface{}]interface{}
+		expected map[interface{}]interface{}
+	}{
+		{
+			name: "simple merge",
+			a: map[interface{}]interface{}{
+				"key1": "value1",
+				"key2": "value2",
+			},
+			b: map[interface{}]interface{}{
+				"key2": "newValue2",
+				"key3": "value3",
+			},
+			expected: map[interface{}]interface{}{
+				"key1": "value1",
+				"key2": "newValue2",
+				"key3": "value3",
+			},
+		},
+		{
+			name: "nested maps",
+			a: map[interface{}]interface{}{
+				"key1": map[interface{}]interface{}{
+					"subkey1": "subvalue1",
+				},
+			},
+			b: map[interface{}]interface{}{
+				"key1": map[interface{}]interface{}{
+					"subkey2": "subvalue2",
+				},
+				"key2": "value2",
+			},
+			expected: map[interface{}]interface{}{
+				"key1": map[interface{}]interface{}{
+					"subkey1": "subvalue1",
+					"subkey2": "subvalue2",
+				},
+				"key2": "value2",
+			},
+		},
+		{
+			name: "overwriting nested maps",
+			a: map[interface{}]interface{}{
+				"key1": map[interface{}]interface{}{
+					"subkey1": "subvalue1",
+				},
+			},
+			b: map[interface{}]interface{}{
+				"key1": map[interface{}]interface{}{
+					"subkey1": "newSubvalue1",
+					"subkey2": "subvalue2",
+				},
+			},
+			expected: map[interface{}]interface{}{
+				"key1": map[interface{}]interface{}{
+					"subkey1": "newSubvalue1",
+					"subkey2": "subvalue2",
+				},
+			},
+		},
+		{
+			name:     "empty maps",
+			a:        map[interface{}]interface{}{},
+			b:        map[interface{}]interface{}{},
+			expected: map[interface{}]interface{}{
+				// Expecting an empty map
+			},
+		},
+		{
+			name: "a is empty",
+			a:    map[interface{}]interface{}{},
+			b: map[interface{}]interface{}{
+				"key1": "value1",
+			},
+			expected: map[interface{}]interface{}{
+				"key1": "value1",
+			},
+		},
+		{
+			name: "b is empty",
+			a: map[interface{}]interface{}{
+				"key1": "value1",
+			},
+			b: map[interface{}]interface{}{},
+			expected: map[interface{}]interface{}{
+				"key1": "value1",
+			},
+		},
+		{
+			name: "override slice",
+			a: map[interface{}]interface{}{
+				"key1": []interface{}{"value1", "value2"},
+			},
+			b: map[interface{}]interface{}{
+				"key1": []interface{}{"newValue1", "newValue2"},
+			},
+			expected: map[interface{}]interface{}{
+				"key1": []interface{}{"newValue1", "newValue2"},
+			},
+		},
+		{
+			name: "merge slice with map",
+			a: map[interface{}]interface{}{
+				"key1": []interface{}{"value1", "value2"},
+			},
+			b: map[interface{}]interface{}{
+				"key1": map[interface{}]interface{}{
+					"subkey1": "subvalue1",
+				},
+			},
+			expected: map[interface{}]interface{}{
+				"key1": map[interface{}]interface{}{
+					"subkey1": "subvalue1",
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := mergeYAMLs(tt.a, tt.b)
+			if !reflect.DeepEqual(result, tt.expected) {
+				t.Errorf("expected %v, got %v", tt.expected, result)
+			}
+		})
+	}
 }

@@ -65,7 +65,7 @@ var (
 	fileD *fd.FileD
 	exit  = make(chan bool)
 
-	config        = kingpin.Flag("config", `Config file name`).Required().ExistingFile()
+	config        = kingpin.Flag("config", `Config file name (to add a config file you can repeat the argument)`).Required().ExistingFiles()
 	http          = kingpin.Flag("http", `HTTP listen addr eg. ":9000", "off" to disable`).Default(":9000").String()
 	memLimitRatio = kingpin.Flag(
 		"mem-limit-ratio",

@@ -173,6 +173,11 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
+	// > Enable split big batches
+	SplitBatch bool `json:"split_batch" default:"false"` // *
+
+	// > @3@4@5@6
+	// >
 	// > Retention milliseconds for retry to DB.
 	Retention  cfg.Duration `json:"retention" default:"1s" parse:"duration"` // *
 	Retention_ time.Duration
@@ -186,6 +191,11 @@ type Config struct {
 	// >
 	// > After a non-retryable write error, fall with a non-zero exit code or not
 	Strict bool `json:"strict" default:"false"` // *
+
+	// > @3@4@5@6
+	// >
+	// > The name of the ingest pipeline to write events to.
+	IngestPipeline string `json:"ingest_pipeline"` // *
 }
 
 type KeepAliveConfig struct {
@@ -200,6 +210,7 @@ type KeepAliveConfig struct {
 
 type data struct {
 	outBuf []byte
+	begin  []int
 }
 
 func init() {
@@ -293,7 +304,7 @@ func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 
 func (p *Plugin) prepareClient() {
 	config := &xhttp.ClientConfig{
-		Endpoints:         prepareEndpoints(p.config.Endpoints),
+		Endpoints:         prepareEndpoints(p.config.Endpoints, p.config.IngestPipeline),
 		ConnectionTimeout: p.config.ConnectionTimeout_ * 2,
 		AuthHeader:        p.getAuthHeader(),
 		KeepAlive: &xhttp.ClientKeepAliveConfig{
@@ -317,13 +328,17 @@ func (p *Plugin) prepareClient() {
 	}
 }
 
-func prepareEndpoints(endpoints []string) []string {
+func prepareEndpoints(endpoints []string, ingestPipeline string) []string {
 	res := make([]string, 0, len(endpoints))
 	for _, e := range endpoints {
 		if e[len(e)-1] == '/' {
 			e = e[:len(e)-1]
 		}
-		res = append(res, e+"/_bulk?_source=false")
+		e += "/_bulk?_source=false"
+		if ingestPipeline != "" {
+			e += "&pipeline=" + ingestPipeline
+		}
+		res = append(res, e)
 	}
 	return res
 }
@@ -338,6 +353,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 	if *workerData == nil {
 		*workerData = &data{
 			outBuf: make([]byte, 0, p.config.BatchSize_*p.avgEventSize),
+			begin:  make([]int, 0, p.config.BatchSize_+1),
 		}
 	}
 
@@ -347,13 +363,24 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 		data.outBuf = make([]byte, 0, p.config.BatchSize_*p.avgEventSize)
 	}
 
+	eventsCount := 0
+	data.begin = data.begin[:0]
 	data.outBuf = data.outBuf[:0]
 	batch.ForEach(func(event *pipeline.Event) {
+		eventsCount++
+		data.begin = append(data.begin, len(data.outBuf))
 		data.outBuf = p.appendEvent(data.outBuf, event)
 	})
+	data.begin = append(data.begin, len(data.outBuf))
 
-	statusCode, err := p.client.DoTimeout(http.MethodPost, NDJSONContentType, data.outBuf,
-		p.config.ConnectionTimeout_, p.reportESErrors)
+	var statusCode int
+	var err error
+
+	if p.config.SplitBatch {
+		statusCode, err = p.sendSplit(0, eventsCount, data.begin, data.outBuf)
+	} else {
+		statusCode, err = p.send(data.outBuf)
+	}
 
 	if err != nil {
 		p.sendErrorMetric.WithLabelValues(strconv.Itoa(statusCode)).Inc()
@@ -373,6 +400,51 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 	}
 
 	return nil
+}
+
+func (p *Plugin) send(data []byte) (int, error) {
+	return p.client.DoTimeout(
+		http.MethodPost,
+		NDJSONContentType,
+		data,
+		p.config.ConnectionTimeout_,
+		p.reportESErrors,
+	)
+}
+
+func (p *Plugin) sendSplit(left int, right int, begin []int, data []byte) (int, error) {
+	if left == right {
+		return http.StatusOK, nil
+	}
+
+	statusCode, err := p.client.DoTimeout(
+		http.MethodPost,
+		NDJSONContentType,
+		data[begin[left]:begin[right]],
+		p.config.ConnectionTimeout_, p.reportESErrors)
+
+	if err != nil {
+		p.sendErrorMetric.WithLabelValues(strconv.Itoa(statusCode)).Inc()
+		switch statusCode {
+		case http.StatusRequestEntityTooLarge:
+			// can't save even one log
+			if right-left == 1 {
+				return statusCode, err
+			}
+
+			middle := (left + right) / 2
+			statusCode, err = p.sendSplit(left, middle, begin, data)
+			if err != nil {
+				return statusCode, err
+			}
+
+			return p.sendSplit(middle, right, begin, data)
+		default:
+			return statusCode, err
+		}
+	}
+
+	return http.StatusOK, nil
 }
 
 func (p *Plugin) appendEvent(outBuf []byte, event *pipeline.Event) []byte {
