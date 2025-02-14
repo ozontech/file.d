@@ -114,12 +114,7 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	}
 
 	// place decoded object under root
-	fields := node.AsFields()
-	for _, child := range fields {
-		childField := child.AsString()
-		x := event.Root.AddFieldNoAlloc(event.Root, childField)
-		x.MutateToNode(child.AsFieldValue())
-	}
+	pipeline.MergeToRoot(event.Root, node)
 
 	return pipeline.ActionPass
 }
