@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/ozontech/file.d/cfg"
+	"github.com/ozontech/file.d/plugin/action/join_template/sample"
 	"github.com/stretchr/testify/require"
 )
 
@@ -13,7 +14,7 @@ func BenchmarkSharpStartMixedRes(b *testing.B) {
 	require.True(b, ok)
 
 	re := regexp.MustCompile(template.startRePat)
-	lines := getLines(contentSharpException)
+	lines := getLines(sample.SharpException)
 
 	b.ResetTimer()
 	b.Run("explicit", func(b *testing.B) {
@@ -37,7 +38,7 @@ func BenchmarkSharpContinueMixedRes(b *testing.B) {
 	require.True(b, ok)
 
 	re := regexp.MustCompile(template.continueRePat)
-	lines := getLines(contentSharpException)
+	lines := getLines(sample.SharpException)
 
 	b.ResetTimer()
 	b.Run("explicit", func(b *testing.B) {
@@ -114,7 +115,7 @@ func TestSharpSameResults(t *testing.T) {
 	continueRe, err := cfg.CompileRegex(template.continueRePat)
 	require.NoError(t, err)
 
-	lines := getLines(contentSharpException)
+	lines := getLines(sample.SharpException)
 
 	for _, line := range lines {
 		require.Equal(t, startRe.MatchString(line), sharpStartCheck(line))
