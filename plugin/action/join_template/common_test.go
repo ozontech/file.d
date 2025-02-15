@@ -2,7 +2,6 @@ package join_template
 
 import (
 	"testing"
-	"unicode"
 
 	"github.com/stretchr/testify/require"
 )
@@ -64,15 +63,5 @@ func TestFirstNonSpaceIndex(t *testing.T) {
 		{"\n\n \t\tqwe", 5},
 	} {
 		require.Equal(t, tt.res, firstNonSpaceIndex(tt.s), tt.s)
-	}
-}
-
-func TestToLower(t *testing.T) {
-	for c := 0; c < 1<<7; c++ {
-		require.Equal(t,
-			int(toLower(byte(c))),
-			int(unicode.ToLower(rune(c))),
-			c,
-		)
 	}
 }

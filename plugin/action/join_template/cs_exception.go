@@ -2,6 +2,8 @@ package join_template
 
 import (
 	"strings"
+
+	"github.com/ozontech/file.d/plugin/action/join_template/ascii"
 )
 
 const (
@@ -57,7 +59,7 @@ func containsAt(s string) bool {
 		return false
 	}
 
-	return isSpace(s[0])
+	return ascii.IsSpace(s[0])
 }
 
 // replaces regexp (\s*--->)
@@ -96,7 +98,7 @@ func equalCaseInsensitive(a, b string) bool {
 	}
 
 	for i, c := range []byte(a) {
-		if toLower(c) != toLower(b[i]) {
+		if ascii.ToLower(c) != ascii.ToLower(b[i]) {
 			return false
 		}
 	}
@@ -116,8 +118,8 @@ func containsException(s string) bool {
 	i--
 
 	if s[i] == '.' {
-		return i > 0 && isLetterOrUnderscoreOrDigit(s[i-1])
+		return i > 0 && ascii.IsLetterOrUnderscoreOrDigit(s[i-1])
 	}
 
-	return isLetterOrUnderscoreOrDigit(s[i])
+	return ascii.IsLetterOrUnderscoreOrDigit(s[i])
 }
