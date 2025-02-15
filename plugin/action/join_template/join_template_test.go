@@ -1,27 +1,18 @@
 package join_template
 
 import (
-	_ "embed"
 	"fmt"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/plugin/action/join_template/sample"
 	"github.com/ozontech/file.d/test"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/atomic"
 )
-
-//go:embed samples/go_panic.txt
-var contentPanics string
-
-//go:embed samples/go_panic_nil_nodes.txt
-var contentPanicsWithNilNodes string
-
-//go:embed samples/cs_exception.txt
-var contentSharpException string
 
 func TestSimpleJoin(t *testing.T) {
 	cases := []struct {
@@ -34,14 +25,14 @@ func TestSimpleJoin(t *testing.T) {
 		{
 			name:         "should_ok_for_panics",
 			templateName: "go_panic",
-			content:      contentPanics,
+			content:      sample.Panics,
 			iterations:   100,
 			expEvents:    17 * 100,
 		},
 		{
 			name:         "should_ok_for_cs_exception",
 			templateName: "cs_exception",
-			content:      contentSharpException,
+			content:      sample.SharpException,
 			iterations:   100,
 			expEvents:    3 * 100,
 		},
@@ -134,7 +125,7 @@ func TestJoinAfterNilNode(t *testing.T) {
 	}{
 		{
 			name:       "should_ok_for_panics",
-			content:    contentPanicsWithNilNodes,
+			content:    sample.PanicsWithNilNodes,
 			iterations: 100,
 			expEvents:  23 * 100,
 		},

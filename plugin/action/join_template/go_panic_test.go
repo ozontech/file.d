@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/ozontech/file.d/cfg"
+	"github.com/ozontech/file.d/plugin/action/join_template/sample"
 	"github.com/stretchr/testify/require"
 )
 
@@ -13,7 +14,7 @@ func BenchmarkPanicStartMixedRes(b *testing.B) {
 	require.True(b, ok)
 
 	re := regexp.MustCompile(template.startRePat)
-	lines := getLines(contentPanics)
+	lines := getLines(sample.Panics)
 
 	b.ResetTimer()
 	b.Run("explicit", func(b *testing.B) {
@@ -37,7 +38,7 @@ func BenchmarkPanicContinueMixedRes(b *testing.B) {
 	require.True(b, ok)
 
 	re := regexp.MustCompile(template.continueRePat)
-	lines := getLines(contentPanics)
+	lines := getLines(sample.Panics)
 
 	b.ResetTimer()
 	b.Run("explicit", func(b *testing.B) {
@@ -114,7 +115,7 @@ func TestPanicSameResults(t *testing.T) {
 	continueRe, err := cfg.CompileRegex(template.continueRePat)
 	require.NoError(t, err)
 
-	lines := getLines(contentPanics)
+	lines := getLines(sample.Panics)
 
 	for _, line := range lines {
 		require.Equal(t, startRe.MatchString(line), goPanicStartCheck(line))
