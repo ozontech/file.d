@@ -1,8 +1,10 @@
 package join_template
 
+import "github.com/ozontech/file.d/plugin/action/join_template/ascii"
+
 func containsOnlySpaces(s string) bool {
 	for _, c := range []byte(s) {
-		if !isSpace(c) {
+		if !ascii.IsSpace(c) {
 			return false
 		}
 	}
@@ -12,7 +14,7 @@ func containsOnlySpaces(s string) bool {
 
 func firstNonSpaceIndex(s string) int {
 	for i, c := range []byte(s) {
-		if !isSpace(c) {
+		if !ascii.IsSpace(c) {
 			return i
 		}
 	}
@@ -20,57 +22,12 @@ func firstNonSpaceIndex(s string) int {
 	return -1
 }
 
-func isSpace(c byte) bool {
-	switch c {
-	case ' ', '\n', '\t':
-		return true
-	default:
-		return false
-	}
-}
-
 func containsOnlyDigits(s string) bool {
 	for _, c := range []byte(s) {
-		if !isDigit(c) {
+		if !ascii.IsDigit(c) {
 			return false
 		}
 	}
 
 	return true
-}
-
-func isHexDigit(c byte) bool {
-	return isDigit(c) || ('a' <= c && c <= 'f')
-}
-
-func isDigit(c byte) bool {
-	return '0' <= c && c <= '9'
-}
-
-func isLetterOrUnderscoreOrDigit(c byte) bool {
-	return isLetterOrUnderscore(c) || isDigit(c)
-}
-
-func isLetterOrUnderscore(c byte) bool {
-	return isLetter(c) || c == '_'
-}
-
-func isLetter(c byte) bool {
-	return isLowerCaseLetter(c) || isUpperCaseLetter(c)
-}
-
-func isLowerCaseLetter(c byte) bool {
-	return 'a' <= c && c <= 'z'
-}
-
-func toLower(c byte) byte {
-	if isUpperCaseLetter(c) {
-		return c + 'a' - 'A'
-	}
-
-	return c
-}
-
-func isUpperCaseLetter(c byte) bool {
-	return 'A' <= c && c <= 'Z'
 }
