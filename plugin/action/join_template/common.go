@@ -3,13 +3,7 @@ package join_template
 import "github.com/ozontech/file.d/plugin/action/join_template/ascii"
 
 func containsOnlySpaces(s string) bool {
-	for _, c := range []byte(s) {
-		if !ascii.IsSpace(c) {
-			return false
-		}
-	}
-
-	return true
+	return firstNonSpaceIndex(s) == -1
 }
 
 func firstNonSpaceIndex(s string) int {
