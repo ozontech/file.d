@@ -61,6 +61,24 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
+	// > Message field from log to be mapped to loki
+	// >
+	// > Example
+	// >
+	// > message
+	MessageField string `json:"message_field" required:"true"`
+
+	// > @3@4@5@6
+	// >
+	// > Timestamp field from log to be mapped to loki
+	// >
+	// > Example
+	// >
+	// > timestamp
+	TimestampField string `json:"timestamp_field" required:"true"`
+
+	// > @3@4@5@6
+	// >
 	// > Authorization enabled, if true set OrgID
 	AuthEnabled bool `json:"auth_enabled" default:"false"` // *
 
@@ -276,12 +294,21 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 	return err
 }
 
+type stream struct {
+	StreamLabels map[string]string `json:"stream"`
+	Values       [][]any           `json:"values"`
+}
+
+type request struct {
+	Streams []stream `json:"streams"`
+}
+
 func (p *Plugin) send(ctx context.Context, data []byte) (int, error) {
-	output := map[string]interface{}{
-		"streams": []map[string]interface{}{
+	output := request{
+		Streams: []stream{
 			{
-				"stream": p.labels(),
-				"values": [][]interface{}{
+				StreamLabels: p.labels(),
+				Values: [][]any{
 					{
 						fmt.Sprintf(`%d`, time.Now().UnixNano()),
 						string(data),
@@ -291,10 +318,13 @@ func (p *Plugin) send(ctx context.Context, data []byte) (int, error) {
 		},
 	}
 
-	data, err := json.MarshalIndent(output, "", "  ")
+	// data, err := json.MarshalIndent(output, "", "  ")
+	data, err := json.Marshal(output)
 	if err != nil {
 		return 0, err
 	}
+
+	p.logger.Info("sent", string(data))
 
 	r := bytes.NewReader(data)
 
