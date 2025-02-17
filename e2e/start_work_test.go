@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/ozontech/file.d/cfg"
+	"github.com/ozontech/file.d/e2e/file_es_split"
 	"github.com/ozontech/file.d/e2e/file_loki"
 	"github.com/ozontech/file.d/fd"
 	_ "github.com/ozontech/file.d/plugin/action/add_file_name"
@@ -153,6 +154,11 @@ func TestE2EStabilityWorkCase(t *testing.T) {
 			name:    "file_loki",
 			e2eTest: &file_loki.Config{},
 			cfgPath: "./file_loki/config.yml",
+		},
+		{
+			name:    "file_es",
+			e2eTest: &file_es_split.Config{},
+			cfgPath: "./file_es_split/config.yml",
 		},
 	}
 

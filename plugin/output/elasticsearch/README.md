@@ -133,6 +133,12 @@ After an insert error, fall with a non-zero exit code or not
 
 <br>
 
+**`split_batch`** *`bool`* *`default=false`* 
+
+Enable split big batches
+
+<br>
+
 **`retention`** *`cfg.Duration`* *`default=1s`* 
 
 Retention milliseconds for retry to DB.
