@@ -108,13 +108,14 @@ type Config struct {
 	// >
 	// > 	The field format for various hashing algorithms.
 	// >
-	// > * **`max_size`** *`int`* *`default=1024`*
+	// > * **`max_size`** *`int`* *`default=0`*
 	// >
 	// > 	The maximum field size used in hash calculation.
+	// >
 	// > 	> If the field size is greater than `max_size`, then
 	// > 	the first `max_size` bytes will be used in hash calculation.
 	// >
-	// > 	> If set to `-1`, the entire field will be used in hash calculation.
+	// > 	> If set to `0`, the entire field will be used in hash calculation.
 	Fields []Field `json:"fields" slice:"true" required:"true"` // *
 
 	// > @3@4@5@6
@@ -138,7 +139,7 @@ type Field struct {
 	Format  string `json:"format" default:"no" options:"no|normalize"`
 	Format_ fieldFormat
 
-	MaxSize int `json:"max_size" default:"1024"`
+	MaxSize int `json:"max_size" default:"0"`
 }
 
 func init() {
@@ -186,7 +187,7 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 
 	fieldData := fieldNode.AsBytes()
 	hashSize := len(fieldData)
-	if field.MaxSize != -1 && hashSize > field.MaxSize {
+	if field.MaxSize > 0 && hashSize > field.MaxSize {
 		hashSize = field.MaxSize
 	}
 
