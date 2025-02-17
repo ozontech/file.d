@@ -10,7 +10,7 @@ import (
 )
 
 func TestHash(t *testing.T) {
-	const hashField = "hash"
+	const resField = "hash"
 
 	tests := []struct {
 		name string
@@ -28,7 +28,7 @@ func TestHash(t *testing.T) {
 					{Field: "error.code"},
 					{Field: "message", Format: "normalize"},
 				},
-				HashField: hashField,
+				ResultField: resField,
 			},
 			input:    []byte(`{"level":"error","error":{"code":"unauthenticated","message":"bad token format"},"message":"error occurred"}`),
 			wantHash: 6584967863753642363,
@@ -40,7 +40,7 @@ func TestHash(t *testing.T) {
 					{Field: "error.code"},
 					{Field: "message", Format: "no"},
 				},
-				HashField: hashField,
+				ResultField: resField,
 			},
 			input:    []byte(`{"level":"error","message":"2023-10-30T13:35:33.638720813Z error occurred, client: 10.125.172.251, upstream: \"http://10.117.246.15:84/download\", host: \"mpm-youtube-downloader-38.name.com:84\""}`),
 			wantHash: 6051551654033583881,
@@ -52,7 +52,7 @@ func TestHash(t *testing.T) {
 					{Field: "error.code"},
 					{Field: "message", Format: "normalize"},
 				},
-				HashField: hashField,
+				ResultField: resField,
 			},
 			input:    []byte(`{"level":"error","message":"error occurred"}`),
 			wantHash: 10960504816536859672,
@@ -64,7 +64,7 @@ func TestHash(t *testing.T) {
 					{Field: "error.code"},
 					{Field: "message", Format: "normalize"},
 				},
-				HashField: hashField,
+				ResultField: resField,
 			},
 			input:    []byte(`{"level":"error","message":"2023-10-30T13:35:33.638720813Z error occurred, client: 10.125.172.251, upstream: \"http://10.117.246.15:84/download\", host: \"mpm-youtube-downloader-38.name.com:84\""}`),
 			wantHash: 2140116920471166296,
@@ -75,7 +75,7 @@ func TestHash(t *testing.T) {
 				Fields: []Field{
 					{Field: "test"},
 				},
-				HashField: hashField,
+				ResultField: resField,
 			},
 			input:         []byte(`{"level":"error"}`),
 			wantEmptyNode: true,
@@ -86,7 +86,7 @@ func TestHash(t *testing.T) {
 				Fields: []Field{
 					{Field: "test"},
 				},
-				HashField: hashField,
+				ResultField: resField,
 			},
 			input:         []byte(`{"test":{"level":"error"}}`),
 			wantEmptyNode: true,
@@ -97,7 +97,7 @@ func TestHash(t *testing.T) {
 				Fields: []Field{
 					{Field: "test"},
 				},
-				HashField: hashField,
+				ResultField: resField,
 			},
 			input:         []byte(`{"test":[1,2,3]}`),
 			wantEmptyNode: true,
@@ -115,9 +115,9 @@ func TestHash(t *testing.T) {
 			wg.Add(1)
 
 			output.SetOutFn(func(e *pipeline.Event) {
-				node := e.Root.Dig(hashField)
+				node := e.Root.Dig(resField)
 				if tt.wantEmptyNode {
-					assert.Nil(t, node, "node %q must be nil", hashField)
+					assert.Nil(t, node, "node %q must be nil", resField)
 				} else {
 					assert.Equal(t, tt.wantHash, node.AsUint64(), "wrong hash value")
 				}

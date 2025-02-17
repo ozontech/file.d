@@ -25,7 +25,7 @@ pipelines:
       fields:
         - field: error.code
         - field: level
-      hash_field: hash
+      result_field: hash
     ...
 ```
 The original event:
@@ -61,7 +61,7 @@ pipelines:
         - field: error.code
         - field: message
           format: normalize
-      hash_field: hash
+      result_field: hash
     ...
 ```
 The original event:
@@ -112,8 +112,8 @@ type Config struct {
 	// > @3@4@5@6
 	// >
 	// > The event field to which put the hash.
-	HashField  cfg.FieldSelector `json:"hash_field" parse:"selector" required:"true"` // *
-	HashField_ []string
+	ResultField  cfg.FieldSelector `json:"result_field" parse:"selector" required:"true"` // *
+	ResultField_ []string
 }
 
 type fieldFormat byte
@@ -182,7 +182,7 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 		hash = calcHash(p.normalizer.Normalize(p.buf, fieldNode.AsBytes()))
 	}
 
-	pipeline.CreateNestedField(event.Root, p.config.HashField_).MutateToUint64(hash)
+	pipeline.CreateNestedField(event.Root, p.config.ResultField_).MutateToUint64(hash)
 	return pipeline.ActionPass
 }
 
