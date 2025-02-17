@@ -88,12 +88,13 @@ Prioritized list of fields. The first field found will be used to calculate the 
 
 * **`max_size`** *`int`* *`default=0`*
 
-	The maximum field size used in hash calculation.
+	The maximum field size used in hash calculation of any format.
+	If set to `0`, the entire field will be used in hash calculation.
 
 	> If the field size is greater than `max_size`, then
 	the first `max_size` bytes will be used in hash calculation.
-
-	> If set to `0`, the entire field will be used in hash calculation.
+	>
+	> It can be useful in case of performance degradation when calculating the hash of long fields.
 
 <br>
 
