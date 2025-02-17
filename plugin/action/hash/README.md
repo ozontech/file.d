@@ -13,7 +13,7 @@ pipelines:
       fields:
         - field: error.code
         - field: level
-      hash_field: hash
+      result_field: hash
     ...
 ```
 The original event:
@@ -49,7 +49,7 @@ pipelines:
         - field: error.code
         - field: message
           format: normalize
-      hash_field: hash
+      result_field: hash
     ...
 ```
 The original event:
@@ -88,7 +88,7 @@ Prioritized list of fields. The first field found will be used to calculate the 
 
 <br>
 
-**`hash_field`** *`cfg.FieldSelector`* *`required`* 
+**`result_field`** *`cfg.FieldSelector`* *`required`* 
 
 The event field to which put the hash.
 
