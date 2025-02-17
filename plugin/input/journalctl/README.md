@@ -1,6 +1,10 @@
 # Journal.d plugin
 Reads `journalctl` output.
 
+### Warning
+
+**Important:** If the `journalctl` process is stopped or killed, the `file.d` application will also be stopped.
+
 ### Config params
 **`offsets_file`** *`string`* *`required`* 
 
