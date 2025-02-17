@@ -1,11 +1,14 @@
 package join_template
 
 import (
+	"regexp"
+
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/plugin/action/join"
+	"github.com/ozontech/file.d/plugin/action/join_template/template"
 )
 
 /*{ introduction
@@ -31,8 +34,8 @@ pipelines:
 }*/
 
 type joinTemplates map[string]struct {
-	startRePat    string
-	continueRePat string
+	startRePat    *regexp.Regexp
+	continueRePat *regexp.Regexp
 
 	startCheckFunc    func(string) bool
 	continueCheckFunc func(string) bool
@@ -40,18 +43,18 @@ type joinTemplates map[string]struct {
 
 var templates = joinTemplates{
 	"go_panic": {
-		startRePat:    "/^(panic:)|(http: panic serving)|^(fatal error:)/",
-		continueRePat: "/(^\\s*$)|(goroutine [0-9]+ \\[)|(\\.go:[0-9]+)|(created by .*\\/?.*\\.)|(^\\[signal)|(panic.+[0-9]x[0-9,a-f]+)|(panic:)|([A-Za-z_]+[A-Za-z0-9_]*\\)?\\.[A-Za-z0-9_]+\\(.*\\))/",
+		startRePat:    template.GoPanicStartRe,
+		continueRePat: template.GoPanicContinueRe,
 
-		startCheckFunc:    goPanicStartCheck,
-		continueCheckFunc: goPanicContinueCheck,
+		startCheckFunc:    template.GoPanicStartCheck,
+		continueCheckFunc: template.GoPanicContinueCheck,
 	},
 	"cs_exception": {
-		startRePat:    `/^\s*(?i)Unhandled exception/`,
-		continueRePat: `/(^\s*at\s.*)|(\s*--->)|(^(?i)\s*--- End of)|(\.?\w+\.?Exception:)/`,
+		startRePat:    template.SharpStartRe,
+		continueRePat: template.SharpContinueRe,
 
-		startCheckFunc:    sharpStartCheck,
-		continueCheckFunc: sharpContinueCheck,
+		startCheckFunc:    template.SharpStartCheck,
+		continueCheckFunc: template.SharpContinueCheck,
 	},
 }
 
@@ -101,30 +104,21 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 	p.config = config.(*Config)
 
 	templateName := p.config.Template
-	template, ok := templates[templateName]
+	curTemplate, ok := templates[templateName]
 	if !ok {
 		logger.Fatalf("join template \"%s\" not found", templateName)
-	}
-
-	startRe, err := cfg.CompileRegex(template.startRePat)
-	if err != nil {
-		logger.Fatalf("failed to compile regex for template \"%s\": %s", templateName, err.Error())
-	}
-	continueRe, err := cfg.CompileRegex(template.continueRePat)
-	if err != nil {
-		logger.Fatalf("failed to compile regex for template \"%s\": %s", templateName, err.Error())
 	}
 
 	jConfig := &join.Config{
 		Field_:       p.config.Field_,
 		MaxEventSize: p.config.MaxEventSize,
-		Start_:       startRe,
-		Continue_:    continueRe,
+		Start_:       curTemplate.startRePat,
+		Continue_:    curTemplate.continueRePat,
 
 		FastCheck: p.config.FastCheck,
 
-		StartCheckFunc_:    template.startCheckFunc,
-		ContinueCheckFunc_: template.continueCheckFunc,
+		StartCheckFunc_:    curTemplate.startCheckFunc,
+		ContinueCheckFunc_: curTemplate.continueCheckFunc,
 	}
 	p.jp = &join.Plugin{}
 	p.jp.Start(jConfig, params)
