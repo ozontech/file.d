@@ -1,7 +1,7 @@
-auth_enabled: false  # Disable authentication for simplicity
+auth_enabled: false
 
 server:
-  http_listen_port: 3100  # HTTP API port
+  http_listen_port: 3100
 
 common:
   path_prefix: /tmp/loki
@@ -12,7 +12,7 @@ common:
   replication_factor: 1
   ring:
     kvstore:
-      store: inmemory  # Store indexes in memory
+      store: inmemory
 
 schema_config:
   configs:

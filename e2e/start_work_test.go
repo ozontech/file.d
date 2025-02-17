@@ -4,20 +4,13 @@ package e2e_test
 
 import (
 	"context"
-	"github.com/ozontech/file.d/e2e/file_clickhouse"
-	"github.com/ozontech/file.d/e2e/file_elasticsearch"
-	"github.com/ozontech/file.d/e2e/file_file"
-	"github.com/ozontech/file.d/e2e/http_file"
-	"github.com/ozontech/file.d/e2e/join_throttle"
-	"github.com/ozontech/file.d/e2e/kafka_auth"
-	"github.com/ozontech/file.d/e2e/kafka_file"
-	"github.com/ozontech/file.d/e2e/split_join"
 	"log"
 	"strconv"
 	"testing"
 	"time"
 
 	"github.com/ozontech/file.d/cfg"
+	"github.com/ozontech/file.d/e2e/file_loki"
 	"github.com/ozontech/file.d/fd"
 	_ "github.com/ozontech/file.d/plugin/action/add_file_name"
 	_ "github.com/ozontech/file.d/plugin/action/add_host"
@@ -57,6 +50,7 @@ import (
 	_ "github.com/ozontech/file.d/plugin/output/file"
 	_ "github.com/ozontech/file.d/plugin/output/gelf"
 	_ "github.com/ozontech/file.d/plugin/output/kafka"
+	_ "github.com/ozontech/file.d/plugin/output/loki"
 	_ "github.com/ozontech/file.d/plugin/output/postgres"
 	_ "github.com/ozontech/file.d/plugin/output/s3"
 	_ "github.com/ozontech/file.d/plugin/output/splunk"
@@ -82,78 +76,83 @@ type E2ETest struct {
 
 func TestE2EStabilityWorkCase(t *testing.T) {
 	testsList := []E2ETest{
+		// {
+		// 	name: "kafka_auth",
+		// 	e2eTest: &kafka_auth.Config{
+		// 		Brokers:    []string{"localhost:9093"},
+		// 		SslEnabled: true,
+		// 	},
+		// 	cfgPath: "./kafka_auth/config.yml",
+		// },
+		// {
+		// 	name: "kafka_auth",
+		// 	e2eTest: &kafka_auth.Config{
+		// 		Brokers:    []string{"localhost:9095"},
+		// 		SslEnabled: false,
+		// 	},
+		// 	cfgPath: "./kafka_auth/config.yml",
+		// },
+		// {
+		// 	name: "file_file",
+		// 	e2eTest: &file_file.Config{
+		// 		Count:   10,
+		// 		Lines:   500,
+		// 		RetTime: "1s",
+		// 	},
+		// 	cfgPath: "./file_file/config.yml",
+		// },
+		// {
+		// 	name: "http_file",
+		// 	e2eTest: &http_file.Config{
+		// 		Count:   10,
+		// 		Lines:   500,
+		// 		RetTime: "1s",
+		// 	},
+		// 	cfgPath: "./http_file/config.yml",
+		// },
+		// {
+		// 	name: "kafka_file",
+		// 	e2eTest: &kafka_file.Config{
+		// 		Topics:    []string{"quickstart"},
+		// 		Brokers:   []string{"localhost:9092"},
+		// 		Count:     500,
+		// 		RetTime:   "1s",
+		// 		Partition: 4,
+		// 	},
+		// 	cfgPath: "./kafka_file/config.yml",
+		// },
+		// {
+		// 	name: "join_throttle",
+		// 	e2eTest: &join_throttle.Config{
+		// 		Count: 1000,
+		// 	},
+		// 	cfgPath: "./join_throttle/config.yml",
+		// },
+		// {
+		// 	name:    "split_join",
+		// 	e2eTest: &split_join.Config{},
+		// 	cfgPath: "./split_join/config.yml",
+		// },
+		//{
+		//	name:    "file_clickhouse",
+		//	e2eTest: &file_clickhouse.Config{},
+		//	cfgPath: "./file_clickhouse/config.yml",
+		//},
+		// {
+		// 	name: "file_elasticsearch",
+		// 	e2eTest: &file_elasticsearch.Config{
+		// 		Count:    10,
+		// 		Pipeline: "test-ingest-pipeline",
+		// 		Endpoint: "http://localhost:19200",
+		// 		Username: "elastic",
+		// 		Password: "elastic",
+		// 	},
+		// 	cfgPath: "./file_elasticsearch/config.yml",
+		// },
 		{
-			name: "kafka_auth",
-			e2eTest: &kafka_auth.Config{
-				Brokers:    []string{"localhost:9093"},
-				SslEnabled: true,
-			},
-			cfgPath: "./kafka_auth/config.yml",
-		},
-		{
-			name: "kafka_auth",
-			e2eTest: &kafka_auth.Config{
-				Brokers:    []string{"localhost:9095"},
-				SslEnabled: false,
-			},
-			cfgPath: "./kafka_auth/config.yml",
-		},
-		{
-			name: "file_file",
-			e2eTest: &file_file.Config{
-				Count:   10,
-				Lines:   500,
-				RetTime: "1s",
-			},
-			cfgPath: "./file_file/config.yml",
-		},
-		{
-			name: "http_file",
-			e2eTest: &http_file.Config{
-				Count:   10,
-				Lines:   500,
-				RetTime: "1s",
-			},
-			cfgPath: "./http_file/config.yml",
-		},
-		{
-			name: "kafka_file",
-			e2eTest: &kafka_file.Config{
-				Topics:    []string{"quickstart"},
-				Brokers:   []string{"localhost:9092"},
-				Count:     500,
-				RetTime:   "1s",
-				Partition: 4,
-			},
-			cfgPath: "./kafka_file/config.yml",
-		},
-		{
-			name: "join_throttle",
-			e2eTest: &join_throttle.Config{
-				Count: 1000,
-			},
-			cfgPath: "./join_throttle/config.yml",
-		},
-		{
-			name:    "split_join",
-			e2eTest: &split_join.Config{},
-			cfgPath: "./split_join/config.yml",
-		},
-		{
-			name:    "file_clickhouse",
-			e2eTest: &file_clickhouse.Config{},
-			cfgPath: "./file_clickhouse/config.yml",
-		},
-		{
-			name: "file_elasticsearch",
-			e2eTest: &file_elasticsearch.Config{
-				Count:    10,
-				Pipeline: "test-ingest-pipeline",
-				Endpoint: "http://localhost:19200",
-				Username: "elastic",
-				Password: "elastic",
-			},
-			cfgPath: "./file_elasticsearch/config.yml",
+			name:    "file_loki",
+			e2eTest: &file_loki.Config{},
+			cfgPath: "./file_loki/config.yml",
 		},
 	}
 

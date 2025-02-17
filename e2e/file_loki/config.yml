@@ -1,0 +1,11 @@
+pipelines:
+  file_loki:
+    input:
+      type: file
+    output:
+      type: loki
+      address: http://localhost:3100
+      auth_enabled: false
+      labels: 
+        - label: label1
+          value: value1
