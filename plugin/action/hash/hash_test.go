@@ -70,6 +70,17 @@ func TestHash(t *testing.T) {
 			wantHash: 2140116920471166296,
 		},
 		{
+			name: "max_size",
+			config: &Config{
+				Fields: []Field{
+					{Field: "message", Format: "normalize", MaxSize: 70},
+				},
+				ResultField: resField,
+			},
+			input:    []byte(`{"level":"error","message":"2023-10-30T13:35:33.638720813Z error occurred, client: 10.125.172.251, upstream: \"http://10.117.246.15:84/download\", host: \"mpm-youtube-downloader-38.name.com:84\""}`),
+			wantHash: 10662808184633841128,
+		},
+		{
 			name: "no_field",
 			config: &Config{
 				Fields: []Field{
