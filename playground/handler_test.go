@@ -45,8 +45,9 @@ func TestHandler(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/api/v1/play", strings.NewReader(fdConfig)))
-	assert.Equal(t, http.StatusOK, w.Code)
-	resp := DoActionsResponse{}
+	require.Equalf(t, http.StatusOK, w.Code, "wrong response: %s", w.Body.String())
+
+	resp := PlayResponse{}
 	_ = json.Unmarshal(w.Body.Bytes(), &resp)
 	assert.True(t, resp.Stdout != "")
 	assert.True(t, resp.Metrics != "")
@@ -65,21 +66,21 @@ func TestHandlerUnmarshalYAML(t *testing.T) {
 	t.Parallel()
 	r := require.New(t)
 
-	test := func(reqRaw string, expected DoActionsRequest) {
+	test := func(reqRaw string, expected PlayRequest) {
 		t.Helper()
 		req, err := unmarshalRequest(strings.NewReader(reqRaw))
 		r.NoError(err)
 		r.Equal(expected, req)
 	}
 
-	test(`{"events": [], "actions_type": "json", "actions": [{"type": "modify", "k": "v"}]}`, DoActionsRequest{
+	test(`{"events": [], "actions_type": "json", "actions": [{"type": "modify", "k": "v"}]}`, PlayRequest{
 		Actions: []json.RawMessage{json.RawMessage(`{"type": "modify", "k": "v"}`)},
 		Events:  []json.RawMessage{},
 	})
-	test(`{"actions": [{"type": "modify", "k": "v"}]}`, DoActionsRequest{
+	test(`{"actions": [{"type": "modify", "k": "v"}]}`, PlayRequest{
 		Actions: []json.RawMessage{json.RawMessage(`{"type": "modify", "k": "v"}`)},
 	})
-	test(`{"actions_type": "yaml", "actions": "- type: rename\n  k: v\n- type: modify\n  k: v"}`, DoActionsRequest{
+	test(`{"actions_type": "yaml", "actions": "- type: rename\n  k: v\n- type: modify\n  k: v"}`, PlayRequest{
 		Actions: []json.RawMessage{json.RawMessage(`{"k":"v","type":"rename"}`), json.RawMessage(`{"k":"v","type":"modify"}`)},
 	})
 }
@@ -88,7 +89,7 @@ func TestHandlerBadRequest(t *testing.T) {
 	t.Parallel()
 
 	h := NewHandler(zap.NewNop())
-	test := func(req DoActionsRequest, expErr string) {
+	test := func(req PlayRequest, expErr string) {
 		t.Helper()
 
 		w := httptest.NewRecorder()
@@ -99,20 +100,20 @@ func TestHandlerBadRequest(t *testing.T) {
 	}
 
 	emptyEvents := []json.RawMessage{json.RawMessage("{}")}
-	test(DoActionsRequest{}, "validate error: events count must be in range [1, 32] and actions count [0, 64]\n")
+	test(PlayRequest{}, "validate error: events count must be in range [1, 32] and actions count [0, 64]\n")
 
-	test(DoActionsRequest{Events: emptyEvents, Actions: []json.RawMessage{[]byte(`{"type": "plugin that does not exist", "some": "args"}`)}},
+	test(PlayRequest{Events: emptyEvents, Actions: []json.RawMessage{[]byte(`{"type": "plugin that does not exist", "some": "args"}`)}},
 		`do actions: can't find action plugin with type "plugin that does not exist"`+"\n")
 
-	test(DoActionsRequest{Events: emptyEvents, Actions: []json.RawMessage{[]byte(`{"type": "clickhouse"}`)}},
+	test(PlayRequest{Events: emptyEvents, Actions: []json.RawMessage{[]byte(`{"type": "clickhouse"}`)}},
 		`do actions: can't find action plugin with type "clickhouse"`+"\n")
 
-	test(DoActionsRequest{Events: emptyEvents, Actions: []json.RawMessage{[]byte(`{"type": "clickhouse"}`)}},
+	test(PlayRequest{Events: emptyEvents, Actions: []json.RawMessage{[]byte(`{"type": "clickhouse"}`)}},
 		`do actions: can't find action plugin with type "clickhouse"`+"\n")
 
-	test(DoActionsRequest{Events: emptyEvents, Actions: []json.RawMessage{[]byte(`{"type": "convert_date", "some field value that does not exist": "123"}`)}},
+	test(PlayRequest{Events: emptyEvents, Actions: []json.RawMessage{[]byte(`{"type": "convert_date", "some field value that does not exist": "123"}`)}},
 		`do actions: wrong config for action 0/convert_date in pipeline "playground_4": json: unknown field "some field value that does not exist"`+"\n")
 
-	test(DoActionsRequest{Events: []json.RawMessage{[]byte(`{ "field":{} }`)}, Actions: []json.RawMessage{[]byte(`{"type": "decode", "decoder": "nginx_error", "field": "field", "params": {"nginx_with_custom_fields":"decoder must call logger.Fatal()"}}`)}},
+	test(PlayRequest{Events: []json.RawMessage{[]byte(`{ "field":{} }`)}, Actions: []json.RawMessage{[]byte(`{"type": "decode", "decoder": "nginx_error", "field": "field", "params": {"nginx_with_custom_fields":"decoder must call logger.Fatal()"}}`)}},
 		`do actions: fatal: can't create nginx_error decoder: "error"="can't extract params: \"nginx_with_custom_fields\" must be bool"`+"\n")
 }

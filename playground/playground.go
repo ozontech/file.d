@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"net/http"
 	"runtime"
 	"strings"
 	"time"
@@ -37,11 +36,8 @@ import (
 	_ "github.com/ozontech/file.d/plugin/action/remove_fields"
 	_ "github.com/ozontech/file.d/plugin/action/rename"
 	_ "github.com/ozontech/file.d/plugin/action/set_time"
-	"github.com/prometheus/client_golang/prometheus/promauto"
-
 	_ "github.com/ozontech/file.d/plugin/input/fake"
 	"github.com/ozontech/file.d/plugin/output/devnull"
-
 	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"
 	"github.com/prometheus/common/expfmt"
@@ -51,107 +47,24 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
-const (
-	pipelineCapacity = 2
-)
-
-type DoActionsResponse struct {
-	// Result is slice of events after all action plugins.
-	Result []json.RawMessage `json:"result"`
-	// Stdout is pipeline stdout during actions execution.
-	Stdout string `json:"stdout"`
-	// Metrics is prometheus metrics in openmetrics format.
-	Metrics string `json:"metrics"`
-}
-
-type Handler struct {
-	logger *zap.Logger
-
-	concurrencyLimiter chan struct{}
-
+type playground struct {
+	logger         *zap.Logger
 	nextPipelineID *atomic.Int64
 }
 
-var _ http.Handler = (*Handler)(nil)
-
-func NewHandler(logger *zap.Logger) *Handler {
-	return &Handler{
-		logger:             logger,
-		concurrencyLimiter: make(chan struct{}, runtime.GOMAXPROCS(0)),
-		nextPipelineID:     new(atomic.Int64),
+func newPlayground(logger *zap.Logger) *playground {
+	return &playground{
+		logger:         logger,
+		nextPipelineID: new(atomic.Int64),
 	}
 }
 
-var (
-	concurrencyReached = promauto.NewCounter(prometheus.CounterOpts{
-		Namespace:   "file_d_playground",
-		Subsystem:   "api",
-		Name:        "concurrency_reached_total",
-		Help:        "Total number of requests that were locked on the concurrency limiter",
-		ConstLabels: nil,
-	})
-	concurrencyTimeouts = promauto.NewCounter(prometheus.CounterOpts{
-		Namespace:   "file_d_playground",
-		Subsystem:   "api",
-		Name:        "concurrency_timeouts_total",
-		Help:        "Total number of requests that where rejected due to concurrency limiter",
-		ConstLabels: nil,
-	})
-)
-
-func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "", http.StatusMethodNotAllowed)
-		return
-	}
-
-	select {
-	case h.concurrencyLimiter <- struct{}{}:
-		defer func() { <-h.concurrencyLimiter }()
-	default:
-		concurrencyReached.Inc()
-
-		const maxWaitDuration = time.Second * 30
-		ctx, cancel := context.WithTimeout(r.Context(), maxWaitDuration)
-		defer cancel()
-
-		select {
-		case <-ctx.Done():
-			concurrencyTimeouts.Inc()
-			http.Error(w, "concurrency limiter timeout", http.StatusRequestTimeout)
-		case h.concurrencyLimiter <- struct{}{}:
-			defer func() { <-h.concurrencyLimiter }()
-		}
-	}
-
-	limitedBody := io.LimitReader(r.Body, 1<<20)
-	req, err := unmarshalRequest(limitedBody)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	if len(req.Events) > 32 || len(req.Events) == 0 || len(req.Actions) > 64 {
-		http.Error(w, "validate error: events count must be in range [1, 32] and actions count [0, 64]", http.StatusBadRequest)
-		return
-	}
-
-	ctx, cancel := context.WithTimeout(r.Context(), time.Second*2)
-	defer cancel()
-
-	resp, code, err := h.doActions(ctx, req)
-	if err != nil {
-		http.Error(w, fmt.Sprintf("do actions: %s", err.Error()), code)
-		return
-	}
-	_ = json.NewEncoder(w).Encode(resp)
-}
-
-func (h *Handler) doActions(ctx context.Context, req DoActionsRequest) (resp DoActionsResponse, code int, err error) {
+func (h *playground) Play(ctx context.Context, req PlayRequest) (PlayResponse, error) {
 	if req.Debug {
+		var err error
 		req.Actions, err = debugActions(req.Actions)
 		if err != nil {
-			return resp, http.StatusBadRequest, err
+			return PlayResponse{}, err
 		}
 	}
 
@@ -179,7 +92,7 @@ func (h *Handler) doActions(ctx context.Context, req DoActionsRequest) (resp DoA
 	p := pipeline.New(pipelineName, settings, metricsRegistry, stdout)
 	// Check logger.Fatal() calls.
 	if fatalErr != nil {
-		return DoActionsResponse{}, http.StatusBadRequest, fatalErr
+		return PlayResponse{}, fatalErr
 	}
 
 	// Callback to collect output events.
@@ -189,15 +102,15 @@ func (h *Handler) doActions(ctx context.Context, req DoActionsRequest) (resp DoA
 	}
 
 	if err := setupPipeline(p, req, outputCb); err != nil {
-		return resp, http.StatusBadRequest, err
+		return PlayResponse{}, err
 	}
 	if fatalErr != nil {
-		return DoActionsResponse{}, http.StatusBadRequest, fatalErr
+		return PlayResponse{}, fatalErr
 	}
 
 	p.Start()
 	if fatalErr != nil {
-		return DoActionsResponse{}, http.StatusBadRequest, fatalErr
+		return PlayResponse{}, fatalErr
 	}
 
 	// Push events to the pipeline.
@@ -222,7 +135,7 @@ loop:
 	}
 	p.Stop()
 	if fatalErr != nil {
-		return DoActionsResponse{}, http.StatusBadRequest, fatalErr
+		return PlayResponse{}, fatalErr
 	}
 
 	// Collect metrics.
@@ -233,11 +146,11 @@ loop:
 
 	_ = stdout.Sync()
 
-	return DoActionsResponse{
+	return PlayResponse{
 		Result:  result,
 		Stdout:  stdoutBuf.String(),
 		Metrics: formatMetricFamily(metricsInfo),
-	}, http.StatusOK, nil
+	}, nil
 }
 
 func formatZapFields(fields []zapcore.Field) strings.Builder {
@@ -281,7 +194,7 @@ func debugActions(actions []json.RawMessage) ([]json.RawMessage, error) {
 
 var pluginRegistry = fd.DefaultPluginRegistry
 
-func setupPipeline(p *pipeline.Pipeline, req DoActionsRequest, cb func(event *pipeline.Event)) error {
+func setupPipeline(p *pipeline.Pipeline, req PlayRequest, cb func(event *pipeline.Event)) error {
 	if req.Actions == nil {
 		req.Actions = []json.RawMessage{[]byte(`[]`)}
 	}
@@ -337,44 +250,44 @@ func setupPipeline(p *pipeline.Pipeline, req DoActionsRequest, cb func(event *pi
 	return nil
 }
 
-type DoActionsRequest struct {
+type PlayRequest struct {
 	Actions []json.RawMessage `json:"actions"`
 	Events  []json.RawMessage `json:"events"`
 	Debug   bool              `json:"debug"`
 }
 
-func unmarshalRequest(r io.Reader) (DoActionsRequest, error) {
+func unmarshalRequest(r io.Reader) (PlayRequest, error) {
 	bodyRaw, err := io.ReadAll(r)
 	if err != nil {
-		return DoActionsRequest{}, fmt.Errorf("reading body: %s", err)
+		return PlayRequest{}, fmt.Errorf("reading body: %s", err)
 	}
 
 	type request struct {
-		DoActionsRequest
+		PlayRequest
 		Actions     json.RawMessage `json:"actions"`
 		ActionsType string          `json:"actions_type"`
 	}
 	var req request
 	if err := json.Unmarshal(bodyRaw, &req); err != nil {
-		return DoActionsRequest{}, fmt.Errorf("unmarshalling json: %s", err)
+		return PlayRequest{}, fmt.Errorf("unmarshalling json: %s", err)
 	}
 
 	switch req.ActionsType {
 	case "json", "":
-		if err := json.Unmarshal(req.Actions, &req.DoActionsRequest.Actions); err != nil {
-			return DoActionsRequest{}, err
+		if err := json.Unmarshal(req.Actions, &req.PlayRequest.Actions); err != nil {
+			return PlayRequest{}, err
 		}
 	case "yaml":
 		var actions string
 		if err := json.Unmarshal(req.Actions, &actions); err != nil {
-			return DoActionsRequest{}, err
+			return PlayRequest{}, err
 		}
-		if err := yaml.Unmarshal([]byte(actions), &req.DoActionsRequest.Actions); err != nil {
-			return DoActionsRequest{}, err
+		if err := yaml.Unmarshal([]byte(actions), &req.PlayRequest.Actions); err != nil {
+			return PlayRequest{}, err
 		}
 	}
 
-	return req.DoActionsRequest, nil
+	return req.PlayRequest, nil
 }
 
 func preparePipelineLogger(buf *bytes.Buffer, onFatal zapcore.CheckWriteHook) *zap.Logger {
@@ -389,7 +302,7 @@ func preparePipelineLogger(buf *bytes.Buffer, onFatal zapcore.CheckWriteHook) *z
 		),
 		zap.WithFatalHook(onFatal),
 		zap.WithCaller(false),
-		zap.WithClock(NewZeroClock(time.Now())),
+		zap.WithClock(newZeroClock(time.Now())),
 	)
 	return stdout
 }
@@ -412,24 +325,24 @@ func escapeJSON(s string) string {
 	return string(b[1 : len(b)-1])
 }
 
-// ZeroClock reports time since "start".
+// zeroClock reports time since "start".
 // Used to print relative time rather than absolute.
-type ZeroClock struct {
+type zeroClock struct {
 	start time.Time
 }
 
-var _ zapcore.Clock = ZeroClock{}
+var _ zapcore.Clock = zeroClock{}
 
-func NewZeroClock(start time.Time) *ZeroClock {
-	return &ZeroClock{start: start}
+func newZeroClock(start time.Time) *zeroClock {
+	return &zeroClock{start: start}
 }
 
-func (z ZeroClock) Now() time.Time {
+func (z zeroClock) Now() time.Time {
 	diff := time.Since(z.start)
 	return time.Time{}.Add(diff)
 }
 
-func (z ZeroClock) NewTicker(_ time.Duration) *time.Ticker {
+func (z zeroClock) NewTicker(_ time.Duration) *time.Ticker {
 	return new(time.Ticker)
 }
 

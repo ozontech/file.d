@@ -52,7 +52,7 @@ func run() {
 	play := playground.NewHandler(lg)
 	appAPI := appAPIHandler(play)
 	appAPIWithMetrics := promhttp.InstrumentMetricHandler(prometheus.DefaultRegisterer, appAPI)
-	startServer(*addr, appAPIWithMetrics, lg.Named("api"))
+	go startServer(*addr, appAPIWithMetrics, lg.Named("api"))
 
 	if *debugAddr != "off" {
 		// Start debug server.
@@ -63,7 +63,7 @@ func run() {
 		debugMux.HandleFunc("/debug/pprof/profile", pprof.Profile)
 		debugMux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
 		debugMux.HandleFunc("/debug/pprof/trace", pprof.Trace)
-		startServer(*debugAddr, debugMux, lg.Named("debug-api"))
+		go startServer(*debugAddr, debugMux, lg.Named("debug-api"))
 	}
 }
 
@@ -78,13 +78,11 @@ func startServer(addr string, handler http.Handler, lg *zap.Logger) {
 		MaxHeaderBytes:    http.DefaultMaxHeaderBytes,
 	}
 
-	go func() {
-		lg.Info("starting HTTP server...", zap.String("addr", addr))
-		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			lg.Fatal("can't serve", zap.Error(err))
-		}
-		lg.Info("server stopped")
-	}()
+	lg.Info("starting HTTP server...", zap.String("addr", addr))
+	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		lg.Fatal("can't serve", zap.Error(err))
+	}
+	lg.Info("server stopped")
 }
 
 func appAPIHandler(play *playground.Handler) http.Handler {
