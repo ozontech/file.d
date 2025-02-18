@@ -21,6 +21,20 @@ Example labels
 label=value
 *`bool`* *`default=false`* 
 
+Message field from log to be mapped to loki
+
+Example
+
+message
+*`bool`* *`default=false`* 
+
+Timestamp field from log to be mapped to loki
+
+Example
+
+timestamp
+*`bool`* *`default=false`* 
+
 Authorization enabled, if true set OrgID
 
 <br>

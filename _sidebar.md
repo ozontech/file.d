@@ -55,6 +55,7 @@
     - [file](plugin/output/file/README.md)
     - [gelf](plugin/output/gelf/README.md)
     - [kafka](plugin/output/kafka/README.md)
+    - [loki](plugin/output/loki/README.md)
     - [postgres](plugin/output/postgres/README.md)
     - [s3](plugin/output/s3/README.md)
     - [splunk](plugin/output/splunk/README.md)
