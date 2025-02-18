@@ -103,7 +103,7 @@ type Config struct {
 	// > @3@4@5@6
 	// >
 	// > In which format timestamp field should be parsed.
-	TimestampFieldFormat string `json:"timestamp_field_format" default:"rfc3339nano" options:"ansic|unixdate|rubydate|rfc822|rfc822z|rfc850|rfc1123|rfc1123z|rfc3339|rfc3339nano|kitchen|stamp|stampmilli|stampmicro|stampnano|unixtime"` // *
+	TimestampFieldFormat string `json:"timestamp_field_format" default:"rfc3339nano" options:"ansic|unixdate|rubydate|rfc822|rfc822z|rfc850|rfc1123|rfc1123z|rfc3339|rfc3339nano|kitchen|stamp|stampmilli|stampmicro|stampnano|unixtime|unixtimemilli|unixtimemicro|unixtimenano|nginx_errorlog"` // *
 
 	// > @3@4@5@6
 	// >
