@@ -570,10 +570,7 @@ func (p *Plugin) decodeProtobuf(root *insaneJSON.Root, node *insaneJSON.Node, bu
 }
 
 func (p *Plugin) addFieldPrefix(root *insaneJSON.Root, key string, val []byte) {
-	if p.config.Prefix != "" {
-		key = fmt.Sprintf("%s%s", p.config.Prefix, key)
-	}
-	root.AddFieldNoAlloc(root, key).MutateToBytesCopy(root, val)
+	root.AddFieldNoAlloc(root, p.config.Prefix+key).MutateToBytesCopy(root, val)
 }
 
 func (p *Plugin) checkError(err error, node *insaneJSON.Node) bool {

@@ -241,6 +241,12 @@ It transforms `{"server":{"os":"linux","arch":"amd64"}}` into `{"server":"{\"os\
 [More details...](plugin/action/json_encode/README.md)
 ## json_extract
 It extracts fields from JSON-encoded event field and adds extracted fields to the event root.
+
+The plugin extracts fields on the go and can work with incomplete JSON (e.g. it was cut by max size limit).
+If the field value is incomplete JSON string, fields can be extracted from the remaining part which must be the first half of JSON,
+e.g. fields can be extracted from `{"service":"test","message":"long message"`, but not from `"service":"test","message:"long message"}`
+because the start as a valid JSON matters.
+
 > If extracted field already exists in the event root, it will be overridden.
 
 [More details...](plugin/action/json_extract/README.md)
