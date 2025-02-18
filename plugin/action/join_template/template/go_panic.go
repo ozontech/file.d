@@ -18,13 +18,13 @@ const (
 	createdByPart = "created by "
 )
 
-func GoPanicStartCheck(s string) bool {
+func goPanicStartCheck(s string) bool {
 	return strings.HasPrefix(s, "panic:") ||
 		strings.HasPrefix(s, "fatal error:") ||
 		strings.Contains(s, "http: panic serving")
 }
 
-func GoPanicContinueCheck(s string) bool {
+func goPanicContinueCheck(s string) bool {
 	return strings.HasPrefix(s, "[signal") ||
 		containsOnlySpaces(s) || // replaces regexp (^\s*$)
 		containsGoroutineID(s) ||

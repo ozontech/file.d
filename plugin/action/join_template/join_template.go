@@ -1,8 +1,6 @@
 package join_template
 
 import (
-	"regexp"
-
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/logger"
@@ -32,31 +30,6 @@ pipelines:
     ...
 ```
 }*/
-
-type joinTemplates map[string]struct {
-	startRePat    *regexp.Regexp
-	continueRePat *regexp.Regexp
-
-	startCheckFunc    func(string) bool
-	continueCheckFunc func(string) bool
-}
-
-var templates = joinTemplates{
-	"go_panic": {
-		startRePat:    template.GoPanicStartRe,
-		continueRePat: template.GoPanicContinueRe,
-
-		startCheckFunc:    template.GoPanicStartCheck,
-		continueCheckFunc: template.GoPanicContinueCheck,
-	},
-	"cs_exception": {
-		startRePat:    template.SharpStartRe,
-		continueRePat: template.SharpContinueRe,
-
-		startCheckFunc:    template.SharpStartCheck,
-		continueCheckFunc: template.SharpContinueCheck,
-	},
-}
 
 type Plugin struct {
 	config *Config
@@ -104,21 +77,21 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 	p.config = config.(*Config)
 
 	templateName := p.config.Template
-	curTemplate, ok := templates[templateName]
-	if !ok {
-		logger.Fatalf("join template \"%s\" not found", templateName)
+	curTemplate, err := template.InitTemplate(templateName)
+	if err != nil {
+		logger.Fatalf("failed to init join template \"%s\": %s", templateName, err)
 	}
 
 	jConfig := &join.Config{
 		Field_:       p.config.Field_,
 		MaxEventSize: p.config.MaxEventSize,
-		Start_:       curTemplate.startRePat,
-		Continue_:    curTemplate.continueRePat,
+		Start_:       curTemplate.StartRe,
+		Continue_:    curTemplate.ContinueRe,
 
 		FastCheck: p.config.FastCheck,
 
-		StartCheckFunc_:    curTemplate.startCheckFunc,
-		ContinueCheckFunc_: curTemplate.continueCheckFunc,
+		StartCheckFunc_:    curTemplate.StartCheck,
+		ContinueCheckFunc_: curTemplate.ContinueCheck,
 	}
 	p.jp = &join.Plugin{}
 	p.jp.Start(jConfig, params)

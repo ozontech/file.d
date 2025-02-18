@@ -16,7 +16,7 @@ const (
 )
 
 // replace regexp (^\s*(?i)Unhandled exception)
-func SharpStartCheck(s string) bool {
+func sharpStartCheck(s string) bool {
 	i := firstNonSpaceIndex(s)
 	if i == -1 {
 		return false
@@ -33,7 +33,7 @@ func SharpStartCheck(s string) bool {
 	return equalCaseInsensitive(s, startSubstr)
 }
 
-func SharpContinueCheck(s string) bool {
+func sharpContinueCheck(s string) bool {
 	return containsAt(s) ||
 		containsArrow(s) ||
 		containsEndOf(s) ||
