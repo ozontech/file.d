@@ -26,7 +26,7 @@ require (
 	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/hashicorp/vault/api v1.9.2
 	github.com/jackc/pgconn v1.14.1
-	github.com/jackc/pgproto3/v2 v2.3.2
+	github.com/jackc/pgproto3/v2 v2.3.3
 	github.com/jackc/pgx/v4 v4.18.1
 	github.com/klauspost/compress v1.17.8
 	github.com/minio/minio-go v6.0.14+incompatible
