@@ -203,6 +203,8 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.avgEventSize = params.PipelineSettings.AvgEventSize
 	p.registerMetrics(params.MetricCtl)
 
+	p.config.BatchFlushTimeout_ = 5 * time.Second
+
 	batcherOpts := &pipeline.BatcherOptions{
 		PipelineName:   params.PipelineName,
 		OutputType:     outPluginType,
@@ -267,18 +269,25 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 	}
 
 	root := insaneJSON.Spawn()
+	if err := root.DecodeString(`{"data":[]}`); err != nil {
+		p.logger.Errorf("failed to decode json: %v", err)
+		return err
+	}
+
 	outBuf := data.outBuf[:0]
 
+	dataArr := root.Dig("data")
+
+	var jsonEvent string
 	batch.ForEach(func(event *pipeline.Event) {
-		outBuf = root.MutateToNode(event.Root.Node).Encode(outBuf)
-		_ = root.DecodeString("{}")
+		jsonEvent = event.Root.Node.EncodeToString()
+		dataArr.AddElement().MutateToJSON(root, jsonEvent)
 	})
+
+	data.outBuf = root.Encode(outBuf)
 	insaneJSON.Release(root)
-	data.outBuf = outBuf
 
-	p.logger.Debugf("trying to send: %s", outBuf)
-
-	code, err := p.send(context.Background(), outBuf)
+	code, err := p.send(context.Background(), data.outBuf)
 	if err != nil {
 		p.sendErrorMetric.Inc()
 		p.logger.Errorf("can't send data to Loki address=%s: %v", p.config.Address, err.Error())
@@ -304,21 +313,44 @@ type request struct {
 }
 
 func (p *Plugin) send(ctx context.Context, data []byte) (int, error) {
+	root := insaneJSON.Spawn()
+	if err := root.DecodeBytes(data); err != nil {
+		p.logger.Errorf("failed to decode json: %v", err)
+		return 0, err
+	}
+
+	messages := root.Dig("data").AsArray()
+	values := make([][]any, 0, len(messages))
+
+	for _, msg := range messages {
+		ts := msg.Dig(p.config.TimestampField).AsString()
+		msg.Dig(p.config.TimestampField).Suicide()
+
+		if ts == "" {
+			ts = fmt.Sprintf(`%d`, time.Now().UnixNano())
+		}
+
+		logMsg := msg.Dig(p.config.MessageField).AsString()
+		msg.Dig(p.config.MessageField).Suicide()
+
+		logLine := []any{
+			ts,
+			logMsg,
+			json.RawMessage(msg.EncodeToString()),
+		}
+
+		values = append(values, logLine)
+	}
+
 	output := request{
 		Streams: []stream{
 			{
 				StreamLabels: p.labels(),
-				Values: [][]any{
-					{
-						fmt.Sprintf(`%d`, time.Now().UnixNano()),
-						string(data),
-					},
-				},
+				Values:       values,
 			},
 		},
 	}
 
-	// data, err := json.MarshalIndent(output, "", "  ")
 	data, err := json.Marshal(output)
 	if err != nil {
 		return 0, err
