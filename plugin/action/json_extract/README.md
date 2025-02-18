@@ -1,5 +1,11 @@
 # JSON extract plugin
 It extracts fields from JSON-encoded event field and adds extracted fields to the event root.
+
+The plugin extracts fields on the go and can work with incomplete JSON (e.g. it was cut by max size limit).
+If the field value is incomplete JSON string, fields can be extracted from the remaining part which must be the first half of JSON,
+e.g. fields can be extracted from `{"service":"test","message":"long message"`, but not from `"service":"test","message:"long message"}`
+because the start as a valid JSON matters.
+
 > If extracted field already exists in the event root, it will be overridden.
 
 ## Examples
@@ -36,6 +42,35 @@ The resulting event:
     "pod": "my-service-5c4dfcdcd4-4v5zw"
   },
   "flags": ["flag1", "flag2"]
+}
+```
+---
+```yaml
+pipelines:
+  example_pipeline:
+    ...
+    actions:
+    - type: json_extract
+      field: log
+      extract_fields:
+        - extract1
+        - extract2
+      prefix: ext_
+    ...
+```
+The original event:
+```json
+{
+  "log": "{\"level\":\"error\",\"extract1\":\"data1\",\"extract2\":\"long message ...",
+  "time": "2024-03-01T10:49:28.263317941Z"
+}
+```
+The resulting event:
+```json
+{
+  "log": "{\"level\":\"error\",\"extract1\":\"data1\",\"extract2\":\"long message ...",
+  "time": "2024-03-01T10:49:28.263317941Z",
+  "ext_extract1": "data1"
 }
 ```
 
@@ -79,6 +114,12 @@ Field to extract.
 **`extract_fields`** *`[]cfg.FieldSelector`* 
 
 Fields to extract.
+
+<br>
+
+**`prefix`** *`string`* 
+
+A prefix to add to extracted field keys.
 
 <br>
 

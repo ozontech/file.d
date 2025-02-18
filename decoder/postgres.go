@@ -25,7 +25,7 @@ type PostgresRow struct {
 	Log              []byte
 }
 
-// DecodePostgresToJson decodes postgres formatted log and merges result with event.
+// DecodePostgresToJson decodes postgres formatted log and merges result with root.
 //
 // From:
 //
@@ -42,24 +42,24 @@ type PostgresRow struct {
 //		"user": "test_user",
 //		"log": "listening on Unix socket \"/var/run/postgresql/.s.PGSQL.5432\""
 //	}
-func DecodePostgresToJson(event *insaneJSON.Root, data []byte) error {
+func DecodePostgresToJson(root *insaneJSON.Root, data []byte) error {
 	row, err := DecodePostgres(data)
 	if err != nil {
 		return err
 	}
 
-	event.AddFieldNoAlloc(event, "time").MutateToBytesCopy(event, row.Time)
-	event.AddFieldNoAlloc(event, "pid").MutateToBytesCopy(event, row.PID)
-	event.AddFieldNoAlloc(event, "pid_message_number").MutateToBytesCopy(event, row.PIDMessageNumber)
-	event.AddFieldNoAlloc(event, "client").MutateToBytesCopy(event, row.Client)
-	event.AddFieldNoAlloc(event, "db").MutateToBytesCopy(event, row.DB)
-	event.AddFieldNoAlloc(event, "user").MutateToBytesCopy(event, row.User)
-	event.AddFieldNoAlloc(event, "log").MutateToBytesCopy(event, row.Log)
+	root.AddFieldNoAlloc(root, "time").MutateToBytesCopy(root, row.Time)
+	root.AddFieldNoAlloc(root, "pid").MutateToBytesCopy(root, row.PID)
+	root.AddFieldNoAlloc(root, "pid_message_number").MutateToBytesCopy(root, row.PIDMessageNumber)
+	root.AddFieldNoAlloc(root, "client").MutateToBytesCopy(root, row.Client)
+	root.AddFieldNoAlloc(root, "db").MutateToBytesCopy(root, row.DB)
+	root.AddFieldNoAlloc(root, "user").MutateToBytesCopy(root, row.User)
+	root.AddFieldNoAlloc(root, "log").MutateToBytesCopy(root, row.Log)
 
 	return nil
 }
 
-// DecodePostgres decodes postgres formated log to [PostgresRow].
+// DecodePostgres decodes postgres formatted log to [PostgresRow].
 //
 // Example of format:
 //
