@@ -839,10 +839,7 @@ func (p *Plugin) decodeSyslog(root *insaneJSON.Root, row decoder.SyslogRFC5424Ro
 }
 
 func (p *Plugin) addFieldPrefix(root *insaneJSON.Root, key string, val any) {
-	if p.config.Prefix != "" {
-		key = fmt.Sprintf("%s%s", p.config.Prefix, key)
-	}
-	f := root.AddFieldNoAlloc(root, key)
+	f := root.AddFieldNoAlloc(root, p.config.Prefix+key)
 	switch v := val.(type) {
 	case []byte:
 		f.MutateToBytesCopy(root, v)

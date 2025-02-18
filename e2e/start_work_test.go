@@ -4,18 +4,20 @@ package e2e_test
 
 import (
 	"context"
+	"log"
+	"strconv"
+	"testing"
+	"time"
+
 	"github.com/ozontech/file.d/e2e/file_clickhouse"
 	"github.com/ozontech/file.d/e2e/file_elasticsearch"
+	"github.com/ozontech/file.d/e2e/file_es_split"
 	"github.com/ozontech/file.d/e2e/file_file"
 	"github.com/ozontech/file.d/e2e/http_file"
 	"github.com/ozontech/file.d/e2e/join_throttle"
 	"github.com/ozontech/file.d/e2e/kafka_auth"
 	"github.com/ozontech/file.d/e2e/kafka_file"
 	"github.com/ozontech/file.d/e2e/split_join"
-	"log"
-	"strconv"
-	"testing"
-	"time"
 
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
@@ -28,6 +30,7 @@ import (
 	_ "github.com/ozontech/file.d/plugin/action/decode"
 	_ "github.com/ozontech/file.d/plugin/action/discard"
 	_ "github.com/ozontech/file.d/plugin/action/flatten"
+	_ "github.com/ozontech/file.d/plugin/action/hash"
 	_ "github.com/ozontech/file.d/plugin/action/join"
 	_ "github.com/ozontech/file.d/plugin/action/join_template"
 	_ "github.com/ozontech/file.d/plugin/action/json_decode"
@@ -154,6 +157,11 @@ func TestE2EStabilityWorkCase(t *testing.T) {
 				Password: "elastic",
 			},
 			cfgPath: "./file_elasticsearch/config.yml",
+		},
+		{
+			name:    "file_es",
+			e2eTest: &file_es_split.Config{},
+			cfgPath: "./file_es_split/config.yml",
 		},
 	}
 

@@ -10,6 +10,12 @@ import (
 
 /*{ introduction
 It extracts fields from JSON-encoded event field and adds extracted fields to the event root.
+
+The plugin extracts fields on the go and can work with incomplete JSON (e.g. it was cut by max size limit).
+If the field value is incomplete JSON string, fields can be extracted from the remaining part which must be the first half of JSON,
+e.g. fields can be extracted from `{"service":"test","message":"long message"`, but not from `"service":"test","message:"long message"}`
+because the start as a valid JSON matters.
+
 > If extracted field already exists in the event root, it will be overridden.
 }*/
 
@@ -47,6 +53,35 @@ The resulting event:
     "pod": "my-service-5c4dfcdcd4-4v5zw"
   },
   "flags": ["flag1", "flag2"]
+}
+```
+---
+```yaml
+pipelines:
+  example_pipeline:
+    ...
+    actions:
+    - type: json_extract
+      field: log
+      extract_fields:
+        - extract1
+        - extract2
+      prefix: ext_
+    ...
+```
+The original event:
+```json
+{
+  "log": "{\"level\":\"error\",\"extract1\":\"data1\",\"extract2\":\"long message ...",
+  "time": "2024-03-01T10:49:28.263317941Z"
+}
+```
+The resulting event:
+```json
+{
+  "log": "{\"level\":\"error\",\"extract1\":\"data1\",\"extract2\":\"long message ...",
+  "time": "2024-03-01T10:49:28.263317941Z",
+  "ext_extract1": "data1"
 }
 ```
 }*/
@@ -102,6 +137,11 @@ type Config struct {
 	// >
 	// > Fields to extract.
 	ExtractFields []cfg.FieldSelector `json:"extract_fields" slice:"true"` // *
+
+	// > @3@4@5@6
+	// >
+	// > A prefix to add to extracted field keys.
+	Prefix string `json:"prefix" default:""` // *
 }
 
 func init() {
@@ -145,14 +185,14 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	}
 
 	p.decoder.ResetBytes(jsonNode.AsBytes())
-	extract(event.Root, p.decoder, p.extractFields.root.children, false)
+	extract(event.Root, p.decoder, p.extractFields.root.children, p.config.Prefix, false)
 	return pipeline.ActionPass
 }
 
 // extract extracts fields from decoder and adds it to the root.
 //
 // [skipAddField] flag is required for proper benchmarking.
-func extract(root *insaneJSON.Root, d *jx.Decoder, fields pathNodes, skipAddField bool) {
+func extract(root *insaneJSON.Root, d *jx.Decoder, fields pathNodes, prefix string, skipAddField bool) {
 	objIter, err := d.ObjIter()
 	if err != nil {
 		return
@@ -171,15 +211,19 @@ func extract(root *insaneJSON.Root, d *jx.Decoder, fields pathNodes, skipAddFiel
 
 		if len(n.children) == 0 { // last field in path, add to root
 			if skipAddField {
-				_ = d.Skip()
+				if err = d.Skip(); err != nil {
+					break
+				}
 			} else {
-				addField(root, n.data, d)
+				if err = addField(root, prefix+n.data, d); err != nil {
+					break
+				}
 			}
 		} else { // go deep
 			// Capture calls f and then rolls back to state before call
 			_ = d.Capture(func(d *jx.Decoder) error {
 				// recursively extract child fields
-				extract(root, d, n.children, skipAddField)
+				extract(root, d, n.children, prefix, skipAddField)
 				return nil
 			})
 			// skip the current field because we have processed it
@@ -196,32 +240,55 @@ func extract(root *insaneJSON.Root, d *jx.Decoder, fields pathNodes, skipAddFiel
 	}
 }
 
-func addField(root *insaneJSON.Root, field string, d *jx.Decoder) {
+func addField(root *insaneJSON.Root, field string, d *jx.Decoder) error {
 	switch d.Next() {
 	case jx.Number:
-		num, _ := d.Num()
-		intVal, err := num.Int64()
+		num, err := d.Num()
+		if err != nil {
+			return err
+		}
+		var (
+			intVal   int64
+			floatVal float64
+		)
+		intVal, err = num.Int64()
 		if err == nil {
 			root.AddFieldNoAlloc(root, field).MutateToInt64(intVal)
 		} else {
-			floatVal, err := num.Float64()
+			floatVal, err = num.Float64()
 			if err == nil {
 				root.AddFieldNoAlloc(root, field).MutateToFloat(floatVal)
 			}
 		}
+		if err != nil {
+			return err
+		}
 	case jx.String:
-		s, _ := d.StrBytes()
+		s, err := d.StrBytes()
+		if err != nil {
+			return err
+		}
 		root.AddFieldNoAlloc(root, field).MutateToBytesCopy(root, s)
 	case jx.Null:
-		_ = d.Null()
+		err := d.Null()
+		if err != nil {
+			return err
+		}
 		root.AddFieldNoAlloc(root, field).MutateToNull()
 	case jx.Bool:
-		b, _ := d.Bool()
+		b, err := d.Bool()
+		if err != nil {
+			return err
+		}
 		root.AddFieldNoAlloc(root, field).MutateToBool(b)
 	case jx.Object, jx.Array:
-		raw, _ := d.Raw()
+		raw, err := d.Raw()
+		if err != nil {
+			return err
+		}
 		root.AddFieldNoAlloc(root, field).MutateToJSON(root, raw.String())
 	default:
-		_ = d.Skip()
+		return d.Skip()
 	}
+	return nil
 }
