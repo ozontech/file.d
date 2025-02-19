@@ -66,5 +66,4 @@ func TestPluginLabels(t *testing.T) {
 			require.Len(t, resultLabelsMap, tt.expectedLen)
 		})
 	}
-
 }
