@@ -1,7 +1,6 @@
 package decoder
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"slices"
@@ -53,13 +52,13 @@ func (d *jsonDecoder) Type() Type {
 	return JSON
 }
 
-// DecodeToJson decodes json-formatted string and merges result with root.
+// DecodeToJson decodes json formatted string and merges result with root.
 func (d *jsonDecoder) DecodeToJson(root *insaneJSON.Root, data []byte) error {
 	data = d.cutFieldsBySize(data)
 	return root.DecodeBytes(data)
 }
 
-// Decode decodes json-formatted string to [*insaneJSON.Node].
+// Decode decodes json formatted string to [*insaneJSON.Node].
 //
 // Args:
 //   - root [*insaneJSON.Root] - required
@@ -141,23 +140,10 @@ func extractJsonParams(params map[string]any) (jsonParams, error) {
 			return jsonParams{}, fmt.Errorf("%q must be map", jsonMaxFieldsSizeParam)
 		}
 		for k, v := range maxFieldsSizeMap {
-			var vInt int
-
-			switch vNum := v.(type) {
-			case int:
-				vInt = vNum
-			case float64:
-				vInt = int(vNum)
-			case json.Number:
-				vInt64, err := vNum.Int64()
-				if err != nil {
-					return jsonParams{}, fmt.Errorf("each value in %q must be int", jsonMaxFieldsSizeParam)
-				}
-				vInt = int(vInt64)
-			default:
+			vInt, err := anyToInt(v)
+			if err != nil {
 				return jsonParams{}, fmt.Errorf("each value in %q must be int", jsonMaxFieldsSizeParam)
 			}
-
 			maxFieldsSize[k] = vInt
 		}
 	}
