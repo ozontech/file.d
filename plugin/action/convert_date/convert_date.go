@@ -25,13 +25,15 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
-	// > List of date formats to parse a field. Available list items should be one of `ansic|unixdate|rubydate|rfc822|rfc822z|rfc850|rfc1123|rfc1123z|rfc3339|rfc3339nano|kitchen|stamp|stampmilli|stampmicro|stampnano|unixtime|nginx_errorlog`.
+	// > List of date formats to parse a field. Can be specified as a datetime layout in Go [time.Parse](https://pkg.go.dev/time#Parse) format or by alias.
+	// > List of available datetime format aliases can be found [here](/pipeline/README.md#datetime-parse-formats).
 	SourceFormats  []string `json:"source_formats" default:"rfc3339nano,rfc3339"` // *
 	SourceFormats_ []string
 
 	// > @3@4@5@6
 	// >
-	// > Date format to convert to.
+	// > Date format to convert to. Can be specified as a datetime layout in Go [time.Parse](https://pkg.go.dev/time#Parse) format or by alias.
+	// > List of available datetime format aliases can be found [here](/pipeline/README.md#datetime-parse-formats).
 	TargetFormat  string `json:"target_format" default:"unixtime"` // *
 	TargetFormat_ string
 
@@ -85,9 +87,16 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 		for _, format := range p.config.SourceFormats_ {
 			t, err := pipeline.ParseTime(format, date)
 			if err == nil {
-				if p.config.TargetFormat_ == pipeline.UnixTime {
+				switch p.config.TargetFormat_ {
+				case pipeline.UnixTime:
 					dateNode.MutateToInt(int(t.Unix()))
-				} else {
+				case pipeline.UnixTimeMilli:
+					dateNode.MutateToInt(int(t.UnixMilli()))
+				case pipeline.UnixTimeMicro:
+					dateNode.MutateToInt(int(t.UnixMicro()))
+				case pipeline.UnixTimeNano:
+					dateNode.MutateToInt(int(t.UnixNano()))
+				default:
 					dateNode.MutateToString(t.Format(p.config.TargetFormat_))
 				}
 

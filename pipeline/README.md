@@ -36,7 +36,7 @@ Flag indicating whether to cut logs which have exceeded the `max_event_size`. If
 
 **`cut_off_event_by_limit_field`** *`string`*
 
-String to add after cut part of the log. Only works if `cut_off_event_by_limit` is set to `true` and `max_event_size` is greater than 0. Useful for marking cut logs.
+Field to add to log if it was cut by `max_event_size`. E.g. with `cut_off_event_by_limit_field: _cropped`, if the log was cut, the output event will have field `"_cropped":true`. Only works if `cut_off_event_by_limit` is set to `true` and `max_event_size` is greater than 0. Useful for marking cut logs.
 
 <br>
 
