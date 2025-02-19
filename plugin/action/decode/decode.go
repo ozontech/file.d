@@ -698,7 +698,7 @@ func (p *Plugin) decodeJson(root *insaneJSON.Root, node *insaneJSON.Node, buf []
 		node.Suicide()
 	}
 
-	root.MergeWith(jsonNode)
+	pipeline.MergeToRoot(root, jsonNode)
 }
 
 func (p *Plugin) decodePostgres(root *insaneJSON.Root, node *insaneJSON.Node) {
@@ -770,7 +770,7 @@ func (p *Plugin) decodeProtobuf(root *insaneJSON.Root, node *insaneJSON.Node, bu
 		node.Suicide()
 	}
 
-	root.MergeWith(t)
+	pipeline.MergeToRoot(root, t)
 }
 
 func (p *Plugin) decodeSyslogRFC3164(root *insaneJSON.Root, node *insaneJSON.Node) {

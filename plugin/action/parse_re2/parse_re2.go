@@ -96,7 +96,7 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 		root.AddFieldNoAlloc(root, pipeline.ByteToStringUnsafe(event.Buf[bl:len(event.Buf)])).MutateToBytes(sm[i])
 	}
 
-	event.Root.MergeWith(root.Node)
+	pipeline.MergeToRoot(event.Root, root.Node)
 
 	insaneJSON.Release(root)
 
