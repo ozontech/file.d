@@ -85,7 +85,7 @@ func startServer(addr string, handler http.Handler, lg *zap.Logger) {
 	lg.Info("server stopped")
 }
 
-func appAPIHandler(play *playground.Handler) http.Handler {
+func appAPIHandler(play *playground.PlayHandler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/api/v1/play":

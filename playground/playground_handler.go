@@ -12,22 +12,14 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"go.uber.org/zap"
+	"sigs.k8s.io/yaml"
 )
 
 const (
 	pipelineCapacity = 2
 )
 
-type PlayResponse struct {
-	// Result is slice of events after all action plugins.
-	Result []json.RawMessage `json:"result"`
-	// Stdout is pipeline stdout during actions execution.
-	Stdout string `json:"stdout"`
-	// Metrics is prometheus metrics in openmetrics format.
-	Metrics string `json:"metrics"`
-}
-
-type Handler struct {
+type PlayHandler struct {
 	logger *zap.Logger
 
 	concurrencyLimiter chan struct{}
@@ -35,10 +27,10 @@ type Handler struct {
 	playground *playground
 }
 
-var _ http.Handler = (*Handler)(nil)
+var _ http.Handler = (*PlayHandler)(nil)
 
-func NewHandler(logger *zap.Logger) *Handler {
-	return &Handler{
+func NewHandler(logger *zap.Logger) *PlayHandler {
+	return &PlayHandler{
 		logger:             logger,
 		concurrencyLimiter: make(chan struct{}, runtime.GOMAXPROCS(0)),
 		playground:         newPlayground(logger),
@@ -62,7 +54,22 @@ var (
 	})
 )
 
-func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+type PlayRequest struct {
+	Actions []json.RawMessage `json:"actions"`
+	Events  []json.RawMessage `json:"events"`
+	Debug   bool              `json:"debug"`
+}
+
+type PlayResponse struct {
+	// Result is slice of events after all action plugins.
+	Result []json.RawMessage `json:"result"`
+	// Stdout is pipeline stdout during actions execution.
+	Stdout string `json:"stdout"`
+	// Metrics is prometheus metrics in openmetrics format.
+	Metrics string `json:"metrics"`
+}
+
+func (h *PlayHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "", http.StatusMethodNotAllowed)
 		return
@@ -108,4 +115,38 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_ = json.NewEncoder(w).Encode(resp)
+}
+
+func unmarshalRequest(r io.Reader) (PlayRequest, error) {
+	bodyRaw, err := io.ReadAll(r)
+	if err != nil {
+		return PlayRequest{}, fmt.Errorf("reading body: %s", err)
+	}
+
+	type request struct {
+		PlayRequest
+		Actions     json.RawMessage `json:"actions"`
+		ActionsType string          `json:"actions_type"`
+	}
+	var req request
+	if err := json.Unmarshal(bodyRaw, &req); err != nil {
+		return PlayRequest{}, fmt.Errorf("unmarshalling json: %s", err)
+	}
+
+	switch req.ActionsType {
+	case "json", "":
+		if err := json.Unmarshal(req.Actions, &req.PlayRequest.Actions); err != nil {
+			return PlayRequest{}, err
+		}
+	case "yaml":
+		var actions string
+		if err := json.Unmarshal(req.Actions, &actions); err != nil {
+			return PlayRequest{}, err
+		}
+		if err := yaml.Unmarshal([]byte(actions), &req.PlayRequest.Actions); err != nil {
+			return PlayRequest{}, err
+		}
+	}
+
+	return req.PlayRequest, nil
 }

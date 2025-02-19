@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"runtime"
 	"strings"
 	"time"
@@ -44,7 +43,6 @@ import (
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
-	"sigs.k8s.io/yaml"
 )
 
 type playground struct {
@@ -248,46 +246,6 @@ func setupPipeline(p *pipeline.Pipeline, req PlayRequest, cb func(event *pipelin
 		},
 	})
 	return nil
-}
-
-type PlayRequest struct {
-	Actions []json.RawMessage `json:"actions"`
-	Events  []json.RawMessage `json:"events"`
-	Debug   bool              `json:"debug"`
-}
-
-func unmarshalRequest(r io.Reader) (PlayRequest, error) {
-	bodyRaw, err := io.ReadAll(r)
-	if err != nil {
-		return PlayRequest{}, fmt.Errorf("reading body: %s", err)
-	}
-
-	type request struct {
-		PlayRequest
-		Actions     json.RawMessage `json:"actions"`
-		ActionsType string          `json:"actions_type"`
-	}
-	var req request
-	if err := json.Unmarshal(bodyRaw, &req); err != nil {
-		return PlayRequest{}, fmt.Errorf("unmarshalling json: %s", err)
-	}
-
-	switch req.ActionsType {
-	case "json", "":
-		if err := json.Unmarshal(req.Actions, &req.PlayRequest.Actions); err != nil {
-			return PlayRequest{}, err
-		}
-	case "yaml":
-		var actions string
-		if err := json.Unmarshal(req.Actions, &actions); err != nil {
-			return PlayRequest{}, err
-		}
-		if err := yaml.Unmarshal([]byte(actions), &req.PlayRequest.Actions); err != nil {
-			return PlayRequest{}, err
-		}
-	}
-
-	return req.PlayRequest, nil
 }
 
 func preparePipelineLogger(buf *bytes.Buffer, onFatal zapcore.CheckWriteHook) *zap.Logger {
