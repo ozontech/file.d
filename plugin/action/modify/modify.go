@@ -115,6 +115,22 @@ Substitution: `message: ${message|trim_to("left","{")|trim_to("right","}")}`
 
 Result: `{"message":"{\"service\":\"service-test-1\",\"took\":\"200ms\"}"}`
 
+**Example cut #1**
+
+Data: `{"message":"some looooooooooooong data"}`
+
+Substitution: `message: ${message|cut("first",10)}`
+
+Result: `{"message":"some loooo"}`
+
+**Example cut #2**
+
+Data: `{"message":"some looooooooooooong data"}`
+
+Substitution: `message: ${message|cut("last",5)}`
+
+Result: `{"message":" data"}`
+
 }*/
 
 const (
