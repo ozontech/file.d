@@ -209,3 +209,20 @@ func CreateNestedField(root *insaneJSON.Root, path []string) *insaneJSON.Node {
 	}
 	return curr
 }
+
+// MergeToRoot like insaneJSON.Node.MergeWith, but without allocations.
+func MergeToRoot(root *insaneJSON.Root, src *insaneJSON.Node) {
+	if root == nil || root.Node == nil || src == nil {
+		return
+	}
+	if !root.IsObject() || !src.IsObject() {
+		return
+	}
+
+	fields := src.AsFields()
+	for _, child := range fields {
+		childField := child.AsString()
+		x := root.Node.AddFieldNoAlloc(root, childField)
+		x.MutateToNode(child.AsFieldValue())
+	}
+}
