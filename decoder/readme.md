@@ -12,7 +12,9 @@ Available values for `decoder` param:
 + cri -- parses cri format from log into event (e.g. `2016-10-06T00:17:09.669794203Z stderr F log content`)
 + postgres -- parses postgres format from log into event (e.g. `2021-06-22 16:24:27 GMT [7291] => [3-1] client=test_client,db=test_db,user=test_user LOG:  listening on Unix socket \"/var/run/postgresql/.s.PGSQL.5432\"\n`)
 + nginx_error -- parses nginx error log format from log into event (e.g. `2022/08/17 10:49:27 [error] 2725122#2725122: *792412315 lua udp socket read timed out, context: ngx.timer`)
-+ protobuf -- parses protobuf message into event 
++ protobuf -- parses protobuf message into event
++ syslog_rfc3164 -- parses syslog-RFC3164 format from log into event (see [RFC3164](https://datatracker.ietf.org/doc/html/rfc3164))
++ syslog_rfc5424 -- parses syslog-RFC5424 format from log into event (see [RFC5424](https://datatracker.ietf.org/doc/html/rfc5424))
 
 > Currently `auto` is available only for usage with k8s input plugin.
 
@@ -71,7 +73,14 @@ To:
 }
 ```
 
-## Nginx decoder
+## Nginx-error decoder
+The resulting event may contain any of the following fields:
+* `time` *string*
+* `level` *string*
+* `pid` *string*
+* `tid` *string*
+* `cid` *string*
+* `message` *string*
 
 ### Params
 * `nginx_with_custom_fields` - if set, custom fields will be extracted.
@@ -86,7 +95,7 @@ pipelines:
 ```
 From:
 
-`"2022/08/17 10:49:27 [error] 2725122#2725122: *792412315 lua udp socket read timed out, context: ngx.timer"`
+`2022/08/17 10:49:27 [error] 2725122#2725122: *792412315 lua udp socket read timed out, context: ngx.timer`
 
 To:
 ```json
@@ -212,4 +221,158 @@ pipelines:
         proto_import_paths:
           - path/to/proto_dir1
           - path/to/proto_dir2
+```
+
+## Syslog-RFC3164 decoder
+The resulting event may contain any of the following fields:
+* `priority` *string*
+* `facility` *string*
+* `severity` *string*
+* `timestamp` *string* (`Stamp` format)
+* `hostname` *string*
+* `app_name` *string*
+* `process_id` *string*
+* `message` *string*
+
+### Params
+* `syslog_facility_format` - facility format, must be one of `number|string` (`number` by default).
+* `syslog_severity_format` - severity format, must be one of `number|string` (`number` by default).
+
+### Examples
+Default decoder:
+```yml
+pipelines:
+  example:
+    settings:
+      decoder: 'syslog_rfc3164'
+```
+From:
+
+`<34>Oct  5 22:14:15 mymachine.example.com myproc[10]: 'myproc' failed on /dev/pts/8`
+
+To:
+```json
+{
+  "priority": "34",
+  "facility": "4",
+  "severity": "2",
+  "timestamp": "Oct  5 22:14:15",
+  "hostname": "mymachine.example.com",
+  "app_name": "myproc",
+  "process_id": "10",
+  "message": "'myproc' failed on /dev/pts/8"
+}
+```
+---
+Decoder with `syslog_*_format` params:
+```yaml
+pipelines:
+  example:
+    settings:
+      decoder: 'syslog_rfc3164'
+      decoder_params:
+        syslog_facility_format: 'string'
+        syslog_severity_format: 'string'
+```
+From:
+
+`<34>Oct 11 22:14:15 mymachine.example.com myproc: 'myproc' failed on /dev/pts/8`
+
+To:
+```json
+{
+  "priority": "34",
+  "facility": "AUTH",
+  "severity": "CRIT",
+  "timestamp": "Oct 11 22:14:15",
+  "hostname": "mymachine.example.com",
+  "app_name": "myproc",
+  "message": "'myproc' failed on /dev/pts/8"
+}
+```
+
+## Syslog-RFC5424 decoder
+The resulting event may contain any of the following fields:
+* `priority` *string*
+* `facility` *string*
+* `severity` *string*
+* `proto_version` *string*
+* `timestamp` *string* (`RFC3339`/`RFC3339Nano` format)
+* `hostname` *string*
+* `app_name` *string*
+* `process_id` *string*
+* `message_id` *string*
+* `message` *string*
+* `SD_1` *object*
+* ...
+* `SD_N` *object*
+
+### Params
+* `syslog_facility_format` - facility format, must be one of `number|string` (`number` by default).
+* `syslog_severity_format` - severity format, must be one of `number|string` (`number` by default).
+
+### Examples
+Default decoder:
+```yml
+pipelines:
+  example:
+    settings:
+      decoder: 'syslog_rfc5424'
+```
+From:
+
+`<165>1 2003-10-11T22:14:15.003Z mymachine.example.com myproc 10 ID47 [exampleSDID@32473 iut="3" eventSource="Application" eventID="1011"] An application event log`
+
+To:
+```json
+{
+  "priority": "165",
+  "facility": "20",
+  "severity": "5",
+  "proto_version": "1",
+  "timestamp": "2003-10-11T22:14:15.003Z",
+  "hostname": "mymachine.example.com",
+  "app_name": "myproc",
+  "process_id": "10",
+  "message_id": "ID47",
+  "message": "An application event log",
+  "exampleSDID@32473": {
+    "iut": "3",
+    "eventSource": "Application",
+    "eventID": "1011"
+  }
+}
+```
+---
+Decoder with `syslog_*_format` params:
+```yaml
+pipelines:
+  example:
+    settings:
+      decoder: 'syslog_rfc5424'
+      decoder_params:
+        syslog_facility_format: 'string'
+        syslog_severity_format: 'string'
+```
+From:
+
+`<165>1 2003-10-11T22:14:15.003Z mymachine.example.com myproc - ID47 [exampleSDID@32473 iut="3" eventSource="Application" eventID="1011"]`
+
+To:
+```json
+{
+  "priority": "165",
+  "facility": "LOCAL4",
+  "severity": "NOTICE",
+  "proto_version": "1",
+  "timestamp": "2003-10-11T22:14:15.003Z",
+  "hostname": "mymachine.example.com",
+  "app_name": "myproc",
+  "message_id": "ID47",
+  "exampleSDID@32473": {
+    "iut": "3",
+    "eventSource": "Application",
+    "eventID": "1011"
+  }
+}
 ```

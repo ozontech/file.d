@@ -142,6 +142,37 @@ func TestJsonExtract(t *testing.T) {
 				"extracted": "text",
 			},
 		},
+		{
+			name: "partial_json",
+			config: &Config{
+				Field: "json_field",
+				ExtractFields: []cfg.FieldSelector{
+					"extracted1",
+					"extracted2",
+				},
+			},
+			in: `{"field1":"value1","json_field":"{\"test\":\"test_value\",\"extracted1\":\"text\",\"extracted2\":\"long text ..."}`,
+			want: map[string]string{
+				"extracted1": "text",
+				"extracted2": "",
+			},
+		},
+		{
+			name: "extract_with_prefix",
+			config: &Config{
+				Field: "json_field",
+				ExtractFields: []cfg.FieldSelector{
+					"extracted1",
+					"extracted2",
+				},
+				Prefix: "ext_",
+			},
+			in: `{"field1":"value1","json_field":"{\"test\":\"test_value\",\"extracted1\":\"text1\",\"extracted2\":\"text2\"}","field3":3}`,
+			want: map[string]string{
+				"ext_extracted1": "text1",
+				"ext_extracted2": "text2",
+			},
+		},
 	}
 	for _, tt := range cases {
 		tt := tt
@@ -275,7 +306,7 @@ func BenchmarkExtract(b *testing.B) {
 			for i := 0; i < b.N; i++ {
 				d.ResetBytes(benchCase.json)
 				// remove allocs for adding new fields to root by passing `skipAddField` flag for correct benching
-				extract(nil, d, extractFields.root.children, true)
+				extract(nil, d, extractFields.root.children, "", true)
 			}
 		})
 	}
