@@ -1,6 +1,8 @@
 package fd
 
 import (
+	"fmt"
+
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/pipeline"
 )
@@ -13,28 +15,25 @@ type PluginRegistry struct {
 	plugins map[string]*pipeline.PluginStaticInfo
 }
 
-func (r *PluginRegistry) Get(kind pipeline.PluginKind, t string) *pipeline.PluginStaticInfo {
+func (r *PluginRegistry) Get(kind pipeline.PluginKind, t string) (*pipeline.PluginStaticInfo, error) {
 	id := r.MakeID(kind, t)
 
 	info := r.plugins[id]
 	if info == nil {
-		logger.Fatalf("can't find plugin kind=%s type=%s", kind, t)
-		return nil
+		return nil, fmt.Errorf("can't find plugin kind=%s type=%s", kind, t)
 	}
 
-	return info
+	return info, nil
 }
 
-func (r *PluginRegistry) GetActionByType(t string) *pipeline.PluginStaticInfo {
+func (r *PluginRegistry) GetActionByType(t string) (*pipeline.PluginStaticInfo, error) {
 	id := r.MakeID(pipeline.PluginKindAction, t)
 
 	info := r.plugins[id]
 	if info == nil {
-		logger.Fatalf("can't find action plugin with type %q", t)
-		return nil
+		return nil, fmt.Errorf("can't find action plugin with type %q", t)
 	}
-
-	return info
+	return info, nil
 }
 
 func (r *PluginRegistry) RegisterInput(info *pipeline.PluginStaticInfo) {
