@@ -231,11 +231,7 @@ func New(name string, settings *Settings, registry *prometheus.Registry) *Pipeli
 	switch settings.Decoder {
 	case "json":
 		pipeline.decoderType = decoder.JSON
-
 		pipeline.decoder, err = decoder.NewJsonDecoder(pipeline.settings.DecoderParams)
-		if err != nil {
-			pipeline.logger.Fatal("can't create json decoder", zap.Error(err))
-		}
 	case "raw":
 		pipeline.decoderType = decoder.RAW
 	case "cri":
@@ -244,22 +240,23 @@ func New(name string, settings *Settings, registry *prometheus.Registry) *Pipeli
 		pipeline.decoderType = decoder.POSTGRES
 	case "nginx_error":
 		pipeline.decoderType = decoder.NGINX_ERROR
-
 		pipeline.decoder, err = decoder.NewNginxErrorDecoder(pipeline.settings.DecoderParams)
-		if err != nil {
-			pipeline.logger.Fatal("can't create nginx_error decoder", zap.Error(err))
-		}
 	case "protobuf":
 		pipeline.decoderType = decoder.PROTOBUF
-
 		pipeline.decoder, err = decoder.NewProtobufDecoder(pipeline.settings.DecoderParams)
-		if err != nil {
-			pipeline.logger.Fatal("can't create protobuf decoder", zap.Error(err))
-		}
+	case "syslog_rfc3164":
+		pipeline.decoderType = decoder.SYSLOG_RFC3164
+		pipeline.decoder, err = decoder.NewSyslogRFC3164Decoder(pipeline.settings.DecoderParams)
+	case "syslog_rfc5424":
+		pipeline.decoderType = decoder.SYSLOG_RFC5424
+		pipeline.decoder, err = decoder.NewSyslogRFC5424Decoder(pipeline.settings.DecoderParams)
 	case "auto":
 		pipeline.decoderType = decoder.AUTO
 	default:
 		pipeline.logger.Fatal("unknown decoder", zap.String("decoder", settings.Decoder))
+	}
+	if err != nil {
+		pipeline.logger.Fatal("can't create decoder", zap.String("decoder", settings.Decoder), zap.Error(err))
 	}
 
 	return pipeline
@@ -509,7 +506,8 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offsets Offsets, byt
 		_ = event.Root.DecodeString("{}")
 	}
 	switch dec {
-	case decoder.JSON:
+	case decoder.JSON, decoder.NGINX_ERROR, decoder.PROTOBUF,
+		decoder.SYSLOG_RFC3164, decoder.SYSLOG_RFC5424:
 		err = p.decoder.DecodeToJson(event.Root, bytes)
 	case decoder.RAW:
 		event.Root.AddFieldNoAlloc(event.Root, "message").MutateToBytesCopy(event.Root, bytes[:len(bytes)-1])
@@ -519,10 +517,6 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offsets Offsets, byt
 		event.Root.AddFieldNoAlloc(event.Root, "stream").MutateToBytesCopy(event.Root, row.Stream)
 	case decoder.POSTGRES:
 		err = decoder.DecodePostgresToJson(event.Root, bytes)
-	case decoder.NGINX_ERROR:
-		err = p.decoder.DecodeToJson(event.Root, bytes)
-	case decoder.PROTOBUF:
-		err = p.decoder.DecodeToJson(event.Root, bytes)
 	default:
 		p.logger.Panic("unknown decoder", zap.Int("decoder", int(dec)))
 	}
