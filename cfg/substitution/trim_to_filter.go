@@ -30,17 +30,17 @@ func (f *TrimToFilter) setBuffer(buf []byte) {}
 func (f *TrimToFilter) compareArgs(args []any) error {
 	wantArgsCnt := 2
 	if len(args) != wantArgsCnt {
-		return fmt.Errorf("wrong trim filter amount of args, want=%d got=%d", wantArgsCnt, len(args))
+		return fmt.Errorf("wrong trim_to filter amount of args, want=%d got=%d", wantArgsCnt, len(args))
 	}
 	wantMode := args[0].(trimMode)
 	gotMode := f.mode
 	if wantMode != gotMode {
-		return fmt.Errorf("wrong trim filter mode, want=%v got=%v", wantMode, gotMode)
+		return fmt.Errorf("wrong trim_to filter mode, want=%v got=%v", wantMode, gotMode)
 	}
 	wantCutset := args[1].(string)
 	gotCutset := string(f.cutset)
 	if wantCutset != gotCutset {
-		return fmt.Errorf("wrong trim filter cutset, want=%q got=%q", wantCutset, gotCutset)
+		return fmt.Errorf("wrong trim_to filter cutset, want=%q got=%q", wantCutset, gotCutset)
 	}
 	return nil
 }
