@@ -106,6 +106,35 @@ Type of `EventPool`. `std` pool is an original pool with the slice of `Event` po
 
 <br>
 
+## Datetime parse formats
+
+Most of the plugins which work with parsing datetime call `pipeline.ParseTime` function. It accepts datetime layouts the same way as Go `time.Parse` (in format of datetime like `2006-01-02T15:04:05.999999999Z07:00`) except unix timestamp formats, they can only be specified via aliases.
+
+For the comfort of use there are aliases to some datetime formats:
+
++ `ansic` - Mon Jan _2 15:04:05 2006
++ `unixdate` - Mon Jan _2 15:04:05 MST 2006
++ `rubydate` - Mon Jan 02 15:04:05 -0700 2006
++ `rfc822` - 02 Jan 06 15:04 MST
++ `rfc822z` - 02 Jan 06 15:04 -0700
++ `rfc850` - Monday, 02-Jan-06 15:04:05 MST
++ `rfc1123` - Mon, 02 Jan 2006 15:04:05 MST
++ `rfc1123z` - Mon, 02 Jan 2006 15:04:05 -0700
++ `rfc3339` - 2006-01-02T15:04:05Z07:00
++ `rfc3339nano` - 2006-01-02T15:04:05.999999999Z07:00
++ `kitchen` - 3:04PM
++ `stamp` - Jan _2 15:04:05
++ `stampmilli` - Jan _2 15:04:05.000
++ `stampmicro` - Jan _2 15:04:05.000000
++ `stampnano` - Jan _2 15:04:05.000000000
++ `nginx_errorlog` - 2006/01/02 15:04:05
++ `unixtime` - unix timestamp in seconds: 1739959880
++ `unixtimemilli` - unix timestamp in milliseconds: 1739959880999
++ `unixtimemicro` - unix timestamp in microseconds: 1739959880999999 (e.g. `journalctl` writes timestamp in that format in `__REALTIME_TIMESTAMP` field when using json output format)
++ `unixtimenano` - unix timestamp in nanoseconds: 1739959880999999999
+
+**Note**: when using `unixtime(|milli|micro|nano)` if there is a float value its whole part is always considered as seconds and the fractional part is fractions of a second.
+
 ## Match modes
 
 > Note: consider using [DoIf match rules](/pipeline/doif/README.md) instead, since it is an advanced version of match modes.
