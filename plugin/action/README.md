@@ -198,7 +198,8 @@ pipelines:
 Alias to "join" plugin with predefined `start` and `continue` parameters.
 
 > ⚠ Parsing the whole event flow could be very CPU intensive because the plugin uses regular expressions.
-> Consider `match_fields` parameter to process only particular events. Check out an example for details.
+> Enable explicit checks without regular expressions (use `fast_check` flag) or
+> consider `match_fields` parameter to process only particular events. Check out an example for details.
 
 **Example of joining Go panics**:
 ```yaml
