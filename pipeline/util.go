@@ -2,6 +2,7 @@ package pipeline
 
 import (
 	"fmt"
+	"math"
 	"reflect"
 	"strconv"
 	"strings"
@@ -56,13 +57,17 @@ func StringToByteUnsafe(s string) (b []byte) {
 */
 
 const (
-	formats      = "ansic|unixdate|rubydate|rfc822|rfc822z|rfc850|rfc1123|rfc1123z|rfc3339|rfc3339nano|kitchen|stamp|stampmilli|stampmicro|stampnano|unixtime|nginx_errorlog"
-	UnixTime     = "unixtime"
-	nginxDateFmt = "2006/01/02 15:04:05"
+	formats       = "ansic|unixdate|rubydate|rfc822|rfc822z|rfc850|rfc1123|rfc1123z|rfc3339|rfc3339nano|kitchen|stamp|stampmilli|stampmicro|stampnano|unixtime|unixtimemilli|unixtimemicro|unixtimenano|nginx_errorlog"
+	UnixTime      = "unixtime"
+	UnixTimeMilli = "unixtimemilli"
+	UnixTimeMicro = "unixtimemicro"
+	UnixTimeNano  = "unixtimenano"
+	nginxDateFmt  = "2006/01/02 15:04:05"
 )
 
 func ParseFormatName(formatName string) (string, error) {
-	switch strings.ToLower(strings.TrimSpace(formatName)) {
+	formatNameProcessed := strings.ToLower(strings.TrimSpace(formatName))
+	switch formatNameProcessed {
 	case "ansic":
 		return time.ANSIC, nil
 	case "unixdate":
@@ -95,31 +100,63 @@ func ParseFormatName(formatName string) (string, error) {
 		return time.StampNano, nil
 	case "nginx_errorlog":
 		return nginxDateFmt, nil
-	case UnixTime:
-		return UnixTime, nil
+	case UnixTime, UnixTimeMilli, UnixTimeMicro, UnixTimeNano:
+		return formatNameProcessed, nil
 	default:
 		return "", fmt.Errorf("unknown format name %q, should be one of %s", formatName, formats)
 	}
 }
 
+type unixTimeFormat int
+
+const (
+	unixTimeSec unixTimeFormat = iota
+	unixTimeMilli
+	unixTimeMicro
+	unixTimeNano
+)
+
 func ParseTime(format, value string) (time.Time, error) {
-	if format == UnixTime {
-		return parseUnixTime(value)
+	switch format {
+	case UnixTime:
+		return parseUnixTime(value, unixTimeSec)
+	case UnixTimeMilli:
+		return parseUnixTime(value, unixTimeMilli)
+	case UnixTimeMicro:
+		return parseUnixTime(value, unixTimeMicro)
+	case UnixTimeNano:
+		return parseUnixTime(value, unixTimeNano)
+	default:
+		return time.Parse(format, value)
 	}
-	return time.Parse(format, value)
 }
 
-func parseUnixTime(value string) (time.Time, error) {
+func parseUnixTime(value string, format unixTimeFormat) (time.Time, error) {
 	numbers := strings.Split(value, ".")
-	var sec, nsec int64
+	var sec, nsec, val int64
 	var err error
 	switch len(numbers) {
 	case 1:
-		sec, err = strconv.ParseInt(numbers[0], 10, 64)
+		val, err = strconv.ParseInt(numbers[0], 10, 64)
 		if err != nil {
 			return time.Time{}, err
 		}
+		switch format {
+		case unixTimeSec:
+			sec = val
+		case unixTimeMilli:
+			sec = val / 1e3
+			nsec = (val % 1e3) * 1e6
+		case unixTimeMicro:
+			sec = val / 1e6
+			nsec = (val % 1e6) * 1e3
+		case unixTimeNano:
+			sec = val / 1e9
+			nsec = val % 1e9
+		}
 	case 2:
+		// when timestamp is presented as a float number its whole part is always considered as seconds
+		// and the fractional part is fractions of a second
 		sec, err = strconv.ParseInt(numbers[0], 10, 64)
 		if err != nil {
 			return time.Time{}, err
@@ -127,6 +164,12 @@ func parseUnixTime(value string) (time.Time, error) {
 		nsec, err = strconv.ParseInt(numbers[1], 10, 64)
 		if err != nil {
 			return time.Time{}, err
+		}
+		// if there are less than 9 digits to the right of the decimal point
+		// it must be multiplied by 10^(9 - digits) to get nsec value
+		digits := len(numbers[1])
+		if digits < 9 {
+			nsec *= int64(math.Pow10(9 - digits))
 		}
 	default:
 		return time.Time{}, fmt.Errorf("unexpected time format")

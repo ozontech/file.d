@@ -25,10 +25,8 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
-	// > Date format to parse a field. This could be one of
-	// `unixtime|timestampmilli|timestampmicro|timestampnano|ansic|unixdate|rubydate|rfc822|rfc822z|rfc850|rfc1123|rfc1123z|rfc3339|rfc3339nano|kitchen|stamp|stampmilli|stampmicro|stampnano`
-	// or custom time format.
-	// See: https://pkg.go.dev/time#Parse
+	// > Date format to parse a field. Can be specified as a datetime layout in Go [time.Parse](https://pkg.go.dev/time#Parse) format or by alias.
+	// > List of available datetime format aliases can be found [here](/pipeline/README.md#datetime-parse-formats).
 	Format  string `json:"format" default:"rfc3339nano" required:"true"` // *
 	Format_ string
 
@@ -80,11 +78,11 @@ func (p *Plugin) do(event *pipeline.Event, t time.Time) pipeline.ActionResult {
 	switch p.config.Format_ {
 	case pipeline.UnixTime:
 		dateNode.MutateToInt64(t.Unix())
-	case "timestampmilli":
+	case pipeline.UnixTimeMilli, "timestampmilli": // timestamp(milli|micro|nano) are left for backward compatibility
 		dateNode.MutateToInt64(t.UnixMilli())
-	case "timestampmicro":
+	case pipeline.UnixTimeMicro, "timestampmicro":
 		dateNode.MutateToInt64(t.UnixMicro())
-	case "timestampnano":
+	case pipeline.UnixTimeNano, "timestampnano":
 		dateNode.MutateToInt64(t.UnixNano())
 	default:
 		dateNode.MutateToString(t.Format(p.config.Format_))

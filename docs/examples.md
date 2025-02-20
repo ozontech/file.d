@@ -74,7 +74,7 @@ pipelines:
 ```
 
 ## What's next?
-1. [Input](/plugin/input) plugins documentation
-2. [Action](/plugin/action) plugins documentation
-3. [Output](/plugin/output) plugins documentation
+1. [Input](/plugin/input/README.md) plugins documentation
+2. [Action](/plugin/action/README.md) plugins documentation
+3. [Output](/plugin/output/README.md) plugins documentation
 4. [Helm-chart](/charts/filed/README.md) and examples for running in Kubernetes

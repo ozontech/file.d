@@ -102,8 +102,9 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
-	// > In which format timestamp field should be parsed.
-	TimestampFieldFormat string `json:"timestamp_field_format" default:"rfc3339nano" options:"ansic|unixdate|rubydate|rfc822|rfc822z|rfc850|rfc1123|rfc1123z|rfc3339|rfc3339nano|kitchen|stamp|stampmilli|stampmicro|stampnano|unixtime"` // *
+	// > In which format timestamp field should be parsed. Can be specified as a datetime layout in Go [time.Parse](https://pkg.go.dev/time#Parse) format or by alias.
+	// > List of available datetime format aliases can be found [here](/pipeline/README.md#datetime-parse-formats).
+	TimestampFieldFormat string `json:"timestamp_field_format" default:"rfc3339nano"` // *
 
 	// > @3@4@5@6
 	// >
@@ -209,6 +210,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.config.timestampField = pipeline.ByteToStringUnsafe(p.formatExtraField(nil, p.config.TimestampField))
 	format, err := pipeline.ParseFormatName(p.config.TimestampFieldFormat)
 	if err != nil {
+		// TODO: refactor plugin code to unify with datetime parsing in other plugins
 		params.Logger.Errorf("unknown time format: %s", err.Error())
 	}
 	p.config.timestampFieldFormat = format
