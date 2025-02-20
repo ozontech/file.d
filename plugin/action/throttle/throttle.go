@@ -74,7 +74,8 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
-	// > It defines how to parse the time field format.
+	// > It defines how to parse the time field format. Can be specified as a datetime layout in Go [time.Parse](https://pkg.go.dev/time#Parse) format or by alias.
+	// > List of available datetime format aliases can be found [here](/pipeline/README.md#datetime-parse-formats).
 	TimeFieldFormat string `json:"time_field_format" default:"rfc3339nano"` // *
 
 	// > @3@4@5@6
