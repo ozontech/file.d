@@ -78,7 +78,7 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	}
 
 	// place decoded object under root
-	event.Root.MergeWith(node)
+	pipeline.MergeToRoot(event.Root, node)
 
 	return pipeline.ActionPass
 }

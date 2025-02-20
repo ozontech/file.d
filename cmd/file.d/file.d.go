@@ -5,6 +5,8 @@ import (
 	"math"
 	"os"
 	"os/signal"
+	"runtime/debug"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -145,6 +147,11 @@ func listenSignals() {
 }
 
 func setRuntimeSettings() {
+	setGOMEMLIMIT()
+	setGOGC()
+}
+
+func setGOMEMLIMIT() {
 	if *memLimitRatio == 0 {
 		return
 	}
@@ -154,4 +161,23 @@ func setRuntimeSettings() {
 		logger.Fatal("can't set GOMEMLIMIT: %s", err)
 	}
 	logger.Warnf("GOMEMLIMIT=%v", memLimit)
+}
+
+// setGOGC initializes GOGC with the value from the environment variable.
+//
+// If GOGC env is not set, it will default 30 to reduce memory usage.
+func setGOGC() {
+	const defaultGOGC = 30
+	v := os.Getenv("GOGC")
+	if v == "" {
+		debug.SetGCPercent(defaultGOGC)
+		return
+	}
+
+	n, err := strconv.Atoi(v)
+	if err != nil {
+		logger.Errorf("invalid GOGC value: %s", v)
+		n = defaultGOGC
+	}
+	debug.SetGCPercent(n)
 }
