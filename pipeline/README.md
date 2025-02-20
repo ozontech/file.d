@@ -118,7 +118,7 @@ Type of `EventPool`. `std` pool is an original pool with the slice of `Event` po
 
 ## Datetime parse formats
 
-Most of the plugins which work with parsing datetime call `pipeline.ParseTime` function. It accepts datetime layouts the same way as Go `time.Parse` (in format of datetime like `2006-01-02T15:04:05.999999999Z07:00`) except unix timestamp formats, they can only be specified via aliases.
+Most of the plugins which work with parsing datetime call `pipeline.ParseTime` function. It accepts datetime layouts the same way as Go [time.Parse](https://pkg.go.dev/time#Parse) (in format of datetime like `2006-01-02T15:04:05.999999999Z07:00`) except unix timestamp formats, they can only be specified via aliases.
 
 For the comfort of use there are aliases to some datetime formats:
 
