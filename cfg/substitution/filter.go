@@ -11,6 +11,7 @@ const (
 	regexFilterPrefix  = "re("
 	trimFilterPrefix   = "trim("
 	trimToFilterPrefix = "trim_to("
+	cutFilterPrefix    = "cut("
 
 	bufInitSize = 1024
 )
@@ -60,6 +61,8 @@ func parseFilter(data string, logger *zap.Logger) (FieldFilter, int, error) {
 		return parseTrimFilter(data, offset)
 	case strings.HasPrefix(data, trimToFilterPrefix):
 		return parseTrimToFilter(data, offset)
+	case strings.HasPrefix(data, cutFilterPrefix):
+		return parseCutFilter(data, offset)
 	}
 	return nil, -1, errInvalidFilter
 }
