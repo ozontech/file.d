@@ -234,11 +234,6 @@ func getExpiredItems(out []*MetaItem) []*MetaItem {
 	// find pods which aren't in k8s pod list for some time and add them to the expiration list
 	for ns, podNames := range MetaData {
 		for pod, containerIDs := range podNames {
-			isDeleted := deletedPodsCache.Contains(pod)
-			if isDeleted {
-				// information about deleted pods will never change again
-				continue
-			}
 			for cid, podData := range containerIDs {
 				if now.Sub(podData.updateTime) > MetaExpireDuration {
 					out = append(out, &MetaItem{
