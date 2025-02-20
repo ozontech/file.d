@@ -394,8 +394,13 @@ func TestParseSubstitution(t *testing.T) {
 			wantErr:      true,
 		},
 		{
-			name:         "err_cut_filter_invalid_second_arg",
+			name:         "err_cut_filter_invalid_second_arg_1",
 			substitution: `test ${field|trim_to("first",true)} test2`,
+			wantErr:      true,
+		},
+		{
+			name:         "err_cut_filter_invalid_second_arg_2",
+			substitution: `test ${field|trim_to("first",-10)} test2`,
 			wantErr:      true,
 		},
 	}

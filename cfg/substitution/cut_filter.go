@@ -2,6 +2,7 @@ package substitution
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 )
 
@@ -89,6 +90,9 @@ func parseCutFilter(data string, offset int) (FieldFilter, int, error) {
 	}
 	if err := json.Unmarshal([]byte(args[1]), &count); err != nil {
 		return nil, filterEndPos, fmt.Errorf("failed to parse cut filter count: %w", err)
+	}
+	if count <= 0 {
+		return nil, filterEndPos, errors.New("failed to parse cut filter count: must be greater than 0")
 	}
 	filter := &CutFilter{
 		mode:  mode,
