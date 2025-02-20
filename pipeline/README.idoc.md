@@ -10,12 +10,6 @@ Capacity of the `EventPool`. There can only be processed no more than `capacity`
 
 <br>
 
-**`meta_cache_size`** *`int`* *`default=1024`* 
-
-Amount of entries in metadata cache. Currently it is used in [file input](/plugin/input/file/README.md) and [k8s input](/plugin/input/k8s/README.md) plugins.
-
-<br>
-
 **`avg_log_size`** *`int`* *`default=4096`* 
 
 Expected average size of the input logs in bytes. Used in standard event pool to release buffer memory when its size exceeds this value.
@@ -82,9 +76,25 @@ The list of antispammer exceptions. If the log matches at least one of the excep
 
 <br>
 
+**`meta_cache_size`** *`int`* *`default=1024`* 
+
+Amount of entries in metadata cache.
+
+<br>
+
 **`source_name_meta_field`** *`string`*
 
-The key in metadata cache to get source metadata. Used for getting k8s pod names in antispammer.
+The metadata field used to retrieve the name or origin of a data source. You can use it for antispam. Metadata is configured via `meta` parameter in input plugin. For example:
+
+```yaml
+input:
+    type: k8s
+    meta:
+        pod_namespace: '{{ .pod_name }}.{{ .namespace_name }}'
+pipeline:
+    antispam_threshold: 2000
+    source_name_meta_field: pod_namespace
+```
 
 <br>
 
