@@ -63,8 +63,11 @@
 
 
 - **Pipeline**
-  - [Match modes](pipeline/README.md#match-modes)
-  - [Experimental: Do If rules](pipeline/doif/README.md#experimental-do-if-rules)
+  - [About](/pipeline/README.md)
+  - [Settings](/pipeline/README.md#settings)
+  - [Datetime parse formats](/pipeline/README.md#datetime-parse-formats)
+  - [Match modes](/pipeline/README.md#match-modes)
+  - [Experimental: Do If rules](/pipeline/doif/README.md#experimental-do-if-rules)
 
 - **Other**
   - [Contributing](/docs/contributing.md)
