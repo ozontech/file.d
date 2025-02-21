@@ -31,6 +31,7 @@
     - [decode](plugin/action/decode/README.md)
     - [discard](plugin/action/discard/README.md)
     - [flatten](plugin/action/flatten/README.md)
+    - [hash](plugin/action/hash/README.md)
     - [join](plugin/action/join/README.md)
     - [join_template](plugin/action/join_template/README.md)
     - [json_decode](plugin/action/json_decode/README.md)
@@ -63,8 +64,11 @@
 
 
 - **Pipeline**
-  - [Match modes](pipeline/README.md#match-modes)
-  - [Experimental: Do If rules](pipeline/doif/README.md#experimental-do-if-rules)
+  - [About](/pipeline/README.md)
+  - [Settings](/pipeline/README.md#settings)
+  - [Datetime parse formats](/pipeline/README.md#datetime-parse-formats)
+  - [Match modes](/pipeline/README.md#match-modes)
+  - [Experimental: Do If rules](/pipeline/doif/README.md#experimental-do-if-rules)
 
 - **Other**
   - [Contributing](/docs/contributing.md)

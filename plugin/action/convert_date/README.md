@@ -10,13 +10,15 @@ The event field name which contains date information.
 
 **`source_formats`** *`[]string`* *`default=rfc3339nano,rfc3339`* 
 
-List of date formats to parse a field. Available list items should be one of `ansic|unixdate|rubydate|rfc822|rfc822z|rfc850|rfc1123|rfc1123z|rfc3339|rfc3339nano|kitchen|stamp|stampmilli|stampmicro|stampnano|unixtime|nginx_errorlog`.
+List of date formats to parse a field. Can be specified as a datetime layout in Go [time.Parse](https://pkg.go.dev/time#Parse) format or by alias.
+List of available datetime format aliases can be found [here](/pipeline/README.md#datetime-parse-formats).
 
 <br>
 
 **`target_format`** *`string`* *`default=unixtime`* 
 
-Date format to convert to.
+Date format to convert to. Can be specified as a datetime layout in Go [time.Parse](https://pkg.go.dev/time#Parse) format or by alias.
+List of available datetime format aliases can be found [here](/pipeline/README.md#datetime-parse-formats).
 
 <br>
 

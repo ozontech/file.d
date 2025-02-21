@@ -322,6 +322,11 @@ pipelines:
 It transforms `{"animal":{"type":"cat","paws":4}}` into `{"pet_type":"b","pet_paws":"4"}`.
 
 [More details...](plugin/action/flatten/README.md)
+## hash
+It calculates the hash for one of the specified event fields and adds a new field with result in the event root.
+> Fields can be of any type except for an object and an array.
+
+[More details...](plugin/action/hash/README.md)
 ## join
 It makes one big event from the sequence of the events.
 It is useful for assembling back together "exceptions" or "panics" if they were written line by line.
@@ -393,6 +398,12 @@ It transforms `{"server":{"os":"linux","arch":"amd64"}}` into `{"server":"{\"os\
 [More details...](plugin/action/json_encode/README.md)
 ## json_extract
 It extracts fields from JSON-encoded event field and adds extracted fields to the event root.
+
+The plugin extracts fields on the go and can work with incomplete JSON (e.g. it was cut by max size limit).
+If the field value is incomplete JSON string, fields can be extracted from the remaining part which must be the first half of JSON,
+e.g. fields can be extracted from `{"service":"test","message":"long message"`, but not from `"service":"test","message:"long message"}`
+because the start as a valid JSON matters.
+
 > If extracted field already exists in the event root, it will be overridden.
 
 [More details...](plugin/action/json_extract/README.md)
@@ -520,7 +531,12 @@ It renames the fields of the event. You can provide an unlimited number of confi
 When `override` is set to `false`, the field won't be renamed in the case of field name collision.
 Sequence of rename operations isn't guaranteed. Use different actions for prioritization.
 
-**Example:**
+**Note**: if the renamed field name starts with underscore "_", it should be escaped with preceding underscore. E.g.
+if the renamed field is "_HOSTNAME", in config it should be "___HOSTNAME". Only one preceding underscore is needed.
+Renamed field names with only one underscore in config are considered as without preceding underscore:
+if there is "_HOSTNAME" in config the plugin searches for "HOSTNAME" field.
+
+**Example common:**
 ```yaml
 pipelines:
   example_pipeline:
@@ -532,14 +548,59 @@ pipelines:
     ...
 ```
 
-The resulting event could look like:
-```yaml
+Input event:
+
+```
 {
   "my_object": {
     "field": {
-      "new_sub_field":"value"
+      "subfield":"value"
     }
-  },
+  }
+}
+```
+
+Output event:
+
+```
+{
+  "my_object": {
+    "field": {
+      "new_sub_field":"value"  # renamed
+    }
+  }
+}
+```
+
+**Example journalctl:**
+```yaml
+pipelines:
+  example_pipeline:
+    ...
+    actions:
+    - type: rename
+      override: false
+      __HOSTNAME: host
+      ___REALTIME_TIMESTAMP: ts
+    ...
+```
+
+Input event:
+
+```
+{
+  "_HOSTNAME": "example-host",
+  "__REALTIME_TIMESTAMP": "1739797379239590"
+}
+```
+
+Output event:
+
+```
+{
+  "host": "example-host",   # renamed
+  "ts": "1739797379239590"  # renamed
+}
 ```
 
 [More details...](plugin/action/rename/README.md)

@@ -20,7 +20,8 @@ If not set, the current time will be taken.
 
 **`time_field_format`** *`string`* *`default=rfc3339nano`* 
 
-It defines how to parse the time field format.
+It defines how to parse the time field format. Can be specified as a datetime layout in Go [time.Parse](https://pkg.go.dev/time#Parse) format or by alias.
+List of available datetime format aliases can be found [here](/pipeline/README.md#datetime-parse-formats).
 
 <br>
 
