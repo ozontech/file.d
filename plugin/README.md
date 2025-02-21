@@ -550,7 +550,7 @@ pipelines:
 
 Input event:
 
-```json
+```
 {
   "my_object": {
     "field": {
@@ -562,11 +562,11 @@ Input event:
 
 Output event:
 
-```json
+```
 {
   "my_object": {
     "field": {
-      "new_sub_field":"value"  // renamed
+      "new_sub_field":"value"  # renamed
     }
   }
 }
@@ -587,7 +587,7 @@ pipelines:
 
 Input event:
 
-```json
+```
 {
   "_HOSTNAME": "example-host",
   "__REALTIME_TIMESTAMP": "1739797379239590"
@@ -596,10 +596,10 @@ Input event:
 
 Output event:
 
-```json
+```
 {
-  "host": "example-host",  // renamed
-  "ts": "1739797379239590"  // renamed
+  "host": "example-host",   # renamed
+  "ts": "1739797379239590"  # renamed
 }
 ```
 
