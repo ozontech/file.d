@@ -34,7 +34,7 @@ const (
 	DefaultMaxInputEventSize       = 0
 	DefaultCutOffEventByLimit      = false
 	DefaultCutOffEventByLimitField = ""
-	DefaultJSONNodePoolSize        = 1024
+	DefaultJSONNodePoolSize        = 16
 	DefaultMaintenanceInterval     = time.Second * 5
 	DefaultEventTimeout            = time.Second * 30
 	DefaultFieldValue              = "not_set"
