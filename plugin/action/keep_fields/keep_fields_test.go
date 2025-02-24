@@ -33,3 +33,34 @@ func TestKeepFields(t *testing.T) {
 	require.Equal(t, `{"field_2":"value_2"}`, outEvents[1], "wrong event")
 	require.Equal(t, `{}`, outEvents[2], "wrong event")
 }
+
+func TestKeepNestedFields(t *testing.T) {
+	config := test.NewConfig(&Config{Fields: []string{"a.b.c", "a.b.d", "a.d", "f"}}, nil)
+	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, config, pipeline.MatchModeAnd, nil, false))
+	wg := &sync.WaitGroup{}
+	wg.Add(3)
+
+	outEvents := make([]string, 0, 3)
+	output.SetOutFn(func(e *pipeline.Event) {
+		outEvents = append(outEvents, e.Root.EncodeToString())
+		wg.Done()
+	})
+
+	input.In(0, "test.log", test.NewOffset(0),
+		[]byte(`{"a":{"b":{"c":1,"d":1}},"d":1}`),
+	)
+	input.In(0, "test.log", test.NewOffset(0),
+		[]byte(`{"a":{"b":[1,2],"d":1}}`),
+	)
+	input.In(0, "test.log", test.NewOffset(0),
+		[]byte(`{"a":{"g":"h","i":"j","f":"nested"},"f":"k"}`),
+	)
+
+	wg.Wait()
+	p.Stop()
+
+	require.Equal(t, 3, len(outEvents), "wrong out events count")
+	require.Equal(t, `{"a":{"b":{"c":1,"d":1}}}`, outEvents[0], "wrong event")
+	require.Equal(t, `{"a":{"d":1}}`, outEvents[1], "wrong event")
+	require.Equal(t, `{"f":"k"}`, outEvents[2], "wrong event")
+}
