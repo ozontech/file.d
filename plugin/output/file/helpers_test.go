@@ -9,6 +9,7 @@ import (
 	"github.com/ozontech/file.d/plugin/input/fake"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/zap"
 )
 
 func createFile(t *testing.T, fileName string, data *[]byte) *os.File {
@@ -57,7 +58,7 @@ func newPipeline(t *testing.T, configOutput *Config) *pipeline.Pipeline {
 		MetricHoldDuration:  pipeline.DefaultMetricHoldDuration,
 	}
 
-	p := pipeline.New("test_pipeline", settings, prometheus.NewRegistry())
+	p := pipeline.New("test_pipeline", settings, prometheus.NewRegistry(), zap.NewNop())
 	p.DisableParallelism()
 	p.EnableEventLog()
 

@@ -21,6 +21,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/atomic"
+	"go.uber.org/zap"
 	"golang.org/x/net/context"
 )
 
@@ -400,7 +401,7 @@ func newPipeline(t *testing.T, configOutput *Config, objStoreF objStoreFactory) 
 		MetricHoldDuration: pipeline.DefaultMetricHoldDuration,
 	}
 
-	p := pipeline.New("test_pipeline", settings, prometheus.NewRegistry())
+	p := pipeline.New("test_pipeline", settings, prometheus.NewRegistry(), zap.NewNop())
 	p.DisableParallelism()
 	p.EnableEventLog()
 
