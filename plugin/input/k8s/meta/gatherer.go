@@ -2,6 +2,7 @@ package meta
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -264,6 +265,10 @@ func cleanUpItems(items []*MetaItem) {
 		if len(MetaData[item.Namespace]) == 0 {
 			delete(MetaData, item.Namespace)
 		}
+	}
+
+	if len(items) > 0 {
+		fmt.Println(len(items))
 	}
 }
 

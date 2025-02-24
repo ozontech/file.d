@@ -6,9 +6,11 @@ import (
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/decoder"
 	"github.com/ozontech/file.d/fd"
+	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/plugin/input/file"
 	"github.com/ozontech/file.d/plugin/input/k8s/meta"
+	"github.com/prometheus/client_golang/prometheus"
 
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
@@ -50,6 +52,9 @@ type Plugin struct {
 	params *pipeline.InputPluginParams
 
 	fp *file.Plugin
+
+	// plugin metrics
+	metaPodsCount prometheus.Gauge
 }
 
 type Config struct {
@@ -154,6 +159,8 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	p.params = params
 	p.config = config.(*Config)
 
+	p.registerMetrics(params.MetricCtl)
+
 	startCounter := startCounter.Inc()
 
 	if startCounter == 1 {
@@ -190,6 +197,10 @@ func setBuiltInMeta(metaConfig cfg.MetaTemplates) {
 	metaConfig["k8s_namespace"] = "{{ .namespace }}"
 	metaConfig["k8s_container"] = "{{ .container_name }}"
 	metaConfig["k8s_container_id"] = "{{ .container_id }}"
+}
+
+func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
+	p.metaPodsCount = ctl.RegisterGauge("meta_pods_count", "")
 }
 
 /*{ meta-params

@@ -216,7 +216,6 @@ func TestK8SJoin(t *testing.T) {
 
 func TestCleanUp(t *testing.T) {
 	p, _, _ := test.NewPipelineMock(test.NewActionPluginStaticInfo(MultilineActionFactory, config(), pipeline.MatchModeAnd, nil, false))
-
 	meta.EnableGatherer(logger.Instance)
 
 	meta.PutMeta(getPodInfo(&meta.MetaItem{
