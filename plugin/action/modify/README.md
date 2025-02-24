@@ -51,6 +51,9 @@ Optional flag `emptyOnNotMatched` allows to returns empty string if no matches o
 + `trim-to filter` - `trim_to(mode string, cutset string)`, trims data to `cutset` substring. Available modes are `all` - trim both sides,
 `left` - trim only left, `right` - trim only right.
 
++ `cut filter` - `cut(mode string, count int)`, cut `count` data bytes.
+Available modes are `first` - cut first `count` bytes, `last` - cut last `count` bytes.
+
 ### Examples
 
 **Example re #1**
@@ -100,5 +103,21 @@ Data: `{"message":"some data {\"service\":\"service-test-1\",\"took\":\"200ms\"}
 Substitution: `message: ${message|trim_to("left","{")|trim_to("right","}")}`
 
 Result: `{"message":"{\"service\":\"service-test-1\",\"took\":\"200ms\"}"}`
+
+**Example cut #1**
+
+Data: `{"message":"some looooooooooooong data"}`
+
+Substitution: `message: ${message|cut("first",10)}`
+
+Result: `{"message":"some loooo"}`
+
+**Example cut #2**
+
+Data: `{"message":"some looooooooooooong data"}`
+
+Substitution: `message: ${message|cut("last",5)}`
+
+Result: `{"message":" data"}`
 
 <br>*Generated using [__insane-doc__](https://github.com/vitkovskii/insane-doc)*

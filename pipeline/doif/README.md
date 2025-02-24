@@ -1,11 +1,11 @@
-## Experimental: Do If rules
+# Experimental: Do If rules (logs content matching rules)
 
 This is experimental feature and represents an advanced version of `match_fields`.
 The Do If rules are a tree of nodes. The tree is stored in the Do If Checker instance.
 When Do If Checker's Match func is called it calls to the root Match func and then
 the chain of Match func calls are performed across the whole tree.
 
-### Node types
+## Node types
 **`FieldOp`** Type of node where matching rules for fields are stored.
 
 <br>
@@ -27,7 +27,7 @@ the chain of Match func calls are performed across the whole tree.
 <br>
 
 
-### Field op node
+## Field op node
 DoIf field op node is considered to always be a leaf in the DoIf tree. It checks byte representation of the value by the given field path.
 Array and object values are considered as not matched since encoding them to bytes leads towards large CPU and memory consumption.
 
@@ -53,7 +53,7 @@ pipelines:
 ```
 
 
-### Field operations
+## Field operations
 **`Equal`** checks whether the field value is equal to one of the elements in the values list.
 
 Example:
@@ -177,7 +177,7 @@ result:
 <br>
 
 
-### Logical op node
+## Logical op node
 DoIf logical op node is a node considered to be the root or an edge between nodes.
 It always has at least one operand which are other nodes and calls their checks
 to apply logical operation on their results.
@@ -206,7 +206,7 @@ pipelines:
 ```
 
 
-### Logical operations
+## Logical operations
 **`Or`** accepts at least one operand and returns true on the first returned true from its operands.
 
 Example:
@@ -293,7 +293,7 @@ result:
 <br>
 
 
-### Length comparison op node
+## Length comparison op node
 DoIf length comparison op node is considered to always be a leaf in the DoIf tree like DoIf field op node.
 It contains operation that compares field length in bytes or array length (for array fields) with certain value.
 
@@ -360,7 +360,7 @@ They denote corresponding comparison operations.
 | `eq` | `==` |
 | `ne` | `!=` |
 
-### Timestamp comparison op node
+## Timestamp comparison op node
 DoIf timestamp comparison op node is considered to always be a leaf in the DoIf tree like DoIf field op node.
 It contains operation that compares timestamps with certain value.
 
@@ -403,7 +403,7 @@ Result:
 {"timestamp":"2011-01-01T00:00:00Z"}  # not discarded (condition is not met)
 ```
 
-### Check type op node
+## Check type op node
 DoIf check type op node checks whether the type of the field node is the one from the list.
 
 Params:

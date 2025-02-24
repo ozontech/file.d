@@ -6,7 +6,7 @@ Images are available
 on [GitHub container registry](https://github.com/ozontech/file.d/pkgs/container/file.d/versions?filters%5Bversion_type%5D=tagged).
 
 **Note**:
-If you are using [journalctl](https://github.com/ozontech/file.d/tree/master/plugin/input/journalctl) input plugin, we
+If you are using [journalctl](https://github.com/ozontech/file.d/tree/master/plugin/input/journalctl/README.md) input plugin, we
 recommend choosing the ubuntu version that matches the host machine
 version.
 For example, if the host machine with which you want to collect logs using journald has a version of Ubuntu 18.04, you
