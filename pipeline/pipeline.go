@@ -34,7 +34,7 @@ const (
 	DefaultMaxInputEventSize       = 0
 	DefaultCutOffEventByLimit      = false
 	DefaultCutOffEventByLimitField = ""
-	DefaultJSONNodePoolSize        = 1024
+	DefaultJSONNodePoolSize        = 16
 	DefaultMaintenanceInterval     = time.Second * 5
 	DefaultEventTimeout            = time.Second * 30
 	DefaultFieldValue              = "not_set"
@@ -181,10 +181,9 @@ func New(name string, settings *Settings, registry *prometheus.Registry) *Pipeli
 
 	var eventPool pool
 	switch settings.Pool {
-	case PoolTypeStd, "":
+	case PoolTypeStd:
 		eventPool = newEventPool(settings.Capacity, settings.AvgEventSize)
-	case PoolTypeLowMem:
-		insaneJSON.StartNodePoolSize = 16
+	case PoolTypeLowMem, "":
 		eventPool = newLowMemoryEventPool(settings.Capacity)
 	default:
 		logger.Fatal("unknown pool type", zap.String("pool", string(settings.Pool)))
