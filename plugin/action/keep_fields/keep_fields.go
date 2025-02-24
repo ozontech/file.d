@@ -172,7 +172,7 @@ func (p *Plugin) collectBadNodes(node *insaneJSON.Node, root *insaneJSON.Node) {
 
 	for _, child := range node.AsFields() {
 		p.path = append(p.path, child.AsString())
-		p.collectBadNodes(child, root)
+		p.collectBadNodes(child.AsFieldValue(), root)
 		p.path = p.path[:len(p.path)-1]
 	}
 }
