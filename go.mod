@@ -15,7 +15,7 @@ require (
 	github.com/bmatcuk/doublestar/v4 v4.0.2
 	github.com/bufbuild/protocompile v0.13.0
 	github.com/cenkalti/backoff/v4 v4.3.0
-	github.com/cespare/xxhash/v2 v2.2.0
+	github.com/cespare/xxhash/v2 v2.3.0
 	github.com/dominikbraun/graph v0.23.0
 	github.com/elliotchance/orderedmap/v2 v2.4.0
 	github.com/euank/go-kmsg-parser v2.0.0+incompatible
