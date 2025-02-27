@@ -162,7 +162,7 @@ func (p *Plugin) collectBadNodes(node *insaneJSON.Node, root *insaneJSON.Node) {
 	}
 
 	if !p.isParentOfSaved() {
-		p.badNodesBuf = append(p.badNodesBuf, root.Dig(p.path...))
+		p.badNodesBuf = append(p.badNodesBuf, node)
 		return
 	}
 
