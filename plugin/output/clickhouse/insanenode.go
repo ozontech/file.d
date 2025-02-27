@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"net/netip"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/ClickHouse/ch-go/proto"
@@ -27,7 +29,7 @@ type InsaneNode interface {
 	AsUUID() (uuid.UUID, error)
 	AsIPv4() (proto.IPv4, error)
 	AsIPv6() (proto.IPv6, error)
-	AsTime(scale int64) (time.Time, error)
+	AsTime(proto.Precision) (time.Time, error)
 
 	IsNull() bool
 }
@@ -91,8 +93,8 @@ func (s StrictNode) AsIPv6() (proto.IPv6, error) {
 	return proto.ToIPv6(addr), nil
 }
 
-func (s StrictNode) AsTime(scale int64) (time.Time, error) {
-	return nodeAsTime(s.StrictNode, scale)
+func (s StrictNode) AsTime(prec proto.Precision) (time.Time, error) {
+	return nodeAsTime(s.StrictNode, prec)
 }
 
 func (s StrictNode) AsStringArray() ([]string, error) {
@@ -207,8 +209,8 @@ func (n NonStrictNode) AsIPv6() (proto.IPv6, error) {
 	return proto.ToIPv6(addr), nil
 }
 
-func (n NonStrictNode) AsTime(scale int64) (time.Time, error) {
-	t, err := nodeAsTime(n.Node.MutateToStrict(), scale)
+func (n NonStrictNode) AsTime(prec proto.Precision) (time.Time, error) {
+	t, err := nodeAsTime(n.Node.MutateToStrict(), prec)
 	if err != nil {
 		return time.Time{}, nil
 	}
@@ -264,7 +266,7 @@ func (z ZeroValueNode) AsIPv6() (proto.IPv6, error) {
 	return proto.IPv6{}, nil
 }
 
-func (z ZeroValueNode) AsTime(_ int64) (time.Time, error) {
+func (z ZeroValueNode) AsTime(proto.Precision) (time.Time, error) {
 	return time.Time{}, nil
 }
 
@@ -282,36 +284,37 @@ func nonStrictAsString(node *insaneJSON.Node) string {
 	return val
 }
 
-func nodeAsTime(n *insaneJSON.StrictNode, scale int64) (time.Time, error) {
+func nodeAsTime(n *insaneJSON.StrictNode, prec proto.Precision) (time.Time, error) {
 	switch {
 	case n.IsNumber():
 		nodeVal, err := n.AsInt64()
 		if err != nil {
 			return time.Time{}, err
 		}
-		// convert to nanoseconds
-		nsec := nodeVal * scale
+		nsec := nodeVal * prec.Scale()
 		return time.Unix(nsec/1e9, nsec%1e9), nil
 	case n.IsString():
-		t, err := parseRFC3339Nano(n)
+		nodeVal, err := n.AsString()
 		if err != nil {
 			return time.Time{}, err
+		}
+
+		if strings.IndexByte(nodeVal, ':') == -1 {
+			// It is not RFC3339-encoded date, try to parse timestamp.
+			n, err := strconv.ParseUint(nodeVal, 10, 64)
+			if err != nil {
+				return time.Time{}, err
+			}
+			nsec := int64(n) * prec.Scale()
+			return time.Unix(nsec/1e9, nsec%1e9), nil
+		}
+
+		t, err := time.Parse(time.RFC3339Nano, nodeVal)
+		if err != nil {
+			return time.Time{}, fmt.Errorf("parsing RFC3339Nano: %w", err)
 		}
 		return t, nil
 	default:
 		return time.Time{}, ErrInvalidTimeType
 	}
-}
-
-func parseRFC3339Nano(node *insaneJSON.StrictNode) (time.Time, error) {
-	nodeVal, err := node.AsString()
-	if err != nil {
-		return time.Time{}, err
-	}
-
-	t, err := time.Parse(time.RFC3339Nano, nodeVal)
-	if err != nil {
-		return time.Time{}, fmt.Errorf("parsing RFC3339Nano: %w", err)
-	}
-	return t, nil
 }

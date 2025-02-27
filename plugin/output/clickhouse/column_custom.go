@@ -27,7 +27,7 @@ func (t *ColDateTime) Append(node InsaneNode) error {
 		return ErrNodeIsNil
 	}
 
-	val, err := node.AsTime(proto.PrecisionSecond.Scale())
+	val, err := node.AsTime(proto.PrecisionSecond)
 	if err != nil {
 		return fmt.Errorf("converting node to time: %w", err)
 	}
@@ -39,14 +39,14 @@ func (t *ColDateTime) Append(node InsaneNode) error {
 
 // ColDateTime64 represents Clickhouse DateTime64 type.
 type ColDateTime64 struct {
-	col   *proto.ColDateTime64
-	scale int64
+	col  *proto.ColDateTime64
+	prec proto.Precision
 }
 
-func NewColDateTime64(col *proto.ColDateTime64, scale int64) *ColDateTime64 {
+func NewColDateTime64(col *proto.ColDateTime64, prec proto.Precision) *ColDateTime64 {
 	return &ColDateTime64{
-		col:   col,
-		scale: scale,
+		col:  col,
+		prec: prec,
 	}
 }
 
@@ -55,7 +55,7 @@ func (t *ColDateTime64) Append(node InsaneNode) error {
 		return ErrNodeIsNil
 	}
 
-	val, err := node.AsTime(t.scale)
+	val, err := node.AsTime(t.prec)
 	if err != nil {
 		return fmt.Errorf("converting to time: %w", err)
 	}
