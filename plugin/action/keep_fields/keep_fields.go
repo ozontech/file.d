@@ -19,6 +19,9 @@ type Plugin struct {
 	config    *Config
 	fieldsBuf []string
 
+	nested           bool
+	firstLevelFields []string
+
 	fieldPaths  [][]string
 	nodePresent []bool
 	path        []string
@@ -120,11 +123,34 @@ func (p *Plugin) StartNew(config pipeline.AnyConfig, _ *pipeline.ActionPluginPar
 	}
 
 	p.nodePresent = make([]bool, len(p.fieldPaths))
+	p.firstLevelFields = make([]string, len(p.fieldPaths))
 	p.path = make([]string, 0, 20)
+
+	for i, path := range p.fieldPaths {
+		p.nested = p.nested || len(path) >= 2
+		p.firstLevelFields[i] = path[0]
+	}
 }
 
 func (p *Plugin) DoNew(event *pipeline.Event) pipeline.ActionResult {
 	if len(p.fieldPaths) == 0 || !event.Root.IsObject() {
+		return pipeline.ActionPass
+	}
+
+	if !p.nested {
+		p.fieldsBuf = p.fieldsBuf[:0]
+
+		for _, node := range event.Root.AsFields() {
+			eventField := node.AsString()
+			if find(p.firstLevelFields, eventField) == -1 {
+				p.fieldsBuf = append(p.fieldsBuf, eventField)
+			}
+		}
+
+		for _, field := range p.fieldsBuf {
+			event.Root.Dig(field).Suicide()
+		}
+
 		return pipeline.ActionPass
 	}
 
