@@ -136,7 +136,7 @@ func (p *Plugin) DoNew(event *pipeline.Event) pipeline.ActionResult {
 	for _, child := range event.Root.AsFields() {
 		eventField := child.AsString()
 		p.path = append(p.path, eventField)
-		p.collectBadNodes(event.Root.Node.Dig(eventField), event.Root.Node)
+		p.collectBadNodes(event.Root.Node.Dig(eventField))
 		p.path = p.path[:len(p.path)-1]
 	}
 
@@ -150,7 +150,7 @@ func (p *Plugin) DoNew(event *pipeline.Event) pipeline.ActionResult {
 	return pipeline.ActionPass
 }
 
-func (p *Plugin) collectBadNodes(node *insaneJSON.Node, root *insaneJSON.Node) {
+func (p *Plugin) collectBadNodes(node *insaneJSON.Node) {
 	// if node explicitly saved then return
 	// if node is not parent of some saved collect it and return
 	// check all children
@@ -172,7 +172,7 @@ func (p *Plugin) collectBadNodes(node *insaneJSON.Node, root *insaneJSON.Node) {
 
 	for _, child := range node.AsFields() {
 		p.path = append(p.path, child.AsString())
-		p.collectBadNodes(child.AsFieldValue(), root)
+		p.collectBadNodes(child.AsFieldValue())
 		p.path = p.path[:len(p.path)-1]
 	}
 }
