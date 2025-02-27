@@ -19,7 +19,6 @@ type Plugin struct {
 	config    *Config
 	fieldsBuf []string
 
-	badNodesBuf []*insaneJSON.Node
 	fieldPaths  [][]string
 	nodePresent []bool
 	path        []string
@@ -117,7 +116,7 @@ func (p *Plugin) StartNew(config pipeline.AnyConfig, _ *pipeline.ActionPluginPar
 	}
 
 	if len(p.fieldPaths) == 0 {
-		logger.Warn("no fields will be removed")
+		logger.Warn("all fields will be removed")
 	}
 
 	p.nodePresent = make([]bool, len(p.fieldPaths))
@@ -136,24 +135,17 @@ func (p *Plugin) DoNew(event *pipeline.Event) pipeline.ActionResult {
 	for _, child := range event.Root.AsFields() {
 		eventField := child.AsString()
 		p.path = append(p.path, eventField)
-		p.collectBadNodes(event.Root.Node.Dig(eventField))
+		p.eraseBadNodes(event.Root.Node.Dig(eventField))
 		p.path = p.path[:len(p.path)-1]
 	}
-
-	for _, node := range p.badNodesBuf {
-		node.Suicide()
-	}
-
-	// necessary
-	p.badNodesBuf = p.badNodesBuf[:0]
 
 	return pipeline.ActionPass
 }
 
-func (p *Plugin) collectBadNodes(node *insaneJSON.Node) {
+func (p *Plugin) eraseBadNodes(node *insaneJSON.Node) {
 	// if node explicitly saved then return
-	// if node is not parent of some saved collect it and return
-	// check all children
+	// else if node is not parent of some saved then erase it and return
+	// else check all children
 
 	for i, curPath := range p.fieldPaths {
 		if p.nodePresent[i] && equal(p.path, curPath) {
@@ -162,7 +154,7 @@ func (p *Plugin) collectBadNodes(node *insaneJSON.Node) {
 	}
 
 	if !p.isParentOfSaved() {
-		p.badNodesBuf = append(p.badNodesBuf, node)
+		node.Suicide()
 		return
 	}
 
@@ -172,16 +164,11 @@ func (p *Plugin) collectBadNodes(node *insaneJSON.Node) {
 
 	for _, child := range node.AsFields() {
 		p.path = append(p.path, child.AsString())
-		p.collectBadNodes(child.AsFieldValue())
+		p.eraseBadNodes(child.AsFieldValue())
 		p.path = p.path[:len(p.path)-1]
 	}
 }
 
-/*
-Является ли текукщая нода предком одной сохраненных (по конфигу)
-*/
-
-// мб префиксное дерево будет быстрее для поиска чтобы не делать лишних equal
 func (p *Plugin) isParentOfSaved() bool {
 	for i, fieldPath := range p.fieldPaths {
 		if !p.nodePresent[i] {
