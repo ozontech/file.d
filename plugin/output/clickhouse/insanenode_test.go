@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/ClickHouse/ch-go/proto"
+	insaneJSON "github.com/ozontech/insane-json"
 	"github.com/stretchr/testify/require"
 )
 
@@ -23,7 +24,7 @@ func TestZeroValueNode(t *testing.T) {
 		NewColDateTime(&proto.ColDateTime{Location: utcLoc}),
 		NewColDateTime64(
 			(&proto.ColDateTime64{Location: utcLoc}).WithPrecision(proto.PrecisionSecond),
-			proto.PrecisionSecond.Scale(),
+			proto.PrecisionSecond,
 		),
 		NewColEnum8(enum8),
 		NewColEnum16(enum16),
@@ -63,4 +64,33 @@ func TestZeroValueNode(t *testing.T) {
 		col.EncodeColumn(buf)
 		r.NotEqual(0, len(buf.Buf), "col=%T", col)
 	}
+}
+
+func TestNodeAsTime(t *testing.T) {
+	r := require.New(t)
+	test := func(jsonTime string, precision proto.Precision, expected time.Time) {
+		t.Helper()
+
+		root, err := insaneJSON.DecodeString(jsonTime)
+		r.NoError(err)
+		defer insaneJSON.Release(root)
+
+		n := StrictNode{root.MutateToStrict()}
+
+		ts, err := n.AsTime(precision)
+		r.NoError(err)
+		r.Equal(expected.Local(), ts.Local())
+	}
+
+	test(`"2004-09-16T23:59:58.75Z"`, 10, mustParseTime("2004-09-16T23:59:58.75Z"))
+	test(`1740643609`, proto.PrecisionSecond, mustParseTime("2025-02-27T08:06:49.00Z"))
+	test(`"1740643609"`, proto.PrecisionSecond, mustParseTime("2025-02-27T08:06:49.00Z"))
+}
+
+func mustParseTime(s string) time.Time {
+	t, err := time.Parse(time.RFC3339Nano, s)
+	if err != nil {
+		panic(err)
+	}
+	return t.Local()
 }

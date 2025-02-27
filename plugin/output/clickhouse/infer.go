@@ -65,7 +65,7 @@ func insaneInfer(auto proto.ColAuto) (InsaneColInput, error) {
 		return NewColDateTime(auto.Data.(*proto.ColDateTime)), nil
 	case proto.ColumnTypeDateTime64:
 		col := auto.Data.(*proto.ColDateTime64)
-		return NewColDateTime64(col, col.Precision.Scale()), nil
+		return NewColDateTime64(col, col.Precision), nil
 	case proto.ColumnTypeArray:
 		child := child.Elem()
 		if child == proto.ColumnTypeString {
