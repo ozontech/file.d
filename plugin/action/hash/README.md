@@ -104,5 +104,40 @@ The event field to which put the hash.
 
 <br>
 
+**`normalizer`** *`*NormalizerConfig`* 
+
+Normalizer params. It works for `fields` with `format: normalize`.
+> For more information, see [Normalization](/plugin/action/hash/normalize/README.md).
+
+`NormalizerConfig` params:
+* **`with_defaults`** *`bool`* *`default=false`*
+
+	If set to `true`, normalizer will use `patterns` in combination with [default patterns](/plugin/action/hash/normalize/README.md#default-patterns).
+
+* **`patterns`** *`[]NormalizePattern`*
+
+	List of normalization patterns.
+
+	`NormalizePattern` params:
+	* **`placeholder`** *`string`* *`required`*
+
+		A placeholder that replaces the parts of string that falls under specified pattern.
+
+	* **`re`** *`string`* *`required`*
+
+		A regular expression that describes a pattern.
+		> We have some [limitations](/plugin/action/hash/normalize/README.md#limitations-of-the-re-language) of the RE syntax.
+
+	* **`priority`** *`string`* *`default=first`*  *`options=first|last`*
+
+		A priority of pattern. Works only if `normalizer.with_defaults=true`.
+
+		If set to `first`, pattern will be added before defaults, otherwise - after.
+
+		> If `normalizer.with_defaults=false`, then the priority is determined
+		by the order of the elements in `normalizer.patterns`.
+
+<br>
+
 
 <br>*Generated using [__insane-doc__](https://github.com/vitkovskii/insane-doc)*

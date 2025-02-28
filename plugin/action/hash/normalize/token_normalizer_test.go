@@ -184,7 +184,9 @@ func TestTokenNormalizer(t *testing.T) {
 		},
 	}
 
-	n := NewTokenNormalizer()
+	n, err := NewTokenNormalizer(TokenNormalizerParams{WithDefaults: true})
+	require.NoError(t, err)
+
 	out := make([]byte, 0)
 
 	for _, tt := range tests {
@@ -234,7 +236,7 @@ var benchCases = []struct {
 }
 
 func BenchmarkTokenNormalizer(b *testing.B) {
-	n := NewTokenNormalizer()
+	n, _ := NewTokenNormalizer(TokenNormalizerParams{WithDefaults: true})
 	out := make([]byte, 0)
 	for _, benchCase := range benchCases {
 		name := fmt.Sprintf("input_len_%d", len(benchCase.input))

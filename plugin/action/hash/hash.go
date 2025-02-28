@@ -7,6 +7,7 @@ import (
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/plugin/action/hash/normalize"
 	insaneJSON "github.com/ozontech/insane-json"
+	"go.uber.org/zap"
 )
 
 /*{ introduction
@@ -72,7 +73,7 @@ The original event:
 }
 ```
 
-Normalized 'message':
+Normalized "message":
 `<datetime> error occurred, client: <ip>, upstream: "<url>", host: "<host>:<int>"`
 
 The resulting event:
@@ -124,6 +125,40 @@ type Config struct {
 	// > The event field to which put the hash.
 	ResultField  cfg.FieldSelector `json:"result_field" parse:"selector" required:"true"` // *
 	ResultField_ []string
+
+	// > @3@4@5@6
+	// >
+	// > Normalizer params. It works for `fields` with `format: normalize`.
+	// >> For more information, see [Normalization](/plugin/action/hash/normalize/README.md).
+	// >
+	// > `NormalizerConfig` params:
+	// > * **`with_defaults`** *`bool`* *`default=true`*
+	// >
+	// > 	If set to `true`, normalizer will use `patterns` in combination with [default patterns](/plugin/action/hash/normalize/README.md#default-patterns).
+	// >
+	// > * **`patterns`** *`[]NormalizePattern`*
+	// >
+	// > 	List of normalization patterns.
+	// >
+	// > 	`NormalizePattern` params:
+	// >	* **`placeholder`** *`string`* *`required`*
+	// >
+	// >		A placeholder that replaces the parts of string that falls under specified pattern.
+	// >
+	// >	* **`re`** *`string`* *`required`*
+	// >
+	// >		A regular expression that describes a pattern.
+	// >		> We have some [limitations](/plugin/action/hash/normalize/README.md#limitations-of-the-re-language) of the RE syntax.
+	// >
+	// >	* **`priority`** *`string`* *`default=first`* *`options=first|last`*
+	// >
+	// >		A priority of pattern. Works only if `normalizer.with_defaults=true`.
+	// >
+	// >		If set to `first`, pattern will be added before defaults, otherwise - after.
+	// >
+	// >		> If `normalizer.with_defaults=false`, then the priority is determined
+	// >		by the order of the elements in `normalizer.patterns`.
+	Normalizer NormalizerConfig `json:"normalizer" child:"true"` // *
 }
 
 type fieldFormat byte
@@ -143,6 +178,17 @@ type Field struct {
 	MaxSize int `json:"max_size" default:"0"`
 }
 
+type NormalizePattern struct {
+	Placeholder string `json:"placeholder" required:"true"`
+	RE          string `json:"re" required:"true"`
+	Priority    string `json:"priority" default:"first" options:"first|last"`
+}
+
+type NormalizerConfig struct {
+	Patterns     []NormalizePattern `json:"patterns" slice:"true"`
+	WithDefaults bool               `json:"with_defaults" default:"true"`
+}
+
 func init() {
 	fd.DefaultPluginRegistry.RegisterAction(&pipeline.PluginStaticInfo{
 		Type:    "hash",
@@ -160,11 +206,37 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 	p.buf = make([]byte, 0)
 
 	for _, f := range p.config.Fields {
-		if f.Format_ == ffNormalize {
-			p.normalizer = normalize.NewTokenNormalizer()
-			break
+		if f.Format_ != ffNormalize {
+			continue
 		}
+
+		if err := p.initNormalizer(); err != nil {
+			params.Logger.Desugar().Fatal("can't create normalizer", zap.Error(err))
+		}
+		break
 	}
+}
+
+func (p *Plugin) initNormalizer() error {
+	tnParams := normalize.TokenNormalizerParams{
+		WithDefaults: p.config.Normalizer.WithDefaults,
+		Patterns:     make([]normalize.TokenPattern, 0, len(p.config.Normalizer.Patterns)),
+	}
+	for _, p := range p.config.Normalizer.Patterns {
+		tnParams.Patterns = append(tnParams.Patterns, normalize.TokenPattern{
+			Placeholder: p.Placeholder,
+			RE:          p.RE,
+			Priority:    p.Priority,
+		})
+	}
+
+	n, err := normalize.NewTokenNormalizer(tnParams)
+	if err != nil {
+		return err
+	}
+
+	p.normalizer = n
+	return nil
 }
 
 func (p *Plugin) Stop() {}

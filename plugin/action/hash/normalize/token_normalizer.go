@@ -1,6 +1,7 @@
 package normalize
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -8,20 +9,40 @@ import (
 	"github.com/timtadh/lexmachine/machines"
 )
 
+const (
+	PatternPriorityFirst = "first"
+	PatternPriorityLast  = "last"
+)
+
+type TokenPattern struct {
+	Placeholder string
+	RE          string
+	Priority    string
+}
+
+type TokenNormalizerParams struct {
+	Patterns     []TokenPattern
+	WithDefaults bool
+}
+
 type tokenNormalizer struct {
 	lexer *lexmachine.Lexer
 }
 
-func NewTokenNormalizer() Normalizer {
+func NewTokenNormalizer(params TokenNormalizerParams) (Normalizer, error) {
 	l := lexmachine.NewLexer()
-	initTokens(l)
-	if err := l.Compile(); err != nil {
-		panic(err)
+
+	err := initTokens(l, params)
+	if err != nil {
+		return nil, fmt.Errorf("failed to init tokens: %w", err)
+	}
+	if err = l.Compile(); err != nil {
+		return nil, fmt.Errorf("failed to compile lexer: %w", err)
 	}
 
 	return &tokenNormalizer{
 		lexer: l,
-	}
+	}, nil
 }
 
 func (n *tokenNormalizer) Normalize(out, data []byte) []byte {
@@ -41,7 +62,7 @@ func (n *tokenNormalizer) Normalize(out, data []byte) []byte {
 		tok := tokRaw.(token)
 
 		out = append(out, data[prevEnd:tok.begin]...)
-		out = addPlaceholder(out, tok.name)
+		out = append(out, tok.placeholder...)
 		prevEnd = tok.end
 	}
 	out = append(out, data[prevEnd:]...)
@@ -50,19 +71,18 @@ func (n *tokenNormalizer) Normalize(out, data []byte) []byte {
 }
 
 type token struct {
-	name  string
-	begin int
-	end   int
+	placeholder string
+	begin       int
+	end         int
 }
 
-func initTokens(lexer *lexmachine.Lexer) {
+func initTokens(lexer *lexmachine.Lexer, params TokenNormalizerParams) error {
 	isWord := func(c byte) bool {
 		return '0' <= c && c <= '9' ||
 			'A' <= c && c <= 'Z' || 'a' <= c && c <= 'z' ||
 			c == '_'
 	}
-
-	addToken := func(name string) lexmachine.Action {
+	addToken := func(placeholder string) lexmachine.Action {
 		return func(s *lexmachine.Scanner, m *machines.Match) (any, error) {
 			// skip `\w<match>\w`
 			if m.TC > 0 && isWord(s.Text[m.TC-1]) ||
@@ -71,92 +91,116 @@ func initTokens(lexer *lexmachine.Lexer) {
 			}
 
 			return token{
-				name:  name,
-				begin: m.TC,
-				end:   m.TC + len(m.Bytes),
+				placeholder: placeholder,
+				begin:       m.TC,
+				end:         m.TC + len(m.Bytes),
 			}, nil
 		}
 	}
-
-	for _, tp := range defaultTokenPatterns {
-		lexer.Add(tp.re, addToken(tp.name))
+	addTokens := func(patterns []TokenPattern) {
+		for _, p := range patterns {
+			lexer.Add([]byte(p.RE), addToken(p.Placeholder))
+		}
 	}
-}
 
-type tokenPattern struct {
-	name string
-	re   []byte
+	if len(params.Patterns) == 0 {
+		if !params.WithDefaults {
+			return errors.New("empty pattern list")
+		}
+		addTokens(defaultTokenPatterns)
+		return nil
+	}
+
+	if !params.WithDefaults {
+		addTokens(params.Patterns)
+		return nil
+	}
+
+	lastPatterns := make([]TokenPattern, 0)
+	patterns := make([]TokenPattern, 0)
+	for _, p := range params.Patterns {
+		if p.Priority == PatternPriorityFirst {
+			patterns = append(patterns, p)
+		} else {
+			lastPatterns = append(lastPatterns, p)
+		}
+	}
+	patterns = append(patterns, defaultTokenPatterns...)
+	patterns = append(patterns, lastPatterns...)
+
+	addTokens(patterns)
+	return nil
 }
 
 // [lexmachine] pkg doesn't support 'exactly' re syntax (a{3}, a{3,6}),
 // so we use [strings.Repeat] instead
-var defaultTokenPatterns = []tokenPattern{
+var defaultTokenPatterns = []TokenPattern{
 	{
-		name: "email",
-		re:   []byte(`\w[0-9a-zA-Z_\.\-]+@[0-9a-zA-Z_\-]+(\.[0-9a-zA-Z_\-]+)*`),
+		Placeholder: "<email>",
+		RE:          `\w[0-9a-zA-Z_\.\-]+@[0-9a-zA-Z_\-]+(\.[0-9a-zA-Z_\-]+)*`,
 	},
 	{
-		name: "url",
-		re:   []byte(`(wss?|https?|ftp)://[0-9a-zA-Z_\.\-@:%\+~#=\?/]+`),
+		Placeholder: "<url>",
+		RE:          `(wss?|https?|ftp)://[0-9a-zA-Z_\.\-@:%\+~#=\?/]+`,
 	},
 	{
-		name: "host",
-		re: []byte(fmt.Sprintf(`([0-9a-zA-Z_\-]+\.)+(%s|%s)`,
+		Placeholder: "<host>",
+		RE: fmt.Sprintf(`([0-9a-zA-Z_\-]+\.)+(%s|%s)`,
 			// top 100 TLDs
 			`COM|NET|ORG|JP|DE|UK|FR|BR|IT|RU|ES|ME|GOV|PL|CA|AU|CN|CO|IN|NL|EDU|INFO|EU|CH|ID|AT|KR|CZ|MX|BE|TV|SE|TR|TW|AL|UA|IR|VN|CL|SK|LY|CC|TO|NO|FI|US|PT|DK|AR|HU|TK|GR|IL|NEWS|RO|MY|BIZ|IE|ZA|NZ|SG|EE|TH|IO|XYZ|PE|BG|HK|RS|LT|LINK|PH|CLUB|SI|SITE|MOBI|BY|CAT|WIKI|LA|GA|XXX|CF|HR|NG|JOBS|ONLINE|KZ|UG|GQ|AE|IS|LV|PRO|FM|TIPS|MS|SA|APP`,
 			`com|net|org|jp|de|uk|fr|br|it|ru|es|me|gov|pl|ca|au|cn|co|in|nl|edu|info|eu|ch|id|at|kr|cz|mx|be|tv|se|tr|tw|al|ua|ir|vn|cl|sk|ly|cc|to|no|fi|us|pt|dk|ar|hu|tk|gr|il|news|ro|my|biz|ie|za|nz|sg|ee|th|io|xyz|pe|bg|hk|rs|lt|link|ph|club|si|site|mobi|by|cat|wiki|la|ga|xxx|cf|hr|ng|jobs|online|kz|ug|gq|ae|is|lv|pro|fm|tips|ms|sa|app`,
-		)),
+		),
 	},
 	{
-		name: "uuid",
-		re: []byte(fmt.Sprintf(`%s-%s-%s-%s-%s`,
+		Placeholder: "<uuid>",
+		RE: fmt.Sprintf(`%s-%s-%s-%s-%s`,
 			strings.Repeat(`[0-9a-fA-F]`, 8),
 			strings.Repeat(`[0-9a-fA-F]`, 4),
 			strings.Repeat(`[0-9a-fA-F]`, 4),
 			strings.Repeat(`[0-9a-fA-F]`, 4),
 			strings.Repeat(`[0-9a-fA-F]`, 12),
-		)),
+		),
 	},
 	{
-		name: "sha1",
-		re:   []byte(strings.Repeat(`[0-9a-fA-F]`, 40)),
+		Placeholder: "<sha1>",
+		RE:          strings.Repeat(`[0-9a-fA-F]`, 40),
 	},
 	{
-		name: "md5",
-		re:   []byte(strings.Repeat(`[0-9a-fA-F]`, 32)),
+		Placeholder: "<md5>",
+		RE:          strings.Repeat(`[0-9a-fA-F]`, 32),
 	},
 	{
 		// RFC3339, RFC3339Nano, DateTime, DateOnly, TimeOnly
-		name: "datetime",
-		re: []byte(fmt.Sprintf(`(%s)|(%s)|(%s)`,
+		Placeholder: "<datetime>",
+		RE: fmt.Sprintf(`(%s)|(%s)|(%s)`,
 			`\d\d\d\d-\d\d-\d\dT\d\d:\d\d:\d\d(\.\d+)?(Z|[\+\-]\d\d:\d\d)`,
 			`\d\d:\d\d:\d\d`,
 			`\d\d\d\d-\d\d-\d\d( \d\d:\d\d:\d\d)?`,
-		)),
+		),
 	},
 	{
 		// IPv4 only
-		name: "ip",
-		re:   []byte(strings.TrimSuffix(strings.Repeat(`(25[0-5]|(2[0-4]|1?[0-9])?[0-9])\.`, 4), `\.`)),
+		Placeholder: "<ip>",
+		RE:          strings.TrimSuffix(strings.Repeat(`(25[0-5]|(2[0-4]|1?[0-9])?[0-9])\.`, 4), `\.`),
 	},
 	{
-		name: "duration",
-		re:   []byte(`-?((\d+|\d+\.\d+)(ns|us|µs|ms|s|m|h|d|w))+`),
+		Placeholder: "<duration>",
+		RE:          `-?((\d+|\d+\.\d+)(ns|us|µs|ms|s|m|h|d|w))+`,
 	},
 	{
-		name: "hex",
-		re:   []byte(`0[xX][0-9a-fA-F]+`),
+		Placeholder: "<hex>",
+		RE:          `0[xX][0-9a-fA-F]+`,
 	},
 	{
-		name: "float",
-		re:   []byte(`-?\d+\.\d+`),
+		Placeholder: "<float>",
+		RE:          `-?\d+\.\d+`,
 	},
 	{
-		name: "int",
-		re:   []byte(`-?\d+`),
+		Placeholder: "<int>",
+		RE:          `-?\d+`,
 	},
 	{
-		name: "bool",
-		re:   []byte(`[Tt][Rr][Uu][Ee]|[Ff][Aa][Ll][Ss][Ee]`),
+		Placeholder: "<bool>",
+		RE:          `[Tt][Rr][Uu][Ee]|[Ff][Aa][Ll][Ss][Ee]`,
 	},
 }
