@@ -41,6 +41,7 @@ func TestPipeline(t *testing.T) {
 		k8sContainerID = strings.Clone(e.Root.Dig("k8s_container_id").AsString())
 		wg.Done()
 	})
+	p.Start()
 
 	item := &meta.MetaItem{
 		Namespace:     "sre",
@@ -51,7 +52,6 @@ func TestPipeline(t *testing.T) {
 	meta.PutMeta(getPodInfo(item, true))
 	filename := getLogFilename(dir, item)
 
-	p.Start()
 	file, err := os.Create(filename)
 	if err != nil {
 		logger.Fatalf("Error creating file: %s", err.Error())

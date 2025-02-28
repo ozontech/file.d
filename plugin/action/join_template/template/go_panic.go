@@ -1,7 +1,9 @@
-package join_template
+package template
 
 import (
 	"strings"
+
+	"github.com/ozontech/file.d/plugin/action/join_template/ascii"
 )
 
 const (
@@ -62,7 +64,7 @@ func containsLineNumber(s string) bool {
 
 	i += len(lineNumberPart)
 
-	return i < len(s) && isDigit(s[i])
+	return i < len(s) && ascii.IsDigit(s[i])
 }
 
 // Two regexps:
@@ -101,7 +103,7 @@ func containsCall(s string) bool {
 
 	right := i - 1
 	left := right
-	for ; left >= 0 && isLetterOrUnderscoreOrDigit(s[left]); left-- {
+	for ; left >= 0 && ascii.IsLetterOrUnderscoreOrDigit(s[left]); left-- {
 	}
 
 	if left == right {
@@ -135,9 +137,9 @@ func endsWithIdentifier(s string) bool {
 	for i := len(s) - 1; i >= 0; i-- {
 		c := s[i]
 		switch {
-		case isLetterOrUnderscore(c):
+		case ascii.IsLetterOrUnderscore(c):
 			return true
-		case isDigit(c):
+		case ascii.IsDigit(c):
 		default:
 			return false
 		}
@@ -176,5 +178,5 @@ func containsPanicAddress(s string) bool {
 		return false
 	}
 
-	return isHexDigit(s[0])
+	return ascii.IsHexDigit(s[0])
 }
