@@ -1,8 +1,11 @@
 package loki
 
 import (
+	"fmt"
+	"net/http"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -10,14 +13,14 @@ func TestPluginLabels(t *testing.T) {
 	type testCase struct {
 		name        string
 		expectedLen int
-		lables      []Lable
+		lables      []Label
 	}
 
 	tests := []testCase{
 		{
 			name:        "one label",
 			expectedLen: 1,
-			lables: []Lable{
+			lables: []Label{
 				{
 					Label: "label1",
 					Value: "value1",
@@ -27,7 +30,7 @@ func TestPluginLabels(t *testing.T) {
 		{
 			name:        "two labels",
 			expectedLen: 2,
-			lables: []Lable{
+			lables: []Label{
 				{
 					Label: "label1",
 					Value: "value1",
@@ -41,7 +44,7 @@ func TestPluginLabels(t *testing.T) {
 		{
 			name:        "two lables; repetetive label key",
 			expectedLen: 1,
-			lables: []Lable{
+			lables: []Label{
 				{
 					Label: "label1",
 					Value: "value1",
@@ -64,6 +67,58 @@ func TestPluginLabels(t *testing.T) {
 
 			resultLabelsMap := pl.labels()
 			require.Len(t, resultLabelsMap, tt.expectedLen)
+		})
+	}
+}
+
+func TestPlugSetAuthHeaders(t *testing.T) {
+	type testCase struct {
+		name         string
+		tenantID     string
+		expectTenant bool
+
+		username    string
+		password    string
+		expectBasic bool
+	}
+
+	tests := []testCase{
+		{
+			name:         "only tenant",
+			tenantID:     "tenant",
+			expectTenant: true,
+		},
+		{
+			name:         "only tenant",
+			tenantID:     "tenant",
+			expectTenant: true,
+			username:     "username",
+			password:     "tenant",
+			expectBasic:  true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pl := &Plugin{
+				config: &Config{
+					TenantID:     tt.tenantID,
+					AuthUsername: tt.username,
+					AuthPassword: tt.password,
+				},
+			}
+
+			req, err := http.NewRequest(http.MethodPost, "url", nil)
+			assert.NoError(t, err)
+
+			pl.setAuthenticationHeaders(req)
+
+			if tt.expectTenant {
+				require.Equal(t, pl.config.TenantID, req.Header.Get("X-Scope-OrgID"))
+			}
+			if tt.expectBasic {
+				require.Equal(t, fmt.Sprintf("Basic %s:%s", pl.config.AuthUsername, pl.config.AuthPassword), req.Header.Get("Authorization"))
+			}
 		})
 	}
 }

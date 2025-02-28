@@ -86,10 +86,28 @@ type Config struct {
 	// >
 	// > Authorization enabled, if set true set TenantID
 	// >
-	// > Example tenant id
+	// > Example
 	// >
 	// > example-org
 	TenantID string `json:"tenant_id"` // *
+
+	// > @3@4@5@6
+	// >
+	// > Authorization enabled, if set true set basic auth username
+	// >
+	// > Example
+	// >
+	// > username
+	AuthUsername string `json:"username"` // *
+
+	// > @3@4@5@6
+	// >
+	// > Authorization enabled, if set true set basic auth password
+	// >
+	// > Example
+	// >
+	// > password
+	AuthPassword string `json:"password"` // *
 
 	// > @3@4@5@6
 	// >
@@ -370,7 +388,7 @@ func (p *Plugin) send(ctx context.Context, data []byte) (int, error) {
 	req.Header.Set("Content-Type", "application/json")
 
 	if p.config.AuthEnabled {
-		req.Header.Set("X-Scope-OrgID", p.config.TenantID)
+		p.setAuthenticationHeaders(req)
 	}
 
 	resp, err := p.httpClient.Do(req)
@@ -412,6 +430,16 @@ func (p *Plugin) newClient(timeout time.Duration) *http.Client {
 	}
 
 	return client
+}
+
+func (p *Plugin) setAuthenticationHeaders(req *http.Request) {
+	if p.config.TenantID != "" {
+		req.Header.Set("X-Scope-OrgID", p.config.TenantID)
+	}
+
+	if p.config.AuthUsername != "" {
+		req.Header.Set("Authorization", fmt.Sprintf("Basic %s:%s", p.config.AuthUsername, p.config.AuthPassword))
+	}
 }
 
 func (p *Plugin) labels() map[string]string {
