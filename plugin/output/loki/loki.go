@@ -33,7 +33,7 @@ type data struct {
 	outBuf []byte
 }
 
-type Lable struct {
+type Label struct {
 	Label string `json:"label" required:"true"`
 	Value string `json:"value" required:"true"`
 }
@@ -57,7 +57,7 @@ type Config struct {
 	// > Example labels
 	// >
 	// > label=value
-	Labels []Lable `json:"labels" required:"true"`
+	Labels []Label `json:"labels"`
 
 	// > @3@4@5@6
 	// >
@@ -84,12 +84,12 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
-	// > Authorization enabled, if set true set OrgID
+	// > Authorization enabled, if set true set TenantID
 	// >
-	// > Example organization id
+	// > Example tenant id
 	// >
 	// > example-org
-	OrgID string `json:"org_id"` // *
+	TenantID string `json:"tenant_id"` // *
 
 	// > @3@4@5@6
 	// >
@@ -370,7 +370,7 @@ func (p *Plugin) send(ctx context.Context, data []byte) (int, error) {
 	req.Header.Set("Content-Type", "application/json")
 
 	if p.config.AuthEnabled {
-		req.Header.Set("X-Scope-OrgID", p.config.OrgID)
+		req.Header.Set("X-Scope-OrgID", p.config.TenantID)
 	}
 
 	resp, err := p.httpClient.Do(req)
