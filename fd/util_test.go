@@ -329,6 +329,27 @@ func Test_extractDoIfChecker(t *testing.T) {
 			},
 		},
 		{
+			name: "ok_ts_cmp_op_format_alias",
+			args: args{
+				cfgStr: `{
+					"op": "ts_cmp",
+					"field": "timestamp",
+					"cmp_op": "lt",
+					"format": "rfc3339",
+					"value": "now"}`,
+			},
+			want: &doIfTreeNode{
+				tsCmpOp:            true,
+				cmpOp:              "lt",
+				fieldName:          "timestamp",
+				tsCmpValChangeMode: tsCmpModeNowTag,
+				tsFormat:           time.RFC3339,
+				tsCmpValueShift:    0,
+				tsUpdateInterval:   defaultTsCmpValUpdateInterval,
+			},
+		},
+
+		{
 			name: "ok_check_type",
 			args: args{
 				cfgStr: `{
