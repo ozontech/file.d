@@ -518,7 +518,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 				if !errorLogged {
 					// Log only 1 error per batch to avoid spam.
 					errorLogged = true
-					p.logger.Error("failed to encode value into Clickhouse column, zero value will be used", zap.Error(err),
+					p.logger.Error("failed to encode value into Clickhouse column, zero value will be used",
 						zap.Error(err), zap.String("col", col.Name), zap.String("value", node.AsString()))
 				}
 
