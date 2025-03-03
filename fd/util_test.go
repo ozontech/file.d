@@ -513,30 +513,16 @@ func Test_extractDoIfChecker(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "error_ts_cmp_op_no_format",
+			name: "error_ts_cmp_op_no_cmp_op",
 			args: args{
 				cfgStr: `{"op":"ts_cmp","field":"timestamp"}`,
 			},
 			wantErr: true,
 		},
 		{
-			name: "error_ts_cmp_op_format_is_not_string",
-			args: args{
-				cfgStr: `{"op":"ts_cmp","field":"timestamp","format":123}`,
-			},
-			wantErr: true,
-		},
-		{
-			name: "error_ts_cmp_op_no_cmp_op",
-			args: args{
-				cfgStr: `{"op":"ts_cmp","field":"timestamp","format":"2006-01-02T15:04:05.999999999Z07:00"}`,
-			},
-			wantErr: true,
-		},
-		{
 			name: "error_ts_cmp_op_cmp_op_is_not_string",
 			args: args{
-				cfgStr: `{"op":"ts_cmp","field":"timestamp","format":"2006-01-02T15:04:05.999999999Z07:00","cmp_op":123}`,
+				cfgStr: `{"op":"ts_cmp","field":"timestamp","cmp_op":123}`,
 			},
 			wantErr: true,
 		},
