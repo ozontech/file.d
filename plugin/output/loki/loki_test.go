@@ -80,6 +80,9 @@ func TestPlugSetAuthHeaders(t *testing.T) {
 		username    string
 		password    string
 		expectBasic bool
+
+		bearer       string
+		expectBearer bool
 	}
 
 	tests := []testCase{
@@ -96,6 +99,14 @@ func TestPlugSetAuthHeaders(t *testing.T) {
 			password:     "tenant",
 			expectBasic:  true,
 		},
+		{
+			name:         "bearer token",
+			tenantID:     "tenant",
+			expectTenant: true,
+			expectBasic:  false,
+			bearer:       "token",
+			expectBearer: true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -105,6 +116,7 @@ func TestPlugSetAuthHeaders(t *testing.T) {
 					TenantID:     tt.tenantID,
 					AuthUsername: tt.username,
 					AuthPassword: tt.password,
+					BearerToken:  tt.bearer,
 				},
 			}
 
@@ -119,6 +131,10 @@ func TestPlugSetAuthHeaders(t *testing.T) {
 			if tt.expectBasic {
 				require.Equal(t, fmt.Sprintf("Basic %s:%s", pl.config.AuthUsername, pl.config.AuthPassword), req.Header.Get("Authorization"))
 			}
+			if tt.expectBearer {
+				require.Equal(t, fmt.Sprintf("Bearer %s", pl.config.BearerToken), req.Header.Get("Authorization"))
+			}
+
 		})
 	}
 }

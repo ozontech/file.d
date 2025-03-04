@@ -79,7 +79,7 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
-	// > Authorization enabled, if true set OrgID
+	// > Authorization enabled, if true set auth method like tenant, basic auth or bearer
 	AuthEnabled bool `json:"auth_enabled" default:"false"` // *
 
 	// > @3@4@5@6
@@ -93,7 +93,7 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
-	// > Authorization enabled, if set true set basic auth username
+	// > Authorization enabled, if auth username set provide auth password
 	// >
 	// > Example
 	// >
@@ -102,12 +102,21 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
-	// > Authorization enabled, if set true set basic auth password
+	// > Authorization enabled, provide basic auth password if basic auth username is provided
 	// >
 	// > Example
 	// >
 	// > password
 	AuthPassword string `json:"password"` // *
+
+	// > @3@4@5@6
+	// >
+	// > Authorization enabled, provide bearer token if you have Bearer authorization
+	// >
+	// > Example
+	// >
+	// > token
+	BearerToken string `json:"bearer_token"` // *
 
 	// > @3@4@5@6
 	// >
@@ -439,6 +448,10 @@ func (p *Plugin) setAuthenticationHeaders(req *http.Request) {
 
 	if p.config.AuthUsername != "" {
 		req.Header.Set("Authorization", fmt.Sprintf("Basic %s:%s", p.config.AuthUsername, p.config.AuthPassword))
+	}
+
+	if p.config.BearerToken != "" {
+		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", p.config.BearerToken))
 	}
 }
 
