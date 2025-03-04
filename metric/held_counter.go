@@ -41,3 +41,7 @@ func (h HeldCounterVec) WithLabelValues(lvs ...string) HeldCounter {
 func (h HeldCounterVec) DeleteOldMetrics(holdDuration time.Duration) {
 	h.store.DeleteOldMetrics(holdDuration, h.vec)
 }
+
+func (h HeldCounterVec) DeleteLabelValues(labels ...string) {
+	h.store.DeleteLabelValues(labels, h.vec)
+}

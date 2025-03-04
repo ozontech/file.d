@@ -156,3 +156,60 @@ func computeStringsHash(s []string) uint64 {
 	}
 	return hash
 }
+
+// DeleteLabelValues deletes metrics that match the provided label values.
+func (h *heldMetricsStore[T]) DeleteLabelValues(labels []string, collector prometheus.Collector) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	// Iterate over all stored metrics
+	for hash, hMetrics := range h.metricsByHash {
+		// Create a slice to store metrics that should be kept
+		var keepMetrics []*heldMetric[T]
+
+		// Iterate over metrics with the same hash
+		for _, hMetric := range hMetrics {
+			// Check if the metric's label values match the provided labels
+			if matchesLabelValues(hMetric.labels, labels) {
+				// Use type assertion to handle different metric types
+				switch v := collector.(type) {
+				case *prometheus.GaugeVec:
+					v.DeleteLabelValues(labels...)
+				case *prometheus.CounterVec:
+					v.DeleteLabelValues(labels...)
+				case *prometheus.HistogramVec:
+					v.DeleteLabelValues(labels...)
+				case *prometheus.SummaryVec:
+					v.DeleteLabelValues(labels...)
+				default:
+					// Unsupported metric type
+					continue
+				}
+			} else {
+				// If the metric doesn't match, keep it
+				keepMetrics = append(keepMetrics, hMetric)
+			}
+		}
+
+		// Update the metrics for this hash
+		if len(keepMetrics) > 0 {
+			h.metricsByHash[hash] = keepMetrics
+		} else {
+			// If no metrics are left for this hash, delete the entry
+			delete(h.metricsByHash, hash)
+		}
+	}
+}
+
+// matchesLabelValues checks if the stored metric's label values match the provided label values.
+func matchesLabelValues(storedLabels, providedLabels []string) bool {
+	if len(storedLabels) != len(providedLabels) {
+		return false
+	}
+	for i := range storedLabels {
+		if storedLabels[i] != providedLabels[i] {
+			return false
+		}
+	}
+	return true
+}

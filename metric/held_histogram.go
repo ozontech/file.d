@@ -38,3 +38,7 @@ func (h HeldHistogramVec) WithLabelValues(lvs ...string) HeldHistogram {
 func (h HeldHistogramVec) DeleteOldMetrics(holdDuration time.Duration) {
 	h.store.DeleteOldMetrics(holdDuration, h.vec)
 }
+
+func (h HeldHistogramVec) DeleteLabelValues(labels ...string) {
+	h.store.DeleteLabelValues(labels, h.vec)
+}

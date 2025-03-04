@@ -49,6 +49,24 @@ func TestLabelExpiration(t *testing.T) {
 	r.Equal([]string{"info"}, infoMetric.labels)
 }
 
+func TestDeleteLabels(t *testing.T) {
+	r := require.New(t)
+
+	ctl := NewCtl("test", prometheus.NewRegistry())
+	promCounter := ctl.RegisterCounterVec("errors", "", "level")
+
+	c := NewHeldCounterVec(promCounter)
+
+	now := time.Now().UnixNano()
+	xtime.SetNowTime(now)
+
+	c.WithLabelValues("error").Inc()
+
+	r.Equal(1, len(c.store.metricsByHash))
+	c.DeleteLabelValues("error")
+	r.Equal(0, len(c.store.metricsByHash))
+}
+
 func TestUnsafeStringInMetric(t *testing.T) {
 	r := require.New(t)
 
