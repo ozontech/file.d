@@ -103,7 +103,7 @@ func TestGoDataRaceSameResults(t *testing.T) {
 	cur, err := InitTemplate(nameGoDataRace)
 	require.NoError(t, err)
 
-	lines := getLines(sample.GoDataRace)
+	lines := append(getLines(sample.GoDataRace), getRandLines()...)
 
 	for _, line := range lines {
 		require.Equal(t, cur.StartRe.MatchString(line), goDataRaceStartCheck(line), line)
