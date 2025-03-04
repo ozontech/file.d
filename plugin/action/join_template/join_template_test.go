@@ -36,6 +36,13 @@ func TestSimpleJoin(t *testing.T) {
 			iterations:   100,
 			expEvents:    3 * 100,
 		},
+		{
+			name:         "should_ok_for_go_data_race",
+			templateName: "go_data_race",
+			content:      sample.GoDataRace,
+			iterations:   100,
+			expEvents:    3 * 3 * 100,
+		},
 	}
 
 	for _, tt := range cases {

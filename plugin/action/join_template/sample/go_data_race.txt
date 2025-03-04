@@ -1,0 +1,44 @@
+==================
+WARNING: DATA RACE
+Read at 0x00c000118008 by goroutine 5:
+  main.main.func1()
+      /Users/qwe/base/awesomeProject/main.go:10 +0x38
+
+Previous write at 0x00c000118008 by main goroutine:
+  main.main()
+      /Users/qwe/base/awesomeProject/main.go:15 +0xc0
+
+Goroutine 5 (running) created at:
+  main.main()
+      /Users/qwe/base/awesomeProject/main.go:8 +0x9c
+==================
+# ===next===
+==================
+WARNING: DATA RACE
+Write at 0x00c000118008 by goroutine 5:
+  main.main.func1()
+      /Users/qwe/base/awesomeProject/main.go:10 +0x48
+
+Previous write at 0x00c000118008 by main goroutine:
+  main.main()
+      /Users/qwe/base/awesomeProject/main.go:15 +0xc0
+
+Goroutine 5 (running) created at:
+  main.main()
+      /Users/qwe/base/awesomeProject/main.go:8 +0x9c
+==================
+# ===next===
+==================
+WARNING: DATA RACE
+Read at 0x00c000118008 by main goroutine:
+  main.main()
+      /Users/qwe/base/awesomeProject/main.go:15 +0xb0
+
+Previous write at 0x00c000118008 by goroutine 5:
+  main.main.func1()
+      /Users/qwe/base/awesomeProject/main.go:10 +0x48
+
+Goroutine 5 (running) created at:
+  main.main()
+      /Users/qwe/base/awesomeProject/main.go:8 +0x9c
+==================

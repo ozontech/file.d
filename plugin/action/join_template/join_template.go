@@ -60,6 +60,11 @@ type Config struct {
 	// >
 	// > Enable check without regular expressions.
 	FastCheck bool `json:"fast_check"` // *
+
+	// > @3@4@5@6
+	// >
+	// > Inverse continue check to enable end mode.
+	Negate bool `json:"negate"` // *
 }
 
 func init() {
@@ -92,6 +97,8 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 
 		StartCheckFunc_:    curTemplate.StartCheck,
 		ContinueCheckFunc_: curTemplate.ContinueCheck,
+
+		Negate: curTemplate.Negate,
 	}
 	p.jp = &join.Plugin{}
 	p.jp.Start(jConfig, params)
