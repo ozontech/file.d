@@ -70,7 +70,7 @@ func TestHash(t *testing.T) {
 			wantHash: 2140116920471166296,
 		},
 		{
-			name: "max_size",
+			name: "field_max_size",
 			config: &Config{
 				Fields: []Field{
 					{Field: "message", Format: "normalize", MaxSize: 70},
@@ -79,6 +79,56 @@ func TestHash(t *testing.T) {
 			},
 			input:    []byte(`{"level":"error","message":"2023-10-30T13:35:33.638720813Z error occurred, client: 10.125.172.251, upstream: \"http://10.117.246.15:84/download\", host: \"mpm-youtube-downloader-38.name.com:84\""}`),
 			wantHash: 10662808184633841128,
+		},
+		{
+			name: "normalizer_without_defaults",
+			config: &Config{
+				Fields: []Field{
+					{Field: "message", Format: "normalize"},
+				},
+				ResultField: resField,
+				Normalizer: NormalizerConfig{
+					WithDefaults: false,
+					Patterns: []NormalizePattern{
+						{
+							Placeholder: "<quoted_str>",
+							RE:          `"[^"]*"`,
+						},
+						{
+							Placeholder: "<date>",
+							RE:          `\d\d.\d\d.\d\d\d\d`,
+						},
+					},
+				},
+			},
+			input:    []byte(`{"level":"error","message":"request from \"ivanivanov\", signed on 19.03.2025"}`),
+			wantHash: 6933347847764028189,
+		},
+		{
+			name: "normalizer_with_defaults",
+			config: &Config{
+				Fields: []Field{
+					{Field: "message", Format: "normalize"},
+				},
+				ResultField: resField,
+				Normalizer: NormalizerConfig{
+					WithDefaults: true,
+					Patterns: []NormalizePattern{
+						{
+							Placeholder: "<quoted_str>",
+							RE:          `"[^"]*"`,
+							Priority:    "first",
+						},
+						{
+							Placeholder: "<nginx_datetime>",
+							RE:          `\d\d\d\d/\d\d/\d\d\ \d\d:\d\d:\d\d`,
+							Priority:    "last",
+						},
+					},
+				},
+			},
+			input:    []byte(`{"level":"error","message":"2006/01/02 15:04:05 error occurred, client: 10.125.172.251, upstream: \"http://10.117.246.15:84/download\", host: \"mpm-youtube-downloader-38.name.com:84\""}`),
+			wantHash: 7891860241841154313,
 		},
 		{
 			name: "no_field",

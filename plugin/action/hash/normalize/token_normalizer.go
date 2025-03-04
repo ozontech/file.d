@@ -10,8 +10,8 @@ import (
 )
 
 const (
-	PatternPriorityFirst = "first"
-	PatternPriorityLast  = "last"
+	patternPriorityFirst = "first"
+	patternPriorityLast  = "last"
 )
 
 type TokenPattern struct {
@@ -36,6 +36,8 @@ func NewTokenNormalizer(params TokenNormalizerParams) (Normalizer, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to init tokens: %w", err)
 	}
+
+	defer func() { _ = recover() }()
 	if err = l.Compile(); err != nil {
 		return nil, fmt.Errorf("failed to compile lexer: %w", err)
 	}
@@ -119,7 +121,7 @@ func initTokens(lexer *lexmachine.Lexer, params TokenNormalizerParams) error {
 	lastPatterns := make([]TokenPattern, 0)
 	patterns := make([]TokenPattern, 0)
 	for _, p := range params.Patterns {
-		if p.Priority == PatternPriorityFirst {
+		if p.Priority == patternPriorityFirst {
 			patterns = append(patterns, p)
 		} else {
 			lastPatterns = append(lastPatterns, p)

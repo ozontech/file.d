@@ -1,6 +1,8 @@
 package hash
 
 import (
+	"errors"
+
 	"github.com/cespare/xxhash/v2"
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
@@ -47,11 +49,44 @@ The resulting event:
     "code": "unauthenticated",
     "message": "bad token format"
   },
-  "hash": 6584967863753642363,
+  "hash": 6584967863753642363
 }
 ```
 ---
-Hashing with normalization (first found field is `message`):
+Hashing with `field.max_size`:
+```yaml
+pipelines:
+  example_pipeline:
+    ...
+    actions:
+    - type: hash
+      fields:
+        - field: message
+          max_size: 10
+      result_field: hash
+    ...
+```
+The original event:
+```json
+{
+  "level": "error",
+  "message": "bad token format"
+}
+```
+
+The value of the "message" field for which the hash will be calculated:
+`bad token `
+
+The resulting event:
+```json
+{
+  "level": "error",
+  "message": "bad token format",
+  "hash": 6584967863753642363
+}
+```
+---
+Hashing with normalization (only default patterns):
 ```yaml
 pipelines:
   example_pipeline:
@@ -81,7 +116,89 @@ The resulting event:
 {
   "level": "error",
   "message": "2023-10-30T13:35:33.638720813Z error occurred, client: 10.125.172.251, upstream: \"http://10.117.246.15:84/download\", host: \"mpm-youtube-downloader-38.name.com:84\"",
-  "hash": 13863947727397728753,
+  "hash": 13863947727397728753
+}
+```
+---
+Hashing with normalization (only custom patterns):
+```yaml
+pipelines:
+  example_pipeline:
+    ...
+    actions:
+    - type: hash
+      fields:
+        - field: message
+          format: normalize
+      result_field: hash
+      normalizer:
+        with_defaults: false
+        patterns:
+          - placeholder: '<quoted_str>'
+            re: '"[^"]*"'
+          - placeholder: '<date>'
+            re: '\d\d.\d\d.\d\d\d\d'
+    ...
+```
+The original event:
+```json
+{
+  "level": "error",
+  "message": "request from \"ivanivanov\", signed on 19.03.2025"
+}
+```
+
+Normalized "message":
+`request from <quoted_str>, signed on <date>`
+
+The resulting event:
+```json
+{
+  "level": "error",
+  "message": "request from \"ivanivanov\", signed on 19.03.2025",
+  "hash": 6933347847764028189
+}
+```
+---
+Hashing with normalization (default & custom patterns):
+```yaml
+pipelines:
+  example_pipeline:
+    ...
+    actions:
+    - type: hash
+      fields:
+        - field: message
+          format: normalize
+      result_field: hash
+      normalizer:
+        with_defaults: true
+        patterns:
+          - placeholder: '<quoted_str>'
+            re: '"[^"]*"'
+            priority: first
+          - placeholder: '<nginx_datetime>'
+            re: '\d\d\d\d/\d\d/\d\d\ \d\d:\d\d:\d\d'
+            priority: last
+    ...
+```
+The original event:
+```json
+{
+  "level": "error",
+  "message": "2006/01/02 15:04:05 error occurred, client: 10.125.172.251, upstream: \"http://10.117.246.15:84/download\", host: \"mpm-youtube-downloader-38.name.com:84\""
+}
+```
+
+Normalized "message":
+`<nginx_datetime> error occurred, client: <ip>, upstream: <quoted_str>, host: <quoted_str>`
+
+The resulting event:
+```json
+{
+  "level": "error",
+  "message": "2006/01/02 15:04:05 error occurred, client: 10.125.172.251, upstream: \"http://10.117.246.15:84/download\", host: \"mpm-youtube-downloader-38.name.com:84\"",
+  "hash": 7891860241841154313
 }
 ```
 }*/
@@ -185,8 +302,8 @@ type NormalizePattern struct {
 }
 
 type NormalizerConfig struct {
-	Patterns     []NormalizePattern `json:"patterns" slice:"true"`
 	WithDefaults bool               `json:"with_defaults" default:"true"`
+	Patterns     []NormalizePattern `json:"patterns" slice:"true"`
 }
 
 func init() {
@@ -233,6 +350,9 @@ func (p *Plugin) initNormalizer() error {
 	n, err := normalize.NewTokenNormalizer(tnParams)
 	if err != nil {
 		return err
+	}
+	if n == nil {
+		return errors.New("failed to compile lexer: bad patterns")
 	}
 
 	p.normalizer = n
