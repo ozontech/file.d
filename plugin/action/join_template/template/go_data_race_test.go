@@ -110,3 +110,48 @@ func TestGoDataRaceSameResults(t *testing.T) {
 		require.Equal(t, cur.ContinueRe.MatchString(line), goDataRaceFinishCheck(line), line)
 	}
 }
+
+func TestGoDataRaceStartCheck(t *testing.T) {
+	positive := []string{
+		"WARNING: DATA RACE",
+		"WARNING: DATA RACE    ",
+		"WARNING: DATA RACE qwe",
+	}
+
+	negative := []string{
+		"",
+		"qwe",
+		"WARNING",
+		"WARNING: DATA",
+		"  WARNING: DATA RACE",
+	}
+
+	for i, test := range getCases(positive, negative) {
+		require.Equal(t, test.res, goDataRaceStartCheck(test.s), i)
+	}
+}
+
+func TestGoDataRaceFinishCheck(t *testing.T) {
+	prefix := goDataRaceFinishPrefix
+
+	positive := []string{
+		prefix,
+		prefix + "    ",
+		prefix + " qwe",
+	}
+
+	n := len(prefix)
+
+	negative := []string{
+		"",
+		"qwe",
+		prefix[:n-6],
+		prefix[:n-4],
+		prefix[:n-2],
+		"  " + prefix,
+	}
+
+	for i, test := range getCases(positive, negative) {
+		require.Equal(t, test.res, goDataRaceFinishCheck(test.s), i)
+	}
+}
