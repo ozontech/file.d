@@ -44,10 +44,4 @@ Enable check without regular expressions.
 
 <br>
 
-**`negate`** *`bool`* 
-
-Inverse continue check to enable end mode.
-
-<br>
-
 <br>*Generated using [__insane-doc__](https://github.com/vitkovskii/insane-doc)*

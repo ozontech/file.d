@@ -60,11 +60,6 @@ type Config struct {
 	// >
 	// > Enable check without regular expressions.
 	FastCheck bool `json:"fast_check"` // *
-
-	// > @3@4@5@6
-	// >
-	// > Inverse continue check to enable end mode.
-	Negate bool `json:"negate"` // *
 }
 
 func init() {
