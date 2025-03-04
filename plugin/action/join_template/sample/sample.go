@@ -10,3 +10,6 @@ var PanicsWithNilNodes string
 
 //go:embed cs_exception.txt
 var SharpException string
+
+//go:embed go_data_race.txt
+var GoDataRace string
