@@ -10,6 +10,7 @@ import (
 const (
 	nameGoPanic     = "go_panic"
 	nameCSException = "cs_exception"
+	nameGoDataRace  = "go_data_race"
 )
 
 type joinTemplates map[string]struct {
@@ -18,6 +19,8 @@ type joinTemplates map[string]struct {
 
 	startCheckFunc    func(string) bool
 	continueCheckFunc func(string) bool
+
+	negate bool
 }
 
 var templates = joinTemplates{
@@ -35,6 +38,15 @@ var templates = joinTemplates{
 		startCheckFunc:    sharpStartCheck,
 		continueCheckFunc: sharpContinueCheck,
 	},
+	nameGoDataRace: {
+		startRePat:    `/^WARNING: DATA RACE/`,
+		continueRePat: `/^==================/`,
+
+		startCheckFunc:    goDataRaceStartCheck,
+		continueCheckFunc: goDataRaceFinishCheck,
+
+		negate: true,
+	},
 }
 
 type Template struct {
@@ -42,6 +54,7 @@ type Template struct {
 	ContinueRe    *regexp.Regexp
 	StartCheck    func(string) bool
 	ContinueCheck func(string) bool
+	Negate        bool
 }
 
 func InitTemplate(name string) (Template, error) {
@@ -53,6 +66,7 @@ func InitTemplate(name string) (Template, error) {
 	result := Template{
 		StartCheck:    cur.startCheckFunc,
 		ContinueCheck: cur.continueCheckFunc,
+		Negate:        cur.negate,
 	}
 
 	var err error

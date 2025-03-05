@@ -53,7 +53,7 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
-	// > The name of the template. Available templates: `go_panic`, `cs_exception`.
+	// > The name of the template. Available templates: `go_panic`, `cs_exception`, `go_data_race`.
 	Template string `json:"template" required:"true"` // *
 
 	// > @3@4@5@6
@@ -92,6 +92,8 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 
 		StartCheckFunc_:    curTemplate.StartCheck,
 		ContinueCheckFunc_: curTemplate.ContinueCheck,
+
+		Negate: curTemplate.Negate,
 	}
 	p.jp = &join.Plugin{}
 	p.jp.Start(jConfig, params)
