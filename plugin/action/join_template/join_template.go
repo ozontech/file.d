@@ -53,7 +53,7 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
-	// > The name of the template. Available templates: `go_panic`, `cs_exception`.
+	// > The name of the template. Available templates: `go_panic`, `cs_exception`, `go_data_race`.
 	Template string `json:"template" required:"true"` // *
 
 	// > @3@4@5@6
