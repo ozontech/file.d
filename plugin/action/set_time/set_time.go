@@ -5,6 +5,7 @@ import (
 
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/xtime"
 )
 
 /*{ introduction
@@ -50,7 +51,7 @@ func factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 func (p *Plugin) Start(config pipeline.AnyConfig, _ *pipeline.ActionPluginParams) {
 	p.config = config.(*Config)
 
-	format, err := pipeline.ParseFormatName(p.config.Format)
+	format, err := xtime.ParseFormatName(p.config.Format)
 	if err != nil {
 		// to support custom formats
 		format = p.config.Format

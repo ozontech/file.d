@@ -64,10 +64,6 @@ const (
 	UnixTimeNano  = xtime.UnixTimeNano
 )
 
-func ParseFormatName(formatName string) (string, error) {
-	return xtime.ParseFormatName(formatName)
-}
-
 type unixTimeFormat int
 
 const (

@@ -4,6 +4,7 @@ import (
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/xtime"
 )
 
 /*{ introduction
@@ -58,14 +59,14 @@ func (p *Plugin) Start(config pipeline.AnyConfig, _ *pipeline.ActionPluginParams
 	p.config = config.(*Config)
 
 	for _, formatName := range p.config.SourceFormats {
-		format, err := pipeline.ParseFormatName(formatName)
+		format, err := xtime.ParseFormatName(formatName)
 		if err != nil {
 			format = formatName
 		}
 		p.config.SourceFormats_ = append(p.config.SourceFormats_, format)
 	}
 
-	format, err := pipeline.ParseFormatName(p.config.TargetFormat)
+	format, err := xtime.ParseFormatName(p.config.TargetFormat)
 	if err != nil {
 		format = p.config.TargetFormat
 	}

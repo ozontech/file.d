@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/go-redis/redis"
+	"github.com/ozontech/file.d/xtime"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
 
@@ -307,7 +308,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 	p.ctx = ctx
 	p.cancel = cancel
 
-	format, err := pipeline.ParseFormatName(p.config.TimeFieldFormat)
+	format, err := xtime.ParseFormatName(p.config.TimeFieldFormat)
 	if err != nil {
 		format = p.config.TimeFieldFormat
 	}
