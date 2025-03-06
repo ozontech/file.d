@@ -6,11 +6,12 @@ import (
 
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/test"
+	"github.com/ozontech/file.d/xtime"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestConvert(t *testing.T) {
-	config := &Config{SourceFormats: []string{"rfc3339nano", "rfc3339", "ansic", pipeline.UnixTime, "nginx_errorlog"}}
+	config := &Config{SourceFormats: []string{"rfc3339nano", "rfc3339", "ansic", xtime.UnixTime, "nginx_errorlog"}}
 	test.NewConfig(config, nil)
 
 	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, config, pipeline.MatchModeAnd, nil, false))

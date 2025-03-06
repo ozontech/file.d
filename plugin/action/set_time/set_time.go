@@ -5,6 +5,7 @@ import (
 
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/xtime"
 )
 
 /*{ introduction
@@ -50,7 +51,7 @@ func factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 func (p *Plugin) Start(config pipeline.AnyConfig, _ *pipeline.ActionPluginParams) {
 	p.config = config.(*Config)
 
-	format, err := pipeline.ParseFormatName(p.config.Format)
+	format, err := xtime.ParseFormatName(p.config.Format)
 	if err != nil {
 		// to support custom formats
 		format = p.config.Format
@@ -76,13 +77,13 @@ func (p *Plugin) do(event *pipeline.Event, t time.Time) pipeline.ActionResult {
 	}
 
 	switch p.config.Format_ {
-	case pipeline.UnixTime:
+	case xtime.UnixTime:
 		dateNode.MutateToInt64(t.Unix())
-	case pipeline.UnixTimeMilli, "timestampmilli": // timestamp(milli|micro|nano) are left for backward compatibility
+	case xtime.UnixTimeMilli, "timestampmilli": // timestamp(milli|micro|nano) are left for backward compatibility
 		dateNode.MutateToInt64(t.UnixMilli())
-	case pipeline.UnixTimeMicro, "timestampmicro":
+	case xtime.UnixTimeMicro, "timestampmicro":
 		dateNode.MutateToInt64(t.UnixMicro())
-	case pipeline.UnixTimeNano, "timestampnano":
+	case xtime.UnixTimeNano, "timestampnano":
 		dateNode.MutateToInt64(t.UnixNano())
 	default:
 		dateNode.MutateToString(t.Format(p.config.Format_))

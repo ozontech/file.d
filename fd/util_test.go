@@ -329,6 +329,27 @@ func Test_extractDoIfChecker(t *testing.T) {
 			},
 		},
 		{
+			name: "ok_ts_cmp_op_format_alias",
+			args: args{
+				cfgStr: `{
+					"op": "ts_cmp",
+					"field": "timestamp",
+					"cmp_op": "lt",
+					"format": "rfc3339",
+					"value": "now"}`,
+			},
+			want: &doIfTreeNode{
+				tsCmpOp:            true,
+				cmpOp:              "lt",
+				fieldName:          "timestamp",
+				tsCmpValChangeMode: tsCmpModeNowTag,
+				tsFormat:           time.RFC3339,
+				tsCmpValueShift:    0,
+				tsUpdateInterval:   defaultTsCmpValUpdateInterval,
+			},
+		},
+
+		{
 			name: "ok_check_type",
 			args: args{
 				cfgStr: `{
@@ -492,58 +513,44 @@ func Test_extractDoIfChecker(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "error_ts_cmp_op_no_format",
+			name: "error_ts_cmp_op_no_cmp_op",
 			args: args{
 				cfgStr: `{"op":"ts_cmp","field":"timestamp"}`,
 			},
 			wantErr: true,
 		},
 		{
-			name: "error_ts_cmp_op_format_is_not_string",
-			args: args{
-				cfgStr: `{"op":"ts_cmp","field":"timestamp","format":123}`,
-			},
-			wantErr: true,
-		},
-		{
-			name: "error_ts_cmp_op_no_cmp_op",
-			args: args{
-				cfgStr: `{"op":"ts_cmp","field":"timestamp","format":"2006-01-02T15:04:05.999999999Z07:00"}`,
-			},
-			wantErr: true,
-		},
-		{
 			name: "error_ts_cmp_op_cmp_op_is_not_string",
 			args: args{
-				cfgStr: `{"op":"ts_cmp","field":"timestamp","format":"2006-01-02T15:04:05.999999999Z07:00","cmp_op":123}`,
+				cfgStr: `{"op":"ts_cmp","field":"timestamp","cmp_op":123}`,
 			},
 			wantErr: true,
 		},
 		{
 			name: "error_ts_cmp_op_no_cmp_value",
 			args: args{
-				cfgStr: `{"op":"ts_cmp","field":"timestamp","format":"2006-01-02T15:04:05.999999999Z07:00","cmp_op":"lt"}`,
+				cfgStr: `{"op":"ts_cmp","field":"timestamp","cmp_op":"lt"}`,
 			},
 			wantErr: true,
 		},
 		{
 			name: "error_ts_cmp_op_cmp_value_is_not_string",
 			args: args{
-				cfgStr: `{"op":"ts_cmp","field":"timestamp","format":"2006-01-02T15:04:05.999999999Z07:00","cmp_op":"lt","value":123}`,
+				cfgStr: `{"op":"ts_cmp","field":"timestamp","cmp_op":"lt","value":123}`,
 			},
 			wantErr: true,
 		},
 		{
 			name: "error_ts_cmp_op_invalid_cmp_value",
 			args: args{
-				cfgStr: `{"op":"ts_cmp","field":"timestamp","format":"2006-01-02T15:04:05.999999999Z07:00","cmp_op":"lt","value":"qwe"}`,
+				cfgStr: `{"op":"ts_cmp","field":"timestamp","cmp_op":"lt","value":"qwe"}`,
 			},
 			wantErr: true,
 		},
 		{
 			name: "error_ts_cmp_op_invalid_cmp_op",
 			args: args{
-				cfgStr: `{"op":"ts_cmp","field":"timestamp","format":"2006-01-02T15:04:05.999999999Z07:00","cmp_op":"qwe","value":"2009-11-10T23:00:00Z"}`,
+				cfgStr: `{"op":"ts_cmp","field":"timestamp","cmp_op":"qwe","value":"2009-11-10T23:00:00Z"}`,
 			},
 			wantErr: true,
 		},
@@ -555,7 +562,6 @@ func Test_extractDoIfChecker(t *testing.T) {
 					"field": "timestamp",
 					"cmp_op": "lt",
 					"value": "2009-11-10T23:00:00Z",
-					"format": "2006-01-02T15:04:05.999999999Z07:00",
 					"update_interval": "qwe"}`,
 			},
 			wantErr: true,

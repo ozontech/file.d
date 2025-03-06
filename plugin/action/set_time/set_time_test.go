@@ -8,6 +8,7 @@ import (
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/test"
+	"github.com/ozontech/file.d/xtime"
 	insaneJSON "github.com/ozontech/insane-json"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/atomic"
@@ -30,7 +31,7 @@ func TestPlugin_Do(t *testing.T) {
 		{
 			Name: "unix",
 			Config: &Config{
-				Format: pipeline.UnixTime,
+				Format: xtime.UnixTime,
 				Field:  "time",
 			},
 			Root: `{}`,
@@ -132,7 +133,7 @@ func TestPlugin_Do(t *testing.T) {
 }
 
 func TestE2E_Plugin(t *testing.T) {
-	config := test.NewConfig(&Config{Format: pipeline.UnixTime, Field: "timestamp"}, nil)
+	config := test.NewConfig(&Config{Format: xtime.UnixTime, Field: "timestamp"}, nil)
 	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, config, pipeline.MatchModeAnd, nil, false))
 
 	counter := atomic.Int32{}
