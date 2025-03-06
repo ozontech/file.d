@@ -5,9 +5,11 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/ozontech/file.d/cfg"
@@ -24,6 +26,8 @@ import (
 /*{ introduction
 It sends the logs batches to Loki using HTTP API.
 }*/
+
+var errUnixNanoFormat = errors.New("please send time in UnixNano format or add a convert_date action")
 
 const (
 	outPluginType = "loki"
@@ -319,8 +323,8 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 		p.sendErrorMetric.Inc()
 		p.logger.Errorf("can't send data to Loki address=%s: %v", p.config.Address, err.Error())
 
-		// skip retries for bad request
-		if code == http.StatusBadRequest {
+		// skip retries for bad request or time format errors
+		if code == http.StatusBadRequest || errors.Is(err, errUnixNanoFormat) {
 			return nil
 		}
 	} else {
@@ -355,6 +359,10 @@ func (p *Plugin) send(ctx context.Context, data []byte) (int, error) {
 
 		if ts == "" {
 			ts = fmt.Sprintf(`%d`, time.Now().UnixNano())
+		} else {
+			if !p.isUnixNanoFormat(ts) {
+				return 0, errUnixNanoFormat
+			}
 		}
 
 		logMsg := msg.Dig(p.config.MessageField).AsString()
@@ -463,4 +471,18 @@ func (p *Plugin) labels() map[string]string {
 	}
 
 	return labels
+}
+
+func (p *Plugin) isUnixNanoFormat(ts string) bool {
+	nano, err := strconv.ParseInt(ts, 10, 64)
+	if err != nil {
+		return false
+	}
+
+	t := time.Unix(0, nano)
+
+	minTime := time.Unix(0, 0)
+	maxTime := time.Now()
+
+	return t.After(minTime) && t.Before(maxTime)
 }

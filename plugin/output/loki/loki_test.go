@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -135,6 +136,53 @@ func TestPlugSetAuthHeaders(t *testing.T) {
 				require.Equal(t, fmt.Sprintf("Bearer %s", pl.config.BearerToken), req.Header.Get("Authorization"))
 			}
 
+		})
+	}
+}
+
+func TestIsUnixNanoFormat(t *testing.T) {
+	type args struct {
+		name         string
+		ts           string
+		expectResult bool
+	}
+
+	testCases := []args{
+		{
+			name:         "valid",
+			ts:           "1700000000000000000",
+			expectResult: true,
+		},
+		{
+			name:         "Too Large",
+			ts:           "9999999999999999999", // 20 November 2286
+			expectResult: false,
+		},
+		{
+			name:         "Valid Timestamp",
+			ts:           "1609459200123456789", // 1 January 2021
+			expectResult: true,
+		},
+		{
+			name:         "Invalid Non-Numeric",
+			ts:           "hello123456789",
+			expectResult: false,
+		},
+		{
+			name:         "now",
+			ts:           fmt.Sprintf("%d", time.Now().UnixNano()),
+			expectResult: true,
+		},
+	}
+
+	for _, tt := range testCases {
+		t.Run(tt.name, func(t *testing.T) {
+			p := &Plugin{}
+
+			result := p.isUnixNanoFormat(tt.ts)
+			if result != tt.expectResult {
+				t.Errorf("isUnixNano(%s) = %v, want %v", tt.ts, result, tt.expectResult)
+			}
 		})
 	}
 }
