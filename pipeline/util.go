@@ -9,7 +9,7 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/ozontech/file.d/pipeline/util"
+	"github.com/ozontech/file.d/xtime"
 	insaneJSON "github.com/ozontech/insane-json"
 )
 
@@ -58,14 +58,14 @@ func StringToByteUnsafe(s string) (b []byte) {
 */
 
 const (
-	UnixTime      = util.UnixTime
-	UnixTimeMilli = util.UnixTimeMilli
-	UnixTimeMicro = util.UnixTimeMicro
-	UnixTimeNano  = util.UnixTimeNano
+	UnixTime      = xtime.UnixTime
+	UnixTimeMilli = xtime.UnixTimeMilli
+	UnixTimeMicro = xtime.UnixTimeMicro
+	UnixTimeNano  = xtime.UnixTimeNano
 )
 
 func ParseFormatName(formatName string) (string, error) {
-	return util.ParseFormatName(formatName)
+	return xtime.ParseFormatName(formatName)
 }
 
 type unixTimeFormat int

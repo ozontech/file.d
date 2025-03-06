@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/ozontech/file.d/cfg"
-	"github.com/ozontech/file.d/pipeline/util"
+	"github.com/ozontech/file.d/xtime"
 	insaneJSON "github.com/ozontech/insane-json"
 )
 
@@ -102,7 +102,7 @@ func NewTsCmpOpNode(field string, format string, cmpOp string, cmpValChangeMode 
 		return nil, fmt.Errorf("unknown ts cmp mode: %s", cmpValChangeMode)
 	}
 
-	parsedFormat, err := util.ParseFormatName(format)
+	parsedFormat, err := xtime.ParseFormatName(format)
 	if err != nil {
 		parsedFormat = format
 	}
