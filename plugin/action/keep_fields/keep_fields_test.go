@@ -6,6 +6,7 @@ import (
 
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/test"
+	insaneJSON "github.com/ozontech/insane-json"
 	"github.com/stretchr/testify/require"
 )
 
@@ -63,4 +64,85 @@ func TestKeepNestedFields(t *testing.T) {
 	require.Equal(t, `{"a":{"b":{"c":1,"d":1}}}`, outEvents[0], "wrong event")
 	require.Equal(t, `{"a":{"d":1}}`, outEvents[1], "wrong event")
 	require.Equal(t, `{"f":"k"}`, outEvents[2], "wrong event")
+}
+
+const data = `
+{
+  "menu1": "123123123",
+  "menu2": "123123123",
+  "menu3": "123123123",
+  "menu4": "123123123",
+  "menu5": "123123123",
+  "menu6": "123123123",
+  "menu7": "123123123",
+  "menu8": "123123123",
+  "menu9": "123123123",
+  "menu10": "123123123",
+  "menu11": "123123123",
+  "menu12": "123123123",
+  "menu13": "123123123",
+  "menu14": "123123123"
+}
+`
+
+func BenchmarkPluginDo(b *testing.B) {
+	config := &Config{Fields: []string{
+		"some1",
+		"some2",
+		"some3",
+		"some4",
+		"some5",
+		"some6",
+		"some7",
+		"some8",
+		"some9",
+		"some10",
+	}}
+
+	p := &Plugin{}
+
+	p.Start(config, nil)
+
+	const n = 100
+
+	oldArray := make([]*pipeline.Event, n)
+	newFastArray := make([]*pipeline.Event, n)
+	newSlowArray := make([]*pipeline.Event, n)
+	for i := 0; i < n; i++ {
+		root, err := insaneJSON.DecodeString(data)
+		require.NoError(b, err)
+		oldArray[i] = &pipeline.Event{Root: root}
+
+		root, err = insaneJSON.DecodeString(data)
+		require.NoError(b, err)
+		newFastArray[i] = &pipeline.Event{Root: root}
+
+		root, err = insaneJSON.DecodeString(data)
+		require.NoError(b, err)
+		newSlowArray[i] = &pipeline.Event{Root: root}
+	}
+
+	b.ResetTimer()
+	b.Run("new_way_fast", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			for _, event := range newFastArray {
+				p.DoNewFixed(event)
+			}
+		}
+	})
+	b.Run("old_way", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			for _, event := range oldArray {
+				p.DoOld(event)
+			}
+		}
+	})
+
+	b.Run("new_way_slow", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			for _, event := range newSlowArray {
+				p.DoNew(event)
+			}
+		}
+	})
 }

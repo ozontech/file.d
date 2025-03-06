@@ -132,7 +132,7 @@ func (p *Plugin) StartNew(config pipeline.AnyConfig, _ *pipeline.ActionPluginPar
 	}
 }
 
-func (p *Plugin) DoNew(event *pipeline.Event) pipeline.ActionResult {
+func (p *Plugin) DoNewFixed(event *pipeline.Event) pipeline.ActionResult {
 	if len(p.fieldPaths) == 0 || !event.Root.IsObject() {
 		return pipeline.ActionPass
 	}
@@ -232,6 +232,25 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 }
 
 func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
-	res := p.DoNew(event)
+	res := p.DoNewFixed(event)
 	return res
+}
+
+func (p *Plugin) DoNew(event *pipeline.Event) pipeline.ActionResult {
+	if len(p.fieldPaths) == 0 || !event.Root.IsObject() {
+		return pipeline.ActionPass
+	}
+
+	for i := range p.nodePresent {
+		p.nodePresent[i] = event.Root.Dig(p.fieldPaths[i]...) != nil
+	}
+
+	for _, child := range event.Root.AsFields() {
+		eventField := child.AsString()
+		p.path = append(p.path, eventField)
+		p.eraseBadNodes(event.Root.Node.Dig(eventField))
+		p.path = p.path[:len(p.path)-1]
+	}
+
+	return pipeline.ActionPass
 }
