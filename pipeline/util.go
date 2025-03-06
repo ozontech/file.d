@@ -57,13 +57,6 @@ func StringToByteUnsafe(s string) (b []byte) {
 }
 */
 
-const (
-	UnixTime      = xtime.UnixTime
-	UnixTimeMilli = xtime.UnixTimeMilli
-	UnixTimeMicro = xtime.UnixTimeMicro
-	UnixTimeNano  = xtime.UnixTimeNano
-)
-
 type unixTimeFormat int
 
 const (
@@ -75,13 +68,13 @@ const (
 
 func ParseTime(format, value string) (time.Time, error) {
 	switch format {
-	case UnixTime:
+	case xtime.UnixTime:
 		return parseUnixTime(value, unixTimeSec)
-	case UnixTimeMilli:
+	case xtime.UnixTimeMilli:
 		return parseUnixTime(value, unixTimeMilli)
-	case UnixTimeMicro:
+	case xtime.UnixTimeMicro:
 		return parseUnixTime(value, unixTimeMicro)
-	case UnixTimeNano:
+	case xtime.UnixTimeNano:
 		return parseUnixTime(value, unixTimeNano)
 	default:
 		return time.Parse(format, value)

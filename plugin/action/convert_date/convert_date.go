@@ -89,13 +89,13 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 			t, err := pipeline.ParseTime(format, date)
 			if err == nil {
 				switch p.config.TargetFormat_ {
-				case pipeline.UnixTime:
+				case xtime.UnixTime:
 					dateNode.MutateToInt(int(t.Unix()))
-				case pipeline.UnixTimeMilli:
+				case xtime.UnixTimeMilli:
 					dateNode.MutateToInt(int(t.UnixMilli()))
-				case pipeline.UnixTimeMicro:
+				case xtime.UnixTimeMicro:
 					dateNode.MutateToInt(int(t.UnixMicro()))
-				case pipeline.UnixTimeNano:
+				case xtime.UnixTimeNano:
 					dateNode.MutateToInt(int(t.UnixNano()))
 				default:
 					dateNode.MutateToString(t.Format(p.config.TargetFormat_))
