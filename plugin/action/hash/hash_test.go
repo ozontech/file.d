@@ -81,14 +81,14 @@ func TestHash(t *testing.T) {
 			wantHash: 10662808184633841128,
 		},
 		{
-			name: "normalizer_without_defaults",
+			name: "normalizer_without_builtin",
 			config: &Config{
 				Fields: []Field{
 					{Field: "message", Format: "normalize"},
 				},
 				ResultField: resField,
 				Normalizer: NormalizerConfig{
-					WithDefaults: false,
+					WithBuiltinPatterns: false,
 					Patterns: []NormalizePattern{
 						{
 							Placeholder: "<quoted_str>",
@@ -105,14 +105,14 @@ func TestHash(t *testing.T) {
 			wantHash: 6933347847764028189,
 		},
 		{
-			name: "normalizer_with_defaults",
+			name: "normalizer_with_builtin",
 			config: &Config{
 				Fields: []Field{
 					{Field: "message", Format: "normalize"},
 				},
 				ResultField: resField,
 				Normalizer: NormalizerConfig{
-					WithDefaults: true,
+					WithBuiltinPatterns: true,
 					Patterns: []NormalizePattern{
 						{
 							Placeholder: "<quoted_str>",

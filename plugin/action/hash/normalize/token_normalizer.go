@@ -21,8 +21,8 @@ type TokenPattern struct {
 }
 
 type TokenNormalizerParams struct {
-	Patterns     []TokenPattern
-	WithDefaults bool
+	WithBuiltinPatterns bool
+	Patterns            []TokenPattern
 }
 
 type tokenNormalizer struct {
@@ -106,14 +106,14 @@ func initTokens(lexer *lexmachine.Lexer, params TokenNormalizerParams) error {
 	}
 
 	if len(params.Patterns) == 0 {
-		if !params.WithDefaults {
+		if !params.WithBuiltinPatterns {
 			return errors.New("empty pattern list")
 		}
-		addTokens(defaultTokenPatterns)
+		addTokens(builtinTokenPatterns)
 		return nil
 	}
 
-	if !params.WithDefaults {
+	if !params.WithBuiltinPatterns {
 		addTokens(params.Patterns)
 		return nil
 	}
@@ -127,7 +127,7 @@ func initTokens(lexer *lexmachine.Lexer, params TokenNormalizerParams) error {
 			lastPatterns = append(lastPatterns, p)
 		}
 	}
-	patterns = append(patterns, defaultTokenPatterns...)
+	patterns = append(patterns, builtinTokenPatterns...)
 	patterns = append(patterns, lastPatterns...)
 
 	addTokens(patterns)
@@ -136,7 +136,7 @@ func initTokens(lexer *lexmachine.Lexer, params TokenNormalizerParams) error {
 
 // [lexmachine] pkg doesn't support 'exactly' re syntax (a{3}, a{3,6}),
 // so we use [strings.Repeat] instead
-var defaultTokenPatterns = []TokenPattern{
+var builtinTokenPatterns = []TokenPattern{
 	{
 		Placeholder: "<email>",
 		RE:          `\w[0-9a-zA-Z_\.\-]+@[0-9a-zA-Z_\-]+(\.[0-9a-zA-Z_\-]+)*`,

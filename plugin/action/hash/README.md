@@ -59,7 +59,7 @@ The original event:
 }
 ```
 
-The value of the "message" field for which the hash will be calculated:
+The part of the "message" field for which the hash will be calculated:
 `bad token `
 
 The resulting event:
@@ -71,7 +71,7 @@ The resulting event:
 }
 ```
 ---
-Hashing with normalization (only default patterns):
+Hashing with normalization (built-in patterns only):
 ```yaml
 pipelines:
   example_pipeline:
@@ -105,7 +105,7 @@ The resulting event:
 }
 ```
 ---
-Hashing with normalization (only custom patterns):
+Hashing with normalization (custom patterns only):
 ```yaml
 pipelines:
   example_pipeline:
@@ -117,7 +117,7 @@ pipelines:
           format: normalize
       result_field: hash
       normalizer:
-        with_defaults: false
+        with_builtin_patterns: false
         patterns:
           - placeholder: '<quoted_str>'
             re: '"[^"]*"'
@@ -145,7 +145,7 @@ The resulting event:
 }
 ```
 ---
-Hashing with normalization (default & custom patterns):
+Hashing with normalization (built-in & custom patterns):
 ```yaml
 pipelines:
   example_pipeline:
@@ -157,7 +157,7 @@ pipelines:
           format: normalize
       result_field: hash
       normalizer:
-        with_defaults: true
+        with_builtin_patterns: true
         patterns:
           - placeholder: '<quoted_str>'
             re: '"[^"]*"'
@@ -225,9 +225,9 @@ Normalizer params. It works for `fields` with `format: normalize`.
 > For more information, see [Normalization](/plugin/action/hash/normalize/README.md).
 
 `NormalizerConfig` params:
-* **`with_defaults`** *`bool`* *`default=true`*
+* **`with_builtin_patterns`** *`bool`* *`default=true`*
 
-	If set to `true`, normalizer will use `patterns` in combination with [default patterns](/plugin/action/hash/normalize/README.md#default-patterns).
+	If set to `true`, normalizer will use `patterns` in combination with [built-in patterns](/plugin/action/hash/normalize/README.md#built-in-patterns).
 
 * **`patterns`** *`[]NormalizePattern`*
 
@@ -245,11 +245,11 @@ Normalizer params. It works for `fields` with `format: normalize`.
 
 	* **`priority`** *`string`* *`default=first`* *`options=first|last`*
 
-		A priority of pattern. Works only if `normalizer.with_defaults=true`.
+		A priority of pattern. Works only if `normalizer.with_builtin_patterns=true`.
 
 		If set to `first`, pattern will be added before defaults, otherwise - after.
 
-		> If `normalizer.with_defaults=false`, then the priority is determined
+		> If `normalizer.with_builtin_patterns=false`, then the priority is determined
 		by the order of the elements in `normalizer.patterns`.
 
 <br>

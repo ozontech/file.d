@@ -7,7 +7,7 @@
 
 Each pattern has a *priority* that determines the placeholder in case the element falls under several patterns at once.
 
-### Default patterns
+### Built-in patterns
 
 We support a set of patterns out of the box.
 

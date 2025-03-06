@@ -74,7 +74,7 @@ The original event:
 }
 ```
 
-The value of the "message" field for which the hash will be calculated:
+The part of the "message" field for which the hash will be calculated:
 `bad token `
 
 The resulting event:
@@ -86,7 +86,7 @@ The resulting event:
 }
 ```
 ---
-Hashing with normalization (only default patterns):
+Hashing with normalization (built-in patterns only):
 ```yaml
 pipelines:
   example_pipeline:
@@ -120,7 +120,7 @@ The resulting event:
 }
 ```
 ---
-Hashing with normalization (only custom patterns):
+Hashing with normalization (custom patterns only):
 ```yaml
 pipelines:
   example_pipeline:
@@ -132,7 +132,7 @@ pipelines:
           format: normalize
       result_field: hash
       normalizer:
-        with_defaults: false
+        with_builtin_patterns: false
         patterns:
           - placeholder: '<quoted_str>'
             re: '"[^"]*"'
@@ -160,7 +160,7 @@ The resulting event:
 }
 ```
 ---
-Hashing with normalization (default & custom patterns):
+Hashing with normalization (built-in & custom patterns):
 ```yaml
 pipelines:
   example_pipeline:
@@ -172,7 +172,7 @@ pipelines:
           format: normalize
       result_field: hash
       normalizer:
-        with_defaults: true
+        with_builtin_patterns: true
         patterns:
           - placeholder: '<quoted_str>'
             re: '"[^"]*"'
@@ -249,9 +249,9 @@ type Config struct {
 	// >> For more information, see [Normalization](/plugin/action/hash/normalize/README.md).
 	// >
 	// > `NormalizerConfig` params:
-	// > * **`with_defaults`** *`bool`* *`default=true`*
+	// > * **`with_builtin_patterns`** *`bool`* *`default=true`*
 	// >
-	// > 	If set to `true`, normalizer will use `patterns` in combination with [default patterns](/plugin/action/hash/normalize/README.md#default-patterns).
+	// > 	If set to `true`, normalizer will use `patterns` in combination with [built-in patterns](/plugin/action/hash/normalize/README.md#built-in-patterns).
 	// >
 	// > * **`patterns`** *`[]NormalizePattern`*
 	// >
@@ -269,11 +269,11 @@ type Config struct {
 	// >
 	// >	* **`priority`** *`string`* *`default=first`* *`options=first|last`*
 	// >
-	// >		A priority of pattern. Works only if `normalizer.with_defaults=true`.
+	// >		A priority of pattern. Works only if `normalizer.with_builtin_patterns=true`.
 	// >
 	// >		If set to `first`, pattern will be added before defaults, otherwise - after.
 	// >
-	// >		> If `normalizer.with_defaults=false`, then the priority is determined
+	// >		> If `normalizer.with_builtin_patterns=false`, then the priority is determined
 	// >		by the order of the elements in `normalizer.patterns`.
 	Normalizer NormalizerConfig `json:"normalizer" child:"true"` // *
 }
@@ -302,8 +302,8 @@ type NormalizePattern struct {
 }
 
 type NormalizerConfig struct {
-	WithDefaults bool               `json:"with_defaults" default:"true"`
-	Patterns     []NormalizePattern `json:"patterns" slice:"true"`
+	WithBuiltinPatterns bool               `json:"with_builtin_patterns" default:"true"`
+	Patterns            []NormalizePattern `json:"patterns" slice:"true"`
 }
 
 func init() {
@@ -336,8 +336,8 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 
 func (p *Plugin) initNormalizer() error {
 	tnParams := normalize.TokenNormalizerParams{
-		WithDefaults: p.config.Normalizer.WithDefaults,
-		Patterns:     make([]normalize.TokenPattern, 0, len(p.config.Normalizer.Patterns)),
+		WithBuiltinPatterns: p.config.Normalizer.WithBuiltinPatterns,
+		Patterns:            make([]normalize.TokenPattern, 0, len(p.config.Normalizer.Patterns)),
 	}
 	for _, p := range p.config.Normalizer.Patterns {
 		tnParams.Patterns = append(tnParams.Patterns, normalize.TokenPattern{

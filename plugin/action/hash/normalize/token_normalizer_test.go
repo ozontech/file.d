@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestTokenNormalizerDefaults(t *testing.T) {
+func TestTokenNormalizerBuiltin(t *testing.T) {
 	tests := []struct {
 		name string
 
@@ -185,7 +185,7 @@ func TestTokenNormalizerDefaults(t *testing.T) {
 		},
 	}
 
-	n, err := NewTokenNormalizer(TokenNormalizerParams{WithDefaults: true})
+	n, err := NewTokenNormalizer(TokenNormalizerParams{WithBuiltinPatterns: true})
 	require.NoError(t, err)
 
 	out := make([]byte, 0)
@@ -214,7 +214,7 @@ func TestTokenNormalizerCustom(t *testing.T) {
 		{
 			name: "only_custom",
 			params: TokenNormalizerParams{
-				WithDefaults: false,
+				WithBuiltinPatterns: false,
 				Patterns: []TokenPattern{
 					{
 						Placeholder: "<quoted_str>",
@@ -233,9 +233,9 @@ func TestTokenNormalizerCustom(t *testing.T) {
 			want: "some <quoted_str> and <date> here",
 		},
 		{
-			name: "custom_with_defaults",
+			name: "custom_with_builtin",
 			params: TokenNormalizerParams{
-				WithDefaults: true,
+				WithBuiltinPatterns: true,
 				Patterns: []TokenPattern{
 					{
 						Placeholder: "<quoted_str>",
@@ -257,14 +257,14 @@ func TestTokenNormalizerCustom(t *testing.T) {
 		{
 			name: "empty_patterns",
 			params: TokenNormalizerParams{
-				WithDefaults: false,
+				WithBuiltinPatterns: false,
 			},
 			wantErr: true,
 		},
 		{
 			name: "bad_patterns",
 			params: TokenNormalizerParams{
-				WithDefaults: false,
+				WithBuiltinPatterns: false,
 				Patterns: []TokenPattern{
 					{
 						Placeholder: "test",
@@ -331,7 +331,7 @@ var benchCases = []struct {
 }
 
 func BenchmarkTokenNormalizer(b *testing.B) {
-	n, _ := NewTokenNormalizer(TokenNormalizerParams{WithDefaults: true})
+	n, _ := NewTokenNormalizer(TokenNormalizerParams{WithBuiltinPatterns: true})
 	out := make([]byte, 0)
 	for _, benchCase := range benchCases {
 		name := fmt.Sprintf("input_len_%d", len(benchCase.input))
