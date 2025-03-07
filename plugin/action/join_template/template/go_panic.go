@@ -16,12 +16,34 @@ const (
 	panicAddrPart2 = "0x"
 
 	createdByPart = "created by "
+
+	httpPanicSubstr    = "http: panic serving"
+	httpPanicSubstrLen = len(httpPanicSubstr)
+
+	httpPanicTimeFormat    = "2025/03/05 19:30:57 "
+	httpPanicTimeFormatLen = len(httpPanicTimeFormat)
+
+	httpPanicPrefixLen = httpPanicSubstrLen + httpPanicTimeFormatLen
 )
 
 func goPanicStartCheck(s string) bool {
 	return strings.HasPrefix(s, "panic:") ||
 		strings.HasPrefix(s, "fatal error:") ||
 		strings.Contains(s, "http: panic serving")
+}
+
+func goPanicStartCheck2(s string) bool {
+	return strings.HasPrefix(s, "panic:") ||
+		strings.HasPrefix(s, "fatal error:") ||
+		containsHTTPPanic(s)
+}
+
+func containsHTTPPanic(s string) bool {
+	if len(s) < httpPanicTimeFormatLen {
+		return false
+	}
+
+	return strings.HasPrefix(s[httpPanicTimeFormatLen:], httpPanicSubstr)
 }
 
 func goPanicContinueCheck(s string) bool {

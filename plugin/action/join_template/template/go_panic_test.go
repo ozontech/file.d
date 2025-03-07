@@ -67,6 +67,13 @@ func BenchmarkPanicStartNegativeRes(b *testing.B) {
 			}
 		}
 	})
+	b.Run("explicit-fast", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			for _, line := range lines {
+				goPanicStartCheck2(line)
+			}
+		}
+	})
 	b.Run("regexp", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			for _, line := range lines {
