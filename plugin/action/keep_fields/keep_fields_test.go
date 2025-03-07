@@ -85,6 +85,18 @@ const data = `
 }
 `
 
+func prepareEvents(b *testing.B) []*pipeline.Event {
+	const n = 100
+	result := make([]*pipeline.Event, n)
+	for i := 0; i < n; i++ {
+		root, err := insaneJSON.DecodeString(data)
+		require.NoError(b, err)
+		result[i] = &pipeline.Event{Root: root}
+	}
+
+	return result
+}
+
 func BenchmarkPluginDo(b *testing.B) {
 	config := &Config{Fields: []string{
 		"some1",
@@ -103,36 +115,23 @@ func BenchmarkPluginDo(b *testing.B) {
 
 	p.Start(config, nil)
 
-	const n = 100
-
-	oldArray := make([]*pipeline.Event, n)
-	newFastArray := make([]*pipeline.Event, n)
-	newSlowArray := make([]*pipeline.Event, n)
-	for i := 0; i < n; i++ {
-		root, err := insaneJSON.DecodeString(data)
-		require.NoError(b, err)
-		oldArray[i] = &pipeline.Event{Root: root}
-
-		root, err = insaneJSON.DecodeString(data)
-		require.NoError(b, err)
-		newFastArray[i] = &pipeline.Event{Root: root}
-
-		root, err = insaneJSON.DecodeString(data)
-		require.NoError(b, err)
-		newSlowArray[i] = &pipeline.Event{Root: root}
-	}
-
 	b.ResetTimer()
 	b.Run("new_way_fast", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
-			for _, event := range newFastArray {
+			b.StopTimer()
+			events := prepareEvents(b)
+			b.StartTimer()
+			for _, event := range events {
 				p.DoNewFixed(event)
 			}
 		}
 	})
 	b.Run("old_way", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
-			for _, event := range oldArray {
+			b.StopTimer()
+			events := prepareEvents(b)
+			b.StartTimer()
+			for _, event := range events {
 				p.DoOld(event)
 			}
 		}
@@ -140,7 +139,10 @@ func BenchmarkPluginDo(b *testing.B) {
 
 	b.Run("new_way_slow", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
-			for _, event := range newSlowArray {
+			b.StopTimer()
+			events := prepareEvents(b)
+			b.StartTimer()
+			for _, event := range events {
 				p.DoNew(event)
 			}
 		}
