@@ -1,6 +1,7 @@
 package keep_fields
 
 import (
+	"fmt"
 	"sync"
 	"testing"
 
@@ -86,7 +87,7 @@ const data = `
 `
 
 func prepareEvents(b *testing.B) []*pipeline.Event {
-	const n = 100
+	const n = 10
 	result := make([]*pipeline.Event, n)
 	for i := 0; i < n; i++ {
 		root, err := insaneJSON.DecodeString(data)
@@ -97,19 +98,8 @@ func prepareEvents(b *testing.B) []*pipeline.Event {
 	return result
 }
 
-func BenchmarkPluginDo(b *testing.B) {
-	config := &Config{Fields: []string{
-		"some1",
-		"some2",
-		"some3",
-		"some4",
-		"some5",
-		"some6",
-		"some7",
-		"some8",
-		"some9",
-		"some10",
-	}}
+func BenchmarkDoFlatAllDeleted(b *testing.B) {
+	config := &Config{Fields: getFlatConfig()}
 
 	p := &Plugin{}
 
@@ -136,7 +126,16 @@ func BenchmarkPluginDo(b *testing.B) {
 			}
 		}
 	})
-
+	b.Run("new_way_tree_slow", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			b.StopTimer()
+			events := prepareEvents(b)
+			b.StartTimer()
+			for _, event := range events {
+				p.DoNewWithTree(event)
+			}
+		}
+	})
 	b.Run("new_way_slow", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			b.StopTimer()
@@ -147,4 +146,13 @@ func BenchmarkPluginDo(b *testing.B) {
 			}
 		}
 	})
+}
+
+func getFlatConfig() []string {
+	result := make([]string, 10)
+	for i := range result {
+		result[i] = fmt.Sprintf("field%d", i+1)
+	}
+
+	return result
 }
