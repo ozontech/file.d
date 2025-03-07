@@ -25,6 +25,8 @@ type Plugin struct {
 	fieldPaths  [][]string
 	nodePresent []bool
 	path        []string
+
+	tree *prefixTree
 }
 
 // ! config-params
@@ -130,6 +132,8 @@ func (p *Plugin) StartNew(config pipeline.AnyConfig, _ *pipeline.ActionPluginPar
 		p.nested = p.nested || len(path) >= 2
 		p.firstLevelFields[i] = path[0]
 	}
+
+	p.tree = newPrefixTree(p.fieldPaths)
 }
 
 func (p *Plugin) DoNewFixed(event *pipeline.Event) pipeline.ActionResult {
@@ -195,6 +199,26 @@ func (p *Plugin) eraseBadNodes(node *insaneJSON.Node) {
 	}
 }
 
+func (p *Plugin) eraseBadNodes2(node *insaneJSON.Node) {
+	switch p.tree.check(p.path) {
+	case saved:
+		return
+	case unsaved:
+		node.Suicide()
+		return
+	case parentOfSaved:
+		if !node.IsObject() {
+			panic("node is parent of saved so it must be an object")
+		}
+
+		for _, child := range node.AsFields() {
+			p.path = append(p.path, child.AsString())
+			p.eraseBadNodes2(child.AsFieldValue())
+			p.path = p.path[:len(p.path)-1]
+		}
+	}
+}
+
 func (p *Plugin) isParentOfSaved() bool {
 	for i, fieldPath := range p.fieldPaths {
 		if !p.nodePresent[i] {
@@ -232,12 +256,12 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 }
 
 func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
-	res := p.DoNewFixed(event)
+	res := p.DoNewWithTree(event)
 	return res
 }
 
 func (p *Plugin) DoNew(event *pipeline.Event) pipeline.ActionResult {
-	if len(p.fieldPaths) == 0 || !event.Root.IsObject() {
+	if !event.Root.IsObject() {
 		return pipeline.ActionPass
 	}
 
@@ -251,6 +275,25 @@ func (p *Plugin) DoNew(event *pipeline.Event) pipeline.ActionResult {
 		p.eraseBadNodes(event.Root.Node.Dig(eventField))
 		p.path = p.path[:len(p.path)-1]
 	}
+
+	return pipeline.ActionPass
+}
+
+func (p *Plugin) DoNewWithTree(event *pipeline.Event) pipeline.ActionResult {
+	if !event.Root.IsObject() {
+		return pipeline.ActionPass
+	}
+
+	p.tree.startChecking(event.Root)
+
+	for _, child := range event.Root.AsFields() {
+		eventField := child.AsString()
+		p.path = append(p.path, eventField)
+		p.eraseBadNodes2(event.Root.Node.Dig(eventField))
+		p.path = p.path[:len(p.path)-1]
+	}
+
+	p.tree.finishChecking()
 
 	return pipeline.ActionPass
 }
