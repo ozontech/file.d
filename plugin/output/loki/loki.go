@@ -344,10 +344,8 @@ func (p *Plugin) send(ctx context.Context, data []byte) (int, error) {
 
 		if ts == "" {
 			ts = fmt.Sprintf(`%d`, time.Now().UnixNano())
-		} else {
-			if !p.isUnixNanoFormat(ts) {
-				return 0, errUnixNanoFormat
-			}
+		} else if !p.isUnixNanoFormat(ts) {
+			return 0, errUnixNanoFormat
 		}
 
 		logMsg := msg.Dig(p.config.MessageField).AsString()

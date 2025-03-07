@@ -121,7 +121,7 @@ func TestPlugSetAuthHeaders(t *testing.T) {
 				},
 			}
 
-			req, err := http.NewRequest(http.MethodPost, "url", nil)
+			req, err := http.NewRequest(http.MethodPost, "url", http.NoBody)
 			assert.NoError(t, err)
 
 			pl.setAuthenticationHeaders(req)
@@ -135,7 +135,6 @@ func TestPlugSetAuthHeaders(t *testing.T) {
 			if tt.expectBearer {
 				require.Equal(t, fmt.Sprintf("Bearer %s", pl.config.BearerToken), req.Header.Get("Authorization"))
 			}
-
 		})
 	}
 }
