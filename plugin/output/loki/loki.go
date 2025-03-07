@@ -134,21 +134,6 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
-	// > Path or content of a PEM-encoded client certificate file.
-	ClientCert string `json:"client_cert"` // *
-
-	// > @3@4@5@6
-	// >
-	// > > Path or content of a PEM-encoded client key file.
-	ClientKey string `json:"client_key"` // *
-
-	// > @3@4@5@6
-	// >
-	// > Path or content of a PEM-encoded CA file. This can be a path or the content of the certificate.
-	CACert string `json:"ca_cert"` // *
-
-	// > @3@4@5@6
-	// >
 	// > Client timeout when sends requests to Loki HTTP API.
 	RequestTimeout  cfg.Duration `json:"request_timeout" default:"1s" parse:"duration"` // *
 	RequestTimeout_ time.Duration

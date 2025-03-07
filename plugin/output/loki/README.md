@@ -35,17 +35,47 @@ Example
 timestamp
 *`bool`* *`default=false`* 
 
-Authorization enabled, if true set OrgID
+Authorization enabled, if true set auth method like tenant, basic auth or bearer
 
 <br>
 
-**`org_id`** *`string`* 
+**`tenant_id`** *`string`* 
 
-Authorization enabled, if set true set OrgID
+Authorization enabled, if set true set TenantID
 
-Example organization id
+Example
 
 example-org
+
+<br>
+
+**`username`** *`string`* 
+
+Authorization enabled, if auth username set provide auth password
+
+Example
+
+username
+
+<br>
+
+**`password`** *`string`* 
+
+Authorization enabled, provide basic auth password if basic auth username is provided
+
+Example
+
+password
+
+<br>
+
+**`bearer_token`** *`string`* 
+
+Authorization enabled, provide bearer token if you have Bearer authorization
+
+Example
+
+token
 
 <br>
 
@@ -58,24 +88,6 @@ If set true, the plugin will use SSL/TLS connections method.
 **`tls_skip_verify`** *`bool`* *`default=false`* 
 
 If set, the plugin will skip SSL/TLS verification.
-
-<br>
-
-**`client_cert`** *`string`* 
-
-Path or content of a PEM-encoded client certificate file.
-
-<br>
-
-**`client_key`** *`string`* 
-
-> Path or content of a PEM-encoded client key file.
-
-<br>
-
-**`ca_cert`** *`string`* 
-
-Path or content of a PEM-encoded CA file. This can be a path or the content of the certificate.
 
 <br>
 
