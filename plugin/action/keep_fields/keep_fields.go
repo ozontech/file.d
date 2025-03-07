@@ -1,8 +1,14 @@
 package keep_fields
 
 import (
+	"sort"
+	"strings"
+
+	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
+	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/pipeline"
+	insaneJSON "github.com/ozontech/insane-json"
 )
 
 /*{ introduction
@@ -12,6 +18,15 @@ It keeps the list of the event fields and removes others.
 type Plugin struct {
 	config    *Config
 	fieldsBuf []string
+
+	nested           bool
+	firstLevelFields []string
+
+	fieldPaths  [][]string
+	nodePresent []bool
+	path        []string
+
+	tree *prefixTree
 }
 
 // ! config-params
@@ -34,14 +49,14 @@ func factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 	return &Plugin{}, &Config{}
 }
 
-func (p *Plugin) Start(config pipeline.AnyConfig, _ *pipeline.ActionPluginParams) {
+func (p *Plugin) StartOld(config pipeline.AnyConfig, _ *pipeline.ActionPluginParams) {
 	p.config = config.(*Config)
 }
 
 func (p *Plugin) Stop() {
 }
 
-func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
+func (p *Plugin) DoOld(event *pipeline.Event) pipeline.ActionResult {
 	p.fieldsBuf = p.fieldsBuf[:0]
 
 	if !event.Root.IsObject() {
@@ -50,14 +65,7 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 
 	for _, node := range event.Root.AsFields() {
 		eventField := node.AsString()
-		isInList := false
-		for _, pluginField := range p.config.Fields {
-			if pluginField == eventField {
-				isInList = true
-				break
-			}
-		}
-		if !isInList {
+		if find(p.config.Fields, eventField) == -1 {
 			p.fieldsBuf = append(p.fieldsBuf, eventField)
 		}
 	}
@@ -65,6 +73,227 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	for _, field := range p.fieldsBuf {
 		event.Root.Dig(field).Suicide()
 	}
+
+	return pipeline.ActionPass
+}
+
+func find(a []string, s string) int {
+	for i, elem := range a {
+		if elem == s {
+			return i
+		}
+	}
+
+	return -1
+}
+
+func (p *Plugin) StartNew(config pipeline.AnyConfig, _ *pipeline.ActionPluginParams) {
+	p.config = config.(*Config)
+	if p.config == nil {
+		logger.Panicf("config is nil for the keep fields plugin")
+	}
+
+	fields := p.config.Fields
+	sort.Slice(fields, func(i, j int) bool {
+		return len(fields[i]) < len(fields[j])
+	})
+
+	p.fieldPaths = make([][]string, 0, len(fields))
+
+	for i, f1 := range fields {
+		if f1 == "" {
+			logger.Warn("empty field found")
+			continue
+		}
+
+		ok := true
+		for _, f2 := range fields[:i] {
+			if strings.HasPrefix(f1, f2) {
+				logger.Warnf("path '%s' included in path '%s'; remove nested path", f1, f2)
+				ok = false
+				break
+			}
+		}
+
+		if ok {
+			p.fieldPaths = append(p.fieldPaths, cfg.ParseFieldSelector(f1))
+		}
+	}
+
+	if len(p.fieldPaths) == 0 {
+		logger.Warn("all fields will be removed")
+	}
+
+	p.nodePresent = make([]bool, len(p.fieldPaths))
+	p.firstLevelFields = make([]string, len(p.fieldPaths))
+	p.path = make([]string, 0, 20)
+
+	for i, path := range p.fieldPaths {
+		p.nested = p.nested || len(path) >= 2
+		p.firstLevelFields[i] = path[0]
+	}
+
+	p.tree = newPrefixTree(p.fieldPaths)
+}
+
+func (p *Plugin) DoNewFixed(event *pipeline.Event) pipeline.ActionResult {
+	if len(p.fieldPaths) == 0 || !event.Root.IsObject() {
+		return pipeline.ActionPass
+	}
+
+	if !p.nested {
+		p.fieldsBuf = p.fieldsBuf[:0]
+
+		for _, node := range event.Root.AsFields() {
+			eventField := node.AsString()
+			if find(p.firstLevelFields, eventField) == -1 {
+				p.fieldsBuf = append(p.fieldsBuf, eventField)
+			}
+		}
+
+		for _, field := range p.fieldsBuf {
+			event.Root.Dig(field).Suicide()
+		}
+
+		return pipeline.ActionPass
+	}
+
+	for i := range p.nodePresent {
+		p.nodePresent[i] = event.Root.Dig(p.fieldPaths[i]...) != nil
+	}
+
+	for _, child := range event.Root.AsFields() {
+		eventField := child.AsString()
+		p.path = append(p.path, eventField)
+		p.eraseBadNodes(event.Root.Node.Dig(eventField))
+		p.path = p.path[:len(p.path)-1]
+	}
+
+	return pipeline.ActionPass
+}
+
+func (p *Plugin) eraseBadNodes(node *insaneJSON.Node) {
+	// if node explicitly saved then return
+	// else if node is not parent of some saved then erase it and return
+	// else check all children
+
+	for i, curPath := range p.fieldPaths {
+		if p.nodePresent[i] && equal(p.path, curPath) {
+			return
+		}
+	}
+
+	if !p.isParentOfSaved() {
+		node.Suicide()
+		return
+	}
+
+	if !node.IsObject() {
+		panic("node is parent of saved so it must be an object")
+	}
+
+	for _, child := range node.AsFields() {
+		p.path = append(p.path, child.AsString())
+		p.eraseBadNodes(child.AsFieldValue())
+		p.path = p.path[:len(p.path)-1]
+	}
+}
+
+func (p *Plugin) eraseBadNodes2(node *insaneJSON.Node) {
+	switch p.tree.check(p.path) {
+	case saved:
+		return
+	case unsaved:
+		node.Suicide()
+		return
+	case parentOfSaved:
+		if !node.IsObject() {
+			panic("node is parent of saved so it must be an object")
+		}
+
+		for _, child := range node.AsFields() {
+			p.path = append(p.path, child.AsString())
+			p.eraseBadNodes2(child.AsFieldValue())
+			p.path = p.path[:len(p.path)-1]
+		}
+	}
+}
+
+func (p *Plugin) isParentOfSaved() bool {
+	for i, fieldPath := range p.fieldPaths {
+		if !p.nodePresent[i] {
+			continue
+		}
+
+		if !(len(p.path) < len(fieldPath)) {
+			continue
+		}
+
+		if equal(p.path, fieldPath[:len(p.path)]) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func equal(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+
+	for i, s := range a {
+		if s != b[i] {
+			return false
+		}
+	}
+
+	return true
+}
+
+func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginParams) {
+	p.StartNew(config, params)
+}
+
+func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
+	res := p.DoNewWithTree(event)
+	return res
+}
+
+func (p *Plugin) DoNew(event *pipeline.Event) pipeline.ActionResult {
+	if !event.Root.IsObject() {
+		return pipeline.ActionPass
+	}
+
+	for i := range p.nodePresent {
+		p.nodePresent[i] = event.Root.Dig(p.fieldPaths[i]...) != nil
+	}
+
+	for _, child := range event.Root.AsFields() {
+		eventField := child.AsString()
+		p.path = append(p.path, eventField)
+		p.eraseBadNodes(event.Root.Node.Dig(eventField))
+		p.path = p.path[:len(p.path)-1]
+	}
+
+	return pipeline.ActionPass
+}
+
+func (p *Plugin) DoNewWithTree(event *pipeline.Event) pipeline.ActionResult {
+	if !event.Root.IsObject() {
+		return pipeline.ActionPass
+	}
+
+	p.tree.startChecking(event.Root)
+
+	for _, child := range event.Root.AsFields() {
+		eventField := child.AsString()
+		p.path = append(p.path, eventField)
+		p.eraseBadNodes2(event.Root.Node.Dig(eventField))
+		p.path = p.path[:len(p.path)-1]
+	}
+
+	p.tree.finishChecking()
 
 	return pipeline.ActionPass
 }
