@@ -17,13 +17,8 @@ const (
 
 	createdByPart = "created by "
 
-	httpPanicSubstr    = "http: panic serving"
-	httpPanicSubstrLen = len(httpPanicSubstr)
-
-	httpPanicTimeFormat    = "2025/03/05 19:30:57 "
-	httpPanicTimeFormatLen = len(httpPanicTimeFormat)
-
-	httpPanicPrefixLen = httpPanicSubstrLen + httpPanicTimeFormatLen
+	httpPanicSubstr     = "http: panic serving"
+	httpPanicTimeFormat = "2025/03/05 19:30:57 "
 )
 
 func goPanicStartCheck(s string) bool {
@@ -39,11 +34,11 @@ func goPanicStartCheck2(s string) bool {
 }
 
 func containsHTTPPanic(s string) bool {
-	if len(s) < httpPanicTimeFormatLen {
+	if len(s) < len(httpPanicTimeFormat) {
 		return false
 	}
 
-	return strings.HasPrefix(s[httpPanicTimeFormatLen:], httpPanicSubstr)
+	return strings.HasPrefix(s[len(httpPanicTimeFormat):], httpPanicSubstr)
 }
 
 func goPanicContinueCheck(s string) bool {
