@@ -8,21 +8,21 @@ type treeNode struct {
 	children []*treeNode
 }
 
-type prefixTree struct {
+type treeChecker struct {
 	root *treeNode
 
 	paths       [][]string
 	nodePresent []bool
 }
 
-func newPrefixTree(paths [][]string) *prefixTree {
+func newPrefixTree(paths [][]string) *treeChecker {
 	root := &treeNode{}
 
 	for _, path := range paths {
 		add(root, path)
 	}
 
-	return &prefixTree{
+	return &treeChecker{
 		root:        root,
 		paths:       paths,
 		nodePresent: make([]bool, len(paths)),
@@ -61,7 +61,7 @@ func findChild(cur *treeNode, s string) *treeNode {
 	return nil
 }
 
-func (t *prefixTree) startChecking(root *insaneJSON.Root) {
+func (t *treeChecker) startChecking(root *insaneJSON.Root) {
 	for i := range t.nodePresent {
 		t.nodePresent[i] = root.Dig(t.paths[i]...) != nil
 	}
@@ -73,7 +73,7 @@ func (t *prefixTree) startChecking(root *insaneJSON.Root) {
 	}
 }
 
-func (t *prefixTree) startCheckingPath(path []string) {
+func (t *treeChecker) startCheckingPath(path []string) {
 	cur := t.root
 	for _, s := range path {
 		cur = findChild(cur, s)
@@ -84,7 +84,7 @@ func (t *prefixTree) startCheckingPath(path []string) {
 	}
 }
 
-func (t *prefixTree) finishChecking() {
+func (t *treeChecker) finishChecking() {
 	for i := range t.nodePresent {
 		if t.nodePresent[i] {
 			t.finishCheckingPath(t.paths[i])
@@ -92,7 +92,7 @@ func (t *prefixTree) finishChecking() {
 	}
 }
 
-func (t *prefixTree) finishCheckingPath(path []string) {
+func (t *treeChecker) finishCheckingPath(path []string) {
 	cur := t.root
 	for _, s := range path {
 		cur = findChild(cur, s)
@@ -103,7 +103,7 @@ func (t *prefixTree) finishCheckingPath(path []string) {
 	}
 }
 
-func (t *prefixTree) check(path []string) nodeStatus {
+func (t *treeChecker) check(path []string) nodeStatus {
 	cur := t.root
 	for _, s := range path {
 		if cur.children == nil {

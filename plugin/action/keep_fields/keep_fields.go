@@ -27,8 +27,7 @@ type Plugin struct {
 	path       []string
 
 	arrayChecker *arrayChecker
-
-	tree *prefixTree
+	treeChecker  *treeChecker
 }
 
 // ! config-params
@@ -135,10 +134,10 @@ func (p *Plugin) StartNew(config pipeline.AnyConfig, _ *pipeline.ActionPluginPar
 	p.path = make([]string, 0, 20)
 
 	p.arrayChecker = newArrayChecker(p.fieldPaths)
-	p.tree = newPrefixTree(p.fieldPaths)
+	p.treeChecker = newPrefixTree(p.fieldPaths)
 }
 
-func (p *Plugin) DoNewFixed(event *pipeline.Event) pipeline.ActionResult {
+func (p *Plugin) DoNewWithArray(event *pipeline.Event) pipeline.ActionResult {
 	if len(p.fieldPaths) == 0 || !event.Root.IsObject() {
 		return pipeline.ActionPass
 	}
@@ -165,7 +164,7 @@ func (p *Plugin) DoNewFixed(event *pipeline.Event) pipeline.ActionResult {
 	for _, child := range event.Root.AsFields() {
 		eventField := child.AsString()
 		p.path = append(p.path, eventField)
-		p.eraseBadNodes(event.Root.Node.Dig(eventField))
+		p.eraseBadNodesArrChecker(event.Root.Node.Dig(eventField))
 		p.path = p.path[:len(p.path)-1]
 	}
 
@@ -174,7 +173,7 @@ func (p *Plugin) DoNewFixed(event *pipeline.Event) pipeline.ActionResult {
 	return pipeline.ActionPass
 }
 
-func (p *Plugin) eraseBadNodes(node *insaneJSON.Node) {
+func (p *Plugin) eraseBadNodesArrChecker(node *insaneJSON.Node) {
 	status := p.arrayChecker.check(p.path)
 	switch status {
 	case saved:
@@ -186,7 +185,7 @@ func (p *Plugin) eraseBadNodes(node *insaneJSON.Node) {
 
 		for _, child := range node.AsFields() {
 			p.path = append(p.path, child.AsString())
-			p.eraseBadNodes(child.AsFieldValue())
+			p.eraseBadNodesArrChecker(child.AsFieldValue())
 			p.path = p.path[:len(p.path)-1]
 		}
 	case unsaved:
@@ -196,12 +195,10 @@ func (p *Plugin) eraseBadNodes(node *insaneJSON.Node) {
 	}
 }
 
-func (p *Plugin) eraseBadNodes2(node *insaneJSON.Node) {
-	switch p.tree.check(p.path) {
+func (p *Plugin) eraseBadNodesTreeChecker(node *insaneJSON.Node) {
+	status := p.treeChecker.check(p.path)
+	switch status {
 	case saved:
-		return
-	case unsaved:
-		node.Suicide()
 		return
 	case parentOfSaved:
 		if !node.IsObject() {
@@ -210,9 +207,13 @@ func (p *Plugin) eraseBadNodes2(node *insaneJSON.Node) {
 
 		for _, child := range node.AsFields() {
 			p.path = append(p.path, child.AsString())
-			p.eraseBadNodes2(child.AsFieldValue())
+			p.eraseBadNodesTreeChecker(child.AsFieldValue())
 			p.path = p.path[:len(p.path)-1]
 		}
+	case unsaved:
+		node.Suicide()
+	default:
+		panic(fmt.Sprintf("unknown node status: %d", status))
 	}
 }
 
@@ -230,16 +231,16 @@ func (p *Plugin) DoNewWithTree(event *pipeline.Event) pipeline.ActionResult {
 		return pipeline.ActionPass
 	}
 
-	p.tree.startChecking(event.Root)
+	p.treeChecker.startChecking(event.Root)
 
 	for _, child := range event.Root.AsFields() {
 		eventField := child.AsString()
 		p.path = append(p.path, eventField)
-		p.eraseBadNodes2(event.Root.Node.Dig(eventField))
+		p.eraseBadNodesTreeChecker(event.Root.Node.Dig(eventField))
 		p.path = p.path[:len(p.path)-1]
 	}
 
-	p.tree.finishChecking()
+	p.treeChecker.finishChecking()
 
 	return pipeline.ActionPass
 }
