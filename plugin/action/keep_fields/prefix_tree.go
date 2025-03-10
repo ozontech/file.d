@@ -103,15 +103,7 @@ func (t *prefixTree) finishCheckingPath(path []string) {
 	}
 }
 
-type verdict int
-
-const (
-	saved verdict = iota
-	parentOfSaved
-	unsaved
-)
-
-func (t *prefixTree) check(path []string) verdict {
+func (t *prefixTree) check(path []string) nodeStatus {
 	cur := t.root
 	for _, s := range path {
 		if cur.children == nil {
