@@ -67,37 +67,6 @@ func TestKeepNestedFields(t *testing.T) {
 	require.Equal(t, `{"f":"k"}`, outEvents[2], "wrong event")
 }
 
-const data = `
-{
-  "menu1": "123123123",
-  "menu2": "123123123",
-  "menu3": "123123123",
-  "menu4": "123123123",
-  "menu5": "123123123",
-  "menu6": "123123123",
-  "menu7": "123123123",
-  "menu8": "123123123",
-  "menu9": "123123123",
-  "menu10": "123123123",
-  "menu11": "123123123",
-  "menu12": "123123123",
-  "menu13": "123123123",
-  "menu14": "123123123"
-}
-`
-
-func prepareEvents(b *testing.B) []*pipeline.Event {
-	const n = 10
-	result := make([]*pipeline.Event, n)
-	for i := 0; i < n; i++ {
-		root, err := insaneJSON.DecodeString(data)
-		require.NoError(b, err)
-		result[i] = &pipeline.Event{Root: root}
-	}
-
-	return result
-}
-
 func BenchmarkDoFlatAllDeleted(b *testing.B) {
 	config := &Config{Fields: getFlatConfig()}
 
@@ -105,35 +74,84 @@ func BenchmarkDoFlatAllDeleted(b *testing.B) {
 
 	p.Start(config, nil)
 
-	b.ResetTimer()
+	const eventsPerIteration = 1
+
 	b.Run("new_way_fast", func(b *testing.B) {
+		n := b.N * eventsPerIteration
+		a := getEventsAllFieldsDeleted(b, n)
+
+		b.ResetTimer()
+
+		from, to := 0, eventsPerIteration
 		for i := 0; i < b.N; i++ {
-			b.StopTimer()
-			events := prepareEvents(b)
-			b.StartTimer()
-			for _, event := range events {
+			for _, event := range a[from:to] {
 				p.DoNewWithArray(event)
 			}
+			from += eventsPerIteration
+			to += eventsPerIteration
 		}
 	})
 	b.Run("old_way", func(b *testing.B) {
+		n := b.N * eventsPerIteration
+		a := getEventsAllFieldsDeleted(b, n)
+
+		b.ResetTimer()
+
+		from, to := 0, eventsPerIteration
 		for i := 0; i < b.N; i++ {
-			b.StopTimer()
-			events := prepareEvents(b)
-			b.StartTimer()
-			for _, event := range events {
+			for _, event := range a[from:to] {
 				p.DoOld(event)
 			}
+			from += eventsPerIteration
+			to += eventsPerIteration
 		}
 	})
 	b.Run("new_way_tree_slow", func(b *testing.B) {
+		n := b.N * eventsPerIteration
+		a := getEventsAllFieldsDeleted(b, n)
+
+		b.ResetTimer()
+
+		from, to := 0, eventsPerIteration
 		for i := 0; i < b.N; i++ {
-			b.StopTimer()
-			events := prepareEvents(b)
-			b.StartTimer()
-			for _, event := range events {
+			for _, event := range a[from:to] {
 				p.DoNewWithTree(event)
 			}
+			from += eventsPerIteration
+			to += eventsPerIteration
+		}
+	})
+}
+
+func BenchmarkDoFlatAllDeletedSimple(b *testing.B) {
+	config := &Config{Fields: getFlatConfig()}
+
+	p := &Plugin{}
+
+	p.Start(config, nil)
+
+	b.Run("new_way_fast", func(b *testing.B) {
+		a := getEventsAllFieldsDeleted(b, b.N)
+		b.ResetTimer()
+
+		for i := 0; i < b.N; i++ {
+			p.DoNewWithArray(a[i])
+		}
+	})
+	b.Run("old_way", func(b *testing.B) {
+		a := getEventsAllFieldsDeleted(b, b.N)
+		b.ResetTimer()
+
+		for i := 0; i < b.N; i++ {
+			p.DoOld(a[i])
+		}
+	})
+	b.Run("new_way_tree_slow", func(b *testing.B) {
+		a := getEventsAllFieldsDeleted(b, b.N)
+		b.ResetTimer()
+
+		for i := 0; i < b.N; i++ {
+			p.DoNewWithTree(a[i])
 		}
 	})
 }
@@ -142,6 +160,32 @@ func getFlatConfig() []string {
 	result := make([]string, 10)
 	for i := range result {
 		result[i] = fmt.Sprintf("field%d", i+1)
+	}
+
+	return result
+}
+
+const dataAllFieldsDeleted = `
+{
+  "menu0": "123123123",
+  "menu1": "123123123",
+  "menu2": "123123123",
+  "menu3": "123123123",
+  "menu4": "123123123",
+  "menu5": "123123123",
+  "menu6": "123123123",
+  "menu7": "123123123",
+  "menu8": "123123123",
+  "menu9": "123123123"
+}
+`
+
+func getEventsAllFieldsDeleted(b *testing.B, n int) []*pipeline.Event {
+	result := make([]*pipeline.Event, n)
+	for i := 0; i < n; i++ {
+		root, err := insaneJSON.DecodeString(dataAllFieldsDeleted)
+		require.NoError(b, err)
+		result[i] = &pipeline.Event{Root: root}
 	}
 
 	return result
