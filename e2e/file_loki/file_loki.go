@@ -73,7 +73,9 @@ func (c *Config) Validate(t *testing.T) {
 
 	httpResp, err := http.Get(url)
 	r.NoError(err)
-	defer httpResp.Body.Close()
+	defer func() {
+		r.NoError(httpResp.Body.Close())
+	}()
 
 	type response struct {
 		Status string   `json:"status"`
