@@ -26,33 +26,54 @@ func (c *arrayChecker) finishChecks() {
 }
 
 func (c *arrayChecker) check(path []string) nodeStatus {
+	switch {
+	case c.isSaved(path):
+		return saved
+	case c.isParentOfSaved(path):
+		return parentOfSaved
+	default:
+		return unsaved
+	}
+}
+
+func (c *arrayChecker) isSaved(path []string) bool {
+	for i, curPath := range c.paths {
+		if c.nodePresent[i] && equal(path, curPath) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (c *arrayChecker) isParentOfSaved(path []string) bool {
 	for i, curPath := range c.paths {
 		if !c.nodePresent[i] {
 			continue
 		}
 
-		switch maxCommonPrefixLength(path, curPath) {
-		case 0:
-			break
-		case len(curPath):
-			return saved
-		default:
-			return parentOfSaved
+		if !(len(path) < len(curPath)) {
+			continue
+		}
+
+		if equal(path, curPath[:len(path)]) {
+			return true
 		}
 	}
 
-	return unsaved
+	return false
 }
 
-func maxCommonPrefixLength(a, b []string) int {
-	n := min(len(a), len(b))
+func equal(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
 
-	i := 0
-	for ; i < n; i++ {
-		if a[i] != b[i] {
-			break
+	for i, s := range a {
+		if s != b[i] {
+			return false
 		}
 	}
 
-	return i
+	return true
 }

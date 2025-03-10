@@ -222,7 +222,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 }
 
 func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
-	res := p.DoNewWithTree(event)
+	res := p.DoNewWithArray(event)
 	return res
 }
 
