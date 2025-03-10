@@ -112,7 +112,7 @@ func BenchmarkDoFlatAllDeleted(b *testing.B) {
 			events := prepareEvents(b)
 			b.StartTimer()
 			for _, event := range events {
-				p.DoNewFixed(event)
+				p.DoNewWithArray(event)
 			}
 		}
 	})
