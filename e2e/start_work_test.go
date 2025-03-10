@@ -9,17 +9,17 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/e2e/file_clickhouse"
 	"github.com/ozontech/file.d/e2e/file_elasticsearch"
 	"github.com/ozontech/file.d/e2e/file_es_split"
 	"github.com/ozontech/file.d/e2e/file_file"
+	"github.com/ozontech/file.d/e2e/file_loki"
 	"github.com/ozontech/file.d/e2e/http_file"
 	"github.com/ozontech/file.d/e2e/join_throttle"
 	"github.com/ozontech/file.d/e2e/kafka_auth"
 	"github.com/ozontech/file.d/e2e/kafka_file"
 	"github.com/ozontech/file.d/e2e/split_join"
-
-	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
 	_ "github.com/ozontech/file.d/plugin/action/add_file_name"
 	_ "github.com/ozontech/file.d/plugin/action/add_host"
@@ -163,6 +163,11 @@ func TestE2EStabilityWorkCase(t *testing.T) {
 			name:    "file_es",
 			e2eTest: &file_es_split.Config{},
 			cfgPath: "./file_es_split/config.yml",
+		},
+		{
+			name:    "file_loki",
+			e2eTest: &file_loki.Config{},
+			cfgPath: "./file_loki/config.yml",
 		},
 	}
 
