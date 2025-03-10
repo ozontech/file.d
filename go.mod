@@ -1,8 +1,8 @@
 module github.com/ozontech/file.d
 
-go 1.21
+go 1.23
 
-toolchain go1.21.0
+toolchain go1.23.7
 
 require (
 	github.com/ClickHouse/ch-go v0.58.2
