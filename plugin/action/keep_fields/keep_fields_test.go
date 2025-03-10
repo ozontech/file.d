@@ -136,16 +136,6 @@ func BenchmarkDoFlatAllDeleted(b *testing.B) {
 			}
 		}
 	})
-	b.Run("new_way_slow", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
-			b.StopTimer()
-			events := prepareEvents(b)
-			b.StartTimer()
-			for _, event := range events {
-				p.DoNew(event)
-			}
-		}
-	})
 }
 
 func getFlatConfig() []string {

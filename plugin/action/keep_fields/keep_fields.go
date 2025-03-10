@@ -1,6 +1,7 @@
 package keep_fields
 
 import (
+	"fmt"
 	"sort"
 	"strings"
 
@@ -22,9 +23,10 @@ type Plugin struct {
 	nested           bool
 	firstLevelFields []string
 
-	fieldPaths  [][]string
-	nodePresent []bool
-	path        []string
+	fieldPaths [][]string
+	path       []string
+
+	arrayChecker *arrayChecker
 
 	tree *prefixTree
 }
@@ -124,15 +126,15 @@ func (p *Plugin) StartNew(config pipeline.AnyConfig, _ *pipeline.ActionPluginPar
 		logger.Warn("all fields will be removed")
 	}
 
-	p.nodePresent = make([]bool, len(p.fieldPaths))
 	p.firstLevelFields = make([]string, len(p.fieldPaths))
-	p.path = make([]string, 0, 20)
-
 	for i, path := range p.fieldPaths {
 		p.nested = p.nested || len(path) >= 2
 		p.firstLevelFields[i] = path[0]
 	}
 
+	p.path = make([]string, 0, 20)
+
+	p.arrayChecker = newArrayChecker(p.fieldPaths)
 	p.tree = newPrefixTree(p.fieldPaths)
 }
 
@@ -158,9 +160,7 @@ func (p *Plugin) DoNewFixed(event *pipeline.Event) pipeline.ActionResult {
 		return pipeline.ActionPass
 	}
 
-	for i := range p.nodePresent {
-		p.nodePresent[i] = event.Root.Dig(p.fieldPaths[i]...) != nil
-	}
+	p.arrayChecker.startChecks(event.Root)
 
 	for _, child := range event.Root.AsFields() {
 		eventField := child.AsString()
@@ -169,33 +169,30 @@ func (p *Plugin) DoNewFixed(event *pipeline.Event) pipeline.ActionResult {
 		p.path = p.path[:len(p.path)-1]
 	}
 
+	p.arrayChecker.finishChecks()
+
 	return pipeline.ActionPass
 }
 
 func (p *Plugin) eraseBadNodes(node *insaneJSON.Node) {
-	// if node explicitly saved then return
-	// else if node is not parent of some saved then erase it and return
-	// else check all children
-
-	for i, curPath := range p.fieldPaths {
-		if p.nodePresent[i] && equal(p.path, curPath) {
-			return
-		}
-	}
-
-	if !p.isParentOfSaved() {
-		node.Suicide()
+	status := p.arrayChecker.check(p.path)
+	switch status {
+	case saved:
 		return
-	}
+	case parentOfSaved:
+		if !node.IsObject() {
+			panic("node is parent of saved so it must be an object")
+		}
 
-	if !node.IsObject() {
-		panic("node is parent of saved so it must be an object")
-	}
-
-	for _, child := range node.AsFields() {
-		p.path = append(p.path, child.AsString())
-		p.eraseBadNodes(child.AsFieldValue())
-		p.path = p.path[:len(p.path)-1]
+		for _, child := range node.AsFields() {
+			p.path = append(p.path, child.AsString())
+			p.eraseBadNodes(child.AsFieldValue())
+			p.path = p.path[:len(p.path)-1]
+		}
+	case unsaved:
+		node.Suicide()
+	default:
+		panic(fmt.Sprintf("unknown node status: %d", status))
 	}
 }
 
@@ -219,38 +216,6 @@ func (p *Plugin) eraseBadNodes2(node *insaneJSON.Node) {
 	}
 }
 
-func (p *Plugin) isParentOfSaved() bool {
-	for i, fieldPath := range p.fieldPaths {
-		if !p.nodePresent[i] {
-			continue
-		}
-
-		if !(len(p.path) < len(fieldPath)) {
-			continue
-		}
-
-		if equal(p.path, fieldPath[:len(p.path)]) {
-			return true
-		}
-	}
-
-	return false
-}
-
-func equal(a, b []string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-
-	for i, s := range a {
-		if s != b[i] {
-			return false
-		}
-	}
-
-	return true
-}
-
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginParams) {
 	p.StartNew(config, params)
 }
@@ -258,25 +223,6 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	res := p.DoNewWithTree(event)
 	return res
-}
-
-func (p *Plugin) DoNew(event *pipeline.Event) pipeline.ActionResult {
-	if !event.Root.IsObject() {
-		return pipeline.ActionPass
-	}
-
-	for i := range p.nodePresent {
-		p.nodePresent[i] = event.Root.Dig(p.fieldPaths[i]...) != nil
-	}
-
-	for _, child := range event.Root.AsFields() {
-		eventField := child.AsString()
-		p.path = append(p.path, eventField)
-		p.eraseBadNodes(event.Root.Node.Dig(eventField))
-		p.path = p.path[:len(p.path)-1]
-	}
-
-	return pipeline.ActionPass
 }
 
 func (p *Plugin) DoNewWithTree(event *pipeline.Event) pipeline.ActionResult {
