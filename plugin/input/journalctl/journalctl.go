@@ -47,7 +47,7 @@ type Config struct {
 	// > Plugin forces "-o json" and "-c *cursor*" or "-n all", otherwise
 	// > you can use any additional args.
 	// >> Have a look at https://man7.org/linux/man-pages/man1/journalctl.1.html
-	JournalArgs []string `json:"journal_args" default:"-f -a"` // *
+	JournalArgs []string `json:"journal_args" default:"-f"` // *
 
 	// for testing mostly
 	MaxLines int `json:"max_lines"`
