@@ -2,6 +2,8 @@ package keep_fields
 
 import (
 	"fmt"
+	"math/rand"
+	"strings"
 	"sync"
 	"testing"
 
@@ -165,28 +167,54 @@ func getFlatConfig() []string {
 	return result
 }
 
-const dataAllFieldsDeleted = `
-{
-  "menu0": "123123123",
-  "menu1": "123123123",
-  "menu2": "123123123",
-  "menu3": "123123123",
-  "menu4": "123123123",
-  "menu5": "123123123",
-  "menu6": "123123123",
-  "menu7": "123123123",
-  "menu8": "123123123",
-  "menu9": "123123123"
-}
-`
-
 func getEventsAllFieldsDeleted(b *testing.B, n int) []*pipeline.Event {
 	result := make([]*pipeline.Event, n)
 	for i := 0; i < n; i++ {
-		root, err := insaneJSON.DecodeString(dataAllFieldsDeleted)
+		root, err := getRandEvent(10)
 		require.NoError(b, err)
 		result[i] = &pipeline.Event{Root: root}
 	}
 
 	return result
+}
+
+func getRandEvent(fieldsCount int) (*insaneJSON.Root, error) {
+	root, err := insaneJSON.DecodeString("{}")
+	if err != nil {
+		return nil, err
+	}
+
+	for i := 0; i < fieldsCount; i++ {
+		k := getRandFieldName(8)
+		v := getRandFieldValue(10)
+		root.AddField(k).MutateToString(v)
+	}
+
+	return root, nil
+}
+
+func getRandFieldName(length int) string {
+	var b strings.Builder
+	b.Grow(length)
+
+	for i := 0; i < length; i++ {
+		b.WriteByte(getRandByte('a', 'z'))
+	}
+
+	return b.String()
+}
+
+func getRandFieldValue(length int) string {
+	var b strings.Builder
+	b.Grow(length)
+
+	for i := 0; i < length; i++ {
+		b.WriteByte(getRandByte(' ', '~'))
+	}
+
+	return b.String()
+}
+
+func getRandByte(from, to byte) byte {
+	return from + byte(rand.Intn(int(to-from)))
 }
