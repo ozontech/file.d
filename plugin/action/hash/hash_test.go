@@ -15,8 +15,9 @@ func TestHash(t *testing.T) {
 	tests := []struct {
 		name string
 
-		config *Config
-		input  []byte
+		config   *Config
+		input    []byte
+		pipeOpts []string
 
 		wantHash      uint64
 		wantEmptyNode bool
@@ -102,6 +103,7 @@ func TestHash(t *testing.T) {
 				},
 			},
 			input:    []byte(`{"level":"error","message":"request from \"ivanivanov\", signed on 19.03.2025"}`),
+			pipeOpts: []string{"name"},
 			wantHash: 6933347847764028189,
 		},
 		{
@@ -128,6 +130,7 @@ func TestHash(t *testing.T) {
 				},
 			},
 			input:    []byte(`{"level":"error","message":"2006/01/02 15:04:05 error occurred, client: 10.125.172.251, upstream: \"http://10.117.246.15:84/download\", host: \"mpm-youtube-downloader-38.name.com:84\""}`),
+			pipeOpts: []string{"name"},
 			wantHash: 7891860241841154313,
 		},
 		{
@@ -167,10 +170,8 @@ func TestHash(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
 			config := test.NewConfig(tt.config, nil)
-			p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, config, pipeline.MatchModeAnd, nil, false))
+			p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, config, pipeline.MatchModeAnd, nil, false), tt.pipeOpts...)
 
 			wg := &sync.WaitGroup{}
 			wg.Add(1)

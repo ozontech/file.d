@@ -2,6 +2,7 @@ package hash
 
 import (
 	"errors"
+	"strconv"
 
 	"github.com/cespare/xxhash/v2"
 	"github.com/ozontech/file.d/cfg"
@@ -203,6 +204,11 @@ The resulting event:
 ```
 }*/
 
+var (
+	// key - <pipeline name>_<action index>
+	normalizerCache = map[string]normalize.Normalizer{}
+)
+
 type Plugin struct {
 	config *Config
 
@@ -319,22 +325,36 @@ func factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginParams) {
 	p.config = config.(*Config)
+	l := params.Logger.Desugar()
 
 	p.buf = make([]byte, 0)
+
+	// we use 1 normalizer for all processors with the
+	// same pipeline name and the action-plugin index
+	cacheKey := params.PipelineName + "_" + strconv.Itoa(params.Index)
 
 	for _, f := range p.config.Fields {
 		if f.Format_ != ffNormalize {
 			continue
 		}
 
-		if err := p.initNormalizer(); err != nil {
-			params.Logger.Desugar().Fatal("can't create normalizer", zap.Error(err))
+		if n, ok := normalizerCache[cacheKey]; ok {
+			p.normalizer = n
+			break
 		}
+
+		l.Info("create normalizer")
+		n, err := p.initNormalizer()
+		if err != nil {
+			l.Fatal("can't create normalizer", zap.Error(err))
+		}
+		p.normalizer = n
+		normalizerCache[cacheKey] = n
 		break
 	}
 }
 
-func (p *Plugin) initNormalizer() error {
+func (p *Plugin) initNormalizer() (normalize.Normalizer, error) {
 	tnParams := normalize.TokenNormalizerParams{
 		WithBuiltinPatterns: p.config.Normalizer.WithBuiltinPatterns,
 		Patterns:            make([]normalize.TokenPattern, 0, len(p.config.Normalizer.Patterns)),
@@ -349,14 +369,13 @@ func (p *Plugin) initNormalizer() error {
 
 	n, err := normalize.NewTokenNormalizer(tnParams)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if n == nil {
-		return errors.New("failed to compile lexer: bad patterns")
+		return nil, errors.New("failed to compile lexer: bad patterns")
 	}
 
-	p.normalizer = n
-	return nil
+	return n, nil
 }
 
 func (p *Plugin) Stop() {}

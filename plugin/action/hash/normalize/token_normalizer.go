@@ -79,29 +79,9 @@ type token struct {
 }
 
 func initTokens(lexer *lexmachine.Lexer, params TokenNormalizerParams) error {
-	isWord := func(c byte) bool {
-		return '0' <= c && c <= '9' ||
-			'A' <= c && c <= 'Z' || 'a' <= c && c <= 'z' ||
-			c == '_'
-	}
-	addToken := func(placeholder string) lexmachine.Action {
-		return func(s *lexmachine.Scanner, m *machines.Match) (any, error) {
-			// skip `\w<match>\w`
-			if m.TC > 0 && isWord(s.Text[m.TC-1]) ||
-				m.TC+len(m.Bytes) < len(s.Text) && isWord(s.Text[m.TC+len(m.Bytes)]) {
-				return nil, nil
-			}
-
-			return token{
-				placeholder: placeholder,
-				begin:       m.TC,
-				end:         m.TC + len(m.Bytes),
-			}, nil
-		}
-	}
 	addTokens := func(patterns []TokenPattern) {
 		for _, p := range patterns {
-			lexer.Add([]byte(p.RE), addToken(p.Placeholder))
+			lexer.Add([]byte(p.RE), newToken(p.Placeholder))
 		}
 	}
 
@@ -132,6 +112,28 @@ func initTokens(lexer *lexmachine.Lexer, params TokenNormalizerParams) error {
 
 	addTokens(patterns)
 	return nil
+}
+
+func newToken(placeholder string) lexmachine.Action {
+	return func(s *lexmachine.Scanner, m *machines.Match) (any, error) {
+		// skip `\w<match>\w`
+		if m.TC > 0 && isWord(s.Text[m.TC-1]) ||
+			m.TC+len(m.Bytes) < len(s.Text) && isWord(s.Text[m.TC+len(m.Bytes)]) {
+			return nil, nil
+		}
+
+		return token{
+			placeholder: placeholder,
+			begin:       m.TC,
+			end:         m.TC + len(m.Bytes),
+		}, nil
+	}
+}
+
+func isWord(c byte) bool {
+	return '0' <= c && c <= '9' ||
+		'A' <= c && c <= 'Z' || 'a' <= c && c <= 'z' ||
+		c == '_'
 }
 
 // [lexmachine] pkg doesn't support 'exactly' re syntax (a{3}, a{3,6}),

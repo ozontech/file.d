@@ -110,6 +110,7 @@ func (p *processor) start(params PluginDefaultParams, log *zap.SugaredLogger) {
 			PluginDefaultParams: params,
 			Controller:          p,
 			Logger:              log.Named("action").Named(actionInfo.Type),
+			Index:               i,
 		})
 	}
 
