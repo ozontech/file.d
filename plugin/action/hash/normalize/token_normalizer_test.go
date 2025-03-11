@@ -188,11 +188,13 @@ func TestTokenNormalizerBuiltin(t *testing.T) {
 	n, err := NewTokenNormalizer(TokenNormalizerParams{WithBuiltinPatterns: true})
 	require.NoError(t, err)
 
-	out := make([]byte, 0)
-
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			out := make([]byte, 0)
+
 			for _, i := range tt.inputs {
 				out = n.Normalize(out, []byte(i))
 				assert.Equal(t, tt.want, string(out), "wrong out with input=%q", i)
