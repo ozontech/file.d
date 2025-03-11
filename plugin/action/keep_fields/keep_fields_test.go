@@ -3,6 +3,7 @@ package keep_fields
 import (
 	"fmt"
 	"math/rand"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"testing"
@@ -77,6 +78,8 @@ func BenchmarkDoFlatAllDeleted(b *testing.B) {
 	p.Start(config, nil)
 
 	const eventsPerIteration = 1
+
+	debug.SetGCPercent(-1)
 
 	b.Run("new_way_fast", func(b *testing.B) {
 		n := b.N * eventsPerIteration
@@ -185,15 +188,15 @@ func getRandEvent(fieldsCount int) (*insaneJSON.Root, error) {
 	}
 
 	for i := 0; i < fieldsCount; i++ {
-		k := getRandFieldName(8)
-		v := getRandFieldValue(10)
+		k := getRandKey(8)
+		v := getRandValue(10)
 		root.AddField(k).MutateToString(v)
 	}
 
 	return root, nil
 }
 
-func getRandFieldName(length int) string {
+func getRandKey(length int) string {
 	var b strings.Builder
 	b.Grow(length)
 
@@ -204,7 +207,7 @@ func getRandFieldName(length int) string {
 	return b.String()
 }
 
-func getRandFieldValue(length int) string {
+func getRandValue(length int) string {
 	var b strings.Builder
 	b.Grow(length)
 
