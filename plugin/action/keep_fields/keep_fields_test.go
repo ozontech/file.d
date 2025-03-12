@@ -120,6 +120,59 @@ func BenchmarkDoFlatNoFieldsSaved(b *testing.B) {
 }
 
 // NOTE: run it with flags: -benchtime 10ms -count 5
+func BenchmarkDoFlatHalfFieldsSaved(b *testing.B) {
+	fields := getFlatConfig()
+	config := &Config{Fields: fields}
+
+	p := &Plugin{}
+
+	p.Start(config, nil)
+
+	debug.SetGCPercent(-1)
+
+	b.Run("old", func(b *testing.B) {
+		a := getEventsHalfFieldsSaved(b, b.N, fields)
+		b.ResetTimer()
+
+		for i := 0; i < b.N; i++ {
+			p.DoOld(a[i])
+		}
+	})
+	b.Run("tree_slow", func(b *testing.B) {
+		a := getEventsHalfFieldsSaved(b, b.N, fields)
+		b.ResetTimer()
+
+		for i := 0; i < b.N; i++ {
+			p.DoNewWithTreeSlow(a[i])
+		}
+	})
+	b.Run("tree_fast", func(b *testing.B) {
+		a := getEventsHalfFieldsSaved(b, b.N, fields)
+		b.ResetTimer()
+
+		for i := 0; i < b.N; i++ {
+			p.DoNewWithTreeFast(a[i])
+		}
+	})
+	b.Run("array_slow", func(b *testing.B) {
+		a := getEventsHalfFieldsSaved(b, b.N, fields)
+		b.ResetTimer()
+
+		for i := 0; i < b.N; i++ {
+			p.DoNewWithArraySlow(a[i])
+		}
+	})
+	b.Run("array_fast", func(b *testing.B) {
+		a := getEventsHalfFieldsSaved(b, b.N, fields)
+		b.ResetTimer()
+
+		for i := 0; i < b.N; i++ {
+			p.DoNewWithArrayFast(a[i])
+		}
+	})
+}
+
+// NOTE: run it with flags: -benchtime 10ms -count 5
 func BenchmarkDoFlatAllFieldsSaved(b *testing.B) {
 	fields := getFlatConfig()
 	config := &Config{Fields: fields}
