@@ -1,16 +1,12 @@
 package keep_fields
 
 import (
-	"fmt"
-	"math/rand"
 	"runtime/debug"
-	"strings"
 	"sync"
 	"testing"
 
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/test"
-	insaneJSON "github.com/ozontech/insane-json"
 	"github.com/stretchr/testify/require"
 )
 
@@ -71,67 +67,9 @@ func TestKeepNestedFields(t *testing.T) {
 }
 
 // NOTE: run it with flags: -benchtime 10ms -count 5
-func BenchmarkDoFlatAllDeleted(b *testing.B) {
-	config := &Config{Fields: getFlatConfig()}
-
-	p := &Plugin{}
-
-	p.Start(config, nil)
-
-	const eventsPerIteration = 1
-
-	debug.SetGCPercent(-1)
-
-	b.Run("array_fast", func(b *testing.B) {
-		n := b.N * eventsPerIteration
-		a := getEventsAllFieldsDeleted(b, n)
-
-		b.ResetTimer()
-
-		from, to := 0, eventsPerIteration
-		for i := 0; i < b.N; i++ {
-			for _, event := range a[from:to] {
-				p.DoNewWithArrayFast(event)
-			}
-			from += eventsPerIteration
-			to += eventsPerIteration
-		}
-	})
-	b.Run("old", func(b *testing.B) {
-		n := b.N * eventsPerIteration
-		a := getEventsAllFieldsDeleted(b, n)
-
-		b.ResetTimer()
-
-		from, to := 0, eventsPerIteration
-		for i := 0; i < b.N; i++ {
-			for _, event := range a[from:to] {
-				p.DoOld(event)
-			}
-			from += eventsPerIteration
-			to += eventsPerIteration
-		}
-	})
-	b.Run("tree_slow", func(b *testing.B) {
-		n := b.N * eventsPerIteration
-		a := getEventsAllFieldsDeleted(b, n)
-
-		b.ResetTimer()
-
-		from, to := 0, eventsPerIteration
-		for i := 0; i < b.N; i++ {
-			for _, event := range a[from:to] {
-				p.DoNewWithTreeSlow(event)
-			}
-			from += eventsPerIteration
-			to += eventsPerIteration
-		}
-	})
-}
-
-// NOTE: run it with flags: -benchtime 10ms -count 5
-func BenchmarkDoFlatAllDeletedSimple(b *testing.B) {
-	config := &Config{Fields: getFlatConfig()}
+func BenchmarkDoFlatNoFieldsSaved(b *testing.B) {
+	fields := getFlatConfig()
+	config := &Config{Fields: fields}
 
 	p := &Plugin{}
 
@@ -140,7 +78,7 @@ func BenchmarkDoFlatAllDeletedSimple(b *testing.B) {
 	debug.SetGCPercent(-1)
 
 	b.Run("old", func(b *testing.B) {
-		a := getEventsAllFieldsDeleted(b, b.N)
+		a := getEventsNoFieldsSaved(b, b.N, fields)
 		b.ResetTimer()
 
 		for i := 0; i < b.N; i++ {
@@ -148,7 +86,7 @@ func BenchmarkDoFlatAllDeletedSimple(b *testing.B) {
 		}
 	})
 	b.Run("tree_slow", func(b *testing.B) {
-		a := getEventsAllFieldsDeleted(b, b.N)
+		a := getEventsNoFieldsSaved(b, b.N, fields)
 		b.ResetTimer()
 
 		for i := 0; i < b.N; i++ {
@@ -156,7 +94,7 @@ func BenchmarkDoFlatAllDeletedSimple(b *testing.B) {
 		}
 	})
 	b.Run("tree_fast", func(b *testing.B) {
-		a := getEventsAllFieldsDeleted(b, b.N)
+		a := getEventsNoFieldsSaved(b, b.N, fields)
 		b.ResetTimer()
 
 		for i := 0; i < b.N; i++ {
@@ -164,7 +102,7 @@ func BenchmarkDoFlatAllDeletedSimple(b *testing.B) {
 		}
 	})
 	b.Run("array_slow", func(b *testing.B) {
-		a := getEventsAllFieldsDeleted(b, b.N)
+		a := getEventsNoFieldsSaved(b, b.N, fields)
 		b.ResetTimer()
 
 		for i := 0; i < b.N; i++ {
@@ -172,7 +110,7 @@ func BenchmarkDoFlatAllDeletedSimple(b *testing.B) {
 		}
 	})
 	b.Run("array_fast", func(b *testing.B) {
-		a := getEventsAllFieldsDeleted(b, b.N)
+		a := getEventsNoFieldsSaved(b, b.N, fields)
 		b.ResetTimer()
 
 		for i := 0; i < b.N; i++ {
@@ -182,7 +120,7 @@ func BenchmarkDoFlatAllDeletedSimple(b *testing.B) {
 }
 
 // NOTE: run it with flags: -benchtime 10ms -count 5
-func BenchmarkDoFlatAllSavedSimple(b *testing.B) {
+func BenchmarkDoFlatAllFieldsSaved(b *testing.B) {
 	fields := getFlatConfig()
 	config := &Config{Fields: fields}
 
@@ -232,90 +170,4 @@ func BenchmarkDoFlatAllSavedSimple(b *testing.B) {
 			p.DoNewWithTreeFast(a[i])
 		}
 	})
-}
-
-func getFlatConfig() []string {
-	result := make([]string, 10)
-	for i := range result {
-		result[i] = fmt.Sprintf("field%d", i+1)
-	}
-
-	return result
-}
-
-func getEventsAllFieldsSaved(b *testing.B, n int, fields []string) []*pipeline.Event {
-	result := make([]*pipeline.Event, n)
-	for i := 0; i < n; i++ {
-		root, err := getEventAllFieldsSaved(fields)
-		require.NoError(b, err)
-		result[i] = &pipeline.Event{Root: root}
-	}
-
-	return result
-}
-
-func getEventAllFieldsSaved(fields []string) (*insaneJSON.Root, error) {
-	root, err := insaneJSON.DecodeString("{}")
-	if err != nil {
-		return nil, err
-	}
-
-	for _, field := range fields {
-		v := getRandValue(10)
-		root.AddField(field).MutateToString(v)
-	}
-
-	return root, nil
-}
-
-func getEventsAllFieldsDeleted(b *testing.B, n int) []*pipeline.Event {
-	result := make([]*pipeline.Event, n)
-	for i := 0; i < n; i++ {
-		root, err := getRandEvent(10)
-		require.NoError(b, err)
-		result[i] = &pipeline.Event{Root: root}
-	}
-
-	return result
-}
-
-func getRandEvent(fieldsCount int) (*insaneJSON.Root, error) {
-	root, err := insaneJSON.DecodeString("{}")
-	if err != nil {
-		return nil, err
-	}
-
-	for i := 0; i < fieldsCount; i++ {
-		k := getRandKey(8)
-		v := getRandValue(10)
-		root.AddField(k).MutateToString(v)
-	}
-
-	return root, nil
-}
-
-func getRandKey(length int) string {
-	var b strings.Builder
-	b.Grow(length)
-
-	for i := 0; i < length; i++ {
-		b.WriteByte(getRandByte('a', 'z'))
-	}
-
-	return b.String()
-}
-
-func getRandValue(length int) string {
-	var b strings.Builder
-	b.Grow(length)
-
-	for i := 0; i < length; i++ {
-		b.WriteByte(getRandByte(' ', '~'))
-	}
-
-	return b.String()
-}
-
-func getRandByte(from, to byte) byte {
-	return from + byte(rand.Intn(int(to-from)))
 }
