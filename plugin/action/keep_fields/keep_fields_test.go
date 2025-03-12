@@ -181,6 +181,59 @@ func BenchmarkDoFlatAllDeletedSimple(b *testing.B) {
 	})
 }
 
+// NOTE: run it with flags: -benchtime 10ms -count 5
+func BenchmarkDoFlatAllSavedSimple(b *testing.B) {
+	fields := getFlatConfig()
+	config := &Config{Fields: fields}
+
+	p := &Plugin{}
+
+	p.Start(config, nil)
+
+	debug.SetGCPercent(-1)
+
+	b.Run("old", func(b *testing.B) {
+		a := getEventsAllFieldsSaved(b, b.N, fields)
+		b.ResetTimer()
+
+		for i := 0; i < b.N; i++ {
+			p.DoOld(a[i])
+		}
+	})
+	b.Run("array_slow", func(b *testing.B) {
+		a := getEventsAllFieldsSaved(b, b.N, fields)
+		b.ResetTimer()
+
+		for i := 0; i < b.N; i++ {
+			p.DoNewWithArraySlow(a[i])
+		}
+	})
+	b.Run("array_fast", func(b *testing.B) {
+		a := getEventsAllFieldsSaved(b, b.N, fields)
+		b.ResetTimer()
+
+		for i := 0; i < b.N; i++ {
+			p.DoNewWithArrayFast(a[i])
+		}
+	})
+	b.Run("tree_slow", func(b *testing.B) {
+		a := getEventsAllFieldsSaved(b, b.N, fields)
+		b.ResetTimer()
+
+		for i := 0; i < b.N; i++ {
+			p.DoNewWithTreeSlow(a[i])
+		}
+	})
+	b.Run("tree_fast", func(b *testing.B) {
+		a := getEventsAllFieldsSaved(b, b.N, fields)
+		b.ResetTimer()
+
+		for i := 0; i < b.N; i++ {
+			p.DoNewWithTreeFast(a[i])
+		}
+	})
+}
+
 func getFlatConfig() []string {
 	result := make([]string, 10)
 	for i := range result {
@@ -188,6 +241,31 @@ func getFlatConfig() []string {
 	}
 
 	return result
+}
+
+func getEventsAllFieldsSaved(b *testing.B, n int, fields []string) []*pipeline.Event {
+	result := make([]*pipeline.Event, n)
+	for i := 0; i < n; i++ {
+		root, err := getEventAllFieldsSaved(fields)
+		require.NoError(b, err)
+		result[i] = &pipeline.Event{Root: root}
+	}
+
+	return result
+}
+
+func getEventAllFieldsSaved(fields []string) (*insaneJSON.Root, error) {
+	root, err := insaneJSON.DecodeString("{}")
+	if err != nil {
+		return nil, err
+	}
+
+	for _, field := range fields {
+		v := getRandValue(10)
+		root.AddField(field).MutateToString(v)
+	}
+
+	return root, nil
 }
 
 func getEventsAllFieldsDeleted(b *testing.B, n int) []*pipeline.Event {
