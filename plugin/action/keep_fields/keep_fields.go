@@ -137,8 +137,8 @@ func (p *Plugin) StartNew(config pipeline.AnyConfig, _ *pipeline.ActionPluginPar
 	p.treeChecker = newPrefixTree(p.fieldPaths)
 }
 
-func (p *Plugin) DoNewWithArray(event *pipeline.Event) pipeline.ActionResult {
-	if len(p.fieldPaths) == 0 || !event.Root.IsObject() {
+func (p *Plugin) DoNewWithArrayFast(event *pipeline.Event) pipeline.ActionResult {
+	if !event.Root.IsObject() {
 		return pipeline.ActionPass
 	}
 
@@ -156,6 +156,25 @@ func (p *Plugin) DoNewWithArray(event *pipeline.Event) pipeline.ActionResult {
 			event.Root.Dig(field).Suicide()
 		}
 
+		return pipeline.ActionPass
+	}
+
+	p.arrayChecker.startChecks(event.Root)
+
+	for _, child := range event.Root.AsFields() {
+		eventField := child.AsString()
+		p.path = append(p.path, eventField)
+		p.eraseBadNodesArrChecker(event.Root.Node.Dig(eventField))
+		p.path = p.path[:len(p.path)-1]
+	}
+
+	p.arrayChecker.finishChecks()
+
+	return pipeline.ActionPass
+}
+
+func (p *Plugin) DoNewWithArraySlow(event *pipeline.Event) pipeline.ActionResult {
+	if !event.Root.IsObject() {
 		return pipeline.ActionPass
 	}
 
@@ -222,12 +241,48 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 }
 
 func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
-	res := p.DoNewWithArray(event)
+	res := p.DoNewWithArrayFast(event)
 	return res
 }
 
-func (p *Plugin) DoNewWithTree(event *pipeline.Event) pipeline.ActionResult {
+func (p *Plugin) DoNewWithTreeSlow(event *pipeline.Event) pipeline.ActionResult {
 	if !event.Root.IsObject() {
+		return pipeline.ActionPass
+	}
+
+	p.treeChecker.startChecking(event.Root)
+
+	for _, child := range event.Root.AsFields() {
+		eventField := child.AsString()
+		p.path = append(p.path, eventField)
+		p.eraseBadNodesTreeChecker(event.Root.Node.Dig(eventField))
+		p.path = p.path[:len(p.path)-1]
+	}
+
+	p.treeChecker.finishChecking()
+
+	return pipeline.ActionPass
+}
+
+func (p *Plugin) DoNewWithTreeFast(event *pipeline.Event) pipeline.ActionResult {
+	if !event.Root.IsObject() {
+		return pipeline.ActionPass
+	}
+
+	if !p.nested {
+		p.fieldsBuf = p.fieldsBuf[:0]
+
+		for _, node := range event.Root.AsFields() {
+			eventField := node.AsString()
+			if find(p.firstLevelFields, eventField) == -1 {
+				p.fieldsBuf = append(p.fieldsBuf, eventField)
+			}
+		}
+
+		for _, field := range p.fieldsBuf {
+			event.Root.Dig(field).Suicide()
+		}
+
 		return pipeline.ActionPass
 	}
 

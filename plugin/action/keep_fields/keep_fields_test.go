@@ -70,6 +70,7 @@ func TestKeepNestedFields(t *testing.T) {
 	require.Equal(t, `{"f":"k"}`, outEvents[2], "wrong event")
 }
 
+// NOTE: run it with flags: -benchtime 10ms -count 5
 func BenchmarkDoFlatAllDeleted(b *testing.B) {
 	config := &Config{Fields: getFlatConfig()}
 
@@ -81,7 +82,7 @@ func BenchmarkDoFlatAllDeleted(b *testing.B) {
 
 	debug.SetGCPercent(-1)
 
-	b.Run("new_way_fast", func(b *testing.B) {
+	b.Run("array_fast", func(b *testing.B) {
 		n := b.N * eventsPerIteration
 		a := getEventsAllFieldsDeleted(b, n)
 
@@ -90,13 +91,13 @@ func BenchmarkDoFlatAllDeleted(b *testing.B) {
 		from, to := 0, eventsPerIteration
 		for i := 0; i < b.N; i++ {
 			for _, event := range a[from:to] {
-				p.DoNewWithArray(event)
+				p.DoNewWithArrayFast(event)
 			}
 			from += eventsPerIteration
 			to += eventsPerIteration
 		}
 	})
-	b.Run("old_way", func(b *testing.B) {
+	b.Run("old", func(b *testing.B) {
 		n := b.N * eventsPerIteration
 		a := getEventsAllFieldsDeleted(b, n)
 
@@ -111,7 +112,7 @@ func BenchmarkDoFlatAllDeleted(b *testing.B) {
 			to += eventsPerIteration
 		}
 	})
-	b.Run("new_way_tree_slow", func(b *testing.B) {
+	b.Run("tree_slow", func(b *testing.B) {
 		n := b.N * eventsPerIteration
 		a := getEventsAllFieldsDeleted(b, n)
 
@@ -120,7 +121,7 @@ func BenchmarkDoFlatAllDeleted(b *testing.B) {
 		from, to := 0, eventsPerIteration
 		for i := 0; i < b.N; i++ {
 			for _, event := range a[from:to] {
-				p.DoNewWithTree(event)
+				p.DoNewWithTreeSlow(event)
 			}
 			from += eventsPerIteration
 			to += eventsPerIteration
@@ -128,6 +129,7 @@ func BenchmarkDoFlatAllDeleted(b *testing.B) {
 	})
 }
 
+// NOTE: run it with flags: -benchtime 10ms -count 5
 func BenchmarkDoFlatAllDeletedSimple(b *testing.B) {
 	config := &Config{Fields: getFlatConfig()}
 
@@ -135,15 +137,9 @@ func BenchmarkDoFlatAllDeletedSimple(b *testing.B) {
 
 	p.Start(config, nil)
 
-	b.Run("new_way_fast", func(b *testing.B) {
-		a := getEventsAllFieldsDeleted(b, b.N)
-		b.ResetTimer()
+	debug.SetGCPercent(-1)
 
-		for i := 0; i < b.N; i++ {
-			p.DoNewWithArray(a[i])
-		}
-	})
-	b.Run("old_way", func(b *testing.B) {
+	b.Run("old", func(b *testing.B) {
 		a := getEventsAllFieldsDeleted(b, b.N)
 		b.ResetTimer()
 
@@ -151,12 +147,36 @@ func BenchmarkDoFlatAllDeletedSimple(b *testing.B) {
 			p.DoOld(a[i])
 		}
 	})
-	b.Run("new_way_tree_slow", func(b *testing.B) {
+	b.Run("tree_slow", func(b *testing.B) {
 		a := getEventsAllFieldsDeleted(b, b.N)
 		b.ResetTimer()
 
 		for i := 0; i < b.N; i++ {
-			p.DoNewWithTree(a[i])
+			p.DoNewWithTreeSlow(a[i])
+		}
+	})
+	b.Run("tree_fast", func(b *testing.B) {
+		a := getEventsAllFieldsDeleted(b, b.N)
+		b.ResetTimer()
+
+		for i := 0; i < b.N; i++ {
+			p.DoNewWithTreeFast(a[i])
+		}
+	})
+	b.Run("array_slow", func(b *testing.B) {
+		a := getEventsAllFieldsDeleted(b, b.N)
+		b.ResetTimer()
+
+		for i := 0; i < b.N; i++ {
+			p.DoNewWithArraySlow(a[i])
+		}
+	})
+	b.Run("array_fast", func(b *testing.B) {
+		a := getEventsAllFieldsDeleted(b, b.N)
+		b.ResetTimer()
+
+		for i := 0; i < b.N; i++ {
+			p.DoNewWithArrayFast(a[i])
 		}
 	})
 }
