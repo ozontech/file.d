@@ -54,34 +54,6 @@ func (c *arrayChecker) check(path []string) nodeStatus {
 	}
 }
 
-func (c *arrayChecker) isSaved(path []string) bool {
-	for i, curPath := range c.paths {
-		if c.nodePresent[i] && equal(path, curPath) {
-			return true
-		}
-	}
-
-	return false
-}
-
-func (c *arrayChecker) isParentOfSaved(path []string) bool {
-	for i, curPath := range c.paths {
-		if !c.nodePresent[i] {
-			continue
-		}
-
-		if !(len(path) < len(curPath)) {
-			continue
-		}
-
-		if equal(path, curPath[:len(path)]) {
-			return true
-		}
-	}
-
-	return false
-}
-
 func equal(a, b []string) bool {
 	if len(a) != len(b) {
 		return false
