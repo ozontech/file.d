@@ -34,7 +34,7 @@ func (c *Config) Configure(t *testing.T, conf *cfg.Config, pipelineName string) 
 
 	input := conf.Pipelines[pipelineName].Raw.Get("input")
 	input.Set("watching_dir", c.dir)
-	input.Set("filename_pattern", "input.log")
+	input.Set("filename_pattern", "loki.log")
 	input.Set("offsets_file", filepath.Join(offsetsDir, "offsets.yaml"))
 
 	output := conf.Pipelines[pipelineName].Raw.Get("output")
@@ -51,7 +51,7 @@ func (c *Config) Configure(t *testing.T, conf *cfg.Config, pipelineName string) 
 func (c *Config) Send(t *testing.T) {
 	r := require.New(t)
 
-	file, err := os.Create(path.Join(c.dir, "input.log"))
+	file, err := os.Create(path.Join(c.dir, "loki.log"))
 	r.NoError(err)
 	defer func() { _ = file.Close() }()
 
