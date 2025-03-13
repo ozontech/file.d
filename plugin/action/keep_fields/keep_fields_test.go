@@ -176,3 +176,150 @@ func BenchmarkDoFlatAllFieldsSaved(b *testing.B) {
 		}
 	})
 }
+
+const dataNested = `
+{
+	"level11": "qwerty",
+	"level12": "some",
+	"level13": 123,
+	"level14": true,
+	"some11": {"k1":"v1","k2":"v2","k3":"v3"},
+	"some12": {"k1":"v1","k2":"v2","k3":"v3"},
+	"some13": {"k1":"v1","k2":"v2","k3":"v3"},
+	"some14": {"k1":"v1","k2":"v2","k3":"v3"},
+	"qwe31": {"k1":"v1","k2":"v2","k3":{"k1":"v1","k2":"v2","k3":"v3"}},
+	"qwe32": {"k1":"v1","k2":"v2","k3":{"k1":"v1","k2":"v2","k3":"v3"}}
+}
+`
+
+// NOTE: run it with flags: -benchtime 10ms -count 5
+func BenchmarkDoNestedNoFieldsSaved(b *testing.B) {
+	fields := []string{
+		// not found
+		"some.qwe.aaa",
+		"some.qwe.bbb",
+		"some.qwe.ccc",
+		"qwe",
+
+		// almost found
+		"level11.empty",
+		"level12.empty",
+		"level13.empty",
+		"level14.empty",
+		"qwe31.k1.empty",
+		"qwe31.k2.empty",
+		"qwe31.k3.k1.empty",
+		"qwe31.k3.k2.empty",
+		"qwe31.k3.k3.empty",
+
+		// not found
+		"field1",
+		"field2",
+		"field3",
+		"abcd.aaa",
+		"abcd.bbb",
+		"abcd.ccc",
+
+		// almost found
+		"some12.k1.empty",
+		"some12.k2.empty",
+		"some12.k3.empty",
+		"some12.k4",
+		"some14.k1.empty",
+		"some14.k2.empty",
+		"some14.k3.empty",
+		"some14.k4",
+	}
+	config := &Config{Fields: fields}
+
+	p := &Plugin{}
+
+	p.Start(config, nil)
+
+	debug.SetGCPercent(-1)
+
+	b.Run("tree", func(b *testing.B) {
+		a := getEventsBySrc(b, dataNested, b.N)
+		b.ResetTimer()
+
+		for i := 0; i < b.N; i++ {
+			p.DoNewWithTree(a[i])
+		}
+	})
+	b.Run("array", func(b *testing.B) {
+		a := getEventsBySrc(b, dataNested, b.N)
+		b.ResetTimer()
+
+		for i := 0; i < b.N; i++ {
+			p.DoNewWithArray(a[i])
+		}
+	})
+}
+
+// NOTE: run it with flags: -benchtime 10ms -count 5
+func BenchmarkDoNestedAllFieldsSaved(b *testing.B) {
+	fields := []string{
+		// found
+		"level11",
+		"level12",
+		"level13",
+		"level14",
+
+		// not found
+		"level15",
+		"level16",
+		"level17",
+		"level18",
+
+		// found
+		"some11.k1",
+		"some11.k2",
+		"some11.k3",
+		"some12",
+		"some13.k1",
+		"some13.k2",
+		"some13.k3",
+		"some14.k1",
+		"some14.k2",
+		"some14.k3",
+
+		// not found
+		"some14.k4",
+		"some14.k5",
+		"some14.k6",
+
+		// found
+		"qwe31.k1",
+		"qwe31.k2",
+		"qwe31.k3.k1",
+		"qwe31.k3.k2",
+		"qwe31.k3.k3",
+		"qwe32.k1",
+		"qwe32.k2",
+		"qwe32.k3",
+	}
+	config := &Config{Fields: fields}
+
+	p := &Plugin{}
+
+	p.Start(config, nil)
+
+	debug.SetGCPercent(-1)
+
+	b.Run("tree", func(b *testing.B) {
+		a := getEventsBySrc(b, dataNested, b.N)
+		b.ResetTimer()
+
+		for i := 0; i < b.N; i++ {
+			p.DoNewWithTree(a[i])
+		}
+	})
+	b.Run("array", func(b *testing.B) {
+		a := getEventsBySrc(b, dataNested, b.N)
+		b.ResetTimer()
+
+		for i := 0; i < b.N; i++ {
+			p.DoNewWithArray(a[i])
+		}
+	})
+}
