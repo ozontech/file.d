@@ -173,25 +173,6 @@ func (p *Plugin) DoNewWithArrayFast(event *pipeline.Event) pipeline.ActionResult
 	return pipeline.ActionPass
 }
 
-func (p *Plugin) DoNewWithArraySlow(event *pipeline.Event) pipeline.ActionResult {
-	if !event.Root.IsObject() {
-		return pipeline.ActionPass
-	}
-
-	p.arrayChecker.startChecks(event.Root)
-
-	for _, child := range event.Root.AsFields() {
-		eventField := child.AsString()
-		p.path = append(p.path, eventField)
-		p.eraseBadNodesArrChecker(event.Root.Node.Dig(eventField))
-		p.path = p.path[:len(p.path)-1]
-	}
-
-	p.arrayChecker.finishChecks()
-
-	return pipeline.ActionPass
-}
-
 func (p *Plugin) eraseBadNodesArrChecker(node *insaneJSON.Node) {
 	status := p.arrayChecker.check(p.path)
 	switch status {
@@ -243,25 +224,6 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	res := p.DoNewWithArrayFast(event)
 	return res
-}
-
-func (p *Plugin) DoNewWithTreeSlow(event *pipeline.Event) pipeline.ActionResult {
-	if !event.Root.IsObject() {
-		return pipeline.ActionPass
-	}
-
-	p.treeChecker.startChecking(event.Root)
-
-	for _, child := range event.Root.AsFields() {
-		eventField := child.AsString()
-		p.path = append(p.path, eventField)
-		p.eraseBadNodesTreeChecker(event.Root.Node.Dig(eventField))
-		p.path = p.path[:len(p.path)-1]
-	}
-
-	p.treeChecker.finishChecking()
-
-	return pipeline.ActionPass
 }
 
 func (p *Plugin) DoNewWithTreeFast(event *pipeline.Event) pipeline.ActionResult {
