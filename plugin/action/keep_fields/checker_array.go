@@ -26,12 +26,30 @@ func (c *arrayChecker) finishChecks() {
 }
 
 func (c *arrayChecker) check(path []string) nodeStatus {
-	switch {
-	case c.isSaved(path):
-		return saved
-	case c.isParentOfSaved(path):
+	isParentOfSaved := false
+
+	for i, curPath := range c.paths {
+		if !c.nodePresent[i] {
+			continue
+		}
+
+		if !(len(path) <= len(curPath)) {
+			continue
+		}
+
+		isPrefix := equal(path, curPath[:len(path)])
+		if isPrefix {
+			if len(path) == len(curPath) {
+				return saved
+			} else {
+				isParentOfSaved = true
+			}
+		}
+	}
+
+	if isParentOfSaved {
 		return parentOfSaved
-	default:
+	} else {
 		return unsaved
 	}
 }
