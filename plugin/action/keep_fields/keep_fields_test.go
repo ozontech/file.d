@@ -323,3 +323,63 @@ func BenchmarkDoNestedAllFieldsSaved(b *testing.B) {
 		}
 	})
 }
+
+const dataDeepNested = `
+{"aaaaaaaa":
+{"bbbbbbbb":
+{"cccccccc":
+{"dddddddd":
+{"eeeeeeee":
+{"ffffffff":
+{"gggggggg":
+{"hhhhhhhh":
+{
+	"f1":2,
+	"f2":2,
+	"f3":2,
+	"f4":2,
+	"f5":2,
+	"f6":2,
+	"f7":2,
+	"f8":2
+}
+}}}}}}}}
+`
+
+// NOTE: run it with flags: -benchtime 10ms -count 5
+func BenchmarkDoDeepNestedAllFieldsSaved(b *testing.B) {
+	fields := []string{
+		"aaaaaaaa.bbbbbbbb.cccccccc.dddddddd.eeeeeeee.ffffffff.gggggggg.hhhhhhhh.f1",
+		"aaaaaaaa.bbbbbbbb.cccccccc.dddddddd.eeeeeeee.ffffffff.gggggggg.hhhhhhhh.f2",
+		"aaaaaaaa.bbbbbbbb.cccccccc.dddddddd.eeeeeeee.ffffffff.gggggggg.hhhhhhhh.f3",
+		"aaaaaaaa.bbbbbbbb.cccccccc.dddddddd.eeeeeeee.ffffffff.gggggggg.hhhhhhhh.f4",
+		"aaaaaaaa.bbbbbbbb.cccccccc.dddddddd.eeeeeeee.ffffffff.gggggggg.hhhhhhhh.f5",
+		"aaaaaaaa.bbbbbbbb.cccccccc.dddddddd.eeeeeeee.ffffffff.gggggggg.hhhhhhhh.f6",
+		"aaaaaaaa.bbbbbbbb.cccccccc.dddddddd.eeeeeeee.ffffffff.gggggggg.hhhhhhhh.f7",
+		"aaaaaaaa.bbbbbbbb.cccccccc.dddddddd.eeeeeeee.ffffffff.gggggggg.hhhhhhhh.f8",
+	}
+	config := &Config{Fields: fields}
+
+	p := &Plugin{}
+
+	p.Start(config, nil)
+
+	debug.SetGCPercent(-1)
+
+	b.Run("tree", func(b *testing.B) {
+		a := getEventsBySrc(b, dataDeepNested, b.N)
+		b.ResetTimer()
+
+		for i := 0; i < b.N; i++ {
+			p.DoNewWithTree(a[i])
+		}
+	})
+	b.Run("array", func(b *testing.B) {
+		a := getEventsBySrc(b, dataDeepNested, b.N)
+		b.ResetTimer()
+
+		for i := 0; i < b.N; i++ {
+			p.DoNewWithArray(a[i])
+		}
+	})
+}
