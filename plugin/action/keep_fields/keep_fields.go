@@ -137,7 +137,7 @@ func (p *Plugin) StartNew(config pipeline.AnyConfig, _ *pipeline.ActionPluginPar
 	p.treeChecker = newPrefixTree(p.fieldPaths)
 }
 
-func (p *Plugin) DoNewWithArrayFast(event *pipeline.Event) pipeline.ActionResult {
+func (p *Plugin) DoNewWithArray(event *pipeline.Event) pipeline.ActionResult {
 	if !event.Root.IsObject() {
 		return pipeline.ActionPass
 	}
@@ -222,11 +222,11 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 }
 
 func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
-	res := p.DoNewWithArrayFast(event)
+	res := p.DoNewWithArray(event)
 	return res
 }
 
-func (p *Plugin) DoNewWithTreeFast(event *pipeline.Event) pipeline.ActionResult {
+func (p *Plugin) DoNewWithTree(event *pipeline.Event) pipeline.ActionResult {
 	if !event.Root.IsObject() {
 		return pipeline.ActionPass
 	}
