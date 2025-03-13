@@ -109,3 +109,14 @@ func getRandValue(length int) string {
 func getRandByte(from, to byte) byte {
 	return from + byte(rand.Intn(int(to-from)))
 }
+
+func getEventsBySrc(b *testing.B, src string, n int) []*pipeline.Event {
+	result := make([]*pipeline.Event, n)
+	for i := 0; i < n; i++ {
+		root, err := insaneJSON.DecodeString(src)
+		require.NoError(b, err)
+		result[i] = &pipeline.Event{Root: root}
+	}
+
+	return result
+}
