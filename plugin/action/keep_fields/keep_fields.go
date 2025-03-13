@@ -20,8 +20,7 @@ type Plugin struct {
 	config    *Config
 	fieldsBuf []string
 
-	nested           bool
-	firstLevelFields []string
+	nested bool
 
 	fieldPaths [][]string
 	path       []string
@@ -125,10 +124,8 @@ func (p *Plugin) StartNew(config pipeline.AnyConfig, _ *pipeline.ActionPluginPar
 		logger.Warn("all fields will be removed")
 	}
 
-	p.firstLevelFields = make([]string, len(p.fieldPaths))
-	for i, path := range p.fieldPaths {
+	for _, path := range p.fieldPaths {
 		p.nested = p.nested || len(path) >= 2
-		p.firstLevelFields[i] = path[0]
 	}
 
 	p.path = make([]string, 0, 20)
@@ -147,7 +144,7 @@ func (p *Plugin) DoNewWithArray(event *pipeline.Event) pipeline.ActionResult {
 
 		for _, node := range event.Root.AsFields() {
 			eventField := node.AsString()
-			if find(p.firstLevelFields, eventField) == -1 {
+			if find(p.config.Fields, eventField) == -1 {
 				p.fieldsBuf = append(p.fieldsBuf, eventField)
 			}
 		}
@@ -236,7 +233,7 @@ func (p *Plugin) DoNewWithTree(event *pipeline.Event) pipeline.ActionResult {
 
 		for _, node := range event.Root.AsFields() {
 			eventField := node.AsString()
-			if find(p.firstLevelFields, eventField) == -1 {
+			if find(p.config.Fields, eventField) == -1 {
 				p.fieldsBuf = append(p.fieldsBuf, eventField)
 			}
 		}
