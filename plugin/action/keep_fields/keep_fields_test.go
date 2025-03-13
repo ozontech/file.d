@@ -85,28 +85,12 @@ func BenchmarkDoFlatNoFieldsSaved(b *testing.B) {
 			p.DoOld(a[i])
 		}
 	})
-	b.Run("tree_slow", func(b *testing.B) {
-		a := getEventsNoFieldsSaved(b, b.N, fields)
-		b.ResetTimer()
-
-		for i := 0; i < b.N; i++ {
-			p.DoNewWithTreeSlow(a[i])
-		}
-	})
 	b.Run("tree_fast", func(b *testing.B) {
 		a := getEventsNoFieldsSaved(b, b.N, fields)
 		b.ResetTimer()
 
 		for i := 0; i < b.N; i++ {
 			p.DoNewWithTreeFast(a[i])
-		}
-	})
-	b.Run("array_slow", func(b *testing.B) {
-		a := getEventsNoFieldsSaved(b, b.N, fields)
-		b.ResetTimer()
-
-		for i := 0; i < b.N; i++ {
-			p.DoNewWithArraySlow(a[i])
 		}
 	})
 	b.Run("array_fast", func(b *testing.B) {
@@ -138,28 +122,12 @@ func BenchmarkDoFlatHalfFieldsSaved(b *testing.B) {
 			p.DoOld(a[i])
 		}
 	})
-	b.Run("tree_slow", func(b *testing.B) {
-		a := getEventsHalfFieldsSaved(b, b.N, fields)
-		b.ResetTimer()
-
-		for i := 0; i < b.N; i++ {
-			p.DoNewWithTreeSlow(a[i])
-		}
-	})
 	b.Run("tree_fast", func(b *testing.B) {
 		a := getEventsHalfFieldsSaved(b, b.N, fields)
 		b.ResetTimer()
 
 		for i := 0; i < b.N; i++ {
 			p.DoNewWithTreeFast(a[i])
-		}
-	})
-	b.Run("array_slow", func(b *testing.B) {
-		a := getEventsHalfFieldsSaved(b, b.N, fields)
-		b.ResetTimer()
-
-		for i := 0; i < b.N; i++ {
-			p.DoNewWithArraySlow(a[i])
 		}
 	})
 	b.Run("array_fast", func(b *testing.B) {
@@ -191,28 +159,12 @@ func BenchmarkDoFlatAllFieldsSaved(b *testing.B) {
 			p.DoOld(a[i])
 		}
 	})
-	b.Run("array_slow", func(b *testing.B) {
-		a := getEventsAllFieldsSaved(b, b.N, fields)
-		b.ResetTimer()
-
-		for i := 0; i < b.N; i++ {
-			p.DoNewWithArraySlow(a[i])
-		}
-	})
 	b.Run("array_fast", func(b *testing.B) {
 		a := getEventsAllFieldsSaved(b, b.N, fields)
 		b.ResetTimer()
 
 		for i := 0; i < b.N; i++ {
 			p.DoNewWithArrayFast(a[i])
-		}
-	})
-	b.Run("tree_slow", func(b *testing.B) {
-		a := getEventsAllFieldsSaved(b, b.N, fields)
-		b.ResetTimer()
-
-		for i := 0; i < b.N; i++ {
-			p.DoNewWithTreeSlow(a[i])
 		}
 	})
 	b.Run("tree_fast", func(b *testing.B) {
