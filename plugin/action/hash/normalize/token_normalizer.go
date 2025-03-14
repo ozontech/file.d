@@ -141,7 +141,7 @@ func isWord(c byte) bool {
 var builtinTokenPatterns = []TokenPattern{
 	{
 		Placeholder: "<email>",
-		RE:          `\w[0-9a-zA-Z_\.\-]+@[0-9a-zA-Z_\-]+(\.[0-9a-zA-Z_\-]+)*`,
+		RE:          `[0-9a-zA-Z_\.\-]+@[0-9a-zA-Z_\-]+(\.[0-9a-zA-Z_\-]+)*`,
 	},
 	{
 		Placeholder: "<url>",
