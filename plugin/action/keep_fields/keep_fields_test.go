@@ -383,3 +383,45 @@ func BenchmarkDoDeepNestedAllFieldsSaved(b *testing.B) {
 		}
 	})
 }
+
+func TestParsePaths(t *testing.T) {
+	type TestCase struct {
+		rawPaths    []string
+		parsedPaths [][]string
+	}
+
+	for _, tt := range []TestCase{
+		{
+			[]string{"a", "b", "c"},
+			[][]string{{"a"}, {"b"}, {"c"}},
+		},
+		{
+			[]string{"a.b.c", "a.b", "a"},
+			[][]string{{"a"}},
+		},
+		{
+			// detect duplicates
+			[]string{"b", "b", "c", "c", "a", "c", "b"},
+			[][]string{{"b"}, {"c"}, {"a"}},
+		},
+		{
+			// first does not include second
+			[]string{"qwe", "qwe12.a.b"},
+			[][]string{{"qwe"}, {"qwe12", "a", "b"}},
+		},
+		{
+			[]string{"a.b.f1", "a.b.f2", "a.b.f3"},
+			[][]string{{"a", "b", "f1"}, {"a", "b", "f2"}, {"a", "b", "f3"}},
+		},
+		{
+			[]string{"a.b.f1", "a.b.f2", "a.b.f3", "a.b", "a.c"},
+			[][]string{{"a", "b"}, {"a", "c"}},
+		},
+		{
+			[]string{"a.b.f1", "a.b.f2", "a.b.f3", "a.b", "a.c", "a"},
+			[][]string{{"a"}},
+		},
+	} {
+		require.Equal(t, tt.parsedPaths, parsePaths(tt.rawPaths))
+	}
+}

@@ -93,32 +93,7 @@ func (p *Plugin) StartNew(config pipeline.AnyConfig, _ *pipeline.ActionPluginPar
 		logger.Panicf("config is nil for the keep fields plugin")
 	}
 
-	fields := p.config.Fields
-	sort.Slice(fields, func(i, j int) bool {
-		return len(fields[i]) < len(fields[j])
-	})
-
-	p.fieldPaths = make([][]string, 0, len(fields))
-
-	for i, f1 := range fields {
-		if f1 == "" {
-			logger.Warn("empty field found")
-			continue
-		}
-
-		ok := true
-		for _, f2 := range fields[:i] {
-			if strings.HasPrefix(f1, f2) {
-				logger.Warnf("path '%s' included in path '%s'; remove nested path", f1, f2)
-				ok = false
-				break
-			}
-		}
-
-		if ok {
-			p.fieldPaths = append(p.fieldPaths, cfg.ParseFieldSelector(f1))
-		}
-	}
+	p.fieldPaths = parsePaths(p.config.Fields)
 
 	if len(p.fieldPaths) == 0 {
 		logger.Warn("all fields will be removed")
@@ -132,6 +107,42 @@ func (p *Plugin) StartNew(config pipeline.AnyConfig, _ *pipeline.ActionPluginPar
 
 	p.arrayChecker = newArrayChecker(p.fieldPaths)
 	p.treeChecker = newPrefixTree(p.fieldPaths)
+}
+
+func parsePaths(rawPaths []string) [][]string {
+	sort.Slice(rawPaths, func(i, j int) bool {
+		return len(rawPaths[i]) < len(rawPaths[j])
+	})
+
+	result := make([][]string, 0, len(rawPaths))
+
+	for i, f1 := range rawPaths {
+		if f1 == "" {
+			logger.Warn("empty field found")
+			continue
+		}
+
+		ok := true
+		for _, f2 := range rawPaths[:i] {
+			if f1 == f2 {
+				logger.Warnf("path '%s' duplicates", f1)
+				ok = false
+				break
+			}
+
+			if strings.HasPrefix(f1, f2+".") {
+				logger.Warnf("path '%s' included in path '%s'; remove nested path", f1, f2)
+				ok = false
+				break
+			}
+		}
+
+		if ok {
+			result = append(result, cfg.ParseFieldSelector(f1))
+		}
+	}
+
+	return result
 }
 
 func (p *Plugin) DoNewWithArray(event *pipeline.Event) pipeline.ActionResult {
