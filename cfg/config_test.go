@@ -355,6 +355,26 @@ func TestParseFieldSelectorEnding(t *testing.T) {
 	assert.Equal(t, "c.", path[2], "wrong field")
 }
 
+func TestParseNestedFields(t *testing.T) {
+	type TestCase struct {
+		in  []string
+		out [][]string
+	}
+
+	for _, tt := range []TestCase{
+		{
+			in:  []string{"a.b", "a.b"},
+			out: [][]string{{"a", "b"}},
+		},
+		{
+			in:  []string{"a.b", "a.b.c", "a.d", "a"},
+			out: [][]string{{"a"}},
+		},
+	} {
+		require.Equal(t, tt.out, ParseNestedFields(tt.in))
+	}
+}
+
 func TestHierarchy(t *testing.T) {
 	s := &hierarchy{T: "10"}
 	err := Parse(s, map[string]int{})

@@ -1,9 +1,6 @@
 package remove_fields
 
 import (
-	"sort"
-	"strings"
-
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/logger"
@@ -87,39 +84,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, _ *pipeline.ActionPluginParams
 		logger.Panicf("config is nil for the remove fields plugin")
 	}
 
-	// remove nested fields selection;
-	// for example:
-	// config `fields: ["a", "a.b"]` is equal to
-	// config `fields: ["a"]`
-	// see tests: TestDuplicatingFieldSelectors, TestNestedFieldSelectors
-
-	fields := p.config.Fields
-	sort.Slice(fields, func(i, j int) bool {
-		return len(fields[i]) < len(fields[j])
-	})
-
-	p.fieldPaths = make([][]string, 0, len(fields))
-
-	for i, f1 := range fields {
-		if f1 == "" {
-			logger.Warn("empty field found")
-			continue
-		}
-
-		ok := true
-		for _, f2 := range fields[:i] {
-			if strings.HasPrefix(f1, f2) {
-				logger.Warnf("path '%s' included in path '%s'; remove nested path", f1, f2)
-				ok = false
-				break
-			}
-		}
-
-		if ok {
-			p.fieldPaths = append(p.fieldPaths, cfg.ParseFieldSelector(f1))
-		}
-	}
-
+	p.fieldPaths = cfg.ParseNestedFields(p.config.Fields)
 	if len(p.fieldPaths) == 0 {
 		logger.Warn("no fields will be removed")
 	}

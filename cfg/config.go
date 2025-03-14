@@ -7,6 +7,7 @@ import (
 	"os"
 	"reflect"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -559,6 +560,124 @@ func ParseFieldSelector(selector string) []string {
 	}
 
 	return result
+}
+
+type fieldInfo struct {
+	index    int
+	selector string
+	path     []string
+
+	empty       bool
+	ancestor    *fieldInfo
+	appearances []int
+}
+
+type pathState int
+
+const (
+	stateEmpty pathState = iota
+	stateNested
+	stateDuplicateFirstAppearance
+	stateDuplicate
+	stateUnique
+)
+
+func (i *fieldInfo) getPathState() pathState {
+	if i.empty {
+		return stateEmpty
+	}
+
+	if i.ancestor != nil {
+		return stateNested
+	}
+
+	if len(i.appearances) == 0 {
+		panic("at least one appearance exists")
+	}
+
+	if len(i.appearances) == 1 {
+		return stateUnique
+	}
+
+	if i.appearances[0] == i.index {
+		return stateDuplicateFirstAppearance
+	}
+
+	return stateDuplicate
+}
+
+func ParseNestedFields(fields []string) [][]string {
+	a := make([]*fieldInfo, len(fields))
+
+	for i, field := range fields {
+		path := ParseFieldSelector(field)
+		a[i] = &fieldInfo{
+			index:    i,
+			selector: field,
+			path:     path,
+			empty:    len(path) == 0,
+		}
+	}
+
+	// find duplicates
+	for _, x := range a {
+		for _, y := range a {
+			if slices.Equal(x.path, y.path) {
+				x.appearances = append(x.appearances, y.index)
+			}
+		}
+	}
+
+	// find nested paths
+	for _, x := range a {
+		if x.empty {
+			continue
+		}
+
+		for _, y := range a {
+			if y.empty {
+				continue
+			}
+
+			if len(y.path) < len(x.path) && slices.Equal(y.path, x.path[:len(y.path)]) {
+				x.ancestor = y
+				break
+			}
+		}
+	}
+
+	result := make([][]string, 0, len(a))
+	for _, x := range a {
+		switch x.getPathState() {
+		case stateEmpty:
+			logger.Warnf("empty path parsed; position = %d", x.index)
+		case stateNested:
+			logger.Warnf(
+				"path '%s' included in path '%s'; remove nested path",
+				x.selector, x.ancestor.selector,
+			)
+		case stateDuplicateFirstAppearance:
+			result = append(result, x.path)
+			logger.Warnf("path '%s' duplicates; appearances: %s", x.selector, joinIntArray(x.appearances))
+		case stateDuplicate:
+			break
+		case stateUnique:
+			result = append(result, x.path)
+		default:
+			panic("unknown path state")
+		}
+	}
+
+	return result
+}
+
+func joinIntArray(a []int) string {
+	result := make([]string, len(a))
+	for i, x := range a {
+		result[i] = strconv.Itoa(x)
+	}
+
+	return strings.Join(result, ", ")
 }
 
 func SetDefaultValues(data interface{}) error {
