@@ -53,6 +53,7 @@ type ActionPluginParams struct {
 	PluginDefaultParams
 	Controller ActionPluginController
 	Logger     *zap.SugaredLogger
+	Index      int
 }
 
 type OutputPluginParams struct {
