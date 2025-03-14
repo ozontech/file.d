@@ -109,6 +109,9 @@ func (p *Plugin) StartNew(config pipeline.AnyConfig, _ *pipeline.ActionPluginPar
 	p.treeChecker = newPrefixTree(p.fieldPaths)
 }
 
+// Parse paths and skip nested path to reduce paths count.
+// Func sorts paths by length iterates over shorter paths
+// and checks for current path if duplicate or some prefix found.
 func parsePaths(rawPaths []string) [][]string {
 	sort.Slice(rawPaths, func(i, j int) bool {
 		return len(rawPaths[i]) < len(rawPaths[j])
