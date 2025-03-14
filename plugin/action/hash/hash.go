@@ -2,7 +2,7 @@ package hash
 
 import (
 	"errors"
-	"strconv"
+	"fmt"
 
 	"github.com/cespare/xxhash/v2"
 	"github.com/ozontech/file.d/cfg"
@@ -331,7 +331,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 
 	// we use 1 normalizer for all processors with the
 	// same pipeline name and the action-plugin index
-	cacheKey := params.PipelineName + "_" + strconv.Itoa(params.Index)
+	cacheKey := fmt.Sprintf("%s_%d", params.PipelineName, params.Index)
 
 	for _, f := range p.config.Fields {
 		if f.Format_ != ffNormalize {
