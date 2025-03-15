@@ -71,7 +71,7 @@ func newJournalReader(config *journalReaderConfig, readerErrorsCounter prometheu
 		readerErrorsMetric: readerErrorsCounter,
 	}
 	res.args = []string{
-		"-o", "json",
+		"-o", "json", "-a",
 	}
 	if config.cursor != "" {
 		res.args = append(res.args, "-c", config.cursor)
