@@ -5,12 +5,14 @@ package file_loki
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"path"
 	"path/filepath"
 	"slices"
 	"testing"
+	"time"
 
 	"github.com/ozontech/file.d/cfg"
 	"github.com/stretchr/testify/require"
@@ -38,6 +40,7 @@ func (c *Config) Configure(t *testing.T, conf *cfg.Config, pipelineName string) 
 	input.Set("offsets_file", filepath.Join(offsetsDir, "offsets.yaml"))
 
 	output := conf.Pipelines[pipelineName].Raw.Get("output")
+	output.Set("request_timeout", "1m")
 	c.lokiAddr = output.Get("address").MustString()
 
 	labels, err := output.Get("labels").Array()
@@ -45,6 +48,21 @@ func (c *Config) Configure(t *testing.T, conf *cfg.Config, pipelineName string) 
 
 	c.label = labels[0].(map[string]interface{})["label"].(string)
 	c.samples = samples
+
+	url := fmt.Sprintf("%s%s", c.lokiAddr, "/ready")
+
+	var httpResp *http.Response
+
+	for {
+		httpResp, err = http.Get(url)
+		r.NoError(err)
+
+		if httpResp.StatusCode == http.StatusOK {
+			break
+		}
+
+		log.Println("waiting for loki to start")
+	}
 }
 
 // Send creates file and writes messages
@@ -67,6 +85,8 @@ func (c *Config) Send(t *testing.T) {
 
 // Validate waits for the message processing to complete
 func (c *Config) Validate(t *testing.T) {
+	time.Sleep(10 * time.Second)
+
 	r := require.New(t)
 
 	url := fmt.Sprintf("%s%s", c.lokiAddr, "/loki/api/v1/labels")
