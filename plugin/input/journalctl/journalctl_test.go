@@ -46,7 +46,7 @@ func TestPipeline(t *testing.T) {
 	const lines = 10
 	config := &Config{OffsetsFile: filepath.Join(t.TempDir(), "offset.yaml"), MaxLines: lines}
 	test.NewConfig(config, nil)
-	assert.Equal(t, []string{"-f", "-a"}, config.JournalArgs)
+	assert.Equal(t, []string{"-f"}, config.JournalArgs)
 
 	setInput(p, config)
 
