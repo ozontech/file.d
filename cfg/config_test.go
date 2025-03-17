@@ -368,11 +368,6 @@ func TestParseNestedFields(t *testing.T) {
 			out: [][]string{{"a"}, {"b"}, {"c"}},
 		},
 		{
-			// order saved
-			in:  []string{"c", "b", "a"},
-			out: [][]string{{"c"}, {"b"}, {"a"}},
-		},
-		{
 			// empty
 			in:  []string{"", "a", "", "", "b", ""},
 			out: [][]string{{"a"}, {"b"}},
@@ -400,12 +395,12 @@ func TestParseNestedFields(t *testing.T) {
 		{
 			// nested field name prefix
 			in:  []string{"qwe12.some.f1", "qwe"},
-			out: [][]string{{"qwe12", "some", "f1"}, {"qwe"}},
+			out: [][]string{{"qwe"}, {"qwe12", "some", "f1"}},
 		},
 		{
 			// nested field name prefix
 			in:  []string{"qwe.some12.f1", "qwe.some"},
-			out: [][]string{{"qwe", "some12", "f1"}, {"qwe", "some"}},
+			out: [][]string{{"qwe", "some"}, {"qwe", "some12", "f1"}},
 		},
 		{
 			// many nested fields

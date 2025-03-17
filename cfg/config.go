@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"regexp"
 	"slices"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -562,104 +563,50 @@ func ParseFieldSelector(selector string) []string {
 	return result
 }
 
-type fieldInfo struct {
-	index    int
-	selector string
-	path     []string
-
-	empty       bool
-	ancestor    *fieldInfo
-	appearances []int
-}
-
-type pathState int
-
-const (
-	stateEmpty pathState = iota
-	stateNested
-	stateDuplicateFirstAppearance
-	stateDuplicate
-	stateUnique
-)
-
-func (i *fieldInfo) getPathState() pathState {
-	switch {
-	case i.empty:
-		return stateEmpty
-	case i.ancestor != nil:
-		return stateNested
-	case len(i.appearances) == 0:
-		panic("at least one appearance exists")
-	case len(i.appearances) == 1:
-		return stateUnique
-	case i.appearances[0] == i.index:
-		return stateDuplicateFirstAppearance
-	default:
-		return stateDuplicate
-	}
-}
-
 func ParseNestedFields(fields []string) [][]string {
-	fieldsArr := make([]*fieldInfo, len(fields))
+	paths := make([][]string, 0, len(fields))
 
-	for i, field := range fields {
+	for _, field := range fields {
 		path := ParseFieldSelector(field)
-		fieldsArr[i] = &fieldInfo{
-			index:    i,
-			selector: field,
-			path:     path,
-			empty:    len(path) == 0,
+		if len(path) == 0 {
+			logger.Warn("empty field found")
+			continue
 		}
+
+		paths = append(paths, path)
 	}
 
-	for _, first := range fieldsArr {
-		for _, second := range fieldsArr {
-			if slices.Equal(first.path, second.path) {
-				first.appearances = append(first.appearances, second.index)
-			}
+	sort.Slice(paths, func(i, j int) bool {
+		return len(paths[i]) < len(paths[j])
+	})
 
-			if second.empty || first.ancestor != nil {
-				continue
-			}
+	result := make([][]string, 0, len(paths))
 
-			if len(second.path) < len(first.path) && slices.Equal(second.path, first.path[:len(second.path)]) {
-				first.ancestor = second
+	for i, longPath := range paths {
+		longSelector := strings.Join(longPath, ".")
+
+		ok := true
+		for _, shortPath := range paths[:i] {
+			shortSelector := strings.Join(shortPath, ".")
+
+			if slices.Equal(shortPath, longPath[:len(shortPath)]) {
+				if len(shortPath) == len(longPath) {
+					logger.Warnf("path '%s' duplicates", longSelector)
+				} else {
+					logger.Warnf("path '%s' included in path '%s'; remove nested path", longSelector, shortSelector)
+				}
+
+				ok = false
+				break
 			}
 		}
-	}
 
-	result := make([][]string, 0, len(fieldsArr))
-	for _, field := range fieldsArr {
-		switch field.getPathState() {
-		case stateEmpty:
-			logger.Warnf("empty path parsed; position = %d", field.index)
-		case stateNested:
-			logger.Warnf(
-				"path '%s' included in path '%s'; remove nested path",
-				field.selector, field.ancestor.selector,
-			)
-		case stateDuplicateFirstAppearance:
-			result = append(result, field.path)
-			logger.Warnf("path '%s' duplicates; appearances: %s", field.selector, joinIntArray(field.appearances))
-		case stateDuplicate:
-			break
-		case stateUnique:
-			result = append(result, field.path)
-		default:
-			panic("unknown path state")
+		if ok {
+			result = append(result, longPath)
 		}
 	}
 
 	return result
-}
-
-func joinIntArray(a []int) string {
-	result := make([]string, len(a))
-	for i, x := range a {
-		result[i] = strconv.Itoa(x)
-	}
-
-	return strings.Join(result, ", ")
 }
 
 func SetDefaultValues(data interface{}) error {
