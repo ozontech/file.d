@@ -384,44 +384,71 @@ func BenchmarkDoDeepNestedAllFieldsSaved(b *testing.B) {
 	})
 }
 
-func TestParsePaths(t *testing.T) {
+func TestParseNestedFields(t *testing.T) {
 	type TestCase struct {
-		rawPaths    []string
-		parsedPaths [][]string
+		in  []string
+		out [][]string
 	}
 
 	for _, tt := range []TestCase{
 		{
-			[]string{"a", "b", "c"},
-			[][]string{{"a"}, {"b"}, {"c"}},
+			// simple
+			in:  []string{"a", "b", "c"},
+			out: [][]string{{"a"}, {"b"}, {"c"}},
 		},
 		{
-			[]string{"a.b.c", "a.b", "a"},
-			[][]string{{"a"}},
+			// empty
+			in:  []string{"", "a", "", "", "b", ""},
+			out: [][]string{{"a"}, {"b"}},
 		},
 		{
-			// detect duplicates
-			[]string{"b", "b", "c", "c", "a", "c", "b"},
-			[][]string{{"b"}, {"c"}, {"a"}},
+			// simple duplicates
+			in:  []string{"a", "b", "b", "a", "c", "a", "c", "b"},
+			out: [][]string{{"a"}, {"b"}, {"c"}},
 		},
 		{
-			// first does not include second
-			[]string{"qwe", "qwe12.a.b"},
-			[][]string{{"qwe"}, {"qwe12", "a", "b"}},
+			// nested duplicates
+			in:  []string{"a.b", "some.qwe", "some.qwe", "a.b"},
+			out: [][]string{{"a", "b"}, {"some", "qwe"}},
 		},
 		{
-			[]string{"a.b.f1", "a.b.f2", "a.b.f3"},
-			[][]string{{"a", "b", "f1"}, {"a", "b", "f2"}, {"a", "b", "f3"}},
+			// nested duplicates and nested field
+			in:  []string{"a.b.c", "a.b", "a.b"},
+			out: [][]string{{"a", "b"}},
 		},
 		{
-			[]string{"a.b.f1", "a.b.f2", "a.b.f3", "a.b", "a.c"},
-			[][]string{{"a", "b"}, {"a", "c"}},
+			// field name prefix
+			in:  []string{"prefix", "prefix_some"},
+			out: [][]string{{"prefix"}, {"prefix_some"}},
 		},
 		{
-			[]string{"a.b.f1", "a.b.f2", "a.b.f3", "a.b", "a.c", "a"},
-			[][]string{{"a"}},
+			// nested field name prefix
+			in:  []string{"qwe12.some.f1", "qwe"},
+			out: [][]string{{"qwe"}, {"qwe12", "some", "f1"}},
+		},
+		{
+			// nested field name prefix
+			in:  []string{"qwe.some12.f1", "qwe.some"},
+			out: [][]string{{"qwe", "some"}, {"qwe", "some12", "f1"}},
+		},
+		{
+			// many nested fields
+			in:  []string{"a.b", "a.b.c", "a.d", "a"},
+			out: [][]string{{"a"}},
+		},
+		{
+			in:  []string{"a.b.f1", "a.b.f2"},
+			out: [][]string{{"a", "b", "f1"}, {"a", "b", "f2"}},
+		},
+		{
+			in:  []string{"a.b.f1", "a.b.f2", "a.b", "a.c"},
+			out: [][]string{{"a", "b"}, {"a", "c"}},
+		},
+		{
+			in:  []string{"a.b.f1", "a.b.f2", "a.b", "a.c", "a"},
+			out: [][]string{{"a"}},
 		},
 	} {
-		require.Equal(t, tt.parsedPaths, parsePaths(tt.rawPaths))
+		require.Equal(t, tt.out, parseNestedFields(tt.in))
 	}
 }
