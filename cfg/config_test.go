@@ -407,6 +407,18 @@ func TestParseNestedFields(t *testing.T) {
 			in:  []string{"a.b", "a.b.c", "a.d", "a"},
 			out: [][]string{{"a"}},
 		},
+		{
+			in:  []string{"a.b.f1", "a.b.f2"},
+			out: [][]string{{"a", "b", "f1"}, {"a", "b", "f2"}},
+		},
+		{
+			in:  []string{"a.b.f1", "a.b.f2", "a.b", "a.c"},
+			out: [][]string{{"a", "b"}, {"a", "c"}},
+		},
+		{
+			in:  []string{"a.b.f1", "a.b.f2", "a.b", "a.c", "a"},
+			out: [][]string{{"a"}},
+		},
 	} {
 		require.Equal(t, tt.out, ParseNestedFields(tt.in))
 	}
