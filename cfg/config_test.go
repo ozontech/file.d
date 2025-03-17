@@ -363,10 +363,52 @@ func TestParseNestedFields(t *testing.T) {
 
 	for _, tt := range []TestCase{
 		{
-			in:  []string{"a.b", "a.b"},
+			// simple
+			in:  []string{"a", "b", "c"},
+			out: [][]string{{"a"}, {"b"}, {"c"}},
+		},
+		{
+			// order saved
+			in:  []string{"c", "b", "a"},
+			out: [][]string{{"c"}, {"b"}, {"a"}},
+		},
+		{
+			// empty
+			in:  []string{"", "a", "", "", "b", ""},
+			out: [][]string{{"a"}, {"b"}},
+		},
+		{
+			// simple duplicates
+			in:  []string{"a", "b", "b", "a", "c", "a", "c", "b"},
+			out: [][]string{{"a"}, {"b"}, {"c"}},
+		},
+		{
+			// nested duplicates
+			in:  []string{"a.b", "some.qwe", "some.qwe", "a.b"},
+			out: [][]string{{"a", "b"}, {"some", "qwe"}},
+		},
+		{
+			// nested duplicates and nested field
+			in:  []string{"a.b.c", "a.b", "a.b"},
 			out: [][]string{{"a", "b"}},
 		},
 		{
+			// field name prefix
+			in:  []string{"prefix", "prefix_some"},
+			out: [][]string{{"prefix"}, {"prefix_some"}},
+		},
+		{
+			// nested field name prefix
+			in:  []string{"qwe12.some.f1", "qwe"},
+			out: [][]string{{"qwe12", "some", "f1"}, {"qwe"}},
+		},
+		{
+			// nested field name prefix
+			in:  []string{"qwe.some12.f1", "qwe.some"},
+			out: [][]string{{"qwe", "some12", "f1"}, {"qwe", "some"}},
+		},
+		{
+			// many nested fields
 			in:  []string{"a.b", "a.b.c", "a.d", "a"},
 			out: [][]string{{"a"}},
 		},

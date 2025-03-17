@@ -630,10 +630,6 @@ func ParseNestedFields(fields []string) [][]string {
 
 	// find nested paths
 	for _, x := range a {
-		if x.empty {
-			continue
-		}
-
 		for _, y := range a {
 			if y.empty {
 				continue
