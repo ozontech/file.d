@@ -93,7 +93,7 @@ func (p *Plugin) StartNew(config pipeline.AnyConfig, _ *pipeline.ActionPluginPar
 		logger.Panicf("config is nil for the keep fields plugin")
 	}
 
-	p.fieldPaths = parsePaths(p.config.Fields)
+	p.fieldPaths = parseNestedFields(p.config.Fields)
 
 	if len(p.fieldPaths) == 0 {
 		logger.Warn("all fields will be removed")
@@ -109,10 +109,8 @@ func (p *Plugin) StartNew(config pipeline.AnyConfig, _ *pipeline.ActionPluginPar
 	p.treeChecker = newPrefixTree(p.fieldPaths)
 }
 
-// Parse paths and skip nested path to reduce paths count.
-// Func sorts paths by length iterates over shorter paths
-// and checks for current path if duplicate or some prefix found.
-func parsePaths(rawPaths []string) [][]string {
+// TODO: replace with cfg.ParseNestedFields
+func parseNestedFields(rawPaths []string) [][]string {
 	sort.Slice(rawPaths, func(i, j int) bool {
 		return len(rawPaths[i]) < len(rawPaths[j])
 	})
