@@ -583,35 +583,28 @@ const (
 )
 
 func (i *fieldInfo) getPathState() pathState {
-	if i.empty {
+	switch {
+	case i.empty:
 		return stateEmpty
-	}
-
-	if i.ancestor != nil {
+	case i.ancestor != nil:
 		return stateNested
-	}
-
-	if len(i.appearances) == 0 {
+	case len(i.appearances) == 0:
 		panic("at least one appearance exists")
-	}
-
-	if len(i.appearances) == 1 {
+	case len(i.appearances) == 1:
 		return stateUnique
-	}
-
-	if i.appearances[0] == i.index {
+	case i.appearances[0] == i.index:
 		return stateDuplicateFirstAppearance
+	default:
+		return stateDuplicate
 	}
-
-	return stateDuplicate
 }
 
 func ParseNestedFields(fields []string) [][]string {
-	a := make([]*fieldInfo, len(fields))
+	fieldsArr := make([]*fieldInfo, len(fields))
 
 	for i, field := range fields {
 		path := ParseFieldSelector(field)
-		a[i] = &fieldInfo{
+		fieldsArr[i] = &fieldInfo{
 			index:    i,
 			selector: field,
 			path:     path,
@@ -619,46 +612,39 @@ func ParseNestedFields(fields []string) [][]string {
 		}
 	}
 
-	// find duplicates
-	for _, x := range a {
-		for _, y := range a {
-			if slices.Equal(x.path, y.path) {
-				x.appearances = append(x.appearances, y.index)
+	for _, first := range fieldsArr {
+		for _, second := range fieldsArr {
+			if slices.Equal(first.path, second.path) {
+				first.appearances = append(first.appearances, second.index)
 			}
-		}
-	}
 
-	// find nested paths
-	for _, x := range a {
-		for _, y := range a {
-			if y.empty {
+			if second.empty || first.ancestor != nil {
 				continue
 			}
 
-			if len(y.path) < len(x.path) && slices.Equal(y.path, x.path[:len(y.path)]) {
-				x.ancestor = y
-				break
+			if len(second.path) < len(first.path) && slices.Equal(second.path, first.path[:len(second.path)]) {
+				first.ancestor = second
 			}
 		}
 	}
 
-	result := make([][]string, 0, len(a))
-	for _, x := range a {
-		switch x.getPathState() {
+	result := make([][]string, 0, len(fieldsArr))
+	for _, field := range fieldsArr {
+		switch field.getPathState() {
 		case stateEmpty:
-			logger.Warnf("empty path parsed; position = %d", x.index)
+			logger.Warnf("empty path parsed; position = %d", field.index)
 		case stateNested:
 			logger.Warnf(
 				"path '%s' included in path '%s'; remove nested path",
-				x.selector, x.ancestor.selector,
+				field.selector, field.ancestor.selector,
 			)
 		case stateDuplicateFirstAppearance:
-			result = append(result, x.path)
-			logger.Warnf("path '%s' duplicates; appearances: %s", x.selector, joinIntArray(x.appearances))
+			result = append(result, field.path)
+			logger.Warnf("path '%s' duplicates; appearances: %s", field.selector, joinIntArray(field.appearances))
 		case stateDuplicate:
 			break
 		case stateUnique:
-			result = append(result, x.path)
+			result = append(result, field.path)
 		default:
 			panic("unknown path state")
 		}
