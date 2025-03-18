@@ -75,7 +75,7 @@ func (p *Plugin) traverseFieldsTree(fpNode *fieldPathNode, eventNode *insaneJSON
 	return shouldPreserveNode
 }
 
-func (p *Plugin) DoNewWithTraverseTree(event *pipeline.Event) pipeline.ActionResult {
+func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	if len(p.parsedFieldsRoot.children) == 0 || !event.Root.IsObject() {
 		return pipeline.ActionPass
 	}
