@@ -1,7 +1,6 @@
 package keep_fields
 
 import (
-	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/pipeline"
 	insaneJSON "github.com/ozontech/insane-json"
 )
@@ -20,16 +19,13 @@ func newFieldPathNode(name string) *fieldPathNode {
 
 func (p *Plugin) StartTraverseTree() {
 	p.parsedFieldsRoot = newFieldPathNode("") // root node
+
 	fieldMaxDepth := 0
-	// parsedFields := make([][]string, len(p.config.Fields))
-	for _, f := range p.config.Fields {
-		parsedF := cfg.ParseFieldSelector(f)
-		// parsedFields = append(parsedFields, parsedF)
-		if len(parsedF) > fieldMaxDepth {
-			fieldMaxDepth = len(parsedF)
-		}
+	for _, fieldPath := range p.fieldPaths {
+		fieldMaxDepth = max(fieldMaxDepth, len(fieldPath))
+
 		curNode := p.parsedFieldsRoot
-		for _, field := range parsedF {
+		for _, field := range fieldPath {
 			nextNode, ok := curNode.children[field]
 			if !ok {
 				nextNode = newFieldPathNode(field)
