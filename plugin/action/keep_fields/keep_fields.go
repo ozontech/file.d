@@ -27,6 +27,9 @@ type Plugin struct {
 
 	arrayChecker *arrayChecker
 	treeChecker  *treeChecker
+
+	parsedFieldsRoot *fieldPathNode
+	fieldsDepthSlice [][]string
 }
 
 // ! config-params
@@ -107,6 +110,8 @@ func (p *Plugin) StartNew(config pipeline.AnyConfig, _ *pipeline.ActionPluginPar
 
 	p.arrayChecker = newArrayChecker(p.fieldPaths)
 	p.treeChecker = newPrefixTree(p.fieldPaths)
+
+	p.StartTraverseTree()
 }
 
 // TODO: replace with cfg.ParseNestedFields
@@ -231,7 +236,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 }
 
 func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
-	res := p.DoNewWithArray(event)
+	res := p.DoNewWithTraverseTree(event)
 	return res
 }
 
