@@ -72,6 +72,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, _ *pipeline.ActionPluginParams
 				nextNode = newFieldPathNode(field)
 				curNode.children[field] = nextNode
 			}
+
 			curNode = nextNode
 		}
 	}
@@ -90,6 +91,7 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	fpNode := p.parsedFieldsRoot
 	eventNode := event.Root.Node
 	depth := 0
+
 	// check root nodes first
 	for _, node := range eventNode.AsFields() {
 		eventField := node.AsString()
@@ -98,11 +100,13 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 			if len(childNode.children) == 0 {
 				continue
 			}
+
 			// check nested fields, if exists, keep node
 			if exists := p.traverseFieldsTree(childNode, eventNode.Dig(eventField), depth+1); exists {
 				continue
 			}
 		}
+
 		// nodes to remove
 		p.fieldsDepthSlice[depth] = append(p.fieldsDepthSlice[depth], eventField)
 	}
