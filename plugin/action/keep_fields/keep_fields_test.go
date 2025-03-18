@@ -1,12 +1,12 @@
 package keep_fields
 
 import (
-	"runtime/debug"
 	"sync"
 	"testing"
 
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/test"
+	insaneJSON "github.com/ozontech/insane-json"
 	"github.com/stretchr/testify/require"
 )
 
@@ -66,141 +66,6 @@ func TestKeepNestedFields(t *testing.T) {
 	require.Equal(t, `{"f":"k"}`, outEvents[2], "wrong event")
 }
 
-// NOTE: run it with flags: -benchtime 10ms -count 5
-func BenchmarkDoFlatNoFieldsSaved(b *testing.B) {
-	fields := getFlatConfig()
-	config := &Config{Fields: fields}
-
-	p := &Plugin{}
-
-	p.Start(config, nil)
-
-	debug.SetGCPercent(-1)
-
-	b.Run("old", func(b *testing.B) {
-		a := getEventsNoFieldsSaved(b, b.N, fields)
-		b.ResetTimer()
-
-		for i := 0; i < b.N; i++ {
-			p.DoOld(a[i])
-		}
-	})
-	b.Run("tree", func(b *testing.B) {
-		a := getEventsNoFieldsSaved(b, b.N, fields)
-		b.ResetTimer()
-
-		for i := 0; i < b.N; i++ {
-			p.DoNewWithTree(a[i])
-		}
-	})
-	b.Run("array", func(b *testing.B) {
-		a := getEventsNoFieldsSaved(b, b.N, fields)
-		b.ResetTimer()
-
-		for i := 0; i < b.N; i++ {
-			p.DoNewWithArray(a[i])
-		}
-	})
-	b.Run("fast-tree", func(b *testing.B) {
-		a := getEventsNoFieldsSaved(b, b.N, fields)
-		b.ResetTimer()
-
-		for i := 0; i < b.N; i++ {
-			p.DoNewWithTraverseTree(a[i])
-		}
-	})
-}
-
-// NOTE: run it with flags: -benchtime 10ms -count 5
-func BenchmarkDoFlatHalfFieldsSaved(b *testing.B) {
-	fields := getFlatConfig()
-	config := &Config{Fields: fields}
-
-	p := &Plugin{}
-
-	p.Start(config, nil)
-
-	debug.SetGCPercent(-1)
-
-	b.Run("old", func(b *testing.B) {
-		a := getEventsHalfFieldsSaved(b, b.N, fields)
-		b.ResetTimer()
-
-		for i := 0; i < b.N; i++ {
-			p.DoOld(a[i])
-		}
-	})
-	b.Run("tree", func(b *testing.B) {
-		a := getEventsHalfFieldsSaved(b, b.N, fields)
-		b.ResetTimer()
-
-		for i := 0; i < b.N; i++ {
-			p.DoNewWithTree(a[i])
-		}
-	})
-	b.Run("array", func(b *testing.B) {
-		a := getEventsHalfFieldsSaved(b, b.N, fields)
-		b.ResetTimer()
-
-		for i := 0; i < b.N; i++ {
-			p.DoNewWithArray(a[i])
-		}
-	})
-	b.Run("fast-tree", func(b *testing.B) {
-		a := getEventsHalfFieldsSaved(b, b.N, fields)
-		b.ResetTimer()
-
-		for i := 0; i < b.N; i++ {
-			p.DoNewWithTraverseTree(a[i])
-		}
-	})
-}
-
-// NOTE: run it with flags: -benchtime 10ms -count 5
-func BenchmarkDoFlatAllFieldsSaved(b *testing.B) {
-	fields := getFlatConfig()
-	config := &Config{Fields: fields}
-
-	p := &Plugin{}
-
-	p.Start(config, nil)
-
-	debug.SetGCPercent(-1)
-
-	b.Run("old", func(b *testing.B) {
-		a := getEventsAllFieldsSaved(b, b.N, fields)
-		b.ResetTimer()
-
-		for i := 0; i < b.N; i++ {
-			p.DoOld(a[i])
-		}
-	})
-	b.Run("tree", func(b *testing.B) {
-		a := getEventsAllFieldsSaved(b, b.N, fields)
-		b.ResetTimer()
-
-		for i := 0; i < b.N; i++ {
-			p.DoNewWithTree(a[i])
-		}
-	})
-	b.Run("array", func(b *testing.B) {
-		a := getEventsAllFieldsSaved(b, b.N, fields)
-		b.ResetTimer()
-
-		for i := 0; i < b.N; i++ {
-			p.DoNewWithArray(a[i])
-		}
-	})
-	b.Run("fast-tree", func(b *testing.B) {
-		a := getEventsAllFieldsSaved(b, b.N, fields)
-		b.ResetTimer()
-
-		for i := 0; i < b.N; i++ {
-			p.DoNewWithTraverseTree(a[i])
-		}
-	})
-}
-
 const dataNested = `
 {
 	"level11": "qwerty",
@@ -216,80 +81,7 @@ const dataNested = `
 }
 `
 
-// NOTE: run it with flags: -benchtime 10ms -count 5
-func BenchmarkDoNestedNoFieldsSaved(b *testing.B) {
-	fields := []string{
-		// not found
-		"some.qwe.aaa",
-		"some.qwe.bbb",
-		"some.qwe.ccc",
-		"qwe",
-
-		// almost found
-		"level11.empty",
-		"level12.empty",
-		"level13.empty",
-		"level14.empty",
-		"qwe31.k1.empty",
-		"qwe31.k2.empty",
-		"qwe31.k3.k1.empty",
-		"qwe31.k3.k2.empty",
-		"qwe31.k3.k3.empty",
-
-		// not found
-		"field1",
-		"field2",
-		"field3",
-		"abcd.aaa",
-		"abcd.bbb",
-		"abcd.ccc",
-
-		// almost found
-		"some12.k1.empty",
-		"some12.k2.empty",
-		"some12.k3.empty",
-		"some12.k4",
-		"some14.k1.empty",
-		"some14.k2.empty",
-		"some14.k3.empty",
-		"some14.k4",
-	}
-	config := &Config{Fields: fields}
-
-	p := &Plugin{}
-
-	p.Start(config, nil)
-
-	debug.SetGCPercent(-1)
-
-	b.Run("tree", func(b *testing.B) {
-		a := getEventsBySrc(b, dataNested, b.N)
-		b.ResetTimer()
-
-		for i := 0; i < b.N; i++ {
-			p.DoNewWithTree(a[i])
-		}
-	})
-	b.Run("array", func(b *testing.B) {
-		a := getEventsBySrc(b, dataNested, b.N)
-		b.ResetTimer()
-
-		for i := 0; i < b.N; i++ {
-			p.DoNewWithArray(a[i])
-		}
-	})
-	b.Run("fast-tree", func(b *testing.B) {
-		a := getEventsBySrc(b, dataNested, b.N)
-		b.ResetTimer()
-
-		for i := 0; i < b.N; i++ {
-			p.DoNewWithTraverseTree(a[i])
-		}
-	})
-}
-
-// NOTE: run it with flags: -benchtime 10ms -count 5
-func BenchmarkDoNestedAllFieldsSaved(b *testing.B) {
+func TestKeepNestedFieldsAllSaved(t *testing.T) {
 	fields := []string{
 		// found
 		"level11",
@@ -330,106 +122,119 @@ func BenchmarkDoNestedAllFieldsSaved(b *testing.B) {
 		"qwe32.k2",
 		"qwe32.k3",
 	}
-	config := &Config{Fields: fields}
+	config := test.NewConfig(&Config{Fields: fields}, nil)
+	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, config, pipeline.MatchModeAnd, nil, false))
 
-	p := &Plugin{}
-
-	p.Start(config, nil)
-
-	debug.SetGCPercent(-1)
-
-	b.Run("tree", func(b *testing.B) {
-		a := getEventsBySrc(b, dataNested, b.N)
-		b.ResetTimer()
-
-		for i := 0; i < b.N; i++ {
-			p.DoNewWithTree(a[i])
-		}
-	})
-	b.Run("array", func(b *testing.B) {
-		a := getEventsBySrc(b, dataNested, b.N)
-		b.ResetTimer()
-
-		for i := 0; i < b.N; i++ {
-			p.DoNewWithArray(a[i])
-		}
-	})
-	b.Run("fast-tree", func(b *testing.B) {
-		a := getEventsBySrc(b, dataNested, b.N)
-		b.ResetTimer()
-
-		for i := 0; i < b.N; i++ {
-			p.DoNewWithTraverseTree(a[i])
-		}
-	})
-}
-
-const dataDeepNested = `
-{"aaaaaaaa":
-{"bbbbbbbb":
-{"cccccccc":
-{"dddddddd":
-{"eeeeeeee":
-{"ffffffff":
-{"gggggggg":
-{"hhhhhhhh":
-{
-	"f1":2,
-	"f2":2,
-	"f3":2,
-	"f4":2,
-	"f5":2,
-	"f6":2,
-	"f7":2,
-	"f8":2
-}
-}}}}}}}}
-`
-
-// NOTE: run it with flags: -benchtime 10ms -count 5
-func BenchmarkDoDeepNestedAllFieldsSaved(b *testing.B) {
-	fields := []string{
-		"aaaaaaaa.bbbbbbbb.cccccccc.dddddddd.eeeeeeee.ffffffff.gggggggg.hhhhhhhh.f1",
-		"aaaaaaaa.bbbbbbbb.cccccccc.dddddddd.eeeeeeee.ffffffff.gggggggg.hhhhhhhh.f2",
-		"aaaaaaaa.bbbbbbbb.cccccccc.dddddddd.eeeeeeee.ffffffff.gggggggg.hhhhhhhh.f3",
-		"aaaaaaaa.bbbbbbbb.cccccccc.dddddddd.eeeeeeee.ffffffff.gggggggg.hhhhhhhh.f4",
-		"aaaaaaaa.bbbbbbbb.cccccccc.dddddddd.eeeeeeee.ffffffff.gggggggg.hhhhhhhh.f5",
-		"aaaaaaaa.bbbbbbbb.cccccccc.dddddddd.eeeeeeee.ffffffff.gggggggg.hhhhhhhh.f6",
-		"aaaaaaaa.bbbbbbbb.cccccccc.dddddddd.eeeeeeee.ffffffff.gggggggg.hhhhhhhh.f7",
-		"aaaaaaaa.bbbbbbbb.cccccccc.dddddddd.eeeeeeee.ffffffff.gggggggg.hhhhhhhh.f8",
+	testData := []struct {
+		in  string
+		out string
+	}{
+		{
+			dataNested,
+			dataNested,
+		},
 	}
-	config := &Config{Fields: fields}
 
-	p := &Plugin{}
+	wg := &sync.WaitGroup{}
+	wg.Add(len(testData))
 
-	p.Start(config, nil)
-
-	debug.SetGCPercent(-1)
-
-	b.Run("tree", func(b *testing.B) {
-		a := getEventsBySrc(b, dataDeepNested, b.N)
-		b.ResetTimer()
-
-		for i := 0; i < b.N; i++ {
-			p.DoNewWithTree(a[i])
-		}
+	outEvents := make([]string, 0, len(testData))
+	output.SetOutFn(func(e *pipeline.Event) {
+		outEvents = append(outEvents, e.Root.EncodeToString())
+		wg.Done()
 	})
-	b.Run("array", func(b *testing.B) {
-		a := getEventsBySrc(b, dataDeepNested, b.N)
-		b.ResetTimer()
 
-		for i := 0; i < b.N; i++ {
-			p.DoNewWithArray(a[i])
-		}
-	})
-	b.Run("array", func(b *testing.B) {
-		a := getEventsBySrc(b, dataDeepNested, b.N)
-		b.ResetTimer()
+	for _, data := range testData {
+		input.In(0, "test.log", test.NewOffset(0),
+			[]byte(data.in),
+		)
+	}
 
-		for i := 0; i < b.N; i++ {
-			p.DoNewWithTraverseTree(a[i])
-		}
+	wg.Wait()
+	p.Stop()
+
+	require.Equal(t, len(testData), len(outEvents), "wrong out events count")
+	for i, data := range testData {
+		root, _ := insaneJSON.DecodeBytes([]byte(data.out))
+		want := root.EncodeToString()
+		require.Equal(t, want, outEvents[i], "wrong event")
+	}
+}
+
+func TestKeepNestedFieldsNoSaved(t *testing.T) {
+	fields := []string{
+		// not found
+		"some.qwe.aaa",
+		"some.qwe.bbb",
+		"some.qwe.ccc",
+		"qwe",
+
+		// almost found
+		"level11.empty",
+		"level12.empty",
+		"level13.empty",
+		"level14.empty",
+		"qwe31.k1.empty",
+		"qwe31.k2.empty",
+		"qwe31.k3.k1.empty",
+		"qwe31.k3.k2.empty",
+		"qwe31.k3.k3.empty",
+
+		// not found
+		"field1",
+		"field2",
+		"field3",
+		"abcd.aaa",
+		"abcd.bbb",
+		"abcd.ccc",
+
+		// almost found
+		"some12.k1.empty",
+		"some12.k2.empty",
+		"some12.k3.empty",
+		"some12.k4",
+		"some14.k1.empty",
+		"some14.k2.empty",
+		"some14.k3.empty",
+		"some14.k4",
+	}
+	config := test.NewConfig(&Config{Fields: fields}, nil)
+	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, config, pipeline.MatchModeAnd, nil, false))
+
+	testData := []struct {
+		in  string
+		out string
+	}{
+		{
+			dataNested,
+			"{}",
+		},
+	}
+
+	wg := &sync.WaitGroup{}
+	wg.Add(len(testData))
+
+	outEvents := make([]string, 0, len(testData))
+	output.SetOutFn(func(e *pipeline.Event) {
+		outEvents = append(outEvents, e.Root.EncodeToString())
+		wg.Done()
 	})
+
+	for _, data := range testData {
+		input.In(0, "test.log", test.NewOffset(0),
+			[]byte(data.in),
+		)
+	}
+
+	wg.Wait()
+	p.Stop()
+
+	require.Equal(t, len(testData), len(outEvents), "wrong out events count")
+	for i, data := range testData {
+		root, _ := insaneJSON.DecodeBytes([]byte(data.out))
+		want := root.EncodeToString()
+		require.Equal(t, want, outEvents[i], "wrong event")
+	}
 }
 
 func TestParseNestedFields(t *testing.T) {
