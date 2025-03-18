@@ -101,6 +101,14 @@ func BenchmarkDoFlatNoFieldsSaved(b *testing.B) {
 			p.DoNewWithArray(a[i])
 		}
 	})
+	b.Run("fast-tree", func(b *testing.B) {
+		a := getEventsNoFieldsSaved(b, b.N, fields)
+		b.ResetTimer()
+
+		for i := 0; i < b.N; i++ {
+			p.DoNewWithTraverseTree(a[i])
+		}
+	})
 }
 
 // NOTE: run it with flags: -benchtime 10ms -count 5
@@ -138,6 +146,14 @@ func BenchmarkDoFlatHalfFieldsSaved(b *testing.B) {
 			p.DoNewWithArray(a[i])
 		}
 	})
+	b.Run("fast-tree", func(b *testing.B) {
+		a := getEventsHalfFieldsSaved(b, b.N, fields)
+		b.ResetTimer()
+
+		for i := 0; i < b.N; i++ {
+			p.DoNewWithTraverseTree(a[i])
+		}
+	})
 }
 
 // NOTE: run it with flags: -benchtime 10ms -count 5
@@ -173,6 +189,14 @@ func BenchmarkDoFlatAllFieldsSaved(b *testing.B) {
 
 		for i := 0; i < b.N; i++ {
 			p.DoNewWithArray(a[i])
+		}
+	})
+	b.Run("fast-tree", func(b *testing.B) {
+		a := getEventsAllFieldsSaved(b, b.N, fields)
+		b.ResetTimer()
+
+		for i := 0; i < b.N; i++ {
+			p.DoNewWithTraverseTree(a[i])
 		}
 	})
 }
@@ -254,6 +278,14 @@ func BenchmarkDoNestedNoFieldsSaved(b *testing.B) {
 			p.DoNewWithArray(a[i])
 		}
 	})
+	b.Run("fast-tree", func(b *testing.B) {
+		a := getEventsBySrc(b, dataNested, b.N)
+		b.ResetTimer()
+
+		for i := 0; i < b.N; i++ {
+			p.DoNewWithTraverseTree(a[i])
+		}
+	})
 }
 
 // NOTE: run it with flags: -benchtime 10ms -count 5
@@ -322,6 +354,14 @@ func BenchmarkDoNestedAllFieldsSaved(b *testing.B) {
 			p.DoNewWithArray(a[i])
 		}
 	})
+	b.Run("fast-tree", func(b *testing.B) {
+		a := getEventsBySrc(b, dataNested, b.N)
+		b.ResetTimer()
+
+		for i := 0; i < b.N; i++ {
+			p.DoNewWithTraverseTree(a[i])
+		}
+	})
 }
 
 const dataDeepNested = `
@@ -380,6 +420,14 @@ func BenchmarkDoDeepNestedAllFieldsSaved(b *testing.B) {
 
 		for i := 0; i < b.N; i++ {
 			p.DoNewWithArray(a[i])
+		}
+	})
+	b.Run("array", func(b *testing.B) {
+		a := getEventsBySrc(b, dataDeepNested, b.N)
+		b.ResetTimer()
+
+		for i := 0; i < b.N; i++ {
+			p.DoNewWithTraverseTree(a[i])
 		}
 	})
 }
