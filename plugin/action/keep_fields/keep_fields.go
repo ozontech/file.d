@@ -168,10 +168,6 @@ func newFieldPathNode(name string) *fieldPathNode {
 	}
 }
 
-func (p *Plugin) StartTraverseTree() {
-
-}
-
 func (p *Plugin) traverseFieldsTree(fpNode *fieldPathNode, eventNode *insaneJSON.Node, depth int) bool {
 	// no child nodes in input path, found target node
 	if len(fpNode.children) == 0 {
