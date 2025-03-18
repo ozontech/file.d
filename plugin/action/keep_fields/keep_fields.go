@@ -59,7 +59,27 @@ func (p *Plugin) Start(config pipeline.AnyConfig, _ *pipeline.ActionPluginParams
 		logger.Warn("all fields will be removed")
 	}
 
-	p.StartTraverseTree()
+	p.parsedFieldsRoot = newFieldPathNode("") // root node
+
+	fieldMaxDepth := 0
+	for _, fieldPath := range p.fieldPaths {
+		fieldMaxDepth = max(fieldMaxDepth, len(fieldPath))
+
+		curNode := p.parsedFieldsRoot
+		for _, field := range fieldPath {
+			nextNode, ok := curNode.children[field]
+			if !ok {
+				nextNode = newFieldPathNode(field)
+				curNode.children[field] = nextNode
+			}
+			curNode = nextNode
+		}
+	}
+
+	p.fieldsDepthSlice = make([][]string, fieldMaxDepth)
+	for i := 0; i < fieldMaxDepth; i++ {
+		p.fieldsDepthSlice[i] = make([]string, 0, 100)
+	}
 }
 
 func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
@@ -149,27 +169,7 @@ func newFieldPathNode(name string) *fieldPathNode {
 }
 
 func (p *Plugin) StartTraverseTree() {
-	p.parsedFieldsRoot = newFieldPathNode("") // root node
 
-	fieldMaxDepth := 0
-	for _, fieldPath := range p.fieldPaths {
-		fieldMaxDepth = max(fieldMaxDepth, len(fieldPath))
-
-		curNode := p.parsedFieldsRoot
-		for _, field := range fieldPath {
-			nextNode, ok := curNode.children[field]
-			if !ok {
-				nextNode = newFieldPathNode(field)
-				curNode.children[field] = nextNode
-			}
-			curNode = nextNode
-		}
-	}
-
-	p.fieldsDepthSlice = make([][]string, fieldMaxDepth)
-	for i := 0; i < fieldMaxDepth; i++ {
-		p.fieldsDepthSlice[i] = make([]string, 0, 100)
-	}
 }
 
 func (p *Plugin) traverseFieldsTree(fpNode *fieldPathNode, eventNode *insaneJSON.Node, depth int) bool {
