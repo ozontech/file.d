@@ -61,7 +61,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, _ *pipeline.ActionPluginParams
 
 	p.parsedFieldsRoot = newFieldPathNode("") // root node
 
-	fieldMaxDepth := 0
+	fieldMaxDepth := 1
 	for _, fieldPath := range p.fieldPaths {
 		fieldMaxDepth = max(fieldMaxDepth, len(fieldPath))
 
