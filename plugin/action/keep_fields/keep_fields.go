@@ -77,6 +77,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, _ *pipeline.ActionPluginParams
 		}
 	}
 
+	// buffer to store fields to delete
 	p.fieldsDepthSlice = make([][]string, fieldMaxDepth)
 	for i := 0; i < fieldMaxDepth; i++ {
 		p.fieldsDepthSlice[i] = make([]string, 0, 100)
@@ -84,7 +85,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, _ *pipeline.ActionPluginParams
 }
 
 func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
-	if len(p.parsedFieldsRoot.children) == 0 || !event.Root.IsObject() {
+	if !event.Root.IsObject() {
 		return pipeline.ActionPass
 	}
 
