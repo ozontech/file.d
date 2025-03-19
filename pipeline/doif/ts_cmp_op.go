@@ -147,7 +147,7 @@ func (n *tsCmpOpNode) Check(eventRoot *insaneJSON.Root) bool {
 		return false
 	}
 
-	timeVal, err := time.Parse(n.format, node.AsString())
+	timeVal, err := xtime.ParseTime(n.format, node.AsString())
 	if err != nil {
 		return false
 	}
