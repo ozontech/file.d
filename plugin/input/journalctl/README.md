@@ -12,7 +12,7 @@ The filename to store offsets of processed messages.
 
 <br>
 
-**`journal_args`** *`[]string`* *`default=-f -a`* 
+**`journal_args`** *`[]string`* *`default=-f`* 
 
 Additional args for `journalctl`.
 Plugin forces "-o json" and "-c *cursor*" or "-n all", otherwise

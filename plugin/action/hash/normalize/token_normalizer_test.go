@@ -5,10 +5,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func TestTokenNormalizer(t *testing.T) {
+func TestTokenNormalizerBuiltin(t *testing.T) {
 	tests := []struct {
 		name string
 
@@ -184,15 +185,113 @@ func TestTokenNormalizer(t *testing.T) {
 		},
 	}
 
-	n := NewTokenNormalizer()
+	n, err := NewTokenNormalizer(TokenNormalizerParams{WithBuiltinPatterns: true})
+	require.NoError(t, err)
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			out := make([]byte, 0)
+
+			for _, i := range tt.inputs {
+				out = n.Normalize(out, []byte(i))
+				assert.Equal(t, tt.want, string(out), "wrong out with input=%q", i)
+			}
+		})
+	}
+}
+
+func TestTokenNormalizerCustom(t *testing.T) {
+	tests := []struct {
+		name string
+
+		params TokenNormalizerParams
+
+		inputs  []string
+		want    string
+		wantErr bool
+	}{
+		{
+			name: "only_custom",
+			params: TokenNormalizerParams{
+				WithBuiltinPatterns: false,
+				Patterns: []TokenPattern{
+					{
+						Placeholder: "<quoted_str>",
+						RE:          `"[^"]*"`,
+					},
+					{
+						Placeholder: "<date>",
+						RE:          `\d\d.\d\d.\d\d\d\d`,
+					},
+				},
+			},
+			inputs: []string{
+				`some "asldfqb21(!@_$(#@-=12))d" and 10.11.2002 here`,
+				`some "10.11.2002" and 10.11.2002 here`,
+			},
+			want: "some <quoted_str> and <date> here",
+		},
+		{
+			name: "custom_with_builtin",
+			params: TokenNormalizerParams{
+				WithBuiltinPatterns: true,
+				Patterns: []TokenPattern{
+					{
+						Placeholder: "<quoted_str>",
+						RE:          `"[^"]*"`,
+						Priority:    patternPriorityFirst,
+					},
+					{
+						Placeholder: "<nginx_datetime>",
+						RE:          `\d\d\d\d/\d\d/\d\d\ \d\d:\d\d:\d\d`,
+						Priority:    patternPriorityLast,
+					},
+				},
+			},
+			inputs: []string{
+				`2006/01/02 15:04:05 error occurred, client: 10.125.172.251, upstream: "http://10.117.246.15:84/download", host: "mpm-youtube-downloader-38.name.com:84"`,
+			},
+			want: "<nginx_datetime> error occurred, client: <ip>, upstream: <quoted_str>, host: <quoted_str>",
+		},
+		{
+			name: "empty_patterns",
+			params: TokenNormalizerParams{
+				WithBuiltinPatterns: false,
+			},
+			wantErr: true,
+		},
+		{
+			name: "bad_patterns",
+			params: TokenNormalizerParams{
+				WithBuiltinPatterns: false,
+				Patterns: []TokenPattern{
+					{
+						Placeholder: "test",
+						RE:          "[asd",
+					},
+				},
+			},
+			wantErr: true,
+		},
+	}
+
 	out := make([]byte, 0)
 
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
+			n, err := NewTokenNormalizer(tt.params)
+			require.Equal(t, tt.wantErr, err != nil || n == nil)
+			if tt.wantErr {
+				return
+			}
+
 			for _, i := range tt.inputs {
 				out = n.Normalize(out, []byte(i))
-				require.Equal(t, []byte(tt.want), out, "wrong out with input=%q", i)
+				assert.Equal(t, tt.want, string(out), "wrong out with input=%q", i)
 			}
 		})
 	}
@@ -234,7 +333,7 @@ var benchCases = []struct {
 }
 
 func BenchmarkTokenNormalizer(b *testing.B) {
-	n := NewTokenNormalizer()
+	n, _ := NewTokenNormalizer(TokenNormalizerParams{WithBuiltinPatterns: true})
 	out := make([]byte, 0)
 	for _, benchCase := range benchCases {
 		name := fmt.Sprintf("input_len_%d", len(benchCase.input))
