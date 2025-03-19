@@ -73,7 +73,7 @@ func TestSocketTCP(t *testing.T) {
 
 	doTest(t, &Config{
 		Network: networkTcp,
-		Address: ":101",
+		Address: ":5001",
 	})
 }
 
@@ -82,7 +82,7 @@ func TestSocketUDP(t *testing.T) {
 
 	doTest(t, &Config{
 		Network: networkUdp,
-		Address: ":102",
+		Address: ":5002",
 	})
 }
 
