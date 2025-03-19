@@ -426,7 +426,7 @@ func (p *Plugin) isAllowed(event *pipeline.Event) bool {
 
 	if len(p.config.TimeField_) != 0 {
 		tsValue := event.Root.Dig(p.config.TimeField_...).AsString()
-		t, err := pipeline.ParseTime(p.format, tsValue)
+		t, err := xtime.ParseTime(p.format, tsValue)
 		if err != nil || t.IsZero() {
 			p.logger.Warnf("can't parse field %q using format %s: %s", p.config.TimeField, p.config.TimeFieldFormat, tsValue)
 			ts = time.Now()

@@ -396,7 +396,7 @@ func (p *Plugin) makeTimestampField(root *insaneJSON.Root, timestampField string
 			ts /= 1000
 		}
 	} else if node.IsString() {
-		t, err := pipeline.ParseTime(timestampFieldFormat, node.AsString())
+		t, err := xtime.ParseTime(timestampFieldFormat, node.AsString())
 		if err == nil {
 			ts = float64(t.UnixNano()) / float64(time.Second)
 		}

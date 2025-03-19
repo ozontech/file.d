@@ -86,7 +86,7 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	if isValidType {
 		date := dateNode.AsString()
 		for _, format := range p.config.SourceFormats_ {
-			t, err := pipeline.ParseTime(format, date)
+			t, err := xtime.ParseTime(format, date)
 			if err == nil {
 				switch p.config.TargetFormat_ {
 				case xtime.UnixTime:
