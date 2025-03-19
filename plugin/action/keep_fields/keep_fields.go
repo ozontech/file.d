@@ -101,10 +101,6 @@ func (p *Plugin) doNew(event *pipeline.Event, alg int) {
 		insaneJSON.Release(event.Root)
 		event.Root = tmp
 	}
-
-	for _, n := range p.nodesBuf {
-		pipeline.CreateNestedField(event.Root, n.path).MutateToNode(n.node)
-	}
 }
 
 func (p *Plugin) doOld(event *pipeline.Event) {
