@@ -357,70 +357,81 @@ func TestParseFieldSelectorEnding(t *testing.T) {
 
 func TestParseNestedFields(t *testing.T) {
 	type TestCase struct {
-		in  []string
-		out [][]string
+		fields []string
+		paths  [][]string
+		errMsg string
 	}
 
 	for _, tt := range []TestCase{
 		{
 			// simple
-			in:  []string{"a", "b", "c"},
-			out: [][]string{{"a"}, {"b"}, {"c"}},
+			fields: []string{"a", "b", "c"},
+			paths:  [][]string{{"a"}, {"b"}, {"c"}},
 		},
 		{
-			// empty
-			in:  []string{"", "a", "", "", "b", ""},
-			out: [][]string{{"a"}, {"b"}},
+			fields: []string{},
+			errMsg: "empty fields list",
+		},
+		{
+			fields: []string{"a", "b", ""},
+			errMsg: "empty path parsed",
 		},
 		{
 			// simple duplicates
-			in:  []string{"a", "b", "b", "a", "c", "a", "c", "b"},
-			out: [][]string{{"a"}, {"b"}, {"c"}},
+			fields: []string{"a", "b", "b", "a", "c", "a", "c", "b"},
+			paths:  [][]string{{"a"}, {"b"}, {"c"}},
 		},
 		{
 			// nested duplicates
-			in:  []string{"a.b", "some.qwe", "some.qwe", "a.b"},
-			out: [][]string{{"a", "b"}, {"some", "qwe"}},
+			fields: []string{"a.b", "some.qwe", "some.qwe", "a.b"},
+			paths:  [][]string{{"a", "b"}, {"some", "qwe"}},
 		},
 		{
 			// nested duplicates and nested field
-			in:  []string{"a.b.c", "a.b", "a.b"},
-			out: [][]string{{"a", "b"}},
+			fields: []string{"a.b.c", "a.b", "a.b"},
+			paths:  [][]string{{"a", "b"}},
 		},
 		{
 			// field name prefix
-			in:  []string{"prefix", "prefix_some"},
-			out: [][]string{{"prefix"}, {"prefix_some"}},
+			fields: []string{"prefix", "prefix_some"},
+			paths:  [][]string{{"prefix"}, {"prefix_some"}},
 		},
 		{
 			// nested field name prefix
-			in:  []string{"qwe12.some.f1", "qwe"},
-			out: [][]string{{"qwe"}, {"qwe12", "some", "f1"}},
+			fields: []string{"qwe12.some.f1", "qwe"},
+			paths:  [][]string{{"qwe"}, {"qwe12", "some", "f1"}},
 		},
 		{
 			// nested field name prefix
-			in:  []string{"qwe.some12.f1", "qwe.some"},
-			out: [][]string{{"qwe", "some"}, {"qwe", "some12", "f1"}},
+			fields: []string{"qwe.some12.f1", "qwe.some"},
+			paths:  [][]string{{"qwe", "some"}, {"qwe", "some12", "f1"}},
 		},
 		{
 			// many nested fields
-			in:  []string{"a.b", "a.b.c", "a.d", "a"},
-			out: [][]string{{"a"}},
+			fields: []string{"a.b", "a.b.c", "a.d", "a"},
+			paths:  [][]string{{"a"}},
 		},
 		{
-			in:  []string{"a.b.f1", "a.b.f2"},
-			out: [][]string{{"a", "b", "f1"}, {"a", "b", "f2"}},
+			fields: []string{"a.b.f1", "a.b.f2"},
+			paths:  [][]string{{"a", "b", "f1"}, {"a", "b", "f2"}},
 		},
 		{
-			in:  []string{"a.b.f1", "a.b.f2", "a.b", "a.c"},
-			out: [][]string{{"a", "b"}, {"a", "c"}},
+			fields: []string{"a.b.f1", "a.b.f2", "a.b", "a.c"},
+			paths:  [][]string{{"a", "b"}, {"a", "c"}},
 		},
 		{
-			in:  []string{"a.b.f1", "a.b.f2", "a.b", "a.c", "a"},
-			out: [][]string{{"a"}},
+			fields: []string{"a.b.f1", "a.b.f2", "a.b", "a.c", "a"},
+			paths:  [][]string{{"a"}},
 		},
 	} {
-		require.Equal(t, tt.out, ParseNestedFields(tt.in))
+		paths, err := ParseNestedFields(tt.fields)
+		if tt.errMsg != "" {
+			require.Error(t, err)
+			require.Equal(t, tt.errMsg, err.Error())
+		} else {
+			require.NoError(t, err)
+			require.Equal(t, tt.paths, paths)
+		}
 	}
 }
 

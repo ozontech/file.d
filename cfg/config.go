@@ -3,6 +3,7 @@ package cfg
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"reflect"
@@ -563,14 +564,17 @@ func ParseFieldSelector(selector string) []string {
 	return result
 }
 
-func ParseNestedFields(fields []string) [][]string {
+func ParseNestedFields(fields []string) ([][]string, error) {
+	if len(fields) == 0 {
+		return nil, errors.New("empty fields list")
+	}
+
 	paths := make([][]string, 0, len(fields))
 
 	for _, field := range fields {
 		path := ParseFieldSelector(field)
 		if len(path) == 0 {
-			logger.Warn("empty field found")
-			continue
+			return nil, errors.New("empty path parsed")
 		}
 
 		paths = append(paths, path)
@@ -606,7 +610,7 @@ func ParseNestedFields(fields []string) [][]string {
 		}
 	}
 
-	return result
+	return result, nil
 }
 
 func SetDefaultValues(data interface{}) error {
