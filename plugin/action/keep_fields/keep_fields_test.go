@@ -66,6 +66,29 @@ func TestKeepNestedFields(t *testing.T) {
 	require.Equal(t, `{"f":"k"}`, outEvents[2], "wrong event")
 }
 
+func TestThatFails(t *testing.T) {
+	config := test.NewConfig(&Config{Fields: []string{"a.b", "a.c", "a"}}, nil)
+	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, config, pipeline.MatchModeAnd, nil, false))
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
+
+	outEvents := make([]string, 0, 1)
+	output.SetOutFn(func(e *pipeline.Event) {
+		outEvents = append(outEvents, e.Root.EncodeToString())
+		wg.Done()
+	})
+
+	input.In(0, "test.log", test.NewOffset(0),
+		[]byte(`{"a":{"d":123}}`),
+	)
+
+	wg.Wait()
+	p.Stop()
+
+	require.Equal(t, 1, len(outEvents), "wrong out events count")
+	require.Equal(t, `{"a":{"d":123}}`, outEvents[0], "wrong event")
+}
+
 const dataNested = `
 {
 	"level11": "qwerty",
