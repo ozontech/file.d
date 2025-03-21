@@ -1,9 +1,6 @@
 package keep_fields
 
 import (
-	"sort"
-	"strings"
-
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/logger"
@@ -53,7 +50,11 @@ func (p *Plugin) Start(config pipeline.AnyConfig, _ *pipeline.ActionPluginParams
 		logger.Panicf("config is nil for the keep fields plugin")
 	}
 
-	p.fieldPaths = parseNestedFields(p.config.Fields)
+	var err error
+	p.fieldPaths, err = cfg.ParseNestedFields(p.config.Fields)
+	if err != nil {
+		logger.Fatalf("can't parse nested fields: %s", err.Error())
+	}
 
 	if len(p.fieldPaths) == 0 {
 		logger.Warn("all fields will be removed")
@@ -122,43 +123,6 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	}
 
 	return pipeline.ActionPass
-}
-
-// TODO: replace with cfg.ParseNestedFields
-func parseNestedFields(rawPaths []string) [][]string {
-	sort.Slice(rawPaths, func(i, j int) bool {
-		return len(rawPaths[i]) < len(rawPaths[j])
-	})
-
-	result := make([][]string, 0, len(rawPaths))
-
-	for i, f1 := range rawPaths {
-		if f1 == "" {
-			logger.Warn("empty field found")
-			continue
-		}
-
-		ok := true
-		for _, f2 := range rawPaths[:i] {
-			if f1 == f2 {
-				logger.Warnf("path '%s' duplicates", f1)
-				ok = false
-				break
-			}
-
-			if strings.HasPrefix(f1, f2+".") {
-				logger.Warnf("path '%s' included in path '%s'; remove nested path", f1, f2)
-				ok = false
-				break
-			}
-		}
-
-		if ok {
-			result = append(result, cfg.ParseFieldSelector(f1))
-		}
-	}
-
-	return result
 }
 
 type fieldPathNode struct {
