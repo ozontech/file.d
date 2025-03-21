@@ -50,16 +50,10 @@ func (p *Plugin) Start(config pipeline.AnyConfig, _ *pipeline.ActionPluginParams
 		logger.Panicf("config is nil for the keep fields plugin")
 	}
 
-	/*
-		var err error
-		p.fieldPaths, err = cfg.ParseNestedFields(p.config.Fields)
-		if err != nil {
-			logger.Fatalf("can't parse nested fields: %s", err.Error())
-		}
-	*/
-
-	for _, selector := range p.config.Fields {
-		p.fieldPaths = append(p.fieldPaths, cfg.ParseFieldSelector(selector))
+	var err error
+	p.fieldPaths, err = cfg.ParseNestedFields(p.config.Fields)
+	if err != nil {
+		logger.Fatalf("can't parse nested fields: %s", err.Error())
 	}
 
 	p.parsedFieldsRoot = newFieldPathNode("") // root node
