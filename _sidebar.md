@@ -20,6 +20,7 @@
     - [journalctl](plugin/input/journalctl/README.md)
     - [k8s](plugin/input/k8s/README.md)
     - [kafka](plugin/input/kafka/README.md)
+    - [socket](plugin/input/socket/README.md)
 
   - Action
     - [add_file_name](plugin/action/add_file_name/README.md)

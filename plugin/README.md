@@ -155,6 +155,10 @@ pipelines:
 ```
 
 [More details...](plugin/input/kafka/README.md)
+## socket
+It reads events from socket network.
+
+[More details...](plugin/input/socket/README.md)
 
 # Actions
 ## add_file_name
