@@ -1,16 +1,15 @@
 package loki
 
 import (
+	"encoding/base64"
 	"fmt"
-	"net/http"
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func TestPluginLabels(t *testing.T) {
+func TestPluginParseLabels(t *testing.T) {
 	type testCase struct {
 		name        string
 		expectedLen int
@@ -66,17 +65,16 @@ func TestPluginLabels(t *testing.T) {
 				},
 			}
 
-			resultLabelsMap := pl.labels()
+			resultLabelsMap := pl.parseLabels()
 			require.Len(t, resultLabelsMap, tt.expectedLen)
 		})
 	}
 }
 
-func TestPlugSetAuthHeaders(t *testing.T) {
+func TestPluginGetAuthHeaders(t *testing.T) {
 	type testCase struct {
-		name         string
-		tenantID     string
-		expectTenant bool
+		name     string
+		strategy AuthStrategy
 
 		username    string
 		password    string
@@ -88,24 +86,16 @@ func TestPlugSetAuthHeaders(t *testing.T) {
 
 	tests := []testCase{
 		{
-			name:         "only tenant",
-			tenantID:     "tenant",
-			expectTenant: true,
+			name:        "only basic",
+			username:    "username",
+			password:    "password",
+			strategy:    StrategyBasic,
+			expectBasic: true,
 		},
 		{
-			name:         "only tenant",
-			tenantID:     "tenant",
-			expectTenant: true,
-			username:     "username",
-			password:     "tenant",
-			expectBasic:  true,
-		},
-		{
-			name:         "bearer token",
-			tenantID:     "tenant",
-			expectTenant: true,
-			expectBasic:  false,
+			name:         "bearer only",
 			bearer:       "token",
+			strategy:     StrategyBearer,
 			expectBearer: true,
 		},
 	}
@@ -114,26 +104,68 @@ func TestPlugSetAuthHeaders(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			pl := &Plugin{
 				config: &Config{
-					TenantID:     tt.tenantID,
-					AuthUsername: tt.username,
-					AuthPassword: tt.password,
-					BearerToken:  tt.bearer,
+					Auth: AuthConfig{
+						Strategy_:   tt.strategy,
+						Username:    tt.username,
+						Password:    tt.password,
+						BearerToken: tt.bearer,
+					},
 				},
 			}
 
-			req, err := http.NewRequest(http.MethodPost, "url", http.NoBody)
-			assert.NoError(t, err)
+			header := pl.getAuthHeader()
+			if tt.expectBasic {
+				credentials := []byte(pl.config.Auth.Username + ":" + pl.config.Auth.Password)
+				require.Equal(t, fmt.Sprintf("Basic %s", base64.StdEncoding.EncodeToString(credentials)), header)
+			}
 
-			pl.setAuthenticationHeaders(req)
+			if tt.expectBearer {
+				require.Equal(t, fmt.Sprintf("Bearer %s", pl.config.Auth.BearerToken), header)
+			}
+		})
+	}
+}
+
+func TestPluginGetCustomHeaders(t *testing.T) {
+	type testCase struct {
+		name         string
+		strategy     AuthStrategy
+		tenantID     string
+		expectTenant bool
+	}
+
+	tests := []testCase{
+		{
+			name:         "only tenant",
+			tenantID:     "tenant",
+			strategy:     StrategyTenant,
+			expectTenant: true,
+		},
+		{
+			name:     "without headers",
+			tenantID: "tenant",
+			strategy: StrategyDisabled,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pl := &Plugin{
+				config: &Config{
+					Auth: AuthConfig{
+						Strategy_: tt.strategy,
+						TenantID:  tt.tenantID,
+					},
+				},
+			}
+
+			headers := pl.getCustomHeaders()
 
 			if tt.expectTenant {
-				require.Equal(t, pl.config.TenantID, req.Header.Get("X-Scope-OrgID"))
-			}
-			if tt.expectBasic {
-				require.Equal(t, fmt.Sprintf("Basic %s:%s", pl.config.AuthUsername, pl.config.AuthPassword), req.Header.Get("Authorization"))
-			}
-			if tt.expectBearer {
-				require.Equal(t, fmt.Sprintf("Bearer %s", pl.config.BearerToken), req.Header.Get("Authorization"))
+				require.Len(t, headers, 1)
+				require.Equal(t, tt.tenantID, headers["X-Scope-OrgID"])
+			} else {
+				require.Len(t, headers, 0)
 			}
 		})
 	}

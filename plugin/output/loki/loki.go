@@ -1,13 +1,12 @@
 package loki
 
 import (
-	"bytes"
 	"context"
 	"crypto/tls"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"strconv"
 	"time"
@@ -16,6 +15,7 @@ import (
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/xhttp"
 
 	insaneJSON "github.com/ozontech/insane-json"
 	"github.com/prometheus/client_golang/prometheus"
@@ -61,7 +61,7 @@ type Config struct {
 	// > Example labels
 	// >
 	// > label=value
-	Labels []Label `json:"labels"`
+	Labels []Label `json:"labels" slice:"true"` // *
 
 	// > @3@4@5@6
 	// >
@@ -70,7 +70,7 @@ type Config struct {
 	// > Example
 	// >
 	// > message
-	MessageField string `json:"message_field" required:"true"`
+	MessageField string `json:"message_field" required:"true"` // *
 
 	// > @3@4@5@6
 	// >
@@ -79,48 +79,15 @@ type Config struct {
 	// > Example
 	// >
 	// > timestamp
-	TimestampField string `json:"timestamp_field" required:"true"`
+	TimestampField string `json:"timestamp_field" required:"true"` // *
 
 	// > @3@4@5@6
 	// >
-	// > Authorization enabled, if true set auth method like tenant, basic auth or bearer
-	AuthEnabled bool `json:"auth_enabled" default:"false"` // *
-
-	// > @3@4@5@6
-	// >
-	// > Authorization enabled, if set true set TenantID
-	// >
-	// > Example
-	// >
-	// > example-org
-	TenantID string `json:"tenant_id"` // *
-
-	// > @3@4@5@6
-	// >
-	// > Authorization enabled, if auth username set provide auth password
-	// >
-	// > Example
-	// >
-	// > username
-	AuthUsername string `json:"username"` // *
-
-	// > @3@4@5@6
-	// >
-	// > Authorization enabled, provide basic auth password if basic auth username is provided
-	// >
-	// > Example
-	// >
-	// > password
-	AuthPassword string `json:"password"` // *
-
-	// > @3@4@5@6
-	// >
-	// > Authorization enabled, provide bearer token if you have Bearer authorization
-	// >
-	// > Example
-	// >
-	// > token
-	BearerToken string `json:"bearer_token"` // *
+	// > Auth config.
+	// > Disabled by default.
+	// > See AuthConfig for details.
+	// > You can use 'warn' log level for logging authorizations.
+	Auth AuthConfig `json:"auth" child:"true"` // *
 
 	// > @3@4@5@6
 	// >
@@ -137,6 +104,24 @@ type Config struct {
 	// > Client timeout when sends requests to Loki HTTP API.
 	RequestTimeout  cfg.Duration `json:"request_timeout" default:"1s" parse:"duration"` // *
 	RequestTimeout_ time.Duration
+
+	// > @3@4@5@6
+	// >
+	// > It defines how much time to wait for the connection.
+	ConnectionTimeout  cfg.Duration `json:"connection_timeout" default:"5s" parse:"duration"` // *
+	ConnectionTimeout_ time.Duration
+
+	// > @3@4@5@6
+	// >
+	// > Keep-alive config.
+	// >
+	// > `KeepAliveConfig` params:
+	// > * `max_idle_conn_duration` - idle keep-alive connections are closed after this duration.
+	// > By default idle connections are closed after `10s`.
+	// > * `max_conn_duration` - keep-alive connections are closed after this duration.
+	// > If set to `0` - connection duration is unlimited.
+	// > By default connection duration is `5m`.
+	KeepAlive KeepAliveConfig `json:"keep_alive" child:"true"` // *
 
 	// > @3@4@5@6
 	// >
@@ -188,17 +173,70 @@ type Config struct {
 	RetentionExponentMultiplier int `json:"retention_exponentially_multiplier" default:"2"` // *
 }
 
+type AuthStrategy byte
+
+const (
+	StrategyDisabled AuthStrategy = iota
+	StrategyTenant
+	StrategyBasic
+	StrategyBearer
+)
+
+// ! config-params
+// ^ config-params
+type AuthConfig struct {
+	// > @3@4@5@6
+	// >
+	// > AuthStrategy.Strategy describes strategy to use.
+	Strategy  string `json:"strategy" default:"disabled" options:"disabled|tenant|basic|bearer"` // *
+	Strategy_ AuthStrategy
+
+	// > @3@4@5@6
+	// >
+	// > TenantID for Tenant Authentication.
+	TenantID string `json:"tenant_id"` // *
+
+	// > @3@4@5@6
+	// >
+	// > Username for HTTP Basic Authentication.
+	Username string `json:"username"` // *
+
+	// > @3@4@5@6
+	// >
+	// > Password for HTTP Basic Authentication.
+	Password string `json:"password"` // *
+
+	// > @3@4@5@6
+	// >
+	// > Token for HTTP Bearer Authentication.
+	BearerToken string // *
+}
+
+type KeepAliveConfig struct {
+	// Idle keep-alive connections are closed after this duration.
+	MaxIdleConnDuration  cfg.Duration `json:"max_idle_conn_duration" parse:"duration" default:"10s"`
+	MaxIdleConnDuration_ time.Duration
+
+	// Keep-alive connections are closed after this duration.
+	MaxConnDuration  cfg.Duration `json:"max_conn_duration" parse:"duration" default:"5m"`
+	MaxConnDuration_ time.Duration
+}
+
 type Plugin struct {
 	controller   pipeline.OutputPluginController
-	logger       *zap.SugaredLogger
+	logger       *zap.Logger
 	config       *Config
 	avgEventSize int
 
 	httpClient *http.Client
+	client     *xhttp.Client
 	batcher    *pipeline.RetriableBatcher
 
 	// plugin metrics
-	sendErrorMetric prometheus.Counter
+	sendErrorMetric *prometheus.CounterVec
+
+	labels            map[string]string
+	nameByBearerToken map[string]string
 }
 
 func init() {
@@ -215,9 +253,13 @@ func Factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginParams) {
 	p.controller = params.Controller
 	p.config = config.(*Config)
-	p.logger = params.Logger
+	p.logger = params.Logger.Desugar()
 	p.avgEventSize = params.PipelineSettings.AvgEventSize
 	p.registerMetrics(params.MetricCtl)
+
+	p.labels = p.parseLabels()
+
+	p.prepareClient()
 
 	batcherOpts := &pipeline.BatcherOptions{
 		PipelineName:   params.PipelineName,
@@ -244,7 +286,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 			level = zapcore.ErrorLevel
 		}
 
-		p.logger.Desugar().Log(level, "can't send data to loki", zap.Error(err),
+		p.logger.Log(level, "can't send data to loki", zap.Error(err),
 			zap.Int("retries", p.config.Retry))
 	}
 
@@ -284,7 +326,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 
 	root := insaneJSON.Spawn()
 	if err := root.DecodeString(`{"data":[]}`); err != nil {
-		p.logger.Errorf("failed to decode json: %v", err)
+		p.logger.Error("failed to decode json", zap.Error(err))
 		return err
 	}
 
@@ -303,15 +345,15 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 
 	code, err := p.send(context.Background(), data.outBuf)
 	if err != nil {
-		p.sendErrorMetric.Inc()
-		p.logger.Errorf("can't send data to Loki address=%s: %v", p.config.Address, err.Error())
+		p.sendErrorMetric.WithLabelValues(strconv.Itoa(code)).Inc()
+		p.logger.Error("can't send data to Loki", zap.String("address", p.config.Address), zap.Error(err))
 
 		// skip retries for bad request or time format errors
 		if code == http.StatusBadRequest || errors.Is(err, errUnixNanoFormat) {
 			return nil
 		}
 	} else {
-		p.logger.Debugf("successfully sent: %s", outBuf)
+		p.logger.Debug("successfully sent", zap.String("data", string(outBuf)))
 	}
 
 	return err
@@ -329,7 +371,7 @@ type request struct {
 func (p *Plugin) send(ctx context.Context, data []byte) (int, error) {
 	root := insaneJSON.Spawn()
 	if err := root.DecodeBytes(data); err != nil {
-		p.logger.Errorf("failed to decode json: %v", err)
+		p.logger.Error("failed to decode json", zap.Error(err))
 		return 0, err
 	}
 
@@ -361,7 +403,7 @@ func (p *Plugin) send(ctx context.Context, data []byte) (int, error) {
 	output := request{
 		Streams: []stream{
 			{
-				StreamLabels: p.labels(),
+				StreamLabels: p.labels,
 				Values:       values,
 			},
 		},
@@ -372,45 +414,24 @@ func (p *Plugin) send(ctx context.Context, data []byte) (int, error) {
 		return 0, err
 	}
 
-	p.logger.Info("sent", string(data))
+	p.logger.Debug("sent", zap.String("data", string(data)))
 
-	r := bytes.NewReader(data)
-
-	url := fmt.Sprintf("%s/loki/api/v1/push", p.config.Address)
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, r)
-	if err != nil {
-		return 0, fmt.Errorf("can't create request: %w", err)
+	statusCode, err := p.client.DoTimeout(
+		http.MethodPost,
+		"application/json",
+		data,
+		p.config.ConnectionTimeout_,
+		p.reportESErrors,
+	)
+	if statusCode != http.StatusNoContent {
+		return statusCode, fmt.Errorf("bad response: code=%d, err=%v", statusCode, err)
 	}
 
-	req.Header.Set("Content-Type", "application/json")
-
-	if p.config.AuthEnabled {
-		p.setAuthenticationHeaders(req)
-	}
-
-	resp, err := p.httpClient.Do(req)
-	if err != nil {
-		return 0, fmt.Errorf("can't send request: %w", err)
-	}
-	defer func(Body io.ReadCloser) {
-		_ = Body.Close()
-	}(resp.Body)
-
-	b, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return resp.StatusCode, fmt.Errorf("can't read response: %w", err)
-	}
-
-	if resp.StatusCode != http.StatusNoContent {
-		return resp.StatusCode, fmt.Errorf("bad response: code=%s, body=%s", resp.Status, b)
-	}
-
-	return resp.StatusCode, nil
+	return statusCode, nil
 }
 
 func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
-	p.sendErrorMetric = ctl.RegisterCounter("output_loki_send_error", "Total Loki send errors")
+	p.sendErrorMetric = ctl.RegisterCounterVec("output_loki_send_error", "Total Loki send errors", "status_code")
 }
 
 func (p *Plugin) newClient(timeout time.Duration) *http.Client {
@@ -430,21 +451,36 @@ func (p *Plugin) newClient(timeout time.Duration) *http.Client {
 	return client
 }
 
-func (p *Plugin) setAuthenticationHeaders(req *http.Request) {
-	if p.config.TenantID != "" {
-		req.Header.Set("X-Scope-OrgID", p.config.TenantID)
+func (p *Plugin) prepareClient() {
+	config := &xhttp.ClientConfig{
+		Endpoints:         []string{"/loki/api/v1/push"},
+		ConnectionTimeout: p.config.ConnectionTimeout_ * 2,
+		AuthHeader:        p.getAuthHeader(),
+		CustomHeaders:     p.getCustomHeaders(),
+		KeepAlive: &xhttp.ClientKeepAliveConfig{
+			MaxConnDuration:     p.config.KeepAlive.MaxConnDuration_,
+			MaxIdleConnDuration: p.config.KeepAlive.MaxIdleConnDuration_,
+		},
 	}
 
-	if p.config.AuthUsername != "" {
-		req.Header.Set("Authorization", fmt.Sprintf("Basic %s:%s", p.config.AuthUsername, p.config.AuthPassword))
-	}
-
-	if p.config.BearerToken != "" {
-		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", p.config.BearerToken))
+	var err error
+	p.client, err = xhttp.NewClient(config)
+	if err != nil {
+		p.logger.Fatal("can't create http client", zap.Error(err))
 	}
 }
 
-func (p *Plugin) labels() map[string]string {
+func (p *Plugin) getCustomHeaders() map[string]string {
+	headers := make(map[string]string)
+
+	if p.config.Auth.Strategy_ == StrategyTenant {
+		headers["X-Scope-OrgID"] = p.config.Auth.TenantID
+	}
+
+	return headers
+}
+
+func (p *Plugin) parseLabels() map[string]string {
 	labels := make(map[string]string, len(p.config.Labels))
 
 	for _, v := range p.config.Labels {
@@ -466,4 +502,68 @@ func (p *Plugin) isUnixNanoFormat(ts string) bool {
 	maxTime := time.Now()
 
 	return t.After(minTime) && t.Before(maxTime)
+}
+
+func (p *Plugin) getAuthHeader() string {
+	if p.config.Auth.Strategy_ == StrategyBasic {
+		credentials := []byte(p.config.Auth.Username + ":" + p.config.Auth.Password)
+		return fmt.Sprintf("Basic %s", base64.StdEncoding.EncodeToString(credentials))
+
+	}
+
+	if p.config.Auth.Strategy_ == StrategyBearer {
+		return fmt.Sprintf("Bearer %s", p.config.Auth.BearerToken)
+	}
+
+	return ""
+}
+
+func (p *Plugin) reportESErrors(data []byte) error {
+	root, err := insaneJSON.DecodeBytes(data)
+	defer insaneJSON.Release(root)
+	if err != nil {
+		return fmt.Errorf("can't decode response: %w", err)
+	}
+
+	if !root.Dig("errors").AsBool() {
+		return nil
+	}
+
+	items := root.Dig("items").AsArray()
+	if len(items) == 0 {
+		p.logger.Error("unknown elasticsearch error, 'items' field in the response is empty",
+			zap.String("response", root.EncodeToString()),
+		)
+		return nil
+	}
+
+	indexingErrors := 0
+	for _, node := range items {
+		indexNode := node.Dig("index")
+		if indexNode == nil {
+			p.logger.Error("unknown elasticsearch response, 'index' field in the response is empty",
+				zap.String("response", node.EncodeToString()),
+			)
+			continue
+		}
+
+		if errNode := indexNode.Dig("error"); errNode != nil {
+			indexingErrors++
+			p.logger.Error("elasticsearch indexing error",
+				zap.String("response", errNode.EncodeToString()))
+			continue
+		}
+
+		if statusCode := indexNode.Dig("status"); statusCode.AsInt() < http.StatusBadRequest {
+			continue
+		}
+
+		p.logger.Error("unknown elasticsearch error", zap.String("response", node.EncodeToString()))
+	}
+
+	if indexingErrors != 0 {
+	}
+
+	p.logger.Error("some events from batch aren't written, check previous logs for more information")
+	return nil
 }

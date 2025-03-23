@@ -5,7 +5,6 @@ package file_loki
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"path"
@@ -61,7 +60,8 @@ func (c *Config) Configure(t *testing.T, conf *cfg.Config, pipelineName string) 
 			break
 		}
 
-		log.Println("waiting for loki to start")
+		t.Log("waiting for loki to start")
+		time.Sleep(3 * time.Second)
 	}
 }
 
@@ -76,9 +76,7 @@ func (c *Config) Send(t *testing.T) {
 	for i := range c.samples {
 		sampleRaw, err := json.Marshal(&c.samples[i])
 		r.NoError(err)
-		_, err = file.Write(sampleRaw)
-		r.NoError(err)
-		_, err = file.WriteString("\n")
+		_, err = file.WriteString(fmt.Sprintf("%s\n", string(sampleRaw)))
 		r.NoError(err)
 	}
 }
