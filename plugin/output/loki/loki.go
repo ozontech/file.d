@@ -86,7 +86,6 @@ type Config struct {
 	// > Auth config.
 	// > Disabled by default.
 	// > See AuthConfig for details.
-	// > You can use 'warn' log level for logging authorizations.
 	Auth AuthConfig `json:"auth" child:"true"` // *
 
 	// > @3@4@5@6
@@ -324,23 +323,17 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 		data.outBuf = make([]byte, 0, p.config.BatchSize_*p.avgEventSize)
 	}
 
+	data.outBuf = data.outBuf[:0]
+
 	root := insaneJSON.Spawn()
-	if err := root.DecodeString(`{"data":[]}`); err != nil {
-		p.logger.Error("failed to decode json", zap.Error(err))
-		return err
-	}
 
-	outBuf := data.outBuf[:0]
-
-	dataArr := root.Dig("data")
-
-	var jsonEvent string
+	dataArr := root.AddFieldNoAlloc(root, "data").MutateToArray()
 	batch.ForEach(func(event *pipeline.Event) {
-		jsonEvent = event.Root.Node.EncodeToString()
-		dataArr.AddElement().MutateToJSON(root, jsonEvent)
+		dataArr.AddElementNoAlloc(root).MutateToNode(event.Root.Node)
 	})
 
-	data.outBuf = root.Encode(outBuf)
+	data.outBuf = root.Encode(data.outBuf)
+
 	insaneJSON.Release(root)
 
 	code, err := p.send(context.Background(), data.outBuf)
@@ -353,7 +346,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 			return nil
 		}
 	} else {
-		p.logger.Debug("successfully sent", zap.String("data", string(outBuf)))
+		p.logger.Debug("successfully sent", zap.String("data", string(data.outBuf)))
 	}
 
 	return err
@@ -421,7 +414,7 @@ func (p *Plugin) send(ctx context.Context, data []byte) (int, error) {
 		"application/json",
 		data,
 		p.config.ConnectionTimeout_,
-		p.reportESErrors,
+		nil,
 	)
 	if statusCode != http.StatusNoContent {
 		return statusCode, fmt.Errorf("bad response: code=%d, err=%v", statusCode, err)
@@ -453,7 +446,7 @@ func (p *Plugin) newClient(timeout time.Duration) *http.Client {
 
 func (p *Plugin) prepareClient() {
 	config := &xhttp.ClientConfig{
-		Endpoints:         []string{"/loki/api/v1/push"},
+		Endpoints:         []string{fmt.Sprintf("%s/loki/api/v1/push", p.config.Address)},
 		ConnectionTimeout: p.config.ConnectionTimeout_ * 2,
 		AuthHeader:        p.getAuthHeader(),
 		CustomHeaders:     p.getCustomHeaders(),
@@ -516,54 +509,4 @@ func (p *Plugin) getAuthHeader() string {
 	}
 
 	return ""
-}
-
-func (p *Plugin) reportESErrors(data []byte) error {
-	root, err := insaneJSON.DecodeBytes(data)
-	defer insaneJSON.Release(root)
-	if err != nil {
-		return fmt.Errorf("can't decode response: %w", err)
-	}
-
-	if !root.Dig("errors").AsBool() {
-		return nil
-	}
-
-	items := root.Dig("items").AsArray()
-	if len(items) == 0 {
-		p.logger.Error("unknown elasticsearch error, 'items' field in the response is empty",
-			zap.String("response", root.EncodeToString()),
-		)
-		return nil
-	}
-
-	indexingErrors := 0
-	for _, node := range items {
-		indexNode := node.Dig("index")
-		if indexNode == nil {
-			p.logger.Error("unknown elasticsearch response, 'index' field in the response is empty",
-				zap.String("response", node.EncodeToString()),
-			)
-			continue
-		}
-
-		if errNode := indexNode.Dig("error"); errNode != nil {
-			indexingErrors++
-			p.logger.Error("elasticsearch indexing error",
-				zap.String("response", errNode.EncodeToString()))
-			continue
-		}
-
-		if statusCode := indexNode.Dig("status"); statusCode.AsInt() < http.StatusBadRequest {
-			continue
-		}
-
-		p.logger.Error("unknown elasticsearch error", zap.String("response", node.EncodeToString()))
-	}
-
-	if indexingErrors != 0 {
-	}
-
-	p.logger.Error("some events from batch aren't written, check previous logs for more information")
-	return nil
 }

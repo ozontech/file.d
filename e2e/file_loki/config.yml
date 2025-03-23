@@ -9,9 +9,10 @@ pipelines:
     output:
       type: loki 
       address: http://localhost:3100
-      auth_enabled: false
       message_field: message
       timestamp_field: timestamp 
       labels: 
         - label: label1
           value: value1
+      auth:
+        strategy: disabled
