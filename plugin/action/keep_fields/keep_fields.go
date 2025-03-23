@@ -3,9 +3,9 @@ package keep_fields
 import (
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
-	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/pipeline"
 	insaneJSON "github.com/ozontech/insane-json"
+	"go.uber.org/zap"
 )
 
 /*{ introduction
@@ -14,6 +14,7 @@ It keeps the list of the event fields and removes others.
 
 type Plugin struct {
 	config *Config
+	logger *zap.Logger
 
 	fieldPaths [][]string
 
@@ -44,10 +45,12 @@ func factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 func (p *Plugin) Stop() {
 }
 
-func (p *Plugin) Start(config pipeline.AnyConfig, _ *pipeline.ActionPluginParams) {
+func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginParams) {
+	p.logger = params.Logger.Desugar()
+
 	p.config = config.(*Config)
 	if p.config == nil {
-		logger.Panicf("config is nil for the keep fields plugin")
+		p.logger.Panic("config is nil for the keep fields plugin")
 	}
 
 	var err error
@@ -57,7 +60,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, _ *pipeline.ActionPluginParams
 	// TestRemoveNestedFieldsInConfig will fall
 	p.fieldPaths, err = cfg.ParseNestedFields(p.config.Fields)
 	if err != nil {
-		logger.Fatalf("can't parse nested fields: %s", err.Error())
+		p.logger.Fatal("can't parse nested fields", zap.Error(err))
 	}
 
 	p.parsedFieldsRoot = newFieldPathNode() // root node
