@@ -93,32 +93,7 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 		return pipeline.ActionPass
 	}
 
-	fpNode := p.parsedFieldsRoot
-	eventNode := event.Root.Node
-	depth := 0
-
-	// check root nodes first
-	for _, node := range eventNode.AsFields() {
-		eventField := node.AsString()
-		if childNode, ok := fpNode.children[eventField]; ok {
-			// no child nodes in input path, found target node
-			if len(childNode.children) == 0 {
-				continue
-			}
-
-			// check nested fields, if exists, keep node
-			if exists := p.traverseFieldsTree(childNode, eventNode.Dig(eventField), depth+1); exists {
-				continue
-			}
-		}
-
-		// nodes to remove
-		p.fieldsDepthSlice[depth] = append(p.fieldsDepthSlice[depth], eventField)
-	}
-
-	for _, field := range p.fieldsDepthSlice[depth] {
-		event.Root.Dig(field).Suicide()
-	}
+	p.traverseFieldsTree(p.parsedFieldsRoot, event.Root.Node, 0, true)
 
 	// clean fields depth slice for the next iteration
 	for i := range p.fieldsDepthSlice {
@@ -138,7 +113,10 @@ func newFieldPathNode() fieldPathNode {
 	}
 }
 
-func (p *Plugin) traverseFieldsTree(fpNode fieldPathNode, eventNode *insaneJSON.Node, depth int) bool {
+func (p *Plugin) traverseFieldsTree(
+	fpNode fieldPathNode, eventNode *insaneJSON.Node,
+	depth int, isRoot bool,
+) bool {
 	// no child nodes in input path, found target node
 	if len(fpNode.children) == 0 {
 		return true
@@ -155,14 +133,14 @@ func (p *Plugin) traverseFieldsTree(fpNode fieldPathNode, eventNode *insaneJSON.
 				shouldPreserveNode = true
 				continue
 			}
-			if exists := p.traverseFieldsTree(childNode, eventNode.Dig(eventField), depth+1); exists {
+			if exists := p.traverseFieldsTree(childNode, eventNode.Dig(eventField), depth+1, false); exists {
 				shouldPreserveNode = true
 				continue
 			}
 		}
 		p.fieldsDepthSlice[depth] = append(p.fieldsDepthSlice[depth], eventField)
 	}
-	if shouldPreserveNode {
+	if isRoot || shouldPreserveNode {
 		// remove all unnecessary fields from current node, if the current node should be preserved
 		for _, field := range p.fieldsDepthSlice[depth] {
 			eventNode.Dig(field).Suicide()
