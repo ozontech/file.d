@@ -95,11 +95,6 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 
 	p.traverseFieldsTree(p.parsedFieldsRoot, event.Root.Node, 0, true)
 
-	// clean fields depth slice for the next iteration
-	for i := range p.fieldsDepthSlice {
-		p.fieldsDepthSlice[i] = p.fieldsDepthSlice[i][:0]
-	}
-
 	return pipeline.ActionPass
 }
 
@@ -145,7 +140,9 @@ func (p *Plugin) traverseFieldsTree(
 		for _, field := range p.fieldsDepthSlice[depth] {
 			eventNode.Dig(field).Suicide()
 		}
-		p.fieldsDepthSlice[depth] = p.fieldsDepthSlice[depth][:0]
 	}
+
+	p.fieldsDepthSlice[depth] = p.fieldsDepthSlice[depth][:0]
+
 	return shouldPreserveNode
 }
