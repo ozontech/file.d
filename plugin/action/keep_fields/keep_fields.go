@@ -51,6 +51,10 @@ func (p *Plugin) Start(config pipeline.AnyConfig, _ *pipeline.ActionPluginParams
 	}
 
 	var err error
+	// NECESSARY:
+	// if we just parse several field selectors
+	// without removing nested fields
+	// TestRemoveNestedFieldsInConfig will fall
 	p.fieldPaths, err = cfg.ParseNestedFields(p.config.Fields)
 	if err != nil {
 		logger.Fatalf("can't parse nested fields: %s", err.Error())

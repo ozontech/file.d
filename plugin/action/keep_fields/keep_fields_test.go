@@ -66,7 +66,7 @@ func TestKeepNestedFields(t *testing.T) {
 	require.Equal(t, `{"f":"k"}`, outEvents[2], "wrong event")
 }
 
-func TestThatFails(t *testing.T) {
+func TestRemoveNestedFieldsInConfig(t *testing.T) {
 	config := test.NewConfig(&Config{Fields: []string{"a.b", "a.c", "a"}}, nil)
 	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, config, pipeline.MatchModeAnd, nil, false))
 	wg := &sync.WaitGroup{}
