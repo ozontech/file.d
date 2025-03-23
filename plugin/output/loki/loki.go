@@ -2,7 +2,6 @@ package loki
 
 import (
 	"context"
-	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -226,10 +225,10 @@ type Plugin struct {
 	logger       *zap.Logger
 	config       *Config
 	avgEventSize int
+	cancel       context.CancelFunc
 
-	httpClient *http.Client
-	client     *xhttp.Client
-	batcher    *pipeline.RetriableBatcher
+	client  *xhttp.Client
+	batcher *pipeline.RetriableBatcher
 
 	// plugin metrics
 	sendErrorMetric *prometheus.CounterVec
@@ -289,7 +288,6 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 			zap.Int("retries", p.config.Retry))
 	}
 
-	p.httpClient = p.newClient(p.config.RequestTimeout_)
 	p.batcher = pipeline.NewRetriableBatcher(
 		batcherOpts,
 		p.out,
@@ -297,12 +295,15 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		onError,
 	)
 
-	p.batcher.Start(context.Background())
+	ctx, cancel := context.WithCancel(context.Background())
+	p.cancel = cancel
+
+	p.batcher.Start(ctx)
 }
 
 func (p *Plugin) Stop() {
-	p.httpClient.CloseIdleConnections()
 	p.batcher.Stop()
+	p.cancel()
 }
 
 func (p *Plugin) Out(event *pipeline.Event) {
@@ -425,23 +426,6 @@ func (p *Plugin) send(ctx context.Context, data []byte) (int, error) {
 
 func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 	p.sendErrorMetric = ctl.RegisterCounterVec("output_loki_send_error", "Total Loki send errors", "status_code")
-}
-
-func (p *Plugin) newClient(timeout time.Duration) *http.Client {
-	transport := http.DefaultTransport.(*http.Transport)
-
-	if p.config.TLSEnabled {
-		transport.TLSClientConfig = &tls.Config{
-			InsecureSkipVerify: p.config.TLSSkipVerify,
-		}
-	}
-
-	client := &http.Client{
-		Timeout:   timeout,
-		Transport: transport,
-	}
-
-	return client
 }
 
 func (p *Plugin) prepareClient() {
