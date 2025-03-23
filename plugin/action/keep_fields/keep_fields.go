@@ -17,7 +17,7 @@ type Plugin struct {
 
 	fieldPaths [][]string
 
-	parsedFieldsRoot *fieldPathNode
+	parsedFieldsRoot fieldPathNode
 	fieldsDepthSlice [][]string
 }
 
@@ -60,7 +60,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, _ *pipeline.ActionPluginParams
 		logger.Fatalf("can't parse nested fields: %s", err.Error())
 	}
 
-	p.parsedFieldsRoot = newFieldPathNode("") // root node
+	p.parsedFieldsRoot = newFieldPathNode() // root node
 
 	fieldMaxDepth := 0
 	for _, fieldPath := range p.fieldPaths {
@@ -70,7 +70,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, _ *pipeline.ActionPluginParams
 		for _, field := range fieldPath {
 			nextNode, ok := curNode.children[field]
 			if !ok {
-				nextNode = newFieldPathNode(field)
+				nextNode = newFieldPathNode()
 				curNode.children[field] = nextNode
 			}
 
@@ -126,18 +126,16 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 }
 
 type fieldPathNode struct {
-	name     string
-	children map[string]*fieldPathNode
+	children map[string]fieldPathNode
 }
 
-func newFieldPathNode(name string) *fieldPathNode {
-	return &fieldPathNode{
-		name:     name,
-		children: make(map[string]*fieldPathNode),
+func newFieldPathNode() fieldPathNode {
+	return fieldPathNode{
+		children: make(map[string]fieldPathNode),
 	}
 }
 
-func (p *Plugin) traverseFieldsTree(fpNode *fieldPathNode, eventNode *insaneJSON.Node, depth int) bool {
+func (p *Plugin) traverseFieldsTree(fpNode fieldPathNode, eventNode *insaneJSON.Node, depth int) bool {
 	// no child nodes in input path, found target node
 	if len(fpNode.children) == 0 {
 		return true
