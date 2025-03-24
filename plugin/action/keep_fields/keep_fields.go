@@ -93,7 +93,7 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 		return pipeline.ActionPass
 	}
 
-	p.traverseFieldsTree(p.parsedFieldsRoot, event.Root.Node, 0, true)
+	p.traverseFieldsTree(p.parsedFieldsRoot, event.Root.Node, 0)
 
 	return pipeline.ActionPass
 }
@@ -108,10 +108,7 @@ func newFieldPathNode() fieldPathNode {
 	}
 }
 
-func (p *Plugin) traverseFieldsTree(
-	fpNode fieldPathNode, eventNode *insaneJSON.Node,
-	depth int, isRoot bool,
-) bool {
+func (p *Plugin) traverseFieldsTree(fpNode fieldPathNode, eventNode *insaneJSON.Node, depth int) bool {
 	// no child nodes in input path, found target node
 	if len(fpNode.children) == 0 {
 		return true
@@ -128,14 +125,14 @@ func (p *Plugin) traverseFieldsTree(
 				shouldPreserveNode = true
 				continue
 			}
-			if exists := p.traverseFieldsTree(childNode, eventNode.Dig(eventField), depth+1, false); exists {
+			if exists := p.traverseFieldsTree(childNode, eventNode.Dig(eventField), depth+1); exists {
 				shouldPreserveNode = true
 				continue
 			}
 		}
 		p.fieldsDepthSlice[depth] = append(p.fieldsDepthSlice[depth], eventField)
 	}
-	if isRoot || shouldPreserveNode {
+	if depth == 0 || shouldPreserveNode {
 		// remove all unnecessary fields from current node, if the current node should be preserved
 		for _, field := range p.fieldsDepthSlice[depth] {
 			eventNode.Dig(field).Suicide()
