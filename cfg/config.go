@@ -3,10 +3,13 @@ package cfg
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"reflect"
 	"regexp"
+	"slices"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -559,6 +562,55 @@ func ParseFieldSelector(selector string) []string {
 	}
 
 	return result
+}
+
+func ParseNestedFields(fields []string) ([][]string, error) {
+	if len(fields) == 0 {
+		return nil, errors.New("empty fields list")
+	}
+
+	paths := make([][]string, 0, len(fields))
+
+	for _, field := range fields {
+		path := ParseFieldSelector(field)
+		if len(path) == 0 {
+			return nil, errors.New("empty path parsed")
+		}
+
+		paths = append(paths, path)
+	}
+
+	sort.Slice(paths, func(i, j int) bool {
+		return len(paths[i]) < len(paths[j])
+	})
+
+	result := make([][]string, 0, len(paths))
+
+	for i, longPath := range paths {
+		longSelector := strings.Join(longPath, ".")
+
+		ok := true
+		for _, shortPath := range paths[:i] {
+			shortSelector := strings.Join(shortPath, ".")
+
+			if slices.Equal(shortPath, longPath[:len(shortPath)]) {
+				if len(shortPath) == len(longPath) {
+					logger.Warnf("path '%s' duplicates", longSelector)
+				} else {
+					logger.Warnf("path '%s' included in path '%s'; remove nested path", longSelector, shortSelector)
+				}
+
+				ok = false
+				break
+			}
+		}
+
+		if ok {
+			result = append(result, longPath)
+		}
+	}
+
+	return result, nil
 }
 
 func SetDefaultValues(data interface{}) error {

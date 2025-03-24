@@ -360,7 +360,7 @@ const (
 
 const (
 	defaultTsCmpValUpdateInterval = 10 * time.Second
-	defaultTsFormat               = time.RFC3339Nano
+	defaultTsFormat               = "rfc3339nano"
 )
 
 func extractTsCmpOpNode(_ string, jsonNode *simplejson.Json) (doif.Node, error) {

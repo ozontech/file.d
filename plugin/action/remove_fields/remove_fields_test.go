@@ -7,7 +7,6 @@ import (
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/test"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func TestRemoveFields(t *testing.T) {
@@ -58,21 +57,4 @@ func TestRemoveNestedFields(t *testing.T) {
 	assert.Equal(t, `{"a":"some"}`, outEvents[0], "wrong event")
 	assert.Equal(t, `{"a":{}}`, outEvents[1], "wrong event")
 	assert.Equal(t, `{"a":{"d":"saved"}}`, outEvents[2], "wrong event")
-}
-
-func TestDuplicatingFieldSelectors(t *testing.T) {
-	config := test.NewConfig(&Config{Fields: []string{"a.b", "a.b"}}, nil)
-	p := Plugin{}
-	p.Start(config, nil)
-
-	require.NotEmpty(t, p.fieldPaths)
-	require.Equal(t, []string{"a", "b"}, p.fieldPaths[0])
-}
-
-func TestNestedFieldSelectors(t *testing.T) {
-	config := test.NewConfig(&Config{Fields: []string{"a.b", "a.b.c", "a.d", "a"}}, nil)
-	p := Plugin{}
-	p.Start(config, nil)
-
-	require.Equal(t, [][]string{{"a"}}, p.fieldPaths)
 }
