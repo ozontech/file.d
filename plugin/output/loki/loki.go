@@ -207,7 +207,7 @@ type AuthConfig struct {
 	// > @3@4@5@6
 	// >
 	// > Token for HTTP Bearer Authentication.
-	BearerToken string // *
+	BearerToken string `json:"bearer_token"` // *
 }
 
 type KeepAliveConfig struct {
@@ -225,7 +225,9 @@ type Plugin struct {
 	logger       *zap.Logger
 	config       *Config
 	avgEventSize int
-	cancel       context.CancelFunc
+
+	ctx    context.Context
+	cancel context.CancelFunc
 
 	client  *xhttp.Client
 	batcher *pipeline.RetriableBatcher
@@ -296,6 +298,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	)
 
 	ctx, cancel := context.WithCancel(context.Background())
+	p.ctx = ctx
 	p.cancel = cancel
 
 	p.batcher.Start(ctx)
@@ -337,7 +340,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 
 	insaneJSON.Release(root)
 
-	code, err := p.send(context.Background(), data.outBuf)
+	code, err := p.send(p.ctx, data.outBuf)
 	if err != nil {
 		p.sendErrorMetric.WithLabelValues(strconv.Itoa(code)).Inc()
 		p.logger.Error("can't send data to Loki", zap.String("address", p.config.Address), zap.Error(err))
