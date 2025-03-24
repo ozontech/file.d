@@ -83,8 +83,17 @@ type Config struct {
 	// > @3@4@5@6
 	// >
 	// > Auth config.
-	// > Disabled by default.
-	// > See AuthConfig for details.
+	// >
+	// > `AuthConfig` params:
+	// > * `strategy` describes strategy to use; options:"disabled|tenant|basic|bearer"
+	// > By default strategy is `disabled`.
+	// > * `tenant_id` should be provided if strategy is `tenant`.
+	// > * `username` should be provided if strategy is `basic`.
+	// > Username is used for HTTP Basic Authentication.
+	// > * `password` should be provided if strategy is `basic`.
+	// > Password is used for HTTP Basic Authentication.
+	// > * `bearer_token` should be provided if strategy is `bearer`.
+	// > Token is used for HTTP Bearer Authentication.
 	Auth AuthConfig `json:"auth" child:"true"` // *
 
 	// > @3@4@5@6
@@ -183,31 +192,21 @@ const (
 // ! config-params
 // ^ config-params
 type AuthConfig struct {
-	// > @3@4@5@6
-	// >
 	// > AuthStrategy.Strategy describes strategy to use.
-	Strategy  string `json:"strategy" default:"disabled" options:"disabled|tenant|basic|bearer"` // *
+	Strategy  string `json:"strategy" default:"disabled" options:"disabled|tenant|basic|bearer"`
 	Strategy_ AuthStrategy
 
-	// > @3@4@5@6
-	// >
 	// > TenantID for Tenant Authentication.
-	TenantID string `json:"tenant_id"` // *
+	TenantID string `json:"tenant_id"`
 
-	// > @3@4@5@6
-	// >
 	// > Username for HTTP Basic Authentication.
-	Username string `json:"username"` // *
+	Username string `json:"username"`
 
-	// > @3@4@5@6
-	// >
 	// > Password for HTTP Basic Authentication.
-	Password string `json:"password"` // *
+	Password string `json:"password"`
 
-	// > @3@4@5@6
-	// >
 	// > Token for HTTP Bearer Authentication.
-	BearerToken string `json:"bearer_token"` // *
+	BearerToken string `json:"bearer_token"`
 }
 
 type KeepAliveConfig struct {

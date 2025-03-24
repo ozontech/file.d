@@ -12,70 +12,50 @@ http://127.0.0.1:3100 or https://loki:3100
 
 <br>
 
-**`auth_enabled`** *`bool`* *`default=false`* 
+**`labels`** *`[]Label`* 
 
 Array of labels to send logs
 
 Example labels
 
 label=value
-*`bool`* *`default=false`* 
+
+<br>
+
+**`message_field`** *`string`* *`required`* 
 
 Message field from log to be mapped to loki
 
 Example
 
 message
-*`bool`* *`default=false`* 
+
+<br>
+
+**`timestamp_field`** *`string`* *`required`* 
 
 Timestamp field from log to be mapped to loki
 
 Example
 
 timestamp
-*`bool`* *`default=false`* 
-
-Authorization enabled, if true set auth method like tenant, basic auth or bearer
 
 <br>
 
-**`tenant_id`** *`string`* 
+**`auth`** *`AuthConfig`* 
 
-Authorization enabled, if set true set TenantID
+Auth config.
 
-Example
-
-example-org
-
-<br>
-
-**`username`** *`string`* 
-
-Authorization enabled, if auth username set provide auth password
-
-Example
-
-username
-
-<br>
-
-**`password`** *`string`* 
-
-Authorization enabled, provide basic auth password if basic auth username is provided
-
-Example
-
-password
-
-<br>
-
-**`bearer_token`** *`string`* 
-
-Authorization enabled, provide bearer token if you have Bearer authorization
-
-Example
-
-token
+`AuthConfig` params:
+* `strategy` describes strategy to use; options:"disabled|tenant|basic|bearer"
+By default strategy is `disabled`.
+* `tenant_id` should be provided if strategy is `tenant`.
+* `username` should be provided if strategy is `basic`.
+Username is used for HTTP Basic Authentication.
+* `password` should be provided if strategy is `basic`.
+Password is used for HTTP Basic Authentication.
+* `bearer_token` should be provided if strategy is `bearer`.
+Token is used for HTTP Bearer Authentication.
 
 <br>
 
@@ -94,6 +74,25 @@ If set, the plugin will skip SSL/TLS verification.
 **`request_timeout`** *`cfg.Duration`* *`default=1s`* 
 
 Client timeout when sends requests to Loki HTTP API.
+
+<br>
+
+**`connection_timeout`** *`cfg.Duration`* *`default=5s`* 
+
+It defines how much time to wait for the connection.
+
+<br>
+
+**`keep_alive`** *`KeepAliveConfig`* 
+
+Keep-alive config.
+
+`KeepAliveConfig` params:
+* `max_idle_conn_duration` - idle keep-alive connections are closed after this duration.
+By default idle connections are closed after `10s`.
+* `max_conn_duration` - keep-alive connections are closed after this duration.
+If set to `0` - connection duration is unlimited.
+By default connection duration is `5m`.
 
 <br>
 
