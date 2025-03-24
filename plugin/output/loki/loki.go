@@ -234,8 +234,7 @@ type Plugin struct {
 	// plugin metrics
 	sendErrorMetric *prometheus.CounterVec
 
-	labels            map[string]string
-	nameByBearerToken map[string]string
+	labels map[string]string
 }
 
 func init() {
@@ -329,13 +328,14 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 	data.outBuf = data.outBuf[:0]
 
 	root := insaneJSON.Spawn()
+	defer insaneJSON.Release(root)
 
 	dataArr := root.AddFieldNoAlloc(root, "data").MutateToArray()
 	batch.ForEach(func(event *pipeline.Event) {
 		dataArr.AddElementNoAlloc(root).MutateToNode(event.Root.Node)
 	})
 
-	code, err := p.send(p.ctx, root)
+	code, err := p.send(root)
 	if err != nil {
 		p.sendErrorMetric.WithLabelValues(strconv.Itoa(code)).Inc()
 		p.logger.Error("can't send data to Loki", zap.String("address", p.config.Address), zap.Error(err))
@@ -360,13 +360,14 @@ type request struct {
 	Streams []stream `json:"streams"`
 }
 
-func (p *Plugin) send(ctx context.Context, root *insaneJSON.Root) (int, error) {
+func (p *Plugin) send(root *insaneJSON.Root) (int, error) {
 	messages := root.Dig("data").AsArray()
 	values := make([][]any, 0, len(messages))
 
 	for _, msg := range messages {
-		ts := msg.Dig(p.config.TimestampField).AsString()
-		msg.Dig(p.config.TimestampField).Suicide()
+		tsNode := msg.Dig(p.config.TimestampField)
+		ts := tsNode.AsString()
+		tsNode.Suicide()
 
 		if ts == "" {
 			ts = fmt.Sprintf(`%d`, time.Now().UnixNano())
@@ -374,8 +375,9 @@ func (p *Plugin) send(ctx context.Context, root *insaneJSON.Root) (int, error) {
 			return 0, errUnixNanoFormat
 		}
 
-		logMsg := msg.Dig(p.config.MessageField).AsString()
-		msg.Dig(p.config.MessageField).Suicide()
+		logNode := msg.Dig(p.config.MessageField)
+		logMsg := logNode.AsString()
+		logNode.Suicide()
 
 		logLine := []any{
 			ts,
@@ -385,8 +387,6 @@ func (p *Plugin) send(ctx context.Context, root *insaneJSON.Root) (int, error) {
 
 		values = append(values, logLine)
 	}
-
-	insaneJSON.Release(root)
 
 	output := request{
 		Streams: []stream{
@@ -479,7 +479,6 @@ func (p *Plugin) getAuthHeader() string {
 	if p.config.Auth.Strategy_ == StrategyBasic {
 		credentials := []byte(p.config.Auth.Username + ":" + p.config.Auth.Password)
 		return fmt.Sprintf("Basic %s", base64.StdEncoding.EncodeToString(credentials))
-
 	}
 
 	if p.config.Auth.Strategy_ == StrategyBearer {

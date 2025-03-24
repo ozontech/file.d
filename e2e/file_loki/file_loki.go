@@ -76,7 +76,7 @@ func (c *Config) Send(t *testing.T) {
 	for i := range c.samples {
 		sampleRaw, err := json.Marshal(&c.samples[i])
 		r.NoError(err)
-		_, err = file.WriteString(fmt.Sprintf("%s\n", string(sampleRaw)))
+		_, err = fmt.Fprintf(file, "%s\n", string(sampleRaw))
 		r.NoError(err)
 	}
 }
