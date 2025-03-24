@@ -1,6 +1,7 @@
 package socket
 
 import (
+	"crypto/tls"
 	"errors"
 	"io"
 	"net"
@@ -11,6 +12,7 @@ import (
 	"github.com/cespare/xxhash/v2"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/xtls"
 	"go.uber.org/zap"
 )
 
@@ -28,6 +30,20 @@ pipelines:
       type: socket
       network: tcp
       address: ':6666'
+    ...
+```
+---
+TLS:
+```yaml
+pipelines:
+  example_pipeline:
+    ...
+    input:
+      type: socket
+      network: tcp
+      address: ':6666'
+      ca_cert: './cert.pem'
+      private_key: './key.pem'
     ...
 ```
 ---
@@ -81,7 +97,7 @@ type Config struct {
 	// > @3@4@5@6
 	// >
 	// > Which network type to listen.
-	Network string `json:"network" default:"tcp" options:"tcp|udp|unix|"` // *
+	Network string `json:"network" default:"tcp" options:"tcp|udp|unix"` // *
 
 	// > @3@4@5@6
 	// >
@@ -92,6 +108,18 @@ type Config struct {
 	// > - 1.2.3.4:9092
 	// > - :9092
 	Address string `json:"address" required:"true"` // *
+
+	// > @3@4@5@6
+	// >
+	// > CA certificate in PEM encoding. This can be a path or the content of the certificate.
+	// >> Works only if `network` is set to `tcp`.
+	CACert string `json:"ca_cert" default:""` // *
+
+	// > @3@4@5@6
+	// >
+	// > CA private key in PEM encoding. This can be a path or the content of the key.
+	// >> Works only if `network` is set to `tcp`.
+	PrivateKey string `json:"private_key" default:""` // *
 }
 
 func init() {
@@ -125,7 +153,18 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 		err error
 	)
 	switch p.config.Network {
-	case networkTcp, networkUnix:
+	case networkTcp:
+		if p.config.CACert == "" && p.config.PrivateKey == "" {
+			ln, err = net.Listen(p.config.Network, p.config.Address)
+			break
+		}
+
+		tlsBuilder := xtls.NewConfigBuilder()
+		err = tlsBuilder.AppendX509KeyPair(p.config.CACert, p.config.PrivateKey)
+		if err == nil {
+			ln, err = tls.Listen(p.config.Network, p.config.Address, tlsBuilder.Build())
+		}
+	case networkUnix:
 		ln, err = net.Listen(p.config.Network, p.config.Address)
 	case networkUdp:
 		pc, err = net.ListenPacket(p.config.Network, p.config.Address)
