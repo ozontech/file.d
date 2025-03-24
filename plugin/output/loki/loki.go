@@ -335,11 +335,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 		dataArr.AddElementNoAlloc(root).MutateToNode(event.Root.Node)
 	})
 
-	data.outBuf = root.Encode(data.outBuf)
-
-	insaneJSON.Release(root)
-
-	code, err := p.send(p.ctx, data.outBuf)
+	code, err := p.send(p.ctx, root)
 	if err != nil {
 		p.sendErrorMetric.WithLabelValues(strconv.Itoa(code)).Inc()
 		p.logger.Error("can't send data to Loki", zap.String("address", p.config.Address), zap.Error(err))
@@ -364,13 +360,7 @@ type request struct {
 	Streams []stream `json:"streams"`
 }
 
-func (p *Plugin) send(ctx context.Context, data []byte) (int, error) {
-	root := insaneJSON.Spawn()
-	if err := root.DecodeBytes(data); err != nil {
-		p.logger.Error("failed to decode json", zap.Error(err))
-		return 0, err
-	}
-
+func (p *Plugin) send(ctx context.Context, root *insaneJSON.Root) (int, error) {
 	messages := root.Dig("data").AsArray()
 	values := make([][]any, 0, len(messages))
 
@@ -395,6 +385,8 @@ func (p *Plugin) send(ctx context.Context, data []byte) (int, error) {
 
 		values = append(values, logLine)
 	}
+
+	insaneJSON.Release(root)
 
 	output := request{
 		Streams: []stream{
