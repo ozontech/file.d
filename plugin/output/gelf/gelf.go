@@ -9,6 +9,7 @@ import (
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/xtime"
 	insaneJSON "github.com/ozontech/insane-json"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
@@ -208,7 +209,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.config.defaultShortMessageValue = strings.TrimSpace(p.config.DefaultShortMessageValue)
 	p.config.fullMessageField = pipeline.ByteToStringUnsafe(p.formatExtraField(nil, p.config.FullMessageField))
 	p.config.timestampField = pipeline.ByteToStringUnsafe(p.formatExtraField(nil, p.config.TimestampField))
-	format, err := pipeline.ParseFormatName(p.config.TimestampFieldFormat)
+	format, err := xtime.ParseFormatName(p.config.TimestampFieldFormat)
 	if err != nil {
 		// TODO: refactor plugin code to unify with datetime parsing in other plugins
 		params.Logger.Errorf("unknown time format: %s", err.Error())
@@ -395,7 +396,7 @@ func (p *Plugin) makeTimestampField(root *insaneJSON.Root, timestampField string
 			ts /= 1000
 		}
 	} else if node.IsString() {
-		t, err := pipeline.ParseTime(timestampFieldFormat, node.AsString())
+		t, err := xtime.ParseTime(timestampFieldFormat, node.AsString())
 		if err == nil {
 			ts = float64(t.UnixNano()) / float64(time.Second)
 		}

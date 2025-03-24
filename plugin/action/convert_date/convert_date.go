@@ -4,6 +4,7 @@ import (
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/xtime"
 )
 
 /*{ introduction
@@ -58,14 +59,14 @@ func (p *Plugin) Start(config pipeline.AnyConfig, _ *pipeline.ActionPluginParams
 	p.config = config.(*Config)
 
 	for _, formatName := range p.config.SourceFormats {
-		format, err := pipeline.ParseFormatName(formatName)
+		format, err := xtime.ParseFormatName(formatName)
 		if err != nil {
 			format = formatName
 		}
 		p.config.SourceFormats_ = append(p.config.SourceFormats_, format)
 	}
 
-	format, err := pipeline.ParseFormatName(p.config.TargetFormat)
+	format, err := xtime.ParseFormatName(p.config.TargetFormat)
 	if err != nil {
 		format = p.config.TargetFormat
 	}
@@ -85,16 +86,16 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	if isValidType {
 		date := dateNode.AsString()
 		for _, format := range p.config.SourceFormats_ {
-			t, err := pipeline.ParseTime(format, date)
+			t, err := xtime.ParseTime(format, date)
 			if err == nil {
 				switch p.config.TargetFormat_ {
-				case pipeline.UnixTime:
+				case xtime.UnixTime:
 					dateNode.MutateToInt(int(t.Unix()))
-				case pipeline.UnixTimeMilli:
+				case xtime.UnixTimeMilli:
 					dateNode.MutateToInt(int(t.UnixMilli()))
-				case pipeline.UnixTimeMicro:
+				case xtime.UnixTimeMicro:
 					dateNode.MutateToInt(int(t.UnixMicro()))
-				case pipeline.UnixTimeNano:
+				case xtime.UnixTimeNano:
 					dateNode.MutateToInt(int(t.UnixNano()))
 				default:
 					dateNode.MutateToString(t.Format(p.config.TargetFormat_))

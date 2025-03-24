@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/ozontech/file.d/cfg"
+	"github.com/ozontech/file.d/xtime"
 	insaneJSON "github.com/ozontech/insane-json"
 )
 
@@ -18,7 +19,10 @@ It contains operation that compares timestamps with certain value.
 Params:
   - `op` - must be `ts_cmp`. Required.
   - `field` - name of the field to apply operation. Required. Field will be parsed with `time.Parse` function.
-  - `format` - format for timestamps representation. Optional; default = `time.RFC3339Nano`.
+  - `format` - format for timestamps representation.
+Can be specified as a datetime layout in Go [time.Parse](https://pkg.go.dev/time#Parse) format or by alias.
+List of available datetime format aliases can be found [here](/pipeline/README.md#datetime-parse-formats).
+Optional; default = `rfc3339nano`.
   - `cmp_op` - comparison operation name (same as for length comparison operations). Required.
   - `value` - timestamp value to compare field timestamps with. It must have `RFC3339Nano` format. Required.
 Also, it may be `now` or `file_d_start`. If it is `now` then value to compare timestamps with is periodically updated current time.
@@ -98,9 +102,14 @@ func NewTsCmpOpNode(field string, format string, cmpOp string, cmpValChangeMode 
 		return nil, fmt.Errorf("unknown ts cmp mode: %s", cmpValChangeMode)
 	}
 
+	parsedFormat, err := xtime.ParseFormatName(format)
+	if err != nil {
+		parsedFormat = format
+	}
+
 	result := &tsCmpOpNode{
 		fieldPath:        fieldPath,
-		format:           format,
+		format:           parsedFormat,
 		cmpOp:            typedCmpOp,
 		cmpValChangeMode: resCmpValChangeMode,
 		constCmpValue:    cmpValue.UnixNano(),
@@ -138,7 +147,7 @@ func (n *tsCmpOpNode) Check(eventRoot *insaneJSON.Root) bool {
 		return false
 	}
 
-	timeVal, err := time.Parse(n.format, node.AsString())
+	timeVal, err := xtime.ParseTime(n.format, node.AsString())
 	if err != nil {
 		return false
 	}
