@@ -60,3 +60,17 @@ Create the name of the service account to use
 {{- default "default" .Values.serviceAccount.name }}
 {{- end }}
 {{- end }}
+
+{{/*
+Generate the name for the ClusterRole
+*/}}
+{{- define "filed.clusterRoleName" -}}
+{{- printf "%s-pods-watcher" .Release.Name -}}
+{{- end -}}
+
+{{/*
+Generate the name for the ClusterRoleBinding
+*/}}
+{{- define "filed.clusterRoleBindingName" -}}
+{{- printf "%s-pods-watcher" .Release.Name -}}
+{{- end -}}

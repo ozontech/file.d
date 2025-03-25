@@ -26,6 +26,10 @@ serviceAccount:
   # If not set and create is true, a name is generated using the fullname template
   name: ""
 
+clusterRole:
+  create: true  # Set to false if you don't want to create the ClusterRole
+  name: "" # Leave empty to use the created ClusterRole. If you want to use an existing ClusterRole, specify its name here.
+
 podAnnotations: {}
 podLabels: {}
 
