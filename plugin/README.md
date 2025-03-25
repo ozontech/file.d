@@ -688,6 +688,10 @@ Allowed characters in field names are letters, numbers, underscores, dashes, and
 It sends the event batches to kafka brokers using `franz-go` lib.
 
 [More details...](plugin/output/kafka/README.md)
+## loki
+It sends the logs batches to Loki using HTTP API.
+
+[More details...](plugin/output/loki/README.md)
 ## postgres
 It sends the event batches to postgres db using pgx.
 

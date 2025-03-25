@@ -9,17 +9,17 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/e2e/file_clickhouse"
 	"github.com/ozontech/file.d/e2e/file_elasticsearch"
 	"github.com/ozontech/file.d/e2e/file_es_split"
 	"github.com/ozontech/file.d/e2e/file_file"
+	"github.com/ozontech/file.d/e2e/file_loki"
 	"github.com/ozontech/file.d/e2e/http_file"
 	"github.com/ozontech/file.d/e2e/join_throttle"
 	"github.com/ozontech/file.d/e2e/kafka_auth"
 	"github.com/ozontech/file.d/e2e/kafka_file"
 	"github.com/ozontech/file.d/e2e/split_join"
-
-	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
 	_ "github.com/ozontech/file.d/plugin/action/add_file_name"
 	_ "github.com/ozontech/file.d/plugin/action/add_host"
@@ -61,6 +61,7 @@ import (
 	_ "github.com/ozontech/file.d/plugin/output/file"
 	_ "github.com/ozontech/file.d/plugin/output/gelf"
 	_ "github.com/ozontech/file.d/plugin/output/kafka"
+	_ "github.com/ozontech/file.d/plugin/output/loki"
 	_ "github.com/ozontech/file.d/plugin/output/postgres"
 	_ "github.com/ozontech/file.d/plugin/output/s3"
 	_ "github.com/ozontech/file.d/plugin/output/splunk"
@@ -164,6 +165,11 @@ func TestE2EStabilityWorkCase(t *testing.T) {
 			e2eTest: &file_es_split.Config{},
 			cfgPath: "./file_es_split/config.yml",
 		},
+		{
+			name:    "file_loki",
+			e2eTest: &file_loki.Config{},
+			cfgPath: "./file_loki/config.yml",
+		},
 	}
 
 	for num, test := range testsList {
@@ -189,8 +195,10 @@ func startForTest(t *testing.T, test E2ETest, num int) *fd.FileD {
 	}
 	test.Configure(t, conf, test.name)
 
+	port := 15080 + num
+
 	// for each file.d its own port
-	filed := fd.New(conf, ":1508"+strconv.Itoa(num))
+	filed := fd.New(conf, ":"+strconv.Itoa(port))
 	filed.Start()
 	return filed
 }

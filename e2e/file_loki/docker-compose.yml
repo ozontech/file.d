@@ -1,0 +1,45 @@
+services:
+
+  grafana: 
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    user: '0'
+    environment:
+      - GF_PATHS_PROVISIONING=/etc/grafana/provisioning
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+    entrypoint:
+      - sh
+      - -euc
+      - |
+        mkdir -p /etc/grafana/provisioning/datasources
+        cat <<EOF > /etc/grafana/provisioning/datasources/ds.yaml
+        apiVersion: 1
+        datasources:
+        - name: Loki
+          type: loki
+          access: proxy
+          orgId: 1
+          url: http://loki:3100
+          basicAuth: false
+          isDefault: true
+          version: 1
+          editable: false
+        EOF
+        /run.sh
+
+  loki:
+    image: grafana/loki:latest
+    container_name: loki
+    command: --config.file=/etc/loki/config.yaml
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./loki.yaml:/etc/loki/config.yaml
+    healthcheck:
+      test: wget --quiet --tries=1 --output-document=- http://localhost:3100/ready | grep -q -w ready || exit 1
+      interval: 3s
+      timeout: 10s
+      retries: 10

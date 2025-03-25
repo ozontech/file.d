@@ -26,6 +26,7 @@ type ClientConfig struct {
 	Endpoints            []string
 	ConnectionTimeout    time.Duration
 	AuthHeader           string
+	CustomHeaders        map[string]string
 	GzipCompressionLevel string
 	TLS                  *ClientTLSConfig
 	KeepAlive            *ClientKeepAliveConfig
@@ -35,6 +36,7 @@ type Client struct {
 	client               *fasthttp.Client
 	endpoints            []*fasthttp.URI
 	authHeader           string
+	customHeaders        map[string]string
 	gzipCompressionLevel int
 }
 
@@ -71,6 +73,7 @@ func NewClient(cfg *ClientConfig) (*Client, error) {
 		client:               client,
 		endpoints:            endpoints,
 		authHeader:           cfg.AuthHeader,
+		customHeaders:        cfg.CustomHeaders,
 		gzipCompressionLevel: parseGzipCompressionLevel(cfg.GzipCompressionLevel),
 	}, nil
 }
@@ -121,6 +124,11 @@ func (c *Client) prepareRequest(req *fasthttp.Request, endpoint *fasthttp.URI, m
 	if c.authHeader != "" {
 		req.Header.Set(fasthttp.HeaderAuthorization, c.authHeader)
 	}
+
+	for header, value := range c.customHeaders {
+		req.Header.Set(header, value)
+	}
+
 	if c.gzipCompressionLevel != -1 {
 		if _, err := fasthttp.WriteGzipLevel(req.BodyWriter(), body, c.gzipCompressionLevel); err != nil {
 			req.SetBodyRaw(body)
