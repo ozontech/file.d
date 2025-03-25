@@ -8,36 +8,45 @@ import (
 	"time"
 
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/plugin/output/devnull"
 	"github.com/ozontech/file.d/test"
 	"github.com/stretchr/testify/require"
 )
 
 func doTest(t *testing.T, config *Config) {
-	p, _, output := test.NewPipelineMock(nil, "passive")
+	p := test.NewPipeline(nil, "passive")
 
 	test.NewConfig(config, nil)
-	input, _ := Factory()
 	p.SetInput(&pipeline.InputPluginInfo{
 		PluginStaticInfo: &pipeline.PluginStaticInfo{
-			Type:    "socket",
-			Factory: nil,
-			Config:  config,
+			Config: config,
 		},
 		PluginRuntimeInfo: &pipeline.PluginRuntimeInfo{
-			Plugin: input,
-			ID:     "socket",
+			Plugin: &Plugin{},
 		},
 	})
-	p.Start()
+
+	outPlugin, outCfg := devnull.Factory()
+	output := outPlugin.(*devnull.Plugin)
 
 	wgOut := &sync.WaitGroup{}
 	wgOut.Add(3)
-
 	outEvents := make([]string, 0)
 	output.SetOutFn(func(event *pipeline.Event) {
 		outEvents = append(outEvents, event.Root.EncodeToString())
 		wgOut.Done()
 	})
+
+	p.SetOutput(&pipeline.OutputPluginInfo{
+		PluginStaticInfo: &pipeline.PluginStaticInfo{
+			Config: outCfg,
+		},
+		PluginRuntimeInfo: &pipeline.PluginRuntimeInfo{
+			Plugin: output,
+		},
+	})
+
+	p.Start()
 
 	conn, err := net.Dial(config.Network, config.Address)
 	require.NoError(t, err)
@@ -69,6 +78,8 @@ func doTest(t *testing.T, config *Config) {
 }
 
 func TestSocketTCP(t *testing.T) {
+	t.Parallel()
+
 	doTest(t, &Config{
 		Network: networkTcp,
 		Address: ":5001",
@@ -76,6 +87,8 @@ func TestSocketTCP(t *testing.T) {
 }
 
 func TestSocketUDP(t *testing.T) {
+	t.Parallel()
+
 	doTest(t, &Config{
 		Network: networkUdp,
 		Address: ":5002",
@@ -83,6 +96,8 @@ func TestSocketUDP(t *testing.T) {
 }
 
 func TestSocketUnix(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := t.TempDir()
 
 	doTest(t, &Config{
