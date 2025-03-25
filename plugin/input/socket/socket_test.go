@@ -69,8 +69,6 @@ func doTest(t *testing.T, config *Config) {
 }
 
 func TestSocketTCP(t *testing.T) {
-	t.Parallel()
-
 	doTest(t, &Config{
 		Network: networkTcp,
 		Address: ":5001",
@@ -78,8 +76,6 @@ func TestSocketTCP(t *testing.T) {
 }
 
 func TestSocketUDP(t *testing.T) {
-	t.Parallel()
-
 	doTest(t, &Config{
 		Network: networkUdp,
 		Address: ":5002",
@@ -87,8 +83,6 @@ func TestSocketUDP(t *testing.T) {
 }
 
 func TestSocketUnix(t *testing.T) {
-	t.Parallel()
-
 	tmpDir := t.TempDir()
 
 	doTest(t, &Config{
