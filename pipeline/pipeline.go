@@ -428,17 +428,22 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offsets Offsets, byt
 	)
 	if p.decoderType == decoder.AUTO {
 		dec = p.suggestedDecoderType
+		if dec == decoder.NO {
+			dec = decoder.JSON
+		}
+
+		// When config decoder is set to "auto", then we didn't create a decoder during pipeline initialization.
+		// It's necessary to initialize the decoder once.
+		if dec == decoder.JSON {
+			p.initDecoderOnce.Do(func() {
+				p.decoder, _ = decoder.NewJsonDecoder(p.settings.DecoderParams)
+			})
+		}
 	} else {
 		dec = p.decoderType
 	}
-	if dec == decoder.NO {
-		dec = decoder.JSON
-		// When config decoder is set to "auto", then we didn't create a decoder during pipeline initialization.
-		// It's necessary to initialize the decoder once.
-		p.initDecoderOnce.Do(func() {
-			p.decoder, _ = decoder.NewJsonDecoder(nil)
-		})
-	} else if dec == decoder.CRI {
+
+	if dec == decoder.CRI {
 		row, err = decoder.DecodeCRI(bytes)
 		if err != nil {
 			p.wrongEventCRIFormatMetric.Inc()
