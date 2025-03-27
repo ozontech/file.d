@@ -35,7 +35,7 @@ require (
 	github.com/prometheus/procfs v0.10.1
 	github.com/rjeczalik/notify v0.9.3
 	github.com/satori/go.uuid v1.2.0
-	github.com/stretchr/testify v1.9.0
+	github.com/stretchr/testify v1.10.0
 	github.com/tidwall/gjson v1.18.0
 	github.com/timtadh/lexmachine v0.2.3
 	github.com/twmb/franz-go v1.17.0
@@ -73,7 +73,7 @@ require (
 	github.com/go-faster/city v1.0.1 // indirect
 	github.com/go-faster/errors v0.6.1 // indirect
 	github.com/go-ini/ini v1.62.0 // indirect
-	github.com/go-jose/go-jose/v4 v4.0.4 // indirect
+	github.com/go-jose/go-jose/v4 v4.0.5 // indirect
 	github.com/go-logr/logr v1.3.0 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-openapi/jsonpointer v0.19.6 // indirect
