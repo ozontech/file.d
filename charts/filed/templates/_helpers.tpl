@@ -72,5 +72,9 @@ Generate the name for the ClusterRole
 Generate the name for the ClusterRoleBinding
 */}}
 {{- define "filed.clusterRoleBindingName" -}}
+{{- if (not (empty .Values.clusterRole.name)) -}}
+{{- printf "%s-%s" .Release.Name .Values.clusterRole.name -}}
+{{- else -}}
 {{- printf "%s-pods-watcher" .Release.Name -}}
+{{- end -}}
 {{- end -}}
