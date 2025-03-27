@@ -106,6 +106,8 @@ input: {}
 
 actions: []
 
+pipeline: {}
+
 elasticsearch:
   enabled: true
   clusterName: k8slogs
