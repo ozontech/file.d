@@ -96,6 +96,8 @@ Reads `journalctl` output.
 ## k8s
 It reads Kubernetes logs and also adds pod meta-information. Also, it joins split logs into a single event.
 
+We recommend using the [Helm-chart](/charts/filed/README.md) for running in Kubernetes
+
 Source log file should be named in the following format:<br> `[pod-name]_[namespace]_[container-name]-[container-id].log`
 
 E.g. `my_pod-1566485760-trtrq_my-namespace_my-container-4e0301b633eaa2bfdcafdeba59ba0c72a3815911a6a820bf273534b0f32d98e0.log`
@@ -120,6 +122,22 @@ pipelines:
       file_config:                        // customize file plugin
         persistence_mode: sync
         read_buffer_size: 2048
+```
+
+To allow the plugin to access the necessary Kubernetes resources, you need to create a ClusterRole that grants permissions to read pod and node information.
+
+```yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: filed-pod-watcher
+rules:
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["nodes"]
+  verbs: ["get"]
 ```
 
 [More details...](plugin/input/k8s/README.md)
