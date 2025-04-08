@@ -32,6 +32,16 @@ message
 
 <br>
 
+**`data_format`** *`string`* *`default=json`* *`options=json|proto`* 
+
+Sendoing data format to Loki.
+
+By default sending data format is json.
+* if `json` is provided plugin will send logs in json format.
+* if `proto` is provided plugin will send logs in Snappy-compressed protobuf format.
+
+<br>
+
 **`timestamp_field`** *`string`* *`required`* 
 
 Timestamp field from log to be mapped to loki

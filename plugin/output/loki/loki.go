@@ -64,7 +64,7 @@ func (labels Labels) String() string {
 
 		b.WriteString(string(label))
 		b.WriteString(`=`)
-		b.WriteString(strconv.Quote(string(labels[string(label)])))
+		b.WriteString(strconv.Quote(labels[string(label)]))
 	}
 	b.WriteByte('}')
 
@@ -497,19 +497,15 @@ func (p *Plugin) buildJSONRequestBody(root *insaneJSON.Root) ([]byte, error) {
 }
 
 func (p *Plugin) buildProtoRequestBody(root *insaneJSON.Root) ([]byte, error) {
-	const timestampFormat = "2006-01-02T15:04:05.999999999Z07:00"
 	messages := root.Dig("data").AsArray()
 	values := make([]push.Entry, 0, len(messages))
+
+	var timestamp time.Time
 
 	for _, msg := range messages {
 		tsNode := msg.Dig(p.config.TimestampField)
 		ts := tsNode.AsString()
 		tsNode.Suicide()
-
-		var (
-			timestamp time.Time
-			err       error
-		)
 
 		if ts == "" {
 			ts = fmt.Sprint(time.Now().UnixNano())
