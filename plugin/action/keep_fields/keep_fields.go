@@ -10,6 +10,37 @@ import (
 
 /*{ introduction
 It keeps the list of the event fields and removes others.
+Nested fields supported: list subfield names separated with dot.
+Example:
+```
+fields: ["a.b.f1", "c"]
+# event before processing
+{
+    "a":{
+        "b":{
+            "f1":1,
+            "f2":2
+        }
+    },
+    "c":0,
+    "d":0
+}
+
+# event after processing
+{
+    "a":{
+        "b":{
+            "f1":1
+        }
+    },
+    "c":0
+}
+
+```
+
+NOTE: if `fields` param contains nested fields they will be removed.
+For example `fields: ["a.b", "a"]` gives the same result as `fields: ["a"]`.
+See `cfg.ParseNestedFields`.
 }*/
 
 type Plugin struct {
@@ -54,10 +85,6 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 	}
 
 	var err error
-	// NECESSARY:
-	// if we just parse several field selectors
-	// without removing nested fields
-	// TestRemoveNestedFieldsInConfig will fall
 	p.fieldPaths, err = cfg.ParseNestedFields(p.config.Fields)
 	if err != nil {
 		p.logger.Fatal("can't parse nested fields", zap.Error(err))
