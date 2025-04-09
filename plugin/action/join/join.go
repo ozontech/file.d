@@ -163,71 +163,7 @@ func (p *Plugin) flush() {
 	p.controller.Propagate(event)
 }
 
-func (p *Plugin) Do1(event *pipeline.Event) pipeline.ActionResult {
-	if event.IsTimeoutKind() {
-		if !p.isJoining {
-			p.logger.Panicf("timeout without joining, why?")
-		}
-		p.flush()
-		return pipeline.ActionDiscard
-	}
-
-	node := event.Root.Dig(p.config.Field_...)
-	if node == nil {
-		if p.isJoining {
-			p.flush()
-		}
-		return pipeline.ActionPass
-	}
-
-	value := node.AsString()
-
-	firstOK := false
-	if node.IsString() {
-		if p.config.FastCheck {
-			firstOK = p.config.StartCheckFunc_(value)
-		} else {
-			firstOK = p.config.Start_.MatchString(value)
-		}
-	}
-
-	if firstOK {
-		if p.isJoining {
-			p.flush()
-		}
-
-		p.initial = event
-		p.isJoining = true
-		p.buff = append(p.buff[:0], value...)
-		return pipeline.ActionHold
-	}
-
-	if p.isJoining {
-		nextOK := false
-		if p.config.FastCheck {
-			nextOK = p.config.ContinueCheckFunc_(value)
-		} else {
-			nextOK = p.config.Continue_.MatchString(value)
-		}
-
-		if p.negate {
-			nextOK = !nextOK
-		}
-		if nextOK {
-			if p.maxEventSize == 0 || len(p.buff) < p.maxEventSize {
-				p.buff = append(p.buff, value...)
-			}
-			return pipeline.ActionCollapse
-		}
-	}
-
-	if p.isJoining {
-		p.flush()
-	}
-	return pipeline.ActionPass
-}
-
-func (p *Plugin) Do2(event *pipeline.Event) pipeline.ActionResult {
+func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	if event.IsTimeoutKind() {
 		if !p.isJoining {
 			p.logger.Panicf("timeout without joining, why?")
@@ -249,8 +185,16 @@ func (p *Plugin) Do2(event *pipeline.Event) pipeline.ActionResult {
 	firstOK := false
 	templateID := -1
 	if node.IsString() {
-		templateID = p.getStartingTemplateID(value)
-		firstOK = templateID != -1
+		if len(p.config.Templates) == 0 {
+			if p.config.FastCheck {
+				firstOK = p.config.StartCheckFunc_(value)
+			} else {
+				firstOK = p.config.Start_.MatchString(value)
+			}
+		} else {
+			templateID = p.getStartingTemplateID(value)
+			firstOK = templateID != -1
+		}
 	}
 
 	if firstOK {
@@ -328,12 +272,4 @@ func (p *Plugin) getStartingTemplateID(value string) int {
 
 func (p *Plugin) getCurrentTemplate() template.Template {
 	return p.config.Templates[p.templateID]
-}
-
-func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
-	if len(p.config.Templates) == 0 {
-		return p.Do1(event)
-	} else {
-		return p.Do2(event)
-	}
 }
