@@ -32,7 +32,7 @@ Max size of the resulted event. If it is set and the event exceeds the limit, th
 
 <br>
 
-**`template`** *`string`* *`required`* 
+**`template`** *`string`* 
 
 The name of the template. Available templates: `go_panic`, `cs_exception`, `go_data_race`.
 
@@ -41,6 +41,12 @@ The name of the template. Available templates: `go_panic`, `cs_exception`, `go_d
 **`fast_check`** *`bool`* 
 
 Enable check without regular expressions.
+
+<br>
+
+**`templates`** *`[]cfgTemplate`* 
+
+Configs of several templates.
 
 <br>
 

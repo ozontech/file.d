@@ -8,7 +8,7 @@ import (
 )
 
 func BenchmarkSharpStartMixedRes(b *testing.B) {
-	cur, err := InitTemplate(nameCSException)
+	cur, err := InitTemplate(nameCSException, true)
 	require.NoError(b, err)
 
 	lines := getLines(sample.SharpException)
@@ -31,7 +31,7 @@ func BenchmarkSharpStartMixedRes(b *testing.B) {
 }
 
 func BenchmarkSharpContinueMixedRes(b *testing.B) {
-	cur, err := InitTemplate(nameCSException)
+	cur, err := InitTemplate(nameCSException, true)
 	require.NoError(b, err)
 
 	lines := getLines(sample.SharpException)
@@ -54,7 +54,7 @@ func BenchmarkSharpContinueMixedRes(b *testing.B) {
 }
 
 func BenchmarkSharpStartNegativeRes(b *testing.B) {
-	cur, err := InitTemplate(nameCSException)
+	cur, err := InitTemplate(nameCSException, true)
 	require.NoError(b, err)
 
 	lines := getRandLines()
@@ -77,7 +77,7 @@ func BenchmarkSharpStartNegativeRes(b *testing.B) {
 }
 
 func BenchmarkSharpContinueNegativeRes(b *testing.B) {
-	cur, err := InitTemplate(nameCSException)
+	cur, err := InitTemplate(nameCSException, true)
 	require.NoError(b, err)
 
 	lines := getRandLines()
@@ -100,7 +100,7 @@ func BenchmarkSharpContinueNegativeRes(b *testing.B) {
 }
 
 func TestSharpSameResults(t *testing.T) {
-	cur, err := InitTemplate(nameCSException)
+	cur, err := InitTemplate(nameCSException, true)
 	require.NoError(t, err)
 
 	lines := append(getLines(sample.SharpException), getRandLines()...)

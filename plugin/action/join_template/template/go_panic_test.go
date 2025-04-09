@@ -8,7 +8,7 @@ import (
 )
 
 func BenchmarkPanicStartMixedRes(b *testing.B) {
-	cur, err := InitTemplate(nameGoPanic)
+	cur, err := InitTemplate(nameGoPanic, true)
 	require.NoError(b, err)
 
 	lines := getLines(sample.Panics)
@@ -31,7 +31,7 @@ func BenchmarkPanicStartMixedRes(b *testing.B) {
 }
 
 func BenchmarkPanicContinueMixedRes(b *testing.B) {
-	cur, err := InitTemplate(nameGoPanic)
+	cur, err := InitTemplate(nameGoPanic, true)
 	require.NoError(b, err)
 
 	lines := getLines(sample.Panics)
@@ -54,7 +54,7 @@ func BenchmarkPanicContinueMixedRes(b *testing.B) {
 }
 
 func BenchmarkPanicStartNegativeRes(b *testing.B) {
-	cur, err := InitTemplate(nameGoPanic)
+	cur, err := InitTemplate(nameGoPanic, true)
 	require.NoError(b, err)
 
 	lines := getRandLines()
@@ -77,7 +77,7 @@ func BenchmarkPanicStartNegativeRes(b *testing.B) {
 }
 
 func BenchmarkPanicContinueNegativeRes(b *testing.B) {
-	cur, err := InitTemplate(nameGoPanic)
+	cur, err := InitTemplate(nameGoPanic, true)
 	require.NoError(b, err)
 
 	lines := getRandLines()
@@ -100,7 +100,7 @@ func BenchmarkPanicContinueNegativeRes(b *testing.B) {
 }
 
 func TestPanicSameResults(t *testing.T) {
-	cur, err := InitTemplate(nameGoPanic)
+	cur, err := InitTemplate(nameGoPanic, true)
 	require.NoError(t, err)
 
 	lines := getLines(sample.Panics)

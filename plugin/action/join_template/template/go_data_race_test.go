@@ -8,7 +8,7 @@ import (
 )
 
 func BenchmarkGoDataRaceStartMixedRes(b *testing.B) {
-	cur, err := InitTemplate(nameGoDataRace)
+	cur, err := InitTemplate(nameGoDataRace, true)
 	require.NoError(b, err)
 
 	lines := getLines(sample.GoDataRace)
@@ -31,7 +31,7 @@ func BenchmarkGoDataRaceStartMixedRes(b *testing.B) {
 }
 
 func BenchmarkGoDataRaceFinishMixedRes(b *testing.B) {
-	cur, err := InitTemplate(nameGoDataRace)
+	cur, err := InitTemplate(nameGoDataRace, true)
 	require.NoError(b, err)
 
 	lines := getLines(sample.GoDataRace)
@@ -54,7 +54,7 @@ func BenchmarkGoDataRaceFinishMixedRes(b *testing.B) {
 }
 
 func BenchmarkGoDataRaceStartNegativeRes(b *testing.B) {
-	cur, err := InitTemplate(nameGoDataRace)
+	cur, err := InitTemplate(nameGoDataRace, true)
 	require.NoError(b, err)
 
 	lines := getRandLines()
@@ -77,7 +77,7 @@ func BenchmarkGoDataRaceStartNegativeRes(b *testing.B) {
 }
 
 func BenchmarkGoDataRaceFinishNegativeRes(b *testing.B) {
-	cur, err := InitTemplate(nameGoDataRace)
+	cur, err := InitTemplate(nameGoDataRace, true)
 	require.NoError(b, err)
 
 	lines := getRandLines()
@@ -100,7 +100,7 @@ func BenchmarkGoDataRaceFinishNegativeRes(b *testing.B) {
 }
 
 func TestGoDataRaceSameResults(t *testing.T) {
-	cur, err := InitTemplate(nameGoDataRace)
+	cur, err := InitTemplate(nameGoDataRace, true)
 	require.NoError(t, err)
 
 	lines := append(getLines(sample.GoDataRace), getRandLines()...)

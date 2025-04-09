@@ -53,21 +53,25 @@ type Template struct {
 	StartRe    *regexp.Regexp
 	ContinueRe *regexp.Regexp
 
-	// Must be set by join_template plugin
-	// if it sets fast check flag
+	FastCheck     bool
 	StartCheck    func(string) bool
 	ContinueCheck func(string) bool
 
 	Negate bool
 }
 
-func InitTemplate(name string) (Template, error) {
+func InitTemplate(name string, fastCheck bool) (Template, error) {
 	cur, ok := templates[name]
 	if !ok {
 		return Template{}, fmt.Errorf("join template \"%s\" not found", name)
 	}
 
+	if fastCheck && (cur.startCheckFunc == nil || cur.continueCheckFunc == nil) {
+		return Template{}, fmt.Errorf("no fast check funcs for template \"%s\"", name)
+	}
+
 	result := Template{
+		FastCheck:     fastCheck,
 		StartCheck:    cur.startCheckFunc,
 		ContinueCheck: cur.continueCheckFunc,
 		Negate:        cur.negate,

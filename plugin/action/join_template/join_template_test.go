@@ -18,12 +18,13 @@ func TestSimpleJoin(t *testing.T) {
 	cases := []struct {
 		name       string
 		template   string
+		templates  []cfgTemplate
 		content    string
 		expEvents  int32
 		iterations int
 	}{
 		{
-			name:       "should_ok_for_panics",
+			name:       "should_ok_for_go_panic",
 			template:   "go_panic",
 			content:    sample.Panics,
 			iterations: 100,
@@ -44,8 +45,12 @@ func TestSimpleJoin(t *testing.T) {
 			expEvents:  3 * 3 * 100,
 		},
 		{
-			name:       "should_ok_for_mixed",
-			template:   "go_panic|cs_exception|go_data_race",
+			name: "should_ok_for_mixed",
+			templates: []cfgTemplate{
+				{Name: "go_panic", FastCheck: true},
+				{Name: "cs_exception", FastCheck: true},
+				{Name: "go_data_race", FastCheck: true},
+			},
 			content:    sample.Panics + sample.SharpException + sample.GoDataRace,
 			iterations: 100,
 			expEvents:  (17 + 3 + 3*3) * 100,
@@ -68,8 +73,9 @@ func TestSimpleJoin(t *testing.T) {
 			}
 
 			config := test.NewConfig(&Config{
-				Field:    "log",
-				Template: tt.template,
+				Field:     "log",
+				Template:  tt.template,
+				Templates: tt.templates,
 
 				FastCheck: fastCheck,
 			}, nil)
