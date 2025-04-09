@@ -45,11 +45,22 @@ func TestSimpleJoin(t *testing.T) {
 			expEvents:  3 * 3 * 100,
 		},
 		{
-			name: "should_ok_for_mixed",
+			name: "should_ok_for_mixed_fast_check",
 			templates: []cfgTemplate{
 				{Name: "go_panic", FastCheck: true},
 				{Name: "cs_exception", FastCheck: true},
 				{Name: "go_data_race", FastCheck: true},
+			},
+			content:    sample.Panics + sample.SharpException + sample.GoDataRace,
+			iterations: 100,
+			expEvents:  (17 + 3 + 3*3) * 100,
+		},
+		{
+			name: "should_ok_for_mixed_regexp",
+			templates: []cfgTemplate{
+				{Name: "go_panic", FastCheck: false},
+				{Name: "cs_exception", FastCheck: false},
+				{Name: "go_data_race", FastCheck: false},
 			},
 			content:    sample.Panics + sample.SharpException + sample.GoDataRace,
 			iterations: 100,

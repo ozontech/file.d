@@ -59,7 +59,7 @@ type Config struct {
 	// > @3@4@5@6
 	// >
 	// > Enable check without regular expressions.
-	FastCheck bool `json:"fast_check"` // *
+	FastCheck bool `json:"fast_check" default:"true"` // *
 
 	// > @3@4@5@6
 	// >
@@ -116,7 +116,6 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 	jConfig := &join.Config{
 		Field_:       p.config.Field_,
 		MaxEventSize: p.config.MaxEventSize,
-		FastCheck:    p.config.FastCheck,
 
 		Templates: templates,
 	}
