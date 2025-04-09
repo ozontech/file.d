@@ -267,13 +267,14 @@ func (p *Plugin) Do2(event *pipeline.Event) pipeline.ActionResult {
 
 	if p.isJoining {
 		nextOK := false
+		curTemplate := p.getCurrentTemplate()
 		if p.config.FastCheck {
-			nextOK = p.config.Templates[p.templateID].ContinueCheck(value)
+			nextOK = curTemplate.ContinueCheck(value)
 		} else {
-			nextOK = p.config.Templates[p.templateID].ContinueRe.MatchString(value)
+			nextOK = curTemplate.ContinueRe.MatchString(value)
 		}
 
-		if p.config.Templates[p.templateID].Negate {
+		if curTemplate.Negate {
 			nextOK = !nextOK
 		}
 		if nextOK {
@@ -307,7 +308,7 @@ func (p *Plugin) getStartingTemplateID(s string) int {
 	return -1
 }
 
-func (p *Plugin) getActiveTemplate() template.Template {
+func (p *Plugin) getCurrentTemplate() template.Template {
 	return p.config.Templates[p.templateID]
 }
 
