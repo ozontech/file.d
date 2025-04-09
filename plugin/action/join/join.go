@@ -128,6 +128,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 	p.controller = params.Controller
 	p.config = config.(*Config)
 	p.isJoining = false
+	p.templateID = -1
 	p.buff = make([]byte, 0, params.PipelineSettings.AvgEventSize)
 	p.maxEventSize = p.config.MaxEventSize
 	p.negate = p.config.Negate
