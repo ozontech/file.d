@@ -266,18 +266,7 @@ func (p *Plugin) Do2(event *pipeline.Event) pipeline.ActionResult {
 	}
 
 	if p.isJoining {
-		nextOK := false
-		curTemplate := p.getCurrentTemplate()
-		if p.config.FastCheck {
-			nextOK = curTemplate.ContinueCheck(value)
-		} else {
-			nextOK = curTemplate.ContinueRe.MatchString(value)
-		}
-
-		if curTemplate.Negate {
-			nextOK = !nextOK
-		}
-		if nextOK {
+		if p.isNextOK(value) {
 			if p.maxEventSize == 0 || len(p.buff) < p.maxEventSize {
 				p.buff = append(p.buff, value...)
 			}
@@ -291,13 +280,42 @@ func (p *Plugin) Do2(event *pipeline.Event) pipeline.ActionResult {
 	return pipeline.ActionPass
 }
 
-func (p *Plugin) getStartingTemplateID(s string) int {
+func (p *Plugin) isNextOK(value string) bool {
+	result := false
+
+	if len(p.config.Templates) == 0 {
+		if p.config.FastCheck {
+			result = p.config.ContinueCheckFunc_(value)
+		} else {
+			result = p.config.Continue_.MatchString(value)
+		}
+
+		if p.negate {
+			result = !result
+		}
+	} else {
+		curTemplate := p.getCurrentTemplate()
+		if p.config.FastCheck {
+			result = curTemplate.ContinueCheck(value)
+		} else {
+			result = curTemplate.ContinueRe.MatchString(value)
+		}
+
+		if curTemplate.Negate {
+			result = !result
+		}
+	}
+
+	return result
+}
+
+func (p *Plugin) getStartingTemplateID(value string) int {
 	for i, cur := range p.config.Templates {
 		res := false
 		if p.config.FastCheck {
-			res = cur.StartCheck(s)
+			res = cur.StartCheck(value)
 		} else {
-			res = cur.StartRe.MatchString(s)
+			res = cur.StartRe.MatchString(value)
 		}
 
 		if res {
