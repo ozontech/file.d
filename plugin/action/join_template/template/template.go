@@ -50,11 +50,15 @@ var templates = joinTemplates{
 }
 
 type Template struct {
-	StartRe       *regexp.Regexp
-	ContinueRe    *regexp.Regexp
+	StartRe    *regexp.Regexp
+	ContinueRe *regexp.Regexp
+
+	// Must be set by join_template plugin
+	// if it sets fast check flag
 	StartCheck    func(string) bool
 	ContinueCheck func(string) bool
-	Negate        bool
+
+	Negate bool
 }
 
 func InitTemplate(name string) (Template, error) {
