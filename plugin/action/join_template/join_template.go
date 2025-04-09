@@ -1,8 +1,6 @@
 package join_template
 
 import (
-	"strings"
-
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/logger"
@@ -56,12 +54,22 @@ type Config struct {
 	// > @3@4@5@6
 	// >
 	// > The name of the template. Available templates: `go_panic`, `cs_exception`, `go_data_race`.
-	Template string `json:"template" required:"true"` // *
+	Template string `json:"template"` // *
 
 	// > @3@4@5@6
 	// >
 	// > Enable check without regular expressions.
 	FastCheck bool `json:"fast_check"` // *
+
+	// > @3@4@5@6
+	// >
+	// > Configs of several templates.
+	Templates []cfgTemplate `json:"templates"` // *
+}
+
+type cfgTemplate struct {
+	Name      string `json:"name" required:"true"`
+	FastCheck bool   `json:"fast_check" default:"true"`
 }
 
 func init() {
@@ -78,16 +86,31 @@ func factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginParams) {
 	p.config = config.(*Config)
 
-	templateNames := strings.Split(strings.TrimSpace(p.config.Template), "|")
+	oneTemplate := p.config.Template != ""
+	manyTemplates := len(p.config.Templates) > 0
 
-	templates := make([]template.Template, 0, len(templateNames))
-	for _, name := range templateNames {
-		cur, err := template.InitTemplate(name)
+	if oneTemplate == manyTemplates {
+		logger.Fatalf("either one or several join templates must be enabled")
+	}
+
+	var templates []template.Template
+
+	switch {
+	case oneTemplate:
+		result, err := template.InitTemplate(p.config.Template, p.config.FastCheck)
 		if err != nil {
-			logger.Fatalf("failed to init join template \"%s\": %s", templateNames, err)
+			logger.Fatalf("failed to init join template \"%s\": %s", p.config.Template, err)
 		}
+		templates = append(templates, result)
 
-		templates = append(templates, cur)
+	case manyTemplates:
+		for _, cur := range p.config.Templates {
+			result, err := template.InitTemplate(cur.Name, cur.FastCheck)
+			if err != nil {
+				logger.Fatalf("failed to init join template \"%s\": %s", cur.Name, err)
+			}
+			templates = append(templates, result)
+		}
 	}
 
 	jConfig := &join.Config{
