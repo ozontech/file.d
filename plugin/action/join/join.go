@@ -113,6 +113,7 @@ type Config struct {
 	// > Negate match logic for Continue (lets you implement negative lookahead while joining lines)
 	Negate bool `json:"negate" default:"false"` // *
 
+	// Used by join_template plugin to set several templates in one plugin
 	Templates []template.Template
 }
 
