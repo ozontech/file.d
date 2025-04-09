@@ -73,6 +73,8 @@ type Plugin struct {
 	maxEventSize int
 	negate       bool
 
+	templateID int
+
 	logger *zap.SugaredLogger
 }
 
@@ -150,6 +152,7 @@ func (p *Plugin) flush() {
 	event := p.initial
 	p.initial = nil
 	p.isJoining = false
+	p.templateID = -1
 
 	if event == nil {
 		p.logger.Panicf("first event is nil, why?")
@@ -225,7 +228,83 @@ func (p *Plugin) Do1(event *pipeline.Event) pipeline.ActionResult {
 }
 
 func (p *Plugin) Do2(event *pipeline.Event) pipeline.ActionResult {
-	panic("qwe")
+	if event.IsTimeoutKind() {
+		if !p.isJoining {
+			p.logger.Panicf("timeout without joining, why?")
+		}
+		p.flush()
+		return pipeline.ActionDiscard
+	}
+
+	node := event.Root.Dig(p.config.Field_...)
+	if node == nil {
+		if p.isJoining {
+			p.flush()
+		}
+		return pipeline.ActionPass
+	}
+
+	value := node.AsString()
+
+	firstOK := false
+	templateID := -1
+	if node.IsString() {
+		templateID = p.getTemplateID(value)
+		firstOK = templateID != -1
+	}
+
+	if firstOK {
+		if p.isJoining {
+			p.flush()
+		}
+
+		p.initial = event
+		p.isJoining = true
+		p.buff = append(p.buff[:0], value...)
+		p.templateID = templateID
+		return pipeline.ActionHold
+	}
+
+	if p.isJoining {
+		nextOK := false
+		if p.config.FastCheck {
+			nextOK = p.config.Templates[p.templateID].ContinueCheck(value)
+		} else {
+			nextOK = p.config.Templates[p.templateID].ContinueRe.MatchString(value)
+		}
+
+		if p.config.Templates[p.templateID].Negate {
+			nextOK = !nextOK
+		}
+		if nextOK {
+			if p.maxEventSize == 0 || len(p.buff) < p.maxEventSize {
+				p.buff = append(p.buff, value...)
+			}
+			return pipeline.ActionCollapse
+		}
+	}
+
+	if p.isJoining {
+		p.flush()
+	}
+	return pipeline.ActionPass
+}
+
+func (p *Plugin) getTemplateID(s string) int {
+	for i, cur := range p.config.Templates {
+		res := false
+		if p.config.FastCheck {
+			res = cur.StartCheck(s)
+		} else {
+			res = cur.StartRe.MatchString(s)
+		}
+
+		if res {
+			return i
+		}
+	}
+
+	return -1
 }
 
 func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
