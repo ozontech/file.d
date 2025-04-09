@@ -6,6 +6,7 @@ import (
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/plugin/action/join_template/template"
 	"go.uber.org/zap"
 )
 
@@ -117,6 +118,8 @@ type Config struct {
 	// >
 	// > Negate match logic for Continue (lets you implement negative lookahead while joining lines)
 	Negate bool `json:"negate" default:"false"` // *
+
+	Templates []template.Template
 }
 
 func init() {
@@ -157,7 +160,7 @@ func (p *Plugin) flush() {
 	p.controller.Propagate(event)
 }
 
-func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
+func (p *Plugin) Do1(event *pipeline.Event) pipeline.ActionResult {
 	if event.IsTimeoutKind() {
 		if !p.isJoining {
 			p.logger.Panicf("timeout without joining, why?")
@@ -219,4 +222,16 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 		p.flush()
 	}
 	return pipeline.ActionPass
+}
+
+func (p *Plugin) Do2(event *pipeline.Event) pipeline.ActionResult {
+	panic("qwe")
+}
+
+func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
+	if len(p.config.Templates) == 0 {
+		return p.Do1(event)
+	} else {
+		return p.Do2(event)
+	}
 }

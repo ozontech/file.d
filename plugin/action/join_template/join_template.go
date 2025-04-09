@@ -1,6 +1,8 @@
 package join_template
 
 import (
+	"strings"
+
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/logger"
@@ -76,25 +78,26 @@ func factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginParams) {
 	p.config = config.(*Config)
 
-	templateName := p.config.Template
-	curTemplate, err := template.InitTemplate(templateName)
-	if err != nil {
-		logger.Fatalf("failed to init join template \"%s\": %s", templateName, err)
+	templateNames := strings.Split(strings.TrimSpace(p.config.Template), "|")
+
+	templates := make([]template.Template, 0, len(templateNames))
+	for _, name := range templateNames {
+		cur, err := template.InitTemplate(name)
+		if err != nil {
+			logger.Fatalf("failed to init join template \"%s\": %s", templateNames, err)
+		}
+
+		templates = append(templates, cur)
 	}
 
 	jConfig := &join.Config{
 		Field_:       p.config.Field_,
 		MaxEventSize: p.config.MaxEventSize,
-		Start_:       curTemplate.StartRe,
-		Continue_:    curTemplate.ContinueRe,
+		FastCheck:    p.config.FastCheck,
 
-		FastCheck: p.config.FastCheck,
-
-		StartCheckFunc_:    curTemplate.StartCheck,
-		ContinueCheckFunc_: curTemplate.ContinueCheck,
-
-		Negate: curTemplate.Negate,
+		Templates: templates,
 	}
+
 	p.jp = &join.Plugin{}
 	p.jp.Start(jConfig, params)
 }
