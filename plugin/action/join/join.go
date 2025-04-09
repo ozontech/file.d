@@ -97,19 +97,11 @@ type Config struct {
 	Start  cfg.Regexp `json:"start" required:"true" parse:"regexp"` // *
 	Start_ *regexp.Regexp
 
-	// Must be set by join_template plugin
-	// if it sets fast check flag
-	StartCheckFunc_ func(s string) bool
-
 	// > @3@4@5@6
 	// >
 	// > A regexp which will continue the join sequence.
 	Continue  cfg.Regexp `json:"continue" required:"true" parse:"regexp"` // *
 	Continue_ *regexp.Regexp
-
-	// Must be set by join_template plugin
-	// if it sets fast check flag
-	ContinueCheckFunc_ func(s string) bool
 
 	// > @3@4@5@6
 	// >
@@ -186,11 +178,7 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	templateID := -1
 	if node.IsString() {
 		if len(p.config.Templates) == 0 {
-			if p.config.FastCheck {
-				firstOK = p.config.StartCheckFunc_(value)
-			} else {
-				firstOK = p.config.Start_.MatchString(value)
-			}
+			firstOK = p.config.Start_.MatchString(value)
 		} else {
 			templateID = p.getStartingTemplateID(value)
 			firstOK = templateID != -1
@@ -228,11 +216,7 @@ func (p *Plugin) isNextOK(value string) bool {
 	result := false
 
 	if len(p.config.Templates) == 0 {
-		if p.config.FastCheck {
-			result = p.config.ContinueCheckFunc_(value)
-		} else {
-			result = p.config.Continue_.MatchString(value)
-		}
+		result = p.config.Continue_.MatchString(value)
 
 		if p.negate {
 			result = !result
