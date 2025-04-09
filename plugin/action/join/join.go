@@ -249,7 +249,7 @@ func (p *Plugin) Do2(event *pipeline.Event) pipeline.ActionResult {
 	firstOK := false
 	templateID := -1
 	if node.IsString() {
-		templateID = p.getTemplateID(value)
+		templateID = p.getStartingTemplateID(value)
 		firstOK = templateID != -1
 	}
 
@@ -290,7 +290,7 @@ func (p *Plugin) Do2(event *pipeline.Event) pipeline.ActionResult {
 	return pipeline.ActionPass
 }
 
-func (p *Plugin) getTemplateID(s string) int {
+func (p *Plugin) getStartingTemplateID(s string) int {
 	for i, cur := range p.config.Templates {
 		res := false
 		if p.config.FastCheck {
@@ -305,6 +305,10 @@ func (p *Plugin) getTemplateID(s string) int {
 	}
 
 	return -1
+}
+
+func (p *Plugin) getActiveTemplate() template.Template {
+	return p.config.Templates[p.templateID]
 }
 
 func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
