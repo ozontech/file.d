@@ -87,10 +87,6 @@ type Config struct {
 	Field  cfg.FieldSelector `json:"field" required:"true" parse:"selector"` // *
 	Field_ []string
 
-	// Special flag for join_template plugin;
-	// it allows to check strings without regexp
-	FastCheck bool
-
 	// > @3@4@5@6
 	// >
 	// > A regexp which will start the join sequence.
@@ -224,7 +220,7 @@ func (p *Plugin) isNextOK(value string) bool {
 		}
 	} else {
 		curTemplate := p.getCurrentTemplate()
-		if p.config.FastCheck {
+		if curTemplate.FastCheck {
 			result = curTemplate.ContinueCheck(value)
 		} else {
 			result = curTemplate.ContinueRe.MatchString(value)
@@ -241,7 +237,7 @@ func (p *Plugin) isNextOK(value string) bool {
 func (p *Plugin) getStartingTemplateID(value string) int {
 	for i, cur := range p.config.Templates {
 		res := false
-		if p.config.FastCheck {
+		if cur.FastCheck {
 			res = cur.StartCheck(value)
 		} else {
 			res = cur.StartRe.MatchString(value)
