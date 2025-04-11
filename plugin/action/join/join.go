@@ -6,6 +6,7 @@ import (
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/plugin/action/join_template/template"
 	"go.uber.org/zap"
 )
 
@@ -72,6 +73,8 @@ type Plugin struct {
 	maxEventSize int
 	negate       bool
 
+	templateID int
+
 	logger *zap.SugaredLogger
 }
 
@@ -84,29 +87,17 @@ type Config struct {
 	Field  cfg.FieldSelector `json:"field" required:"true" parse:"selector"` // *
 	Field_ []string
 
-	// Special flag for join_template plugin;
-	// it allows to check strings without regexp
-	FastCheck bool
-
 	// > @3@4@5@6
 	// >
 	// > A regexp which will start the join sequence.
 	Start  cfg.Regexp `json:"start" required:"true" parse:"regexp"` // *
 	Start_ *regexp.Regexp
 
-	// Must be set by join_template plugin
-	// if it sets fast check flag
-	StartCheckFunc_ func(s string) bool
-
 	// > @3@4@5@6
 	// >
 	// > A regexp which will continue the join sequence.
 	Continue  cfg.Regexp `json:"continue" required:"true" parse:"regexp"` // *
 	Continue_ *regexp.Regexp
-
-	// Must be set by join_template plugin
-	// if it sets fast check flag
-	ContinueCheckFunc_ func(s string) bool
 
 	// > @3@4@5@6
 	// >
@@ -117,6 +108,9 @@ type Config struct {
 	// >
 	// > Negate match logic for Continue (lets you implement negative lookahead while joining lines)
 	Negate bool `json:"negate" default:"false"` // *
+
+	// Used by join_template plugin to set several templates in one plugin
+	Templates []template.Template
 }
 
 func init() {
@@ -134,6 +128,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 	p.controller = params.Controller
 	p.config = config.(*Config)
 	p.isJoining = false
+	p.templateID = -1
 	p.buff = make([]byte, 0, params.PipelineSettings.AvgEventSize)
 	p.maxEventSize = p.config.MaxEventSize
 	p.negate = p.config.Negate
@@ -147,6 +142,7 @@ func (p *Plugin) flush() {
 	event := p.initial
 	p.initial = nil
 	p.isJoining = false
+	p.templateID = -1
 
 	if event == nil {
 		p.logger.Panicf("first event is nil, why?")
@@ -177,11 +173,13 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	value := node.AsString()
 
 	firstOK := false
+	templateID := -1
 	if node.IsString() {
-		if p.config.FastCheck {
-			firstOK = p.config.StartCheckFunc_(value)
-		} else {
+		if len(p.config.Templates) == 0 {
 			firstOK = p.config.Start_.MatchString(value)
+		} else {
+			templateID = p.getStartingTemplateID(value)
+			firstOK = templateID != -1
 		}
 	}
 
@@ -193,21 +191,12 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 		p.initial = event
 		p.isJoining = true
 		p.buff = append(p.buff[:0], value...)
+		p.templateID = templateID
 		return pipeline.ActionHold
 	}
 
 	if p.isJoining {
-		nextOK := false
-		if p.config.FastCheck {
-			nextOK = p.config.ContinueCheckFunc_(value)
-		} else {
-			nextOK = p.config.Continue_.MatchString(value)
-		}
-
-		if p.negate {
-			nextOK = !nextOK
-		}
-		if nextOK {
+		if p.isNextOK(value) {
 			if p.maxEventSize == 0 || len(p.buff) < p.maxEventSize {
 				p.buff = append(p.buff, value...)
 			}
@@ -219,4 +208,50 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 		p.flush()
 	}
 	return pipeline.ActionPass
+}
+
+func (p *Plugin) isNextOK(value string) bool {
+	result := false
+
+	if len(p.config.Templates) == 0 {
+		result = p.config.Continue_.MatchString(value)
+
+		if p.negate {
+			result = !result
+		}
+	} else {
+		curTemplate := p.getCurrentTemplate()
+		if curTemplate.FastCheck {
+			result = curTemplate.ContinueCheck(value)
+		} else {
+			result = curTemplate.ContinueRe.MatchString(value)
+		}
+
+		if curTemplate.Negate {
+			result = !result
+		}
+	}
+
+	return result
+}
+
+func (p *Plugin) getStartingTemplateID(value string) int {
+	for i, cur := range p.config.Templates {
+		res := false
+		if cur.FastCheck {
+			res = cur.StartCheck(value)
+		} else {
+			res = cur.StartRe.MatchString(value)
+		}
+
+		if res {
+			return i
+		}
+	}
+
+	return -1
+}
+
+func (p *Plugin) getCurrentTemplate() template.Template {
+	return p.config.Templates[p.templateID]
 }

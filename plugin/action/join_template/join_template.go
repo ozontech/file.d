@@ -54,12 +54,22 @@ type Config struct {
 	// > @3@4@5@6
 	// >
 	// > The name of the template. Available templates: `go_panic`, `cs_exception`, `go_data_race`.
-	Template string `json:"template" required:"true"` // *
+	Template string `json:"template"` // *
 
 	// > @3@4@5@6
 	// >
 	// > Enable check without regular expressions.
-	FastCheck bool `json:"fast_check"` // *
+	FastCheck bool `json:"fast_check" default:"true"` // *
+
+	// > @3@4@5@6
+	// >
+	// > Configs of several templates.
+	Templates []cfgTemplate `json:"templates"` // *
+}
+
+type cfgTemplate struct {
+	Name      string `json:"name" required:"true"`
+	FastCheck bool   `json:"fast_check" default:"true"`
 }
 
 func init() {
@@ -76,25 +86,40 @@ func factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginParams) {
 	p.config = config.(*Config)
 
-	templateName := p.config.Template
-	curTemplate, err := template.InitTemplate(templateName)
-	if err != nil {
-		logger.Fatalf("failed to init join template \"%s\": %s", templateName, err)
+	oneTemplate := p.config.Template != ""
+	manyTemplates := len(p.config.Templates) > 0
+
+	if oneTemplate == manyTemplates {
+		logger.Fatalf("either one or several join templates must be enabled")
+	}
+
+	var templates []template.Template
+
+	switch {
+	case oneTemplate:
+		result, err := template.InitTemplate(p.config.Template, p.config.FastCheck)
+		if err != nil {
+			logger.Fatalf("failed to init join template \"%s\": %s", p.config.Template, err)
+		}
+		templates = append(templates, result)
+
+	case manyTemplates:
+		for _, cur := range p.config.Templates {
+			result, err := template.InitTemplate(cur.Name, cur.FastCheck)
+			if err != nil {
+				logger.Fatalf("failed to init join template \"%s\": %s", cur.Name, err)
+			}
+			templates = append(templates, result)
+		}
 	}
 
 	jConfig := &join.Config{
 		Field_:       p.config.Field_,
 		MaxEventSize: p.config.MaxEventSize,
-		Start_:       curTemplate.StartRe,
-		Continue_:    curTemplate.ContinueRe,
 
-		FastCheck: p.config.FastCheck,
-
-		StartCheckFunc_:    curTemplate.StartCheck,
-		ContinueCheckFunc_: curTemplate.ContinueCheck,
-
-		Negate: curTemplate.Negate,
+		Templates: templates,
 	}
+
 	p.jp = &join.Plugin{}
 	p.jp.Start(jConfig, params)
 }
