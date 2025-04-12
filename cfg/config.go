@@ -564,6 +564,13 @@ func ParseFieldSelector(selector string) []string {
 	return result
 }
 
+// Parses several fields selectors and removes nested fields.
+// If there are empty field selectors or no selectors at all error returned.
+// For example:
+// {"a", "a.b"} and {"a"} give the same results
+// because field "a.b" is nested to field "a".
+// Used in remove_fields plugin and keep_fields plugin
+// to prevent extra selections.
 func ParseNestedFields(fields []string) ([][]string, error) {
 	if len(fields) == 0 {
 		return nil, errors.New("empty fields list")

@@ -12,6 +12,7 @@ import (
 type KafkaClient interface {
 	ProduceSync(ctx context.Context, rs ...*kgo.Record) kgo.ProduceResults
 	Close()
+	ForceMetadataRefresh()
 }
 
 func NewClient(c *Config, l *zap.Logger) *kgo.Client {
@@ -22,6 +23,7 @@ func NewClient(c *Config, l *zap.Logger) *kgo.Client {
 		kgo.ProducerBatchMaxBytes(int32(c.MaxMessageBytes_)),
 		kgo.ProducerLinger(1 * time.Millisecond),
 		kgo.AllowAutoTopicCreation(),
+		kgo.RecordRetries(1),
 	}...)
 
 	switch c.Compression {
