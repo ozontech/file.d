@@ -2,10 +2,10 @@ package pipeline
 
 type Offsets struct {
 	current       int64
-	streamOffsets SliceMap
+	streamOffsets *SliceMap
 }
 
-func NewOffsets(current int64, streamOffsets SliceMap) Offsets {
+func NewOffsets(current int64, streamOffsets *SliceMap) Offsets {
 	return Offsets{
 		current:       current,
 		streamOffsets: streamOffsets,

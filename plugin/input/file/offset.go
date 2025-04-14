@@ -217,7 +217,7 @@ func (o *offsetDB) save(jobs map[pipeline.SourceID]*Job, mu *sync.RWMutex) {
 	o.buf = o.buf[:0]
 	for _, job := range snapshot {
 		job.mu.Lock()
-		if len(job.offsets) == 0 {
+		if job.offsets.Len() == 0 {
 			job.mu.Unlock()
 			continue
 		}
@@ -235,7 +235,7 @@ func (o *offsetDB) save(jobs map[pipeline.SourceID]*Job, mu *sync.RWMutex) {
 		o.buf = append(o.buf, '\n')
 
 		o.buf = append(o.buf, "  streams:\n"...)
-		for _, strOff := range job.offsets {
+		for _, strOff := range job.offsets.All() {
 			o.buf = append(o.buf, "    "...)
 			o.buf = append(o.buf, string(strOff.Stream)...)
 			o.buf = append(o.buf, ": "...)
