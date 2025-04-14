@@ -9,7 +9,8 @@ import (
 // SliceMap is a map of streamName to offset.
 // It could be just map[k]v, but Go > 1.17 internal map implementation can't
 // work with mutable strings that occurs when using unsafe cast from []byte.
-// Also it should be not slower on 1-2 keys like linked list, which is often the case for streams per job.
+// Also it should be not slower on 1-2 keys like linked list,
+// which is often the case for streams per job.
 type SliceMap struct {
 	s  []kv
 	mx sync.RWMutex
