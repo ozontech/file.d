@@ -35,6 +35,9 @@ type Plugin struct {
 	config *Config
 
 	jp *join.Plugin
+
+	templates      []template.Template
+	curTemplateIdx int
 }
 
 // ! config-params
@@ -64,10 +67,10 @@ type Config struct {
 	// > @3@4@5@6
 	// >
 	// > Configs of several templates.
-	Templates []cfgTemplate `json:"templates"` // *
+	Templates []TemplateConfig `json:"templates"` // *
 }
 
-type cfgTemplate struct {
+type TemplateConfig struct {
 	Name      string `json:"name" required:"true"`
 	FastCheck bool   `json:"fast_check" default:"true"`
 }
@@ -113,11 +116,15 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 		}
 	}
 
+	p.templates = templates
+	p.curTemplateIdx = -1
+
 	jConfig := &join.Config{
 		Field_:       p.config.Field_,
 		MaxEventSize: p.config.MaxEventSize,
 
-		Templates: templates,
+		FirstCheck: p.firstCheck,
+		NextCheck:  p.nextCheck,
 	}
 
 	p.jp = &join.Plugin{}
@@ -130,4 +137,39 @@ func (p *Plugin) Stop() {
 
 func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	return p.jp.Do(event)
+}
+
+func (p *Plugin) firstCheck(value string) bool {
+	for i, cur := range p.templates {
+		res := false
+		if cur.FastCheck {
+			res = cur.StartCheck(value)
+		} else {
+			res = cur.StartRe.MatchString(value)
+		}
+
+		if res {
+			p.curTemplateIdx = i
+			return true
+		}
+	}
+
+	return false
+}
+
+func (p *Plugin) nextCheck(value string) bool {
+	result := false
+
+	curTemplate := p.templates[p.curTemplateIdx]
+	if curTemplate.FastCheck {
+		result = curTemplate.ContinueCheck(value)
+	} else {
+		result = curTemplate.ContinueRe.MatchString(value)
+	}
+
+	if curTemplate.Negate {
+		result = !result
+	}
+
+	return result
 }

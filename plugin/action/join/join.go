@@ -6,7 +6,6 @@ import (
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/pipeline"
-	"github.com/ozontech/file.d/plugin/action/join_template/template"
 	"go.uber.org/zap"
 )
 
@@ -73,8 +72,6 @@ type Plugin struct {
 	maxEventSize int
 	negate       bool
 
-	templateID int
-
 	logger *zap.SugaredLogger
 }
 
@@ -109,8 +106,9 @@ type Config struct {
 	// > Negate match logic for Continue (lets you implement negative lookahead while joining lines)
 	Negate bool `json:"negate" default:"false"` // *
 
-	// Used by join_template plugin to set several templates in one plugin
-	Templates []template.Template
+	// Used for compatibility with join_template plugin
+	FirstCheck func(string) bool
+	NextCheck  func(string) bool
 }
 
 func init() {
@@ -128,7 +126,6 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 	p.controller = params.Controller
 	p.config = config.(*Config)
 	p.isJoining = false
-	p.templateID = -1
 	p.buff = make([]byte, 0, params.PipelineSettings.AvgEventSize)
 	p.maxEventSize = p.config.MaxEventSize
 	p.negate = p.config.Negate
@@ -142,7 +139,6 @@ func (p *Plugin) flush() {
 	event := p.initial
 	p.initial = nil
 	p.isJoining = false
-	p.templateID = -1
 
 	if event == nil {
 		p.logger.Panicf("first event is nil, why?")
@@ -173,13 +169,11 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	value := node.AsString()
 
 	firstOK := false
-	templateID := -1
 	if node.IsString() {
-		if len(p.config.Templates) == 0 {
+		if p.config.FirstCheck == nil {
 			firstOK = p.config.Start_.MatchString(value)
 		} else {
-			templateID = p.getStartingTemplateID(value)
-			firstOK = templateID != -1
+			firstOK = p.config.FirstCheck(value)
 		}
 	}
 
@@ -191,7 +185,6 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 		p.initial = event
 		p.isJoining = true
 		p.buff = append(p.buff[:0], value...)
-		p.templateID = templateID
 		return pipeline.ActionHold
 	}
 
@@ -211,47 +204,15 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 }
 
 func (p *Plugin) isNextOK(value string) bool {
-	result := false
-
-	if len(p.config.Templates) == 0 {
-		result = p.config.Continue_.MatchString(value)
+	if p.config.NextCheck == nil {
+		result := p.config.Continue_.MatchString(value)
 
 		if p.negate {
 			result = !result
 		}
-	} else {
-		curTemplate := p.getCurrentTemplate()
-		if curTemplate.FastCheck {
-			result = curTemplate.ContinueCheck(value)
-		} else {
-			result = curTemplate.ContinueRe.MatchString(value)
-		}
 
-		if curTemplate.Negate {
-			result = !result
-		}
+		return result
 	}
 
-	return result
-}
-
-func (p *Plugin) getStartingTemplateID(value string) int {
-	for i, cur := range p.config.Templates {
-		res := false
-		if cur.FastCheck {
-			res = cur.StartCheck(value)
-		} else {
-			res = cur.StartRe.MatchString(value)
-		}
-
-		if res {
-			return i
-		}
-	}
-
-	return -1
-}
-
-func (p *Plugin) getCurrentTemplate() template.Template {
-	return p.config.Templates[p.templateID]
+	return p.config.NextCheck(value)
 }

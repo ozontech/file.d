@@ -38,13 +38,13 @@ The name of the template. Available templates: `go_panic`, `cs_exception`, `go_d
 
 <br>
 
-**`fast_check`** *`bool`* 
+**`fast_check`** *`bool`* *`default=true`* 
 
 Enable check without regular expressions.
 
 <br>
 
-**`templates`** *`[]cfgTemplate`* 
+**`templates`** *`[]TemplateConfig`* 
 
 Configs of several templates.
 
