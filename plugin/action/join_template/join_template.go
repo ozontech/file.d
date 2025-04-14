@@ -3,7 +3,6 @@ package join_template
 import (
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
-	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/plugin/action/join"
 	"github.com/ozontech/file.d/plugin/action/join_template/template"
@@ -87,25 +86,19 @@ func factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 }
 
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginParams) {
+	logger := params.Logger
 	p.config = config.(*Config)
 
 	oneTemplate := p.config.Template != ""
 	manyTemplates := len(p.config.Templates) > 0
 
-	if oneTemplate == manyTemplates {
-		logger.Fatalf("either one or several join templates must be enabled")
-	}
-
 	var templates []template.Template
 
-	switch {
-	case oneTemplate:
-		result, err := template.InitTemplate(p.config.Template, p.config.FastCheck)
-		if err != nil {
-			logger.Fatalf("failed to init join template \"%s\": %s", p.config.Template, err)
-		}
-		templates = append(templates, result)
+	if oneTemplate && manyTemplates {
+		logger.Warn("field 'template' is deprecated and suppressed by field 'templates'")
+	}
 
+	switch {
 	case manyTemplates:
 		for _, cur := range p.config.Templates {
 			result, err := template.InitTemplate(cur.Name, cur.FastCheck)
@@ -114,6 +107,14 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 			}
 			templates = append(templates, result)
 		}
+	case oneTemplate:
+		result, err := template.InitTemplate(p.config.Template, p.config.FastCheck)
+		if err != nil {
+			logger.Fatalf("failed to init join template \"%s\": %s", p.config.Template, err)
+		}
+		templates = append(templates, result)
+	default:
+		logger.Fatalf("either field 'template' or field 'templates' must be non empty")
 	}
 
 	p.templates = templates
