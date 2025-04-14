@@ -36,6 +36,15 @@ func (so *SliceMap) Len() int {
 	return len(so.s)
 }
 
+func (so *SliceMap) RLock() {
+	so.mx.RLock()
+}
+
+func (so *SliceMap) RUnlock() {
+	so.mx.RUnlock()
+}
+
+// All returns iterator. Use in pair with [RLock]/[RUnlock].
 func (so *SliceMap) All() iter.Seq2[int, kv] {
 	if so == nil {
 		return nil
