@@ -65,7 +65,15 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
-	// > Configs of several templates.
+	// > Configs of several templates. `TemplateConfig` params:
+	// > * **`name`** *`string`* *`required`*
+	// >
+	// > 	The name of the template. Available templates: `go_panic`, `cs_exception`, `go_data_race`.
+	// >
+	// > * **`fast_check`** *`bool`*
+	// >
+	// > 	Enable check without regular expressions.
+	// >
 	Templates []TemplateConfig `json:"templates"` // *
 }
 
