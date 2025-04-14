@@ -232,16 +232,13 @@ func (jp *jobProvider) commit(event *pipeline.Event) {
 		return
 	}
 
-	job.mu.Lock()
 	// commit offsets only not ignored AND regular events
 	if (!event.IsRegularKind() && !event.IsChildParentKind()) || event.SeqID <= job.ignoreEventsLE {
-		job.mu.Unlock()
 		return
 	}
 
 	value, has := job.offsets.Get(streamName)
 	if value >= event.Offset {
-		defer job.mu.Unlock()
 		jp.logger.Panicf("offset corruption: committing=%d, current=%d, event id=%d, source=%d:%s", event.Offset, value, event.SeqID, event.SourceID, event.SourceName)
 	}
 
@@ -257,8 +254,6 @@ func (jp *jobProvider) commit(event *pipeline.Event) {
 		streamNameCopy := pipeline.StreamName(event.StreamNameBytes())
 		job.offsets.Set(streamNameCopy, event.Offset)
 	}
-
-	job.mu.Unlock()
 
 	jp.offsetsCommitted.Inc()
 	if jp.config.PersistenceMode_ == persistenceModeSync {
@@ -381,7 +376,7 @@ func (jp *jobProvider) addJob(file *os.File, stat os.FileInfo, filename string, 
 		isDone:     true,
 		shouldSkip: *atomic.NewBool(false),
 
-		offsets: nil,
+		offsets: pipeline.SliceFromMap(nil),
 
 		mu: &sync.Mutex{},
 	}
