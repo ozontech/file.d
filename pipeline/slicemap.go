@@ -12,7 +12,7 @@ import (
 // Also it should be not slower on 1-2 keys like linked list, which is often the case for streams per job.
 type SliceMap struct {
 	s  []kv
-	mx *sync.RWMutex
+	mx sync.RWMutex
 }
 
 type kv struct {
@@ -25,21 +25,28 @@ func SliceFromMap(m map[StreamName]int64) *SliceMap {
 	for k, v := range m {
 		so = append(so, kv{k, v})
 	}
-	return &SliceMap{
-		s:  so,
-		mx: &sync.RWMutex{},
-	}
+	return &SliceMap{s: so}
 }
 
 func (so *SliceMap) Len() int {
+	if so == nil {
+		return 0
+	}
 	return len(so.s)
 }
 
 func (so *SliceMap) All() iter.Seq2[int, kv] {
+	if so == nil {
+		return nil
+	}
 	return slices.All(so.s)
 }
 
 func (so *SliceMap) Get(streamName StreamName) (int64, bool) {
+	if so == nil {
+		return 0, false
+	}
+
 	so.mx.RLock()
 	defer so.mx.RUnlock()
 
@@ -50,6 +57,10 @@ func (so *SliceMap) Get(streamName StreamName) (int64, bool) {
 }
 
 func (so *SliceMap) Set(streamName StreamName, offset int64) {
+	if so == nil {
+		return
+	}
+
 	so.mx.Lock()
 	defer so.mx.Unlock()
 
@@ -61,6 +72,10 @@ func (so *SliceMap) Set(streamName StreamName, offset int64) {
 }
 
 func (so *SliceMap) Reset() {
+	if so == nil {
+		return
+	}
+
 	so.mx.Lock()
 	defer so.mx.Unlock()
 
