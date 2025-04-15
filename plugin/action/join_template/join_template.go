@@ -6,6 +6,7 @@ import (
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/plugin/action/join"
 	"github.com/ozontech/file.d/plugin/action/join_template/template"
+	"go.uber.org/zap"
 )
 
 /*{ introduction
@@ -83,7 +84,7 @@ func factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 }
 
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginParams) {
-	logger := params.Logger
+	logger := params.Logger.Desugar()
 	p.config = config.(*Config)
 
 	oneTemplate := p.config.Template != ""
@@ -100,18 +101,18 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 		for _, cur := range p.config.Templates {
 			result, err := template.InitTemplate(cur)
 			if err != nil {
-				logger.Fatalf("failed to init join template \"%s\": %s", cur, err)
+				logger.Fatal("failed to init join template", zap.String("name", cur), zap.Error(err))
 			}
 			templates = append(templates, result)
 		}
 	case oneTemplate:
 		result, err := template.InitTemplate(p.config.Template)
 		if err != nil {
-			logger.Fatalf("failed to init join template \"%s\": %s", p.config.Template, err)
+			logger.Fatal("failed to init join template", zap.String("name", p.config.Template), zap.Error(err))
 		}
 		templates = append(templates, result)
 	default:
-		logger.Fatalf("either field 'template' or field 'templates' must be non empty")
+		logger.Fatal("either field 'template' or field 'templates' must be non empty")
 	}
 
 	p.templates = templates
