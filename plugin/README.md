@@ -374,11 +374,8 @@ pipelines:
 
 [More details...](plugin/action/join/README.md)
 ## join_template
-Alias to "join" plugin with predefined `start` and `continue` parameters.
-
-> ⚠ Parsing the whole event flow could be very CPU intensive because the plugin uses regular expressions.
-> Enable explicit checks without regular expressions (use `fast_check` flag) or
-> consider `match_fields` parameter to process only particular events. Check out an example for details.
+Alias to "join" plugin with predefined fast (regexes not used) `start` and `continue` checks.
+Use `do_if` or `match_fields` to prevent extra checks and reduce CPU usage.
 
 **Example of joining Go panics**:
 ```yaml
@@ -386,11 +383,14 @@ pipelines:
   example_pipeline:
     ...
     actions:
-    - type: join_template
-      template: go_panic
-      field: log
-      match_fields:
-        stream: stderr // apply only for events which was written to stderr to save CPU time
+      - type: join_template
+        template: go_panic
+        field: log
+        do_if:
+          field: stream
+          op: equal
+          values:
+            - stderr # apply only for events which was written to stderr to save CPU time
     ...
 ```
 

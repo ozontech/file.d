@@ -8,7 +8,7 @@ import (
 )
 
 func BenchmarkPanicStartMixedRes(b *testing.B) {
-	cur, err := InitTemplate(nameGoPanic, true)
+	cur, err := InitTemplate(nameGoPanic)
 	require.NoError(b, err)
 
 	lines := getLines(sample.Panics)
@@ -24,14 +24,14 @@ func BenchmarkPanicStartMixedRes(b *testing.B) {
 	b.Run("regexp", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			for _, line := range lines {
-				cur.StartRe.MatchString(line)
+				cur.startRe.MatchString(line)
 			}
 		}
 	})
 }
 
 func BenchmarkPanicContinueMixedRes(b *testing.B) {
-	cur, err := InitTemplate(nameGoPanic, true)
+	cur, err := InitTemplate(nameGoPanic)
 	require.NoError(b, err)
 
 	lines := getLines(sample.Panics)
@@ -47,14 +47,14 @@ func BenchmarkPanicContinueMixedRes(b *testing.B) {
 	b.Run("regexp", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			for _, line := range lines {
-				cur.ContinueRe.MatchString(line)
+				cur.continueRe.MatchString(line)
 			}
 		}
 	})
 }
 
 func BenchmarkPanicStartNegativeRes(b *testing.B) {
-	cur, err := InitTemplate(nameGoPanic, true)
+	cur, err := InitTemplate(nameGoPanic)
 	require.NoError(b, err)
 
 	lines := getRandLines()
@@ -70,14 +70,14 @@ func BenchmarkPanicStartNegativeRes(b *testing.B) {
 	b.Run("regexp", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			for _, line := range lines {
-				cur.StartRe.MatchString(line)
+				cur.startRe.MatchString(line)
 			}
 		}
 	})
 }
 
 func BenchmarkPanicContinueNegativeRes(b *testing.B) {
-	cur, err := InitTemplate(nameGoPanic, true)
+	cur, err := InitTemplate(nameGoPanic)
 	require.NoError(b, err)
 
 	lines := getRandLines()
@@ -93,21 +93,21 @@ func BenchmarkPanicContinueNegativeRes(b *testing.B) {
 	b.Run("regexp", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			for _, line := range lines {
-				cur.ContinueRe.MatchString(line)
+				cur.continueRe.MatchString(line)
 			}
 		}
 	})
 }
 
 func TestPanicSameResults(t *testing.T) {
-	cur, err := InitTemplate(nameGoPanic, true)
+	cur, err := InitTemplate(nameGoPanic)
 	require.NoError(t, err)
 
 	lines := getLines(sample.Panics)
 
 	for _, line := range lines {
-		require.Equal(t, cur.StartRe.MatchString(line), goPanicStartCheck(line), line)
-		require.Equal(t, cur.ContinueRe.MatchString(line), goPanicContinueCheck(line), line)
+		require.Equal(t, cur.startRe.MatchString(line), goPanicStartCheck(line), line)
+		require.Equal(t, cur.continueRe.MatchString(line), goPanicContinueCheck(line), line)
 	}
 }
 

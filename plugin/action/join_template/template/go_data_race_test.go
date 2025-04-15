@@ -8,7 +8,7 @@ import (
 )
 
 func BenchmarkGoDataRaceStartMixedRes(b *testing.B) {
-	cur, err := InitTemplate(nameGoDataRace, true)
+	cur, err := InitTemplate(nameGoDataRace)
 	require.NoError(b, err)
 
 	lines := getLines(sample.GoDataRace)
@@ -24,14 +24,14 @@ func BenchmarkGoDataRaceStartMixedRes(b *testing.B) {
 	b.Run("regexp", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			for _, line := range lines {
-				cur.StartRe.MatchString(line)
+				cur.startRe.MatchString(line)
 			}
 		}
 	})
 }
 
 func BenchmarkGoDataRaceFinishMixedRes(b *testing.B) {
-	cur, err := InitTemplate(nameGoDataRace, true)
+	cur, err := InitTemplate(nameGoDataRace)
 	require.NoError(b, err)
 
 	lines := getLines(sample.GoDataRace)
@@ -47,14 +47,14 @@ func BenchmarkGoDataRaceFinishMixedRes(b *testing.B) {
 	b.Run("regexp", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			for _, line := range lines {
-				cur.ContinueRe.MatchString(line)
+				cur.continueRe.MatchString(line)
 			}
 		}
 	})
 }
 
 func BenchmarkGoDataRaceStartNegativeRes(b *testing.B) {
-	cur, err := InitTemplate(nameGoDataRace, true)
+	cur, err := InitTemplate(nameGoDataRace)
 	require.NoError(b, err)
 
 	lines := getRandLines()
@@ -70,14 +70,14 @@ func BenchmarkGoDataRaceStartNegativeRes(b *testing.B) {
 	b.Run("regexp", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			for _, line := range lines {
-				cur.StartRe.MatchString(line)
+				cur.startRe.MatchString(line)
 			}
 		}
 	})
 }
 
 func BenchmarkGoDataRaceFinishNegativeRes(b *testing.B) {
-	cur, err := InitTemplate(nameGoDataRace, true)
+	cur, err := InitTemplate(nameGoDataRace)
 	require.NoError(b, err)
 
 	lines := getRandLines()
@@ -93,21 +93,21 @@ func BenchmarkGoDataRaceFinishNegativeRes(b *testing.B) {
 	b.Run("regexp", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			for _, line := range lines {
-				cur.ContinueRe.MatchString(line)
+				cur.continueRe.MatchString(line)
 			}
 		}
 	})
 }
 
 func TestGoDataRaceSameResults(t *testing.T) {
-	cur, err := InitTemplate(nameGoDataRace, true)
+	cur, err := InitTemplate(nameGoDataRace)
 	require.NoError(t, err)
 
 	lines := append(getLines(sample.GoDataRace), getRandLines()...)
 
 	for _, line := range lines {
-		require.Equal(t, cur.StartRe.MatchString(line), goDataRaceStartCheck(line), line)
-		require.Equal(t, cur.ContinueRe.MatchString(line), goDataRaceFinishCheck(line), line)
+		require.Equal(t, cur.startRe.MatchString(line), goDataRaceStartCheck(line), line)
+		require.Equal(t, cur.continueRe.MatchString(line), goDataRaceFinishCheck(line), line)
 	}
 }
 

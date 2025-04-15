@@ -50,28 +50,26 @@ var templates = joinTemplates{
 }
 
 type Template struct {
-	StartRe    *regexp.Regexp
-	ContinueRe *regexp.Regexp
+	startRe    *regexp.Regexp
+	continueRe *regexp.Regexp
 
-	FastCheck     bool
 	StartCheck    func(string) bool
 	ContinueCheck func(string) bool
 
 	Negate bool
 }
 
-func InitTemplate(name string, fastCheck bool) (Template, error) {
+func InitTemplate(name string) (Template, error) {
 	cur, ok := templates[name]
 	if !ok {
 		return Template{}, fmt.Errorf("join template \"%s\" not found", name)
 	}
 
-	if fastCheck && (cur.startCheckFunc == nil || cur.continueCheckFunc == nil) {
+	if cur.startCheckFunc == nil || cur.continueCheckFunc == nil {
 		return Template{}, fmt.Errorf("no fast check funcs for template \"%s\"", name)
 	}
 
 	result := Template{
-		FastCheck:     fastCheck,
 		StartCheck:    cur.startCheckFunc,
 		ContinueCheck: cur.continueCheckFunc,
 		Negate:        cur.negate,
@@ -79,12 +77,12 @@ func InitTemplate(name string, fastCheck bool) (Template, error) {
 
 	var err error
 
-	result.StartRe, err = cfg.CompileRegex(cur.startRePat)
+	result.startRe, err = cfg.CompileRegex(cur.startRePat)
 	if err != nil {
 		return Template{}, err
 	}
 
-	result.ContinueRe, err = cfg.CompileRegex(cur.continueRePat)
+	result.continueRe, err = cfg.CompileRegex(cur.continueRePat)
 	if err != nil {
 		return Template{}, err
 	}

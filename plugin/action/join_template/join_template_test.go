@@ -18,7 +18,7 @@ func TestSimpleJoin(t *testing.T) {
 	cases := []struct {
 		name       string
 		template   string
-		templates  []TemplateConfig
+		templates  []string
 		content    string
 		expEvents  int32
 		iterations int
@@ -45,23 +45,8 @@ func TestSimpleJoin(t *testing.T) {
 			expEvents:  3 * 3 * 100,
 		},
 		{
-			name: "should_ok_for_mixed_fast_check",
-			templates: []TemplateConfig{
-				{Name: "go_panic", FastCheck: true},
-				{Name: "cs_exception", FastCheck: true},
-				{Name: "go_data_race", FastCheck: true},
-			},
-			content:    sample.Panics + sample.SharpException + sample.GoDataRace,
-			iterations: 100,
-			expEvents:  (17 + 3 + 3*3) * 100,
-		},
-		{
-			name: "should_ok_for_mixed_regexp",
-			templates: []TemplateConfig{
-				{Name: "go_panic", FastCheck: false},
-				{Name: "cs_exception", FastCheck: false},
-				{Name: "go_data_race", FastCheck: false},
-			},
+			name:       "should_ok_for_mixed",
+			templates:  []string{"go_panic", "cs_exception", "go_data_race"},
 			content:    sample.Panics + sample.SharpException + sample.GoDataRace,
 			iterations: 100,
 			expEvents:  (17 + 3 + 3*3) * 100,
@@ -70,9 +55,7 @@ func TestSimpleJoin(t *testing.T) {
 
 	for _, tt := range cases {
 		tt := tt
-
-		var fastCheck bool
-		testFunc := func(t *testing.T) {
+		t.Run(tt.name, func(t *testing.T) {
 			format := `{"log":"%s\n"}`
 			content := strings.ReplaceAll(tt.content, "# ===next===\n", "")
 			lines := make([]string, 0)
@@ -87,8 +70,6 @@ func TestSimpleJoin(t *testing.T) {
 				Field:     "log",
 				Template:  tt.template,
 				Templates: tt.templates,
-
-				FastCheck: fastCheck,
 			}, nil)
 
 			p, input, output := test.NewPipelineMock(
@@ -138,12 +119,7 @@ func TestSimpleJoin(t *testing.T) {
 
 			require.True(t, iters > i, "test timed out")
 			assert.Equal(t, tt.expEvents, outEvents.Load(), "wrong out events count")
-		}
-
-		fastCheck = false
-		t.Run(tt.name, testFunc)
-		fastCheck = true
-		t.Run(tt.name+"_fast", testFunc)
+		})
 	}
 }
 
