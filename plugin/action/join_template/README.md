@@ -1,5 +1,5 @@
 # Join Template plugin
-Alias to "join" plugin with predefined fast (regexes not used) `start` and `continue` checks.
+Alias to `join` plugin with predefined fast (regexes not used) `start` and `continue` checks.
 Use `do_if` or `match_fields` to prevent extra checks and reduce CPU usage.
 
 **Example of joining Go panics**:
@@ -46,17 +46,9 @@ Deprecated and ignored; `join_template` works without regexes now.
 
 <br>
 
-**`templates`** *`[]TemplateConfig`* 
+**`templates`** *`[]string`* 
 
-Configs of several templates. `TemplateConfig` params:
-* **`name`** *`string`* *`required`*
-
-	The name of the template. Available templates: `go_panic`, `cs_exception`, `go_data_race`.
-
-* **`fast_check`** *`bool`*
-
-	Enable check without regular expressions.
-
+Names of templates. Available templates: `go_panic`, `cs_exception`, `go_data_race`.
 
 <br>
 
