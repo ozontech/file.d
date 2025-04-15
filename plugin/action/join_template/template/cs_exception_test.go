@@ -8,7 +8,7 @@ import (
 )
 
 func BenchmarkSharpStartMixedRes(b *testing.B) {
-	cur, err := InitTemplate(nameCSException, true)
+	cur, err := InitTemplate(nameCSException)
 	require.NoError(b, err)
 
 	lines := getLines(sample.SharpException)
@@ -24,14 +24,14 @@ func BenchmarkSharpStartMixedRes(b *testing.B) {
 	b.Run("regexp", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			for _, line := range lines {
-				cur.StartRe.MatchString(line)
+				cur.startRe.MatchString(line)
 			}
 		}
 	})
 }
 
 func BenchmarkSharpContinueMixedRes(b *testing.B) {
-	cur, err := InitTemplate(nameCSException, true)
+	cur, err := InitTemplate(nameCSException)
 	require.NoError(b, err)
 
 	lines := getLines(sample.SharpException)
@@ -47,14 +47,14 @@ func BenchmarkSharpContinueMixedRes(b *testing.B) {
 	b.Run("regexp", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			for _, line := range lines {
-				cur.ContinueRe.MatchString(line)
+				cur.continueRe.MatchString(line)
 			}
 		}
 	})
 }
 
 func BenchmarkSharpStartNegativeRes(b *testing.B) {
-	cur, err := InitTemplate(nameCSException, true)
+	cur, err := InitTemplate(nameCSException)
 	require.NoError(b, err)
 
 	lines := getRandLines()
@@ -70,14 +70,14 @@ func BenchmarkSharpStartNegativeRes(b *testing.B) {
 	b.Run("regexp", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			for _, line := range lines {
-				cur.StartRe.MatchString(line)
+				cur.startRe.MatchString(line)
 			}
 		}
 	})
 }
 
 func BenchmarkSharpContinueNegativeRes(b *testing.B) {
-	cur, err := InitTemplate(nameCSException, true)
+	cur, err := InitTemplate(nameCSException)
 	require.NoError(b, err)
 
 	lines := getRandLines()
@@ -93,21 +93,21 @@ func BenchmarkSharpContinueNegativeRes(b *testing.B) {
 	b.Run("regexp", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			for _, line := range lines {
-				cur.ContinueRe.MatchString(line)
+				cur.continueRe.MatchString(line)
 			}
 		}
 	})
 }
 
 func TestSharpSameResults(t *testing.T) {
-	cur, err := InitTemplate(nameCSException, true)
+	cur, err := InitTemplate(nameCSException)
 	require.NoError(t, err)
 
 	lines := append(getLines(sample.SharpException), getRandLines()...)
 
 	for _, line := range lines {
-		require.Equal(t, cur.StartRe.MatchString(line), sharpStartCheck(line), line)
-		require.Equal(t, cur.ContinueRe.MatchString(line), sharpContinueCheck(line), line)
+		require.Equal(t, cur.startRe.MatchString(line), sharpStartCheck(line), line)
+		require.Equal(t, cur.continueRe.MatchString(line), sharpContinueCheck(line), line)
 	}
 }
 

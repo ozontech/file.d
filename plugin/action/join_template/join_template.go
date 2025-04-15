@@ -9,11 +9,8 @@ import (
 )
 
 /*{ introduction
-Alias to "join" plugin with predefined `start` and `continue` parameters.
-
-> ⚠ Parsing the whole event flow could be very CPU intensive because the plugin uses regular expressions.
-> Enable explicit checks without regular expressions (use `fast_check` flag) or
-> consider `match_fields` parameter to process only particular events. Check out an example for details.
+Alias to "join" plugin with predefined fast (regexes not used) `start` and `continue` checks.
+Use `do_if` or `match_fields` to prevent extra checks and reduce CPU usage.
 
 **Example of joining Go panics**:
 ```yaml
@@ -21,11 +18,14 @@ pipelines:
   example_pipeline:
     ...
     actions:
-    - type: join_template
-      template: go_panic
-      field: log
-      match_fields:
-        stream: stderr // apply only for events which was written to stderr to save CPU time
+      - type: join_template
+        template: go_panic
+        field: log
+        do_if:
+          field: stream
+          op: equal
+          values:
+            - stderr # apply only for events which was written to stderr to save CPU time
     ...
 ```
 }*/
@@ -56,30 +56,19 @@ type Config struct {
 	// > @3@4@5@6
 	// >
 	// > The name of the template. Available templates: `go_panic`, `cs_exception`, `go_data_race`.
+	// > Deprecated; use `templates` instead.
 	Template string `json:"template"` // *
 
 	// > @3@4@5@6
 	// >
 	// > Enable check without regular expressions.
+	// > Deprecated and ignored; `join_template` works without regexes now.
 	FastCheck bool `json:"fast_check" default:"true"` // *
 
 	// > @3@4@5@6
 	// >
-	// > Configs of several templates. `TemplateConfig` params:
-	// > * **`name`** *`string`* *`required`*
-	// >
-	// > 	The name of the template. Available templates: `go_panic`, `cs_exception`, `go_data_race`.
-	// >
-	// > * **`fast_check`** *`bool`*
-	// >
-	// > 	Enable check without regular expressions.
-	// >
-	Templates []TemplateConfig `json:"templates"` // *
-}
-
-type TemplateConfig struct {
-	Name      string `json:"name" required:"true"`
-	FastCheck bool   `json:"fast_check" default:"true"`
+	// > Names of templates. Available templates: `go_panic`, `cs_exception`, `go_data_race`.
+	Templates []string `json:"templates"` // *
 }
 
 func init() {
@@ -109,14 +98,14 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 	switch {
 	case manyTemplates:
 		for _, cur := range p.config.Templates {
-			result, err := template.InitTemplate(cur.Name, cur.FastCheck)
+			result, err := template.InitTemplate(cur)
 			if err != nil {
-				logger.Fatalf("failed to init join template \"%s\": %s", cur.Name, err)
+				logger.Fatalf("failed to init join template \"%s\": %s", cur, err)
 			}
 			templates = append(templates, result)
 		}
 	case oneTemplate:
-		result, err := template.InitTemplate(p.config.Template, p.config.FastCheck)
+		result, err := template.InitTemplate(p.config.Template)
 		if err != nil {
 			logger.Fatalf("failed to init join template \"%s\": %s", p.config.Template, err)
 		}
@@ -150,14 +139,7 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 
 func (p *Plugin) firstCheck(value string) bool {
 	for i, cur := range p.templates {
-		res := false
-		if cur.FastCheck {
-			res = cur.StartCheck(value)
-		} else {
-			res = cur.StartRe.MatchString(value)
-		}
-
-		if res {
+		if cur.StartCheck(value) {
 			p.curTemplateIdx = i
 			return true
 		}
@@ -167,14 +149,8 @@ func (p *Plugin) firstCheck(value string) bool {
 }
 
 func (p *Plugin) nextCheck(value string) bool {
-	result := false
-
 	curTemplate := p.templates[p.curTemplateIdx]
-	if curTemplate.FastCheck {
-		result = curTemplate.ContinueCheck(value)
-	} else {
-		result = curTemplate.ContinueRe.MatchString(value)
-	}
+	result := curTemplate.ContinueCheck(value)
 
 	if curTemplate.Negate {
 		result = !result
