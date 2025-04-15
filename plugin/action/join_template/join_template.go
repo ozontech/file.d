@@ -10,7 +10,7 @@ import (
 )
 
 /*{ introduction
-Alias to "join" plugin with predefined fast (regexes not used) `start` and `continue` checks.
+Alias to `join` plugin with predefined fast (regexes not used) `start` and `continue` checks.
 Use `do_if` or `match_fields` to prevent extra checks and reduce CPU usage.
 
 **Example of joining Go panics**:
