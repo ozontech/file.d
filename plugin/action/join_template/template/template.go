@@ -55,8 +55,7 @@ type Template struct {
 
 	StartCheck    func(string) bool
 	ContinueCheck func(string) bool
-
-	Negate bool
+	Negate        bool
 }
 
 func InitTemplate(name string) (Template, error) {
