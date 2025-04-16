@@ -40,11 +40,11 @@ var templates = map[string]Template{
 func InitTemplate(name string) (Template, error) {
 	res, ok := templates[name]
 	if !ok {
-		return Template{}, fmt.Errorf("join template \"%s\" not found", name)
+		return Template{}, fmt.Errorf("join template %q not found", name)
 	}
 
 	if res.StartCheck == nil || res.ContinueCheck == nil {
-		return Template{}, fmt.Errorf("no check funcs for template \"%s\"", name)
+		return Template{}, fmt.Errorf("no check funcs for template %q", name)
 	}
 
 	return res, nil
