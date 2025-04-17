@@ -137,10 +137,10 @@ pipelines:
         patterns:
           - placeholder: '<quoted_str>'
             re: '"[^"]*"'
-			priority: 'first'
+            priority: 'first'
           - placeholder: '<date>'
             re: '\d\d.\d\d.\d\d\d\d'
-			priority: 'first'
+            priority: 'first'
     ...
 ```
 The original event:
@@ -200,7 +200,8 @@ The resulting event:
   "message": "2006/01/02 15:04:05 error occurred, client: 10.125.172.251, upstream: \"http://10.117.246.15:84/download\", host: \"mpm-youtube-downloader-38.name.com:84\"",
   "hash": 4150276598667727274
 }
-```---
+```
+---
 Hashing with normalization (partial built-in patterns):
 ```yaml
 pipelines:
