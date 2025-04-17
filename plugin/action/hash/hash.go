@@ -133,12 +133,14 @@ pipelines:
           format: normalize
       result_field: hash
       normalizer:
-        with_builtin_patterns: false
+        builtin_patterns: 0
         patterns:
           - placeholder: '<quoted_str>'
             re: '"[^"]*"'
+			priority: 'first'
           - placeholder: '<date>'
             re: '\d\d.\d\d.\d\d\d\d'
+			priority: 'first'
     ...
 ```
 The original event:
@@ -161,7 +163,7 @@ The resulting event:
 }
 ```
 ---
-Hashing with normalization (built-in & custom patterns):
+Hashing with normalization (all built-in & custom patterns):
 ```yaml
 pipelines:
   example_pipeline:
@@ -173,11 +175,8 @@ pipelines:
           format: normalize
       result_field: hash
       normalizer:
-        with_builtin_patterns: true
+        builtin_patterns: -1
         patterns:
-          - placeholder: '<quoted_str>'
-            re: '"[^"]*"'
-            priority: first
           - placeholder: '<nginx_datetime>'
             re: '\d\d\d\d/\d\d/\d\d\ \d\d:\d\d:\d\d'
             priority: last
@@ -192,14 +191,48 @@ The original event:
 ```
 
 Normalized "message":
-`<nginx_datetime> error occurred, client: <ip>, upstream: <quoted_str>, host: <quoted_str>`
+`<nginx_datetime> error occurred, client: <ip>, upstream: <double_quoted>, host: <double_quoted>`
 
 The resulting event:
 ```json
 {
   "level": "error",
   "message": "2006/01/02 15:04:05 error occurred, client: 10.125.172.251, upstream: \"http://10.117.246.15:84/download\", host: \"mpm-youtube-downloader-38.name.com:84\"",
-  "hash": 7891860241841154313
+  "hash": 4150276598667727274
+}
+```---
+Hashing with normalization (partial built-in patterns):
+```yaml
+pipelines:
+  example_pipeline:
+    ...
+    actions:
+    - type: hash
+      fields:
+        - field: message
+          format: normalize
+      result_field: hash
+      normalizer:
+        builtin_patterns: 4098 // 2(square brackets) + 4096(ip)
+    ...
+```
+The original event:
+```json
+{
+  "level": "error",
+  "message": "2006/01/02 15:04:05 error occurred, client: 10.125.172.251, upstream: \"http://10.117.246.15:84/download\", host: \"mpm-youtube-downloader-38.name.com:84\", params: [param1, param2]"
+}
+```
+
+Normalized "message":
+`2006/01/02 15:04:05 error occurred, client: <ip>, upstream: \"http://10.117.246.15:84/download\", host: \"mpm-youtube-downloader-38.name.com:84\", params: <square_bracketed>`
+
+The resulting event:
+```json
+{
+  "level": "error",
+  "message": "2006/01/02 15:04:05 error occurred, client: 10.125.172.251, upstream: \"http://10.117.246.15:84/download\", host: \"mpm-youtube-downloader-38.name.com:84\", params: [param1, param2]",
+  "hash": 15982987157336450215
 }
 ```
 }*/
@@ -255,11 +288,16 @@ type Config struct {
 	// >> For more information, see [Normalization](/plugin/action/hash/normalize/README.md).
 	// >
 	// > `NormalizerConfig` params:
-	// > * **`with_builtin_patterns`** *`bool`* *`default=true`*
+	// > * **`builtin_patterns`** *`int`* *`default=-1`*
 	// >
-	// > 	If set to `true`, normalizer will use `patterns` in combination with [built-in patterns](/plugin/action/hash/normalize/README.md#built-in-patterns).
+	// > 	Mask for [built-in patterns](/plugin/action/hash/normalize/README.md#built-in-patterns) (see `mask value` column).
 	// >
-	// > * **`patterns`** *`[]NormalizePattern`*
+	// >	For example, `url`+`host`+`md5` patterns equals `64+128+1024=1216`.
+	// >
+	// >	> * If set to `-1` - all built-in patterns will be used.
+	// >	> * If set to `0` - built-in patterns will not be used.
+	// >
+	// > * **`custom_patterns`** *`[]NormalizePattern`*
 	// >
 	// > 	List of normalization patterns.
 	// >
@@ -275,12 +313,12 @@ type Config struct {
 	// >
 	// >	* **`priority`** *`string`* *`default=first`* *`options=first|last`*
 	// >
-	// >		A priority of pattern. Works only if `normalizer.with_builtin_patterns=true`.
+	// >		A priority of pattern. Works only if `normalizer.builtin_patterns != 0`.
 	// >
-	// >		If set to `first`, pattern will be added before defaults, otherwise - after.
+	// >		If set to `first`, pattern will be added before built-in, otherwise - after.
 	// >
-	// >		> If `normalizer.with_builtin_patterns=false`, then the priority is determined
-	// >		by the order of the elements in `normalizer.patterns`.
+	// >		> If `normalizer.builtin_patterns = 0`, then the priority is determined
+	// >		by the order of the elements in `normalizer.custom_patterns`.
 	Normalizer NormalizerConfig `json:"normalizer" child:"true"` // *
 }
 
@@ -308,8 +346,8 @@ type NormalizePattern struct {
 }
 
 type NormalizerConfig struct {
-	WithBuiltinPatterns bool               `json:"with_builtin_patterns" default:"true"`
-	Patterns            []NormalizePattern `json:"patterns" slice:"true"`
+	BuiltinPatterns int                `json:"builtin_patterns" default:"-1"`
+	CustomPatterns  []NormalizePattern `json:"custom_patterns" slice:"true"`
 }
 
 func init() {
@@ -356,11 +394,11 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 
 func (p *Plugin) initNormalizer() (normalize.Normalizer, error) {
 	tnParams := normalize.TokenNormalizerParams{
-		WithBuiltinPatterns: p.config.Normalizer.WithBuiltinPatterns,
-		Patterns:            make([]normalize.TokenPattern, 0, len(p.config.Normalizer.Patterns)),
+		BuiltinPatterns: p.config.Normalizer.BuiltinPatterns,
+		CustomPatterns:  make([]normalize.TokenPattern, 0, len(p.config.Normalizer.CustomPatterns)),
 	}
-	for _, p := range p.config.Normalizer.Patterns {
-		tnParams.Patterns = append(tnParams.Patterns, normalize.TokenPattern{
+	for _, p := range p.config.Normalizer.CustomPatterns {
+		tnParams.CustomPatterns = append(tnParams.CustomPatterns, normalize.TokenPattern{
 			Placeholder: p.Placeholder,
 			RE:          p.RE,
 			Priority:    p.Priority,
