@@ -17,4 +17,4 @@ pipelines:
       retention: 1s
       workers_count: 1
       username: elastic
-      password: password
+      password: elastic

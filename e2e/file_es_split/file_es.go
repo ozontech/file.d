@@ -90,7 +90,7 @@ func (c *Config) deleteAll() error {
 	if err != nil {
 		return fmt.Errorf("create request: %w", err)
 	}
-	req.Header.Add("Authorization", "elastic:password")
+	req.SetBasicAuth("elastic", "elastic")
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -128,7 +128,7 @@ func (c *Config) getEventsCount() (int, error) {
 	if err != nil {
 		return 0, fmt.Errorf("create request: %w", err)
 	}
-	req.Header.Add("Authorization", "elastic:password")
+	req.SetBasicAuth("elastic", "elastic")
 
 	resp, err := client.Do(req)
 	if err != nil {

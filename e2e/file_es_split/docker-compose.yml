@@ -1,17 +1,14 @@
 services:
-  es01:
+  elasticsearch:
     image: elasticsearch:8.17.0
+    container_name: es-local-test-2
     ports:
       - "9200:9200"
     environment:
-      - node.name=es01
-      - cluster.name=docker-cluster
-      - cluster.initial_master_nodes=es01
-      - ELASTIC_PASSWORD=password
-      - bootstrap.memory_lock=true
-      - xpack.security.enabled=false
-      - xpack.license.self_generated.type=basic
-      - xpack.ml.use_auto_machine_memory_percent=true
+      - discovery.type=single-node
+      - ELASTIC_PASSWORD=elastic
+      - xpack.security.enabled=true
+      - xpack.security.http.ssl.enabled=false
       - http.max_content_length=128b
     mem_limit: 1073741824
     healthcheck:
