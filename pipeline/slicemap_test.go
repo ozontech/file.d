@@ -26,11 +26,15 @@ func TestSliceMapRace(t *testing.T) {
 	defer cancel()
 
 	go func() {
-		sm.Get(getRandStream())
+		for {
+			sm.Get(getRandStream())
+		}
 	}()
 
 	go func() {
-		sm.Set(getRandStream(), rand.Int63()%100)
+		for {
+			sm.Set(getRandStream(), rand.Int63()%100)
+		}
 	}()
 
 	<-ctx.Done()
