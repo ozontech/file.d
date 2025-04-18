@@ -1,27 +1,21 @@
-version: "3"
-
 services:
   es01:
-    image: elasticsearch:${STACK_VERSION}
+    image: elasticsearch:8.17.0
     volumes:
       - esdata01:/usr/share/elasticsearch/data
     ports:
-      - ${ES_PORT}:9200
+      - "9200:9200"
     environment:
       - node.name=es01
-      - cluster.name=${CLUSTER_NAME}
+      - cluster.name=docker-cluster
       - cluster.initial_master_nodes=es01
-      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
+      - ELASTIC_PASSWORD=password
       - bootstrap.memory_lock=true
       - xpack.security.enabled=false
-      - xpack.license.self_generated.type=${LICENSE}
+      - xpack.license.self_generated.type=basic
       - xpack.ml.use_auto_machine_memory_percent=true
       - http.max_content_length=128b
-    mem_limit: ${MEM_LIMIT}
-    ulimits:
-      memlock:
-        soft: -1
-        hard: -1
+    mem_limit: 1073741824
     healthcheck:
       test:
         [
@@ -30,7 +24,7 @@ services:
         ]
       interval: 10s
       timeout: 10s
-      retries: 120
+      retries: 10
 
 volumes:
   esdata01:
