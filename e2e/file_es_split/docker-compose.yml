@@ -1,8 +1,6 @@
 services:
   es01:
     image: elasticsearch:8.17.0
-    volumes:
-      - esdata01:/usr/share/elasticsearch/data
     ports:
       - "9200:9200"
     environment:
@@ -25,7 +23,3 @@ services:
       interval: 10s
       timeout: 10s
       retries: 10
-
-volumes:
-  esdata01:
-    driver: local
