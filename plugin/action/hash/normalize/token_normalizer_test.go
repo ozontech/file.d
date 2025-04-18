@@ -9,6 +9,56 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestParseBuiltinPatterns(t *testing.T) {
+	tests := []struct {
+		name string
+
+		input   string
+		want    int
+		wantErr bool
+	}{
+		{
+			name:  "all",
+			input: "all",
+			want:  pAll,
+		},
+		{
+			name:  "no",
+			input: "no",
+			want:  pNo,
+		},
+		{
+			name:  "single",
+			input: "email",
+			want:  pEmail,
+		},
+		{
+			name:  "multiple",
+			input: "host|url|single_quoted",
+			want:  pHost + pUrl + pSingleQuoted,
+		},
+		{
+			name:    "bad_pattern",
+			input:   "host|url|unknown",
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got, err := parseBuiltinPatterns(tt.input)
+			require.Equal(t, tt.wantErr, err != nil)
+			if tt.wantErr {
+				return
+			}
+			require.Equal(t, tt.want, got)
+		})
+	}
+}
+
 func TestTokenNormalizerHasPattern(t *testing.T) {
 	tests := []struct {
 		name string
@@ -122,8 +172,10 @@ func TestTokenNormalizerNormalizerByBytes(t *testing.T) {
 		},
 	}
 
+	const testNormalizeByBytesPattern = "curly_bracketed|square_bracketed|parenthesized|double_quoted|single_quoted"
+
 	n, err := NewTokenNormalizer(TokenNormalizerParams{
-		BuiltinPatterns: normalizeByBytesPatternsMask(),
+		BuiltinPatterns: testNormalizeByBytesPattern,
 	})
 	require.NoError(t, err)
 
@@ -145,14 +197,14 @@ func TestTokenNormalizerBuiltin(t *testing.T) {
 		name string
 
 		inputs   []string
-		patterns int
+		patterns string
 
 		want string
 	}{
 		{
 			name:     "no_matches",
 			inputs:   []string{"Falsehood is s1mple"},
-			patterns: pAll,
+			patterns: "all",
 			want:     "Falsehood is s1mple",
 		},
 		{
@@ -161,7 +213,7 @@ func TestTokenNormalizerBuiltin(t *testing.T) {
 				"some test@host.com here",
 				"some test@host1.host2.com here",
 			},
-			patterns: pEmail,
+			patterns: "email",
 			want:     "some <email> here",
 		},
 		{
@@ -173,7 +225,7 @@ func TestTokenNormalizerBuiltin(t *testing.T) {
 				"some wss://some.host1.host2.net here",
 				"some ftp://login:pass@serv.example.com:21/function/reg.php here",
 			},
-			patterns: pUrl,
+			patterns: "url",
 			want:     "some <url> here",
 		},
 		{
@@ -182,25 +234,25 @@ func TestTokenNormalizerBuiltin(t *testing.T) {
 				"some hello-world-123.COM here",
 				"some www.weather.jp here",
 			},
-			patterns: pHost,
+			patterns: "host",
 			want:     "some <host> here",
 		},
 		{
 			name:     "uuid",
 			inputs:   []string{"some 7c1811ed-e98f-4c9c-a9f9-58c757ff494f here"},
-			patterns: pUuid,
+			patterns: "uuid",
 			want:     "some <uuid> here",
 		},
 		{
 			name:     "sha1",
 			inputs:   []string{"some a94a8fe5ccb19ba61c4c0873d391e987982fbbd3 here"},
-			patterns: pSha1,
+			patterns: "sha1",
 			want:     "some <sha1> here",
 		},
 		{
 			name:     "md5",
 			inputs:   []string{"some 098f6bcd4621d373cade4e832627b4f6 here"},
-			patterns: pMd5,
+			patterns: "md5",
 			want:     "some <md5> here",
 		},
 		{
@@ -214,7 +266,7 @@ func TestTokenNormalizerBuiltin(t *testing.T) {
 				"some 2025-01-13 here",
 				"some 10:20:40 here",
 			},
-			patterns: pDatetime,
+			patterns: "datetime",
 			want:     "some <datetime> here",
 		},
 		{
@@ -239,7 +291,7 @@ func TestTokenNormalizerBuiltin(t *testing.T) {
 				//"some ::1234:5678:1.2.3.4 here",
 				//"some 2001:db8::1234:5678:5.6.7.8 here",
 			},
-			patterns: pIp,
+			patterns: "ip",
 			want:     "some <ip> here",
 		},
 		{
@@ -249,7 +301,7 @@ func TestTokenNormalizerBuiltin(t *testing.T) {
 				"some -50s20ms10µs here",
 				"some 1w2d3h4m5s6ms7us8ns here",
 			},
-			patterns: pDuration,
+			patterns: "duration",
 			want:     "some <duration> here",
 		},
 		{
@@ -258,7 +310,7 @@ func TestTokenNormalizerBuiltin(t *testing.T) {
 				"some 0x13eb85e69dfbc0758b12acdaae36287d here",
 				"some 0X553026A59C here",
 			},
-			patterns: pHex,
+			patterns: "hex",
 			want:     "some <hex> here",
 		},
 		{
@@ -267,7 +319,7 @@ func TestTokenNormalizerBuiltin(t *testing.T) {
 				"some 1.23 here",
 				"some -4.56 here",
 			},
-			patterns: pFloat,
+			patterns: "float",
 			want:     "some <float> here",
 		},
 		{
@@ -276,7 +328,7 @@ func TestTokenNormalizerBuiltin(t *testing.T) {
 				"some 100 here",
 				"some -200 here",
 			},
-			patterns: pInt,
+			patterns: "int",
 			want:     "some <int> here",
 		},
 		{
@@ -289,7 +341,7 @@ func TestTokenNormalizerBuiltin(t *testing.T) {
 				"some tRuE here",
 				"some FaLsE here",
 			},
-			patterns: pBool,
+			patterns: "bool",
 			want:     "some <bool> here",
 		},
 		{
@@ -312,7 +364,7 @@ func TestTokenNormalizerBuiltin(t *testing.T) {
 				Downloaded from https://some.host.test for 5.5s.
 			`,
 			},
-			patterns: pAll,
+			patterns: "all",
 			want: `
 				Today Monday, <datetime>.
 
@@ -336,7 +388,7 @@ func TestTokenNormalizerBuiltin(t *testing.T) {
 			inputs: []string{
 				"some TRUE here",
 			},
-			patterns: pInt,
+			patterns: "int|float|host",
 			want:     "some TRUE here",
 		},
 	}
@@ -372,7 +424,7 @@ func TestTokenNormalizerCustom(t *testing.T) {
 		{
 			name: "only_custom",
 			params: TokenNormalizerParams{
-				BuiltinPatterns: 0,
+				BuiltinPatterns: "no",
 				CustomPatterns: []TokenPattern{
 					{
 						Placeholder: "<date>",
@@ -388,7 +440,7 @@ func TestTokenNormalizerCustom(t *testing.T) {
 		{
 			name: "custom_with_builtin",
 			params: TokenNormalizerParams{
-				BuiltinPatterns: pAll,
+				BuiltinPatterns: "all",
 				CustomPatterns: []TokenPattern{
 					{
 						Placeholder: "<nginx_datetime>",
@@ -410,7 +462,7 @@ func TestTokenNormalizerCustom(t *testing.T) {
 		{
 			name: "bad_patterns",
 			params: TokenNormalizerParams{
-				BuiltinPatterns: 0,
+				BuiltinPatterns: "no",
 				CustomPatterns: []TokenPattern{
 					{
 						Placeholder: "test",
@@ -477,7 +529,7 @@ var benchCases = []struct {
 }
 
 func BenchmarkTokenNormalizer(b *testing.B) {
-	n, _ := NewTokenNormalizer(TokenNormalizerParams{BuiltinPatterns: pAll})
+	n, _ := NewTokenNormalizer(TokenNormalizerParams{BuiltinPatterns: "all"})
 	out := make([]byte, 0)
 	for _, benchCase := range benchCases {
 		name := fmt.Sprintf("input_len_%d", len(benchCase.input))

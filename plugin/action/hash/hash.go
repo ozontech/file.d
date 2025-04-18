@@ -133,7 +133,7 @@ pipelines:
           format: normalize
       result_field: hash
       normalizer:
-        builtin_patterns: 0
+        builtin_patterns: "no"
         patterns:
           - placeholder: '<quoted_str>'
             re: '"[^"]*"'
@@ -175,7 +175,7 @@ pipelines:
           format: normalize
       result_field: hash
       normalizer:
-        builtin_patterns: -1
+        builtin_patterns: "all"
         patterns:
           - placeholder: '<nginx_datetime>'
             re: '\d\d\d\d/\d\d/\d\d\ \d\d:\d\d:\d\d'
@@ -214,7 +214,7 @@ pipelines:
           format: normalize
       result_field: hash
       normalizer:
-        builtin_patterns: 4098 // 2(square brackets) + 4096(ip)
+        builtin_patterns: "square_bracketed|ip"
     ...
 ```
 The original event:
@@ -289,14 +289,16 @@ type Config struct {
 	// >> For more information, see [Normalization](/plugin/action/hash/normalize/README.md).
 	// >
 	// > `NormalizerConfig` params:
-	// > * **`builtin_patterns`** *`int`* *`default=-1`*
+	// > * **`builtin_patterns`** *`string`* *`default="all"`*
 	// >
-	// > 	Mask for [built-in patterns](/plugin/action/hash/normalize/README.md#built-in-patterns) (see `mask value` column).
+	// > 	List of [built-in patterns](/plugin/action/hash/normalize/README.md#built-in-patterns) (see `pattern id` column).
 	// >
-	// >	For example, `url`+`host`+`md5` patterns equals `64+128+1024=1216`.
+	// >	Format: `pattern_id1|pattern_id2|...|pattern_idN`.
 	// >
-	// >	> * If set to `-1` - all built-in patterns will be used.
-	// >	> * If set to `0` - built-in patterns will not be used.
+	// >	Example: `host|url|square_bracketed`.
+	// >
+	// >	> * If set to `all` - all built-in patterns will be used.
+	// >	> * If set to `no` - built-in patterns will not be used.
 	// >
 	// > * **`custom_patterns`** *`[]NormalizePattern`*
 	// >
@@ -347,7 +349,7 @@ type NormalizePattern struct {
 }
 
 type NormalizerConfig struct {
-	BuiltinPatterns int                `json:"builtin_patterns" default:"-1"`
+	BuiltinPatterns string             `json:"builtin_patterns" default:"all"`
 	CustomPatterns  []NormalizePattern `json:"custom_patterns" slice:"true"`
 }
 

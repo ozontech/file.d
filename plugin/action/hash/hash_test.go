@@ -81,28 +81,27 @@ func TestHash(t *testing.T) {
 			input:    []byte(`{"level":"error","message":"2023-10-30T13:35:33.638720813Z error occurred, client: 10.125.172.251, upstream: \"http://10.117.246.15:84/download\", host: \"mpm-youtube-downloader-38.name.com:84\""}`),
 			wantHash: 10662808184633841128,
 		},
-		// test.NewConfig overrides zero-value BuiltinPatterns as if it was empty
-		// {
-		// 	name: "normalizer_only_custom",
-		// 	config: &Config{
-		// 		Fields: []Field{
-		// 			{Field: "message", Format: "normalize"},
-		// 		},
-		// 		ResultField: resField,
-		// 		Normalizer: NormalizerConfig{
-		// 			BuiltinPatterns: 0,
-		// 			CustomPatterns: []NormalizePattern{
-		// 				{
-		// 					Placeholder: "<date>",
-		// 					RE:          `\d\d.\d\d.\d\d\d\d`,
-		// 				},
-		// 			},
-		// 		},
-		// 	},
-		// 	input:    []byte(`{"level":"error","message":"request from \"ivanivanov\", signed on 19.03.2025"}`),
-		// 	pipeOpts: []string{"name"},
-		// 	wantHash: 6546706502540149833,
-		// },
+		{
+			name: "normalizer_only_custom",
+			config: &Config{
+				Fields: []Field{
+					{Field: "message", Format: "normalize"},
+				},
+				ResultField: resField,
+				Normalizer: NormalizerConfig{
+					BuiltinPatterns: "no",
+					CustomPatterns: []NormalizePattern{
+						{
+							Placeholder: "<date>",
+							RE:          `\d\d.\d\d.\d\d\d\d`,
+						},
+					},
+				},
+			},
+			input:    []byte(`{"level":"error","message":"request from \"ivanivanov\", signed on 19.03.2025"}`),
+			pipeOpts: []string{"name"},
+			wantHash: 6546706502540149833,
+		},
 		{
 			name: "normalizer_custom_and_builtin",
 			config: &Config{
@@ -111,7 +110,7 @@ func TestHash(t *testing.T) {
 				},
 				ResultField: resField,
 				Normalizer: NormalizerConfig{
-					BuiltinPatterns: -1,
+					BuiltinPatterns: "all",
 					CustomPatterns: []NormalizePattern{
 						{
 							Placeholder: "<nginx_datetime>",
@@ -133,7 +132,7 @@ func TestHash(t *testing.T) {
 				},
 				ResultField: resField,
 				Normalizer: NormalizerConfig{
-					BuiltinPatterns: 8, // only double quoted
+					BuiltinPatterns: "double_quoted",
 				},
 			},
 			input:    []byte(`{"level":"error","message":"2006/01/02 15:04:05 error occurred, client: 10.125.172.251, upstream: \"http://10.117.246.15:84/download\", host: \"mpm-youtube-downloader-38.name.com:84\""}`),

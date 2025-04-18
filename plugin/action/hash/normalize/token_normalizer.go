@@ -17,6 +17,7 @@ const (
 
 const (
 	pAll = -1
+	pNo  = 0
 
 	pCurlyBracketed  = 0x1  // {...}
 	pSquareBracketed = 0x2  // [...]
@@ -37,6 +38,30 @@ const (
 	pInt             = 0x10000
 	pBool            = 0x20000
 )
+
+var patternById = map[string]int{
+	"all": pAll,
+	"no":  pNo,
+
+	"curly_bracketed":  pCurlyBracketed,
+	"square_bracketed": pSquareBracketed,
+	"parenthesized":    pParenthesized,
+	"double_quoted":    pDoubleQuoted,
+	"single_quoted":    pSingleQuoted,
+	"email":            pEmail,
+	"url":              pUrl,
+	"host":             pHost,
+	"uuid":             pUuid,
+	"sha1":             pSha1,
+	"md5":              pMd5,
+	"datetime":         pDatetime,
+	"ip":               pIp,
+	"duration":         pDuration,
+	"hex":              pHex,
+	"float":            pFloat,
+	"int":              pInt,
+	"bool":             pBool,
+}
 
 var placeholderByPattern = map[int]string{
 	pCurlyBracketed:  "<curly_bracketed>",
@@ -67,14 +92,6 @@ var normalizeByBytesPatterns = []int{
 	pSingleQuoted,
 }
 
-func normalizeByBytesPatternsMask() int {
-	sum := 0
-	for _, p := range normalizeByBytesPatterns {
-		sum += p
-	}
-	return sum
-}
-
 func onlyNormalizeByBytesPatterns(mask int) bool {
 	if mask <= 0 {
 		return false
@@ -100,7 +117,7 @@ type TokenPattern struct {
 }
 
 type TokenNormalizerParams struct {
-	BuiltinPatterns int
+	BuiltinPatterns string
 	CustomPatterns  []TokenPattern
 }
 
@@ -110,29 +127,51 @@ type tokenNormalizer struct {
 }
 
 func NewTokenNormalizer(params TokenNormalizerParams) (Normalizer, error) {
-	// only patterns without regexps
-	if onlyNormalizeByBytesPatterns(params.BuiltinPatterns) && len(params.CustomPatterns) == 0 {
-		return &tokenNormalizer{
-			builtinPatterns: params.BuiltinPatterns,
-		}, nil
+	builtinPatterns, err := parseBuiltinPatterns(params.BuiltinPatterns)
+	if err != nil {
+		return nil, err
 	}
 
-	l := lexmachine.NewLexer()
+	n := &tokenNormalizer{
+		builtinPatterns: builtinPatterns,
+	}
 
-	err := initTokens(l, params)
+	// only patterns without regexps
+	if onlyNormalizeByBytesPatterns(builtinPatterns) && len(params.CustomPatterns) == 0 {
+		return n, nil
+	}
+
+	n.lexer = lexmachine.NewLexer()
+
+	err = n.initTokens(params)
 	if err != nil {
 		return nil, fmt.Errorf("failed to init tokens: %w", err)
 	}
 
 	defer func() { _ = recover() }()
-	if err = l.Compile(); err != nil {
+	if err = n.lexer.Compile(); err != nil {
 		return nil, fmt.Errorf("failed to compile lexer: %w", err)
 	}
 
-	return &tokenNormalizer{
-		lexer:           l,
-		builtinPatterns: params.BuiltinPatterns,
-	}, nil
+	return n, nil
+}
+
+func parseBuiltinPatterns(s string) (int, error) {
+	// single pattern
+	if p, ok := patternById[s]; ok {
+		return p, nil
+	}
+
+	res := 0
+	patterns := strings.Split(s, "|")
+	for _, pId := range patterns {
+		p, ok := patternById[pId]
+		if !ok {
+			return 0, fmt.Errorf("invalid pattern %q", pId)
+		}
+		res += p
+	}
+	return res, nil
 }
 
 func (n *tokenNormalizer) Normalize(out, data []byte) []byte {
@@ -320,24 +359,24 @@ type token struct {
 	end         int
 }
 
-func initTokens(lexer *lexmachine.Lexer, params TokenNormalizerParams) error {
+func (n *tokenNormalizer) initTokens(params TokenNormalizerParams) error {
 	addTokens := func(patterns []TokenPattern) {
 		for _, p := range patterns {
-			if p.mask == 0 || params.BuiltinPatterns&p.mask != 0 {
-				lexer.Add([]byte(p.RE), newToken(p.Placeholder))
+			if p.mask == 0 || n.builtinPatterns&p.mask != 0 {
+				n.lexer.Add([]byte(p.RE), newToken(p.Placeholder))
 			}
 		}
 	}
 
 	if len(params.CustomPatterns) == 0 {
-		if params.BuiltinPatterns == 0 {
+		if n.builtinPatterns == pNo {
 			return errors.New("empty pattern list")
 		}
 		addTokens(builtinTokenPatterns)
 		return nil
 	}
 
-	if params.BuiltinPatterns == 0 {
+	if n.builtinPatterns == pNo {
 		addTokens(params.CustomPatterns)
 		return nil
 	}
