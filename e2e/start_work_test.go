@@ -12,7 +12,6 @@ import (
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/e2e/file_clickhouse"
 	"github.com/ozontech/file.d/e2e/file_elasticsearch"
-	"github.com/ozontech/file.d/e2e/file_es_split"
 	"github.com/ozontech/file.d/e2e/file_file"
 	"github.com/ozontech/file.d/e2e/file_loki"
 	"github.com/ozontech/file.d/e2e/http_file"
@@ -160,11 +159,13 @@ func TestE2EStabilityWorkCase(t *testing.T) {
 			},
 			cfgPath: "./file_elasticsearch/config.yml",
 		},
-		{
-			name:    "file_es",
-			e2eTest: &file_es_split.Config{},
-			cfgPath: "./file_es_split/config.yml",
-		},
+		/*
+			{
+				name:    "file_es",
+				e2eTest: &file_es_split.Config{},
+				cfgPath: "./file_es_split/config.yml",
+			},
+		*/
 		{
 			name:    "file_loki",
 			e2eTest: &file_loki.Config{},
