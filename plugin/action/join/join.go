@@ -84,29 +84,17 @@ type Config struct {
 	Field  cfg.FieldSelector `json:"field" required:"true" parse:"selector"` // *
 	Field_ []string
 
-	// Special flag for join_template plugin;
-	// it allows to check strings without regexp
-	FastCheck bool
-
 	// > @3@4@5@6
 	// >
 	// > A regexp which will start the join sequence.
 	Start  cfg.Regexp `json:"start" required:"true" parse:"regexp"` // *
 	Start_ *regexp.Regexp
 
-	// Must be set by join_template plugin
-	// if it sets fast check flag
-	StartCheckFunc_ func(s string) bool
-
 	// > @3@4@5@6
 	// >
 	// > A regexp which will continue the join sequence.
 	Continue  cfg.Regexp `json:"continue" required:"true" parse:"regexp"` // *
 	Continue_ *regexp.Regexp
-
-	// Must be set by join_template plugin
-	// if it sets fast check flag
-	ContinueCheckFunc_ func(s string) bool
 
 	// > @3@4@5@6
 	// >
@@ -117,6 +105,10 @@ type Config struct {
 	// >
 	// > Negate match logic for Continue (lets you implement negative lookahead while joining lines)
 	Negate bool `json:"negate" default:"false"` // *
+
+	// Used for compatibility with join_template plugin
+	FirstCheck func(string) bool
+	NextCheck  func(string) bool
 }
 
 func init() {
@@ -178,10 +170,10 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 
 	firstOK := false
 	if node.IsString() {
-		if p.config.FastCheck {
-			firstOK = p.config.StartCheckFunc_(value)
-		} else {
+		if p.config.FirstCheck == nil {
 			firstOK = p.config.Start_.MatchString(value)
+		} else {
+			firstOK = p.config.FirstCheck(value)
 		}
 	}
 
@@ -197,17 +189,7 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	}
 
 	if p.isJoining {
-		nextOK := false
-		if p.config.FastCheck {
-			nextOK = p.config.ContinueCheckFunc_(value)
-		} else {
-			nextOK = p.config.Continue_.MatchString(value)
-		}
-
-		if p.negate {
-			nextOK = !nextOK
-		}
-		if nextOK {
+		if p.isNextOK(value) {
 			if p.maxEventSize == 0 || len(p.buff) < p.maxEventSize {
 				p.buff = append(p.buff, value...)
 			}
@@ -219,4 +201,18 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 		p.flush()
 	}
 	return pipeline.ActionPass
+}
+
+func (p *Plugin) isNextOK(value string) bool {
+	if p.config.NextCheck == nil {
+		result := p.config.Continue_.MatchString(value)
+
+		if p.negate {
+			result = !result
+		}
+
+		return result
+	}
+
+	return p.config.NextCheck(value)
 }
