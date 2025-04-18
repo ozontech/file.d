@@ -115,6 +115,11 @@ func TestTokenNormalizerNormalizerByBytes(t *testing.T) {
 			input: `some {"a":1,b:{"c":2,"d":3},e:[4,5,6]`,
 			want:  "some <curly_bracketed>",
 		},
+		{
+			name:  "multiple",
+			input: `some {"a":1,b:{"c":2,"d":3},e:[4,5,6]} & [val1, val2, [{val3_1}, (val3_2)]] & "bla bla" here`,
+			want:  "some <curly_bracketed> & <square_bracketed> & <double_quoted> here",
+		},
 	}
 
 	n, err := NewTokenNormalizer(TokenNormalizerParams{
