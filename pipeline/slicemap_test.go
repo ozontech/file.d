@@ -1,16 +1,17 @@
 package pipeline
 
 import (
+	"context"
 	"fmt"
 	"math/rand"
-	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
 
 func TestSliceMapRace(t *testing.T) {
-	const iters = 100
+	const testDuration = 2 * time.Second
 
 	getRandStream := func() StreamName {
 		return StreamName(fmt.Sprintf("stream%d", rand.Int()%3))
@@ -21,23 +22,18 @@ func TestSliceMapRace(t *testing.T) {
 		"stream1": 200,
 	})
 
-	wgGet := &sync.WaitGroup{}
-	wgGet.Add(iters)
-	wgSet := &sync.WaitGroup{}
-	wgSet.Add(iters)
+	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(testDuration))
+	defer cancel()
 
 	go func() {
 		sm.Get(getRandStream())
-		wgGet.Done()
 	}()
 
 	go func() {
 		sm.Set(getRandStream(), rand.Int63()%100)
-		wgSet.Done()
 	}()
 
-	wgSet.Done()
-	wgGet.Done()
+	<-ctx.Done()
 }
 
 func TestSliceMapAll(t *testing.T) {
