@@ -25,17 +25,24 @@ func TestSliceMapRace(t *testing.T) {
 	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(testDuration))
 	defer cancel()
 
-	go func() {
+	runFn := func(f func()) {
 		for {
-			sm.Get(getRandStream())
+			select {
+			case <-ctx.Done():
+				return
+			default:
+				f()
+			}
 		}
-	}()
+	}
 
-	go func() {
-		for {
-			sm.Set(getRandStream(), rand.Int63()%100)
-		}
-	}()
+	go runFn(func() {
+		sm.Get(getRandStream())
+	})
+
+	go runFn(func() {
+		sm.Set(getRandStream(), rand.Int63()%100)
+	})
 
 	<-ctx.Done()
 }
