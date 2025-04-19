@@ -24,19 +24,20 @@ const (
 	pParenthesized   = 0x4  // (...)
 	pDoubleQuoted    = 0x8  // "..."
 	pSingleQuoted    = 0x10 // '...'
-	pEmail           = 0x20
-	pUrl             = 0x40
-	pHost            = 0x80
-	pUuid            = 0x100
-	pSha1            = 0x200
-	pMd5             = 0x400
-	pDatetime        = 0x800
-	pIp              = 0x1000
-	pDuration        = 0x2000
-	pHex             = 0x4000
-	pFloat           = 0x8000
-	pInt             = 0x10000
-	pBool            = 0x20000
+	pGraveQuoted     = 0x20 // `...`
+	pEmail           = 0x40
+	pUrl             = 0x80
+	pHost            = 0x100
+	pUuid            = 0x200
+	pSha1            = 0x400
+	pMd5             = 0x800
+	pDatetime        = 0x1000
+	pIp              = 0x2000
+	pDuration        = 0x4000
+	pHex             = 0x8000
+	pFloat           = 0x10000
+	pInt             = 0x20000
+	pBool            = 0x40000
 )
 
 var patternById = map[string]int{
@@ -48,6 +49,7 @@ var patternById = map[string]int{
 	"parenthesized":    pParenthesized,
 	"double_quoted":    pDoubleQuoted,
 	"single_quoted":    pSingleQuoted,
+	"grave_quoted":     pGraveQuoted,
 	"email":            pEmail,
 	"url":              pUrl,
 	"host":             pHost,
@@ -69,6 +71,7 @@ var placeholderByPattern = map[int]string{
 	pParenthesized:   "<parenthesized>",
 	pDoubleQuoted:    "<double_quoted>",
 	pSingleQuoted:    "<single_quoted>",
+	pGraveQuoted:     "<grave_quoted>",
 	pEmail:           "<email>",
 	pUrl:             "<url>",
 	pHost:            "<host>",
@@ -90,6 +93,7 @@ var normalizeByBytesPatterns = []int{
 	pParenthesized,
 	pDoubleQuoted,
 	pSingleQuoted,
+	pGraveQuoted,
 }
 
 func onlyNormalizeByBytesPatterns(mask int) bool {
@@ -289,32 +293,38 @@ func (n *tokenNormalizer) normalizeByBytes(out, data []byte) []byte {
 
 		for i := lastPos; i < len(data); i++ {
 			switch {
-			case n.hasPattern(pCurlyBracketed) && data[i] == '{':
+			case data[i] == '{' && n.hasPattern(pCurlyBracketed):
 				openBracket(pCurlyBracketed, i)
-			case n.hasPattern(pCurlyBracketed) && data[i] == '}':
+			case data[i] == '}' && n.hasPattern(pCurlyBracketed):
 				if t, ok := closeBracket(pCurlyBracketed, i); ok {
 					return t, false
 				}
-			case n.hasPattern(pSquareBracketed) && data[i] == '[':
+			case data[i] == '[' && n.hasPattern(pSquareBracketed):
 				openBracket(pSquareBracketed, i)
-			case n.hasPattern(pSquareBracketed) && data[i] == ']':
+			case data[i] == ']' && n.hasPattern(pSquareBracketed):
 				if t, ok := closeBracket(pSquareBracketed, i); ok {
 					return t, false
 				}
-			case n.hasPattern(pParenthesized) && data[i] == '(':
+			case data[i] == '(' && n.hasPattern(pParenthesized):
 				openBracket(pParenthesized, i)
-			case n.hasPattern(pParenthesized) && data[i] == ')':
+			case data[i] == ')' && n.hasPattern(pParenthesized):
 				if t, ok := closeBracket(pParenthesized, i); ok {
 					return t, false
 				}
-			case n.hasPattern(pDoubleQuoted) && data[i] == '"':
+			case data[i] == '"' && n.hasPattern(pDoubleQuoted):
 				t, shift, ok := quotes('"', pDoubleQuoted, i)
 				if ok {
 					return t, false
 				}
 				i += shift
-			case n.hasPattern(pSingleQuoted) && data[i] == '\'':
+			case data[i] == '\'' && n.hasPattern(pSingleQuoted):
 				t, shift, ok := quotes('\'', pSingleQuoted, i)
+				if ok {
+					return t, false
+				}
+				i += shift
+			case data[i] == '`' && n.hasPattern(pGraveQuoted):
+				t, shift, ok := quotes('`', pGraveQuoted, i)
 				if ok {
 					return t, false
 				}

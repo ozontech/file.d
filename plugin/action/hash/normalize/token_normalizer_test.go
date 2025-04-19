@@ -117,72 +117,69 @@ func TestTokenNormalizerNormalizerByBytes(t *testing.T) {
 	tests := []struct {
 		name string
 
-		input string
+		input []string
 		want  string
 	}{
 		{
 			name:  "curly_brackets",
-			input: `some {"a":1,b:{"c":2,"d":3},e:[4,5,6]} here`,
+			input: []string{`some {"a":1,b:{"c":2,"d":3},e:[4,5,6]} here`},
 			want:  "some <curly_bracketed> here",
 		},
 		{
 			name:  "square_brackets",
-			input: `some [val1, val2, [{val3_1}, (val3_2)]] here`,
+			input: []string{`some [val1, val2, [{val3_1}, (val3_2)]] here`},
 			want:  "some <square_bracketed> here",
 		},
 		{
 			name:  "parentheses",
-			input: `some (asd(gfd)(())) here`,
+			input: []string{`some (asd(gfd)(())) here`},
 			want:  "some <parenthesized> here",
 		},
 		{
-			name:  "double_quotes1",
-			input: `some "bla bla" here`,
-			want:  "some <double_quoted> here",
+			name: "double_quotes",
+			input: []string{
+				`some "bla bla" here`,
+				`some """bla "asd" bla""" here`,
+				`some "\"bla\" asd \"bla\"" here`,
+			},
+			want: "some <double_quoted> here",
 		},
 		{
-			name:  "double_quotes2",
-			input: `some """bla "asd" bla""" here`,
-			want:  "some <double_quoted> here",
+			name: "single_quotes",
+			input: []string{
+				`some 'bla bla' here`,
+				`some '''bla 'asd' bla''' here`,
+				`some '\'bla\' asd \'bla\'' here`,
+			},
+			want: "some <single_quoted> here",
 		},
 		{
-			name:  "double_quotes3",
-			input: `some "\"bla\" asd \"bla\"" here`,
-			want:  "some <double_quoted> here",
-		},
-		{
-			name:  "single_quotes1",
-			input: `some 'bla bla' here`,
-			want:  "some <single_quoted> here",
-		},
-		{
-			name:  "single_quotes2",
-			input: `some '''bla 'asd' bla''' here`,
-			want:  "some <single_quoted> here",
-		},
-		{
-			name:  "single_quotes3",
-			input: `some '\'bla\' asd \'bla\'' here`,
-			want:  "some <single_quoted> here",
+			name: "grave_quotes",
+			input: []string{
+				"some `bla bla` here",
+				"some ```bla `asd` bla``` here",
+				"some `\\`bla\\` asd \\`bla\\`` here",
+			},
+			want: "some <grave_quoted> here",
 		},
 		{
 			name:  "partial_token1",
-			input: `some "dsadsadasd asd qw`,
+			input: []string{`some "dsadsadasd asd qw`},
 			want:  "some <double_quoted>",
 		},
 		{
 			name:  "partial_token2",
-			input: `some {"a":1,b:{"c":2,"d":3},e:[4,5,6]`,
+			input: []string{`some {"a":1,b:{"c":2,"d":3},e:[4,5,6]`},
 			want:  "some <curly_bracketed>",
 		},
 		{
 			name:  "multiple",
-			input: `some {"a":1,b:{"c":2,"d":3},e:[4,5,6]} & [val1, val2, [{val3_1}, (val3_2)]] & "bla bla" here`,
+			input: []string{`some {"a":1,b:{"c":2,"d":3},e:[4,5,6]} & [val1, val2, [{val3_1}, (val3_2)]] & "bla bla" here`},
 			want:  "some <curly_bracketed> & <square_bracketed> & <double_quoted> here",
 		},
 	}
 
-	const testNormalizeByBytesPattern = "curly_bracketed|square_bracketed|parenthesized|double_quoted|single_quoted"
+	const testNormalizeByBytesPattern = "curly_bracketed|square_bracketed|parenthesized|double_quoted|single_quoted|grave_quoted"
 
 	n, err := NewTokenNormalizer(TokenNormalizerParams{
 		BuiltinPatterns: testNormalizeByBytesPattern,
@@ -196,8 +193,10 @@ func TestTokenNormalizerNormalizerByBytes(t *testing.T) {
 
 			out := make([]byte, 0)
 
-			out = n.Normalize(out, []byte(tt.input))
-			assert.Equal(t, tt.want, string(out), "wrong out with input=%q", tt.input)
+			for _, i := range tt.input {
+				out = n.Normalize(out, []byte(i))
+				assert.Equal(t, tt.want, string(out), "wrong out with input=%q", i)
+			}
 		})
 	}
 }
