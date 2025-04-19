@@ -263,6 +263,11 @@ func (n *tokenNormalizer) normalizeByBytes(out, data []byte) []byte {
 
 				return token{}, counter - 1, false
 			} else if curPattern == pattern {
+				// skip escaped
+				if pos > 0 && data[pos-1] == '\\' {
+					return token{}, 0, false
+				}
+
 				tmp := counter - 1
 				// multiple quotes in a row
 				for j := pos + 1; j < len(data) && data[j] == c; j++ {

@@ -146,6 +146,11 @@ func TestTokenNormalizerNormalizerByBytes(t *testing.T) {
 			want:  "some <double_quoted> here",
 		},
 		{
+			name:  "double_quotes3",
+			input: `some "\"bla\" asd \"bla\"" here`,
+			want:  "some <double_quoted> here",
+		},
+		{
 			name:  "single_quotes1",
 			input: `some 'bla bla' here`,
 			want:  "some <single_quoted> here",
@@ -153,6 +158,11 @@ func TestTokenNormalizerNormalizerByBytes(t *testing.T) {
 		{
 			name:  "single_quotes2",
 			input: `some '''bla 'asd' bla''' here`,
+			want:  "some <single_quoted> here",
+		},
+		{
+			name:  "single_quotes3",
+			input: `some '\'bla\' asd \'bla\'' here`,
 			want:  "some <single_quoted> here",
 		},
 		{
