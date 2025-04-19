@@ -286,11 +286,11 @@ Normalizer params. It works for `fields` with `format: normalize`.
 
 	* **`priority`** *`string`* *`default=first`* *`options=first|last`*
 
-		A priority of pattern. Works only if `normalizer.builtin_patterns != 0`.
+		A priority of pattern. Works only if `normalizer.builtin_patterns != "no"`.
 
 		If set to `first`, pattern will be added before built-in, otherwise - after.
 
-		> If `normalizer.builtin_patterns = 0`, then the priority is determined
+		> If `normalizer.builtin_patterns = "no"`, then the priority is determined
 		by the order of the elements in `normalizer.custom_patterns`.
 
 <br>
