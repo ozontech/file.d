@@ -46,17 +46,10 @@ func (so *SliceMap) RUnlock() {
 
 // All returns iterator. Use in pair with [RLock]/[RUnlock].
 func (so *SliceMap) All() iter.Seq2[int, kv] {
-	if so == nil {
-		return nil
-	}
 	return slices.All(so.s)
 }
 
 func (so *SliceMap) Get(streamName StreamName) (int64, bool) {
-	if so == nil {
-		return 0, false
-	}
-
 	so.mx.RLock()
 	defer so.mx.RUnlock()
 
@@ -67,10 +60,6 @@ func (so *SliceMap) Get(streamName StreamName) (int64, bool) {
 }
 
 func (so *SliceMap) Set(streamName StreamName, offset int64) {
-	if so == nil {
-		return
-	}
-
 	so.mx.Lock()
 	defer so.mx.Unlock()
 
@@ -82,10 +71,6 @@ func (so *SliceMap) Set(streamName StreamName, offset int64) {
 }
 
 func (so *SliceMap) Reset() {
-	if so == nil {
-		return
-	}
-
 	so.mx.Lock()
 	defer so.mx.Unlock()
 

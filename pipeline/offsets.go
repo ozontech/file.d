@@ -13,6 +13,10 @@ func NewOffsets(current int64, streamOffsets *SliceMap) Offsets {
 }
 
 func (o Offsets) byStream(stream string) int64 {
+	if o.streamOffsets == nil {
+		return -1
+	}
+
 	offset, found := o.streamOffsets.Get(StreamName(stream))
 	if !found {
 		return -1
