@@ -78,7 +78,7 @@ type Job struct {
 	// offsets is a sliceMap of streamName to offset.
 	// Unlike map[string]int, sliceMap can work with mutable strings when using unsafe conversion from []byte.
 	// Also it is likely not slower than map implementation for 1-2 streams case.
-	offsets *pipeline.SliceMap
+	offsets pipeline.SliceMap
 
 	mu *sync.Mutex
 }
@@ -381,7 +381,7 @@ func (jp *jobProvider) addJob(file *os.File, stat os.FileInfo, filename string, 
 		isDone:     true,
 		shouldSkip: *atomic.NewBool(false),
 
-		offsets: pipeline.SliceFromMap(nil),
+		offsets: nil,
 
 		mu: &sync.Mutex{},
 	}
@@ -528,7 +528,9 @@ func (jp *jobProvider) truncateJob(job *Job) {
 
 	job.seek(0, io.SeekStart, "truncation")
 
-	job.offsets.Reset()
+	for _, strOff := range job.offsets {
+		job.offsets.Set(strOff.Stream, 0)
+	}
 
 	jp.logger.Infof("job %d:%s was truncated, reading will start over, events with id less than %d will be ignored", job.sourceID, job.filename, job.ignoreEventsLE)
 }
