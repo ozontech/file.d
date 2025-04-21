@@ -281,7 +281,7 @@ func TestWorkerWorkMultiData(t *testing.T) {
 			job := &Job{
 				file:       f,
 				shouldSkip: *atomic.NewBool(false),
-				offsets:    pipeline.SliceFromMap(nil),
+				offsets:    pipeline.SliceMap{},
 				mu:         &sync.Mutex{},
 			}
 
