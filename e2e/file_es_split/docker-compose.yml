@@ -1,8 +1,6 @@
 services:
   elasticsearch:
     image: elasticsearch:8.17.0
-    volumes:
-      - esdata01:/usr/share/elasticsearch/data
     container_name: es-local-test-2
     ports:
       - "29200:9200"
@@ -22,7 +20,3 @@ services:
       interval: 10s
       timeout: 10s
       retries: 10
-
-volumes:
-  esdata01:
-    driver: local
