@@ -175,6 +175,7 @@ func TestE2EStabilityWorkCase(t *testing.T) {
 	for num, test := range testsList {
 		test := test
 		num := num
+
 		t.Run(test.name, func(t *testing.T) {
 			fd := startForTest(t, test, num)
 			t.Parallel()
