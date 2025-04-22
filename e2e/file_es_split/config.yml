@@ -13,8 +13,6 @@ pipelines:
       split_batch: true
       strict: false
       index_format: index_name
-      retry: 1
-      retention: 1s
       workers_count: 1
       username: elastic
       password: elastic
