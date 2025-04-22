@@ -73,43 +73,32 @@ func addEvent(f *os.File, s string) error {
 }
 
 func (c *Config) Validate(t *testing.T) {
-	time.Sleep(5 * time.Second)
+	count := 0
+	var err error
+	for range 10 {
+		count, err = c.getEventsCount()
+		if err != nil {
+			// ignore possible es init errors
+			time.Sleep(10 * time.Second)
+			continue
+		}
 
-	count, err := c.getEventsCount()
+		if count < n {
+			// wait for events to be saved
+			time.Sleep(10 * time.Second)
+			continue
+		}
+	}
+
 	require.NoError(t, err)
+
+	// there might be more events
+	time.Sleep(10 * time.Second)
+
+	count, err = c.getEventsCount()
+	require.NoError(t, err)
+
 	require.Equal(t, n, count)
-
-	err = c.deleteAll()
-	require.NoError(t, err)
-}
-
-func (c *Config) deleteAll() error {
-	client := &http.Client{Timeout: 3 * time.Second}
-
-	req, err := http.NewRequest(http.MethodDelete, "http://127.0.0.1:9200/index_name", http.NoBody)
-	if err != nil {
-		return fmt.Errorf("create request: %w", err)
-	}
-	req.SetBasicAuth("elastic", "elastic")
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return fmt.Errorf("do request: %w", err)
-	}
-	defer func() {
-		_ = resp.Body.Close()
-	}()
-
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return fmt.Errorf("read all: %w", err)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("wrong status code; status = %d; body = %s", resp.StatusCode, respBody)
-	}
-
-	return nil
 }
 
 type searchResp struct {
