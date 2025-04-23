@@ -10,6 +10,8 @@ services:
       - xpack.security.enabled=true
       - xpack.security.http.ssl.enabled=false
       - http.max_content_length=128b
+      - logger.org.elasticsearch.transport=DEBUG
+      - logger.org.elasticsearch.http=DEBUG
     mem_limit: 1073741824
     healthcheck:
       test:
