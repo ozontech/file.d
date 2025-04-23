@@ -127,26 +127,32 @@ func TestSocketTCP(t *testing.T) {
 	t.Parallel()
 
 	const clients = 4
-	cfg := &Config{
+
+	doTest(t, &Config{
 		Network: networkTcp,
 		Address: ":5001",
-	}
+	}, clients, true)
 
-	doTest(t, cfg, clients, true)
-	doTest(t, cfg, clients, false)
+	doTest(t, &Config{
+		Network: networkTcp,
+		Address: ":5002",
+	}, clients, false)
 }
 
 func TestSocketUDP(t *testing.T) {
 	t.Parallel()
 
 	const clients = 4
-	cfg := &Config{
-		Network: networkUdp,
-		Address: ":5002",
-	}
 
-	doTest(t, cfg, clients, true)
-	doTest(t, cfg, clients, false)
+	doTest(t, &Config{
+		Network: networkUdp,
+		Address: ":5010",
+	}, clients, true)
+
+	doTest(t, &Config{
+		Network: networkUdp,
+		Address: ":5020",
+	}, clients, false)
 }
 
 func TestSocketUnix(t *testing.T) {
