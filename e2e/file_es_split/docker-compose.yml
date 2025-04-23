@@ -6,9 +6,7 @@ services:
       - "9200:9200"
     environment:
       - discovery.type=single-node
-      - ELASTIC_PASSWORD=elastic
-      - xpack.security.enabled=true
-      - xpack.security.http.ssl.enabled=false
+      - xpack.security.enabled=false
       - http.max_content_length=128b
       - logger.org.elasticsearch.transport=DEBUG
       - logger.org.elasticsearch.http=DEBUG

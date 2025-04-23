@@ -14,5 +14,3 @@ pipelines:
       strict: false
       index_format: index_name
       workers_count: 1
-      username: elastic
-      password: elastic
