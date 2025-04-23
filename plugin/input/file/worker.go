@@ -55,7 +55,7 @@ func (w *worker) work(controller inputer, jobProvider *jobProvider, readBufferSi
 		sourceName := job.filename
 		skipLine := job.shouldSkip.Load()
 		lastOffset := job.curOffset
-		offsets := job.offsets
+		offsets := job.offsets.Copy()
 		if job.symlink != "" {
 			sourceName = job.symlink
 		}
