@@ -706,7 +706,7 @@ func CompileRegex(s string) (*regexp.Regexp, error) {
 		return nil, fmt.Errorf(`regexp is empty`)
 	}
 
-	if s == "" || s[0] != '/' || s[len(s)-1] != '/' {
+	if s == "/" || s[0] != '/' || s[len(s)-1] != '/' {
 		return nil, fmt.Errorf(`regexp "%s" should be surrounded by "/"`, s)
 	}
 
