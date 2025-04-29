@@ -19,25 +19,25 @@ const (
 	pAll = -1
 	pNo  = 0
 
-	pCurlyBracketed  = 0x1  // {...}
-	pSquareBracketed = 0x2  // [...]
-	pParenthesized   = 0x4  // (...)
-	pDoubleQuoted    = 0x8  // "..."
-	pSingleQuoted    = 0x10 // '...'
-	pGraveQuoted     = 0x20 // `...`
-	pEmail           = 0x40
-	pUrl             = 0x80
-	pHost            = 0x100
-	pUuid            = 0x200
-	pSha1            = 0x400
-	pMd5             = 0x800
-	pDatetime        = 0x1000
-	pIp              = 0x2000
-	pDuration        = 0x4000
-	pHex             = 0x8000
-	pFloat           = 0x10000
-	pInt             = 0x20000
-	pBool            = 0x40000
+	pCurlyBracketed  = 1 << (iota - 2) // {...}
+	pSquareBracketed                   // [...]
+	pParenthesized                     // (...)
+	pDoubleQuoted                      // "..."
+	pSingleQuoted                      // '...'
+	pGraveQuoted                       // `...`
+	pEmail
+	pUrl
+	pHost
+	pUuid
+	pSha1
+	pMd5
+	pDatetime
+	pIp
+	pDuration
+	pHex
+	pFloat
+	pInt
+	pBool
 )
 
 var patternById = map[string]int{
@@ -97,7 +97,7 @@ var normalizeByBytesPatterns = []int{
 }
 
 func onlyNormalizeByBytesPatterns(mask int) bool {
-	if mask <= 0 {
+	if mask <= pNo {
 		return false
 	}
 
@@ -128,6 +128,8 @@ type TokenNormalizerParams struct {
 type tokenNormalizer struct {
 	lexer           *lexmachine.Lexer
 	builtinPatterns int
+
+	normalizeByBytes bool
 }
 
 func NewTokenNormalizer(params TokenNormalizerParams) (Normalizer, error) {
@@ -137,7 +139,8 @@ func NewTokenNormalizer(params TokenNormalizerParams) (Normalizer, error) {
 	}
 
 	n := &tokenNormalizer{
-		builtinPatterns: builtinPatterns,
+		builtinPatterns:  builtinPatterns,
+		normalizeByBytes: hasPattern(builtinPatterns, normalizeByBytesPatterns...),
 	}
 
 	// only patterns without regexps
@@ -147,7 +150,7 @@ func NewTokenNormalizer(params TokenNormalizerParams) (Normalizer, error) {
 
 	n.lexer = lexmachine.NewLexer()
 
-	err = n.initTokens(params)
+	err = initTokens(n.lexer, builtinPatterns, params.CustomPatterns)
 	if err != nil {
 		return nil, fmt.Errorf("failed to init tokens: %w", err)
 	}
@@ -158,6 +161,27 @@ func NewTokenNormalizer(params TokenNormalizerParams) (Normalizer, error) {
 	}
 
 	return n, nil
+}
+
+func (n *tokenNormalizer) Normalize(out, data []byte) []byte {
+	out = out[:0]
+
+	var scanner *lexmachine.Scanner
+	if n.normalizeByBytes {
+		out = n.normalizeByTokenizer(out, newTokenizer(n.builtinPatterns, data))
+		if n.lexer == nil {
+			return out
+		}
+
+		scanner, _ = n.lexer.Scanner(out)
+
+		// scanner copied buffer, so we can reset it
+		out = out[:0]
+	} else {
+		scanner, _ = n.lexer.Scanner(data)
+	}
+
+	return n.normalizeByScanner(out, scanner)
 }
 
 func parseBuiltinPatterns(s string) (int, error) {
@@ -178,25 +202,66 @@ func parseBuiltinPatterns(s string) (int, error) {
 	return res, nil
 }
 
-func (n *tokenNormalizer) Normalize(out, data []byte) []byte {
-	out = out[:0]
-
-	var scanner *lexmachine.Scanner
-	if n.hasPattern(normalizeByBytesPatterns...) {
-		out = n.normalizeByBytes(out, data)
-		if n.lexer == nil {
-			return out
+func initTokens(lexer *lexmachine.Lexer,
+	builtinPatterns int, customPatterns []TokenPattern,
+) error {
+	addTokens := func(patterns []TokenPattern) {
+		for _, p := range patterns {
+			if p.mask == 0 || builtinPatterns&p.mask != 0 {
+				lexer.Add([]byte(p.RE), newToken(p.Placeholder))
+			}
 		}
-
-		scanner, _ = n.lexer.Scanner(out)
-
-		// scanner copied buffer, so we can reset it
-		out = out[:0]
-	} else {
-		scanner, _ = n.lexer.Scanner(data)
 	}
 
-	return n.normalizeByScanner(out, scanner)
+	if len(customPatterns) == 0 {
+		if builtinPatterns == pNo {
+			return errors.New("empty pattern list")
+		}
+		addTokens(builtinTokenPatterns)
+		return nil
+	}
+
+	if builtinPatterns == pNo {
+		addTokens(customPatterns)
+		return nil
+	}
+
+	lastPatterns := make([]TokenPattern, 0)
+	patterns := make([]TokenPattern, 0)
+	for _, p := range customPatterns {
+		if p.Priority == patternPriorityFirst {
+			patterns = append(patterns, p)
+		} else {
+			lastPatterns = append(lastPatterns, p)
+		}
+	}
+	patterns = append(patterns, builtinTokenPatterns...)
+	patterns = append(patterns, lastPatterns...)
+
+	addTokens(patterns)
+	return nil
+}
+
+type token struct {
+	placeholder string
+	begin       int
+	end         int
+}
+
+func newToken(placeholder string) lexmachine.Action {
+	return func(s *lexmachine.Scanner, m *machines.Match) (any, error) {
+		// skip `\w<match>\w`
+		if m.TC > 0 && isWord(s.Text[m.TC-1]) ||
+			m.TC+len(m.Bytes) < len(s.Text) && isWord(s.Text[m.TC+len(m.Bytes)]) {
+			return nil, nil
+		}
+
+		return token{
+			placeholder: placeholder,
+			begin:       m.TC,
+			end:         m.TC + len(m.Bytes),
+		}, nil
+	}
 }
 
 func (n *tokenNormalizer) normalizeByScanner(out []byte, scanner *lexmachine.Scanner) []byte {
@@ -221,211 +286,169 @@ func (n *tokenNormalizer) normalizeByScanner(out []byte, scanner *lexmachine.Sca
 	return out
 }
 
-func (n *tokenNormalizer) normalizeByBytes(out, data []byte) []byte {
-	lastPos := 0
-	nextToken := func() (token, bool) {
-		curPattern := 0
-		counter := 0
-		startPattern := 0
-
-		openBracket := func(pattern int, pos int) {
-			if curPattern == 0 {
-				curPattern = pattern
-				counter = 1
-				startPattern = pos
-			} else if curPattern == pattern {
-				counter++
-			}
-		}
-		closeBracket := func(pattern int, pos int) (token, bool) {
-			if curPattern != pattern {
-				return token{}, false
-			}
-
-			counter--
-			if counter > 0 {
-				return token{}, false
-			}
-
-			lastPos = pos + 1
-			return token{
-				placeholder: placeholderByPattern[pattern],
-				begin:       startPattern,
-				end:         pos + 1,
-			}, true
-		}
-		quotes := func(c byte, pattern int, pos int) (token, int, bool) {
-			if curPattern == 0 {
-				curPattern = pattern
-				counter = 1
-				startPattern = pos
-
-				// multiple quotes in a row
-				for j := pos + 1; j < len(data) && data[j] == c; j++ {
-					counter++
-				}
-
-				return token{}, counter - 1, false
-			} else if curPattern == pattern {
-				// skip escaped
-				if pos > 0 && data[pos-1] == '\\' {
-					return token{}, 0, false
-				}
-
-				tmp := counter - 1
-				// multiple quotes in a row
-				for j := pos + 1; j < len(data) && data[j] == c; j++ {
-					tmp--
-				}
-				if tmp > 0 {
-					return token{}, counter - tmp - 1, false
-				}
-
-				lastPos = pos + counter
-				return token{
-					placeholder: placeholderByPattern[pattern],
-					begin:       startPattern,
-					end:         pos + counter,
-				}, 0, true
-			}
-			return token{}, 0, false
-		}
-
-		for i := lastPos; i < len(data); i++ {
-			switch {
-			case data[i] == '{' && n.hasPattern(pCurlyBracketed):
-				openBracket(pCurlyBracketed, i)
-			case data[i] == '}' && n.hasPattern(pCurlyBracketed):
-				if t, ok := closeBracket(pCurlyBracketed, i); ok {
-					return t, false
-				}
-			case data[i] == '[' && n.hasPattern(pSquareBracketed):
-				openBracket(pSquareBracketed, i)
-			case data[i] == ']' && n.hasPattern(pSquareBracketed):
-				if t, ok := closeBracket(pSquareBracketed, i); ok {
-					return t, false
-				}
-			case data[i] == '(' && n.hasPattern(pParenthesized):
-				openBracket(pParenthesized, i)
-			case data[i] == ')' && n.hasPattern(pParenthesized):
-				if t, ok := closeBracket(pParenthesized, i); ok {
-					return t, false
-				}
-			case data[i] == '"' && n.hasPattern(pDoubleQuoted):
-				t, shift, ok := quotes('"', pDoubleQuoted, i)
-				if ok {
-					return t, false
-				}
-				i += shift
-			case data[i] == '\'' && n.hasPattern(pSingleQuoted):
-				t, shift, ok := quotes('\'', pSingleQuoted, i)
-				if ok {
-					return t, false
-				}
-				i += shift
-			case data[i] == '`' && n.hasPattern(pGraveQuoted):
-				t, shift, ok := quotes('`', pGraveQuoted, i)
-				if ok {
-					return t, false
-				}
-				i += shift
-			}
-		}
-
-		// last partial token for possible cropped data
-		if curPattern != 0 {
-			lastPos = len(data)
-			return token{
-				placeholder: placeholderByPattern[curPattern],
-				begin:       startPattern,
-				end:         len(data),
-			}, false
-		}
-
-		return token{}, true
-	}
-
+func (n *tokenNormalizer) normalizeByTokenizer(out []byte, tok *tokenizer) []byte {
 	prevEnd := 0
-	for t, end := nextToken(); !end; t, end = nextToken() {
-		out = append(out, data[prevEnd:t.begin]...)
+	for t, end := tok.nextToken(); !end; t, end = tok.nextToken() {
+		out = append(out, tok.data[prevEnd:t.begin]...)
 		out = append(out, t.placeholder...)
 		prevEnd = t.end
 	}
-	out = append(out, data[prevEnd:]...)
+	out = append(out, tok.data[prevEnd:]...)
 
 	return out
 }
 
-func (n *tokenNormalizer) hasPattern(masks ...int) bool {
-	if n.builtinPatterns == pAll {
+func hasPattern(patterns int, masks ...int) bool {
+	if patterns == pAll {
 		return true
 	}
 	for _, m := range masks {
-		if n.builtinPatterns&m != 0 {
+		if patterns&m != 0 {
 			return true
 		}
 	}
 	return false
 }
 
-type token struct {
-	placeholder string
-	begin       int
-	end         int
+type tokenizer struct {
+	patterns int
+	data     []byte
+	pos      int
+
+	curPattern   int
+	counter      int
+	startPattern int
 }
 
-func (n *tokenNormalizer) initTokens(params TokenNormalizerParams) error {
-	addTokens := func(patterns []TokenPattern) {
-		for _, p := range patterns {
-			if p.mask == 0 || n.builtinPatterns&p.mask != 0 {
-				n.lexer.Add([]byte(p.RE), newToken(p.Placeholder))
+func newTokenizer(patterns int, data []byte) *tokenizer {
+	return &tokenizer{
+		patterns: patterns,
+		data:     data,
+	}
+}
+
+func (t *tokenizer) nextToken() (token, bool) {
+	t.curPattern = 0
+	t.counter = 0
+	t.startPattern = 0
+
+	for i := t.pos; i < len(t.data); i++ {
+		switch {
+		case t.data[i] == '{' && hasPattern(t.patterns, pCurlyBracketed):
+			t.processOpenBracket(pCurlyBracketed, i)
+		case t.data[i] == '}' && hasPattern(t.patterns, pCurlyBracketed):
+			if t, ok := t.processCloseBracket(pCurlyBracketed, i); ok {
+				return t, false
 			}
+		case t.data[i] == '[' && hasPattern(t.patterns, pSquareBracketed):
+			t.processOpenBracket(pSquareBracketed, i)
+		case t.data[i] == ']' && hasPattern(t.patterns, pSquareBracketed):
+			if t, ok := t.processCloseBracket(pSquareBracketed, i); ok {
+				return t, false
+			}
+		case t.data[i] == '(' && hasPattern(t.patterns, pParenthesized):
+			t.processOpenBracket(pParenthesized, i)
+		case t.data[i] == ')' && hasPattern(t.patterns, pParenthesized):
+			if t, ok := t.processCloseBracket(pParenthesized, i); ok {
+				return t, false
+			}
+		case t.data[i] == '"' && hasPattern(t.patterns, pDoubleQuoted):
+			t, shift, ok := t.processQuotes('"', pDoubleQuoted, i)
+			if ok {
+				return t, false
+			}
+			i += shift
+		case t.data[i] == '\'' && hasPattern(t.patterns, pSingleQuoted):
+			t, shift, ok := t.processQuotes('\'', pSingleQuoted, i)
+			if ok {
+				return t, false
+			}
+			i += shift
+		case t.data[i] == '`' && hasPattern(t.patterns, pGraveQuoted):
+			t, shift, ok := t.processQuotes('`', pGraveQuoted, i)
+			if ok {
+				return t, false
+			}
+			i += shift
 		}
 	}
 
-	if len(params.CustomPatterns) == 0 {
-		if n.builtinPatterns == pNo {
-			return errors.New("empty pattern list")
-		}
-		addTokens(builtinTokenPatterns)
-		return nil
+	// last partial token for possible cropped data
+	if t.curPattern != 0 {
+		t.pos = len(t.data)
+		return token{
+			placeholder: placeholderByPattern[t.curPattern],
+			begin:       t.startPattern,
+			end:         t.pos,
+		}, false
 	}
 
-	if n.builtinPatterns == pNo {
-		addTokens(params.CustomPatterns)
-		return nil
-	}
-
-	lastPatterns := make([]TokenPattern, 0)
-	patterns := make([]TokenPattern, 0)
-	for _, p := range params.CustomPatterns {
-		if p.Priority == patternPriorityFirst {
-			patterns = append(patterns, p)
-		} else {
-			lastPatterns = append(lastPatterns, p)
-		}
-	}
-	patterns = append(patterns, builtinTokenPatterns...)
-	patterns = append(patterns, lastPatterns...)
-
-	addTokens(patterns)
-	return nil
+	return token{}, true
 }
 
-func newToken(placeholder string) lexmachine.Action {
-	return func(s *lexmachine.Scanner, m *machines.Match) (any, error) {
-		// skip `\w<match>\w`
-		if m.TC > 0 && isWord(s.Text[m.TC-1]) ||
-			m.TC+len(m.Bytes) < len(s.Text) && isWord(s.Text[m.TC+len(m.Bytes)]) {
-			return nil, nil
+func (t *tokenizer) processOpenBracket(pattern int, pos int) {
+	if t.curPattern == 0 {
+		t.curPattern = pattern
+		t.counter = 1
+		t.startPattern = pos
+	} else if t.curPattern == pattern {
+		t.counter++
+	}
+}
+
+func (t *tokenizer) processCloseBracket(pattern int, pos int) (token, bool) {
+	if t.curPattern != pattern {
+		return token{}, false
+	}
+
+	t.counter--
+	if t.counter > 0 {
+		return token{}, false
+	}
+
+	t.pos = pos + 1
+	return token{
+		placeholder: placeholderByPattern[pattern],
+		begin:       t.startPattern,
+		end:         t.pos,
+	}, true
+}
+
+func (t *tokenizer) processQuotes(c byte, pattern int, pos int) (token, int, bool) {
+	if t.curPattern == 0 {
+		t.curPattern = pattern
+		t.counter = 1
+		t.startPattern = pos
+
+		// multiple quotes in a row
+		for i := pos + 1; i < len(t.data) && t.data[i] == c; i++ {
+			t.counter++
 		}
 
+		return token{}, t.counter - 1, false
+	} else if t.curPattern == pattern {
+		// skip escaped
+		if pos > 0 && t.data[pos-1] == '\\' {
+			return token{}, 0, false
+		}
+
+		tmp := t.counter - 1
+		// multiple quotes in a row
+		for i := pos + 1; i < len(t.data) && t.data[i] == c; i++ {
+			tmp--
+		}
+		if tmp > 0 {
+			return token{}, t.counter - tmp - 1, false
+		}
+
+		t.pos = pos + t.counter
 		return token{
-			placeholder: placeholder,
-			begin:       m.TC,
-			end:         m.TC + len(m.Bytes),
-		}, nil
+			placeholder: placeholderByPattern[pattern],
+			begin:       t.startPattern,
+			end:         t.pos,
+		}, 0, true
 	}
+	return token{}, 0, false
 }
 
 func isWord(c byte) bool {

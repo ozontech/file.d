@@ -59,7 +59,7 @@ func TestParseBuiltinPatterns(t *testing.T) {
 	}
 }
 
-func TestTokenNormalizerHasPattern(t *testing.T) {
+func TestHasPattern(t *testing.T) {
 	tests := []struct {
 		name string
 
@@ -105,15 +105,12 @@ func TestTokenNormalizerHasPattern(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			n := &tokenNormalizer{
-				builtinPatterns: tt.patterns,
-			}
-			require.Equal(t, tt.want, n.hasPattern(tt.input...))
+			require.Equal(t, tt.want, hasPattern(tt.patterns, tt.input...))
 		})
 	}
 }
 
-func TestTokenNormalizerNormalizerByBytes(t *testing.T) {
+func TestNormalizeByBytesOnly(t *testing.T) {
 	tests := []struct {
 		name string
 
