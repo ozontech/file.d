@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func doTest(t *testing.T, config *Config) {
+func doTest(t *testing.T, config *Config, clients int, parallel bool) {
 	p := test.NewPipeline(nil, "passive")
 
 	test.NewConfig(config, nil)
@@ -29,11 +29,13 @@ func doTest(t *testing.T, config *Config) {
 	outPlugin, outCfg := devnull.Factory()
 	output := outPlugin.(*devnull.Plugin)
 
+	const eventsCount = 3
+
 	wgOut := &sync.WaitGroup{}
-	wgOut.Add(3)
-	outEvents := make([]string, 0)
+	wgOut.Add(eventsCount * clients)
+	outEvents := make(map[pipeline.SourceID][]string)
 	output.SetOutFn(func(event *pipeline.Event) {
-		outEvents = append(outEvents, event.Root.EncodeToString())
+		outEvents[event.SourceID] = append(outEvents[event.SourceID], event.Root.EncodeToString())
 		wgOut.Done()
 	})
 
@@ -48,12 +50,7 @@ func doTest(t *testing.T, config *Config) {
 
 	p.Start()
 
-	conn, err := net.Dial(config.Network, config.Address)
-	require.NoError(t, err)
-
-	wgIn := &sync.WaitGroup{}
-	wgIn.Add(1)
-	go func() {
+	connWrite := func(conn net.Conn, wg *sync.WaitGroup) {
 		_ = conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
 
 		_, werr := conn.Write([]byte("{\"a\":1}\n"))
@@ -62,37 +59,100 @@ func doTest(t *testing.T, config *Config) {
 		_, werr = conn.Write([]byte("{\"b\":2}\n{\"c\":3}"))
 		require.NoError(t, werr)
 
-		wgIn.Done()
-	}()
+		if wg != nil {
+			wg.Done()
+		}
+	}
 
-	wgIn.Wait()
-	conn.Close()
+	if parallel {
+		conns := make([]net.Conn, 0, clients)
+		for i := 0; i < clients; i++ {
+			conn, err := net.Dial(config.Network, config.Address)
+			require.NoError(t, err)
 
-	wgOut.Wait()
+			conns = append(conns, conn)
+		}
+
+		wgIn := &sync.WaitGroup{}
+		wgIn.Add(clients)
+		for _, conn := range conns {
+			go connWrite(conn, wgIn)
+		}
+		wgIn.Wait()
+
+		for _, conn := range conns {
+			conn.Close()
+		}
+	} else {
+		for i := 0; i < clients; i++ {
+			conn, err := net.Dial(config.Network, config.Address)
+			require.NoError(t, err)
+
+			connWrite(conn, nil)
+
+			conn.Close()
+		}
+	}
+
+	wgWaitWithTimeout := func(wg *sync.WaitGroup, timeout time.Duration) bool {
+		c := make(chan struct{})
+		go func() {
+			defer close(c)
+			wg.Wait()
+		}()
+		select {
+		case <-c:
+			return false
+		case <-time.After(timeout):
+			return true
+		}
+	}
+
+	timeouted := wgWaitWithTimeout(wgOut, 10*time.Second)
 	p.Stop()
 
-	require.Equal(t, 3, len(outEvents), "wrong events count")
-	require.Equal(t, `{"a":1}`, outEvents[0], "wrong event")
-	require.Equal(t, `{"b":2}`, outEvents[1], "wrong event")
-	require.Equal(t, `{"c":3}`, outEvents[2], "wrong event")
+	require.False(t, timeouted, "timeouted")
+
+	require.Equal(t, clients, len(outEvents), "wrong clients count")
+	for _, events := range outEvents {
+		require.Equal(t, eventsCount, len(events), "wrong events count")
+
+		require.Equal(t, `{"a":1}`, events[0], "wrong event")
+		require.Equal(t, `{"b":2}`, events[1], "wrong event")
+		require.Equal(t, `{"c":3}`, events[2], "wrong event")
+	}
 }
 
 func TestSocketTCP(t *testing.T) {
 	t.Parallel()
 
+	const clients = 4
+
 	doTest(t, &Config{
 		Network: networkTcp,
 		Address: ":5001",
-	})
+	}, clients, true)
+
+	doTest(t, &Config{
+		Network: networkTcp,
+		Address: ":5002",
+	}, clients, false)
 }
 
 func TestSocketUDP(t *testing.T) {
 	t.Parallel()
 
+	const clients = 4
+
 	doTest(t, &Config{
 		Network: networkUdp,
-		Address: ":5002",
-	})
+		Address: ":5010",
+	}, clients, true)
+
+	doTest(t, &Config{
+		Network: networkUdp,
+		Address: ":5020",
+	}, clients, false)
 }
 
 func TestSocketUnix(t *testing.T) {
@@ -103,5 +163,5 @@ func TestSocketUnix(t *testing.T) {
 	doTest(t, &Config{
 		Network: networkUnix,
 		Address: filepath.Join(tmpDir, "filed.sock"),
-	})
+	}, 1, false)
 }
