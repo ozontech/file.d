@@ -37,3 +37,9 @@ func (so *SliceMap) Set(streamName StreamName, offset int64) {
 	}
 	*so = append(*so, kv{streamName, offset})
 }
+
+func (so *SliceMap) Copy() SliceMap {
+	soCopy := make(SliceMap, len(*so))
+	copy(soCopy, *so)
+	return soCopy
+}
