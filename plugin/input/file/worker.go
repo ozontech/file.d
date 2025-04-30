@@ -55,7 +55,11 @@ func (w *worker) work(controller inputer, jobProvider *jobProvider, readBufferSi
 		sourceName := job.filename
 		skipLine := job.shouldSkip.Load()
 		lastOffset := job.curOffset
-		offsets := job.offsets
+
+		// copying is required due to sending to the `controller.In` to avoid a race
+		// see [TestParallelOffsetsGetSet]
+		offsets := job.offsets.Copy()
+
 		if job.symlink != "" {
 			sourceName = job.symlink
 		}
