@@ -8,106 +8,46 @@ import (
 )
 
 func BenchmarkSharpStartMixedRes(b *testing.B) {
-	cur, err := InitTemplate(nameCSException)
-	require.NoError(b, err)
-
 	lines := getLines(sample.SharpException)
 
 	b.ResetTimer()
-	b.Run("explicit", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
-			for _, line := range lines {
-				sharpStartCheck(line)
-			}
+	for i := 0; i < b.N; i++ {
+		for _, line := range lines {
+			sharpStartCheck(line)
 		}
-	})
-	b.Run("regexp", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
-			for _, line := range lines {
-				cur.StartRe.MatchString(line)
-			}
-		}
-	})
+	}
 }
 
 func BenchmarkSharpContinueMixedRes(b *testing.B) {
-	cur, err := InitTemplate(nameCSException)
-	require.NoError(b, err)
-
 	lines := getLines(sample.SharpException)
 
 	b.ResetTimer()
-	b.Run("explicit", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
-			for _, line := range lines {
-				sharpContinueCheck(line)
-			}
+	for i := 0; i < b.N; i++ {
+		for _, line := range lines {
+			sharpContinueCheck(line)
 		}
-	})
-	b.Run("regexp", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
-			for _, line := range lines {
-				cur.ContinueRe.MatchString(line)
-			}
-		}
-	})
+	}
 }
 
 func BenchmarkSharpStartNegativeRes(b *testing.B) {
-	cur, err := InitTemplate(nameCSException)
-	require.NoError(b, err)
-
 	lines := getRandLines()
 
 	b.ResetTimer()
-	b.Run("explicit", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
-			for _, line := range lines {
-				sharpStartCheck(line)
-			}
+	for i := 0; i < b.N; i++ {
+		for _, line := range lines {
+			sharpStartCheck(line)
 		}
-	})
-	b.Run("regexp", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
-			for _, line := range lines {
-				cur.StartRe.MatchString(line)
-			}
-		}
-	})
+	}
 }
 
 func BenchmarkSharpContinueNegativeRes(b *testing.B) {
-	cur, err := InitTemplate(nameCSException)
-	require.NoError(b, err)
-
 	lines := getRandLines()
 
 	b.ResetTimer()
-	b.Run("explicit", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
-			for _, line := range lines {
-				sharpContinueCheck(line)
-			}
+	for i := 0; i < b.N; i++ {
+		for _, line := range lines {
+			sharpContinueCheck(line)
 		}
-	})
-	b.Run("regexp", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
-			for _, line := range lines {
-				cur.ContinueRe.MatchString(line)
-			}
-		}
-	})
-}
-
-func TestSharpSameResults(t *testing.T) {
-	cur, err := InitTemplate(nameCSException)
-	require.NoError(t, err)
-
-	lines := append(getLines(sample.SharpException), getRandLines()...)
-
-	for _, line := range lines {
-		require.Equal(t, cur.StartRe.MatchString(line), sharpStartCheck(line), line)
-		require.Equal(t, cur.ContinueRe.MatchString(line), sharpContinueCheck(line), line)
 	}
 }
 

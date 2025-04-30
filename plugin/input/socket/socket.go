@@ -139,10 +139,20 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	p.controller = params.Controller
 
 	p.readBuffers = &sync.Pool{
-		New: func() any { return newWrapBuffer(defaultReadBufferSize) },
+		New: func() any {
+			return newWrapBuffer(
+				make([]byte, defaultReadBufferSize),
+				false,
+			)
+		},
 	}
 	p.eventBuffers = &sync.Pool{
-		New: func() any { return newWrapBuffer(0, params.PipelineSettings.AvgEventSize) },
+		New: func() any {
+			return newWrapBuffer(
+				make([]byte, 0, params.PipelineSettings.AvgEventSize),
+				true,
+			)
+		},
 	}
 
 	p.stopChan = make(chan struct{})
@@ -240,7 +250,7 @@ func (p *Plugin) handleConn(c net.Conn, wg *sync.WaitGroup) {
 	defer putWrapBuffer(readBuf, p.readBuffers)
 	defer putWrapBuffer(eventBuf, p.eventBuffers)
 
-	sourceID := calcSourceID(c.LocalAddr(), c.RemoteAddr())
+	sourceID := calcSourceID(c.RemoteAddr(), c.LocalAddr())
 
 	for {
 		n, err := c.Read(readBuf.b)
@@ -340,25 +350,21 @@ func calcSourceID(addrs ...net.Addr) pipeline.SourceID {
 }
 
 type wrapBuffer struct {
-	b []byte
+	b         []byte
+	needReset bool
 }
 
-func newWrapBuffer(size ...int) *wrapBuffer {
-	var b []byte
-	switch len(size) {
-	case 0:
-		b = make([]byte, 0)
-	case 1:
-		b = make([]byte, size[0])
-	default:
-		b = make([]byte, size[0], size[1])
+func newWrapBuffer(b []byte, needReset bool) *wrapBuffer {
+	return &wrapBuffer{
+		b:         b,
+		needReset: needReset,
 	}
-
-	return &wrapBuffer{b: b}
 }
 
 func (wb *wrapBuffer) reset() {
-	wb.b = wb.b[:0]
+	if wb.needReset {
+		wb.b = wb.b[:0]
+	}
 }
 
 func getWrapBuffer(pool *sync.Pool) *wrapBuffer {

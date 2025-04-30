@@ -161,7 +161,7 @@ func TestE2EStabilityWorkCase(t *testing.T) {
 			cfgPath: "./file_elasticsearch/config.yml",
 		},
 		{
-			name:    "file_es",
+			name:    "file_es_split",
 			e2eTest: &file_es_split.Config{},
 			cfgPath: "./file_es_split/config.yml",
 		},
