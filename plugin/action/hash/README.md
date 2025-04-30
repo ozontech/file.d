@@ -117,12 +117,14 @@ pipelines:
           format: normalize
       result_field: hash
       normalizer:
-        with_builtin_patterns: false
+        builtin_patterns: "no"
         patterns:
           - placeholder: '<quoted_str>'
             re: '"[^"]*"'
+            priority: 'first'
           - placeholder: '<date>'
             re: '\d\d.\d\d.\d\d\d\d'
+            priority: 'first'
     ...
 ```
 The original event:
@@ -145,7 +147,7 @@ The resulting event:
 }
 ```
 ---
-Hashing with normalization (built-in & custom patterns):
+Hashing with normalization (all built-in & custom patterns):
 ```yaml
 pipelines:
   example_pipeline:
@@ -157,11 +159,8 @@ pipelines:
           format: normalize
       result_field: hash
       normalizer:
-        with_builtin_patterns: true
+        builtin_patterns: "all"
         patterns:
-          - placeholder: '<quoted_str>'
-            re: '"[^"]*"'
-            priority: first
           - placeholder: '<nginx_datetime>'
             re: '\d\d\d\d/\d\d/\d\d\ \d\d:\d\d:\d\d'
             priority: last
@@ -176,14 +175,49 @@ The original event:
 ```
 
 Normalized "message":
-`<nginx_datetime> error occurred, client: <ip>, upstream: <quoted_str>, host: <quoted_str>`
+`<nginx_datetime> error occurred, client: <ip>, upstream: <double_quoted>, host: <double_quoted>`
 
 The resulting event:
 ```json
 {
   "level": "error",
   "message": "2006/01/02 15:04:05 error occurred, client: 10.125.172.251, upstream: \"http://10.117.246.15:84/download\", host: \"mpm-youtube-downloader-38.name.com:84\"",
-  "hash": 7891860241841154313
+  "hash": 4150276598667727274
+}
+```
+---
+Hashing with normalization (partial built-in patterns):
+```yaml
+pipelines:
+  example_pipeline:
+    ...
+    actions:
+    - type: hash
+      fields:
+        - field: message
+          format: normalize
+      result_field: hash
+      normalizer:
+        builtin_patterns: "square_bracketed|ip"
+    ...
+```
+The original event:
+```json
+{
+  "level": "error",
+  "message": "2006/01/02 15:04:05 error occurred, client: 10.125.172.251, upstream: \"http://10.117.246.15:84/download\", host: \"mpm-youtube-downloader-38.name.com:84\", params: [param1, param2]"
+}
+```
+
+Normalized "message":
+`2006/01/02 15:04:05 error occurred, client: <ip>, upstream: \"http://10.117.246.15:84/download\", host: \"mpm-youtube-downloader-38.name.com:84\", params: <square_bracketed>`
+
+The resulting event:
+```json
+{
+  "level": "error",
+  "message": "2006/01/02 15:04:05 error occurred, client: 10.125.172.251, upstream: \"http://10.117.246.15:84/download\", host: \"mpm-youtube-downloader-38.name.com:84\", params: [param1, param2]",
+  "hash": 15982987157336450215
 }
 ```
 
@@ -225,11 +259,18 @@ Normalizer params. It works for `fields` with `format: normalize`.
 > For more information, see [Normalization](/plugin/action/hash/normalize/README.md).
 
 `NormalizerConfig` params:
-* **`with_builtin_patterns`** *`bool`* *`default=true`*
+* **`builtin_patterns`** *`string`* *`default="all"`*
 
-	If set to `true`, normalizer will use `patterns` in combination with [built-in patterns](/plugin/action/hash/normalize/README.md#built-in-patterns).
+	List of [built-in patterns](/plugin/action/hash/normalize/README.md#built-in-patterns) (see `pattern id` column).
 
-* **`patterns`** *`[]NormalizePattern`*
+	Format: `pattern_id1|pattern_id2|...|pattern_idN`.
+
+	Example: `host|url|square_bracketed`.
+
+	> * If set to `all` - all built-in patterns will be used.
+	> * If set to `no` - built-in patterns will not be used.
+
+* **`custom_patterns`** *`[]NormalizePattern`*
 
 	List of normalization patterns.
 
@@ -245,12 +286,12 @@ Normalizer params. It works for `fields` with `format: normalize`.
 
 	* **`priority`** *`string`* *`default=first`* *`options=first|last`*
 
-		A priority of pattern. Works only if `normalizer.with_builtin_patterns=true`.
+		A priority of pattern. Works only if `normalizer.builtin_patterns != "no"`.
 
-		If set to `first`, pattern will be added before defaults, otherwise - after.
+		If set to `first`, pattern will be added before built-in, otherwise - after.
 
-		> If `normalizer.with_builtin_patterns=false`, then the priority is determined
-		by the order of the elements in `normalizer.patterns`.
+		> If `normalizer.builtin_patterns = "no"`, then the priority is determined
+		by the order of the elements in `normalizer.custom_patterns`.
 
 <br>
 
