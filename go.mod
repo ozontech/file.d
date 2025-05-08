@@ -1,8 +1,7 @@
 module github.com/ozontech/file.d
 
 go 1.23
-
-toolchain go1.23.7
+toolchain go1.24.1
 
 require (
 	github.com/ClickHouse/ch-go v0.58.2
@@ -139,7 +138,7 @@ require (
 	go.opentelemetry.io/otel/metric v1.16.0 // indirect
 	go.opentelemetry.io/otel/trace v1.16.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
-	golang.org/x/crypto v0.33.0 // indirect
+	golang.org/x/crypto v0.35.0 // indirect
 	golang.org/x/mod v0.17.0 // indirect
 	golang.org/x/oauth2 v0.10.0 // indirect
 	golang.org/x/sync v0.11.0 // indirect
