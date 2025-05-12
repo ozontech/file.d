@@ -39,13 +39,6 @@ Deprecated; use `templates` instead.
 
 <br>
 
-**`fast_check`** *`bool`* *`default=true`* 
-
-Enable check without regular expressions.
-Deprecated and ignored; `join_template` works without regexes now.
-
-<br>
-
 **`templates`** *`[]string`* 
 
 Names of templates. Available templates: `go_panic`, `cs_exception`, `go_data_race`.
