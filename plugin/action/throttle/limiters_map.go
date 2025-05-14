@@ -7,27 +7,18 @@ import (
 	"sync"
 	"time"
 
-	"github.com/go-redis/redis"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
 
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/xredis"
 )
 
 const (
 	maintenanceInterval    = time.Second
 	redisReconnectInterval = 30 * time.Minute
 )
-
-// interface with only necessary functions of the original redis.Client
-type redisClient interface {
-	IncrBy(key string, value int64) *redis.IntCmd
-	Expire(key string, expiration time.Duration) *redis.BoolCmd
-	SetNX(key string, value any, expiration time.Duration) *redis.BoolCmd
-	Get(key string) *redis.StringCmd
-	Ping() *redis.StatusCmd
-}
 
 type limiter interface {
 	isAllowed(event *pipeline.Event, ts time.Time) bool
@@ -54,7 +45,7 @@ func newLimiterWithGen(lim limiter, gen int64) *limiterWithGen {
 type limiterConfig struct {
 	ctx                      context.Context
 	backend                  string
-	redisClient              redisClient
+	redisClient              xredis.Client
 	pipeline                 string
 	throttleField            string
 	bucketInterval           time.Duration
@@ -99,7 +90,7 @@ type limitersMap struct {
 	limitDistrMetrics *limitDistributionMetrics
 }
 
-func newLimitersMap(lmCfg limitersMapConfig, redisOpts *redis.Options) *limitersMap {
+func newLimitersMap(lmCfg limitersMapConfig, redisOpts *xredis.Options) *limitersMap {
 	nowTs := time.Now().UnixMicro()
 	lm := &limitersMap{
 		ctx:         lmCfg.ctx,
@@ -117,7 +108,7 @@ func newLimitersMap(lmCfg limitersMapConfig, redisOpts *redis.Options) *limiters
 		limitDistrMetrics: lmCfg.limitDistrMetrics,
 	}
 	if redisOpts != nil {
-		lm.limiterCfg.redisClient = redis.NewClient(redisOpts)
+		lm.limiterCfg.redisClient = xredis.NewClient(redisOpts)
 		if pingResp := lm.limiterCfg.redisClient.Ping(); pingResp.Err() != nil {
 			msg := fmt.Sprintf("can't ping redis: %s", pingResp.Err())
 			if lmCfg.isStrict {

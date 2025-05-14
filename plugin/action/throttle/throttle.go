@@ -6,8 +6,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/go-redis/redis"
-	"github.com/ozontech/file.d/xtime"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
 
@@ -15,6 +13,8 @@ import (
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/xredis"
+	"github.com/ozontech/file.d/xtime"
 )
 
 const defaultThrottleKey = "default"
@@ -169,7 +169,12 @@ type Config struct {
 type RedisBackendConfig struct {
 	// > @3@4@5@6
 	// >
-	// Аddress of redis server. Format: HOST:PORT.
+	// > Redis client type.
+	ClientType string `json:"client_type" default:"base" options:"base|ring|cluster"` // *
+
+	// > @3@4@5@6
+	// >
+	// > Аddresses of redis server, separated by `,`. Address format: HOST:PORT.
 	Endpoint string `json:"endpoint"` // *
 
 	// > @3@4@5@6
@@ -250,6 +255,35 @@ type RedisBackendConfig struct {
 	LimiterDistributionField string `json:"limiter_distribution_field" default:""` // *
 }
 
+func (c *RedisBackendConfig) toOptions() *xredis.Options {
+	const endpointSeparator = ","
+
+	var clientType xredis.ClientType
+	switch c.ClientType {
+	case "ring":
+		clientType = xredis.ClientTypeRing
+	case "cluster":
+		clientType = xredis.ClientTypeCluster
+	default:
+		clientType = xredis.ClientTypeBase
+	}
+
+	return &xredis.Options{
+		ID:         "throttle",
+		ClientType: clientType,
+
+		Endpoints: strings.Split(c.Endpoint, endpointSeparator),
+		Password:  c.Password,
+
+		ReadTimeout:  c.Timeout_,
+		WriteTimeout: c.Timeout_,
+
+		MaxRetries:      c.MaxRetries,
+		MinRetryBackoff: c.MinRetryBackoff_,
+		MaxRetryBackoff: c.MaxRetryBackoff_,
+	}
+}
+
 type RuleConfig struct {
 	Limit             int64                   `json:"limit"`
 	LimitKind         string                  `json:"limit_kind" default:"count" options:"count|size"`
@@ -317,22 +351,12 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 	limitersMu.Lock()
 	// init limitersMap only once per pipeline
 	if _, has := limiters[p.pipeline]; !has {
-		var redisOpts *redis.Options
+		var redisOpts *xredis.Options
 		if p.config.LimiterBackend == redisBackend {
 			if p.config.RedisBackendCfg.WorkerCount < 1 {
 				p.logger.Fatalf("workers_count must be > 0, passed: %d", p.config.RedisBackendCfg.WorkerCount)
 			}
-
-			redisOpts = &redis.Options{
-				Network:         "tcp",
-				Addr:            p.config.RedisBackendCfg.Endpoint,
-				Password:        p.config.RedisBackendCfg.Password,
-				ReadTimeout:     p.config.RedisBackendCfg.Timeout_,
-				WriteTimeout:    p.config.RedisBackendCfg.Timeout_,
-				MaxRetries:      p.config.RedisBackendCfg.MaxRetries,
-				MinRetryBackoff: p.config.RedisBackendCfg.MinRetryBackoff_,
-				MaxRetryBackoff: p.config.RedisBackendCfg.MaxRetryBackoff_,
-			}
+			redisOpts = p.config.RedisBackendCfg.toOptions()
 		}
 		lmCfg := limitersMapConfig{
 			ctx:                p.ctx,

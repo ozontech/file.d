@@ -12,6 +12,7 @@ import (
 	"github.com/go-redis/redis"
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/xredis"
 )
 
 const (
@@ -19,7 +20,7 @@ const (
 )
 
 type redisLimiter struct {
-	redis redisClient
+	redis xredis.Client
 
 	// bucket counter prefix, forms key in redis: <keyPrefix>_<bucketID>_<distributionIdx>
 	keyPrefix bytes.Buffer
