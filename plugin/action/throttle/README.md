@@ -118,8 +118,15 @@ For this config and the `default_limit=100`:
 
 <br>
 
+**`client_type`** *`string`* *`default=base`* *`options=base|ring|cluster`* 
+
+Redis client type.
+
+<br>
+
 **`endpoint`** *`string`* 
 
+Аddresses of redis server, separated by `,`. Address format: HOST:PORT.
 
 <br>
 
