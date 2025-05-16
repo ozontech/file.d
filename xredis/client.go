@@ -32,6 +32,10 @@ type Options struct {
 	MaxRetries      int
 	MinRetryBackoff time.Duration
 	MaxRetryBackoff time.Duration
+
+	// cluster options
+	RouteByLatency bool
+	RouteRandomly  bool
 }
 
 func (o *Options) toBaseOptions() *redis.Options {
@@ -40,10 +44,12 @@ func (o *Options) toBaseOptions() *redis.Options {
 		addr = o.Endpoints[0]
 	}
 	return &redis.Options{
-		Addr:            addr,
-		Password:        o.Password,
-		ReadTimeout:     o.ReadTimeout,
-		WriteTimeout:    o.WriteTimeout,
+		Addr:     addr,
+		Password: o.Password,
+
+		ReadTimeout:  o.ReadTimeout,
+		WriteTimeout: o.WriteTimeout,
+
 		MaxRetries:      o.MaxRetries,
 		MinRetryBackoff: o.MinRetryBackoff,
 		MaxRetryBackoff: o.MaxRetryBackoff,
@@ -56,10 +62,12 @@ func (o *Options) toRingOptions() *redis.RingOptions {
 		addrs[fmt.Sprintf("%s_%d", o.ID, i)] = e
 	}
 	return &redis.RingOptions{
-		Addrs:           addrs,
-		Password:        o.Password,
-		ReadTimeout:     o.ReadTimeout,
-		WriteTimeout:    o.WriteTimeout,
+		Addrs:    addrs,
+		Password: o.Password,
+
+		ReadTimeout:  o.ReadTimeout,
+		WriteTimeout: o.WriteTimeout,
+
 		MaxRetries:      o.MaxRetries,
 		MinRetryBackoff: o.MinRetryBackoff,
 		MaxRetryBackoff: o.MaxRetryBackoff,
@@ -68,13 +76,18 @@ func (o *Options) toRingOptions() *redis.RingOptions {
 
 func (o *Options) toClusterOptions() *redis.ClusterOptions {
 	return &redis.ClusterOptions{
-		Addrs:           o.Endpoints,
-		Password:        o.Password,
-		ReadTimeout:     o.ReadTimeout,
-		WriteTimeout:    o.WriteTimeout,
+		Addrs:    o.Endpoints,
+		Password: o.Password,
+
+		ReadTimeout:  o.ReadTimeout,
+		WriteTimeout: o.WriteTimeout,
+
 		MaxRetries:      o.MaxRetries,
 		MinRetryBackoff: o.MinRetryBackoff,
 		MaxRetryBackoff: o.MaxRetryBackoff,
+
+		RouteByLatency: o.RouteByLatency,
+		RouteRandomly:  o.RouteRandomly,
 	}
 }
 

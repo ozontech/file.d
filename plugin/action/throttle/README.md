@@ -136,6 +136,15 @@ Password to redis server.
 
 <br>
 
+**`read_only_routing`** *`string`* *`default=off`* *`options=off|latency|random`* 
+
+Read only routing. Only for `client_type: cluster`.
+- `off` - Disable read-only commands on slave nodes
+- `latency` - Allows routing read-only commands to the closest master or slave node
+- `random` - Allows routing read-only commands to the random master or slave node
+
+<br>
+
 **`sync_interval`** *`cfg.Duration`* *`default=5s`* 
 
 Defines sync interval between global and local limiters.

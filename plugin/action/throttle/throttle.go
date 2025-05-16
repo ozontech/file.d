@@ -166,6 +166,15 @@ type Config struct {
 	LimitDistribution LimitDistributionConfig `json:"limit_distribution" child:"true"` // *
 }
 
+const (
+	redisClientTypeBase    = "base"
+	redisClientTypeRing    = "ring"
+	redisClientTypeCluster = "cluster"
+
+	redisReadOnlyRoutingLatency = "latency"
+	redisReadOnlyRoutingRandom  = "random"
+)
+
 type RedisBackendConfig struct {
 	// > @3@4@5@6
 	// >
@@ -181,6 +190,14 @@ type RedisBackendConfig struct {
 	// >
 	// > Password to redis server.
 	Password string `json:"password"` // *
+
+	// > @3@4@5@6
+	// >
+	// > Read only routing. Only for `client_type: cluster`.
+	// > - `off` - Disable read-only commands on slave nodes
+	// > - `latency` - Allows routing read-only commands to the closest master or slave node
+	// > - `random` - Allows routing read-only commands to the random master or slave node
+	ReadOnlyRouting string `json:"read_only_routing" default:"off" options:"off|latency|random"` // *
 
 	// > @3@4@5@6
 	// >
@@ -258,19 +275,8 @@ type RedisBackendConfig struct {
 func (c *RedisBackendConfig) toOptions() *xredis.Options {
 	const endpointSeparator = ","
 
-	var clientType xredis.ClientType
-	switch c.ClientType {
-	case "ring":
-		clientType = xredis.ClientTypeRing
-	case "cluster":
-		clientType = xredis.ClientTypeCluster
-	default:
-		clientType = xredis.ClientTypeBase
-	}
-
-	return &xredis.Options{
-		ID:         "throttle",
-		ClientType: clientType,
+	opts := &xredis.Options{
+		ID: "throttle",
 
 		Endpoints: strings.Split(c.Endpoint, endpointSeparator),
 		Password:  c.Password,
@@ -282,6 +288,24 @@ func (c *RedisBackendConfig) toOptions() *xredis.Options {
 		MinRetryBackoff: c.MinRetryBackoff_,
 		MaxRetryBackoff: c.MaxRetryBackoff_,
 	}
+
+	switch c.ClientType {
+	case redisClientTypeRing:
+		opts.ClientType = xredis.ClientTypeRing
+	case redisClientTypeCluster:
+		opts.ClientType = xredis.ClientTypeCluster
+	default:
+		opts.ClientType = xredis.ClientTypeBase
+	}
+
+	switch c.ReadOnlyRouting {
+	case redisReadOnlyRoutingLatency:
+		opts.RouteByLatency = true
+	case redisReadOnlyRoutingRandom:
+		opts.RouteRandomly = true
+	}
+
+	return opts
 }
 
 type RuleConfig struct {
