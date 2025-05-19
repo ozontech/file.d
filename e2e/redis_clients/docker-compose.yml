@@ -31,4 +31,4 @@ services:
       - 'REDIS_CLUSTER_DYNAMIC_IPS=no'
       - 'REDIS_CLUSTER_ANNOUNCE_IP=127.0.0.1'
     ports:
-      - '6379:6379'
+      - 6379:6379
