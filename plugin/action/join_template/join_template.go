@@ -62,12 +62,6 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
-	// > Enable check without regular expressions.
-	// > Deprecated and ignored; `join_template` works without regexes now.
-	FastCheck bool `json:"fast_check" default:"true"` // *
-
-	// > @3@4@5@6
-	// >
 	// > Names of templates. Available templates: `go_panic`, `cs_exception`, `go_data_race`.
 	Templates []string `json:"templates"` // *
 }
