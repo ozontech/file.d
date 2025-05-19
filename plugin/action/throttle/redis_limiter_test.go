@@ -68,7 +68,7 @@ func Test_updateKeyLimit(t *testing.T) {
 	client := xredis.NewClient(
 		&xredis.Options{
 			ClientType:      xredis.ClientTypeBase,
-			Endpoints:       []string{s.Addr()},
+			Addrs:           []string{s.Addr()},
 			Password:        "",
 			ReadTimeout:     time.Second,
 			WriteTimeout:    time.Second,
@@ -80,7 +80,7 @@ func Test_updateKeyLimit(t *testing.T) {
 	invalidClient := xredis.NewClient(
 		&xredis.Options{
 			ClientType:      xredis.ClientTypeBase,
-			Endpoints:       []string{"invalid"},
+			Addrs:           []string{"invalid"},
 			Password:        "",
 			ReadTimeout:     time.Second,
 			WriteTimeout:    time.Second,

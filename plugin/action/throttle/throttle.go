@@ -278,8 +278,8 @@ func (c *RedisBackendConfig) toOptions() *xredis.Options {
 	opts := &xredis.Options{
 		ID: "throttle",
 
-		Endpoints: strings.Split(c.Endpoint, endpointSeparator),
-		Password:  c.Password,
+		Addrs:    strings.Split(c.Endpoint, endpointSeparator),
+		Password: c.Password,
 
 		ReadTimeout:  c.Timeout_,
 		WriteTimeout: c.Timeout_,

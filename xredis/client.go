@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/go-redis/redis"
+	"github.com/redis/go-redis/v9"
 )
 
 type Client interface {
@@ -23,8 +23,8 @@ type Options struct {
 	ID         string // used as name in ring-client addrs map
 	ClientType ClientType
 
-	Endpoints []string
-	Password  string
+	Addrs    []string
+	Password string
 
 	ReadTimeout  time.Duration
 	WriteTimeout time.Duration
@@ -40,8 +40,8 @@ type Options struct {
 
 func (o *Options) toBaseOptions() *redis.Options {
 	addr := ""
-	if len(o.Endpoints) > 0 {
-		addr = o.Endpoints[0]
+	if len(o.Addrs) > 0 {
+		addr = o.Addrs[0]
 	}
 	return &redis.Options{
 		Addr:     addr,
@@ -58,7 +58,7 @@ func (o *Options) toBaseOptions() *redis.Options {
 
 func (o *Options) toRingOptions() *redis.RingOptions {
 	addrs := make(map[string]string)
-	for i, e := range o.Endpoints {
+	for i, e := range o.Addrs {
 		addrs[fmt.Sprintf("%s_%d", o.ID, i)] = e
 	}
 	return &redis.RingOptions{
@@ -76,7 +76,7 @@ func (o *Options) toRingOptions() *redis.RingOptions {
 
 func (o *Options) toClusterOptions() *redis.ClusterOptions {
 	return &redis.ClusterOptions{
-		Addrs:    o.Endpoints,
+		Addrs:    o.Addrs,
 		Password: o.Password,
 
 		ReadTimeout:  o.ReadTimeout,

@@ -109,7 +109,7 @@ func newLimitersMap(lmCfg limitersMapConfig, redisOpts *xredis.Options) *limiter
 	}
 	if redisOpts != nil {
 		lm.limiterCfg.redisClient = xredis.NewClient(redisOpts)
-		if pingResp := lm.limiterCfg.redisClient.Ping(); pingResp.Err() != nil {
+		if pingResp := lm.limiterCfg.redisClient.Ping(lm.ctx); pingResp.Err() != nil {
 			msg := fmt.Sprintf("can't ping redis: %s", pingResp.Err())
 			if lmCfg.isStrict {
 				lm.logger.Fatal(msg)
@@ -143,7 +143,7 @@ func (l *limitersMap) waitRedisReconnect(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			if pingResp := l.limiterCfg.redisClient.Ping(); pingResp.Err() == nil {
+			if pingResp := l.limiterCfg.redisClient.Ping(l.ctx); pingResp.Err() == nil {
 				l.isRedisConnected = true
 				l.logger.Info("connected to redis")
 				return
