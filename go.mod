@@ -15,12 +15,11 @@ require (
 	github.com/bmatcuk/doublestar/v4 v4.0.2
 	github.com/bufbuild/protocompile v0.13.0
 	github.com/cenkalti/backoff/v4 v4.3.0
-	github.com/cespare/xxhash/v2 v2.2.0
+	github.com/cespare/xxhash/v2 v2.3.0
 	github.com/dominikbraun/graph v0.23.0
 	github.com/elliotchance/orderedmap/v2 v2.4.0
 	github.com/euank/go-kmsg-parser v2.0.0+incompatible
 	github.com/go-faster/jx v1.1.0
-	github.com/go-redis/redis v6.15.9+incompatible
 	github.com/golang/mock v1.6.0
 	github.com/google/uuid v1.6.0
 	github.com/hashicorp/golang-lru/v2 v2.0.7
@@ -33,6 +32,7 @@ require (
 	github.com/ozontech/insane-json v0.1.9
 	github.com/prometheus/client_golang v1.16.0
 	github.com/prometheus/procfs v0.10.1
+	github.com/redis/go-redis/v9 v9.8.0
 	github.com/rjeczalik/notify v0.9.3
 	github.com/satori/go.uuid v1.2.0
 	github.com/stretchr/testify v1.9.0
@@ -67,6 +67,7 @@ require (
 	github.com/containerd/cgroups/v3 v3.0.1 // indirect
 	github.com/coreos/go-systemd/v22 v22.3.2 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
+	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
 	github.com/dmarkham/enumer v1.5.8 // indirect
 	github.com/docker/go-units v0.4.0 // indirect
 	github.com/emicklei/go-restful/v3 v3.11.0 // indirect
@@ -115,7 +116,6 @@ require (
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
-	github.com/onsi/ginkgo v1.16.5 // indirect
 	github.com/opencontainers/runtime-spec v1.0.2 // indirect
 	github.com/pascaldekloe/name v1.0.1 // indirect
 	github.com/pierrec/lz4/v4 v4.1.21 // indirect

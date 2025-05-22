@@ -1,5 +1,5 @@
 pipelines:
-  kafka_auth:
+  redis_clients:
     input:
       type: fake
     output:

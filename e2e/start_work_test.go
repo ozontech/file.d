@@ -19,6 +19,7 @@ import (
 	"github.com/ozontech/file.d/e2e/join_throttle"
 	"github.com/ozontech/file.d/e2e/kafka_auth"
 	"github.com/ozontech/file.d/e2e/kafka_file"
+	"github.com/ozontech/file.d/e2e/redis_clients"
 	"github.com/ozontech/file.d/e2e/split_join"
 	"github.com/ozontech/file.d/fd"
 	_ "github.com/ozontech/file.d/plugin/action/add_file_name"
@@ -80,9 +81,11 @@ type e2eTest interface {
 }
 
 type E2ETest struct {
-	name    string
-	cfgPath string
 	e2eTest
+
+	name          string
+	cfgPath       string
+	onlyConfigure bool
 }
 
 func TestE2EStabilityWorkCase(t *testing.T) {
@@ -93,7 +96,8 @@ func TestE2EStabilityWorkCase(t *testing.T) {
 				Brokers:    []string{"localhost:9093"},
 				SslEnabled: true,
 			},
-			cfgPath: "./kafka_auth/config.yml",
+			cfgPath:       "./kafka_auth/config.yml",
+			onlyConfigure: true,
 		},
 		{
 			name: "kafka_auth",
@@ -101,7 +105,8 @@ func TestE2EStabilityWorkCase(t *testing.T) {
 				Brokers:    []string{"localhost:9095"},
 				SslEnabled: false,
 			},
-			cfgPath: "./kafka_auth/config.yml",
+			cfgPath:       "./kafka_auth/config.yml",
+			onlyConfigure: true,
 		},
 		{
 			name: "file_file",
@@ -170,13 +175,32 @@ func TestE2EStabilityWorkCase(t *testing.T) {
 			e2eTest: &file_loki.Config{},
 			cfgPath: "./file_loki/config.yml",
 		},
+		{
+			name:          "redis_clients",
+			e2eTest:       &redis_clients.Config{},
+			cfgPath:       "./redis_clients/config.yml",
+			onlyConfigure: true,
+		},
 	}
 
 	for num, test := range testsList {
 		test := test
 		num := num
 		t.Run(test.name, func(t *testing.T) {
-			fd := startForTest(t, test, num)
+			conf := cfg.NewConfigFromFile([]string{test.cfgPath})
+			if _, ok := conf.Pipelines[test.name]; !ok {
+				log.Fatalf("pipeline name must be named the same as the name of the test")
+			}
+			test.Configure(t, conf, test.name)
+			if test.onlyConfigure {
+				return
+			}
+
+			port := 15080 + num
+			// for each file.d its own port
+			fd := fd.New(conf, ":"+strconv.Itoa(port))
+			fd.Start()
+
 			t.Parallel()
 			test.Send(t)
 			test.Validate(t)
@@ -186,19 +210,4 @@ func TestE2EStabilityWorkCase(t *testing.T) {
 			assert.NoError(t, err)
 		})
 	}
-}
-
-func startForTest(t *testing.T, test E2ETest, num int) *fd.FileD {
-	conf := cfg.NewConfigFromFile([]string{test.cfgPath})
-	if _, ok := conf.Pipelines[test.name]; !ok {
-		log.Fatalf("pipeline name must be named the same as the name of the test")
-	}
-	test.Configure(t, conf, test.name)
-
-	port := 15080 + num
-
-	// for each file.d its own port
-	filed := fd.New(conf, ":"+strconv.Itoa(port))
-	filed.Start()
-	return filed
 }
