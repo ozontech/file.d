@@ -52,7 +52,7 @@ func containsGoroutineID(s string) bool {
 		return false
 	}
 
-	return containsOnlyDigits(s[:i]) && strings.Index(s[i:], goroutineIDSuffix) != -1
+	return containsOnlyDigits(s[:i]) && strings.Contains(s[i:], goroutineIDSuffix)
 }
 
 // replaces regexp (\.go:[0-9]+)
