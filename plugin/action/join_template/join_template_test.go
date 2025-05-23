@@ -28,7 +28,7 @@ func TestSimpleJoin(t *testing.T) {
 			template:   "go_panic",
 			content:    sample.Panics,
 			iterations: 100,
-			expEvents:  17 * 100,
+			expEvents:  18 * 100,
 		},
 		{
 			name:       "should_ok_for_cs_exception",
@@ -49,7 +49,7 @@ func TestSimpleJoin(t *testing.T) {
 			templates:  []string{"go_panic", "cs_exception", "go_data_race"},
 			content:    sample.Panics + sample.SharpException + sample.GoDataRace,
 			iterations: 100,
-			expEvents:  (17 + 3 + 3*3) * 100,
+			expEvents:  (18 + 3 + 3*3) * 100,
 		},
 	}
 
