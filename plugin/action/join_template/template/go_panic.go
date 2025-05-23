@@ -35,7 +35,7 @@ func goPanicContinueCheck(s string) bool {
 		containsCall(s)
 }
 
-// replaces regexp (goroutine [0-9]+ \[)
+// replaces regexp (goroutine [0-9]+ \[)|(goroutine [0-9]+ .* \[)
 // NOTE: only first occurrence counts
 func containsGoroutineID(s string) bool {
 	i := strings.Index(s, goroutineIDPrefix)
@@ -45,13 +45,13 @@ func containsGoroutineID(s string) bool {
 
 	s = s[i+len(goroutineIDPrefix):]
 
-	i = strings.Index(s, goroutineIDSuffix)
+	i = strings.Index(s, " ")
 	// not found or found at start
 	if i < 1 {
 		return false
 	}
 
-	return containsOnlyDigits(s[:i])
+	return containsOnlyDigits(s[:i]) && strings.Index(s[i:], goroutineIDSuffix) != -1
 }
 
 // replaces regexp (\.go:[0-9]+)
