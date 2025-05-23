@@ -1,32 +1,216 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="vi">
 <head>
-  <meta charset="UTF-8">
-  <title>file.d documentation</title>
-  <link rel="icon" type="image/png" href="/file.d/static/file.d.png" />
-  <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
-  <meta name="description" content="A blazing fast tool for building data pipelines: read, process, and output events.">
-  <meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
-  <link rel="stylesheet" href="//unpkg.com/docsify/lib/themes/vue.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Cộng đồng Cựu Sinh Viên</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0; padding: 0;
+      background: #f5f5f5;
+      color: #333;
+    }
+    header {
+      background: #004080;
+      color: white;
+      padding: 15px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    header h1 {
+      margin: 0;
+      font-size: 24px;
+    }
+    nav a {
+      color: white;
+      text-decoration: none;
+      margin-left: 15px;
+      font-weight: bold;
+    }
+    nav a:hover {
+      text-decoration: underline;
+    }
+    .banner {
+      background: url('https://images.unsplash.com/photo-1503676260728-1c00da094a0b?auto=format&fit=crop&w=1350&q=80') no-repeat center center/cover;
+      height: 250px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      color: white;
+      font-size: 32px;
+      font-weight: bold;
+      text-shadow: 1px 1px 6px #000;
+    }
+    main {
+      max-width: 900px;
+      margin: 20px auto;
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+    }
+    section {
+      margin-bottom: 30px;
+    }
+    h2 {
+      border-bottom: 2px solid #004080;
+      padding-bottom: 8px;
+      margin-bottom: 15px;
+    }
+    /* Danh sách cựu sinh viên */
+    .alumni-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 15px;
+    }
+    .alumni-card {
+      background: #e7f0ff;
+      padding: 15px;
+      border-radius: 6px;
+      width: 180px;
+      box-shadow: 1px 1px 6px #ccc;
+      text-align: center;
+    }
+    .alumni-card img {
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      object-fit: cover;
+      margin-bottom: 10px;
+    }
+    /* Form đăng ký đơn giản */
+    form {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      max-width: 400px;
+    }
+    form input, form select {
+      padding: 8px;
+      font-size: 16px;
+      border: 1px solid #aaa;
+      border-radius: 4px;
+    }
+    form button {
+      background: #004080;
+      color: white;
+      border: none;
+      padding: 10px;
+      font-size: 18px;
+      cursor: pointer;
+      border-radius: 4px;
+    }
+    form button:hover {
+      background: #003060;
+    }
+    /* Tin tức */
+    .news-item {
+      margin-bottom: 15px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid #ccc;
+    }
+    .news-item h3 {
+      margin: 0 0 5px 0;
+      color: #004080;
+    }
+    footer {
+      text-align: center;
+      padding: 15px;
+      background: #004080;
+      color: white;
+      margin-top: 40px;
+    }
+  </style>
 </head>
 <body>
-  <div id="app"></div>
+  <header>
+    <h1>Cộng đồng Cựu Sinh Viên</h1>
+    <nav>
+      <a href="#home">Trang chủ</a>
+      <a href="#alumni">Danh sách</a>
+      <a href="#register">Đăng ký</a>
+      <a href="#news">Tin tức</a>
+    </nav>
+  </header>
+
+  <div class="banner" id="home">
+    Kết nối Cựu Sinh Viên Đại học CTU
+  </div>
+
+  <main>
+    <section id="alumni">
+      <h2>Danh sách cựu sinh viên nổi bật</h2>
+      <div class="alumni-list">
+        <div class="alumni-card">
+          <img src="https://randomuser.me/api/portraits/men/32.jpg" alt="Nguyễn Văn A" />
+          <strong>Nguyễn Văn A</strong><br />
+          Khóa 2015 - CNTT
+        </div>
+        <div class="alumni-card">
+          <img src="https://randomuser.me/api/portraits/women/44.jpg" alt="Trần Thị B" />
+          <strong>Trần Thị B</strong><br />
+          Khóa 2017 - Kinh tế
+        </div>
+        <div class="alumni-card">
+          <img src="https://randomuser.me/api/portraits/men/56.jpg" alt="Lê Văn C" />
+          <strong>Lê Văn C</strong><br />
+          Khóa 2014 - Xây dựng
+        </div>
+      </div>
+    </section>
+
+    <section id="register">
+      <h2>Đăng ký thành viên mới</h2>
+      <form id="registerForm">
+        <input type="text" name="fullname" placeholder="Họ và tên" required />
+        <input type="email" name="email" placeholder="Email" required />
+        <select name="major" required>
+          <option value="">Chọn ngành học</option>
+          <option value="CNTT">Công nghệ thông tin</option>
+          <option value="Kinh tế">Kinh tế</option>
+          <option value="Xây dựng">Xây dựng</option>
+          <option value="Khác">Khác</option>
+        </select>
+        <input type="number" name="gradYear" placeholder="Năm tốt nghiệp" min="1980" max="2025" required />
+        <button type="submit">Đăng ký</button>
+      </form>
+      <div id="registerMessage" style="margin-top: 15px; color: green;"></div>
+    </section>
+
+    <section id="news">
+      <h2>Tin tức & Sự kiện</h2>
+      <div class="news-item">
+        <h3>Hội thảo kết nối cựu sinh viên 2025</h3>
+        <p>Tham gia hội thảo trực tuyến để gặp gỡ, giao lưu và chia sẻ cơ hội nghề nghiệp.</p>
+      </div>
+      <div class="news-item">
+        <h3>Giải thưởng cựu sinh viên xuất sắc</h3>
+        <p>Danh sách cựu sinh viên có thành tích nổi bật được vinh danh năm 2025.</p>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    &copy; 2025 Cộng đồng Cựu Sinh Viên Đại học CTU
+  </footer>
+
   <script>
-    window.$docsify = {
-      name: 'file.d',
-      repo: 'https://github.com/ozontech/file.d',
-      loadSidebar: true,
-      loadNavbar: true,
-      subMaxLevel: 2,
-      maxLevel: 1,
-      coverpage: true,
-      auto2top: true,
-      markdown: {
-        gfm: true
+    document.getElementById('registerForm').addEventListener('submit', function(e) {
+      e.preventDefault();
+      const fullname = this.fullname.value.trim();
+      const email = this.email.value.trim();
+      const major = this.major.value;
+      const gradYear = this.gradYear.value;
+
+      if(fullname && email && major && gradYear) {
+        // Ở đây bạn có thể gửi dữ liệu lên server hoặc lưu vào localStorage
+        this.reset();
+        document.getElementById('registerMessage').textContent = 'Cảm ơn bạn đã đăng ký, ' + fullname + '!';
+      } else {
+        document.getElementById('registerMessage').textContent = 'Vui lòng điền đầy đủ thông tin.';
       }
-    }
+    });
   </script>
-  <script src="//unpkg.com/docsify/lib/docsify.min.js"></script>
-  <script src="//unpkg.com/docsify-copy-code"></script>
 </body>
 </html>
