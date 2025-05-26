@@ -72,15 +72,16 @@ func TestPipeline(t *testing.T) {
 func TestOffsets(t *testing.T) {
 	offsetPath := filepath.Join(t.TempDir(), "offset.yaml")
 
-	const lines = 5
+	const (
+		lines = 5
+		iters = 2
+		total = lines * iters
+	)
 
 	config := &Config{OffsetsFile: offsetPath, MaxLines: lines}
 	test.NewConfig(config, nil)
 
 	cursors := map[string]int{}
-
-	const iters = 2
-	const total = lines * iters
 
 	for i := 0; i < iters; i++ {
 		p := test.NewPipeline(nil, "passive")
