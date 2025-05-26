@@ -112,19 +112,24 @@ func TestContainsGoroutineID(t *testing.T) {
 		"    goroutine 123 [running]:",
 		"goroutine 100 [",
 		"goroutine 1 [qwe",
+
+		"goroutine 108568134 gp=0xc0011cddc0 m=nil [IO wait]:",
 	}
 
 	negative := []string{
 		"qwe abc", // no goroutine id prefix
 		"goroutine",
 
-		"goroutine qwe", // no goroutine id suffix after prefix
+		"goroutine qwe", // no space after goroutine id prefix
 		"goroutine [",
 
-		"goroutine  [", // no chars between suffix and prefix
+		"goroutine  ", // no chars between goroutine id prefix and space
+		"goroutine  [",
 
-		"goroutine ABC [", // only digits allowed between suffix and prefix
-		"goroutine 1a [",
+		"goroutine ABC ", // only digits allowed between goroutine id prefix and space
+		"goroutine 1a ",
+
+		"goroutine 108568134 gp=0xc0011cddc0 m=nil[IO wait]:", // no goroutine id suffix
 
 		"goroutine QWE goroutine 1 [running]:", // only first occurrence counts
 	}
