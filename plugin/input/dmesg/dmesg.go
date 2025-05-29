@@ -1,5 +1,4 @@
 //go:build linux
-// +build linux
 
 package dmesg
 
@@ -66,7 +65,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	p.state = &state{}
 	if err := offset.LoadYAML(p.config.OffsetsFile, p.state); err != nil {
 		p.offsetErrorsMetric.Inc()
-		p.logger.Error("can't load offset file: %s", err.Error())
+		p.logger.Errorf("can't load offset file: %s", err.Error())
 	}
 
 	parser, err := kmsgparser.NewParser()
@@ -77,7 +76,10 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	p.parser = parser
 	p.messages = make(chan kmsgparser.Message, 1)
 	go func() {
-		p.parser.Parse(p.messages)
+		err := p.parser.Parse(p.messages)
+		if err != nil {
+			p.logger.Errorf("parsing error occurred: %s", err.Error())
+		}
 	}()
 
 	go p.read()
