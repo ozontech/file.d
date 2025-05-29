@@ -25,7 +25,7 @@ type Plugin struct {
 	state      *state
 	controller pipeline.InputPluginController
 	parser     kmsgparser.Parser
-	ch         chan kmsgparser.Message
+	messages   chan kmsgparser.Message
 	logger     *zap.SugaredLogger
 
 	// plugin metrics
@@ -75,11 +75,10 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	}
 
 	p.parser = parser
-	p.ch = make(chan kmsgparser.Message, 1)
-	err = p.parser.Parse(p.ch)
-	if err != nil {
-		p.logger.Fatalf("can't create chan by parser: %s", err.Error())
-	}
+	p.messages = make(chan kmsgparser.Message, 1)
+	go func() {
+		p.parser.Parse(p.messages)
+	}()
 
 	go p.read()
 }
@@ -93,7 +92,7 @@ func (p *Plugin) read() {
 	defer insaneJSON.Release(root)
 
 	out := make([]byte, 0)
-	for m := range p.ch {
+	for m := range p.messages {
 		ts := m.Timestamp.UnixNano()
 		if ts <= p.state.TS {
 			continue
