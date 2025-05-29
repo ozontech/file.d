@@ -6,7 +6,7 @@ package dmesg
 import (
 	"time"
 
-	"github.com/euank/go-kmsg-parser/kmsgparser"
+	"github.com/euank/go-kmsg-parser/v3/kmsgparser"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/offset"
@@ -86,8 +86,14 @@ func (p *Plugin) read() {
 	root := insaneJSON.Spawn()
 	defer insaneJSON.Release(root)
 
+	tmp := make(chan kmsgparser.Message, 100)
+	err := p.parser.Parse(tmp)
+	if err != nil {
+		p.logger.Fatal(err)
+	}
+
 	out := make([]byte, 0)
-	for m := range p.parser.Parse() {
+	for m := range tmp {
 		ts := m.Timestamp.UnixNano()
 		if ts <= p.state.TS {
 			continue
