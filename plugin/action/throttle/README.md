@@ -147,7 +147,7 @@ Read only routing. Only for `client_type: cluster`.
 
 **`pool_size`** *`int`* *`default=3`* 
 
-Defines redis pool size.
+Defines redis pool size. It's allow to manage the number of connections to redis server.
 
 <br>
 
