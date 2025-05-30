@@ -145,6 +145,12 @@ Read only routing. Only for `client_type: cluster`.
 
 <br>
 
+**`pool_size`** *`int`* *`default=3`* 
+
+Defines redis pool size.
+
+<br>
+
 **`sync_interval`** *`cfg.Duration`* *`default=5s`* 
 
 Defines sync interval between global and local limiters.

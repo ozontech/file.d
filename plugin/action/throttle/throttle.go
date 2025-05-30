@@ -201,6 +201,11 @@ type RedisBackendConfig struct {
 
 	// > @3@4@5@6
 	// >
+	// > Defines redis pool size.
+	PoolSize int `json:"pool_size" default:"3"` // *
+
+	// > @3@4@5@6
+	// >
 	// > Defines sync interval between global and local limiters.
 	SyncInterval  cfg.Duration `json:"sync_interval" parse:"duration" default:"5s"` // *
 	SyncInterval_ time.Duration
@@ -287,6 +292,8 @@ func (c *RedisBackendConfig) toOptions() *xredis.Options {
 		MaxRetries:      c.MaxRetries,
 		MinRetryBackoff: c.MinRetryBackoff_,
 		MaxRetryBackoff: c.MaxRetryBackoff_,
+
+		PoolSize: c.PoolSize,
 	}
 
 	switch c.ClientType {

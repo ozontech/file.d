@@ -33,6 +33,8 @@ type Options struct {
 	MinRetryBackoff time.Duration
 	MaxRetryBackoff time.Duration
 
+	PoolSize int
+
 	// cluster options
 	RouteByLatency bool
 	RouteRandomly  bool
@@ -53,6 +55,8 @@ func (o *Options) toBaseOptions() *redis.Options {
 		MaxRetries:      o.MaxRetries,
 		MinRetryBackoff: o.MinRetryBackoff,
 		MaxRetryBackoff: o.MaxRetryBackoff,
+
+		PoolSize: o.PoolSize,
 	}
 }
 
@@ -71,6 +75,8 @@ func (o *Options) toRingOptions() *redis.RingOptions {
 		MaxRetries:      o.MaxRetries,
 		MinRetryBackoff: o.MinRetryBackoff,
 		MaxRetryBackoff: o.MaxRetryBackoff,
+
+		PoolSize: o.PoolSize,
 	}
 }
 
@@ -88,6 +94,8 @@ func (o *Options) toClusterOptions() *redis.ClusterOptions {
 
 		RouteByLatency: o.RouteByLatency,
 		RouteRandomly:  o.RouteRandomly,
+
+		PoolSize: o.PoolSize,
 	}
 }
 
