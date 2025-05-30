@@ -201,7 +201,7 @@ type RedisBackendConfig struct {
 
 	// > @3@4@5@6
 	// >
-	// > Defines redis pool size.
+	// > Defines redis pool size. It's allow to manage the number of connections to redis server.
 	PoolSize int `json:"pool_size" default:"3"` // *
 
 	// > @3@4@5@6
