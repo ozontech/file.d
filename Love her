@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Semangat Gya!</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', sans-serif;
+      background: linear-gradient(to bottom right, #ffecd2, #fcb69f);
+      color: #333;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      text-align: center;
+      padding: 2rem;
+    }
+
+    h1 {
+      font-size: 2.5em;
+      animation: fadeIn 2s ease-in-out;
+    }
+
+    p {
+      font-size: 1.2em;
+      max-width: 600px;
+      margin-top: 1rem;
+      animation: fadeIn 3s ease-in-out;
+    }
+
+    .heart {
+      color: #e25555;
+      font-size: 3em;
+      animation: pulse 1.5s infinite;
+      margin-top: 1rem;
+    }
+
+    iframe {
+      margin-top: 2rem;
+      border-radius: 1rem;
+      box-shadow: 0 0 20px rgba(0,0,0,0.1);
+      animation: fadeIn 4s ease-in-out;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes pulse {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.2); }
+      100% { transform: scale(1); }
+    }
+  </style>
+</head>
+<body>
+  <h1>Semangat Ujiannya, Argya Rasendriya! 📚</h1>
+  <p>Gya, kamu sudah luar biasa. Jangan ragu sama kemampuanmu. Aku percaya kamu bisa lewatin ini dengan baik. Istirahat cukup, jangan stres, dan inget... aku selalu ada buat kamu. 💖</p>
+  <div class="heart">❤️</div>
+
+  <!-- Lagu: About You - The 1975 -->
+  <iframe width="300" height="180" src="https://www.youtube.com/embed/G_T0n9Mq4Vw?autoplay=1&loop=1&playlist=G_T0n9Mq4Vw" 
+    title="About You - The 1975" frameborder="0" 
+    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+    allowfullscreen></iframe>
+</body>
+</html>
