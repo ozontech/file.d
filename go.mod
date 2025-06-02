@@ -31,6 +31,8 @@ require (
 	github.com/minio/minio-go v6.0.14+incompatible
 	github.com/ozontech/insane-json v0.1.9
 	github.com/prometheus/client_golang v1.16.0
+	github.com/prometheus/client_model v0.3.0
+	github.com/prometheus/common v0.42.0
 	github.com/prometheus/procfs v0.10.1
 	github.com/redis/go-redis/v9 v9.8.0
 	github.com/rjeczalik/notify v0.9.3
@@ -120,8 +122,6 @@ require (
 	github.com/pascaldekloe/name v1.0.1 // indirect
 	github.com/pierrec/lz4/v4 v4.1.21 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
-	github.com/prometheus/client_model v0.3.0 // indirect
-	github.com/prometheus/common v0.42.0 // indirect
 	github.com/ryanuber/go-glob v1.0.0 // indirect
 	github.com/segmentio/asm v1.2.0 // indirect
 	github.com/sirupsen/logrus v1.8.1 // indirect

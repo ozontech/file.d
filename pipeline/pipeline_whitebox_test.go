@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/atomic"
+	"go.uber.org/zap"
 )
 
 // Can't use fake plugin here dye cycle import
@@ -27,7 +28,7 @@ func TestPipelineStreamEvent(t *testing.T) {
 		Decoder:            "json",
 		MetricHoldDuration: DefaultMetricHoldDuration,
 	}
-	p := New("test", settings, prometheus.NewRegistry())
+	p := New("test", settings, prometheus.NewRegistry(), zap.NewNop())
 
 	streamID := StreamID(123123)
 	procs := int32(7)
@@ -135,7 +136,7 @@ func TestCheckInputBytes(t *testing.T) {
 
 	for _, tCase := range cases {
 		t.Run(tCase.name, func(t *testing.T) {
-			pipe := New("test_pipeline", tCase.pipelineSettings, prometheus.NewRegistry())
+			pipe := New("test_pipeline", tCase.pipelineSettings, prometheus.NewRegistry(), zap.NewNop())
 
 			data, cutoff, ok := pipe.checkInputBytes(tCase.input, "test", nil)
 
@@ -214,7 +215,7 @@ func TestCheckInputBytesMetric(t *testing.T) {
 
 	for _, tCase := range cases {
 		t.Run(tCase.name, func(t *testing.T) {
-			pipe := New("test_pipeline", tCase.pipelineSettings, prometheus.NewRegistry())
+			pipe := New("test_pipeline", tCase.pipelineSettings, prometheus.NewRegistry(), zap.NewNop())
 
 			pipe.checkInputBytes([]byte("some log"), tCase.sourceName, tCase.meta)
 

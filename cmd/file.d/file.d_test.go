@@ -181,7 +181,8 @@ func TestThatPluginsAreImported(t *testing.T) {
 		"throttle",
 	}
 	for _, pluginName := range action {
-		pluginInfo := fd.DefaultPluginRegistry.Get(pipeline.PluginKindAction, pluginName)
+		pluginInfo, err := fd.DefaultPluginRegistry.Get(pipeline.PluginKindAction, pluginName)
+		require.NoError(t, err)
 		require.NotNil(t, pluginInfo)
 	}
 
@@ -193,7 +194,8 @@ func TestThatPluginsAreImported(t *testing.T) {
 		"kafka",
 	}
 	for _, pluginName := range input {
-		pluginInfo := fd.DefaultPluginRegistry.Get(pipeline.PluginKindInput, pluginName)
+		pluginInfo, err := fd.DefaultPluginRegistry.Get(pipeline.PluginKindInput, pluginName)
+		require.NoError(t, err)
 		require.NotNil(t, pluginInfo)
 	}
 
@@ -208,7 +210,8 @@ func TestThatPluginsAreImported(t *testing.T) {
 		"stdout",
 	}
 	for _, pluginName := range output {
-		pluginInfo := fd.DefaultPluginRegistry.Get(pipeline.PluginKindOutput, pluginName)
+		pluginInfo, err := fd.DefaultPluginRegistry.Get(pipeline.PluginKindOutput, pluginName)
+		require.NoError(t, err)
 		require.NotNil(t, pluginInfo)
 	}
 }
@@ -251,8 +254,9 @@ func TestConfigParseValid(t *testing.T) {
 		tl := tl
 		t.Run(tl.name, func(t *testing.T) {
 			t.Parallel()
-			pluginInfo := fd.DefaultPluginRegistry.Get(tl.kind, tl.name)
-			_, err := pipeline.GetConfig(pluginInfo, []byte(tl.configJSON), map[string]int{"gomaxprocs": 1, "capacity": 64})
+			pluginInfo, err := fd.DefaultPluginRegistry.Get(tl.kind, tl.name)
+			require.NoError(t, err)
+			_, err = pipeline.GetConfig(pluginInfo, []byte(tl.configJSON), map[string]int{"gomaxprocs": 1, "capacity": 64})
 			assert.NoError(t, err, "shouldn't be an error")
 		})
 	}
@@ -290,8 +294,9 @@ func TestConfigParseInvalid(t *testing.T) {
 		tl := tl
 		t.Run(tl.name, func(t *testing.T) {
 			t.Parallel()
-			pluginInfo := fd.DefaultPluginRegistry.Get(tl.kind, tl.name)
-			_, err := pipeline.GetConfig(pluginInfo, []byte(tl.configJSON), map[string]int{"gomaxprocs": 1, "capacity": 64})
+			pluginInfo, err := fd.DefaultPluginRegistry.Get(tl.kind, tl.name)
+			require.NoError(t, err)
+			_, err = pipeline.GetConfig(pluginInfo, []byte(tl.configJSON), map[string]int{"gomaxprocs": 1, "capacity": 64})
 			assert.Error(t, err, "should be an error")
 		})
 	}

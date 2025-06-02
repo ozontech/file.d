@@ -208,7 +208,7 @@ func (c *Config) Validate(t *testing.T) {
 	ts64.WithPrecision(proto.PrecisionMilli)
 	ts64Auto.WithPrecision(proto.PrecisionNano)
 
-	i := 0
+	sampleIdx := 0
 	r.NoError(c.conn.Do(c.ctx, ch.Query{
 		Body: `select c1, c2, c3, c4, c5, level, ipv4, ipv6, ts, ts_with_tz, ts64, ts64_auto, ts_rfc3339nano, f32, f64, lc_str, str_arr, uuid, uuid_nullable
 			from test_table_insert
@@ -235,8 +235,9 @@ func (c *Config) Validate(t *testing.T) {
 			proto.ResultColumn{Name: "uuid_nullable", Data: uidNullable},
 		},
 		OnResult: func(_ context.Context, _ proto.Block) error {
-			for ; i < c1.Rows(); i++ {
-				sample := c.samples[i]
+			for i := 0; i < c1.Rows(); i++ {
+				sample := c.samples[sampleIdx]
+				sampleIdx++
 
 				c1Expected, _ := json.Marshal(sample.C1)
 				a.Equal(string(trim(c1Expected)), c1.Row(i))
@@ -271,7 +272,6 @@ func (c *Config) Validate(t *testing.T) {
 				a.True(ts64Auto.Row(i).After(sample.TS64), "%s before %s", ts64Auto.Row(i).String(), sample.TS64.String()) // we are use set_time plugin and override this value
 				a.Equal("UTC", ts64Auto.Row(i).Location().String())
 			}
-
 			return nil
 		},
 	}))
