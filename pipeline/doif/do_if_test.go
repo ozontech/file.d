@@ -1039,6 +1039,22 @@ func TestCheck(t *testing.T) {
 			},
 		},
 		{
+			name: "ts_cmp_eq_unixtime",
+			tree: treeNode{
+				tsCmpOp:            true,
+				cmpOp:              "eq",
+				fieldName:          "ts",
+				tsFormat:           "unixtime",
+				tsCmpValChangeMode: "const",
+				tsCmpValue:         time.Unix(1735678800, 0),
+			},
+			data: []argsResp{
+				{`{"ts":"1735678799"}`, false},
+				{`{"ts":"1735678800"}`, true},
+				{`{"ts":"1735678801"}`, false},
+			},
+		},
+		{
 			name: "ts_cmp_ne",
 			tree: treeNode{
 				tsCmpOp:            true,

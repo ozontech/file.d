@@ -31,6 +31,10 @@ func (m *mockProducer) Close() {
 
 }
 
+func (m *mockProducer) ForceMetadataRefresh() {
+
+}
+
 func newEvent(t *testing.T, topicField, topicVal, key, val string) *pipeline.Event {
 	root, err := insaneJSON.DecodeString(fmt.Sprintf(`{"%s":"%s", "%s":"%s"}`, topicField, topicVal, key, val))
 	if err != nil {

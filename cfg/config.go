@@ -3,10 +3,13 @@ package cfg
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"reflect"
 	"regexp"
+	"slices"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -561,6 +564,62 @@ func ParseFieldSelector(selector string) []string {
 	return result
 }
 
+// Parses several fields selectors and removes nested fields.
+// If there are empty field selectors or no selectors at all error returned.
+// For example:
+// {"a", "a.b"} and {"a"} give the same results
+// because field "a.b" is nested to field "a".
+// Used in remove_fields plugin and keep_fields plugin
+// to prevent extra selections.
+func ParseNestedFields(fields []string) ([][]string, error) {
+	if len(fields) == 0 {
+		return nil, errors.New("empty fields list")
+	}
+
+	paths := make([][]string, 0, len(fields))
+
+	for _, field := range fields {
+		path := ParseFieldSelector(field)
+		if len(path) == 0 {
+			return nil, errors.New("empty path parsed")
+		}
+
+		paths = append(paths, path)
+	}
+
+	sort.Slice(paths, func(i, j int) bool {
+		return len(paths[i]) < len(paths[j])
+	})
+
+	result := make([][]string, 0, len(paths))
+
+	for i, longPath := range paths {
+		longSelector := strings.Join(longPath, ".")
+
+		ok := true
+		for _, shortPath := range paths[:i] {
+			shortSelector := strings.Join(shortPath, ".")
+
+			if slices.Equal(shortPath, longPath[:len(shortPath)]) {
+				if len(shortPath) == len(longPath) {
+					logger.Warnf("path '%s' duplicates", longSelector)
+				} else {
+					logger.Warnf("path '%s' included in path '%s'; remove nested path", longSelector, shortSelector)
+				}
+
+				ok = false
+				break
+			}
+		}
+
+		if ok {
+			result = append(result, longPath)
+		}
+	}
+
+	return result, nil
+}
+
 func SetDefaultValues(data interface{}) error {
 	t := reflect.TypeOf(data).Elem()
 	v := reflect.ValueOf(data).Elem()
@@ -647,7 +706,7 @@ func CompileRegex(s string) (*regexp.Regexp, error) {
 		return nil, fmt.Errorf(`regexp is empty`)
 	}
 
-	if s == "" || s[0] != '/' || s[len(s)-1] != '/' {
+	if s == "/" || s[0] != '/' || s[len(s)-1] != '/' {
 		return nil, fmt.Errorf(`regexp "%s" should be surrounded by "/"`, s)
 	}
 

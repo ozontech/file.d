@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/alicebob/miniredis/v2"
-	"github.com/go-redis/redis"
 	"github.com/ozontech/file.d/metric"
+	"github.com/ozontech/file.d/xredis"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/require"
 )
@@ -65,10 +65,10 @@ func Test_updateKeyLimit(t *testing.T) {
 	require.NoError(t, s.Set("custom_limit_field_not_exists", `no_custom_field`))
 	require.NoError(t, s.Set("parse_int_error", `not_int`))
 
-	client := redis.NewClient(
-		&redis.Options{
-			Network:         "tcp",
-			Addr:            s.Addr(),
+	client := xredis.NewClient(
+		&xredis.Options{
+			ClientType:      xredis.ClientTypeBase,
+			Addrs:           []string{s.Addr()},
 			Password:        "",
 			ReadTimeout:     time.Second,
 			WriteTimeout:    time.Second,
@@ -77,10 +77,10 @@ func Test_updateKeyLimit(t *testing.T) {
 			MaxRetryBackoff: 0,
 		},
 	)
-	invalidClient := redis.NewClient(
-		&redis.Options{
-			Network:         "tcp",
-			Addr:            "invalid",
+	invalidClient := xredis.NewClient(
+		&xredis.Options{
+			ClientType:      xredis.ClientTypeBase,
+			Addrs:           []string{"invalid"},
 			Password:        "",
 			ReadTimeout:     time.Second,
 			WriteTimeout:    time.Second,
@@ -91,7 +91,7 @@ func Test_updateKeyLimit(t *testing.T) {
 	)
 
 	type args struct {
-		client             redisClient
+		client             xredis.Client
 		defaultLimit       *complexLimit
 		throttleFieldValue string
 		keyLimitOverride   string

@@ -195,10 +195,8 @@ pipelines:
 
 [More details...](plugin/action/join/README.md)
 ## join_template
-Alias to "join" plugin with predefined `start` and `continue` parameters.
-
-> ⚠ Parsing the whole event flow could be very CPU intensive because the plugin uses regular expressions.
-> Consider `match_fields` parameter to process only particular events. Check out an example for details.
+Alias to `join` plugin with predefined fast (regexes not used) `start` and `continue` checks.
+Use `do_if` or `match_fields` to prevent extra checks and reduce CPU usage.
 
 **Example of joining Go panics**:
 ```yaml
@@ -206,11 +204,14 @@ pipelines:
   example_pipeline:
     ...
     actions:
-    - type: join_template
-      template: go_panic
-      field: log
-      match_fields:
-        stream: stderr // apply only for events which was written to stderr to save CPU time
+      - type: join_template
+        template: go_panic
+        field: log
+        do_if:
+          field: stream
+          op: equal
+          values:
+            - stderr # apply only for events which was written to stderr to save CPU time
     ...
 ```
 
@@ -252,6 +253,37 @@ because the start as a valid JSON matters.
 [More details...](plugin/action/json_extract/README.md)
 ## keep_fields
 It keeps the list of the event fields and removes others.
+Nested fields supported: list subfield names separated with dot.
+Example:
+```
+fields: ["a.b.f1", "c"]
+# event before processing
+{
+    "a":{
+        "b":{
+            "f1":1,
+            "f2":2
+        }
+    },
+    "c":0,
+    "d":0
+}
+
+# event after processing
+{
+    "a":{
+        "b":{
+            "f1":1
+        }
+    },
+    "c":0
+}
+
+```
+
+NOTE: if `fields` param contains nested fields they will be removed.
+For example `fields: ["a.b", "a"]` gives the same result as `fields: ["a"]`.
+See `cfg.ParseNestedFields`.
 
 [More details...](plugin/action/keep_fields/README.md)
 ## mask

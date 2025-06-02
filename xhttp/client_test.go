@@ -14,6 +14,7 @@ func TestPrepareRequest(t *testing.T) {
 		contentType          string
 		body                 string
 		authHeader           string
+		customHeaders        map[string]string
 		gzipCompressionLevel int
 	}
 
@@ -66,6 +67,28 @@ func TestPrepareRequest(t *testing.T) {
 			},
 		},
 		{
+			name: "custom headers",
+			in: inputData{
+				endpoint:    "http://endpoint:3",
+				method:      fasthttp.MethodPost,
+				contentType: "application/json",
+				body:        "test auth",
+				authHeader:  "Auth Header",
+				customHeaders: map[string]string{
+					"header": "value",
+				},
+				gzipCompressionLevel: -1,
+			},
+			want: wantData{
+				uri:         "http://endpoint:3/",
+				method:      []byte(fasthttp.MethodPost),
+				contentType: []byte("application/json"),
+				body:        []byte("test auth"),
+				auth:        []byte("Auth Header"),
+			},
+		},
+
+		{
 			name: "gzip",
 			in: inputData{
 				endpoint:             "http://endpoint:4",
@@ -91,6 +114,7 @@ func TestPrepareRequest(t *testing.T) {
 			c := &Client{
 				authHeader:           tt.in.authHeader,
 				gzipCompressionLevel: tt.in.gzipCompressionLevel,
+				customHeaders:        tt.in.customHeaders,
 			}
 
 			req := fasthttp.AcquireRequest()
@@ -105,6 +129,10 @@ func TestPrepareRequest(t *testing.T) {
 			require.Equal(t, tt.want.contentType, req.Header.ContentType(), "wrong content type")
 			require.Equal(t, tt.want.contentEncoding, req.Header.ContentEncoding(), "wrong content encoding")
 			require.Equal(t, tt.want.auth, req.Header.Peek(fasthttp.HeaderAuthorization), "wrong auth")
+
+			for header, value := range c.customHeaders {
+				require.Equal(t, []byte(value), req.Header.Peek(header), "wrong custom header")
+			}
 
 			var body []byte
 			if tt.in.gzipCompressionLevel != -1 {

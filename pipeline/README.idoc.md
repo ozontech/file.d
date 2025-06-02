@@ -112,7 +112,22 @@ The amount of time the metric can be idle until it is deleted. Used for deleting
 
 **`pool`** *`string`* *`options=std|low_memory`*
 
-Type of `EventPool`. `std` pool is an original pool with the slice of `Event` pointers and slices of free events indicators. `low_memory` pool is a leveled pool based on multiple `sync.Pool` for the events of different size. The latter one is experimental.
+Type of `EventPool` that file.d uses to reuse memory. 
+`std` pool is an original event pool with pre-allocated events at the start of the application.
+This pool only frees up memory if event exceeds `avg_log_size`.
+
+`low_memory` event pool based on Go's [sync.Pool](https://pkg.go.dev/sync#Pool) with lazy memory allocation.
+It frees up memory depending on the application load - if file.d processes a lot of events, then a lot of memory will be allocated.
+If the application load decreases, then the extra events will be freed up in background.
+
+Note that `low_memory` pool increases the load on the garbage collector. 
+If you are confident in what you are doing, you can change the [GOGC](https://tip.golang.org/doc/gc-guide) (file.d uses GOGC=30 as default value)
+environment variable to adjust the frequency of garbage collection – this can reduce the load on the CPU.
+
+Both pools support the `capacity` setting, which both pools use to ensure that they do not exceed the number of allocated events.
+This parameter is useful for avoiding OOM.
+
+Default pool is `low_memory`.
 
 <br>
 

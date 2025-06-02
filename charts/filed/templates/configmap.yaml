@@ -17,6 +17,10 @@ data:
         {{- if .Values.actions }}
         {{- toYaml .Values.actions | nindent 8 }}
         {{- end }}
+        pipeline:
+        {{- if .Values.pipeline }}
+        {{- toYaml .Values.pipeline | nindent 8 }}
+        {{- end }}
         output:
           {{- if .Values.elasticsearch.enabled }}
           type: elasticsearch

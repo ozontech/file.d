@@ -34,7 +34,7 @@ const (
 	DefaultMaxInputEventSize       = 0
 	DefaultCutOffEventByLimit      = false
 	DefaultCutOffEventByLimitField = ""
-	DefaultJSONNodePoolSize        = 1024
+	DefaultJSONNodePoolSize        = 16
 	DefaultMaintenanceInterval     = time.Second * 5
 	DefaultEventTimeout            = time.Second * 30
 	DefaultFieldValue              = "not_set"
@@ -180,9 +180,9 @@ func New(name string, settings *Settings, registry *prometheus.Registry, lg *zap
 
 	var eventPool pool
 	switch settings.Pool {
-	case PoolTypeStd, "":
+	case PoolTypeStd:
 		eventPool = newEventPool(settings.Capacity, settings.AvgEventSize)
-	case PoolTypeLowMem:
+	case PoolTypeLowMem, "":
 		eventPool = newLowMemoryEventPool(settings.Capacity)
 	default:
 		logger.Fatal("unknown pool type", zap.String("pool", string(settings.Pool)))
@@ -427,17 +427,22 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offsets Offsets, byt
 	)
 	if p.decoderType == decoder.AUTO {
 		dec = p.suggestedDecoderType
+		if dec == decoder.NO {
+			dec = decoder.JSON
+		}
+
+		// When config decoder is set to "auto", then we didn't create a decoder during pipeline initialization.
+		// It's necessary to initialize the decoder once.
+		if dec == decoder.JSON {
+			p.initDecoderOnce.Do(func() {
+				p.decoder, _ = decoder.NewJsonDecoder(p.settings.DecoderParams)
+			})
+		}
 	} else {
 		dec = p.decoderType
 	}
-	if dec == decoder.NO {
-		dec = decoder.JSON
-		// When config decoder is set to "auto", then we didn't create a decoder during pipeline initialization.
-		// It's necessary to initialize the decoder once.
-		p.initDecoderOnce.Do(func() {
-			p.decoder, _ = decoder.NewJsonDecoder(nil)
-		})
-	} else if dec == decoder.CRI {
+
+	if dec == decoder.CRI {
 		row, err = decoder.DecodeCRI(bytes)
 		if err != nil {
 			p.wrongEventCRIFormatMetric.Inc()
@@ -455,7 +460,7 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offsets Offsets, byt
 	// For example, for containerd this setting is called max_container_log_line_size
 	// https://github.com/containerd/containerd/blob/f7f2be732159a411eae46b78bfdb479b133a823b/pkg/cri/config/config.go#L263-L266
 	if !row.IsPartial && p.settings.AntispamThreshold > 0 {
-		streamOffset := offsets.byStream(string(row.Stream))
+		streamOffset := offsets.ByStream(string(row.Stream))
 		currentOffset := offsets.current
 
 		if streamOffset > 0 && currentOffset < streamOffset {

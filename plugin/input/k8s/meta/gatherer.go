@@ -70,6 +70,7 @@ var (
 	DisableMetaUpdates  = false
 	metaAddedCounter    atomic.Int64
 	expiredItemsCounter atomic.Int64
+	deletedPodsCounter  atomic.Int64
 
 	CriType    = "docker"
 	NodeLabels = make(map[string]string)
@@ -163,6 +164,7 @@ func initInformer() {
 			pod := obj.(*corev1.Pod)
 			PutMeta(pod)
 			deletedPodsCache.Add(PodName(pod.Name), true)
+			deletedPodsCounter.Inc()
 		},
 	}, cache.Indexers{})
 	controller = c
@@ -189,11 +191,19 @@ func removeExpired() {
 	cleanUpItems(expiredItems)
 
 	if MaintenanceInterval > time.Second {
-		localLogger.Infof("k8s meta stat for last %d seconds: total=%d, updated=%d, expired=%d", MaintenanceInterval/time.Second, getTotalItems(), metaAddedCounter.Load(), expiredItemsCounter.Load())
+		localLogger.Infof(
+			"k8s meta stat for last %d seconds: total=%d, updated=%d, expired=%d, deleted=%d",
+			MaintenanceInterval/time.Second,
+			getTotalItems(),
+			metaAddedCounter.Load(),
+			expiredItemsCounter.Load(),
+			deletedPodsCounter.Load(),
+		)
 	}
 
 	metaAddedCounter.Swap(0)
 	expiredItemsCounter.Swap(0)
+	deletedPodsCounter.Swap(0)
 }
 
 func maintenance() {
@@ -234,11 +244,6 @@ func getExpiredItems(out []*MetaItem) []*MetaItem {
 	// find pods which aren't in k8s pod list for some time and add them to the expiration list
 	for ns, podNames := range MetaData {
 		for pod, containerIDs := range podNames {
-			isDeleted := deletedPodsCache.Contains(pod)
-			if isDeleted {
-				// information about deleted pods will never change again
-				continue
-			}
 			for cid, podData := range containerIDs {
 				if now.Sub(podData.updateTime) > MetaExpireDuration {
 					out = append(out, &MetaItem{

@@ -1,0 +1,6 @@
+pipelines:
+  redis_clients:
+    input:
+      type: fake
+    output:
+      type: devnull

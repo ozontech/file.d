@@ -16,12 +16,12 @@ func TestOffset(t *testing.T) {
 	}
 
 	// Test ByStream method for existing stream
-	if got := offset.byStream("stream1"); got != 100 {
+	if got := offset.ByStream("stream1"); got != 100 {
 		t.Errorf("ByStream('stream1') = %v; want 100", got)
 	}
 
 	// Test ByStream method for non-existing stream
-	if got := offset.byStream("stream3"); got != -1 {
+	if got := offset.ByStream("stream3"); got != -1 {
 		t.Errorf("ByStream('stream3') = %v; want -1", got)
 	}
 }

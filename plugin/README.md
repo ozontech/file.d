@@ -97,6 +97,8 @@ Reads `journalctl` output.
 ## k8s
 It reads Kubernetes logs and also adds pod meta-information. Also, it joins split logs into a single event.
 
+We recommend using the [Helm-chart](/charts/filed/README.md) for running in Kubernetes
+
 Source log file should be named in the following format:<br> `[pod-name]_[namespace]_[container-name]-[container-id].log`
 
 E.g. `my_pod-1566485760-trtrq_my-namespace_my-container-4e0301b633eaa2bfdcafdeba59ba0c72a3815911a6a820bf273534b0f32d98e0.log`
@@ -121,6 +123,22 @@ pipelines:
       file_config:                        // customize file plugin
         persistence_mode: sync
         read_buffer_size: 2048
+```
+
+To allow the plugin to access the necessary Kubernetes resources, you need to create a ClusterRole that grants permissions to read pod and node information.
+
+```yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: filed-pod-watcher
+rules:
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["nodes"]
+  verbs: ["get"]
 ```
 
 [More details...](plugin/input/k8s/README.md)
@@ -155,6 +173,10 @@ pipelines:
 ```
 
 [More details...](plugin/input/kafka/README.md)
+## socket
+It reads events from socket network.
+
+[More details...](plugin/input/socket/README.md)
 
 # Actions
 ## add_file_name
@@ -352,10 +374,8 @@ pipelines:
 
 [More details...](plugin/action/join/README.md)
 ## join_template
-Alias to "join" plugin with predefined `start` and `continue` parameters.
-
-> ⚠ Parsing the whole event flow could be very CPU intensive because the plugin uses regular expressions.
-> Consider `match_fields` parameter to process only particular events. Check out an example for details.
+Alias to `join` plugin with predefined fast (regexes not used) `start` and `continue` checks.
+Use `do_if` or `match_fields` to prevent extra checks and reduce CPU usage.
 
 **Example of joining Go panics**:
 ```yaml
@@ -363,11 +383,14 @@ pipelines:
   example_pipeline:
     ...
     actions:
-    - type: join_template
-      template: go_panic
-      field: log
-      match_fields:
-        stream: stderr // apply only for events which was written to stderr to save CPU time
+      - type: join_template
+        template: go_panic
+        field: log
+        do_if:
+          field: stream
+          op: equal
+          values:
+            - stderr # apply only for events which was written to stderr to save CPU time
     ...
 ```
 
@@ -409,6 +432,37 @@ because the start as a valid JSON matters.
 [More details...](plugin/action/json_extract/README.md)
 ## keep_fields
 It keeps the list of the event fields and removes others.
+Nested fields supported: list subfield names separated with dot.
+Example:
+```
+fields: ["a.b.f1", "c"]
+# event before processing
+{
+    "a":{
+        "b":{
+            "f1":1,
+            "f2":2
+        }
+    },
+    "c":0,
+    "d":0
+}
+
+# event after processing
+{
+    "a":{
+        "b":{
+            "f1":1
+        }
+    },
+    "c":0
+}
+
+```
+
+NOTE: if `fields` param contains nested fields they will be removed.
+For example `fields: ["a.b", "a"]` gives the same result as `fields: ["a"]`.
+See `cfg.ParseNestedFields`.
 
 [More details...](plugin/action/keep_fields/README.md)
 ## mask
@@ -683,6 +737,10 @@ Allowed characters in field names are letters, numbers, underscores, dashes, and
 It sends the event batches to kafka brokers using `franz-go` lib.
 
 [More details...](plugin/output/kafka/README.md)
+## loki
+It sends the logs batches to Loki using HTTP API.
+
+[More details...](plugin/output/loki/README.md)
 ## postgres
 It sends the event batches to postgres db using pgx.
 

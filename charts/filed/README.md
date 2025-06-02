@@ -17,8 +17,6 @@ Install [Minikube](https://minikube.sigs.k8s.io/docs/start/)
 ```shell
 helm upgrade --install k8s-logs . -f values.minikube.k8s-logs.yaml
 
-kubectl create clusterrolebinding k8s-logs-filed --clusterrole=cluster-admin --serviceaccount=default:k8s-logs-filed
-
 kubectl port-forward svc/k8s-logs-elasticsearch 9200:9200
 
 curl -X GET "http://localhost:9200/k8s-logs/_search/?size=10" -H 'Content-Type: application/json' -d '{

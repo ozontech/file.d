@@ -355,6 +355,86 @@ func TestParseFieldSelectorEnding(t *testing.T) {
 	assert.Equal(t, "c.", path[2], "wrong field")
 }
 
+func TestParseNestedFields(t *testing.T) {
+	type TestCase struct {
+		fields []string
+		paths  [][]string
+		errMsg string
+	}
+
+	for _, tt := range []TestCase{
+		{
+			// simple
+			fields: []string{"a", "b", "c"},
+			paths:  [][]string{{"a"}, {"b"}, {"c"}},
+		},
+		{
+			fields: []string{},
+			errMsg: "empty fields list",
+		},
+		{
+			fields: []string{"a", "b", ""},
+			errMsg: "empty path parsed",
+		},
+		{
+			// simple duplicates
+			fields: []string{"a", "b", "b", "a", "c", "a", "c", "b"},
+			paths:  [][]string{{"a"}, {"b"}, {"c"}},
+		},
+		{
+			// nested duplicates
+			fields: []string{"a.b", "some.qwe", "some.qwe", "a.b"},
+			paths:  [][]string{{"a", "b"}, {"some", "qwe"}},
+		},
+		{
+			// nested duplicates and nested field
+			fields: []string{"a.b.c", "a.b", "a.b"},
+			paths:  [][]string{{"a", "b"}},
+		},
+		{
+			// field name prefix
+			fields: []string{"prefix", "prefix_some"},
+			paths:  [][]string{{"prefix"}, {"prefix_some"}},
+		},
+		{
+			// nested field name prefix
+			fields: []string{"qwe12.some.f1", "qwe"},
+			paths:  [][]string{{"qwe"}, {"qwe12", "some", "f1"}},
+		},
+		{
+			// nested field name prefix
+			fields: []string{"qwe.some12.f1", "qwe.some"},
+			paths:  [][]string{{"qwe", "some"}, {"qwe", "some12", "f1"}},
+		},
+		{
+			// many nested fields
+			fields: []string{"a.b", "a.b.c", "a.d", "a"},
+			paths:  [][]string{{"a"}},
+		},
+		{
+			fields: []string{"a.b.f1", "a.b.f2"},
+			paths:  [][]string{{"a", "b", "f1"}, {"a", "b", "f2"}},
+		},
+		{
+			fields: []string{"a.b.f1", "a.b.f2", "a.b", "a.c"},
+			paths:  [][]string{{"a", "b"}, {"a", "c"}},
+		},
+		{
+			fields: []string{"a.b.f1", "a.b.f2", "a.b", "a.c", "a"},
+			paths:  [][]string{{"a"}},
+		},
+	} {
+		paths, err := ParseNestedFields(tt.fields)
+		if tt.errMsg != "" {
+			require.Error(t, err)
+			require.Equal(t, tt.errMsg, err.Error())
+		} else {
+			require.NoError(t, err)
+			require.Equal(t, tt.paths, paths)
+		}
+	}
+}
+
 func TestHierarchy(t *testing.T) {
 	s := &hierarchy{T: "10"}
 	err := Parse(s, map[string]int{})

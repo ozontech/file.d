@@ -40,6 +40,9 @@ func (r *RegexFilter) Apply(src []byte, dst []byte) []byte {
 			// and so on. Hence, the start of group i is index[2*i], the end of group i is index[2*i+1].
 			start := index[grp*2]
 			end := index[grp*2+1]
+			if start == -1 || end == -1 {
+				continue
+			}
 			if len(r.separator) > 0 && len(r.buf) != 0 {
 				r.buf = append(r.buf, r.separator...)
 			}

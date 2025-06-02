@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net"
 	"strings"
 	"time"
@@ -137,7 +138,7 @@ type Config struct {
 	// > ```
 	// >
 	// > When some addresses get weight greater than 1 and round_robin insert strategy is used,
-	// > it works as classical weighted round robin. Given {(a_1,w_1),(a_1,w_1),...,{a_n,w_n}},
+	// > it works as classical weighted round-robin. Given {(a_1,w_1),(a_1,w_1),...,{a_n,w_n}},
 	// > where a_i is the ith address and w_i is the ith address' weight, requests are sent in order:
 	// > w_1 times to a_1, w_2 times to a_2, ..., w_n times to a_n, w_1 times to a_1 and so on.
 	Addresses []Address `json:"addresses" required:"true" slice:"true"` // *
@@ -185,16 +186,26 @@ type Config struct {
 	// >
 	// > Clickhouse table columns. Each column must contain `name` and `type`.
 	// > File.d supports next data types:
-	// > * Signed and unsigned integers from 8 to 64 bits.
-	// > If you set 128-256 bits - File.d will cast the number to the int64.
-	// > * DateTime, DateTime64
-	// > * String
-	// > * Enum8, Enum16
-	// > * Bool
-	// > * Nullable
-	// > * IPv4, IPv6
-	// > * LowCardinality(String)
-	// > * Array(String)
+	// > * **Signed and unsigned integers** from 8 to 64 bits.
+	// > If you set 128-256 bits – File.d will cast the number to the int64.
+	// > * **DateTime** and **DateTime64** – File.d automatically determines whether a timestamp in JSON is in RFC3339Nano
+	// > or Unix timestamp format when attempting to parse it. Unix timestamp has some requirements:
+	// >   * Value should be a positive integer with the string or number json type.
+	// >   * Precision must match the column type in **ClickHouse**:
+	// >     - **DateTime** → Unix timestamp in **seconds**.
+	// >     - **DateTime64(3)** → Unix timestamp in **milliseconds**.
+	// >     - **DateTime64(6)** → Unix timestamp in **microseconds**.
+	// >     - **DateTime64(9)** → Unix timestamp in **nanoseconds**.
+	// >     - If the timestamp precision in JSON does not match the ClickHouse column type, the data may be processed incorrectly.
+	// > * **String**
+	// > * **Enum8** and **Enum16**
+	// > * **Bool**
+	// > * **Nullable**
+	// > * **IPv4**, **IPv6**
+	// > * **LowCardinality(String)**
+	// > * **Array(String)**
+	// >
+	// > If file.d fails convert JSON to the correct data type for Clickhouse, it will log **sampled** errors.
 	// >
 	// > If you need more types, please, create an issue.
 	Columns []Column `json:"columns" required:"true"` // *
@@ -491,6 +502,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 	data := (*workerData).(data)
 	data.reset()
 
+	errorLogged := false
 	batch.ForEach(func(event *pipeline.Event) {
 		for _, col := range data.cols {
 			node := event.Root.Dig(col.Name)
@@ -503,15 +515,18 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 			}
 
 			if err := col.ColInput.Append(insaneNode); err != nil {
-				// we can't append the value to the column because of the node has wrong format,
-				// so append zero value
+				if !errorLogged {
+					// Log only 1 error per batch to avoid spam.
+					errorLogged = true
+					p.logger.Error("failed to encode value into Clickhouse column, zero value will be used",
+						zap.Error(err), zap.String("col", col.Name), zap.String("value", node.AsString()))
+				}
+
+				// We can't append the value to the column because of the node has wrong format,
+				// so append zero value to be able to send a batch.
 				err := col.ColInput.Append(ZeroValueNode{})
 				if err != nil {
-					p.logger.Fatal("why err isn't nil?",
-						zap.Error(err),
-						zap.String("column", col.Name),
-						zap.Any("event", json.RawMessage(event.Root.EncodeToByte())),
-					)
+					panic(fmt.Errorf("BUG: failed to append zero value to column: %s", err))
 				}
 			}
 		}

@@ -9,17 +9,18 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/e2e/file_clickhouse"
 	"github.com/ozontech/file.d/e2e/file_elasticsearch"
 	"github.com/ozontech/file.d/e2e/file_es_split"
 	"github.com/ozontech/file.d/e2e/file_file"
+	"github.com/ozontech/file.d/e2e/file_loki"
 	"github.com/ozontech/file.d/e2e/http_file"
 	"github.com/ozontech/file.d/e2e/join_throttle"
 	"github.com/ozontech/file.d/e2e/kafka_auth"
 	"github.com/ozontech/file.d/e2e/kafka_file"
+	"github.com/ozontech/file.d/e2e/redis_clients"
 	"github.com/ozontech/file.d/e2e/split_join"
-
-	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
 	_ "github.com/ozontech/file.d/plugin/action/add_file_name"
 	_ "github.com/ozontech/file.d/plugin/action/add_host"
@@ -54,12 +55,14 @@ import (
 	_ "github.com/ozontech/file.d/plugin/input/journalctl"
 	_ "github.com/ozontech/file.d/plugin/input/k8s"
 	_ "github.com/ozontech/file.d/plugin/input/kafka"
+	_ "github.com/ozontech/file.d/plugin/input/socket"
 	_ "github.com/ozontech/file.d/plugin/output/clickhouse"
 	_ "github.com/ozontech/file.d/plugin/output/devnull"
 	_ "github.com/ozontech/file.d/plugin/output/elasticsearch"
 	_ "github.com/ozontech/file.d/plugin/output/file"
 	_ "github.com/ozontech/file.d/plugin/output/gelf"
 	_ "github.com/ozontech/file.d/plugin/output/kafka"
+	_ "github.com/ozontech/file.d/plugin/output/loki"
 	_ "github.com/ozontech/file.d/plugin/output/postgres"
 	_ "github.com/ozontech/file.d/plugin/output/s3"
 	_ "github.com/ozontech/file.d/plugin/output/splunk"
@@ -78,9 +81,11 @@ type e2eTest interface {
 }
 
 type E2ETest struct {
-	name    string
-	cfgPath string
 	e2eTest
+
+	name          string
+	cfgPath       string
+	onlyConfigure bool
 }
 
 func TestE2EStabilityWorkCase(t *testing.T) {
@@ -91,7 +96,8 @@ func TestE2EStabilityWorkCase(t *testing.T) {
 				Brokers:    []string{"localhost:9093"},
 				SslEnabled: true,
 			},
-			cfgPath: "./kafka_auth/config.yml",
+			cfgPath:       "./kafka_auth/config.yml",
+			onlyConfigure: true,
 		},
 		{
 			name: "kafka_auth",
@@ -99,7 +105,8 @@ func TestE2EStabilityWorkCase(t *testing.T) {
 				Brokers:    []string{"localhost:9095"},
 				SslEnabled: false,
 			},
-			cfgPath: "./kafka_auth/config.yml",
+			cfgPath:       "./kafka_auth/config.yml",
+			onlyConfigure: true,
 		},
 		{
 			name: "file_file",
@@ -159,9 +166,20 @@ func TestE2EStabilityWorkCase(t *testing.T) {
 			cfgPath: "./file_elasticsearch/config.yml",
 		},
 		{
-			name:    "file_es",
+			name:    "file_es_split",
 			e2eTest: &file_es_split.Config{},
 			cfgPath: "./file_es_split/config.yml",
+		},
+		{
+			name:    "file_loki",
+			e2eTest: &file_loki.Config{},
+			cfgPath: "./file_loki/config.yml",
+		},
+		{
+			name:          "redis_clients",
+			e2eTest:       &redis_clients.Config{},
+			cfgPath:       "./redis_clients/config.yml",
+			onlyConfigure: true,
 		},
 	}
 
@@ -169,7 +187,20 @@ func TestE2EStabilityWorkCase(t *testing.T) {
 		test := test
 		num := num
 		t.Run(test.name, func(t *testing.T) {
-			fd := startForTest(t, test, num)
+			conf := cfg.NewConfigFromFile([]string{test.cfgPath})
+			if _, ok := conf.Pipelines[test.name]; !ok {
+				log.Fatalf("pipeline name must be named the same as the name of the test")
+			}
+			test.Configure(t, conf, test.name)
+			if test.onlyConfigure {
+				return
+			}
+
+			port := 15080 + num
+			// for each file.d its own port
+			fd := fd.New(conf, ":"+strconv.Itoa(port))
+			fd.Start()
+
 			t.Parallel()
 			test.Send(t)
 			test.Validate(t)
@@ -179,17 +210,4 @@ func TestE2EStabilityWorkCase(t *testing.T) {
 			assert.NoError(t, err)
 		})
 	}
-}
-
-func startForTest(t *testing.T, test E2ETest, num int) *fd.FileD {
-	conf := cfg.NewConfigFromFile([]string{test.cfgPath})
-	if _, ok := conf.Pipelines[test.name]; !ok {
-		log.Fatalf("pipeline name must be named the same as the name of the test")
-	}
-	test.Configure(t, conf, test.name)
-
-	// for each file.d its own port
-	filed := fd.New(conf, ":1508"+strconv.Itoa(num))
-	filed.Start()
-	return filed
 }

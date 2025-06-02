@@ -2,6 +2,7 @@ package throttle
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -9,9 +10,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-redis/redis"
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/xredis"
+	"github.com/redis/go-redis/v9"
 )
 
 const (
@@ -19,7 +21,9 @@ const (
 )
 
 type redisLimiter struct {
-	redis redisClient
+	redis xredis.Client
+
+	ctx context.Context
 
 	// bucket counter prefix, forms key in redis: <keyPrefix>_<bucketID>_<distributionIdx>
 	keyPrefix bytes.Buffer
@@ -59,6 +63,7 @@ func newRedisLimiter(
 ) *redisLimiter {
 	rl := &redisLimiter{
 		redis:             cfg.redisClient,
+		ctx:               cfg.ctx,
 		incrementLimiter:  newInMemoryLimiter(cfg, limit, limitDistrMetrics, nowFn),
 		totalLimiter:      newInMemoryLimiter(cfg, limit, limitDistrMetrics, nowFn),
 		valField:          cfg.limiterValueField,
@@ -162,7 +167,7 @@ func (l *redisLimiter) syncLocalGlobalLimiters(maxID int) {
 			// <keyPrefix>_<bucketID>_<distributionIdx>
 			subKey := builder.String()
 
-			intCmd := l.redis.IncrBy(subKey, l.bucketValuesForSync[bucketIdx][distrIdx])
+			intCmd := l.redis.IncrBy(l.ctx, subKey, l.bucketValuesForSync[bucketIdx][distrIdx])
 			val, err := intCmd.Result()
 			if err != nil {
 				logger.Errorf("can't watch global limit for %s: %s", key, err.Error())
@@ -172,7 +177,7 @@ func (l *redisLimiter) syncLocalGlobalLimiters(maxID int) {
 			l.distributionValuesForUpdate = append(l.distributionValuesForUpdate, val)
 
 			// for oldest bucket set lifetime equal to 1 bucket duration, for newest equal to ((bucket count + 1) * bucket duration)
-			l.redis.Expire(subKey, tlBucketsInterval+tlBucketsInterval*time.Duration(bucketIdx))
+			l.redis.Expire(l.ctx, subKey, tlBucketsInterval+tlBucketsInterval*time.Duration(bucketIdx))
 		}
 
 		l.updateLimiterValues(maxID, bucketIdx)
@@ -241,7 +246,7 @@ func (l *redisLimiter) updateKeyLimit() error {
 	var distrVal limitDistributionCfg
 	var data []byte
 
-	data, err = l.redis.Get(l.keyLimit).Bytes()
+	data, err = l.redis.Get(l.ctx, l.keyLimit).Bytes()
 	if errors.Is(err, redis.Nil) {
 		return nil
 	}
