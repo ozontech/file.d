@@ -1,12 +1,11 @@
 //go:build linux
-// +build linux
 
 package dmesg
 
 import (
 	"time"
 
-	"github.com/euank/go-kmsg-parser/kmsgparser"
+	"github.com/euank/go-kmsg-parser/v3/kmsgparser"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/offset"
@@ -25,6 +24,7 @@ type Plugin struct {
 	state      *state
 	controller pipeline.InputPluginController
 	parser     kmsgparser.Parser
+	messages   chan kmsgparser.Message
 	logger     *zap.SugaredLogger
 
 	// plugin metrics
@@ -65,7 +65,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	p.state = &state{}
 	if err := offset.LoadYAML(p.config.OffsetsFile, p.state); err != nil {
 		p.offsetErrorsMetric.Inc()
-		p.logger.Error("can't load offset file: %s", err.Error())
+		p.logger.Errorf("can't load offset file: %s", err.Error())
 	}
 
 	parser, err := kmsgparser.NewParser()
@@ -74,6 +74,13 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	}
 
 	p.parser = parser
+	p.messages = make(chan kmsgparser.Message, 1)
+	go func() {
+		err := p.parser.Parse(p.messages)
+		if err != nil {
+			p.logger.Errorf("parsing error occurred: %s", err.Error())
+		}
+	}()
 
 	go p.read()
 }
@@ -87,7 +94,7 @@ func (p *Plugin) read() {
 	defer insaneJSON.Release(root)
 
 	out := make([]byte, 0)
-	for m := range p.parser.Parse() {
+	for m := range p.messages {
 		ts := m.Timestamp.UnixNano()
 		if ts <= p.state.TS {
 			continue
