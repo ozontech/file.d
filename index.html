@@ -1,32 +1,87 @@
+<!-- Clone by @WusThanhDieu -->
 <!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>file.d documentation</title>
-  <link rel="icon" type="image/png" href="/file.d/static/file.d.png" />
-  <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
-  <meta name="description" content="A blazing fast tool for building data pipelines: read, process, and output events.">
-  <meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
-  <link rel="stylesheet" href="//unpkg.com/docsify/lib/themes/vue.css">
-</head>
-<body>
-  <div id="app"></div>
-  <script>
-    window.$docsify = {
-      name: 'file.d',
-      repo: 'https://github.com/ozontech/file.d',
-      loadSidebar: true,
-      loadNavbar: true,
-      subMaxLevel: 2,
-      maxLevel: 1,
-      coverpage: true,
-      auto2top: true,
-      markdown: {
-        gfm: true
+<html lang="en" class="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Github WusThanhDieu</title>
+    <link href="https://fonts.bunny.net/css?family=instrument-sans:400,500,600" rel="stylesheet"/>
+    <link rel="stylesheet" href="/static/css/app.css" />
+  </head>
+  <body class="font-sans antialiased">
+    <div
+      id="app"
+      data-page='{
+        "component": "views/home",
+        "props": {
+          "errors": {},
+          "name": "Github WusThanhDieu",
+          "quote": {
+            "message": "",
+            "author": ""
+          },
+          "auth": {
+            "user": null
+          },
+          "ziggy": {
+            "port": null,
+            "defaults": [],
+            "routes": {
+              "home": {
+                "uri": "/",
+                "methods": ["GET", "HEAD"]
+              },
+              "show-create-form": {
+                "uri": "create-message/{id?}",
+                "methods": ["GET", "HEAD"],
+                "parameters": ["id"]
+              },
+              "create-form": {
+                "uri": "create-message",
+                "methods": ["POST"]
+              },
+              "login": {
+                "uri": "login",
+                "methods": ["GET", "HEAD"]
+              },
+              "logout": {
+                "uri": "logout",
+                "methods": ["POST"]
+              },
+              "storage.local": {
+                "uri": "storage/{path}",
+                "methods": ["GET", "HEAD"],
+                "wheres": {
+                  "path": ".*"
+                },
+                "parameters": ["path"]
+              }
+            },
+            "location": ""
+          },
+          "message": "",
+          "client": {
+            "fontName": "Mali",
+            "color": "#ff0019",
+            "messages": [
+              "2407❤️",
+              "iu em 💗",
+              "Nhớ em 🥰 rất rất nhớ em💗",
+              "💗💗Linh Nhi iu em nhiều lắm💗💗"
+            ],
+            "music": "//thanhdieu.com/music.mp3"
+          },
+          "clientId": "/"
+        },
+        "url": "/",
+        "version": "",
+        "clearHistory": false,
+        "encryptHistory": false
       }
-    }
-  </script>
-  <script src="//unpkg.com/docsify/lib/docsify.min.js"></script>
-  <script src="//unpkg.com/docsify-copy-code"></script>
-</body>
+      '
+    >
+  </div>
+  <script type="module" src="/static/js/app.js"></script>
+  <script type="module" src="/static/js/home.js"></script>
+  </body>
 </html>
