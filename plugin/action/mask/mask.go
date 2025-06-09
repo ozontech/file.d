@@ -11,6 +11,7 @@ import (
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/pipeline/doif"
 	insaneJSON "github.com/ozontech/insane-json"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
@@ -158,6 +159,11 @@ type Mask struct {
 
 	mode mode
 
+	DoIfRaw     *TreeNode `json:"do_if"`
+	DoIfChecker *doif.Checker
+
+	use bool
+
 	// > @3@4@5@6
 	// >
 	// > If the mask has been applied then `applied_field` will be set to `applied_value` in the event.
@@ -239,6 +245,17 @@ func compileMasks(masks []Mask, logger *zap.Logger) ([]Mask, *regexp.Regexp) {
 func compileMask(m *Mask, logger *zap.Logger) {
 	if m.Re == "" && len(m.MatchRules) == 0 {
 		logger.Fatal("mask must have either nonempty regex or ruleset, or both")
+	}
+
+	if m.DoIfRaw != nil {
+		checker, err := extractDoIfNode(m.DoIfRaw)
+		if err != nil {
+			logger.Fatal("can't init do_if for mask", zap.Error(err))
+		}
+
+		m.DoIfChecker = doif.NewChecker(checker)
+	} else {
+		m.use = true
 	}
 
 	setModeReplace := m.ReplaceWord != ""
@@ -488,6 +505,12 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	maskApplied := false
 	locApplied := false
 
+	for i := range p.config.Masks {
+		if p.config.Masks[i].DoIfChecker != nil {
+			p.config.Masks[i].use = p.config.Masks[i].DoIfChecker.Check(event.Root)
+		}
+	}
+
 	p.valueNodes = p.valueNodes[:0]
 	p.valueNodes = p.getValueNodes(root, p.valueNodes)
 	for _, v := range p.valueNodes {
@@ -509,6 +532,10 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 			mask := &p.config.Masks[i]
 			if mask.Re != "" && !valueIsCommonMatched {
 				// skips messages not matched common regex
+				continue
+			}
+
+			if !mask.use {
 				continue
 			}
 

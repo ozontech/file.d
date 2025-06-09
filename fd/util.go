@@ -221,26 +221,26 @@ func extractMetrics(actionJSON *simplejson.Json) (string, []string, bool) {
 }
 
 var (
-	doIfLogicalOpNodes = map[string]struct{}{
+	DoIfLogicalOpNodes = map[string]struct{}{
 		"and": {},
 		"not": {},
 		"or":  {},
 	}
-	doIfFieldOpNodes = map[string]struct{}{
+	DoIfFieldOpNodes = map[string]struct{}{
 		"equal":    {},
 		"contains": {},
 		"prefix":   {},
 		"suffix":   {},
 		"regex":    {},
 	}
-	doIfLengthCmpOpNodes = map[string]struct{}{
+	DoIfLengthCmpOpNodes = map[string]struct{}{
 		"byte_len_cmp":  {},
 		"array_len_cmp": {},
 	}
-	doIfTimestampCmpOpNodes = map[string]struct{}{
+	DoIfTimestampCmpOpNodes = map[string]struct{}{
 		"ts_cmp": {},
 	}
-	doIfCheckTypeOpNode = "check_type"
+	DoIfCheckTypeOpNode = "check_type"
 )
 
 func extractFieldOpVals(jsonNode *simplejson.Json) [][]byte {
@@ -462,15 +462,15 @@ func extractDoIfNode(jsonNode *simplejson.Json) (doif.Node, error) {
 		return nil, errors.New(`"op" field not found`)
 	}
 	opName := opNameNode.MustString()
-	if _, has := doIfLogicalOpNodes[opName]; has {
+	if _, has := DoIfLogicalOpNodes[opName]; has {
 		return extractLogicalOpNode(opName, jsonNode)
-	} else if _, has := doIfFieldOpNodes[opName]; has {
+	} else if _, has := DoIfFieldOpNodes[opName]; has {
 		return extractFieldOpNode(opName, jsonNode)
-	} else if _, has := doIfLengthCmpOpNodes[opName]; has {
+	} else if _, has := DoIfLengthCmpOpNodes[opName]; has {
 		return extractLengthCmpOpNode(opName, jsonNode)
-	} else if _, has := doIfTimestampCmpOpNodes[opName]; has {
+	} else if _, has := DoIfTimestampCmpOpNodes[opName]; has {
 		return extractTsCmpOpNode(opName, jsonNode)
-	} else if opName == doIfCheckTypeOpNode {
+	} else if opName == DoIfCheckTypeOpNode {
 		return extractCheckTypeOpNode(opName, jsonNode)
 	} else {
 		return nil, fmt.Errorf("unknown op %q", opName)
