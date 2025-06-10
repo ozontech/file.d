@@ -161,7 +161,7 @@ type Mask struct {
 
 	mode mode
 
-	DoIfStab    map[string]any `json:"do_if"`
+	DoIfStub    map[string]any `json:"do_if"`
 	doIfChecker *doif.Checker
 
 	use bool
@@ -300,6 +300,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 	}
 
 	for i, doIfChecker := range doIfCheckers {
+		p.config.Masks[i].DoIfStub = nil
 		if doIfChecker != nil {
 			p.config.Masks[i].doIfChecker = doIfChecker
 		} else {
