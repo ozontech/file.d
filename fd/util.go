@@ -243,41 +243,61 @@ var (
 	doIfCheckTypeOpNode = "check_type"
 )
 
-func extractFieldOpVals(jsonNode *simplejson.Json) [][]byte {
-	values, has := jsonNode.CheckGet("values")
+func extractFieldOpVals(jsonNode map[string]any) [][]byte {
+	valuesRaw, has := jsonNode["values"]
 	if !has {
 		return nil
 	}
-	vals := make([][]byte, 0)
-	iFaceVal := values.Interface()
-	if iFaceVal == nil {
-		vals = append(vals, nil)
-		return vals
+
+	switch values := valuesRaw.(type) {
+	case nil:
+		return [][]byte{nil}
+	case string:
+		return [][]byte{[]byte(values)}
+	case []any:
+		return extractFieldOpValsArrAny(values)
+	default:
+		logger.Panicf(`unknown type of field "values": %T; value %v`, values, values)
 	}
-	if strVal, ok := iFaceVal.(string); ok {
-		vals = append(vals, []byte(strVal))
-		return vals
-	}
-	for i := range values.MustArray() {
-		curValue := values.GetIndex(i).Interface()
-		if curValue == nil {
+
+	panic("unreachable")
+}
+
+func extractFieldOpValsArrAny(values []any) [][]byte {
+	var vals [][]byte
+
+	for _, value := range values {
+		if value == nil {
 			vals = append(vals, nil)
+		} else if valueStr, ok := value.(string); ok {
+			vals = append(vals, []byte(valueStr))
 		} else {
-			vals = append(vals, []byte(curValue.(string)))
+			logger.Panicf(
+				`elem of array "values" type mismatch; expected string or nil; got %T; value: %v`,
+				value, value)
 		}
 	}
+
 	return vals
 }
 
-func extractFieldOpNode(opName string, jsonNode *simplejson.Json) (doif.Node, error) {
+func extractFieldOpNode(opName string, jsonNode map[string]any) (doif.Node, error) {
 	var result doif.Node
 	var err error
-	fieldPath := jsonNode.Get("field").MustString()
-	caseSensitiveNode, has := jsonNode.CheckGet("case_sensitive")
-	caseSensitive := true
-	if has {
-		caseSensitive = caseSensitiveNode.MustBool()
+
+	fieldPath, err := requireString(jsonNode, "field")
+	if err != nil {
+		return nil, err
 	}
+
+	caseSensitive := true
+	caseSensitiveNode, err := requireBool(jsonNode, "case_sensitive")
+	if err == nil {
+		caseSensitive = caseSensitiveNode
+	} else if errors.Is(err, errFieldTypeMismatch) {
+		return nil, err
+	}
+
 	vals := extractFieldOpVals(jsonNode)
 	result, err = doif.NewFieldOpNode(opName, fieldPath, caseSensitive, vals)
 	if err != nil {
@@ -287,36 +307,109 @@ func extractFieldOpNode(opName string, jsonNode *simplejson.Json) (doif.Node, er
 	return result, nil
 }
 
-func noRequiredFieldError(field string) error {
-	return fmt.Errorf("no required field: %s", field)
+var errFieldNotFound = errors.New("field not found")
+
+func fieldNotFoundError(field string) error {
+	return fmt.Errorf("%w: %s", errFieldNotFound, field)
 }
 
-func requiredString(jsonNode *simplejson.Json, fieldName string) (string, error) {
-	node, has := jsonNode.CheckGet(fieldName)
+var errFieldTypeMismatch = errors.New("field type mismatch")
+
+func requireType(jsonNode map[string]any, fieldName string, typeSample any) (any, error) {
+	node, has := jsonNode[fieldName]
 	if !has {
-		return "", noRequiredFieldError(fieldName)
+		return nil, fieldNotFoundError(fieldName)
 	}
 
-	result, err := node.String()
-	if err != nil {
-		return "", err
+	var result any
+	ok := false
+
+	switch typeSample.(type) {
+	case string:
+		result, ok = node.(string)
+	case int:
+		result, ok = node.(int)
+	case json.Number:
+		result, ok = node.(json.Number)
+	case bool:
+		result, ok = node.(bool)
+	case []any:
+		result, ok = node.([]any)
+	default:
+		return nil, errors.New("unknown required type")
+	}
+
+	if !ok {
+		return "", fmt.Errorf(
+			"%w; field %q; expected %T, got %T; value: %v",
+			errFieldTypeMismatch, fieldName, typeSample, result, result,
+		)
 	}
 
 	return result, nil
 }
 
-func requiredInt(jsonNode *simplejson.Json, fieldName string) (int, error) {
-	node, has := jsonNode.CheckGet(fieldName)
-	if !has {
-		return 0, noRequiredFieldError(fieldName)
+func requireString(jsonNode map[string]any, fieldName string) (string, error) {
+	res, err := requireType(jsonNode, fieldName, "")
+	if err != nil {
+		return "", err
 	}
+	return res.(string), nil
+}
 
-	result, err := node.Int()
+func requireCommonInt(jsonNode map[string]any, fieldName string) (int, error) {
+	res, err := requireType(jsonNode, fieldName, 0)
+	if err != nil {
+		return 0, err
+	}
+	return res.(int), nil
+}
+
+func requireJSONInt(jsonNode map[string]any, fieldName string) (int, error) {
+	res, err := requireType(jsonNode, fieldName, json.Number("0"))
 	if err != nil {
 		return 0, err
 	}
 
-	return result, nil
+	val, err := res.(json.Number).Int64()
+	if err != nil {
+		return 0, err
+	}
+
+	return int(val), nil
+}
+
+func requireInt(jsonNode map[string]any, fieldName string) (int, error) {
+	var res int
+	var err error
+
+	for _, f := range []func(jsonNode map[string]any, fieldName string) (int, error){
+		requireCommonInt,
+		requireJSONInt,
+	} {
+		res, err = f(jsonNode, fieldName)
+		if err == nil {
+			return res, err
+		}
+	}
+
+	return res, err
+}
+
+func requireBool(jsonNode map[string]any, fieldName string) (bool, error) {
+	res, err := requireType(jsonNode, fieldName, false)
+	if err != nil {
+		return false, err
+	}
+	return res.(bool), nil
+}
+
+func requireArrAny(jsonNode map[string]any, fieldName string) ([]any, error) {
+	res, err := requireType(jsonNode, fieldName, []any{})
+	if err != nil {
+		return nil, err
+	}
+	return res.([]any), nil
 }
 
 const (
@@ -325,18 +418,18 @@ const (
 	fieldNameCmpValue = "value"
 )
 
-func extractLengthCmpOpNode(opName string, jsonNode *simplejson.Json) (doif.Node, error) {
-	fieldPath, err := requiredString(jsonNode, fieldNameField)
+func extractLengthCmpOpNode(opName string, jsonNode map[string]any) (doif.Node, error) {
+	fieldPath, err := requireString(jsonNode, fieldNameField)
 	if err != nil {
 		return nil, err
 	}
 
-	cmpOp, err := requiredString(jsonNode, fieldNameCmpOp)
+	cmpOp, err := requireString(jsonNode, fieldNameCmpOp)
 	if err != nil {
 		return nil, err
 	}
 
-	cmpValue, err := requiredInt(jsonNode, fieldNameCmpValue)
+	cmpValue, err := requireInt(jsonNode, fieldNameCmpValue)
 	if err != nil {
 		return nil, err
 	}
@@ -363,18 +456,18 @@ const (
 	defaultTsFormat               = "rfc3339nano"
 )
 
-func extractTsCmpOpNode(_ string, jsonNode *simplejson.Json) (doif.Node, error) {
-	fieldPath, err := requiredString(jsonNode, fieldNameField)
+func extractTsCmpOpNode(_ string, jsonNode map[string]any) (doif.Node, error) {
+	fieldPath, err := requireString(jsonNode, fieldNameField)
 	if err != nil {
 		return nil, err
 	}
 
-	cmpOp, err := requiredString(jsonNode, fieldNameCmpOp)
+	cmpOp, err := requireString(jsonNode, fieldNameCmpOp)
 	if err != nil {
 		return nil, err
 	}
 
-	rawCmpValue, err := requiredString(jsonNode, fieldNameCmpValue)
+	rawCmpValue, err := requireString(jsonNode, fieldNameCmpValue)
 	if err != nil {
 		return nil, err
 	}
@@ -397,34 +490,40 @@ func extractTsCmpOpNode(_ string, jsonNode *simplejson.Json) (doif.Node, error) 
 	}
 
 	format := defaultTsFormat
-	str := jsonNode.Get(fieldNameFormat).MustString()
-	if str != "" {
+	str, err := requireString(jsonNode, fieldNameFormat)
+	if err == nil {
 		format = str
+	} else if errors.Is(err, errFieldTypeMismatch) {
+		return nil, err
 	}
 
 	cmpValueShift := time.Duration(0)
-	str = jsonNode.Get(fieldNameCmpValueShift).MustString()
-	if str != "" {
+	str, err = requireString(jsonNode, fieldNameCmpValueShift)
+	if err == nil {
 		cmpValueShift, err = time.ParseDuration(str)
 		if err != nil {
 			return nil, fmt.Errorf("parse cmp value shift: %w", err)
 		}
+	} else if errors.Is(err, errFieldTypeMismatch) {
+		return nil, err
 	}
 
 	updateInterval := defaultTsCmpValUpdateInterval
-	str = jsonNode.Get(fieldNameUpdateInterval).MustString()
+	str, err = requireString(jsonNode, fieldNameUpdateInterval)
 	if str != "" {
 		updateInterval, err = time.ParseDuration(str)
 		if err != nil {
 			return nil, fmt.Errorf("parse update interval: %w", err)
 		}
+	} else if errors.Is(err, errFieldTypeMismatch) {
+		return nil, err
 	}
 
 	return doif.NewTsCmpOpNode(fieldPath, format, cmpOp, cmpMode, cmpValue, cmpValueShift, updateInterval)
 }
 
-func extractCheckTypeOpNode(_ string, jsonNode *simplejson.Json) (doif.Node, error) {
-	fieldPath, err := requiredString(jsonNode, "field")
+func extractCheckTypeOpNode(_ string, jsonNode map[string]any) (doif.Node, error) {
+	fieldPath, err := requireString(jsonNode, "field")
 	if err != nil {
 		return nil, err
 	}
@@ -436,32 +535,39 @@ func extractCheckTypeOpNode(_ string, jsonNode *simplejson.Json) (doif.Node, err
 	return result, nil
 }
 
-func extractLogicalOpNode(opName string, jsonNode *simplejson.Json) (doif.Node, error) {
+func extractLogicalOpNode(opName string, jsonNode map[string]any) (doif.Node, error) {
 	var result, operand doif.Node
 	var err error
-	operands := jsonNode.Get("operands")
+
+	rawOperands, err := requireArrAny(jsonNode, "operands")
+	if err != nil {
+		return nil, err
+	}
+
 	operandsList := make([]doif.Node, 0)
-	for i := range operands.MustArray() {
-		opNode := operands.GetIndex(i)
-		operand, err = ExtractDoIfNode(opNode)
+
+	for _, rawOperand := range rawOperands {
+		operand, err = ExtractDoIfNode(rawOperand.(map[string]any))
 		if err != nil {
 			return nil, fmt.Errorf("failed to extract operand node for logical op %q", opName)
 		}
 		operandsList = append(operandsList, operand)
 	}
+
 	result, err = doif.NewLogicalNode(opName, operandsList)
 	if err != nil {
 		return nil, fmt.Errorf("failed to init logical node: %w", err)
 	}
+
 	return result, nil
 }
 
-func ExtractDoIfNode(jsonNode *simplejson.Json) (doif.Node, error) {
-	opNameNode, has := jsonNode.CheckGet("op")
-	if !has {
-		return nil, errors.New(`"op" field not found`)
+func ExtractDoIfNode(jsonNode map[string]any) (doif.Node, error) {
+	opName, err := requireString(jsonNode, "op")
+	if err != nil {
+		return nil, err
 	}
-	opName := opNameNode.MustString()
+
 	if _, has := doIfLogicalOpNodes[opName]; has {
 		return extractLogicalOpNode(opName, jsonNode)
 	} else if _, has := doIfFieldOpNodes[opName]; has {
@@ -478,14 +584,16 @@ func ExtractDoIfNode(jsonNode *simplejson.Json) (doif.Node, error) {
 }
 
 func extractDoIfChecker(actionJSON *simplejson.Json) (*doif.Checker, error) {
-	if actionJSON.MustMap() == nil {
+	m := actionJSON.MustMap()
+	if m == nil {
 		return nil, nil
 	}
 
-	root, err := ExtractDoIfNode(actionJSON)
+	root, err := ExtractDoIfNode(m)
 	if err != nil {
 		return nil, fmt.Errorf("failed to extract nodes: %w", err)
 	}
+
 	result := doif.NewChecker(root)
 	return result, nil
 }
