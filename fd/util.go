@@ -327,8 +327,8 @@ func requireType(jsonNode map[string]any, fieldName string, typeSample any) (any
 	switch typeSample.(type) {
 	case string:
 		result, ok = node.(string)
-	case int:
-		result, ok = node.(int)
+	case float64:
+		result, ok = node.(float64)
 	case json.Number:
 		result, ok = node.(json.Number)
 	case bool:
@@ -357,12 +357,12 @@ func requireString(jsonNode map[string]any, fieldName string) (string, error) {
 	return res.(string), nil
 }
 
-func requireInt(jsonNode map[string]any, fieldName string) (int, error) {
-	res, err := requireType(jsonNode, fieldName, 0)
+func requireFloat64(jsonNode map[string]any, fieldName string) (float64, error) {
+	res, err := requireType(jsonNode, fieldName, 0.0)
 	if err != nil {
 		return 0, err
 	}
-	return res.(int), nil
+	return res.(float64), nil
 }
 
 func requireJSONInt(jsonNode map[string]any, fieldName string) (int, error) {
@@ -412,18 +412,22 @@ func extractLengthCmpOpNode(opName string, jsonNode map[string]any, isRawJSON bo
 		return nil, err
 	}
 
-	cmpValue := 0
 	if isRawJSON {
+		cmpValue := 0
 		cmpValue, err = requireJSONInt(jsonNode, fieldNameCmpValue)
-	} else {
-		cmpValue, err = requireInt(jsonNode, fieldNameCmpValue)
+		if err != nil {
+			return nil, err
+		}
+
+		return doif.NewLenCmpOpNode(opName, fieldPath, cmpOp, cmpValue)
 	}
 
+	cmpValueFloat, err := requireFloat64(jsonNode, fieldNameCmpValue)
 	if err != nil {
 		return nil, err
 	}
 
-	return doif.NewLenCmpOpNode(opName, fieldPath, cmpOp, cmpValue)
+	return doif.NewLenCmpOpNode(opName, fieldPath, cmpOp, int(cmpValueFloat))
 }
 
 const (
