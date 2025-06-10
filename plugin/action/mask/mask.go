@@ -6,7 +6,6 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/bitly/go-simplejson"
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/cfg/matchrule"
 	"github.com/ozontech/file.d/fd"
@@ -16,7 +15,6 @@ import (
 	insaneJSON "github.com/ozontech/insane-json"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
-	"sigs.k8s.io/yaml"
 )
 
 /*{ introduction
@@ -250,22 +248,7 @@ func compileMask(m *Mask, logger *zap.Logger) {
 	}
 
 	if m.DoIfCheckerRaw != nil {
-		yamlData, err := yaml.Marshal(m.DoIfCheckerRaw)
-		if err != nil {
-			logger.Fatal("can't marshal do_if for mask", zap.Error(err))
-		}
-
-		jsonData, err := yaml.YAMLToJSON(yamlData)
-		if err != nil {
-			logger.Fatal("can't cast do_if for mask from YAML to JSON", zap.Error(err))
-		}
-
-		jsonNode, err := simplejson.NewJson(jsonData)
-		if err != nil {
-			logger.Fatal("can't unmarshal do_if for mask", zap.Error(err))
-		}
-
-		checker, err := fd.ExtractDoIfNode(jsonNode)
+		checker, err := fd.ExtractDoIfNode(m.DoIfCheckerRaw)
 		if err != nil {
 			logger.Fatal("can't init do_if for mask", zap.Error(err))
 		}
