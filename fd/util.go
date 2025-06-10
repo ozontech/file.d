@@ -357,7 +357,7 @@ func requireString(jsonNode map[string]any, fieldName string) (string, error) {
 	return res.(string), nil
 }
 
-func requireCommonInt(jsonNode map[string]any, fieldName string) (int, error) {
+func requireInt(jsonNode map[string]any, fieldName string) (int, error) {
 	res, err := requireType(jsonNode, fieldName, 0)
 	if err != nil {
 		return 0, err
@@ -377,23 +377,6 @@ func requireJSONInt(jsonNode map[string]any, fieldName string) (int, error) {
 	}
 
 	return int(val), nil
-}
-
-func requireInt(jsonNode map[string]any, fieldName string) (int, error) {
-	var res int
-	var err error
-
-	for _, f := range []func(jsonNode map[string]any, fieldName string) (int, error){
-		requireCommonInt,
-		requireJSONInt,
-	} {
-		res, err = f(jsonNode, fieldName)
-		if err == nil {
-			return res, err
-		}
-	}
-
-	return res, err
 }
 
 func requireBool(jsonNode map[string]any, fieldName string) (bool, error) {
@@ -418,7 +401,7 @@ const (
 	fieldNameCmpValue = "value"
 )
 
-func extractLengthCmpOpNode(opName string, jsonNode map[string]any) (doif.Node, error) {
+func extractLengthCmpOpNode(opName string, jsonNode map[string]any, isRawJSON bool) (doif.Node, error) {
 	fieldPath, err := requireString(jsonNode, fieldNameField)
 	if err != nil {
 		return nil, err
@@ -429,7 +412,13 @@ func extractLengthCmpOpNode(opName string, jsonNode map[string]any) (doif.Node, 
 		return nil, err
 	}
 
-	cmpValue, err := requireInt(jsonNode, fieldNameCmpValue)
+	cmpValue := 0
+	if isRawJSON {
+		cmpValue, err = requireJSONInt(jsonNode, fieldNameCmpValue)
+	} else {
+		cmpValue, err = requireInt(jsonNode, fieldNameCmpValue)
+	}
+
 	if err != nil {
 		return nil, err
 	}
@@ -535,7 +524,7 @@ func extractCheckTypeOpNode(_ string, jsonNode map[string]any) (doif.Node, error
 	return result, nil
 }
 
-func extractLogicalOpNode(opName string, jsonNode map[string]any) (doif.Node, error) {
+func extractLogicalOpNode(opName string, jsonNode map[string]any, isRawJSON bool) (doif.Node, error) {
 	var result, operand doif.Node
 	var err error
 
@@ -547,7 +536,16 @@ func extractLogicalOpNode(opName string, jsonNode map[string]any) (doif.Node, er
 	operandsList := make([]doif.Node, 0)
 
 	for _, rawOperand := range rawOperands {
-		operand, err = ExtractDoIfNode(rawOperand.(map[string]any))
+		operandMap, ok := rawOperand.(map[string]any)
+		if !ok {
+			return nil,
+				fmt.Errorf(
+					"logical op type mismatch; expected map[string]any; got: %T; value: %v",
+					operandMap, operandMap,
+				)
+		}
+
+		operand, err = ExtractDoIfNode(operandMap, isRawJSON)
 		if err != nil {
 			return nil, fmt.Errorf("failed to extract operand node for logical op %q", opName)
 		}
@@ -562,18 +560,18 @@ func extractLogicalOpNode(opName string, jsonNode map[string]any) (doif.Node, er
 	return result, nil
 }
 
-func ExtractDoIfNode(jsonNode map[string]any) (doif.Node, error) {
+func ExtractDoIfNode(jsonNode map[string]any, isRawJSON bool) (doif.Node, error) {
 	opName, err := requireString(jsonNode, "op")
 	if err != nil {
 		return nil, err
 	}
 
 	if _, has := doIfLogicalOpNodes[opName]; has {
-		return extractLogicalOpNode(opName, jsonNode)
+		return extractLogicalOpNode(opName, jsonNode, isRawJSON)
 	} else if _, has := doIfFieldOpNodes[opName]; has {
 		return extractFieldOpNode(opName, jsonNode)
 	} else if _, has := doIfLengthCmpOpNodes[opName]; has {
-		return extractLengthCmpOpNode(opName, jsonNode)
+		return extractLengthCmpOpNode(opName, jsonNode, isRawJSON)
 	} else if _, has := doIfTimestampCmpOpNodes[opName]; has {
 		return extractTsCmpOpNode(opName, jsonNode)
 	} else if opName == doIfCheckTypeOpNode {
@@ -589,7 +587,7 @@ func extractDoIfChecker(actionJSON *simplejson.Json) (*doif.Checker, error) {
 		return nil, nil
 	}
 
-	root, err := ExtractDoIfNode(m)
+	root, err := ExtractDoIfNode(m, true)
 	if err != nil {
 		return nil, fmt.Errorf("failed to extract nodes: %w", err)
 	}
