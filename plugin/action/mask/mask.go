@@ -9,8 +9,11 @@ import (
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/cfg/matchrule"
 	"github.com/ozontech/file.d/fd"
+	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/pipeline/doif"
+	"github.com/ozontech/file.d/plugin/action/mask/do_if_cache"
 	insaneJSON "github.com/ozontech/insane-json"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
@@ -158,6 +161,11 @@ type Mask struct {
 
 	mode mode
 
+	DoIfStab    map[string]any `json:"do_if"`
+	doIfChecker *doif.Checker
+
+	use bool
+
 	// > @3@4@5@6
 	// >
 	// > If the mask has been applied then `applied_field` will be set to `applied_value` in the event.
@@ -281,6 +289,29 @@ func compileMask(m *Mask, logger *zap.Logger) {
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginParams) {
 	p.config = *config.(*Config)                            // copy shared config
 	p.config.Masks = append([]Mask(nil), p.config.Masks...) // copy shared masks
+
+	doIfCheckers, ok := do_if_cache.GetCheckers(params.PipelineName, params.Index)
+	if !ok {
+		logger.Fatal(
+			"do_if checkers for mask plugin not found",
+			zap.String("pipeline_name", params.PipelineName),
+			zap.Int("plugin_index", params.Index),
+		)
+	}
+
+	for i, doIfChecker := range doIfCheckers {
+		if doIfChecker != nil {
+			p.config.Masks[i].doIfChecker = doIfChecker
+			p.config.Masks[i].use = true
+		}
+	}
+
+	/*
+		fmt.Println(
+			"SOME DO_IF CHECKER",
+			doIfCheckers, params.PipelineName, params.Index,
+		)
+	*/
 
 	for i := range p.config.Masks {
 		mask := &p.config.Masks[i]
@@ -488,6 +519,12 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	maskApplied := false
 	locApplied := false
 
+	for i := range p.config.Masks {
+		if p.config.Masks[i].doIfChecker != nil {
+			p.config.Masks[i].use = p.config.Masks[i].doIfChecker.Check(event.Root)
+		}
+	}
+
 	p.valueNodes = p.valueNodes[:0]
 	p.valueNodes = p.getValueNodes(root, p.valueNodes)
 	for _, v := range p.valueNodes {
@@ -509,6 +546,10 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 			mask := &p.config.Masks[i]
 			if mask.Re != "" && !valueIsCommonMatched {
 				// skips messages not matched common regex
+				continue
+			}
+
+			if !mask.use {
 				continue
 			}
 

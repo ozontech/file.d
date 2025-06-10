@@ -16,6 +16,8 @@ import (
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/pipeline/doif"
+	"github.com/ozontech/file.d/plugin/action/mask/do_if_cache"
 	insaneJSON "github.com/ozontech/insane-json"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -174,6 +176,24 @@ func setupAction(p *pipeline.Pipeline, plugins *PluginRegistry, index int, t str
 	doIfChecker, err := extractDoIfChecker(actionJSON.Get("do_if"))
 	if err != nil {
 		logger.Fatalf(`failed to extract "do_if" conditions for action %d/%s in pipeline %q: %s`, index, t, p.Name, err.Error())
+	}
+
+	if t == "mask" {
+		maskNodes := actionJSON.Get("masks")
+		var checkers []*doif.Checker
+		for i := range maskNodes.MustArray() {
+			maskNode := maskNodes.GetIndex(i)
+			var checker *doif.Checker
+			checker, err = extractDoIfChecker(maskNode.Get("do_if"))
+			if err != nil {
+				logger.Fatalf(
+					`failed to extract "do_if" conditions for mask; plugin index - %d; pipeline - %s; mask index - %d: %s`,
+					index, p.Name, i, err.Error())
+			}
+			checkers = append(checkers, checker)
+		}
+
+		do_if_cache.SetCheckers(p.Name, index, checkers)
 	}
 
 	matchMode := extractMatchMode(actionJSON)
