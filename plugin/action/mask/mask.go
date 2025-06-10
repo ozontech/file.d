@@ -306,13 +306,6 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 		}
 	}
 
-	/*
-		fmt.Println(
-			"SOME DO_IF CHECKER",
-			doIfCheckers, params.PipelineName, params.Index,
-		)
-	*/
-
 	for i := range p.config.Masks {
 		mask := &p.config.Masks[i]
 		if mask.MaxCount > 0 && mask.ReplaceWord != "" {
