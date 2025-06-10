@@ -302,6 +302,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 	for i, doIfChecker := range doIfCheckers {
 		if doIfChecker != nil {
 			p.config.Masks[i].doIfChecker = doIfChecker
+		} else {
 			p.config.Masks[i].use = true
 		}
 	}
