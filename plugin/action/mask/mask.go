@@ -159,7 +159,7 @@ type Mask struct {
 
 	mode mode
 
-	DoIfCheckerRaw map[string]any `json:"do_if"`
+	DoIfCheckerMap map[string]any `json:"do_if"`
 	DoIfChecker    *doif.Checker
 
 	use bool
@@ -247,8 +247,8 @@ func compileMask(m *Mask, logger *zap.Logger) {
 		logger.Fatal("mask must have either nonempty regex or ruleset, or both")
 	}
 
-	if m.DoIfCheckerRaw != nil {
-		checker, err := fd.ExtractDoIfNode(m.DoIfCheckerRaw)
+	if m.DoIfCheckerMap != nil {
+		checker, err := fd.ExtractDoIfNode(m.DoIfCheckerMap, false)
 		if err != nil {
 			logger.Fatal("can't init do_if for mask", zap.Error(err))
 		}
