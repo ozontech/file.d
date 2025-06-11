@@ -1080,7 +1080,7 @@ func TestCheck(t *testing.T) {
 			t.Parallel()
 			root, err = buildTree(tt.tree)
 			require.NoError(t, err)
-			checker := NewChecker(root)
+			checker := newChecker(root)
 			for _, d := range tt.data {
 				if d.eventStr == "" {
 					eventRoot = nil
@@ -1155,7 +1155,7 @@ func TestCheckLenCmpLtObject(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		checker := NewChecker(root)
+		checker := newChecker(root)
 		result := checker.Check(eventRoot)
 		require.Equal(t, test.result, result, "invalid result; test id: %d", index)
 	}
@@ -1172,7 +1172,7 @@ func TestCheckLenCmpLtObject(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		checker := NewChecker(root)
+		checker := newChecker(root)
 		result := checker.Check(eventRoot)
 		require.Equal(t, test.result, result, "invalid result (empty selector); test id: %d", index)
 	}
@@ -1198,7 +1198,7 @@ func TestCheckTsCmpValChangeModeNow(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	checker := NewChecker(root)
+	checker := newChecker(root)
 
 	eventRoot1, err := timeToJSON(ts1)
 	require.NoError(t, err)
@@ -1883,8 +1883,8 @@ func TestNodeIsEqual(t *testing.T) {
 			require.NoError(t, err)
 			root2, err := buildTree(tt.t2)
 			require.NoError(t, err)
-			c1 := NewChecker(root1)
-			c2 := NewChecker(root2)
+			c1 := newChecker(root1)
+			c2 := newChecker(root2)
 			err1 := c1.IsEqualTo(c2)
 			err2 := c2.IsEqualTo(c1)
 			if tt.wantErr {
