@@ -115,34 +115,29 @@ func fieldNotFoundError(field string) error {
 
 var errFieldTypeMismatch = errors.New("field type mismatch")
 
-func must[T any](jsonNode map[string]any, fieldName string) (T, error) {
+func must[T any](val any) (T, error) {
 	var def T
 
-	node, has := jsonNode[fieldName]
+	res, ok := val.(T)
+	if !ok {
+		return def, fmt.Errorf(
+			"%w; expected %T; got %T; value: %v",
+			errFieldTypeMismatch, def, val, val,
+		)
+	}
+
+	return res, nil
+}
+
+func requireField[T any](node map[string]any, fieldName string) (T, error) {
+	var def T
+
+	fieldNode, has := node[fieldName]
 	if !has {
 		return def, fieldNotFoundError(fieldName)
 	}
 
-	result, ok := node.(T)
-	if !ok {
-		return def, fmt.Errorf(
-			"%w; field %q; type %T; value: %v",
-			errFieldTypeMismatch, fieldName, result, result,
-		)
-	}
-
-	return result, nil
-}
-
-func requireField[T any](jsonNode map[string]any, fieldName string) (T, error) {
-	var def T
-
-	res, err := must[T](jsonNode, fieldName)
-	if err != nil {
-		return def, err
-	}
-
-	return res, nil
+	return must[T](fieldNode)
 }
 
 const (
