@@ -16,6 +16,7 @@ import (
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/pipeline/doif"
 	insaneJSON "github.com/ozontech/insane-json"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -171,7 +172,7 @@ func setupAction(p *pipeline.Pipeline, plugins *PluginRegistry, index int, t str
 		return err
 	}
 
-	doIfChecker, err := extractDoIfChecker(actionJSON.Get("do_if"))
+	doIfChecker, err := doif.NewFromMap(actionJSON.Get("do_if").MustMap(), true)
 	if err != nil {
 		logger.Fatalf(`failed to extract "do_if" conditions for action %d/%s in pipeline %q: %s`, index, t, p.Name, err.Error())
 	}
