@@ -247,16 +247,13 @@ func compileMask(m *Mask, logger *zap.Logger) {
 		logger.Fatal("mask must have either nonempty regex or ruleset, or both")
 	}
 
-	if m.DoIfCheckerMap != nil {
-		checker, err := fd.ExtractDoIfNode(m.DoIfCheckerMap, false)
-		if err != nil {
-			logger.Fatal("can't init do_if for mask", zap.Error(err))
-		}
-
-		m.DoIfChecker = doif.NewChecker(checker)
-	} else {
-		m.use = true
+	var err error
+	m.DoIfChecker, err = doif.NewFromMap(m.DoIfCheckerMap, false)
+	if err != nil {
+		logger.Fatal("can't init do_if for mask", zap.Error(err))
 	}
+
+	m.use = true
 
 	setModeReplace := m.ReplaceWord != ""
 	setModeCut := m.CutValues
