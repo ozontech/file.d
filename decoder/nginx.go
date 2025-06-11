@@ -186,10 +186,11 @@ func (d *nginxErrorDecoder) extractCustomFields(data []byte) ([]byte, map[string
 			break
 		}
 
-		value := field[idx+2:]
-		if len(value) > 0 {
-			value = bytes.Trim(value, `"`)
+		value := make([]byte, 0)
+		if len(field[idx+1:]) > 1 {
+			value = bytes.Trim(field[idx+2:], `"`)
 		}
+
 		fields[string(key)] = value
 		data = data[:sepIdx]
 	}
