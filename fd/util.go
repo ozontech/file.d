@@ -345,20 +345,6 @@ func requireField[T any](jsonNode map[string]any, fieldName string) (T, error) {
 	return res, nil
 }
 
-func requireJSONInt(jsonNode map[string]any, fieldName string) (int, error) {
-	res, err := must[json.Number](jsonNode, fieldName)
-	if err != nil {
-		return 0, err
-	}
-
-	val, err := res.Int64()
-	if err != nil {
-		return 0, err
-	}
-
-	return int(val), nil
-}
-
 const (
 	fieldNameField    = "field"
 	fieldNameCmpOp    = "cmp_op"
@@ -376,22 +362,35 @@ func extractLengthCmpOpNode(opName string, jsonNode map[string]any, isRawJSON bo
 		return nil, err
 	}
 
-	if isRawJSON {
-		cmpValue := 0
-		cmpValue, err = requireJSONInt(jsonNode, fieldNameCmpValue)
-		if err != nil {
-			return nil, err
-		}
-
-		return doif.NewLenCmpOpNode(opName, fieldPath, cmpOp, cmpValue)
-	}
-
-	cmpValueFloat, err := requireField[float64](jsonNode, fieldNameCmpValue)
+	cmpValue, err := extractLengthCmpVal(jsonNode, isRawJSON)
 	if err != nil {
 		return nil, err
 	}
 
-	return doif.NewLenCmpOpNode(opName, fieldPath, cmpOp, int(cmpValueFloat))
+	return doif.NewLenCmpOpNode(opName, fieldPath, cmpOp, cmpValue)
+}
+
+func extractLengthCmpVal(jsonNode map[string]any, isRawJSON bool) (int, error) {
+	if isRawJSON {
+		cmpValueWrapped, err := requireField[json.Number](jsonNode, fieldNameCmpValue)
+		if err != nil {
+			return 0, err
+		}
+
+		cmpValue, err := cmpValueWrapped.Int64()
+		if err != nil {
+			return 0, err
+		}
+
+		return int(cmpValue), nil
+	}
+
+	cmpValue, err := requireField[float64](jsonNode, fieldNameCmpValue)
+	if err != nil {
+		return 0, err
+	}
+
+	return int(cmpValue), nil
 }
 
 const (
