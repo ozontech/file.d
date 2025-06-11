@@ -33,10 +33,6 @@ var (
 )
 
 func NewFromMap(m map[string]any, isRawJSON bool) (*Checker, error) {
-	if m == nil {
-		return nil, nil
-	}
-
 	root, err := extractDoIfNode(m, isRawJSON)
 	if err != nil {
 		return nil, fmt.Errorf("failed to extract nodes: %w", err)
