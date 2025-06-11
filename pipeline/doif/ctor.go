@@ -165,9 +165,14 @@ func extractLengthCmpOpNode(opName string, jsonNode map[string]any, isRawJSON bo
 	return NewLenCmpOpNode(opName, fieldPath, cmpOp, cmpValue)
 }
 
-func extractLengthCmpVal(jsonNode map[string]any, isRawJSON bool) (int, error) {
+func extractLengthCmpVal(node map[string]any, isRawJSON bool) (int, error) {
+	fieldNode, has := node[fieldNameCmpValue]
+	if !has {
+		return 0, fieldNotFoundError(fieldNameField)
+	}
+
 	if isRawJSON {
-		cmpValueWrapped, err := requireField[json.Number](jsonNode, fieldNameCmpValue)
+		cmpValueWrapped, err := must[json.Number](fieldNode)
 		if err != nil {
 			return 0, err
 		}
@@ -180,7 +185,7 @@ func extractLengthCmpVal(jsonNode map[string]any, isRawJSON bool) (int, error) {
 		return int(cmpValue), nil
 	}
 
-	cmpValue, err := requireField[float64](jsonNode, fieldNameCmpValue)
+	cmpValue, err := must[float64](fieldNode)
 	if err != nil {
 		return 0, err
 	}
