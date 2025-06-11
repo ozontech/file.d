@@ -315,34 +315,17 @@ func fieldNotFoundError(field string) error {
 
 var errFieldTypeMismatch = errors.New("field type mismatch")
 
-func requireType(jsonNode map[string]any, fieldName string, typeSample any) (any, error) {
+func must[T any](jsonNode map[string]any, fieldName string) (any, error) {
 	node, has := jsonNode[fieldName]
 	if !has {
 		return nil, fieldNotFoundError(fieldName)
 	}
 
-	var result any
-	ok := false
-
-	switch typeSample.(type) {
-	case string:
-		result, ok = node.(string)
-	case float64:
-		result, ok = node.(float64)
-	case json.Number:
-		result, ok = node.(json.Number)
-	case bool:
-		result, ok = node.(bool)
-	case []any:
-		result, ok = node.([]any)
-	default:
-		return nil, errors.New("unknown required type")
-	}
-
+	result, ok := node.(T)
 	if !ok {
-		return "", fmt.Errorf(
-			"%w; field %q; expected %T, got %T; value: %v",
-			errFieldTypeMismatch, fieldName, typeSample, result, result,
+		return nil, fmt.Errorf(
+			"%w; field %q; type %T; value: %v",
+			errFieldTypeMismatch, fieldName, result, result,
 		)
 	}
 
@@ -350,7 +333,7 @@ func requireType(jsonNode map[string]any, fieldName string, typeSample any) (any
 }
 
 func requireString(jsonNode map[string]any, fieldName string) (string, error) {
-	res, err := requireType(jsonNode, fieldName, "")
+	res, err := must[string](jsonNode, fieldName)
 	if err != nil {
 		return "", err
 	}
@@ -358,7 +341,7 @@ func requireString(jsonNode map[string]any, fieldName string) (string, error) {
 }
 
 func requireFloat64(jsonNode map[string]any, fieldName string) (float64, error) {
-	res, err := requireType(jsonNode, fieldName, 0.0)
+	res, err := must[float64](jsonNode, fieldName)
 	if err != nil {
 		return 0, err
 	}
@@ -366,7 +349,7 @@ func requireFloat64(jsonNode map[string]any, fieldName string) (float64, error) 
 }
 
 func requireJSONInt(jsonNode map[string]any, fieldName string) (int, error) {
-	res, err := requireType(jsonNode, fieldName, json.Number("0"))
+	res, err := must[json.Number](jsonNode, fieldName)
 	if err != nil {
 		return 0, err
 	}
@@ -380,7 +363,7 @@ func requireJSONInt(jsonNode map[string]any, fieldName string) (int, error) {
 }
 
 func requireBool(jsonNode map[string]any, fieldName string) (bool, error) {
-	res, err := requireType(jsonNode, fieldName, false)
+	res, err := must[bool](jsonNode, fieldName)
 	if err != nil {
 		return false, err
 	}
@@ -388,7 +371,7 @@ func requireBool(jsonNode map[string]any, fieldName string) (bool, error) {
 }
 
 func requireArrAny(jsonNode map[string]any, fieldName string) ([]any, error) {
-	res, err := requireType(jsonNode, fieldName, []any{})
+	res, err := must[[]any](jsonNode, fieldName)
 	if err != nil {
 		return nil, err
 	}
