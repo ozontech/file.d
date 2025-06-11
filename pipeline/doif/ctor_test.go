@@ -604,10 +604,5 @@ func extractDoIfChecker(actionJSON *simplejson.Json) (*Checker, error) {
 		return nil, nil
 	}
 
-	root, err := NewFromMap(m, true)
-	if err != nil {
-		return nil, fmt.Errorf("failed to extract nodes: %w", err)
-	}
-
-	return root, nil
+	return NewFromMap(m, true)
 }
