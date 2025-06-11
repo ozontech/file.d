@@ -25,6 +25,7 @@ import (
 	_ "github.com/ozontech/file.d/plugin/action/debug"
 	_ "github.com/ozontech/file.d/plugin/action/decode"
 	_ "github.com/ozontech/file.d/plugin/action/discard"
+	_ "github.com/ozontech/file.d/plugin/action/event_to_metrics"
 	_ "github.com/ozontech/file.d/plugin/action/flatten"
 	_ "github.com/ozontech/file.d/plugin/action/hash"
 	_ "github.com/ozontech/file.d/plugin/action/join"
