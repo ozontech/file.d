@@ -287,34 +287,27 @@ func extractCheckTypeOpNode(_ string, jsonNode map[string]any) (Node, error) {
 }
 
 func extractLogicalOpNode(opName string, jsonNode map[string]any, isRawJSON bool) (Node, error) {
-	var result, operand Node
-	var err error
-
 	rawOperands, err := requireField[[]any](jsonNode, "operands")
 	if err != nil {
 		return nil, err
 	}
 
-	operandsList := make([]Node, 0)
+	operands := make([]Node, 0)
 
 	for _, rawOperand := range rawOperands {
-		operandMap, ok := rawOperand.(map[string]any)
-		if !ok {
-			return nil,
-				fmt.Errorf(
-					"logical op type mismatch; expected map[string]any; got: %T; value: %v",
-					operandMap, operandMap,
-				)
+		operandMap, err := must[map[string]any](rawOperand)
+		if err != nil {
+			return nil, err
 		}
 
-		operand, err = extractDoIfNode(operandMap, isRawJSON)
+		operand, err := extractDoIfNode(operandMap, isRawJSON)
 		if err != nil {
 			return nil, fmt.Errorf("failed to extract operand node for logical op %q", opName)
 		}
-		operandsList = append(operandsList, operand)
+		operands = append(operands, operand)
 	}
 
-	result, err = NewLogicalNode(opName, operandsList)
+	result, err := NewLogicalNode(opName, operands)
 	if err != nil {
 		return nil, fmt.Errorf("failed to init logical node: %w", err)
 	}
