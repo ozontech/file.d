@@ -5,8 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"time"
-
-	"github.com/ozontech/file.d/logger"
 )
 
 var (
@@ -43,27 +41,25 @@ func NewFromMap(m map[string]any, isRawJSON bool) (*Checker, error) {
 	}, nil
 }
 
-func extractFieldOpVals(jsonNode map[string]any) [][]byte {
+func extractFieldOpVals(jsonNode map[string]any) ([][]byte, error) {
 	valuesRaw, has := jsonNode["values"]
 	if !has {
-		return nil
+		return nil, fieldNotFoundError("values")
 	}
 
 	switch values := valuesRaw.(type) {
 	case nil:
-		return [][]byte{nil}
+		return [][]byte{nil}, nil
 	case string:
-		return [][]byte{[]byte(values)}
+		return [][]byte{[]byte(values)}, nil
 	case []any:
 		return extractFieldOpValsArrAny(values)
 	default:
-		logger.Panicf(`unknown type of field "values": %T; value %v`, values, values)
+		return nil, fmt.Errorf(`unknown type of field "values": %T; value %v`, values, values)
 	}
-
-	panic("unreachable")
 }
 
-func extractFieldOpValsArrAny(values []any) [][]byte {
+func extractFieldOpValsArrAny(values []any) ([][]byte, error) {
 	var vals [][]byte
 
 	for _, value := range values {
@@ -72,13 +68,13 @@ func extractFieldOpValsArrAny(values []any) [][]byte {
 		} else if valueStr, ok := value.(string); ok {
 			vals = append(vals, []byte(valueStr))
 		} else {
-			logger.Panicf(
+			return nil, fmt.Errorf(
 				`elem of array "values" type mismatch; expected string or nil; got %T; value: %v`,
 				value, value)
 		}
 	}
 
-	return vals
+	return vals, nil
 }
 
 func extractFieldOpNode(opName string, jsonNode map[string]any) (Node, error) {
@@ -98,7 +94,11 @@ func extractFieldOpNode(opName string, jsonNode map[string]any) (Node, error) {
 		return nil, err
 	}
 
-	vals := extractFieldOpVals(jsonNode)
+	vals, err := extractFieldOpVals(jsonNode)
+	if err != nil {
+		return nil, err
+	}
+
 	result, err = NewFieldOpNode(opName, fieldPath, caseSensitive, vals)
 	if err != nil {
 		return nil, fmt.Errorf("failed to init field op: %w", err)
@@ -283,11 +283,17 @@ func extractCheckTypeOpNode(_ string, jsonNode map[string]any) (Node, error) {
 	if err != nil {
 		return nil, err
 	}
-	vals := extractFieldOpVals(jsonNode)
+
+	vals, err := extractFieldOpVals(jsonNode)
+	if err != nil {
+		return nil, err
+	}
+
 	result, err := NewCheckTypeOpNode(fieldPath, vals)
 	if err != nil {
 		return nil, fmt.Errorf("failed to init check_type op: %w", err)
 	}
+
 	return result, nil
 }
 
