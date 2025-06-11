@@ -285,13 +285,13 @@ func extractFieldOpNode(opName string, jsonNode map[string]any) (doif.Node, erro
 	var result doif.Node
 	var err error
 
-	fieldPath, err := requireString(jsonNode, "field")
+	fieldPath, err := requireField[string](jsonNode, "field")
 	if err != nil {
 		return nil, err
 	}
 
 	caseSensitive := true
-	caseSensitiveNode, err := requireBool(jsonNode, "case_sensitive")
+	caseSensitiveNode, err := requireField[bool](jsonNode, "case_sensitive")
 	if err == nil {
 		caseSensitive = caseSensitiveNode
 	} else if errors.Is(err, errFieldTypeMismatch) {
@@ -315,15 +315,17 @@ func fieldNotFoundError(field string) error {
 
 var errFieldTypeMismatch = errors.New("field type mismatch")
 
-func must[T any](jsonNode map[string]any, fieldName string) (any, error) {
+func must[T any](jsonNode map[string]any, fieldName string) (T, error) {
+	var def T
+
 	node, has := jsonNode[fieldName]
 	if !has {
-		return nil, fieldNotFoundError(fieldName)
+		return def, fieldNotFoundError(fieldName)
 	}
 
 	result, ok := node.(T)
 	if !ok {
-		return nil, fmt.Errorf(
+		return def, fmt.Errorf(
 			"%w; field %q; type %T; value: %v",
 			errFieldTypeMismatch, fieldName, result, result,
 		)
@@ -332,20 +334,15 @@ func must[T any](jsonNode map[string]any, fieldName string) (any, error) {
 	return result, nil
 }
 
-func requireString(jsonNode map[string]any, fieldName string) (string, error) {
-	res, err := must[string](jsonNode, fieldName)
-	if err != nil {
-		return "", err
-	}
-	return res.(string), nil
-}
+func requireField[T any](jsonNode map[string]any, fieldName string) (T, error) {
+	var def T
 
-func requireFloat64(jsonNode map[string]any, fieldName string) (float64, error) {
-	res, err := must[float64](jsonNode, fieldName)
+	res, err := must[T](jsonNode, fieldName)
 	if err != nil {
-		return 0, err
+		return def, err
 	}
-	return res.(float64), nil
+
+	return res, nil
 }
 
 func requireJSONInt(jsonNode map[string]any, fieldName string) (int, error) {
@@ -354,28 +351,12 @@ func requireJSONInt(jsonNode map[string]any, fieldName string) (int, error) {
 		return 0, err
 	}
 
-	val, err := res.(json.Number).Int64()
+	val, err := res.Int64()
 	if err != nil {
 		return 0, err
 	}
 
 	return int(val), nil
-}
-
-func requireBool(jsonNode map[string]any, fieldName string) (bool, error) {
-	res, err := must[bool](jsonNode, fieldName)
-	if err != nil {
-		return false, err
-	}
-	return res.(bool), nil
-}
-
-func requireArrAny(jsonNode map[string]any, fieldName string) ([]any, error) {
-	res, err := must[[]any](jsonNode, fieldName)
-	if err != nil {
-		return nil, err
-	}
-	return res.([]any), nil
 }
 
 const (
@@ -385,12 +366,12 @@ const (
 )
 
 func extractLengthCmpOpNode(opName string, jsonNode map[string]any, isRawJSON bool) (doif.Node, error) {
-	fieldPath, err := requireString(jsonNode, fieldNameField)
+	fieldPath, err := requireField[string](jsonNode, fieldNameField)
 	if err != nil {
 		return nil, err
 	}
 
-	cmpOp, err := requireString(jsonNode, fieldNameCmpOp)
+	cmpOp, err := requireField[string](jsonNode, fieldNameCmpOp)
 	if err != nil {
 		return nil, err
 	}
@@ -405,7 +386,7 @@ func extractLengthCmpOpNode(opName string, jsonNode map[string]any, isRawJSON bo
 		return doif.NewLenCmpOpNode(opName, fieldPath, cmpOp, cmpValue)
 	}
 
-	cmpValueFloat, err := requireFloat64(jsonNode, fieldNameCmpValue)
+	cmpValueFloat, err := requireField[float64](jsonNode, fieldNameCmpValue)
 	if err != nil {
 		return nil, err
 	}
@@ -433,17 +414,17 @@ const (
 )
 
 func extractTsCmpOpNode(_ string, jsonNode map[string]any) (doif.Node, error) {
-	fieldPath, err := requireString(jsonNode, fieldNameField)
+	fieldPath, err := requireField[string](jsonNode, fieldNameField)
 	if err != nil {
 		return nil, err
 	}
 
-	cmpOp, err := requireString(jsonNode, fieldNameCmpOp)
+	cmpOp, err := requireField[string](jsonNode, fieldNameCmpOp)
 	if err != nil {
 		return nil, err
 	}
 
-	rawCmpValue, err := requireString(jsonNode, fieldNameCmpValue)
+	rawCmpValue, err := requireField[string](jsonNode, fieldNameCmpValue)
 	if err != nil {
 		return nil, err
 	}
@@ -466,7 +447,7 @@ func extractTsCmpOpNode(_ string, jsonNode map[string]any) (doif.Node, error) {
 	}
 
 	format := defaultTsFormat
-	str, err := requireString(jsonNode, fieldNameFormat)
+	str, err := requireField[string](jsonNode, fieldNameFormat)
 	if err == nil {
 		format = str
 	} else if errors.Is(err, errFieldTypeMismatch) {
@@ -474,7 +455,7 @@ func extractTsCmpOpNode(_ string, jsonNode map[string]any) (doif.Node, error) {
 	}
 
 	cmpValueShift := time.Duration(0)
-	str, err = requireString(jsonNode, fieldNameCmpValueShift)
+	str, err = requireField[string](jsonNode, fieldNameCmpValueShift)
 	if err == nil {
 		cmpValueShift, err = time.ParseDuration(str)
 		if err != nil {
@@ -485,7 +466,7 @@ func extractTsCmpOpNode(_ string, jsonNode map[string]any) (doif.Node, error) {
 	}
 
 	updateInterval := defaultTsCmpValUpdateInterval
-	str, err = requireString(jsonNode, fieldNameUpdateInterval)
+	str, err = requireField[string](jsonNode, fieldNameUpdateInterval)
 	if str != "" {
 		updateInterval, err = time.ParseDuration(str)
 		if err != nil {
@@ -499,7 +480,7 @@ func extractTsCmpOpNode(_ string, jsonNode map[string]any) (doif.Node, error) {
 }
 
 func extractCheckTypeOpNode(_ string, jsonNode map[string]any) (doif.Node, error) {
-	fieldPath, err := requireString(jsonNode, "field")
+	fieldPath, err := requireField[string](jsonNode, "field")
 	if err != nil {
 		return nil, err
 	}
@@ -515,7 +496,7 @@ func extractLogicalOpNode(opName string, jsonNode map[string]any, isRawJSON bool
 	var result, operand doif.Node
 	var err error
 
-	rawOperands, err := requireArrAny(jsonNode, "operands")
+	rawOperands, err := requireField[[]any](jsonNode, "operands")
 	if err != nil {
 		return nil, err
 	}
@@ -548,7 +529,7 @@ func extractLogicalOpNode(opName string, jsonNode map[string]any, isRawJSON bool
 }
 
 func ExtractDoIfNode(jsonNode map[string]any, isRawJSON bool) (doif.Node, error) {
-	opName, err := requireString(jsonNode, "op")
+	opName, err := requireField[string](jsonNode, "op")
 	if err != nil {
 		return nil, err
 	}
