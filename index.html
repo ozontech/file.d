@@ -1,32 +1,244 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="pt-BR">
 <head>
-  <meta charset="UTF-8">
-  <title>file.d documentation</title>
-  <link rel="icon" type="image/png" href="/file.d/static/file.d.png" />
-  <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
-  <meta name="description" content="A blazing fast tool for building data pipelines: read, process, and output events.">
-  <meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
-  <link rel="stylesheet" href="//unpkg.com/docsify/lib/themes/vue.css">
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>888Bet (teste)</title>
+<style>
+  body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    background-color: #121212;
+    color: #fff;
+  }
+  header {
+    background-color: #f8b400;
+    color: #000;
+    padding: 20px;
+    text-align: center;
+    font-size: 26px;
+    font-weight: bold;
+  }
+  nav {
+    display: flex;
+    justify-content: space-around;
+    background: #1f1f1f;
+    padding: 10px 0;
+  }
+  nav button {
+    background: none;
+    border: none;
+    color: #fff;
+    font-size: 16px;
+    cursor: pointer;
+  }
+  nav button.active {
+    color: #f8b400;
+    font-weight: bold;
+  }
+  .container {
+    max-width: 400px;
+    margin: 20px auto;
+    background: #1f1f1f;
+    padding: 20px;
+    border-radius: 10px;
+    box-shadow: 0 0 15px rgba(0,0,0,0.4);
+  }
+  h2 {
+    text-align: center;
+    color: #f8b400;
+    margin-bottom: 20px;
+  }
+  input, input[type="file"] {
+    width: 100%;
+    padding: 12px;
+    margin-bottom: 15px;
+    border: none;
+    border-radius: 5px;
+    background: #2a2a2a;
+    color: #fff;
+    font-size: 16px;
+  }
+  button.submit {
+    width: 100%;
+    padding: 12px;
+    background-color: #f8b400;
+    color: #000;
+    border: none;
+    border-radius: 5px;
+    font-size: 16px;
+    cursor: pointer;
+  }
+  button.submit:hover {
+    background-color: #e09f00;
+  }
+  .message {
+    text-align: center;
+    font-size: 14px;
+    margin-top: 10px;
+    color: #aaa;
+  }
+  .section {
+    display: none;
+  }
+  .section.active {
+    display: block;
+  }
+  footer {
+    text-align: center;
+    margin: 30px 0 10px;
+    font-size: 12px;
+    color: #555;
+  }
+  a {
+    color: #f8b400;
+    text-decoration: none;
+  }
+</style>
 </head>
 <body>
-  <div id="app"></div>
-  <script>
-    window.$docsify = {
-      name: 'file.d',
-      repo: 'https://github.com/ozontech/file.d',
-      loadSidebar: true,
-      loadNavbar: true,
-      subMaxLevel: 2,
-      maxLevel: 1,
-      coverpage: true,
-      auto2top: true,
-      markdown: {
-        gfm: true
-      }
+<header>888Bet (teste)</header>
+<nav>
+  <button class="tab-button active" data-tab="register">Cadastro</button>
+  <button class="tab-button" data-tab="login">Login</button>
+  <button class="tab-button" data-tab="dashboard">Dashboard</button>
+  <button class="tab-button" data-tab="deposit">Depósito</button>
+</nav>
+<div class="container">
+  <div id="register" class="section active">
+    <h2>Crie sua Conta</h2>
+    <form id="registerForm">
+      <input type="tel" placeholder="Número de telefone" required />
+      <input type="password" placeholder="Criar senha" required />
+      <input type="password" placeholder="Confirmar senha" required />
+      <button class="submit" type="submit">Registrar</button>
+    </form>
+    <div class="message">
+      Já tem uma conta? <a href="#" id="goToLogin">Entrar</a>
+    </div>
+  </div>
+
+  <div id="login" class="section">
+    <h2>Login</h2>
+    <form id="loginForm">
+      <input type="tel" placeholder="Número de telefone" required />
+      <input type="password" placeholder="Senha" required />
+      <button class="submit" type="submit">Entrar</button>
+    </form>
+    <div class="message">
+      Não tem conta? <a href="#" id="goToRegister">Registrar</a>
+    </div>
+  </div>
+
+  <div id="dashboard" class="section">
+    <h2>Dashboard</h2>
+    <p><strong>Saldo:</strong> R$ <span id="balance">0,00</span></p>
+    <h3>Apostas recentes</h3>
+    <ul id="betsList">
+      <li>Jogo A - R$ 10,00 - Pendente</li>
+      <li>Jogo B - R$ 20,00 - Perdido</li>
+      <li>Jogo C - R$ 15,00 - Ganhou</li>
+    </ul>
+  </div>
+
+  <div id="deposit" class="section">
+    <h2>Depósito</h2>
+    <p>Faça seu depósito via Pix usando seu aplicativo bancário.</p>
+    <p>Após o pagamento, envie o comprovante para nosso suporte pelo WhatsApp.</p>
+    <button id="whatsappButton" class="submit">Enviar comprovante no WhatsApp</button>
+    <h3>Ou envie o comprovante aqui:</h3>
+    <form id="uploadForm">
+      <input type="file" accept="image/*" required />
+      <button class="submit" type="submit">Enviar Comprovante</button>
+    </form>
+    <div id="uploadMessage" style="text-align:center; margin-top: 10px;"></div>
+  </div>
+</div>
+<footer>
+  &copy; 2025 - 888Bet (teste). Todos os direitos reservados.
+</footer>
+
+<script>
+  // Navegação entre abas
+  const buttons = document.querySelectorAll(".tab-button");
+  const sections = document.querySelectorAll(".section");
+  function showSection(id) {
+    sections.forEach(s => s.classList.remove("active"));
+    buttons.forEach(b => b.classList.remove("active"));
+    document.getElementById(id).classList.add("active");
+    document.querySelector('.tab-button[data-tab="'+id+'"]').classList.add("active");
+  }
+
+  buttons.forEach(button => {
+    button.addEventListener("click", () => {
+      showSection(button.getAttribute("data-tab"));
+    });
+  });
+
+  // Link entre telas registro/login
+  document.getElementById("goToLogin").addEventListener("click", e => {
+    e.preventDefault();
+    showSection("login");
+  });
+  document.getElementById("goToRegister").addEventListener("click", e => {
+    e.preventDefault();
+    showSection("register");
+  });
+
+  // Registro (modo teste, sem backend)
+  document.getElementById("registerForm").addEventListener("submit", e => {
+    e.preventDefault();
+    const tel = e.target[0].value.trim();
+    const pass = e.target[1].value;
+    const pass2 = e.target[2].value;
+    if(pass !== pass2) {
+      alert("As senhas não conferem.");
+      return;
     }
-  </script>
-  <script src="//unpkg.com/docsify/lib/docsify.min.js"></script>
-  <script src="//unpkg.com/docsify-copy-code"></script>
-</body>
-</html>
+    localStorage.setItem("userPhone", tel);
+    localStorage.setItem("userPass", pass);
+    alert("Cadastro realizado com sucesso!");
+    showSection("login");
+  });
+
+  // Login (modo teste, sem backend)
+  document.getElementById("loginForm").addEventListener("submit", e => {
+    e.preventDefault();
+    const tel = e.target[0].value.trim();
+    const pass = e.target[1].value;
+    const storedTel = localStorage.getItem("userPhone");
+    const storedPass = localStorage.getItem("userPass");
+    if(tel === storedTel && pass === storedPass) {
+      alert("Login efetuado com sucesso!");
+      showSection("dashboard");
+      updateDashboard();
+    } else {
+      alert("Telefone ou senha incorretos.");
+    }
+  });
+
+  // Atualiza saldo e apostas (modo teste)
+  function updateDashboard() {
+    document.getElementById("balance").textContent = "150,00"; // valor fixo exemplo
+  }
+
+  // Botão WhatsApp para envio de comprovante
+  document.getElementById("whatsappButton").addEventListener("click", () => {
+    const phone = "559988009203"; // WhatsApp número com DDI (Brasil +55)
+    const message = encodeURIComponent("Olá, enviei meu comprovante de depósito para liberar o saldo.");
+    window.open(`https://wa.me/${phone}?text=${message}`, "_blank");
+  });
+
+  // Formulário upload de comprovante (simulado)
+  document.getElementById("uploadForm").addEventListener("submit", e => {
+    e.preventDefault();
+    const fileInput = e.target[0];
+    if(fileInput.files.length === 0) {
+      alert("Selecione um arquivo antes de enviar.");
+      return;
+    }
+    // Simula upload
+    document.getElementById("uploadMessage").textContent = "Comprovante enviado com sucesso (simulado).";
+    e.target.reset();
+  });
+</script>
