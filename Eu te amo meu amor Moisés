@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8" />
+    <title>Juntos para Sempre 💍🩸</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: black;
+            animation: luzes 1s infinite alternate;
+            cursor: pointer;
+        }
+
+        @keyframes luzes {
+            0% { background-color: #000000; }
+            100% { background-color: #1a0000; }
+        }
+
+        /* Texto principal */
+        h1 {
+            color: red;
+            font-size: 50px;
+            text-align: center;
+            margin-top: 8%;
+            font-family: 'Creepster', cursive;
+            text-shadow: 
+                0 0 20px red,
+                0 0 40px crimson,
+                0 0 80px darkred;
+            z-index: 3;
+            position: relative;
+        }
+
+        /* Mensagem ao clicar */
+        .click-msg {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: red;
+            font-family: 'Creepster', cursive;
+            font-size: 60px;
+            display: none;
+            text-shadow:
+                0 0 10px red,
+                0 0 30px crimson,
+                0 0 50px darkred;
+            z-index: 5;
+        }
+
+        /* Fundo com "Eu te amo" */
+        .fundo {
+            position: fixed;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+            pointer-events: none;
+        }
+
+        .fundo span {
+            position: absolute;
+            color: rgba(255,0,0,0.07);
+            font-size: 40px;
+            font-family: sans-serif;
+            animation: flutuar linear infinite;
+            user-select: none;
+        }
+
+        @keyframes flutuar {
+            0% { transform: translateY(100vh) rotate(0deg); }
+            100% { transform: translateY(-150vh) rotate(360deg); }
+        }
+
+        /* Sangue escorrendo simulando gotas */
+        .gota {
+            position: absolute;
+            top: -50px;
+            width: 10px;
+            height: 30px;
+            background-color: red;
+            border-radius: 50% 50% 50% 50%;
+            animation: cair linear infinite;
+            z-index: 2;
+            filter: drop-shadow(0 0 5px red) drop-shadow(0 0 15px crimson);
+        }
+
+        @keyframes cair {
+            to { transform: translateY(120vh); opacity: 0; }
+        }
+
+        /* Áudio player */
+        .audio-container {
+            position: fixed;
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 10;
+            background-color: rgba(0, 0, 0, 0.7);
+            padding: 10px 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px red;
+        }
+
+        .audio-container audio {
+            width: 300px;
+        }
+
+        .audio-container p {
+            color: white;
+            text-align: center;
+            font-family: sans-serif;
+            font-size: 12px;
+            margin-top: 5px;
+        }
+    </style>
+
+    <!-- Fonte assustadora -->
+    <link href="https://fonts.googleapis.com/css2?family=Creepster&display=swap" rel="stylesheet" />
+</head>
+<body>
+
+    <!-- Fundo com "Eu te amo" -->
+    <div class="fundo"></div>
+
+    <!-- Sangue escorrendo -->
+    <script>
+        // Criar as palavras "EU TE AMO" flutuando
+        const fundo = document.querySelector('.fundo');
+        for (let i = 0; i < 50; i++) {
+            const span = document.createElement('span');
+            span.innerText = 'EU TE AMO';
+            span.style.left = Math.random() * 100 + 'vw';
+            span.style.top = Math.random() * 100 + 'vh';
+            span.style.animationDuration = (20 + Math.random() * 30) + 's';
+            span.style.animationDelay = (Math.random() * 30) + 's';
+            fundo.appendChild(span);
+        }
+
+        // Criar gotas de sangue escorrendo
+        function criarGota() {
+            const gota = document.createElement('div');
+            gota.classList.add('gota');
+            gota.style.left = Math.random() * 100 + 'vw';
+            gota.style.animationDuration = (2 + Math.random() * 3) + 's';
+            document.body.appendChild(gota);
+            setTimeout(() => {
+                gota.remove();
+            }, 5000);
+        }
+
+        setInterval(criarGota, 200);
+    </script>
+
+    <!-- Texto principal -->
+    <h1>Juntos para sempre 💍🩸</h1>
+
+    <!-- Mensagem ao clicar -->
+    <div class="click-msg" id="clickMsg">VOCÊ É MEU</div>
+
+    <!-- Áudio -->
+    <div class="audio-container">
+        <audio controls autoplay loop>
+            <source src="https://voca.ro/1owxJPndDnmN" type="audio/mpeg" />
+            Seu navegador não suporta áudio.
+        </audio>
+        <p>Se o som não tocar, atualize seu navegador ou
