@@ -7,29 +7,6 @@ import (
 	"time"
 )
 
-var (
-	doIfLogicalOpNodes = map[string]struct{}{
-		"and": {},
-		"not": {},
-		"or":  {},
-	}
-	doIfFieldOpNodes = map[string]struct{}{
-		"equal":    {},
-		"contains": {},
-		"prefix":   {},
-		"suffix":   {},
-		"regex":    {},
-	}
-	doIfLengthCmpOpNodes = map[string]struct{}{
-		"byte_len_cmp":  {},
-		"array_len_cmp": {},
-	}
-	doIfTimestampCmpOpNodes = map[string]struct{}{
-		"ts_cmp": {},
-	}
-	doIfCheckTypeOpNode = "check_type"
-)
-
 func NewFromMap(m map[string]any, isRawJSON bool) (*Checker, error) {
 	root, err := extractDoIfNode(m, isRawJSON)
 	if err != nil {
@@ -39,6 +16,78 @@ func NewFromMap(m map[string]any, isRawJSON bool) (*Checker, error) {
 	return &Checker{
 		root: root,
 	}, nil
+}
+
+func extractDoIfNode(jsonNode map[string]any, isRawJSON bool) (Node, error) {
+	opName, err := getMust[string](jsonNode, "op")
+	if err != nil {
+		return nil, err
+	}
+
+	switch opName {
+	case "and", "or", "not":
+		return extractLogicalOpNode(opName, jsonNode, isRawJSON)
+	case
+		"equal",
+		"contains",
+		"prefix",
+		"suffix",
+		"regex":
+		return extractFieldOpNode(opName, jsonNode)
+	case
+		"byte_len_cmp",
+		"array_len_cmp":
+		return extractLengthCmpOpNode(opName, jsonNode, isRawJSON)
+	case "ts_cmp":
+		return extractTsCmpOpNode(opName, jsonNode)
+	case "check_type":
+		return extractCheckTypeOpNode(opName, jsonNode)
+	default:
+		return nil, fmt.Errorf("unknown op %q", opName)
+	}
+}
+
+var errFieldNotFound = errors.New("field not found")
+
+func get(node map[string]any, field string) (any, error) {
+	res, has := node[field]
+	if !has {
+		return nil, fmt.Errorf("%w: %s", errFieldNotFound, field)
+	}
+
+	return res, nil
+}
+
+var errTypeMismatch = errors.New("type mismatch")
+
+func must[T any](val any) (T, error) {
+	var def T
+
+	res, ok := val.(T)
+	if !ok {
+		return def, fmt.Errorf(
+			"%w; expected %T; got %T; value: %v",
+			errTypeMismatch, def, val, val,
+		)
+	}
+
+	return res, nil
+}
+
+func getMust[T any](node map[string]any, field string) (T, error) {
+	var def T
+
+	fieldNode, err := get(node, field)
+	if err != nil {
+		return def, err
+	}
+
+	val, err := must[T](fieldNode)
+	if err != nil {
+		return def, fmt.Errorf("field %q type check: %w", field, err)
+	}
+
+	return val, nil
 }
 
 func extractFieldOpVals(jsonNode map[string]any) ([][]byte, error) {
@@ -105,49 +154,6 @@ func extractFieldOpNode(opName string, jsonNode map[string]any) (Node, error) {
 	}
 
 	return result, nil
-}
-
-var errFieldNotFound = errors.New("field not found")
-
-func get(node map[string]any, field string) (any, error) {
-	res, has := node[field]
-	if !has {
-		return nil, fmt.Errorf("%w: %s", errFieldNotFound, field)
-	}
-
-	return res, nil
-}
-
-var errTypeMismatch = errors.New("type mismatch")
-
-func must[T any](val any) (T, error) {
-	var def T
-
-	res, ok := val.(T)
-	if !ok {
-		return def, fmt.Errorf(
-			"%w; expected %T; got %T; value: %v",
-			errTypeMismatch, def, val, val,
-		)
-	}
-
-	return res, nil
-}
-
-func getMust[T any](node map[string]any, field string) (T, error) {
-	var def T
-
-	fieldNode, err := get(node, field)
-	if err != nil {
-		return def, err
-	}
-
-	val, err := must[T](fieldNode)
-	if err != nil {
-		return def, fmt.Errorf("field %q type check: %w", field, err)
-	}
-
-	return val, nil
 }
 
 const (
@@ -334,25 +340,4 @@ func extractLogicalOpNode(opName string, jsonNode map[string]any, isRawJSON bool
 	}
 
 	return result, nil
-}
-
-func extractDoIfNode(jsonNode map[string]any, isRawJSON bool) (Node, error) {
-	opName, err := getMust[string](jsonNode, "op")
-	if err != nil {
-		return nil, err
-	}
-
-	if _, has := doIfLogicalOpNodes[opName]; has {
-		return extractLogicalOpNode(opName, jsonNode, isRawJSON)
-	} else if _, has := doIfFieldOpNodes[opName]; has {
-		return extractFieldOpNode(opName, jsonNode)
-	} else if _, has := doIfLengthCmpOpNodes[opName]; has {
-		return extractLengthCmpOpNode(opName, jsonNode, isRawJSON)
-	} else if _, has := doIfTimestampCmpOpNodes[opName]; has {
-		return extractTsCmpOpNode(opName, jsonNode)
-	} else if opName == doIfCheckTypeOpNode {
-		return extractCheckTypeOpNode(opName, jsonNode)
-	} else {
-		return nil, fmt.Errorf("unknown op %q", opName)
-	}
 }
