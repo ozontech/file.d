@@ -90,7 +90,7 @@ func extractFieldOpNode(opName string, jsonNode map[string]any) (Node, error) {
 	caseSensitiveNode, err := getMust[bool](jsonNode, "case_sensitive")
 	if err == nil {
 		caseSensitive = caseSensitiveNode
-	} else if errors.Is(err, errFieldTypeMismatch) {
+	} else if errors.Is(err, errTypeMismatch) {
 		return nil, err
 	}
 
@@ -109,20 +109,16 @@ func extractFieldOpNode(opName string, jsonNode map[string]any) (Node, error) {
 
 var errFieldNotFound = errors.New("field not found")
 
-func fieldNotFoundError(field string) error {
-	return fmt.Errorf("%w: %s", errFieldNotFound, field)
-}
-
-func get(node map[string]any, fieldName string) (any, error) {
-	res, has := node[fieldName]
+func get(node map[string]any, field string) (any, error) {
+	res, has := node[field]
 	if !has {
-		return nil, fieldNotFoundError(fieldName)
+		return nil, fmt.Errorf("%w: %s", errFieldNotFound, field)
 	}
 
 	return res, nil
 }
 
-var errFieldTypeMismatch = errors.New("field type mismatch")
+var errTypeMismatch = errors.New("type mismatch")
 
 func must[T any](val any) (T, error) {
 	var def T
@@ -131,22 +127,27 @@ func must[T any](val any) (T, error) {
 	if !ok {
 		return def, fmt.Errorf(
 			"%w; expected %T; got %T; value: %v",
-			errFieldTypeMismatch, def, val, val,
+			errTypeMismatch, def, val, val,
 		)
 	}
 
 	return res, nil
 }
 
-func getMust[T any](node map[string]any, fieldName string) (T, error) {
+func getMust[T any](node map[string]any, field string) (T, error) {
 	var def T
 
-	fieldNode, err := get(node, fieldName)
+	fieldNode, err := get(node, field)
 	if err != nil {
 		return def, err
 	}
 
-	return must[T](fieldNode)
+	val, err := must[T](fieldNode)
+	if err != nil {
+		return def, fmt.Errorf("field %q type check: %w", field, err)
+	}
+
+	return val, nil
 }
 
 const (
@@ -258,7 +259,7 @@ func extractTsCmpOpNode(_ string, jsonNode map[string]any) (Node, error) {
 	str, err := getMust[string](jsonNode, fieldNameFormat)
 	if err == nil {
 		format = str
-	} else if errors.Is(err, errFieldTypeMismatch) {
+	} else if errors.Is(err, errTypeMismatch) {
 		return nil, err
 	}
 
@@ -269,7 +270,7 @@ func extractTsCmpOpNode(_ string, jsonNode map[string]any) (Node, error) {
 		if err != nil {
 			return nil, fmt.Errorf("parse cmp value shift: %w", err)
 		}
-	} else if errors.Is(err, errFieldTypeMismatch) {
+	} else if errors.Is(err, errTypeMismatch) {
 		return nil, err
 	}
 
@@ -280,7 +281,7 @@ func extractTsCmpOpNode(_ string, jsonNode map[string]any) (Node, error) {
 		if err != nil {
 			return nil, fmt.Errorf("parse update interval: %w", err)
 		}
-	} else if errors.Is(err, errFieldTypeMismatch) {
+	} else if errors.Is(err, errTypeMismatch) {
 		return nil, err
 	}
 
