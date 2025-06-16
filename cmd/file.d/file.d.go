@@ -60,6 +60,7 @@ import (
 	_ "github.com/ozontech/file.d/plugin/output/kafka"
 	_ "github.com/ozontech/file.d/plugin/output/loki"
 	_ "github.com/ozontech/file.d/plugin/output/postgres"
+	_ "github.com/ozontech/file.d/plugin/output/prometheus"
 	_ "github.com/ozontech/file.d/plugin/output/s3"
 	_ "github.com/ozontech/file.d/plugin/output/splunk"
 	_ "github.com/ozontech/file.d/plugin/output/stdout"
