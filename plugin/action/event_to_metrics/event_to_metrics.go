@@ -56,7 +56,12 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 		object := elem.MutateToObject()
 
 		object.AddField("name").MutateToBytes([]byte(metric.Name))
-		object.AddField("value").MutateToInt(1)
+		if len(metric.Value) == 0 {
+			object.AddField("value").MutateToInt(1)
+		} else {
+			valueNode := event.Root.Dig(metric.Value).AsFloat()
+			object.AddField("value").MutateToFloat(valueNode)
+		}
 
 		if len(metric.Labels) > 0 {
 			labelsObject := object.AddField("labels").MutateToObject()
