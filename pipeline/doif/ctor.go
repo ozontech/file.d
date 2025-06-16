@@ -95,6 +95,38 @@ func getMust[T any](node map[string]any, field string) (T, error) {
 	return val, nil
 }
 
+const fieldNameCaseSensitive = "case_sensitive"
+
+func extractFieldOpNode(opName string, node map[string]any) (Node, error) {
+	var result Node
+	var err error
+
+	fieldPath, err := getMust[string](node, fieldNameField)
+	if err != nil {
+		return nil, err
+	}
+
+	caseSensitive := true
+	caseSensitiveNode, err := getMust[bool](node, fieldNameCaseSensitive)
+	if err == nil {
+		caseSensitive = caseSensitiveNode
+	} else if errors.Is(err, errTypeMismatch) {
+		return nil, err
+	}
+
+	vals, err := extractFieldOpVals(node)
+	if err != nil {
+		return nil, fmt.Errorf("extract field op values: %w", err)
+	}
+
+	result, err = NewFieldOpNode(opName, fieldPath, caseSensitive, vals)
+	if err != nil {
+		return nil, fmt.Errorf("init field op: %w", err)
+	}
+
+	return result, nil
+}
+
 const fieldNameValues = "values"
 
 func extractFieldOpVals(node map[string]any) ([][]byte, error) {
@@ -133,38 +165,6 @@ func extractFieldOpValsArrAny(values []any) ([][]byte, error) {
 	}
 
 	return vals, nil
-}
-
-const fieldNameCaseSensitive = "case_sensitive"
-
-func extractFieldOpNode(opName string, node map[string]any) (Node, error) {
-	var result Node
-	var err error
-
-	fieldPath, err := getMust[string](node, fieldNameField)
-	if err != nil {
-		return nil, err
-	}
-
-	caseSensitive := true
-	caseSensitiveNode, err := getMust[bool](node, fieldNameCaseSensitive)
-	if err == nil {
-		caseSensitive = caseSensitiveNode
-	} else if errors.Is(err, errTypeMismatch) {
-		return nil, err
-	}
-
-	vals, err := extractFieldOpVals(node)
-	if err != nil {
-		return nil, fmt.Errorf("extract field op values: %w", err)
-	}
-
-	result, err = NewFieldOpNode(opName, fieldPath, caseSensitive, vals)
-	if err != nil {
-		return nil, fmt.Errorf("init field op: %w", err)
-	}
-
-	return result, nil
 }
 
 const (
