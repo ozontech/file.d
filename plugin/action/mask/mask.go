@@ -249,7 +249,7 @@ func compileMask(m *Mask, logger *zap.Logger) {
 
 	if m.DoIfCheckerMap != nil {
 		var err error
-		m.DoIfChecker, err = doif.NewFromMap(m.DoIfCheckerMap, false)
+		m.DoIfChecker, err = doif.NewFromMap(m.DoIfCheckerMap)
 		if err != nil {
 			logger.Fatal("can't init do_if for mask", zap.Error(err))
 		}

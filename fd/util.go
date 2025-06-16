@@ -225,7 +225,7 @@ func extractDoIfChecker(actionJSON *simplejson.Json) (*doif.Checker, error) {
 		return nil, nil
 	}
 
-	return doif.NewFromMap(m, true)
+	return doif.NewFromMap(m)
 }
 
 func makeActionJSON(actionJSON *simplejson.Json) []byte {
