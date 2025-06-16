@@ -10,7 +10,7 @@ import (
 func NewFromMap(m map[string]any, isRawJSON bool) (*Checker, error) {
 	root, err := extractDoIfNode(m, isRawJSON)
 	if err != nil {
-		return nil, fmt.Errorf("failed to extract nodes: %w", err)
+		return nil, fmt.Errorf("extract nodes: %w", err)
 	}
 
 	return &Checker{
@@ -18,8 +18,13 @@ func NewFromMap(m map[string]any, isRawJSON bool) (*Checker, error) {
 	}, nil
 }
 
+const (
+	fieldNameOp    = "op"
+	fieldNameField = "field"
+)
+
 func extractDoIfNode(node map[string]any, isRawJSON bool) (Node, error) {
-	opName, err := getMust[string](node, "op")
+	opName, err := getMust[string](node, fieldNameOp)
 	if err != nil {
 		return nil, err
 	}
@@ -84,14 +89,16 @@ func getMust[T any](node map[string]any, field string) (T, error) {
 
 	val, err := must[T](fieldNode)
 	if err != nil {
-		return def, fmt.Errorf("field %q type check: %w", field, err)
+		return def, fmt.Errorf("field %q type assertion: %w", field, err)
 	}
 
 	return val, nil
 }
 
+const fieldNameValues = "values"
+
 func extractFieldOpVals(node map[string]any) ([][]byte, error) {
-	valuesRaw, err := get(node, "values")
+	valuesRaw, err := get(node, fieldNameValues)
 	if err != nil {
 		return nil, err
 	}
@@ -104,7 +111,9 @@ func extractFieldOpVals(node map[string]any) ([][]byte, error) {
 	case []any:
 		return extractFieldOpValsArrAny(values)
 	default:
-		return nil, fmt.Errorf(`unknown type of field "values": %T; value %v`, values, values)
+		return nil, fmt.Errorf(
+			"unknown type of field %q: %T; value %v",
+			fieldNameValues, values, values)
 	}
 }
 
@@ -118,7 +127,7 @@ func extractFieldOpValsArrAny(values []any) ([][]byte, error) {
 			vals = append(vals, []byte(valueStr))
 		} else {
 			return nil, fmt.Errorf(
-				`elem of array "values" type mismatch; expected string or nil; got %T; value: %v`,
+				"elem of array type mismatch; expected string or nil; got %T; value: %v",
 				value, value)
 		}
 	}
@@ -126,17 +135,19 @@ func extractFieldOpValsArrAny(values []any) ([][]byte, error) {
 	return vals, nil
 }
 
+const fieldNameCaseSensitive = "case_sensitive"
+
 func extractFieldOpNode(opName string, node map[string]any) (Node, error) {
 	var result Node
 	var err error
 
-	fieldPath, err := getMust[string](node, "field")
+	fieldPath, err := getMust[string](node, fieldNameField)
 	if err != nil {
 		return nil, err
 	}
 
 	caseSensitive := true
-	caseSensitiveNode, err := getMust[bool](node, "case_sensitive")
+	caseSensitiveNode, err := getMust[bool](node, fieldNameCaseSensitive)
 	if err == nil {
 		caseSensitive = caseSensitiveNode
 	} else if errors.Is(err, errTypeMismatch) {
@@ -145,19 +156,18 @@ func extractFieldOpNode(opName string, node map[string]any) (Node, error) {
 
 	vals, err := extractFieldOpVals(node)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("extract field op values: %w", err)
 	}
 
 	result, err = NewFieldOpNode(opName, fieldPath, caseSensitive, vals)
 	if err != nil {
-		return nil, fmt.Errorf("failed to init field op: %w", err)
+		return nil, fmt.Errorf("init field op: %w", err)
 	}
 
 	return result, nil
 }
 
 const (
-	fieldNameField    = "field"
 	fieldNameCmpOp    = "cmp_op"
 	fieldNameCmpValue = "value"
 )
@@ -282,7 +292,7 @@ func extractTsCmpOpNode(_ string, node map[string]any) (Node, error) {
 
 	updateInterval := defaultTsCmpValUpdateInterval
 	str, err = getMust[string](node, fieldNameUpdateInterval)
-	if str != "" {
+	if err == nil {
 		updateInterval, err = time.ParseDuration(str)
 		if err != nil {
 			return nil, fmt.Errorf("parse update interval: %w", err)
@@ -295,26 +305,28 @@ func extractTsCmpOpNode(_ string, node map[string]any) (Node, error) {
 }
 
 func extractCheckTypeOpNode(_ string, node map[string]any) (Node, error) {
-	fieldPath, err := getMust[string](node, "field")
+	fieldPath, err := getMust[string](node, fieldNameField)
 	if err != nil {
 		return nil, err
 	}
 
 	vals, err := extractFieldOpVals(node)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("extract check type op values: %w", err)
 	}
 
 	result, err := NewCheckTypeOpNode(fieldPath, vals)
 	if err != nil {
-		return nil, fmt.Errorf("failed to init check_type op: %w", err)
+		return nil, fmt.Errorf("init check_type op: %w", err)
 	}
 
 	return result, nil
 }
 
+const fieldNameOperands = "operands"
+
 func extractLogicalOpNode(opName string, node map[string]any, isRawJSON bool) (Node, error) {
-	rawOperands, err := getMust[[]any](node, "operands")
+	rawOperands, err := getMust[[]any](node, fieldNameOperands)
 	if err != nil {
 		return nil, err
 	}
@@ -329,14 +341,14 @@ func extractLogicalOpNode(opName string, node map[string]any, isRawJSON bool) (N
 
 		operand, err := extractDoIfNode(operandMap, isRawJSON)
 		if err != nil {
-			return nil, fmt.Errorf("failed to extract operand node for logical op %q", opName)
+			return nil, fmt.Errorf("extract operand node for logical op %q", opName)
 		}
 		operands = append(operands, operand)
 	}
 
 	result, err := NewLogicalNode(opName, operands)
 	if err != nil {
-		return nil, fmt.Errorf("failed to init logical node: %w", err)
+		return nil, fmt.Errorf("init logical node: %w", err)
 	}
 
 	return result, nil
