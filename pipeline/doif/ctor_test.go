@@ -604,5 +604,5 @@ func extractDoIfChecker(actionJSON *simplejson.Json) (*Checker, error) {
 		return nil, nil
 	}
 
-	return NewFromMap(m, true)
+	return NewFromMap(m)
 }

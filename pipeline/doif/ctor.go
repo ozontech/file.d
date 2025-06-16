@@ -7,8 +7,8 @@ import (
 	"time"
 )
 
-func NewFromMap(m map[string]any, isRawJSON bool) (*Checker, error) {
-	root, err := extractDoIfNode(m, isRawJSON)
+func NewFromMap(m map[string]any) (*Checker, error) {
+	root, err := extractDoIfNode(m)
 	if err != nil {
 		return nil, fmt.Errorf("extract nodes: %w", err)
 	}
@@ -23,7 +23,7 @@ const (
 	fieldNameField = "field"
 )
 
-func extractDoIfNode(node map[string]any, isRawJSON bool) (Node, error) {
+func extractDoIfNode(node map[string]any) (Node, error) {
 	opName, err := getMust[string](node, fieldNameOp)
 	if err != nil {
 		return nil, err
@@ -31,7 +31,7 @@ func extractDoIfNode(node map[string]any, isRawJSON bool) (Node, error) {
 
 	switch opName {
 	case "and", "or", "not":
-		return extractLogicalOpNode(opName, node, isRawJSON)
+		return extractLogicalOpNode(opName, node)
 	case
 		"equal",
 		"contains",
@@ -42,7 +42,7 @@ func extractDoIfNode(node map[string]any, isRawJSON bool) (Node, error) {
 	case
 		"byte_len_cmp",
 		"array_len_cmp":
-		return extractLengthCmpOpNode(opName, node, isRawJSON)
+		return extractLengthCmpOpNode(opName, node)
 	case "ts_cmp":
 		return extractTsCmpOpNode(opName, node)
 	case "check_type":
@@ -144,7 +144,7 @@ func extractFieldOpVals(node map[string]any) ([][]byte, error) {
 		return extractFieldOpValsArrAny(values)
 	default:
 		return nil, fmt.Errorf(
-			"unknown type of field %q: %T; value %v",
+			"unknown type of field %q: %T; value: %v",
 			fieldNameValues, values, values)
 	}
 }
@@ -172,7 +172,7 @@ const (
 	fieldNameCmpValue = "value"
 )
 
-func extractLengthCmpOpNode(opName string, node map[string]any, isRawJSON bool) (Node, error) {
+func extractLengthCmpOpNode(opName string, node map[string]any) (Node, error) {
 	fieldPath, err := getMust[string](node, fieldNameField)
 	if err != nil {
 		return nil, err
@@ -183,7 +183,7 @@ func extractLengthCmpOpNode(opName string, node map[string]any, isRawJSON bool) 
 		return nil, err
 	}
 
-	cmpValue, err := extractLengthCmpVal(node, isRawJSON)
+	cmpValue, err := extractLengthCmpVal(node)
 	if err != nil {
 		return nil, err
 	}
@@ -191,32 +191,26 @@ func extractLengthCmpOpNode(opName string, node map[string]any, isRawJSON bool) 
 	return NewLenCmpOpNode(opName, fieldPath, cmpOp, cmpValue)
 }
 
-func extractLengthCmpVal(node map[string]any, isRawJSON bool) (int, error) {
+func extractLengthCmpVal(node map[string]any) (int, error) {
 	fieldNode, err := get(node, fieldNameCmpValue)
 	if err != nil {
 		return 0, err
 	}
 
-	if isRawJSON {
-		cmpValueWrapped, err := must[json.Number](fieldNode)
+	switch value := fieldNode.(type) {
+	case json.Number:
+		cmpValue, err := value.Int64()
 		if err != nil {
 			return 0, err
 		}
-
-		cmpValue, err := cmpValueWrapped.Int64()
-		if err != nil {
-			return 0, err
-		}
-
 		return int(cmpValue), nil
+	case float64:
+		return int(value), nil
+	default:
+		return 0, fmt.Errorf(
+			"unknown type of field %q: %T; value: %v",
+			fieldNameCmpValue, value, value)
 	}
-
-	cmpValue, err := must[float64](fieldNode)
-	if err != nil {
-		return 0, err
-	}
-
-	return int(cmpValue), nil
 }
 
 const (
@@ -325,7 +319,7 @@ func extractCheckTypeOpNode(_ string, node map[string]any) (Node, error) {
 
 const fieldNameOperands = "operands"
 
-func extractLogicalOpNode(opName string, node map[string]any, isRawJSON bool) (Node, error) {
+func extractLogicalOpNode(opName string, node map[string]any) (Node, error) {
 	rawOperands, err := getMust[[]any](node, fieldNameOperands)
 	if err != nil {
 		return nil, err
@@ -339,7 +333,7 @@ func extractLogicalOpNode(opName string, node map[string]any, isRawJSON bool) (N
 			return nil, err
 		}
 
-		operand, err := extractDoIfNode(operandMap, isRawJSON)
+		operand, err := extractDoIfNode(operandMap)
 		if err != nil {
 			return nil, fmt.Errorf("extract operand node for logical op %q", opName)
 		}
