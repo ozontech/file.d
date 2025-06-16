@@ -18,30 +18,30 @@ func NewFromMap(m map[string]any, isRawJSON bool) (*Checker, error) {
 	}, nil
 }
 
-func extractDoIfNode(jsonNode map[string]any, isRawJSON bool) (Node, error) {
-	opName, err := getMust[string](jsonNode, "op")
+func extractDoIfNode(node map[string]any, isRawJSON bool) (Node, error) {
+	opName, err := getMust[string](node, "op")
 	if err != nil {
 		return nil, err
 	}
 
 	switch opName {
 	case "and", "or", "not":
-		return extractLogicalOpNode(opName, jsonNode, isRawJSON)
+		return extractLogicalOpNode(opName, node, isRawJSON)
 	case
 		"equal",
 		"contains",
 		"prefix",
 		"suffix",
 		"regex":
-		return extractFieldOpNode(opName, jsonNode)
+		return extractFieldOpNode(opName, node)
 	case
 		"byte_len_cmp",
 		"array_len_cmp":
-		return extractLengthCmpOpNode(opName, jsonNode, isRawJSON)
+		return extractLengthCmpOpNode(opName, node, isRawJSON)
 	case "ts_cmp":
-		return extractTsCmpOpNode(opName, jsonNode)
+		return extractTsCmpOpNode(opName, node)
 	case "check_type":
-		return extractCheckTypeOpNode(opName, jsonNode)
+		return extractCheckTypeOpNode(opName, node)
 	default:
 		return nil, fmt.Errorf("unknown op %q", opName)
 	}
@@ -90,8 +90,8 @@ func getMust[T any](node map[string]any, field string) (T, error) {
 	return val, nil
 }
 
-func extractFieldOpVals(jsonNode map[string]any) ([][]byte, error) {
-	valuesRaw, err := get(jsonNode, "values")
+func extractFieldOpVals(node map[string]any) ([][]byte, error) {
+	valuesRaw, err := get(node, "values")
 	if err != nil {
 		return nil, err
 	}
@@ -126,24 +126,24 @@ func extractFieldOpValsArrAny(values []any) ([][]byte, error) {
 	return vals, nil
 }
 
-func extractFieldOpNode(opName string, jsonNode map[string]any) (Node, error) {
+func extractFieldOpNode(opName string, node map[string]any) (Node, error) {
 	var result Node
 	var err error
 
-	fieldPath, err := getMust[string](jsonNode, "field")
+	fieldPath, err := getMust[string](node, "field")
 	if err != nil {
 		return nil, err
 	}
 
 	caseSensitive := true
-	caseSensitiveNode, err := getMust[bool](jsonNode, "case_sensitive")
+	caseSensitiveNode, err := getMust[bool](node, "case_sensitive")
 	if err == nil {
 		caseSensitive = caseSensitiveNode
 	} else if errors.Is(err, errTypeMismatch) {
 		return nil, err
 	}
 
-	vals, err := extractFieldOpVals(jsonNode)
+	vals, err := extractFieldOpVals(node)
 	if err != nil {
 		return nil, err
 	}
@@ -162,18 +162,18 @@ const (
 	fieldNameCmpValue = "value"
 )
 
-func extractLengthCmpOpNode(opName string, jsonNode map[string]any, isRawJSON bool) (Node, error) {
-	fieldPath, err := getMust[string](jsonNode, fieldNameField)
+func extractLengthCmpOpNode(opName string, node map[string]any, isRawJSON bool) (Node, error) {
+	fieldPath, err := getMust[string](node, fieldNameField)
 	if err != nil {
 		return nil, err
 	}
 
-	cmpOp, err := getMust[string](jsonNode, fieldNameCmpOp)
+	cmpOp, err := getMust[string](node, fieldNameCmpOp)
 	if err != nil {
 		return nil, err
 	}
 
-	cmpValue, err := extractLengthCmpVal(jsonNode, isRawJSON)
+	cmpValue, err := extractLengthCmpVal(node, isRawJSON)
 	if err != nil {
 		return nil, err
 	}
@@ -228,18 +228,18 @@ const (
 	defaultTsFormat               = "rfc3339nano"
 )
 
-func extractTsCmpOpNode(_ string, jsonNode map[string]any) (Node, error) {
-	fieldPath, err := getMust[string](jsonNode, fieldNameField)
+func extractTsCmpOpNode(_ string, node map[string]any) (Node, error) {
+	fieldPath, err := getMust[string](node, fieldNameField)
 	if err != nil {
 		return nil, err
 	}
 
-	cmpOp, err := getMust[string](jsonNode, fieldNameCmpOp)
+	cmpOp, err := getMust[string](node, fieldNameCmpOp)
 	if err != nil {
 		return nil, err
 	}
 
-	rawCmpValue, err := getMust[string](jsonNode, fieldNameCmpValue)
+	rawCmpValue, err := getMust[string](node, fieldNameCmpValue)
 	if err != nil {
 		return nil, err
 	}
@@ -262,7 +262,7 @@ func extractTsCmpOpNode(_ string, jsonNode map[string]any) (Node, error) {
 	}
 
 	format := defaultTsFormat
-	str, err := getMust[string](jsonNode, fieldNameFormat)
+	str, err := getMust[string](node, fieldNameFormat)
 	if err == nil {
 		format = str
 	} else if errors.Is(err, errTypeMismatch) {
@@ -270,7 +270,7 @@ func extractTsCmpOpNode(_ string, jsonNode map[string]any) (Node, error) {
 	}
 
 	cmpValueShift := time.Duration(0)
-	str, err = getMust[string](jsonNode, fieldNameCmpValueShift)
+	str, err = getMust[string](node, fieldNameCmpValueShift)
 	if err == nil {
 		cmpValueShift, err = time.ParseDuration(str)
 		if err != nil {
@@ -281,7 +281,7 @@ func extractTsCmpOpNode(_ string, jsonNode map[string]any) (Node, error) {
 	}
 
 	updateInterval := defaultTsCmpValUpdateInterval
-	str, err = getMust[string](jsonNode, fieldNameUpdateInterval)
+	str, err = getMust[string](node, fieldNameUpdateInterval)
 	if str != "" {
 		updateInterval, err = time.ParseDuration(str)
 		if err != nil {
@@ -294,13 +294,13 @@ func extractTsCmpOpNode(_ string, jsonNode map[string]any) (Node, error) {
 	return NewTsCmpOpNode(fieldPath, format, cmpOp, cmpMode, cmpValue, cmpValueShift, updateInterval)
 }
 
-func extractCheckTypeOpNode(_ string, jsonNode map[string]any) (Node, error) {
-	fieldPath, err := getMust[string](jsonNode, "field")
+func extractCheckTypeOpNode(_ string, node map[string]any) (Node, error) {
+	fieldPath, err := getMust[string](node, "field")
 	if err != nil {
 		return nil, err
 	}
 
-	vals, err := extractFieldOpVals(jsonNode)
+	vals, err := extractFieldOpVals(node)
 	if err != nil {
 		return nil, err
 	}
@@ -313,8 +313,8 @@ func extractCheckTypeOpNode(_ string, jsonNode map[string]any) (Node, error) {
 	return result, nil
 }
 
-func extractLogicalOpNode(opName string, jsonNode map[string]any, isRawJSON bool) (Node, error) {
-	rawOperands, err := getMust[[]any](jsonNode, "operands")
+func extractLogicalOpNode(opName string, node map[string]any, isRawJSON bool) (Node, error) {
+	rawOperands, err := getMust[[]any](node, "operands")
 	if err != nil {
 		return nil, err
 	}
