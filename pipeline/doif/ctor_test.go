@@ -398,6 +398,17 @@ func Test_extractDoIfChecker(t *testing.T) {
 			wantErr: true,
 		},
 		{
+			name: "error_invalid_case_sensitive_type",
+			args: args{
+				cfgStr: `{
+					"op": "equal",
+					"field": "a",
+					"values": ["abc"],
+					"case_sensitive": "not bool"}`,
+			},
+			wantErr: true,
+		},
+		{
 			name: "error_invalid_logical_op",
 			args: args{
 				cfgStr: `{"op": "or"}`,
@@ -492,6 +503,45 @@ func Test_extractDoIfChecker(t *testing.T) {
 			wantErr: true,
 		},
 		{
+			name: "error_ts_cmp_op_invalid_format_type",
+			args: args{
+				cfgStr: `{
+					"op": "ts_cmp",
+					"field": "timestamp",
+					"cmp_op": "lt",
+					"format": 1000,
+					"value": "now"}`,
+			},
+			wantErr: true,
+		},
+		{
+			name: "error_ts_cmp_op_invalid_value_shift_type",
+			args: args{
+				cfgStr: `{
+					"op": "ts_cmp",
+					"field": "timestamp",
+					"cmp_op": "lt",
+					"value": "2009-11-10T23:00:00Z",
+					"value_shift": 1000,
+					"format": "2006-01-02T15:04:05Z07:00",
+					"update_interval": "15s"}`,
+			},
+			wantErr: true,
+		},
+		{
+			name: "error_ts_cmp_op_invalid_update_interval_type",
+			args: args{
+				cfgStr: `{
+					"op": "ts_cmp",
+					"field": "timestamp",
+					"cmp_op": "lt",
+					"value": "2009-11-10T23:00:00Z",
+					"format": "2006-01-02T15:04:05Z07:00",
+					"update_interval": false}`,
+			},
+			wantErr: true,
+		},
+		{
 			name: "error_ts_cmp_op_cmp_op_is_not_string",
 			args: args{
 				cfgStr: `{"op":"ts_cmp","field":"timestamp","cmp_op":123}`,
@@ -555,7 +605,7 @@ func Test_extractDoIfChecker(t *testing.T) {
 				cfgStr: `{
 					"op": "check_type",
 					"field": "log",
-					"values": ["uknown_type"]
+					"values": ["unknown_type"]
 				}`,
 			},
 			wantErr: true,
