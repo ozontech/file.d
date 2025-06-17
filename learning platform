@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Integrated Online Learning Platform</title>
+  <style>
+    :root {
+      --bg-color: #ffffff;
+      --text-color: #000000;
+    }
+    [data-theme="dark"] {
+      --bg-color: #1a1a1a;
+      --text-color: #f0f0f0;
+    }
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background-color: var(--bg-color);
+      color: var(--text-color);
+      margin: 0;
+      transition: all 0.3s ease;
+    }
+    header {
+      background-color: #4CAF50;
+      color: white;
+      padding: 1rem;
+      text-align: center;
+    }
+    .container {
+      display: grid;
+      grid-template-columns: 1fr 3fr;
+      gap: 1rem;
+      padding: 1rem;
+    }
+    nav {
+      background: #f4f4f4;
+      padding: 1rem;
+    }
+    main {
+      padding: 1rem;
+    }
+    .course {
+      background: #e0e0e0;
+      margin: 0.5rem 0;
+      padding: 1rem;
+      border-radius: 8px;
+      cursor: move;
+    }
+    .dropzone {
+      min-height: 100px;
+      border: 2px dashed #ccc;
+      padding: 1rem;
+      margin-top: 1rem;
+    }
+    button {
+      margin: 1rem 0;
+      padding: 0.5rem 1rem;
+      background: #222;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    video, audio {
+      margin-top: 1rem;
+      width: 100%;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Integrated Online Learning Platform</h1>
+  <button onclick="toggleDarkMode()">Toggle Dark Mode</button>
+</header>
+
+<div class="container">
+  <nav>
+    <h3>Navigation</h3>
+    <ul>
+      <li>Dashboard</li>
+      <li>Courses</li>
+      <li>Profile</li>
+      <li>Logout</li>
+    </ul>
+  </nav>
+
+  <main>
+    <section>
+      <h2>Available Courses</h2>
+      <div class="course" draggable="true" ondragstart="drag(event)" id="course1">HTML & CSS Basics</div>
+      <div class="course" draggable="true" ondragstart="drag(event)" id="course2">JavaScript Essentials</div>
+      <div class="course" draggable="true" ondragstart="drag(event)" id="course3">ReactJS Fundamentals</div>
+    </section>
+
+    <section class="dropzone" ondrop="drop(event)" ondragover="allowDrop(event)">
+      <h3>My Learning List</h3>
+    </section>
+
+    <section>
+      <h3>Sample Video Lesson</h3>
+      <video controls>
+        <source src="sample-video.mp4" type="video/mp4">
+        Your browser does not support the video tag.
+      </video>
+
+      <h3>Podcast</h3>
+      <audio controls>
+        <source src="sample-audio.mp3" type="audio/mpeg">
+        Your browser does not support the audio tag.
+      </audio>
+    </section>
+  </main>
+</div>
+
+<script>
+  function allowDrop(ev) {
+    ev.preventDefault();
+  }
+
+  function drag(ev) {
+    ev.dataTransfer.setData("text", ev.target.id);
+  }
+
+  function drop(ev) {
+    ev.preventDefault();
+    var data = ev.dataTransfer.getData("text");
+    ev.target.appendChild(document.getElementById(data));
+  }
+
+  function toggleDarkMode() {
+    const body = document.body;
+    const currentTheme = body.getAttribute("data-theme");
+    if (currentTheme === "dark") {
+      body.removeAttribute("data-theme");
+    } else {
+      body.setAttribute("data-theme", "dark");
+    }
+  }
+</script>
+
+</body>
+</html>
