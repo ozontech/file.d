@@ -84,6 +84,24 @@ func get[T any](node map[string]any, field string) (T, error) {
 	return result, nil
 }
 
+func anyToInt(v any) (int, error) {
+	switch vNum := v.(type) {
+	case int:
+		return vNum, nil
+	case float64:
+		return int(vNum), nil
+	case json.Number:
+		vInt64, err := vNum.Int64()
+		if err != nil {
+			return 0, err
+		}
+		return int(vInt64), nil
+	default:
+		return 0, fmt.Errorf(
+			"not convertable to int; unexpected type %T; value: %v", v, v)
+	}
+}
+
 const fieldNameCaseSensitive = "case_sensitive"
 
 func extractFieldOpNode(opName string, node map[string]any) (Node, error) {
@@ -172,34 +190,17 @@ func extractLengthCmpOpNode(opName string, node map[string]any) (Node, error) {
 		return nil, err
 	}
 
-	cmpValue, err := extractLengthCmpVal(node)
+	cmpValueRaw, err := getAny(node, fieldNameCmpValue)
+	if err != nil {
+		return nil, err
+	}
+
+	cmpValue, err := anyToInt(cmpValueRaw)
 	if err != nil {
 		return nil, err
 	}
 
 	return NewLenCmpOpNode(opName, fieldPath, cmpOp, cmpValue)
-}
-
-func extractLengthCmpVal(node map[string]any) (int, error) {
-	fieldNode, err := getAny(node, fieldNameCmpValue)
-	if err != nil {
-		return 0, err
-	}
-
-	switch value := fieldNode.(type) {
-	case json.Number:
-		cmpValue, err := value.Int64()
-		if err != nil {
-			return 0, err
-		}
-		return int(cmpValue), nil
-	case float64:
-		return int(value), nil
-	default:
-		return 0, fmt.Errorf(
-			"unknown type of field %q: %T; value: %v",
-			fieldNameCmpValue, value, value)
-	}
 }
 
 const (
