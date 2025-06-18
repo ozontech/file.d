@@ -2,7 +2,9 @@ package prometheus
 
 import (
 	"context"
-	"errors"
+	"fmt"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/castai/promwrite"
@@ -20,8 +22,6 @@ import (
 /*{ introduction
 It sends the logs batches to Loki using HTTP API.
 }*/
-
-var errUnixNanoFormat = errors.New("please send time in UnixNano format or add a convert_date action")
 
 const (
 	outPluginType = "prometheus"
@@ -194,6 +194,8 @@ type Plugin struct {
 
 	// plugin metrics
 	sendErrorMetric *prometheus.CounterVec
+
+	collector *sync.Map
 }
 
 func init() {
@@ -213,6 +215,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.logger = params.Logger.Desugar()
 	p.avgEventSize = params.PipelineSettings.AvgEventSize
 	p.registerMetrics(params.MetricCtl)
+	p.collector = new(sync.Map)
 
 	p.prepareClient()
 
@@ -313,6 +316,10 @@ func (p *Plugin) send(root *insaneJSON.Root) error {
 		name := nameNode.AsString()
 		nameNode.Suicide()
 
+		typeNode := msg.Dig("type")
+		metricType := typeNode.AsString()
+		typeNode.Suicide()
+
 		timestampNode := msg.Dig("timestamp")
 		timestamp := timestampNode.AsInt64()
 		timestampNode.Suicide()
@@ -337,6 +344,15 @@ func (p *Plugin) send(root *insaneJSON.Root) error {
 			})
 		}
 
+		if metricType == "counter" {
+			labelsKeys := labelsToKey(labels)
+			prevValue, ok := p.collector.Load(labelsKeys)
+			if ok {
+				value += prevValue.(float64)
+			}
+			p.collector.Store(labelsKeys, value)
+		}
+
 		logLine := promwrite.TimeSeries{
 			Labels: labels,
 			Sample: promwrite.Sample{
@@ -350,7 +366,23 @@ func (p *Plugin) send(root *insaneJSON.Root) error {
 
 	_, err := p.client.Write(context.Background(), &promwrite.WriteRequest{TimeSeries: values})
 
+	if err != nil {
+		// TODO: add metrics
+		if strings.Contains(err.Error(), "out of order sample") || strings.Contains(err.Error(), "duplicate sample for") {
+			p.logger.Warn("can't send data to Prometheus", zap.Error(err))
+			return nil
+		}
+	}
+
 	return err
+}
+
+func labelsToKey(labels []promwrite.Label) string {
+	var b strings.Builder
+	for _, l := range labels {
+		fmt.Fprintf(&b, "%s=%s,", l.Name, l.Value)
+	}
+	return b.String()
 }
 
 func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
