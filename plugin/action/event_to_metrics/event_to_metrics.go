@@ -44,6 +44,7 @@ type Config struct {
 
 type Metric struct {
 	Name   string            `json:"name"`
+	Type   string            `json:"type"`
 	Value  string            `json:"value"`
 	Labels map[string]string `json:"labels"`
 }
@@ -101,6 +102,7 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 		object := elem.MutateToObject()
 
 		object.AddField("name").MutateToBytes([]byte(metric.Name))
+		object.AddField("type").MutateToBytes([]byte(metric.Type))
 		object.AddField("timestamp").MutateToInt64(ts.UnixNano())
 
 		if len(metric.Value) == 0 {
