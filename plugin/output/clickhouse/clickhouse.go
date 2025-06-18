@@ -204,6 +204,7 @@ type Config struct {
 	// > * **IPv4**, **IPv6**
 	// > * **LowCardinality(String)**
 	// > * **Array(String)**
+	// > * **Map(String,String)**
 	// >
 	// > If file.d fails convert JSON to the correct data type for Clickhouse, it will log **sampled** errors.
 	// >

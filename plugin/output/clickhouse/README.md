@@ -93,6 +93,7 @@ or Unix timestamp format when attempting to parse it. Unix timestamp has some re
 * **IPv4**, **IPv6**
 * **LowCardinality(String)**
 * **Array(String)**
+* **Map(String,String)**
 
 If file.d fails convert JSON to the correct data type for Clickhouse, it will log **sampled** errors.
 

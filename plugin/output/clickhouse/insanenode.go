@@ -30,6 +30,7 @@ type InsaneNode interface {
 	AsIPv4() (proto.IPv4, error)
 	AsIPv6() (proto.IPv6, error)
 	AsTime(proto.Precision) (time.Time, error)
+	AsMapStringString() (map[string]string, error)
 
 	IsNull() bool
 }
@@ -114,6 +115,34 @@ func (s StrictNode) AsStringArray() ([]string, error) {
 		}
 	}
 	return vals, nil
+}
+
+func (s StrictNode) AsMapStringString() (map[string]string, error) {
+	if s.StrictNode == nil || s.IsNull() {
+		return nil, nil
+	}
+
+	fields, err := s.AsFields()
+	if err != nil {
+		return nil, err
+	}
+
+	m := make(map[string]string)
+	for _, f := range fields {
+		k := f.AsString()
+		vNode := f.AsFieldValue()
+		if vNode == nil || vNode.IsNull() {
+			m[k] = ""
+			continue
+		}
+		v, err := vNode.MutateToStrict().AsString()
+		if err != nil {
+			return nil, err
+		}
+		m[k] = v
+	}
+
+	return m, nil
 }
 
 type NonStrictNode struct {
@@ -217,6 +246,21 @@ func (n NonStrictNode) AsTime(prec proto.Precision) (time.Time, error) {
 	return t, nil
 }
 
+func (n NonStrictNode) AsMapStringString() (map[string]string, error) {
+	if n.Node == nil || n.Node.IsNull() || !n.IsObject() {
+		return nil, nil
+	}
+
+	m := make(map[string]string)
+	for _, f := range n.AsFields() {
+		k := f.AsString()
+		v := nonStrictAsString(f.AsFieldValue())
+		m[k] = v
+	}
+
+	return m, nil
+}
+
 // ZeroValueNode returns a null-value for all called methods.
 // It is usually used to insert a zero-value into a column
 // if the field type of the event does not match the column type.
@@ -272,6 +316,10 @@ func (z ZeroValueNode) AsTime(proto.Precision) (time.Time, error) {
 
 func (z ZeroValueNode) IsNull() bool {
 	return false
+}
+
+func (z ZeroValueNode) AsMapStringString() (map[string]string, error) {
+	return nil, nil
 }
 
 func nonStrictAsString(node *insaneJSON.Node) string {
