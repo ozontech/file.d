@@ -194,3 +194,57 @@ func BenchmarkMetaTemplater_Render(b *testing.B) {
 		}
 	}
 }
+
+func TestGenerateCacheKey(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    map[string]any
+		expected string
+	}{
+		{
+			name:     "empty map",
+			input:    map[string]any{},
+			expected: "",
+		},
+		{
+			name: "string and int",
+			input: map[string]any{
+				"topic":     "topic1",
+				"partition": 2,
+			},
+			expected: "topic:topic1|partition:2",
+		},
+		{
+			name: "int32 && int64",
+			input: map[string]any{
+				"topic":     "topic1",
+				"partition": int32(2),
+				"offset":    int64(123456789),
+			},
+			expected: "topic:topic1|partition:2|offset:123456789",
+		},
+		{
+			name: "float",
+			input: map[string]any{
+				"size": float32(2.0),
+			},
+			expected: "size:2.000000",
+		},
+		{
+			name: "bool",
+			input: map[string]any{
+				"is": true,
+			},
+			expected: "is:true",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := generateCacheKey(tt.input)
+			if got != tt.expected {
+				t.Errorf("generateCacheKey() = %v, want %v", got, tt.expected)
+			}
+		})
+	}
+}
