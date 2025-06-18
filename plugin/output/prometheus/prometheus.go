@@ -313,9 +313,9 @@ func (p *Plugin) send(root *insaneJSON.Root) error {
 		name := nameNode.AsString()
 		nameNode.Suicide()
 
-		// timestampNode := msg.Dig("timestamp")
-		// timestamp := timestampNode.AsString()
-		// timestampNode.Suicide()
+		timestampNode := msg.Dig("timestamp")
+		timestamp := timestampNode.AsInt64()
+		timestampNode.Suicide()
 
 		valueNode := msg.Dig("value")
 		value := valueNode.AsFloat()
@@ -340,7 +340,7 @@ func (p *Plugin) send(root *insaneJSON.Root) error {
 		logLine := promwrite.TimeSeries{
 			Labels: labels,
 			Sample: promwrite.Sample{
-				Time:  time.Now(),
+				Time:  time.Unix(0, timestamp),
 				Value: value,
 			},
 		}
