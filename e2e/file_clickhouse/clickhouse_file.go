@@ -46,26 +46,26 @@ func (c *Config) Configure(t *testing.T, conf *cfg.Config, pipelineName string) 
 	err = conn.Do(c.ctx, ch.Query{
 		Body: `CREATE TABLE IF NOT EXISTS test_table_insert
 		(
-		    c1 String,
-		    c2 Int8,
-		    c3 Int16,
-		    c4 Nullable(Int16),
-		    c5 Nullable(String),
-		    level Enum8('error'=1, 'warn'=2, 'info'=3, 'debug'=4),
-		    ipv4 Nullable(IPv4),
-		    ipv6 Nullable(IPv6),
-		    ts DateTime,
-		    ts_with_tz DateTime('Europe/Moscow'),
-		    ts64 DateTime64(3),
-		    ts64_auto DateTime64(9, 'UTC'),
-		    ts_rfc3339nano DateTime64(9),
-		    f32 Float32,
-		    f64 Float64,
-		    lc_str LowCardinality(String),
-		    str_arr Array(String),
+			c1 String,
+			c2 Int8,
+			c3 Int16,
+			c4 Nullable(Int16),
+			c5 Nullable(String),
+			level Enum8('error'=1, 'warn'=2, 'info'=3, 'debug'=4),
+			ipv4 Nullable(IPv4),
+			ipv6 Nullable(IPv6),
+			ts DateTime,
+			ts_with_tz DateTime('Europe/Moscow'),
+			ts64 DateTime64(3),
+			ts64_auto DateTime64(9, 'UTC'),
+			ts_rfc3339nano DateTime64(9),
+			f32 Float32,
+			f64 Float64,
+			lc_str LowCardinality(String),
+			str_arr Array(String),
 			map_str_str Map(String, String),
-		    uuid UUID,
-		    uuid_nullable Nullable(UUID),
+			uuid UUID,
+			uuid_nullable Nullable(UUID),
 			created_at DateTime64(6, 'UTC') DEFAULT now()
 		) ENGINE = Memory`,
 	})
@@ -82,25 +82,22 @@ func (c *Config) Configure(t *testing.T, conf *cfg.Config, pipelineName string) 
 	c.sampleTime = time.Now()
 	c.samples = []Sample{
 		{
-			C1:       json.RawMessage(`"1"`),
-			C2:       2,
-			C3:       3,
-			C4:       proto.NewNullable(int16(4)),
-			C5:       proto.Null[string](),
-			Level:    3,
-			IPv4:     proto.NewNullable(proto.ToIPv4(netip.MustParseAddr("127.0.0.1"))),
-			IPv6:     proto.NewNullable(proto.ToIPv6(netip.MustParseAddr("0000:0000:0000:0000:0000:0000:0000:0001"))),
-			TS:       c.sampleTime,
-			TSWithTZ: c.sampleTime,
-			TS64:     c.sampleTime,
-			F32:      123.45,
-			F64:      0.6789,
-			LcStr:    "0558cee0-dd11-4304-9a15-1ad53d151fed",
-			StrArr:   &[]string{"improve", "error handling"},
-			MapStrStr: map[string]string{
-				"key1": "val1",
-				"key2": "val2",
-			},
+			C1:           json.RawMessage(`"1"`),
+			C2:           2,
+			C3:           3,
+			C4:           proto.NewNullable(int16(4)),
+			C5:           proto.Null[string](),
+			Level:        3,
+			IPv4:         proto.NewNullable(proto.ToIPv4(netip.MustParseAddr("127.0.0.1"))),
+			IPv6:         proto.NewNullable(proto.ToIPv6(netip.MustParseAddr("0000:0000:0000:0000:0000:0000:0000:0001"))),
+			TS:           c.sampleTime,
+			TSWithTZ:     c.sampleTime,
+			TS64:         c.sampleTime,
+			F32:          123.45,
+			F64:          0.6789,
+			LcStr:        "0558cee0-dd11-4304-9a15-1ad53d151fed",
+			StrArr:       &[]string{"improve", "error handling"},
+			MapStrStr:    map[string]string{"key1": "val1", "key2": "val2"},
 			UUID:         uuid.New(),
 			UUIDNullable: uuid.NullUUID{UUID: uuid.New(), Valid: true},
 		},
@@ -273,7 +270,7 @@ func (c *Config) Validate(t *testing.T) {
 				}
 
 				if len(sample.MapStrStr) == 0 {
-					a.Equal(map[string]string(nil), mapStrStr.Row(i))
+					a.Equal(map[string]string{}, mapStrStr.Row(i))
 				} else {
 					a.Equal(sample.MapStrStr, mapStrStr.Row(i))
 				}
