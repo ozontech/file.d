@@ -103,17 +103,19 @@ type symlinkInfo struct {
 type metricCollection struct {
 	possibleOffsetCorruptionMetric prometheus.Counter
 	errorOpenFileMetric            prometheus.Counter
+	invalidStreamsCountMetric      prometheus.Counter
 	notifyChannelLengthMetric      prometheus.Gauge
 	numberOfCurrentJobsMetric      prometheus.Gauge
 }
 
 func newMetricCollection(
-	possibleOffsetCorruptionMetric, errorOpenFileMetric prometheus.Counter,
+	possibleOffsetCorruptionMetric, errorOpenFileMetric, invalidStreamsCountMetric prometheus.Counter,
 	notifyChannelLengthMetric prometheus.Gauge, numberOfCurrentJobsMetric prometheus.Gauge,
 ) *metricCollection {
 	return &metricCollection{
 		possibleOffsetCorruptionMetric: possibleOffsetCorruptionMetric,
 		errorOpenFileMetric:            errorOpenFileMetric,
+		invalidStreamsCountMetric:      invalidStreamsCountMetric,
 		notifyChannelLengthMetric:      notifyChannelLengthMetric,
 		numberOfCurrentJobsMetric:      numberOfCurrentJobsMetric,
 	}
@@ -122,7 +124,7 @@ func newMetricCollection(
 func NewJobProvider(config *Config, metrics *metricCollection, sugLogger *zap.SugaredLogger) *jobProvider {
 	jp := &jobProvider{
 		config:   config,
-		offsetDB: newOffsetDB(config.OffsetsFile, config.OffsetsFileTmp),
+		offsetDB: newOffsetDB(config.OffsetsFile, config.OffsetsFileTmp, newOffsetDbMetricCollection(metrics.invalidStreamsCountMetric)),
 
 		jobs:     make(map[pipeline.SourceID]*Job, config.MaxFiles),
 		jobsDone: atomic.NewInt32(0),

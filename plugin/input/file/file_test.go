@@ -15,12 +15,14 @@ import (
 	"time"
 
 	"github.com/alecthomas/units"
+	"github.com/prometheus/client_golang/prometheus"
 	uuid "github.com/satori/go.uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/atomic"
 
 	"github.com/ozontech/file.d/logger"
+	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/test"
 )
@@ -339,7 +341,11 @@ func getInodeByFile(file string) uint64 {
 }
 
 func assertOffsetsAreEqual(t *testing.T, expectedContent string, actualContent string) {
-	offsetDB := newOffsetDB("", "")
+	ctl := metric.NewCtl("test", prometheus.NewRegistry())
+	metrics := newOffsetDbMetricCollection(
+		ctl.RegisterCounter("worker1", "help_test"),
+	)
+	offsetDB := newOffsetDB("", "", metrics)
 	offExpected, err := offsetDB.parse(expectedContent)
 	require.NoError(t, err)
 	offActual, err := offsetDB.parse(actualContent)

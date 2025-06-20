@@ -10,6 +10,7 @@ import (
 
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/atomic"
 )
 
@@ -21,6 +22,9 @@ type offsetDB struct {
 	buf            []byte
 	mu             *sync.Mutex
 	reloadCh       chan bool
+
+	// offset metrics
+	invalidStreamsCountMetric prometheus.Counter
 }
 
 type inodeOffsets struct {
@@ -34,15 +38,26 @@ type (
 	fpOffsets      map[pipeline.SourceID]*inodeOffsets
 )
 
-func newOffsetDB(curOffsetsFile string, tmpOffsetsFile string) *offsetDB {
+type offsetDbMetricCollection struct {
+	invalidStreamsCountMetric prometheus.Counter
+}
+
+func newOffsetDbMetricCollection(invalidStreamsCountMetric prometheus.Counter) *offsetDbMetricCollection {
+	return &offsetDbMetricCollection{
+		invalidStreamsCountMetric: invalidStreamsCountMetric,
+	}
+}
+
+func newOffsetDB(curOffsetsFile string, tmpOffsetsFile string, metrics *offsetDbMetricCollection) *offsetDB {
 	return &offsetDB{
-		curOffsetsFile: curOffsetsFile,
-		tmpOffsetsFile: tmpOffsetsFile,
-		mu:             &sync.Mutex{},
-		savesTotal:     &atomic.Int64{},
-		buf:            make([]byte, 0, 65536),
-		jobsSnapshot:   make([]*Job, 0),
-		reloadCh:       make(chan bool),
+		curOffsetsFile:            curOffsetsFile,
+		tmpOffsetsFile:            tmpOffsetsFile,
+		mu:                        &sync.Mutex{},
+		savesTotal:                &atomic.Int64{},
+		buf:                       make([]byte, 0, 65536),
+		jobsSnapshot:              make([]*Job, 0),
+		reloadCh:                  make(chan bool),
+		invalidStreamsCountMetric: metrics.invalidStreamsCountMetric,
 	}
 }
 
@@ -150,6 +165,12 @@ func (o *offsetDB) parseStreams(content string, streams streamsOffsets) (string,
 		if pos < 0 {
 			return "", fmt.Errorf("wrong offsets format, no separator %q", line)
 		}
+
+		if line[pos+1] == ':' {
+			logger.Warnf("invalid stream name: %s, skipping stream", line[4:pos+2])
+			continue
+		}
+
 		stream := pipeline.StreamName(line[4:pos])
 		if len(stream) == 0 {
 			return "", fmt.Errorf("wrong offsets format, empty stream, %s", content)
@@ -236,6 +257,10 @@ func (o *offsetDB) save(jobs map[pipeline.SourceID]*Job, mu *sync.RWMutex) {
 
 		o.buf = append(o.buf, "  streams:\n"...)
 		for _, strOff := range job.offsets {
+			if strOff.Stream[len(strOff.Stream)-1] == ':' {
+				o.invalidStreamsCountMetric.Inc()
+				continue
+			}
 			o.buf = append(o.buf, "    "...)
 			o.buf = append(o.buf, string(strOff.Stream)...)
 			o.buf = append(o.buf, ": "...)

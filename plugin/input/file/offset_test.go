@@ -6,7 +6,9 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/atomic"
@@ -25,7 +27,11 @@ func TestParseOffsets(t *testing.T) {
   streams:
     stderr: 300
 `
-	offsetDB := newOffsetDB("", "")
+	ctl := metric.NewCtl("test", prometheus.NewRegistry())
+	metrics := newOffsetDbMetricCollection(
+		ctl.RegisterCounter("worker1", "help_test"),
+	)
+	offsetDB := newOffsetDB("", "", metrics)
 	offsets, err := offsetDB.parse(data)
 	require.NoError(t, err)
 
@@ -105,9 +111,13 @@ func TestParallelOffsetsSave(t *testing.T) {
 	count := 100
 	wg := sync.WaitGroup{}
 	wg.Add(count)
+	ctl := metric.NewCtl("test", prometheus.NewRegistry())
 	for range count {
+		metrics := newOffsetDbMetricCollection(
+			ctl.RegisterCounter("worker1", "help_test"),
+		)
 		go func() {
-			offsetDB := newOffsetDB("tests-offsets", "tests-offsets.tmp")
+			offsetDB := newOffsetDB("tests-offsets", "tests-offsets.tmp", metrics)
 			_, _ = offsetDB.parse(data)
 			offsetDB.save(jobs, rwmu)
 			wg.Done()

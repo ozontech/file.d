@@ -4,6 +4,8 @@ import (
 	"os"
 	"testing"
 
+	"github.com/ozontech/file.d/metric"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -73,7 +75,11 @@ func Test_deleteOneOffsetByField(t *testing.T) {
 				errR := os.Remove(fname)
 				require.NoError(t, errR)
 			}()
-			o := newOffsetDB(fname, "")
+			ctl := metric.NewCtl("test", prometheus.NewRegistry())
+			metrics := newOffsetDbMetricCollection(
+				ctl.RegisterCounter("worker1", "help_test"),
+			)
+			o := newOffsetDB(fname, "", metrics)
 
 			deleteOneOffsetByField(o, tt.fieldName, tt.fieldVal)
 

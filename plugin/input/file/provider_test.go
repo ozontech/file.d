@@ -34,8 +34,9 @@ func TestRefreshSymlinkOnBrokenLink(t *testing.T) {
 	metrics := newMetricCollection(
 		ctl.RegisterCounter("worker1", "help_test"),
 		ctl.RegisterCounter("worker2", "help_test"),
-		ctl.RegisterGauge("worker3", "help_test"),
+		ctl.RegisterCounter("worker3", "help_test"),
 		ctl.RegisterGauge("worker4", "help_test"),
+		ctl.RegisterGauge("worker5", "help_test"),
 	)
 	jp := NewJobProvider(&Config{
 		MaxFiles: 100,
@@ -172,8 +173,9 @@ func TestProviderWatcherPaths(t *testing.T) {
 			metrics := newMetricCollection(
 				ctl.RegisterCounter("worker1", "help_test"),
 				ctl.RegisterCounter("worker2", "help_test"),
-				ctl.RegisterGauge("worker3", "help_test"),
+				ctl.RegisterCounter("worker3", "help_test"),
 				ctl.RegisterGauge("worker4", "help_test"),
+				ctl.RegisterGauge("worker5", "help_test"),
 			)
 			jp := NewJobProvider(config, metrics, &zap.SugaredLogger{})
 
