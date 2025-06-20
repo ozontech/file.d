@@ -46,11 +46,11 @@ func inferInsaneColInputs(columns []Column) ([]InsaneColumn, error) {
 }
 
 func insaneInfer(auto proto.ColAuto) (InsaneColInput, error) {
-	parent := auto.Type().Base()
+	child := auto.Type()
+	parent := child.Base()
+
 	nullable := parent == proto.ColumnTypeNullable
 	lowCardinality := parent == proto.ColumnTypeLowCardinality
-
-	child := auto.Type()
 	if nullable || lowCardinality {
 		// trim "Nullable()", "LowCardinality()"
 		child = child.Elem()
@@ -72,6 +72,12 @@ func insaneInfer(auto proto.ColAuto) (InsaneColInput, error) {
 			return NewColStringArray(), nil
 		}
 		return nil, fmt.Errorf("array of type %q is not supported", child.String())
+	case proto.ColumnTypeMap:
+		child := child.Elem()
+		if child == "String,String" {
+			return NewColMapStringString(), nil
+		}
+		return nil, fmt.Errorf("map of type \"(%s)\" is not supported", child.String())
 	default:
 		switch child {
 		case proto.ColumnTypeBool:

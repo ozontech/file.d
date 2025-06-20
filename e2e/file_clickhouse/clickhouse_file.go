@@ -46,25 +46,26 @@ func (c *Config) Configure(t *testing.T, conf *cfg.Config, pipelineName string) 
 	err = conn.Do(c.ctx, ch.Query{
 		Body: `CREATE TABLE IF NOT EXISTS test_table_insert
 		(
-		    c1 String,
-		    c2 Int8,
-		    c3 Int16,
-		    c4 Nullable(Int16),
-		    c5 Nullable(String),
-		    level Enum8('error'=1, 'warn'=2, 'info'=3, 'debug'=4),
-		    ipv4 Nullable(IPv4),
-		    ipv6 Nullable(IPv6),
-		    ts DateTime,
-		    ts_with_tz DateTime('Europe/Moscow'),
-		    ts64 DateTime64(3),
-		    ts64_auto DateTime64(9, 'UTC'),
-		    ts_rfc3339nano DateTime64(9),
-		    f32 Float32,
-		    f64 Float64,
-		    lc_str LowCardinality(String),
-		    str_arr Array(String),
-		    uuid UUID,
-		    uuid_nullable Nullable(UUID),
+			c1 String,
+			c2 Int8,
+			c3 Int16,
+			c4 Nullable(Int16),
+			c5 Nullable(String),
+			level Enum8('error'=1, 'warn'=2, 'info'=3, 'debug'=4),
+			ipv4 Nullable(IPv4),
+			ipv6 Nullable(IPv6),
+			ts DateTime,
+			ts_with_tz DateTime('Europe/Moscow'),
+			ts64 DateTime64(3),
+			ts64_auto DateTime64(9, 'UTC'),
+			ts_rfc3339nano DateTime64(9),
+			f32 Float32,
+			f64 Float64,
+			lc_str LowCardinality(String),
+			str_arr Array(String),
+			map_str_str Map(String, String),
+			uuid UUID,
+			uuid_nullable Nullable(UUID),
 			created_at DateTime64(6, 'UTC') DEFAULT now()
 		) ENGINE = Memory`,
 	})
@@ -96,6 +97,7 @@ func (c *Config) Configure(t *testing.T, conf *cfg.Config, pipelineName string) 
 			F64:          0.6789,
 			LcStr:        "0558cee0-dd11-4304-9a15-1ad53d151fed",
 			StrArr:       &[]string{"improve", "error handling"},
+			MapStrStr:    map[string]string{"key1": "val1", "key2": "val2"},
 			UUID:         uuid.New(),
 			UUIDNullable: uuid.NullUUID{UUID: uuid.New(), Valid: true},
 		},
@@ -115,6 +117,7 @@ func (c *Config) Configure(t *testing.T, conf *cfg.Config, pipelineName string) 
 			F64:          32.02867104,
 			LcStr:        "cc578a55-8f57-4475-9355-67dfccac9e8d",
 			StrArr:       nil,
+			MapStrStr:    nil,
 			UUID:         uuid.New(),
 			UUIDNullable: uuid.NullUUID{},
 		},
@@ -134,6 +137,7 @@ func (c *Config) Configure(t *testing.T, conf *cfg.Config, pipelineName string) 
 			F64:          0.5555555555555555,
 			LcStr:        "cc578a55-8f57-4475-9355-67dfccac9e8d",
 			StrArr:       &[]string{},
+			MapStrStr:    map[string]string{},
 			UUID:         uuid.New(),
 			UUIDNullable: uuid.NullUUID{},
 		},
@@ -165,7 +169,7 @@ func (c *Config) Validate(t *testing.T) {
 	r := require.New(t)
 
 	var rows int
-	for i := 0; i < 1000; i++ {
+	for range 1000 {
 		cnt := proto.ColUInt64{}
 		err := c.conn.Do(c.ctx, ch.Query{
 			Body: `select count(*) from test_table_insert`,
@@ -202,6 +206,7 @@ func (c *Config) Validate(t *testing.T) {
 		f64         = new(proto.ColFloat64)
 		lcStr       = new(proto.ColStr).LowCardinality()
 		strArr      = new(proto.ColStr).Array()
+		mapStrStr   = proto.NewMap(new(proto.ColStr), new(proto.ColStr))
 		uid         = new(proto.ColUUID)
 		uidNullable = proto.NewColNullable[uuid.UUID](new(proto.ColUUID))
 	)
@@ -210,7 +215,7 @@ func (c *Config) Validate(t *testing.T) {
 
 	sampleIdx := 0
 	r.NoError(c.conn.Do(c.ctx, ch.Query{
-		Body: `select c1, c2, c3, c4, c5, level, ipv4, ipv6, ts, ts_with_tz, ts64, ts64_auto, ts_rfc3339nano, f32, f64, lc_str, str_arr, uuid, uuid_nullable
+		Body: `select c1, c2, c3, c4, c5, level, ipv4, ipv6, ts, ts_with_tz, ts64, ts64_auto, ts_rfc3339nano, f32, f64, lc_str, str_arr, map_str_str, uuid, uuid_nullable
 			from test_table_insert
 			order by c1`,
 		Result: proto.Results{
@@ -231,6 +236,7 @@ func (c *Config) Validate(t *testing.T) {
 			proto.ResultColumn{Name: "f64", Data: f64},
 			proto.ResultColumn{Name: "lc_str", Data: lcStr},
 			proto.ResultColumn{Name: "str_arr", Data: strArr},
+			proto.ResultColumn{Name: "map_str_str", Data: mapStrStr},
 			proto.ResultColumn{Name: "uuid", Data: uid},
 			proto.ResultColumn{Name: "uuid_nullable", Data: uidNullable},
 		},
@@ -261,6 +267,12 @@ func (c *Config) Validate(t *testing.T) {
 					a.Equal([]string(nil), strArr.Row(i))
 				} else {
 					a.Equal(*sample.StrArr, strArr.Row(i))
+				}
+
+				if len(sample.MapStrStr) == 0 {
+					a.Equal(map[string]string{}, mapStrStr.Row(i))
+				} else {
+					a.Equal(sample.MapStrStr, mapStrStr.Row(i))
 				}
 
 				a.Equal(sample.TSWithTZ.Unix(), tsWithTz.Row(i).Unix())

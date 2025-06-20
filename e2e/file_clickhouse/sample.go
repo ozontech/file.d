@@ -9,21 +9,22 @@ import (
 )
 
 type Sample struct {
-	C1       json.RawMessage
-	C2       int8
-	C3       int16
-	C4       proto.Nullable[int16]
-	C5       proto.Nullable[string]
-	Level    proto.Enum8
-	IPv4     proto.Nullable[proto.IPv4]
-	IPv6     proto.Nullable[proto.IPv6]
-	TS       time.Time
-	TSWithTZ time.Time
-	TS64     time.Time
-	F32      float32
-	F64      float64
-	LcStr    string
-	StrArr   *[]string
+	C1        json.RawMessage
+	C2        int8
+	C3        int16
+	C4        proto.Nullable[int16]
+	C5        proto.Nullable[string]
+	Level     proto.Enum8
+	IPv4      proto.Nullable[proto.IPv4]
+	IPv6      proto.Nullable[proto.IPv6]
+	TS        time.Time
+	TSWithTZ  time.Time
+	TS64      time.Time
+	F32       float32
+	F64       float64
+	LcStr     string
+	StrArr    *[]string
+	MapStrStr map[string]string
 
 	UUID         uuid.UUID
 	UUIDNullable uuid.NullUUID
@@ -55,21 +56,22 @@ func (s *Sample) MarshalJSON() ([]byte, error) {
 	}
 
 	return json.Marshal(struct {
-		C1       json.RawMessage `json:"c1,omitempty"`
-		C2       int8            `json:"c2,omitempty"`
-		C3       int16           `json:"c3,omitempty"`
-		C4       int16           `json:"c4,omitempty"`
-		C5       string          `json:"c5,omitempty"`
-		Level    string          `json:"level,omitempty"`
-		Ipv4     string          `json:"ipv4,omitempty"`
-		Ipv6     string          `json:"ipv6,omitempty"`
-		F32      float32         `json:"f32,omitempty"`
-		F64      float64         `json:"f64,omitempty"`
-		TS       int32           `json:"ts"`
-		TSWithTZ int64           `json:"ts_with_tz"`
-		TS64     int64           `json:"ts64"`
-		LcStr    string          `json:"lc_str,omitempty"`
-		StrArr   *[]string       `json:"str_arr"`
+		C1        json.RawMessage   `json:"c1,omitempty"`
+		C2        int8              `json:"c2,omitempty"`
+		C3        int16             `json:"c3,omitempty"`
+		C4        int16             `json:"c4,omitempty"`
+		C5        string            `json:"c5,omitempty"`
+		Level     string            `json:"level,omitempty"`
+		Ipv4      string            `json:"ipv4,omitempty"`
+		Ipv6      string            `json:"ipv6,omitempty"`
+		F32       float32           `json:"f32,omitempty"`
+		F64       float64           `json:"f64,omitempty"`
+		TS        int32             `json:"ts"`
+		TSWithTZ  int64             `json:"ts_with_tz"`
+		TS64      int64             `json:"ts64"`
+		LcStr     string            `json:"lc_str,omitempty"`
+		StrArr    *[]string         `json:"str_arr"`
+		MapStrStr map[string]string `json:"map_str_str"`
 
 		UUID         string        `json:"uuid,omitempty"`
 		UUIDNullable uuid.NullUUID `json:"uuid_nullable,omitempty"`
@@ -89,6 +91,7 @@ func (s *Sample) MarshalJSON() ([]byte, error) {
 		TS64:         s.TS64.UnixMilli(),
 		LcStr:        s.LcStr,
 		StrArr:       s.StrArr,
+		MapStrStr:    s.MapStrStr,
 		UUID:         s.UUID.String(),
 		UUIDNullable: s.UUIDNullable,
 	})
