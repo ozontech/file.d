@@ -1,10 +1,36 @@
 package doif
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
+)
+
+const (
+	fieldNameOp    = "op"
+	fieldNameField = "field"
+
+	fieldNameCaseSensitive = "case_sensitive"
+
+	fieldNameValues = "values"
+
+	fieldNameCmpOp    = "cmp_op"
+	fieldNameCmpValue = "value"
+
+	fieldNameFormat         = "format"
+	fieldNameUpdateInterval = "update_interval"
+	fieldNameCmpValueShift  = "value_shift"
+
+	tsCmpModeNowTag   = "now"
+	tsCmpModeConstTag = "const"
+
+	tsCmpValueNowTag   = "now"
+	tsCmpValueStartTag = "file_d_start"
+
+	defaultTsCmpValUpdateInterval = 10 * time.Second
+	defaultTsFormat               = "rfc3339nano"
+
+	fieldNameOperands = "operands"
 )
 
 func NewFromMap(m map[string]any) (*Checker, error) {
@@ -17,11 +43,6 @@ func NewFromMap(m map[string]any) (*Checker, error) {
 		root: root,
 	}, nil
 }
-
-const (
-	fieldNameOp    = "op"
-	fieldNameField = "field"
-)
 
 func extractDoIfNode(node map[string]any) (Node, error) {
 	opName, err := get[string](node, fieldNameOp)
@@ -52,57 +73,6 @@ func extractDoIfNode(node map[string]any) (Node, error) {
 	}
 }
 
-var errFieldNotFound = errors.New("field not found")
-
-func getAny(node map[string]any, field string) (any, error) {
-	res, has := node[field]
-	if !has {
-		return nil, fmt.Errorf("field=%q: %w", field, errFieldNotFound)
-	}
-
-	return res, nil
-}
-
-var errTypeMismatch = errors.New("type mismatch")
-
-func get[T any](node map[string]any, field string) (T, error) {
-	var def T
-
-	fieldNode, err := getAny(node, field)
-	if err != nil {
-		return def, err
-	}
-
-	result, ok := fieldNode.(T)
-	if !ok {
-		return def, fmt.Errorf(
-			"field=%q expected=%T got=%T: %w",
-			field, def, fieldNode, errTypeMismatch,
-		)
-	}
-
-	return result, nil
-}
-
-func anyToInt(v any) (int, error) {
-	switch vNum := v.(type) {
-	case int:
-		return vNum, nil
-	case float64:
-		return int(vNum), nil
-	case json.Number:
-		vInt64, err := vNum.Int64()
-		if err != nil {
-			return 0, err
-		}
-		return int(vInt64), nil
-	default:
-		return 0, fmt.Errorf("type=%T not convertable to int", v)
-	}
-}
-
-const fieldNameCaseSensitive = "case_sensitive"
-
 func extractFieldOpNode(opName string, node map[string]any) (Node, error) {
 	var result Node
 	var err error
@@ -132,8 +102,6 @@ func extractFieldOpNode(opName string, node map[string]any) (Node, error) {
 
 	return result, nil
 }
-
-const fieldNameValues = "values"
 
 func extractOpValues(node map[string]any) ([][]byte, error) {
 	valuesRaw, err := getAny(node, fieldNameValues)
@@ -170,11 +138,6 @@ func extractOpValuesFromArr(values []any) ([][]byte, error) {
 	return vals, nil
 }
 
-const (
-	fieldNameCmpOp    = "cmp_op"
-	fieldNameCmpValue = "value"
-)
-
 func extractLengthCmpOpNode(opName string, node map[string]any) (Node, error) {
 	fieldPath, err := get[string](node, fieldNameField)
 	if err != nil {
@@ -198,25 +161,6 @@ func extractLengthCmpOpNode(opName string, node map[string]any) (Node, error) {
 
 	return NewLenCmpOpNode(opName, fieldPath, cmpOp, cmpValue)
 }
-
-const (
-	fieldNameFormat         = "format"
-	fieldNameUpdateInterval = "update_interval"
-	fieldNameCmpValueShift  = "value_shift"
-)
-
-const (
-	tsCmpModeNowTag   = "now"
-	tsCmpModeConstTag = "const"
-
-	tsCmpValueNowTag   = "now"
-	tsCmpValueStartTag = "file_d_start"
-)
-
-const (
-	defaultTsCmpValUpdateInterval = 10 * time.Second
-	defaultTsFormat               = "rfc3339nano"
-)
 
 func extractTsCmpOpNode(_ string, node map[string]any) (Node, error) {
 	fieldPath, err := get[string](node, fieldNameField)
@@ -302,8 +246,6 @@ func extractCheckTypeOpNode(_ string, node map[string]any) (Node, error) {
 
 	return result, nil
 }
-
-const fieldNameOperands = "operands"
 
 func extractLogicalOpNode(opName string, node map[string]any) (Node, error) {
 	rawOperands, err := get[[]any](node, fieldNameOperands)
