@@ -317,7 +317,7 @@ func extractLogicalOpNode(opName string, node map[string]any) (Node, error) {
 		operandMap, ok := rawOperand.(map[string]any)
 		if !ok {
 			return nil, fmt.Errorf(
-				"logical node operand type mismatch; expected: map[string]any; got: %T",
+				"logical node operand type mismatch: expected=map[string]any got=%T",
 				rawOperand)
 		}
 
