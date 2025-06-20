@@ -48,7 +48,7 @@ func extractDoIfNode(node map[string]any) (Node, error) {
 	case "check_type":
 		return extractCheckTypeOpNode(opName, node)
 	default:
-		return nil, fmt.Errorf("unknown op %q", opName)
+		return nil, fmt.Errorf("unknown op: %s", opName)
 	}
 }
 
@@ -57,7 +57,7 @@ var errFieldNotFound = errors.New("field not found")
 func getAny(node map[string]any, field string) (any, error) {
 	res, has := node[field]
 	if !has {
-		return nil, fmt.Errorf("%w: %s", errFieldNotFound, field)
+		return nil, fmt.Errorf("field=%q: %w", field, errFieldNotFound)
 	}
 
 	return res, nil
@@ -76,8 +76,8 @@ func get[T any](node map[string]any, field string) (T, error) {
 	result, ok := fieldNode.(T)
 	if !ok {
 		return def, fmt.Errorf(
-			"%w; field %q; expected %T; got %T; value: %v",
-			errTypeMismatch, field, def, fieldNode, fieldNode,
+			"field=%q expected=%T got=%T: %w",
+			field, def, fieldNode, errTypeMismatch,
 		)
 	}
 
@@ -97,8 +97,7 @@ func anyToInt(v any) (int, error) {
 		}
 		return int(vInt64), nil
 	default:
-		return 0, fmt.Errorf(
-			"not convertable to int; unexpected type %T; value: %v", v, v)
+		return 0, fmt.Errorf("type=%T not convertable to int", v)
 	}
 }
 
@@ -121,7 +120,7 @@ func extractFieldOpNode(opName string, node map[string]any) (Node, error) {
 		return nil, err
 	}
 
-	vals, err := extractFieldOpVals(node)
+	vals, err := extractOpValues(node)
 	if err != nil {
 		return nil, fmt.Errorf("extract field op values: %w", err)
 	}
@@ -136,7 +135,7 @@ func extractFieldOpNode(opName string, node map[string]any) (Node, error) {
 
 const fieldNameValues = "values"
 
-func extractFieldOpVals(node map[string]any) ([][]byte, error) {
+func extractOpValues(node map[string]any) ([][]byte, error) {
 	valuesRaw, err := getAny(node, fieldNameValues)
 	if err != nil {
 		return nil, err
@@ -148,26 +147,23 @@ func extractFieldOpVals(node map[string]any) ([][]byte, error) {
 	case string:
 		return [][]byte{[]byte(values)}, nil
 	case []any:
-		return extractFieldOpValsArrAny(values)
+		return extractOpValuesFromArr(values)
 	default:
-		return nil, fmt.Errorf(
-			"unknown type of field %q: %T; value: %v",
-			fieldNameValues, values, values)
+		return nil, fmt.Errorf("type=%T not convertable to op values", values)
 	}
 }
 
-func extractFieldOpValsArrAny(values []any) ([][]byte, error) {
+func extractOpValuesFromArr(values []any) ([][]byte, error) {
 	var vals [][]byte
 
 	for _, value := range values {
-		if value == nil {
+		switch v := value.(type) {
+		case nil:
 			vals = append(vals, nil)
-		} else if valueStr, ok := value.(string); ok {
-			vals = append(vals, []byte(valueStr))
-		} else {
-			return nil, fmt.Errorf(
-				"elem of array type mismatch; expected string or nil; got %T; value: %v",
-				value, value)
+		case string:
+			vals = append(vals, []byte(v))
+		default:
+			return nil, fmt.Errorf("type=%T not convertable to one op value", v)
 		}
 	}
 
@@ -294,7 +290,7 @@ func extractCheckTypeOpNode(_ string, node map[string]any) (Node, error) {
 		return nil, err
 	}
 
-	vals, err := extractFieldOpVals(node)
+	vals, err := extractOpValues(node)
 	if err != nil {
 		return nil, fmt.Errorf("extract check type op values: %w", err)
 	}
@@ -321,13 +317,13 @@ func extractLogicalOpNode(opName string, node map[string]any) (Node, error) {
 		operandMap, ok := rawOperand.(map[string]any)
 		if !ok {
 			return nil, fmt.Errorf(
-				"logical node operand type mismatch; expected: map[string]any; got: %T; value: %v",
-				rawOperand, rawOperand)
+				"logical node operand type mismatch; expected: map[string]any; got: %T",
+				rawOperand)
 		}
 
 		operand, err := extractDoIfNode(operandMap)
 		if err != nil {
-			return nil, fmt.Errorf("extract operand node for logical op %q", opName)
+			return nil, fmt.Errorf("extract operand for logical op %q: %w", opName, err)
 		}
 		operands = append(operands, operand)
 	}
