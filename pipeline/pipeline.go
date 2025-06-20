@@ -613,6 +613,10 @@ func (p *Pipeline) streamEvent(event *Event) uint64 {
 			event.streamName = StreamName(node.AsString())
 		}
 
+		if !isValidStreamName(event.streamName) {
+			p.logger.Panic("invalid stream name", zap.String("stream", string(event.streamName)))
+		}
+
 		if pass := p.input.PassEvent(event); !pass {
 			// Can't process event, return to pool.
 			p.eventPool.back(event)
@@ -621,6 +625,15 @@ func (p *Pipeline) streamEvent(event *Event) uint64 {
 	}
 
 	return p.streamer.putEvent(streamID, event.streamName, event)
+}
+
+func isValidStreamName(streamName StreamName) bool {
+	for _, ch := range streamName {
+		if (ch < 'a' || 'z' < ch) && (ch < 'A' || 'Z' < ch) && ch != '_' {
+			return false
+		}
+	}
+	return true
 }
 
 func (p *Pipeline) Commit(event *Event) {
