@@ -1,32 +1,206 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>file.d documentation</title>
-  <link rel="icon" type="image/png" href="/file.d/static/file.d.png" />
-  <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
-  <meta name="description" content="A blazing fast tool for building data pipelines: read, process, and output events.">
-  <meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
-  <link rel="stylesheet" href="//unpkg.com/docsify/lib/themes/vue.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Aryapathshala - Education App</title>
+  <link rel="stylesheet" href="styles.css" />
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      background-color: #f7f7f7;
+    }
+    header {
+      background-color: #2196f3;
+      color: white;
+      padding: 1rem;
+      text-align: center;
+    }
+    nav ul {
+      list-style: none;
+      padding: 0;
+      display: flex;
+      justify-content: center;
+      gap: 1rem;
+    }
+    nav a {
+      color: white;
+      text-decoration: none;
+    }
+    section {
+      padding: 2rem;
+      text-align: center;
+    }
+    .class-buttons button {
+      margin: 0.5rem;
+      padding: 0.75rem 1.5rem;
+      background-color: #4caf50;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    footer {
+      background-color: #333;
+      color: white;
+      text-align: center;
+      padding: 1rem;
+      position: fixed;
+      bottom: 0;
+      width: 100%;
+    }
+    .subject-topic {
+      margin-top: 1rem;
+    }
+    .test-form {
+      margin-top: 1rem;
+    }
+    #login-form {
+      max-width: 300px;
+      margin: 0 auto;
+      background: #fff;
+      padding: 1rem;
+      border-radius: 10px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+    #login-form input {
+      width: 100%;
+      padding: 0.5rem;
+      margin: 0.5rem 0;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+    }
+    #login-form button {
+      background-color: #2196f3;
+      color: white;
+      border: none;
+      padding: 0.5rem 1rem;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    #logoutBtn {
+      display: none;
+      margin-top: 10px;
+    }
+  </style>
 </head>
 <body>
-  <div id="app"></div>
+  <header>
+    <h1>Aryapathshala</h1>
+    <nav>
+      <ul>
+        <li><a href="#home">Home</a></li>
+        <li><a href="#classes">Classes</a></li>
+        <li><a href="#subjects">Subjects</a></li>
+        <li><a href="#test">Test</a></li>
+        <li><a href="#login">Login</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <section id="home">
+    <h2>Welcome to Aryapathshala</h2>
+    <p>Empowering students from Class 9th to 12th with quality learning.</p>
+  </section>
+
+  <section id="login">
+    <h2>Login to Continue</h2>
+    <form id="login-form" onsubmit="handleLogin(event)">
+      <input type="text" id="username" placeholder="Enter Username" required />
+      <input type="password" id="password" placeholder="Enter Password" required />
+      <button type="submit">Login</button>
+    </form>
+    <button id="logoutBtn" onclick="handleLogout()">Logout</button>
+    <p id="loginStatus"></p>
+  </section>
+
+  <section id="classes">
+    <h2>Select Your Class</h2>
+    <div class="class-buttons">
+      <button onclick="loadSubjects(9)">Class 9</button>
+      <button onclick="loadSubjects(10)">Class 10</button>
+      <button onclick="loadSubjects(11)">Class 11</button>
+      <button onclick="loadSubjects(12)">Class 12</button>
+    </div>
+  </section>
+
+  <section id="subjects">
+    <h2>Subjects</h2>
+    <div id="subject-list">Please select a class above.</div>
+  </section>
+
+  <section id="test">
+    <h2>Test Zone</h2>
+    <p>Attempt chapter-wise and full syllabus tests.</p>
+    <form class="test-form" onsubmit="submitTest(event)">
+      <p>1. What is the capital of India?</p>
+      <label><input type="radio" name="q1" value="A"> Mumbai</label><br>
+      <label><input type="radio" name="q1" value="B"> Delhi</label><br>
+      <label><input type="radio" name="q1" value="C"> Kolkata</label><br>
+      <label><input type="radio" name="q1" value="D"> Chennai</label><br>
+      <br>
+      <button type="submit">Submit Test</button>
+    </form>
+    <div id="test-result"></div>
+  </section>
+
+  <footer>
+    <p>&copy; 2025 Aryapathshala. All rights reserved.</p>
+  </footer>
+
   <script>
-    window.$docsify = {
-      name: 'file.d',
-      repo: 'https://github.com/ozontech/file.d',
-      loadSidebar: true,
-      loadNavbar: true,
-      subMaxLevel: 2,
-      maxLevel: 1,
-      coverpage: true,
-      auto2top: true,
-      markdown: {
-        gfm: true
+    const subjectData = {
+      9: ['Maths', 'Science', 'English'],
+      10: ['Maths', 'Science', 'Social Science'],
+      11: ['Physics', 'Chemistry', 'Maths', 'Biology'],
+      12: ['Physics', 'Chemistry', 'Maths', 'Biology']
+    };
+
+    function loadSubjects(classNum) {
+      const list = subjectData[classNum] || [];
+      const container = document.getElementById('subject-list');
+      if (list.length === 0) {
+        container.innerHTML = 'No subjects found.';
+        return;
+      }
+      container.innerHTML = '<ul>' + list.map(sub => `<li>${sub}</li>`).join('') + '</ul>';
+    }
+
+    function submitTest(event) {
+      event.preventDefault();
+      const selected = document.querySelector('input[name="q1"]:checked');
+      const result = document.getElementById('test-result');
+      if (!selected) {
+        result.innerText = "Please select an answer.";
+        return;
+      }
+      if (selected.value === 'B') {
+        result.innerText = "Correct!";
+      } else {
+        result.innerText = "Incorrect. The correct answer is Delhi.";
       }
     }
+
+    function handleLogin(event) {
+      event.preventDefault();
+      const username = document.getElementById('username').value;
+      const password = document.getElementById('password').value;
+      if (username === "student" && password === "1234") {
+        document.getElementById('loginStatus').innerText = "Login successful!";
+        document.getElementById('logoutBtn').style.display = "inline";
+        document.getElementById('login-form').style.display = "none";
+      } else {
+        document.getElementById('loginStatus').innerText = "Invalid credentials. Try again.";
+      }
+    }
+
+    function handleLogout() {
+      document.getElementById('loginStatus').innerText = "Logged out.";
+      document.getElementById('logoutBtn').style.display = "none";
+      document.getElementById('login-form').style.display = "block";
+    }
   </script>
-  <script src="//unpkg.com/docsify/lib/docsify.min.js"></script>
-  <script src="//unpkg.com/docsify-copy-code"></script>
 </body>
 </html>
