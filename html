@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Guptas House Menu</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body {
+            background: #5c2e1b;
+            font-family: 'Segoe UI', Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+        }
+        .menu-container {
+            background: #fff;
+            max-width: 800px;
+            margin: 40px auto;
+            border-radius: 14px;
+            box-shadow: 0 4px 24px rgba(60,30,10,0.14);
+            padding: 36px 32px 24px 32px;
+            position: relative;
+        }
+        .menu-header {
+            text-align: right;
+            font-family: 'Brush Script MT', cursive;
+        }
+        .menu-header h1 {
+            color: #8a1a1a;
+            font-size: 3rem;
+            margin: 0;
+            font-weight: bold;
+            letter-spacing: 2px;
+        }
+        .menu-header h2 {
+            color: #222;
+            font-size: 1.5rem;
+            margin: 0;
+            font-family: inherit;
+            font-weight: 400;
+        }
+        .menu-section {
+            margin-top: 32px;
+        }
+        .menu-section h3 {
+            font-size: 1.6rem;
+            color: #222;
+            margin-bottom: 8px;
+            font-family: 'Segoe UI', Arial, sans-serif;
+            font-weight: bold;
+            letter-spacing: 1px;
+        }
+        .menu-list {
+            margin: 0;
+            padding: 0;
+            list-style: none;
+        }
+        .menu-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            border-bottom: 1px solid #f0e6e6;
+            padding: 12px 0;
+        }
+        .menu-item:last-child {
+            border-bottom: none;
+        }
+        .item-name {
+            font-weight: bold;
+            color: #333;
+            font-size: 1.1rem;
+        }
+        .item-desc {
+            font-size: 0.95rem;
+            color: #777;
+            margin-top: 2px;
+        }
+        .item-price {
+            color: #8a1a1a;
+            font-weight: bold;
+            font-size: 1.1rem;
+            min-width: 70px;
+            text-align: right;
+        }
+        @media (max-width: 600px) {
+            .menu-container {
+                padding: 16px 6px 8px 6px;
+            }
+            .menu-header h1 {
+                font-size: 2rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="menu-container">
+        <div class="menu-header">
+            <h2>The</h2>
+            <h1>Guptas House Menu</h1>
+        </div>
+        <div class="menu-section">
+            <h3>Appetizer</h3>
+            <ul class="menu-list">
+                <li class="menu-item">
+                    <div>
+                        <span class="item-name">Food Name 01</span>
+                        <div class="item-desc">Lorem ipsum has been the industry's standard dummy text ever since the 1500s.</div>
+                    </div>
+                    <span class="item-price">$10.25</span>
+                </li>
+                <li class="menu-item">
+                    <div>
+                        <span class="item-name">Food Name 02</span>
+                        <div class="item-desc">Lorem ipsum has been the industry's standard dummy text ever since the 1500s.</div>
+                    </div>
+                    <span class="item-price">$10.25</span>
+                </li>
+                <li class="menu-item">
+                    <div>
+                        <span class="item-name">Food Name 03</span>
+                        <div class="item-desc">Lorem ipsum has been the industry's standard dummy text ever since the 1500s.</div>
+                    </div>
+                    <span class="item-price">$10.25</span>
+                </li>
+                <li class="menu-item">
+                    <div>
+                        <span class="item-name">Food Name 04</span>
+                        <div class="item-desc">Lorem ipsum has been the industry's standard dummy text ever since the 1500s.</div>
+                    </div>
+                    <span class="item-price">$10.25</span>
+                </li>
+            </ul>
+        </div>
+        <div class="menu-section">
+            <h3>Drinks</h3>
+            <ul class="menu-list">
+                <li class="menu-item">
+                    <div>
+                        <span class="item-name">Food Name 01</span>
+                        <div class="item-desc">Lorem ipsum has been the industry's standard dummy text ever since the 1500s.</div>
+                    </div>
+                    <span class="item-price">$10.25</span>
+                </li>
+                <li class="menu-item">
+                    <div>
+                        <span class="item-name">Food Name 02</span>
+                        <div class="item-desc">Lorem ipsum has been the industry's standard dummy text ever since the 1500s.</div>
+                    </div>
+                    <span class="item-price">$10.25</span>
+                </li>
+                <li class="menu-item">
+                    <div>
+                        <span class="item-name">Food Name 03</span>
+                        <div class="item-desc">Lorem ipsum has been the industry's standard dummy text ever since the 1500s.</div>
+                    </div>
+                    <span class="item-price">$10.25</span>
+                </li>
+            </ul>
+        </div>
+        <div class="menu-section">
+            <h3>Salad</h3>
+            <ul class="menu-list">
+                <li class="menu-item">
+                    <div>
+                        <span class="item-name">Food Name 01</span>
+                        <div class="item-desc">Lorem ipsum has been the industry's standard dummy text ever since the 1500s.</div>
+                    </div>
+                    <span class="item-price">$10.25</span>
+                </li>
+                <li class="menu-item">
+                    <div>
+                        <span class="item-name">Food Name 02</span>
+                        <div class="item-desc">Lorem ipsum has been the industry's standard dummy text ever since the 1500s.</div>
+                    </div>
+                    <span class="item-price">$10.25</span>
+                </li>
+                <li class="menu-item">
+                    <div>
+                        <span class="item-name">Food Name 03</span>
+                        <div class="item-desc">Lorem ipsum has been the industry's standard dummy text ever since the 1500s.</div>
+                    </div>
+                    <span class="item-price">$10.25</span>
+                </li>
+            </ul>
+        </div>
+    </div>
+</body>
+</html>
