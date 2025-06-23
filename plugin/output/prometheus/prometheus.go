@@ -311,7 +311,12 @@ func (p *Plugin) send(root *insaneJSON.Root) error {
 	// # {"name":"partitions_total","labels":{"partition":"1"},"timestamp":"2025-06-05T05:19:28.129666195Z","value": 1}}
 	values := make([]promwrite.TimeSeries, 0, len(messages))
 
+	type metricValue struct {
+		value     float64
+		timestamp int64
+	}
 	for _, msg := range messages {
+		skipSendValue := false
 		nameNode := msg.Dig("name")
 		name := nameNode.AsString()
 		nameNode.Suicide()
@@ -348,20 +353,30 @@ func (p *Plugin) send(root *insaneJSON.Root) error {
 			labelsKeys := labelsToKey(labels)
 			prevValue, ok := p.collector.Load(labelsKeys)
 			if ok {
-				value += prevValue.(float64)
+				value += prevValue.(metricValue).value
+				prevTimestamp := prevValue.(metricValue).timestamp / 1000000
+				if prevTimestamp >= timestamp/1000000 {
+					skipSendValue = true
+				}
 			}
-			p.collector.Store(labelsKeys, value)
+			p.collector.Store(labelsKeys, metricValue{
+				timestamp: timestamp,
+				value:     value,
+			})
 		}
 
-		logLine := promwrite.TimeSeries{
-			Labels: labels,
-			Sample: promwrite.Sample{
-				Time:  time.Unix(0, timestamp),
-				Value: value,
-			},
+		if !skipSendValue {
+			logLine := promwrite.TimeSeries{
+				Labels: labels,
+				Sample: promwrite.Sample{
+					Time:  time.Unix(0, timestamp),
+					Value: value,
+				},
+			}
+
+			values = append(values, logLine)
 		}
 
-		values = append(values, logLine)
 	}
 
 	_, err := p.client.Write(context.Background(), &promwrite.WriteRequest{TimeSeries: values})
