@@ -2,9 +2,7 @@ package prometheus
 
 import (
 	"context"
-	"fmt"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/castai/promwrite"
@@ -195,7 +193,7 @@ type Plugin struct {
 	// plugin metrics
 	sendErrorMetric *prometheus.CounterVec
 
-	collector *sync.Map
+	collector *metricCollector
 }
 
 func init() {
@@ -215,7 +213,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.logger = params.Logger.Desugar()
 	p.avgEventSize = params.PipelineSettings.AvgEventSize
 	p.registerMetrics(params.MetricCtl)
-	p.collector = new(sync.Map)
+	p.collector = newCollector(10*time.Second, p, p.logger)
 
 	p.prepareClient()
 
@@ -264,6 +262,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 
 func (p *Plugin) Stop() {
 	p.batcher.Stop()
+	p.collector.shutdown()
 	p.cancel()
 }
 
@@ -311,12 +310,7 @@ func (p *Plugin) send(root *insaneJSON.Root) error {
 	// # {"name":"partitions_total","labels":{"partition":"1"},"timestamp":"2025-06-05T05:19:28.129666195Z","value": 1}}
 	values := make([]promwrite.TimeSeries, 0, len(messages))
 
-	type metricValue struct {
-		value     float64
-		timestamp int64
-	}
 	for _, msg := range messages {
-		skipSendValue := false
 		nameNode := msg.Dig("name")
 		name := nameNode.AsString()
 		nameNode.Suicide()
@@ -349,38 +343,15 @@ func (p *Plugin) send(root *insaneJSON.Root) error {
 			})
 		}
 
-		if metricType == "counter" {
-			labelsKeys := labelsToKey(labels)
-			prevValue, ok := p.collector.Load(labelsKeys)
-			if ok {
-				value += prevValue.(metricValue).value
-				prevTimestamp := prevValue.(metricValue).timestamp / 1000000
-				if prevTimestamp >= timestamp/1000000 {
-					skipSendValue = true
-				}
-			}
-			p.collector.Store(labelsKeys, metricValue{
-				timestamp: timestamp,
-				value:     value,
-			})
-		}
-
-		if !skipSendValue {
-			logLine := promwrite.TimeSeries{
-				Labels: labels,
-				Sample: promwrite.Sample{
-					Time:  time.Unix(0, timestamp),
-					Value: value,
-				},
-			}
-
-			values = append(values, logLine)
-		}
-
+		values = append(values, p.collector.handleMetric(
+			labels,
+			value,
+			timestamp,
+			metricType,
+		)...)
 	}
 
-	_, err := p.client.Write(context.Background(), &promwrite.WriteRequest{TimeSeries: values})
-
+	err := p.sendToStorage(values)
 	if err != nil {
 		// TODO: add metrics
 		if strings.Contains(err.Error(), "out of order sample") || strings.Contains(err.Error(), "duplicate sample for") {
@@ -392,12 +363,9 @@ func (p *Plugin) send(root *insaneJSON.Root) error {
 	return err
 }
 
-func labelsToKey(labels []promwrite.Label) string {
-	var b strings.Builder
-	for _, l := range labels {
-		fmt.Fprintf(&b, "%s=%s,", l.Name, l.Value)
-	}
-	return b.String()
+func (p *Plugin) sendToStorage(values []promwrite.TimeSeries) error {
+	_, err := p.client.Write(context.Background(), &promwrite.WriteRequest{TimeSeries: values})
+	return err
 }
 
 func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
