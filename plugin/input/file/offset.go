@@ -146,7 +146,7 @@ func (o *offsetDB) parseStreams(content string, streams streamsOffsets) (string,
 		}
 		content = content[linePos+1:]
 
-		pos := strings.IndexByte(line, ':')
+		pos := strings.LastIndexByte(line, ':')
 		if pos < 0 {
 			return "", fmt.Errorf("wrong offsets format, no separator %q", line)
 		}
