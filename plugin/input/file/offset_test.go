@@ -18,14 +18,14 @@ func TestParseOffsets(t *testing.T) {
   source_id: 1234
   streams:
     default: 100
-	error:: 960
+    error:: 960
     another: 200
 - file: /another/informational/name
   inode: 2
   source_id: 4321
   streams:
     stderr: 300
-	error:: 0
+    error:: 0
 `
 	offsetDB := newOffsetDB("", "")
 	offsets, err := offsetDB.parse(data)
