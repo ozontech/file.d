@@ -1,6 +1,7 @@
 package mask
 
 import (
+	"errors"
 	"regexp"
 	"slices"
 	"strings"
@@ -232,10 +233,10 @@ func (p *Plugin) makeMetric(ctl *metric.Ctl, name, help string, labels ...string
 	return ctl.RegisterCounterVec(name, help, labelNames...)
 }
 
-func compileMasks(masks []Mask, logger *zap.Logger) ([]Mask, *regexp.Regexp) {
+func (p *Plugin) compileMasks(masks []Mask, logger *zap.Logger) ([]Mask, *regexp.Regexp) {
 	patterns := make([]string, 0, len(masks))
 	for i := range masks {
-		compileMask(&masks[i], logger)
+		p.compileMask(&masks[i], logger)
 		if masks[i].Re != "" {
 			patterns = append(patterns, masks[i].Re)
 		}
@@ -251,9 +252,23 @@ func compileMasks(masks []Mask, logger *zap.Logger) ([]Mask, *regexp.Regexp) {
 	return masks, matchRegex
 }
 
-func compileMask(m *Mask, logger *zap.Logger) {
+func (p *Plugin) compileMask(m *Mask, logger *zap.Logger) {
 	if m.Re == "" && len(m.MatchRules) == 0 {
 		logger.Fatal("mask must have either nonempty regex or ruleset, or both")
+	}
+
+	switch {
+	case m.ProcessAllFields:
+		break
+	case len(m.ProcessFields) > 0 || len(m.IgnoreFields) > 0:
+		var err error
+		m.fieldPaths, m.isWhitelist, err = extractFieldPaths(m.ProcessFields, m.IgnoreFields)
+		if err != nil {
+			logger.Fatal(err.Error())
+		}
+	default:
+		m.fieldPaths = p.fieldPaths
+		m.isWhitelist = p.isWhitelist
 	}
 
 	if m.DoIfCheckerMap != nil {
@@ -306,6 +321,7 @@ func compileMask(m *Mask, logger *zap.Logger) {
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginParams) {
 	p.config = *config.(*Config)                            // copy shared config
 	p.config.Masks = append([]Mask(nil), p.config.Masks...) // copy shared masks
+	p.logger = params.Logger.Desugar()
 
 	for i := range p.config.Masks {
 		mask := &p.config.Masks[i]
@@ -316,32 +332,38 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 	p.maskBuf = make([]byte, 0, params.PipelineSettings.AvgEventSize)
 	p.sourceBuf = make([]byte, 0, params.PipelineSettings.AvgEventSize)
 	p.valueNodes = make([]*insaneJSON.Node, 0)
-	p.logger = params.Logger.Desugar()
-	p.config.Masks, p.matchRe = compileMasks(p.config.Masks, p.logger)
 
-	isBlacklist := len(p.config.IgnoreFields) > 0
-	isWhitelist := len(p.config.ProcessFields) > 0
-	if isBlacklist && isWhitelist {
-		p.logger.Fatal("ignored fields list and processed fields list are both non-empty")
+	var err error
+	p.fieldPaths, p.isWhitelist, err = extractFieldPaths(p.config.ProcessFields, p.config.IgnoreFields)
+	if err != nil {
+		p.logger.Fatal(err.Error())
 	}
 
-	p.isWhitelist = isWhitelist
-
-	var fieldPaths []cfg.FieldSelector
-	if isBlacklist {
-		fieldPaths = p.config.IgnoreFields
-	} else if isWhitelist {
-		fieldPaths = p.config.ProcessFields
-	}
-
-	if len(fieldPaths) > 0 {
-		p.fieldPaths = make([][]string, 0, len(fieldPaths))
-		for _, fieldPath := range fieldPaths {
-			p.fieldPaths = append(p.fieldPaths, cfg.ParseFieldSelector(string(fieldPath)))
-		}
-	}
+	p.config.Masks, p.matchRe = p.compileMasks(p.config.Masks, p.logger)
 
 	p.registerMetrics(params.MetricCtl)
+}
+
+func extractFieldPaths(processFields, ignoreFields []cfg.FieldSelector) ([][]string, bool, error) {
+	isBlacklist := len(ignoreFields) > 0
+	isWhitelist := len(processFields) > 0
+	if isBlacklist && isWhitelist {
+		return nil, false, errors.New("ignored fields list and processed fields list are both non-empty")
+	}
+
+	var fields []cfg.FieldSelector
+	if isBlacklist {
+		fields = ignoreFields
+	} else if isWhitelist {
+		fields = processFields
+	}
+
+	fieldPaths := make([][]string, 0, len(fields))
+	for _, field := range fields {
+		fieldPaths = append(fieldPaths, cfg.ParseFieldSelector(string(field)))
+	}
+
+	return fieldPaths, isWhitelist, nil
 }
 
 func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
