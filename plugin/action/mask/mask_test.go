@@ -400,11 +400,14 @@ func TestGroupNumbers(t *testing.T) {
 
 	for _, s := range suits {
 		t.Run(s.name, func(t *testing.T) {
+			p := &Plugin{}
+			// s.input.ProcessAllFields = true
+
 			if s.isFatal {
 				assert.PanicsWithValue(t,
 					s.fatalMsg,
 					func() {
-						compileMask(
+						p.compileMask(
 							s.input,
 							zap.NewNop().WithOptions(zap.WithFatalHook(zapcore.WriteThenPanic)),
 						)
@@ -418,7 +421,7 @@ func TestGroupNumbers(t *testing.T) {
 					CutValues:   s.input.CutValues,
 					ReplaceWord: s.input.ReplaceWord,
 				}
-				compileMask(res, zap.NewNop())
+				p.compileMask(res, zap.NewNop())
 				assert.NotNil(t, res.Re_, s.comment)
 				assert.Equal(t, res.Re, s.expect.Re, s.comment)
 				assert.Equal(t, res.Groups, s.expect.Groups, s.comment)
