@@ -18,7 +18,7 @@ require (
 	github.com/cespare/xxhash/v2 v2.3.0
 	github.com/dominikbraun/graph v0.23.0
 	github.com/elliotchance/orderedmap/v2 v2.4.0
-	github.com/euank/go-kmsg-parser v2.0.0+incompatible
+	github.com/euank/go-kmsg-parser/v3 v3.0.0
 	github.com/go-faster/jx v1.1.0
 	github.com/golang/mock v1.6.0
 	github.com/google/uuid v1.6.0
