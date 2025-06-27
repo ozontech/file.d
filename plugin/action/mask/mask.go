@@ -164,6 +164,15 @@ type Mask struct {
 
 	use bool
 
+	IgnoreFields []cfg.FieldSelector `json:"ignore_fields" slice:"true"`
+
+	ProcessFields []cfg.FieldSelector `json:"process_fields" slice:"true"`
+
+	ProcessAllFields bool `json:"proc_all_fields"`
+
+	fieldPaths  [][]string
+	isWhitelist bool
+
 	// > @3@4@5@6
 	// >
 	// > If the mask has been applied then `applied_field` will be set to `applied_value` in the event.
