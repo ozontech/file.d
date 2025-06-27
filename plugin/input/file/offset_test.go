@@ -18,12 +18,14 @@ func TestParseOffsets(t *testing.T) {
   source_id: 1234
   streams:
     default: 100
+    error:: 960
     another: 200
 - file: /another/informational/name
   inode: 2
   source_id: 4321
   streams:
     stderr: 300
+    error:: 0
 `
 	offsetDB := newOffsetDB("", "")
 	offsets, err := offsetDB.parse(data)
@@ -39,6 +41,10 @@ func TestParseOffsets(t *testing.T) {
 	assert.True(t, has, "stream isn't found")
 	assert.Equal(t, int64(100), offset, "wrong offset")
 
+	offset, has = item.streams["error:"]
+	assert.True(t, has, "stream isn't found")
+	assert.Equal(t, int64(960), offset, "wrong offset")
+
 	offset, has = item.streams["another"]
 	assert.True(t, has, "stream isn't found")
 	assert.Equal(t, int64(200), offset, "wrong offset")
@@ -52,6 +58,10 @@ func TestParseOffsets(t *testing.T) {
 	offset, has = item.streams["stderr"]
 	assert.True(t, has, "stream isn't found")
 	assert.Equal(t, int64(300), offset, "wrong offset")
+
+	offset, has = item.streams["error:"]
+	assert.True(t, has, "stream isn't found")
+	assert.Equal(t, int64(0), offset, "wrong offset")
 }
 
 func TestParallelOffsetsSave(t *testing.T) {
