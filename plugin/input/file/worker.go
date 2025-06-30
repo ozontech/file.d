@@ -3,12 +3,16 @@ package file
 import (
 	"bytes"
 	"io"
+	"mime"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/pipeline/metadata"
 	k8s_meta "github.com/ozontech/file.d/plugin/input/k8s/meta"
+	"github.com/pierrec/lz4/v4"
 
 	"go.uber.org/zap"
 )
@@ -90,12 +94,35 @@ func (w *worker) work(controller inputer, jobProvider *jobProvider, readBufferSi
 			}
 		}
 
+		var reader io.Reader
+		if job.mimeType == "application/x-lz4" {
+			if isNotFileBeingWritten(file.Name()) {
+				logger.Error("cannot lock file", zap.String("filename", file.Name()))
+				break
+			}
+			lz4Reader := lz4.NewReader(file)
+			if len(offsets) > 0 {
+				for lastOffset+int64(readBufferSize) < offsets[0].Offset {
+					n, err := lz4Reader.Read(readBuf)
+					if err != nil {
+						if err == io.EOF {
+							break // End of file reached
+						}
+					}
+					lastOffset += int64(n)
+				}
+			}
+			reader = lz4Reader
+		} else {
+			reader = file
+		}
+
 		// append the data of the old work, this happens when the event was not completely written to the file
 		// for example: {"level": "info", "message": "some...
 		// the end of the message can be added later and will be read in this iteration
 		accumBuf = append(accumBuf[:0], job.tail...)
 		for {
-			n, err := file.Read(readBuf)
+			n, err := reader.Read(readBuf)
 			controller.IncReadOps()
 			// if we read to end of file it's time to check truncation etc and process next job
 			if err == io.EOF || n == 0 {
@@ -177,21 +204,58 @@ func (w *worker) work(controller inputer, jobProvider *jobProvider, readBufferSi
 	}
 }
 
+func getMimeType(filename string) string {
+	ext := filepath.Ext(filename)
+	mimeType := mime.TypeByExtension(ext)
+	if mimeType == "" {
+		mimeType = "application/octet-stream"
+	}
+
+	return mimeType
+}
+
+func isNotFileBeingWritten(filePath string) bool {
+	// Run the lsof command to check open file descriptors
+	cmd := exec.Command("lsof", filePath)
+	output, err := cmd.Output()
+	if err != nil {
+		return false // Error running lsof
+	}
+
+	// Check the output for write access
+	lines := strings.Split(string(output), "\n")
+	for _, line := range lines {
+		// Check if the line contains 'w' indicating write access
+		if strings.Contains(line, "w") {
+			return true // File is being written to
+		}
+	}
+
+	return false // File is not being written to
+}
+
 func (w *worker) processEOF(file *os.File, job *Job, jobProvider *jobProvider, totalOffset int64) error {
 	stat, err := file.Stat()
 	if err != nil {
 		return err
 	}
 
-	// files truncated from time to time, after logs from file was processed.
-	// Position > stat.Size() means that data was truncated and
-	// caret pointer must be moved to start of file.
-	if totalOffset > stat.Size() {
-		jobProvider.truncateJob(job)
+	if !job.isCompressed {
+		// files truncated from time to time, after logs from file was processed.
+		// Position > stat.Size() means that data was truncated and
+		// caret pointer must be moved to start of file.
+		if totalOffset > stat.Size() {
+			jobProvider.truncateJob(job)
+		}
 	}
-
 	// Mark job as done till new lines has appeared.
 	jobProvider.doneJob(job)
+
+	if job.isCompressed {
+		job.mu.Lock()
+		file.Close()
+		jobProvider.deleteJobAndUnlock(job)
+	}
 
 	return nil
 }
