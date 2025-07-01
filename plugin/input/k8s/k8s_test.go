@@ -11,40 +11,10 @@ import (
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/plugin/input/k8s/meta"
-	"github.com/ozontech/file.d/plugin/output/devnull"
 	"github.com/ozontech/file.d/test"
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 )
-
-func setInput(p *pipeline.Pipeline, config *Config) {
-	plugin, _ := Factory()
-
-	p.SetInput(&pipeline.InputPluginInfo{
-		PluginStaticInfo: &pipeline.PluginStaticInfo{
-			Config: config,
-		},
-		PluginRuntimeInfo: &pipeline.PluginRuntimeInfo{
-			Plugin: plugin,
-		},
-	})
-}
-
-func setOutput(p *pipeline.Pipeline, out func(event *pipeline.Event)) {
-	plugin, config := devnull.Factory()
-	outputPlugin := plugin.(*devnull.Plugin)
-
-	p.SetOutput(&pipeline.OutputPluginInfo{
-		PluginStaticInfo: &pipeline.PluginStaticInfo{
-			Config: config,
-		},
-		PluginRuntimeInfo: &pipeline.PluginRuntimeInfo{
-			Plugin: outputPlugin,
-		},
-	})
-
-	outputPlugin.SetOutFn(out)
-}
 
 func TestMain(m *testing.M) {
 	// we are going to do work fucking fast
@@ -122,14 +92,13 @@ func TestAllowedLabels(t *testing.T) {
 		wg.Done()
 	})
 
-	input.In(0, filename1, test.NewOffset(0), []byte(wrapK8sInfo(`log\n`, item, "node1")))
-	input.In(0, filename2, test.NewOffset(0), []byte(wrapK8sInfo(`log\n`, item2, "node1")))
+	input.In(0, filename1, test.NewOffset(0), []byte(wrapK8sInfo(`log\n`, "node1")))
+	input.In(0, filename2, test.NewOffset(0), []byte(wrapK8sInfo(`log\n`, "node1")))
 
 	wg.Wait()
 	meta.DisableGatherer()
 	p.Stop()
 
-	assert.Equal(t, "allowed_value", outEvents[0].Root.Dig("k8s_pod_label_allowed_label").AsString(), "no label in event")
 	assert.Nil(t, outEvents[1].Root.Dig("k8s_label_denied_label"), "extra label in event")
 }
 

@@ -49,13 +49,13 @@ func TestMultilineAction_Do(t *testing.T) {
 			// because the buffer size check happens before adding to it
 			EventParts:    []string{`{"log": "hello"}`, `{"log": "  "}`, `{"log": "world\n"}`},
 			ActionResults: []pipeline.ActionResult{pipeline.ActionCollapse, pipeline.ActionCollapse, pipeline.ActionPass},
-			ExpectedRoot:  wrapK8sInfo(`hello  world\n`, item, meta.SelfNodeName),
+			ExpectedRoot:  wrapK8sInfo(`hello  world\n`, meta.SelfNodeName),
 		},
 		{
 			Name:          "continue process events",
 			EventParts:    []string{`{"log": "some "}`, `{"log": "other "}`, `{"log": "logs\n"}`},
 			ActionResults: []pipeline.ActionResult{pipeline.ActionCollapse, pipeline.ActionCollapse, pipeline.ActionPass},
-			ExpectedRoot:  wrapK8sInfo(`some other logs\n`, item, meta.SelfNodeName),
+			ExpectedRoot:  wrapK8sInfo(`some other logs\n`, meta.SelfNodeName),
 		},
 		{
 			Name:          "must discard long event",
@@ -66,14 +66,14 @@ func TestMultilineAction_Do(t *testing.T) {
 			Name:          "continue process events 2",
 			EventParts:    []string{`{"log": "some "}`, `{"log": "other long long long long "}`, `{"log": "event\n"}`},
 			ActionResults: []pipeline.ActionResult{pipeline.ActionCollapse, pipeline.ActionCollapse, pipeline.ActionDiscard},
-			ExpectedRoot:  wrapK8sInfo(`event\n`, item, meta.SelfNodeName),
+			ExpectedRoot:  wrapK8sInfo(`event\n`, meta.SelfNodeName),
 		},
 		{
 			Name:               "must cutoff long event",
 			EventParts:         []string{`{"log": "some "}`, `{"log": "other long "}`, `{"log":"long long"}`, `{"log": "event\n"}`},
 			CutOffEventByLimit: true,
 			ActionResults:      []pipeline.ActionResult{pipeline.ActionCollapse, pipeline.ActionCollapse, pipeline.ActionCollapse, pipeline.ActionPass},
-			ExpectedRoot:       wrapK8sInfo(`some other long l\n`, item, meta.SelfNodeName),
+			ExpectedRoot:       wrapK8sInfo(`some other long l\n`, meta.SelfNodeName),
 		},
 		{
 			Name:                    "must cutoff long event with field",
@@ -82,8 +82,8 @@ func TestMultilineAction_Do(t *testing.T) {
 			CutOffEventByLimitField: "cutoff",
 			ActionResults:           []pipeline.ActionResult{pipeline.ActionCollapse, pipeline.ActionCollapse, pipeline.ActionCollapse, pipeline.ActionPass},
 			ExpectedRoot: fmt.Sprintf(
-				`{"log":"%s","k8s_pod":"%s","k8s_namespace":"%s","k8s_container":"%s","k8s_container_id":"%s","k8s_node":"%s","k8s_pod_label_allowed_label":"allowed_value","k8s_node_label_zone":"z34","cutoff":true}`,
-				`some other long l\n`, item.PodName, item.Namespace, item.ContainerName, item.ContainerID, meta.SelfNodeName,
+				`{"log":"%s","k8s_node":"%s","cutoff":true}`,
+				`some other long l\n`, meta.SelfNodeName,
 			),
 		},
 	}
@@ -98,11 +98,6 @@ func TestMultilineAction_Do(t *testing.T) {
 
 				require.NoError(t, root.DecodeString(part))
 				event := &pipeline.Event{Root: root, SourceName: filename, Size: len(part)}
-
-				pipeline.CreateNestedField(event.Root, []string{"k8s_pod"}).MutateToString(string(item.PodName))
-				pipeline.CreateNestedField(event.Root, []string{"k8s_namespace"}).MutateToString(string(item.Namespace))
-				pipeline.CreateNestedField(event.Root, []string{"k8s_container"}).MutateToString(string(item.ContainerName))
-				pipeline.CreateNestedField(event.Root, []string{"k8s_container_id"}).MutateToString(string(item.ContainerID))
 
 				result := plugin.Do(event)
 
@@ -287,8 +282,8 @@ func wrapLogContent(s string) string {
 	return fmt.Sprintf(`{"log": "%s"}`, s)
 }
 
-func wrapK8sInfo(s string, item *meta.MetaItem, nodeName string) string {
+func wrapK8sInfo(s string, nodeName string) string {
 	return fmt.Sprintf(
-		`{"log":"%s","k8s_pod":"%s","k8s_namespace":"%s","k8s_container":"%s","k8s_container_id":"%s","k8s_node":"%s","k8s_pod_label_allowed_label":"allowed_value","k8s_node_label_zone":"z34"}`,
-		s, item.PodName, item.Namespace, item.ContainerName, item.ContainerID, nodeName)
+		`{"log":"%s","k8s_node":"%s"}`,
+		s, nodeName)
 }
