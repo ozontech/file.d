@@ -311,52 +311,46 @@ func TestWorkerWorkMultiData(t *testing.T) {
 func TestNewMetaInformation(t *testing.T) {
 	k8s_meta.DisableMetaUpdates = true
 	tests := []struct {
-		name         string
-		filename     string
-		symlink      string
-		inode        inodeID
-		parseK8sMeta bool
-		expectError  bool
+		name        string
+		filename    string
+		symlink     string
+		inode       inodeID
+		expectError bool
 	}{
 		{
-			name:         "Valid filename with K8s metadata",
-			filename:     "/k8s-logs/advanced-logs-checker-2222222222-trtrq_sre_duty-bot-4e0301b633eaa2bfdcafdeba59ba0c72a3815911a6a820bf273534b0f32d98e0.log",
-			symlink:      "",
-			inode:        12345,
-			parseK8sMeta: true,
-			expectError:  false,
+			name:        "Valid filename with K8s metadata",
+			filename:    "/k8s-logs/advanced-logs-checker-2222222222-trtrq_sre_duty-bot-4e0301b633eaa2bfdcafdeba59ba0c72a3815911a6a820bf273534b0f32d98e0.log",
+			symlink:     "",
+			inode:       12345,
+			expectError: false,
 		},
 		{
-			name:         "Valid symlink with K8s metadata",
-			filename:     "/4e0301b633eaa2bfdcafdeba59ba0c72a3815911a6a820bf273534b0f32d98e0.log",
-			symlink:      "/k8s-logs/advanced-logs-checker-2222222222-trtrq_sre_duty-bot-4e0301b633eaa2bfdcafdeba59ba0c72a3815911a6a820bf273534b0f32d98e0.log",
-			inode:        12345,
-			parseK8sMeta: true,
-			expectError:  false,
+			name:        "Valid symlink with K8s metadata",
+			filename:    "/4e0301b633eaa2bfdcafdeba59ba0c72a3815911a6a820bf273534b0f32d98e0.log",
+			symlink:     "/k8s-logs/advanced-logs-checker-2222222222-trtrq_sre_duty-bot-4e0301b633eaa2bfdcafdeba59ba0c72a3815911a6a820bf273534b0f32d98e0.log",
+			inode:       12345,
+			expectError: false,
 		},
 		{
-			name:         "Filename without k8s parse",
-			filename:     "/4e0301b633eaa2bfdcafdeba59ba0c72a3815911a6a820bf273534b0f32d98e0.log",
-			symlink:      "/k8s-logs/advanced-logs-checker-2222222222-trtrq_sre_duty-bot-4e0301b633eaa2bfdcafdeba59ba0c72a3815911a6a820bf273534b0f32d98e0.log",
-			inode:        12345,
-			parseK8sMeta: false,
-			expectError:  false,
+			name:        "Filename without k8s parse",
+			filename:    "/4e0301b633eaa2bfdcafdeba59ba0c72a3815911a6a820bf273534b0f32d98e0.log",
+			symlink:     "/k8s-logs/advanced-logs-checker-2222222222-trtrq_sre_duty-bot-4e0301b633eaa2bfdcafdeba59ba0c72a3815911a6a820bf273534b0f32d98e0.log",
+			inode:       12345,
+			expectError: false,
 		},
 		{
-			name:         "Invalid inputs without K8s metadata",
-			filename:     "",
-			symlink:      "",
-			inode:        0,
-			parseK8sMeta: false,
-			expectError:  false,
+			name:        "Invalid inputs without K8s metadata",
+			filename:    "",
+			symlink:     "",
+			inode:       0,
+			expectError: false,
 		},
 		{
-			name:         "Invalid K8s metadata parsing",
-			filename:     "invalidfile.txt",
-			symlink:      "invalidsymlink",
-			inode:        0,
-			parseK8sMeta: true,
-			expectError:  true,
+			name:        "Invalid K8s metadata parsing",
+			filename:    "invalidfile.txt",
+			symlink:     "invalidsymlink",
+			inode:       0,
+			expectError: true,
 		},
 	}
 
@@ -387,13 +381,9 @@ func TestGetData(t *testing.T) {
 				inode:    12345,
 			},
 			expected: map[string]any{
-				"filename":       "/4e0301b633eaa2bfdcafdeba59ba0c72a3815911a6a820bf273534b0f32d98e0.log",
-				"symlink":        "/k8s-logs/advanced-logs-checker-2222222222-trtrq_sre_duty-bot-4e0301b633eaa2bfdcafdeba59ba0c72a3815911a6a820bf273534b0f32d98e0.log",
-				"inode":          uint64(12345),
-				"pod_name":       "advanced-logs-checker-2222222222-trtrq",
-				"namespace":      "sre",
-				"container_name": "duty-bot",
-				"container_id":   "4e0301b633eaa2bfdcafdeba59ba0c72a3815911a6a820bf273534b0f32d98e0",
+				"filename": "/4e0301b633eaa2bfdcafdeba59ba0c72a3815911a6a820bf273534b0f32d98e0.log",
+				"symlink":  "/k8s-logs/advanced-logs-checker-2222222222-trtrq_sre_duty-bot-4e0301b633eaa2bfdcafdeba59ba0c72a3815911a6a820bf273534b0f32d98e0.log",
+				"inode":    uint64(12345),
 			},
 		},
 		{
@@ -404,13 +394,9 @@ func TestGetData(t *testing.T) {
 				inode:    12345,
 			},
 			expected: map[string]any{
-				"filename":       "/container.log",
-				"symlink":        "/k8s-logs/container.log",
-				"inode":          uint64(12345),
-				"pod_name":       nil,
-				"namespace":      nil,
-				"container_name": nil,
-				"container_id":   nil,
+				"filename": "/container.log",
+				"symlink":  "/k8s-logs/container.log",
+				"inode":    uint64(12345),
 			},
 		},
 	}
