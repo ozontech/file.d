@@ -1,12 +1,11 @@
 //go:build linux
-// +build linux
 
 package dmesg
 
 import (
 	"time"
 
-	"github.com/euank/go-kmsg-parser/kmsgparser"
+	"github.com/euank/go-kmsg-parser/v3/kmsgparser"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/offset"
@@ -65,7 +64,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	p.state = &state{}
 	if err := offset.LoadYAML(p.config.OffsetsFile, p.state); err != nil {
 		p.offsetErrorsMetric.Inc()
-		p.logger.Error("can't load offset file: %s", err.Error())
+		p.logger.Errorf("can't load offset file: %s", err.Error())
 	}
 
 	parser, err := kmsgparser.NewParser()
@@ -86,8 +85,17 @@ func (p *Plugin) read() {
 	root := insaneJSON.Spawn()
 	defer insaneJSON.Release(root)
 
+	messages := make(chan kmsgparser.Message, 1)
+
+	go func() {
+		err := p.parser.Parse(messages)
+		if err != nil {
+			p.logger.Fatalf("parsing error occurred: %s", err.Error())
+		}
+	}()
+
 	out := make([]byte, 0)
-	for m := range p.parser.Parse() {
+	for m := range messages {
 		ts := m.Timestamp.UnixNano()
 		if ts <= p.state.TS {
 			continue
