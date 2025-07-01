@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Super Adventure - Interactive Game Plan</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Lora:wght@400;700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body class="antialiased">
+
+    <header id="main-header" class="bg-[#FDFBF5]/80 backdrop-blur-sm sticky top-0 z-50 shadow-sm">
+        <nav class="container mx-auto px-6 py-4 flex justify-between items-center">
+            <h1 class="text-2xl font-bold text-[#4A554A]">Super Adventure</h1>
+            <div class="hidden md:flex items-center space-x-8">
+                <a href="#concept" class="nav-link text-lg border-b-2 border-transparent">Concept</a>
+                <a href="#story" class="nav-link text-lg border-b-2 border-transparent">The Story</a>
+                <a href="#mechanics" class="nav-link text-lg border-b-2 border-transparent">Mechanics</a>
+                <a href="#structure" class="nav-link text-lg border-b-2 border-transparent">Structure</a>
+            </div>
+            <button id="mobile-menu-button" class="md:hidden text-2xl">☰</button>
+        </nav>
+        <div id="mobile-menu" class="hidden md:hidden bg-[#FDFBF5] py-4">
+             <a href="#concept" class="block text-center py-2 text-lg">Concept</a>
+             <a href="#story" class="block text-center py-2 text-lg">The Story</a>
+             <a href="#mechanics" class="block text-center py-2 text-lg">Mechanics</a>
+             <a href="#structure" class="block text-center py-2 text-lg">Structure</a>
+        </div>
+    </header>
+
+    <main class="container mx-auto px-6 py-8">
+        
+        <section id="concept" class="min-h-[60vh] flex items-center text-center py-16">
+            <div class="w-full">
+                <h1 class="text-5xl md:text-7xl font-bold mb-4 text-[#4A554A]">Super Adventure</h1>
+                <p class="text-xl md:text-2xl text-[#5A6A5A] mb-8">A Text-Based Fantasy Adventure Game</p>
+                <div class="max-w-3xl mx-auto bg-white/50 p-6 rounded-lg shadow-sm">
+                    <h3 class="text-xl font-bold mb-2 font-lora">Core Idea</h3>
+                    <p class="text-lg text-gray-700">The player is an aspiring hero in the whimsical Kingdom of Eldoria. The legendary Sunstone, which protects the kingdom from the encroaching Gloom, has been stolen by the mischievous Shadow Sorcerer. The player must embark on a quest to retrieve the Sunstone, solving puzzles, interacting with characters, and overcoming challenges along the way.</p>
+                </div>
+            </div>
+        </section>
+
+        <section id="story" class="py-16">
+            <div class="text-center mb-12">
+                <h2 class="text-4xl font-bold mb-2">The Hero's Journey</h2>
+                <p class="text-lg text-gray-600 max-w-2xl mx-auto">This section outlines the main narrative arc of the game. The player's journey is a linear progression through distinct areas, each with its own challenges. Click on a location in the flowchart below to learn more about its role in the story.</p>
+            </div>
+
+            <div class="lg:flex lg:space-x-8">
+                <div class="lg:w-2/3 mb-8 lg:mb-0">
+                    <div id="story-flow" class="flex flex-col md:flex-row items-center justify-center space-y-4 md:space-y-0 md:space-x-4">
+                        <div class="flowchart-node active p-4 rounded-lg w-full md:w-auto text-center" data-story="intro">Meadowbrook Village</div>
+                        <div class="flex items-center w-full md:w-auto md:flex-1">
+                            <div class="flowchart-connector hidden md:block"></div>
+                            <div class="flowchart-arrow hidden md:block"></div>
+                            <div class="md:hidden text-3xl">↓</div>
+                        </div>
+                        <div class="flowchart-node p-4 rounded-lg w-full md:w-auto text-center" data-story="quest_woods">Whispering Woods</div>
+                         <div class="flex items-center w-full md:w-auto md:flex-1">
+                            <div class="flowchart-connector hidden md:block"></div>
+                            <div class="flowchart-arrow hidden md:block"></div>
+                             <div class="md:hidden text-3xl">↓</div>
+                        </div>
+                        <div class="flowchart-node p-4 rounded-lg w-full md:w-auto text-center" data-story="quest_caves">Glimmering Caves</div>
+                         <div class="flex items-center w-full md:w-auto md:flex-1">
+                            <div class="flowchart-connector hidden md:block"></div>
+                            <div class="flowchart-arrow hidden md:block"></div>
+                             <div class="md:hidden text-3xl">↓</div>
+                        </div>
+                        <div class="flowchart-node p-4 rounded-lg w-full md:w-auto text-center" data-story="quest_keep">The Shadow Keep</div>
+                    </div>
+                </div>
+
+                <div id="story-details" class="lg:w-1/3 bg-white p-6 rounded-lg shadow-md border border-gray-200">
+                    <h3 id="story-title" class="text-2xl font-bold mb-4 font-lora"></h3>
+                    <p id="story-description" class="text-gray-700"></p>
+                </div>
+            </div>
+        </section>
+
+        <section id="mechanics" class="py-16">
+            <div class="text-center mb-12">
+                <h2 class="text-4xl font-bold mb-2">Gameplay Mechanics</h2>
+                <p class="text-lg text-gray-600 max-w-2xl mx-auto">This section explains how the player interacts with the world of Super Adventure. Below are the core mechanics. Use the buttons to see a demonstration of how each command type works in the game.</p>
+            </div>
+            <div class="grid md:grid-cols-2 gap-8">
+                <div class="bg-white p-6 rounded-lg shadow-md border border-gray-200">
+                    <h3 class="text-2xl font-bold mb-4 font-lora">Player Actions</h3>
+                     <p class="text-gray-700 mb-4">The player interacts with the world using simple verb-noun commands. Try the commands below to see what happens.</p>
+                    <div class="flex flex-wrap gap-2 mb-4">
+                        <button class="mechanic-btn bg-[#5A6A5A] text-white px-4 py-2 rounded-md hover:bg-[#4A554A] transition" data-command="go north">go north</button>
+                        <button class="mechanic-btn bg-[#5A6A5A] text-white px-4 py-2 rounded-md hover:bg-[#4A554A] transition" data-command="take wooden staff">take wooden staff</button>
+                        <button class="mechanic-btn bg-[#5A6A5A] text-white px-4 py-2 rounded-md hover:bg-[#4A554A] transition" data-command="use iron key">use iron key</button>
+                        <button class="mechanic-btn bg-[#5A6A5A] text-white px-4 py-2 rounded-md hover:bg-[#4A554A] transition" data-command="talk to Elder Elara">talk to Elder Elara</button>
+                        <button class="mechanic-btn bg-[#5A6A5A] text-white px-4 py-2 rounded-md hover:bg-[#4A554A] transition" data-command="inventory">inventory</button>
+                    </div>
+                     <div class="bg-gray-800 text-white font-mono p-4 rounded-md text-sm">
+                        <p>&gt; <span id="mechanic-input">...</span></p>
+                        <p id="mechanic-output" class="text-green-400">Press a button to see a command in action.</p>
+                    </div>
+                </div>
+
+                <div class="bg-white p-6 rounded-lg shadow-md border border-gray-200">
+                    <h3 class="text-2xl font-bold mb-4 font-lora">World State</h3>
+                    <div class="space-y-4">
+                        <div>
+                            <h4 class="font-semibold text-lg">Puzzles</h4>
+                            <p class="text-gray-700">The world contains obstacles, like locked doors or chasms, that require specific items from the player's inventory to overcome. This encourages exploration and problem-solving.</p>
+                        </div>
+                        <div>
+                            <h4 class="font-semibold text-lg">Inventory</h4>
+                            <p class="text-gray-700">The player carries a collection of items. Managing this inventory is key to solving puzzles and progressing through the game.</p>
+                        </div>
+                        <div>
+                            <h4 class="font-semibold text-lg">State Management</h4>
+                            <p class="text-gray-700">The game remembers every change: a door unlocked, an item taken, a character spoken to. This ensures the world feels persistent and responsive to the player's actions.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="structure" class="py-16">
+            <div class="text-center mb-12">
+                <h2 class="text-4xl font-bold mb-2">Game Data Structure</h2>
+                <p class="text-lg text-gray-600 max-w-2xl mx-auto">This section provides a look under the hood at how the game world is built. The entire world is defined in a single, large data structure (a Python dictionary). This approach makes it easy to add new rooms, items, and puzzles. Below is an example of one room's data.</p>
+            </div>
+            <div class="code-block p-6 rounded-lg shadow-lg max-w-4xl mx-auto overflow-x-auto">
+<pre><code><span class="code-comment"># The 'world' is a dictionary of room objects</span>
+<span class="code-key">'whispering_woods_entrance'</span><span class="code-punc">: {</span>
+    <span class="code-key">'name'</span><span class="code-punc">:</span> <span class="code-string">"Entrance to the Whispering Woods"</span><span class="code-punc">,</span>
+    <span class="code-key">'description'</span><span class="code-punc">:</span> <span class="code-string">"A path leads deeper into the woods to the north..."</span><span class="code-punc">,</span>
+    <span class="code-key">'exits'</span><span class="code-punc">: {</span><span class="code-key">'south'</span><span class="code-punc">:</span> <span class="code-string">'meadowbrook_square'</span><span class="code-punc">,</span> <span class="code-key">'east'</span><span class="code-punc">:</span> <span class="code-string">'glimmering_caves'</span><span class="code-punc">},</span>
+    <span class="code-key">'items'</span><span class="code-punc">: [],</span>
+    <span class="code-key">'characters'</span><span class="code-punc">: [],</span>
+    <span class="code-key">'puzzles'</span><span class="code-punc">: {</span>
+        <span class="code-key">'east'</span><span class="code-punc">: {</span>
+            <span class="code-key">'locked'</span><span class="code-punc">:</span> <span class="code-key">True</span><span class="code-punc">,</span>
+            <span class="code-key">'key'</span><span class="code-punc">:</span> <span class="code-string">'iron key'</span><span class="code-punc">,</span>
+            <span class="code-key">'message_locked'</span><span class="code-punc">:</span> <span class="code-string">"The gate is locked."</span>
+        <span class="code-punc">}</span>
+    <span class="code-punc">}</span>
+<span class="code-punc">}</span></code></pre>
+            </div>
+        </section>
+
+    </main>
+
+    <footer class="bg-gray-800 text-white py-6">
+        <div class="container mx-auto text-center">
+            <p>&copy; 2025 Super Adventure. A text-based adventure concept.</p>
+        </div>
+    </footer>
+
+    <script src="app.js"></script>
+</body>
+</html>
