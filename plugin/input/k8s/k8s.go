@@ -136,7 +136,7 @@ type Config struct {
 	// > `k8s_container_id`: `{{ .container_id }}`
 	// >
 	// > Example: ```component: '{{ index .pod.Labels "component" | default .k8s_container }}'```
-	K8sMeta cfg.MetaTemplates `json:"meta"` // *
+	// K8sMeta cfg.MetaTemplates `json:"meta"` // *
 }
 
 var startCounter atomic.Int32
@@ -185,42 +185,14 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 		p.params.Controller.SuggestDecoder(decoder.CRI)
 	}
 
-	metaConfig := cfg.MetaTemplates{}
-	if p.config.K8sMeta != nil {
-		metaConfig = p.config.K8sMeta
-	}
-
 	fileMeta := cfg.MetaTemplates{}
 	if p.config.FileConfig.Meta != nil {
 		fileMeta = p.config.FileConfig.Meta
-	}
-	setBuiltInMeta(fileMeta)
-	for k, v := range metaConfig {
-		fileMeta[k] = v
 	}
 	p.config.FileConfig.Meta = fileMeta
 
 	p.fp.Start(&p.config.FileConfig, params)
 }
-
-func setBuiltInMeta(metaConfig cfg.MetaTemplates) {
-	metaConfig["k8s_pod"] = "{{ .pod_name }}"
-	metaConfig["k8s_namespace"] = "{{ .namespace }}"
-	metaConfig["k8s_container"] = "{{ .container_name }}"
-	metaConfig["k8s_container_id"] = "{{ .container_id }}"
-}
-
-/*{ meta-params
-**`pod_name`** - string
-
-**`namespace`** - string
-
-**`container_name`** - string
-
-**`container_id`** - string
-
-**`pod`** - k8s.io/api/core/v1.Pod
-}*/
 
 // Commit event.
 func (p *Plugin) Commit(event *pipeline.Event) {

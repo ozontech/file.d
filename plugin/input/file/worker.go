@@ -8,7 +8,6 @@ import (
 
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/pipeline/metadata"
-	k8s_meta "github.com/ozontech/file.d/plugin/input/k8s/meta"
 
 	"go.uber.org/zap"
 )
@@ -75,15 +74,12 @@ func (w *worker) work(controller inputer, jobProvider *jobProvider, readBufferSi
 
 		var metadataInfo metadata.MetaData
 		if w.metaTemplater != nil {
-			metaData, err := newMetaInformation(
+			metaData := newMetaInformation(
 				job.filename,
 				job.symlink,
 				job.inode,
-				w.needK8sMeta,
 			)
-			if err != nil {
-				logger.Error("cannot parse meta info", zap.Error(err))
-			}
+			var err error
 			metadataInfo, err = w.metaTemplater.Render(metaData)
 			if err != nil {
 				logger.Error("cannot render meta info", zap.Error(err))
@@ -200,29 +196,14 @@ type metaInformation struct {
 	filename string
 	symlink  string
 	inode    uint64
-
-	k8sMetadata *k8s_meta.K8sMetaInformation
 }
 
-func newMetaInformation(filename, symlink string, inode inodeID, parseK8sMeta bool) (metaInformation, error) {
-	var metaData k8s_meta.K8sMetaInformation
-	var err error
-	if parseK8sMeta {
-		metaData, err = k8s_meta.NewK8sMetaInformation(symlink)
-		if err != nil {
-			metaData, err = k8s_meta.NewK8sMetaInformation(filename)
-			if err != nil {
-				return metaInformation{}, err
-			}
-		}
-	}
-
+func newMetaInformation(filename, symlink string, inode inodeID) metaInformation {
 	return metaInformation{
-		filename:    filename,
-		symlink:     symlink,
-		inode:       uint64(inode),
-		k8sMetadata: &metaData,
-	}, nil
+		filename: filename,
+		symlink:  symlink,
+		inode:    uint64(inode),
+	}
 }
 
 func (m metaInformation) GetData() map[string]any {
@@ -230,20 +211,6 @@ func (m metaInformation) GetData() map[string]any {
 		"filename": m.filename,
 		"symlink":  m.symlink,
 		"inode":    m.inode,
-	}
-
-	if m.k8sMetadata != nil {
-		data["pod_name"] = m.k8sMetadata.PodName
-		data["namespace"] = m.k8sMetadata.Namespace
-		data["container_name"] = m.k8sMetadata.ContainerName
-		data["container_id"] = m.k8sMetadata.ContainerID
-		data["pod"] = m.k8sMetadata.Pod
-	} else {
-		data["pod_name"] = nil
-		data["namespace"] = nil
-		data["container_name"] = nil
-		data["container_id"] = nil
-		data["pod"] = nil
 	}
 
 	return data
