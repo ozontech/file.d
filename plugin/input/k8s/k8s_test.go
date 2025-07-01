@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/plugin/input/k8s/meta"
@@ -87,16 +86,9 @@ func config() *Config {
 	config := &Config{
 		AllowedPodLabels: []string{"allowed_label"},
 		OffsetsFile:      "offsets.yaml",
-		K8sMeta:          getTestMeta(),
 	}
 	test.NewConfig(config, map[string]int{"gomaxprocs": 1})
 	return config
-}
-
-func getTestMeta() cfg.MetaTemplates {
-	metaConfig := cfg.MetaTemplates{}
-	setBuiltInMeta(metaConfig)
-	return metaConfig
 }
 
 func TestAllowedLabels(t *testing.T) {
