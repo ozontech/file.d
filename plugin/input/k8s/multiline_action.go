@@ -73,6 +73,24 @@ func (p *MultilineAction) Do(event *pipeline.Event) pipeline.ActionResult {
 
 	event.Root.AddFieldNoAlloc(event.Root, "k8s_node").MutateToString(meta.SelfNodeName)
 
+	ns := meta.Namespace(event.Root.Dig("k8s_namespace").AsString())
+	pod := meta.PodName(event.Root.Dig("k8s_pod").AsString())
+	containerID := meta.ContainerID(event.Root.Dig("k8s_container_id").AsString())
+	containerName := meta.ContainerName(event.Root.Dig("k8s_container").AsString())
+
+	if ns == "" {
+		p.logger.Fatalf("k8s namespace is empty: source=%s", event.SourceName)
+	}
+	if pod == "" {
+		p.logger.Fatalf("k8s pod is empty: source=%s", event.SourceName)
+	}
+	if containerID == "" {
+		p.logger.Fatalf("k8s container id is empty: source=%s", event.SourceName)
+	}
+	if containerName == "" {
+		p.logger.Fatalf("k8s container name is empty: source=%s", event.SourceName)
+	}
+
 	if p.config.OnlyNode {
 		return pipeline.ActionPass
 	}
@@ -124,9 +142,9 @@ func (p *MultilineAction) Do(event *pipeline.Event) pipeline.ActionResult {
 				p.eventBuf = append(p.eventBuf, logFragment[1:logFragmentLen-1-offset]...)
 				p.cutOffEvent = true
 
-				p.logger.Errorf("event chunk will be cut off due to max_event_size, source_name=%s", event.SourceName)
+				p.logger.Errorf("event chunk will be cut off due to max_event_size, source_name=%s, namespace=%s, pod=%s", event.SourceName, ns, pod)
 			} else {
-				p.logger.Errorf("event chunk will be discarded due to max_event_size, source_name=%s", event.SourceName)
+				p.logger.Errorf("event chunk will be discarded due to max_event_size, source_name=%s, namespace=%s, pod=%s", event.SourceName, ns, pod)
 			}
 		}
 		return pipeline.ActionCollapse
@@ -145,8 +163,42 @@ func (p *MultilineAction) Do(event *pipeline.Event) pipeline.ActionResult {
 		}
 	}
 
+	success, podMeta := meta.GetPodMeta(ns, pod, containerID)
+
 	if shouldSplit {
-		p.logger.Warnf("too long k8s event found, it'll be split, source_name=%s consider increase split_event_size, split_event_size=%d, predicted event size=%d", event.SourceName, p.config.SplitEventSize, predictedLen)
+		p.logger.Warnf("too long k8s event found, it'll be split, ns=%s pod=%s container=%s consider increase split_event_size, split_event_size=%d, predicted event size=%d", ns, pod, containerName, p.config.SplitEventSize, predictedLen)
+	}
+
+	if success {
+		for labelName, labelValue := range podMeta.Labels {
+			if len(p.allowedPodLabels) != 0 {
+				_, has := p.allowedPodLabels[labelName]
+
+				if !has {
+					continue
+				}
+			}
+
+			l := len(event.Buf)
+			event.Buf = append(event.Buf, "k8s_pod_label_"...)
+			event.Buf = append(event.Buf, labelName...)
+			event.Root.AddFieldNoAlloc(event.Root, pipeline.ByteToStringUnsafe(event.Buf[l:])).MutateToString(labelValue)
+		}
+
+		for labelName, labelValue := range meta.NodeLabels {
+			if len(p.allowedNodeLabels) != 0 {
+				_, has := p.allowedNodeLabels[labelName]
+
+				if !has {
+					continue
+				}
+			}
+
+			l := len(event.Buf)
+			event.Buf = append(event.Buf, "k8s_node_label_"...)
+			event.Buf = append(event.Buf, labelName...)
+			event.Root.AddFieldNoAlloc(event.Root, pipeline.ByteToStringUnsafe(event.Buf[l:])).MutateToString(labelValue)
+		}
 	}
 
 	if len(p.eventBuf) > 1 {
