@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Birthday Countdown</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <h1>🎉 Birthday Countdown 🎉</h1>
+  <h2>Happy Birthday Baby</h2>
+
+  <div class="countdown">
+    <a href="day1.html">Day 1 - July 1</a>
+    <a href="day2.html">Day 2 - July 2</a>
+    <a href="day3.html">Day 3 - July 3</a>
+    <a href="day4.html">Day 4 - July 4</a>
+    <a href="day5.html">Day 5 - July 5</a>
+    <a href="day6.html">Day 6 - July 6</a>
+    <a href="day7.html">Day 7 - July 7</a>
+    <a href="day8.html">Day 8 - July 8</a>
+    <a href="day9.html">Day 9 - July 9</a>
+    <a href="day10.html">Day 10 - July 10</a>
+    <a href="day11.html">Day 11 - July 11 🎂</a>
+  </div>
+</body>
+</html>
