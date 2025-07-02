@@ -82,8 +82,9 @@ func TestOffsets(t *testing.T) {
 	test.NewConfig(config, nil)
 
 	cursors := map[string]int{}
+	mu := sync.Mutex{}
 
-	for i := 0; i < iters; i++ {
+	for range iters {
 		p := test.NewPipeline(nil, "passive")
 
 		wg := sync.WaitGroup{}
@@ -91,7 +92,9 @@ func TestOffsets(t *testing.T) {
 
 		setInput(p, config)
 		setOutput(p, func(event *pipeline.Event) {
+			mu.Lock()
 			cursors[strings.Clone(event.Root.Dig("__CURSOR").AsString())]++
+			mu.Unlock()
 			wg.Done()
 		})
 
