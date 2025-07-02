@@ -84,41 +84,41 @@ func (p *Plugin) gatherFieldMasksTree() error {
 		}
 	}
 
+	masksWithSpecificFieldsLists := 0
 	if p.hasMaskSpecificFieldsList {
-		masksWithSpecificFieldsLists := 0
 		for i := range p.config.Masks {
 			if p.hasMasksIgnoreFields[i] || p.hasMasksProcessFields[i] {
 				masksWithSpecificFieldsLists++
 			}
 		}
-		// if every mask has specific ignore/process fields lists, no need to apply global ignore/process fields lists
-		if masksWithSpecificFieldsLists < len(p.config.Masks) {
-			if len(p.config.IgnoreFields) > 0 {
-				globalIgnoreFields, err := cfg.ParseNestedFields(p.config.IgnoreFields)
-				if err != nil {
-					return err
-				}
-				addFieldsToTree(root, globalIgnoreFields, func(n *fieldMasksNode) {
-					n.globalIgnore = true
-				})
-				p.hasGlobalIgnoreFields = true
-				p.hasProcessOrIgnoreFields = true
+	}
+	// if every mask has specific ignore/process fields lists, no need to apply global ignore/process fields lists
+	if masksWithSpecificFieldsLists < len(p.config.Masks) {
+		if len(p.config.IgnoreFields) > 0 {
+			globalIgnoreFields, err := cfg.ParseNestedFields(p.config.IgnoreFields)
+			if err != nil {
+				return err
 			}
-
-			if len(p.config.ProcessFields) > 0 {
-				globalProcessFields, err := cfg.ParseNestedFields(p.config.ProcessFields)
-				if err != nil {
-					return err
-				}
-				addFieldsToTree(root, globalProcessFields, func(n *fieldMasksNode) {
-					n.globalProcess = true
-				})
-				p.hasGlobalProcessFields = true
-				p.hasProcessOrIgnoreFields = true
-			}
-		} else {
-			p.logger.Warn("every mask has specific ignore/process fields list, global ignore/process fields list is ommited")
+			addFieldsToTree(root, globalIgnoreFields, func(n *fieldMasksNode) {
+				n.globalIgnore = true
+			})
+			p.hasGlobalIgnoreFields = true
+			p.hasProcessOrIgnoreFields = true
 		}
+
+		if len(p.config.ProcessFields) > 0 {
+			globalProcessFields, err := cfg.ParseNestedFields(p.config.ProcessFields)
+			if err != nil {
+				return err
+			}
+			addFieldsToTree(root, globalProcessFields, func(n *fieldMasksNode) {
+				n.globalProcess = true
+			})
+			p.hasGlobalProcessFields = true
+			p.hasProcessOrIgnoreFields = true
+		}
+	} else {
+		p.logger.Warn("every mask has specific ignore/process fields list, global ignore/process fields list is ommited")
 	}
 
 	if p.hasProcessOrIgnoreFields {
