@@ -175,8 +175,8 @@ func newLogicalNode(op string, operands []Node) (Node, error) {
 	}, nil
 }
 
-func (n *logicalNode) Type() NodeType {
-	return NodeLogicalOp
+func (n *logicalNode) Type() nodeType {
+	return nodeLogicalOp
 }
 
 func (n *logicalNode) Check(eventRoot *insaneJSON.Root) bool {

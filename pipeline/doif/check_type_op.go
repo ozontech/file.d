@@ -150,8 +150,8 @@ func newCheckTypeOpNode(field string, values [][]byte) (Node, error) {
 	}, nil
 }
 
-func (n *checkTypeOpNode) Type() NodeType {
-	return NodeCheckTypeOp
+func (n *checkTypeOpNode) Type() nodeType {
+	return nodeCheckTypeOp
 }
 
 func (n *checkTypeOpNode) Check(eventRoot *insaneJSON.Root) bool {

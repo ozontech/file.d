@@ -7,29 +7,29 @@ import (
 // ! do-if-node
 // ^ do-if-node
 
-type NodeType int
+type nodeType int
 
 const (
-	NodeUnknownType NodeType = iota
+	nodeUnknownType nodeType = iota
 
 	// > Type of node where matching rules for fields are stored.
-	NodeFieldOp // *
+	nodeFieldOp // *
 
 	// > Type of node where matching rules for byte length and array length are stored.
-	NodeLengthCmpOp // *
+	nodeLengthCmpOp // *
 
 	// > Type of node where matching rules for timestamps are stored.
-	NodeTimestampCmpOp // *
+	nodeTimestampCmpOp // *
 
 	// > Type of node where matching rules for check types are stored.
-	NodeCheckTypeOp // *
+	nodeCheckTypeOp // *
 
 	// > Type of node where logical rules for applying other rules are stored.
-	NodeLogicalOp // *
+	nodeLogicalOp // *
 )
 
 type Node interface {
-	Type() NodeType
+	Type() nodeType
 	Check(*insaneJSON.Root) bool
 	isEqualTo(Node, int) error
 }

@@ -77,7 +77,7 @@ func buildTree(node treeNode) (Node, error) {
 func checkNode(t *testing.T, want, got Node) {
 	require.Equal(t, want.Type(), got.Type())
 	switch want.Type() {
-	case NodeFieldOp:
+	case nodeFieldOp:
 		wantNode := want.(*fieldOpNode)
 		gotNode := got.(*fieldOpNode)
 		assert.Equal(t, wantNode.op, gotNode.op)
@@ -111,7 +111,7 @@ func checkNode(t *testing.T, want, got Node) {
 		}
 		assert.Equal(t, wantNode.minValLen, gotNode.minValLen)
 		assert.Equal(t, wantNode.maxValLen, gotNode.maxValLen)
-	case NodeLogicalOp:
+	case nodeLogicalOp:
 		wantNode := want.(*logicalNode)
 		gotNode := got.(*logicalNode)
 		assert.Equal(t, wantNode.op, gotNode.op)
@@ -119,14 +119,14 @@ func checkNode(t *testing.T, want, got Node) {
 		for i := 0; i < len(wantNode.operands); i++ {
 			checkNode(t, wantNode.operands[i], gotNode.operands[i])
 		}
-	case NodeLengthCmpOp:
+	case nodeLengthCmpOp:
 		wantNode := want.(*lenCmpOpNode)
 		gotNode := got.(*lenCmpOpNode)
 		assert.Equal(t, wantNode.lenCmpOp, gotNode.lenCmpOp)
 		assert.Equal(t, wantNode.cmpValue, gotNode.cmpValue)
 		assert.Equal(t, wantNode.cmpOp, gotNode.cmpOp)
 		assert.Equal(t, 0, slices.Compare[[]string](wantNode.fieldPath, gotNode.fieldPath))
-	case NodeTimestampCmpOp:
+	case nodeTimestampCmpOp:
 		wantNode := want.(*tsCmpOpNode)
 		gotNode := got.(*tsCmpOpNode)
 		assert.Equal(t, wantNode.format, gotNode.format)
