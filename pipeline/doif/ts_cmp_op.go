@@ -134,7 +134,7 @@ func (n *tsCmpOpNode) startUpdater() {
 }
 
 func (n *tsCmpOpNode) Type() nodeType {
-	return nodeTimestampCmpOp
+	return NodeTimestampCmpOp
 }
 
 func (n *tsCmpOpNode) check(eventRoot *insaneJSON.Root) bool {

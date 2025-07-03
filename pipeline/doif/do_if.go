@@ -10,22 +10,22 @@ import (
 type nodeType int
 
 const (
-	nodeUnknownType nodeType = iota
+	NodeUnknownType nodeType = iota
 
 	// > Type of node where matching rules for fields are stored.
-	nodeFieldOp // *
+	NodeFieldOp // *
 
 	// > Type of node where matching rules for byte length and array length are stored.
-	nodeLengthCmpOp // *
+	NodeLengthCmpOp // *
 
 	// > Type of node where matching rules for timestamps are stored.
-	nodeTimestampCmpOp // *
+	NodeTimestampCmpOp // *
 
 	// > Type of node where matching rules for check types are stored.
-	nodeCheckTypeOp // *
+	NodeCheckTypeOp // *
 
 	// > Type of node where logical rules for applying other rules are stored.
-	nodeLogicalOp // *
+	NodeLogicalOp // *
 )
 
 type Node interface {
