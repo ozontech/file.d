@@ -185,22 +185,24 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 		p.params.Controller.SuggestDecoder(decoder.CRI)
 	}
 
-	if !p.config.OnlyNode {
-		metaConfig := cfg.MetaTemplates{}
-		if p.config.K8sMeta != nil {
-			metaConfig = p.config.K8sMeta
-		}
-
-		fileMeta := cfg.MetaTemplates{}
-		if p.config.FileConfig.Meta != nil {
-			fileMeta = p.config.FileConfig.Meta
-		}
-		setBuiltInMeta(fileMeta)
-		for k, v := range metaConfig {
-			fileMeta[k] = v
-		}
-		p.config.FileConfig.Meta = fileMeta
+	metaConfig := cfg.MetaTemplates{}
+	if p.config.K8sMeta != nil {
+		metaConfig = p.config.K8sMeta
 	}
+
+	fileMeta := cfg.MetaTemplates{}
+	if p.config.FileConfig.Meta != nil {
+		fileMeta = p.config.FileConfig.Meta
+	}
+
+	if !p.config.OnlyNode {
+		setBuiltInMeta(fileMeta)
+	}
+
+	for k, v := range metaConfig {
+		fileMeta[k] = v
+	}
+	p.config.FileConfig.Meta = fileMeta
 
 	p.fp.Start(&p.config.FileConfig, params)
 }
