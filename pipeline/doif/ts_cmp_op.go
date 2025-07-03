@@ -84,7 +84,7 @@ type tsCmpOpNode struct {
 	updateInterval   time.Duration
 }
 
-func NewTsCmpOpNode(field string, format string, cmpOp string, cmpValChangeMode string, cmpValue time.Time, cmpValueShift time.Duration, updateInterval time.Duration) (Node, error) {
+func newTsCmpOpNode(field string, format string, cmpOp string, cmpValChangeMode string, cmpValue time.Time, cmpValueShift time.Duration, updateInterval time.Duration) (Node, error) {
 	typedCmpOp, err := newCmpOp(cmpOp)
 	if err != nil {
 		return nil, err

@@ -204,7 +204,7 @@ func TestCheckType(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			var eventRoot *insaneJSON.Root
-			node, err := NewCheckTypeOpNode(tt.node.field, tt.node.values)
+			node, err := newCheckTypeOpNode(tt.node.field, tt.node.values)
 			require.NoError(t, err)
 			for _, d := range tt.data {
 				if d.eventStr == "" {
@@ -357,8 +357,8 @@ func TestCheckTypeDuplicateValues(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			node, err := NewCheckTypeOpNode(tt.node.field, tt.node.values)
-			require.NoError(t, err, "must be no error on NewCheckTypeOpNode")
+			node, err := newCheckTypeOpNode(tt.node.field, tt.node.values)
+			require.NoError(t, err, "must be no error on newCheckTypeOpNode")
 			ctnode, ok := node.(*checkTypeOpNode)
 			require.True(t, ok, "must be *checkTypeOpNode type")
 			assert.Equal(t, tt.expectedVals, len(ctnode.checkTypeFns))

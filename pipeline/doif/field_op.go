@@ -201,7 +201,7 @@ type fieldOpNode struct {
 	maxValLen int
 }
 
-func NewFieldOpNode(op string, field string, caseSensitive bool, values [][]byte) (Node, error) {
+func newFieldOpNode(op string, field string, caseSensitive bool, values [][]byte) (Node, error) {
 	if len(values) == 0 {
 		return nil, errors.New("values are not provided")
 	}

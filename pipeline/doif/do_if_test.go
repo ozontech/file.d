@@ -38,7 +38,7 @@ type treeNode struct {
 func buildTree(node treeNode) (Node, error) {
 	switch {
 	case node.fieldOp != "":
-		return NewFieldOpNode(
+		return newFieldOpNode(
 			node.fieldOp,
 			node.fieldName,
 			node.caseSensitive,
@@ -53,14 +53,14 @@ func buildTree(node treeNode) (Node, error) {
 			}
 			operands = append(operands, operand)
 		}
-		return NewLogicalNode(
+		return newLogicalNode(
 			node.logicalOp,
 			operands,
 		)
 	case node.lenCmpOp != "":
-		return NewLenCmpOpNode(node.lenCmpOp, node.fieldName, node.cmpOp, node.cmpValue)
+		return newLenCmpOpNode(node.lenCmpOp, node.fieldName, node.cmpOp, node.cmpValue)
 	case node.tsCmpOp:
-		return NewTsCmpOpNode(
+		return newTsCmpOpNode(
 			node.fieldName,
 			node.tsFormat,
 			node.cmpOp,

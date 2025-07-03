@@ -151,7 +151,7 @@ type logicalNode struct {
 	operands []Node
 }
 
-func NewLogicalNode(op string, operands []Node) (Node, error) {
+func newLogicalNode(op string, operands []Node) (Node, error) {
 	if len(operands) == 0 {
 		return nil, errors.New("logical op must have at least one operand")
 	}
