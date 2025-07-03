@@ -137,7 +137,7 @@ func (n *tsCmpOpNode) Type() nodeType {
 	return nodeTimestampCmpOp
 }
 
-func (n *tsCmpOpNode) Check(eventRoot *insaneJSON.Root) bool {
+func (n *tsCmpOpNode) check(eventRoot *insaneJSON.Root) bool {
 	node := eventRoot.Dig(n.fieldPath...)
 	if node == nil {
 		return false

@@ -284,7 +284,7 @@ func (n *fieldOpNode) Type() nodeType {
 	return nodeFieldOp
 }
 
-func (n *fieldOpNode) Check(eventRoot *insaneJSON.Root) bool {
+func (n *fieldOpNode) check(eventRoot *insaneJSON.Root) bool {
 	var data []byte
 	node := eventRoot.Dig(n.fieldPath...)
 	if node.IsArray() || node.IsObject() {
