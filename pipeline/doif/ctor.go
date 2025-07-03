@@ -95,7 +95,7 @@ func extractFieldOpNode(opName string, node map[string]any) (Node, error) {
 		return nil, fmt.Errorf("extract field op values: %w", err)
 	}
 
-	result, err = NewFieldOpNode(opName, fieldPath, caseSensitive, vals)
+	result, err = newFieldOpNode(opName, fieldPath, caseSensitive, vals)
 	if err != nil {
 		return nil, fmt.Errorf("init field op: %w", err)
 	}
@@ -159,7 +159,7 @@ func extractLengthCmpOpNode(opName string, node map[string]any) (Node, error) {
 		return nil, err
 	}
 
-	return NewLenCmpOpNode(opName, fieldPath, cmpOp, cmpValue)
+	return newLenCmpOpNode(opName, fieldPath, cmpOp, cmpValue)
 }
 
 func extractTsCmpOpNode(_ string, node map[string]any) (Node, error) {
@@ -225,7 +225,7 @@ func extractTsCmpOpNode(_ string, node map[string]any) (Node, error) {
 		return nil, err
 	}
 
-	return NewTsCmpOpNode(fieldPath, format, cmpOp, cmpMode, cmpValue, cmpValueShift, updateInterval)
+	return newTsCmpOpNode(fieldPath, format, cmpOp, cmpMode, cmpValue, cmpValueShift, updateInterval)
 }
 
 func extractCheckTypeOpNode(_ string, node map[string]any) (Node, error) {
@@ -239,7 +239,7 @@ func extractCheckTypeOpNode(_ string, node map[string]any) (Node, error) {
 		return nil, fmt.Errorf("extract check type op values: %w", err)
 	}
 
-	result, err := NewCheckTypeOpNode(fieldPath, vals)
+	result, err := newCheckTypeOpNode(fieldPath, vals)
 	if err != nil {
 		return nil, fmt.Errorf("init check_type op: %w", err)
 	}
@@ -270,7 +270,7 @@ func extractLogicalOpNode(opName string, node map[string]any) (Node, error) {
 		operands = append(operands, operand)
 	}
 
-	result, err := NewLogicalNode(opName, operands)
+	result, err := newLogicalNode(opName, operands)
 	if err != nil {
 		return nil, fmt.Errorf("init logical node: %w", err)
 	}

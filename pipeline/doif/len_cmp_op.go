@@ -96,7 +96,7 @@ type lenCmpOpNode struct {
 	cmpValue  int
 }
 
-func NewLenCmpOpNode(op string, field string, cmpOp string, cmpValue int) (Node, error) {
+func newLenCmpOpNode(op string, field string, cmpOp string, cmpValue int) (Node, error) {
 	var lenCmpOp lenCmpOpType
 	switch op {
 	case byteLenCmpOpTag:

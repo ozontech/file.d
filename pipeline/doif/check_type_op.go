@@ -79,7 +79,7 @@ type checkTypeOpNode struct {
 	checkTypeFns []checkTypeFn
 }
 
-func NewCheckTypeOpNode(field string, values [][]byte) (Node, error) {
+func newCheckTypeOpNode(field string, values [][]byte) (Node, error) {
 	if len(values) == 0 {
 		return nil, errors.New("values are not provided")
 	}
