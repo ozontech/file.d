@@ -179,24 +179,24 @@ func (n *logicalNode) Type() nodeType {
 	return nodeLogicalOp
 }
 
-func (n *logicalNode) Check(eventRoot *insaneJSON.Root) bool {
+func (n *logicalNode) check(eventRoot *insaneJSON.Root) bool {
 	switch n.op {
 	case logicalOr:
 		for _, op := range n.operands {
-			if op.Check(eventRoot) {
+			if op.check(eventRoot) {
 				return true
 			}
 		}
 		return false
 	case logicalAnd:
 		for _, op := range n.operands {
-			if !op.Check(eventRoot) {
+			if !op.check(eventRoot) {
 				return false
 			}
 		}
 		return true
 	case logicalNot:
-		return !n.operands[0].Check(eventRoot)
+		return !n.operands[0].check(eventRoot)
 	}
 	return false
 }

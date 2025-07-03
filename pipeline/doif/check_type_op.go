@@ -154,7 +154,7 @@ func (n *checkTypeOpNode) Type() nodeType {
 	return nodeCheckTypeOp
 }
 
-func (n *checkTypeOpNode) Check(eventRoot *insaneJSON.Root) bool {
+func (n *checkTypeOpNode) check(eventRoot *insaneJSON.Root) bool {
 	node := eventRoot.Dig(n.fieldPath...)
 	for _, checkFn := range n.checkTypeFns {
 		if checkFn(node) {
