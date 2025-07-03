@@ -76,11 +76,6 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
-	// > **Experimental feature** for best performance. Skips events with mismatched masks.
-	SkipMismatched bool `json:"skip_mismatched" default:"false"` // *
-
-	// > @3@4@5@6
-	// >
 	// > If any mask has been applied then `mask_applied_field` will be set to `mask_applied_value` in the event.
 	MaskAppliedField string `json:"mask_applied_field"` // *
 
@@ -514,14 +509,6 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	p.valueNodes = p.getValueNodes(root, p.valueNodes)
 	for _, v := range p.valueNodes {
 		value := v.AsBytes()
-		var valueIsCommonMatched bool
-		if p.config.SkipMismatched {
-			// is matched by common mask
-			valueIsCommonMatched = p.matchRe.Match(value)
-		} else {
-			// to always try to apply a mask
-			valueIsCommonMatched = true
-		}
 
 		p.sourceBuf = append(p.sourceBuf[:0], value...)
 		// valueMasked is not the same as maskApplied;
@@ -529,10 +516,6 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 		valueMasked := false
 		for i := range p.config.Masks {
 			mask := &p.config.Masks[i]
-			if mask.Re != "" && !valueIsCommonMatched {
-				// skips messages not matched common regex
-				continue
-			}
 
 			if !mask.use {
 				continue

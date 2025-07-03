@@ -26,12 +26,6 @@ List of masks.
 
 <br>
 
-**`skip_mismatched`** *`bool`* *`default=false`* 
-
-**Experimental feature** for best performance. Skips events with mismatched masks.
-
-<br>
-
 **`mask_applied_field`** *`string`* 
 
 If any mask has been applied then `mask_applied_field` will be set to `mask_applied_value` in the event.
