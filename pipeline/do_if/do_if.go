@@ -1,4 +1,4 @@
-package doif
+package do_if
 
 import (
 	insaneJSON "github.com/ozontech/insane-json"
