@@ -126,7 +126,7 @@ func newLenCmpOpNode(op string, field string, cmpOp string, cmpValue int) (Node,
 }
 
 func (n *lenCmpOpNode) Type() nodeType {
-	return nodeLengthCmpOp
+	return NodeLengthCmpOp
 }
 
 func getNodeFieldsBytesSize(node *insaneJSON.Node) int {
