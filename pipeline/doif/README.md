@@ -6,25 +6,6 @@ When Do If Checker's Match func is called it calls to the root Match func and th
 the chain of Match func calls are performed across the whole tree.
 
 ## Node types
-**`FieldOp`** Type of node where matching rules for fields are stored.
-
-<br>
-
-**`LengthCmpOp`** Type of node where matching rules for byte length and array length are stored.
-
-<br>
-
-**`TimestampCmpOp`** Type of node where matching rules for timestamps are stored.
-
-<br>
-
-**`CheckTypeOp`** Type of node where matching rules for check types are stored.
-
-<br>
-
-**`LogicalOp`** Type of node where logical rules for applying other rules are stored.
-
-<br>
 
 
 ## Field op node

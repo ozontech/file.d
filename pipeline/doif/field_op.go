@@ -280,8 +280,8 @@ func newFieldOpNode(op string, field string, caseSensitive bool, values [][]byte
 	}, nil
 }
 
-func (n *fieldOpNode) Type() NodeType {
-	return NodeFieldOp
+func (n *fieldOpNode) Type() nodeType {
+	return nodeFieldOp
 }
 
 func (n *fieldOpNode) Check(eventRoot *insaneJSON.Root) bool {
