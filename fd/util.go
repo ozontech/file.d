@@ -11,7 +11,7 @@ import (
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/pipeline/antispam"
-	"github.com/ozontech/file.d/pipeline/doif"
+	"github.com/ozontech/file.d/pipeline/do_if"
 )
 
 func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
@@ -219,13 +219,13 @@ func extractMetrics(actionJSON *simplejson.Json) (string, []string, bool) {
 	return metricName, metricLabels, skipStatus
 }
 
-func extractDoIfChecker(actionJSON *simplejson.Json) (*doif.Checker, error) {
+func extractDoIfChecker(actionJSON *simplejson.Json) (*do_if.Checker, error) {
 	m := actionJSON.MustMap()
 	if m == nil {
 		return nil, nil
 	}
 
-	return doif.NewFromMap(m)
+	return do_if.NewFromMap(m)
 }
 
 func makeActionJSON(actionJSON *simplejson.Json) []byte {
