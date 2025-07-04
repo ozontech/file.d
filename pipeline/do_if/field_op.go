@@ -8,6 +8,7 @@ import (
 	"slices"
 
 	"github.com/ozontech/file.d/cfg"
+	"github.com/ozontech/file.d/pipeline/checker"
 	insaneJSON "github.com/ozontech/insane-json"
 )
 
@@ -64,7 +65,7 @@ const (
 	// > {"pod":"test-pod","service":"test-service"}     # not discarded
 	// > {"pod":"test-pod","service":"test-service-1"}   # not discarded
 	// > ```
-	fieldEqualOpTag = "equal" // *
+	fieldEqualOpTag = checker.OpEqualTag // *
 
 	// > checks whether the field value contains one of the elements the in values list.
 	// >
@@ -87,7 +88,7 @@ const (
 	// > {"pod":"my-test-pod","service":"test-service"}       # discarded
 	// > {"pod":"test-pod","service":"test-service-1"}        # not discarded
 	// > ```
-	fieldContainsOpTag = "contains" // *
+	fieldContainsOpTag = checker.OpContainsTag // *
 
 	// > checks whether the field value has prefix equal to one of the elements in the values list.
 	// >
@@ -110,7 +111,7 @@ const (
 	// > {"pod":"test-pod","service":"test-service"}       # not discarded
 	// > {"pod":"test-pod","service":"test-service-1"}     # not discarded
 	// > ```
-	fieldPrefixOpTag = "prefix" // *
+	fieldPrefixOpTag = checker.OpPrefixTag // *
 
 	// > checks whether the field value has suffix equal to one of the elements in the values list.
 	// >
@@ -133,7 +134,7 @@ const (
 	// > {"pod":"test-pod","service":"test-service"}       # not discarded
 	// > {"pod":"test-pod","service":"test-service-1"}     # not discarded
 	// > ```
-	fieldSuffixOpTag = "suffix" // *
+	fieldSuffixOpTag = checker.OpSuffixTag // *
 
 	// > checks whether the field matches any regex from the values list.
 	// >
@@ -158,7 +159,7 @@ const (
 	// > {"pod":"my-test-instance","service":"test-service-1"} # discarded
 	// > {"pod":"service123","service":"test-service-1"}       # not discarded
 	// > ```
-	fieldRegexOpTag = "regex" // *
+	fieldRegexOpTag = checker.OpRegexTag // *
 )
 
 /*{ do-if-field-op-node
