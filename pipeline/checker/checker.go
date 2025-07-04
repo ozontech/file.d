@@ -17,18 +17,18 @@ const (
 	opRegex
 )
 
-func opToString(op op) string {
+func (op op) String() string {
 	switch op {
 	case opEqual:
-		return "equal"
+		return OpEqualTag
 	case opContains:
-		return "contains"
+		return OpContainsTag
 	case opPrefix:
-		return "prefix"
+		return OpPrefixTag
 	case opSuffix:
-		return "suffix"
+		return OpSuffixTag
 	case opRegex:
-		return "regex"
+		return OpRegexTag
 	default:
 		return "unknown"
 	}
