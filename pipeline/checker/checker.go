@@ -249,6 +249,14 @@ func Equal(a, b *Checker) (err error) {
 		)
 	}
 
+	AssertEqual(len(a.reValues), len(b.reValues), "different regex values count")
+	for i := range a.reValues {
+		AssertEqual(
+			a.reValues[i].String(), b.reValues[i].String(),
+			fmt.Sprintf("different regex values at pos %d", i),
+		)
+	}
+
 	AssertEqual(a.minValLen, b.minValLen, "different min value len")
 	AssertEqual(a.maxValLen, b.maxValLen, "different max value len")
 
