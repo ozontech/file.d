@@ -205,3 +205,52 @@ func (n *Checker) Check(data []byte) bool {
 	}
 	return false
 }
+
+func Assert(b bool, msg string) {
+	if !b {
+		panic(msg)
+	}
+}
+
+func AssertEqual[T comparable](a, b T, msg string) {
+	Assert(a == b, fmt.Sprintf("%s: %v != %v", msg, a, b))
+}
+
+func AssertEqualValues(a, b [][]byte, msg string) {
+	AssertEqual(len(a), len(b), fmt.Sprintf("%s: different values count", msg))
+	for i := range a {
+		Assert(
+			bytes.Equal(a[i], b[i]),
+			fmt.Sprintf("%s: different values at pos %d: %s != %s",
+				msg, i, a[i], b[i],
+			),
+		)
+	}
+}
+
+func Equal(a, b *Checker) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = errors.New(r.(string))
+		}
+	}()
+
+	AssertEqual(a.op, b.op, "different op")
+	AssertEqual(a.caseSensitive, b.caseSensitive, "different case_sensitive")
+	AssertEqualValues(a.values, b.values, "different values")
+
+	AssertEqual(len(a.valuesBySize), len(b.valuesBySize), "different valuesBySize len")
+	for size := range a.valuesBySize {
+		_, found := b.valuesBySize[size]
+		Assert(found, fmt.Sprintf("not found values by size %d", size))
+		AssertEqualValues(
+			a.valuesBySize[size], b.valuesBySize[size],
+			fmt.Sprintf("different values by size %d", size),
+		)
+	}
+
+	AssertEqual(a.minValLen, b.minValLen, "different min value len")
+	AssertEqual(a.maxValLen, b.maxValLen, "different max value len")
+
+	return
+}
