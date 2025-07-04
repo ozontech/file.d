@@ -1,4 +1,4 @@
-package doif
+package do_if
 
 import (
 	"errors"
@@ -79,7 +79,7 @@ type checkTypeOpNode struct {
 	checkTypeFns []checkTypeFn
 }
 
-func NewCheckTypeOpNode(field string, values [][]byte) (Node, error) {
+func newCheckTypeOpNode(field string, values [][]byte) (Node, error) {
 	if len(values) == 0 {
 		return nil, errors.New("values are not provided")
 	}
@@ -150,11 +150,11 @@ func NewCheckTypeOpNode(field string, values [][]byte) (Node, error) {
 	}, nil
 }
 
-func (n *checkTypeOpNode) Type() NodeType {
+func (n *checkTypeOpNode) Type() nodeType {
 	return NodeCheckTypeOp
 }
 
-func (n *checkTypeOpNode) Check(eventRoot *insaneJSON.Root) bool {
+func (n *checkTypeOpNode) check(eventRoot *insaneJSON.Root) bool {
 	node := eventRoot.Dig(n.fieldPath...)
 	for _, checkFn := range n.checkTypeFns {
 		if checkFn(node) {

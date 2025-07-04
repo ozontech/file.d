@@ -1,4 +1,4 @@
-package doif
+package do_if
 
 import (
 	"errors"
@@ -151,7 +151,7 @@ type logicalNode struct {
 	operands []Node
 }
 
-func NewLogicalNode(op string, operands []Node) (Node, error) {
+func newLogicalNode(op string, operands []Node) (Node, error) {
 	if len(operands) == 0 {
 		return nil, errors.New("logical op must have at least one operand")
 	}
@@ -175,28 +175,28 @@ func NewLogicalNode(op string, operands []Node) (Node, error) {
 	}, nil
 }
 
-func (n *logicalNode) Type() NodeType {
+func (n *logicalNode) Type() nodeType {
 	return NodeLogicalOp
 }
 
-func (n *logicalNode) Check(eventRoot *insaneJSON.Root) bool {
+func (n *logicalNode) check(eventRoot *insaneJSON.Root) bool {
 	switch n.op {
 	case logicalOr:
 		for _, op := range n.operands {
-			if op.Check(eventRoot) {
+			if op.check(eventRoot) {
 				return true
 			}
 		}
 		return false
 	case logicalAnd:
 		for _, op := range n.operands {
-			if !op.Check(eventRoot) {
+			if !op.check(eventRoot) {
 				return false
 			}
 		}
 		return true
 	case logicalNot:
-		return !n.operands[0].Check(eventRoot)
+		return !n.operands[0].check(eventRoot)
 	}
 	return false
 }
