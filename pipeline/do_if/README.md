@@ -54,7 +54,7 @@ pipelines:
 
 
 ## Field operations
-**`Equal`** checks whether the field value is equal to one of the elements in the values list.
+`equal` checks whether the field value is equal to one of the elements in the values list.
 
 Example:
 ```yaml
@@ -68,7 +68,7 @@ pipelines:
           values: [test-pod-1, test-pod-2]
 ```
 
-result:
+Result:
 ```
 {"pod":"test-pod-1","service":"test-service"}   # discarded
 {"pod":"test-pod-2","service":"test-service-2"} # discarded
@@ -76,9 +76,7 @@ result:
 {"pod":"test-pod","service":"test-service-1"}   # not discarded
 ```
 
-<br>
-
-**`Contains`** checks whether the field value contains one of the elements the in values list.
+`contains` checks whether the field value contains one of the elements the in values list.
 
 Example:
 ```yaml
@@ -92,7 +90,7 @@ pipelines:
           values: [my-pod, my-test]
 ```
 
-result:
+Result:
 ```
 {"pod":"test-my-pod-1","service":"test-service"}     # discarded
 {"pod":"test-not-my-pod","service":"test-service-2"} # discarded
@@ -100,9 +98,7 @@ result:
 {"pod":"test-pod","service":"test-service-1"}        # not discarded
 ```
 
-<br>
-
-**`Prefix`** checks whether the field value has prefix equal to one of the elements in the values list.
+`prefix` checks whether the field value has prefix equal to one of the elements in the values list.
 
 Example:
 ```yaml
@@ -116,7 +112,7 @@ pipelines:
           values: [test-1, test-2]
 ```
 
-result:
+Result:
 ```
 {"pod":"test-1-pod-1","service":"test-service"}   # discarded
 {"pod":"test-2-pod-2","service":"test-service-2"} # discarded
@@ -124,9 +120,7 @@ result:
 {"pod":"test-pod","service":"test-service-1"}     # not discarded
 ```
 
-<br>
-
-**`Suffix`** checks whether the field value has suffix equal to one of the elements in the values list.
+`suffix` checks whether the field value has suffix equal to one of the elements in the values list.
 
 Example:
 ```yaml
@@ -140,7 +134,7 @@ pipelines:
           values: [pod-1, pod-2]
 ```
 
-result:
+Result:
 ```
 {"pod":"test-1-pod-1","service":"test-service"}   # discarded
 {"pod":"test-2-pod-2","service":"test-service-2"} # discarded
@@ -148,9 +142,7 @@ result:
 {"pod":"test-pod","service":"test-service-1"}     # not discarded
 ```
 
-<br>
-
-**`Regex`** checks whether the field matches any regex from the values list.
+`regex` checks whether the field matches any regex from the values list.
 
 Example:
 ```yaml
@@ -164,7 +156,7 @@ pipelines:
           values: [pod-\d, my-test.*]
 ```
 
-result:
+Result:
 ```
 {"pod":"test-1-pod-1","service":"test-service"}       # discarded
 {"pod":"test-2-pod-2","service":"test-service-2"}     # discarded
@@ -173,8 +165,6 @@ result:
 {"pod":"my-test-instance","service":"test-service-1"} # discarded
 {"pod":"service123","service":"test-service-1"}       # not discarded
 ```
-
-<br>
 
 
 ## Logical op node

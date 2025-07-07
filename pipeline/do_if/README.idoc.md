@@ -12,7 +12,7 @@ the chain of Match func calls are performed across the whole tree.
 @do-if-field-op-node
 
 ## Field operations
-@do-if-field-op|description
+@do-if-field-op
 
 ## Logical op node
 @do-if-logical-op-node
