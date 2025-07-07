@@ -1,6 +1,7 @@
 package antispam
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/bitly/go-simplejson"
@@ -48,9 +49,33 @@ func extractValueNode(op string, jsonNode *simplejson.Json) (Node, error) {
 	checkDataTag := jsonNode.Get("data").MustString()
 	metaKey := jsonNode.Get("meta_key").MustString()
 
-	result, err := newValueNode(op, caseSensitive, nil, checkDataTag, metaKey)
+	values, err := extractFieldOpVals(jsonNode)
+	if err != nil {
+		return nil, fmt.Errorf("extract values: %w", err)
+	}
+
+	result, err := newValueNode(op, caseSensitive, values, checkDataTag, metaKey)
 	if err != nil {
 		return nil, fmt.Errorf("init value node: %w", err)
+	}
+
+	return result, nil
+}
+
+func extractFieldOpVals(jsonNode *simplejson.Json) ([][]byte, error) {
+	values, has := jsonNode.CheckGet("values")
+	if !has {
+		return nil, errors.New(`field "values" not found'`)
+	}
+
+	var result [][]byte
+	for i := range values.MustArray() {
+		curValue, err := values.GetIndex(i).String()
+		if err != nil {
+			return nil, err
+		}
+
+		result = append(result, []byte(curValue))
 	}
 
 	return result, nil
