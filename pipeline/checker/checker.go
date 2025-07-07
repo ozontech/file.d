@@ -260,5 +260,5 @@ func Equal(a, b *Checker) (err error) {
 	AssertEqual(a.minValLen, b.minValLen, "different min value len")
 	AssertEqual(a.maxValLen, b.maxValLen, "different max value len")
 
-	return
+	return nil
 }
