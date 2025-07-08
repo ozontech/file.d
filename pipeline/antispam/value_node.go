@@ -7,50 +7,50 @@ import (
 	"github.com/ozontech/file.d/pipeline/checker"
 )
 
-type checkData int
+type dataType int
 
 const (
-	checkDataEvent checkData = iota
-	checkDataSourceName
-	checkDataMeta
+	dataTypeEvent dataType = iota
+	dataTypeSourceName
+	dataTypeMeta
 )
 
-func (c checkData) String() string {
+func (c dataType) String() string {
 	switch c {
-	case checkDataEvent:
-		return checkDataEventTag
-	case checkDataSourceName:
-		return checkDataSourceNameTag
-	case checkDataMeta:
-		return checkDataMetaTag
+	case dataTypeEvent:
+		return dataTypeEventTag
+	case dataTypeSourceName:
+		return dataTypeSourceNameTag
+	case dataTypeMeta:
+		return dataTypeMetaTag
 	default:
 		panic(fmt.Sprintf("unknown checked data type: %d", c))
 	}
 }
 
 const (
-	checkDataEventTag      = "event"
-	checkDataSourceNameTag = "source_name"
-	checkDataMetaTag       = "meta"
+	dataTypeEventTag      = "event"
+	dataTypeSourceNameTag = "source_name"
+	dataTypeMetaTag       = "meta"
 )
 
-func stringToCheckData(s string) (checkData, error) {
+func stringToDataType(s string) (dataType, error) {
 	switch s {
-	case checkDataEventTag:
-		return checkDataEvent, nil
-	case checkDataSourceNameTag:
-		return checkDataSourceName, nil
-	case checkDataMetaTag:
-		return checkDataMeta, nil
+	case dataTypeEventTag:
+		return dataTypeEvent, nil
+	case dataTypeSourceNameTag:
+		return dataTypeSourceName, nil
+	case dataTypeMetaTag:
+		return dataTypeMeta, nil
 	default:
 		return -1, fmt.Errorf("unknown checked type data: %s", s)
 	}
 }
 
 type valueNode struct {
-	checkData checkData
-	metaKey   string
-	checker   *checker.Checker
+	dataType dataType
+	metaKey  string
+	checker  *checker.Checker
 }
 
 func newValueNode(
@@ -65,39 +65,39 @@ func newValueNode(
 		return nil, fmt.Errorf("init checker: %w", err)
 	}
 
-	var checkDataType checkData
-	checkDataType, err = stringToCheckData(checkDataTag)
+	var dType dataType
+	dType, err = stringToDataType(checkDataTag)
 	if err != nil {
 		return nil, err
 	}
 
-	if checkDataType == checkDataMeta {
+	if dType == dataTypeMeta {
 		if metaKey == "" {
 			return nil, errors.New("empty meta key")
 		}
 	}
 
 	return &valueNode{
-		checkData: checkDataType,
-		metaKey:   metaKey,
-		checker:   c,
+		dataType: dType,
+		metaKey:  metaKey,
+		checker:  c,
 	}, nil
 }
 
 func (n *valueNode) Type() nodeType {
-	return nodeTypeUsual
+	return nodeTypeValue
 }
 
 func (n *valueNode) check(event []byte, sourceName []byte, metadata map[string]string) bool {
-	switch n.checkData {
-	case checkDataEvent:
+	switch n.dataType {
+	case dataTypeEvent:
 		return n.checker.Check(event)
-	case checkDataSourceName:
+	case dataTypeSourceName:
 		return n.checker.Check(sourceName)
-	case checkDataMeta:
+	case dataTypeMeta:
 		data, ok := metadata[n.metaKey]
 		return ok && n.checker.Check([]byte(data))
 	default:
-		panic(fmt.Sprintf("inknown type of checked data: %d", n.checkData))
+		panic(fmt.Sprintf("inknown type of checked data: %d", n.dataType))
 	}
 }

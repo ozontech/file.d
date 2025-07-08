@@ -3,7 +3,7 @@ package antispam
 type nodeType int
 
 const (
-	nodeTypeUsual nodeType = iota
+	nodeTypeValue nodeType = iota
 	nodeTypeLogical
 )
 
