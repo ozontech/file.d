@@ -83,7 +83,14 @@ func NewAntispammer(o *Options) *Antispammer {
 	return a
 }
 
-func (a *Antispammer) IsSpam(id string, name string, isNewSource bool, event []byte, timeEvent time.Time) bool {
+func (a *Antispammer) IsSpam(
+	id string,
+	name string,
+	isNewSource bool,
+	event []byte,
+	timeEvent time.Time,
+	_ map[string]string,
+) bool {
 	if a.threshold <= 0 {
 		return false
 	}
