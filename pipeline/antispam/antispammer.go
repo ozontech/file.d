@@ -25,6 +25,8 @@ type Antispammer struct {
 	sources             map[string]source
 	exceptions          Exceptions
 
+	antispam *Antispam
+
 	logger *zap.Logger
 
 	// antispammer metrics
@@ -44,6 +46,7 @@ type Options struct {
 	Threshold           int
 	UnbanIterations     int
 	Exceptions          Exceptions
+	Antispam            *Antispam
 
 	Logger            *zap.Logger
 	MetricsController *metric.Ctl
@@ -91,6 +94,10 @@ func (a *Antispammer) IsSpam(
 	timeEvent time.Time,
 	_ map[string]string,
 ) bool {
+	if a.antispam != nil {
+		panic("proc new antispam")
+	}
+
 	if a.threshold <= 0 {
 		return false
 	}
@@ -236,16 +243,20 @@ type Antispam struct {
 	enabled      bool
 }
 
-func NewAntispam(defaultLimit int, rules []Rule) *Antispam {
+func NewAntispam(defaultLimit int, rules []Rule) (*Antispam, error) {
+	if err := checkLimit(defaultLimit); err != nil {
+		return nil, err
+	}
+
 	if defaultLimit == -1 && len(rules) == 0 {
-		return &Antispam{enabled: false}
+		return &Antispam{enabled: false}, nil
 	}
 
 	return &Antispam{
 		rules:        rules,
 		defaultLimit: defaultLimit,
 		enabled:      true,
-	}
+	}, nil
 }
 
 type Rule struct {
@@ -253,9 +264,16 @@ type Rule struct {
 	Limit     int
 }
 
-func newRule(condition Node, limit int) (Rule, error) {
+func checkLimit(limit int) error {
 	if limit < -1 {
-		return Rule{}, fmt.Errorf("invalid limit: %d", limit)
+		return fmt.Errorf("invalid limit: %d", limit)
+	}
+	return nil
+}
+
+func newRule(condition Node, limit int) (Rule, error) {
+	if err := checkLimit(limit); err != nil {
+		return Rule{}, err
 	}
 
 	return Rule{
