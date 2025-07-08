@@ -174,6 +174,8 @@ Result:
 {"pod":"service123","service":"test-service-1"}       # not discarded
 ```
 
+<br>
+
 
 ## Logical op node
 DoIf logical op node is a node considered to be the root or an edge between nodes.
