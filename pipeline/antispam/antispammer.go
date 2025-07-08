@@ -92,10 +92,10 @@ func (a *Antispammer) IsSpam(
 	isNewSource bool,
 	event []byte,
 	timeEvent time.Time,
-	_ map[string]string,
+	meta map[string]string,
 ) bool {
 	if a.antispam != nil {
-		panic("proc new antispam")
+		return a.isSpamNew(id, name, isNewSource, event, timeEvent, meta)
 	}
 
 	if a.threshold <= 0 {

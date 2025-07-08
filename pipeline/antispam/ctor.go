@@ -34,7 +34,7 @@ func ExtractV2(jsonNode *simplejson.Json) (*Antispam, error) {
 func extractRules(jsonNode *simplejson.Json) ([]Rule, error) {
 	rules := jsonNode.Get("rules")
 
-	var result []Rule
+	result := make([]Rule, 0)
 	for i := range rules.MustArray() {
 		ruleRaw := rules.GetIndex(i)
 		rule, err := extractRule(ruleRaw)
@@ -81,7 +81,7 @@ func extractNode(jsonNode *simplejson.Json) (Node, error) {
 func extractLogicalNode(op string, jsonNode *simplejson.Json) (Node, error) {
 	rawOperands := jsonNode.Get("operands")
 
-	var operands []Node
+	operands := make([]Node, 0)
 	for i := range rawOperands.MustArray() {
 		opNode := rawOperands.GetIndex(i)
 		operand, err := extractNode(opNode)
@@ -123,7 +123,7 @@ func extractFieldOpVals(jsonNode *simplejson.Json) ([][]byte, error) {
 		return nil, errors.New(`field "values" not found'`)
 	}
 
-	var result [][]byte
+	result := make([][]byte, 0)
 	for i := range values.MustArray() {
 		curValue, err := values.GetIndex(i).String()
 		if err != nil {
