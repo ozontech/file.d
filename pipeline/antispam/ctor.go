@@ -7,6 +7,37 @@ import (
 	"github.com/bitly/go-simplejson"
 )
 
+func extractRules(jsonNode *simplejson.Json) ([]Rule, error) {
+	rules := jsonNode.Get("rules")
+
+	var result []Rule
+	for i := range rules.MustArray() {
+		ruleRaw := rules.GetIndex(i)
+		rule, err := extractRule(ruleRaw)
+		if err != nil {
+			return nil, fmt.Errorf("extract rule: %w", err)
+		}
+
+		result = append(result, rule)
+	}
+
+	return result, nil
+}
+
+func extractRule(jsonNode *simplejson.Json) (Rule, error) {
+	condition, err := extractNode(jsonNode.Get("cond"))
+	if err != nil {
+		return Rule{}, fmt.Errorf("extract cond: %w", err)
+	}
+
+	limit, err := jsonNode.Get("limit").Int()
+	if err != nil {
+		return Rule{}, fmt.Errorf("limit is not int: %w", err)
+	}
+
+	return newRule(condition, limit)
+}
+
 func extractNode(jsonNode *simplejson.Json) (Node, error) {
 	switch op := jsonNode.Get("op").MustString(); op {
 	case "and", "or", "not":
