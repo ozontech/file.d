@@ -18,6 +18,7 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 	capacity := pipeline.DefaultCapacity
 	antispamThreshold := pipeline.DefaultAntispamThreshold
 	var antispamExceptions antispam.Exceptions
+	var antispamV2 *antispam.Antispam
 	sourceNameMetaField := pipeline.DefaultSourceNameMetaField
 	avgInputEventSize := pipeline.DefaultAvgInputEventSize
 	maxInputEventSize := pipeline.DefaultMaxInputEventSize
@@ -87,19 +88,28 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 			eventTimeout = i
 		}
 
-		antispamThreshold = settings.Get("antispam_threshold").MustInt()
-		antispamThreshold *= int(maintenanceInterval / time.Second)
-		if antispamThreshold < 0 {
-			logger.Warn("negative antispam_threshold value, antispam disabled")
-			antispamThreshold = 0
-		}
-
 		var err error
-		antispamExceptions, err = extractAntispamExceptions(settings)
+		antispamV2, err = antispam.ExtractV2(settings)
 		if err != nil {
-			logger.Fatalf("extract exceptions: %s", err)
+			logger.Warnf(
+				"try to fallback to legacy antispam; can't get new antispam config: %s",
+				err.Error(),
+			)
+
+			antispamThreshold = settings.Get("antispam_threshold").MustInt()
+			antispamThreshold *= int(maintenanceInterval / time.Second)
+			if antispamThreshold < 0 {
+				logger.Warn("negative antispam_threshold value, antispam disabled")
+				antispamThreshold = 0
+			}
+
+			var err error
+			antispamExceptions, err = extractAntispamExceptions(settings)
+			if err != nil {
+				logger.Fatalf("extract exceptions: %s", err)
+			}
+			antispamExceptions.Prepare()
 		}
-		antispamExceptions.Prepare()
 
 		sourceNameMetaField = settings.Get("source_name_meta_field").MustString()
 		isStrict = settings.Get("is_strict").MustBool()
@@ -129,6 +139,7 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 		CutOffEventByLimitField: cutOffEventByLimitField,
 		AntispamThreshold:       antispamThreshold,
 		AntispamExceptions:      antispamExceptions,
+		Antispam:                antispamV2,
 		SourceNameMetaField:     sourceNameMetaField,
 		MaintenanceInterval:     maintenanceInterval,
 		EventTimeout:            eventTimeout,

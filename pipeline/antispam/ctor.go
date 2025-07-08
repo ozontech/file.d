@@ -7,6 +7,30 @@ import (
 	"github.com/bitly/go-simplejson"
 )
 
+func ExtractV2(jsonNode *simplejson.Json) (*Antispam, error) {
+	rules, err := extractRules(jsonNode)
+	if err != nil {
+		return nil, err
+	}
+
+	defLimiter, ok := jsonNode.CheckGet("default")
+	if !ok {
+		return nil, fmt.Errorf(`field "default" not found`)
+	}
+
+	defLimit, ok := defLimiter.CheckGet("limit")
+	if !ok {
+		return nil, fmt.Errorf(`field "limit" not found`)
+	}
+
+	limit, err := defLimit.Int()
+	if err != nil {
+		return nil, err
+	}
+
+	return NewAntispam(limit, rules)
+}
+
 func extractRules(jsonNode *simplejson.Json) ([]Rule, error) {
 	rules := jsonNode.Get("rules")
 
