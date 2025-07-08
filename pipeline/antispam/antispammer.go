@@ -229,3 +229,37 @@ func (e Exceptions) Prepare() {
 		e[i].Prepare()
 	}
 }
+
+type Antispam struct {
+	rules        []Rule
+	defaultLimit int
+	enabled      bool
+}
+
+func NewAntispam(defaultLimit int, rules []Rule) *Antispam {
+	if defaultLimit == -1 && len(rules) == 0 {
+		return &Antispam{enabled: false}
+	}
+
+	return &Antispam{
+		rules:        rules,
+		defaultLimit: defaultLimit,
+		enabled:      true,
+	}
+}
+
+type Rule struct {
+	Condition Node
+	Limit     int
+}
+
+func newRule(condition Node, limit int) (Rule, error) {
+	if limit < -1 {
+		return Rule{}, fmt.Errorf("invalid limit: %d", limit)
+	}
+
+	return Rule{
+		Condition: condition,
+		Limit:     limit,
+	}, nil
+}
