@@ -163,6 +163,89 @@ func (a *Antispammer) IsSpam(
 	return x >= int32(a.threshold)
 }
 
+func (a *Antispammer) isSpamNew(
+	id string,
+	name string,
+	isNewSource bool,
+	event []byte,
+	timeEvent time.Time,
+	meta map[string]string,
+) bool {
+	if !a.antispam.enabled {
+		return false
+	}
+
+	key := id
+	ruleIndex := -1
+
+	for i := range a.antispam.rules {
+		rule := a.antispam.rules[i]
+		if rule.Condition.check(event, []byte(name), meta) {
+			if a.antispam.defaultLimit == -1 {
+				return false
+			} else {
+				key = rule.MapKey
+				ruleIndex = i
+				break
+			}
+		}
+	}
+
+	if a.antispam.defaultLimit == -1 {
+		return false
+	}
+
+	a.mu.RLock()
+	src, has := a.sources[key]
+	a.mu.RUnlock()
+
+	timeEventSeconds := timeEvent.UnixNano()
+
+	if !has {
+		a.mu.Lock()
+		if newSrc, has := a.sources[key]; has {
+			src = newSrc
+		} else {
+			src = source{
+				counter:   &atomic.Int32{},
+				name:      name,
+				timestamp: &atomic.Int64{},
+			}
+			src.timestamp.Add(timeEventSeconds)
+			a.sources[key] = src
+		}
+		a.mu.Unlock()
+	}
+
+	if isNewSource {
+		src.counter.Swap(0)
+		return false
+	}
+
+	x := src.counter.Load()
+	diff := timeEventSeconds - src.timestamp.Swap(timeEventSeconds)
+	if diff < a.maintenanceInterval.Nanoseconds() {
+		x = src.counter.Inc()
+	}
+	if x == int32(a.threshold) {
+		src.counter.Swap(int32(a.unbanIterations * a.threshold))
+		a.activeMetric.Set(1)
+		a.banMetric.WithLabelValues(name).Inc()
+		a.logger.Warn("source has been banned",
+			zap.Any("id", id), zap.String("name", name),
+			zap.Time("time_event", timeEvent), zap.Int64("diff_nsec", diff),
+			zap.Int64("maintenance_nsec", a.maintenanceInterval.Nanoseconds()),
+			zap.Int32("counter", src.counter.Load()),
+		)
+	}
+
+	if ruleIndex == -1 {
+		return x >= int32(a.antispam.defaultLimit)
+	}
+
+	return x >= int32(a.antispam.rules[ruleIndex].Limit)
+}
+
 func (a *Antispammer) Maintenance() {
 	a.mu.Lock()
 
@@ -252,6 +335,10 @@ func NewAntispam(defaultLimit int, rules []Rule) (*Antispam, error) {
 		return &Antispam{enabled: false}, nil
 	}
 
+	for i := range rules {
+		rules[i].Prepare(i)
+	}
+
 	return &Antispam{
 		rules:        rules,
 		defaultLimit: defaultLimit,
@@ -262,6 +349,11 @@ func NewAntispam(defaultLimit int, rules []Rule) (*Antispam, error) {
 type Rule struct {
 	Condition Node
 	Limit     int
+	MapKey    string
+}
+
+func (r *Rule) Prepare(id int) {
+	r.MapKey = fmt.Sprintf("#=%d=#", id)
 }
 
 func checkLimit(limit int) error {
