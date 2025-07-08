@@ -54,7 +54,7 @@ pipelines:
 
 
 ## Field operations
-`equal` checks whether the field value is equal to one of the elements in the values list.
+Operation `equal` checks whether the field value is equal to one of the elements in the values list.
 
 Example:
 ```yaml
@@ -76,7 +76,9 @@ Result:
 {"pod":"test-pod","service":"test-service-1"}   # not discarded
 ```
 
-`contains` checks whether the field value contains one of the elements the in values list.
+<br>
+
+Operation `contains` checks whether the field value contains one of the elements the in values list.
 
 Example:
 ```yaml
@@ -98,7 +100,9 @@ Result:
 {"pod":"test-pod","service":"test-service-1"}        # not discarded
 ```
 
-`prefix` checks whether the field value has prefix equal to one of the elements in the values list.
+<br>
+
+Operation `prefix` checks whether the field value has prefix equal to one of the elements in the values list.
 
 Example:
 ```yaml
@@ -120,7 +124,9 @@ Result:
 {"pod":"test-pod","service":"test-service-1"}     # not discarded
 ```
 
-`suffix` checks whether the field value has suffix equal to one of the elements in the values list.
+<br>
+
+Operation `suffix` checks whether the field value has suffix equal to one of the elements in the values list.
 
 Example:
 ```yaml
@@ -142,7 +148,9 @@ Result:
 {"pod":"test-pod","service":"test-service-1"}     # not discarded
 ```
 
-`regex` checks whether the field matches any regex from the values list.
+<br>
+
+Operation `regex` checks whether the field matches any regex from the values list.
 
 Example:
 ```yaml

@@ -10,121 +10,6 @@ import (
 	insaneJSON "github.com/ozontech/insane-json"
 )
 
-/*{ do-if-field-op
-`equal` checks whether the field value is equal to one of the elements in the values list.
-
-Example:
-```yaml
-pipelines:
-  test:
-    actions:
-      - type: discard
-        do_if:
-          op: equal
-          field: pod
-          values: [test-pod-1, test-pod-2]
-```
-
-Result:
-```
-{"pod":"test-pod-1","service":"test-service"}   # discarded
-{"pod":"test-pod-2","service":"test-service-2"} # discarded
-{"pod":"test-pod","service":"test-service"}     # not discarded
-{"pod":"test-pod","service":"test-service-1"}   # not discarded
-```
-
-`contains` checks whether the field value contains one of the elements the in values list.
-
-Example:
-```yaml
-pipelines:
-  test:
-    actions:
-      - type: discard
-        do_if:
-          op: contains
-          field: pod
-          values: [my-pod, my-test]
-```
-
-Result:
-```
-{"pod":"test-my-pod-1","service":"test-service"}     # discarded
-{"pod":"test-not-my-pod","service":"test-service-2"} # discarded
-{"pod":"my-test-pod","service":"test-service"}       # discarded
-{"pod":"test-pod","service":"test-service-1"}        # not discarded
-```
-
-`prefix` checks whether the field value has prefix equal to one of the elements in the values list.
-
-Example:
-```yaml
-pipelines:
-  test:
-    actions:
-      - type: discard
-        do_if:
-          op: prefix
-          field: pod
-          values: [test-1, test-2]
-```
-
-Result:
-```
-{"pod":"test-1-pod-1","service":"test-service"}   # discarded
-{"pod":"test-2-pod-2","service":"test-service-2"} # discarded
-{"pod":"test-pod","service":"test-service"}       # not discarded
-{"pod":"test-pod","service":"test-service-1"}     # not discarded
-```
-
-`suffix` checks whether the field value has suffix equal to one of the elements in the values list.
-
-Example:
-```yaml
-pipelines:
-  test:
-    actions:
-      - type: discard
-        do_if:
-          op: suffix
-          field: pod
-          values: [pod-1, pod-2]
-```
-
-Result:
-```
-{"pod":"test-1-pod-1","service":"test-service"}   # discarded
-{"pod":"test-2-pod-2","service":"test-service-2"} # discarded
-{"pod":"test-pod","service":"test-service"}       # not discarded
-{"pod":"test-pod","service":"test-service-1"}     # not discarded
-```
-
-`regex` checks whether the field matches any regex from the values list.
-
-Example:
-```yaml
-pipelines:
-  test:
-    actions:
-      - type: discard
-        do_if:
-          op: regex
-          field: pod
-          values: [pod-\d, my-test.*]
-```
-
-Result:
-```
-{"pod":"test-1-pod-1","service":"test-service"}       # discarded
-{"pod":"test-2-pod-2","service":"test-service-2"}     # discarded
-{"pod":"test-pod","service":"test-service"}           # not discarded
-{"pod":"my-test-pod","service":"test-service-1"}      # discarded
-{"pod":"my-test-instance","service":"test-service-1"} # discarded
-{"pod":"service123","service":"test-service-1"}       # not discarded
-```
-
-}*/
-
 /*{ do-if-field-op-node
 DoIf field op node is considered to always be a leaf in the DoIf tree. It checks byte representation of the value by the given field path.
 Array and object values are considered as not matched since encoding them to bytes leads towards large CPU and memory consumption.
@@ -148,6 +33,129 @@ pipelines:
           field: pod
           values: [pod-1, pod-2]
           case_sensitive: true
+```
+
+}*/
+
+/*{ do-if-field-op
+Operation `equal` checks whether the field value is equal to one of the elements in the values list.
+
+Example:
+```yaml
+pipelines:
+  test:
+    actions:
+      - type: discard
+        do_if:
+          op: equal
+          field: pod
+          values: [test-pod-1, test-pod-2]
+```
+
+Result:
+```
+{"pod":"test-pod-1","service":"test-service"}   # discarded
+{"pod":"test-pod-2","service":"test-service-2"} # discarded
+{"pod":"test-pod","service":"test-service"}     # not discarded
+{"pod":"test-pod","service":"test-service-1"}   # not discarded
+```
+
+<br>
+
+Operation `contains` checks whether the field value contains one of the elements the in values list.
+
+Example:
+```yaml
+pipelines:
+  test:
+    actions:
+      - type: discard
+        do_if:
+          op: contains
+          field: pod
+          values: [my-pod, my-test]
+```
+
+Result:
+```
+{"pod":"test-my-pod-1","service":"test-service"}     # discarded
+{"pod":"test-not-my-pod","service":"test-service-2"} # discarded
+{"pod":"my-test-pod","service":"test-service"}       # discarded
+{"pod":"test-pod","service":"test-service-1"}        # not discarded
+```
+
+<br>
+
+Operation `prefix` checks whether the field value has prefix equal to one of the elements in the values list.
+
+Example:
+```yaml
+pipelines:
+  test:
+    actions:
+      - type: discard
+        do_if:
+          op: prefix
+          field: pod
+          values: [test-1, test-2]
+```
+
+Result:
+```
+{"pod":"test-1-pod-1","service":"test-service"}   # discarded
+{"pod":"test-2-pod-2","service":"test-service-2"} # discarded
+{"pod":"test-pod","service":"test-service"}       # not discarded
+{"pod":"test-pod","service":"test-service-1"}     # not discarded
+```
+
+<br>
+
+Operation `suffix` checks whether the field value has suffix equal to one of the elements in the values list.
+
+Example:
+```yaml
+pipelines:
+  test:
+    actions:
+      - type: discard
+        do_if:
+          op: suffix
+          field: pod
+          values: [pod-1, pod-2]
+```
+
+Result:
+```
+{"pod":"test-1-pod-1","service":"test-service"}   # discarded
+{"pod":"test-2-pod-2","service":"test-service-2"} # discarded
+{"pod":"test-pod","service":"test-service"}       # not discarded
+{"pod":"test-pod","service":"test-service-1"}     # not discarded
+```
+
+<br>
+
+Operation `regex` checks whether the field matches any regex from the values list.
+
+Example:
+```yaml
+pipelines:
+  test:
+    actions:
+      - type: discard
+        do_if:
+          op: regex
+          field: pod
+          values: [pod-\d, my-test.*]
+```
+
+Result:
+```
+{"pod":"test-1-pod-1","service":"test-service"}       # discarded
+{"pod":"test-2-pod-2","service":"test-service-2"}     # discarded
+{"pod":"test-pod","service":"test-service"}           # not discarded
+{"pod":"my-test-pod","service":"test-service-1"}      # discarded
+{"pod":"my-test-instance","service":"test-service-1"} # discarded
+{"pod":"service123","service":"test-service-1"}       # not discarded
 ```
 
 }*/
