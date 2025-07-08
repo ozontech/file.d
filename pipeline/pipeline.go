@@ -491,7 +491,7 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offsets Offsets, byt
 				p.Error(fmt.Sprintf("cannot parse raw time %s: %v", row.Time, err))
 			}
 		}
-		isSpam := p.antispamer.IsSpam(checkSourceID, checkSourceName, isNewSource, bytes, eventTime)
+		isSpam := p.antispamer.IsSpam(checkSourceID, checkSourceName, isNewSource, bytes, eventTime, meta)
 		if isSpam {
 			return EventSeqIDError
 		}
