@@ -4,7 +4,7 @@ package journalctl
 
 import (
 	"strings"
-	"sync/atomic"
+	"sync"
 
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/metric"
@@ -22,9 +22,11 @@ type Plugin struct {
 	params        *pipeline.InputPluginParams
 	config        *Config
 	reader        *journalReader
-	offInfo       atomic.Pointer[offsetInfo]
 	currentOffset int64
 	logger        *zap.Logger
+
+	offInfo      offsetInfo
+	offInfoGuard sync.Mutex
 
 	//  plugin metrics
 	offsetErrorsMetric        prometheus.Counter
@@ -86,12 +88,15 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	p.logger = params.Logger.Desugar()
 	p.registerMetrics(params.MetricCtl)
 
-	offInfo := &offsetInfo{}
-	if err := offset.LoadYAML(p.config.OffsetsFile, offInfo); err != nil {
+	offInfo := offsetInfo{}
+	if err := offset.LoadYAML(p.config.OffsetsFile, &offInfo); err != nil {
 		p.offsetErrorsMetric.Inc()
 		p.logger.Error("can't load offset file", zap.Error(err))
 	}
-	p.offInfo.Store(offInfo)
+
+	p.offInfoGuard.Lock()
+	p.offInfo = offInfo
+	p.offInfoGuard.Unlock()
 
 	readConfig := &journalReaderConfig{
 		output:   p,
@@ -119,7 +124,10 @@ func (p *Plugin) Stop() {
 		p.logger.Error("can't stop journalctl cmd", zap.Error(err))
 	}
 
-	offsets := *p.offInfo.Load()
+	p.offInfoGuard.Lock()
+	offsets := p.offInfo
+	p.offInfoGuard.Unlock()
+
 	if err := offset.SaveYAML(p.config.OffsetsFile, offsets); err != nil {
 		p.offsetErrorsMetric.Inc()
 		p.logger.Error("can't save offset file", zap.Error(err))
@@ -127,11 +135,12 @@ func (p *Plugin) Stop() {
 }
 
 func (p *Plugin) Commit(event *pipeline.Event) {
-	offInfo := *p.offInfo.Load()
-	offInfo.set(strings.Clone(event.Root.Dig("__CURSOR").AsString()))
-	p.offInfo.Store(&offInfo)
+	p.offInfoGuard.Lock()
+	defer p.offInfoGuard.Unlock()
 
-	if err := offset.SaveYAML(p.config.OffsetsFile, offInfo); err != nil {
+	p.offInfo.set(strings.Clone(event.Root.Dig("__CURSOR").AsString()))
+
+	if err := offset.SaveYAML(p.config.OffsetsFile, p.offInfo); err != nil {
 		p.offsetErrorsMetric.Inc()
 		p.logger.Error("can't save offset file", zap.Error(err))
 	}
