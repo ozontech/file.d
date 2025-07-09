@@ -821,6 +821,8 @@ func TestPluginWithComplexMasks(t *testing.T) {
 }
 
 func TestIgnoreProcessFields(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name          string
 		ignoreFields  []string
@@ -828,7 +830,6 @@ func TestIgnoreProcessFields(t *testing.T) {
 		masks         []Mask
 		input         []string
 		expected      []string
-		wantErr       bool
 		comment       string
 	}{
 		{
@@ -1432,7 +1433,13 @@ func TestIgnoreProcessFields(t *testing.T) {
 					Re:            "(tst)",
 					Groups:        []int{0},
 					ReplaceWord:   "REPLACED2",
-					ProcessFields: []string{"f3"},
+					ProcessFields: []string{"f3.f5"},
+				},
+				{
+					Re:           "(tesst)",
+					Groups:       []int{0},
+					ReplaceWord:  "REPLACED3",
+					IgnoreFields: []string{"f3.f4"},
 				},
 			},
 			input: []string{
@@ -1440,14 +1447,53 @@ func TestIgnoreProcessFields(t *testing.T) {
 				`{"f1":"some val","f2":"another val","f3":"more val"}`,
 				`{"f1":"some test val test more tests tst","f2":"another test val","f3":{"f5":"more test val test tsttessttest testtest atestb ctesstd"}}`,
 				`"some test-string not-json tst"`,
-				`["testarrvaltst"]`,
+				`["testarrvaltsttesst"]`,
 			},
 			expected: []string{
-				`{"f1":"some test val","f2":"tst another REPLACED1 val","f3":{"f4":"more REPLACED1 REPLACED2 tesst val"}}`,
+				`{"f1":"some test val","f2":"tst another REPLACED1 val","f3":{"f4":"more REPLACED1 tst tesst val"}}`,
 				`{"f1":"some val","f2":"another val","f3":"more val"}`,
-				`{"f1":"some test val test more tests tst","f2":"another REPLACED1 val","f3":{"f5":"more REPLACED1 val REPLACED1 REPLACED2tesstREPLACED1 REPLACED1REPLACED1 aREPLACED1b ctesstd"}}`,
+				`{"f1":"some test val test more tests tst","f2":"another REPLACED1 val","f3":{"f5":"more REPLACED1 val REPLACED1 REPLACED2REPLACED3REPLACED1 REPLACED1REPLACED1 aREPLACED1b cREPLACED3d"}}`,
 				`"some REPLACED1-string not-json tst"`,
-				`["REPLACED1arrvaltst"]`,
+				`["REPLACED1arrvaltstREPLACED3"]`,
+			},
+			comment: "mask-specific ignore fields nested with two masks no error",
+		},
+		{
+			name:         "complex_global_inmask_mixed_case_ok_1",
+			ignoreFields: []string{"f1", "f2.f3"},
+			masks: []Mask{
+				{
+					Re:            "(test)",
+					Groups:        []int{0},
+					ReplaceWord:   "REPLACED1",
+					ProcessFields: []string{"f1"},
+				},
+				{
+					Re:            "(tst)",
+					Groups:        []int{0},
+					ReplaceWord:   "REPLACED2",
+					ProcessFields: []string{"f3.f5"},
+				},
+				{
+					Re:            "(tesst)",
+					Groups:        []int{0},
+					ReplaceWord:   "REPLACED3",
+					ProcessFields: []string{"f3.f4"},
+				},
+			},
+			input: []string{
+				`{"f1":"some test val","f2":"tst another test val","f3":{"f4":"more test tst tesst val"}}`,
+				`{"f1":"some val","f2":"another val","f3":"more val"}`,
+				`{"f1":"some test val test more tests tst","f2":"another test val","f3":{"f5":"more test val test tsttessttest testtest atestb ctesstd"}}`,
+				`"some test-string not-json tst"`,
+				`["testarrvaltsttesst"]`,
+			},
+			expected: []string{
+				`{"f1":"some REPLACED1 val","f2":"tst another test val","f3":{"f4":"more test tst REPLACED3 val"}}`,
+				`{"f1":"some val","f2":"another val","f3":"more val"}`,
+				`{"f1":"some REPLACED1 val REPLACED1 more REPLACED1s tst","f2":"another test val","f3":{"f5":"more test val test REPLACED2tessttest testtest atestb ctesstd"}}`,
+				`"some test-string not-json tst"`,
+				`["testarrvaltsttesst"]`,
 			},
 			comment: "mask-specific ignore fields nested with two masks no error",
 		},
@@ -1455,6 +1501,7 @@ func TestIgnoreProcessFields(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			config := test.NewConfig(&Config{
 				SkipMismatched: true,
 				Masks:          tt.masks,
