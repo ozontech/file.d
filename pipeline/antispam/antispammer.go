@@ -13,6 +13,11 @@ import (
 	"go.uber.org/zap"
 )
 
+const (
+	limitValueUnlimited = -1
+	limitValueBlocked   = 0
+)
+
 // Antispammer makes a decision on the need to parse the input log.
 // It can be useful when any application writes logs at speed faster than File.d can read it.
 //
@@ -181,9 +186,12 @@ func (a *Antispammer) isSpamNew(
 	for i := range a.antispam.rules {
 		rule := a.antispam.rules[i]
 		if rule.Condition.check(event, []byte(name), meta) {
-			if a.antispam.defaultLimit == -1 {
+			switch rule.Limit {
+			case limitValueUnlimited:
 				return false
-			} else {
+			case limitValueBlocked:
+				return true
+			default:
 				key = rule.MapKey
 				ruleIndex = i
 				break
@@ -191,8 +199,11 @@ func (a *Antispammer) isSpamNew(
 		}
 	}
 
-	if a.antispam.defaultLimit == -1 {
+	switch a.antispam.defaultLimit {
+	case limitValueUnlimited:
 		return false
+	case limitValueBlocked:
+		return true
 	}
 
 	a.mu.RLock()
@@ -343,33 +354,5 @@ func NewAntispam(defaultLimit int, rules []Rule) (*Antispam, error) {
 		rules:        rules,
 		defaultLimit: defaultLimit,
 		enabled:      true,
-	}, nil
-}
-
-type Rule struct {
-	Condition Node
-	Limit     int
-	MapKey    string
-}
-
-func (r *Rule) Prepare(id int) {
-	r.MapKey = fmt.Sprintf("#=%d=#", id)
-}
-
-func checkLimit(limit int) error {
-	if limit < -1 {
-		return fmt.Errorf("invalid limit: %d", limit)
-	}
-	return nil
-}
-
-func newRule(condition Node, limit int) (Rule, error) {
-	if err := checkLimit(limit); err != nil {
-		return Rule{}, err
-	}
-
-	return Rule{
-		Condition: condition,
-		Limit:     limit,
 	}, nil
 }
