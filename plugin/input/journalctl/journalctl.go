@@ -125,10 +125,9 @@ func (p *Plugin) Stop() {
 	}
 
 	p.offInfoGuard.Lock()
-	offsets := p.offInfo
-	p.offInfoGuard.Unlock()
+	defer p.offInfoGuard.Unlock()
 
-	if err := offset.SaveYAML(p.config.OffsetsFile, offsets); err != nil {
+	if err := offset.SaveYAML(p.config.OffsetsFile, p.offInfo); err != nil {
 		p.offsetErrorsMetric.Inc()
 		p.logger.Error("can't save offset file", zap.Error(err))
 	}
