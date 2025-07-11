@@ -11,7 +11,7 @@ import (
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
-	"github.com/ozontech/file.d/pipeline/doif"
+	"github.com/ozontech/file.d/pipeline/do_if"
 	insaneJSON "github.com/ozontech/insane-json"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
@@ -160,7 +160,7 @@ type Mask struct {
 	mode mode
 
 	DoIfCheckerMap map[string]any `json:"do_if"`
-	DoIfChecker    *doif.Checker
+	DoIfChecker    *do_if.Checker
 
 	use bool
 
@@ -249,7 +249,7 @@ func compileMask(m *Mask, logger *zap.Logger) {
 
 	if m.DoIfCheckerMap != nil {
 		var err error
-		m.DoIfChecker, err = doif.NewFromMap(m.DoIfCheckerMap)
+		m.DoIfChecker, err = do_if.NewFromMap(m.DoIfCheckerMap)
 		if err != nil {
 			logger.Fatal("can't init do_if for mask", zap.Error(err))
 		}

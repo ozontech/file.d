@@ -54,7 +54,7 @@ pipelines:
 
 
 ## Field operations
-**`Equal`** checks whether the field value is equal to one of the elements in the values list.
+Operation `equal` checks whether the field value is equal to one of the elements in the values list.
 
 Example:
 ```yaml
@@ -68,7 +68,7 @@ pipelines:
           values: [test-pod-1, test-pod-2]
 ```
 
-result:
+Result:
 ```
 {"pod":"test-pod-1","service":"test-service"}   # discarded
 {"pod":"test-pod-2","service":"test-service-2"} # discarded
@@ -78,7 +78,7 @@ result:
 
 <br>
 
-**`Contains`** checks whether the field value contains one of the elements the in values list.
+Operation `contains` checks whether the field value contains one of the elements the in values list.
 
 Example:
 ```yaml
@@ -92,7 +92,7 @@ pipelines:
           values: [my-pod, my-test]
 ```
 
-result:
+Result:
 ```
 {"pod":"test-my-pod-1","service":"test-service"}     # discarded
 {"pod":"test-not-my-pod","service":"test-service-2"} # discarded
@@ -102,7 +102,7 @@ result:
 
 <br>
 
-**`Prefix`** checks whether the field value has prefix equal to one of the elements in the values list.
+Operation `prefix` checks whether the field value has prefix equal to one of the elements in the values list.
 
 Example:
 ```yaml
@@ -116,7 +116,7 @@ pipelines:
           values: [test-1, test-2]
 ```
 
-result:
+Result:
 ```
 {"pod":"test-1-pod-1","service":"test-service"}   # discarded
 {"pod":"test-2-pod-2","service":"test-service-2"} # discarded
@@ -126,7 +126,7 @@ result:
 
 <br>
 
-**`Suffix`** checks whether the field value has suffix equal to one of the elements in the values list.
+Operation `suffix` checks whether the field value has suffix equal to one of the elements in the values list.
 
 Example:
 ```yaml
@@ -140,7 +140,7 @@ pipelines:
           values: [pod-1, pod-2]
 ```
 
-result:
+Result:
 ```
 {"pod":"test-1-pod-1","service":"test-service"}   # discarded
 {"pod":"test-2-pod-2","service":"test-service-2"} # discarded
@@ -150,7 +150,7 @@ result:
 
 <br>
 
-**`Regex`** checks whether the field matches any regex from the values list.
+Operation `regex` checks whether the field matches any regex from the values list.
 
 Example:
 ```yaml
@@ -164,7 +164,7 @@ pipelines:
           values: [pod-\d, my-test.*]
 ```
 
-result:
+Result:
 ```
 {"pod":"test-1-pod-1","service":"test-service"}       # discarded
 {"pod":"test-2-pod-2","service":"test-service-2"}     # discarded

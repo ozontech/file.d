@@ -13,6 +13,11 @@ import (
 	"go.uber.org/zap"
 )
 
+const (
+	limitValueUnlimited = -1
+	limitValueBlocked   = 0
+)
+
 // Antispammer makes a decision on the need to parse the input log.
 // It can be useful when any application writes logs at speed faster than File.d can read it.
 //
@@ -24,6 +29,8 @@ type Antispammer struct {
 	mu                  sync.RWMutex
 	sources             map[string]source
 	exceptions          Exceptions
+
+	antispam *Antispam
 
 	logger *zap.Logger
 
@@ -44,6 +51,7 @@ type Options struct {
 	Threshold           int
 	UnbanIterations     int
 	Exceptions          Exceptions
+	Antispam            *Antispam
 
 	Logger            *zap.Logger
 	MetricsController *metric.Ctl
@@ -83,7 +91,18 @@ func NewAntispammer(o *Options) *Antispammer {
 	return a
 }
 
-func (a *Antispammer) IsSpam(id string, name string, isNewSource bool, event []byte, timeEvent time.Time) bool {
+func (a *Antispammer) IsSpam(
+	id string,
+	name string,
+	isNewSource bool,
+	event []byte,
+	timeEvent time.Time,
+	meta map[string]string,
+) bool {
+	if a.antispam != nil {
+		return a.isSpamNew(id, name, isNewSource, event, timeEvent, meta)
+	}
+
 	if a.threshold <= 0 {
 		return false
 	}
@@ -147,6 +166,95 @@ func (a *Antispammer) IsSpam(id string, name string, isNewSource bool, event []b
 	}
 
 	return x >= int32(a.threshold)
+}
+
+func (a *Antispammer) isSpamNew(
+	id string,
+	name string,
+	isNewSource bool,
+	event []byte,
+	timeEvent time.Time,
+	meta map[string]string,
+) bool {
+	if !a.antispam.enabled {
+		return false
+	}
+
+	key := id
+	ruleIndex := -1
+
+	for i := range a.antispam.rules {
+		rule := a.antispam.rules[i]
+		if rule.Condition.check(event, []byte(name), meta) {
+			switch rule.Limit {
+			case limitValueUnlimited:
+				return false
+			case limitValueBlocked:
+				return true
+			default:
+				key = rule.MapKey
+				ruleIndex = i
+				break
+			}
+		}
+	}
+
+	switch a.antispam.defaultLimit {
+	case limitValueUnlimited:
+		return false
+	case limitValueBlocked:
+		return true
+	}
+
+	a.mu.RLock()
+	src, has := a.sources[key]
+	a.mu.RUnlock()
+
+	timeEventSeconds := timeEvent.UnixNano()
+
+	if !has {
+		a.mu.Lock()
+		if newSrc, has := a.sources[key]; has {
+			src = newSrc
+		} else {
+			src = source{
+				counter:   &atomic.Int32{},
+				name:      name,
+				timestamp: &atomic.Int64{},
+			}
+			src.timestamp.Add(timeEventSeconds)
+			a.sources[key] = src
+		}
+		a.mu.Unlock()
+	}
+
+	if isNewSource {
+		src.counter.Swap(0)
+		return false
+	}
+
+	x := src.counter.Load()
+	diff := timeEventSeconds - src.timestamp.Swap(timeEventSeconds)
+	if diff < a.maintenanceInterval.Nanoseconds() {
+		x = src.counter.Inc()
+	}
+	if x == int32(a.threshold) {
+		src.counter.Swap(int32(a.unbanIterations * a.threshold))
+		a.activeMetric.Set(1)
+		a.banMetric.WithLabelValues(name).Inc()
+		a.logger.Warn("source has been banned",
+			zap.Any("id", id), zap.String("name", name),
+			zap.Time("time_event", timeEvent), zap.Int64("diff_nsec", diff),
+			zap.Int64("maintenance_nsec", a.maintenanceInterval.Nanoseconds()),
+			zap.Int32("counter", src.counter.Load()),
+		)
+	}
+
+	if ruleIndex == -1 {
+		return x >= int32(a.antispam.defaultLimit)
+	}
+
+	return x >= int32(a.antispam.rules[ruleIndex].Limit)
 }
 
 func (a *Antispammer) Maintenance() {
@@ -221,4 +329,30 @@ func (e Exceptions) Prepare() {
 	for i := range e {
 		e[i].Prepare()
 	}
+}
+
+type Antispam struct {
+	rules        []Rule
+	defaultLimit int
+	enabled      bool
+}
+
+func NewAntispam(defaultLimit int, rules []Rule) (*Antispam, error) {
+	if err := checkLimit(defaultLimit); err != nil {
+		return nil, err
+	}
+
+	if defaultLimit == -1 && len(rules) == 0 {
+		return &Antispam{enabled: false}, nil
+	}
+
+	for i := range rules {
+		rules[i].Prepare(i)
+	}
+
+	return &Antispam{
+		rules:        rules,
+		defaultLimit: defaultLimit,
+		enabled:      true,
+	}, nil
 }
