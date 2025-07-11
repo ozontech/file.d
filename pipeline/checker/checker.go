@@ -206,20 +206,20 @@ func (n *Checker) Check(data []byte) bool {
 	return false
 }
 
-func Assert(b bool, msg string) {
+func assert(b bool, msg string) {
 	if !b {
 		panic(msg)
 	}
 }
 
-func AssertEqual[T comparable](a, b T, msg string) {
-	Assert(a == b, fmt.Sprintf("%s: %v != %v", msg, a, b))
+func assertEqual[T comparable](a, b T, msg string) {
+	assert(a == b, fmt.Sprintf("%s: %v != %v", msg, a, b))
 }
 
-func AssertEqualValues(a, b [][]byte, msg string) {
-	AssertEqual(len(a), len(b), fmt.Sprintf("%s: different values count", msg))
+func assertEqualValues(a, b [][]byte, msg string) {
+	assertEqual(len(a), len(b), fmt.Sprintf("%s: different values count", msg))
 	for i := range a {
-		Assert(
+		assert(
 			bytes.Equal(a[i], b[i]),
 			fmt.Sprintf("%s: different values at pos %d: %s != %s",
 				msg, i, a[i], b[i],
@@ -235,30 +235,30 @@ func Equal(a, b *Checker) (err error) {
 		}
 	}()
 
-	AssertEqual(a.op, b.op, "different op")
-	AssertEqual(a.caseSensitive, b.caseSensitive, "different case_sensitive")
-	AssertEqualValues(a.values, b.values, "different values")
+	assertEqual(a.op, b.op, "different op")
+	assertEqual(a.caseSensitive, b.caseSensitive, "different case_sensitive")
+	assertEqualValues(a.values, b.values, "different values")
 
-	AssertEqual(len(a.valuesBySize), len(b.valuesBySize), "different valuesBySize len")
+	assertEqual(len(a.valuesBySize), len(b.valuesBySize), "different valuesBySize len")
 	for size := range a.valuesBySize {
 		_, found := b.valuesBySize[size]
-		Assert(found, fmt.Sprintf("not found values by size %d", size))
-		AssertEqualValues(
+		assert(found, fmt.Sprintf("not found values by size %d", size))
+		assertEqualValues(
 			a.valuesBySize[size], b.valuesBySize[size],
 			fmt.Sprintf("different values by size %d", size),
 		)
 	}
 
-	AssertEqual(len(a.reValues), len(b.reValues), "different regex values count")
+	assertEqual(len(a.reValues), len(b.reValues), "different regex values count")
 	for i := range a.reValues {
-		AssertEqual(
+		assertEqual(
 			a.reValues[i].String(), b.reValues[i].String(),
 			fmt.Sprintf("different regex values at pos %d", i),
 		)
 	}
 
-	AssertEqual(a.minValLen, b.minValLen, "different min value len")
-	AssertEqual(a.maxValLen, b.maxValLen, "different max value len")
+	assertEqual(a.minValLen, b.minValLen, "different min value len")
+	assertEqual(a.maxValLen, b.maxValLen, "different max value len")
 
 	return nil
 }
