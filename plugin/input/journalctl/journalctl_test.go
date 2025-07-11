@@ -72,17 +72,19 @@ func TestPipeline(t *testing.T) {
 func TestOffsets(t *testing.T) {
 	offsetPath := filepath.Join(t.TempDir(), "offset.yaml")
 
-	const lines = 5
+	const (
+		lines = 5
+		iters = 2
+		total = lines * iters
+	)
 
 	config := &Config{OffsetsFile: offsetPath, MaxLines: lines}
 	test.NewConfig(config, nil)
 
 	cursors := map[string]int{}
+	mu := sync.Mutex{}
 
-	const iters = 2
-	const total = lines * iters
-
-	for i := 0; i < iters; i++ {
+	for range iters {
 		p := test.NewPipeline(nil, "passive")
 
 		wg := sync.WaitGroup{}
@@ -90,7 +92,9 @@ func TestOffsets(t *testing.T) {
 
 		setInput(p, config)
 		setOutput(p, func(event *pipeline.Event) {
+			mu.Lock()
 			cursors[strings.Clone(event.Root.Dig("__CURSOR").AsString())]++
+			mu.Unlock()
 			wg.Done()
 		})
 
