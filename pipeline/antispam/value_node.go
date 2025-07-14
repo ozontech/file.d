@@ -84,7 +84,7 @@ func newValueNode(
 	}, nil
 }
 
-func (n *valueNode) Type() nodeType {
+func (n *valueNode) getType() nodeType {
 	return nodeTypeValue
 }
 
