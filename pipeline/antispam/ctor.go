@@ -12,7 +12,10 @@ import (
 const (
 	fieldNameOp = "op"
 
+	fieldNameOperands = "operands"
+
 	fieldNameData          = "data"
+	fieldNameValues        = "values"
 	fieldNameCaseSensitive = "case_sensitive"
 )
 
@@ -41,7 +44,35 @@ func extractNode(node map[string]any) (Node, error) {
 }
 
 func extractLogicalNode(op string, node map[string]any) (Node, error) {
-	panic("not impl")
+	rawOperands, err := get[[]any](node, fieldNameOperands)
+	if err != nil {
+		return nil, err
+	}
+
+	operands := make([]Node, 0)
+
+	for _, rawOperand := range rawOperands {
+		operandMap, ok := rawOperand.(map[string]any)
+		if !ok {
+			return nil, fmt.Errorf(
+				"logical node operand type mismatch: expected=map[string]any got=%T",
+				rawOperand)
+		}
+
+		operand, err := extractNode(operandMap)
+		if err != nil {
+			return nil, fmt.Errorf("extract operand for logical op %q: %w", op, err)
+		}
+
+		operands = append(operands, operand)
+	}
+
+	result, err := newLogicalNode(op, operands)
+	if err != nil {
+		return nil, fmt.Errorf("init logical node: %w", err)
+	}
+
+	return result, nil
 }
 
 func extractValueNode(op string, node map[string]any) (Node, error) {
@@ -67,7 +98,7 @@ func extractValueNode(op string, node map[string]any) (Node, error) {
 }
 
 func extractValues(node map[string]any) ([][]byte, error) {
-	rawValues, err := get[[]any](node, "values")
+	rawValues, err := get[[]any](node, fieldNameValues)
 	if err != nil {
 		return nil, err
 	}
@@ -76,7 +107,7 @@ func extractValues(node map[string]any) ([][]byte, error) {
 	for _, rawValue := range rawValues {
 		value, ok := rawValue.(string)
 		if !ok {
-			return nil, fmt.Errorf("type=%T is not string", rawValue)
+			return nil, fmt.Errorf("type of value is not string: %T", rawValue)
 		}
 
 		values = append(values, []byte(strings.Clone(value)))
