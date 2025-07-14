@@ -62,7 +62,7 @@ func newLogicalNode(op string, operands []Node) (Node, error) {
 	}, nil
 }
 
-func (n *logicalNode) Type() nodeType {
+func (n *logicalNode) getType() nodeType {
 	return nodeTypeLogical
 }
 

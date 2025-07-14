@@ -8,6 +8,6 @@ const (
 )
 
 type Node interface {
-	Type() nodeType
+	getType() nodeType
 	check(event []byte, sourceName []byte, metadata map[string]string) bool
 }

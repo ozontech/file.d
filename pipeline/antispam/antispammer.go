@@ -14,8 +14,8 @@ import (
 )
 
 const (
-	limitValueUnlimited = -1
-	limitValueBlocked   = 0
+	thresholdUnlimited = -1
+	thresholdBlocked   = 0
 )
 
 // Antispammer makes a decision on the need to parse the input log.
@@ -186,23 +186,23 @@ func (a *Antispammer) isSpamNew(
 	for i := range a.antispam.rules {
 		rule := a.antispam.rules[i]
 		if rule.Condition.check(event, []byte(name), meta) {
-			switch rule.Limit {
-			case limitValueUnlimited:
+			switch rule.Threshold {
+			case thresholdUnlimited:
 				return false
-			case limitValueBlocked:
+			case thresholdBlocked:
 				return true
 			default:
-				key = rule.MapKey
+				key = rule.MetaKey
 				ruleIndex = i
 				break
 			}
 		}
 	}
 
-	switch a.antispam.defaultLimit {
-	case limitValueUnlimited:
+	switch a.antispam.defThreshold {
+	case thresholdUnlimited:
 		return false
-	case limitValueBlocked:
+	case thresholdBlocked:
 		return true
 	}
 
@@ -251,10 +251,10 @@ func (a *Antispammer) isSpamNew(
 	}
 
 	if ruleIndex == -1 {
-		return x >= int32(a.antispam.defaultLimit)
+		return x >= int32(a.antispam.defThreshold)
 	}
 
-	return x >= int32(a.antispam.rules[ruleIndex].Limit)
+	return x >= int32(a.antispam.rules[ruleIndex].Threshold)
 }
 
 func (a *Antispammer) Maintenance() {
@@ -333,16 +333,16 @@ func (e Exceptions) Prepare() {
 
 type Antispam struct {
 	rules        []Rule
-	defaultLimit int
+	defThreshold int
 	enabled      bool
 }
 
-func NewAntispam(defaultLimit int, rules []Rule) (*Antispam, error) {
-	if err := checkLimit(defaultLimit); err != nil {
+func NewAntispam(defThreshold int, rules []Rule) (*Antispam, error) {
+	if err := checkThreshold(defThreshold); err != nil {
 		return nil, err
 	}
 
-	if defaultLimit == -1 && len(rules) == 0 {
+	if defThreshold == -1 && len(rules) == 0 {
 		return &Antispam{enabled: false}, nil
 	}
 
@@ -352,7 +352,7 @@ func NewAntispam(defaultLimit int, rules []Rule) (*Antispam, error) {
 
 	return &Antispam{
 		rules:        rules,
-		defaultLimit: defaultLimit,
+		defThreshold: defThreshold,
 		enabled:      true,
 	}, nil
 }
