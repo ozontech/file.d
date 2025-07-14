@@ -18,7 +18,7 @@ the chain of Match func calls are performed across the whole tree.
 @do-if-logical-op-node
 
 ## Logical operations
-@do-if-logical-op|description
+@do-if-logical-op
 
 ## Length comparison op node
 @do-if-len-cmp-op-node

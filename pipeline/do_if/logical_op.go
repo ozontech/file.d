@@ -4,116 +4,8 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/ozontech/file.d/pipeline/logic"
 	insaneJSON "github.com/ozontech/insane-json"
-)
-
-// ! do-if-logical-op
-// ^ do-if-logical-op
-
-type logicalOpType int
-
-const (
-	logicalOpUnknown logicalOpType = iota
-	logicalOr
-	logicalAnd
-	logicalNot
-)
-
-func (t logicalOpType) String() string {
-	switch t {
-	case logicalOr:
-		return "or"
-	case logicalAnd:
-		return "and"
-	case logicalNot:
-		return "not"
-	default:
-		return "unknown"
-	}
-}
-
-const (
-	// > accepts at least one operand and returns true on the first returned true from its operands.
-	// >
-	// > Example:
-	// > ```yaml
-	// > pipelines:
-	// >   test:
-	// >     actions:
-	// >       - type: discard
-	// >         do_if:
-	// >           op: or
-	// >           operands:
-	// >             - op: equal
-	// >               field: pod
-	// >               values: [test-pod-1, test-pod-2]
-	// >             - op: equal
-	// >               field: service
-	// >               values: [test-service]
-	// > ```
-	// >
-	// > result:
-	// > ```
-	// > {"pod":"test-pod-1","service":"test-service"}   # discarded
-	// > {"pod":"test-pod-2","service":"test-service-2"} # discarded
-	// > {"pod":"test-pod","service":"test-service"}     # discarded
-	// > {"pod":"test-pod","service":"test-service-1"}   # not discarded
-	// > ```
-	logicalOrTag = "or" // *
-
-	// > accepts at least one operand and returns true if all operands return true
-	// > (in other words returns false on the first returned false from its operands).
-	// >
-	// > Example:
-	// > ```yaml
-	// > pipelines:
-	// >   test:
-	// >     actions:
-	// >       - type: discard
-	// >         do_if:
-	// >           op: and
-	// >           operands:
-	// >             - op: equal
-	// >               field: pod
-	// >               values: [test-pod-1, test-pod-2]
-	// >             - op: equal
-	// >               field: service
-	// >               values: [test-service]
-	// > ```
-	// >
-	// > result:
-	// > ```
-	// > {"pod":"test-pod-1","service":"test-service"}   # discarded
-	// > {"pod":"test-pod-2","service":"test-service-2"} # not discarded
-	// > {"pod":"test-pod","service":"test-service"}     # not discarded
-	// > {"pod":"test-pod","service":"test-service-1"}   # not discarded
-	// > ```
-	logicalAndTag = "and" // *
-
-	// > accepts exactly one operand and returns inverted result of its operand.
-	// >
-	// > Example:
-	// > ```yaml
-	// > pipelines:
-	// >   test:
-	// >     actions:
-	// >       - type: discard
-	// >         do_if:
-	// >           op: not
-	// >           operands:
-	// >             - op: equal
-	// >               field: service
-	// >               values: [test-service]
-	// > ```
-	// >
-	// > result:
-	// > ```
-	// > {"pod":"test-pod-1","service":"test-service"}   # not discarded
-	// > {"pod":"test-pod-2","service":"test-service-2"} # discarded
-	// > {"pod":"test-pod","service":"test-service"}     # not discarded
-	// > {"pod":"test-pod","service":"test-service-1"}   # discarded
-	// > ```
-	logicalNotTag = "not" // *
 )
 
 /*{ do-if-logical-op-node
@@ -146,8 +38,96 @@ pipelines:
 
 }*/
 
+/*{ do-if-logical-op
+Operation `or` accepts at least one operand and returns true on the first returned true from its operands.
+
+Example:
+```yaml
+pipelines:
+  test:
+    actions:
+      - type: discard
+        do_if:
+          op: or
+          operands:
+            - op: equal
+              field: pod
+              values: [test-pod-1, test-pod-2]
+            - op: equal
+              field: service
+              values: [test-service]
+```
+
+Result:
+```
+{"pod":"test-pod-1","service":"test-service"}   # discarded
+{"pod":"test-pod-2","service":"test-service-2"} # discarded
+{"pod":"test-pod","service":"test-service"}     # discarded
+{"pod":"test-pod","service":"test-service-1"}   # not discarded
+```
+
+<br>
+
+Operation `and` accepts at least one operand and returns true if all operands return true
+(in other words returns false on the first returned false from its operands).
+
+Example:
+```yaml
+pipelines:
+  test:
+    actions:
+      - type: discard
+        do_if:
+          op: and
+          operands:
+            - op: equal
+              field: pod
+              values: [test-pod-1, test-pod-2]
+            - op: equal
+              field: service
+              values: [test-service]
+```
+
+Result:
+```
+{"pod":"test-pod-1","service":"test-service"}   # discarded
+{"pod":"test-pod-2","service":"test-service-2"} # not discarded
+{"pod":"test-pod","service":"test-service"}     # not discarded
+{"pod":"test-pod","service":"test-service-1"}   # not discarded
+```
+
+<br>
+
+Operation `not` accepts exactly one operand and returns inverted result of its operand.
+
+Example:
+```yaml
+pipelines:
+  test:
+    actions:
+      - type: discard
+        do_if:
+          op: not
+          operands:
+            - op: equal
+              field: service
+              values: [test-service]
+```
+
+Result:
+```
+{"pod":"test-pod-1","service":"test-service"}   # not discarded
+{"pod":"test-pod-2","service":"test-service-2"} # discarded
+{"pod":"test-pod","service":"test-service"}     # not discarded
+{"pod":"test-pod","service":"test-service-1"}   # discarded
+```
+
+<br>
+
+}*/
+
 type logicalNode struct {
-	op       logicalOpType
+	op       logic.Op
 	operands []Node
 }
 
@@ -155,22 +135,20 @@ func newLogicalNode(op string, operands []Node) (Node, error) {
 	if len(operands) == 0 {
 		return nil, errors.New("logical op must have at least one operand")
 	}
-	var lop logicalOpType
-	switch op {
-	case logicalOrTag:
-		lop = logicalOr
-	case logicalAndTag:
-		lop = logicalAnd
-	case logicalNotTag:
-		lop = logicalNot
-		if len(operands) > 1 {
+
+	logicOp, err := logic.StringToOp(op)
+	if err != nil {
+		return nil, err
+	}
+
+	if logicOp == logic.Not {
+		if len(operands) != 1 {
 			return nil, fmt.Errorf("logical not must have exactly one operand, got %d", len(operands))
 		}
-	default:
-		return nil, fmt.Errorf("unknown logical op %q", op)
 	}
+
 	return &logicalNode{
-		op:       lop,
+		op:       logicOp,
 		operands: operands,
 	}, nil
 }
@@ -181,24 +159,25 @@ func (n *logicalNode) Type() nodeType {
 
 func (n *logicalNode) check(eventRoot *insaneJSON.Root) bool {
 	switch n.op {
-	case logicalOr:
+	case logic.Or:
 		for _, op := range n.operands {
 			if op.check(eventRoot) {
 				return true
 			}
 		}
 		return false
-	case logicalAnd:
+	case logic.And:
 		for _, op := range n.operands {
 			if !op.check(eventRoot) {
 				return false
 			}
 		}
 		return true
-	case logicalNot:
+	case logic.Not:
 		return !n.operands[0].check(eventRoot)
+	default:
+		panic("unknown logical op")
 	}
-	return false
 }
 
 func (n *logicalNode) isEqualTo(n2 Node, level int) error {
