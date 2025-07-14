@@ -1,7 +1,6 @@
 package antispam
 
 import (
-	"errors"
 	"fmt"
 )
 
@@ -37,10 +36,8 @@ type logicalNode struct {
 	operands []Node
 }
 
-func newLogicalNode(op string, operands []Node) (Node, error) {
-	if len(operands) == 0 {
-		return nil, errors.New("logical op must have at least one operand")
-	}
+func newLogicalNode(op string, operands []Node) *logicalNode {
+	assert(len(operands) > 0, "logical op must have at least one operand")
 
 	var lop logicalOpType
 	switch op {
@@ -50,16 +47,15 @@ func newLogicalNode(op string, operands []Node) (Node, error) {
 		lop = logicalAnd
 	case logicalNotTag:
 		lop = logicalNot
-		if len(operands) > 1 {
-			return nil, fmt.Errorf("logical not must have exactly one operand, got %d", len(operands))
-		}
+		assert(len(operands) == 1, fmt.Sprintf("logical not must have exactly one operand, got %d", len(operands)))
 	default:
-		return nil, fmt.Errorf("unknown logical op %q", op)
+		panic(fmt.Sprintf("unknown logical op %q", op))
 	}
+
 	return &logicalNode{
 		op:       lop,
 		operands: operands,
-	}, nil
+	}
 }
 
 func (n *logicalNode) getType() nodeType {
@@ -82,7 +78,6 @@ func (n *logicalNode) check(event []byte, sourceName []byte, metadata map[string
 			}
 		}
 		return false
-
 	case logicalNot:
 		return !n.operands[0].check(event, sourceName, metadata)
 	default:

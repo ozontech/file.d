@@ -5,6 +5,16 @@ import (
 	"fmt"
 )
 
+func assert(b bool, msg string) {
+	if !b {
+		panic(msg)
+	}
+}
+
+func assertEqual[T comparable](a, b T, msg string) {
+	assert(a == b, fmt.Sprintf("%s: %v != %v", msg, a, b))
+}
+
 func getAny(node map[string]any, field string) any {
 	res, has := node[field]
 	if !has {
