@@ -1,8 +1,8 @@
 package antispam
 
 import (
-	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/ozontech/file.d/pipeline/checker"
 )
@@ -32,18 +32,20 @@ const (
 	dataTypeEventTag      = "event"
 	dataTypeSourceNameTag = "source_name"
 	dataTypeMetaTag       = "meta"
+
+	metaTagPrefix = "meta:"
 )
 
-func stringToDataType(s string) (dataType, error) {
-	switch s {
-	case dataTypeEventTag:
-		return dataTypeEvent, nil
-	case dataTypeSourceNameTag:
-		return dataTypeSourceName, nil
-	case dataTypeMetaTag:
-		return dataTypeMeta, nil
+func stringToDataType(s string) (dataType, string, error) {
+	switch {
+	case s == dataTypeEventTag:
+		return dataTypeEvent, "", nil
+	case s == dataTypeSourceNameTag:
+		return dataTypeSourceName, "", nil
+	case strings.HasPrefix(s, metaTagPrefix):
+		return dataTypeMeta, strings.TrimPrefix(s, metaTagPrefix), nil
 	default:
-		return -1, fmt.Errorf("unknown checked type data: %s", s)
+		return -1, "", fmt.Errorf("unparsable check data tag: %s", s)
 	}
 }
 
@@ -66,15 +68,9 @@ func newValueNode(
 	}
 
 	var dType dataType
-	dType, err = stringToDataType(checkDataTag)
+	dType, metaKey, err = stringToDataType(checkDataTag)
 	if err != nil {
 		return nil, err
-	}
-
-	if dType == dataTypeMeta {
-		if metaKey == "" {
-			return nil, errors.New("empty meta key")
-		}
 	}
 
 	return &valueNode{
