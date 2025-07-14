@@ -6,6 +6,7 @@ import (
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/pipeline/doif"
 	"github.com/ozontech/file.d/xtime"
 	insaneJSON "github.com/ozontech/insane-json"
 	"go.uber.org/zap"
@@ -47,6 +48,11 @@ type Metric struct {
 	Type   string            `json:"type"`
 	Value  string            `json:"value"`
 	Labels map[string]string `json:"labels"`
+
+	DoIfCheckerMap map[string]any `json:"do_if"`
+	DoIfChecker    *doif.Checker
+
+	use bool
 }
 
 func init() {
@@ -64,6 +70,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 	p.config = config.(*Config)
 	p.logger = params.Logger.Desugar()
 	p.pluginController = params.Controller
+	p.config.Metrics = prepareCheckersForMetrics(p.config.Metrics, p.logger)
 
 	format, err := xtime.ParseFormatName(p.config.TimeFieldFormat)
 	if err != nil {
@@ -72,10 +79,33 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 	p.format = format
 }
 
+func prepareCheckersForMetrics(metrics []Metric, logger *zap.Logger) []Metric {
+	for i := range metrics {
+		m := &metrics[i]
+		if m.DoIfCheckerMap != nil {
+			var err error
+			m.DoIfChecker, err = doif.NewFromMap(m.DoIfCheckerMap)
+			if err != nil {
+				logger.Fatal("can't init do_if for mask", zap.Error(err))
+			}
+		} else {
+			m.use = true
+		}
+	}
+
+	return metrics
+}
+
 func (p *Plugin) Stop() {
 }
 
 func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
+	for i := range p.config.Metrics {
+		if p.config.Metrics[i].DoIfChecker != nil {
+			p.config.Metrics[i].use = p.config.Metrics[i].DoIfChecker.Check(event.Root)
+		}
+	}
+
 	var ts time.Time
 
 	if len(p.config.TimeField_) != 0 {
@@ -98,6 +128,10 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 
 	children := make([]*insaneJSON.Node, 0, len(p.config.Metrics))
 	for _, metric := range p.config.Metrics {
+		if !metric.use {
+			continue
+		}
+
 		elem := new(insaneJSON.Node)
 		object := elem.MutateToObject()
 
@@ -127,7 +161,7 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 
 	if len(children) == 0 {
 		// zero array or an array that does not contain objects
-		return pipeline.ActionPass
+		return pipeline.ActionDiscard
 	}
 
 	p.pluginController.Spawn(event, children)
