@@ -36,16 +36,16 @@ const (
 	metaTagPrefix = "meta:"
 )
 
-func stringToDataType(s string) (dataType, string, error) {
+func stringToDataType(s string) (dataType, string) {
 	switch {
 	case s == dataTypeEventTag:
-		return dataTypeEvent, "", nil
+		return dataTypeEvent, ""
 	case s == dataTypeSourceNameTag:
-		return dataTypeSourceName, "", nil
+		return dataTypeSourceName, ""
 	case strings.HasPrefix(s, metaTagPrefix):
-		return dataTypeMeta, strings.TrimPrefix(s, metaTagPrefix), nil
+		return dataTypeMeta, strings.TrimPrefix(s, metaTagPrefix)
 	default:
-		return -1, "", fmt.Errorf("unparsable check data tag: %s", s)
+		panic(fmt.Sprintf("unparsable check data tag: %s", s))
 	}
 }
 
@@ -61,23 +61,19 @@ func newValueNode(
 	values [][]byte,
 	checkDataTag string,
 	metaKey string,
-) (*valueNode, error) {
+) *valueNode {
 	c, err := checker.New(opTag, caseSensitive, values)
 	if err != nil {
-		return nil, fmt.Errorf("init checker: %w", err)
+		panic(fmt.Sprintf("init checker: %s", err.Error()))
 	}
 
-	var dType dataType
-	dType, metaKey, err = stringToDataType(checkDataTag)
-	if err != nil {
-		return nil, err
-	}
+	dType, metaKey := stringToDataType(checkDataTag)
 
 	return &valueNode{
 		dataType: dType,
 		metaKey:  metaKey,
 		checker:  c,
-	}, nil
+	}
 }
 
 func (n *valueNode) getType() nodeType {
