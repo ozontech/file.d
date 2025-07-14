@@ -1,61 +1,37 @@
 package antispam
 
 import (
+	"errors"
 	"fmt"
-)
 
-type logicalOpType int
-
-const (
-	logicalAnd logicalOpType = iota
-	logicalOr
-	logicalNot
-)
-
-func (t logicalOpType) String() string {
-	switch t {
-	case logicalAnd:
-		return "and"
-	case logicalOr:
-		return "or"
-	case logicalNot:
-		return "not"
-	default:
-		return "unknown"
-	}
-}
-
-const (
-	logicalAndTag = "and"
-	logicalOrTag  = "or"
-	logicalNotTag = "not"
+	"github.com/ozontech/file.d/pipeline/logic"
 )
 
 type logicalNode struct {
-	op       logicalOpType
+	op       logic.Op
 	operands []Node
 }
 
-func newLogicalNode(op string, operands []Node) *logicalNode {
-	assert(len(operands) > 0, "logical op must have at least one operand")
+func newLogicalNode(op string, operands []Node) (*logicalNode, error) {
+	if len(operands) == 0 {
+		return nil, errors.New("logical op must have at least one operand")
+	}
 
-	var lop logicalOpType
-	switch op {
-	case logicalOrTag:
-		lop = logicalOr
-	case logicalAndTag:
-		lop = logicalAnd
-	case logicalNotTag:
-		lop = logicalNot
-		assert(len(operands) == 1, fmt.Sprintf("logical not must have exactly one operand, got %d", len(operands)))
-	default:
-		panic(fmt.Sprintf("unknown logical op %q", op))
+	logicOp, err := logic.StringToOp(op)
+	if err != nil {
+		return nil, err
+	}
+
+	if logicOp == logic.Not {
+		if len(operands) != 1 {
+			return nil, fmt.Errorf("logical not must have exactly one operand, got %d", len(operands))
+		}
 	}
 
 	return &logicalNode{
-		op:       lop,
+		op:       logicOp,
 		operands: operands,
-	}
+	}, nil
 }
 
 func (n *logicalNode) getType() nodeType {
@@ -64,23 +40,23 @@ func (n *logicalNode) getType() nodeType {
 
 func (n *logicalNode) check(event []byte, sourceName []byte, metadata map[string]string) bool {
 	switch n.op {
-	case logicalAnd:
+	case logic.And:
 		for _, op := range n.operands {
 			if !op.check(event, sourceName, metadata) {
 				return false
 			}
 		}
 		return true
-	case logicalOr:
+	case logic.Or:
 		for _, op := range n.operands {
 			if op.check(event, sourceName, metadata) {
 				return true
 			}
 		}
 		return false
-	case logicalNot:
+	case logic.Not:
 		return !n.operands[0].check(event, sourceName, metadata)
 	default:
-		panic(fmt.Sprintf("unknown logical op: %v", n.op))
+		panic("unknown logical op: %v")
 	}
 }
