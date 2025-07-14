@@ -2,42 +2,56 @@ package antispam
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 )
 
-func getAny(node map[string]any, field string) any {
+var (
+	errFieldNotFound = errors.New("field not found")
+	errTypeMismatch  = errors.New("type mismatch")
+)
+
+func getAny(node map[string]any, field string) (any, error) {
 	res, has := node[field]
 	if !has {
-		panic(fmt.Sprintf("field %q not found", field))
+		return nil, fmt.Errorf("field=%q: %w", field, errFieldNotFound)
 	}
 
-	return res
+	return res, nil
 }
 
-func get[T any](node map[string]any, field string) T {
-	fieldNode := getAny(node, field)
+func get[T any](node map[string]any, field string) (T, error) {
+	var def T
+
+	fieldNode, err := getAny(node, field)
+	if err != nil {
+		return def, err
+	}
 
 	result, ok := fieldNode.(T)
 	if !ok {
-		panic(fmt.Sprintf("field %q type mismatch: expected=%T got=%T", field, *new(T), fieldNode))
+		return def, fmt.Errorf(
+			"field=%q expected=%T got=%T: %w",
+			field, def, fieldNode, errTypeMismatch,
+		)
 	}
 
-	return result
+	return result, nil
 }
 
-func anyToInt(v any) int {
+func anyToInt(v any) (int, error) {
 	switch vNum := v.(type) {
 	case int:
-		return vNum
+		return vNum, nil
 	case float64:
-		return int(vNum)
+		return int(vNum), nil
 	case json.Number:
 		vInt64, err := vNum.Int64()
 		if err != nil {
-			panic(err.Error())
+			return 0, err
 		}
-		return int(vInt64)
+		return int(vInt64), nil
 	default:
-		panic(fmt.Sprintf("type=%T not convertable to int", v))
+		return 0, fmt.Errorf("type=%T not convertable to int", v)
 	}
 }
