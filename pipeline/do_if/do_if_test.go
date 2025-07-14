@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/ozontech/file.d/pipeline/checker"
+	"github.com/ozontech/file.d/pipeline/logic"
 	insaneJSON "github.com/ozontech/insane-json"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -187,7 +188,7 @@ func TestBuildNodes(t *testing.T) {
 				},
 			},
 			want: &logicalNode{
-				op: logicalOr,
+				op: logic.Or,
 				operands: []Node{
 					&fieldOpNode{
 						fieldPath:    []string{"log", "pod"},

@@ -207,7 +207,7 @@ pipelines:
 
 
 ## Logical operations
-**`Or`** accepts at least one operand and returns true on the first returned true from its operands.
+Operation `or` accepts at least one operand and returns true on the first returned true from its operands.
 
 Example:
 ```yaml
@@ -226,7 +226,7 @@ pipelines:
               values: [test-service]
 ```
 
-result:
+Result:
 ```
 {"pod":"test-pod-1","service":"test-service"}   # discarded
 {"pod":"test-pod-2","service":"test-service-2"} # discarded
@@ -236,7 +236,7 @@ result:
 
 <br>
 
-**`And`** accepts at least one operand and returns true if all operands return true
+Operation `and` accepts at least one operand and returns true if all operands return true
 (in other words returns false on the first returned false from its operands).
 
 Example:
@@ -256,7 +256,7 @@ pipelines:
               values: [test-service]
 ```
 
-result:
+Result:
 ```
 {"pod":"test-pod-1","service":"test-service"}   # discarded
 {"pod":"test-pod-2","service":"test-service-2"} # not discarded
@@ -266,7 +266,7 @@ result:
 
 <br>
 
-**`Not`** accepts exactly one operand and returns inverted result of its operand.
+Operation `not` accepts exactly one operand and returns inverted result of its operand.
 
 Example:
 ```yaml
@@ -282,7 +282,7 @@ pipelines:
               values: [test-service]
 ```
 
-result:
+Result:
 ```
 {"pod":"test-pod-1","service":"test-service"}   # not discarded
 {"pod":"test-pod-2","service":"test-service-2"} # discarded
