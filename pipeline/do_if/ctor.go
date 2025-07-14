@@ -4,6 +4,9 @@ import (
 	"errors"
 	"fmt"
 	"time"
+
+	"github.com/ozontech/file.d/pipeline/checker"
+	"github.com/ozontech/file.d/pipeline/logic"
 )
 
 const (
@@ -51,14 +54,17 @@ func extractDoIfNode(node map[string]any) (Node, error) {
 	}
 
 	switch opName {
-	case "and", "or", "not":
+	case
+		logic.AndTag,
+		logic.OrTag,
+		logic.NotTag:
 		return extractLogicalOpNode(opName, node)
 	case
-		"equal",
-		"contains",
-		"prefix",
-		"suffix",
-		"regex":
+		checker.OpEqualTag,
+		checker.OpContainsTag,
+		checker.OpPrefixTag,
+		checker.OpSuffixTag,
+		checker.OpRegexTag:
 		return extractFieldOpNode(opName, node)
 	case
 		"byte_len_cmp",
