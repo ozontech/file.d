@@ -10,6 +10,10 @@ import (
 )
 
 const (
+	fieldNameRules     = "rules"
+	fieldNameIf        = "if"
+	fieldNameThreshold = "threshold"
+
 	fieldNameOp = "op"
 
 	fieldNameOperands = "operands"
@@ -18,6 +22,79 @@ const (
 	fieldNameValues        = "values"
 	fieldNameCaseSensitive = "case_sensitive"
 )
+
+func extractAntispam(node map[string]any) ([]Rule, int, error) {
+	thresholdNode, err := getAny(node, fieldNameThreshold)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	threshold, err := anyToInt(thresholdNode)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	var rules []Rule
+
+	rawRules, err := get[[]any](node, fieldNameRules)
+	if err == nil {
+		rules, err = extractRules(rawRules)
+		if err == nil {
+			return nil, 0, err
+		}
+	} else if errors.Is(err, errTypeMismatch) {
+		return nil, 0, err
+	}
+
+	return rules, threshold, nil
+}
+
+func extractRules(rawRules []any) ([]Rule, error) {
+	rules := make([]Rule, 0, len(rawRules))
+
+	for _, rawRule := range rawRules {
+		ruleNode, err := must[map[string]any](rawRule)
+		if err != nil {
+			return nil, fmt.Errorf("rule type mismatch: %w", err)
+		}
+
+		rule, err := extractRule(ruleNode)
+		if err != nil {
+			return nil, err
+		}
+
+		rules = append(rules, rule)
+	}
+
+	return rules, nil
+}
+
+func extractRule(node map[string]any) (Rule, error) {
+	condNode, err := get[map[string]any](node, fieldNameIf)
+	if err != nil {
+		return Rule{}, err
+	}
+
+	cond, err := extractNode(condNode)
+	if err != nil {
+		return Rule{}, err
+	}
+
+	thresholdRaw, err := getAny(node, fieldNameThreshold)
+	if err != nil {
+		return Rule{}, err
+	}
+
+	threshold, err := anyToInt(thresholdRaw)
+	if err != nil {
+		return Rule{}, err
+	}
+
+	return Rule{
+		Condition: cond,
+		Threshold: threshold,
+	}, nil
+}
 
 func extractNode(node map[string]any) (Node, error) {
 	opName, err := get[string](node, fieldNameOp)
@@ -52,14 +129,12 @@ func extractLogicalNode(op string, node map[string]any) (Node, error) {
 	operands := make([]Node, 0)
 
 	for _, rawOperand := range rawOperands {
-		operandMap, ok := rawOperand.(map[string]any)
-		if !ok {
-			return nil, fmt.Errorf(
-				"logical node operand type mismatch: expected=map[string]any got=%T",
-				rawOperand)
+		operandNode, err := must[map[string]any](rawOperand)
+		if err != nil {
+			return nil, fmt.Errorf("logical node operand type mismatch: %w", err)
 		}
 
-		operand, err := extractNode(operandMap)
+		operand, err := extractNode(operandNode)
 		if err != nil {
 			return nil, fmt.Errorf("extract operand for logical op %q: %w", op, err)
 		}
@@ -105,9 +180,10 @@ func extractValues(node map[string]any) ([][]byte, error) {
 
 	values := make([][]byte, 0, len(rawValues))
 	for _, rawValue := range rawValues {
-		value, ok := rawValue.(string)
-		if !ok {
-			return nil, fmt.Errorf("type of value is not string: %T", rawValue)
+		var value string
+		value, err = must[string](rawValue)
+		if err != nil {
+			return nil, fmt.Errorf("value type mismatch: %w", err)
 		}
 
 		values = append(values, []byte(strings.Clone(value)))

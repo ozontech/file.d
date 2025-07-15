@@ -20,6 +20,17 @@ func getAny(node map[string]any, field string) (any, error) {
 	return res, nil
 }
 
+func must[T any](v any) (T, error) {
+	var def T
+
+	result, ok := v.(T)
+	if !ok {
+		return def, fmt.Errorf("%w: expected=%T got=%T", errTypeMismatch, def, v)
+	}
+
+	return result, nil
+}
+
 func get[T any](node map[string]any, field string) (T, error) {
 	var def T
 
@@ -31,8 +42,8 @@ func get[T any](node map[string]any, field string) (T, error) {
 	result, ok := fieldNode.(T)
 	if !ok {
 		return def, fmt.Errorf(
-			"field=%q expected=%T got=%T: %w",
-			field, def, fieldNode, errTypeMismatch,
+			"%w: field=%q expected=%T got=%T",
+			errTypeMismatch, field, def, fieldNode,
 		)
 	}
 
