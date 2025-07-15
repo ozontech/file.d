@@ -18,7 +18,6 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 	capacity := pipeline.DefaultCapacity
 	antispamThreshold := pipeline.DefaultAntispamThreshold
 	var antispamExceptions antispam.Exceptions
-	var antispammer *antispam.Antispam
 	sourceNameMetaField := pipeline.DefaultSourceNameMetaField
 	avgInputEventSize := pipeline.DefaultAvgInputEventSize
 	maxInputEventSize := pipeline.DefaultMaxInputEventSize
@@ -130,7 +129,6 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 		CutOffEventByLimitField: cutOffEventByLimitField,
 		AntispamThreshold:       antispamThreshold,
 		AntispamExceptions:      antispamExceptions,
-		Antispam:                antispammer,
 		SourceNameMetaField:     sourceNameMetaField,
 		MaintenanceInterval:     maintenanceInterval,
 		EventTimeout:            eventTimeout,

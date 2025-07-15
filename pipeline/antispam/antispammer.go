@@ -30,8 +30,6 @@ type Antispammer struct {
 	sources             map[string]source
 	exceptions          Exceptions
 
-	antispam *Antispam
-
 	logger *zap.Logger
 
 	// antispammer metrics
@@ -51,7 +49,6 @@ type Options struct {
 	Threshold           int
 	UnbanIterations     int
 	Exceptions          Exceptions
-	Antispam            *Antispam
 
 	Logger            *zap.Logger
 	MetricsController *metric.Ctl
@@ -97,12 +94,8 @@ func (a *Antispammer) IsSpam(
 	isNewSource bool,
 	event []byte,
 	timeEvent time.Time,
-	meta map[string]string,
+	_ map[string]string,
 ) bool {
-	if a.antispam != nil {
-		return a.isSpamNew(id, name, isNewSource, event, timeEvent, meta)
-	}
-
 	if a.threshold <= 0 {
 		return false
 	}
@@ -166,95 +159,6 @@ func (a *Antispammer) IsSpam(
 	}
 
 	return x >= int32(a.threshold)
-}
-
-func (a *Antispammer) isSpamNew(
-	id string,
-	name string,
-	isNewSource bool,
-	event []byte,
-	timeEvent time.Time,
-	meta map[string]string,
-) bool {
-	if !a.antispam.enabled {
-		return false
-	}
-
-	key := id
-	ruleIndex := -1
-
-	for i := range a.antispam.rules {
-		rule := a.antispam.rules[i]
-		if rule.Condition.check(event, []byte(name), meta) {
-			switch rule.Threshold {
-			case thresholdUnlimited:
-				return false
-			case thresholdBlocked:
-				return true
-			default:
-				key = rule.RLMapKey
-				ruleIndex = i
-				break
-			}
-		}
-	}
-
-	switch a.antispam.defThreshold {
-	case thresholdUnlimited:
-		return false
-	case thresholdBlocked:
-		return true
-	}
-
-	a.mu.RLock()
-	src, has := a.sources[key]
-	a.mu.RUnlock()
-
-	timeEventSeconds := timeEvent.UnixNano()
-
-	if !has {
-		a.mu.Lock()
-		if newSrc, has := a.sources[key]; has {
-			src = newSrc
-		} else {
-			src = source{
-				counter:   &atomic.Int32{},
-				name:      name,
-				timestamp: &atomic.Int64{},
-			}
-			src.timestamp.Add(timeEventSeconds)
-			a.sources[key] = src
-		}
-		a.mu.Unlock()
-	}
-
-	if isNewSource {
-		src.counter.Swap(0)
-		return false
-	}
-
-	x := src.counter.Load()
-	diff := timeEventSeconds - src.timestamp.Swap(timeEventSeconds)
-	if diff < a.maintenanceInterval.Nanoseconds() {
-		x = src.counter.Inc()
-	}
-	if x == int32(a.threshold) {
-		src.counter.Swap(int32(a.unbanIterations * a.threshold))
-		a.activeMetric.Set(1)
-		a.banMetric.WithLabelValues(name).Inc()
-		a.logger.Warn("source has been banned",
-			zap.Any("id", id), zap.String("name", name),
-			zap.Time("time_event", timeEvent), zap.Int64("diff_nsec", diff),
-			zap.Int64("maintenance_nsec", a.maintenanceInterval.Nanoseconds()),
-			zap.Int32("counter", src.counter.Load()),
-		)
-	}
-
-	if ruleIndex == -1 {
-		return x >= int32(a.antispam.defThreshold)
-	}
-
-	return x >= int32(a.antispam.rules[ruleIndex].Threshold)
 }
 
 func (a *Antispammer) Maintenance() {
@@ -329,30 +233,4 @@ func (e Exceptions) Prepare() {
 	for i := range e {
 		e[i].Prepare()
 	}
-}
-
-type Antispam struct {
-	rules        []Rule
-	defThreshold int
-	enabled      bool
-}
-
-func NewAntispam(defThreshold int, rules []Rule) (*Antispam, error) {
-	if err := checkThreshold(defThreshold); err != nil {
-		return nil, err
-	}
-
-	if defThreshold == -1 && len(rules) == 0 {
-		return &Antispam{enabled: false}, nil
-	}
-
-	for i := range rules {
-		rules[i].Prepare(i)
-	}
-
-	return &Antispam{
-		rules:        rules,
-		defThreshold: defThreshold,
-		enabled:      true,
-	}, nil
 }

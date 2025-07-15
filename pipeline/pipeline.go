@@ -154,7 +154,6 @@ type Settings struct {
 	EventTimeout            time.Duration
 	AntispamThreshold       int
 	AntispamExceptions      antispam.Exceptions
-	Antispam                *antispam.Antispam
 	SourceNameMetaField     string
 	AvgEventSize            int
 	MaxEventSize            int
@@ -210,7 +209,6 @@ func New(name string, settings *Settings, registry *prometheus.Registry, lg *zap
 		antispamer: antispam.NewAntispammer(&antispam.Options{
 			MaintenanceInterval: settings.MaintenanceInterval,
 			Threshold:           settings.AntispamThreshold,
-			Antispam:            settings.Antispam,
 			UnbanIterations:     antispamUnbanIterations,
 			Logger:              lg.Named("antispam"),
 			MetricsController:   metricCtl,
