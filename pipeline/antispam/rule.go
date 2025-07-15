@@ -5,11 +5,11 @@ import "fmt"
 type Rule struct {
 	Condition Node
 	Threshold int
-	MetaKey   string
+	RLMapKey  string
 }
 
 func (r *Rule) Prepare(id int) {
-	r.MetaKey = fmt.Sprintf("#=%d=#", id)
+	r.RLMapKey = fmt.Sprintf("#=%d=#", id)
 }
 
 func checkThreshold(threshold int) error {

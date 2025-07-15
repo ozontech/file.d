@@ -192,7 +192,7 @@ func (a *Antispammer) isSpamNew(
 			case thresholdBlocked:
 				return true
 			default:
-				key = rule.MetaKey
+				key = rule.RLMapKey
 				ruleIndex = i
 				break
 			}
