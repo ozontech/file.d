@@ -1,0 +1,50 @@
+package ctor
+
+import (
+	"errors"
+	"fmt"
+)
+
+var (
+	ErrFieldNotFound = errors.New("field not found")
+	ErrTypeMismatch  = errors.New("type mismatch")
+)
+
+func GetAny(node map[string]any, field string) (any, error) {
+	res, has := node[field]
+	if !has {
+		return nil, fmt.Errorf("field=%q: %w", field, ErrFieldNotFound)
+	}
+
+	return res, nil
+}
+
+func Must[T any](v any) (T, error) {
+	var def T
+
+	result, ok := v.(T)
+	if !ok {
+		return def, fmt.Errorf("%w: expected=%T got=%T", ErrTypeMismatch, def, v)
+	}
+
+	return result, nil
+}
+
+func Get[T any](node map[string]any, field string) (T, error) {
+	var def T
+
+	fieldNode, err := GetAny(node, field)
+	if err != nil {
+		return def, err
+	}
+
+	result, ok := fieldNode.(T)
+	if !ok {
+		return def, fmt.Errorf(
+			"%w: field=%q expected=%T got=%T",
+			ErrTypeMismatch, field, def, fieldNode,
+		)
+	}
+
+	return result, nil
+}

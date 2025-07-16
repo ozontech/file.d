@@ -7,6 +7,7 @@ import (
 
 	"github.com/ozontech/file.d/decoder"
 	"github.com/ozontech/file.d/pipeline/checker"
+	"github.com/ozontech/file.d/pipeline/ctor"
 	"github.com/ozontech/file.d/pipeline/logic"
 )
 
@@ -26,7 +27,7 @@ const (
 )
 
 func extractAntispam(node map[string]any) ([]Rule, int, error) {
-	thresholdNode, err := getAny(node, fieldNameThreshold)
+	thresholdNode, err := ctor.GetAny(node, fieldNameThreshold)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -38,13 +39,13 @@ func extractAntispam(node map[string]any) ([]Rule, int, error) {
 
 	var rules []Rule
 
-	rawRules, err := get[[]any](node, fieldNameRules)
+	rawRules, err := ctor.Get[[]any](node, fieldNameRules)
 	if err == nil {
 		rules, err = extractRules(rawRules)
 		if err == nil {
 			return nil, 0, err
 		}
-	} else if errors.Is(err, errTypeMismatch) {
+	} else if errors.Is(err, ctor.ErrTypeMismatch) {
 		return nil, 0, err
 	}
 
@@ -55,7 +56,7 @@ func extractRules(rawRules []any) ([]Rule, error) {
 	rules := make([]Rule, 0, len(rawRules))
 
 	for _, rawRule := range rawRules {
-		ruleNode, err := must[map[string]any](rawRule)
+		ruleNode, err := ctor.Must[map[string]any](rawRule)
 		if err != nil {
 			return nil, fmt.Errorf("rule type mismatch: %w", err)
 		}
@@ -73,14 +74,14 @@ func extractRules(rawRules []any) ([]Rule, error) {
 
 func extractRule(node map[string]any) (Rule, error) {
 	name := ""
-	nameNode, err := get[string](node, fieldNameName)
+	nameNode, err := ctor.Get[string](node, fieldNameName)
 	if err == nil {
 		name = nameNode
-	} else if errors.Is(err, errTypeMismatch) {
+	} else if errors.Is(err, ctor.ErrTypeMismatch) {
 		return Rule{}, err
 	}
 
-	condNode, err := get[map[string]any](node, fieldNameIf)
+	condNode, err := ctor.Get[map[string]any](node, fieldNameIf)
 	if err != nil {
 		return Rule{}, err
 	}
@@ -90,7 +91,7 @@ func extractRule(node map[string]any) (Rule, error) {
 		return Rule{}, err
 	}
 
-	thresholdRaw, err := getAny(node, fieldNameThreshold)
+	thresholdRaw, err := ctor.GetAny(node, fieldNameThreshold)
 	if err != nil {
 		return Rule{}, err
 	}
@@ -104,7 +105,7 @@ func extractRule(node map[string]any) (Rule, error) {
 }
 
 func extractNode(node map[string]any) (Node, error) {
-	opName, err := get[string](node, fieldNameOp)
+	opName, err := ctor.Get[string](node, fieldNameOp)
 	if err != nil {
 		return nil, err
 	}
@@ -128,7 +129,7 @@ func extractNode(node map[string]any) (Node, error) {
 }
 
 func extractLogicalNode(op string, node map[string]any) (Node, error) {
-	rawOperands, err := get[[]any](node, fieldNameOperands)
+	rawOperands, err := ctor.Get[[]any](node, fieldNameOperands)
 	if err != nil {
 		return nil, err
 	}
@@ -136,7 +137,7 @@ func extractLogicalNode(op string, node map[string]any) (Node, error) {
 	operands := make([]Node, 0)
 
 	for _, rawOperand := range rawOperands {
-		operandNode, err := must[map[string]any](rawOperand)
+		operandNode, err := ctor.Must[map[string]any](rawOperand)
 		if err != nil {
 			return nil, fmt.Errorf("logical node operand type mismatch: %w", err)
 		}
@@ -158,16 +159,16 @@ func extractLogicalNode(op string, node map[string]any) (Node, error) {
 }
 
 func extractValueNode(op string, node map[string]any) (Node, error) {
-	dataTag, err := get[string](node, fieldNameData)
+	dataTag, err := ctor.Get[string](node, fieldNameData)
 	if err != nil {
 		return nil, err
 	}
 
 	caseSensitive := true
-	caseSensitiveNode, err := get[bool](node, fieldNameCaseSensitive)
+	caseSensitiveNode, err := ctor.Get[bool](node, fieldNameCaseSensitive)
 	if err == nil {
 		caseSensitive = caseSensitiveNode
-	} else if errors.Is(err, errTypeMismatch) {
+	} else if errors.Is(err, ctor.ErrTypeMismatch) {
 		return nil, err
 	}
 
@@ -180,7 +181,7 @@ func extractValueNode(op string, node map[string]any) (Node, error) {
 }
 
 func extractValues(node map[string]any) ([][]byte, error) {
-	rawValues, err := get[[]any](node, fieldNameValues)
+	rawValues, err := ctor.Get[[]any](node, fieldNameValues)
 	if err != nil {
 		return nil, err
 	}
@@ -188,7 +189,7 @@ func extractValues(node map[string]any) ([][]byte, error) {
 	values := make([][]byte, 0, len(rawValues))
 	for _, rawValue := range rawValues {
 		var value string
-		value, err = must[string](rawValue)
+		value, err = ctor.Must[string](rawValue)
 		if err != nil {
 			return nil, fmt.Errorf("value type mismatch: %w", err)
 		}

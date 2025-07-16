@@ -7,6 +7,7 @@ import (
 
 	"github.com/ozontech/file.d/decoder"
 	"github.com/ozontech/file.d/pipeline/checker"
+	"github.com/ozontech/file.d/pipeline/ctor"
 	"github.com/ozontech/file.d/pipeline/logic"
 )
 
@@ -49,7 +50,7 @@ func NewFromMap(m map[string]any) (*Checker, error) {
 }
 
 func extractDoIfNode(node map[string]any) (Node, error) {
-	opName, err := get[string](node, fieldNameOp)
+	opName, err := ctor.Get[string](node, fieldNameOp)
 	if err != nil {
 		return nil, err
 	}
@@ -84,16 +85,16 @@ func extractFieldOpNode(opName string, node map[string]any) (Node, error) {
 	var result Node
 	var err error
 
-	fieldPath, err := get[string](node, fieldNameField)
+	fieldPath, err := ctor.Get[string](node, fieldNameField)
 	if err != nil {
 		return nil, err
 	}
 
 	caseSensitive := true
-	caseSensitiveNode, err := get[bool](node, fieldNameCaseSensitive)
+	caseSensitiveNode, err := ctor.Get[bool](node, fieldNameCaseSensitive)
 	if err == nil {
 		caseSensitive = caseSensitiveNode
-	} else if errors.Is(err, errTypeMismatch) {
+	} else if errors.Is(err, ctor.ErrTypeMismatch) {
 		return nil, err
 	}
 
@@ -111,7 +112,7 @@ func extractFieldOpNode(opName string, node map[string]any) (Node, error) {
 }
 
 func extractOpValues(node map[string]any) ([][]byte, error) {
-	valuesRaw, err := getAny(node, fieldNameValues)
+	valuesRaw, err := ctor.GetAny(node, fieldNameValues)
 	if err != nil {
 		return nil, err
 	}
@@ -146,17 +147,17 @@ func extractOpValuesFromArr(values []any) ([][]byte, error) {
 }
 
 func extractLengthCmpOpNode(opName string, node map[string]any) (Node, error) {
-	fieldPath, err := get[string](node, fieldNameField)
+	fieldPath, err := ctor.Get[string](node, fieldNameField)
 	if err != nil {
 		return nil, err
 	}
 
-	cmpOp, err := get[string](node, fieldNameCmpOp)
+	cmpOp, err := ctor.Get[string](node, fieldNameCmpOp)
 	if err != nil {
 		return nil, err
 	}
 
-	cmpValueRaw, err := getAny(node, fieldNameCmpValue)
+	cmpValueRaw, err := ctor.GetAny(node, fieldNameCmpValue)
 	if err != nil {
 		return nil, err
 	}
@@ -170,17 +171,17 @@ func extractLengthCmpOpNode(opName string, node map[string]any) (Node, error) {
 }
 
 func extractTsCmpOpNode(_ string, node map[string]any) (Node, error) {
-	fieldPath, err := get[string](node, fieldNameField)
+	fieldPath, err := ctor.Get[string](node, fieldNameField)
 	if err != nil {
 		return nil, err
 	}
 
-	cmpOp, err := get[string](node, fieldNameCmpOp)
+	cmpOp, err := ctor.Get[string](node, fieldNameCmpOp)
 	if err != nil {
 		return nil, err
 	}
 
-	rawCmpValue, err := get[string](node, fieldNameCmpValue)
+	rawCmpValue, err := ctor.Get[string](node, fieldNameCmpValue)
 	if err != nil {
 		return nil, err
 	}
@@ -203,32 +204,32 @@ func extractTsCmpOpNode(_ string, node map[string]any) (Node, error) {
 	}
 
 	format := defaultTsFormat
-	str, err := get[string](node, fieldNameFormat)
+	str, err := ctor.Get[string](node, fieldNameFormat)
 	if err == nil {
 		format = str
-	} else if errors.Is(err, errTypeMismatch) {
+	} else if errors.Is(err, ctor.ErrTypeMismatch) {
 		return nil, err
 	}
 
 	cmpValueShift := time.Duration(0)
-	str, err = get[string](node, fieldNameCmpValueShift)
+	str, err = ctor.Get[string](node, fieldNameCmpValueShift)
 	if err == nil {
 		cmpValueShift, err = time.ParseDuration(str)
 		if err != nil {
 			return nil, fmt.Errorf("parse cmp value shift: %w", err)
 		}
-	} else if errors.Is(err, errTypeMismatch) {
+	} else if errors.Is(err, ctor.ErrTypeMismatch) {
 		return nil, err
 	}
 
 	updateInterval := defaultTsCmpValUpdateInterval
-	str, err = get[string](node, fieldNameUpdateInterval)
+	str, err = ctor.Get[string](node, fieldNameUpdateInterval)
 	if err == nil {
 		updateInterval, err = time.ParseDuration(str)
 		if err != nil {
 			return nil, fmt.Errorf("parse update interval: %w", err)
 		}
-	} else if errors.Is(err, errTypeMismatch) {
+	} else if errors.Is(err, ctor.ErrTypeMismatch) {
 		return nil, err
 	}
 
@@ -236,7 +237,7 @@ func extractTsCmpOpNode(_ string, node map[string]any) (Node, error) {
 }
 
 func extractCheckTypeOpNode(_ string, node map[string]any) (Node, error) {
-	fieldPath, err := get[string](node, fieldNameField)
+	fieldPath, err := ctor.Get[string](node, fieldNameField)
 	if err != nil {
 		return nil, err
 	}
@@ -255,7 +256,7 @@ func extractCheckTypeOpNode(_ string, node map[string]any) (Node, error) {
 }
 
 func extractLogicalOpNode(opName string, node map[string]any) (Node, error) {
-	rawOperands, err := get[[]any](node, fieldNameOperands)
+	rawOperands, err := ctor.Get[[]any](node, fieldNameOperands)
 	if err != nil {
 		return nil, err
 	}
