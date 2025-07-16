@@ -2,10 +2,10 @@ package decoder
 
 import (
 	"encoding/json"
-	"errors"
+	"fmt"
 )
 
-func anyToInt(v any) (int, error) {
+func AnyToInt(v any) (int, error) {
 	switch vNum := v.(type) {
 	case int:
 		return vNum, nil
@@ -18,7 +18,7 @@ func anyToInt(v any) (int, error) {
 		}
 		return int(vInt64), nil
 	default:
-		return 0, errors.New("value is not convertable to int")
+		return 0, fmt.Errorf("not convertable to int: value=%v type=%T", v, v)
 	}
 }
 

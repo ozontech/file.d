@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/ozontech/file.d/decoder"
 	"github.com/ozontech/file.d/pipeline/checker"
 	"github.com/ozontech/file.d/pipeline/logic"
 )
@@ -29,7 +30,7 @@ func extractAntispam(node map[string]any) ([]Rule, int, error) {
 		return nil, 0, err
 	}
 
-	threshold, err := anyToInt(thresholdNode)
+	threshold, err := decoder.AnyToInt(thresholdNode)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -85,7 +86,7 @@ func extractRule(node map[string]any) (Rule, error) {
 		return Rule{}, err
 	}
 
-	threshold, err := anyToInt(thresholdRaw)
+	threshold, err := decoder.AnyToInt(thresholdRaw)
 	if err != nil {
 		return Rule{}, err
 	}
