@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/ozontech/file.d/cfg/matchrule"
+	"github.com/ozontech/file.d/pipeline/ctor"
 	"github.com/ozontech/file.d/pipeline/logic"
 )
 
@@ -56,7 +57,7 @@ func matchRuleToNode(rule matchrule.Rule, dataTypeTag string) (Node, error) {
 		return node, nil
 	}
 
-	return newLogicalNode(logic.NotTag, []Node{node})
+	return ctor.NewLogicalNode(logic.NotTag, []Node{node}, newLogicalNode)
 }
 
 func matchRuleSetToNode(ruleSet matchrule.RuleSet, dataTypeTag string) (Node, error) {
@@ -69,7 +70,7 @@ func matchRuleSetToNode(ruleSet matchrule.RuleSet, dataTypeTag string) (Node, er
 		operands = append(operands, operand)
 	}
 
-	return newLogicalNode(matchrule.CondToString(ruleSet.Cond), operands)
+	return ctor.NewLogicalNode(matchrule.CondToString(ruleSet.Cond), operands, newLogicalNode)
 }
 
 func exceptionToNode(exception Exception) (Node, error) {

@@ -10,7 +10,7 @@ var (
 	ErrTypeMismatch  = errors.New("type mismatch")
 )
 
-func GetAny(node map[string]any, field string) (any, error) {
+func GetAny(node Node, field string) (any, error) {
 	res, has := node[field]
 	if !has {
 		return nil, fmt.Errorf("field=%q: %w", field, ErrFieldNotFound)
@@ -30,7 +30,7 @@ func Must[T any](v any) (T, error) {
 	return result, nil
 }
 
-func Get[T any](node map[string]any, field string) (T, error) {
+func Get[T any](node Node, field string) (T, error) {
 	var def T
 
 	fieldNode, err := GetAny(node, field)

@@ -8,7 +8,6 @@ import (
 	"github.com/ozontech/file.d/decoder"
 	"github.com/ozontech/file.d/pipeline/checker"
 	"github.com/ozontech/file.d/pipeline/ctor"
-	"github.com/ozontech/file.d/pipeline/logic"
 )
 
 const (
@@ -86,7 +85,7 @@ func extractRule(node map[string]any) (Rule, error) {
 		return Rule{}, err
 	}
 
-	cond, err := extractNode(condNode)
+	cond, err := ctor.Extract(condNode, opToNonLogicalCtor, newLogicalNode)
 	if err != nil {
 		return Rule{}, err
 	}
@@ -104,58 +103,18 @@ func extractRule(node map[string]any) (Rule, error) {
 	return newRule(name, cond, threshold)
 }
 
-func extractNode(node map[string]any) (Node, error) {
-	opName, err := ctor.Get[string](node, fieldNameOp)
-	if err != nil {
-		return nil, err
-	}
-
+func opToNonLogicalCtor(opName string) func(string, map[string]any) (Node, error) {
 	switch opName {
-	case
-		logic.AndTag,
-		logic.OrTag,
-		logic.NotTag:
-		return extractLogicalNode(opName, node)
 	case
 		checker.OpEqualTag,
 		checker.OpContainsTag,
 		checker.OpPrefixTag,
 		checker.OpSuffixTag,
 		checker.OpRegexTag:
-		return extractValueNode(opName, node)
+		return extractValueNode
 	default:
-		return nil, fmt.Errorf("unknown op: %s", opName)
+		return nil
 	}
-}
-
-func extractLogicalNode(op string, node map[string]any) (Node, error) {
-	rawOperands, err := ctor.Get[[]any](node, fieldNameOperands)
-	if err != nil {
-		return nil, err
-	}
-
-	operands := make([]Node, 0)
-
-	for _, rawOperand := range rawOperands {
-		operandNode, err := ctor.Must[map[string]any](rawOperand)
-		if err != nil {
-			return nil, fmt.Errorf("logical node operand type mismatch: %w", err)
-		}
-
-		operand, err := extractNode(operandNode)
-		if err != nil {
-			return nil, fmt.Errorf("extract operand for logical op %q: %w", op, err)
-		}
-
-		operands = append(operands, operand)
-	}
-
-	result, err := newLogicalNode(op, operands)
-	if err != nil {
-		return nil, fmt.Errorf("init logical node: %w", err)
-	}
-
-	return result, nil
 }
 
 func extractValueNode(op string, node map[string]any) (Node, error) {
