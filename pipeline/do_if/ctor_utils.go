@@ -1,7 +1,6 @@
 package do_if
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 )
@@ -37,21 +36,4 @@ func get[T any](node map[string]any, field string) (T, error) {
 	}
 
 	return result, nil
-}
-
-func anyToInt(v any) (int, error) {
-	switch vNum := v.(type) {
-	case int:
-		return vNum, nil
-	case float64:
-		return int(vNum), nil
-	case json.Number:
-		vInt64, err := vNum.Int64()
-		if err != nil {
-			return 0, err
-		}
-		return int(vInt64), nil
-	default:
-		return 0, fmt.Errorf("type=%T not convertable to int", v)
-	}
 }

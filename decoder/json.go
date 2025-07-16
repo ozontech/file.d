@@ -140,7 +140,7 @@ func extractJsonParams(params map[string]any) (jsonParams, error) {
 			return jsonParams{}, fmt.Errorf("%q must be map", jsonMaxFieldsSizeParam)
 		}
 		for k, v := range maxFieldsSizeMap {
-			vInt, err := anyToInt(v)
+			vInt, err := AnyToInt(v)
 			if err != nil {
 				return jsonParams{}, fmt.Errorf("each value in %q must be int", jsonMaxFieldsSizeParam)
 			}
