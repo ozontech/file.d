@@ -1,4 +1,4 @@
-package doif
+package do_if
 
 import (
 	"errors"
@@ -8,6 +8,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ozontech/file.d/pipeline/checker"
+	"github.com/ozontech/file.d/pipeline/ctor"
+	"github.com/ozontech/file.d/pipeline/logic"
 	insaneJSON "github.com/ozontech/insane-json"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -38,7 +41,7 @@ type treeNode struct {
 func buildTree(node treeNode) (Node, error) {
 	switch {
 	case node.fieldOp != "":
-		return NewFieldOpNode(
+		return newFieldOpNode(
 			node.fieldOp,
 			node.fieldName,
 			node.caseSensitive,
@@ -53,14 +56,15 @@ func buildTree(node treeNode) (Node, error) {
 			}
 			operands = append(operands, operand)
 		}
-		return NewLogicalNode(
+		return ctor.NewLogicalNode(
 			node.logicalOp,
 			operands,
+			newLogicalOpNode,
 		)
 	case node.lenCmpOp != "":
-		return NewLenCmpOpNode(node.lenCmpOp, node.fieldName, node.cmpOp, node.cmpValue)
+		return newLenCmpOpNode(node.lenCmpOp, node.fieldName, node.cmpOp, node.cmpValue)
 	case node.tsCmpOp:
-		return NewTsCmpOpNode(
+		return newTsCmpOpNode(
 			node.fieldName,
 			node.tsFormat,
 			node.cmpOp,
@@ -80,37 +84,9 @@ func checkNode(t *testing.T, want, got Node) {
 	case NodeFieldOp:
 		wantNode := want.(*fieldOpNode)
 		gotNode := got.(*fieldOpNode)
-		assert.Equal(t, wantNode.op, gotNode.op)
 		assert.Equal(t, 0, slices.Compare[[]string](wantNode.fieldPath, gotNode.fieldPath))
 		assert.Equal(t, wantNode.fieldPathStr, gotNode.fieldPathStr)
-		assert.Equal(t, wantNode.caseSensitive, gotNode.caseSensitive)
-		if wantNode.values == nil {
-			assert.Equal(t, wantNode.values, gotNode.values)
-		} else {
-			require.Equal(t, len(wantNode.values), len(gotNode.values))
-			for i := 0; i < len(wantNode.values); i++ {
-				wantValues := wantNode.values[i]
-				gotValues := gotNode.values[i]
-				assert.Equal(t, 0, slices.Compare[[]byte](wantValues, gotValues))
-			}
-		}
-		if wantNode.valuesBySize == nil {
-			assert.Equal(t, wantNode.valuesBySize, gotNode.valuesBySize)
-		} else {
-			require.Equal(t, len(wantNode.valuesBySize), len(gotNode.valuesBySize))
-			for k, wantVals := range wantNode.valuesBySize {
-				gotVals, ok := gotNode.valuesBySize[k]
-				assert.True(t, ok, "values by key %d not present in got node", k)
-				if ok {
-					require.Equal(t, len(wantVals), len(gotVals))
-					for i := 0; i < len(wantVals); i++ {
-						assert.Equal(t, 0, slices.Compare[[]byte](wantVals[i], gotVals[i]))
-					}
-				}
-			}
-		}
-		assert.Equal(t, wantNode.minValLen, gotNode.minValLen)
-		assert.Equal(t, wantNode.maxValLen, gotNode.maxValLen)
+		assert.NoError(t, checker.Equal(wantNode.checker, gotNode.checker))
 	case NodeLogicalOp:
 		wantNode := want.(*logicalNode)
 		gotNode := got.(*logicalNode)
@@ -144,6 +120,14 @@ func checkNode(t *testing.T, want, got Node) {
 func TestBuildNodes(t *testing.T) {
 	timestamp := time.Now()
 
+	mustNewChecker := func(op string, caseSensitive bool, values [][]byte) *checker.Checker {
+		c, err := checker.New(op, caseSensitive, values)
+		if err != nil {
+			panic(err)
+		}
+		return c
+	}
+
 	tests := []struct {
 		name    string
 		tree    treeNode
@@ -159,25 +143,13 @@ func TestBuildNodes(t *testing.T) {
 				values:        [][]byte{[]byte(`test-111`), []byte(`test-2`), []byte(`test-3`), []byte(`test-12345`)},
 			},
 			want: &fieldOpNode{
-				op:            fieldEqualOp,
-				fieldPath:     []string{"log", "pod"},
-				fieldPathStr:  "log.pod",
-				caseSensitive: true,
-				values:        nil,
-				valuesBySize: map[int][][]byte{
-					6: [][]byte{
-						[]byte(`test-2`),
-						[]byte(`test-3`),
-					},
-					8: [][]byte{
-						[]byte(`test-111`),
-					},
-					10: [][]byte{
-						[]byte(`test-12345`),
-					},
-				},
-				minValLen: 6,
-				maxValLen: 10,
+				fieldPath:    []string{"log", "pod"},
+				fieldPathStr: "log.pod",
+				checker: mustNewChecker(
+					"equal",
+					true,
+					[][]byte{[]byte(`test-111`), []byte(`test-2`), []byte(`test-3`), []byte(`test-12345`)},
+				),
 			},
 		},
 		{
@@ -189,25 +161,13 @@ func TestBuildNodes(t *testing.T) {
 				values:        [][]byte{[]byte(`TEST-111`), []byte(`Test-2`), []byte(`tesT-3`), []byte(`TeSt-12345`)},
 			},
 			want: &fieldOpNode{
-				op:            fieldEqualOp,
-				fieldPath:     []string{"log", "pod"},
-				fieldPathStr:  "log.pod",
-				caseSensitive: false,
-				values:        nil,
-				valuesBySize: map[int][][]byte{
-					6: [][]byte{
-						[]byte(`test-2`),
-						[]byte(`test-3`),
-					},
-					8: [][]byte{
-						[]byte(`test-111`),
-					},
-					10: [][]byte{
-						[]byte(`test-12345`),
-					},
-				},
-				minValLen: 6,
-				maxValLen: 10,
+				fieldPath:    []string{"log", "pod"},
+				fieldPathStr: "log.pod",
+				checker: mustNewChecker(
+					"equal",
+					false,
+					[][]byte{[]byte(`TEST-111`), []byte(`Test-2`), []byte(`tesT-3`), []byte(`TeSt-12345`)},
+				),
 			},
 		},
 		{
@@ -230,40 +190,25 @@ func TestBuildNodes(t *testing.T) {
 				},
 			},
 			want: &logicalNode{
-				op: logicalOr,
+				op: logic.Or,
 				operands: []Node{
 					&fieldOpNode{
-						op:            fieldEqualOp,
-						fieldPath:     []string{"log", "pod"},
-						fieldPathStr:  "log.pod",
-						caseSensitive: true,
-						values:        nil,
-						valuesBySize: map[int][][]byte{
-							6: [][]byte{
-								[]byte(`test-2`),
-								[]byte(`test-3`),
-							},
-							8: [][]byte{
-								[]byte(`test-111`),
-							},
-							10: [][]byte{
-								[]byte(`test-12345`),
-							},
-						},
-						minValLen: 6,
-						maxValLen: 10,
+						fieldPath:    []string{"log", "pod"},
+						fieldPathStr: "log.pod",
+						checker: mustNewChecker(
+							"equal",
+							true,
+							[][]byte{[]byte(`test-111`), []byte(`test-2`), []byte(`test-3`), []byte(`test-12345`)},
+						),
 					},
 					&fieldOpNode{
-						op:            fieldContainsOp,
-						fieldPath:     []string{"service", "msg"},
-						fieldPathStr:  "service.msg",
-						caseSensitive: true,
-						values: [][]byte{
-							[]byte(`test-0987`),
-							[]byte(`test-11`),
-						},
-						minValLen: 7,
-						maxValLen: 9,
+						fieldPath:    []string{"service", "msg"},
+						fieldPathStr: "service.msg",
+						checker: mustNewChecker(
+							"contains",
+							true,
+							[][]byte{[]byte(`test-0987`), []byte(`test-11`)},
+						),
 					},
 				},
 			},

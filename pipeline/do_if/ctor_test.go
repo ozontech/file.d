@@ -1,4 +1,4 @@
-package doif
+package do_if
 
 import (
 	"bytes"
@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/bitly/go-simplejson"
+	"github.com/ozontech/file.d/pipeline/ctor"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -39,7 +40,7 @@ type doIfTreeNode struct {
 func buildDoIfTree(node *doIfTreeNode) (Node, error) {
 	switch {
 	case node.fieldOp != "":
-		return NewFieldOpNode(
+		return newFieldOpNode(
 			node.fieldOp,
 			node.fieldName,
 			node.caseSensitive,
@@ -54,14 +55,15 @@ func buildDoIfTree(node *doIfTreeNode) (Node, error) {
 			}
 			operands = append(operands, operand)
 		}
-		return NewLogicalNode(
+		return ctor.NewLogicalNode(
 			node.logicalOp,
 			operands,
+			newLogicalOpNode,
 		)
 	case node.lenCmpOp != "":
-		return NewLenCmpOpNode(node.lenCmpOp, node.fieldName, node.cmpOp, node.cmpValue)
+		return newLenCmpOpNode(node.lenCmpOp, node.fieldName, node.cmpOp, node.cmpValue)
 	case node.tsCmpOp:
-		return NewTsCmpOpNode(
+		return newTsCmpOpNode(
 			node.fieldName,
 			node.tsFormat,
 			node.cmpOp,
@@ -71,7 +73,7 @@ func buildDoIfTree(node *doIfTreeNode) (Node, error) {
 			node.tsUpdateInterval,
 		)
 	case node.checkTypeOp:
-		return NewCheckTypeOpNode(
+		return newCheckTypeOpNode(
 			node.fieldName,
 			node.values,
 		)

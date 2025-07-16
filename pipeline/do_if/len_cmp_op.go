@@ -1,4 +1,4 @@
-package doif
+package do_if
 
 import (
 	"errors"
@@ -96,7 +96,7 @@ type lenCmpOpNode struct {
 	cmpValue  int
 }
 
-func NewLenCmpOpNode(op string, field string, cmpOp string, cmpValue int) (Node, error) {
+func newLenCmpOpNode(op string, field string, cmpOp string, cmpValue int) (Node, error) {
 	var lenCmpOp lenCmpOpType
 	switch op {
 	case byteLenCmpOpTag:
@@ -125,7 +125,7 @@ func NewLenCmpOpNode(op string, field string, cmpOp string, cmpValue int) (Node,
 	}, nil
 }
 
-func (n *lenCmpOpNode) Type() NodeType {
+func (n *lenCmpOpNode) Type() nodeType {
 	return NodeLengthCmpOp
 }
 
@@ -174,7 +174,7 @@ func getNodeBytesSize(node *insaneJSON.Node) int {
 	return size
 }
 
-func (n *lenCmpOpNode) Check(eventRoot *insaneJSON.Root) bool {
+func (n *lenCmpOpNode) check(eventRoot *insaneJSON.Root) bool {
 	value := 0
 
 	switch n.lenCmpOp {
