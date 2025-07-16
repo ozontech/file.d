@@ -131,26 +131,11 @@ type logicalNode struct {
 	operands []Node
 }
 
-func newLogicalNode(op string, operands []Node) (Node, error) {
-	if len(operands) == 0 {
-		return nil, errors.New("logical op must have at least one operand")
-	}
-
-	logicOp, err := logic.StringToOp(op)
-	if err != nil {
-		return nil, err
-	}
-
-	if logicOp == logic.Not {
-		if len(operands) != 1 {
-			return nil, fmt.Errorf("logical not must have exactly one operand, got %d", len(operands))
-		}
-	}
-
+func newLogicalOpNode(op logic.Op, operands []Node) Node {
 	return &logicalNode{
-		op:       logicOp,
+		op:       op,
 		operands: operands,
-	}, nil
+	}
 }
 
 func (n *logicalNode) Type() nodeType {
