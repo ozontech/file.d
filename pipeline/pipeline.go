@@ -154,6 +154,7 @@ type Settings struct {
 	EventTimeout            time.Duration
 	AntispamThreshold       int
 	AntispamExceptions      antispam.Exceptions
+	Antispam                map[string]any
 	SourceNameMetaField     string
 	AvgEventSize            int
 	MaxEventSize            int
@@ -214,6 +215,7 @@ func New(name string, settings *Settings, registry *prometheus.Registry, lg *zap
 			MetricsController:   metricCtl,
 			MetricHolder:        metricHolder,
 			Exceptions:          settings.AntispamExceptions,
+			ConfigV2:            settings.Antispam,
 		}),
 
 		eventLog:   make([]string, 0, 128),

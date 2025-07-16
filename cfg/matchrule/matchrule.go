@@ -27,6 +27,19 @@ func (m *Mode) UnmarshalJSON(i []byte) error {
 	return nil
 }
 
+func ModeToString(m Mode) string {
+	switch m {
+	case ModeContains:
+		return "contains"
+	case ModePrefix:
+		return "prefix"
+	case ModeSuffix:
+		return "suffix"
+	default:
+		panic("unreachable")
+	}
+}
+
 const (
 	ModePrefix Mode = iota
 	ModeContains
@@ -185,6 +198,17 @@ var (
 	condAndBytes = []byte(`"and"`)
 	condOrBytes  = []byte(`"or"`)
 )
+
+func CondToString(c Cond) string {
+	switch c {
+	case CondAnd:
+		return "and"
+	case CondOr:
+		return "or"
+	default:
+		panic("unreachable")
+	}
+}
 
 type RuleSet struct {
 	// > @3@4@5@6
