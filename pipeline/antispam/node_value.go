@@ -33,7 +33,7 @@ const (
 	dataTypeSourceNameTag = "source_name"
 	dataTypeMetaTag       = "meta"
 
-	metaTagPrefix = "meta:"
+	metaTagPrefix = "meta."
 )
 
 func stringToDataType(s string) (dataType, string, error) {
