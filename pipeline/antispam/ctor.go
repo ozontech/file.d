@@ -12,6 +12,7 @@ import (
 
 const (
 	fieldNameRules     = "rules"
+	fieldNameName      = "name"
 	fieldNameIf        = "if"
 	fieldNameThreshold = "threshold"
 
@@ -71,6 +72,14 @@ func extractRules(rawRules []any) ([]Rule, error) {
 }
 
 func extractRule(node map[string]any) (Rule, error) {
+	name := ""
+	nameNode, err := get[string](node, fieldNameName)
+	if err == nil {
+		name = nameNode
+	} else if errors.Is(err, errTypeMismatch) {
+		return Rule{}, err
+	}
+
 	condNode, err := get[map[string]any](node, fieldNameIf)
 	if err != nil {
 		return Rule{}, err
@@ -91,10 +100,7 @@ func extractRule(node map[string]any) (Rule, error) {
 		return Rule{}, err
 	}
 
-	return Rule{
-		Condition: cond,
-		Threshold: threshold,
-	}, nil
+	return newRule(name, cond, threshold)
 }
 
 func extractNode(node map[string]any) (Node, error) {
