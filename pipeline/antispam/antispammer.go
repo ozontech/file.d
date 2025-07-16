@@ -29,6 +29,7 @@ type Antispammer struct {
 	mu                  sync.RWMutex
 	sources             map[string]source
 	rules               Rules
+	enabled             bool
 
 	logger *zap.Logger
 
@@ -95,8 +96,11 @@ func NewAntispammer(o *Options) *Antispammer {
 		}
 	}
 
+	a.enabled = a.threshold != thresholdUnlimited
+
 	for i := range a.rules {
 		a.rules[i].Prepare(i)
+		a.enabled = a.enabled || a.rules[i].Threshold != thresholdUnlimited
 	}
 
 	// not enabled by default
@@ -113,6 +117,10 @@ func (a *Antispammer) IsSpam(
 	timeEvent time.Time,
 	meta map[string]string,
 ) bool {
+	if !a.enabled {
+		return false
+	}
+
 	rlMapKey := id
 	threshold := a.threshold
 
@@ -134,6 +142,13 @@ loop:
 				break loop
 			}
 		}
+	}
+
+	switch threshold {
+	case thresholdUnlimited:
+		return false
+	case thresholdBlocked:
+		return true
 	}
 
 	a.mu.RLock()
