@@ -341,8 +341,8 @@ func Factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 }
 
 func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
-	p.insertErrorsMetric = ctl.RegisterCounter("output_clickhouse_errors", "Total clickhouse insert errors")
-	p.queriesCountMetric = ctl.RegisterCounter("output_clickhouse_queries_count", "How many queries sent by clickhouse output plugin")
+	p.insertErrorsMetric = ctl.RegisterCounter("output_clickhouse_errors_total", "Total clickhouse insert errors")
+	p.queriesCountMetric = ctl.RegisterCounter("output_clickhouse_queries_count_total", "How many queries sent by clickhouse output plugin")
 }
 
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginParams) {

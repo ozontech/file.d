@@ -308,8 +308,8 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 }
 
 func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
-	p.commitErrorsMetric = ctl.RegisterCounter("input_kafka_commit_errors", "Number of kafka commit errors")
-	p.consumeErrorsMetric = ctl.RegisterCounter("input_kafka_consume_errors", "Number of kafka consume errors")
+	p.commitErrorsMetric = ctl.RegisterCounter("input_kafka_commit_errors_total", "Number of kafka commit errors")
+	p.consumeErrorsMetric = ctl.RegisterCounter("input_kafka_consume_errors_total", "Number of kafka consume errors")
 }
 
 func (p *Plugin) Stop() {
