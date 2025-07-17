@@ -104,5 +104,5 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 }
 
 func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
-	p.eventNotMatchingPatternMetric = ctl.RegisterCounter("action_parse_re2_event_not_matching_pattern", "Total events not matching pattern")
+	p.eventNotMatchingPatternMetric = ctl.RegisterCounter("action_parse_re2_event_not_matching_pattern_total", "Total events not matching pattern")
 }

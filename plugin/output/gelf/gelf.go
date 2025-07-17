@@ -268,7 +268,7 @@ func (p *Plugin) Out(event *pipeline.Event) {
 }
 
 func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
-	p.sendErrorMetric = ctl.RegisterCounter("output_gelf_send_error", "Total GELF send errors")
+	p.sendErrorMetric = ctl.RegisterCounter("output_gelf_send_error_total", "Total GELF send errors")
 }
 
 func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) error {
