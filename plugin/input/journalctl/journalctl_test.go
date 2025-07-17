@@ -4,6 +4,7 @@ package journalctl
 
 import (
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 
@@ -13,13 +14,13 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func setInput(p *pipeline.Pipeline, config *Config) {
+func setInput(p *pipeline.Pipeline, in pipeline.InputPlugin, cfg pipeline.AnyConfig) {
 	p.SetInput(&pipeline.InputPluginInfo{
 		PluginStaticInfo: &pipeline.PluginStaticInfo{
-			Config: config,
+			Config: cfg,
 		},
 		PluginRuntimeInfo: &pipeline.PluginRuntimeInfo{
-			Plugin: &Plugin{},
+			Plugin: in,
 		},
 	})
 }
@@ -47,7 +48,7 @@ func TestPipeline(t *testing.T) {
 	test.NewConfig(config, nil)
 	assert.Equal(t, []string{"-f"}, config.JournalArgs)
 
-	setInput(p, config)
+	setInput(p, new(Plugin), config)
 
 	total := 0
 	wg := sync.WaitGroup{}
@@ -68,6 +69,33 @@ func TestPipeline(t *testing.T) {
 	assert.Equal(t, 10, total)
 }
 
+type SafePlugin struct {
+	*Plugin
+	safeConfig *SafeConfig
+}
+
+type SafeConfig struct {
+	*Config
+
+	cursors      map[string]int
+	cursorsGuard *sync.Mutex
+	commitWG     *sync.WaitGroup
+}
+
+func (p *SafePlugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginParams) {
+	p.safeConfig = config.(*SafeConfig)
+	p.Plugin.Start(p.safeConfig.Config, params)
+}
+
+func (p *SafePlugin) Commit(event *pipeline.Event) {
+	p.safeConfig.cursorsGuard.Lock()
+	p.safeConfig.cursors[strings.Clone(event.Root.Dig("__CURSOR").AsString())]++
+	p.safeConfig.cursorsGuard.Unlock()
+	defer p.safeConfig.commitWG.Done()
+
+	p.Plugin.Commit(event)
+}
+
 func TestOffsets(t *testing.T) {
 	offsetPath := filepath.Join(t.TempDir(), "offset.yaml")
 
@@ -77,11 +105,15 @@ func TestOffsets(t *testing.T) {
 		total = lines * iters
 	)
 
-	config := &Config{OffsetsFile: offsetPath, MaxLines: lines}
-	test.NewConfig(config, nil)
+	cursors := make(map[string]int)
 
-	cursors := map[string]int{}
-	cursorsGuard := new(sync.Mutex)
+	safeConfig := &SafeConfig{
+		Config:       &Config{OffsetsFile: offsetPath, MaxLines: lines},
+		cursors:      cursors,
+		cursorsGuard: new(sync.Mutex),
+	}
+
+	test.NewConfig(safeConfig.Config, nil)
 
 	for range iters {
 		p := test.NewPipeline(nil, "passive")
@@ -89,12 +121,10 @@ func TestOffsets(t *testing.T) {
 		wg := new(sync.WaitGroup)
 		wg.Add(lines)
 
-		config.cursors = cursors
-		config.cursorsGuard = cursorsGuard
-		config.wg = wg
+		safeConfig.commitWG = wg
 
-		setInput(p, config)
-		setOutput(p, func(event *pipeline.Event) {})
+		setInput(p, &SafePlugin{Plugin: &Plugin{}}, safeConfig)
+		setOutput(p, func(_ *pipeline.Event) {})
 
 		p.Start()
 		wg.Wait()
