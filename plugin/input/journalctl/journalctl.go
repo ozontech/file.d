@@ -148,7 +148,6 @@ func (p *Plugin) Commit(event *pipeline.Event) {
 }
 
 func (p *Plugin) commit(event *pipeline.Event) {
-
 	p.offInfoGuard.Lock()
 	defer p.offInfoGuard.Unlock()
 
