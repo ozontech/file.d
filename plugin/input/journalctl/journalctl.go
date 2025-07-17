@@ -53,6 +53,11 @@ type Config struct {
 
 	// for testing mostly
 	MaxLines int `json:"max_lines"`
+
+	cursors      map[string]int
+	cursorsGuard *sync.Mutex
+
+	wg *sync.WaitGroup
 }
 
 type offsetInfo struct {
@@ -132,6 +137,18 @@ func (p *Plugin) Stop() {
 }
 
 func (p *Plugin) Commit(event *pipeline.Event) {
+	if p.config.cursors != nil {
+		p.config.cursorsGuard.Lock()
+		p.config.cursors[strings.Clone(event.Root.Dig("__CURSOR").AsString())]++
+		p.config.cursorsGuard.Unlock()
+		defer p.config.wg.Done()
+	}
+
+	p.commit(event)
+}
+
+func (p *Plugin) commit(event *pipeline.Event) {
+
 	p.offInfoGuard.Lock()
 	defer p.offInfoGuard.Unlock()
 

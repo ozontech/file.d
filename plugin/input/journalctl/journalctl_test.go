@@ -4,7 +4,6 @@ package journalctl
 
 import (
 	"path/filepath"
-	"strings"
 	"sync"
 	"testing"
 
@@ -82,21 +81,20 @@ func TestOffsets(t *testing.T) {
 	test.NewConfig(config, nil)
 
 	cursors := map[string]int{}
-	mu := sync.Mutex{}
+	cursorsGuard := new(sync.Mutex)
 
 	for range iters {
 		p := test.NewPipeline(nil, "passive")
 
-		wg := sync.WaitGroup{}
+		wg := new(sync.WaitGroup)
 		wg.Add(lines)
 
+		config.cursors = cursors
+		config.cursorsGuard = cursorsGuard
+		config.wg = wg
+
 		setInput(p, config)
-		setOutput(p, func(event *pipeline.Event) {
-			mu.Lock()
-			cursors[strings.Clone(event.Root.Dig("__CURSOR").AsString())]++
-			mu.Unlock()
-			wg.Done()
-		})
+		setOutput(p, func(event *pipeline.Event) {})
 
 		p.Start()
 		wg.Wait()
