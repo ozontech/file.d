@@ -88,19 +88,17 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	p.logger = params.Logger.Desugar()
 	p.registerMetrics(params.MetricCtl)
 
-	offInfo := offsetInfo{}
-	if err := offset.LoadYAML(p.config.OffsetsFile, &offInfo); err != nil {
+	p.offInfoGuard.Lock()
+	defer p.offInfoGuard.Unlock()
+
+	if err := offset.LoadYAML(p.config.OffsetsFile, &p.offInfo); err != nil {
 		p.offsetErrorsMetric.Inc()
 		p.logger.Error("can't load offset file", zap.Error(err))
 	}
 
-	p.offInfoGuard.Lock()
-	p.offInfo = offInfo
-	p.offInfoGuard.Unlock()
-
 	readConfig := &journalReaderConfig{
 		output:   p,
-		cursor:   offInfo.Cursor,
+		cursor:   p.offInfo.Cursor,
 		maxLines: p.config.MaxLines,
 		logger:   p.logger,
 	}
