@@ -228,10 +228,10 @@ func Factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 }
 
 func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
-	p.discardedEventMetric = ctl.RegisterCounter("output_postgres_event_discarded", "Total pgsql discarded messages")
-	p.duplicatedEventMetric = ctl.RegisterCounter("output_postgres_event_duplicated", "Total pgsql duplicated messages")
-	p.writtenEventMetric = ctl.RegisterCounter("output_postgres_event_written", "Total events written to pgsql")
-	p.insertErrorsMetric = ctl.RegisterCounter("output_postgres_insert_errors", "Total pgsql insert errors")
+	p.discardedEventMetric = ctl.RegisterCounter("output_postgres_event_discarded_total", "Total pgsql discarded messages")
+	p.duplicatedEventMetric = ctl.RegisterCounter("output_postgres_event_duplicated_total", "Total pgsql duplicated messages")
+	p.writtenEventMetric = ctl.RegisterCounter("output_postgres_event_written_total", "Total events written to pgsql")
+	p.insertErrorsMetric = ctl.RegisterCounter("output_postgres_insert_errors_total", "Total pgsql insert errors")
 }
 
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginParams) {
