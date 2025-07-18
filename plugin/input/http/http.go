@@ -1,6 +1,7 @@
 package http
 
 import (
+	"context"
 	"crypto/sha1"
 	"fmt"
 	"io"
@@ -103,6 +104,8 @@ type Plugin struct {
 	gzipReaderPool sync.Pool
 	readBuffs      sync.Pool
 	eventBuffs     sync.Pool
+
+	stopChan chan struct{}
 
 	// plugin metrics
 
@@ -303,6 +306,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 		Addr:    p.config.Address,
 		Handler: http.Handler(p),
 	}
+	p.stopChan = make(chan struct{})
 
 	if p.config.Address != "off" {
 		go p.listenHTTP()
@@ -338,9 +342,11 @@ func (p *Plugin) listenHTTP() {
 		err = p.server.ListenAndServe()
 	}
 
-	if err != nil {
+	if err != nil && err != http.ErrServerClosed {
 		p.logger.Fatal("input plugin http listening error", zap.String("addr", p.config.Address), zap.Error(err))
 	}
+
+	close(p.stopChan)
 }
 
 func (p *Plugin) newReadBuff() []byte {
@@ -578,6 +584,11 @@ func (p *Plugin) processChunk(sourceID pipeline.SourceID, readBuff []byte, event
 }
 
 func (p *Plugin) Stop() {
+	err := p.server.Shutdown(context.Background())
+	if err != nil {
+		p.logger.Fatal("failed to shutdown http input plugin server", zap.Error(err))
+	}
+	<-p.stopChan
 }
 
 func (p *Plugin) Commit(_ *pipeline.Event) {
