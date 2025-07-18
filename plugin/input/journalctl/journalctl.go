@@ -4,7 +4,7 @@ package journalctl
 
 import (
 	"strings"
-	"sync"
+	"sync/atomic"
 
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/metric"
@@ -22,11 +22,9 @@ type Plugin struct {
 	params        *pipeline.InputPluginParams
 	config        *Config
 	reader        *journalReader
+	offInfo       atomic.Pointer[offsetInfo]
 	currentOffset int64
 	logger        *zap.Logger
-
-	offInfo      offsetInfo
-	offInfoGuard sync.Mutex
 
 	//  plugin metrics
 	offsetErrorsMetric        prometheus.Counter
@@ -88,17 +86,16 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	p.logger = params.Logger.Desugar()
 	p.registerMetrics(params.MetricCtl)
 
-	p.offInfoGuard.Lock()
-	defer p.offInfoGuard.Unlock()
-
-	if err := offset.LoadYAML(p.config.OffsetsFile, &p.offInfo); err != nil {
+	offInfo := &offsetInfo{}
+	if err := offset.LoadYAML(p.config.OffsetsFile, offInfo); err != nil {
 		p.offsetErrorsMetric.Inc()
 		p.logger.Error("can't load offset file", zap.Error(err))
 	}
+	p.offInfo.Store(offInfo)
 
 	readConfig := &journalReaderConfig{
 		output:   p,
-		cursor:   p.offInfo.Cursor,
+		cursor:   offInfo.Cursor,
 		maxLines: p.config.MaxLines,
 		logger:   p.logger,
 	}
@@ -122,22 +119,19 @@ func (p *Plugin) Stop() {
 		p.logger.Error("can't stop journalctl cmd", zap.Error(err))
 	}
 
-	p.offInfoGuard.Lock()
-	defer p.offInfoGuard.Unlock()
-
-	if err := offset.SaveYAML(p.config.OffsetsFile, p.offInfo); err != nil {
+	offsets := *p.offInfo.Load()
+	if err := offset.SaveYAML(p.config.OffsetsFile, offsets); err != nil {
 		p.offsetErrorsMetric.Inc()
 		p.logger.Error("can't save offset file", zap.Error(err))
 	}
 }
 
 func (p *Plugin) Commit(event *pipeline.Event) {
-	p.offInfoGuard.Lock()
-	defer p.offInfoGuard.Unlock()
+	offInfo := *p.offInfo.Load()
+	offInfo.set(strings.Clone(event.Root.Dig("__CURSOR").AsString()))
+	p.offInfo.Store(&offInfo)
 
-	p.offInfo.set(strings.Clone(event.Root.Dig("__CURSOR").AsString()))
-
-	if err := offset.SaveYAML(p.config.OffsetsFile, p.offInfo); err != nil {
+	if err := offset.SaveYAML(p.config.OffsetsFile, offInfo); err != nil {
 		p.offsetErrorsMetric.Inc()
 		p.logger.Error("can't save offset file", zap.Error(err))
 	}
