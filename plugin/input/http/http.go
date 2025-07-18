@@ -588,7 +588,10 @@ func (p *Plugin) Stop() {
 	if err != nil {
 		p.logger.Fatal("failed to shutdown http input plugin server", zap.Error(err))
 	}
-	<-p.stopChan
+
+	if p.config.Address != "off" {
+		<-p.stopChan
+	}
 }
 
 func (p *Plugin) Commit(_ *pipeline.Event) {
