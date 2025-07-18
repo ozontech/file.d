@@ -23,14 +23,16 @@ import (
 )
 
 type FileD struct {
-	config    *cfg.Config
-	httpAddr  string
-	registry  *prometheus.Registry
-	plugins   *PluginRegistry
-	Pipelines []*pipeline.Pipeline
-	server    *http.Server
-	mux       *http.ServeMux
-	metricCtl *metric.Ctl
+	config     *cfg.Config
+	httpAddr   string
+	registry   *prometheus.Registry
+	plugins    *PluginRegistry
+	Pipelines  []*pipeline.Pipeline
+	server     *http.Server
+	mux        *http.ServeMux
+	metricCtl  *metric.Ctl
+	stopChan   chan struct{}
+	shouldStop atomic.Bool
 
 	// file_d metrics
 
@@ -268,9 +270,13 @@ func (f *FileD) Stop(ctx context.Context) error {
 	if f.server != nil {
 		err = f.server.Shutdown(ctx)
 	}
+	f.shouldStop.Store(true)
+
 	for _, p := range f.Pipelines {
 		p.Stop()
 	}
+
+	<-f.stopChan
 
 	return err
 }
@@ -318,6 +324,8 @@ func (f *FileD) startHTTP() {
 	})
 
 	f.server = &http.Server{Addr: f.httpAddr, Handler: mux}
+	f.stopChan = make(chan struct{})
+
 	go f.listenHTTP()
 }
 
@@ -326,6 +334,7 @@ func (f *FileD) listenHTTP() {
 	if err != http.ErrServerClosed {
 		logger.Fatalf("http listening error address=%q: %s", f.httpAddr, err.Error())
 	}
+	close(f.stopChan)
 }
 
 func (f *FileD) serveFreeOsMem(_ http.ResponseWriter, _ *http.Request) {
@@ -333,7 +342,12 @@ func (f *FileD) serveFreeOsMem(_ http.ResponseWriter, _ *http.Request) {
 	logger.Infof("free OS memory OK")
 }
 
-func (f *FileD) serveLiveReady(_ http.ResponseWriter, _ *http.Request) {
+func (f *FileD) serveLiveReady(w http.ResponseWriter, _ *http.Request) {
+	if f.shouldStop.Load() {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		logger.Infof("unavailable")
+		return
+	}
 	logger.Infof("live/ready OK")
 }
 
