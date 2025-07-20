@@ -100,7 +100,7 @@ func TestOffsets(t *testing.T) {
 		wg := sync.WaitGroup{}
 		wg.Add(lines)
 
-		setInput(p, new(Plugin), config)
+		setInput(p, &Plugin{}, config)
 		setOutput(p, func(event *pipeline.Event) {
 			mu.Lock()
 			cursors[strings.Clone(event.Root.Dig("__CURSOR").AsString())]++
@@ -121,29 +121,12 @@ func TestOffsets(t *testing.T) {
 
 type SafePlugin struct {
 	*Plugin
-	safeConfig *SafeConfig
-}
-
-type SafeConfig struct {
-	*Config
-
-	cursors      map[string]int
-	cursorsGuard *sync.Mutex
-	commitWG     *sync.WaitGroup
-}
-
-func (p *SafePlugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginParams) {
-	p.safeConfig = config.(*SafeConfig)
-	p.Plugin.Start(p.safeConfig.Config, params)
+	commitFn func(event *pipeline.Event)
 }
 
 func (p *SafePlugin) Commit(event *pipeline.Event) {
-	p.safeConfig.cursorsGuard.Lock()
-	p.safeConfig.cursors[strings.Clone(event.Root.Dig("__CURSOR").AsString())]++
-	p.safeConfig.cursorsGuard.Unlock()
-	defer p.safeConfig.commitWG.Done()
-
 	p.Plugin.Commit(event)
+	p.commitFn(event)
 }
 
 func TestOffsetsFixed(t *testing.T) {
@@ -151,29 +134,29 @@ func TestOffsetsFixed(t *testing.T) {
 
 	const (
 		lines = 5
-		iters = 2
+		iters = 20
 		total = lines * iters
 	)
 
-	cursors := make(map[string]int)
+	config := &Config{OffsetsFile: offsetPath, MaxLines: lines}
+	test.NewConfig(config, nil)
 
-	safeConfig := &SafeConfig{
-		Config:       &Config{OffsetsFile: offsetPath, MaxLines: lines},
-		cursors:      cursors,
-		cursorsGuard: new(sync.Mutex),
-	}
-
-	test.NewConfig(safeConfig.Config, nil)
+	cursors := map[string]int{}
+	mu := sync.Mutex{}
 
 	for range iters {
 		p := test.NewPipeline(nil, "passive")
 
-		wg := new(sync.WaitGroup)
+		wg := sync.WaitGroup{}
 		wg.Add(lines)
 
-		safeConfig.commitWG = wg
-
-		setInput(p, &SafePlugin{Plugin: &Plugin{}}, safeConfig)
+		setInput(p, &SafePlugin{Plugin: &Plugin{}}, config)
+		p.GetInput().(*SafePlugin).commitFn = func(event *pipeline.Event) {
+			mu.Lock()
+			cursors[strings.Clone(event.Root.Dig("__CURSOR").AsString())]++
+			mu.Unlock()
+			wg.Done()
+		}
 		setOutput(p, func(_ *pipeline.Event) {})
 
 		p.Start()
