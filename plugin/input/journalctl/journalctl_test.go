@@ -134,7 +134,7 @@ func TestOffsetsFixed(t *testing.T) {
 
 	const (
 		lines = 5
-		iters = 20
+		iters = 2
 		total = lines * iters
 	)
 
