@@ -48,7 +48,7 @@ func TestPipeline(t *testing.T) {
 	test.NewConfig(config, nil)
 	assert.Equal(t, []string{"-f"}, config.JournalArgs)
 
-	setInput(p, new(Plugin), config)
+	setInput(p, &Plugin{}, config)
 
 	total := 0
 	wg := sync.WaitGroup{}
@@ -120,7 +120,7 @@ func TestOffsets(t *testing.T) {
 }
 
 type SafePlugin struct {
-	*Plugin
+	Plugin
 	commitFn func(event *pipeline.Event)
 }
 
@@ -150,13 +150,16 @@ func TestOffsetsFixed(t *testing.T) {
 		wg := sync.WaitGroup{}
 		wg.Add(lines)
 
-		setInput(p, &SafePlugin{Plugin: &Plugin{}}, config)
-		p.GetInput().(*SafePlugin).commitFn = func(event *pipeline.Event) {
-			mu.Lock()
-			cursors[strings.Clone(event.Root.Dig("__CURSOR").AsString())]++
-			mu.Unlock()
-			wg.Done()
+		in := &SafePlugin{
+			commitFn: func(event *pipeline.Event) {
+				mu.Lock()
+				cursors[strings.Clone(event.Root.Dig("__CURSOR").AsString())]++
+				mu.Unlock()
+				wg.Done()
+			},
 		}
+
+		setInput(p, in, config)
 		setOutput(p, func(_ *pipeline.Event) {})
 
 		p.Start()
