@@ -113,7 +113,7 @@ type Pipeline struct {
 	procCount   *atomic.Int32
 	activeProcs *atomic.Int32
 
-	router *router
+	router *Router
 
 	metricHolder *metric.Holder
 
@@ -198,7 +198,7 @@ func New(name string, settings *Settings, registry *prometheus.Registry, lg *zap
 			PipelineSettings: settings,
 			MetricCtl:        metricCtl,
 		},
-		router: newRouter(),
+		router: NewRouter(),
 		actionMetrics: actionMetrics{
 			m:  make(map[string]*actionMetric),
 			mu: new(sync.RWMutex),
@@ -343,7 +343,7 @@ func (p *Pipeline) Start() {
 	}
 	p.logger.Info("starting output plugin", zap.String("name", p.router.outputInfo.Type))
 
-	p.router.Start(p.router.outputInfo.Config, outputParams)
+	p.router.Start(outputParams)
 
 	p.logger.Info("stating processors", zap.Int("count", len(p.Procs)))
 	for _, processor := range p.Procs {

@@ -13,6 +13,7 @@ It writes events to stdout(also known as console).
 
 type Plugin struct {
 	controller pipeline.OutputPluginController
+	router     pipeline.Router
 }
 
 type Config struct{}
@@ -30,6 +31,7 @@ func Factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 
 func (p *Plugin) Start(_ pipeline.AnyConfig, params *pipeline.OutputPluginParams) {
 	p.controller = params.Controller
+	p.router = params.Router
 }
 
 func (_ *Plugin) Stop() {}
@@ -38,4 +40,5 @@ func (p *Plugin) Out(event *pipeline.Event) {
 	// nolint: forbidigo
 	fmt.Println(event.Root.EncodeToString())
 	p.controller.Commit(event)
+	p.router.Ack(event)
 }

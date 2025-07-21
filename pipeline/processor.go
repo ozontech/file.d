@@ -55,7 +55,7 @@ func allEventStatuses() []eventStatus {
 type processor struct {
 	id       int
 	streamer *streamer
-	router   router
+	router   Router
 	finalize finalizeFn
 
 	activeCounter *atomic.Int32
@@ -78,7 +78,7 @@ func newProcessor(
 	id int,
 	actionMetrics *actionMetrics,
 	activeCounter *atomic.Int32,
-	router *router,
+	router *Router,
 	streamer *streamer,
 	finalizeFn finalizeFn,
 	incMaxEventSizeExceededFn func(lvs ...string),

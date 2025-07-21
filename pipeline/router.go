@@ -1,32 +1,45 @@
 package pipeline
 
-type router struct {
+type Router struct {
 	output     OutputPlugin
-	deadQueue  OutputPlugin
 	outputInfo *OutputPluginInfo
+
+	deadQueue     OutputPlugin
+	deadQueueInfo *OutputPluginInfo
 }
 
-func newRouter() *router {
-	return &router{}
+func NewRouter() *Router {
+	return &Router{}
 }
 
-func (r *router) SetOutput(info *OutputPluginInfo) {
+func (r *Router) SetOutput(info *OutputPluginInfo) {
 	r.outputInfo = info
 	r.output = info.Plugin.(OutputPlugin)
 }
 
-func (r *router) SetDeadQueueOutput(info *OutputPluginInfo) {
+func (r *Router) SetDeadQueueOutput(info *OutputPluginInfo) {
+	r.deadQueueInfo = info
 	r.deadQueue = info.Plugin.(OutputPlugin)
 }
 
-func (p *router) Out(event *Event) {
-	p.output.Out(event)
+func (r *Router) Ack(event *Event) {
+
 }
 
-func (p *router) Stop() {
-	p.output.Stop()
+func (r *Router) Fail(event *Event) {
+	r.deadQueue.Out(event)
 }
 
-func (p *router) Start(config AnyConfig, params *OutputPluginParams) {
-	p.output.Start(config, params)
+func (r *Router) Out(event *Event) {
+	r.output.Out(event)
+}
+
+func (r *Router) Stop() {
+	r.output.Stop()
+}
+
+func (r *Router) Start(params *OutputPluginParams) {
+	params.Router = *r
+	r.output.Start(r.outputInfo.Config, params)
+	r.deadQueue.Start(r.deadQueueInfo.Config, params)
 }
