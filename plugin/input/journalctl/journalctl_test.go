@@ -69,56 +69,6 @@ func TestPipeline(t *testing.T) {
 	assert.Equal(t, 10, total)
 }
 
-func TestOffsets(t *testing.T) {
-	/*
-		This test falls sometimes because commit of last event of iteration
-		doesn't have enough time to finish before pipeline stop.
-		So last event duplicates during next iteration
-		and total number of unique events is less then required.
-		Compare it with TestOffsetsFixed.
-	*/
-
-	t.Skip()
-
-	offsetPath := filepath.Join(t.TempDir(), "offset.yaml")
-
-	const (
-		lines = 5
-		iters = 2
-		total = lines * iters
-	)
-
-	config := &Config{OffsetsFile: offsetPath, MaxLines: lines}
-	test.NewConfig(config, nil)
-
-	cursors := map[string]int{}
-	mu := sync.Mutex{}
-
-	for range iters {
-		p := test.NewPipeline(nil, "passive")
-
-		wg := sync.WaitGroup{}
-		wg.Add(lines)
-
-		setInput(p, &Plugin{}, config)
-		setOutput(p, func(event *pipeline.Event) {
-			mu.Lock()
-			cursors[strings.Clone(event.Root.Dig("__CURSOR").AsString())]++
-			mu.Unlock()
-			wg.Done()
-		})
-
-		p.Start()
-		wg.Wait()
-		p.Stop()
-	}
-
-	assert.Equal(t, total, len(cursors))
-	for _, cnt := range cursors {
-		assert.Equal(t, 1, cnt)
-	}
-}
-
 type SafePlugin struct {
 	Plugin
 	commitFn func(event *pipeline.Event)
@@ -129,7 +79,7 @@ func (p *SafePlugin) Commit(event *pipeline.Event) {
 	p.commitFn(event)
 }
 
-func TestOffsetsFixed(t *testing.T) {
+func TestOffsets(t *testing.T) {
 	offsetPath := filepath.Join(t.TempDir(), "offset.yaml")
 
 	const (
@@ -151,6 +101,7 @@ func TestOffsetsFixed(t *testing.T) {
 		wg.Add(lines)
 
 		in := &SafePlugin{
+			// ensure Stop() called after all Commit()-s
 			commitFn: func(event *pipeline.Event) {
 				mu.Lock()
 				cursors[strings.Clone(event.Root.Dig("__CURSOR").AsString())]++
