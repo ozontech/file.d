@@ -113,8 +113,7 @@ type Pipeline struct {
 	procCount   *atomic.Int32
 	activeProcs *atomic.Int32
 
-	output     OutputPlugin
-	outputInfo *OutputPluginInfo
+	router *router
 
 	metricHolder *metric.Holder
 
@@ -199,6 +198,7 @@ func New(name string, settings *Settings, registry *prometheus.Registry, lg *zap
 			PipelineSettings: settings,
 			MetricCtl:        metricCtl,
 		},
+		router: newRouter(),
 		actionMetrics: actionMetrics{
 			m:  make(map[string]*actionMetric),
 			mu: new(sync.RWMutex),
@@ -301,7 +301,7 @@ func (p *Pipeline) SetupHTTPHandlers(mux *http.ServeMux) {
 	if p.input == nil {
 		p.logger.Panic("input isn't set")
 	}
-	if p.output == nil {
+	if p.router.output == nil {
 		p.logger.Panic("output isn't set")
 	}
 
@@ -321,7 +321,7 @@ func (p *Pipeline) SetupHTTPHandlers(mux *http.ServeMux) {
 		}
 	}
 
-	for hName, handler := range p.outputInfo.PluginStaticInfo.Endpoints {
+	for hName, handler := range p.router.outputInfo.PluginStaticInfo.Endpoints {
 		mux.HandleFunc(fmt.Sprintf("%s/%d/%s", prefix, len(p.actionInfos)+1, hName), handler)
 	}
 }
@@ -330,7 +330,7 @@ func (p *Pipeline) Start() {
 	if p.input == nil {
 		p.logger.Panic("input isn't set")
 	}
-	if p.output == nil {
+	if p.router.output == nil {
 		p.logger.Panic("output isn't set")
 	}
 
@@ -339,11 +339,11 @@ func (p *Pipeline) Start() {
 	outputParams := &OutputPluginParams{
 		PluginDefaultParams: p.actionParams,
 		Controller:          p,
-		Logger:              p.logger.Sugar().Named("output").Named(p.outputInfo.Type),
+		Logger:              p.logger.Sugar().Named("output").Named(p.router.outputInfo.Type),
 	}
-	p.logger.Info("starting output plugin", zap.String("name", p.outputInfo.Type))
+	p.logger.Info("starting output plugin", zap.String("name", p.router.outputInfo.Type))
 
-	p.output.Start(p.outputInfo.Config, outputParams)
+	p.router.Start(p.router.outputInfo.Config, outputParams)
 
 	p.logger.Info("stating processors", zap.Int("count", len(p.Procs)))
 	for _, processor := range p.Procs {
@@ -382,7 +382,7 @@ func (p *Pipeline) Stop() {
 	p.input.Stop()
 
 	p.logger.Info("stopping output")
-	p.output.Stop()
+	p.router.Stop()
 
 	p.shouldStop.Store(true)
 
@@ -399,12 +399,15 @@ func (p *Pipeline) GetInput() InputPlugin {
 }
 
 func (p *Pipeline) SetOutput(info *OutputPluginInfo) {
-	p.outputInfo = info
-	p.output = info.Plugin.(OutputPlugin)
+	p.router.SetOutput(info)
+}
+
+func (p *Pipeline) SetDeadQueueOutput(info *OutputPluginInfo) {
+	p.router.SetDeadQueueOutput(info)
 }
 
 func (p *Pipeline) GetOutput() OutputPlugin {
-	return p.output
+	return p.router.output
 }
 
 // In decodes message and passes it to event stream.
@@ -758,7 +761,7 @@ func (p *Pipeline) newProc(id int) *processor {
 		id,
 		&p.actionMetrics,
 		p.activeProcs,
-		p.output,
+		p.router,
 		p.streamer,
 		p.finalize,
 		p.IncMaxEventSizeExceeded,
