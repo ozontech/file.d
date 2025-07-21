@@ -77,6 +77,7 @@ type PluginStaticInfo struct {
 	// Every plugin can provide their own API through Endpoints.
 	Endpoints         map[string]func(http.ResponseWriter, *http.Request)
 	AdditionalActions []string // used only for input plugins, defines actions that should be run right after input plugin with input config
+	DeadQueueInfo     *PluginStaticInfo
 }
 
 type PluginRuntimeInfo struct {
