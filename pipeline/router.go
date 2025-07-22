@@ -38,6 +38,10 @@ func (r *Router) Stop() {
 	r.output.Stop()
 }
 
+func (r *Router) DeadQueueIsAvailable() bool {
+	return r.deadQueue != nil
+}
+
 func (r *Router) Start(params *OutputPluginParams) {
 	params.Router = *r
 	r.output.Start(r.outputInfo.Config, params)

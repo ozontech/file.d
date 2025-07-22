@@ -11,7 +11,7 @@ type RetriableBatcher struct {
 	outFn        RetriableBatcherOutFn
 	batcher      *Batcher
 	backoffOpts  BackoffOpts
-	onRetryError func(err error)
+	onRetryError func(err error, events []*Event)
 }
 
 type RetriableBatcherOutFn func(*WorkerData, *Batch) error
@@ -22,7 +22,7 @@ type BackoffOpts struct {
 	AttemptNum   int
 }
 
-func NewRetriableBatcher(batcherOpts *BatcherOptions, batcherOutFn RetriableBatcherOutFn, opts BackoffOpts, onError func(err error)) *RetriableBatcher {
+func NewRetriableBatcher(batcherOpts *BatcherOptions, batcherOutFn RetriableBatcherOutFn, opts BackoffOpts, onError func(err error, events []*Event)) *RetriableBatcher {
 	batcherBackoff := &RetriableBatcher{
 		outFn:        batcherOutFn,
 		backoffOpts:  opts,
@@ -58,7 +58,7 @@ func (b *RetriableBatcher) Out(data *WorkerData, batch *Batch) {
 		}
 		next := exponentionalBackoff.NextBackOff()
 		if next == backoff.Stop || (b.backoffOpts.AttemptNum >= 0 && numTries > b.backoffOpts.AttemptNum) {
-			b.onRetryError(err)
+			b.onRetryError(err, batch.events)
 			return
 		}
 		numTries++
