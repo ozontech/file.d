@@ -236,7 +236,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		AttemptNum:   p.config.Retry,
 	}
 
-	onError := func(err error) {
+	onError := func(err error, _ []*pipeline.Event) {
 		var level zapcore.Level
 		if p.config.FatalOnFailedInsert {
 			level = zapcore.FatalLevel
