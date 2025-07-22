@@ -266,16 +266,16 @@ func (f *FileD) getStaticInfo(pipelineConfig *cfg.PipelineConfig, pluginKind pip
 
 func (f *FileD) Stop(ctx context.Context) error {
 	logger.Infof("stopping pipelines=%d", len(f.Pipelines))
-	var err error
-	if f.server != nil {
-		err = f.server.Shutdown(ctx)
-	}
 	f.shouldStop.Store(true)
 
 	for _, p := range f.Pipelines {
 		p.Stop()
 	}
 
+	var err error
+	if f.server != nil {
+		err = f.server.Shutdown(ctx)
+	}
 	<-f.stopChan
 
 	return err
@@ -295,8 +295,8 @@ func (f *FileD) startHTTP() {
 	mux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
 	mux.HandleFunc("/debug/pprof/trace", pprof.Trace)
 
-	mux.HandleFunc("/live", f.serveLiveReady)
-	mux.HandleFunc("/ready", f.serveLiveReady)
+	mux.HandleFunc("/live", f.serveLive)
+	mux.HandleFunc("/ready", f.serveReady)
 	mux.HandleFunc("/freeosmem", f.serveFreeOsMem)
 	mux.Handle("/metrics", promhttp.InstrumentMetricHandler(
 		f.registry, promhttp.HandlerFor(f.registry, promhttp.HandlerOpts{}),
@@ -342,13 +342,16 @@ func (f *FileD) serveFreeOsMem(_ http.ResponseWriter, _ *http.Request) {
 	logger.Infof("free OS memory OK")
 }
 
-func (f *FileD) serveLiveReady(w http.ResponseWriter, _ *http.Request) {
+func (f *FileD) serveReady(w http.ResponseWriter, _ *http.Request) {
 	if f.shouldStop.Load() {
 		w.WriteHeader(http.StatusServiceUnavailable)
-		logger.Infof("unavailable")
 		return
 	}
-	logger.Infof("live/ready OK")
+	logger.Infof("ready OK")
+}
+
+func (f *FileD) serveLive(_ http.ResponseWriter, _ *http.Request) {
+	logger.Infof("live OK")
 }
 
 type valueChangerHandler struct {
