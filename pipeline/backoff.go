@@ -59,6 +59,9 @@ func (b *RetriableBatcher) Out(data *WorkerData, batch *Batch) {
 		next := exponentionalBackoff.NextBackOff()
 		if next == backoff.Stop || (b.backoffOpts.AttemptNum >= 0 && numTries > b.backoffOpts.AttemptNum) {
 			b.onRetryError(err, batch.events)
+			// TODO: check that dead_queue is possible
+			batch.reset()
+			batch.status = BatchStatusInDeadQueue
 			return
 		}
 		numTries++
