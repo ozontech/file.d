@@ -124,7 +124,6 @@ func (a *Antispammer) IsSpam(
 	rlMapKey := id
 	threshold := a.threshold
 
-loop:
 	for i := range a.rules {
 		rule := &a.rules[i]
 		if rule.Condition.check(event, []byte(name), meta) {
@@ -136,11 +135,11 @@ loop:
 				return false
 			case thresholdBlocked:
 				return true
-			default:
-				rlMapKey = rule.RLMapKey
-				threshold = rule.Threshold
-				break loop
 			}
+
+			rlMapKey = rule.RLMapKey
+			threshold = rule.Threshold
+			break
 		}
 	}
 
