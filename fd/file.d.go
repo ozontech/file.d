@@ -222,10 +222,12 @@ func (f *FileD) setupOutput(p *pipeline.Pipeline, pipelineConfig *cfg.PipelineCo
 		PluginRuntimeInfo: f.instantiatePlugin(info),
 	})
 
-	p.SetDeadQueueOutput(&pipeline.OutputPluginInfo{
-		PluginStaticInfo:  info.DeadQueueInfo,
-		PluginRuntimeInfo: f.instantiatePlugin(info.DeadQueueInfo),
-	})
+	if info.DeadQueueInfo != nil {
+		p.SetDeadQueueOutput(&pipeline.OutputPluginInfo{
+			PluginStaticInfo:  info.DeadQueueInfo,
+			PluginRuntimeInfo: f.instantiatePlugin(info.DeadQueueInfo),
+		})
+	}
 
 	return nil
 }
@@ -254,6 +256,7 @@ func (f *FileD) getStaticInfo(pipelineConfig *cfg.PipelineConfig, pluginKind pip
 	if err != nil {
 		return nil, err
 	}
+
 	deadqueue := configJSON.Get("deadqueue")
 	var deadqueueInfo *pipeline.PluginStaticInfo
 	if deadqueue.MustMap() != nil {
@@ -265,8 +268,12 @@ func (f *FileD) getStaticInfo(pipelineConfig *cfg.PipelineConfig, pluginKind pip
 		if err != nil {
 			return nil, err
 		}
+
+		// TODO: recursive deadqueue config
+		// deadqueueForDeadqueue := deadqueue.Get("deadqueue").MustMap()
 		configJSON.Del("deadqueue")
 	}
+
 	configJson, err := configJSON.Encode()
 	if err != nil {
 		logger.Panicf("can't create config json for %s", t)
