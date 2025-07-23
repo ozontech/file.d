@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ozontech/file.d/decoder"
+	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/pipeline/checker"
 	"github.com/ozontech/file.d/pipeline/ctor"
 )
@@ -148,7 +148,7 @@ func extractLengthCmpOpNode(opName string, node map[string]any) (Node, error) {
 		return nil, err
 	}
 
-	cmpValue, err := decoder.AnyToInt(cmpValueRaw)
+	cmpValue, err := cfg.AnyToInt(cmpValueRaw)
 	if err != nil {
 		return nil, err
 	}

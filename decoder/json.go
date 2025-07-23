@@ -6,6 +6,7 @@ import (
 	"slices"
 	"sync"
 
+	"github.com/ozontech/file.d/cfg"
 	insaneJSON "github.com/ozontech/insane-json"
 	"github.com/tidwall/gjson"
 )
@@ -140,7 +141,7 @@ func extractJsonParams(params map[string]any) (jsonParams, error) {
 			return jsonParams{}, fmt.Errorf("%q must be map", jsonMaxFieldsSizeParam)
 		}
 		for k, v := range maxFieldsSizeMap {
-			vInt, err := AnyToInt(v)
+			vInt, err := cfg.AnyToInt(v)
 			if err != nil {
 				return jsonParams{}, fmt.Errorf("each value in %q must be int", jsonMaxFieldsSizeParam)
 			}
