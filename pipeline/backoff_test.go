@@ -17,7 +17,7 @@ func TestBackoff(t *testing.T) {
 	eventCount := &atomic.Int32{}
 	eventCountBefore := eventCount.Load()
 
-	errorFn := func(err error) {
+	errorFn := func(err error, events []*Event) {
 		errorCount.Inc()
 	}
 
@@ -42,7 +42,7 @@ func TestBackoff(t *testing.T) {
 func TestBackoffWithError(t *testing.T) {
 	errorCount := &atomic.Int32{}
 	prevValue := errorCount.Load()
-	errorFn := func(err error) {
+	errorFn := func(err error, events []*Event) {
 		errorCount.Inc()
 	}
 
