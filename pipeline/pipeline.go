@@ -627,6 +627,7 @@ func (p *Pipeline) streamEvent(event *Event) uint64 {
 }
 
 func (p *Pipeline) Commit(event *Event) {
+	p.router.Ack(event)
 	p.finalize(event, true, true)
 }
 

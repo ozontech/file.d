@@ -27,7 +27,9 @@ func (r *Router) Ack(event *Event) {
 }
 
 func (r *Router) Fail(event *Event) {
-	r.deadQueue.Out(event)
+	if r.DeadQueueIsAvailable() {
+		r.deadQueue.Out(event)
+	}
 }
 
 func (r *Router) Out(event *Event) {
@@ -36,6 +38,9 @@ func (r *Router) Out(event *Event) {
 
 func (r *Router) Stop() {
 	r.output.Stop()
+	if r.DeadQueueIsAvailable() {
+		r.deadQueue.Stop()
+	}
 }
 
 func (r *Router) DeadQueueIsAvailable() bool {
@@ -45,5 +50,7 @@ func (r *Router) DeadQueueIsAvailable() bool {
 func (r *Router) Start(params *OutputPluginParams) {
 	params.Router = *r
 	r.output.Start(r.outputInfo.Config, params)
-	r.deadQueue.Start(r.deadQueueInfo.Config, params)
+	if r.DeadQueueIsAvailable() {
+		r.deadQueue.Start(r.deadQueueInfo.Config, params)
+	}
 }

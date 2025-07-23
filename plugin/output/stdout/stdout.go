@@ -40,5 +40,4 @@ func (p *Plugin) Out(event *pipeline.Event) {
 	// nolint: forbidigo
 	fmt.Println(event.Root.EncodeToString())
 	p.controller.Commit(event)
-	p.router.Ack(event)
 }

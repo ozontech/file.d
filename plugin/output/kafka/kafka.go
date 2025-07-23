@@ -258,10 +258,12 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		MetricCtl:      params.MetricCtl,
 	}
 
+	p.router = params.Router
 	backoffOpts := pipeline.BackoffOpts{
-		MinRetention: p.config.Retention_,
-		Multiplier:   float64(p.config.RetentionExponentMultiplier),
-		AttemptNum:   p.config.Retry,
+		MinRetention:         p.config.Retention_,
+		Multiplier:           float64(p.config.RetentionExponentMultiplier),
+		AttemptNum:           p.config.Retry,
+		DeadQueueIsAvailable: p.router.DeadQueueIsAvailable(),
 	}
 
 	onError := func(err error, events []*pipeline.Event) {
@@ -289,7 +291,6 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	)
 
 	p.batcher.Start(context.TODO())
-	p.router = params.Router
 }
 
 func (p *Plugin) Out(event *pipeline.Event) {
