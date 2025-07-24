@@ -158,7 +158,7 @@ func (a *Antispammer) IsSpam(
 
 	if !has {
 		a.mu.Lock()
-		if newSrc, has := a.sources[id]; has {
+		if newSrc, has := a.sources[rlMapKey]; has {
 			src = newSrc
 		} else {
 			src = source{
@@ -167,7 +167,7 @@ func (a *Antispammer) IsSpam(
 				timestamp: &atomic.Int64{},
 			}
 			src.timestamp.Add(timeEventSeconds)
-			a.sources[id] = src
+			a.sources[rlMapKey] = src
 		}
 		a.mu.Unlock()
 	}
