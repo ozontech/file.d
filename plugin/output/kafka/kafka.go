@@ -326,7 +326,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 	})
 
 	if err := p.client.ProduceSync(context.Background(), data.messages[:i]...).FirstErr(); err != nil {
-		if errors.Is(err, kerr.LeaderNotAvailable) {
+		if errors.Is(err, kerr.LeaderNotAvailable) || errors.Is(err, kerr.NotLeaderForPartition) {
 			p.client.ForceMetadataRefresh()
 		}
 		p.logger.Errorf("can't write batch: %v", err)
