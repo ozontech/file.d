@@ -6,7 +6,7 @@ import (
 	"slices"
 
 	"github.com/ozontech/file.d/cfg"
-	"github.com/ozontech/file.d/pipeline/checker"
+	"github.com/ozontech/file.d/pipeline/do_if/data_checker"
 	insaneJSON "github.com/ozontech/insane-json"
 )
 
@@ -165,7 +165,7 @@ Result:
 type fieldOpNode struct {
 	fieldPath    []string
 	fieldPathStr string
-	checker      *checker.Checker
+	checker      data_checker.DataChecker
 }
 
 func newFieldOpNode(op string, field string, caseSensitive bool, values [][]byte) (Node, error) {
@@ -173,7 +173,7 @@ func newFieldOpNode(op string, field string, caseSensitive bool, values [][]byte
 		return nil, errors.New("values are not provided")
 	}
 
-	c, err := checker.New(op, caseSensitive, values)
+	c, err := data_checker.New(op, caseSensitive, values)
 	if err != nil {
 		return nil, err
 	}
@@ -214,5 +214,5 @@ func (n *fieldOpNode) isEqualTo(n2 Node, _ int) error {
 		)
 	}
 
-	return checker.Equal(n.checker, n2f.checker)
+	return data_checker.Equal(&n.checker, &n2f.checker)
 }

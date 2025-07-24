@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/ozontech/file.d/pipeline/checker"
+	"github.com/ozontech/file.d/pipeline/do_if/data_checker"
 )
 
 type dataType int
@@ -52,7 +52,7 @@ func stringToDataType(s string) (dataType, string, error) {
 type valueNode struct {
 	dataType dataType
 	metaKey  string
-	checker  *checker.Checker
+	checker  data_checker.DataChecker
 }
 
 func newValueNode(
@@ -61,7 +61,7 @@ func newValueNode(
 	values [][]byte,
 	checkDataTag string,
 ) (*valueNode, error) {
-	c, err := checker.New(opTag, caseSensitive, values)
+	c, err := data_checker.New(opTag, caseSensitive, values)
 	if err != nil {
 		return nil, fmt.Errorf("init checker: %w", err)
 	}

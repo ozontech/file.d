@@ -6,8 +6,8 @@ import (
 	"strings"
 
 	"github.com/ozontech/file.d/cfg"
-	"github.com/ozontech/file.d/pipeline/checker"
 	"github.com/ozontech/file.d/pipeline/ctor"
+	"github.com/ozontech/file.d/pipeline/do_if/data_checker"
 )
 
 const (
@@ -106,11 +106,11 @@ func extractRule(node map[string]any) (Rule, error) {
 func opToNonLogicalCtor(opName string) func(string, map[string]any) (Node, error) {
 	switch opName {
 	case
-		checker.OpEqualTag,
-		checker.OpContainsTag,
-		checker.OpPrefixTag,
-		checker.OpSuffixTag,
-		checker.OpRegexTag:
+		data_checker.OpEqualTag,
+		data_checker.OpContainsTag,
+		data_checker.OpPrefixTag,
+		data_checker.OpSuffixTag,
+		data_checker.OpRegexTag:
 		return extractValueNode
 	default:
 		return nil

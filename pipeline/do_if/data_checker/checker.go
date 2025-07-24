@@ -1,4 +1,4 @@
-package checker
+package data_checker
 
 import (
 	"bytes"
@@ -59,7 +59,7 @@ func stringToOp(s string) (op, error) {
 	}
 }
 
-type Checker struct {
+type DataChecker struct {
 	op            op
 	caseSensitive bool
 	values        [][]byte
@@ -70,9 +70,11 @@ type Checker struct {
 	maxValLen int
 }
 
-func New(opTag string, caseSensitive bool, values [][]byte) (*Checker, error) {
+func New(opTag string, caseSensitive bool, values [][]byte) (DataChecker, error) {
+	var def DataChecker
+
 	if len(values) == 0 {
-		return nil, errors.New("values are not provided")
+		return def, errors.New("values are not provided")
 	}
 
 	var vals [][]byte
@@ -82,7 +84,7 @@ func New(opTag string, caseSensitive bool, values [][]byte) (*Checker, error) {
 
 	curOp, err := stringToOp(opTag)
 	if err != nil {
-		return nil, err
+		return def, err
 	}
 
 	if curOp == opRegex {
@@ -90,7 +92,7 @@ func New(opTag string, caseSensitive bool, values [][]byte) (*Checker, error) {
 		for _, v := range values {
 			re, err := regexp.Compile(string(v))
 			if err != nil {
-				return nil, fmt.Errorf("failed to compile regex %q: %w", v, err)
+				return def, fmt.Errorf("failed to compile regex %q: %w", v, err)
 			}
 			reValues = append(reValues, re)
 		}
@@ -125,7 +127,7 @@ func New(opTag string, caseSensitive bool, values [][]byte) (*Checker, error) {
 		}
 	}
 
-	return &Checker{
+	return DataChecker{
 		op:            curOp,
 		caseSensitive: caseSensitive,
 		values:        vals,
@@ -136,7 +138,7 @@ func New(opTag string, caseSensitive bool, values [][]byte) (*Checker, error) {
 	}, nil
 }
 
-func (n *Checker) Check(data []byte) bool {
+func (n *DataChecker) Check(data []byte) bool {
 	// fast check for data
 	if n.op != opRegex && len(data) < n.minValLen {
 		return false
@@ -228,7 +230,7 @@ func assertEqualValues(a, b [][]byte, msg string) {
 	}
 }
 
-func Equal(a, b *Checker) (err error) {
+func Equal(a, b *DataChecker) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = errors.New(r.(string))

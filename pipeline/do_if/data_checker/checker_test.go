@@ -1,4 +1,4 @@
-package checker
+package data_checker
 
 import (
 	"testing"
@@ -12,7 +12,7 @@ func TestCheckerCtor(t *testing.T) {
 		caseSensitive bool
 		values        [][]byte
 
-		expected *Checker
+		expected DataChecker
 	}
 
 	for _, tt := range []testCase{
@@ -21,7 +21,7 @@ func TestCheckerCtor(t *testing.T) {
 			caseSensitive: true,
 			values:        [][]byte{[]byte(`test-111`), []byte(`test-2`), []byte(`test-3`), []byte(`test-12345`)},
 
-			expected: &Checker{
+			expected: DataChecker{
 				op:            opEqual,
 				caseSensitive: true,
 				values:        nil,
@@ -50,7 +50,7 @@ func TestCheckerCtor(t *testing.T) {
 				[]byte(`test-11`),
 			},
 
-			expected: &Checker{
+			expected: DataChecker{
 				op:            opContains,
 				caseSensitive: false,
 				values: [][]byte{
@@ -66,6 +66,6 @@ func TestCheckerCtor(t *testing.T) {
 	} {
 		got, err := New(tt.opTag, tt.caseSensitive, tt.values)
 		require.NoErrorf(t, err, "failed to init checker")
-		require.NoError(t, Equal(got, tt.expected), "checkers are not equal")
+		require.NoError(t, Equal(&got, &tt.expected), "checkers are not equal")
 	}
 }

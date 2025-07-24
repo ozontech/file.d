@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ozontech/file.d/pipeline/checker"
 	"github.com/ozontech/file.d/pipeline/ctor"
+	"github.com/ozontech/file.d/pipeline/do_if/data_checker"
 	"github.com/ozontech/file.d/pipeline/logic"
 	insaneJSON "github.com/ozontech/insane-json"
 	"github.com/stretchr/testify/assert"
@@ -86,7 +86,7 @@ func checkNode(t *testing.T, want, got Node) {
 		gotNode := got.(*fieldOpNode)
 		assert.Equal(t, 0, slices.Compare[[]string](wantNode.fieldPath, gotNode.fieldPath))
 		assert.Equal(t, wantNode.fieldPathStr, gotNode.fieldPathStr)
-		assert.NoError(t, checker.Equal(wantNode.checker, gotNode.checker))
+		assert.NoError(t, data_checker.Equal(&wantNode.checker, &gotNode.checker))
 	case NodeLogicalOp:
 		wantNode := want.(*logicalNode)
 		gotNode := got.(*logicalNode)
@@ -120,8 +120,8 @@ func checkNode(t *testing.T, want, got Node) {
 func TestBuildNodes(t *testing.T) {
 	timestamp := time.Now()
 
-	mustNewChecker := func(op string, caseSensitive bool, values [][]byte) *checker.Checker {
-		c, err := checker.New(op, caseSensitive, values)
+	mustNewChecker := func(op string, caseSensitive bool, values [][]byte) data_checker.DataChecker {
+		c, err := data_checker.New(op, caseSensitive, values)
 		if err != nil {
 			panic(err)
 		}
