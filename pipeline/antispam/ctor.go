@@ -3,11 +3,10 @@ package antispam
 import (
 	"errors"
 	"fmt"
-	"strings"
 
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/pipeline/ctor"
-	"github.com/ozontech/file.d/pipeline/do_if/data_checker"
+	"github.com/ozontech/file.d/pipeline/do_if"
 )
 
 const (
@@ -15,10 +14,6 @@ const (
 	fieldNameName      = "name"
 	fieldNameIf        = "if"
 	fieldNameThreshold = "threshold"
-
-	fieldNameOp = "op"
-
-	fieldNameOperands = "operands"
 
 	fieldNameData          = "data"
 	fieldNameValues        = "values"
@@ -85,7 +80,7 @@ func extractRule(node map[string]any) (Rule, error) {
 		return Rule{}, err
 	}
 
-	cond, err := ctor.Extract(condNode, opToNonLogicalCtor, newLogicalNode)
+	cond, err := do_if.ExtractNode(condNode)
 	if err != nil {
 		return Rule{}, err
 	}
@@ -101,60 +96,4 @@ func extractRule(node map[string]any) (Rule, error) {
 	}
 
 	return newRule(name, cond, threshold)
-}
-
-func opToNonLogicalCtor(opName string) func(string, map[string]any) (Node, error) {
-	switch opName {
-	case
-		data_checker.OpEqualTag,
-		data_checker.OpContainsTag,
-		data_checker.OpPrefixTag,
-		data_checker.OpSuffixTag,
-		data_checker.OpRegexTag:
-		return extractValueNode
-	default:
-		return nil
-	}
-}
-
-func extractValueNode(op string, node map[string]any) (Node, error) {
-	dataTag, err := ctor.Get[string](node, fieldNameData)
-	if err != nil {
-		return nil, err
-	}
-
-	caseSensitive := true
-	caseSensitiveNode, err := ctor.Get[bool](node, fieldNameCaseSensitive)
-	if err == nil {
-		caseSensitive = caseSensitiveNode
-	} else if errors.Is(err, ctor.ErrTypeMismatch) {
-		return nil, err
-	}
-
-	values, err := extractValues(node)
-	if err != nil {
-		return nil, fmt.Errorf("extract values: %w", err)
-	}
-
-	return newValueNode(op, caseSensitive, values, dataTag)
-}
-
-func extractValues(node map[string]any) ([][]byte, error) {
-	rawValues, err := ctor.Get[[]any](node, fieldNameValues)
-	if err != nil {
-		return nil, err
-	}
-
-	values := make([][]byte, 0, len(rawValues))
-	for _, rawValue := range rawValues {
-		var value string
-		value, err = ctor.Must[string](rawValue)
-		if err != nil {
-			return nil, fmt.Errorf("value type mismatch: %w", err)
-		}
-
-		values = append(values, []byte(strings.Clone(value)))
-	}
-
-	return values, nil
 }

@@ -40,7 +40,7 @@ const (
 )
 
 func NewFromMap(m map[string]any) (*Checker, error) {
-	root, err := extractNode(m)
+	root, err := ExtractNode(m)
 	if err != nil {
 		return nil, fmt.Errorf("extract nodes: %w", err)
 	}
@@ -50,7 +50,7 @@ func NewFromMap(m map[string]any) (*Checker, error) {
 	}, nil
 }
 
-func extractNode(node ctor.Node) (Node, error) {
+func ExtractNode(node ctor.Node) (Node, error) {
 	opName, err := ctor.Get[string](node, fieldNameOp)
 	if err != nil {
 		return nil, err
@@ -272,7 +272,7 @@ func extractLogicalOpNode(opName string, node map[string]any) (Node, error) {
 		}
 
 		var operand Node
-		operand, err = extractNode(operandNode)
+		operand, err = ExtractNode(operandNode)
 		if err != nil {
 			return nil, fmt.Errorf("extract operand for logical op %q: %w", opName, err)
 		}

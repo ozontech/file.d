@@ -164,7 +164,7 @@ func (n *checkTypeOpNode) checkEvent(eventRoot *insaneJSON.Root) bool {
 	return false
 }
 
-func (n *checkTypeOpNode) checkRaw([]byte, []byte, map[string]string) bool {
+func (n *checkTypeOpNode) CheckRaw([]byte, []byte, map[string]string) bool {
 	panic("not impl")
 }
 

@@ -84,7 +84,7 @@ func NewAntispammer(o *Options) *Antispammer {
 			o.Logger.Fatal("can't extract antispam", zap.Error(err))
 		}
 	} else {
-		a.rules, err = exceptionToRules(o.Exceptions)
+		a.rules, err = exceptionsToRules(o.Exceptions)
 		if err != nil {
 			o.Logger.Fatal("can't convert exceptions to rules")
 		}
@@ -126,7 +126,7 @@ func (a *Antispammer) IsSpam(
 
 	for i := range a.rules {
 		rule := &a.rules[i]
-		if rule.Condition.check(event, []byte(name), meta) {
+		if rule.Condition.CheckRaw(event, []byte(name), meta) {
 			switch rule.Threshold {
 			case thresholdUnlimited:
 				if rule.Name != "" {

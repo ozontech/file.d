@@ -174,29 +174,29 @@ const (
 func (c dataType) String() string {
 	switch c {
 	case dataTypeEvent:
-		return dataTypeEventTag
+		return DataTypeEventTag
 	case dataTypeSourceName:
-		return dataTypeSourceNameTag
+		return DataTypeSourceNameTag
 	case dataTypeMeta:
-		return dataTypeMetaTag
+		return DataTypeMetaTag
 	default:
 		panic(fmt.Sprintf("unknown checked data type: %d", c))
 	}
 }
 
 const (
-	dataTypeEventTag      = "event"
-	dataTypeSourceNameTag = "source_name"
-	dataTypeMetaTag       = "meta"
+	DataTypeEventTag      = "event"
+	DataTypeSourceNameTag = "source_name"
+	DataTypeMetaTag       = "meta"
 
 	dataTypeMetaTagPrefix = "meta."
 )
 
 func stringToDataType(s string) (dataType, string, error) {
 	switch {
-	case s == dataTypeEventTag:
+	case s == DataTypeEventTag:
 		return dataTypeEvent, "", nil
-	case s == dataTypeSourceNameTag:
+	case s == DataTypeSourceNameTag:
 		return dataTypeSourceName, "", nil
 	case strings.HasPrefix(s, dataTypeMetaTagPrefix):
 		return dataTypeMeta, strings.TrimPrefix(s, dataTypeMetaTagPrefix), nil
@@ -265,7 +265,7 @@ func (n *fieldOpNode) checkEvent(eventRoot *insaneJSON.Root) bool {
 	return n.checker.Check(node.AsBytes())
 }
 
-func (n *fieldOpNode) checkRaw(event []byte, sourceName []byte, metadata map[string]string) bool {
+func (n *fieldOpNode) CheckRaw(event []byte, sourceName []byte, metadata map[string]string) bool {
 	switch n.dataType {
 	case dataTypeEvent:
 		return n.checker.Check(event)

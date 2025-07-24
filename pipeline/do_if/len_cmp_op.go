@@ -203,7 +203,7 @@ func (n *lenCmpOpNode) checkEvent(eventRoot *insaneJSON.Root) bool {
 	return n.cmpOp.compare(value, n.cmpValue)
 }
 
-func (n *lenCmpOpNode) checkRaw(event []byte, sourceName []byte, metadata map[string]string) bool {
+func (n *lenCmpOpNode) CheckRaw(event []byte, sourceName []byte, metadata map[string]string) bool {
 	panic("not impl")
 }
 

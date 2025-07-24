@@ -2,16 +2,13 @@ package antispam
 
 import (
 	"fmt"
-	"strings"
 
-	"github.com/ozontech/file.d/cfg/matchrule"
-	"github.com/ozontech/file.d/pipeline/ctor"
-	"github.com/ozontech/file.d/pipeline/logic"
+	"github.com/ozontech/file.d/pipeline/do_if"
 )
 
 type Rule struct {
 	Name      string
-	Condition Node
+	Condition do_if.Node
 	Threshold int
 	RLMapKey  string
 }
@@ -30,7 +27,7 @@ func checkThreshold(threshold int) error {
 	return nil
 }
 
-func newRule(name string, condition Node, threshold int) (Rule, error) {
+func newRule(name string, condition do_if.Node, threshold int) (Rule, error) {
 	if err := checkThreshold(threshold); err != nil {
 		return Rule{}, err
 	}
@@ -42,47 +39,16 @@ func newRule(name string, condition Node, threshold int) (Rule, error) {
 	}, nil
 }
 
-func matchRuleToNode(rule matchrule.Rule, dataTypeTag string) (Node, error) {
-	values := make([][]byte, 0, len(rule.Values))
-	for _, s := range rule.Values {
-		values = append(values, []byte(strings.Clone(s)))
-	}
-
-	node, err := newValueNode(matchrule.ModeToString(rule.Mode), !rule.CaseInsensitive, values, dataTypeTag)
-	if err != nil {
-		return nil, err
-	}
-
-	if !rule.Invert {
-		return node, nil
-	}
-
-	return ctor.NewLogicalNode(logic.NotTag, []Node{node}, newLogicalNode)
-}
-
-func matchRuleSetToNode(ruleSet matchrule.RuleSet, dataTypeTag string) (Node, error) {
-	operands := make([]Node, 0, len(ruleSet.Rules))
-	for _, r := range ruleSet.Rules {
-		operand, err := matchRuleToNode(r, dataTypeTag)
-		if err != nil {
-			return nil, err
-		}
-		operands = append(operands, operand)
-	}
-
-	return ctor.NewLogicalNode(matchrule.CondToString(ruleSet.Cond), operands, newLogicalNode)
-}
-
-func exceptionToNode(exception Exception) (Node, error) {
-	dataTypeTag := dataTypeEventTag
+func exceptionToNode(exception Exception) (do_if.Node, error) {
+	dataTypeTag := do_if.DataTypeEventTag
 	if exception.CheckSourceName {
-		dataTypeTag = dataTypeSourceNameTag
+		dataTypeTag = do_if.DataTypeSourceNameTag
 	}
 
-	return matchRuleSetToNode(exception.RuleSet, dataTypeTag)
+	return do_if.RuleSetToNode(exception.RuleSet, dataTypeTag)
 }
 
-func exceptionToRules(exceptions Exceptions) (Rules, error) {
+func exceptionsToRules(exceptions Exceptions) (Rules, error) {
 	rules := make(Rules, 0, len(exceptions))
 	for _, e := range exceptions {
 		node, err := exceptionToNode(e)
