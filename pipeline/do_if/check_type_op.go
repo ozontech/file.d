@@ -154,7 +154,7 @@ func (n *checkTypeOpNode) Type() nodeType {
 	return NodeCheckTypeOp
 }
 
-func (n *checkTypeOpNode) check(eventRoot *insaneJSON.Root) bool {
+func (n *checkTypeOpNode) checkEvent(eventRoot *insaneJSON.Root) bool {
 	node := eventRoot.Dig(n.fieldPath...)
 	for _, checkFn := range n.checkTypeFns {
 		if checkFn(node) {
@@ -162,6 +162,10 @@ func (n *checkTypeOpNode) check(eventRoot *insaneJSON.Root) bool {
 		}
 	}
 	return false
+}
+
+func (n *checkTypeOpNode) checkRaw([]byte, []byte, map[string]string) bool {
+	panic("not impl")
 }
 
 func (n *checkTypeOpNode) isEqualTo(n2 Node, _ int) error {

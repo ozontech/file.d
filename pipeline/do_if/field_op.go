@@ -189,7 +189,7 @@ func (n *fieldOpNode) Type() nodeType {
 	return NodeFieldOp
 }
 
-func (n *fieldOpNode) check(eventRoot *insaneJSON.Root) bool {
+func (n *fieldOpNode) checkEvent(eventRoot *insaneJSON.Root) bool {
 	node := eventRoot.Dig(n.fieldPath...)
 	if node.IsArray() || node.IsObject() {
 		return false
@@ -200,6 +200,10 @@ func (n *fieldOpNode) check(eventRoot *insaneJSON.Root) bool {
 	}
 
 	return n.checker.Check(node.AsBytes())
+}
+
+func (n *fieldOpNode) checkRaw(event []byte, sourceName []byte, metadata map[string]string) bool {
+	panic("not impl")
 }
 
 func (n *fieldOpNode) isEqualTo(n2 Node, _ int) error {

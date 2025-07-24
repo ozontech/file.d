@@ -213,7 +213,7 @@ func TestCheckType(t *testing.T) {
 					eventRoot, err = insaneJSON.DecodeString(d.eventStr)
 					require.NoError(t, err)
 				}
-				got := node.check(eventRoot)
+				got := node.checkEvent(eventRoot)
 				assert.Equal(t, d.want, got, "invalid result for event %q", d.eventStr)
 			}
 		})
@@ -366,7 +366,7 @@ func TestCheckTypeDuplicateValues(t *testing.T) {
 				eventStr := logsMap[d.checkType]
 				eventRoot, err := insaneJSON.DecodeString(eventStr)
 				require.NoError(t, err, "must be no error on decode checkEvent")
-				got := ctnode.check(eventRoot)
+				got := ctnode.checkEvent(eventRoot)
 				assert.Equal(t, d.want, got, "invalid result for check %d of type %q", i, d.checkType)
 			}
 		})

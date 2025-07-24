@@ -137,7 +137,7 @@ func (n *tsCmpOpNode) Type() nodeType {
 	return NodeTimestampCmpOp
 }
 
-func (n *tsCmpOpNode) check(eventRoot *insaneJSON.Root) bool {
+func (n *tsCmpOpNode) checkEvent(eventRoot *insaneJSON.Root) bool {
 	node := eventRoot.Dig(n.fieldPath...)
 	if node == nil {
 		return false
@@ -167,6 +167,10 @@ func (n *tsCmpOpNode) check(eventRoot *insaneJSON.Root) bool {
 	rhs += n.cmpValueShift
 
 	return n.cmpOp.compare(lhs, int(rhs))
+}
+
+func (n *tsCmpOpNode) checkRaw([]byte, []byte, map[string]string) bool {
+	panic("not impl")
 }
 
 func (n *tsCmpOpNode) isEqualTo(n2 Node, _ int) error {

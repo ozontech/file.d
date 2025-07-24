@@ -142,27 +142,31 @@ func (n *logicalNode) Type() nodeType {
 	return NodeLogicalOp
 }
 
-func (n *logicalNode) check(eventRoot *insaneJSON.Root) bool {
+func (n *logicalNode) checkEvent(eventRoot *insaneJSON.Root) bool {
 	switch n.op {
 	case logic.Or:
 		for _, op := range n.operands {
-			if op.check(eventRoot) {
+			if op.checkEvent(eventRoot) {
 				return true
 			}
 		}
 		return false
 	case logic.And:
 		for _, op := range n.operands {
-			if !op.check(eventRoot) {
+			if !op.checkEvent(eventRoot) {
 				return false
 			}
 		}
 		return true
 	case logic.Not:
-		return !n.operands[0].check(eventRoot)
+		return !n.operands[0].checkEvent(eventRoot)
 	default:
 		panic("unknown logical op")
 	}
+}
+
+func (n *logicalNode) checkRaw([]byte, []byte, map[string]string) bool {
+	panic("not impl")
 }
 
 func (n *logicalNode) isEqualTo(n2 Node, level int) error {

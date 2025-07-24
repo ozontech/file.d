@@ -30,7 +30,8 @@ const (
 
 type Node interface {
 	Type() nodeType
-	check(*insaneJSON.Root) bool
+	checkEvent(*insaneJSON.Root) bool
+	checkRaw(event []byte, sourceName []byte, metadata map[string]string) bool
 	isEqualTo(Node, int) error
 }
 
@@ -52,5 +53,5 @@ func (c *Checker) Check(eventRoot *insaneJSON.Root) bool {
 	if eventRoot == nil {
 		return false
 	}
-	return c.root.check(eventRoot)
+	return c.root.checkEvent(eventRoot)
 }

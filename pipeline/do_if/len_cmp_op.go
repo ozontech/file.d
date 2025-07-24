@@ -174,7 +174,7 @@ func getNodeBytesSize(node *insaneJSON.Node) int {
 	return size
 }
 
-func (n *lenCmpOpNode) check(eventRoot *insaneJSON.Root) bool {
+func (n *lenCmpOpNode) checkEvent(eventRoot *insaneJSON.Root) bool {
 	value := 0
 
 	switch n.lenCmpOp {
@@ -201,6 +201,10 @@ func (n *lenCmpOpNode) check(eventRoot *insaneJSON.Root) bool {
 	}
 
 	return n.cmpOp.compare(value, n.cmpValue)
+}
+
+func (n *lenCmpOpNode) checkRaw(event []byte, sourceName []byte, metadata map[string]string) bool {
+	panic("not impl")
 }
 
 func (n *lenCmpOpNode) isEqualTo(n2 Node, _ int) error {
