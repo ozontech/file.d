@@ -42,9 +42,10 @@ func buildDoIfTree(node *doIfTreeNode) (Node, error) {
 	case node.fieldOp != "":
 		return newFieldOpNode(
 			node.fieldOp,
-			node.fieldName,
 			node.caseSensitive,
 			node.values,
+			node.fieldName,
+			"",
 		)
 	case node.logicalOp != "":
 		operands := make([]Node, 0)

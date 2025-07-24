@@ -89,7 +89,7 @@ func extractFieldOpNode(opName string, node map[string]any) (Node, error) {
 		return nil, fmt.Errorf("extract field op values: %w", err)
 	}
 
-	result, err = newFieldOpNode(opName, fieldPath, caseSensitive, vals)
+	result, err = newFieldOpNode(opName, caseSensitive, vals, fieldPath, "")
 	if err != nil {
 		return nil, fmt.Errorf("init field op: %w", err)
 	}

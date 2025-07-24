@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/pipeline/do_if/data_checker"
@@ -19,7 +20,7 @@ Params:
   - `field` - path to field in JSON tree. If empty, root value is checked. Path to nested fields is delimited by dots `"."`, e.g. `"field.subfield"` for `{"field": {"subfield": "val"}}`.
   If the field name contains dots in it they should be shielded with `"\"`, e.g. `"exception\.type"` for `{"exception.type": "example"}`. Default empty.
   - `values` - list of values to check field. Required non-empty.
-  - `case_sensitive` - flag indicating whether checks are performed in case sensitive way. Default `true`.
+  - `case_sensitive` - flag indicating whether checks are performed in case-sensitive way. Default `true`.
     Note: case insensitive checks can cause CPU and memory overhead since every field value will be converted to lower letters.
 
 Example:
@@ -162,13 +163,64 @@ Result:
 
 }*/
 
+type dataType int
+
+const (
+	dataTypeEvent dataType = iota
+	dataTypeSourceName
+	dataTypeMeta
+)
+
+func (c dataType) String() string {
+	switch c {
+	case dataTypeEvent:
+		return dataTypeEventTag
+	case dataTypeSourceName:
+		return dataTypeSourceNameTag
+	case dataTypeMeta:
+		return dataTypeMetaTag
+	default:
+		panic(fmt.Sprintf("unknown checked data type: %d", c))
+	}
+}
+
+const (
+	dataTypeEventTag      = "event"
+	dataTypeSourceNameTag = "source_name"
+	dataTypeMetaTag       = "meta"
+
+	dataTypeMetaTagPrefix = "meta."
+)
+
+func stringToDataType(s string) (dataType, string, error) {
+	switch {
+	case s == dataTypeEventTag:
+		return dataTypeEvent, "", nil
+	case s == dataTypeSourceNameTag:
+		return dataTypeSourceName, "", nil
+	case strings.HasPrefix(s, dataTypeMetaTagPrefix):
+		return dataTypeMeta, strings.TrimPrefix(s, dataTypeMetaTagPrefix), nil
+	default:
+		return -1, "", fmt.Errorf("unparsable check data tag: %s", s)
+	}
+}
+
 type fieldOpNode struct {
 	fieldPath    []string
 	fieldPathStr string
-	checker      data_checker.DataChecker
+	dataType     dataType
+	metaKey      string
+
+	checker data_checker.DataChecker
 }
 
-func newFieldOpNode(op string, field string, caseSensitive bool, values [][]byte) (Node, error) {
+func newFieldOpNode(
+	op string,
+	caseSensitive bool,
+	values [][]byte,
+	field string,
+	dataTypeTag string,
+) (Node, error) {
 	if len(values) == 0 {
 		return nil, errors.New("values are not provided")
 	}
@@ -178,9 +230,20 @@ func newFieldOpNode(op string, field string, caseSensitive bool, values [][]byte
 		return nil, err
 	}
 
+	var curDataType dataType
+	var curMetaKey string
+	if dataTypeTag != "" {
+		curDataType, curMetaKey, err = stringToDataType(dataTypeTag)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	return &fieldOpNode{
 		fieldPath:    cfg.ParseFieldSelector(field),
 		fieldPathStr: field,
+		dataType:     curDataType,
+		metaKey:      curMetaKey,
 		checker:      c,
 	}, nil
 }
@@ -203,7 +266,17 @@ func (n *fieldOpNode) checkEvent(eventRoot *insaneJSON.Root) bool {
 }
 
 func (n *fieldOpNode) checkRaw(event []byte, sourceName []byte, metadata map[string]string) bool {
-	panic("not impl")
+	switch n.dataType {
+	case dataTypeEvent:
+		return n.checker.Check(event)
+	case dataTypeSourceName:
+		return n.checker.Check(sourceName)
+	case dataTypeMeta:
+		data, ok := metadata[n.metaKey]
+		return ok && n.checker.Check([]byte(data))
+	default:
+		panic(fmt.Sprintf("inknown type of checked data: %d", n.dataType))
+	}
 }
 
 func (n *fieldOpNode) isEqualTo(n2 Node, _ int) error {

@@ -33,7 +33,7 @@ const (
 	dataTypeSourceNameTag = "source_name"
 	dataTypeMetaTag       = "meta"
 
-	metaTagPrefix = "meta."
+	dataTypeMetaTagPrefix = "meta."
 )
 
 func stringToDataType(s string) (dataType, string, error) {
@@ -42,8 +42,8 @@ func stringToDataType(s string) (dataType, string, error) {
 		return dataTypeEvent, "", nil
 	case s == dataTypeSourceNameTag:
 		return dataTypeSourceName, "", nil
-	case strings.HasPrefix(s, metaTagPrefix):
-		return dataTypeMeta, strings.TrimPrefix(s, metaTagPrefix), nil
+	case strings.HasPrefix(s, dataTypeMetaTagPrefix):
+		return dataTypeMeta, strings.TrimPrefix(s, dataTypeMetaTagPrefix), nil
 	default:
 		return -1, "", fmt.Errorf("unparsable check data tag: %s", s)
 	}

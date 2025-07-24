@@ -165,8 +165,27 @@ func (n *logicalNode) checkEvent(eventRoot *insaneJSON.Root) bool {
 	}
 }
 
-func (n *logicalNode) checkRaw([]byte, []byte, map[string]string) bool {
-	panic("not impl")
+func (n *logicalNode) checkRaw(event []byte, sourceName []byte, metadata map[string]string) bool {
+	switch n.op {
+	case logic.Or:
+		for _, op := range n.operands {
+			if op.checkRaw(event, sourceName, metadata) {
+				return true
+			}
+		}
+		return false
+	case logic.And:
+		for _, op := range n.operands {
+			if !op.checkRaw(event, sourceName, metadata) {
+				return false
+			}
+		}
+		return true
+	case logic.Not:
+		return !n.operands[0].checkRaw(event, sourceName, metadata)
+	default:
+		panic("unknown logical op")
+	}
 }
 
 func (n *logicalNode) isEqualTo(n2 Node, level int) error {
