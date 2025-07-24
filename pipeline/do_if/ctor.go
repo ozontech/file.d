@@ -8,9 +8,12 @@ import (
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/pipeline/ctor"
 	"github.com/ozontech/file.d/pipeline/do_if/data_checker"
+	"github.com/ozontech/file.d/pipeline/logic"
 )
 
 const (
+	fieldNameOp = "op"
+
 	fieldNameField = "field"
 
 	fieldNameCaseSensitive = "case_sensitive"
@@ -32,10 +35,12 @@ const (
 
 	defaultTsCmpValUpdateInterval = 10 * time.Second
 	defaultTsFormat               = "rfc3339nano"
+
+	fieldNameOperands = "operands"
 )
 
 func NewFromMap(m map[string]any) (*Checker, error) {
-	root, err := ctor.Extract(m, opToNonLogicalCtor, newLogicalOpNode)
+	root, err := extractNode(m)
 	if err != nil {
 		return nil, fmt.Errorf("extract nodes: %w", err)
 	}
@@ -45,25 +50,35 @@ func NewFromMap(m map[string]any) (*Checker, error) {
 	}, nil
 }
 
-func opToNonLogicalCtor(opName string) func(string, map[string]any) (Node, error) {
+func extractNode(node ctor.Node) (Node, error) {
+	opName, err := ctor.Get[string](node, fieldNameOp)
+	if err != nil {
+		return nil, err
+	}
+
 	switch opName {
+	case
+		logic.AndTag,
+		logic.OrTag,
+		logic.NotTag:
+		return extractLogicalOpNode(opName, node)
 	case
 		data_checker.OpEqualTag,
 		data_checker.OpContainsTag,
 		data_checker.OpPrefixTag,
 		data_checker.OpSuffixTag,
 		data_checker.OpRegexTag:
-		return extractFieldOpNode
+		return extractFieldOpNode(opName, node)
 	case
 		"byte_len_cmp",
 		"array_len_cmp":
-		return extractLengthCmpOpNode
+		return extractLengthCmpOpNode(opName, node)
 	case "ts_cmp":
-		return extractTsCmpOpNode
+		return extractTsCmpOpNode(opName, node)
 	case "check_type":
-		return extractCheckTypeOpNode
+		return extractCheckTypeOpNode(opName, node)
 	default:
-		return nil
+		return nil, fmt.Errorf("unknown op: %s", opName)
 	}
 }
 
@@ -236,6 +251,38 @@ func extractCheckTypeOpNode(_ string, node map[string]any) (Node, error) {
 	result, err := newCheckTypeOpNode(fieldPath, vals)
 	if err != nil {
 		return nil, fmt.Errorf("init check_type op: %w", err)
+	}
+
+	return result, nil
+}
+
+func extractLogicalOpNode(opName string, node map[string]any) (Node, error) {
+	rawOperands, err := ctor.Get[[]any](node, fieldNameOperands)
+	if err != nil {
+		return nil, err
+	}
+
+	operands := make([]Node, 0)
+
+	for _, rawOperand := range rawOperands {
+		var operandNode map[string]any
+		operandNode, err = ctor.Must[map[string]any](rawOperand)
+		if err != nil {
+			return nil, fmt.Errorf("logical node operand type mismatch: %w", err)
+		}
+
+		var operand Node
+		operand, err = extractNode(operandNode)
+		if err != nil {
+			return nil, fmt.Errorf("extract operand for logical op %q: %w", opName, err)
+		}
+
+		operands = append(operands, operand)
+	}
+
+	result, err := newLogicalNode(opName, operands)
+	if err != nil {
+		return nil, fmt.Errorf("init logical node: %w", err)
 	}
 
 	return result, nil

@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/bitly/go-simplejson"
-	"github.com/ozontech/file.d/pipeline/ctor"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -56,10 +55,9 @@ func buildDoIfTree(node *doIfTreeNode) (Node, error) {
 			}
 			operands = append(operands, operand)
 		}
-		return ctor.NewLogicalNode(
+		return newLogicalNode(
 			node.logicalOp,
 			operands,
-			newLogicalOpNode,
 		)
 	case node.lenCmpOp != "":
 		return newLenCmpOpNode(node.lenCmpOp, node.fieldName, node.cmpOp, node.cmpValue)

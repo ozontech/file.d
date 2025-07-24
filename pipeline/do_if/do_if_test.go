@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ozontech/file.d/pipeline/ctor"
 	"github.com/ozontech/file.d/pipeline/do_if/data_checker"
 	"github.com/ozontech/file.d/pipeline/logic"
 	insaneJSON "github.com/ozontech/insane-json"
@@ -57,10 +56,9 @@ func buildTree(node treeNode) (Node, error) {
 			}
 			operands = append(operands, operand)
 		}
-		return ctor.NewLogicalNode(
+		return newLogicalNode(
 			node.logicalOp,
 			operands,
-			newLogicalOpNode,
 		)
 	case node.lenCmpOp != "":
 		return newLenCmpOpNode(node.lenCmpOp, node.fieldName, node.cmpOp, node.cmpValue)

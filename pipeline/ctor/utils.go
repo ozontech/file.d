@@ -5,6 +5,8 @@ import (
 	"fmt"
 )
 
+type Node = map[string]any
+
 var (
 	ErrFieldNotFound = errors.New("field not found")
 	ErrTypeMismatch  = errors.New("type mismatch")
