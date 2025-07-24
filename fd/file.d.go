@@ -273,7 +273,8 @@ func (f *FileD) Stop(ctx context.Context) error {
 		p.Stop()
 	}
 
-	time.Sleep(time.Minute)
+	time.Sleep(time.Duration(f.config.ServerShutdownDelaySeconds) * time.Second)
+
 	var err error
 	if f.server != nil {
 		err = f.server.Shutdown(ctx)
