@@ -9,6 +9,7 @@ import (
 	"net/http/pprof"
 	"runtime"
 	"runtime/debug"
+	"time"
 
 	"github.com/bitly/go-simplejson"
 	"github.com/ozontech/file.d/buildinfo"
@@ -272,6 +273,7 @@ func (f *FileD) Stop(ctx context.Context) error {
 		p.Stop()
 	}
 
+	time.Sleep(time.Minute)
 	var err error
 	if f.server != nil {
 		err = f.server.Shutdown(ctx)
