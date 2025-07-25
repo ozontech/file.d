@@ -215,7 +215,7 @@ func New(name string, settings *Settings, registry *prometheus.Registry, lg *zap
 			MetricsController:   metricCtl,
 			MetricHolder:        metricHolder,
 			Exceptions:          settings.AntispamExceptions,
-			ConfigV2:            settings.Antispam,
+			Config:              settings.Antispam,
 		}),
 
 		eventLog:   make([]string, 0, 128),

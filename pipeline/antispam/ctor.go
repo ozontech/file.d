@@ -14,10 +14,6 @@ const (
 	fieldNameName      = "name"
 	fieldNameIf        = "if"
 	fieldNameThreshold = "threshold"
-
-	fieldNameData          = "data"
-	fieldNameValues        = "values"
-	fieldNameCaseSensitive = "case_sensitive"
 )
 
 func extractAntispam(node map[string]any) ([]Rule, int, error) {
@@ -67,32 +63,34 @@ func extractRules(rawRules []any) ([]Rule, error) {
 }
 
 func extractRule(node map[string]any) (Rule, error) {
+	def := Rule{}
+
 	name := ""
 	nameNode, err := ctor.Get[string](node, fieldNameName)
 	if err == nil {
 		name = nameNode
 	} else if errors.Is(err, ctor.ErrTypeMismatch) {
-		return Rule{}, err
+		return def, err
 	}
 
 	condNode, err := ctor.Get[map[string]any](node, fieldNameIf)
 	if err != nil {
-		return Rule{}, err
+		return def, err
 	}
 
 	cond, err := do_if.ExtractNode(condNode)
 	if err != nil {
-		return Rule{}, err
+		return def, err
 	}
 
 	thresholdRaw, err := ctor.GetAny(node, fieldNameThreshold)
 	if err != nil {
-		return Rule{}, err
+		return def, err
 	}
 
 	threshold, err := cfg.AnyToInt(thresholdRaw)
 	if err != nil {
-		return Rule{}, err
+		return def, err
 	}
 
 	return newRule(name, cond, threshold)

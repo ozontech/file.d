@@ -50,7 +50,7 @@ type Options struct {
 	Threshold           int
 	UnbanIterations     int
 	Exceptions          Exceptions
-	ConfigV2            map[string]any
+	Config              map[string]any
 
 	Logger            *zap.Logger
 	MetricsController *metric.Ctl
@@ -78,8 +78,8 @@ func NewAntispammer(o *Options) *Antispammer {
 
 	var err error
 
-	if o.ConfigV2 != nil {
-		a.rules, a.threshold, err = extractAntispam(o.ConfigV2)
+	if o.Config != nil {
+		a.rules, a.threshold, err = extractAntispam(o.Config)
 		if err != nil {
 			o.Logger.Fatal("can't extract antispam", zap.Error(err))
 		}
