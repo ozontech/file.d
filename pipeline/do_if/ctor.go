@@ -15,6 +15,7 @@ const (
 	fieldNameOp = "op"
 
 	fieldNameField = "field"
+	fieldNameData  = "data"
 
 	fieldNameCaseSensitive = "case_sensitive"
 
@@ -87,8 +88,22 @@ func extractFieldOpNode(opName string, node map[string]any) (Node, error) {
 	var err error
 
 	fieldPath, err := ctor.Get[string](node, fieldNameField)
-	if err != nil {
+	fieldPathFound := err == nil
+	if errors.Is(err, ctor.ErrTypeMismatch) {
 		return nil, err
+	}
+
+	dataTypeTag, err := ctor.Get[string](node, fieldNameData)
+	dataTypeTagFound := err == nil
+	if errors.Is(err, ctor.ErrTypeMismatch) {
+		return nil, err
+	}
+
+	switch {
+	case fieldPathFound && dataTypeTagFound:
+		return nil, errors.New("field selector and data type tag provided")
+	case !fieldPathFound && !dataTypeTagFound:
+		return nil, errors.New("field selector and data type tag are not provided")
 	}
 
 	caseSensitive := true
@@ -104,7 +119,7 @@ func extractFieldOpNode(opName string, node map[string]any) (Node, error) {
 		return nil, fmt.Errorf("extract field op values: %w", err)
 	}
 
-	result, err = newFieldOpNode(opName, caseSensitive, vals, fieldPath, "")
+	result, err = newFieldOpNode(opName, caseSensitive, vals, fieldPath, dataTypeTag)
 	if err != nil {
 		return nil, fmt.Errorf("init field op: %w", err)
 	}
