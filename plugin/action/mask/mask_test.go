@@ -2,6 +2,7 @@ package mask
 
 import (
 	"encoding/json"
+	"fmt"
 	"regexp"
 	"sync"
 	"testing"
@@ -255,7 +256,6 @@ func TestMaskAddExtraField(t *testing.T) {
 	config := test.NewConfig(&Config{
 		MaskAppliedField: key,
 		MaskAppliedValue: val,
-		SkipMismatched:   true,
 		Masks: []Mask{
 			{Re: kDefaultCardRegExp, Groups: []int{1, 2, 3, 4}},
 		},
@@ -504,7 +504,6 @@ func TestPlugin(t *testing.T) {
 	}
 
 	config := test.NewConfig(&Config{
-		SkipMismatched: true,
 		Masks: []Mask{
 			{
 				Re:     `a(x*)b`,
@@ -573,7 +572,6 @@ func TestWithEmptyRegex(t *testing.T) {
 	}
 
 	config := test.NewConfig(&Config{
-		SkipMismatched: true,
 		Masks: []Mask{
 			{
 				MatchRules: []matchrule.RuleSet{
@@ -787,7 +785,6 @@ func TestPluginWithComplexMasks(t *testing.T) {
 	for _, s := range suits {
 		t.Run(s.name, func(t *testing.T) {
 			config := test.NewConfig(&Config{
-				SkipMismatched:      true,
 				Masks:               s.masks,
 				AppliedMetricName:   s.metricName,
 				AppliedMetricLabels: s.metricLabels,
@@ -1503,10 +1500,9 @@ func TestIgnoreProcessFields(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			config := test.NewConfig(&Config{
-				SkipMismatched: true,
-				Masks:          tt.masks,
-				IgnoreFields:   tt.ignoreFields,
-				ProcessFields:  tt.processFields,
+				Masks:         tt.masks,
+				IgnoreFields:  tt.ignoreFields,
+				ProcessFields: tt.processFields,
 			}, nil)
 			p, input, output := test.NewPipelineMock(
 				test.NewActionPluginStaticInfo(factory, config,
@@ -1533,5 +1529,272 @@ func TestIgnoreProcessFields(t *testing.T) {
 				assert.Equal(t, tt.expected[i], outEvents[i], tt.comment)
 			}
 		})
+	}
+}
+
+func initBenchData(totalCount, fieldsCnt, valLen int) []*pipeline.Event {
+	if totalCount <= 0 {
+		totalCount = 50
+	}
+	if fieldsCnt <= 0 {
+		fieldsCnt = 10
+	}
+	if valLen <= 0 {
+		valLen = 10
+	}
+
+	matchableVal := "Иванов Иван Иванович c картой 4445-2222-3333-4444 встал не с той ноги"
+	unmatchableVal := "Просто строка которая не заменяется"
+
+	matchable := `{`
+	for i := range fieldsCnt {
+		matchable += fmt.Sprintf(`"field%d":"`, i+1)
+		for range valLen {
+			matchable += fmt.Sprintf("%s ", matchableVal)
+		}
+		matchable += `"`
+		if i < fieldsCnt-1 {
+			matchable += `,`
+		}
+	}
+	matchable += `}`
+
+	unmatchable := `{`
+	for i := range fieldsCnt {
+		unmatchable += fmt.Sprintf(`"field%d":"`, i+1)
+		for range valLen {
+			unmatchable += fmt.Sprintf("%s ", unmatchableVal)
+		}
+		unmatchable += `"`
+		if i < fieldsCnt-1 {
+			unmatchable += `,`
+		}
+	}
+	unmatchable += `}`
+
+	matchableCoeff := 0.1 // percentage of matchable input
+	matchableCount := int(float64(totalCount) * matchableCoeff)
+	events := make([]pipeline.Event, totalCount)
+	eventsPtrs := make([]*pipeline.Event, totalCount)
+	for i := 0; i < totalCount; i++ {
+		root := insaneJSON.Spawn()
+		if i <= matchableCount {
+			root.DecodeString(matchable)
+		} else {
+			root.DecodeString(unmatchable)
+		}
+		events[i].Root = root
+		eventsPtrs[i] = &events[i]
+	}
+	return eventsPtrs
+}
+
+func BenchmarkDo_f10_v10(b *testing.B) {
+	var plugin Plugin
+	config := test.NewConfig(&Config{
+		Masks: []Mask{
+			{
+				Re:     kDefaultCardRegExp,
+				Groups: []int{0, 1, 2, 3},
+			},
+		},
+	}, nil).(pipeline.AnyConfig)
+	params := test.NewEmptyActionPluginParams()
+	plugin.Start(config, params)
+	input := initBenchData(50, 10, 10)
+	for i := 0; i < b.N; i++ {
+		for _, event := range input {
+			plugin.Do(event)
+		}
+	}
+}
+
+func BenchmarkDoProcessFields_f10_v10(b *testing.B) {
+	var plugin Plugin
+	config := test.NewConfig(&Config{
+		ProcessFields: []string{
+			"field1",
+			"field2",
+			"field3",
+		},
+		Masks: []Mask{
+			{
+				Re:     kDefaultCardRegExp,
+				Groups: []int{0, 1, 2, 3},
+			},
+		},
+	}, nil).(pipeline.AnyConfig)
+	params := test.NewEmptyActionPluginParams()
+	plugin.Start(config, params)
+	input := initBenchData(50, 10, 10)
+	for i := 0; i < b.N; i++ {
+		for _, event := range input {
+			plugin.Do(event)
+		}
+	}
+}
+
+func BenchmarkDoIgnoreFields_f10_v10(b *testing.B) {
+	var plugin Plugin
+	config := test.NewConfig(&Config{
+		IgnoreFields: []string{
+			"field1",
+			"field2",
+			"field3",
+		},
+		Masks: []Mask{
+			{
+				Re:     kDefaultCardRegExp,
+				Groups: []int{0, 1, 2, 3},
+			},
+		},
+	}, nil).(pipeline.AnyConfig)
+	params := test.NewEmptyActionPluginParams()
+	plugin.Start(config, params)
+	input := initBenchData(50, 10, 10)
+	for i := 0; i < b.N; i++ {
+		for _, event := range input {
+			plugin.Do(event)
+		}
+	}
+}
+
+func BenchmarkDo_f10_v100(b *testing.B) {
+	var plugin Plugin
+	config := test.NewConfig(&Config{
+		Masks: []Mask{
+			{
+				Re:     kDefaultCardRegExp,
+				Groups: []int{0, 1, 2, 3},
+			},
+		},
+	}, nil).(pipeline.AnyConfig)
+	params := test.NewEmptyActionPluginParams()
+	plugin.Start(config, params)
+	input := initBenchData(50, 10, 100)
+	for i := 0; i < b.N; i++ {
+		for _, event := range input {
+			plugin.Do(event)
+		}
+	}
+}
+
+func BenchmarkDoProcessFields_f10_v100(b *testing.B) {
+	var plugin Plugin
+	config := test.NewConfig(&Config{
+		ProcessFields: []string{
+			"field1",
+			"field2",
+			"field3",
+		},
+		Masks: []Mask{
+			{
+				Re:     kDefaultCardRegExp,
+				Groups: []int{0, 1, 2, 3},
+			},
+		},
+	}, nil).(pipeline.AnyConfig)
+	params := test.NewEmptyActionPluginParams()
+	plugin.Start(config, params)
+	input := initBenchData(50, 10, 10)
+	for i := 0; i < b.N; i++ {
+		for _, event := range input {
+			plugin.Do(event)
+		}
+	}
+}
+
+func BenchmarkDoIgnoreFields_f10_v100(b *testing.B) {
+	var plugin Plugin
+	config := test.NewConfig(&Config{
+		IgnoreFields: []string{
+			"field1",
+			"field2",
+			"field3",
+		},
+		Masks: []Mask{
+			{
+				Re:     kDefaultCardRegExp,
+				Groups: []int{0, 1, 2, 3},
+			},
+		},
+	}, nil).(pipeline.AnyConfig)
+	params := test.NewEmptyActionPluginParams()
+	plugin.Start(config, params)
+	input := initBenchData(50, 10, 100)
+	for i := 0; i < b.N; i++ {
+		for _, event := range input {
+			plugin.Do(event)
+		}
+	}
+}
+
+func BenchmarkDo_f100_v10(b *testing.B) {
+	var plugin Plugin
+	config := test.NewConfig(&Config{
+		Masks: []Mask{
+			{
+				Re:     kDefaultCardRegExp,
+				Groups: []int{0, 1, 2, 3},
+			},
+		},
+	}, nil).(pipeline.AnyConfig)
+	params := test.NewEmptyActionPluginParams()
+	plugin.Start(config, params)
+	input := initBenchData(50, 100, 10)
+	for i := 0; i < b.N; i++ {
+		for _, event := range input {
+			plugin.Do(event)
+		}
+	}
+}
+
+func BenchmarkDoProcessFields_f100_v10(b *testing.B) {
+	var plugin Plugin
+	config := test.NewConfig(&Config{
+		ProcessFields: []string{
+			"field1",
+			"field2",
+			"field3",
+		},
+		Masks: []Mask{
+			{
+				Re:     kDefaultCardRegExp,
+				Groups: []int{0, 1, 2, 3},
+			},
+		},
+	}, nil).(pipeline.AnyConfig)
+	params := test.NewEmptyActionPluginParams()
+	plugin.Start(config, params)
+	input := initBenchData(50, 100, 10)
+	for i := 0; i < b.N; i++ {
+		for _, event := range input {
+			plugin.Do(event)
+		}
+	}
+}
+
+func BenchmarkDoIgnoreFields_f100_v10(b *testing.B) {
+	var plugin Plugin
+	config := test.NewConfig(&Config{
+		IgnoreFields: []string{
+			"field1",
+			"field2",
+			"field3",
+		},
+		Masks: []Mask{
+			{
+				Re:     kDefaultCardRegExp,
+				Groups: []int{0, 1, 2, 3},
+			},
+		},
+	}, nil).(pipeline.AnyConfig)
+	params := test.NewEmptyActionPluginParams()
+	plugin.Start(config, params)
+	input := initBenchData(50, 100, 10)
+	for i := 0; i < b.N; i++ {
+		for _, event := range input {
+			plugin.Do(event)
+		}
 	}
 }
