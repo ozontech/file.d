@@ -11,13 +11,14 @@ import (
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/pipeline/antispam"
-	"github.com/ozontech/file.d/pipeline/doif"
+	"github.com/ozontech/file.d/pipeline/do_if"
 )
 
 func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 	capacity := pipeline.DefaultCapacity
 	antispamThreshold := pipeline.DefaultAntispamThreshold
 	var antispamExceptions antispam.Exceptions
+	var antispamCfg map[string]any
 	sourceNameMetaField := pipeline.DefaultSourceNameMetaField
 	avgInputEventSize := pipeline.DefaultAvgInputEventSize
 	maxInputEventSize := pipeline.DefaultMaxInputEventSize
@@ -101,6 +102,8 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 		}
 		antispamExceptions.Prepare()
 
+		antispamCfg = settings.Get("antispam").MustMap()
+
 		sourceNameMetaField = settings.Get("source_name_meta_field").MustString()
 		isStrict = settings.Get("is_strict").MustBool()
 
@@ -129,6 +132,7 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 		CutOffEventByLimitField: cutOffEventByLimitField,
 		AntispamThreshold:       antispamThreshold,
 		AntispamExceptions:      antispamExceptions,
+		Antispam:                antispamCfg,
 		SourceNameMetaField:     sourceNameMetaField,
 		MaintenanceInterval:     maintenanceInterval,
 		EventTimeout:            eventTimeout,
@@ -219,13 +223,13 @@ func extractMetrics(actionJSON *simplejson.Json) (string, []string, bool) {
 	return metricName, metricLabels, skipStatus
 }
 
-func extractDoIfChecker(actionJSON *simplejson.Json) (*doif.Checker, error) {
+func extractDoIfChecker(actionJSON *simplejson.Json) (*do_if.Checker, error) {
 	m := actionJSON.MustMap()
 	if m == nil {
 		return nil, nil
 	}
 
-	return doif.NewFromMap(m)
+	return do_if.NewFromMap(m)
 }
 
 func makeActionJSON(actionJSON *simplejson.Json) []byte {
