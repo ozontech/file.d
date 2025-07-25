@@ -6,6 +6,7 @@ import (
 	"github.com/ozontech/file.d/cfg"
 )
 
+// fieldMasksNode is a supplemental data structure for global and mask-specific process/ignore fields lists.
 type fieldMasksNode struct {
 	processMasks  map[int]struct{}
 	ignoreMasks   map[int]struct{}
@@ -131,14 +132,13 @@ func (p *Plugin) gatherFieldMasksTree() error {
 
 func (p *Plugin) gatherFieldPaths() error {
 	var err error
+	var fieldPaths []string
+
 	isBlacklist := len(p.config.IgnoreFields) > 0
 	isWhitelist := len(p.config.ProcessFields) > 0
 	if isBlacklist && isWhitelist {
-		return fmt.Errorf("ignored fields list and processed fields list are both non-empty")
-	}
-
-	var fieldPaths []string
-	if isBlacklist {
+		return fmt.Errorf("ignored fields list and processed fields lists are both non-empty")
+	} else if isBlacklist {
 		fieldPaths = p.config.IgnoreFields
 	} else if isWhitelist {
 		fieldPaths = p.config.ProcessFields
@@ -151,5 +151,6 @@ func (p *Plugin) gatherFieldPaths() error {
 			return fmt.Errorf("failed to parse fields: %w", err)
 		}
 	}
+
 	return nil
 }
