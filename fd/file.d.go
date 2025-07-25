@@ -9,6 +9,7 @@ import (
 	"net/http/pprof"
 	"runtime"
 	"runtime/debug"
+	"time"
 
 	"github.com/bitly/go-simplejson"
 	"github.com/ozontech/file.d/buildinfo"
@@ -23,14 +24,16 @@ import (
 )
 
 type FileD struct {
-	config    *cfg.Config
-	httpAddr  string
-	registry  *prometheus.Registry
-	plugins   *PluginRegistry
-	Pipelines []*pipeline.Pipeline
-	server    *http.Server
-	mux       *http.ServeMux
-	metricCtl *metric.Ctl
+	config     *cfg.Config
+	httpAddr   string
+	registry   *prometheus.Registry
+	plugins    *PluginRegistry
+	Pipelines  []*pipeline.Pipeline
+	server     *http.Server
+	mux        *http.ServeMux
+	metricCtl  *metric.Ctl
+	stopChan   chan struct{}
+	shouldStop atomic.Bool
 
 	// file_d metrics
 
@@ -264,13 +267,19 @@ func (f *FileD) getStaticInfo(pipelineConfig *cfg.PipelineConfig, pluginKind pip
 
 func (f *FileD) Stop(ctx context.Context) error {
 	logger.Infof("stopping pipelines=%d", len(f.Pipelines))
+	f.shouldStop.Store(true)
+
+	for _, p := range f.Pipelines {
+		p.Stop()
+	}
+
+	time.Sleep(time.Duration(f.config.ServerShutdownDelaySeconds) * time.Second)
+
 	var err error
 	if f.server != nil {
 		err = f.server.Shutdown(ctx)
 	}
-	for _, p := range f.Pipelines {
-		p.Stop()
-	}
+	<-f.stopChan
 
 	return err
 }
@@ -289,8 +298,8 @@ func (f *FileD) startHTTP() {
 	mux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
 	mux.HandleFunc("/debug/pprof/trace", pprof.Trace)
 
-	mux.HandleFunc("/live", f.serveLiveReady)
-	mux.HandleFunc("/ready", f.serveLiveReady)
+	mux.HandleFunc("/live", f.serveLive)
+	mux.HandleFunc("/ready", f.serveReady)
 	mux.HandleFunc("/freeosmem", f.serveFreeOsMem)
 	mux.Handle("/metrics", promhttp.InstrumentMetricHandler(
 		f.registry, promhttp.HandlerFor(f.registry, promhttp.HandlerOpts{}),
@@ -318,6 +327,8 @@ func (f *FileD) startHTTP() {
 	})
 
 	f.server = &http.Server{Addr: f.httpAddr, Handler: mux}
+	f.stopChan = make(chan struct{})
+
 	go f.listenHTTP()
 }
 
@@ -326,6 +337,7 @@ func (f *FileD) listenHTTP() {
 	if err != http.ErrServerClosed {
 		logger.Fatalf("http listening error address=%q: %s", f.httpAddr, err.Error())
 	}
+	close(f.stopChan)
 }
 
 func (f *FileD) serveFreeOsMem(_ http.ResponseWriter, _ *http.Request) {
@@ -333,8 +345,16 @@ func (f *FileD) serveFreeOsMem(_ http.ResponseWriter, _ *http.Request) {
 	logger.Infof("free OS memory OK")
 }
 
-func (f *FileD) serveLiveReady(_ http.ResponseWriter, _ *http.Request) {
-	logger.Infof("live/ready OK")
+func (f *FileD) serveReady(w http.ResponseWriter, _ *http.Request) {
+	if f.shouldStop.Load() {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		return
+	}
+	logger.Infof("ready OK")
+}
+
+func (f *FileD) serveLive(_ http.ResponseWriter, _ *http.Request) {
+	logger.Infof("live OK")
 }
 
 type valueChangerHandler struct {
