@@ -291,5 +291,13 @@ func (n *fieldOpNode) isEqualTo(n2 Node, _ int) error {
 		)
 	}
 
+	if n.dataType != n2f.dataType {
+		return fmt.Errorf("nodes have different data types expected: dataType=%q", n.dataType)
+	}
+
+	if n.metaKey != n2f.metaKey {
+		return fmt.Errorf("nodes have different meta keys expected: mataKey=%q", n.metaKey)
+	}
+
 	return data_checker.Equal(&n.checker, &n2f.checker)
 }
