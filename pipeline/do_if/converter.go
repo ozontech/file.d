@@ -4,7 +4,7 @@ import (
 	"strings"
 
 	"github.com/ozontech/file.d/cfg/matchrule"
-	"github.com/ozontech/file.d/pipeline/logic"
+	"github.com/ozontech/file.d/pipeline/do_if/logic"
 )
 
 func RuleToNode(rule matchrule.Rule, dataTypeTag string) (Node, error) {

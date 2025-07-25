@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/ozontech/file.d/pipeline/logic"
+	"github.com/ozontech/file.d/pipeline/do_if/logic"
 	insaneJSON "github.com/ozontech/insane-json"
 )
 

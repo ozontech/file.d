@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/ozontech/file.d/pipeline/do_if/data_checker"
-	"github.com/ozontech/file.d/pipeline/logic"
+	"github.com/ozontech/file.d/pipeline/do_if/logic"
 	insaneJSON "github.com/ozontech/insane-json"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

@@ -8,7 +8,7 @@ import (
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/pipeline/ctor"
 	"github.com/ozontech/file.d/pipeline/do_if/data_checker"
-	"github.com/ozontech/file.d/pipeline/logic"
+	"github.com/ozontech/file.d/pipeline/do_if/logic"
 )
 
 const (
