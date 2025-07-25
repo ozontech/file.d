@@ -119,7 +119,7 @@ func (p *Plugin) gatherFieldMasksTree() error {
 			p.hasProcessOrIgnoreFields = true
 		}
 	} else {
-		p.logger.Warn("every mask has specific ignore/process fields list, global ignore/process fields list is ommited")
+		p.logger.Warn("every mask has specific ignore/process fields list, global ignore/process fields list is omitted")
 	}
 
 	if p.hasProcessOrIgnoreFields {
@@ -136,11 +136,12 @@ func (p *Plugin) gatherFieldPaths() error {
 
 	isBlacklist := len(p.config.IgnoreFields) > 0
 	isWhitelist := len(p.config.ProcessFields) > 0
-	if isBlacklist && isWhitelist {
+	switch {
+	case isBlacklist && isWhitelist:
 		return fmt.Errorf("ignored fields list and processed fields lists are both non-empty")
-	} else if isBlacklist {
+	case isBlacklist:
 		fieldPaths = p.config.IgnoreFields
-	} else if isWhitelist {
+	case isWhitelist:
 		fieldPaths = p.config.ProcessFields
 	}
 
