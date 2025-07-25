@@ -16,14 +16,34 @@ import (
 Mask plugin matches event with regular expression and substitutions successfully matched symbols via asterix symbol.
 You could set regular expressions and submatch groups.
 
-**Example:**
+**Note**: masks are applied only to string or number values.
+
+**Example 1:**
 ```yaml
 pipelines:
   example_pipeline:
     ...
     actions:
     - type: mask
-      metric_subsystem_name: "some_name"
+      masks:
+      - re: "\b(\d{1,4})\D?(\d{1,4})\D?(\d{1,4})\D?(\d{1,4})\b"
+        groups: [1,2,3]
+    ...
+```
+
+Mask plugin can have white and black lists for fields using `process_fields` and `ignore_fields` parameters respectively.
+Elements of `process_fields` and `ignore_fields` lists are json paths (e.g. `message` — field `message` in root,
+`field.subfield` — field `subfield` inside object value of field `field`).
+
+**Note**: `process_fields` and `ignore_fields` cannot be used simultaneously.
+
+**Example 2:**
+```yaml
+pipelines:
+  example_pipeline:
+    ...
+    actions:
+    - type: mask
       ignore_fields:
       - trace_id
       masks:
@@ -32,6 +52,50 @@ pipelines:
     ...
 ```
 
+All masks will be applied to all fields in the event except for the `trace_id` field in the root of the event.
+
+**Example 3:**
+```yaml
+pipelines:
+  example_pipeline:
+    ...
+    actions:
+    - type: mask
+      process_fields:
+      - message
+      masks:
+      - re: "\b(\d{1,4})\D?(\d{1,4})\D?(\d{1,4})\D?(\d{1,4})\b"
+        groups: [1,2,3]
+    ...
+```
+
+All masks will be applied only to `message` field in the root of the event.
+
+Also `process_fields` and `ignore_fields` lists can be used on per mask basis. In that case, if a mask has
+non-empty `process_fields` or `ignore_fields` and there is non-empty `process_fields` or `ignore_fields`
+in plugin parameters, mask fields lists will override plugin lists.
+
+**Example 3:**
+```yaml
+pipelines:
+  example_pipeline:
+    ...
+    actions:
+    - type: mask
+      ignore_fields:
+      - trace_id
+      masks:
+      - re: "\b(\d{1,4})\D?(\d{1,4})\D?(\d{1,4})\D?(\d{1,4})\b"
+        groups: [1,2,3]
+      - re: "(test)"
+        groups: [1]
+		process_fields:
+		- message
+    ...
+```
+
+The first mask will be applied to all fields in the event except for the `trace_id` field in the root of the event.
+The second mask will be applied only to `message` field in the root of the event.
 }*/
 
 const (
@@ -47,21 +111,21 @@ type Plugin struct {
 	// (data before masked entry, its replacement and data after masked entry)
 	maskBuf []byte
 
-	fieldPaths [][]string
+	fieldPaths [][]string // list of fields for fast path when only global process fields list is used
 
-	fieldMasksRoot *fieldMasksNode
-	emptyFMNode    *fieldMasksNode // alloc optimization for tree traversal
+	fieldMasksRoot *fieldMasksNode // fields lists converted to a tree in [(*Plugin).gatherFieldMasksTree]
+	emptyFMNode    *fieldMasksNode // nil value node for tree traversal
 
-	hasProcessOrIgnoreFields  bool
-	hasGlobalIgnoreFields     bool
-	hasGlobalProcessFields    bool
-	hasMaskSpecificFieldsList bool
-	hasMasksIgnoreFields      []bool
-	hasMasksProcessFields     []bool
+	hasProcessOrIgnoreFields  bool   // fast check for process ignore fields lists global or mask-specific
+	hasGlobalIgnoreFields     bool   // fast check for global ignore fields list
+	hasGlobalProcessFields    bool   // fast check for global process fields list
+	hasMaskSpecificFieldsList bool   // fast check for mask-specific ignore or process fields lists
+	hasMasksIgnoreFields      []bool // flags for which masks have ignore fields lists
+	hasMasksProcessFields     []bool // flags for which masks have process fields lists
 
 	logger *zap.Logger
 
-	//  plugin metrics
+	// plugin metrics
 	maskAppliedMetric *prometheus.CounterVec
 }
 
@@ -75,7 +139,7 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
-	// > **Experimental feature** for best performance. Skips events with mismatched masks.
+	// > **Deprecated** currently does nothing.
 	SkipMismatched bool `json:"skip_mismatched" default:"false"` // *
 
 	// > @3@4@5@6
@@ -182,6 +246,7 @@ func (p *Plugin) Stop() {
 }
 
 func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
+	// check which masks to apply to the event
 	for i := range p.config.Masks {
 		if p.config.Masks[i].DoIfChecker != nil {
 			p.config.Masks[i].use = p.config.Masks[i].DoIfChecker.Check(event.Root)
@@ -192,16 +257,12 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	if p.hasGlobalProcessFields && !p.hasMaskSpecificFieldsList { // fast path when there are no mask-specific fields
 		for _, fieldPath := range p.fieldPaths {
 			node := event.Root.Dig(fieldPath...)
-			if p.traverseTreeIterative(event, node, nil) {
+			if p.traverseTree(event, node, nil) {
 				maskApplied = true
 			}
-			// if p.traverseTree(event, node, nil) {
-			// 	maskApplied = true
-			// }
 		}
 	} else {
-		maskApplied = p.traverseTreeIterative(event, event.Root.Node, p.fieldMasksRoot)
-		// maskApplied = p.traverseTree(event, event.Root.Node, p.fieldMasksRoot)
+		maskApplied = p.traverseTree(event, event.Root.Node, p.fieldMasksRoot)
 	}
 
 	if p.config.MaskAppliedField != "" && maskApplied {
@@ -229,73 +290,34 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	return pipeline.ActionPass
 }
 
-func (p *Plugin) traverseTreeIterative(event *pipeline.Event, rootNode *insaneJSON.Node, rootFmNode *fieldMasksNode) bool {
-	var nextFmNode *fieldMasksNode
-	result := false
-
-	nodeStack := newStack(nodePair{rootNode, rootFmNode})
-
-	for !nodeStack.isEmpty() {
-		curNodePair := nodeStack.pop()
-		curNode := curNodePair.jNode
-		curFmNode := curNodePair.fmNode
-		nextFmNode = nil
-
-		shouldCheckFmNode := curFmNode != nil && len(curFmNode.children) > 0
-		if !shouldCheckFmNode {
-			nextFmNode = curFmNode
-		}
-
-		switch {
-		case curNode == nil:
-			continue
-		case curNode.IsField():
-			if shouldCheckFmNode {
-				if _fmNode, has := curFmNode.children[curNode.AsString()]; has {
-					// fast path when there are no mask-specific fields
-					if _fmNode.globalIgnore && !p.hasMaskSpecificFieldsList {
-						continue
-					}
-					nextFmNode = _fmNode
-				} else {
-					nextFmNode = p.emptyFMNode
-				}
-			}
-			nextNode := curNode.AsFieldValue()
-			nodeStack.add(nodePair{nextNode, nextFmNode})
-			continue
-		case curNode.IsArray():
-			for i, nextNode := range curNode.AsArray() {
-				if shouldCheckFmNode {
-					if _fmNode, has := curFmNode.children[strconv.Itoa(i)]; has {
-						nextFmNode = _fmNode
-					} else {
-						nextFmNode = p.emptyFMNode
-					}
-				}
-				nodeStack.add(nodePair{nextNode, nextFmNode})
-			}
-			continue
-		case curNode.IsObject():
-			for _, nextNode := range curNode.AsFields() {
-				nodeStack.add(nodePair{nextNode, curFmNode})
-			}
-			continue
-		default:
-			if p.processMaskOps(event, curNode, curFmNode) {
-				result = true
-			}
-		}
-	}
-
-	return result
-}
-
+// traverseTree traverses JSON tree in DFS manner and applies masks to its leaves. Masks are applied only to strings
+// and numbers since only these values can have some sensitive data in them, other value types are bool, null.
+//
+// If field mask node is provided, traverses its tree simultaneously with JSON tree. If field mask leaf node is matched
+// with non-leaf JSON node, it is applied to all JSON node subtree.
+// For example:
+//
+// Field mask tree (FM tree):
+//
+//	  a
+//	 / \
+//	b   c
+//
+// JSON tree:
+//
+//	  a
+//	 / \
+//	b   c
+//	   / \
+//	  d   e
+//
+// FM node "b" is matched with JSON node "b", FM node "c" is matched with JSON nodes "c", "d", "e".
 func (p *Plugin) traverseTree(event *pipeline.Event, curNode *insaneJSON.Node, curFmNode *fieldMasksNode) bool {
 	var nextFmNode *fieldMasksNode
 
-	shouldCheckFmNode := curFmNode != nil && len(curFmNode.children) > 0
 	result := false
+
+	shouldCheckFmNode := curFmNode != nil && len(curFmNode.children) > 0
 
 	if !shouldCheckFmNode {
 		nextFmNode = curFmNode
@@ -307,7 +329,7 @@ func (p *Plugin) traverseTree(event *pipeline.Event, curNode *insaneJSON.Node, c
 	case curNode.IsField():
 		if shouldCheckFmNode {
 			if _fmNode, has := curFmNode.children[curNode.AsString()]; has {
-				// fast path when there are no mask-specific fields
+				// fast path for global ignore fields list when there are no mask-specific fields
 				if _fmNode.globalIgnore && !p.hasMaskSpecificFieldsList {
 					return false
 				}
@@ -337,40 +359,50 @@ func (p *Plugin) traverseTree(event *pipeline.Event, curNode *insaneJSON.Node, c
 				result = true
 			}
 		}
+	case curNode.IsString() || curNode.IsNumber():
+		// there is no point in checking other values except for the strings or numbers
+		// since there won't be any sensitive data
+		return p.processMask(event, curNode, curFmNode)
 	default:
-		return p.processMaskOps(event, curNode, curFmNode)
+		return false
 	}
 
 	return result
 }
 
-func (p *Plugin) processMaskOps(event *pipeline.Event, curNode *insaneJSON.Node, fmNode *fieldMasksNode) bool {
+// processMask runs through all masks, checks whether a mask should be applied, applies masks and updates
+// node value if it was changed. All global and mask-specific process/ignore fields lists are considered.
+// Returns flag whether any of the masks was applied (node value might have not been changed).
+func (p *Plugin) processMask(event *pipeline.Event, curNode *insaneJSON.Node, fmNode *fieldMasksNode) bool {
 	locApplied := false
 	maskApplied := false
 	shouldUpdateValue := false
 	value := curNode.AsBytes()
+	if len(value) == 0 { // no need to check empty value
+		return false
+	}
 	p.sourceBuf = p.sourceBuf[:0]
 	for i := range p.config.Masks {
 		if p.hasProcessOrIgnoreFields { // check process/ignore fields lists
 			switch {
-			case p.hasMasksIgnoreFields[i]:
+			case p.hasMasksIgnoreFields[i]: // mask-specific ignore fields list
 				if fmNode != nil {
 					if _, has := fmNode.ignoreMasks[i]; has {
 						continue
 					}
 				}
-			case p.hasMasksProcessFields[i]:
+			case p.hasMasksProcessFields[i]: // mask-specific process fields list
 				if fmNode == nil {
 					continue
 				}
 				if _, has := fmNode.processMasks[i]; !has {
 					continue
 				}
-			case p.hasGlobalIgnoreFields:
+			case p.hasGlobalIgnoreFields: // global ignroe fields list
 				if fmNode != nil && fmNode.globalIgnore {
 					continue
 				}
-			case p.hasGlobalProcessFields:
+			case p.hasGlobalProcessFields: // global process fields list
 				if fmNode != nil && !fmNode.globalProcess {
 					continue
 				}
@@ -386,10 +418,16 @@ func (p *Plugin) processMaskOps(event *pipeline.Event, curNode *insaneJSON.Node,
 				// copy node value to process in mask only once when required
 				p.sourceBuf = append(p.sourceBuf[:0], value...)
 			}
+			// check value for mask application and apply mask if it matches
+			// maskBuf is used for allocation optimization, we cannot use only sourceBuf
+			// because it might either be less effective or corrupt data
 			p.maskBuf, locApplied = mask.maskValue(p.sourceBuf, p.maskBuf)
 			if !locApplied {
 				continue
 			}
+			// update sourceBuf with maskBuf data to apply next mask on the processed data
+			// e.g. first mask masked some substring and the next mask is applied
+			// on the value with the masked substring
 			p.sourceBuf = append(p.sourceBuf[:0], p.maskBuf...)
 			shouldUpdateValue = true
 		}
@@ -401,8 +439,8 @@ func (p *Plugin) processMaskOps(event *pipeline.Event, curNode *insaneJSON.Node,
 		}
 		maskApplied = true
 	}
-	if shouldUpdateValue {
-		curNode.MutateToString(string(p.maskBuf))
+	if shouldUpdateValue { // update node value only if the data was masked
+		curNode.MutateToString(string(p.sourceBuf))
 	}
 
 	return maskApplied
