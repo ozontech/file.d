@@ -14,13 +14,13 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func setInput(p *pipeline.Pipeline, config *Config) {
+func setInput(p *pipeline.Pipeline, in pipeline.InputPlugin, cfg pipeline.AnyConfig) {
 	p.SetInput(&pipeline.InputPluginInfo{
 		PluginStaticInfo: &pipeline.PluginStaticInfo{
-			Config: config,
+			Config: cfg,
 		},
 		PluginRuntimeInfo: &pipeline.PluginRuntimeInfo{
-			Plugin: &Plugin{},
+			Plugin: in,
 		},
 	})
 }
@@ -48,7 +48,7 @@ func TestPipeline(t *testing.T) {
 	test.NewConfig(config, nil)
 	assert.Equal(t, []string{"-f"}, config.JournalArgs)
 
-	setInput(p, config)
+	setInput(p, &Plugin{}, config)
 
 	total := 0
 	wg := sync.WaitGroup{}
@@ -69,30 +69,49 @@ func TestPipeline(t *testing.T) {
 	assert.Equal(t, 10, total)
 }
 
+type SafePlugin struct {
+	Plugin
+	commitFn func(event *pipeline.Event)
+}
+
+func (p *SafePlugin) Commit(event *pipeline.Event) {
+	p.Plugin.Commit(event)
+	p.commitFn(event)
+}
+
 func TestOffsets(t *testing.T) {
 	offsetPath := filepath.Join(t.TempDir(), "offset.yaml")
 
-	const lines = 5
+	const (
+		lines = 5
+		iters = 2
+		total = lines * iters
+	)
 
 	config := &Config{OffsetsFile: offsetPath, MaxLines: lines}
 	test.NewConfig(config, nil)
 
 	cursors := map[string]int{}
+	mu := sync.Mutex{}
 
-	const iters = 2
-	const total = lines * iters
-
-	for i := 0; i < iters; i++ {
+	for range iters {
 		p := test.NewPipeline(nil, "passive")
 
 		wg := sync.WaitGroup{}
 		wg.Add(lines)
 
-		setInput(p, config)
-		setOutput(p, func(event *pipeline.Event) {
-			cursors[strings.Clone(event.Root.Dig("__CURSOR").AsString())]++
-			wg.Done()
-		})
+		in := &SafePlugin{
+			// ensure Stop() called after all Commit()-s
+			commitFn: func(event *pipeline.Event) {
+				mu.Lock()
+				cursors[strings.Clone(event.Root.Dig("__CURSOR").AsString())]++
+				mu.Unlock()
+				wg.Done()
+			},
+		}
+
+		setInput(p, in, config)
+		setOutput(p, func(_ *pipeline.Event) {})
 
 		p.Start()
 		wg.Wait()
