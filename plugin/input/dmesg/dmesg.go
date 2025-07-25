@@ -78,7 +78,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 }
 
 func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
-	p.offsetErrorsMetric = ctl.RegisterCounter("input_dmesg_offset_errors", "Number of errors occurred when saving/loading offset")
+	p.offsetErrorsMetric = ctl.RegisterCounter("input_dmesg_offset_errors_total", "Number of errors occurred when saving/loading offset")
 }
 
 func (p *Plugin) read() {
