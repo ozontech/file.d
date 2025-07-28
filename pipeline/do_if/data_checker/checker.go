@@ -138,6 +138,15 @@ func New(opTag string, caseSensitive bool, values [][]byte) (DataChecker, error)
 	}, nil
 }
 
+func MustNew(opTag string, caseSensitive bool, values [][]byte) DataChecker {
+	res, err := New(opTag, caseSensitive, values)
+	if err != nil {
+		panic(err)
+	}
+
+	return res
+}
+
 func (n *DataChecker) Check(data []byte) bool {
 	// fast check for data
 	if n.op != opRegex && len(data) < n.minValLen {

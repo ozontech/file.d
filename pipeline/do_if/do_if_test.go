@@ -119,14 +119,6 @@ func checkNode(t *testing.T, want, got Node) {
 func TestBuildNodes(t *testing.T) {
 	timestamp := time.Now()
 
-	mustNewChecker := func(op string, caseSensitive bool, values [][]byte) data_checker.DataChecker {
-		c, err := data_checker.New(op, caseSensitive, values)
-		if err != nil {
-			panic(err)
-		}
-		return c
-	}
-
 	tests := []struct {
 		name    string
 		tree    treeNode
@@ -144,7 +136,7 @@ func TestBuildNodes(t *testing.T) {
 			want: &fieldOpNode{
 				fieldPath:    []string{"log", "pod"},
 				fieldPathStr: "log.pod",
-				checker: mustNewChecker(
+				checker: data_checker.MustNew(
 					"equal",
 					true,
 					[][]byte{[]byte(`test-111`), []byte(`test-2`), []byte(`test-3`), []byte(`test-12345`)},
@@ -162,7 +154,7 @@ func TestBuildNodes(t *testing.T) {
 			want: &fieldOpNode{
 				fieldPath:    []string{"log", "pod"},
 				fieldPathStr: "log.pod",
-				checker: mustNewChecker(
+				checker: data_checker.MustNew(
 					"equal",
 					false,
 					[][]byte{[]byte(`TEST-111`), []byte(`Test-2`), []byte(`tesT-3`), []byte(`TeSt-12345`)},
@@ -194,7 +186,7 @@ func TestBuildNodes(t *testing.T) {
 					&fieldOpNode{
 						fieldPath:    []string{"log", "pod"},
 						fieldPathStr: "log.pod",
-						checker: mustNewChecker(
+						checker: data_checker.MustNew(
 							"equal",
 							true,
 							[][]byte{[]byte(`test-111`), []byte(`test-2`), []byte(`test-3`), []byte(`test-12345`)},
@@ -203,7 +195,7 @@ func TestBuildNodes(t *testing.T) {
 					&fieldOpNode{
 						fieldPath:    []string{"service", "msg"},
 						fieldPathStr: "service.msg",
-						checker: mustNewChecker(
+						checker: data_checker.MustNew(
 							"contains",
 							true,
 							[][]byte{[]byte(`test-0987`), []byte(`test-11`)},
