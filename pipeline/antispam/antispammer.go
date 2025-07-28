@@ -137,7 +137,12 @@ func (a *Antispammer) IsSpam(
 				return true
 			}
 
-			rlMapKey = rule.RLMapKey
+			if rule.UniteSources {
+				rlMapKey = fmt.Sprintf("==%d==", rule.RuleID)
+			} else {
+				rlMapKey = fmt.Sprintf("==%d==%s==", rule.RuleID, id)
+			}
+
 			threshold = rule.Threshold
 			break
 		}

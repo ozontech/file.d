@@ -10,10 +10,13 @@ import (
 )
 
 const (
-	fieldNameRules     = "rules"
-	fieldNameName      = "name"
-	fieldNameIf        = "if"
+	fieldNameRules = "rules"
+
 	fieldNameThreshold = "threshold"
+
+	fieldNameName         = "name"
+	fieldNameIf           = "if"
+	fieldNameUniteSources = "unite_sources"
 )
 
 func extractAntispam(node map[string]any) ([]Rule, int, error) {
@@ -73,6 +76,14 @@ func extractRule(node map[string]any) (Rule, error) {
 		return def, err
 	}
 
+	uniteSources := false
+	uniteSourcesNode, err := ctor.Get[bool](node, fieldNameUniteSources)
+	if err == nil {
+		uniteSources = uniteSourcesNode
+	} else if errors.Is(err, ctor.ErrTypeMismatch) {
+		return def, err
+	}
+
 	condNode, err := ctor.Get[map[string]any](node, fieldNameIf)
 	if err != nil {
 		return def, err
@@ -93,5 +104,5 @@ func extractRule(node map[string]any) (Rule, error) {
 		return def, err
 	}
 
-	return newRule(name, cond, threshold)
+	return newRule(name, cond, threshold, uniteSources)
 }

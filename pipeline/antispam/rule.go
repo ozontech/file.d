@@ -7,35 +7,37 @@ import (
 )
 
 type Rule struct {
-	Name      string
-	Condition do_if.Node
-	Threshold int
-	RLMapKey  string
+	Name         string
+	Condition    do_if.Node
+	Threshold    int
+	RuleID       int
+	UniteSources bool
 }
 
 type Rules []Rule
 
 func (r *Rule) Prepare(id int) {
-	r.RLMapKey = fmt.Sprintf("#=%d=#", id)
+	r.RuleID = id
 }
 
 func checkThreshold(threshold int) error {
 	if threshold < -1 {
-		return fmt.Errorf("invalid threshold: expected non-negative or -1 got=%d", threshold)
+		return fmt.Errorf("invalid threshold: expected=(non-negative or -1) got=%d", threshold)
 	}
 
 	return nil
 }
 
-func newRule(name string, condition do_if.Node, threshold int) (Rule, error) {
+func newRule(name string, condition do_if.Node, threshold int, uniteSources bool) (Rule, error) {
 	if err := checkThreshold(threshold); err != nil {
 		return Rule{}, err
 	}
 
 	return Rule{
-		Name:      name,
-		Condition: condition,
-		Threshold: threshold,
+		Name:         name,
+		Condition:    condition,
+		Threshold:    threshold,
+		UniteSources: uniteSources,
 	}, nil
 }
 
@@ -56,7 +58,7 @@ func exceptionsToRules(exceptions Exceptions) (Rules, error) {
 			return nil, err
 		}
 
-		rule, err := newRule(e.RuleSet.Name, node, -1)
+		rule, err := newRule(e.RuleSet.Name, node, -1, false)
 		if err != nil {
 			return nil, err
 		}
