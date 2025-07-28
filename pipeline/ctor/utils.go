@@ -32,11 +32,19 @@ func Must[T any](v any) (T, error) {
 	return result, nil
 }
 
-func Get[T any](node Node, field string) (T, error) {
+func Get[T any](node Node, field string, defValues ...T) (T, error) {
+	if len(defValues) > 1 {
+		panic("too many default values")
+	}
+
 	var def T
 
 	fieldNode, err := GetAny(node, field)
 	if err != nil {
+		if len(defValues) == 1 {
+			return defValues[0], nil
+		}
+
 		return def, err
 	}
 

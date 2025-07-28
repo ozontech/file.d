@@ -34,6 +34,7 @@ const (
 	tsCmpValueNowTag   = "now"
 	tsCmpValueStartTag = "file_d_start"
 
+	defaultTsCmpValueShift        = 0 * time.Second
 	defaultTsCmpValUpdateInterval = 10 * time.Second
 	defaultTsFormat               = "rfc3339nano"
 
@@ -106,11 +107,8 @@ func extractFieldOpNode(opName string, node map[string]any) (Node, error) {
 		return nil, errors.New("field selector and data type tag are not provided")
 	}
 
-	caseSensitive := true
-	caseSensitiveNode, err := ctor.Get[bool](node, fieldNameCaseSensitive)
-	if err == nil {
-		caseSensitive = caseSensitiveNode
-	} else if errors.Is(err, ctor.ErrTypeMismatch) {
+	caseSensitive, err := ctor.Get[bool](node, fieldNameCaseSensitive, true)
+	if err != nil {
 		return nil, err
 	}
 
@@ -219,34 +217,37 @@ func extractTsCmpOpNode(_ string, node map[string]any) (Node, error) {
 		}
 	}
 
-	format := defaultTsFormat
-	str, err := ctor.Get[string](node, fieldNameFormat)
-	if err == nil {
-		format = str
-	} else if errors.Is(err, ctor.ErrTypeMismatch) {
+	format, err := ctor.Get[string](node, fieldNameFormat, defaultTsFormat)
+	if err != nil {
 		return nil, err
 	}
 
-	cmpValueShift := time.Duration(0)
-	str, err = ctor.Get[string](node, fieldNameCmpValueShift)
-	if err == nil {
-		cmpValueShift, err = time.ParseDuration(str)
-		if err != nil {
-			return nil, fmt.Errorf("parse cmp value shift: %w", err)
-		}
-	} else if errors.Is(err, ctor.ErrTypeMismatch) {
+	cmpValueShiftStr, err := ctor.Get[string](
+		node,
+		fieldNameCmpValueShift,
+		defaultTsCmpValueShift.String(),
+	)
+	if err != nil {
 		return nil, err
 	}
 
-	updateInterval := defaultTsCmpValUpdateInterval
-	str, err = ctor.Get[string](node, fieldNameUpdateInterval)
-	if err == nil {
-		updateInterval, err = time.ParseDuration(str)
-		if err != nil {
-			return nil, fmt.Errorf("parse update interval: %w", err)
-		}
-	} else if errors.Is(err, ctor.ErrTypeMismatch) {
+	cmpValueShift, err := time.ParseDuration(cmpValueShiftStr)
+	if err != nil {
+		return nil, fmt.Errorf("parse cmp value shift: %w", err)
+	}
+
+	updateIntervalStr, err := ctor.Get[string](
+		node,
+		fieldNameUpdateInterval,
+		defaultTsCmpValUpdateInterval.String(),
+	)
+	if err != nil {
 		return nil, err
+	}
+
+	updateInterval, err := time.ParseDuration(updateIntervalStr)
+	if err != nil {
+		return nil, fmt.Errorf("parse update interval: %w", err)
 	}
 
 	return newTsCmpOpNode(fieldPath, format, cmpOp, cmpMode, cmpValue, cmpValueShift, updateInterval)

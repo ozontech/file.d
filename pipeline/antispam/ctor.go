@@ -68,19 +68,13 @@ func extractRules(rawRules []any) ([]Rule, error) {
 func extractRule(node map[string]any) (Rule, error) {
 	def := Rule{}
 
-	name := ""
-	nameNode, err := ctor.Get[string](node, fieldNameName)
-	if err == nil {
-		name = nameNode
-	} else if errors.Is(err, ctor.ErrTypeMismatch) {
+	name, err := ctor.Get[string](node, fieldNameName, "")
+	if err != nil {
 		return def, err
 	}
 
-	uniteSources := false
-	uniteSourcesNode, err := ctor.Get[bool](node, fieldNameUniteSources)
-	if err == nil {
-		uniteSources = uniteSourcesNode
-	} else if errors.Is(err, ctor.ErrTypeMismatch) {
+	uniteSources, err := ctor.Get[bool](node, fieldNameUniteSources, false)
+	if err != nil {
 		return def, err
 	}
 
