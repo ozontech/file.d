@@ -259,31 +259,33 @@ func (f *FileD) getStaticInfo(pipelineConfig *cfg.PipelineConfig, pluginKind pip
 
 	deadqueue := configJSON.Get("deadqueue")
 	var deadqueueInfo *pipeline.PluginStaticInfo
-	if deadqueue.MustMap() != nil {
-		deadqueueType := deadqueue.Get("type").MustString()
-		if deadqueueType == "" {
-			return nil, fmt.Errorf("%s doesn't have type", pluginKind)
-		}
-		deadqueueInfo, err = f.plugins.Get(pluginKind, deadqueueType)
-		if err != nil {
-			return nil, err
-		}
+	if deadqueueMap := deadqueue.MustMap(); deadqueueMap != nil {
+		if len(deadqueueMap) > 0 {
+			deadqueueType := deadqueue.Get("type").MustString()
+			if deadqueueType == "" {
+				return nil, fmt.Errorf("%s doesn't have type", pluginKind)
+			}
+			deadqueueInfo, err = f.plugins.Get(pluginKind, deadqueueType)
+			if err != nil {
+				return nil, err
+			}
 
-		deadqueue.Del("type")
+			deadqueue.Del("type")
 
-		deadqueueConfigJson, err := deadqueue.Encode()
-		if err != nil {
-			logger.Panicf("can't create config json for %s", t)
+			deadqueueConfigJson, err := deadqueue.Encode()
+			if err != nil {
+				logger.Panicf("can't create config json for %s", t)
+			}
+
+			config, err := pipeline.GetConfig(deadqueueInfo, deadqueueConfigJson, values)
+			if err != nil {
+				logger.Fatalf("error on creating %s with type %q: %s", t, pluginKind, err.Error())
+			}
+			deadqueueInfo.Config = config
+
+			// TODO: recursive deadqueue config
+			// deadqueueForDeadqueue := deadqueue.Get("deadqueue").MustMap()
 		}
-
-		config, err := pipeline.GetConfig(deadqueueInfo, deadqueueConfigJson, values)
-		if err != nil {
-			logger.Fatalf("error on creating %s with type %q: %s", t, pluginKind, err.Error())
-		}
-		deadqueueInfo.Config = config
-
-		// TODO: recursive deadqueue config
-		// deadqueueForDeadqueue := deadqueue.Get("deadqueue").MustMap()
 		configJSON.Del("deadqueue")
 	}
 
