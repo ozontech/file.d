@@ -182,68 +182,66 @@ func TestExtractNode(t *testing.T) {
 				cmpValue:  10,
 			},
 		},
-		/*
-						{
-							name: "ok_ts_cmp_op",
-							raw: `{
-				                "op": "ts_cmp",
-				                "field": "timestamp",
-				                "cmp_op": "lt",
-				                "value": "2009-11-10T23:00:00Z",
-				                "value_shift": "-24h",
-				                "format": "2006-01-02T15:04:05Z07:00",
-				                "update_interval": "15s"
-				            }`,
-							expected: &tsCmpOpNode{
-								fieldPath:        []string{"timestamp"},
-								format:           time.RFC3339,
-								cmpOp:            cmpOpLess,
-								cmpValChangeMode: cmpValChangeModeConst,
-								constCmpValue: time.Date(
-									2009, time.November, 10, 23, 0, 0, 0, time.UTC,
-								).UnixNano(),
-								cmpValueShift:  (-24 * time.Hour).Nanoseconds(),
-								updateInterval: 15 * time.Second,
-							},
-						},
-						{
-							name: "ok_ts_cmp_op_default_settings",
-							raw: `{
-								"op": "ts_cmp",
-								"field": "timestamp",
-								"cmp_op": "lt",
-								"value": "now"
-							}`,
-							expected: &tsCmpOpNode{
-								fieldPath:        []string{"timestamp"},
-								format:           time.RFC3339Nano,
-								cmpOp:            cmpOpLess,
-								cmpValChangeMode: cmpValChangeModeNow,
-								updateInterval:   defaultTsCmpValUpdateInterval,
-								cmpValueShift:    0,
-							},
-						},
-
-			{
-				name: "ok_ts_cmp_op_format_alias",
-				raw: `{
-					"op": "ts_cmp",
-					"field": "timestamp",
-					"cmp_op": "lt",
-					"format": "rfc3339",
-					"value": "now"
-				}`,
-				expected: &tsCmpOpNode{
-					fieldPath:        []string{"timestamp"},
-					format:           time.RFC3339,
-					cmpOp:            cmpOpLess,
-					cmpValChangeMode: cmpValChangeModeNow,
-					cmpValueShift:    0,
-					updateInterval:   defaultTsCmpValUpdateInterval,
-				},
+		{
+			name: "ok_ts_cmp_op",
+			raw: `{
+				"op": "ts_cmp",
+				"field": "timestamp",
+				"cmp_op": "lt",
+				"value": "2009-11-10T23:00:00Z",
+				"value_shift": "-24h",
+				"format": "2006-01-02T15:04:05Z07:00",
+				"update_interval": "15s"
+			}`,
+			expected: &tsCmpOpNode{
+				fieldPath:        []string{"timestamp"},
+				format:           time.RFC3339,
+				cmpOp:            cmpOpLess,
+				cmpValChangeMode: cmpValChangeModeConst,
+				constCmpValue: time.Date(
+					2009, time.November, 10, 23, 0, 0, 0, time.UTC,
+				).UnixNano(),
+				cmpValueShift:  (-24 * time.Hour).Nanoseconds(),
+				updateInterval: 15 * time.Second,
 			},
-
-		*/
+		},
+		{
+			name: "ok_ts_cmp_op_default_settings",
+			raw: `{
+				"op": "ts_cmp",
+				"field": "timestamp",
+				"cmp_op": "lt",
+				"value": "now"
+			}`,
+			expected: &tsCmpOpNode{
+				fieldPath:        []string{"timestamp"},
+				format:           time.RFC3339Nano,
+				cmpOp:            cmpOpLess,
+				cmpValChangeMode: cmpValChangeModeNow,
+				constCmpValue:    time.Time{}.UnixNano(),
+				updateInterval:   defaultTsCmpValUpdateInterval,
+				cmpValueShift:    0,
+			},
+		},
+		{
+			name: "ok_ts_cmp_op_format_alias",
+			raw: `{
+				"op": "ts_cmp",
+				"field": "timestamp",
+				"cmp_op": "lt",
+				"format": "rfc3339",
+				"value": "now"
+			}`,
+			expected: &tsCmpOpNode{
+				fieldPath:        []string{"timestamp"},
+				format:           time.RFC3339,
+				cmpOp:            cmpOpLess,
+				cmpValChangeMode: cmpValChangeModeNow,
+				constCmpValue:    time.Time{}.UnixNano(),
+				cmpValueShift:    0,
+				updateInterval:   defaultTsCmpValUpdateInterval,
+			},
+		},
 		{
 			name: "ok_check_type",
 			raw: `{
