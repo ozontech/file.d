@@ -1,4 +1,4 @@
-package data_checker
+package str_checker
 
 import (
 	"bytes"

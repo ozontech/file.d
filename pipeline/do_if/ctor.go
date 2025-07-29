@@ -7,8 +7,8 @@ import (
 
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/pipeline/ctor"
-	"github.com/ozontech/file.d/pipeline/do_if/data_checker"
 	"github.com/ozontech/file.d/pipeline/do_if/logic"
+	"github.com/ozontech/file.d/pipeline/do_if/str_checker"
 )
 
 const (
@@ -65,11 +65,11 @@ func ExtractNode(node ctor.Node) (Node, error) {
 		logic.NotTag:
 		return extractLogicalOpNode(opName, node)
 	case
-		data_checker.OpEqualTag,
-		data_checker.OpContainsTag,
-		data_checker.OpPrefixTag,
-		data_checker.OpSuffixTag,
-		data_checker.OpRegexTag:
+		str_checker.OpEqualTag,
+		str_checker.OpContainsTag,
+		str_checker.OpPrefixTag,
+		str_checker.OpSuffixTag,
+		str_checker.OpRegexTag:
 		return extractFieldOpNode(opName, node)
 	case
 		"byte_len_cmp",

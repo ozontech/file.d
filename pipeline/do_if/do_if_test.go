@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ozontech/file.d/pipeline/do_if/data_checker"
 	"github.com/ozontech/file.d/pipeline/do_if/logic"
+	"github.com/ozontech/file.d/pipeline/do_if/str_checker"
 	insaneJSON "github.com/ozontech/insane-json"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -85,7 +85,7 @@ func checkNode(t *testing.T, want, got Node) {
 		gotNode := got.(*fieldOpNode)
 		assert.Equal(t, 0, slices.Compare[[]string](wantNode.fieldPath, gotNode.fieldPath))
 		assert.Equal(t, wantNode.fieldPathStr, gotNode.fieldPathStr)
-		assert.NoError(t, data_checker.Equal(&wantNode.checker, &gotNode.checker))
+		assert.NoError(t, str_checker.Equal(&wantNode.checker, &gotNode.checker))
 	case NodeLogicalOp:
 		wantNode := want.(*logicalNode)
 		gotNode := got.(*logicalNode)
@@ -136,7 +136,7 @@ func TestBuildNodes(t *testing.T) {
 			want: &fieldOpNode{
 				fieldPath:    []string{"log", "pod"},
 				fieldPathStr: "log.pod",
-				checker: data_checker.MustNew(
+				checker: str_checker.MustNew(
 					"equal",
 					true,
 					[][]byte{[]byte(`test-111`), []byte(`test-2`), []byte(`test-3`), []byte(`test-12345`)},
@@ -154,7 +154,7 @@ func TestBuildNodes(t *testing.T) {
 			want: &fieldOpNode{
 				fieldPath:    []string{"log", "pod"},
 				fieldPathStr: "log.pod",
-				checker: data_checker.MustNew(
+				checker: str_checker.MustNew(
 					"equal",
 					false,
 					[][]byte{[]byte(`TEST-111`), []byte(`Test-2`), []byte(`tesT-3`), []byte(`TeSt-12345`)},
@@ -186,7 +186,7 @@ func TestBuildNodes(t *testing.T) {
 					&fieldOpNode{
 						fieldPath:    []string{"log", "pod"},
 						fieldPathStr: "log.pod",
-						checker: data_checker.MustNew(
+						checker: str_checker.MustNew(
 							"equal",
 							true,
 							[][]byte{[]byte(`test-111`), []byte(`test-2`), []byte(`test-3`), []byte(`test-12345`)},
@@ -195,7 +195,7 @@ func TestBuildNodes(t *testing.T) {
 					&fieldOpNode{
 						fieldPath:    []string{"service", "msg"},
 						fieldPathStr: "service.msg",
-						checker: data_checker.MustNew(
+						checker: str_checker.MustNew(
 							"contains",
 							true,
 							[][]byte{[]byte(`test-0987`), []byte(`test-11`)},

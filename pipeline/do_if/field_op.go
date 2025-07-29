@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/ozontech/file.d/cfg"
-	"github.com/ozontech/file.d/pipeline/do_if/data_checker"
+	"github.com/ozontech/file.d/pipeline/do_if/str_checker"
 	insaneJSON "github.com/ozontech/insane-json"
 )
 
@@ -211,7 +211,7 @@ type fieldOpNode struct {
 	dataType     dataType
 	metaKey      string
 
-	checker data_checker.DataChecker
+	checker str_checker.DataChecker
 }
 
 func newFieldOpNode(
@@ -225,7 +225,7 @@ func newFieldOpNode(
 		return nil, errors.New("values are not provided")
 	}
 
-	c, err := data_checker.New(op, caseSensitive, values)
+	c, err := str_checker.New(op, caseSensitive, values)
 	if err != nil {
 		return nil, err
 	}
@@ -299,5 +299,5 @@ func (n *fieldOpNode) isEqualTo(n2 Node, _ int) error {
 		return fmt.Errorf("nodes have different meta keys expected: mataKey=%q", n.metaKey)
 	}
 
-	return data_checker.Equal(&n.checker, &n2f.checker)
+	return str_checker.Equal(&n.checker, &n2f.checker)
 }
