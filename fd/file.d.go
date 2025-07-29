@@ -269,6 +269,19 @@ func (f *FileD) getStaticInfo(pipelineConfig *cfg.PipelineConfig, pluginKind pip
 			return nil, err
 		}
 
+		deadqueue.Del("type")
+
+		deadqueueConfigJson, err := deadqueue.Encode()
+		if err != nil {
+			logger.Panicf("can't create config json for %s", t)
+		}
+
+		config, err := pipeline.GetConfig(deadqueueInfo, deadqueueConfigJson, values)
+		if err != nil {
+			logger.Fatalf("error on creating %s with type %q: %s", t, pluginKind, err.Error())
+		}
+		deadqueueInfo.Config = config
+
 		// TODO: recursive deadqueue config
 		// deadqueueForDeadqueue := deadqueue.Get("deadqueue").MustMap()
 		configJSON.Del("deadqueue")
