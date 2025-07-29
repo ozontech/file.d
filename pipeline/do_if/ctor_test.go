@@ -163,6 +163,31 @@ func TestExtractNode(t *testing.T) {
 			},
 		},
 		{
+			name: "ok_field_op_node_data_type_event",
+			raw:  `{"op":"equal", "values":["a"], "data":"event"}`,
+			expected: &fieldOpNode{
+				dataType: dataTypeEvent,
+				checker:  str_checker.MustNew("equal", true, [][]byte{[]byte("a")}),
+			},
+		},
+		{
+			name: "ok_field_op_node_data_type_source_name",
+			raw:  `{"op":"equal", "values":["a"], "data":"source_name"}`,
+			expected: &fieldOpNode{
+				dataType: dataTypeSourceName,
+				checker:  str_checker.MustNew("equal", true, [][]byte{[]byte("a")}),
+			},
+		},
+		{
+			name: "ok_field_op_node_data_type_meta",
+			raw:  `{"op":"equal", "values":["a"], "data":"meta.name"}`,
+			expected: &fieldOpNode{
+				dataType: dataTypeMeta,
+				metaKey:  "name",
+				checker:  str_checker.MustNew("equal", true, [][]byte{[]byte("a")}),
+			},
+		},
+		{
 			name: "ok_byte_len_cmp_op",
 			raw:  `{"op":"byte_len_cmp","field":"data","cmp_op":"lt","value":10}`,
 			expected: &lenCmpOpNode{
@@ -459,6 +484,16 @@ func TestExtractNode(t *testing.T) {
 				"value": "2009-11-10T23:00:00Z",
 				"update_interval": "qwe"
 			}`,
+			wantErr: true,
+		},
+		{
+			name:    "error_field_op_node_data_type_type_mismatch",
+			raw:     `{"op":"equal", "values":["a"], "data":123}`,
+			wantErr: true,
+		},
+		{
+			name:    "error_field_op_node_data_type_unparsable",
+			raw:     `{"op":"equal", "values":["a"], "data":"some"}`,
 			wantErr: true,
 		},
 		{
