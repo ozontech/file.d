@@ -35,7 +35,7 @@ func extractAntispam(node map[string]any) ([]Rule, int, error) {
 	rawRules, err := ctor.Get[[]any](node, fieldNameRules)
 	if err == nil {
 		rules, err = extractRules(rawRules)
-		if err == nil {
+		if err != nil {
 			return nil, 0, err
 		}
 	} else if errors.Is(err, ctor.ErrTypeMismatch) {
