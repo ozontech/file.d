@@ -6,7 +6,7 @@ When Do If Checker's Match func is called it calls to the root Match func and th
 the chain of Match func calls are performed across the whole tree.
 
 ## Node types
-**`FieldOp`** Type of node where matching rules for fields are stored.
+**`StringOp`** Type of node where string checks for fields are stored.
 
 <br>
 
@@ -27,16 +27,16 @@ the chain of Match func calls are performed across the whole tree.
 <br>
 
 
-## Field op node
-DoIf field op node is considered to always be a leaf in the DoIf tree. It checks byte representation of the value by the given field path.
+## String op node
+DoIf string op node is considered to always be a leaf in the DoIf tree. It checks byte representation of the value by the given field path.
 Array and object values are considered as not matched since encoding them to bytes leads towards large CPU and memory consumption.
 
 Params:
-  - `op` - value from field operations list. Required.
+  - `op` - value from string operations list. Required.
   - `field` - path to field in JSON tree. If empty, root value is checked. Path to nested fields is delimited by dots `"."`, e.g. `"field.subfield"` for `{"field": {"subfield": "val"}}`.
   If the field name contains dots in it they should be shielded with `"\"`, e.g. `"exception\.type"` for `{"exception.type": "example"}`. Default empty.
   - `values` - list of values to check field. Required non-empty.
-  - `case_sensitive` - flag indicating whether checks are performed in case sensitive way. Default `true`.
+  - `case_sensitive` - flag indicating whether checks are performed in case-sensitive way. Default `true`.
     Note: case insensitive checks can cause CPU and memory overhead since every field value will be converted to lower letters.
 
 Example:
@@ -53,7 +53,7 @@ pipelines:
 ```
 
 
-## Field operations
+## String operations
 Operation `equal` checks whether the field value is equal to one of the elements in the values list.
 
 Example:
@@ -294,7 +294,7 @@ Result:
 
 
 ## Length comparison op node
-DoIf length comparison op node is considered to always be a leaf in the DoIf tree like DoIf field op node.
+DoIf length comparison op node is considered to always be a leaf in the DoIf tree like DoIf string op node.
 It contains operation that compares field length in bytes or array length (for array fields) with certain value.
 
 Params:
@@ -361,7 +361,7 @@ They denote corresponding comparison operations.
 | `ne` | `!=` |
 
 ## Timestamp comparison op node
-DoIf timestamp comparison op node is considered to always be a leaf in the DoIf tree like DoIf field op node.
+DoIf timestamp comparison op node is considered to always be a leaf in the DoIf tree like DoIf string op node.
 It contains operation that compares timestamps with certain value.
 
 Params:

@@ -13,7 +13,7 @@ import (
 )
 
 /*{ do-if-ts-cmp-op-node
-DoIf timestamp comparison op node is considered to always be a leaf in the DoIf tree like DoIf field op node.
+DoIf timestamp comparison op node is considered to always be a leaf in the DoIf tree like DoIf string op node.
 It contains operation that compares timestamps with certain value.
 
 Params:

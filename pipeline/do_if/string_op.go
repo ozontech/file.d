@@ -11,12 +11,12 @@ import (
 	insaneJSON "github.com/ozontech/insane-json"
 )
 
-/*{ do-if-field-op-node
-DoIf field op node is considered to always be a leaf in the DoIf tree. It checks byte representation of the value by the given field path.
+/*{ do-if-string-op-node
+DoIf string op node is considered to always be a leaf in the DoIf tree. It checks byte representation of the value by the given field path.
 Array and object values are considered as not matched since encoding them to bytes leads towards large CPU and memory consumption.
 
 Params:
-  - `op` - value from field operations list. Required.
+  - `op` - value from string operations list. Required.
   - `field` - path to field in JSON tree. If empty, root value is checked. Path to nested fields is delimited by dots `"."`, e.g. `"field.subfield"` for `{"field": {"subfield": "val"}}`.
   If the field name contains dots in it they should be shielded with `"\"`, e.g. `"exception\.type"` for `{"exception.type": "example"}`. Default empty.
   - `values` - list of values to check field. Required non-empty.
@@ -38,7 +38,7 @@ pipelines:
 
 }*/
 
-/*{ do-if-field-op
+/*{ do-if-string-op
 Operation `equal` checks whether the field value is equal to one of the elements in the values list.
 
 Example:
@@ -205,7 +205,7 @@ func stringToDataType(s string) (dataType, string, error) {
 	}
 }
 
-type fieldOpNode struct {
+type stringOpNode struct {
 	fieldPath    []string
 	fieldPathStr string
 	dataType     dataType
@@ -214,7 +214,7 @@ type fieldOpNode struct {
 	checker str_checker.DataChecker
 }
 
-func newFieldOpNode(
+func newStringOpNode(
 	op string,
 	caseSensitive bool,
 	values [][]byte,
@@ -239,7 +239,7 @@ func newFieldOpNode(
 		}
 	}
 
-	return &fieldOpNode{
+	return &stringOpNode{
 		fieldPath:    cfg.ParseFieldSelector(field),
 		fieldPathStr: field,
 		dataType:     curDataType,
@@ -248,11 +248,11 @@ func newFieldOpNode(
 	}, nil
 }
 
-func (n *fieldOpNode) Type() nodeType {
-	return NodeFieldOp
+func (n *stringOpNode) Type() nodeType {
+	return NodeStringOp
 }
 
-func (n *fieldOpNode) checkEvent(eventRoot *insaneJSON.Root) bool {
+func (n *stringOpNode) checkEvent(eventRoot *insaneJSON.Root) bool {
 	node := eventRoot.Dig(n.fieldPath...)
 	if node.IsArray() || node.IsObject() {
 		return false
@@ -265,7 +265,7 @@ func (n *fieldOpNode) checkEvent(eventRoot *insaneJSON.Root) bool {
 	return n.checker.Check(node.AsBytes())
 }
 
-func (n *fieldOpNode) CheckRaw(event []byte, sourceName []byte, metadata map[string]string) bool {
+func (n *stringOpNode) CheckRaw(event []byte, sourceName []byte, metadata map[string]string) bool {
 	switch n.dataType {
 	case dataTypeEvent:
 		return n.checker.Check(event)
@@ -279,10 +279,10 @@ func (n *fieldOpNode) CheckRaw(event []byte, sourceName []byte, metadata map[str
 	}
 }
 
-func (n *fieldOpNode) isEqualTo(n2 Node, _ int) error {
-	n2f, ok := n2.(*fieldOpNode)
+func (n *stringOpNode) isEqualTo(n2 Node, _ int) error {
+	n2f, ok := n2.(*stringOpNode)
 	if !ok {
-		return errors.New("nodes have different types expected: fieldOpNode")
+		return errors.New("nodes have different types expected: stringOpNode")
 	}
 
 	if n.fieldPathStr != n2f.fieldPathStr || slices.Compare[[]string](n.fieldPath, n2f.fieldPath) != 0 {

@@ -55,7 +55,7 @@ func stringToOp(s string) (op, error) {
 	case OpRegexTag:
 		return opRegex, nil
 	default:
-		return -1, fmt.Errorf("unknown field op %q", s)
+		return -1, fmt.Errorf("unknown string op %q", s)
 	}
 }
 

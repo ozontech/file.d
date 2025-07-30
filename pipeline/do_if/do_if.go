@@ -12,8 +12,8 @@ type nodeType int
 const (
 	NodeUnknownType nodeType = iota
 
-	// > Type of node where matching rules for fields are stored.
-	NodeFieldOp // *
+	// > Type of node where string checks for fields are stored.
+	NodeStringOp // *
 
 	// > Type of node where matching rules for byte length and array length are stored.
 	NodeLengthCmpOp // *

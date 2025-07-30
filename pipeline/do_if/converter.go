@@ -13,7 +13,7 @@ func RuleToNode(rule matchrule.Rule, dataTypeTag string) (Node, error) {
 		values = append(values, []byte(strings.Clone(s)))
 	}
 
-	node, err := newFieldOpNode(
+	node, err := newStringOpNode(
 		matchrule.ModeToString(rule.Mode),
 		!rule.CaseInsensitive,
 		values,

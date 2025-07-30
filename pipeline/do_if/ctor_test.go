@@ -92,12 +92,12 @@ func TestExtractNode(t *testing.T) {
 					&logicalNode{
 						op: logic.And,
 						operands: []Node{
-							&fieldOpNode{
+							&stringOpNode{
 								fieldPath:    []string{"service"},
 								fieldPathStr: "service",
 								checker:      str_checker.MustNew("equal", false, [][]byte{nil, []byte("")}),
 							},
-							&fieldOpNode{
+							&stringOpNode{
 								fieldPath:    []string{"log", "msg"},
 								fieldPathStr: "log.msg",
 								checker: str_checker.MustNew(
@@ -128,7 +128,7 @@ func TestExtractNode(t *testing.T) {
 							&logicalNode{
 								op: logic.Or,
 								operands: []Node{
-									&fieldOpNode{
+									&stringOpNode{
 										fieldPath:    []string{"service"},
 										fieldPathStr: "service",
 										checker: str_checker.MustNew(
@@ -137,7 +137,7 @@ func TestExtractNode(t *testing.T) {
 											[][]byte{[]byte("test-svc-1"), []byte("test-svc-2")},
 										),
 									},
-									&fieldOpNode{
+									&stringOpNode{
 										fieldPath:    []string{"pod"},
 										fieldPathStr: "pod",
 										checker: str_checker.MustNew(
@@ -146,7 +146,7 @@ func TestExtractNode(t *testing.T) {
 											[][]byte{[]byte("test")},
 										),
 									},
-									&fieldOpNode{
+									&stringOpNode{
 										fieldPath:    []string{"message"},
 										fieldPathStr: "message",
 										checker: str_checker.MustNew(
@@ -165,7 +165,7 @@ func TestExtractNode(t *testing.T) {
 		{
 			name: "ok_field_op_node_data_type_event",
 			raw:  `{"op":"equal", "values":["a"], "data":"event"}`,
-			expected: &fieldOpNode{
+			expected: &stringOpNode{
 				dataType: dataTypeEvent,
 				checker:  str_checker.MustNew("equal", true, [][]byte{[]byte("a")}),
 			},
@@ -173,7 +173,7 @@ func TestExtractNode(t *testing.T) {
 		{
 			name: "ok_field_op_node_data_type_source_name",
 			raw:  `{"op":"equal", "values":["a"], "data":"source_name"}`,
-			expected: &fieldOpNode{
+			expected: &stringOpNode{
 				dataType: dataTypeSourceName,
 				checker:  str_checker.MustNew("equal", true, [][]byte{[]byte("a")}),
 			},
@@ -181,7 +181,7 @@ func TestExtractNode(t *testing.T) {
 		{
 			name: "ok_field_op_node_data_type_meta",
 			raw:  `{"op":"equal", "values":["a"], "data":"meta.name"}`,
-			expected: &fieldOpNode{
+			expected: &stringOpNode{
 				dataType: dataTypeMeta,
 				metaKey:  "name",
 				checker:  str_checker.MustNew("equal", true, [][]byte{[]byte("a")}),
@@ -300,17 +300,17 @@ func TestExtractNode(t *testing.T) {
 			expected: &logicalNode{
 				op: logic.Or,
 				operands: []Node{
-					&fieldOpNode{
+					&stringOpNode{
 						fieldPath:    []string{"service"},
 						fieldPathStr: "service",
 						checker:      str_checker.MustNew("equal", true, [][]byte{nil}),
 					},
-					&fieldOpNode{
+					&stringOpNode{
 						fieldPath:    []string{"service"},
 						fieldPathStr: "service",
 						checker:      str_checker.MustNew("equal", true, [][]byte{[]byte("")}),
 					},
-					&fieldOpNode{
+					&stringOpNode{
 						fieldPath:    []string{"service"},
 						fieldPathStr: "service",
 						checker:      str_checker.MustNew("equal", true, [][]byte{[]byte("test")}),

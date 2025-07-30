@@ -10,7 +10,7 @@ import (
 )
 
 /*{ do-if-len-cmp-op-node
-DoIf length comparison op node is considered to always be a leaf in the DoIf tree like DoIf field op node.
+DoIf length comparison op node is considered to always be a leaf in the DoIf tree like DoIf string op node.
 It contains operation that compares field length in bytes or array length (for array fields) with certain value.
 
 Params:

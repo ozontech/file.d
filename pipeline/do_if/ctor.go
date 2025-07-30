@@ -70,7 +70,7 @@ func ExtractNode(node ctor.Node) (Node, error) {
 		str_checker.OpPrefixTag,
 		str_checker.OpSuffixTag,
 		str_checker.OpRegexTag:
-		return extractFieldOpNode(opName, node)
+		return extractStringOpNode(opName, node)
 	case
 		"byte_len_cmp",
 		"array_len_cmp":
@@ -84,7 +84,7 @@ func ExtractNode(node ctor.Node) (Node, error) {
 	}
 }
 
-func extractFieldOpNode(opName string, node map[string]any) (Node, error) {
+func extractStringOpNode(opName string, node map[string]any) (Node, error) {
 	var result Node
 	var err error
 
@@ -114,12 +114,12 @@ func extractFieldOpNode(opName string, node map[string]any) (Node, error) {
 
 	vals, err := extractOpValues(node)
 	if err != nil {
-		return nil, fmt.Errorf("extract field op values: %w", err)
+		return nil, fmt.Errorf("extract string op values: %w", err)
 	}
 
-	result, err = newFieldOpNode(opName, caseSensitive, vals, fieldPath, dataTypeTag)
+	result, err = newStringOpNode(opName, caseSensitive, vals, fieldPath, dataTypeTag)
 	if err != nil {
-		return nil, fmt.Errorf("init field op: %w", err)
+		return nil, fmt.Errorf("init string op: %w", err)
 	}
 
 	return result, nil
