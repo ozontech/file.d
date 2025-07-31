@@ -22,10 +22,10 @@ func TestCheckerCtor(t *testing.T) {
 			values:        [][]byte{[]byte(`test-111`), []byte(`test-2`), []byte(`test-3`), []byte(`test-12345`)},
 
 			expected: DataChecker{
-				op:            opEqual,
-				caseSensitive: true,
-				values:        nil,
-				valuesBySize: map[int][][]byte{
+				Op:            OpEqual,
+				CaseSensitive: true,
+				Values:        nil,
+				ValuesBySize: map[int][][]byte{
 					6: {
 						[]byte(`test-2`),
 						[]byte(`test-3`),
@@ -37,9 +37,9 @@ func TestCheckerCtor(t *testing.T) {
 						[]byte(`test-12345`),
 					},
 				},
-				reValues:  nil,
-				minValLen: 6,
-				maxValLen: 10,
+				ReValues:  nil,
+				MinValLen: 6,
+				MaxValLen: 10,
 			},
 		},
 		{
@@ -51,16 +51,16 @@ func TestCheckerCtor(t *testing.T) {
 			},
 
 			expected: DataChecker{
-				op:            opContains,
-				caseSensitive: false,
-				values: [][]byte{
+				Op:            OpContains,
+				CaseSensitive: false,
+				Values: [][]byte{
 					[]byte(`test-0987`),
 					[]byte(`test-11`),
 				},
-				valuesBySize: nil,
-				reValues:     nil,
-				minValLen:    7,
-				maxValLen:    9,
+				ValuesBySize: nil,
+				ReValues:     nil,
+				MinValLen:    7,
+				MaxValLen:    9,
 			},
 		},
 	} {

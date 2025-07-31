@@ -10,24 +10,24 @@ import (
 type op int
 
 const (
-	opEqual op = iota
-	opContains
-	opPrefix
-	opSuffix
-	opRegex
+	OpEqual op = iota
+	OpContains
+	OpPrefix
+	OpSuffix
+	OpRegex
 )
 
 func (op op) String() string {
 	switch op {
-	case opEqual:
+	case OpEqual:
 		return OpEqualTag
-	case opContains:
+	case OpContains:
 		return OpContainsTag
-	case opPrefix:
+	case OpPrefix:
 		return OpPrefixTag
-	case opSuffix:
+	case OpSuffix:
 		return OpSuffixTag
-	case opRegex:
+	case OpRegex:
 		return OpRegexTag
 	default:
 		return "unknown"
@@ -45,29 +45,29 @@ const (
 func stringToOp(s string) (op, error) {
 	switch s {
 	case OpEqualTag:
-		return opEqual, nil
+		return OpEqual, nil
 	case OpContainsTag:
-		return opContains, nil
+		return OpContains, nil
 	case OpPrefixTag:
-		return opPrefix, nil
+		return OpPrefix, nil
 	case OpSuffixTag:
-		return opSuffix, nil
+		return OpSuffix, nil
 	case OpRegexTag:
-		return opRegex, nil
+		return OpRegex, nil
 	default:
 		return -1, fmt.Errorf("unknown string op %q", s)
 	}
 }
 
 type DataChecker struct {
-	op            op
-	caseSensitive bool
-	values        [][]byte
-	valuesBySize  map[int][][]byte
-	reValues      []*regexp.Regexp
+	Op            op
+	CaseSensitive bool
+	Values        [][]byte
+	ValuesBySize  map[int][][]byte
+	ReValues      []*regexp.Regexp
 
-	minValLen int
-	maxValLen int
+	MinValLen int
+	MaxValLen int
 }
 
 func New(opTag string, caseSensitive bool, values [][]byte) (DataChecker, error) {
@@ -87,7 +87,7 @@ func New(opTag string, caseSensitive bool, values [][]byte) (DataChecker, error)
 		return def, err
 	}
 
-	if curOp == opRegex {
+	if curOp == OpRegex {
 		reValues = make([]*regexp.Regexp, 0, len(values))
 		for _, v := range values {
 			re, err := regexp.Compile(string(v))
@@ -99,7 +99,7 @@ func New(opTag string, caseSensitive bool, values [][]byte) (DataChecker, error)
 	} else {
 		minValLen = len(values[0])
 		maxValLen = len(values[0])
-		if curOp == opEqual {
+		if curOp == OpEqual {
 			valsBySize = make(map[int][][]byte)
 		} else {
 			vals = make([][]byte, len(values))
@@ -119,7 +119,7 @@ func New(opTag string, caseSensitive bool, values [][]byte) (DataChecker, error)
 			if len(values[i]) > maxValLen {
 				maxValLen = len(values[i])
 			}
-			if curOp == opEqual {
+			if curOp == OpEqual {
 				valsBySize[len(curVal)] = append(valsBySize[len(curVal)], curVal)
 			} else {
 				vals[i] = curVal
@@ -128,13 +128,13 @@ func New(opTag string, caseSensitive bool, values [][]byte) (DataChecker, error)
 	}
 
 	return DataChecker{
-		op:            curOp,
-		caseSensitive: caseSensitive,
-		values:        vals,
-		valuesBySize:  valsBySize,
-		reValues:      reValues,
-		minValLen:     minValLen,
-		maxValLen:     maxValLen,
+		Op:            curOp,
+		CaseSensitive: caseSensitive,
+		Values:        vals,
+		ValuesBySize:  valsBySize,
+		ReValues:      reValues,
+		MinValLen:     minValLen,
+		MaxValLen:     maxValLen,
 	}, nil
 }
 
@@ -149,17 +149,17 @@ func MustNew(opTag string, caseSensitive bool, values [][]byte) DataChecker {
 
 func (n *DataChecker) Check(data []byte) bool {
 	// fast check for data
-	if n.op != opRegex && len(data) < n.minValLen {
+	if n.Op != OpRegex && len(data) < n.MinValLen {
 		return false
 	}
 
-	switch n.op {
-	case opEqual:
-		vals, ok := n.valuesBySize[len(data)]
+	switch n.Op {
+	case OpEqual:
+		vals, ok := n.ValuesBySize[len(data)]
 		if !ok {
 			return false
 		}
-		if !n.caseSensitive && data != nil {
+		if !n.CaseSensitive && data != nil {
 			data = bytes.ToLower(data)
 		}
 		for _, val := range vals {
@@ -172,43 +172,43 @@ func (n *DataChecker) Check(data []byte) bool {
 				return true
 			}
 		}
-	case opContains:
-		if !n.caseSensitive {
+	case OpContains:
+		if !n.CaseSensitive {
 			data = bytes.ToLower(data)
 		}
-		for _, val := range n.values {
+		for _, val := range n.Values {
 			if bytes.Contains(data, val) {
 				return true
 			}
 		}
-	case opPrefix:
+	case OpPrefix:
 		// check only necessary amount of bytes
-		if len(data) > n.maxValLen {
-			data = data[:n.maxValLen]
+		if len(data) > n.MaxValLen {
+			data = data[:n.MaxValLen]
 		}
-		if !n.caseSensitive {
+		if !n.CaseSensitive {
 			data = bytes.ToLower(data)
 		}
-		for _, val := range n.values {
+		for _, val := range n.Values {
 			if bytes.HasPrefix(data, val) {
 				return true
 			}
 		}
-	case opSuffix:
+	case OpSuffix:
 		// check only necessary amount of bytes
-		if len(data) > n.maxValLen {
-			data = data[len(data)-n.maxValLen:]
+		if len(data) > n.MaxValLen {
+			data = data[len(data)-n.MaxValLen:]
 		}
-		if !n.caseSensitive {
+		if !n.CaseSensitive {
 			data = bytes.ToLower(data)
 		}
-		for _, val := range n.values {
+		for _, val := range n.Values {
 			if bytes.HasSuffix(data, val) {
 				return true
 			}
 		}
-	case opRegex:
-		for _, re := range n.reValues {
+	case OpRegex:
+		for _, re := range n.ReValues {
 			if re.Match(data) {
 				return true
 			}
@@ -246,30 +246,30 @@ func Equal(a, b *DataChecker) (err error) {
 		}
 	}()
 
-	assertEqual(a.op, b.op, "different op")
-	assertEqual(a.caseSensitive, b.caseSensitive, "different case_sensitive")
-	assertEqualValues(a.values, b.values, "different values")
+	assertEqual(a.Op, b.Op, "different op")
+	assertEqual(a.CaseSensitive, b.CaseSensitive, "different case_sensitive")
+	assertEqualValues(a.Values, b.Values, "different values")
 
-	assertEqual(len(a.valuesBySize), len(b.valuesBySize), "different valuesBySize len")
-	for size := range a.valuesBySize {
-		_, found := b.valuesBySize[size]
+	assertEqual(len(a.ValuesBySize), len(b.ValuesBySize), "different ValuesBySize len")
+	for size := range a.ValuesBySize {
+		_, found := b.ValuesBySize[size]
 		assert(found, fmt.Sprintf("not found values by size %d", size))
 		assertEqualValues(
-			a.valuesBySize[size], b.valuesBySize[size],
+			a.ValuesBySize[size], b.ValuesBySize[size],
 			fmt.Sprintf("different values by size %d", size),
 		)
 	}
 
-	assertEqual(len(a.reValues), len(b.reValues), "different regex values count")
-	for i := range a.reValues {
+	assertEqual(len(a.ReValues), len(b.ReValues), "different regex values count")
+	for i := range a.ReValues {
 		assertEqual(
-			a.reValues[i].String(), b.reValues[i].String(),
+			a.ReValues[i].String(), b.ReValues[i].String(),
 			fmt.Sprintf("different regex values at pos %d", i),
 		)
 	}
 
-	assertEqual(a.minValLen, b.minValLen, "different min value len")
-	assertEqual(a.maxValLen, b.maxValLen, "different max value len")
+	assertEqual(a.MinValLen, b.MinValLen, "different min value len")
+	assertEqual(a.MaxValLen, b.MaxValLen, "different max value len")
 
 	return nil
 }

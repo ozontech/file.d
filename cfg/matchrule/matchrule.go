@@ -79,6 +79,14 @@ type Rule struct {
 	prepared     bool
 }
 
+func (r *Rule) GetMinValueSize() int {
+	return r.minValueSize
+}
+
+func (r *Rule) GetMaxValueSize() int {
+	return r.maxValueSize
+}
+
 func (r *Rule) Prepare() {
 	if len(r.Values) == 0 {
 		return
