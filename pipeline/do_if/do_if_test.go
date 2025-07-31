@@ -16,8 +16,9 @@ import (
 )
 
 type treeNode struct {
+	fieldName string
+
 	stringOp      string
-	fieldName     string
 	caseSensitive bool
 	values        [][]byte
 
@@ -34,10 +35,12 @@ type treeNode struct {
 	tsCmpValue         time.Time
 	tsCmpValueShift    time.Duration
 	tsUpdateInterval   time.Duration
+
+	checkTypeOp bool
 }
 
 // nolint:gocritic
-func buildTree(node treeNode) (Node, error) {
+func buildTree(node *treeNode) (Node, error) {
 	switch {
 	case node.stringOp != "":
 		return newStringOpNode(
@@ -49,8 +52,8 @@ func buildTree(node treeNode) (Node, error) {
 		)
 	case node.logicalOp != "":
 		operands := make([]Node, 0)
-		for _, operandNode := range node.operands {
-			operand, err := buildTree(operandNode)
+		for i := range node.operands {
+			operand, err := buildTree(&node.operands[i])
 			if err != nil {
 				return nil, fmt.Errorf("failed to build tree: %w", err)
 			}
@@ -71,6 +74,11 @@ func buildTree(node treeNode) (Node, error) {
 			node.tsCmpValue,
 			node.tsCmpValueShift,
 			node.tsUpdateInterval,
+		)
+	case node.checkTypeOp:
+		return newCheckTypeOpNode(
+			node.fieldName,
+			node.values,
 		)
 	default:
 		return nil, errors.New("unknown type of node")
@@ -450,7 +458,7 @@ func TestBuildNodes(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			got, err := buildTree(tt.tree)
+			got, err := buildTree(&tt.tree)
 			if tt.wantErr {
 				require.Error(t, err)
 				return
@@ -1014,7 +1022,7 @@ func TestCheck(t *testing.T) {
 			var eventRoot *insaneJSON.Root
 			var err error
 			t.Parallel()
-			root, err = buildTree(tt.tree)
+			root, err = buildTree(&tt.tree)
 			require.NoError(t, err)
 			checker := newChecker(root)
 			for _, d := range tt.data {
@@ -1083,7 +1091,7 @@ func TestCheckLenCmpLtObject(t *testing.T) {
 	require.NoError(t, err)
 
 	for index, test := range tests {
-		root, err := buildTree(treeNode{
+		root, err := buildTree(&treeNode{
 			fieldName: "user_info",
 			lenCmpOp:  byteLenCmpOpTag,
 			cmpOp:     "lt",
@@ -1100,7 +1108,7 @@ func TestCheckLenCmpLtObject(t *testing.T) {
 	require.NoError(t, err)
 
 	for index, test := range tests {
-		root, err := buildTree(treeNode{
+		root, err := buildTree(&treeNode{
 			fieldName: "",
 			lenCmpOp:  byteLenCmpOpTag,
 			cmpOp:     "lt",
@@ -1124,7 +1132,7 @@ func TestCheckTsCmpValChangeModeNow(t *testing.T) {
 	ts1 := begin.Add(2 * dt)
 	ts2 := begin.Add(4 * dt)
 
-	root, err := buildTree(treeNode{
+	root, err := buildTree(&treeNode{
 		tsCmpOp:            true,
 		fieldName:          "ts",
 		cmpOp:              "lt",
@@ -1815,9 +1823,9 @@ func TestNodeIsEqual(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			root1, err := buildTree(tt.t1)
+			root1, err := buildTree(&tt.t1)
 			require.NoError(t, err)
-			root2, err := buildTree(tt.t2)
+			root2, err := buildTree(&tt.t2)
 			require.NoError(t, err)
 			c1 := newChecker(root1)
 			c2 := newChecker(root2)

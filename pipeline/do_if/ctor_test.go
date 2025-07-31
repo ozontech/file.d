@@ -6,19 +6,16 @@ import (
 	"time"
 
 	"github.com/bitly/go-simplejson"
-	"github.com/ozontech/file.d/pipeline/do_if/logic"
-	"github.com/ozontech/file.d/pipeline/do_if/str_checker"
-	insaneJSON "github.com/ozontech/insane-json"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestExtractNode(t *testing.T) {
 	tests := []struct {
-		name     string
-		raw      string
-		expected Node
-		wantErr  bool
+		name    string
+		raw     string
+		want    *treeNode
+		wantErr bool
 	}{
 		{
 			name: "ok",
@@ -86,74 +83,65 @@ func TestExtractNode(t *testing.T) {
 					}
 				]
 			}`,
-			expected: &logicalNode{
-				op: logic.Not,
-				operands: []Node{
-					&logicalNode{
-						op: logic.And,
-						operands: []Node{
-							&stringOpNode{
-								fieldPath:    []string{"service"},
-								fieldPathStr: "service",
-								checker:      str_checker.MustNew("equal", false, [][]byte{nil, []byte("")}),
+			want: &treeNode{
+				logicalOp: "not",
+				operands: []treeNode{
+					{
+						logicalOp: "and",
+						operands: []treeNode{
+							{
+								stringOp:      "equal",
+								fieldName:     "service",
+								values:        [][]byte{nil, []byte("")},
+								caseSensitive: false,
 							},
-							&stringOpNode{
-								fieldPath:    []string{"log", "msg"},
-								fieldPathStr: "log.msg",
-								checker: str_checker.MustNew(
-									"prefix", false, [][]byte{[]byte("test-1"), []byte("test-2")}),
+							{
+								stringOp:      "prefix",
+								fieldName:     "log.msg",
+								values:        [][]byte{[]byte("test-1"), []byte("test-2")},
+								caseSensitive: false,
 							},
-							&lenCmpOpNode{
-								lenCmpOp:  byteLenCmpOp,
-								fieldPath: []string{"msg"},
-								cmpOp:     cmpOpGreater,
+							{
+								lenCmpOp:  "byte_len_cmp",
+								cmpOp:     "gt",
+								fieldName: "msg",
 								cmpValue:  100,
 							},
-							&lenCmpOpNode{
-								lenCmpOp:  arrayLenCmpOp,
-								fieldPath: []string{"items"},
-								cmpOp:     cmpOpLess,
+							{
+								lenCmpOp:  "array_len_cmp",
+								cmpOp:     "lt",
+								fieldName: "items",
 								cmpValue:  100,
 							},
-							&tsCmpOpNode{
-								fieldPath:        []string{"timestamp"},
-								format:           time.RFC3339Nano,
-								cmpOp:            cmpOpLess,
-								cmpValChangeMode: cmpValChangeModeConst,
-								constCmpValue: time.Date(
-									2009, time.November, 10, 23, 0, 0, 0, time.UTC,
-								).UnixNano(),
-								updateInterval: 15 * time.Second,
+							{
+								tsCmpOp:            true,
+								cmpOp:              "lt",
+								fieldName:          "timestamp",
+								tsFormat:           time.RFC3339Nano,
+								tsCmpValue:         time.Date(2009, time.November, 10, 23, 0, 0, 0, time.UTC),
+								tsCmpValChangeMode: tsCmpModeConstTag,
+								tsUpdateInterval:   15 * time.Second,
 							},
-							&logicalNode{
-								op: logic.Or,
-								operands: []Node{
-									&stringOpNode{
-										fieldPath:    []string{"service"},
-										fieldPathStr: "service",
-										checker: str_checker.MustNew(
-											"suffix",
-											true,
-											[][]byte{[]byte("test-svc-1"), []byte("test-svc-2")},
-										),
+							{
+								logicalOp: "or",
+								operands: []treeNode{
+									{
+										stringOp:      "suffix",
+										fieldName:     "service",
+										values:        [][]byte{[]byte("test-svc-1"), []byte("test-svc-2")},
+										caseSensitive: true,
 									},
-									&stringOpNode{
-										fieldPath:    []string{"pod"},
-										fieldPathStr: "pod",
-										checker: str_checker.MustNew(
-											"contains",
-											true,
-											[][]byte{[]byte("test")},
-										),
+									{
+										stringOp:      "contains",
+										fieldName:     "pod",
+										values:        [][]byte{[]byte("test")},
+										caseSensitive: true,
 									},
-									&stringOpNode{
-										fieldPath:    []string{"message"},
-										fieldPathStr: "message",
-										checker: str_checker.MustNew(
-											"regex",
-											true,
-											[][]byte{[]byte(`test-\d+`), []byte(`test-msg-\d+`)},
-										),
+									{
+										stringOp:      "regex",
+										fieldName:     "message",
+										values:        [][]byte{[]byte(`test-\d+`), []byte(`test-msg-\d+`)},
+										caseSensitive: true,
 									},
 								},
 							},
@@ -163,47 +151,22 @@ func TestExtractNode(t *testing.T) {
 			},
 		},
 		{
-			name: "ok_field_op_node_data_type_event",
-			raw:  `{"op":"equal", "values":["a"], "data":"event"}`,
-			expected: &stringOpNode{
-				dataType: dataTypeEvent,
-				checker:  str_checker.MustNew("equal", true, [][]byte{[]byte("a")}),
-			},
-		},
-		{
-			name: "ok_field_op_node_data_type_source_name",
-			raw:  `{"op":"equal", "values":["a"], "data":"source_name"}`,
-			expected: &stringOpNode{
-				dataType: dataTypeSourceName,
-				checker:  str_checker.MustNew("equal", true, [][]byte{[]byte("a")}),
-			},
-		},
-		{
-			name: "ok_field_op_node_data_type_meta",
-			raw:  `{"op":"equal", "values":["a"], "data":"meta.name"}`,
-			expected: &stringOpNode{
-				dataType: dataTypeMeta,
-				metaKey:  "name",
-				checker:  str_checker.MustNew("equal", true, [][]byte{[]byte("a")}),
-			},
-		},
-		{
 			name: "ok_byte_len_cmp_op",
 			raw:  `{"op":"byte_len_cmp","field":"data","cmp_op":"lt","value":10}`,
-			expected: &lenCmpOpNode{
-				lenCmpOp:  byteLenCmpOp,
-				fieldPath: []string{"data"},
-				cmpOp:     cmpOpLess,
+			want: &treeNode{
+				lenCmpOp:  "byte_len_cmp",
+				cmpOp:     "lt",
+				fieldName: "data",
 				cmpValue:  10,
 			},
 		},
 		{
 			name: "ok_array_len_cmp_op",
 			raw:  `{"op":"array_len_cmp","field":"items","cmp_op":"lt","value":10}`,
-			expected: &lenCmpOpNode{
-				lenCmpOp:  arrayLenCmpOp,
-				fieldPath: []string{"items"},
-				cmpOp:     cmpOpLess,
+			want: &treeNode{
+				lenCmpOp:  "array_len_cmp",
+				cmpOp:     "lt",
+				fieldName: "items",
 				cmpValue:  10,
 			},
 		},
@@ -218,16 +181,15 @@ func TestExtractNode(t *testing.T) {
 				"format": "2006-01-02T15:04:05Z07:00",
 				"update_interval": "15s"
 			}`,
-			expected: &tsCmpOpNode{
-				fieldPath:        []string{"timestamp"},
-				format:           time.RFC3339,
-				cmpOp:            cmpOpLess,
-				cmpValChangeMode: cmpValChangeModeConst,
-				constCmpValue: time.Date(
-					2009, time.November, 10, 23, 0, 0, 0, time.UTC,
-				).UnixNano(),
-				cmpValueShift:  (-24 * time.Hour).Nanoseconds(),
-				updateInterval: 15 * time.Second,
+			want: &treeNode{
+				tsCmpOp:            true,
+				cmpOp:              "lt",
+				fieldName:          "timestamp",
+				tsFormat:           time.RFC3339,
+				tsCmpValue:         time.Date(2009, time.November, 10, 23, 0, 0, 0, time.UTC),
+				tsCmpValueShift:    -24 * time.Hour,
+				tsCmpValChangeMode: tsCmpModeConstTag,
+				tsUpdateInterval:   15 * time.Second,
 			},
 		},
 		{
@@ -238,14 +200,14 @@ func TestExtractNode(t *testing.T) {
 				"cmp_op": "lt",
 				"value": "now"
 			}`,
-			expected: &tsCmpOpNode{
-				fieldPath:        []string{"timestamp"},
-				format:           time.RFC3339Nano,
-				cmpOp:            cmpOpLess,
-				cmpValChangeMode: cmpValChangeModeNow,
-				constCmpValue:    time.Time{}.UnixNano(),
-				updateInterval:   defaultTsCmpValUpdateInterval,
-				cmpValueShift:    0,
+			want: &treeNode{
+				tsCmpOp:            true,
+				cmpOp:              "lt",
+				fieldName:          "timestamp",
+				tsCmpValChangeMode: tsCmpModeNowTag,
+				tsFormat:           defaultTsFormat,
+				tsCmpValueShift:    0,
+				tsUpdateInterval:   defaultTsCmpValUpdateInterval,
 			},
 		},
 		{
@@ -257,16 +219,17 @@ func TestExtractNode(t *testing.T) {
 				"format": "rfc3339",
 				"value": "now"
 			}`,
-			expected: &tsCmpOpNode{
-				fieldPath:        []string{"timestamp"},
-				format:           time.RFC3339,
-				cmpOp:            cmpOpLess,
-				cmpValChangeMode: cmpValChangeModeNow,
-				constCmpValue:    time.Time{}.UnixNano(),
-				cmpValueShift:    0,
-				updateInterval:   defaultTsCmpValUpdateInterval,
+			want: &treeNode{
+				tsCmpOp:            true,
+				cmpOp:              "lt",
+				fieldName:          "timestamp",
+				tsCmpValChangeMode: tsCmpModeNowTag,
+				tsFormat:           time.RFC3339,
+				tsCmpValueShift:    0,
+				tsUpdateInterval:   defaultTsCmpValUpdateInterval,
 			},
 		},
+
 		{
 			name: "ok_check_type",
 			raw: `{
@@ -274,16 +237,12 @@ func TestExtractNode(t *testing.T) {
 				"field": "log",
 				"values": ["obj","arr"]
 			}`,
-			expected: &checkTypeOpNode{
-				fieldPath:    []string{"log"},
-				fieldPathStr: "log",
-				checkTypeFns: []checkTypeFn{
-					func(n *insaneJSON.Node) bool {
-						return n.IsObject()
-					},
-					func(n *insaneJSON.Node) bool {
-						return n.IsArray()
-					},
+			want: &treeNode{
+				checkTypeOp: true,
+				fieldName:   "log",
+				values: [][]byte{
+					[]byte("obj"),
+					[]byte("arr"),
 				},
 			},
 		},
@@ -297,23 +256,26 @@ func TestExtractNode(t *testing.T) {
 					{"op":"equal","field":"service","values":"test"}
 				]
 			}`,
-			expected: &logicalNode{
-				op: logic.Or,
-				operands: []Node{
-					&stringOpNode{
-						fieldPath:    []string{"service"},
-						fieldPathStr: "service",
-						checker:      str_checker.MustNew("equal", true, [][]byte{nil}),
+			want: &treeNode{
+				logicalOp: "or",
+				operands: []treeNode{
+					{
+						stringOp:      "equal",
+						fieldName:     "service",
+						values:        [][]byte{nil},
+						caseSensitive: true,
 					},
-					&stringOpNode{
-						fieldPath:    []string{"service"},
-						fieldPathStr: "service",
-						checker:      str_checker.MustNew("equal", true, [][]byte{[]byte("")}),
+					{
+						stringOp:      "equal",
+						fieldName:     "service",
+						values:        [][]byte{[]byte("")},
+						caseSensitive: true,
 					},
-					&stringOpNode{
-						fieldPath:    []string{"service"},
-						fieldPathStr: "service",
-						checker:      str_checker.MustNew("equal", true, [][]byte{[]byte("test")}),
+					{
+						stringOp:      "equal",
+						fieldName:     "service",
+						values:        [][]byte{[]byte("test")},
+						caseSensitive: true,
 					},
 				},
 			},
@@ -487,16 +449,6 @@ func TestExtractNode(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name:    "error_field_op_node_data_type_type_mismatch",
-			raw:     `{"op":"equal", "values":["a"], "data":123}`,
-			wantErr: true,
-		},
-		{
-			name:    "error_field_op_node_data_type_unparsable",
-			raw:     `{"op":"equal", "values":["a"], "data":"some"}`,
-			wantErr: true,
-		},
-		{
 			name: "error_check_type_op_empty_values",
 			raw: `{
 				"op": "check_type",
@@ -523,7 +475,6 @@ func TestExtractNode(t *testing.T) {
 			wantErr: true,
 		},
 	}
-
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
@@ -540,7 +491,9 @@ func TestExtractNode(t *testing.T) {
 				return
 			}
 
-			assert.NoError(t, got.isEqualTo(tt.expected, 1))
+			want, err := buildTree(tt.want)
+			require.NoError(t, err)
+			assert.NoError(t, got.isEqualTo(want, 1))
 		})
 	}
 }
