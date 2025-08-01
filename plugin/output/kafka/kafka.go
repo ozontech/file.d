@@ -40,6 +40,7 @@ type Plugin struct {
 
 	// plugin metrics
 	sendErrorMetric prometheus.Counter
+	router          pipeline.Router
 }
 
 // ! config-params
@@ -251,15 +252,17 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		MetricCtl:      params.MetricCtl,
 	}
 
+	p.router = params.Router
 	backoffOpts := pipeline.BackoffOpts{
-		MinRetention: p.config.Retention_,
-		Multiplier:   float64(p.config.RetentionExponentMultiplier),
-		AttemptNum:   p.config.Retry,
+		MinRetention:         p.config.Retention_,
+		Multiplier:           float64(p.config.RetentionExponentMultiplier),
+		AttemptNum:           p.config.Retry,
+		DeadQueueIsAvailable: p.router.DeadQueueIsAvailable(),
 	}
 
-	onError := func(err error) {
+	onError := func(err error, events []*pipeline.Event) {
 		var level zapcore.Level
-		if p.config.FatalOnFailedInsert {
+		if p.config.FatalOnFailedInsert && !p.router.DeadQueueIsAvailable() {
 			level = zapcore.FatalLevel
 		} else {
 			level = zapcore.ErrorLevel
@@ -268,6 +271,10 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		p.logger.Desugar().Log(level, "can't write batch",
 			zap.Int("retries", p.config.Retry),
 		)
+
+		for i := range events {
+			p.router.Fail(events[i])
+		}
 	}
 
 	p.batcher = pipeline.NewRetriableBatcher(
