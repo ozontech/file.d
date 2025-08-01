@@ -123,6 +123,9 @@ type Plugin struct {
 	hasMasksIgnoreFields      []bool // flags for which masks have ignore fields lists
 	hasMasksProcessFields     []bool // flags for which masks have process fields lists
 
+	maskApplyCount        []uint64
+	hasMaskSpecificMetric bool
+
 	logger *zap.Logger
 
 	// plugin metrics
@@ -216,6 +219,14 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 		p.logger.Fatal("failed to build field masks tree", zap.Error(err))
 	}
 
+	for i := range p.config.Masks {
+		if p.config.Masks[i].MetricName != "" {
+			p.hasMaskSpecificMetric = true
+			p.maskApplyCount = make([]uint64, len(p.config.Masks))
+			break
+		}
+	}
+
 	p.registerMetrics(params.MetricCtl)
 }
 
@@ -269,21 +280,33 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 		event.Root.AddFieldNoAlloc(event.Root, p.config.MaskAppliedField).MutateToString(p.config.MaskAppliedValue)
 	}
 
-	if maskApplied && p.config.AppliedMetricName != "" {
-		labelValues := make([]string, 0, len(p.config.AppliedMetricLabels))
-		for _, labelValuePath := range p.config.AppliedMetricLabels {
-			value := "not_set"
-			if node := event.Root.Dig(labelValuePath); node != nil {
-				value = strings.Clone(node.AsString())
+	if maskApplied {
+		if p.config.AppliedMetricName != "" {
+			labelValues := make([]string, 0, len(p.config.AppliedMetricLabels))
+			for _, labelValuePath := range p.config.AppliedMetricLabels {
+				value := "not_set"
+				if node := event.Root.Dig(labelValuePath); node != nil {
+					value = strings.Clone(node.AsString())
+				}
+
+				labelValues = append(labelValues, value)
 			}
 
-			labelValues = append(labelValues, value)
+			p.maskAppliedMetric.WithLabelValues(labelValues...).Inc()
+
+			if ce := p.logger.Check(zap.DebugLevel, "mask appeared to event"); ce != nil {
+				ce.Write(zap.String("event", event.Root.EncodeToString()))
+			}
 		}
-
-		p.maskAppliedMetric.WithLabelValues(labelValues...).Inc()
-
-		if ce := p.logger.Check(zap.DebugLevel, "mask appeared to event"); ce != nil {
-			ce.Write(zap.String("event", event.Root.EncodeToString()))
+		if p.hasMaskSpecificMetric {
+			for i := range p.config.Masks {
+				delta := p.maskApplyCount[i]
+				if delta == 0 {
+					continue
+				}
+				p.applyMaskMetric(&p.config.Masks[i], event, delta)
+				p.maskApplyCount[i] = 0
+			}
 		}
 	}
 
@@ -435,7 +458,7 @@ func (p *Plugin) processMask(event *pipeline.Event, curNode *insaneJSON.Node, fm
 			event.Root.AddFieldNoAlloc(event.Root, mask.AppliedField).MutateToString(mask.AppliedValue)
 		}
 		if mask.MetricName != "" {
-			p.applyMaskMetric(mask, event)
+			p.maskApplyCount[i]++
 		}
 		maskApplied = true
 	}

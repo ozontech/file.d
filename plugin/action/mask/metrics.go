@@ -31,7 +31,7 @@ func (p *Plugin) makeMetric(ctl *metric.Ctl, name, help string, labels ...string
 	return ctl.RegisterCounterVec(name, help, labelNames...)
 }
 
-func (p *Plugin) applyMaskMetric(mask *Mask, event *pipeline.Event) {
+func (p *Plugin) applyMaskMetric(mask *Mask, event *pipeline.Event, delta uint64) {
 	if mask.appliedMetric == nil {
 		return
 	}
@@ -46,7 +46,7 @@ func (p *Plugin) applyMaskMetric(mask *Mask, event *pipeline.Event) {
 		labelValues = append(labelValues, value)
 	}
 
-	mask.appliedMetric.WithLabelValues(labelValues...).Inc()
+	mask.appliedMetric.WithLabelValues(labelValues...).Add(float64(delta))
 
 	if ce := p.logger.Check(zap.DebugLevel, "mask appeared to event"); ce != nil {
 		ce.Write(zap.String("event", event.Root.EncodeToString()))
