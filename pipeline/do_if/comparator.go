@@ -1,4 +1,4 @@
-package doif
+package do_if
 
 import "fmt"
 

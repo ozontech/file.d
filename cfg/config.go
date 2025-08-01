@@ -731,3 +731,20 @@ func mergeYAMLs(a, b map[interface{}]interface{}) map[interface{}]interface{} {
 	}
 	return merged
 }
+
+func AnyToInt(v any) (int, error) {
+	switch vNum := v.(type) {
+	case int:
+		return vNum, nil
+	case float64:
+		return int(vNum), nil
+	case json.Number:
+		vInt64, err := vNum.Int64()
+		if err != nil {
+			return 0, err
+		}
+		return int(vInt64), nil
+	default:
+		return 0, fmt.Errorf("not convertable to int: value=%v type=%T", v, v)
+	}
+}
