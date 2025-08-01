@@ -9,7 +9,6 @@ import (
 	"net/http/pprof"
 	"runtime"
 	"runtime/debug"
-	"time"
 
 	"github.com/bitly/go-simplejson"
 	"github.com/ozontech/file.d/buildinfo"
@@ -272,8 +271,6 @@ func (f *FileD) Stop(ctx context.Context) error {
 	for _, p := range f.Pipelines {
 		p.Stop()
 	}
-
-	time.Sleep(time.Duration(f.config.ServerShutdownDelaySeconds) * time.Second)
 
 	var err error
 	if f.server != nil {

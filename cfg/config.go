@@ -23,9 +23,8 @@ import (
 const trueValue = "true"
 
 type Config struct {
-	Vault                      VaultConfig
-	Pipelines                  map[string]*PipelineConfig
-	ServerShutdownDelaySeconds int
+	Vault     VaultConfig
+	Pipelines map[string]*PipelineConfig
 }
 
 type (
@@ -78,8 +77,7 @@ func NewConfig() *Config {
 			Address:   "",
 			ShouldUse: false,
 		},
-		Pipelines:                  make(map[string]*PipelineConfig, 20),
-		ServerShutdownDelaySeconds: 0,
+		Pipelines: make(map[string]*PipelineConfig, 20),
 	}
 }
 
@@ -168,17 +166,9 @@ func applyEnvs(object *simplejson.Json) error {
 
 func parseConfig(object *simplejson.Json) *Config {
 	config := NewConfig()
-
-	serverShutdownDelaySeconds := object.Get("server_shutdown_delay_seconds")
-	var err error
-	if serverShutdownDelaySeconds.Interface() != nil {
-		config.ServerShutdownDelaySeconds, err = serverShutdownDelaySeconds.Int()
-		if err != nil {
-			logger.Panicf("can't parse server shutdown delay seconds: %s", err.Error())
-		}
-	}
-
 	vault := object.Get("vault")
+	var err error
+
 	addr := vault.Get("address")
 	if addr.Interface() != nil {
 		config.Vault.Address, err = addr.String()
