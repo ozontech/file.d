@@ -8,11 +8,7 @@ import (
 )
 
 func RuleToNode(rule matchrule.Rule, dataTypeTag string) (Node, error) {
-	values := make([][]byte, 0, len(rule.Values))
-	for _, s := range rule.Values {
-		values = append(values, []byte(strings.Clone(s)))
-	}
-
+	values := arrStringToArrBytes(rule.Values)
 	node, err := newStringOpNode(
 		matchrule.ModeToString(rule.Mode),
 		!rule.CaseInsensitive,
@@ -29,6 +25,15 @@ func RuleToNode(rule matchrule.Rule, dataTypeTag string) (Node, error) {
 	}
 
 	return newLogicalNode(logic.NotTag, []Node{node})
+}
+
+func arrStringToArrBytes(a []string) [][]byte {
+	res := make([][]byte, 0, len(a))
+	for _, s := range a {
+		res = append(res, []byte(strings.Clone(s)))
+	}
+
+	return res
 }
 
 func RuleSetToNode(ruleSet matchrule.RuleSet, dataTypeTag string) (Node, error) {
