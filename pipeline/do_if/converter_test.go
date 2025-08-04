@@ -9,24 +9,7 @@ import (
 )
 
 func TestRuleToNode(t *testing.T) {
-	rules := []matchrule.Rule{
-		{
-			Values:          []string{"a", "bb", "ccc"},
-			Mode:            matchrule.ModeSuffix,
-			CaseInsensitive: true,
-			Invert:          true,
-		},
-		{
-			Values:          []string{"a", "bb", "ccc"},
-			Mode:            matchrule.ModeSuffix,
-			CaseInsensitive: true,
-			Invert:          false,
-		},
-	}
-
-	for _, rule := range rules {
-		rule.Prepare()
-
+	for _, rule := range genAllRules() {
 		nRaw, err := RuleToNode(rule, DataTypeEventTag)
 		require.NoError(t, err)
 
@@ -49,4 +32,38 @@ func TestRuleToNode(t *testing.T) {
 		require.Equal(t, c.CaseSensitive, !rule.CaseInsensitive)
 		require.Equal(t, c.Values, arrStringToArrBytes(rule.Values))
 	}
+}
+
+func genAllRules() []matchrule.Rule {
+	arrValues := [][]string{
+		{"val1", "val2", "val3", "val4"},
+		{"a", "bb", "ccc"},
+	}
+	modes := []matchrule.Mode{
+		matchrule.ModePrefix,
+		matchrule.ModeContains,
+		matchrule.ModeSuffix,
+	}
+	boolVals := []bool{false, true}
+
+	var rules []matchrule.Rule
+
+	for _, values := range arrValues {
+		for _, mode := range modes {
+			for _, caseSensitive := range boolVals {
+				for _, invert := range boolVals {
+					rule := matchrule.Rule{
+						Values:          values,
+						Mode:            mode,
+						CaseInsensitive: caseSensitive,
+						Invert:          invert,
+					}
+					rule.Prepare()
+					rules = append(rules, rule)
+				}
+			}
+		}
+	}
+
+	return rules
 }
