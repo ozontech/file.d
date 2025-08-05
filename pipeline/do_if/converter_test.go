@@ -8,30 +8,66 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestRuleToNode(t *testing.T) {
-	for _, rule := range genAllRules() {
-		nRaw, err := RuleToNode(rule, DataTypeEventTag)
+func TestRuleSetToNode(t *testing.T) {
+	ruleSets := []matchrule.RuleSet{
+		{
+			Name:  "sample_or",
+			Cond:  matchrule.CondOr,
+			Rules: genAllRules(),
+		},
+		{
+			Name:  "sample_and",
+			Cond:  matchrule.CondAnd,
+			Rules: genAllRules(),
+		},
+	}
+
+	for _, ruleSet := range ruleSets {
+		ruleSet.Prepare()
+
+		rawNode, err := RuleSetToNode(ruleSet, DataTypeEventTag)
 		require.NoError(t, err)
 
-		if rule.Invert {
-			nLogic := nRaw.(*logicalNode)
-			require.Equal(t, nLogic.op, logic.Not)
-			require.Equal(t, len(nLogic.operands), 1)
+		logicNode := rawNode.(*logicalNode)
+		require.Equal(t, logicNode.op.String(), matchrule.CondToString(ruleSet.Cond))
+		require.Equal(t, len(logicNode.operands), len(ruleSet.Rules))
 
-			nRaw = nLogic.operands[0]
+		for i := range len(logicNode.operands) {
+			cmpRuleAndNode(t, ruleSet.Rules[i], logicNode.operands[i])
 		}
-
-		nStr := nRaw.(*stringOpNode)
-		require.Equal(t, nStr.dataType, dataTypeEvent)
-
-		c := nStr.checker
-		require.Equal(t, c.MinValLen, rule.GetMinValueSize())
-		require.Equal(t, c.MinValLen, rule.GetMinValueSize())
-		require.True(t, c.ValuesBySize == nil)
-		require.Equal(t, c.Op.String(), matchrule.ModeToString(rule.Mode))
-		require.Equal(t, c.CaseSensitive, !rule.CaseInsensitive)
-		require.Equal(t, c.Values, arrStringToArrBytes(rule.Values))
 	}
+}
+
+func TestRuleToNode(t *testing.T) {
+	for _, rule := range genAllRules() {
+		rule.Prepare()
+
+		node, err := RuleToNode(rule, DataTypeEventTag)
+		require.NoError(t, err)
+
+		cmpRuleAndNode(t, rule, node)
+	}
+}
+
+func cmpRuleAndNode(t *testing.T, rule matchrule.Rule, node Node) {
+	if rule.Invert {
+		nLogic := node.(*logicalNode)
+		require.Equal(t, nLogic.op, logic.Not)
+		require.Equal(t, len(nLogic.operands), 1)
+
+		node = nLogic.operands[0]
+	}
+
+	nStr := node.(*stringOpNode)
+	require.Equal(t, nStr.dataType, dataTypeEvent)
+
+	c := nStr.checker
+	require.Equal(t, c.MinValLen, rule.GetMinValueSize())
+	require.Equal(t, c.MinValLen, rule.GetMinValueSize())
+	require.True(t, c.ValuesBySize == nil)
+	require.Equal(t, c.Op.String(), matchrule.ModeToString(rule.Mode))
+	require.Equal(t, c.CaseSensitive, !rule.CaseInsensitive)
+	require.Equal(t, c.Values, arrStringToArrBytes(rule.Values))
 }
 
 func genAllRules() []matchrule.Rule {
@@ -58,7 +94,6 @@ func genAllRules() []matchrule.Rule {
 						CaseInsensitive: caseSensitive,
 						Invert:          invert,
 					}
-					rule.Prepare()
 					rules = append(rules, rule)
 				}
 			}
