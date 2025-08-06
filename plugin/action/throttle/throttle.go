@@ -2,6 +2,7 @@ package throttle
 
 import (
 	"context"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -23,6 +24,7 @@ var (
 	// limiters should be shared across pipeline, so let's have a map by namespace and limiter name
 	limiters   = map[string]*limitersMap{}
 	limitersMu = &sync.RWMutex{}
+	limitFiles = make(map[string]string)
 )
 
 const (
@@ -275,6 +277,12 @@ type RedisBackendConfig struct {
 	// > ```
 	// >> If `limiter_value_field` and `limiter_distribution_field` not set, distribution will not be stored.
 	LimiterDistributionField string `json:"limiter_distribution_field" default:""` // *
+
+	// > @3@4@5@6
+	// >
+	// > The filename to store current logs limits. Limits are loaded only on initialization
+	// > > It's a `yaml` file. You can modify it manually.
+	LimitsFile string `json:"limits_file" default:""` // *
 }
 
 func (c *RedisBackendConfig) toOptions() *xredis.Options {
@@ -387,6 +395,18 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 			if p.config.RedisBackendCfg.WorkerCount < 1 {
 				p.logger.Fatalf("workers_count must be > 0, passed: %d", p.config.RedisBackendCfg.WorkerCount)
 			}
+
+			limitFilePath := filepath.Clean(p.config.RedisBackendCfg.LimitsFile)
+			if pipelineName, alreadyUsed := limitFiles[limitFilePath]; alreadyUsed {
+				p.logger.Fatalf(
+					"limits file %s is already used in pipeline %s",
+					p.config.RedisBackendCfg.LimitsFile,
+					pipelineName,
+				)
+			} else {
+				limitFiles[limitFilePath] = params.PipelineName
+			}
+
 			redisOpts = p.config.RedisBackendCfg.toOptions()
 		}
 		lmCfg := limitersMapConfig{
@@ -403,17 +423,25 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 				bucketsCount:             p.config.BucketsCount,
 				limiterValueField:        p.config.RedisBackendCfg.LimiterValueField,
 				limiterDistributionField: p.config.RedisBackendCfg.LimiterDistributionField,
+				limitsFile:               p.config.RedisBackendCfg.LimitsFile,
+				limitsFileTmp:            p.config.RedisBackendCfg.LimitsFile + ".atomic",
 			},
 			mapSizeMetric:     p.limitersMapSizeMetric,
 			limitDistrMetrics: p.limitDistrMetrics,
 		}
 		limiters[p.pipeline] = newLimitersMap(lmCfg, redisOpts)
 		if p.config.LimiterBackend == redisBackend {
+			err := limiters[p.pipeline].loadLimits()
+			if err != nil {
+				p.logger.Fatalf("can't load limits: %s", err.Error())
+			}
+
 			// run sync only once per pipeline
 			go limiters[p.pipeline].runSync(p.ctx,
 				p.config.RedisBackendCfg.WorkerCount,
 				p.config.RedisBackendCfg.SyncInterval_,
 			)
+			go limiters[p.pipeline].saveLimitsCyclic(p.ctx, 2*time.Second)
 		}
 		go limiters[p.pipeline].maintenance(p.ctx)
 	}

@@ -29,12 +29,12 @@ func newInMemoryLimiter(
 	limitDistrMetrics *limitDistributionMetrics,
 	nowFn func() time.Time,
 ) *inMemoryLimiter {
-	distSize := limit.distributions.size()
+	distSize := limit.Distributions.size()
 
 	l := &inMemoryLimiter{
 		limit: complexLimit{
-			value: limit.value,
-			kind:  limit.kind,
+			Value: limit.Value,
+			Kind:  limit.Kind,
 		},
 		buckets: newBuckets(
 			cfg.bucketsCount,
@@ -50,7 +50,7 @@ func newInMemoryLimiter(
 
 	// need a copy due to possible runtime changes (sync with redis)
 	if distSize > 0 {
-		l.limit.distributions = limit.distributions.copy()
+		l.limit.Distributions = limit.Distributions.copy()
 	}
 
 	return l
@@ -59,7 +59,7 @@ func newInMemoryLimiter(
 func (l *inMemoryLimiter) sync() {}
 
 func (l *inMemoryLimiter) isAllowed(event *pipeline.Event, ts time.Time) bool {
-	limit := atomic.LoadInt64(&l.limit.value)
+	limit := atomic.LoadInt64(&l.limit.Value)
 
 	// limit value fast check without races
 	if limit < 0 {
@@ -75,22 +75,22 @@ func (l *inMemoryLimiter) isAllowed(event *pipeline.Event, ts time.Time) bool {
 	// If the limit is given with distribution, then distributed buckets are used
 	distrIdx := 0
 	distrFieldVal := ""
-	if l.limit.distributions.isEnabled() {
+	if l.limit.Distributions.isEnabled() {
 		distrFieldVal, distrIdx, limit = l.getDistrData(index, event)
 	}
 
-	switch l.limit.kind {
+	switch l.limit.Kind {
 	case "", limitKindCount:
 		l.buckets.add(index, distrIdx, 1)
 	case limitKindSize:
 		l.buckets.add(index, distrIdx, int64(event.Size))
 	default:
-		logger.Fatalf("unknown type of the inMemoryLimiter: %q", l.limit.kind)
+		logger.Fatalf("unknown type of the inMemoryLimiter: %q", l.limit.Kind)
 	}
 
 	isAllowed := l.buckets.get(index, distrIdx) <= limit
 
-	if !isAllowed && l.limit.distributions.isEnabled() {
+	if !isAllowed && l.limit.Distributions.isEnabled() {
 		l.updateDistrMetrics(distrFieldVal, event)
 	}
 
@@ -99,8 +99,8 @@ func (l *inMemoryLimiter) isAllowed(event *pipeline.Event, ts time.Time) bool {
 
 // getDistrData returns distribution field value, index and limit
 func (l *inMemoryLimiter) getDistrData(bucketIdx int, event *pipeline.Event) (string, int, int64) {
-	fieldVal := event.Root.Dig(l.limit.distributions.field...).AsString()
-	idx, limit := l.limit.distributions.getLimit(fieldVal)
+	fieldVal := event.Root.Dig(l.limit.Distributions.Field...).AsString()
+	idx, limit := l.limit.Distributions.getLimit(fieldVal)
 
 	// The distribution index in the bucket matches the distribution value index in distributions,
 	// but is shifted by 1 because default distribution has index 0.
@@ -113,7 +113,7 @@ func (l *inMemoryLimiter) getDistrData(bucketIdx int, event *pipeline.Event) (st
 	// For default distribution check in advance that we are within the limit.
 	// If not, then try to steal reserve from the most free distribution.
 	val := int64(1)
-	if l.limit.kind == limitKindSize {
+	if l.limit.Kind == limitKindSize {
 		val = int64(event.Size)
 	}
 
@@ -125,12 +125,12 @@ func (l *inMemoryLimiter) getDistrData(bucketIdx int, event *pipeline.Event) (st
 	// Looking for a distribution with the most free space.
 	// If found, updating idx and limit - use different bucket for check allowance.
 	maxDiff := int64(-1)
-	for i, d := range l.limit.distributions.distributions {
+	for i, d := range l.limit.Distributions.Distributions {
 		curVal := l.buckets.get(bucketIdx, i+1)
-		if curDiff := d.limit - (curVal + val); curDiff > maxDiff {
+		if curDiff := d.Limit - (curVal + val); curDiff > maxDiff {
 			maxDiff = curDiff
 			idx = i + 1
-			limit = d.limit
+			limit = d.Limit
 		}
 	}
 
@@ -150,7 +150,7 @@ func (l *inMemoryLimiter) updateDistrMetrics(fieldVal string, event *pipeline.Ev
 		l.metricLabelsBuf = append(l.metricLabelsBuf, val)
 	}
 
-	switch l.limit.kind {
+	switch l.limit.Kind {
 	case "", limitKindCount:
 		l.limitDistrMetrics.EventsCount.WithLabelValues(l.metricLabelsBuf...).Inc()
 	case limitKindSize:
@@ -167,14 +167,14 @@ func (l *inMemoryLimiter) unlock() {
 }
 
 func (l *inMemoryLimiter) updateLimit(limit int64) {
-	atomic.StoreInt64(&l.limit.value, limit)
+	atomic.StoreInt64(&l.limit.Value, limit)
 }
 
 func (l *inMemoryLimiter) updateDistribution(distribution limitDistributionCfg) error {
-	if distribution.isEmpty() && l.limit.distributions.size() == 0 {
+	if distribution.isEmpty() && l.limit.Distributions.size() == 0 {
 		return nil
 	}
-	ld, err := parseLimitDistribution(distribution, atomic.LoadInt64(&l.limit.value))
+	ld, err := parseLimitDistribution(distribution, atomic.LoadInt64(&l.limit.Value))
 	if err != nil {
 		return err
 	}
@@ -183,7 +183,7 @@ func (l *inMemoryLimiter) updateDistribution(distribution limitDistributionCfg) 
 	defer l.unlock()
 
 	// recreate buckets
-	if l.limit.distributions.size() == 0 && ld.size() > 0 || l.limit.distributions.size() > 0 && ld.size() == 0 {
+	if l.limit.Distributions.size() == 0 && ld.size() > 0 || l.limit.Distributions.size() > 0 && ld.size() == 0 {
 		l.buckets = newBuckets(
 			l.buckets.getCount(),
 			ld.size()+1, // +1 because of default distribution
@@ -191,7 +191,7 @@ func (l *inMemoryLimiter) updateDistribution(distribution limitDistributionCfg) 
 		)
 	}
 
-	l.limit.distributions = ld
+	l.limit.Distributions = ld
 	return nil
 }
 
@@ -234,6 +234,10 @@ func (l *inMemoryLimiter) bucketsInterval() time.Duration {
 
 func (l *inMemoryLimiter) bucketsMinID() int {
 	return l.buckets.getMinID()
+}
+
+func (l *inMemoryLimiter) getLimit() complexLimit {
+	return l.limit
 }
 
 func (l *inMemoryLimiter) setNowFn(fn func() time.Time) {
