@@ -37,16 +37,16 @@ func parseLimitDistribution(c limitDistributionCfg, totalLimit int64) (limitDist
 
 	if len(c.Ratios) == 0 {
 		return limitDistributions{
-			field:   cfg.ParseFieldSelector(c.Field),
-			enabled: c.Enabled,
+			Field:   cfg.ParseFieldSelector(c.Field),
+			Enabled: c.Enabled,
 		}, nil
 	}
 
 	ld := limitDistributions{
-		field:         cfg.ParseFieldSelector(c.Field),
-		distributions: make([]complexDistribution, len(c.Ratios)),
-		idxByKey:      map[string]int{},
-		enabled:       c.Enabled,
+		Field:         cfg.ParseFieldSelector(c.Field),
+		Distributions: make([]complexDistribution, len(c.Ratios)),
+		IdxByKey:      map[string]int{},
+		Enabled:       c.Enabled,
 	}
 
 	var ratioSum float64
@@ -60,15 +60,15 @@ func parseLimitDistribution(c limitDistributionCfg, totalLimit int64) (limitDist
 
 		ratioSum += r.Ratio
 		for _, v := range r.Values {
-			if _, ok := ld.idxByKey[v]; ok {
+			if _, ok := ld.IdxByKey[v]; ok {
 				return ld, fmt.Errorf("value '%s' is duplicated in 'ratios' list", v)
 			}
-			ld.idxByKey[v] = i
+			ld.IdxByKey[v] = i
 		}
 
-		ld.distributions[i] = complexDistribution{
-			ratio: r.Ratio,
-			limit: int64(math.Round(r.Ratio * float64(totalLimit))),
+		ld.Distributions[i] = complexDistribution{
+			Ratio: r.Ratio,
+			Limit: int64(math.Round(r.Ratio * float64(totalLimit))),
 		}
 	}
 
@@ -78,61 +78,61 @@ func parseLimitDistribution(c limitDistributionCfg, totalLimit int64) (limitDist
 	}
 
 	defRatio := math.Round(dif*100) / 100
-	ld.defDistribution = complexDistribution{
-		ratio: defRatio,
-		limit: int64(math.Round(defRatio * float64(totalLimit))),
+	ld.DefDistribution = complexDistribution{
+		Ratio: defRatio,
+		Limit: int64(math.Round(defRatio * float64(totalLimit))),
 	}
 
 	return ld, nil
 }
 
 type complexDistribution struct {
-	ratio float64 // between [0.0;1.0]
-	limit int64   // distributed limit = total limit * ratio
+	Ratio float64 `yaml:"ratio"` // between [0.0;1.0]
+	Limit int64   `yaml:"limit"` // distributed limit = total limit * ratio
 }
 
 // limitDistributions is not thread-safe
 type limitDistributions struct {
-	field           []string       // event field, based on the values of which limits are distributed
-	idxByKey        map[string]int // relationship between the field value and index in a distributions
-	distributions   []complexDistribution
-	defDistribution complexDistribution // default distribution if there is no field value in idxByKey map
-	enabled         bool
+	Field           []string              `yaml:"field"`    // event field, based on the values of which limits are distributed
+	IdxByKey        map[string]int        `yaml:"idxByKey"` // relationship between the field value and index in a distributions
+	Distributions   []complexDistribution `yaml:"values"`
+	DefDistribution complexDistribution   `yaml:"default"` // default distribution if there is no field value in idxByKey map
+	Enabled         bool                  `yaml:"enabled"`
 }
 
 func (ld *limitDistributions) isEnabled() bool {
-	return ld.enabled && ld.size() > 0
+	return ld.Enabled && ld.size() > 0
 }
 
 func (ld *limitDistributions) size() int {
-	return len(ld.distributions)
+	return len(ld.Distributions)
 }
 
 // getLimit returns (index, distribution limit) by key or (-1, default distribution limit) otherwise
 func (ld *limitDistributions) getLimit(key string) (int, int64) {
-	if idx, ok := ld.idxByKey[key]; ok {
-		return idx, ld.distributions[idx].limit
+	if idx, ok := ld.IdxByKey[key]; ok {
+		return idx, ld.Distributions[idx].Limit
 	}
-	return -1, ld.defDistribution.limit
+	return -1, ld.DefDistribution.Limit
 }
 
 func (ld *limitDistributions) copy() limitDistributions {
-	fieldCopy := make([]string, len(ld.field))
-	copy(fieldCopy, ld.field)
+	fieldCopy := make([]string, len(ld.Field))
+	copy(fieldCopy, ld.Field)
 
-	distributionsCopy := make([]complexDistribution, len(ld.distributions))
-	copy(distributionsCopy, ld.distributions)
+	distributionsCopy := make([]complexDistribution, len(ld.Distributions))
+	copy(distributionsCopy, ld.Distributions)
 
-	idxByKeyCopy := make(map[string]int, len(ld.idxByKey))
-	for k, v := range ld.idxByKey {
+	idxByKeyCopy := make(map[string]int, len(ld.IdxByKey))
+	for k, v := range ld.IdxByKey {
 		idxByKeyCopy[k] = v
 	}
 
 	return limitDistributions{
-		field:           fieldCopy,
-		distributions:   distributionsCopy,
-		idxByKey:        idxByKeyCopy,
-		defDistribution: ld.defDistribution,
-		enabled:         ld.enabled,
+		Field:           fieldCopy,
+		Distributions:   distributionsCopy,
+		IdxByKey:        idxByKeyCopy,
+		DefDistribution: ld.DefDistribution,
+		Enabled:         ld.Enabled,
 	}
 }

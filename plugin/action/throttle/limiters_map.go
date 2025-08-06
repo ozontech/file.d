@@ -4,13 +4,18 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/rand/v2"
+	"os"
+	"strconv"
 	"sync"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
+	"gopkg.in/yaml.v2"
 
+	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/xredis"
 )
@@ -23,6 +28,7 @@ const (
 type limiter interface {
 	isAllowed(event *pipeline.Event, ts time.Time) bool
 	sync()
+	getLimit() complexLimit
 
 	// setNowFn is used for testing purposes
 	setNowFn(fn func() time.Time)
@@ -52,6 +58,8 @@ type limiterConfig struct {
 	bucketsCount             int
 	limiterValueField        string
 	limiterDistributionField string
+	limitsFile               string
+	limitsFileTmp            string
 }
 
 // limitersMapConfig configuration of limiters map.
@@ -73,6 +81,7 @@ type limitersMapConfig struct {
 type limitersMap struct {
 	ctx              context.Context
 	lims             map[string]*limiterWithGen
+	loadedLimits     map[string]complexLimit
 	mu               *sync.RWMutex
 	activeTasks      atomic.Uint32
 	curGen           int64
@@ -93,14 +102,15 @@ type limitersMap struct {
 func newLimitersMap(lmCfg limitersMapConfig, redisOpts *xredis.Options) *limitersMap {
 	nowTs := time.Now().UnixMicro()
 	lm := &limitersMap{
-		ctx:         lmCfg.ctx,
-		lims:        make(map[string]*limiterWithGen),
-		mu:          &sync.RWMutex{},
-		activeTasks: *atomic.NewUint32(0),
-		curGen:      nowTs,
-		limitersExp: lmCfg.limitersExpiration.Microseconds(),
-		logger:      lmCfg.logger,
-		nowFn:       time.Now,
+		ctx:          lmCfg.ctx,
+		lims:         make(map[string]*limiterWithGen),
+		loadedLimits: make(map[string]complexLimit),
+		mu:           &sync.RWMutex{},
+		activeTasks:  *atomic.NewUint32(0),
+		curGen:       nowTs,
+		limitersExp:  lmCfg.limitersExpiration.Microseconds(),
+		logger:       lmCfg.logger,
+		nowFn:        time.Now,
 
 		limiterCfg: lmCfg.limiterCfg,
 
@@ -261,10 +271,104 @@ func (l *limitersMap) getOrAdd(throttleKey, keyLimitOverride string, limiterBuf 
 		lim.gen.Store(l.curGen)
 		return lim, limiterBuf
 	}
+
+	loadedLimit, has := l.loadedLimits[key]
+	if has {
+		rule.updateLimit(loadedLimit)
+	}
+
 	newLim := l.newLimiter(throttleKey, keyLimitOverride, rule)
 	lim = newLimiterWithGen(newLim, l.curGen)
 	l.lims[key] = lim
 	return lim, limiterBuf
+}
+
+func (l *limitersMap) saveLimitsCyclic(ctx context.Context, duration time.Duration) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+			l.saveLimits()
+			l.logger.Info("!!! LIMITS SAVED !!!")
+			time.Sleep(duration)
+		}
+	}
+}
+
+func (l *limitersMap) saveLimits() {
+	tmpWithRandom := append(make([]byte, 0), l.limiterCfg.limitsFileTmp...)
+	tmpWithRandom = append(tmpWithRandom, '.')
+	tmpWithRandom = strconv.AppendUint(tmpWithRandom, rand.Uint64(), 8)
+
+	file, err := os.OpenFile(string(tmpWithRandom), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0o600)
+	if err != nil {
+		l.logger.Errorf("can't open temp limits file %s, %s", l.limiterCfg.limitsFileTmp, err.Error())
+		return
+	}
+	defer func() {
+		err := file.Close()
+		if err != nil {
+			l.logger.Errorf("can't close limits file %s, %s", l.limiterCfg.limitsFileTmp, err.Error())
+		}
+	}()
+
+	limitsToSave := make(map[string]complexLimit)
+	l.mu.RLock()
+	for limiterKey, limiter := range l.lims {
+		limitsToSave[limiterKey] = limiter.getLimit()
+	}
+	l.mu.RUnlock()
+
+	buf, err := yaml.Marshal(limitsToSave)
+	if err != nil {
+		l.logger.Errorf("can't marshall limits map into yaml: %s", err.Error())
+	}
+
+	_, err = file.Write(buf)
+	if err != nil {
+		l.logger.Errorf("can't write limits file %s, %s", l.limiterCfg.limitsFileTmp, err.Error())
+	}
+
+	err = file.Sync()
+	if err != nil {
+		l.logger.Errorf("can't sync limits file %s, %s", l.limiterCfg.limitsFileTmp, err.Error())
+	}
+
+	err = os.Rename(string(tmpWithRandom), l.limiterCfg.limitsFile)
+	if err != nil {
+		logger.Errorf("failed renaming temporary limits file to current: %s", err.Error())
+	}
+}
+
+func (l *limitersMap) loadLimits() error {
+	if l.limiterCfg.limitsFile == "" {
+		return nil
+	}
+
+	info, err := os.Stat(l.limiterCfg.limitsFile)
+	if os.IsNotExist(err) {
+		return fmt.Errorf("file %s is not exist", l.limiterCfg.limitsFile)
+	}
+
+	if info.IsDir() {
+		return fmt.Errorf("file %s is dir", l.limiterCfg.limitsFile)
+	}
+
+	content, err := os.ReadFile(l.limiterCfg.limitsFile)
+	if err != nil {
+		return fmt.Errorf("can't read limits file: %s", err.Error())
+	}
+
+	limitsToLoad := make(map[string]complexLimit)
+	err = yaml.Unmarshal(content, limitsToLoad)
+	if err != nil {
+		return fmt.Errorf("can't unmarshall limits file: %s", err.Error())
+	}
+
+	l.loadedLimits = limitsToLoad
+
+	return nil
 }
 
 // setNowFn is used for testing purposes. Sets custom now func.
