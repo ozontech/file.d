@@ -276,6 +276,21 @@ func (l *redisLimiter) updateKeyLimit() error {
 	return nil
 }
 
+func (l *redisLimiter) getLimit() complexLimit {
+	// 1) key string
+	// 2) value int64
+	// 3) kind string
+	// 4) distributions:
+	// field: ["log", "level"]
+	// [
+	// {"ratio":0.4,"values":["val1","val2"]},
+	// {"ratio":0.5,"values":["val3"]}
+	// ],
+	// "enabled":false}}`))
+
+	return l.totalLimiter.getLimit()
+}
+
 func (l *redisLimiter) setNowFn(fn func() time.Time) {
 	l.incrementLimiter.setNowFn(fn)
 	l.totalLimiter.setNowFn(fn)

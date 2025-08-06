@@ -7,9 +7,9 @@ import (
 )
 
 type complexLimit struct {
-	value         int64
-	kind          string
-	distributions limitDistributions
+	Value         int64              `yaml:"value"`
+	Kind          string             `yaml:"kind"`
+	Distributions limitDistributions `yaml:"distributions"`
 }
 
 type rule struct {
@@ -54,4 +54,8 @@ func (r *rule) isMatch(event *pipeline.Event) bool {
 	}
 
 	return true
+}
+
+func (r *rule) updateLimit(limit complexLimit) {
+	r.limit = limit
 }
