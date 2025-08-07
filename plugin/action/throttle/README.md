@@ -227,5 +227,18 @@ Distribution object example:
 
 <br>
 
+**`limits_file`** *`string`* 
+
+The filename to store current log limits. Limits are loaded only on initialization
+> It's a `json` file. You can modify it manually. But the limit from the file will disappear if redis is available and it has a different value for this limit
+
+<br>
+
+**`limits_save_interval`** *`cfg.Duration`* *`default=3s`* 
+
+Defines the interval between each saving of log limits in file
+
+<br>
+
 
 <br>*Generated using [__insane-doc__](https://github.com/vitkovskii/insane-doc)*
