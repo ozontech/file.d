@@ -291,7 +291,7 @@ func (p *Plugin) Out(event *pipeline.Event) {
 }
 
 func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
-	p.sendErrorMetric = ctl.RegisterCounter("output_kafka_send_errors", "Total Kafka send errors")
+	p.sendErrorMetric = ctl.RegisterCounter("output_kafka_send_errors_total", "Total Kafka send errors")
 }
 
 func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) error {
