@@ -316,9 +316,9 @@ func (l *limitersMap) saveLimits() {
 		}
 	}()
 
-	var limitsToSave []limitCfg
-	var keys []string
 	l.mu.RLock()
+	keys := make([]string, 0, len(l.lims))
+	limitsToSave := make([]limitCfg, 0, len(l.lims))
 	for key, limiter := range l.lims {
 		limitsToSave = append(limitsToSave, limiter.getLimitCfg())
 		keys = append(keys, key)
@@ -387,7 +387,7 @@ func (l *limitersMap) loadLimits() error {
 	for key, innerMap := range m {
 		throttleKey := key[strings.IndexByte(key, ':')+1:]
 
-		// innerMap lenght == 1
+		// innerMap length == 1
 		for keyLimitOverride, msg := range innerMap {
 			data, err := msg.MarshalJSON()
 			if err != nil {

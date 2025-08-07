@@ -280,9 +280,15 @@ type RedisBackendConfig struct {
 
 	// > @3@4@5@6
 	// >
-	// > The filename to store current logs limits. Limits are loaded only on initialization
-	// > > It's a `yaml` file. You can modify it manually.
+	// > The filename to store current log limits. Limits are loaded only on initialization
+	// > > It's a `json` file. You can modify it manually. But the limit from the file will disappear if redis is available and it has a different value for this limit
 	LimitsFile string `json:"limits_file" default:""` // *
+
+	// > @3@4@5@6
+	// >
+	// > Defines the interval between each saving of log limits in file
+	LimitsSaveInterval  cfg.Duration `json:"limits_save_interval" parse:"duration" default:"3s"` // *
+	LimitsSaveInterval_ time.Duration
 }
 
 func (c *RedisBackendConfig) toOptions() *xredis.Options {
