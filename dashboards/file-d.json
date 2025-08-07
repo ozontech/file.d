@@ -791,7 +791,7 @@
             "uid": "000000013"
           },
           "editorMode": "code",
-          "expr": "sum(rate(file_d_pipeline_${pipeline}_antispam_exceptions{}[$__rate_interval])) by (name)",
+          "expr": "sum(rate(file_d_pipeline_${pipeline}_antispam_exceptions_total{}[$__rate_interval])) by (name)",
           "instant": false,
           "interval": "",
           "legendFormat": "{{name}}",
