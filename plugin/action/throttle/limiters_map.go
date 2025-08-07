@@ -1,19 +1,21 @@
 package throttle
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math/rand/v2"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
-	"gopkg.in/yaml.v2"
 
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/pipeline"
@@ -28,7 +30,7 @@ const (
 type limiter interface {
 	isAllowed(event *pipeline.Event, ts time.Time) bool
 	sync()
-	getLimit() complexLimit
+	getLimitCfg() limitCfg
 
 	// setNowFn is used for testing purposes
 	setNowFn(fn func() time.Time)
@@ -62,6 +64,15 @@ type limiterConfig struct {
 	limitsFileTmp            string
 }
 
+type limitCfg struct {
+	Key               string
+	ValField          string
+	DistributionField string
+	Kind              string
+	Limit             int64
+	Distribution      limitDistributionCfg
+}
+
 // limitersMapConfig configuration of limiters map.
 type limitersMapConfig struct {
 	ctx                context.Context
@@ -81,7 +92,6 @@ type limitersMapConfig struct {
 type limitersMap struct {
 	ctx              context.Context
 	lims             map[string]*limiterWithGen
-	loadedLimits     map[string]complexLimit
 	mu               *sync.RWMutex
 	activeTasks      atomic.Uint32
 	curGen           int64
@@ -102,15 +112,14 @@ type limitersMap struct {
 func newLimitersMap(lmCfg limitersMapConfig, redisOpts *xredis.Options) *limitersMap {
 	nowTs := time.Now().UnixMicro()
 	lm := &limitersMap{
-		ctx:          lmCfg.ctx,
-		lims:         make(map[string]*limiterWithGen),
-		loadedLimits: make(map[string]complexLimit),
-		mu:           &sync.RWMutex{},
-		activeTasks:  *atomic.NewUint32(0),
-		curGen:       nowTs,
-		limitersExp:  lmCfg.limitersExpiration.Microseconds(),
-		logger:       lmCfg.logger,
-		nowFn:        time.Now,
+		ctx:         lmCfg.ctx,
+		lims:        make(map[string]*limiterWithGen),
+		mu:          &sync.RWMutex{},
+		activeTasks: *atomic.NewUint32(0),
+		curGen:      nowTs,
+		limitersExp: lmCfg.limitersExpiration.Microseconds(),
+		logger:      lmCfg.logger,
+		nowFn:       time.Now,
 
 		limiterCfg: lmCfg.limiterCfg,
 
@@ -272,11 +281,6 @@ func (l *limitersMap) getOrAdd(throttleKey, keyLimitOverride string, limiterBuf 
 		return lim, limiterBuf
 	}
 
-	loadedLimit, has := l.loadedLimits[key]
-	if has {
-		rule.updateLimit(loadedLimit)
-	}
-
 	newLim := l.newLimiter(throttleKey, keyLimitOverride, rule)
 	lim = newLimiterWithGen(newLim, l.curGen)
 	l.lims[key] = lim
@@ -290,7 +294,6 @@ func (l *limitersMap) saveLimitsCyclic(ctx context.Context, duration time.Durati
 			return
 		default:
 			l.saveLimits()
-			l.logger.Info("!!! LIMITS SAVED !!!")
 			time.Sleep(duration)
 		}
 	}
@@ -313,16 +316,30 @@ func (l *limitersMap) saveLimits() {
 		}
 	}()
 
-	limitsToSave := make(map[string]complexLimit)
+	var limitsToSave []limitCfg
+	var keys []string
 	l.mu.RLock()
-	for limiterKey, limiter := range l.lims {
-		limitsToSave[limiterKey] = limiter.getLimit()
+	for key, limiter := range l.lims {
+		limitsToSave = append(limitsToSave, limiter.getLimitCfg())
+		keys = append(keys, key)
 	}
 	l.mu.RUnlock()
 
-	buf, err := yaml.Marshal(limitsToSave)
+	limitsToSaveFormatted := make(map[string]map[string]map[string]any)
+	for i, limit := range limitsToSave {
+		key := keys[i]
+		limitsToSaveFormatted[key] = map[string]map[string]any{
+			limit.Key: map[string]any{
+				limit.ValField:          limit.Limit,
+				limit.DistributionField: limit.Distribution,
+				"kind":                  limit.Kind,
+			},
+		}
+	}
+
+	buf, err := json.MarshalIndent(limitsToSaveFormatted, "", "  ")
 	if err != nil {
-		l.logger.Errorf("can't marshall limits map into yaml: %s", err.Error())
+		l.logger.Errorf("can't marshall limits map into json: %s", err.Error())
 	}
 
 	_, err = file.Write(buf)
@@ -355,18 +372,63 @@ func (l *limitersMap) loadLimits() error {
 		return fmt.Errorf("file %s is dir", l.limiterCfg.limitsFile)
 	}
 
-	content, err := os.ReadFile(l.limiterCfg.limitsFile)
+	data, err := os.ReadFile(l.limiterCfg.limitsFile)
 	if err != nil {
-		return fmt.Errorf("can't read limits file: %s", err.Error())
+		return fmt.Errorf("can't read limits file: %w", err)
 	}
 
-	limitsToLoad := make(map[string]complexLimit)
-	err = yaml.Unmarshal(content, limitsToLoad)
-	if err != nil {
-		return fmt.Errorf("can't unmarshall limits file: %s", err.Error())
+	var m map[string]map[string]json.RawMessage
+
+	reader := bytes.NewReader(data)
+	if err = json.NewDecoder(reader).Decode(&m); err != nil {
+		return fmt.Errorf("can't unmarshal map: %w", err)
 	}
 
-	l.loadedLimits = limitsToLoad
+	for key, innerMap := range m {
+		throttleKey := key[strings.IndexByte(key, ':')+1:]
+
+		// innerMap lenght == 1
+		for keyLimitOverride, msg := range innerMap {
+			data, err := msg.MarshalJSON()
+			if err != nil {
+				return fmt.Errorf("can't marshall json value: %w", err)
+			}
+
+			limit, distrCfg, err := decodeKeyLimitValue(data, l.limiterCfg.limiterValueField, l.limiterCfg.limiterDistributionField)
+			if err != nil {
+				return fmt.Errorf("can't decode redis json value: %w", err)
+			}
+
+			var temp map[string]json.RawMessage
+			var kind string
+			if err := json.Unmarshal(msg, &temp); err != nil {
+				return fmt.Errorf("can't unmarshall json value: %w", err)
+			}
+
+			if err := json.Unmarshal(temp["kind"], &kind); err != nil {
+				return fmt.Errorf("can't unmarshall json value: %w", err)
+			}
+
+			distr, err := parseLimitDistribution(distrCfg, limit)
+			if err != nil {
+				return fmt.Errorf("can't parse limit_distribution: %w", err)
+			}
+
+			newLim := newRedisLimiter(
+				l.limiterCfg,
+				throttleKey, keyLimitOverride,
+				&complexLimit{
+					value:         limit,
+					kind:          kind,
+					distributions: distr,
+				},
+				l.limitDistrMetrics,
+				l.nowFn,
+			)
+			lim := newLimiterWithGen(newLim, l.curGen)
+			l.lims[key] = lim
+		}
+	}
 
 	return nil
 }

@@ -276,19 +276,22 @@ func (l *redisLimiter) updateKeyLimit() error {
 	return nil
 }
 
-func (l *redisLimiter) getLimit() complexLimit {
-	// 1) key string
-	// 2) value int64
-	// 3) kind string
-	// 4) distributions:
-	// field: ["log", "level"]
-	// [
-	// {"ratio":0.4,"values":["val1","val2"]},
-	// {"ratio":0.5,"values":["val3"]}
-	// ],
-	// "enabled":false}}`))
+func (l *redisLimiter) getLimitCfg() limitCfg {
+	l.totalLimiter.lock()
+	distrCopy := l.totalLimiter.limit.distributions.copy()
+	kind := l.totalLimiter.limit.kind
+	l.totalLimiter.unlock()
 
-	return l.totalLimiter.getLimit()
+	limit := limitCfg{
+		Key:               l.keyLimit,
+		ValField:          l.valField,
+		DistributionField: l.distributionField,
+		Kind:              kind,
+		Limit:             l.totalLimiter.getLimit(),
+		Distribution:      distrCopy.getLimitDistributionsCfg(),
+	}
+
+	return limit
 }
 
 func (l *redisLimiter) setNowFn(fn func() time.Time) {
