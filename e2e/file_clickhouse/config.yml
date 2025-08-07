@@ -21,11 +21,59 @@ pipelines:
         override: true
       - type: debug
     output:
+      deadqueue:
+        type: clickhouse
+        addresses:
+          - 127.0.0.1:9001
+        table: test_table_insert
+        insert_timeout: 1m
+        columns:
+          - name: c1
+            type: String
+          - name: c2
+            type: Int8
+          - name: c3
+            type: Int16
+          - name: c4
+            type: Nullable(Int16)
+          - name: c5
+            type: Nullable(String)
+          - name: level
+            type: Enum8('error'=1, 'warn'=2, 'info'=3, 'debug'=4)
+          - name: ipv4
+            type: Nullable(IPv4)
+          - name: ipv6
+            type: Nullable(IPv6)
+          - name: ts
+            type: DateTime
+          - name: ts_with_tz
+            type: DateTime('Europe/Moscow')
+          - name: ts64
+            type: DateTime64(3, 'UTC')
+          - name: ts64_auto
+            type: DateTime64(9, 'UTC')
+          - name: ts_rfc3339nano
+            type: DateTime64(9)
+          - name: f32
+            type: Float32
+          - name: f64
+            type: Float64
+          - name: lc_str
+            type: LowCardinality(String)
+          - name: str_arr
+            type: Array(String)
+          - name: map_str_str
+            type: Map(String,String)
+          - name: uuid
+            type: UUID
+          - name: uuid_nullable
+            type: Nullable(UUID)
       type: clickhouse
       addresses:
         - 127.0.0.1:9001
-      table: test_table_insert
+      table: test_table_insert_not_exists
       insert_timeout: 1m
+      retry: 0
       columns:
         - name: c1
           type: String
