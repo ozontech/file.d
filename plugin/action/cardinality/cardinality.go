@@ -7,7 +7,10 @@ import (
 
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
+	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/prometheus/client_golang/prometheus"
+	"go.uber.org/zap"
 )
 
 type Plugin struct {
@@ -15,6 +18,9 @@ type Plugin struct {
 	config *Config
 	keys   []string
 	fields []string
+	logger *zap.Logger
+
+	cardinalityDiscardMetric *prometheus.GaugeVec
 }
 
 type Config struct {
@@ -36,8 +42,39 @@ func factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 	return &Plugin{}, &Config{}
 }
 
+func (p *Plugin) makeMetric(ctl *metric.Ctl, name, help string, labels ...string) *prometheus.GaugeVec {
+	if name == "" {
+		return nil
+	}
+
+	uniq := make(map[string]struct{})
+	labelNames := make([]string, 0, len(labels))
+	for _, label := range labels {
+		if label == "" {
+			p.logger.Fatal("empty label name")
+		}
+		if _, ok := uniq[label]; ok {
+			p.logger.Fatal("metric labels must be unique")
+		}
+		uniq[label] = struct{}{}
+
+		labelNames = append(labelNames, label)
+	}
+
+	return ctl.RegisterGaugeVec(name, help, labelNames...)
+}
+
+func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
+	p.cardinalityDiscardMetric = p.makeMetric(ctl,
+		"cardinality_limit",
+		"Number of ...",
+		p.keys...,
+	)
+}
+
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginParams) {
 	p.config = config.(*Config)
+	p.logger = params.Logger.Desugar()
 
 	var err error
 	p.cache, err = NewCache(int64(p.config.Limit*10), p.config.TTL_)
@@ -58,6 +95,8 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 			p.fields = append(p.fields, cfg.ParseFieldSelector(string(fs))[0])
 		}
 	}
+
+	p.registerMetrics(params.MetricCtl)
 }
 
 func (p *Plugin) Stop() {
@@ -83,9 +122,15 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	value := mapToStringSorted(cacheKey, cacheValue)
 	p.cache.Set(value)
 
-	if p.cache.CountPrefix(key) > p.config.Limit {
+	keysCount := p.cache.CountPrefix(key)
+
+	labelsValues := make([]string, 0, len(p.keys))
+	for _, key := range p.keys {
+		labelsValues = append(labelsValues, cacheKey[key])
+	}
+	p.cardinalityDiscardMetric.WithLabelValues(labelsValues...).Set(float64(keysCount))
+	if keysCount > p.config.Limit {
 		return pipeline.ActionDiscard
-		// TODO: add metrics
 	} else {
 		return pipeline.ActionPass
 	}

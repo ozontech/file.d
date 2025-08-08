@@ -39,16 +39,23 @@ func NewCache(maxItems int64, ttl time.Duration) (*Cache, error) {
 
 // Set adds an item to cache with TTL and updates prefix counts
 func (c *Cache) Set(key string) bool {
-	// Set item in Ristretto with TTL
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	// Check if key already exists
+	if _, exists := c.rc.Get(key); exists {
+		return true // Existing key, do nothing
+	}
+
+	// Set in cache
 	success := c.rc.SetWithTTL(key, "1", 1, c.ttl)
 	if !success {
 		return false
 	}
 
-	// Update prefix trie
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	// Only update trie if this is a NEW key
 	c.updateTrie(key, 1)
+
 	return true
 }
 
