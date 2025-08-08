@@ -403,7 +403,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 			}
 
 			limitFilePath := filepath.Clean(p.config.RedisBackendCfg.LimitsFile)
-			if pipelineName, alreadyUsed := limitFiles[limitFilePath]; alreadyUsed {
+			if pipelineName, alreadyUsed := limitFiles[limitFilePath]; alreadyUsed && p.config.RedisBackendCfg.LimitsFile != "" {
 				p.logger.Fatalf(
 					"limits file %s is already used in pipeline %s",
 					p.config.RedisBackendCfg.LimitsFile,
@@ -430,24 +430,26 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 				limiterValueField:        p.config.RedisBackendCfg.LimiterValueField,
 				limiterDistributionField: p.config.RedisBackendCfg.LimiterDistributionField,
 				limitsFile:               p.config.RedisBackendCfg.LimitsFile,
-				limitsFileTmp:            p.config.RedisBackendCfg.LimitsFile + ".atomic",
 			},
 			mapSizeMetric:     p.limitersMapSizeMetric,
 			limitDistrMetrics: p.limitDistrMetrics,
 		}
 		limiters[p.pipeline] = newLimitersMap(lmCfg, redisOpts)
 		if p.config.LimiterBackend == redisBackend {
-			err := limiters[p.pipeline].loadLimits()
-			if err != nil {
-				p.logger.Fatalf("can't load limits: %s", err.Error())
-			}
-
 			// run sync only once per pipeline
 			go limiters[p.pipeline].runSync(p.ctx,
 				p.config.RedisBackendCfg.WorkerCount,
 				p.config.RedisBackendCfg.SyncInterval_,
 			)
-			go limiters[p.pipeline].saveLimitsCyclic(p.ctx, 2*time.Second)
+
+			if lmCfg.limiterCfg.limitsFile != "" {
+				err := limiters[p.pipeline].loadLimits()
+				if err != nil {
+					p.logger.Fatalf("can't load limits: %s", err.Error())
+				}
+
+				go limiters[p.pipeline].saveLimitsCyclic(p.ctx, p.config.RedisBackendCfg.LimitsSaveInterval_)
+			}
 		}
 		go limiters[p.pipeline].maintenance(p.ctx)
 	}
