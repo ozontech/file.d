@@ -3,6 +3,8 @@ package throttle
 import (
 	"fmt"
 	"math/rand"
+	"os"
+	"path"
 	"strings"
 	"sync"
 	"testing"
@@ -14,6 +16,12 @@ import (
 
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/test"
+)
+
+const (
+	limitsDir   = ""
+	limitsFile  = "throttle_limits.json"
+	limitsFile2 = "throttle_limits_another_pipeline.json"
 )
 
 type testConfig struct {
@@ -29,12 +37,29 @@ var formats = []string{
 	`{"time":"%s","k8s_ns":"not_matched","k8s_pod":"pod_3"}`,
 }
 
+func createLimitsFile(data string) string {
+	file, err := os.Create(path.Join(limitsDir, limitsFile))
+	if err != nil {
+		panic(err.Error())
+	}
+
+	_, err = file.Write([]byte(data))
+	if err != nil {
+		panic(err.Error())
+	}
+
+	return file.Name()
+}
+
 func throttleMapsCleanup() {
 	limitersMu.Lock()
 	for k := range limiters {
 		delete(limiters, k)
 	}
 	limitersMu.Unlock()
+	for k := range limitFiles {
+		delete(limitFiles, k)
+	}
 }
 
 func (c *testConfig) runPipeline() {
@@ -223,6 +248,60 @@ func TestMixedThrottle(t *testing.T) {
 	})
 }
 
+var data string = `
+{
+  "a:another": {
+    "PIPELINENAME__throttle_key_another_limit": {
+      "distribution": {
+        "field": "level",
+        "ratios": [
+          {
+            "ratio": 0.5,
+            "values": [
+              "error"
+            ]
+          },
+          {
+            "ratio": 0.3,
+            "values": [
+              "warn",
+              "info"
+            ]
+          }
+        ],
+        "enabled": true
+      },
+      "kind": "count",
+      "max_pod_log_count": 3000
+    }
+  },
+  "a:default": {
+    "PIPELINENAME__throttle_key_default_limit": {
+      "distribution": {
+        "field": "level",
+        "ratios": [
+          {
+            "ratio": 0.3,
+            "values": [
+              "warn",
+              "info"
+            ]
+          },
+          {
+            "ratio": 0.5,
+            "values": [
+              "error"
+            ]
+          }
+        ],
+        "enabled": true
+      },
+      "kind": "count",
+      "max_pod_log_count": 3000
+    }
+  }
+}`
+
 func TestRedisThrottle(t *testing.T) {
 	s, err := miniredis.Run()
 	require.NoError(t, err)
@@ -270,8 +349,7 @@ func TestRedisThrottle(t *testing.T) {
 		`{"time":"%s","k8s_ns":"ns_2","k8s_pod":"pod_1"}`,
 		`{"time":"%s","k8s_ns":"not_matched","k8s_pod":"pod_1"}`,
 	}
-
-	for i := 0; i < eventsTotal; i++ {
+	for i := range eventsTotal {
 		json := fmt.Sprintf(events[i], time.Now().Format(time.RFC3339Nano))
 
 		input.In(10, sourceNames[rand.Int()%len(sourceNames)], test.NewOffset(0), []byte(json))
