@@ -1,4 +1,4 @@
-package doif
+package do_if
 
 import (
 	"errors"
@@ -10,7 +10,7 @@ import (
 )
 
 /*{ do-if-len-cmp-op-node
-DoIf length comparison op node is considered to always be a leaf in the DoIf tree like DoIf field op node.
+DoIf length comparison op node is considered to always be a leaf in the DoIf tree like DoIf string op node.
 It contains operation that compares field length in bytes or array length (for array fields) with certain value.
 
 Params:
@@ -96,7 +96,7 @@ type lenCmpOpNode struct {
 	cmpValue  int
 }
 
-func NewLenCmpOpNode(op string, field string, cmpOp string, cmpValue int) (Node, error) {
+func newLenCmpOpNode(op string, field string, cmpOp string, cmpValue int) (Node, error) {
 	var lenCmpOp lenCmpOpType
 	switch op {
 	case byteLenCmpOpTag:
@@ -125,7 +125,7 @@ func NewLenCmpOpNode(op string, field string, cmpOp string, cmpValue int) (Node,
 	}, nil
 }
 
-func (n *lenCmpOpNode) Type() NodeType {
+func (n *lenCmpOpNode) Type() nodeType {
 	return NodeLengthCmpOp
 }
 
@@ -174,7 +174,7 @@ func getNodeBytesSize(node *insaneJSON.Node) int {
 	return size
 }
 
-func (n *lenCmpOpNode) Check(eventRoot *insaneJSON.Root) bool {
+func (n *lenCmpOpNode) checkEvent(eventRoot *insaneJSON.Root) bool {
 	value := 0
 
 	switch n.lenCmpOp {
@@ -201,6 +201,10 @@ func (n *lenCmpOpNode) Check(eventRoot *insaneJSON.Root) bool {
 	}
 
 	return n.cmpOp.compare(value, n.cmpValue)
+}
+
+func (n *lenCmpOpNode) CheckRaw(event []byte, sourceName []byte, metadata map[string]string) bool {
+	panic("not impl")
 }
 
 func (n *lenCmpOpNode) isEqualTo(n2 Node, _ int) error {

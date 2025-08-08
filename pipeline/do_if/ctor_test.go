@@ -1,9 +1,7 @@
-package doif
+package do_if
 
 import (
 	"bytes"
-	"errors"
-	"fmt"
 	"testing"
 	"time"
 
@@ -11,74 +9,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-type doIfTreeNode struct {
-	fieldOp       string
-	fieldName     string
-	caseSensitive bool
-	values        [][]byte
-
-	logicalOp string
-	operands  []*doIfTreeNode
-
-	lenCmpOp string
-	cmpOp    string
-	cmpValue int
-
-	tsCmpOp            bool
-	tsFormat           string
-	tsCmpValChangeMode string
-	tsCmpValue         time.Time
-	tsCmpValueShift    time.Duration
-	tsUpdateInterval   time.Duration
-
-	checkTypeOp bool
-}
-
-// nolint:gocritic
-func buildDoIfTree(node *doIfTreeNode) (Node, error) {
-	switch {
-	case node.fieldOp != "":
-		return NewFieldOpNode(
-			node.fieldOp,
-			node.fieldName,
-			node.caseSensitive,
-			node.values,
-		)
-	case node.logicalOp != "":
-		operands := make([]Node, 0)
-		for _, operandNode := range node.operands {
-			operand, err := buildDoIfTree(operandNode)
-			if err != nil {
-				return nil, fmt.Errorf("failed to build tree: %w", err)
-			}
-			operands = append(operands, operand)
-		}
-		return NewLogicalNode(
-			node.logicalOp,
-			operands,
-		)
-	case node.lenCmpOp != "":
-		return NewLenCmpOpNode(node.lenCmpOp, node.fieldName, node.cmpOp, node.cmpValue)
-	case node.tsCmpOp:
-		return NewTsCmpOpNode(
-			node.fieldName,
-			node.tsFormat,
-			node.cmpOp,
-			node.tsCmpValChangeMode,
-			node.tsCmpValue,
-			node.tsCmpValueShift,
-			node.tsUpdateInterval,
-		)
-	case node.checkTypeOp:
-		return NewCheckTypeOpNode(
-			node.fieldName,
-			node.values,
-		)
-	default:
-		return nil, errors.New("unknown type of node")
-	}
-}
 
 func Test_extractDoIfChecker(t *testing.T) {
 	type args struct {
@@ -88,7 +18,7 @@ func Test_extractDoIfChecker(t *testing.T) {
 	tests := []struct {
 		name    string
 		args    args
-		want    *doIfTreeNode
+		want    *treeNode
 		wantErr bool
 	}{
 		{
@@ -160,20 +90,20 @@ func Test_extractDoIfChecker(t *testing.T) {
 		}
 						`,
 			},
-			want: &doIfTreeNode{
+			want: &treeNode{
 				logicalOp: "not",
-				operands: []*doIfTreeNode{
+				operands: []treeNode{
 					{
 						logicalOp: "and",
-						operands: []*doIfTreeNode{
+						operands: []treeNode{
 							{
-								fieldOp:       "equal",
+								stringOp:      "equal",
 								fieldName:     "service",
 								values:        [][]byte{nil, []byte("")},
 								caseSensitive: false,
 							},
 							{
-								fieldOp:       "prefix",
+								stringOp:      "prefix",
 								fieldName:     "log.msg",
 								values:        [][]byte{[]byte("test-1"), []byte("test-2")},
 								caseSensitive: false,
@@ -201,21 +131,21 @@ func Test_extractDoIfChecker(t *testing.T) {
 							},
 							{
 								logicalOp: "or",
-								operands: []*doIfTreeNode{
+								operands: []treeNode{
 									{
-										fieldOp:       "suffix",
+										stringOp:      "suffix",
 										fieldName:     "service",
 										values:        [][]byte{[]byte("test-svc-1"), []byte("test-svc-2")},
 										caseSensitive: true,
 									},
 									{
-										fieldOp:       "contains",
+										stringOp:      "contains",
 										fieldName:     "pod",
 										values:        [][]byte{[]byte("test")},
 										caseSensitive: true,
 									},
 									{
-										fieldOp:       "regex",
+										stringOp:      "regex",
 										fieldName:     "message",
 										values:        [][]byte{[]byte(`test-\d+`), []byte(`test-msg-\d+`)},
 										caseSensitive: true,
@@ -239,7 +169,7 @@ func Test_extractDoIfChecker(t *testing.T) {
 			args: args{
 				cfgStr: `{"op":"byte_len_cmp","field":"data","cmp_op":"lt","value":10}`,
 			},
-			want: &doIfTreeNode{
+			want: &treeNode{
 				lenCmpOp:  "byte_len_cmp",
 				cmpOp:     "lt",
 				fieldName: "data",
@@ -251,7 +181,7 @@ func Test_extractDoIfChecker(t *testing.T) {
 			args: args{
 				cfgStr: `{"op":"array_len_cmp","field":"items","cmp_op":"lt","value":10}`,
 			},
-			want: &doIfTreeNode{
+			want: &treeNode{
 				lenCmpOp:  "array_len_cmp",
 				cmpOp:     "lt",
 				fieldName: "items",
@@ -270,7 +200,7 @@ func Test_extractDoIfChecker(t *testing.T) {
 					"format": "2006-01-02T15:04:05Z07:00",
 					"update_interval": "15s"}`,
 			},
-			want: &doIfTreeNode{
+			want: &treeNode{
 				tsCmpOp:            true,
 				cmpOp:              "lt",
 				fieldName:          "timestamp",
@@ -290,7 +220,7 @@ func Test_extractDoIfChecker(t *testing.T) {
 					"cmp_op": "lt",
 					"value": "now"}`,
 			},
-			want: &doIfTreeNode{
+			want: &treeNode{
 				tsCmpOp:            true,
 				cmpOp:              "lt",
 				fieldName:          "timestamp",
@@ -310,7 +240,7 @@ func Test_extractDoIfChecker(t *testing.T) {
 					"format": "rfc3339",
 					"value": "now"}`,
 			},
-			want: &doIfTreeNode{
+			want: &treeNode{
 				tsCmpOp:            true,
 				cmpOp:              "lt",
 				fieldName:          "timestamp",
@@ -330,7 +260,7 @@ func Test_extractDoIfChecker(t *testing.T) {
 					"values": ["obj","arr"]
 				}`,
 			},
-			want: &doIfTreeNode{
+			want: &treeNode{
 				checkTypeOp: true,
 				fieldName:   "log",
 				values: [][]byte{
@@ -351,23 +281,23 @@ func Test_extractDoIfChecker(t *testing.T) {
 					]
 				}`,
 			},
-			want: &doIfTreeNode{
+			want: &treeNode{
 				logicalOp: "or",
-				operands: []*doIfTreeNode{
+				operands: []treeNode{
 					{
-						fieldOp:       "equal",
+						stringOp:      "equal",
 						fieldName:     "service",
 						values:        [][]byte{nil},
 						caseSensitive: true,
 					},
 					{
-						fieldOp:       "equal",
+						stringOp:      "equal",
 						fieldName:     "service",
 						values:        [][]byte{[]byte("")},
 						caseSensitive: true,
 					},
 					{
-						fieldOp:       "equal",
+						stringOp:      "equal",
 						fieldName:     "service",
 						values:        [][]byte{[]byte("test")},
 						caseSensitive: true,
@@ -640,7 +570,7 @@ func Test_extractDoIfChecker(t *testing.T) {
 				assert.Nil(t, got)
 				return
 			}
-			wantTree, err := buildDoIfTree(tt.want)
+			wantTree, err := buildTree(tt.want)
 			require.NoError(t, err)
 			wantDoIfChecker := newChecker(wantTree)
 			assert.NoError(t, wantDoIfChecker.IsEqualTo(got))
