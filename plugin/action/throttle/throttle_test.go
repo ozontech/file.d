@@ -43,7 +43,7 @@ func createLimitsFile(data string) string {
 		panic(err.Error())
 	}
 
-	_, err = file.Write([]byte(data))
+	_, err = file.WriteString(data)
 	if err != nil {
 		panic(err.Error())
 	}
@@ -251,7 +251,7 @@ func TestMixedThrottle(t *testing.T) {
 var data string = `
 {
   "a:another": {
-    "PIPELINENAME__throttle_key_another_limit": {
+    "PIPELINENAME_k8s_pod_another_limit": {
       "distribution": {
         "field": "level",
         "ratios": [
@@ -276,7 +276,7 @@ var data string = `
     }
   },
   "a:default": {
-    "PIPELINENAME__throttle_key_default_limit": {
+    "PIPELINENAME_k8s_pod_default_limit": {
       "distribution": {
         "field": "level",
         "ratios": [
