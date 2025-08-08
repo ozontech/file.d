@@ -10,79 +10,86 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestExtractNode(t *testing.T) {
+func Test_extractDoIfChecker(t *testing.T) {
+	type args struct {
+		cfgStr string
+	}
+
 	tests := []struct {
 		name    string
-		raw     string
+		args    args
 		want    *treeNode
 		wantErr bool
 	}{
 		{
 			name: "ok",
-			raw: `
-			{
-				"op": "not",
-				"operands": [
-					{
-						"op": "and",
-						"operands": [
-							{
-								"op": "equal",
-								"field": "service",
-								"values": [null, ""],
-								"case_sensitive": false
-							},
-							{
-								"op": "prefix",
-								"field": "log.msg",
-								"values": ["test-1", "test-2"],
-								"case_sensitive": false
-							},
-							{
-								"op": "byte_len_cmp",
-								"field": "msg",
-								"cmp_op": "gt",
-								"value": 100
-							},
-							{
-								"op": "array_len_cmp",
-								"field": "items",
-								"cmp_op": "lt",
-								"value": 100
-							},
-							{
-								"op": "ts_cmp",
-								"field": "timestamp",
-								"cmp_op": "lt",
-								"value": "2009-11-10T23:00:00Z",
-								"format": "2006-01-02T15:04:05.999999999Z07:00",
-								"update_interval": "15s"
-							},
-							{
-								"op": "or",
-								"operands": [
-									{
-										"op": "suffix",
-										"field": "service",
-										"values": ["test-svc-1", "test-svc-2"],
-										"case_sensitive": true
-									},
-									{
-										"op": "contains",
-										"field": "pod",
-										"values": ["test"]
-									},
-									{
-										"op": "regex",
-										"field": "message",
-										"values": ["test-\\d+", "test-msg-\\d+"]
-									}
-								]
-							}
-						]
-					}
-				]
-			}`,
+			args: args{
+				cfgStr: `
+		{
+			"op": "not",
+			"operands": [
+				{
+					"op": "and",
+					"operands": [
+						{
+							"op": "equal",
+							"field": "service",
+							"values": [null, ""],
+							"case_sensitive": false
+						},
+						{
+							"op": "prefix",
+							"field": "log.msg",
+							"values": ["test-1", "test-2"],
+							"case_sensitive": false
+						},
+						{
+							"op": "byte_len_cmp",
+							"field": "msg",
+							"cmp_op": "gt",
+							"value": 100
+						},
+						{
+							"op": "array_len_cmp",
+							"field": "items",
+							"cmp_op": "lt",
+							"value": 100
+						},
+						{
+							"op": "ts_cmp",
+							"field": "timestamp",
+							"cmp_op": "lt",
+							"value": "2009-11-10T23:00:00Z",
+							"format": "2006-01-02T15:04:05.999999999Z07:00",
+							"update_interval": "15s"
+						},
+						{
+							"op": "or",
+							"operands": [
+								{
+									"op": "suffix",
+									"field": "service",
+									"values": ["test-svc-1", "test-svc-2"],
+									"case_sensitive": true
+								},
+								{
+									"op": "contains",
+									"field": "pod",
+									"values": ["test"]
+								},
+								{
+									"op": "regex",
+									"field": "message",
+									"values": ["test-\\d+", "test-msg-\\d+"]
+								}
+							]
+						}
+					]
+				}
+			]
+		}
+						`,
+			},
 			want: &treeNode{
 				logicalOp: "not",
 				operands: []treeNode{
@@ -151,8 +158,17 @@ func TestExtractNode(t *testing.T) {
 			},
 		},
 		{
+			name: "ok_not_map",
+			args: args{
+				cfgStr: `[{"field":"val"}]`,
+			},
+			wantErr: false,
+		},
+		{
 			name: "ok_byte_len_cmp_op",
-			raw:  `{"op":"byte_len_cmp","field":"data","cmp_op":"lt","value":10}`,
+			args: args{
+				cfgStr: `{"op":"byte_len_cmp","field":"data","cmp_op":"lt","value":10}`,
+			},
 			want: &treeNode{
 				lenCmpOp:  "byte_len_cmp",
 				cmpOp:     "lt",
@@ -162,7 +178,9 @@ func TestExtractNode(t *testing.T) {
 		},
 		{
 			name: "ok_array_len_cmp_op",
-			raw:  `{"op":"array_len_cmp","field":"items","cmp_op":"lt","value":10}`,
+			args: args{
+				cfgStr: `{"op":"array_len_cmp","field":"items","cmp_op":"lt","value":10}`,
+			},
 			want: &treeNode{
 				lenCmpOp:  "array_len_cmp",
 				cmpOp:     "lt",
@@ -172,15 +190,16 @@ func TestExtractNode(t *testing.T) {
 		},
 		{
 			name: "ok_ts_cmp_op",
-			raw: `{
-				"op": "ts_cmp",
-				"field": "timestamp",
-				"cmp_op": "lt",
-				"value": "2009-11-10T23:00:00Z",
-				"value_shift": "-24h",
-				"format": "2006-01-02T15:04:05Z07:00",
-				"update_interval": "15s"
-			}`,
+			args: args{
+				cfgStr: `{
+					"op": "ts_cmp",
+					"field": "timestamp",
+					"cmp_op": "lt",
+					"value": "2009-11-10T23:00:00Z",
+					"value_shift": "-24h",
+					"format": "2006-01-02T15:04:05Z07:00",
+					"update_interval": "15s"}`,
+			},
 			want: &treeNode{
 				tsCmpOp:            true,
 				cmpOp:              "lt",
@@ -194,12 +213,13 @@ func TestExtractNode(t *testing.T) {
 		},
 		{
 			name: "ok_ts_cmp_op_default_settings",
-			raw: `{
-				"op": "ts_cmp",
-				"field": "timestamp",
-				"cmp_op": "lt",
-				"value": "now"
-			}`,
+			args: args{
+				cfgStr: `{
+					"op": "ts_cmp",
+					"field": "timestamp",
+					"cmp_op": "lt",
+					"value": "now"}`,
+			},
 			want: &treeNode{
 				tsCmpOp:            true,
 				cmpOp:              "lt",
@@ -212,13 +232,14 @@ func TestExtractNode(t *testing.T) {
 		},
 		{
 			name: "ok_ts_cmp_op_format_alias",
-			raw: `{
-				"op": "ts_cmp",
-				"field": "timestamp",
-				"cmp_op": "lt",
-				"format": "rfc3339",
-				"value": "now"
-			}`,
+			args: args{
+				cfgStr: `{
+					"op": "ts_cmp",
+					"field": "timestamp",
+					"cmp_op": "lt",
+					"format": "rfc3339",
+					"value": "now"}`,
+			},
 			want: &treeNode{
 				tsCmpOp:            true,
 				cmpOp:              "lt",
@@ -232,11 +253,13 @@ func TestExtractNode(t *testing.T) {
 
 		{
 			name: "ok_check_type",
-			raw: `{
-				"op": "check_type",
-				"field": "log",
-				"values": ["obj","arr"]
-			}`,
+			args: args{
+				cfgStr: `{
+					"op": "check_type",
+					"field": "log",
+					"values": ["obj","arr"]
+				}`,
+			},
 			want: &treeNode{
 				checkTypeOp: true,
 				fieldName:   "log",
@@ -248,14 +271,16 @@ func TestExtractNode(t *testing.T) {
 		},
 		{
 			name: "ok_single_val",
-			raw: `{
-				"op":"or",
-				"operands":[
-					{"op":"equal","field":"service","values":null},
-					{"op":"equal","field":"service","values":""},
-					{"op":"equal","field":"service","values":"test"}
-				]
-			}`,
+			args: args{
+				cfgStr: `{
+					"op":"or",
+					"operands":[
+						{"op":"equal","field":"service","values":null},
+						{"op":"equal","field":"service","values":""},
+						{"op":"equal","field":"service","values":"test"}
+					]
+				}`,
+			},
 			want: &treeNode{
 				logicalOp: "or",
 				operands: []treeNode{
@@ -282,196 +307,247 @@ func TestExtractNode(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name:    "error_no_op_field",
-			raw:     `{"field": "val"}`,
+			name: "error_no_op_field",
+			args: args{
+				cfgStr: `{"field": "val"}`,
+			},
 			wantErr: true,
 		},
 		{
-			name:    "error_invalid_op_name",
-			raw:     `{"op": "invalid"}`,
+			name: "error_invalid_op_name",
+			args: args{
+				cfgStr: `{"op": "invalid"}`,
+			},
 			wantErr: true,
 		},
 		{
-			name:    "error_invalid_field_op",
-			raw:     `{"op": "equal"}`,
+			name: "error_invalid_field_op",
+			args: args{
+				cfgStr: `{"op": "equal"}`,
+			},
 			wantErr: true,
 		},
 		{
 			name: "error_invalid_case_sensitive_type",
-			raw: `{
-				"op": "equal",
-				"field": "a",
-				"values": ["abc"],
-				"case_sensitive": "not bool"
-			}`,
+			args: args{
+				cfgStr: `{
+					"op": "equal",
+					"field": "a",
+					"values": ["abc"],
+					"case_sensitive": "not bool"}`,
+			},
 			wantErr: true,
 		},
 		{
-			name:    "error_invalid_logical_op",
-			raw:     `{"op": "or"}`,
+			name: "error_invalid_logical_op",
+			args: args{
+				cfgStr: `{"op": "or"}`,
+			},
 			wantErr: true,
 		},
 		{
-			name:    "error_invalid_logical_op_operand",
-			raw:     `{"op": "or", "operands": [{"op": "equal"}]}`,
+			name: "error_invalid_logical_op_operand",
+			args: args{
+				cfgStr: `{"op": "or", "operands": [{"op": "equal"}]}`,
+			},
 			wantErr: true,
 		},
 		{
-			name:    "error_byte_len_cmp_op_no_field",
-			raw:     `{"op":"byte_len_cmp","cmp_op":"lt","value":10}`,
+			name: "error_byte_len_cmp_op_no_field",
+			args: args{
+				cfgStr: `{"op":"byte_len_cmp","cmp_op":"lt","value":10}`,
+			},
 			wantErr: true,
 		},
 		{
-			name:    "error_array_len_cmp_op_no_field",
-			raw:     `{"op":"array_len_cmp","cmp_op":"lt","value":10}`,
+			name: "error_array_len_cmp_op_no_field",
+			args: args{
+				cfgStr: `{"op":"array_len_cmp","cmp_op":"lt","value":10}`,
+			},
 			wantErr: true,
 		},
 		{
-			name:    "error_byte_len_cmp_op_field_is_not_string",
-			raw:     `{"op":"byte_len_cmp","field":123,"cmp_op":"lt","value":10}`,
+			name: "error_byte_len_cmp_op_field_is_not_string",
+			args: args{
+				cfgStr: `{"op":"byte_len_cmp","field":123,"cmp_op":"lt","value":10}`,
+			},
 			wantErr: true,
 		},
 		{
-			name:    "error_byte_len_cmp_op_no_cmp_op",
-			raw:     `{"op":"byte_len_cmp","field":"data","value":10}`,
+			name: "error_byte_len_cmp_op_no_cmp_op",
+			args: args{
+				cfgStr: `{"op":"byte_len_cmp","field":"data","value":10}`,
+			},
 			wantErr: true,
 		},
 		{
-			name:    "error_byte_len_cmp_op_cmp_op_is_not_string",
-			raw:     `{"op":"byte_len_cmp","field":"data","cmp_op":123,"value":10}`,
+			name: "error_byte_len_cmp_op_cmp_op_is_not_string",
+			args: args{
+				cfgStr: `{"op":"byte_len_cmp","field":"data","cmp_op":123,"value":10}`,
+			},
 			wantErr: true,
 		},
 		{
-			name:    "error_byte_len_cmp_op_no_cmp_value",
-			raw:     `{"op":"byte_len_cmp","field":"data","cmp_op":"lt"}`,
+			name: "error_byte_len_cmp_op_no_cmp_value",
+			args: args{
+				cfgStr: `{"op":"byte_len_cmp","field":"data","cmp_op":"lt"}`,
+			},
 			wantErr: true,
 		},
 		{
-			name:    "error_byte_len_cmp_op_cmp_value_is_not_integer",
-			raw:     `{"op":"byte_len_cmp","field":"data","cmp_op":"lt","value":"abc"}`,
+			name: "error_byte_len_cmp_op_cmp_value_is_not_integer",
+			args: args{
+				cfgStr: `{"op":"byte_len_cmp","field":"data","cmp_op":"lt","value":"abc"}`,
+			},
 			wantErr: true,
 		},
 		{
 			name:    "error_byte_len_cmp_op_invalid_cmp_op",
-			raw:     `{"op":"byte_len_cmp","field":"data","cmp_op":"ABC","value":10}`,
+			args:    args{cfgStr: `{"op":"byte_len_cmp","field":"data","cmp_op":"ABC","value":10}`},
 			wantErr: true,
 		},
 		{
 			name:    "error_byte_len_cmp_op_negative_cmp_value",
-			raw:     `{"op":"byte_len_cmp","field":"data","cmp_op":"lt","value":-1}`,
+			args:    args{cfgStr: `{"op":"byte_len_cmp","field":"data","cmp_op":"lt","value":-1}`},
 			wantErr: true,
 		},
 		{
-			name:    "error_ts_cmp_op_no_field",
-			raw:     `{"op": "ts_cmp","cmp_op": "lt"}`,
+			name: "error_ts_cmp_op_no_field",
+			args: args{
+				cfgStr: `{"op": "ts_cmp","cmp_op": "lt"}`,
+			},
 			wantErr: true,
 		},
 		{
-			name:    "error_ts_cmp_op_field_is_not_string",
-			raw:     `{"op":"ts_cmp","field":123}`,
+			name: "error_ts_cmp_op_field_is_not_string",
+			args: args{
+				cfgStr: `{"op":"ts_cmp","field":123}`,
+			},
 			wantErr: true,
 		},
 		{
-			name:    "error_ts_cmp_op_no_cmp_op",
-			raw:     `{"op":"ts_cmp","field":"timestamp"}`,
+			name: "error_ts_cmp_op_no_cmp_op",
+			args: args{
+				cfgStr: `{"op":"ts_cmp","field":"timestamp"}`,
+			},
 			wantErr: true,
 		},
 		{
 			name: "error_ts_cmp_op_invalid_format_type",
-			raw: `{
-				"op": "ts_cmp",
-				"field": "timestamp",
-				"cmp_op": "lt",
-				"format": 1000,
-				"value": "now"
-			}`,
+			args: args{
+				cfgStr: `{
+					"op": "ts_cmp",
+					"field": "timestamp",
+					"cmp_op": "lt",
+					"format": 1000,
+					"value": "now"}`,
+			},
 			wantErr: true,
 		},
 		{
 			name: "error_ts_cmp_op_invalid_value_shift_type",
-			raw: `{
-				"op": "ts_cmp",
-				"field": "timestamp",
-				"cmp_op": "lt",
-				"value": "2009-11-10T23:00:00Z",
-				"value_shift": 1000,
-				"format": "2006-01-02T15:04:05Z07:00",
-				"update_interval": "15s"
-			}`,
+			args: args{
+				cfgStr: `{
+					"op": "ts_cmp",
+					"field": "timestamp",
+					"cmp_op": "lt",
+					"value": "2009-11-10T23:00:00Z",
+					"value_shift": 1000,
+					"format": "2006-01-02T15:04:05Z07:00",
+					"update_interval": "15s"}`,
+			},
 			wantErr: true,
 		},
 		{
 			name: "error_ts_cmp_op_invalid_update_interval_type",
-			raw: `{
-				"op": "ts_cmp",
-				"field": "timestamp",
-				"cmp_op": "lt",
-				"value": "2009-11-10T23:00:00Z",
-				"format": "2006-01-02T15:04:05Z07:00",
-				"update_interval": false
-			}`,
+			args: args{
+				cfgStr: `{
+					"op": "ts_cmp",
+					"field": "timestamp",
+					"cmp_op": "lt",
+					"value": "2009-11-10T23:00:00Z",
+					"format": "2006-01-02T15:04:05Z07:00",
+					"update_interval": false}`,
+			},
 			wantErr: true,
 		},
 		{
-			name:    "error_ts_cmp_op_cmp_op_is_not_string",
-			raw:     `{"op":"ts_cmp","field":"timestamp","cmp_op":123}`,
+			name: "error_ts_cmp_op_cmp_op_is_not_string",
+			args: args{
+				cfgStr: `{"op":"ts_cmp","field":"timestamp","cmp_op":123}`,
+			},
 			wantErr: true,
 		},
 		{
-			name:    "error_ts_cmp_op_no_cmp_value",
-			raw:     `{"op":"ts_cmp","field":"timestamp","cmp_op":"lt"}`,
+			name: "error_ts_cmp_op_no_cmp_value",
+			args: args{
+				cfgStr: `{"op":"ts_cmp","field":"timestamp","cmp_op":"lt"}`,
+			},
 			wantErr: true,
 		},
 		{
-			name:    "error_ts_cmp_op_cmp_value_is_not_string",
-			raw:     `{"op":"ts_cmp","field":"timestamp","cmp_op":"lt","value":123}`,
+			name: "error_ts_cmp_op_cmp_value_is_not_string",
+			args: args{
+				cfgStr: `{"op":"ts_cmp","field":"timestamp","cmp_op":"lt","value":123}`,
+			},
 			wantErr: true,
 		},
 		{
-			name:    "error_ts_cmp_op_invalid_cmp_value",
-			raw:     `{"op":"ts_cmp","field":"timestamp","cmp_op":"lt","value":"qwe"}`,
+			name: "error_ts_cmp_op_invalid_cmp_value",
+			args: args{
+				cfgStr: `{"op":"ts_cmp","field":"timestamp","cmp_op":"lt","value":"qwe"}`,
+			},
 			wantErr: true,
 		},
 		{
-			name:    "error_ts_cmp_op_invalid_cmp_op",
-			raw:     `{"op":"ts_cmp","field":"timestamp","cmp_op":"qwe","value":"2009-11-10T23:00:00Z"}`,
+			name: "error_ts_cmp_op_invalid_cmp_op",
+			args: args{
+				cfgStr: `{"op":"ts_cmp","field":"timestamp","cmp_op":"qwe","value":"2009-11-10T23:00:00Z"}`,
+			},
 			wantErr: true,
 		},
 		{
 			name: "error_ts_cmp_op_invalid_update_interval",
-			raw: `{
-				"op": "ts_cmp",
-				"field": "timestamp",
-				"cmp_op": "lt",
-				"value": "2009-11-10T23:00:00Z",
-				"update_interval": "qwe"
-			}`,
+			args: args{
+				cfgStr: `{
+					"op": "ts_cmp",
+					"field": "timestamp",
+					"cmp_op": "lt",
+					"value": "2009-11-10T23:00:00Z",
+					"update_interval": "qwe"}`,
+			},
 			wantErr: true,
 		},
 		{
 			name: "error_check_type_op_empty_values",
-			raw: `{
-				"op": "check_type",
-				"field": "log",
-				"values": []
-			}`,
+			args: args{
+				cfgStr: `{
+					"op": "check_type",
+					"field": "log",
+					"values": []
+				}`,
+			},
 			wantErr: true,
 		},
 		{
 			name: "error_check_type_op_invalid_value",
-			raw: `{
-				"op": "check_type",
-				"field": "log",
-				"values": ["unknown_type"]
-			}`,
+			args: args{
+				cfgStr: `{
+					"op": "check_type",
+					"field": "log",
+					"values": ["unknown_type"]
+				}`,
+			},
 			wantErr: true,
 		},
 		{
 			name: "error_check_type_op_no_field",
-			raw: `{
-				"op": "check_type",
-				"values": ["obj"]
-			}`,
+			args: args{
+				cfgStr: `{
+					"op": "check_type",
+					"values": ["obj"]
+				}`,
+			},
 			wantErr: true,
 		},
 	}
@@ -479,21 +555,34 @@ func TestExtractNode(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-
-			reader := bytes.NewBufferString(tt.raw)
+			reader := bytes.NewBufferString(tt.args.cfgStr)
 			actionJSON, err := simplejson.NewFromReader(reader)
 			require.NoError(t, err)
-
-			got, err := ExtractNode(actionJSON.MustMap())
-			require.Equal(t, err != nil, tt.wantErr)
-
+			got, err := extractDoIfChecker(actionJSON)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("extractDoIfChecker() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
 			if tt.wantErr {
 				return
 			}
-
-			want, err := buildTree(tt.want)
+			if tt.want == nil {
+				assert.Nil(t, got)
+				return
+			}
+			wantTree, err := buildTree(tt.want)
 			require.NoError(t, err)
-			assert.NoError(t, got.isEqualTo(want, 1))
+			wantDoIfChecker := newChecker(wantTree)
+			assert.NoError(t, wantDoIfChecker.IsEqualTo(got))
 		})
 	}
+}
+
+func extractDoIfChecker(actionJSON *simplejson.Json) (*Checker, error) {
+	m := actionJSON.MustMap()
+	if m == nil {
+		return nil, nil
+	}
+
+	return NewFromMap(m)
 }
