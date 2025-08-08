@@ -127,6 +127,8 @@ func newLimitersMap(lmCfg limitersMapConfig, redisOpts *xredis.Options) *limiter
 		limitDistrMetrics: lmCfg.limitDistrMetrics,
 	}
 	if redisOpts != nil {
+		lm.limiterCfg.limitsFileTmp = lmCfg.limiterCfg.limitsFile + ".atomic"
+
 		lm.limiterCfg.redisClient = xredis.NewClient(redisOpts)
 		if pingResp := lm.limiterCfg.redisClient.Ping(lm.ctx); pingResp.Err() != nil {
 			msg := fmt.Sprintf("can't ping redis: %s", pingResp.Err())
@@ -329,7 +331,7 @@ func (l *limitersMap) saveLimits() {
 	for i, limit := range limitsToSave {
 		key := keys[i]
 		limitsToSaveFormatted[key] = map[string]map[string]any{
-			limit.Key: map[string]any{
+			limit.Key: {
 				limit.ValField:          limit.Limit,
 				limit.DistributionField: limit.Distribution,
 				"kind":                  limit.Kind,
@@ -359,10 +361,6 @@ func (l *limitersMap) saveLimits() {
 }
 
 func (l *limitersMap) loadLimits() error {
-	if l.limiterCfg.limitsFile == "" {
-		return nil
-	}
-
 	info, err := os.Stat(l.limiterCfg.limitsFile)
 	if os.IsNotExist(err) {
 		return fmt.Errorf("file %s is not exist", l.limiterCfg.limitsFile)
@@ -377,10 +375,23 @@ func (l *limitersMap) loadLimits() error {
 		return fmt.Errorf("can't read limits file: %w", err)
 	}
 
+	err = l.parseLimits(data)
+	if err != nil {
+		return fmt.Errorf("can't parse limits: %w", err)
+	}
+
+	return nil
+}
+
+func (l *limitersMap) parseLimits(data []byte) error {
+	if len(data) == 0 {
+		return nil
+	}
+
 	var m map[string]map[string]json.RawMessage
 
 	reader := bytes.NewReader(data)
-	if err = json.NewDecoder(reader).Decode(&m); err != nil {
+	if err := json.NewDecoder(reader).Decode(&m); err != nil {
 		return fmt.Errorf("can't unmarshal map: %w", err)
 	}
 
@@ -388,7 +399,7 @@ func (l *limitersMap) loadLimits() error {
 		throttleKey := key[strings.IndexByte(key, ':')+1:]
 
 		// innerMap length == 1
-		for keyLimitOverride, msg := range innerMap {
+		for keyLimit, msg := range innerMap {
 			data, err := msg.MarshalJSON()
 			if err != nil {
 				return fmt.Errorf("can't marshall json value: %w", err)
@@ -416,7 +427,7 @@ func (l *limitersMap) loadLimits() error {
 
 			newLim := newRedisLimiter(
 				l.limiterCfg,
-				throttleKey, keyLimitOverride,
+				throttleKey, keyLimit,
 				&complexLimit{
 					value:         limit,
 					kind:          kind,
