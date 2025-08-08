@@ -134,7 +134,7 @@ func TestBuildNodes(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name: "ok_field_op_node",
+			name: "ok_string_op_node",
 			tree: treeNode{
 				stringOp:      "equal",
 				fieldName:     "log.pod",
@@ -152,7 +152,7 @@ func TestBuildNodes(t *testing.T) {
 			},
 		},
 		{
-			name: "ok_field_op_node_case_insensitive",
+			name: "ok_string_op_node_case_insensitive",
 			tree: treeNode{
 				stringOp:      "equal",
 				fieldName:     "log.pod",
@@ -313,14 +313,14 @@ func TestBuildNodes(t *testing.T) {
 			},
 		},
 		{
-			name: "err_field_op_node_empty_field",
+			name: "err_string_op_node_empty_field",
 			tree: treeNode{
 				stringOp: "equal",
 			},
 			wantErr: true,
 		},
 		{
-			name: "err_field_op_node_empty_values",
+			name: "err_string_op_node_empty_values",
 			tree: treeNode{
 				stringOp:  "equal",
 				fieldName: "pod",
@@ -328,7 +328,7 @@ func TestBuildNodes(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "err_field_op_node_invalid_regex",
+			name: "err_string_op_node_invalid_regex",
 			tree: treeNode{
 				stringOp:  "regex",
 				fieldName: "pod",
@@ -337,7 +337,7 @@ func TestBuildNodes(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "err_field_op_node_invalid_op_type",
+			name: "err_string_op_node_invalid_op_type",
 			tree: treeNode{
 				stringOp:  "noop",
 				fieldName: "pod",
@@ -1317,7 +1317,7 @@ func TestNodeIsEqual(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "not_equal_field_op_mismatch",
+			name: "not_equal_string_op_mismatch",
 			t1: treeNode{
 				stringOp:      "equal",
 				fieldName:     "service",
@@ -1333,7 +1333,7 @@ func TestNodeIsEqual(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "not_equal_field_op_mismatch_2",
+			name: "not_equal_string_op_mismatch_2",
 			t1: treeNode{
 				stringOp:      "prefix",
 				fieldName:     "service",
@@ -1349,7 +1349,7 @@ func TestNodeIsEqual(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "not_equal_field_op_mismatch_3",
+			name: "not_equal_string_op_mismatch_3",
 			t1: treeNode{
 				stringOp:      "regex",
 				fieldName:     "service",
