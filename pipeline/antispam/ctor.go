@@ -1,7 +1,6 @@
 package antispam
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/ozontech/file.d/cfg"
@@ -32,13 +31,13 @@ func extractAntispam(node map[string]any) ([]Rule, int, error) {
 
 	var rules []Rule
 
-	rawRules, err := ctor.Get[[]any](node, fieldNameRules)
-	if err == nil {
-		rules, err = extractRules(rawRules)
-		if err != nil {
-			return nil, 0, err
-		}
-	} else if errors.Is(err, ctor.ErrTypeMismatch) {
+	rawRules, err := ctor.Get[[]any](node, fieldNameRules, nil)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	rules, err = extractRules(rawRules)
+	if err != nil {
 		return nil, 0, err
 	}
 
