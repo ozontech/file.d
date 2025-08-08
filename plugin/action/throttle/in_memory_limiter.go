@@ -236,6 +236,14 @@ func (l *inMemoryLimiter) bucketsMinID() int {
 	return l.buckets.getMinID()
 }
 
+func (l *inMemoryLimiter) getLimitCfg() limitCfg {
+	return limitCfg{}
+}
+
+func (l *inMemoryLimiter) getLimit() int64 {
+	return atomic.LoadInt64(&l.limit.value)
+}
+
 func (l *inMemoryLimiter) setNowFn(fn func() time.Time) {
 	l.lock()
 	l.nowFn = fn

@@ -1,9 +1,15 @@
 package throttle
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"math/rand/v2"
+	"os"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -11,6 +17,7 @@ import (
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
 
+	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/xredis"
 )
@@ -23,6 +30,7 @@ const (
 type limiter interface {
 	isAllowed(event *pipeline.Event, ts time.Time) bool
 	sync()
+	getLimitCfg() limitCfg
 
 	// setNowFn is used for testing purposes
 	setNowFn(fn func() time.Time)
@@ -52,6 +60,17 @@ type limiterConfig struct {
 	bucketsCount             int
 	limiterValueField        string
 	limiterDistributionField string
+	limitsFile               string
+	limitsFileTmp            string
+}
+
+type limitCfg struct {
+	Key               string
+	ValField          string
+	DistributionField string
+	Kind              string
+	Limit             int64
+	Distribution      limitDistributionCfg
 }
 
 // limitersMapConfig configuration of limiters map.
@@ -108,6 +127,8 @@ func newLimitersMap(lmCfg limitersMapConfig, redisOpts *xredis.Options) *limiter
 		limitDistrMetrics: lmCfg.limitDistrMetrics,
 	}
 	if redisOpts != nil {
+		lm.limiterCfg.limitsFileTmp = lmCfg.limiterCfg.limitsFile + ".atomic"
+
 		lm.limiterCfg.redisClient = xredis.NewClient(redisOpts)
 		if pingResp := lm.limiterCfg.redisClient.Ping(lm.ctx); pingResp.Err() != nil {
 			msg := fmt.Sprintf("can't ping redis: %s", pingResp.Err())
@@ -261,10 +282,166 @@ func (l *limitersMap) getOrAdd(throttleKey, keyLimitOverride string, limiterBuf 
 		lim.gen.Store(l.curGen)
 		return lim, limiterBuf
 	}
+
 	newLim := l.newLimiter(throttleKey, keyLimitOverride, rule)
 	lim = newLimiterWithGen(newLim, l.curGen)
 	l.lims[key] = lim
 	return lim, limiterBuf
+}
+
+func (l *limitersMap) saveLimitsCyclic(ctx context.Context, duration time.Duration) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+			l.saveLimits()
+			time.Sleep(duration)
+		}
+	}
+}
+
+func (l *limitersMap) saveLimits() {
+	tmpWithRandom := append(make([]byte, 0), l.limiterCfg.limitsFileTmp...)
+	tmpWithRandom = append(tmpWithRandom, '.')
+	tmpWithRandom = strconv.AppendUint(tmpWithRandom, rand.Uint64(), 8)
+
+	file, err := os.OpenFile(string(tmpWithRandom), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0o600)
+	if err != nil {
+		l.logger.Errorf("can't open temp limits file %s, %s", l.limiterCfg.limitsFileTmp, err.Error())
+		return
+	}
+	defer func() {
+		err := file.Close()
+		if err != nil {
+			l.logger.Errorf("can't close limits file %s, %s", l.limiterCfg.limitsFileTmp, err.Error())
+		}
+	}()
+
+	l.mu.RLock()
+	keys := make([]string, 0, len(l.lims))
+	limitsToSave := make([]limitCfg, 0, len(l.lims))
+	for key, limiter := range l.lims {
+		limitsToSave = append(limitsToSave, limiter.getLimitCfg())
+		keys = append(keys, key)
+	}
+	l.mu.RUnlock()
+
+	limitsToSaveFormatted := make(map[string]map[string]map[string]any)
+	for i, limit := range limitsToSave {
+		key := keys[i]
+		limitsToSaveFormatted[key] = map[string]map[string]any{
+			limit.Key: {
+				limit.ValField:          limit.Limit,
+				limit.DistributionField: limit.Distribution,
+				"kind":                  limit.Kind,
+			},
+		}
+	}
+
+	buf, err := json.MarshalIndent(limitsToSaveFormatted, "", "  ")
+	if err != nil {
+		l.logger.Errorf("can't marshall limits map into json: %s", err.Error())
+	}
+
+	_, err = file.Write(buf)
+	if err != nil {
+		l.logger.Errorf("can't write limits file %s, %s", l.limiterCfg.limitsFileTmp, err.Error())
+	}
+
+	err = file.Sync()
+	if err != nil {
+		l.logger.Errorf("can't sync limits file %s, %s", l.limiterCfg.limitsFileTmp, err.Error())
+	}
+
+	err = os.Rename(string(tmpWithRandom), l.limiterCfg.limitsFile)
+	if err != nil {
+		logger.Errorf("failed renaming temporary limits file to current: %s", err.Error())
+	}
+}
+
+func (l *limitersMap) loadLimits() error {
+	info, err := os.Stat(l.limiterCfg.limitsFile)
+	if os.IsNotExist(err) {
+		return fmt.Errorf("file %s is not exist", l.limiterCfg.limitsFile)
+	}
+
+	if info.IsDir() {
+		return fmt.Errorf("file %s is dir", l.limiterCfg.limitsFile)
+	}
+
+	data, err := os.ReadFile(l.limiterCfg.limitsFile)
+	if err != nil {
+		return fmt.Errorf("can't read limits file: %w", err)
+	}
+
+	err = l.parseLimits(data)
+	if err != nil {
+		return fmt.Errorf("can't parse limits: %w", err)
+	}
+
+	return nil
+}
+
+func (l *limitersMap) parseLimits(data []byte) error {
+	if len(data) == 0 {
+		return nil
+	}
+
+	var m map[string]map[string]json.RawMessage
+
+	reader := bytes.NewReader(data)
+	if err := json.NewDecoder(reader).Decode(&m); err != nil {
+		return fmt.Errorf("can't unmarshal map: %w", err)
+	}
+
+	for key, innerMap := range m {
+		throttleKey := key[strings.IndexByte(key, ':')+1:]
+
+		// innerMap length == 1
+		for keyLimit, msg := range innerMap {
+			data, err := msg.MarshalJSON()
+			if err != nil {
+				return fmt.Errorf("can't marshall json value: %w", err)
+			}
+
+			limit, distrCfg, err := decodeKeyLimitValue(data, l.limiterCfg.limiterValueField, l.limiterCfg.limiterDistributionField)
+			if err != nil {
+				return fmt.Errorf("can't decode redis json value: %w", err)
+			}
+
+			var temp map[string]json.RawMessage
+			var kind string
+			if err := json.Unmarshal(msg, &temp); err != nil {
+				return fmt.Errorf("can't unmarshall json value: %w", err)
+			}
+
+			if err := json.Unmarshal(temp["kind"], &kind); err != nil {
+				return fmt.Errorf("can't unmarshall json value: %w", err)
+			}
+
+			distr, err := parseLimitDistribution(distrCfg, limit)
+			if err != nil {
+				return fmt.Errorf("can't parse limit_distribution: %w", err)
+			}
+
+			newLim := newRedisLimiter(
+				l.limiterCfg,
+				throttleKey, keyLimit,
+				&complexLimit{
+					value:         limit,
+					kind:          kind,
+					distributions: distr,
+				},
+				l.limitDistrMetrics,
+				l.nowFn,
+			)
+			lim := newLimiterWithGen(newLim, l.curGen)
+			l.lims[key] = lim
+		}
+	}
+
+	return nil
 }
 
 // setNowFn is used for testing purposes. Sets custom now func.
