@@ -62,8 +62,13 @@ jobs:
         if: ${{ !contains(matrix.flags, '-race') }}
         env:
           LOG_LEVEL: error
-        run: go test --timeout=15m --benchtime=3x --benchmem --bench="BenchmarkLightJsonReadPar" --run=$^ ./plugin/input/file/...
-
+        run: |
+          echo "### Benchmark Results" >> $GITHUB_STEP_SUMMARY
+          go test --timeout=15m --benchtime=3x --benchmem --bench="BenchmarkLightJsonReadPar" --run=$^ ./plugin/input/file/... | tee benchmark.out
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          cat benchmark.out >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          
   e2e_test:
     runs-on: ubuntu-latest
     strategy:
