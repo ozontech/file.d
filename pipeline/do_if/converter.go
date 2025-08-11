@@ -10,7 +10,7 @@ import (
 func RuleToNode(rule matchrule.Rule, dataTypeTag string) (Node, error) {
 	values := arrStringToArrBytes(rule.Values)
 	node, err := newStringOpNode(
-		matchrule.ModeToString(rule.Mode),
+		rule.Mode.ToString(),
 		!rule.CaseInsensitive,
 		values,
 		"",
@@ -46,5 +46,5 @@ func RuleSetToNode(ruleSet matchrule.RuleSet, dataTypeTag string) (Node, error) 
 		operands = append(operands, operand)
 	}
 
-	return newLogicalNode(matchrule.CondToString(ruleSet.Cond), operands)
+	return newLogicalNode(ruleSet.Cond.ToString(), operands)
 }

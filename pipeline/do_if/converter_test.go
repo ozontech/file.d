@@ -29,7 +29,7 @@ func TestRuleSetToNode(t *testing.T) {
 		require.NoError(t, err)
 
 		logicNode := rawNode.(*logicalNode)
-		require.Equal(t, logicNode.op.String(), matchrule.CondToString(ruleSet.Cond))
+		require.Equal(t, logicNode.op.String(), ruleSet.Cond.ToString())
 		require.Equal(t, len(logicNode.operands), len(ruleSet.Rules))
 
 		for i := range len(logicNode.operands) {
@@ -65,7 +65,7 @@ func cmpRuleAndNode(t *testing.T, rule matchrule.Rule, node Node) {
 	require.Equal(t, c.MinValLen, rule.GetMinValueSize())
 	require.Equal(t, c.MinValLen, rule.GetMinValueSize())
 	require.True(t, c.ValuesBySize == nil)
-	require.Equal(t, c.Op.String(), matchrule.ModeToString(rule.Mode))
+	require.Equal(t, c.Op.String(), rule.Mode.ToString())
 	require.Equal(t, c.CaseSensitive, !rule.CaseInsensitive)
 	require.Equal(t, c.Values, arrStringToArrBytes(rule.Values))
 }

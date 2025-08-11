@@ -27,8 +27,8 @@ func (m *Mode) UnmarshalJSON(i []byte) error {
 	return nil
 }
 
-func ModeToString(m Mode) string {
-	switch m {
+func (m *Mode) ToString() string {
+	switch *m {
 	case ModeContains:
 		return "contains"
 	case ModePrefix:
@@ -207,8 +207,8 @@ var (
 	condOrBytes  = []byte(`"or"`)
 )
 
-func CondToString(c Cond) string {
-	switch c {
+func (c *Cond) ToString() string {
+	switch *c {
 	case CondAnd:
 		return "and"
 	case CondOr:
