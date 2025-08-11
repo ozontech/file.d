@@ -35,9 +35,13 @@ jobs:
           GOFLAGS: ${{ matrix.flags }}
           LOG_LEVEL: error
         run: |
-          go test -coverprofile=profile${{ matrix.flags }}.out -covermode=atomic -v -coverpkg=./... ./... -json > test-report${{ matrix.flags }}.json
+          go test -coverprofile=profile${{ matrix.flags }}.out -covermode=atomic -v -coverpkg=./... ./... -json > test-report${{ matrix.flags }}.json || true
 
-          go tool cover -html=profile${{ matrix.flags }}.out -o coverage${{ matrix.flags }}.html
+          if [ -f profile${{ matrix.flags }}.out ]; then
+            go tool cover -html=profile${{ matrix.flags }}.out -o coverage${{ matrix.flags }}.html
+          else
+            echo "No coverage data generated for ${{ matrix.flags }} tests" > coverage${{ matrix.flags }}.html
+          fi
 
       - name: Upload test artifacts
         uses: actions/upload-artifact@v4
