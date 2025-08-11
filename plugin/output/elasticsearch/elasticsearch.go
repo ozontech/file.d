@@ -51,7 +51,7 @@ type Plugin struct {
 	sendErrorMetric      *prometheus.CounterVec
 	indexingErrorsMetric prometheus.Counter
 
-	router pipeline.Router
+	router *pipeline.Router
 }
 
 // ! config-params
@@ -263,12 +263,12 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		MinRetention:         p.config.Retention_,
 		Multiplier:           float64(p.config.RetentionExponentMultiplier),
 		AttemptNum:           p.config.Retry,
-		DeadQueueIsAvailable: p.router.DeadQueueIsAvailable(),
+		IsDeadQueueAvailable: p.router.IsDeadQueueAvailable(),
 	}
 
 	onError := func(err error, events []*pipeline.Event) {
 		var level zapcore.Level
-		if p.config.FatalOnFailedInsert && !p.router.DeadQueueIsAvailable() {
+		if p.config.FatalOnFailedInsert && !p.router.IsDeadQueueAvailable() {
 			level = zapcore.FatalLevel
 		} else {
 			level = zapcore.ErrorLevel

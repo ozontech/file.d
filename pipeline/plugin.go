@@ -59,7 +59,7 @@ type ActionPluginParams struct {
 type OutputPluginParams struct {
 	PluginDefaultParams
 	Controller OutputPluginController
-	Router     Router
+	Router     *Router
 	Logger     *zap.SugaredLogger
 }
 

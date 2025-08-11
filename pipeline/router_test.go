@@ -72,7 +72,7 @@ func TestRouterNormalProcessing(t *testing.T) {
 
 	params := test.NewEmptyOutputPluginParams()
 	params.PipelineName = "test_pipeline"
-	params.Router = *r
+	params.Router = r
 	params.Controller = controller
 	r.Start(params)
 	defer r.Stop()
@@ -122,7 +122,7 @@ func TestRouterDeadQueueProcessing(t *testing.T) {
 
 	params := test.NewEmptyOutputPluginParams()
 	params.PipelineName = "test_pipeline"
-	params.Router = *r
+	params.Router = r
 	params.Controller = controller
 	r.Start(params)
 	defer r.Stop()

@@ -263,7 +263,7 @@ func (f *FileD) getStaticInfo(pipelineConfig *cfg.PipelineConfig, pluginKind pip
 		if len(deadqueueMap) > 0 {
 			deadqueueType := deadqueue.Get("type").MustString()
 			if deadqueueType == "" {
-				return nil, fmt.Errorf("%s doesn't have type", pluginKind)
+				return nil, fmt.Errorf("deadqueue of %s doesn't have type", pluginKind)
 			}
 			deadqueueInfo, err = f.plugins.Get(pluginKind, deadqueueType)
 			if err != nil {
@@ -274,12 +274,12 @@ func (f *FileD) getStaticInfo(pipelineConfig *cfg.PipelineConfig, pluginKind pip
 
 			deadqueueConfigJson, err := deadqueue.Encode()
 			if err != nil {
-				logger.Panicf("can't create config json for %s", t)
+				logger.Panicf("can't create config json for %s deadqueue", deadqueueType)
 			}
 
 			config, err := pipeline.GetConfig(deadqueueInfo, deadqueueConfigJson, values)
 			if err != nil {
-				logger.Fatalf("error on creating %s with type %q: %s", t, pluginKind, err.Error())
+				logger.Fatalf("error on creating deadqueue of %s with type %q: %s", deadqueueType, pluginKind, err.Error())
 			}
 			deadqueueInfo.Config = config
 
