@@ -27,7 +27,7 @@ func TestPrivateOut(t *testing.T) {
 
 	columns := []ConfigColumn{
 		{
-			Name:       "str_uni_",
+			Name:       "str_uni_1",
 			ColumnType: "string",
 			Unique:     true,
 		},
