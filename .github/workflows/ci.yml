@@ -34,15 +34,29 @@ jobs:
         env:
           GOFLAGS: ${{ matrix.flags }}
           LOG_LEVEL: error
-        run: go test -coverprofile=profile${{ matrix.flags }}.out -covermode=atomic -v -coverpkg=./... ./...
+        run: |
+          go test -coverprofile=profile${{ matrix.flags }}.out -covermode=atomic -v -coverpkg=./... ./... -json > test-report.json
 
-      - name: Upload artifact
+          go tool cover -html=profile${{ matrix.flags }}.out -o coverage.html
+
+      - name: Upload test artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: coverage${{ matrix.flags }}
-          path: profile${{ matrix.flags }}.out
-          if-no-files-found: error
+          name: test-artifacts-${{ matrix.flags }}
+          path: |
+            profile${{ matrix.flags }}.out
+            test-report.json
+            coverage.html
           retention-days: 1
+
+      - name: Publish Test Report
+        uses: dorny/test-reporter@v2
+        if: always()
+        with:
+          name: Test Results
+          path: test-report.json
+          reporter: golang-json
+          fail-on-error: false
 
       - name: Run benchmarks
         if: ${{ !contains(matrix.flags, '-race') }}
