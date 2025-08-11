@@ -78,6 +78,10 @@ func (p *MultilineAction) Do(event *pipeline.Event) pipeline.ActionResult {
 	containerID := meta.ContainerID(event.Root.Dig("k8s_container_id").AsString())
 	containerName := meta.ContainerName(event.Root.Dig("k8s_container").AsString())
 
+	if p.config.OnlyNode {
+		return pipeline.ActionPass
+	}
+
 	if ns == "" {
 		p.logger.Fatalf("k8s namespace is empty: source=%s", event.SourceName)
 	}
@@ -89,10 +93,6 @@ func (p *MultilineAction) Do(event *pipeline.Event) pipeline.ActionResult {
 	}
 	if containerName == "" {
 		p.logger.Fatalf("k8s container name is empty: source=%s", event.SourceName)
-	}
-
-	if p.config.OnlyNode {
-		return pipeline.ActionPass
 	}
 
 	buf := escapedStringBufPool.Get().(*bytesBuf)
