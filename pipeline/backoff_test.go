@@ -32,7 +32,7 @@ func TestBackoff(t *testing.T) {
 		},
 		BackoffOpts{
 			AttemptNum:           3,
-			DeadQueueIsAvailable: false,
+			IsDeadQueueAvailable: false,
 		},
 		errorFn,
 	)
@@ -61,7 +61,7 @@ func TestBackoffWithError(t *testing.T) {
 		},
 		BackoffOpts{
 			AttemptNum:           3,
-			DeadQueueIsAvailable: false,
+			IsDeadQueueAvailable: false,
 		},
 		errorFn,
 	)
@@ -91,7 +91,7 @@ func TestBackoffWithErrorWithDeadQueue(t *testing.T) {
 		},
 		BackoffOpts{
 			AttemptNum:           3,
-			DeadQueueIsAvailable: true,
+			IsDeadQueueAvailable: true,
 		},
 		errorFn,
 	)

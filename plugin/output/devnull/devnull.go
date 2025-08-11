@@ -12,7 +12,7 @@ It provides an API to test pipelines and other plugins.
 
 type Plugin struct {
 	controller pipeline.OutputPluginController
-	router     pipeline.Router
+	router     *pipeline.Router
 	outFn      func(event *pipeline.Event)
 	total      *atomic.Int64
 }
