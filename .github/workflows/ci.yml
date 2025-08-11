@@ -35,9 +35,9 @@ jobs:
           GOFLAGS: ${{ matrix.flags }}
           LOG_LEVEL: error
         run: |
-          go test -coverprofile=profile${{ matrix.flags }}.out -covermode=atomic -v -coverpkg=./... ./... -json > test-report.json
+          go test -coverprofile=profile${{ matrix.flags }}.out -covermode=atomic -v -coverpkg=./... ./... -json > test-report${{ matrix.flags }}.json
 
-          go tool cover -html=profile${{ matrix.flags }}.out -o coverage.html
+          go tool cover -html=profile${{ matrix.flags }}.out -o coverage${{ matrix.flags }}.html
 
       - name: Upload test artifacts
         uses: actions/upload-artifact@v4
@@ -45,8 +45,8 @@ jobs:
           name: test-artifacts-${{ matrix.flags }}
           path: |
             profile${{ matrix.flags }}.out
-            test-report.json
-            coverage.html
+            test-report${{ matrix.flags }}.json
+            coverage${{ matrix.flags }}.html
           retention-days: 1
 
       - name: Publish Test Report
@@ -54,7 +54,7 @@ jobs:
         if: always()
         with:
           name: Test Results
-          path: test-report.json
+          path: test-report${{ matrix.flags }}.json
           reporter: golang-json
           fail-on-error: false
 
@@ -68,7 +68,7 @@ jobs:
           echo '```' >> $GITHUB_STEP_SUMMARY
           cat benchmark.out >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
-          
+
   e2e_test:
     runs-on: ubuntu-latest
     strategy:
@@ -93,18 +93,18 @@ jobs:
           GOFLAGS: ${{ matrix.flags }}
           LOG_LEVEL: error
         run: |
-          go test ./e2e -coverprofile=profile-e2e${{ matrix.flags }}.out -covermode=atomic -tags=e2e_new -timeout=3m -coverpkg=./... -json > test-report-e2e.json
+          go test ./e2e -coverprofile=profile-e2e${{ matrix.flags }}.out -covermode=atomic -tags=e2e_new -timeout=3m -coverpkg=./... -json > test-report-e2e${{ matrix.flags }}.json
 
-          go tool cover -html=profile-e2e${{ matrix.flags }}.out -o coverage-e2e.html
+          go tool cover -html=profile-e2e${{ matrix.flags }}.out -o coverage-e2e${{ matrix.flags }}.html
 
       - name: Upload test artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: test-artifacts-${{ matrix.flags }}
+          name: test-artifacts-e2e${{ matrix.flags }}
           path: |
             profile-e2e${{ matrix.flags }}.out
-            test-report-e2e.json
-            coverage-e2e.html
+            test-report-e2e${{ matrix.flags }}.json
+            coverage-e2e${{ matrix.flags }}.html
           retention-days: 1
 
       - name: Publish Test Report
@@ -112,7 +112,7 @@ jobs:
         if: always()
         with:
           name: Test Results
-          path: test-report-e2e.json
+          path: test-report-e2e${{ matrix.flags }}.json
           reporter: golang-json
           fail-on-error: false
 
