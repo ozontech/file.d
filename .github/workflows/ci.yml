@@ -57,6 +57,7 @@ jobs:
           path: test-report${{ matrix.flags }}.json
           reporter: golang-json
           fail-on-error: false
+          list-suites: all
 
       - name: Run benchmarks
         if: ${{ !contains(matrix.flags, '-race') }}
@@ -96,7 +97,7 @@ jobs:
           go test ./e2e -coverprofile=profile-e2e${{ matrix.flags }}.out -covermode=atomic -tags=e2e_new -timeout=3m -coverpkg=./... -json > test-report-e2e${{ matrix.flags }}.json
 
           go tool cover -html=profile-e2e${{ matrix.flags }}.out -o coverage-e2e${{ matrix.flags }}.html
-
+          
       - name: Upload test artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -115,6 +116,7 @@ jobs:
           path: test-report-e2e${{ matrix.flags }}.json
           reporter: golang-json
           fail-on-error: false
+          list-suites: all
 
   upload:
     runs-on: ubuntu-latest
