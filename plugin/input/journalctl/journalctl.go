@@ -107,9 +107,9 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 }
 
 func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
-	p.offsetErrorsMetric = ctl.RegisterCounter("input_journalctl_offset_errors", "Number of errors occurred when saving/loading offset")
-	p.journalCtlStopErrorMetric = ctl.RegisterCounter("input_journalctl_stop_errors", "Total journalctl stop errors")
-	p.readerErrorsMetric = ctl.RegisterCounter("input_journalctl_reader_errors", "Total reader errors")
+	p.offsetErrorsMetric = ctl.RegisterCounter("input_journalctl_offset_errors_total", "Number of errors occurred when saving/loading offset")
+	p.journalCtlStopErrorMetric = ctl.RegisterCounter("input_journalctl_stop_errors_total", "Total journalctl stop errors")
+	p.readerErrorsMetric = ctl.RegisterCounter("input_journalctl_reader_errors_total", "Total reader errors")
 }
 
 func (p *Plugin) Stop() {

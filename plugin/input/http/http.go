@@ -317,7 +317,7 @@ func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 	p.bulkRequestsDoneTotal = ctl.RegisterCounter("bulk_requests_done_total", "")
 	p.requestsInProgress = ctl.RegisterGauge("requests_in_progress", "")
 	p.processBulkSeconds = ctl.RegisterHistogram("process_bulk_seconds", "", metric.SecondsBucketsDetailed)
-	p.errorsTotal = ctl.RegisterCounter("input_http_errors", "Total http errors")
+	p.errorsTotal = ctl.RegisterCounter("input_http_errors_total", "Total http errors")
 
 	if p.config.Auth.Strategy_ != StrategyDisabled {
 		httpAuthTotal := ctl.RegisterCounterVec("http_auth_success_total", "", "secret_name")

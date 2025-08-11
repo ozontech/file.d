@@ -71,7 +71,7 @@ func NewAntispammer(o *Options) *Antispammer {
 			"Source is banned",
 			"source_name",
 		),
-		exceptionMetric: o.MetricsController.RegisterCounterVec("antispam_exceptions",
+		exceptionMetric: o.MetricsController.RegisterCounterVec("antispam_exceptions_total",
 			"How many times an exception match with an event",
 			"name",
 		),
