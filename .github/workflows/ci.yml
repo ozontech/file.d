@@ -87,15 +87,29 @@ jobs:
         env:
           GOFLAGS: ${{ matrix.flags }}
           LOG_LEVEL: error
-        run: go test ./e2e -coverprofile=profile-e2e${{ matrix.flags }}.out -covermode=atomic -tags=e2e_new -timeout=3m -coverpkg=./...
+        run: |
+          go test ./e2e -coverprofile=profile-e2e${{ matrix.flags }}.out -covermode=atomic -tags=e2e_new -timeout=3m -coverpkg=./... -json > test-report-e2e.json
 
-      - name: Upload artifact
+          go tool cover -html=profile-e2e${{ matrix.flags }}.out -o coverage-e2e.html
+
+      - name: Upload test artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: coverage-e2e${{ matrix.flags }}
-          path: profile-e2e${{ matrix.flags }}.out
-          if-no-files-found: error
+          name: test-artifacts-${{ matrix.flags }}
+          path: |
+            profile-e2e${{ matrix.flags }}.out
+            test-report-e2e.json
+            coverage-e2e.html
           retention-days: 1
+
+      - name: Publish Test Report
+        uses: dorny/test-reporter@v2
+        if: always()
+        with:
+          name: Test Results
+          path: test-report-e2e.json
+          reporter: golang-json
+          fail-on-error: false
 
   upload:
     runs-on: ubuntu-latest
