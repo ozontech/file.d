@@ -16,6 +16,8 @@ GELF messages are separated by null byte. Each message is a JSON with the follow
 Every field with an underscore prefix `_` will be treated as an extra field.
 Allowed characters in field names are letters, numbers, underscores, dashes, and dots.
 
+Supports [dead queue](/plugin/output/README.md#dead-queue).
+
 ### Config params
 **`endpoint`** *`string`* *`required`* 
 
@@ -121,8 +123,7 @@ After this timeout the batch will be sent even if batch isn't completed.
 
 **`retry`** *`int`* *`default=0`* 
 
-Retries of insertion. If File.d cannot insert for this number of attempts,
-File.d will fall with non-zero exit code or skip message (see fatal_on_failed_insert).
+After an insert error, fall with a non-zero exit code or not. A configured deadqueue disables fatal exits.
 
 <br>
 
