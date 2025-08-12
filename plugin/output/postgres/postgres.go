@@ -22,6 +22,8 @@ import (
 
 /*{ introduction
 It sends the event batches to postgres db using pgx.
+
+Supports [dead queue](/plugin/output/README.md#dead-queue).
 }*/
 
 /*{ example
@@ -164,8 +166,7 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
-	// > After an insert error, fall with a non-zero exit code or not
-	// > **Experimental feature**
+	// > After an insert error, fall with a non-zero exit code or not. A configured deadqueue disables fatal exits.
 	FatalOnFailedInsert bool `json:"fatal_on_failed_insert" default:"false"` // *
 
 	// > @3@4@5@6

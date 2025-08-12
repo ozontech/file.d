@@ -33,6 +33,8 @@ GELF messages are separated by null byte. Each message is a JSON with the follow
 
 Every field with an underscore prefix `_` will be treated as an extra field.
 Allowed characters in field names are letters, numbers, underscores, dashes, and dots.
+
+Supports [dead queue](/plugin/output/README.md#dead-queue).
 }*/
 
 const (
@@ -151,8 +153,7 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
-	// > Retries of insertion. If File.d cannot insert for this number of attempts,
-	// > File.d will fall with non-zero exit code or skip message (see fatal_on_failed_insert).
+	// > After an insert error, fall with a non-zero exit code or not. A configured deadqueue disables fatal exits.
 	Retry int `json:"retry" default:"0"` // *
 
 	// > @3@4@5@6

@@ -24,6 +24,8 @@ import (
 
 /*{ introduction
 It sends the logs batches to Loki using HTTP API.
+
+Supports [dead queue](/plugin/output/README.md#dead-queue).
 }*/
 
 var errUnixNanoFormat = errors.New("please send time in UnixNano format or add a convert_date action")
@@ -170,8 +172,7 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
-	// > After an insert error, fall with a non-zero exit code or not
-	// > **Experimental feature**
+	// > After an insert error, fall with a non-zero exit code or not. A configured deadqueue disables fatal exits.
 	FatalOnFailedInsert bool `json:"fatal_on_failed_insert" default:"false"` // *
 
 	// > @3@4@5@6

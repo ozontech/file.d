@@ -23,6 +23,8 @@ import (
 /*{ introduction
 It sends events into Elasticsearch. It uses `_bulk` API to send events in batches.
 If a network error occurs, the batch will infinitely try to be delivered to the random endpoint.
+
+Supports [dead queue](/plugin/output/README.md#dead-queue).
 }*/
 
 const (
@@ -169,8 +171,7 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
-	// > After an insert error, fall with a non-zero exit code or not
-	// > **Experimental feature**
+	// > After an insert error, fall with a non-zero exit code or not. A configured deadqueue disables fatal exits.
 	FatalOnFailedInsert bool `json:"fatal_on_failed_insert" default:"false"` // *
 
 	// > @3@4@5@6

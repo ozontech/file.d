@@ -1,6 +1,8 @@
 # Kafka output
 It sends the event batches to kafka brokers using `franz-go` lib.
 
+Supports [dead queue](/plugin/output/README.md#dead-queue).
+
 ### Config params
 **`brokers`** *`[]string`* *`required`* 
 
@@ -91,8 +93,7 @@ the client.ForceMetadataRefresh() function is used for some ProduceSync errors:
 
 **`fatal_on_failed_insert`** *`bool`* *`default=false`* 
 
-After an insert error, fall with a non-zero exit code or not
-**Experimental feature**
+After an insert error, fall with a non-zero exit code or not. A configured deadqueue disables fatal exits.
 
 <br>
 

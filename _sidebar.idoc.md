@@ -16,7 +16,7 @@
 @global-contents-table-plugin-input|links-list
   - Action
 @global-contents-table-plugin-action|links-list
-  - Output
+  - [Output](/plugin/output/README.md)
 @global-contents-table-plugin-output|links-list
 
 - **Pipeline**
