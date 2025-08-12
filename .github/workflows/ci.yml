@@ -35,14 +35,9 @@ jobs:
           GOFLAGS: ${{ matrix.flags }}
           LOG_LEVEL: error
         run: |
-          go test -coverprofile=profile${{ matrix.flags }}.out -covermode=atomic -v -coverpkg=./... ./... -json > allure-results{{ matrix.flags }}/output.json
+          PREFIX="${{ github.run_number }}${{ matrix.flags || '-standard' }}"
 
-      - name: Generate Allure report
-        uses: simple-elf/allure-report-action@v1
-        with:
-          results: allure-results{{ matrix.flags }}
-          report_dir: allure-report{{ matrix.flags }}
-          auto_create_folders: true
+          go test -coverprofile=profile${{ matrix.flags }}.out -covermode=atomic -v -coverpkg=./... ./... -json | sed "s/\"Test\":\"/\"Test\":\"${PREFIX}-/g" > test-report${{ matrix.flags }}.json
 
       - name: Coverage report
         run: |
@@ -58,8 +53,8 @@ jobs:
           name: test-artifacts${{ matrix.flags || '-standard' }}
           path: |
             profile${{ matrix.flags }}.out
+            test-report${{ matrix.flags }}.json
             coverage${{ matrix.flags }}.html
-            allure-report{{ matrix.flags }}
           retention-days: 1
 
       - name: Publish Test Report
