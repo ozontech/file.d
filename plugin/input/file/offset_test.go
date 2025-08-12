@@ -5,7 +5,6 @@ import (
 	"os"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/stretchr/testify/assert"
@@ -167,32 +166,4 @@ func TestParallelOffsetsGetSet(t *testing.T) {
 		}()
 	}
 	wg.Wait()
-}
-
-var counter int
-
-func TestDataRace(t *testing.T) {
-	var wg sync.WaitGroup
-	wg.Add(2)
-
-	// Goroutine 1: Increment counter
-	go func() {
-		defer wg.Done()
-		for i := 0; i < 1000; i++ {
-			counter++
-			time.Sleep(1 * time.Microsecond)
-		}
-	}()
-
-	// Goroutine 2: Decrement counter
-	go func() {
-		defer wg.Done()
-		for i := 0; i < 1000; i++ {
-			counter--
-			time.Sleep(1 * time.Microsecond)
-		}
-	}()
-
-	wg.Wait()
-	t.Logf("Final counter value: %d", counter)
 }
