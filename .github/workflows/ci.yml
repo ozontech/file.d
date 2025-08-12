@@ -65,7 +65,6 @@ jobs:
           path: test-report${{ matrix.flags }}.json
           reporter: golang-json
           fail-on-error: true
-          list-suites: failed
 
       - name: Run benchmarks
         if: ${{ !contains(matrix.flags, '-race') }}
@@ -102,9 +101,17 @@ jobs:
           GOFLAGS: ${{ matrix.flags }}
           LOG_LEVEL: error
         run: |
-          go test ./e2e -coverprofile=profile-e2e${{ matrix.flags }}.out -covermode=atomic -tags=e2e_new -timeout=3m -coverpkg=./... -json > test-report-e2e${{ matrix.flags }}.json
+          PREFIX="${{ github.run_number }}${{ matrix.flags || '-standard' }}"
 
-          go tool cover -html=profile-e2e${{ matrix.flags }}.out -o coverage-e2e${{ matrix.flags }}.html
+          go test ./e2e -coverprofile=profile-e2e${{ matrix.flags }}.out -covermode=atomic -tags=e2e_new -timeout=3m -coverpkg=./... -json | sed "s/\"Test\":\"/\"Test\":\"${PREFIX}-/g" > test-report-e2e${{ matrix.flags }}.json
+
+      - name: Coverage report
+        run: |
+          if [ -f profile-e2e${{ matrix.flags }}.out ]; then
+            go tool cover -html=profile-e2e${{ matrix.flags }}.out -o coverage-e2e${{ matrix.flags }}.html
+          else
+            echo "No coverage data generated for ${{ matrix.flags }} tests" > coverage-e2e${{ matrix.flags }}.html
+          fi
           
       - name: Upload test artifacts
         uses: actions/upload-artifact@v4
@@ -123,9 +130,7 @@ jobs:
           name: Test Results
           path: test-report-e2e${{ matrix.flags }}.json
           reporter: golang-json
-          fail-on-error: false
-          list-suites: all
-          artifact: test-report-e2e-${{ matrix.flags || 'standard' }}-${{ github.run_number }}
+          fail-on-error: true
 
   upload:
     runs-on: ubuntu-latest
