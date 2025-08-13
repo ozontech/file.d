@@ -19,9 +19,8 @@ import (
 )
 
 const (
-	limitsDir   = ""
-	limitsFile  = "throttle_limits.json"
-	limitsFile2 = "throttle_limits_another_pipeline.json"
+	limitsDir  = ""
+	limitsFile = "throttle_limits.json"
 )
 
 type testConfig struct {
@@ -248,60 +247,6 @@ func TestMixedThrottle(t *testing.T) {
 	})
 }
 
-var data string = `
-{
-  "a:another": {
-    "PIPELINENAME_k8s_pod_another_limit": {
-      "distribution": {
-        "field": "level",
-        "ratios": [
-          {
-            "ratio": 0.5,
-            "values": [
-              "error"
-            ]
-          },
-          {
-            "ratio": 0.3,
-            "values": [
-              "warn",
-              "info"
-            ]
-          }
-        ],
-        "enabled": true
-      },
-      "kind": "count",
-      "max_pod_log_count": 3000
-    }
-  },
-  "a:default": {
-    "PIPELINENAME_k8s_pod_default_limit": {
-      "distribution": {
-        "field": "level",
-        "ratios": [
-          {
-            "ratio": 0.3,
-            "values": [
-              "warn",
-              "info"
-            ]
-          },
-          {
-            "ratio": 0.5,
-            "values": [
-              "error"
-            ]
-          }
-        ],
-        "enabled": true
-      },
-      "kind": "count",
-      "max_pod_log_count": 3000
-    }
-  }
-}`
-
 func TestRedisThrottle(t *testing.T) {
 	s, err := miniredis.Run()
 	require.NoError(t, err)
@@ -349,6 +294,7 @@ func TestRedisThrottle(t *testing.T) {
 		`{"time":"%s","k8s_ns":"ns_2","k8s_pod":"pod_1"}`,
 		`{"time":"%s","k8s_ns":"not_matched","k8s_pod":"pod_1"}`,
 	}
+
 	for i := range eventsTotal {
 		json := fmt.Sprintf(events[i], time.Now().Format(time.RFC3339Nano))
 
@@ -452,6 +398,338 @@ func TestRedisThrottleMultiPipes(t *testing.T) {
 
 	// limit is 10 while events count 4, all passed
 	assert.Equal(t, len(secondPipeEvents), outEventsSec, "wrong in events count")
+	t.Cleanup(func() {
+		throttleMapsCleanup()
+	})
+}
+
+func TestParseLimits(t *testing.T) {
+	defaultLimitA := 4
+	defaultLimitB := 4
+	changedLimit := 2
+	eventsTotal := 8
+
+	config := &Config{
+		Rules: []RuleConfig{
+			{
+				Limit:      int64(defaultLimitA),
+				LimitKind:  limitKindCount,
+				Conditions: map[string]string{"k8s_ns": "ns_1"},
+				LimitDistribution: LimitDistributionConfig{
+					Field: "level",
+					Ratios: []ComplexRatio{
+						{Ratio: 0.5, Values: []string{"error"}},
+						{Ratio: 0.25, Values: []string{"warn", "info"}},
+					},
+				},
+			},
+			{
+				Limit:      int64(defaultLimitB),
+				LimitKind:  limitKindCount,
+				Conditions: map[string]string{"k8s_ns": "ns_2"},
+			},
+		},
+		BucketsCount:   1,
+		BucketInterval: "2s",
+		RedisBackendCfg: RedisBackendConfig{
+			Endpoint:                 "",
+			Password:                 "",
+			SyncInterval:             "100ms",
+			WorkerCount:              2,
+			LimiterValueField:        "max_pod_log_count",
+			LimiterDistributionField: "distribution",
+		},
+		LimiterBackend: "redis",
+		ThrottleField:  "k8s_pod",
+		TimeField:      "",
+		DefaultLimit:   int64(defaultLimitA + defaultLimitB),
+	}
+	test.NewConfig(config, nil)
+
+	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, config, pipeline.MatchModeAnd, nil, false))
+	outEvents := 0
+	output.SetOutFn(func(e *pipeline.Event) {
+		outEvents++
+	})
+
+	sourceNames := []string{
+		`source_1`,
+		`source_2`,
+		`source_3`,
+	}
+
+	events := []string{
+		`{"time":"%s","k8s_ns":"ns_1","k8s_pod":"pod_1","level":"error"}`,
+		`{"time":"%s","k8s_ns":"ns_1","k8s_pod":"pod_1","level":"error"}`,
+		`{"time":"%s","k8s_ns":"ns_1","k8s_pod":"pod_1","level":"warn"}`,
+		`{"time":"%s","k8s_ns":"ns_1","k8s_pod":"pod_1","level":"info"}`,
+
+		`{"time":"%s","k8s_ns":"ns_2","k8s_pod":"pod_1","level":"error"}`,
+		`{"time":"%s","k8s_ns":"ns_2","k8s_pod":"pod_1","level":"error"}`,
+		`{"time":"%s","k8s_ns":"ns_2","k8s_pod":"pod_1","level":"warn"}`,
+		`{"time":"%s","k8s_ns":"ns_2","k8s_pod":"pod_1","level":"info"}`,
+	}
+
+	data := `{
+  "a:pod_1": {
+    "test_pipeline_k8s_pod_pod_1_limit": {
+      "distribution": {
+        "field": "level",
+        "ratios": [
+          {
+            "ratio": 0.25,
+            "values": [
+              "warn",
+              "info"
+            ]
+          },
+          {
+            "ratio": 0.5,
+            "values": [
+              "error"
+            ]
+          }
+        ],
+        "enabled": true
+      },
+      "kind": "count",
+      "max_pod_log_count": 4
+    }
+  },
+  "b:pod_1": {
+    "test_pipeline_k8s_pod_pod_1_limit": {
+      "kind": "count",
+      "max_pod_log_count": 2
+    }
+  }
+}`
+
+	limitersMu.RLock()
+	lm, has := limiters[p.Name]
+	limitersMu.RUnlock()
+	assert.True(t, has, "key must exist in the map")
+	assert.NotNil(t, lm, "the map object must be non-nil")
+
+	require.NoError(t, lm.parseLimits([]byte(data)))
+
+	podLimiter1Cfg := lm.lims["a:pod_1"].limiter.getLimitCfg()
+	podLimiter2Cfg := lm.lims["b:pod_1"].limiter.getLimitCfg()
+
+	assert.Equal(t, int64(defaultLimitA), podLimiter1Cfg.Limit)
+	assert.Equal(t, int64(changedLimit), podLimiter2Cfg.Limit)
+
+	assert.Equal(t, limitKindCount, podLimiter1Cfg.Kind)
+	assert.Equal(t, limitKindCount, podLimiter2Cfg.Kind)
+
+	assert.Equal(t, true, podLimiter1Cfg.Distribution.Enabled)
+	assert.Equal(t, false, podLimiter2Cfg.Distribution.Enabled)
+
+	for i := range eventsTotal {
+		json := fmt.Sprintf(events[i], time.Now().Format(time.RFC3339Nano))
+
+		input.In(10, sourceNames[rand.Int()%len(sourceNames)], test.NewOffset(0), []byte(json))
+
+		time.Sleep(300 * time.Millisecond)
+	}
+
+	p.Stop()
+
+	assert.Greater(t, eventsTotal, outEvents, "wrong in events count")
+	t.Cleanup(func() {
+		throttleMapsCleanup()
+	})
+}
+
+func TestSaveLimitsToFile(t *testing.T) {
+	defaultLimitA := 4
+	defaultLimitB := 4
+	eventsTotal := 8
+	limitsFilename := createLimitsFile("")
+
+	config := &Config{
+		Rules: []RuleConfig{
+			{
+				Limit:      int64(defaultLimitA),
+				LimitKind:  limitKindCount,
+				Conditions: map[string]string{"k8s_ns": "ns_1"},
+				LimitDistribution: LimitDistributionConfig{
+					Field: "level",
+					Ratios: []ComplexRatio{
+						{Ratio: 0.5, Values: []string{"error"}},
+						{Ratio: 0.25, Values: []string{"warn", "info"}},
+					},
+				},
+			},
+			{
+				Limit:      int64(defaultLimitB),
+				LimitKind:  limitKindCount,
+				Conditions: map[string]string{"k8s_ns": "ns_2"},
+			},
+		},
+		BucketsCount:   1,
+		BucketInterval: "2s",
+		RedisBackendCfg: RedisBackendConfig{
+			Endpoint:                 "",
+			Password:                 "",
+			SyncInterval:             "100ms",
+			WorkerCount:              2,
+			LimiterValueField:        "max_pod_log_count",
+			LimiterDistributionField: "distribution",
+			LimitsFile:               limitsFilename,
+		},
+		LimiterBackend: "redis",
+		ThrottleField:  "k8s_pod",
+		TimeField:      "",
+		DefaultLimit:   int64(defaultLimitA + defaultLimitB),
+	}
+	test.NewConfig(config, nil)
+
+	p, input, _ := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, config, pipeline.MatchModeAnd, nil, false))
+
+	sourceNames := []string{
+		`source_1`,
+		`source_2`,
+		`source_3`,
+	}
+
+	events := []string{
+		`{"time":"%s","k8s_ns":"ns_1","k8s_pod":"pod_1","level":"error"}`,
+		`{"time":"%s","k8s_ns":"ns_1","k8s_pod":"pod_1","level":"error"}`,
+		`{"time":"%s","k8s_ns":"ns_1","k8s_pod":"pod_1","level":"warn"}`,
+		`{"time":"%s","k8s_ns":"ns_1","k8s_pod":"pod_1","level":"info"}`,
+
+		`{"time":"%s","k8s_ns":"ns_2","k8s_pod":"pod_1","level":"error"}`,
+		`{"time":"%s","k8s_ns":"ns_2","k8s_pod":"pod_1","level":"error"}`,
+		`{"time":"%s","k8s_ns":"ns_2","k8s_pod":"pod_1","level":"warn"}`,
+		`{"time":"%s","k8s_ns":"ns_2","k8s_pod":"pod_1","level":"info"}`,
+	}
+
+	limitersMu.RLock()
+	lm, has := limiters[p.Name]
+	limitersMu.RUnlock()
+	assert.True(t, has, "key must exist in the map")
+	assert.NotNil(t, lm, "the map object must be non-nil")
+
+	for i := range eventsTotal {
+		json := fmt.Sprintf(events[i], time.Now().Format(time.RFC3339Nano))
+
+		input.In(10, sourceNames[rand.Int()%len(sourceNames)], test.NewOffset(0), []byte(json))
+
+		time.Sleep(300 * time.Millisecond)
+	}
+
+	p.Stop()
+
+	lm.saveLimits()
+	limitsFileData, err := os.ReadFile(limitsFilename)
+	require.NoError(t, err)
+
+	require.NoError(t, lm.parseLimits([]byte(limitsFileData)))
+
+	podLimiter1Cfg := lm.lims["a:pod_1"].limiter.getLimitCfg()
+	podLimiter2Cfg := lm.lims["b:pod_1"].limiter.getLimitCfg()
+
+	assert.Equal(t, int64(defaultLimitA), podLimiter1Cfg.Limit)
+	assert.Equal(t, int64(defaultLimitB), podLimiter2Cfg.Limit)
+
+	assert.Equal(t, limitKindCount, podLimiter1Cfg.Kind)
+	assert.Equal(t, limitKindCount, podLimiter2Cfg.Kind)
+
+	assert.Equal(t, true, podLimiter1Cfg.Distribution.Enabled)
+	assert.Equal(t, false, podLimiter2Cfg.Distribution.Enabled)
+
+	err = os.Remove(limitsFilename)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		throttleMapsCleanup()
+	})
+}
+
+func TestRedisOverwritesLimitsFromFile(t *testing.T) {
+	s, err := miniredis.Run()
+	require.NoError(t, err)
+	defer s.Close()
+
+	require.NoError(t, s.Set("test_pipeline_k8s_pod_pod_1_limit", `{"limit":"1"}`))
+
+	data := `{
+  "a:pod_1": {
+    "test_pipeline_k8s_pod_pod_1_limit": {
+      "kind": "count",
+      "limit": 2
+    }
+  }
+}`
+
+	defaultLimit := 3
+	fileLimit := 2
+	redisLimit := 1
+	eventsTotal := 3
+	limitsFilename := createLimitsFile(data)
+
+	config := &Config{
+		Rules: []RuleConfig{
+			{Limit: int64(defaultLimit), LimitKind: limitKindCount},
+		},
+		BucketsCount:   1,
+		BucketInterval: "2s",
+		RedisBackendCfg: RedisBackendConfig{
+			Endpoint:          s.Addr(),
+			Password:          "",
+			SyncInterval:      "100ms",
+			WorkerCount:       2,
+			LimiterValueField: "limit",
+			LimitsFile:        limitsFilename,
+		},
+		LimiterBackend: "redis",
+		ThrottleField:  "k8s_pod",
+		TimeField:      "",
+		DefaultLimit:   int64(defaultLimit),
+	}
+	test.NewConfig(config, nil)
+
+	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, config, pipeline.MatchModeAnd, nil, false))
+	outEvents := 0
+	output.SetOutFn(func(e *pipeline.Event) {
+		outEvents++
+	})
+
+	sourceNames := []string{
+		`source_1`,
+		`source_2`,
+		`source_3`,
+	}
+
+	events := []string{
+		`{"time":"%s","k8s_ns":"ns_1","k8s_pod":"pod_1"}`,
+		`{"time":"%s","k8s_ns":"ns_2","k8s_pod":"pod_1"}`,
+		`{"time":"%s","k8s_ns":"not_matched","k8s_pod":"pod_1"}`,
+	}
+
+	limitersMu.RLock()
+	lm, has := limiters[p.Name]
+	limitersMu.RUnlock()
+	assert.True(t, has, "key must exist in the map")
+	assert.NotNil(t, lm, "the map object must be non-nil")
+
+	podLimiter1Cfg := lm.lims["a:pod_1"].limiter.getLimitCfg()
+	assert.Equal(t, int64(fileLimit), podLimiter1Cfg.Limit)
+
+	for i := range eventsTotal {
+		json := fmt.Sprintf(events[i], time.Now().Format(time.RFC3339Nano))
+
+		input.In(10, sourceNames[rand.Int()%len(sourceNames)], test.NewOffset(0), []byte(json))
+
+		time.Sleep(300 * time.Millisecond)
+	}
+
+	p.Stop()
+
+	podLimiter1Cfg = lm.lims["a:pod_1"].limiter.getLimitCfg()
+	assert.Equal(t, int64(redisLimit), podLimiter1Cfg.Limit)
+
+	err = os.Remove(limitsFilename)
+	require.NoError(t, err)
 	t.Cleanup(func() {
 		throttleMapsCleanup()
 	})
