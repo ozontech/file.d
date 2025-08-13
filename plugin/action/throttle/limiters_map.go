@@ -332,10 +332,13 @@ func (l *limitersMap) saveLimits() {
 		key := keys[i]
 		limitsToSaveFormatted[key] = map[string]map[string]any{
 			limit.Key: {
-				limit.ValField:          limit.Limit,
-				limit.DistributionField: limit.Distribution,
-				"kind":                  limit.Kind,
+				limit.ValField: limit.Limit,
+				"kind":         limit.Kind,
 			},
+		}
+
+		if limit.Distribution.Enabled {
+			limitsToSaveFormatted[key][limit.Key][limit.DistributionField] = limit.Distribution
 		}
 	}
 
