@@ -624,7 +624,7 @@ func TestSaveLimitsToFile(t *testing.T) {
 	limitsFileData, err := os.ReadFile(limitsFilename)
 	require.NoError(t, err)
 
-	require.NoError(t, lm.parseLimits([]byte(limitsFileData)))
+	require.NoError(t, lm.parseLimits(limitsFileData))
 
 	podLimiter1Cfg := lm.lims["a:pod_1"].limiter.getLimitCfg()
 	podLimiter2Cfg := lm.lims["b:pod_1"].limiter.getLimitCfg()
