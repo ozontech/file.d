@@ -1,7 +1,7 @@
 ARG APP_IMAGE=ubuntu:latest
 
 # Build
-FROM --platform=$BUILDPLATFORM golang:1.23-alpine AS build
+FROM --platform=$BUILDPLATFORM golang:1.24-alpine AS build
 
 ARG VERSION
 ARG BUILD_TIME
