@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
-	"strings"
 	"sync"
 	"testing"
 
@@ -47,7 +46,7 @@ func TestMaskFunctions(t *testing.T) {
 			name:         "re not matches input string",
 			input:        []byte("ab.cd.efgh"),
 			masks:        Mask{Re: `\d`, Groups: []int{0}},
-			expected:     []byte("ab.cd.efgh"),
+			expected:     []byte(""),
 			comment:      "no one symbol should be masked",
 			mustBeMasked: false,
 		},
@@ -229,13 +228,11 @@ func TestMaskFunctions(t *testing.T) {
 		},
 	}
 
-	var plugin Plugin
-
 	for _, tCase := range suits {
 		t.Run(tCase.name, func(t *testing.T) {
 			buf := make([]byte, 0, 2048)
 			tCase.masks.Re_ = regexp.MustCompile(tCase.masks.Re)
-			buf, masked := plugin.maskValue(&tCase.masks, tCase.input, buf)
+			buf, masked := tCase.masks.maskValue(tCase.input, buf)
 			assert.Equal(t, string(tCase.expected), string(buf), tCase.comment)
 			assert.Equal(t, tCase.mustBeMasked, masked)
 		})
@@ -259,7 +256,6 @@ func TestMaskAddExtraField(t *testing.T) {
 	config := test.NewConfig(&Config{
 		MaskAppliedField: key,
 		MaskAppliedValue: val,
-		SkipMismatched:   true,
 		Masks: []Mask{
 			{Re: kDefaultCardRegExp, Groups: []int{1, 2, 3, 4}},
 		},
@@ -432,285 +428,6 @@ func TestGroupNumbers(t *testing.T) {
 }
 
 //nolint:funlen
-func TestGetValueNodes(t *testing.T) {
-	suits := []struct {
-		name        string
-		input       string
-		fieldPaths  [][]string
-		isWhitelist bool
-		expected    []string
-		comment     string
-	}{
-		{
-			name:     "simple test",
-			input:    `{"name1":"value1"}`,
-			expected: []string{"value1"},
-			comment:  "one string",
-		},
-		{
-			name:     "json with only one integer value",
-			input:    `{"name1":1}`,
-			expected: []string{"1"},
-			comment:  "integer also included into result",
-		},
-		{
-			name:  "test with ignored field",
-			input: `{"name1":"value1", "name2":"value2", "ignored_field":"some"}`,
-			fieldPaths: [][]string{
-				{"ignored_field"},
-			},
-			isWhitelist: false,
-			expected:    []string{"value1", "value2"},
-			comment:     "skip ignored_field",
-		},
-		{
-			name:  "test with processed field",
-			input: `{"name1":"value1", "name2":"value2", "processed_field":"some"}`,
-			fieldPaths: [][]string{
-				{"processed_field"},
-			},
-			isWhitelist: true,
-			expected:    []string{"some"},
-			comment:     "skip all fields except processed_field",
-		},
-		{
-			name: "test with ignored nested field 1",
-			input: `{
-				"name1":"value1",
-				"name2":"value2",
-				"nested": {
-					"ignored_field":"some",
-					"name3":"value3"
-				}
-			}`,
-			fieldPaths: [][]string{
-				{"nested", "ignored_field"},
-			},
-			isWhitelist: false,
-			expected:    []string{"value1", "value2", "value3"},
-			comment:     "skip one nested ignored_field",
-		},
-		{
-			name: "test with ignored nested field 2",
-			input: `{
-				"name1":"value1",
-				"name2":"value2",
-				"nested": {
-					"ignored1":"some1",
-					"ignored2":"some2"
-				}
-			}`,
-			fieldPaths: [][]string{
-				{"nested"},
-			},
-			isWhitelist: false,
-			expected:    []string{"value1", "value2"},
-			comment:     "skip two nested ignored_fields",
-		},
-		{
-			name: "test with several ignored paths",
-			input: `{
-				"name1":"value1",
-				"name2":"value2",
-				"nested": {"ignored1":"some1"},
-				"ignored2":"some2"
-			}`,
-			fieldPaths: [][]string{
-				{"nested", "ignored1"},
-				{"ignored2"},
-			},
-			isWhitelist: false,
-			expected:    []string{"value1", "value2"},
-			comment:     "skip two ignored_fields",
-		},
-		{
-			name: "test with processed nested field 1",
-			input: `{
-				"name1":"value1",
-				"name2":"value2",
-				"nested": {
-					"processed_field":"some",
-					"name3": "value3"
-				}
-			}`,
-			fieldPaths: [][]string{
-				{"nested", "processed_field"},
-			},
-			isWhitelist: true,
-			expected:    []string{"some"},
-			comment:     "skip all fields except one nested processed_field",
-		},
-		{
-			name: "test with processed nested field 2",
-			input: `{
-				"name1":"value1",
-				"name2":"value2",
-				"nested": {
-					"processed1":"some1",
-					"processed2":"some2"
-				}
-			}`,
-			fieldPaths: [][]string{
-				{"nested"},
-			},
-			isWhitelist: true,
-			expected:    []string{"some1", "some2"},
-			comment:     "skip all fields except two nested processed_fields",
-		},
-		{
-			name: "test with several processed paths",
-			input: `{
-				"name1":"value1",
-				"name2":"value2",
-				"nested": {"processed1":"some1"},
-				"processed2":"some2"
-			}`,
-			fieldPaths: [][]string{
-				{"nested", "processed1"},
-				{"processed2"},
-			},
-			isWhitelist: true,
-			expected:    []string{"some1", "some2"},
-			comment:     "skip all fields except two processed_fields",
-		},
-		{
-			name: "big json with ints and nulls",
-			input: `{"widget": {
-                "debug": "on",
-                "window": {
-                    "title": "Sample Konfabulator Widget",
-                    "name": "main_window",
-                    "width": 500,
-                    "height": 500
-                },
-                "image": {
-                    "src": "Images/Sun.png",
-                    "name": "sun1",
-                    "hOffset": 250,
-                    "vOffset": 250,
-                    "alignment": "center"
-                },
-                "text": {
-                    "data": "Click Here",
-                    "size": 36,
-                    "param": null,
-                    "style": "bold",
-                    "name": "text1",
-                    "hOffset": 250,
-                    "vOffset": 100,
-                    "alignment": "center",
-                    "onMouseUp": "sun1.opacity = (sun1.opacity / 100) * 90;"
-                }
-                }} `,
-			expected: []string{"on",
-				"Sample Konfabulator Widget",
-				"main_window",
-				"500",
-				"500",
-				"Images/Sun.png",
-				"sun1",
-				"250",
-				"250",
-				"center",
-				"Click Here",
-				"36",
-				"null",
-				"bold",
-				"text1",
-				"250",
-				"100",
-				"center",
-				"sun1.opacity = (sun1.opacity / 100) * 90;"},
-			comment: "all values should be collected",
-		},
-	}
-
-	for _, s := range suits {
-		t.Run(s.name, func(t *testing.T) {
-			root, err := insaneJSON.DecodeString(s.input)
-			require.NoError(t, err)
-			defer insaneJSON.Release(root)
-
-			p := Plugin{fieldPaths: s.fieldPaths, isWhitelist: s.isWhitelist}
-			nodes := p.getValueNodes(root.Node, nil)
-			require.Equal(t, len(nodes), len(s.expected), s.comment)
-			for i := range nodes {
-				assert.Equal(t, s.expected[i], nodes[i].AsString(), s.comment)
-			}
-		})
-	}
-}
-
-//nolint:funlen
-func TestGetAllValueNodes(t *testing.T) {
-	suits := []struct {
-		name     string
-		input    string
-		expected []string
-	}{
-		{
-			name:     "one string",
-			input:    `"abc"`,
-			expected: []string{"abc"},
-		},
-		{
-			name:     "one number",
-			input:    `123`,
-			expected: []string{"123"},
-		},
-		{
-			name:     "one boolean",
-			input:    `true`,
-			expected: []string{"true"},
-		},
-		{
-			name:     "one null",
-			input:    `null`,
-			expected: []string{"null"},
-		},
-		{
-			name:     "simple array",
-			input:    `["abc", 123, true, null]`,
-			expected: []string{"abc", "123", "true", "null"},
-		},
-		{
-			name:     "nested arrays",
-			input:    `[[], ["abc", 123, [true]], [[[], [null]]]]`,
-			expected: []string{"abc", "123", "true", "null"},
-		},
-		{
-			name:     "simple object",
-			input:    `{"name1":"abc", "name2":123, "name3":true, "name4":null}`,
-			expected: []string{"abc", "123", "true", "null"},
-		},
-		{
-			name:     "nested objects",
-			input:    `{"f1": {"some":"abc", "f2": {"n":123, "flag":true, "f3": {"name":null}}}}`,
-			expected: []string{"abc", "123", "true", "null"},
-		},
-		{
-			name:     "array and object",
-			input:    `{"f1": ["abc", {"name2":123, "name3":true}], "name": {"name":null}}`,
-			expected: []string{"abc", "123", "true", "null"},
-		},
-	}
-
-	for _, s := range suits {
-		t.Run(s.name, func(t *testing.T) {
-			root, err := insaneJSON.DecodeString(s.input)
-			require.NoError(t, err)
-			defer insaneJSON.Release(root)
-
-			nodes := getNestedValueNodes(root.Node, nil, nil)
-			require.Equal(t, len(nodes), len(s.expected))
-			for i := range nodes {
-				assert.Equal(t, s.expected[i], nodes[i].AsString())
-			}
-		})
-	}
-}
-
-//nolint:funlen
 func TestPlugin(t *testing.T) {
 	suits := []struct {
 		name     string
@@ -787,7 +504,6 @@ func TestPlugin(t *testing.T) {
 	}
 
 	config := test.NewConfig(&Config{
-		SkipMismatched: true,
 		Masks: []Mask{
 			{
 				Re:     `a(x*)b`,
@@ -856,7 +572,6 @@ func TestWithEmptyRegex(t *testing.T) {
 	}
 
 	config := test.NewConfig(&Config{
-		SkipMismatched: true,
 		Masks: []Mask{
 			{
 				MatchRules: []matchrule.RuleSet{
@@ -1070,7 +785,6 @@ func TestPluginWithComplexMasks(t *testing.T) {
 	for _, s := range suits {
 		t.Run(s.name, func(t *testing.T) {
 			config := test.NewConfig(&Config{
-				SkipMismatched:      true,
 				Masks:               s.masks,
 				AppliedMetricName:   s.metricName,
 				AppliedMetricLabels: s.metricLabels,
@@ -1103,85 +817,934 @@ func TestPluginWithComplexMasks(t *testing.T) {
 	}
 }
 
-func createBenchInputString() []byte {
-	matchable := `{"field1":"Иванов Иван Иванович c картой 4445-2222-3333-4444 встал не с той ноги"}`
-	unmatchable := `{"field1":"Просто строка которая не заменяется"}`
-	matchableCoeff := 0.1 // percentage of matchable input
-	totalCount := 50
-	matchableCount := int(float64(totalCount) * matchableCoeff)
-	builder := strings.Builder{}
-	for i := 0; i < totalCount; i++ {
-		if i <= matchableCount {
-			builder.WriteString(matchable)
-		} else {
-			builder.WriteString(unmatchable)
+func TestIgnoreProcessFields(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name          string
+		ignoreFields  []string
+		processFields []string
+		masks         []Mask
+		input         []string
+		expected      []string
+		comment       string
+	}{
+		{
+			name:         "global_ignore_fields_flat_single_mask_ok",
+			ignoreFields: []string{"f3"},
+			masks: []Mask{
+				{
+					Re:          "(test)",
+					Groups:      []int{0},
+					ReplaceWord: "REPLACED",
+				},
+			},
+			input: []string{
+				`{"f1":"some test val","f2":"another test val","f3":"more test val"}`,
+				`{"f1":"some val","f2":"another val","f3":"more val"}`,
+				`{"f1":"some test val test more tests","f2":"another test val","f3":"more test val"}`,
+				`"some test-string not-json"`,
+				`["testarrval"]`,
+			},
+			expected: []string{
+				`{"f1":"some REPLACED val","f2":"another REPLACED val","f3":"more test val"}`,
+				`{"f1":"some val","f2":"another val","f3":"more val"}`,
+				`{"f1":"some REPLACED val REPLACED more REPLACEDs","f2":"another REPLACED val","f3":"more test val"}`,
+				`"some REPLACED-string not-json"`,
+				`["REPLACEDarrval"]`,
+			},
+			comment: "global ignore fields flat with single mask no error",
+		},
+		{
+			name:          "global_process_fields_flat_single_mask_ok",
+			processFields: []string{"f3"},
+			masks: []Mask{
+				{
+					Re:          "(test)",
+					Groups:      []int{0},
+					ReplaceWord: "REPLACED",
+				},
+			},
+			input: []string{
+				`{"f1":"some test val","f2":"another test val","f3":"more test val"}`,
+				`{"f1":"some val","f2":"another val","f3":"more val"}`,
+				`{"f1":"some test val test more tests","f2":"another test val","f3":"more test val test testtest atestb"}`,
+				`"some test-string not-json"`,
+				`["testarrval"]`,
+			},
+			expected: []string{
+				`{"f1":"some test val","f2":"another test val","f3":"more REPLACED val"}`,
+				`{"f1":"some val","f2":"another val","f3":"more val"}`,
+				`{"f1":"some test val test more tests","f2":"another test val","f3":"more REPLACED val REPLACED REPLACEDREPLACED aREPLACEDb"}`,
+				`"some test-string not-json"`,
+				`["testarrval"]`,
+			},
+			comment: "global process fields flat with single mask no error",
+		},
+		{
+			name:         "global_ignore_fields_flat_multi_mask_ok",
+			ignoreFields: []string{"f3"},
+			masks: []Mask{
+				{
+					Re:          "(test)",
+					Groups:      []int{0},
+					ReplaceWord: "REPLACED1",
+				},
+				{
+					Re:          "(tst)",
+					Groups:      []int{0},
+					ReplaceWord: "REPLACED2",
+				},
+				{
+					Re:          "(tesst)",
+					Groups:      []int{0},
+					ReplaceWord: "REPLACED3",
+				},
+			},
+			input: []string{
+				`{"f1":"some test tst tesst val","f2":"another tesst tst test val","f3":"more test val"}`,
+				`{"f1":"some val","f2":"another val","f3":"more val"}`,
+				`{"f1":"some tst tst tesst tesst test val test more tests","f2":"another test val tst atestb test ctstd","f3":"more test val"}`,
+				`"some test-string not-json"`,
+				`["testarrval"]`,
+			},
+			expected: []string{
+				`{"f1":"some REPLACED1 REPLACED2 REPLACED3 val","f2":"another REPLACED3 REPLACED2 REPLACED1 val","f3":"more test val"}`,
+				`{"f1":"some val","f2":"another val","f3":"more val"}`,
+				`{"f1":"some REPLACED2 REPLACED2 REPLACED3 REPLACED3 REPLACED1 val REPLACED1 more REPLACED1s","f2":"another REPLACED1 val REPLACED2 aREPLACED1b REPLACED1 cREPLACED2d","f3":"more test val"}`,
+				`"some REPLACED1-string not-json"`,
+				`["REPLACED1arrval"]`,
+			},
+			comment: "global ignore fields flat with multiple masks no error",
+		},
+		{
+			name:          "global_process_fields_flat_multi_mask_ok",
+			processFields: []string{"f3"},
+			masks: []Mask{
+				{
+					Re:          "(test)",
+					Groups:      []int{0},
+					ReplaceWord: "REPLACED1",
+				},
+				{
+					Re:          "(tst)",
+					Groups:      []int{0},
+					ReplaceWord: "REPLACED2",
+				},
+				{
+					Re:          "(tesst)",
+					Groups:      []int{0},
+					ReplaceWord: "REPLACED3",
+				},
+			},
+			input: []string{
+				`{"f1":"some test val","f2":"another test val","f3":"more test tst tesst val"}`,
+				`{"f1":"some val","f2":"another val","f3":"more val"}`,
+				`{"f1":"some test val test more tests","f2":"another test val","f3":"more test val test tsttessttest testtest atestb ctesstd"}`,
+				`"some test-string not-json"`,
+				`["testarrval"]`,
+			},
+			expected: []string{
+				`{"f1":"some test val","f2":"another test val","f3":"more REPLACED1 REPLACED2 REPLACED3 val"}`,
+				`{"f1":"some val","f2":"another val","f3":"more val"}`,
+				`{"f1":"some test val test more tests","f2":"another test val","f3":"more REPLACED1 val REPLACED1 REPLACED2REPLACED3REPLACED1 REPLACED1REPLACED1 aREPLACED1b cREPLACED3d"}`,
+				`"some test-string not-json"`,
+				`["testarrval"]`,
+			},
+			comment: "global process fields flat with multiple masks no error",
+		},
+		{
+			name: "inmask_ignore_fields_flat_two_mask_ok",
+			masks: []Mask{
+				{
+					Re:           "(test)",
+					Groups:       []int{0},
+					ReplaceWord:  "REPLACED1",
+					IgnoreFields: []string{"f3"},
+				},
+				{
+					Re:          "(tst)",
+					Groups:      []int{0},
+					ReplaceWord: "REPLACED2",
+				},
+			},
+			input: []string{
+				`{"f1":"some test tst tesst val","f2":"another tesst tst test val","f3":"more test val tst"}`,
+				`{"f1":"some val","f2":"another val","f3":"more val"}`,
+				`{"f1":"some tst tst tesst tesst test val test more tests","f2":"another test val tst atestb test ctstd","f3":"more test val tsttesttst"}`,
+				`"some test-string not-json tst"`,
+				`["testarrvaltst"]`,
+			},
+			expected: []string{
+				`{"f1":"some REPLACED1 REPLACED2 tesst val","f2":"another tesst REPLACED2 REPLACED1 val","f3":"more test val REPLACED2"}`,
+				`{"f1":"some val","f2":"another val","f3":"more val"}`,
+				`{"f1":"some REPLACED2 REPLACED2 tesst tesst REPLACED1 val REPLACED1 more REPLACED1s","f2":"another REPLACED1 val REPLACED2 aREPLACED1b REPLACED1 cREPLACED2d","f3":"more test val REPLACED2testREPLACED2"}`,
+				`"some REPLACED1-string not-json REPLACED2"`,
+				`["REPLACED1arrvalREPLACED2"]`,
+			},
+			comment: "mask-specific ignore fields flat with two masks no error",
+		},
+		{
+			name: "inmask_process_fields_flat_two_mask_ok",
+			masks: []Mask{
+				{
+					Re:            "(test)",
+					Groups:        []int{0},
+					ReplaceWord:   "REPLACED1",
+					ProcessFields: []string{"f3"},
+				},
+				{
+					Re:          "(tst)",
+					Groups:      []int{0},
+					ReplaceWord: "REPLACED2",
+				},
+			},
+			input: []string{
+				`{"f1":"some test val","f2":"tst another test val","f3":"more test tst tesst val"}`,
+				`{"f1":"some val","f2":"another val","f3":"more val"}`,
+				`{"f1":"some test val test more tests tst","f2":"another test val","f3":"more test val test tsttessttest testtest atestb ctesstd"}`,
+				`"some test-string not-json tst"`,
+				`["testarrvaltst"]`,
+			},
+			expected: []string{
+				`{"f1":"some test val","f2":"REPLACED2 another test val","f3":"more REPLACED1 REPLACED2 tesst val"}`,
+				`{"f1":"some val","f2":"another val","f3":"more val"}`,
+				`{"f1":"some test val test more tests REPLACED2","f2":"another test val","f3":"more REPLACED1 val REPLACED1 REPLACED2tesstREPLACED1 REPLACED1REPLACED1 aREPLACED1b ctesstd"}`,
+				`"some test-string not-json REPLACED2"`,
+				`["testarrvalREPLACED2"]`,
+			},
+			comment: "mask-specific process fields flat with two masks no error",
+		},
+		{
+			name:         "global_ignore_fields_nested_single_mask_ok_1",
+			ignoreFields: []string{"f3"},
+			masks: []Mask{
+				{
+					Re:          "(test)",
+					Groups:      []int{0},
+					ReplaceWord: "REPLACED",
+				},
+			},
+			input: []string{
+				`{"f1":{"f5":"some test val"},"f2":"another test val","f3":{"f4":"more test val","ff4":"testtestval"}}`,
+				`{"f1":"some val","f2":"another val","f3":"more val"}`,
+				`{"f1":{"f6":"some test val test more tests"},"f2":"another test val","f3":{"f7":"more test val"}}`,
+				`"some test-string not-json"`,
+				`["testarrvaltst"]`,
+			},
+			expected: []string{
+				`{"f1":{"f5":"some REPLACED val"},"f2":"another REPLACED val","f3":{"f4":"more test val","ff4":"testtestval"}}`,
+				`{"f1":"some val","f2":"another val","f3":"more val"}`,
+				`{"f1":{"f6":"some REPLACED val REPLACED more REPLACEDs"},"f2":"another REPLACED val","f3":{"f7":"more test val"}}`,
+				`"some REPLACED-string not-json"`,
+				`["REPLACEDarrvaltst"]`,
+			},
+			comment: "global ignore fields nested with single mask no error",
+		},
+		{
+			name:         "global_ignore_fields_nested_single_mask_ok_2",
+			ignoreFields: []string{"f3.f4"},
+			masks: []Mask{
+				{
+					Re:          "(test)",
+					Groups:      []int{0},
+					ReplaceWord: "REPLACED",
+				},
+			},
+			input: []string{
+				`{"f1":{"f5":"some test val"},"f2":"another test val","f3":{"f4":"more test val","ff4":"testtestval"}}`,
+				`{"f1":"some val","f2":"another val","f3":"more val"}`,
+				`{"f1":{"f6":"some test val test more tests"},"f2":"another test val","f3":{"f7":"more test val","f8":["testarrval"]}}`,
+				`"some test-string not-json"`,
+				`["testarrvaltst"]`,
+			},
+			expected: []string{
+				`{"f1":{"f5":"some REPLACED val"},"f2":"another REPLACED val","f3":{"f4":"more test val","ff4":"REPLACEDREPLACEDval"}}`,
+				`{"f1":"some val","f2":"another val","f3":"more val"}`,
+				`{"f1":{"f6":"some REPLACED val REPLACED more REPLACEDs"},"f2":"another REPLACED val","f3":{"f7":"more REPLACED val","f8":["REPLACEDarrval"]}}`,
+				`"some REPLACED-string not-json"`,
+				`["REPLACEDarrvaltst"]`,
+			},
+			comment: "global ignore fields nested with single mask no error",
+		},
+		{
+			name:         "global_ignore_fields_nested_single_mask_ok_3",
+			ignoreFields: []string{"f1.1"},
+			masks: []Mask{
+				{
+					Re:          "(test)",
+					Groups:      []int{0},
+					ReplaceWord: "REPLACED",
+				},
+			},
+			input: []string{
+				`{"f1":[{"f101":"test val","f102":"another test val"},{"f111":"again test val"}]}`,
+				`"some test-string not-json"`,
+				`["testarrvaltst"]`,
+			},
+			expected: []string{
+				`{"f1":[{"f101":"REPLACED val","f102":"another REPLACED val"},{"f111":"again test val"}]}`,
+				`"some REPLACED-string not-json"`,
+				`["REPLACEDarrvaltst"]`,
+			},
+			comment: "global ignore fields nested with single mask no error",
+		},
+		{
+			name:          "global_process_fields_nested_single_mask_ok_1",
+			processFields: []string{"f3"},
+			masks: []Mask{
+				{
+					Re:          "(test)",
+					Groups:      []int{0},
+					ReplaceWord: "REPLACED",
+				},
+			},
+			input: []string{
+				`{"f1":{"f5":"some test val"},"f2":"another test val","f3":{"f4":"more test val"}}`,
+				`{"f1":"some val","f2":"another val","f3":"more val"}`,
+				`{"f1":{"f6":"some test val test more tests"},"f2":"another test val","f3":{"f7":"more test val"}}`,
+				`"some test-string not-json"`,
+				`["testarrvaltst"]`,
+			},
+			expected: []string{
+				`{"f1":{"f5":"some test val"},"f2":"another test val","f3":{"f4":"more REPLACED val"}}`,
+				`{"f1":"some val","f2":"another val","f3":"more val"}`,
+				`{"f1":{"f6":"some test val test more tests"},"f2":"another test val","f3":{"f7":"more REPLACED val"}}`,
+				`"some test-string not-json"`,
+				`["testarrvaltst"]`,
+			},
+			comment: "global process fields nested with single mask no error",
+		},
+		{
+			name:          "global_process_fields_nested_single_mask_ok_2",
+			processFields: []string{"f3.f4"},
+			masks: []Mask{
+				{
+					Re:          "(test)",
+					Groups:      []int{0},
+					ReplaceWord: "REPLACED",
+				},
+			},
+			input: []string{
+				`{"f1":{"f5":"some test val"},"f2":"another test val","f3":{"f4":"more test val"}}`,
+				`{"f1":"some val","f2":"another val","f3":"more val"}`,
+				`{"f1":{"f6":"some test val test more tests"},"f2":"another test val","f3":{"f7":"more test val"}}`,
+				`{"f1":{"f5":"some test val"},"f2":"another test val","f3":{"f4":{"f8":"more test val"}}}`,
+				`"some test-string not-json"`,
+				`["testarrvaltst"]`,
+			},
+			expected: []string{
+				`{"f1":{"f5":"some test val"},"f2":"another test val","f3":{"f4":"more REPLACED val"}}`,
+				`{"f1":"some val","f2":"another val","f3":"more val"}`,
+				`{"f1":{"f6":"some test val test more tests"},"f2":"another test val","f3":{"f7":"more test val"}}`,
+				`{"f1":{"f5":"some test val"},"f2":"another test val","f3":{"f4":{"f8":"more REPLACED val"}}}`,
+				`"some test-string not-json"`,
+				`["testarrvaltst"]`,
+			},
+			comment: "global process fields nested with single mask no error",
+		},
+		{
+			name:          "global_process_fields_nested_single_mask_ok_3",
+			processFields: []string{"f1.1"},
+			masks: []Mask{
+				{
+					Re:          "(test)",
+					Groups:      []int{0},
+					ReplaceWord: "REPLACED",
+				},
+			},
+			input: []string{
+				`{"f1":[{"f101":"test val","f102":"another test val"},{"f111":"again test val"}]}`,
+				`"some test-string not-json"`,
+				`["testarrvaltst"]`,
+			},
+			expected: []string{
+				`{"f1":[{"f101":"test val","f102":"another test val"},{"f111":"again REPLACED val"}]}`,
+				`"some test-string not-json"`,
+				`["testarrvaltst"]`,
+			},
+			comment: "global process fields nested with single mask no error",
+		},
+		{
+			name: "inmask_ignore_fields_nested_two_mask_ok_1",
+			masks: []Mask{
+				{
+					Re:           "(test)",
+					Groups:       []int{0},
+					ReplaceWord:  "REPLACED1",
+					IgnoreFields: []string{"f3"},
+				},
+				{
+					Re:          "(tst)",
+					Groups:      []int{0},
+					ReplaceWord: "REPLACED2",
+				},
+			},
+			input: []string{
+				`{"f1":{"f6":"some test val"},"f2":"tst another test val","f3":{"f4":"more test tst tesst val"}}`,
+				`{"f1":"some val","f2":"another val","f3":"more val"}`,
+				`{"f1":"some test val test more tests tst","f2":["another test val"],"f3":{"f5":"more test val test tsttessttest testtest atestb ctesstd"}}`,
+				`"some test-string not-json tst"`,
+				`["testarrvaltst"]`,
+			},
+			expected: []string{
+				`{"f1":{"f6":"some REPLACED1 val"},"f2":"REPLACED2 another REPLACED1 val","f3":{"f4":"more test REPLACED2 tesst val"}}`,
+				`{"f1":"some val","f2":"another val","f3":"more val"}`,
+				`{"f1":"some REPLACED1 val REPLACED1 more REPLACED1s REPLACED2","f2":["another REPLACED1 val"],"f3":{"f5":"more test val test REPLACED2tessttest testtest atestb ctesstd"}}`,
+				`"some REPLACED1-string not-json REPLACED2"`,
+				`["REPLACED1arrvalREPLACED2"]`,
+			},
+			comment: "mask-specific ignore fields nested with two masks no error",
+		},
+		{
+			name: "inmask_ignore_fields_nested_two_mask_ok_2",
+			masks: []Mask{
+				{
+					Re:           "(test)",
+					Groups:       []int{0},
+					ReplaceWord:  "REPLACED1",
+					IgnoreFields: []string{"f3.f4"},
+				},
+				{
+					Re:          "(tst)",
+					Groups:      []int{0},
+					ReplaceWord: "REPLACED2",
+				},
+			},
+			input: []string{
+				`{"f1":{"f6":"some test val"},"f2":"tst another test val","f3":{"f4":"more test tst tesst val"}}`,
+				`{"f1":"some val","f2":"another val","f3":"more val"}`,
+				`{"f1":"some test val test more tests tst","f2":["another test val"],"f3":{"f5":"more test val test tsttessttest testtest atestb ctesstd"}}`,
+				`"some test-string not-json tst"`,
+				`["testarrvaltst"]`,
+			},
+			expected: []string{
+				`{"f1":{"f6":"some REPLACED1 val"},"f2":"REPLACED2 another REPLACED1 val","f3":{"f4":"more test REPLACED2 tesst val"}}`,
+				`{"f1":"some val","f2":"another val","f3":"more val"}`,
+				`{"f1":"some REPLACED1 val REPLACED1 more REPLACED1s REPLACED2","f2":["another REPLACED1 val"],"f3":{"f5":"more REPLACED1 val REPLACED1 REPLACED2tesstREPLACED1 REPLACED1REPLACED1 aREPLACED1b ctesstd"}}`,
+				`"some REPLACED1-string not-json REPLACED2"`,
+				`["REPLACED1arrvalREPLACED2"]`,
+			},
+			comment: "mask-specific ignore fields nested with two masks no error",
+		},
+		{
+			name: "inmask_process_fields_nested_two_mask_ok_1",
+			masks: []Mask{
+				{
+					Re:            "(test)",
+					Groups:        []int{0},
+					ReplaceWord:   "REPLACED1",
+					ProcessFields: []string{"f3"},
+				},
+				{
+					Re:          "(tst)",
+					Groups:      []int{0},
+					ReplaceWord: "REPLACED2",
+				},
+			},
+			input: []string{
+				`{"f1":"some test val","f2":"tst another test val","f3":{"f4":"more test tst tesst val"}}`,
+				`{"f1":"some val","f2":"another val","f3":"more val"}`,
+				`{"f1":"some test val test more tests tst","f2":"another test val","f3":{"f5":"more test val test tsttessttest testtest atestb ctesstd"}}`,
+				`"some test-string not-json tst"`,
+				`["testarrvaltst"]`,
+			},
+			expected: []string{
+				`{"f1":"some test val","f2":"REPLACED2 another test val","f3":{"f4":"more REPLACED1 REPLACED2 tesst val"}}`,
+				`{"f1":"some val","f2":"another val","f3":"more val"}`,
+				`{"f1":"some test val test more tests REPLACED2","f2":"another test val","f3":{"f5":"more REPLACED1 val REPLACED1 REPLACED2tesstREPLACED1 REPLACED1REPLACED1 aREPLACED1b ctesstd"}}`,
+				`"some test-string not-json REPLACED2"`,
+				`["testarrvalREPLACED2"]`,
+			},
+			comment: "mask-specific process fields nested with two masks no error",
+		},
+		{
+			name: "inmask_process_fields_nested_two_mask_ok_2",
+			masks: []Mask{
+				{
+					Re:            "(test)",
+					Groups:        []int{0},
+					ReplaceWord:   "REPLACED1",
+					ProcessFields: []string{"f3.f4"},
+				},
+				{
+					Re:          "(tst)",
+					Groups:      []int{0},
+					ReplaceWord: "REPLACED2",
+				},
+			},
+			input: []string{
+				`{"f1":"some test val","f2":"tst another test val","f3":{"f4":"more test tst tesst val"}}`,
+				`{"f1":"some val","f2":"another val","f3":"more val"}`,
+				`{"f1":"some test val test more tests tst","f2":"another test val","f3":{"f5":"more test val test tsttessttest testtest atestb ctesstd"}}`,
+				`"some test-string not-json tst"`,
+				`["testarrvaltst"]`,
+			},
+			expected: []string{
+				`{"f1":"some test val","f2":"REPLACED2 another test val","f3":{"f4":"more REPLACED1 REPLACED2 tesst val"}}`,
+				`{"f1":"some val","f2":"another val","f3":"more val"}`,
+				`{"f1":"some test val test more tests REPLACED2","f2":"another test val","f3":{"f5":"more test val test REPLACED2tessttest testtest atestb ctesstd"}}`,
+				`"some test-string not-json REPLACED2"`,
+				`["testarrvalREPLACED2"]`,
+			},
+			comment: "mask-specific process fields nested with two masks no error",
+		},
+		{
+			name:         "global_inmask_ignore_fields_nested_multiple_mask_ok_1",
+			ignoreFields: []string{"f1"},
+			masks: []Mask{
+				{
+					Re:          "(test)",
+					Groups:      []int{0},
+					ReplaceWord: "REPLACED1",
+				},
+				{
+					Re:           "(tst)",
+					Groups:       []int{0},
+					ReplaceWord:  "REPLACED2",
+					IgnoreFields: []string{"f3"},
+				},
+			},
+			input: []string{
+				`{"f1":"some test val","f2":"tst another test val","f3":{"f4":"more test tst tesst val"}}`,
+				`{"f1":"some val","f2":"another val","f3":"more val"}`,
+				`{"f1":"some test val test more tests tst","f2":"another test val","f3":{"f5":"more test val test tsttessttest testtest atestb ctesstd"}}`,
+				`"some test-string not-json tst"`,
+				`["testarrvaltst"]`,
+			},
+			expected: []string{
+				`{"f1":"some test val","f2":"REPLACED2 another REPLACED1 val","f3":{"f4":"more REPLACED1 tst tesst val"}}`,
+				`{"f1":"some val","f2":"another val","f3":"more val"}`,
+				`{"f1":"some test val test more tests REPLACED2","f2":"another REPLACED1 val","f3":{"f5":"more REPLACED1 val REPLACED1 tsttesstREPLACED1 REPLACED1REPLACED1 aREPLACED1b ctesstd"}}`,
+				`"some REPLACED1-string not-json REPLACED2"`,
+				`["REPLACED1arrvalREPLACED2"]`,
+			},
+			comment: "mask-specific ignore fields nested with two masks no error",
+		},
+		{
+			name:          "global_inmask_process_fields_nested_multiple_mask_ok_1",
+			processFields: []string{"f1"},
+			masks: []Mask{
+				{
+					Re:          "(test)",
+					Groups:      []int{0},
+					ReplaceWord: "REPLACED1",
+				},
+				{
+					Re:            "(tst)",
+					Groups:        []int{0},
+					ReplaceWord:   "REPLACED2",
+					ProcessFields: []string{"f3"},
+				},
+			},
+			input: []string{
+				`{"f1":"some test val","f2":"tst another test val","f3":{"f4":"more test tst tesst val"}}`,
+				`{"f1":"some val","f2":"another val","f3":"more val"}`,
+				`{"f1":"some test val test more tests tst","f2":"another test val","f3":{"f5":"more test val test tsttessttest testtest atestb ctesstd"}}`,
+				`"some test-string not-json tst"`,
+				`["testarrvaltst"]`,
+			},
+			expected: []string{
+				`{"f1":"some REPLACED1 val","f2":"tst another test val","f3":{"f4":"more test REPLACED2 tesst val"}}`,
+				`{"f1":"some val","f2":"another val","f3":"more val"}`,
+				`{"f1":"some REPLACED1 val REPLACED1 more REPLACED1s tst","f2":"another test val","f3":{"f5":"more test val test REPLACED2tessttest testtest atestb ctesstd"}}`,
+				`"some test-string not-json tst"`,
+				`["testarrvaltst"]`,
+			},
+			comment: "mask-specific process fields nested with two masks no error",
+		},
+		{
+			name:          "global_inmask_ignore_process_fields_nested_multiple_mask_ok_1",
+			processFields: []string{"f1"},
+			masks: []Mask{
+				{
+					Re:          "(test)",
+					Groups:      []int{0},
+					ReplaceWord: "REPLACED1",
+				},
+				{
+					Re:           "(tst)",
+					Groups:       []int{0},
+					ReplaceWord:  "REPLACED2",
+					IgnoreFields: []string{"f3"},
+				},
+			},
+			input: []string{
+				`{"f1":"some test val","f2":"tst another test val","f3":{"f4":"more test tst tesst val"}}`,
+				`{"f1":"some val","f2":"another val","f3":"more val"}`,
+				`{"f1":"some test val test more tests tst","f2":"another test val","f3":{"f5":"more test val test tsttessttest testtest atestb ctesstd"}}`,
+				`"some test-string not-json tst"`,
+				`["testarrvaltst"]`,
+			},
+			expected: []string{
+				`{"f1":"some REPLACED1 val","f2":"REPLACED2 another test val","f3":{"f4":"more test tst tesst val"}}`,
+				`{"f1":"some val","f2":"another val","f3":"more val"}`,
+				`{"f1":"some REPLACED1 val REPLACED1 more REPLACED1s REPLACED2","f2":"another test val","f3":{"f5":"more test val test tsttessttest testtest atestb ctesstd"}}`,
+				`"some test-string not-json REPLACED2"`,
+				`["testarrvalREPLACED2"]`,
+			},
+			comment: "mask-specific ignore fields nested with two masks no error",
+		},
+		{
+			name:         "global_inmask_process_ignore_fields_nested_multiple_mask_ok_1",
+			ignoreFields: []string{"f1"},
+			masks: []Mask{
+				{
+					Re:          "(test)",
+					Groups:      []int{0},
+					ReplaceWord: "REPLACED1",
+				},
+				{
+					Re:            "(tst)",
+					Groups:        []int{0},
+					ReplaceWord:   "REPLACED2",
+					ProcessFields: []string{"f3"},
+				},
+			},
+			input: []string{
+				`{"f1":"some test val","f2":"tst another test val","f3":{"f4":"more test tst tesst val"}}`,
+				`{"f1":"some val","f2":"another val","f3":"more val"}`,
+				`{"f1":"some test val test more tests tst","f2":"another test val","f3":{"f5":"more test val test tsttessttest testtest atestb ctesstd"}}`,
+				`"some test-string not-json tst"`,
+				`["testarrvaltst"]`,
+			},
+			expected: []string{
+				`{"f1":"some test val","f2":"tst another REPLACED1 val","f3":{"f4":"more REPLACED1 REPLACED2 tesst val"}}`,
+				`{"f1":"some val","f2":"another val","f3":"more val"}`,
+				`{"f1":"some test val test more tests tst","f2":"another REPLACED1 val","f3":{"f5":"more REPLACED1 val REPLACED1 REPLACED2tesstREPLACED1 REPLACED1REPLACED1 aREPLACED1b ctesstd"}}`,
+				`"some REPLACED1-string not-json tst"`,
+				`["REPLACED1arrvaltst"]`,
+			},
+			comment: "mask-specific ignore fields nested with two masks no error",
+		},
+		{
+			name:         "complex_global_inmask_mixed_case_ok_1",
+			ignoreFields: []string{"f1", "f2.f3"},
+			masks: []Mask{
+				{
+					Re:          "(test)",
+					Groups:      []int{0},
+					ReplaceWord: "REPLACED1",
+				},
+				{
+					Re:            "(tst)",
+					Groups:        []int{0},
+					ReplaceWord:   "REPLACED2",
+					ProcessFields: []string{"f3.f5"},
+				},
+				{
+					Re:           "(tesst)",
+					Groups:       []int{0},
+					ReplaceWord:  "REPLACED3",
+					IgnoreFields: []string{"f3.f4"},
+				},
+			},
+			input: []string{
+				`{"f1":"some test val","f2":"tst another test val","f3":{"f4":"more test tst tesst val"}}`,
+				`{"f1":"some val","f2":"another val","f3":"more val"}`,
+				`{"f1":"some test val test more tests tst","f2":"another test val","f3":{"f5":"more test val test tsttessttest testtest atestb ctesstd"}}`,
+				`"some test-string not-json tst"`,
+				`["testarrvaltsttesst"]`,
+			},
+			expected: []string{
+				`{"f1":"some test val","f2":"tst another REPLACED1 val","f3":{"f4":"more REPLACED1 tst tesst val"}}`,
+				`{"f1":"some val","f2":"another val","f3":"more val"}`,
+				`{"f1":"some test val test more tests tst","f2":"another REPLACED1 val","f3":{"f5":"more REPLACED1 val REPLACED1 REPLACED2REPLACED3REPLACED1 REPLACED1REPLACED1 aREPLACED1b cREPLACED3d"}}`,
+				`"some REPLACED1-string not-json tst"`,
+				`["REPLACED1arrvaltstREPLACED3"]`,
+			},
+			comment: "mask-specific ignore fields nested with two masks no error",
+		},
+		{
+			name:         "complex_global_inmask_mixed_case_ok_1",
+			ignoreFields: []string{"f1", "f2.f3"},
+			masks: []Mask{
+				{
+					Re:            "(test)",
+					Groups:        []int{0},
+					ReplaceWord:   "REPLACED1",
+					ProcessFields: []string{"f1"},
+				},
+				{
+					Re:            "(tst)",
+					Groups:        []int{0},
+					ReplaceWord:   "REPLACED2",
+					ProcessFields: []string{"f3.f5"},
+				},
+				{
+					Re:            "(tesst)",
+					Groups:        []int{0},
+					ReplaceWord:   "REPLACED3",
+					ProcessFields: []string{"f3.f4"},
+				},
+			},
+			input: []string{
+				`{"f1":"some test val","f2":"tst another test val","f3":{"f4":"more test tst tesst val"}}`,
+				`{"f1":"some val","f2":"another val","f3":"more val"}`,
+				`{"f1":"some test val test more tests tst","f2":"another test val","f3":{"f5":"more test val test tsttessttest testtest atestb ctesstd"}}`,
+				`"some test-string not-json tst"`,
+				`["testarrvaltsttesst"]`,
+			},
+			expected: []string{
+				`{"f1":"some REPLACED1 val","f2":"tst another test val","f3":{"f4":"more test tst REPLACED3 val"}}`,
+				`{"f1":"some val","f2":"another val","f3":"more val"}`,
+				`{"f1":"some REPLACED1 val REPLACED1 more REPLACED1s tst","f2":"another test val","f3":{"f5":"more test val test REPLACED2tessttest testtest atestb ctesstd"}}`,
+				`"some test-string not-json tst"`,
+				`["testarrvaltsttesst"]`,
+			},
+			comment: "mask-specific ignore fields nested with two masks no error",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			config := test.NewConfig(&Config{
+				Masks:         tt.masks,
+				IgnoreFields:  tt.ignoreFields,
+				ProcessFields: tt.processFields,
+			}, nil)
+			p, input, output := test.NewPipelineMock(
+				test.NewActionPluginStaticInfo(factory, config,
+					pipeline.MatchModeAnd,
+					nil,
+					false))
+			wg := sync.WaitGroup{}
+			wg.Add(len(tt.input))
+
+			outEvents := make([]string, 0, len(tt.expected))
+			output.SetOutFn(func(e *pipeline.Event) {
+				outEvents = append(outEvents, e.Root.EncodeToString())
+				wg.Done()
+			})
+
+			for _, in := range tt.input {
+				input.In(0, "test.log", test.NewOffset(0), []byte(in))
+			}
+
+			wg.Wait()
+			p.Stop()
+
+			for i := range tt.expected {
+				assert.Equal(t, tt.expected[i], outEvents[i], tt.comment)
+			}
+		})
+	}
+}
+
+func initBenchData(eventsTotalCnt, fieldsCnt, valLen int) []*pipeline.Event {
+	if eventsTotalCnt <= 0 {
+		eventsTotalCnt = 50
+	}
+	if fieldsCnt <= 0 {
+		fieldsCnt = 10
+	}
+	if valLen <= 0 {
+		valLen = 10
+	}
+
+	matchableVal := "Иванов Иван Иванович c картой 4445-2222-3333-4444 встал не с той ноги"
+	unmatchableVal := "Просто строка которая не заменяется"
+
+	matchable := `{`
+	for i := range fieldsCnt {
+		matchable += fmt.Sprintf(`"field%d":"`, i+1)
+		for range valLen {
+			matchable += fmt.Sprintf("%s ", matchableVal)
+		}
+		matchable += `"`
+		if i < fieldsCnt-1 {
+			matchable += `,`
 		}
 	}
-	return []byte(builder.String())
+	matchable += `}`
+
+	unmatchable := `{`
+	for i := range fieldsCnt {
+		unmatchable += fmt.Sprintf(`"field%d":"`, i+1)
+		for range valLen {
+			unmatchable += fmt.Sprintf("%s ", unmatchableVal)
+		}
+		unmatchable += `"`
+		if i < fieldsCnt-1 {
+			unmatchable += `,`
+		}
+	}
+	unmatchable += `}`
+
+	matchableCoeff := 0.1 // percentage of matchable input
+	matchableCount := int(float64(eventsTotalCnt) * matchableCoeff)
+	events := make([]pipeline.Event, eventsTotalCnt)
+	eventsPtrs := make([]*pipeline.Event, eventsTotalCnt)
+	for i := 0; i < eventsTotalCnt; i++ {
+		root := insaneJSON.Spawn()
+		if i <= matchableCount {
+			root.DecodeString(matchable)
+		} else {
+			root.DecodeString(unmatchable)
+		}
+		events[i].Root = root
+		eventsPtrs[i] = &events[i]
+	}
+	return eventsPtrs
 }
 
-func BenchmarkMaskValue(b *testing.B) {
-	var plugin Plugin
-	input := createBenchInputString()
-	re := regexp.MustCompile(kDefaultCardRegExp)
-	grp := []int{0, 1, 2, 3}
-	mask := Mask{
-		Re_:    re,
-		Groups: grp,
-	}
-	buf := make([]byte, 0, 2048)
-	for i := 0; i < b.N; i++ {
-		buf, _ = plugin.maskValue(&mask, input, buf)
-	}
-}
-
-func genFields(count int) string {
-	var sb strings.Builder
-	for i := 0; i < count; i++ {
-		sb.WriteString(fmt.Sprintf(`"field_%d":"val_%d",`, i, i))
-	}
-	return sb.String()
-}
-
-func BenchmarkGetValueNodesCommon(b *testing.B) {
-	s := fmt.Sprintf(`{%s"level":"info"}`, genFields(1000))
-	pl := Plugin{
-		isWhitelist: false,
-		fieldPaths: [][]string{
-			{"field_1"}, {"field_2"}, {"field_200"}, {"field_300"}, {"field_400"}, {"field_500"},
-			{"field_600"}, {"field_700"}, {"field_750"}, {"field_800"}, {"field_850"}, {"field_900"},
+func BenchmarkDo(b *testing.B) {
+	eventsTotalCnt := 50
+	benchmarks := []struct {
+		name           string
+		eventsTotalCnt int
+		fieldsCnt      int
+		valLen         int
+	}{
+		{
+			name:           "f10-v10",
+			eventsTotalCnt: eventsTotalCnt,
+			fieldsCnt:      10,
+			valLen:         10,
 		},
-		ignoredNodes: make([]*insaneJSON.Node, 100),
-		valueNodes:   make([]*insaneJSON.Node, 0, 1000),
+		{
+			name:           "f10-v100",
+			eventsTotalCnt: eventsTotalCnt,
+			fieldsCnt:      10,
+			valLen:         100,
+		},
+		{
+			name:           "f100-v10",
+			eventsTotalCnt: eventsTotalCnt,
+			fieldsCnt:      100,
+			valLen:         10,
+		},
 	}
-
-	root, err := insaneJSON.DecodeString(s)
-	require.NoError(b, err)
-	defer insaneJSON.Release(root)
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		pl.getValueNodes(root.Node, pl.valueNodes)
+	for _, bb := range benchmarks {
+		b.Run(bb.name, func(b *testing.B) {
+			var plugin Plugin
+			config := test.NewConfig(&Config{
+				Masks: []Mask{
+					{
+						Re:     kDefaultCardRegExp,
+						Groups: []int{0, 1, 2, 3},
+					},
+				},
+			}, nil).(pipeline.AnyConfig)
+			params := test.NewEmptyActionPluginParams()
+			plugin.Start(config, params)
+			input := initBenchData(bb.eventsTotalCnt, bb.fieldsCnt, bb.valLen)
+			for i := 0; i < b.N; i++ {
+				for _, event := range input {
+					plugin.Do(event)
+				}
+			}
+		})
 	}
 }
 
-func BenchmarkSkipManyValuesAtOnce(b *testing.B) {
-	s := fmt.Sprintf(
-		`{"name1":{"name2":[%s]}}`,
-		strings.TrimRight(strings.Repeat(`"abc",`, 1000), ","),
-	)
-	pl := Plugin{
-		isWhitelist: false,
-		fieldPaths:  [][]string{{"name1"}},
-		valueNodes:  make([]*insaneJSON.Node, 0, 1000),
+func BenchmarkDoIgnoreFields(b *testing.B) {
+	eventsTotalCnt := 50
+	benchmarks := []struct {
+		name           string
+		eventsTotalCnt int
+		fieldsCnt      int
+		valLen         int
+	}{
+		{
+			name:           "f10-v10",
+			eventsTotalCnt: eventsTotalCnt,
+			fieldsCnt:      10,
+			valLen:         10,
+		},
+		{
+			name:           "f10-v100",
+			eventsTotalCnt: eventsTotalCnt,
+			fieldsCnt:      10,
+			valLen:         100,
+		},
+		{
+			name:           "f100-v10",
+			eventsTotalCnt: eventsTotalCnt,
+			fieldsCnt:      100,
+			valLen:         10,
+		},
 	}
+	for _, bb := range benchmarks {
+		b.Run(bb.name, func(b *testing.B) {
+			var plugin Plugin
+			config := test.NewConfig(&Config{
+				IgnoreFields: []string{
+					"field1",
+					"field2",
+					"field3",
+				},
+				Masks: []Mask{
+					{
+						Re:     kDefaultCardRegExp,
+						Groups: []int{0, 1, 2, 3},
+					},
+				},
+			}, nil).(pipeline.AnyConfig)
+			params := test.NewEmptyActionPluginParams()
+			plugin.Start(config, params)
+			input := initBenchData(bb.eventsTotalCnt, bb.fieldsCnt, bb.valLen)
+			for i := 0; i < b.N; i++ {
+				for _, event := range input {
+					plugin.Do(event)
+				}
+			}
+		})
+	}
+}
 
-	root, err := insaneJSON.DecodeString(s)
-	require.NoError(b, err)
-	defer insaneJSON.Release(root)
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		pl.getValueNodes(root.Node, pl.valueNodes)
+func BenchmarkDoProcessFields(b *testing.B) {
+	eventsTotalCnt := 50
+	benchmarks := []struct {
+		name           string
+		eventsTotalCnt int
+		fieldsCnt      int
+		valLen         int
+	}{
+		{
+			name:           "f10-v10",
+			eventsTotalCnt: eventsTotalCnt,
+			fieldsCnt:      10,
+			valLen:         10,
+		},
+		{
+			name:           "f10-v100",
+			eventsTotalCnt: eventsTotalCnt,
+			fieldsCnt:      10,
+			valLen:         100,
+		},
+		{
+			name:           "f100-v10",
+			eventsTotalCnt: eventsTotalCnt,
+			fieldsCnt:      100,
+			valLen:         10,
+		},
+	}
+	for _, bb := range benchmarks {
+		b.Run(bb.name, func(b *testing.B) {
+			var plugin Plugin
+			config := test.NewConfig(&Config{
+				ProcessFields: []string{
+					"field1",
+					"field2",
+					"field3",
+				},
+				Masks: []Mask{
+					{
+						Re:     kDefaultCardRegExp,
+						Groups: []int{0, 1, 2, 3},
+					},
+				},
+			}, nil).(pipeline.AnyConfig)
+			params := test.NewEmptyActionPluginParams()
+			plugin.Start(config, params)
+			input := initBenchData(bb.eventsTotalCnt, bb.fieldsCnt, bb.valLen)
+			for i := 0; i < b.N; i++ {
+				for _, event := range input {
+					plugin.Do(event)
+				}
+			}
+		})
 	}
 }
