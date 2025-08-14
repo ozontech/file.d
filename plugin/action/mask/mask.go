@@ -122,6 +122,7 @@ type Plugin struct {
 	hasMaskSpecificFieldsList bool   // fast check for mask-specific ignore or process fields lists
 	hasMasksIgnoreFields      []bool // flags for which masks have ignore fields lists
 	hasMasksProcessFields     []bool // flags for which masks have process fields lists
+	hasMaskSpecificDoIf       bool
 
 	maskApplyCount        []uint64
 	hasMaskSpecificMetric bool
@@ -227,6 +228,13 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 		}
 	}
 
+	for i := range p.config.Masks {
+		if p.config.Masks[i].DoIfChecker != nil {
+			p.hasMaskSpecificDoIf = true
+			break
+		}
+	}
+
 	p.registerMetrics(params.MetricCtl)
 }
 
@@ -258,9 +266,11 @@ func (p *Plugin) Stop() {
 
 func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	// check which masks to apply to the event
-	for i := range p.config.Masks {
-		if p.config.Masks[i].DoIfChecker != nil {
-			p.config.Masks[i].use = p.config.Masks[i].DoIfChecker.Check(event.Root)
+	if p.hasMaskSpecificDoIf {
+		for i := range p.config.Masks {
+			if p.config.Masks[i].DoIfChecker != nil {
+				p.config.Masks[i].use = p.config.Masks[i].DoIfChecker.Check(event.Root)
+			}
 		}
 	}
 
@@ -268,6 +278,9 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	if p.hasGlobalProcessFields && !p.hasMaskSpecificFieldsList { // fast path when there are no mask-specific fields
 		for _, fieldPath := range p.fieldPaths {
 			node := event.Root.Dig(fieldPath...)
+			if node == nil {
+				continue
+			}
 			if p.traverseTree(event, node, nil) {
 				maskApplied = true
 			}
@@ -276,11 +289,10 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 		maskApplied = p.traverseTree(event, event.Root.Node, p.fieldMasksRoot)
 	}
 
-	if p.config.MaskAppliedField != "" && maskApplied {
-		event.Root.AddFieldNoAlloc(event.Root, p.config.MaskAppliedField).MutateToString(p.config.MaskAppliedValue)
-	}
-
 	if maskApplied {
+		if p.config.MaskAppliedField != "" {
+			event.Root.AddFieldNoAlloc(event.Root, p.config.MaskAppliedField).MutateToString(p.config.MaskAppliedValue)
+		}
 		if p.config.AppliedMetricName != "" {
 			labelValues := make([]string, 0, len(p.config.AppliedMetricLabels))
 			for _, labelValuePath := range p.config.AppliedMetricLabels {
