@@ -1,4 +1,4 @@
-package doif
+package do_if
 
 import (
 	"errors"
@@ -13,7 +13,7 @@ import (
 )
 
 /*{ do-if-ts-cmp-op-node
-DoIf timestamp comparison op node is considered to always be a leaf in the DoIf tree like DoIf field op node.
+DoIf timestamp comparison op node is considered to always be a leaf in the DoIf tree like DoIf string op node.
 It contains operation that compares timestamps with certain value.
 
 Params:
@@ -84,7 +84,7 @@ type tsCmpOpNode struct {
 	updateInterval   time.Duration
 }
 
-func NewTsCmpOpNode(field string, format string, cmpOp string, cmpValChangeMode string, cmpValue time.Time, cmpValueShift time.Duration, updateInterval time.Duration) (Node, error) {
+func newTsCmpOpNode(field string, format string, cmpOp string, cmpValChangeMode string, cmpValue time.Time, cmpValueShift time.Duration, updateInterval time.Duration) (Node, error) {
 	typedCmpOp, err := newCmpOp(cmpOp)
 	if err != nil {
 		return nil, err
@@ -133,11 +133,11 @@ func (n *tsCmpOpNode) startUpdater() {
 	}
 }
 
-func (n *tsCmpOpNode) Type() NodeType {
+func (n *tsCmpOpNode) Type() nodeType {
 	return NodeTimestampCmpOp
 }
 
-func (n *tsCmpOpNode) Check(eventRoot *insaneJSON.Root) bool {
+func (n *tsCmpOpNode) checkEvent(eventRoot *insaneJSON.Root) bool {
 	node := eventRoot.Dig(n.fieldPath...)
 	if node == nil {
 		return false
@@ -167,6 +167,10 @@ func (n *tsCmpOpNode) Check(eventRoot *insaneJSON.Root) bool {
 	rhs += n.cmpValueShift
 
 	return n.cmpOp.compare(lhs, int(rhs))
+}
+
+func (n *tsCmpOpNode) CheckRaw([]byte, []byte, map[string]string) bool {
+	panic("not impl")
 }
 
 func (n *tsCmpOpNode) isEqualTo(n2 Node, _ int) error {

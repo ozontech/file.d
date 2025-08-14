@@ -12,11 +12,12 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func newAntispammer(threshold, unbanIterations int, maintenanceInterval time.Duration) *Antispammer {
+func newAntispammer(threshold, unbanIterations int, maintenanceInterval time.Duration, exceptions Exceptions) *Antispammer {
 	holder := metric.NewHolder(time.Minute)
 	return NewAntispammer(&Options{
 		MaintenanceInterval: maintenanceInterval,
 		Threshold:           threshold,
+		Exceptions:          exceptions,
 		UnbanIterations:     unbanIterations,
 		Logger:              logger.Instance.Named("antispam").Desugar(),
 		MetricsController:   metric.NewCtl("test", prometheus.NewRegistry()),
@@ -31,12 +32,12 @@ func TestAntispam(t *testing.T) {
 	unbanIterations := 2
 	maintenanceInterval := time.Second * 1
 
-	antispamer := newAntispammer(threshold, unbanIterations, maintenanceInterval)
+	antispammer := newAntispammer(threshold, unbanIterations, maintenanceInterval, nil)
 
 	startTime := time.Now()
 	checkSpam := func(i int) bool {
 		eventTime := startTime.Add(time.Duration(i) * maintenanceInterval / 2)
-		return antispamer.IsSpam("1", "test", false, []byte(`{}`), eventTime)
+		return antispammer.IsSpam("1", "test", false, []byte(`{}`), eventTime, nil)
 	}
 
 	for i := 1; i < threshold; i++ {
@@ -47,7 +48,7 @@ func TestAntispam(t *testing.T) {
 	for i := 0; i <= unbanIterations-1; i++ {
 		result := checkSpam(threshold + i)
 		r.True(result)
-		antispamer.Maintenance()
+		antispammer.Maintenance()
 	}
 
 	result := checkSpam(threshold + 1)
@@ -61,12 +62,12 @@ func TestAntispamAfterRestart(t *testing.T) {
 	unbanIterations := 2
 	maintenanceInterval := time.Second * 1
 
-	antispamer := newAntispammer(threshold, unbanIterations, maintenanceInterval)
+	antispamer := newAntispammer(threshold, unbanIterations, maintenanceInterval, nil)
 
 	startTime := time.Now()
 	checkSpam := func(i int) bool {
 		eventTime := startTime.Add(time.Duration(i) * maintenanceInterval)
-		return antispamer.IsSpam("1", "test", false, []byte(`{}`), eventTime)
+		return antispamer.IsSpam("1", "test", false, []byte(`{}`), eventTime, nil)
 	}
 
 	for i := 1; i < threshold; i++ {
@@ -86,12 +87,10 @@ func TestAntispamExceptions(t *testing.T) {
 	unbanIterations := 2
 	maintenanceInterval := time.Second * 1
 
-	antispamer := newAntispammer(threshold, unbanIterations, maintenanceInterval)
-
 	eventRulesetName := "test_event"
 	sourceRulesetName := "test_sourcename"
 
-	antispamer.exceptions = Exceptions{
+	exceptions := Exceptions{
 		{
 			RuleSet: matchrule.RuleSet{
 				Name: eventRulesetName,
@@ -125,12 +124,13 @@ func TestAntispamExceptions(t *testing.T) {
 			},
 		},
 	}
-	antispamer.exceptions.Prepare()
+
+	antispammer := newAntispammer(threshold, unbanIterations, maintenanceInterval, exceptions)
 
 	checkSpam := func(source, event string, wantMetric map[string]float64) {
-		antispamer.IsSpam("1", source, true, []byte(event), now)
+		antispammer.IsSpam("1", source, true, []byte(event), now, nil)
 		for k, v := range wantMetric {
-			r.Equal(v, testutil.ToFloat64(antispamer.exceptionMetric.WithLabelValues(k)))
+			r.Equal(v, testutil.ToFloat64(antispammer.exceptionMetric.WithLabelValues(k)))
 		}
 	}
 

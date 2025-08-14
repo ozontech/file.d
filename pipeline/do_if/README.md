@@ -6,7 +6,7 @@ When Do If Checker's Match func is called it calls to the root Match func and th
 the chain of Match func calls are performed across the whole tree.
 
 ## Node types
-**`FieldOp`** Type of node where matching rules for fields are stored.
+**`StringOp`** Type of node where string checks for fields are stored.
 
 <br>
 
@@ -27,16 +27,16 @@ the chain of Match func calls are performed across the whole tree.
 <br>
 
 
-## Field op node
-DoIf field op node is considered to always be a leaf in the DoIf tree. It checks byte representation of the value by the given field path.
+## String op node
+DoIf string op node is considered to always be a leaf in the DoIf tree. It checks byte representation of the value by the given field path.
 Array and object values are considered as not matched since encoding them to bytes leads towards large CPU and memory consumption.
 
 Params:
-  - `op` - value from field operations list. Required.
+  - `op` - value from string operations list. Required.
   - `field` - path to field in JSON tree. If empty, root value is checked. Path to nested fields is delimited by dots `"."`, e.g. `"field.subfield"` for `{"field": {"subfield": "val"}}`.
   If the field name contains dots in it they should be shielded with `"\"`, e.g. `"exception\.type"` for `{"exception.type": "example"}`. Default empty.
   - `values` - list of values to check field. Required non-empty.
-  - `case_sensitive` - flag indicating whether checks are performed in case sensitive way. Default `true`.
+  - `case_sensitive` - flag indicating whether checks are performed in case-sensitive way. Default `true`.
     Note: case insensitive checks can cause CPU and memory overhead since every field value will be converted to lower letters.
 
 Example:
@@ -53,8 +53,8 @@ pipelines:
 ```
 
 
-## Field operations
-**`Equal`** checks whether the field value is equal to one of the elements in the values list.
+## String operations
+Operation `equal` checks whether the field value is equal to one of the elements in the values list.
 
 Example:
 ```yaml
@@ -68,7 +68,7 @@ pipelines:
           values: [test-pod-1, test-pod-2]
 ```
 
-result:
+Result:
 ```
 {"pod":"test-pod-1","service":"test-service"}   # discarded
 {"pod":"test-pod-2","service":"test-service-2"} # discarded
@@ -78,7 +78,7 @@ result:
 
 <br>
 
-**`Contains`** checks whether the field value contains one of the elements the in values list.
+Operation `contains` checks whether the field value contains one of the elements the in values list.
 
 Example:
 ```yaml
@@ -92,7 +92,7 @@ pipelines:
           values: [my-pod, my-test]
 ```
 
-result:
+Result:
 ```
 {"pod":"test-my-pod-1","service":"test-service"}     # discarded
 {"pod":"test-not-my-pod","service":"test-service-2"} # discarded
@@ -102,7 +102,7 @@ result:
 
 <br>
 
-**`Prefix`** checks whether the field value has prefix equal to one of the elements in the values list.
+Operation `prefix` checks whether the field value has prefix equal to one of the elements in the values list.
 
 Example:
 ```yaml
@@ -116,7 +116,7 @@ pipelines:
           values: [test-1, test-2]
 ```
 
-result:
+Result:
 ```
 {"pod":"test-1-pod-1","service":"test-service"}   # discarded
 {"pod":"test-2-pod-2","service":"test-service-2"} # discarded
@@ -126,7 +126,7 @@ result:
 
 <br>
 
-**`Suffix`** checks whether the field value has suffix equal to one of the elements in the values list.
+Operation `suffix` checks whether the field value has suffix equal to one of the elements in the values list.
 
 Example:
 ```yaml
@@ -140,7 +140,7 @@ pipelines:
           values: [pod-1, pod-2]
 ```
 
-result:
+Result:
 ```
 {"pod":"test-1-pod-1","service":"test-service"}   # discarded
 {"pod":"test-2-pod-2","service":"test-service-2"} # discarded
@@ -150,7 +150,7 @@ result:
 
 <br>
 
-**`Regex`** checks whether the field matches any regex from the values list.
+Operation `regex` checks whether the field matches any regex from the values list.
 
 Example:
 ```yaml
@@ -164,7 +164,7 @@ pipelines:
           values: [pod-\d, my-test.*]
 ```
 
-result:
+Result:
 ```
 {"pod":"test-1-pod-1","service":"test-service"}       # discarded
 {"pod":"test-2-pod-2","service":"test-service-2"}     # discarded
@@ -207,7 +207,7 @@ pipelines:
 
 
 ## Logical operations
-**`Or`** accepts at least one operand and returns true on the first returned true from its operands.
+Operation `or` accepts at least one operand and returns true on the first returned true from its operands.
 
 Example:
 ```yaml
@@ -226,7 +226,7 @@ pipelines:
               values: [test-service]
 ```
 
-result:
+Result:
 ```
 {"pod":"test-pod-1","service":"test-service"}   # discarded
 {"pod":"test-pod-2","service":"test-service-2"} # discarded
@@ -236,7 +236,7 @@ result:
 
 <br>
 
-**`And`** accepts at least one operand and returns true if all operands return true
+Operation `and` accepts at least one operand and returns true if all operands return true
 (in other words returns false on the first returned false from its operands).
 
 Example:
@@ -256,7 +256,7 @@ pipelines:
               values: [test-service]
 ```
 
-result:
+Result:
 ```
 {"pod":"test-pod-1","service":"test-service"}   # discarded
 {"pod":"test-pod-2","service":"test-service-2"} # not discarded
@@ -266,7 +266,7 @@ result:
 
 <br>
 
-**`Not`** accepts exactly one operand and returns inverted result of its operand.
+Operation `not` accepts exactly one operand and returns inverted result of its operand.
 
 Example:
 ```yaml
@@ -282,7 +282,7 @@ pipelines:
               values: [test-service]
 ```
 
-result:
+Result:
 ```
 {"pod":"test-pod-1","service":"test-service"}   # not discarded
 {"pod":"test-pod-2","service":"test-service-2"} # discarded
@@ -294,7 +294,7 @@ result:
 
 
 ## Length comparison op node
-DoIf length comparison op node is considered to always be a leaf in the DoIf tree like DoIf field op node.
+DoIf length comparison op node is considered to always be a leaf in the DoIf tree like DoIf string op node.
 It contains operation that compares field length in bytes or array length (for array fields) with certain value.
 
 Params:
@@ -361,7 +361,7 @@ They denote corresponding comparison operations.
 | `ne` | `!=` |
 
 ## Timestamp comparison op node
-DoIf timestamp comparison op node is considered to always be a leaf in the DoIf tree like DoIf field op node.
+DoIf timestamp comparison op node is considered to always be a leaf in the DoIf tree like DoIf string op node.
 It contains operation that compares timestamps with certain value.
 
 Params:

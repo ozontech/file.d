@@ -27,6 +27,19 @@ func (m *Mode) UnmarshalJSON(i []byte) error {
 	return nil
 }
 
+func (m *Mode) ToString() string {
+	switch *m {
+	case ModeContains:
+		return "contains"
+	case ModePrefix:
+		return "prefix"
+	case ModeSuffix:
+		return "suffix"
+	default:
+		panic("unreachable")
+	}
+}
+
 const (
 	ModePrefix Mode = iota
 	ModeContains
@@ -64,6 +77,14 @@ type Rule struct {
 	minValueSize int
 	maxValueSize int
 	prepared     bool
+}
+
+func (r *Rule) GetMinValueSize() int {
+	return r.minValueSize
+}
+
+func (r *Rule) GetMaxValueSize() int {
+	return r.maxValueSize
 }
 
 func (r *Rule) Prepare() {
@@ -185,6 +206,17 @@ var (
 	condAndBytes = []byte(`"and"`)
 	condOrBytes  = []byte(`"or"`)
 )
+
+func (c *Cond) ToString() string {
+	switch *c {
+	case CondAnd:
+		return "and"
+	case CondOr:
+		return "or"
+	default:
+		panic("unreachable")
+	}
+}
 
 type RuleSet struct {
 	// > @3@4@5@6

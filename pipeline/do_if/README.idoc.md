@@ -8,17 +8,17 @@ the chain of Match func calls are performed across the whole tree.
 ## Node types
 @do-if-node|description
 
-## Field op node
-@do-if-field-op-node
+## String op node
+@do-if-string-op-node
 
-## Field operations
-@do-if-field-op|description
+## String operations
+@do-if-string-op
 
 ## Logical op node
 @do-if-logical-op-node
 
 ## Logical operations
-@do-if-logical-op|description
+@do-if-logical-op
 
 ## Length comparison op node
 @do-if-len-cmp-op-node

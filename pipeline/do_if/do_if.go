@@ -1,4 +1,4 @@
-package doif
+package do_if
 
 import (
 	insaneJSON "github.com/ozontech/insane-json"
@@ -7,13 +7,13 @@ import (
 // ! do-if-node
 // ^ do-if-node
 
-type NodeType int
+type nodeType int
 
 const (
-	NodeUnknownType NodeType = iota
+	NodeUnknownType nodeType = iota
 
-	// > Type of node where matching rules for fields are stored.
-	NodeFieldOp // *
+	// > Type of node where string checks for fields are stored.
+	NodeStringOp // *
 
 	// > Type of node where matching rules for byte length and array length are stored.
 	NodeLengthCmpOp // *
@@ -29,8 +29,9 @@ const (
 )
 
 type Node interface {
-	Type() NodeType
-	Check(*insaneJSON.Root) bool
+	Type() nodeType
+	checkEvent(*insaneJSON.Root) bool
+	CheckRaw(event []byte, sourceName []byte, metadata map[string]string) bool
 	isEqualTo(Node, int) error
 }
 
@@ -52,5 +53,9 @@ func (c *Checker) Check(eventRoot *insaneJSON.Root) bool {
 	if eventRoot == nil {
 		return false
 	}
-	return c.root.Check(eventRoot)
+	return c.root.checkEvent(eventRoot)
+}
+
+func (c *Checker) CheckRaw(event []byte, sourceName []byte, metadata map[string]string) bool {
+	return c.root.CheckRaw(event, sourceName, metadata)
 }

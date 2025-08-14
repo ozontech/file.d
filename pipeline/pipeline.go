@@ -154,6 +154,7 @@ type Settings struct {
 	EventTimeout            time.Duration
 	AntispamThreshold       int
 	AntispamExceptions      antispam.Exceptions
+	Antispam                map[string]any
 	SourceNameMetaField     string
 	AvgEventSize            int
 	MaxEventSize            int
@@ -214,6 +215,7 @@ func New(name string, settings *Settings, registry *prometheus.Registry, lg *zap
 			MetricsController:   metricCtl,
 			MetricHolder:        metricHolder,
 			Exceptions:          settings.AntispamExceptions,
+			Config:              settings.Antispam,
 		}),
 
 		eventLog:   make([]string, 0, 128),
@@ -491,7 +493,7 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offsets Offsets, byt
 				p.Error(fmt.Sprintf("cannot parse raw time %s: %v", row.Time, err))
 			}
 		}
-		isSpam := p.antispamer.IsSpam(checkSourceID, checkSourceName, isNewSource, bytes, eventTime)
+		isSpam := p.antispamer.IsSpam(checkSourceID, checkSourceName, isNewSource, bytes, eventTime, meta)
 		if isSpam {
 			return EventSeqIDError
 		}

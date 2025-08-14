@@ -1,4 +1,4 @@
-package doif
+package do_if
 
 import (
 	"errors"
@@ -8,14 +8,17 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ozontech/file.d/pipeline/do_if/logic"
+	"github.com/ozontech/file.d/pipeline/do_if/str_checker"
 	insaneJSON "github.com/ozontech/insane-json"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 type treeNode struct {
-	fieldOp       string
-	fieldName     string
+	fieldName string
+
+	stringOp      string
 	caseSensitive bool
 	values        [][]byte
 
@@ -32,35 +35,38 @@ type treeNode struct {
 	tsCmpValue         time.Time
 	tsCmpValueShift    time.Duration
 	tsUpdateInterval   time.Duration
+
+	checkTypeOp bool
 }
 
 // nolint:gocritic
-func buildTree(node treeNode) (Node, error) {
+func buildTree(node *treeNode) (Node, error) {
 	switch {
-	case node.fieldOp != "":
-		return NewFieldOpNode(
-			node.fieldOp,
-			node.fieldName,
+	case node.stringOp != "":
+		return newStringOpNode(
+			node.stringOp,
 			node.caseSensitive,
 			node.values,
+			node.fieldName,
+			"",
 		)
 	case node.logicalOp != "":
 		operands := make([]Node, 0)
-		for _, operandNode := range node.operands {
-			operand, err := buildTree(operandNode)
+		for i := range node.operands {
+			operand, err := buildTree(&node.operands[i])
 			if err != nil {
 				return nil, fmt.Errorf("failed to build tree: %w", err)
 			}
 			operands = append(operands, operand)
 		}
-		return NewLogicalNode(
+		return newLogicalNode(
 			node.logicalOp,
 			operands,
 		)
 	case node.lenCmpOp != "":
-		return NewLenCmpOpNode(node.lenCmpOp, node.fieldName, node.cmpOp, node.cmpValue)
+		return newLenCmpOpNode(node.lenCmpOp, node.fieldName, node.cmpOp, node.cmpValue)
 	case node.tsCmpOp:
-		return NewTsCmpOpNode(
+		return newTsCmpOpNode(
 			node.fieldName,
 			node.tsFormat,
 			node.cmpOp,
@@ -68,6 +74,11 @@ func buildTree(node treeNode) (Node, error) {
 			node.tsCmpValue,
 			node.tsCmpValueShift,
 			node.tsUpdateInterval,
+		)
+	case node.checkTypeOp:
+		return newCheckTypeOpNode(
+			node.fieldName,
+			node.values,
 		)
 	default:
 		return nil, errors.New("unknown type of node")
@@ -77,40 +88,12 @@ func buildTree(node treeNode) (Node, error) {
 func checkNode(t *testing.T, want, got Node) {
 	require.Equal(t, want.Type(), got.Type())
 	switch want.Type() {
-	case NodeFieldOp:
-		wantNode := want.(*fieldOpNode)
-		gotNode := got.(*fieldOpNode)
-		assert.Equal(t, wantNode.op, gotNode.op)
+	case NodeStringOp:
+		wantNode := want.(*stringOpNode)
+		gotNode := got.(*stringOpNode)
 		assert.Equal(t, 0, slices.Compare[[]string](wantNode.fieldPath, gotNode.fieldPath))
 		assert.Equal(t, wantNode.fieldPathStr, gotNode.fieldPathStr)
-		assert.Equal(t, wantNode.caseSensitive, gotNode.caseSensitive)
-		if wantNode.values == nil {
-			assert.Equal(t, wantNode.values, gotNode.values)
-		} else {
-			require.Equal(t, len(wantNode.values), len(gotNode.values))
-			for i := 0; i < len(wantNode.values); i++ {
-				wantValues := wantNode.values[i]
-				gotValues := gotNode.values[i]
-				assert.Equal(t, 0, slices.Compare[[]byte](wantValues, gotValues))
-			}
-		}
-		if wantNode.valuesBySize == nil {
-			assert.Equal(t, wantNode.valuesBySize, gotNode.valuesBySize)
-		} else {
-			require.Equal(t, len(wantNode.valuesBySize), len(gotNode.valuesBySize))
-			for k, wantVals := range wantNode.valuesBySize {
-				gotVals, ok := gotNode.valuesBySize[k]
-				assert.True(t, ok, "values by key %d not present in got node", k)
-				if ok {
-					require.Equal(t, len(wantVals), len(gotVals))
-					for i := 0; i < len(wantVals); i++ {
-						assert.Equal(t, 0, slices.Compare[[]byte](wantVals[i], gotVals[i]))
-					}
-				}
-			}
-		}
-		assert.Equal(t, wantNode.minValLen, gotNode.minValLen)
-		assert.Equal(t, wantNode.maxValLen, gotNode.maxValLen)
+		assert.NoError(t, str_checker.Equal(&wantNode.checker, &gotNode.checker))
 	case NodeLogicalOp:
 		wantNode := want.(*logicalNode)
 		gotNode := got.(*logicalNode)
@@ -151,63 +134,39 @@ func TestBuildNodes(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name: "ok_field_op_node",
+			name: "ok_string_op_node",
 			tree: treeNode{
-				fieldOp:       "equal",
+				stringOp:      "equal",
 				fieldName:     "log.pod",
 				caseSensitive: true,
 				values:        [][]byte{[]byte(`test-111`), []byte(`test-2`), []byte(`test-3`), []byte(`test-12345`)},
 			},
-			want: &fieldOpNode{
-				op:            fieldEqualOp,
-				fieldPath:     []string{"log", "pod"},
-				fieldPathStr:  "log.pod",
-				caseSensitive: true,
-				values:        nil,
-				valuesBySize: map[int][][]byte{
-					6: [][]byte{
-						[]byte(`test-2`),
-						[]byte(`test-3`),
-					},
-					8: [][]byte{
-						[]byte(`test-111`),
-					},
-					10: [][]byte{
-						[]byte(`test-12345`),
-					},
-				},
-				minValLen: 6,
-				maxValLen: 10,
+			want: &stringOpNode{
+				fieldPath:    []string{"log", "pod"},
+				fieldPathStr: "log.pod",
+				checker: str_checker.MustNew(
+					"equal",
+					true,
+					[][]byte{[]byte(`test-111`), []byte(`test-2`), []byte(`test-3`), []byte(`test-12345`)},
+				),
 			},
 		},
 		{
-			name: "ok_field_op_node_case_insensitive",
+			name: "ok_string_op_node_case_insensitive",
 			tree: treeNode{
-				fieldOp:       "equal",
+				stringOp:      "equal",
 				fieldName:     "log.pod",
 				caseSensitive: false,
 				values:        [][]byte{[]byte(`TEST-111`), []byte(`Test-2`), []byte(`tesT-3`), []byte(`TeSt-12345`)},
 			},
-			want: &fieldOpNode{
-				op:            fieldEqualOp,
-				fieldPath:     []string{"log", "pod"},
-				fieldPathStr:  "log.pod",
-				caseSensitive: false,
-				values:        nil,
-				valuesBySize: map[int][][]byte{
-					6: [][]byte{
-						[]byte(`test-2`),
-						[]byte(`test-3`),
-					},
-					8: [][]byte{
-						[]byte(`test-111`),
-					},
-					10: [][]byte{
-						[]byte(`test-12345`),
-					},
-				},
-				minValLen: 6,
-				maxValLen: 10,
+			want: &stringOpNode{
+				fieldPath:    []string{"log", "pod"},
+				fieldPathStr: "log.pod",
+				checker: str_checker.MustNew(
+					"equal",
+					false,
+					[][]byte{[]byte(`TEST-111`), []byte(`Test-2`), []byte(`tesT-3`), []byte(`TeSt-12345`)},
+				),
 			},
 		},
 		{
@@ -216,13 +175,13 @@ func TestBuildNodes(t *testing.T) {
 				logicalOp: "or",
 				operands: []treeNode{
 					{
-						fieldOp:       "equal",
+						stringOp:      "equal",
 						fieldName:     "log.pod",
 						caseSensitive: true,
 						values:        [][]byte{[]byte(`test-111`), []byte(`test-2`), []byte(`test-3`), []byte(`test-12345`)},
 					},
 					{
-						fieldOp:       "contains",
+						stringOp:      "contains",
 						fieldName:     "service.msg",
 						caseSensitive: true,
 						values:        [][]byte{[]byte(`test-0987`), []byte(`test-11`)},
@@ -230,40 +189,25 @@ func TestBuildNodes(t *testing.T) {
 				},
 			},
 			want: &logicalNode{
-				op: logicalOr,
+				op: logic.Or,
 				operands: []Node{
-					&fieldOpNode{
-						op:            fieldEqualOp,
-						fieldPath:     []string{"log", "pod"},
-						fieldPathStr:  "log.pod",
-						caseSensitive: true,
-						values:        nil,
-						valuesBySize: map[int][][]byte{
-							6: [][]byte{
-								[]byte(`test-2`),
-								[]byte(`test-3`),
-							},
-							8: [][]byte{
-								[]byte(`test-111`),
-							},
-							10: [][]byte{
-								[]byte(`test-12345`),
-							},
-						},
-						minValLen: 6,
-						maxValLen: 10,
+					&stringOpNode{
+						fieldPath:    []string{"log", "pod"},
+						fieldPathStr: "log.pod",
+						checker: str_checker.MustNew(
+							"equal",
+							true,
+							[][]byte{[]byte(`test-111`), []byte(`test-2`), []byte(`test-3`), []byte(`test-12345`)},
+						),
 					},
-					&fieldOpNode{
-						op:            fieldContainsOp,
-						fieldPath:     []string{"service", "msg"},
-						fieldPathStr:  "service.msg",
-						caseSensitive: true,
-						values: [][]byte{
-							[]byte(`test-0987`),
-							[]byte(`test-11`),
-						},
-						minValLen: 7,
-						maxValLen: 9,
+					&stringOpNode{
+						fieldPath:    []string{"service", "msg"},
+						fieldPathStr: "service.msg",
+						checker: str_checker.MustNew(
+							"contains",
+							true,
+							[][]byte{[]byte(`test-0987`), []byte(`test-11`)},
+						),
 					},
 				},
 			},
@@ -369,33 +313,33 @@ func TestBuildNodes(t *testing.T) {
 			},
 		},
 		{
-			name: "err_field_op_node_empty_field",
+			name: "err_string_op_node_empty_field",
 			tree: treeNode{
-				fieldOp: "equal",
+				stringOp: "equal",
 			},
 			wantErr: true,
 		},
 		{
-			name: "err_field_op_node_empty_values",
+			name: "err_string_op_node_empty_values",
 			tree: treeNode{
-				fieldOp:   "equal",
+				stringOp:  "equal",
 				fieldName: "pod",
 			},
 			wantErr: true,
 		},
 		{
-			name: "err_field_op_node_invalid_regex",
+			name: "err_string_op_node_invalid_regex",
 			tree: treeNode{
-				fieldOp:   "regex",
+				stringOp:  "regex",
 				fieldName: "pod",
 				values:    [][]byte{[]byte(`\`)},
 			},
 			wantErr: true,
 		},
 		{
-			name: "err_field_op_node_invalid_op_type",
+			name: "err_string_op_node_invalid_op_type",
 			tree: treeNode{
-				fieldOp:   "noop",
+				stringOp:  "noop",
 				fieldName: "pod",
 				values:    [][]byte{[]byte(`test`)},
 			},
@@ -478,7 +422,7 @@ func TestBuildNodes(t *testing.T) {
 				logicalOp: "noop",
 				operands: []treeNode{
 					{
-						fieldOp:       "contains",
+						stringOp:      "contains",
 						fieldName:     "service.msg",
 						caseSensitive: true,
 						values:        [][]byte{[]byte(`test-0987`), []byte(`test-11`)},
@@ -493,13 +437,13 @@ func TestBuildNodes(t *testing.T) {
 				logicalOp: "not",
 				operands: []treeNode{
 					{
-						fieldOp:       "contains",
+						stringOp:      "contains",
 						fieldName:     "service.msg",
 						caseSensitive: true,
 						values:        [][]byte{[]byte(`test-0987`), []byte(`test-11`)},
 					},
 					{
-						fieldOp:       "contains",
+						stringOp:      "contains",
 						fieldName:     "service.msg",
 						caseSensitive: true,
 						values:        [][]byte{[]byte(`test-0987`), []byte(`test-11`)},
@@ -514,7 +458,7 @@ func TestBuildNodes(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			got, err := buildTree(tt.tree)
+			got, err := buildTree(&tt.tree)
 			if tt.wantErr {
 				require.Error(t, err)
 				return
@@ -546,7 +490,7 @@ func TestCheck(t *testing.T) {
 		{
 			name: "equal",
 			tree: treeNode{
-				fieldOp:       "equal",
+				stringOp:      "equal",
 				fieldName:     "pod",
 				caseSensitive: true,
 				values:        [][]byte{[]byte("test-1"), []byte("test-2"), []byte("test-pod-123"), []byte("po-32")},
@@ -569,7 +513,7 @@ func TestCheck(t *testing.T) {
 		{
 			name: "contains",
 			tree: treeNode{
-				fieldOp:       "contains",
+				stringOp:      "contains",
 				fieldName:     "pod",
 				caseSensitive: true,
 				values:        [][]byte{[]byte("test-1"), []byte("test-2")},
@@ -584,7 +528,7 @@ func TestCheck(t *testing.T) {
 		{
 			name: "prefix",
 			tree: treeNode{
-				fieldOp:       "prefix",
+				stringOp:      "prefix",
 				fieldName:     "pod",
 				caseSensitive: true,
 				values:        [][]byte{[]byte("test-1"), []byte("test-2")},
@@ -599,7 +543,7 @@ func TestCheck(t *testing.T) {
 		{
 			name: "suffix",
 			tree: treeNode{
-				fieldOp:       "suffix",
+				stringOp:      "suffix",
 				fieldName:     "pod",
 				caseSensitive: true,
 				values:        [][]byte{[]byte("test-1"), []byte("test-2")},
@@ -614,7 +558,7 @@ func TestCheck(t *testing.T) {
 		{
 			name: "regex",
 			tree: treeNode{
-				fieldOp:   "regex",
+				stringOp:  "regex",
 				fieldName: "pod",
 				values:    [][]byte{[]byte(`test-\d`)},
 			},
@@ -633,13 +577,13 @@ func TestCheck(t *testing.T) {
 				logicalOp: "or",
 				operands: []treeNode{
 					{
-						fieldOp:       "equal",
+						stringOp:      "equal",
 						fieldName:     "pod",
 						caseSensitive: true,
 						values:        [][]byte{[]byte("test-1"), []byte("test-2")},
 					},
 					{
-						fieldOp:       "equal",
+						stringOp:      "equal",
 						fieldName:     "pod",
 						caseSensitive: true,
 						values:        [][]byte{[]byte("test-3"), []byte("test-4")},
@@ -662,13 +606,13 @@ func TestCheck(t *testing.T) {
 				logicalOp: "and",
 				operands: []treeNode{
 					{
-						fieldOp:       "prefix",
+						stringOp:      "prefix",
 						fieldName:     "pod",
 						caseSensitive: true,
 						values:        [][]byte{[]byte("test")},
 					},
 					{
-						fieldOp:       "suffix",
+						stringOp:      "suffix",
 						fieldName:     "pod",
 						caseSensitive: true,
 						values:        [][]byte{[]byte("pod")},
@@ -691,7 +635,7 @@ func TestCheck(t *testing.T) {
 				logicalOp: "not",
 				operands: []treeNode{
 					{
-						fieldOp:       "equal",
+						stringOp:      "equal",
 						fieldName:     "pod",
 						caseSensitive: true,
 						values:        [][]byte{[]byte("test-1"), []byte("test-2")},
@@ -709,7 +653,7 @@ func TestCheck(t *testing.T) {
 		{
 			name: "equal_case_insensitive",
 			tree: treeNode{
-				fieldOp:       "equal",
+				stringOp:      "equal",
 				fieldName:     "pod",
 				caseSensitive: false,
 				values:        [][]byte{[]byte("Test-1"), []byte("tesT-2")},
@@ -724,7 +668,7 @@ func TestCheck(t *testing.T) {
 		{
 			name: "contains_case_insensitive",
 			tree: treeNode{
-				fieldOp:       "contains",
+				stringOp:      "contains",
 				fieldName:     "pod",
 				caseSensitive: false,
 				values:        [][]byte{[]byte("Test-1"), []byte("tesT-2")},
@@ -739,7 +683,7 @@ func TestCheck(t *testing.T) {
 		{
 			name: "prefix_case_insensitive",
 			tree: treeNode{
-				fieldOp:       "prefix",
+				stringOp:      "prefix",
 				fieldName:     "pod",
 				caseSensitive: false,
 				values:        [][]byte{[]byte("Test-1"), []byte("tesT-2")},
@@ -754,7 +698,7 @@ func TestCheck(t *testing.T) {
 		{
 			name: "suffix_case_insensitive",
 			tree: treeNode{
-				fieldOp:       "suffix",
+				stringOp:      "suffix",
 				fieldName:     "pod",
 				caseSensitive: false,
 				values:        [][]byte{[]byte("Test-1"), []byte("tesT-2")},
@@ -769,7 +713,7 @@ func TestCheck(t *testing.T) {
 		{
 			name: "equal_nil_or_empty_string",
 			tree: treeNode{
-				fieldOp:       "equal",
+				stringOp:      "equal",
 				fieldName:     "test-field",
 				caseSensitive: false,
 				values:        [][]byte{nil, []byte("")},
@@ -1078,7 +1022,7 @@ func TestCheck(t *testing.T) {
 			var eventRoot *insaneJSON.Root
 			var err error
 			t.Parallel()
-			root, err = buildTree(tt.tree)
+			root, err = buildTree(&tt.tree)
 			require.NoError(t, err)
 			checker := newChecker(root)
 			for _, d := range tt.data {
@@ -1147,7 +1091,7 @@ func TestCheckLenCmpLtObject(t *testing.T) {
 	require.NoError(t, err)
 
 	for index, test := range tests {
-		root, err := buildTree(treeNode{
+		root, err := buildTree(&treeNode{
 			fieldName: "user_info",
 			lenCmpOp:  byteLenCmpOpTag,
 			cmpOp:     "lt",
@@ -1164,7 +1108,7 @@ func TestCheckLenCmpLtObject(t *testing.T) {
 	require.NoError(t, err)
 
 	for index, test := range tests {
-		root, err := buildTree(treeNode{
+		root, err := buildTree(&treeNode{
 			fieldName: "",
 			lenCmpOp:  byteLenCmpOpTag,
 			cmpOp:     "lt",
@@ -1188,7 +1132,7 @@ func TestCheckTsCmpValChangeModeNow(t *testing.T) {
 	ts1 := begin.Add(2 * dt)
 	ts2 := begin.Add(4 * dt)
 
-	root, err := buildTree(treeNode{
+	root, err := buildTree(&treeNode{
 		tsCmpOp:            true,
 		fieldName:          "ts",
 		cmpOp:              "lt",
@@ -1219,7 +1163,7 @@ func TestNodeIsEqual(t *testing.T) {
 	ts := time.Now()
 
 	fieldNode := treeNode{
-		fieldOp:       "equal",
+		stringOp:      "equal",
 		fieldName:     "service",
 		caseSensitive: true,
 		values:        [][]byte{[]byte("test-1"), []byte("test-2")},
@@ -1248,7 +1192,7 @@ func TestNodeIsEqual(t *testing.T) {
 		logicalOp: "not",
 		operands: []treeNode{
 			{
-				fieldOp:       "equal",
+				stringOp:      "equal",
 				fieldName:     "service",
 				caseSensitive: true,
 				values:        [][]byte{[]byte("test-1"), []byte("test-2")},
@@ -1262,13 +1206,13 @@ func TestNodeIsEqual(t *testing.T) {
 				logicalOp: "or",
 				operands: []treeNode{
 					{
-						fieldOp:       "equal",
+						stringOp:      "equal",
 						fieldName:     "service",
 						caseSensitive: true,
 						values:        [][]byte{nil, []byte(""), []byte("null")},
 					},
 					{
-						fieldOp:       "contains",
+						stringOp:      "contains",
 						fieldName:     "pod",
 						caseSensitive: false,
 						values:        [][]byte{[]byte("pod-1"), []byte("pod-2")},
@@ -1283,19 +1227,19 @@ func TestNodeIsEqual(t *testing.T) {
 						logicalOp: "and",
 						operands: []treeNode{
 							{
-								fieldOp:       "prefix",
+								stringOp:      "prefix",
 								fieldName:     "message",
 								caseSensitive: true,
 								values:        [][]byte{[]byte("test-msg-1"), []byte("test-msg-2")},
 							},
 							{
-								fieldOp:       "suffix",
+								stringOp:      "suffix",
 								fieldName:     "message",
 								caseSensitive: true,
 								values:        [][]byte{[]byte("test-msg-3"), []byte("test-msg-4")},
 							},
 							{
-								fieldOp:       "regex",
+								stringOp:      "regex",
 								fieldName:     "msg",
 								caseSensitive: true,
 								values:        [][]byte{[]byte("test-\\d+"), []byte("test-000-\\d+")},
@@ -1373,15 +1317,15 @@ func TestNodeIsEqual(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "not_equal_field_op_mismatch",
+			name: "not_equal_string_op_mismatch",
 			t1: treeNode{
-				fieldOp:       "equal",
+				stringOp:      "equal",
 				fieldName:     "service",
 				caseSensitive: false,
 				values:        [][]byte{[]byte("test-1")},
 			},
 			t2: treeNode{
-				fieldOp:       "contains",
+				stringOp:      "contains",
 				fieldName:     "service",
 				caseSensitive: false,
 				values:        [][]byte{[]byte("test-1")},
@@ -1389,15 +1333,15 @@ func TestNodeIsEqual(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "not_equal_field_op_mismatch_2",
+			name: "not_equal_string_op_mismatch_2",
 			t1: treeNode{
-				fieldOp:       "prefix",
+				stringOp:      "prefix",
 				fieldName:     "service",
 				caseSensitive: false,
 				values:        [][]byte{[]byte("test-1")},
 			},
 			t2: treeNode{
-				fieldOp:       "suffix",
+				stringOp:      "suffix",
 				fieldName:     "service",
 				caseSensitive: false,
 				values:        [][]byte{[]byte("test-1")},
@@ -1405,15 +1349,15 @@ func TestNodeIsEqual(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "not_equal_field_op_mismatch_3",
+			name: "not_equal_string_op_mismatch_3",
 			t1: treeNode{
-				fieldOp:       "regex",
+				stringOp:      "regex",
 				fieldName:     "service",
 				caseSensitive: false,
 				values:        [][]byte{[]byte("test-1")},
 			},
 			t2: treeNode{
-				fieldOp:       "contains",
+				stringOp:      "contains",
 				fieldName:     "service",
 				caseSensitive: false,
 				values:        [][]byte{[]byte("test-1")},
@@ -1423,13 +1367,13 @@ func TestNodeIsEqual(t *testing.T) {
 		{
 			name: "not_equal_field_case_sensitive_mismatch",
 			t1: treeNode{
-				fieldOp:       "equal",
+				stringOp:      "equal",
 				fieldName:     "service",
 				caseSensitive: false,
 				values:        [][]byte{[]byte("test-1")},
 			},
 			t2: treeNode{
-				fieldOp:       "equal",
+				stringOp:      "equal",
 				fieldName:     "service",
 				caseSensitive: true,
 				values:        [][]byte{[]byte("test-1")},
@@ -1439,13 +1383,13 @@ func TestNodeIsEqual(t *testing.T) {
 		{
 			name: "not_equal_field_field_path_mismatch",
 			t1: treeNode{
-				fieldOp:       "equal",
+				stringOp:      "equal",
 				fieldName:     "log.msg",
 				caseSensitive: true,
 				values:        [][]byte{[]byte("test-1")},
 			},
 			t2: treeNode{
-				fieldOp:       "equal",
+				stringOp:      "equal",
 				fieldName:     "log.svc",
 				caseSensitive: true,
 				values:        [][]byte{[]byte("test-1")},
@@ -1455,13 +1399,13 @@ func TestNodeIsEqual(t *testing.T) {
 		{
 			name: "not_equal_field_values_slice_len_mismatch",
 			t1: treeNode{
-				fieldOp:       "contains",
+				stringOp:      "contains",
 				fieldName:     "service",
 				caseSensitive: true,
 				values:        [][]byte{[]byte("test-1"), []byte("test-2")},
 			},
 			t2: treeNode{
-				fieldOp:       "contains",
+				stringOp:      "contains",
 				fieldName:     "service",
 				caseSensitive: true,
 				values:        [][]byte{[]byte("test-1")},
@@ -1471,13 +1415,13 @@ func TestNodeIsEqual(t *testing.T) {
 		{
 			name: "not_equal_field_values_slice_vals_mismatch",
 			t1: treeNode{
-				fieldOp:       "contains",
+				stringOp:      "contains",
 				fieldName:     "service",
 				caseSensitive: true,
 				values:        [][]byte{[]byte("test-2")},
 			},
 			t2: treeNode{
-				fieldOp:       "contains",
+				stringOp:      "contains",
 				fieldName:     "service",
 				caseSensitive: true,
 				values:        [][]byte{[]byte("test-1")},
@@ -1487,13 +1431,13 @@ func TestNodeIsEqual(t *testing.T) {
 		{
 			name: "not_equal_field_values_by_size_len_mismatch",
 			t1: treeNode{
-				fieldOp:       "equal",
+				stringOp:      "equal",
 				fieldName:     "service",
 				caseSensitive: true,
 				values:        [][]byte{[]byte("test-1"), []byte("test-22")},
 			},
 			t2: treeNode{
-				fieldOp:       "equal",
+				stringOp:      "equal",
 				fieldName:     "service",
 				caseSensitive: true,
 				values:        [][]byte{[]byte("test-1")},
@@ -1503,13 +1447,13 @@ func TestNodeIsEqual(t *testing.T) {
 		{
 			name: "not_equal_field_values_by_size_vals_key_mismatch",
 			t1: treeNode{
-				fieldOp:       "equal",
+				stringOp:      "equal",
 				fieldName:     "service",
 				caseSensitive: true,
 				values:        [][]byte{[]byte("test-11")},
 			},
 			t2: treeNode{
-				fieldOp:       "equal",
+				stringOp:      "equal",
 				fieldName:     "service",
 				caseSensitive: true,
 				values:        [][]byte{[]byte("test-1")},
@@ -1519,13 +1463,13 @@ func TestNodeIsEqual(t *testing.T) {
 		{
 			name: "not_equal_field_values_by_size_vals_len_mismatch",
 			t1: treeNode{
-				fieldOp:       "equal",
+				stringOp:      "equal",
 				fieldName:     "service",
 				caseSensitive: true,
 				values:        [][]byte{[]byte("test-1"), []byte("test-2")},
 			},
 			t2: treeNode{
-				fieldOp:       "equal",
+				stringOp:      "equal",
 				fieldName:     "service",
 				caseSensitive: true,
 				values:        [][]byte{[]byte("test-1")},
@@ -1535,13 +1479,13 @@ func TestNodeIsEqual(t *testing.T) {
 		{
 			name: "not_equal_field_values_by_size_vals_mismatch",
 			t1: treeNode{
-				fieldOp:       "equal",
+				stringOp:      "equal",
 				fieldName:     "service",
 				caseSensitive: true,
 				values:        [][]byte{[]byte("test-2")},
 			},
 			t2: treeNode{
-				fieldOp:       "equal",
+				stringOp:      "equal",
 				fieldName:     "service",
 				caseSensitive: true,
 				values:        [][]byte{[]byte("test-1")},
@@ -1551,13 +1495,13 @@ func TestNodeIsEqual(t *testing.T) {
 		{
 			name: "not_equal_field_reValues_len_mismatch",
 			t1: treeNode{
-				fieldOp:       "regex",
+				stringOp:      "regex",
 				fieldName:     "service",
 				caseSensitive: true,
 				values:        [][]byte{[]byte("test-1"), []byte("test-2")},
 			},
 			t2: treeNode{
-				fieldOp:       "regex",
+				stringOp:      "regex",
 				fieldName:     "service",
 				caseSensitive: true,
 				values:        [][]byte{[]byte("test-1")},
@@ -1567,13 +1511,13 @@ func TestNodeIsEqual(t *testing.T) {
 		{
 			name: "not_equal_field_reValues_vals_mismatch",
 			t1: treeNode{
-				fieldOp:       "regex",
+				stringOp:      "regex",
 				fieldName:     "service",
 				caseSensitive: true,
 				values:        [][]byte{[]byte("test-2")},
 			},
 			t2: treeNode{
-				fieldOp:       "regex",
+				stringOp:      "regex",
 				fieldName:     "service",
 				caseSensitive: true,
 				values:        [][]byte{[]byte("test-1")},
@@ -1796,7 +1740,7 @@ func TestNodeIsEqual(t *testing.T) {
 				logicalOp: "not",
 				operands: []treeNode{
 					{
-						fieldOp:       "equal",
+						stringOp:      "equal",
 						fieldName:     "service",
 						caseSensitive: false,
 						values:        [][]byte{nil},
@@ -1807,7 +1751,7 @@ func TestNodeIsEqual(t *testing.T) {
 				logicalOp: "and",
 				operands: []treeNode{
 					{
-						fieldOp:       "equal",
+						stringOp:      "equal",
 						fieldName:     "service",
 						caseSensitive: false,
 						values:        [][]byte{nil},
@@ -1822,7 +1766,7 @@ func TestNodeIsEqual(t *testing.T) {
 				logicalOp: "or",
 				operands: []treeNode{
 					{
-						fieldOp:       "equal",
+						stringOp:      "equal",
 						fieldName:     "service",
 						caseSensitive: false,
 						values:        [][]byte{nil},
@@ -1833,13 +1777,13 @@ func TestNodeIsEqual(t *testing.T) {
 				logicalOp: "or",
 				operands: []treeNode{
 					{
-						fieldOp:       "equal",
+						stringOp:      "equal",
 						fieldName:     "service",
 						caseSensitive: false,
 						values:        [][]byte{nil},
 					},
 					{
-						fieldOp:       "equal",
+						stringOp:      "equal",
 						fieldName:     "service",
 						caseSensitive: false,
 						values:        [][]byte{nil},
@@ -1854,7 +1798,7 @@ func TestNodeIsEqual(t *testing.T) {
 				logicalOp: "or",
 				operands: []treeNode{
 					{
-						fieldOp:       "equal",
+						stringOp:      "equal",
 						fieldName:     "service",
 						caseSensitive: false,
 						values:        [][]byte{nil},
@@ -1865,7 +1809,7 @@ func TestNodeIsEqual(t *testing.T) {
 				logicalOp: "or",
 				operands: []treeNode{
 					{
-						fieldOp:       "equal",
+						stringOp:      "equal",
 						fieldName:     "pod",
 						caseSensitive: false,
 						values:        [][]byte{nil},
@@ -1879,9 +1823,9 @@ func TestNodeIsEqual(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			root1, err := buildTree(tt.t1)
+			root1, err := buildTree(&tt.t1)
 			require.NoError(t, err)
-			root2, err := buildTree(tt.t2)
+			root2, err := buildTree(&tt.t2)
 			require.NoError(t, err)
 			c1 := newChecker(root1)
 			c2 := newChecker(root2)
