@@ -11,7 +11,7 @@ type RetriableBatcher struct {
 	outFn                RetriableBatcherOutFn
 	batcher              *Batcher
 	backoffOpts          BackoffOpts
-	IsDeadQueueAvailable bool
+	isDeadQueueAvailable bool
 	onRetryError         func(err error, events []*Event)
 }
 
@@ -29,7 +29,7 @@ func NewRetriableBatcher(batcherOpts *BatcherOptions, batcherOutFn RetriableBatc
 		outFn:                batcherOutFn,
 		backoffOpts:          opts,
 		onRetryError:         onError,
-		IsDeadQueueAvailable: opts.IsDeadQueueAvailable,
+		isDeadQueueAvailable: opts.IsDeadQueueAvailable,
 	}
 	batcherBackoff.setBatcher(batcherOpts)
 	return batcherBackoff
@@ -66,7 +66,7 @@ func (b *RetriableBatcher) Out(data *WorkerData, batch *Batch) {
 				events = batch.events
 			}
 			b.onRetryError(err, events)
-			if batch != nil && b.IsDeadQueueAvailable {
+			if batch != nil && b.isDeadQueueAvailable {
 				batch.reset()
 				batch.status = BatchStatusInDeadQueue
 			}
