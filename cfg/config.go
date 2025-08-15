@@ -564,6 +564,18 @@ func ParseFieldSelector(selector string) []string {
 	return result
 }
 
+func BuildFieldSelector(fields []string) string {
+	var builder strings.Builder
+	for i, field := range fields {
+		escaped := strings.ReplaceAll(field, ".", `\.`)
+		builder.WriteString(escaped)
+		if i != len(fields)-1 {
+			builder.WriteByte('.')
+		}
+	}
+	return builder.String()
+}
+
 // Parses several fields selectors and removes nested fields.
 // If there are empty field selectors or no selectors at all error returned.
 // For example:
