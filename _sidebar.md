@@ -50,7 +50,7 @@
     - [split](plugin/action/split/README.md)
     - [throttle](plugin/action/throttle/README.md)
 
-  - Output
+  - [Output](/plugin/output/README.md)
     - [clickhouse](plugin/output/clickhouse/README.md)
     - [devnull](plugin/output/devnull/README.md)
     - [elasticsearch](plugin/output/elasticsearch/README.md)

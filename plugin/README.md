@@ -764,6 +764,8 @@ It sends the event batches to Clickhouse database using
 
 File.d uses low level Go client - [ch-go](https://github.com/ClickHouse/ch-go) to provide these features.
 
+Supports [dead queue](/plugin/output/README.md#dead-queue).
+
 [More details...](plugin/output/clickhouse/README.md)
 ## devnull
 It provides an API to test pipelines and other plugins.
@@ -772,6 +774,8 @@ It provides an API to test pipelines and other plugins.
 ## elasticsearch
 It sends events into Elasticsearch. It uses `_bulk` API to send events in batches.
 If a network error occurs, the batch will infinitely try to be delivered to the random endpoint.
+
+Supports [dead queue](/plugin/output/README.md#dead-queue).
 
 [More details...](plugin/output/elasticsearch/README.md)
 ## file
@@ -796,17 +800,25 @@ GELF messages are separated by null byte. Each message is a JSON with the follow
 Every field with an underscore prefix `_` will be treated as an extra field.
 Allowed characters in field names are letters, numbers, underscores, dashes, and dots.
 
+Supports [dead queue](/plugin/output/README.md#dead-queue).
+
 [More details...](plugin/output/gelf/README.md)
 ## kafka
 It sends the event batches to kafka brokers using `franz-go` lib.
+
+Supports [dead queue](/plugin/output/README.md#dead-queue).
 
 [More details...](plugin/output/kafka/README.md)
 ## loki
 It sends the logs batches to Loki using HTTP API.
 
+Supports [dead queue](/plugin/output/README.md#dead-queue).
+
 [More details...](plugin/output/loki/README.md)
 ## postgres
 It sends the event batches to postgres db using pgx.
+
+Supports [dead queue](/plugin/output/README.md#dead-queue).
 
 [More details...](plugin/output/postgres/README.md)
 ## s3
@@ -935,6 +947,8 @@ Out:
   }
 }
 ```
+
+Supports [dead queue](/plugin/output/README.md#dead-queue).
 
 [More details...](plugin/output/splunk/README.md)
 ## stdout
