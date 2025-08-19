@@ -107,15 +107,13 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	cacheKey := make(map[string]string, len(p.keys))
 
 	for _, key := range p.keys {
-		node := event.Root.Dig(key)
-		value := node.AsString()
+		value := pipeline.CloneString(event.Root.Dig(key).AsString())
 		cacheKey[key] = value
 	}
 
 	cacheValue := make(map[string]string, len(p.fields))
 	for _, key := range p.fields {
-		node := event.Root.Dig(key)
-		value := node.AsString()
+		value := pipeline.CloneString(event.Root.Dig(key).AsString())
 		cacheValue[key] = value
 	}
 
@@ -133,8 +131,9 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 			labelsValues = append(labelsValues, "unknown")
 		}
 	}
-	p.cardinalityDiscardMetric.WithLabelValues(labelsValues...).Set(float64(keysCount))
+
 	if p.config.Limit > 0 && keysCount > p.config.Limit {
+		p.cardinalityDiscardMetric.WithLabelValues(labelsValues...).Set(float64(keysCount))
 		return pipeline.ActionDiscard
 	} else {
 		return pipeline.ActionPass
@@ -155,7 +154,7 @@ func mapToStringSorted(m, n map[string]string) string {
 		if i > 0 {
 			sb.WriteString(" ")
 		}
-		sb.WriteString(k + ":" + m[k])
+		sb.WriteString(k + ":" + n[k])
 	}
 	sb.WriteString("]")
 	return sb.String()
