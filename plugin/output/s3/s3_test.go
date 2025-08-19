@@ -64,7 +64,7 @@ func fPutObjectOk(ctx context.Context, bucketName, objectName, filePath string, 
 	defer f.Close()
 
 	if _, err := f.WriteString(fmt.Sprintf("%s | from '%s' to b: `%s` as obj: `%s`\n", time.Now().String(), filePath, bucketName, objectName)); err != nil {
-		return 0, fmt.Errorf(err.Error())
+		return 0, fmt.Errorf("%s", err.Error())
 	}
 
 	return 1, nil
@@ -93,7 +93,7 @@ func (put *putWithErr) fPutObjectErr(ctx context.Context, bucketName, objectName
 		}
 
 		if _, err := f.WriteString(fmt.Sprintf("%s | from '%s' to b: `%s` as obj: `%s`\n", time.Now().String(), filePath, bucketName, objectName)); err != nil {
-			return 0, fmt.Errorf(err.Error())
+			return 0, fmt.Errorf("%s", err.Error())
 		}
 		return 1, nil
 	default:
