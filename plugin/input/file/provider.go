@@ -60,13 +60,15 @@ type jobProvider struct {
 }
 
 type Job struct {
-	file      *os.File
-	inode     inodeID
-	sourceID  pipeline.SourceID // some value to distinguish jobs with same inode
-	filename  string
-	symlink   string
-	curOffset int64  // offset to not call Seek() everytime
-	tail      []byte // some data of a new line read by worker, to not seek backwards to read from line start
+	file         *os.File
+	mimeType     string
+	isCompressed bool
+	inode        inodeID
+	sourceID     pipeline.SourceID // some value to distinguish jobs with same inode
+	filename     string
+	symlink      string
+	curOffset    int64  // offset to not call Seek() everytime
+	tail         []byte // some data of a new line read by worker, to not seek backwards to read from line start
 
 	ignoreEventsLE uint64 // events with seq id less or equal than this should be ignored in terms offset commitment
 	lastEventSeq   uint64
@@ -83,10 +85,15 @@ type Job struct {
 	mu *sync.Mutex
 }
 
-func (j *Job) seek(offset int64, whence int, hint string) int64 {
-	n, err := j.file.Seek(offset, whence)
-	if err != nil {
-		logger.Infof("file seek error hint=%s, name=%s, err=%s", hint, j.filename, err.Error())
+func (j *Job) seek(offset int64, whence int, hint string) (n int64) {
+	var err error
+	if !j.isCompressed {
+		n, err = j.file.Seek(offset, whence)
+		if err != nil {
+			logger.Infof("file seek error hint=%s, name=%s, err=%s", hint, j.filename, err.Error())
+		}
+	} else {
+		n = 0
 	}
 	j.curOffset = n
 
@@ -354,6 +361,10 @@ func (jp *jobProvider) checkFileWasTruncated(job *Job, size int64) {
 	}
 }
 
+func isCompressed(mimeType string) bool {
+	return mimeType == "application/x-lz4"
+}
+
 func (jp *jobProvider) addJob(file *os.File, stat os.FileInfo, filename string, symlink string) {
 	sourceID := sourceIDByStat(stat, symlink)
 
@@ -370,12 +381,16 @@ func (jp *jobProvider) addJob(file *os.File, stat os.FileInfo, filename string, 
 	}
 
 	inode := getInode(stat)
+	mimeType := getMimeType(filename)
+
 	job := &Job{
-		file:     file,
-		inode:    inode,
-		filename: filename,
-		symlink:  symlink,
-		sourceID: sourceID,
+		file:         file,
+		isCompressed: isCompressed(mimeType),
+		mimeType:     mimeType,
+		inode:        inode,
+		filename:     filename,
+		symlink:      symlink,
+		sourceID:     sourceID,
 
 		isVirgin:   true,
 		isDone:     true,
