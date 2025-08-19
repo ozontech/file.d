@@ -2,14 +2,34 @@
 Mask plugin matches event with regular expression and substitutions successfully matched symbols via asterix symbol.
 You could set regular expressions and submatch groups.
 
-**Example:**
+**Note**: masks are applied only to string or number values.
+
+**Example 1:**
 ```yaml
 pipelines:
   example_pipeline:
     ...
     actions:
     - type: mask
-      metric_subsystem_name: "some_name"
+      masks:
+      - re: "\b(\d{1,4})\D?(\d{1,4})\D?(\d{1,4})\D?(\d{1,4})\b"
+        groups: [1,2,3]
+    ...
+```
+
+Mask plugin can have white and black lists for fields using `process_fields` and `ignore_fields` parameters respectively.
+Elements of `process_fields` and `ignore_fields` lists are json paths (e.g. `message` — field `message` in root,
+`field.subfield` — field `subfield` inside object value of field `field`).
+
+**Note**: `process_fields` and `ignore_fields` cannot be used simultaneously.
+
+**Example 2:**
+```yaml
+pipelines:
+  example_pipeline:
+    ...
+    actions:
+    - type: mask
       ignore_fields:
       - trace_id
       masks:
@@ -18,6 +38,50 @@ pipelines:
     ...
 ```
 
+All masks will be applied to all fields in the event except for the `trace_id` field in the root of the event.
+
+**Example 3:**
+```yaml
+pipelines:
+  example_pipeline:
+    ...
+    actions:
+    - type: mask
+      process_fields:
+      - message
+      masks:
+      - re: "\b(\d{1,4})\D?(\d{1,4})\D?(\d{1,4})\D?(\d{1,4})\b"
+        groups: [1,2,3]
+    ...
+```
+
+All masks will be applied only to `message` field in the root of the event.
+
+Also `process_fields` and `ignore_fields` lists can be used on per mask basis. In that case, if a mask has
+non-empty `process_fields` or `ignore_fields` and there is non-empty `process_fields` or `ignore_fields`
+in plugin parameters, mask fields lists will override plugin lists.
+
+**Example 3:**
+```yaml
+pipelines:
+  example_pipeline:
+    ...
+    actions:
+    - type: mask
+      ignore_fields:
+      - trace_id
+      masks:
+      - re: "\b(\d{1,4})\D?(\d{1,4})\D?(\d{1,4})\D?(\d{1,4})\b"
+        groups: [1,2,3]
+      - re: "(test)"
+        groups: [1]
+		process_fields:
+		- message
+    ...
+```
+
+The first mask will be applied to all fields in the event except for the `trace_id` field in the root of the event.
+The second mask will be applied only to `message` field in the root of the event.
 
 ### Config params
 **`masks`** *`[]Mask`* 
@@ -28,7 +92,7 @@ List of masks.
 
 **`skip_mismatched`** *`bool`* *`default=false`* 
 
-**Experimental feature** for best performance. Skips events with mismatched masks.
+**Deprecated** currently does nothing.
 
 <br>
 
@@ -43,7 +107,7 @@ If any mask has been applied then `mask_applied_field` will be set to `mask_appl
 
 <br>
 
-**`ignore_fields`** *`[]cfg.FieldSelector`* 
+**`ignore_fields`** *`[]string`* 
 
 List of the ignored event fields.
 If name of some field contained in this list
@@ -51,7 +115,7 @@ then all nested fields will be ignored (even if they are not listed).
 
 <br>
 
-**`process_fields`** *`[]cfg.FieldSelector`* 
+**`process_fields`** *`[]string`* 
 
 List of the processed event fields.
 If name of some field contained in this list
@@ -108,6 +172,27 @@ ReplaceWord, if set, is used instead of asterisks for masking patterns that are 
 **`cut_values`** *`bool`* 
 
 CutValues, if set, masking parts will be cut instead of being replaced with ReplaceWord or asterisks.
+
+<br>
+
+**`ignore_fields`** *`[]string`* 
+
+List of the mask-specific ignored event fields.
+If name of some field contained in this list
+then all nested fields will be ignored (even if they are not listed).
+Overrides plugin process/ignore fields lists for the mask.
+
+<br>
+
+**`process_fields`** *`[]string`* 
+
+List of the mask-specific processed event fields.
+If name of some field contained in this list
+then all nested fields will be processed (even if they are not listed).
+If ignored fields list is empty and processed fields list is empty
+we consider this as empty ignored fields list (all fields will be processed).
+It is wrong to set non-empty ignored fields list and non-empty processed fields list at the same time.
+Overrides plugin process/ignore fields lists for the mask.
 
 <br>
 

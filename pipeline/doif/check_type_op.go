@@ -61,7 +61,7 @@ func (t checkTypeVal) String() string {
 	case checkTypeNumber:
 		return "number"
 	case checkTypeString:
-		return "string"
+		return "string" // nolint:goconst
 	case checkTypeNull:
 		return "null"
 	case checkTypeNil:
