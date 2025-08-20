@@ -437,7 +437,8 @@ func TestParseLimits(t *testing.T) {
 			SyncInterval:             "100ms",
 			WorkerCount:              2,
 			LimiterValueField:        "max_pod_log_count",
-			LimiterDistributionField: "distribution",
+			LimiterDistributionField: "distribution_field_example",
+			LimitsFile:               "/Users/tgukov/filed-cfg/throttle_limits_test.json",
 		},
 		LimiterBackend: "redis",
 		ThrottleField:  "k8s_pod",
@@ -472,35 +473,33 @@ func TestParseLimits(t *testing.T) {
 
 	data := `{
   "a:pod_1": {
-    "test_pipeline_k8s_pod_pod_1_limit": {
-      "distribution": {
-        "field": "level",
-        "ratios": [
-          {
-            "ratio": 0.25,
-            "values": [
-              "warn",
-              "info"
-            ]
-          },
-          {
-            "ratio": 0.5,
-            "values": [
-              "error"
-            ]
-          }
-        ],
-        "enabled": true
-      },
-      "kind": "count",
-      "max_pod_log_count": 4
+    "key": "test_pipeline_k8s_pod_pod_1_limit",
+    "kind": "count",
+    "limit": 4,
+    "distribution": {
+      "field": "level",
+      "ratios": [
+        {
+          "ratio": 0.5,
+          "values": [
+            "error"
+          ]
+        },
+        {
+          "ratio": 0.25,
+          "values": [
+            "info",
+            "warn"
+          ]
+        }
+      ],
+      "enabled": true
     }
   },
   "b:pod_1": {
-    "test_pipeline_k8s_pod_pod_1_limit": {
-      "kind": "count",
-      "max_pod_log_count": 2
-    }
+    "key": "test_pipeline_k8s_pod_pod_1_limit",
+    "kind": "count",
+    "limit": 2
   }
 }`
 
@@ -512,6 +511,8 @@ func TestParseLimits(t *testing.T) {
 
 	require.NoError(t, lm.parseLimits([]byte(data)))
 
+	assert.Equal(t, 2, len(lm.limsCfg))
+
 	podLimiter1Cfg := lm.lims["a:pod_1"].limiter.getLimitCfg()
 	podLimiter2Cfg := lm.lims["b:pod_1"].limiter.getLimitCfg()
 
@@ -522,7 +523,7 @@ func TestParseLimits(t *testing.T) {
 	assert.Equal(t, limitKindCount, podLimiter2Cfg.Kind)
 
 	assert.Equal(t, true, podLimiter1Cfg.Distribution.Enabled)
-	assert.Equal(t, false, podLimiter2Cfg.Distribution.Enabled)
+	assert.Nil(t, podLimiter2Cfg.Distribution, "limitDistributionCfg must be nil")
 
 	for i := range eventsTotal {
 		json := fmt.Sprintf(events[i], time.Now().Format(time.RFC3339Nano))
@@ -574,7 +575,7 @@ func TestSaveLimitsToFile(t *testing.T) {
 			SyncInterval:             "100ms",
 			WorkerCount:              2,
 			LimiterValueField:        "max_pod_log_count",
-			LimiterDistributionField: "distribution",
+			LimiterDistributionField: "distribution_field_example",
 			LimitsFile:               limitsFilename,
 		},
 		LimiterBackend: "redis",
@@ -636,7 +637,7 @@ func TestSaveLimitsToFile(t *testing.T) {
 	assert.Equal(t, limitKindCount, podLimiter2Cfg.Kind)
 
 	assert.Equal(t, true, podLimiter1Cfg.Distribution.Enabled)
-	assert.Equal(t, false, podLimiter2Cfg.Distribution.Enabled)
+	assert.Nil(t, podLimiter2Cfg.Distribution, "limitDistributionCfg must be nil")
 
 	err = os.Remove(limitsFilename)
 	require.NoError(t, err)
@@ -654,10 +655,9 @@ func TestRedisOverwritesLimitsFromFile(t *testing.T) {
 
 	data := `{
   "a:pod_1": {
-    "test_pipeline_k8s_pod_pod_1_limit": {
+      "key": "test_pipeline_k8s_pod_pod_1_limit",
       "kind": "count",
       "limit": 2
-    }
   }
 }`
 

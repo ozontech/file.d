@@ -236,8 +236,8 @@ func (l *inMemoryLimiter) bucketsMinID() int {
 	return l.buckets.getMinID()
 }
 
-func (l *inMemoryLimiter) getLimitCfg() limitCfg {
-	return limitCfg{}
+func (l *inMemoryLimiter) getLimitCfg() *limitCfg {
+	return &limitCfg{}
 }
 
 func (l *inMemoryLimiter) getLimit() int64 {
