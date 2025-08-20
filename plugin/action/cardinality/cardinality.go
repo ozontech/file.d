@@ -20,12 +20,18 @@ type Plugin struct {
 	fields []string
 	logger *zap.Logger
 
-	cardinalityDiscardMetric *prometheus.GaugeVec
+	cardinalityDiscardCounter *prometheus.CounterVec
 }
+
+const (
+	actionDiscard      = "discard"
+	actionRemoveFields = "remove_fields"
+)
 
 type Config struct {
 	KeyFields []cfg.FieldSelector `json:"key" slice:"true" required:"true"`
 	Fields    []cfg.FieldSelector `json:"fields" slice:"true" required:"true"`
+	Action    string              `json:"action" default:"discard" options:"discard|remove_fields"`
 	Limit     int                 `json:"limit" default:"10000"`
 	TTL       cfg.Duration        `json:"ttl" default:"1h" parse:"duration"` // *
 	TTL_      time.Duration
@@ -42,7 +48,7 @@ func factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 	return &Plugin{}, &Config{}
 }
 
-func (p *Plugin) makeMetric(ctl *metric.Ctl, name, help string, labels ...string) *prometheus.GaugeVec {
+func (p *Plugin) makeMetric(ctl *metric.Ctl, name, help string, labels ...string) *prometheus.CounterVec {
 	if name == "" {
 		return nil
 	}
@@ -61,13 +67,13 @@ func (p *Plugin) makeMetric(ctl *metric.Ctl, name, help string, labels ...string
 		labelNames = append(labelNames, label)
 	}
 
-	return ctl.RegisterGaugeVec(name, help, labelNames...)
+	return ctl.RegisterCounterVec(name, help, labelNames...)
 }
 
 func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
-	p.cardinalityDiscardMetric = p.makeMetric(ctl,
-		"unique_count",
-		"Number of uniqie values",
+	p.cardinalityDiscardCounter = p.makeMetric(ctl,
+		"cardinality_discard_total",
+		"Total number of events discarded due to cardinality limits",
 		p.keys...,
 	)
 }
@@ -119,25 +125,30 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 
 	key := mapToKey(cacheKey)
 	value := mapToStringSorted(cacheKey, cacheValue)
-	p.cache.Set(value)
-
 	keysCount := p.cache.CountPrefix(key)
 
-	labelsValues := make([]string, 0, len(p.keys))
-	for _, key := range p.keys {
-		if val, exists := cacheKey[key]; exists {
-			labelsValues = append(labelsValues, val)
-		} else {
-			labelsValues = append(labelsValues, "unknown")
-		}
-	}
-
 	if p.config.Limit > 0 && keysCount > p.config.Limit {
-		p.cardinalityDiscardMetric.WithLabelValues(labelsValues...).Set(float64(keysCount))
-		return pipeline.ActionDiscard
+		labelsValues := make([]string, 0, len(p.keys))
+		for _, key := range p.keys {
+			if val, exists := cacheKey[key]; exists {
+				labelsValues = append(labelsValues, val)
+			} else {
+				labelsValues = append(labelsValues, "unknown")
+			}
+		}
+		p.cardinalityDiscardCounter.WithLabelValues(labelsValues...).Inc()
+		switch p.config.Action {
+		case actionDiscard:
+			return pipeline.ActionDiscard
+		case actionRemoveFields:
+			for _, key := range p.fields {
+				event.Root.Dig(key).Suicide()
+			}
+		}
 	} else {
-		return pipeline.ActionPass
+		p.cache.Set(value)
 	}
+	return pipeline.ActionPass
 }
 
 func mapToStringSorted(m, n map[string]string) string {
