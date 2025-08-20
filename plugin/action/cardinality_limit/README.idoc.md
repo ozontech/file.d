@@ -1,0 +1,3 @@
+# Cardinality limit plugin
+@introduction
+

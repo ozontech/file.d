@@ -39,7 +39,7 @@ type Config struct {
 
 func init() {
 	fd.DefaultPluginRegistry.RegisterAction(&pipeline.PluginStaticInfo{
-		Type:    "cardinality",
+		Type:    "cardinality_limit",
 		Factory: factory,
 	})
 }
