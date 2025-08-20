@@ -55,7 +55,7 @@ func allEventStatuses() []eventStatus {
 type processor struct {
 	id       int
 	streamer *streamer
-	output   OutputPlugin
+	router   *Router
 	finalize finalizeFn
 
 	activeCounter *atomic.Int32
@@ -78,7 +78,7 @@ func newProcessor(
 	id int,
 	actionMetrics *actionMetrics,
 	activeCounter *atomic.Int32,
-	output OutputPlugin,
+	router *Router,
 	streamer *streamer,
 	finalizeFn finalizeFn,
 	incMaxEventSizeExceededFn func(lvs ...string),
@@ -88,7 +88,7 @@ func newProcessor(
 		id:            id,
 		streamer:      streamer,
 		actionMetrics: actionMetrics,
-		output:        output,
+		router:        router,
 		finalize:      finalizeFn,
 
 		activeCounter: activeCounter,
@@ -153,7 +153,7 @@ func (p *processor) processSequence(event *Event) bool {
 		}
 
 		event.stage = eventStageOutput
-		p.output.Out(event)
+		p.router.Out(event)
 	}
 
 	return true
@@ -447,7 +447,7 @@ func (p *processor) Spawn(parent *Event, nodes []*insaneJSON.Node) {
 		ok, _ := p.doActions(child)
 		if ok {
 			child.stage = eventStageOutput
-			p.output.Out(child)
+			p.router.Out(child)
 		}
 	}
 
