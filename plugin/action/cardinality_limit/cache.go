@@ -80,11 +80,3 @@ func (c *Cache) CountPrefix(prefix string) (count int) {
 	}
 	return
 }
-
-type PrefixCache interface {
-	Set(key string) bool
-	IsExists(key string) bool
-	Delete(key string)
-	CountPrefix(prefix string) int
-	Cleanup() int
-}
