@@ -95,6 +95,10 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 		}
 	}
 
+	if len(p.config.Fields) == 0 {
+		p.logger.Fatal("you have to set key fields")
+	}
+
 	p.fields = make([]string, 0, len(p.config.Fields))
 	for _, fs := range p.config.Fields {
 		if fs != "" {
@@ -127,7 +131,7 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	value := mapToStringSorted(cacheKey, cacheValue)
 	keysCount := p.cache.CountPrefix(key)
 
-	if p.config.Limit > 0 && keysCount > p.config.Limit {
+	if p.config.Limit > 0 && keysCount >= p.config.Limit {
 		labelsValues := make([]string, 0, len(p.keys))
 		for _, key := range p.keys {
 			if val, exists := cacheKey[key]; exists {
