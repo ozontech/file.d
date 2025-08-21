@@ -1,6 +1,7 @@
 package discard
 
 import (
+	"fmt"
 	"sort"
 	"strings"
 	"time"
@@ -29,12 +30,13 @@ const (
 )
 
 type Config struct {
-	KeyFields []cfg.FieldSelector `json:"key" slice:"true" required:"true"`
-	Fields    []cfg.FieldSelector `json:"fields" slice:"true" required:"true"`
-	Action    string              `json:"action" default:"discard" options:"discard|remove_fields"`
-	Limit     int                 `json:"limit" default:"10000"`
-	TTL       cfg.Duration        `json:"ttl" default:"1h" parse:"duration"` // *
-	TTL_      time.Duration
+	KeyFields    []cfg.FieldSelector `json:"key" slice:"true" required:"true"`
+	Fields       []cfg.FieldSelector `json:"fields" slice:"true" required:"true"`
+	Action       string              `json:"action" default:"discard" options:"discard|remove_fields"`
+	MetricPrefix string              `json:"metric_prefix" default:""`
+	Limit        int                 `json:"limit" default:"10000"`
+	TTL          cfg.Duration        `json:"ttl" default:"1h" parse:"duration"` // *
+	TTL_         time.Duration
 }
 
 func init() {
@@ -70,9 +72,15 @@ func (p *Plugin) makeMetric(ctl *metric.Ctl, name, help string, labels ...string
 	return ctl.RegisterCounterVec(name, help, labelNames...)
 }
 
-func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
+func (p *Plugin) registerMetrics(ctl *metric.Ctl, prefix string) {
+	var metricName string
+	if prefix == "" {
+		metricName = "cardinality_discard_total"
+	} else {
+		metricName = fmt.Sprintf(`cardinality_discard_%s_total`, prefix)
+	}
 	p.cardinalityDiscardCounter = p.makeMetric(ctl,
-		"cardinality_discard_total",
+		metricName,
 		"Total number of events discarded due to cardinality limits",
 		p.keys...,
 	)
@@ -106,7 +114,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 		}
 	}
 
-	p.registerMetrics(params.MetricCtl)
+	p.registerMetrics(params.MetricCtl, p.config.MetricPrefix)
 }
 
 func (p *Plugin) Stop() {
