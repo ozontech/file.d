@@ -438,7 +438,6 @@ func TestParseLimits(t *testing.T) {
 			WorkerCount:              2,
 			LimiterValueField:        "max_pod_log_count",
 			LimiterDistributionField: "distribution_field_example",
-			LimitsFile:               "/Users/tgukov/filed-cfg/throttle_limits_test.json",
 		},
 		LimiterBackend: "redis",
 		ThrottleField:  "k8s_pod",
