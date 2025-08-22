@@ -137,11 +137,7 @@ func (ld *limitDistributions) copy() limitDistributions {
 	}
 }
 
-func (ld *limitDistributions) getLimitDistributionsCfg() *limitDistributionCfg {
-	if !ld.enabled {
-		return nil
-	}
-
+func (ld *limitDistributions) getLimitDistributionsCfg() limitDistributionCfg {
 	field := cfg.BuildFieldSelector(ld.field)
 
 	ratioMap := make(map[float64][]string)
@@ -161,7 +157,7 @@ func (ld *limitDistributions) getLimitDistributionsCfg() *limitDistributionCfg {
 		})
 	}
 
-	return &limitDistributionCfg{
+	return limitDistributionCfg{
 		Field:   field,
 		Ratios:  ratios,
 		Enabled: ld.enabled,

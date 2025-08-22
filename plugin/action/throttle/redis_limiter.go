@@ -276,20 +276,18 @@ func (l *redisLimiter) updateKeyLimit() error {
 	return nil
 }
 
-func (l *redisLimiter) getLimitCfg() *limitCfg {
+func (l *redisLimiter) getLimitCfg() limitCfg {
 	l.totalLimiter.lock()
 	distrCopy := l.totalLimiter.limit.distributions.copy()
 	kind := l.totalLimiter.limit.kind
 	l.totalLimiter.unlock()
 
-	limit := &limitCfg{
+	return limitCfg{
 		Key:          l.keyLimit,
 		Kind:         kind,
 		Limit:        l.totalLimiter.getLimit(),
 		Distribution: distrCopy.getLimitDistributionsCfg(),
 	}
-
-	return limit
 }
 
 func (l *redisLimiter) setNowFn(fn func() time.Time) {

@@ -29,7 +29,7 @@ const (
 type limiter interface {
 	isAllowed(event *pipeline.Event, ts time.Time) bool
 	sync()
-	getLimitCfg() *limitCfg
+	getLimitCfg() limitCfg
 
 	// setNowFn is used for testing purposes
 	setNowFn(fn func() time.Time)
@@ -64,10 +64,10 @@ type limiterConfig struct {
 }
 
 type limitCfg struct {
-	Key          string                `json:"key"`
-	Kind         string                `json:"kind"`
-	Limit        int64                 `json:"limit"`
-	Distribution *limitDistributionCfg `json:"distribution,omitempty"`
+	Key          string               `json:"key"`
+	Kind         string               `json:"kind"`
+	Limit        int64                `json:"limit"`
+	Distribution limitDistributionCfg `json:"distribution,omitempty"`
 }
 
 // limitersMapConfig configuration of limiters map.
@@ -89,7 +89,7 @@ type limitersMapConfig struct {
 type limitersMap struct {
 	ctx              context.Context
 	lims             map[string]*limiterWithGen
-	limsCfg          map[string]*limitCfg
+	limsCfg          map[string]limitCfg
 	mu               *sync.RWMutex
 	activeTasks      atomic.Uint32
 	curGen           int64
@@ -125,7 +125,7 @@ func newLimitersMap(lmCfg limitersMapConfig, redisOpts *xredis.Options) *limiter
 		limitDistrMetrics: lmCfg.limitDistrMetrics,
 	}
 	if redisOpts != nil {
-		lm.limsCfg = make(map[string]*limitCfg)
+		lm.limsCfg = make(map[string]limitCfg)
 		lm.limiterCfg.limitsFileTmp = lmCfg.limiterCfg.limitsFile + ".atomic"
 
 		lm.limiterCfg.redisClient = xredis.NewClient(redisOpts)
@@ -390,12 +390,7 @@ func (l *limitersMap) parseLimits(data []byte) error {
 	for key, cfg := range l.limsCfg {
 		throttleKey := key[strings.IndexByte(key, ':')+1:]
 
-		distrCfg := limitDistributionCfg{}
-		if cfg.Distribution != nil {
-			distrCfg = *cfg.Distribution
-		}
-
-		distr, err := parseLimitDistribution(distrCfg, cfg.Limit)
+		distr, err := parseLimitDistribution(cfg.Distribution, cfg.Limit)
 		if err != nil {
 			return fmt.Errorf("can't parse limit_distribution: %w", err)
 		}
