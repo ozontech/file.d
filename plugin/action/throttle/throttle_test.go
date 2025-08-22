@@ -498,7 +498,12 @@ func TestParseLimits(t *testing.T) {
   "b:pod_1": {
     "key": "test_pipeline_k8s_pod_pod_1_limit",
     "kind": "count",
-    "limit": 2
+    "limit": 2,
+	"distribution": {
+      "field": "",
+      "ratios": [],
+      "enabled": false
+    }
   }
 }`
 
@@ -522,7 +527,7 @@ func TestParseLimits(t *testing.T) {
 	assert.Equal(t, limitKindCount, podLimiter2Cfg.Kind)
 
 	assert.Equal(t, true, podLimiter1Cfg.Distribution.Enabled)
-	assert.Nil(t, podLimiter2Cfg.Distribution, "limitDistributionCfg must be nil")
+	assert.Equal(t, false, podLimiter2Cfg.Distribution.Enabled)
 
 	for i := range eventsTotal {
 		json := fmt.Sprintf(events[i], time.Now().Format(time.RFC3339Nano))
@@ -636,7 +641,7 @@ func TestSaveLimitsToFile(t *testing.T) {
 	assert.Equal(t, limitKindCount, podLimiter2Cfg.Kind)
 
 	assert.Equal(t, true, podLimiter1Cfg.Distribution.Enabled)
-	assert.Nil(t, podLimiter2Cfg.Distribution, "limitDistributionCfg must be nil")
+	assert.Equal(t, false, podLimiter2Cfg.Distribution.Enabled)
 
 	err = os.Remove(limitsFilename)
 	require.NoError(t, err)
@@ -656,7 +661,12 @@ func TestRedisOverwritesLimitsFromFile(t *testing.T) {
   "a:pod_1": {
       "key": "test_pipeline_k8s_pod_pod_1_limit",
       "kind": "count",
-      "limit": 2
+      "limit": 2,
+	  "distribution": {
+		"field": "",
+		"ratios": [],
+		"enabled": false
+	  }
   }
 }`
 
