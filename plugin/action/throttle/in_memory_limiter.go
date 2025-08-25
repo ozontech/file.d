@@ -1,6 +1,7 @@
 package throttle
 
 import (
+	"math"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -8,6 +9,8 @@ import (
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/pipeline"
 )
+
+const EPS = 1e-9
 
 type inMemoryLimiter struct {
 	limit   complexLimit
@@ -252,7 +255,7 @@ func (l *inMemoryLimiter) isLimitCfgChanged(curLimit int64, curDistribution []li
 		curDistributionsCount += len(ldRatio.Values)
 		for _, fieldValue := range ldRatio.Values {
 			idx, has := l.limit.distributions.idxByKey[fieldValue]
-			if !has || l.limit.distributions.distributions[idx].ratio != ldRatio.Ratio {
+			if !has || math.Abs(l.limit.distributions.distributions[idx].ratio-ldRatio.Ratio) > EPS {
 				l.unlock()
 				return true
 			}
