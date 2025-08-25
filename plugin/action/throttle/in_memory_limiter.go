@@ -261,9 +261,10 @@ func (l *inMemoryLimiter) isLimitCfgChanged(curLimit int64, curDistribution []li
 			}
 		}
 	}
+	distributionsCount := len(l.limit.distributions.distributions)
 	l.unlock()
 
-	return l.getLimit() != curLimit || len(l.limit.distributions.distributions) != curDistributionsCount
+	return l.getLimit() != curLimit || distributionsCount != curDistributionsCount
 }
 
 func (l *inMemoryLimiter) setNowFn(fn func() time.Time) {
