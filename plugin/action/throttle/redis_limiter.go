@@ -290,6 +290,10 @@ func (l *redisLimiter) getLimitCfg() limitCfg {
 	}
 }
 
+func (l *redisLimiter) isLimitCfgChanged(curLimit int64, curDistribution []limitDistributionRatio) bool {
+	return l.totalLimiter.isLimitCfgChanged(curLimit, curDistribution)
+}
+
 func (l *redisLimiter) setNowFn(fn func() time.Time) {
 	l.incrementLimiter.setNowFn(fn)
 	l.totalLimiter.setNowFn(fn)
