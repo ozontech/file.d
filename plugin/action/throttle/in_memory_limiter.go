@@ -244,6 +244,25 @@ func (l *inMemoryLimiter) getLimit() int64 {
 	return atomic.LoadInt64(&l.limit.value)
 }
 
+func (l *inMemoryLimiter) isLimitCfgChanged(curLimit int64, curDistribution []limitDistributionRatio) bool {
+	curDistributionsCount := 0
+
+	l.lock()
+	for _, ldRatio := range curDistribution {
+		curDistributionsCount += len(ldRatio.Values)
+		for _, fieldValue := range ldRatio.Values {
+			idx, has := l.limit.distributions.idxByKey[fieldValue]
+			if !has || l.limit.distributions.distributions[idx].ratio != ldRatio.Ratio {
+				l.unlock()
+				return true
+			}
+		}
+	}
+	l.unlock()
+
+	return l.getLimit() != curLimit || len(l.limit.distributions.distributions) != curDistributionsCount
+}
+
 func (l *inMemoryLimiter) setNowFn(fn func() time.Time) {
 	l.lock()
 	l.nowFn = fn

@@ -29,6 +29,7 @@ const (
 type limiter interface {
 	isAllowed(event *pipeline.Event, ts time.Time) bool
 	sync()
+	isLimitCfgChanged(curLimit int64, curDistribution []limitDistributionRatio) bool
 	getLimitCfg() limitCfg
 
 	// setNowFn is used for testing purposes
@@ -67,7 +68,7 @@ type limitCfg struct {
 	Key          string               `json:"key"`
 	Kind         string               `json:"kind"`
 	Limit        int64                `json:"limit"`
-	Distribution limitDistributionCfg `json:"distribution,omitempty"`
+	Distribution limitDistributionCfg `json:"distribution"`
 }
 
 // limitersMapConfig configuration of limiters map.
@@ -351,7 +352,9 @@ func (l *limitersMap) updateLimitsCfg() {
 	defer l.mu.Unlock()
 
 	for key, limiter := range l.lims {
-		l.limsCfg[key] = limiter.getLimitCfg()
+		if limiter.isLimitCfgChanged(l.limsCfg[key].Limit, l.limsCfg[key].Distribution.Ratios) {
+			l.limsCfg[key] = limiter.getLimitCfg()
+		}
 	}
 }
 
