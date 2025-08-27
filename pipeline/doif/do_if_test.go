@@ -968,6 +968,35 @@ func TestCheck(t *testing.T) {
 			},
 		},
 		{
+			name: "int_val_cmp_ok",
+			tree: treeNode{
+				lenCmpOp:  intValCmpOpTag,
+				cmpOp:     "ge",
+				fieldName: "count",
+				cmpValue:  50,
+			},
+			data: []argsResp{
+				{`{"count":50}`, true},
+				{`{"count":51}`, true},
+				{`{"count":49}`, false},
+			},
+		},
+		{
+			name: "int_val_cmp_not_int",
+			tree: treeNode{
+				lenCmpOp:  intValCmpOpTag,
+				cmpOp:     "ge",
+				fieldName: "count",
+				cmpValue:  0,
+			},
+			data: []argsResp{
+				{`{"count":"0"}`, true},
+				{`{"count":"n"}`, false},
+				{`{"count":[0]}`, false},
+				{`{"not_count":0}`, false},
+			},
+		},
+		{
 			name: "ts_cmp_lt",
 			tree: treeNode{
 				tsCmpOp:            true,
