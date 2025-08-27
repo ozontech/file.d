@@ -361,7 +361,7 @@ func (l *limitersMap) updateLimitsCfg() {
 func (l *limitersMap) loadLimits() error {
 	info, err := os.Stat(l.limiterCfg.limitsFile)
 	if os.IsNotExist(err) {
-		return fmt.Errorf("file %s is not exist", l.limiterCfg.limitsFile)
+		return nil
 	}
 
 	if info.IsDir() {
