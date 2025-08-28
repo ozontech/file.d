@@ -276,6 +276,24 @@ func (l *redisLimiter) updateKeyLimit() error {
 	return nil
 }
 
+func (l *redisLimiter) getLimitCfg() limitCfg {
+	l.totalLimiter.lock()
+	distrCopy := l.totalLimiter.limit.distributions.copy()
+	kind := l.totalLimiter.limit.kind
+	l.totalLimiter.unlock()
+
+	return limitCfg{
+		Key:          l.keyLimit,
+		Kind:         kind,
+		Limit:        l.totalLimiter.getLimit(),
+		Distribution: distrCopy.getLimitDistributionsCfg(),
+	}
+}
+
+func (l *redisLimiter) isLimitCfgChanged(curLimit int64, curDistribution []limitDistributionRatio) bool {
+	return l.totalLimiter.isLimitCfgChanged(curLimit, curDistribution)
+}
+
 func (l *redisLimiter) setNowFn(fn func() time.Time) {
 	l.incrementLimiter.setNowFn(fn)
 	l.totalLimiter.setNowFn(fn)
