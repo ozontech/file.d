@@ -62,7 +62,8 @@ func extractDoIfNode(node map[string]any) (Node, error) {
 		return extractFieldOpNode(opName, node)
 	case
 		"byte_len_cmp",
-		"array_len_cmp":
+		"array_len_cmp",
+		"int_val_cmp":
 		return extractLengthCmpOpNode(opName, node)
 	case "ts_cmp":
 		return extractTsCmpOpNode(opName, node)
