@@ -298,7 +298,7 @@ DoIf length comparison op node is considered to always be a leaf in the DoIf tre
 It contains operation that compares field length in bytes or array length (for array fields) with certain value.
 
 Params:
-  - `op` - must be `byte_len_cmp` or `array_len_cmp`. Required.
+  - `op` - must be `byte_len_cmp`, `array_len_cmp` or `int_val_cmp`. Required.
   - `field` - name of the field to apply operation. Required.
   - `cmp_op` - comparison operation name (see below). Required.
   - `value` - integer value to compare length with. Required non-negative.
