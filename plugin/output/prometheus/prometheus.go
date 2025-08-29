@@ -242,7 +242,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 			level = zapcore.ErrorLevel
 		}
 
-		p.logger.Log(level, "can't send data to loki", zap.Error(err),
+		p.logger.Log(level, "can't send data to Prometheus", zap.Error(err),
 			zap.Int("retries", p.config.Retry))
 	}
 
@@ -297,7 +297,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 	err := p.send(root)
 	if err != nil {
 		p.sendErrorMetric.WithLabelValues().Inc()
-		p.logger.Error("can't send data to Loki", zap.String("address", p.config.Endpoint), zap.Error(err))
+		p.logger.Error("can't send data to Prometheus", zap.String("address", p.config.Endpoint), zap.Error(err))
 	} else {
 		p.logger.Debug("successfully sent", zap.String("data", string(data.outBuf)))
 	}
