@@ -191,7 +191,7 @@ type Plugin struct {
 	batcher *pipeline.RetriableBatcher
 
 	// plugin metrics
-	sendErrorMetric *prometheus.CounterVec
+	sendErrorMetric prometheus.Counter
 
 	collector *metricCollector
 }
@@ -296,7 +296,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 
 	err := p.send(root)
 	if err != nil {
-		p.sendErrorMetric.WithLabelValues().Inc()
+		p.sendErrorMetric.Inc()
 		p.logger.Error("can't send data to Prometheus", zap.String("address", p.config.Endpoint), zap.Error(err))
 	} else {
 		p.logger.Debug("successfully sent", zap.String("data", string(data.outBuf)))
@@ -353,8 +353,8 @@ func (p *Plugin) send(root *insaneJSON.Root) error {
 
 	err := p.sendToStorage(values)
 	if err != nil {
-		// TODO: add metrics
 		if strings.Contains(err.Error(), "out of order sample") || strings.Contains(err.Error(), "duplicate sample for") {
+			p.sendErrorMetric.Inc()
 			p.logger.Warn("can't send data to Prometheus", zap.Error(err))
 			return nil
 		}
@@ -369,7 +369,7 @@ func (p *Plugin) sendToStorage(values []promwrite.TimeSeries) error {
 }
 
 func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
-	p.sendErrorMetric = ctl.RegisterCounterVec("output_loki_send_error", "Total Loki send errors")
+	p.sendErrorMetric = ctl.RegisterCounter("output_prometheus_send_error", "Total Prometheus send errors")
 }
 
 func (p *Plugin) prepareClient() {
