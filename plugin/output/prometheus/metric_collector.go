@@ -68,6 +68,28 @@ func (p *metricCollector) handleMetric(labels []promwrite.Label, value float64, 
 		shouldSend = prevTimestampSec < currentTimestampSec
 
 		if shouldSend {
+			prevMetric.timestamp = max(prevMetric.timestamp, timestamp-1_000_000_000)
+
+			zapLabels := make([]zap.Field, 0, len(labels)+2)
+			timeMetric := time.Unix(0, prevMetric.timestamp)
+
+			zapLabels = append(zapLabels, zap.Time("prom_timestamp", timeMetric))
+			zapLabels = append(zapLabels, zap.Time("current_timestamp", time.Unix(0, timestamp)))
+			for i := range labels {
+				zapLabels = append(zapLabels, zap.String("prom_label_"+labels[i].Name, labels[i].Value))
+			}
+			p.logger.Info(
+				"send metric",
+				zapLabels...,
+			)
+
+			if time.Since(timeMetric) > 5*time.Minute {
+				p.logger.Error(
+					"too old sample",
+					zapLabels...,
+				)
+			}
+
 			values = append(values, createTimeSeries(labels, prevMetric))
 		}
 	} else {
@@ -97,6 +119,26 @@ func (p *metricCollector) flushOldMetrics() {
 				metric := value.(metricValue)
 				if now.Sub(metric.lastUpdateTime) > p.timeout && !metric.lastValueIsSended {
 					labels := keyToLabels(key.(string))
+
+					zapLabels := make([]zap.Field, 0, len(labels)+2)
+					timeMetric := time.Unix(0, metric.timestamp)
+					zapLabels = append(zapLabels, zap.Time("prom_timestamp", timeMetric))
+					zapLabels = append(zapLabels, zap.Bool("flush_old_metric", true))
+					for i := range labels {
+						zapLabels = append(zapLabels, zap.String("prom_label_"+labels[i].Name, labels[i].Value))
+					}
+					p.logger.Info(
+						"send metric",
+						zapLabels...,
+					)
+
+					if time.Since(timeMetric) > 10*time.Minute {
+						p.logger.Error(
+							"too old sample",
+							zapLabels...,
+						)
+					}
+
 					toSend = append(toSend, createTimeSeries(labels, metric))
 
 					metric.lastValueIsSended = true
