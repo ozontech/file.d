@@ -261,7 +261,7 @@ func (l *inMemoryLimiter) isLimitCfgChanged(curLimit int64, curDistribution []li
 			}
 		}
 	}
-	distributionsCount := len(l.limit.distributions.distributions)
+	distributionsCount := len(l.limit.distributions.idxByKey)
 	l.unlock()
 
 	return l.getLimit() != curLimit || distributionsCount != curDistributionsCount

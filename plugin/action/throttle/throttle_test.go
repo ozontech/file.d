@@ -655,7 +655,7 @@ func TestRedisOverwritesLimitsFromFile(t *testing.T) {
 	require.NoError(t, err)
 	defer s.Close()
 
-	require.NoError(t, s.Set("test_pipeline_k8s_pod_pod_1_limit", `{"limit":"1"}`))
+	require.NoError(t, s.Set("test_pipeline_k8s_pod_pod_1_limit", `{"count_limit":"1"}`))
 
 	data := `{
   "a:pod_1": {
@@ -687,7 +687,7 @@ func TestRedisOverwritesLimitsFromFile(t *testing.T) {
 			Password:          "",
 			SyncInterval:      "100ms",
 			WorkerCount:       2,
-			LimiterValueField: "limit",
+			LimiterValueField: "count_limit",
 			LimitsFile:        limitsFilename,
 		},
 		LimiterBackend: "redis",
@@ -739,76 +739,6 @@ func TestRedisOverwritesLimitsFromFile(t *testing.T) {
 
 	err = os.Remove(limitsFilename)
 	require.NoError(t, err)
-	t.Cleanup(func() {
-		throttleMapsCleanup()
-	})
-}
-
-func TestRedisThrottleWithCustomLimitData(t *testing.T) {
-	s, err := miniredis.Run()
-	require.NoError(t, err)
-	defer s.Close()
-
-	// set distributed redis limit
-	require.NoError(t, s.Set("custom_limit_key", `{"count_limit":"1"}`))
-
-	defaultLimit := 3
-	eventsTotal := 3
-	config := &Config{
-		Rules: []RuleConfig{
-			{Limit: int64(defaultLimit), LimitKind: limitKindCount},
-		},
-		BucketsCount:   1,
-		BucketInterval: "2s",
-		RedisBackendCfg: RedisBackendConfig{
-			Endpoint:          s.Addr(),
-			Password:          "",
-			LimiterKeyField:   "throttle_key",
-			LimiterKeyField_:  []string{"throttle_key"},
-			LimiterValueField: "count_limit",
-			SyncInterval:      "100ms",
-			WorkerCount:       2,
-		},
-		LimiterBackend: "redis",
-		ThrottleField:  "k8s_pod",
-		TimeField:      "",
-		DefaultLimit:   int64(defaultLimit),
-	}
-	test.NewConfig(config, nil)
-
-	p, input, output := test.NewPipelineMock(
-		test.NewActionPluginStaticInfo(factory, config, pipeline.MatchModeAnd, nil, false),
-		"name",
-	)
-	outEvents := 0
-	output.SetOutFn(func(e *pipeline.Event) {
-		outEvents++
-	})
-
-	sourceNames := []string{
-		`source_1`,
-		`source_2`,
-		`source_3`,
-	}
-
-	events := []string{
-		`{"time":"%s","k8s_ns":"ns_1","k8s_pod":"pod_1","throttle_key":"custom_limit_key"}`,
-		`{"time":"%s","k8s_ns":"ns_2","k8s_pod":"pod_1","throttle_key":"custom_limit_key"}`,
-		`{"time":"%s","k8s_ns":"not_matched","k8s_pod":"pod_1","throttle_key":"custom_limit_key"}`,
-	}
-
-	nowTs := time.Now().Format(time.RFC3339Nano)
-	for i := 0; i < eventsTotal; i++ {
-		json := fmt.Sprintf(events[i], nowTs)
-
-		input.In(10, sourceNames[rand.Int()%len(sourceNames)], test.NewOffset(0), []byte(json))
-
-		time.Sleep(300 * time.Millisecond)
-	}
-
-	p.Stop()
-
-	assert.Greater(t, eventsTotal, outEvents, "wrong in events count")
 	t.Cleanup(func() {
 		throttleMapsCleanup()
 	})

@@ -3,6 +3,7 @@ package throttle
 import (
 	"fmt"
 	"slices"
+	"sort"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -195,4 +196,50 @@ func Test_parseLimitDistribution(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestGetLimitDistributionsCfg(t *testing.T) {
+	ld := &limitDistributions{
+		field: []string{"log", "level"},
+		idxByKey: map[string]int{
+			"A": 0,
+			"B": 1,
+			"C": 0,
+		},
+		distributions: []complexDistribution{
+			{ratio: 0.1, limit: 10},
+			{ratio: 0.2, limit: 20},
+		},
+		enabled: true,
+	}
+
+	expected := limitDistributionCfg{
+		Field: "log.level",
+		Ratios: []limitDistributionRatio{
+			{Ratio: 0.1, Values: []string{"A", "C"}},
+			{Ratio: 0.2, Values: []string{"B"}},
+		},
+		Enabled: true,
+	}
+
+	result := ld.getLimitDistributionsCfg()
+
+	require.Equal(t, expected.Field, result.Field, "wrong Field")
+	require.Equal(t, expected.Enabled, result.Enabled, "wrong Enabled")
+	require.True(t, isLimitDistributionCfgRatiosEqual(expected.Ratios, result.Ratios), "wrong Ratios")
+}
+
+func isLimitDistributionCfgRatiosEqual(expected, result []limitDistributionRatio) bool {
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].Ratio < result[j].Ratio
+	})
+
+	for i, ldRatio := range result {
+		slices.Sort(ldRatio.Values)
+		if !slices.Equal(expected[i].Values, ldRatio.Values) {
+			return false
+		}
+	}
+
+	return true
 }
