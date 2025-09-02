@@ -232,6 +232,8 @@ Distribution object example:
 The filename to store current log limits. Limits are loaded only on initialization
 > It's a `json` file. You can modify it manually. But the limit from the file will disappear if redis is available and it has a different value for this limit
 
+> ⚠ **Experimental feature**
+
 <br>
 
 **`limits_save_interval`** *`cfg.Duration`* *`default=3s`* 
