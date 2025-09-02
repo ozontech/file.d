@@ -22,9 +22,9 @@ import (
 )
 
 const (
-	maintenanceInterval         = time.Second
-	redisReconnectInterval      = 30 * time.Minute
-	limitsFileTempSuffixPattern = ".atomic.*"
+	maintenanceInterval    = time.Second
+	redisReconnectInterval = 30 * time.Minute
+	limitsFileTempSuffix   = ".atomic"
 )
 
 type limiter interface {
@@ -128,7 +128,7 @@ func newLimitersMap(lmCfg limitersMapConfig, redisOpts *xredis.Options) *limiter
 	}
 	if redisOpts != nil {
 		lm.limsCfg = make(map[string]limitCfg)
-		lm.limiterCfg.limitsFileTmp = lmCfg.limiterCfg.limitsFile + limitsFileTempSuffixPattern
+		lm.limiterCfg.limitsFileTmp = lmCfg.limiterCfg.limitsFile + limitsFileTempSuffix
 
 		lm.limiterCfg.redisClient = xredis.NewClient(redisOpts)
 		if pingResp := lm.limiterCfg.redisClient.Ping(lm.ctx); pingResp.Err() != nil {
