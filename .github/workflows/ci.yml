@@ -101,7 +101,7 @@ jobs:
           GOFLAGS: ${{ matrix.flags }}
           LOG_LEVEL: error
         run: |
-          go test ./e2e -coverprofile=profile-e2e${{ matrix.flags }}.out -covermode=atomic -tags=e2e_new -timeout=3m -coverpkg=./... -json
+          go test ./e2e -coverprofile=profile-e2e${{ matrix.flags }}.out -covermode=atomic -tags=e2e_new -timeout=3m -coverpkg=./... -json > test-report-e2e${{ matrix.flags }}.json
 
       - name: Coverage report
         run: |
