@@ -136,3 +136,30 @@ func (ld *limitDistributions) copy() limitDistributions {
 		enabled:         ld.enabled,
 	}
 }
+
+func (ld *limitDistributions) getLimitDistributionsCfg() limitDistributionCfg {
+	field := cfg.BuildFieldSelector(ld.field)
+
+	ratioMap := make(map[float64][]string)
+	for value, idx := range ld.idxByKey {
+		if idx < 0 || idx >= len(ld.distributions) {
+			continue
+		}
+		ratio := ld.distributions[idx].ratio
+		ratioMap[ratio] = append(ratioMap[ratio], value)
+	}
+
+	ratios := make([]limitDistributionRatio, 0, len(ratioMap))
+	for ratio, values := range ratioMap {
+		ratios = append(ratios, limitDistributionRatio{
+			Ratio:  ratio,
+			Values: values,
+		})
+	}
+
+	return limitDistributionCfg{
+		Field:   field,
+		Ratios:  ratios,
+		Enabled: ld.enabled,
+	}
+}
