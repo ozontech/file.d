@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"regexp"
-	"strconv"
+	"sort"
 	"strings"
 	"sync"
 	"text/template"
@@ -213,8 +213,14 @@ func (m *MetaTemplater) Render(data Data) (MetaData, error) {
 }
 
 func generateCacheKey(data map[string]any) string {
+	keys := make([]string, 0, len(data))
+	for k := range data {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
 	var builder strings.Builder
-	builder.Grow(len(data) * 16) // Preallocate memory for the builder (estimate)
+	builder.Grow(len(data) * 32) // Preallocate memory for the builder (estimate)
 
 	for k, v := range data {
 		switch v := v.(type) {
@@ -224,14 +230,23 @@ func generateCacheKey(data map[string]any) string {
 			builder.WriteString(":")
 			builder.WriteString(v)
 			builder.WriteString("|")
-		case int:
-			// Write the key and integer value to the builder
+		case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
 			builder.WriteString(k)
 			builder.WriteString(":")
-			builder.WriteString(strconv.Itoa(v))
+			builder.WriteString(fmt.Sprintf("%d", v))
+			builder.WriteString("|")
+		case float32, float64:
+			builder.WriteString(k)
+			builder.WriteString(":")
+			builder.WriteString(fmt.Sprintf("%f", v))
+			builder.WriteString("|")
+		case bool:
+			builder.WriteString(k)
+			builder.WriteString(":")
+			builder.WriteString(fmt.Sprintf("%t", v))
 			builder.WriteString("|")
 		}
-		// If the value is not a string or int, skip it
+		// If the value is not a string, int, float or bool, skip it
 	}
 
 	// Convert the builder to a string
