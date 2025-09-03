@@ -154,7 +154,6 @@ File.d will fall with non-zero exit code or skip message (see fatal_on_failed_in
 **`fatal_on_failed_insert`** *`bool`* *`default=false`* 
 
 After an insert error, fall with a non-zero exit code or not
-**Experimental feature**
 
 <br>
 

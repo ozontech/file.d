@@ -210,6 +210,7 @@ func NewEmptyOutputPluginParams() *pipeline.OutputPluginParams {
 	return &pipeline.OutputPluginParams{
 		PluginDefaultParams: newDefaultParams(),
 		Logger:              newLogger().Named("output"),
+		Router:              pipeline.NewRouter(),
 	}
 }
 

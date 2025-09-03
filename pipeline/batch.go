@@ -16,6 +16,7 @@ const (
 	BatchStatusNotReady BatchStatus = iota
 	BatchStatusMaxSizeExceeded
 	BatchStatusTimeoutExceeded
+	BatchStatusInDeadQueue
 )
 
 type Batch struct {
@@ -125,11 +126,12 @@ type Batcher struct {
 	outSeq    int64
 	commitSeq int64
 
-	batchOutFnSeconds    prometheus.Observer
-	commitWaitingSeconds prometheus.Observer
-	workersInProgress    prometheus.Gauge
-	batchesDoneByMaxSize prometheus.Counter
-	batchesDoneByTimeout prometheus.Counter
+	batchOutFnSeconds        prometheus.Observer
+	commitWaitingSeconds     prometheus.Observer
+	workersInProgress        prometheus.Gauge
+	batchesDoneByMaxSize     prometheus.Counter
+	batchesDoneByTimeout     prometheus.Counter
+	batchesRoutedToDeadQueue prometheus.Counter
 }
 
 type (
@@ -163,16 +165,17 @@ func NewBatcher(opts BatcherOptions) *Batcher { // nolint: gocritic // hugeParam
 
 	seqMu := &sync.Mutex{}
 	return &Batcher{
-		seqMu:                seqMu,
-		cond:                 sync.NewCond(seqMu),
-		freeBatches:          freeBatches,
-		fullBatches:          fullBatches,
-		opts:                 opts,
-		batchOutFnSeconds:    ctl.RegisterHistogram("batcher_out_fn_seconds", "", metric.SecondsBucketsLong),
-		commitWaitingSeconds: ctl.RegisterHistogram("batcher_commit_waiting_seconds", "", metric.SecondsBucketsDetailed),
-		workersInProgress:    ctl.RegisterGauge("batcher_workers_in_progress", ""),
-		batchesDoneByMaxSize: jobsDone.WithLabelValues("max_size_exceeded"),
-		batchesDoneByTimeout: jobsDone.WithLabelValues("timeout_exceeded"),
+		seqMu:                    seqMu,
+		cond:                     sync.NewCond(seqMu),
+		freeBatches:              freeBatches,
+		fullBatches:              fullBatches,
+		opts:                     opts,
+		batchOutFnSeconds:        ctl.RegisterHistogram("batcher_out_fn_seconds", "", metric.SecondsBucketsLong),
+		commitWaitingSeconds:     ctl.RegisterHistogram("batcher_commit_waiting_seconds", "", metric.SecondsBucketsDetailed),
+		workersInProgress:        ctl.RegisterGauge("batcher_workers_in_progress", ""),
+		batchesDoneByMaxSize:     jobsDone.WithLabelValues("max_size_exceeded"),
+		batchesDoneByTimeout:     jobsDone.WithLabelValues("timeout_exceeded"),
+		batchesRoutedToDeadQueue: jobsDone.WithLabelValues("routed_in_deadqueue"),
 	}
 }
 
@@ -220,6 +223,8 @@ func (b *Batcher) work() {
 			b.batchesDoneByMaxSize.Inc()
 		case BatchStatusTimeoutExceeded:
 			b.batchesDoneByTimeout.Inc()
+		case BatchStatusInDeadQueue:
+			b.batchesRoutedToDeadQueue.Inc()
 		default:
 			logger.Panic("unreachable")
 		}

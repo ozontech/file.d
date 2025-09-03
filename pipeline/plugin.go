@@ -59,6 +59,7 @@ type ActionPluginParams struct {
 type OutputPluginParams struct {
 	PluginDefaultParams
 	Controller OutputPluginController
+	Router     *Router
 	Logger     *zap.SugaredLogger
 }
 
@@ -77,6 +78,8 @@ type PluginStaticInfo struct {
 	// Every plugin can provide their own API through Endpoints.
 	Endpoints         map[string]func(http.ResponseWriter, *http.Request)
 	AdditionalActions []string // used only for input plugins, defines actions that should be run right after input plugin with input config
+	// TODO: maybe to OutputPluginStaticInfo cause uses by output and action plugins?
+	DeadQueueInfo *PluginStaticInfo
 }
 
 type PluginRuntimeInfo struct {

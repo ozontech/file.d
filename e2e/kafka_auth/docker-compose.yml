@@ -2,13 +2,16 @@ version: "2.1"
 
 services:
   zookeeper:
-    image: docker.io/bitnami/zookeeper:3.9
+    image: zookeeper:3.9
     ports:
       - "2182:2181"
     volumes:
-      - "zookeeper_data:/bitnami"
+      - "zookeeper_data:/data"
     environment:
-      - ALLOW_ANONYMOUS_LOGIN=yes
+      ZOO_MY_ID: 1
+      ZOO_PORT: 2181
+      ZOO_4LW_COMMANDS_WHITELIST: "*"
+      ZOO_SERVERS: server.1=zookeeper:2888:3888;2181
   init-certs:
       image: docker.io/bitnami/kafka:3.6
       command: /tmp/generate.sh

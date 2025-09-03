@@ -8,25 +8,28 @@ import (
 )
 
 type RetriableBatcher struct {
-	outFn        RetriableBatcherOutFn
-	batcher      *Batcher
-	backoffOpts  BackoffOpts
-	onRetryError func(err error)
+	outFn                RetriableBatcherOutFn
+	batcher              *Batcher
+	backoffOpts          BackoffOpts
+	isDeadQueueAvailable bool
+	onRetryError         func(err error, events []*Event)
 }
 
 type RetriableBatcherOutFn func(*WorkerData, *Batch) error
 
 type BackoffOpts struct {
-	MinRetention time.Duration
-	Multiplier   float64
-	AttemptNum   int
+	MinRetention         time.Duration
+	Multiplier           float64
+	AttemptNum           int
+	IsDeadQueueAvailable bool
 }
 
-func NewRetriableBatcher(batcherOpts *BatcherOptions, batcherOutFn RetriableBatcherOutFn, opts BackoffOpts, onError func(err error)) *RetriableBatcher {
+func NewRetriableBatcher(batcherOpts *BatcherOptions, batcherOutFn RetriableBatcherOutFn, opts BackoffOpts, onError func(err error, events []*Event)) *RetriableBatcher {
 	batcherBackoff := &RetriableBatcher{
-		outFn:        batcherOutFn,
-		backoffOpts:  opts,
-		onRetryError: onError,
+		outFn:                batcherOutFn,
+		backoffOpts:          opts,
+		onRetryError:         onError,
+		isDeadQueueAvailable: opts.IsDeadQueueAvailable,
 	}
 	batcherBackoff.setBatcher(batcherOpts)
 	return batcherBackoff
@@ -58,7 +61,15 @@ func (b *RetriableBatcher) Out(data *WorkerData, batch *Batch) {
 		}
 		next := exponentionalBackoff.NextBackOff()
 		if next == backoff.Stop || (b.backoffOpts.AttemptNum >= 0 && numTries > b.backoffOpts.AttemptNum) {
-			b.onRetryError(err)
+			var events []*Event
+			if batch != nil {
+				events = batch.events
+			}
+			b.onRetryError(err, events)
+			if batch != nil && b.isDeadQueueAvailable {
+				batch.reset()
+				batch.status = BatchStatusInDeadQueue
+			}
 			return
 		}
 		numTries++

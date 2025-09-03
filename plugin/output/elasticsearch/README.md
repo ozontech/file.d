@@ -2,6 +2,8 @@
 It sends events into Elasticsearch. It uses `_bulk` API to send events in batches.
 If a network error occurs, the batch will infinitely try to be delivered to the random endpoint.
 
+Supports [dead queue](/plugin/output/README.md#dead-queue).
+
 ### Config params
 **`endpoints`** *`[]string`* *`required`* 
 
@@ -128,8 +130,7 @@ File.d will fall with non-zero exit code or skip message (see fatal_on_failed_in
 
 **`fatal_on_failed_insert`** *`bool`* *`default=false`* 
 
-After an insert error, fall with a non-zero exit code or not
-**Experimental feature**
+After an insert error, fall with a non-zero exit code or not. A configured deadqueue disables fatal exits.
 
 <br>
 

@@ -244,7 +244,6 @@ type Config struct {
 	// > @3@4@5@6
 	// >
 	// > After an insert error, fall with a non-zero exit code or not
-	// > **Experimental feature**
 	FatalOnFailedInsert bool `json:"fatal_on_failed_insert" default:"false"` // *
 
 	// > @3@4@5@6

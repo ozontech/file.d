@@ -1,6 +1,8 @@
 # Postgres output
 It sends the event batches to postgres db using pgx.
 
+Supports [dead queue](/plugin/output/README.md#dead-queue).
+
 ### Config params
 **`strict`** *`bool`* *`default=false`* 
 
@@ -47,8 +49,7 @@ File.d will fall with non-zero exit code or skip message (see fatal_on_failed_in
 
 **`fatal_on_failed_insert`** *`bool`* *`default=false`* 
 
-After an insert error, fall with a non-zero exit code or not
-**Experimental feature**
+After an insert error, fall with a non-zero exit code or not. A configured deadqueue disables fatal exits.
 
 <br>
 
