@@ -438,12 +438,6 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 		}
 		limiters[p.pipeline] = newLimitersMap(lmCfg, redisOpts)
 		if p.config.LimiterBackend == redisBackend {
-			// run sync only once per pipeline
-			go limiters[p.pipeline].runSync(p.ctx,
-				p.config.RedisBackendCfg.WorkerCount,
-				p.config.RedisBackendCfg.SyncInterval_,
-			)
-
 			if lmCfg.limiterCfg.limitsFile != "" {
 				err := limiters[p.pipeline].loadLimits()
 				if err != nil {
@@ -452,6 +446,12 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 
 				go limiters[p.pipeline].saveLimitsCyclic(p.ctx, p.config.RedisBackendCfg.LimitsSaveInterval_)
 			}
+
+			// run sync only once per pipeline
+			go limiters[p.pipeline].runSync(p.ctx,
+				p.config.RedisBackendCfg.WorkerCount,
+				p.config.RedisBackendCfg.SyncInterval_,
+			)
 		}
 		go limiters[p.pipeline].maintenance(p.ctx)
 	}

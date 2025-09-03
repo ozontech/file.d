@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"os"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -309,11 +308,9 @@ func (l *limitersMap) saveLimitsCyclic(ctx context.Context, duration time.Durati
 }
 
 func (l *limitersMap) saveLimits() {
-	tmpWithRandom := append(make([]byte, 0), l.limiterCfg.limitsFileTmp...)
-	tmpWithRandom = append(tmpWithRandom, '.')
-	tmpWithRandom = strconv.AppendUint(tmpWithRandom, rand.Uint64(), 8)
+	tmpWithRandom := fmt.Sprintf("%s.%08d", l.limiterCfg.limitsFileTmp, rand.Uint32())
 
-	file, err := os.OpenFile(string(tmpWithRandom), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0o600)
+	file, err := os.OpenFile(tmpWithRandom, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0o600)
 	if err != nil {
 		l.logger.Errorf("can't open temp limits file %s, %s", l.limiterCfg.limitsFileTmp, err.Error())
 		return
@@ -342,7 +339,7 @@ func (l *limitersMap) saveLimits() {
 		l.logger.Errorf("can't sync limits file %s, %s", l.limiterCfg.limitsFileTmp, err.Error())
 	}
 
-	err = os.Rename(string(tmpWithRandom), l.limiterCfg.limitsFile)
+	err = os.Rename(tmpWithRandom, l.limiterCfg.limitsFile)
 	if err != nil {
 		logger.Errorf("failed renaming temporary limits file to current: %s", err.Error())
 	}
