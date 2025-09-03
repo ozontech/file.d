@@ -248,6 +248,10 @@ func (l *inMemoryLimiter) getLimit() int64 {
 }
 
 func (l *inMemoryLimiter) isLimitCfgChanged(curLimit int64, curDistribution []limitDistributionRatio) bool {
+	if l.getLimit() != curLimit {
+		return true
+	}
+
 	curDistributionsCount := 0
 
 	l.lock()
@@ -264,7 +268,7 @@ func (l *inMemoryLimiter) isLimitCfgChanged(curLimit int64, curDistribution []li
 	distributionsCount := len(l.limit.distributions.idxByKey)
 	l.unlock()
 
-	return l.getLimit() != curLimit || distributionsCount != curDistributionsCount
+	return distributionsCount != curDistributionsCount
 }
 
 func (l *inMemoryLimiter) setNowFn(fn func() time.Time) {
