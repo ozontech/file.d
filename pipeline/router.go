@@ -23,7 +23,7 @@ func (r *Router) SetDeadQueueOutput(info *OutputPluginInfo) {
 }
 
 func (r *Router) Ack(event *Event) {
-
+	// TODO: send commit to input after receiving all acks from outputs
 }
 
 func (r *Router) Fail(event *Event) {
