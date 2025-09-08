@@ -2,6 +2,8 @@ package prometheus
 
 import (
 	"context"
+	"net"
+	"net/http"
 	"strings"
 	"time"
 
@@ -187,13 +189,19 @@ type Plugin struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 
-	client  *promwrite.Client
+	client  PrometheusClient
 	batcher *pipeline.RetriableBatcher
 
 	// plugin metrics
 	sendErrorMetric prometheus.Counter
 
 	collector *metricCollector
+
+	router *pipeline.Router
+}
+
+type PrometheusClient interface {
+	Write(ctx context.Context, req *promwrite.WriteRequest, options ...promwrite.WriteOption) (*promwrite.WriteResponse, error)
 }
 
 func init() {
@@ -228,15 +236,17 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		MetricCtl:      params.MetricCtl,
 	}
 
+	p.router = params.Router
 	backoffOpts := pipeline.BackoffOpts{
-		MinRetention: p.config.Retention_,
-		Multiplier:   float64(p.config.RetentionExponentMultiplier),
-		AttemptNum:   p.config.Retry,
+		MinRetention:         p.config.Retention_,
+		Multiplier:           float64(p.config.RetentionExponentMultiplier),
+		AttemptNum:           p.config.Retry,
+		IsDeadQueueAvailable: p.router.IsDeadQueueAvailable(),
 	}
 
-	onError := func(err error) {
+	onError := func(err error, events []*pipeline.Event) {
 		var level zapcore.Level
-		if p.config.FatalOnFailedInsert {
+		if p.config.FatalOnFailedInsert && !p.router.IsDeadQueueAvailable() {
 			level = zapcore.FatalLevel
 		} else {
 			level = zapcore.ErrorLevel
@@ -244,6 +254,10 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 
 		p.logger.Log(level, "can't send data to Prometheus", zap.Error(err),
 			zap.Int("retries", p.config.Retry))
+
+		for i := range events {
+			p.router.Fail(events[i])
+		}
 	}
 
 	p.batcher = pipeline.NewRetriableBatcher(
@@ -373,5 +387,16 @@ func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 }
 
 func (p *Plugin) prepareClient() {
-	p.client = promwrite.NewClient(p.config.Endpoint)
+	customClient := &http.Client{
+		Transport: &http.Transport{
+			DialContext: (&net.Dialer{
+				Timeout:   p.config.ConnectionTimeout_,
+				KeepAlive: p.config.KeepAlive.MaxConnDuration_,
+			}).DialContext,
+			IdleConnTimeout: p.config.KeepAlive.MaxIdleConnDuration_,
+		},
+		Timeout: p.config.RequestTimeout_,
+	}
+
+	p.client = promwrite.NewClient(p.config.Endpoint, promwrite.HttpClient(customClient))
 }
