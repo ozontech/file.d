@@ -36,6 +36,8 @@ On MacBook Pro 2017 with two physical cores `file.d` can achieve the following t
 * 1.7GB/s in `files > devnull` case
 * 1.0GB/s in `files > json decode > devnull` case
 
+More benchmarks can be found [here](https://github.com/ozontech/file.d-bench).
+
 TBD: throughput on production servers.  
 
 ## Plugins
@@ -46,6 +48,9 @@ TBD: throughput on production servers.
 
 **Output**: @global-contents-table-plugin-output|links
 
+## Logging system
+
+We have also developed a scalable and high-performance database for logs — [seq-db](https://github.com/ozontech/seq-db). File.d can send data to [seq-db](https://github.com/ozontech/seq-db) using [Elasticsearch Bulk API](https://ozontech.github.io/seq-db-docs/#write-documents-to-seq-db). An example of sending data from file.d to [seq-db](https://github.com/ozontech/seq-db) can be found [here](/docs/examples.md#kafka-to-seq-db).
 
 ## What's next
 * [Quick start](/docs/quick-start.md)

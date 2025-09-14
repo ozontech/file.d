@@ -73,6 +73,40 @@ pipelines:
       default_short_message_value: "message isn't provided"
 ```
 
+## Kafka to seq-db
+The following config reads logs from kafka, processes them and sends into [seq-db](https://github.com/ozontech/seq-db) via Elasticsearch Bulk API.
+It assumes that logs are in docker json format.
+```yaml
+pipelines:
+  kafka_gelf_example:
+    input:
+      type: kafka
+      brokers: [kafka-broker-0.svc.local, kafka-broker-1.svc.local, kafka-broker-2.svc.local]
+      topics: [k8s-logs]
+
+    actions:
+    - type: json_decode                             # unpack "log" field 
+      field: log
+      metric_name: input
+      metric_labels: [k8s_label_app]                # expose input metrics to prometheus
+
+    # normalize                                     # unify log format
+    - type: rename
+      log: message
+      msg: message
+      ts: time
+      _ts: time
+      systemd.unit: service
+      syslog.identifier: service
+      k8s_label_app: service
+
+    output:
+      type: elasticsearch
+      endpoints:
+        - "http://seq-db-proxy:9002"
+```
+
+
 ## What's next?
 1. [Input](/plugin/input/README.md) plugins documentation
 2. [Action](/plugin/action/README.md) plugins documentation
