@@ -12,6 +12,7 @@ It provides an API to test pipelines and other plugins.
 
 type Plugin struct {
 	controller pipeline.OutputPluginController
+	router     *pipeline.Router
 	outFn      func(event *pipeline.Event)
 	total      *atomic.Int64
 }
@@ -31,6 +32,7 @@ func Factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 
 func (p *Plugin) Start(_ pipeline.AnyConfig, params *pipeline.OutputPluginParams) {
 	p.controller = params.Controller
+	p.router = params.Router
 	p.total = &atomic.Int64{}
 }
 

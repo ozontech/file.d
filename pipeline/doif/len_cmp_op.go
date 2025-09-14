@@ -14,7 +14,7 @@ DoIf length comparison op node is considered to always be a leaf in the DoIf tre
 It contains operation that compares field length in bytes or array length (for array fields) with certain value.
 
 Params:
-  - `op` - must be `byte_len_cmp` or `array_len_cmp`. Required.
+  - `op` - must be `byte_len_cmp`, `array_len_cmp` or `int_val_cmp`. Required.
   - `field` - name of the field to apply operation. Required.
   - `cmp_op` - comparison operation name (see below). Required.
   - `value` - integer value to compare length with. Required non-negative.
@@ -82,11 +82,13 @@ type lenCmpOpType int
 const (
 	byteLenCmpOp lenCmpOpType = iota
 	arrayLenCmpOp
+	intValCmpOp
 )
 
 const (
 	byteLenCmpOpTag  = "byte_len_cmp"
 	arrayLenCmpOpTag = "array_len_cmp"
+	intValCmpOpTag   = "int_val_cmp"
 )
 
 type lenCmpOpNode struct {
@@ -103,6 +105,8 @@ func NewLenCmpOpNode(op string, field string, cmpOp string, cmpValue int) (Node,
 		lenCmpOp = byteLenCmpOp
 	case arrayLenCmpOpTag:
 		lenCmpOp = arrayLenCmpOp
+	case intValCmpOpTag:
+		lenCmpOp = intValCmpOp
 	default:
 		return nil, fmt.Errorf("bad len cmp op: %s", op)
 	}
@@ -161,7 +165,7 @@ func getNodeBytesSize(node *insaneJSON.Node) int {
 		size += getNodeFieldsBytesSize(node) + 2 // curly brackets enclosing object
 	default:
 		if node.IsString() {
-			if node.TypeStr() == "hellBitString" {
+			if node.TypeStr() == "string" { // nolint:goconst
 				// Note: in case of unescaped string computed bytes length can diverse from the actual
 				size += len(node.AsString()) + 2 // add quotes to unescaped string
 			} else {
@@ -196,6 +200,20 @@ func (n *lenCmpOpNode) Check(eventRoot *insaneJSON.Root) bool {
 		}
 
 		value = len(node.AsArray())
+	case intValCmpOp:
+		node := eventRoot.Dig(n.fieldPath...)
+		if node == nil {
+			return false
+		}
+		if !(node.IsNumber() || node.IsString()) {
+			return false
+		}
+		value = node.AsInt()
+		if value == 0 &&
+			(node.TypeStr() == "string" && node.AsString() != "0" ||
+				node.TypeStr() != "string" && node.AsEscapedString() != "0") {
+			return false
+		}
 	default:
 		panic("impossible: bad len cmp op")
 	}

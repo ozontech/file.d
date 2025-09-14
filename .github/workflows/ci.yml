@@ -24,7 +24,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.23'
+          go-version: '1.24'
           cache: true
 
       - name: Build
@@ -34,21 +34,48 @@ jobs:
         env:
           GOFLAGS: ${{ matrix.flags }}
           LOG_LEVEL: error
-        run: go test -coverprofile=profile${{ matrix.flags }}.out -covermode=atomic -v -coverpkg=./... ./...
+        run: |
+          go test -coverprofile=profile${{ matrix.flags }}.out -covermode=atomic -v -coverpkg=./... ./... -json | tee test-report${{ matrix.flags }}.json
 
-      - name: Upload artifact
+      - name: Coverage report
+        run: |
+          if [ -f profile${{ matrix.flags }}.out ]; then
+            go tool cover -html=profile${{ matrix.flags }}.out -o coverage${{ matrix.flags }}.html
+          else
+            echo "No coverage data generated for ${{ matrix.flags }} tests" > coverage${{ matrix.flags }}.html
+          fi
+
+      - name: Upload test artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: coverage${{ matrix.flags }}
-          path: profile${{ matrix.flags }}.out
-          if-no-files-found: error
+          name: test-artifacts${{ matrix.flags || '-standard' }}
+          path: |
+            profile${{ matrix.flags }}.out
+            test-report${{ matrix.flags }}.json
+            coverage${{ matrix.flags }}.html
           retention-days: 1
+
+      - name: Publish Test Report
+        uses: dorny/test-reporter@v2
+        if: always()
+        with:
+          name: Test Results
+          path: test-report${{ matrix.flags }}.json
+          reporter: golang-json
+          fail-on-error: true
+          list-suites: none
+          list-tests: failed
 
       - name: Run benchmarks
         if: ${{ !contains(matrix.flags, '-race') }}
         env:
           LOG_LEVEL: error
-        run: go test --timeout=15m --benchtime=3x --benchmem --bench="BenchmarkLightJsonReadPar" --run=$^ ./plugin/input/file/...
+        run: |
+          echo "### Benchmark Results" >> $GITHUB_STEP_SUMMARY
+          go test --timeout=15m --benchtime=3x --benchmem --bench="BenchmarkLightJsonReadPar" --run=$^ ./plugin/input/file/... | tee benchmark.out
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          cat benchmark.out >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
 
   e2e_test:
     runs-on: ubuntu-latest
@@ -63,7 +90,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.23'
+          go-version: '1.24'
           cache: true
 
       - name: Run docker containers
@@ -73,15 +100,37 @@ jobs:
         env:
           GOFLAGS: ${{ matrix.flags }}
           LOG_LEVEL: error
-        run: go test ./e2e -coverprofile=profile-e2e${{ matrix.flags }}.out -covermode=atomic -tags=e2e_new -timeout=3m -coverpkg=./...
+        run: |
+          go test ./e2e -coverprofile=profile-e2e${{ matrix.flags }}.out -covermode=atomic -tags=e2e_new -timeout=3m -coverpkg=./... -json | tee test-report-e2e${{ matrix.flags }}.json
 
-      - name: Upload artifact
+      - name: Coverage report
+        run: |
+          if [ -f profile-e2e${{ matrix.flags }}.out ]; then
+            go tool cover -html=profile-e2e${{ matrix.flags }}.out -o coverage-e2e${{ matrix.flags }}.html
+          else
+            echo "No coverage data generated for ${{ matrix.flags }} tests" > coverage-e2e${{ matrix.flags }}.html
+          fi
+          
+      - name: Upload test artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: coverage-e2e${{ matrix.flags }}
-          path: profile-e2e${{ matrix.flags }}.out
-          if-no-files-found: error
+          name: test-artifacts-e2e${{ matrix.flags }}
+          path: |
+            profile-e2e${{ matrix.flags }}.out
+            test-report-e2e${{ matrix.flags }}.json
+            coverage-e2e${{ matrix.flags }}.html
           retention-days: 1
+
+      - name: Publish Test Report
+        uses: dorny/test-reporter@v2
+        if: always()
+        with:
+          name: Test Results
+          path: test-report-e2e${{ matrix.flags }}.json
+          reporter: golang-json
+          fail-on-error: true
+          list-suites: none
+          list-tests: failed
 
   upload:
     runs-on: ubuntu-latest
@@ -112,7 +161,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.23'
+          go-version: '1.24'
           cache: true
 
       - name: Lint
@@ -137,7 +186,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.23'
+          go-version: '1.24'
           cache: true
 
       - name: Generate doc
@@ -161,7 +210,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.23'
+          go-version: '1.24'
           cache: true
 
       - name: Download dependencies

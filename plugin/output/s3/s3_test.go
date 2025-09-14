@@ -21,6 +21,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/atomic"
+	"go.uber.org/zap"
 	"golang.org/x/net/context"
 )
 
@@ -63,7 +64,7 @@ func fPutObjectOk(ctx context.Context, bucketName, objectName, filePath string, 
 	defer f.Close()
 
 	if _, err := f.WriteString(fmt.Sprintf("%s | from '%s' to b: `%s` as obj: `%s`\n", time.Now().String(), filePath, bucketName, objectName)); err != nil {
-		return 0, fmt.Errorf(err.Error())
+		return 0, fmt.Errorf("%s", err.Error())
 	}
 
 	return 1, nil
@@ -92,7 +93,7 @@ func (put *putWithErr) fPutObjectErr(ctx context.Context, bucketName, objectName
 		}
 
 		if _, err := f.WriteString(fmt.Sprintf("%s | from '%s' to b: `%s` as obj: `%s`\n", time.Now().String(), filePath, bucketName, objectName)); err != nil {
-			return 0, fmt.Errorf(err.Error())
+			return 0, fmt.Errorf("%s", err.Error())
 		}
 		return 1, nil
 	default:
@@ -400,7 +401,7 @@ func newPipeline(t *testing.T, configOutput *Config, objStoreF objStoreFactory) 
 		MetricHoldDuration: pipeline.DefaultMetricHoldDuration,
 	}
 
-	p := pipeline.New("test_pipeline", settings, prometheus.NewRegistry())
+	p := pipeline.New("test_pipeline", settings, prometheus.NewRegistry(), zap.NewNop())
 	p.DisableParallelism()
 	p.EnableEventLog()
 

@@ -18,6 +18,8 @@ import (
 
 /*{ introduction
 It sends the event batches to kafka brokers using `franz-go` lib.
+
+Supports [dead queue](/plugin/output/README.md#dead-queue).
 }*/
 
 const (
@@ -40,6 +42,7 @@ type Plugin struct {
 
 	// plugin metrics
 	sendErrorMetric prometheus.Counter
+	router          *pipeline.Router
 }
 
 // ! config-params
@@ -116,12 +119,17 @@ type Config struct {
 	// >
 	// > Retries of insertion. If File.d cannot insert for this number of attempts,
 	// > File.d will fall with non-zero exit code or skip message (see fatal_on_failed_insert).
+	// >
+	// > There are situations when one of the brokers is disconnected and the client does not have time to
+	// > update the metadata before all the remaining retries are finished. To avoid this situation,
+	// > the client.ForceMetadataRefresh() function is used for some ProduceSync errors:
+	// > - kerr.LeaderNotAvailable - There is no leader for this topic-partition as we are in the middle of a leadership election.
+	// > - kerr.NotLeaderForPartition - This server is not the leader for that topic-partition.
 	Retry int `json:"retry" default:"10"` // *
 
 	// > @3@4@5@6
 	// >
-	// > After an insert error, fall with a non-zero exit code or not
-	// > **Experimental feature**
+	// > After an insert error, fall with a non-zero exit code or not. A configured deadqueue disables fatal exits.
 	FatalOnFailedInsert bool `json:"fatal_on_failed_insert" default:"false"` // *
 
 	// > @3@4@5@6
@@ -251,15 +259,17 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		MetricCtl:      params.MetricCtl,
 	}
 
+	p.router = params.Router
 	backoffOpts := pipeline.BackoffOpts{
-		MinRetention: p.config.Retention_,
-		Multiplier:   float64(p.config.RetentionExponentMultiplier),
-		AttemptNum:   p.config.Retry,
+		MinRetention:         p.config.Retention_,
+		Multiplier:           float64(p.config.RetentionExponentMultiplier),
+		AttemptNum:           p.config.Retry,
+		IsDeadQueueAvailable: p.router.IsDeadQueueAvailable(),
 	}
 
-	onError := func(err error) {
+	onError := func(err error, events []*pipeline.Event) {
 		var level zapcore.Level
-		if p.config.FatalOnFailedInsert {
+		if p.config.FatalOnFailedInsert && !p.router.IsDeadQueueAvailable() {
 			level = zapcore.FatalLevel
 		} else {
 			level = zapcore.ErrorLevel
@@ -268,6 +278,10 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		p.logger.Desugar().Log(level, "can't write batch",
 			zap.Int("retries", p.config.Retry),
 		)
+
+		for i := range events {
+			p.router.Fail(events[i])
+		}
 	}
 
 	p.batcher = pipeline.NewRetriableBatcher(
@@ -285,7 +299,7 @@ func (p *Plugin) Out(event *pipeline.Event) {
 }
 
 func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
-	p.sendErrorMetric = ctl.RegisterCounter("output_kafka_send_errors", "Total Kafka send errors")
+	p.sendErrorMetric = ctl.RegisterCounter("output_kafka_send_errors_total", "Total Kafka send errors")
 }
 
 func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) error {
@@ -326,7 +340,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 	})
 
 	if err := p.client.ProduceSync(context.Background(), data.messages[:i]...).FirstErr(); err != nil {
-		if errors.Is(err, kerr.LeaderNotAvailable) {
+		if errors.Is(err, kerr.LeaderNotAvailable) || errors.Is(err, kerr.NotLeaderForPartition) {
 			p.client.ForceMetadataRefresh()
 		}
 		p.logger.Errorf("can't write batch: %v", err)

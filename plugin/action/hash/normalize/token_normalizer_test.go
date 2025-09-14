@@ -9,17 +9,209 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestParseBuiltinPatterns(t *testing.T) {
+	tests := []struct {
+		name string
+
+		input   string
+		want    int
+		wantErr bool
+	}{
+		{
+			name:  "all",
+			input: "all",
+			want:  pAll,
+		},
+		{
+			name:  "no",
+			input: "no",
+			want:  pNo,
+		},
+		{
+			name:  "single",
+			input: "email",
+			want:  pEmail,
+		},
+		{
+			name:  "multiple",
+			input: "host|url|single_quoted",
+			want:  pHost + pUrl + pSingleQuoted,
+		},
+		{
+			name:    "bad_pattern",
+			input:   "host|url|unknown",
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got, err := parseBuiltinPatterns(tt.input)
+			require.Equal(t, tt.wantErr, err != nil)
+			if tt.wantErr {
+				return
+			}
+			require.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestHasPattern(t *testing.T) {
+	tests := []struct {
+		name string
+
+		patterns int
+		input    []int
+
+		want bool
+	}{
+		{
+			name:     "all",
+			patterns: pAll,
+			input:    []int{pEmail, pBool, pDoubleQuoted},
+			want:     true,
+		},
+		{
+			name:     "one_true",
+			patterns: pEmail,
+			input:    []int{pEmail},
+			want:     true,
+		},
+		{
+			name:     "one_false",
+			patterns: pEmail,
+			input:    []int{pUrl},
+			want:     false,
+		},
+		{
+			name:     "multiple_true",
+			patterns: pEmail + pBool + pDatetime,
+			input:    []int{pDuration, pInt, pBool},
+			want:     true,
+		},
+		{
+			name:     "multiple_false",
+			patterns: pEmail + pBool + pDatetime,
+			input:    []int{pDuration, pInt, pFloat},
+			want:     false,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			require.Equal(t, tt.want, hasPattern(tt.patterns, tt.input...))
+		})
+	}
+}
+
+func TestNormalizeByBytesOnly(t *testing.T) {
+	tests := []struct {
+		name string
+
+		input []string
+		want  string
+	}{
+		{
+			name:  "curly_brackets",
+			input: []string{`some {"a":1,b:{"c":2,"d":3},e:[4,5,6]} here`},
+			want:  "some <curly_bracketed> here",
+		},
+		{
+			name:  "square_brackets",
+			input: []string{`some [val1, val2, [{val3_1}, (val3_2)]] here`},
+			want:  "some <square_bracketed> here",
+		},
+		{
+			name:  "parentheses",
+			input: []string{`some (asd(gfd)(())) here`},
+			want:  "some <parenthesized> here",
+		},
+		{
+			name: "double_quotes",
+			input: []string{
+				`some "bla bla" here`,
+				`some """bla "asd" bla""" here`,
+				`some "\"bla\" asd \"bla\"" here`,
+			},
+			want: "some <double_quoted> here",
+		},
+		{
+			name: "single_quotes",
+			input: []string{
+				`some 'bla bla' here`,
+				`some '''bla 'asd' bla''' here`,
+				`some '\'bla\' asd \'bla\'' here`,
+			},
+			want: "some <single_quoted> here",
+		},
+		{
+			name: "grave_quotes",
+			input: []string{
+				"some `bla bla` here",
+				"some ```bla `asd` bla``` here",
+				"some `\\`bla\\` asd \\`bla\\`` here",
+			},
+			want: "some <grave_quoted> here",
+		},
+		{
+			name:  "partial_token1",
+			input: []string{`some "dsadsadasd asd qw`},
+			want:  "some <double_quoted>",
+		},
+		{
+			name:  "partial_token2",
+			input: []string{`some {"a":1,b:{"c":2,"d":3},e:[4,5,6]`},
+			want:  "some <curly_bracketed>",
+		},
+		{
+			name:  "multiple",
+			input: []string{`some {"a":1,b:{"c":2,"d":3},e:[4,5,6]} & [val1, val2, [{val3_1}, (val3_2)]] & "bla bla" here`},
+			want:  "some <curly_bracketed> & <square_bracketed> & <double_quoted> here",
+		},
+	}
+
+	const testNormalizeByBytesPattern = "curly_bracketed|square_bracketed|parenthesized|double_quoted|single_quoted|grave_quoted"
+
+	n, err := NewTokenNormalizer(TokenNormalizerParams{
+		BuiltinPatterns: testNormalizeByBytesPattern,
+	})
+	require.NoError(t, err)
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			out := make([]byte, 0)
+
+			for _, i := range tt.input {
+				out = n.Normalize(out, []byte(i))
+				assert.Equal(t, tt.want, string(out), "wrong out with input=%q", i)
+			}
+		})
+	}
+}
+
 func TestTokenNormalizerBuiltin(t *testing.T) {
 	tests := []struct {
 		name string
 
-		inputs []string
-		want   string
+		inputs   []string
+		patterns string
+
+		want string
 	}{
 		{
-			name:   "no_matches",
-			inputs: []string{"Falsehood is s1mple"},
-			want:   "Falsehood is s1mple",
+			name:     "no_matches",
+			inputs:   []string{"Falsehood is s1mple"},
+			patterns: "all",
+			want:     "Falsehood is s1mple",
 		},
 		{
 			name: "email",
@@ -27,7 +219,8 @@ func TestTokenNormalizerBuiltin(t *testing.T) {
 				"some test@host.com here",
 				"some test@host1.host2.com here",
 			},
-			want: "some <email> here",
+			patterns: "email",
+			want:     "some <email> here",
 		},
 		{
 			name: "url",
@@ -38,7 +231,8 @@ func TestTokenNormalizerBuiltin(t *testing.T) {
 				"some wss://some.host1.host2.net here",
 				"some ftp://login:pass@serv.example.com:21/function/reg.php here",
 			},
-			want: "some <url> here",
+			patterns: "url",
+			want:     "some <url> here",
 		},
 		{
 			name: "host",
@@ -46,22 +240,26 @@ func TestTokenNormalizerBuiltin(t *testing.T) {
 				"some hello-world-123.COM here",
 				"some www.weather.jp here",
 			},
-			want: "some <host> here",
+			patterns: "host",
+			want:     "some <host> here",
 		},
 		{
-			name:   "uuid",
-			inputs: []string{"some 7c1811ed-e98f-4c9c-a9f9-58c757ff494f here"},
-			want:   "some <uuid> here",
+			name:     "uuid",
+			inputs:   []string{"some 7c1811ed-e98f-4c9c-a9f9-58c757ff494f here"},
+			patterns: "uuid",
+			want:     "some <uuid> here",
 		},
 		{
-			name:   "sha1",
-			inputs: []string{"some a94a8fe5ccb19ba61c4c0873d391e987982fbbd3 here"},
-			want:   "some <sha1> here",
+			name:     "sha1",
+			inputs:   []string{"some a94a8fe5ccb19ba61c4c0873d391e987982fbbd3 here"},
+			patterns: "sha1",
+			want:     "some <sha1> here",
 		},
 		{
-			name:   "md5",
-			inputs: []string{"some 098f6bcd4621d373cade4e832627b4f6 here"},
-			want:   "some <md5> here",
+			name:     "md5",
+			inputs:   []string{"some 098f6bcd4621d373cade4e832627b4f6 here"},
+			patterns: "md5",
+			want:     "some <md5> here",
 		},
 		{
 			name: "datetime",
@@ -74,7 +272,8 @@ func TestTokenNormalizerBuiltin(t *testing.T) {
 				"some 2025-01-13 here",
 				"some 10:20:40 here",
 			},
-			want: "some <datetime> here",
+			patterns: "datetime",
+			want:     "some <datetime> here",
 		},
 		{
 			name: "ip",
@@ -98,7 +297,8 @@ func TestTokenNormalizerBuiltin(t *testing.T) {
 				//"some ::1234:5678:1.2.3.4 here",
 				//"some 2001:db8::1234:5678:5.6.7.8 here",
 			},
-			want: "some <ip> here",
+			patterns: "ip",
+			want:     "some <ip> here",
 		},
 		{
 			name: "duration",
@@ -107,7 +307,8 @@ func TestTokenNormalizerBuiltin(t *testing.T) {
 				"some -50s20ms10µs here",
 				"some 1w2d3h4m5s6ms7us8ns here",
 			},
-			want: "some <duration> here",
+			patterns: "duration",
+			want:     "some <duration> here",
 		},
 		{
 			name: "hex",
@@ -115,7 +316,8 @@ func TestTokenNormalizerBuiltin(t *testing.T) {
 				"some 0x13eb85e69dfbc0758b12acdaae36287d here",
 				"some 0X553026A59C here",
 			},
-			want: "some <hex> here",
+			patterns: "hex",
+			want:     "some <hex> here",
 		},
 		{
 			name: "float",
@@ -123,7 +325,8 @@ func TestTokenNormalizerBuiltin(t *testing.T) {
 				"some 1.23 here",
 				"some -4.56 here",
 			},
-			want: "some <float> here",
+			patterns: "float",
+			want:     "some <float> here",
 		},
 		{
 			name: "int",
@@ -131,7 +334,8 @@ func TestTokenNormalizerBuiltin(t *testing.T) {
 				"some 100 here",
 				"some -200 here",
 			},
-			want: "some <int> here",
+			patterns: "int",
+			want:     "some <int> here",
 		},
 		{
 			name: "bool",
@@ -143,10 +347,11 @@ func TestTokenNormalizerBuiltin(t *testing.T) {
 				"some tRuE here",
 				"some FaLsE here",
 			},
-			want: "some <bool> here",
+			patterns: "bool",
+			want:     "some <bool> here",
 		},
 		{
-			name: "all_in",
+			name: "all",
 			inputs: []string{`
 				Today Monday, 2025-01-13.
 
@@ -165,6 +370,7 @@ func TestTokenNormalizerBuiltin(t *testing.T) {
 				Downloaded from https://some.host.test for 5.5s.
 			`,
 			},
+			patterns: "all",
 			want: `
 				Today Monday, <datetime>.
 
@@ -183,15 +389,23 @@ func TestTokenNormalizerBuiltin(t *testing.T) {
 				Downloaded from <url> for <duration>.
 			`,
 		},
+		{
+			name: "not_added_pattern",
+			inputs: []string{
+				"some TRUE here",
+			},
+			patterns: "int|float|host",
+			want:     "some TRUE here",
+		},
 	}
-
-	n, err := NewTokenNormalizer(TokenNormalizerParams{WithBuiltinPatterns: true})
-	require.NoError(t, err)
 
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
+			n, err := NewTokenNormalizer(TokenNormalizerParams{BuiltinPatterns: tt.patterns})
+			require.NoError(t, err)
 
 			out := make([]byte, 0)
 
@@ -216,12 +430,8 @@ func TestTokenNormalizerCustom(t *testing.T) {
 		{
 			name: "only_custom",
 			params: TokenNormalizerParams{
-				WithBuiltinPatterns: false,
-				Patterns: []TokenPattern{
-					{
-						Placeholder: "<quoted_str>",
-						RE:          `"[^"]*"`,
-					},
+				BuiltinPatterns: "no",
+				CustomPatterns: []TokenPattern{
 					{
 						Placeholder: "<date>",
 						RE:          `\d\d.\d\d.\d\d\d\d`,
@@ -229,21 +439,15 @@ func TestTokenNormalizerCustom(t *testing.T) {
 				},
 			},
 			inputs: []string{
-				`some "asldfqb21(!@_$(#@-=12))d" and 10.11.2002 here`,
-				`some "10.11.2002" and 10.11.2002 here`,
+				`some "asdfasd" and 10.11.2002 here`,
 			},
-			want: "some <quoted_str> and <date> here",
+			want: "some \"asdfasd\" and <date> here",
 		},
 		{
 			name: "custom_with_builtin",
 			params: TokenNormalizerParams{
-				WithBuiltinPatterns: true,
-				Patterns: []TokenPattern{
-					{
-						Placeholder: "<quoted_str>",
-						RE:          `"[^"]*"`,
-						Priority:    patternPriorityFirst,
-					},
+				BuiltinPatterns: "all",
+				CustomPatterns: []TokenPattern{
 					{
 						Placeholder: "<nginx_datetime>",
 						RE:          `\d\d\d\d/\d\d/\d\d\ \d\d:\d\d:\d\d`,
@@ -254,20 +458,18 @@ func TestTokenNormalizerCustom(t *testing.T) {
 			inputs: []string{
 				`2006/01/02 15:04:05 error occurred, client: 10.125.172.251, upstream: "http://10.117.246.15:84/download", host: "mpm-youtube-downloader-38.name.com:84"`,
 			},
-			want: "<nginx_datetime> error occurred, client: <ip>, upstream: <quoted_str>, host: <quoted_str>",
+			want: "<nginx_datetime> error occurred, client: <ip>, upstream: <double_quoted>, host: <double_quoted>",
 		},
 		{
-			name: "empty_patterns",
-			params: TokenNormalizerParams{
-				WithBuiltinPatterns: false,
-			},
+			name:    "empty_patterns",
+			params:  TokenNormalizerParams{},
 			wantErr: true,
 		},
 		{
 			name: "bad_patterns",
 			params: TokenNormalizerParams{
-				WithBuiltinPatterns: false,
-				Patterns: []TokenPattern{
+				BuiltinPatterns: "no",
+				CustomPatterns: []TokenPattern{
 					{
 						Placeholder: "test",
 						RE:          "[asd",
@@ -333,7 +535,7 @@ var benchCases = []struct {
 }
 
 func BenchmarkTokenNormalizer(b *testing.B) {
-	n, _ := NewTokenNormalizer(TokenNormalizerParams{WithBuiltinPatterns: true})
+	n, _ := NewTokenNormalizer(TokenNormalizerParams{BuiltinPatterns: "all"})
 	out := make([]byte, 0)
 	for _, benchCase := range benchCases {
 		name := fmt.Sprintf("input_len_%d", len(benchCase.input))

@@ -2,12 +2,14 @@ VERSION ?= $(shell git describe --abbrev=4 --dirty --always --tags)
 TIME := $(shell date '+%Y-%m-%d_%H:%M:%S')
 UPSTREAM_BRANCH ?= origin/master
 
-GOLANGCI_LINT_VER=v1.63.4
+GOLANGCI_LINT_VER=latest
+GOOS ?= linux
+GOARCH ?= amd64
 
 .PHONY: build
 build: 
-	echo "Building for amd64..."
-	GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "-X github.com/ozontech/file.d/buildinfo.Version=${VERSION}" -o file.d ./cmd/file.d
+	echo "Building for $(GOOS) $(GOARCH)..."
+	go build -trimpath -ldflags "-X github.com/ozontech/file.d/buildinfo.Version=${VERSION}" -o file.d ./cmd/file.d
 
 .PHONY: cover
 cover:

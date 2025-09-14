@@ -16,24 +16,27 @@ import (
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
+	insaneJSON "github.com/ozontech/insane-json"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.uber.org/atomic"
 )
 
 type FileD struct {
-	config    *cfg.Config
-	httpAddr  string
-	registry  *prometheus.Registry
-	plugins   *PluginRegistry
-	Pipelines []*pipeline.Pipeline
-	server    *http.Server
-	mux       *http.ServeMux
-	metricCtl *metric.Ctl
+	config     *cfg.Config
+	httpAddr   string
+	registry   *prometheus.Registry
+	plugins    *PluginRegistry
+	Pipelines  []*pipeline.Pipeline
+	server     *http.Server
+	mux        *http.ServeMux
+	metricCtl  *metric.Ctl
+	stopChan   chan struct{}
+	shouldStop atomic.Bool
 
 	// file_d metrics
 
-	versionMetric *prometheus.CounterVec
+	versionMetric *prometheus.GaugeVec
 }
 
 func New(config *cfg.Config, httpAddr string) *FileD {
@@ -61,7 +64,7 @@ func (f *FileD) Start() {
 
 func (f *FileD) initMetrics() {
 	f.metricCtl = metric.NewCtl("file_d", f.registry)
-	f.versionMetric = f.metricCtl.RegisterCounterVec("version", "", "version")
+	f.versionMetric = f.metricCtl.RegisterGaugeVec("version", "", "version")
 	f.versionMetric.WithLabelValues(buildinfo.Version).Inc()
 }
 
@@ -93,13 +96,19 @@ func (f *FileD) addPipeline(name string, config *cfg.PipelineConfig) {
 
 	logger.Infof("creating pipeline %q: capacity=%d, stream field=%s, decoder=%s", name, settings.Capacity, settings.StreamField, settings.Decoder)
 
-	p := pipeline.New(name, settings, f.registry)
+	if settings.Pool == pipeline.PoolTypeLowMem {
+		insaneJSON.StartNodePoolSize = 16
+	}
+	p := pipeline.New(name, settings, f.registry, logger.Instance.Named(name).Desugar())
 	err := f.setupInput(p, config, values)
 	if err != nil {
 		logger.Fatalf("can't create pipeline %q: %s", name, err.Error())
 	}
 
-	f.setupActions(p, config, values)
+	actions := config.Raw.Get("actions")
+	if err := SetupActions(p, f.plugins, actions, values); err != nil {
+		logger.Fatalf("can't create pipeline %q: %s", name, err.Error())
+	}
 
 	err = f.setupOutput(p, config, values)
 	if err != nil {
@@ -122,7 +131,10 @@ func (f *FileD) setupInput(p *pipeline.Pipeline, pipelineConfig *cfg.PipelineCon
 	})
 
 	for _, actionType := range inputInfo.AdditionalActions {
-		actionInfo := f.plugins.GetActionByType(actionType)
+		actionInfo, err := f.plugins.GetActionByType(actionType)
+		if err != nil {
+			return err
+		}
 
 		infoCopy := *actionInfo
 		infoCopy.Config = inputInfo.Config
@@ -137,25 +149,29 @@ func (f *FileD) setupInput(p *pipeline.Pipeline, pipelineConfig *cfg.PipelineCon
 	return nil
 }
 
-func (f *FileD) setupActions(p *pipeline.Pipeline, pipelineConfig *cfg.PipelineConfig, values map[string]int) {
-	actions := pipelineConfig.Raw.Get("actions")
+func SetupActions(p *pipeline.Pipeline, plugins *PluginRegistry, actions *simplejson.Json, values map[string]int) error {
 	for index := range actions.MustArray() {
 		actionJSON := actions.GetIndex(index)
 		if actionJSON.MustMap() == nil {
-			logger.Fatalf("empty action #%d for pipeline %q", index, p.Name)
+			return fmt.Errorf("empty action #%d for pipeline %q", index, p.Name)
 		}
 
 		t := actionJSON.Get("type").MustString()
 		if t == "" {
-			logger.Fatalf("action #%d doesn't provide type %q", index, p.Name)
+			return fmt.Errorf("action #%d doesn't provide type %q", index, p.Name)
 		}
-		f.setupAction(p, index, t, actionJSON, values)
+		if err := setupAction(p, plugins, index, t, actionJSON, values); err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
-func (f *FileD) setupAction(p *pipeline.Pipeline, index int, t string, actionJSON *simplejson.Json, values map[string]int) {
-	logger.Infof("creating action with type %q for pipeline %q", t, p.Name)
-	info := f.plugins.GetActionByType(t)
+func setupAction(p *pipeline.Pipeline, plugins *PluginRegistry, index int, t string, actionJSON *simplejson.Json, values map[string]int) error {
+	info, err := plugins.GetActionByType(t)
+	if err != nil {
+		return err
+	}
 
 	doIfChecker, err := extractDoIfChecker(actionJSON.Get("do_if"))
 	if err != nil {
@@ -164,18 +180,18 @@ func (f *FileD) setupAction(p *pipeline.Pipeline, index int, t string, actionJSO
 
 	matchMode := extractMatchMode(actionJSON)
 	if matchMode == pipeline.MatchModeUnknown {
-		logger.Fatalf("unknown match_mode value for action %d/%s in pipeline %q", index, t, p.Name)
+		return fmt.Errorf("unknown match_mode value for action %d/%s", index, t)
 	}
 	matchInvert := extractMatchInvert(actionJSON)
 	conditions, err := extractConditions(actionJSON.Get("match_fields"))
 	if err != nil {
-		logger.Fatalf("can't extract conditions for action %d/%s in pipeline %q: %s", index, t, p.Name, err.Error())
+		return fmt.Errorf("can't extract conditions for action %d/%s: %s", index, t, err.Error())
 	}
 	metricName, metricLabels, skipStatus := extractMetrics(actionJSON)
 	configJSON := makeActionJSON(actionJSON)
 	config, err := pipeline.GetConfig(info, configJSON, values)
 	if err != nil {
-		logger.Fatalf("wrong config for action %d/%s in pipeline %q: %s", index, t, p.Name, err.Error())
+		return fmt.Errorf("wrong config for action %d/%s in pipeline %q: %s", index, t, p.Name, err.Error())
 	}
 
 	infoCopy := *info
@@ -192,6 +208,7 @@ func (f *FileD) setupAction(p *pipeline.Pipeline, index int, t string, actionJSO
 		MatchInvert:      matchInvert,
 		DoIfChecker:      doIfChecker,
 	})
+	return nil
 }
 
 func (f *FileD) setupOutput(p *pipeline.Pipeline, pipelineConfig *cfg.PipelineConfig, values map[string]int) error {
@@ -204,6 +221,13 @@ func (f *FileD) setupOutput(p *pipeline.Pipeline, pipelineConfig *cfg.PipelineCo
 		PluginStaticInfo:  info,
 		PluginRuntimeInfo: f.instantiatePlugin(info),
 	})
+
+	if info.DeadQueueInfo != nil {
+		p.SetDeadQueueOutput(&pipeline.OutputPluginInfo{
+			PluginStaticInfo:  info.DeadQueueInfo,
+			PluginRuntimeInfo: f.instantiatePlugin(info.DeadQueueInfo),
+		})
+	}
 
 	return nil
 }
@@ -228,7 +252,43 @@ func (f *FileD) getStaticInfo(pipelineConfig *cfg.PipelineConfig, pluginKind pip
 		return nil, fmt.Errorf("%s doesn't have type", pluginKind)
 	}
 	logger.Infof("creating %s with type %q", pluginKind, t)
-	info := f.plugins.Get(pluginKind, t)
+	info, err := f.plugins.Get(pluginKind, t)
+	if err != nil {
+		return nil, err
+	}
+
+	deadqueue := configJSON.Get("deadqueue")
+	var deadqueueInfo *pipeline.PluginStaticInfo
+	if deadqueueMap := deadqueue.MustMap(); deadqueueMap != nil {
+		if len(deadqueueMap) > 0 {
+			deadqueueType := deadqueue.Get("type").MustString()
+			if deadqueueType == "" {
+				return nil, fmt.Errorf("deadqueue of %s doesn't have type", pluginKind)
+			}
+			deadqueueInfo, err = f.plugins.Get(pluginKind, deadqueueType)
+			if err != nil {
+				return nil, err
+			}
+
+			deadqueue.Del("type")
+
+			deadqueueConfigJson, err := deadqueue.Encode()
+			if err != nil {
+				logger.Panicf("can't create config json for %s deadqueue", deadqueueType)
+			}
+
+			config, err := pipeline.GetConfig(deadqueueInfo, deadqueueConfigJson, values)
+			if err != nil {
+				logger.Fatalf("error on creating deadqueue of %s with type %q: %s", deadqueueType, pluginKind, err.Error())
+			}
+			deadqueueInfo.Config = config
+
+			// TODO: recursive deadqueue config
+			// deadqueueForDeadqueue := deadqueue.Get("deadqueue").MustMap()
+		}
+		configJSON.Del("deadqueue")
+	}
+
 	configJson, err := configJSON.Encode()
 	if err != nil {
 		logger.Panicf("can't create config json for %s", t)
@@ -240,19 +300,26 @@ func (f *FileD) getStaticInfo(pipelineConfig *cfg.PipelineConfig, pluginKind pip
 
 	infoCopy := *info
 	infoCopy.Config = config
+	if deadqueueInfo != nil {
+		infoCopy.DeadQueueInfo = deadqueueInfo
+	}
 
 	return &infoCopy, nil
 }
 
 func (f *FileD) Stop(ctx context.Context) error {
 	logger.Infof("stopping pipelines=%d", len(f.Pipelines))
+	f.shouldStop.Store(true)
+
+	for _, p := range f.Pipelines {
+		p.Stop()
+	}
+
 	var err error
 	if f.server != nil {
 		err = f.server.Shutdown(ctx)
 	}
-	for _, p := range f.Pipelines {
-		p.Stop()
-	}
+	<-f.stopChan
 
 	return err
 }
@@ -271,8 +338,8 @@ func (f *FileD) startHTTP() {
 	mux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
 	mux.HandleFunc("/debug/pprof/trace", pprof.Trace)
 
-	mux.HandleFunc("/live", f.serveLiveReady)
-	mux.HandleFunc("/ready", f.serveLiveReady)
+	mux.HandleFunc("/live", f.serveLive)
+	mux.HandleFunc("/ready", f.serveReady)
 	mux.HandleFunc("/freeosmem", f.serveFreeOsMem)
 	mux.Handle("/metrics", promhttp.InstrumentMetricHandler(
 		f.registry, promhttp.HandlerFor(f.registry, promhttp.HandlerOpts{}),
@@ -300,6 +367,8 @@ func (f *FileD) startHTTP() {
 	})
 
 	f.server = &http.Server{Addr: f.httpAddr, Handler: mux}
+	f.stopChan = make(chan struct{})
+
 	go f.listenHTTP()
 }
 
@@ -308,6 +377,7 @@ func (f *FileD) listenHTTP() {
 	if err != http.ErrServerClosed {
 		logger.Fatalf("http listening error address=%q: %s", f.httpAddr, err.Error())
 	}
+	close(f.stopChan)
 }
 
 func (f *FileD) serveFreeOsMem(_ http.ResponseWriter, _ *http.Request) {
@@ -315,8 +385,16 @@ func (f *FileD) serveFreeOsMem(_ http.ResponseWriter, _ *http.Request) {
 	logger.Infof("free OS memory OK")
 }
 
-func (f *FileD) serveLiveReady(_ http.ResponseWriter, _ *http.Request) {
-	logger.Infof("live/ready OK")
+func (f *FileD) serveReady(w http.ResponseWriter, _ *http.Request) {
+	if f.shouldStop.Load() {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		return
+	}
+	logger.Infof("ready OK")
+}
+
+func (f *FileD) serveLive(_ http.ResponseWriter, _ *http.Request) {
+	logger.Infof("live OK")
 }
 
 type valueChangerHandler struct {

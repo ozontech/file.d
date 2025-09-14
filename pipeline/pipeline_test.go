@@ -11,6 +11,7 @@ import (
 	"github.com/ozontech/file.d/test"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
 )
 
 func getFakeInputInfo() *pipeline.InputPluginInfo {
@@ -63,7 +64,7 @@ func TestInInvalidMessages(t *testing.T) {
 
 	for _, tCase := range cases {
 		t.Run(tCase.name, func(t *testing.T) {
-			pipe := pipeline.New("test_pipeline", tCase.pipelineSettings, prometheus.NewRegistry())
+			pipe := pipeline.New("test_pipeline", tCase.pipelineSettings, prometheus.NewRegistry(), zap.NewNop())
 
 			pipe.SetInput(getFakeInputInfo())
 
@@ -80,7 +81,7 @@ func BenchmarkMetaTemplater(b *testing.B) {
 		MetricHoldDuration: pipeline.DefaultMetricHoldDuration,
 	}
 
-	pipe := pipeline.New("test_pipeline", pipelineSettings, prometheus.NewRegistry())
+	pipe := pipeline.New("test_pipeline", pipelineSettings, prometheus.NewRegistry(), zap.NewNop())
 	pipe.SetInput(getFakeInputInfo())
 	plugin, config := devnull.Factory()
 	outputPlugin := plugin.(*devnull.Plugin)

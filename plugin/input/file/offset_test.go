@@ -1,6 +1,7 @@
 package file
 
 import (
+	"math/rand"
 	"os"
 	"sync"
 	"testing"
@@ -17,12 +18,14 @@ func TestParseOffsets(t *testing.T) {
   source_id: 1234
   streams:
     default: 100
+    error:: 960
     another: 200
 - file: /another/informational/name
   inode: 2
   source_id: 4321
   streams:
     stderr: 300
+    error:: 0
 `
 	offsetDB := newOffsetDB("", "")
 	offsets, err := offsetDB.parse(data)
@@ -38,6 +41,10 @@ func TestParseOffsets(t *testing.T) {
 	assert.True(t, has, "stream isn't found")
 	assert.Equal(t, int64(100), offset, "wrong offset")
 
+	offset, has = item.streams["error:"]
+	assert.True(t, has, "stream isn't found")
+	assert.Equal(t, int64(960), offset, "wrong offset")
+
 	offset, has = item.streams["another"]
 	assert.True(t, has, "stream isn't found")
 	assert.Equal(t, int64(200), offset, "wrong offset")
@@ -51,9 +58,13 @@ func TestParseOffsets(t *testing.T) {
 	offset, has = item.streams["stderr"]
 	assert.True(t, has, "stream isn't found")
 	assert.Equal(t, int64(300), offset, "wrong offset")
+
+	offset, has = item.streams["error:"]
+	assert.True(t, has, "stream isn't found")
+	assert.Equal(t, int64(0), offset, "wrong offset")
 }
 
-func TestParallel(t *testing.T) {
+func TestParallelOffsetsSave(t *testing.T) {
 	data := `- file: /some/informational/name
   inode: 1
   source_id: 1234
@@ -103,8 +114,8 @@ func TestParallel(t *testing.T) {
 	rwmu := &sync.RWMutex{}
 	count := 100
 	wg := sync.WaitGroup{}
-	wg.Add(100)
-	for i := 0; i < count; i++ {
+	wg.Add(count)
+	for range count {
 		go func() {
 			offsetDB := newOffsetDB("tests-offsets", "tests-offsets.tmp")
 			_, _ = offsetDB.parse(data)
@@ -115,4 +126,44 @@ func TestParallel(t *testing.T) {
 	wg.Wait()
 	err := os.Remove("tests-offsets")
 	require.NoError(t, err)
+}
+
+func TestParallelOffsetsGetSet(t *testing.T) {
+	offsets := pipeline.SliceFromMap(map[pipeline.StreamName]int64{
+		"stdout": 111,
+		"stderr": 222,
+	})
+
+	job := &Job{
+		offsets: offsets,
+		mu:      &sync.Mutex{},
+	}
+
+	count := 100
+	wg := sync.WaitGroup{}
+	wg.Add(2 * count)
+	for range count {
+		go func() {
+			// like in `worker.work`
+			job.mu.Lock()
+			jobOffsets := job.offsets.Copy()
+			job.mu.Unlock()
+			o := pipeline.NewOffsets(0, jobOffsets)
+
+			// like in `pipeline.In`
+			_ = o.ByStream("test")
+
+			wg.Done()
+		}()
+
+		go func() {
+			// like in `jobProvider.commit`
+			job.mu.Lock()
+			job.offsets.Set("stderr", rand.Int63())
+			job.mu.Unlock()
+
+			wg.Done()
+		}()
+	}
+	wg.Wait()
 }

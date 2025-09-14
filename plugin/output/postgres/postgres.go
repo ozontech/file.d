@@ -22,6 +22,8 @@ import (
 
 /*{ introduction
 It sends the event batches to postgres db using pgx.
+
+Supports [dead queue](/plugin/output/README.md#dead-queue).
 }*/
 
 /*{ example
@@ -111,6 +113,8 @@ type Plugin struct {
 	duplicatedEventMetric prometheus.Counter
 	writtenEventMetric    prometheus.Counter
 	insertErrorsMetric    prometheus.Counter
+
+	router *pipeline.Router
 }
 
 type ConfigColumn struct {
@@ -162,8 +166,7 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
-	// > After an insert error, fall with a non-zero exit code or not
-	// > **Experimental feature**
+	// > After an insert error, fall with a non-zero exit code or not. A configured deadqueue disables fatal exits.
 	FatalOnFailedInsert bool `json:"fatal_on_failed_insert" default:"false"` // *
 
 	// > @3@4@5@6
@@ -228,10 +231,10 @@ func Factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 }
 
 func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
-	p.discardedEventMetric = ctl.RegisterCounter("output_postgres_event_discarded", "Total pgsql discarded messages")
-	p.duplicatedEventMetric = ctl.RegisterCounter("output_postgres_event_duplicated", "Total pgsql duplicated messages")
-	p.writtenEventMetric = ctl.RegisterCounter("output_postgres_event_written", "Total events written to pgsql")
-	p.insertErrorsMetric = ctl.RegisterCounter("output_postgres_insert_errors", "Total pgsql insert errors")
+	p.discardedEventMetric = ctl.RegisterCounter("output_postgres_event_discarded_total", "Total pgsql discarded messages")
+	p.duplicatedEventMetric = ctl.RegisterCounter("output_postgres_event_duplicated_total", "Total pgsql duplicated messages")
+	p.writtenEventMetric = ctl.RegisterCounter("output_postgres_event_written_total", "Total events written to pgsql")
+	p.insertErrorsMetric = ctl.RegisterCounter("output_postgres_insert_errors_total", "Total pgsql insert errors")
 }
 
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginParams) {
@@ -286,15 +289,17 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		MetricCtl:      params.MetricCtl,
 	}
 
+	p.router = params.Router
 	backoffOpts := pipeline.BackoffOpts{
-		MinRetention: p.config.Retention_,
-		Multiplier:   float64(p.config.RetentionExponentMultiplier),
-		AttemptNum:   p.config.Retry,
+		MinRetention:         p.config.Retention_,
+		Multiplier:           float64(p.config.RetentionExponentMultiplier),
+		AttemptNum:           p.config.Retry,
+		IsDeadQueueAvailable: p.router.IsDeadQueueAvailable(),
 	}
 
-	onError := func(err error) {
+	onError := func(err error, events []*pipeline.Event) {
 		var level zapcore.Level
-		if p.config.FatalOnFailedInsert {
+		if p.config.FatalOnFailedInsert && !p.router.IsDeadQueueAvailable() {
 			level = zapcore.FatalLevel
 		} else {
 			level = zapcore.ErrorLevel
@@ -303,6 +308,10 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		p.logger.Desugar().Log(level, "can't insert to the table", zap.Error(err),
 			zap.Int("retries", p.config.Retry),
 			zap.String("table", p.config.Table))
+
+		for i := range events {
+			p.router.Fail(events[i])
+		}
 	}
 
 	p.batcher = pipeline.NewRetriableBatcher(

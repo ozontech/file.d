@@ -244,7 +244,6 @@ type Config struct {
 	// > @3@4@5@6
 	// >
 	// > After an insert error, fall with a non-zero exit code or not
-	// > **Experimental feature**
 	FatalOnFailedInsert bool `json:"fatal_on_failed_insert" default:"false"` // *
 
 	// > @3@4@5@6
@@ -292,8 +291,8 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 }
 
 func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
-	p.sendErrorMetric = ctl.RegisterCounter("output_s3_send_error", "Total s3 send errors")
-	p.uploadFileMetric = ctl.RegisterCounterVec("output_s3_upload_file", "Total files upload", "bucket_name")
+	p.sendErrorMetric = ctl.RegisterCounter("output_s3_send_error_total", "Total s3 send errors")
+	p.uploadFileMetric = ctl.RegisterCounterVec("output_s3_upload_file_total", "Total files upload", "bucket_name")
 }
 
 func (p *Plugin) StartWithMinio(config pipeline.AnyConfig, params *pipeline.OutputPluginParams, factory objStoreFactory) {

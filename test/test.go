@@ -136,7 +136,7 @@ func NewPipeline(actions []*pipeline.ActionPluginStaticInfo, pipelineOpts ...str
 		pName += strconv.Itoa(rand.Int())
 	}
 
-	p := pipeline.New(pName, settings, prometheus.NewRegistry())
+	p := pipeline.New(pName, settings, prometheus.NewRegistry(), zap.NewNop())
 	if !parallel {
 		p.DisableParallelism()
 	}
@@ -210,6 +210,7 @@ func NewEmptyOutputPluginParams() *pipeline.OutputPluginParams {
 	return &pipeline.OutputPluginParams{
 		PluginDefaultParams: newDefaultParams(),
 		Logger:              newLogger().Named("output"),
+		Router:              pipeline.NewRouter(),
 	}
 }
 

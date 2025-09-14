@@ -8,106 +8,46 @@ import (
 )
 
 func BenchmarkPanicStartMixedRes(b *testing.B) {
-	cur, err := InitTemplate(nameGoPanic)
-	require.NoError(b, err)
-
 	lines := getLines(sample.Panics)
 
 	b.ResetTimer()
-	b.Run("explicit", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
-			for _, line := range lines {
-				goPanicStartCheck(line)
-			}
+	for i := 0; i < b.N; i++ {
+		for _, line := range lines {
+			goPanicStartCheck(line)
 		}
-	})
-	b.Run("regexp", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
-			for _, line := range lines {
-				cur.StartRe.MatchString(line)
-			}
-		}
-	})
+	}
 }
 
 func BenchmarkPanicContinueMixedRes(b *testing.B) {
-	cur, err := InitTemplate(nameGoPanic)
-	require.NoError(b, err)
-
 	lines := getLines(sample.Panics)
 
 	b.ResetTimer()
-	b.Run("explicit", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
-			for _, line := range lines {
-				goPanicContinueCheck(line)
-			}
+	for i := 0; i < b.N; i++ {
+		for _, line := range lines {
+			goPanicContinueCheck(line)
 		}
-	})
-	b.Run("regexp", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
-			for _, line := range lines {
-				cur.ContinueRe.MatchString(line)
-			}
-		}
-	})
+	}
 }
 
 func BenchmarkPanicStartNegativeRes(b *testing.B) {
-	cur, err := InitTemplate(nameGoPanic)
-	require.NoError(b, err)
-
 	lines := getRandLines()
 
 	b.ResetTimer()
-	b.Run("explicit", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
-			for _, line := range lines {
-				goPanicStartCheck(line)
-			}
+	for i := 0; i < b.N; i++ {
+		for _, line := range lines {
+			goPanicStartCheck(line)
 		}
-	})
-	b.Run("regexp", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
-			for _, line := range lines {
-				cur.StartRe.MatchString(line)
-			}
-		}
-	})
+	}
 }
 
 func BenchmarkPanicContinueNegativeRes(b *testing.B) {
-	cur, err := InitTemplate(nameGoPanic)
-	require.NoError(b, err)
-
 	lines := getRandLines()
 
 	b.ResetTimer()
-	b.Run("explicit", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
-			for _, line := range lines {
-				goPanicContinueCheck(line)
-			}
+	for i := 0; i < b.N; i++ {
+		for _, line := range lines {
+			goPanicContinueCheck(line)
 		}
-	})
-	b.Run("regexp", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
-			for _, line := range lines {
-				cur.ContinueRe.MatchString(line)
-			}
-		}
-	})
-}
-
-func TestPanicSameResults(t *testing.T) {
-	cur, err := InitTemplate(nameGoPanic)
-	require.NoError(t, err)
-
-	lines := getLines(sample.Panics)
-
-	for _, line := range lines {
-		require.Equal(t, cur.StartRe.MatchString(line), goPanicStartCheck(line), line)
-		require.Equal(t, cur.ContinueRe.MatchString(line), goPanicContinueCheck(line), line)
 	}
 }
 
@@ -172,19 +112,24 @@ func TestContainsGoroutineID(t *testing.T) {
 		"    goroutine 123 [running]:",
 		"goroutine 100 [",
 		"goroutine 1 [qwe",
+
+		"goroutine 108568134 gp=0xc0011cddc0 m=nil [IO wait]:",
 	}
 
 	negative := []string{
 		"qwe abc", // no goroutine id prefix
 		"goroutine",
 
-		"goroutine qwe", // no goroutine id suffix after prefix
+		"goroutine qwe", // no space after goroutine id prefix
 		"goroutine [",
 
-		"goroutine  [", // no chars between suffix and prefix
+		"goroutine  ", // no chars between goroutine id prefix and space
+		"goroutine  [",
 
-		"goroutine ABC [", // only digits allowed between suffix and prefix
-		"goroutine 1a [",
+		"goroutine ABC ", // only digits allowed between goroutine id prefix and space
+		"goroutine 1a ",
+
+		"goroutine 108568134 gp=0xc0011cddc0 m=nil[IO wait]:", // no goroutine id suffix
 
 		"goroutine QWE goroutine 1 [running]:", // only first occurrence counts
 	}

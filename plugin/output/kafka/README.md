@@ -1,6 +1,8 @@
 # Kafka output
 It sends the event batches to kafka brokers using `franz-go` lib.
 
+Supports [dead queue](/plugin/output/README.md#dead-queue).
+
 ### Config params
 **`brokers`** *`[]string`* *`required`* 
 
@@ -81,12 +83,17 @@ Required acks for produced records
 Retries of insertion. If File.d cannot insert for this number of attempts,
 File.d will fall with non-zero exit code or skip message (see fatal_on_failed_insert).
 
+There are situations when one of the brokers is disconnected and the client does not have time to
+update the metadata before all the remaining retries are finished. To avoid this situation,
+the client.ForceMetadataRefresh() function is used for some ProduceSync errors:
+- kerr.LeaderNotAvailable - There is no leader for this topic-partition as we are in the middle of a leadership election.
+- kerr.NotLeaderForPartition - This server is not the leader for that topic-partition.
+
 <br>
 
 **`fatal_on_failed_insert`** *`bool`* *`default=false`* 
 
-After an insert error, fall with a non-zero exit code or not
-**Experimental feature**
+After an insert error, fall with a non-zero exit code or not. A configured deadqueue disables fatal exits.
 
 <br>
 

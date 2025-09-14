@@ -29,6 +29,7 @@ func TestZeroValueNode(t *testing.T) {
 		NewColEnum8(enum8),
 		NewColEnum16(enum16),
 		NewColStringArray(),
+		NewColMapStringString(),
 	}
 
 	for _, nullable := range []bool{true, false} {

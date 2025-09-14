@@ -195,11 +195,8 @@ pipelines:
 
 [More details...](plugin/action/join/README.md)
 ## join_template
-Alias to "join" plugin with predefined `start` and `continue` parameters.
-
-> ⚠ Parsing the whole event flow could be very CPU intensive because the plugin uses regular expressions.
-> Enable explicit checks without regular expressions (use `fast_check` flag) or
-> consider `match_fields` parameter to process only particular events. Check out an example for details.
+Alias to `join` plugin with predefined fast (regexes not used) `start` and `continue` checks.
+Use `do_if` or `match_fields` to prevent extra checks and reduce CPU usage.
 
 **Example of joining Go panics**:
 ```yaml
@@ -207,11 +204,14 @@ pipelines:
   example_pipeline:
     ...
     actions:
-    - type: join_template
-      template: go_panic
-      field: log
-      match_fields:
-        stream: stderr // apply only for events which was written to stderr to save CPU time
+      - type: join_template
+        template: go_panic
+        field: log
+        do_if:
+          field: stream
+          op: equal
+          values:
+            - stderr # apply only for events which was written to stderr to save CPU time
     ...
 ```
 
@@ -290,14 +290,34 @@ See `cfg.ParseNestedFields`.
 Mask plugin matches event with regular expression and substitutions successfully matched symbols via asterix symbol.
 You could set regular expressions and submatch groups.
 
-**Example:**
+**Note**: masks are applied only to string or number values.
+
+**Example 1:**
 ```yaml
 pipelines:
   example_pipeline:
     ...
     actions:
     - type: mask
-      metric_subsystem_name: "some_name"
+      masks:
+      - re: "\b(\d{1,4})\D?(\d{1,4})\D?(\d{1,4})\D?(\d{1,4})\b"
+        groups: [1,2,3]
+    ...
+```
+
+Mask plugin can have white and black lists for fields using `process_fields` and `ignore_fields` parameters respectively.
+Elements of `process_fields` and `ignore_fields` lists are json paths (e.g. `message` — field `message` in root,
+`field.subfield` — field `subfield` inside object value of field `field`).
+
+**Note**: `process_fields` and `ignore_fields` cannot be used simultaneously.
+
+**Example 2:**
+```yaml
+pipelines:
+  example_pipeline:
+    ...
+    actions:
+    - type: mask
       ignore_fields:
       - trace_id
       masks:
@@ -306,6 +326,50 @@ pipelines:
     ...
 ```
 
+All masks will be applied to all fields in the event except for the `trace_id` field in the root of the event.
+
+**Example 3:**
+```yaml
+pipelines:
+  example_pipeline:
+    ...
+    actions:
+    - type: mask
+      process_fields:
+      - message
+      masks:
+      - re: "\b(\d{1,4})\D?(\d{1,4})\D?(\d{1,4})\D?(\d{1,4})\b"
+        groups: [1,2,3]
+    ...
+```
+
+All masks will be applied only to `message` field in the root of the event.
+
+Also `process_fields` and `ignore_fields` lists can be used on per mask basis. In that case, if a mask has
+non-empty `process_fields` or `ignore_fields` and there is non-empty `process_fields` or `ignore_fields`
+in plugin parameters, mask fields lists will override plugin lists.
+
+**Example 3:**
+```yaml
+pipelines:
+  example_pipeline:
+    ...
+    actions:
+    - type: mask
+      ignore_fields:
+      - trace_id
+      masks:
+      - re: "\b(\d{1,4})\D?(\d{1,4})\D?(\d{1,4})\D?(\d{1,4})\b"
+        groups: [1,2,3]
+      - re: "(test)"
+        groups: [1]
+		process_fields:
+		- message
+    ...
+```
+
+The first mask will be applied to all fields in the event except for the `trace_id` field in the root of the event.
+The second mask will be applied only to `message` field in the root of the event.
 
 [More details...](plugin/action/mask/README.md)
 ## modify

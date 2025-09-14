@@ -113,8 +113,7 @@ type Pipeline struct {
 	procCount   *atomic.Int32
 	activeProcs *atomic.Int32
 
-	output     OutputPlugin
-	outputInfo *OutputPluginInfo
+	router *Router
 
 	metricHolder *metric.Holder
 
@@ -173,10 +172,9 @@ const (
 )
 
 // New creates new pipeline. Consider using `SetupHTTPHandlers` next.
-func New(name string, settings *Settings, registry *prometheus.Registry) *Pipeline {
+func New(name string, settings *Settings, registry *prometheus.Registry, lg *zap.Logger) *Pipeline {
 	metricCtl := metric.NewCtl("pipeline_"+name, registry)
 
-	lg := logger.Instance.Named(name).Desugar()
 	metricHolder := metric.NewHolder(settings.MetricHoldDuration)
 
 	var eventPool pool
@@ -200,6 +198,7 @@ func New(name string, settings *Settings, registry *prometheus.Registry) *Pipeli
 			PipelineSettings: settings,
 			MetricCtl:        metricCtl,
 		},
+		router: NewRouter(),
 		actionMetrics: actionMetrics{
 			m:  make(map[string]*actionMetric),
 			mu: new(sync.RWMutex),
@@ -277,14 +276,14 @@ func (p *Pipeline) registerMetrics() {
 	m := p.actionParams.MetricCtl
 	p.inUseEventsMetric = m.RegisterGauge("event_pool_in_use_events", "Count of pool events which is used for processing")
 	p.eventPoolCapacityMetric = m.RegisterGauge("event_pool_capacity", "Pool capacity value")
-	p.inputEventsCountMetric = m.RegisterCounter("input_events_count", "Count of events on pipeline input")
-	p.inputEventSizeMetric = m.RegisterCounter("input_events_size", "Size of events on pipeline input")
-	p.outputEventsCountMetric = m.RegisterCounter("output_events_count", "Count of events on pipeline output")
-	p.outputEventSizeMetric = m.RegisterCounter("output_events_size", "Size of events on pipeline output")
-	p.readOpsEventsSizeMetric = m.RegisterCounter("read_ops_count", "Read OPS count")
-	p.wrongEventCRIFormatMetric = m.RegisterCounter("wrong_event_cri_format", "Wrong event CRI format counter")
-	p.maxEventSizeExceededMetric = m.RegisterCounterVec("max_event_size_exceeded", "Max event size exceeded counter", "source_name")
-	p.countEventPanicsRecoveredMetric = m.RegisterCounter("count_event_panics_recovered", "Count of processor.countEvent panics recovered")
+	p.inputEventsCountMetric = m.RegisterCounter("input_plugin_events_count_total", "Count of events on pipeline input")
+	p.inputEventSizeMetric = m.RegisterCounter("input_plugin_events_size_total", "Size of events on pipeline input")
+	p.outputEventsCountMetric = m.RegisterCounter("output_plugin_events_count_total", "Count of events on pipeline output")
+	p.outputEventSizeMetric = m.RegisterCounter("output_plugin_events_size_total", "Size of events on pipeline output")
+	p.readOpsEventsSizeMetric = m.RegisterCounter("read_ops_count_total", "Read OPS count")
+	p.wrongEventCRIFormatMetric = m.RegisterCounter("wrong_event_cri_format_total", "Wrong event CRI format counter")
+	p.maxEventSizeExceededMetric = m.RegisterCounterVec("max_event_size_exceeded_total", "Max event size exceeded counter", "source_name")
+	p.countEventPanicsRecoveredMetric = m.RegisterCounter("count_event_panics_recovered_total", "Count of processor.countEvent panics recovered")
 	p.eventPoolLatency = m.RegisterHistogram("event_pool_latency_seconds",
 		"How long we are wait an event from the pool", metric.SecondsBucketsDetailedNano)
 }
@@ -302,7 +301,7 @@ func (p *Pipeline) SetupHTTPHandlers(mux *http.ServeMux) {
 	if p.input == nil {
 		p.logger.Panic("input isn't set")
 	}
-	if p.output == nil {
+	if p.router.output == nil {
 		p.logger.Panic("output isn't set")
 	}
 
@@ -322,7 +321,7 @@ func (p *Pipeline) SetupHTTPHandlers(mux *http.ServeMux) {
 		}
 	}
 
-	for hName, handler := range p.outputInfo.PluginStaticInfo.Endpoints {
+	for hName, handler := range p.router.outputInfo.PluginStaticInfo.Endpoints {
 		mux.HandleFunc(fmt.Sprintf("%s/%d/%s", prefix, len(p.actionInfos)+1, hName), handler)
 	}
 }
@@ -331,7 +330,7 @@ func (p *Pipeline) Start() {
 	if p.input == nil {
 		p.logger.Panic("input isn't set")
 	}
-	if p.output == nil {
+	if p.router.output == nil {
 		p.logger.Panic("output isn't set")
 	}
 
@@ -340,11 +339,11 @@ func (p *Pipeline) Start() {
 	outputParams := &OutputPluginParams{
 		PluginDefaultParams: p.actionParams,
 		Controller:          p,
-		Logger:              p.logger.Sugar().Named("output").Named(p.outputInfo.Type),
+		Logger:              p.logger.Sugar().Named("output").Named(p.router.outputInfo.Type),
 	}
-	p.logger.Info("starting output plugin", zap.String("name", p.outputInfo.Type))
+	p.logger.Info("starting output plugin", zap.String("name", p.router.outputInfo.Type))
 
-	p.output.Start(p.outputInfo.Config, outputParams)
+	p.router.Start(outputParams)
 
 	p.logger.Info("stating processors", zap.Int("count", len(p.Procs)))
 	for _, processor := range p.Procs {
@@ -383,7 +382,7 @@ func (p *Pipeline) Stop() {
 	p.input.Stop()
 
 	p.logger.Info("stopping output")
-	p.output.Stop()
+	p.router.Stop()
 
 	p.shouldStop.Store(true)
 
@@ -400,12 +399,15 @@ func (p *Pipeline) GetInput() InputPlugin {
 }
 
 func (p *Pipeline) SetOutput(info *OutputPluginInfo) {
-	p.outputInfo = info
-	p.output = info.Plugin.(OutputPlugin)
+	p.router.SetOutput(info)
+}
+
+func (p *Pipeline) SetDeadQueueOutput(info *OutputPluginInfo) {
+	p.router.SetDeadQueueOutput(info)
 }
 
 func (p *Pipeline) GetOutput() OutputPlugin {
-	return p.output
+	return p.router.output
 }
 
 // In decodes message and passes it to event stream.
@@ -461,7 +463,7 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offsets Offsets, byt
 	// For example, for containerd this setting is called max_container_log_line_size
 	// https://github.com/containerd/containerd/blob/f7f2be732159a411eae46b78bfdb479b133a823b/pkg/cri/config/config.go#L263-L266
 	if !row.IsPartial && p.settings.AntispamThreshold > 0 {
-		streamOffset := offsets.byStream(string(row.Stream))
+		streamOffset := offsets.ByStream(string(row.Stream))
 		currentOffset := offsets.current
 
 		if streamOffset > 0 && currentOffset < streamOffset {
@@ -625,6 +627,7 @@ func (p *Pipeline) streamEvent(event *Event) uint64 {
 }
 
 func (p *Pipeline) Commit(event *Event) {
+	p.router.Ack(event)
 	p.finalize(event, true, true)
 }
 
@@ -759,7 +762,7 @@ func (p *Pipeline) newProc(id int) *processor {
 		id,
 		&p.actionMetrics,
 		p.activeProcs,
-		p.output,
+		p.router,
 		p.streamer,
 		p.finalize,
 		p.IncMaxEventSizeExceeded,

@@ -68,7 +68,7 @@ func TestHash(t *testing.T) {
 				ResultField: resField,
 			},
 			input:    []byte(`{"level":"error","message":"2023-10-30T13:35:33.638720813Z error occurred, client: 10.125.172.251, upstream: \"http://10.117.246.15:84/download\", host: \"mpm-youtube-downloader-38.name.com:84\""}`),
-			wantHash: 2140116920471166296,
+			wantHash: 16996027065257776963,
 		},
 		{
 			name: "field_max_size",
@@ -82,19 +82,15 @@ func TestHash(t *testing.T) {
 			wantHash: 10662808184633841128,
 		},
 		{
-			name: "normalizer_without_builtin",
+			name: "normalizer_only_custom",
 			config: &Config{
 				Fields: []Field{
 					{Field: "message", Format: "normalize"},
 				},
 				ResultField: resField,
 				Normalizer: NormalizerConfig{
-					WithBuiltinPatterns: false,
-					Patterns: []NormalizePattern{
-						{
-							Placeholder: "<quoted_str>",
-							RE:          `"[^"]*"`,
-						},
+					BuiltinPatterns: "no",
+					CustomPatterns: []NormalizePattern{
 						{
 							Placeholder: "<date>",
 							RE:          `\d\d.\d\d.\d\d\d\d`,
@@ -104,23 +100,18 @@ func TestHash(t *testing.T) {
 			},
 			input:    []byte(`{"level":"error","message":"request from \"ivanivanov\", signed on 19.03.2025"}`),
 			pipeOpts: []string{"name"},
-			wantHash: 6933347847764028189,
+			wantHash: 6546706502540149833,
 		},
 		{
-			name: "normalizer_with_builtin",
+			name: "normalizer_custom_and_builtin",
 			config: &Config{
 				Fields: []Field{
 					{Field: "message", Format: "normalize"},
 				},
 				ResultField: resField,
 				Normalizer: NormalizerConfig{
-					WithBuiltinPatterns: true,
-					Patterns: []NormalizePattern{
-						{
-							Placeholder: "<quoted_str>",
-							RE:          `"[^"]*"`,
-							Priority:    "first",
-						},
+					BuiltinPatterns: "all",
+					CustomPatterns: []NormalizePattern{
 						{
 							Placeholder: "<nginx_datetime>",
 							RE:          `\d\d\d\d/\d\d/\d\d\ \d\d:\d\d:\d\d`,
@@ -131,7 +122,22 @@ func TestHash(t *testing.T) {
 			},
 			input:    []byte(`{"level":"error","message":"2006/01/02 15:04:05 error occurred, client: 10.125.172.251, upstream: \"http://10.117.246.15:84/download\", host: \"mpm-youtube-downloader-38.name.com:84\""}`),
 			pipeOpts: []string{"name"},
-			wantHash: 7891860241841154313,
+			wantHash: 4150276598667727274,
+		},
+		{
+			name: "normalizer_partial_builtin",
+			config: &Config{
+				Fields: []Field{
+					{Field: "message", Format: "normalize"},
+				},
+				ResultField: resField,
+				Normalizer: NormalizerConfig{
+					BuiltinPatterns: "double_quoted",
+				},
+			},
+			input:    []byte(`{"level":"error","message":"2006/01/02 15:04:05 error occurred, client: 10.125.172.251, upstream: \"http://10.117.246.15:84/download\", host: \"mpm-youtube-downloader-38.name.com:84\""}`),
+			pipeOpts: []string{"name"},
+			wantHash: 18348543511044429638,
 		},
 		{
 			name: "no_field",

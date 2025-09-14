@@ -1,5 +1,5 @@
 pipelines:
-  file_es:
+  file_es_split:
     input:
       type: file
     output:
@@ -13,8 +13,4 @@ pipelines:
       split_batch: true
       strict: false
       index_format: index_name
-      retry: 1
-      retention: 1s
       workers_count: 1
-      username: elastic
-      password: password

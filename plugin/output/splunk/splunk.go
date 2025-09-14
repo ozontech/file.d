@@ -68,6 +68,8 @@ Out:
   }
 }
 ```
+
+Supports [dead queue](/plugin/output/README.md#dead-queue).
 }*/
 
 const (
@@ -96,6 +98,8 @@ type Plugin struct {
 
 	// plugin metrics
 	sendErrorMetric *prometheus.CounterVec
+
+	router *pipeline.Router
 }
 
 type CopyField struct {
@@ -177,8 +181,7 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
-	// > After an insert error, fall with a non-zero exit code or not
-	// > **Experimental feature**
+	// > After an insert error, fall with a non-zero exit code or not. A configured deadqueue disables fatal exits.
 	FatalOnFailedInsert bool `json:"fatal_on_failed_insert" default:"false"` // *
 
 	// > @3@4@5@6
@@ -263,15 +266,17 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		MetricCtl:      params.MetricCtl,
 	}
 
+	p.router = params.Router
 	backoffOpts := pipeline.BackoffOpts{
-		MinRetention: p.config.Retention_,
-		Multiplier:   float64(p.config.RetentionExponentMultiplier),
-		AttemptNum:   p.config.Retry,
+		MinRetention:         p.config.Retention_,
+		Multiplier:           float64(p.config.RetentionExponentMultiplier),
+		AttemptNum:           p.config.Retry,
+		IsDeadQueueAvailable: p.router.IsDeadQueueAvailable(),
 	}
 
-	onError := func(err error) {
+	onError := func(err error, events []*pipeline.Event) {
 		var level zapcore.Level
-		if p.config.FatalOnFailedInsert {
+		if p.config.FatalOnFailedInsert && !p.router.IsDeadQueueAvailable() {
 			level = zapcore.FatalLevel
 		} else {
 			level = zapcore.ErrorLevel
@@ -279,6 +284,10 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 
 		p.logger.Desugar().Log(level, "can't send data to splunk", zap.Error(err),
 			zap.Int("retries", p.config.Retry))
+
+		for i := range events {
+			p.router.Fail(events[i])
+		}
 	}
 
 	p.batcher = pipeline.NewRetriableBatcher(
@@ -305,7 +314,7 @@ func (p *Plugin) Out(event *pipeline.Event) {
 
 func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 	p.sendErrorMetric = ctl.RegisterCounterVec(
-		"output_splunk_send_error",
+		"output_splunk_send_error_total",
 		"Total splunk send errors",
 		"status_code",
 	)
