@@ -864,3 +864,57 @@ func TestMergeYAMLs(t *testing.T) {
 		})
 	}
 }
+
+func TestBuildFieldSelector(t *testing.T) {
+	tests := []struct {
+		name     string
+		fields   []string
+		expected string
+	}{
+		{
+			name:     "Empty slice",
+			fields:   []string{},
+			expected: "",
+		},
+		{
+			name:     "Single field, no dot",
+			fields:   []string{"field"},
+			expected: "field",
+		},
+		{
+			name:     "Multiple fields, no dots",
+			fields:   []string{"a", "b", "c"},
+			expected: "a.b.c",
+		},
+		{
+			name:     "Field with dot",
+			fields:   []string{"a.b", "c"},
+			expected: "a\\.b.c",
+		},
+		{
+			name:     "All fields with dots",
+			fields:   []string{"a.b", "c.d"},
+			expected: "a\\.b.c\\.d",
+		},
+		{
+			name:     "Field with multiple dots",
+			fields:   []string{"a.b.c", "d"},
+			expected: "a\\.b\\.c.d",
+		},
+		{
+			name:     "Field with backslash",
+			fields:   []string{`a\b`, "c"},
+			expected: `a\b.c`,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := BuildFieldSelector(tt.fields)
+			require.Equal(t, tt.expected, got)
+		})
+	}
+}
