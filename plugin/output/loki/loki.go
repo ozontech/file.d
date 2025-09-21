@@ -116,10 +116,10 @@ type Config struct {
 	// >
 	// > Sendoing data format to Loki.
 	// >
-	// > By default sending data format is json.
+	// > By default sending data format is `proto`.
 	// > * if `json` is provided plugin will send logs in json format.
 	// > * if `proto` is provided plugin will send logs in Snappy-compressed protobuf format.
-	DataFormat  string `json:"data_format" default:"json" options:"json|proto"` // *
+	DataFormat  string `json:"data_format" default:"proto" options:"proto|json"` // *
 	DataFormat_ DataFormat
 
 	// > @3@4@5@6
@@ -531,15 +531,14 @@ func (p *Plugin) buildProtoRequestBody(root *insaneJSON.Root) ([]byte, error) {
 		logMsg := logNode.AsString()
 		logNode.Suicide()
 
-		var tempMap map[string]string
-		if err = json.Unmarshal(msg.EncodeToByte(), &tempMap); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal json: %v", err)
-		}
+		fields := msg.AsFields()
+		metadata := make([]push.LabelAdapter, 0, len(fields))
 
-		metadata := make([]push.LabelAdapter, 0, len(tempMap))
+		for _, f := range fields {
+			key := f.AsString()
+			fieldValue := msg.Dig(key).AsString()
 
-		for k, v := range tempMap {
-			metadata = append(metadata, push.LabelAdapter{Name: k, Value: v})
+			metadata = append(metadata, push.LabelAdapter{Name: key, Value: fieldValue})
 		}
 
 		entry := push.Entry{

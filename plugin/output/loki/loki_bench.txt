@@ -1,31 +1,17 @@
-{"level":"info","ts":"2025-09-14T14:40:34.873532Z","logger":"fd","message":"Logger initialized with level: info"}
+{"level":"info","ts":"2025-09-21T13:31:46.027314Z","logger":"fd","message":"Logger initialized with level: info"}
 goos: darwin
 goarch: arm64
 pkg: github.com/ozontech/file.d/plugin/output/loki
 cpu: Apple M4
-BenchmarkLokiJSONRequestBuilding/SmallBatch_10_events-10         	   23006	     51179 ns/op	  143911 B/op	    1650 allocs/op
-BenchmarkLokiJSONRequestBuilding/MediumBatch_100_events-10       	    2414	    514560 ns/op	 1462834 B/op	   16417 allocs/op
-BenchmarkLokiJSONRequestBuilding/LargeBatch_1000_events-10       	     204	   5017317 ns/op	15096270 B/op	  164050 allocs/op
-BenchmarkLokiJSONRequestBuilding/VeryLargeBatch_10000_events-10  	      21	  55791942 ns/op	149384657 B/op	 1641093 allocs/op
-BenchmarkLokiProtoRequestBuilding/SmallBatch_10_events-10        	   16693	     75746 ns/op	  161432 B/op	    1965 allocs/op
-BenchmarkLokiProtoRequestBuilding/MediumBatch_100_events-10      	    1615	    749605 ns/op	 1603518 B/op	   19542 allocs/op
-BenchmarkLokiProtoRequestBuilding/LargeBatch_1000_events-10      	     158	   6837191 ns/op	15995011 B/op	  195105 allocs/op
-BenchmarkLokiProtoRequestBuilding/VeryLargeBatch_10000_events-10 	      15	  72553203 ns/op	159906479 B/op	 1952272 allocs/op
-BenchmarkLokiJSONvsProto/JSON-10                                 	     244	   5079080 ns/op	15091280 B/op	  164049 allocs/op
-BenchmarkLokiJSONvsProto/Proto-10                                	     175	   6982145 ns/op	16000824 B/op	  195146 allocs/op
-BenchmarkLokiEventProcessing/Events_1-10                         	  336946	      3775 ns/op	   13208 B/op	     153 allocs/op
-BenchmarkLokiEventProcessing/Events_10-10                        	   33576	     37542 ns/op	  132083 B/op	    1530 allocs/op
-BenchmarkLokiEventProcessing/Events_100-10                       	    3385	    362833 ns/op	 1321930 B/op	   15301 allocs/op
-BenchmarkLokiEventProcessing/Events_1000-10                      	     337	   3415926 ns/op	13215432 B/op	  153009 allocs/op
-BenchmarkLokiMemoryUsage/Events_100-10                           	    3372	    360289 ns/op	 1321481 B/op	   15301 allocs/op
-BenchmarkLokiMemoryUsage/Events_1000-10                          	     346	   3440417 ns/op	13213659 B/op	  153009 allocs/op
-BenchmarkLokiMemoryUsage/Events_10000-10                         	      37	  30806841 ns/op	132114023 B/op	 1530048 allocs/op
-BenchmarkLokiMemoryUsage/Events_100000-10                        	       4	 296715386 ns/op	1320852458 B/op	15300083 allocs/op
-BenchmarkLokiLabelProcessing/Labels_1-10                         	24748412	        47.78 ns/op	      16 B/op	       1 allocs/op
-BenchmarkLokiLabelProcessing/Labels_5-10                         	 6595143	       188.6 ns/op	     240 B/op	       5 allocs/op
-BenchmarkLokiLabelProcessing/Labels_10-10                        	 2813852	       423.0 ns/op	     880 B/op	      10 allocs/op
-BenchmarkLokiLabelProcessing/Labels_20-10                        	 1000000	      1080 ns/op	    3753 B/op	      20 allocs/op
-BenchmarkLokiLabelProcessing/Labels_50-10                        	  278847	      4359 ns/op	   23676 B/op	      50 allocs/op
-BenchmarkLokiTimestampProcessing-10                              	 4715233	       258.7 ns/op	     168 B/op	       5 allocs/op
+BenchmarkLokiJSONRequestBuilding/SmallBatch_10_events-10         	   23757	     50821 ns/op	  144009 B/op	    1650 allocs/op
+BenchmarkLokiJSONRequestBuilding/MediumBatch_100_events-10       	    2210	    530140 ns/op	 1463461 B/op	   16417 allocs/op
+BenchmarkLokiJSONRequestBuilding/LargeBatch_1000_events-10       	     204	   6455180 ns/op	15090684 B/op	  164050 allocs/op
+BenchmarkLokiJSONRequestBuilding/VeryLargeBatch_10000_events-10  	      15	  81413203 ns/op	149441513 B/op	 1641516 allocs/op
+BenchmarkLokiProtoRequestBuilding/SmallBatch_10_events-10        	   25628	     48096 ns/op	  141786 B/op	    1546 allocs/op
+BenchmarkLokiProtoRequestBuilding/MediumBatch_100_events-10      	    1904	    592796 ns/op	 1413570 B/op	   15407 allocs/op
+BenchmarkLokiProtoRequestBuilding/LargeBatch_1000_events-10      	     170	   7107666 ns/op	14111673 B/op	  154026 allocs/op
+BenchmarkLokiProtoRequestBuilding/VeryLargeBatch_10000_events-10 	      16	  76681576 ns/op	140987275 B/op	 1540086 allocs/op
+BenchmarkLokiJSONvsProto/JSON-10                                 	     208	   5690060 ns/op	15089443 B/op	  164039 allocs/op
+BenchmarkLokiJSONvsProto/Proto-10                                	     249	   4754119 ns/op	14121091 B/op	  154021 allocs/op
 PASS
-ok  	github.com/ozontech/file.d/plugin/output/loki	37.286s
+ok  	github.com/ozontech/file.d/plugin/output/loki	17.345s

@@ -34,11 +34,11 @@ message
 
 <br>
 
-**`data_format`** *`string`* *`default=json`* *`options=json|proto`* 
+**`data_format`** *`string`* *`default=proto`* *`options=proto|json`* 
 
 Sendoing data format to Loki.
 
-By default sending data format is json.
+By default sending data format is `proto`.
 * if `json` is provided plugin will send logs in json format.
 * if `proto` is provided plugin will send logs in Snappy-compressed protobuf format.
 
