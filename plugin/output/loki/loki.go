@@ -7,12 +7,10 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"slices"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/golang/snappy"
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/metric"
@@ -20,10 +18,10 @@ import (
 	"github.com/ozontech/file.d/xhttp"
 
 	"github.com/gogo/protobuf/proto"
+	"github.com/golang/snappy"
 	"github.com/grafana/loki/pkg/push"
 	insaneJSON "github.com/ozontech/insane-json"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/common/model"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -48,18 +46,17 @@ type Labels map[string]string
 func (labels Labels) String() string {
 	var b strings.Builder
 	totalSize := 2
-	lstrs := make([]model.LabelName, 0, len(labels))
+	labelsString := make([]string, 0, len(labels))
 
 	for label, value := range labels {
-		lstrs = append(lstrs, model.LabelName(label))
-		// guess size increase: 2 for `, ` between labels and 3 for the `=` and quotes around label value
+		labelsString = append(labelsString, label)
+		// calculate size increase: 2 for `, ` between labels and 3 for the `=` and quotes around label value
 		totalSize += len(label) + 2 + len(value) + 3
 	}
 
 	b.Grow(totalSize)
 	b.WriteByte('{')
-	slices.Sort(lstrs)
-	for i, label := range lstrs {
+	for i, label := range labelsString {
 		if i > 0 {
 			b.WriteString(", ")
 		}

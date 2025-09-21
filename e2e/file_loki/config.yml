@@ -11,9 +11,12 @@ pipelines:
       address: http://localhost:3100
       message_field: message
       timestamp_field: timestamp 
-      data_format: proto
       labels: 
         - label: label1
           value: value1
+        - label: a
+          value: "1"
+        - label: b
+          value: "2"
       auth:
         strategy: disabled
