@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/ozontech/file.d/cfg"
@@ -16,6 +17,9 @@ import (
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/xhttp"
 
+	"github.com/gogo/protobuf/proto"
+	"github.com/golang/snappy"
+	"github.com/grafana/loki/pkg/push"
 	insaneJSON "github.com/ozontech/insane-json"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
@@ -32,7 +36,39 @@ var errUnixNanoFormat = errors.New("please send time in UnixNano format or add a
 
 const (
 	outPluginType = "loki"
+
+	jsonContentType  = "application/json"
+	protoContentType = "application/x-protobuf"
 )
+
+type Labels map[string]string
+
+func (labels Labels) String() string {
+	var b strings.Builder
+	totalSize := 2
+	labelsString := make([]string, 0, len(labels))
+
+	for label, value := range labels {
+		labelsString = append(labelsString, label)
+		// calculate size increase: 2 for `, ` between labels and 3 for the `=` and quotes around label value
+		totalSize += len(label) + 2 + len(value) + 3
+	}
+
+	b.Grow(totalSize)
+	b.WriteByte('{')
+	for i, label := range labelsString {
+		if i > 0 {
+			b.WriteString(", ")
+		}
+
+		b.WriteString(label)
+		b.WriteString(`=`)
+		b.WriteString(strconv.Quote(labels[label]))
+	}
+	b.WriteByte('}')
+
+	return b.String()
+}
 
 type data struct {
 	outBuf []byte
@@ -72,6 +108,16 @@ type Config struct {
 	// >
 	// > message
 	MessageField string `json:"message_field" required:"true"` // *
+
+	// > @3@4@5@6
+	// >
+	// > Sendoing data format to Loki.
+	// >
+	// > By default sending data format is `proto`.
+	// > * if `json` is provided plugin will send logs in json format.
+	// > * if `proto` is provided plugin will send logs in Snappy-compressed protobuf format.
+	DataFormat  string `json:"data_format" default:"proto" options:"proto|json"` // *
+	DataFormat_ DataFormat
 
 	// > @3@4@5@6
 	// >
@@ -181,6 +227,13 @@ type Config struct {
 	RetentionExponentMultiplier int `json:"retention_exponentially_multiplier" default:"2"` // *
 }
 
+type DataFormat byte
+
+const (
+	FormatJSON DataFormat = iota
+	FormatProto
+)
+
 type AuthStrategy byte
 
 const (
@@ -235,8 +288,7 @@ type Plugin struct {
 	// plugin metrics
 	sendErrorMetric *prometheus.CounterVec
 
-	labels map[string]string
-
+	labels Labels
 	router *pipeline.Router
 }
 
@@ -360,16 +412,56 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 	return err
 }
 
+type request struct {
+	Streams []stream `json:"streams"`
+}
+
 type stream struct {
 	StreamLabels map[string]string `json:"stream"`
 	Values       [][]any           `json:"values"`
 }
 
-type request struct {
-	Streams []stream `json:"streams"`
+func (p *Plugin) send(root *insaneJSON.Root) (int, error) {
+	var (
+		contentType string
+		data        []byte
+		err         error
+	)
+
+	if p.config.DataFormat_ == FormatJSON {
+		contentType = jsonContentType
+		data, err = p.buildJSONRequestBody(root)
+	} else {
+		contentType = protoContentType
+		data, err = p.buildProtoRequestBody(root)
+	}
+
+	if err != nil {
+		p.logger.Error("failed to build request body", zap.Error(err))
+		return 0, err
+	}
+
+	p.logger.Debug("sent", zap.String("data", string(data)))
+
+	statusCode, err := p.sendRequest(data, contentType)
+	if statusCode != http.StatusNoContent {
+		return statusCode, fmt.Errorf("bad response: code=%d, err=%v", statusCode, err)
+	}
+
+	return statusCode, nil
 }
 
-func (p *Plugin) send(root *insaneJSON.Root) (int, error) {
+func (p *Plugin) sendRequest(data []byte, contentType string) (int, error) {
+	return p.client.DoTimeout(
+		http.MethodPost,
+		contentType,
+		data,
+		p.config.ConnectionTimeout_,
+		nil,
+	)
+}
+
+func (p *Plugin) buildJSONRequestBody(root *insaneJSON.Root) ([]byte, error) {
 	messages := root.Dig("data").AsArray()
 	values := make([][]any, 0, len(messages))
 
@@ -381,7 +473,7 @@ func (p *Plugin) send(root *insaneJSON.Root) (int, error) {
 		if ts == "" {
 			ts = fmt.Sprintf(`%d`, time.Now().UnixNano())
 		} else if !p.isUnixNanoFormat(ts) {
-			return 0, errUnixNanoFormat
+			return nil, errUnixNanoFormat
 		}
 
 		logNode := msg.Dig(p.config.MessageField)
@@ -406,25 +498,73 @@ func (p *Plugin) send(root *insaneJSON.Root) (int, error) {
 		},
 	}
 
-	data, err := json.Marshal(output)
+	return json.Marshal(output)
+}
+
+func (p *Plugin) buildProtoRequestBody(root *insaneJSON.Root) ([]byte, error) {
+	messages := root.Dig("data").AsArray()
+	values := make([]push.Entry, 0, len(messages))
+
+	var timestamp time.Time
+
+	for _, msg := range messages {
+		tsNode := msg.Dig(p.config.TimestampField)
+		ts := tsNode.AsString()
+		tsNode.Suicide()
+
+		if ts == "" {
+			ts = fmt.Sprint(time.Now().UnixNano())
+		} else if !p.isUnixNanoFormat(ts) {
+			return nil, errUnixNanoFormat
+		}
+
+		nano, err := strconv.ParseInt(ts, 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse int: %v", err)
+		}
+		timestamp = time.Unix(0, nano)
+
+		logNode := msg.Dig(p.config.MessageField)
+		logMsg := logNode.AsString()
+		logNode.Suicide()
+
+		fields := msg.AsFields()
+		metadata := make([]push.LabelAdapter, 0, len(fields))
+
+		for _, f := range fields {
+			key := f.AsString()
+			fieldValue := msg.Dig(key).AsString()
+
+			metadata = append(metadata, push.LabelAdapter{Name: key, Value: fieldValue})
+		}
+
+		entry := push.Entry{
+			Timestamp:          timestamp,
+			Line:               logMsg,
+			StructuredMetadata: metadata,
+		}
+
+		values = append(values, entry)
+	}
+
+	req := &push.PushRequest{
+		Streams: []push.Stream{
+			{
+				Labels:  p.labels.String(),
+				Entries: values,
+			},
+		},
+	}
+
+	b, err := proto.Marshal(req)
 	if err != nil {
-		return 0, err
+		p.logger.Error("failed to marshal proto message", zap.Error(err))
+		return nil, err
 	}
 
-	p.logger.Debug("sent", zap.String("data", string(data)))
+	b = snappy.Encode(nil, b)
 
-	statusCode, err := p.client.DoTimeout(
-		http.MethodPost,
-		"application/json",
-		data,
-		p.config.ConnectionTimeout_,
-		nil,
-	)
-	if statusCode != http.StatusNoContent {
-		return statusCode, fmt.Errorf("bad response: code=%d, err=%v", statusCode, err)
-	}
-
-	return statusCode, nil
+	return b, nil
 }
 
 func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
@@ -460,7 +600,7 @@ func (p *Plugin) getCustomHeaders() map[string]string {
 	return headers
 }
 
-func (p *Plugin) parseLabels() map[string]string {
+func (p *Plugin) parseLabels() Labels {
 	labels := make(map[string]string, len(p.config.Labels))
 
 	for _, v := range p.config.Labels {

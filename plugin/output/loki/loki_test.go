@@ -71,6 +71,46 @@ func TestPluginParseLabels(t *testing.T) {
 	}
 }
 
+func TestPluginLabelsString(t *testing.T) {
+	type testCase struct {
+		name           string
+		expectedString string
+		labels         Labels
+	}
+
+	tests := []testCase{
+		{
+			name:           "one label",
+			expectedString: `{a="1"}`,
+			labels: Labels(map[string]string{
+				"a": "1",
+			}),
+		},
+		{
+			name:           "two labels; ascending order",
+			expectedString: `{a="1", b="2"}`,
+			labels: Labels(map[string]string{
+				"a": "1",
+				"b": "2",
+			}),
+		},
+		{
+			name:           "two labels; descending order",
+			expectedString: `{b="2", a="1"}`,
+			labels: Labels(map[string]string{
+				"b": "2",
+				"a": "1",
+			}),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.Equal(t, tt.expectedString, tt.labels.String())
+		})
+	}
+}
+
 func TestPluginGetAuthHeaders(t *testing.T) {
 	type testCase struct {
 		name     string
