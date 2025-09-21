@@ -11,14 +11,12 @@ import (
 	insaneJSON "github.com/ozontech/insane-json"
 )
 
-// Benchmark data structures
 type benchmarkEvent struct {
 	message   string
 	timestamp string
 	metadata  map[string]string
 }
 
-// generateBenchmarkEvents creates a slice of benchmark events with realistic data
 func generateBenchmarkEvents(count int) []benchmarkEvent {
 	events := make([]benchmarkEvent, count)
 
@@ -33,7 +31,6 @@ func generateBenchmarkEvents(count int) []benchmarkEvent {
 		`{"level":"debug","message":"Query executed","query":"SELECT * FROM users WHERE id = ?","execution_time":"12ms"}`,
 	}
 
-	// Sample metadata fields
 	metadataFields := []string{"service", "version", "environment", "hostname", "region", "cluster"}
 	metadataValues := map[string][]string{
 		"service":     {"api-gateway", "user-service", "auth-service", "payment-service"},
@@ -47,13 +44,10 @@ func generateBenchmarkEvents(count int) []benchmarkEvent {
 	now := time.Now()
 
 	for i := 0; i < count; i++ {
-		// Random timestamp within the last hour
 		ts := now.Add(-time.Duration(rand.Intn(3600)) * time.Second)
 
-		// Random message
 		message := sampleMessages[rand.Intn(len(sampleMessages))]
 
-		// Random metadata
 		metadata := make(map[string]string)
 		for _, field := range metadataFields {
 			if values, exists := metadataValues[field]; exists {
@@ -71,20 +65,15 @@ func generateBenchmarkEvents(count int) []benchmarkEvent {
 	return events
 }
 
-// createBenchmarkEvent creates a pipeline event from benchmark data
 func createBenchmarkEvent(eventData benchmarkEvent) *pipeline.Event {
 	root := insaneJSON.Spawn()
 
-	// Parse the JSON message
 	if err := root.DecodeBytes([]byte(eventData.message)); err != nil {
-		// If parsing fails, create a simple structure
 		root.AddField("message").MutateToString(eventData.message)
 	}
 
-	// Add timestamp
 	root.AddField("timestamp").MutateToString(eventData.timestamp)
 
-	// Add metadata
 	for key, value := range eventData.metadata {
 		root.AddField(key).MutateToString(value)
 	}
@@ -94,7 +83,6 @@ func createBenchmarkEvent(eventData benchmarkEvent) *pipeline.Event {
 	}
 }
 
-// DataFormat.String() method
 func (df DataFormat) String() string {
 	switch df {
 	case FormatJSON:
@@ -102,11 +90,10 @@ func (df DataFormat) String() string {
 	case FormatProto:
 		return "proto"
 	default:
-		return "json"
+		return "proto"
 	}
 }
 
-// BenchmarkLokiJSONRequestBuilding benchmarks JSON request building
 func BenchmarkLokiJSONRequestBuilding(b *testing.B) {
 	benchmarkCases := []struct {
 		name       string
@@ -120,7 +107,6 @@ func BenchmarkLokiJSONRequestBuilding(b *testing.B) {
 
 	for _, bc := range benchmarkCases {
 		b.Run(fmt.Sprintf("%s_%d_events", bc.name, bc.eventCount), func(b *testing.B) {
-			// Create a minimal plugin for request building
 			plugin := &Plugin{
 				config: &Config{
 					MessageField:   "message",
@@ -145,7 +131,6 @@ func BenchmarkLokiJSONRequestBuilding(b *testing.B) {
 			var root *insaneJSON.Root
 
 			for i := 0; i < b.N; i++ {
-				// Create a batch of events for each iteration
 				root = insaneJSON.Spawn()
 				dataArr := root.AddFieldNoAlloc(root, "data").MutateToArray()
 
@@ -165,7 +150,6 @@ func BenchmarkLokiJSONRequestBuilding(b *testing.B) {
 	}
 }
 
-// BenchmarkLokiProtoRequestBuilding benchmarks protobuf request building
 func BenchmarkLokiProtoRequestBuilding(b *testing.B) {
 	benchmarkCases := []struct {
 		name       string
@@ -179,7 +163,6 @@ func BenchmarkLokiProtoRequestBuilding(b *testing.B) {
 
 	for _, bc := range benchmarkCases {
 		b.Run(fmt.Sprintf("%s_%d_events", bc.name, bc.eventCount), func(b *testing.B) {
-			// Create a minimal plugin for request building
 			plugin := &Plugin{
 				config: &Config{
 					MessageField:   "message",
@@ -204,7 +187,6 @@ func BenchmarkLokiProtoRequestBuilding(b *testing.B) {
 			var root *insaneJSON.Root
 
 			for i := 0; i < b.N; i++ {
-				// Create a batch of events for each iteration
 				root = insaneJSON.Spawn()
 				dataArr := root.AddFieldNoAlloc(root, "data").MutateToArray()
 
@@ -224,11 +206,9 @@ func BenchmarkLokiProtoRequestBuilding(b *testing.B) {
 	}
 }
 
-// BenchmarkLokiJSONvsProto compares JSON vs protobuf request building performance
 func BenchmarkLokiJSONvsProto(b *testing.B) {
 	eventCount := 1000
 
-	// Benchmark JSON
 	b.Run("JSON", func(b *testing.B) {
 		plugin := &Plugin{
 			config: &Config{
@@ -254,7 +234,6 @@ func BenchmarkLokiJSONvsProto(b *testing.B) {
 		var root *insaneJSON.Root
 
 		for i := 0; i < b.N; i++ {
-			// Create a batch of events for each iteration
 			root = insaneJSON.Spawn()
 			dataArr := root.AddFieldNoAlloc(root, "data").MutateToArray()
 
@@ -272,7 +251,6 @@ func BenchmarkLokiJSONvsProto(b *testing.B) {
 		}
 	})
 
-	// Benchmark Protobuf
 	b.Run("Proto", func(b *testing.B) {
 		plugin := &Plugin{
 			config: &Config{
@@ -298,7 +276,6 @@ func BenchmarkLokiJSONvsProto(b *testing.B) {
 		var root *insaneJSON.Root
 
 		for i := 0; i < b.N; i++ {
-			// Create a batch of events for each iteration
 			root = insaneJSON.Spawn()
 			dataArr := root.AddFieldNoAlloc(root, "data").MutateToArray()
 
