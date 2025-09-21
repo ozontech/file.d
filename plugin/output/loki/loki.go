@@ -61,9 +61,9 @@ func (labels Labels) String() string {
 			b.WriteString(", ")
 		}
 
-		b.WriteString(string(label))
+		b.WriteString(label)
 		b.WriteString(`=`)
-		b.WriteString(strconv.Quote(labels[string(label)]))
+		b.WriteString(strconv.Quote(labels[label]))
 	}
 	b.WriteByte('}')
 
