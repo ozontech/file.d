@@ -1,6 +1,7 @@
 package throttle
 
 import (
+	"math"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -8,6 +9,8 @@ import (
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/pipeline"
 )
+
+const EPS = 1e-9
 
 type inMemoryLimiter struct {
 	limit   complexLimit
@@ -234,6 +237,38 @@ func (l *inMemoryLimiter) bucketsInterval() time.Duration {
 
 func (l *inMemoryLimiter) bucketsMinID() int {
 	return l.buckets.getMinID()
+}
+
+func (l *inMemoryLimiter) getLimitCfg() limitCfg {
+	return limitCfg{}
+}
+
+func (l *inMemoryLimiter) getLimit() int64 {
+	return atomic.LoadInt64(&l.limit.value)
+}
+
+func (l *inMemoryLimiter) isLimitCfgChanged(curLimit int64, curDistribution []limitDistributionRatio) bool {
+	if l.getLimit() != curLimit {
+		return true
+	}
+
+	curDistributionsCount := 0
+
+	l.lock()
+	for _, ldRatio := range curDistribution {
+		curDistributionsCount += len(ldRatio.Values)
+		for _, fieldValue := range ldRatio.Values {
+			idx, has := l.limit.distributions.idxByKey[fieldValue]
+			if !has || math.Abs(l.limit.distributions.distributions[idx].ratio-ldRatio.Ratio) > EPS {
+				l.unlock()
+				return true
+			}
+		}
+	}
+	distributionsCount := len(l.limit.distributions.idxByKey)
+	l.unlock()
+
+	return distributionsCount != curDistributionsCount
 }
 
 func (l *inMemoryLimiter) setNowFn(fn func() time.Time) {
