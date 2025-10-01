@@ -391,15 +391,6 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 	return err
 }
 
-type request struct {
-	Streams []stream `json:"streams"`
-}
-
-type stream struct {
-	StreamLabels map[string]string `json:"stream"`
-	Values       [][]any           `json:"values"`
-}
-
 func (p *Plugin) send(root *insaneJSON.Root) (int, error) {
 	data, err := p.buildProtoRequestBody(root)
 	if err != nil {
