@@ -114,7 +114,7 @@ func TestPluginLabelsString(t *testing.T) {
 func TestPluginGetAuthHeaders(t *testing.T) {
 	type testCase struct {
 		name     string
-		strategy AuthStrategy
+		strategy string
 
 		username    string
 		password    string
@@ -145,7 +145,7 @@ func TestPluginGetAuthHeaders(t *testing.T) {
 			pl := &Plugin{
 				config: &Config{
 					Auth: AuthConfig{
-						Strategy_:   tt.strategy,
+						Strategy:    tt.strategy,
 						Username:    tt.username,
 						Password:    tt.password,
 						BearerToken: tt.bearer,
@@ -169,7 +169,7 @@ func TestPluginGetAuthHeaders(t *testing.T) {
 func TestPluginGetCustomHeaders(t *testing.T) {
 	type testCase struct {
 		name         string
-		strategy     AuthStrategy
+		strategy     string
 		tenantID     string
 		expectTenant bool
 	}
@@ -193,8 +193,8 @@ func TestPluginGetCustomHeaders(t *testing.T) {
 			pl := &Plugin{
 				config: &Config{
 					Auth: AuthConfig{
-						Strategy_: tt.strategy,
-						TenantID:  tt.tenantID,
+						Strategy: tt.strategy,
+						TenantID: tt.tenantID,
 					},
 				},
 			}

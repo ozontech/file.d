@@ -3,7 +3,6 @@ package loki
 import (
 	"context"
 	"encoding/base64"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -37,7 +36,6 @@ var errUnixNanoFormat = errors.New("please send time in UnixNano format or add a
 const (
 	outPluginType = "loki"
 
-	jsonContentType  = "application/json"
 	protoContentType = "application/x-protobuf"
 )
 
@@ -108,16 +106,6 @@ type Config struct {
 	// >
 	// > message
 	MessageField string `json:"message_field" required:"true"` // *
-
-	// > @3@4@5@6
-	// >
-	// > Sendoing data format to Loki.
-	// >
-	// > By default sending data format is `proto`.
-	// > * if `json` is provided plugin will send logs in json format.
-	// > * if `proto` is provided plugin will send logs in Snappy-compressed protobuf format.
-	DataFormat  string `json:"data_format" default:"proto" options:"proto|json"` // *
-	DataFormat_ DataFormat
 
 	// > @3@4@5@6
 	// >
@@ -227,28 +215,18 @@ type Config struct {
 	RetentionExponentMultiplier int `json:"retention_exponentially_multiplier" default:"2"` // *
 }
 
-type DataFormat byte
-
 const (
-	FormatJSON DataFormat = iota
-	FormatProto
-)
-
-type AuthStrategy byte
-
-const (
-	StrategyDisabled AuthStrategy = iota
-	StrategyTenant
-	StrategyBasic
-	StrategyBearer
+	StrategyDisabled = "disabled"
+	StrategyTenant   = "tenant"
+	StrategyBasic    = "basic"
+	StrategyBearer   = "bearer"
 )
 
 // ! config-params
 // ^ config-params
 type AuthConfig struct {
 	// > AuthStrategy.Strategy describes strategy to use.
-	Strategy  string `json:"strategy" default:"disabled" options:"disabled|tenant|basic|bearer"`
-	Strategy_ AuthStrategy
+	Strategy string `json:"strategy" default:"disabled" options:"disabled|tenant|basic|bearer"`
 
 	// > TenantID for Tenant Authentication.
 	TenantID string `json:"tenant_id"`
@@ -342,7 +320,8 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		}
 
 		p.logger.Log(level, "can't send data to loki", zap.Error(err),
-			zap.Int("retries", p.config.Retry))
+			zap.Int("retries", p.config.Retry),
+		)
 
 		for i := range events {
 			p.router.Fail(events[i])
@@ -422,20 +401,7 @@ type stream struct {
 }
 
 func (p *Plugin) send(root *insaneJSON.Root) (int, error) {
-	var (
-		contentType string
-		data        []byte
-		err         error
-	)
-
-	if p.config.DataFormat_ == FormatJSON {
-		contentType = jsonContentType
-		data, err = p.buildJSONRequestBody(root)
-	} else {
-		contentType = protoContentType
-		data, err = p.buildProtoRequestBody(root)
-	}
-
+	data, err := p.buildProtoRequestBody(root)
 	if err != nil {
 		p.logger.Error("failed to build request body", zap.Error(err))
 		return 0, err
@@ -443,7 +409,7 @@ func (p *Plugin) send(root *insaneJSON.Root) (int, error) {
 
 	p.logger.Debug("sent", zap.String("data", string(data)))
 
-	statusCode, err := p.sendRequest(data, contentType)
+	statusCode, err := p.sendRequest(data)
 	if statusCode != http.StatusNoContent {
 		return statusCode, fmt.Errorf("bad response: code=%d, err=%v", statusCode, err)
 	}
@@ -451,54 +417,14 @@ func (p *Plugin) send(root *insaneJSON.Root) (int, error) {
 	return statusCode, nil
 }
 
-func (p *Plugin) sendRequest(data []byte, contentType string) (int, error) {
+func (p *Plugin) sendRequest(data []byte) (int, error) {
 	return p.client.DoTimeout(
 		http.MethodPost,
-		contentType,
+		protoContentType,
 		data,
 		p.config.ConnectionTimeout_,
 		nil,
 	)
-}
-
-func (p *Plugin) buildJSONRequestBody(root *insaneJSON.Root) ([]byte, error) {
-	messages := root.Dig("data").AsArray()
-	values := make([][]any, 0, len(messages))
-
-	for _, msg := range messages {
-		tsNode := msg.Dig(p.config.TimestampField)
-		ts := tsNode.AsString()
-		tsNode.Suicide()
-
-		if ts == "" {
-			ts = fmt.Sprintf(`%d`, time.Now().UnixNano())
-		} else if !p.isUnixNanoFormat(ts) {
-			return nil, errUnixNanoFormat
-		}
-
-		logNode := msg.Dig(p.config.MessageField)
-		logMsg := logNode.AsString()
-		logNode.Suicide()
-
-		logLine := []any{
-			ts,
-			logMsg,
-			json.RawMessage(msg.EncodeToString()),
-		}
-
-		values = append(values, logLine)
-	}
-
-	output := request{
-		Streams: []stream{
-			{
-				StreamLabels: p.labels,
-				Values:       values,
-			},
-		},
-	}
-
-	return json.Marshal(output)
 }
 
 func (p *Plugin) buildProtoRequestBody(root *insaneJSON.Root) ([]byte, error) {
@@ -525,15 +451,16 @@ func (p *Plugin) buildProtoRequestBody(root *insaneJSON.Root) ([]byte, error) {
 		timestamp = time.Unix(0, nano)
 
 		logNode := msg.Dig(p.config.MessageField)
-		logMsg := logNode.AsString()
+		logMsg := logNode.AsEscapedString()
 		logNode.Suicide()
+		p.logger.Info("log msg", zap.String("msg", logMsg))
 
 		fields := msg.AsFields()
 		metadata := make([]push.LabelAdapter, 0, len(fields))
 
 		for _, f := range fields {
 			key := f.AsString()
-			fieldValue := msg.Dig(key).AsString()
+			fieldValue := msg.Dig(key).AsEscapedString()
 
 			metadata = append(metadata, push.LabelAdapter{Name: key, Value: fieldValue})
 		}
@@ -593,7 +520,7 @@ func (p *Plugin) prepareClient() {
 func (p *Plugin) getCustomHeaders() map[string]string {
 	headers := make(map[string]string)
 
-	if p.config.Auth.Strategy_ == StrategyTenant {
+	if p.config.Auth.Strategy == StrategyTenant {
 		headers["X-Scope-OrgID"] = p.config.Auth.TenantID
 	}
 
@@ -625,12 +552,12 @@ func (p *Plugin) isUnixNanoFormat(ts string) bool {
 }
 
 func (p *Plugin) getAuthHeader() string {
-	if p.config.Auth.Strategy_ == StrategyBasic {
+	if p.config.Auth.Strategy == StrategyBasic {
 		credentials := []byte(p.config.Auth.Username + ":" + p.config.Auth.Password)
 		return fmt.Sprintf("Basic %s", base64.StdEncoding.EncodeToString(credentials))
 	}
 
-	if p.config.Auth.Strategy_ == StrategyBearer {
+	if p.config.Auth.Strategy == StrategyBearer {
 		return fmt.Sprintf("Bearer %s", p.config.Auth.BearerToken)
 	}
 
