@@ -11,6 +11,7 @@ require (
 	github.com/alecthomas/kingpin v2.2.6+incompatible
 	github.com/alecthomas/units v0.0.0-20211218093645-b94a6e3cc137
 	github.com/alicebob/miniredis/v2 v2.35.0
+	github.com/armon/go-radix v0.0.0-20180808171621-7fddfc383310
 	github.com/bitly/go-simplejson v0.5.1
 	github.com/bmatcuk/doublestar/v4 v4.8.1
 	github.com/bufbuild/protocompile v0.13.0
@@ -32,7 +33,6 @@ require (
 	github.com/minio/minio-go v6.0.14+incompatible
 	github.com/ozontech/insane-json v0.1.9
 	github.com/pierrec/lz4/v4 v4.1.22
-	github.com/plar/go-adaptive-radix-tree/v2 v2.0.3
 	github.com/prometheus/client_golang v1.16.0
 	github.com/prometheus/client_model v0.3.0
 	github.com/prometheus/common v0.42.0
