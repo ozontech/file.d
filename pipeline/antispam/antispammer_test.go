@@ -13,7 +13,7 @@ import (
 )
 
 func newAntispammer(threshold, unbanIterations int, maintenanceInterval time.Duration) *Antispammer {
-	holder := metric.NewHolder(time.Minute)
+	holder := metric.NewHolder(time.Minute, 100)
 	return NewAntispammer(&Options{
 		MaintenanceInterval: maintenanceInterval,
 		Threshold:           threshold,

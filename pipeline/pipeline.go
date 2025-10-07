@@ -41,6 +41,7 @@ const (
 	DefaultStreamName              = StreamName("not_set")
 	DefaultMetricHoldDuration      = time.Minute * 30
 	DefaultMetaCacheSize           = 1024
+	DefaultmaxLabelLength          = 100
 
 	EventSeqIDError = uint64(0)
 
@@ -162,6 +163,7 @@ type Settings struct {
 	IsStrict                bool
 	MetricHoldDuration      time.Duration
 	Pool                    PoolType
+	MaxLabelLength          int
 }
 
 type PoolType string
@@ -175,7 +177,7 @@ const (
 func New(name string, settings *Settings, registry *prometheus.Registry, lg *zap.Logger) *Pipeline {
 	metricCtl := metric.NewCtl("pipeline_"+name, registry)
 
-	metricHolder := metric.NewHolder(settings.MetricHoldDuration)
+	metricHolder := metric.NewHolder(settings.MetricHoldDuration, settings.MaxLabelLength)
 
 	var eventPool pool
 	switch settings.Pool {

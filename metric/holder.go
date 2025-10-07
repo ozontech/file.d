@@ -11,18 +11,20 @@ type heldMetricVec interface {
 }
 
 type Holder struct {
-	holdDuration time.Duration
-	heldMetrics  []heldMetricVec
+	holdDuration   time.Duration
+	heldMetrics    []heldMetricVec
+	maxLabelLength int
 }
 
 // NewHolder returns new metric holder. The holdDuration must be more than 1m.
-func NewHolder(holdDuration time.Duration) *Holder {
+func NewHolder(holdDuration time.Duration, maxLabelLength int) *Holder {
 	if holdDuration < time.Minute {
 		panic("hold duration must be greater than 1m")
 	}
 	return &Holder{
-		holdDuration: holdDuration,
-		heldMetrics:  make([]heldMetricVec, 0),
+		holdDuration:   holdDuration,
+		heldMetrics:    make([]heldMetricVec, 0),
+		maxLabelLength: maxLabelLength,
 	}
 }
 
@@ -31,19 +33,19 @@ func (h *Holder) Maintenance() {
 }
 
 func (h *Holder) AddCounterVec(counterVec *prometheus.CounterVec) HeldCounterVec {
-	hcv := NewHeldCounterVec(counterVec)
+	hcv := NewHeldCounterVec(counterVec, h.maxLabelLength)
 	h.heldMetrics = append(h.heldMetrics, hcv)
 	return hcv
 }
 
 func (h *Holder) AddGaugeVec(gaugeVec *prometheus.GaugeVec) HeldGaugeVec {
-	hgv := NewHeldGaugeVec(gaugeVec)
+	hgv := NewHeldGaugeVec(gaugeVec, h.maxLabelLength)
 	h.heldMetrics = append(h.heldMetrics, hgv)
 	return hgv
 }
 
 func (h *Holder) AddHistogramVec(histogramVec *prometheus.HistogramVec) HeldHistogramVec {
-	hhv := NewHeldHistogramVec(histogramVec)
+	hhv := NewHeldHistogramVec(histogramVec, h.maxLabelLength)
 	h.heldMetrics = append(h.heldMetrics, hhv)
 	return hhv
 }

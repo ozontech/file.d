@@ -32,6 +32,7 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 	metricHoldDuration := pipeline.DefaultMetricHoldDuration
 	metaCacheSize := pipeline.DefaultMetaCacheSize
 	pool := ""
+	maxLabelLength := pipeline.DefaultmaxLabelLength
 
 	if settings != nil {
 		val := settings.Get("capacity").MustInt()
@@ -52,6 +53,11 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 		val = settings.Get("max_event_size").MustInt()
 		if val != 0 {
 			maxInputEventSize = val
+		}
+
+		val = settings.Get("max_label_value_length").MustInt()
+		if val != 0 {
+			maxLabelLength = val
 		}
 
 		cutOffEventByLimit = settings.Get("cut_off_event_by_limit").MustBool()
@@ -116,6 +122,7 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 		if str := settings.Get("pool").MustString(); str != "" {
 			pool = str
 		}
+
 	}
 
 	return &pipeline.Settings{
@@ -136,6 +143,7 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 		IsStrict:                isStrict,
 		MetricHoldDuration:      metricHoldDuration,
 		Pool:                    pipeline.PoolType(pool),
+		MaxLabelLength:          maxLabelLength,
 	}
 }
 

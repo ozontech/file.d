@@ -17,7 +17,7 @@ func TestLabelExpiration(t *testing.T) {
 	ctl := NewCtl("test", prometheus.NewRegistry())
 	promCounter := ctl.RegisterCounterVec("errors", "", "level")
 
-	c := NewHeldCounterVec(promCounter)
+	c := NewHeldCounterVec(promCounter, 100)
 
 	now := time.Now().UnixNano()
 	xtime.SetNowTime(now)
@@ -101,7 +101,7 @@ var holderBenchCases = []struct {
 func BenchmarkMetricHolder(b *testing.B) {
 	for _, benchCase := range holderBenchCases {
 		ctl := NewCtl("test", prometheus.NewRegistry())
-		holder := NewHolder(time.Minute)
+		holder := NewHolder(time.Minute, 100)
 
 		promCounter := ctl.RegisterCounterVec("test_name", "", benchCase.Labels...)
 		counter := holder.AddCounterVec(promCounter)

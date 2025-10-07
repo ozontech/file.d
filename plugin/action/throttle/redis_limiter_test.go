@@ -333,8 +333,8 @@ func Test_updateKeyLimit(t *testing.T) {
 				tt.args.keyLimitOverride,
 				tt.args.defaultLimit,
 				&limitDistributionMetrics{
-					EventsCount: metric.NewHeldCounterVec(ctl.RegisterCounterVec("test_count", "")),
-					EventsSize:  metric.NewHeldCounterVec(ctl.RegisterCounterVec("test_size", "")),
+					EventsCount: metric.NewHeldCounterVec(ctl.RegisterCounterVec("test_count", ""), 100),
+					EventsSize:  metric.NewHeldCounterVec(ctl.RegisterCounterVec("test_size", ""), 100),
 				},
 				time.Now,
 			)

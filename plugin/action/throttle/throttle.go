@@ -40,12 +40,13 @@ It discards the events if pipeline throughput gets higher than a configured thre
 }*/
 
 type Plugin struct {
-	ctx      context.Context
-	cancel   context.CancelFunc
-	logger   *zap.SugaredLogger
-	config   *Config
-	pipeline string
-	format   string
+	ctx            context.Context
+	cancel         context.CancelFunc
+	logger         *zap.SugaredLogger
+	config         *Config
+	pipeline       string
+	format         string
+	maxLabelLength int
 
 	limitersMap *limitersMap
 	limiterBuf  []byte
@@ -385,6 +386,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 	p.registerMetrics(params.MetricCtl, p.config.LimitDistribution.MetricLabels)
 
 	p.pipeline = params.PipelineName
+	p.maxLabelLength = params.PipelineSettings.MaxLabelLength
 	ctx, cancel := context.WithCancel(context.Background())
 	p.ctx = ctx
 	p.cancel = cancel
@@ -493,12 +495,12 @@ func (p *Plugin) registerMetrics(ctl *metric.Ctl, limitDistrMetricsLabels []stri
 			"throttle_distributed_events_count_total",
 			"total count of events that have been throttled using limit distribution",
 			labels...,
-		)),
+		), p.maxLabelLength),
 		EventsSize: metric.NewHeldCounterVec(ctl.RegisterCounterVec(
 			"throttle_distributed_events_size_total",
 			"total size of events that have been throttled using limit distribution",
 			labels...,
-		)),
+		), p.maxLabelLength),
 	}
 }
 
