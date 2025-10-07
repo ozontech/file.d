@@ -46,9 +46,14 @@ func (p *Plugin) applyMaskMetric(mask *Mask, event *pipeline.Event, delta uint64
 		labelValues = append(labelValues, value)
 	}
 
-	mask.appliedMetric.WithLabelValues(labelValues...).Add(float64(delta))
+	p.AddAppliedMetric(mask, float64(delta), labelValues...)
 
 	if ce := p.logger.Check(zap.DebugLevel, "mask appeared to event"); ce != nil {
 		ce.Write(zap.String("event", event.Root.EncodeToString()))
 	}
+}
+
+func (p *Plugin) AddAppliedMetric(mask *Mask, delta float64, lvs ...string) {
+	metric.TruncateLabels(lvs, p.maxLabelLength)
+	mask.appliedMetric.WithLabelValues(lvs...).Add(float64(delta))
 }

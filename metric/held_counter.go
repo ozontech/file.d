@@ -35,7 +35,7 @@ func NewHeldCounterVec(cv *prometheus.CounterVec, maxLabelLength int) HeldCounte
 }
 
 func (h HeldCounterVec) WithLabelValues(lvs ...string) HeldCounter {
-	truncateLabels(lvs, h.maxLabelLength)
+	TruncateLabels(lvs, h.maxLabelLength)
 
 	return HeldCounter{
 		heldMetric: h.store.GetOrCreate(lvs, h.vec.WithLabelValues),
@@ -46,7 +46,7 @@ func (h HeldCounterVec) DeleteOldMetrics(holdDuration time.Duration) {
 	h.store.DeleteOldMetrics(holdDuration, h.vec)
 }
 
-func truncateLabels(lvs []string, maxLabelLength int) {
+func TruncateLabels(lvs []string, maxLabelLength int) {
 	for i, label := range lvs {
 		if len(label) > maxLabelLength {
 			lvs[i] = label[:maxLabelLength]

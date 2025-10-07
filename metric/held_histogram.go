@@ -30,7 +30,7 @@ func NewHeldHistogramVec(hv *prometheus.HistogramVec, maxLabelLength int) HeldHi
 }
 
 func (h HeldHistogramVec) WithLabelValues(lvs ...string) HeldHistogram {
-	truncateLabels(lvs, h.maxLabelLength)
+	TruncateLabels(lvs, h.maxLabelLength)
 
 	return HeldHistogram{
 		heldMetric: h.store.GetOrCreate(lvs, func(s ...string) prometheus.Histogram {

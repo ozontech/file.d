@@ -149,6 +149,8 @@ type Plugin struct {
 
 	compressor compressor
 
+	maxLabelLength int
+
 	// plugin metrics
 	sendErrorMetric  prometheus.Counter
 	uploadFileMetric *prometheus.CounterVec
@@ -538,7 +540,7 @@ func (p *Plugin) uploadWork(workerBackoff backoff.BackOff) {
 			p.logger.Infof("starting upload s3 object. fileName=%s, bucketName=%s", compressed.fileName, compressed.bucketName)
 			err := p.uploadToS3(compressed)
 			if err == nil {
-				p.uploadFileMetric.WithLabelValues(compressed.bucketName).Inc()
+				p.IncUploadFileMetric(compressed.bucketName)
 				p.logger.Infof("successfully uploaded object=%s", compressed.fileName)
 				// delete archive after uploading
 				err = os.Remove(compressed.fileName)
@@ -564,6 +566,11 @@ func (p *Plugin) uploadWork(workerBackoff backoff.BackOff) {
 			)
 		}
 	}
+}
+
+func (p *Plugin) IncUploadFileMetric(lvs ...string) {
+	metric.TruncateLabels(lvs, p.maxLabelLength)
+	p.uploadFileMetric.WithLabelValues(lvs...).Inc()
 }
 
 // compressWork compress file from channel and then delete source file

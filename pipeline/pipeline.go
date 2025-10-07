@@ -267,6 +267,7 @@ func (p *Pipeline) IncReadOps() {
 }
 
 func (p *Pipeline) IncMaxEventSizeExceeded(lvs ...string) {
+	metric.TruncateLabels(lvs, p.settings.MaxLabelLength)
 	p.maxEventSizeExceededMetric.WithLabelValues(lvs...).Inc()
 }
 

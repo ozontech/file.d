@@ -50,7 +50,7 @@ func NewHeldGaugeVec(gv *prometheus.GaugeVec, maxLabelLength int) HeldGaugeVec {
 }
 
 func (h HeldGaugeVec) WithLabelValues(lvs ...string) HeldGauge {
-	truncateLabels(lvs, h.maxLabelLength)
+	TruncateLabels(lvs, h.maxLabelLength)
 
 	return HeldGauge{
 		heldMetric: h.store.GetOrCreate(lvs, h.vec.WithLabelValues),

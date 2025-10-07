@@ -129,6 +129,8 @@ type Plugin struct {
 
 	logger *zap.Logger
 
+	maxLabelLength int
+
 	// plugin metrics
 	maskAppliedMetric *prometheus.CounterVec
 }
@@ -211,6 +213,8 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 	p.sourceBuf = make([]byte, 0, params.PipelineSettings.AvgEventSize)
 	p.logger = params.Logger.Desugar()
 	p.config.Masks = compileMasks(p.config.Masks, p.logger)
+
+	p.maxLabelLength = params.PipelineSettings.MaxLabelLength
 
 	if err := p.gatherFieldPaths(); err != nil {
 		p.logger.Fatal("failed to gather ignore/process fields paths", zap.Error(err))
@@ -304,7 +308,7 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 				labelValues = append(labelValues, value)
 			}
 
-			p.maskAppliedMetric.WithLabelValues(labelValues...).Inc()
+			p.IncMaskAppliedMetric(labelValues...)
 
 			if ce := p.logger.Check(zap.DebugLevel, "mask appeared to event"); ce != nil {
 				ce.Write(zap.String("event", event.Root.EncodeToString()))
@@ -323,6 +327,11 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	}
 
 	return pipeline.ActionPass
+}
+
+func (p *Plugin) IncMaskAppliedMetric(lvs ...string) {
+	metric.TruncateLabels(lvs, p.maxLabelLength)
+	p.maskAppliedMetric.WithLabelValues(lvs...).Inc()
 }
 
 // traverseTree traverses JSON tree in DFS manner and applies masks to its leaves. Masks are applied only to strings
