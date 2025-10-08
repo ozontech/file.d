@@ -122,7 +122,6 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 		if str := settings.Get("pool").MustString(); str != "" {
 			pool = str
 		}
-
 	}
 
 	return &pipeline.Settings{
