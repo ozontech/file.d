@@ -165,6 +165,7 @@ func TestCheckInputBytesMetric(t *testing.T) {
 				Decoder:            "raw",
 				MetricHoldDuration: DefaultMetricHoldDuration,
 				MaxEventSize:       1,
+				MaxLabelLength:     100,
 			},
 			sourceName: "test-source",
 			meta: metadata.MetaData{
@@ -183,6 +184,7 @@ func TestCheckInputBytesMetric(t *testing.T) {
 				MetricHoldDuration:  DefaultMetricHoldDuration,
 				MaxEventSize:        1,
 				SourceNameMetaField: "test",
+				MaxLabelLength:      100,
 			},
 			sourceName: "test-source",
 			meta: metadata.MetaData{
@@ -201,6 +203,7 @@ func TestCheckInputBytesMetric(t *testing.T) {
 				MetricHoldDuration:  DefaultMetricHoldDuration,
 				MaxEventSize:        1,
 				SourceNameMetaField: "test",
+				MaxLabelLength:      100,
 			},
 			sourceName: "test-source",
 			meta: metadata.MetaData{

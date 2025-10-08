@@ -32,7 +32,7 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 	metricHoldDuration := pipeline.DefaultMetricHoldDuration
 	metaCacheSize := pipeline.DefaultMetaCacheSize
 	pool := ""
-	maxLabelLength := pipeline.DefaultmaxLabelLength
+	maxLabelLength := pipeline.DefaultMaxLabelLength
 
 	if settings != nil {
 		val := settings.Get("capacity").MustInt()
