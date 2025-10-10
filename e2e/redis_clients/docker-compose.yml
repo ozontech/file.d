@@ -21,14 +21,14 @@ services:
       - 6382:6379
 
   redis-single-node-cluster:
-    image: docker.io/bitnami/redis-cluster:latest
+    image: docker.io/bitnamilegacy/redis-cluster:latest
     container_name: redis-single-node-cluster
     environment:
-      - 'ALLOW_EMPTY_PASSWORD=yes'
-      - 'REDIS_CLUSTER_REPLICAS=0'
-      - 'REDIS_NODES=127.0.0.1 127.0.0.1 127.0.0.1'
-      - 'REDIS_CLUSTER_CREATOR=yes'
-      - 'REDIS_CLUSTER_DYNAMIC_IPS=no'
-      - 'REDIS_CLUSTER_ANNOUNCE_IP=127.0.0.1'
+      - "ALLOW_EMPTY_PASSWORD=yes"
+      - "REDIS_CLUSTER_REPLICAS=0"
+      - "REDIS_NODES=127.0.0.1 127.0.0.1 127.0.0.1"
+      - "REDIS_CLUSTER_CREATOR=yes"
+      - "REDIS_CLUSTER_DYNAMIC_IPS=no"
+      - "REDIS_CLUSTER_ANNOUNCE_IP=127.0.0.1"
     ports:
       - 6379:6379
