@@ -24,24 +24,24 @@ import (
 )
 
 const (
-	DefaultAntispamThreshold       = 0
-	DefaultSourceNameMetaField     = ""
-	DefaultDecoder                 = "auto"
-	DefaultIsStrict                = false
-	DefaultStreamField             = "stream"
-	DefaultCapacity                = 1024
-	DefaultAvgInputEventSize       = 4 * 1024
-	DefaultMaxInputEventSize       = 0
-	DefaultCutOffEventByLimit      = false
-	DefaultCutOffEventByLimitField = ""
-	DefaultJSONNodePoolSize        = 16
-	DefaultMaintenanceInterval     = time.Second * 5
-	DefaultEventTimeout            = time.Second * 30
-	DefaultFieldValue              = "not_set"
-	DefaultStreamName              = StreamName("not_set")
-	DefaultMetricHoldDuration      = time.Minute * 30
-	DefaultMetaCacheSize           = 1024
-	DefaultMaxLabelLength          = 100
+	DefaultAntispamThreshold         = 0
+	DefaultSourceNameMetaField       = ""
+	DefaultDecoder                   = "auto"
+	DefaultIsStrict                  = false
+	DefaultStreamField               = "stream"
+	DefaultCapacity                  = 1024
+	DefaultAvgInputEventSize         = 4 * 1024
+	DefaultMaxInputEventSize         = 0
+	DefaultCutOffEventByLimit        = false
+	DefaultCutOffEventByLimitField   = ""
+	DefaultJSONNodePoolSize          = 16
+	DefaultMaintenanceInterval       = time.Second * 5
+	DefaultEventTimeout              = time.Second * 30
+	DefaultFieldValue                = "not_set"
+	DefaultStreamName                = StreamName("not_set")
+	DefaultMetricHoldDuration        = time.Minute * 30
+	DefaultMetaCacheSize             = 1024
+	DefaultMetricMaxLabelValueLength = 100
 
 	EventSeqIDError = uint64(0)
 
@@ -146,24 +146,24 @@ type Pipeline struct {
 }
 
 type Settings struct {
-	Decoder                 string
-	DecoderParams           map[string]any
-	Capacity                int
-	MetaCacheSize           int
-	MaintenanceInterval     time.Duration
-	EventTimeout            time.Duration
-	AntispamThreshold       int
-	AntispamExceptions      antispam.Exceptions
-	SourceNameMetaField     string
-	AvgEventSize            int
-	MaxEventSize            int
-	CutOffEventByLimit      bool
-	CutOffEventByLimitField string
-	StreamField             string
-	IsStrict                bool
-	MetricHoldDuration      time.Duration
-	Pool                    PoolType
-	MaxLabelLength          int
+	Decoder                   string
+	DecoderParams             map[string]any
+	Capacity                  int
+	MetaCacheSize             int
+	MaintenanceInterval       time.Duration
+	EventTimeout              time.Duration
+	AntispamThreshold         int
+	AntispamExceptions        antispam.Exceptions
+	SourceNameMetaField       string
+	AvgEventSize              int
+	MaxEventSize              int
+	CutOffEventByLimit        bool
+	CutOffEventByLimitField   string
+	StreamField               string
+	IsStrict                  bool
+	MetricHoldDuration        time.Duration
+	Pool                      PoolType
+	MetricMaxLabelValueLength int
 }
 
 type PoolType string
@@ -177,7 +177,7 @@ const (
 func New(name string, settings *Settings, registry *prometheus.Registry, lg *zap.Logger) *Pipeline {
 	metricCtl := metric.NewCtl("pipeline_"+name, registry)
 
-	metricHolder := metric.NewHolder(settings.MetricHoldDuration, settings.MaxLabelLength)
+	metricHolder := metric.NewHolder(settings.MetricHoldDuration, settings.MetricMaxLabelValueLength)
 
 	var eventPool pool
 	switch settings.Pool {
@@ -267,7 +267,7 @@ func (p *Pipeline) IncReadOps() {
 }
 
 func (p *Pipeline) IncMaxEventSizeExceeded(lvs ...string) {
-	metric.TruncateLabels(lvs, p.settings.MaxLabelLength)
+	metric.TruncateLabels(lvs, p.settings.MetricMaxLabelValueLength)
 	p.maxEventSizeExceededMetric.WithLabelValues(lvs...).Inc()
 }
 

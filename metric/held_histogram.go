@@ -16,21 +16,21 @@ func (h HeldHistogram) Observe(v float64) {
 }
 
 type HeldHistogramVec struct {
-	store          *heldMetricsStore[prometheus.Histogram]
-	vec            *prometheus.HistogramVec
-	maxLabelLength int
+	store                     *heldMetricsStore[prometheus.Histogram]
+	vec                       *prometheus.HistogramVec
+	metricMaxLabelValueLength int
 }
 
-func NewHeldHistogramVec(hv *prometheus.HistogramVec, maxLabelLength int) HeldHistogramVec {
+func NewHeldHistogramVec(hv *prometheus.HistogramVec, metricMaxLabelValueLength int) HeldHistogramVec {
 	return HeldHistogramVec{
-		vec:            hv,
-		store:          newHeldMetricsStore[prometheus.Histogram](),
-		maxLabelLength: maxLabelLength,
+		vec:                       hv,
+		store:                     newHeldMetricsStore[prometheus.Histogram](),
+		metricMaxLabelValueLength: metricMaxLabelValueLength,
 	}
 }
 
 func (h HeldHistogramVec) WithLabelValues(lvs ...string) HeldHistogram {
-	TruncateLabels(lvs, h.maxLabelLength)
+	TruncateLabels(lvs, h.metricMaxLabelValueLength)
 
 	return HeldHistogram{
 		heldMetric: h.store.GetOrCreate(lvs, func(s ...string) prometheus.Histogram {

@@ -21,21 +21,21 @@ func (h HeldCounter) Add(v float64) {
 }
 
 type HeldCounterVec struct {
-	store          *heldMetricsStore[prometheus.Counter]
-	vec            *prometheus.CounterVec
-	maxLabelLength int
+	store                     *heldMetricsStore[prometheus.Counter]
+	vec                       *prometheus.CounterVec
+	metricMaxLabelValueLength int
 }
 
-func NewHeldCounterVec(cv *prometheus.CounterVec, maxLabelLength int) HeldCounterVec {
+func NewHeldCounterVec(cv *prometheus.CounterVec, metricMaxLabelValueLength int) HeldCounterVec {
 	return HeldCounterVec{
-		vec:            cv,
-		store:          newHeldMetricsStore[prometheus.Counter](),
-		maxLabelLength: maxLabelLength,
+		vec:                       cv,
+		store:                     newHeldMetricsStore[prometheus.Counter](),
+		metricMaxLabelValueLength: metricMaxLabelValueLength,
 	}
 }
 
 func (h HeldCounterVec) WithLabelValues(lvs ...string) HeldCounter {
-	TruncateLabels(lvs, h.maxLabelLength)
+	TruncateLabels(lvs, h.metricMaxLabelValueLength)
 
 	return HeldCounter{
 		heldMetric: h.store.GetOrCreate(lvs, h.vec.WithLabelValues),
@@ -46,10 +46,10 @@ func (h HeldCounterVec) DeleteOldMetrics(holdDuration time.Duration) {
 	h.store.DeleteOldMetrics(holdDuration, h.vec)
 }
 
-func TruncateLabels(lvs []string, maxLabelLength int) {
+func TruncateLabels(lvs []string, metricMaxLabelValueLength int) {
 	for i, label := range lvs {
-		if len(label) > maxLabelLength {
-			lvs[i] = label[:maxLabelLength]
+		if len(label) > metricMaxLabelValueLength {
+			lvs[i] = label[:metricMaxLabelValueLength]
 		}
 	}
 }

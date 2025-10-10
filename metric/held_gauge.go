@@ -36,21 +36,21 @@ func (h HeldGauge) Sub(v float64) {
 }
 
 type HeldGaugeVec struct {
-	store          *heldMetricsStore[prometheus.Gauge]
-	vec            *prometheus.GaugeVec
-	maxLabelLength int
+	store                     *heldMetricsStore[prometheus.Gauge]
+	vec                       *prometheus.GaugeVec
+	metricMaxLabelValueLength int
 }
 
-func NewHeldGaugeVec(gv *prometheus.GaugeVec, maxLabelLength int) HeldGaugeVec {
+func NewHeldGaugeVec(gv *prometheus.GaugeVec, metricMaxLabelValueLength int) HeldGaugeVec {
 	return HeldGaugeVec{
-		vec:            gv,
-		store:          newHeldMetricsStore[prometheus.Gauge](),
-		maxLabelLength: maxLabelLength,
+		vec:                       gv,
+		store:                     newHeldMetricsStore[prometheus.Gauge](),
+		metricMaxLabelValueLength: metricMaxLabelValueLength,
 	}
 }
 
 func (h HeldGaugeVec) WithLabelValues(lvs ...string) HeldGauge {
-	TruncateLabels(lvs, h.maxLabelLength)
+	TruncateLabels(lvs, h.metricMaxLabelValueLength)
 
 	return HeldGauge{
 		heldMetric: h.store.GetOrCreate(lvs, h.vec.WithLabelValues),

@@ -149,7 +149,7 @@ type Plugin struct {
 
 	compressor compressor
 
-	maxLabelLength int
+	metricMaxLabelValueLength int
 
 	// plugin metrics
 	sendErrorMetric  prometheus.Counter
@@ -569,7 +569,7 @@ func (p *Plugin) uploadWork(workerBackoff backoff.BackOff) {
 }
 
 func (p *Plugin) IncUploadFileMetric(lvs ...string) {
-	metric.TruncateLabels(lvs, p.maxLabelLength)
+	metric.TruncateLabels(lvs, p.metricMaxLabelValueLength)
 	p.uploadFileMetric.WithLabelValues(lvs...).Inc()
 }
 

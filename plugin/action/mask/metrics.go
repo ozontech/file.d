@@ -54,6 +54,6 @@ func (p *Plugin) applyMaskMetric(mask *Mask, event *pipeline.Event, delta uint64
 }
 
 func (p *Plugin) AddAppliedMetric(mask *Mask, delta float64, lvs ...string) {
-	metric.TruncateLabels(lvs, p.maxLabelLength)
+	metric.TruncateLabels(lvs, p.metricMaxLabelValueLength)
 	mask.appliedMetric.WithLabelValues(lvs...).Add(float64(delta))
 }

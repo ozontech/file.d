@@ -129,7 +129,7 @@ type Plugin struct {
 
 	logger *zap.Logger
 
-	maxLabelLength int
+	metricMaxLabelValueLength int
 
 	// plugin metrics
 	maskAppliedMetric *prometheus.CounterVec
@@ -214,7 +214,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 	p.logger = params.Logger.Desugar()
 	p.config.Masks = compileMasks(p.config.Masks, p.logger)
 
-	p.maxLabelLength = params.PipelineSettings.MaxLabelLength
+	p.metricMaxLabelValueLength = params.PipelineSettings.MetricMaxLabelValueLength
 
 	if err := p.gatherFieldPaths(); err != nil {
 		p.logger.Fatal("failed to gather ignore/process fields paths", zap.Error(err))
@@ -330,7 +330,7 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 }
 
 func (p *Plugin) IncMaskAppliedMetric(lvs ...string) {
-	metric.TruncateLabels(lvs, p.maxLabelLength)
+	metric.TruncateLabels(lvs, p.metricMaxLabelValueLength)
 	p.maskAppliedMetric.WithLabelValues(lvs...).Inc()
 }
 
