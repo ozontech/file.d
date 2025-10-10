@@ -13,15 +13,15 @@ services:
       ZOO_4LW_COMMANDS_WHITELIST: "*"
       ZOO_SERVERS: server.1=zookeeper:2888:3888;2181
   init-certs:
-      image: docker.io/bitnami/kafka:3.6
-      command: /tmp/generate.sh
-      working_dir: /tmp/
-      user: 0:0
-      volumes:
-        - ./certs/:/tmp/certs/
-        - "./generate.sh:/tmp/generate.sh"
+    image: docker.io/bitnamilegacy/kafka:3.6
+    command: /tmp/generate.sh
+    working_dir: /tmp/
+    user: 0:0
+    volumes:
+      - ./certs/:/tmp/certs/
+      - "./generate.sh:/tmp/generate.sh"
   kafka:
-    image: docker.io/bitnami/kafka:3.6
+    image: docker.io/bitnamilegacy/kafka:3.6
     container_name: kafka
     depends_on:
       zookeeper:
