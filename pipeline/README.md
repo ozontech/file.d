@@ -108,6 +108,8 @@ Whether to fatal on decoding error.
 
 The amount of time the metric can be idle until it is deleted. Used for deleting rarely updated metrics to save metrics storage resources. The value must be passed in format of duration (`<number>(ms|s|m|h)`).
 
+> ⚠ DEPRECATED. Use `metric_hold_duration` in `metrics` section instead.
+
 <br>
 
 **`pool`** *`string`* *`options=std|low_memory`*
@@ -128,6 +130,22 @@ Both pools support the `capacity` setting, which both pools use to ensure that t
 This parameter is useful for avoiding OOM.
 
 Default pool is `low_memory`.
+
+<br>
+
+## Metrics
+
+Section for metrics in settings
+
+**`metric_hold_duration`** *`string`* *`default=30m`* 
+
+The amount of time the metric can be idle until it is deleted. Used for deleting rarely updated metrics to save metrics storage resources. The value must be passed in format of duration (`<number>(ms|s|m|h)`).
+
+<br>
+
+**`metric_max_label_value_length`** *`int`* *`default=100`* 
+
+Maximum lenght of custom metric labels in action plugins.
 
 <br>
 
