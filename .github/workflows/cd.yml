@@ -2,7 +2,7 @@ name: CD
 
 on:
   release:
-    types: published
+    types: [published, prereleased]
 
 jobs:
   build:
@@ -58,7 +58,7 @@ jobs:
           build-args: |
             VERSION=${{ github.ref_name }}
             APP_IMAGE=${{ matrix.image.name }}
-          tags:
+          tags: |
             ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}:${{ github.ref_name }}${{ matrix.image.suffix }}
             ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}:latest${{ matrix.image.suffix }}
 
