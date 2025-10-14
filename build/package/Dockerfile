@@ -34,12 +34,10 @@ RUN if [ -f /etc/debian_version ]; then \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean; \
     elif [ -f /etc/redhat-release ]; then \
+    dnf clean all || true \
     dnf update -y && dnf install -y \
     systemd \
     && dnf clean all; \
-    elif [ -f /etc/arch-release ]; then \
-    pacman -Syu --noconfirm && pacman -S --noconfirm systemd \
-    && pacman -Scc --noconfirm; \
     fi
 
 WORKDIR /file.d

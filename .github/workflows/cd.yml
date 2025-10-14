@@ -2,7 +2,7 @@ name: CD
 
 on:
   release:
-    types: [published, prereleased]
+    types: published
 
 jobs:
   build:
@@ -28,13 +28,8 @@ jobs:
             suffix: "-scratch"
             dockerfile: "./build/package/Dockerfile.scratch"
           # RedHat-based distributions
-          - name: "rockylinux:8"
-            suffix: "-rocky8"
           - name: "rockylinux:9"
             suffix: "-rocky9"
-          # Arch Linux
-          - name: "archlinux"
-            suffix: "-arch"
     steps:
       - uses: actions/checkout@v4
 

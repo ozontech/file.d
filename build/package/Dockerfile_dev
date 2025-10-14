@@ -65,18 +65,6 @@ RUN if [ -f /etc/debian_version ]; then \
     procps \
     iputils \
     && rm -rf /var/cache/apk/*; \
-    elif [ -f /etc/arch-release ]; then \
-    pacman -Syu --noconfirm && pacman -S --noconfirm \
-    systemd \
-    strace \
-    tcpdump \
-    traceroute \
-    inetutils \
-    iotop \
-    jq \
-    htop \
-    iputils \
-    && pacman -Scc --noconfirm; \
     fi
 
 
