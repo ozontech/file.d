@@ -29,15 +29,15 @@ FROM $APP_IMAGE
 
 # Install systemd based on distribution
 RUN if [ -f /etc/debian_version ]; then \
-    apt-get update && apt-get install -y \
-    systemd \
-    && rm -rf /var/lib/apt/lists/* \
-    && apt-get clean; \
+        apt-get update && apt-get install -y \
+        systemd \
+        && rm -rf /var/lib/apt/lists/* \
+        && apt-get clean; \
     elif [ -f /etc/redhat-release ]; then \
-    dnf clean all || true \
-    dnf update -y && dnf install -y \
-    systemd \
-    && dnf clean all; \
+        dnf clean all || true \
+        dnf update -y && dnf install -y \
+        systemd \
+        && dnf clean all; \
     fi
 
 WORKDIR /file.d
