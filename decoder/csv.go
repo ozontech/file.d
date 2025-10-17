@@ -103,10 +103,6 @@ func (d *CSVDecoder) DecodeToJson(root *insaneJSON.Root, data []byte) error {
 //
 // "1760551019001	127.0.0.1	example-service	some-additional-info"
 func (d *CSVDecoder) Decode(data []byte, _ ...any) (any, error) {
-	if !validDelim(d.params.delimiter) {
-		return nil, fmt.Errorf("invalid delimiter")
-	}
-
 	if n := len(data); n >= 2 && data[n-2] == '\r' && data[n-1] == '\n' {
 		data[n-2] = '\n'
 		data = data[:n-1]
@@ -228,6 +224,9 @@ func extractCSVParams(params map[string]any) (CSVParams, error) {
 		}
 
 		delimiter = delimiterStr[0]
+		if !validDelim(delimiter) {
+			return CSVParams{}, fmt.Errorf("invalid delimiter")
+		}
 	}
 
 	return CSVParams{
