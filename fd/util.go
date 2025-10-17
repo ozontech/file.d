@@ -109,20 +109,6 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 			pool = str
 		}
 
-		str = settings.Get("metric_hold_duration").MustString()
-		if str != "" {
-			i, err := time.ParseDuration(str)
-			if err != nil {
-				logger.Fatalf("can't parse pipeline metric hold duration: %s", err.Error())
-			}
-			metricHoldDuration = i
-		}
-
-		val = settings.Get("metric_max_label_value_length").MustInt()
-		if val != 0 {
-			metricMaxLabelValueLength = val
-		}
-
 		if metrics := settings.Get("metrics"); metrics != nil {
 			str = settings.Get("metric_hold_duration").MustString()
 			if str != "" {
@@ -146,11 +132,6 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 				logger.Fatalf("can't parse pipeline metric hold duration: %s", err.Error())
 			}
 			metricHoldDuration = i
-		}
-
-		val = settings.Get("metric_max_label_value_length").MustInt()
-		if val != 0 && metricMaxLabelValueLength == pipeline.DefaultMetricMaxLabelValueLength {
-			metricMaxLabelValueLength = val
 		}
 	}
 
