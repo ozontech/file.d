@@ -194,7 +194,6 @@ parseField:
 	}
 
 	return d.resultBuffer, err
-
 }
 
 func extractCSVParams(params map[string]any) (CSVParams, error) {
@@ -224,11 +223,11 @@ func extractCSVParams(params map[string]any) (CSVParams, error) {
 	delimiter := defaultDelimiter
 	if delimiterRaw, ok := params[delimiterParam]; ok {
 		delimiterStr, ok := delimiterRaw.(string)
-		if !ok {
-			return CSVParams{}, fmt.Errorf("%v must be string", delimiterParam)
+		if !ok || len(delimiterStr) != 1 {
+			return CSVParams{}, fmt.Errorf("%v must be string with length=1", delimiterParam)
 		}
 
-		delimiter = byte(delimiterStr[0])
+		delimiter = delimiterStr[0]
 	}
 
 	return CSVParams{
