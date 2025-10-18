@@ -1,4 +1,4 @@
-ARG APP_IMAGE=ubuntu:22.04
+ARG APP_IMAGE=ubuntu:latest
 
 # Build
 FROM --platform=$BUILDPLATFORM golang:1.24-alpine AS build
@@ -26,7 +26,47 @@ RUN go build -trimpath \
 # Deploy
 FROM $APP_IMAGE
 
-RUN apt-get update && apt-get install systemd strace tcpdump traceroute telnet iotop curl jq iputils-ping htop -y && rm -rf /var/lib/apt/lists/*
+# Install packages based on distribution
+RUN if [ -f /etc/debian_version ]; then \
+        apt-get update && apt-get install -y \
+        systemd \
+        strace \
+        tcpdump \
+        traceroute \
+        telnet \
+        iotop \
+        curl \
+        jq \
+        iputils-ping \
+        htop \
+        && rm -rf /var/lib/apt/lists/* \
+        && apt-get clean; \
+    elif [ -f /etc/redhat-release ]; then \
+        dnf update -y && dnf install -y \
+        systemd \
+        strace \
+        tcpdump \
+        traceroute \
+        telnet \
+        iotop \
+        jq \
+        iputils \
+        && dnf clean all; \
+    elif [ -f /etc/alpine-release ]; then \
+        apk update && apk add --no-cache \
+        strace \
+        tcpdump \
+        traceroute \
+        inetutils-telnet \
+        iotop \
+        curl \
+        jq \
+        htop \
+        procps \
+        iputils \
+        && rm -rf /var/cache/apk/*; \
+    fi
+
 
 WORKDIR /file.d
 

@@ -21,10 +21,10 @@ version: 0.2.0
 # incremented each time you make changes to the application. Versions are not expected to
 # follow Semantic Versioning. They should reflect the version the application is using.
 # It is recommended to use it with quotes.
-appVersion: "v0.58.0"
+appVersion: "v0.70.0"
 
 dependencies:
-- name: elasticsearch
-  version: "19.18.0"
-  repository: "oci://registry-1.docker.io/bitnamicharts"
-  condition: elasticsearch.enabled
+  - name: elasticsearch
+    version: "19.18.0"
+    repository: "oci://registry-1.docker.io/bitnamicharts"
+    condition: elasticsearch.enabled

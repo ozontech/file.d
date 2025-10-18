@@ -14,18 +14,22 @@ jobs:
       fail-fast: false
       matrix:
         image:
-          - name: 'ubuntu:latest'
-            suffix: ''
-          - name: 'ubuntu:22.04'
-            suffix: '-ubuntu22.04'
-          - name: 'ubuntu:20.04'
-            suffix: '-ubuntu20.04'
-          - name: 'ubuntu:18.04'
-            suffix: '-ubuntu18.04'
-          - name: 'alpine'
-            suffix: '-alpine'
-          - name: 'scratch'
-            suffix: '-scratch'
+          - name: "ubuntu:latest"
+            suffix: ""
+          - name: "ubuntu:22.04"
+            suffix: "-ubuntu22.04"
+          - name: "ubuntu:20.04"
+            suffix: "-ubuntu20.04"
+          - name: "ubuntu:18.04"
+            suffix: "-ubuntu18.04"
+          - name: "alpine"
+            suffix: "-alpine"
+          - name: "scratch"
+            suffix: "-scratch"
+            dockerfile: "./build/package/Dockerfile.scratch"
+          # RedHat-based distributions
+          - name: "rockylinux:9"
+            suffix: "-rocky9"
     steps:
       - uses: actions/checkout@v4
 
@@ -38,18 +42,21 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+          logout: false
 
       - name: Build and push
         id: docker-build
         uses: docker/build-push-action@v6
         with:
           push: true
-          file: ./build/package/Dockerfile
+          file: ${{ matrix.image.dockerfile || './build/package/Dockerfile' }}
           platforms: linux/amd64,linux/arm64
           build-args: |
             VERSION=${{ github.ref_name }}
             APP_IMAGE=${{ matrix.image.name }}
-          tags: ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}:${{ github.ref_name }}${{ matrix.image.suffix }}
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}:${{ github.ref_name }}${{ matrix.image.suffix }}
+            ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}:latest${{ matrix.image.suffix }}
 
   build-playground:
     runs-on: ubuntu-latest
@@ -68,6 +75,7 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+          logout: false
 
       - name: Build and push
         id: docker-build
