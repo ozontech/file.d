@@ -3,6 +3,7 @@ package loki
 import (
 	"encoding/base64"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -71,10 +72,52 @@ func TestPluginParseLabels(t *testing.T) {
 	}
 }
 
+func TestPluginLabelsString(t *testing.T) {
+	type testCase struct {
+		name                string
+		expectedLabelsCount int
+		labels              Labels
+	}
+
+	tests := []testCase{
+		{
+			name:                "one label",
+			expectedLabelsCount: 1,
+			labels: Labels(map[string]string{
+				"a": "1",
+			}),
+		},
+		{
+			name:                "two labels; ascending order",
+			expectedLabelsCount: 2,
+			labels: Labels(map[string]string{
+				"a": "1",
+				"b": "2",
+			}),
+		},
+		{
+			name:                "two labels; descending order",
+			expectedLabelsCount: 4,
+			labels: Labels(map[string]string{
+				"b": "2",
+				"a": "1",
+				"c": "3",
+				"d": "4",
+			}),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.Equal(t, tt.expectedLabelsCount, len(strings.Split(tt.labels.String(), ", ")))
+		})
+	}
+}
+
 func TestPluginGetAuthHeaders(t *testing.T) {
 	type testCase struct {
 		name     string
-		strategy AuthStrategy
+		strategy string
 
 		username    string
 		password    string
@@ -105,7 +148,7 @@ func TestPluginGetAuthHeaders(t *testing.T) {
 			pl := &Plugin{
 				config: &Config{
 					Auth: AuthConfig{
-						Strategy_:   tt.strategy,
+						Strategy:    tt.strategy,
 						Username:    tt.username,
 						Password:    tt.password,
 						BearerToken: tt.bearer,
@@ -129,7 +172,7 @@ func TestPluginGetAuthHeaders(t *testing.T) {
 func TestPluginGetCustomHeaders(t *testing.T) {
 	type testCase struct {
 		name         string
-		strategy     AuthStrategy
+		strategy     string
 		tenantID     string
 		expectTenant bool
 	}
@@ -153,8 +196,8 @@ func TestPluginGetCustomHeaders(t *testing.T) {
 			pl := &Plugin{
 				config: &Config{
 					Auth: AuthConfig{
-						Strategy_: tt.strategy,
-						TenantID:  tt.tenantID,
+						Strategy: tt.strategy,
+						TenantID: tt.tenantID,
 					},
 				},
 			}
