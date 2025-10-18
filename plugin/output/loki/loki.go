@@ -444,7 +444,6 @@ func (p *Plugin) buildProtoRequestBody(root *insaneJSON.Root) ([]byte, error) {
 		logNode := msg.Dig(p.config.MessageField)
 		logMsg := logNode.AsEscapedString()
 		logNode.Suicide()
-		p.logger.Info("log msg", zap.String("msg", logMsg))
 
 		fields := msg.AsFields()
 		metadata := make([]push.LabelAdapter, 0, len(fields))
