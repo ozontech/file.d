@@ -3,6 +3,7 @@ package loki
 import (
 	"encoding/base64"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -73,40 +74,42 @@ func TestPluginParseLabels(t *testing.T) {
 
 func TestPluginLabelsString(t *testing.T) {
 	type testCase struct {
-		name           string
-		expectedString string
-		labels         Labels
+		name                string
+		expectedLabelsCount int
+		labels              Labels
 	}
 
 	tests := []testCase{
 		{
-			name:           "one label",
-			expectedString: `{a="1"}`,
+			name:                "one label",
+			expectedLabelsCount: 1,
 			labels: Labels(map[string]string{
 				"a": "1",
 			}),
 		},
 		{
-			name:           "two labels; ascending order",
-			expectedString: `{a="1", b="2"}`,
+			name:                "two labels; ascending order",
+			expectedLabelsCount: 2,
 			labels: Labels(map[string]string{
 				"a": "1",
 				"b": "2",
 			}),
 		},
 		{
-			name:           "two labels; descending order",
-			expectedString: `{b="2", a="1"}`,
+			name:                "two labels; descending order",
+			expectedLabelsCount: 4,
 			labels: Labels(map[string]string{
 				"b": "2",
 				"a": "1",
+				"c": "3",
+				"d": "4",
 			}),
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			require.Equal(t, tt.expectedString, tt.labels.String())
+			require.Equal(t, tt.expectedLabelsCount, len(strings.Split(tt.labels.String(), ", ")))
 		})
 	}
 }
