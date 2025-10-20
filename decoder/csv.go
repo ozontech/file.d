@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"sync"
 
 	insaneJSON "github.com/ozontech/insane-json"
 )
@@ -31,6 +32,7 @@ type CSVDecoder struct {
 	recordBuffer []byte
 	fieldIndexes []int
 	resultBuffer CSVRow
+	mu           *sync.Mutex
 }
 
 func NewCSVDecoder(params map[string]any) (Decoder, error) {
@@ -41,6 +43,7 @@ func NewCSVDecoder(params map[string]any) (Decoder, error) {
 
 	return &CSVDecoder{
 		params: p,
+		mu:     &sync.Mutex{},
 	}, nil
 }
 
@@ -105,6 +108,9 @@ func (d *CSVDecoder) Decode(data []byte, _ ...any) (any, error) {
 		data[n-2] = '\n'
 		data = data[:n-1]
 	}
+
+	d.mu.Lock()
+	defer d.mu.Unlock()
 
 	const quoteLen = 1
 	const delimiterLen = 1
