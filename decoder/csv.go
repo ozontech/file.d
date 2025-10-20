@@ -26,8 +26,7 @@ type CSVParams struct {
 }
 
 type CSVDecoder struct {
-	params    CSVParams
-	fieldsNum int
+	params CSVParams
 
 	recordBuffer []byte
 	fieldIndexes []int
@@ -41,8 +40,7 @@ func NewCSVDecoder(params map[string]any) (Decoder, error) {
 	}
 
 	return &CSVDecoder{
-		params:    p,
-		fieldsNum: len(p.columnNames),
+		params: p,
 	}, nil
 }
 
@@ -84,7 +82,7 @@ func (d *CSVDecoder) DecodeToJson(root *insaneJSON.Root, data []byte) error {
 	}
 	row := rowRaw.(CSVRow)
 
-	if d.fieldsNum != 0 {
+	if len(d.params.columnNames) != 0 {
 		for i := range row {
 			root.AddFieldNoAlloc(root, d.params.columnNames[i]).MutateToString(row[i])
 		}
@@ -108,7 +106,6 @@ func (d *CSVDecoder) Decode(data []byte, _ ...any) (any, error) {
 		data = data[:n-1]
 	}
 
-	var err error
 	const quoteLen = 1
 	const delimiterLen = 1
 
@@ -183,13 +180,13 @@ parseField:
 		preIdx = idx
 	}
 
-	if d.fieldsNum > 0 {
-		if len(d.resultBuffer) != d.fieldsNum && err == nil {
-			err = errors.New("wrong number of fields")
+	if len(d.params.columnNames) > 0 {
+		if len(d.resultBuffer) != len(d.params.columnNames) {
+			return nil, errors.New("wrong number of fields")
 		}
 	}
 
-	return d.resultBuffer, err
+	return d.resultBuffer, nil
 }
 
 func extractCSVParams(params map[string]any) (CSVParams, error) {
