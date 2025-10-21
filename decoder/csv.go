@@ -7,13 +7,22 @@ import (
 	"strconv"
 	"sync"
 
+	"github.com/ozontech/file.d/logger"
 	insaneJSON "github.com/ozontech/insane-json"
 )
 
+type InvalidLineMode string
+
 const (
-	columnNamesParam = "columns"
-	prefixParam      = "prefix"
-	delimiterParam   = "delimiter"
+	columnNamesParam     = "columns"
+	prefixParam          = "prefix"
+	delimiterParam       = "delimiter"
+	invalidLineModeParam = "invalid_line_mode"
+
+	InvalidLineModeFatal    InvalidLineMode = "fatal"
+	InvalidLineModeIgnore   InvalidLineMode = "ignore"
+	InvalidLineModeContinue InvalidLineMode = "continue"
+	InvalidLineModeDefault  InvalidLineMode = "default"
 
 	defaultPrefix    = ""
 	defaultDelimiter = byte(',')
@@ -22,9 +31,10 @@ const (
 type CSVRow []string
 
 type CSVParams struct {
-	columnNames []string
-	prefix      string
-	delimiter   byte
+	columnNames     []string
+	prefix          string
+	invalidLineMode InvalidLineMode
+	delimiter       byte
 }
 
 type CSVBuffers struct {
@@ -101,13 +111,27 @@ func (d *CSVDecoder) DecodeToJson(root *insaneJSON.Root, data []byte) error {
 	row := rowRaw.(CSVRow)
 
 	if len(d.params.columnNames) != 0 {
-		for i := range row {
-			root.AddFieldNoAlloc(root, d.params.columnNames[i]).MutateToString(row[i])
+		if len(row) != len(d.params.columnNames) {
+			switch d.params.invalidLineMode {
+			case InvalidLineModeFatal:
+				logger.Fatalf("got invalid line with InvalidLineMode=%s", InvalidLineModeFatal)
+			case InvalidLineModeIgnore:
+				return nil
+			case InvalidLineModeContinue:
+			default:
+				return errors.New("wrong number of fields")
+			}
 		}
-	} else {
-		for i := range row {
-			root.AddFieldNoAlloc(root, d.params.prefix+strconv.Itoa(i)).MutateToString(row[i])
+	}
+
+	var columnName string
+	for i := range row {
+		if i < len(d.params.columnNames) {
+			columnName = d.params.columnNames[i]
+		} else {
+			columnName = d.params.prefix + strconv.Itoa(i)
 		}
+		root.AddFieldNoAlloc(root, columnName).MutateToString(row[i])
 	}
 
 	return nil
@@ -201,12 +225,6 @@ parseField:
 		preIdx = idx
 	}
 
-	if len(d.params.columnNames) > 0 {
-		if len(buffers.resultBuffer) != len(d.params.columnNames) {
-			return nil, errors.New("wrong number of fields")
-		}
-	}
-
 	return buffers.resultBuffer, nil
 }
 
@@ -234,6 +252,14 @@ func extractCSVParams(params map[string]any) (CSVParams, error) {
 		}
 	}
 
+	invalidLineMode := InvalidLineModeDefault
+	if invalidLineModeRaw, ok := params[prefixParam]; ok {
+		invalidLineMode, ok = invalidLineModeRaw.(InvalidLineMode)
+		if !ok {
+			return CSVParams{}, fmt.Errorf("%v must be string", invalidLineModeParam)
+		}
+	}
+
 	delimiter := defaultDelimiter
 	if delimiterRaw, ok := params[delimiterParam]; ok {
 		delimiterStr, ok := delimiterRaw.(string)
@@ -248,9 +274,10 @@ func extractCSVParams(params map[string]any) (CSVParams, error) {
 	}
 
 	return CSVParams{
-		columnNames: columnNames,
-		prefix:      prefix,
-		delimiter:   delimiter,
+		columnNames:     columnNames,
+		prefix:          prefix,
+		invalidLineMode: invalidLineMode,
+		delimiter:       delimiter,
 	}, nil
 }
 
