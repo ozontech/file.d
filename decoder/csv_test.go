@@ -37,7 +37,7 @@ func TestDecodeCSV(t *testing.T) {
 			want: CSVRow{"a", "b", "c"},
 		},
 		{
-			name:  "invalid_column_names",
+			name:  "invalid_columns",
 			input: "",
 			params: map[string]any{
 				columnNamesParam: "name",
@@ -124,7 +124,7 @@ func TestDecodeToJsonCSV(t *testing.T) {
 			want:  `{"0":"a","1":"b","2":"c"}`,
 		},
 		{
-			name:  "custom_column_names",
+			name:  "custom_columns",
 			input: `"a","""b""","c"` + "\n",
 			params: map[string]any{
 				columnNamesParam: []any{"service", "version", "info"},

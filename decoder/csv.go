@@ -4,13 +4,14 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"strconv"
 	"sync"
 
 	insaneJSON "github.com/ozontech/insane-json"
 )
 
 const (
-	columnNamesParam = "column_names"
+	columnNamesParam = "columns"
 	prefixParam      = "prefix"
 	delimiterParam   = "delimiter"
 
@@ -53,7 +54,7 @@ func (d *CSVDecoder) Type() Type {
 
 // DecodeToJson decodes csv formatted log and merges result with root.
 //
-// From (column_names: ['timestamp', 'ip', 'service', 'info'], delimiter: ";"):
+// From (columns: ['timestamp', 'ip', 'service', 'info'], delimiter: ";"):
 //
 // 1760551019001;127.0.0.1;example-service;some-additional-info
 //
@@ -66,7 +67,7 @@ func (d *CSVDecoder) Type() Type {
 //		"info": "some-additional-info",
 //	}
 //
-// From (column_names: [], prefix: 'csv_', delimiter: ","):
+// From (columns: [], prefix: 'csv_', delimiter: ","):
 //
 // 1760551019001,127.0.0.1,example-service,some-additional-info
 //
@@ -91,7 +92,7 @@ func (d *CSVDecoder) DecodeToJson(root *insaneJSON.Root, data []byte) error {
 		}
 	} else {
 		for i := range row {
-			root.AddFieldNoAlloc(root, fmt.Sprintf("%s%d", d.params.prefix, i)).MutateToString(row[i])
+			root.AddFieldNoAlloc(root, d.params.prefix+strconv.Itoa(i)).MutateToString(row[i])
 		}
 	}
 

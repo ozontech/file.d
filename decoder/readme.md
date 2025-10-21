@@ -381,8 +381,8 @@ To:
 ## CSV decoder
 
 ### Params
-* `column_names` - []string, field names (empty by default).
-* `prefix` - string, if `column_names` is empty, field names are formed as follows: `{prefix}{i}` where **{i}**
+* `columns` - []string, key names in the resulting event (empty by default).
+* `prefix` - string, if `columns` is empty, key names are formed as follows: `{prefix}{i}` where **{i}**
 is position of field in a row (`""` by default)
 * `delimiter` - 1 byte symbol (`,` by default).
 
@@ -410,14 +410,14 @@ To:
 }
 ```
 ---
-Decoder with `column_names` param:
+Decoder with `columns` param:
 ```yaml
 pipelines:
   example:
     settings:
       decoder: 'csv'
       decoder_params:
-        column_names: ['level', 'message', 'ts', 'stream']
+        columns: ['level', 'message', 'ts', 'stream']
 ```
 From:
 
