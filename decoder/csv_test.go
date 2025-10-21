@@ -61,14 +61,6 @@ func TestDecodeCSV(t *testing.T) {
 			wantCreateErr: true,
 		},
 		{
-			name:  "wrong_number_of_fields",
-			input: "a,b,c,d" + "\n",
-			params: map[string]any{
-				columnNamesParam: []any{"column_a", "column_b", "column_c"},
-			},
-			wantDecodeErr: true,
-		},
-		{
 			name:          "missing_quote_quoted_field",
 			input:         `a,"b,c,d` + "\n",
 			wantDecodeErr: true,
@@ -139,6 +131,14 @@ func TestDecodeToJsonCSV(t *testing.T) {
 				delimiterParam: ";",
 			},
 			want: `{"csv_0":"a","csv_1":"\"b\"","csv_2":"c"}`,
+		},
+		{
+			name:  "wrong_number_of_fields",
+			input: "a,b,c,d" + "\n",
+			params: map[string]any{
+				columnNamesParam: []any{"column_a", "column_b", "column_c"},
+			},
+			wantDecodeErr: true,
 		},
 	}
 	for _, tt := range tests {

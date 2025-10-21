@@ -254,10 +254,12 @@ func extractCSVParams(params map[string]any) (CSVParams, error) {
 
 	invalidLineMode := InvalidLineModeDefault
 	if invalidLineModeRaw, ok := params[prefixParam]; ok {
-		invalidLineMode, ok = invalidLineModeRaw.(InvalidLineMode)
+		invalidLineModeStr, ok := invalidLineModeRaw.(string)
 		if !ok {
 			return CSVParams{}, fmt.Errorf("%v must be string", invalidLineModeParam)
 		}
+
+		invalidLineMode = InvalidLineMode(invalidLineModeStr)
 	}
 
 	delimiter := defaultDelimiter
