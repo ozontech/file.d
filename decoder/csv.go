@@ -27,13 +27,23 @@ type CSVParams struct {
 	delimiter   byte
 }
 
-type CSVDecoder struct {
-	params CSVParams
-
+type CSVBuffers struct {
 	recordBuffer []byte
 	fieldIndexes []int
 	resultBuffer CSVRow
-	mu           *sync.Mutex
+}
+
+func NewCSVBuffers() *CSVBuffers {
+	return &CSVBuffers{
+		recordBuffer: make([]byte, 0),
+		fieldIndexes: make([]int, 0),
+		resultBuffer: make(CSVRow, 0),
+	}
+}
+
+type CSVDecoder struct {
+	params      CSVParams
+	buffersPool sync.Pool
 }
 
 func NewCSVDecoder(params map[string]any) (Decoder, error) {
@@ -44,7 +54,11 @@ func NewCSVDecoder(params map[string]any) (Decoder, error) {
 
 	return &CSVDecoder{
 		params: p,
-		mu:     &sync.Mutex{},
+		buffersPool: sync.Pool{
+			New: func() any {
+				return NewCSVBuffers()
+			},
+		},
 	}, nil
 }
 
@@ -110,14 +124,14 @@ func (d *CSVDecoder) Decode(data []byte, _ ...any) (any, error) {
 		data = data[:n-1]
 	}
 
-	d.mu.Lock()
-	defer d.mu.Unlock()
+	buffers := d.buffersPool.Get().(*CSVBuffers)
+	defer d.buffersPool.Put(buffers)
 
 	const quoteLen = 1
 	const delimiterLen = 1
 
-	d.recordBuffer = d.recordBuffer[:0]
-	d.fieldIndexes = d.fieldIndexes[:0]
+	buffers.recordBuffer = buffers.recordBuffer[:0]
+	buffers.fieldIndexes = buffers.fieldIndexes[:0]
 parseField:
 	for {
 		if len(data) == 0 || data[0] != '"' {
@@ -134,8 +148,8 @@ parseField:
 				return nil, errors.New("missing \" in non-quoted field")
 			}
 
-			d.recordBuffer = append(d.recordBuffer, field...)
-			d.fieldIndexes = append(d.fieldIndexes, len(d.recordBuffer))
+			buffers.recordBuffer = append(buffers.recordBuffer, field...)
+			buffers.fieldIndexes = append(buffers.fieldIndexes, len(buffers.recordBuffer))
 			if i >= 0 {
 				data = data[i+delimiterLen:]
 				continue parseField
@@ -148,21 +162,21 @@ parseField:
 				i := bytes.IndexByte(data, '"')
 				if i >= 0 {
 					// Hit next quote.
-					d.recordBuffer = append(d.recordBuffer, data[:i]...)
+					buffers.recordBuffer = append(buffers.recordBuffer, data[:i]...)
 					data = data[i+quoteLen:]
 					switch rn := data[0]; {
 					case rn == '"':
 						// `""` sequence (append quote).
-						d.recordBuffer = append(d.recordBuffer, '"')
+						buffers.recordBuffer = append(buffers.recordBuffer, '"')
 						data = data[quoteLen:]
 					case rn == d.params.delimiter:
 						// `",` sequence (end of field).
 						data = data[delimiterLen:]
-						d.fieldIndexes = append(d.fieldIndexes, len(d.recordBuffer))
+						buffers.fieldIndexes = append(buffers.fieldIndexes, len(buffers.recordBuffer))
 						continue parseField
 					case lengthNL(data) == len(data):
 						// `"\n` sequence (end of data).
-						d.fieldIndexes = append(d.fieldIndexes, len(d.recordBuffer))
+						buffers.fieldIndexes = append(buffers.fieldIndexes, len(buffers.recordBuffer))
 						break parseField
 					default:
 						// `"*` sequence (invalid non-escaped quote).
@@ -175,25 +189,25 @@ parseField:
 		}
 	}
 
-	str := string(d.recordBuffer)
-	d.resultBuffer = d.resultBuffer[:0]
-	if cap(d.resultBuffer) < len(d.fieldIndexes) {
-		d.resultBuffer = make([]string, len(d.fieldIndexes))
+	str := string(buffers.recordBuffer)
+	buffers.resultBuffer = buffers.resultBuffer[:0]
+	if cap(buffers.resultBuffer) < len(buffers.fieldIndexes) {
+		buffers.resultBuffer = make([]string, len(buffers.fieldIndexes))
 	}
-	d.resultBuffer = d.resultBuffer[:len(d.fieldIndexes)]
+	buffers.resultBuffer = buffers.resultBuffer[:len(buffers.fieldIndexes)]
 	var preIdx int
-	for i, idx := range d.fieldIndexes {
-		d.resultBuffer[i] = str[preIdx:idx]
+	for i, idx := range buffers.fieldIndexes {
+		buffers.resultBuffer[i] = str[preIdx:idx]
 		preIdx = idx
 	}
 
 	if len(d.params.columnNames) > 0 {
-		if len(d.resultBuffer) != len(d.params.columnNames) {
+		if len(buffers.resultBuffer) != len(d.params.columnNames) {
 			return nil, errors.New("wrong number of fields")
 		}
 	}
 
-	return d.resultBuffer, nil
+	return buffers.resultBuffer, nil
 }
 
 func extractCSVParams(params map[string]any) (CSVParams, error) {
