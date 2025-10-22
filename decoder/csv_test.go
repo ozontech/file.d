@@ -133,12 +133,31 @@ func TestDecodeToJsonCSV(t *testing.T) {
 			want: `{"csv_0":"a","csv_1":"\"b\"","csv_2":"c"}`,
 		},
 		{
-			name:  "wrong_number_of_fields",
+			name:  "wrong_number_of_fields_1",
 			input: "a,b,c,d" + "\n",
 			params: map[string]any{
 				columnNamesParam: []any{"column_a", "column_b", "column_c"},
 			},
 			wantDecodeErr: true,
+		},
+		{
+			name:  "wrong_number_of_fields_2",
+			input: "a,b,c,d" + "\n",
+			params: map[string]any{
+				columnNamesParam:     []any{"column_a", "column_b", "column_c"},
+				invalidLineModeParam: "continue",
+				prefixParam:          "csv_",
+			},
+			want: `{"column_a":"a","column_b":"b","column_c":"c","csv_3":"d"}`,
+		},
+		{
+			name:  "wrong_number_of_fields_3",
+			input: "a,b" + "\n",
+			params: map[string]any{
+				columnNamesParam:     []any{"column_a", "column_b", "column_c"},
+				invalidLineModeParam: "continue",
+			},
+			want: `{"column_a":"a","column_b":"b"}`,
 		},
 	}
 	for _, tt := range tests {
