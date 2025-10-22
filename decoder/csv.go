@@ -20,7 +20,6 @@ const (
 	invalidLineModeParam = "invalid_line_mode"
 
 	InvalidLineModeFatal    InvalidLineMode = "fatal"
-	InvalidLineModeIgnore   InvalidLineMode = "ignore"
 	InvalidLineModeContinue InvalidLineMode = "continue"
 	InvalidLineModeDefault  InvalidLineMode = "default"
 
@@ -114,9 +113,7 @@ func (d *CSVDecoder) DecodeToJson(root *insaneJSON.Root, data []byte) error {
 		if len(row) != len(d.params.columnNames) {
 			switch d.params.invalidLineMode {
 			case InvalidLineModeFatal:
-				logger.Fatalf("got invalid line with InvalidLineMode=%s", InvalidLineModeFatal)
-			case InvalidLineModeIgnore:
-				return nil
+				logger.Fatalf("got invalid line with setting InvalidLineMode=%s", InvalidLineModeFatal)
 			case InvalidLineModeContinue:
 			default:
 				return errors.New("wrong number of fields")
@@ -253,7 +250,7 @@ func extractCSVParams(params map[string]any) (CSVParams, error) {
 	}
 
 	invalidLineMode := InvalidLineModeDefault
-	if invalidLineModeRaw, ok := params[prefixParam]; ok {
+	if invalidLineModeRaw, ok := params[invalidLineModeParam]; ok {
 		invalidLineModeStr, ok := invalidLineModeRaw.(string)
 		if !ok {
 			return CSVParams{}, fmt.Errorf("%v must be string", invalidLineModeParam)
