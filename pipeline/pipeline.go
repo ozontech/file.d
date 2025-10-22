@@ -41,7 +41,7 @@ const (
 	DefaultStreamName                = StreamName("not_set")
 	DefaultMetricHoldDuration        = time.Minute * 30
 	DefaultMetaCacheSize             = 1024
-	DefaultMetricMaxLabelValueLength = 100
+	DefaultMetricMaxLabelValueLength = 0
 
 	EventSeqIDError = uint64(0)
 

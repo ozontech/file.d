@@ -47,6 +47,10 @@ func (h HeldCounterVec) DeleteOldMetrics(holdDuration time.Duration) {
 }
 
 func TruncateLabels(lvs []string, metricMaxLabelValueLength int) {
+	if metricMaxLabelValueLength == 0 {
+		return
+	}
+
 	for i, label := range lvs {
 		if len(label) > metricMaxLabelValueLength {
 			lvs[i] = label[:metricMaxLabelValueLength]
