@@ -32,7 +32,7 @@ const (
 type Config struct {
 	KeyFields    []cfg.FieldSelector `json:"key" slice:"true" required:"true"`
 	Fields       []cfg.FieldSelector `json:"fields" slice:"true" required:"true"`
-	Action       string              `json:"action" default:"discard" options:"discard|remove_fields"`
+	Action       string              `json:"action" default:"nothing" options:"discard|remove_fields|nothing"`
 	MetricPrefix string              `json:"metric_prefix" default:""`
 	Limit        int                 `json:"limit" default:"10000"`
 	TTL          cfg.Duration        `json:"ttl" default:"1h" parse:"duration"` // *
