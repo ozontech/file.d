@@ -385,6 +385,7 @@ To:
 * `prefix` - string, if `columns` is empty, key names are formed as follows: `{prefix}{i}` where **{i}**
 is position of field in a row (`""` by default)
 * `delimiter` - 1 byte symbol (`,` by default).
+* `invalid_line_mode` - string, defines the behavior when columns number is not equal to the fields number ​​in a row, must be one of `default|continue|fatal` (`default` by default)
 
 
 ### Examples
@@ -410,7 +411,7 @@ To:
 }
 ```
 ---
-Decoder with `columns` param:
+Decoder with `columns` and `invalid_line_mode` param:
 ```yaml
 pipelines:
   example:
@@ -418,10 +419,11 @@ pipelines:
       decoder: 'csv'
       decoder_params:
         columns: ['level', 'message', 'ts', 'stream']
+        invalid_line_mode: continue
 ```
 From:
 
-`error,error occurred,2023-10-30T13:35:33.638720813Z,stderr`
+`error,error occurred,2023-10-30T13:35:33.638720813Z,stderr,additional field`
 
 To:
 ```json
@@ -429,7 +431,8 @@ To:
   "level": "error",
   "message": "error occurred",
   "ts": "2023-10-30T13:35:33.638720813Z",
-  "stream": "stderr"
+  "stream": "stderr",
+  "4": "additional field"
 }
 ```
 ---
