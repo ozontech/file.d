@@ -1,4 +1,4 @@
-# Keep fields plugin
+# Mask plugin
 Mask plugin matches event with regular expression and substitutions successfully matched symbols via asterix symbol.
 You could set regular expressions and submatch groups.
 
