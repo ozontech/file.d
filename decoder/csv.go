@@ -105,11 +105,12 @@ func (d *CSVDecoder) Type() Type {
 //		"csv_3": "some-additional-info",
 //	}
 func (d *CSVDecoder) DecodeToJson(root *insaneJSON.Root, data []byte) error {
-	rowRaw, err := d.Decode(data)
+	bufsRaw, err := d.Decode(data)
+	defer d.buffersPool.Put(bufsRaw.(*CSVBuffers))
 	if err != nil {
 		return err
 	}
-	row := rowRaw.(CSVRow)
+	row := bufsRaw.(*CSVBuffers).resultBuffer
 
 	if len(d.params.columnNames) != 0 {
 		if len(row) != len(d.params.columnNames) {
@@ -152,7 +153,6 @@ func (d *CSVDecoder) Decode(data []byte, _ ...any) (any, error) {
 	}
 
 	buffers := d.buffersPool.Get().(*CSVBuffers)
-	defer d.buffersPool.Put(buffers)
 
 	const quoteLen = 1
 	const delimiterLen = 1
@@ -228,7 +228,7 @@ parseField:
 		preIdx = idx
 	}
 
-	return buffers.resultBuffer, nil
+	return buffers, nil
 }
 
 func extractCSVParams(params map[string]any) (CSVParams, error) {
