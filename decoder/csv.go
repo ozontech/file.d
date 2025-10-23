@@ -25,6 +25,8 @@ const (
 
 	defaultPrefix    = ""
 	defaultDelimiter = byte(',')
+
+	quoteChar = '"'
 )
 
 type CSVRow []string
@@ -140,6 +142,10 @@ func (d *CSVDecoder) DecodeToJson(root *insaneJSON.Root, data []byte) error {
 //
 // "1760551019001	127.0.0.1	example-service	some-additional-info"
 func (d *CSVDecoder) Decode(data []byte, _ ...any) (any, error) {
+	if len(data) == 0 {
+		return CSVRow{}, nil
+	}
+
 	if n := len(data); n >= 2 && data[n-2] == '\r' && data[n-1] == '\n' {
 		data[n-2] = '\n'
 		data = data[:n-1]
@@ -155,17 +161,17 @@ func (d *CSVDecoder) Decode(data []byte, _ ...any) (any, error) {
 	buffers.fieldIndexes = buffers.fieldIndexes[:0]
 parseField:
 	for {
-		if len(data) == 0 || data[0] != '"' {
+		if data[0] != quoteChar {
 			// Non-quoted string field
 			i := bytes.IndexByte(data, d.params.delimiter)
 			field := data
 			if i >= 0 {
 				field = field[:i]
 			} else {
-				field = field[:len(field)-lengthNL(field)]
+				field = bytes.TrimSpace(field)
 			}
 
-			if j := bytes.IndexByte(field, '"'); j >= 0 {
+			if j := bytes.IndexByte(field, quoteChar); j >= 0 {
 				return nil, errors.New("missing \" in non-quoted field")
 			}
 
@@ -180,22 +186,22 @@ parseField:
 			// Quoted string field
 			data = data[quoteLen:]
 			for {
-				i := bytes.IndexByte(data, '"')
+				i := bytes.IndexByte(data, quoteChar)
 				if i >= 0 {
 					// Hit next quote.
 					buffers.recordBuffer = append(buffers.recordBuffer, data[:i]...)
 					data = data[i+quoteLen:]
 					switch rn := data[0]; {
-					case rn == '"':
+					case rn == quoteChar:
 						// `""` sequence (append quote).
-						buffers.recordBuffer = append(buffers.recordBuffer, '"')
+						buffers.recordBuffer = append(buffers.recordBuffer, quoteChar)
 						data = data[quoteLen:]
 					case rn == d.params.delimiter:
 						// `",` sequence (end of field).
 						data = data[delimiterLen:]
 						buffers.fieldIndexes = append(buffers.fieldIndexes, len(buffers.recordBuffer))
 						continue parseField
-					case lengthNL(data) == len(data):
+					case len(data) == 1 && data[0] == '\n':
 						// `"\n` sequence (end of data).
 						buffers.fieldIndexes = append(buffers.fieldIndexes, len(buffers.recordBuffer))
 						break parseField
@@ -281,12 +287,5 @@ func extractCSVParams(params map[string]any) (CSVParams, error) {
 }
 
 func validDelim(r byte) bool {
-	return r != 0 && r != '"' && r != '\r' && r != '\n'
-}
-
-func lengthNL(b []byte) int {
-	if len(b) > 0 && b[len(b)-1] == '\n' {
-		return 1
-	}
-	return 0
+	return r != 0 && r != quoteChar && r != '\r' && r != '\n'
 }
