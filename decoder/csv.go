@@ -103,11 +103,11 @@ func (d *CSVDecoder) Type() Type {
 //		"csv_3": "some-additional-info",
 //	}
 func (d *CSVDecoder) DecodeToJson(root *insaneJSON.Root, data []byte) error {
-	rowsRaw, err := d.Decode(data)
+	rowRaw, err := d.Decode(data)
 	if err != nil {
 		return err
 	}
-	row := rowsRaw.(CSVRow)
+	row := rowRaw.(CSVRow)
 
 	err = d.CheckInvalidLine(row)
 	if err != nil {

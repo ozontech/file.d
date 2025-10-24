@@ -913,11 +913,11 @@ func (p *Plugin) decodeSyslogRFC5424(root *insaneJSON.Root, node *insaneJSON.Nod
 }
 
 func (p *Plugin) decodeCSV(root *insaneJSON.Root, node *insaneJSON.Node) {
-	rowsRaw, err := p.decoder.Decode(node.AsBytes())
+	rowRaw, err := p.decoder.Decode(node.AsBytes())
 	if p.checkError(err, node) {
 		return
 	}
-	row := rowsRaw.(decoder.CSVRow)
+	row := rowRaw.(decoder.CSVRow)
 
 	if !p.config.KeepOrigin {
 		node.Suicide()
