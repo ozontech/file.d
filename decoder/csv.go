@@ -52,6 +52,10 @@ func NewCSVBuffers() *CSVBuffers {
 	}
 }
 
+func (bufs *CSVBuffers) GetResultBuffer() CSVRow {
+	return bufs.resultBuffer
+}
+
 type CSVDecoder struct {
 	params      CSVParams
 	buffersPool sync.Pool
@@ -106,32 +110,19 @@ func (d *CSVDecoder) Type() Type {
 //	}
 func (d *CSVDecoder) DecodeToJson(root *insaneJSON.Root, data []byte) error {
 	bufsRaw, err := d.Decode(data)
-	defer d.buffersPool.Put(bufsRaw.(*CSVBuffers))
+	defer d.PutBuffers(bufsRaw.(*CSVBuffers))
 	if err != nil {
 		return err
 	}
-	row := bufsRaw.(*CSVBuffers).resultBuffer
+	row := bufsRaw.(*CSVBuffers).GetResultBuffer()
 
-	if len(d.params.columnNames) != 0 {
-		if len(row) != len(d.params.columnNames) {
-			switch d.params.invalidLineMode {
-			case InvalidLineModeFatal:
-				logger.Fatalf("got invalid line with setting InvalidLineMode=%s", InvalidLineModeFatal)
-			case InvalidLineModeContinue:
-			default:
-				return errors.New("wrong number of fields")
-			}
-		}
+	err = d.CheckInvalidLine(row)
+	if err != nil {
+		return err
 	}
 
-	var columnName string
 	for i := range row {
-		if i < len(d.params.columnNames) {
-			columnName = d.params.columnNames[i]
-		} else {
-			columnName = d.params.prefix + strconv.Itoa(i)
-		}
-		root.AddFieldNoAlloc(root, columnName).MutateToString(row[i])
+		root.AddFieldNoAlloc(root, d.GenerateColumnName(i)).MutateToString(row[i])
 	}
 
 	return nil
@@ -152,7 +143,7 @@ func (d *CSVDecoder) Decode(data []byte, _ ...any) (any, error) {
 		data = data[:n-1]
 	}
 
-	buffers := d.buffersPool.Get().(*CSVBuffers)
+	buffers := d.GetBuffers()
 
 	const quoteLen = 1
 	const delimiterLen = 1
@@ -229,6 +220,38 @@ parseField:
 	}
 
 	return buffers, nil
+}
+
+func (d *CSVDecoder) PutBuffers(buffers *CSVBuffers) {
+	d.buffersPool.Put(buffers)
+}
+
+func (d *CSVDecoder) GetBuffers() *CSVBuffers {
+	return d.buffersPool.Get().(*CSVBuffers)
+}
+
+func (d *CSVDecoder) CheckInvalidLine(row CSVRow) error {
+	if len(d.params.columnNames) != 0 {
+		if len(row) != len(d.params.columnNames) {
+			switch d.params.invalidLineMode {
+			case InvalidLineModeFatal:
+				logger.Fatalf("got invalid line with setting InvalidLineMode=%s", InvalidLineModeFatal)
+			case InvalidLineModeContinue:
+			default:
+				return errors.New("wrong number of fields")
+			}
+		}
+	}
+
+	return nil
+}
+
+func (d *CSVDecoder) GenerateColumnName(i int) string {
+	if i < len(d.params.columnNames) {
+		return d.params.columnNames[i]
+	}
+
+	return d.params.prefix + strconv.Itoa(i)
 }
 
 func extractCSVParams(params map[string]any) (CSVParams, error) {

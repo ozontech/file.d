@@ -524,6 +524,7 @@ const (
 	decProtobuf
 	decSyslogRFC3164
 	decSyslogRFC5424
+	decCSV
 )
 
 type logDecodeErrorMode int
@@ -553,7 +554,7 @@ type Config struct {
 	// > @3@4@5@6
 	// >
 	// > Decoder type.
-	Decoder  string `json:"decoder" default:"json" options:"json|postgres|nginx_error|protobuf|syslog_rfc3164|syslog_rfc5424"` // *
+	Decoder  string `json:"decoder" default:"json" options:"json|postgres|nginx_error|protobuf|syslog_rfc3164|syslog_rfc5424|csv"` // *
 	Decoder_ decoderType
 
 	// > @3@4@5@6
@@ -642,6 +643,8 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 		p.decoder, err = decoder.NewSyslogRFC3164Decoder(p.config.Params)
 	case decSyslogRFC5424:
 		p.decoder, err = decoder.NewSyslogRFC5424Decoder(p.config.Params)
+	case decCSV:
+		p.decoder, err = decoder.NewCSVDecoder(p.config.Params)
 	}
 	if err != nil {
 		p.logger.Fatal(fmt.Sprintf("can't create %s decoder", p.config.Decoder), zap.Error(err))
@@ -669,6 +672,8 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 		p.decodeSyslogRFC3164(event.Root, fieldNode)
 	case decSyslogRFC5424:
 		p.decodeSyslogRFC5424(event.Root, fieldNode)
+	case decCSV:
+		p.decodeCSV(event.Root, fieldNode)
 	}
 
 	return pipeline.ActionPass
@@ -799,6 +804,29 @@ func (p *Plugin) decodeSyslogRFC5424(root *insaneJSON.Root, node *insaneJSON.Nod
 	}
 
 	p.decodeSyslog(root, row)
+}
+
+func (p *Plugin) decodeCSV(root *insaneJSON.Root, node *insaneJSON.Node) {
+	d := p.decoder.(*decoder.CSVDecoder)
+	bufsRaw, err := d.Decode(node.AsBytes())
+	defer d.PutBuffers(bufsRaw.(*decoder.CSVBuffers))
+	if p.checkError(err, node) {
+		return
+	}
+	row := bufsRaw.(*decoder.CSVBuffers).GetResultBuffer()
+
+	if !p.config.KeepOrigin {
+		node.Suicide()
+	}
+
+	err = d.CheckInvalidLine(row)
+	if err != nil {
+		return
+	}
+
+	for i := range row {
+		p.addFieldPrefix(root, d.GenerateColumnName(i), row[i])
+	}
 }
 
 func (p *Plugin) decodeSyslog(root *insaneJSON.Root, row decoder.SyslogRFC5424Row) { // nolint: gocritic // hugeParam is ok
