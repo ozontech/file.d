@@ -108,7 +108,7 @@ Whether to fatal on decoding error.
 
 The amount of time the metric can be idle until it is deleted. Used for deleting rarely updated metrics to save metrics storage resources. The value must be passed in format of duration (`<number>(ms|s|m|h)`).
 
-> ⚠ DEPRECATED. Use `metric_hold_duration` in `metrics` section instead.
+> ⚠ DEPRECATED. Use `hold_duration` in `metrics` section instead.
 
 <br>
 
@@ -142,17 +142,17 @@ pipelines:
   test:
     settings:
       metrics:
-        metric_hold_duration: 1h
-        metric_max_label_value_length: 100
+        hold_duration: 1h
+        max_label_value_length: 100
 ```
 
-**`metric_hold_duration`** *`string`* *`default=30m`*
+**`hold_duration`** *`string`* *`default=30m`*
 
 The amount of time the metric can be idle until it is deleted. Used for deleting rarely updated metrics to save metrics storage resources. The value must be passed in format of duration (`<number>(ms|s|m|h)`).
 
 <br>
 
-**`metric_max_label_value_length`** *`int`* *`default=0`*
+**`max_label_value_length`** *`int`* *`default=0`*
 
 Maximum length of custom metric labels in action plugins. If zero, no limit is set.
 
