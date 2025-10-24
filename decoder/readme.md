@@ -386,6 +386,9 @@ To:
 is position of field in a row (`""` by default)
 * `delimiter` - 1 byte symbol (`,` by default).
 * `invalid_line_mode` - string, defines the behavior when columns number is not equal to the fields number ​​in a row, must be one of `default|continue|fatal` (`default` by default)
+  * `default` - returns error 
+  * `continue` - if column number is greater than fields number - skips fields, otherwise fills in missing keys with `{prefix}{i}`
+  * `fatal` - falls with non-zero exit code
 
 
 ### Examples
