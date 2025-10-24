@@ -41,19 +41,13 @@ type CSVParams struct {
 type CSVBuffers struct {
 	recordBuffer []byte
 	fieldIndexes []int
-	resultBuffer CSVRow
 }
 
 func NewCSVBuffers() *CSVBuffers {
 	return &CSVBuffers{
 		recordBuffer: make([]byte, 0),
 		fieldIndexes: make([]int, 0),
-		resultBuffer: make(CSVRow, 0),
 	}
-}
-
-func (bufs *CSVBuffers) GetResultBuffer() CSVRow {
-	return bufs.resultBuffer
 }
 
 type CSVDecoder struct {
@@ -109,12 +103,11 @@ func (d *CSVDecoder) Type() Type {
 //		"csv_3": "some-additional-info",
 //	}
 func (d *CSVDecoder) DecodeToJson(root *insaneJSON.Root, data []byte) error {
-	bufsRaw, err := d.Decode(data)
-	defer d.PutBuffers(bufsRaw.(*CSVBuffers))
+	rowsRaw, err := d.Decode(data)
 	if err != nil {
 		return err
 	}
-	row := bufsRaw.(*CSVBuffers).GetResultBuffer()
+	row := rowsRaw.(CSVRow)
 
 	err = d.CheckInvalidLine(row)
 	if err != nil {
@@ -144,6 +137,7 @@ func (d *CSVDecoder) Decode(data []byte, _ ...any) (any, error) {
 	}
 
 	buffers := d.GetBuffers()
+	defer d.PutBuffers(buffers)
 
 	const quoteLen = 1
 	const delimiterLen = 1
@@ -208,18 +202,15 @@ parseField:
 	}
 
 	str := string(buffers.recordBuffer)
-	buffers.resultBuffer = buffers.resultBuffer[:0]
-	if cap(buffers.resultBuffer) < len(buffers.fieldIndexes) {
-		buffers.resultBuffer = make([]string, len(buffers.fieldIndexes))
-	}
-	buffers.resultBuffer = buffers.resultBuffer[:len(buffers.fieldIndexes)]
+
+	resultBuffer := make(CSVRow, len(buffers.fieldIndexes))
 	var preIdx int
 	for i, idx := range buffers.fieldIndexes {
-		buffers.resultBuffer[i] = str[preIdx:idx]
+		resultBuffer[i] = str[preIdx:idx]
 		preIdx = idx
 	}
 
-	return buffers, nil
+	return resultBuffer, nil
 }
 
 func (d *CSVDecoder) PutBuffers(buffers *CSVBuffers) {

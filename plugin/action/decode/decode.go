@@ -807,20 +807,21 @@ func (p *Plugin) decodeSyslogRFC5424(root *insaneJSON.Root, node *insaneJSON.Nod
 }
 
 func (p *Plugin) decodeCSV(root *insaneJSON.Root, node *insaneJSON.Node) {
-	d := p.decoder.(*decoder.CSVDecoder)
-	bufsRaw, err := d.Decode(node.AsBytes())
-	defer d.PutBuffers(bufsRaw.(*decoder.CSVBuffers))
+	rowsRaw, err := p.decoder.Decode(node.AsBytes())
 	if p.checkError(err, node) {
 		return
 	}
-	row := bufsRaw.(*decoder.CSVBuffers).GetResultBuffer()
+	row := rowsRaw.(decoder.CSVRow)
 
 	if !p.config.KeepOrigin {
 		node.Suicide()
 	}
 
+	d := p.decoder.(*decoder.CSVDecoder)
+
 	err = d.CheckInvalidLine(row)
 	if err != nil {
+		p.logger.Error("invalid line", zap.Strings("row", row), zap.Error(err))
 		return
 	}
 

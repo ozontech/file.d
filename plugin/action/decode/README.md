@@ -507,7 +507,7 @@ The event field to decode. Must be a string.
 
 <br>
 
-**`decoder`** *`string`* *`default=json`* *`options=json|postgres|nginx_error|protobuf|syslog_rfc3164|syslog_rfc5424`* 
+**`decoder`** *`string`* *`default=json`* *`options=json|postgres|nginx_error|protobuf|syslog_rfc3164|syslog_rfc5424|csv`* 
 
 Decoder type.
 
