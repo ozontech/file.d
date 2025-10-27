@@ -42,6 +42,7 @@ type testS3Plugin struct {
 }
 
 func (p *testS3Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginParams) {
+	p.params = params
 	p.Plugin.rnd = *rand.New(rand.NewSource(time.Now().UnixNano()))
 	p.registerMetrics(params.MetricCtl)
 	p.StartWithMinio(config, params, p.objStoreF)

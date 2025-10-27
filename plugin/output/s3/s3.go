@@ -285,6 +285,7 @@ func Factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 }
 
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginParams) {
+	p.params = params
 	p.rnd = *rand.New(rand.NewSource(time.Now().UnixNano()))
 	p.registerMetrics(params.MetricCtl)
 	p.StartWithMinio(config, params, p.minioClientsFactory)
@@ -302,7 +303,6 @@ func (p *Plugin) StartWithMinio(config pipeline.AnyConfig, params *pipeline.Outp
 	p.controller = params.Controller
 	p.logger = params.Logger
 	p.config = config.(*Config)
-	p.params = params
 
 	// outPlugCount is defaultBucket + multi_buckets count, use to set maps size.
 	outPlugCount := len(p.config.MultiBuckets) + 1
