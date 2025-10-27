@@ -320,10 +320,13 @@ func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 	p.errorsTotal = ctl.RegisterCounter("input_http_errors_total", "Total http errors")
 
 	if p.config.Auth.Strategy_ != StrategyDisabled {
-		httpAuthTotal := ctl.RegisterCounterVec("http_auth_success_total", "", "secret_name")
+		httpAuthTotal := metric.NewHeldCounterVec(
+			ctl.RegisterCounterVec("http_auth_success_total", "", "secret_name"),
+			p.params.PipelineSettings.MetricMaxLabelValueLength,
+		)
 		p.successfulAuthTotal = make(map[string]prometheus.Counter, len(p.config.Auth.Secrets))
 		for key := range p.config.Auth.Secrets {
-			p.successfulAuthTotal[key] = httpAuthTotal.WithLabelValues(key)
+			p.successfulAuthTotal[key] = httpAuthTotal.WithLabelValues(key).Get()
 		}
 		p.failedAuthTotal = ctl.RegisterCounter("http_auth_fails_total", "")
 	}

@@ -223,7 +223,7 @@ func TestCheckInputBytesMetric(t *testing.T) {
 			pipe.checkInputBytes([]byte("some log"), tCase.sourceName, tCase.meta)
 
 			for k, v := range tCase.want {
-				require.Equal(t, v, testutil.ToFloat64(pipe.maxEventSizeExceededMetric.WithLabelValues(k)))
+				require.Equal(t, v, testutil.ToFloat64(pipe.maxEventSizeExceededMetric.WithLabelValues(k).Get()))
 			}
 		})
 	}

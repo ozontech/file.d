@@ -20,6 +20,10 @@ func (h HeldCounter) Add(v float64) {
 	h.updateUsage()
 }
 
+func (h HeldCounter) Get() prometheus.Counter {
+	return h.metric
+}
+
 type HeldCounterVec struct {
 	store                     *heldMetricsStore[prometheus.Counter]
 	vec                       *prometheus.CounterVec
@@ -44,6 +48,10 @@ func (h HeldCounterVec) WithLabelValues(lvs ...string) HeldCounter {
 
 func (h HeldCounterVec) DeleteOldMetrics(holdDuration time.Duration) {
 	h.store.DeleteOldMetrics(holdDuration, h.vec)
+}
+
+func (h HeldCounterVec) GetVec() *prometheus.CounterVec {
+	return h.vec
 }
 
 func TruncateLabels(lvs []string, metricMaxLabelValueLength int) {

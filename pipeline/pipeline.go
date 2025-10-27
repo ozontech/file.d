@@ -139,7 +139,7 @@ type Pipeline struct {
 	outputEventSizeMetric      prometheus.Counter
 	readOpsEventsSizeMetric    prometheus.Counter
 	wrongEventCRIFormatMetric  prometheus.Counter
-	maxEventSizeExceededMetric *prometheus.CounterVec
+	maxEventSizeExceededMetric metric.HeldCounterVec
 	eventPoolLatency           prometheus.Observer
 
 	countEventPanicsRecoveredMetric prometheus.Counter
@@ -209,13 +209,14 @@ func New(name string, settings *Settings, registry *prometheus.Registry, lg *zap
 		streamer:     newStreamer(settings.EventTimeout),
 		eventPool:    eventPool,
 		antispamer: antispam.NewAntispammer(&antispam.Options{
-			MaintenanceInterval: settings.MaintenanceInterval,
-			Threshold:           settings.AntispamThreshold,
-			UnbanIterations:     antispamUnbanIterations,
-			Logger:              lg.Named("antispam"),
-			MetricsController:   metricCtl,
-			MetricHolder:        metricHolder,
-			Exceptions:          settings.AntispamExceptions,
+			MaintenanceInterval:       settings.MaintenanceInterval,
+			Threshold:                 settings.AntispamThreshold,
+			UnbanIterations:           antispamUnbanIterations,
+			Logger:                    lg.Named("antispam"),
+			MetricsController:         metricCtl,
+			MetricHolder:              metricHolder,
+			Exceptions:                settings.AntispamExceptions,
+			MetricMaxLabelValueLength: settings.MetricMaxLabelValueLength,
 		}),
 
 		eventLog:   make([]string, 0, 128),
@@ -267,7 +268,6 @@ func (p *Pipeline) IncReadOps() {
 }
 
 func (p *Pipeline) IncMaxEventSizeExceeded(lvs ...string) {
-	metric.TruncateLabels(lvs, p.settings.MetricMaxLabelValueLength)
 	p.maxEventSizeExceededMetric.WithLabelValues(lvs...).Inc()
 }
 
@@ -285,7 +285,10 @@ func (p *Pipeline) registerMetrics() {
 	p.outputEventSizeMetric = m.RegisterCounter("output_plugin_events_size_total", "Size of events on pipeline output")
 	p.readOpsEventsSizeMetric = m.RegisterCounter("read_ops_count_total", "Read OPS count")
 	p.wrongEventCRIFormatMetric = m.RegisterCounter("wrong_event_cri_format_total", "Wrong event CRI format counter")
-	p.maxEventSizeExceededMetric = m.RegisterCounterVec("max_event_size_exceeded_total", "Max event size exceeded counter", "source_name")
+	p.maxEventSizeExceededMetric = metric.NewHeldCounterVec(
+		m.RegisterCounterVec("max_event_size_exceeded_total", "Max event size exceeded counter", "source_name"),
+		p.settings.MetricMaxLabelValueLength,
+	)
 	p.countEventPanicsRecoveredMetric = m.RegisterCounter("count_event_panics_recovered_total", "Count of processor.countEvent panics recovered")
 	p.eventPoolLatency = m.RegisterHistogram("event_pool_latency_seconds",
 		"How long we are wait an event from the pool", metric.SecondsBucketsDetailedNano)

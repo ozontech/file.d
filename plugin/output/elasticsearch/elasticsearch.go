@@ -35,6 +35,7 @@ const (
 
 type Plugin struct {
 	config *Config
+	params *pipeline.OutputPluginParams
 
 	client *xhttp.Client
 
@@ -50,7 +51,7 @@ type Plugin struct {
 	mu           *sync.Mutex
 
 	// plugin metrics
-	sendErrorMetric      *prometheus.CounterVec
+	sendErrorMetric      metric.HeldCounterVec
 	indexingErrorsMetric prometheus.Counter
 
 	router *pipeline.Router
@@ -232,6 +233,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.logger = params.Logger.Desugar()
 	p.avgEventSize = params.PipelineSettings.AvgEventSize
 	p.config = config.(*Config)
+	p.params = params
 	p.registerMetrics(params.MetricCtl)
 	p.mu = &sync.Mutex{}
 	p.headerPrefix = `{"` + p.config.BatchOpType + `":{"_index":"`
@@ -307,7 +309,10 @@ func (p *Plugin) Out(event *pipeline.Event) {
 }
 
 func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
-	p.sendErrorMetric = ctl.RegisterCounterVec("output_elasticsearch_send_error_total", "Total elasticsearch send errors", "status_code")
+	p.sendErrorMetric = metric.NewHeldCounterVec(
+		ctl.RegisterCounterVec("output_elasticsearch_send_error_total", "Total elasticsearch send errors", "status_code"),
+		p.params.PipelineSettings.MetricMaxLabelValueLength,
+	)
 	p.indexingErrorsMetric = ctl.RegisterCounter("output_elasticsearch_index_error_total", "Number of elasticsearch indexing errors")
 }
 

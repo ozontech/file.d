@@ -6,8 +6,8 @@ import (
 
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/cfg/matchrule"
+	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline/doif"
-	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
 )
 
@@ -92,7 +92,7 @@ type Mask struct {
 	MetricLabels []string `json:"metric_labels"` // *
 
 	// mask metric
-	appliedMetric *prometheus.CounterVec
+	appliedMetric metric.HeldCounterVec
 }
 
 func compileMasks(masks []Mask, logger *zap.Logger) []Mask {

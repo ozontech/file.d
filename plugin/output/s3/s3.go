@@ -149,11 +149,9 @@ type Plugin struct {
 
 	compressor compressor
 
-	metricMaxLabelValueLength int
-
 	// plugin metrics
 	sendErrorMetric  prometheus.Counter
-	uploadFileMetric *prometheus.CounterVec
+	uploadFileMetric metric.HeldCounterVec
 
 	rnd   rand.Rand
 	rndMx sync.Mutex
@@ -294,7 +292,10 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 
 func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 	p.sendErrorMetric = ctl.RegisterCounter("output_s3_send_error_total", "Total s3 send errors")
-	p.uploadFileMetric = ctl.RegisterCounterVec("output_s3_upload_file_total", "Total files upload", "bucket_name")
+	p.uploadFileMetric = metric.NewHeldCounterVec(
+		ctl.RegisterCounterVec("output_s3_upload_file_total", "Total files upload", "bucket_name"),
+		p.params.PipelineSettings.MetricMaxLabelValueLength,
+	)
 }
 
 func (p *Plugin) StartWithMinio(config pipeline.AnyConfig, params *pipeline.OutputPluginParams, factory objStoreFactory) {
@@ -540,7 +541,7 @@ func (p *Plugin) uploadWork(workerBackoff backoff.BackOff) {
 			p.logger.Infof("starting upload s3 object. fileName=%s, bucketName=%s", compressed.fileName, compressed.bucketName)
 			err := p.uploadToS3(compressed)
 			if err == nil {
-				p.IncUploadFileMetric(compressed.bucketName)
+				p.uploadFileMetric.WithLabelValues(compressed.bucketName).Inc()
 				p.logger.Infof("successfully uploaded object=%s", compressed.fileName)
 				// delete archive after uploading
 				err = os.Remove(compressed.fileName)
@@ -566,11 +567,6 @@ func (p *Plugin) uploadWork(workerBackoff backoff.BackOff) {
 			)
 		}
 	}
-}
-
-func (p *Plugin) IncUploadFileMetric(lvs ...string) {
-	metric.TruncateLabels(lvs, p.metricMaxLabelValueLength)
-	p.uploadFileMetric.WithLabelValues(lvs...).Inc()
 }
 
 // compressWork compress file from channel and then delete source file
