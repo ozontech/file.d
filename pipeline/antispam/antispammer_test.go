@@ -130,7 +130,7 @@ func TestAntispamExceptions(t *testing.T) {
 	checkSpam := func(source, event string, wantMetric map[string]float64) {
 		antispamer.IsSpam("1", source, true, []byte(event), now)
 		for k, v := range wantMetric {
-			r.Equal(v, testutil.ToFloat64(antispamer.exceptionMetric.WithLabelValues(k)))
+			r.Equal(v, testutil.ToFloat64(antispamer.exceptionMetric.WithLabelValues(k).Get()))
 		}
 	}
 
