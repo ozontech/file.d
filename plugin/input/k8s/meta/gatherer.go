@@ -92,9 +92,9 @@ func EnableGatherer(l *zap.SugaredLogger) {
 	localLogger.Info("enabling k8s meta gatherer")
 
 	if MetaFileSaver.metaFile != "" {
-		err := MetaFileSaver.loadLimits()
+		err := MetaFileSaver.loadMeta()
 		if err != nil {
-			localLogger.Errorf("can't load limits: %s", err.Error())
+			localLogger.Errorf("can't load k8s pod meta: %s", err.Error())
 		}
 	}
 
@@ -467,7 +467,7 @@ func (ms *MetaSaver) saveMetaFile() {
 	}
 }
 
-func (ms *MetaSaver) loadLimits() error {
+func (ms *MetaSaver) loadMeta() error {
 	info, err := os.Stat(ms.metaFile)
 	if os.IsNotExist(err) {
 		return nil
