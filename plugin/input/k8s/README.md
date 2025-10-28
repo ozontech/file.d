@@ -116,6 +116,12 @@ Example: ```component: '{{ index .pod.Labels "component" | default .k8s_containe
 
 <br>
 
+**`meta_file`** *`string`* 
+
+The filename to store current k8s pod meta. Meta are loaded only on initialization
+
+<br>
+
 
 ### Meta params
 **`pod_name`** - string

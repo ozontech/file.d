@@ -140,8 +140,7 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
-	// > K8sMeta file
-	// >
+	// > The filename to store current k8s pod meta. Meta are loaded only on initialization
 	K8sMetaFile string `json:"meta_file" default:""` // *
 }
 
