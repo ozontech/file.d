@@ -2,6 +2,9 @@ package meta
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
+	"math/rand/v2"
 	"os"
 	"path/filepath"
 	"strings"
@@ -9,6 +12,7 @@ import (
 	"time"
 
 	lru "github.com/hashicorp/golang-lru/v2"
+	"github.com/ozontech/file.d/logger"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"
@@ -19,6 +23,8 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/clientcmd"
 )
+
+const metaFileTempSuffix = ".atomic"
 
 type (
 	PodName       string
@@ -42,9 +48,10 @@ type (
 )
 
 var (
-	client     *kubernetes.Clientset
-	MetaData   = make(meta)
-	metaDataMu = &sync.RWMutex{}
+	client        *kubernetes.Clientset
+	MetaData      = make(meta)
+	metaDataMu    = &sync.RWMutex{}
+	MetaFileSaver = &MetaSaver{}
 
 	DeletedPodsCacheSize = 1024
 	deletedPodsCache     *lru.Cache[PodName, bool] // to mark deleted pods or for which we are miss k8s meta and don't wanna wait for timeout for each event
@@ -84,6 +91,8 @@ func EnableGatherer(l *zap.SugaredLogger) {
 	localLogger = l
 	localLogger.Info("enabling k8s meta gatherer")
 
+	MetaFileSaver.loadLimits()
+
 	var err error
 	deletedPodsCache, err = lru.New[PodName, bool](DeletedPodsCacheSize)
 	if err != nil {
@@ -101,6 +110,7 @@ func EnableGatherer(l *zap.SugaredLogger) {
 
 func DisableGatherer() {
 	localLogger.Info("disabling k8s meta gatherer")
+	MetaFileSaver.saveMetaFile()
 	if !DisableMetaUpdates {
 		informerStop <- struct{}{}
 	}
@@ -217,6 +227,7 @@ func maintenance() {
 		default:
 			time.Sleep(MaintenanceInterval)
 			removeExpired()
+			MetaFileSaver.saveMetaFile()
 		}
 	}
 }
@@ -398,4 +409,80 @@ func getNamespace() string {
 		return ""
 	}
 	return strings.TrimSpace(string(data))
+}
+
+type MetaSaver struct {
+	metaFile    string
+	metaFileTmp string
+}
+
+func NewMetaSaver(metaFile string) *MetaSaver {
+	return &MetaSaver{
+		metaFile:    metaFile,
+		metaFileTmp: metaFile + metaFileTempSuffix,
+	}
+}
+
+func (ms *MetaSaver) saveMetaFile() {
+	tmpWithRandom := fmt.Sprintf("%s.%08d", ms.metaFileTmp, rand.Uint32())
+
+	file, err := os.OpenFile(tmpWithRandom, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0o600)
+	if err != nil {
+		localLogger.Errorf("can't open k8s meta file %s, %s", ms.metaFileTmp, err.Error())
+		return
+	}
+	defer func() {
+		err := file.Close()
+		if err != nil {
+			localLogger.Errorf("can't close k8s meta file %s, %s", ms.metaFileTmp, err.Error())
+		}
+	}()
+
+	metaDataMu.RLock()
+	buf, err := json.MarshalIndent(MetaData, "", "  ")
+	metaDataMu.RUnlock()
+	if err != nil {
+		localLogger.Errorf("can't marshall k8s meta map into json: %s", err.Error())
+	}
+
+	_, err = file.Write(buf)
+	if err != nil {
+		localLogger.Errorf("can't write k8s meta file %s, %s", ms.metaFileTmp, err.Error())
+	}
+
+	err = file.Sync()
+	if err != nil {
+		localLogger.Errorf("can't sync k8s meta file %s, %s", ms.metaFileTmp, err.Error())
+	}
+
+	err = os.Rename(tmpWithRandom, ms.metaFile)
+	if err != nil {
+		logger.Errorf("failed renaming temporary k8s meta file to current: %s", err.Error())
+	}
+}
+
+func (ms *MetaSaver) loadLimits() error {
+	info, err := os.Stat(ms.metaFile)
+	if os.IsNotExist(err) {
+		return nil
+	}
+
+	if info.IsDir() {
+		return fmt.Errorf("file %s is dir", ms.metaFile)
+	}
+
+	data, err := os.ReadFile(ms.metaFile)
+	if err != nil {
+		return fmt.Errorf("can't read k8s meta file: %w", err)
+	}
+
+	if len(data) == 0 {
+		return nil
+	}
+
+	if err := json.Unmarshal(data, &MetaData); err != nil {
+		return fmt.Errorf("can't unmarshal map: %w", err)
+	}
+
+	return nil
 }
