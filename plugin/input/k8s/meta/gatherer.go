@@ -91,7 +91,12 @@ func EnableGatherer(l *zap.SugaredLogger) {
 	localLogger = l
 	localLogger.Info("enabling k8s meta gatherer")
 
-	MetaFileSaver.loadLimits()
+	if MetaFileSaver.metaFile != "" {
+		err := MetaFileSaver.loadLimits()
+		if err != nil {
+			localLogger.Errorf("can't load limits: %s", err.Error())
+		}
+	}
 
 	var err error
 	deletedPodsCache, err = lru.New[PodName, bool](DeletedPodsCacheSize)
@@ -110,7 +115,6 @@ func EnableGatherer(l *zap.SugaredLogger) {
 
 func DisableGatherer() {
 	localLogger.Info("disabling k8s meta gatherer")
-	MetaFileSaver.saveMetaFile()
 	if !DisableMetaUpdates {
 		informerStop <- struct{}{}
 	}
@@ -227,7 +231,9 @@ func maintenance() {
 		default:
 			time.Sleep(MaintenanceInterval)
 			removeExpired()
-			MetaFileSaver.saveMetaFile()
+			if MetaFileSaver.metaFile != "" {
+				MetaFileSaver.saveMetaFile()
+			}
 		}
 	}
 }
