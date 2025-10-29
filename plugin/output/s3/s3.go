@@ -151,7 +151,7 @@ type Plugin struct {
 
 	// plugin metrics
 	sendErrorMetric  prometheus.Counter
-	uploadFileMetric *prometheus.CounterVec
+	uploadFileMetric metric.HeldCounterVec
 
 	rnd   rand.Rand
 	rndMx sync.Mutex
@@ -285,6 +285,7 @@ func Factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 }
 
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginParams) {
+	p.params = params
 	p.rnd = *rand.New(rand.NewSource(time.Now().UnixNano()))
 	p.registerMetrics(params.MetricCtl)
 	p.StartWithMinio(config, params, p.minioClientsFactory)
@@ -292,14 +293,16 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 
 func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 	p.sendErrorMetric = ctl.RegisterCounter("output_s3_send_error_total", "Total s3 send errors")
-	p.uploadFileMetric = ctl.RegisterCounterVec("output_s3_upload_file_total", "Total files upload", "bucket_name")
+	p.uploadFileMetric = metric.NewHeldCounterVec(
+		ctl.RegisterCounterVec("output_s3_upload_file_total", "Total files upload", "bucket_name"),
+		p.params.PipelineSettings.MetricMaxLabelValueLength,
+	)
 }
 
 func (p *Plugin) StartWithMinio(config pipeline.AnyConfig, params *pipeline.OutputPluginParams, factory objStoreFactory) {
 	p.controller = params.Controller
 	p.logger = params.Logger
 	p.config = config.(*Config)
-	p.params = params
 
 	// outPlugCount is defaultBucket + multi_buckets count, use to set maps size.
 	outPlugCount := len(p.config.MultiBuckets) + 1

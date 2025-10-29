@@ -44,6 +44,7 @@ type Plugin struct {
 	cancel   context.CancelFunc
 	logger   *zap.SugaredLogger
 	config   *Config
+	params   *pipeline.ActionPluginParams
 	pipeline string
 	format   string
 
@@ -374,6 +375,7 @@ func factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginParams) {
 	p.config = config.(*Config)
+	p.params = params
 	p.logger = params.Logger
 
 	distrCfg := p.config.LimitDistribution.toInternal()
@@ -489,16 +491,22 @@ func (p *Plugin) registerMetrics(ctl *metric.Ctl, limitDistrMetricsLabels []stri
 	labels = append(labels, limitDistrMetricsLabels...)
 	p.limitDistrMetrics = &limitDistributionMetrics{
 		CustomLabels: limitDistrMetricsLabels,
-		EventsCount: metric.NewHeldCounterVec(ctl.RegisterCounterVec(
-			"throttle_distributed_events_count_total",
-			"total count of events that have been throttled using limit distribution",
-			labels...,
-		)),
-		EventsSize: metric.NewHeldCounterVec(ctl.RegisterCounterVec(
-			"throttle_distributed_events_size_total",
-			"total size of events that have been throttled using limit distribution",
-			labels...,
-		)),
+		EventsCount: metric.NewHeldCounterVec(
+			ctl.RegisterCounterVec(
+				"throttle_distributed_events_count_total",
+				"total count of events that have been throttled using limit distribution",
+				labels...,
+			),
+			p.params.PipelineSettings.MetricMaxLabelValueLength,
+		),
+		EventsSize: metric.NewHeldCounterVec(
+			ctl.RegisterCounterVec(
+				"throttle_distributed_events_size_total",
+				"total size of events that have been throttled using limit distribution",
+				labels...,
+			),
+			p.params.PipelineSettings.MetricMaxLabelValueLength,
+		),
 	}
 }
 
