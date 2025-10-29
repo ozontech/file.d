@@ -137,6 +137,11 @@ type Config struct {
 	// >
 	// > Example: ```component: '{{ index .pod.Labels "component" | default .k8s_container }}'```
 	K8sMeta cfg.MetaTemplates `json:"meta"` // *
+
+	// > @3@4@5@6
+	// >
+	// > The filename to store current k8s pod meta. Meta are loaded only on initialization
+	K8sMetaFile string `json:"meta_file" default:""` // *
 }
 
 var startCounter atomic.Int32
@@ -176,6 +181,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 
 	if startCounter == 1 {
 		meta.DeletedPodsCacheSize = p.config.DeletedPodsCacheSize
+		meta.MetaFileSaver = meta.NewMetaSaver(p.config.K8sMetaFile)
 		meta.EnableGatherer(p.logger)
 	}
 
