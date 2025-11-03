@@ -57,3 +57,9 @@ func TestCRIJoined3Lines(t *testing.T) {
 	assert.Equal(t, `{"level":"warn","ts":"2024-05-22T06:39:29.230Z"}\n`, string(row.Log))
 	assert.Equal(t, false, row.IsPartial)
 }
+
+func BenchmarkCRI(b *testing.B) {
+	for b.Loop() {
+		_, _ = DecodeCRI([]byte("2016-10-06T00:17:09.669794202Z stdout P partial content 1\n"))
+	}
+}
