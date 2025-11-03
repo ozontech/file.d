@@ -3,6 +3,7 @@ package decoder
 import (
 	"testing"
 
+	insaneJSON "github.com/ozontech/insane-json"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -172,5 +173,18 @@ func BenchmarkSyslogRFC3164Decoder_Decode(b *testing.B) {
 
 	for b.Loop() {
 		_, _ = d.Decode([]byte(input))
+	}
+}
+
+func BenchmarkSyslogRFC3164Decoder_DecodeToJson(b *testing.B) {
+	const input = "<34>Oct 11 22:14:15 mymachine.example.com myproc[10]: 'myproc' failed on /dev/pts/8\n"
+
+	d, _ := NewSyslogRFC3164Decoder(nil)
+
+	root := insaneJSON.Spawn()
+	defer insaneJSON.Release(root)
+
+	for b.Loop() {
+		_ = d.DecodeToJson(root, []byte(input))
 	}
 }
