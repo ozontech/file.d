@@ -22,3 +22,12 @@ func TestPostgres(t *testing.T) {
 	assert.Equal(t, "test_user", root.Dig("user").AsString())
 	assert.Equal(t, "listening on Unix socket \"/var/run/postgresql/.s.PGSQL.5432\"\n", root.Dig("log").AsString())
 }
+
+func BenchmarkDecodePostgresToJson(b *testing.B) {
+	root := insaneJSON.Spawn()
+	defer insaneJSON.Release(root)
+
+	for b.Loop() {
+		_ = DecodePostgresToJson(root, []byte("2021-06-22 16:24:27 GMT [7291] => [3-1] client=test_client,db=test_db,user=test_user LOG:  listening on Unix socket \"/var/run/postgresql/.s.PGSQL.5432\"\n"))
+	}
+}
