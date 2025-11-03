@@ -182,7 +182,7 @@ func TestDecodeToJsonCSV(t *testing.T) {
 	}
 }
 
-func BenchmarkDecodeCSV(b *testing.B) {
+func BenchmarkDecodeCSV_Decode(b *testing.B) {
 	d, _ := NewCSVDecoder(make(map[string]any))
 
 	for b.Loop() {
@@ -190,7 +190,7 @@ func BenchmarkDecodeCSV(b *testing.B) {
 	}
 }
 
-func BenchmarkDecodeToJsonCSV(b *testing.B) {
+func BenchmarkCSVDecoder_DecodeToJsonCSV(b *testing.B) {
 	d, _ := NewCSVDecoder(make(map[string]any))
 
 	root := insaneJSON.Spawn()

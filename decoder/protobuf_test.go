@@ -189,7 +189,7 @@ func TestProtobuf(t *testing.T) {
 	}
 }
 
-func BenchmarkDecodeToJson(b *testing.B) {
+func BenchmarkProtobufDecoder_DecodeToJson(b *testing.B) {
 	const protoMessage = "MyMessage"
 
 	inputData := []byte{10, 13, 10, 9, 109, 121, 95, 115, 116, 114, 105, 110, 103, 16, 123, 18, 14, 10, 4, 115, 116, 114, 49, 10, 4, 115, 116, 114, 50, 16, 1, 24, 10}

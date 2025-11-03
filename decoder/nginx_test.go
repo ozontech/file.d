@@ -154,7 +154,7 @@ func TestNginxError(t *testing.T) {
 	}
 }
 
-func BenchmarkDecode(b *testing.B) {
+func BenchmarkNginxErrorDecoder_Decode(b *testing.B) {
 	const input = `2022/08/18 09:29:37 [error] 844935#844935: *44934601 upstream timed out (110: Operation timed out) while connecting to upstream, client: 10.125.172.251, server: mpm-youtube-downloader-38.name.tldn, request: "POST /download HTTP/1.1", upstream: "http://10.117.246.15:84/download", host: "mpm-youtube-downloader-38.name.tldn:84"` + "\n"
 
 	d, _ := NewNginxErrorDecoder(nil)

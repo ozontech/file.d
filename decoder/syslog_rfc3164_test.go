@@ -165,7 +165,7 @@ func TestSyslogRFC3164(t *testing.T) {
 	}
 }
 
-func BenchmarkSyslogRFC3164Decoder(b *testing.B) {
+func BenchmarkSyslogRFC3164Decoder_Decode(b *testing.B) {
 	const input = "<34>Oct 11 22:14:15 mymachine.example.com myproc[10]: 'myproc' failed on /dev/pts/8\n"
 
 	d, _ := NewSyslogRFC3164Decoder(nil)
