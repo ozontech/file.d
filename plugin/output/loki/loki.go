@@ -3,11 +3,11 @@ package loki
 import (
 	"context"
 	"encoding/base64"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/ozontech/file.d/cfg"
@@ -16,6 +16,9 @@ import (
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/xhttp"
 
+	"github.com/gogo/protobuf/proto"
+	"github.com/golang/snappy"
+	"github.com/grafana/loki/pkg/push"
 	insaneJSON "github.com/ozontech/insane-json"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
@@ -32,7 +35,38 @@ var errUnixNanoFormat = errors.New("please send time in UnixNano format or add a
 
 const (
 	outPluginType = "loki"
+
+	protoContentType = "application/x-protobuf"
 )
+
+type Labels map[string]string
+
+func (labels Labels) String() string {
+	var b strings.Builder
+	totalSize := 2
+	labelsString := make([]string, 0, len(labels))
+
+	for label, value := range labels {
+		labelsString = append(labelsString, label)
+		// calculate size increase: 2 for `, ` between labels and 3 for the `=` and quotes around label value
+		totalSize += len(label) + 2 + len(value) + 3
+	}
+
+	b.Grow(totalSize)
+	b.WriteByte('{')
+	for i, label := range labelsString {
+		if i > 0 {
+			b.WriteString(", ")
+		}
+
+		b.WriteString(label)
+		b.WriteString(`=`)
+		b.WriteString(strconv.Quote(labels[label]))
+	}
+	b.WriteByte('}')
+
+	return b.String()
+}
 
 type data struct {
 	outBuf []byte
@@ -181,21 +215,18 @@ type Config struct {
 	RetentionExponentMultiplier int `json:"retention_exponentially_multiplier" default:"2"` // *
 }
 
-type AuthStrategy byte
-
 const (
-	StrategyDisabled AuthStrategy = iota
-	StrategyTenant
-	StrategyBasic
-	StrategyBearer
+	StrategyDisabled = "disabled"
+	StrategyTenant   = "tenant"
+	StrategyBasic    = "basic"
+	StrategyBearer   = "bearer"
 )
 
 // ! config-params
 // ^ config-params
 type AuthConfig struct {
 	// > AuthStrategy.Strategy describes strategy to use.
-	Strategy  string `json:"strategy" default:"disabled" options:"disabled|tenant|basic|bearer"`
-	Strategy_ AuthStrategy
+	Strategy string `json:"strategy" default:"disabled" options:"disabled|tenant|basic|bearer"`
 
 	// > TenantID for Tenant Authentication.
 	TenantID string `json:"tenant_id"`
@@ -235,8 +266,7 @@ type Plugin struct {
 	// plugin metrics
 	sendErrorMetric *prometheus.CounterVec
 
-	labels map[string]string
-
+	labels Labels
 	router *pipeline.Router
 }
 
@@ -290,7 +320,8 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		}
 
 		p.logger.Log(level, "can't send data to loki", zap.Error(err),
-			zap.Int("retries", p.config.Retry))
+			zap.Int("retries", p.config.Retry),
+		)
 
 		for i := range events {
 			p.router.Fail(events[i])
@@ -360,18 +391,38 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 	return err
 }
 
-type stream struct {
-	StreamLabels map[string]string `json:"stream"`
-	Values       [][]any           `json:"values"`
-}
-
-type request struct {
-	Streams []stream `json:"streams"`
-}
-
 func (p *Plugin) send(root *insaneJSON.Root) (int, error) {
+	data, err := p.buildProtoRequestBody(root)
+	if err != nil {
+		p.logger.Error("failed to build request body", zap.Error(err))
+		return 0, err
+	}
+
+	p.logger.Debug("sent", zap.String("data", string(data)))
+
+	statusCode, err := p.sendRequest(data)
+	if statusCode != http.StatusNoContent {
+		return statusCode, fmt.Errorf("bad response: code=%d, err=%v", statusCode, err)
+	}
+
+	return statusCode, nil
+}
+
+func (p *Plugin) sendRequest(data []byte) (int, error) {
+	return p.client.DoTimeout(
+		http.MethodPost,
+		protoContentType,
+		data,
+		p.config.ConnectionTimeout_,
+		nil,
+	)
+}
+
+func (p *Plugin) buildProtoRequestBody(root *insaneJSON.Root) ([]byte, error) {
 	messages := root.Dig("data").AsArray()
-	values := make([][]any, 0, len(messages))
+	values := make([]push.Entry, 0, len(messages))
+
+	var timestamp time.Time
 
 	for _, msg := range messages {
 		tsNode := msg.Dig(p.config.TimestampField)
@@ -379,52 +430,58 @@ func (p *Plugin) send(root *insaneJSON.Root) (int, error) {
 		tsNode.Suicide()
 
 		if ts == "" {
-			ts = fmt.Sprintf(`%d`, time.Now().UnixNano())
+			ts = fmt.Sprint(time.Now().UnixNano())
 		} else if !p.isUnixNanoFormat(ts) {
-			return 0, errUnixNanoFormat
+			return nil, errUnixNanoFormat
 		}
+
+		nano, err := strconv.ParseInt(ts, 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse int: %v", err)
+		}
+		timestamp = time.Unix(0, nano)
 
 		logNode := msg.Dig(p.config.MessageField)
-		logMsg := logNode.AsString()
+		logMsg := logNode.AsEscapedString()
 		logNode.Suicide()
 
-		logLine := []any{
-			ts,
-			logMsg,
-			json.RawMessage(msg.EncodeToString()),
+		fields := msg.AsFields()
+		metadata := make([]push.LabelAdapter, 0, len(fields))
+
+		for _, f := range fields {
+			key := f.AsString()
+			fieldValue := msg.Dig(key).AsEscapedString()
+
+			metadata = append(metadata, push.LabelAdapter{Name: key, Value: fieldValue})
 		}
 
-		values = append(values, logLine)
+		entry := push.Entry{
+			Timestamp:          timestamp,
+			Line:               logMsg,
+			StructuredMetadata: metadata,
+		}
+
+		values = append(values, entry)
 	}
 
-	output := request{
-		Streams: []stream{
+	req := &push.PushRequest{
+		Streams: []push.Stream{
 			{
-				StreamLabels: p.labels,
-				Values:       values,
+				Labels:  p.labels.String(),
+				Entries: values,
 			},
 		},
 	}
 
-	data, err := json.Marshal(output)
+	b, err := proto.Marshal(req)
 	if err != nil {
-		return 0, err
+		p.logger.Error("failed to marshal proto message", zap.Error(err))
+		return nil, err
 	}
 
-	p.logger.Debug("sent", zap.String("data", string(data)))
+	b = snappy.Encode(nil, b)
 
-	statusCode, err := p.client.DoTimeout(
-		http.MethodPost,
-		"application/json",
-		data,
-		p.config.ConnectionTimeout_,
-		nil,
-	)
-	if statusCode != http.StatusNoContent {
-		return statusCode, fmt.Errorf("bad response: code=%d, err=%v", statusCode, err)
-	}
-
-	return statusCode, nil
+	return b, nil
 }
 
 func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
@@ -453,14 +510,14 @@ func (p *Plugin) prepareClient() {
 func (p *Plugin) getCustomHeaders() map[string]string {
 	headers := make(map[string]string)
 
-	if p.config.Auth.Strategy_ == StrategyTenant {
+	if p.config.Auth.Strategy == StrategyTenant {
 		headers["X-Scope-OrgID"] = p.config.Auth.TenantID
 	}
 
 	return headers
 }
 
-func (p *Plugin) parseLabels() map[string]string {
+func (p *Plugin) parseLabels() Labels {
 	labels := make(map[string]string, len(p.config.Labels))
 
 	for _, v := range p.config.Labels {
@@ -485,12 +542,12 @@ func (p *Plugin) isUnixNanoFormat(ts string) bool {
 }
 
 func (p *Plugin) getAuthHeader() string {
-	if p.config.Auth.Strategy_ == StrategyBasic {
+	if p.config.Auth.Strategy == StrategyBasic {
 		credentials := []byte(p.config.Auth.Username + ":" + p.config.Auth.Password)
 		return fmt.Sprintf("Basic %s", base64.StdEncoding.EncodeToString(credentials))
 	}
 
-	if p.config.Auth.Strategy_ == StrategyBearer {
+	if p.config.Auth.Strategy == StrategyBearer {
 		return fmt.Sprintf("Bearer %s", p.config.Auth.BearerToken)
 	}
 
