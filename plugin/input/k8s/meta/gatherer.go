@@ -58,7 +58,8 @@ var (
 
 	controller cache.Controller
 
-	expiredItems = make([]*MetaItem, 0, 16) // temporary list of expired items
+	canUpdateMetaData atomic.Bool
+	expiredItems      = make([]*MetaItem, 0, 16) // temporary list of expired items
 
 	informerStop    = make(chan struct{}, 1)
 	maintenanceStop = make(chan struct{}, 1)
@@ -105,6 +106,8 @@ func EnableGatherer(l *zap.SugaredLogger) {
 	}
 
 	if !DisableMetaUpdates {
+		canUpdateMetaData.Store(true)
+
 		initGatherer()
 
 		go controller.Run(informerStop)
@@ -193,6 +196,14 @@ func initInformer() {
 		localLogger.Fatalf("can't add event handler: %s", err.Error())
 	}
 
+	err = informer.SetWatchErrorHandler(func(r *cache.Reflector, err error) {
+		canUpdateMetaData.Store(false)
+		localLogger.Errorf("can't update meta data: %s", err.Error())
+	})
+	if err != nil {
+		localLogger.Fatalf("can't set error handler: %s", err.Error())
+	}
+
 	controller = informer
 }
 
@@ -242,7 +253,9 @@ func maintenance() {
 			return
 		default:
 			time.Sleep(MaintenanceInterval)
-			removeExpired()
+			if canUpdateMetaData.Load() {
+				removeExpired()
+			}
 			if MetaFileSaver.metaFile != "" {
 				MetaFileSaver.saveMetaFile()
 			}
@@ -348,6 +361,8 @@ func PutMeta(podData *corev1.Pod) {
 	if len(podData.Status.ContainerStatuses) == 0 {
 		return
 	}
+
+	canUpdateMetaData.Store(true)
 
 	podCopy := podData
 
@@ -500,6 +515,14 @@ func (ms *MetaSaver) loadMeta() error {
 
 	if err := json.Unmarshal(data, &MetaData); err != nil {
 		return fmt.Errorf("can't unmarshal map: %w", err)
+	}
+
+	for _, podNames := range MetaData {
+		for _, containerIDs := range podNames {
+			for _, podData := range containerIDs {
+				podData.updateTime = time.Now()
+			}
+		}
 	}
 
 	return nil
