@@ -166,8 +166,16 @@ func initInformer() {
 	if err != nil {
 		localLogger.Fatalf("can't create k8s field selector: %s", err.Error())
 	}
+
 	podListWatcher := cache.NewListWatchFromClient(client.CoreV1().RESTClient(), "pods", "", selector)
-	_, c := cache.NewIndexerInformer(podListWatcher, &corev1.Pod{}, MetaExpireDuration/4, cache.ResourceEventHandlerFuncs{
+	informer := cache.NewSharedIndexInformer(
+		podListWatcher,
+		&corev1.Pod{},
+		MetaExpireDuration/4,
+		cache.Indexers{},
+	)
+
+	_, err = informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj any) {
 			PutMeta(obj.(*corev1.Pod))
 		},
@@ -180,8 +188,12 @@ func initInformer() {
 			deletedPodsCache.Add(PodName(pod.Name), true)
 			deletedPodsCounter.Inc()
 		},
-	}, cache.Indexers{})
-	controller = c
+	})
+	if err != nil {
+		localLogger.Fatalf("can't add event handler: %s", err.Error())
+	}
+
+	controller = informer
 }
 
 func initRuntime(ctx context.Context) {
