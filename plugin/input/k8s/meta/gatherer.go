@@ -324,6 +324,7 @@ func GetPodMeta(ns Namespace, pod PodName, cid ContainerID) (bool, *podMeta) {
 	var success bool
 
 	i := time.Nanosecond
+	canUpdateMetaDataBeforeRetries := canUpdateMetaData.Load()
 	for {
 		metaDataMu.RLock()
 		pm, has := MetaData[ns][pod][cid]
@@ -349,8 +350,12 @@ func GetPodMeta(ns Namespace, pod PodName, cid ContainerID) (bool, *podMeta) {
 		i += metaRecheckInterval
 
 		if i-MetaWaitTimeout >= 0 {
-			deletedPodsCache.Add(pod, true)
-			localLogger.Errorf("maybe pod %q have deleted, cause k8s meta retrieve timeout ns=%s", string(pod), string(ns))
+			if canUpdateMetaDataBeforeRetries && canUpdateMetaData.Load() {
+				deletedPodsCache.Add(pod, true)
+				localLogger.Errorf("pod %q was deleted, causing k8s meta retrieval timeout ns=%s", string(pod), string(ns))
+			} else {
+				localLogger.Errorf("k8s meta retrieval timeout pod=%q ns=%s", string(pod), string(ns))
+			}
 
 			return success, podMeta
 		}
