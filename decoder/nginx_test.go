@@ -3,7 +3,6 @@ package decoder
 import (
 	"testing"
 
-	insaneJSON "github.com/ozontech/insane-json"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -155,25 +154,12 @@ func TestNginxError(t *testing.T) {
 	}
 }
 
-func BenchmarkNginxErrorDecoder_Decode(b *testing.B) {
+func BenchmarkDecodeNginx(b *testing.B) {
 	const input = `2022/08/18 09:29:37 [error] 844935#844935: *44934601 upstream timed out (110: Operation timed out) while connecting to upstream, client: 10.125.172.251, server: mpm-youtube-downloader-38.name.tldn, request: "POST /download HTTP/1.1", upstream: "http://10.117.246.15:84/download", host: "mpm-youtube-downloader-38.name.tldn:84"` + "\n"
 
 	d, _ := NewNginxErrorDecoder(nil)
 
 	for b.Loop() {
 		_, _ = d.Decode([]byte(input))
-	}
-}
-
-func BenchmarkNginxErrorDecoder_DecodeToJson(b *testing.B) {
-	const input = `2022/08/18 09:29:37 [error] 844935#844935: *44934601 upstream timed out (110: Operation timed out) while connecting to upstream, client: 10.125.172.251, server: mpm-youtube-downloader-38.name.tldn, request: "POST /download HTTP/1.1", upstream: "http://10.117.246.15:84/download", host: "mpm-youtube-downloader-38.name.tldn:84"` + "\n"
-
-	d, _ := NewNginxErrorDecoder(nil)
-
-	root := insaneJSON.Spawn()
-	defer insaneJSON.Release(root)
-
-	for b.Loop() {
-		_ = d.DecodeToJson(root, []byte(input))
 	}
 }

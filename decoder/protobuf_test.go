@@ -189,7 +189,7 @@ func TestProtobuf(t *testing.T) {
 	}
 }
 
-func BenchmarkProtobufDecoder_Decode(b *testing.B) {
+func BenchmarkDecodeProtobuf(b *testing.B) {
 	const protoMessage = "MyMessage"
 
 	inputData := []byte{10, 13, 10, 9, 109, 121, 95, 115, 116, 114, 105, 110, 103, 16, 123, 18, 14, 10, 4, 115, 116, 114, 49, 10, 4, 115, 116, 114, 50, 16, 1, 24, 10}
@@ -206,28 +206,5 @@ func BenchmarkProtobufDecoder_Decode(b *testing.B) {
 
 	for b.Loop() {
 		_, _ = dec.Decode(inputData)
-	}
-}
-
-func BenchmarkProtobufDecoder_DecodeToJson(b *testing.B) {
-	const protoMessage = "MyMessage"
-
-	inputData := []byte{10, 13, 10, 9, 109, 121, 95, 115, 116, 114, 105, 110, 103, 16, 123, 18, 14, 10, 4, 115, 116, 114, 49, 10, 4, 115, 116, 114, 50, 16, 1, 24, 10}
-
-	p := map[string]any{
-		protoFileParam:    "with_imports.proto",
-		protoMessageParam: protoMessage,
-		protoImportPathsParam: []any{
-			"../testdata/proto",
-		},
-	}
-
-	dec, _ := NewProtobufDecoder(p)
-
-	root := insaneJSON.Spawn()
-	defer insaneJSON.Release(root)
-
-	for b.Loop() {
-		_ = dec.DecodeToJson(root, inputData)
 	}
 }

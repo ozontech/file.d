@@ -182,21 +182,10 @@ func TestDecodeToJsonCSV(t *testing.T) {
 	}
 }
 
-func BenchmarkDecodeCSV_Decode(b *testing.B) {
+func BenchmarkDecodeCSV(b *testing.B) {
 	d, _ := NewCSVDecoder(make(map[string]any))
 
 	for b.Loop() {
 		_, _ = d.Decode([]byte(`a,b,c`))
-	}
-}
-
-func BenchmarkCSVDecoder_DecodeToJsonCSV(b *testing.B) {
-	d, _ := NewCSVDecoder(make(map[string]any))
-
-	root := insaneJSON.Spawn()
-	defer insaneJSON.Release(root)
-
-	for b.Loop() {
-		_ = d.DecodeToJson(root, []byte(`a,b,c`))
 	}
 }
