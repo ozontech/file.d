@@ -58,9 +58,9 @@ var (
 
 	controller cache.Controller
 
-	canUpdateMetaData       atomic.Bool
-	metaLastUnavailableTime atomic.Time
-	expiredItems            = make([]*MetaItem, 0, 16) // temporary list of expired items
+	canUpdateMetaData        atomic.Bool
+	metaFirstUnavailableTime atomic.Time
+	expiredItems             = make([]*MetaItem, 0, 16) // temporary list of expired items
 
 	informerStop    = make(chan struct{}, 1)
 	maintenanceStop = make(chan struct{}, 1)
@@ -200,7 +200,7 @@ func initInformer() {
 
 	err = informer.SetWatchErrorHandler(func(r *cache.Reflector, err error) {
 		if canUpdateMetaData.Load() {
-			metaLastUnavailableTime.Store(time.Now())
+			metaFirstUnavailableTime.Store(time.Now())
 		}
 		canUpdateMetaData.Store(false)
 		localLogger.Errorf("can't update meta data: %s", err.Error())
@@ -346,7 +346,7 @@ func GetPodMeta(ns Namespace, pod PodName, cid ContainerID) (bool, *podMeta) {
 			return success, podMeta
 		}
 
-		if !canUpdateMetaData.Load() && time.Since(metaLastUnavailableTime.Load()) > metaWaitAvailabilityTimeout {
+		if !canUpdateMetaData.Load() && time.Since(metaFirstUnavailableTime.Load()) > metaWaitAvailabilityTimeout {
 			return success, podMeta
 		}
 
