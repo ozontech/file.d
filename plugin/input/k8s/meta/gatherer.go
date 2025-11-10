@@ -199,8 +199,10 @@ func initInformer() {
 	}
 
 	err = informer.SetWatchErrorHandler(func(r *cache.Reflector, err error) {
+		if canUpdateMetaData.Load() {
+			metaLastUnavailableTime.Store(time.Now())
+		}
 		canUpdateMetaData.Store(false)
-		metaLastUnavailableTime.Store(time.Now())
 		localLogger.Errorf("can't update meta data: %s", err.Error())
 	})
 	if err != nil {
