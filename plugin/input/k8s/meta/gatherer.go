@@ -58,8 +58,9 @@ var (
 
 	controller cache.Controller
 
-	canUpdateMetaData atomic.Bool
-	expiredItems      = make([]*MetaItem, 0, 16) // temporary list of expired items
+	canUpdateMetaData       atomic.Bool
+	metaLastUnavailableTime atomic.Time
+	expiredItems            = make([]*MetaItem, 0, 16) // temporary list of expired items
 
 	informerStop    = make(chan struct{}, 1)
 	maintenanceStop = make(chan struct{}, 1)
@@ -68,9 +69,10 @@ var (
 	MaintenanceInterval = 15 * time.Second
 	MetaExpireDuration  = 5 * time.Minute
 
-	metaRecheckInterval = 250 * time.Millisecond
-	metaWaitWarn        = 5 * time.Second
-	MetaWaitTimeout     = 120 * time.Second
+	metaRecheckInterval         = 250 * time.Millisecond
+	metaWaitWarn                = 5 * time.Second
+	MetaWaitTimeout             = 120 * time.Second
+	metaWaitAvailabilityTimeout = 5 * time.Minute
 
 	stopWg = &sync.WaitGroup{}
 
@@ -198,6 +200,7 @@ func initInformer() {
 
 	err = informer.SetWatchErrorHandler(func(r *cache.Reflector, err error) {
 		canUpdateMetaData.Store(false)
+		metaLastUnavailableTime.Store(time.Now())
 		localLogger.Errorf("can't update meta data: %s", err.Error())
 	})
 	if err != nil {
@@ -338,6 +341,10 @@ func GetPodMeta(ns Namespace, pod PodName, cid ContainerID) (bool, *podMeta) {
 
 			success = true
 			podMeta = pm
+			return success, podMeta
+		}
+
+		if !canUpdateMetaData.Load() && time.Since(metaLastUnavailableTime.Load()) > metaWaitAvailabilityTimeout {
 			return success, podMeta
 		}
 
