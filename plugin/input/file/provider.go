@@ -72,6 +72,7 @@ type Job struct {
 
 	ignoreEventsLE uint64 // events with seq id less or equal than this should be ignored in terms offset commitment
 	lastEventSeq   uint64
+	eofTimestamp   time.Time
 
 	isVirgin   bool // it should be set to false if job hits isDone=true at the first time
 	isDone     bool

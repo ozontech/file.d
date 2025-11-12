@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/pipeline/metadata"
@@ -19,6 +20,7 @@ import (
 
 type worker struct {
 	maxEventSize       int
+	removeAfter        time.Duration
 	cutOffEventByLimit bool
 
 	metaTemplater *metadata.MetaTemplater
@@ -251,10 +253,15 @@ func (w *worker) processEOF(file *os.File, job *Job, jobProvider *jobProvider, t
 	// Mark job as done till new lines has appeared.
 	jobProvider.doneJob(job)
 
-	if job.isCompressed {
+	if job.eofTimestamp.IsZero() {
+		job.eofTimestamp = time.Now()
+	}
+
+	if w.removeAfter > 0 && time.Since(job.eofTimestamp) > w.removeAfter {
 		job.mu.Lock()
 		file.Close()
 		jobProvider.deleteJobAndUnlock(job)
+		os.Remove(file.Name())
 	}
 
 	return nil
