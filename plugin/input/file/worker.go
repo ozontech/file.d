@@ -3,6 +3,7 @@ package file
 import (
 	"bytes"
 	"io"
+	"math"
 	"mime"
 	"os"
 	"os/exec"
@@ -104,7 +105,13 @@ func (w *worker) work(controller inputer, jobProvider *jobProvider, readBufferSi
 			}
 			lz4Reader := lz4.NewReader(file)
 			if len(offsets) > 0 {
-				for lastOffset+int64(readBufferSize) < offsets[0].Offset {
+				minOffset := int64(math.MaxInt64)
+				for _, offset := range offsets {
+					if offset.Offset < minOffset {
+						minOffset = offset.Offset
+					}
+				}
+				for lastOffset+int64(readBufferSize) < minOffset {
 					n, err := lz4Reader.Read(readBuf)
 					if err != nil {
 						if err == io.EOF {
@@ -217,23 +224,23 @@ func getMimeType(filename string) string {
 }
 
 func isNotFileBeingWritten(filePath string) bool {
-	// Run the lsof command to check open file descriptors
 	cmd := exec.Command("lsof", filePath)
 	output, err := cmd.Output()
+
 	if err != nil {
-		return false // Error running lsof
-	}
-
-	// Check the output for write access
-	lines := strings.Split(string(output), "\n")
-	for _, line := range lines {
-		// Check if the line contains 'w' indicating write access
-		if strings.Contains(line, "w") {
-			return true // File is being written to
+		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 1 {
+			return true // File not open by any process
 		}
+		return false // Other error
 	}
 
-	return false // File is not being written to
+	// Quick check for empty output
+	if len(output) == 0 {
+		return true
+	}
+
+	// Use bytes.Contains for faster searching
+	return !bytes.Contains(output, []byte("w"))
 }
 
 func (w *worker) processEOF(file *os.File, job *Job, jobProvider *jobProvider, totalOffset int64) error {
