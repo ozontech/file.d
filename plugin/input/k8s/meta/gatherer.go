@@ -58,9 +58,9 @@ var (
 
 	controller cache.Controller
 
-	canUpdateMetaData        atomic.Bool
-	metaFirstUnavailableTime atomic.Time
-	expiredItems             = make([]*MetaItem, 0, 16) // temporary list of expired items
+	canUpdateMetaData     atomic.Bool
+	metaLastAvailableTime atomic.Time
+	expiredItems          = make([]*MetaItem, 0, 16) // temporary list of expired items
 
 	informerStop    = make(chan struct{}, 1)
 	maintenanceStop = make(chan struct{}, 1)
@@ -158,7 +158,14 @@ func initNodeInfo(ctx context.Context) {
 		localLogger.Fatalf("can't get host name for k8s plugin: %s", err.Error())
 		panic("")
 	}
-	pod, err := client.CoreV1().Pods(getNamespace()).Get(ctx, podName, metav1.GetOptions{})
+
+	ns := getNamespace()
+	SelfNodeName = getNodeName(Namespace(ns), PodName(podName))
+	if SelfNodeName != "" {
+		return
+	}
+
+	pod, err := client.CoreV1().Pods(ns).Get(ctx, podName, metav1.GetOptions{})
 	if err != nil {
 		localLogger.Fatalf("can't detect node name for k8s plugin using pod %q: %s", podName, err.Error())
 		panic("")
@@ -200,7 +207,7 @@ func initInformer() {
 
 	err = informer.SetWatchErrorHandler(func(r *cache.Reflector, err error) {
 		if canUpdateMetaData.Load() {
-			metaFirstUnavailableTime.Store(time.Now())
+			metaLastAvailableTime.Store(time.Now())
 		}
 		canUpdateMetaData.Store(false)
 		localLogger.Errorf("can't update meta data: %s", err.Error())
@@ -346,7 +353,7 @@ func GetPodMeta(ns Namespace, pod PodName, cid ContainerID) (bool, *podMeta) {
 			return success, podMeta
 		}
 
-		if !canUpdateMetaData.Load() && time.Since(metaFirstUnavailableTime.Load()) > metaWaitAvailabilityTimeout {
+		if !canUpdateMetaData.Load() && time.Since(metaLastAvailableTime.Load()) > metaWaitAvailabilityTimeout {
 			return success, podMeta
 		}
 
@@ -456,6 +463,16 @@ func getNamespace() string {
 		return ""
 	}
 	return strings.TrimSpace(string(data))
+}
+
+func getNodeName(ns Namespace, podName PodName) string {
+	for _, podData := range MetaData[ns][podName] {
+		if podData.Spec.NodeName != "" {
+			return podData.Spec.NodeName
+		}
+	}
+
+	return ""
 }
 
 type MetaSaver struct {
