@@ -26,8 +26,6 @@ import (
 
 const (
 	metaFileTempSuffix = ".atomic"
-
-	defaultCriType = "docker"
 )
 
 type (
