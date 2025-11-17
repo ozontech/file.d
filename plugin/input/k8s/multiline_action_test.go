@@ -31,7 +31,7 @@ func TestMultilineAction_Do(t *testing.T) {
 	filename := getLogFilename("k8s", item)
 	meta.PutMeta(getPodInfo(item, true))
 	meta.SelfNodeName = "node_1"
-	meta.NodeLabels = map[string]string{"zone": "z34"}
+	meta.MetaData.NodeLabels = map[string]string{"zone": "z34"}
 
 	tcs := []struct {
 		Name       string

@@ -185,7 +185,7 @@ func (p *MultilineAction) Do(event *pipeline.Event) pipeline.ActionResult {
 			event.Root.AddFieldNoAlloc(event.Root, pipeline.ByteToStringUnsafe(event.Buf[l:])).MutateToString(labelValue)
 		}
 
-		for labelName, labelValue := range meta.NodeLabels {
+		for labelName, labelValue := range meta.MetaData.NodeLabels {
 			if len(p.allowedNodeLabels) != 0 {
 				_, has := p.allowedNodeLabels[labelName]
 
