@@ -24,7 +24,11 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 )
 
-const metaFileTempSuffix = ".atomic"
+const (
+	metaFileTempSuffix = ".atomic"
+
+	defaultCriType = "docker"
+)
 
 type (
 	PodName       string
@@ -45,11 +49,21 @@ type (
 	}
 
 	meta map[Namespace]map[PodName]map[ContainerID]*podMeta
+
+	metaCache struct {
+		PodMeta    meta
+		CriType    string
+		NodeLabels map[string]string
+	}
 )
 
 var (
-	client        *kubernetes.Clientset
-	MetaData      = make(meta)
+	client   *kubernetes.Clientset
+	MetaData = &metaCache{
+		PodMeta:    make(meta),
+		CriType:    "",
+		NodeLabels: nil,
+	}
 	metaDataMu    = &sync.RWMutex{}
 	MetaFileSaver = &MetaSaver{}
 
@@ -81,9 +95,6 @@ var (
 	metaAddedCounter    atomic.Int64
 	expiredItemsCounter atomic.Int64
 	deletedPodsCounter  atomic.Int64
-
-	CriType    = "docker"
-	NodeLabels = make(map[string]string)
 
 	SelfNodeName string
 
@@ -160,7 +171,7 @@ func initNodeInfo(ctx context.Context) {
 	}
 
 	ns := getNamespace()
-	SelfNodeName = getNodeName(Namespace(ns), PodName(podName))
+	SelfNodeName = getNodeName(Namespace(ns))
 	if SelfNodeName != "" {
 		return
 	}
@@ -220,6 +231,10 @@ func initInformer() {
 }
 
 func initRuntime(ctx context.Context) {
+	if MetaData.NodeLabels != nil && MetaData.CriType != "" {
+		return
+	}
+
 	node, err := client.CoreV1().Nodes().Get(ctx, SelfNodeName, metav1.GetOptions{})
 	if err != nil || node == nil {
 		localLogger.Fatalf("can't detect CRI runtime for node %s, api call is unsuccessful: %s", node, err.Error())
@@ -231,8 +246,8 @@ func initRuntime(ctx context.Context) {
 		localLogger.Fatalf("can't detect CRI runtime for node %s, wrong runtime version: %s", node, runtimeVer)
 	}
 
-	NodeLabels = node.Labels
-	CriType = runtimeVer[:pos]
+	MetaData.NodeLabels = node.Labels
+	MetaData.CriType = runtimeVer[:pos]
 }
 
 func removeExpired() {
@@ -280,7 +295,7 @@ func getTotalItems() int {
 	defer metaDataMu.RUnlock()
 
 	totalItems := 0
-	for _, podNames := range MetaData {
+	for _, podNames := range MetaData.PodMeta {
 		for _, containerIDs := range podNames {
 			totalItems += len(containerIDs)
 		}
@@ -296,7 +311,7 @@ func getExpiredItems(out []*MetaItem) []*MetaItem {
 	defer metaDataMu.RUnlock()
 
 	// find pods which aren't in k8s pod list for some time and add them to the expiration list
-	for ns, podNames := range MetaData {
+	for ns, podNames := range MetaData.PodMeta {
 		for pod, containerIDs := range podNames {
 			for cid, podData := range containerIDs {
 				if now.Sub(podData.updateTime) > MetaExpireDuration {
@@ -319,14 +334,14 @@ func cleanUpItems(items []*MetaItem) {
 
 	for _, item := range items {
 		expiredItemsCounter.Inc()
-		delete(MetaData[item.Namespace][item.PodName], item.ContainerID)
+		delete(MetaData.PodMeta[item.Namespace][item.PodName], item.ContainerID)
 
-		if len(MetaData[item.Namespace][item.PodName]) == 0 {
-			delete(MetaData[item.Namespace], item.PodName)
+		if len(MetaData.PodMeta[item.Namespace][item.PodName]) == 0 {
+			delete(MetaData.PodMeta[item.Namespace], item.PodName)
 		}
 
-		if len(MetaData[item.Namespace]) == 0 {
-			delete(MetaData, item.Namespace)
+		if len(MetaData.PodMeta[item.Namespace]) == 0 {
+			delete(MetaData.PodMeta, item.Namespace)
 		}
 	}
 }
@@ -339,7 +354,7 @@ func GetPodMeta(ns Namespace, pod PodName, cid ContainerID) (bool, *podMeta) {
 	canUpdateMetaDataBeforeRetries := canUpdateMetaData.Load()
 	for {
 		metaDataMu.RLock()
-		pm, has := MetaData[ns][pod][cid]
+		pm, has := MetaData.PodMeta[ns][pod][cid]
 		isDeleted := deletedPodsCache.Contains(pod)
 		metaDataMu.RUnlock()
 
@@ -391,11 +406,11 @@ func PutMeta(podData *corev1.Pod) {
 	ns := Namespace(podCopy.Namespace)
 
 	metaDataMu.Lock()
-	if MetaData[ns] == nil {
-		MetaData[ns] = make(map[PodName]map[ContainerID]*podMeta)
+	if MetaData.PodMeta[ns] == nil {
+		MetaData.PodMeta[ns] = make(map[PodName]map[ContainerID]*podMeta)
 	}
-	if MetaData[ns][pod] == nil {
-		MetaData[ns][pod] = make(map[ContainerID]*podMeta)
+	if MetaData.PodMeta[ns][pod] == nil {
+		MetaData.PodMeta[ns][pod] = make(map[ContainerID]*podMeta)
 	}
 	metaDataMu.Unlock()
 
@@ -453,7 +468,7 @@ func putContainerMeta(ns Namespace, pod PodName, fullContainerID string, podInfo
 	}
 
 	metaDataMu.Lock()
-	MetaData[ns][pod][containerID] = meta
+	MetaData.PodMeta[ns][pod][containerID] = meta
 	metaDataMu.Unlock()
 }
 
@@ -465,10 +480,12 @@ func getNamespace() string {
 	return strings.TrimSpace(string(data))
 }
 
-func getNodeName(ns Namespace, podName PodName) string {
-	for _, podData := range MetaData[ns][podName] {
-		if podData.Spec.NodeName != "" {
-			return podData.Spec.NodeName
+func getNodeName(ns Namespace) string {
+	for _, containerIDs := range MetaData.PodMeta[ns] {
+		for _, podData := range containerIDs {
+			if podData.Spec.NodeName != "" {
+				return podData.Spec.NodeName
+			}
 		}
 	}
 
@@ -505,6 +522,7 @@ func (ms *MetaSaver) saveMetaFile() {
 	metaDataMu.RLock()
 	buf, err := json.MarshalIndent(MetaData, "", "  ")
 	metaDataMu.RUnlock()
+
 	if err != nil {
 		localLogger.Errorf("can't marshall k8s meta map into json: %s", err.Error())
 	}
@@ -548,7 +566,7 @@ func (ms *MetaSaver) loadMeta() error {
 		return fmt.Errorf("can't unmarshal map: %w", err)
 	}
 
-	for _, podNames := range MetaData {
+	for _, podNames := range MetaData.PodMeta {
 		for _, containerIDs := range podNames {
 			for _, podData := range containerIDs {
 				podData.updateTime = time.Now()

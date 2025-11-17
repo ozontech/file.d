@@ -189,7 +189,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 		meta.EnableGatherer(p.logger)
 	}
 
-	if meta.CriType == "docker" {
+	if meta.MetaData.CriType == "docker" {
 		p.params.Controller.SuggestDecoder(decoder.JSON)
 	} else {
 		p.params.Controller.SuggestDecoder(decoder.CRI)
