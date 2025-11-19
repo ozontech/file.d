@@ -172,7 +172,7 @@ func initNodeInfo(ctx context.Context) {
 	if err != nil {
 		localLogger.Warnf("can't detect node name for k8s plugin using pod %q: %s", podName, err.Error())
 		SelfNodeName = getNodeName()
-		if SelfNodeName != "" {
+		if SelfNodeName == "" {
 			localLogger.Fatalf("can't get node name from cache for k8s plugin using pod %q", podName)
 			panic("")
 		}
