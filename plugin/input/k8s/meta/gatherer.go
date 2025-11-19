@@ -168,13 +168,12 @@ func initNodeInfo(ctx context.Context) {
 		panic("")
 	}
 
-	ns := getNamespace()
-	SelfNodeName = getNodeName(Namespace(ns))
+	SelfNodeName = getNodeName()
 	if SelfNodeName != "" {
 		return
 	}
 
-	pod, err := client.CoreV1().Pods(ns).Get(ctx, podName, metav1.GetOptions{})
+	pod, err := client.CoreV1().Pods(getNamespace()).Get(ctx, podName, metav1.GetOptions{})
 	if err != nil {
 		localLogger.Fatalf("can't detect node name for k8s plugin using pod %q: %s", podName, err.Error())
 		panic("")
@@ -478,11 +477,13 @@ func getNamespace() string {
 	return strings.TrimSpace(string(data))
 }
 
-func getNodeName(ns Namespace) string {
-	for _, containerIDs := range MetaData.PodMeta[ns] {
-		for _, podData := range containerIDs {
-			if podData.Spec.NodeName != "" {
-				return podData.Spec.NodeName
+func getNodeName() string {
+	for _, podNames := range MetaData.PodMeta {
+		for _, containerIDs := range podNames {
+			for _, podData := range containerIDs {
+				if podData.Spec.NodeName != "" {
+					return podData.Spec.NodeName
+				}
 			}
 		}
 	}
