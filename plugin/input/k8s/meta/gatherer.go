@@ -168,15 +168,15 @@ func initNodeInfo(ctx context.Context) {
 		panic("")
 	}
 
-	SelfNodeName = getNodeName()
-	if SelfNodeName != "" {
-		return
-	}
-
 	pod, err := client.CoreV1().Pods(getNamespace()).Get(ctx, podName, metav1.GetOptions{})
 	if err != nil {
-		localLogger.Fatalf("can't detect node name for k8s plugin using pod %q: %s", podName, err.Error())
-		panic("")
+		localLogger.Warnf("can't detect node name for k8s plugin using pod %q: %s", podName, err.Error())
+		SelfNodeName = getNodeName()
+		if SelfNodeName != "" {
+			localLogger.Fatalf("can't get node name from cache for k8s plugin using pod %q", podName)
+			panic("")
+		}
+		return
 	}
 	SelfNodeName = pod.Spec.NodeName
 }
@@ -228,14 +228,14 @@ func initInformer() {
 }
 
 func initRuntime(ctx context.Context) {
-	if MetaData.NodeLabels != nil && MetaData.CriType != "" {
-		return
-	}
-
 	node, err := client.CoreV1().Nodes().Get(ctx, SelfNodeName, metav1.GetOptions{})
 	if err != nil || node == nil {
-		localLogger.Fatalf("can't detect CRI runtime for node %s, api call is unsuccessful: %s", node, err.Error())
-		panic("_")
+		localLogger.Warnf("can't detect CRI runtime for node %s, api call is unsuccessful: %s", node, err.Error())
+		if MetaData.CriType == "" {
+			localLogger.Fatalf("can't get CRI runtime for node %s from cache", node)
+			panic("")
+		}
+		return
 	}
 	runtimeVer := node.Status.NodeInfo.ContainerRuntimeVersion
 	pos := strings.IndexByte(runtimeVer, ':')
