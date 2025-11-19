@@ -687,7 +687,7 @@ func (jp *jobProvider) maintenanceJob(job *Job) int {
 
 	offset := job.seek(0, io.SeekCurrent, "maintenance")
 
-	if stat.Size() != offset {
+	if stat.Size() != offset && !job.isCompressed {
 		jp.tryResumeJobAndUnlock(job, filename)
 
 		return maintenanceResultResumed
