@@ -100,11 +100,13 @@ func (w *worker) work(controller inputer, jobProvider *jobProvider, readBufferSi
 		var reader io.Reader
 		if job.mimeType == "application/x-lz4" {
 			if isNotFileBeingWritten(file.Name()) {
+				// lz4 does not support appending, so we check that no one is writting to the file
 				logger.Error("cannot lock file", zap.String("filename", file.Name()))
 				break
 			}
 			lz4Reader := lz4.NewReader(file)
 			if len(offsets) > 0 {
+				// skip processed lines cause we cannot use fseek on a compressed file
 				minOffset := int64(math.MaxInt64)
 				for _, offset := range offsets {
 					if offset.Offset < minOffset {
@@ -134,12 +136,14 @@ func (w *worker) work(controller inputer, jobProvider *jobProvider, readBufferSi
 			n, err := reader.Read(readBuf)
 			controller.IncReadOps()
 			// if we read to end of file it's time to check truncation etc and process next job
-			if err == io.EOF || n == 0 {
+			if (!job.isCompressed && err == io.EOF) || n == 0 {
 				isEOFReached = true
 				break
 			}
 			if err != nil {
-				logger.Fatalf("file %d:%s read error, %s read=%d", sourceID, sourceName, err.Error(), n)
+				if !job.isCompressed && err != io.EOF {
+					logger.Fatalf("file %d:%s read error, %s read=%d", sourceID, sourceName, err.Error(), n)
+				}
 			}
 
 			read := int64(n)
@@ -224,23 +228,23 @@ func getMimeType(filename string) string {
 }
 
 func isNotFileBeingWritten(filePath string) bool {
+	// Run the lsof command to check open file descriptors
 	cmd := exec.Command("lsof", filePath)
 	output, err := cmd.Output()
-
 	if err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 1 {
-			return true // File not open by any process
+		return false // Error running lsof
+	}
+
+	// Check the output for write access
+	lines := strings.Split(string(output), "\n")
+	for _, line := range lines {
+		// Check if the line contains 'w' indicating write access
+		if strings.Contains(line, "w") {
+			return true // File is being written to
 		}
-		return false // Other error
 	}
 
-	// Quick check for empty output
-	if len(output) == 0 {
-		return true
-	}
-
-	// Use bytes.Contains for faster searching
-	return !bytes.Contains(output, []byte("w"))
+	return false // File is not being written to
 }
 
 func (w *worker) processEOF(file *os.File, job *Job, jobProvider *jobProvider, totalOffset int64) error {
