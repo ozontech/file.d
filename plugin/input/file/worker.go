@@ -3,18 +3,25 @@ package file
 import (
 	"bytes"
 	"io"
+	"math"
+	"mime"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/pipeline/metadata"
 	k8s_meta "github.com/ozontech/file.d/plugin/input/k8s/meta"
+	"github.com/pierrec/lz4/v4"
 
 	"go.uber.org/zap"
 )
 
 type worker struct {
 	maxEventSize       int
+	removeAfter        time.Duration
 	cutOffEventByLimit bool
 
 	metaTemplater *metadata.MetaTemplater
@@ -90,20 +97,53 @@ func (w *worker) work(controller inputer, jobProvider *jobProvider, readBufferSi
 			}
 		}
 
+		var reader io.Reader
+		if job.mimeType == "application/x-lz4" {
+			if isNotFileBeingWritten(file.Name()) {
+				// lz4 does not support appending, so we check that no one is writting to the file
+				logger.Error("cannot lock file", zap.String("filename", file.Name()))
+				break
+			}
+			lz4Reader := lz4.NewReader(file)
+			if len(offsets) > 0 {
+				// skip processed lines cause we cannot use fseek on a compressed file
+				minOffset := int64(math.MaxInt64)
+				for _, offset := range offsets {
+					if offset.Offset < minOffset {
+						minOffset = offset.Offset
+					}
+				}
+				for lastOffset+int64(readBufferSize) < minOffset {
+					n, err := lz4Reader.Read(readBuf)
+					if err != nil {
+						if err == io.EOF {
+							break // End of file reached
+						}
+					}
+					lastOffset += int64(n)
+				}
+			}
+			reader = lz4Reader
+		} else {
+			reader = file
+		}
+
 		// append the data of the old work, this happens when the event was not completely written to the file
 		// for example: {"level": "info", "message": "some...
 		// the end of the message can be added later and will be read in this iteration
 		accumBuf = append(accumBuf[:0], job.tail...)
 		for {
-			n, err := file.Read(readBuf)
+			n, err := reader.Read(readBuf)
 			controller.IncReadOps()
 			// if we read to end of file it's time to check truncation etc and process next job
-			if err == io.EOF || n == 0 {
+			if (!job.isCompressed && err == io.EOF) || n == 0 {
 				isEOFReached = true
 				break
 			}
 			if err != nil {
-				logger.Fatalf("file %d:%s read error, %s read=%d", sourceID, sourceName, err.Error(), n)
+				if !job.isCompressed && err != io.EOF {
+					logger.Fatalf("file %d:%s read error, %s read=%d", sourceID, sourceName, err.Error(), n)
+				}
 			}
 
 			read := int64(n)
@@ -177,21 +217,63 @@ func (w *worker) work(controller inputer, jobProvider *jobProvider, readBufferSi
 	}
 }
 
+func getMimeType(filename string) string {
+	ext := filepath.Ext(filename)
+	mimeType := mime.TypeByExtension(ext)
+	if mimeType == "" {
+		mimeType = "application/octet-stream"
+	}
+
+	return mimeType
+}
+
+func isNotFileBeingWritten(filePath string) bool {
+	// Run the lsof command to check open file descriptors
+	cmd := exec.Command("lsof", filePath)
+	output, err := cmd.Output()
+	if err != nil {
+		return false // Error running lsof
+	}
+
+	// Check the output for write access
+	lines := strings.Split(string(output), "\n")
+	for _, line := range lines {
+		// Check if the line contains 'w' indicating write access
+		if strings.Contains(line, "w") {
+			return true // File is being written to
+		}
+	}
+
+	return false // File is not being written to
+}
+
 func (w *worker) processEOF(file *os.File, job *Job, jobProvider *jobProvider, totalOffset int64) error {
 	stat, err := file.Stat()
 	if err != nil {
 		return err
 	}
 
-	// files truncated from time to time, after logs from file was processed.
-	// Position > stat.Size() means that data was truncated and
-	// caret pointer must be moved to start of file.
-	if totalOffset > stat.Size() {
-		jobProvider.truncateJob(job)
+	if !job.isCompressed {
+		// files truncated from time to time, after logs from file was processed.
+		// Position > stat.Size() means that data was truncated and
+		// caret pointer must be moved to start of file.
+		if totalOffset > stat.Size() {
+			jobProvider.truncateJob(job)
+		}
 	}
-
 	// Mark job as done till new lines has appeared.
 	jobProvider.doneJob(job)
+
+	if job.eofTimestamp.IsZero() {
+		job.eofTimestamp = time.Now()
+	}
+
+	if w.removeAfter > 0 && time.Since(job.eofTimestamp) > w.removeAfter {
+		job.mu.Lock()
+		file.Close()
+		jobProvider.deleteJobAndUnlock(job)
+		os.Remove(file.Name())
+	}
 
 	return nil
 }
