@@ -79,6 +79,13 @@ func TestWorkerWork(t *testing.T) {
 			readBufferSize:     1024,
 			expData:            "abc\n",
 		},
+		{
+			name:           "should_ok_when_read_1_line_without_newline",
+			maxEventSize:   1024,
+			inFile:         "abc",
+			readBufferSize: 1024,
+			expData:        "",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
