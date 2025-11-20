@@ -116,6 +116,16 @@ Example: ```component: '{{ index .pod.Labels "component" | default .k8s_containe
 
 <br>
 
+**`meta_file`** *`string`* 
+
+The filename to store current k8s pod meta. Meta are loaded only on initialization
+
+> This feature is used to reuse metadata that we have already received, in particular if the kube-apiserver is unavailable.
+>
+> The plugin considers kube-apiserver to be unavailable from the moment the SetWatchErrorHandler handler is called until one of the ResourceEventHandlerFuncs handlers is called.
+
+<br>
+
 
 ### Meta params
 **`pod_name`** - string
