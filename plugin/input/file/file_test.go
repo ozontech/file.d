@@ -544,6 +544,22 @@ func TestReadCompressed(t *testing.T) {
 	}, eventCount)
 }
 
+// TestReadCompressedEmpty test if works of empty compressed file
+func TestReadCompressedEmpty(t *testing.T) {
+	eventCount := 0
+
+	run(&test.Case{
+		Prepare: func() {
+		},
+		Act: func(p *pipeline.Pipeline) {
+			createTempLZ4File()
+		},
+		Assert: func(p *pipeline.Pipeline) {
+			assert.Equal(t, eventCount, p.GetEventsTotal(), "wrong event count")
+		},
+	}, eventCount)
+}
+
 // TestOffsetsSaveSimple tests if offsets saving works right in the simple case
 func TestOffsetsSaveSimple(t *testing.T) {
 	eventCount := 5
