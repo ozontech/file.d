@@ -16,6 +16,7 @@ func TestParseOffsets(t *testing.T) {
 	data := `- file: /some/informational/name
   inode: 1
   source_id: 1234
+  last_read_timestamp: 1763651665
   streams:
     default: 100
     error:: 960
