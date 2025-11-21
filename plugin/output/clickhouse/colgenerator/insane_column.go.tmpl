@@ -142,6 +142,22 @@ func (t *{{ $type.ColumnTypeName }}) EncodeColumn(buffer *proto.Buffer) {
 	t.col.EncodeColumn(buffer)
 }
 
+func (t *{{ $type.ColumnTypeName }}) WriteColumn(writer *proto.Writer) {
+	{{- if $type.Nullable }}
+	if t.nullable {
+		t.nullCol.WriteColumn(writer)
+		return
+	}
+	{{- end }}
+	{{- if $type.LowCardinality }}
+	if t.lc {
+		t.lcCol.WriteColumn(writer)
+		return
+	}
+	{{- end }}
+	t.col.WriteColumn(writer)
+}
+
 {{ if $type.Preparable }}
 // Prepare the column before sending.
 func (t *{{ $type.ColumnTypeName }}) Prepare() error {
