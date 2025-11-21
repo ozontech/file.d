@@ -80,6 +80,14 @@ func (t *ColBool) EncodeColumn(buffer *proto.Buffer) {
 	t.col.EncodeColumn(buffer)
 }
 
+func (t *ColBool) WriteColumn(writer *proto.Writer) {
+	if t.nullable {
+		t.nullCol.WriteColumn(writer)
+		return
+	}
+	t.col.WriteColumn(writer)
+}
+
 // struct ColString defined and implemented in another file
 
 var _ InsaneColInput = (*ColString)(nil)
@@ -123,6 +131,18 @@ func (t *ColString) EncodeColumn(buffer *proto.Buffer) {
 	t.col.EncodeColumn(buffer)
 }
 
+func (t *ColString) WriteColumn(writer *proto.Writer) {
+	if t.nullable {
+		t.nullCol.WriteColumn(writer)
+		return
+	}
+	if t.lc {
+		t.lcCol.WriteColumn(writer)
+		return
+	}
+	t.col.WriteColumn(writer)
+}
+
 // Prepare the column before sending.
 func (t *ColString) Prepare() error {
 	if t.lc {
@@ -152,6 +172,10 @@ func (t *ColEnum8) EncodeColumn(buffer *proto.Buffer) {
 	t.col.EncodeColumn(buffer)
 }
 
+func (t *ColEnum8) WriteColumn(writer *proto.Writer) {
+	t.col.WriteColumn(writer)
+}
+
 // Prepare the column before sending.
 func (t *ColEnum8) Prepare() error {
 	return t.col.Prepare()
@@ -176,6 +200,10 @@ func (t *ColEnum16) Rows() int {
 
 func (t *ColEnum16) EncodeColumn(buffer *proto.Buffer) {
 	t.col.EncodeColumn(buffer)
+}
+
+func (t *ColEnum16) WriteColumn(writer *proto.Writer) {
+	t.col.WriteColumn(writer)
 }
 
 // Prepare the column before sending.
@@ -258,6 +286,14 @@ func (t *ColInt8) EncodeColumn(buffer *proto.Buffer) {
 	t.col.EncodeColumn(buffer)
 }
 
+func (t *ColInt8) WriteColumn(writer *proto.Writer) {
+	if t.nullable {
+		t.nullCol.WriteColumn(writer)
+		return
+	}
+	t.col.WriteColumn(writer)
+}
+
 // ColUInt8 represents Clickhouse UInt8 type.
 type ColUInt8 struct {
 	// col contains values for the UInt8 type.
@@ -331,6 +367,14 @@ func (t *ColUInt8) EncodeColumn(buffer *proto.Buffer) {
 		return
 	}
 	t.col.EncodeColumn(buffer)
+}
+
+func (t *ColUInt8) WriteColumn(writer *proto.Writer) {
+	if t.nullable {
+		t.nullCol.WriteColumn(writer)
+		return
+	}
+	t.col.WriteColumn(writer)
 }
 
 // ColInt16 represents Clickhouse Int16 type.
@@ -408,6 +452,14 @@ func (t *ColInt16) EncodeColumn(buffer *proto.Buffer) {
 	t.col.EncodeColumn(buffer)
 }
 
+func (t *ColInt16) WriteColumn(writer *proto.Writer) {
+	if t.nullable {
+		t.nullCol.WriteColumn(writer)
+		return
+	}
+	t.col.WriteColumn(writer)
+}
+
 // ColUInt16 represents Clickhouse UInt16 type.
 type ColUInt16 struct {
 	// col contains values for the UInt16 type.
@@ -481,6 +533,14 @@ func (t *ColUInt16) EncodeColumn(buffer *proto.Buffer) {
 		return
 	}
 	t.col.EncodeColumn(buffer)
+}
+
+func (t *ColUInt16) WriteColumn(writer *proto.Writer) {
+	if t.nullable {
+		t.nullCol.WriteColumn(writer)
+		return
+	}
+	t.col.WriteColumn(writer)
 }
 
 // ColInt32 represents Clickhouse Int32 type.
@@ -558,6 +618,14 @@ func (t *ColInt32) EncodeColumn(buffer *proto.Buffer) {
 	t.col.EncodeColumn(buffer)
 }
 
+func (t *ColInt32) WriteColumn(writer *proto.Writer) {
+	if t.nullable {
+		t.nullCol.WriteColumn(writer)
+		return
+	}
+	t.col.WriteColumn(writer)
+}
+
 // ColUInt32 represents Clickhouse UInt32 type.
 type ColUInt32 struct {
 	// col contains values for the UInt32 type.
@@ -633,6 +701,14 @@ func (t *ColUInt32) EncodeColumn(buffer *proto.Buffer) {
 	t.col.EncodeColumn(buffer)
 }
 
+func (t *ColUInt32) WriteColumn(writer *proto.Writer) {
+	if t.nullable {
+		t.nullCol.WriteColumn(writer)
+		return
+	}
+	t.col.WriteColumn(writer)
+}
+
 // ColInt64 represents Clickhouse Int64 type.
 type ColInt64 struct {
 	// col contains values for the Int64 type.
@@ -706,6 +782,14 @@ func (t *ColInt64) EncodeColumn(buffer *proto.Buffer) {
 	t.col.EncodeColumn(buffer)
 }
 
+func (t *ColInt64) WriteColumn(writer *proto.Writer) {
+	if t.nullable {
+		t.nullCol.WriteColumn(writer)
+		return
+	}
+	t.col.WriteColumn(writer)
+}
+
 // ColUInt64 represents Clickhouse UInt64 type.
 type ColUInt64 struct {
 	// col contains values for the UInt64 type.
@@ -777,6 +861,14 @@ func (t *ColUInt64) EncodeColumn(buffer *proto.Buffer) {
 		return
 	}
 	t.col.EncodeColumn(buffer)
+}
+
+func (t *ColUInt64) WriteColumn(writer *proto.Writer) {
+	if t.nullable {
+		t.nullCol.WriteColumn(writer)
+		return
+	}
+	t.col.WriteColumn(writer)
 }
 
 // ColInt128 represents Clickhouse Int128 type.
@@ -854,6 +946,14 @@ func (t *ColInt128) EncodeColumn(buffer *proto.Buffer) {
 	t.col.EncodeColumn(buffer)
 }
 
+func (t *ColInt128) WriteColumn(writer *proto.Writer) {
+	if t.nullable {
+		t.nullCol.WriteColumn(writer)
+		return
+	}
+	t.col.WriteColumn(writer)
+}
+
 // ColUInt128 represents Clickhouse UInt128 type.
 type ColUInt128 struct {
 	// col contains values for the UInt128 type.
@@ -927,6 +1027,14 @@ func (t *ColUInt128) EncodeColumn(buffer *proto.Buffer) {
 		return
 	}
 	t.col.EncodeColumn(buffer)
+}
+
+func (t *ColUInt128) WriteColumn(writer *proto.Writer) {
+	if t.nullable {
+		t.nullCol.WriteColumn(writer)
+		return
+	}
+	t.col.WriteColumn(writer)
 }
 
 // ColInt256 represents Clickhouse Int256 type.
@@ -1004,6 +1112,14 @@ func (t *ColInt256) EncodeColumn(buffer *proto.Buffer) {
 	t.col.EncodeColumn(buffer)
 }
 
+func (t *ColInt256) WriteColumn(writer *proto.Writer) {
+	if t.nullable {
+		t.nullCol.WriteColumn(writer)
+		return
+	}
+	t.col.WriteColumn(writer)
+}
+
 // ColUInt256 represents Clickhouse UInt256 type.
 type ColUInt256 struct {
 	// col contains values for the UInt256 type.
@@ -1079,6 +1195,14 @@ func (t *ColUInt256) EncodeColumn(buffer *proto.Buffer) {
 	t.col.EncodeColumn(buffer)
 }
 
+func (t *ColUInt256) WriteColumn(writer *proto.Writer) {
+	if t.nullable {
+		t.nullCol.WriteColumn(writer)
+		return
+	}
+	t.col.WriteColumn(writer)
+}
+
 // ColFloat32 represents Clickhouse Float32 type.
 type ColFloat32 struct {
 	// col contains values for the Float32 type.
@@ -1150,6 +1274,14 @@ func (t *ColFloat32) EncodeColumn(buffer *proto.Buffer) {
 		return
 	}
 	t.col.EncodeColumn(buffer)
+}
+
+func (t *ColFloat32) WriteColumn(writer *proto.Writer) {
+	if t.nullable {
+		t.nullCol.WriteColumn(writer)
+		return
+	}
+	t.col.WriteColumn(writer)
 }
 
 // ColFloat64 represents Clickhouse Float64 type.
@@ -1225,6 +1357,14 @@ func (t *ColFloat64) EncodeColumn(buffer *proto.Buffer) {
 	t.col.EncodeColumn(buffer)
 }
 
+func (t *ColFloat64) WriteColumn(writer *proto.Writer) {
+	if t.nullable {
+		t.nullCol.WriteColumn(writer)
+		return
+	}
+	t.col.WriteColumn(writer)
+}
+
 // struct ColDateTime defined and implemented in another file
 
 var _ InsaneColInput = (*ColDateTime)(nil)
@@ -1245,6 +1385,10 @@ func (t *ColDateTime) EncodeColumn(buffer *proto.Buffer) {
 	t.col.EncodeColumn(buffer)
 }
 
+func (t *ColDateTime) WriteColumn(writer *proto.Writer) {
+	t.col.WriteColumn(writer)
+}
+
 // struct ColDateTime64 defined and implemented in another file
 
 var _ InsaneColInput = (*ColDateTime64)(nil)
@@ -1263,6 +1407,10 @@ func (t *ColDateTime64) Rows() int {
 
 func (t *ColDateTime64) EncodeColumn(buffer *proto.Buffer) {
 	t.col.EncodeColumn(buffer)
+}
+
+func (t *ColDateTime64) WriteColumn(writer *proto.Writer) {
+	t.col.WriteColumn(writer)
 }
 
 // ColIPv4 represents Clickhouse IPv4 type.
@@ -1338,6 +1486,14 @@ func (t *ColIPv4) EncodeColumn(buffer *proto.Buffer) {
 	t.col.EncodeColumn(buffer)
 }
 
+func (t *ColIPv4) WriteColumn(writer *proto.Writer) {
+	if t.nullable {
+		t.nullCol.WriteColumn(writer)
+		return
+	}
+	t.col.WriteColumn(writer)
+}
+
 // ColIPv6 represents Clickhouse IPv6 type.
 type ColIPv6 struct {
 	// col contains values for the IPv6 type.
@@ -1411,6 +1567,14 @@ func (t *ColIPv6) EncodeColumn(buffer *proto.Buffer) {
 	t.col.EncodeColumn(buffer)
 }
 
+func (t *ColIPv6) WriteColumn(writer *proto.Writer) {
+	if t.nullable {
+		t.nullCol.WriteColumn(writer)
+		return
+	}
+	t.col.WriteColumn(writer)
+}
+
 // ColUUID represents Clickhouse UUID type.
 type ColUUID struct {
 	// col contains values for the UUID type.
@@ -1482,4 +1646,12 @@ func (t *ColUUID) EncodeColumn(buffer *proto.Buffer) {
 		return
 	}
 	t.col.EncodeColumn(buffer)
+}
+
+func (t *ColUUID) WriteColumn(writer *proto.Writer) {
+	if t.nullable {
+		t.nullCol.WriteColumn(writer)
+		return
+	}
+	t.col.WriteColumn(writer)
 }
