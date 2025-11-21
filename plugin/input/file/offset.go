@@ -24,9 +24,10 @@ type offsetDB struct {
 }
 
 type inodeOffsets struct {
-	filename string
-	sourceID pipeline.SourceID
-	streams  map[pipeline.StreamName]int64
+	filename          string
+	sourceID          pipeline.SourceID
+	streams           map[pipeline.StreamName]int64
+	lastReadTimestamp int64
 }
 
 type (
@@ -88,6 +89,7 @@ func (o *offsetDB) parseOne(content string, offsets fpOffsets) (string, error) {
 	filename := ""
 	inodeStr := ""
 	sourceIDStr := ""
+	lastReadTimestampStr := ""
 	var err error
 
 	filename, content, err = o.parseLine(content, "- file: ")
@@ -101,6 +103,11 @@ func (o *offsetDB) parseOne(content string, offsets fpOffsets) (string, error) {
 	sourceIDStr, content, err = o.parseLine(content, "  source_id: ")
 	if err != nil {
 		return "", fmt.Errorf("can't parse source_id: %w", err)
+	}
+
+	lastReadTimestampStr, content, err = o.parseLine(content, "  last_read_timestamp: ")
+	if err != nil {
+		return "", fmt.Errorf("can't parse last_read_timestamp: %w", err)
 	}
 
 	sysInode, err := strconv.ParseUint(inodeStr, 10, 64)
@@ -120,10 +127,16 @@ func (o *offsetDB) parseOne(content string, offsets fpOffsets) (string, error) {
 		return "", fmt.Errorf("wrong offsets format, duplicate inode %d", inode)
 	}
 
+	lastReadTimestampVal, err := strconv.ParseInt(lastReadTimestampStr, 10, 64)
+	if err != nil {
+		return "", fmt.Errorf("wrong offsets format, can't parse last read timestamp: %s: %w", sourceIDStr, err)
+	}
+
 	offsets[fp] = &inodeOffsets{
-		streams:  make(map[pipeline.StreamName]int64),
-		filename: filename,
-		sourceID: fp,
+		streams:           make(map[pipeline.StreamName]int64),
+		filename:          filename,
+		sourceID:          fp,
+		lastReadTimestamp: lastReadTimestampVal,
 	}
 
 	return o.parseStreams(content, offsets[fp].streams)
