@@ -402,6 +402,8 @@ func (jp *jobProvider) addJob(file *os.File, stat os.FileInfo, filename string, 
 		mu: &sync.Mutex{},
 	}
 
+	jp.initEofTimestamp(job)
+
 	// set curOffset
 	job.seek(0, io.SeekCurrent, "add job")
 
@@ -490,6 +492,16 @@ func (jp *jobProvider) initJobOffset(operation offsetsOp, job *Job) {
 	}
 }
 
+func (jp *jobProvider) initEofTimestamp(job *Job) {
+	offsets, has := jp.loadedOffsets[job.sourceID]
+	if has {
+		job.eofTimestamp = time.Unix(offsets.lastReadTimestamp, 0)
+	} else {
+		job.eofTimestamp = time.Unix(0, 0)
+	}
+	return
+}
+
 // tryResumeJob job should be already locked and it'll be unlocked.
 func (jp *jobProvider) tryResumeJobAndUnlock(job *Job, filename string) {
 	jp.logger.Debugf("job for %d:%s resumed", job.sourceID, job.filename)
@@ -521,6 +533,7 @@ func (jp *jobProvider) doneJob(job *Job) {
 	}
 	job.isDone = true
 	job.isVirgin = false
+	job.eofTimestamp = time.Now()
 
 	jp.jobsMu.Lock()
 	v := int(jp.jobsDone.Inc())
