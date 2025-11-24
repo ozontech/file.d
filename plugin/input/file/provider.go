@@ -533,7 +533,6 @@ func (jp *jobProvider) doneJob(job *Job) {
 	}
 	job.isDone = true
 	job.isVirgin = false
-	job.eofTimestamp = time.Now()
 
 	jp.jobsMu.Lock()
 	v := int(jp.jobsDone.Inc())
