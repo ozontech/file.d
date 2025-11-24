@@ -217,14 +217,24 @@ func (w *worker) work(controller inputer, jobProvider *jobProvider, readBufferSi
 	}
 }
 
+var customMimeTypes = map[string]string{
+	".lz4": "application/x-lz4",
+}
+
 func getMimeType(filename string) string {
-	ext := filepath.Ext(filename)
-	mimeType := mime.TypeByExtension(ext)
-	if mimeType == "" {
-		mimeType = "application/octet-stream"
+	ext := strings.ToLower(filepath.Ext(filename))
+
+	if mimeType := mime.TypeByExtension(ext); mimeType != "" {
+		return mimeType
 	}
 
-	return mimeType
+	// Try custom mapping
+	if mimeType, exists := customMimeTypes[ext]; exists {
+		return mimeType
+	}
+
+	// Default for unknown types
+	return "application/octet-stream"
 }
 
 func isNotFileBeingWritten(filePath string) bool {

@@ -496,10 +496,7 @@ func (jp *jobProvider) initEofTimestamp(job *Job) {
 	offsets, has := jp.loadedOffsets[job.sourceID]
 	if has {
 		job.eofTimestamp = time.Unix(offsets.lastReadTimestamp, 0)
-	} else {
-		job.eofTimestamp = time.Unix(0, 0)
 	}
-	return
 }
 
 // tryResumeJob job should be already locked and it'll be unlocked.
