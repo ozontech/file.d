@@ -5,6 +5,7 @@ import (
 	"os"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/stretchr/testify/assert"
@@ -37,6 +38,7 @@ func TestParseOffsets(t *testing.T) {
 
 	assert.Equal(t, "/some/informational/name", item.filename)
 	assert.Equal(t, pipeline.SourceID(1234), item.sourceID)
+	assert.InDelta(t, time.Now().Unix(), item.lastReadTimestamp, 10)
 
 	offset, has := item.streams["default"]
 	assert.True(t, has, "stream isn't found")
@@ -55,6 +57,7 @@ func TestParseOffsets(t *testing.T) {
 
 	assert.Equal(t, "/another/informational/name", item.filename)
 	assert.Equal(t, pipeline.SourceID(4321), item.sourceID)
+	assert.Equal(t, int64(1763651665), item.lastReadTimestamp)
 
 	offset, has = item.streams["stderr"]
 	assert.True(t, has, "stream isn't found")
