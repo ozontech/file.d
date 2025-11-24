@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/pipeline"
@@ -105,7 +106,7 @@ func (o *offsetDB) parseOne(content string, offsets fpOffsets) (string, error) {
 		return "", fmt.Errorf("can't parse source_id: %w", err)
 	}
 
-	lastReadTimestampStr, content, err = o.parseLine(content, "  last_read_timestamp: ")
+	lastReadTimestampStr, content, err = o.parseOptionalLine(content, "  last_read_timestamp: ")
 	if err != nil {
 		return "", fmt.Errorf("can't parse last_read_timestamp: %w", err)
 	}
@@ -127,9 +128,12 @@ func (o *offsetDB) parseOne(content string, offsets fpOffsets) (string, error) {
 		return "", fmt.Errorf("wrong offsets format, duplicate inode %d", inode)
 	}
 
-	lastReadTimestampVal, err := strconv.ParseInt(lastReadTimestampStr, 10, 64)
-	if err != nil {
-		return "", fmt.Errorf("wrong offsets format, can't parse last read timestamp: %s: %w", sourceIDStr, err)
+	var lastReadTimestampVal int64 = time.Now().Unix()
+	if lastReadTimestampStr != "" {
+		lastReadTimestampVal, err = strconv.ParseInt(lastReadTimestampStr, 10, 64)
+		if err != nil {
+			return "", fmt.Errorf("invalid timestamp format %q: %w", lastReadTimestampStr, err)
+		}
 	}
 
 	offsets[fp] = &inodeOffsets{
@@ -185,21 +189,54 @@ func (o *offsetDB) parseStreams(content string, streams streamsOffsets) (string,
 	return content, nil
 }
 
-func (o *offsetDB) parseLine(content string, start string) (string, string, error) {
-	l := len(start)
+func (o *offsetDB) parseLine(content string, prefix string) (string, string, error) {
+	if content == "" {
+		return "", "", fmt.Errorf("unexpected end of content while looking for %q", prefix)
+	}
 
 	linePos := strings.IndexByte(content, '\n')
 	if linePos < 0 {
-		return "", "", fmt.Errorf("wrong offsets format, no nl: %q", content)
-	}
-	line := content[0:linePos]
-
-	content = content[linePos+1:]
-	if linePos < l || line[0:l] != start {
-		return "", "", fmt.Errorf("wrong offsets file format expected=%q, got=%q", start, line[0:l])
+		return "", "", fmt.Errorf("no newline found in content")
 	}
 
-	return line[l:], content, nil
+	line := content[:linePos]
+	remaining := content[linePos+1:]
+
+	if len(line) < len(prefix) || line[:len(prefix)] != prefix {
+		return "", "", fmt.Errorf("expected prefix %q, got %q", prefix, safeSubstring(line, len(prefix)))
+	}
+
+	return line[len(prefix):], remaining, nil
+}
+
+func (o *offsetDB) parseOptionalLine(content string, prefix string) (string, string, error) {
+	if content == "" {
+		return "", content, nil // No content, return empty value
+	}
+
+	if len(content) >= len(prefix) && content[:len(prefix)] == prefix {
+		return o.parseLine(content, prefix)
+	}
+
+	if strings.HasPrefix(content, "  streams:") || (len(content) > 0 && content[0] == '-') {
+		return "", content, nil
+	}
+
+	linePos := strings.IndexByte(content, '\n')
+	var nextLine string
+	if linePos >= 0 {
+		nextLine = content[:linePos]
+	} else {
+		nextLine = content
+	}
+	return "", "", fmt.Errorf("unexpected line format, expected %q or streams section, got %q", prefix, safeSubstring(nextLine, len(prefix)))
+}
+
+func safeSubstring(s string, length int) string {
+	if len(s) < length {
+		return s
+	}
+	return s[:length]
 }
 
 func (o *offsetDB) save(jobs map[pipeline.SourceID]*Job, mu *sync.RWMutex) {
