@@ -137,6 +137,7 @@ func (w *worker) work(controller inputer, jobProvider *jobProvider, readBufferSi
 			controller.IncReadOps()
 			// if we read to end of file it's time to check truncation etc and process next job
 			if (!job.isCompressed && err == io.EOF) || n == 0 {
+				// cause lz4reader can return EOF and n > 0
 				isEOFReached = true
 				break
 			}
@@ -274,11 +275,13 @@ func (w *worker) processEOF(file *os.File, job *Job, jobProvider *jobProvider, t
 	// Mark job as done till new lines has appeared.
 	jobProvider.doneJob(job)
 
-	if job.eofTimestamp.IsZero() {
-		job.eofTimestamp = time.Now()
+	if job.eofReadInfo.timestamp.IsZero() || job.eofReadInfo.offset != totalOffset {
+		// store info about
+		job.eofReadInfo.timestamp = time.Now()
+		job.eofReadInfo.offset = totalOffset
 	}
 
-	if w.removeAfter > 0 && time.Since(job.eofTimestamp) > w.removeAfter {
+	if w.removeAfter > 0 && time.Since(job.eofReadInfo.timestamp) > w.removeAfter {
 		job.mu.Lock()
 		file.Close()
 		jobProvider.deleteJobAndUnlock(job)

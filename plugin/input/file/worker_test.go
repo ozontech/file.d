@@ -472,9 +472,10 @@ func TestGetData(t *testing.T) {
 
 func TestWorkerRemoveAfter(t *testing.T) {
 	tests := []struct {
-		name        string
-		removeAfter time.Duration
-		fileRemoved bool
+		name          string
+		removeAfter   time.Duration
+		fileRemoved   bool
+		fileIsChanged bool
 	}{
 		{
 			name: "is_not_set",
@@ -483,6 +484,12 @@ func TestWorkerRemoveAfter(t *testing.T) {
 			name:        "remove_after",
 			removeAfter: 5 * time.Second,
 			fileRemoved: true,
+		},
+		{
+			name:          "dont_remove_after_append",
+			removeAfter:   5 * time.Second,
+			fileRemoved:   false,
+			fileIsChanged: true,
 		},
 		{
 			name:        "dont_remove_after",
@@ -497,7 +504,8 @@ func TestWorkerRemoveAfter(t *testing.T) {
 			require.NoError(t, err)
 			defer os.Remove(path.Join("/tmp", info.Name()))
 
-			_, _ = fmt.Fprint(f, "abc\n")
+			str := "abc\n"
+			_, _ = fmt.Fprint(f, str)
 			_, err = f.Seek(0, io.SeekStart)
 			require.NoError(t, err)
 			job := &Job{
@@ -515,7 +523,11 @@ func TestWorkerRemoveAfter(t *testing.T) {
 			}
 
 			if tt.removeAfter > 0 {
-				job.eofTimestamp = time.Now().Add(-5 * time.Minute)
+				job.eofReadInfo.timestamp = time.Now().Add(-5 * time.Minute)
+			}
+
+			if !tt.fileIsChanged {
+				job.eofReadInfo.offset = int64(len(str))
 			}
 			ctl := metric.NewCtl("test", prometheus.NewRegistry())
 			metrics := newMetricCollection(

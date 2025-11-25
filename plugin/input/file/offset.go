@@ -285,7 +285,7 @@ func (o *offsetDB) save(jobs map[pipeline.SourceID]*Job, mu *sync.RWMutex) {
 		o.buf = append(o.buf, '\n')
 
 		o.buf = append(o.buf, "  last_read_timestamp: "...)
-		o.buf = strconv.AppendInt(o.buf, job.eofTimestamp.Unix(), 10)
+		o.buf = strconv.AppendInt(o.buf, job.eofReadInfo.timestamp.Unix(), 10)
 		o.buf = append(o.buf, '\n')
 
 		o.buf = append(o.buf, "  streams:\n"...)

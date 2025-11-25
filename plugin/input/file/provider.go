@@ -72,7 +72,7 @@ type Job struct {
 
 	ignoreEventsLE uint64 // events with seq id less or equal than this should be ignored in terms offset commitment
 	lastEventSeq   uint64
-	eofTimestamp   time.Time
+	eofReadInfo    eofInfo // timestamp of last EOF event
 
 	isVirgin   bool // it should be set to false if job hits isDone=true at the first time
 	isDone     bool
@@ -99,6 +99,11 @@ func (j *Job) seek(offset int64, whence int, hint string) (n int64) {
 	j.curOffset = n
 
 	return n
+}
+
+type eofInfo struct {
+	timestamp time.Time
+	offset    int64
 }
 
 type inodeID uint64
@@ -402,7 +407,7 @@ func (jp *jobProvider) addJob(file *os.File, stat os.FileInfo, filename string, 
 		mu: &sync.Mutex{},
 	}
 
-	jp.initEofTimestamp(job)
+	jp.initEofInfo(job)
 
 	// set curOffset
 	job.seek(0, io.SeekCurrent, "add job")
@@ -492,10 +497,21 @@ func (jp *jobProvider) initJobOffset(operation offsetsOp, job *Job) {
 	}
 }
 
-func (jp *jobProvider) initEofTimestamp(job *Job) {
+func (jp *jobProvider) initEofInfo(job *Job) {
 	offsets, has := jp.loadedOffsets[job.sourceID]
 	if has {
-		job.eofTimestamp = time.Unix(offsets.lastReadTimestamp, 0)
+		eofInfoFromOffsets := eofInfo{}
+		eofInfoFromOffsets.timestamp = time.Unix(offsets.lastReadTimestamp, 0)
+
+		minOffset := int64(math.MaxInt64)
+		for _, offset := range offsets.streams {
+			if offset < minOffset {
+				minOffset = offset
+			}
+		}
+		eofInfoFromOffsets.offset = minOffset
+
+		job.eofReadInfo = eofInfoFromOffsets
 	}
 }
 
