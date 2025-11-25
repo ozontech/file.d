@@ -523,11 +523,11 @@ func TestWorkerRemoveAfter(t *testing.T) {
 			}
 
 			if tt.removeAfter > 0 {
-				job.eofReadInfo.timestamp = time.Now().Add(-5 * time.Minute)
+				job.eofReadInfo.setTimestamp(time.Now().Add(-5 * time.Minute))
 			}
 
 			if !tt.fileIsChanged {
-				job.eofReadInfo.offset = int64(len(str))
+				job.eofReadInfo.setOffset(int64(len(str)))
 			}
 			ctl := metric.NewCtl("test", prometheus.NewRegistry())
 			metrics := newMetricCollection(

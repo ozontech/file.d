@@ -9,6 +9,8 @@ import (
 	"syscall"
 	"time"
 
+	sync_atomic "sync/atomic"
+
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/prometheus/client_golang/prometheus"
@@ -102,8 +104,25 @@ func (j *Job) seek(offset int64, whence int, hint string) (n int64) {
 }
 
 type eofInfo struct {
-	timestamp time.Time
+	timestamp int64
 	offset    int64
+}
+
+func (e *eofInfo) setTimestamp(t time.Time) {
+	sync_atomic.StoreInt64(&e.timestamp, t.UnixNano())
+}
+
+func (e *eofInfo) getTimestamp() time.Time {
+	nanos := sync_atomic.LoadInt64(&e.timestamp)
+	return time.Unix(0, nanos)
+}
+
+func (e *eofInfo) setOffset(offset int64) {
+	sync_atomic.StoreInt64(&e.offset, offset)
+}
+
+func (e *eofInfo) getOffset() int64 {
+	return sync_atomic.LoadInt64(&e.offset)
 }
 
 type inodeID uint64
@@ -501,7 +520,7 @@ func (jp *jobProvider) initEofInfo(job *Job) {
 	offsets, has := jp.loadedOffsets[job.sourceID]
 	if has {
 		eofInfoFromOffsets := eofInfo{}
-		eofInfoFromOffsets.timestamp = time.Unix(offsets.lastReadTimestamp, 0)
+		eofInfoFromOffsets.setTimestamp(time.Unix(offsets.lastReadTimestamp, 0))
 
 		minOffset := int64(math.MaxInt64)
 		for _, offset := range offsets.streams {
@@ -509,7 +528,7 @@ func (jp *jobProvider) initEofInfo(job *Job) {
 				minOffset = offset
 			}
 		}
-		eofInfoFromOffsets.offset = minOffset
+		eofInfoFromOffsets.setOffset(minOffset)
 
 		job.eofReadInfo = eofInfoFromOffsets
 	}
