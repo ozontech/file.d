@@ -218,7 +218,7 @@ func (o *offsetDB) parseOptionalLine(content string, prefix string) (string, str
 		return o.parseLine(content, prefix)
 	}
 
-	if strings.HasPrefix(content, "  streams:") || (len(content) > 0 && content[0] == '-') {
+	if strings.HasPrefix(content, "  streams:") || (content != "" && content[0] == '-') {
 		return "", content, nil
 	}
 
