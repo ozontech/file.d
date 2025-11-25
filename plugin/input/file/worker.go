@@ -275,13 +275,13 @@ func (w *worker) processEOF(file *os.File, job *Job, jobProvider *jobProvider, t
 	// Mark job as done till new lines has appeared.
 	jobProvider.doneJob(job)
 
-	if job.eofReadInfo.timestamp.IsZero() || job.eofReadInfo.offset != totalOffset {
-		// store info about
-		job.eofReadInfo.timestamp = time.Now()
-		job.eofReadInfo.offset = totalOffset
+	if job.eofReadInfo.getTimestamp().IsZero() || job.eofReadInfo.getOffset() != totalOffset {
+		// store info about event of end of file
+		job.eofReadInfo.setTimestamp(time.Now())
+		job.eofReadInfo.setOffset(totalOffset)
 	}
 
-	if w.removeAfter > 0 && time.Since(job.eofReadInfo.timestamp) > w.removeAfter {
+	if w.removeAfter > 0 && time.Since(job.eofReadInfo.getTimestamp()) > w.removeAfter {
 		job.mu.Lock()
 		file.Close()
 		jobProvider.deleteJobAndUnlock(job)
