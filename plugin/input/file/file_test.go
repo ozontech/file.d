@@ -87,6 +87,7 @@ func pluginConfig(opts ...string) *Config {
 		PersistenceMode:     "async",
 		OffsetsOp:           op,
 		MaintenanceInterval: "5s",
+		RemoveAfter:         "5s",
 	}
 	test.NewConfig(config, map[string]int{"gomaxprocs": runtime.GOMAXPROCS(0)})
 
