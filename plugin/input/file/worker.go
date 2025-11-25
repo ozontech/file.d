@@ -100,7 +100,7 @@ func (w *worker) work(controller inputer, jobProvider *jobProvider, readBufferSi
 		var reader io.Reader
 		if job.mimeType == "application/x-lz4" {
 			if isNotFileBeingWritten(file.Name()) {
-				// lz4 does not support appending, so we check that no one is writting to the file
+				// lz4 does not support appending, so we check that no one is writing to the file
 				logger.Error("cannot lock file", zap.String("filename", file.Name()))
 				break
 			}
@@ -283,9 +283,15 @@ func (w *worker) processEOF(file *os.File, job *Job, jobProvider *jobProvider, t
 
 	if w.removeAfter > 0 && time.Since(job.eofReadInfo.getTimestamp()) > w.removeAfter {
 		job.mu.Lock()
-		file.Close()
+		err = file.Close()
+		if err != nil {
+			jobProvider.logger.Errorf("cannot close file %s: ", err)
+		}
 		jobProvider.deleteJobAndUnlock(job)
-		os.Remove(file.Name())
+		err = os.Remove(file.Name())
+		if err != nil {
+			jobProvider.logger.Errorf("cannot remove file %s: ", err)
+		}
 	}
 
 	return nil
