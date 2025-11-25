@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
@@ -464,6 +465,90 @@ func TestGetData(t *testing.T) {
 				if data[key] != expectedValue {
 					t.Errorf("expected %s: %v, got: %v", key, expectedValue, data[key])
 				}
+			}
+		})
+	}
+}
+
+func TestWorkerRemoveAfter(t *testing.T) {
+	tests := []struct {
+		name        string
+		removeAfter time.Duration
+		fileRemoved bool
+	}{
+		{
+			name: "is_not_set",
+		},
+		{
+			name:        "remove_after",
+			removeAfter: 5 * time.Second,
+			fileRemoved: true,
+		},
+		{
+			name:        "dont_remove_after",
+			removeAfter: 1 * time.Hour,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f, err := os.CreateTemp("/tmp", "worker_test")
+			require.NoError(t, err)
+			info, err := f.Stat()
+			require.NoError(t, err)
+			defer os.Remove(path.Join("/tmp", info.Name()))
+
+			_, _ = fmt.Fprint(f, "abc\n")
+			_, err = f.Seek(0, io.SeekStart)
+			require.NoError(t, err)
+			job := &Job{
+				file:           f,
+				inode:          0,
+				sourceID:       0,
+				filename:       "",
+				symlink:        "",
+				ignoreEventsLE: 0,
+				lastEventSeq:   0,
+				isVirgin:       false,
+				isDone:         false,
+				shouldSkip:     *atomic.NewBool(false),
+				mu:             &sync.Mutex{},
+			}
+
+			if tt.removeAfter > 0 {
+				job.eofTimestamp = time.Now().Add(-5 * time.Minute)
+			}
+			ctl := metric.NewCtl("test", prometheus.NewRegistry())
+			metrics := newMetricCollection(
+				ctl.RegisterCounter("worker1", "help_test"),
+				ctl.RegisterCounter("worker2", "help_test"),
+				ctl.RegisterGauge("worker3", "help_test"),
+				ctl.RegisterGauge("worker4", "help_test"),
+			)
+			logger := zap.L().Sugar().With("fd")
+			jp := NewJobProvider(&Config{}, metrics, logger)
+			jp.jobsChan = make(chan *Job, 2)
+			jp.jobs = map[pipeline.SourceID]*Job{
+				1: job,
+			}
+			jp.jobsChan <- job
+			jp.jobsChan <- nil
+
+			maxEventSize := 1024
+			readBufferSize := 1024
+
+			w := &worker{
+				maxEventSize: maxEventSize,
+			}
+			if tt.removeAfter > 0 {
+				w.removeAfter = tt.removeAfter
+			}
+			inputer := inputerMock{}
+
+			w.work(&inputer, jp, readBufferSize, logger)
+			if tt.fileRemoved {
+				assert.NoFileExists(t, f.Name())
+			} else {
+				assert.FileExists(t, f.Name())
 			}
 		})
 	}
