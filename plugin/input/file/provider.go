@@ -777,6 +777,19 @@ func (jp *jobProvider) maintenanceJob(job *Job) int {
 		return maintenanceResultDeleted
 	}
 
+	if jp.config.RemoveAfter_ > 0 && time.Since(job.eofReadInfo.getTimestamp()) > jp.config.RemoveAfter_ {
+		err = file.Close()
+		if err != nil {
+			jp.logger.Errorf("cannot close file %s: ", err)
+		}
+		jp.deleteJobAndUnlock(job)
+		err = os.Remove(file.Name())
+		if err != nil {
+			jp.logger.Errorf("cannot remove file %s: ", err)
+		}
+		return maintenanceResultDeleted
+	}
+
 	// seek to saved offset
 	job.file = file
 	job.seek(offset, io.SeekStart, "maintenance")
