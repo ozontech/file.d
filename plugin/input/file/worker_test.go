@@ -510,9 +510,9 @@ func TestWorkerRemoveAfter(t *testing.T) {
 			require.NoError(t, err)
 			job := &Job{
 				file:           f,
-				inode:          0,
+				inode:          getInode(info),
 				sourceID:       0,
-				filename:       "",
+				filename:       f.Name(),
 				symlink:        "",
 				ignoreEventsLE: 0,
 				lastEventSeq:   0,
@@ -552,11 +552,12 @@ func TestWorkerRemoveAfter(t *testing.T) {
 				maxEventSize: maxEventSize,
 			}
 			if tt.removeAfter > 0 {
-				w.removeAfter = tt.removeAfter
+				jp.config.RemoveAfter_ = tt.removeAfter
 			}
 			inputer := inputerMock{}
 
 			w.work(&inputer, jp, readBufferSize, logger)
+			jp.maintenanceJob(job)
 			if tt.fileRemoved {
 				assert.NoFileExists(t, f.Name())
 			} else {

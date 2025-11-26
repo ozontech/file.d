@@ -276,7 +276,6 @@ func (p *Plugin) startWorkers() {
 	for i := range p.workers {
 		p.workers[i] = &worker{
 			maxEventSize:       p.params.PipelineSettings.MaxEventSize,
-			removeAfter:        p.config.RemoveAfter_,
 			cutOffEventByLimit: p.params.PipelineSettings.CutOffEventByLimit,
 		}
 		if len(p.config.Meta) > 0 {
