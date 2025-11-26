@@ -118,11 +118,15 @@ Example: ```component: '{{ index .pod.Labels "component" | default .k8s_containe
 
 **`meta_file`** *`string`* 
 
-The filename to store current k8s pod meta. Meta are loaded only on initialization
+The filename to store current k8s pod metadata (`map[Namespace]map[PodName]map[ContainerID]*podMeta`, where `podMeta` is a wrapper for `corev1.Pod`).
+
+Metadata is saved once per gatherer `MaintenanceInterval` and is loaded only on initialization.
+
+If parameter is empty, the metadata won't be cached.
 
 > This feature is used to reuse metadata that we have already received, in particular if the kube-apiserver is unavailable.
 >
-> The plugin considers kube-apiserver to be unavailable from the moment the SetWatchErrorHandler handler is called until one of the ResourceEventHandlerFuncs handlers is called.
+> The plugin considers kube-apiserver to be unavailable from the moment the `SetWatchErrorHandler` handler is called until one of the `ResourceEventHandlerFuncs` handlers is called.
 
 <br>
 
