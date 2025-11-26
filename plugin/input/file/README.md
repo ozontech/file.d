@@ -119,6 +119,13 @@ Job maintenance `fstat` tracked files to detect if new portion of data have been
 
 <br>
 
+**`remove_after`** *`cfg.Duration`* *`default=0`* 
+
+After reaching EOF, the number of seconds to wait before removing the file, unless new data is written.
+If not specified, files are not removed.
+
+<br>
+
 **`should_watch_file_changes`** *`bool`* *`default=false`* 
 
 It turns on watching for file modifications. Turning it on cause more CPU work, but it is more probable to catch file truncation

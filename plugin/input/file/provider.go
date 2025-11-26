@@ -9,6 +9,8 @@ import (
 	"syscall"
 	"time"
 
+	sync_atomic "sync/atomic"
+
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/prometheus/client_golang/prometheus"
@@ -60,16 +62,19 @@ type jobProvider struct {
 }
 
 type Job struct {
-	file      *os.File
-	inode     inodeID
-	sourceID  pipeline.SourceID // some value to distinguish jobs with same inode
-	filename  string
-	symlink   string
-	curOffset int64  // offset to not call Seek() everytime
-	tail      []byte // some data of a new line read by worker, to not seek backwards to read from line start
+	file         *os.File
+	mimeType     string
+	isCompressed bool
+	inode        inodeID
+	sourceID     pipeline.SourceID // some value to distinguish jobs with same inode
+	filename     string
+	symlink      string
+	curOffset    int64  // offset to not call Seek() everytime
+	tail         []byte // some data of a new line read by worker, to not seek backwards to read from line start
 
 	ignoreEventsLE uint64 // events with seq id less or equal than this should be ignored in terms offset commitment
 	lastEventSeq   uint64
+	eofReadInfo    eofInfo // timestamp of last EOF event
 
 	isVirgin   bool // it should be set to false if job hits isDone=true at the first time
 	isDone     bool
@@ -83,14 +88,41 @@ type Job struct {
 	mu *sync.Mutex
 }
 
-func (j *Job) seek(offset int64, whence int, hint string) int64 {
-	n, err := j.file.Seek(offset, whence)
-	if err != nil {
-		logger.Infof("file seek error hint=%s, name=%s, err=%s", hint, j.filename, err.Error())
+func (j *Job) seek(offset int64, whence int, hint string) (n int64) {
+	var err error
+	if !j.isCompressed {
+		n, err = j.file.Seek(offset, whence)
+		if err != nil {
+			logger.Infof("file seek error hint=%s, name=%s, err=%s", hint, j.filename, err.Error())
+		}
+	} else {
+		n = 0
 	}
 	j.curOffset = n
 
 	return n
+}
+
+type eofInfo struct {
+	timestamp int64
+	offset    int64
+}
+
+func (e *eofInfo) setTimestamp(t time.Time) {
+	sync_atomic.StoreInt64(&e.timestamp, t.UnixNano())
+}
+
+func (e *eofInfo) getTimestamp() time.Time {
+	nanos := sync_atomic.LoadInt64(&e.timestamp)
+	return time.Unix(0, nanos)
+}
+
+func (e *eofInfo) setOffset(offset int64) {
+	sync_atomic.StoreInt64(&e.offset, offset)
+}
+
+func (e *eofInfo) getOffset() int64 {
+	return sync_atomic.LoadInt64(&e.offset)
 }
 
 type inodeID uint64
@@ -354,6 +386,10 @@ func (jp *jobProvider) checkFileWasTruncated(job *Job, size int64) {
 	}
 }
 
+func isCompressed(mimeType string) bool {
+	return mimeType == "application/x-lz4"
+}
+
 func (jp *jobProvider) addJob(file *os.File, stat os.FileInfo, filename string, symlink string) {
 	sourceID := sourceIDByStat(stat, symlink)
 
@@ -370,12 +406,16 @@ func (jp *jobProvider) addJob(file *os.File, stat os.FileInfo, filename string, 
 	}
 
 	inode := getInode(stat)
+	mimeType := getMimeType(filename)
+
 	job := &Job{
-		file:     file,
-		inode:    inode,
-		filename: filename,
-		symlink:  symlink,
-		sourceID: sourceID,
+		file:         file,
+		isCompressed: isCompressed(mimeType),
+		mimeType:     mimeType,
+		inode:        inode,
+		filename:     filename,
+		symlink:      symlink,
+		sourceID:     sourceID,
 
 		isVirgin:   true,
 		isDone:     true,
@@ -385,6 +425,8 @@ func (jp *jobProvider) addJob(file *os.File, stat os.FileInfo, filename string, 
 
 		mu: &sync.Mutex{},
 	}
+
+	jp.initEofInfo(job)
 
 	// set curOffset
 	job.seek(0, io.SeekCurrent, "add job")
@@ -471,6 +513,24 @@ func (jp *jobProvider) initJobOffset(operation offsetsOp, job *Job) {
 		job.seek(minOffset, io.SeekStart, "job initialization")
 	default:
 		jp.logger.Panicf("unknown offsets op: %d", jp.config.OffsetsOp_)
+	}
+}
+
+func (jp *jobProvider) initEofInfo(job *Job) {
+	offsets, has := jp.loadedOffsets[job.sourceID]
+	if has {
+		eofInfoFromOffsets := eofInfo{}
+		eofInfoFromOffsets.setTimestamp(time.Unix(offsets.lastReadTimestamp, 0))
+
+		minOffset := int64(math.MaxInt64)
+		for _, offset := range offsets.streams {
+			if offset < minOffset {
+				minOffset = offset
+			}
+		}
+		eofInfoFromOffsets.setOffset(minOffset)
+
+		job.eofReadInfo = eofInfoFromOffsets
 	}
 }
 
@@ -671,7 +731,7 @@ func (jp *jobProvider) maintenanceJob(job *Job) int {
 
 	offset := job.seek(0, io.SeekCurrent, "maintenance")
 
-	if stat.Size() != offset {
+	if stat.Size() != offset && !job.isCompressed {
 		jp.tryResumeJobAndUnlock(job, filename)
 
 		return maintenanceResultResumed
@@ -713,6 +773,19 @@ func (jp *jobProvider) maintenanceJob(job *Job) int {
 		jp.deleteJobAndUnlock(job)
 		if err = file.Close(); err != nil {
 			jp.logger.Errorf("can't close file %s %v in case of different inodes", filename, err)
+		}
+		return maintenanceResultDeleted
+	}
+
+	if jp.config.RemoveAfter_ > 0 && time.Since(job.eofReadInfo.getTimestamp()) > jp.config.RemoveAfter_ {
+		err = file.Close()
+		if err != nil {
+			jp.logger.Errorf("cannot close file %s: ", err)
+		}
+		jp.deleteJobAndUnlock(job)
+		err = os.Remove(file.Name())
+		if err != nil {
+			jp.logger.Errorf("cannot remove file %s: ", err)
 		}
 		return maintenanceResultDeleted
 	}
