@@ -21,7 +21,6 @@ import (
 
 type worker struct {
 	maxEventSize       int
-	removeAfter        time.Duration
 	cutOffEventByLimit bool
 
 	metaTemplater *metadata.MetaTemplater
@@ -279,19 +278,6 @@ func (w *worker) processEOF(file *os.File, job *Job, jobProvider *jobProvider, t
 		// store info about event of end of file
 		job.eofReadInfo.setTimestamp(time.Now())
 		job.eofReadInfo.setOffset(totalOffset)
-	}
-
-	if w.removeAfter > 0 && time.Since(job.eofReadInfo.getTimestamp()) > w.removeAfter {
-		job.mu.Lock()
-		err = file.Close()
-		if err != nil {
-			jobProvider.logger.Errorf("cannot close file %s: ", err)
-		}
-		jobProvider.deleteJobAndUnlock(job)
-		err = os.Remove(file.Name())
-		if err != nil {
-			jobProvider.logger.Errorf("cannot remove file %s: ", err)
-		}
 	}
 
 	return nil
