@@ -32,6 +32,7 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 	metricHoldDuration := pipeline.DefaultMetricHoldDuration
 	metaCacheSize := pipeline.DefaultMetaCacheSize
 	pool := ""
+	metricMaxLabelValueLength := pipeline.DefaultMetricMaxLabelValueLength
 
 	if settings != nil {
 		val := settings.Get("capacity").MustInt()
@@ -104,38 +105,55 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 		sourceNameMetaField = settings.Get("source_name_meta_field").MustString()
 		isStrict = settings.Get("is_strict").MustBool()
 
+		if str := settings.Get("pool").MustString(); str != "" {
+			pool = str
+		}
+
+		if metrics := settings.Get("metrics"); metrics != nil {
+			str = metrics.Get("hold_duration").MustString()
+			if str != "" {
+				i, err := time.ParseDuration(str)
+				if err != nil {
+					logger.Fatalf("can't parse pipeline metric hold duration: %s", err.Error())
+				}
+				metricHoldDuration = i
+			}
+
+			val = metrics.Get("max_label_value_length").MustInt()
+			if val != 0 {
+				metricMaxLabelValueLength = val
+			}
+		}
+
 		str = settings.Get("metric_hold_duration").MustString()
-		if str != "" {
+		if str != "" && metricHoldDuration == pipeline.DefaultMetricHoldDuration {
 			i, err := time.ParseDuration(str)
 			if err != nil {
 				logger.Fatalf("can't parse pipeline metric hold duration: %s", err.Error())
 			}
 			metricHoldDuration = i
 		}
-
-		if str := settings.Get("pool").MustString(); str != "" {
-			pool = str
-		}
 	}
 
 	return &pipeline.Settings{
-		Decoder:                 decoder,
-		DecoderParams:           decoderParams,
-		Capacity:                capacity,
-		MetaCacheSize:           metaCacheSize,
-		AvgEventSize:            avgInputEventSize,
-		MaxEventSize:            maxInputEventSize,
-		CutOffEventByLimit:      cutOffEventByLimit,
-		CutOffEventByLimitField: cutOffEventByLimitField,
-		AntispamThreshold:       antispamThreshold,
-		AntispamExceptions:      antispamExceptions,
-		SourceNameMetaField:     sourceNameMetaField,
-		MaintenanceInterval:     maintenanceInterval,
-		EventTimeout:            eventTimeout,
-		StreamField:             streamField,
-		IsStrict:                isStrict,
-		MetricHoldDuration:      metricHoldDuration,
-		Pool:                    pipeline.PoolType(pool),
+		Decoder:                   decoder,
+		DecoderParams:             decoderParams,
+		Capacity:                  capacity,
+		MetaCacheSize:             metaCacheSize,
+		AvgEventSize:              avgInputEventSize,
+		MaxEventSize:              maxInputEventSize,
+		CutOffEventByLimit:        cutOffEventByLimit,
+		CutOffEventByLimitField:   cutOffEventByLimitField,
+		AntispamThreshold:         antispamThreshold,
+		AntispamExceptions:        antispamExceptions,
+		SourceNameMetaField:       sourceNameMetaField,
+		MaintenanceInterval:       maintenanceInterval,
+		EventTimeout:              eventTimeout,
+		StreamField:               streamField,
+		IsStrict:                  isStrict,
+		MetricHoldDuration:        metricHoldDuration,
+		Pool:                      pipeline.PoolType(pool),
+		MetricMaxLabelValueLength: metricMaxLabelValueLength,
 	}
 }
 
