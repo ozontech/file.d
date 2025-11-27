@@ -118,7 +118,12 @@ Example: ```component: '{{ index .pod.Labels "component" | default .k8s_containe
 
 **`meta_file`** *`string`* 
 
-The filename to store current k8s pod metadata (`map[Namespace]map[PodName]map[ContainerID]*podMeta`, where `podMeta` is a wrapper for `corev1.Pod`).
+The filename to store current k8s pod metadata.
+
+Metadata contains:
+* PodMeta `map[Namespace]map[PodName]map[ContainerID]*podMeta`, where `podMeta` is a wrapper for `corev1.Pod`
+* CriType `string`
+* NodeLabels `map[string]string`
 
 Metadata is saved once per gatherer `MaintenanceInterval` and is loaded only on initialization.
 
