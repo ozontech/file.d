@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [ master ]
+    branches: [master]
   pull_request:
-    branches: [ master ]
+    branches: [master]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -16,7 +16,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        flags: [ '', '-race' ]
+        flags: ["", "-race"]
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -24,7 +24,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.24'
+          go-version: "1.24"
           cache: true
 
       - name: Build
@@ -35,7 +35,21 @@ jobs:
           GOFLAGS: ${{ matrix.flags }}
           LOG_LEVEL: error
         run: |
-          go test -coverprofile=profile${{ matrix.flags }}.out -covermode=atomic -v -coverpkg=./... ./... -json | tee test-report${{ matrix.flags }}.json
+          go test -coverprofile=profile${{ matrix.flags }}.out -covermode=atomic -coverpkg=./... ./... -json 2>&1 | tee test-report${{ matrix.flags }}.json
+          TEST_EXIT_CODE=${PIPESTATUS[0]}
+          exit $TEST_EXIT_CODE
+
+      - name: Fix Test Report
+        if: always()
+        run: |
+          if [ -f test-report${{ matrix.flags }}.json ]; then
+            # Add final event if missing
+            if ! tail -1 test-report${{ matrix.flags }}.json | grep -q '"Action":"end"'; then
+              echo '{"Time":"'$(date -u +"%Y-%m-%dT%H:%M:%S.%3NZ")'","Action":"end","Package":".","Elapsed":0}' >> test-report${{ matrix.flags }}.json
+            fi
+          else
+            echo '{"Time":"'$(date -u +"%Y-%m-%dT%H:%M:%S.%3NZ")'","Action":"end","Package":".","Elapsed":0}' > test-report${{ matrix.flags }}.json
+          fi
 
       - name: Coverage report
         run: |
@@ -82,7 +96,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        flags: [ '', '-race' ]
+        flags: ["", "-race"]
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -90,7 +104,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.24'
+          go-version: "1.24"
           cache: true
 
       - name: Run docker containers
@@ -101,7 +115,9 @@ jobs:
           GOFLAGS: ${{ matrix.flags }}
           LOG_LEVEL: error
         run: |
-          go test ./e2e -coverprofile=profile-e2e${{ matrix.flags }}.out -covermode=atomic -tags=e2e_new -timeout=3m -coverpkg=./... -json | tee test-report-e2e${{ matrix.flags }}.json
+          go test ./e2e -coverprofile=profile-e2e${{ matrix.flags }}.out -covermode=atomic -tags=e2e_new -timeout=3m -coverpkg=./... -json 2>&1 | tee test-report-e2e${{ matrix.flags }}.json
+          TEST_EXIT_CODE=${PIPESTATUS[0]}
+          exit $TEST_EXIT_CODE
 
       - name: Coverage report
         run: |
@@ -110,7 +126,7 @@ jobs:
           else
             echo "No coverage data generated for ${{ matrix.flags }} tests" > coverage-e2e${{ matrix.flags }}.html
           fi
-          
+
       - name: Upload test artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -161,7 +177,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.24'
+          go-version: "1.24"
           cache: true
 
       - name: Lint
@@ -186,7 +202,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.24'
+          go-version: "1.24"
           cache: true
 
       - name: Generate doc
@@ -210,7 +226,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.24'
+          go-version: "1.24"
           cache: true
 
       - name: Download dependencies
