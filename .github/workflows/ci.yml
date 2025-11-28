@@ -35,7 +35,21 @@ jobs:
           GOFLAGS: ${{ matrix.flags }}
           LOG_LEVEL: error
         run: |
-          go test -coverprofile=profile${{ matrix.flags }}.out -covermode=atomic -v -coverpkg=./... ./... -json | tee test-report${{ matrix.flags }}.json
+          go test -coverprofile=profile${{ matrix.flags }}.out -covermode=atomic -coverpkg=./... ./... -json 2>&1 | tee test-report${{ matrix.flags }}.json
+          TEST_EXIT_CODE=${PIPESTATUS[0]}
+          exit $TEST_EXIT_CODE
+
+      - name: Fix Test Report
+        if: always()
+        run: |
+          if [ -f test-report${{ matrix.flags }}.json ]; then
+            # Add final event if missing
+            if ! tail -1 test-report${{ matrix.flags }}.json | grep -q '"Action":"end"'; then
+              echo '{"Time":"'$(date -u +"%Y-%m-%dT%H:%M:%S.%3NZ")'","Action":"end","Package":".","Elapsed":0}' >> test-report${{ matrix.flags }}.json
+            fi
+          else
+            echo '{"Time":"'$(date -u +"%Y-%m-%dT%H:%M:%S.%3NZ")'","Action":"end","Package":".","Elapsed":0}' > test-report${{ matrix.flags }}.json
+          fi
 
       - name: Coverage report
         run: |
@@ -101,7 +115,9 @@ jobs:
           GOFLAGS: ${{ matrix.flags }}
           LOG_LEVEL: error
         run: |
-          go test ./e2e -coverprofile=profile-e2e${{ matrix.flags }}.out -covermode=atomic -tags=e2e_new -timeout=3m -coverpkg=./... -json | tee test-report-e2e${{ matrix.flags }}.json
+          go test ./e2e -coverprofile=profile-e2e${{ matrix.flags }}.out -covermode=atomic -tags=e2e_new -timeout=3m -coverpkg=./... -json 2>&1 | tee test-report-e2e${{ matrix.flags }}.json
+          TEST_EXIT_CODE=${PIPESTATUS[0]}
+          exit $TEST_EXIT_CODE
 
       - name: Coverage report
         run: |
