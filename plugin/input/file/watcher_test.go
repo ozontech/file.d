@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -32,7 +33,9 @@ func TestWatcher(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			dir := t.TempDir()
 			shouldCreate := atomic.Int64{}
+			var wg sync.WaitGroup
 			notifyFn := func(_ notify.Event, _ string, _ os.FileInfo) {
+				defer wg.Done()
 				shouldCreate.Inc()
 			}
 			ctl := metric.NewCtl("test", prometheus.NewRegistry())
@@ -67,8 +70,7 @@ func TestWatcher(t *testing.T) {
 			require.NoError(t, err)
 			err = f2.Close()
 			require.NoError(t, err)
-
-			time.Sleep(10 * time.Millisecond)
+			wg.Add(1)
 
 			f1, err = os.OpenFile(f1Name, os.O_WRONLY, 0o600)
 			require.NoError(t, err)
@@ -77,13 +79,11 @@ func TestWatcher(t *testing.T) {
 			err = f1.Close()
 			require.NoError(t, err)
 
-			time.Sleep(10 * time.Millisecond)
-
 			err = os.Remove(f1Name)
 			require.NoError(t, err)
+			wg.Add(1)
 
-			time.Sleep(10 * time.Millisecond)
-
+			wg.Wait()
 			require.Equal(t, int64(2), shouldCreate.Load())
 		})
 	}
@@ -193,7 +193,10 @@ func TestWatcherPaths(t *testing.T) {
 
 			time.Sleep(10 * time.Millisecond)
 			before := shouldCreate.Load()
-			w.notify(notify.Create, filename)
+
+			resolvedFilename, err := resolvePathLinks(filename)
+			require.NoError(t, err)
+			w.notify(notify.Create, resolvedFilename)
 			after := shouldCreate.Load()
 
 			isNotified := after-before != 0
@@ -216,9 +219,9 @@ func TestCommonPathPrefix(t *testing.T) {
 
 func TestResolvePathLinks(t *testing.T) {
 	a := assert.New(t)
-	originalDir := t.TempDir()
+	originalDir, _ := resolvePathLinks(t.TempDir())
 
-	dirWithLink := t.TempDir()
+	dirWithLink, _ := resolvePathLinks(t.TempDir())
 	dirLink := filepath.Join(dirWithLink, "symlink")
 	err := os.Symlink(originalDir, dirLink)
 	if err != nil {
