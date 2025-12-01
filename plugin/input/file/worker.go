@@ -9,11 +9,11 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/pipeline/metadata"
 	k8s_meta "github.com/ozontech/file.d/plugin/input/k8s/meta"
+	"github.com/ozontech/file.d/xtime"
 	"github.com/pierrec/lz4/v4"
 
 	"go.uber.org/zap"
@@ -114,10 +114,8 @@ func (w *worker) work(controller inputer, jobProvider *jobProvider, readBufferSi
 				}
 				for lastOffset+int64(readBufferSize) < minOffset {
 					n, err := lz4Reader.Read(readBuf)
-					if err != nil {
-						if err == io.EOF {
-							break // End of file reached
-						}
+					if err == io.EOF {
+						break // End of file reached
 					}
 					lastOffset += int64(n)
 				}
@@ -274,9 +272,9 @@ func (w *worker) processEOF(file *os.File, job *Job, jobProvider *jobProvider, t
 	// Mark job as done till new lines has appeared.
 	jobProvider.doneJob(job)
 
-	if job.eofReadInfo.getTimestamp().IsZero() || job.eofReadInfo.getOffset() != totalOffset {
+	if job.eofReadInfo.getUnixNanoTimestamp() == 0 || job.eofReadInfo.getOffset() != totalOffset {
 		// store info about event of end of file
-		job.eofReadInfo.setTimestamp(time.Now())
+		job.eofReadInfo.setUnixNanoTimestamp(xtime.GetInaccurateUnixNano())
 		job.eofReadInfo.setOffset(totalOffset)
 	}
 
