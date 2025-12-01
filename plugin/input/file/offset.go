@@ -7,10 +7,10 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/xtime"
 	"go.uber.org/atomic"
 )
 
@@ -128,12 +128,14 @@ func (o *offsetDB) parseOne(content string, offsets fpOffsets) (string, error) {
 		return "", fmt.Errorf("wrong offsets format, duplicate inode %d", inode)
 	}
 
-	var lastReadTimestampVal int64 = time.Now().Unix()
+	var lastReadTimestampVal int64
 	if lastReadTimestampStr != "" {
 		lastReadTimestampVal, err = strconv.ParseInt(lastReadTimestampStr, 10, 64)
 		if err != nil {
 			return "", fmt.Errorf("invalid timestamp format %q: %w", lastReadTimestampStr, err)
 		}
+	} else {
+		lastReadTimestampVal = xtime.GetInaccurateUnixNano()
 	}
 
 	offsets[fp] = &inodeOffsets{
@@ -218,7 +220,7 @@ func (o *offsetDB) parseOptionalLine(content string, prefix string) (string, str
 		return o.parseLine(content, prefix)
 	}
 
-	if strings.HasPrefix(content, "  streams:") || (content != "" && content[0] == '-') {
+	if strings.HasPrefix(content, "  streams:") || content[0] == '-' {
 		return "", content, nil
 	}
 
@@ -285,7 +287,7 @@ func (o *offsetDB) save(jobs map[pipeline.SourceID]*Job, mu *sync.RWMutex) {
 		o.buf = append(o.buf, '\n')
 
 		o.buf = append(o.buf, "  last_read_timestamp: "...)
-		o.buf = strconv.AppendInt(o.buf, job.eofReadInfo.getTimestamp().Unix(), 10)
+		o.buf = strconv.AppendInt(o.buf, job.eofReadInfo.getUnixNanoTimestamp(), 10)
 		o.buf = append(o.buf, '\n')
 
 		o.buf = append(o.buf, "  streams:\n"...)

@@ -13,6 +13,7 @@ import (
 
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/xtime"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/rjeczalik/notify"
 	"go.uber.org/atomic"
@@ -115,6 +116,17 @@ func (e *eofInfo) setTimestamp(t time.Time) {
 func (e *eofInfo) getTimestamp() time.Time {
 	nanos := sync_atomic.LoadInt64(&e.timestamp)
 	return time.Unix(0, nanos)
+}
+
+// setUnixNanoTimestamp sets timestamp in seconds
+func (e *eofInfo) setUnixNanoTimestamp(nanos int64) {
+	sync_atomic.StoreInt64(&e.timestamp, nanos)
+}
+
+// getUnixNanoTimestamp returns timestamp in seconds
+func (e *eofInfo) getUnixNanoTimestamp() int64 {
+	nanos := sync_atomic.LoadInt64(&e.timestamp)
+	return nanos
 }
 
 func (e *eofInfo) setOffset(offset int64) {
@@ -518,20 +530,21 @@ func (jp *jobProvider) initJobOffset(operation offsetsOp, job *Job) {
 
 func (jp *jobProvider) initEofInfo(job *Job) {
 	offsets, has := jp.loadedOffsets[job.sourceID]
-	if has {
-		eofInfoFromOffsets := eofInfo{}
-		eofInfoFromOffsets.setTimestamp(time.Unix(offsets.lastReadTimestamp, 0))
-
-		minOffset := int64(math.MaxInt64)
-		for _, offset := range offsets.streams {
-			if offset < minOffset {
-				minOffset = offset
-			}
-		}
-		eofInfoFromOffsets.setOffset(minOffset)
-
-		job.eofReadInfo = eofInfoFromOffsets
+	if !has {
+		return
 	}
+	eofInfoFromOffsets := eofInfo{}
+	eofInfoFromOffsets.setUnixNanoTimestamp(offsets.lastReadTimestamp)
+
+	minOffset := int64(math.MaxInt64)
+	for _, offset := range offsets.streams {
+		if offset < minOffset {
+			minOffset = offset
+		}
+	}
+	eofInfoFromOffsets.setOffset(minOffset)
+
+	job.eofReadInfo = eofInfoFromOffsets
 }
 
 // tryResumeJob job should be already locked and it'll be unlocked.
@@ -777,7 +790,7 @@ func (jp *jobProvider) maintenanceJob(job *Job) int {
 		return maintenanceResultDeleted
 	}
 
-	if jp.config.RemoveAfter_ > 0 && time.Since(job.eofReadInfo.getTimestamp()) > jp.config.RemoveAfter_ {
+	if jp.config.RemoveAfter_ > 0 && xtime.GetInaccurateTime().Sub(job.eofReadInfo.getTimestamp()) > jp.config.RemoveAfter_ {
 		err = file.Close()
 		if err != nil {
 			jp.logger.Errorf("cannot close file %s: ", err)
