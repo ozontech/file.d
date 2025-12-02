@@ -32,7 +32,7 @@ func (p *Plugin) makeMetric(ctl *metric.Ctl, name, help string, labels ...string
 }
 
 func (p *Plugin) applyMaskMetric(mask *Mask, event *pipeline.Event, delta uint64) {
-	if mask.appliedMetric == nil {
+	if mask.appliedMetric.GetVec() == nil {
 		return
 	}
 

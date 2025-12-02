@@ -15,7 +15,6 @@ import (
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/xhttp"
 	insaneJSON "github.com/ozontech/insane-json"
-	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -83,6 +82,7 @@ type copyFieldPaths struct {
 
 type Plugin struct {
 	config *Config
+	params *pipeline.OutputPluginParams
 
 	client *xhttp.Client
 
@@ -97,7 +97,7 @@ type Plugin struct {
 	cancel context.CancelFunc
 
 	// plugin metrics
-	sendErrorMetric *prometheus.CounterVec
+	sendErrorMetric metric.HeldCounterVec
 
 	router *pipeline.Router
 }
@@ -235,6 +235,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.logger = params.Logger
 	p.avgEventSize = params.PipelineSettings.AvgEventSize
 	p.config = config.(*Config)
+	p.params = params
 	p.registerMetrics(params.MetricCtl)
 	p.prepareClient()
 
@@ -313,10 +314,13 @@ func (p *Plugin) Out(event *pipeline.Event) {
 }
 
 func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
-	p.sendErrorMetric = ctl.RegisterCounterVec(
-		"output_splunk_send_error_total",
-		"Total splunk send errors",
-		"status_code",
+	p.sendErrorMetric = metric.NewHeldCounterVec(
+		ctl.RegisterCounterVec(
+			"output_splunk_send_error_total",
+			"Total splunk send errors",
+			"status_code",
+		),
+		p.params.PipelineSettings.MetricMaxLabelValueLength,
 	)
 }
 

@@ -17,7 +17,6 @@ import (
 	"github.com/ozontech/file.d/xhttp"
 
 	insaneJSON "github.com/ozontech/insane-json"
-	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -224,6 +223,7 @@ type Plugin struct {
 	controller   pipeline.OutputPluginController
 	logger       *zap.Logger
 	config       *Config
+	params       *pipeline.OutputPluginParams
 	avgEventSize int
 
 	ctx    context.Context
@@ -233,7 +233,7 @@ type Plugin struct {
 	batcher *pipeline.RetriableBatcher
 
 	// plugin metrics
-	sendErrorMetric *prometheus.CounterVec
+	sendErrorMetric metric.HeldCounterVec
 
 	labels map[string]string
 
@@ -254,6 +254,7 @@ func Factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginParams) {
 	p.controller = params.Controller
 	p.config = config.(*Config)
+	p.params = params
 	p.logger = params.Logger.Desugar()
 	p.avgEventSize = params.PipelineSettings.AvgEventSize
 	p.registerMetrics(params.MetricCtl)
@@ -428,7 +429,10 @@ func (p *Plugin) send(root *insaneJSON.Root) (int, error) {
 }
 
 func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
-	p.sendErrorMetric = ctl.RegisterCounterVec("output_loki_send_error_total", "Total Loki send errors", "status_code")
+	p.sendErrorMetric = metric.NewHeldCounterVec(
+		ctl.RegisterCounterVec("output_loki_send_error_total", "Total Loki send errors", "status_code"),
+		p.params.PipelineSettings.MetricMaxLabelValueLength,
+	)
 }
 
 func (p *Plugin) prepareClient() {
