@@ -9,6 +9,26 @@ It is only applicable for input plugins k8s and file.
 It adds field containing hostname to an event.
 
 [More details...](plugin/action/add_host/README.md)
+## cardinality
+Limits the cardinality of fields on events or drops events.
+
+**An example for discarding events with high cardinality field:**
+```yaml
+pipelines:
+  example_pipeline:
+    ...
+    - type: cardinality
+      limit: 10
+      action: discard
+      metric_prefix: service_zone
+      key:
+        - service
+      fields:
+        - zone
+    ...
+```
+
+[More details...](plugin/action/cardinality/README.md)
 ## convert_date
 It converts field date/time data to different format.
 
