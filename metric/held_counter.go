@@ -27,7 +27,7 @@ func (c *Counter) Add(v float64) {
 	c.updateUsage()
 }
 
-func ToFloat64(c *Counter) float64 {
+func (c *Counter) ToFloat64() float64 {
 	return testutil.ToFloat64(c.metric)
 }
 

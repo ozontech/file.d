@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 )
 
 type Gauge struct {
@@ -39,6 +40,10 @@ func (g *Gauge) Add(v float64) {
 func (g *Gauge) Sub(v float64) {
 	g.metric.Sub(v)
 	g.updateUsage()
+}
+
+func (c *Gauge) ToFloat64() float64 {
+	return testutil.ToFloat64(c.metric)
 }
 
 type GaugeVec struct {

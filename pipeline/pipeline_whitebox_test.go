@@ -3,7 +3,6 @@ package pipeline
 import (
 	"testing"
 
-	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline/metadata"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
@@ -220,7 +219,7 @@ func TestCheckInputBytesMetric(t *testing.T) {
 			pipe.checkInputBytes([]byte("some log"), tCase.sourceName, tCase.meta)
 
 			for k, v := range tCase.want {
-				require.Equal(t, v, metric.ToFloat64(pipe.maxEventSizeExceededMetric.WithLabelValues(k)))
+				require.Equal(t, v, pipe.maxEventSizeExceededMetric.WithLabelValues(k).ToFloat64())
 			}
 		})
 	}
