@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"runtime"
 
@@ -30,7 +31,7 @@ func TestRefreshSymlinkOnBrokenLink(t *testing.T) {
 		panic(err.Error())
 	}
 	defer os.Remove(linkName)
-	ctl := metric.NewCtl("test", prometheus.NewRegistry())
+	ctl := metric.NewCtl("test", prometheus.NewRegistry(), time.Minute)
 	metrics := newMetricCollection(
 		ctl.RegisterCounter("worker1", "help_test"),
 		ctl.RegisterCounter("worker2", "help_test"),
@@ -166,7 +167,7 @@ func TestProviderWatcherPaths(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctl := metric.NewCtl("test", prometheus.NewRegistry())
+			ctl := metric.NewCtl("test", prometheus.NewRegistry(), time.Minute)
 			config := tt.config
 			test.NewConfig(config, map[string]int{"gomaxprocs": runtime.GOMAXPROCS(0)})
 			metrics := newMetricCollection(

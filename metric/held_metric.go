@@ -124,7 +124,7 @@ func (h *heldMetricsStore[T]) tryCreate(labels []string, hash uint64, newPromMet
 		return hMetric
 	}
 
-	hMetric = newHeldMetric[T](labels, metric)
+	hMetric = newHeldMetric(labels, metric)
 	h.metricsByHash[hash] = append(h.metricsByHash[hash], hMetric)
 	return hMetric
 }

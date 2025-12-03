@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 )
 
 type Counter struct {
@@ -24,6 +25,10 @@ func (c *Counter) Inc() {
 func (c *Counter) Add(v float64) {
 	c.metric.Add(v)
 	c.updateUsage()
+}
+
+func ToFloat64(c *Counter) float64 {
+	return testutil.ToFloat64(c.metric)
 }
 
 type CounterVec struct {
