@@ -11,7 +11,6 @@ import (
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/pipeline/metadata"
-	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
 )
 
@@ -46,11 +45,11 @@ type Plugin struct {
 	jobProvider *jobProvider
 
 	// plugin metrics
-	possibleOffsetCorruptionMetric    prometheus.Counter
-	alreadyWrittenEventsSkippedMetric prometheus.Counter
-	errorOpenFileMetric               prometheus.Counter
-	notifyChannelLengthMetric         prometheus.Gauge
-	numberOfCurrentJobsMetric         prometheus.Gauge
+	possibleOffsetCorruptionMetric    *metric.Counter
+	alreadyWrittenEventsSkippedMetric *metric.Counter
+	errorOpenFileMetric               *metric.Counter
+	notifyChannelLengthMetric         *metric.Gauge
+	numberOfCurrentJobsMetric         *metric.Gauge
 }
 
 type persistenceMode int

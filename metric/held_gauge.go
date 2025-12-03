@@ -6,53 +6,63 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-type HeldGauge struct {
+type Gauge struct {
 	*heldMetric[prometheus.Gauge]
 }
 
-func (h HeldGauge) Set(v float64) {
-	h.metric.Set(v)
-	h.updateUsage()
+func NewGauge(c prometheus.Gauge) *Gauge {
+	return &Gauge{
+		heldMetric: newHeldMetric([]string{}, c),
+	}
 }
 
-func (h HeldGauge) Inc() {
-	h.metric.Inc()
-	h.updateUsage()
+func (g *Gauge) Set(v float64) {
+	g.metric.Set(v)
+	g.updateUsage()
 }
 
-func (h HeldGauge) Dec() {
-	h.metric.Dec()
-	h.updateUsage()
+func (g *Gauge) Inc() {
+	g.metric.Inc()
+	g.updateUsage()
 }
 
-func (h HeldGauge) Add(v float64) {
-	h.metric.Add(v)
-	h.updateUsage()
+func (g *Gauge) Dec() {
+	g.metric.Dec()
+	g.updateUsage()
 }
 
-func (h HeldGauge) Sub(v float64) {
-	h.metric.Sub(v)
-	h.updateUsage()
+func (g *Gauge) Add(v float64) {
+	g.metric.Add(v)
+	g.updateUsage()
 }
 
-type HeldGaugeVec struct {
+func (g *Gauge) Sub(v float64) {
+	g.metric.Sub(v)
+	g.updateUsage()
+}
+
+type GaugeVec struct {
 	store *heldMetricsStore[prometheus.Gauge]
 	vec   *prometheus.GaugeVec
 }
 
-func NewHeldGaugeVec(gv *prometheus.GaugeVec) HeldGaugeVec {
-	return HeldGaugeVec{
+func NewGaugeVec(gv *prometheus.GaugeVec) *GaugeVec {
+	return &GaugeVec{
 		vec:   gv,
 		store: newHeldMetricsStore[prometheus.Gauge](),
 	}
 }
 
-func (h HeldGaugeVec) WithLabelValues(lvs ...string) HeldGauge {
-	return HeldGauge{
-		heldMetric: h.store.GetOrCreate(lvs, h.vec.WithLabelValues),
+func (gv *GaugeVec) WithLabelValues(lvs ...string) *Gauge {
+	return &Gauge{
+		heldMetric: gv.store.GetOrCreate(lvs, gv.vec.WithLabelValues),
 	}
 }
 
-func (h HeldGaugeVec) DeleteOldMetrics(holdDuration time.Duration) {
-	h.store.DeleteOldMetrics(holdDuration, h.vec)
+func (cv *GaugeVec) DeleteLabelValues(lvs ...string) bool {
+	return cv.store.Delete(lvs, cv.vec)
+}
+
+func (gv *GaugeVec) DeleteOldMetrics(holdDuration time.Duration) {
+	gv.store.DeleteOldMetrics(holdDuration, gv.vec)
 }

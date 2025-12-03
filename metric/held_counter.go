@@ -6,38 +6,48 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-type HeldCounter struct {
+type Counter struct {
 	*heldMetric[prometheus.Counter]
 }
 
-func (h HeldCounter) Inc() {
-	h.metric.Inc()
-	h.updateUsage()
+func NewCounter(c prometheus.Counter) *Counter {
+	return &Counter{
+		heldMetric: newHeldMetric([]string{}, c),
+	}
 }
 
-func (h HeldCounter) Add(v float64) {
-	h.metric.Add(v)
-	h.updateUsage()
+func (c *Counter) Inc() {
+	c.metric.Inc()
+	c.updateUsage()
 }
 
-type HeldCounterVec struct {
+func (c *Counter) Add(v float64) {
+	c.metric.Add(v)
+	c.updateUsage()
+}
+
+type CounterVec struct {
 	store *heldMetricsStore[prometheus.Counter]
 	vec   *prometheus.CounterVec
 }
 
-func NewHeldCounterVec(cv *prometheus.CounterVec) HeldCounterVec {
-	return HeldCounterVec{
+func NewCounterVec(cv *prometheus.CounterVec) *CounterVec {
+	return &CounterVec{
 		vec:   cv,
 		store: newHeldMetricsStore[prometheus.Counter](),
 	}
 }
 
-func (h HeldCounterVec) WithLabelValues(lvs ...string) HeldCounter {
-	return HeldCounter{
-		heldMetric: h.store.GetOrCreate(lvs, h.vec.WithLabelValues),
+func (cv *CounterVec) WithLabelValues(lvs ...string) *Counter {
+	return &Counter{
+		heldMetric: cv.store.GetOrCreate(lvs, cv.vec.WithLabelValues),
 	}
 }
 
-func (h HeldCounterVec) DeleteOldMetrics(holdDuration time.Duration) {
-	h.store.DeleteOldMetrics(holdDuration, h.vec)
+func (cv *CounterVec) DeleteLabelValues(lvs ...string) bool {
+	return cv.store.Delete(lvs, cv.vec)
+}
+
+func (cv *CounterVec) DeleteOldMetrics(holdDuration time.Duration) {
+	cv.store.DeleteOldMetrics(holdDuration, cv.vec)
 }

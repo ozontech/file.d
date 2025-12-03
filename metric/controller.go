@@ -2,6 +2,7 @@ package metric
 
 import (
 	"sync"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 )
@@ -20,20 +21,30 @@ type Ctl struct {
 	subsystem string
 	register  *prometheus.Registry
 
+	holder  *Holder
 	metrics map[string]prometheus.Collector
 	mu      sync.RWMutex
 }
 
-func NewCtl(subsystem string, registry *prometheus.Registry) *Ctl {
+func NewCtl(subsystem string, registry *prometheus.Registry, holderMetricHoldDuration time.Duration) *Ctl {
 	ctl := &Ctl{
 		subsystem: subsystem,
 		register:  registry,
+		holder:    NewHolder(holderMetricHoldDuration),
 		metrics:   make(map[string]prometheus.Collector),
 	}
 	return ctl
 }
 
-func (mc *Ctl) RegisterCounter(name, help string) prometheus.Counter {
+func (mc *Ctl) HolderMaintenance() {
+	mc.holder.Maintenance()
+}
+
+func (mc *Ctl) AddTimeout(mv metricVec) {
+	mc.holder.AddMetricVec(mv)
+}
+
+func (mc *Ctl) RegisterCounter(name, help string) *Counter {
 	counter := prometheus.NewCounter(prometheus.CounterOpts{
 		Namespace: PromNamespace,
 		Subsystem: mc.subsystem,
@@ -41,10 +52,10 @@ func (mc *Ctl) RegisterCounter(name, help string) prometheus.Counter {
 		Help:      help,
 	})
 
-	return mc.registerMetric(name, counter).(prometheus.Counter)
+	return NewCounter(mc.registerMetric(name, counter).(prometheus.Counter))
 }
 
-func (mc *Ctl) RegisterCounterVec(name, help string, labels ...string) *prometheus.CounterVec {
+func (mc *Ctl) RegisterCounterVec(name, help string, labels ...string) *CounterVec {
 	counterVec := prometheus.NewCounterVec(prometheus.CounterOpts{
 		Namespace: PromNamespace,
 		Subsystem: mc.subsystem,
@@ -52,10 +63,10 @@ func (mc *Ctl) RegisterCounterVec(name, help string, labels ...string) *promethe
 		Help:      help,
 	}, labels)
 
-	return mc.registerMetric(name, counterVec).(*prometheus.CounterVec)
+	return NewCounterVec(mc.registerMetric(name, counterVec).(*prometheus.CounterVec))
 }
 
-func (mc *Ctl) RegisterGauge(name, help string) prometheus.Gauge {
+func (mc *Ctl) RegisterGauge(name, help string) *Gauge {
 	gauge := prometheus.NewGauge(prometheus.GaugeOpts{
 		Namespace: PromNamespace,
 		Subsystem: mc.subsystem,
@@ -63,10 +74,10 @@ func (mc *Ctl) RegisterGauge(name, help string) prometheus.Gauge {
 		Help:      help,
 	})
 
-	return mc.registerMetric(name, gauge).(prometheus.Gauge)
+	return NewGauge(mc.registerMetric(name, gauge).(prometheus.Gauge))
 }
 
-func (mc *Ctl) RegisterGaugeVec(name, help string, labels ...string) *prometheus.GaugeVec {
+func (mc *Ctl) RegisterGaugeVec(name, help string, labels ...string) *GaugeVec {
 	gaugeVec := prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Namespace: PromNamespace,
 		Subsystem: mc.subsystem,
@@ -74,10 +85,10 @@ func (mc *Ctl) RegisterGaugeVec(name, help string, labels ...string) *prometheus
 		Help:      help,
 	}, labels)
 
-	return mc.registerMetric(name, gaugeVec).(*prometheus.GaugeVec)
+	return NewGaugeVec(mc.registerMetric(name, gaugeVec).(*prometheus.GaugeVec))
 }
 
-func (mc *Ctl) RegisterHistogram(name, help string, buckets []float64) prometheus.Histogram {
+func (mc *Ctl) RegisterHistogram(name, help string, buckets []float64) *Histogram {
 	histogram := prometheus.NewHistogram(prometheus.HistogramOpts{
 		Namespace: PromNamespace,
 		Subsystem: mc.subsystem,
@@ -86,10 +97,10 @@ func (mc *Ctl) RegisterHistogram(name, help string, buckets []float64) prometheu
 		Buckets:   buckets,
 	})
 
-	return mc.registerMetric(name, histogram).(prometheus.Histogram)
+	return NewHistogram(mc.registerMetric(name, histogram).(prometheus.Histogram))
 }
 
-func (mc *Ctl) RegisterHistogramVec(name, help string, buckets []float64, labels ...string) *prometheus.HistogramVec {
+func (mc *Ctl) RegisterHistogramVec(name, help string, buckets []float64, labels ...string) *HistogramVec {
 	histogramVec := prometheus.NewHistogramVec(prometheus.HistogramOpts{
 		Namespace: PromNamespace,
 		Subsystem: mc.subsystem,
@@ -98,7 +109,7 @@ func (mc *Ctl) RegisterHistogramVec(name, help string, buckets []float64, labels
 		Buckets:   buckets,
 	}, labels)
 
-	return mc.registerMetric(name, histogramVec).(*prometheus.HistogramVec)
+	return NewHistogramVec(mc.registerMetric(name, histogramVec).(*prometheus.HistogramVec))
 }
 
 func (mc *Ctl) registerMetric(name string, newMetric prometheus.Collector) prometheus.Collector {

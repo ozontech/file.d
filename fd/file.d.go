@@ -9,6 +9,7 @@ import (
 	"net/http/pprof"
 	"runtime"
 	"runtime/debug"
+	"time"
 
 	"github.com/bitly/go-simplejson"
 	"github.com/ozontech/file.d/buildinfo"
@@ -36,7 +37,7 @@ type FileD struct {
 
 	// file_d metrics
 
-	versionMetric *prometheus.GaugeVec
+	versionMetric *metric.GaugeVec
 }
 
 func New(config *cfg.Config, httpAddr string) *FileD {
@@ -63,7 +64,7 @@ func (f *FileD) Start() {
 }
 
 func (f *FileD) initMetrics() {
-	f.metricCtl = metric.NewCtl("file_d", f.registry)
+	f.metricCtl = metric.NewCtl("file_d", f.registry, time.Minute)
 	f.versionMetric = f.metricCtl.RegisterGaugeVec("version", "", "version")
 	f.versionMetric.WithLabelValues(buildinfo.Version).Inc()
 }
