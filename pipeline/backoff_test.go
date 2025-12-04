@@ -24,7 +24,7 @@ func TestBackoff(t *testing.T) {
 
 	batcherBackoff := NewRetriableBatcher(
 		&BatcherOptions{
-			MetricCtl: metric.NewCtl("", prometheus.NewRegistry()),
+			MetricCtl: metric.NewCtl("", prometheus.NewRegistry(), time.Minute),
 		},
 		func(workerData *WorkerData, batch *Batch) error {
 			eventCount.Inc()
@@ -54,7 +54,7 @@ func TestBackoffWithError(t *testing.T) {
 
 	batcherBackoff := NewRetriableBatcher(
 		&BatcherOptions{
-			MetricCtl: metric.NewCtl("", prometheus.NewRegistry()),
+			MetricCtl: metric.NewCtl("", prometheus.NewRegistry(), time.Minute),
 		},
 		func(workerData *WorkerData, batch *Batch) error {
 			return errors.New("some error")
@@ -84,7 +84,7 @@ func TestBackoffWithErrorWithDeadQueue(t *testing.T) {
 
 	batcherBackoff := NewRetriableBatcher(
 		&BatcherOptions{
-			MetricCtl: metric.NewCtl("", prometheus.NewRegistry()),
+			MetricCtl: metric.NewCtl("", prometheus.NewRegistry(), time.Minute),
 		},
 		func(workerData *WorkerData, batch *Batch) error {
 			return errors.New("some error")

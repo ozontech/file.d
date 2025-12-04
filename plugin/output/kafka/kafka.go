@@ -9,7 +9,6 @@ import (
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
-	"github.com/prometheus/client_golang/prometheus"
 	"github.com/twmb/franz-go/pkg/kerr"
 	"github.com/twmb/franz-go/pkg/kgo"
 	"go.uber.org/zap"
@@ -41,7 +40,7 @@ type Plugin struct {
 	batcher *pipeline.RetriableBatcher
 
 	// plugin metrics
-	sendErrorMetric prometheus.Counter
+	sendErrorMetric *metric.Counter
 	router          *pipeline.Router
 }
 

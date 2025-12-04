@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
@@ -104,7 +105,7 @@ func TestWorkerWork(t *testing.T) {
 				shouldSkip:     *atomic.NewBool(false),
 				mu:             &sync.Mutex{},
 			}
-			ctl := metric.NewCtl("test", prometheus.NewRegistry())
+			ctl := metric.NewCtl("test", prometheus.NewRegistry(), time.Minute)
 			metrics := newMetricCollection(
 				ctl.RegisterCounter("worker1", "help_test"),
 				ctl.RegisterCounter("worker2", "help_test"),
@@ -285,7 +286,7 @@ func TestWorkerWorkMultiData(t *testing.T) {
 				mu:         &sync.Mutex{},
 			}
 
-			ctl := metric.NewCtl("test", prometheus.NewRegistry())
+			ctl := metric.NewCtl("test", prometheus.NewRegistry(), time.Minute)
 			metrics := newMetricCollection(
 				ctl.RegisterCounter("worker1", "help_test"),
 				ctl.RegisterCounter("worker2", "help_test"),

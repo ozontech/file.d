@@ -10,8 +10,8 @@ import (
 	"time"
 
 	"github.com/ozontech/file.d/logger"
+	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
-	"github.com/prometheus/client_golang/prometheus"
 	"github.com/rjeczalik/notify"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
@@ -54,9 +54,9 @@ type jobProvider struct {
 	logger           *zap.SugaredLogger
 
 	// provider metrics
-	possibleOffsetCorruptionMetric prometheus.Counter
-	errorOpenFileMetric            prometheus.Counter
-	numberOfCurrentJobsMetric      prometheus.Gauge
+	possibleOffsetCorruptionMetric *metric.Counter
+	errorOpenFileMetric            *metric.Counter
+	numberOfCurrentJobsMetric      *metric.Gauge
 }
 
 type Job struct {
@@ -101,15 +101,15 @@ type symlinkInfo struct {
 }
 
 type metricCollection struct {
-	possibleOffsetCorruptionMetric prometheus.Counter
-	errorOpenFileMetric            prometheus.Counter
-	notifyChannelLengthMetric      prometheus.Gauge
-	numberOfCurrentJobsMetric      prometheus.Gauge
+	possibleOffsetCorruptionMetric *metric.Counter
+	errorOpenFileMetric            *metric.Counter
+	notifyChannelLengthMetric      *metric.Gauge
+	numberOfCurrentJobsMetric      *metric.Gauge
 }
 
 func newMetricCollection(
-	possibleOffsetCorruptionMetric, errorOpenFileMetric prometheus.Counter,
-	notifyChannelLengthMetric prometheus.Gauge, numberOfCurrentJobsMetric prometheus.Gauge,
+	possibleOffsetCorruptionMetric, errorOpenFileMetric *metric.Counter,
+	notifyChannelLengthMetric *metric.Gauge, numberOfCurrentJobsMetric *metric.Gauge,
 ) *metricCollection {
 	return &metricCollection{
 		possibleOffsetCorruptionMetric: possibleOffsetCorruptionMetric,
