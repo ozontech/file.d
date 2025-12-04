@@ -440,7 +440,7 @@ func (p *processor) Spawn(parent *Event, nodes []*insaneJSON.Node) {
 			SourceName: parent.SourceName,
 		}
 		parent.children = append(parent.children, child)
-		child.Root.MutateToNode(node)
+		child.Root.CopyFromNode(child.Root, node)
 		child.SetChildKind()
 		child.action = nextActionIdx
 
