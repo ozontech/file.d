@@ -160,3 +160,5 @@ require (
 	sigs.k8s.io/randfill v1.0.0 // indirect
 	sigs.k8s.io/structured-merge-diff/v6 v6.3.0 // indirect
 )
+
+replace github.com/ozontech/insane-json => github.com/HeadHunter483/insane-json v0.0.0-20251020115930-22ac733527f5
