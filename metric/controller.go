@@ -52,7 +52,7 @@ func (mc *Ctl) RegisterCounter(name, help string) *Counter {
 		Help:      help,
 	})
 
-	return NewCounter(mc.registerMetric(name, counter).(prometheus.Counter))
+	return newCounter(mc.registerMetric(name, counter).(prometheus.Counter))
 }
 
 func (mc *Ctl) RegisterCounterVec(name, help string, labels ...string) *CounterVec {
@@ -63,7 +63,7 @@ func (mc *Ctl) RegisterCounterVec(name, help string, labels ...string) *CounterV
 		Help:      help,
 	}, labels)
 
-	return NewCounterVec(mc.registerMetric(name, counterVec).(*prometheus.CounterVec))
+	return newCounterVec(mc.registerMetric(name, counterVec).(*prometheus.CounterVec))
 }
 
 func (mc *Ctl) RegisterGauge(name, help string) *Gauge {
@@ -74,7 +74,7 @@ func (mc *Ctl) RegisterGauge(name, help string) *Gauge {
 		Help:      help,
 	})
 
-	return NewGauge(mc.registerMetric(name, gauge).(prometheus.Gauge))
+	return newGauge(mc.registerMetric(name, gauge).(prometheus.Gauge))
 }
 
 func (mc *Ctl) RegisterGaugeVec(name, help string, labels ...string) *GaugeVec {
@@ -85,7 +85,7 @@ func (mc *Ctl) RegisterGaugeVec(name, help string, labels ...string) *GaugeVec {
 		Help:      help,
 	}, labels)
 
-	return NewGaugeVec(mc.registerMetric(name, gaugeVec).(*prometheus.GaugeVec))
+	return newGaugeVec(mc.registerMetric(name, gaugeVec).(*prometheus.GaugeVec))
 }
 
 func (mc *Ctl) RegisterHistogram(name, help string, buckets []float64) *Histogram {
@@ -97,7 +97,7 @@ func (mc *Ctl) RegisterHistogram(name, help string, buckets []float64) *Histogra
 		Buckets:   buckets,
 	})
 
-	return NewHistogram(mc.registerMetric(name, histogram).(prometheus.Histogram))
+	return newHistogram(mc.registerMetric(name, histogram).(prometheus.Histogram))
 }
 
 func (mc *Ctl) RegisterHistogramVec(name, help string, buckets []float64, labels ...string) *HistogramVec {
@@ -109,7 +109,7 @@ func (mc *Ctl) RegisterHistogramVec(name, help string, buckets []float64, labels
 		Buckets:   buckets,
 	}, labels)
 
-	return NewHistogramVec(mc.registerMetric(name, histogramVec).(*prometheus.HistogramVec))
+	return newHistogramVec(mc.registerMetric(name, histogramVec).(*prometheus.HistogramVec))
 }
 
 func (mc *Ctl) registerMetric(name string, newMetric prometheus.Collector) prometheus.Collector {

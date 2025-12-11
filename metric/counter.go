@@ -11,7 +11,7 @@ type Counter struct {
 	*heldMetric[prometheus.Counter]
 }
 
-func NewCounter(c prometheus.Counter) *Counter {
+func newCounter(c prometheus.Counter) *Counter {
 	return &Counter{
 		heldMetric: newHeldMetric([]string{}, c),
 	}
@@ -36,7 +36,7 @@ type CounterVec struct {
 	vec   *prometheus.CounterVec
 }
 
-func NewCounterVec(cv *prometheus.CounterVec) *CounterVec {
+func newCounterVec(cv *prometheus.CounterVec) *CounterVec {
 	return &CounterVec{
 		vec:   cv,
 		store: newHeldMetricsStore[prometheus.Counter](),

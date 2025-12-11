@@ -1,4 +1,5 @@
 elasticsearch:
+  enabled: false
   # security:
   #   enabled: true
   #   elasticPassword: "changeme"
@@ -33,29 +34,31 @@ input:
     filename_pattern: "*"
   watching_dir: /var/log/containers/
   offsets_file: /data/k8s-offsets.yaml
+  meta_file: /data/meta.json
   allowed_pod_labels: [app, jobid]
 
 actions:
   - type: discard                             # discard some events 
     match_fields:
-      k8s_container: /filed/
+      k8s_container: /filed|storage-provisioner/
+      k8s_namespace: /kube-system/
     match_mode: or
-  - type: debug
-    interval: 10s
-    first: 1
-  - type: join                                # join golang panics from stderr
-    field: log
-    start: '/^(panic:)|(http: panic serving)/'
-    continue: '/(^\s*$)|(goroutine [0-9]+ \[)|(\([0-9]+x[0-9,a-f]+)|(\.go:[0-9]+ \+[0-9]x)|(\/.*\.go:[0-9]+)|(\(...\))|(main\.main\(\))|(created by .*\/.*\.)|(^\[signal)|(panic.+[0-9]x[0-9,a-f]+)|(panic:)/'
-    match_fields:
-      stream: stderr
-  - type: throttle                            # throttle pod logs if throughput is more than 3000/minute
-    default_limit: 3000
-    throttle_field: k8s_pod
-    bucket_interval: 1m
-    buckets_count: 60
+  # - type: debug
+  #   interval: 10s
+  #   first: 1
+  # - type: join                                # join golang panics from stderr
+  #   field: log
+  #   start: '/^(panic:)|(http: panic serving)/'
+  #   continue: '/(^\s*$)|(goroutine [0-9]+ \[)|(\([0-9]+x[0-9,a-f]+)|(\.go:[0-9]+ \+[0-9]x)|(\/.*\.go:[0-9]+)|(\(...\))|(main\.main\(\))|(created by .*\/.*\.)|(^\[signal)|(panic.+[0-9]x[0-9,a-f]+)|(panic:)/'
+  #   match_fields:
+  #     stream: stderr
+  # - type: throttle                            # throttle pod logs if throughput is more than 3000/minute
+  #   default_limit: 3000
+  #   throttle_field: k8s_pod
+  #   bucket_interval: 1m
+  #   buckets_count: 60
   - type: keep_fields                         # keep only meaningful fields of event
-    fields: [time, stream, log, k8s_namespace, k8s_pod, k8s_container, k8s_node, k8s_label_app, k8s_label_jobid]
+    fields: [k8s_pod_label_app, time, stream, log, k8s_namespace, k8s_pod, k8s_container, k8s_node, k8s_label_app, k8s_label_jobid]
 
 volumeMounts:
   - name: data

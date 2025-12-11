@@ -11,7 +11,7 @@ type Gauge struct {
 	*heldMetric[prometheus.Gauge]
 }
 
-func NewGauge(c prometheus.Gauge) *Gauge {
+func newGauge(c prometheus.Gauge) *Gauge {
 	return &Gauge{
 		heldMetric: newHeldMetric([]string{}, c),
 	}
@@ -51,7 +51,7 @@ type GaugeVec struct {
 	vec   *prometheus.GaugeVec
 }
 
-func NewGaugeVec(gv *prometheus.GaugeVec) *GaugeVec {
+func newGaugeVec(gv *prometheus.GaugeVec) *GaugeVec {
 	return &GaugeVec{
 		vec:   gv,
 		store: newHeldMetricsStore[prometheus.Gauge](),

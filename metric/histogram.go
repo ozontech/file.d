@@ -10,7 +10,7 @@ type Histogram struct {
 	*heldMetric[prometheus.Histogram]
 }
 
-func NewHistogram(c prometheus.Histogram) *Histogram {
+func newHistogram(c prometheus.Histogram) *Histogram {
 	return &Histogram{
 		heldMetric: newHeldMetric([]string{}, c),
 	}
@@ -26,7 +26,7 @@ type HistogramVec struct {
 	vec   *prometheus.HistogramVec
 }
 
-func NewHistogramVec(hv *prometheus.HistogramVec) *HistogramVec {
+func newHistogramVec(hv *prometheus.HistogramVec) *HistogramVec {
 	return &HistogramVec{
 		vec:   hv,
 		store: newHeldMetricsStore[prometheus.Histogram](),
