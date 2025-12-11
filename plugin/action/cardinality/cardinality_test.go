@@ -1,4 +1,4 @@
-package discard
+package cardinality
 
 import (
 	"fmt"
@@ -183,7 +183,7 @@ func TestCardinalityLimitDiscardIfNoSetKeyFields(t *testing.T) {
 }
 
 func TestSetAndCountPrefix(t *testing.T) {
-	cache, _ := NewCache(time.Minute)
+	cache := NewCache(time.Minute)
 
 	cacheKey := map[string]string{
 		"host": "localhost",

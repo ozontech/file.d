@@ -1,4 +1,4 @@
-package discard
+package cardinality
 
 import (
 	"sync"
@@ -9,13 +9,12 @@ import (
 )
 
 func TestNewCache(t *testing.T) {
-	cache, err := NewCache(time.Minute)
-	assert.NoError(t, err)
+	cache := NewCache(time.Minute)
 	assert.NotNil(t, cache)
 }
 
 func TestSetAndExists(t *testing.T) {
-	cache, _ := NewCache(time.Minute)
+	cache := NewCache(time.Minute)
 
 	t.Run("basic set and get", func(t *testing.T) {
 		key := "test-key"
@@ -32,25 +31,47 @@ func TestSetAndExists(t *testing.T) {
 }
 
 func TestDelete(t *testing.T) {
-	cache, _ := NewCache(time.Minute)
+	cache := NewCache(time.Minute)
 
-	key := "to-delete"
-	cache.Set(key)
+	t.Run("delete existing key with lock=true", func(t *testing.T) {
+		key := "to-delete-1"
+		cache.Set(key)
 
-	t.Run("delete existing key", func(t *testing.T) {
-		cache.delete(key)
+		cache.delete(key, true)
+
 		found := cache.IsExists(key)
-		assert.False(t, found)
+		assert.False(t, found, "Key should be deleted")
+	})
+
+	t.Run("delete existing key with lock=false", func(t *testing.T) {
+		key := "to-delete-2"
+		cache.Set(key)
+
+		// Manually acquire lock since we're using lock=false
+		cache.mu.Lock()
+		cache.delete(key, false)
+		cache.mu.Unlock()
+
+		found := cache.IsExists(key)
+		assert.False(t, found, "Key should be deleted when lock=false")
 	})
 
 	t.Run("delete non-existent key", func(t *testing.T) {
-		// Should not panic
-		cache.delete("never-existed")
+		// Should not panic or cause issues
+		assert.NotPanics(t, func() {
+			cache.delete("never-existed-1", true)
+		})
+
+		// Verify cache is still functional
+		key := "test-after-non-existent"
+		cache.Set(key)
+		found := cache.IsExists(key)
+		assert.True(t, found, "Cache should still work after deleting non-existent key")
 	})
 }
 
 func TestCountPrefix(t *testing.T) {
-	cache, _ := NewCache(time.Minute)
+	cache := NewCache(time.Minute)
 
 	keys := []string{
 		"key1_subkey1",
@@ -80,13 +101,13 @@ func TestCountPrefix(t *testing.T) {
 	}
 
 	t.Run("count after delete", func(t *testing.T) {
-		cache.delete("key1_subkey1")
+		cache.delete("key1_subkey1", true)
 		assert.Equal(t, 1, cache.CountPrefix("key1"))
 	})
 }
 
 func TestConcurrentOperations(t *testing.T) {
-	cache, _ := NewCache(time.Minute)
+	cache := NewCache(time.Minute)
 
 	var wg sync.WaitGroup
 	keys := []string{"key1", "key2", "key3"}
@@ -128,7 +149,7 @@ func TestConcurrentOperations(t *testing.T) {
 		go func(k string) {
 			defer wg.Done()
 			for i := 0; i < 100; i++ {
-				cache.delete(k)
+				cache.delete(k, true)
 			}
 		}(key)
 	}
@@ -147,14 +168,14 @@ func TestConcurrentOperations(t *testing.T) {
 		for i := 0; i < 100; i++ {
 			cache.Set("key-x")
 			cache.Set("key-y")
-			cache.delete("key-x")
+			cache.delete("key-x", true)
 		}
 	}()
 	wg.Wait()
 }
 
 func TestTTL(t *testing.T) {
-	cache, _ := NewCache(100 * time.Millisecond)
+	cache := NewCache(100 * time.Millisecond)
 
 	key := "ttl-key"
 	cache.Set(key)
