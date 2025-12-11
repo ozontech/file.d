@@ -1,4 +1,4 @@
-package discard
+package cardinality
 
 import (
 	"fmt"
@@ -41,7 +41,7 @@ type Plugin struct {
 	fields []string
 	logger *zap.Logger
 
-	cardinalityDiscardCounter *prometheus.CounterVec
+	cardinalityApplyCounter *prometheus.CounterVec
 }
 
 const (
@@ -81,6 +81,11 @@ type Config struct {
 	// > Useful when running multiple instances to avoid metric name collisions.
 	// > Leave empty for default metric naming.
 	MetricPrefix string `json:"metric_prefix" default:""` // *
+
+	// > @3@4@5@6
+	// >
+	// > Value assigned to the metric label when cardinality limit is exceeded.
+	MetricLabelValue string `json:"metric_label_value" default:"unknown"` // *
 
 	// > @3@4@5@6
 	// >
@@ -134,13 +139,13 @@ func (p *Plugin) makeMetric(ctl *metric.Ctl, name, help string, labels ...string
 func (p *Plugin) registerMetrics(ctl *metric.Ctl, prefix string) {
 	var metricName string
 	if prefix == "" {
-		metricName = "cardinality_discard_total"
+		metricName = "cardinality_applied_total"
 	} else {
-		metricName = fmt.Sprintf(`cardinality_discard_%s_total`, prefix)
+		metricName = fmt.Sprintf(`cardinality_applied_%s_total`, prefix)
 	}
-	p.cardinalityDiscardCounter = p.makeMetric(ctl,
+	p.cardinalityApplyCounter = p.makeMetric(ctl,
 		metricName,
-		"Total number of events discarded due to cardinality limits",
+		"Total number of events applied due to cardinality limits",
 		p.keys...,
 	)
 }
@@ -149,11 +154,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 	p.config = config.(*Config)
 	p.logger = params.Logger.Desugar()
 
-	var err error
-	p.cache, err = NewCache(p.config.TTL_)
-	if err != nil {
-		panic(err)
-	}
+	p.cache = NewCache(p.config.TTL_)
 
 	p.keys = make([]string, 0, len(p.config.KeyFields))
 	for _, fs := range p.config.KeyFields {
@@ -198,16 +199,16 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	value := mapToStringSorted(cacheKey, cacheValue)
 	keysCount := p.cache.CountPrefix(key)
 
-	if p.config.Limit > 0 && keysCount >= p.config.Limit {
+	if p.config.Limit >= 0 && keysCount >= p.config.Limit {
 		labelsValues := make([]string, 0, len(p.keys))
 		for _, key := range p.keys {
 			if val, exists := cacheKey[key]; exists {
 				labelsValues = append(labelsValues, val)
 			} else {
-				labelsValues = append(labelsValues, "unknown")
+				labelsValues = append(labelsValues, p.config.MetricLabelValue)
 			}
 		}
-		p.cardinalityDiscardCounter.WithLabelValues(labelsValues...).Inc()
+		p.cardinalityApplyCounter.WithLabelValues(labelsValues...).Inc()
 		switch p.config.Action {
 		case actionDiscard:
 			return pipeline.ActionDiscard

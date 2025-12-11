@@ -1,4 +1,4 @@
-package discard
+package cardinality
 
 import (
 	"sync"
@@ -14,12 +14,12 @@ type Cache struct {
 	ttl  int64
 }
 
-func NewCache(ttl time.Duration) (*Cache, error) {
+func NewCache(ttl time.Duration) *Cache {
 	return &Cache{
 		tree: radix.New(),
 		ttl:  ttl.Nanoseconds(),
 		mu:   &sync.RWMutex{},
-	}, nil
+	}
 }
 
 func (c *Cache) Set(key string) bool {
@@ -39,7 +39,7 @@ func (c *Cache) IsExists(key string) bool {
 		now := xtime.GetInaccurateUnixNano()
 		isExpire := c.isExpire(now, timeValue.(int64))
 		if isExpire {
-			c.delete(key)
+			c.delete(key, true)
 			return false
 		}
 	}
@@ -51,17 +51,19 @@ func (c *Cache) isExpire(now, value int64) bool {
 	return diff > c.ttl
 }
 
-func (c *Cache) delete(key string) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+func (c *Cache) delete(key string, lock bool) {
+	if lock {
+		c.mu.Lock()
+		defer c.mu.Unlock()
+	}
 
 	c.tree.Delete(key)
 }
 
 func (c *Cache) CountPrefix(prefix string) (count int) {
 	var keysToDelete []string
-	c.mu.RLock()
 	now := xtime.GetInaccurateUnixNano()
+	c.mu.RLock()
 	c.tree.WalkPrefix(prefix, func(s string, v any) bool {
 		timeValue := v.(int64)
 		if c.isExpire(now, timeValue) {
@@ -74,9 +76,11 @@ func (c *Cache) CountPrefix(prefix string) (count int) {
 	c.mu.RUnlock()
 
 	if len(keysToDelete) > 0 {
+		c.mu.Lock()
 		for _, key := range keysToDelete {
-			c.delete(key)
+			c.delete(key, false)
 		}
+		c.mu.Unlock()
 	}
 	return
 }
