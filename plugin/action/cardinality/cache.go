@@ -14,12 +14,12 @@ type Cache struct {
 	ttl  int64
 }
 
-func NewCache(ttl time.Duration) (*Cache, error) {
+func NewCache(ttl time.Duration) *Cache {
 	return &Cache{
 		tree: radix.New(),
 		ttl:  ttl.Nanoseconds(),
 		mu:   &sync.RWMutex{},
-	}, nil
+	}
 }
 
 func (c *Cache) Set(key string) bool {
@@ -60,8 +60,8 @@ func (c *Cache) delete(key string) {
 
 func (c *Cache) CountPrefix(prefix string) (count int) {
 	var keysToDelete []string
-	c.mu.RLock()
 	now := xtime.GetInaccurateUnixNano()
+	c.mu.RLock()
 	c.tree.WalkPrefix(prefix, func(s string, v any) bool {
 		timeValue := v.(int64)
 		if c.isExpire(now, timeValue) {

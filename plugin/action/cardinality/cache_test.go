@@ -9,13 +9,12 @@ import (
 )
 
 func TestNewCache(t *testing.T) {
-	cache, err := NewCache(time.Minute)
-	assert.NoError(t, err)
+	cache := NewCache(time.Minute)
 	assert.NotNil(t, cache)
 }
 
 func TestSetAndExists(t *testing.T) {
-	cache, _ := NewCache(time.Minute)
+	cache := NewCache(time.Minute)
 
 	t.Run("basic set and get", func(t *testing.T) {
 		key := "test-key"
@@ -32,7 +31,7 @@ func TestSetAndExists(t *testing.T) {
 }
 
 func TestDelete(t *testing.T) {
-	cache, _ := NewCache(time.Minute)
+	cache := NewCache(time.Minute)
 
 	key := "to-delete"
 	cache.Set(key)
@@ -50,7 +49,7 @@ func TestDelete(t *testing.T) {
 }
 
 func TestCountPrefix(t *testing.T) {
-	cache, _ := NewCache(time.Minute)
+	cache := NewCache(time.Minute)
 
 	keys := []string{
 		"key1_subkey1",
@@ -86,7 +85,7 @@ func TestCountPrefix(t *testing.T) {
 }
 
 func TestConcurrentOperations(t *testing.T) {
-	cache, _ := NewCache(time.Minute)
+	cache := NewCache(time.Minute)
 
 	var wg sync.WaitGroup
 	keys := []string{"key1", "key2", "key3"}
@@ -154,7 +153,7 @@ func TestConcurrentOperations(t *testing.T) {
 }
 
 func TestTTL(t *testing.T) {
-	cache, _ := NewCache(100 * time.Millisecond)
+	cache := NewCache(100 * time.Millisecond)
 
 	key := "ttl-key"
 	cache.Set(key)

@@ -149,11 +149,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 	p.config = config.(*Config)
 	p.logger = params.Logger.Desugar()
 
-	var err error
-	p.cache, err = NewCache(p.config.TTL_)
-	if err != nil {
-		panic(err)
-	}
+	p.cache = NewCache(p.config.TTL_)
 
 	p.keys = make([]string, 0, len(p.config.KeyFields))
 	for _, fs := range p.config.KeyFields {
