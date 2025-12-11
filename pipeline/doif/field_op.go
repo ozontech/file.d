@@ -38,7 +38,7 @@ func (t fieldOpType) String() string {
 	case fieldRegexOp:
 		return "regex"
 	default:
-		return "unknown"
+		return "unknown" // nolint:goconst
 	}
 }
 

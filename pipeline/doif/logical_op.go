@@ -28,7 +28,7 @@ func (t logicalOpType) String() string {
 	case logicalNot:
 		return "not"
 	default:
-		return "unknown"
+		return "unknown" // nolint:goconst
 	}
 }
 

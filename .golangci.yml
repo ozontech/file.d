@@ -1,89 +1,90 @@
-linters-settings:
-  forbidigo:
-    forbid:
-      - ^print.*$
-      - p: ^fmt\.Print.*$
-        msg: Do not commit print statements.
-  govet:
-    enable:
-      - composites
-    disable:
-      - printf
-  dupl:
-    threshold: 120
-  goconst:
-    min-len: 2
-    min-occurrences: 3
-  misspell:
-    locale: US
-  gocritic:
-    enabled-tags:
-      - diagnostic
-      - experimental
-      - opinionated
-      - performance
-      - style
-    disabled-checks:
-      - whyNoLint
-      - commentFormatting # insane-doc syntax requires "//>" format
-      - paramTypeCombine
-      - ptrToRefParam # we use interface pointer in many places
-      - unnamedResult
-      - sprintfQuotedString
-      - tooManyResultsChecker
-  gosec:
-    excludes:
-      - G304 # Potential file inclusion via variable -- it's ok for this project
-  stylecheck:
-    checks:
-      - '-ST1021' # insane-doc syntax requires "//>" format
-
+version: "2"
+run:
+  build-tags:
+    - e2e
+    - fuzz
 linters:
-  disable-all: true
+  default: none
   enable:
-    - forbidigo
     - dogsled
     - dupl
     - errcheck
+    - forbidigo
     - goconst
     - gocritic
-    - goimports
-    - gosimple
     - govet
     - ineffassign
     - misspell
     - nakedret
     - prealloc
-    - stylecheck
-    - typecheck
+    - staticcheck
     - unconvert
     - unparam
     - unused
     - usestdlibvars
     - whitespace
-    # Do not enable:
-    # - staticcheck (does not work with golangci-lint 1.46.2 and go 1.18.2)
-    # - gosec (not worth it in scope of this project)
-    # - gochecknoglobals (we know when it is ok to use globals)
-    # - gochecknoinits (we know when it is ok to use inits)
-
-issues:
-  exclude-use-default: false
-  exclude-rules:
-    # Disable linters that are annoying in tests.
-    - path: _test\.go
-      linters:
-        - gocyclo
-        - errcheck
-        - dupl
-        - gosec
-        - goconst
-
-    # Ignore shadowing of err.
-    - linters: [ govet ]
-      text: 'declaration of "(err|ctx)"'
-
-run:
-  build-tags:
-    - e2e
-    - fuzz
+  settings:
+    dupl:
+      threshold: 120
+    forbidigo:
+      forbid:
+        - pattern: ^print.*$
+        - pattern: ^fmt\.Print.*$
+          msg: Do not commit print statements.
+    goconst:
+      min-len: 2
+      min-occurrences: 3
+    gocritic:
+      disabled-checks:
+        - whyNoLint
+        - commentFormatting
+        - paramTypeCombine
+        - ptrToRefParam
+        - unnamedResult
+        - sprintfQuotedString
+        - tooManyResultsChecker
+      enabled-tags:
+        - diagnostic
+        - experimental
+        - opinionated
+        - performance
+        - style
+    gosec:
+      excludes:
+        - G304
+    govet:
+      enable:
+        - composites
+      disable:
+        - printf
+    misspell:
+      locale: US
+    staticcheck:
+      checks:
+        - -ST1021
+  exclusions:
+    generated: lax
+    rules:
+      - linters:
+          - dupl
+          - errcheck
+          - goconst
+          - gocyclo
+          - gosec
+        path: _test\.go
+      - linters:
+          - govet
+        text: declaration of "(err|ctx)"
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+formatters:
+  enable:
+    - goimports
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
