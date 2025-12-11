@@ -2,7 +2,7 @@ module github.com/ozontech/file.d
 
 go 1.25
 
-toolchain go1.25.4
+toolchain go1.25.5
 
 require (
 	github.com/ClickHouse/ch-go v0.58.2
