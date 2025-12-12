@@ -13,7 +13,7 @@ type Counter struct {
 
 func newCounter(c prometheus.Counter) *Counter {
 	return &Counter{
-		heldMetric: newHeldMetric([]string{}, c),
+		heldMetric: newHeldMetric(nil, c),
 	}
 }
 
@@ -27,6 +27,7 @@ func (c *Counter) Add(v float64) {
 	c.updateUsage()
 }
 
+// should only be used in tests
 func (c *Counter) ToFloat64() float64 {
 	return testutil.ToFloat64(c.metric)
 }

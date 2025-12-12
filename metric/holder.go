@@ -4,13 +4,13 @@ import (
 	"time"
 )
 
-type metricVec interface {
+type heldMetricVec interface {
 	DeleteOldMetrics(holdDuration time.Duration)
 }
 
 type Holder struct {
 	holdDuration time.Duration
-	heldMetrics  []metricVec
+	heldMetrics  []heldMetricVec
 }
 
 // NewHolder returns new metric holder. The holdDuration must be more than 1m.
@@ -20,20 +20,20 @@ func NewHolder(holdDuration time.Duration) *Holder {
 	}
 	return &Holder{
 		holdDuration: holdDuration,
-		heldMetrics:  make([]metricVec, 0),
+		heldMetrics:  make([]heldMetricVec, 0),
 	}
 }
 
-func (h *Holder) Maintenance() {
-	h.DeleteOldMetrics()
+func (h *Holder) maintenance() {
+	h.deleteOldMetrics()
 }
 
-func (h *Holder) AddMetricVec(mv metricVec) {
+func (h *Holder) addMetricVec(mv heldMetricVec) {
 	h.heldMetrics = append(h.heldMetrics, mv)
 }
 
 // DeleteOldMetrics delete old metric labels, that aren't in use since last update.
-func (h *Holder) DeleteOldMetrics() {
+func (h *Holder) deleteOldMetrics() {
 	for i := range h.heldMetrics {
 		h.heldMetrics[i].DeleteOldMetrics(h.holdDuration)
 	}

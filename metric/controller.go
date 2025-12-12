@@ -26,22 +26,34 @@ type Ctl struct {
 	mu      sync.RWMutex
 }
 
-func NewCtl(subsystem string, registry *prometheus.Registry, holderMetricHoldDuration time.Duration) *Ctl {
+func NewCtl(subsystem string, registry *prometheus.Registry, metricHoldDuration time.Duration) *Ctl {
 	ctl := &Ctl{
 		subsystem: subsystem,
 		register:  registry,
-		holder:    NewHolder(holderMetricHoldDuration),
 		metrics:   make(map[string]prometheus.Collector),
 	}
+
+	if metricHoldDuration != 0 {
+		ctl.holder = NewHolder(metricHoldDuration)
+	}
+
 	return ctl
 }
 
 func (mc *Ctl) HolderMaintenance() {
-	mc.holder.Maintenance()
+	if mc.holder == nil {
+		return
+	}
+
+	mc.holder.maintenance()
 }
 
-func (mc *Ctl) AddTimeout(mv metricVec) {
-	mc.holder.AddMetricVec(mv)
+func (mc *Ctl) AddToHolder(mv heldMetricVec) {
+	if mc.holder == nil {
+		return
+	}
+
+	mc.holder.addMetricVec(mv)
 }
 
 func (mc *Ctl) RegisterCounter(name, help string) *Counter {

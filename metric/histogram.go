@@ -12,7 +12,7 @@ type Histogram struct {
 
 func newHistogram(c prometheus.Histogram) *Histogram {
 	return &Histogram{
-		heldMetric: newHeldMetric([]string{}, c),
+		heldMetric: newHeldMetric(nil, c),
 	}
 }
 

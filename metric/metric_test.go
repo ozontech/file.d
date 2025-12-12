@@ -101,7 +101,7 @@ func BenchmarkMetricHolder(b *testing.B) {
 		ctl := NewCtl("test", prometheus.NewRegistry(), time.Minute)
 
 		counter := ctl.RegisterCounterVec("test_name", "", benchCase.Labels...)
-		ctl.AddTimeout(counter)
+		ctl.AddToHolder(counter)
 
 		name := strings.Join(benchCase.Labels, "_")
 

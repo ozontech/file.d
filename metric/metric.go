@@ -72,19 +72,21 @@ func (h *heldMetricsStore[T]) Delete(labels []string, deleter metricDeleter) boo
 	defer h.mu.Unlock()
 
 	hMetrics, ok := h.metricsByHash[hash]
-	if ok {
-		i := findHeldMetricIndex(hMetrics, labels)
-		if i == -1 {
-			return false
-		}
+	if !ok {
+		return false
+	}
 
-		deleter.DeleteLabelValues(labels...)
-		*hMetrics[i] = heldMetric[T]{}
-		hMetrics = append(hMetrics[:i], hMetrics[i+1:]...)
+	i := findHeldMetricIndex(hMetrics, labels)
+	if i == -1 {
+		return false
+	}
 
-		if len(hMetrics) == 0 {
-			delete(h.metricsByHash, hash)
-		}
+	deleter.DeleteLabelValues(labels...)
+	*hMetrics[i] = heldMetric[T]{}
+	hMetrics = append(hMetrics[:i], hMetrics[i+1:]...)
+
+	if len(hMetrics) == 0 {
+		delete(h.metricsByHash, hash)
 	}
 
 	return ok

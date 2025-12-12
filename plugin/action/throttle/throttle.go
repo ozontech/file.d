@@ -499,8 +499,8 @@ func (p *Plugin) registerMetrics(ctl *metric.Ctl, limitDistrMetricsLabels []stri
 			labels...,
 		),
 	}
-	ctl.AddTimeout(p.limitDistrMetrics.EventsCount)
-	ctl.AddTimeout(p.limitDistrMetrics.EventsSize)
+	ctl.AddToHolder(p.limitDistrMetrics.EventsCount)
+	ctl.AddToHolder(p.limitDistrMetrics.EventsSize)
 }
 
 // Stop ends plugin activity.

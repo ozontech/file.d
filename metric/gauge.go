@@ -13,7 +13,7 @@ type Gauge struct {
 
 func newGauge(c prometheus.Gauge) *Gauge {
 	return &Gauge{
-		heldMetric: newHeldMetric([]string{}, c),
+		heldMetric: newHeldMetric(nil, c),
 	}
 }
 
@@ -42,6 +42,7 @@ func (g *Gauge) Sub(v float64) {
 	g.updateUsage()
 }
 
+// should only be used in tests
 func (c *Gauge) ToFloat64() float64 {
 	return testutil.ToFloat64(c.metric)
 }

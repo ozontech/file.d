@@ -104,6 +104,7 @@ type Pipeline struct {
 	input      InputPlugin
 	inputInfo  *InputPluginInfo
 	antispamer *antispam.Antispammer
+	metricCtl  *metric.Ctl
 
 	actionInfos   []*ActionPluginStaticInfo
 	actionMetrics actionMetrics
@@ -209,6 +210,7 @@ func New(name string, settings *Settings, registry *prometheus.Registry, lg *zap
 			MetricsController:   metricCtl,
 			Exceptions:          settings.AntispamExceptions,
 		}),
+		metricCtl: metricCtl,
 
 		eventLog:   make([]string, 0, 128),
 		eventLogMu: &sync.Mutex{},
@@ -703,7 +705,7 @@ func (am *actionMetrics) get(name string) *actionMetric {
 func (p *Pipeline) AddAction(info *ActionPluginStaticInfo) {
 	p.actionInfos = append(p.actionInfos, info)
 
-	mCtl := p.actionParams.MetricCtl
+	mCtl := p.metricCtl
 
 	labels := make([]string, 0, len(info.MetricLabels)+1)
 	if !info.MetricSkipStatus {
@@ -716,14 +718,14 @@ func (p *Pipeline) AddAction(info *ActionPluginStaticInfo) {
 		fmt.Sprintf("how many events processed by pipeline %q and #%d action", p.Name, len(p.actionInfos)-1),
 		labels...,
 	)
-	mCtl.AddTimeout(count)
+	mCtl.AddToHolder(count)
 
 	size := mCtl.RegisterCounterVec(
 		info.MetricName+"_events_size_total",
 		fmt.Sprintf("total size of events processed by pipeline %q and #%d action", p.Name, len(p.actionInfos)-1),
 		labels...,
 	)
-	mCtl.AddTimeout(size)
+	mCtl.AddToHolder(size)
 
 	totalCounter := make(map[string]*atomic.Uint64)
 	for _, st := range allEventStatuses() {
