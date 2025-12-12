@@ -22,6 +22,7 @@ data:
         {{- toYaml .Values.pipeline | nindent 8 }}
         {{- end }}
         output:
+          type: stdout
           {{- if .Values.elasticsearch.enabled }}
           type: elasticsearch
           index_format: {{ template "filed.fullname" . }}

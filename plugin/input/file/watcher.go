@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/bmatcuk/doublestar/v4"
-	"github.com/prometheus/client_golang/prometheus"
+	"github.com/ozontech/file.d/metric"
 	"github.com/rjeczalik/notify"
 	"go.uber.org/zap"
 )
@@ -18,7 +18,7 @@ type watcher struct {
 	notifyFn                  notifyFn // function to receive notifications
 	watcherCh                 chan notify.EventInfo
 	shouldWatchWrites         bool
-	notifyChannelLengthMetric prometheus.Gauge
+	notifyChannelLengthMetric *metric.Gauge
 	logger                    *zap.SugaredLogger
 }
 
@@ -31,7 +31,7 @@ func NewWatcher(
 	paths Paths,
 	notifyFn notifyFn,
 	shouldWatchWrites bool,
-	notifyChannelLengthMetric prometheus.Gauge,
+	notifyChannelLengthMetric *metric.Gauge,
 	logger *zap.SugaredLogger,
 ) *watcher {
 	return &watcher{
