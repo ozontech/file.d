@@ -3,7 +3,7 @@
 # Declare variables to be passed into your templates.
 
 image:
-  repository: docker.io/timggggggg/file-d
+  repository: ghcr.io/ozontech/file.d
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
   # It uses an ubuntu-based image by default, but you can also use -alpine or -scratch (for example v0.58.0-alpine)
