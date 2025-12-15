@@ -35,7 +35,7 @@ func TestWatcher(t *testing.T) {
 			notifyFn := func(_ notify.Event, _ string, _ os.FileInfo) {
 				shouldCreate.Inc()
 			}
-			ctl := metric.NewCtl("test", prometheus.NewRegistry())
+			ctl := metric.NewCtl("test", prometheus.NewRegistry(), time.Minute)
 			w := NewWatcher(
 				dir,
 				Paths{
@@ -104,7 +104,7 @@ func TestWatcherPaths(t *testing.T) {
 	notifyFn := func(_ notify.Event, _ string, _ os.FileInfo) {
 		shouldCreate.Inc()
 	}
-	ctl := metric.NewCtl("test", prometheus.NewRegistry())
+	ctl := metric.NewCtl("test", prometheus.NewRegistry(), time.Minute)
 	w := NewWatcher(
 		dir,
 		Paths{
