@@ -59,8 +59,8 @@ func TestMapToStringSorted(t *testing.T) {
 func TestCardinalityLimitDiscard(t *testing.T) {
 	limit := 10
 	config := &Config{
-		KeyFields: []cfg.FieldSelector{"host"},
-		Fields:    []cfg.FieldSelector{"i"},
+		KeyFields: []cfg.FieldSelector{"info.host", "not_exists_fields"},
+		Fields:    []cfg.FieldSelector{"value.i"},
 		Limit:     limit,
 		Action:    actionDiscard,
 		TTL_:      1 * time.Hour,
@@ -84,7 +84,7 @@ func TestCardinalityLimitDiscard(t *testing.T) {
 	})
 
 	for i := 0; i < genEventsCnt; i++ {
-		json := fmt.Sprintf(`{"host":"localhost","i":"%d"}`, i)
+		json := fmt.Sprintf(`{"info": {"host":"localhost"},"value":{"i":"%d"}}`, i)
 		input.In(10, "test", test.NewOffset(0), []byte(json))
 	}
 	inWg.Wait()
@@ -118,6 +118,7 @@ func TestCardinalityLimitRemoveFields(t *testing.T) {
 	})
 
 	outEventsCnt := 0
+	wrongEventsCnt := 0
 	outWg := sync.WaitGroup{}
 	outWg.Add(genEventsCnt)
 	output.SetOutFn(func(e *pipeline.Event) {
@@ -125,9 +126,14 @@ func TestCardinalityLimitRemoveFields(t *testing.T) {
 
 		// check exists field
 		value := pipeline.CloneString(e.Root.Dig(string(config.Fields[0])).AsString())
+		keyValue := pipeline.CloneString(e.Root.Dig(string(config.KeyFields[0])).AsString())
 
 		if value != "" {
 			outEventsCnt++
+		}
+
+		if keyValue == "" {
+			wrongEventsCnt++
 		}
 	})
 
@@ -140,6 +146,7 @@ func TestCardinalityLimitRemoveFields(t *testing.T) {
 
 	p.Stop()
 	assert.Equal(t, inEventsCnt, genEventsCnt, "wrong in events count")
+	assert.Equal(t, 0, wrongEventsCnt)
 	assert.Equal(t, limit, outEventsCnt, "wrong out events count")
 }
 

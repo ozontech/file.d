@@ -37,11 +37,16 @@ pipelines:
 type Plugin struct {
 	cache  *Cache
 	config *Config
-	keys   []string
-	fields []string
+	keys   []parsedField
+	fields []parsedField
 	logger *zap.Logger
 
 	cardinalityApplyCounter *prometheus.CounterVec
+}
+
+type parsedField struct {
+	name  string
+	value []string
 }
 
 const (
@@ -81,11 +86,6 @@ type Config struct {
 	// > Useful when running multiple instances to avoid metric name collisions.
 	// > Leave empty for default metric naming.
 	MetricPrefix string `json:"metric_prefix" default:""` // *
-
-	// > @3@4@5@6
-	// >
-	// > Value assigned to the metric label when cardinality limit is exceeded.
-	MetricLabelValue string `json:"metric_label_value" default:"unknown"` // *
 
 	// > @3@4@5@6
 	// >
@@ -136,6 +136,14 @@ func (p *Plugin) makeMetric(ctl *metric.Ctl, name, help string, labels ...string
 	return ctl.RegisterCounterVec(name, help, labelNames...)
 }
 
+func keyMetricLabels(fields []parsedField) []string {
+	result := make([]string, 0, len(fields))
+	for i := range fields {
+		result = append(result, fields[i].name)
+	}
+	return result
+}
+
 func (p *Plugin) registerMetrics(ctl *metric.Ctl, prefix string) {
 	var metricName string
 	if prefix == "" {
@@ -146,7 +154,7 @@ func (p *Plugin) registerMetrics(ctl *metric.Ctl, prefix string) {
 	p.cardinalityApplyCounter = p.makeMetric(ctl,
 		metricName,
 		"Total number of events applied due to cardinality limits",
-		p.keys...,
+		keyMetricLabels(p.keys)...,
 	)
 }
 
@@ -156,10 +164,17 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 
 	p.cache = NewCache(p.config.TTL_)
 
-	p.keys = make([]string, 0, len(p.config.KeyFields))
+	p.keys = make([]parsedField, 0, len(p.config.KeyFields))
 	for _, fs := range p.config.KeyFields {
 		if fs != "" {
-			p.keys = append(p.keys, cfg.ParseFieldSelector(string(fs))[0])
+			parsedFields := cfg.ParseFieldSelector(string(fs))
+			p.keys = append(p.keys, struct {
+				name  string
+				value []string
+			}{
+				name:  strings.Join(parsedFields, "_"),
+				value: parsedFields,
+			})
 		}
 	}
 
@@ -167,10 +182,17 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 		p.logger.Fatal("you have to set key fields")
 	}
 
-	p.fields = make([]string, 0, len(p.config.Fields))
+	p.fields = make([]parsedField, 0, len(p.config.Fields))
 	for _, fs := range p.config.Fields {
 		if fs != "" {
-			p.fields = append(p.fields, cfg.ParseFieldSelector(string(fs))[0])
+			parsedFields := cfg.ParseFieldSelector(string(fs))
+			p.fields = append(p.fields, struct {
+				name  string
+				value []string
+			}{
+				name:  strings.Join(parsedFields, "_"),
+				value: parsedFields,
+			})
 		}
 	}
 
@@ -185,14 +207,14 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	cacheKey := make(map[string]string, len(p.keys))
 
 	for _, key := range p.keys {
-		value := pipeline.CloneString(event.Root.Dig(key).AsString())
-		cacheKey[key] = value
+		value := pipeline.CloneString(event.Root.Dig(key.value...).AsString())
+		cacheKey[key.name] = value
 	}
 
 	cacheValue := make(map[string]string, len(p.fields))
 	for _, key := range p.fields {
-		value := pipeline.CloneString(event.Root.Dig(key).AsString())
-		cacheValue[key] = value
+		value := pipeline.CloneString(event.Root.Dig(key.value...).AsString())
+		cacheValue[key.name] = value
 	}
 
 	key := mapToKey(cacheKey)
@@ -200,12 +222,11 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	keysCount := p.cache.CountPrefix(key)
 
 	if p.config.Limit >= 0 && keysCount >= p.config.Limit {
-		labelsValues := make([]string, 0, len(p.keys))
+		var labelsValues []string
+		labelsValues = make([]string, 0, len(p.keys))
 		for _, key := range p.keys {
-			if val, exists := cacheKey[key]; exists {
+			if val, exists := cacheKey[key.name]; exists {
 				labelsValues = append(labelsValues, val)
-			} else {
-				labelsValues = append(labelsValues, p.config.MetricLabelValue)
 			}
 		}
 		p.cardinalityApplyCounter.WithLabelValues(labelsValues...).Inc()
@@ -214,7 +235,7 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 			return pipeline.ActionDiscard
 		case actionRemoveFields:
 			for _, key := range p.fields {
-				event.Root.Dig(key).Suicide()
+				event.Root.Dig(key.value...).Suicide()
 			}
 		}
 	} else {
@@ -237,7 +258,9 @@ func mapToStringSorted(m, n map[string]string) string {
 		if i > 0 {
 			sb.WriteString(" ")
 		}
-		sb.WriteString(k + ":" + n[k])
+		sb.WriteString(k)
+		sb.WriteByte(':')
+		sb.WriteString(n[k])
 	}
 	sb.WriteString("]")
 	return sb.String()
@@ -256,7 +279,9 @@ func mapToKey(m map[string]string) string {
 		if i > 0 {
 			sb.WriteString(" ")
 		}
-		sb.WriteString(k + ":" + m[k])
+		sb.WriteString(k)
+		sb.WriteByte(':')
+		sb.WriteString(m[k])
 	}
 	sb.WriteString("];")
 	return sb.String()
