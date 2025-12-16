@@ -50,12 +50,6 @@ Leave empty for default metric naming.
 
 <br>
 
-**`metric_label_value`** *`string`* *`default=unknown`* 
-
-Value assigned to the metric label when cardinality limit is exceeded.
-
-<br>
-
 **`limit`** *`int`* *`default=10000`* 
 
 Maximum allowed number of unique values for monitored fields.
