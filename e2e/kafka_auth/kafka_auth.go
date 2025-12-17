@@ -124,8 +124,9 @@ func (c *Config) Configure(t *testing.T, _ *cfg.Config, _ string) {
 					config.ClientCert = "./kafka_auth/certs/client_cert.pem"
 				}
 
-				kafka_out.NewClient(config,
+				kafka_out.NewClient(context.Background(), config,
 					zap.NewNop().WithOptions(zap.WithFatalHook(zapcore.WriteThenPanic)),
+					nil,
 				)
 			},
 			func() {
@@ -154,9 +155,9 @@ func (c *Config) Configure(t *testing.T, _ *cfg.Config, _ string) {
 					config.ClientCert = "./kafka_auth/certs/client_cert.pem"
 				}
 
-				kafka_in.NewClient(config,
+				kafka_in.NewClient(context.Background(), config,
 					zap.NewNop().WithOptions(zap.WithFatalHook(zapcore.WriteThenPanic)),
-					Consumer{},
+					Consumer{}, nil,
 				)
 			},
 		}

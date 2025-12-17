@@ -62,7 +62,7 @@ func FuzzKafka(f *testing.F) {
 	}
 
 	worker := pipeline.WorkerData(nil)
-	logger := zaptest.NewLogger(f).Sugar()
+	logger := zaptest.NewLogger(f)
 	p := Plugin{
 		logger:       logger,
 		config:       &config,

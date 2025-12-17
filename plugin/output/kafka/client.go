@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/ozontech/file.d/cfg"
+	"github.com/ozontech/file.d/xoauth"
 	"github.com/twmb/franz-go/pkg/kgo"
 	"go.uber.org/zap"
 )
@@ -15,8 +16,8 @@ type KafkaClient interface {
 	ForceMetadataRefresh()
 }
 
-func NewClient(c *Config, l *zap.Logger) *kgo.Client {
-	opts := cfg.GetKafkaClientOptions(c, l)
+func NewClient(ctx context.Context, c *Config, l *zap.Logger, ts xoauth.TokenSource) *kgo.Client {
+	opts := cfg.GetKafkaClientOptions(c, l, ts)
 	opts = append(opts, []kgo.Opt{
 		kgo.DefaultProduceTopic(c.DefaultTopic),
 		kgo.MaxBufferedRecords(c.BatchSize_),
@@ -54,10 +55,10 @@ func NewClient(c *Config, l *zap.Logger) *kgo.Client {
 		l.Fatal("can't create kafka client", zap.Error(err))
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	pingCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
-	err = client.Ping(ctx)
+	err = client.Ping(pingCtx)
 	if err != nil {
 		l.Fatal("can't connect to kafka", zap.Error(err))
 	}
