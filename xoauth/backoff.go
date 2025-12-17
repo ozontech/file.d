@@ -14,13 +14,13 @@ import (
 // the attempt number will be chosen at random from between them, thus they are
 // bounding the jitter.
 func exponentialJitterBackoff() func(min, max time.Duration, attemptNum int) time.Duration {
-	rand := rand.New(rand.NewSource(int64(time.Now().Nanosecond())))
+	rnd := rand.New(rand.NewSource(int64(time.Now().Nanosecond())))
 
 	return func(min, max time.Duration, attemptNum int) time.Duration {
 		minf := float64(min)
 		mult := math.Pow(2, float64(attemptNum)) * minf
 
-		jitter := rand.Float64() * (mult - minf)
+		jitter := rnd.Float64() * (mult - minf)
 
 		sleepf := mult + jitter
 		maxf := float64(max)
@@ -48,7 +48,7 @@ func exponentialJitterBackoff() func(min, max time.Duration, attemptNum int) tim
 // - To get extreme jitter, set to a very wide spread, such as a min of 100ms
 // and a max of 20s (15382ms, 292ms, 51321ms, 35234ms, ...)
 func linearJitterBackoff() func(min, max time.Duration, attemptNum int) time.Duration {
-	rand := rand.New(rand.NewSource(int64(time.Now().Nanosecond())))
+	rnd := rand.New(rand.NewSource(int64(time.Now().Nanosecond())))
 
 	return func(min, max time.Duration, attemptNum int) time.Duration {
 		// attemptNum always starts at zero but we want to start at 1 for multiplication
@@ -64,7 +64,7 @@ func linearJitterBackoff() func(min, max time.Duration, attemptNum int) time.Dur
 		// multiply by the attemptNum. attemptNum starts at zero so we always
 		// increment here. We first get a random percentage, then apply that to the
 		// difference between min and max, and add to min.
-		jitter := rand.Float64() * float64(max-min)
+		jitter := rnd.Float64() * float64(max-min)
 
 		jitterMin := int64(jitter) + int64(min)
 		return time.Duration(jitterMin * int64(attemptNum))
