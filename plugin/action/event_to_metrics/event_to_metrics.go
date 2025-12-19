@@ -40,7 +40,7 @@ type Config struct {
 	// > List of available datetime format aliases can be found [here](/pipeline/README.md#datetime-parse-formats).
 	TimeFieldFormat string `json:"time_field_format" default:"rfc3339nano"` // *
 
-	Metrics []Metric
+	Metrics []Metric `json:"metrics" slice:"true" required:"true"` // *
 }
 
 type Metric struct {
@@ -48,6 +48,8 @@ type Metric struct {
 	Type   string            `json:"type"`
 	Value  string            `json:"value"`
 	Labels map[string]string `json:"labels"`
+	TTL    cfg.Duration      `json:"ttl" parse:"duration"` // *
+	TTL_   time.Duration
 
 	DoIfCheckerMap map[string]any `json:"do_if"`
 	DoIfChecker    *doif.Checker
@@ -137,6 +139,7 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 
 		object.AddField("name").MutateToBytes([]byte(metric.Name))
 		object.AddField("type").MutateToBytes([]byte(metric.Type))
+		object.AddField("ttl").MutateToInt64(metric.TTL_.Nanoseconds())
 		object.AddField("timestamp").MutateToInt64(ts.UnixNano())
 
 		if len(metric.Value) == 0 {

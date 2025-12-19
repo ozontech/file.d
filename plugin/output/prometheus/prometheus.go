@@ -337,6 +337,10 @@ func (p *Plugin) send(root *insaneJSON.Root) error {
 		timestamp := timestampNode.AsInt64()
 		timestampNode.Suicide()
 
+		ttlNode := msg.Dig("ttl")
+		ttl := ttlNode.AsInt64()
+		ttlNode.Suicide()
+
 		valueNode := msg.Dig("value")
 		value := valueNode.AsFloat()
 		valueNode.Suicide()
@@ -362,6 +366,7 @@ func (p *Plugin) send(root *insaneJSON.Root) error {
 			value,
 			timestamp,
 			metricType,
+			ttl,
 		)...)
 	}
 

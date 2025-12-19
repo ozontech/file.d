@@ -15,6 +15,7 @@ type metricCollector struct {
 	collector    *sync.Map
 	timeout      time.Duration
 	flushTicker  *time.Ticker
+	repeatTicker *time.Ticker
 	shutdownChan chan struct{}
 	sender       storageSender
 	logger       *zap.Logger
@@ -24,6 +25,7 @@ type metricValue struct {
 	value             float64
 	timestamp         int64
 	lastUpdateTime    time.Time
+	expiredAt         time.Time
 	lastValueIsSended bool
 }
 
@@ -35,16 +37,17 @@ func newCollector(timeout time.Duration, sender storageSender, logger *zap.Logge
 	c := &metricCollector{
 		collector:    new(sync.Map),
 		timeout:      timeout,
-		flushTicker:  time.NewTicker(1 * time.Second), // Check every second
+		flushTicker:  time.NewTicker(1 * time.Second),
+		repeatTicker: time.NewTicker(30 * time.Second),
 		shutdownChan: make(chan struct{}),
 		sender:       sender,
 		logger:       logger,
 	}
-	go c.flushOldMetrics()
+	go c.flushAndRepeatOldMetrics()
 	return c
 }
 
-func (p *metricCollector) handleMetric(labels []promwrite.Label, value float64, timestamp int64, metricType string) []promwrite.TimeSeries {
+func (p *metricCollector) handleMetric(labels []promwrite.Label, value float64, timestamp int64, metricType string, ttl int64) []promwrite.TimeSeries {
 	labelsKey := labelsToKey(labels)
 	now := time.Now()
 	currentTimestampSec := timestamp / 1_000_000_000
@@ -81,41 +84,74 @@ func (p *metricCollector) handleMetric(labels []promwrite.Label, value float64, 
 		value:             currentValue,
 		timestamp:         timestamp,
 		lastUpdateTime:    now,
+		expiredAt:         now.Add(time.Duration(ttl)),
 		lastValueIsSended: shouldSend,
 	})
 
 	return values
 }
 
-func (p *metricCollector) flushOldMetrics() {
+func (p *metricCollector) flushAndRepeatOldMetrics() {
 	for {
 		select {
 		case <-p.flushTicker.C:
-			var toSend []promwrite.TimeSeries
-			now := time.Now()
-
-			p.collector.Range(func(key, value interface{}) bool {
-				metric := value.(metricValue)
-				if now.Sub(metric.lastUpdateTime) > p.timeout && !metric.lastValueIsSended {
-					labels := keyToLabels(key.(string))
-					toSend = append(toSend, createTimeSeries(labels, metric))
-					metric.lastValueIsSended = true
-					p.collector.Store(key, metric)
-				}
-				return true
-			})
-
-			if len(toSend) > 0 {
-				// Send these metrics to your storage
-				err := p.sender.sendToStorage(toSend)
-				if err != nil {
-					p.logger.Error("can't send data", zap.Error(err))
-				}
-			}
-
+			p.flushOldMetrics()
+		case <-p.repeatTicker.C:
+			p.repeatOldMetrics()
 		case <-p.shutdownChan:
 			p.flushTicker.Stop()
 			return
+		}
+	}
+}
+
+func (p *metricCollector) flushOldMetrics() {
+	var toSend []promwrite.TimeSeries
+	now := time.Now()
+
+	p.collector.Range(func(key, value interface{}) bool {
+		metric := value.(metricValue)
+		if now.Sub(metric.lastUpdateTime) > p.timeout && !metric.lastValueIsSended {
+			labels := keyToLabels(key.(string))
+			toSend = append(toSend, createTimeSeries(labels, metric))
+			metric.lastValueIsSended = true
+			p.collector.Store(key, metric)
+		}
+		return true
+	})
+
+	if len(toSend) > 0 {
+		// Send these metrics to your storage
+		err := p.sender.sendToStorage(toSend)
+		if err != nil {
+			p.logger.Error("can't send data", zap.Error(err))
+		}
+	}
+}
+
+func (p *metricCollector) repeatOldMetrics() {
+	var toSend []promwrite.TimeSeries
+	now := time.Now()
+	nowUnixtime := now.UnixNano()
+
+	p.collector.Range(func(key, value interface{}) bool {
+		metric := value.(metricValue)
+		labels := keyToLabels(key.(string))
+		metric.timestamp = nowUnixtime
+		toSend = append(toSend, createTimeSeries(labels, metric))
+		if now.Before(metric.expiredAt) {
+			metric.lastValueIsSended = true
+			p.collector.Store(key, metric)
+		} else {
+			p.collector.Delete(key)
+		}
+		return true
+	})
+
+	if len(toSend) > 0 {
+		err := p.sender.sendToStorage(toSend)
+		if err != nil {
+			p.logger.Error("can't send data", zap.Error(err))
 		}
 	}
 }
