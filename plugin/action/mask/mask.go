@@ -8,7 +8,6 @@ import (
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
 	insaneJSON "github.com/ozontech/insane-json"
-	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
 )
 
@@ -104,6 +103,7 @@ const (
 
 type Plugin struct {
 	config Config
+	params *pipeline.ActionPluginParams
 
 	// sourceBuf buffer for storing node value initial and transformed
 	sourceBuf []byte
@@ -130,7 +130,7 @@ type Plugin struct {
 	logger *zap.Logger
 
 	// plugin metrics
-	maskAppliedMetric *prometheus.CounterVec
+	maskAppliedMetric metric.HeldCounterVec
 }
 
 // ! config-params
@@ -206,6 +206,7 @@ func factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginParams) {
 	p.config = *config.(*Config)                            // copy shared config
 	p.config.Masks = append([]Mask(nil), p.config.Masks...) // copy shared masks
+	p.params = params
 
 	p.maskBuf = make([]byte, 0, params.PipelineSettings.AvgEventSize)
 	p.sourceBuf = make([]byte, 0, params.PipelineSettings.AvgEventSize)
@@ -239,10 +240,13 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 }
 
 func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
-	p.maskAppliedMetric = p.makeMetric(ctl,
-		p.config.AppliedMetricName,
-		"Number of times mask plugin found the provided pattern",
-		p.config.AppliedMetricLabels...,
+	p.maskAppliedMetric = metric.NewHeldCounterVec(
+		p.makeMetric(ctl,
+			p.config.AppliedMetricName,
+			"Number of times mask plugin found the provided pattern",
+			p.config.AppliedMetricLabels...,
+		),
+		p.params.PipelineSettings.MetricMaxLabelValueLength,
 	)
 	for i := range p.config.Masks {
 		mask := &p.config.Masks[i]
@@ -253,10 +257,13 @@ func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 			)
 			continue
 		}
-		mask.appliedMetric = p.makeMetric(ctl,
-			mask.MetricName,
-			"Number of times mask found in the provided pattern",
-			mask.MetricLabels...,
+		mask.appliedMetric = metric.NewHeldCounterVec(
+			p.makeMetric(ctl,
+				mask.MetricName,
+				"Number of times mask found in the provided pattern",
+				mask.MetricLabels...,
+			),
+			p.params.PipelineSettings.MetricMaxLabelValueLength,
 		)
 	}
 }

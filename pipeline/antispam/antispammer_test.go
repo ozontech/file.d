@@ -13,7 +13,7 @@ import (
 )
 
 func newAntispammer(threshold, unbanIterations int, maintenanceInterval time.Duration) *Antispammer {
-	holder := metric.NewHolder(time.Minute)
+	holder := metric.NewHolder(time.Minute, 100)
 	return NewAntispammer(&Options{
 		MaintenanceInterval: maintenanceInterval,
 		Threshold:           threshold,
@@ -130,7 +130,7 @@ func TestAntispamExceptions(t *testing.T) {
 	checkSpam := func(source, event string, wantMetric map[string]float64) {
 		antispamer.IsSpam("1", source, true, []byte(event), now)
 		for k, v := range wantMetric {
-			r.Equal(v, testutil.ToFloat64(antispamer.exceptionMetric.WithLabelValues(k)))
+			r.Equal(v, testutil.ToFloat64(antispamer.exceptionMetric.WithLabelValues(k).Get()))
 		}
 	}
 

@@ -24,23 +24,24 @@ import (
 )
 
 const (
-	DefaultAntispamThreshold       = 0
-	DefaultSourceNameMetaField     = ""
-	DefaultDecoder                 = "auto"
-	DefaultIsStrict                = false
-	DefaultStreamField             = "stream"
-	DefaultCapacity                = 1024
-	DefaultAvgInputEventSize       = 4 * 1024
-	DefaultMaxInputEventSize       = 0
-	DefaultCutOffEventByLimit      = false
-	DefaultCutOffEventByLimitField = ""
-	DefaultJSONNodePoolSize        = 16
-	DefaultMaintenanceInterval     = time.Second * 5
-	DefaultEventTimeout            = time.Second * 30
-	DefaultFieldValue              = "not_set"
-	DefaultStreamName              = StreamName("not_set")
-	DefaultMetricHoldDuration      = time.Minute * 30
-	DefaultMetaCacheSize           = 1024
+	DefaultAntispamThreshold         = 0
+	DefaultSourceNameMetaField       = ""
+	DefaultDecoder                   = "auto"
+	DefaultIsStrict                  = false
+	DefaultStreamField               = "stream"
+	DefaultCapacity                  = 1024
+	DefaultAvgInputEventSize         = 4 * 1024
+	DefaultMaxInputEventSize         = 0
+	DefaultCutOffEventByLimit        = false
+	DefaultCutOffEventByLimitField   = ""
+	DefaultJSONNodePoolSize          = 16
+	DefaultMaintenanceInterval       = time.Second * 5
+	DefaultEventTimeout              = time.Second * 30
+	DefaultFieldValue                = "not_set"
+	DefaultStreamName                = StreamName("not_set")
+	DefaultMetricHoldDuration        = time.Minute * 30
+	DefaultMetaCacheSize             = 1024
+	DefaultMetricMaxLabelValueLength = 0
 
 	EventSeqIDError = uint64(0)
 
@@ -138,30 +139,31 @@ type Pipeline struct {
 	outputEventSizeMetric      prometheus.Counter
 	readOpsEventsSizeMetric    prometheus.Counter
 	wrongEventCRIFormatMetric  prometheus.Counter
-	maxEventSizeExceededMetric *prometheus.CounterVec
+	maxEventSizeExceededMetric metric.HeldCounterVec
 	eventPoolLatency           prometheus.Observer
 
 	countEventPanicsRecoveredMetric prometheus.Counter
 }
 
 type Settings struct {
-	Decoder                 string
-	DecoderParams           map[string]any
-	Capacity                int
-	MetaCacheSize           int
-	MaintenanceInterval     time.Duration
-	EventTimeout            time.Duration
-	AntispamThreshold       int
-	AntispamExceptions      antispam.Exceptions
-	SourceNameMetaField     string
-	AvgEventSize            int
-	MaxEventSize            int
-	CutOffEventByLimit      bool
-	CutOffEventByLimitField string
-	StreamField             string
-	IsStrict                bool
-	MetricHoldDuration      time.Duration
-	Pool                    PoolType
+	Decoder                   string
+	DecoderParams             map[string]any
+	Capacity                  int
+	MetaCacheSize             int
+	MaintenanceInterval       time.Duration
+	EventTimeout              time.Duration
+	AntispamThreshold         int
+	AntispamExceptions        antispam.Exceptions
+	SourceNameMetaField       string
+	AvgEventSize              int
+	MaxEventSize              int
+	CutOffEventByLimit        bool
+	CutOffEventByLimitField   string
+	StreamField               string
+	IsStrict                  bool
+	MetricHoldDuration        time.Duration
+	Pool                      PoolType
+	MetricMaxLabelValueLength int
 }
 
 type PoolType string
@@ -175,7 +177,7 @@ const (
 func New(name string, settings *Settings, registry *prometheus.Registry, lg *zap.Logger) *Pipeline {
 	metricCtl := metric.NewCtl("pipeline_"+name, registry)
 
-	metricHolder := metric.NewHolder(settings.MetricHoldDuration)
+	metricHolder := metric.NewHolder(settings.MetricHoldDuration, settings.MetricMaxLabelValueLength)
 
 	var eventPool pool
 	switch settings.Pool {
@@ -207,13 +209,14 @@ func New(name string, settings *Settings, registry *prometheus.Registry, lg *zap
 		streamer:     newStreamer(settings.EventTimeout),
 		eventPool:    eventPool,
 		antispamer: antispam.NewAntispammer(&antispam.Options{
-			MaintenanceInterval: settings.MaintenanceInterval,
-			Threshold:           settings.AntispamThreshold,
-			UnbanIterations:     antispamUnbanIterations,
-			Logger:              lg.Named("antispam"),
-			MetricsController:   metricCtl,
-			MetricHolder:        metricHolder,
-			Exceptions:          settings.AntispamExceptions,
+			MaintenanceInterval:       settings.MaintenanceInterval,
+			Threshold:                 settings.AntispamThreshold,
+			UnbanIterations:           antispamUnbanIterations,
+			Logger:                    lg.Named("antispam"),
+			MetricsController:         metricCtl,
+			MetricHolder:              metricHolder,
+			Exceptions:                settings.AntispamExceptions,
+			MetricMaxLabelValueLength: settings.MetricMaxLabelValueLength,
 		}),
 
 		eventLog:   make([]string, 0, 128),
@@ -285,7 +288,10 @@ func (p *Pipeline) registerMetrics() {
 	p.outputEventSizeMetric = m.RegisterCounter("output_plugin_events_size_total", "Size of events on pipeline output")
 	p.readOpsEventsSizeMetric = m.RegisterCounter("read_ops_count_total", "Read OPS count")
 	p.wrongEventCRIFormatMetric = m.RegisterCounter("wrong_event_cri_format_total", "Wrong event CRI format counter")
-	p.maxEventSizeExceededMetric = m.RegisterCounterVec("max_event_size_exceeded_total", "Max event size exceeded counter", "source_name")
+	p.maxEventSizeExceededMetric = metric.NewHeldCounterVec(
+		m.RegisterCounterVec("max_event_size_exceeded_total", "Max event size exceeded counter", "source_name"),
+		p.settings.MetricMaxLabelValueLength,
+	)
 	p.countEventPanicsRecoveredMetric = m.RegisterCounter("count_event_panics_recovered_total", "Count of processor.countEvent panics recovered")
 	p.eventPoolLatency = m.RegisterHistogram("event_pool_latency_seconds",
 		"How long we are wait an event from the pool", metric.SecondsBucketsDetailedNano)
