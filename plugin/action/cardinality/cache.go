@@ -39,7 +39,7 @@ func (c *Cache) IsExists(key string) bool {
 		now := xtime.GetInaccurateUnixNano()
 		isExpire := c.isExpire(now, timeValue.(int64))
 		if isExpire {
-			c.delete(key, true)
+			c.delete(key)
 			return false
 		}
 	}
@@ -51,13 +51,16 @@ func (c *Cache) isExpire(now, value int64) bool {
 	return diff > c.ttl
 }
 
-func (c *Cache) delete(key string, lock bool) {
-	if lock {
-		c.mu.Lock()
-		defer c.mu.Unlock()
+func (c *Cache) delete(keysToDelete ...string) {
+	if len(keysToDelete) == 0 {
+		return
 	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
 
-	c.tree.Delete(key)
+	for _, key := range keysToDelete {
+		c.tree.Delete(key)
+	}
 }
 
 func (c *Cache) CountPrefix(prefix string) (count int) {
@@ -76,11 +79,7 @@ func (c *Cache) CountPrefix(prefix string) (count int) {
 	c.mu.RUnlock()
 
 	if len(keysToDelete) > 0 {
-		c.mu.Lock()
-		for _, key := range keysToDelete {
-			c.delete(key, false)
-		}
-		c.mu.Unlock()
+		c.delete(keysToDelete...)
 	}
 	return
 }

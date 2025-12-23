@@ -62,16 +62,14 @@ type Config struct {
 	// > Fields used to group events before calculating cardinality.
 	// > Events with the same key values are aggregated together.
 	// > Required for proper cardinality tracking per logical group.
-	KeyFields  []cfg.FieldSelector `json:"key" slice:"true" required:"true"` // *
-	KeyFields_ []string
+	KeyFields []cfg.FieldSelector `json:"key" slice:"true" required:"true"` // *
 
 	// > @3@4@5@6
 	// >
 	// > Target fields whose unique values are counted within each key group.
 	// > The plugin monitors how many distinct values these fields contain.
 	// > Required to define what constitutes high cardinality.
-	Fields  []cfg.FieldSelector `json:"fields" slice:"true" required:"true"` // *
-	Fields_ []string
+	Fields []cfg.FieldSelector `json:"fields" slice:"true" required:"true"` // *
 
 	// > @3@4@5@6
 	// >
@@ -114,34 +112,35 @@ func factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 	return &Plugin{}, &Config{}
 }
 
-func (p *Plugin) makeMetric(ctl *metric.Ctl, name, help string, labels ...string) *prometheus.CounterVec {
-	if name == "" {
-		return nil
+func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginParams) {
+	p.config = config.(*Config)
+	p.logger = params.Logger.Desugar()
+
+	p.cache = NewCache(p.config.TTL_)
+
+	if len(p.config.Fields) == 0 {
+		p.logger.Fatal("you have to set key fields")
 	}
 
-	uniq := make(map[string]struct{})
-	labelNames := make([]string, 0, len(labels))
-	for _, label := range labels {
-		if label == "" {
-			p.logger.Fatal("empty label name")
-		}
-		if _, ok := uniq[label]; ok {
-			p.logger.Fatal("metric labels must be unique")
-		}
-		uniq[label] = struct{}{}
+	p.keys = parseFields(p.config.KeyFields)
+	p.fields = parseFields(p.config.Fields)
 
-		labelNames = append(labelNames, label)
-	}
-
-	return ctl.RegisterCounterVec(name, help, labelNames...)
+	p.registerMetrics(params.MetricCtl, p.config.MetricPrefix)
 }
 
-func keyMetricLabels(fields []parsedField) []string {
-	result := make([]string, 0, len(fields))
-	for i := range fields {
-		result = append(result, fields[i].name)
+func parseFields(fields []cfg.FieldSelector) []parsedField {
+	res := make([]parsedField, 0, len(fields))
+	for _, fs := range fields {
+		if fs == "" {
+			continue
+		}
+		parsed := cfg.ParseFieldSelector(string(fs))
+		res = append(res, parsedField{
+			name:  strings.Join(parsed, "_"),
+			value: parsed,
+		})
 	}
-	return result
+	return res
 }
 
 func (p *Plugin) registerMetrics(ctl *metric.Ctl, prefix string) {
@@ -151,52 +150,25 @@ func (p *Plugin) registerMetrics(ctl *metric.Ctl, prefix string) {
 	} else {
 		metricName = fmt.Sprintf(`cardinality_applied_%s_total`, prefix)
 	}
-	p.cardinalityApplyCounter = p.makeMetric(ctl,
+	p.cardinalityApplyCounter = ctl.RegisterCounterVec(
 		metricName,
 		"Total number of events applied due to cardinality limits",
 		keyMetricLabels(p.keys)...,
 	)
 }
 
-func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginParams) {
-	p.config = config.(*Config)
-	p.logger = params.Logger.Desugar()
+func keyMetricLabels(fields []parsedField) []string {
+	result := make([]string, 0, len(fields))
+	seen := make(map[string]bool, len(fields))
 
-	p.cache = NewCache(p.config.TTL_)
-
-	p.keys = make([]parsedField, 0, len(p.config.KeyFields))
-	for _, fs := range p.config.KeyFields {
-		if fs != "" {
-			parsedFields := cfg.ParseFieldSelector(string(fs))
-			p.keys = append(p.keys, struct {
-				name  string
-				value []string
-			}{
-				name:  strings.Join(parsedFields, "_"),
-				value: parsedFields,
-			})
+	for i := range fields {
+		name := fields[i].name
+		if !seen[name] {
+			seen[name] = true
+			result = append(result, name)
 		}
 	}
-
-	if len(p.config.Fields) == 0 {
-		p.logger.Fatal("you have to set key fields")
-	}
-
-	p.fields = make([]parsedField, 0, len(p.config.Fields))
-	for _, fs := range p.config.Fields {
-		if fs != "" {
-			parsedFields := cfg.ParseFieldSelector(string(fs))
-			p.fields = append(p.fields, struct {
-				name  string
-				value []string
-			}{
-				name:  strings.Join(parsedFields, "_"),
-				value: parsedFields,
-			})
-		}
-	}
-
-	p.registerMetrics(params.MetricCtl, p.config.MetricPrefix)
+	return result
 }
 
 func (p *Plugin) Stop() {
