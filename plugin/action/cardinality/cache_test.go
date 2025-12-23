@@ -33,33 +33,20 @@ func TestSetAndExists(t *testing.T) {
 func TestDelete(t *testing.T) {
 	cache := NewCache(time.Minute)
 
-	t.Run("delete existing key with lock=true", func(t *testing.T) {
+	t.Run("delete existing key", func(t *testing.T) {
 		key := "to-delete-1"
 		cache.Set(key)
 
-		cache.delete(key, true)
+		cache.delete(key)
 
 		found := cache.IsExists(key)
 		assert.False(t, found, "Key should be deleted")
 	})
 
-	t.Run("delete existing key with lock=false", func(t *testing.T) {
-		key := "to-delete-2"
-		cache.Set(key)
-
-		// Manually acquire lock since we're using lock=false
-		cache.mu.Lock()
-		cache.delete(key, false)
-		cache.mu.Unlock()
-
-		found := cache.IsExists(key)
-		assert.False(t, found, "Key should be deleted when lock=false")
-	})
-
 	t.Run("delete non-existent key", func(t *testing.T) {
 		// Should not panic or cause issues
 		assert.NotPanics(t, func() {
-			cache.delete("never-existed-1", true)
+			cache.delete("never-existed-1")
 		})
 
 		// Verify cache is still functional
@@ -67,6 +54,22 @@ func TestDelete(t *testing.T) {
 		cache.Set(key)
 		found := cache.IsExists(key)
 		assert.True(t, found, "Cache should still work after deleting non-existent key")
+	})
+
+	t.Run("delete many existing key", func(t *testing.T) {
+		key1 := "to-delete-1"
+		cache.Set(key1)
+
+		key2 := "to-delete-2"
+		cache.Set(key2)
+
+		cache.delete(key1, key2)
+
+		found := cache.IsExists(key1)
+		assert.False(t, found, "Key should be deleted")
+
+		found = cache.IsExists(key2)
+		assert.False(t, found, "Key should be deleted")
 	})
 }
 
@@ -101,7 +104,7 @@ func TestCountPrefix(t *testing.T) {
 	}
 
 	t.Run("count after delete", func(t *testing.T) {
-		cache.delete("key1_subkey1", true)
+		cache.delete("key1_subkey1")
 		assert.Equal(t, 1, cache.CountPrefix("key1"))
 	})
 }
@@ -149,7 +152,7 @@ func TestConcurrentOperations(t *testing.T) {
 		go func(k string) {
 			defer wg.Done()
 			for i := 0; i < 100; i++ {
-				cache.delete(k, true)
+				cache.delete(k)
 			}
 		}(key)
 	}
@@ -168,7 +171,7 @@ func TestConcurrentOperations(t *testing.T) {
 		for i := 0; i < 100; i++ {
 			cache.Set("key-x")
 			cache.Set("key-y")
-			cache.delete("key-x", true)
+			cache.delete("key-x")
 		}
 	}()
 	wg.Wait()
