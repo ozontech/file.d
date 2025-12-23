@@ -30,22 +30,6 @@ func (c *Cache) Set(key string) bool {
 	return true
 }
 
-func (c *Cache) IsExists(key string) bool {
-	c.mu.RLock()
-	timeValue, found := c.tree.Get(key)
-	c.mu.RUnlock()
-
-	if found {
-		now := xtime.GetInaccurateUnixNano()
-		isExpire := c.isExpire(now, timeValue.(int64))
-		if isExpire {
-			c.delete(key)
-			return false
-		}
-	}
-	return found
-}
-
 func (c *Cache) isExpire(now, value int64) bool {
 	diff := now - value
 	return diff > c.ttl
@@ -79,7 +63,7 @@ func (c *Cache) CountPrefix(prefix string) (count int) {
 	c.mu.RUnlock()
 
 	if len(keysToDelete) > 0 {
-		c.delete(keysToDelete...)
+		go c.delete(keysToDelete...)
 	}
 	return
 }
