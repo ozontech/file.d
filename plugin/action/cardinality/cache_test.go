@@ -20,12 +20,12 @@ func TestSetAndExists(t *testing.T) {
 		key := "test-key"
 		assert.True(t, cache.Set(key))
 
-		found := cache.IsExists(key)
+		found := cacheKeyIsExists(cache, key)
 		assert.True(t, found)
 	})
 
 	t.Run("non-existent key", func(t *testing.T) {
-		found := cache.IsExists("non-existent")
+		found := cacheKeyIsExists(cache, "non-existent")
 		assert.False(t, found)
 	})
 }
@@ -39,7 +39,7 @@ func TestDelete(t *testing.T) {
 
 		cache.delete(key)
 
-		found := cache.IsExists(key)
+		found := cacheKeyIsExists(cache, key)
 		assert.False(t, found, "Key should be deleted")
 	})
 
@@ -52,7 +52,7 @@ func TestDelete(t *testing.T) {
 		// Verify cache is still functional
 		key := "test-after-non-existent"
 		cache.Set(key)
-		found := cache.IsExists(key)
+		found := cacheKeyIsExists(cache, key)
 		assert.True(t, found, "Cache should still work after deleting non-existent key")
 	})
 
@@ -65,10 +65,10 @@ func TestDelete(t *testing.T) {
 
 		cache.delete(key1, key2)
 
-		found := cache.IsExists(key1)
+		found := cacheKeyIsExists(cache, key1)
 		assert.False(t, found, "Key should be deleted")
 
-		found = cache.IsExists(key2)
+		found = cacheKeyIsExists(cache, key2)
 		assert.False(t, found, "Key should be deleted")
 	})
 }
@@ -129,7 +129,7 @@ func TestConcurrentOperations(t *testing.T) {
 
 	// Verify all keys were set
 	for _, key := range keys {
-		found := cache.IsExists(key)
+		found := cacheKeyIsExists(cache, key)
 		assert.True(t, found)
 	}
 
@@ -139,7 +139,7 @@ func TestConcurrentOperations(t *testing.T) {
 		go func(k string) {
 			defer wg.Done()
 			for i := 0; i < 100; i++ {
-				cache.IsExists(k)
+				cacheKeyIsExists(cache, k)
 				cache.Set(k + "-new")
 			}
 		}(key)
@@ -184,13 +184,24 @@ func TestTTL(t *testing.T) {
 	cache.Set(key)
 
 	t.Run("key exists before TTL", func(t *testing.T) {
-		found := cache.IsExists(key)
+		assert.Equal(t, 1, cache.CountPrefix(key))
+		found := cacheKeyIsExists(cache, key)
 		assert.True(t, found)
 	})
 
 	t.Run("key expires after TTL", func(t *testing.T) {
 		time.Sleep(1 * time.Second)
-		found := cache.IsExists(key)
+		assert.Equal(t, 0, cache.CountPrefix(key))
+		time.Sleep(100 * time.Millisecond) // cause delete in async
+		found := cacheKeyIsExists(cache, key)
 		assert.False(t, found)
 	})
+}
+
+func cacheKeyIsExists(c *Cache, key string) bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	_, found := c.tree.Get(key)
+
+	return found
 }

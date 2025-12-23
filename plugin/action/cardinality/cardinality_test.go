@@ -3,11 +3,13 @@ package cardinality
 import (
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/elliotchance/orderedmap/v2"
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/test"
@@ -25,19 +27,19 @@ func TestMapToStringSorted(t *testing.T) {
 			name:     "empty maps",
 			m:        map[string]string{},
 			n:        map[string]string{},
-			expected: "map[];map[]",
+			expected: "map[];map[];",
 		},
 		{
 			name:     "simple maps",
 			m:        map[string]string{"service": "test", "host": "localhost"},
-			n:        map[string]string{"value": "1", "level": "3"},
-			expected: "map[host:localhost service:test];map[level:3 value:1]",
+			n:        map[string]string{"level": "3", "value": "1"},
+			expected: "map[service:test host:localhost ];map[level:3 value:1 ];",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := mapToStringSorted(tt.m, tt.n)
+			result := mapToStringSorted(mapToOrderedMap(tt.m), mapToOrderedMap(tt.n))
 			if result != tt.expected {
 				t.Errorf("mapToStringSorted() = %v, want %v", result, tt.expected)
 			}
@@ -54,6 +56,26 @@ func TestMapToStringSorted(t *testing.T) {
 			}
 		})
 	}
+}
+
+func BenchmarkMapToStringSorted_Comparison(b *testing.B) {
+	m := mapToOrderedMap(map[string]string{
+		"service": "test", "host": "localhost", "port": "8080",
+		"protocol": "http", "env": "production", "version": "2.0",
+		"region": "us-west", "zone": "1a", "cluster": "prod",
+	})
+	n := mapToOrderedMap(map[string]string{
+		"level": "3", "timeout": "30",
+		"retry": "5", "cache": "true", "debug": "false",
+	})
+
+	b.Run("current_implementation", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			n.Set("value", strconv.Itoa(i))
+			_ = mapToStringSorted(m, n)
+		}
+	})
+
 }
 
 func TestCardinalityLimitDiscard(t *testing.T) {
@@ -198,10 +220,18 @@ func TestSetAndCountPrefix(t *testing.T) {
 	cacheValue := map[string]string{
 		"i": "0",
 	}
-	key := mapToKey(cacheKey)
-	value := mapToStringSorted(cacheKey, cacheValue)
+	key := mapToKey(mapToOrderedMap(cacheKey))
+	value := mapToStringSorted(mapToOrderedMap(cacheKey), mapToOrderedMap(cacheValue))
 	cache.Set(value)
 
 	keysCount := cache.CountPrefix(key)
 	assert.Equal(t, 1, keysCount, "wrong in events count")
+}
+
+func mapToOrderedMap(src map[string]string) *orderedmap.OrderedMap[string, string] {
+	m := orderedmap.NewOrderedMap[string, string]()
+	for k, v := range src {
+		m.Set(k, v)
+	}
+	return m
 }

@@ -2,8 +2,8 @@ package cardinality
 
 import (
 	"fmt"
-	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/ozontech/file.d/cfg"
@@ -11,6 +11,8 @@ import (
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/prometheus/client_golang/prometheus"
+
+	"github.com/elliotchance/orderedmap/v2"
 	"go.uber.org/zap"
 )
 
@@ -47,6 +49,7 @@ type Plugin struct {
 type parsedField struct {
 	name  string
 	value []string
+	// value *orderedmap.NewOrderedMap[string, any]
 }
 
 const (
@@ -176,28 +179,21 @@ func (p *Plugin) Stop() {
 }
 
 func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
-	cacheKey := make(map[string]string, len(p.keys))
-
+	cacheKey := orderedmap.NewOrderedMap[string, string]()
 	for _, key := range p.keys {
 		value := pipeline.CloneString(event.Root.Dig(key.value...).AsString())
-		cacheKey[key.name] = value
+		cacheKey.Set(key.name, value)
 	}
 
-	cacheValue := make(map[string]string, len(p.fields))
-	for _, key := range p.fields {
-		value := pipeline.CloneString(event.Root.Dig(key.value...).AsString())
-		cacheValue[key.name] = value
-	}
-
-	key := mapToKey(cacheKey)
-	value := mapToStringSorted(cacheKey, cacheValue)
-	keysCount := p.cache.CountPrefix(key)
+	prefixKey := mapToKey(cacheKey)
+	keysCount := p.cache.CountPrefix(prefixKey)
 
 	if p.config.Limit >= 0 && keysCount >= p.config.Limit {
-		var labelsValues []string
-		labelsValues = make([]string, 0, len(p.keys))
+		labelsValues := getLabelsValues(len(p.keys))
+		defer labelsValuesPool.Put(labelsValues)
+
 		for _, key := range p.keys {
-			if val, exists := cacheKey[key.name]; exists {
+			if val, exists := cacheKey.Get(key.name); exists {
 				labelsValues = append(labelsValues, val)
 			}
 		}
@@ -211,50 +207,70 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 			}
 		}
 	} else {
+		cacheValue := orderedmap.NewOrderedMap[string, string]()
+		for _, key := range p.fields {
+			value := pipeline.CloneString(event.Root.Dig(key.value...).AsString())
+			cacheValue.Set(key.name, value)
+		}
+		value := mapToStringSorted(cacheKey, cacheValue)
 		p.cache.Set(value)
 	}
 	return pipeline.ActionPass
 }
 
-func mapToStringSorted(m, n map[string]string) string {
-	var sb strings.Builder
-	sb.WriteString(mapToKey(m))
-
-	keys := make([]string, 0, len(n))
-	for k := range n {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	sb.WriteString("map[")
-	for i, k := range keys {
-		if i > 0 {
-			sb.WriteString(" ")
-		}
-		sb.WriteString(k)
-		sb.WriteByte(':')
-		sb.WriteString(n[k])
-	}
-	sb.WriteString("]")
-	return sb.String()
+var labelsValuesPool = sync.Pool{
+	New: func() any {
+		return make([]string, 0, 5)
+	},
 }
 
-func mapToKey(m map[string]string) string {
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
+func getLabelsValues(minCapacity int) []string {
+	slice := labelsValuesPool.Get().([]string)
 
-	var sb strings.Builder
+	if cap(slice) < minCapacity {
+		labelsValuesPool.Put(slice)
+		return make([]string, 0, minCapacity)
+	}
+
+	return slice[:0]
+}
+
+var builderPool = sync.Pool{
+	New: func() any {
+		return &strings.Builder{}
+	},
+}
+
+func mapToStringSorted(cacheKey, cacheValue *orderedmap.OrderedMap[string, string]) string {
+	sb := builderPool.Get().(*strings.Builder)
+	defer func() {
+		sb.Reset()
+		builderPool.Put(sb)
+	}()
+
+	estimatedSize := (cacheKey.Len()+cacheValue.Len())*20 + 10
+	sb.Grow(estimatedSize)
+
+	sb.WriteString(mapToKey(cacheKey))
+	sb.WriteString(mapToKey(cacheValue))
+	out := sb.String()
+	return out
+}
+
+func mapToKey(m *orderedmap.OrderedMap[string, string]) string {
+	sb := new(strings.Builder)
+
+	sb.Grow(m.Len() * 15)
 	sb.WriteString("map[")
-	for i, k := range keys {
-		if i > 0 {
-			sb.WriteString(" ")
-		}
-		sb.WriteString(k)
+
+	for el := m.Front(); el != nil; el = el.Next() {
+		sb.WriteString(el.Key)
 		sb.WriteByte(':')
-		sb.WriteString(m[k])
+		sb.WriteString(el.Value)
+		sb.WriteByte(' ')
 	}
 	sb.WriteString("];")
-	return sb.String()
+
+	out := sb.String()
+	return out
 }
