@@ -10,8 +10,8 @@ import (
 	"go.uber.org/zap"
 )
 
-func NewClient(ctx context.Context, c *Config, l *zap.Logger, s Consumer, ts xoauth.TokenSource) *kgo.Client {
-	opts := cfg.GetKafkaClientOptions(c, l, ts)
+func NewClient(ctx context.Context, c *Config, l *zap.Logger, s Consumer, tokenSource xoauth.TokenSource) *kgo.Client {
+	opts := cfg.GetKafkaClientOptions(c, l, tokenSource)
 	opts = append(opts, []kgo.Opt{
 		kgo.ConsumerGroup(c.ConsumerGroup),
 		kgo.ConsumeTopics(c.Topics...),

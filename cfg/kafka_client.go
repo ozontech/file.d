@@ -98,7 +98,7 @@ func GetKafkaClientOAuthTokenSource(ctx context.Context, cfg KafkaClientConfig) 
 	}), nil
 }
 
-func GetKafkaClientOptions(c KafkaClientConfig, l *zap.Logger, ts xoauth.TokenSource) []kgo.Opt {
+func GetKafkaClientOptions(c KafkaClientConfig, l *zap.Logger, tokenSource xoauth.TokenSource) []kgo.Opt {
 	opts := []kgo.Opt{
 		kgo.SeedBrokers(c.GetBrokers()...),
 		kgo.ClientID(c.GetClientID()),
@@ -130,10 +130,13 @@ func GetKafkaClientOptions(c KafkaClientConfig, l *zap.Logger, ts xoauth.TokenSo
 			}.AsManagedStreamingIAMMechanism()))
 		case "OAUTHBEARER":
 			authFn := func(ctx context.Context) (oauth.Auth, error) {
-				if ts == nil {
+				if tokenSource == nil {
 					return oauth.Auth{}, errors.New("uninitialized token source")
 				}
-				t := ts.Token(ctx)
+				t := tokenSource.Token(ctx)
+				if t == nil {
+					return oauth.Auth{}, errors.New("empty token from token source")
+				}
 				return oauth.Auth{Token: t.AccessToken}, nil
 			}
 			opts = append(opts, kgo.SASL(oauth.Oauth(authFn)))

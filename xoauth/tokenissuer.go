@@ -20,20 +20,13 @@ const (
 	grantTypeClientCreds = "client_credentials"
 )
 
-type tokenJSON struct {
-	AccessToken string `json:"access_token"`
-	TokenType   string `json:"token_type"`
-	ExpiresIn   int64  `json:"expires_in"`
-	Scope       string `json:"scope"`
-}
-
-type tokenIssuer struct {
+type httpTokenIssuer struct {
 	client *http.Client
 	cfg    *Config
 }
 
-func newTokenIssuer(cfg *Config) *tokenIssuer {
-	return &tokenIssuer{
+func newHTTPTokenIssuer(cfg *Config) *httpTokenIssuer {
+	return &httpTokenIssuer{
 		client: &http.Client{
 			Timeout: defaultHttpTimeout,
 		},
@@ -41,15 +34,22 @@ func newTokenIssuer(cfg *Config) *tokenIssuer {
 	}
 }
 
-func (ti *tokenIssuer) issueToken(ctx context.Context) (Token, error) {
-	req, err := ti.newTokenRequest(ctx)
+type tokenJSON struct {
+	AccessToken string `json:"access_token"`
+	TokenType   string `json:"token_type"`
+	ExpiresIn   int64  `json:"expires_in"`
+	Scope       string `json:"scope"`
+}
+
+func (ti *httpTokenIssuer) issueToken(ctx context.Context) (*Token, error) {
+	req, err := newTokenRequest(ctx, ti.cfg)
 	if err != nil {
-		return Token{}, err
+		return nil, err
 	}
 
 	resp, err := ti.client.Do(req)
 	if err != nil {
-		return Token{}, err
+		return nil, err
 	}
 	defer func() {
 		_ = resp.Body.Close()
@@ -57,11 +57,11 @@ func (ti *tokenIssuer) issueToken(ctx context.Context) (Token, error) {
 
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if err != nil {
-		return Token{}, fmt.Errorf("cannot fetch token: %w", err)
+		return nil, fmt.Errorf("cannot fetch token: %w", err)
 	}
 
-	if c := resp.StatusCode; c < 200 || c > 299 {
-		return Token{}, &oauth2.RetrieveError{
+	if c := resp.StatusCode; c < http.StatusOK || c >= http.StatusMultipleChoices {
+		return nil, &oauth2.RetrieveError{
 			Response: resp,
 			Body:     body,
 		}
@@ -69,14 +69,14 @@ func (ti *tokenIssuer) issueToken(ctx context.Context) (Token, error) {
 
 	var data tokenJSON
 	if err := json.Unmarshal(body, &data); err != nil {
-		return Token{}, err
+		return nil, err
 	}
 
 	var expiry time.Time
 	if secs := data.ExpiresIn; secs > 0 {
 		expiry = xtime.GetInaccurateTime().Add(time.Duration(secs) * time.Second)
 	}
-	return Token{
+	return &Token{
 		AccessToken: data.AccessToken,
 		TokenType:   data.TokenType,
 		Expiry:      expiry,
@@ -84,29 +84,29 @@ func (ti *tokenIssuer) issueToken(ctx context.Context) (Token, error) {
 	}, nil
 }
 
-func (ti *tokenIssuer) newTokenRequest(ctx context.Context) (*http.Request, error) {
+func newTokenRequest(ctx context.Context, cfg *Config) (*http.Request, error) {
 	v := url.Values{}
 	v.Set("grant_type", grantTypeClientCreds)
-	if len(ti.cfg.Scopes) > 0 {
-		v.Set("scope", strings.Join(ti.cfg.Scopes, " "))
+	if len(cfg.Scopes) > 0 {
+		v.Set("scope", strings.Join(cfg.Scopes, " "))
 	}
 
-	if ti.cfg.AuthStyle == AuthStyleInParams {
-		v.Set("client_id", ti.cfg.ClientID)
-		if ti.cfg.ClientSecret != "" {
-			v.Set("client_secret", ti.cfg.ClientSecret)
+	if cfg.AuthStyle == AuthStyleInParams {
+		v.Set("client_id", cfg.ClientID)
+		if cfg.ClientSecret != "" {
+			v.Set("client_secret", cfg.ClientSecret)
 		}
 	}
 
 	reqBody := io.NopCloser(strings.NewReader(v.Encode()))
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, ti.cfg.TokenURL, reqBody)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, cfg.TokenURL, reqBody)
 	if err != nil {
 		return nil, err
 	}
 
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	if ti.cfg.AuthStyle == AuthStyleInHeader {
-		req.SetBasicAuth(url.QueryEscape(ti.cfg.ClientID), url.QueryEscape(ti.cfg.ClientSecret))
+	if cfg.AuthStyle == AuthStyleInHeader {
+		req.SetBasicAuth(url.QueryEscape(cfg.ClientID), url.QueryEscape(cfg.ClientSecret))
 	}
 
 	return req, nil

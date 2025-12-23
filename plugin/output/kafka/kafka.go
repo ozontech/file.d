@@ -40,9 +40,9 @@ type Plugin struct {
 	controller   pipeline.OutputPluginController
 	cancel       context.CancelFunc
 
-	client  KafkaClient
-	batcher *pipeline.RetriableBatcher
-	ts      xoauth.TokenSource
+	client      KafkaClient
+	batcher     *pipeline.RetriableBatcher
+	tokenSource xoauth.TokenSource
 
 	// plugin metrics
 	sendErrorMetric prometheus.Counter
@@ -270,12 +270,12 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.cancel = cancel
 
 	var err error
-	p.ts, err = cfg.GetKafkaClientOAuthTokenSource(ctx, p.config)
+	p.tokenSource, err = cfg.GetKafkaClientOAuthTokenSource(ctx, p.config)
 	if err != nil {
 		p.logger.Fatal(err.Error())
 	}
 
-	p.client = NewClient(ctx, p.config, p.logger, p.ts)
+	p.client = NewClient(ctx, p.config, p.logger, p.tokenSource)
 
 	batcherOpts := pipeline.BatcherOptions{
 		PipelineName:   params.PipelineName,
@@ -383,8 +383,8 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 func (p *Plugin) Stop() {
 	p.batcher.Stop()
 	p.client.Close()
-	if p.ts != nil {
-		p.ts.Stop()
+	if p.tokenSource != nil {
+		p.tokenSource.Stop()
 	}
 	p.cancel()
 }

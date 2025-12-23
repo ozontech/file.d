@@ -8,7 +8,6 @@ import (
 	"mime"
 	"net"
 	"net/http"
-	"os"
 
 	"golang.org/x/oauth2"
 )
@@ -62,7 +61,7 @@ func parseError(err error) *errorAuth {
 		return parseRetrieveError(err, retrieveErr)
 	}
 
-	if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) || errors.Is(err, os.ErrDeadlineExceeded) {
+	if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
 		return wrapErr(err, ecTimeout, "timeout")
 	}
 

@@ -16,8 +16,8 @@ type KafkaClient interface {
 	ForceMetadataRefresh()
 }
 
-func NewClient(ctx context.Context, c *Config, l *zap.Logger, ts xoauth.TokenSource) *kgo.Client {
-	opts := cfg.GetKafkaClientOptions(c, l, ts)
+func NewClient(ctx context.Context, c *Config, l *zap.Logger, tokenSource xoauth.TokenSource) *kgo.Client {
+	opts := cfg.GetKafkaClientOptions(c, l, tokenSource)
 	opts = append(opts, []kgo.Opt{
 		kgo.DefaultProduceTopic(c.DefaultTopic),
 		kgo.MaxBufferedRecords(c.BatchSize_),

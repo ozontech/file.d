@@ -54,7 +54,7 @@ type Plugin struct {
 
 	client        *kgo.Client
 	s             *splitConsume
-	ts            xoauth.TokenSource
+	tokenSource   xoauth.TokenSource
 	metaTemplater *metadata.MetaTemplater
 
 	// plugin metrics
@@ -319,12 +319,12 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	}
 
 	var err error
-	p.ts, err = cfg.GetKafkaClientOAuthTokenSource(ctx, p.config)
+	p.tokenSource, err = cfg.GetKafkaClientOAuthTokenSource(ctx, p.config)
 	if err != nil {
 		p.logger.Fatal(err.Error())
 	}
 
-	p.client = NewClient(ctx, p.config, p.logger, p.s, p.ts)
+	p.client = NewClient(ctx, p.config, p.logger, p.s, p.tokenSource)
 
 	p.controller.UseSpread()
 	p.controller.DisableStreams()
@@ -345,8 +345,8 @@ func (p *Plugin) Stop() {
 		p.logger.Error("can't commit marked offsets", zap.Error(err))
 	}
 	p.client.Close()
-	if p.ts != nil {
-		p.ts.Stop()
+	if p.tokenSource != nil {
+		p.tokenSource.Stop()
 	}
 	p.cancel()
 }
