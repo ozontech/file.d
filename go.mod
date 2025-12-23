@@ -161,4 +161,4 @@ require (
 	sigs.k8s.io/structured-merge-diff/v6 v6.3.0 // indirect
 )
 
-replace github.com/ozontech/insane-json => github.com/HeadHunter483/insane-json v0.0.0-20251020115930-22ac733527f5
+replace github.com/ozontech/insane-json => github.com/HeadHunter483/insane-json v0.0.0-20251226085615-89194e0cbc3a

@@ -1,8 +1,8 @@
 github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03qcyfWMU=
 github.com/ClickHouse/ch-go v0.65.1 h1:SLuxmLl5Mjj44/XbINsK2HFvzqup0s6rwKLFH347ZhU=
 github.com/ClickHouse/ch-go v0.65.1/go.mod h1:bsodgURwmrkvkBe5jw1qnGDgyITsYErfONKAHn05nv4=
-github.com/HeadHunter483/insane-json v0.0.0-20251020115930-22ac733527f5 h1:+H5kKZdH98PKdba2EqhS4fi214/s1oGG4kxxwCqb144=
-github.com/HeadHunter483/insane-json v0.0.0-20251020115930-22ac733527f5/go.mod h1:xZLf3tVLOqaT13rn1sv4fYaZfupAXNL9naLz4QRoMfY=
+github.com/HeadHunter483/insane-json v0.0.0-20251226085615-89194e0cbc3a h1:YJCkZEjkHeDg1VoC6MWj+ZlsYXUw8FkHl2FE0DpOVMU=
+github.com/HeadHunter483/insane-json v0.0.0-20251226085615-89194e0cbc3a/go.mod h1:xZLf3tVLOqaT13rn1sv4fYaZfupAXNL9naLz4QRoMfY=
 github.com/KimMachineGun/automemlimit v0.2.6 h1:tQFriVTcIteUkV5EgU9iz03eDY36T8JU5RAjP2r6Kt0=
 github.com/KimMachineGun/automemlimit v0.2.6/go.mod h1:pJhTW/nWJMj6SnWSU2TEKSlCaM+1N5Mej+IfS/5/Ol0=
 github.com/Masterminds/semver/v3 v3.1.1/go.mod h1:VPu/7SZ7ePZ3QOrcuXROw5FAcLl4a0cBrbBpGY/8hQs=
