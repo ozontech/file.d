@@ -2,6 +2,7 @@ package throttle
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -132,7 +133,6 @@ func TestIsLimitCfgChangedSame(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -140,4 +140,120 @@ func TestIsLimitCfgChangedSame(t *testing.T) {
 			require.Equal(t, tt.want, got)
 		})
 	}
+}
+
+func TestInMemoryLimiterUpdateDistribution(t *testing.T) {
+	const totalLimit int64 = 100
+
+	tests := []struct {
+		name string
+		cur  limitDistributionCfg
+		new  limitDistributionCfg
+
+		wantDistrField        []string
+		wantBucketsDistrCount int
+		wantErr               bool
+	}{
+		{
+			name:                  "both_empty",
+			cur:                   limitDistributionCfg{},
+			new:                   limitDistributionCfg{},
+			wantDistrField:        nil,
+			wantBucketsDistrCount: 0,
+		},
+		{
+			name: "cur_empty",
+			cur:  limitDistributionCfg{},
+			new: limitDistributionCfg{
+				Field: "test1",
+				Ratios: []limitDistributionRatio{
+					{Ratio: 0.5, Values: []string{"val1", "val2"}},
+				},
+			},
+			wantDistrField:        []string{"test1"},
+			wantBucketsDistrCount: 2,
+		},
+		{
+			name: "new_empty",
+			cur: limitDistributionCfg{
+				Field: "test1",
+				Ratios: []limitDistributionRatio{
+					{Ratio: 0.5, Values: []string{"val1", "val2"}},
+				},
+			},
+			new:                   limitDistributionCfg{},
+			wantDistrField:        nil,
+			wantBucketsDistrCount: 0,
+		},
+		{
+			name: "err_parsing_new",
+			cur: limitDistributionCfg{
+				Field: "test1",
+				Ratios: []limitDistributionRatio{
+					{Ratio: 0.5, Values: []string{"val1", "val2"}},
+				},
+			},
+			new: limitDistributionCfg{
+				Field: "test2",
+				Ratios: []limitDistributionRatio{
+					{Ratio: 0.5, Values: []string{"val3", "val4"}},
+					{Ratio: 10, Values: []string{"val5", "val6"}},
+				},
+			},
+			wantDistrField:        []string{"test1"},
+			wantBucketsDistrCount: 2,
+			wantErr:               true,
+		},
+		{
+			name: "both_not_empty",
+			cur: limitDistributionCfg{
+				Field: "test1",
+				Ratios: []limitDistributionRatio{
+					{Ratio: 0.5, Values: []string{"val1", "val2"}},
+				},
+			},
+			new: limitDistributionCfg{
+				Field: "test2",
+				Ratios: []limitDistributionRatio{
+					{Ratio: 0.3, Values: []string{"val3", "val4"}},
+					{Ratio: 0.4, Values: []string{"val5"}},
+				},
+			},
+			wantDistrField:        []string{"test2"},
+			wantBucketsDistrCount: 3,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			l, err := initTestInmemLimiter(tt.cur, totalLimit)
+			require.NoError(t, err)
+
+			err = l.updateDistribution(tt.new)
+			require.Equal(t, tt.wantErr, err != nil)
+			require.Equal(t, tt.wantDistrField, l.limit.distributions.field)
+			require.Equal(t, tt.wantBucketsDistrCount, l.buckets.getDistrCount())
+		})
+	}
+}
+
+func initTestInmemLimiter(distrCfg limitDistributionCfg, totalLimit int64) (*inMemoryLimiter, error) {
+	distr, err := parseLimitDistribution(distrCfg, totalLimit)
+	if err != nil {
+		return nil, err
+	}
+
+	return &inMemoryLimiter{
+		limit: complexLimit{
+			value:         totalLimit,
+			kind:          limitKindCount,
+			distributions: distr,
+		},
+		buckets: newBuckets(
+			1,
+			distr.size()+1, // +1 because of default distribution
+			time.Second,
+		),
+	}, nil
 }
