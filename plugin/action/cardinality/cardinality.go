@@ -90,7 +90,8 @@ type Plugin struct {
 	fields []parsedField
 	logger *zap.Logger
 
-	cardinalityApplyCounter *prometheus.CounterVec
+	cardinalityApplyCounter      *prometheus.CounterVec
+	cardinalityUniqueValuesGauge *prometheus.GaugeVec
 }
 
 type parsedField struct {
@@ -102,6 +103,7 @@ type parsedField struct {
 const (
 	actionDiscard      = "discard"
 	actionRemoveFields = "remove_fields"
+	actionNothing      = "nothing"
 )
 
 // ! config-params
@@ -205,6 +207,17 @@ func (p *Plugin) registerMetrics(ctl *metric.Ctl, prefix string) {
 		"Total number of events applied due to cardinality limits",
 		keyMetricLabels(p.keys)...,
 	)
+
+	if prefix == "" {
+		metricName = "cardinality_unique_values_count"
+	} else {
+		metricName = fmt.Sprintf(`cardinality_unique_values_%s_count`, prefix)
+	}
+	p.cardinalityUniqueValuesGauge = ctl.RegisterGaugeVec(
+		metricName,
+		"Count of unique values",
+		keyMetricLabels(p.keys)...,
+	)
 }
 
 func keyMetricLabels(fields []parsedField) []string {
@@ -232,18 +245,20 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 		cacheKey.Set(key.name, value)
 	}
 
+	labelsValues := getLabelsValues(len(p.keys))
+	defer labelsValuesPool.Put(labelsValues)
+	for _, key := range p.keys {
+		if val, exists := cacheKey.Get(key.name); exists {
+			labelsValues = append(labelsValues, val)
+		}
+	}
+
 	prefixKey := mapToKey(cacheKey)
 	keysCount := p.cache.CountPrefix(prefixKey)
 
-	if p.config.Limit >= 0 && keysCount >= p.config.Limit {
-		labelsValues := getLabelsValues(len(p.keys))
-		defer labelsValuesPool.Put(labelsValues)
+	shouldUpdateCache := false
 
-		for _, key := range p.keys {
-			if val, exists := cacheKey.Get(key.name); exists {
-				labelsValues = append(labelsValues, val)
-			}
-		}
+	if p.config.Limit >= 0 && keysCount >= p.config.Limit {
 		p.cardinalityApplyCounter.WithLabelValues(labelsValues...).Inc()
 		switch p.config.Action {
 		case actionDiscard:
@@ -252,16 +267,28 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 			for _, key := range p.fields {
 				event.Root.Dig(key.value...).Suicide()
 			}
+		case actionNothing:
+			shouldUpdateCache = true
 		}
 	} else {
+		shouldUpdateCache = true
+	}
+
+	if shouldUpdateCache {
 		cacheValue := orderedmap.NewOrderedMap[string, string]()
 		for _, key := range p.fields {
 			value := pipeline.CloneString(event.Root.Dig(key.value...).AsString())
 			cacheValue.Set(key.name, value)
 		}
 		value := mapToStringSorted(cacheKey, cacheValue)
-		p.cache.Set(value)
+		isOldValue := p.cache.Set(value)
+		if !isOldValue {
+			// is new value
+			keysCount++
+			p.cardinalityUniqueValuesGauge.WithLabelValues(labelsValues...).Set(float64(keysCount))
+		}
 	}
+
 	return pipeline.ActionPass
 }
 

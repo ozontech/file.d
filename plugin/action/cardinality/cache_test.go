@@ -18,10 +18,12 @@ func TestSetAndExists(t *testing.T) {
 
 	t.Run("basic set and get", func(t *testing.T) {
 		key := "test-key"
-		assert.True(t, cache.Set(key))
+		assert.False(t, cache.Set(key))
 
 		found := cacheKeyIsExists(cache, key)
 		assert.True(t, found)
+
+		assert.True(t, cache.Set(key))
 	})
 
 	t.Run("non-existent key", func(t *testing.T) {
