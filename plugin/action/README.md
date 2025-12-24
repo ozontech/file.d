@@ -10,23 +10,7 @@ It adds field containing hostname to an event.
 
 [More details...](plugin/action/add_host/README.md)
 ## cardinality
-Limits the cardinality of fields on events or drops events.
-
-**An example for discarding events with high cardinality field:**
-```yaml
-pipelines:
-  example_pipeline:
-    ...
-    - type: cardinality
-      limit: 10
-      action: discard
-      metric_prefix: service_zone
-      key:
-        - service
-      fields:
-        - zone
-    ...
-```
+Limits the cardinality of fields on events, drops events or just do nothing.
 
 [More details...](plugin/action/cardinality/README.md)
 ## convert_date

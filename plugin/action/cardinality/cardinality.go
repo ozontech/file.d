@@ -17,23 +17,70 @@ import (
 )
 
 /*{ introduction
-Limits the cardinality of fields on events or drops events.
+Limits the cardinality of fields on events, drops events or just do nothing.
+}*/
 
-**An example for discarding events with high cardinality field:**
+/*{ examples
+Discarding events with high cardinality field:
 ```yaml
 pipelines:
   example_pipeline:
     ...
     - type: cardinality
-      limit: 10
+      limit: 2
       action: discard
-      metric_prefix: service_zone
+      ttl: 1m
+      metric_prefix: service_client
       key:
         - service
       fields:
-        - zone
+        - client_id
     ...
 ```
+The original event:
+```jsonl
+{"service": "registration", "client_id": "1"}
+{"service": "registration", "client_id": "1"}
+{"service": "registration", "client_id": "2"}
+{"service": "registration", "client_id": "3"} // will be discarded
+```
+The resulting event:
+```json
+{"service": "registration", "client_id": "1"}
+{"service": "registration", "client_id": "1"}
+{"service": "registration", "client_id": "2"}
+```
+---
+
+Discarding events with high cardinality field:
+```yaml
+pipelines:
+  example_pipeline:
+    ...
+    - type: cardinality
+      limit: 2
+      action: remove_fields
+      ttl: 1m
+      metric_prefix: service_client
+      key:
+        - service
+      fields:
+        - client_id
+    ...
+```
+The original event:
+```jsonl
+{"service": "registration", "client_id": "1"}
+{"service": "registration", "client_id": "2"}
+{"service": "registration", "client_id": "3"}
+```
+The resulting event:
+```json
+{"service": "registration", "client_id": "1"}
+{"service": "registration", "client_id": "2"}
+{"service": "registration"}
+```
+---
 }*/
 
 type Plugin struct {
