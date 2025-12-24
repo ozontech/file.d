@@ -198,17 +198,6 @@ func parseFields(fields []cfg.FieldSelector) []parsedField {
 func (p *Plugin) registerMetrics(ctl *metric.Ctl, prefix string) {
 	var metricName string
 	if prefix == "" {
-		metricName = "cardinality_applied_total"
-	} else {
-		metricName = fmt.Sprintf(`cardinality_applied_%s_total`, prefix)
-	}
-	p.cardinalityApplyCounter = ctl.RegisterCounterVec(
-		metricName,
-		"Total number of events applied due to cardinality limits",
-		keyMetricLabels(p.keys)...,
-	)
-
-	if prefix == "" {
 		metricName = "cardinality_unique_values_count"
 	} else {
 		metricName = fmt.Sprintf(`cardinality_unique_values_%s_count`, prefix)
@@ -218,6 +207,17 @@ func (p *Plugin) registerMetrics(ctl *metric.Ctl, prefix string) {
 		"Count of unique values",
 		keyMetricLabels(p.keys)...,
 	)
+
+	if prefix == "" {
+		metricName = "cardinality_values_limit"
+	} else {
+		metricName = fmt.Sprintf(`cardinality_values_%s_limit`, prefix)
+	}
+	cardinalityUniqueValuesLimit := ctl.RegisterGauge(
+		metricName,
+		"Limit of unique values",
+	)
+	cardinalityUniqueValuesLimit.Set(float64(p.config.Limit))
 }
 
 func keyMetricLabels(fields []parsedField) []string {
@@ -245,21 +245,12 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 		cacheKey.Set(key.name, value)
 	}
 
-	labelsValues := getLabelsValues(len(p.keys))
-	defer labelsValuesPool.Put(labelsValues)
-	for _, key := range p.keys {
-		if val, exists := cacheKey.Get(key.name); exists {
-			labelsValues = append(labelsValues, val)
-		}
-	}
-
 	prefixKey := mapToKey(cacheKey)
 	keysCount := p.cache.CountPrefix(prefixKey)
 
 	shouldUpdateCache := false
 
 	if p.config.Limit >= 0 && keysCount >= p.config.Limit {
-		p.cardinalityApplyCounter.WithLabelValues(labelsValues...).Inc()
 		switch p.config.Action {
 		case actionDiscard:
 			return pipeline.ActionDiscard
@@ -285,6 +276,13 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 		if !isOldValue {
 			// is new value
 			keysCount++
+			labelsValues := getLabelsValues(len(p.keys))
+			defer labelsValuesPool.Put(labelsValues)
+			for _, key := range p.keys {
+				if val, exists := cacheKey.Get(key.name); exists {
+					labelsValues = append(labelsValues, val)
+				}
+			}
 			p.cardinalityUniqueValuesGauge.WithLabelValues(labelsValues...).Set(float64(keysCount))
 		}
 	}
