@@ -26,8 +26,8 @@ func (c *Cache) Set(key string) bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	c.tree.Insert(key, xtime.GetInaccurateUnixNano())
-	return true
+	_, result := c.tree.Insert(key, xtime.GetInaccurateUnixNano())
+	return result
 }
 
 func (c *Cache) isExpire(now, value int64) bool {
