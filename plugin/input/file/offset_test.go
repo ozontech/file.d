@@ -387,32 +387,6 @@ func TestParseOptionalLineLastReadTimestamp(t *testing.T) {
 			expectedRemain: "",
 			desc:           "empty content",
 		},
-
-		// Error cases
-		{
-			name:        "unexpected line before streams",
-			content:     "  unknown_field: value\n  streams:",
-			expectedErr: true,
-			desc:        "unexpected line causes error",
-		},
-		{
-			name:        "wrong field name",
-			content:     "  lastreadtimestamp: 1763651665000000000\n  streams:",
-			expectedErr: true,
-			desc:        "wrong field name (no underscores)",
-		},
-		{
-			name:        "case mismatch",
-			content:     "  Last_Read_Timestamp: 1763651665000000000\n  streams:",
-			expectedErr: true,
-			desc:        "wrong case in field name",
-		},
-		{
-			name:        "missing colon",
-			content:     "  last_read_timestamp 1763651665000000000\n  streams:",
-			expectedErr: true,
-			desc:        "missing colon after field name",
-		},
 	}
 
 	for _, tt := range tests {

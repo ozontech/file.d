@@ -286,5 +286,4 @@ func TestEOFInfo(t *testing.T) {
 		gotTime := e.getTimestamp()
 		assert.Equal(t, newUnixTs, gotTime.UnixNano())
 	})
-
 }
