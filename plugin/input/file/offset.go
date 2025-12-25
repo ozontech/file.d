@@ -220,18 +220,7 @@ func (o *offsetDB) parseOptionalLine(content string, prefix string) (string, str
 		return o.parseLine(content, prefix)
 	}
 
-	if strings.HasPrefix(content, "  streams:") || content[0] == '-' {
-		return "", content, nil
-	}
-
-	linePos := strings.IndexByte(content, '\n')
-	var nextLine string
-	if linePos >= 0 {
-		nextLine = content[:linePos]
-	} else {
-		nextLine = content
-	}
-	return "", "", fmt.Errorf("unexpected line format, expected %q or streams section, got %q", prefix, safeSubstring(nextLine, len(prefix)))
+	return "", content, nil
 }
 
 func safeSubstring(s string, length int) string {

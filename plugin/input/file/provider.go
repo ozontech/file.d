@@ -9,8 +9,6 @@ import (
 	"syscall"
 	"time"
 
-	sync_atomic "sync/atomic"
-
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/xtime"
@@ -104,37 +102,38 @@ func (j *Job) seek(offset int64, whence int, hint string) (n int64) {
 	return n
 }
 
+// eofInfo tracks end-of-file state for read operations.
+// Used to determine when files can be safely removed after processing.
 type eofInfo struct {
-	timestamp int64
-	offset    int64
+	timestamp atomic.Int64
+	offset    atomic.Int64
 }
 
 func (e *eofInfo) setTimestamp(t time.Time) {
-	sync_atomic.StoreInt64(&e.timestamp, t.UnixNano())
+	e.timestamp.Store(t.UnixNano())
 }
 
 func (e *eofInfo) getTimestamp() time.Time {
-	nanos := sync_atomic.LoadInt64(&e.timestamp)
+	nanos := e.timestamp.Load()
 	return time.Unix(0, nanos)
 }
 
 // setUnixNanoTimestamp sets timestamp in seconds
 func (e *eofInfo) setUnixNanoTimestamp(nanos int64) {
-	sync_atomic.StoreInt64(&e.timestamp, nanos)
+	e.timestamp.Store(nanos)
 }
 
 // getUnixNanoTimestamp returns timestamp in seconds
 func (e *eofInfo) getUnixNanoTimestamp() int64 {
-	nanos := sync_atomic.LoadInt64(&e.timestamp)
-	return nanos
+	return e.timestamp.Load()
 }
 
 func (e *eofInfo) setOffset(offset int64) {
-	sync_atomic.StoreInt64(&e.offset, offset)
+	e.offset.Store(offset)
 }
 
 func (e *eofInfo) getOffset() int64 {
-	return sync_atomic.LoadInt64(&e.offset)
+	return e.offset.Load()
 }
 
 type inodeID uint64

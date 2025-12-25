@@ -100,7 +100,7 @@ func (w *worker) work(controller inputer, jobProvider *jobProvider, readBufferSi
 		if job.mimeType == "application/x-lz4" {
 			if isNotFileBeingWritten(file.Name()) {
 				// lz4 does not support appending, so we check that no one is writing to the file
-				logger.Error("cannot lock file", zap.String("filename", file.Name()))
+				logger.Error("cannot process incomplete file. write in progress", zap.String("filename", file.Name()))
 				break
 			}
 			lz4Reader := lz4.NewReader(file)
@@ -132,14 +132,14 @@ func (w *worker) work(controller inputer, jobProvider *jobProvider, readBufferSi
 		for {
 			n, err := reader.Read(readBuf)
 			controller.IncReadOps()
-			// if we read to end of file it's time to check truncation etc and process next job
-			if (!job.isCompressed && err == io.EOF) || n == 0 {
-				// cause lz4reader can return EOF and n > 0
-				isEOFReached = true
-				break
-			}
 			if err != nil {
-				if !job.isCompressed && err != io.EOF {
+				if (!job.isCompressed && err == io.EOF) || n == 0 {
+					// cause lz4reader can return EOF and n > 0
+					isEOFReached = true
+					break
+				}
+				if !(job.isCompressed && (err == io.EOF || err == io.ErrUnexpectedEOF)) {
+					// except EOF-errors on compressed file
 					logger.Fatalf("file %d:%s read error, %s read=%d", sourceID, sourceName, err.Error(), n)
 				}
 			}
