@@ -18,18 +18,12 @@ pipelines:
         - client_id
     ...
 ```
-The original event:
+Events:
 ```jsonl
 {"service": "registration", "client_id": "1"}
 {"service": "registration", "client_id": "1"}
 {"service": "registration", "client_id": "2"}
 {"service": "registration", "client_id": "3"} // will be discarded
-```
-The resulting event:
-```json
-{"service": "registration", "client_id": "1"}
-{"service": "registration", "client_id": "1"}
-{"service": "registration", "client_id": "2"}
 ```
 ---
 
@@ -49,19 +43,18 @@ pipelines:
         - client_id
     ...
 ```
-The original event:
+The original events:
 ```jsonl
 {"service": "registration", "client_id": "1"}
 {"service": "registration", "client_id": "2"}
 {"service": "registration", "client_id": "3"}
 ```
-The resulting event:
-```json
+The resulting events:
+```jsonl
 {"service": "registration", "client_id": "1"}
 {"service": "registration", "client_id": "2"}
 {"service": "registration"}
 ```
----
 
 ## Config params
 **`key`** *`[]cfg.FieldSelector`* *`required`* 

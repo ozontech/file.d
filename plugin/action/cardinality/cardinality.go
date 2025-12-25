@@ -37,18 +37,12 @@ pipelines:
         - client_id
     ...
 ```
-The original event:
-```jsonl
-{"service": "registration", "client_id": "1"}
-{"service": "registration", "client_id": "1"}
-{"service": "registration", "client_id": "2"}
-{"service": "registration", "client_id": "3"} // will be discarded
-```
-The resulting event:
+Events:
 ```json
 {"service": "registration", "client_id": "1"}
 {"service": "registration", "client_id": "1"}
 {"service": "registration", "client_id": "2"}
+{"service": "registration", "client_id": "3"} // will be discarded
 ```
 ---
 
@@ -68,19 +62,18 @@ pipelines:
         - client_id
     ...
 ```
-The original event:
-```jsonl
+The original events:
+```json
 {"service": "registration", "client_id": "1"}
 {"service": "registration", "client_id": "2"}
 {"service": "registration", "client_id": "3"}
 ```
-The resulting event:
+The resulting events:
 ```json
 {"service": "registration", "client_id": "1"}
 {"service": "registration", "client_id": "2"}
 {"service": "registration"}
 ```
----
 }*/
 
 type Plugin struct {
@@ -90,14 +83,13 @@ type Plugin struct {
 	fields []parsedField
 	logger *zap.Logger
 
-	cardinalityApplyCounter      *prometheus.CounterVec
+	cardinalityUniqueValuesLimit prometheus.Gauge
 	cardinalityUniqueValuesGauge *prometheus.GaugeVec
 }
 
 type parsedField struct {
 	name  string
 	value []string
-	// value *orderedmap.NewOrderedMap[string, any]
 }
 
 const (
@@ -171,7 +163,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 	p.cache = NewCache(p.config.TTL_)
 
 	if len(p.config.Fields) == 0 {
-		p.logger.Fatal("you have to set key fields")
+		p.logger.Fatal("you have to set fields")
 	}
 
 	p.keys = parseFields(p.config.KeyFields)
@@ -213,11 +205,11 @@ func (p *Plugin) registerMetrics(ctl *metric.Ctl, prefix string) {
 	} else {
 		metricName = fmt.Sprintf(`cardinality_values_%s_limit`, prefix)
 	}
-	cardinalityUniqueValuesLimit := ctl.RegisterGauge(
+	p.cardinalityUniqueValuesLimit = ctl.RegisterGauge(
 		metricName,
 		"Limit of unique values",
 	)
-	cardinalityUniqueValuesLimit.Set(float64(p.config.Limit))
+	p.cardinalityUniqueValuesLimit.Set(float64(p.config.Limit))
 }
 
 func keyMetricLabels(fields []parsedField) []string {
