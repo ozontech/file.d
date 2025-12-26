@@ -436,11 +436,11 @@ func (p *processor) Spawn(parent *Event, nodes []*insaneJSON.Node) {
 		// we can't reuse parent event (using insaneJSON.Root{Node: child}
 		// because of nil decoder
 		child := &Event{
-			Root:       insaneJSON.Spawn(),
+			Root:       nil,
 			SourceName: parent.SourceName,
 		}
 		parent.children = append(parent.children, child)
-		child.Root.MutateToNode(node)
+		child.Root = node.ConvertToRoot(parent.Root)
 		child.SetChildKind()
 		child.action = nextActionIdx
 
