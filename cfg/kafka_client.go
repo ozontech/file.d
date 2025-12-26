@@ -1,10 +1,14 @@
 package cfg
 
 import (
+	"context"
+	"errors"
 	"os"
 
+	"github.com/ozontech/file.d/xoauth"
 	"github.com/twmb/franz-go/pkg/kgo"
 	"github.com/twmb/franz-go/pkg/sasl/aws"
+	"github.com/twmb/franz-go/pkg/sasl/oauth"
 	"github.com/twmb/franz-go/pkg/sasl/plain"
 	"github.com/twmb/franz-go/pkg/sasl/scram"
 	"github.com/twmb/franz-go/plugin/kzap"
@@ -27,6 +31,8 @@ type KafkaClientSaslConfig struct {
 	SaslMechanism string
 	SaslUsername  string
 	SaslPassword  string
+
+	SaslOAuth KafkaClientOAuthConfig
 }
 
 type KafkaClientSslConfig struct {
@@ -36,7 +42,63 @@ type KafkaClientSslConfig struct {
 	SslSkipVerify bool
 }
 
-func GetKafkaClientOptions(c KafkaClientConfig, l *zap.Logger) []kgo.Opt {
+type KafkaClientOAuthConfig struct {
+	// static
+	Token string `json:"token"`
+
+	// dynamic
+	ClientID     string   `json:"client_id"`
+	ClientSecret string   `json:"client_secret"`
+	TokenURL     string   `json:"token_url"`
+	Scopes       []string `json:"scopes" slice:"true"`
+	AuthStyle    string   `json:"auth_style" default:"params" options:"params|header"`
+}
+
+func (c *KafkaClientOAuthConfig) isStatic() bool {
+	return c.Token != ""
+}
+
+func (c *KafkaClientOAuthConfig) isDynamic() bool {
+	return c.ClientID != "" && c.ClientSecret != "" && c.TokenURL != ""
+}
+
+func (c *KafkaClientOAuthConfig) isValid() bool {
+	return c.isStatic() || c.isDynamic()
+}
+
+func GetKafkaClientOAuthTokenSource(ctx context.Context, cfg KafkaClientConfig) (xoauth.TokenSource, error) {
+	saslCfg := cfg.GetSaslConfig()
+
+	if !cfg.IsSaslEnabled() || saslCfg.SaslMechanism != "OAUTHBEARER" {
+		return nil, nil
+	}
+
+	saslOAuth := saslCfg.SaslOAuth
+	if !saslOAuth.isValid() {
+		return nil, errors.New("invalid SASL OAUTHBEARER config")
+	}
+
+	if saslOAuth.isDynamic() {
+		authStyle := xoauth.AuthStyleInParams
+		if saslOAuth.AuthStyle == "header" {
+			authStyle = xoauth.AuthStyleInHeader
+		}
+
+		return xoauth.NewReuseTokenSource(ctx, &xoauth.Config{
+			ClientID:     saslOAuth.ClientID,
+			ClientSecret: saslOAuth.ClientSecret,
+			TokenURL:     saslOAuth.TokenURL,
+			Scopes:       saslOAuth.Scopes,
+			AuthStyle:    authStyle,
+		})
+	}
+
+	return xoauth.NewStaticTokenSource(&xoauth.Token{
+		AccessToken: saslOAuth.Token,
+	}), nil
+}
+
+func GetKafkaClientOptions(c KafkaClientConfig, l *zap.Logger, tokenSource xoauth.TokenSource) []kgo.Opt {
 	opts := []kgo.Opt{
 		kgo.SeedBrokers(c.GetBrokers()...),
 		kgo.ClientID(c.GetClientID()),
@@ -66,6 +128,18 @@ func GetKafkaClientOptions(c KafkaClientConfig, l *zap.Logger) []kgo.Opt {
 				AccessKey: saslConfig.SaslUsername,
 				SecretKey: saslConfig.SaslPassword,
 			}.AsManagedStreamingIAMMechanism()))
+		case "OAUTHBEARER":
+			authFn := func(ctx context.Context) (oauth.Auth, error) {
+				if tokenSource == nil {
+					return oauth.Auth{}, errors.New("uninitialized token source")
+				}
+				t := tokenSource.Token(ctx)
+				if t == nil {
+					return oauth.Auth{}, errors.New("empty token from token source")
+				}
+				return oauth.Auth{Token: t.AccessToken}, nil
+			}
+			opts = append(opts, kgo.SASL(oauth.Oauth(authFn)))
 		}
 	}
 

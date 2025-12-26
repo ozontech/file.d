@@ -3,12 +3,14 @@ package kafka
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/xoauth"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/twmb/franz-go/pkg/kerr"
 	"github.com/twmb/franz-go/pkg/kgo"
@@ -32,13 +34,15 @@ type data struct {
 }
 
 type Plugin struct {
-	logger       *zap.SugaredLogger
+	logger       *zap.Logger
 	config       *Config
 	avgEventSize int
 	controller   pipeline.OutputPluginController
+	cancel       context.CancelFunc
 
-	client  KafkaClient
-	batcher *pipeline.RetriableBatcher
+	client      KafkaClient
+	batcher     *pipeline.RetriableBatcher
+	tokenSource xoauth.TokenSource
 
 	// plugin metrics
 	sendErrorMetric prometheus.Counter
@@ -151,7 +155,7 @@ type Config struct {
 	// > @3@4@5@6
 	// >
 	// > SASL mechanism to use.
-	SaslMechanism string `json:"sasl_mechanism" default:"SCRAM-SHA-512" options:"PLAIN|SCRAM-SHA-256|SCRAM-SHA-512"` // *
+	SaslMechanism string `json:"sasl_mechanism" default:"SCRAM-SHA-512" options:"PLAIN|SCRAM-SHA-256|SCRAM-SHA-512|AWS_MSK_IAM|OAUTHBEARER"` // *
 
 	// > @3@4@5@6
 	// >
@@ -162,6 +166,21 @@ type Config struct {
 	// >
 	// > SASL password.
 	SaslPassword string `json:"sasl_password" default:"password"` // *
+
+	// > @3@4@5@6
+	// >
+	// > SASL OAUTHBEARER config. It works only if `sasl_mechanism:"OAUTHBEARER"`.
+	// >> There are 2 options - a static token or a dynamically updated.
+	// >
+	// > `OAuthConfig` params:
+	// > * **`token`** *`string`* - static token
+	// > ---
+	// > * **`client_id`** *`string`* - client ID
+	// > * **`client_secret`** *`string`* - client secret
+	// > * **`token_url`** *`string`* - resource server's token endpoint URL
+	// > * **`scopes`** *`[]string`* - optional requested permissions
+	// > * **`auth_style`** *`string`* - specifies how the endpoint wants the client ID & client secret sent
+	SaslOAuth cfg.KafkaClientOAuthConfig `json:"sasl_oauth" child:"true"` // *
 
 	// > @3@4@5@6
 	// >
@@ -206,6 +225,7 @@ func (c *Config) GetSaslConfig() cfg.KafkaClientSaslConfig {
 		SaslMechanism: c.SaslMechanism,
 		SaslUsername:  c.SaslUsername,
 		SaslPassword:  c.SaslPassword,
+		SaslOAuth:     c.SaslOAuth,
 	}
 }
 
@@ -235,7 +255,7 @@ func Factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginParams) {
 	p.config = config.(*Config)
-	p.logger = params.Logger
+	p.logger = params.Logger.Desugar()
 	p.avgEventSize = params.PipelineSettings.AvgEventSize
 	p.controller = params.Controller
 	p.registerMetrics(params.MetricCtl)
@@ -244,9 +264,18 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		p.logger.Fatal("'retention' can't be <1")
 	}
 
-	p.logger.Infof("workers count=%d, batch size=%d", p.config.WorkersCount_, p.config.BatchSize_)
+	p.logger.Info(fmt.Sprintf("workers count=%d, batch size=%d", p.config.WorkersCount_, p.config.BatchSize_))
 
-	p.client = NewClient(p.config, p.logger.Desugar())
+	ctx, cancel := context.WithCancel(context.Background())
+	p.cancel = cancel
+
+	var err error
+	p.tokenSource, err = cfg.GetKafkaClientOAuthTokenSource(ctx, p.config)
+	if err != nil {
+		p.logger.Fatal(err.Error())
+	}
+
+	p.client = NewClient(ctx, p.config, p.logger, p.tokenSource)
 
 	batcherOpts := pipeline.BatcherOptions{
 		PipelineName:   params.PipelineName,
@@ -275,7 +304,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 			level = zapcore.ErrorLevel
 		}
 
-		p.logger.Desugar().Log(level, "can't write batch",
+		p.logger.Log(level, "can't write batch",
 			zap.Int("retries", p.config.Retry),
 		)
 
@@ -343,7 +372,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 		if errors.Is(err, kerr.LeaderNotAvailable) || errors.Is(err, kerr.NotLeaderForPartition) {
 			p.client.ForceMetadataRefresh()
 		}
-		p.logger.Errorf("can't write batch: %v", err)
+		p.logger.Error("can't write batch", zap.Error(err))
 		p.sendErrorMetric.Inc()
 		return err
 	}
@@ -354,4 +383,8 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 func (p *Plugin) Stop() {
 	p.batcher.Stop()
 	p.client.Close()
+	if p.tokenSource != nil {
+		p.tokenSource.Stop()
+	}
+	p.cancel()
 }
