@@ -30,6 +30,7 @@ require (
 	github.com/klauspost/compress v1.18.1
 	github.com/minio/minio-go v6.0.14+incompatible
 	github.com/ozontech/insane-json v0.1.9
+	github.com/pierrec/lz4/v4 v4.1.22
 	github.com/prometheus/client_golang v1.16.0
 	github.com/prometheus/client_model v0.3.0
 	github.com/prometheus/common v0.42.0
@@ -117,7 +118,6 @@ require (
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/opencontainers/runtime-spec v1.0.2 // indirect
 	github.com/pascaldekloe/name v1.0.1 // indirect
-	github.com/pierrec/lz4/v4 v4.1.22 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/ryanuber/go-glob v1.0.0 // indirect
