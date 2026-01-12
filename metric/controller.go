@@ -40,7 +40,7 @@ func NewCtl(subsystem string, registry *prometheus.Registry, metricHoldDuration 
 	return ctl
 }
 
-func (mc *Ctl) HolderMaintenance() {
+func (mc *Ctl) Maintenance() {
 	if mc.holder == nil {
 		return
 	}

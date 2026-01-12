@@ -705,27 +705,25 @@ func (am *actionMetrics) get(name string) *actionMetric {
 func (p *Pipeline) AddAction(info *ActionPluginStaticInfo) {
 	p.actionInfos = append(p.actionInfos, info)
 
-	mCtl := p.metricCtl
-
 	labels := make([]string, 0, len(info.MetricLabels)+1)
 	if !info.MetricSkipStatus {
 		labels = append(labels, "status")
 	}
 	labels = append(labels, info.MetricLabels...)
 
-	count := mCtl.RegisterCounterVec(
+	count := p.metricCtl.RegisterCounterVec(
 		info.MetricName+"_events_count_total",
 		fmt.Sprintf("how many events processed by pipeline %q and #%d action", p.Name, len(p.actionInfos)-1),
 		labels...,
 	)
-	mCtl.AddToHolder(count)
+	p.metricCtl.AddToHolder(count)
 
-	size := mCtl.RegisterCounterVec(
+	size := p.metricCtl.RegisterCounterVec(
 		info.MetricName+"_events_size_total",
 		fmt.Sprintf("total size of events processed by pipeline %q and #%d action", p.Name, len(p.actionInfos)-1),
 		labels...,
 	)
-	mCtl.AddToHolder(size)
+	p.metricCtl.AddToHolder(size)
 
 	totalCounter := make(map[string]*atomic.Uint64)
 	for _, st := range allEventStatuses() {
@@ -896,7 +894,7 @@ func (p *Pipeline) maintenance() {
 		}
 
 		p.antispamer.Maintenance()
-		p.actionParams.MetricCtl.HolderMaintenance()
+		p.metricCtl.Maintenance()
 
 		myDeltas := p.incMetrics(inputEvents, inputSize, outputEvents, outputSize, readOps)
 		p.setMetrics(p.eventPool.inUse())

@@ -9,7 +9,6 @@ import (
 	"net/http/pprof"
 	"runtime"
 	"runtime/debug"
-	"time"
 
 	"github.com/bitly/go-simplejson"
 	"github.com/ozontech/file.d/buildinfo"
@@ -64,7 +63,7 @@ func (f *FileD) Start() {
 }
 
 func (f *FileD) initMetrics() {
-	f.metricCtl = metric.NewCtl("file_d", f.registry, time.Minute)
+	f.metricCtl = metric.NewCtl("file_d", f.registry, 0)
 	f.versionMetric = f.metricCtl.RegisterGaugeVec("version", "", "version")
 	f.versionMetric.WithLabelValues(buildinfo.Version).Inc()
 }
