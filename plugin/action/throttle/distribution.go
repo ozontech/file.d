@@ -12,8 +12,8 @@ import (
 
 type limitDistributionMetrics struct {
 	CustomLabels []string
-	EventsCount  metric.HeldCounterVec
-	EventsSize   metric.HeldCounterVec
+	EventsCount  *metric.CounterVec
+	EventsSize   *metric.CounterVec
 }
 
 type limitDistributionRatio struct {

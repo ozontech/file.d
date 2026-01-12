@@ -5,11 +5,10 @@ import (
 
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
-	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
 )
 
-func (p *Plugin) makeMetric(ctl *metric.Ctl, name, help string, labels ...string) *prometheus.CounterVec {
+func (p *Plugin) makeMetric(ctl *metric.Ctl, name, help string, labels ...string) *metric.CounterVec {
 	if name == "" {
 		return nil
 	}

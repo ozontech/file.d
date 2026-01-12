@@ -5,7 +5,6 @@ import (
 
 	"github.com/ozontech/file.d/pipeline/metadata"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/atomic"
@@ -220,7 +219,7 @@ func TestCheckInputBytesMetric(t *testing.T) {
 			pipe.checkInputBytes([]byte("some log"), tCase.sourceName, tCase.meta)
 
 			for k, v := range tCase.want {
-				require.Equal(t, v, testutil.ToFloat64(pipe.maxEventSizeExceededMetric.WithLabelValues(k)))
+				require.Equal(t, v, pipe.maxEventSizeExceededMetric.WithLabelValues(k).ToFloat64())
 			}
 		})
 	}

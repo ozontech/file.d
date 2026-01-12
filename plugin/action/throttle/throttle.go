@@ -7,7 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
 
 	"github.com/ozontech/file.d/cfg"
@@ -52,7 +51,7 @@ type Plugin struct {
 	rules       []*rule
 
 	// plugin metrics
-	limitersMapSizeMetric prometheus.Gauge
+	limitersMapSizeMetric *metric.Gauge
 	limitDistrMetrics     *limitDistributionMetrics
 }
 
@@ -485,21 +484,24 @@ func (p *Plugin) registerMetrics(ctl *metric.Ctl, limitDistrMetricsLabels []stri
 		"Size of internal map of throttle limiters",
 	)
 
-	labels := []string{"distribution_value"}
+	labels := make([]string, 0, 1+len(limitDistrMetricsLabels))
+	labels = append(labels, "distribution_value")
 	labels = append(labels, limitDistrMetricsLabels...)
 	p.limitDistrMetrics = &limitDistributionMetrics{
 		CustomLabels: limitDistrMetricsLabels,
-		EventsCount: metric.NewHeldCounterVec(ctl.RegisterCounterVec(
+		EventsCount: ctl.RegisterCounterVec(
 			"throttle_distributed_events_count_total",
 			"total count of events that have been throttled using limit distribution",
 			labels...,
-		)),
-		EventsSize: metric.NewHeldCounterVec(ctl.RegisterCounterVec(
+		),
+		EventsSize: ctl.RegisterCounterVec(
 			"throttle_distributed_events_size_total",
 			"total size of events that have been throttled using limit distribution",
 			labels...,
-		)),
+		),
 	}
+	ctl.AddToHolder(p.limitDistrMetrics.EventsCount)
+	ctl.AddToHolder(p.limitDistrMetrics.EventsSize)
 }
 
 // Stop ends plugin activity.

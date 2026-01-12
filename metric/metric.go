@@ -65,6 +65,33 @@ func (h *heldMetricsStore[T]) GetOrCreate(labels []string, newPromMetric func(..
 	return h.tryCreate(labels, hash, newPromMetric)
 }
 
+func (h *heldMetricsStore[T]) Delete(labels []string, deleter metricDeleter) bool {
+	hash := computeStringsHash(labels)
+
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	hMetrics, ok := h.metricsByHash[hash]
+	if !ok {
+		return false
+	}
+
+	i := findHeldMetricIndex(hMetrics, labels)
+	if i == -1 {
+		return false
+	}
+
+	deleter.DeleteLabelValues(labels...)
+	*hMetrics[i] = heldMetric[T]{}
+	hMetrics = append(hMetrics[:i], hMetrics[i+1:]...)
+
+	if len(hMetrics) == 0 {
+		delete(h.metricsByHash, hash)
+	}
+
+	return ok
+}
+
 func (h *heldMetricsStore[T]) getHeldMetricByHash(labels []string, hash uint64) (*heldMetric[T], bool) {
 	hMetrics, ok := h.metricsByHash[hash]
 	if !ok {
@@ -99,7 +126,7 @@ func (h *heldMetricsStore[T]) tryCreate(labels []string, hash uint64, newPromMet
 		return hMetric
 	}
 
-	hMetric = newHeldMetric[T](labels, metric)
+	hMetric = newHeldMetric(labels, metric)
 	h.metricsByHash[hash] = append(h.metricsByHash[hash], hMetric)
 	return hMetric
 }
