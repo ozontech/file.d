@@ -62,7 +62,7 @@ func newInMemoryLimiter(
 func (l *inMemoryLimiter) sync() {}
 
 func (l *inMemoryLimiter) isAllowed(event *pipeline.Event, ts time.Time) bool {
-	limit := atomic.LoadInt64(&l.limit.value)
+	limit := l.getLimit()
 
 	// limit value fast check without races
 	if limit < 0 {
@@ -177,7 +177,7 @@ func (l *inMemoryLimiter) updateDistribution(distribution limitDistributionCfg) 
 	if distribution.isEmpty() && l.limit.distributions.size() == 0 {
 		return nil
 	}
-	ld, err := parseLimitDistribution(distribution, atomic.LoadInt64(&l.limit.value))
+	ld, err := parseLimitDistribution(distribution, l.getLimit())
 	if err != nil {
 		return err
 	}
@@ -186,7 +186,7 @@ func (l *inMemoryLimiter) updateDistribution(distribution limitDistributionCfg) 
 	defer l.unlock()
 
 	// recreate buckets
-	if l.limit.distributions.size() == 0 && ld.size() > 0 || l.limit.distributions.size() > 0 && ld.size() == 0 {
+	if l.limit.distributions.size() != ld.size() {
 		l.buckets = newBuckets(
 			l.buckets.getCount(),
 			ld.size()+1, // +1 because of default distribution
@@ -255,18 +255,17 @@ func (l *inMemoryLimiter) isLimitCfgChanged(curLimit int64, curDistribution []li
 	curDistributionsCount := 0
 
 	l.lock()
+	defer l.unlock()
 	for _, ldRatio := range curDistribution {
 		curDistributionsCount += len(ldRatio.Values)
 		for _, fieldValue := range ldRatio.Values {
 			idx, has := l.limit.distributions.idxByKey[fieldValue]
 			if !has || math.Abs(l.limit.distributions.distributions[idx].ratio-ldRatio.Ratio) > EPS {
-				l.unlock()
 				return true
 			}
 		}
 	}
 	distributionsCount := len(l.limit.distributions.idxByKey)
-	l.unlock()
 
 	return distributionsCount != curDistributionsCount
 }

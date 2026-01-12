@@ -3,6 +3,7 @@ package file
 import (
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -10,6 +11,7 @@ import (
 
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/metric"
+	"github.com/ozontech/file.d/xtime"
 	"github.com/prometheus/client_golang/prometheus"
 	uuid "github.com/satori/go.uuid"
 	"github.com/stretchr/testify/require"
@@ -181,4 +183,107 @@ func TestProviderWatcherPaths(t *testing.T) {
 			assert.Equal(t, tt.expectedPathes, jp.watcher.paths)
 		})
 	}
+}
+
+func TestEOFInfo(t *testing.T) {
+	t.Run("setTimestamp and getTimestamp match", func(t *testing.T) {
+		e := &eofInfo{}
+
+		now := time.Now()
+		e.setTimestamp(now)
+
+		got := e.getTimestamp()
+		assert.Equal(t, now.UnixNano(), got.UnixNano())
+		assert.True(t, now.Equal(got))
+	})
+
+	t.Run("setUnixTimestamp and getUnixTimestamp match", func(t *testing.T) {
+		e := &eofInfo{}
+
+		expected := time.Now().Unix()
+		e.setUnixNanoTimestamp(expected)
+
+		got := e.getUnixNanoTimestamp()
+		assert.Equal(t, expected, got)
+	})
+
+	t.Run("setOffset and getOffset match", func(t *testing.T) {
+		e := &eofInfo{}
+
+		expected := int64(12345)
+		e.setOffset(expected)
+
+		got := e.getOffset()
+		assert.Equal(t, expected, got)
+	})
+
+	t.Run("concurrent access to timestamp", func(t *testing.T) {
+		e := &eofInfo{}
+		var wg sync.WaitGroup
+
+		for i := 0; i < 100; i++ {
+			wg.Add(1)
+			go func(idx int) {
+				defer wg.Done()
+				ts := time.Unix(int64(idx), 0)
+				e.setTimestamp(ts)
+				_ = e.getTimestamp() // Just read it
+			}(i)
+		}
+
+		wg.Wait()
+	})
+
+	t.Run("concurrent access to offset", func(t *testing.T) {
+		e := &eofInfo{}
+		var wg sync.WaitGroup
+
+		// Start multiple goroutines writing different offsets
+		for i := 0; i < 100; i++ {
+			wg.Add(1)
+			go func(offset int64) {
+				defer wg.Done()
+				e.setOffset(offset)
+				_ = e.getOffset() // Just read it
+			}(int64(i * 100))
+		}
+
+		wg.Wait()
+	})
+
+	t.Run("timestamp and unix timestamp consistency", func(t *testing.T) {
+		e := &eofInfo{}
+
+		now := time.Now()
+		e.setTimestamp(now)
+
+		// Verify unix timestamp matches
+		unixTs := e.getUnixNanoTimestamp()
+		assert.Equal(t, now.UnixNano(), unixTs)
+
+		// Now set via unix timestamp and verify via getTimestamp
+		newUnixTs := now.Add(time.Hour).Unix()
+		e.setUnixNanoTimestamp(newUnixTs)
+
+		gotTime := e.getTimestamp()
+		assert.Equal(t, newUnixTs, gotTime.UnixNano())
+	})
+
+	t.Run("timestamp and unix timestamp consistency with xtime", func(t *testing.T) {
+		e := &eofInfo{}
+
+		now := xtime.GetInaccurateTime()
+		e.setTimestamp(now)
+
+		// Verify unix timestamp matches
+		unixTs := e.getUnixNanoTimestamp()
+		assert.Equal(t, now.UnixNano(), unixTs)
+
+		// Now set via unix timestamp and verify via getTimestamp
+		newUnixTs := xtime.GetInaccurateUnixNano()
+		e.setUnixNanoTimestamp(newUnixTs)
+
+		gotTime := e.getTimestamp()
+		assert.Equal(t, newUnixTs, gotTime.UnixNano())
+	})
 }

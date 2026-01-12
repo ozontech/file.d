@@ -137,6 +137,24 @@ type Config struct {
 	// >
 	// > Example: ```component: '{{ index .pod.Labels "component" | default .k8s_container }}'```
 	K8sMeta cfg.MetaTemplates `json:"meta"` // *
+
+	// > @3@4@5@6
+	// >
+	// > The filename to store current k8s pod metadata.
+	// >
+	// > Metadata contains:
+	// > * PodMeta `map[Namespace]map[PodName]map[ContainerID]*podMeta`, where `podMeta` is a wrapper for `corev1.Pod`
+	// > * CriType `string`
+	// > * NodeLabels `map[string]string`
+	// >
+	// > Metadata is saved once per gatherer `MaintenanceInterval` and is loaded only on initialization.
+	// >
+	// > If parameter is empty, the metadata won't be cached.
+	// >
+	// > > This feature is used to reuse metadata that we have already received, in particular if the kube-apiserver is unavailable.
+	// > >
+	// > > The plugin considers kube-apiserver to be unavailable from the moment the `SetWatchErrorHandler` handler is called until one of the `ResourceEventHandlerFuncs` handlers is called.
+	K8sMetaFile string `json:"meta_file" default:""` // *
 }
 
 var startCounter atomic.Int32
@@ -176,10 +194,11 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 
 	if startCounter == 1 {
 		meta.DeletedPodsCacheSize = p.config.DeletedPodsCacheSize
+		meta.MetaFileSaver = meta.NewMetaSaver(p.config.K8sMetaFile)
 		meta.EnableGatherer(p.logger)
 	}
 
-	if meta.CriType == "docker" {
+	if meta.MetaData.CriType == "docker" {
 		p.params.Controller.SuggestDecoder(decoder.JSON)
 	} else {
 		p.params.Controller.SuggestDecoder(decoder.CRI)

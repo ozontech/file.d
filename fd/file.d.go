@@ -391,11 +391,11 @@ func (f *FileD) serveReady(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		return
 	}
-	logger.Infof("ready OK")
+	logger.Debug("ready OK")
 }
 
 func (f *FileD) serveLive(_ http.ResponseWriter, _ *http.Request) {
-	logger.Infof("live OK")
+	logger.Debug("live OK")
 }
 
 type valueChangerHandler struct {
