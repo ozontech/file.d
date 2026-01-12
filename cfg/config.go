@@ -120,7 +120,7 @@ func NewConfigFromFile(paths []string) *Config {
 	}
 
 	config := parseConfig(object)
-	var apps []funcApplier
+	apps := make([]funcApplier, 0, 2)
 
 	// add applicator for env variables
 	apps = append(apps, &envs{})

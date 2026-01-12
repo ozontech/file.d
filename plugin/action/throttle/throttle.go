@@ -484,7 +484,8 @@ func (p *Plugin) registerMetrics(ctl *metric.Ctl, limitDistrMetricsLabels []stri
 		"Size of internal map of throttle limiters",
 	)
 
-	labels := []string{"distribution_value"}
+	labels := make([]string, 0, 1+len(limitDistrMetricsLabels))
+	labels = append(labels, "distribution_value")
 	labels = append(labels, limitDistrMetricsLabels...)
 	p.limitDistrMetrics = &limitDistributionMetrics{
 		CustomLabels: limitDistrMetricsLabels,
