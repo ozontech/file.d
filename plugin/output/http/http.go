@@ -13,7 +13,6 @@ import (
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/xhttp"
-	insaneJSON "github.com/ozontech/insane-json"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -368,7 +367,7 @@ func (p *Plugin) send(data []byte) (int, error) {
 		p.config.ContentType,
 		data,
 		p.config.ConnectionTimeout_,
-		p.reportHTTPErrors,
+		nil,
 	)
 }
 
@@ -382,7 +381,7 @@ func (p *Plugin) sendSplit(left int, right int, begin []int, data []byte) (int, 
 		p.config.ContentType,
 		data[begin[left]:begin[right]],
 		p.config.ConnectionTimeout_,
-		p.reportHTTPErrors,
+		nil,
 	)
 
 	if err != nil {
@@ -418,26 +417,4 @@ func (p *Plugin) getAuthHeader() string {
 		return "Basic " + base64.StdEncoding.EncodeToString(credentials)
 	}
 	return ""
-}
-
-func (p *Plugin) reportHTTPErrors(data []byte) error {
-	if len(data) == 0 {
-		return nil
-	}
-
-	root, err := insaneJSON.DecodeBytes(data)
-	if err != nil {
-		// If response is not JSON, just log it as raw response
-		p.logger.Debug("http endpoint response is not JSON",
-			zap.ByteString("response", data),
-		)
-		return nil
-	}
-	defer insaneJSON.Release(root)
-
-	p.logger.Debug("http endpoint response",
-		zap.String("response", root.EncodeToString()),
-	)
-
-	return nil
 }
