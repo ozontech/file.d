@@ -139,8 +139,8 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 
 		object.AddField("name").MutateToBytes([]byte(metric.Name))
 		object.AddField("type").MutateToBytes([]byte(metric.Type))
-		object.AddField("ttl").MutateToInt64(metric.TTL_.Nanoseconds())
-		object.AddField("timestamp").MutateToInt64(ts.UnixNano())
+		object.AddField("ttl").MutateToInt64(metric.TTL_.Milliseconds())
+		object.AddField("timestamp").MutateToInt64(ts.UnixMilli())
 
 		if len(metric.Value) == 0 {
 			object.AddField("value").MutateToInt(1)

@@ -50,7 +50,7 @@ func newCollector(timeout time.Duration, sender storageSender, logger *zap.Logge
 func (p *metricCollector) handleMetric(labels []promwrite.Label, value float64, timestamp int64, metricType string, ttl int64) []promwrite.TimeSeries {
 	labelsKey := labelsToKey(labels)
 	now := time.Now()
-	currentTimestampSec := timestamp / 1_000_000_000
+	currentTimestampSec := timestamp / 1_000
 
 	var values []promwrite.TimeSeries
 	var shouldSend bool
@@ -59,7 +59,7 @@ func (p *metricCollector) handleMetric(labels []promwrite.Label, value float64, 
 
 	if prev, ok := p.collector.Load(labelsKey); ok {
 		prevMetric = prev.(metricValue)
-		prevTimestampSec := prevMetric.timestamp / 1_000_000_000
+		prevTimestampSec := prevMetric.timestamp / 1_000
 
 		// For counters, accumulate values
 		currentValue = value
@@ -71,7 +71,7 @@ func (p *metricCollector) handleMetric(labels []promwrite.Label, value float64, 
 		shouldSend = prevTimestampSec < currentTimestampSec
 
 		if shouldSend {
-			prevMetric.timestamp = max(prevMetric.timestamp, timestamp-1_000_000_000)
+			prevMetric.timestamp = max(prevMetric.timestamp, timestamp-1_000)
 			values = append(values, createTimeSeries(labels, prevMetric))
 		}
 	} else {
@@ -84,7 +84,7 @@ func (p *metricCollector) handleMetric(labels []promwrite.Label, value float64, 
 		value:             currentValue,
 		timestamp:         timestamp,
 		lastUpdateTime:    now,
-		expiredAt:         now.Add(time.Duration(ttl)),
+		expiredAt:         now.Add(time.Duration(ttl) * time.Millisecond),
 		lastValueIsSended: shouldSend,
 	})
 
@@ -132,7 +132,7 @@ func (p *metricCollector) flushOldMetrics() {
 func (p *metricCollector) repeatOldMetrics() {
 	var toSend []promwrite.TimeSeries
 	now := time.Now()
-	nowUnixtime := now.UnixNano()
+	nowUnixtime := now.UnixMilli()
 
 	p.collector.Range(func(key, value interface{}) bool {
 		metric := value.(metricValue)
@@ -174,7 +174,7 @@ func createTimeSeries(labels []promwrite.Label, metric metricValue) promwrite.Ti
 	return promwrite.TimeSeries{
 		Labels: labels,
 		Sample: promwrite.Sample{
-			Time:  time.Unix(0, metric.timestamp),
+			Time:  time.Unix(0, metric.timestamp*int64(time.Millisecond)),
 			Value: metric.value,
 		},
 	}
