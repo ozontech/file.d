@@ -151,6 +151,9 @@ func (p *processor) processSequence(event *Event) bool {
 		if event.IsUnlockKind() {
 			return false
 		}
+		if event.IsTimeoutKind() {
+			return true
+		}
 
 		event.stage = eventStageOutput
 		p.router.Out(event)
