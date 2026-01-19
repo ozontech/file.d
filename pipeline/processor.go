@@ -202,6 +202,11 @@ func (p *processor) doActions(event *Event) (isPassed bool, lastAction int) {
 
 		p.actionWatcher.setEventBefore(index, event)
 
+		if event.IsTimeoutKind() && !p.actionInfos[index].IsHandleTimeouts {
+			p.actionWatcher.setEventAfter(index, event, eventStatusPassed)
+			continue
+		}
+
 		result := action.Do(event)
 		switch result {
 		case ActionPass:

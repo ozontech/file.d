@@ -133,10 +133,6 @@ func (e *Event) SetUnlockKind() {
 	e.kind = EventKindUnlock
 }
 
-func (e *Event) IsIgnoreKind() bool {
-	return e.kind == EventKindUnlock
-}
-
 func (e *Event) SetTimeoutKind() {
 	e.kind = EventKindTimeout
 }
