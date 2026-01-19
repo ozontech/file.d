@@ -80,6 +80,9 @@ type PluginStaticInfo struct {
 	AdditionalActions []string // used only for input plugins, defines actions that should be run right after input plugin with input config
 	// TODO: maybe to OutputPluginStaticInfo cause uses by output and action plugins?
 	DeadQueueInfo *PluginStaticInfo
+
+	// Indicates whether the action plugin can handle timeout events.
+	IsHandleTimeouts bool
 }
 
 type PluginRuntimeInfo struct {

@@ -24,6 +24,8 @@ func init() {
 	fd.DefaultPluginRegistry.RegisterAction(&pipeline.PluginStaticInfo{
 		Type:    "parse_es",
 		Factory: factory,
+
+		IsHandleTimeouts: true,
 	})
 }
 

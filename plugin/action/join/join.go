@@ -115,6 +115,8 @@ func init() {
 	fd.DefaultPluginRegistry.RegisterAction(&pipeline.PluginStaticInfo{
 		Type:    "join",
 		Factory: factory,
+
+		IsHandleTimeouts: true,
 	})
 }
 

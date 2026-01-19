@@ -151,6 +151,9 @@ func (p *processor) processSequence(event *Event) bool {
 		if event.IsUnlockKind() {
 			return false
 		}
+		if event.IsTimeoutKind() {
+			return true
+		}
 
 		event.stage = eventStageOutput
 		p.router.Out(event)
@@ -201,6 +204,11 @@ func (p *processor) doActions(event *Event) (isPassed bool, lastAction int) {
 		}
 
 		p.actionWatcher.setEventBefore(index, event)
+
+		if event.IsTimeoutKind() && !p.actionInfos[index].IsHandleTimeouts {
+			p.actionWatcher.setEventAfter(index, event, eventStatusPassed)
+			continue
+		}
 
 		result := action.Do(event)
 		switch result {

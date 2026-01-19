@@ -173,6 +173,8 @@ func init() {
 	fd.DefaultPluginRegistry.RegisterAction(&pipeline.PluginStaticInfo{
 		Type:    "k8s-multiline",
 		Factory: MultilineActionFactory,
+
+		IsHandleTimeouts: true,
 	})
 }
 

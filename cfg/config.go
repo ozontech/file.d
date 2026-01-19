@@ -120,10 +120,6 @@ func NewConfigFromFile(paths []string) *Config {
 	}
 
 	config := parseConfig(object)
-	var apps []funcApplier
-
-	// add applicator for env variables
-	apps = append(apps, &envs{})
 
 	// if vault is used then set value otherwise it is empty variable
 	vault := &vault{}
@@ -134,8 +130,11 @@ func NewConfigFromFile(paths []string) *Config {
 		}
 	}
 
-	// add applicator for vault
-	apps = append(apps, vault)
+	// add applicators
+	apps := []funcApplier{
+		&envs{},
+		vault,
+	}
 
 	for _, p := range config.Pipelines {
 		applyConfigFuncs(apps, p.Raw)
