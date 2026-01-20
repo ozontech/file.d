@@ -80,18 +80,18 @@ func TestMetricCollector(t *testing.T) {
 
 		// First value - should not be sent
 		now := time.Now()
-		values := collector.handleMetric(labels, 10.0, now.UnixNano(), "counter")
+		values := collector.handleMetric(labels, 10.0, now.UnixMilli(), "counter", 0)
 		assert.Empty(t, values)
 		assert.Empty(t, testSender.getSentMetrics())
 
 		// Second value in same time window - should accumulate but not send
-		values = collector.handleMetric(labels, 5.0, now.UnixNano(), "counter")
+		values = collector.handleMetric(labels, 5.0, now.UnixMilli(), "counter", 0)
 		assert.Empty(t, values)
 		assert.Empty(t, testSender.getSentMetrics())
 
 		// Third value in next time window - should send accumulated value
 		nextTime := now.Add(time.Second)
-		values = collector.handleMetric(labels, 3.0, nextTime.UnixNano(), "counter")
+		values = collector.handleMetric(labels, 3.0, nextTime.UnixMilli(), "counter", 0)
 		assert.Len(t, values, 1)
 		assert.Equal(t, 15.0, values[0].Sample.Value) // 10 + 5
 	})
@@ -109,16 +109,16 @@ func TestMetricCollector(t *testing.T) {
 		now := time.Now()
 
 		// First value - should not be sent
-		values := collector.handleMetric(labels, 100.0, now.UnixNano(), "gauge")
+		values := collector.handleMetric(labels, 100.0, now.UnixMilli(), "gauge", 0)
 		assert.Empty(t, values)
 
 		// Second value in same time window - should replace but not send
-		values = collector.handleMetric(labels, 200.0, now.UnixNano(), "gauge")
+		values = collector.handleMetric(labels, 200.0, now.UnixMilli(), "gauge", 0)
 		assert.Empty(t, values)
 
 		// Third value in next time window - should send latest value
 		nextTime := now.Add(time.Second)
-		values = collector.handleMetric(labels, 300.0, nextTime.UnixNano(), "gauge")
+		values = collector.handleMetric(labels, 300.0, nextTime.UnixMilli(), "gauge", 0)
 		assert.Len(t, values, 1)
 		assert.Equal(t, 200.0, values[0].Sample.Value) // Latest value before time window change
 	})
@@ -135,7 +135,7 @@ func TestMetricCollector(t *testing.T) {
 		}
 
 		// Add a metric that will timeout
-		collector.handleMetric(labels, 42.0, time.Now().UnixNano(), "gauge")
+		collector.handleMetric(labels, 42.0, time.Now().UnixMilli(), "gauge", 0)
 
 		// Wait for timeout + a bit more
 		time.Sleep(shortTimeout + 50*time.Millisecond)
@@ -168,7 +168,7 @@ func TestMetricCollector(t *testing.T) {
 		}
 
 		// Add a metric that will timeout
-		sendedValues := collector.handleMetric(labels, 42.0, time.Now().UnixNano(), "gauge")
+		sendedValues := collector.handleMetric(labels, 42.0, time.Now().UnixMilli(), "gauge", 0)
 		assert.Len(t, sendedValues, 0)
 
 		// Wait for timeout + a bit more
@@ -203,8 +203,8 @@ func TestMetricCollector(t *testing.T) {
 		}
 
 		// Add multiple metrics
-		collector.handleMetric(labels1, 10.0, time.Now().UnixNano(), "gauge")
-		collector.handleMetric(labels2, 20.0, time.Now().UnixNano(), "gauge")
+		collector.handleMetric(labels1, 10.0, time.Now().UnixMilli(), "gauge", 0)
+		collector.handleMetric(labels2, 20.0, time.Now().UnixMilli(), "gauge", 0)
 
 		collector.shutdown()
 
@@ -232,7 +232,7 @@ func TestMetricCollector(t *testing.T) {
 						{Name: "worker", Value: string(rune(workerID))},
 						{Name: "index", Value: string(rune(j))},
 					}
-					collector.handleMetric(labels, float64(j), time.Now().UnixNano(), "counter")
+					collector.handleMetric(labels, float64(j), time.Now().UnixMilli(), "counter", 0)
 				}
 			}(i)
 		}
@@ -260,7 +260,7 @@ func TestMetricCollector(t *testing.T) {
 			{Name: "job", Value: "test"},
 		}
 
-		collector.handleMetric(labels, 99.0, time.Now().UnixNano(), "gauge")
+		collector.handleMetric(labels, 99.0, time.Now().UnixMilli(), "gauge", 0)
 
 		// Wait for flush
 		time.Sleep(150 * time.Millisecond)
@@ -274,7 +274,7 @@ func TestMetricCollector(t *testing.T) {
 		now := time.Now()
 		mv := metricValue{
 			value:             42.0,
-			timestamp:         now.UnixNano(),
+			timestamp:         now.UnixMilli(),
 			lastUpdateTime:    now,
 			lastValueIsSended: false,
 		}
@@ -285,7 +285,7 @@ func TestMetricCollector(t *testing.T) {
 
 		ts := createTimeSeries(labels, mv)
 		assert.Equal(t, 42.0, ts.Sample.Value)
-		assert.Equal(t, now.Truncate(time.Nanosecond), ts.Sample.Time.Truncate(time.Nanosecond))
+		assert.Equal(t, now.Truncate(time.Millisecond), ts.Sample.Time.Truncate(time.Millisecond))
 		assert.Equal(t, labels, ts.Labels)
 	})
 
@@ -317,11 +317,11 @@ func TestEdgeCases(t *testing.T) {
 
 		// Very old timestamp
 		oldTime := time.Now().Add(-1 * time.Hour)
-		collector.handleMetric(labels, 1.0, oldTime.UnixNano(), "gauge")
+		collector.handleMetric(labels, 1.0, oldTime.UnixMilli(), "gauge", 0)
 
 		now := time.Now()
 		// New timestamp to trigger send
-		values := collector.handleMetric(labels, 2.0, now.UnixNano(), "gauge")
+		values := collector.handleMetric(labels, 2.0, now.UnixMilli(), "gauge", 0)
 
 		// Should have sent the old value despite being very old (timestamp: 1 second before now)
 		assert.Len(t, values, 1)
@@ -341,8 +341,8 @@ func TestEdgeCases(t *testing.T) {
 		now := time.Now()
 
 		// Test unknown metric type (should behave like gauge)
-		collector.handleMetric(labels, 10.0, now.UnixNano(), "unknown")
-		values := collector.handleMetric(labels, 20.0, now.Add(time.Second).UnixNano(), "unknown")
+		collector.handleMetric(labels, 10.0, now.UnixMilli(), "unknown", 0)
+		values := collector.handleMetric(labels, 20.0, now.Add(time.Second).UnixMilli(), "unknown", 0)
 
 		// Should send the last value (10.0) since time window advanced
 		if len(values) > 0 {
@@ -356,7 +356,7 @@ func TestCreateTimeSeries(t *testing.T) {
 		now := time.Now()
 		mv := metricValue{
 			value:     123.45,
-			timestamp: now.UnixNano(),
+			timestamp: now.UnixMilli(),
 		}
 
 		labels := []promwrite.Label{
@@ -368,7 +368,7 @@ func TestCreateTimeSeries(t *testing.T) {
 
 		assert.Equal(t, labels, ts.Labels)
 		assert.Equal(t, 123.45, ts.Sample.Value)
-		assert.Equal(t, now.Truncate(time.Nanosecond), ts.Sample.Time.Truncate(time.Nanosecond))
+		assert.Equal(t, now.Truncate(time.Millisecond), ts.Sample.Time.Truncate(time.Millisecond))
 	})
 }
 

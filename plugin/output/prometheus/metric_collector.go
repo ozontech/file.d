@@ -12,7 +12,8 @@ import (
 )
 
 type metricCollector struct {
-	collector    *sync.Map
+	collector *sync.Map
+
 	timeout      time.Duration
 	flushTicker  *time.Ticker
 	repeatTicker *time.Ticker
@@ -22,23 +23,22 @@ type metricCollector struct {
 }
 
 type metricValue struct {
-	value             float64
-	timestamp         int64
-	lastUpdateTime    time.Time
-	expiredAt         time.Time
-	lastValueIsSended bool
+	value           float64
+	timestamp       int64
+	sendedTimestamp time.Time
+	lastUpdateTime  time.Time
+	expiredAt       time.Time
 }
 
 type storageSender interface {
 	sendToStorage(values []promwrite.TimeSeries) error
 }
 
-func newCollector(timeout time.Duration, sender storageSender, logger *zap.Logger) *metricCollector {
+func newCollector(sender storageSender, logger *zap.Logger) *metricCollector {
 	c := &metricCollector{
 		collector:    new(sync.Map),
-		timeout:      timeout,
-		flushTicker:  time.NewTicker(1 * time.Second),
-		repeatTicker: time.NewTicker(30 * time.Second),
+		flushTicker:  time.NewTicker(10 * time.Second),
+		repeatTicker: time.NewTicker(1 * time.Minute),
 		shutdownChan: make(chan struct{}),
 		sender:       sender,
 		logger:       logger,
@@ -47,57 +47,48 @@ func newCollector(timeout time.Duration, sender storageSender, logger *zap.Logge
 	return c
 }
 
-func (p *metricCollector) handleMetric(labels []promwrite.Label, value float64, timestamp int64, metricType string, ttl int64) []promwrite.TimeSeries {
+var i int
+
+func (p *metricCollector) handleMetric(labels []promwrite.Label, value float64, timestamp int64, metricType string, ttl int64) {
 	labelsKey := labelsToKey(labels)
 	now := time.Now()
-	currentTimestampSec := timestamp / 1_000
 
-	var values []promwrite.TimeSeries
-	var shouldSend bool
-	var currentValue float64
-	var prevMetric metricValue
+	newMetric := func() metricValue {
+		if prev, ok := p.collector.Load(labelsKey); ok {
+			prevMetric := prev.(metricValue)
+			currentValue := value
 
-	if prev, ok := p.collector.Load(labelsKey); ok {
-		prevMetric = prev.(metricValue)
-		prevTimestampSec := prevMetric.timestamp / 1_000
+			if metricType == "counter" {
+				// For counters, incoming values should be increments
+				currentValue += prevMetric.value
+			}
 
-		// For counters, accumulate values
-		currentValue = value
-		if metricType == "counter" {
-			currentValue += prevMetric.value
+			return metricValue{
+				value:           currentValue,
+				timestamp:       max(timestamp, prevMetric.timestamp),
+				lastUpdateTime:  now,
+				expiredAt:       now.Add(time.Duration(ttl) * time.Millisecond),
+				sendedTimestamp: prevMetric.sendedTimestamp,
+			}
 		}
 
-		// Check if time window advanced
-		shouldSend = prevTimestampSec < currentTimestampSec
-
-		if shouldSend {
-			prevMetric.timestamp = max(prevMetric.timestamp, timestamp-1_000)
-			values = append(values, createTimeSeries(labels, prevMetric))
+		return metricValue{
+			value:           value,
+			timestamp:       timestamp,
+			lastUpdateTime:  now,
+			expiredAt:       now.Add(time.Duration(ttl) * time.Millisecond),
+			sendedTimestamp: time.Time{}, // Zero time for new metrics
 		}
-	} else {
-		currentValue = value
-		shouldSend = false // First value, don't send yet
 	}
 
-	// Always store the current value
-	p.collector.Store(labelsKey, metricValue{
-		value:             currentValue,
-		timestamp:         timestamp,
-		lastUpdateTime:    now,
-		expiredAt:         now.Add(time.Duration(ttl) * time.Millisecond),
-		lastValueIsSended: shouldSend,
-	})
-
-	return values
+	p.collector.Store(labelsKey, newMetric())
 }
 
 func (p *metricCollector) flushAndRepeatOldMetrics() {
 	for {
 		select {
 		case <-p.flushTicker.C:
-			p.flushOldMetrics()
-		case <-p.repeatTicker.C:
-			p.repeatOldMetrics()
+			p.flushMetrics()
 		case <-p.shutdownChan:
 			p.flushTicker.Stop()
 			return
@@ -105,20 +96,51 @@ func (p *metricCollector) flushAndRepeatOldMetrics() {
 	}
 }
 
-func (p *metricCollector) flushOldMetrics() {
+func (p *metricCollector) flushMetrics() {
 	var toSend []promwrite.TimeSeries
 	now := time.Now()
+	nowUnixtime := now.UnixMilli()
+
+	sendEvery := 1 * time.Minute
+	freshDuration := 3 * time.Minute
+
+	toDelete := []string{}
 
 	p.collector.Range(func(key, value interface{}) bool {
 		metric := value.(metricValue)
-		if now.Sub(metric.lastUpdateTime) > p.timeout && !metric.lastValueIsSended {
-			labels := keyToLabels(key.(string))
-			toSend = append(toSend, createTimeSeries(labels, metric))
-			metric.lastValueIsSended = true
-			p.collector.Store(key, metric)
+		labels := keyToLabels(key.(string))
+
+		lastUpdateSeconds := now.Sub(metric.lastUpdateTime)
+		lastSendedSeconds := now.Sub(metric.sendedTimestamp)
+		isFresh := lastUpdateSeconds < freshDuration
+
+		if isFresh {
+			timeSeries := createTimeSeries(labels, metric)
+			if timeSeries.Sample.Time.After(metric.sendedTimestamp) {
+				toSend = append(toSend, timeSeries)
+				metric.sendedTimestamp = timeSeries.Sample.Time
+				p.collector.Store(key, metric)
+			}
+		} else if lastSendedSeconds > sendEvery {
+			if now.After(metric.expiredAt) {
+				toDelete = append(toDelete, key.(string))
+			}
+			metric.timestamp = nowUnixtime
+			timeSeries := createTimeSeries(labels, metric)
+			if timeSeries.Sample.Time.After(metric.sendedTimestamp) {
+				toSend = append(toSend, timeSeries)
+				metric.sendedTimestamp = timeSeries.Sample.Time
+				p.collector.Store(key, metric)
+			}
 		}
 		return true
 	})
+
+	if len(toDelete) > 0 {
+		for _, key := range toDelete {
+			p.collector.Delete(key)
+		}
+	}
 
 	if len(toSend) > 0 {
 		// Send these metrics to your storage
@@ -129,37 +151,12 @@ func (p *metricCollector) flushOldMetrics() {
 	}
 }
 
-func (p *metricCollector) repeatOldMetrics() {
-	var toSend []promwrite.TimeSeries
-	now := time.Now()
-	nowUnixtime := now.UnixMilli()
-
-	p.collector.Range(func(key, value interface{}) bool {
-		metric := value.(metricValue)
-		labels := keyToLabels(key.(string))
-		metric.timestamp = nowUnixtime
-		toSend = append(toSend, createTimeSeries(labels, metric))
-		if now.Before(metric.expiredAt) {
-			metric.lastValueIsSended = true
-			p.collector.Store(key, metric)
-		} else {
-			p.collector.Delete(key)
-		}
-		return true
-	})
-
-	if len(toSend) > 0 {
-		err := p.sender.sendToStorage(toSend)
-		if err != nil {
-			p.logger.Error("can't send data", zap.Error(err))
-		}
-	}
-}
-
 func (p *metricCollector) shutdown() {
 	close(p.shutdownChan)
+
 	// Flush all remaining metrics
 	var toSend []promwrite.TimeSeries
+
 	p.collector.Range(func(key, value interface{}) bool {
 		metric := value.(metricValue)
 		labels := keyToLabels(key.(string))
@@ -174,7 +171,7 @@ func createTimeSeries(labels []promwrite.Label, metric metricValue) promwrite.Ti
 	return promwrite.TimeSeries{
 		Labels: labels,
 		Sample: promwrite.Sample{
-			Time:  time.Unix(0, metric.timestamp*int64(time.Millisecond)),
+			Time:  time.Unix(0, metric.timestamp*int64(time.Millisecond)).Truncate(30 * time.Second),
 			Value: metric.value,
 		},
 	}
