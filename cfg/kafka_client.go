@@ -1,6 +1,7 @@
 package cfg
 
 import (
+	"math/rand"
 	"os"
 
 	"github.com/twmb/franz-go/pkg/kgo"
@@ -37,6 +38,11 @@ type KafkaClientSslConfig struct {
 }
 
 func GetKafkaClientOptions(c KafkaClientConfig, l *zap.Logger) []kgo.Opt {
+	brokers := c.GetBrokers()
+	rand.Shuffle(len(brokers), func(i, j int) {
+		brokers[i], brokers[j] = brokers[j], brokers[i]
+	})
+
 	opts := []kgo.Opt{
 		kgo.SeedBrokers(c.GetBrokers()...),
 		kgo.ClientID(c.GetClientID()),
