@@ -4,7 +4,6 @@ import (
 	"context"
 	"net"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/castai/promwrite"
@@ -221,7 +220,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.logger = params.Logger.Desugar()
 	p.avgEventSize = params.PipelineSettings.AvgEventSize
 	p.registerMetrics(params.MetricCtl)
-	p.collector = newCollector(10*time.Second, p, p.logger)
+	p.collector = newCollector(p, p.logger)
 
 	p.prepareClient()
 
@@ -322,7 +321,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 func (p *Plugin) send(root *insaneJSON.Root) error {
 	messages := root.Dig("data").AsArray()
 	// # {"name":"partitions_total","labels":{"partition":"1"},"timestamp":"2025-06-05T05:19:28.129666195Z","value": 1}}
-	values := make([]promwrite.TimeSeries, 0, len(messages))
+	// values := make([]promwrite.TimeSeries, 0, len(messages))
 
 	for _, msg := range messages {
 		nameNode := msg.Dig("name")
@@ -361,25 +360,25 @@ func (p *Plugin) send(root *insaneJSON.Root) error {
 			})
 		}
 
-		values = append(values, p.collector.handleMetric(
+		p.collector.handleMetric(
 			labels,
 			value,
 			timestamp,
 			metricType,
 			ttl,
-		)...)
+		)
 	}
 
-	err := p.sendToStorage(values)
-	if err != nil {
-		if strings.Contains(err.Error(), "out of order sample") || strings.Contains(err.Error(), "duplicate sample for") {
-			p.sendErrorMetric.Inc()
-			p.logger.Warn("can't send data to Prometheus", zap.Error(err))
-			return nil
-		}
-	}
+	// err := p.sendToStorage(values)
+	// if err != nil {
+	// 	if strings.Contains(err.Error(), "out of order sample") || strings.Contains(err.Error(), "duplicate sample for") {
+	// 		p.sendErrorMetric.Inc()
+	// 		p.logger.Warn("can't send data to Prometheus", zap.Error(err))
+	// 		return nil
+	// 	}
+	// }
 
-	return err
+	return nil
 }
 
 func (p *Plugin) sendToStorage(values []promwrite.TimeSeries) error {
