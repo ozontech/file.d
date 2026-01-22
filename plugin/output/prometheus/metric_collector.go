@@ -12,36 +12,37 @@ import (
 )
 
 type metricCollector struct {
-	collector *sync.Map
-
-	timeout      time.Duration
-	flushTicker  *time.Ticker
-	repeatTicker *time.Ticker
-	shutdownChan chan struct{}
 	sender       storageSender
-	logger       *zap.Logger
+	metrics      map[string]*metricValue
+	mutex        sync.RWMutex
+	flushTicker  *time.Ticker
+	shutdownChan chan struct{}
+	flushTimeout time.Duration
+
+	logger *zap.Logger
 }
 
 type metricValue struct {
-	value           float64
-	timestamp       int64
-	sendedTimestamp time.Time
-	lastUpdateTime  time.Time
-	expiredAt       time.Time
+	value             float64
+	timestamp         int64
+	lastValueIsSended bool
+	lastUpdateTime    time.Time
+	sendedTimestamp   time.Time
+	expiredAt         time.Time
 }
 
 type storageSender interface {
 	sendToStorage(values []promwrite.TimeSeries) error
 }
 
-func newCollector(sender storageSender, logger *zap.Logger) *metricCollector {
+func newCollector(sender storageSender, flushTimeout time.Duration, logger *zap.Logger) *metricCollector {
 	c := &metricCollector{
-		collector:    new(sync.Map),
-		flushTicker:  time.NewTicker(10 * time.Second),
-		repeatTicker: time.NewTicker(1 * time.Minute),
-		shutdownChan: make(chan struct{}),
 		sender:       sender,
 		logger:       logger,
+		metrics:      make(map[string]*metricValue),
+		flushTicker:  time.NewTicker(flushTimeout),
+		flushTimeout: flushTimeout,
+		shutdownChan: make(chan struct{}),
 	}
 	go c.flushAndRepeatOldMetrics()
 	return c
@@ -50,38 +51,29 @@ func newCollector(sender storageSender, logger *zap.Logger) *metricCollector {
 var i int
 
 func (p *metricCollector) handleMetric(labels []promwrite.Label, value float64, timestamp int64, metricType string, ttl int64) {
-	labelsKey := labelsToKey(labels)
+	key := labelsToKey(labels)
 	now := time.Now()
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
 
-	newMetric := func() metricValue {
-		if prev, ok := p.collector.Load(labelsKey); ok {
-			prevMetric := prev.(metricValue)
-			currentValue := value
-
-			if metricType == "counter" {
-				// For counters, incoming values should be increments
-				currentValue += prevMetric.value
-			}
-
-			return metricValue{
-				value:           currentValue,
-				timestamp:       max(timestamp, prevMetric.timestamp),
-				lastUpdateTime:  now,
-				expiredAt:       now.Add(time.Duration(ttl) * time.Millisecond),
-				sendedTimestamp: prevMetric.sendedTimestamp,
-			}
+	if existing, exists := p.metrics[key]; exists {
+		if metricType == "counter" {
+			value += existing.value
 		}
-
-		return metricValue{
-			value:           value,
-			timestamp:       timestamp,
-			lastUpdateTime:  now,
-			expiredAt:       now.Add(time.Duration(ttl) * time.Millisecond),
-			sendedTimestamp: time.Time{}, // Zero time for new metrics
-		}
+		timestamp = max(timestamp, existing.sendedTimestamp.UnixMilli())
 	}
 
-	p.collector.Store(labelsKey, newMetric())
+	nowUnixTime := now.UnixMilli()
+	timestamp = min(timestamp, nowUnixTime)
+
+	metric := &metricValue{
+		value:             value,
+		timestamp:         timestamp,
+		lastUpdateTime:    now,
+		lastValueIsSended: false,
+		expiredAt:         now.Add(time.Duration(ttl) * time.Millisecond),
+	}
+	p.metrics[key] = metric
 }
 
 func (p *metricCollector) flushAndRepeatOldMetrics() {
@@ -97,48 +89,37 @@ func (p *metricCollector) flushAndRepeatOldMetrics() {
 }
 
 func (p *metricCollector) flushMetrics() {
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+
 	var toSend []promwrite.TimeSeries
 	now := time.Now()
-	nowUnixtime := now.UnixMilli()
-
-	sendEvery := 1 * time.Minute
-	freshDuration := 3 * time.Minute
 
 	toDelete := []string{}
 
-	p.collector.Range(func(key, value interface{}) bool {
-		metric := value.(metricValue)
-		labels := keyToLabels(key.(string))
+	for key, metric := range p.metrics {
+		labels := keyToLabels(key)
 
-		lastUpdateSeconds := now.Sub(metric.lastUpdateTime)
-		lastSendedSeconds := now.Sub(metric.sendedTimestamp)
-		isFresh := lastUpdateSeconds < freshDuration
+		if metric.lastValueIsSended && now.Sub(metric.lastUpdateTime) >= p.flushTimeout && now.Before(metric.expiredAt) {
+			// repeat value
+			metric.timestamp = now.UnixMilli()
+		}
 
-		if isFresh {
-			timeSeries := createTimeSeries(labels, metric)
-			if timeSeries.Sample.Time.After(metric.sendedTimestamp) {
-				toSend = append(toSend, timeSeries)
-				metric.sendedTimestamp = timeSeries.Sample.Time
-				p.collector.Store(key, metric)
-			}
-		} else if lastSendedSeconds > sendEvery {
+		timeSeries := createTimeSeries(labels, metric, p.flushTimeout)
+		if metric.sendedTimestamp != timeSeries.Sample.Time {
+			toSend = append(toSend, timeSeries)
+			metric.sendedTimestamp = timeSeries.Sample.Time
+			metric.lastValueIsSended = true
+			p.metrics[key] = metric
 			if now.After(metric.expiredAt) {
-				toDelete = append(toDelete, key.(string))
-			}
-			metric.timestamp = nowUnixtime
-			timeSeries := createTimeSeries(labels, metric)
-			if timeSeries.Sample.Time.After(metric.sendedTimestamp) {
-				toSend = append(toSend, timeSeries)
-				metric.sendedTimestamp = timeSeries.Sample.Time
-				p.collector.Store(key, metric)
+				toDelete = append(toDelete, key)
 			}
 		}
-		return true
-	})
+	}
 
 	if len(toDelete) > 0 {
 		for _, key := range toDelete {
-			p.collector.Delete(key)
+			delete(p.metrics, key)
 		}
 	}
 
@@ -153,25 +134,15 @@ func (p *metricCollector) flushMetrics() {
 
 func (p *metricCollector) shutdown() {
 	close(p.shutdownChan)
-
-	// Flush all remaining metrics
-	var toSend []promwrite.TimeSeries
-
-	p.collector.Range(func(key, value interface{}) bool {
-		metric := value.(metricValue)
-		labels := keyToLabels(key.(string))
-		toSend = append(toSend, createTimeSeries(labels, metric))
-		return true
-	})
-	p.sender.sendToStorage(toSend)
+	p.flushMetrics()
 }
 
 // Helper function
-func createTimeSeries(labels []promwrite.Label, metric metricValue) promwrite.TimeSeries {
+func createTimeSeries(labels []promwrite.Label, metric *metricValue, roundPeriod time.Duration) promwrite.TimeSeries {
 	return promwrite.TimeSeries{
 		Labels: labels,
 		Sample: promwrite.Sample{
-			Time:  time.Unix(0, metric.timestamp*int64(time.Millisecond)).Truncate(30 * time.Second),
+			Time:  time.Unix(0, metric.timestamp*int64(time.Millisecond)).Truncate(roundPeriod),
 			Value: metric.value,
 		},
 	}

@@ -1,6 +1,8 @@
 package event_to_metrics
 
 import (
+	"maps"
+	"sync"
 	"time"
 
 	"github.com/ozontech/file.d/cfg"
@@ -21,6 +23,9 @@ type Plugin struct {
 	logger           *zap.Logger
 	pluginController pipeline.ActionPluginController
 	format           string
+
+	Metrics []Metric
+	mu      *sync.Mutex
 }
 
 // ! config-params
@@ -69,10 +74,11 @@ func factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 }
 
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginParams) {
+	p.mu = &sync.Mutex{}
 	p.config = config.(*Config)
 	p.logger = params.Logger.Desugar()
 	p.pluginController = params.Controller
-	p.config.Metrics = prepareCheckersForMetrics(p.config.Metrics, p.logger)
+	p.Metrics = prepareCheckersForMetrics(p.config.Metrics, p.logger)
 
 	format, err := xtime.ParseFormatName(p.config.TimeFieldFormat)
 	if err != nil {
@@ -102,11 +108,23 @@ func (p *Plugin) Stop() {
 }
 
 func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
-	for i := range p.config.Metrics {
-		if p.config.Metrics[i].DoIfChecker != nil {
-			p.config.Metrics[i].use = p.config.Metrics[i].DoIfChecker.Check(event.Root)
+	p.mu.Lock()
+	copyMetrics := make([]Metric, 0, len(p.Metrics))
+	for i := range p.Metrics {
+		if p.Metrics[i].DoIfChecker == nil {
+			copyMetrics = append(copyMetrics, p.Metrics[i])
+		} else {
+			if !p.config.Metrics[i].DoIfChecker.Check(event.Root) {
+				continue
+			}
+			copyMetrics = append(copyMetrics, p.Metrics[i])
+		}
+		if p.Metrics[i].Labels != nil {
+			copyMetrics[len(copyMetrics)-1].Labels = make(map[string]string, len(p.Metrics[i].Labels))
+			maps.Copy(copyMetrics[len(copyMetrics)-1].Labels, p.Metrics[i].Labels)
 		}
 	}
+	p.mu.Unlock()
 
 	var ts time.Time
 
@@ -128,12 +146,8 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 		ts = time.Now()
 	}
 
-	children := make([]*insaneJSON.Node, 0, len(p.config.Metrics))
-	for _, metric := range p.config.Metrics {
-		if !metric.use {
-			continue
-		}
-
+	children := make([]*insaneJSON.Node, 0, len(copyMetrics))
+	for _, metric := range copyMetrics {
 		elem := new(insaneJSON.Node)
 		object := elem.MutateToObject()
 

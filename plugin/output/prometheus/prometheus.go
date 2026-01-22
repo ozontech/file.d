@@ -220,7 +220,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.logger = params.Logger.Desugar()
 	p.avgEventSize = params.PipelineSettings.AvgEventSize
 	p.registerMetrics(params.MetricCtl)
-	p.collector = newCollector(p, p.logger)
+	p.collector = newCollector(p, 15*time.Second, p.logger)
 
 	p.prepareClient()
 
@@ -369,19 +369,18 @@ func (p *Plugin) send(root *insaneJSON.Root) error {
 		)
 	}
 
-	// err := p.sendToStorage(values)
-	// if err != nil {
-	// 	if strings.Contains(err.Error(), "out of order sample") || strings.Contains(err.Error(), "duplicate sample for") {
-	// 		p.sendErrorMetric.Inc()
-	// 		p.logger.Warn("can't send data to Prometheus", zap.Error(err))
-	// 		return nil
-	// 	}
-	// }
-
 	return nil
 }
 
 func (p *Plugin) sendToStorage(values []promwrite.TimeSeries) error {
+	for _, value := range values {
+		p.logger.Debug(
+			"send metric",
+			zap.Any("labels", value.Labels),
+			zap.Time("time", value.Sample.Time),
+			zap.Float64("value", value.Sample.Value),
+		)
+	}
 	_, err := p.client.Write(context.Background(), &promwrite.WriteRequest{TimeSeries: values})
 	return err
 }
