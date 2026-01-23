@@ -12,7 +12,6 @@ import (
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/prometheus/client_golang/prometheus"
 
-	"github.com/elliotchance/orderedmap/v2"
 	"go.uber.org/zap"
 )
 
@@ -77,11 +76,13 @@ The resulting events:
 }*/
 
 type Plugin struct {
-	cache  *Cache
-	config *Config
-	keys   []parsedField
-	fields []parsedField
-	logger *zap.Logger
+	cache        *Cache
+	config       *Config
+	keys         *parsedFields
+	fields       *parsedFields
+	labelsValues []string
+	logger       *zap.Logger
+	bufPool      sync.Pool
 
 	cardinalityUniqueValuesLimit prometheus.Gauge
 	cardinalityUniqueValuesGauge *prometheus.GaugeVec
@@ -90,6 +91,31 @@ type Plugin struct {
 type parsedField struct {
 	name  string
 	value []string
+}
+
+type parsedFields struct {
+	fields  []parsedField
+	valsBuf []string
+}
+
+func (f *parsedFields) appendTo(buf []byte) []byte {
+	if len(f.fields) == 0 {
+		return append(buf, '[', ']')
+	}
+
+	buf = append(buf, '[')
+
+	for i := range f.fields {
+		if i > 0 {
+			buf = append(buf, ' ')
+		}
+		buf = append(buf, f.fields[i].name...)
+		buf = append(buf, ':')
+		buf = append(buf, f.valsBuf[i]...)
+	}
+
+	buf = append(buf, ']')
+	return buf
 }
 
 const (
@@ -165,26 +191,35 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 	if len(p.config.Fields) == 0 {
 		p.logger.Fatal("you have to set fields")
 	}
+	p.bufPool = sync.Pool{
+		New: func() any {
+			return make([]byte, 0, 256)
+		},
+	}
 
 	p.keys = parseFields(p.config.KeyFields)
 	p.fields = parseFields(p.config.Fields)
+	p.labelsValues = make([]string, len(p.config.KeyFields))
 
 	p.registerMetrics(params.MetricCtl, p.config.MetricPrefix)
 }
 
-func parseFields(fields []cfg.FieldSelector) []parsedField {
-	res := make([]parsedField, 0, len(fields))
+func parseFields(fields []cfg.FieldSelector) *parsedFields {
+	f := make([]parsedField, 0, len(fields))
 	for _, fs := range fields {
 		if fs == "" {
 			continue
 		}
 		parsed := cfg.ParseFieldSelector(string(fs))
-		res = append(res, parsedField{
+		f = append(f, parsedField{
 			name:  strings.Join(parsed, "_"),
 			value: parsed,
 		})
 	}
-	return res
+	return &parsedFields{
+		fields:  f,
+		valsBuf: make([]string, len(f)),
+	}
 }
 
 func (p *Plugin) registerMetrics(ctl *metric.Ctl, prefix string) {
@@ -212,12 +247,12 @@ func (p *Plugin) registerMetrics(ctl *metric.Ctl, prefix string) {
 	p.cardinalityUniqueValuesLimit.Set(float64(p.config.Limit))
 }
 
-func keyMetricLabels(fields []parsedField) []string {
-	result := make([]string, 0, len(fields))
-	seen := make(map[string]bool, len(fields))
+func keyMetricLabels(fields *parsedFields) []string {
+	result := make([]string, 0, len(fields.fields))
+	seen := make(map[string]bool, len(fields.fields))
 
-	for i := range fields {
-		name := fields[i].name
+	for i := range fields.fields {
+		name := fields.fields[i].name
 		if !seen[name] {
 			seen[name] = true
 			result = append(result, name)
@@ -231,14 +266,16 @@ func (p *Plugin) Stop() {
 }
 
 func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
-	cacheKey := orderedmap.NewOrderedMap[string, string]()
-	for _, key := range p.keys {
-		value := pipeline.CloneString(event.Root.Dig(key.value...).AsString())
-		cacheKey.Set(key.name, value)
+	for i, key := range p.keys.fields {
+		value := event.Root.Dig(key.value...).AsString()
+		p.keys.valsBuf[i] = value
 	}
+	buf := p.bufPool.Get().([]byte)
+	buf = buf[:0]
+	defer p.bufPool.Put(buf)
 
-	prefixKey := mapToKey(cacheKey)
-	keysCount := p.cache.CountPrefix(prefixKey)
+	prefixKey := p.keys.appendTo(buf)
+	keysCount := p.cache.CountPrefix(string(prefixKey))
 
 	shouldUpdateCache := false
 
@@ -247,7 +284,7 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 		case actionDiscard:
 			return pipeline.ActionDiscard
 		case actionRemoveFields:
-			for _, key := range p.fields {
+			for _, key := range p.fields.fields {
 				event.Root.Dig(key.value...).Suicide()
 			}
 		case actionNothing:
@@ -258,83 +295,21 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	}
 
 	if shouldUpdateCache {
-		cacheValue := orderedmap.NewOrderedMap[string, string]()
-		for _, key := range p.fields {
-			value := pipeline.CloneString(event.Root.Dig(key.value...).AsString())
-			cacheValue.Set(key.name, value)
+		for i, key := range p.fields.fields {
+			value := event.Root.Dig(key.value...).AsString()
+			p.fields.valsBuf[i] = value
 		}
-		value := mapToStringSorted(cacheKey, cacheValue)
-		isOldValue := p.cache.Set(value)
+
+		isOldValue := p.cache.Set(string(p.fields.appendTo(prefixKey)))
 		if !isOldValue {
 			// is new value
 			keysCount++
-			labelsValues := getLabelsValues(len(p.keys))
-			defer labelsValuesPool.Put(labelsValues)
-			for _, key := range p.keys {
-				if val, exists := cacheKey.Get(key.name); exists {
-					labelsValues = append(labelsValues, val)
-				}
+			for i, _ := range p.keys.fields {
+				p.labelsValues[i] = p.keys.valsBuf[i]
 			}
-			p.cardinalityUniqueValuesGauge.WithLabelValues(labelsValues...).Set(float64(keysCount))
+			p.cardinalityUniqueValuesGauge.WithLabelValues(p.labelsValues...).Set(float64(keysCount))
 		}
 	}
 
 	return pipeline.ActionPass
-}
-
-var labelsValuesPool = sync.Pool{
-	New: func() any {
-		return make([]string, 0, 5)
-	},
-}
-
-func getLabelsValues(minCapacity int) []string {
-	slice := labelsValuesPool.Get().([]string)
-
-	if cap(slice) < minCapacity {
-		labelsValuesPool.Put(slice)
-		return make([]string, 0, minCapacity)
-	}
-
-	return slice[:0]
-}
-
-var builderPool = sync.Pool{
-	New: func() any {
-		return &strings.Builder{}
-	},
-}
-
-func mapToStringSorted(cacheKey, cacheValue *orderedmap.OrderedMap[string, string]) string {
-	sb := builderPool.Get().(*strings.Builder)
-	defer func() {
-		sb.Reset()
-		builderPool.Put(sb)
-	}()
-
-	estimatedSize := (cacheKey.Len()+cacheValue.Len())*20 + 10
-	sb.Grow(estimatedSize)
-
-	sb.WriteString(mapToKey(cacheKey))
-	sb.WriteString(mapToKey(cacheValue))
-	out := sb.String()
-	return out
-}
-
-func mapToKey(m *orderedmap.OrderedMap[string, string]) string {
-	sb := new(strings.Builder)
-
-	sb.Grow(m.Len() * 15)
-	sb.WriteString("map[")
-
-	for el := m.Front(); el != nil; el = el.Next() {
-		sb.WriteString(el.Key)
-		sb.WriteByte(':')
-		sb.WriteString(el.Value)
-		sb.WriteByte(' ')
-	}
-	sb.WriteString("];")
-
-	out := sb.String()
-	return out
 }

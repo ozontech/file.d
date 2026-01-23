@@ -19,7 +19,7 @@ pipelines:
     ...
 ```
 Events:
-```jsonl
+```json
 {"service": "registration", "client_id": "1"}
 {"service": "registration", "client_id": "1"}
 {"service": "registration", "client_id": "2"}
@@ -44,13 +44,13 @@ pipelines:
     ...
 ```
 The original events:
-```jsonl
+```json
 {"service": "registration", "client_id": "1"}
 {"service": "registration", "client_id": "2"}
 {"service": "registration", "client_id": "3"}
 ```
 The resulting events:
-```jsonl
+```json
 {"service": "registration", "client_id": "1"}
 {"service": "registration", "client_id": "2"}
 {"service": "registration"}
