@@ -2,80 +2,55 @@ package cardinality
 
 import (
 	"fmt"
-	"sort"
-	"strconv"
-	"strings"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/elliotchance/orderedmap/v2"
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/test"
 	"github.com/stretchr/testify/assert"
 )
 
-func TestMapToStringSorted(t *testing.T) {
+func TestParseFields(t *testing.T) {
 	tests := []struct {
 		name     string
-		m        map[string]string
-		n        map[string]string
+		m        []cfg.FieldSelector
+		v        []string
 		expected string
 	}{
 		{
 			name:     "empty maps",
-			m:        map[string]string{},
-			n:        map[string]string{},
-			expected: "map[];map[];",
+			m:        []cfg.FieldSelector{},
+			v:        []string{},
+			expected: "[]",
 		},
 		{
 			name:     "simple maps",
-			m:        map[string]string{"service": "test", "host": "localhost"},
-			n:        map[string]string{"level": "3", "value": "1"},
-			expected: "map[service:test host:localhost ];map[level:3 value:1 ];",
+			m:        []cfg.FieldSelector{"service", "host"},
+			v:        []string{"test", "localhost"},
+			expected: "[service:test host:localhost]",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := mapToStringSorted(mapToOrderedMap(tt.m), mapToOrderedMap(tt.n))
-			if result != tt.expected {
-				t.Errorf("mapToStringSorted() = %v, want %v", result, tt.expected)
+			parsedFields := parseFields(tt.m)
+			for i := range tt.v {
+				parsedFields.valsBuf[i] = tt.v[i]
 			}
 
-			// Verify the output is properly sorted
-			if strings.HasPrefix(result, "map[") && strings.HasSuffix(result, "]") {
-				content := result[4 : len(result)-1]
-				if content != "" {
-					pairs := strings.Split(content, " ")
-					if !sort.StringsAreSorted(pairs) {
-						t.Errorf("output pairs are not sorted: %v", pairs)
-					}
-				}
-			}
+			var buf []byte
+			result := parsedFields.appendTo(buf)
+
+			assert.Equal(
+				t,
+				[]byte(tt.expected),
+				result,
+				"mapToStringSorted() = %v, want %v", string(result), string(tt.expected),
+			)
 		})
 	}
-}
-
-func BenchmarkMapToStringSorted_Comparison(b *testing.B) {
-	m := mapToOrderedMap(map[string]string{
-		"service": "test", "host": "localhost", "port": "8080",
-		"protocol": "http", "env": "production", "version": "2.0",
-		"region": "us-west", "zone": "1a", "cluster": "prod",
-	})
-	n := mapToOrderedMap(map[string]string{
-		"level": "3", "timeout": "30",
-		"retry": "5", "cache": "true", "debug": "false",
-	})
-
-	b.Run("current_implementation", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
-			n.Set("value", strconv.Itoa(i))
-			_ = mapToStringSorted(m, n)
-		}
-	})
-
 }
 
 func TestCardinalityLimitDiscard(t *testing.T) {
@@ -214,24 +189,17 @@ func TestCardinalityLimitDiscardIfNoSetKeyFields(t *testing.T) {
 func TestSetAndCountPrefix(t *testing.T) {
 	cache := NewCache(time.Minute)
 
-	cacheKey := map[string]string{
-		"host": "localhost",
-	}
-	cacheValue := map[string]string{
-		"i": "0",
-	}
-	key := mapToKey(mapToOrderedMap(cacheKey))
-	value := mapToStringSorted(mapToOrderedMap(cacheKey), mapToOrderedMap(cacheValue))
-	cache.Set(value)
+	key := parseFields([]cfg.FieldSelector{"host"})
+	key.valsBuf[0] = "localhost"
 
-	keysCount := cache.CountPrefix(key)
+	value := parseFields([]cfg.FieldSelector{"i"})
+	key.valsBuf[0] = "0"
+
+	var buf []byte
+	prefixKey := key.appendTo(buf)
+
+	cache.Set(string(value.appendTo(prefixKey)))
+
+	keysCount := cache.CountPrefix(string(prefixKey))
 	assert.Equal(t, 1, keysCount, "wrong in events count")
-}
-
-func mapToOrderedMap(src map[string]string) *orderedmap.OrderedMap[string, string] {
-	m := orderedmap.NewOrderedMap[string, string]()
-	for k, v := range src {
-		m.Set(k, v)
-	}
-	return m
 }
