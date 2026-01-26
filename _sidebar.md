@@ -56,6 +56,7 @@
     - [elasticsearch](plugin/output/elasticsearch/README.md)
     - [file](plugin/output/file/README.md)
     - [gelf](plugin/output/gelf/README.md)
+    - [http](plugin/output/http/README.md)
     - [kafka](plugin/output/kafka/README.md)
     - [loki](plugin/output/loki/README.md)
     - [postgres](plugin/output/postgres/README.md)
