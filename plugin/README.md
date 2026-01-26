@@ -803,6 +803,13 @@ Allowed characters in field names are letters, numbers, underscores, dashes, and
 Supports [dead queue](/plugin/output/README.md#dead-queue).
 
 [More details...](plugin/output/gelf/README.md)
+## http
+It sends events to arbitrary HTTP endpoints. It uses POST requests to send events in batches.
+If a network error occurs, the batch will infinitely try to be delivered to the random endpoint.
+
+Supports [dead queue](/plugin/output/README.md#dead-queue).
+
+[More details...](plugin/output/http/README.md)
 ## kafka
 It sends the event batches to kafka brokers using `franz-go` lib.
 
