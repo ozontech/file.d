@@ -22,6 +22,7 @@ type buckets interface {
 
 	// for testing only
 	isSimple() bool
+	getDistrCount() int
 }
 
 func newBuckets(count, distributionSize int, interval time.Duration) buckets {
@@ -124,6 +125,10 @@ func (b *simpleBuckets) isSimple() bool {
 	return true
 }
 
+func (b *simpleBuckets) getDistrCount() int {
+	return 0
+}
+
 type distributedBuckets struct {
 	bucketsMeta
 	b []distributedBucket
@@ -184,6 +189,13 @@ func (b *distributedBuckets) rebuild(currentTs, ts time.Time) int {
 
 func (b *distributedBuckets) isSimple() bool {
 	return false
+}
+
+func (b *distributedBuckets) getDistrCount() int {
+	if len(b.b) > 0 {
+		return len(b.b[0])
+	}
+	return 0
 }
 
 type distributedBucket []int64

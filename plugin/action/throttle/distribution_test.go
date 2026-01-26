@@ -175,7 +175,6 @@ func Test_parseLimitDistribution(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -198,7 +197,7 @@ func Test_parseLimitDistribution(t *testing.T) {
 	}
 }
 
-func TestGetLimitDistributionsCfg(t *testing.T) {
+func TestLimitDistributionsGetCfg(t *testing.T) {
 	ld := &limitDistributions{
 		field: []string{"log", "level"},
 		idxByKey: map[string]int{
@@ -222,7 +221,7 @@ func TestGetLimitDistributionsCfg(t *testing.T) {
 		Enabled: true,
 	}
 
-	result := ld.getLimitDistributionsCfg()
+	result := ld.getCfg()
 
 	require.Equal(t, expected.Field, result.Field, "wrong Field")
 	require.Equal(t, expected.Enabled, result.Enabled, "wrong Enabled")

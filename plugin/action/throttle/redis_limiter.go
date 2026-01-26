@@ -286,7 +286,7 @@ func (l *redisLimiter) getLimitCfg() limitCfg {
 		Key:          l.keyLimit,
 		Kind:         kind,
 		Limit:        l.totalLimiter.getLimit(),
-		Distribution: distrCopy.getLimitDistributionsCfg(),
+		Distribution: distrCopy.getCfg(),
 	}
 }
 
