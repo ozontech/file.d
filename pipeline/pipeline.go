@@ -88,10 +88,10 @@ type Pipeline struct {
 	started  bool
 	settings *Settings
 
-	decoderType          decoder.Type // decoder type set in the config
-	suggestedDecoderType decoder.Type // decoder type suggested by input plugin, it is used when config decoder is set to "auto"
-	decoder              decoder.Decoder
-	initDecoderOnce      *sync.Once
+	decoderType     decoder.Type // decoder type set in the config
+	suggestOnce     sync.Once
+	decoder         decoder.Decoder
+	initDecoderOnce *sync.Once
 
 	eventPool pool
 	streamer  *streamer
@@ -427,28 +427,22 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offsets Offsets, byt
 	length := len(bytes)
 
 	var (
-		dec decoder.Type
 		row decoder.CRIRow
 		err error
 	)
-	if p.decoderType == decoder.AUTO {
-		dec = p.suggestedDecoderType
-		if dec == decoder.NO {
-			dec = decoder.JSON
-		}
 
-		// When config decoder is set to "auto", then we didn't create a decoder during pipeline initialization.
-		// It's necessary to initialize the decoder once.
-		if dec == decoder.JSON {
+	// If no input plugin suggested a decoder, use JSON decoder by default.
+	if p.decoderType == decoder.AUTO {
+		p.decoderType = decoder.JSON
+
+		if p.decoder == nil {
 			p.initDecoderOnce.Do(func() {
 				p.decoder, _ = decoder.NewJsonDecoder(p.settings.DecoderParams)
 			})
 		}
-	} else {
-		dec = p.decoderType
 	}
 
-	if dec == decoder.CRI {
+	if p.decoderType == decoder.CRI {
 		row, err = decoder.DecodeCRI(bytes)
 		if err != nil {
 			p.wrongEventCRIFormatMetric.Inc()
@@ -511,10 +505,10 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offsets Offsets, byt
 	p.eventPoolLatency.Observe(time.Since(now).Seconds())
 
 	err = nil
-	if !(dec == decoder.JSON || dec == decoder.PROTOBUF) {
+	if !(p.decoderType == decoder.JSON || p.decoderType == decoder.PROTOBUF) {
 		_ = event.Root.DecodeString("{}")
 	}
-	switch dec {
+	switch p.decoderType {
 	case decoder.JSON, decoder.NGINX_ERROR, decoder.PROTOBUF,
 		decoder.SYSLOG_RFC3164, decoder.SYSLOG_RFC5424, decoder.CSV:
 		err = p.decoder.DecodeToJson(event.Root, bytes)
@@ -527,7 +521,7 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offsets Offsets, byt
 	case decoder.POSTGRES:
 		err = decoder.DecodePostgresToJson(event.Root, bytes)
 	default:
-		p.logger.Panic("unknown decoder", zap.Int("decoder", int(dec)))
+		p.logger.Panic("unknown decoder", zap.Int("decoder", int(p.decoderType)))
 	}
 
 	if err != nil {
@@ -919,8 +913,25 @@ func (p *Pipeline) DisableStreams() {
 	p.disableStreams = true
 }
 
+// SuggestDecoder applies a decoder hint from input plugins (k8s only for now)
+// when pipeline decoder is set to "auto".
+// The first non-No suggestion wins and permanently replaces pipeline decoder.
 func (p *Pipeline) SuggestDecoder(t decoder.Type) {
-	p.suggestedDecoderType = t
+	if p.decoderType != decoder.AUTO {
+		return
+	}
+
+	if t == decoder.NO {
+		return
+	}
+
+	p.suggestOnce.Do(func() {
+		p.decoderType = t
+
+		if t == decoder.JSON {
+			p.decoder, _ = decoder.NewJsonDecoder(p.settings.DecoderParams)
+		}
+	})
 }
 
 func (p *Pipeline) DisableParallelism() {
