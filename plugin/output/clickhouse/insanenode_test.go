@@ -1,3 +1,4 @@
+//nolint:prealloc
 package clickhouse
 
 import (

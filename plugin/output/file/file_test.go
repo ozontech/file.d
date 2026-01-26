@@ -1,3 +1,4 @@
+//nolint:prealloc
 package file
 
 import (
@@ -66,7 +67,7 @@ func TestGetStartIdx(t *testing.T) {
 		}
 
 		// create files.
-		files := make([]*os.File, len(tc.filesName))
+		files := make([]*os.File, 0, len(tc.filesName))
 		createDir(t, p.targetDir)
 		for _, f := range tc.filesName {
 			files = append(files, createFile(t, f, nil))
