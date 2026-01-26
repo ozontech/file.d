@@ -52,8 +52,9 @@ func (c *Config) Send(t *testing.T) {
 		BatchSize_:       c.Count,
 	}
 
-	client := kafka_out.NewClient(config,
+	client := kafka_out.NewClient(context.Background(), config,
 		zap.NewNop().WithOptions(zap.WithFatalHook(zapcore.WriteThenPanic)),
+		nil,
 	)
 	adminClient := kadm.NewClient(client)
 	_, err := adminClient.CreateTopic(context.TODO(), 1, 1, nil, c.Topics[0])
