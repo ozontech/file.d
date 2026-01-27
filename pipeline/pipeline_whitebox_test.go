@@ -3,6 +3,7 @@ package pipeline
 import (
 	"testing"
 
+	"github.com/ozontech/file.d/decoder"
 	"github.com/ozontech/file.d/pipeline/metadata"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/testutil"
@@ -224,4 +225,29 @@ func TestCheckInputBytesMetric(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestSuggestDecoderIsAppliedOnlyOnce(t *testing.T) {
+	settings := &Settings{
+		Decoder:            "auto",
+		MetricHoldDuration: DefaultMetricHoldDuration,
+	}
+
+	p := New("file_d", settings, prometheus.NewPedanticRegistry(), zap.NewNop())
+	p.SuggestDecoder(decoder.CRI)
+	p.SuggestDecoder(decoder.JSON)
+
+	require.Equal(t, decoder.CRI, p.decoderType)
+}
+
+func TestSuggestDecoderIgnoredWhenDecoderNotAuto(t *testing.T) {
+	settings := &Settings{
+		Decoder:            "json",
+		MetricHoldDuration: DefaultMetricHoldDuration,
+	}
+
+	p := New("file_d", settings, prometheus.NewPedanticRegistry(), zap.NewNop())
+	p.SuggestDecoder(decoder.CRI)
+
+	require.Equal(t, decoder.JSON, p.decoderType)
 }

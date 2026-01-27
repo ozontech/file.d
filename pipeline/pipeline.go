@@ -88,10 +88,8 @@ type Pipeline struct {
 	started  bool
 	settings *Settings
 
-	decoderType          decoder.Type // decoder type set in the config
-	suggestedDecoderType decoder.Type // decoder type suggested by input plugin, it is used when config decoder is set to "auto"
-	decoder              decoder.Decoder
-	initDecoderOnce      *sync.Once
+	decoderType decoder.Type // decoder type set in the config
+	decoder     decoder.Decoder
 
 	eventPool pool
 	streamer  *streamer
@@ -218,8 +216,6 @@ func New(name string, settings *Settings, registry *prometheus.Registry, lg *zap
 
 		eventLog:   make([]string, 0, 128),
 		eventLogMu: &sync.Mutex{},
-
-		initDecoderOnce: &sync.Once{},
 	}
 
 	pipeline.registerMetrics()
@@ -362,6 +358,11 @@ func (p *Pipeline) Start() {
 
 	p.input.Start(p.inputInfo.Config, inputParams)
 
+	if p.decoderType == decoder.AUTO {
+		p.decoderType = decoder.JSON
+		p.decoder, _ = decoder.NewJsonDecoder(p.settings.DecoderParams)
+	}
+
 	p.streamer.start()
 
 	go p.maintenance()
@@ -431,23 +432,8 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offsets Offsets, byt
 		row decoder.CRIRow
 		err error
 	)
-	if p.decoderType == decoder.AUTO {
-		dec = p.suggestedDecoderType
-		if dec == decoder.NO {
-			dec = decoder.JSON
-		}
 
-		// When config decoder is set to "auto", then we didn't create a decoder during pipeline initialization.
-		// It's necessary to initialize the decoder once.
-		if dec == decoder.JSON {
-			p.initDecoderOnce.Do(func() {
-				p.decoder, _ = decoder.NewJsonDecoder(p.settings.DecoderParams)
-			})
-		}
-	} else {
-		dec = p.decoderType
-	}
-
+	dec = p.decoderType
 	if dec == decoder.CRI {
 		row, err = decoder.DecodeCRI(bytes)
 		if err != nil {
@@ -919,8 +905,18 @@ func (p *Pipeline) DisableStreams() {
 	p.disableStreams = true
 }
 
+// SuggestDecoder applies a decoder hint from input plugins (k8s only for now)
+// when pipeline decoder is set to "auto".
+// The first non-No suggestion wins and permanently replaces pipeline decoder.
 func (p *Pipeline) SuggestDecoder(t decoder.Type) {
-	p.suggestedDecoderType = t
+	if p.decoderType != decoder.AUTO || t == decoder.NO {
+		return
+	}
+
+	p.decoderType = t
+	if t == decoder.JSON {
+		p.decoder, _ = decoder.NewJsonDecoder(p.settings.DecoderParams)
+	}
 }
 
 func (p *Pipeline) DisableParallelism() {
