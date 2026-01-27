@@ -88,10 +88,8 @@ type Pipeline struct {
 	started  bool
 	settings *Settings
 
-	decoderType     decoder.Type // decoder type set in the config
-	suggestOnce     sync.Once
-	decoder         decoder.Decoder
-	initDecoderOnce *sync.Once
+	decoderType decoder.Type // decoder type set in the config
+	decoder     decoder.Decoder
 
 	eventPool pool
 	streamer  *streamer
@@ -218,8 +216,6 @@ func New(name string, settings *Settings, registry *prometheus.Registry, lg *zap
 
 		eventLog:   make([]string, 0, 128),
 		eventLogMu: &sync.Mutex{},
-
-		initDecoderOnce: &sync.Once{},
 	}
 
 	pipeline.registerMetrics()
@@ -362,6 +358,11 @@ func (p *Pipeline) Start() {
 
 	p.input.Start(p.inputInfo.Config, inputParams)
 
+	if p.decoderType == decoder.AUTO {
+		p.decoderType = decoder.JSON
+		p.decoder, _ = decoder.NewJsonDecoder(p.settings.DecoderParams)
+	}
+
 	p.streamer.start()
 
 	go p.maintenance()
@@ -427,22 +428,13 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offsets Offsets, byt
 	length := len(bytes)
 
 	var (
+		dec decoder.Type
 		row decoder.CRIRow
 		err error
 	)
 
-	// If no input plugin suggested a decoder, use JSON decoder by default.
-	if p.decoderType == decoder.AUTO {
-		p.decoderType = decoder.JSON
-
-		if p.decoder == nil {
-			p.initDecoderOnce.Do(func() {
-				p.decoder, _ = decoder.NewJsonDecoder(p.settings.DecoderParams)
-			})
-		}
-	}
-
-	if p.decoderType == decoder.CRI {
+	dec = p.decoderType
+	if dec == decoder.CRI {
 		row, err = decoder.DecodeCRI(bytes)
 		if err != nil {
 			p.wrongEventCRIFormatMetric.Inc()
@@ -505,10 +497,10 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offsets Offsets, byt
 	p.eventPoolLatency.Observe(time.Since(now).Seconds())
 
 	err = nil
-	if !(p.decoderType == decoder.JSON || p.decoderType == decoder.PROTOBUF) {
+	if !(dec == decoder.JSON || dec == decoder.PROTOBUF) {
 		_ = event.Root.DecodeString("{}")
 	}
-	switch p.decoderType {
+	switch dec {
 	case decoder.JSON, decoder.NGINX_ERROR, decoder.PROTOBUF,
 		decoder.SYSLOG_RFC3164, decoder.SYSLOG_RFC5424, decoder.CSV:
 		err = p.decoder.DecodeToJson(event.Root, bytes)
@@ -521,7 +513,7 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offsets Offsets, byt
 	case decoder.POSTGRES:
 		err = decoder.DecodePostgresToJson(event.Root, bytes)
 	default:
-		p.logger.Panic("unknown decoder", zap.Int("decoder", int(p.decoderType)))
+		p.logger.Panic("unknown decoder", zap.Int("decoder", int(dec)))
 	}
 
 	if err != nil {
@@ -917,21 +909,14 @@ func (p *Pipeline) DisableStreams() {
 // when pipeline decoder is set to "auto".
 // The first non-No suggestion wins and permanently replaces pipeline decoder.
 func (p *Pipeline) SuggestDecoder(t decoder.Type) {
-	if p.decoderType != decoder.AUTO {
+	if p.decoderType != decoder.AUTO || t == decoder.NO {
 		return
 	}
 
-	if t == decoder.NO {
-		return
+	p.decoderType = t
+	if t == decoder.JSON {
+		p.decoder, _ = decoder.NewJsonDecoder(p.settings.DecoderParams)
 	}
-
-	p.suggestOnce.Do(func() {
-		p.decoderType = t
-
-		if t == decoder.JSON {
-			p.decoder, _ = decoder.NewJsonDecoder(p.settings.DecoderParams)
-		}
-	})
 }
 
 func (p *Pipeline) DisableParallelism() {
