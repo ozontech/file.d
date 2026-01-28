@@ -27,7 +27,7 @@ Events:
 ```
 ---
 
-Discarding events with high cardinality field:
+Remove high cardinality fields:
 ```yaml
 pipelines:
   example_pipeline:

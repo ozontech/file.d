@@ -45,7 +45,7 @@ Events:
 ```
 ---
 
-Discarding events with high cardinality field:
+Remove high cardinality fields:
 ```yaml
 pipelines:
   example_pipeline:
@@ -76,13 +76,12 @@ The resulting events:
 }*/
 
 type Plugin struct {
-	cache        *Cache
-	config       *Config
-	keys         *parsedFields
-	fields       *parsedFields
-	labelsValues []string
-	logger       *zap.Logger
-	bufPool      sync.Pool
+	cache   *Cache
+	config  *Config
+	keys    *parsedFields
+	fields  *parsedFields
+	logger  *zap.Logger
+	bufPool sync.Pool
 
 	cardinalityUniqueValuesLimit prometheus.Gauge
 	cardinalityUniqueValuesGauge *prometheus.GaugeVec
@@ -199,7 +198,6 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 
 	p.keys = parseFields(p.config.KeyFields)
 	p.fields = parseFields(p.config.Fields)
-	p.labelsValues = make([]string, len(p.config.KeyFields))
 
 	p.registerMetrics(params.MetricCtl, p.config.MetricPrefix)
 }
@@ -227,7 +225,7 @@ func (p *Plugin) registerMetrics(ctl *metric.Ctl, prefix string) {
 	if prefix == "" {
 		metricName = "cardinality_unique_values_count"
 	} else {
-		metricName = fmt.Sprintf(`cardinality_unique_values_%s_count`, prefix)
+		metricName = fmt.Sprintf(`cardinality_%s_unique_values_count`, prefix)
 	}
 	p.cardinalityUniqueValuesGauge = ctl.RegisterGaugeVec(
 		metricName,
@@ -236,9 +234,9 @@ func (p *Plugin) registerMetrics(ctl *metric.Ctl, prefix string) {
 	)
 
 	if prefix == "" {
-		metricName = "cardinality_values_limit"
+		metricName = "cardinality_unique_values_limit"
 	} else {
-		metricName = fmt.Sprintf(`cardinality_values_%s_limit`, prefix)
+		metricName = fmt.Sprintf(`cardinality_%s_unique_values_limit`, prefix)
 	}
 	p.cardinalityUniqueValuesLimit = ctl.RegisterGauge(
 		metricName,
@@ -271,13 +269,13 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 		p.keys.valsBuf[i] = value
 	}
 	buf := p.bufPool.Get().([]byte)
-	buf = buf[:0]
-	defer p.bufPool.Put(buf)
+	defer func() {
+		buf = buf[:0]
+		p.bufPool.Put(buf)
+	}()
 
 	prefixKey := p.keys.appendTo(buf)
 	keysCount := p.cache.CountPrefix(string(prefixKey))
-
-	shouldUpdateCache := false
 
 	if p.config.Limit >= 0 && keysCount >= p.config.Limit {
 		switch p.config.Action {
@@ -287,28 +285,20 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 			for _, key := range p.fields.fields {
 				event.Root.Dig(key.value...).Suicide()
 			}
-		case actionNothing:
-			shouldUpdateCache = true
+			return pipeline.ActionPass
 		}
-	} else {
-		shouldUpdateCache = true
 	}
 
-	if shouldUpdateCache {
-		for i, key := range p.fields.fields {
-			value := event.Root.Dig(key.value...).AsString()
-			p.fields.valsBuf[i] = value
-		}
+	for i, key := range p.fields.fields {
+		value := event.Root.Dig(key.value...).AsString()
+		p.fields.valsBuf[i] = value
+	}
 
-		isOldValue := p.cache.Set(string(p.fields.appendTo(prefixKey)))
-		if !isOldValue {
-			// is new value
-			keysCount++
-			for i, _ := range p.keys.fields {
-				p.labelsValues[i] = p.keys.valsBuf[i]
-			}
-			p.cardinalityUniqueValuesGauge.WithLabelValues(p.labelsValues...).Set(float64(keysCount))
-		}
+	isOldValue := p.cache.Set(string(p.fields.appendTo(prefixKey)))
+	if !isOldValue {
+		// is new value
+		keysCount++
+		p.cardinalityUniqueValuesGauge.WithLabelValues(p.keys.valsBuf...).Set(float64(keysCount))
 	}
 
 	return pipeline.ActionPass
