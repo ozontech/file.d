@@ -165,7 +165,7 @@ func getNodeBytesSize(node *insaneJSON.Node) int {
 		size += getNodeFieldsBytesSize(node) + 2 // curly brackets enclosing object
 	default:
 		if node.IsString() {
-			if node.TypeStr() == "string" { // nolint:goconst
+			if node.TypeStr() == "string" {
 				// Note: in case of unescaped string computed bytes length can diverse from the actual
 				size += len(node.AsString()) + 2 // add quotes to unescaped string
 			} else {
