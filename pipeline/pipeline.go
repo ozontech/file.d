@@ -221,41 +221,18 @@ func New(name string, settings *Settings, registry *prometheus.Registry, lg *zap
 	pipeline.registerMetrics()
 	pipeline.setDefaultMetrics()
 
-	var err error
-	switch settings.Decoder {
-	case "json":
-		pipeline.decoderType = decoder.JSON
-		pipeline.decoder, err = decoder.NewJsonDecoder(pipeline.settings.DecoderParams)
-	case "raw":
-		pipeline.decoderType = decoder.RAW
-	case "cri":
-		pipeline.decoderType = decoder.CRI
-	case "postgres":
-		pipeline.decoderType = decoder.POSTGRES
-	case "nginx_error":
-		pipeline.decoderType = decoder.NGINX_ERROR
-		pipeline.decoder, err = decoder.NewNginxErrorDecoder(pipeline.settings.DecoderParams)
-	case "protobuf":
-		pipeline.decoderType = decoder.PROTOBUF
-		pipeline.decoder, err = decoder.NewProtobufDecoder(pipeline.settings.DecoderParams)
-	case "syslog_rfc3164":
-		pipeline.decoderType = decoder.SYSLOG_RFC3164
-		pipeline.decoder, err = decoder.NewSyslogRFC3164Decoder(pipeline.settings.DecoderParams)
-	case "syslog_rfc5424":
-		pipeline.decoderType = decoder.SYSLOG_RFC5424
-		pipeline.decoder, err = decoder.NewSyslogRFC5424Decoder(pipeline.settings.DecoderParams)
-	case "csv":
-		pipeline.decoderType = decoder.CSV
-		pipeline.decoder, err = decoder.NewCSVDecoder(pipeline.settings.DecoderParams)
-	case "auto":
-		pipeline.decoderType = decoder.AUTO
-	default:
+	pipeline.decoderType = decoder.TypeFromString(settings.Decoder)
+	if pipeline.decoderType == decoder.NO {
 		pipeline.logger.Fatal("unknown decoder", zap.String("decoder", settings.Decoder))
 	}
-	if err != nil {
-		pipeline.logger.Fatal("can't create decoder", zap.String("decoder", settings.Decoder), zap.Error(err))
-	}
 
+	if pipeline.decoderType.RequiresInitialization() {
+		var err error
+		pipeline.decoder, err = decoder.New(pipeline.decoderType, pipeline.settings.DecoderParams)
+		if err != nil {
+			pipeline.logger.Fatal("can't create decoder", zap.String("decoder", settings.Decoder), zap.Error(err))
+		}
+	}
 	return pipeline
 }
 
@@ -358,9 +335,15 @@ func (p *Pipeline) Start() {
 
 	p.input.Start(p.inputInfo.Config, inputParams)
 
+	// If decoder is still set to AUTO after input plugin start, it means
+	// no plugin called SuggestDecoder to override it. In this case, we default to JSON decoder.
 	if p.decoderType == decoder.AUTO {
 		p.decoderType = decoder.JSON
-		p.decoder, _ = decoder.NewJsonDecoder(p.settings.DecoderParams)
+		var err error
+		p.decoder, err = decoder.New(decoder.JSON, p.settings.DecoderParams)
+		if err != nil {
+			p.logger.Error("can't create JSON decoder", zap.Error(err))
+		}
 	}
 
 	p.streamer.start()
@@ -914,8 +897,12 @@ func (p *Pipeline) SuggestDecoder(t decoder.Type) {
 	}
 
 	p.decoderType = t
-	if t == decoder.JSON {
-		p.decoder, _ = decoder.NewJsonDecoder(p.settings.DecoderParams)
+	if t.RequiresInitialization() {
+		var err error
+		p.decoder, err = decoder.New(t, p.settings.DecoderParams)
+		if err != nil {
+			p.logger.Error("can't create decoder", zap.Error(err))
+		}
 	}
 }
 
