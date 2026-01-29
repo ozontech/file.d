@@ -1,3 +1,4 @@
+// nolint:goconst
 package doif
 
 import (
@@ -28,7 +29,7 @@ func (t logicalOpType) String() string {
 	case logicalNot:
 		return "not"
 	default:
-		return "unknown" // nolint:goconst
+		return "unknown"
 	}
 }
 

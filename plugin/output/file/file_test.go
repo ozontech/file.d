@@ -1,4 +1,3 @@
-//nolint:prealloc
 package file
 
 import (

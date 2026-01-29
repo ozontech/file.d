@@ -1,4 +1,4 @@
-//nolint:prealloc
+// nolint:prealloc
 package main
 
 import (
