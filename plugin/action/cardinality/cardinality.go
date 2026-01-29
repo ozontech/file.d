@@ -3,7 +3,6 @@ package cardinality
 import (
 	"fmt"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/ozontech/file.d/cfg"
@@ -76,12 +75,12 @@ The resulting events:
 }*/
 
 type Plugin struct {
-	cache   *Cache
-	config  *Config
-	keys    *parsedFields
-	fields  *parsedFields
-	logger  *zap.Logger
-	bufPool sync.Pool
+	cache  *Cache
+	config *Config
+	keys   *parsedFields
+	fields *parsedFields
+	logger *zap.Logger
+	buf    []byte
 
 	cardinalityUniqueValuesLimit prometheus.Gauge
 	cardinalityUniqueValuesGauge *prometheus.GaugeVec
@@ -190,11 +189,6 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 	if len(p.config.Fields) == 0 {
 		p.logger.Fatal("you have to set fields")
 	}
-	p.bufPool = sync.Pool{
-		New: func() any {
-			return make([]byte, 0, 256)
-		},
-	}
 
 	p.keys = parseFields(p.config.KeyFields)
 	p.fields = parseFields(p.config.Fields)
@@ -268,13 +262,11 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 		value := event.Root.Dig(key.value...).AsString()
 		p.keys.valsBuf[i] = value
 	}
-	buf := p.bufPool.Get().([]byte)
-	defer func() {
-		buf = buf[:0]
-		p.bufPool.Put(buf)
-	}()
+	p.buf = p.buf[:0]
+	p.buf = p.keys.appendTo(p.buf)
+	prefixKey := make([]byte, len(p.buf))
+	copy(prefixKey, p.buf)
 
-	prefixKey := p.keys.appendTo(buf)
 	keysCount := p.cache.CountPrefix(string(prefixKey))
 
 	if p.config.Limit >= 0 && keysCount >= p.config.Limit {
