@@ -76,6 +76,9 @@ linters:
       - linters:
           - govet
         text: declaration of "(err|ctx)"
+      - linters:
+          - goconst
+        path: pipeline/doif
     paths:
       - testdata$
 formatters:
