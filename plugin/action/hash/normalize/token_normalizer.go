@@ -3,6 +3,7 @@ package normalize
 import (
 	"errors"
 	"fmt"
+	"net"
 	"slices"
 	"strings"
 
@@ -32,7 +33,8 @@ const (
 	pSha1
 	pMd5
 	pDatetime
-	pIp
+	pIPv4
+	pIPv6
 	pDuration
 	pHex
 	pFloat
@@ -57,7 +59,7 @@ var patternById = map[string]int{
 	"sha1":             pSha1,
 	"md5":              pMd5,
 	"datetime":         pDatetime,
-	"ip":               pIp,
+	"ip":               pIPv4 | pIPv6,
 	"duration":         pDuration,
 	"hex":              pHex,
 	"float":            pFloat,
@@ -79,7 +81,8 @@ var placeholderByPattern = map[int]string{
 	pSha1:            "<sha1>",
 	pMd5:             "<md5>",
 	pDatetime:        "<datetime>",
-	pIp:              "<ip>",
+	pIPv4:            "<ip>",
+	pIPv6:            "<ip>",
 	pDuration:        "<duration>",
 	pHex:             "<hex>",
 	pFloat:           "<float>",
@@ -166,6 +169,10 @@ func NewTokenNormalizer(params TokenNormalizerParams) (Normalizer, error) {
 func (n *tokenNormalizer) Normalize(out, data []byte) []byte {
 	out = out[:0]
 
+	if hasPattern(n.builtinPatterns, pIPv6) {
+		data = n.normalizeIP(data)
+	}
+
 	var scanner *lexmachine.Scanner
 	if n.normalizeByBytes {
 		out = n.normalizeByTokenizer(out, newTokenizer(n.builtinPatterns, data))
@@ -205,8 +212,12 @@ func parseBuiltinPatterns(s string) (int, error) {
 func initTokens(lexer *lexmachine.Lexer,
 	builtinPatterns int, customPatterns []TokenPattern,
 ) error {
+	hasIpPattern := hasPattern(builtinPatterns, pIPv6)
 	addTokens := func(patterns []TokenPattern) {
 		for _, p := range patterns {
+			if hasIpPattern && p.mask == pIPv6 {
+				continue
+			}
 			if p.mask == 0 || builtinPatterns&p.mask != 0 {
 				lexer.Add([]byte(p.RE), newToken(p.Placeholder))
 			}
@@ -457,6 +468,40 @@ func isWord(c byte) bool {
 		c == '_'
 }
 
+func (n *tokenNormalizer) normalizeIP(data []byte) []byte {
+	out := make([]byte, 0, len(data))
+	pos := 0
+
+	for pos < len(data) {
+		if !isIPChar(data[pos]) {
+			out = append(out, data[pos])
+			pos++
+			continue
+		}
+
+		start := pos
+		for pos < len(data) && isIPChar(data[pos]) {
+			pos++
+		}
+
+		potentialIP := string(data[start:pos])
+		if net.ParseIP(potentialIP) != nil {
+			out = append(out, "<ip>"...)
+		} else {
+			out = append(out, data[start:pos]...)
+		}
+	}
+
+	return out
+}
+
+func isIPChar(c byte) bool {
+	return (c >= '0' && c <= '9') ||
+		(c >= 'a' && c <= 'f') ||
+		(c >= 'A' && c <= 'F') ||
+		c == ':' || c == '.'
+}
+
 // [lexmachine] pkg doesn't support 'exactly' re syntax (a{3}, a{3,6}),
 // so we use [strings.Repeat] instead
 var builtinTokenPatterns = []TokenPattern{
@@ -518,11 +563,10 @@ var builtinTokenPatterns = []TokenPattern{
 		mask: pDatetime,
 	},
 	{
-		// IPv4 only
-		Placeholder: placeholderByPattern[pIp],
+		Placeholder: placeholderByPattern[pIPv4],
 		RE:          strings.TrimSuffix(strings.Repeat(`(25[0-5]|(2[0-4]|1?[0-9])?[0-9])\.`, 4), `\.`),
 
-		mask: pIp,
+		mask: pIPv4,
 	},
 	{
 		Placeholder: placeholderByPattern[pDuration],
