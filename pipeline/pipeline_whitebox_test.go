@@ -161,10 +161,11 @@ func TestCheckInputBytesMetric(t *testing.T) {
 		{
 			name: "from_source1",
 			pipelineSettings: &Settings{
-				Capacity:           5,
-				Decoder:            "raw",
-				MetricHoldDuration: DefaultMetricHoldDuration,
-				MaxEventSize:       1,
+				Capacity:                  5,
+				Decoder:                   "raw",
+				MetricHoldDuration:        DefaultMetricHoldDuration,
+				MaxEventSize:              1,
+				MetricMaxLabelValueLength: 100,
 			},
 			sourceName: "test-source",
 			meta: metadata.MetaData{
@@ -178,11 +179,12 @@ func TestCheckInputBytesMetric(t *testing.T) {
 		{
 			name: "from_source2",
 			pipelineSettings: &Settings{
-				Capacity:            5,
-				Decoder:             "raw",
-				MetricHoldDuration:  DefaultMetricHoldDuration,
-				MaxEventSize:        1,
-				SourceNameMetaField: "test",
+				Capacity:                  5,
+				Decoder:                   "raw",
+				MetricHoldDuration:        DefaultMetricHoldDuration,
+				MaxEventSize:              1,
+				SourceNameMetaField:       "test",
+				MetricMaxLabelValueLength: 100,
 			},
 			sourceName: "test-source",
 			meta: metadata.MetaData{
@@ -196,11 +198,12 @@ func TestCheckInputBytesMetric(t *testing.T) {
 		{
 			name: "from_meta",
 			pipelineSettings: &Settings{
-				Capacity:            5,
-				Decoder:             "raw",
-				MetricHoldDuration:  DefaultMetricHoldDuration,
-				MaxEventSize:        1,
-				SourceNameMetaField: "test",
+				Capacity:                  5,
+				Decoder:                   "raw",
+				MetricHoldDuration:        DefaultMetricHoldDuration,
+				MaxEventSize:              1,
+				SourceNameMetaField:       "test",
+				MetricMaxLabelValueLength: 100,
 			},
 			sourceName: "test-source",
 			meta: metadata.MetaData{
@@ -220,7 +223,7 @@ func TestCheckInputBytesMetric(t *testing.T) {
 			pipe.checkInputBytes([]byte("some log"), tCase.sourceName, tCase.meta)
 
 			for k, v := range tCase.want {
-				require.Equal(t, v, testutil.ToFloat64(pipe.maxEventSizeExceededMetric.WithLabelValues(k)))
+				require.Equal(t, v, testutil.ToFloat64(pipe.maxEventSizeExceededMetric.WithLabelValues(k).Get()))
 			}
 		})
 	}
