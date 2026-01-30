@@ -68,30 +68,31 @@ func main() {
 }
 
 func clickhouseTypes() []Type {
-	types := []Type{
-		{
+	types := make([]Type, 0, 23)
+	types = append(types,
+		Type{
 			ChTypeName: "Bool",
 			GoName:     "bool",
 			Nullable:   true,
 		},
-		{
+		Type{
 			ChTypeName:     "String",
 			GoName:         "string",
 			Nullable:       true,
 			CustomImpl:     true,
 			LowCardinality: true,
 		},
-		{
+		Type{
 			ChTypeName: "Enum8",
 			GoName:     goTypeEnum,
 			CustomImpl: true,
 		},
-		{
+		Type{
 			ChTypeName: "Enum16",
 			GoName:     goTypeEnum,
 			CustomImpl: true,
 		},
-	}
+	)
 
 	for _, bits := range []int{8, 16, 32, 64} {
 		for _, signed := range []bool{false, true} {

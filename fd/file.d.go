@@ -36,7 +36,7 @@ type FileD struct {
 
 	// file_d metrics
 
-	versionMetric *prometheus.GaugeVec
+	versionMetric *metric.GaugeVec
 }
 
 func New(config *cfg.Config, httpAddr string) *FileD {
@@ -63,7 +63,7 @@ func (f *FileD) Start() {
 }
 
 func (f *FileD) initMetrics() {
-	f.metricCtl = metric.NewCtl("file_d", f.registry)
+	f.metricCtl = metric.NewCtl("file_d", f.registry, 0)
 	f.versionMetric = f.metricCtl.RegisterGaugeVec("version", "", "version")
 	f.versionMetric.WithLabelValues(buildinfo.Version).Inc()
 }

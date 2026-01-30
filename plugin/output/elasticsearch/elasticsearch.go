@@ -15,7 +15,6 @@ import (
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/xhttp"
 	insaneJSON "github.com/ozontech/insane-json"
-	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -50,8 +49,8 @@ type Plugin struct {
 	mu           *sync.Mutex
 
 	// plugin metrics
-	sendErrorMetric      *prometheus.CounterVec
-	indexingErrorsMetric prometheus.Counter
+	sendErrorMetric      *metric.CounterVec
+	indexingErrorsMetric *metric.Counter
 
 	router *pipeline.Router
 }
