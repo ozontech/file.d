@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [ master ]
+    branches: [master]
   pull_request:
-    branches: [ master ]
+    branches: [master]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -16,7 +16,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        flags: [ '', '-race' ]
+        flags: ["", "-race"]
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -82,7 +82,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        flags: [ '', '-race' ]
+        flags: ["", "-race"]
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -110,7 +110,7 @@ jobs:
           else
             echo "No coverage data generated for ${{ matrix.flags }} tests" > coverage-e2e${{ matrix.flags }}.html
           fi
-          
+
       - name: Upload test artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -167,7 +167,7 @@ jobs:
       - name: Lint
         uses: golangci/golangci-lint-action@v8
         with:
-          version: latest
+          version: v2.8.0
           only-new-issues: false
           args: --timeout 5m
           skip-cache: true
