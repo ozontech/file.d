@@ -61,6 +61,7 @@ import (
 	_ "github.com/ozontech/file.d/plugin/output/elasticsearch"
 	_ "github.com/ozontech/file.d/plugin/output/file"
 	_ "github.com/ozontech/file.d/plugin/output/gelf"
+	_ "github.com/ozontech/file.d/plugin/output/http"
 	_ "github.com/ozontech/file.d/plugin/output/kafka"
 	_ "github.com/ozontech/file.d/plugin/output/loki"
 	_ "github.com/ozontech/file.d/plugin/output/postgres"
