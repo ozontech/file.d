@@ -6,9 +6,9 @@ import (
 	insaneJSON "github.com/ozontech/insane-json"
 )
 
-type Type int
-
 type Params map[string]any
+
+type Type int
 
 const (
 	NO Type = iota
@@ -54,17 +54,6 @@ func TypeFromString(s string) Type {
 		return AUTO
 	default:
 		return NO
-	}
-}
-
-func (t Type) RequiresInitialization() bool {
-	switch t {
-	case JSON, NGINX_ERROR, PROTOBUF, SYSLOG_RFC3164, SYSLOG_RFC5424, CSV:
-		return true
-	case RAW, CRI, POSTGRES, AUTO:
-		return false
-	default:
-		return false
 	}
 }
 

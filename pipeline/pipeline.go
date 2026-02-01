@@ -144,7 +144,7 @@ type Pipeline struct {
 
 type Settings struct {
 	Decoder                 string
-	DecoderParams           map[string]any
+	DecoderParams           decoder.Params
 	Capacity                int
 	MetaCacheSize           int
 	MaintenanceInterval     time.Duration
@@ -226,13 +226,12 @@ func New(name string, settings *Settings, registry *prometheus.Registry, lg *zap
 		pipeline.logger.Fatal("unknown decoder", zap.String("decoder", settings.Decoder))
 	}
 
-	if pipeline.decoderType.RequiresInitialization() {
-		var err error
-		pipeline.decoder, err = decoder.New(pipeline.decoderType, pipeline.settings.DecoderParams)
-		if err != nil {
-			pipeline.logger.Fatal("can't create decoder", zap.String("decoder", settings.Decoder), zap.Error(err))
-		}
+	var err error
+	pipeline.decoder, err = decoder.New(pipeline.decoderType, pipeline.settings.DecoderParams)
+	if err != nil {
+		pipeline.logger.Fatal("can't create decoder", zap.String("decoder", settings.Decoder), zap.Error(err))
 	}
+
 	return pipeline
 }
 
@@ -336,13 +335,14 @@ func (p *Pipeline) Start() {
 	p.input.Start(p.inputInfo.Config, inputParams)
 
 	// If decoder is still set to AUTO after input plugin start, it means
-	// no plugin called SuggestDecoder to override it. In this case, we default to JSON decoder.
+	// no plugin called SuggestDecoder to override it.
+	// In this case, the JSON decoder is used by default.
 	if p.decoderType == decoder.AUTO {
 		p.decoderType = decoder.JSON
 		var err error
-		p.decoder, err = decoder.New(decoder.JSON, p.settings.DecoderParams)
+		p.decoder, err = decoder.New(decoder.JSON, nil)
 		if err != nil {
-			p.logger.Error("can't create JSON decoder", zap.Error(err))
+			p.logger.Fatal("can't create JSON decoder", zap.Error(err))
 		}
 	}
 
@@ -897,12 +897,10 @@ func (p *Pipeline) SuggestDecoder(t decoder.Type) {
 	}
 
 	p.decoderType = t
-	if t.RequiresInitialization() {
-		var err error
-		p.decoder, err = decoder.New(t, p.settings.DecoderParams)
-		if err != nil {
-			p.logger.Error("can't create decoder", zap.Error(err))
-		}
+	var err error
+	p.decoder, err = decoder.New(t, p.settings.DecoderParams)
+	if err != nil {
+		p.logger.Fatal("can't create decoder", zap.Error(err))
 	}
 }
 
