@@ -339,11 +339,7 @@ func (p *Pipeline) Start() {
 	// In this case, the JSON decoder is used by default.
 	if p.decoderType == decoder.AUTO {
 		p.decoderType = decoder.JSON
-		var err error
-		p.decoder, err = decoder.New(decoder.JSON, nil)
-		if err != nil {
-			p.logger.Fatal("can't create JSON decoder", zap.Error(err))
-		}
+		p.decoder, _ = decoder.New(decoder.JSON, nil)
 	}
 
 	p.streamer.start()

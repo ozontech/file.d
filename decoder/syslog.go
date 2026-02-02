@@ -34,7 +34,7 @@ type syslogParams struct {
 	severityFormat string // optional
 }
 
-func extractSyslogParams(params map[string]any) (syslogParams, error) {
+func extractSyslogParams(params Params) (syslogParams, error) {
 	facilityFormat := spfNumber
 	if facilityFormatRaw, ok := params[syslogFacilityFormatParam]; ok {
 		facilityFormat, ok = facilityFormatRaw.(string)

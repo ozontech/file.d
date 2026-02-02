@@ -69,7 +69,7 @@ func TestProtobuf(t *testing.T) {
 		name string
 
 		data   []byte
-		params map[string]any
+		params Params
 
 		want          testMyMessage
 		wantCreateErr bool
@@ -78,7 +78,7 @@ func TestProtobuf(t *testing.T) {
 		{
 			name: "proto_file_path",
 			data: inputData,
-			params: map[string]any{
+			params: Params{
 				protoFileParam:    "../testdata/proto/valid.proto",
 				protoMessageParam: protoMessage,
 			},
@@ -87,7 +87,7 @@ func TestProtobuf(t *testing.T) {
 		{
 			name: "proto_file_content",
 			data: inputData,
-			params: map[string]any{
+			params: Params{
 				protoFileParam:    protoContent,
 				protoMessageParam: protoMessage,
 			},
@@ -96,7 +96,7 @@ func TestProtobuf(t *testing.T) {
 		{
 			name: "proto_file_with_imports",
 			data: inputData,
-			params: map[string]any{
+			params: Params{
 				protoFileParam:    "with_imports.proto",
 				protoMessageParam: protoMessage,
 				protoImportPathsParam: []any{
@@ -107,14 +107,14 @@ func TestProtobuf(t *testing.T) {
 		},
 		{
 			name: "proto_file_param_not_exists",
-			params: map[string]any{
+			params: Params{
 				protoMessageParam: "test",
 			},
 			wantCreateErr: true,
 		},
 		{
 			name: "proto_file_param_invalid",
-			params: map[string]any{
+			params: Params{
 				protoFileParam:    123,
 				protoMessageParam: "test",
 			},
@@ -122,14 +122,14 @@ func TestProtobuf(t *testing.T) {
 		},
 		{
 			name: "proto_message_param_not_exists",
-			params: map[string]any{
+			params: Params{
 				protoFileParam: "test",
 			},
 			wantCreateErr: true,
 		},
 		{
 			name: "proto_message_param_invalid",
-			params: map[string]any{
+			params: Params{
 				protoFileParam:    "test",
 				protoMessageParam: 123,
 			},
@@ -137,7 +137,7 @@ func TestProtobuf(t *testing.T) {
 		},
 		{
 			name: "compile_error",
-			params: map[string]any{
+			params: Params{
 				protoFileParam:    "../testdata/proto/invalid.proto",
 				protoMessageParam: protoMessage,
 			},
@@ -145,7 +145,7 @@ func TestProtobuf(t *testing.T) {
 		},
 		{
 			name: "message_not_found",
-			params: map[string]any{
+			params: Params{
 				protoFileParam:    "../testdata/proto/valid.proto",
 				protoMessageParam: "test",
 			},
@@ -154,7 +154,7 @@ func TestProtobuf(t *testing.T) {
 		{
 			name: "invalid_data",
 			data: []byte{10, 13},
-			params: map[string]any{
+			params: Params{
 				protoFileParam:    "../testdata/proto/valid.proto",
 				protoMessageParam: protoMessage,
 			},

@@ -30,7 +30,7 @@ type jsonDecoder struct {
 	mu           *sync.Mutex
 }
 
-func NewJsonDecoder(params map[string]any) (Decoder, error) {
+func NewJsonDecoder(params Params) (Decoder, error) {
 	p, err := extractJsonParams(params)
 	if err != nil {
 		return nil, fmt.Errorf("can't extract params: %w", err)
@@ -132,7 +132,7 @@ func (d *jsonDecoder) cutFieldsBySize(data []byte) []byte {
 	return data
 }
 
-func extractJsonParams(params map[string]any) (jsonParams, error) {
+func extractJsonParams(params Params) (jsonParams, error) {
 	maxFieldsSize := make(map[string]int)
 	if maxFieldsSizeRaw, ok := params[jsonMaxFieldsSizeParam]; ok {
 		maxFieldsSizeMap, ok := maxFieldsSizeRaw.(map[string]any)
