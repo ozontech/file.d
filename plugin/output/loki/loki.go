@@ -17,7 +17,6 @@ import (
 	"github.com/ozontech/file.d/xhttp"
 
 	insaneJSON "github.com/ozontech/insane-json"
-	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -233,7 +232,7 @@ type Plugin struct {
 	batcher *pipeline.RetriableBatcher
 
 	// plugin metrics
-	sendErrorMetric *prometheus.CounterVec
+	sendErrorMetric *metric.CounterVec
 
 	labels map[string]string
 

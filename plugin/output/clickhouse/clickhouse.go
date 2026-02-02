@@ -18,7 +18,6 @@ import (
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/xtls"
-	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -58,8 +57,8 @@ type Plugin struct {
 	requestID atomic.Int64
 
 	// plugin metrics
-	insertErrorsMetric prometheus.Counter
-	queriesCountMetric prometheus.Counter
+	insertErrorsMetric *metric.Counter
+	queriesCountMetric *metric.Counter
 
 	router *pipeline.Router
 }

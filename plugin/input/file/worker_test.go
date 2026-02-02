@@ -112,7 +112,7 @@ func TestWorkerWork(t *testing.T) {
 				shouldSkip:     *atomic.NewBool(false),
 				mu:             &sync.Mutex{},
 			}
-			ctl := metric.NewCtl("test", prometheus.NewRegistry())
+			ctl := metric.NewCtl("test", prometheus.NewRegistry(), 0)
 			metrics := newMetricCollection(
 				ctl.RegisterCounter("worker1", "help_test"),
 				ctl.RegisterCounter("worker2", "help_test"),
@@ -293,7 +293,7 @@ func TestWorkerWorkMultiData(t *testing.T) {
 				mu:         &sync.Mutex{},
 			}
 
-			ctl := metric.NewCtl("test", prometheus.NewRegistry())
+			ctl := metric.NewCtl("test", prometheus.NewRegistry(), 0)
 			metrics := newMetricCollection(
 				ctl.RegisterCounter("worker1", "help_test"),
 				ctl.RegisterCounter("worker2", "help_test"),
@@ -529,7 +529,7 @@ func TestWorkerRemoveAfter(t *testing.T) {
 			if !tt.fileIsChanged {
 				job.eofReadInfo.setOffset(int64(len(str)))
 			}
-			ctl := metric.NewCtl("test", prometheus.NewRegistry())
+			ctl := metric.NewCtl("test", prometheus.NewRegistry(), 0)
 			metrics := newMetricCollection(
 				ctl.RegisterCounter("worker1", "help_test"),
 				ctl.RegisterCounter("worker2", "help_test"),

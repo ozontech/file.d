@@ -8,7 +8,6 @@ import (
 	"github.com/ozontech/file.d/cfg/matchrule"
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/metric"
-	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
 )
@@ -28,9 +27,9 @@ type Antispammer struct {
 	logger *zap.Logger
 
 	// antispammer metrics
-	activeMetric    prometheus.Gauge
-	banMetric       *prometheus.GaugeVec
-	exceptionMetric *prometheus.CounterVec
+	activeMetric    *metric.Gauge
+	banMetric       *metric.GaugeVec
+	exceptionMetric *metric.CounterVec
 }
 
 type source struct {
@@ -47,7 +46,6 @@ type Options struct {
 
 	Logger            *zap.Logger
 	MetricsController *metric.Ctl
-	MetricHolder      *metric.Holder
 }
 
 func NewAntispammer(o *Options) *Antispammer {
