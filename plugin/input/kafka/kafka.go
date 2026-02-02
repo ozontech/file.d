@@ -9,7 +9,6 @@ import (
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/pipeline/metadata"
-	"github.com/prometheus/client_golang/prometheus"
 	"github.com/twmb/franz-go/pkg/kgo"
 	"go.uber.org/zap"
 )
@@ -54,8 +53,8 @@ type Plugin struct {
 	idByTopic  map[string]int
 
 	// plugin metrics
-	commitErrorsMetric  prometheus.Counter
-	consumeErrorsMetric prometheus.Counter
+	commitErrorsMetric  *metric.Counter
+	consumeErrorsMetric *metric.Counter
 
 	metaTemplater *metadata.MetaTemplater
 

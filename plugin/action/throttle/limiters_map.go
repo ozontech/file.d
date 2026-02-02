@@ -11,11 +11,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
 
 	"github.com/ozontech/file.d/logger"
+	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/xredis"
 )
@@ -81,7 +81,7 @@ type limitersMapConfig struct {
 	limiterCfg *limiterConfig
 
 	// metrics
-	mapSizeMetric     prometheus.Gauge
+	mapSizeMetric     *metric.Gauge
 	limitDistrMetrics *limitDistributionMetrics
 }
 
@@ -104,7 +104,7 @@ type limitersMap struct {
 	limiterCfg *limiterConfig
 
 	// metrics
-	mapSizeMetric     prometheus.Gauge
+	mapSizeMetric     *metric.Gauge
 	limitDistrMetrics *limitDistributionMetrics
 }
 

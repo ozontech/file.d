@@ -15,7 +15,6 @@ import (
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
 	insaneJSON "github.com/ozontech/insane-json"
-	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -109,10 +108,10 @@ type Plugin struct {
 
 	// plugin metrics
 
-	discardedEventMetric  prometheus.Counter
-	duplicatedEventMetric prometheus.Counter
-	writtenEventMetric    prometheus.Counter
-	insertErrorsMetric    prometheus.Counter
+	discardedEventMetric  *metric.Counter
+	duplicatedEventMetric *metric.Counter
+	writtenEventMetric    *metric.Counter
+	insertErrorsMetric    *metric.Counter
 
 	router *pipeline.Router
 }

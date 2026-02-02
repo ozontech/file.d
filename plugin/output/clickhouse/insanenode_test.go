@@ -1,4 +1,3 @@
-//nolint:prealloc
 package clickhouse
 
 import (
@@ -21,7 +20,8 @@ func TestZeroValueNode(t *testing.T) {
 	enum16 := new(proto.ColEnum)
 	r.NoError(enum16.Infer("Enum16('error'=1, 'info'=2, ''=3)"))
 
-	columns := []InsaneColInput{
+	columns := make([]InsaneColInput, 0, 38)
+	columns = append(columns, []InsaneColInput{
 		NewColDateTime(&proto.ColDateTime{Location: utcLoc}),
 		NewColDateTime64(
 			(&proto.ColDateTime64{Location: utcLoc}).WithPrecision(proto.PrecisionSecond),
@@ -31,7 +31,7 @@ func TestZeroValueNode(t *testing.T) {
 		NewColEnum16(enum16),
 		NewColStringArray(),
 		NewColMapStringString(),
-	}
+	}...)
 
 	for _, nullable := range []bool{true, false} {
 		columns = append(columns, []InsaneColInput{

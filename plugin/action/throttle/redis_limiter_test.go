@@ -317,7 +317,7 @@ func Test_updateKeyLimit(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			ctl := metric.NewCtl("test", prometheus.NewRegistry())
+			ctl := metric.NewCtl("test", prometheus.NewRegistry(), time.Minute)
 			lim := newRedisLimiter(
 				&limiterConfig{
 					ctx:                      ctx,
@@ -333,8 +333,8 @@ func Test_updateKeyLimit(t *testing.T) {
 				tt.args.keyLimitOverride,
 				tt.args.defaultLimit,
 				&limitDistributionMetrics{
-					EventsCount: metric.NewHeldCounterVec(ctl.RegisterCounterVec("test_count", "")),
-					EventsSize:  metric.NewHeldCounterVec(ctl.RegisterCounterVec("test_size", "")),
+					EventsCount: ctl.RegisterCounterVec("test_count", ""),
+					EventsSize:  ctl.RegisterCounterVec("test_size", ""),
 				},
 				time.Now,
 			)
