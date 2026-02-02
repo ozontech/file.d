@@ -482,3 +482,13 @@ func TestSyslogRFC5424(t *testing.T) {
 		})
 	}
 }
+
+func BenchmarkDecodeSyslogRFC5424(b *testing.B) {
+	const input = "<165>1 2003-10-11T22:14:15.003Z mymachine.example.com myproc 10 ID47 [exampleSDID@32473 iut=\"3\" eventSource=\"My \\\"Application\\\"\" eventID=\"1011\"] An application event log\n"
+
+	d, _ := NewSyslogRFC5424Decoder(nil)
+
+	for b.Loop() {
+		_, _ = d.Decode([]byte(input))
+	}
+}

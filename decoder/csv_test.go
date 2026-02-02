@@ -181,3 +181,11 @@ func TestDecodeToJsonCSV(t *testing.T) {
 		})
 	}
 }
+
+func BenchmarkDecodeCSV(b *testing.B) {
+	d, _ := NewCSVDecoder(make(map[string]any))
+
+	for b.Loop() {
+		_, _ = d.Decode([]byte(`a,b,c`))
+	}
+}
