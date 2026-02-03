@@ -77,7 +77,7 @@ func (mc *Ctl) RegisterCounterVec(name, help string, labels ...string) *CounterV
 		Help:      help,
 	}, labels)
 
-	return newCounterVec(mc.registerMetric(name, counterVec).(*prometheus.CounterVec))
+	return newCounterVec(mc.registerMetric(name, counterVec).(*prometheus.CounterVec), mc.metricMaxLabelValueLength)
 }
 
 func (mc *Ctl) RegisterGauge(name, help string) *Gauge {
@@ -99,7 +99,7 @@ func (mc *Ctl) RegisterGaugeVec(name, help string, labels ...string) *GaugeVec {
 		Help:      help,
 	}, labels)
 
-	return newGaugeVec(mc.registerMetric(name, gaugeVec).(*prometheus.GaugeVec))
+	return newGaugeVec(mc.registerMetric(name, gaugeVec).(*prometheus.GaugeVec), mc.metricMaxLabelValueLength)
 }
 
 func (mc *Ctl) RegisterHistogram(name, help string, buckets []float64) *Histogram {
@@ -123,7 +123,7 @@ func (mc *Ctl) RegisterHistogramVec(name, help string, buckets []float64, labels
 		Buckets:   buckets,
 	}, labels)
 
-	return newHistogramVec(mc.registerMetric(name, histogramVec).(*prometheus.HistogramVec))
+	return newHistogramVec(mc.registerMetric(name, histogramVec).(*prometheus.HistogramVec), mc.metricMaxLabelValueLength)
 }
 
 func (mc *Ctl) registerMetric(name string, newMetric prometheus.Collector) prometheus.Collector {

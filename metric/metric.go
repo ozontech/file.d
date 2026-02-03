@@ -41,18 +41,21 @@ func (h *heldMetric[T]) updateUsage() {
 }
 
 type heldMetricsStore[T prometheus.Metric] struct {
-	mu            sync.RWMutex
-	metricsByHash map[uint64][]*heldMetric[T]
+	mu                        sync.RWMutex
+	metricsByHash             map[uint64][]*heldMetric[T]
+	metricMaxLabelValueLength int
 }
 
-func newHeldMetricsStore[T prometheus.Metric]() *heldMetricsStore[T] {
+func newHeldMetricsStore[T prometheus.Metric](metricMaxLabelValueLength int) *heldMetricsStore[T] {
 	return &heldMetricsStore[T]{
-		mu:            sync.RWMutex{},
-		metricsByHash: make(map[uint64][]*heldMetric[T]),
+		mu:                        sync.RWMutex{},
+		metricsByHash:             make(map[uint64][]*heldMetric[T]),
+		metricMaxLabelValueLength: metricMaxLabelValueLength,
 	}
 }
 
 func (h *heldMetricsStore[T]) GetOrCreate(labels []string, newPromMetric func(...string) T) *heldMetric[T] {
+	h.truncateLabels(labels)
 	hash := computeStringsHash(labels)
 	// fast path - metric exists
 	h.mu.RLock()
@@ -66,6 +69,7 @@ func (h *heldMetricsStore[T]) GetOrCreate(labels []string, newPromMetric func(..
 }
 
 func (h *heldMetricsStore[T]) Delete(labels []string, deleter metricDeleter) bool {
+	h.truncateLabels(labels)
 	hash := computeStringsHash(labels)
 
 	h.mu.Lock()
@@ -155,6 +159,18 @@ func (h *heldMetricsStore[T]) DeleteOldMetrics(holdDuration time.Duration, delet
 
 		if len(releasedMetrics) == 0 {
 			delete(h.metricsByHash, hash)
+		}
+	}
+}
+
+func (h *heldMetricsStore[T]) truncateLabels(lvs []string) {
+	if h.metricMaxLabelValueLength == 0 {
+		return
+	}
+
+	for i, label := range lvs {
+		if len(label) > h.metricMaxLabelValueLength {
+			lvs[i] = label[:h.metricMaxLabelValueLength]
 		}
 	}
 }

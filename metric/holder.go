@@ -9,9 +9,8 @@ type heldMetricVec interface {
 }
 
 type Holder struct {
-	holdDuration              time.Duration
-	heldMetrics               []heldMetricVec
-	metricMaxLabelValueLength int
+	holdDuration time.Duration
+	heldMetrics  []heldMetricVec
 }
 
 // NewHolder returns new metric holder. The holdDuration must be more than 1m.
