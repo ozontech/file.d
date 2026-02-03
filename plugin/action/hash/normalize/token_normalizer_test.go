@@ -279,7 +279,7 @@ func TestTokenNormalizerBuiltin(t *testing.T) {
 			name: "ip",
 			inputs: []string{
 				"some 1.2.3.4 here",
-				"some 01.102.103.104 here",
+				"some 101.102.103.104 here",
 
 				// IPv6 Normal
 				"some 2001:db8:3333:4444:5555:DDDD:EEEE:FFFF here",

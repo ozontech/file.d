@@ -33,8 +33,7 @@ const (
 	pSha1
 	pMd5
 	pDatetime
-	pIPv4
-	pIPv6
+	pIp
 	pDuration
 	pHex
 	pFloat
@@ -59,7 +58,7 @@ var patternById = map[string]int{
 	"sha1":             pSha1,
 	"md5":              pMd5,
 	"datetime":         pDatetime,
-	"ip":               pIPv4 | pIPv6,
+	"ip":               pIp,
 	"duration":         pDuration,
 	"hex":              pHex,
 	"float":            pFloat,
@@ -81,8 +80,7 @@ var placeholderByPattern = map[int]string{
 	pSha1:            "<sha1>",
 	pMd5:             "<md5>",
 	pDatetime:        "<datetime>",
-	pIPv4:            "<ip>",
-	pIPv6:            "<ip>",
+	pIp:              "<ip>",
 	pDuration:        "<duration>",
 	pHex:             "<hex>",
 	pFloat:           "<float>",
@@ -169,10 +167,6 @@ func NewTokenNormalizer(params TokenNormalizerParams) (Normalizer, error) {
 func (n *tokenNormalizer) Normalize(out, data []byte) []byte {
 	out = out[:0]
 
-	if hasPattern(n.builtinPatterns, pIPv6) {
-		data = n.normalizeIP(data)
-	}
-
 	var scanner *lexmachine.Scanner
 	if n.normalizeByBytes {
 		out = n.normalizeByTokenizer(out, newTokenizer(n.builtinPatterns, data))
@@ -212,14 +206,10 @@ func parseBuiltinPatterns(s string) (int, error) {
 func initTokens(lexer *lexmachine.Lexer,
 	builtinPatterns int, customPatterns []TokenPattern,
 ) error {
-	hasIpPattern := hasPattern(builtinPatterns, pIPv6)
 	addTokens := func(patterns []TokenPattern) {
 		for _, p := range patterns {
-			if hasIpPattern && p.mask == pIPv6 {
-				continue
-			}
 			if p.mask == 0 || builtinPatterns&p.mask != 0 {
-				lexer.Add([]byte(p.RE), newToken(p.Placeholder))
+				lexer.Add([]byte(p.RE), newToken(p.Placeholder, p.mask))
 			}
 		}
 	}
@@ -259,12 +249,37 @@ type token struct {
 	end         int
 }
 
-func newToken(placeholder string) lexmachine.Action {
+func newToken(placeholder string, patternID int) lexmachine.Action {
 	return func(s *lexmachine.Scanner, m *machines.Match) (any, error) {
 		// skip `\w<match>\w`
 		if m.TC > 0 && isWord(s.Text[m.TC-1]) ||
 			m.TC+len(m.Bytes) < len(s.Text) && isWord(s.Text[m.TC+len(m.Bytes)]) {
 			return nil, nil
+		}
+
+		// Fallback IP parser.
+		// Scans for IP-like patterns until end, then validates with net.ParseIP.
+		// Necessary because lexer's own pattern matching can be incomplete.
+		if patternID == pIp {
+			begin, end := m.TC, m.TC
+
+			for begin < len(s.Text) {
+				if !isIPChar(s.Text[end]) {
+					break
+				}
+				end++
+			}
+
+			candidate := string(s.Text[begin:end])
+			if net.ParseIP(candidate) != nil {
+				return token{
+					placeholder: placeholder,
+					begin:       begin,
+					end:         end,
+				}, nil
+			} else {
+				return nil, nil
+			}
 		}
 
 		return token{
@@ -468,33 +483,6 @@ func isWord(c byte) bool {
 		c == '_'
 }
 
-func (n *tokenNormalizer) normalizeIP(data []byte) []byte {
-	out := make([]byte, 0, len(data))
-	pos := 0
-
-	for pos < len(data) {
-		if !isIPChar(data[pos]) {
-			out = append(out, data[pos])
-			pos++
-			continue
-		}
-
-		start := pos
-		for pos < len(data) && isIPChar(data[pos]) {
-			pos++
-		}
-
-		potentialIP := string(data[start:pos])
-		if net.ParseIP(potentialIP) != nil {
-			out = append(out, "<ip>"...)
-		} else {
-			out = append(out, data[start:pos]...)
-		}
-	}
-
-	return out
-}
-
 func isIPChar(c byte) bool {
 	return (c >= '0' && c <= '9') ||
 		(c >= 'a' && c <= 'f') ||
@@ -563,10 +551,13 @@ var builtinTokenPatterns = []TokenPattern{
 		mask: pDatetime,
 	},
 	{
-		Placeholder: placeholderByPattern[pIPv4],
-		RE:          strings.TrimSuffix(strings.Repeat(`(25[0-5]|(2[0-4]|1?[0-9])?[0-9])\.`, 4), `\.`),
+		Placeholder: placeholderByPattern[pIp],
+		RE: fmt.Sprintf(`%s|%s`,
+			strings.TrimSuffix(strings.Repeat(`(25[0-5]|(2[0-4]|1?[0-9])?[0-9])\.`, 4), `\.`),
+			`[0-9a-fA-F:]*:[0-9a-fF-F:]*`,
+		),
 
-		mask: pIPv4,
+		mask: pIp,
 	},
 	{
 		Placeholder: placeholderByPattern[pDuration],
