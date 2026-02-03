@@ -63,7 +63,7 @@ func (f *FileD) Start() {
 }
 
 func (f *FileD) initMetrics() {
-	f.metricCtl = metric.NewCtl("file_d", f.registry, 0)
+	f.metricCtl = metric.NewCtl("file_d", f.registry, 0, 0)
 	f.versionMetric = f.metricCtl.RegisterGaugeVec("version", "", "version")
 	f.versionMetric.WithLabelValues(buildinfo.Version).Inc()
 }

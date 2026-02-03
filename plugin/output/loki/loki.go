@@ -429,10 +429,7 @@ func (p *Plugin) send(root *insaneJSON.Root) (int, error) {
 }
 
 func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
-	p.sendErrorMetric = metric.NewHeldCounterVec(
-		ctl.RegisterCounterVec("output_loki_send_error_total", "Total Loki send errors", "status_code"),
-		p.params.PipelineSettings.MetricMaxLabelValueLength,
-	)
+	p.sendErrorMetric = ctl.RegisterCounterVec("output_loki_send_error_total", "Total Loki send errors", "status_code")
 }
 
 func (p *Plugin) prepareClient() {

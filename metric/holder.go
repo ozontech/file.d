@@ -15,14 +15,13 @@ type Holder struct {
 }
 
 // NewHolder returns new metric holder. The holdDuration must be more than 1m.
-func NewHolder(holdDuration time.Duration, metricMaxLabelValueLength int) *Holder {
+func NewHolder(holdDuration time.Duration) *Holder {
 	if holdDuration < time.Minute {
 		panic("hold duration must be greater than 1m")
 	}
 	return &Holder{
-		holdDuration:              holdDuration,
-		heldMetrics:               make([]heldMetricVec, 0),
-		metricMaxLabelValueLength: metricMaxLabelValueLength,
+		holdDuration: holdDuration,
+		heldMetrics:  make([]heldMetricVec, 0),
 	}
 }
 

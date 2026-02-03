@@ -240,13 +240,10 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 }
 
 func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
-	p.maskAppliedMetric = metric.NewHeldCounterVec(
-		p.makeMetric(ctl,
-			p.config.AppliedMetricName,
-			"Number of times mask plugin found the provided pattern",
-			p.config.AppliedMetricLabels...,
-		),
-		p.params.PipelineSettings.MetricMaxLabelValueLength,
+	p.maskAppliedMetric = p.makeMetric(ctl,
+		p.config.AppliedMetricName,
+		"Number of times mask plugin found the provided pattern",
+		p.config.AppliedMetricLabels...,
 	)
 	for i := range p.config.Masks {
 		mask := &p.config.Masks[i]
@@ -257,13 +254,10 @@ func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 			)
 			continue
 		}
-		mask.appliedMetric = metric.NewHeldCounterVec(
-			p.makeMetric(ctl,
-				mask.MetricName,
-				"Number of times mask found in the provided pattern",
-				mask.MetricLabels...,
-			),
-			p.params.PipelineSettings.MetricMaxLabelValueLength,
+		mask.appliedMetric = p.makeMetric(ctl,
+			mask.MetricName,
+			"Number of times mask found in the provided pattern",
+			mask.MetricLabels...,
 		)
 	}
 }

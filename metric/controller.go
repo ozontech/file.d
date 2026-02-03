@@ -21,16 +21,18 @@ type Ctl struct {
 	subsystem string
 	register  *prometheus.Registry
 
-	holder  *Holder
-	metrics map[string]prometheus.Collector
-	mu      sync.RWMutex
+	holder                    *Holder
+	metrics                   map[string]prometheus.Collector
+	metricMaxLabelValueLength int
+	mu                        sync.RWMutex
 }
 
-func NewCtl(subsystem string, registry *prometheus.Registry, metricHoldDuration time.Duration) *Ctl {
+func NewCtl(subsystem string, registry *prometheus.Registry, metricHoldDuration time.Duration, metricMaxLabelValueLength int) *Ctl {
 	ctl := &Ctl{
-		subsystem: subsystem,
-		register:  registry,
-		metrics:   make(map[string]prometheus.Collector),
+		subsystem:                 subsystem,
+		register:                  registry,
+		metrics:                   make(map[string]prometheus.Collector),
+		metricMaxLabelValueLength: metricMaxLabelValueLength,
 	}
 
 	if metricHoldDuration != 0 {

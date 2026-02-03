@@ -314,13 +314,10 @@ func (p *Plugin) Out(event *pipeline.Event) {
 }
 
 func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
-	p.sendErrorMetric = metric.NewHeldCounterVec(
-		ctl.RegisterCounterVec(
-			"output_splunk_send_error_total",
-			"Total splunk send errors",
-			"status_code",
-		),
-		p.params.PipelineSettings.MetricMaxLabelValueLength,
+	p.sendErrorMetric = ctl.RegisterCounterVec(
+		"output_splunk_send_error_total",
+		"Total splunk send errors",
+		"status_code",
 	)
 }
 

@@ -322,7 +322,7 @@ func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 		httpAuthTotal := ctl.RegisterCounterVec("http_auth_success_total", "", "secret_name")
 		p.successfulAuthTotal = make(map[string]*metric.Counter, len(p.config.Auth.Secrets))
 		for key := range p.config.Auth.Secrets {
-			p.successfulAuthTotal[key] = httpAuthTotal.WithLabelValues(key).Get()
+			p.successfulAuthTotal[key] = httpAuthTotal.WithLabelValues(key)
 		}
 		p.failedAuthTotal = ctl.RegisterCounter("http_auth_fails_total", "")
 	}
