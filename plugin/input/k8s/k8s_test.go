@@ -242,5 +242,5 @@ func TestCleanUp(t *testing.T) {
 
 	meta.DisableGatherer()
 	p.Stop()
-	assert.Equal(t, 0, len(meta.MetaData))
+	assert.Equal(t, 0, len(meta.MetaData.PodMeta))
 }

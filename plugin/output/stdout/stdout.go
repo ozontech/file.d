@@ -37,7 +37,6 @@ func (p *Plugin) Start(_ pipeline.AnyConfig, params *pipeline.OutputPluginParams
 func (_ *Plugin) Stop() {}
 
 func (p *Plugin) Out(event *pipeline.Event) {
-	// nolint: forbidigo
-	fmt.Println(event.Root.EncodeToString())
+	fmt.Println(event.Root.EncodeToString()) // nolint:forbidigo
 	p.controller.Commit(event)
 }

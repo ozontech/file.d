@@ -92,7 +92,7 @@ type Mask struct {
 	MetricLabels []string `json:"metric_labels"` // *
 
 	// mask metric
-	appliedMetric metric.HeldCounterVec
+	appliedMetric *metric.CounterVec
 }
 
 func compileMasks(masks []Mask, logger *zap.Logger) []Mask {

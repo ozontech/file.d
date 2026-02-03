@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/alecthomas/units"
+	"github.com/pierrec/lz4/v4"
 	uuid "github.com/satori/go.uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -86,6 +87,7 @@ func pluginConfig(opts ...string) *Config {
 		PersistenceMode:     "async",
 		OffsetsOp:           op,
 		MaintenanceInterval: "5s",
+		RemoveAfter:         "0",
 	}
 	test.NewConfig(config, map[string]int{"gomaxprocs": runtime.GOMAXPROCS(0)})
 
@@ -172,6 +174,16 @@ func createTempFile() string {
 	return file.Name()
 }
 
+func createTempLZ4File() string {
+	u := uuid.NewV4().String()
+	file, err := os.Create(path.Join(filesDir, u+".lz4"))
+	if err != nil {
+		panic(err.Error())
+	}
+
+	return file.Name()
+}
+
 func createOffsetFile() string {
 	file, err := os.Create(path.Join(offsetsDir, offsetsFile))
 	if err != nil {
@@ -235,6 +247,27 @@ func addString(file string, str string, isLine bool, doSync bool) {
 			panic(err.Error())
 		}
 	}
+}
+
+func addEventsToLZ4File(file string, events []string) error {
+	outputFile, err := os.Create(file)
+	if err != nil {
+		return err
+	}
+	defer outputFile.Close() // Ensure file descriptor is closed
+
+	lz4Writer := lz4.NewWriter(outputFile)
+	defer lz4Writer.Close() // Ensure LZ4 writer is closed
+
+	// Join events with newlines and write
+	data := strings.Join(events, "\n") + "\n"
+	_, err = lz4Writer.Write([]byte(data))
+	if err != nil {
+		return err
+	}
+
+	// Sync to disk before closing
+	return outputFile.Sync()
 }
 
 func addLines(file string, from int, to int) int {
@@ -486,6 +519,46 @@ func TestReadContinue(t *testing.T) {
 			assertOffsetsAreEqual(t, genOffsetsContent(file, size), getContent(getConfigByPipeline(p).OffsetsFile))
 		},
 	}, blockSize+blockSize-processed, "dirty")
+}
+
+// TestReadCompressed test if works of compressed file
+func TestReadCompressed(t *testing.T) {
+	eventCount := 5
+	events := make([]string, 0)
+
+	run(&test.Case{
+		Prepare: func() {
+			for i := 0; i < eventCount; i++ {
+				events = append(events, fmt.Sprintf(`{"field":"value_%d"}`, i))
+			}
+		},
+		Act: func(p *pipeline.Pipeline) {
+			file := createTempLZ4File()
+			addEventsToLZ4File(file, events)
+		},
+		Assert: func(p *pipeline.Pipeline) {
+			assert.Equal(t, eventCount, p.GetEventsTotal(), "wrong event count")
+			for i, s := range events {
+				assert.Equal(t, s, p.GetEventLogItem(i), "wrong event")
+			}
+		},
+	}, eventCount)
+}
+
+// TestReadCompressedEmpty test if works of empty compressed file
+func TestReadCompressedEmpty(t *testing.T) {
+	eventCount := 0
+
+	run(&test.Case{
+		Prepare: func() {
+		},
+		Act: func(p *pipeline.Pipeline) {
+			createTempLZ4File()
+		},
+		Assert: func(p *pipeline.Pipeline) {
+			assert.Equal(t, eventCount, p.GetEventsTotal(), "wrong event count")
+		},
+	}, eventCount)
 }
 
 // TestOffsetsSaveSimple tests if offsets saving works right in the simple case

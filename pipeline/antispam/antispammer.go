@@ -8,7 +8,6 @@ import (
 	"github.com/ozontech/file.d/cfg/matchrule"
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/metric"
-	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
 )
@@ -28,9 +27,9 @@ type Antispammer struct {
 	logger *zap.Logger
 
 	// antispammer metrics
-	activeMetric    prometheus.Gauge
-	banMetric       metric.HeldGaugeVec
-	exceptionMetric metric.HeldCounterVec
+	activeMetric    *metric.Gauge
+	banMetric       *metric.GaugeVec
+	exceptionMetric *metric.CounterVec
 }
 
 type source struct {
@@ -49,7 +48,6 @@ type Options struct {
 
 	Logger            *zap.Logger
 	MetricsController *metric.Ctl
-	MetricHolder      *metric.Holder
 }
 
 func NewAntispammer(o *Options) *Antispammer {
@@ -69,14 +67,14 @@ func NewAntispammer(o *Options) *Antispammer {
 		activeMetric: o.MetricsController.RegisterGauge("antispam_active",
 			"Gauge indicates whether the antispam is enabled",
 		),
-		banMetric: metric.NewHeldGaugeVec(o.MetricsController.RegisterGaugeVec("antispam_banned",
+		banMetric: o.MetricsController.RegisterGaugeVec("antispam_banned",
 			"Source is banned",
 			"source_name",
-		), o.MetricMaxLabelValueLength),
-		exceptionMetric: metric.NewHeldCounterVec(o.MetricsController.RegisterCounterVec("antispam_exceptions_total",
+		),
+		exceptionMetric: o.MetricsController.RegisterCounterVec("antispam_exceptions_total",
 			"How many times an exception match with an event",
 			"name",
-		), o.MetricMaxLabelValueLength),
+		),
 	}
 
 	// not enabled by default

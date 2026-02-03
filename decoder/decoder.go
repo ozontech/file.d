@@ -15,6 +15,7 @@ const (
 	PROTOBUF
 	SYSLOG_RFC3164
 	SYSLOG_RFC5424
+	CSV
 )
 
 type Decoder interface {

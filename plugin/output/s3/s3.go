@@ -20,7 +20,6 @@ import (
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/plugin/output/file"
-	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -150,8 +149,8 @@ type Plugin struct {
 	compressor compressor
 
 	// plugin metrics
-	sendErrorMetric  prometheus.Counter
-	uploadFileMetric metric.HeldCounterVec
+	sendErrorMetric  *metric.Counter
+	uploadFileMetric *metric.CounterVec
 
 	rnd   rand.Rand
 	rndMx sync.Mutex

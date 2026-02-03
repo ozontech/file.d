@@ -105,6 +105,7 @@ type Pipeline struct {
 	input      InputPlugin
 	inputInfo  *InputPluginInfo
 	antispamer *antispam.Antispammer
+	metricCtl  *metric.Ctl
 
 	actionInfos   []*ActionPluginStaticInfo
 	actionMetrics actionMetrics
@@ -115,8 +116,6 @@ type Pipeline struct {
 	activeProcs *atomic.Int32
 
 	router *Router
-
-	metricHolder *metric.Holder
 
 	// some debugging stuff
 	logger          *zap.Logger
@@ -131,18 +130,18 @@ type Pipeline struct {
 	readOps      atomic.Int64
 
 	// all pipeline`s metrics
-	inUseEventsMetric          prometheus.Gauge
-	eventPoolCapacityMetric    prometheus.Gauge
-	inputEventsCountMetric     prometheus.Counter
-	inputEventSizeMetric       prometheus.Counter
-	outputEventsCountMetric    prometheus.Counter
-	outputEventSizeMetric      prometheus.Counter
-	readOpsEventsSizeMetric    prometheus.Counter
-	wrongEventCRIFormatMetric  prometheus.Counter
-	maxEventSizeExceededMetric metric.HeldCounterVec
-	eventPoolLatency           prometheus.Observer
+	inUseEventsMetric          *metric.Gauge
+	eventPoolCapacityMetric    *metric.Gauge
+	inputEventsCountMetric     *metric.Counter
+	inputEventSizeMetric       *metric.Counter
+	outputEventsCountMetric    *metric.Counter
+	outputEventSizeMetric      *metric.Counter
+	readOpsEventsSizeMetric    *metric.Counter
+	wrongEventCRIFormatMetric  *metric.Counter
+	maxEventSizeExceededMetric *metric.CounterVec
+	eventPoolLatency           *metric.Histogram
 
-	countEventPanicsRecoveredMetric prometheus.Counter
+	countEventPanicsRecoveredMetric *metric.Counter
 }
 
 type Settings struct {
@@ -175,9 +174,7 @@ const (
 
 // New creates new pipeline. Consider using `SetupHTTPHandlers` next.
 func New(name string, settings *Settings, registry *prometheus.Registry, lg *zap.Logger) *Pipeline {
-	metricCtl := metric.NewCtl("pipeline_"+name, registry)
-
-	metricHolder := metric.NewHolder(settings.MetricHoldDuration, settings.MetricMaxLabelValueLength)
+	metricCtl := metric.NewCtl("pipeline_"+name, registry, settings.MetricHoldDuration)
 
 	var eventPool pool
 	switch settings.Pool {
@@ -205,19 +202,18 @@ func New(name string, settings *Settings, registry *prometheus.Registry, lg *zap
 			m:  make(map[string]*actionMetric),
 			mu: new(sync.RWMutex),
 		},
-		metricHolder: metricHolder,
-		streamer:     newStreamer(settings.EventTimeout),
-		eventPool:    eventPool,
+		streamer:  newStreamer(settings.EventTimeout),
+		eventPool: eventPool,
 		antispamer: antispam.NewAntispammer(&antispam.Options{
 			MaintenanceInterval:       settings.MaintenanceInterval,
 			Threshold:                 settings.AntispamThreshold,
 			UnbanIterations:           antispamUnbanIterations,
 			Logger:                    lg.Named("antispam"),
 			MetricsController:         metricCtl,
-			MetricHolder:              metricHolder,
 			Exceptions:                settings.AntispamExceptions,
 			MetricMaxLabelValueLength: settings.MetricMaxLabelValueLength,
 		}),
+		metricCtl: metricCtl,
 
 		eventLog:   make([]string, 0, 128),
 		eventLogMu: &sync.Mutex{},
@@ -251,6 +247,9 @@ func New(name string, settings *Settings, registry *prometheus.Registry, lg *zap
 	case "syslog_rfc5424":
 		pipeline.decoderType = decoder.SYSLOG_RFC5424
 		pipeline.decoder, err = decoder.NewSyslogRFC5424Decoder(pipeline.settings.DecoderParams)
+	case "csv":
+		pipeline.decoderType = decoder.CSV
+		pipeline.decoder, err = decoder.NewCSVDecoder(pipeline.settings.DecoderParams)
 	case "auto":
 		pipeline.decoderType = decoder.AUTO
 	default:
@@ -519,7 +518,7 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offsets Offsets, byt
 	}
 	switch dec {
 	case decoder.JSON, decoder.NGINX_ERROR, decoder.PROTOBUF,
-		decoder.SYSLOG_RFC3164, decoder.SYSLOG_RFC5424:
+		decoder.SYSLOG_RFC3164, decoder.SYSLOG_RFC5424, decoder.CSV:
 		err = p.decoder.DecodeToJson(event.Root, bytes)
 	case decoder.RAW:
 		event.Root.AddFieldNoAlloc(event.Root, "message").MutateToBytesCopy(event.Root, bytes[:len(bytes)-1])
@@ -678,8 +677,8 @@ func (p *Pipeline) finalize(event *Event, notifyInput bool, backEvent bool) {
 }
 
 type actionMetric struct {
-	count metric.HeldCounterVec
-	size  metric.HeldCounterVec
+	count *metric.CounterVec
+	size  *metric.CounterVec
 	// totalCounter is a map of eventStatus to counter for `/info` endpoint.
 	totalCounter map[string]*atomic.Uint64
 }
@@ -712,27 +711,25 @@ func (am *actionMetrics) get(name string) *actionMetric {
 func (p *Pipeline) AddAction(info *ActionPluginStaticInfo) {
 	p.actionInfos = append(p.actionInfos, info)
 
-	mCtl := p.actionParams.MetricCtl
-
 	labels := make([]string, 0, len(info.MetricLabels)+1)
 	if !info.MetricSkipStatus {
 		labels = append(labels, "status")
 	}
 	labels = append(labels, info.MetricLabels...)
 
-	count := mCtl.RegisterCounterVec(
+	count := p.metricCtl.RegisterCounterVec(
 		info.MetricName+"_events_count_total",
 		fmt.Sprintf("how many events processed by pipeline %q and #%d action", p.Name, len(p.actionInfos)-1),
 		labels...,
 	)
-	heldCount := p.metricHolder.AddCounterVec(count)
+	p.metricCtl.AddToHolder(count)
 
-	size := mCtl.RegisterCounterVec(
+	size := p.metricCtl.RegisterCounterVec(
 		info.MetricName+"_events_size_total",
 		fmt.Sprintf("total size of events processed by pipeline %q and #%d action", p.Name, len(p.actionInfos)-1),
 		labels...,
 	)
-	heldSize := p.metricHolder.AddCounterVec(size)
+	p.metricCtl.AddToHolder(size)
 
 	totalCounter := make(map[string]*atomic.Uint64)
 	for _, st := range allEventStatuses() {
@@ -740,8 +737,8 @@ func (p *Pipeline) AddAction(info *ActionPluginStaticInfo) {
 	}
 
 	p.actionMetrics.set(info.MetricName, &actionMetric{
-		count:        heldCount,
-		size:         heldSize,
+		count:        count,
+		size:         size,
 		totalCounter: totalCounter,
 	})
 }
@@ -903,7 +900,7 @@ func (p *Pipeline) maintenance() {
 		}
 
 		p.antispamer.Maintenance()
-		p.metricHolder.Maintenance()
+		p.metricCtl.Maintenance()
 
 		myDeltas := p.incMetrics(inputEvents, inputSize, outputEvents, outputSize, readOps)
 		p.setMetrics(p.eventPool.inUse())

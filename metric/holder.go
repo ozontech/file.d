@@ -2,8 +2,6 @@ package metric
 
 import (
 	"time"
-
-	"github.com/prometheus/client_golang/prometheus"
 )
 
 type heldMetricVec interface {
@@ -28,30 +26,16 @@ func NewHolder(holdDuration time.Duration, metricMaxLabelValueLength int) *Holde
 	}
 }
 
-func (h *Holder) Maintenance() {
-	h.DeleteOldMetrics()
+func (h *Holder) maintenance() {
+	h.deleteOldMetrics()
 }
 
-func (h *Holder) AddCounterVec(counterVec *prometheus.CounterVec) HeldCounterVec {
-	hcv := NewHeldCounterVec(counterVec, h.metricMaxLabelValueLength)
-	h.heldMetrics = append(h.heldMetrics, hcv)
-	return hcv
-}
-
-func (h *Holder) AddGaugeVec(gaugeVec *prometheus.GaugeVec) HeldGaugeVec {
-	hgv := NewHeldGaugeVec(gaugeVec, h.metricMaxLabelValueLength)
-	h.heldMetrics = append(h.heldMetrics, hgv)
-	return hgv
-}
-
-func (h *Holder) AddHistogramVec(histogramVec *prometheus.HistogramVec) HeldHistogramVec {
-	hhv := NewHeldHistogramVec(histogramVec, h.metricMaxLabelValueLength)
-	h.heldMetrics = append(h.heldMetrics, hhv)
-	return hhv
+func (h *Holder) addMetricVec(mv heldMetricVec) {
+	h.heldMetrics = append(h.heldMetrics, mv)
 }
 
 // DeleteOldMetrics delete old metric labels, that aren't in use since last update.
-func (h *Holder) DeleteOldMetrics() {
+func (h *Holder) deleteOldMetrics() {
 	for i := range h.heldMetrics {
 		h.heldMetrics[i].DeleteOldMetrics(h.holdDuration)
 	}

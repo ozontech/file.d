@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
@@ -79,6 +80,13 @@ func TestWorkerWork(t *testing.T) {
 			readBufferSize:     1024,
 			expData:            "abc\n",
 		},
+		{
+			name:           "should_ok_when_read_1_line_without_newline",
+			maxEventSize:   1024,
+			inFile:         "abc",
+			readBufferSize: 1024,
+			expData:        "",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -104,7 +112,7 @@ func TestWorkerWork(t *testing.T) {
 				shouldSkip:     *atomic.NewBool(false),
 				mu:             &sync.Mutex{},
 			}
-			ctl := metric.NewCtl("test", prometheus.NewRegistry())
+			ctl := metric.NewCtl("test", prometheus.NewRegistry(), 0)
 			metrics := newMetricCollection(
 				ctl.RegisterCounter("worker1", "help_test"),
 				ctl.RegisterCounter("worker2", "help_test"),
@@ -285,7 +293,7 @@ func TestWorkerWorkMultiData(t *testing.T) {
 				mu:         &sync.Mutex{},
 			}
 
-			ctl := metric.NewCtl("test", prometheus.NewRegistry())
+			ctl := metric.NewCtl("test", prometheus.NewRegistry(), 0)
 			metrics := newMetricCollection(
 				ctl.RegisterCounter("worker1", "help_test"),
 				ctl.RegisterCounter("worker2", "help_test"),
@@ -457,6 +465,103 @@ func TestGetData(t *testing.T) {
 				if data[key] != expectedValue {
 					t.Errorf("expected %s: %v, got: %v", key, expectedValue, data[key])
 				}
+			}
+		})
+	}
+}
+
+func TestWorkerRemoveAfter(t *testing.T) {
+	tests := []struct {
+		name          string
+		removeAfter   time.Duration
+		fileRemoved   bool
+		fileIsChanged bool
+	}{
+		{
+			name: "is_not_set",
+		},
+		{
+			name:        "remove_after",
+			removeAfter: 5 * time.Second,
+			fileRemoved: true,
+		},
+		{
+			name:          "dont_remove_after_append",
+			removeAfter:   5 * time.Second,
+			fileRemoved:   false,
+			fileIsChanged: true,
+		},
+		{
+			name:        "dont_remove_after",
+			removeAfter: 1 * time.Hour,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f, err := os.CreateTemp("/tmp", "worker_test")
+			require.NoError(t, err)
+			info, err := f.Stat()
+			require.NoError(t, err)
+			defer os.Remove(path.Join("/tmp", info.Name()))
+
+			str := "abc\n"
+			_, _ = fmt.Fprint(f, str)
+			_, err = f.Seek(0, io.SeekStart)
+			require.NoError(t, err)
+			job := &Job{
+				file:           f,
+				inode:          getInode(info),
+				sourceID:       0,
+				filename:       f.Name(),
+				symlink:        "",
+				ignoreEventsLE: 0,
+				lastEventSeq:   0,
+				isVirgin:       false,
+				isDone:         false,
+				shouldSkip:     *atomic.NewBool(false),
+				mu:             &sync.Mutex{},
+			}
+
+			if tt.removeAfter > 0 {
+				job.eofReadInfo.setTimestamp(time.Now().Add(-5 * time.Minute))
+			}
+
+			if !tt.fileIsChanged {
+				job.eofReadInfo.setOffset(int64(len(str)))
+			}
+			ctl := metric.NewCtl("test", prometheus.NewRegistry(), 0)
+			metrics := newMetricCollection(
+				ctl.RegisterCounter("worker1", "help_test"),
+				ctl.RegisterCounter("worker2", "help_test"),
+				ctl.RegisterGauge("worker3", "help_test"),
+				ctl.RegisterGauge("worker4", "help_test"),
+			)
+			logger := zap.L().Sugar().With("fd")
+			jp := NewJobProvider(&Config{}, metrics, logger)
+			jp.jobsChan = make(chan *Job, 2)
+			jp.jobs = map[pipeline.SourceID]*Job{
+				1: job,
+			}
+			jp.jobsChan <- job
+			jp.jobsChan <- nil
+
+			maxEventSize := 1024
+			readBufferSize := 1024
+
+			w := &worker{
+				maxEventSize: maxEventSize,
+			}
+			if tt.removeAfter > 0 {
+				jp.config.RemoveAfter_ = tt.removeAfter
+			}
+			inputer := inputerMock{}
+
+			w.work(&inputer, jp, readBufferSize, logger)
+			jp.maintenanceJob(job)
+			if tt.fileRemoved {
+				assert.NoFileExists(t, f.Name())
+			} else {
+				assert.FileExists(t, f.Name())
 			}
 		})
 	}

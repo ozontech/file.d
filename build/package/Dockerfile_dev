@@ -1,7 +1,7 @@
 ARG APP_IMAGE=ubuntu:latest
 
 # Build
-FROM --platform=$BUILDPLATFORM golang:1.24-alpine AS build
+FROM --platform=$BUILDPLATFORM golang:1.25-alpine AS build
 
 ARG VERSION
 ARG BUILD_TIME
@@ -17,6 +17,7 @@ COPY . .
 ENV CGO_ENABLED 0
 ENV GOOS linux
 ENV GOARCH amd64
+# ENV GOEXPERIMENT greenteagc
 
 RUN go build -trimpath \
     -pgo default.pgo \

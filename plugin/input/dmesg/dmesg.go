@@ -11,7 +11,6 @@ import (
 	"github.com/ozontech/file.d/offset"
 	"github.com/ozontech/file.d/pipeline"
 	insaneJSON "github.com/ozontech/insane-json"
-	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
 )
 
@@ -27,7 +26,7 @@ type Plugin struct {
 	logger     *zap.SugaredLogger
 
 	// plugin metrics
-	offsetErrorsMetric prometheus.Counter
+	offsetErrorsMetric *metric.Counter
 }
 
 // ! config-params

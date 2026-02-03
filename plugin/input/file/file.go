@@ -11,7 +11,6 @@ import (
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/pipeline/metadata"
-	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
 )
 
@@ -46,11 +45,11 @@ type Plugin struct {
 	jobProvider *jobProvider
 
 	// plugin metrics
-	possibleOffsetCorruptionMetric    prometheus.Counter
-	alreadyWrittenEventsSkippedMetric prometheus.Counter
-	errorOpenFileMetric               prometheus.Counter
-	notifyChannelLengthMetric         prometheus.Gauge
-	numberOfCurrentJobsMetric         prometheus.Gauge
+	possibleOffsetCorruptionMetric    *metric.Counter
+	alreadyWrittenEventsSkippedMetric *metric.Counter
+	errorOpenFileMetric               *metric.Counter
+	notifyChannelLengthMetric         *metric.Gauge
+	numberOfCurrentJobsMetric         *metric.Gauge
 }
 
 type persistenceMode int
@@ -151,6 +150,13 @@ type Config struct {
 	// > @maintenance
 	MaintenanceInterval  cfg.Duration `json:"maintenance_interval" default:"10s" parse:"duration"` // *
 	MaintenanceInterval_ time.Duration
+
+	// > @3@4@5@6
+	// >
+	// > After reaching EOF, the number of seconds to wait before removing the file, unless new data is written.
+	// > If not specified, files are not removed.
+	RemoveAfter  cfg.Duration `json:"remove_after" default:"0" parse:"duration"` // *
+	RemoveAfter_ time.Duration
 
 	// > @3@4@5@6
 	// >

@@ -97,7 +97,7 @@ type Plugin struct {
 	cancel context.CancelFunc
 
 	// plugin metrics
-	sendErrorMetric metric.HeldCounterVec
+	sendErrorMetric *metric.CounterVec
 
 	router *pipeline.Router
 }

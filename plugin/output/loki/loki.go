@@ -233,7 +233,7 @@ type Plugin struct {
 	batcher *pipeline.RetriableBatcher
 
 	// plugin metrics
-	sendErrorMetric metric.HeldCounterVec
+	sendErrorMetric *metric.CounterVec
 
 	labels map[string]string
 

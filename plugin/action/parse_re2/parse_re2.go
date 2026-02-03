@@ -8,7 +8,6 @@ import (
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
 	insaneJSON "github.com/ozontech/insane-json"
-	"github.com/prometheus/client_golang/prometheus"
 )
 
 /*{ introduction
@@ -20,7 +19,7 @@ type Plugin struct {
 	re     *regexp.Regexp
 
 	// plugin metrics
-	eventNotMatchingPatternMetric prometheus.Counter
+	eventNotMatchingPatternMetric *metric.Counter
 }
 
 // ! config-params

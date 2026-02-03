@@ -3,6 +3,7 @@ package throttle
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"math"
 
 	"github.com/ozontech/file.d/cfg"
@@ -11,8 +12,8 @@ import (
 
 type limitDistributionMetrics struct {
 	CustomLabels []string
-	EventsCount  metric.HeldCounterVec
-	EventsSize   metric.HeldCounterVec
+	EventsCount  *metric.CounterVec
+	EventsSize   *metric.CounterVec
 }
 
 type limitDistributionRatio struct {
@@ -124,9 +125,7 @@ func (ld *limitDistributions) copy() limitDistributions {
 	copy(distributionsCopy, ld.distributions)
 
 	idxByKeyCopy := make(map[string]int, len(ld.idxByKey))
-	for k, v := range ld.idxByKey {
-		idxByKeyCopy[k] = v
-	}
+	maps.Copy(idxByKeyCopy, ld.idxByKey)
 
 	return limitDistributions{
 		field:           fieldCopy,
@@ -137,7 +136,7 @@ func (ld *limitDistributions) copy() limitDistributions {
 	}
 }
 
-func (ld *limitDistributions) getLimitDistributionsCfg() limitDistributionCfg {
+func (ld *limitDistributions) getCfg() limitDistributionCfg {
 	field := cfg.BuildFieldSelector(ld.field)
 
 	ratioMap := make(map[float64][]string)

@@ -513,6 +513,112 @@ The resulting event:
   "p_stream": "stderr"
 }
 ```
+
+### CSV decoder
+
+Default decoder:
+```yaml
+pipelines:
+  example:
+    ...
+    actions:
+    - type: decode
+      field: log
+      decoder: csv
+    ...
+```
+The original event:
+```json
+{
+  "level": "error",
+  "log": "error,error occurred,2023-10-30T13:35:33.638720813Z,stderr",
+  "service": "test"
+}
+```
+The resulting event:
+```json
+{
+  "level": "error",
+  "service": "test",
+  "0": "error",
+  "1": "error occurred",
+  "2": "2023-10-30T13:35:33.638720813Z",
+  "3": "stderr"
+}
+```
+---
+Decoder with `columns` and `invalid_line_mode` param:
+```yaml
+pipelines:
+  example:
+    ...
+    actions:
+    - type: decode
+      field: log
+      decoder: csv
+      params:
+        columns:
+        - a
+        - b
+        - c
+        - d
+        invalid_line_mode: continue
+    ...
+```
+The original event:
+```json
+{
+  "level": "error",
+  "log": "error,error occurred,2023-10-30T13:35:33.638720813Z,stderr,additional field",
+  "service": "test"
+}
+```
+The resulting event:
+```json
+{
+  "level": "error",
+  "service": "test",
+  "a": "error",
+  "b": "error occurred",
+  "c": "2023-10-30T13:35:33.638720813Z",
+  "d": "stderr",
+  "4": "additional field"
+}
+```
+---
+Decoder with `prefix` and `delimiter` params:
+```yaml
+pipelines:
+  example:
+    ...
+    actions:
+    - type: decode
+      field: log
+      decoder: csv
+      params:
+        prefix: 'csv_'
+        delimiter: " "
+    ...
+```
+The original event:
+```json
+{
+  "level": "error",
+  "log": "error "error occurred" 2023-10-30T13:35:33.638720813Z stderr",
+  "service": "test"
+}
+```
+The resulting event:
+```json
+{
+  "level": "error",
+  "service": "test",
+  "csv_0": "error",
+  "csv_1": "error occurred",
+  "csv_2": "2023-10-30T13:35:33.638720813Z",
+  "csv_3": "stderr"
+}
+```
 }*/
 
 type decoderType int
@@ -524,6 +630,7 @@ const (
 	decProtobuf
 	decSyslogRFC3164
 	decSyslogRFC5424
+	decCSV
 )
 
 type logDecodeErrorMode int
@@ -553,7 +660,7 @@ type Config struct {
 	// > @3@4@5@6
 	// >
 	// > Decoder type.
-	Decoder  string `json:"decoder" default:"json" options:"json|postgres|nginx_error|protobuf|syslog_rfc3164|syslog_rfc5424"` // *
+	Decoder  string `json:"decoder" default:"json" options:"json|postgres|nginx_error|protobuf|syslog_rfc3164|syslog_rfc5424|csv"` // *
 	Decoder_ decoderType
 
 	// > @3@4@5@6
@@ -642,6 +749,8 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 		p.decoder, err = decoder.NewSyslogRFC3164Decoder(p.config.Params)
 	case decSyslogRFC5424:
 		p.decoder, err = decoder.NewSyslogRFC5424Decoder(p.config.Params)
+	case decCSV:
+		p.decoder, err = decoder.NewCSVDecoder(p.config.Params)
 	}
 	if err != nil {
 		p.logger.Fatal(fmt.Sprintf("can't create %s decoder", p.config.Decoder), zap.Error(err))
@@ -669,6 +778,8 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 		p.decodeSyslogRFC3164(event.Root, fieldNode)
 	case decSyslogRFC5424:
 		p.decodeSyslogRFC5424(event.Root, fieldNode)
+	case decCSV:
+		p.decodeCSV(event.Root, fieldNode)
 	}
 
 	return pipeline.ActionPass
@@ -799,6 +910,30 @@ func (p *Plugin) decodeSyslogRFC5424(root *insaneJSON.Root, node *insaneJSON.Nod
 	}
 
 	p.decodeSyslog(root, row)
+}
+
+func (p *Plugin) decodeCSV(root *insaneJSON.Root, node *insaneJSON.Node) {
+	rowRaw, err := p.decoder.Decode(node.AsBytes())
+	if p.checkError(err, node) {
+		return
+	}
+	row := rowRaw.(decoder.CSVRow)
+
+	if !p.config.KeepOrigin {
+		node.Suicide()
+	}
+
+	d := p.decoder.(*decoder.CSVDecoder)
+
+	err = d.CheckInvalidLine(row)
+	if err != nil {
+		p.logger.Error("invalid line", zap.Strings("row", row), zap.Error(err))
+		return
+	}
+
+	for i := range row {
+		p.addFieldPrefix(root, d.GenerateColumnName(i), row[i])
+	}
 }
 
 func (p *Plugin) decodeSyslog(root *insaneJSON.Root, row decoder.SyslogRFC5424Row) { // nolint: gocritic // hugeParam is ok

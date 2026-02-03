@@ -11,11 +11,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
 
 	"github.com/ozontech/file.d/logger"
+	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/xredis"
 )
@@ -81,7 +81,7 @@ type limitersMapConfig struct {
 	limiterCfg *limiterConfig
 
 	// metrics
-	mapSizeMetric     prometheus.Gauge
+	mapSizeMetric     *metric.Gauge
 	limitDistrMetrics *limitDistributionMetrics
 }
 
@@ -104,7 +104,7 @@ type limitersMap struct {
 	limiterCfg *limiterConfig
 
 	// metrics
-	mapSizeMetric     prometheus.Gauge
+	mapSizeMetric     *metric.Gauge
 	limitDistrMetrics *limitDistributionMetrics
 }
 
@@ -130,8 +130,8 @@ func newLimitersMap(lmCfg limitersMapConfig, redisOpts *xredis.Options) *limiter
 		lm.limiterCfg.limitsFileTmp = lmCfg.limiterCfg.limitsFile + limitsFileTempSuffix
 
 		lm.limiterCfg.redisClient = xredis.NewClient(redisOpts)
-		if pingResp := lm.limiterCfg.redisClient.Ping(lm.ctx); pingResp.Err() != nil {
-			msg := fmt.Sprintf("can't ping redis: %s", pingResp.Err())
+		if pingErr := lm.limiterCfg.redisClient.Ping(lm.ctx).Err(); pingErr != nil {
+			msg := fmt.Sprintf("can't ping redis: %s", pingErr.Error())
 			if lmCfg.isStrict {
 				lm.logger.Fatal(msg)
 			}
@@ -142,6 +142,7 @@ func newLimitersMap(lmCfg limitersMapConfig, redisOpts *xredis.Options) *limiter
 			)
 		} else {
 			lm.isRedisConnected = true
+			lm.logger.Info("connected to redis")
 		}
 	}
 	return lm
@@ -164,10 +165,12 @@ func (l *limitersMap) waitRedisReconnect(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			if pingResp := l.limiterCfg.redisClient.Ping(l.ctx); pingResp.Err() == nil {
+			if pingErr := l.limiterCfg.redisClient.Ping(l.ctx).Err(); pingErr == nil {
 				l.isRedisConnected = true
 				l.logger.Info("connected to redis")
 				return
+			} else {
+				l.logger.Errorf("can't ping redis: %s", pingErr.Error())
 			}
 		}
 	}

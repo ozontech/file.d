@@ -130,7 +130,7 @@ type Plugin struct {
 	logger *zap.Logger
 
 	// plugin metrics
-	maskAppliedMetric metric.HeldCounterVec
+	maskAppliedMetric *metric.CounterVec
 }
 
 // ! config-params

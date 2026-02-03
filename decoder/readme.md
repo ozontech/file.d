@@ -15,6 +15,7 @@ Available values for `decoder` param:
 + protobuf -- parses protobuf message into event
 + syslog_rfc3164 -- parses syslog-RFC3164 format from log into event (see [RFC3164](https://datatracker.ietf.org/doc/html/rfc3164))
 + syslog_rfc5424 -- parses syslog-RFC5424 format from log into event (see [RFC5424](https://datatracker.ietf.org/doc/html/rfc5424))
++ csv -- parses csv format from log into event
 
 > Currently `auto` is available only for usage with k8s input plugin.
 
@@ -374,5 +375,90 @@ To:
     "eventSource": "Application",
     "eventID": "1011"
   }
+}
+```
+
+## CSV decoder
+
+### Params
+* `columns` - []string, key names in the resulting event (empty by default).
+* `prefix` - string, if `columns` is empty, key names are formed as follows: `{prefix}{i}` where **{i}**
+is position of field in a row (`""` by default)
+* `delimiter` - 1 byte symbol (`,` by default).
+* `invalid_line_mode` - string, defines the behavior when columns number is not equal to the fields number ​​in a row, must be one of `default|continue|fatal` (`default` by default)
+  * `default` - returns error 
+  * `continue` - if column number is greater than fields number - skips fields, otherwise fills in missing keys with `{prefix}{i}`
+  * `fatal` - falls with non-zero exit code
+
+
+### Examples
+Default decoder:
+```yml
+pipelines:
+  example:
+    settings:
+      decoder: 'csv'
+```
+From:
+
+`error,error occurred,2023-10-30T13:35:33.638720813Z,stderr`
+
+
+To:
+```json
+{
+  "0": "error",
+  "1": "error occurred",
+  "2": "2023-10-30T13:35:33.638720813Z",
+  "3": "stderr"
+}
+```
+---
+Decoder with `columns` and `invalid_line_mode` param:
+```yaml
+pipelines:
+  example:
+    settings:
+      decoder: 'csv'
+      decoder_params:
+        columns: ['level', 'message', 'ts', 'stream']
+        invalid_line_mode: continue
+```
+From:
+
+`error,error occurred,2023-10-30T13:35:33.638720813Z,stderr,additional field`
+
+To:
+```json
+{
+  "level": "error",
+  "message": "error occurred",
+  "ts": "2023-10-30T13:35:33.638720813Z",
+  "stream": "stderr",
+  "4": "additional field"
+}
+```
+---
+Decoder with `prefix` and `delimiter` params:
+```yaml
+pipelines:
+  example:
+    settings:
+      decoder: 'csv'
+      decoder_params:
+        prefix: 'csv_'
+        delimiter: " "
+```
+From:
+
+`error "error occurred" 2023-10-30T13:35:33.638720813Z stderr`
+
+To:
+```json
+{
+  "csv_0": "error",
+  "csv_1": "error occurred",
+  "csv_2": "2023-10-30T13:35:33.638720813Z",
+  "csv_3": "stderr"
 }
 ```

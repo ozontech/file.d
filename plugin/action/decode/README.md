@@ -500,6 +500,112 @@ The resulting event:
 }
 ```
 
+### CSV decoder
+
+Default decoder:
+```yaml
+pipelines:
+  example:
+    ...
+    actions:
+    - type: decode
+      field: log
+      decoder: csv
+    ...
+```
+The original event:
+```json
+{
+  "level": "error",
+  "log": "error,error occurred,2023-10-30T13:35:33.638720813Z,stderr",
+  "service": "test"
+}
+```
+The resulting event:
+```json
+{
+  "level": "error",
+  "service": "test",
+  "0": "error",
+  "1": "error occurred",
+  "2": "2023-10-30T13:35:33.638720813Z",
+  "3": "stderr"
+}
+```
+---
+Decoder with `columns` and `invalid_line_mode` param:
+```yaml
+pipelines:
+  example:
+    ...
+    actions:
+    - type: decode
+      field: log
+      decoder: csv
+      params:
+        columns:
+        - a
+        - b
+        - c
+        - d
+        invalid_line_mode: continue
+    ...
+```
+The original event:
+```json
+{
+  "level": "error",
+  "log": "error,error occurred,2023-10-30T13:35:33.638720813Z,stderr,additional field",
+  "service": "test"
+}
+```
+The resulting event:
+```json
+{
+  "level": "error",
+  "service": "test",
+  "a": "error",
+  "b": "error occurred",
+  "c": "2023-10-30T13:35:33.638720813Z",
+  "d": "stderr",
+  "4": "additional field"
+}
+```
+---
+Decoder with `prefix` and `delimiter` params:
+```yaml
+pipelines:
+  example:
+    ...
+    actions:
+    - type: decode
+      field: log
+      decoder: csv
+      params:
+        prefix: 'csv_'
+        delimiter: " "
+    ...
+```
+The original event:
+```json
+{
+  "level": "error",
+  "log": "error "error occurred" 2023-10-30T13:35:33.638720813Z stderr",
+  "service": "test"
+}
+```
+The resulting event:
+```json
+{
+  "level": "error",
+  "service": "test",
+  "csv_0": "error",
+  "csv_1": "error occurred",
+  "csv_2": "2023-10-30T13:35:33.638720813Z",
+  "csv_3": "stderr"
+}
+```
+
 ## Config params
 **`field`** *`cfg.FieldSelector`* *`required`* 
 
@@ -507,7 +613,7 @@ The event field to decode. Must be a string.
 
 <br>
 
-**`decoder`** *`string`* *`default=json`* *`options=json|postgres|nginx_error|protobuf|syslog_rfc3164|syslog_rfc5424`* 
+**`decoder`** *`string`* *`default=json`* *`options=json|postgres|nginx_error|protobuf|syslog_rfc3164|syslog_rfc5424|csv`* 
 
 Decoder type.
 

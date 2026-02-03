@@ -8,19 +8,16 @@ import (
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/metric"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/require"
 )
 
 func newAntispammer(threshold, unbanIterations int, maintenanceInterval time.Duration) *Antispammer {
-	holder := metric.NewHolder(time.Minute, 100)
 	return NewAntispammer(&Options{
 		MaintenanceInterval: maintenanceInterval,
 		Threshold:           threshold,
 		UnbanIterations:     unbanIterations,
 		Logger:              logger.Instance.Named("antispam").Desugar(),
-		MetricsController:   metric.NewCtl("test", prometheus.NewRegistry()),
-		MetricHolder:        holder,
+		MetricsController:   metric.NewCtl("test", prometheus.NewRegistry(), time.Minute),
 	})
 }
 
@@ -130,7 +127,7 @@ func TestAntispamExceptions(t *testing.T) {
 	checkSpam := func(source, event string, wantMetric map[string]float64) {
 		antispamer.IsSpam("1", source, true, []byte(event), now)
 		for k, v := range wantMetric {
-			r.Equal(v, testutil.ToFloat64(antispamer.exceptionMetric.WithLabelValues(k).Get()))
+			r.Equal(v, antispamer.exceptionMetric.WithLabelValues(k).ToFloat64())
 		}
 	}
 
