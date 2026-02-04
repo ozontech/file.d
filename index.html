@@ -1,32 +1,172 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>file.d documentation</title>
-  <link rel="icon" type="image/png" href="/file.d/static/file.d.png" />
-  <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
-  <meta name="description" content="A blazing fast tool for building data pipelines: read, process, and output events.">
-  <meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
-  <link rel="stylesheet" href="//unpkg.com/docsify/lib/themes/vue.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Be My Valentine 💖</title>
+
+  <style>
+    body {
+      margin: 0;
+      height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background: linear-gradient(135deg, #ff9a9e, #fad0c4);
+      font-family: 'Comic Sans MS', cursive, sans-serif;
+      overflow: hidden;
+      text-align: center;
+    }
+
+    .container {
+      background: white;
+      padding: 35px;
+      border-radius: 20px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+      position: relative;
+      max-width: 380px;
+    }
+
+    h1 {
+      color: #ff4d6d;
+      font-size: 2.2em;
+      margin-bottom: 10px;
+    }
+
+    p {
+      font-size: 1.1em;
+      margin-bottom: 15px;
+    }
+
+    .pickup {
+      font-size: 1.3em;
+      margin: 15px 0;
+      color: #e63946;
+      font-weight: bold;
+    }
+
+    img {
+      width: 100%;
+      max-width: 280px;
+      border-radius: 15px;
+      margin: 15px 0;
+      box-shadow: 0 8px 15px rgba(0,0,0,0.2);
+    }
+
+    button {
+      padding: 14px 24px;
+      font-size: 1.1em;
+      border: none;
+      border-radius: 30px;
+      cursor: pointer;
+      margin: 10px;
+      transition: 0.3s;
+    }
+
+    #yesBtn {
+      background-color: #ff4d6d;
+      color: white;
+    }
+
+    #noBtn {
+      background-color: #ccc;
+      position: absolute;
+    }
+
+    .heart {
+      position: absolute;
+      color: #ff4d6d;
+      animation: float 6s linear infinite;
+      font-size: 20px;
+      pointer-events: none;
+    }
+
+    @keyframes float {
+      0% { transform: translateY(100vh); opacity: 1; }
+      100% { transform: translateY(-10vh); opacity: 0; }
+    }
+  </style>
 </head>
+
 <body>
-  <div id="app"></div>
+
+  <div class="container">
+    <h1>Deepak ❤️</h1>
+    <p>I have a very important question for you…</p>
+
+    <div class="pickup">
+      Are you made of copper and tellurium?<br>
+      Because you’re Cu-Te 💘
+    </div>
+
+    <p style="font-size:0.9em; color:#888;">(Turn your sound on 🎵)</p>
+
+    <!-- YOUR PHOTO -->
+    <img src="us.jpg" alt="Us together">
+
+    <p style="font-size:1em; color:#555;">
+      Every moment with you is my favorite ❤️
+    </p>
+
+    <h2>Will you be my Valentine? 💌</h2>
+
+    <button id="yesBtn" onclick="yesClicked()">YES 💖</button>
+    <button id="noBtn" onmouseover="moveNo()">No 😜</button>
+  </div>
+
+  <!-- Background Music -->
+  <audio id="bgMusic" autoplay loop>
+    <source src="song.mp3" type="audio/mpeg">
+  </audio>
+
   <script>
-    window.$docsify = {
-      name: 'file.d',
-      repo: 'https://github.com/ozontech/file.d',
-      loadSidebar: true,
-      loadNavbar: true,
-      subMaxLevel: 2,
-      maxLevel: 1,
-      coverpage: true,
-      auto2top: true,
-      markdown: {
-        gfm: true
-      }
+    // Start music on first click (in case autoplay is blocked)
+    document.addEventListener("click", function () {
+      const music = document.getElementById("bgMusic");
+      music.play();
+    }, { once: true });
+
+    function yesClicked() {
+      document.body.innerHTML = `
+        <div style="display:flex;justify-content:center;align-items:center;height:100vh;background:#ffdde1;font-family:cursive;text-align:center;flex-direction:column;">
+          <h1 style="color:#ff4d6d;">YAY DEEPAK!!! 💖💖💖</h1>
+          <p style="font-size:1.3em;">Best Valentine ever 🥰</p>
+        </div>`;
+      launchHearts();
+    }
+
+    function moveNo() {
+      const btn = document.getElementById("noBtn");
+      const x = Math.random() * (window.innerWidth - 100);
+      const y = Math.random() * (window.innerHeight - 50);
+      btn.style.left = x + "px";
+      btn.style.top = y + "px";
+    }
+
+    // Floating hearts in background
+    setInterval(() => {
+      const heart = document.createElement("div");
+      heart.classList.add("heart");
+      heart.style.left = Math.random() * 100 + "vw";
+      heart.innerHTML = "💖";
+      document.body.appendChild(heart);
+      setTimeout(() => heart.remove(), 6000);
+    }, 500);
+
+    function launchHearts() {
+      setInterval(() => {
+        const heart = document.createElement("div");
+        heart.innerHTML = "💘";
+        heart.style.position = "absolute";
+        heart.style.left = Math.random() * 100 + "vw";
+        heart.style.top = "100vh";
+        heart.style.fontSize = "24px";
+        heart.style.animation = "float 4s linear infinite";
+        document.body.appendChild(heart);
+        setTimeout(() => heart.remove(), 4000);
+      }, 300);
     }
   </script>
-  <script src="//unpkg.com/docsify/lib/docsify.min.js"></script>
-  <script src="//unpkg.com/docsify-copy-code"></script>
+
 </body>
 </html>
