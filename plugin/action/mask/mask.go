@@ -8,7 +8,6 @@ import (
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
 	insaneJSON "github.com/ozontech/insane-json"
-	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
 )
 
@@ -130,7 +129,7 @@ type Plugin struct {
 	logger *zap.Logger
 
 	// plugin metrics
-	maskAppliedMetric *prometheus.CounterVec
+	maskAppliedMetric *metric.CounterVec
 }
 
 // ! config-params

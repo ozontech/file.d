@@ -4,9 +4,9 @@ import (
 	"context"
 	"sync"
 
+	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/pipeline/metadata"
-	"github.com/prometheus/client_golang/prometheus"
 	"github.com/twmb/franz-go/pkg/kgo"
 	"go.uber.org/zap"
 )
@@ -29,7 +29,7 @@ type splitConsume struct {
 	controller             pipeline.InputPluginController
 	logger                 *zap.Logger
 	metaTemplater          *metadata.MetaTemplater
-	consumeErrorsMetric    prometheus.Counter
+	consumeErrorsMetric    *metric.Counter
 }
 
 func (s *splitConsume) Assigned(_ context.Context, _ *kgo.Client, assigned map[string][]int32) {
