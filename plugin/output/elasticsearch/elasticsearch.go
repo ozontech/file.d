@@ -34,7 +34,6 @@ const (
 
 type Plugin struct {
 	config *Config
-	params *pipeline.OutputPluginParams
 
 	client *xhttp.Client
 
@@ -232,7 +231,6 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.logger = params.Logger.Desugar()
 	p.avgEventSize = params.PipelineSettings.AvgEventSize
 	p.config = config.(*Config)
-	p.params = params
 	p.registerMetrics(params.MetricCtl)
 	p.mu = &sync.Mutex{}
 	p.headerPrefix = `{"` + p.config.BatchOpType + `":{"_index":"`

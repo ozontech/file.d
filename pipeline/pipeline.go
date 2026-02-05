@@ -145,24 +145,28 @@ type Pipeline struct {
 }
 
 type Settings struct {
-	Decoder                   string
-	DecoderParams             map[string]any
-	Capacity                  int
-	MetaCacheSize             int
-	MaintenanceInterval       time.Duration
-	EventTimeout              time.Duration
-	AntispamThreshold         int
-	AntispamExceptions        antispam.Exceptions
-	SourceNameMetaField       string
-	AvgEventSize              int
-	MaxEventSize              int
-	CutOffEventByLimit        bool
-	CutOffEventByLimitField   string
-	StreamField               string
-	IsStrict                  bool
-	MetricHoldDuration        time.Duration
-	Pool                      PoolType
-	MetricMaxLabelValueLength int
+	Decoder                 string
+	DecoderParams           map[string]any
+	Capacity                int
+	MetaCacheSize           int
+	MaintenanceInterval     time.Duration
+	EventTimeout            time.Duration
+	AntispamThreshold       int
+	AntispamExceptions      antispam.Exceptions
+	SourceNameMetaField     string
+	AvgEventSize            int
+	MaxEventSize            int
+	CutOffEventByLimit      bool
+	CutOffEventByLimitField string
+	StreamField             string
+	IsStrict                bool
+	Pool                    PoolType
+	Metric                  MetricSettings
+}
+
+type MetricSettings struct {
+	HoldDuration        time.Duration
+	MaxLabelValueLength int
 }
 
 type PoolType string

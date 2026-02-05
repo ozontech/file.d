@@ -223,7 +223,6 @@ type Plugin struct {
 	controller   pipeline.OutputPluginController
 	logger       *zap.Logger
 	config       *Config
-	params       *pipeline.OutputPluginParams
 	avgEventSize int
 
 	ctx    context.Context
@@ -254,7 +253,6 @@ func Factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginParams) {
 	p.controller = params.Controller
 	p.config = config.(*Config)
-	p.params = params
 	p.logger = params.Logger.Desugar()
 	p.avgEventSize = params.PipelineSettings.AvgEventSize
 	p.registerMetrics(params.MetricCtl)

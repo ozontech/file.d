@@ -103,7 +103,6 @@ const (
 
 type Plugin struct {
 	config Config
-	params *pipeline.ActionPluginParams
 
 	// sourceBuf buffer for storing node value initial and transformed
 	sourceBuf []byte
@@ -206,7 +205,6 @@ func factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginParams) {
 	p.config = *config.(*Config)                            // copy shared config
 	p.config.Masks = append([]Mask(nil), p.config.Masks...) // copy shared masks
-	p.params = params
 
 	p.maskBuf = make([]byte, 0, params.PipelineSettings.AvgEventSize)
 	p.sourceBuf = make([]byte, 0, params.PipelineSettings.AvgEventSize)

@@ -43,7 +43,6 @@ type Plugin struct {
 	cancel   context.CancelFunc
 	logger   *zap.SugaredLogger
 	config   *Config
-	params   *pipeline.ActionPluginParams
 	pipeline string
 	format   string
 
@@ -374,7 +373,6 @@ func factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginParams) {
 	p.config = config.(*Config)
-	p.params = params
 	p.logger = params.Logger
 
 	distrCfg := p.config.LimitDistribution.toInternal()

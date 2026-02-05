@@ -44,8 +44,6 @@ type Options struct {
 	UnbanIterations     int
 	Exceptions          Exceptions
 
-	MetricMaxLabelValueLength int
-
 	Logger            *zap.Logger
 	MetricsController *metric.Ctl
 }
