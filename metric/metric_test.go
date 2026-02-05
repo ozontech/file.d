@@ -66,6 +66,21 @@ func TestUnsafeStringInMetric(t *testing.T) {
 	r.Equal([]string{"hello world"}, m.labels)
 }
 
+func TestLabelTruncation(t *testing.T) {
+	r := require.New(t)
+
+	maxLabelValueLength := 10
+	label := "some_long_label_value"
+	ctl := NewCtl("test", prometheus.NewRegistry(), time.Minute, maxLabelValueLength)
+	c := ctl.RegisterCounterVec("errors", "", "level")
+
+	c.WithLabelValues(label).Inc()
+	r.Equal(float64(1), c.WithLabelValues("some_long_").ToFloat64())
+
+	c.DeleteLabelValues(label)
+	r.Equal(float64(0), c.WithLabelValues("some_long_").ToFloat64())
+}
+
 var holderBenchCases = []struct {
 	Labels      []string
 	LabelValues [][]string
