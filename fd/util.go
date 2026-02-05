@@ -29,9 +29,10 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 	decoderParams := make(map[string]any)
 	isStrict := pipeline.DefaultIsStrict
 	eventTimeout := pipeline.DefaultEventTimeout
-	metricHoldDuration := pipeline.DefaultMetricHoldDuration
 	metaCacheSize := pipeline.DefaultMetaCacheSize
 	pool := ""
+
+	metricHoldDuration := pipeline.DefaultMetricHoldDuration
 	metricMaxLabelValueLength := pipeline.DefaultMetricMaxLabelValueLength
 
 	if settings != nil {
@@ -129,24 +130,26 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 	}
 
 	return &pipeline.Settings{
-		Decoder:                   decoder,
-		DecoderParams:             decoderParams,
-		Capacity:                  capacity,
-		MetaCacheSize:             metaCacheSize,
-		AvgEventSize:              avgInputEventSize,
-		MaxEventSize:              maxInputEventSize,
-		CutOffEventByLimit:        cutOffEventByLimit,
-		CutOffEventByLimitField:   cutOffEventByLimitField,
-		AntispamThreshold:         antispamThreshold,
-		AntispamExceptions:        antispamExceptions,
-		SourceNameMetaField:       sourceNameMetaField,
-		MaintenanceInterval:       maintenanceInterval,
-		EventTimeout:              eventTimeout,
-		StreamField:               streamField,
-		IsStrict:                  isStrict,
-		MetricHoldDuration:        metricHoldDuration,
-		Pool:                      pipeline.PoolType(pool),
-		MetricMaxLabelValueLength: metricMaxLabelValueLength,
+		Decoder:                 decoder,
+		DecoderParams:           decoderParams,
+		Capacity:                capacity,
+		MetaCacheSize:           metaCacheSize,
+		AvgEventSize:            avgInputEventSize,
+		MaxEventSize:            maxInputEventSize,
+		CutOffEventByLimit:      cutOffEventByLimit,
+		CutOffEventByLimitField: cutOffEventByLimitField,
+		AntispamThreshold:       antispamThreshold,
+		AntispamExceptions:      antispamExceptions,
+		SourceNameMetaField:     sourceNameMetaField,
+		MaintenanceInterval:     maintenanceInterval,
+		EventTimeout:            eventTimeout,
+		StreamField:             streamField,
+		IsStrict:                isStrict,
+		Pool:                    pipeline.PoolType(pool),
+		Metric: &pipeline.MetricSettings{
+			HoldDuration:        metricHoldDuration,
+			MaxLabelValueLength: metricMaxLabelValueLength,
+		},
 	}
 }
 

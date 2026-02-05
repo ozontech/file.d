@@ -124,7 +124,10 @@ func NewPipeline(actions []*pipeline.ActionPluginStaticInfo, pipelineOpts ...str
 		MetaCacheSize:       32,
 		StreamField:         "stream",
 		Decoder:             "json",
-		MetricHoldDuration:  pipeline.DefaultMetricHoldDuration,
+		Metric: &pipeline.MetricSettings{
+			HoldDuration:        pipeline.DefaultMetricHoldDuration,
+			MaxLabelValueLength: pipeline.DefaultMetricMaxLabelValueLength,
+		},
 	}
 
 	if lowMem {

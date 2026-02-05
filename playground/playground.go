@@ -83,8 +83,10 @@ func (h *playground) Play(ctx context.Context, req PlayRequest) (PlayResponse, e
 		MaintenanceInterval: time.Millisecond * 100,
 		EventTimeout:        time.Millisecond * 100,
 		IsStrict:            false,
-		MetricHoldDuration:  time.Minute,
 		Pool:                pipeline.PoolTypeLowMem,
+		Metric: &pipeline.MetricSettings{
+			HoldDuration: time.Minute,
+		},
 	}
 	metricsRegistry := prometheus.NewRegistry()
 	p := pipeline.New(pipelineName, settings, metricsRegistry, stdout)

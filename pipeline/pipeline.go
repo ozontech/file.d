@@ -161,7 +161,7 @@ type Settings struct {
 	StreamField             string
 	IsStrict                bool
 	Pool                    PoolType
-	Metric                  MetricSettings
+	Metric                  *MetricSettings
 }
 
 type MetricSettings struct {
@@ -178,7 +178,7 @@ const (
 
 // New creates new pipeline. Consider using `SetupHTTPHandlers` next.
 func New(name string, settings *Settings, registry *prometheus.Registry, lg *zap.Logger) *Pipeline {
-	metricCtl := metric.NewCtl("pipeline_"+name, registry, settings.MetricHoldDuration, settings.MetricMaxLabelValueLength)
+	metricCtl := metric.NewCtl("pipeline_"+name, registry, settings.Metric.HoldDuration, settings.Metric.MaxLabelValueLength)
 
 	var eventPool pool
 	switch settings.Pool {
@@ -209,13 +209,12 @@ func New(name string, settings *Settings, registry *prometheus.Registry, lg *zap
 		streamer:  newStreamer(settings.EventTimeout),
 		eventPool: eventPool,
 		antispamer: antispam.NewAntispammer(&antispam.Options{
-			MaintenanceInterval:       settings.MaintenanceInterval,
-			Threshold:                 settings.AntispamThreshold,
-			UnbanIterations:           antispamUnbanIterations,
-			Logger:                    lg.Named("antispam"),
-			MetricsController:         metricCtl,
-			Exceptions:                settings.AntispamExceptions,
-			MetricMaxLabelValueLength: settings.MetricMaxLabelValueLength,
+			MaintenanceInterval: settings.MaintenanceInterval,
+			Threshold:           settings.AntispamThreshold,
+			UnbanIterations:     antispamUnbanIterations,
+			Logger:              lg.Named("antispam"),
+			MetricsController:   metricCtl,
+			Exceptions:          settings.AntispamExceptions,
 		}),
 		metricCtl: metricCtl,
 
