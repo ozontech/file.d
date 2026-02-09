@@ -55,7 +55,7 @@ type CSVDecoder struct {
 	buffersPool sync.Pool
 }
 
-func NewCSVDecoder(params map[string]any) (Decoder, error) {
+func NewCSVDecoder(params Params) (Decoder, error) {
 	p, err := extractCSVParams(params)
 	if err != nil {
 		return nil, fmt.Errorf("can't extract params: %w", err)
@@ -245,7 +245,7 @@ func (d *CSVDecoder) GenerateColumnName(i int) string {
 	return d.params.prefix + strconv.Itoa(i)
 }
 
-func extractCSVParams(params map[string]any) (CSVParams, error) {
+func extractCSVParams(params Params) (CSVParams, error) {
 	columnNames := make([]string, 0)
 	if columnNamesRaw, ok := params[columnNamesParam]; ok {
 		columnNamesRawSlice, ok := columnNamesRaw.([]any)

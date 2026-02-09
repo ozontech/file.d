@@ -11,7 +11,7 @@ func TestNginxError(t *testing.T) {
 		name string
 
 		input  string
-		params map[string]any
+		params Params
 
 		want          NginxErrorRow
 		wantCreateErr bool
@@ -64,7 +64,7 @@ func TestNginxError(t *testing.T) {
 		{
 			name:  "valid_custom_fields",
 			input: `2022/08/18 09:29:37 [error] 844935#844935: *44934601 upstream timed out (110: Operation timed out), while connecting to upstream, client: 10.125.172.251, server: , request: "POST /download HTTP/1.1", upstream: "http://10.117.246.15:84/download", host: "mpm-youtube-downloader-38.name.tldn:84", test:`,
-			params: map[string]any{
+			params: Params{
 				nginxWithCustomFieldsParam: true,
 			},
 			want: NginxErrorRow{
@@ -86,7 +86,7 @@ func TestNginxError(t *testing.T) {
 		},
 		{
 			name: "invalid_create",
-			params: map[string]any{
+			params: Params{
 				nginxWithCustomFieldsParam: "not bool",
 			},
 			wantCreateErr: true,
