@@ -266,8 +266,11 @@ func TestSuggestDecoder(t *testing.T) {
 		{
 			name: "first non-no suggestion wins when decoder is auto",
 			settings: &Settings{
-				Decoder:            "auto",
-				MetricHoldDuration: DefaultMetricHoldDuration,
+				Decoder: "auto",
+				Metric: &MetricSettings{
+					HoldDuration:        DefaultMetricHoldDuration,
+					MaxLabelValueLength: DefaultMetricMaxLabelValueLength,
+				},
 			},
 			suggestType:  decoder.CRI,
 			expectedType: decoder.CRI,
@@ -275,8 +278,11 @@ func TestSuggestDecoder(t *testing.T) {
 		{
 			name: "suggestion ignored when decoder is not auto",
 			settings: &Settings{
-				Decoder:            "json",
-				MetricHoldDuration: DefaultMetricHoldDuration,
+				Decoder: "json",
+				Metric: &MetricSettings{
+					HoldDuration:        DefaultMetricHoldDuration,
+					MaxLabelValueLength: DefaultMetricMaxLabelValueLength,
+				},
 			},
 			suggestType:  decoder.CRI,
 			expectedType: decoder.JSON,
