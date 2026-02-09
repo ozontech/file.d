@@ -123,9 +123,10 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 			metricHoldDuration = i
 		}
 
-		val = metrics.Get("max_label_value_length").MustInt()
-		if val != 0 {
-			metricMaxLabelValueLength = val
+		metricMaxLabelValueLength = metrics.Get("max_label_value_length").MustInt()
+		if metricMaxLabelValueLength < 0 {
+			logger.Warn("negative max_label_value_length value, metric label truncation is disabled")
+			metricMaxLabelValueLength = 0
 		}
 	}
 
