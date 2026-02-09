@@ -3,6 +3,7 @@ package pipeline
 import (
 	"testing"
 
+	"github.com/ozontech/file.d/decoder"
 	"github.com/ozontech/file.d/pipeline/metadata"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
@@ -251,6 +252,42 @@ func TestCheckInputBytesMetric(t *testing.T) {
 			for k, v := range tCase.want {
 				require.Equal(t, v, pipe.maxEventSizeExceededMetric.WithLabelValues(k).ToFloat64())
 			}
+		})
+	}
+}
+
+func TestSuggestDecoder(t *testing.T) {
+	tCases := []struct {
+		name         string
+		settings     *Settings
+		suggestType  decoder.Type
+		expectedType decoder.Type
+	}{
+		{
+			name: "first non-no suggestion wins when decoder is auto",
+			settings: &Settings{
+				Decoder:            "auto",
+				MetricHoldDuration: DefaultMetricHoldDuration,
+			},
+			suggestType:  decoder.CRI,
+			expectedType: decoder.CRI,
+		},
+		{
+			name: "suggestion ignored when decoder is not auto",
+			settings: &Settings{
+				Decoder:            "json",
+				MetricHoldDuration: DefaultMetricHoldDuration,
+			},
+			suggestType:  decoder.CRI,
+			expectedType: decoder.JSON,
+		},
+	}
+
+	for _, tCase := range tCases {
+		t.Run(tCase.name, func(t *testing.T) {
+			p := New("file_d", tCase.settings, prometheus.NewPedanticRegistry(), zap.NewNop())
+			p.SuggestDecoder(tCase.suggestType)
+			require.Equal(t, tCase.expectedType, p.decoderType)
 		})
 	}
 }

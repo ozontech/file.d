@@ -198,6 +198,11 @@ type Config struct {
 	// >
 	// > The name of the ingest pipeline to write events to.
 	IngestPipeline string `json:"ingest_pipeline"` // *
+
+	// > @3@4@5@6
+	// >
+	// > Process ES response and report errors, if any.
+	ProcessResponse bool `json:"process_response" default:"true"` // *
 }
 
 type KeepAliveConfig struct {
@@ -411,12 +416,17 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 }
 
 func (p *Plugin) send(data []byte) (int, error) {
+	processFn := p.reportESErrors
+	if !p.config.ProcessResponse {
+		processFn = nil
+	}
+
 	return p.client.DoTimeout(
 		http.MethodPost,
 		NDJSONContentType,
 		data,
 		p.config.ConnectionTimeout_,
-		p.reportESErrors,
+		processFn,
 	)
 }
 
@@ -425,11 +435,18 @@ func (p *Plugin) sendSplit(left int, right int, begin []int, data []byte) (int, 
 		return http.StatusOK, nil
 	}
 
+	processFn := p.reportESErrors
+	if !p.config.ProcessResponse {
+		processFn = nil
+	}
+
 	statusCode, err := p.client.DoTimeout(
 		http.MethodPost,
 		NDJSONContentType,
 		data[begin[left]:begin[right]],
-		p.config.ConnectionTimeout_, p.reportESErrors)
+		p.config.ConnectionTimeout_,
+		processFn,
+	)
 
 	if err != nil {
 		p.sendErrorMetric.WithLabelValues(strconv.Itoa(statusCode)).Inc()

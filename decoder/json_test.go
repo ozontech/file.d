@@ -18,7 +18,7 @@ func TestJson(t *testing.T) {
 		name string
 
 		input  string
-		params map[string]any
+		params Params
 
 		want          map[string]string
 		wantCreateErr bool
@@ -39,7 +39,7 @@ func TestJson(t *testing.T) {
 		{
 			name:  "valid_max_fields_size",
 			input: inputJson,
-			params: map[string]any{
+			params: Params{
 				jsonMaxFieldsSizeParam: map[string]any{
 					"":               json.Number("1"),
 					"not_exists":     json.Number("100"),
@@ -61,7 +61,7 @@ func TestJson(t *testing.T) {
 		{
 			name:  "valid_max_fields_size_single",
 			input: inputJson,
-			params: map[string]any{
+			params: Params{
 				jsonMaxFieldsSizeParam: map[string]any{
 					"f2.f2_2.f2_2_2": json.Number("4"),
 				},
@@ -77,14 +77,14 @@ func TestJson(t *testing.T) {
 		},
 		{
 			name: "invalid_create_1",
-			params: map[string]any{
+			params: Params{
 				jsonMaxFieldsSizeParam: "not_map",
 			},
 			wantCreateErr: true,
 		},
 		{
 			name: "invalid_create_2",
-			params: map[string]any{
+			params: Params{
 				jsonMaxFieldsSizeParam: map[string]any{
 					"test": json.Number("not_num"),
 				},
@@ -93,7 +93,7 @@ func TestJson(t *testing.T) {
 		},
 		{
 			name: "invalid_create_3",
-			params: map[string]any{
+			params: Params{
 				jsonMaxFieldsSizeParam: map[string]any{
 					"test": json.Number("1.2"),
 				},

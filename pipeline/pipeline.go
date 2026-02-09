@@ -89,10 +89,8 @@ type Pipeline struct {
 	started  bool
 	settings *Settings
 
-	decoderType          decoder.Type // decoder type set in the config
-	suggestedDecoderType decoder.Type // decoder type suggested by input plugin, it is used when config decoder is set to "auto"
-	decoder              decoder.Decoder
-	initDecoderOnce      *sync.Once
+	decoderType decoder.Type // decoder type set in the config
+	decoder     decoder.Decoder
 
 	eventPool pool
 	streamer  *streamer
@@ -146,7 +144,7 @@ type Pipeline struct {
 
 type Settings struct {
 	Decoder                 string
-	DecoderParams           map[string]any
+	DecoderParams           decoder.Params
 	Capacity                int
 	MetaCacheSize           int
 	MaintenanceInterval     time.Duration
@@ -220,44 +218,18 @@ func New(name string, settings *Settings, registry *prometheus.Registry, lg *zap
 
 		eventLog:   make([]string, 0, 128),
 		eventLogMu: &sync.Mutex{},
-
-		initDecoderOnce: &sync.Once{},
 	}
 
 	pipeline.registerMetrics()
 	pipeline.setDefaultMetrics()
 
-	var err error
-	switch settings.Decoder {
-	case "json":
-		pipeline.decoderType = decoder.JSON
-		pipeline.decoder, err = decoder.NewJsonDecoder(pipeline.settings.DecoderParams)
-	case "raw":
-		pipeline.decoderType = decoder.RAW
-	case "cri":
-		pipeline.decoderType = decoder.CRI
-	case "postgres":
-		pipeline.decoderType = decoder.POSTGRES
-	case "nginx_error":
-		pipeline.decoderType = decoder.NGINX_ERROR
-		pipeline.decoder, err = decoder.NewNginxErrorDecoder(pipeline.settings.DecoderParams)
-	case "protobuf":
-		pipeline.decoderType = decoder.PROTOBUF
-		pipeline.decoder, err = decoder.NewProtobufDecoder(pipeline.settings.DecoderParams)
-	case "syslog_rfc3164":
-		pipeline.decoderType = decoder.SYSLOG_RFC3164
-		pipeline.decoder, err = decoder.NewSyslogRFC3164Decoder(pipeline.settings.DecoderParams)
-	case "syslog_rfc5424":
-		pipeline.decoderType = decoder.SYSLOG_RFC5424
-		pipeline.decoder, err = decoder.NewSyslogRFC5424Decoder(pipeline.settings.DecoderParams)
-	case "csv":
-		pipeline.decoderType = decoder.CSV
-		pipeline.decoder, err = decoder.NewCSVDecoder(pipeline.settings.DecoderParams)
-	case "auto":
-		pipeline.decoderType = decoder.AUTO
-	default:
+	pipeline.decoderType = decoder.TypeFromString(settings.Decoder)
+	if pipeline.decoderType == decoder.NO {
 		pipeline.logger.Fatal("unknown decoder", zap.String("decoder", settings.Decoder))
 	}
+
+	var err error
+	pipeline.decoder, err = decoder.New(pipeline.decoderType, pipeline.settings.DecoderParams)
 	if err != nil {
 		pipeline.logger.Fatal("can't create decoder", zap.String("decoder", settings.Decoder), zap.Error(err))
 	}
@@ -363,6 +335,14 @@ func (p *Pipeline) Start() {
 
 	p.input.Start(p.inputInfo.Config, inputParams)
 
+	// If decoder is still set to AUTO after input plugin start, it means
+	// no plugin called SuggestDecoder to override it.
+	// In this case, the JSON decoder is used by default.
+	if p.decoderType == decoder.AUTO {
+		p.decoderType = decoder.JSON
+		p.decoder, _ = decoder.New(decoder.JSON, nil)
+	}
+
 	p.streamer.start()
 
 	go p.maintenance()
@@ -432,23 +412,8 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offsets Offsets, byt
 		row decoder.CRIRow
 		err error
 	)
-	if p.decoderType == decoder.AUTO {
-		dec = p.suggestedDecoderType
-		if dec == decoder.NO {
-			dec = decoder.JSON
-		}
 
-		// When config decoder is set to "auto", then we didn't create a decoder during pipeline initialization.
-		// It's necessary to initialize the decoder once.
-		if dec == decoder.JSON {
-			p.initDecoderOnce.Do(func() {
-				p.decoder, _ = decoder.NewJsonDecoder(p.settings.DecoderParams)
-			})
-		}
-	} else {
-		dec = p.decoderType
-	}
-
+	dec = p.decoderType
 	if dec == decoder.CRI {
 		row, err = decoder.DecodeCRI(bytes)
 		if err != nil {
@@ -918,8 +883,20 @@ func (p *Pipeline) DisableStreams() {
 	p.disableStreams = true
 }
 
+// SuggestDecoder applies a decoder hint from input plugins (k8s only for now)
+// when pipeline decoder is set to "auto".
+// The first non-No suggestion wins and permanently replaces pipeline decoder.
 func (p *Pipeline) SuggestDecoder(t decoder.Type) {
-	p.suggestedDecoderType = t
+	if p.decoderType != decoder.AUTO || t == decoder.NO {
+		return
+	}
+
+	p.decoderType = t
+	var err error
+	p.decoder, err = decoder.New(t, p.settings.DecoderParams)
+	if err != nil {
+		p.logger.Fatal("can't create decoder", zap.Error(err))
+	}
 }
 
 func (p *Pipeline) DisableParallelism() {
