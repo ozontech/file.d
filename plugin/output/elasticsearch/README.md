@@ -164,5 +164,11 @@ The name of the ingest pipeline to write events to.
 
 <br>
 
+**`process_response`** *`bool`* *`default=true`* 
+
+Process ES response and report errors, if any.
+
+<br>
+
 
 <br>*Generated using [__insane-doc__](https://github.com/vitkovskii/insane-doc)*
