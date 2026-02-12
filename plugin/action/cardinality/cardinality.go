@@ -265,6 +265,7 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	p.buf = p.buf[:0]
 	p.buf = p.keys.appendTo(p.buf)
 	prefixKey := make([]byte, len(p.buf))
+	// make an independent copy so prefixKey won't be corrupted when p.buf is reused or modified.
 	copy(prefixKey, p.buf)
 
 	keysCount := p.cache.CountPrefix(string(prefixKey))
