@@ -25,6 +25,7 @@
   - Action
     - [add_file_name](plugin/action/add_file_name/README.md)
     - [add_host](plugin/action/add_host/README.md)
+    - [cardinality](plugin/action/cardinality/README.md)
     - [convert_date](plugin/action/convert_date/README.md)
     - [convert_log_level](plugin/action/convert_log_level/README.md)
     - [convert_utf8_bytes](plugin/action/convert_utf8_bytes/README.md)
