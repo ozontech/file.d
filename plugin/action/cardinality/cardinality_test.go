@@ -47,7 +47,7 @@ func TestParseFields(t *testing.T) {
 				t,
 				[]byte(tt.expected),
 				result,
-				"mapToStringSorted() = %v, want %v", string(result), string(tt.expected),
+				"mapToStringSorted() = %v, want %v", string(result), tt.expected,
 			)
 		})
 	}

@@ -9,7 +9,6 @@ import (
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
-	"github.com/prometheus/client_golang/prometheus"
 
 	"go.uber.org/zap"
 )
@@ -82,8 +81,8 @@ type Plugin struct {
 	logger *zap.Logger
 	buf    []byte
 
-	cardinalityUniqueValuesLimit prometheus.Gauge
-	cardinalityUniqueValuesGauge *prometheus.GaugeVec
+	cardinalityUniqueValuesLimit *metric.Gauge
+	cardinalityUniqueValuesGauge *metric.GaugeVec
 }
 
 type parsedField struct {
