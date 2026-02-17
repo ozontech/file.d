@@ -11,6 +11,7 @@ require (
 	github.com/alecthomas/kingpin v2.2.6+incompatible
 	github.com/alecthomas/units v0.0.0-20211218093645-b94a6e3cc137
 	github.com/alicebob/miniredis/v2 v2.35.0
+	github.com/armon/go-radix v0.0.0-20180808171621-7fddfc383310
 	github.com/bitly/go-simplejson v0.5.1
 	github.com/bmatcuk/doublestar/v4 v4.8.1
 	github.com/bufbuild/protocompile v0.13.0
