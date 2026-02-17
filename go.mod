@@ -28,7 +28,7 @@ require (
 	github.com/jackc/pgconn v1.14.3
 	github.com/jackc/pgproto3/v2 v2.3.3
 	github.com/jackc/pgx/v4 v4.18.3
-	github.com/klauspost/compress v1.18.1
+	github.com/klauspost/compress v1.18.2
 	github.com/minio/minio-go v6.0.14+incompatible
 	github.com/ozontech/insane-json v0.1.9
 	github.com/pierrec/lz4/v4 v4.1.22
