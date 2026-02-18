@@ -29,6 +29,9 @@ type metricValue struct {
 	lastUpdateTime    time.Time
 	sendedTimestamp   time.Time
 	expiredAt         time.Time
+
+	count        int64
+	bucketCounts []int64
 }
 
 type storageSender interface {
@@ -56,10 +59,16 @@ func (p *metricCollector) handleMetric(labels []promwrite.Label, value float64, 
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 
+	count := int64(1)
 	if existing, exists := p.metrics[key]; exists {
-		if metricType == "counter" {
+		if metricType == "counter" || metricType == "histogram" {
 			value += existing.value
+			if metricType == "histogram" {
+				// calculate buckets
+				//
+			}
 		}
+		count += existing.count
 		timestamp = max(timestamp, existing.sendedTimestamp.UnixMilli())
 	}
 
@@ -68,6 +77,7 @@ func (p *metricCollector) handleMetric(labels []promwrite.Label, value float64, 
 
 	metric := &metricValue{
 		value:             value,
+		count:             count,
 		timestamp:         timestamp,
 		lastUpdateTime:    now,
 		lastValueIsSended: false,

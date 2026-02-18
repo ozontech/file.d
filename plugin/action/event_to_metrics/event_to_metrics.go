@@ -50,7 +50,7 @@ type Config struct {
 
 type Metric struct {
 	Name   string            `json:"name"`
-	Type   string            `json:"type"`
+	Type   string            `json:"type" default:"counter" options:"counter|gauge|histogram"` // *
 	Value  string            `json:"value"`
 	Labels map[string]string `json:"labels"`
 	TTL    cfg.Duration      `json:"ttl" parse:"duration"` // *

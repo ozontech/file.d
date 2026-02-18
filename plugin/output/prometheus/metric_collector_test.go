@@ -96,6 +96,33 @@ func TestMetricCollector(t *testing.T) {
 		assert.Equal(t, now.Truncate(time.Second), sendedMetrics[0].Sample.Time.Truncate(time.Second))
 	})
 
+	t.Run("handleMetric histogram", func(t *testing.T) {
+		logger := zaptest.NewLogger(t)
+		testSender := &TestStorageSender{}
+		testSender.reset()
+		collector := newCollector(testSender, 1*time.Second, logger)
+
+		labels := []promwrite.Label{
+			{Name: "__name__", Value: "test_histogram"},
+			{Name: "job", Value: "test"},
+		}
+
+		// First value - should not be sent
+		now := time.Now()
+		collector.handleMetric(labels, 1.0, now.UnixMilli(), "histogram", 0)
+		assert.Empty(t, testSender.getSentMetrics())
+
+		collector.handleMetric(labels, 2.0, now.UnixMilli(), "histogram", 0)
+		assert.Empty(t, testSender.getSentMetrics())
+
+		time.Sleep(2 * time.Second)
+		sendedMetrics := testSender.getSentMetrics()
+
+		assert.Equal(t, 1, len(sendedMetrics))
+		assert.Equal(t, 18.0, sendedMetrics[0].Sample.Value) // 10 + 5 + 3
+		assert.Equal(t, now.Truncate(time.Second), sendedMetrics[0].Sample.Time.Truncate(time.Second))
+	})
+
 	t.Run("handleMetric counter accumulation with ttl", func(t *testing.T) {
 		logger := zaptest.NewLogger(t)
 		testSender := &TestStorageSender{}
