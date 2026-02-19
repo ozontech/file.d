@@ -14,7 +14,7 @@ import (
 func TestLabelExpiration(t *testing.T) {
 	r := require.New(t)
 
-	ctl := NewCtl("test", prometheus.NewRegistry(), time.Minute)
+	ctl := NewCtl("test", prometheus.NewRegistry(), time.Minute, 0)
 	c := ctl.RegisterCounterVec("errors", "", "level")
 
 	now := time.Now().UnixNano()
@@ -53,7 +53,7 @@ func TestUnsafeStringInMetric(t *testing.T) {
 	bytes := []byte("hello world")
 	unsafeString := unsafe.String(unsafe.SliceData(bytes), len(bytes))
 
-	store := newHeldMetricsStore[prometheus.Counter]()
+	store := newHeldMetricsStore[prometheus.Counter](0)
 
 	labels := []string{unsafeString}
 	m := store.GetOrCreate([]string{unsafeString}, func(s ...string) prometheus.Counter {
@@ -64,6 +64,21 @@ func TestUnsafeStringInMetric(t *testing.T) {
 	labels[0] = "new"
 
 	r.Equal([]string{"hello world"}, m.labels)
+}
+
+func TestLabelTruncation(t *testing.T) {
+	r := require.New(t)
+
+	maxLabelValueLength := 10
+	label := "some_long_label_value"
+	ctl := NewCtl("test", prometheus.NewRegistry(), time.Minute, maxLabelValueLength)
+	c := ctl.RegisterCounterVec("errors", "", "level")
+
+	c.WithLabelValues(label).Inc()
+	r.Equal(float64(1), c.WithLabelValues("some_long_").ToFloat64())
+
+	c.DeleteLabelValues(label)
+	r.Equal(float64(0), c.WithLabelValues("some_long_").ToFloat64())
 }
 
 var holderBenchCases = []struct {
@@ -98,7 +113,7 @@ var holderBenchCases = []struct {
 
 func BenchmarkMetricHolder(b *testing.B) {
 	for _, benchCase := range holderBenchCases {
-		ctl := NewCtl("test", prometheus.NewRegistry(), time.Minute)
+		ctl := NewCtl("test", prometheus.NewRegistry(), time.Minute, 0)
 
 		counter := ctl.RegisterCounterVec("test_name", "", benchCase.Labels...)
 		ctl.AddToHolder(counter)
@@ -117,7 +132,7 @@ func BenchmarkMetricHolder(b *testing.B) {
 
 func BenchmarkPromVec(b *testing.B) {
 	for _, benchCase := range holderBenchCases {
-		ctl := NewCtl("test", prometheus.NewRegistry(), time.Minute)
+		ctl := NewCtl("test", prometheus.NewRegistry(), time.Minute, 0)
 		counter := ctl.RegisterCounterVec("test_name", "", benchCase.Labels...)
 		name := strings.Join(benchCase.Labels, "_")
 

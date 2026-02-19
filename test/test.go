@@ -124,7 +124,10 @@ func NewPipeline(actions []*pipeline.ActionPluginStaticInfo, pipelineOpts ...str
 		MetaCacheSize:       32,
 		StreamField:         "stream",
 		Decoder:             "json",
-		MetricHoldDuration:  pipeline.DefaultMetricHoldDuration,
+		Metric: &pipeline.MetricSettings{
+			HoldDuration:        pipeline.DefaultMetricHoldDuration,
+			MaxLabelValueLength: pipeline.DefaultMetricMaxLabelValueLength,
+		},
 	}
 
 	if lowMem {
@@ -235,7 +238,7 @@ func newDefaultParams() pipeline.PluginDefaultParams {
 	return pipeline.PluginDefaultParams{
 		PipelineName:     "test_pipeline",
 		PipelineSettings: &pipeline.Settings{},
-		MetricCtl:        metric.NewCtl("test", prometheus.NewRegistry(), time.Minute),
+		MetricCtl:        metric.NewCtl("test", prometheus.NewRegistry(), time.Minute, 0),
 	}
 }
 

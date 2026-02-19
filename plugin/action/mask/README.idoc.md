@@ -1,4 +1,4 @@
-# Keep fields plugin
+# Mask plugin
 @introduction
 
 ### Config params
