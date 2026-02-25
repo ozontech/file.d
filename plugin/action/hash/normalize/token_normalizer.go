@@ -29,11 +29,11 @@ const (
 	pUrl
 	pHost
 	pUuid
-	pSha1
-	pMd5
+	pHash
 	pDatetime
 	pIp
 	pDuration
+	pFilepath
 	pHex
 	pFloat
 	pInt
@@ -54,11 +54,11 @@ var patternById = map[string]int{
 	"url":              pUrl,
 	"host":             pHost,
 	"uuid":             pUuid,
-	"sha1":             pSha1,
-	"md5":              pMd5,
+	"hash":             pHash,
 	"datetime":         pDatetime,
 	"ip":               pIp,
 	"duration":         pDuration,
+	"filepath":         pFilepath,
 	"hex":              pHex,
 	"float":            pFloat,
 	"int":              pInt,
@@ -76,11 +76,11 @@ var placeholderByPattern = map[int]string{
 	pUrl:             "<url>",
 	pHost:            "<host>",
 	pUuid:            "<uuid>",
-	pSha1:            "<sha1>",
-	pMd5:             "<md5>",
+	pHash:            "<hash>",
 	pDatetime:        "<datetime>",
 	pIp:              "<ip>",
 	pDuration:        "<duration>",
+	pFilepath:        "<filepath>",
 	pHex:             "<hex>",
 	pFloat:           "<float>",
 	pInt:             "<int>",
@@ -495,21 +495,21 @@ var builtinTokenPatterns = []TokenPattern{
 		mask: pUuid,
 	},
 	{
-		Placeholder: placeholderByPattern[pSha1],
-		RE:          strings.Repeat(`[0-9a-fA-F]`, 40),
+		// pSha256, pSha1, Md5
+		Placeholder: placeholderByPattern[pHash],
+		RE: fmt.Sprintf("(%s)|(%s)|(%s)",
+			strings.Repeat("[0-9a-fA-F]", 64),
+			strings.Repeat(`[0-9a-fA-F]`, 40),
+			strings.Repeat(`[0-9a-fA-F]`, 32),
+		),
 
-		mask: pSha1,
-	},
-	{
-		Placeholder: placeholderByPattern[pMd5],
-		RE:          strings.Repeat(`[0-9a-fA-F]`, 32),
-
-		mask: pMd5,
+		mask: pHash,
 	},
 	{
 		// RFC3339, RFC3339Nano, DateTime, DateOnly, TimeOnly
 		Placeholder: placeholderByPattern[pDatetime],
-		RE: fmt.Sprintf(`(%s)|(%s)|(%s)`,
+		RE: fmt.Sprintf(`(%s)|(%s)|(%s)|(%s)`,
+			`\d\d\d\d-\d\d-\d\d \d\d:\d\d:\d\d\.\d+ \+\d\d\d\d UTC m=\+\d+\.\d+`,
 			`\d\d\d\d-\d\d-\d\dT\d\d:\d\d:\d\d(\.\d+)?(Z|[\+\-]\d\d:\d\d)`,
 			`\d\d:\d\d:\d\d`,
 			`\d\d\d\d-\d\d-\d\d( \d\d:\d\d:\d\d)?`,
@@ -529,6 +529,11 @@ var builtinTokenPatterns = []TokenPattern{
 		RE:          `-?((\d+|\d+\.\d+)(ns|us|µs|ms|s|m|h|d|w))+`,
 
 		mask: pDuration,
+	},
+	{
+		Placeholder: placeholderByPattern[pFilepath],
+		RE:          `(/[a-zA-Z0-9-]+)+`,
+		mask:        pFilepath,
 	},
 	{
 		Placeholder: placeholderByPattern[pHex],
