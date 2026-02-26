@@ -24,9 +24,12 @@ func (p *TestInputPlugin) PassEvent(_ *Event) bool {
 
 func TestPipelineStreamEvent(t *testing.T) {
 	settings := &Settings{
-		Capacity:           5,
-		Decoder:            "json",
-		MetricHoldDuration: DefaultMetricHoldDuration,
+		Capacity: 5,
+		Decoder:  "json",
+		Metric: &MetricSettings{
+			HoldDuration:        DefaultMetricHoldDuration,
+			MaxLabelValueLength: DefaultMetricMaxLabelValueLength,
+		},
 	}
 	p := New("test", settings, prometheus.NewRegistry(), zap.NewNop())
 
@@ -63,9 +66,12 @@ func TestCheckInputBytes(t *testing.T) {
 		{
 			name: "empty_input",
 			pipelineSettings: &Settings{
-				Capacity:           5,
-				Decoder:            "raw",
-				MetricHoldDuration: DefaultMetricHoldDuration,
+				Capacity: 5,
+				Decoder:  "raw",
+				Metric: &MetricSettings{
+					HoldDuration:        DefaultMetricHoldDuration,
+					MaxLabelValueLength: DefaultMetricMaxLabelValueLength,
+				},
 			},
 			input:  []byte(""),
 			wantOk: false,
@@ -73,9 +79,12 @@ func TestCheckInputBytes(t *testing.T) {
 		{
 			name: "only_newline",
 			pipelineSettings: &Settings{
-				Capacity:           5,
-				Decoder:            "raw",
-				MetricHoldDuration: DefaultMetricHoldDuration,
+				Capacity: 5,
+				Decoder:  "raw",
+				Metric: &MetricSettings{
+					HoldDuration:        DefaultMetricHoldDuration,
+					MaxLabelValueLength: DefaultMetricMaxLabelValueLength,
+				},
 			},
 			input:  []byte("\n"),
 			wantOk: false,
@@ -83,10 +92,13 @@ func TestCheckInputBytes(t *testing.T) {
 		{
 			name: "too_long_input",
 			pipelineSettings: &Settings{
-				Capacity:           5,
-				Decoder:            "raw",
-				MaxEventSize:       1,
-				MetricHoldDuration: DefaultMetricHoldDuration,
+				Capacity:     5,
+				Decoder:      "raw",
+				MaxEventSize: 1,
+				Metric: &MetricSettings{
+					HoldDuration:        DefaultMetricHoldDuration,
+					MaxLabelValueLength: DefaultMetricMaxLabelValueLength,
+				},
 			},
 			input:  []byte("i'm longer than 1 byte"),
 			wantOk: false,
@@ -94,9 +106,12 @@ func TestCheckInputBytes(t *testing.T) {
 		{
 			name: "no_cutoff",
 			pipelineSettings: &Settings{
-				Capacity:           5,
-				Decoder:            "raw",
-				MetricHoldDuration: DefaultMetricHoldDuration,
+				Capacity: 5,
+				Decoder:  "raw",
+				Metric: &MetricSettings{
+					HoldDuration:        DefaultMetricHoldDuration,
+					MaxLabelValueLength: DefaultMetricMaxLabelValueLength,
+				},
 				MaxEventSize:       20,
 				CutOffEventByLimit: true,
 			},
@@ -107,9 +122,12 @@ func TestCheckInputBytes(t *testing.T) {
 		{
 			name: "cutoff_no_newline",
 			pipelineSettings: &Settings{
-				Capacity:           5,
-				Decoder:            "raw",
-				MetricHoldDuration: DefaultMetricHoldDuration,
+				Capacity: 5,
+				Decoder:  "raw",
+				Metric: &MetricSettings{
+					HoldDuration:        DefaultMetricHoldDuration,
+					MaxLabelValueLength: DefaultMetricMaxLabelValueLength,
+				},
 				MaxEventSize:       10,
 				CutOffEventByLimit: true,
 			},
@@ -121,9 +139,12 @@ func TestCheckInputBytes(t *testing.T) {
 		{
 			name: "cutoff_newline",
 			pipelineSettings: &Settings{
-				Capacity:           5,
-				Decoder:            "raw",
-				MetricHoldDuration: DefaultMetricHoldDuration,
+				Capacity: 5,
+				Decoder:  "raw",
+				Metric: &MetricSettings{
+					HoldDuration:        DefaultMetricHoldDuration,
+					MaxLabelValueLength: DefaultMetricMaxLabelValueLength,
+				},
 				MaxEventSize:       10,
 				CutOffEventByLimit: true,
 			},
@@ -161,10 +182,13 @@ func TestCheckInputBytesMetric(t *testing.T) {
 		{
 			name: "from_source1",
 			pipelineSettings: &Settings{
-				Capacity:           5,
-				Decoder:            "raw",
-				MetricHoldDuration: DefaultMetricHoldDuration,
-				MaxEventSize:       1,
+				Capacity:     5,
+				Decoder:      "raw",
+				MaxEventSize: 1,
+				Metric: &MetricSettings{
+					HoldDuration:        DefaultMetricHoldDuration,
+					MaxLabelValueLength: DefaultMetricMaxLabelValueLength,
+				},
 			},
 			sourceName: "test-source",
 			meta: metadata.MetaData{
@@ -180,9 +204,12 @@ func TestCheckInputBytesMetric(t *testing.T) {
 			pipelineSettings: &Settings{
 				Capacity:            5,
 				Decoder:             "raw",
-				MetricHoldDuration:  DefaultMetricHoldDuration,
 				MaxEventSize:        1,
 				SourceNameMetaField: "test",
+				Metric: &MetricSettings{
+					HoldDuration:        DefaultMetricHoldDuration,
+					MaxLabelValueLength: DefaultMetricMaxLabelValueLength,
+				},
 			},
 			sourceName: "test-source",
 			meta: metadata.MetaData{
@@ -198,9 +225,12 @@ func TestCheckInputBytesMetric(t *testing.T) {
 			pipelineSettings: &Settings{
 				Capacity:            5,
 				Decoder:             "raw",
-				MetricHoldDuration:  DefaultMetricHoldDuration,
 				MaxEventSize:        1,
 				SourceNameMetaField: "test",
+				Metric: &MetricSettings{
+					HoldDuration:        DefaultMetricHoldDuration,
+					MaxLabelValueLength: DefaultMetricMaxLabelValueLength,
+				},
 			},
 			sourceName: "test-source",
 			meta: metadata.MetaData{
@@ -236,8 +266,11 @@ func TestSuggestDecoder(t *testing.T) {
 		{
 			name: "first non-no suggestion wins when decoder is auto",
 			settings: &Settings{
-				Decoder:            "auto",
-				MetricHoldDuration: DefaultMetricHoldDuration,
+				Decoder: "auto",
+				Metric: &MetricSettings{
+					HoldDuration:        DefaultMetricHoldDuration,
+					MaxLabelValueLength: DefaultMetricMaxLabelValueLength,
+				},
 			},
 			suggestType:  decoder.CRI,
 			expectedType: decoder.CRI,
@@ -245,8 +278,11 @@ func TestSuggestDecoder(t *testing.T) {
 		{
 			name: "suggestion ignored when decoder is not auto",
 			settings: &Settings{
-				Decoder:            "json",
-				MetricHoldDuration: DefaultMetricHoldDuration,
+				Decoder: "json",
+				Metric: &MetricSettings{
+					HoldDuration:        DefaultMetricHoldDuration,
+					MaxLabelValueLength: DefaultMetricMaxLabelValueLength,
+				},
 			},
 			suggestType:  decoder.CRI,
 			expectedType: decoder.JSON,
