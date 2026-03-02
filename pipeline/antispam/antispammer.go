@@ -23,6 +23,7 @@ type Antispammer struct {
 	mu                  sync.RWMutex
 	sources             map[string]source
 	exceptions          Exceptions
+	rules               Rules
 
 	logger *zap.Logger
 
@@ -43,6 +44,7 @@ type Options struct {
 	Threshold           int
 	UnbanIterations     int
 	Exceptions          Exceptions
+	Rules               Rules
 
 	Logger            *zap.Logger
 	MetricsController *metric.Ctl
@@ -61,6 +63,7 @@ func NewAntispammer(o *Options) *Antispammer {
 		maintenanceInterval: o.MaintenanceInterval,
 		sources:             make(map[string]source),
 		exceptions:          o.Exceptions,
+		rules:               o.Rules,
 		logger:              o.Logger,
 		activeMetric: o.MetricsController.RegisterGauge("antispam_active",
 			"Gauge indicates whether the antispam is enabled",

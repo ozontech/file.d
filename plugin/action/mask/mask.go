@@ -7,6 +7,7 @@ import (
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/pipeline/doif"
 	insaneJSON "github.com/ozontech/insane-json"
 	"go.uber.org/zap"
 )
@@ -268,7 +269,7 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	if p.hasMaskSpecificDoIf {
 		for i := range p.config.Masks {
 			if p.config.Masks[i].DoIfChecker != nil {
-				p.config.Masks[i].use = p.config.Masks[i].DoIfChecker.Check(event.Root)
+				p.config.Masks[i].use = p.config.Masks[i].DoIfChecker.Check(doif.NewRootData(event.Root))
 			}
 		}
 	}

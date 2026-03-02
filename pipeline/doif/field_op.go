@@ -284,15 +284,34 @@ func (n *fieldOpNode) Type() NodeType {
 	return NodeFieldOp
 }
 
-func (n *fieldOpNode) Check(eventRoot *insaneJSON.Root) bool {
+// event
+// source_name
+// meta.podName -> [meta, podName]
+
+type RootData struct {
+	root *insaneJSON.Root
+}
+
+func NewRootData(root *insaneJSON.Root) *RootData {
+	return &RootData{
+		root: root,
+	}
+}
+
+func (d *RootData) Get(path ...string) []byte {
 	var data []byte
-	node := eventRoot.Dig(n.fieldPath...)
+	node := d.root.Dig(path...)
 	if node.IsArray() || node.IsObject() {
-		return false
+		return nil
 	}
 	if !node.IsNull() {
 		data = node.AsBytes()
 	}
+	return data
+}
+
+func (n *fieldOpNode) Check(eventData Data) bool {
+	data := eventData.Get(n.fieldPath...)
 	// fast check for data
 	if n.op != fieldRegexOp && len(data) < n.minValLen {
 		return false
@@ -372,7 +391,7 @@ func (n *fieldOpNode) isEqualTo(n2 Node, _ int) error {
 	if n.caseSensitive != n2f.caseSensitive {
 		return fmt.Errorf("nodes have different caseSensitive expected: %v", n.caseSensitive)
 	}
-	if n.fieldPathStr != n2f.fieldPathStr || slices.Compare[[]string](n.fieldPath, n2f.fieldPath) != 0 {
+	if n.fieldPathStr != n2f.fieldPathStr || slices.Compare(n.fieldPath, n2f.fieldPath) != 0 {
 		return fmt.Errorf("nodes have different fieldPathStr expected: fieldPathStr=%q fieldPath=%v",
 			n.fieldPathStr, n.fieldPath,
 		)

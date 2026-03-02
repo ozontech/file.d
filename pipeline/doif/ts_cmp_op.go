@@ -9,7 +9,6 @@ import (
 
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/xtime"
-	insaneJSON "github.com/ozontech/insane-json"
 )
 
 /*{ do-if-ts-cmp-op-node
@@ -137,17 +136,21 @@ func (n *tsCmpOpNode) Type() NodeType {
 	return NodeTimestampCmpOp
 }
 
-func (n *tsCmpOpNode) Check(eventRoot *insaneJSON.Root) bool {
-	node := eventRoot.Dig(n.fieldPath...)
-	if node == nil {
+func (n *tsCmpOpNode) Check(eventData Data) bool {
+	rootData, ok := eventData.(*RootData)
+	if !ok {
 		return false
 	}
 
-	if !node.IsString() {
+	if rootData.root == nil {
 		return false
 	}
 
-	timeVal, err := xtime.ParseTime(n.format, node.AsString())
+	if !rootData.root.IsString() {
+		return false
+	}
+
+	timeVal, err := xtime.ParseTime(n.format, rootData.root.AsString())
 	if err != nil {
 		return false
 	}
