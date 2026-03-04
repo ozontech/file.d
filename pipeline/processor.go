@@ -4,6 +4,7 @@ import (
 	"errors"
 
 	"github.com/ozontech/file.d/logger"
+	"github.com/ozontech/file.d/pipeline/doif"
 	insaneJSON "github.com/ozontech/insane-json"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
@@ -331,7 +332,7 @@ func (p *processor) isMatch(index int, event *Event) bool {
 	info := p.actionInfos[index]
 
 	if info.DoIfChecker != nil {
-		return info.DoIfChecker.Check(event.Root)
+		return info.DoIfChecker.Check(doif.NewRootData(event.Root))
 	}
 
 	conds := info.MatchConditions

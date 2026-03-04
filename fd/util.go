@@ -18,6 +18,7 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 	capacity := pipeline.DefaultCapacity
 	antispamThreshold := pipeline.DefaultAntispamThreshold
 	var antispamExceptions antispam.Exceptions
+	var antispamRules antispam.Rules
 	sourceNameMetaField := pipeline.DefaultSourceNameMetaField
 	avgInputEventSize := pipeline.DefaultAvgInputEventSize
 	maxInputEventSize := pipeline.DefaultMaxInputEventSize
@@ -103,6 +104,11 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 		}
 		antispamExceptions.Prepare()
 
+		antispamRules, err = extractAntispamRules(settings)
+		if err != nil {
+			logger.Fatalf("extract antispam rules: %s", err)
+		}
+
 		sourceNameMetaField = settings.Get("source_name_meta_field").MustString()
 		isStrict = settings.Get("is_strict").MustBool()
 
@@ -141,6 +147,7 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 		CutOffEventByLimitField: cutOffEventByLimitField,
 		AntispamThreshold:       antispamThreshold,
 		AntispamExceptions:      antispamExceptions,
+		AntispamRules:           antispamRules,
 		SourceNameMetaField:     sourceNameMetaField,
 		MaintenanceInterval:     maintenanceInterval,
 		EventTimeout:            eventTimeout,
@@ -169,6 +176,42 @@ func extractAntispamExceptions(settings *simplejson.Json) (antispam.Exceptions, 
 	}
 
 	return exceptions, nil
+}
+
+func extractAntispamRules(settings *simplejson.Json) (antispam.Rules, error) {
+	rulesJSON := settings.Get("rules")
+	rulesRaw := rulesJSON.MustArray()
+	if len(rulesRaw) == 0 {
+		return nil, nil
+	}
+
+	rules := make(antispam.Rules, 0, len(rulesRaw))
+	for i := range rulesRaw {
+		ruleJSON := rulesJSON.GetIndex(i)
+
+		name := ruleJSON.Get("name").MustString()
+		if name == "" {
+			return nil, fmt.Errorf("name must be set")
+		}
+
+		threshold := ruleJSON.Get("threshold").MustInt()
+		if threshold < -1 {
+			return nil, fmt.Errorf("invalid threshold, must be >= -1")
+		}
+
+		doIfChecker, err := extractDoIfChecker(ruleJSON.Get("do_if"))
+		if err != nil {
+			return nil, err
+		}
+
+		rules[i] = antispam.Rule{
+			Name:        name,
+			Threshold:   threshold,
+			DoIfChecker: doIfChecker,
+		}
+	}
+
+	return rules, nil
 }
 
 func extractMatchMode(actionJSON *simplejson.Json) pipeline.MatchMode {

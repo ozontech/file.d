@@ -3,8 +3,6 @@ package doif
 import (
 	"errors"
 	"fmt"
-
-	insaneJSON "github.com/ozontech/insane-json"
 )
 
 // ! do-if-logical-op
@@ -179,7 +177,7 @@ func (n *logicalNode) Type() NodeType {
 	return NodeLogicalOp
 }
 
-func (n *logicalNode) Check(eventRoot *insaneJSON.Root) bool {
+func (n *logicalNode) Check(eventRoot Data) bool {
 	switch n.op {
 	case logicalOr:
 		for _, op := range n.operands {
