@@ -284,10 +284,6 @@ func (n *fieldOpNode) Type() NodeType {
 	return NodeFieldOp
 }
 
-// event
-// source_name
-// meta.podName -> [meta, podName]
-
 type RootData struct {
 	root *insaneJSON.Root
 }

@@ -10,31 +10,28 @@ type Rule struct {
 
 type Rules []Rule
 
-type getAntispamData struct {
+type antispamData struct {
 	eventBytes []byte
 	sourceName string
 	meta       map[string]string
 }
 
-func (g *getAntispamData) GetData(args ...string) []byte {
+func (d *antispamData) Get(args ...string) []byte {
 	if len(args) == 0 {
-		panic("wrong usage")
+		return nil
 	}
 	switch args[0] {
 	case "event":
-		return g.eventBytes
+		return d.eventBytes
 	case "source":
-		return []byte(g.sourceName)
+		return []byte(d.sourceName)
 	case "meta":
 		if len(args) != 2 {
-			panic("wrong usage")
+			return nil
 		}
-		if v, ok := g.meta[args[1]]; ok {
+		if v, ok := d.meta[args[1]]; ok {
 			return []byte(v)
-		} else {
-			panic("wrong")
 		}
-	default:
-		panic("wrong")
 	}
+	return nil
 }

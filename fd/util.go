@@ -166,11 +166,15 @@ func extractAntispamExceptions(settings *simplejson.Json) (antispam.Exceptions, 
 func extractAntispamRules(settings *simplejson.Json) (antispam.Rules, error) {
 	rulesJSON := settings.Get("rules")
 	rulesRaw := rulesJSON.MustArray()
+	if len(rulesRaw) == 0 {
+		return nil, nil
+	}
+
 	rules := make(antispam.Rules, 0, len(rulesRaw))
 	for i := range rulesRaw {
 		ruleJSON := rulesJSON.GetIndex(i)
 
-		name := settings.Get("name").MustString()
+		name := ruleJSON.Get("name").MustString()
 		if name == "" {
 			return nil, fmt.Errorf("name must be set")
 		}

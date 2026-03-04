@@ -33,7 +33,7 @@ func TestAntispam(t *testing.T) {
 	startTime := time.Now()
 	checkSpam := func(i int) bool {
 		eventTime := startTime.Add(time.Duration(i) * maintenanceInterval / 2)
-		return antispamer.IsSpam("1", "test", false, []byte(`{}`), eventTime)
+		return antispamer.IsSpam("1", "test", false, []byte(`{}`), eventTime, nil)
 	}
 
 	for i := 1; i < threshold; i++ {
@@ -63,7 +63,7 @@ func TestAntispamAfterRestart(t *testing.T) {
 	startTime := time.Now()
 	checkSpam := func(i int) bool {
 		eventTime := startTime.Add(time.Duration(i) * maintenanceInterval)
-		return antispamer.IsSpam("1", "test", false, []byte(`{}`), eventTime)
+		return antispamer.IsSpam("1", "test", false, []byte(`{}`), eventTime, nil)
 	}
 
 	for i := 1; i < threshold; i++ {
@@ -125,7 +125,7 @@ func TestAntispamExceptions(t *testing.T) {
 	antispamer.exceptions.Prepare()
 
 	checkSpam := func(source, event string, wantMetric map[string]float64) {
-		antispamer.IsSpam("1", source, true, []byte(event), now)
+		antispamer.IsSpam("1", source, true, []byte(event), now, nil)
 		for k, v := range wantMetric {
 			r.Equal(v, antispamer.exceptionMetric.WithLabelValues(k).ToFloat64())
 		}
