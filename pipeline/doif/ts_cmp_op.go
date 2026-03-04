@@ -137,20 +137,21 @@ func (n *tsCmpOpNode) Type() NodeType {
 }
 
 func (n *tsCmpOpNode) Check(eventData Data) bool {
-	rootData, ok := eventData.(*RootData)
+	rootData, ok := eventData.(rootData)
 	if !ok {
 		return false
 	}
 
-	if rootData.root == nil {
+	node := rootData.root.Dig(n.fieldPath...)
+	if node == nil {
 		return false
 	}
 
-	if !rootData.root.IsString() {
+	if !node.IsString() {
 		return false
 	}
 
-	timeVal, err := xtime.ParseTime(n.format, rootData.root.AsString())
+	timeVal, err := xtime.ParseTime(n.format, node.AsString())
 	if err != nil {
 		return false
 	}

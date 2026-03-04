@@ -1117,7 +1117,7 @@ func TestCheck(t *testing.T) {
 					eventRoot, err = insaneJSON.DecodeString(d.eventStr)
 					require.NoError(t, err)
 				}
-				got := checker.Check(&RootData{eventRoot})
+				got := checker.Check(rootData{eventRoot})
 				assert.Equal(t, d.want, got, "invalid result for event %q", d.eventStr)
 			}
 		})
@@ -1185,7 +1185,7 @@ func TestCheckLenCmpLtObject(t *testing.T) {
 		require.NoError(t, err)
 
 		checker := newChecker(root)
-		result := checker.Check(&RootData{eventRoot})
+		result := checker.Check(rootData{eventRoot})
 		require.Equal(t, test.result, result, "invalid result; test id: %d", index)
 	}
 
@@ -1202,7 +1202,7 @@ func TestCheckLenCmpLtObject(t *testing.T) {
 		require.NoError(t, err)
 
 		checker := newChecker(root)
-		result := checker.Check(&RootData{eventRoot})
+		result := checker.Check(rootData{eventRoot})
 		require.Equal(t, test.result, result, "invalid result (empty selector); test id: %d", index)
 	}
 }
@@ -1235,13 +1235,13 @@ func TestCheckTsCmpValChangeModeNow(t *testing.T) {
 	eventRoot2, err := timeToJSON(ts2)
 	require.NoError(t, err)
 
-	require.True(t, checker.Check(&RootData{eventRoot1}))
-	require.False(t, checker.Check(&RootData{eventRoot2}))
+	require.True(t, checker.Check(rootData{eventRoot1}))
+	require.False(t, checker.Check(rootData{eventRoot2}))
 
 	time.Sleep(4 * dt)
 
-	require.True(t, checker.Check(&RootData{eventRoot1}))
-	require.True(t, checker.Check(&RootData{eventRoot2}))
+	require.True(t, checker.Check(rootData{eventRoot1}))
+	require.True(t, checker.Check(rootData{eventRoot2}))
 }
 
 func TestNodeIsEqual(t *testing.T) {

@@ -155,7 +155,7 @@ func (n *checkTypeOpNode) Type() NodeType {
 }
 
 func (n *checkTypeOpNode) Check(eventData Data) bool {
-	rootData, ok := eventData.(*RootData)
+	rootData, ok := eventData.(rootData)
 	if !ok {
 		return false
 	}

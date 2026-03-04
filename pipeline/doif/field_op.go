@@ -284,21 +284,24 @@ func (n *fieldOpNode) Type() NodeType {
 	return NodeFieldOp
 }
 
-type RootData struct {
+type rootData struct {
 	root *insaneJSON.Root
 }
 
-func NewRootData(root *insaneJSON.Root) *RootData {
-	return &RootData{
+func NewRootData(root *insaneJSON.Root) rootData {
+	return rootData{
 		root: root,
 	}
 }
 
-func (d *RootData) Get(path ...string) []byte {
+func (d rootData) Get(path ...string) []byte {
 	var data []byte
+	if d.root == nil {
+		return nil
+	}
 	node := d.root.Dig(path...)
 	if node.IsArray() || node.IsObject() {
-		return nil
+		return make([]byte, 1)
 	}
 	if !node.IsNull() {
 		data = node.AsBytes()

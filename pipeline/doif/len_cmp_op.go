@@ -180,7 +180,7 @@ func getNodeBytesSize(node *insaneJSON.Node) int {
 
 func (n *lenCmpOpNode) Check(eventData Data) bool {
 	value := 0
-	rootData, ok := eventData.(*RootData)
+	rootData, ok := eventData.(rootData)
 	if !ok {
 		return false
 	}
