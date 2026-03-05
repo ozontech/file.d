@@ -49,12 +49,13 @@ type Config struct {
 }
 
 type Metric struct {
-	Name   string            `json:"name"`
-	Type   string            `json:"type"`
-	Value  string            `json:"value"`
-	Labels map[string]string `json:"labels"`
-	TTL    cfg.Duration      `json:"ttl" parse:"duration"` // *
-	TTL_   time.Duration
+	Name        string              `json:"name"`
+	Type        string              `json:"type"`
+	Value       []cfg.FieldSelector `json:"value"`
+	valueFields []string
+	Labels      map[string]string `json:"labels"`
+	TTL         cfg.Duration      `json:"ttl" parse:"duration"` // *
+	TTL_        time.Duration
 
 	DoIfCheckerMap map[string]any `json:"do_if"`
 	DoIfChecker    *doif.Checker
@@ -99,6 +100,16 @@ func prepareCheckersForMetrics(metrics []Metric, logger *zap.Logger) []Metric {
 		} else {
 			m.use = true
 		}
+
+		fields := make([]string, 0, len(m.Value))
+		for _, fs := range m.Value {
+			if fs == "" {
+				continue
+			}
+			parsed := cfg.ParseFieldSelector(string(fs))
+			fields = append(fields, parsed...)
+		}
+		m.valueFields = fields
 	}
 
 	return metrics
@@ -159,7 +170,7 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 		if len(metric.Value) == 0 {
 			object.AddField("value").MutateToInt(1)
 		} else {
-			valueNode := event.Root.Dig(metric.Value).AsFloat()
+			valueNode := event.Root.Dig(metric.valueFields...).AsFloat()
 			object.AddField("value").MutateToFloat(valueNode)
 		}
 

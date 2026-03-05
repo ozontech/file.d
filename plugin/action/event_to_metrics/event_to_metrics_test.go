@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/test"
 	"github.com/stretchr/testify/assert"
@@ -25,14 +26,19 @@ func TestEventToMetrics(t *testing.T) {
 					"host":   "host",
 				},
 			},
-			// Metric{
-			// 	Name:  "response_time",
-			// 	Value: "response_time",
-			// 	Type:  "gauge",
-			// 	Labels: map[string]string{
-			// 		"zone": "info.zone",
-			// 	},
-			// },
+			Metric{
+				Name:  "checkout_response_time",
+				Value: []cfg.FieldSelector{"info", "response_time"},
+				Type:  "gauge",
+				Labels: map[string]string{
+					"zone": "info.zone",
+				},
+				DoIfCheckerMap: map[string]any{
+					"op":     "equal",
+					"field":  "info.zone",
+					"values": []any{"checkout"},
+				},
+			},
 		},
 	}
 
@@ -60,10 +66,10 @@ func TestEventToMetrics(t *testing.T) {
 			assert.Equal(t, "counter", metricType)
 			assert.Equal(t, (1 * time.Hour).Milliseconds(), ttl)
 			assert.Equal(t, float64(1), value)
-		} else if metricName == "response_time" {
+		} else if metricName == "checkout_response_time" {
 			assert.Equal(t, "gauge", metricType)
 			assert.Equal(t, int64(0), ttl)
-			// assert.Equal(t, float64(0.1), value)
+			assert.Equal(t, float64(0.1), value)
 		} else {
 			fmt.Println("unkown metric name", metricName)
 			return
