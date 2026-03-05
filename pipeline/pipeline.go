@@ -24,7 +24,7 @@ import (
 )
 
 const (
-	DefaultAntispamThreshold       = 0
+	DefaultAntispamThreshold       = -1
 	DefaultSourceNameMetaField     = ""
 	DefaultDecoder                 = "auto"
 	DefaultIsStrict                = false

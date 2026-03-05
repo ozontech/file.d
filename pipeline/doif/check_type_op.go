@@ -154,12 +154,12 @@ func (n *checkTypeOpNode) Type() NodeType {
 	return NodeCheckTypeOp
 }
 
-func (n *checkTypeOpNode) Check(eventData Data) bool {
-	rootData, ok := eventData.(rootData)
+func (n *checkTypeOpNode) Check(data Data) bool {
+	eventData, ok := data.(rootData)
 	if !ok {
 		return false
 	}
-	node := rootData.root.Dig(n.fieldPath...)
+	node := eventData.root.Dig(n.fieldPath...)
 	for _, checkFn := range n.checkTypeFns {
 		if checkFn(node) {
 			return true

@@ -136,13 +136,13 @@ func (n *tsCmpOpNode) Type() NodeType {
 	return NodeTimestampCmpOp
 }
 
-func (n *tsCmpOpNode) Check(eventData Data) bool {
-	rootData, ok := eventData.(rootData)
+func (n *tsCmpOpNode) Check(data Data) bool {
+	eventData, ok := data.(rootData)
 	if !ok {
 		return false
 	}
 
-	node := rootData.root.Dig(n.fieldPath...)
+	node := eventData.root.Dig(n.fieldPath...)
 	if node == nil {
 		return false
 	}

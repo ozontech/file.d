@@ -309,69 +309,69 @@ func (d rootData) Get(path ...string) []byte {
 	return data
 }
 
-func (n *fieldOpNode) Check(eventData Data) bool {
-	data := eventData.Get(n.fieldPath...)
+func (n *fieldOpNode) Check(data Data) bool {
+	eventData := data.Get(n.fieldPath...)
 	// fast check for data
-	if n.op != fieldRegexOp && len(data) < n.minValLen {
+	if n.op != fieldRegexOp && len(eventData) < n.minValLen {
 		return false
 	}
 	switch n.op {
 	case fieldEqualOp:
-		vals, ok := n.valuesBySize[len(data)]
+		vals, ok := n.valuesBySize[len(eventData)]
 		if !ok {
 			return false
 		}
-		if !n.caseSensitive && data != nil {
-			data = bytes.ToLower(data)
+		if !n.caseSensitive && eventData != nil {
+			eventData = bytes.ToLower(eventData)
 		}
 		for _, val := range vals {
 			// null and empty strings are considered as different values
 			// null can also come if field value is absent
-			if (data == nil && val != nil) || (data != nil && val == nil) {
+			if (eventData == nil && val != nil) || (eventData != nil && val == nil) {
 				continue
 			}
-			if bytes.Equal(data, val) {
+			if bytes.Equal(eventData, val) {
 				return true
 			}
 		}
 	case fieldContainsOp:
 		if !n.caseSensitive {
-			data = bytes.ToLower(data)
+			eventData = bytes.ToLower(eventData)
 		}
 		for _, val := range n.values {
-			if bytes.Contains(data, val) {
+			if bytes.Contains(eventData, val) {
 				return true
 			}
 		}
 	case fieldPrefixOp:
 		// check only necessary amount of bytes
-		if len(data) > n.maxValLen {
-			data = data[:n.maxValLen]
+		if len(eventData) > n.maxValLen {
+			eventData = eventData[:n.maxValLen]
 		}
 		if !n.caseSensitive {
-			data = bytes.ToLower(data)
+			eventData = bytes.ToLower(eventData)
 		}
 		for _, val := range n.values {
-			if bytes.HasPrefix(data, val) {
+			if bytes.HasPrefix(eventData, val) {
 				return true
 			}
 		}
 	case fieldSuffixOp:
 		// check only necessary amount of bytes
-		if len(data) > n.maxValLen {
-			data = data[len(data)-n.maxValLen:]
+		if len(eventData) > n.maxValLen {
+			eventData = eventData[len(eventData)-n.maxValLen:]
 		}
 		if !n.caseSensitive {
-			data = bytes.ToLower(data)
+			eventData = bytes.ToLower(eventData)
 		}
 		for _, val := range n.values {
-			if bytes.HasSuffix(data, val) {
+			if bytes.HasSuffix(eventData, val) {
 				return true
 			}
 		}
 	case fieldRegexOp:
 		for _, re := range n.reValues {
-			if re.Match(data) {
+			if re.Match(eventData) {
 				return true
 			}
 		}

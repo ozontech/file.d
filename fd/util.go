@@ -189,6 +189,10 @@ func extractAntispamRules(settings *simplejson.Json) (antispam.Rules, error) {
 			return nil, err
 		}
 
+		if doIfChecker == nil {
+			return nil, fmt.Errorf("missing do_if section, ruleName=%s", name)
+		}
+
 		rules[i] = antispam.Rule{
 			Name:        name,
 			Threshold:   threshold,

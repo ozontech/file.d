@@ -177,24 +177,24 @@ func (n *logicalNode) Type() NodeType {
 	return NodeLogicalOp
 }
 
-func (n *logicalNode) Check(eventRoot Data) bool {
+func (n *logicalNode) Check(data Data) bool {
 	switch n.op {
 	case logicalOr:
 		for _, op := range n.operands {
-			if op.Check(eventRoot) {
+			if op.Check(data) {
 				return true
 			}
 		}
 		return false
 	case logicalAnd:
 		for _, op := range n.operands {
-			if !op.Check(eventRoot) {
+			if !op.Check(data) {
 				return false
 			}
 		}
 		return true
 	case logicalNot:
-		return !n.operands[0].Check(eventRoot)
+		return !n.operands[0].Check(data)
 	}
 	return false
 }
