@@ -17,7 +17,7 @@ func newAntispammer(threshold, unbanIterations int, maintenanceInterval time.Dur
 		Threshold:           threshold,
 		UnbanIterations:     unbanIterations,
 		Logger:              logger.Instance.Named("antispam").Desugar(),
-		MetricsController:   metric.NewCtl("test", prometheus.NewRegistry(), time.Minute),
+		MetricsController:   metric.NewCtl("test", prometheus.NewRegistry(), time.Minute, 0),
 	})
 }
 

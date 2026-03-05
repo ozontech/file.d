@@ -317,7 +317,7 @@ func Test_updateKeyLimit(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			ctl := metric.NewCtl("test", prometheus.NewRegistry(), time.Minute)
+			ctl := metric.NewCtl("test", prometheus.NewRegistry(), time.Minute, 0)
 			lim := newRedisLimiter(
 				&limiterConfig{
 					ctx:                      ctx,

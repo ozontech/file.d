@@ -41,9 +41,11 @@ func TestInInvalidMessages(t *testing.T) {
 			name:    "empty_message",
 			message: []byte(""),
 			pipelineSettings: &pipeline.Settings{
-				Capacity:           5,
-				Decoder:            "json",
-				MetricHoldDuration: pipeline.DefaultMetricHoldDuration,
+				Capacity: 5,
+				Decoder:  "json",
+				Metric: &pipeline.MetricSettings{
+					HoldDuration: pipeline.DefaultMetricHoldDuration,
+				},
 			},
 			offset:   int64(666),
 			sourceID: pipeline.SourceID(1<<16 + int(1)),
@@ -52,10 +54,12 @@ func TestInInvalidMessages(t *testing.T) {
 			name:    "too_long_message",
 			message: []byte("{\"value\":\"i'm longer than 1 byte\""),
 			pipelineSettings: &pipeline.Settings{
-				Capacity:           5,
-				Decoder:            "json",
-				MaxEventSize:       1,
-				MetricHoldDuration: pipeline.DefaultMetricHoldDuration,
+				Capacity:     5,
+				Decoder:      "json",
+				MaxEventSize: 1,
+				Metric: &pipeline.MetricSettings{
+					HoldDuration: pipeline.DefaultMetricHoldDuration,
+				},
 			},
 			offset:   int64(666),
 			sourceID: pipeline.SourceID(2<<16 + int(3)),
@@ -76,9 +80,11 @@ func TestInInvalidMessages(t *testing.T) {
 
 func BenchmarkMetaTemplater(b *testing.B) {
 	pipelineSettings := &pipeline.Settings{
-		Capacity:           b.N,
-		Decoder:            "cri",
-		MetricHoldDuration: pipeline.DefaultMetricHoldDuration,
+		Capacity: b.N,
+		Decoder:  "cri",
+		Metric: &pipeline.MetricSettings{
+			HoldDuration: pipeline.DefaultMetricHoldDuration,
+		},
 	}
 
 	pipe := pipeline.New("test_pipeline", pipelineSettings, prometheus.NewRegistry(), zap.NewNop())
