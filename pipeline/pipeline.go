@@ -149,9 +149,7 @@ type Settings struct {
 	MetaCacheSize           int
 	MaintenanceInterval     time.Duration
 	EventTimeout            time.Duration
-	AntispamThreshold       int
-	AntispamExceptions      antispam.Exceptions
-	AntispamRules           antispam.Rules
+	Antispam                AntispamSettings
 	SourceNameMetaField     string
 	AvgEventSize            int
 	MaxEventSize            int
@@ -166,6 +164,13 @@ type Settings struct {
 type MetricSettings struct {
 	HoldDuration        time.Duration
 	MaxLabelValueLength int
+}
+
+type AntispamSettings struct {
+	Threshold           int
+	Rules               antispam.Rules
+	Exceptions          antispam.Exceptions
+	MaintenanceInterval time.Duration
 }
 
 type PoolType string
@@ -208,13 +213,13 @@ func New(name string, settings *Settings, registry *prometheus.Registry, lg *zap
 		streamer:  newStreamer(settings.EventTimeout),
 		eventPool: eventPool,
 		antispamer: antispam.NewAntispammer(&antispam.Options{
-			MaintenanceInterval: settings.MaintenanceInterval,
-			Threshold:           settings.AntispamThreshold,
+			Threshold:           settings.Antispam.Threshold,
+			MaintenanceInterval: settings.Antispam.MaintenanceInterval,
 			UnbanIterations:     antispamUnbanIterations,
 			Logger:              lg.Named("antispam"),
 			MetricsController:   metricCtl,
-			Exceptions:          settings.AntispamExceptions,
-			Rules:               settings.AntispamRules,
+			Rules:               settings.Antispam.Rules,
+			Exceptions:          settings.Antispam.Exceptions,
 		}),
 		metricCtl: metricCtl,
 
@@ -433,7 +438,7 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offsets Offsets, byt
 	// The event is Partial if it is larger than the driver configuration.
 	// For example, for containerd this setting is called max_container_log_line_size
 	// https://github.com/containerd/containerd/blob/f7f2be732159a411eae46b78bfdb479b133a823b/pkg/cri/config/config.go#L263-L266
-	if !row.IsPartial && p.settings.AntispamThreshold > 0 {
+	if !row.IsPartial && p.settings.Antispam.Threshold > 0 {
 		streamOffset := offsets.ByStream(string(row.Stream))
 		currentOffset := offsets.current
 

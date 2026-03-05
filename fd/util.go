@@ -16,9 +16,6 @@ import (
 
 func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 	capacity := pipeline.DefaultCapacity
-	antispamThreshold := pipeline.DefaultAntispamThreshold
-	var antispamExceptions antispam.Exceptions
-	var antispamRules antispam.Rules
 	sourceNameMetaField := pipeline.DefaultSourceNameMetaField
 	avgInputEventSize := pipeline.DefaultAvgInputEventSize
 	maxInputEventSize := pipeline.DefaultMaxInputEventSize
@@ -32,6 +29,11 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 	eventTimeout := pipeline.DefaultEventTimeout
 	metaCacheSize := pipeline.DefaultMetaCacheSize
 	pool := ""
+
+	antispamThreshold := pipeline.DefaultAntispamThreshold
+	antispamMaintenanceInterval := pipeline.DefaultMaintenanceInterval
+	var antispamExceptions antispam.Exceptions
+	var antispamRules antispam.Rules
 
 	metricHoldDuration := pipeline.DefaultMetricHoldDuration
 	metricMaxLabelValueLength := pipeline.DefaultMetricMaxLabelValueLength
@@ -90,13 +92,6 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 			eventTimeout = i
 		}
 
-		antispamThreshold = settings.Get("antispam_threshold").MustInt()
-		antispamThreshold *= int(maintenanceInterval / time.Second)
-		if antispamThreshold < 0 {
-			logger.Warn("negative antispam_threshold value, antispam disabled")
-			antispamThreshold = 0
-		}
-
 		var err error
 		antispamExceptions, err = extractAntispamExceptions(settings)
 		if err != nil {
@@ -104,7 +99,29 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 		}
 		antispamExceptions.Prepare()
 
-		antispamRules, err = extractAntispamRules(settings)
+		antispam := settings.Get("antispam")
+		str = antispam.Get("maintenance_interval").MustString()
+		if str != "" {
+			i, err := time.ParseDuration(str)
+			if err != nil {
+				logger.Fatalf("can't parse antispam maintenance interval: %s", err.Error())
+			}
+			antispamMaintenanceInterval = i
+		}
+
+		antispamThreshold = antispam.Get("threshold").MustInt(pipeline.DefaultAntispamThreshold)
+		if antispamThreshold == pipeline.DefaultAntispamThreshold {
+			antispamThreshold = settings.Get("antispam_threshold").MustInt(pipeline.DefaultAntispamThreshold)
+		}
+		if antispamThreshold != pipeline.DefaultAntispamThreshold {
+			antispamThreshold *= int(antispamMaintenanceInterval / time.Second)
+		}
+		if antispamThreshold < -1 {
+			logger.Warn("invalid antispam_threshold value, antispam disabled")
+			antispamThreshold = -1
+		}
+
+		antispamRules, err = extractAntispamRules(antispam)
 		if err != nil {
 			logger.Fatalf("extract antispam rules: %s", err)
 		}
@@ -145,15 +162,18 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 		MaxEventSize:            maxInputEventSize,
 		CutOffEventByLimit:      cutOffEventByLimit,
 		CutOffEventByLimitField: cutOffEventByLimitField,
-		AntispamThreshold:       antispamThreshold,
-		AntispamExceptions:      antispamExceptions,
-		AntispamRules:           antispamRules,
-		SourceNameMetaField:     sourceNameMetaField,
-		MaintenanceInterval:     maintenanceInterval,
-		EventTimeout:            eventTimeout,
-		StreamField:             streamField,
-		IsStrict:                isStrict,
-		Pool:                    pipeline.PoolType(pool),
+		Antispam: pipeline.AntispamSettings{
+			Threshold:           antispamThreshold,
+			Rules:               antispamRules,
+			Exceptions:          antispamExceptions,
+			MaintenanceInterval: antispamMaintenanceInterval,
+		},
+		SourceNameMetaField: sourceNameMetaField,
+		MaintenanceInterval: maintenanceInterval,
+		EventTimeout:        eventTimeout,
+		StreamField:         streamField,
+		IsStrict:            isStrict,
+		Pool:                pipeline.PoolType(pool),
 		Metric: &pipeline.MetricSettings{
 			HoldDuration:        metricHoldDuration,
 			MaxLabelValueLength: metricMaxLabelValueLength,
