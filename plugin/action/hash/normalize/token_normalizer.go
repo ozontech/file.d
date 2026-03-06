@@ -3,6 +3,7 @@ package normalize
 import (
 	"errors"
 	"fmt"
+	"net"
 	"slices"
 	"strings"
 
@@ -208,7 +209,12 @@ func initTokens(lexer *lexmachine.Lexer,
 	addTokens := func(patterns []TokenPattern) {
 		for _, p := range patterns {
 			if p.mask == 0 || builtinPatterns&p.mask != 0 {
-				lexer.Add([]byte(p.RE), newToken(p.Placeholder))
+				switch p.mask {
+				case pIp:
+					lexer.Add([]byte(p.RE), newIpToken(p.Placeholder))
+				default:
+					lexer.Add([]byte(p.RE), newToken(p.Placeholder))
+				}
 			}
 		}
 	}
@@ -261,6 +267,33 @@ func newToken(placeholder string) lexmachine.Action {
 			begin:       m.TC,
 			end:         m.TC + len(m.Bytes),
 		}, nil
+	}
+}
+
+func newIpToken(placeholder string) lexmachine.Action {
+	return func(s *lexmachine.Scanner, m *machines.Match) (any, error) {
+		// Fallback IP parser.
+		// Scans for IP-like patterns until end, then validates with net.ParseIP.
+		// Necessary because lexer's own pattern matching can be incomplete.
+		begin, end := m.TC, m.TC
+
+		for begin < len(s.Text) {
+			if !isIPChar(s.Text[end]) {
+				break
+			}
+			end++
+		}
+
+		candidate := string(s.Text[begin:end])
+		if net.ParseIP(candidate) != nil {
+			return token{
+				placeholder: placeholder,
+				begin:       begin,
+				end:         end,
+			}, nil
+		} else {
+			return nil, nil
+		}
 	}
 }
 
@@ -457,6 +490,13 @@ func isWord(c byte) bool {
 		c == '_'
 }
 
+func isIPChar(c byte) bool {
+	return (c >= '0' && c <= '9') ||
+		(c >= 'a' && c <= 'f') ||
+		(c >= 'A' && c <= 'F') ||
+		c == ':' || c == '.'
+}
+
 // [lexmachine] pkg doesn't support 'exactly' re syntax (a{3}, a{3,6}),
 // so we use [strings.Repeat] instead
 var builtinTokenPatterns = []TokenPattern{
@@ -518,9 +558,11 @@ var builtinTokenPatterns = []TokenPattern{
 		mask: pDatetime,
 	},
 	{
-		// IPv4 only
 		Placeholder: placeholderByPattern[pIp],
-		RE:          strings.TrimSuffix(strings.Repeat(`(25[0-5]|(2[0-4]|1?[0-9])?[0-9])\.`, 4), `\.`),
+		RE: fmt.Sprintf(`%s|%s`,
+			strings.TrimSuffix(strings.Repeat(`(25[0-5]|(2[0-4]|1?[0-9])?[0-9])\.`, 4), `\.`),
+			`[0-9a-fA-F:]*:[0-9a-fA-F:]*`,
+		),
 
 		mask: pIp,
 	},
