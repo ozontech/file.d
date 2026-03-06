@@ -33,8 +33,6 @@ We support a set of patterns out of the box.
 | 18 | int | `<int>` | 100<br>-200 |
 | 19 | bool | `<bool>` | TRUE<br>false |
 
-**Note:** The `ip` pattern now includes IPv6 support. All IP formats normalize to `<ip>`.
-
 ### Limitations of the RE language
 We use the [lexmachine](https://github.com/timtadh/lexmachine) package to search for tokens according to the described patterns (lexical analysis).
 
