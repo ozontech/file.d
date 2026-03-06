@@ -421,11 +421,16 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 			HealthCheckPeriod: p.config.HealthCheckPeriod_,
 		})
 		if err != nil {
-			p.logger.Fatal("create clickhouse connection pool", zap.Error(err), zap.String("addr", addr.Addr))
+			p.logger.Error("create clickhouse connection pool", zap.Error(err), zap.String("addr", addr.Addr))
+		} else {
+			for j := 0; j < addr.Weight; j++ {
+				p.instances = append(p.instances, pool)
+			}
 		}
-		for j := 0; j < addr.Weight; j++ {
-			p.instances = append(p.instances, pool)
-		}
+	}
+
+	if len(p.instances) == 0 {
+		p.logger.Fatal("cannot start: no available clickhouse addresses in config")
 	}
 
 	batcherOpts := pipeline.BatcherOptions{
